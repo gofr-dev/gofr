@@ -1,0 +1,57 @@
+package gofr
+
+import (
+	"os"
+	"regexp"
+
+	cmd2 "github.com/vikash/gofr/pkg/gofr/cmd"
+)
+
+type cmd struct {
+	routes []route
+}
+
+type route struct {
+	pattern string
+	handler Handler
+}
+
+func (cmd *cmd) Run(container *Container) {
+	args := os.Args[1:] // First one is command itself
+	command := ""
+
+	// Removing all flags and putting everything else as a part of command.
+	// So, unlike native flag package we can put subcommands anywhere
+	for _, a := range args {
+		if a[1] != '-' {
+			command = command + " " + a
+		}
+	}
+
+	h := cmd.handler(command)
+	ctx := newContext(&cmd2.Responder{}, cmd2.NewRequest(""), container)
+
+	if h == nil {
+		ctx.responder.Respond("No Command Found!", nil)
+	}
+
+	ctx.responder.Respond(h(ctx))
+}
+
+func (cmd *cmd) handler(path string) Handler {
+	for _, route := range cmd.routes {
+		re := regexp.MustCompile(route.pattern)
+		if re.MatchString(path) {
+			return route.handler
+		}
+	}
+
+	return nil
+}
+
+func (cmd *cmd) addRoute(pattern string, handler Handler) {
+	cmd.routes = append(cmd.routes, route{
+		pattern: pattern,
+		handler: handler,
+	})
+}
