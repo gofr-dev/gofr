@@ -27,18 +27,14 @@ jobs:
 
     - name: Test
       run: |
-        mkdir build
-        go test ./... -v -coverprofile build/coverage.txt -coverpkg=./...
-        cat build/coverage.txt | grep -v '.pb.go' > build/coverage.out
-        go tool cover -func build/coverage.out
-
-    - name: Upload coverage artifact
-      uses: actions/upload-artifact@v2
-      with:
-        name: build artifacts
-        path: build
-
-
+        go test ./... -v -coverprofile profile.cov -coverpkg=./...
+        go tool cover -func profile.cov
+      
+    - name: Send coverage
+      uses: shogo82148/actions-goveralls@v1
+      with: 
+        path-to-profile: profile.cov
+        parallel: true
   code_quality:
     name: Code Quality
     runs-on: ubuntu-latest

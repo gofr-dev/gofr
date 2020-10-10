@@ -1,4 +1,8 @@
 # gofr
+![Build Status](https://github.com/vikash/gofr/workflows/Go/badge.svg)
+[![Coverage Status](https://coveralls.io/repos/github/vikash/gofr/badge.svg?branch=main)](https://coveralls.io/github/vikash/gofr?branch=main)
+[![license](http://img.shields.io/badge/license-MIT-red.svg?style=flat)](https://raw.githubusercontent.com/jmoiron/sqlx/master/LICENSE)
+
 Mini GoLang framework for writing http api and command line tools.
 
 ### What all is (planned to be) supported in Gofr?
