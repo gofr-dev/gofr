@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/go-redis/redis/v8"
+
 	"github.com/vikash/gofr/pkg/gofr"
 )
 
@@ -38,7 +40,12 @@ func ErrorHandler(c *gofr.Context) (interface{}, error) {
 }
 
 func RedisHandler(c *gofr.Context) (interface{}, error) {
-	return c.Redis.Get(c, "test").Result()
+	val, err := c.Redis.Get(c, "test").Result()
+	if err != nil && err != redis.Nil { // If key is not found, we are not considering this an error and returning "".
+		return nil, err
+	}
+
+	return val, nil
 }
 
 func TraceHandler(c *gofr.Context) (interface{}, error) {

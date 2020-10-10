@@ -20,6 +20,9 @@ func TestSimpleAPIServer(t *testing.T) {
 		{"/hello", 200, "Hello World!"},
 		{"/hello?name=gofr", 200, "Hello gofr!"},
 		{"/error", 500, ""},
+		{"/redis", 200, ""},
+		{"/mysql", 200, ""},
+		{"/trace", 200, ""},
 	}
 
 	for _, tc := range testcases {
@@ -32,8 +35,6 @@ func TestSimpleAPIServer(t *testing.T) {
 
 		if resp != nil && resp.StatusCode != tc.statusCode {
 			t.Errorf("Failed. \t Expected %v\t Got %v", tc.statusCode, resp.StatusCode)
-		} else {
-			t.Logf("Passed for URL: %v\t Got %v", tc.path, tc.statusCode)
 		}
 	}
 }
