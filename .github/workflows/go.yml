@@ -30,11 +30,21 @@ jobs:
         go test ./... -v -coverprofile profile.cov -coverpkg=./...
         go tool cover -func profile.cov
       
-    - name: Send coverage
+    - name: Send coverage to coveralls
       uses: shogo82148/actions-goveralls@v1
       with: 
         path-to-profile: profile.cov
         parallel: true
+        
+    - name: Send coverage to CodeClimate    
+      uses: paambaati/codeclimate-action@v2.7.4
+      env: 
+        CC_TEST_REPORTER_ID: ${{secrets.CC_TEST_REPORTER_ID}}
+      with: 
+        debug: true
+        coverageLocations: profile.cov:gocov
+        prefix: github.com/vikash/gofr
+  
   code_quality:
     name: Code Quality
     runs-on: ubuntu-latest
