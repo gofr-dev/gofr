@@ -99,7 +99,6 @@ linters:
     - staticcheck
     - structcheck
     - stylecheck
-    - testpackage
     - typecheck
     - unconvert
     - unparam
@@ -110,6 +109,7 @@ linters:
 
   # don't enable:
   # - godox  # Disabling because we need TODO lines at this stage of project.
+  # - testpackage # We also need to do unit test for unexported functions. And adding _internal in all files is cumbersome.
 
 
 
