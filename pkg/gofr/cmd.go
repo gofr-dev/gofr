@@ -16,6 +16,12 @@ type route struct {
 	handler Handler
 }
 
+type ErrCommandNotFound struct{}
+
+func (e ErrCommandNotFound) Error() string {
+	return "No Command Found!" //nolint:goconst // This error is needed and repetition is in test to check for the exact string.
+}
+
 func (cmd *cmd) Run(container *Container) {
 	args := os.Args[1:] // First one is command itself
 	command := ""
@@ -29,10 +35,11 @@ func (cmd *cmd) Run(container *Container) {
 	}
 
 	h := cmd.handler(command)
-	ctx := newContext(&cmd2.Responder{}, cmd2.NewRequest(""), container)
+	ctx := newContext(&cmd2.Responder{}, cmd2.NewRequest(args), container)
 
 	if h == nil {
-		ctx.responder.Respond("No Command Found!", nil)
+		ctx.responder.Respond(nil, ErrCommandNotFound{})
+		return
 	}
 
 	ctx.responder.Respond(h(ctx))

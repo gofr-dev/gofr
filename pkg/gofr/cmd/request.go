@@ -14,9 +14,9 @@ type Request struct {
 
 // TODO - use statement to parse the request to populate the flags and params.
 
-// NewRequest creates a Request from a statement. This way we can simulate running a command without actually
+// NewRequest creates a Request from a list of arguments. This way we can simulate running a command without actually
 // doing it. It makes the code more testable this way.
-func NewRequest(statement string) *Request {
+func NewRequest(args []string) *Request {
 	r := Request{
 		flags:  make(map[string]bool),
 		params: make(map[string]string),

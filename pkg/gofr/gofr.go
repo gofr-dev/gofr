@@ -13,7 +13,7 @@ import (
 	"github.com/vikash/gofr/pkg/gofr/config"
 	"go.opentelemetry.io/otel/sdk/trace"
 
-	http2 "github.com/vikash/gofr/pkg/gofr/http"
+	gofrHTTP "github.com/vikash/gofr/pkg/gofr/http"
 )
 
 // App is the main application in the gofr framework.
@@ -28,20 +28,13 @@ type App struct {
 	Config Config // If we directly embed, unnecessary confusion between app.Get and app.GET will happen.
 }
 
-func newApp() *App {
+// New creates a HTTP Server Application and returns that App.
+func New() *App {
 	app := &App{}
 	app.readConfig()
 	app.container = newContainer(app.Config)
 
 	app.initTracer()
-
-	return app
-}
-
-// New creates a HTTP Server Application and returns that App.
-func New() *App {
-	app := newApp()
-
 	// HTTP Server
 	port, err := strconv.Atoi(app.Config.Get("HTTP_PORT"))
 	if err != nil || port <= 0 {
@@ -49,7 +42,7 @@ func New() *App {
 	}
 
 	app.httpServer = &httpServer{
-		router: http2.NewRouter(),
+		router: gofrHTTP.NewRouter(),
 		port:   port,
 	}
 
@@ -58,8 +51,16 @@ func New() *App {
 
 // NewCMD creates a command line application.
 func NewCMD() *App {
-	app := newApp()
+	app := &App{}
+	app.readConfig()
+
+	// TODO - Instead of disabling, output to a file. Figure out a better way to disable. LOG_LEVELS?
+	os.Setenv("DISABLE_LOG", "true") // Disabling logs for CMD
+
+	app.container = newContainer(app.Config)
 	app.cmd = &cmd{}
+
+	app.initTracer()
 
 	return app
 }
