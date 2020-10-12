@@ -7,6 +7,7 @@ import (
 )
 
 type Logger interface {
+	Disable()
 	Log(args ...interface{})
 	Logf(format string, args ...interface{})
 	Error(args ...interface{})
@@ -14,24 +15,37 @@ type Logger interface {
 }
 
 type logger struct {
+	disabled  bool
 	normalOut io.Writer
 	errorOut  io.Writer
 }
 
 func (l *logger) Log(args ...interface{}) {
-	fmt.Fprintln(l.normalOut, args...)
+	if !l.disabled {
+		fmt.Fprintln(l.normalOut, args...)
+	}
 }
 
 func (l *logger) Logf(format string, args ...interface{}) {
-	fmt.Fprintf(l.normalOut, format, args...)
+	if !l.disabled {
+		fmt.Fprintf(l.normalOut, format, args...)
+	}
 }
 
 func (l *logger) Error(args ...interface{}) {
-	fmt.Fprintln(l.errorOut, args...)
+	if !l.disabled {
+		fmt.Fprintln(l.errorOut, args...)
+	}
 }
 
 func (l *logger) Errorf(format string, args ...interface{}) {
-	fmt.Fprintf(l.errorOut, format, args...)
+	if !l.disabled {
+		fmt.Fprintf(l.errorOut, format, args...)
+	}
+}
+
+func (l *logger) Disable() {
+	l.disabled = true
 }
 
 func newLogger() Logger {

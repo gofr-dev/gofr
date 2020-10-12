@@ -22,6 +22,11 @@ func newContainer(config Config) *Container {
 	c := &Container{
 		Logger: newLogger(),
 	}
+
+	if config.Get("DISABLE_LOG") == "true" {
+		c.Logger.Disable()
+	}
+
 	c.Log("Container is being created")
 
 	// Connect Redis if REDIS_HOST is Set.

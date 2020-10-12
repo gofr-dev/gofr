@@ -8,14 +8,12 @@ import (
 type Responder struct{}
 
 func (r *Responder) Respond(data interface{}, err error) {
+	// TODO - provide proper exit codes here. Using os.Exit directly is a problem for tests.
 	if data != nil {
-		fmt.Println(data)
+		fmt.Fprint(os.Stdout, data)
 	}
 
 	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
+		fmt.Fprint(os.Stderr, err)
 	}
-
-	os.Exit(0)
 }

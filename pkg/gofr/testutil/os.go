@@ -12,7 +12,7 @@ func StdoutOutputForFunc(f func()) string {
 
 	f()
 
-	w.Close()
+	_ = w.Close()
 
 	out, _ := ioutil.ReadAll(r)
 	os.Stdout = old
@@ -27,7 +27,7 @@ func StderrOutputForFunc(f func()) string {
 
 	f()
 
-	w.Close()
+	_ = w.Close()
 
 	out, _ := ioutil.ReadAll(r)
 	os.Stderr = old
