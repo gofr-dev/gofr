@@ -41,6 +41,10 @@ func (c *Context) Trace(name string) trace.Span {
 	return span
 }
 
+func (c *Context) Bind(i interface{}) error {
+	return c.Request.Bind(i)
+}
+
 // func (c *Context) reset(w Responder, r Request) {
 //	c.Request = r
 //	c.responder = w

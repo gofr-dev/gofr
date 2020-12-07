@@ -1,9 +1,9 @@
 package http
 
 import (
-	"log"
 	"net/http"
-	"os"
+
+	"github.com/vikash/gofr/pkg/gofr/logging"
 
 	"github.com/vikash/gofr/pkg/gofr/http/middleware"
 
@@ -18,8 +18,7 @@ func NewRouter() *Router {
 	muxRouter := mux.NewRouter().StrictSlash(false)
 	muxRouter.Use(
 		middleware.Tracer,
-		middleware.Recover,
-		middleware.Logging(log.New(os.Stdout, "[REQ] ", log.LstdFlags)),
+		middleware.Logging(logging.NewLogger(logging.INFO)),
 	)
 
 	return &Router{

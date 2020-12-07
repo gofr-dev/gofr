@@ -18,3 +18,10 @@ Mini GoLang framework for writing http api and command line tools.
     * Export Spans to GCP Cloud trace based on config
 * Logs to go to stdout and stderr
 * Configurations by Environment
+
+
+### Development Notes
+To run the tests, mysql and redis needs to run on the default ports 3306 and 6379 respectively. Following
+docker commands can be used: 
+* `docker run --name gofr-mysql -e MYSQL_ROOT_PASSWORD=password -p3306:3306 mysql:latest`
+* `docker run --name gofr-redis -p6379:6379 redis:latest`

@@ -1,4 +1,4 @@
-package gofr
+package logging
 
 import (
 	"testing"
@@ -12,7 +12,7 @@ func TestLogger_Log(t *testing.T) {
 	expectedLog := testLogStatement + "\n" // Note that Log always adds a new line.
 
 	f := func() {
-		logger := newLogger()
+		logger := NewLogger(DEBUG)
 		logger.Log(testLogStatement)
 	}
 
@@ -24,15 +24,16 @@ func TestLogger_Log(t *testing.T) {
 }
 
 func TestLogger_Logf(t *testing.T) {
+	expectedLog := testLogStatement + "\n"
 	f := func() {
-		logger := newLogger()
+		logger := NewLogger(DEBUG)
 		logger.Logf("%s", testLogStatement)
 	}
 
 	output := testutil.StdoutOutputForFunc(f)
 
-	if output != testLogStatement {
-		t.Errorf("Stdout mismatch. Expected: %s Got: %s", testLogStatement, output)
+	if output != expectedLog {
+		t.Errorf("Stdout mismatch. Expected: %s Got: %s", expectedLog, output)
 	}
 }
 
@@ -40,7 +41,7 @@ func TestLogger_Error(t *testing.T) {
 	expectedLog := testLogStatement + "\n" // Note that Error always adds a new line.
 
 	f := func() {
-		logger := newLogger()
+		logger := NewLogger(DEBUG)
 		logger.Error(testLogStatement)
 	}
 
@@ -52,14 +53,15 @@ func TestLogger_Error(t *testing.T) {
 }
 
 func TestLogger_Errorf(t *testing.T) {
+	expectedLog := testLogStatement + "\n"
 	f := func() {
-		logger := newLogger()
+		logger := NewLogger(DEBUG)
 		logger.Errorf("%s", testLogStatement)
 	}
 
 	output := testutil.StderrOutputForFunc(f)
 
-	if output != testLogStatement {
-		t.Errorf("Stdout mismatch. Expected: %s Got: %s", testLogStatement, output)
+	if output != expectedLog {
+		t.Errorf("Stdout mismatch. Expected: %s Got: %s", expectedLog, output)
 	}
 }

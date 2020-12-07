@@ -3,6 +3,8 @@ package http
 import (
 	"encoding/json"
 	"net/http"
+
+	resTypes "github.com/vikash/gofr/pkg/gofr/http/response"
 )
 
 func NewResponder(w http.ResponseWriter) *Responder {
@@ -16,23 +18,31 @@ type Responder struct {
 func (r Responder) Respond(data interface{}, err error) {
 	r.w.Header().Set("Content-type", "application/json")
 
-	statusCode := r.HTTPStatusFromError(err)
+	statusCode, errorObj := r.HTTPStatusFromError(err)
 	r.w.WriteHeader(statusCode)
 
-	response := response{
-		Error: err,
-		Data:  data,
+	var resp interface{}
+	switch v := data.(type) {
+	case resTypes.Raw:
+		resp = v.Data
+	default:
+		resp = response{
+			Data:  v,
+			Error: errorObj,
+		}
 	}
 
-	_ = json.NewEncoder(r.w).Encode(response)
+	_ = json.NewEncoder(r.w).Encode(resp)
 }
 
-func (r Responder) HTTPStatusFromError(err error) int {
+func (r Responder) HTTPStatusFromError(err error) (int, interface{}) {
 	if err == nil {
-		return http.StatusOK
+		return http.StatusOK, nil
 	}
 
-	return http.StatusInternalServerError
+	return http.StatusInternalServerError, map[string]interface{}{
+		"message": err.Error(),
+	}
 }
 
 type response struct {

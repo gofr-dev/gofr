@@ -54,9 +54,6 @@ func NewCMD() *App {
 	app := &App{}
 	app.readConfig()
 
-	// TODO - Instead of disabling, output to a file. Figure out a better way to disable. LOG_LEVELS?
-	os.Setenv("DISABLE_LOG", "true") // Disabling logs for CMD
-
 	app.container = newContainer(app.Config)
 	app.cmd = &cmd{}
 
@@ -134,8 +131,8 @@ func (a *App) initTracer() {
 	conn, err := net.DialTimeout("tcp", net.JoinHostPort("localhost", "9411"), 2*time.Second) //nolint:gomnd
 
 	if err != nil || conn == nil {
-		a.container.Log("Tracer detection error: ", err)
-		a.container.Log("To enable tracing locally, Run:", "docker run -d -p 9411:9411 openzipkin/zipkin ")
+		a.container.Logf("Tracer detection error: %v", err)
+		a.container.Log("To enable tracing locally, Run: docker run -d -p 9411:9411 openzipkin/zipkin")
 
 		return
 	}

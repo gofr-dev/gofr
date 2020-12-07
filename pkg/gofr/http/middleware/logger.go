@@ -2,8 +2,8 @@ package middleware
 
 import (
 	"encoding/json"
-	"log"
 	"net/http"
+	"runtime/debug"
 	"strings"
 	"time"
 
@@ -37,10 +37,16 @@ func (l *LogLine) String() string {
 	return string(line)
 }
 
+type logger interface {
+	Log(...interface{})
+	Errorf(string, ...interface{})
+}
+
 // Logging is a middleware which logs response status and time in microseconds along with other data.
-func Logging(logger *log.Logger) func(inner http.Handler) http.Handler {
+func Logging(logger logger) func(inner http.Handler) http.Handler {
 	return func(inner http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			defer panicRecovery(w, logger)
 			start := time.Now()
 			srw := &StatusResponseWriter{ResponseWriter: w}
 
@@ -56,7 +62,7 @@ func Logging(logger *log.Logger) func(inner http.Handler) http.Handler {
 					Response:     res.status,
 				}
 				if logger != nil {
-					logger.Print(l)
+					logger.Log(l)
 				}
 			}(srw, r)
 
@@ -77,4 +83,26 @@ func getIPAddress(r *http.Request) string {
 	}
 
 	return strings.TrimSpace(ipAddress)
+}
+
+func panicRecovery(w http.ResponseWriter, logger logger) {
+	re := recover()
+
+	if re != nil {
+		var e string
+		switch t := re.(type) {
+		case string:
+			e = t
+		case error:
+			e = t.Error()
+		default:
+			e = "Unknown panic type"
+		}
+		logger.Errorf("Panicked: %v Trace: %v", e, string(debug.Stack()))
+
+		w.WriteHeader(http.StatusInternalServerError)
+
+		res := map[string]interface{}{"code": http.StatusInternalServerError, "status": "ERROR", "message": "Some unexpected error has occurred"}
+		_ = json.NewEncoder(w).Encode(res)
+	}
 }
