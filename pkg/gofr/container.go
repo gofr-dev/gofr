@@ -1,8 +1,9 @@
 package gofr
 
 import (
-	"database/sql"
 	"strconv"
+
+	"github.com/vikash/gofr/pkg/gofr/logging"
 
 	"github.com/go-redis/redis/v8"
 	_ "github.com/go-sql-driver/mysql" // This is required to be blank import
@@ -13,18 +14,14 @@ import (
 // Container is a collection of all common application level concerns. Things like Logger, Connection Pool for Redis
 // etc which is shared across is placed here.
 type Container struct {
-	Logger
+	logging.Logger
 	Redis *redis.Client
-	DB    *sql.DB
+	DB    *DB
 }
 
 func newContainer(config Config) *Container {
 	c := &Container{
-		Logger: newLogger(),
-	}
-
-	if config.Get("DISABLE_LOG") == "true" {
-		c.Logger.Disable()
+		Logger: logging.NewLogger(logging.INFO),
 	}
 
 	c.Log("Container is being created")
@@ -44,7 +41,7 @@ func newContainer(config Config) *Container {
 		if err != nil {
 			c.Errorf("could not connect to redis at %s:%d\n error:", host, port, err)
 		} else {
-			c.Logf("connected to redis at %s:%d\n", host, port)
+			c.Logf("connected to redis at %s:%d", host, port)
 		}
 	}
 
@@ -57,12 +54,12 @@ func newContainer(config Config) *Container {
 			Database: config.Get("DB_NAME"),
 		}
 		db, err := NewMYSQL(&conf)
-		c.DB = db
+		c.DB = &DB{db}
 
 		if err != nil {
-			c.Errorf("could not connect to database with config %v error: %v\n", conf, err)
+			c.Errorf("could not connect to database with config %v error: %v", conf, err)
 		} else {
-			c.Logf("connected to '%s' database at %s:%s\n", conf.Database, conf.HostName, conf.Port)
+			c.Logf("connected to '%s' database at %s:%s", conf.Database, conf.HostName, conf.Port)
 		}
 	}
 
