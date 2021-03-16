@@ -3,6 +3,7 @@ package gofr
 import (
 	"log"
 	"net"
+	"net/http"
 	"os"
 	"strconv"
 	"sync"
@@ -45,6 +46,9 @@ func New() *App {
 		router: gofrHTTP.NewRouter(),
 		port:   port,
 	}
+
+	// Add Default routes
+	app.add(http.MethodGet, "/.well-known/health", healthHandler)
 
 	return app
 }

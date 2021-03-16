@@ -17,6 +17,7 @@ require (
 	go.opentelemetry.io/otel v0.13.0
 	go.opentelemetry.io/otel/exporters/trace/zipkin v0.13.0
 	go.opentelemetry.io/otel/sdk v0.13.0
+	golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9
 	golang.org/x/exp v0.0.0-20200821190819-94841d0725da // indirect
 	golang.org/x/net v0.0.0-20201110031124-69a78807bb2b // indirect
 	golang.org/x/oauth2 v0.0.0-20201109201403-9fd604954f58 // indirect
