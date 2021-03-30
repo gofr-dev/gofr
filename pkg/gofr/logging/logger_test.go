@@ -7,9 +7,9 @@ import (
 	"github.com/vikash/gofr/pkg/gofr/testutil"
 )
 
-const testLogStatement = "hello log!"
-
 func TestLogger_Log(t *testing.T) {
+	testLogStatement := "hello info log!"
+
 	f := func() {
 		logger := NewLogger(DEBUG)
 		logger.Log(testLogStatement)
@@ -20,6 +20,8 @@ func TestLogger_Log(t *testing.T) {
 }
 
 func TestLogger_Logf(t *testing.T) {
+	testLogStatement := "hello info logf!"
+
 	f := func() {
 		logger := NewLogger(DEBUG)
 		logger.Logf("%s", testLogStatement)
@@ -31,6 +33,8 @@ func TestLogger_Logf(t *testing.T) {
 }
 
 func TestLogger_Error(t *testing.T) {
+	testLogStatement := "hello error log!"
+
 	f := func() {
 		logger := NewLogger(DEBUG)
 		logger.Error(testLogStatement)
@@ -42,6 +46,8 @@ func TestLogger_Error(t *testing.T) {
 }
 
 func TestLogger_Errorf(t *testing.T) {
+	testLogStatement := "hello errorf log!"
+
 	f := func() {
 		logger := NewLogger(DEBUG)
 		logger.Errorf("%s", testLogStatement)
