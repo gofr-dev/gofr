@@ -121,3 +121,4 @@ issues:
       linters:
         - gomnd
         - dupl
+        - goconst
