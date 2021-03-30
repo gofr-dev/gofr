@@ -1,6 +1,6 @@
 module github.com/vikash/gofr
 
-go 1.15
+go 1.16
 
 require (
 	cloud.google.com/go v0.72.0 // indirect

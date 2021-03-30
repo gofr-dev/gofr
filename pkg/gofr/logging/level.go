@@ -28,11 +28,11 @@ func (l level) String() string {
 	case FATAL:
 		return "FATAL"
 	default:
-		return "INFO"
+		return ""
 	}
 }
 
-//nolint:mnd // Color codes are sent as numbers
+//nolint:gomnd // Color codes are sent as numbers
 func (l level) color() uint {
 	switch l {
 	case ERROR, FATAL:
