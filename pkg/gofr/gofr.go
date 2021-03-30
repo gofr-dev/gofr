@@ -135,7 +135,8 @@ func (a *App) SubCommand(pattern string, handler Handler) {
 
 func (a *App) initTracer() {
 	// If zipkin is running on default port - start tracing
-	conn, err := net.DialTimeout("tcp", net.JoinHostPort("localhost", "9411"), 2*time.Second) //nolint:gomnd
+	// TODO - remove gomnd and do proper check here.
+	conn, err := net.DialTimeout("tcp", net.JoinHostPort("localhost", "9411"), 2*time.Second) //nolint:gomnd // 2 is reasonable to check.
 
 	if err != nil || conn == nil {
 		a.container.Logf("Tracer detection error: %v", err)

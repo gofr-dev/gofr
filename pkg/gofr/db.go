@@ -67,9 +67,9 @@ func (d *DB) Select(ctx context.Context, data interface{}, query string, args ..
 
 		for rows.Next() {
 			val := reflect.New(rv.Type().Elem())
+
 			if rv.Type().Elem().Kind() == reflect.Struct {
 				d.rowsToStruct(rows, val)
-
 			} else {
 				_ = rows.Scan(val.Interface())
 			}
@@ -112,11 +112,13 @@ func (d *DB) rowsToStruct(rows *sql.Rows, vo reflect.Value) {
 		} else {
 			name = ToSnakeCase(f.Name)
 		}
+
 		fieldNameIndex[name] = i
 	}
 
 	fields := []interface{}{}
 	columns, _ := rows.Columns()
+
 	for _, c := range columns {
 		if i, ok := fieldNameIndex[c]; ok {
 			fields = append(fields, v.Field(i).Addr().Interface())

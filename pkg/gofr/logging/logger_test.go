@@ -53,7 +53,6 @@ func TestLogger_Errorf(t *testing.T) {
 }
 
 func assertMessageInJSONLog(t *testing.T, logLine, expectation string) {
-
 	var l logEntry
 	_ = json.Unmarshal([]byte(logLine), &l)
 

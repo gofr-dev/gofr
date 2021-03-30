@@ -129,6 +129,7 @@ func NewSilentLogger() Logger {
 		normalOut: ioutil.Discard,
 		errorOut:  ioutil.Discard,
 	}
+
 	return l
 }
 

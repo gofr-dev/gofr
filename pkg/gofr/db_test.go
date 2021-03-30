@@ -73,7 +73,9 @@ func TestDB_SelectSingleColumnFromIntToCustomInt(t *testing.T) {
 		WillReturnRows(rows)
 
 	type CustomInt int
+
 	ids := make([]CustomInt, 0)
+
 	db.Select(context.TODO(), &ids, "select id from users")
 	assert.Equal(t, []CustomInt{1, 2}, ids)
 }
@@ -89,12 +91,14 @@ func TestDB_SelectSingleColumnFromStringToCustomInt(t *testing.T) {
 		WillReturnRows(rows)
 
 	type CustomInt int
+
 	ids := make([]CustomInt, 0)
+
 	db.Select(context.TODO(), &ids, "select id from users")
 	assert.Equal(t, []CustomInt{1, 2}, ids)
 }
 
-//func TestDB_SelectSingleColumnFromIntToCustomString(t *testing.T) {
+// func TestDB_SelectSingleColumnFromIntToCustomString(t *testing.T) {
 //	db, mock := getDB(t)
 //	defer db.DB.Close()
 //
@@ -121,7 +125,9 @@ func TestDB_SelectSingleColumnFromStringToCustomString(t *testing.T) {
 		WillReturnRows(rows)
 
 	type CustomStr string
+
 	ids := make([]CustomStr, 0)
+
 	db.Select(context.TODO(), &ids, "select id from users")
 	assert.Equal(t, []CustomStr{"1", "2"}, ids)
 }
@@ -140,8 +146,11 @@ func TestDB_SelectSingleRowMultiColumn(t *testing.T) {
 		ID    int
 		Image string
 	}
+
 	u := user{}
+
 	db.Select(context.TODO(), &u, "select 1 user")
+
 	assert.Equal(t, user{
 		Name:  "Vikash",
 		ID:    1,
@@ -163,7 +172,9 @@ func TestDB_SelectSingleRowMultiColumnWithTags(t *testing.T) {
 		ID    int
 		Image string `db:"image_url"`
 	}
+
 	u := user{}
+
 	db.Select(context.TODO(), &u, "select 1 user")
 	assert.Equal(t, user{
 		Name:  "Vikash",
@@ -187,7 +198,9 @@ func TestDB_SelectMultiRowMultiColumnWithTags(t *testing.T) {
 		ID    int
 		Image string `db:"image_url"`
 	}
+
 	users := []user{}
+
 	db.Select(context.TODO(), &users, "select users")
 	assert.Equal(t, []user{
 		{

@@ -35,7 +35,7 @@ func (r Responder) Respond(data interface{}, err error) {
 	_ = json.NewEncoder(r.w).Encode(resp)
 }
 
-func (r Responder) HTTPStatusFromError(err error) (status int, error interface{}) {
+func (r Responder) HTTPStatusFromError(err error) (status int, errObj interface{}) {
 	if err == nil {
 		return http.StatusOK, nil
 	}
