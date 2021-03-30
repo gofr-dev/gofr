@@ -9,6 +9,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/vikash/gofr/pkg/gofr/logging"
+
 	"go.opentelemetry.io/otel/exporters/trace/zipkin"
 
 	"github.com/vikash/gofr/pkg/gofr/config"
@@ -60,6 +62,7 @@ func NewCMD() *App {
 
 	app.container = newContainer(app.Config)
 	app.cmd = &cmd{}
+	app.container.Logger = logging.NewSilentLogger() // TODO - figure out a proper way to log in CMD
 
 	app.initTracer()
 

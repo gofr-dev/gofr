@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 	"time"
 
@@ -14,6 +15,8 @@ import (
 )
 
 type Logger interface {
+	Debug(args ...interface{})
+	Debugf(format string, args ...interface{})
 	Log(args ...interface{})
 	Logf(format string, args ...interface{})
 	Info(args ...interface{})
@@ -36,7 +39,7 @@ type logEntry struct {
 	Message interface{} `json:"message"`
 }
 
-func (l *logger) log(level level, format string, args ...interface{}) {
+func (l *logger) logf(level level, format string, args ...interface{}) {
 	if level < l.level {
 		return
 	}
@@ -63,33 +66,40 @@ func (l *logger) log(level level, format string, args ...interface{}) {
 	if l.isTerminal {
 		l.prettyPrint(entry, out)
 	} else {
-		json.NewEncoder(out).Encode(entry)
+		_ = json.NewEncoder(out).Encode(entry)
 	}
+}
 
+func (l *logger) Debug(args ...interface{}) {
+	l.logf(DEBUG, "", args...)
+}
+
+func (l *logger) Debugf(format string, args ...interface{}) {
+	l.logf(DEBUG, format, args...)
 }
 
 func (l *logger) Info(args ...interface{}) {
-	l.log(INFO, "", args...)
+	l.logf(INFO, "", args...)
 }
 
 func (l *logger) Infof(format string, args ...interface{}) {
-	l.log(INFO, format, args...)
+	l.logf(INFO, format, args...)
 }
 
 func (l *logger) Log(args ...interface{}) {
-	l.log(INFO, "", args...)
+	l.logf(INFO, "", args...)
 }
 
 func (l *logger) Logf(format string, args ...interface{}) {
-	l.log(INFO, format, args...)
+	l.logf(INFO, format, args...)
 }
 
 func (l *logger) Error(args ...interface{}) {
-	l.log(ERROR, "", args...)
+	l.logf(ERROR, "", args...)
 }
 
 func (l *logger) Errorf(format string, args ...interface{}) {
-	l.log(ERROR, format, args...)
+	l.logf(ERROR, format, args...)
 }
 
 func (l *logger) prettyPrint(e logEntry, out io.Writer) {
@@ -110,6 +120,15 @@ func NewLogger(level level) Logger {
 
 	l.isTerminal = checkIfTerminal(l.normalOut)
 
+	return l
+}
+
+// TODO - Do we need this? Only used for CMD log silencing.
+func NewSilentLogger() Logger {
+	l := &logger{
+		normalOut: ioutil.Discard,
+		errorOut:  ioutil.Discard,
+	}
 	return l
 }
 

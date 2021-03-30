@@ -13,6 +13,7 @@ func getDB(t *testing.T) (*DB, sqlmock.Sqlmock) {
 	if err != nil {
 		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
 	}
+
 	return &DB{mockDB}, mock
 }
 

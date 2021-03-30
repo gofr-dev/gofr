@@ -1,6 +1,7 @@
 package logging
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/vikash/gofr/pkg/gofr/testutil"
@@ -9,22 +10,16 @@ import (
 const testLogStatement = "hello log!"
 
 func TestLogger_Log(t *testing.T) {
-	expectedLog := testLogStatement + "\n" // Note that Log always adds a new line.
-
 	f := func() {
 		logger := NewLogger(DEBUG)
 		logger.Log(testLogStatement)
 	}
 
 	output := testutil.StdoutOutputForFunc(f)
-
-	if output != expectedLog {
-		t.Errorf("Stdout mismatch. Expected: %s Got: %s", expectedLog, output)
-	}
+	assertMessageInJSONLog(t, output, testLogStatement)
 }
 
 func TestLogger_Logf(t *testing.T) {
-	expectedLog := testLogStatement + "\n"
 	f := func() {
 		logger := NewLogger(DEBUG)
 		logger.Logf("%s", testLogStatement)
@@ -32,14 +27,10 @@ func TestLogger_Logf(t *testing.T) {
 
 	output := testutil.StdoutOutputForFunc(f)
 
-	if output != expectedLog {
-		t.Errorf("Stdout mismatch. Expected: %s Got: %s", expectedLog, output)
-	}
+	assertMessageInJSONLog(t, output, testLogStatement)
 }
 
 func TestLogger_Error(t *testing.T) {
-	expectedLog := testLogStatement + "\n" // Note that Error always adds a new line.
-
 	f := func() {
 		logger := NewLogger(DEBUG)
 		logger.Error(testLogStatement)
@@ -47,13 +38,10 @@ func TestLogger_Error(t *testing.T) {
 
 	output := testutil.StderrOutputForFunc(f)
 
-	if output != expectedLog {
-		t.Errorf("Stdout mismatch. Expected: %s Got: %s", expectedLog, output)
-	}
+	assertMessageInJSONLog(t, output, testLogStatement)
 }
 
 func TestLogger_Errorf(t *testing.T) {
-	expectedLog := testLogStatement + "\n"
 	f := func() {
 		logger := NewLogger(DEBUG)
 		logger.Errorf("%s", testLogStatement)
@@ -61,7 +49,15 @@ func TestLogger_Errorf(t *testing.T) {
 
 	output := testutil.StderrOutputForFunc(f)
 
-	if output != expectedLog {
-		t.Errorf("Stdout mismatch. Expected: %s Got: %s", expectedLog, output)
+	assertMessageInJSONLog(t, output, testLogStatement)
+}
+
+func assertMessageInJSONLog(t *testing.T, logLine, expectation string) {
+
+	var l logEntry
+	_ = json.Unmarshal([]byte(logLine), &l)
+
+	if l.Message != expectation {
+		t.Errorf("Log mismatch. Expected: %s Got: %s", expectation, l.Message)
 	}
 }
