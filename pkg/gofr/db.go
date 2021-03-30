@@ -71,8 +71,9 @@ func (d *DB) Select(ctx context.Context, data interface{}, query string, args ..
 				d.rowsToStruct(rows, val)
 
 			} else {
-				err = rows.Scan(val.Interface())
+				_ = rows.Scan(val.Interface())
 			}
+
 			rv = reflect.Append(rv, val.Elem())
 		}
 
@@ -89,7 +90,6 @@ func (d *DB) Select(ctx context.Context, data interface{}, query string, args ..
 	default:
 		fmt.Println("a pointer to", rv.Kind(), "was not expected.")
 	}
-
 }
 
 func (d *DB) rowsToStruct(rows *sql.Rows, vo reflect.Value) {
@@ -100,10 +100,13 @@ func (d *DB) rowsToStruct(rows *sql.Rows, vo reflect.Value) {
 
 	// Map fields and their indexes by normalised name
 	fieldNameIndex := map[string]int{}
+
 	for i := 0; i < v.Type().NumField(); i++ {
 		var name string
+
 		f := v.Type().Field(i)
 		tag := f.Tag.Get("db")
+
 		if tag != "" {
 			name = tag
 		} else {
@@ -123,7 +126,7 @@ func (d *DB) rowsToStruct(rows *sql.Rows, vo reflect.Value) {
 		}
 	}
 
-	rows.Scan(fields...)
+	_ = rows.Scan(fields...)
 
 	if vo.CanSet() {
 		vo.Set(v)
@@ -136,5 +139,6 @@ var matchAllCap = regexp.MustCompile("([a-z0-9])([A-Z])")
 func ToSnakeCase(str string) string {
 	snake := matchFirstCap.ReplaceAllString(str, "${1}_${2}")
 	snake = matchAllCap.ReplaceAllString(snake, "${1}_${2}")
+
 	return strings.ToLower(snake)
 }

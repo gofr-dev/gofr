@@ -32,7 +32,7 @@ func (r *Request) Param(key string) string {
 	return r.params[key]
 }
 
-// PathParam returns the value of the parameter for key. This is equivalent to Param
+// PathParam returns the value of the parameter for key. This is equivalent to Param.
 func (r *Request) PathParam(key string) string {
 	return r.params[key]
 }
@@ -51,7 +51,7 @@ func (r *Request) Bind(i interface{}) error {
 			f := s.FieldByName(k)
 			// A Value can be changed only if it is addressable and not unexported struct field
 			if f.IsValid() && f.CanSet() {
-				// nolint:exhaustive // no need to add other cases
+				//nolint:exhaustive // no need to add other cases
 				switch f.Kind() {
 				case reflect.String:
 					f.SetString(v)
