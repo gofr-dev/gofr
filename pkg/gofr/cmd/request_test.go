@@ -3,7 +3,8 @@ package cmd
 import "testing"
 
 func TestRequest_Bind(t *testing.T) {
-	r := NewRequest([]string{"command", "-Name=gofr", "-Valid=true", "-Value=12", "-test"}) // TODO: Only fields starting with Capital letter can be 'bind' right now.
+	// TODO: Only fields starting with Capital letter can be 'bind' right now.
+	r := NewRequest([]string{"command", "-Name=gofr", "-Valid=true", "-Value=12", "-test"})
 
 	if r.Param("Name") != "gofr" {
 		t.Error("Param parse error.")
@@ -24,7 +25,8 @@ func TestRequest_Bind(t *testing.T) {
 		Value int
 	}{}
 
-	r.Bind(&a)
+	_ = r.Bind(&a)
+
 	if a.Name != "gofr" || a.Valid != true || a.Value != 12 {
 		t.Errorf("1. Request Bind error. Got: %v", a)
 	}
