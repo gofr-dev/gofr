@@ -4,6 +4,7 @@ import (
 	"context"
 	"reflect"
 	"strconv"
+	"strings"
 )
 
 // Request is an abstraction over the actual command with flags. This abstraction is useful because it allows us
@@ -14,6 +15,8 @@ type Request struct {
 	params map[string]string
 }
 
+const trueString = "true"
+
 // TODO - use statement to parse the request to populate the flags and params.
 
 // NewRequest creates a Request from a list of arguments. This way we can simulate running a command without actually
@@ -22,6 +25,28 @@ func NewRequest(args []string) *Request {
 	r := Request{
 		flags:  make(map[string]bool),
 		params: make(map[string]string),
+	}
+
+	const (
+		argsLen1 = 1
+		argsLen2 = 2
+	)
+
+	for _, arg := range args {
+		if arg[0] != '-' {
+			continue
+		}
+
+		a := arg[1:]
+
+		switch values := strings.Split(a, "="); len(values) {
+		case argsLen1:
+			// Support -t -a etc.
+			r.params[values[0]] = trueString
+		case argsLen2:
+			// Support -a=b
+			r.params[values[0]] = values[1]
+		}
 	}
 
 	return &r
@@ -56,7 +81,7 @@ func (r *Request) Bind(i interface{}) error {
 				case reflect.String:
 					f.SetString(v)
 				case reflect.Bool:
-					if v == "true" {
+					if v == trueString {
 						f.SetBool(true)
 					}
 				case reflect.Int:
