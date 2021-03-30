@@ -24,3 +24,12 @@ func TestCMDRunWithProperArg(t *testing.T) {
 		t.Errorf("Expected: %s\n Got: %s", expectedOutput, output)
 	}
 }
+
+func TestCMDRunWithParams(t *testing.T) {
+	expectedOutput := "Hello Vikash!"
+	os.Args = []string{"command", "params", "-name=Vikash"}
+	output := testutil.StdoutOutputForFunc(main)
+	if output != expectedOutput {
+		t.Errorf("Expected: %s\n Got: %s", expectedOutput, output)
+	}
+}
