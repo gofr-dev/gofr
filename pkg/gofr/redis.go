@@ -8,13 +8,15 @@ import (
 	"github.com/go-redis/redis/v8/redisext"
 )
 
-type RedisConfig struct {
+type redisConfig struct {
 	HostName string
 	Port     int
 	Options  *redis.Options
 }
 
-func NewRedisClient(config RedisConfig) (*redis.Client, error) {
+// newRedisClient return a redis client if connection is successful based on Config.
+// In case of error, it returns an error as second parameter.
+func newRedisClient(config redisConfig) (*redis.Client, error) {
 	if config.Options == nil {
 		config.Options = new(redis.Options)
 	}
@@ -34,6 +36,6 @@ func NewRedisClient(config RedisConfig) (*redis.Client, error) {
 }
 
 // TODO - if we make Redis an interface and expose from container we can avoid c.Redis(c, command) using methods on c and still pass c.
-type Redis interface {
-	Get(string) (string, error)
-}
+// type Redis interface {
+//	Get(string) (string, error)
+// }

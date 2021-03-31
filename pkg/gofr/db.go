@@ -9,6 +9,7 @@ import (
 	"strings"
 )
 
+// DB is a wrapper around sql.DB which provides some more features.
 type DB struct {
 	*sql.DB
 }
