@@ -5,8 +5,8 @@ import (
 	"fmt"
 )
 
-// DBConfig has those members which are necessary variables while connecting to database.
-type DBConfig struct {
+// dbConfig has those members which are necessary variables while connecting to database.
+type dbConfig struct {
 	HostName string
 	User     string
 	Password string
@@ -14,7 +14,7 @@ type DBConfig struct {
 	Database string
 }
 
-func NewMYSQL(config *DBConfig) (*sql.DB, error) {
+func newMYSQL(config *dbConfig) (*sql.DB, error) {
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8&parseTime=True&loc=Local&interpolateParams=true",
 		config.User,
 		config.Password,

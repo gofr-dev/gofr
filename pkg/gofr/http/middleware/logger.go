@@ -21,7 +21,7 @@ func (w *StatusResponseWriter) WriteHeader(status int) {
 	w.ResponseWriter.WriteHeader(status)
 }
 
-type LogLine struct {
+type logLine struct {
 	ID           string
 	StartTime    string
 	ResponseTime int64
@@ -32,7 +32,7 @@ type LogLine struct {
 	Response     int
 }
 
-func (l *LogLine) String() string {
+func (l *logLine) String() string {
 	line, _ := json.Marshal(l)
 	return string(line)
 }
@@ -51,7 +51,7 @@ func Logging(logger logger) func(inner http.Handler) http.Handler {
 			srw := &StatusResponseWriter{ResponseWriter: w}
 
 			defer func(res *StatusResponseWriter, req *http.Request) {
-				l := LogLine{
+				l := logLine{
 					ID:           trace.SpanFromContext(r.Context()).SpanContext().TraceID.String(),
 					StartTime:    start.Format("2006-01-02T15:04:05.999999999-07:00"),
 					ResponseTime: time.Since(start).Nanoseconds() / 1000,

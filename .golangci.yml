@@ -114,6 +114,7 @@ linters:
 
 
 issues:
+  # exclude-use-default: false
   # exclude-use-default: false # By default, golangci-lint does not enforce comments on exported types. We want it.
   # Excluding configuration per-path, per-linter, per-text and per-source
   exclude-rules:
