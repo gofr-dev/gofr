@@ -16,7 +16,6 @@ type Responder struct {
 }
 
 func (r Responder) Respond(data interface{}, err error) {
-
 	statusCode, errorObj := r.HTTPStatusFromError(err)
 	r.w.WriteHeader(statusCode)
 
@@ -27,6 +26,7 @@ func (r Responder) Respond(data interface{}, err error) {
 	case resTypes.File:
 		r.w.Header().Set("Content-Type", v.ContentType)
 		_, _ = r.w.Write(v.Content)
+
 		return
 	default:
 		resp = response{
