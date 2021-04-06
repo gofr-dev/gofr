@@ -1,9 +1,8 @@
 package gofr
 
 import (
-	"embed"
-
 	"github.com/vikash/gofr/pkg/gofr/http/response"
+	"github.com/vikash/gofr/pkg/gofr/static"
 )
 
 const (
@@ -16,11 +15,9 @@ func healthHandler(c *Context) (interface{}, error) {
 	return "OK", nil
 }
 
-//go:embed static/*
-var static embed.FS
-
 func faviconHandler(c *Context) (interface{}, error) {
-	data, err := static.ReadFile("static/favicon.ico")
+	data, err := static.Files.ReadFile("favicon.ico")
+
 	return response.File{
 		Content:     data,
 		ContentType: "image/x-icon",
