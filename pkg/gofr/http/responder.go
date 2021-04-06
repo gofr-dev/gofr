@@ -16,7 +16,6 @@ type Responder struct {
 }
 
 func (r Responder) Respond(data interface{}, err error) {
-	r.w.Header().Set("Content-type", "application/json")
 
 	statusCode, errorObj := r.HTTPStatusFromError(err)
 	r.w.WriteHeader(statusCode)
@@ -25,6 +24,10 @@ func (r Responder) Respond(data interface{}, err error) {
 	switch v := data.(type) {
 	case resTypes.Raw:
 		resp = v.Data
+	case resTypes.File:
+		r.w.Header().Set("Content-Type", v.ContentType)
+		_, _ = r.w.Write(v.Content)
+		return
 	default:
 		resp = response{
 			Data:  v,
@@ -32,6 +35,7 @@ func (r Responder) Respond(data interface{}, err error) {
 		}
 	}
 
+	r.w.Header().Set("Content-type", "application/json")
 	_ = json.NewEncoder(r.w).Encode(resp)
 }
 

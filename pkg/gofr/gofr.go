@@ -2,6 +2,7 @@ package gofr
 
 import (
 	"log"
+
 	"net"
 	"net/http"
 	"os"
@@ -51,6 +52,7 @@ func New() *App {
 
 	// Add Default routes
 	app.add(http.MethodGet, "/.well-known/health", healthHandler)
+	app.add(http.MethodGet, "/favicon.ico", faviconHandler)
 
 	return app
 }
