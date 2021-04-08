@@ -32,6 +32,7 @@ func (cmd *cmd) Run(container *Container) {
 		if a == "" {
 			continue // This takes cares of cases where command has multiple space in between.
 		}
+
 		if a[0] != '-' {
 			command = command + " " + a
 		}
