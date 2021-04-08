@@ -1,8 +1,6 @@
 package gofr
 
 import (
-	"log"
-
 	"net"
 	"net/http"
 	"os"
@@ -10,14 +8,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/vikash/gofr/pkg/gofr/config"
+	gofrHTTP "github.com/vikash/gofr/pkg/gofr/http"
 	"github.com/vikash/gofr/pkg/gofr/logging"
 
 	"go.opentelemetry.io/otel/exporters/trace/zipkin"
-
-	"github.com/vikash/gofr/pkg/gofr/config"
 	"go.opentelemetry.io/otel/sdk/trace"
-
-	gofrHTTP "github.com/vikash/gofr/pkg/gofr/http"
 )
 
 // App is the main application in the gofr framework.
@@ -156,6 +152,6 @@ func (a *App) initTracer() {
 	)
 
 	if err != nil {
-		log.Fatal(err)
+		a.container.Error(err)
 	}
 }
