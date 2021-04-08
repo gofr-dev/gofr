@@ -24,6 +24,7 @@ func TestSimpleAPIServer(t *testing.T) {
 		{"/mysql", 200, ""},
 		{"/trace", 200, ""},
 		{"/.well-known/health", 200, ""}, // Health check should be added by the framework.
+		{"/favicon.ico", 200, ""}, //Favicon should be added by the framework.
 	}
 
 	for _, tc := range testcases {

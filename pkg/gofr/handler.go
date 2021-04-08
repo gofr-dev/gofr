@@ -1,9 +1,11 @@
 package gofr
 
 import (
-	"net/http"
+	gofrHTTP "github.com/vikash/gofr/pkg/gofr/http"
+	"github.com/vikash/gofr/pkg/gofr/http/response"
+	"github.com/vikash/gofr/pkg/gofr/static"
 
-	http2 "github.com/vikash/gofr/pkg/gofr/http"
+	"net/http"
 )
 
 type Handler func(c *Context) (interface{}, error)
@@ -27,7 +29,21 @@ type handler struct {
 }
 
 func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	c := newContext(http2.NewResponder(w), http2.NewRequest(r), h.container)
+	c := newContext(gofrHTTP.NewResponder(w), gofrHTTP.NewRequest(r), h.container)
 	defer c.Trace("gofr-handler").End()
 	c.responder.Respond(h.function(c))
+}
+
+
+func healthHandler(c *Context) (interface{}, error) {
+	return "OK", nil
+}
+
+func faviconHandler(c *Context) (interface{}, error) {
+	data, err := static.Files.ReadFile("favicon.ico")
+
+	return response.File{
+		Content:     data,
+		ContentType: "image/x-icon",
+	}, err
 }

@@ -33,6 +33,9 @@ func NewRequest(args []string) *Request {
 	)
 
 	for _, arg := range args {
+		if arg == "" {
+			continue // This takes cares of cases where command has multiple space in between.
+		}
 		if arg[0] != '-' {
 			continue
 		}
