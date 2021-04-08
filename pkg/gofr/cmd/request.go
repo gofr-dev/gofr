@@ -36,6 +36,7 @@ func NewRequest(args []string) *Request {
 		if arg == "" {
 			continue // This takes cares of cases where command has multiple space in between.
 		}
+
 		if arg[0] != '-' {
 			continue
 		}

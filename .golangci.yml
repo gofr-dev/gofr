@@ -112,6 +112,8 @@ linters:
   # - testpackage # We also need to do unit test for unexported functions. And adding _internal in all files is cumbersome.
 
 
+service:
+  golangci-lint-version: 1.37.x
 
 issues:
   # exclude-use-default: false
