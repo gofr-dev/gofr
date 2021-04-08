@@ -21,7 +21,7 @@ func TestBind(t *testing.T) {
 		B int    `json:"b"`
 	}{}
 
-	req.Bind(&x)
+	_ = req.Bind(&x)
 
 	if x.A != "b" || x.B != 5 {
 		t.Errorf("Bind error. Got: %v", x)
