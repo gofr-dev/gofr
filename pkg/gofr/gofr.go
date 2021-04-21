@@ -11,21 +11,33 @@ import (
 	"github.com/vikash/gofr/pkg/gofr/config"
 	gofrHTTP "github.com/vikash/gofr/pkg/gofr/http"
 	"github.com/vikash/gofr/pkg/gofr/logging"
-
 	"go.opentelemetry.io/otel/exporters/trace/zipkin"
 	"go.opentelemetry.io/otel/sdk/trace"
+	"google.golang.org/grpc"
 )
 
 // App is the main application in the gofr framework.
 type App struct {
+	// Config can be used by applications to fetch custom configurations from environment or file.
+	Config Config // If we directly embed, unnecessary confusion between app.Get and app.GET will happen.
+
+	grpcServer *grpcServer
 	httpServer *httpServer
-	cmd        *cmd
+
+	cmd *cmd
 
 	// container is unexported because this is an internal implementation and applications are provided access to it via Context
 	container *Container
 
-	// Config can be used by applications to fetch custom configurations from environment or file.
-	Config Config // If we directly embed, unnecessary confusion between app.Get and app.GET will happen.
+	grpcRegistered bool
+	httpRegistered bool
+}
+
+// RegisterService adds a grpc service to the gofr application.
+func (a *App) RegisterService(desc *grpc.ServiceDesc, impl interface{}) {
+	a.grpcRegistered = true
+	a.container.Logger.Infof("Registering GRPC Server: %s", desc.ServiceName)
+	a.grpcServer.server.RegisterService(desc, impl)
 }
 
 // New creates a HTTP Server Application and returns that App.
@@ -35,6 +47,7 @@ func New() *App {
 	app.container = newContainer(app.Config)
 
 	app.initTracer()
+
 	// HTTP Server
 	port, err := strconv.Atoi(app.Config.Get("HTTP_PORT"))
 	if err != nil || port <= 0 {
@@ -46,9 +59,13 @@ func New() *App {
 		port:   port,
 	}
 
-	// Add Default routes
-	app.add(http.MethodGet, "/.well-known/health", healthHandler)
-	app.add(http.MethodGet, "/favicon.ico", faviconHandler)
+	// GRPC Server
+	port, err = strconv.Atoi(app.Config.Get("GRPC_PORT"))
+	if err != nil || port <= 0 {
+		port = defaultGRPCPort
+	}
+
+	app.grpcServer = newGRPCServer(app.container, port)
 
 	return app
 }
@@ -76,13 +93,27 @@ func (a *App) Run() {
 	wg := sync.WaitGroup{}
 
 	// Start HTTP Server
-	if a.httpServer != nil {
+	if a.httpRegistered {
 		wg.Add(1)
+
+		// Add Default routes
+		a.add(http.MethodGet, "/.well-known/health", healthHandler)
+		a.add(http.MethodGet, "/favicon.ico", faviconHandler)
 
 		go func(s *httpServer) {
 			defer wg.Done()
 			s.Run(a.container)
 		}(a.httpServer)
+	}
+
+	// Start GRPC Server only if a service is registered
+	if a.grpcRegistered {
+		wg.Add(1)
+
+		go func(s *grpcServer) {
+			defer wg.Done()
+			s.Run(a.container)
+		}(a.grpcServer)
 	}
 
 	wg.Wait()
@@ -119,6 +150,7 @@ func (a *App) DELETE(pattern string, handler Handler) {
 }
 
 func (a *App) add(method, pattern string, h Handler) {
+	a.httpRegistered = true
 	a.httpServer.router.Add(method, pattern, handler{
 		function:  h,
 		container: a.container,
