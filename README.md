@@ -4,7 +4,7 @@
 [![Maintainability](https://api.codeclimate.com/v1/badges/b23df337f31dedbfa918/maintainability)](https://codeclimate.com/github/vikash/gofr/maintainability)
 [![Coverage Status](https://coveralls.io/repos/github/vikash/gofr/badge.svg?branch=main)](https://coveralls.io/github/vikash/gofr?branch=main)
 
-Mini GoLang framework for writing http api and command line tools.
+Mini GoLang framework for writing http or grpc api and command line tools.
 
 ### What all is (planned to be) supported in Gofr?
 * API server and Cmd creation

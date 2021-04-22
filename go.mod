@@ -25,4 +25,5 @@ require (
 	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/genproto v0.0.0-20201111145450-ac7456db90a6 // indirect
 	google.golang.org/grpc v1.33.2
+	google.golang.org/protobuf v1.25.0
 )
