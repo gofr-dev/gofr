@@ -41,7 +41,12 @@ func NewRequest(args []string) *Request {
 			continue
 		}
 
-		a := arg[1:]
+		a := ""
+		if arg[1] == '-' {
+			a = arg[2:]
+		} else {
+			a = arg[1:]
+		}
 
 		switch values := strings.Split(a, "="); len(values) {
 		case argsLen1:
