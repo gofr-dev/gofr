@@ -1,6 +1,8 @@
 package http
 
 import (
+	"fmt"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"net/http"
 
 	"github.com/vikash/gofr/pkg/gofr/logging"
@@ -27,5 +29,6 @@ func NewRouter() *Router {
 }
 
 func (rou *Router) Add(method, pattern string, handler http.Handler) {
-	rou.Router.NewRoute().Methods(method).Path(pattern).Handler(handler)
+	h := otelhttp.NewHandler(handler, fmt.Sprintf("%s %s", method, pattern))
+	rou.Router.NewRoute().Methods(method).Path(pattern).Handler(h)
 }

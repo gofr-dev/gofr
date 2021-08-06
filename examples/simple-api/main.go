@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"github.com/vikash/gofr/pkg/gofr/service"
 	"sync"
 	"time"
 
@@ -57,7 +58,7 @@ func TraceHandler(c *gofr.Context) (interface{}, error) {
 	span2.End()
 
 	// Ping redis 5 times concurrently and wait.
-	count := 10
+	count := 5
 	wg := sync.WaitGroup{}
 	wg.Add(count)
 	for i :=0; i<count ;i++ {
@@ -67,6 +68,10 @@ func TraceHandler(c *gofr.Context) (interface{}, error) {
 	 }()
 	}
 	wg.Wait()
+
+	// Call Another service
+	anotherService := service.NewHTTPService("http://localhost:8000")
+	anotherService.Get(c, "redis", nil)
 
 	return "Tracing Success", nil
 }
