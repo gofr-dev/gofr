@@ -28,6 +28,5 @@ type handler struct {
 
 func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	c := newContext(http2.NewResponder(w), http2.NewRequest(r), h.container)
-	defer c.Trace("gofr-handler").End()
 	c.responder.Respond(h.function(c))
 }

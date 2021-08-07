@@ -1,12 +1,12 @@
 package service
 
 import (
+	"context"
 	"fmt"
-	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/httptrace/otelhttptrace"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel"
 	"net/http"
-	"context"
 	"net/http/httptrace"
 )
 
@@ -19,8 +19,6 @@ type httpService struct {
 func (h *httpService) Get(ctx context.Context, path string, params map[string]interface{}) (*http.Response, error) {
 
 	uri := h.url + "/" + path
-
-	fmt.Sprintf("Making a request to %s\n", uri)
 
 	tr := otel.Tracer("gofr-http-client")
 	ctx, span := tr.Start(ctx, uri)
