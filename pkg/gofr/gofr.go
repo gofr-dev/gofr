@@ -1,20 +1,18 @@
 package gofr
 
 import (
+	"fmt"
+	"github.com/vikash/gofr/pkg/gofr/config"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/exporters/zipkin"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
 	"log"
-	"net"
 	"os"
 	"strconv"
 	"sync"
-	"time"
-
-	"github.com/vikash/gofr/pkg/gofr/config"
-	"go.opentelemetry.io/otel/exporters/zipkin"
-	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 
 	gofrHTTP "github.com/vikash/gofr/pkg/gofr/http"
 )
@@ -130,20 +128,16 @@ func (a *App) SubCommand(pattern string, handler Handler) {
 }
 
 func (a *App) initTracer() {
-	// If zipkin is running on default port - start tracing
-	conn, err := net.DialTimeout("tcp", net.JoinHostPort("localhost", "9411"), 2*time.Second) //nolint:gomnd
-
-	if err != nil || conn == nil {
-		a.container.Logf("Tracer detection error: %v", err)
-		a.container.Log("To enable tracing locally, Run: docker run -d -p 9411:9411 openzipkin/zipkin")
-
+	tracerHost := a.Config.Get("TRACER_HOST")
+	tracerPort := a.Config.GetOrDefault("TRACER_PORT", "9411")
+	if tracerHost == "" {
 		return
 	}
 
 	a.container.Log("Exporting traces to zipkin.")
 
 	exporter, err := zipkin.New(
-		"http://localhost:9411/api/v2/spans",
+		fmt.Sprintf("http://%s:%s/api/v2/spans", tracerHost, tracerPort),
 		zipkin.WithSDKOptions(sdktrace.WithSampler(sdktrace.AlwaysSample())),
 	)
 
