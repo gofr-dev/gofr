@@ -2,8 +2,8 @@ package gofr
 
 import (
 	ctx "context"
-
-	"go.opentelemetry.io/otel/api/trace"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type Context struct {
@@ -36,7 +36,8 @@ but End will be called after function ends.
 Developer Note: If you chain methods in a defer statement, everything except the last function will be evaluated at call time.
 */
 func (c *Context) Trace(name string) trace.Span {
-	_, span := trace.SpanFromContext(c.Context).Tracer().Start(c, name)
+	tr := otel.GetTracerProvider().Tracer("gofr-context")
+	_, span := tr.Start(c.Context, name)
 	// c.Context = ctx // TODO - wanted to change the internal context to the newly returned context. But it crashes.
 	return span
 }
