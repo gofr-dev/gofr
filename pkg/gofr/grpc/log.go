@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/vikash/gofr/pkg/gofr/logging"
-	"go.opentelemetry.io/otel/api/global"
-	"go.opentelemetry.io/otel/api/trace"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
 )
 
@@ -25,13 +25,13 @@ func (l RPCLog) String() string {
 
 func LoggingInterceptor(logger logging.Logger) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (_ interface{}, err error) {
-		ctx, span := global.TracerProvider().Tracer("gofr",
+		ctx, span := otel.GetTracerProvider().Tracer("gofr",
 			trace.WithInstrumentationVersion("v0.1")).Start(ctx, info.FullMethod)
 		start := time.Now()
 
 		defer func() {
 			l := RPCLog{
-				ID:           trace.SpanFromContext(ctx).SpanContext().TraceID.String(),
+				ID:           trace.SpanFromContext(ctx).SpanContext().TraceID().String(),
 				StartTime:    start.Format("2006-01-02T15:04:05.999999999-07:00"),
 				ResponseTime: time.Since(start).Microseconds(),
 				Method:       info.FullMethod,
