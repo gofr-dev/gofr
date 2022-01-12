@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/go-redis/redis/v8"
 	"github.com/go-redis/redis/extra/redisotel"
+	"github.com/go-redis/redis/v8"
 )
 
 type redisConfig struct {

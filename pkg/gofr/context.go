@@ -1,13 +1,14 @@
 package gofr
 
 import (
-	ctx "context"
+	"context"
+
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 )
 
 type Context struct {
-	ctx.Context
+	context.Context
 
 	// Request needs to be public because handlers need to access request details. Else, we need to provide all
 	// functionalities of the Request as a method on context. This is not needed because Request here is an interface
@@ -38,7 +39,7 @@ Developer Note: If you chain methods in a defer statement, everything except the
 func (c *Context) Trace(name string) trace.Span {
 	tr := otel.GetTracerProvider().Tracer("gofr-context")
 	_, span := tr.Start(c.Context, name)
-	// c.Context = ctx // TODO - wanted to change the internal context to the newly returned context. But it crashes.
+	// c.Context = context // TODO - wanted to change the internal context to the newly returned context. But it crashes.
 	return span
 }
 
