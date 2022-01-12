@@ -10,7 +10,7 @@ import (
 
 	"github.com/vikash/gofr/pkg/gofr/http/middleware"
 
-	"golang.org/x/crypto/ssh/terminal"
+	"golang.org/x/term"
 )
 
 type Logger interface {
@@ -136,7 +136,7 @@ func NewSilentLogger() Logger {
 func checkIfTerminal(w io.Writer) bool {
 	switch v := w.(type) {
 	case *os.File:
-		return terminal.IsTerminal(int(v.Fd()))
+		return term.IsTerminal(int(v.Fd()))
 	default:
 		return false
 	}

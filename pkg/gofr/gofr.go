@@ -170,6 +170,7 @@ func (a *App) SubCommand(pattern string, handler Handler) {
 func (a *App) initTracer() {
 	tracerHost := a.Config.Get("TRACER_HOST")
 	tracerPort := a.Config.GetOrDefault("TRACER_PORT", "9411")
+
 	if tracerHost == "" {
 		return
 	}
