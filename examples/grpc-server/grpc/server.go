@@ -16,6 +16,6 @@ func (Server) SayHello(ctx context.Context, req *HelloRequest) (*HelloResponse, 
 	}
 
 	return &HelloResponse{
-		Message: fmt.Sprintf("Hello %s", name),
+		Message: fmt.Sprintf("Hello %s!", name),
 	}, nil
 }
