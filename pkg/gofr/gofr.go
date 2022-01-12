@@ -16,7 +16,6 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
 
 	gofrHTTP "github.com/vikash/gofr/pkg/gofr/http"
-	"github.com/vikash/gofr/pkg/gofr/logging"
 	"google.golang.org/grpc"
 )
 
@@ -81,7 +80,7 @@ func NewCMD() *App {
 
 	app.container = newContainer(app.Config)
 	app.cmd = &cmd{}
-	app.container.Logger = logging.NewSilentLogger() // TODO - figure out a proper way to log in CMD
+	//app.container.Logger = logging.NewSilentLogger() // TODO - figure out a proper way to log in CMD
 
 	app.initTracer()
 
