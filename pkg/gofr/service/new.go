@@ -3,11 +3,12 @@ package service
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"net/http/httptrace"
+
 	"go.opentelemetry.io/contrib/instrumentation/net/http/httptrace/otelhttptrace"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel"
-	"net/http"
-	"net/http/httptrace"
 )
 
 type httpService struct {
@@ -17,16 +18,17 @@ type httpService struct {
 }
 
 func (h *httpService) Get(ctx context.Context, path string, params map[string]interface{}) (*http.Response, error) {
-
 	uri := h.url + "/" + path
 
 	tr := otel.Tracer("gofr-http-client")
+
 	ctx, span := tr.Start(ctx, uri)
 	defer span.End()
 
 	ctx = httptrace.WithClientTrace(ctx, otelhttptrace.NewClientTrace(ctx))
-	req, _ := http.NewRequestWithContext(ctx, "GET", uri,nil)
+	req, _ := http.NewRequestWithContext(ctx, "GET", uri, nil)
 	encodeQueryParameters(req, params)
+
 	return h.Do(req)
 }
 
@@ -34,11 +36,11 @@ type HTTP interface {
 	Get(ctx context.Context, api string, params map[string]interface{}) (*http.Response, error)
 }
 
-func NewHTTPService(serviceAddress string) HTTP{
+func NewHTTPService(serviceAddress string) HTTP {
 	return &httpService{
-			Client: &http.Client{Transport: otelhttp.NewTransport(http.DefaultTransport)},
-			url: serviceAddress,
-		}
+		Client: &http.Client{Transport: otelhttp.NewTransport(http.DefaultTransport)},
+		url:    serviceAddress,
+	}
 }
 
 func encodeQueryParameters(req *http.Request, params map[string]interface{}) {

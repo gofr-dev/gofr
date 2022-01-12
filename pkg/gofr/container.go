@@ -24,7 +24,7 @@ func newContainer(config Config) *Container {
 		Logger: logging.NewLogger(logging.INFO),
 	}
 
-	c.Log("Container is being created")
+	c.Debug("Container is being created")
 
 	// Connect Redis if REDIS_HOST is Set.
 	if host := config.Get("REDIS_HOST"); host != "" {
@@ -33,7 +33,7 @@ func newContainer(config Config) *Container {
 			port = defaultRedisPort
 		}
 
-		c.Redis, err = NewRedisClient(RedisConfig{
+		c.Redis, err = newRedisClient(redisConfig{
 			HostName: host,
 			Port:     port,
 		})
@@ -46,18 +46,18 @@ func newContainer(config Config) *Container {
 	}
 
 	if host := config.Get("DB_HOST"); host != "" {
-		conf := DBConfig{
+		conf := dbConfig{
 			HostName: host,
 			User:     config.Get("DB_USER"),
 			Password: config.Get("DB_PASSWORD"),
 			Port:     config.GetOrDefault("DB_PORT", strconv.Itoa(defaultDBPort)),
 			Database: config.Get("DB_NAME"),
 		}
-		db, err := NewMYSQL(&conf)
+		db, err := newMYSQL(&conf)
 		c.DB = &DB{db}
 
 		if err != nil {
-			c.Errorf("could not connect to database with config %v error: %v", conf, err)
+			c.Errorf("could not connect to database with Config %v error: %v", conf, err)
 		} else {
 			c.Logf("connected to '%s' database at %s:%s", conf.Database, conf.HostName, conf.Port)
 		}

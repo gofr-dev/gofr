@@ -4,6 +4,7 @@ import (
 	"context"
 	"reflect"
 	"strconv"
+	"strings"
 )
 
 // Request is an abstraction over the actual command with flags. This abstraction is useful because it allows us
@@ -13,6 +14,8 @@ type Request struct {
 	flags  map[string]bool
 	params map[string]string
 }
+
+const trueString = "true"
 
 // TODO - use statement to parse the request to populate the flags and params.
 
@@ -24,6 +27,37 @@ func NewRequest(args []string) *Request {
 		params: make(map[string]string),
 	}
 
+	const (
+		argsLen1 = 1
+		argsLen2 = 2
+	)
+
+	for _, arg := range args {
+		if arg == "" {
+			continue // This takes cares of cases where command has multiple space in between.
+		}
+
+		if arg[0] != '-' {
+			continue
+		}
+
+		a := ""
+		if arg[1] == '-' {
+			a = arg[2:]
+		} else {
+			a = arg[1:]
+		}
+
+		switch values := strings.Split(a, "="); len(values) {
+		case argsLen1:
+			// Support -t -a etc.
+			r.params[values[0]] = trueString
+		case argsLen2:
+			// Support -a=b
+			r.params[values[0]] = values[1]
+		}
+	}
+
 	return &r
 }
 
@@ -32,7 +66,7 @@ func (r *Request) Param(key string) string {
 	return r.params[key]
 }
 
-// PathParam returns the value of the parameter for key. This is equivalent to Param
+// PathParam returns the value of the parameter for key. This is equivalent to Param.
 func (r *Request) PathParam(key string) string {
 	return r.params[key]
 }
@@ -51,12 +85,12 @@ func (r *Request) Bind(i interface{}) error {
 			f := s.FieldByName(k)
 			// A Value can be changed only if it is addressable and not unexported struct field
 			if f.IsValid() && f.CanSet() {
-				// nolint:exhaustive // no need to add other cases
+				//nolint:exhaustive // no need to add other cases
 				switch f.Kind() {
 				case reflect.String:
 					f.SetString(v)
 				case reflect.Bool:
-					if v == "true" {
+					if v == trueString {
 						f.SetBool(true)
 					}
 				case reflect.Int:
