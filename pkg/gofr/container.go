@@ -57,7 +57,8 @@ func newContainer(config Config) *Container {
 		c.DB = &DB{db}
 
 		if err != nil {
-			c.Errorf("could not connect to database with Config %v error: %v", conf, err)
+			c.Errorf("could not connect with '%s' user to database '%s:%s'  error: %v",
+				conf.User, conf.HostName, conf.Port, err)
 		} else {
 			c.Logf("connected to '%s' database at %s:%s", conf.Database, conf.HostName, conf.Port)
 		}
