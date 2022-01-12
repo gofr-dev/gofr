@@ -1,19 +1,21 @@
 package logging
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 	"time"
 
-	"golang.org/x/crypto/ssh/terminal"
+	"github.com/vikash/gofr/pkg/gofr/http/middleware"
 
-	"cloud.google.com/go/logging"
+	"golang.org/x/term"
 )
 
 type Logger interface {
+	Debug(args ...interface{})
+	Debugf(format string, args ...interface{})
 	Log(args ...interface{})
 	Logf(format string, args ...interface{})
 	Info(args ...interface{})
@@ -26,7 +28,6 @@ type logger struct {
 	level      level
 	normalOut  io.Writer
 	errorOut   io.Writer
-	client     *logging.Client
 	isTerminal bool
 }
 
@@ -36,7 +37,7 @@ type logEntry struct {
 	Message interface{} `json:"message"`
 }
 
-func (l *logger) log(level level, format string, args ...interface{}) {
+func (l *logger) logf(level level, format string, args ...interface{}) {
 	if level < l.level {
 		return
 	}
@@ -63,37 +64,51 @@ func (l *logger) log(level level, format string, args ...interface{}) {
 	if l.isTerminal {
 		l.prettyPrint(entry, out)
 	} else {
-		json.NewEncoder(out).Encode(entry)
+		_ = json.NewEncoder(out).Encode(entry)
 	}
+}
 
+func (l *logger) Debug(args ...interface{}) {
+	l.logf(DEBUG, "", args...)
+}
+
+func (l *logger) Debugf(format string, args ...interface{}) {
+	l.logf(DEBUG, format, args...)
 }
 
 func (l *logger) Info(args ...interface{}) {
-	l.log(INFO, "", args...)
+	l.logf(INFO, "", args...)
 }
 
 func (l *logger) Infof(format string, args ...interface{}) {
-	l.log(INFO, format, args...)
+	l.logf(INFO, format, args...)
 }
 
 func (l *logger) Log(args ...interface{}) {
-	l.log(INFO, "", args...)
+	l.logf(INFO, "", args...)
 }
 
 func (l *logger) Logf(format string, args ...interface{}) {
-	l.log(INFO, format, args...)
+	l.logf(INFO, format, args...)
 }
 
 func (l *logger) Error(args ...interface{}) {
-	l.log(ERROR, "", args...)
+	l.logf(ERROR, "", args...)
 }
 
 func (l *logger) Errorf(format string, args ...interface{}) {
-	l.log(ERROR, format, args...)
+	l.logf(ERROR, format, args...)
 }
 
 func (l *logger) prettyPrint(e logEntry, out io.Writer) {
-	fmt.Fprintf(out, "\u001B[%dm%s\u001B[0m [%s] %v\n", e.Level.color(), e.Level.String()[0:4], e.Time.Format("15:04:05"), e.Message)
+	// Giving special treatment to framework's request log in terminal display. This does not add any overhead
+	// in running the server. Decent tradeoff for the interface to struct conversion anti-pattern.
+	if rl, ok := e.Message.(middleware.RequestLog); ok {
+		fmt.Fprintf(out, "\u001B[%dm%s\u001B[0m [%s] %d  %8dµs %s %s \n", e.Level.color(), e.Level.String()[0:4],
+			e.Time.Format("15:04:05"), rl.Response, rl.ResponseTime, rl.Method, rl.URI)
+	} else {
+		fmt.Fprintf(out, "\u001B[%dm%s\u001B[0m [%s] %v\n", e.Level.color(), e.Level.String()[0:4], e.Time.Format("15:04:05"), e.Message)
+	}
 }
 
 func NewLogger(level level) Logger {
@@ -103,12 +118,17 @@ func NewLogger(level level) Logger {
 		level:     level,
 	}
 
-	client, err := logging.NewClient(context.Background(), "my-project")
-	if err != nil {
-		l.client = client
-	}
-
 	l.isTerminal = checkIfTerminal(l.normalOut)
+
+	return l
+}
+
+// TODO - Do we need this? Only used for CMD log silencing.
+func NewSilentLogger() Logger {
+	l := &logger{
+		normalOut: ioutil.Discard,
+		errorOut:  ioutil.Discard,
+	}
 
 	return l
 }
@@ -116,7 +136,7 @@ func NewLogger(level level) Logger {
 func checkIfTerminal(w io.Writer) bool {
 	switch v := w.(type) {
 	case *os.File:
-		return terminal.IsTerminal(int(v.Fd()))
+		return term.IsTerminal(int(v.Fd()))
 	default:
 		return false
 	}

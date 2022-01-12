@@ -28,10 +28,11 @@ func (l level) String() string {
 	case FATAL:
 		return "FATAL"
 	default:
-		return "INFO"
+		return ""
 	}
 }
 
+//nolint:gomnd // Color codes are sent as numbers
 func (l level) color() uint {
 	switch l {
 	case ERROR, FATAL:
@@ -39,6 +40,8 @@ func (l level) color() uint {
 	case WARN, NOTICE:
 		return 33
 	case INFO:
+		return 36
+	case DEBUG:
 		return 36
 	default:
 		return 37

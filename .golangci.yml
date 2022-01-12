@@ -112,11 +112,16 @@ linters:
   # - testpackage # We also need to do unit test for unexported functions. And adding _internal in all files is cumbersome.
 
 
+service:
+  golangci-lint-version: 1.37.x
 
 issues:
+  # exclude-use-default: false
   # exclude-use-default: false # By default, golangci-lint does not enforce comments on exported types. We want it.
   # Excluding configuration per-path, per-linter, per-text and per-source
   exclude-rules:
     - path: _test\.go
       linters:
         - gomnd
+        - dupl
+        - goconst

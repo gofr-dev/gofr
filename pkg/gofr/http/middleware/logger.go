@@ -21,37 +21,31 @@ func (w *StatusResponseWriter) WriteHeader(status int) {
 	w.ResponseWriter.WriteHeader(status)
 }
 
-type LogLine struct {
-	ID           string
-	StartTime    string
-	ResponseTime int64
-	Method       string
-	UserAgent    string
-	IP           string
-	URI          string
-	Response     int
-}
-
-func (l *LogLine) String() string {
-	line, _ := json.Marshal(l)
-	return string(line)
+type RequestLog struct {
+	ID           string `json:"id,omitempty"`
+	StartTime    string `json:"start_time,omitempty"`
+	ResponseTime int64  `json:"response_time,omitempty"`
+	Method       string `json:"method,omitempty"`
+	UserAgent    string `json:"user_agent,omitempty"`
+	IP           string `json:"ip,omitempty"`
+	URI          string `json:"uri,omitempty"`
+	Response     int    `json:"response,omitempty"`
 }
 
 type logger interface {
 	Log(...interface{})
-	Errorf(string, ...interface{})
+	Error(...interface{})
 }
 
 // Logging is a middleware which logs response status and time in microseconds along with other data.
 func Logging(logger logger) func(inner http.Handler) http.Handler {
 	return func(inner http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			defer panicRecovery(w, logger)
 			start := time.Now()
 			srw := &StatusResponseWriter{ResponseWriter: w}
 
 			defer func(res *StatusResponseWriter, req *http.Request) {
-				l := LogLine{
+				l := RequestLog{
 					ID:           trace.SpanFromContext(r.Context()).SpanContext().TraceID().String(),
 					StartTime:    start.Format("2006-01-02T15:04:05.999999999-07:00"),
 					ResponseTime: time.Since(start).Nanoseconds() / 1000,
@@ -65,6 +59,8 @@ func Logging(logger logger) func(inner http.Handler) http.Handler {
 					logger.Log(l)
 				}
 			}(srw, r)
+
+			defer panicRecovery(srw, logger)
 
 			inner.ServeHTTP(srw, r)
 		})
@@ -85,6 +81,11 @@ func getIPAddress(r *http.Request) string {
 	return strings.TrimSpace(ipAddress)
 }
 
+type panicLog struct {
+	Error      string `json:"error,omitempty"`
+	StackTrace string `json:"stack_trace,omitempty"`
+}
+
 func panicRecovery(w http.ResponseWriter, logger logger) {
 	re := recover()
 
@@ -98,7 +99,10 @@ func panicRecovery(w http.ResponseWriter, logger logger) {
 		default:
 			e = "Unknown panic type"
 		}
-		logger.Errorf("Panicked: %v Trace: %v", e, string(debug.Stack()))
+		logger.Error(panicLog{
+			Error:      e,
+			StackTrace: string(debug.Stack()),
+		})
 
 		w.WriteHeader(http.StatusInternalServerError)
 

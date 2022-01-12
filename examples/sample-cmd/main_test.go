@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/vikash/gofr/pkg/gofr/testutil"
@@ -22,5 +23,23 @@ func TestCMDRunWithProperArg(t *testing.T) {
 	output := testutil.StdoutOutputForFunc(main)
 	if output != expectedOutput {
 		t.Errorf("Expected: %s\n Got: %s", expectedOutput, output)
+	}
+}
+
+func TestCMDRunWithParams(t *testing.T) {
+	expectedOutput := "Hello Vikash!"
+
+	testcases := []string{
+		"command params -name=Vikash",
+		"command params   -name=Vikash",
+		"command -name=Vikash params",
+	}
+
+	for _, tc := range testcases {
+		os.Args = strings.Split(tc, " ")
+		output := testutil.StdoutOutputForFunc(main)
+		if output != expectedOutput {
+			t.Errorf("Expected: %s\n Got: %s", expectedOutput, output)
+		}
 	}
 }

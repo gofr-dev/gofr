@@ -29,7 +29,11 @@ func (cmd *cmd) Run(container *Container) {
 	// Removing all flags and putting everything else as a part of command.
 	// So, unlike native flag package we can put subcommands anywhere
 	for _, a := range args {
-		if a[1] != '-' {
+		if a == "" {
+			continue // This takes cares of cases where command has multiple space in between.
+		}
+
+		if a[0] != '-' {
 			command = command + " " + a
 		}
 	}
