@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"os"
 	"reflect"
 	"strconv"
 	"strings"
@@ -73,6 +74,13 @@ func (r *Request) PathParam(key string) string {
 
 func (r *Request) Context() context.Context {
 	return context.Background()
+}
+func (r *Request) HostName() string {
+	h, err := os.Hostname()
+	if err != nil {
+		return ""
+	}
+	return h
 }
 
 func (r *Request) Bind(i interface{}) error {
