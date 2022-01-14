@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 
@@ -43,6 +44,14 @@ func (r *Request) Bind(i interface{}) error {
 	}
 
 	return json.Unmarshal(body, &i)
+}
+
+func (r *Request) HostName() string {
+	proto := r.req.Header.Get("X-forwarded-proto")
+	if proto == "" {
+		proto = "http"
+	}
+	return fmt.Sprintf("%s://%s", proto, r.req.Host)
 }
 
 func (r *Request) body() ([]byte, error) {
