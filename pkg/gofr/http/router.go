@@ -21,6 +21,7 @@ func NewRouter() *Router {
 	muxRouter.Use(
 		middleware.Tracer,
 		middleware.Logging(logging.NewLogger(logging.INFO)),
+		middleware.CORS(),
 	)
 
 	return &Router{
