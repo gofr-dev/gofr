@@ -39,7 +39,7 @@ require (
 	github.com/joho/godotenv v1.4.0
 	github.com/lib/pq v1.10.7
 	github.com/newrelic/go-agent v3.20.2+incompatible
-	github.com/pkg/sftp v1.13.5
+	github.com/pkg/sftp v1.13.6
 	github.com/prometheus/client_golang v1.13.0
 	github.com/stretchr/testify v1.8.4
 	github.com/xdg/scram v1.0.5
