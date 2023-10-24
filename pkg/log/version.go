@@ -1,3 +1,3 @@
 package log
 
-const GofrVersion = "dev"
+const GofrVersion = "1.0.0"
