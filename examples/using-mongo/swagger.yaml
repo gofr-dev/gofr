@@ -1,0 +1,100 @@
+
+openapi: 3.0.1
+info:
+  title: Mongo Example
+  description:  Documentation for endpoints of using-mongo examaple
+  version: '0.1'
+servers:
+  - url: 'http://api.staging.zopsmart.com/inventory-service'
+paths:
+  /customer:
+    get:
+      tags:
+        - Customer
+      description: Returns All the customers.
+      parameters:
+        - name: name
+          in: query
+          schema:
+            type: string
+          example: 'person'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: string
+              examples:
+                'data':
+                  value: 
+                        [ 
+                          {
+                            "name": "person",
+                            "age": 12,
+                            "city": "Banglore"
+                          },
+                          {
+                              "name": "customer",
+                              "age": 20,
+                              "city": "Banglore"
+                          }
+                        ]
+                         
+    post:
+      tags: 
+        - Customer
+      description: Creates new Customer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Customer'
+            example: {
+                        name: "person",
+                        age: 20,
+                        city: "banglore"
+                     }
+      responses:
+        '201':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+              examples: 
+                'data': 
+                  value: {"data":"New Customer Added!"}
+    delete:
+      tags: 
+        - Customer
+      description: Deletes the customers by name.
+      parameters:
+        - name: name
+          in: query
+          schema:
+            type: string
+          example: 'person'
+      responses:
+        '204':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: string
+              examples:
+                'data':
+                  value: []
+components:
+  schemas:
+    Customer:
+      properties:
+        name:
+          type: string
+          example: "person"
+        age:
+          type: integer
+          example: 20
+        city:
+          type: string
+          example: "Banglore"

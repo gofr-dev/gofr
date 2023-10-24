@@ -1,0 +1,1923 @@
+{
+  "openapi": "3.0.1",
+  "info": {
+    "version": "1.0.0",
+    "title": "Sample API",
+    "description": "This is a sample API description that provides details about various endpoints, their functionality, and response formats."
+  },
+  "servers": [
+    {
+      "url": "http://localhost:9000"
+    }
+  ],
+  "paths": {
+    "/hello-world": {
+      "get": {
+        "tags": [
+          "sample-api"
+        ],
+        "summary": "Retrieve a \"Hello World!\" Message",
+        "description": "It returns a simple \"Hello World!\" message.",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "examples": {
+                  "data": {
+                    "value": {
+                      "data": "Hello World!"
+                    }
+                  }
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "string"
+                    }
+                  },
+                  "xml": {
+                    "name": "response"
+                  }
+                },
+                "examples": {
+                  "data": {
+                    "value": "<Response>\n  <data>Hello World!</data>\n</Response>\n"
+                  }
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "examples": {
+                  "data": {
+                    "value": "&{Hello World! <nil>}"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "errors": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "code": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          },
+                          "datetime": {
+                            "type": "object",
+                            "properties": {
+                              "value": {
+                                "type": "string",
+                                "format": "date-time"
+                              },
+                              "timezone": {
+                                "type": "string"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "examples": {
+                  "error": {
+                    "value": {
+                      "errors": [
+                        {
+                          "code": "Invalid Parameter",
+                          "reason": "This request has invalid parameters",
+                          "datetime": {
+                            "value": "2023-05-23T16:18:16Z",
+                            "timezone": "IST"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "string"
+                    }
+                  },
+                  "xml": {
+                    "name": "response"
+                  }
+                },
+                "examples": {
+                  "error": {
+                    "value": "<MultipleErrors>\n    <errors>\n        <StatusCode>400</StatusCode>\n        <Code>Invalid Parameter</Code>\n        <Reason>This request has invalid parameters</Reason>\n        <ResourceID></ResourceID>\n        <Path></Path>\n        <Value>2023-05-23T16:18:16Z</Value>\n        <TimeZone>IST</TimeZone>\n    </errors>\n</MultipleErrors>\n"
+                  }
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "company": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "examples": {
+                  "error": {
+                    "value": "This request has invalid parameters"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Invalid Route",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "errors": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "code": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          },
+                          "datetime": {
+                            "type": "object",
+                            "properties": {
+                              "value": {
+                                "type": "string",
+                                "format": "date-time"
+                              },
+                              "timezone": {
+                                "type": "string"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "examples": {
+                  "error": {
+                    "value": {
+                      "errors": [
+                        {
+                          "code": "Invalid Route",
+                          "reason": "Route GET /hello-worlda not found",
+                          "datetime": {
+                            "value": "2023-05-24T11:36:08Z",
+                            "timezone": "IST"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "string"
+                    }
+                  },
+                  "xml": {
+                    "name": "response"
+                  }
+                },
+                "examples": {
+                  "error": {
+                    "value": "<MultipleErrors>\n  <errors>\n      <StatusCode>404</StatusCode>\n      <Code>Invalid Route</Code>\n      <Reason>Route GET /hello-worlda not found</Reason>\n      <ResourceID></ResourceID>\n      <Path></Path>\n      <Value>2023-05-24T11:36:08Z</Value>\n      <TimeZone>IST</TimeZone>\n  </errors>\n</MultipleErrors>\n"
+                  }
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "company": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "examples": {
+                  "error": {
+                    "value": "Route GET /hello-worlda not found"
+                  }
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Method Not Allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "errors": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "code": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          },
+                          "datetime": {
+                            "type": "object",
+                            "properties": {
+                              "value": {
+                                "type": "string",
+                                "format": "date-time"
+                              },
+                              "timezone": {
+                                "type": "string"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "examples": {
+                  "error": {
+                    "value": {
+                      "errors": [
+                        {
+                          "code": "Invalid Method",
+                          "reason": "POST method not allowed for Route POST /hello-world",
+                          "datetime": {
+                            "value": "2023-05-23T14:53:06Z",
+                            "timezone": "IST"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "string"
+                    }
+                  },
+                  "xml": {
+                    "name": "response"
+                  }
+                },
+                "examples": {
+                  "error": {
+                    "value": "<MultipleErrors>\n  <errors>\n      <StatusCode>405</StatusCode>\n      <Code>Invalid Method</Code>\n      <Reason>POST method not allowed for Route POST /hello-world</Reason>\n      <ResourceID></ResourceID>\n      <Path></Path>\n      <Value>2023-05-23T14:53:06Z</Value>\n      <TimeZone>IST</TimeZone>\n  </errors>\n</MultipleErrors>\n"
+                  }
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "company": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "examples": {
+                  "error": {
+                    "value": "POST method not allowed for Route POST /hello-world"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/hello": {
+      "get": {
+        "tags": [
+          "sample-api"
+        ],
+        "summary": "Retrieve a Personalized Greeting",
+        "description": "It retrieves a personalized greeting by providing a name as a query parameter.",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "example": "Rohan"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string",
+                  "properties": {
+                    "data": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "examples": {
+                  "data": {
+                    "value": {
+                      "data": "Hello Rohan"
+                    }
+                  }
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "string"
+                    }
+                  },
+                  "xml": {
+                    "name": "response"
+                  }
+                },
+                "examples": {
+                  "data": {
+                    "value": "<Response>\n  <data>Hello Rohan</data>\n</Response>\n"
+                  }
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "properties": {
+                    "data": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "examples": {
+                  "data": {
+                    "value": "&{Hello Rohan <nil>}"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "errors": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "code": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          },
+                          "datetime": {
+                            "type": "object",
+                            "properties": {
+                              "value": {
+                                "type": "string",
+                                "format": "date-time"
+                              },
+                              "timezone": {
+                                "type": "string"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "examples": {
+                  "error": {
+                    "value": {
+                      "errors": [
+                        {
+                          "code": "Invalid Parameter",
+                          "reason": "This request has invalid parameters",
+                          "datetime": {
+                            "value": "2023-05-23T16:18:16Z",
+                            "timezone": "IST"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "string"
+                    }
+                  },
+                  "xml": {
+                    "name": "response"
+                  }
+                },
+                "examples": {
+                  "error": {
+                    "value": "<MultipleErrors>\n    <errors>\n        <StatusCode>400</StatusCode>\n        <Code>Invalid Parameter</Code>\n        <Reason>This request has invalid parameters</Reason>\n        <ResourceID></ResourceID>\n        <Path></Path>\n        <Value>2023-05-23T16:18:16Z</Value>\n        <TimeZone>IST</TimeZone>\n    </errors>\n</MultipleErrors>            \n"
+                  }
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "company": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "examples": {
+                  "error": {
+                    "value": "This request has invalid parameters"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Invalid Route",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "errors": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "code": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          },
+                          "datetime": {
+                            "type": "object",
+                            "properties": {
+                              "value": {
+                                "type": "string",
+                                "format": "date-time"
+                              },
+                              "timezone": {
+                                "type": "string"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "examples": {
+                  "error": {
+                    "value": {
+                      "errors": [
+                        {
+                          "code": "Invalid Route",
+                          "reason": "Route GET /helloa not found",
+                          "datetime": {
+                            "value": "2023-05-24T11:36:08Z",
+                            "timezone": "IST"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "string"
+                    }
+                  },
+                  "xml": {
+                    "name": "response"
+                  }
+                },
+                "examples": {
+                  "error": {
+                    "value": "<MultipleErrors>\n    <errors>\n        <StatusCode>404</StatusCode>\n        <Code>Invalid Route</Code>\n        <Reason>Route GET /helloa not found</Reason>\n        <ResourceID></ResourceID>\n        <Path></Path>\n        <Value>22023-05-24T11:36:08Z</Value>\n        <TimeZone>IST</TimeZone>\n    </errors>\n</MultipleErrors>            \n"
+                  }
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "company": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "examples": {
+                  "error": {
+                    "value": "Route GET /helloa not found"
+                  }
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Method Not Allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "errors": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "code": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          },
+                          "datetime": {
+                            "type": "object",
+                            "properties": {
+                              "value": {
+                                "type": "string",
+                                "format": "date-time"
+                              },
+                              "timezone": {
+                                "type": "string"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "examples": {
+                  "error": {
+                    "value": {
+                      "errors": [
+                        {
+                          "code": "Invalid Method",
+                          "reason": "POST method not allowed for Route POST /hello",
+                          "datetime": {
+                            "value": "2023-05-23T14:53:06Z",
+                            "timezone": "IST"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "string"
+                    }
+                  },
+                  "xml": {
+                    "name": "response"
+                  }
+                },
+                "examples": {
+                  "error": {
+                    "value": "<MultipleErrors>\n  <errors>\n      <StatusCode>405</StatusCode>\n      <Code>Invalid Method</Code>\n      <Reason>POST method not allowed for Route POST /hello</Reason>\n      <ResourceID></ResourceID>\n      <Path></Path>\n      <Value>2023-05-23T14:53:06Z</Value>\n      <TimeZone>IST</TimeZone>\n  </errors>\n</MultipleErrors>\n"
+                  }
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "company": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "examples": {
+                  "error": {
+                    "value": "POST method not allowed for Route POST /hello"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/json": {
+      "get": {
+        "tags": [
+          "sample-api"
+        ],
+        "summary": "Retireve JSON Data",
+        "description": "It returns JSON data, including the name and company properties.",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "company": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "examples": {
+                  "data": {
+                    "value": {
+                      "data": {
+                        "name": "Vikash",
+                        "company": "ZopSmart"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "errors": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "code": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          },
+                          "datetime": {
+                            "type": "object",
+                            "properties": {
+                              "value": {
+                                "type": "string",
+                                "format": "date-time"
+                              },
+                              "timezone": {
+                                "type": "string"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "examples": {
+                  "error": {
+                    "value": {
+                      "errors": [
+                        {
+                          "code": "Invalid Parameter",
+                          "reason": "This request has invalid parameters",
+                          "datetime": {
+                            "value": "2023-05-23T16:18:16Z",
+                            "timezone": "IST"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Invalid Route",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "errors": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "code": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          },
+                          "datetime": {
+                            "type": "object",
+                            "properties": {
+                              "value": {
+                                "type": "string",
+                                "format": "date-time"
+                              },
+                              "timezone": {
+                                "type": "string"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "examples": {
+                  "error": {
+                    "value": {
+                      "errors": [
+                        {
+                          "code": "Invalid Route",
+                          "reason": "Route GET /jsona not found",
+                          "datetime": {
+                            "value": "2023-05-24T11:36:08Z",
+                            "timezone": "IST"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Method Not Allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "errors": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "code": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          },
+                          "datetime": {
+                            "type": "object",
+                            "properties": {
+                              "value": {
+                                "type": "string",
+                                "format": "date-time"
+                              },
+                              "timezone": {
+                                "type": "string"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "examples": {
+                  "error": {
+                    "value": {
+                      "errors": [
+                        {
+                          "code": "Invalid Method",
+                          "reason": "POST method not allowed for Route POST /json",
+                          "datetime": {
+                            "value": "2023-05-23T16:18:16Z",
+                            "timezone": "IST"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/user/{name}": {
+      "get": {
+        "tags": [
+          "sample-api"
+        ],
+        "summary": "Retrieve User Information",
+        "description": "It retrieves user information based on the provided name as a path parameter.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "example": "Vikash"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "company": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "examples": {
+                  "data": {
+                    "value": {
+                      "data": {
+                        "name": "Vikash",
+                        "company": "ZopSmart"
+                      }
+                    }
+                  }
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "string"
+                    }
+                  },
+                  "xml": {
+                    "name": "response"
+                  }
+                },
+                "examples": {
+                  "data": {
+                    "value": "<Response>\n  <data>\n    <Name>Vikash</Name>\n    <Company>ZopSmart</Company>\n  </data>\n</Response>\n  \n"
+                  }
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "company": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "examples": {
+                  "data": {
+                    "value": "&{{Vikash ZopSmart} <nil>}"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Entity Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "errors": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "code": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          },
+                          "datetime": {
+                            "type": "object",
+                            "properties": {
+                              "value": {
+                                "type": "string"
+                              },
+                              "timezone": {
+                                "type": "string"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "examples": {
+                  "error": {
+                    "value": {
+                      "errors": [
+                        {
+                          "code": "Entity Not Found",
+                          "reason": "No 'user' found for Id: 'Rohan'",
+                          "datetime": {
+                            "value": "IST",
+                            "timezone": "2023-05-23T16:18:16Z"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "string"
+                    }
+                  },
+                  "xml": {
+                    "name": "response"
+                  }
+                },
+                "examples": {
+                  "error": {
+                    "value": "<MultipleErrors>\n    <errors>\n        <StatusCode>404</StatusCode>\n        <Code>Entity Not Found</Code>\n        <Reason>No &#39;user&#39; found for Id: &#39;Rohan&#39;</Reason>\n        <ResourceID></ResourceID>\n        <Path></Path>\n        <Value>2023-05-23T16:18:16Z</Value>\n        <TimeZone>IST</TimeZone>\n    </errors>\n</MultipleErrors>\n"
+                  }
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "company": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "examples": {
+                  "error": {
+                    "value": "No 'user' found for Id: 'Rohan'"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/error": {
+      "get": {
+        "tags": [
+          "sample-api"
+        ],
+        "summary": "Handle Error",
+        "description": "It simulates an error condition and returns an appropriate error response.",
+        "responses": {
+          "404": {
+            "description": "Invalid Route",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "errors": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "code": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          },
+                          "datetime": {
+                            "type": "object",
+                            "properties": {
+                              "value": {
+                                "type": "string",
+                                "format": "date-time"
+                              },
+                              "timezone": {
+                                "type": "string"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "examples": {
+                  "error": {
+                    "value": {
+                      "errors": [
+                        {
+                          "code": "Invalid Route",
+                          "reason": "Route GET /errora not found",
+                          "datetime": {
+                            "value": "2023-05-24T11:36:08Z",
+                            "timezone": "IST"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Method Not Allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "errors": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "code": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          },
+                          "datetime": {
+                            "type": "object",
+                            "properties": {
+                              "value": {
+                                "type": "string",
+                                "format": "date-time"
+                              },
+                              "timezone": {
+                                "type": "string"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "examples": {
+                  "error": {
+                    "value": {
+                      "errors": [
+                        {
+                          "code": "Invalid Method",
+                          "reason": "POST method not allowed for Route POST /error",
+                          "datetime": {
+                            "value": "2023-05-23T16:18:16Z",
+                            "timezone": "IST"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "errors": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "code": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          },
+                          "datetime": {
+                            "type": "object",
+                            "properties": {
+                              "value": {
+                                "type": "string"
+                              },
+                              "timezone": {
+                                "type": "string"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "examples": {
+                  "error": {
+                    "value": {
+                      "errors": [
+                        {
+                          "code": "UNKNOWN_ERROR",
+                          "reason": "unknown error occurred",
+                          "datetime": {
+                            "value": "IST",
+                            "timezone": "2023-05-23T16:18:16Z"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/log": {
+      "get": {
+        "tags": [
+          "sample-api"
+        ],
+        "summary": "Log Message",
+        "description": "It demonstrates various use cases of logging by allowing messages to be logged at multiple levels.",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string",
+                  "properties": {
+                    "data": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "examples": {
+                  "data": {
+                    "value": {
+                      "data": "Logging OK"
+                    }
+                  }
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "string"
+                    }
+                  },
+                  "xml": {
+                    "name": "response"
+                  }
+                },
+                "examples": {
+                  "data": {
+                    "value": "<Response>\n  <data>Logging OK</data>\n</Response>\n"
+                  }
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "company": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "examples": {
+                  "data": {
+                    "value": "&{Logging OK <nil>}"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "errors": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "code": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          },
+                          "datetime": {
+                            "type": "object",
+                            "properties": {
+                              "value": {
+                                "type": "string",
+                                "format": "date-time"
+                              },
+                              "timezone": {
+                                "type": "string"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "examples": {
+                  "error": {
+                    "value": {
+                      "errors": [
+                        {
+                          "code": "Invalid Parameter",
+                          "reason": "This request has invalid parameters",
+                          "datetime": {
+                            "value": "2023-05-23T16:18:16Z",
+                            "timezone": "IST"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "string"
+                    }
+                  },
+                  "xml": {
+                    "name": "response"
+                  }
+                },
+                "examples": {
+                  "error": {
+                    "value": "<MultipleErrors>\n  <errors>\n      <StatusCode>400</StatusCode>\n      <Code>Invalid Parameter</Code>\n      <Reason>This request has invalid parameters</Reason>\n      <ResourceID></ResourceID>\n      <Path></Path>\n      <Value>2023-05-23T16:18:16Z</Value>\n      <TimeZone>IST</TimeZone>\n  </errors>\n</MultipleErrors>\n"
+                  }
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "company": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "examples": {
+                  "error": {
+                    "value": "This request has invalid parameters"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Invalid Route",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "errors": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "code": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          },
+                          "datetime": {
+                            "type": "object",
+                            "properties": {
+                              "value": {
+                                "type": "string",
+                                "format": "date-time"
+                              },
+                              "timezone": {
+                                "type": "string"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "examples": {
+                  "error": {
+                    "value": {
+                      "errors": [
+                        {
+                          "code": "Invalid Route",
+                          "reason": "Route GET /loga not found",
+                          "datetime": {
+                            "value": "2023-05-24T11:36:08Z",
+                            "timezone": "IST"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "string"
+                    }
+                  },
+                  "xml": {
+                    "name": "response"
+                  }
+                },
+                "examples": {
+                  "error": {
+                    "value": "<MultipleErrors>\n  <errors>\n      <StatusCode>404</StatusCode>\n      <Code>Invalid Route</Code>\n      <Reason>Route GET /loga not found</Reason>\n      <ResourceID></ResourceID>\n      <Path></Path>\n      <Value>2023-05-24T11:36:08Z</Value>\n      <TimeZone>IST</TimeZone>\n  </errors>\n</MultipleErrors>\n"
+                  }
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "company": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "examples": {
+                  "error": {
+                    "value": "Route GET /loga not found"
+                  }
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Method Not Allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "errors": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "code": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          },
+                          "datetime": {
+                            "type": "object",
+                            "properties": {
+                              "value": {
+                                "type": "string",
+                                "format": "date-time"
+                              },
+                              "timezone": {
+                                "type": "string"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "examples": {
+                  "error": {
+                    "value": {
+                      "errors": [
+                        {
+                          "code": "Invalid Method",
+                          "reason": "POST method not allowed for Route POST /log",
+                          "datetime": {
+                            "value": "2023-05-23T16:18:16Z",
+                            "timezone": "IST"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "string"
+                    }
+                  },
+                  "xml": {
+                    "name": "response"
+                  }
+                },
+                "examples": {
+                  "error": {
+                    "value": "<MultipleErrors>\n  <errors>\n      <StatusCode>405</StatusCode>\n      <Code>Invalid Method</Code>\n      <Reason>POST method not allowed for Route POST /log</Reason>\n      <ResourceID></ResourceID>\n      <Path></Path>\n      <Value>2023-05-23T16:18:16Z</Value>\n      <TimeZone>IST</TimeZone>\n  </errors>\n</MultipleErrors>\n"
+                  }
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "company": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "examples": {
+                  "error": {
+                    "value": "POST method not allowed for Route POST /log"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/raw": {
+      "get": {
+        "tags": [
+          "sample-api"
+        ],
+        "summary": "Retrieve Raw Response",
+        "description": "Raw endpoint gives response directly without any additional wrapping inside the field data.",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "examples": {
+                  "data": {
+                    "value": {
+                      "name": "Mukund"
+                    }
+                  }
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "string"
+                    }
+                  },
+                  "xml": {
+                    "name": "response"
+                  }
+                },
+                "examples": {
+                  "data": {
+                    "value": "<details>\n  <Name>Mukund</Name>\n</details>\n"
+                  }
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "company": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "examples": {
+                  "data": {
+                    "value": "{Mukund}"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "errors": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "code": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          },
+                          "datetime": {
+                            "type": "object",
+                            "properties": {
+                              "value": {
+                                "type": "string",
+                                "format": "date-time"
+                              },
+                              "timezone": {
+                                "type": "string"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "examples": {
+                  "error": {
+                    "value": {
+                      "errors": [
+                        {
+                          "code": "Invalid Parameter",
+                          "reason": "This request has invalid parameters",
+                          "datetime": {
+                            "value": "2023-05-23T16:18:16Z",
+                            "timezone": "IST"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "string"
+                    }
+                  },
+                  "xml": {
+                    "name": "response"
+                  }
+                },
+                "examples": {
+                  "error": {
+                    "value": "<MultipleErrors>\n    <errors>\n        <StatusCode>400</StatusCode>\n        <Code>Invalid Parameter</Code>\n        <Reason>This request has invalid parameters</Reason>\n        <ResourceID></ResourceID>\n        <Path></Path>\n        <Value>2023-05-23T16:18:16Z</Value>\n        <TimeZone>IST</TimeZone>\n    </errors>\n</MultipleErrors>\n"
+                  }
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "company": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "examples": {
+                  "error": {
+                    "value": "This request has invalid parameters"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Invalid Route",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "errors": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "code": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          },
+                          "datetime": {
+                            "type": "object",
+                            "properties": {
+                              "value": {
+                                "type": "string",
+                                "format": "date-time"
+                              },
+                              "timezone": {
+                                "type": "string"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "examples": {
+                  "error": {
+                    "value": {
+                      "errors": [
+                        {
+                          "code": "Invalid Route",
+                          "reason": "Route GET /rawa not found",
+                          "datetime": {
+                            "value": "2023-05-24T11:36:08Z",
+                            "timezone": "IST"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "string"
+                    }
+                  },
+                  "xml": {
+                    "name": "response"
+                  }
+                },
+                "examples": {
+                  "error": {
+                    "value": "<MultipleErrors>\n  <errors>\n      <StatusCode>404</StatusCode>\n      <Code>Invalid Route</Code>\n      <Reason>Route GET /rawa not found</Reason>\n      <ResourceID></ResourceID>\n      <Path></Path>\n      <Value>2023-05-24T11:36:08Z</Value>\n      <TimeZone>IST</TimeZone>\n  </errors>\n</MultipleErrors>\n"
+                  }
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "company": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "examples": {
+                  "error": {
+                    "value": "Route GET /rawa not found"
+                  }
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Method Not Allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "errors": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "code": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          },
+                          "datetime": {
+                            "type": "object",
+                            "properties": {
+                              "value": {
+                                "type": "string",
+                                "format": "date-time"
+                              },
+                              "timezone": {
+                                "type": "string"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "examples": {
+                  "error": {
+                    "value": {
+                      "errors": [
+                        {
+                          "code": "Invalid Method",
+                          "reason": "POST method not allowed for Route POST /raw",
+                          "datetime": {
+                            "value": "2023-05-23T16:18:16Z",
+                            "timezone": "IST"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "string"
+                    }
+                  },
+                  "xml": {
+                    "name": "response"
+                  }
+                },
+                "examples": {
+                  "error": {
+                    "value": "<MultipleErrors>\n  <errors>\n    <StatusCode>405</StatusCode>\n    <Code>Invalid Method</Code>\n    <Reason>POST method not allowed for Route POST /raw</Reason>\n    <ResourceID></ResourceID>\n    <Path></Path>\n    <Value>2023-05-23T16:18:16Z</Value>\n    <TimeZone>IST</TimeZone>\n  </errors>\n</MultipleErrors>\n"
+                  }
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "company": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "examples": {
+                  "error": {
+                    "value": "POST method not allowed for Route POST /raw"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,75 @@
+
+penapi: 3.0.1
+info:
+  title: Sample API
+  description:  Some description
+  version: '0.1'
+servers:
+  - url: 'http://api.staging.zopsmart.com/inventory-service'
+paths:
+  /hello:
+    get:
+      tags:
+        - Hello
+      description: Responds with Hello followed by the name passed in the url query
+      parameters:
+        - name: name
+          in: query
+          schema:
+            type: string
+          example: 'Rohan'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: string
+              examples:
+                'data':
+                  value: "Hello Rohan"
+  /hello-world:
+    get:
+      tags: 
+        - Hello-World
+      description: Responds with Hello World!
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: string
+              examples:
+                'data':
+                  value: "Hello World!"
+  /json:
+    get:
+      tags: 
+        - JSON
+      description: Responds with a JSON string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: string
+              examples:
+                'data':
+                  value: '{Name: "Vikash", Company: "ZopSmart"}'
+  /error:
+    get:
+      tags: 
+        - Error
+      description: Responds with an error
+      responses:
+        '500':
+          description: Error
+          content:
+            application/json:
+              schema:
+                type: string
+              examples:
+                'errors':
+                  value: '[{ code: "500", reason: "somethings bad happened", datetime: {value: "2020-03-12T11:40:19Z", timezone: "IST"}}]'

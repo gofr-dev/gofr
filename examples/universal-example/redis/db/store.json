@@ -1,0 +1,8 @@
+[
+  {"Company": "ZopSmart", "Department": "IT", "Location": "BLR"},
+  {"Company": "Zopsmart", "Department": "Management", "Location": "Sydney"},
+  {"Company": "Amazon", "Department": "HR", "Location": "Munich"},
+  {"Company": "Microsoft", "Department": "Sales", "Location": "Barcelona"},
+  {"Company": "Google", "Department": "IT", "Location": "London"},
+  {"Company": "Facebook", "Department": "DevOps", "Location": "Munich"}
+]

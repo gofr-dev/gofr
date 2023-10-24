@@ -1,0 +1,15 @@
+syntax = "proto3";
+option go_package = "/grpc";
+
+message Response {
+    string firstName=1;
+    string secondName=2;
+}
+
+message ID {
+    string id=1;
+}
+
+service ExampleService {
+    rpc Get(ID) returns (Response);
+}

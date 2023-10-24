@@ -1,0 +1,276 @@
+{
+  "openapi": "3.0.1",
+  "info": {
+    "title": "remote-config-func",
+    "description": "functional service used to override configs at the the runtime, communicates with remote-config-data data service to update the configs",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "https://jsonplaceholder.typicode.com"
+    }
+  ],
+  "paths": {
+    "/users": {
+      "get": {
+        "tags": [
+          "configs"
+        ],
+        "summary": "GET all configs",
+        "description": "list all the configs",
+        "operationId": "getemployee",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfigsResponse"
+                },
+                "examples": {
+                  "GetAll": {
+                    "value": {
+                      "data": [
+                        {
+                          "id": "c07eb39d-2c20-11ec-a497-005056afc161",
+                          "serviceName": "user-assets-func",
+                          "config": {
+                            "LOG_LEVEL": "DEBUG",
+                            "MAX_DB_CONNECTIONS": "10"
+                          },
+                          "versionKey": "8917239812",
+                          "namespace": "user-assets",
+                          "cluster": "core-platform"
+                        },
+                        {
+                          "id": "3e951b16-bff5-4f41-9a2e-687ee8f63069",
+                          "serviceName": "subscription-func",
+                          "config": {
+                            "LOG_LEVEL": "INFO",
+                            "MAX_DB_CONNECTIONS": "15"
+                          },
+                          "versionKey": "8732460214",
+                          "namespace": "subscription",
+                          "cluster": "core-platform"
+                        }
+                      ]
+                    }
+                  },
+                  "namespace=user-assets": {
+                    "value": {
+                      "data": [
+                        {
+                          "id": "c07eb39d-2c20-11ec-a497-005056afc161",
+                          "serviceName": "user-assets-func",
+                          "config": {
+                            "LOG_LEVEL": "DEBUG",
+                            "MAX_DB_CONNECTIONS": "10"
+                          },
+                          "versionKey": "8917239812",
+                          "namespace": "user-assets",
+                          "cluster": "core-platform"
+                        }
+                      ]
+                    }
+                  },
+                  "serviceName=subscription-func": {
+                    "value": {
+                      "data": [
+                        {
+                          "id": "3e951b16-bff5-4f41-9a2e-687ee8f63069",
+                          "serviceName": "subscription-func",
+                          "config": {
+                            "LOG_LEVEL": "INFO",
+                            "MAX_DB_CONNECTIONS": "15"
+                          },
+                          "versionKey": "8732460214",
+                          "namespace": "subscription",
+                          "cluster": "core-platform"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ConfigsRequest": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "c07eb39d-2c20-11ec-a497-005056afc161"
+          },
+          "name": {
+            "type": "string",
+            "example": "harsh"
+          },
+          "salary": {
+            "type": "integer",
+            "example": 1000000000
+          },
+          "age": {
+            "type": "integer",
+            "example": 25
+          }
+        }
+      },
+      "ConfigsResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "example": "c07eb39d-2c20-11ec-a497-005056afc161"
+                },
+                "name": {
+                  "type": "string",
+                  "example": "harsh"
+                },
+                "salary": {
+                  "type": "integer",
+                  "example": 1000000000
+                },
+                "age": {
+                  "type": "integer",
+                  "example": 25
+                }
+              }
+            }
+          }
+        }
+      },
+      "MissingParam": {
+        "type": "object",
+        "properties": {
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "type": "string",
+                  "example": "Invalid Parameter"
+                },
+                "reason": {
+                  "type": "string",
+                  "example": "Incorrect value for parameter: body"
+                },
+                "datetime": {
+                  "type": "object",
+                  "properties": {
+                    "value": {
+                      "type": "string",
+                      "example": "2021-10-06T07:32:41Z"
+                    },
+                    "timezone": {
+                      "type": "string",
+                      "example": "IST"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "StatusNotFound": {
+        "type": "object",
+        "properties": {
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "type": "string",
+                  "example": "Invalid Route"
+                },
+                "reason": {
+                  "type": "string",
+                  "example": "Route <method> /config not found"
+                },
+                "datetime": {
+                  "type": "object",
+                  "properties": {
+                    "value": {
+                      "type": "string",
+                      "example": "2021-10-06T07:32:41Z"
+                    },
+                    "timezone": {
+                      "type": "string",
+                      "example": "IST"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "InternalServerError": {
+        "type": "object",
+        "properties": {
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "type": "string",
+                  "example": "Internal Server Error"
+                },
+                "reason": {
+                  "type": "string",
+                  "example": "DB Error"
+                },
+                "datetime": {
+                  "type": "object",
+                  "properties": {
+                    "value": {
+                      "type": "string",
+                      "example": "2021-10-06T07:32:41Z"
+                    },
+                    "timezone": {
+                      "type": "string",
+                      "example": "IST"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "parameters": {
+      "Pagelength": {
+        "name": "page",
+        "in": "query",
+        "description": "Page",
+        "required": true,
+        "schema": {
+          "type": "number"
+        }
+      },
+      "Startindex": {
+        "name": "limit",
+        "in": "query",
+        "description": "Limit",
+        "required": true,
+        "schema": {
+          "type": "number"
+        }
+      }
+    }
+  }
+}

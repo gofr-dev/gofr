@@ -1,0 +1,6 @@
+id,height,name,work_hours,created_at,active
+4,5.1,d,0h30m40s,2020-03-16 00:00:00,true
+1,6,e,5h40s,2002-03-16 10:05:01,false
+2,5.8,NULL,1h10m40s,2021-04-27 04:20:25,true
+3,5.9,a,12h50m0s,2020-03-16 12:40:07,false
+5,4.2,m,5h30m40s,2020-03-16 00:35:10,true

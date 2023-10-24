@@ -1,0 +1,12 @@
+version: '3'
+
+services:
+  localstack:
+    image: localstack/localstack
+    ports:
+      - "4566:4566"
+    environment:
+      - SERVICES=sns
+      - DEFAULT_REGION=eu-central-1
+      - AWS_ACCESS_KEY_ID=dummy1
+      - AWS_SECRET_ACCESS_KEY=dummy1
