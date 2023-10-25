@@ -1,7 +1,5 @@
-/*
-Package awssns provides notifier implementation for AWS Simple Notification Service(SNS) to publish-subscribe messages
-to an SNS topic.It offers features like message attribute customization and health checks to ensure the notifier's availability.
-*/
+// Package awssns provides notifier implementation for AWS Simple Notification Service(SNS) to publish-subscribe messages
+// to an SNS topic.It offers features like message attribute customization and health checks to ensure the notifier's availability.
 package awssns
 
 import (
@@ -39,7 +37,7 @@ type Config struct {
 	Protocol          string
 }
 
-// nolint // The declared global variable can be accessed across multiple functions
+//nolint // The declared global variable can be accessed across multiple functions
 var (
 	notifierReceiveCount = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "zs_notifier_receive_count",

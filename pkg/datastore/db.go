@@ -284,7 +284,7 @@ func (c GORMClient) logError(err error) {
 // else the healthCheck status will be DOWN
 func (c GORMClient) HealthCheck() types.Health {
 	resp := types.Health{
-		Name:     SqlStore,
+		Name:     SQLStore,
 		Status:   pkg.StatusDown,
 		Host:     c.config.HostName,
 		Database: c.config.Database,
@@ -292,19 +292,19 @@ func (c GORMClient) HealthCheck() types.Health {
 
 	// The following check is for the condition when the connection to SQL has not been made during initialization
 	if c.DB == nil {
-		c.logError(errors.HealthCheckFailed{Dependency: SqlStore, Reason: "sql not initialized"})
+		c.logError(errors.HealthCheckFailed{Dependency: SQLStore, Reason: "sql not initialized"})
 		return resp
 	}
 
 	sqlDB, err := c.DB.DB()
 	if err != nil {
-		c.logError(errors.HealthCheckFailed{Dependency: SqlStore, Err: err})
+		c.logError(errors.HealthCheckFailed{Dependency: SQLStore, Err: err})
 		return resp
 	}
 
 	err = sqlDB.Ping()
 	if err != nil {
-		c.logError(errors.HealthCheckFailed{Dependency: SqlStore, Err: err})
+		c.logError(errors.HealthCheckFailed{Dependency: SQLStore, Err: err})
 		return resp
 	}
 
@@ -318,7 +318,7 @@ func (c GORMClient) HealthCheck() types.Health {
 // else the healthCheck status will be DOWN
 func (c SQLXClient) HealthCheck() types.Health {
 	resp := types.Health{
-		Name:     SqlStore,
+		Name:     SQLStore,
 		Status:   pkg.StatusDown,
 		Host:     c.config.HostName,
 		Database: c.config.Database,
