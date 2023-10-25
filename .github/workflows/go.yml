@@ -201,10 +201,12 @@ jobs:
           branch: ${{github.ref}}
 
       - name: Upload Test Coverage to Code Climate
-        uses: paambaati/codeclimate-action@v3
+        uses: paambaati/codeclimate-action@v5.0.0
+        env:
+          CC_TEST_REPORTER_ID: ${{ secrets.CC_TEST_REPORTER_ID }}
         with:
-          coverage_files: build/coverage.out
-          api_token: ${{ secrets.CC_TEST_REPORTER_ID }}
+          coverageLocations: build/coverage.out
+
 
       - uses: actions/upload-artifact@v2
         with:
