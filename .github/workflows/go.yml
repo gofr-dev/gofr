@@ -178,7 +178,7 @@ jobs:
         with:
           debug: true
           coverageLocations: profile.cov:gocov
-          prefix: github/gofr-dev/gofr
+          prefix: github.com/gofr-dev/gofr
 
   code_quality:
     name: Code Quality🎖️
