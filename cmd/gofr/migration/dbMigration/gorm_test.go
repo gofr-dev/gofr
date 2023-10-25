@@ -62,7 +62,7 @@ func Test_Run(t *testing.T) {
 	}{
 		{"success case", "UP", g, nil},
 		{"failure case", "DOWN", g, &errors.Response{Reason: "error encountered in running the migration", Detail: errors.Error("test error")}},
-		{"db not initialized", "UP", &GORM{}, errors.DataStoreNotInitialized{DBName: datastore.SqlStore}},
+		{"db not initialized", "UP", &GORM{}, errors.DataStoreNotInitialized{DBName: datastore.SQLStore}},
 	}
 
 	for i, tc := range tests {
