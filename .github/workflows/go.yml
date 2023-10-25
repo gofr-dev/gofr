@@ -153,8 +153,8 @@ jobs:
 
       - name: Load Schema of YCQL
         run: |
-          temp=$(sudo docker ps | grep yugabyte | awk '{print $1}');
-          docker exec -i $temp /home/yugabyte/bin/ycqlsh < .github/setups/keyspace.ycql;
+          container_id=$(sudo docker ps | grep yugabyte | awk '{print $1}')
+          docker exec -i $container_id /home/yugabyte/bin/ycqlsh < .github/setups/keyspace.ycql
 
       - name: Get dependencies
         run: |
