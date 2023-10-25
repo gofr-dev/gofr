@@ -92,19 +92,19 @@ jobs:
       cassandra:
         image: cassandra:4.1
         ports:
-          - 9042:9042
-        options: --health-cmd "cqlsh --debug < .github/setups/keyspace.cql"
+          - 9041:9042
+        options: --health-cmd "cqlsh --debug"
 
       yugabyte-master:
         image: yugabytedb/yugabyte:latest
         ports:
           - "7000:7000"
           - "5433:5433"
-          - "9043:9042"
+          - "9042:9042"
         env:
           YB_MASTER_UI_PORT: 7000
           YSQL_PORT: 5433
-          YCQL_PORT: 9043
+          YCQL_PORT: 9042
 
       yugabyte-tserver:
         image: yugabytedb/yugabyte:latest
@@ -112,6 +112,11 @@ jobs:
           - "6000:6000"
         env:
           YB_TSERVER_UI_PORT: 6000
+
+      solr:
+        image: solr:8
+        ports:
+          - 8983:8983
 
     steps:
       - name: Checkout code into go module directory
@@ -125,14 +130,18 @@ jobs:
           go-version: 1.21
         id: Go
 
-      - name: Yugabyte setup
-        uses: yugabyte/yugabyte-db-action@master
-        with:
-          yb_image_tag: 2.14.5.0-b18
-          yb_master_ui_port: 7000
-          yb_tserver_ui_port: 6000
-          ysql_port: 5433
-          ycql_port: 9042
+      - name: Load Schema of Cassandra
+        run: |
+          docker exec -i ${{ job.services.cassandra.id }} cqlsh --debug  < .github/setups/keyspace.cql  
+
+#      - name: Yugabyte setup
+#        uses: yugabyte/yugabyte-db-action@master
+#        with:
+#          yb_image_tag: 2.14.5.0-b18
+#          yb_master_ui_port: 7000
+#          yb_tserver_ui_port: 6000
+#          ysql_port: 5433
+#          ycql_port: 9042
 
       - name: Set up SSL Enabled MySQL
         run: |
@@ -153,8 +162,6 @@ jobs:
 
       - name: Load Schema of Solr
         run: |
-          docker run -d --name solr -p 8983:8983 solr:8 -DzkRun;
-          sleep 10s;
           docker exec -i solr sh < .github/setups/solrSchema.sh;
 
       - name: Setup SFTP Server
