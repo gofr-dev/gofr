@@ -17,6 +17,9 @@ jobs:
   Unit-Testing:
     name: Unit-Testing🛠
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        go-version: [ 1.21, 1.20, 1.19 ]
     services:
       mysql:
         image: mysql:8.0.30
@@ -101,10 +104,10 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up  Go 1.21
+      - name: Set up Go ${{ matrix.go-version }}
         uses: actions/setup-go@v4
         with:
-          go-version: 1.21
+          go-version: ${{ matrix.go-version }}
         id: Go
 
       - name: Load Schema of Cassandra
@@ -174,39 +177,15 @@ jobs:
           go test ./... -short --tags=integration -v -coverprofile build/coverage.txt -coverpkg=./...
           cat build/coverage.txt | grep -v '.pb.go' > build/coverage.out
           go tool cover -func build/coverage.out | tee build/c.out
-
-      - name: Create Coverage Summary Report
-        if: github.event_name == 'pull_request'
-        run: |
-          git fetch origin ${{github.base_ref}}
-          git checkout ${{github.base_ref}}
-          git checkout ${{github.head_ref}}
-          git diff --name-status ${{github.base_ref}}..${{ github.head_ref }} > build/changed_files.text
-          chmod u+x .github/workflows/changes.sh
-          .github/workflows/changes.sh build/changed_files.text
-
-      - name: Generate and Commit Coverage Badge
-        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main'}}
-        run: |
-          go install github.com/AlexBeauchemin/gobadge@latest
-          gobadge -filename=build/c.out -target=$(pwd)/README.md
-          git config --local user.email "action@github.com" && git config --local user.name "GitHub-Action"
-          git diff --quiet --exit-code README.md || git commit README.md -m "updating coverage in README.md"
-
-      - name: Push Coverage Badge
-        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main'}}
-        uses: ad-m/github-push-action@master
-        with:
-          github_token: ${{ github.token }}
-          branch: ${{github.ref}}
+          echo "COVERAGE_FILE=build/coverage.out" >> $GITHUB_ENV
 
       - name: Upload Test Coverage to Code Climate
+        if: matrix.go-version == '1.21'
         uses: paambaati/codeclimate-action@v5.0.0
         env:
           CC_TEST_REPORTER_ID: ${{ secrets.CC_TEST_REPORTER_ID }}
         with:
-          coverageCommand: "go test -coverprofile=build/coverage.out"
-
+          coverageCommand: "go tool cover -func $COVERAGE_FILE"
 
       - uses: actions/upload-artifact@v2
         with:
