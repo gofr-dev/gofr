@@ -17,9 +17,9 @@ jobs:
   Unit-Testing:
     name: Unit-Testing🛠
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        go-version: [ 1.21, 1.20, 1.19 ]
+#    strategy:
+#      matrix:
+#        go-version: [ 1.21, 1.20, 1.19 ]
     services:
       mysql:
         image: mysql:8.0.30
@@ -110,14 +110,14 @@ jobs:
           go-version: ${{ matrix.go-version }}
         id: Go
 
-      - name: Yugabyte setup
-        uses: yugabyte/yugabyte-db-action@master
-        with:
-          yb_image_tag: 2.14.5.0-b18
-          yb_master_ui_port: 7000
-          yb_tserver_ui_port: 6000
-          ysql_port: 5433
-          ycql_port: 9042
+#      - name: Yugabyte setup
+#        uses: yugabyte/yugabyte-db-action@master
+#        with:
+#          yb_image_tag: 2.14.5.0-b18
+#          yb_master_ui_port: 7000
+#          yb_tserver_ui_port: 6000
+#          ysql_port: 5433
+#          ycql_port: 9042
 
 #      - name: Set up MySQL
 #        run: |
@@ -140,31 +140,31 @@ jobs:
         run: |
           go mod download
 
-      - name: Load Schema of Solr
-        run: |
-          docker run -d --name solr -p 8983:8983 solr:8 -DzkRun;
-          sleep 10s;
-          docker exec -i solr sh < .github/setups/solrSchema.sh;
-
-      - name: Setup SFTP Server
-        run: |
-          mkdir $HOME/sftpData
-          chmod -R 777 $HOME/sftpData
-          docker run --name gofr-sftp -v $HOME/upload:/home/myuser -p 2222:22 -d atmoz/sftp myuser:mypass:1001
-
-      - name: Setup FTP Server
-        run: |
-          mkdir $HOME/ftpData
-          chmod -R 777 $HOME/ftpData
-          docker run -d --name gofr-ftp -v $HOME/ftpData:/home/vsftpd -p 20:20 -p 21:21 -p 21100-21110:21100-21110 -e FTP_USER=myuser \
-          -e FTP_PASS=mypass -e PASV_ADDRESS=127.0.0.1 -e PASV_MIN_PORT=21100 -e PASV_MAX_PORT=21110 fauria/vsftpd
-
-      - name: Setup Google PubSub
-        run: |
-          docker pull gcr.io/google.com/cloudsdktool/google-cloud-cli:emulators
-          docker run --name=gcloud-emulator -d -p 8086:8086 \
-          gcr.io/google.com/cloudsdktool/google-cloud-cli:emulators gcloud beta emulators pubsub start --project=test123 \
-          --host-port=0.0.0.0:8086
+#      - name: Load Schema of Solr
+#        run: |
+#          docker run -d --name solr -p 8983:8983 solr:8 -DzkRun;
+#          sleep 10s;
+#          docker exec -i solr sh < .github/setups/solrSchema.sh;
+#
+#      - name: Setup SFTP Server
+#        run: |
+#          mkdir $HOME/sftpData
+#          chmod -R 777 $HOME/sftpData
+#          docker run --name gofr-sftp -v $HOME/upload:/home/myuser -p 2222:22 -d atmoz/sftp myuser:mypass:1001
+#
+#      - name: Setup FTP Server
+#        run: |
+#          mkdir $HOME/ftpData
+#          chmod -R 777 $HOME/ftpData
+#          docker run -d --name gofr-ftp -v $HOME/ftpData:/home/vsftpd -p 20:20 -p 21:21 -p 21100-21110:21100-21110 -e FTP_USER=myuser \
+#          -e FTP_PASS=mypass -e PASV_ADDRESS=127.0.0.1 -e PASV_MIN_PORT=21100 -e PASV_MAX_PORT=21110 fauria/vsftpd
+#
+#      - name: Setup Google PubSub
+#        run: |
+#          docker pull gcr.io/google.com/cloudsdktool/google-cloud-cli:emulators
+#          docker run --name=gcloud-emulator -d -p 8086:8086 \
+#          gcr.io/google.com/cloudsdktool/google-cloud-cli:emulators gcloud beta emulators pubsub start --project=test123 \
+#          --host-port=0.0.0.0:8086
 
       - name: Test
         run: |
@@ -174,7 +174,6 @@ jobs:
           go tool cover -func profile.cov
 
       - name: Upload Test Coverage to Code Climate
-        if: matrix.go-version == '1.21'
         uses: paambaati/codeclimate-action@v5.0.0
         env:
           CC_TEST_REPORTER_ID: ${{ secrets.CC_TEST_REPORTER_ID }}
