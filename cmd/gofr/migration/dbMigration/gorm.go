@@ -32,7 +32,7 @@ func NewGorm(d *gorm.DB) *GORM {
 // Run executes a migration
 func (g *GORM) Run(m Migrator, app, name, methods string, logger log.Logger) error {
 	if g.db == nil {
-		return errors.DataStoreNotInitialized{DBName: datastore.SqlStore}
+		return errors.DataStoreNotInitialized{DBName: datastore.SQLStore}
 	}
 
 	g.txn = g.db.Begin()
