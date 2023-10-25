@@ -92,11 +92,11 @@ jobs:
 #          POSTGRES_USER: postgres
 #          POSTGRES_DB: test
 
-      cassandra:
-        image: cassandra:4.1
-        ports:
-          - 9041:9042
-        options: --health-cmd "cqlsh --debug < .github/setups/keyspace.cql"
+#      cassandra:
+#        image: cassandra:4.1
+#        ports:
+#          - 9041:9042
+#        options: --health-cmd "cqlsh --debug < .github/setups/keyspace.cql"
 
     steps:
       - name: Checkout code into go module directory
