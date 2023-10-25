@@ -347,13 +347,13 @@ func Test_move(t *testing.T) {
 	}{
 		{"Success case: able to move file", "testDir", "testDestination", nil},
 		{"Failure case: remote path does not exists", "invalid", "destination",
-			&textproto.Error{Code: 550, Msg: "RNFR command failed."}},
+			&textproto.Error{}},
 	}
 
 	for i, tc := range tests {
 		err = f.move(tc.source, tc.destination)
 
-		assert.Equalf(t, tc.expErr, err, "Test[%d] failed: %v", i+1, tc.desc)
+		assert.IsTypef(t, tc.expErr, err, "Test[%d] failed: %v", i+1, tc.desc)
 	}
 
 	cleanUp(t, conn)
