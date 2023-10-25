@@ -96,12 +96,12 @@ jobs:
         options: --health-cmd "cqlsh --debug"
 
       yugabyte-master:
-        image: umang01hash/gofr-yugabyte:latest
+        image: umang01hash/gofr-yugabyte:1.0.1
         ports:
-          - "7000:7000"
-          - "5433:5433"
-          - "9042:9042"
-          - "6000:9000"
+          - 7000:7000
+          - 5433:5433
+          - 9042:9042
+          - 6000:9000
 
       solr:
         image: solr:8
