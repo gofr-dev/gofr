@@ -1,11 +1,12 @@
 package migration
 
 import (
-	"gofr.dev/pkg/datastore"
 	"sort"
 	"strconv"
 
 	db "gofr.dev/cmd/gofr/migration/dbMigration"
+
+	"gofr.dev/pkg/datastore"
 	"gofr.dev/pkg/errors"
 	"gofr.dev/pkg/log"
 )
@@ -144,7 +145,7 @@ func getDBName(database db.DBDriver) string {
 	case *db.Redis:
 		return datastore.RedisStore
 	case *db.GORM:
-		return datastore.SqlStore
+		return datastore.SQLStore
 	default:
 		return "datastore"
 	}

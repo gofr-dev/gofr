@@ -129,7 +129,7 @@ func TestHealthCheck(t *testing.T) {
 
 	for i, tc := range tcs {
 		health := tc.db.HealthCheck()
-		expHealth := types.Health{Name: DynamoDb, Status: tc.status}
+		expHealth := types.Health{Name: DynamoStore, Status: tc.status}
 
 		assert.Equal(t, expHealth, health, "TEST[%d], failed.\n", i)
 
