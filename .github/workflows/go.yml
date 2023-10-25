@@ -96,7 +96,7 @@ jobs:
         options: --health-cmd "cqlsh --debug < .github/setups/keyspace.cql"
 
       yugabyte-master:
-        image: yugabyte/yugabyte:2.14.5.0-b18
+        image: yugabytedb/yugabyte:latest
         ports:
           - "7000:7000"
           - "5433:5433"
@@ -107,7 +107,7 @@ jobs:
           YCQL_PORT: 9042
 
       yugabyte-tserver:
-        image: yugabyte/yugabyte:2.14.5.0-b18
+        image: yugabytedb/yugabyte:latest
         ports:
           - "6000:6000"
         env:
