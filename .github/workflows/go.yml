@@ -195,7 +195,7 @@ jobs:
 
       - name: Push Coverage Badge
         if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main'}}
-        uses: ad-m/github-push-action@main
+        uses: ad-m/github-push-action@master
         with:
           github_token: ${{ github.token }}
           branch: ${{github.ref}}
