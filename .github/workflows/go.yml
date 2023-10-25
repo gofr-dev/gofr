@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - development
+      - en/add_code_climate
     tags:
       - "*"
   pull_request:
@@ -13,8 +14,8 @@ on:
       - development
 
 jobs:
-  setup:
-    name: Setup
+  Unit-Testing:
+    name: Unit-Testing🛠
     runs-on: ubuntu-latest
     services:
       mysql:
@@ -23,15 +24,18 @@ jobs:
           - "3306:3306"
         env:
           MYSQL_ROOT_PASSWORD: "password"
+
       redis:
         image: redis:7.0.5
         ports:
           - "6379:6379"
         options: "--entrypoint redis-server"
+
       zipkin:
         image: openzipkin/zipkin:2
         ports:
           - "9411:9411"
+
       elasticsearch:
         image: elasticsearch:6.8.6
         ports:
@@ -40,6 +44,7 @@ jobs:
           - 9200:9200
         env:
           discovery type: "single-node"
+
       kafka:
         image: krisgeus/docker-kafka
         ports:
@@ -53,6 +58,7 @@ jobs:
           KAFKA_CREATE_TOPICS: 'test-topic'
           KAFKA_HOSTS: 'localhost:2008,localhost:2009'
           KAFKA_TOPIC: 'test-topic'
+
       mongo:
         image: mongo:6.0.2
         ports:
@@ -60,6 +66,7 @@ jobs:
         env:
           MONGO_INITDB_ROOT_USERNAME: admin
           MONGO_INITDB_ROOT_PASSWORD: admin123
+
       mssql:
         image: mcr.microsoft.com/mssql/server:2022-latest
         ports:
@@ -67,10 +74,12 @@ jobs:
         env:
           ACCEPT_EULA: Y
           SA_PASSWORD: reallyStrongPwd123
+
       dynamodb:
         image: amazon/dynamodb-local:1.22.0
         ports:
           - "2021:8000"
+
       postgres:
         image: postgres:15.1
         ports:
@@ -79,24 +88,29 @@ jobs:
           POSTGRES_PASSWORD: password
           POSTGRES_USER: postgres
           POSTGRES_DB: test
+
       cassandra:
         image: cassandra:4.1
         ports:
           - 9041:9042
         options: --health-cmd "cqlsh --debug"
+
     steps:
       - name: Checkout code into go module directory
         uses: actions/checkout@v2
         with:
           fetch-depth: 0
+
       - name: Set up  Go 1.21
         uses: actions/setup-go@v4
         with:
           go-version: 1.21
         id: Go
+
       - name: Load Schema of Cassandra
         run: |
           docker exec -i ${{ job.services.cassandra.id }} cqlsh --debug  < .github/setups/keyspace.cql
+
       - name: Yugabyte setup
         uses: yugabyte/yugabyte-db-action@master
         with:
@@ -105,9 +119,11 @@ jobs:
           yb_tserver_ui_port: 6000
           ysql_port: 5433
           ycql_port: 9042
+
       - name: Set up MySQL
         run: |
           docker exec -i ${{ job.services.mysql.id }} mysql -uroot -ppassword -e 'CREATE DATABASE test;'
+
       - name: Set up SSL Enabled MySQL
         run: |
           docker run --name gofr-ssl-mysql -e MYSQL_ROOT_PASSWORD=password -p 2001:3306 -d mysql:8.0.31
@@ -115,35 +131,42 @@ jobs:
           docker cp ${{ github.workspace }}/.github/setups/my.cnf gofr-ssl-mysql:/etc/my.cnf
           docker exec -i gofr-ssl-mysql chown -Rf mysql. /usr/certFiles
           docker restart gofr-ssl-mysql
+
       - name: Load Schema of YCQL
         run: |
           temp=$(sudo docker ps | grep yugabyte | awk '{print $1}');
           docker exec -i $temp /home/yugabyte/bin/ycqlsh < .github/setups/keyspace.ycql;
+
       - name: Get dependencies
         run: |
           go mod download
+
       - name: Load Schema of Solr
         run: |
           docker run -d --name solr -p 8983:8983 solr:8 -DzkRun;
           sleep 10s;
           docker exec -i solr sh < .github/setups/solrSchema.sh;
+
       - name: Setup SFTP Server
         run: |
           mkdir $HOME/sftpData
           chmod -R 777 $HOME/sftpData
           docker run --name gofr-sftp -v $HOME/upload:/home/myuser -p 2222:22 -d atmoz/sftp myuser:mypass:1001
+
       - name: Setup FTP Server
         run: |
           mkdir $HOME/ftpData
           chmod -R 777 $HOME/ftpData
           docker run -d --name gofr-ftp -v $HOME/ftpData:/home/vsftpd -p 20:20 -p 21:21 -p 21100-21110:21100-21110 -e FTP_USER=myuser \
           -e FTP_PASS=mypass -e PASV_ADDRESS=127.0.0.1 -e PASV_MIN_PORT=21100 -e PASV_MAX_PORT=21110 fauria/vsftpd
+
       - name: Setup Google PubSub
         run: |
           docker pull gcr.io/google.com/cloudsdktool/google-cloud-cli:emulators
           docker run --name=gcloud-emulator -d -p 8086:8086 \
           gcr.io/google.com/cloudsdktool/google-cloud-cli:emulators gcloud beta emulators pubsub start --project=test123 \
           --host-port=0.0.0.0:8086
+
       - name: Test
         run: |
           export GOFR_ENV=test
@@ -151,6 +174,7 @@ jobs:
           go test ./... -short --tags=integration -v -coverprofile build/coverage.txt -coverpkg=./...
           cat build/coverage.txt | grep -v '.pb.go' > build/coverage.out
           go tool cover -func build/coverage.out | tee build/c.out
+
       - name: Create Coverage Summary Report
         if: github.event_name == 'pull_request'
         run: |
@@ -160,27 +184,36 @@ jobs:
           git diff --name-status ${{github.base_ref}}..${{ github.head_ref }} > build/changed_files.text
           chmod u+x .github/workflows/changes.sh
           .github/workflows/changes.sh build/changed_files.text
+
       - name: Generate and Commit Coverage Badge
-        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master'}}
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main'}}
         run: |
           go install github.com/AlexBeauchemin/gobadge@latest
           gobadge -filename=build/c.out -target=$(pwd)/README.md
           git config --local user.email "action@github.com" && git config --local user.name "GitHub-Action"
           git diff --quiet --exit-code README.md || git commit README.md -m "updating coverage in README.md"
+
       - name: Push Coverage Badge
-        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master'}}
-        uses: ad-m/github-push-action@master
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main'}}
+        uses: ad-m/github-push-action@main
         with:
           github_token: ${{ github.token }}
           branch: ${{github.ref}}
+
+      - name: Upload Test Coverage to Code Climate
+        uses: paambaati/codeclimate-action@v3
+        with:
+          coverage_files: build/coverage.out
+          api_token: ${{ secrets.CC_TEST_REPORTER_ID }}
+
       - uses: actions/upload-artifact@v2
         with:
           name: build artifacts
           path: build
 
   code_quality:
-    needs: [setup]
-    name: Code Quality
+    needs: [Unit-Testing]
+    name: Code Quality🎖
     runs-on: ubuntu-latest
     container: "golangci/golangci-lint:v1.52.2"
     steps:
