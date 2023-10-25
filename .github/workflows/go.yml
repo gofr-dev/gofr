@@ -96,22 +96,12 @@ jobs:
         options: --health-cmd "cqlsh --debug"
 
       yugabyte-master:
-        image: yugabytedb/yugabyte:latest
+        image: umang01hash/gofr-yugabyte:latest
         ports:
           - "7000:7000"
           - "5433:5433"
           - "9042:9042"
-        env:
-          YB_MASTER_UI_PORT: 7000
-          YSQL_PORT: 5433
-          YCQL_PORT: 9042
-
-      yugabyte-tserver:
-        image: yugabytedb/yugabyte:latest
-        ports:
-          - "6000:6000"
-        env:
-          YB_TSERVER_UI_PORT: 6000
+          - "6000:9000"
 
       solr:
         image: solr:8
