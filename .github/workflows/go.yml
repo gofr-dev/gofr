@@ -92,7 +92,7 @@ jobs:
       cassandra:
         image: cassandra:4.1
         ports:
-          - 9041:9042
+          - 9042:9042
         options: --health-cmd "cqlsh --debug < .github/setups/keyspace.cql"
 
       yugabyte-master:
