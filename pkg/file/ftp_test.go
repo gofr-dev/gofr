@@ -347,13 +347,13 @@ func Test_move(t *testing.T) {
 	}{
 		{"Success case: able to move file", "testDir", "testDestination", nil},
 		{"Failure case: remote path does not exists", "invalid", "destination",
-			&textproto.Error{}},
+			&textproto.Error{Code: 550, Msg: "RNFR command failed."}},
 	}
 
 	for i, tc := range tests {
 		err = f.move(tc.source, tc.destination)
 
-		assert.IsTypef(t, tc.expErr, err, "Test[%d] failed: %v", i+1, tc.desc)
+		assert.Equalf(t, tc.expErr, err, "Test[%d] failed: %v", i+1, tc.desc)
 	}
 
 	cleanUp(t, conn)
@@ -403,4 +403,8 @@ func cleanUp(t *testing.T, conn *pkgFtp.ServerConn) {
 	if err != nil {
 		t.Fatalf("error while closing the connection to the host: %v", err)
 	}
+}
+
+func (s *mockFtpConn) Close() error {
+	return nil
 }
