@@ -100,11 +100,11 @@ jobs:
         ports:
           - "7000:7000"
           - "5433:5433"
-          - "9042:9042"
+          - "9043:9042"
         env:
           YB_MASTER_UI_PORT: 7000
           YSQL_PORT: 5433
-          YCQL_PORT: 9042
+          YCQL_PORT: 9043
 
       yugabyte-tserver:
         image: yugabytedb/yugabyte:latest
