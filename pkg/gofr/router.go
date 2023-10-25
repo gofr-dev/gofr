@@ -5,8 +5,9 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/gorilla/mux"
 	"gofr.dev/pkg"
+
+	"github.com/gorilla/mux"
 )
 
 // Router provides support to do router specific operations like add routes, use middlewares, etc.

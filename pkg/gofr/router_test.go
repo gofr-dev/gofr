@@ -6,8 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	"gofr.dev/pkg"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestRouteLog(t *testing.T) {
