@@ -1,7 +1,5 @@
-/*
-Package awssns provides notifier implementation for AWS Simple Notification Service(SNS) to publish-subscribe messages
-to an SNS topic.It offers features like message attribute customization and health checks to ensure the notifier's availability.
-*/
+// Package awssns provides notifier implementation for AWS Simple Notification Service(SNS) to publish-subscribe messages
+// to an SNS topic.It offers features like message attribute customization and health checks to ensure the notifier's availability.
 package awssns
 
 import (
