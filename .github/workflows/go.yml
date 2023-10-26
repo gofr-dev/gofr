@@ -182,7 +182,7 @@ jobs:
           golangci-lint run --timeout 9m0s
 
   yugabyte_test:
-    name: YugaByte Tests 🎖️
+    name: YugaByte and Cassandra Tests 🎖️
     runs-on: ubuntu-latest
     services:
       cassandra:
@@ -210,6 +210,10 @@ jobs:
         run: |
           temp=$(sudo docker ps | grep yugabyte | awk '{print $1}');
           docker exec -i $temp /home/yugabyte/bin/ycqlsh < .github/setups/keyspace.ycql;
+
+      - name: Load Schema of Cassandra
+        run: |
+          docker exec -i ${{ job.services.cassandra.id }} cqlsh --debug  < .github/setups/keyspace.cql
 
       - name: Test
         run: |
