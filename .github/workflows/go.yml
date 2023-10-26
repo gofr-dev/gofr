@@ -89,12 +89,6 @@ jobs:
           POSTGRES_USER: postgres
           POSTGRES_DB: test
 
-      cassandra:
-        image: cassandra:4.1
-        ports:
-          - 9041:9042
-        options: --health-cmd "cqlsh --debug"
-
       solr:
         image: solr:8
         ports:
@@ -120,19 +114,6 @@ jobs:
           go-version: 1.21
         id: Go
 
-      - name: Load Schema of Cassandra
-        run: |
-          docker exec -i ${{ job.services.cassandra.id }} cqlsh --debug  < .github/setups/keyspace.cql  
-
-      - name: Yugabyte setup
-        uses: yugabyte/yugabyte-db-action@master
-        with:
-          yb_image_tag: 2.14.5.0-b18
-          yb_master_ui_port: 7000
-          yb_tserver_ui_port: 6000
-          ysql_port: 5433
-          ycql_port: 9042
-
       - name: Set up SSL Enabled MySQL
         run: |
           docker run --name gofr-ssl-mysql -e MYSQL_ROOT_PASSWORD=password -p 2001:3306 -d mysql:8.0.31
@@ -140,11 +121,6 @@ jobs:
           docker cp ${{ github.workspace }}/.github/setups/my.cnf gofr-ssl-mysql:/etc/my.cnf
           docker exec -i gofr-ssl-mysql chown -Rf mysql. /usr/certFiles
           docker restart gofr-ssl-mysql
-
-      - name: Load Schema of YCQL
-        run: |
-          container_id=$(sudo docker ps | grep yugabyte | awk '{print $1}')
-          docker exec -i $container_id /home/yugabyte/bin/ycqlsh < .github/setups/keyspace.ycql
 
       - name: Get dependencies
         run: |
@@ -206,9 +182,14 @@ jobs:
           golangci-lint run --timeout 9m0s
 
   yugabyte_test:
-    name: YugaByte Tests🎖️
+    name: YugaByte and Cassandra Tests 🎖️
     runs-on: ubuntu-latest
-
+    services:
+      cassandra:
+        image: cassandra:4.1
+        ports:
+          - 9041:9042
+        options: --health-cmd "cqlsh --debug"
     steps:
       - name: Check out code into the Go module directory
         uses: actions/checkout@v2
@@ -230,11 +211,11 @@ jobs:
           temp=$(sudo docker ps | grep yugabyte | awk '{print $1}');
           docker exec -i $temp /home/yugabyte/bin/ycqlsh < .github/setups/keyspace.ycql;
 
+      - name: Load Schema of Cassandra
+        run: |
+          docker exec -i ${{ job.services.cassandra.id }} cqlsh --debug  < .github/setups/keyspace.cql
+
       - name: Test
         run: |
           export GOFR_ENV=test
-          go test ./... -run 'Test_YCQL_*' -v -coverprofile yugabyte.cov -coverpkg=./..
-
-
-
-
+          go test ./... -run 'Test_YCQL_*'/'Test_CQL_*' -v -coverprofile cql.cov -coverpkg=./..

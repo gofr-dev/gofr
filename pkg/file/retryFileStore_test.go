@@ -125,3 +125,7 @@ func (m mockFtpOp) Move(string, string) error {
 func (m mockFtpOp) Mkdir(string) error {
 	return nil
 }
+
+func (m mockFtpOp) Close() error {
+	return nil
+}

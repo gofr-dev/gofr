@@ -404,3 +404,7 @@ func cleanUp(t *testing.T, conn *pkgFtp.ServerConn) {
 		t.Fatalf("error while closing the connection to the host: %v", err)
 	}
 }
+
+func (s *mockFtpConn) Close() error {
+	return nil
+}

@@ -19,6 +19,7 @@ type ftpOp interface {
 	List(dir string) (entries []*pkgFtp.Entry, err error)
 	Move(source, destination string) error
 	Mkdir(path string) error
+	Close() error
 }
 
 type ftp struct {
@@ -62,6 +63,11 @@ func (s *ftpConn) Move(source, destination string) error {
 // Mkdir to create new directory on ftp
 func (s *ftpConn) Mkdir(path string) error {
 	return s.conn.MakeDir(path)
+}
+
+// Close to quit the ftp connections
+func (s *ftpConn) Close() error {
+	return s.conn.Quit()
 }
 
 // createNestedDirFTP utility method to create directory recursively
@@ -188,6 +194,8 @@ func (f ftp) move(source, destination string) error {
 	if err != nil {
 		return err
 	}
+
+	defer f.conn.Close()
 
 	err = f.conn.Move(source, destination)
 	if err != nil {
