@@ -102,7 +102,7 @@ func (m *mockSchemaClient) GetSchema(id int) (string, error) {
 }
 
 //nolint:gocognit // reducing the cognitive complexity so all the test cases can be considered
-func TestAvro_Publish(t *testing.T) {
+func Test_PubSub_Avro_Publish(t *testing.T) {
 	type args struct {
 		key   string
 		value interface{}
@@ -140,7 +140,7 @@ func TestAvro_Publish(t *testing.T) {
 	}
 }
 
-func TestAvro_Subscribe(t *testing.T) {
+func Test_PubSub_Avro_Subscribe(t *testing.T) {
 	tests := []struct {
 		name             string
 		mockPubSub       pubsub.PublisherSubscriber
@@ -169,7 +169,7 @@ func TestAvro_Subscribe(t *testing.T) {
 	}
 }
 
-func TestAvro_SubscribeWithCommit(t *testing.T) {
+func Test_PubSub_Avro_SubscribeWithCommit(t *testing.T) {
 	commitFunc := func(msg *pubsub.Message) (bool, bool) {
 		return true, false
 	}
@@ -197,7 +197,7 @@ func TestAvro_SubscribeWithCommit(t *testing.T) {
 	}
 }
 
-func TestAvro_Ping(t *testing.T) {
+func Test_PubSub_Avro_Ping(t *testing.T) {
 	m := mockPubSub{}
 	sc := mockSchemaClient{}
 	a, _ := New(&m, &sc, "latest", "test_topic")
@@ -207,7 +207,7 @@ func TestAvro_Ping(t *testing.T) {
 	}
 }
 
-func TestAvro_HealthCheck(t *testing.T) {
+func Test_PubSub_Avro_HealthCheck(t *testing.T) {
 	tests := []struct {
 		desc    string
 		m       mockPubSub
@@ -227,7 +227,7 @@ func TestAvro_HealthCheck(t *testing.T) {
 	}
 }
 
-func TestAvro_IsSet(t *testing.T) {
+func Test_PubSub_Avro_IsSet(t *testing.T) {
 	var a *Avro
 	tests := []struct {
 		a    *Avro
@@ -245,7 +245,7 @@ func TestAvro_IsSet(t *testing.T) {
 	}
 }
 
-func Test_NewAvro(t *testing.T) {
+func Test_PubSub_NewAvro(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respMap := map[string]interface{}{"subject": "gofr-value", "version": 2, "id": 293,
 			"schema": `{"type":"record","name":"test","fields":[{"name":"ID","type":"string"}]}`}
@@ -270,7 +270,7 @@ func Test_NewAvro(t *testing.T) {
 	}
 }
 
-func Test_NewAvroError(t *testing.T) {
+func Test_PubSub__NewAvroError(t *testing.T) {
 	forbiddenServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
 	}))
@@ -289,7 +289,7 @@ func Test_NewAvroError(t *testing.T) {
 	}
 }
 
-func Test_PublishEventWithOptionsError(t *testing.T) {
+func Test_PubSub__PublishEventWithOptionsError(t *testing.T) {
 	var (
 		options *pubsub.PublishOptions
 		avro    Avro

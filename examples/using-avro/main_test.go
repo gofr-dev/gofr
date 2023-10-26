@@ -15,7 +15,7 @@ import (
 )
 
 //nolint:gocognit // need to wait for topic to be created so retry logic is to be added
-func TestServerRun(t *testing.T) {
+func Test_PubSub_ServerRun(t *testing.T) {
 	// avro schema registry test server
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		re := map[string]interface{}{

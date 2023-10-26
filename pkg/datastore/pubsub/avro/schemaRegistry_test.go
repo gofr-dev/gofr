@@ -15,7 +15,7 @@ import (
 	"gofr.dev/pkg/service"
 )
 
-func TestSchemaRegistryClient_GetSchemaByVersion(t *testing.T) {
+func Test_PubSub_SchemaRegistryClient_GetSchemaByVersion(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.URL.String(), "error") {
 			w.Header().Set("StatusCode", "500")
@@ -64,7 +64,7 @@ func TestSchemaRegistryClient_GetSchemaByVersion(t *testing.T) {
 }
 
 //nolint:gocognit // cannot reduce the complexity further
-func TestSchemaRegistryClient_GetSchema(t *testing.T) {
+func Test_PubSub_SchemaRegistryClient_GetSchema(t *testing.T) {
 	logger := log.NewLogger()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -122,7 +122,7 @@ func TestSchemaRegistryClient_GetSchema(t *testing.T) {
 	}
 }
 
-func Test_httpCall(t *testing.T) {
+func Test_PubSub_httpCall(t *testing.T) {
 	logger := log.NewMockLogger(io.Discard)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -142,7 +142,7 @@ func Test_httpCall(t *testing.T) {
 	assert.IsType(t, errors.ForbiddenRequest{}, err)
 }
 
-func Test_checkForbiddenRequest(t *testing.T) {
+func Test_PubSub_checkForbiddenRequest(t *testing.T) {
 	testcases := []struct {
 		testResp    service.Response
 		uri         string

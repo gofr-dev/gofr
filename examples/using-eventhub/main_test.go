@@ -10,7 +10,7 @@ import (
 	"gofr.dev/pkg/gofr/request"
 )
 
-func TestServerRun(t *testing.T) {
+func Test_PubSub_ServerRun(t *testing.T) {
 	go main()
 	time.Sleep(3 * time.Second)
 

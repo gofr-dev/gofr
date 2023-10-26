@@ -21,7 +21,7 @@ import (
 	"gofr.dev/pkg/log"
 )
 
-func TestNew(t *testing.T) {
+func Test_PubSub_New(t *testing.T) {
 	conf := config.NewGoDotEnvProvider(log.NewLogger(), "../../../../configs")
 
 	tests := []struct {
@@ -62,7 +62,7 @@ func TestNew(t *testing.T) {
 	}
 }
 
-func TestEventhub_HealthCheck(t *testing.T) {
+func Test_PubSub_Eventhub_HealthCheck(t *testing.T) {
 	conf := config.NewGoDotEnvProvider(log.NewLogger(), "../../../../configs")
 	testcases := []struct {
 		c    Config
@@ -86,7 +86,7 @@ func TestEventhub_HealthCheck(t *testing.T) {
 	}
 }
 
-func TestEventhub_HealthCheck_Down(t *testing.T) {
+func Test_PubSub_Eventhub_HealthCheck_Down(t *testing.T) {
 	conf := config.NewGoDotEnvProvider(log.NewLogger(), "../../../../configs")
 
 	{
@@ -145,7 +145,7 @@ func TestEventhub_HealthCheck_Down(t *testing.T) {
 	}
 }
 
-func TestIsSet(t *testing.T) {
+func Test_PubSub_IsSet(t *testing.T) {
 	var e *Eventhub
 
 	logger := log.NewMockLogger(io.Discard)
@@ -171,7 +171,7 @@ func TestIsSet(t *testing.T) {
 	}
 }
 
-func Test_NewEventHubWithAvro(t *testing.T) {
+func Test_PubSub__NewEventHubWithAvro(t *testing.T) {
 	logger := log.NewMockLogger(io.Discard)
 	c := config.NewGoDotEnvProvider(logger, "../../../../configs")
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -229,7 +229,7 @@ func Test_NewEventHubWithAvro(t *testing.T) {
 	}
 }
 
-func TestEventhub_BindError(t *testing.T) {
+func Test_PubSub_Eventhub_BindError(t *testing.T) {
 	svc := &Eventhub{}
 	message := map[string]interface{}{}
 

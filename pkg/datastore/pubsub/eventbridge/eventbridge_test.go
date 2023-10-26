@@ -18,7 +18,7 @@ import (
 	"gofr.dev/pkg/gofr/types"
 )
 
-func Test_New(t *testing.T) {
+func Test_PubSub_New(t *testing.T) {
 	cfg := &Config{
 		Region:      "us-east-1",
 		EventBus:    "Gofr",
@@ -31,7 +31,7 @@ func Test_New(t *testing.T) {
 	}
 }
 
-func TestEventBridge_PublishEvent(t *testing.T) {
+func Test_PubSub_EventBridge_PublishEvent(t *testing.T) {
 	ch := make(chan int)
 	tcs := []struct {
 		region string
@@ -57,7 +57,7 @@ func TestEventBridge_PublishEvent(t *testing.T) {
 	}
 }
 
-func TestEventBridge_HealthCheck(t *testing.T) {
+func Test_PubSubEventBridge_HealthCheck(t *testing.T) {
 	var eBridge Client
 
 	awscfg := aws.NewConfig().WithRegion("us-west-2")
@@ -82,7 +82,7 @@ func TestEventBridge_HealthCheck(t *testing.T) {
 	}
 }
 
-func TestEventBridge_PublishEventWithOptions(t *testing.T) {
+func Test_PubSub_EventBridge_PublishEventWithOptions(t *testing.T) {
 	c := Client{}
 
 	err := c.PublishEventWithOptions("", "", map[string]string{}, &pubsub.PublishOptions{})
@@ -91,7 +91,7 @@ func TestEventBridge_PublishEventWithOptions(t *testing.T) {
 	}
 }
 
-func TestEventBridge_Subscribe(t *testing.T) {
+func Test_PubSub_EventBridge_Subscribe(t *testing.T) {
 	c := Client{}
 
 	_, err := c.Subscribe()
@@ -100,7 +100,7 @@ func TestEventBridge_Subscribe(t *testing.T) {
 	}
 }
 
-func TestEventBridge_SubscribeWithCommit(t *testing.T) {
+func Test_PubSub_EventBridge_SubscribeWithCommit(t *testing.T) {
 	c := Client{}
 	f := func(message *pubsub.Message) (bool, bool) { return false, false }
 
@@ -110,7 +110,7 @@ func TestEventBridge_SubscribeWithCommit(t *testing.T) {
 	}
 }
 
-func TestEventBridge_Bind(t *testing.T) {
+func Test_PubSub_EventBridge_Bind(t *testing.T) {
 	var k string
 
 	c := Client{}
@@ -121,7 +121,7 @@ func TestEventBridge_Bind(t *testing.T) {
 	}
 }
 
-func TestEventBridge_Ping(t *testing.T) {
+func Test_PubSub_EventBridge_Ping(t *testing.T) {
 	c := Client{}
 
 	err := c.Ping()
@@ -130,7 +130,7 @@ func TestEventBridge_Ping(t *testing.T) {
 	}
 }
 
-func TestEventBridge_IsSet(t *testing.T) {
+func Test_PubSub_EventBridge_IsSet(t *testing.T) {
 	var eBridge Client
 
 	awscfg := aws.NewConfig().WithRegion("us-west-2")
@@ -154,7 +154,7 @@ func TestEventBridge_IsSet(t *testing.T) {
 	}
 }
 
-func TestEventBridge_Retrieve(t *testing.T) {
+func Test_PubSub_EventBridge_Retrieve(t *testing.T) {
 	tests := []struct {
 		desc        string
 		credentials customProvider
@@ -174,7 +174,7 @@ func TestEventBridge_Retrieve(t *testing.T) {
 	}
 }
 
-func TestEventBridge_IsExpired(t *testing.T) {
+func Test_PubSub_EventBridge_IsExpired(t *testing.T) {
 	tests := []struct {
 		desc        string
 		credentials customProvider

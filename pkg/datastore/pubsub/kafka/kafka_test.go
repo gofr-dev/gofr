@@ -30,7 +30,7 @@ import (
 
 const connectionFailError = "invalid brokers connection failed"
 
-func TestNewKafka(t *testing.T) {
+func Test_PubSub_NewKafka(t *testing.T) {
 	conf := sarama.NewConfig()
 	conf.Consumer.Group.Session.Timeout = 1
 
@@ -60,7 +60,7 @@ func TestNewKafka(t *testing.T) {
 	}
 }
 
-func TestNewKafkaProducer(t *testing.T) {
+func Test_PubSub_NewKafkaProducer(t *testing.T) {
 	tests := []struct {
 		config *Config
 		err    error
@@ -77,7 +77,7 @@ func TestNewKafkaProducer(t *testing.T) {
 	}
 }
 
-func TestNewKafkaConsumer(t *testing.T) {
+func Test_PubSub_NewKafkaConsumer(t *testing.T) {
 	conf := sarama.NewConfig()
 	conf.Consumer.Group.Session.Timeout = 1
 	tests := []struct {
@@ -96,7 +96,7 @@ func TestNewKafkaConsumer(t *testing.T) {
 	}
 }
 
-func TestNewKafkaFromEnv(t *testing.T) {
+func Test_PubSub_NewKafkaFromEnv(t *testing.T) {
 	logger := log.NewLogger()
 	config.NewGoDotEnvProvider(logger, "../../../../configs")
 
@@ -122,7 +122,7 @@ func TestNewKafkaFromEnv(t *testing.T) {
 	}
 }
 
-func Test_PubSub(t *testing.T) {
+func Test_PubSub_Success(t *testing.T) {
 	logger := log.NewLogger()
 	c := config.NewGoDotEnvProvider(logger, "../../../../configs")
 
@@ -147,7 +147,7 @@ func Test_PubSub(t *testing.T) {
 }
 
 // Test_PubSubWithOffset check the subscribe operation with custom initial offset value.
-func Test_PubSubWithOffset(t *testing.T) {
+func Test_PubSub_WithOffset(t *testing.T) {
 	t.Skip("skipping testing in short mode")
 
 	logger := log.NewLogger()
@@ -322,7 +322,7 @@ func Resume(t *testing.T, k *Kafka) {
 	}
 }
 
-func Test_convertKafkaConfig(t *testing.T) {
+func Test_PubSub_convertKafkaConfig(t *testing.T) {
 	expectedConfig := sarama.NewConfig()
 	setDefaultConfig(expectedConfig)
 
@@ -344,7 +344,7 @@ func Test_convertKafkaConfig(t *testing.T) {
 	assert.Equal(t, expectedConfig, kafkaConfig.Config)
 }
 
-func Test_processSASLConfigs(t *testing.T) {
+func Test_PubSub_processSASLConfigs(t *testing.T) {
 	expConfig := sarama.NewConfig()
 
 	expConfig.Net.SASL.User = "testuser"
@@ -391,7 +391,7 @@ func Test_processSASLConfigs(t *testing.T) {
 	}
 }
 
-func Test_KafkaAuthentication(t *testing.T) {
+func Test_PubSub_KafkaAuthentication(t *testing.T) {
 	logger := log.NewMockLogger(io.Discard)
 	c := config.NewGoDotEnvProvider(logger, "../../../../configs")
 	topic := c.Get("KAFKA_TOPIC")
@@ -421,7 +421,7 @@ func Test_KafkaAuthentication(t *testing.T) {
 	}
 }
 
-func Test_invalidSaslMechanism(t *testing.T) {
+func Test_PubSub_invalidSaslMechanism(t *testing.T) {
 	logger := log.NewMockLogger(io.Discard)
 	c := config.NewGoDotEnvProvider(logger, "../../../../configs")
 	topic := c.Get("KAFKA_TOPIC")
@@ -444,7 +444,7 @@ func Test_invalidSaslMechanism(t *testing.T) {
 	assert.Nil(t, kafka)
 }
 
-func TestKafkaHealthCheck(t *testing.T) {
+func Test_PubSub_KafkaHealthCheck(t *testing.T) {
 	b := new(bytes.Buffer)
 	logger := log.NewMockLogger(b)
 	c := config.NewGoDotEnvProvider(logger, "../../../../configs")
@@ -475,7 +475,7 @@ func TestKafkaHealthCheck(t *testing.T) {
 	}
 }
 
-func TestKafka_HealthCheckDown(t *testing.T) {
+func Test_PubSub_Kafka_HealthCheckDown(t *testing.T) {
 	b := new(bytes.Buffer)
 	logger := log.NewMockLogger(b)
 	expLog := "Health check failed"
@@ -512,7 +512,7 @@ func TestKafka_HealthCheckDown(t *testing.T) {
 	}
 }
 
-func TestIsSet(t *testing.T) {
+func Test_PubSub_IsSet(t *testing.T) {
 	var k *Kafka
 
 	logger := log.NewMockLogger(io.Discard)
@@ -539,7 +539,7 @@ func TestIsSet(t *testing.T) {
 	}
 }
 
-func TestSubscribeError(t *testing.T) {
+func Test_PubSub_SubscribeError(t *testing.T) {
 	logger := log.NewMockLogger(io.Discard)
 	c := config.NewGoDotEnvProvider(logger, "../../../../configs")
 	topic := "dummy-topic"
@@ -552,7 +552,7 @@ func TestSubscribeError(t *testing.T) {
 	}
 }
 
-func TestSubscribeWithCommitError(t *testing.T) {
+func Test_PubSub_SubscribeWithCommitError(t *testing.T) {
 	logger := log.NewMockLogger(io.Discard)
 	c := config.NewGoDotEnvProvider(logger, "../../../../configs")
 	topic := "dummy-topic"
@@ -585,7 +585,7 @@ func PublishMessage(t *testing.T, k *Kafka) {
 	}
 }
 
-func Test_populateOffsetTopic(t *testing.T) {
+func Test_PubSub_populateOffsetTopic(t *testing.T) {
 	tests := []struct {
 		config         *Config
 		expectedConfig *Config
@@ -604,7 +604,7 @@ func Test_populateOffsetTopic(t *testing.T) {
 	}
 }
 
-func TestNewKafkaWithAvro(t *testing.T) {
+func Test_PubSub_NewKafkaWithAvro(t *testing.T) {
 	logger := log.NewMockLogger(io.Discard)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respMap := map[string]interface{}{"subject": "gofr-value", "version": 2, "id": 293,
@@ -639,7 +639,7 @@ func TestNewKafkaWithAvro(t *testing.T) {
 	}
 }
 
-func Test_Printf(t *testing.T) {
+func Test_PubSub_Printf(t *testing.T) {
 	tests := []struct {
 		format    string
 		input     []interface{}
@@ -663,7 +663,7 @@ func Test_Printf(t *testing.T) {
 	}
 }
 
-func Test_Print(t *testing.T) {
+func Test_PubSub_Print(t *testing.T) {
 	input := []interface{}{"Print the sys log,", "Print kafka Log", map[string]interface{}{"key": "value"}}
 	expOutput := "Print the sys log, Print kafka Log"
 
@@ -677,7 +677,7 @@ func Test_Print(t *testing.T) {
 	}
 }
 
-func Test_Println(t *testing.T) {
+func Test_PubSub_Println(t *testing.T) {
 	input := []interface{}{"Print the sys log,", "Print kafka Log", map[string]interface{}{"key": "value"}}
 	expOutput := "Print the sys log, Print kafka Log"
 
@@ -691,7 +691,7 @@ func Test_Println(t *testing.T) {
 	}
 }
 
-func TestKafka_SubscribeNilMessage(t *testing.T) {
+func Test_PubSub_Kafka_SubscribeNilMessage(t *testing.T) {
 	logger := log.NewMockLogger(io.Discard)
 	c := config.NewGoDotEnvProvider(logger, "../../../../configs")
 
@@ -709,7 +709,7 @@ func TestKafka_SubscribeNilMessage(t *testing.T) {
 	assert.Equal(t, errConsumeMsg, err)
 }
 
-func Test_Error(t *testing.T) {
+func Test_PubSub_Error(t *testing.T) {
 	brokerErr := brokersErr{}
 	expectedError := connectionFailError
 
@@ -718,7 +718,7 @@ func Test_Error(t *testing.T) {
 	assert.Equal(t, expectedError, err, "Test [%d] Failed. Expected: %s, Got: %s", expectedError, err)
 }
 
-func TestKafka_Bind(t *testing.T) {
+func Test_PubSub_Kafka_Bind(t *testing.T) {
 	k := Kafka{}
 
 	message := []byte(`{"name":"Rohan","email":"rohan@email.xyz"}`)
@@ -732,7 +732,7 @@ func TestKafka_Bind(t *testing.T) {
 	assert.Nil(t, err, "TEST [%d] Failed. Expected Nil Got %v", err)
 }
 
-func TestSetDefaultConfig_Metadata(t *testing.T) {
+func Test_PubSub_SetDefaultConfig_Metadata(t *testing.T) {
 	mockConfig := &sarama.Config{}
 
 	setDefaultConfig(mockConfig)
@@ -743,7 +743,7 @@ func TestSetDefaultConfig_Metadata(t *testing.T) {
 	assert.Equal(t, mockConfig.Metadata.Retry.Max, 5,
 		"Expected Metadata.Retry.Max to be 5, got %d", mockConfig.Metadata.Retry.Max)
 }
-func TestSetDefaultConfig_Producer(t *testing.T) {
+func Test_PubSub_SetDefaultConfig_Producer(t *testing.T) {
 	mockConfig := &sarama.Config{}
 
 	setDefaultConfig(mockConfig)
@@ -763,7 +763,7 @@ func TestSetDefaultConfig_Producer(t *testing.T) {
 	assert.Equal(t, mockConfig.Producer.Return.Errors, true,
 		"Expected Producer.Return.Errors to be true", mockConfig.Producer.Return.Errors)
 }
-func TestSetDefaultConfig_Consumer(t *testing.T) {
+func Test_PubSub_SetDefaultConfig_Consumer(t *testing.T) {
 	mockConfig := &sarama.Config{}
 
 	setDefaultConfig(mockConfig)
@@ -778,7 +778,7 @@ func TestSetDefaultConfig_Consumer(t *testing.T) {
 		"Expected Consumer.Group.Heartbeat.Interval to be 1000000, got %d", mockConfig.Consumer.Group.Heartbeat.Interval)
 }
 
-func TestConsumerHandler_Cleanup(t *testing.T) {
+func Test_PubSub_ConsumerHandler_Cleanup(t *testing.T) {
 	consumer := &ConsumerHandler{}
 
 	session := &MockConsumerGroupSession{}

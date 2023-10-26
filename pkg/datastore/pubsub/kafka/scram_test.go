@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func Test_BeginSuccess(t *testing.T) {
+func Test_PubSub_BeginSuccess(t *testing.T) {
 	client := XDGSCRAMClient{HashGeneratorFcn: SHA512}
 
 	err := client.Begin("test-user", "password", "")
@@ -14,7 +14,7 @@ func Test_BeginSuccess(t *testing.T) {
 	}
 }
 
-func Test_BeginError(t *testing.T) {
+func Test_PubSub_BeginError(t *testing.T) {
 	client := XDGSCRAMClient{HashGeneratorFcn: SHA512}
 
 	errStr := "Error SASLprepping username"
@@ -25,7 +25,7 @@ func Test_BeginError(t *testing.T) {
 	}
 }
 
-func Test_Step(t *testing.T) {
+func Test_PubSub_Step(t *testing.T) {
 	client := XDGSCRAMClient{HashGeneratorFcn: SHA512}
 
 	err := client.Begin("test-user", "password", "")
@@ -39,7 +39,7 @@ func Test_Step(t *testing.T) {
 	}
 }
 
-func Test_Done(t *testing.T) {
+func Test_PubSub_Done(t *testing.T) {
 	client := XDGSCRAMClient{HashGeneratorFcn: SHA512}
 
 	err := client.Begin("test-user", "password", "")

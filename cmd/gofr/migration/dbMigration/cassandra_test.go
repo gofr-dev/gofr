@@ -48,7 +48,7 @@ func initCassandraTests() *Cassandra {
 	return cass
 }
 
-func TestCassandra_Run(t *testing.T) {
+func Test_CQL_Run(t *testing.T) {
 	c := initCassandraTests()
 	createCassandraTable(c, t)
 

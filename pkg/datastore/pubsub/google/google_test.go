@@ -23,7 +23,7 @@ import (
 	"gofr.dev/pkg/log"
 )
 
-func Test_New(t *testing.T) {
+func Test_PubSub_New(t *testing.T) {
 	t.Setenv("PUBSUB_BACKEND", "google")
 	t.Setenv("PUBSUB_EMULATOR_HOST", "localhost:8086")
 
@@ -53,7 +53,7 @@ func Test_New(t *testing.T) {
 	}
 }
 
-func Test_createSubscription(t *testing.T) {
+func Test_PubSub_createSubscription(t *testing.T) {
 	g := initializeTest(t)
 
 	g.config.Topic = g.client.Topic(g.config.TopicName)
@@ -86,7 +86,7 @@ func Test_createSubscription(t *testing.T) {
 	}
 }
 
-func Test_SubscribeWithCommit(t *testing.T) {
+func Test_PubSub_SubscribeWithCommit(t *testing.T) {
 	t.Setenv("PUBSUB_BACKEND", "google")
 	t.Setenv("PUBSUB_EMULATOR_HOST", "localhost:8086")
 
@@ -126,7 +126,7 @@ func Test_SubscribeWithCommit(t *testing.T) {
 	assert.Equal(t, err != nil, false, "Testcase Failed")
 }
 
-func Test_PublishEventWithOptions(t *testing.T) {
+func Test_PubSub_PublishEventWithOptions(t *testing.T) {
 	g := initializeTest(t)
 
 	g.config.Topic = g.client.Topic(g.config.TopicName)
@@ -155,7 +155,7 @@ func Test_PublishEventWithOptions(t *testing.T) {
 	}
 }
 
-func Test_PublishEvent(t *testing.T) {
+func Test_PubSub_PublishEvent(t *testing.T) {
 	g := initializeTest(t)
 
 	g.config.Topic = g.client.Topic(g.config.TopicName)
@@ -165,7 +165,7 @@ func Test_PublishEvent(t *testing.T) {
 	assert.Nilf(t, err, "Test Failed")
 }
 
-func Test_Bind(t *testing.T) {
+func Test_PubSub_Bind(t *testing.T) {
 	t.Setenv("PUBSUB_BACKEND", "google")
 	t.Setenv("PUBSUB_EMULATOR_HOST", "localhost:8086")
 
@@ -182,7 +182,7 @@ func Test_Bind(t *testing.T) {
 	assert.Nilf(t, err, "Test Failed. Expected Nil Got %v", err)
 }
 
-func Test_Ping(t *testing.T) {
+func Test_PubSub_Ping(t *testing.T) {
 	g := initializeTest(t)
 
 	testCases := []struct {
@@ -202,7 +202,7 @@ func Test_Ping(t *testing.T) {
 	}
 }
 
-func Test_Ping_Error(t *testing.T) {
+func Test_PubSub_Ping_Error(t *testing.T) {
 	g := initializeTest(t)
 	err := g.client.Close()
 
@@ -215,7 +215,7 @@ func Test_Ping_Error(t *testing.T) {
 	assert.IsTypef(t, &apierror.APIError{}, err, "Tescase Failed: %v")
 }
 
-func Test_Ping_ClientNotSet(t *testing.T) {
+func Test_PubSub_Ping_ClientNotSet(t *testing.T) {
 	g := initializeTest(t)
 	g.client = nil
 
@@ -224,7 +224,7 @@ func Test_Ping_ClientNotSet(t *testing.T) {
 	assert.Equalf(t, errors.Error("Google Pubsub not initialized"), err, "Test Failed: client is not initialized")
 }
 
-func Test_HealthCheck(t *testing.T) {
+func Test_PubSub_HealthCheck(t *testing.T) {
 	g := initializeTest(t)
 
 	expHealth := types.Health{
@@ -238,7 +238,7 @@ func Test_HealthCheck(t *testing.T) {
 	assert.Equalf(t, expHealth, health, "Test Failed: client is not initialized")
 }
 
-func Test_HealthCheck_Failed(t *testing.T) {
+func Test_PubSub_HealthCheck_Failed(t *testing.T) {
 	g := initializeTest(t)
 
 	// updating topic name to non-existing topic name
@@ -256,7 +256,7 @@ func Test_HealthCheck_Failed(t *testing.T) {
 	assert.Equalf(t, expHealth, health, "Test Failed: client is not initialized")
 }
 
-func Test_HealthCheck_ClientNotSet(t *testing.T) {
+func Test_PubSub_HealthCheck_ClientNotSet(t *testing.T) {
 	g := initializeTest(t)
 	g.client = nil
 
@@ -270,7 +270,7 @@ func Test_HealthCheck_ClientNotSet(t *testing.T) {
 	assert.Equalf(t, expHealth, health, "Test Failed: client is not initialized")
 }
 
-func Test_IsSet(t *testing.T) {
+func Test_PubSub_IsSet(t *testing.T) {
 	t.Setenv("PUBSUB_BACKEND", "google")
 	t.Setenv("PUBSUB_EMULATOR_HOST", "localhost:8086")
 

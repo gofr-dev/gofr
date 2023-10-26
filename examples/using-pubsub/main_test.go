@@ -14,7 +14,7 @@ import (
 )
 
 //nolint:gocognit // need to wait for topic to be created so retry logic is to be added
-func TestServerRun(t *testing.T) {
+func Test_PubSub_ServerRun(t *testing.T) {
 	t.Setenv("KAFKA_TOPIC", "kafka-pubsub")
 
 	go main()

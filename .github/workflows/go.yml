@@ -133,13 +133,6 @@ jobs:
           docker run -d --name gofr-ftp -v $HOME/ftpData:/home/vsftpd -p 20:20 -p 21:21 -p 21100-21110:21100-21110 -e FTP_USER=myuser \
           -e FTP_PASS=mypass -e PASV_ADDRESS=127.0.0.1 -e PASV_MIN_PORT=21100 -e PASV_MAX_PORT=21110 fauria/vsftpd
 
-      - name: Setup Google PubSub
-        run: |
-          docker pull gcr.io/google.com/cloudsdktool/google-cloud-cli:emulators
-          docker run --name=gcloud-emulator -d -p 8086:8086 \
-          gcr.io/google.com/cloudsdktool/google-cloud-cli:emulators gcloud beta emulators pubsub start --project=test123 \
-          --host-port=0.0.0.0:8086     
-
       - name: Test
         run: |
           export GOFR_ENV=test
@@ -207,3 +200,39 @@ jobs:
         run: |
           export GOFR_ENV=test
           go test ./... -run 'Test_YCQL_*'/'Test_CQL_*' -v -coverprofile cql.cov -coverpkg=./..
+
+  pubsub_test:
+    name: PubSub Tests 🎖️
+    runs-on: ubuntu-latest
+    services:
+      kafka:
+        image: krisgeus/docker-kafka
+        ports:
+          - 2008:2008
+          - 2009:2009
+        env:
+          ADVERTISED_LISTENERS: 'PLAINTEXT://localhost:2008,INTERNAL://localhost:2009'
+          LISTENERS: 'PLAINTEXT://0.0.0.0:2008,INTERNAL://0.0.0.0:2009'
+          SECURITY_PROTOCOL_MAP: 'PLAINTEXT:PLAINTEXT,INTERNAL:PLAINTEXT'
+          INTER_BROKER: 'INTERNAL'
+          KAFKA_CREATE_TOPICS: 'test-topic'
+          KAFKA_HOSTS: 'localhost:2008,localhost:2009'
+          KAFKA_TOPIC: 'test-topic'
+    steps:
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v2
+
+      - name: Get dependencies
+        run: go get -v -t -d ./...
+
+      - name: Setup Google PubSub
+        run: |
+          docker pull gcr.io/google.com/cloudsdktool/google-cloud-cli:emulators
+          docker run --name=gcloud-emulator -d -p 8086:8086 \
+          gcr.io/google.com/cloudsdktool/google-cloud-cli:emulators gcloud beta emulators pubsub start --project=test123 \
+          --host-port=0.0.0.0:8086
+
+      - name: Test
+        run: |
+          export GOFR_ENV=test
+          go test ./... -run 'Test_PubSub_*' -v -coverprofile pubsub.cov -coverpkg=./..         
