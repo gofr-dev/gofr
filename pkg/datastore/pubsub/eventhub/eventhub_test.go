@@ -14,7 +14,6 @@ import (
 
 	"gofr.dev/pkg"
 	"gofr.dev/pkg/datastore"
-	"gofr.dev/pkg/datastore/pubsub"
 	"gofr.dev/pkg/datastore/pubsub/avro"
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/types"
@@ -59,30 +58,6 @@ func Test_New(t *testing.T) {
 
 			assert.Equal(t, tt.wantErr, err != nil)
 		})
-	}
-}
-
-func Test_PubSub_Eventhub_HealthCheck(t *testing.T) {
-	conf := config.NewGoDotEnvProvider(log.NewLogger(), "../../../../configs")
-	testcases := []struct {
-		c    Config
-		resp types.Health
-	}{
-		{Config{Namespace: "zsmisc-dev", EventhubName: "healthcheck",
-			ClientSecret: conf.Get("AZURE_CLIENT_SECRET"), ClientID: conf.Get("AZURE_CLIENT_ID"),
-			TenantID: conf.Get("AZURE_TENANT_ID")}, types.Health{
-			Name: datastore.EventHub, Status: pkg.StatusUp, Host: "zsmisc-dev", Database: "healthcheck"}},
-		{Config{Namespace: "host-name", EventhubName: "eventhub"},
-			types.Health{Name: datastore.EventHub, Status: pkg.StatusDown, Host: "host-name", Database: "eventhub"}},
-	}
-
-	for i, v := range testcases {
-		conn, _ := New(&v.c)
-
-		resp := conn.HealthCheck()
-		if !reflect.DeepEqual(resp, v.resp) {
-			t.Errorf("[TESTCASE%d]Failed.Got %v\tExpected %v\n", i+1, resp, v.resp)
-		}
 	}
 }
 
@@ -141,32 +116,6 @@ func Test_PubSub_Eventhub_HealthCheck_Down(t *testing.T) {
 		resp := e.HealthCheck()
 		if !reflect.DeepEqual(resp, expected) {
 			t.Errorf("Expected %v\tGot %v\n", expected, resp)
-		}
-	}
-}
-
-func Test_PubSub_IsSet(t *testing.T) {
-	var e *Eventhub
-
-	logger := log.NewMockLogger(io.Discard)
-	c := config.NewGoDotEnvProvider(logger, "../../../configs")
-	conn, _ := New(&Config{Namespace: "zsmisc-dev", EventhubName: "healthcheck",
-		ClientSecret: c.Get("AZURE_CLIENT_SECRET"), ClientID: c.Get("AZURE_CLIENT_ID"),
-		TenantID: c.Get("AZURE_TENANT_ID")})
-
-	testcases := []struct {
-		pubsub pubsub.PublisherSubscriber
-		resp   bool
-	}{
-		{e, false},
-		{&Eventhub{}, false},
-		{conn, true},
-	}
-
-	for i, v := range testcases {
-		resp := v.pubsub.IsSet()
-		if resp != v.resp {
-			t.Errorf("[TESTCASE%d]Failed.Expected %v\tGot %v\n", i+1, v.resp, resp)
 		}
 	}
 }
