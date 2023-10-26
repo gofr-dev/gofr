@@ -21,7 +21,7 @@ import (
 	"gofr.dev/pkg/log"
 )
 
-func Test_PubSub_New(t *testing.T) {
+func Test_New(t *testing.T) {
 	conf := config.NewGoDotEnvProvider(log.NewLogger(), "../../../../configs")
 
 	tests := []struct {
@@ -62,7 +62,7 @@ func Test_PubSub_New(t *testing.T) {
 	}
 }
 
-func Test_PubSub_Eventhub_HealthCheck(t *testing.T) {
+func Test_Eventhub_HealthCheck(t *testing.T) {
 	conf := config.NewGoDotEnvProvider(log.NewLogger(), "../../../../configs")
 	testcases := []struct {
 		c    Config
@@ -145,7 +145,7 @@ func Test_PubSub_Eventhub_HealthCheck_Down(t *testing.T) {
 	}
 }
 
-func Test_PubSub_IsSet(t *testing.T) {
+func Test_IsSet(t *testing.T) {
 	var e *Eventhub
 
 	logger := log.NewMockLogger(io.Discard)
