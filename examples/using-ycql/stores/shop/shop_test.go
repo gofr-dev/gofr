@@ -1,3 +1,5 @@
+//go:build !all
+
 package shop
 
 import (

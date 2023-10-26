@@ -263,7 +263,7 @@ func Test_initializeMongoDB(t *testing.T) {
 	}
 }
 
-func Test_initializeCassandra(t *testing.T) {
+func Test_CQL_initialize(t *testing.T) {
 	// this is done to so that it doesnt affects the other tests related to cassandra
 	b := new(bytes.Buffer)
 	logger := log.NewMockLogger(b)
@@ -306,7 +306,7 @@ func Test_initializeCassandra_InvalidDialect(t *testing.T) {
 	}
 }
 
-func Test_getYcqlConfigs(t *testing.T) {
+func Test_YCQL_Configs(t *testing.T) {
 	b := new(bytes.Buffer)
 	logger := log.NewMockLogger(b)
 	c := config.NewGoDotEnvProvider(logger, "../../configs")
@@ -692,7 +692,7 @@ func Test_InitializeElasticSearchFromConfigs(t *testing.T) {
 	assert.NotNil(t, conn, "Test case failed")
 }
 
-func Test_InitializeCassandraFromConfigs(t *testing.T) {
+func Test_CQL_InitializeCassandraFromConfigs(t *testing.T) {
 	var cfg mockConfig
 
 	logger := log.NewMockLogger(io.Discard)
@@ -705,7 +705,7 @@ func Test_InitializeCassandraFromConfigs(t *testing.T) {
 	assert.NotNil(t, conn, "Test case failed")
 }
 
-func Test_InitializeYCQLFromConfigs(t *testing.T) {
+func Test_YCQL_InitializeYCQLFromConfigs(t *testing.T) {
 	logger := log.NewMockLogger(io.Discard)
 	c := config.NewGoDotEnvProvider(logger, "../../configs")
 	cfg := &config.MockConfig{
