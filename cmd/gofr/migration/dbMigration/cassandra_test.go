@@ -79,7 +79,7 @@ func Test_CQL_Run(t *testing.T) {
 	}
 }
 
-func TestCassandra_LastRunVersion(t *testing.T) {
+func Test_CQL_LastRunVersion(t *testing.T) {
 	cass := initCassandraTests()
 
 	createCassandraTable(cass, t)
@@ -107,7 +107,7 @@ func TestCassandra_LastRunVersion(t *testing.T) {
 	}
 }
 
-func Test_CassandraGetAllMigrations(t *testing.T) {
+func Test_CQL_GetAllMigrations(t *testing.T) {
 	c := initCassandraTests()
 	now := time.Now()
 
@@ -136,7 +136,7 @@ func Test_CassandraGetAllMigrations(t *testing.T) {
 	assert.Equal(t, expOut, down, "TEST failed.\n%s", "get all DOWN migrations")
 }
 
-func Test_CassandraGetAllMigrationsError(t *testing.T) {
+func Test_CQL_GetAllMigrationsError(t *testing.T) {
 	c := &Cassandra{}
 
 	expectedUp := []int{-1}
@@ -148,7 +148,7 @@ func Test_CassandraGetAllMigrationsError(t *testing.T) {
 	assert.Nil(t, down, "TEST failed.\n%s", "get all migrations")
 }
 
-func TestCassandra_IsDirty(t *testing.T) {
+func Test_CQL_IsDirty(t *testing.T) {
 	c := initCassandraTests()
 	createCassandraTable(c, t)
 
@@ -165,7 +165,7 @@ func TestCassandra_IsDirty(t *testing.T) {
 	}
 }
 
-func TestCassandra_FinishMigration(t *testing.T) {
+func Test_CQL_FinishMigration(t *testing.T) {
 	c := initCassandraTests()
 	createCassandraTable(c, t)
 
@@ -184,7 +184,7 @@ func TestCassandra_FinishMigration(t *testing.T) {
 	assert.Nilf(t, err, "TEST failed.")
 }
 
-func TestCassandra_FinishMigrationError(t *testing.T) {
+func Test_CQL_FinishMigrationError(t *testing.T) {
 	c := &Cassandra{}
 	expectedError := errors.DataStoreNotInitialized{DBName: datastore.CassandraStore}
 

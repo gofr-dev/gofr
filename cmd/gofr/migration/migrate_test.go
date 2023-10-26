@@ -236,7 +236,7 @@ func TestSQL_Migration(t *testing.T) {
 	}
 }
 
-func TestCassandra_Migration(t *testing.T) {
+func Test_CQL_Migration(t *testing.T) {
 	logger := log.NewMockLogger(new(bytes.Buffer))
 	c := config.NewGoDotEnvProvider(logger, "../../../configs")
 	cassandraPort, _ := strconv.Atoi(c.Get("CASS_DB_PORT"))
