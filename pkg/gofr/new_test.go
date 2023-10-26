@@ -346,7 +346,7 @@ func Test_YCQL_Configs(t *testing.T) {
 	}
 }
 
-func Test_PubSub(t *testing.T) {
+func Test_initialize_PubSub(t *testing.T) {
 	t.Setenv("PUBSUB_EMULATOR_HOST", "localhost:8086")
 
 	if testing.Short() {
