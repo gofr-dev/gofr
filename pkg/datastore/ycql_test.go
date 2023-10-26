@@ -30,7 +30,7 @@ func TestQueryLogger_String(t *testing.T) {
 	}
 }
 
-func Test_NewYCQL_Connection(t *testing.T) {
+func Test_YCQL_Connection(t *testing.T) {
 	logger := log.NewMockLogger(io.Discard)
 	c := config.NewGoDotEnvProvider(logger, "../../configs")
 
@@ -94,7 +94,7 @@ func Test_NewYCQL_Connection(t *testing.T) {
 	}
 }
 
-func Test_NewYCQL_ImproperConnection(t *testing.T) {
+func Test__YCQL_ImproperConnection(t *testing.T) {
 	yugabyteDBConfig := CassandraCfg{
 		Hosts:       "fake host",
 		Username:    "Cassandra",
@@ -112,7 +112,7 @@ func Test_NewYCQL_ImproperConnection(t *testing.T) {
 	}
 }
 
-func Test_YCQLQueryLog(t *testing.T) {
+func Test_YCQL_QueryLog(t *testing.T) {
 	b := new(bytes.Buffer)
 	logger := log.NewMockLogger(b)
 	c := config.NewGoDotEnvProvider(logger, "../../configs")
@@ -173,7 +173,7 @@ func Test_YCQLQueryLog(t *testing.T) {
 	}
 }
 
-func TestDataStore_YCQLHealthCheck(t *testing.T) {
+func Test_YCQL_DataStore_HealthCheck(t *testing.T) {
 	logger := log.NewMockLogger(io.Discard)
 	c := config.NewGoDotEnvProvider(logger, "../../configs")
 	port, _ := strconv.Atoi(c.Get("CASS_DB_PORT"))
@@ -224,7 +224,7 @@ func TestDataStore_YCQLHealthCheck(t *testing.T) {
 	}
 }
 
-func Test_YCQLHealthCheck_Logs(t *testing.T) {
+func Test_YCQL_HealthCheck_Logs(t *testing.T) {
 	b := new(bytes.Buffer)
 	logger := log.NewMockLogger(b)
 
@@ -246,8 +246,8 @@ func Test_YCQLHealthCheck_Logs(t *testing.T) {
 	assert.Equal(t, expectedResponse, output, "TESTCASE FAILED. \nexpected: %v, \ngot: %v", expectedResponse, output)
 }
 
-// Test_YCQLHealthCheck checks the health check when ycql was connected but went down later
-func Test_YCQLHealthCheck_Down(t *testing.T) {
+// Test_YCQL_HealthCheck checks the health check when ycql was connected but went down later
+func Test_YCQL_LHealthCheck_Down(t *testing.T) {
 	logger := log.NewLogger()
 	c := config.NewGoDotEnvProvider(logger, "../../configs")
 	port, _ := strconv.Atoi(c.Get("YCQL_DB_PORT"))
@@ -276,7 +276,7 @@ func Test_YCQLHealthCheck_Down(t *testing.T) {
 	}
 }
 
-func TestYCQL_HealthCheck_NilObject(t *testing.T) {
+func Test_YCQL__HealthCheck_NilObject(t *testing.T) {
 	expected := types.Health{
 		Name:   Ycql,
 		Status: pkg.StatusDown,
@@ -290,7 +290,7 @@ func TestYCQL_HealthCheck_NilObject(t *testing.T) {
 	}
 }
 
-func Test_IncorrectSSLCertPathYCQL(t *testing.T) {
+func Test_YCQL_IncorrectSSLCertPath(t *testing.T) {
 	logger := log.NewLogger()
 	c := config.NewGoDotEnvProvider(logger, "../../configs")
 	port, _ := strconv.Atoi(c.Get("YCQL_DB_PORT"))

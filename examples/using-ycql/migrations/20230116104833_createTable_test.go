@@ -13,7 +13,7 @@ func initializeTests() *gofr.Gofr {
 	return app
 }
 
-func TestK20230116104833_Up(t *testing.T) {
+func Test_YCQL_K20230116104833_Up(t *testing.T) {
 	app := initializeTests()
 	k := K20230116104833{}
 

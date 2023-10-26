@@ -54,7 +54,7 @@ func createYCQLTable(ycql *YCQL, t *testing.T) {
 	}
 }
 
-func TestYCQL_Run(t *testing.T) {
+func Test_YCQL_Run(t *testing.T) {
 	ycql := initYCQLTests(t)
 	createYCQLTable(ycql, t)
 
@@ -86,7 +86,7 @@ func TestYCQL_Run(t *testing.T) {
 	}
 }
 
-func TestYCQL_GetAllMigrations(t *testing.T) {
+func Test_YCQL_GetAllMigrations(t *testing.T) {
 	ycql := initYCQLTests(t)
 	now := time.Now()
 
@@ -115,7 +115,7 @@ func TestYCQL_GetAllMigrations(t *testing.T) {
 	assert.Equal(t, expOut, down, "TEST failed.\n%s", "get all DOWN migrations")
 }
 
-func TestYCQL_Run_Fail(t *testing.T) {
+func Test_YCQL_Run_Fail(t *testing.T) {
 	m := &YCQL{}
 
 	expectedError := errors.DataStoreNotInitialized{DBName: datastore.Ycql}
@@ -125,7 +125,7 @@ func TestYCQL_Run_Fail(t *testing.T) {
 	assert.EqualError(t, err, expectedError.Error())
 }
 
-func TestYCQL_LastRunVersion_Fail(t *testing.T) {
+func Test_YCQL_LastRunVersion_Fail(t *testing.T) {
 	m := &YCQL{}
 
 	expectedLastVersion := -1
@@ -135,7 +135,7 @@ func TestYCQL_LastRunVersion_Fail(t *testing.T) {
 	assert.Equal(t, expectedLastVersion, lastVersion)
 }
 
-func TestYCQL_GetAllMigrations_Fail(t *testing.T) {
+func Test_YCQL_GetAllMigrations_Fail(t *testing.T) {
 	m := &YCQL{}
 
 	expectedUP := []int{-1}
@@ -188,7 +188,7 @@ func insertYCQLMigration(t *testing.T, ycql *YCQL, mig *gofrMigration) {
 	}
 }
 
-func Test_ycqlMethods(t *testing.T) {
+func Test_YCQL_lMethods(t *testing.T) {
 	ycqlDB := fetchYCQL(t)
 
 	migrationTableSchema := "CREATE TABLE IF NOT EXISTS gofr_migrations ( " +
@@ -213,7 +213,7 @@ func Test_ycqlMethods(t *testing.T) {
 	}
 }
 
-func Test_FinishMigrationError(t *testing.T) {
+func Test_YCQL_FinishMigrationError(t *testing.T) {
 	y := fetchYCQL(t)
 
 	testcases := []struct {
@@ -233,7 +233,7 @@ func Test_FinishMigrationError(t *testing.T) {
 	}
 }
 
-func Test_FinishMigration(t *testing.T) {
+func Test_YCQL_FinishMigration(t *testing.T) {
 	y := fetchYCQL(t)
 	y.newMigrations = []gofrMigration{}
 
@@ -242,7 +242,7 @@ func Test_FinishMigration(t *testing.T) {
 	assert.Nil(t, err, "Test case failed")
 }
 
-func Test_postRunYcql(t *testing.T) {
+func Test_YCQL_postRun(t *testing.T) {
 	y := fetchYCQL(t)
 	y.newMigrations = []gofrMigration{{"testing", 20010102121212, time.Now(), time.Time{}, "UP"},
 		{"testing", 20000102121212, time.Now(), time.Time{}, "UP"}}
@@ -252,7 +252,7 @@ func Test_postRunYcql(t *testing.T) {
 	assert.Nil(t, err, "Test case failed.")
 }
 
-func TestYCQL_IsDirty(t *testing.T) {
+func Test_YCQL_IsDirty(t *testing.T) {
 	logger := log.NewLogger()
 	c := config.NewGoDotEnvProvider(logger, "../../../../configs")
 
@@ -308,7 +308,7 @@ func (k K20180324120551) Down(_ *datastore.DataStore, _ log.Logger) error {
 	return errors.Error("test error")
 }
 
-func Test_runError(t *testing.T) {
+func Test_YCQL_runError(t *testing.T) {
 	y := fetchYCQL(t)
 
 	err := y.Run(K20180324120551{}, "testing", "k20180324120551", "UP", log.NewLogger())
@@ -316,7 +316,7 @@ func Test_runError(t *testing.T) {
 	assert.NotNil(t, err, "Test case failed")
 }
 
-func TestYCQL_LastRunVersion(t *testing.T) {
+func Test_YCQL_LastRunVersion(t *testing.T) {
 	y := fetchYCQL(t)
 
 	var expected int
