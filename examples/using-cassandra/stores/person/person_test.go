@@ -3,7 +3,6 @@
 package person
 
 import (
-	"os"
 	"reflect"
 	"testing"
 
@@ -14,21 +13,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 )
-
-func TestMain(m *testing.M) {
-	app := gofr.New()
-	// Create a table person if the table does not exists
-	q := "CREATE TABLE IF NOT EXISTS persons (id int PRIMARY KEY, name text, age int, state text )"
-	err := app.Cassandra.Session.Query(q).Exec()
-	// if table creation is unsuccessful log the error
-	if err != nil {
-		app.Logger.Errorf("Failed creation of table persons :%v", err)
-	} else {
-		app.Logger.Info("Table persons created Successfully")
-	}
-
-	os.Exit(m.Run())
-}
 
 func initializeTest(t *testing.T) *gofr.Gofr {
 	app := gofr.New()

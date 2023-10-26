@@ -21,7 +21,7 @@ import (
 	"gofr.dev/pkg/log"
 )
 
-func Test_PubSub_New(t *testing.T) {
+func Test_New(t *testing.T) {
 	conf := config.NewGoDotEnvProvider(log.NewLogger(), "../../../../configs")
 
 	tests := []struct {

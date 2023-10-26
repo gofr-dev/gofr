@@ -57,7 +57,7 @@ func Test_PubSub_EventBridge_PublishEvent(t *testing.T) {
 	}
 }
 
-func Test_PubSubEventBridge_HealthCheck(t *testing.T) {
+func Test_PubSub_EventBridge_HealthCheck(t *testing.T) {
 	var eBridge Client
 
 	awscfg := aws.NewConfig().WithRegion("us-west-2")
