@@ -18,11 +18,12 @@ jobs:
     runs-on: ubuntu-latest
     services:
       mysql:
-        image: mysql:8.0.30
+        image: mysql:8.0.31
         ports:
           - "3306:3306"
         env:
           MYSQL_ROOT_PASSWORD: "password"
+          MYSQL_DATABASE: "test"
 
       redis:
         image: redis:7.0.5
@@ -94,6 +95,19 @@ jobs:
           - 9041:9042
         options: --health-cmd "cqlsh --debug"
 
+      solr:
+        image: solr:8
+        ports:
+          - 8983:8983
+
+      pubsub-emulator:
+        image: gcr.io/google.com/cloudsdktool/google-cloud-cli:emulators
+        ports:
+          - 8086:8086
+        options: --name pubsub-emulator --entrypoint gcloud
+        env:
+          CLOUDSDK_CORE_PROJECT: test123
+
     steps:
       - name: Checkout code into go module directory
         uses: actions/checkout@v2
@@ -108,7 +122,7 @@ jobs:
 
       - name: Load Schema of Cassandra
         run: |
-          docker exec -i ${{ job.services.cassandra.id }} cqlsh --debug  < .github/setups/keyspace.cql
+          docker exec -i ${{ job.services.cassandra.id }} cqlsh --debug  < .github/setups/keyspace.cql  
 
       - name: Yugabyte setup
         uses: yugabyte/yugabyte-db-action@master
@@ -118,10 +132,6 @@ jobs:
           yb_tserver_ui_port: 6000
           ysql_port: 5433
           ycql_port: 9042
-
-      - name: Set up MySQL
-        run: |
-          docker exec -i ${{ job.services.mysql.id }} mysql -uroot -ppassword -e 'CREATE DATABASE test;'
 
       - name: Set up SSL Enabled MySQL
         run: |
@@ -133,8 +143,8 @@ jobs:
 
       - name: Load Schema of YCQL
         run: |
-          temp=$(sudo docker ps | grep yugabyte | awk '{print $1}');
-          docker exec -i $temp /home/yugabyte/bin/ycqlsh < .github/setups/keyspace.ycql;
+          container_id=$(sudo docker ps | grep yugabyte | awk '{print $1}')
+          docker exec -i $container_id /home/yugabyte/bin/ycqlsh < .github/setups/keyspace.ycql
 
       - name: Get dependencies
         run: |
@@ -142,9 +152,9 @@ jobs:
 
       - name: Load Schema of Solr
         run: |
-          docker run -d --name solr -p 8983:8983 solr:8 -DzkRun;
-          sleep 10s;
+          dockerize -wait tcp://solr:8983 -timeout 1m
           docker exec -i solr sh < .github/setups/solrSchema.sh;
+        timeout-minutes: 5
 
       - name: Setup SFTP Server
         run: |
@@ -158,18 +168,18 @@ jobs:
           chmod -R 777 $HOME/ftpData
           docker run -d --name gofr-ftp -v $HOME/ftpData:/home/vsftpd -p 20:20 -p 21:21 -p 21100-21110:21100-21110 -e FTP_USER=myuser \
           -e FTP_PASS=mypass -e PASV_ADDRESS=127.0.0.1 -e PASV_MIN_PORT=21100 -e PASV_MAX_PORT=21110 fauria/vsftpd
-
-      - name: Setup Google PubSub
-        run: |
-          docker pull gcr.io/google.com/cloudsdktool/google-cloud-cli:emulators
-          docker run --name=gcloud-emulator -d -p 8086:8086 \
-          gcr.io/google.com/cloudsdktool/google-cloud-cli:emulators gcloud beta emulators pubsub start --project=test123 \
-          --host-port=0.0.0.0:8086
+#
+#      - name: Setup Google PubSub
+#        run: |
+#          docker pull gcr.io/google.com/cloudsdktool/google-cloud-cli:emulators
+#          docker run --name=gcloud-emulator -d -p 8086:8086 \
+#          gcr.io/google.com/cloudsdktool/google-cloud-cli:emulators gcloud beta emulators pubsub start --project=test123 \
+#          --host-port=0.0.0.0:8086
 
       - name: Test
         run: |
           export GOFR_ENV=test
-          go test ./... -v -coverprofile profile.cov -coverpkg=./...
+          go test ./... -short --tags=integration -v -coverprofile profile.cov -coverpkg=./...
           go tool cover -func profile.cov
 
       - name: Upload Test Coverage to Code Climate
@@ -194,3 +204,37 @@ jobs:
       - name: GolangCI-Lint
         run: |
           golangci-lint run --timeout 9m0s
+
+  yugabyte_test:
+    name: YugaByte Tests🎖️
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v2
+
+      - name: Get dependencies
+        run: go get -v -t -d ./...
+
+      - name: Yugabyte setup
+        uses: yugabyte/yugabyte-db-action@master
+        with:
+          yb_image_tag: 2.14.5.0-b18
+          yb_master_ui_port: 7000
+          yb_tserver_ui_port: 6000
+          ysql_port: 5433
+          ycql_port: 9042
+
+      - name: Load Schema of YCQL
+        run: |
+          temp=$(sudo docker ps | grep yugabyte | awk '{print $1}');
+          docker exec -i $temp /home/yugabyte/bin/ycqlsh < .github/setups/keyspace.ycql;
+
+      - name: Test
+        run: |
+          export GOFR_ENV=test
+          go test ./... -run 'Test_YCQL_*' -v -coverprofile yugabyte.cov -coverpkg=./..
+
+
+
+

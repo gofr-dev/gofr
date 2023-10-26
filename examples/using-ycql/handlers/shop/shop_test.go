@@ -29,7 +29,7 @@ func initializeHandlerTest(t *testing.T) (*stores.MockShop, handler, *gofr.Gofr)
 	return store, h, app
 }
 
-func TestGet(t *testing.T) {
+func Test_YCQL_Get(t *testing.T) {
 	tests := []struct {
 		desc        string
 		queryParams string
@@ -66,7 +66,7 @@ func TestGet(t *testing.T) {
 	}
 }
 
-func TestCreate(t *testing.T) {
+func Test_YCQL_Create(t *testing.T) {
 	store, h, app := initializeHandlerTest(t)
 
 	tests := []struct {
@@ -111,7 +111,7 @@ func TestCreate(t *testing.T) {
 	}
 }
 
-func TestUpdate(t *testing.T) {
+func Test_YCQL_Update(t *testing.T) {
 	store, h, app := initializeHandlerTest(t)
 
 	tests := []struct {
@@ -165,7 +165,7 @@ func TestUpdate(t *testing.T) {
 	}
 }
 
-func TestDelete(t *testing.T) {
+func Test_YCQL_Delete(t *testing.T) {
 	store, h, app := initializeHandlerTest(t)
 
 	tests := []struct {

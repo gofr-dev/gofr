@@ -1,52 +1,14 @@
 package shop
 
 import (
-	"os"
-	"strconv"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 
 	"gofr.dev/examples/using-ycql/models"
 	"gofr.dev/pkg/datastore"
 	"gofr.dev/pkg/gofr"
-	"gofr.dev/pkg/gofr/config"
-	"gofr.dev/pkg/log"
-
-	"github.com/stretchr/testify/assert"
 )
-
-func TestMain(m *testing.M) {
-	logger := log.NewLogger()
-	c := config.NewGoDotEnvProvider(logger, "../../configs")
-	cassandraPort, _ := strconv.Atoi(c.Get("CASS_DB_PORT"))
-	ycqlCfg := datastore.CassandraCfg{
-		Hosts:    c.Get("CASS_DB_HOST"),
-		Port:     cassandraPort,
-		Username: c.Get("CASS_DB_USER"),
-		Password: c.Get("CASS_DB_PASS"),
-		Keyspace: "system",
-	}
-
-	ycqlDB, err := datastore.GetNewYCQL(logger, &ycqlCfg)
-	if err != nil {
-		logger.Errorf("got error while connecting to YCQL")
-	}
-
-	err = ycqlDB.Session.Query(
-		"CREATE KEYSPACE IF NOT EXISTS test WITH REPLICATION = {'class': 'SimpleStrategy', 'replication_factor': '1'} " +
-			"AND DURABLE_WRITES = true;").Exec()
-	if err != nil {
-		logger.Errorf("got error while connecting to YCQL")
-	}
-
-	ycqlCfg.Keyspace = "test"
-
-	ycqlDB, err = datastore.GetNewYCQL(logger, &ycqlCfg)
-	if err != nil {
-		logger.Errorf("got error while connecting to YCQL")
-	}
-
-	os.Exit(m.Run())
-}
 
 func initializeTest(t *testing.T) *gofr.Context {
 	app := gofr.New()
@@ -67,7 +29,7 @@ func initializeTest(t *testing.T) *gofr.Context {
 	return ctx
 }
 
-func TestGet(t *testing.T) {
+func Test_YCQL_Get(t *testing.T) {
 	tests := []struct {
 		desc  string
 		input models.Shop
@@ -94,7 +56,7 @@ func TestGet(t *testing.T) {
 	}
 }
 
-func TestCreate(t *testing.T) {
+func Test_YCQL_Create(t *testing.T) {
 	tests := []struct {
 		desc  string
 		input models.Shop
@@ -118,7 +80,7 @@ func TestCreate(t *testing.T) {
 	}
 }
 
-func TestUpdate(t *testing.T) {
+func Test_YCQL_Update(t *testing.T) {
 	tests := []struct {
 		desc  string
 		input models.Shop
