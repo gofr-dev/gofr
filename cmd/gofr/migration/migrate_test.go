@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"os"
 	"reflect"
 	"strconv"
 	"strings"
@@ -108,7 +107,7 @@ func Test_runDOWN_Fail(t *testing.T) {
 	assert.Nilf(t, res, "Test Failed. Expected: Nil Got: %v", res)
 	assert.Equalf(t, expectedError, err, "Test Failed. Expected: %v Got: %v", expectedError, err)
 }
-func TestMain(m *testing.M) {
+func Test_CQL(t *testing.T) {
 	logger := log.NewLogger()
 	c := config.NewGoDotEnvProvider(logger, "../../../configs")
 	cassandraPort, _ := strconv.Atoi(c.Get("CASS_DB_PORT"))
@@ -132,8 +131,6 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		logger.Errorf("unable to create %v keyspace %s", keyspace, err)
 	}
-
-	os.Exit(m.Run())
 }
 
 func TestRedisAndMongo_Migration(t *testing.T) {
