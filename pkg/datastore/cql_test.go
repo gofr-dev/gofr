@@ -91,7 +91,7 @@ func Test_CQL_ImproperConnection(t *testing.T) {
 	}
 }
 
-func Test_hostVerification(t *testing.T) {
+func Test_CQL_hostVerification(t *testing.T) {
 	boolCheck := enableHostVerification("true")
 	if !boolCheck {
 		t.Errorf("Failed to enable host verification")
@@ -103,7 +103,7 @@ func Test_hostVerification(t *testing.T) {
 	}
 }
 
-func Test_setTLSVersion(t *testing.T) {
+func Test_CQL_setTLSVersion(t *testing.T) {
 	testCases := []struct {
 		version         string
 		expectedVersion uint16
@@ -130,7 +130,7 @@ func Test_setTLSVersion(t *testing.T) {
 	}
 }
 
-func Test_incorrectSSL_Connection(t *testing.T) {
+func Test_CQL_incorrectSSL_Connection(t *testing.T) {
 	cassandraConfig := CassandraCfg{
 		Hosts:       "fake host",
 		Username:    "cassandra",
@@ -147,7 +147,7 @@ func Test_incorrectSSL_Connection(t *testing.T) {
 	}
 }
 
-func Test_CassandraQueryLog(t *testing.T) {
+func Test_CQL_CassandraQueryLog(t *testing.T) {
 	b := new(bytes.Buffer)
 	logger := log.NewMockLogger(b)
 	c := config.NewGoDotEnvProvider(logger, "../../configs")
@@ -215,7 +215,7 @@ func Test_CassandraQueryLog(t *testing.T) {
 	}
 }
 
-func TestDataStore_CassandraHealthCheck(t *testing.T) {
+func Test_CQL_CassandraHealthCheck(t *testing.T) {
 	logger := log.NewMockLogger(io.Discard)
 	c := config.NewGoDotEnvProvider(logger, "../../configs")
 	port, _ := strconv.Atoi(c.Get("CASS_DB_PORT"))
@@ -242,7 +242,7 @@ func TestDataStore_CassandraHealthCheck(t *testing.T) {
 }
 
 // check log message returned from healthCheck
-func Test_CassandraHealthCheck_Logger(t *testing.T) {
+func Test_CQL_CassandraHealthCheck_Logger(t *testing.T) {
 	b := new(bytes.Buffer)
 	logger := log.NewMockLogger(b)
 
@@ -263,7 +263,7 @@ func Test_CassandraHealthCheck_Logger(t *testing.T) {
 }
 
 // Test_CassandraHealthCheck checks the health check when cassandra was connected but went down later
-func Test_CassandraHealthCheck(t *testing.T) {
+func Test_CQL_CassandraHealthCheck_Down(t *testing.T) {
 	logger := log.NewLogger()
 	c := config.NewGoDotEnvProvider(logger, "../../configs")
 	port, _ := strconv.Atoi(c.Get("CASS_DB_PORT"))
@@ -293,7 +293,7 @@ func Test_CassandraHealthCheck(t *testing.T) {
 	}
 }
 
-func TestCQL_HealthCheck_NilObject(t *testing.T) {
+func Test_CQL_HealthCheck_NilObject(t *testing.T) {
 	expected := types.Health{
 		Name:   CassandraStore,
 		Status: pkg.StatusDown,
@@ -307,7 +307,7 @@ func TestCQL_HealthCheck_NilObject(t *testing.T) {
 	}
 }
 
-func Test_IncorrectSSLCertPathCql(t *testing.T) {
+func Test_CQL_IncorrectSSLCertPathCql(t *testing.T) {
 	logger := log.NewLogger()
 	c := config.NewGoDotEnvProvider(logger, "../../configs")
 	port, _ := strconv.Atoi(c.Get("CASS_DB_PORT"))
