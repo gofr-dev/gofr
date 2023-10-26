@@ -120,6 +120,22 @@ jobs:
           docker exec -i solr sh < .github/setups/solrSchema.sh;
         timeout-minutes: 5
 
+      - name: Yugabyte setup
+        uses: yugabyte/yugabyte-db-action@master
+        with:
+          yb_image_tag: 2.14.5.0-b18
+          yb_master_ui_port: 7000
+          yb_tserver_ui_port: 6000
+          ysql_port: 5433
+          ycql_port: 9042
+
+      - name: Setup Google PubSub
+        run: |
+          docker pull gcr.io/google.com/cloudsdktool/google-cloud-cli:emulators
+          docker run --name=gcloud-emulator -d -p 8086:8086 \
+          gcr.io/google.com/cloudsdktool/google-cloud-cli:emulators gcloud beta emulators pubsub start --project=test123 \
+          --host-port=0.0.0.0:8086    
+
       - name: Setup SFTP Server
         run: |
           mkdir $HOME/sftpData
