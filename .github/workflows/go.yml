@@ -143,7 +143,7 @@ jobs:
       - name: Test
         run: |
           export GOFR_ENV=test
-          go test ./... -short --tags=integration -v -run '^(?!(Test_YCQL_|Test_CQL_)).*' -coverprofile profile.cov -coverpkg=./...
+          go test ./... -skip 'Test_YCQL_'/'Test_CQL_' -v -coverprofile profile.cov -coverpkg=./..
           go tool cover -func profile.cov
 
       - name: Upload Test Coverage to Code Climate
