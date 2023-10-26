@@ -107,6 +107,7 @@ func Test_runDOWN_Fail(t *testing.T) {
 	assert.Nilf(t, res, "Test Failed. Expected: Nil Got: %v", res)
 	assert.Equalf(t, expectedError, err, "Test Failed. Expected: %v Got: %v", expectedError, err)
 }
+
 func Test_CQL(t *testing.T) {
 	logger := log.NewLogger()
 	c := config.NewGoDotEnvProvider(logger, "../../../configs")
@@ -121,7 +122,7 @@ func Test_CQL(t *testing.T) {
 
 	cassandra, err := datastore.GetNewCassandra(logger, &cassandraCfg)
 	if err != nil {
-		logger.Errorf("[FAILED] unable to connect to cassandra with system keyspace %s", err)
+		t.Errorf("[FAILED] unable to connect to cassandra with system keyspace %s", err)
 	}
 
 	query := fmt.Sprintf("CREATE KEYSPACE IF NOT EXISTS %v WITH replication = "+
@@ -129,7 +130,7 @@ func Test_CQL(t *testing.T) {
 
 	err = cassandra.Session.Query(query).Exec()
 	if err != nil {
-		logger.Errorf("unable to create %v keyspace %s", keyspace, err)
+		t.Errorf("unable to create %v keyspace %s", keyspace, err)
 	}
 }
 
