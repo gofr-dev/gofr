@@ -34,7 +34,7 @@ func Test_Read(t *testing.T) {
 		response interface{}
 		err      error
 	}{
-		{"successful read", getMockConfigs()["LOCAL"], "success.txt", "Welcome to Zopsmart!", nil},
+		{"successful read", getMockConfigs()["LOCAL"], "success.txt", "Welcome to gofr.dev!", nil},
 		{"read error", getMockConfigs()["AZURE"], "err.txt", nil, &fs.PathError{}},
 		{"read open error", getMockConfigs()["GCP"], "openErr.txt", nil, &fs.PathError{}},
 	}
@@ -149,7 +149,7 @@ func (m mockFile) Open() error {
 func (m mockFile) Read(b []byte) (int, error) {
 	switch m.fileName {
 	case "success.txt":
-		data := []byte("Welcome to Zopsmart!")
+		data := []byte("Welcome to gofr.dev!")
 		copy(b, data)
 
 		_, err := m.Write(data)

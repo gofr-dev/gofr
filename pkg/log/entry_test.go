@@ -129,10 +129,10 @@ func TestEntry_TerminalOutput(t *testing.T) {
 		{entry{Level: Info, CorrelationID: "test", Message: "hello"}, fmt.Sprintf(
 			"INFO\u001B[0m [00:00:00]  hello\n%15s: %s", "CorrelationId", "test")},
 		// data with message
-		{entry{Level: Warn, Message: "hello", Data: map[string]interface{}{"name": "ZopSmart"}},
+		{entry{Level: Warn, Message: "hello", Data: map[string]interface{}{"name": "gofr.dev"}},
 			"WARN\u001B[0m [00:00:00]  hello"},
 		// statusCode
-		{entry{Level: Warn, Message: "hello", Data: map[string]interface{}{"name": "ZopSmart", "responseCode": 200}},
+		{entry{Level: Warn, Message: "hello", Data: map[string]interface{}{"name": "gofr.dev", "responseCode": 200}},
 			"WARN\u001B[0m [00:00:00]  hello"},
 		// test data
 		{entry{Level: Debug, Data: map[string]interface{}{"method": "get", "duration": 10000.0, "uri": "i", "datastore": "cql"}},

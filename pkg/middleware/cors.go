@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	allowedHeaders = "Authorization, Content-Type, x-requested-with, origin, true-client-ip, X-Correlation-ID, x-zopsmart-tenant"
+	allowedHeaders = "Authorization, Content-Type, x-requested-with, origin, true-client-ip, X-Correlation-ID"
 	allowedMethods = "PUT, POST, GET, DELETE, OPTIONS, PATCH"
 )
 

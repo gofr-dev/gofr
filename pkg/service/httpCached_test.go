@@ -3,10 +3,8 @@ package service
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -199,42 +197,18 @@ func TestGetHeaders(t *testing.T) {
 
 func Test_GetHeaders_All(t *testing.T) {
 	expectedHeaders := map[string]string{"X-Correlation-ID": "123", "True-Client-IP": "127.0.0.1",
-		"X-Zopsmart-Channel": "api", "X-Authenticated-UserId": "990", "X-Zopsmart-Tenant": "zopsmart", "X-B3-TraceID": "123"}
+		"X-Authenticated-UserId": "990", "X-B3-TraceID": "123"}
 
 	ctx := context.TODO()
 	ctx = context.WithValue(ctx, middleware.CorrelationIDKey, "123")
 	ctx = context.WithValue(ctx, middleware.ClientIPKey, "127.0.0.1")
-	ctx = context.WithValue(ctx, middleware.ZopsmartChannelKey, "api")
 	ctx = context.WithValue(ctx, middleware.AuthenticatedUserIDKey, "990")
-	ctx = context.WithValue(ctx, middleware.ZopsmartTenantKey, "zopsmart")
 	ctx = context.WithValue(ctx, middleware.B3TraceIDKey, "123")
 
 	headers := cachedHTTPService{httpService: &httpService{}}.getHeaders(ctx, nil)
 
 	if len(headers) != len(expectedHeaders) {
 		t.Errorf("headers are not set")
-	}
-}
-
-func TestGenerateKey(t *testing.T) {
-	api := "customer"
-	params := map[string]interface{}{"id": 123}
-	headers := map[string]string{"X-Zopsmart-Tenant": "zopsmart"}
-
-	b, _ := json.Marshal(params)
-
-	expectedKey := api + ":" + string(b)
-
-	h := sha256.New()
-	b, _ = json.Marshal(headers)
-	_, _ = h.Write(b)
-
-	expectedKey += ":" + fmt.Sprintf("%x", h.Sum(nil))
-
-	key := generateKey(api, params, headers)
-
-	if key != expectedKey {
-		t.Errorf("generation of key failed.\ngot %v\nexpected %v", key, expectedKey)
 	}
 }
 

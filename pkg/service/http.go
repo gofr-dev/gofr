@@ -299,16 +299,6 @@ func (h *httpService) setHeadersFromContext(ctx context.Context, req *http.Reque
 		req.Header.Add("X-Authenticated-UserId", authUserID)
 	}
 
-	if val := ctx.Value(middleware.ZopsmartChannelKey); val != nil {
-		zopsmartChannel, _ := val.(string)
-		req.Header.Add("X-Zopsmart-Channel", zopsmartChannel)
-	}
-
-	if val := ctx.Value(middleware.ZopsmartTenantKey); val != nil {
-		zopsmartTenant, _ := val.(string)
-		req.Header.Add("X-Zopsmart-Tenant", zopsmartTenant)
-	}
-
 	if h.auth != "" {
 		req.Header.Add("Authorization", h.auth)
 	}

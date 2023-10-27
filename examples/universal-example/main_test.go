@@ -86,7 +86,7 @@ func testDataStores(tb testing.TB) {
 		// Cassandra
 		{1, http.MethodGet, "/cassandra/employee?name=Aman", http.StatusOK, nil},
 		{2, http.MethodPost, "/cassandra/employee", http.StatusCreated,
-			[]byte(`{"id": 5, "name": "Sukanya", "phone": "01477", "email":"sukanya@zopsmart.com", "city":"Guwahati"}`)},
+			[]byte(`{"id": 5, "name": "Sukanya", "phone": "01477", "email":"sukanya@gofr.dev", "city":"Guwahati"}`)},
 		{3, http.MethodGet, "/cassandra/unknown", http.StatusNotFound, nil},
 		// Redis
 		{4, http.MethodGet, "/redis/config/key123", http.StatusInternalServerError, nil},
@@ -94,7 +94,7 @@ func testDataStores(tb testing.TB) {
 		// Postgres
 		{6, http.MethodGet, "/pgsql/employee", http.StatusOK, nil},
 		{7, http.MethodPost, "/pgsql/employee", http.StatusCreated,
-			[]byte(`{"id": 5, "name": "Sukanya", "phone": "01477", "email":"sukanya@zopsmart.com", "city":"Guwahati"}`)},
+			[]byte(`{"id": 5, "name": "Sukanya", "phone": "01477", "email":"sukanya@gofr.dev", "city":"Guwahati"}`)},
 	}
 	for _, tc := range tests {
 		req, _ := request.NewMock(tc.method, "http://localhost:9095"+tc.endpoint, bytes.NewBuffer(tc.body))

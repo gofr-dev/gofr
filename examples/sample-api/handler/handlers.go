@@ -38,7 +38,7 @@ type resp struct {
 func JSONHandler(_ *gofr.Context) (interface{}, error) {
 	r := resp{
 		Name:    "Vikash",
-		Company: "ZopSmart",
+		Company: "gofr.dev",
 	}
 
 	return r, nil
@@ -50,7 +50,7 @@ func UserHandler(ctx *gofr.Context) (interface{}, error) {
 
 	switch strings.ToLower(name) {
 	case "vikash":
-		return resp{Name: "Vikash", Company: "ZopSmart"}, nil
+		return resp{Name: "Vikash", Company: "gofr.dev"}, nil
 	default:
 		return nil, errors.EntityNotFound{Entity: "user", ID: name}
 	}

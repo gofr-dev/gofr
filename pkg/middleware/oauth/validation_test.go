@@ -187,7 +187,7 @@ func TestValidate_RawStdEncoding_Header(t *testing.T) {
 		header: header{
 			Algorithm: "RS256",
 			Type:      "JWT",
-			URL:       "https://api.zopsmart.com/v1/.well-known/jwks.json",
+			URL:       "https://api.gofr.dev/v1/.well-known/jwks.json",
 			KeyID:     "BmixJ3zyENlT1b0zNmimkQ==",
 		},
 		signature: "odhLuiNd6C-TxBeTikzUBF8NF7x5j9e2eeqVBkgFYaJ8q0Rq-JPDf4p4pWFDi7eCDoQRPQY8KXSHxilikkrQqfXoCsGr09vPiQNL2cFn71ovxTR21bH0SafWKYlKefcuP7ocLOCb2JX38TfOP3pqc6tPRzDDgi9v3F818w9lYjyojyRiJ5wz7D6jFYWOG4wuUeGgCS7TOXRPLeAr2WsNkZd5v5_b_69sElmk9LjedOIBpsJBT0RYsELDiUOermOUEdcmQgZvLvi1k2NiVJCJ88rl-bWLSXE-PPVrUxhv4B-zKbPowDXJRyVyzK-3qKQKFfZQlmfhb4CrXanEoWhG7Q",

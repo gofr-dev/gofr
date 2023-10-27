@@ -39,9 +39,9 @@ func TestEmployee_Get(t *testing.T) {
 		expResp  []entity.Employee
 	}{
 		{"get success", mock.NewRows([]string{"id", "name", "phone", "email", "city"}).
-			AddRow(1, "abc", "2345-678", "abc@gmail.com", "Bangalore").AddRow(2, "cde", "123-331-345", "cde@zopsmart.com", "Mysore"), nil, nil,
+			AddRow(1, "abc", "2345-678", "abc@gmail.com", "Bangalore").AddRow(2, "cde", "123-331-345", "cde@gofr.dev.com", "Mysore"), nil, nil,
 			[]entity.Employee{{ID: 1, Name: "abc", Phone: "2345-678", Email: "abc@gmail.com", City: "Bangalore"},
-				{ID: 2, Name: "cde", Phone: "123-331-345", Email: "cde@zopsmart.com", City: "Mysore"}},
+				{ID: 2, Name: "cde", Phone: "123-331-345", Email: "cde@gofr.dev.com", City: "Mysore"}},
 		},
 		{"get failure", mock.NewRows([]string{"id", "name", "phone", "email", "city"}), errors.DB{}, errors.DB{Err: errors.DB{}},
 			nil},
@@ -81,7 +81,7 @@ func TestEmployee_Create(t *testing.T) {
 		expError error
 		resError error
 	}{
-		{"success", entity.Employee{ID: 9, Name: "Sunita", Phone: "01234", Email: "sunita@zopsmart.com", City: "Darbhanga"}, nil, nil},
+		{"success", entity.Employee{ID: 9, Name: "Sunita", Phone: "01234", Email: "sunita@gofr.dev.com", City: "Darbhanga"}, nil, nil},
 		{"success failure", entity.Employee{}, errors.DB{}, errors.DB{Err: errors.DB{}}},
 	}
 

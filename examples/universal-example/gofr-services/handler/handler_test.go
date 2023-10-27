@@ -43,7 +43,7 @@ func TestHandler_GetHello(t *testing.T) {
 		response interface{}
 		err      error
 	}{
-		{"name=ZopSmart", "Hello ZopSmart", nil},
+		{"name=gofr.dev", "Hello gofr.dev", nil},
 		{"", "Hello", nil},
 	}
 

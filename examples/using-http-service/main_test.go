@@ -60,7 +60,7 @@ func mockServer(t *testing.T) *httptest.Server {
 		_, err := w.Write([]byte(`{
 				"data": {
         			"name": "Vikash",
-        			"company": "ZopSmart"
+        			"company": "gofr.dev"
     			}
 			}`))
 

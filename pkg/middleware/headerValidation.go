@@ -18,17 +18,14 @@ type Header struct {
 
 //nolint:gochecknoglobals // since we need to iterate through all the values provided by v3
 var (
-	xZopsmartTenantValues = map[string]bool{"good4more": true, "zopsmart": true}
-
 	// key is the header name and the value is the default value of the header as per v3
 	// headers with empty default values are mandatory headers
 	requiredHeaders = map[string]string{
-		"Accept-Language":   "en-US",
-		"Content-Language":  "en-US",
-		"Content-Type":      "application/json",
-		"True-Client-Ip":    "",
-		"X-Correlation-ID":  "",
-		"X-Zopsmart-Tenant": "",
+		"Accept-Language":  "en-US",
+		"Content-Language": "en-US",
+		"Content-Type":     "application/json",
+		"True-Client-Ip":   "",
+		"X-Correlation-ID": "",
 	}
 )
 
@@ -100,16 +97,6 @@ func createError(header, value string) *errors.Response {
 	}
 }
 
-// isValidZopsmartTenant check if the value of `X-Zopsmart-Tenant` is one of the values in map
-func isValidZopsmartTenant(val string) bool {
-	val = strings.ToLower(val)
-	if val == "" || !xZopsmartTenantValues[val] {
-		return false
-	}
-
-	return true
-}
-
 // isValidTrueClientIP check if the value of "True-Client-Ip" is valid or not
 func isValidTrueClientIP(headerVal string) bool {
 	ip := net.ParseIP(headerVal)
@@ -136,12 +123,6 @@ func validateAllHeaders(r *http.Request, envHeaders []string) (errs []error) {
 
 	for k, defaultVal := range allHeaders {
 		headerVal := reqHeaders.Get(k)
-
-		// validate x-zopsmart-tenant from the list of values
-		if k == "X-Zopsmart-Tenant" && !isValidZopsmartTenant(headerVal) {
-			errs = append(errs, createError(k, headerVal))
-			continue
-		}
 
 		// correlationId can be present in X-B3-TraceID as well
 		if k == "X-Correlation-ID" && headerVal == "" {
