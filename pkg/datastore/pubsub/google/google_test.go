@@ -1,3 +1,5 @@
+//go:build !skip
+
 package google
 
 import (
