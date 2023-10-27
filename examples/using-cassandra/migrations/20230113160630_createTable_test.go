@@ -15,7 +15,7 @@ func initializeTests() *gofr.Gofr {
 	return app
 }
 
-func TestK20230113160630_Up(t *testing.T) {
+func Test_CQL_K20230113160630_Up(t *testing.T) {
 	app := initializeTests()
 	k := K20230113160630{}
 

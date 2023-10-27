@@ -48,7 +48,7 @@ func isSubset(supSet, subSet []models.Person) bool {
 	return true
 }
 
-func TestGet(t *testing.T) {
+func Test_CQL_Get(t *testing.T) {
 	tests := []struct {
 		desc  string
 		input models.Person

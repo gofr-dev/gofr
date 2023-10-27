@@ -108,7 +108,7 @@ func Test_runDOWN_Fail(t *testing.T) {
 	assert.Equalf(t, expectedError, err, "Test Failed. Expected: %v Got: %v", expectedError, err)
 }
 
-func Test_CQL(t *testing.T) {
+func Test_CQL_Connection(t *testing.T) {
 	logger := log.NewLogger()
 	c := config.NewGoDotEnvProvider(logger, "../../../configs")
 	cassandraPort, _ := strconv.Atoi(c.Get("CASS_DB_PORT"))

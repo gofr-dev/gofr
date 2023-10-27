@@ -11,7 +11,7 @@ import (
 	"gofr.dev/pkg/gofr/request"
 )
 
-func TestIntegrationPersons(t *testing.T) {
+func Test_CQL_IntegrationPersons(t *testing.T) {
 	// call  the main function
 	go main()
 
