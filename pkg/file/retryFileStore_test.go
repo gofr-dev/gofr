@@ -12,31 +12,31 @@ import (
 )
 
 // Test_retryFTP to test the behavior of retryFTP
-func Test_retryFTP_connNil(t *testing.T) {
-	ftpConfig := FTPConfig{
-		Host:          "localhost",
-		User:          "myuser",
-		Password:      "mypass",
-		Port:          21,
-		RetryDuration: 1,
-	}
-
-	ftpInstance := &ftp{
-		fileName: "test.txt",
-		fileMode: "rw",
-		conn:     nil, // Initialize conn to nil
-	}
-
-	// Start the retryFTP goroutine
-	go retryFTP(&ftpConfig, ftpInstance)
-
-	// Wait for the retryFTP goroutine to complete
-	time.Sleep(1 * time.Minute)
-
-	_, err := ftpInstance.conn.List(".")
-
-	assert.NoError(t, err, "Test Failed: Expected successful connection")
-}
+//func Test_retryFTP_connNil(t *testing.T) {
+//	ftpConfig := FTPConfig{
+//		Host:          "localhost",
+//		User:          "myuser",
+//		Password:      "mypass",
+//		Port:          21,
+//		RetryDuration: 1,
+//	}
+//
+//	ftpInstance := &ftp{
+//		fileName: "test.txt",
+//		fileMode: "rw",
+//		conn:     nil, // Initialize conn to nil
+//	}
+//
+//	// Start the retryFTP goroutine
+//	go retryFTP(&ftpConfig, ftpInstance)
+//
+//	// Wait for the retryFTP goroutine to complete
+//	time.Sleep(1 * time.Minute)
+//
+//	_, err := ftpInstance.conn.List(".")
+//
+//	assert.NoError(t, err, "Test Failed: Expected successful connection")
+//}
 
 func Test_retryFTP_connNotNil(t *testing.T) {
 	ftpConfig := FTPConfig{

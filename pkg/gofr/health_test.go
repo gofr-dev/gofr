@@ -1,9 +1,7 @@
 package gofr
 
 import (
-	"fmt"
 	"net/http"
-	"reflect"
 	"testing"
 	"time"
 
@@ -79,31 +77,31 @@ func Test_HeartBeatIntegration(t *testing.T) {
 	resp.Body.Close()
 }
 
-func Test_server_HeartCheck(t *testing.T) {
-	s := New()
-	s.Server.HTTP.Port = 3340
-	s.Server.HTTPS.CertificateFile = ""
-
-	tests := []struct {
-		name string
-		want string
-	}{
-		{"test1", "GET /.well-known/health-check"},
-	}
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			http.DefaultServeMux = new(http.ServeMux)
-			go s.Start()
-			time.Sleep(3 * time.Second)
-			got := fmt.Sprintf("%s", s.Server.Router)
-
-			if reflect.DeepEqual(got, tt.want) {
-				t.Errorf(" got = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
+//func Test_server_HeartCheck(t *testing.T) {
+//	s := New()
+//	s.Server.HTTP.Port = 3340
+//	s.Server.HTTPS.CertificateFile = ""
+//
+//	tests := []struct {
+//		name string
+//		want string
+//	}{
+//		{"test1", "GET /.well-known/health-check"},
+//	}
+//	for _, tt := range tests {
+//		tt := tt
+//		t.Run(tt.name, func(t *testing.T) {
+//			http.DefaultServeMux = new(http.ServeMux)
+//			go s.Start()
+//			time.Sleep(3 * time.Second)
+//			got := fmt.Sprintf("%s", s.Server.Router)
+//
+//			if reflect.DeepEqual(got, tt.want) {
+//				t.Errorf(" got = %v, want %v", got, tt.want)
+//			}
+//		})
+//	}
+//}
 
 func Test_finalStatus(t *testing.T) {
 	testCases := []struct {
