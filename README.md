@@ -12,17 +12,15 @@
 
 Gofr is an opinionated microservice development framework.
 
-In order to fetch Gofr as a dependency
-```bash
-go get gofr.dev
-```
 ## Goal
 Even though generic applications can be written using Gofr, our main focus is to simplify the development of microservices. 
 We will focus ourselves towards deployment in kubernetes and aspire to provide out-of-the-box observability. 
 
 ## Quick Start Guide
 
-The latest version of go in your system should be installed. If you have not already done that, install it from [here](https://go.dev/). This can be tested by opening a terminal and trying `go version`. One should also be familiar with golang syntax. Official golang website has an excellent [tour of go](https://go.dev/tour/welcome/1) and is highly recommended.
+If you already have a go project with go module, you can get gofr by calling: `go get gofr.dev`. Follow the instructions below, if you are starting afresh. 
+
+The latest version of go in your system should be installed. If you have not already done that, install it from [here](https://go.dev/). This can be tested by opening a terminal and trying `go version`. One should also be familiar with golang syntax. Official golang website has an excellent [tour of go](https://go.dev/tour/welcome/1) and is highly recommended.  
 
 Writing an API service using Gofr is very simple. 
 1. In an empty folder, initialise your go module using: `go mod init test-service`. If you intend to push your code to github, it is recommended to name your module like this: `go mod init github.com/{USERNAME}/{REPO}`
