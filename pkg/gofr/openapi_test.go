@@ -277,7 +277,7 @@ func TestSwaggerUIHandler(t *testing.T) {
 	// Added contextInjector middleware
 	g.Server.Router.Use(g.Server.contextInjector)
 
-	g.GET("/.well-gnown/swagger", SwaggerUIHandler)
+	g.GET("/.well-known/swagger", SwaggerUIHandler)
 	g.GET("/.well-known/swagger/{name}", SwaggerUIHandler)
 
 	createSampleOpenAPI()
