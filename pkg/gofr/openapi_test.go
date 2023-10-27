@@ -220,11 +220,11 @@ func deleteSampleOpenAPI() {
 }
 
 func TestOpenAPIHandler(t *testing.T) {
-	k := New()
+	g := New()
 	// Added contextInjector middleware
-	k.Server.Router.Use(k.Server.contextInjector)
+	g.Server.Router.Use(g.Server.contextInjector)
 
-	k.GET("/.well-known/openapi.json", OpenAPIHandler)
+	g.GET("/.well-known/openapi.json", OpenAPIHandler)
 
 	createSampleOpenAPI()
 
@@ -235,7 +235,7 @@ func TestOpenAPIHandler(t *testing.T) {
 
 	w := httptest.NewRecorder()
 
-	k.Server.Router.ServeHTTP(w, req)
+	g.Server.Router.ServeHTTP(w, req)
 
 	if w.Code != 200 {
 		t.Errorf("want status code 200 got= %v", w.Code)
@@ -243,20 +243,20 @@ func TestOpenAPIHandler(t *testing.T) {
 }
 
 func TestOpenAPIHandlerError(t *testing.T) {
-	k := New()
+	g := New()
 	// Added contextInjector middleware
-	k.Server.Router.Use(k.Server.contextInjector)
+	g.Server.Router.Use(g.Server.contextInjector)
 
 	rootDir := t.TempDir()
 	path := rootDir + "/" + "api"
 
-	k.GET("/.well-known/openapi.json", OpenAPIHandler)
+	g.GET("/.well-known/openapi.json", OpenAPIHandler)
 
 	url := "http://localhost:3396/.well-known/openapi.json"
 	req, _ := http.NewRequest(http.MethodGet, url, http.NoBody)
 	w := httptest.NewRecorder()
 
-	k.Server.Router.ServeHTTP(w, req)
+	g.Server.Router.ServeHTTP(w, req)
 
 	expResp := errors.FileNotFound{
 		FileName: "openapi.json",
@@ -273,12 +273,12 @@ func TestOpenAPIHandlerError(t *testing.T) {
 }
 
 func TestSwaggerUIHandler(t *testing.T) {
-	k := New()
+	g := New()
 	// Added contextInjector middleware
-	k.Server.Router.Use(k.Server.contextInjector)
+	g.Server.Router.Use(g.Server.contextInjector)
 
-	k.GET("/.well-known/swagger", SwaggerUIHandler)
-	k.GET("/.well-known/swagger/{name}", SwaggerUIHandler)
+	g.GET("/.well-gnown/swagger", SwaggerUIHandler)
+	g.GET("/.well-known/swagger/{name}", SwaggerUIHandler)
 
 	createSampleOpenAPI()
 
@@ -303,7 +303,7 @@ func TestSwaggerUIHandler(t *testing.T) {
 
 		w := httptest.NewRecorder()
 
-		k.Server.Router.ServeHTTP(w, req)
+		g.Server.Router.ServeHTTP(w, req)
 
 		if w.Code != resource.expStatusCode {
 			t.Errorf("want status code: %v, got= %v for resource : %v", resource.expStatusCode, w.Code, resource.resource)

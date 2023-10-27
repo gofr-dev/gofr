@@ -65,10 +65,10 @@ func TestHeaderValidation(t *testing.T) {
 
 func TestServer_Done(t *testing.T) {
 	// start a server using Gofr
-	k := New()
-	k.Server.HTTP.Port = 8080
+	g := New()
+	g.Server.HTTP.Port = 8080
 
-	go k.Start()
+	go g.Start()
 	time.Sleep(time.Second * 3)
 
 	serverUP := false
@@ -91,7 +91,7 @@ func TestServer_Done(t *testing.T) {
 	}
 
 	// stop the server
-	k.Server.Done()
+	g.Server.Done()
 
 	serverUP = true
 
@@ -122,13 +122,13 @@ func TestServer_Done2(t *testing.T) {
 
 // Test_AllRouteLog will test logging of all routes of the server along with methods
 func Test_AllRouteLog(t *testing.T) {
-	k := New()
-	k.Server.HTTP.Port = 8080
+	g := New()
+	g.Server.HTTP.Port = 8080
 
 	b := new(bytes.Buffer)
-	k.Logger = log.NewMockLogger(b)
+	g.Logger = log.NewMockLogger(b)
 
-	go k.Start()
+	go g.Start()
 	time.Sleep(time.Second * 2)
 	assert.Contains(t, b.String(), "GET /.well-known/health-check HEAD /.well-known/health-check ")
 	assert.Contains(t, b.String(), "GET /.well-known/heartbeat HEAD /.well-known/heartbeat ")
@@ -136,8 +136,8 @@ func Test_AllRouteLog(t *testing.T) {
 }
 
 func Test_APIFilePresent(t *testing.T) {
-	k := New()
-	k.Server.HTTP.Port = 8080
+	g := New()
+	g.Server.HTTP.Port = 8080
 
 	wd, _ := os.Getwd()
 	_ = os.Mkdir(wd+"/api", 0777)
@@ -147,9 +147,9 @@ func Test_APIFilePresent(t *testing.T) {
 	_, _ = os.Create(wd + "/api/openapi.json")
 
 	b := new(bytes.Buffer)
-	k.Logger = log.NewMockLogger(b)
+	g.Logger = log.NewMockLogger(b)
 
-	go k.Start()
+	go g.Start()
 	time.Sleep(time.Second * 2)
 	assert.Contains(t, b.String(), "GET /.well-known/openapi.json HEAD /.well-known/openapi.json ")
 	assert.Contains(t, b.String(), "GET /.well-known/swagger HEAD /.well-known/swagger ")
@@ -157,13 +157,13 @@ func Test_APIFilePresent(t *testing.T) {
 }
 
 func Test_APIFileNotPresent(t *testing.T) {
-	k := New()
-	k.Server.HTTP.Port = 8080
+	g := New()
+	g.Server.HTTP.Port = 8080
 
 	b := new(bytes.Buffer)
-	k.Logger = log.NewMockLogger(b)
+	g.Logger = log.NewMockLogger(b)
 
-	go k.Start()
+	go g.Start()
 	time.Sleep(time.Second * 2)
 	assert.NotContains(t, b.String(), "GET /.well-known/openapi.json HEAD /.well-known/openapi.json ")
 	assert.NotContains(t, b.String(), "GET /.well-known/swagger HEAD /.well-known/swagger ")
@@ -217,7 +217,7 @@ func Test_setupAuth(t *testing.T) {
 	b := new(bytes.Buffer)
 	logger := log.NewMockLogger(b)
 
-	k := &Gofr{Logger: logger}
+	g := &Gofr{Logger: logger}
 
 	c1 := &config.MockConfig{Data: map[string]string{
 		"JWKS_ENDPOINT":        "/abc",
@@ -240,8 +240,8 @@ func Test_setupAuth(t *testing.T) {
 	}
 
 	for i, tc := range tests {
-		s := NewServer(tc.config, k)
-		s.setupAuth(tc.config, k)
+		s := NewServer(tc.config, g)
+		s.setupAuth(tc.config, g)
 
 		if !strings.Contains(b.String(), tc.logMessage) {
 			t.Errorf("Test case [%d] failed\n%s", i, tc.desc)

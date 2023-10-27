@@ -17,7 +17,7 @@ import (
 )
 
 func Test_kafkaRetry(t *testing.T) {
-	var k Gofr
+	var g Gofr
 
 	logger := log.NewMockLogger(io.Discard)
 	c := config.NewGoDotEnvProvider(logger, "../../configs")
@@ -25,11 +25,11 @@ func Test_kafkaRetry(t *testing.T) {
 	avroConfig := avroConfigFromEnv(c, "")
 
 	kafkaConfig.ConnRetryDuration = 1
-	k.Logger = logger
+	g.Logger = logger
 
-	kafkaRetry(kafkaConfig, avroConfig, &k)
+	kafkaRetry(kafkaConfig, avroConfig, &g)
 
-	if !k.PubSub.IsSet() {
+	if !g.PubSub.IsSet() {
 		t.Errorf("FAILED, expected: Kafka initialized successfully, got: kafka initialization failed")
 	}
 }
@@ -39,7 +39,7 @@ func Test_eventhubRetry(t *testing.T) {
 		t.Skip("skipping testing in short mode")
 	}
 
-	var k Gofr
+	var g Gofr
 
 	logger := log.NewMockLogger(io.Discard)
 	conf := config.NewGoDotEnvProvider(logger, "../../configs")
@@ -54,17 +54,17 @@ func Test_eventhubRetry(t *testing.T) {
 	eventhubConfig := eventhubConfigFromEnv(c, "")
 
 	eventhubConfig.ConnRetryDuration = 1
-	k.Logger = logger
+	g.Logger = logger
 
-	eventhubRetry(&eventhubConfig, nil, &k)
+	eventhubRetry(&eventhubConfig, nil, &g)
 
-	if !k.PubSub.IsSet() {
+	if !g.PubSub.IsSet() {
 		t.Errorf("FAILED, expected: Eventhub initialized successfully, got: Eventhub initialization failed")
 	}
 }
 
 func Test_mongoRetry(t *testing.T) {
-	var k Gofr
+	var g Gofr
 
 	logger := log.NewMockLogger(io.Discard)
 	c := config.NewGoDotEnvProvider(logger, "../../configs")
@@ -81,34 +81,34 @@ func Test_mongoRetry(t *testing.T) {
 		ConnRetryDuration: 1,
 	}
 
-	k.Logger = logger
+	g.Logger = logger
 
-	mongoRetry(&mongoCfg, &k)
+	mongoRetry(&mongoCfg, &g)
 
-	if !k.MongoDB.IsSet() {
+	if !g.MongoDB.IsSet() {
 		t.Errorf("FAILED, expected: MongoDB initialized successfully, got: MongoDB initialization failed")
 	}
 }
 
 func Test_cassandraRetry(t *testing.T) {
-	var k Gofr
+	var g Gofr
 
 	logger := log.NewMockLogger(io.Discard)
 	c := config.NewGoDotEnvProvider(logger, "../../configs")
 	cassandraCfg := cassandraConfigFromEnv(c, "")
 
 	cassandraCfg.ConnRetryDuration = 1
-	k.Logger = logger
+	g.Logger = logger
 
-	cassandraRetry(cassandraCfg, &k)
+	cassandraRetry(cassandraCfg, &g)
 
-	if k.Cassandra.Session == nil {
+	if g.Cassandra.Session == nil {
 		t.Errorf("FAILED, expected: Cassandra initialized successfully, got: cassandra initialization failed")
 	}
 }
 
 func Test_ycqlRetry(t *testing.T) {
-	var k Gofr
+	var g Gofr
 
 	logger := log.NewMockLogger(io.Discard)
 	c := config.NewGoDotEnvProvider(logger, "../../configs")
@@ -119,17 +119,17 @@ func Test_ycqlRetry(t *testing.T) {
 	cassandraCfg.Username = c.Get("YCQL_DB_USER")
 	cassandraCfg.ConnRetryDuration = 1
 	cassandraCfg.Hosts = c.Get("CASS_DB_HOST")
-	k.Logger = logger
+	g.Logger = logger
 
-	yclRetry(&cassandraCfg, &k)
+	yclRetry(&cassandraCfg, &g)
 
-	if k.YCQL.Session == nil {
+	if g.YCQL.Session == nil {
 		t.Errorf("FAILED, expected: Ycql initialized successfully, got: Ycql initialization failed")
 	}
 }
 
 func Test_ormRetry(t *testing.T) {
-	var k Gofr
+	var g Gofr
 
 	logger := log.NewMockLogger(io.Discard)
 	c := config.NewGoDotEnvProvider(logger, "../../configs")
@@ -145,11 +145,11 @@ func Test_ormRetry(t *testing.T) {
 		ConnRetryDuration: 1,
 	}
 
-	k.Logger = logger
+	g.Logger = logger
 
-	ormRetry(&dc, &k)
+	ormRetry(&dc, &g)
 
-	sqlDB, err := k.GORM().DB()
+	sqlDB, err := g.GORM().DB()
 
 	assert.NoError(t, err, "FAILED, expected: successful initialisation of ORM, got: orm initialisation failed")
 
@@ -160,7 +160,7 @@ func Test_ormRetry(t *testing.T) {
 
 // Testing sqlx retry mechanism
 func Test_sqlxRetry(t *testing.T) {
-	var k Gofr
+	var g Gofr
 
 	logger := log.NewMockLogger(io.Discard)
 	c := config.NewGoDotEnvProvider(logger, "../../configs")
@@ -176,17 +176,17 @@ func Test_sqlxRetry(t *testing.T) {
 		ConnRetryDuration: 1,
 	}
 
-	k.Logger = logger
+	g.Logger = logger
 
-	sqlxRetry(&dc, &k)
+	sqlxRetry(&dc, &g)
 
-	if k.SQLX() == nil || (k.SQLX() != nil && k.SQLX().Ping() != nil) {
+	if g.SQLX() == nil || (g.SQLX() != nil && g.SQLX().Ping() != nil) {
 		t.Errorf("FAILED, expected: SQLX initialized successfully, got: sqlx initialization failed")
 	}
 }
 
 func Test_redisRetry(t *testing.T) {
-	var k Gofr
+	var g Gofr
 
 	logger := log.NewMockLogger(io.Discard)
 	c := config.NewGoDotEnvProvider(logger, "../../configs")
@@ -198,23 +198,23 @@ func Test_redisRetry(t *testing.T) {
 
 	redisConfig.Options = new(redis.Options)
 	redisConfig.Options.Addr = redisConfig.HostName + ":" + redisConfig.Port
-	k.Logger = logger
+	g.Logger = logger
 
-	redisRetry(&redisConfig, &k)
+	redisRetry(&redisConfig, &g)
 
-	if !k.Redis.IsSet() {
+	if !g.Redis.IsSet() {
 		t.Errorf("FAILED, expected: Redis initialized successfully, got: redis initialization failed")
 	}
 }
 
 func Test_elasticSearchRetry(t *testing.T) {
-	k := Gofr{Logger: log.NewMockLogger(io.Discard)}
+	g := Gofr{Logger: log.NewMockLogger(io.Discard)}
 
 	cfg := &datastore.ElasticSearchCfg{Ports: []int{2012}, ConnectionRetryDuration: 1, Host: "localhost"}
 
-	elasticSearchRetry(cfg, &k)
+	elasticSearchRetry(cfg, &g)
 
-	if k.Elasticsearch.Client == nil {
+	if g.Elasticsearch.Client == nil {
 		t.Errorf("Expected: successful initialization, Got: initialization failed")
 	}
 }
@@ -224,22 +224,22 @@ func Test_AWSSNSRetry(t *testing.T) {
 		t.Skip("skipping testing in short mode")
 	}
 
-	var k Gofr
+	var g Gofr
 
 	logger := log.NewMockLogger(io.Discard)
 	c := config.NewGoDotEnvProvider(logger, "../../configs")
 	awsSNSConfig := awsSNSConfigFromEnv(c, "")
 
 	awsSNSConfig.ConnRetryDuration = 1
-	k.Logger = logger
+	g.Logger = logger
 
-	awsSNSRetry(&awsSNSConfig, &k)
+	awsSNSRetry(&awsSNSConfig, &g)
 
-	assert.True(t, k.Notifier.IsSet(), "FAILED, expected: AwsSNS initialized successfully, got: AwsSNS initialization failed")
+	assert.True(t, g.Notifier.IsSet(), "FAILED, expected: AwsSNS initialized successfully, got: AwsSNS initialization failed")
 }
 
 func Test_dynamoRetry(t *testing.T) {
-	var k Gofr
+	var g Gofr
 
 	logger := log.NewMockLogger(io.Discard)
 	c := config.NewGoDotEnvProvider(logger, "../../configs")
@@ -251,31 +251,31 @@ func Test_dynamoRetry(t *testing.T) {
 		ConnRetryDuration: 1,
 	}
 
-	k.Logger = logger
+	g.Logger = logger
 
-	dynamoRetry(dynamoConfig, &k)
+	dynamoRetry(dynamoConfig, &g)
 
-	if k.DynamoDB.DynamoDB == nil {
+	if g.DynamoDB.DynamoDB == nil {
 		t.Errorf("FAILED, expected: DynamoDB initialized successfully, got: DynamoDB initialization failed")
 	}
 }
 
 func Test_AWSEventBridgeRetry(t *testing.T) {
-	var k Gofr
+	var g Gofr
 
 	b := new(bytes.Buffer)
 	logger := log.NewMockLogger(b)
-	k.Logger = logger
+	g.Logger = logger
 	c := config.NewGoDotEnvProvider(logger, "../../configs")
 	cfg := eventbridgeConfigFromEnv(c, logger, "")
 	cfg.ConnRetryDuration = 1
 
-	go eventbridgeRetry(cfg, &k)
+	go eventbridgeRetry(cfg, &g)
 
 	for i := 0; i < 5; i++ {
 		time.Sleep(1 * time.Second)
 
-		if k.PubSub != nil {
+		if g.PubSub != nil {
 			break
 		}
 	}
@@ -286,12 +286,12 @@ func Test_AWSEventBridgeRetry(t *testing.T) {
 func Test_googlePubsubRetry(t *testing.T) {
 	t.Setenv("PUBSUB_EMULATOR_HOST", "localhost:8086")
 
-	var k Gofr
+	var g Gofr
 
 	logger := log.NewMockLogger(io.Discard)
 	c := config.NewGoDotEnvProvider(logger, "../../configs")
 
-	g := google.Config{
+	googleConfig := google.Config{
 		TopicName: c.Get("GOOGLE_TOPIC_NAME"),
 		ProjectID: c.Get("GOOGLE_PROJECT_ID"),
 		SubscriptionDetails: &google.Subscription{
@@ -301,13 +301,13 @@ func Test_googlePubsubRetry(t *testing.T) {
 		ConnRetryDuration: 1,
 	}
 
-	k.Logger = logger
+	g.Logger = logger
 
-	go googlePubsubRetry(g, &k)
+	go googlePubsubRetry(googleConfig, &g)
 
 	time.Sleep(30 * time.Second)
 
-	if !k.PubSub.IsSet() {
+	if !g.PubSub.IsSet() {
 		t.Errorf("FAILED, expected: GooglePubsub initialized successfully, got: g Pubsub initialization failed")
 	}
 }

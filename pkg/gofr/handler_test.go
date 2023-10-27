@@ -69,13 +69,13 @@ func TestHandler_ServeHTTP_StatusCode(t *testing.T) {
 
 	for i, tc := range testCases {
 		tc := tc
-		k := New()
+		g := New()
 		w := newCustomWriter()
 		r := httptest.NewRequest("GET", "/Dummy", nil)
 		r = routeKeySetter(w, r)
 		req := request.NewHTTPRequest(r)
 		resp := responder.NewContextualResponder(w, r)
-		*r = *r.Clone(ctx.WithValue(r.Context(), gofrContextkey, NewContext(resp, req, k)))
+		*r = *r.Clone(ctx.WithValue(r.Context(), gofrContextkey, NewContext(resp, req, g)))
 
 		Handler(func(c *Context) (interface{}, error) {
 			return tc.data, tc.error
@@ -93,13 +93,13 @@ func TestHandler_ServeHTTP_StatusCode(t *testing.T) {
 
 // TestHandler_ServeHTTP_ErrorFormat
 func TestHandler_ServeHTTP_ErrorFormat(t *testing.T) {
-	k := New()
+	g := New()
 	w := newCustomWriter()
 	r := httptest.NewRequest("GET", "/Dummy", nil)
 	r = routeKeySetter(w, r)
 	req := request.NewHTTPRequest(r)
 	resp := responder.NewContextualResponder(w, r)
-	*r = *r.Clone(ctx.WithValue(r.Context(), gofrContextkey, NewContext(resp, req, k)))
+	*r = *r.Clone(ctx.WithValue(r.Context(), gofrContextkey, NewContext(resp, req, g)))
 
 	Handler(func(c *Context) (interface{}, error) {
 		return nil, &gofrErrors.Response{StatusCode: 400, Code: "Invalid name", Reason: "The name in the parameter is incorrect"}
@@ -119,13 +119,13 @@ func TestHandler_ServeHTTP_ErrorFormat(t *testing.T) {
 
 // TestHandler_ServeHTTP_RawErrorFormat to test error format for errors.Raw response
 func TestHandler_ServeHTTP_RawErrorFormat(t *testing.T) {
-	k := New()
+	g := New()
 	w := newCustomWriter()
 	r := httptest.NewRequest("GET", "/Dummy", nil)
 	r = routeKeySetter(w, r)
 	req := request.NewHTTPRequest(r)
 	resp := responder.NewContextualResponder(w, r)
-	*r = *r.Clone(ctx.WithValue(r.Context(), gofrContextkey, NewContext(resp, req, k)))
+	*r = *r.Clone(ctx.WithValue(r.Context(), gofrContextkey, NewContext(resp, req, g)))
 
 	testCases := []struct {
 		desc   string
@@ -149,13 +149,13 @@ func TestHandler_ServeHTTP_RawErrorFormat(t *testing.T) {
 
 // TestHandler_ServeHTTP_Content_Type tests the JSON content type for a response
 func TestHandler_ServeHTTP_Content_Type(t *testing.T) {
-	k := New()
+	g := New()
 	w := newCustomWriter()
 	r := httptest.NewRequest("GET", "/Dummy", nil)
 	r = routeKeySetter(w, r)
 	req := request.NewHTTPRequest(r)
 	resp := responder.NewContextualResponder(w, r)
-	*r = *r.Clone(ctx.WithValue(r.Context(), gofrContextkey, NewContext(resp, req, k)))
+	*r = *r.Clone(ctx.WithValue(r.Context(), gofrContextkey, NewContext(resp, req, g)))
 
 	Handler(func(c *Context) (interface{}, error) {
 		return "hi", nil
@@ -169,13 +169,13 @@ func TestHandler_ServeHTTP_Content_Type(t *testing.T) {
 
 // TestHandler_ServeHTTP
 func TestHandler_ServeHTTP(t *testing.T) {
-	k := New()
+	g := New()
 	w := newCustomWriter()
 	r := httptest.NewRequest("GET", "/Dummy", nil)
 	r = routeKeySetter(w, r)
 	req := request.NewHTTPRequest(r)
 	resp := responder.NewContextualResponder(w, r)
-	*r = *r.Clone(ctx.WithValue(r.Context(), gofrContextkey, NewContext(resp, req, k)))
+	*r = *r.Clone(ctx.WithValue(r.Context(), gofrContextkey, NewContext(resp, req, g)))
 	Handler(func(c *Context) (interface{}, error) {
 		p := product{Name: "Orange", CategoryID: 1}
 		data := struct {
@@ -199,14 +199,14 @@ type product struct {
 
 // TestHandler_ServeHTTP_XML tests the XML content type for a response
 func TestHandler_ServeHTTP_XML(t *testing.T) {
-	k := New()
+	g := New()
 	w := newCustomWriter()
 	r := httptest.NewRequest("GET", "/Dummy", nil)
 	r.Header.Add("Content-type", "application/xml")
 	r = routeKeySetter(w, r)
 	req := request.NewHTTPRequest(r)
 	resp := responder.NewContextualResponder(w, r)
-	*r = *r.Clone(ctx.WithValue(r.Context(), gofrContextkey, NewContext(resp, req, k)))
+	*r = *r.Clone(ctx.WithValue(r.Context(), gofrContextkey, NewContext(resp, req, g)))
 	expectedError := gofrErrors.Response{StatusCode: http.StatusInternalServerError, Reason: "something unexpected occurred"}
 
 	Handler(func(c *Context) (interface{}, error) {
@@ -220,14 +220,14 @@ func TestHandler_ServeHTTP_XML(t *testing.T) {
 
 // TestHandler_ServeHTTP_Text tests the TEXT content type for a response
 func TestHandler_ServeHTTP_Text(t *testing.T) {
-	k := New()
+	g := New()
 	w := newCustomWriter()
 	r := httptest.NewRequest("GET", "/Dummy", nil)
 	r.Header.Add("Content-type", "text/plain")
 	r = routeKeySetter(w, r)
 	req := request.NewHTTPRequest(r)
 	resp := responder.NewContextualResponder(w, r)
-	*r = *r.Clone(ctx.WithValue(r.Context(), gofrContextkey, NewContext(resp, req, k)))
+	*r = *r.Clone(ctx.WithValue(r.Context(), gofrContextkey, NewContext(resp, req, g)))
 
 	Handler(func(c *Context) (interface{}, error) {
 		return nil, errors.New("something unexpected occurred")
@@ -240,13 +240,13 @@ func TestHandler_ServeHTTP_Text(t *testing.T) {
 
 // TestHandler_ServeHTTP_PartialContent
 func TestHandler_ServeHTTP_PartialContent(t *testing.T) {
-	k := New()
+	g := New()
 	w := newCustomWriter()
 	r := httptest.NewRequest("GET", "/Dummy", nil)
 	r = routeKeySetter(w, r)
 	req := request.NewHTTPRequest(r)
 	resp := responder.NewContextualResponder(w, r)
-	*r = *r.Clone(ctx.WithValue(r.Context(), gofrContextkey, NewContext(resp, req, k)))
+	*r = *r.Clone(ctx.WithValue(r.Context(), gofrContextkey, NewContext(resp, req, g)))
 	Handler(func(c *Context) (interface{}, error) {
 		p := product{Name: "Orange", CategoryID: 1}
 		data := struct {
@@ -271,13 +271,13 @@ func TestHandler_ServeHTTP_PartialContent(t *testing.T) {
 
 // TestHandler_ServeHTTP_EntityAlreadyExists
 func TestHandler_ServeHTTP_EntityAlreadyExists(t *testing.T) {
-	k := New()
+	g := New()
 	w := newCustomWriter()
 	r := httptest.NewRequest(http.MethodPost, "/Dummy", nil)
 	r = routeKeySetter(w, r)
 	req := request.NewHTTPRequest(r)
 	resp := responder.NewContextualResponder(w, r)
-	*r = *r.Clone(ctx.WithValue(r.Context(), gofrContextkey, NewContext(resp, req, k)))
+	*r = *r.Clone(ctx.WithValue(r.Context(), gofrContextkey, NewContext(resp, req, g)))
 
 	Handler(func(c *Context) (interface{}, error) {
 		p := product{Name: "Orange", CategoryID: 1}
@@ -315,13 +315,13 @@ func Test_HealthInvalidMethod(t *testing.T) {
 
 	for _, tc := range testCases {
 		tc := tc
-		k := New()
+		g := New()
 		w := newCustomWriter()
 		r := httptest.NewRequest(tc.method, "/.well-known/health-check", nil)
 		r = routeKeySetter(w, r)
 		req := request.NewHTTPRequest(r)
 		resp := responder.NewContextualResponder(w, r)
-		*r = *r.Clone(ctx.WithValue(r.Context(), gofrContextkey, NewContext(resp, req, k)))
+		*r = *r.Clone(ctx.WithValue(r.Context(), gofrContextkey, NewContext(resp, req, g)))
 
 		Handler(func(c *Context) (interface{}, error) {
 			return tc.data, tc.error
@@ -344,13 +344,13 @@ func testEmptyStruct() (*product, error) {
 
 // TestHTTP_Respond_Nil tests nil and empty struct response
 func TestHTTP_Respond_Nil(t *testing.T) {
-	k := New()
+	g := New()
 	w := newCustomWriter()
 	r := httptest.NewRequest("GET", "/Dummy", nil)
 	r = routeKeySetter(w, r)
 	req := request.NewHTTPRequest(r)
 	resp := responder.NewContextualResponder(w, r)
-	*r = *r.Clone(ctx.WithValue(r.Context(), gofrContextkey, NewContext(resp, req, k)))
+	*r = *r.Clone(ctx.WithValue(r.Context(), gofrContextkey, NewContext(resp, req, g)))
 	{
 		// Test for nil types.Response
 		expectedError := gofrErrors.Response{StatusCode: http.StatusBadRequest, Code: "Missing Parameter",
@@ -390,13 +390,13 @@ func TestHTTP_Respond_Nil(t *testing.T) {
 
 // TestHTTP_Respond_Delete tests the DELETE method
 func TestHTTP_Respond_Delete(t *testing.T) {
-	k := New()
+	g := New()
 	w := newCustomWriter()
 	r := httptest.NewRequest(http.MethodDelete, "/delete", nil)
 	r = routeKeySetter(w, r)
 	req := request.NewHTTPRequest(r)
 	resp := responder.NewContextualResponder(w, r)
-	*r = *r.Clone(ctx.WithValue(r.Context(), gofrContextkey, NewContext(resp, req, k)))
+	*r = *r.Clone(ctx.WithValue(r.Context(), gofrContextkey, NewContext(resp, req, g)))
 
 	Handler(func(c *Context) (interface{}, error) {
 		return nil, nil
@@ -416,13 +416,13 @@ func TestHTTP_Respond_Delete(t *testing.T) {
 
 // TestHandler_ServeHTTP_Error tests the different error cases returned from Respond
 func TestHandler_ServeHTTP_Error(t *testing.T) {
-	k := New()
+	g := New()
 	w := newCustomWriter()
 	r := httptest.NewRequest("GET", "/error", nil)
 	r = routeKeySetter(w, r)
 	req := request.NewHTTPRequest(r)
 	resp := responder.NewContextualResponder(w, r)
-	*r = *r.Clone(ctx.WithValue(r.Context(), gofrContextkey, NewContext(resp, req, k)))
+	*r = *r.Clone(ctx.WithValue(r.Context(), gofrContextkey, NewContext(resp, req, g)))
 
 	{
 		// Error is present but only status code is set and no body
@@ -458,14 +458,14 @@ func TestHandler_ServeHTTP_Error(t *testing.T) {
 
 // Test_Head tests if HEAD request for an endpoint returns the correct content length in the response header
 func Test_Head(t *testing.T) {
-	k := New()
+	g := New()
 	w := newCustomWriter()
 	// making the get request
 	r := httptest.NewRequest(http.MethodGet, "/Dummy", nil)
 	r = routeKeySetter(w, r)
 	req := request.NewHTTPRequest(r)
 	resp := responder.NewContextualResponder(w, r)
-	*r = *r.Clone(ctx.WithValue(r.Context(), gofrContextkey, NewContext(resp, req, k)))
+	*r = *r.Clone(ctx.WithValue(r.Context(), gofrContextkey, NewContext(resp, req, g)))
 
 	h := Handler(func(c *Context) (interface{}, error) {
 		return "hello", nil
@@ -480,7 +480,7 @@ func Test_Head(t *testing.T) {
 	r = routeKeySetter(w, r)
 	req = request.NewHTTPRequest(r)
 	resp = responder.NewContextualResponder(w, r)
-	*r = *r.Clone(ctx.WithValue(r.Context(), gofrContextkey, NewContext(resp, req, k)))
+	*r = *r.Clone(ctx.WithValue(r.Context(), gofrContextkey, NewContext(resp, req, g)))
 
 	got := w.Header().Get("content-length")
 	if got != expected {
@@ -489,14 +489,14 @@ func Test_Head(t *testing.T) {
 }
 
 func TestHandler_ServeHTTP_TypeResponse(t *testing.T) {
-	k := New()
+	g := New()
 	w := newCustomWriter()
 	r := httptest.NewRequest("GET", "/Dummy", nil)
 	r.Header.Add("Content-type", "application/json")
 	r = routeKeySetter(w, r)
 	req := request.NewHTTPRequest(r)
 	resp := responder.NewContextualResponder(w, r)
-	*r = *r.Clone(ctx.WithValue(r.Context(), gofrContextkey, NewContext(resp, req, k)))
+	*r = *r.Clone(ctx.WithValue(r.Context(), gofrContextkey, NewContext(resp, req, g)))
 	input := types.Response{
 		Data: "Mukund",
 	}
@@ -512,14 +512,14 @@ func TestHandler_ServeHTTP_TypeResponse(t *testing.T) {
 	}
 }
 func TestHandler_ServeHTTP_TypeRaw(t *testing.T) {
-	k := New()
+	g := New()
 	w := newCustomWriter()
 	r := httptest.NewRequest("GET", "/Dummy", nil)
 	r.Header.Add("Content-type", "application/json")
 	r = routeKeySetter(w, r)
 	req := request.NewHTTPRequest(r)
 	resp := responder.NewContextualResponder(w, r)
-	*r = *r.Clone(ctx.WithValue(r.Context(), gofrContextkey, NewContext(resp, req, k)))
+	*r = *r.Clone(ctx.WithValue(r.Context(), gofrContextkey, NewContext(resp, req, g)))
 
 	Handler(func(c *Context) (interface{}, error) {
 		return types.Raw{
@@ -534,14 +534,14 @@ func TestHandler_ServeHTTP_TypeRaw(t *testing.T) {
 	}
 }
 func TestHandler_ServeHTTP_TypeDefault(t *testing.T) {
-	k := New()
+	g := New()
 	w := newCustomWriter()
 	r := httptest.NewRequest("GET", "/Dummy", nil)
 	r.Header.Add("Content-type", "application/json")
 	r = routeKeySetter(w, r)
 	req := request.NewHTTPRequest(r)
 	resp := responder.NewContextualResponder(w, r)
-	*r = *r.Clone(ctx.WithValue(r.Context(), gofrContextkey, NewContext(resp, req, k)))
+	*r = *r.Clone(ctx.WithValue(r.Context(), gofrContextkey, NewContext(resp, req, g)))
 	expOut := struct {
 		Data interface{} `json:"data"`
 	}{"Mukund"}
@@ -597,14 +597,14 @@ func Test_processErrors_RawError(t *testing.T) {
 
 // TestHandler_ServeHTTP_WithContentType will test the behavior of the ServeHTTP function with different Content-Type headers.
 func TestHandler_ServeHTTP_WithContentType(t *testing.T) {
-	k := New()
+	g := New()
 	w := newCustomWriter()
 	r := httptest.NewRequest("GET", "/Dummy", nil)
 	r.Header.Add("Content-type", "text/plain")
 	r = routeKeySetter(w, r)
 	req := request.NewHTTPRequest(r)
 	resp := responder.NewContextualResponder(w, r)
-	*r = *r.Clone(ctx.WithValue(r.Context(), gofrContextkey, NewContext(resp, req, k)))
+	*r = *r.Clone(ctx.WithValue(r.Context(), gofrContextkey, NewContext(resp, req, g)))
 	testCases := []struct {
 		desc           string
 		contentType    string

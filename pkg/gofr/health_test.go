@@ -41,11 +41,11 @@ func TestHeartBeatHandler(t *testing.T) {
 }
 
 func Test_HeartBeatIntegration(t *testing.T) {
-	k := New()
-	k.Server.HTTP.Port = 3339
+	g := New()
+	g.Server.HTTP.Port = 3339
 	http.DefaultServeMux = new(http.ServeMux)
 
-	go k.Start()
+	go g.Start()
 	time.Sleep(3 * time.Second)
 
 	client := http.Client{}
@@ -153,8 +153,8 @@ func Test_GetAppDetails(t *testing.T) {
 }
 
 func Test_HealthCheckHandler(t *testing.T) {
-	k := New()
-	ctx := NewContext(nil, nil, k)
+	g := New()
+	ctx := NewContext(nil, nil, g)
 
 	healthCheckResponse, err := HealthHandler(ctx)
 	if err != nil {

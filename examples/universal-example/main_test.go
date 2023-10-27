@@ -253,14 +253,14 @@ func cassandraTableInitialization(app *gofr.Gofr) {
 }
 
 // Postgres Table initialization, Remove table if already exists
-func postgresTableInitialization(k *gofr.Gofr) {
-	if k.DB() == nil {
+func postgresTableInitialization(g *gofr.Gofr) {
+	if g.DB() == nil {
 		return
 	}
 
 	query := `DROP TABLE IF EXISTS employees`
-	if _, err := k.DB().Exec(query); err != nil {
-		k.Logger.Errorf("Got error while dropping the existing table employees: ", err)
+	if _, err := g.DB().Exec(query); err != nil {
+		g.Logger.Errorf("Got error while dropping the existing table employees: ", err)
 	}
 
 	queryTable := `
@@ -272,8 +272,8 @@ func postgresTableInitialization(k *gofr.Gofr) {
  	   city       varchar(50))
 	`
 
-	if _, err := k.DB().Exec(queryTable); err != nil {
-		k.Logger.Errorf("Got error while sourcing the schema: ", err)
+	if _, err := g.DB().Exec(queryTable); err != nil {
+		g.Logger.Errorf("Got error while sourcing the schema: ", err)
 	}
 }
 

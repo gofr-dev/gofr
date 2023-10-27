@@ -109,16 +109,16 @@ import (
 )
 
 func main() {
-	k := gofr.New()
+	g := gofr.New()
 
 	// Sample Route
-	k.GET("/hello", func(c *gofr.Context) (interface{}, error) {
+	g.GET("/hello", func(c *gofr.Context) (interface{}, error) {
 		return "Hello World!!!", nil
 	})
 
 	// Add the routes here
 
-	k.Start()
+	g.Start()
 }
 `
 
