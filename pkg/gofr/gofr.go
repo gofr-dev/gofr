@@ -72,55 +72,55 @@ type Gofr struct {
 // If a command is present, it calls the Start method of the command, passing the logger as a parameter.
 // If no command is available, it starts the server by calling its Start method, also passing the logger.
 // This method effectively launches the application, handling both command-line and server-based execution scenarios.
-func (k *Gofr) Start() {
-	if k.cmd != nil {
-		k.cmd.Start(k.Logger)
+func (g *Gofr) Start() {
+	if g.cmd != nil {
+		g.cmd.Start(g.Logger)
 	} else {
-		k.Server.Start(k.Logger)
+		g.Server.Start(g.Logger)
 	}
 }
 
-func (k *Gofr) addRoute(method, path string, handler Handler) {
-	if k.cmd != nil {
-		k.cmd.Router.AddRoute(path, handler) // Ignoring method in CMD App.
+func (g *Gofr) addRoute(method, path string, handler Handler) {
+	if g.cmd != nil {
+		g.cmd.Router.AddRoute(path, handler) // Ignoring method in CMD App.
 	} else {
 		if path != "/" {
 			path = strings.TrimSuffix(path, "/")
-			k.Server.Router.Route(method, path+"/", handler)
+			g.Server.Router.Route(method, path+"/", handler)
 		}
-		k.Server.Router.Route(method, path, handler)
+		g.Server.Router.Route(method, path, handler)
 	}
 }
 
 // GET adds a route for handling HTTP GET requests.
-func (k *Gofr) GET(path string, handler Handler) {
-	k.addRoute(http.MethodGet, path, handler)
+func (g *Gofr) GET(path string, handler Handler) {
+	g.addRoute(http.MethodGet, path, handler)
 }
 
 // PUT adds a route for handling HTTP PUT requests.
-func (k *Gofr) PUT(path string, handler Handler) {
-	k.addRoute(http.MethodPut, path, handler)
+func (g *Gofr) PUT(path string, handler Handler) {
+	g.addRoute(http.MethodPut, path, handler)
 }
 
 // POST adds a route for handling HTTP POST requests.
-func (k *Gofr) POST(path string, handler Handler) {
-	k.addRoute(http.MethodPost, path, handler)
+func (g *Gofr) POST(path string, handler Handler) {
+	g.addRoute(http.MethodPost, path, handler)
 }
 
 // DELETE adds a route for handling HTTP DELETE requests.
-func (k *Gofr) DELETE(path string, handler Handler) {
-	k.addRoute(http.MethodDelete, path, handler)
+func (g *Gofr) DELETE(path string, handler Handler) {
+	g.addRoute(http.MethodDelete, path, handler)
 }
 
 // PATCH adds a route for handling HTTP PATCH requests.
-func (k *Gofr) PATCH(path string, handler Handler) {
-	k.addRoute(http.MethodPatch, path, handler)
+func (g *Gofr) PATCH(path string, handler Handler) {
+	g.addRoute(http.MethodPatch, path, handler)
 }
 
 // Deprecated: EnableSwaggerUI is deprecated. Auto enabled swagger-endpoints.
-func (k *Gofr) EnableSwaggerUI() {
-	k.addRoute(http.MethodGet, "/swagger", SwaggerUIHandler)
-	k.addRoute(http.MethodGet, "/swagger/{name}", SwaggerUIHandler)
+func (g *Gofr) EnableSwaggerUI() {
+	g.addRoute(http.MethodGet, "/swagger", SwaggerUIHandler)
+	g.addRoute(http.MethodGet, "/swagger/{name}", SwaggerUIHandler)
 
-	k.Logger.Warn("Usage of EnableSwaggerUI is deprecated. Swagger Endpoints are auto-enabled")
+	g.Logger.Warn("Usage of EnableSwaggerUI is deprecated. Swagger Endpoints are auto-enabled")
 }

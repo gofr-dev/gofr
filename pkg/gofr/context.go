@@ -46,7 +46,7 @@ type Context struct {
 // and a Gofr object.
 // It constructs a context with a specific correlation ID retrieved from the request's header, providing a correlation-aware
 // logger instance for logging within the context of the request.
-func NewContext(w responder.Responder, r request.Request, k *Gofr) *Context {
+func NewContext(w responder.Responder, r request.Request, g *Gofr) *Context {
 	var cID string
 	if r != nil {
 		cID = r.Header("X-Correlation-ID")
@@ -55,7 +55,7 @@ func NewContext(w responder.Responder, r request.Request, k *Gofr) *Context {
 	return &Context{
 		req:    r,
 		resp:   w,
-		Gofr:   k,
+		Gofr:   g,
 		Logger: log.NewCorrelationLogger(cID),
 	}
 }

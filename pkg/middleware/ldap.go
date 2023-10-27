@@ -46,7 +46,7 @@ type LDAPOptions struct {
 	// in case same method is present in multiple elements in the array, first occurrence would be considered
 	RegexToMethodGroup map[string][]MethodGroup
 
-	// ex: ldapstage.zopsmart.com:636
+	// ex: ldapstage.gofr.dev:636
 	Addr string
 
 	// TimeOut is the authentication timeout in seconds, if not set,
@@ -82,7 +82,7 @@ func NewLDAP(logger log.Logger, options *LDAPOptions) (l *Ldap) {
 	return
 }
 
-// LDAP middleware enables basic authentication for inter-service calls using Zopsmart LDAP
+// LDAP middleware enables basic authentication for inter-service calls using gofr.dev LDAP
 func LDAP(logger log.Logger, options *LDAPOptions) func(inner http.Handler) http.Handler {
 	l := NewLDAP(logger, options)
 
@@ -312,12 +312,12 @@ func (l *Ldap) callLdap(user, pass string) ([]*ldap.Entry, error) {
 	}
 	defer conn.Close()
 
-	if err := conn.Bind(fmt.Sprintf("cn=%v,ou=svc,ou=people,o=zopsmart", user), pass); err != nil {
+	if err := conn.Bind(fmt.Sprintf("cn=%v,ou=svc,ou=people,o=gofr.dev", user), pass); err != nil {
 		return nil, err
 	}
 
 	searchRequest := ldap.NewSearchRequest(
-		fmt.Sprintf("cn=%v,ou=svc,ou=people,o=zopsmart", user),
+		fmt.Sprintf("cn=%v,ou=svc,ou=people,o=gofr.dev", user),
 		ldap.ScopeBaseObject, ldap.NeverDerefAliases, 0, options.TimeOut, false,
 		"(objectClass=*)", []string{"groupmembership"}, nil)
 

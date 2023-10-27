@@ -12,13 +12,13 @@ import (
 )
 
 func initializeTest(t *testing.T) *gofr.Gofr {
-	k := gofr.New()
+	g := gofr.New()
 
 	// initialize the seeder
-	seeder := datastore.NewSeeder(&k.DataStore, "../db")
+	seeder := datastore.NewSeeder(&g.DataStore, "../db")
 	seeder.RefreshRedis(t, "store")
 
-	return k
+	return g
 }
 
 func TestModel_Get(t *testing.T) {
@@ -33,8 +33,8 @@ func TestModel_Get(t *testing.T) {
 		{"someKey", "", errors.DB{}},
 	}
 	for i, tc := range tests {
-		k := initializeTest(t)
-		c := gofr.NewContext(nil, nil, k)
+		g := initializeTest(t)
+		c := gofr.NewContext(nil, nil, g)
 		c.Context = context.Background()
 
 		gotValue, gotErr := New().Get(c, tc.key)

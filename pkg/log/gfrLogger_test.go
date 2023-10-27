@@ -67,14 +67,14 @@ func TestLog(t *testing.T) {
 		b := new(bytes.Buffer)
 		rls.level = 5
 
-		k := logger{correlationID: tc.correlationID, out: b, isTerminal: tc.isTerminal}
+		l := logger{correlationID: tc.correlationID, out: b, isTerminal: tc.isTerminal}
 		syncData := sync.Map{}
 		syncData.Store("correlationID", tc.correlationIDInMap)
 
-		k.app = appInfo{
+		l.app = appInfo{
 			syncData: &syncData,
 		}
-		k.log(tc.level, "%s", args)
+		l.log(tc.level, "%s", args)
 
 		assert.Containsf(t, b.String(), tc.expLevel, "TESTCASE [%d] Failed. Expected %v\tGot %v\n", i, tc.expLevel, b.String())
 	}

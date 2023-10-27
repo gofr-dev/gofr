@@ -1,32 +1,33 @@
 package main
 
 import (
-	addroute "gofr.dev/cmd/gofr/addRoute"
 	"gofr.dev/cmd/gofr/dockerize"
 	"gofr.dev/cmd/gofr/entity"
 	"gofr.dev/cmd/gofr/initialize"
 	"gofr.dev/cmd/gofr/migration/handler"
 	"gofr.dev/cmd/gofr/test"
 	"gofr.dev/pkg/gofr"
+
+	addroute "gofr.dev/cmd/gofr/addRoute"
 )
 
 func main() {
-	k := gofr.NewCMD()
+	g := gofr.NewCMD()
 
-	dockerHandler := dockerize.New(k.Config.GetOrDefault("APP_NAME", "gofr"),
-		k.Config.GetOrDefault("APP_VERSION", "dev"))
+	dockerHandler := dockerize.New(g.Config.GetOrDefault("APP_NAME", "gofr"),
+		g.Config.GetOrDefault("APP_VERSION", "dev"))
 
-	k.GET("migrate create", handler.CreateMigration)
-	k.GET("migrate", handler.Migrate)
-	k.GET("dockerize run", dockerHandler.Run)
-	k.GET("dockerize", dockerHandler.Dockerize)
-	k.GET("init", initialize.Init)
-	k.GET("entity", entity.AddEntity)
-	k.GET("add", addroute.AddRoute)
-	k.GET("help", helpHandler)
-	k.GET("test", test.GenerateIntegrationTest)
+	g.GET("migrate create", handler.CreateMigration)
+	g.GET("migrate", handler.Migrate)
+	g.GET("dockerize run", dockerHandler.Run)
+	g.GET("dockerize", dockerHandler.Dockerize)
+	g.GET("init", initialize.Init)
+	g.GET("entity", entity.AddEntity)
+	g.GET("add", addroute.AddRoute)
+	g.GET("help", helpHandler)
+	g.GET("test", test.GenerateIntegrationTest)
 
-	k.Start()
+	g.Start()
 }
 
 func helpHandler(_ *gofr.Context) (interface{}, error) {

@@ -22,17 +22,17 @@ func testSOAPServer() *httptest.Server {
 			res = `<?xml version="1.0" encoding="utf-8"?>
 						<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
 							<soap:Body>
-        						<m:CompanyNameResponse xmlns:m="http://www.zopsmart.com">
+        						<m:CompanyNameResponse xmlns:m="http://www.gofr.dev">
            						 	<m:CompanyNameResult>Gofr</m:CompanyNameResult>
 								</m:CompanyNameResponse>
    							 </soap:Body>
 						</soap:Envelope>`
-		case "zop":
+		case "gofr":
 			res = `<?xml version="1.0" encoding="utf-8"?>
 						<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
 							<soap:Body>
-        						<m:CompanyNameResponse xmlns:m="http://www.zopsmart.com">
-           						 	<m:CompanyNameResult>ZopSmart</m:CompanyNameResult>
+        						<m:CompanyNameResponse xmlns:m="http://www.gofr.dev">
+           						 	<m:CompanyNameResult>gofr.dev</m:CompanyNameResult>
 								</m:CompanyNameResponse>
    							 </soap:Body>
 						</soap:Envelope>`
@@ -59,7 +59,7 @@ func TestSOAPServer(t *testing.T) {
 		out string
 	}{
 		{"action/gfr", "gfr", "Gofr"},
-		{"action/zop", "zop", "ZopSmart"},
+		{"action/gofr", "gofr", "gofr.dev"},
 	}
 	for _, tc := range tests {
 		tc := tc
@@ -88,8 +88,7 @@ func TestCallWithHeaders_SOAP(t *testing.T) {
 		headers     map[string]string
 		expectedLog string
 	}{
-		{"zop", map[string]string{"X-Trace-Id": "a123ru", "X-B-Trace-Id": "198d7sf3d"}, `"X-B-Trace-Id":"198d7sf3d","X-Trace-Id":"a123ru"`},
-		{"gfr", map[string]string{"X-Zopsmart-Tenant": "zopsmart"}, `"X-Zopsmart-Tenant":"zopsmart"`},
+		{"gofr.dev", map[string]string{"X-Trace-Id": "a123ru", "X-B-Trace-Id": "198d7sf3d"}, `"X-B-Trace-Id":"198d7sf3d","X-Trace-Id":"a123ru"`},
 		{"gfr", nil, ``},
 	}
 

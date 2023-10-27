@@ -19,7 +19,7 @@ import (
 	"gofr.dev/pkg/log"
 )
 
-const ldapAddress = "ldapstage.zopsmart.com:636"
+const ldapAddress = "ldapstage.gofr.dev:636"
 
 const ldapUser = "ZOPORDERSVC"
 
@@ -80,7 +80,7 @@ func Test_getGroupsFromEntries(t *testing.T) {
 			Attributes: []*ldap.EntryAttribute{
 				{
 					Name:   "groupmembership",
-					Values: []string{"cn=abc,ou=People,o=Zopsmart", "cn=xyz,ou=People,o=Zopsmart"},
+					Values: []string{"cn=abc,ou=People,o=gofr.dev", "cn=xyz,ou=People,o=gofr.dev"},
 				},
 			},
 		},
@@ -93,7 +93,7 @@ func Test_getGroupsFromEntries(t *testing.T) {
 			Attributes: []*ldap.EntryAttribute{
 				{
 					Name:   "",
-					Values: []string{"cn=abc,ou=People,o=Zopsmart", "cn=xyz,ou=People,o=Zopsmart"},
+					Values: []string{"cn=abc,ou=People,o=gofr.dev", "cn=xyz,ou=People,o=gofr.dev"},
 				},
 			},
 		}}}, want: map[string]bool{}},

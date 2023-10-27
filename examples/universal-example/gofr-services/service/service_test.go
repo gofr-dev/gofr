@@ -42,7 +42,7 @@ func TestGetHello(t *testing.T) {
 		response    string
 		expectedErr error
 	}{
-		{0, "ZopSmart", "Hello ZopSmart", nil},
+		{0, "gofr.dev", "Hello gofr.dev", nil},
 		{0, "", "Hello", nil},
 		{1, "", "", &errors.Response{Reason: "unmarshal error"}},
 		{2, "", "", service.ErrServiceDown{URL: "http//HelloDown"}},
@@ -67,7 +67,7 @@ func (m mockService) Get(_ context.Context, api string, params map[string]interf
 	}
 
 	if api == "hello" && params["name"] != "" {
-		return &service.Response{Body: []byte(`{"data": "Hello ZopSmart"}`), StatusCode: http.StatusOK}, nil
+		return &service.Response{Body: []byte(`{"data": "Hello gofr.dev"}`), StatusCode: http.StatusOK}, nil
 	}
 
 	if api == "hello" && m.id == 0 || m.id == 1 {

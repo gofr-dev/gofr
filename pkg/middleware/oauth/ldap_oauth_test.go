@@ -32,7 +32,7 @@ func TestLDAPOAuth(t *testing.T) {
 				Group:  "order-service",
 			}},
 		},
-		Addr:                       "ldapstage.zopsmart.com:636",
+		Addr:                       "ldapstage.gofr.dev:636",
 		CacheInvalidationFrequency: 10,
 		InsecureSkipVerify:         true,
 	}
@@ -76,7 +76,7 @@ func TestLDAPOAuth_Success(t *testing.T) {
 					Group:  testCase.ldapGroup,
 				}},
 			},
-			Addr:                       "ldapstage.zopsmart.com:636",
+			Addr:                       "ldapstage.gofr.dev:636",
 			CacheInvalidationFrequency: 10,
 			InsecureSkipVerify:         true,
 		}
@@ -96,10 +96,10 @@ func TestVerifyOptions(t *testing.T) {
 		ldapGroups   bool
 		errorMessage string
 	}{
-		{"ldapstage.zopsmart.com:636", getTestServerURL(), true, ""},
-		{"ldapstage.zopsmart.com:636", getTestServerURL(), false, "no mappings defined for LDAP groups"},
-		{"ldapstage.zopsmart.com:636", "", true, "empty oAuth options/ missing JWK End point."},
-		{"ldapstage.zopsmart.com:636", "", false, "empty oAuth options/ missing JWK End point."},
+		{"ldapstage.gofr.dev:636", getTestServerURL(), true, ""},
+		{"ldapstage.gofr.dev:636", getTestServerURL(), false, "no mappings defined for LDAP groups"},
+		{"ldapstage.gofr.dev:636", "", true, "empty oAuth options/ missing JWK End point."},
+		{"ldapstage.gofr.dev:636", "", false, "empty oAuth options/ missing JWK End point."},
 		{"", getTestServerURL(), true, "empty LDAP options/ missing LDAP Address"},
 		{"", getTestServerURL(), false, "empty LDAP options/ missing LDAP Address"},
 		{"", "", true, "empty LDAP options/ missing LDAP Address"},

@@ -57,7 +57,7 @@ func (f fileHandler) Write(*gofr.Context) (interface{}, error) {
 		return nil, err
 	}
 
-	b := []byte("Welcome to Zopsmart!")
+	b := []byte("Welcome to gofr.dev!")
 
 	_, err = f.fileOP.Write(b)
 	if err != nil {
