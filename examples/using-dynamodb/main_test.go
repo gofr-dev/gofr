@@ -49,10 +49,10 @@ func TestIntegration(t *testing.T) {
 		body       []byte
 	}{
 		{"create success case", http.MethodPost, "person", http.StatusCreated,
-			[]byte(`{"id":"10", "name":  "gofr", "email": "gofr@gofr.dev.com"}`)},
+			[]byte(`{"id":"10", "name":  "gofr", "email": "gofr@gofr.dev"}`)},
 		{"get success case", http.MethodGet, "person/10", http.StatusOK, nil},
 		{"update success case", http.MethodPut, "person/10", http.StatusOK,
-			[]byte(`{"id":"10", "name":  "gofr1", "email": "gofrone@gofr.dev.com"}`)},
+			[]byte(`{"id":"10", "name":  "gofr1", "email": "gofrone@gofr.dev"}`)},
 		{"delete success case", http.MethodDelete, "person/10", http.StatusNoContent, nil},
 	}
 
