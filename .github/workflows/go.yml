@@ -13,8 +13,8 @@ on:
       - development
 
 jobs:
-  Unit-Testing:
-    name: Unit Testing🛠
+  Unit-Tests:
+    name: Unit Tests🛠
     runs-on: ubuntu-latest
     services:
       mysql:
@@ -155,15 +155,11 @@ jobs:
           go test ./... -skip 'Test_YCQL_*'/'Test_CQL_*'/'Test_PubSub_*' --tags=integration -v -coverprofile profile.cov -coverpkg=./..
           go tool cover -func profile.cov
 
-      - name: Upload Test Coverage to Code Climate
-        if: ${{ always() }}
-        uses: paambaati/codeclimate-action@v5.0.0
-        env:
-          CC_TEST_REPORTER_ID: ${{ secrets.CC_TEST_REPORTER_ID }}
+      - name: Upload coverage report to artifacts
+        uses: actions/upload-artifact@v2
         with:
-          debug: true
-          coverageLocations: profile.cov:gocov
-          prefix: gofr.dev
+          name: coverage-reports
+          path: ./profile.cov
 
   code_quality:
     name: Code Quality🎖️
@@ -179,7 +175,7 @@ jobs:
           golangci-lint run --timeout 9m0s
 
   yugabyte_test:
-    name: YugaByte and Cassandra Tests 🎖️
+    name: YugaByte and Cassandra Tests 🛠
     runs-on: ubuntu-latest
     services:
       cassandra:
@@ -217,8 +213,14 @@ jobs:
           export GOFR_ENV=test
           go test ./... -run 'Test_YCQL_*'/'Test_CQL_*' -v -coverprofile cql.cov -coverpkg=./..
 
+      - name: Upload coverage report to artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: coverage-reports
+          path: ./cql.cov
+
   pubsub_test:
-    name: PubSub Tests 🎖️
+    name: PubSub Tests 🛠
     runs-on: ubuntu-latest
     services:
       kafka:
@@ -251,4 +253,33 @@ jobs:
       - name: Test
         run: |
           export GOFR_ENV=test
-          go test ./... -run 'Test_PubSub_*' -v -coverprofile pubsub.cov -coverpkg=./..         
+          go test ./... -run 'Test_PubSub_*' -v -coverprofile pubsub.cov -coverpkg=./.. 
+
+      - name: Upload coverage report to artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: coverage-reports
+          path: ./pubsub.cov
+
+
+  upload_coverage_to_code_climate:
+    name: Upload Coverage to Code Climate
+    runs-on: ubuntu-latest
+    needs: [Unit-Tests,pubsub_test,yugabyte_test]
+    steps:
+        - uses: actions/download-artifact@v2
+          with:
+            name: coverage-reports
+            path: ./coverage-reports
+
+        - name: Combine coverage reports
+          run: go tool cover -merge profile.cov cql.cov pubsub.cov -o combined.cov
+
+        - name: Upload coverage report to Code Climate
+          uses: paambaati/codeclimate-action@v5.0.0
+          env:
+            CC_TEST_REPORTER_ID: ${{ secrets.CC_TEST_REPORTER_ID }}
+          with:
+            debug: true
+            coverageLocations: combined.cov:gocov
+            prefix: gofr.dev
