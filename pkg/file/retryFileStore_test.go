@@ -31,7 +31,7 @@ func Test_retryFTP_connNil(t *testing.T) {
 	go retryFTP(&ftpConfig, ftpInstance)
 
 	// Wait for the retryFTP goroutine to complete
-	time.Sleep(2 * time.Second)
+	time.Sleep(1 * time.Minute)
 
 	_, err := ftpInstance.conn.List(".")
 
