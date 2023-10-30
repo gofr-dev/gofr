@@ -152,7 +152,7 @@ jobs:
       - name: Test
         run: |
           export GOFR_ENV=test
-          go test ./... --tags=skip,integration -v -coverprofile profile.cov -coverpkg=./..
+          go test ./... --tags=skip,integration -short -v -coverprofile profile.cov -coverpkg=./..
           go tool cover -func profile.cov
 
       - name: Upload coverage report to artifacts

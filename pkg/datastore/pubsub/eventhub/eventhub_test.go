@@ -16,7 +16,7 @@ import (
 	"gofr.dev/pkg/log"
 )
 
-//func Test_New(t *testing.T) {
+// func Test_New(t *testing.T) {
 //	conf := config.NewGoDotEnvProvider(log.NewLogger(), "../../../../configs")
 //
 //	tests := []struct {
@@ -55,9 +55,9 @@ import (
 //			assert.Equal(t, tt.wantErr, err != nil)
 //		})
 //	}
-//}
+// }
 
-//func Test_PubSub_Eventhub_HealthCheck_Down(t *testing.T) {
+// func Test_PubSub_Eventhub_HealthCheck_Down(t *testing.T) {
 //	conf := config.NewGoDotEnvProvider(log.NewLogger(), "../../../../configs")
 //
 //	{
@@ -114,7 +114,7 @@ import (
 //			t.Errorf("Expected %v\tGot %v\n", expected, resp)
 //		}
 //	}
-//}
+// }
 
 func Test_PubSub__NewEventHubWithAvro(t *testing.T) {
 	logger := log.NewMockLogger(io.Discard)

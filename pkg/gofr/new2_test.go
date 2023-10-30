@@ -4,12 +4,14 @@ package gofr
 
 import (
 	"bytes"
-	"github.com/stretchr/testify/assert"
-	"gofr.dev/pkg/gofr/config"
-	"gofr.dev/pkg/log"
 	"io"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+
+	"gofr.dev/pkg/gofr/config"
+	"gofr.dev/pkg/log"
 )
 
 func Test_CQL_initialize(t *testing.T) {
