@@ -56,28 +56,28 @@ type RestPatcher interface {
 //
 // This will automatically generate routes for listing, retrieving, creating, updating, deleting, and patching
 // user entities using the provided handler (UserHandler).
-func (k *Gofr) REST(entity string, handler interface{}) {
+func (g *Gofr) REST(entity string, handler interface{}) {
 	if c, ok := handler.(RestIndexer); ok {
-		k.GET("/"+entity, c.Index)
+		g.GET("/"+entity, c.Index)
 	}
 
 	if c, ok := handler.(RestReader); ok {
-		k.GET("/"+entity+"/{id}", c.Read)
+		g.GET("/"+entity+"/{id}", c.Read)
 	}
 
 	if c, ok := handler.(RestCreator); ok {
-		k.POST("/"+entity, c.Create)
+		g.POST("/"+entity, c.Create)
 	}
 
 	if c, ok := handler.(RestDeleter); ok {
-		k.DELETE("/"+entity+"/{id}", c.Delete)
+		g.DELETE("/"+entity+"/{id}", c.Delete)
 	}
 
 	if c, ok := handler.(RestUpdater); ok {
-		k.PUT("/"+entity+"/{id}", c.Update)
+		g.PUT("/"+entity+"/{id}", c.Update)
 	}
 
 	if c, ok := handler.(RestPatcher); ok {
-		k.PATCH("/"+entity+"/{id}", c.Patch)
+		g.PATCH("/"+entity+"/{id}", c.Patch)
 	}
 }

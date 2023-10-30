@@ -84,7 +84,7 @@ func TestGetCustomerByID(t *testing.T) {
 		mockErr  error
 		err      error
 	}{
-		{"Get existent id", model.Customer{ID: uid, Name: "zopsmart", Email: "Zopsmart@gmail.com", Phone: 1234567789},
+		{"Get existent id", model.Customer{ID: uid, Name: "gofr.dev", Email: "gofr.dev@gmail.com", Phone: 1234567789},
 			uid, nil, nil},
 		{"Get non existent id", model.Customer{}, invalidUID, sql.ErrNoRows,
 			errors.EntityNotFound{Entity: "customer", ID: "37387615-aead-4b28-9adc-78c1eb714ca5"}},
@@ -161,7 +161,7 @@ func TestGetCustomers(t *testing.T) {
 		mockErr  error
 		err      error
 	}{
-		{"Get existent data", model.Customer{ID: uid, Name: "zopsmart", Email: "zopsmart@gmail.com", Phone: 123456789}, nil, nil},
+		{"Get existent data", model.Customer{ID: uid, Name: "gofr.dev", Email: "gofr.dev@gmail.com", Phone: 123456789}, nil, nil},
 		{"db connection failed", model.Customer{}, errors.DB{}, errors.DB{Err: errors.DB{}}},
 	}
 	app := gofr.New()
@@ -198,7 +198,7 @@ func TestGetScanErr(t *testing.T) {
 	ctx.DataStore = datastore.DataStore{ORM: db}
 	ctx.Context = context.Background()
 	rows := mock.NewRows([]string{"id", "name", "email", "phone"}).
-		AddRow(1223, "Durga", "zopsmart@gmail.com", 1234567890)
+		AddRow(1223, "Durga", "gofr.dev@gmail.com", 1234567890)
 	mock.ExpectQuery("SELECT id,name").WillReturnRows(rows).WillReturnError(nil)
 
 	store := New()

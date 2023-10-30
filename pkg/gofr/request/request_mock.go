@@ -14,7 +14,6 @@ func NewMock(method, target string, body io.Reader) (*http.Request, error) {
 		return nil, err
 	}
 	// mandatory headers according to v3
-	req.Header.Set("X-Zopsmart-Tenant", "good4more")
 	req.Header.Set("X-Correlation-ID", "12d4F321S")
 	req.Header.Set("True-Client-IP", "127.0.0.1")
 

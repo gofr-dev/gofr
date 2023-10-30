@@ -24,7 +24,7 @@ func TestNewHTTPServiceWithNilOptions(t *testing.T) {
 		expectedURL string
 	}{
 		{"http://example.com", "http://example.com"},
-		{"http://zopsmart.com//", "http://zopsmart.com"},
+		{"http://gofr.dev//", "http://gofr.dev"},
 	}
 	for i := range testCase {
 		httpService := NewHTTPServiceWithOptions(testCase[i].resourceURL, log.NewMockLogger(io.Discard), nil)

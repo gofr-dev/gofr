@@ -62,7 +62,7 @@ func TestService_Get(t *testing.T) {
 		{
     		"data": {
         		"name": "Vikash",
-        		"company": "ZopSmart"
+        		"company": "gofr.dev"
     		}
 		}`),
 	}
@@ -76,7 +76,7 @@ func TestService_Get(t *testing.T) {
 	}{
 		{"error from get call", nil, serviceErr, models.User{}, serviceErr},
 		{"error response from get call", errResp, nil, models.User{}, serverErr},
-		{"success case", resp, nil, models.User{Name: "Vikash", Company: "ZopSmart"}, nil},
+		{"success case", resp, nil, models.User{Name: "Vikash", Company: "gofr.dev"}, nil},
 	}
 
 	for i, tc := range tests {

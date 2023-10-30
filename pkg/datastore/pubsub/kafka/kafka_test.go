@@ -404,7 +404,7 @@ func Test_PubSub_KafkaAuthentication(t *testing.T) {
 		err           error
 	}{
 		{"", "", PLAIN, nil},
-		{"zopsmart", "zopsmart", "", errInvalidMechanism},
+		{"gofr.dev", "gofr.dev", "", errInvalidMechanism},
 	}
 
 	for i, tc := range tests {

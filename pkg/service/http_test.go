@@ -430,12 +430,9 @@ func TestHttpService_SetHeaders(t *testing.T) {
 	ctx := context.WithValue(context.TODO(), middleware.ClientIPKey, "123.234.545.894")
 	ctx = context.WithValue(ctx, middleware.AuthenticatedUserIDKey, "2")
 	ctx = context.WithValue(ctx, middleware.B3TraceIDKey, "3434")
-	ctx = context.WithValue(ctx, middleware.ZopsmartChannelKey, "WEB")
-	ctx = context.WithValue(ctx, middleware.ZopsmartTenantKey, "riu")
 
 	req, _ := httpSvc.createReq(ctx, http.MethodGet, "", nil, nil, nil)
-	if req.Header.Get("X-Authenticated-UserId") != "2" || req.Header.Get("X-B3-TraceID") != "3434" ||
-		req.Header.Get("X-Zopsmart-Tenant") != "riu" || req.Header.Get("X-Zopsmart-Channel") != "WEB" {
+	if req.Header.Get("X-Authenticated-UserId") != "2" || req.Header.Get("X-B3-TraceID") != "3434" {
 		t.Error("setting of headers failed")
 	}
 }

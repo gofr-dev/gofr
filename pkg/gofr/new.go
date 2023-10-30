@@ -40,7 +40,7 @@ var (
 )
 
 // New creates a new instance of the Gofr object
-func New() (k *Gofr) {
+func New() (g *Gofr) {
 	logger := log.NewLogger()
 
 	return NewWithConfig(config.NewGoDotEnvProvider(logger, getConfigFolder()))
@@ -49,7 +49,7 @@ func New() (k *Gofr) {
 // NewWithConfig creates a new instance of gofr object based on the configurations provided
 //
 //nolint:gocognit  // It's a sequence of initialization. Easier to understand this way.
-func NewWithConfig(c Config) (k *Gofr) {
+func NewWithConfig(c Config) (g *Gofr) {
 	// Here we do things based on what is provided by Config
 	logger := log.NewLogger()
 
@@ -145,7 +145,7 @@ func (s *server) initializeMetricServerConfig(c Config) {
 	}
 }
 
-func initializePubSub(c Config, logger log.Logger, k *Gofr) {
+func initializePubSub(c Config, logger log.Logger, g *Gofr) {
 	pubsubBackend := c.Get("PUBSUB_BACKEND")
 	if pubsubBackend == "" {
 		return
@@ -153,13 +153,13 @@ func initializePubSub(c Config, logger log.Logger, k *Gofr) {
 
 	switch strings.ToLower(pubsubBackend) {
 	case datastore.Kafka, datastore.Avro:
-		initializeKafka(c, k)
+		initializeKafka(c, g)
 	case datastore.EventHub:
-		initializeEventhub(c, k)
+		initializeEventhub(c, g)
 	case datastore.EventBridge:
-		initializeEventBridge(c, logger, k)
+		initializeEventBridge(c, logger, g)
 	case datastore.GooglePubSub:
-		initializeGooglePubSub(c, k)
+		initializeGooglePubSub(c, g)
 	}
 }
 
@@ -189,12 +189,12 @@ func InitializePubSubFromConfigs(c Config, l log.Logger, prefix string) (pubsub.
 // initializeAvro initializes avro schema registry along with
 // pubsub present in k.Pubsub, only if registryURL is present,
 // else k.PubSub remains as is, either Kafka/Eventhub
-func initializeAvro(c *avro.Config, k *Gofr) {
-	pubsubKafka, _ := k.PubSub.(*kafka.Kafka)
-	pubsubEventhub, _ := k.PubSub.(*eventhub.Eventhub)
+func initializeAvro(c *avro.Config, g *Gofr) {
+	pubsubKafka, _ := g.PubSub.(*kafka.Kafka)
+	pubsubEventhub, _ := g.PubSub.(*eventhub.Eventhub)
 
 	if pubsubKafka == nil && pubsubEventhub == nil {
-		k.Logger.Error("Kafka/Eventhub not present, cannot use Avro")
+		g.Logger.Error("Kafka/Eventhub not present, cannot use Avro")
 		return
 	}
 
@@ -203,18 +203,18 @@ func initializeAvro(c *avro.Config, k *Gofr) {
 	}
 
 	if c.URL == "" {
-		k.Logger.Error("Schema registry URL is required for Avro")
+		g.Logger.Error("Schema registry URL is required for Avro")
 	}
 
-	ps, err := avro.NewWithConfig(c, k.PubSub)
+	ps, err := avro.NewWithConfig(c, g.PubSub)
 	if err != nil {
-		k.Logger.Errorf("Avro could not be initialized! SchemaRegistry: %v SchemaVersion: %v, Subject: %v, Error: %v",
+		g.Logger.Errorf("Avro could not be initialized! SchemaRegistry: %v SchemaVersion: %v, Subject: %v, Error: %v",
 			c.URL, c.Version, c.Subject, err)
 	}
 
 	if ps != nil {
-		k.PubSub = ps
-		k.Logger.Infof("Avro initialized! SchemaRegistry: %v SchemaVersion: %v, Subject: %v",
+		g.PubSub = ps
+		g.Logger.Infof("Avro initialized! SchemaRegistry: %v SchemaVersion: %v, Subject: %v",
 			c.URL, c.Version, c.Subject)
 	}
 }
@@ -280,50 +280,50 @@ func enableTracing(c Config, logger log.Logger) {
 
 // initializeDataStores initializes the Gofr struct with all the data stores for which
 // correct config is set in the environment
-func initializeDataStores(c Config, logger log.Logger, k *Gofr) {
+func initializeDataStores(c Config, logger log.Logger, g *Gofr) {
 	// Redis
-	initializeRedis(c, k)
+	initializeRedis(c, g)
 
 	// DB
-	initializeDB(c, k)
+	initializeDB(c, g)
 
 	// Cassandra
-	initializeCassandra(c, k)
+	initializeCassandra(c, g)
 
 	// Mongo DB
-	initializeMongoDB(c, k)
+	initializeMongoDB(c, g)
 
 	// PubSub
-	initializePubSub(c, logger, k)
+	initializePubSub(c, logger, g)
 
 	// Elasticsearch
-	initializeElasticsearch(c, k)
+	initializeElasticsearch(c, g)
 
 	// Solr
-	initializeSolr(c, k)
+	initializeSolr(c, g)
 
 	// DynamoDB
-	initializeDynamoDB(c, k)
+	initializeDynamoDB(c, g)
 }
 
-func initializeDynamoDB(c Config, k *Gofr) {
+func initializeDynamoDB(c Config, g *Gofr) {
 	cfg := dynamoDBConfigFromEnv(c, "")
 
 	if cfg.SecretAccessKey != "" && cfg.AccessKeyID != "" {
 		var err error
 
-		k.DynamoDB, err = datastore.NewDynamoDB(k.Logger, cfg)
-		k.DatabaseHealth = append(k.DatabaseHealth, k.DynamoDBHealthCheck)
+		g.DynamoDB, err = datastore.NewDynamoDB(g.Logger, cfg)
+		g.DatabaseHealth = append(g.DatabaseHealth, g.DynamoDBHealthCheck)
 
 		if err != nil {
-			k.Logger.Errorf("DynamoDB could not be initialized, error: %v\n", err)
+			g.Logger.Errorf("DynamoDB could not be initialized, error: %v\n", err)
 
-			go dynamoRetry(cfg, k)
+			go dynamoRetry(cfg, g)
 
 			return
 		}
 
-		k.Logger.Infof("DynamoDB initialized at %v", cfg.Endpoint)
+		g.Logger.Infof("DynamoDB initialized at %v", cfg.Endpoint)
 	}
 }
 
@@ -335,25 +335,25 @@ func InitializeDynamoDBFromConfig(c Config, l log.Logger, prefix string) (datast
 
 // initializeRedis initializes the Redis client in the Gofr struct if the Redis configuration is set
 // in the environment, in case of an error, it logs the error
-func initializeRedis(c Config, k *Gofr) {
+func initializeRedis(c Config, g *Gofr) {
 	rc := redisConfigFromEnv(c, "")
 
 	if rc.HostName != "" || rc.Port != "" {
 		var err error
 
-		k.Redis, err = datastore.NewRedis(k.Logger, rc)
-		k.DatabaseHealth = append(k.DatabaseHealth, k.RedisHealthCheck)
+		g.Redis, err = datastore.NewRedis(g.Logger, rc)
+		g.DatabaseHealth = append(g.DatabaseHealth, g.RedisHealthCheck)
 
 		if err != nil {
-			k.Logger.Errorf("could not connect to Redis, HostName: %s, Port: %s, error: %v\n",
+			g.Logger.Errorf("could not connect to Redis, HostName: %s, Port: %s, error: %v\n",
 				rc.HostName, rc.Port, err)
 
-			go redisRetry(&rc, k)
+			go redisRetry(&rc, g)
 
 			return
 		}
 
-		k.Logger.Infof("Redis connected. HostName: %s, Port: %s", rc.HostName, rc.Port)
+		g.Logger.Infof("Redis connected. HostName: %s, Port: %s", rc.HostName, rc.Port)
 	}
 }
 
@@ -367,45 +367,45 @@ func InitializeRedisFromConfigs(c Config, l log.Logger, prefix string) (datastor
 // in the environment, in case of an error, it logs the error
 //
 //nolint:gocognit //breaks code readability
-func initializeDB(c Config, k *Gofr) {
+func initializeDB(c Config, g *Gofr) {
 	if c.Get("DB_HOST") != "" && c.Get("DB_PORT") != "" {
 		dc := sqlDBConfigFromEnv(c, "")
 
 		if strings.EqualFold(dc.ORM, "SQLX") {
 			db, err := datastore.NewSQLX(dc)
-			k.SetORM(db)
+			g.SetORM(db)
 
-			k.DatabaseHealth = append(k.DatabaseHealth, k.SQLXHealthCheck)
+			g.DatabaseHealth = append(g.DatabaseHealth, g.SQLXHealthCheck)
 
 			if err != nil {
-				k.Logger.Errorf("could not connect to DB, HOST: %s, PORT: %s, Dialect: %s, error: %v\n",
+				g.Logger.Errorf("could not connect to DB, HOST: %s, PORT: %s, Dialect: %s, error: %v\n",
 					dc.HostName, dc.Port, dc.Dialect, err)
 
-				go sqlxRetry(dc, k)
+				go sqlxRetry(dc, g)
 
 				return
 			}
 
-			k.Logger.Infof("DB connected, HostName: %s, Port: %s, Database: %s", dc.HostName, dc.Port, dc.Database)
+			g.Logger.Infof("DB connected, HostName: %s, Port: %s, Database: %s", dc.HostName, dc.Port, dc.Database)
 
 			return
 		}
 
 		db, err := datastore.NewORM(dc)
-		k.SetORM(db)
+		g.SetORM(db)
 
-		k.DatabaseHealth = append(k.DatabaseHealth, k.SQLHealthCheck)
+		g.DatabaseHealth = append(g.DatabaseHealth, g.SQLHealthCheck)
 
 		if err != nil {
-			k.Logger.Errorf("could not connect to DB, HostName: %s, Port: %s, Dialect: %s, error: %v\n",
+			g.Logger.Errorf("could not connect to DB, HostName: %s, Port: %s, Dialect: %s, error: %v\n",
 				dc.HostName, dc.Port, dc.Dialect, err)
 
-			go ormRetry(dc, k)
+			go ormRetry(dc, g)
 
 			return
 		}
 
-		k.Logger.Infof("DB connected, HostName: %s, Port: %s, Database: %s", dc.HostName, dc.Port, dc.Database)
+		g.Logger.Infof("DB connected, HostName: %s, Port: %s, Database: %s", dc.HostName, dc.Port, dc.Database)
 	}
 }
 
@@ -436,7 +436,7 @@ func InitializeSQLFromConfigs(c Config, prefix string) (*datastore.SQLClient, er
 	return sqlClient, nil
 }
 
-func initializeMongoDB(c Config, k *Gofr) {
+func initializeMongoDB(c Config, g *Gofr) {
 	hostName := c.Get("MONGO_DB_HOST")
 	port := c.Get("MONGO_DB_PORT")
 
@@ -445,18 +445,18 @@ func initializeMongoDB(c Config, k *Gofr) {
 
 		var err error
 
-		k.MongoDB, err = datastore.GetNewMongoDB(k.Logger, mongoConfig)
-		k.DatabaseHealth = append(k.DatabaseHealth, k.MongoHealthCheck)
+		g.MongoDB, err = datastore.GetNewMongoDB(g.Logger, mongoConfig)
+		g.DatabaseHealth = append(g.DatabaseHealth, g.MongoHealthCheck)
 
 		if err != nil {
-			k.Logger.Errorf("could not connect to mongoDB, HOST: %s, PORT: %v, Error: %v\n", hostName, port, err)
+			g.Logger.Errorf("could not connect to mongoDB, HOST: %s, PORT: %v, Error: %v\n", hostName, port, err)
 
-			go mongoRetry(mongoConfig, k)
+			go mongoRetry(mongoConfig, g)
 
 			return
 		}
 
-		k.Logger.Infof("MongoDB connected. HostName: %s, Port: %s, Database: %s", mongoConfig.HostName, mongoConfig.Port, mongoConfig.Database)
+		g.Logger.Infof("MongoDB connected. HostName: %s, Port: %s, Database: %s", mongoConfig.HostName, mongoConfig.Port, mongoConfig.Database)
 	}
 }
 
@@ -466,7 +466,7 @@ func InitializeMongoDBFromConfigs(c Config, l log.Logger, prefix string) (datast
 	return datastore.GetNewMongoDB(l, cfg)
 }
 
-func initializeKafka(c Config, k *Gofr) {
+func initializeKafka(c Config, g *Gofr) {
 	hosts := c.Get("KAFKA_HOSTS")
 	topic := c.Get("KAFKA_TOPIC")
 
@@ -476,23 +476,23 @@ func initializeKafka(c Config, k *Gofr) {
 		kafkaConfig := kafkaConfigFromEnv(c, "")
 		avroConfig := avroConfigFromEnv(c, "")
 
-		k.PubSub, err = kafka.New(kafkaConfig, k.Logger)
-		k.DatabaseHealth = append(k.DatabaseHealth, k.PubSubHealthCheck)
+		g.PubSub, err = kafka.New(kafkaConfig, g.Logger)
+		g.DatabaseHealth = append(g.DatabaseHealth, g.PubSubHealthCheck)
 
 		if err != nil {
-			k.Logger.Errorf("Kafka could not be initialized, Hosts: %v, Topic: %v, error: %v\n",
+			g.Logger.Errorf("Kafka could not be initialized, Hosts: %v, Topic: %v, error: %v\n",
 				hosts, topic, err)
 
-			go kafkaRetry(kafkaConfig, avroConfig, k)
+			go kafkaRetry(kafkaConfig, avroConfig, g)
 
 			return
 		}
 
-		k.Logger.Infof("Kafka initialized. Hosts: %v, Topic: %v\n", hosts, topic)
+		g.Logger.Infof("Kafka initialized. Hosts: %v, Topic: %v\n", hosts, topic)
 
 		// initialize Avro using Kafka pubsub if the schema url is specified
 		if avroConfig.URL != "" {
-			initializeAvro(avroConfig, k)
+			initializeAvro(avroConfig, g)
 		}
 	}
 }
@@ -514,22 +514,22 @@ func initializeKafkaFromConfigs(c Config, l log.Logger, prefix string) (pubsub.P
 	return k, nil
 }
 
-func initializeEventBridge(c Config, l log.Logger, k *Gofr) {
+func initializeEventBridge(c Config, l log.Logger, g *Gofr) {
 	if c.Get("EVENT_BRIDGE_BUS") != "" {
 		cfg := eventbridgeConfigFromEnv(c, l, "")
 
 		var err error
 
-		k.PubSub, err = eventbridge.New(cfg)
+		g.PubSub, err = eventbridge.New(cfg)
 		if err != nil {
-			k.Logger.Errorf("AWS EventBridge could not be initialized, error: %v\n", err)
+			g.Logger.Errorf("AWS EventBridge could not be initialized, error: %v\n", err)
 
-			go eventbridgeRetry(cfg, k)
+			go eventbridgeRetry(cfg, g)
 
 			return
 		}
 
-		k.Logger.Info("AWS EventBridge initialized successfully")
+		g.Logger.Info("AWS EventBridge initialized successfully")
 	}
 }
 
@@ -539,7 +539,7 @@ func initializeEventBridgeFromConfigs(c Config, l log.Logger, prefix string) (*e
 	return eventbridge.New(cfg)
 }
 
-func initializeEventhub(c Config, k *Gofr) {
+func initializeEventhub(c Config, g *Gofr) {
 	hosts := c.Get("EVENTHUB_NAMESPACE")
 	topic := c.Get("EVENTHUB_NAME")
 
@@ -549,23 +549,23 @@ func initializeEventhub(c Config, k *Gofr) {
 		avroConfig := avroConfigFromEnv(c, "")
 		eventhubConfig := eventhubConfigFromEnv(c, "")
 
-		k.PubSub, err = eventhub.New(&eventhubConfig)
-		k.DatabaseHealth = append(k.DatabaseHealth, k.PubSubHealthCheck)
+		g.PubSub, err = eventhub.New(&eventhubConfig)
+		g.DatabaseHealth = append(g.DatabaseHealth, g.PubSubHealthCheck)
 
 		if err != nil {
-			k.Logger.Errorf("Azure Eventhub could not be initialized, Namespace: %v, Eventhub: %v, error: %v\n",
+			g.Logger.Errorf("Azure Eventhub could not be initialized, Namespace: %v, Eventhub: %v, error: %v\n",
 				hosts, topic, err)
 
-			go eventhubRetry(&eventhubConfig, avroConfig, k)
+			go eventhubRetry(&eventhubConfig, avroConfig, g)
 
 			return
 		}
 
-		k.Logger.Infof("Azure Eventhub initialized, Namespace: %v, Eventhub: %v\n", hosts, topic)
+		g.Logger.Infof("Azure Eventhub initialized, Namespace: %v, Eventhub: %v\n", hosts, topic)
 
 		// initialize Avro using eventhub pubsub if the schema url is specified
 		if avroConfig.URL != "" {
-			initializeAvro(avroConfig, k)
+			initializeAvro(avroConfig, g)
 		}
 	}
 }
@@ -591,7 +591,7 @@ func initializeEventhubFromConfigs(c Config, prefix string) (pubsub.PublisherSub
 // in the environment, in case of an error, it logs the error
 //
 //nolint:gocognit // reducing the function further is not required
-func initializeCassandra(c Config, k *Gofr) {
+func initializeCassandra(c Config, g *Gofr) {
 	validDialects := map[string]bool{
 		"cassandra": true,
 		"ycql":      true,
@@ -611,7 +611,7 @@ func initializeCassandra(c Config, k *Gofr) {
 
 	// Checks if dialect is valid
 	if _, ok := validDialects[dialect]; !ok {
-		k.Logger.Errorf("invalid dialect: supported dialects are - cassandra, ycql")
+		g.Logger.Errorf("invalid dialect: supported dialects are - cassandra, ycql")
 		return
 	}
 
@@ -621,13 +621,13 @@ func initializeCassandra(c Config, k *Gofr) {
 	case "ycql":
 		ycqlconfig := getYcqlConfigs(c, "")
 
-		k.YCQL, err = datastore.GetNewYCQL(k.Logger, &ycqlconfig)
-		k.DatabaseHealth = append(k.DatabaseHealth, k.YCQLHealthCheck)
+		g.YCQL, err = datastore.GetNewYCQL(g.Logger, &ycqlconfig)
+		g.DatabaseHealth = append(g.DatabaseHealth, g.YCQLHealthCheck)
 
 		if err != nil {
-			k.Logger.Errorf("could not connect to YCQL, Hosts: %s, Port: %s, Error: %v\n", host, port, err)
+			g.Logger.Errorf("could not connect to YCQL, Hosts: %s, Port: %s, Error: %v\n", host, port, err)
 
-			go yclRetry(&ycqlconfig, k)
+			go yclRetry(&ycqlconfig, g)
 
 			return
 		}
@@ -635,13 +635,13 @@ func initializeCassandra(c Config, k *Gofr) {
 	default:
 		cassandraCfg := cassandraConfigFromEnv(c, "")
 
-		k.Cassandra, err = datastore.GetNewCassandra(k.Logger, cassandraCfg)
-		k.DatabaseHealth = append(k.DatabaseHealth, k.CQLHealthCheck)
+		g.Cassandra, err = datastore.GetNewCassandra(g.Logger, cassandraCfg)
+		g.DatabaseHealth = append(g.DatabaseHealth, g.CQLHealthCheck)
 
 		if err != nil {
-			k.Logger.Errorf("could not connect to Cassandra, Hosts: %s, Port: %s, Error: %v\n", host, port, err)
+			g.Logger.Errorf("could not connect to Cassandra, Hosts: %s, Port: %s, Error: %v\n", host, port, err)
 
-			go cassandraRetry(cassandraCfg, k)
+			go cassandraRetry(cassandraCfg, g)
 
 			return
 		}
@@ -701,7 +701,7 @@ func getYcqlConfigs(c Config, prefix string) datastore.CassandraCfg {
 	}
 }
 
-func initializeElasticsearch(c Config, k *Gofr) {
+func initializeElasticsearch(c Config, g *Gofr) {
 	elasticSearchCfg := elasticSearchConfigFromEnv(c, "")
 
 	if (elasticSearchCfg.Host == "" || len(elasticSearchCfg.Ports) == 0) && elasticSearchCfg.CloudID == "" {
@@ -710,18 +710,18 @@ func initializeElasticsearch(c Config, k *Gofr) {
 
 	var err error
 
-	k.Elasticsearch, err = datastore.NewElasticsearchClient(k.Logger, &elasticSearchCfg)
-	k.DatabaseHealth = append(k.DatabaseHealth, k.ElasticsearchHealthCheck)
+	g.Elasticsearch, err = datastore.NewElasticsearchClient(g.Logger, &elasticSearchCfg)
+	g.DatabaseHealth = append(g.DatabaseHealth, g.ElasticsearchHealthCheck)
 
 	if err != nil {
-		k.Logger.Errorf("could not connect to elasticsearch, HOST: %s, PORT: %v, Error: %v\n", elasticSearchCfg.Host, elasticSearchCfg.Ports, err)
+		g.Logger.Errorf("could not connect to elasticsearch, HOST: %s, PORT: %v, Error: %v\n", elasticSearchCfg.Host, elasticSearchCfg.Ports, err)
 
-		go elasticSearchRetry(&elasticSearchCfg, k)
+		go elasticSearchRetry(&elasticSearchCfg, g)
 
 		return
 	}
 
-	k.Logger.Infof("connected to elasticsearch, HOST: %s, PORT: %v\n", elasticSearchCfg.Host, elasticSearchCfg.Ports)
+	g.Logger.Infof("connected to elasticsearch, HOST: %s, PORT: %v\n", elasticSearchCfg.Host, elasticSearchCfg.Ports)
 }
 
 // InitializeElasticSearchFromConfigs initializes Elasticsearch
@@ -730,7 +730,7 @@ func InitializeElasticSearchFromConfigs(c Config, l log.Logger, prefix string) (
 	return datastore.NewElasticsearchClient(l, &cfg)
 }
 
-func initializeSolr(c Config, k *Gofr) {
+func initializeSolr(c Config, g *Gofr) {
 	host := c.Get("SOLR_HOST")
 	port := c.Get("SOLR_PORT")
 
@@ -738,8 +738,8 @@ func initializeSolr(c Config, k *Gofr) {
 		return
 	}
 
-	k.Solr = datastore.NewSolrClient(host, port)
-	k.Logger.Infof("Solr connected. Host: %s, Port: %s \n", host, port)
+	g.Solr = datastore.NewSolrClient(host, port)
+	g.Logger.Infof("Solr connected. Host: %s, Port: %s \n", host, port)
 }
 
 // InitializeSolrFromConfigs initializes Solr
@@ -758,7 +758,7 @@ func InitializeSolrFromConfigs(c Config, prefix string) (datastore.Client, error
 	return datastore.NewSolrClient(host, port), nil
 }
 
-func initializeNotifiers(c Config, k *Gofr) {
+func initializeNotifiers(c Config, g *Gofr) {
 	notifierBackend := c.Get("NOTIFIER_BACKEND")
 
 	if notifierBackend == "" {
@@ -766,26 +766,26 @@ func initializeNotifiers(c Config, k *Gofr) {
 	}
 
 	if notifierBackend == "SNS" {
-		initializeAwsSNS(c, k)
+		initializeAwsSNS(c, g)
 	}
 }
-func initializeAwsSNS(c Config, k *Gofr) {
+func initializeAwsSNS(c Config, g *Gofr) {
 	awsConfig := awsSNSConfigFromEnv(c, "")
 
 	var err error
 
-	k.Notifier, err = awssns.New(&awsConfig)
-	k.DatabaseHealth = append(k.DatabaseHealth, k.Notifier.HealthCheck)
+	g.Notifier, err = awssns.New(&awsConfig)
+	g.DatabaseHealth = append(g.DatabaseHealth, g.Notifier.HealthCheck)
 
 	if err != nil {
-		k.Logger.Errorf("AWS SNS could not be initialized, error: %v\n", err)
+		g.Logger.Errorf("AWS SNS could not be initialized, error: %v\n", err)
 
-		go awsSNSRetry(&awsConfig, k)
+		go awsSNSRetry(&awsConfig, g)
 
 		return
 	}
 
-	k.Logger.Infof("AWS SNS initialized")
+	g.Logger.Infof("AWS SNS initialized")
 }
 
 // InitializeAWSSNSFromConfigs initializes aws sns
@@ -806,21 +806,21 @@ func getConfigFolder() (configFolder string) {
 	return
 }
 
-func initializeGooglePubSub(c Config, k *Gofr) {
+func initializeGooglePubSub(c Config, g *Gofr) {
 	var err error
 
 	googlePubSubConfigs := googlePubSubConfigFromEnv(c, "")
 
-	k.PubSub, err = google.New(&googlePubSubConfigs, k.Logger)
-	k.DatabaseHealth = append(k.DatabaseHealth, k.PubSubHealthCheck)
+	g.PubSub, err = google.New(&googlePubSubConfigs, g.Logger)
+	g.DatabaseHealth = append(g.DatabaseHealth, g.PubSubHealthCheck)
 
 	if err != nil {
-		k.Logger.Errorf("Cannot connect to google pubsub: %v", err)
+		g.Logger.Errorf("Cannot connect to google pubsub: %v", err)
 
-		go googlePubsubRetry(googlePubSubConfigs, k)
+		go googlePubsubRetry(googlePubSubConfigs, g)
 
 		return
 	}
 
-	k.Logger.Infof("Google PubSub initialized")
+	g.Logger.Infof("Google PubSub initialized")
 }
