@@ -5,8 +5,6 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
-	"net/http/httptest"
-	"os"
 	"strconv"
 	"strings"
 	"testing"
@@ -20,52 +18,6 @@ import (
 	"gofr.dev/pkg/gofr/request"
 	"gofr.dev/pkg/log"
 )
-
-func TestMain(m *testing.M) {
-	if testing.Short() {
-		t := testing.T{}
-		t.Skip("skipping testing in short mode")
-	}
-
-	app := gofr.New()
-
-	cassandraTableInitialization(app)
-
-	postgresTableInitialization(app)
-
-	// avro schema registry test server
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		re := map[string]interface{}{
-			"subject": "employee-value",
-			"version": 3,
-			"id":      303,
-			"schema": "{\"type\":\"record\",\"name\":\"employee\"," +
-				"\"fields\":[{\"name\":\"Id\",\"type\":\"string\"}," +
-				"{\"name\":\"Name\",\"type\":\"string\"}," +
-				"{\"name\":\"Phone\",\"type\":\"string\"}," +
-				"{\"name\":\"Email\",\"type\":\"string\"}," +
-				"{\"name\":\"City\",\"type\":\"string\"}]}",
-		}
-
-		reBytes, _ := json.Marshal(re)
-		w.Header().Set("Content-type", "application/json")
-		_, _ = w.Write(reBytes)
-	}))
-
-	schemaURL := os.Getenv("AVRO_SCHEMA_URL")
-	os.Setenv("AVRO_SCHEMA_URL", ts.URL)
-
-	topic := os.Getenv("KAFKA_TOPIC")
-	os.Setenv("KAFKA_TOPIC", "avro-pubsub")
-
-	defer func() {
-		os.Setenv("AVRO_SCHEMA_URL", schemaURL)
-		os.Setenv("KAFKA_TOPIC", topic)
-	}()
-
-	//nolint:gocritic //os.Exit will exit, and `defer func(){...}(...)`
-	os.Exit(m.Run())
-}
 
 func TestUniversalIntegration(t *testing.T) {
 	if testing.Short() {
