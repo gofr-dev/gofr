@@ -90,10 +90,6 @@ type MultipleErrors struct {
 
 //nolint:gocognit // breaking down function will reduce readability
 func Test_Middleware_Errors(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping testing in short mode")
-	}
-
 	testcases := []struct {
 		jwtEndpoint   string
 		jwtToken      string
