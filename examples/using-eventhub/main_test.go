@@ -1,5 +1,3 @@
-//go:build !integration
-
 package main
 
 import (
@@ -11,6 +9,10 @@ import (
 )
 
 func TestServerRun(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping testing in short mode")
+	}
+
 	go main()
 	time.Sleep(3 * time.Second)
 

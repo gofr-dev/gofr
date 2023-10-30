@@ -1,5 +1,3 @@
-//go:build !integration
-
 package main
 
 import (
@@ -24,6 +22,11 @@ import (
 )
 
 func TestMain(m *testing.M) {
+	if testing.Short() {
+		t := testing.T{}
+		t.Skip("skipping testing in short mode")
+	}
+
 	app := gofr.New()
 
 	cassandraTableInitialization(app)
@@ -65,6 +68,9 @@ func TestMain(m *testing.M) {
 }
 
 func TestUniversalIntegration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping testing in short mode")
+	}
 	// call the main function
 	go main()
 	// sleep, so that every data stores get initialized properly

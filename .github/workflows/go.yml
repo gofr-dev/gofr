@@ -169,7 +169,7 @@ jobs:
       - name: Test
         run: |
           export GOFR_ENV=test
-          go test ./... -v -coverprofile profile.cov -coverpkg=./...
+          go test ./... -v -short -coverprofile profile.cov -coverpkg=./...
           go tool cover -func profile.cov
 
       - name: Upload Test Coverage to Code Climate

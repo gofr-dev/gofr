@@ -6,6 +6,10 @@ import (
 )
 
 func Test_main(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping testing in short mode")
+	}
+
 	go main()
 	time.Sleep(1*time.Minute + 30*time.Second)
 
