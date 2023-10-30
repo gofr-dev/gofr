@@ -63,8 +63,8 @@ require (
 	gorm.io/driver/mysql v1.4.5
 	gorm.io/driver/postgres v1.4.6
 	gorm.io/driver/sqlite v1.4.4
-	gorm.io/driver/sqlserver v1.4.1
-	gorm.io/gorm v1.24.3
+	gorm.io/driver/sqlserver v1.5.2
+	gorm.io/gorm v1.25.2-0.20230610234218-206613868439
 )
 
 require (
@@ -128,7 +128,7 @@ require (
 	github.com/jcmturner/aescts/v2 v2.0.0 // indirect
 	github.com/jcmturner/dnsutils/v2 v2.0.0 // indirect
 	github.com/jcmturner/gofork v1.7.6 // indirect
-	github.com/jcmturner/gokrb5/v8 v8.4.3 // indirect
+	github.com/jcmturner/gokrb5/v8 v8.4.4 // indirect
 	github.com/jcmturner/rpc/v2 v2.0.3 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
@@ -144,7 +144,7 @@ require (
 	github.com/mattn/go-ieproxy v0.0.9 // indirect
 	github.com/mattn/go-sqlite3 v1.14.16 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.4 // indirect
-	github.com/microsoft/go-mssqldb v0.19.0 // indirect
+	github.com/microsoft/go-mssqldb v1.6.0 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
