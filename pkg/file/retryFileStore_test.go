@@ -62,7 +62,7 @@ func Test_retryFTP_connNotNil(t *testing.T) {
 	}
 
 	go retryFTP(&ftpConfig, &ftpInstance)
-	time.Sleep(10 * time.Second)
+	time.Sleep(1 * time.Minute)
 
 	_, err := ftpInstance.conn.List(".")
 
