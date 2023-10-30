@@ -62,6 +62,10 @@ func (m *mockPubSub) IsSet() bool {
 }
 
 func TestProducerHandler(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping testing in short mode")
+	}
+
 	app := gofr.New()
 	m := mockPubSub{}
 	app.PubSub = &m
@@ -94,6 +98,10 @@ func TestProducerHandler(t *testing.T) {
 }
 
 func TestConsumerHandler(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping testing in short mode")
+	}
+
 	app := gofr.New()
 	app.PubSub = &mockPubSub{}
 
