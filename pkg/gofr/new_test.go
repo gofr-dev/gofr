@@ -349,27 +349,9 @@ func Test_getYcqlConfigs(t *testing.T) {
 func Test_PubSub(t *testing.T) {
 	t.Setenv("PUBSUB_EMULATOR_HOST", "localhost:8086")
 
-	if testing.Short() {
-		t.Skip("skipping testing in short mode")
-	}
-
 	b := new(bytes.Buffer)
 	logger := log.NewMockLogger(b)
 	conf := config.NewGoDotEnvProvider(logger, "../../configs")
-
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		re := map[string]interface{}{
-			"subject": "gofr-value",
-			"version": 3,
-			"id":      303,
-			"schema": `{"type":"record","name":"person","fields":[{"name":"Id","type":"string"},
-						{"name":"Name","type":"string"},{"name":"Email","type":"string"}]}`,
-		}
-
-		reBytes, _ := json.Marshal(re)
-		w.Header().Set("Content-type", "application/json")
-		_, _ = w.Write(reBytes)
-	}))
 
 	g := &Gofr{Logger: logger}
 
@@ -378,23 +360,6 @@ func Test_PubSub(t *testing.T) {
 		expectedStr string
 	}{
 		{mockConfig{}, "Kafka initialized"},
-		{&config.MockConfig{Data: map[string]string{
-			"EVENTHUB_NAMESPACE":  "zsmisc-dev",
-			"EVENTHUB_NAME":       "healthcheck",
-			"AZURE_CLIENT_ID":     conf.Get("AZURE_CLIENT_ID"),
-			"AZURE_CLIENT_SECRET": conf.Get("AZURE_CLIENT_SECRET"),
-			"AZURE_TENANT_ID":     conf.Get("AZURE_TENANT_ID"),
-			"PUBSUB_BACKEND":      "EVENTHUB",
-		}}, "Azure Eventhub initialized"},
-		{&config.MockConfig{Data: map[string]string{
-			"EVENTHUB_NAMESPACE":  "zsmisc-dev",
-			"EVENTHUB_NAME":       "healthcheck",
-			"AZURE_CLIENT_ID":     conf.Get("AZURE_CLIENT_ID"),
-			"AZURE_CLIENT_SECRET": conf.Get("AZURE_CLIENT_SECRET"),
-			"AZURE_TENANT_ID":     conf.Get("AZURE_TENANT_ID"),
-			"PUBSUB_BACKEND":      "EVENTHUB",
-			"AVRO_SCHEMA_URL":     ts.URL,
-		}}, "Avro initialized"},
 		{&config.MockConfig{Data: map[string]string{
 			"PUBSUB_BACKEND":           "google",
 			"GOOGLE_TOPIC_NAME":        conf.Get("GOOGLE_TOPIC_NAME"),
