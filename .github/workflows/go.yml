@@ -24,6 +24,16 @@ jobs:
         env:
           MYSQL_ROOT_PASSWORD: "password"
 
+      localstack:
+        image: localstack/localstack
+        ports:
+          - "4566:4566"
+        env:
+          SERVICES: "sns"
+          DEFAULT_REGION: "eu-central-1"
+          AWS_ACCESS_KEY_ID: "dummy1"
+          AWS_SECRET_ACCESS_KEY: "dummy1"
+
       redis:
         image: redis:7.0.5
         ports:
@@ -105,6 +115,41 @@ jobs:
         with:
           go-version: 1.21
         id: Go
+
+      - name: Set UP AWS-CLI
+        run: |
+          curl "https://awscli.amazonaws.com/AWSCLIV2.pkg" -o "AWSCLIV2.pkg"
+
+      - name: Run initializing command for AWS-CLI
+        run: |
+          sudo installer -pkg AWSCLIV2.pkg -target /
+          rm AWSCLIV2.pkg
+          echo "AWS CLI installation completed." 
+
+      - name: Run initializing command for AWS-CLI
+        run: |
+          docker-compose -f examples/using-awssns/Docker-Compose.yml up -d
+
+      - name: Configure AWS CLI profile
+        run: |
+          aws configure --profile test-profile
+          aws configure set aws_access_key_id dummy1 --profile test-profile
+          aws configure set aws_secret_access_key dummy1 --profile test-profile
+          aws configure set region eu-central-1 --profile test-profile
+
+      - name: Create SNS topic
+        run: |
+          topic_arn=$(aws --endpoint-url=http://localhost:4566 sns create-topic --name order-creation-events --region eu-central-1 --profile test-profile | grep -o 'arn[^"]*')
+          echo "APP_VERSION=v0" > examples/using-awssns/configs/.local.env
+          echo "APP_NAME=aws-sns-example" >> examples/using-awssns/configs/.local.env
+          echo "HTTP_PORT=8080" >> examples/using-awssns/configs/.local.env
+          echo "SNS_ACCESS_KEY=dummy1" >> examples/using-awssns/configs/.local.env
+          echo "SNS_SECRET_ACCESS_KEY=dummy1" >> examples/using-awssns/configs/.local.env
+          echo "SNS_REGION=eu-central-1" >> examples/using-awssns/configs/.local.env
+          echo "SNS_PROTOCOL=http" >> examples/using-awssns/configs/.local.env
+          echo "SNS_ENDPOINT=http://localhost:4566/" >> examples/using-awssns/configs/.local.env
+          echo "SNS_TOPIC_ARN=$topic_arn" >> examples/using-awssns/configs/.local.env
+          echo "NOTIFIER_BACKEND=SNS" >> examples/using-awssns/configs/.local.env
 
       - name: Load Schema of Cassandra
         run: |
