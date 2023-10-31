@@ -27,7 +27,7 @@ jobs:
       localstack:
         image: localstack/localstack
         ports:
-          - "4566:4566"
+          - "4576:4566"
         env:
           SERVICES: "sns"
           DEFAULT_REGION: "eu-central-1"
