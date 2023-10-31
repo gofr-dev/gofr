@@ -27,7 +27,7 @@ jobs:
       localstack:
         image: localstack/localstack
         ports:
-          - "4576:4566"
+          - "4566:4566"
         env:
           SERVICES: "sns"
           DEFAULT_REGION: "eu-central-1"
@@ -125,10 +125,6 @@ jobs:
           unzip awscliv2.zip
           sudo ./aws/install --update
           echo "AWS CLI installation completed."
-
-      - name: Run docker for AWS-CLI
-        run: |
-          docker-compose -f examples/using-awssns/Docker-Compose.yml up -d
 
       - name: Configure AWS CLI profile
         run: |
