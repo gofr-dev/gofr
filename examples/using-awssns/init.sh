@@ -43,7 +43,7 @@ install_aws_cli_mac() {
 
 
 # Step 1: Start localstack docker container
-docker-compose -f Docker-Compose.yml up -d
+docker-compose -f examples/using-awssns/Docker-Compose.yml up -d
 
 # Step 2: Check operating system and install AWS CLI if not installed
 if [[ "$OSTYPE" == "linux-gnu"* ]]; then
