@@ -114,7 +114,7 @@ jobs:
           export AWS_DEFAULT_OUTPUT_FORMAT=json
     
           chmod +x examples/using-awssns/init.sh
-          ./examples/using-awssns/init.sh
+          AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY AWS_DEFAULT_REGION=$AWS_DEFAULT_REGION ./examples/using-awssns/init.sh
 
       - name: Load Schema of Cassandra
         run: |
