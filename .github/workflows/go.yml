@@ -122,7 +122,7 @@ jobs:
 
       - name: Run initializing command for AWS-CLI
         run: |
-          sudo /usr/sbin/installer -pkg AWSCLIV2.pkg -target /
+          sudo dpkg -i AWSCLIV2.pkg
           rm AWSCLIV2.pkg
           echo "AWS CLI installation completed."
 
