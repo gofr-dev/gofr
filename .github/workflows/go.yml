@@ -169,6 +169,7 @@ jobs:
       - name: Test
         run: |
           export GOFR_ENV=test
+          cd examples/using-awssns
           go test ./... -v -short -coverprofile profile.cov -coverpkg=./...          
           go tool cover -func profile.cov
 
