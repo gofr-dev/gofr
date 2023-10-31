@@ -123,7 +123,7 @@ jobs:
       - name: Run initializing command for AWS-CLI
         run: |
           unzip awscliv2.zip
-          sudo ./aws/install
+          sudo ./aws/install --update
           echo "AWS CLI installation completed."
 
       - name: Run docker for AWS-CLI
