@@ -119,14 +119,11 @@ jobs:
       - name: Set UP AWS-CLI
         run: |
           curl "https://awscli.amazonaws.com/AWSCLIV2.pkg" -o "AWSCLIV2.pkg"
-
-      - name: Run initializing command for AWS-CLI
-        run: |
           sudo installer -pkg AWSCLIV2.pkg -target /
           rm AWSCLIV2.pkg
-          echo "AWS CLI installation completed." 
+          echo "AWS CLI installation completed."
 
-      - name: Run initializing command for AWS-CLI
+      - name: Run docker for AWS-CLI
         run: |
           docker-compose -f examples/using-awssns/Docker-Compose.yml up -d
 
