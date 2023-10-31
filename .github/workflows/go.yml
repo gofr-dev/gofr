@@ -119,7 +119,10 @@ jobs:
       - name: Set UP AWS-CLI
         run: |
           curl "https://awscli.amazonaws.com/AWSCLIV2.pkg" -o "AWSCLIV2.pkg"
-          sudo installer -pkg AWSCLIV2.pkg -target /
+
+      - name: Run initializing command for AWS-CLI
+        run: |
+          sudo /usr/sbin/installer -pkg AWSCLIV2.pkg -target /
           rm AWSCLIV2.pkg
           echo "AWS CLI installation completed."
 
