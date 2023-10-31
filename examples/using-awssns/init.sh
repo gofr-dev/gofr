@@ -45,6 +45,9 @@ install_aws_cli_mac() {
 # Step 1: Start localstack docker container
 docker-compose -f examples/using-awssns/Docker-Compose.yml up -d
 
+# Wait for 5 seconds after starting localstack
+sleep 5
+
 # Step 2: Check operating system and install AWS CLI if not installed
 if [[ "$OSTYPE" == "linux-gnu"* ]]; then
     if ! command -v aws &> /dev/null; then
@@ -60,23 +63,24 @@ else
 fi
 
 # Step 3: Configure AWS CLI profile
-aws configure --profile test-profile
-
-aws configure set aws_access_key_id dummy1 --profile test-profile
-aws configure set aws_secret_access_key dummy1 --profile test-profile
-aws configure set region eu-central-1 --profile test-profile
+aws configure --profile test-profile <<EOF
+dummy1
+dummy1
+eu-central-1
+json
+EOF
 
 # Step 4: Create SNS topic
 topic_arn=$(aws --endpoint-url=http://localhost:4566 sns create-topic --name order-creation-events --region eu-central-1 --profile test-profile | grep -o 'arn[^"]*')
 
 # Step 5: Set environment variables
-echo "APP_VERSION=v0" > ./configs/.local.env
-echo "APP_NAME=aws-sns-example" >> ./configs/.local.env
-echo "HTTP_PORT=8080" >> ./configs/.local.env
-echo "SNS_ACCESS_KEY=dummy1" >> ./configs/.local.env
-echo "SNS_SECRET_ACCESS_KEY=dummy1" >> ./configs/.local.env
-echo "SNS_REGION=eu-central-1" >> ./configs/.local.env
-echo "SNS_PROTOCOL=http" >> ./configs/.local.env
-echo "SNS_ENDPOINT=http://localhost:4566/" >> ./configs/.local.env
-echo "SNS_TOPIC_ARN=$topic_arn" >> ./configs/.local.env
-echo "NOTIFIER_BACKEND=SNS" >> ./configs/.local.env
+echo "APP_VERSION=v0" > examples/using-awssns/configs/.local.env
+echo "APP_NAME=aws-sns-example" >> examples/using-awssns/configs/.local.env
+echo "HTTP_PORT=8080" >> examples/using-awssns/configs/.local.env
+echo "SNS_ACCESS_KEY=dummy1" >> examples/using-awssns/configs/.local.env
+echo "SNS_SECRET_ACCESS_KEY=dummy1" >> examples/using-awssns/configs/.local.env
+echo "SNS_REGION=eu-central-1" >> examples/using-awssns/configs/.local.env
+echo "SNS_PROTOCOL=http" >> examples/using-awssns/configs/.local.env
+echo "SNS_ENDPOINT=http://localhost:4566/" >> examples/using-awssns/configs/.local.env
+echo "SNS_TOPIC_ARN=$topic_arn" >> examples/using-awssns/configs/.local.env
+echo "NOTIFIER_BACKEND=SNS" >> examples/using-awssns/configs/.local.env
