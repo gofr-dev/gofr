@@ -106,7 +106,7 @@ jobs:
           go-version: 1.21
         id: Go
 
-      - name : Run init.sh to initialize AWS-CLI
+      - name: Set up AWS-SNS
         run: |
           chmod +x examples/using-awssns/init.sh
           ./examples/using-awssns/init.sh
