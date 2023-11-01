@@ -74,7 +74,8 @@ EOF
 topic_arn=$(aws --endpoint-url=http://localhost:4566 sns create-topic --name order-creation-events --region eu-central-1 --profile test-profile | grep -o 'arn[^"]*')
 
 # Step 5: Set environment variables
-echo "APP_VERSION=v0" > examples/using-awssns/configs/.local.env
+# shellcheck disable=SC2129
+echo "APP_VERSION=v0" >> examples/using-awssns/configs/.local.env
 echo "APP_NAME=aws-sns-example" >> examples/using-awssns/configs/.local.env
 echo "HTTP_PORT=8080" >> examples/using-awssns/configs/.local.env
 echo "SNS_ACCESS_KEY=dummy1" >> examples/using-awssns/configs/.local.env
