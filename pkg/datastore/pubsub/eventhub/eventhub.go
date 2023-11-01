@@ -56,6 +56,10 @@ type Offset struct {
 	StartOffset string
 }
 
+type aadJWTProvider struct {
+	NewJWTProviderFunc func(c *Config, opts ...aad.JWTProviderOption) (*aad.TokenProvider, error)
+}
+
 //nolint:gochecknoglobals // The declared global variable can be accessed across multiple functions
 var (
 	subscribeRecieveCount = prometheus.NewCounterVec(prometheus.CounterOpts{
@@ -114,12 +118,13 @@ func New(c *Config) (pubsub.PublisherSubscriber, error) {
 		return &Eventhub{hub: hub, Config: *c, partitionOffsetMap: make(map[string]string)}, nil
 	}
 
-	jwtProvider, err := aad.NewJWTProvider(jwtProvider(c))
+	aadProvider := &aadJWTProvider{}
+	abc, err := aadProvider.NewJWTProvider(c)
 	if err != nil {
 		return &Eventhub{Config: *c}, err
 	}
 
-	hub, err := eventhub.NewHub(c.Namespace, c.EventhubName, jwtProvider)
+	hub, err := eventhub.NewHub(c.Namespace, c.EventhubName, abc)
 	if err != nil {
 		return &Eventhub{Config: *c}, err
 	}
@@ -310,4 +315,13 @@ func NewEventHubWithAvro(config *AvroWithEventhubConfig, logger log.Logger) (pub
 	}
 
 	return p, nil
+}
+
+func (aadJWT *aadJWTProvider) NewJWTProvider(c *Config, opts ...aad.JWTProviderOption) (*aad.TokenProvider, error) {
+	aadJWTProvider, err := aad.NewJWTProvider(jwtProvider(c))
+	if err != nil {
+		return nil, err
+	}
+
+	return aadJWTProvider, nil
 }
