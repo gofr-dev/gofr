@@ -220,10 +220,6 @@ func Test_elasticSearchRetry(t *testing.T) {
 }
 
 func Test_AWSSNSRetry(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping testing in short mode")
-	}
-
 	var g Gofr
 
 	logger := log.NewMockLogger(io.Discard)
