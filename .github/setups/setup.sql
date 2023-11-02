@@ -1,11 +1,18 @@
-DROP DATABASE customers;
+-- Drop the database if it exists
+DROP DATABASE IF EXISTS customers;
+
+-- Create the database
 CREATE DATABASE customers;
-\connect customers
+
+-- Switch to the 'customers' database
+USE customers;
+
+-- Create the 'customers' table in the 'public' schema
 CREATE TABLE public.customers (
-                                  id uuid NOT NULL primary key,
-                                  name character varying(50),
-                                  email varchar(50),
-                                      phone bigint
+                                  id uuid NOT NULL PRIMARY KEY,
+                                  name VARCHAR(50),
+                                  email VARCHAR(50),
+                                  phone BIGINT
 );
 
 DROP TABLE IF EXISTS employees;
