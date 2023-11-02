@@ -349,6 +349,38 @@ func Test_getYcqlConfigs(t *testing.T) {
 func Test_PubSub(t *testing.T) {
 	t.Setenv("PUBSUB_EMULATOR_HOST", "localhost:8086")
 
+	b := new(bytes.Buffer)
+	logger := log.NewMockLogger(b)
+	conf := config.NewGoDotEnvProvider(logger, "../../configs")
+
+	g := &Gofr{Logger: logger}
+
+	testCases := []struct {
+		configLoc   Config
+		expectedStr string
+	}{
+		{mockConfig{}, "Kafka initialized"},
+		{&config.MockConfig{Data: map[string]string{
+			"PUBSUB_BACKEND":           "google",
+			"GOOGLE_TOPIC_NAME":        conf.Get("GOOGLE_TOPIC_NAME"),
+			"GOOGLE_PROJECT_ID":        conf.Get("GOOGLE_PROJECT_ID"),
+			"GOOGLE_SUBSCRIPTION_NAME": conf.Get("GOOGLE_SUBSCRIPTION_NAME"),
+		}}, "Google PubSub initialized"},
+	}
+
+	for i, tc := range testCases {
+		b.Reset()
+		initializePubSub(tc.configLoc, logger, g)
+
+		if !strings.Contains(b.String(), tc.expectedStr) {
+			t.Errorf("[FAILED %v], expected: `%v` in the logs, got: %v", i, tc.expectedStr, b.String())
+		}
+	}
+}
+
+func Test_PubSub_Eventhub(t *testing.T) {
+	t.Setenv("PUBSUB_EMULATOR_HOST", "localhost:8086")
+
 	if testing.Short() {
 		t.Skip("skipping testing in short mode")
 	}
@@ -377,7 +409,6 @@ func Test_PubSub(t *testing.T) {
 		configLoc   Config
 		expectedStr string
 	}{
-		{mockConfig{}, "Kafka initialized"},
 		{&config.MockConfig{Data: map[string]string{
 			"EVENTHUB_NAMESPACE":  "zsmisc-dev",
 			"EVENTHUB_NAME":       "healthcheck",
@@ -395,12 +426,6 @@ func Test_PubSub(t *testing.T) {
 			"PUBSUB_BACKEND":      "EVENTHUB",
 			"AVRO_SCHEMA_URL":     ts.URL,
 		}}, "Avro initialized"},
-		{&config.MockConfig{Data: map[string]string{
-			"PUBSUB_BACKEND":           "google",
-			"GOOGLE_TOPIC_NAME":        conf.Get("GOOGLE_TOPIC_NAME"),
-			"GOOGLE_PROJECT_ID":        conf.Get("GOOGLE_PROJECT_ID"),
-			"GOOGLE_SUBSCRIPTION_NAME": conf.Get("GOOGLE_SUBSCRIPTION_NAME"),
-		}}, "Google PubSub initialized"},
 	}
 
 	for i, tc := range testCases {

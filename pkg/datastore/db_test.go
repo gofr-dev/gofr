@@ -68,7 +68,7 @@ func TestNewORM(t *testing.T) {
 }
 
 func TestNewORM_Success(t *testing.T) {
-	t.Skip("skipping testing in short mode")
+	t.Skip("skipping tests in short mode")
 
 	dc := DBConfig{
 		SSL:               "require",
@@ -196,7 +196,7 @@ func Test_NewSQLX(t *testing.T) {
 }
 
 func TestDataStore_SQL_SQLX_HealthCheck(t *testing.T) {
-	t.Skip("skipping test in short mode")
+	t.Skip("skipping tests in short mode")
 
 	b := new(bytes.Buffer)
 	logger := log.NewMockLogger(b)
@@ -251,7 +251,7 @@ func TestDataStore_SQL_SQLX_HealthCheck(t *testing.T) {
 }
 
 func TestNewSQLX_Success(t *testing.T) {
-	t.Skip("skipping testing in short mode")
+	t.Skip("skipping tests in short mode")
 
 	{
 		dc := DBConfig{
@@ -282,7 +282,7 @@ func TestNewSQLX_Success(t *testing.T) {
 
 // Test_SQL_SQLX_HealthCheck_Down tests health check response when the db connection was made but lost in between
 func Test_SQL_SQLX_HealthCheck_Down(t *testing.T) {
-	t.Skip("skipping testing in short mode")
+	t.Skip("skipping tests in short mode")
 
 	b := new(bytes.Buffer)
 	logger := log.NewMockLogger(b)
