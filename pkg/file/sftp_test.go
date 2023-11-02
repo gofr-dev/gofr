@@ -237,8 +237,6 @@ func tempDirSFTP(s sftpClient) (string, error) {
 }
 
 func Test_createNestedDir_SFTP(t *testing.T) {
-	t.Skip("Skipping the test as while creating directory on GHA will get permission denied error")
-
 	sftpCfg := &SFTPConfig{
 		Host:     "localhost",
 		User:     "myuser",
