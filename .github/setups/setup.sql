@@ -1,6 +1,6 @@
-DROP DATABASE customers;
+DROP DATABASE IF EXISTS customers;
 CREATE DATABASE customers;
-\connect customers
+connect customers
 CREATE TABLE public.customers (
                                   id uuid NOT NULL primary key,
                                   name character varying(50),
