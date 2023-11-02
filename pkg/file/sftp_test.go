@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -228,10 +229,26 @@ func Test_SftpMove(t *testing.T) {
 
 func tempDirSFTP(s sftpClient) (string, error) {
 	tempDir := fmt.Sprintf("/tempDir%v", uuid.NewString())
+	parentDir := filepath.Dir(tempDir)
 
-	// Create the temporary directory inside the SFTP server.
+	// Check if the parent directory exists.
+	if _, err := s.Stat(parentDir); err != nil {
+		// Parent directory does not exist, try creating it.
+		if err := s.Mkdir(parentDir); err != nil {
+			log.NewLogger().Errorf("Error while creating parent dir: %v", err.Error())
+			return "", err
+		}
+	}
+
+	// Create the temporary directory inside the parent directory.
 	if err := s.Mkdir(tempDir); err != nil {
-		log.NewLogger().Errorf("Error while creating dir:%v", err.Error())
+		log.NewLogger().Errorf("Error while creating dir: %v", err.Error())
+		return "", err
+	}
+
+	// Set permissions for the temporary directory.
+	if err := s.Chmod(tempDir, 0755); err != nil {
+		log.NewLogger().Errorf("Error while setting permissions: %v", err.Error())
 		return "", err
 	}
 
