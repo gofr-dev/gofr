@@ -128,7 +128,7 @@ jobs:
       - name: Set up MySQL
         run: |
           docker exec -i ${{ job.services.mysql.id }} mysql -uroot -ppassword -e 'CREATE DATABASE test;'
-          docker exec -i ${{ job.services.mysql.id }} mysql -uroot -ppassword < ../../.github/setups/setup.sql
+          docker exec -i ${{ job.services.mysql.id }} mysql -uroot -ppassword < /.github/setups/setup.sql
 
       - name: Set up SSL Enabled MySQL
         run: |
