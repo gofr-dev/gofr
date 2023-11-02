@@ -1,8 +1,3 @@
-<<<<<<< Updated upstream
-DROP DATABASE IF EXISTS customers;
-CREATE DATABASE customers;
-connect customers
-=======
 -- Drop the database if it exists
 DROP DATABASE IF EXISTS customers;
 
@@ -13,13 +8,11 @@ CREATE DATABASE customers;
 \connect customers;
 
 -- Create the 'customers' table in the 'public' schema
->>>>>>> Stashed changes
 CREATE TABLE public.customers (
                                   id UUID NOT NULL PRIMARY KEY,
                                   name VARCHAR(50),
                                   email VARCHAR(50),
                                   phone BIGINT
-
 );
 
 DROP TABLE IF EXISTS employees;
