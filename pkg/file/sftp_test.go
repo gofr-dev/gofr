@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	pkgErr "gofr.dev/pkg/errors"
+	"gofr.dev/pkg/log"
 )
 
 func Test_NewSFTPFile(t *testing.T) {
@@ -230,6 +231,7 @@ func tempDirSFTP(s sftpClient) (string, error) {
 
 	// Create the temporary directory inside the SFTP server.
 	if err := s.Mkdir(tempDir); err != nil {
+		log.NewLogger().Errorf("Error while creating dir:%v", err.Error())
 		return "", err
 	}
 
