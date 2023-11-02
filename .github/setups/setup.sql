@@ -5,7 +5,7 @@ DROP DATABASE IF EXISTS customers;
 CREATE DATABASE customers;
 
 -- Switch to the 'customers' database
-\connect customers;
+USE customers;
 
 -- Create the 'customers' table in the 'public' schema
 CREATE TABLE public.customers (
