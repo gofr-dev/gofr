@@ -9,7 +9,7 @@ USE customers;
 
 -- Create the 'customers' table in the 'public' schema
 CREATE TABLE public.customers (
-                                  id UUID NOT NULL PRIMARY KEY,
+                                  id uuid NOT NULL PRIMARY KEY,
                                   name VARCHAR(50),
                                   email VARCHAR(50),
                                   phone BIGINT
