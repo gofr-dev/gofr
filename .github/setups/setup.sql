@@ -1,11 +1,25 @@
+<<<<<<< Updated upstream
 DROP DATABASE IF EXISTS customers;
 CREATE DATABASE customers;
 connect customers
+=======
+-- Drop the database if it exists
+DROP DATABASE IF EXISTS customers;
+
+-- Create the database
+CREATE DATABASE customers;
+
+-- Switch to the 'customers' database
+\connect customers;
+
+-- Create the 'customers' table in the 'public' schema
+>>>>>>> Stashed changes
 CREATE TABLE public.customers (
-                                  id uuid NOT NULL primary key,
-                                  name character varying(50),
-                                  email varchar(50),
-                                      phone bigint
+                                  id UUID NOT NULL PRIMARY KEY,
+                                  name VARCHAR(50),
+                                  email VARCHAR(50),
+                                  phone BIGINT
+
 );
 
 DROP TABLE IF EXISTS employees;
