@@ -10,7 +10,7 @@
 
 ## Gofr
 
-Gofr is an opinionated microservice development framework.
+Gofr is an opinionated microservice development framework. Visit <a href="https://gofr.dev"/>https://gofr.dev</a> for more details and documentation. 
 
 ## Goal
 Even though generic applications can be written using Gofr, our main focus is to simplify the development of microservices. 

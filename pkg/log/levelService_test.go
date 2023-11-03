@@ -121,7 +121,7 @@ func TestRemoteLevelLogging(t *testing.T) {
 
 	newLevelService(l, "gofr-app")
 
-	time.Sleep(15 * time.Second)
+	time.Sleep(1 * time.Second)
 
 	mu.Lock()
 	lvl := rls.level

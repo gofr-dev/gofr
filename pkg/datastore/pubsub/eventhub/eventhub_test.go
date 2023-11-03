@@ -1,5 +1,3 @@
-//go:build !integration
-
 package eventhub
 
 import (
@@ -22,6 +20,10 @@ import (
 )
 
 func TestNew(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping testing in short mode")
+	}
+
 	conf := config.NewGoDotEnvProvider(log.NewLogger(), "../../../../configs")
 
 	tests := []struct {
@@ -63,6 +65,10 @@ func TestNew(t *testing.T) {
 }
 
 func TestEventhub_HealthCheck(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping testing in short mode")
+	}
+
 	conf := config.NewGoDotEnvProvider(log.NewLogger(), "../../../../configs")
 	testcases := []struct {
 		c    Config
@@ -146,6 +152,10 @@ func TestEventhub_HealthCheck_Down(t *testing.T) {
 }
 
 func TestIsSet(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping testing in short mode")
+	}
+
 	var e *Eventhub
 
 	logger := log.NewMockLogger(io.Discard)
