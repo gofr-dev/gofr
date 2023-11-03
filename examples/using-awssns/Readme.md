@@ -15,9 +15,9 @@ Using Amazon SNS topics, your publisher systems can fanout messages to a large n
 
 To run the example follow the steps below :
 
-1) Run the below command on your PWD to setup awssns locally for testing.
+1) Run the below command from root directory to setup awssns locally for testing.
 
-   > `bash init.sh`
+   > `bash ./examples/using-awssns/init.sh`
 
 2) Now you can run the example on your PWD .
 
