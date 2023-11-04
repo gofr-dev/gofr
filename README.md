@@ -23,17 +23,17 @@ We will focus ourselves towards deployment in kubernetes and aspire to provide o
 1. Simple API syntax
 2. REST Standards by default
 3. Battle Tested at Enterprise Scale
-4. Configuration management
-5. Database state management using migrations
-6. Inbuilt Middlewares along with support for custom middlewares
-7. Error Management
-8. Inbuilt Datastore, File System, Pub/Sub Support
-9. gRPC support 
+4. [Configuration management](https://gofr.dev/docs/v1/references/configs)
+5. [Database state management using migrations](https://gofr.dev/docs/v1/advanced-guide/data-migrations)
+6. Inbuilt Middlewares along with support for [custom middlewares](https://gofr.dev/docs/v1/advanced-guide/middleware)
+7. [Error Management](https://gofr.dev/docs/v1/references/errors)
+8. Inbuilt [Datastore](https://gofr.dev/docs/v1/references/datastore), [File System](https://gofr.dev/docs/v1/references/files), [Pub/Sub](https://gofr.dev/docs/v1/references/pubsub)
+9. [gRPC support](https://gofr.dev/docs/v1/advanced-guide/grpc)
 10. Chained timeout control
 11. Serve Static Files
-12. Websocket Support
+12. [Websocket](https://gofr.dev/docs/v1/advanced-guide/websockets)
 13. Support for Surge Protection
-14. Inbuilt Traces, Metrics and Logs
+14. [Inbuilt Traces, Metrics and Logs](https://gofr.dev/docs/v1/quick-start/observability)
 
 ## Quick Start Guide
 
