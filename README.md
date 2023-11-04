@@ -14,11 +14,11 @@ Gofr is an opinionated microservice development framework. Listed in [CNCF Lands
 
 Visit <a href="https://gofr.dev"/>https://gofr.dev</a> for more details and documentation. 
 
-## Goal
+## 🎯 Goal
 Even though generic applications can be written using Gofr, our main focus is to simplify the development of microservices. 
 We will focus ourselves towards deployment in kubernetes and aspire to provide out-of-the-box observability. 
 
-## Quick Start Guide
+## ⚡️ Quick Start Guide
 
 If you already have a go project with go module, you can get gofr by calling: `go get gofr.dev`. Follow the instructions below, if you are starting afresh. 
 
@@ -45,7 +45,7 @@ func main() {
 3. Get all the dependencies using `go get ./...`. It will download gofr along with every other package it requires.
 4. Start the server: `go run main.go` It will start the server on default port 8000. If this port is already in use, you can override the default port by mentioning an environment variable like this: `HTTP_PORT=9000 go run main.go`
 
-## Advantages/Features
+## 💡 Advantages/Features
 
 1. Simple API syntax
 2. REST Standards by default
