@@ -11,8 +11,6 @@
 <a href="https://goreportcard.com/report/gofr.dev"><img src="https://goreportcard.com/badge/gofr.dev"></a>
 <a href="https://opensource.org/licenses/Apache-2.0"><img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg"></a>
 
-https://img.badgesize.io/[.svg|png|jpg][?compression=gzip|brotli][&label=string][&max=string][&softmax=string]
-
 </div>
 
 
