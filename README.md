@@ -11,6 +11,8 @@
 
 </p>
 
+<br>
+
 Gofr is an opinionated microservice development framework. Listed in [CNCF Landscape](https://landscape.cncf.io/?selected=go-fr)
 
 Visit <a href="https://gofr.dev"/>https://gofr.dev</a> for more details and documentation. 
