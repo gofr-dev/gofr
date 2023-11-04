@@ -4,6 +4,8 @@
 </p>
 <br /><br /><br />
 
+<a href="https://pkg.go.dev/gofr.dev"><img src="https://img.shields.io/badge/%F0%9F%93%9A%20godoc-pkg-00ACD7.svg?color=00ACD7&style=flat-square"></a>
+<a href="https://gofr.dev/docs"><img src="https://img.shields.io/badge/%F0%9F%92%A1%20gofr-docs-00ACD7.svg?style=flat-square"></a>
 <a href="https://codeclimate.com/github/gofr-dev/gofr/maintainability"><img src="https://api.codeclimate.com/v1/badges/58c8d0443a3d08c59c07/maintainability" /></a>
 <a href="https://codeclimate.com/github/gofr-dev/gofr/test_coverage"><img src="https://api.codeclimate.com/v1/badges/58c8d0443a3d08c59c07/test_coverage" /></a>
 [![Go Report Card](https://goreportcard.com/badge/gofr.dev)](https://goreportcard.com/report/gofr.dev)
