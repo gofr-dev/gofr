@@ -23,12 +23,17 @@ We will focus ourselves towards deployment in kubernetes and aspire to provide o
 1. Simple API syntax
 2. REST Standards by default
 3. Battle Tested at Enterprise Scale
-4. Inbuilt Middlewares along with support for custom middlewares
-5. Error Management
-6. Inbuilt Datastore, File System, Pub/Sub Support
-7. 
-8. Chained timeout control
-9. Inbuilt Traces, Metrics and Logs
+4. Configuration management
+5. Database state management using migrations
+6. Inbuilt Middlewares along with support for custom middlewares
+7. Error Management
+8. Inbuilt Datastore, File System, Pub/Sub Support
+9. gRPC support 
+10. Chained timeout control
+11. Serve Static Files
+12. Websocket Support
+13. Support for Surge Protection
+14. Inbuilt Traces, Metrics and Logs
 
 ## Quick Start Guide
 
