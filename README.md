@@ -10,6 +10,7 @@
 <a href="https://pkg.go.dev/gofr.dev/pkg/gofr"><img src="https://pkg.go.dev/badge/gofr.dev.svg" alt="Go Reference"></a>
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
+<img align="right" alt="logo" src="https://github.com/gofr-dev/gofr/assets/44036979/916fe7b1-42fb-4af1-9e0b-4a7a064c243c">
 Gofr is an opinionated microservice development framework. Listed in [CNCF Landscape](https://landscape.cncf.io/?selected=go-fr)
 Visit <a href="https://gofr.dev"/>https://gofr.dev</a> for more details and documentation. 
 
