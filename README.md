@@ -18,23 +18,6 @@ Visit <a href="https://gofr.dev"/>https://gofr.dev</a> for more details and docu
 Even though generic applications can be written using Gofr, our main focus is to simplify the development of microservices. 
 We will focus ourselves towards deployment in kubernetes and aspire to provide out-of-the-box observability. 
 
-## Advantages
-
-1. Simple API syntax
-2. REST Standards by default
-3. Battle Tested at Enterprise Scale
-4. [Configuration management](https://gofr.dev/docs/v1/references/configs)
-5. [Database state management using migrations](https://gofr.dev/docs/v1/advanced-guide/data-migrations)
-6. Inbuilt Middlewares along with support for [custom middlewares](https://gofr.dev/docs/v1/advanced-guide/middleware)
-7. [Error Management](https://gofr.dev/docs/v1/references/errors)
-8. Inbuilt [Datastore](https://gofr.dev/docs/v1/references/datastore), [File System](https://gofr.dev/docs/v1/references/files), [Pub/Sub](https://gofr.dev/docs/v1/references/pubsub)
-9. [gRPC support](https://gofr.dev/docs/v1/advanced-guide/grpc)
-10. Chained timeout control
-11. Serve Static Files
-12. [Websocket](https://gofr.dev/docs/v1/advanced-guide/websockets)
-13. Support for Surge Protection
-14. [Inbuilt Traces, Metrics and Logs](https://gofr.dev/docs/v1/quick-start/observability)
-
 ## Quick Start Guide
 
 If you already have a go project with go module, you can get gofr by calling: `go get gofr.dev`. Follow the instructions below, if you are starting afresh. 
@@ -61,3 +44,21 @@ func main() {
 ```
 3. Get all the dependencies using `go get ./...`. It will download gofr along with every other package it requires.
 4. Start the server: `go run main.go` It will start the server on default port 8000. If this port is already in use, you can override the default port by mentioning an environment variable like this: `HTTP_PORT=9000 go run main.go`
+
+## Advantages/Features
+
+1. Simple API syntax
+2. REST Standards by default
+3. Battle Tested at Enterprise Scale
+4. [Configuration management](https://gofr.dev/docs/v1/references/configs)
+5. [Database state management using migrations](https://gofr.dev/docs/v1/advanced-guide/data-migrations)
+6. Inbuilt Middlewares along with support for [custom middlewares](https://gofr.dev/docs/v1/advanced-guide/middleware)
+7. [Error Management](https://gofr.dev/docs/v1/references/errors)
+8. Inbuilt [Datastore](https://gofr.dev/docs/v1/references/datastore), [File System](https://gofr.dev/docs/v1/references/files), [Pub/Sub](https://gofr.dev/docs/v1/references/pubsub)
+9. [gRPC support](https://gofr.dev/docs/v1/advanced-guide/grpc)
+10. Chained timeout control
+11. Serve Static Files
+12. [Websocket](https://gofr.dev/docs/v1/advanced-guide/websockets)
+13. Support for Surge Protection
+14. [Inbuilt Traces, Metrics and Logs](https://gofr.dev/docs/v1/quick-start/observability)
+
