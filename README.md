@@ -68,3 +68,6 @@ func main() {
 13. Support for Surge Protection
 14. [Inbuilt Traces, Metrics and Logs](https://gofr.dev/docs/v1/quick-start/observability)
 
+## Contributing
+
+Please visit [CONTRIBUTING](https://github.com/gofr-dev/gofr/blob/Refactor-readme/CONTRIBUTING.md) for details on submitting patches and the contribution workflow.
