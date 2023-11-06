@@ -62,9 +62,9 @@ require (
 	google.golang.org/protobuf v1.31.0
 	gorm.io/driver/mysql v1.4.5
 	gorm.io/driver/postgres v1.4.6
-	gorm.io/driver/sqlite v1.4.4
+	gorm.io/driver/sqlite v1.5.4
 	gorm.io/driver/sqlserver v1.4.1
-	gorm.io/gorm v1.24.3
+	gorm.io/gorm v1.25.2-0.20230530020048-26663ab9bf55
 )
 
 require (
@@ -142,7 +142,7 @@ require (
 	github.com/kr/text v0.2.0 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/mattn/go-ieproxy v0.0.9 // indirect
-	github.com/mattn/go-sqlite3 v1.14.16 // indirect
+	github.com/mattn/go-sqlite3 v1.14.17 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.4 // indirect
 	github.com/microsoft/go-mssqldb v0.19.0 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
