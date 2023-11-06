@@ -1,22 +1,30 @@
-<img width="300" alt="logo" src="https://github.com/gofr-dev/gofr/assets/324203/b3b27007-9501-4212-816a-422bfd02cd42">
-<br /><br /><br />
+# GoFr
+<p align="center">
+<img align="center" width="300" alt="logo" src="https://github.com/gofr-dev/gofr/assets/44036979/916fe7b1-42fb-4af1-9e0b-4a7a064c243c">
+</p>
 
+<div align=center>
+<a href="https://pkg.go.dev/gofr.dev"><img src="https://img.shields.io/badge/%F0%9F%93%9A%20godoc-pkg-00ACD7.svg?color=00ACD7&style=flat-square"></a>
+<a href="https://gofr.dev/docs"><img src="https://img.shields.io/badge/%F0%9F%92%A1%20gofr-docs-00ACD7.svg?style=flat-square"></a>
 <a href="https://codeclimate.com/github/gofr-dev/gofr/maintainability"><img src="https://api.codeclimate.com/v1/badges/58c8d0443a3d08c59c07/maintainability" /></a>
 <a href="https://codeclimate.com/github/gofr-dev/gofr/test_coverage"><img src="https://api.codeclimate.com/v1/badges/58c8d0443a3d08c59c07/test_coverage" /></a>
-[![Go Report Card](https://goreportcard.com/badge/gofr.dev)](https://goreportcard.com/report/gofr.dev)
-<a href="https://pkg.go.dev/gofr.dev/pkg/gofr"><img src="https://pkg.go.dev/badge/gofr.dev.svg" alt="Go Reference"></a>
-[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+<a href="https://goreportcard.com/report/gofr.dev"><img src="https://goreportcard.com/badge/gofr.dev"></a>
+<a href="https://opensource.org/licenses/Apache-2.0"><img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg"></a>
+
+</div>
 
 
-## Gofr
+<br>
 
-Gofr is an opinionated microservice development framework.
+Gofr is an opinionated microservice development framework. Listed in [CNCF Landscape](https://landscape.cncf.io/?selected=go-fr).
 
-## Goal
+Visit <a href="https://gofr.dev"/>https://gofr.dev</a> for more details and documentation. 
+
+## 🎯 Goal
 Even though generic applications can be written using Gofr, our main focus is to simplify the development of microservices. 
 We will focus ourselves towards deployment in kubernetes and aspire to provide out-of-the-box observability. 
 
-## Quick Start Guide
+## ⚡️ Quick Start Guide
 
 If you already have a go project with go module, you can get gofr by calling: `go get gofr.dev`. Follow the instructions below, if you are starting afresh. 
 
@@ -42,3 +50,27 @@ func main() {
 ```
 3. Get all the dependencies using `go get ./...`. It will download gofr along with every other package it requires.
 4. Start the server: `go run main.go` It will start the server on default port 8000. If this port is already in use, you can override the default port by mentioning an environment variable like this: `HTTP_PORT=9000 go run main.go`
+
+## 💡 Advantages/Features
+
+1. Simple API syntax
+2. REST Standards by default
+3. Battle Tested at Enterprise Scale
+4. [Configuration management](https://gofr.dev/docs/v1/references/configs)
+5. [Database state management using migrations](https://gofr.dev/docs/v1/advanced-guide/data-migrations)
+6. Inbuilt Middlewares along with support for [custom middlewares](https://gofr.dev/docs/v1/advanced-guide/middleware)
+7. [Error Management](https://gofr.dev/docs/v1/references/errors)
+8. Inbuilt [Datastore](https://gofr.dev/docs/v1/references/datastore), [File System](https://gofr.dev/docs/v1/references/files), [Pub/Sub](https://gofr.dev/docs/v1/references/pubsub)
+9. [gRPC support](https://gofr.dev/docs/v1/advanced-guide/grpc)
+10. Chained timeout control
+11. Serve Static Files
+12. [Websocket](https://gofr.dev/docs/v1/advanced-guide/websockets)
+13. Support for Surge Protection
+14. [Inbuilt Traces, Metrics and Logs](https://gofr.dev/docs/v1/quick-start/observability)
+
+## 👍 Contribute
+If you want to say thank you and/or support the active development of GoFr:
+
+1. Add a [GitHub Star](https://github.com/gofr-dev/gofr/stargazers) to the project.
+2. Write a review or tutorial on [Medium](https://medium.com/), [Dev.to](https://dev.to/) or personal blog.
+3. Visit [CONTRIBUTING](https://github.com/gofr-dev/gofr/blob/Refactor-readme/CONTRIBUTING.md) for details on submitting patches and the contribution workflow.
