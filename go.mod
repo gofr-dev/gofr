@@ -36,7 +36,7 @@ require (
 	github.com/hamba/avro/v2 v2.14.1
 	github.com/jlaffaye/ftp v0.1.0
 	github.com/jmoiron/sqlx v1.3.5
-	github.com/joho/godotenv v1.4.0
+	github.com/joho/godotenv v1.5.1
 	github.com/lib/pq v1.10.7
 	github.com/newrelic/go-agent v3.20.2+incompatible
 	github.com/pkg/sftp v1.13.6
