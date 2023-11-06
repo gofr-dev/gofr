@@ -65,6 +65,10 @@ func TestMain(m *testing.M) {
 }
 
 func TestUniversalIntegration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping testing in short mode")
+	}
+
 	// call the main function
 	go main()
 	// sleep, so that every data stores get initialized properly

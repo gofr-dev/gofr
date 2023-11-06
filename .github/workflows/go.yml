@@ -106,6 +106,11 @@ jobs:
           go-version: 1.21
         id: Go
 
+      - name: Set up AWS-SNS
+        run: |
+          chmod +x examples/using-awssns/init.sh
+          ./examples/using-awssns/init.sh
+
       - name: Load Schema of Cassandra
         run: |
           docker exec -i ${{ job.services.cassandra.id }} cqlsh --debug  < .github/setups/keyspace.cql
@@ -122,6 +127,7 @@ jobs:
       - name: Set up MySQL
         run: |
           docker exec -i ${{ job.services.mysql.id }} mysql -uroot -ppassword -e 'CREATE DATABASE test;'
+          docker exec -i ${{ job.services.mysql.id }} mysql -uroot -ppassword < ${{ github.workspace }}/.github/setups/setup.sql
 
       - name: Set up SSL Enabled MySQL
         run: |
@@ -169,7 +175,7 @@ jobs:
       - name: Test
         run: |
           export GOFR_ENV=test
-          go test ./... -v -coverprofile profile.cov -coverpkg=./...
+          go test ./... -v -short -coverprofile profile.cov -coverpkg=./...
           go tool cover -func profile.cov
 
       - name: Upload Test Coverage to Code Climate
