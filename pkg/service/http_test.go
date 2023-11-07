@@ -327,8 +327,9 @@ func TestLogError(t *testing.T) {
 		Client:    c,
 		isHealthy: true,
 	}
+	ctx := context.WithValue(context.TODO(), middleware.AuthorizationHeader, "some auth")
 
-	_, _ = client.call(context.TODO(), http.MethodGet, "", nil, nil, nil)
+	_, _ = client.call(ctx, http.MethodGet, "", nil, nil, nil)
 	expected := "unsupported protocol scheme"
 
 	if !strings.Contains(b.String(), expected) {
