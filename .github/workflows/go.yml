@@ -179,7 +179,6 @@ jobs:
           go tool cover -func profile.cov
 
       - name: Upload Test Coverage to Code Climate
-        if: ${{ always() }}
         uses: paambaati/codeclimate-action@v5.0.0
         env:
           CC_TEST_REPORTER_ID: ${{ secrets.CC_TEST_REPORTER_ID }}
