@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -31,8 +32,11 @@ func TestTrace(t *testing.T) {
 
 	otel.SetTracerProvider(tp)
 
-	handler := Trace("Gofr-App", "dev", "zipkin")(&MockHandlerForTracing{})
 	req := httptest.NewRequest("GET", "/dummy", nil)
+	req = req.WithContext(context.WithValue(context.Background(), "path", ""))
+	req.Header.Set("X-Correlation-ID", "123e4567e89b12d3a456426655440000")
+	//req = req.WithContext(context.WithValue(context.Background(), "X-Correlation-ID", "123e4567-e89b-12d3-a456-426655440000"))
+	handler := Trace("Gofr-App", "dev", "zipkin")(&MockHandlerForTracing{})
 
 	recorder := httptest.NewRecorder()
 
