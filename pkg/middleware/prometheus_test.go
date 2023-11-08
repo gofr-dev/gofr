@@ -34,6 +34,10 @@ func newTestRouter() *mux.Router {
 		w.WriteHeader(http.StatusInternalServerError)
 	})
 
+	r.HandleFunc("/.well-known/health-check", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
 	return r
 }
 
@@ -52,7 +56,7 @@ func TestPrometheusMiddleware(t *testing.T) {
 	}{
 		{"GET", "/api/v1/users", http.StatusOK},
 		{"GET", "/api/v1/products/123", http.StatusOK},
-		{"GET", "/.well-known/health-check", http.StatusNotFound},
+		{"GET", "/.well-known/health-check", http.StatusOK},
 	}
 
 	for i, tc := range testCase {
