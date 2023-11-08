@@ -174,6 +174,32 @@ func Test_HeaderValidation_Success(t *testing.T) {
 	}
 }
 
+func Test_HeaderValidation_Success_ExemptPath(t *testing.T) {
+	logger := log.NewMockLogger(io.Discard)
+
+	headers := map[string]string{
+		"X-Authenticated-UserId": "gofr0000",
+		"True-Client-Ip":         "127.0.0.1",
+		"X-B3-TraceID":           "1s3d323adsd",
+		"Test-Header":            "test"}
+
+	req := httptest.NewRequest(http.MethodGet, "http://dummy/metrics", nil)
+
+	for k, v := range headers {
+		req.Header.Set(k, v)
+	}
+
+	h := ValidateHeaders("", logger)(validatorHandler{})
+
+	w := new(httptest.ResponseRecorder)
+
+	h.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected %v\tgot %v", http.StatusOK, w.Code)
+	}
+}
+
 func Test_ExemptPath(t *testing.T) {
 	tests := []struct {
 		r          *http.Request
