@@ -29,10 +29,10 @@ require (
 	github.com/golang/mock v1.6.0
 	github.com/google/uuid v1.3.0
 	github.com/googleapis/gax-go/v2 v2.11.0
-	github.com/gookit/color v1.5.2
+	github.com/gookit/color v1.5.4
 	github.com/gorilla/mux v1.8.0
 	github.com/gorilla/websocket v1.5.0
-	github.com/grpc-ecosystem/go-grpc-middleware v1.3.0
+	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0
 	github.com/hamba/avro/v2 v2.14.1
 	github.com/jlaffaye/ftp v0.1.0
 	github.com/jmoiron/sqlx v1.3.5
@@ -52,7 +52,7 @@ require (
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.45.0
 	go.opentelemetry.io/otel v1.19.0
 	go.opentelemetry.io/otel/exporters/zipkin v1.16.0
-	go.opentelemetry.io/otel/sdk v1.16.0
+	go.opentelemetry.io/otel/sdk v1.19.0
 	go.opentelemetry.io/otel/trace v1.19.0
 	golang.org/x/crypto v0.14.0
 	golang.org/x/net v0.17.0
