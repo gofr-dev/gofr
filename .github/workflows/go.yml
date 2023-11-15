@@ -178,13 +178,14 @@ jobs:
           go test ./... -v -short -coverprofile profile.cov -coverpkg=./...
           go tool cover -func profile.cov
 
-      - uses: actions/upload-artifact@v3
+      - name: Upload Test Coverage
+        uses: actions/upload-artifact@v3
         with:
           name: Coverage-Report
           path: profile.cov
 
   upload_coverage:
-    name: Upload Code Coverage to Code Climate📊
+    name: Upload Coverage📊
     runs-on: ubuntu-latest
     needs: Unit-Testing
     steps:
