@@ -188,6 +188,12 @@ jobs:
     name: Unit Testing🛠
     runs-on: ubuntu-latest
     services:
+      cassandra:
+        image: cassandra:4.1
+        ports:
+          - 9041:9042
+        options: --health-cmd "cqlsh --debug"
+
       mysql:
         image: mysql:8.0.30
         ports:
@@ -201,11 +207,6 @@ jobs:
           - "6379:6379"
         options: "--entrypoint redis-server"
 
-      #      zipkin:
-      #        image: openzipkin/zipkin:2
-      #        ports:
-      #          - "9411:9411"
-      #
       elasticsearch:
         image: elasticsearch:6.8.6
         ports:
@@ -214,7 +215,7 @@ jobs:
           - 9200:9200
         env:
           discovery type: "single-node"
-      #
+
       kafka:
         image: krisgeus/docker-kafka
         ports:
@@ -237,14 +238,14 @@ jobs:
           MONGO_INITDB_ROOT_USERNAME: admin
           MONGO_INITDB_ROOT_PASSWORD: admin123
 
-      #      mssql:
-      #        image: mcr.microsoft.com/mssql/server:2022-latest
-      #        ports:
-      #          - "1433:1433"
-      #        env:
-      #          ACCEPT_EULA: Y
-      #          SA_PASSWORD: reallyStrongPwd123
-      #
+      mssql:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        ports:
+          - "1433:1433"
+        env:
+          ACCEPT_EULA: Y
+          SA_PASSWORD: reallyStrongPwd123
+
       dynamodb:
         image: amazon/dynamodb-local:1.22.0
         ports:
@@ -259,11 +260,7 @@ jobs:
       #          POSTGRES_USER: postgres
       #          POSTGRES_DB: test
       #
-      cassandra:
-        image: cassandra:4.1
-        ports:
-          - 9041:9042
-        options: --health-cmd "cqlsh --debug"
+
 
     steps:
       - name: Checkout code into go module directory
