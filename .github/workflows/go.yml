@@ -358,17 +358,16 @@ jobs:
     name: Unit Testing🛠
     runs-on: ubuntu-latest
     services:
+      redis:
+       image: redis:7.0.5
+       ports:
+        - "6379:6379"
+      options: "--entrypoint redis-server"
 
-    redis:
-     image: redis:7.0.5
-     ports:
-      - "6379:6379"
-    options: "--entrypoint redis-server"
-
-    dynamodb:
-      image: amazon/dynamodb-local:1.22.0
-      ports:
-        - "2021:8000"
+      dynamodb:
+        image: amazon/dynamodb-local:1.22.0
+        ports:
+          - "2021:8000"
 
     steps:
       - name: Checkout code into go module directory
