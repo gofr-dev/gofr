@@ -348,11 +348,11 @@ jobs:
           go test gofr.dev/pkg/file/... -v -short -coverprofile profile.cov
           go tool cover -func profile.cov
 
-      - name: Upload Test Coverage
-        uses: actions/upload-artifact@v3
-        with:
-          name: Example-Coverage-Report
-          path: profile.cov
+#      - name: Upload Test Coverage
+#        uses: actions/upload-artifact@v3
+#        with:
+#          name: Example-Coverage-Report
+#          path: profile.cov
 
 #  upload_coverage:
 #    name: Upload Coverage📊
