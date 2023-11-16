@@ -175,13 +175,13 @@ jobs:
       - name: Test
         run: |
           export GOFR_ENV=test
-          go test gofr.dev/examples/... -v -short -coverprofile profile.cov -coverpkg=./...
+          go test gofr.dev/examples/... -v -short -coverprofile profile.cov
           go tool cover -func profile.cov
 
       - name: Upload Test Coverage
         uses: actions/upload-artifact@v3
         with:
-          name: Coverage-Report
+          name: Example-Coverage-Report
           path: profile.cov
 
   upload_coverage:
@@ -195,7 +195,7 @@ jobs:
       - name: Download Coverage Report
         uses: actions/download-artifact@v3
         with:
-          name: Coverage-Report
+          name: Example-Coverage-Report
 
       - name: Upload
         uses: paambaati/codeclimate-action@v5.0.0
