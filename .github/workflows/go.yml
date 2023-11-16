@@ -216,7 +216,6 @@ jobs:
           ACCEPT_EULA: Y
           SA_PASSWORD: reallyStrongPwd123
 
-
       redis:
         image: redis:7.0.5
         ports:
@@ -263,10 +262,6 @@ jobs:
           MYSQL_ROOT_PASSWORD: "password"
 
     steps:
-      - name: Load Schema of Cassandra
-        run: |
-          docker exec -i ${{ job.services.cassandra.id }} cqlsh --debug  < .github/setups/keyspace.cql
-
       - name: Yugabyte setup
         uses: yugabyte/yugabyte-db-action@master
         with:
@@ -287,6 +282,10 @@ jobs:
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
+
+      - name: Load Schema of Cassandra
+        run: |
+          docker exec -i ${{ job.services.cassandra.id }} cqlsh --debug  < .github/setups/keyspace.cql
 
       - name: Set up  Go 1.21
         uses: actions/setup-go@v4
