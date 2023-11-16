@@ -13,8 +13,8 @@ on:
       - development
 
 jobs:
-  Example-Unit-Testing:
-    name: Example Unit Testing🛠
+  Unit-Testing:
+    name: Unit Testing🛠
     runs-on: ubuntu-latest
     services:
       mysql:
