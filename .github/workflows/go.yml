@@ -309,9 +309,67 @@ jobs:
 #          name: Example-Coverage-Report
 #          path: profile.cov
 
+#  Unit-Testing:
+#    name: Unit Testing🛠
+#    runs-on: ubuntu-latest
+#    steps:
+#      - name: Checkout code into go module directory
+#        uses: actions/checkout@v3
+#        with:
+#          fetch-depth: 0
+#
+#      - name: Set up  Go 1.21
+#        uses: actions/setup-go@v4
+#        with:
+#          go-version: 1.21
+#        id: Go
+#
+#      - name: Get dependencies
+#        run: |
+#          go mod download
+#
+#
+#      - name: Setup SFTP Server
+#        run: |
+#          mkdir $HOME/sftpData
+#          chmod -R 777 $HOME/sftpData
+#          docker run --name gofr-sftp -v $HOME/upload:/home/myuser -p 2222:22 -d atmoz/sftp myuser:mypass:1001
+#
+#      - name: Setup FTP Server
+#        run: |
+#          mkdir $HOME/ftpData
+#          chmod -R 777 $HOME/ftpData
+#          docker run -d --name gofr-ftp -v $HOME/ftpData:/home/vsftpd -p 20:20 -p 21:21 -p 21100-21110:21100-21110 -e FTP_USER=myuser \
+#          -e FTP_PASS=mypass -e PASV_ADDRESS=127.0.0.1 -e PASV_MIN_PORT=21100 -e PASV_MAX_PORT=21110 fauria/vsftpd
+#
+#      - name: Test
+#        run: |
+#          export GOFR_ENV=test
+#          go test gofr.dev/pkg/file/... -v -short -coverprofile profile.cov
+#          go tool cover -func profile.cov
+
+#      - name: Upload Test Coverage
+#        uses: actions/upload-artifact@v3
+#        with:
+#          name: Example-Coverage-Report
+#          path: profile.cov
+
   Unit-Testing:
     name: Unit Testing🛠
     runs-on: ubuntu-latest
+    services:
+
+    redis:
+     image: redis:7.0.5
+     ports:
+      - "6379:6379"
+    options: "--entrypoint redis-server"
+
+    dynamodb:
+      image: amazon/dynamodb-local:1.22.0
+      ports:
+        - "2021:8000"
+
     steps:
       - name: Checkout code into go module directory
         uses: actions/checkout@v3
@@ -328,31 +386,12 @@ jobs:
         run: |
           go mod download
 
-
-      - name: Setup SFTP Server
-        run: |
-          mkdir $HOME/sftpData
-          chmod -R 777 $HOME/sftpData
-          docker run --name gofr-sftp -v $HOME/upload:/home/myuser -p 2222:22 -d atmoz/sftp myuser:mypass:1001
-
-      - name: Setup FTP Server
-        run: |
-          mkdir $HOME/ftpData
-          chmod -R 777 $HOME/ftpData
-          docker run -d --name gofr-ftp -v $HOME/ftpData:/home/vsftpd -p 20:20 -p 21:21 -p 21100-21110:21100-21110 -e FTP_USER=myuser \
-          -e FTP_PASS=mypass -e PASV_ADDRESS=127.0.0.1 -e PASV_MIN_PORT=21100 -e PASV_MAX_PORT=21110 fauria/vsftpd
-
       - name: Test
         run: |
           export GOFR_ENV=test
-          go test gofr.dev/pkg/file/... -v -short -coverprofile profile.cov
+          go test gofr.dev/pkg/gofr/... -v -short -coverprofile profile.cov
           go tool cover -func profile.cov
 
-#      - name: Upload Test Coverage
-#        uses: actions/upload-artifact@v3
-#        with:
-#          name: Example-Coverage-Report
-#          path: profile.cov
 
 #  upload_coverage:
 #    name: Upload Coverage📊
