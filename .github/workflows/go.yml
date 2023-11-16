@@ -362,7 +362,7 @@ jobs:
        image: redis:7.0.5
        ports:
         - "6379:6379"
-      options: "--entrypoint redis-server"
+       options: "--entrypoint redis-server"
 
       dynamodb:
         image: amazon/dynamodb-local:1.22.0
