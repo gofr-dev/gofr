@@ -195,12 +195,12 @@ jobs:
         env:
           MYSQL_ROOT_PASSWORD: "password"
 
-      #      redis:
-      #        image: redis:7.0.5
-      #        ports:
-      #          - "6379:6379"
-      #        options: "--entrypoint redis-server"
-      #
+      redis:
+        image: redis:7.0.5
+        ports:
+          - "6379:6379"
+        options: "--entrypoint redis-server"
+
       #      zipkin:
       #        image: openzipkin/zipkin:2
       #        ports:
@@ -229,14 +229,14 @@ jobs:
           KAFKA_HOSTS: 'localhost:2008,localhost:2009'
           KAFKA_TOPIC: 'test-topic'
 
-      #      mongo:
-      #        image: mongo:6.0.2
-      #        ports:
-      #          - "27017:27017"
-      #        env:
-      #          MONGO_INITDB_ROOT_USERNAME: admin
-      #          MONGO_INITDB_ROOT_PASSWORD: admin123
-      #
+      mongo:
+        image: mongo:6.0.2
+        ports:
+          - "27017:27017"
+        env:
+          MONGO_INITDB_ROOT_USERNAME: admin
+          MONGO_INITDB_ROOT_PASSWORD: admin123
+
       #      mssql:
       #        image: mcr.microsoft.com/mssql/server:2022-latest
       #        ports:
@@ -286,14 +286,14 @@ jobs:
         run: |
           docker exec -i ${{ job.services.cassandra.id }} cqlsh --debug  < .github/setups/keyspace.cql
 
-      #      - name: Yugabyte setup
-      #        uses: yugabyte/yugabyte-db-action@master
-      #        with:
-      #          yb_image_tag: 2.14.5.0-b18
-      #          yb_master_ui_port: 7000
-      #          yb_tserver_ui_port: 6000
-      #          ysql_port: 5433
-      #          ycql_port: 9042
+      - name: Yugabyte setup
+        uses: yugabyte/yugabyte-db-action@master
+        with:
+          yb_image_tag: 2.14.5.0-b18
+          yb_master_ui_port: 7000
+          yb_tserver_ui_port: 6000
+          ysql_port: 5433
+          ycql_port: 9042
 
       #      - name: Set up MySQL
       #        run: |
