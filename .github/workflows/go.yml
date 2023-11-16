@@ -194,12 +194,28 @@ jobs:
           - 9041:9042
         options: --health-cmd "cqlsh --debug"
 
-      mysql:
-        image: mysql:8.0.30
+      kafka:
+        image: krisgeus/docker-kafka
         ports:
-          - "3306:3306"
+          - 2008:2008
+          - 2009:2009
         env:
-          MYSQL_ROOT_PASSWORD: "password"
+          ADVERTISED_LISTENERS: 'PLAINTEXT://localhost:2008,INTERNAL://localhost:2009'
+          LISTENERS: 'PLAINTEXT://0.0.0.0:2008,INTERNAL://0.0.0.0:2009'
+          SECURITY_PROTOCOL_MAP: 'PLAINTEXT:PLAINTEXT,INTERNAL:PLAINTEXT'
+          INTER_BROKER: 'INTERNAL'
+          KAFKA_CREATE_TOPICS: 'test-topic'
+          KAFKA_HOSTS: 'localhost:2008,localhost:2009'
+          KAFKA_TOPIC: 'test-topic'
+
+      mssql:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        ports:
+          - "1433:1433"
+        env:
+          ACCEPT_EULA: Y
+          SA_PASSWORD: reallyStrongPwd123
+
 
       redis:
         image: redis:7.0.5
@@ -216,20 +232,6 @@ jobs:
         env:
           discovery type: "single-node"
 
-      kafka:
-        image: krisgeus/docker-kafka
-        ports:
-          - 2008:2008
-          - 2009:2009
-        env:
-          ADVERTISED_LISTENERS: 'PLAINTEXT://localhost:2008,INTERNAL://localhost:2009'
-          LISTENERS: 'PLAINTEXT://0.0.0.0:2008,INTERNAL://0.0.0.0:2009'
-          SECURITY_PROTOCOL_MAP: 'PLAINTEXT:PLAINTEXT,INTERNAL:PLAINTEXT'
-          INTER_BROKER: 'INTERNAL'
-          KAFKA_CREATE_TOPICS: 'test-topic'
-          KAFKA_HOSTS: 'localhost:2008,localhost:2009'
-          KAFKA_TOPIC: 'test-topic'
-
       mongo:
         image: mongo:6.0.2
         ports:
@@ -238,47 +240,29 @@ jobs:
           MONGO_INITDB_ROOT_USERNAME: admin
           MONGO_INITDB_ROOT_PASSWORD: admin123
 
-      mssql:
-        image: mcr.microsoft.com/mssql/server:2022-latest
-        ports:
-          - "1433:1433"
-        env:
-          ACCEPT_EULA: Y
-          SA_PASSWORD: reallyStrongPwd123
 
       dynamodb:
         image: amazon/dynamodb-local:1.22.0
         ports:
           - "2021:8000"
-      #
-      #      postgres:
-      #        image: postgres:15.1
-      #        ports:
-      #          - 5432:5432
-      #        env:
-      #          POSTGRES_PASSWORD: password
-      #          POSTGRES_USER: postgres
-      #          POSTGRES_DB: test
-      #
 
+      postgres:
+        image: postgres:15.1
+        ports:
+          - 5432:5432
+        env:
+          POSTGRES_PASSWORD: password
+          POSTGRES_USER: postgres
+          POSTGRES_DB: test
+
+      mysql:
+        image: mysql:8.0.30
+        ports:
+          - "3306:3306"
+        env:
+          MYSQL_ROOT_PASSWORD: "password"
 
     steps:
-      - name: Checkout code into go module directory
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-
-      - name: Set up  Go 1.21
-        uses: actions/setup-go@v4
-        with:
-          go-version: 1.21
-        id: Go
-
-      #      - name: Set up AWS-SNS
-      #        run: |
-      #          chmod +x examples/using-awssns/init.sh
-      #          ./examples/using-awssns/init.sh
-
       - name: Load Schema of Cassandra
         run: |
           docker exec -i ${{ job.services.cassandra.id }} cqlsh --debug  < .github/setups/keyspace.cql
@@ -292,53 +276,27 @@ jobs:
           ysql_port: 5433
           ycql_port: 9042
 
-      #      - name: Set up MySQL
-      #        run: |
-      #          docker exec -i ${{ job.services.mysql.id }} mysql -uroot -ppassword -e 'CREATE DATABASE test;'
-      #          docker exec -i ${{ job.services.mysql.id }} mysql -uroot -ppassword < ${{ github.workspace }}/.github/setups/setup.sql
-
-      #      - name: Set up SSL Enabled MySQL
-      #        run: |
-      #          docker run --name gofr-ssl-mysql -e MYSQL_ROOT_PASSWORD=password -p 2001:3306 -d mysql:8.0.31
-      #          docker cp ${{ github.workspace }}/.github/setups/certFiles gofr-ssl-mysql:/usr/certFiles
-      #          docker cp ${{ github.workspace }}/.github/setups/my.cnf gofr-ssl-mysql:/etc/my.cnf
-      #          docker exec -i gofr-ssl-mysql chown -Rf mysql. /usr/certFiles
-      #          docker restart gofr-ssl-mysql
-
-      #      - name: Load Schema of YCQL
-      #        run: |
-      #          temp=$(sudo docker ps | grep yugabyte | awk '{print $1}');
-      #          docker exec -i $temp /home/yugabyte/bin/ycqlsh < .github/setups/keyspace.ycql;
-
-      - name: Get dependencies
-        run: |
-          go mod download
-
-      #      - name: Load Schema of Solr
-      #        run: |
-      #          docker run -d --name solr -p 8983:8983 solr:8 -DzkRun;
-      #          sleep 10s;
-      #          docker exec -i solr sh < .github/setups/solrSchema.sh;
-
-      #      - name: Setup SFTP Server
-      #        run: |
-      #          mkdir $HOME/sftpData
-      #          chmod -R 777 $HOME/sftpData
-      #          docker run --name gofr-sftp -v $HOME/upload:/home/myuser -p 2222:22 -d atmoz/sftp myuser:mypass:1001
-      #
-      #      - name: Setup FTP Server
-      #        run: |
-      #          mkdir $HOME/ftpData
-      #          chmod -R 777 $HOME/ftpData
-      #          docker run -d --name gofr-ftp -v $HOME/ftpData:/home/vsftpd -p 20:20 -p 21:21 -p 21100-21110:21100-21110 -e FTP_USER=myuser \
-      #          -e FTP_PASS=mypass -e PASV_ADDRESS=127.0.0.1 -e PASV_MIN_PORT=21100 -e PASV_MAX_PORT=21110 fauria/vsftpd
-
       - name: Setup Google PubSub
         run: |
           docker pull gcr.io/google.com/cloudsdktool/google-cloud-cli:emulators
           docker run --name=gcloud-emulator -d -p 8086:8086 \
           gcr.io/google.com/cloudsdktool/google-cloud-cli:emulators gcloud beta emulators pubsub start --project=test123 \
           --host-port=0.0.0.0:8086
+
+      - name: Checkout code into go module directory
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Set up  Go 1.21
+        uses: actions/setup-go@v4
+        with:
+          go-version: 1.21
+        id: Go
+
+      - name: Get dependencies
+        run: |
+          go mod download
 
       - name: Test
         run: |
