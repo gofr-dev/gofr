@@ -31,7 +31,7 @@ require (
 	github.com/googleapis/gax-go/v2 v2.12.0
 	github.com/gookit/color v1.5.4
 	github.com/gorilla/mux v1.8.0
-	github.com/gorilla/websocket v1.5.1
+	github.com/gorilla/websocket v1.5.0
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0
 	github.com/hamba/avro/v2 v2.14.1
 	github.com/jlaffaye/ftp v0.1.0
@@ -61,10 +61,10 @@ require (
 	google.golang.org/grpc v1.59.0
 	google.golang.org/protobuf v1.31.0
 	gorm.io/driver/mysql v1.4.5
-	gorm.io/driver/postgres v1.5.4
+	gorm.io/driver/postgres v1.4.8
 	gorm.io/driver/sqlite v1.4.4
 	gorm.io/driver/sqlserver v1.4.1
-	gorm.io/gorm v1.25.5
+	gorm.io/gorm v1.24.3
 )
 
 require (

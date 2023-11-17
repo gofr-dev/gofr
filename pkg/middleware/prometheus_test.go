@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"runtime"
 	"testing"
 	"time"
 
@@ -73,6 +74,9 @@ func TestPrometheusMiddleware(t *testing.T) {
 }
 
 func TestGetSystemStats(t *testing.T) {
+	// force a garbage clean run
+	runtime.GC()
+
 	s := getSystemStats()
 
 	assert.Greater(t, int(s.numGoRoutines), 0, "Expected non-negative numGoRoutines, got %f", s.numGoRoutines)
@@ -83,7 +87,7 @@ func TestGetSystemStats(t *testing.T) {
 
 	assert.Greater(t, int(s.sys), 0, "Expected non-negative sys, got %f", s.sys)
 
-	assert.Greater(t, int(s.numGC), 0, "Expected non-negative numGC, got %f", s.numGC)
+	assert.Greater(t, int(s.numGC), 0, "Expected non-negative numGC, got %v", int(s.numGC))
 }
 
 func TestPushDeprecatedFeature(t *testing.T) {
