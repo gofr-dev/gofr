@@ -28,7 +28,7 @@ require (
 	github.com/golang-jwt/jwt/v4 v4.5.0
 	github.com/golang/mock v1.6.0
 	github.com/google/uuid v1.4.0
-	github.com/googleapis/gax-go/v2 v2.12.0
+	github.com/googleapis/gax-go/v2 v2.11.0
 	github.com/gookit/color v1.5.4
 	github.com/gorilla/mux v1.8.1
 	github.com/gorilla/websocket v1.5.0
@@ -57,7 +57,7 @@ require (
 	golang.org/x/crypto v0.15.0
 	golang.org/x/net v0.18.0
 	golang.org/x/text v0.14.0
-	google.golang.org/api v0.134.0
+	google.golang.org/api v0.126.0
 	google.golang.org/grpc v1.56.3
 	google.golang.org/protobuf v1.31.0
 	gorm.io/driver/mysql v1.4.5
@@ -68,11 +68,11 @@ require (
 )
 
 require (
-	cloud.google.com/go v0.110.8 // indirect
-	cloud.google.com/go/compute v1.23.1 // indirect
+	cloud.google.com/go v0.110.7 // indirect
+	cloud.google.com/go/compute v1.23.0 // indirect
 	cloud.google.com/go/compute/metadata v0.2.3 // indirect
-	cloud.google.com/go/iam v1.1.3 // indirect
-	cloud.google.com/go/trace v1.10.2 // indirect
+	cloud.google.com/go/iam v1.1.2 // indirect
+	cloud.google.com/go/trace v1.10.1 // indirect
 	github.com/Azure/azure-sdk-for-go v67.3.0+incompatible // indirect
 	github.com/Azure/go-amqp v0.17.5 // indirect
 	github.com/Azure/go-autorest v14.2.0+incompatible // indirect
