@@ -127,8 +127,10 @@ github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/cloudmock v0
 github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/cloudmock v0.45.0/go.mod h1:WntFIMzxcU+PMBuekFc34UOsEZ9sP+vsnBYTyaNBkOs=
 github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/resourcemapping v0.45.0 h1:o/Nf55GfyLwGDaHkVAkRGgBXeExce73L6N9w2PZTB3k=
 github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/resourcemapping v0.45.0/go.mod h1:qkFPtMouQjW5ugdHIOthiTbweVHUTqbS0Qsu55KqXks=
-github.com/IBM/sarama v1.42.1 h1:wugyWa15TDEHh2kvq2gAy1IHLjEjuYOYgXz/ruC/OSQ=
-github.com/IBM/sarama v1.42.1/go.mod h1:Xxho9HkHd4K/MDUo/T/sOqwtX/17D33++E9Wib6hUdQ=
+github.com/Shopify/sarama v1.38.0 h1:Q81EWxDT2Xs7kCaaiDGV30GyNCWd6K1Xmd4k2qpTWE8=
+github.com/Shopify/sarama v1.38.0/go.mod h1:djdek3V4gS0N9LZ+OhfuuM6rE1bEKeDffYY8UvsRNyM=
+github.com/Shopify/toxiproxy/v2 v2.5.0 h1:i4LPT+qrSlKNtQf5QliVjdP08GyAH8+BUIc9gT0eahc=
+github.com/Shopify/toxiproxy/v2 v2.5.0/go.mod h1:yhM2epWtAmel9CB8r2+L+PCmhH6yH2pITaPAo7jxJl0=
 github.com/XSAM/otelsql v0.10.0 h1:y8o7q4NaZEV0dBiUC7TuNTHNKyDaX3Z4anntNu7dfYw=
 github.com/XSAM/otelsql v0.10.0/go.mod h1:7n9dZASOnVJncMmBPQjL5OdjQosb5gryCgsgNISnJVo=
 github.com/alecthomas/template v0.0.0-20160405071501-a0175ee3bccc/go.mod h1:LOuyumcjzFXgccqObfd/Ljyb9UuFJ6TxHnclSeseNhc=

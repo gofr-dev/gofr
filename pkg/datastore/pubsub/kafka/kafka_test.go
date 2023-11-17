@@ -16,7 +16,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/IBM/sarama"
+	"github.com/Shopify/sarama"
 	"github.com/stretchr/testify/assert"
 
 	"gofr.dev/pkg"

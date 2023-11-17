@@ -13,7 +13,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/IBM/sarama"
+	"github.com/Shopify/sarama"
 	"github.com/prometheus/client_golang/prometheus"
 
 	"golang.org/x/net/context"
