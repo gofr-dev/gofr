@@ -162,7 +162,9 @@ func TestGet(t *testing.T) {
 
 func TestGet_incorrect_configFile_format(t *testing.T) {
 	dir := t.TempDir()
-	file, _ := os.Create(dir + "/.env")
+	dir1 := t.TempDir()
+
+	file, _ := os.Create(dir1 + "/.env")
 
 	defer file.Close()
 
