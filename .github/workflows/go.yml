@@ -146,7 +146,7 @@ jobs:
       - name: Test
         run: |
           export GOFR_ENV=test
-          go test gofr.dev/examples/... -v -short -coverprofile profile.cov -coverpkg=./...
+          go test gofr.dev/examples/... -v -short -coverprofile profile.cov -coverpkg=gofr.dev/examples/...
           go tool cover -func profile.cov
 
       - name: Upload Test Coverage
@@ -256,7 +256,7 @@ jobs:
       - name: Test
         run: |
           export GOFR_ENV=test
-          go test gofr.dev/cmd/gofr/... -v -short -coverprofile profile.cov -coverpkg=./...
+          go test gofr.dev/cmd/gofr/... -v -short -coverprofile profile.cov -coverpkg=gofr.dev/cmd/gofr/...
           go tool cover -func profile.cov
 
       - name: Upload Test Coverage
@@ -419,7 +419,7 @@ jobs:
       - name: Test
         run: |
           export GOFR_ENV=test
-          go test gofr.dev/pkg/... -v -short -coverprofile profile.cov -coverpkg=./...
+          go test gofr.dev/pkg/... -v -short -coverprofile profile.cov -coverpkg=gofr.dev/pkg/...
           go tool cover -func profile.cov
 
       - name: Upload Test Coverage
@@ -441,23 +441,20 @@ jobs:
         with:
           path: artifacts
 
-      - name: Display structure of downloaded files
-        run: ls -R
-        working-directory: artifacts
-
       - name: Merge Coverage Files
         working-directory: artifacts
         run: |
-          awk '!/^mode: / && FNR==1{print "mode: set"} {print}' ./CMD-Test-Report/profile.cov > merged_profile.text
-          tail -n +2 ./Example-Test-Report/profile.cov >> merged_profile.text
-          tail -n +2 ./PKG-Coverage-Report/profile.cov >> merged_profile.text
+          awk '!/^mode: / && FNR==1{print "mode: set"} {print}' ./CMD-Test-Report/profile.cov > merged_profile.cov
+          tail -n +2 ./Example-Test-Report/profile.cov >> merged_profile.cov
+          tail -n +2 ./PKG-Coverage-Report/profile.cov >> merged_profile.cov
 
       - name: Upload
+        working-directory: artifacts
         uses: paambaati/codeclimate-action@v5.0.0
         env:
           CC_TEST_REPORTER_ID: ${{ secrets.CC_TEST_REPORTER_ID }}
         with:
-          coverageLocations: merged_profile.text:gocov
+          coverageLocations: merged_profile.cov:gocov
           prefix: gofr.dev
 
   code_quality:
