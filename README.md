@@ -73,4 +73,4 @@ If you want to say thank you and/or support the active development of GoFr:
 
 1. Add a [GitHub Star](https://github.com/gofr-dev/gofr/stargazers) to the project.
 2. Write a review or tutorial on [Medium](https://medium.com/), [Dev.to](https://dev.to/) or personal blog.
-3. Visit [CONTRIBUTING](https://github.com/gofr-dev/gofr/blob/Refactor-readme/CONTRIBUTING.md) for details on submitting patches and the contribution workflow.
+3. Visit [CONTRIBUTING](CONTRIBUTING.md) for details on submitting patches and the contribution workflow.
