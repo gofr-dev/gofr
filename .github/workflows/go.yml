@@ -450,11 +450,10 @@ jobs:
 
       - name: Upload
         uses: paambaati/codeclimate-action@v5.0.0
-        working-directory: artifacts
         env:
           CC_TEST_REPORTER_ID: ${{ secrets.CC_TEST_REPORTER_ID }}
         with:
-          coverageLocations: merged_profile.cov:gocov
+          coverageLocations: artifacts/merged_profile.cov:gocov
           prefix: gofr.dev
 
   code_quality:
