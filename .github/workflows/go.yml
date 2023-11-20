@@ -448,7 +448,7 @@ jobs:
       - name: Merge Coverage Files
         working-directory: artifacts
         run: |
-          awk '!/^mode: / && FNR==1{print "mode: set"} FNR>1{print}' ./CMD-Test-Report/profile.text > merged_profile.text
+          awk '!/^mode: / && FNR==1{print "mode: set"} {print}' ./CMD-Test-Report/profile.text > merged_profile.text
           tail -n +2 ./Example-Test-Report/profile.text >> merged_profile.text
           tail -n +2 ./PKG-Coverage-Report/profile.text >> merged_profile.text
 
