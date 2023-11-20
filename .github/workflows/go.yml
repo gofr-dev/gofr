@@ -58,11 +58,6 @@ jobs:
           - "6379:6379"
         options: "--entrypoint redis-server"
 
-      zipkin:
-        image: openzipkin/zipkin:2
-        ports:
-          - "9411:9411"
-
       elasticsearch:
         image: elasticsearch:6.8.6
         ports:
@@ -124,23 +119,15 @@ jobs:
           ysql_port: 5433
           ycql_port: 9042
 
-      - name: Set up MySQL
-        run: |
-          docker exec -i ${{ job.services.mysql.id }} mysql -uroot -ppassword -e 'CREATE DATABASE test;'
-          docker exec -i ${{ job.services.mysql.id }} mysql -uroot -ppassword < ${{ github.workspace }}/.github/setups/setup.sql
-
-      - name: Set up SSL Enabled MySQL
-        run: |
-          docker run --name gofr-ssl-mysql -e MYSQL_ROOT_PASSWORD=password -p 2001:3306 -d mysql:8.0.31
-          docker cp ${{ github.workspace }}/.github/setups/certFiles gofr-ssl-mysql:/usr/certFiles
-          docker cp ${{ github.workspace }}/.github/setups/my.cnf gofr-ssl-mysql:/etc/my.cnf
-          docker exec -i gofr-ssl-mysql chown -Rf mysql. /usr/certFiles
-          docker restart gofr-ssl-mysql
-
       - name: Load Schema of YCQL
         run: |
           temp=$(sudo docker ps | grep yugabyte | awk '{print $1}');
           docker exec -i $temp /home/yugabyte/bin/ycqlsh < .github/setups/keyspace.ycql;
+
+      - name: Set up MySQL
+        run: |
+          docker exec -i ${{ job.services.mysql.id }} mysql -uroot -ppassword -e 'CREATE DATABASE test;'
+          docker exec -i ${{ job.services.mysql.id }} mysql -uroot -ppassword < ${{ github.workspace }}/.github/setups/setup.sql
 
       - name: Get dependencies
         run: |
@@ -152,37 +139,17 @@ jobs:
           sleep 10s;
           docker exec -i solr sh < .github/setups/solrSchema.sh;
 
-      - name: Setup SFTP Server
-        run: |
-          mkdir $HOME/sftpData
-          chmod -R 777 $HOME/sftpData
-          docker run --name gofr-sftp -v $HOME/upload:/home/myuser -p 2222:22 -d atmoz/sftp myuser:mypass:1001
-
-      - name: Setup FTP Server
-        run: |
-          mkdir $HOME/ftpData
-          chmod -R 777 $HOME/ftpData
-          docker run -d --name gofr-ftp -v $HOME/ftpData:/home/vsftpd -p 20:20 -p 21:21 -p 21100-21110:21100-21110 -e FTP_USER=myuser \
-          -e FTP_PASS=mypass -e PASV_ADDRESS=127.0.0.1 -e PASV_MIN_PORT=21100 -e PASV_MAX_PORT=21110 fauria/vsftpd
-
-      - name: Setup Google PubSub
-        run: |
-          docker pull gcr.io/google.com/cloudsdktool/google-cloud-cli:emulators
-          docker run --name=gcloud-emulator -d -p 8086:8086 \
-          gcr.io/google.com/cloudsdktool/google-cloud-cli:emulators gcloud beta emulators pubsub start --project=test123 \
-          --host-port=0.0.0.0:8086
-
       - name: Test
         run: |
           export GOFR_ENV=test
-          go test gofr.dev/examples/... -v -short -coverprofile profile.cov -coverpkg=./...
-          go tool cover -func profile.cov
+          go test gofr.dev/examples/... -v -short -coverprofile profile.text -coverpkg=./...
+          go tool cover -func profile.text
 
       - name: Upload Test Coverage
         uses: actions/upload-artifact@v3
         with:
           name: Example-Test-Report
-          path: profile.cov
+          path: profile.text
 
   CMD-Unit-Testing:
     name: CMD Unit Testing🛠
@@ -285,14 +252,14 @@ jobs:
       - name: Test
         run: |
           export GOFR_ENV=test
-          go test gofr.dev/cmd/gofr/... -v -short -coverprofile profile.cov -coverpkg=./...
-          go tool cover -func profile.cov
+          go test gofr.dev/cmd/gofr/... -v -short -coverprofile profile.text -coverpkg=./...
+          go tool cover -func profile.text
 
       - name: Upload Test Coverage
         uses: actions/upload-artifact@v3
         with:
           name: CMD-Test-Report
-          path: profile.cov
+          path: profile.text
 
   PKG-Unit-Testing:
     name: PKG Unit Testing🛠
@@ -448,35 +415,39 @@ jobs:
       - name: Test
         run: |
           export GOFR_ENV=test
-          go test gofr.dev/pkg/... -v -short -coverprofile profile.cov -coverpkg=./...
-          go tool cover -func profile.cov
+          go test gofr.dev/pkg/... -v -short -coverprofile profile.text -coverpkg=./...
+          go tool cover -func profile.text
 
       - name: Upload Test Coverage
         uses: actions/upload-artifact@v3
         with:
           name: PKG-Coverage-Report
-          path: profile.cov
+          path: profile.text
 
-#  upload_coverage:
-#    name: Upload Coverage📊
-#    runs-on: ubuntu-latest
-#    needs: Unit-Testing
-#    steps:
-#      - name: Check out code into the Go module directory
-#        uses: actions/checkout@v4
-#
-#      - name: Download Coverage Report
-#        uses: actions/download-artifact@v3
-#        with:
-#          name: Coverage-Report
-#
-#      - name: Upload
-#        uses: paambaati/codeclimate-action@v5.0.0
-#        env:
-#          CC_TEST_REPORTER_ID: ${{ secrets.CC_TEST_REPORTER_ID }}
-#        with:
-#          coverageLocations: profile.cov:gocov
-#          prefix: gofr.dev
+  upload_coverage:
+    name: Upload Coverage📊
+    runs-on: ubuntu-latest
+    needs: Unit-Testing
+    steps:
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v4
+
+      - name: Download Coverage Report
+        uses: actions/download-artifact@v3
+        with:
+          path: artifacts
+
+      - name: Display structure of downloaded files
+        run: ls -R
+        working-directory: artifacts
+
+      - name: Upload
+        uses: paambaati/codeclimate-action@v5.0.0
+        env:
+          CC_TEST_REPORTER_ID: ${{ secrets.CC_TEST_REPORTER_ID }}
+        with:
+          coverageLocations: profile.cov:gocov
+          prefix: gofr.dev
 
   code_quality:
     name: Code Quality🎖️
