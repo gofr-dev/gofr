@@ -60,11 +60,11 @@ require (
 	google.golang.org/api v0.150.0
 	google.golang.org/grpc v1.59.0
 	google.golang.org/protobuf v1.31.0
-	gorm.io/driver/mysql v1.4.5
+	gorm.io/driver/mysql v1.5.2
 	gorm.io/driver/postgres v1.4.8
 	gorm.io/driver/sqlite v1.4.4
 	gorm.io/driver/sqlserver v1.4.1
-	gorm.io/gorm v1.24.3
+	gorm.io/gorm v1.25.2-0.20230530020048-26663ab9bf55
 )
 
 require (
