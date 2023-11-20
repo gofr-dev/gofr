@@ -19,7 +19,6 @@ import (
 	// used for concrete implementation of the database driver.
 	_ "github.com/lib/pq"
 	"go.opentelemetry.io/otel"
-	semconv "go.opentelemetry.io/otel/semconv/v1.7.0"
 	"gorm.io/driver/mysql"
 	"gorm.io/driver/postgres"
 	"gorm.io/driver/sqlite"
@@ -357,12 +356,7 @@ func dbConnection(d gorm.Dialector) (db *gorm.DB, err error) {
 
 // registerDialect registers the dialect to instrument the database/sql pkg and returns driverName based on the db Dialect.
 func registerDialect(dialect string) (driverName string) {
-	if dialect == pgSQL {
-		driverName, _ = otelsql.Register(dialect, semconv.DBSystemPostgreSQL.Value.AsString())
-	} else {
-		driverName, _ = otelsql.Register(dialect, dialect)
-	}
-
+	driverName, _ = otelsql.Register(dialect)
 	return
 }
 
