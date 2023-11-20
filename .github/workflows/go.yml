@@ -7,10 +7,14 @@ on:
       - development
     tags:
       - "*"
+    paths-ignore:
+      - '**/*.md'
   pull_request:
     branches:
       - main
       - development
+    paths-ignore:
+      - '**/*.md'
 
 jobs:
   Unit-Testing:
