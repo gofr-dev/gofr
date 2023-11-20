@@ -146,14 +146,14 @@ jobs:
       - name: Test
         run: |
           export GOFR_ENV=test
-          go test gofr.dev/examples/... -v -short -coverprofile profile.text -coverpkg=./...
-          go tool cover -func profile.text
+          go test gofr.dev/examples/... -v -short -coverprofile profile.cov -coverpkg=./...
+          go tool cover -func profile.cov
 
       - name: Upload Test Coverage
         uses: actions/upload-artifact@v3
         with:
           name: Example-Test-Report
-          path: profile.text
+          path: profile.cov
 
   CMD-Unit-Testing:
     name: CMD Unit Testing🛠
@@ -256,14 +256,14 @@ jobs:
       - name: Test
         run: |
           export GOFR_ENV=test
-          go test gofr.dev/cmd/gofr/... -v -short -coverprofile profile.text -coverpkg=./...
-          go tool cover -func profile.text
+          go test gofr.dev/cmd/gofr/... -v -short -coverprofile profile.cov -coverpkg=./...
+          go tool cover -func profile.cov
 
       - name: Upload Test Coverage
         uses: actions/upload-artifact@v3
         with:
           name: CMD-Test-Report
-          path: profile.text
+          path: profile.cov
 
   PKG-Unit-Testing:
     name: PKG Unit Testing🛠
@@ -419,14 +419,14 @@ jobs:
       - name: Test
         run: |
           export GOFR_ENV=test
-          go test gofr.dev/pkg/... -v -short -coverprofile profile.text -coverpkg=./...
-          go tool cover -func profile.text
+          go test gofr.dev/pkg/... -v -short -coverprofile profile.cov -coverpkg=./...
+          go tool cover -func profile.cov
 
       - name: Upload Test Coverage
         uses: actions/upload-artifact@v3
         with:
           name: PKG-Coverage-Report
-          path: profile.text
+          path: profile.cov
 
   upload_coverage:
     name: Upload Coverage📊
@@ -448,9 +448,9 @@ jobs:
       - name: Merge Coverage Files
         working-directory: artifacts
         run: |
-          awk '!/^mode: / && FNR==1{print "mode: set"} {print}' ./CMD-Test-Report/profile.text > merged_profile.text
-          tail -n +2 ./Example-Test-Report/profile.text >> merged_profile.text
-          tail -n +2 ./PKG-Coverage-Report/profile.text >> merged_profile.text
+          awk '!/^mode: / && FNR==1{print "mode: set"} {print}' ./CMD-Test-Report/profile.cov > merged_profile.text
+          tail -n +2 ./Example-Test-Report/profile.cov >> merged_profile.text
+          tail -n +2 ./PKG-Coverage-Report/profile.cov >> merged_profile.text
 
       - name: Upload
         uses: paambaati/codeclimate-action@v5.0.0
