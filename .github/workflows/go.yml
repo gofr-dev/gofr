@@ -449,8 +449,8 @@ jobs:
           tail -n +2 ./PKG-Coverage-Report/profile.cov >> merged_profile.cov
 
       - name: Upload
-        working-directory: artifacts
         uses: paambaati/codeclimate-action@v5.0.0
+        working-directory: artifacts
         env:
           CC_TEST_REPORTER_ID: ${{ secrets.CC_TEST_REPORTER_ID }}
         with:
