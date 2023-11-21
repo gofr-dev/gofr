@@ -3,6 +3,7 @@ package entity
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
@@ -33,6 +34,7 @@ func (h Handler) Chdir(dir string) error {
 
 // OpenFile opens the named file with specified flag (O_RDONLY etc.)
 func (h Handler) OpenFile(name string, flag int, perm os.FileMode) (*os.File, error) {
+	name = filepath.Clean(name)
 	return os.OpenFile(name, flag, perm)
 }
 

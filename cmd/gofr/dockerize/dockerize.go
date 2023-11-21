@@ -182,7 +182,7 @@ func (h handler) Run(ctx *gofr.Context) (interface{}, error) {
 }
 
 func runDockerImage(ctx *gofr.Context, flag *flags) error {
-	dockerRunCMD := fmt.Sprintf("docker run -d -p %v %v", flag.port, flag.image)
+	dockerRunCMD := "docker run -d -p" + flag.port + " " + flag.image
 
 	cmd := exec.Command("bash", "-c", dockerRunCMD)
 
