@@ -1,10 +1,12 @@
 package test
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 
 	"github.com/getkin/kin-openapi/openapi3"
@@ -194,6 +196,8 @@ func TestCreateJSONString(t *testing.T) {
 }
 
 func TestRunTests(t *testing.T) {
+
+	_, _ = http.NewRequest(http.MethodGet, "%%", http.NoBody)
 	testCases := IntegrationTestSchema{
 		TestCases: []IntegrationTestCase{
 			{
@@ -217,6 +221,55 @@ func TestRunTests(t *testing.T) {
 	err := runTests(host, testCases)
 
 	assert.Nil(t, err, "No error should occur during test execution")
+}
+
+func TestRunTestErrorRespCode(t *testing.T) {
+	testCases := []struct {
+		tests  IntegrationTestSchema
+		expErr error
+	}{
+		{
+			tests: IntegrationTestSchema{
+				[]IntegrationTestCase{
+					{
+						Endpoint:             "/api/v1/users/123",
+						Method:               "GET",
+						ParamsJSONString:     "",
+						ExpectedResponseCode: "200.%",
+					},
+				},
+			},
+			expErr: &strconv.NumError{Func: "Atoi", Num: "200.%", Err: errors.New("invalid syntax")},
+		},
+		{
+			tests: IntegrationTestSchema{
+				[]IntegrationTestCase{
+					{
+						Endpoint:             "/api/v1/users/123",
+						Method:               "GET",
+						ParamsJSONString:     "",
+						ExpectedResponseCode: "201",
+					},
+				},
+			},
+			expErr: errors.New("failed.\tExpected 201\tGot 200"),
+		},
+	}
+
+	// Mock the server using httptest
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, `{"id": 123, "name": "John Doe"}`)
+	}))
+
+	defer server.Close()
+
+	host := server.URL
+	for i, tc := range testCases {
+		err := runTests(host, tc.tests)
+		assert.Equal(t, tc.expErr.Error(), err.Error(), "Failed [%d] testcase: Expected [%v], Got [%v]", i, tc.expErr, err)
+	}
+
 }
 
 func TestMakeRequest(t *testing.T) {

@@ -3,6 +3,7 @@ package initialize
 import (
 	"errors"
 	"fmt"
+	gofrError "gofr.dev/pkg/errors"
 	"net/http/httptest"
 	"os"
 	"strings"
@@ -11,7 +12,6 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 
-	gofrError "gofr.dev/pkg/errors"
 	"gofr.dev/pkg/gofr"
 	"gofr.dev/pkg/gofr/request"
 )
@@ -20,46 +20,85 @@ func Test_createProjectErrors(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	fileSys := NewMockFileSystem(ctrl)
+	fileSys := NewMockfileSystem(ctrl)
+
+	f, _ := os.Create("main.go")
+	defer os.Remove("main.go")
 
 	type args struct {
 		f    fileSystem
 		name string
 	}
 
-	arg := args{fileSys, "testProject"}
+	arg := args{f: fileSys, name: "testProject"}
 
 	tests := []struct {
 		desc      string
 		mockCalls []*gomock.Call
+		expErr    error
 	}{
-		{"Error Mkdir", []*gomock.Call{
-			fileSys.EXPECT().Mkdir("testProject", gomock.Any()).Return(errors.New("test error")),
-		}},
-
-		{"Error Chdir", []*gomock.Call{
-			fileSys.EXPECT().Mkdir("testProject", gomock.Any()).Return(nil),
-			fileSys.EXPECT().Chdir(gomock.Any()).Return(errors.New("test error")),
-		}},
-
-		{"Error Mkdir - Standard Directories", []*gomock.Call{
-			fileSys.EXPECT().Chdir("testProject").Return(nil).MaxTimes(3),
-			fileSys.EXPECT().Mkdir("configs", gomock.Any()).Return(errors.New("test error")),
-			fileSys.EXPECT().Mkdir(gomock.Any(), gomock.Any()).Return(nil).MaxTimes(10),
-		}},
-
-		{"Error Create", []*gomock.Call{
-			fileSys.EXPECT().Create(gomock.Any()).Return(nil, errors.New("test error")),
-		}},
-
-		{"Error WriteString", []*gomock.Call{
-			fileSys.EXPECT().Create(gomock.Any()).Return(nil, nil),
-		}},
+		{
+			desc: "Error Mkdir",
+			mockCalls: []*gomock.Call{
+				fileSys.EXPECT().Mkdir("testProject", gomock.Any()).Return(errors.New("test error")),
+			},
+			expErr: errors.New("test error"),
+		},
+		{
+			desc: "Error Chdir",
+			mockCalls: []*gomock.Call{
+				fileSys.EXPECT().Mkdir("testProject", gomock.Any()).Return(nil),
+				fileSys.EXPECT().Chdir(gomock.Any()).Return(errors.New("test error")),
+			},
+			expErr: errors.New("test error"),
+		},
+		{
+			desc: "Error Mkdir - Standard Directories",
+			mockCalls: []*gomock.Call{
+				fileSys.EXPECT().Mkdir("testProject", gomock.Any()).Return(nil),
+				fileSys.EXPECT().Chdir("testProject").Return(nil),
+				fileSys.EXPECT().Mkdir("cmd", gomock.Any()).Return(nil),
+				fileSys.EXPECT().Mkdir("configs", gomock.Any()).Return(errors.New("test error")),
+			},
+			expErr: errors.New("test error"),
+		},
+		{
+			desc: "Error Create",
+			mockCalls: []*gomock.Call{
+				fileSys.EXPECT().Mkdir("testProject", gomock.Any()).Return(nil),
+				fileSys.EXPECT().Chdir("testProject").Return(nil),
+				fileSys.EXPECT().Mkdir(gomock.Any(), gomock.Any()).Return(nil).Times(3),
+				fileSys.EXPECT().Create(gomock.Any()).Return(nil, errors.New("create error")),
+			},
+			expErr: errors.New("create error"),
+		},
+		{
+			desc: "Error WriteString",
+			mockCalls: []*gomock.Call{
+				fileSys.EXPECT().Mkdir("testProject", gomock.Any()).Return(nil),
+				fileSys.EXPECT().Chdir("testProject").Return(nil),
+				fileSys.EXPECT().Mkdir(gomock.Any(), gomock.Any()).Return(nil).Times(3),
+				fileSys.EXPECT().Create(gomock.Any()).Return(nil, nil),
+			},
+			expErr: errors.New("invalid argument"),
+		},
+		{
+			desc: "Error create env files",
+			mockCalls: []*gomock.Call{
+				fileSys.EXPECT().Mkdir("testProject", gomock.Any()).Return(nil),
+				fileSys.EXPECT().Chdir("testProject").Return(nil),
+				fileSys.EXPECT().Mkdir(gomock.Any(), gomock.Any()).Return(nil).Times(3),
+				fileSys.EXPECT().Create(gomock.Any()).Return(f, nil),
+				fileSys.EXPECT().Chdir("configs").Return(errors.New("test error")),
+			},
+			expErr: errors.New("test error"),
+		},
 	}
 
 	for i, tc := range tests {
-		if err := createProject(arg.f, arg.name); err == nil {
-			t.Errorf("TEST[%d] failed. createProject(), Got: %v, Expected: %v", i, nil, tc.desc)
+		err := createProject(arg.f, arg.name)
+		if err != nil && err.Error() != tc.expErr.Error() {
+			t.Errorf("TEST[%d] failed. createProject(), Got: %v, Expected: %v", i, err, tc.expErr)
 		}
 	}
 }
@@ -127,6 +166,42 @@ func Test_Init(t *testing.T) {
 
 		assert.Equalf(t, tc.expOut, res, "Test case [%d] failed.", i)
 		assert.IsTypef(t, tc.expectedErr, err, "Test case [%d] failed.", i)
+	}
+}
+
+func Test_createEnvFiles_Errors(t *testing.T) {
+	ctrl := gomock.NewController(t)
+
+	defer ctrl.Finish()
+
+	fileSys := NewMockfileSystem(ctrl)
+
+	testCases := []struct {
+		desc     string
+		mockCall []*gomock.Call
+		expErr   error
+	}{
+		{
+			desc: "Failed switching to configs dir",
+			mockCall: []*gomock.Call{
+				fileSys.EXPECT().Chdir("configs").Return(errors.New("test error")),
+			},
+			expErr: errors.New("test error"),
+		},
+		{
+			desc: "Failed creating env file",
+			mockCall: []*gomock.Call{
+				fileSys.EXPECT().Chdir("configs").Return(nil),
+				fileSys.EXPECT().Create(".env").Return(nil, errors.New("create error")),
+			},
+			expErr: errors.New("create error"),
+		},
+	}
+
+	for i, tc := range testCases {
+		err := createEnvFiles(fileSys, []string{".env"})
+
+		assert.Equalf(t, tc.expErr, err, "Test casee [%d] failed", i)
 	}
 }
 
