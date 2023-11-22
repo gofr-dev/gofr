@@ -196,7 +196,6 @@ func TestCreateJSONString(t *testing.T) {
 }
 
 func TestRunTests(t *testing.T) {
-
 	_, _ = http.NewRequest(http.MethodGet, "%%", http.NoBody)
 	testCases := IntegrationTestSchema{
 		TestCases: []IntegrationTestCase{
@@ -269,7 +268,6 @@ func TestRunTestErrorRespCode(t *testing.T) {
 		err := runTests(host, tc.tests)
 		assert.Equal(t, tc.expErr.Error(), err.Error(), "Failed [%d] testcase: Expected [%v], Got [%v]", i, tc.expErr, err)
 	}
-
 }
 
 func TestMakeRequest(t *testing.T) {

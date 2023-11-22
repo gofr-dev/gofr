@@ -3,7 +3,6 @@ package initialize
 import (
 	"errors"
 	"fmt"
-	gofrError "gofr.dev/pkg/errors"
 	"net/http/httptest"
 	"os"
 	"strings"
@@ -12,6 +11,7 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 
+	gofrError "gofr.dev/pkg/errors"
 	"gofr.dev/pkg/gofr"
 	"gofr.dev/pkg/gofr/request"
 )
