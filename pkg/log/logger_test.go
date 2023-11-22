@@ -12,6 +12,8 @@ const defaultAppName = "gofr-app"
 func TestNewLogger(t *testing.T) {
 	l := newLogger()
 
+	rls.init = false
+
 	if l.app.Name != defaultAppName {
 		t.Errorf("Expected APP_NAME: gofr-app     GOT:  %v", l.app.Name)
 	}

@@ -62,24 +62,29 @@ func TestGetZipkinExporter(t *testing.T) {
 		sampler      trace.Sampler
 		alwaysSample string
 		expTrace     *trace.TracerProvider
+		url          string
+		err          error
 	}{
-		{"URL:valid,SAMPLING:AlwaysSample", trace.AlwaysSample(), "true", &trace.TracerProvider{}},
-		{"URL:valid,SAMPLING:ParentBased", trace.ParentBased(trace.TraceIDRatioBased(0.1)), "false", &trace.TracerProvider{}},
+		{"URL:valid,SAMPLING:AlwaysSample", trace.AlwaysSample(), "true", &trace.TracerProvider{}, "http://localhost/9411", nil},
+		{"URL:valid,SAMPLING:ParentBased", trace.ParentBased(trace.TraceIDRatioBased(0.1)), "false",
+			&trace.TracerProvider{}, "http://localhost/9411", nil},
+		{"URL:valid,SAMPLING:AlwaysSample", trace.AlwaysSample(), "true", &trace.TracerProvider{},
+			"localhost/9411", errors.New("invalid collector URL \"localhost/9411/api/v2/spans\": no scheme or host")},
 	}
 
 	for i, tc := range testcases {
 		cfg := &config.MockConfig{Data: map[string]string{
 			"TRACER_EXPORTER":      "zipkin",
-			"TRACER_URL":           "http://localhost/9411",
+			"TRACER_URL":           tc.url,
 			"TRACER_ALWAYS_SAMPLE": tc.alwaysSample,
 		}}
 
-		e := &exporter{url: "http://localhost/9411"}
+		e := &exporter{url: tc.url}
 
 		tracers, err := e.getZipkinExporter(cfg, logger)
 
 		assert.IsTypef(t, tc.expTrace, tracers, "Test[%d],failed:%v", i, tc.desc)
-		assert.Nil(t, err, "Test[%d],failed:%v", i, tc.desc)
+		assert.Equal(t, tc.err, err, "Test[%d],failed:%v", i, tc.desc)
 	}
 }
 
