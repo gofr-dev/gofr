@@ -100,18 +100,30 @@ func Test_refreshConfigs(t *testing.T) {
 			"REMOTE_NAMESPACE": "ZS_NAMESPACE",
 		},
 	}
-	remoteURL := testServer("success").URL
+
+	tests := []struct {
+		desc       string
+		remoteURL  string
+		appVersion string
+	}{
+		{"success", testServer("success").URL, "v0.17.0"},
+		{"error", "127.0.0.1:50045", ""},
+	}
+
 	remoteConfig := map[string]string{}
 	freq := int(5 * time.Millisecond)
 
-	r := RemoteConfig{remoteConfig: remoteConfig, localConfig: localConfig, logger: logger, appName: appName, url: remoteURL, frequency: freq}
+	for i, tc := range tests {
 
-	go r.refreshConfigs()
+		r := RemoteConfig{remoteConfig: remoteConfig, localConfig: localConfig, logger: logger, appName: appName, url: tc.remoteURL, frequency: freq}
 
-	time.Sleep(time.Second)
+		go r.refreshConfigs()
 
-	if r.remoteConfig["APP_VERSION"] != "v0.17.0" {
-		t.Errorf("Test Failed. Expected: %v, got: %v", "v0.17.0", r.remoteConfig["APP_VERSION"])
+		time.Sleep(time.Second)
+
+		if r.remoteConfig["APP_VERSION"] != tc.appVersion {
+			t.Errorf("Test[%d] Failed. Expected: %v, got: %v", i, tc.appVersion, r.remoteConfig["APP_VERSION"])
+		}
 	}
 }
 

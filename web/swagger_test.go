@@ -25,6 +25,7 @@ func TestGetSwaggerFile(t *testing.T) {
 			Path: "swagger/some-random-file.txt",
 			Err:  errors.New("file does not exist"),
 		}},
+		{"", true, nil},
 	}
 
 	for _, tc := range testcases {
