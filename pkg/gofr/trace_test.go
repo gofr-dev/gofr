@@ -66,8 +66,10 @@ func TestGetZipkinExporter(t *testing.T) {
 		err          error
 	}{
 		{"URL:valid,SAMPLING:AlwaysSample", trace.AlwaysSample(), "true", &trace.TracerProvider{}, "http://localhost/9411", nil},
-		{"URL:valid,SAMPLING:ParentBased", trace.ParentBased(trace.TraceIDRatioBased(0.1)), "false", &trace.TracerProvider{}, "http://localhost/9411", nil},
-		{"URL:valid,SAMPLING:AlwaysSample", trace.AlwaysSample(), "true", &trace.TracerProvider{}, "localhost/9411", errors.New("invalid collector URL \"localhost/9411/api/v2/spans\": no scheme or host")},
+		{"URL:valid,SAMPLING:ParentBased", trace.ParentBased(trace.TraceIDRatioBased(0.1)), "false",
+			&trace.TracerProvider{}, "http://localhost/9411", nil},
+		{"URL:valid,SAMPLING:AlwaysSample", trace.AlwaysSample(), "true", &trace.TracerProvider{},
+			"localhost/9411", errors.New("invalid collector URL \"localhost/9411/api/v2/spans\": no scheme or host")},
 	}
 
 	for i, tc := range testcases {

@@ -114,8 +114,8 @@ func Test_refreshConfigs(t *testing.T) {
 	freq := int(5 * time.Millisecond)
 
 	for i, tc := range tests {
-
-		r := RemoteConfig{remoteConfig: remoteConfig, localConfig: localConfig, logger: logger, appName: appName, url: tc.remoteURL, frequency: freq}
+		r := RemoteConfig{remoteConfig: remoteConfig, localConfig: localConfig, logger: logger, appName: appName,
+			url: tc.remoteURL, frequency: freq}
 
 		go r.refreshConfigs()
 
