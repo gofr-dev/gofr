@@ -236,8 +236,9 @@ func Test_Client_ctx_cancel(t *testing.T) {
 
 	ctx := context.Background()
 	ps := NewHTTPServiceWithOptions(ts.URL, log.NewMockLogger(io.Discard), nil)
-	//nolint:govet // ignoring the cancel function
-	ctx, _ = context.WithTimeout(ctx, 2*time.Nanosecond)
+
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Nanosecond)
+	defer cancel()
 
 	_, err := ps.Get(ctx, "dummy", nil)
 	if err == nil {
@@ -287,13 +288,15 @@ func Test_OAuth_ctx_cancel_RequestTimeout(t *testing.T) {
 		svc := NewHTTPServiceWithOptions(testServer.URL, logger, &Options{Auth: &Auth{OAuthOption: &oauth}})
 		svc.Timeout = testcases[i].reqTimeout
 
-		//nolint:govet // ignoring the cancel function
-		ctx, _ := context.WithTimeout(context.TODO(), testcases[i].ctxTimeout)
+		func() {
+			ctx, cancel := context.WithTimeout(context.TODO(), testcases[i].ctxTimeout)
+			defer cancel()
 
-		_, err := svc.Get(ctx, "dummy", nil)
-		if !reflect.DeepEqual(err, testcases[i].err) {
-			t.Errorf("[TESTCASE%d]Failed.\nExpected %v\nGot %v\n", i+1, testcases[i].err, err)
-		}
+			_, err := svc.Get(ctx, "dummy", nil)
+			if !reflect.DeepEqual(err, testcases[i].err) {
+				t.Errorf("[TESTCASE%d]Failed.\nExpected %v\nGot %v\n", i+1, testcases[i].err, err)
+			}
+		}()
 	}
 }
 

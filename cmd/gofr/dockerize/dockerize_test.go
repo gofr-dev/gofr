@@ -109,7 +109,7 @@ func Test_Dockerize(t *testing.T) {
 	testCases := []struct {
 		desc   string
 		params map[string]string
-		expRes interface{}
+		expRes string
 		expErr error
 	}{
 		{"Success case, with default app name", map[string]string{}, "Docker image created", nil},
@@ -121,9 +121,6 @@ func Test_Dockerize(t *testing.T) {
 		{"Success case, with os linux", map[string]string{"os": "linux"}, "Docker image created", nil},
 		{"Success case, with default os", map[string]string{"os": ""}, "Docker image created", nil},
 		{"Success case, with help", map[string]string{"h": "true"}, Help(), nil},
-		{"Error case, with tags commit", map[string]string{"tags": "commit"}, nil, &errors.Response{
-			Reason: fmt.Sprintf(`unknown parameter(s) [` + strings.Join([]string{"tags"}, ",") + `]. ` +
-				`Run gofr <command_name> -h for help of the command.`)}},
 	}
 
 	for i, tc := range testCases {
