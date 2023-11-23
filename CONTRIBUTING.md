@@ -7,7 +7,8 @@
   tools, will fail on the pipeline.
 * All code contributions should have associated tests and all new line additions should be covered in those testcases.
   No PR should ever decrease the overall code coverage.
-* Once your code changes are done along with the testcases, submit a PR to development branch. Please note that all PRs
+* Documentation should be updated in docs directory under appropriate section.
+* Once your code changes are done along with the testcases submit a PR to development branch. Please note that all PRs
   are merged from feature branches to development first.
 * All PRs need to be reviewed by at least 2 Gofr developers. They might reach out to you for any clarfication.
 * Thank you for your contribution. :)
