@@ -3,15 +3,14 @@ package gofr
 import (
 	"context"
 	"encoding/json"
-	"go.opencensus.io/plugin/ocgrpc"
-	"strings"
-
 	"net"
 	"strconv"
+	"strings"
 	"time"
 
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	grpc_recovery "github.com/grpc-ecosystem/go-grpc-middleware/recovery"
+	"go.opencensus.io/plugin/ocgrpc"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"go.opentelemetry.io/otel"
 	"google.golang.org/grpc"
@@ -33,7 +32,7 @@ func (g *GRPC) Server() *grpc.Server {
 // NewGRPCServer creates a gRPC server instance with OpenTelemetry tracing, OpenCensus stats handling,
 // unary interceptors for tracing and recovery, and a custom logging interceptor.
 //
-// nolint:staticcheck // will be upgraded to grpc.NewServer in upcoming releases
+//nolint:staticcheck //will be upgraded to grpc.NewServer in upcoming releases
 func NewGRPCServer() *grpc.Server {
 	return grpc.NewServer(
 		grpc.StreamInterceptor(otelgrpc.StreamServerInterceptor(otelgrpc.WithTracerProvider(otel.GetTracerProvider()))),
