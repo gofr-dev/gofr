@@ -225,6 +225,29 @@ func Test_SftpMove(t *testing.T) {
 	}
 }
 
+func Test_Sftpmove(t *testing.T) {
+	sftpCfg := &SFTPConfig{
+		Host:     "localhost",
+		User:     "myuser",
+		Password: "mypass",
+		Port:     2222,
+	}
+
+	s, err := newSFTPFile(sftpCfg, "testFile.txt", "rw")
+	if err != nil {
+		t.Fatalf("Error in creating connection to SFTP: %v", err)
+	}
+
+	_, ok := s.client.(sftpClient)
+	if !ok {
+		t.Fatalf("Unable to parse ftpConn")
+	}
+
+	err = s.move("/test.txt", "/test.txt")
+
+	assert.Equal(t, errors.New("file does not exist"), err, "Test failed.")
+}
+
 func tempDirSFTP(s sftpClient) (string, error) {
 	tempDir := fmt.Sprintf("/tempDir%v", uuid.NewString())
 
@@ -237,8 +260,6 @@ func tempDirSFTP(s sftpClient) (string, error) {
 }
 
 func Test_createNestedDir_SFTP(t *testing.T) {
-	t.Skip("Skipping the test as while creating directory on GHA will get permission denied error")
-
 	sftpCfg := &SFTPConfig{
 		Host:     "localhost",
 		User:     "myuser",

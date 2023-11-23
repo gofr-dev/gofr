@@ -5,6 +5,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestCMD_parseArgs(t *testing.T) {
@@ -122,4 +124,20 @@ func TestCMD_Request(t *testing.T) {
 	if got != expected {
 		t.Errorf("FAILED, Expected: %v, Got: %v", expected, got)
 	}
+}
+
+func TestCMD_GetClaim(t *testing.T) {
+	c := new(CMD)
+	c.params = map[string]string{"A": "10", "B": "abc", "C": "true", "D": "false"}
+
+	got := c.GetClaim("A")
+	assert.Nil(t, got, "Test failed")
+}
+
+func TestCMD_GetClaims(t *testing.T) {
+	c := new(CMD)
+	c.params = map[string]string{"A": "10", "B": "abc", "C": "true", "D": "false"}
+
+	got := c.GetClaims()
+	assert.Nil(t, got, "Test failed")
 }

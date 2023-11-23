@@ -109,7 +109,7 @@ func Test_Dockerize(t *testing.T) {
 	testCases := []struct {
 		desc   string
 		params map[string]string
-		expRes string
+		expRes interface{}
 		expErr error
 	}{
 		{"Success case, with default app name", map[string]string{}, "Docker image created", nil},
@@ -121,6 +121,9 @@ func Test_Dockerize(t *testing.T) {
 		{"Success case, with os linux", map[string]string{"os": "linux"}, "Docker image created", nil},
 		{"Success case, with default os", map[string]string{"os": ""}, "Docker image created", nil},
 		{"Success case, with help", map[string]string{"h": "true"}, Help(), nil},
+		{"Error case, with tags commit", map[string]string{"tags": "commit"}, nil, &errors.Response{
+			Reason: fmt.Sprintf(`unknown parameter(s) [` + strings.Join([]string{"tags"}, ",") + `]. ` +
+				`Run gofr <command_name> -h for help of the command.`)}},
 	}
 
 	for i, tc := range testCases {
@@ -132,6 +135,25 @@ func Test_Dockerize(t *testing.T) {
 		assert.Contains(t, resp, tc.expRes, "[TESTCASE %d] Failed Desc: %v\nexpected %v\tgot %v\n", i+1, tc.desc, tc.expRes, resp)
 		assert.Equal(t, tc.expErr, err, "[TESTCASE %d]failed Desc: %v\nexpected %v\tgot %v\n", i+1, tc.desc, tc.expErr, err)
 	}
+}
+
+func TestDockerize_Error(t *testing.T) {
+	initializeTest(t)
+	initialiseGit(t)
+
+	h := New("gofr-app", "1.0.0")
+
+	app := gofr.New()
+	expErr := &errors.Response{Reason: fmt.Sprintf(`unknown parameter(s) [` + strings.Join([]string{"tags"}, ",") + `]. ` +
+		`Run gofr <command_name> -h for help of the command.`)}
+
+	req := httptest.NewRequest("", setQueryParams(map[string]string{"tags": "commit"}), nil)
+	ctx := gofr.NewContext(nil, request.NewHTTPRequest(req), app)
+
+	resp, err := h.Dockerize(ctx)
+
+	assert.Nil(t, resp, "TEST Failed.")
+	assert.Equal(t, expErr, err, "TEST Failed.")
 }
 
 func TestDockerize_Fail(t *testing.T) {
