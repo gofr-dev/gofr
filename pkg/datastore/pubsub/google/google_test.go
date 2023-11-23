@@ -169,7 +169,7 @@ func Test_Bind(t *testing.T) {
 	t.Setenv("PUBSUB_BACKEND", "google")
 	t.Setenv("PUBSUB_EMULATOR_HOST", "localhost:8086")
 
-	k := GCPubSub{}
+	g := GCPubSub{}
 
 	message := []byte(`{"name":"Rohan","email":"rohan@email.xyz"}`)
 	data := struct {
@@ -177,7 +177,7 @@ func Test_Bind(t *testing.T) {
 		Email string `json:"email"`
 	}{}
 
-	err := k.Bind(message, &data)
+	err := g.Bind(message, &data)
 
 	assert.Nilf(t, err, "Test Failed. Expected Nil Got %v", err)
 }

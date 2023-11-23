@@ -35,27 +35,6 @@ type MultipleErrors struct {
 	Errors     []errors.Response `json:"errors" xml:"errors"`
 }
 
-func Test_isValidZopsmartTenant(t *testing.T) {
-	tests := []struct {
-		name string
-		val  string
-		want bool
-	}{
-		{"invalid X-Zopsmart-Tenant value", "test", false},
-		{"empty X-Zopsmart-Tenant value", "", false},
-		{"valid X-Zopsmart-Tenant value", "good4more", true},
-	}
-
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			if got := isValidZopsmartTenant(tt.val); got != tt.want {
-				t.Errorf("isValidZopsmartTenant() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
 func Test_isValidTrueClientIP(t *testing.T) {
 	tests := []struct {
 		ip      string
@@ -93,24 +72,10 @@ func Test_validateMandatoryHeaders(t *testing.T) {
 		envHeaders string
 		errs       MultipleErrors
 	}{
-		{"X-Zopsmart-Tenant not passed", map[string]string{
-			"X-Authenticated-UserId": "gofr0000",
-			"True-Client-Ip":         "127.0.0.1",
-			"X-Correlation-ID":       "1s3d323adsd",
-		}, "", MultipleErrors{StatusCode: http.StatusBadRequest, Errors: []errors.Response{
-			{Code: "BAD_REQUEST", Reason: "Header X-Zopsmart-Tenant is missing"}}}},
 
-		{"X-Zopsmart-Tenant invalid value passed", map[string]string{
-			"X-Authenticated-UserId": "gofr0000",
-			"True-Client-Ip":         "127.0.0.1",
-			"X-Correlation-ID":       "1s3d323adsd",
-			"X-Zopsmart-Tenant":      "foods",
-		}, "", MultipleErrors{StatusCode: http.StatusBadRequest, Errors: []errors.Response{
-			{Code: "BAD_REQUEST", Reason: "Header X-Zopsmart-Tenant value is invalid"}}}},
 		{"X-Correlation-ID not passed", map[string]string{
 			"X-Authenticated-UserId": "gofr0000",
 			"True-Client-Ip":         "127.0.0.1",
-			"X-Zopsmart-Tenant":      "good4more",
 		}, "", MultipleErrors{StatusCode: http.StatusBadRequest, Errors: []errors.Response{
 			{Code: "BAD_REQUEST", Reason: "Header X-Correlation-ID is missing"}}}},
 
@@ -118,28 +83,18 @@ func Test_validateMandatoryHeaders(t *testing.T) {
 			"X-Authenticated-UserId": "gofr0000",
 			"X-Correlation-ID":       "1s3d323adsd",
 			"True-Client-Ip":         "127.0.0.1.1",
-			"X-Zopsmart-Tenant":      "good4more",
 		}, "", MultipleErrors{StatusCode: http.StatusBadRequest, Errors: []errors.Response{
 			{Code: "BAD_REQUEST", Reason: "Header True-Client-Ip value is invalid"}}}},
 
 		{"True-Client-Ip value NOT passed", map[string]string{
 			"X-Authenticated-UserId": "gofr0000",
 			"X-Correlation-ID":       "1s3d323adsd",
-			"X-Zopsmart-Tenant":      "good4more",
 		}, "", MultipleErrors{StatusCode: http.StatusBadRequest, Errors: []errors.Response{
 			{Code: "BAD_REQUEST", Reason: "Header True-Client-Ip is missing"}}}},
-		{"invalid X-Zopsmart-Tenant", map[string]string{
-			"X-Authenticated-UserId": "gofr0000",
-			"True-Client-Ip":         "127.0.0.1",
-			"X-B3-TraceID":           "1s3d323adsd",
-			"X-Zopsmart-Tenant":      "good14less",
-		}, "", MultipleErrors{StatusCode: http.StatusBadRequest, Errors: []errors.Response{
-			{Code: "BAD_REQUEST", Reason: "Header X-Zopsmart-Tenant value is invalid"}}}},
 		{"env headers not present", map[string]string{
 			"X-Authenticated-UserId": "gofr0000",
 			"True-Client-Ip":         "127.0.0.1",
 			"X-B3-TraceID":           "1s3d323adsd",
-			"X-Zopsmart-Tenant":      "good4more",
 		}, "Test-Header", MultipleErrors{StatusCode: http.StatusBadRequest, Errors: []errors.Response{
 			{Code: "BAD_REQUEST", Reason: "Header Test-Header is missing"}}}},
 	}
@@ -182,7 +137,6 @@ func Test_validateMandatoryHeaders(t *testing.T) {
 	}
 }
 
-//nolint:gocognit // We are testing multiple headers here.
 func Test_HeaderValidation_Success(t *testing.T) {
 	logger := log.NewMockLogger(io.Discard)
 
@@ -198,31 +152,51 @@ func Test_HeaderValidation_Success(t *testing.T) {
 		req.Header.Set(k, v)
 	}
 
-	xZopsmartTenantVals := []string{"good4more", "Zopsmart"} // for checking case insensitivity of X-Zopsmart-Tenant
+	h := ValidateHeaders("", logger)(validatorHandler{})
 
-	for _, v := range xZopsmartTenantVals {
-		req.Header.Set("X-Zopsmart-Tenant", v)
+	w := new(httptest.ResponseRecorder)
 
-		h := ValidateHeaders("", logger)(validatorHandler{})
+	h.ServeHTTP(w, req)
 
-		w := new(httptest.ResponseRecorder)
+	if w.Code != http.StatusOK {
+		t.Errorf("expected %v\tgot %v", http.StatusOK, w.Code)
+	}
 
-		h.ServeHTTP(w, req)
+	sts := w.Header().Get("Strict-Transport-Security")
+	csp := w.Header().Get("Content-Security-Policy")
+	xcto := w.Header().Get("X-Content-Type-Options")
+	xssp := w.Header().Get("X-XSS-Protection")
 
-		if w.Code != http.StatusOK {
-			t.Errorf("expected %v\tgot %v", http.StatusOK, w.Code)
-		}
+	if sts != "max-age=86400; includeSubDomains" || csp != "default-src 'self'; script-src 'self'" || xcto != "nosniff" || xssp != "1" {
+		t.Errorf("invalid set of response headers\n"+
+			"Got: \n%v:%v, \n%v:%v, \n%v:%v, \n%v:%v", "Strict-Transport-Security", sts, "Content-Security-Policy", csp,
+			"X-Content-Type-Options", xcto, "X-XSS-Protection", xssp)
+	}
+}
 
-		sts := w.Header().Get("Strict-Transport-Security")
-		csp := w.Header().Get("Content-Security-Policy")
-		xcto := w.Header().Get("X-Content-Type-Options")
-		xssp := w.Header().Get("X-XSS-Protection")
+func Test_HeaderValidation_Success_ExemptPath(t *testing.T) {
+	logger := log.NewMockLogger(io.Discard)
 
-		if sts != "max-age=86400; includeSubDomains" || csp != "default-src 'self'; script-src 'self'" || xcto != "nosniff" || xssp != "1" {
-			t.Errorf("invalid set of response headers\n"+
-				"Got: \n%v:%v, \n%v:%v, \n%v:%v, \n%v:%v", "Strict-Transport-Security", sts, "Content-Security-Policy", csp,
-				"X-Content-Type-Options", xcto, "X-XSS-Protection", xssp)
-		}
+	headers := map[string]string{
+		"X-Authenticated-UserId": "gofr0000",
+		"True-Client-Ip":         "127.0.0.1",
+		"X-B3-TraceID":           "1s3d323adsd",
+		"Test-Header":            "test"}
+
+	req := httptest.NewRequest(http.MethodGet, "http://dummy/metrics", nil)
+
+	for k, v := range headers {
+		req.Header.Set(k, v)
+	}
+
+	h := ValidateHeaders("", logger)(validatorHandler{})
+
+	w := new(httptest.ResponseRecorder)
+
+	h.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected %v\tgot %v", http.StatusOK, w.Code)
 	}
 }
 

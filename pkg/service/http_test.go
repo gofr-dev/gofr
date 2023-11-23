@@ -236,8 +236,9 @@ func Test_Client_ctx_cancel(t *testing.T) {
 
 	ctx := context.Background()
 	ps := NewHTTPServiceWithOptions(ts.URL, log.NewMockLogger(io.Discard), nil)
-	//nolint:govet // ignoring the cancel function
-	ctx, _ = context.WithTimeout(ctx, 2*time.Nanosecond)
+
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Nanosecond)
+	defer cancel()
 
 	_, err := ps.Get(ctx, "dummy", nil)
 	if err == nil {
@@ -287,13 +288,15 @@ func Test_OAuth_ctx_cancel_RequestTimeout(t *testing.T) {
 		svc := NewHTTPServiceWithOptions(testServer.URL, logger, &Options{Auth: &Auth{OAuthOption: &oauth}})
 		svc.Timeout = testcases[i].reqTimeout
 
-		//nolint:govet // ignoring the cancel function
-		ctx, _ := context.WithTimeout(context.TODO(), testcases[i].ctxTimeout)
+		func() {
+			ctx, cancel := context.WithTimeout(context.TODO(), testcases[i].ctxTimeout)
+			defer cancel()
 
-		_, err := svc.Get(ctx, "dummy", nil)
-		if !reflect.DeepEqual(err, testcases[i].err) {
-			t.Errorf("[TESTCASE%d]Failed.\nExpected %v\nGot %v\n", i+1, testcases[i].err, err)
-		}
+			_, err := svc.Get(ctx, "dummy", nil)
+			if !reflect.DeepEqual(err, testcases[i].err) {
+				t.Errorf("[TESTCASE%d]Failed.\nExpected %v\nGot %v\n", i+1, testcases[i].err, err)
+			}
+		}()
 	}
 }
 
@@ -327,8 +330,9 @@ func TestLogError(t *testing.T) {
 		Client:    c,
 		isHealthy: true,
 	}
+	ctx := context.WithValue(context.TODO(), middleware.AuthorizationHeader, "some auth")
 
-	_, _ = client.call(context.TODO(), http.MethodGet, "", nil, nil, nil)
+	_, _ = client.call(ctx, http.MethodGet, "", nil, nil, nil)
 	expected := "unsupported protocol scheme"
 
 	if !strings.Contains(b.String(), expected) {
@@ -430,12 +434,9 @@ func TestHttpService_SetHeaders(t *testing.T) {
 	ctx := context.WithValue(context.TODO(), middleware.ClientIPKey, "123.234.545.894")
 	ctx = context.WithValue(ctx, middleware.AuthenticatedUserIDKey, "2")
 	ctx = context.WithValue(ctx, middleware.B3TraceIDKey, "3434")
-	ctx = context.WithValue(ctx, middleware.ZopsmartChannelKey, "WEB")
-	ctx = context.WithValue(ctx, middleware.ZopsmartTenantKey, "riu")
 
 	req, _ := httpSvc.createReq(ctx, http.MethodGet, "", nil, nil, nil)
-	if req.Header.Get("X-Authenticated-UserId") != "2" || req.Header.Get("X-B3-TraceID") != "3434" ||
-		req.Header.Get("X-Zopsmart-Tenant") != "riu" || req.Header.Get("X-Zopsmart-Channel") != "WEB" {
+	if req.Header.Get("X-Authenticated-UserId") != "2" || req.Header.Get("X-B3-TraceID") != "3434" {
 		t.Error("setting of headers failed")
 	}
 }

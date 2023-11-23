@@ -69,7 +69,7 @@ func TestJSONHandler(t *testing.T) {
 		t.Errorf("FAILED, got error: %v", err)
 	}
 
-	expected := resp{Name: "Vikash", Company: "ZopSmart"}
+	expected := resp{Name: "Vikash", Company: "gofr.dev"}
 
 	var got resp
 
@@ -89,7 +89,7 @@ func TestUserHandler(t *testing.T) {
 		resp interface{}
 		err  error
 	}{
-		{"UserHandler success", "Vikash", resp{Name: "Vikash", Company: "ZopSmart"}, nil},
+		{"UserHandler success", "Vikash", resp{Name: "Vikash", Company: "gofr.dev"}, nil},
 		{"UserHandler fail", "ABC", nil, errors.EntityNotFound{Entity: "user", ID: "ABC"}},
 	}
 

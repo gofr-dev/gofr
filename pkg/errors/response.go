@@ -24,12 +24,12 @@ type DateTime struct {
 }
 
 // Error returns a formatted error message with the associated error reason
-func (k *Response) Error() string {
-	if e, ok := k.Detail.(error); ok {
-		return fmt.Sprintf("%v : %v ", k.Reason, e)
+func (r *Response) Error() string {
+	if e, ok := r.Detail.(error); ok {
+		return fmt.Sprintf("%v : %v ", r.Reason, e)
 	}
 
-	return k.Reason
+	return r.Reason
 }
 
 // Error is a generic error of type string

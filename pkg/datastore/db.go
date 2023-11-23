@@ -19,7 +19,6 @@ import (
 	// used for concrete implementation of the database driver.
 	_ "github.com/lib/pq"
 	"go.opentelemetry.io/otel"
-	semconv "go.opentelemetry.io/otel/semconv/v1.7.0"
 	"gorm.io/driver/mysql"
 	"gorm.io/driver/postgres"
 	"gorm.io/driver/sqlite"
@@ -284,7 +283,7 @@ func (c GORMClient) logError(err error) {
 // else the healthCheck status will be DOWN
 func (c GORMClient) HealthCheck() types.Health {
 	resp := types.Health{
-		Name:     SqlStore,
+		Name:     SQLStore,
 		Status:   pkg.StatusDown,
 		Host:     c.config.HostName,
 		Database: c.config.Database,
@@ -292,19 +291,19 @@ func (c GORMClient) HealthCheck() types.Health {
 
 	// The following check is for the condition when the connection to SQL has not been made during initialization
 	if c.DB == nil {
-		c.logError(errors.HealthCheckFailed{Dependency: SqlStore, Reason: "sql not initialized"})
+		c.logError(errors.HealthCheckFailed{Dependency: SQLStore, Reason: "sql not initialized"})
 		return resp
 	}
 
 	sqlDB, err := c.DB.DB()
 	if err != nil {
-		c.logError(errors.HealthCheckFailed{Dependency: SqlStore, Err: err})
+		c.logError(errors.HealthCheckFailed{Dependency: SQLStore, Err: err})
 		return resp
 	}
 
 	err = sqlDB.Ping()
 	if err != nil {
-		c.logError(errors.HealthCheckFailed{Dependency: SqlStore, Err: err})
+		c.logError(errors.HealthCheckFailed{Dependency: SQLStore, Err: err})
 		return resp
 	}
 
@@ -318,7 +317,7 @@ func (c GORMClient) HealthCheck() types.Health {
 // else the healthCheck status will be DOWN
 func (c SQLXClient) HealthCheck() types.Health {
 	resp := types.Health{
-		Name:     SqlStore,
+		Name:     SQLStore,
 		Status:   pkg.StatusDown,
 		Host:     c.config.HostName,
 		Database: c.config.Database,
@@ -357,12 +356,7 @@ func dbConnection(d gorm.Dialector) (db *gorm.DB, err error) {
 
 // registerDialect registers the dialect to instrument the database/sql pkg and returns driverName based on the db Dialect.
 func registerDialect(dialect string) (driverName string) {
-	if dialect == pgSQL {
-		driverName, _ = otelsql.Register(dialect, semconv.DBSystemPostgreSQL.Value.AsString())
-	} else {
-		driverName, _ = otelsql.Register(dialect, dialect)
-	}
-
+	driverName, _ = otelsql.Register(dialect)
 	return
 }
 

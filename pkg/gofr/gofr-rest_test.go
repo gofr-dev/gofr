@@ -52,10 +52,10 @@ func TestGofr_REST(t *testing.T) {
 		{http.MethodPatch, "/person/12", "Patch id: 12"},
 	}
 
-	k := New()
-	k.REST("person", &testController{})
+	g := New()
+	g.REST("person", &testController{})
 	// Added contextInjector middleware
-	k.Server.Router.Use(k.Server.contextInjector)
+	g.Server.Router.Use(g.Server.contextInjector)
 
 	for _, tc := range testCases {
 		w := httptest.NewRecorder()
@@ -63,7 +63,7 @@ func TestGofr_REST(t *testing.T) {
 
 		r.Header.Set("content-type", "text/plain")
 
-		k.Server.Router.ServeHTTP(w, r)
+		g.Server.Router.ServeHTTP(w, r)
 
 		expectedResp := fmt.Sprintf("%v", &types.Response{Data: tc.response})
 

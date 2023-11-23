@@ -28,7 +28,7 @@ type HTTP interface {
 	BindStrict(resp []byte, i interface{}) error
 
 	// PropagateHeaders is used to specify the header keys that needs to be propagated through context
-	// By default the headers: True-Client-IP, X-Zopsmart-Channel, X-Zopsmart-Location, X-Authenticated-UserId, X-Zopsmart-Tenant
+	// By default the headers: True-Client-IP, X-Authenticated-UserId,
 	// are propagated.
 	PropagateHeaders(headers ...string)
 

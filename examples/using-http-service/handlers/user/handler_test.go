@@ -27,7 +27,7 @@ func Test_Get(t *testing.T) {
 		mockResp interface{}
 		err      error
 	}{
-		{"get success", "Vikash", models.User{Name: "Vikash", Company: "ZopSmart"}, models.User{Name: "Vikash", Company: "ZopSmart"}, nil},
+		{"get success", "Vikash", models.User{Name: "Vikash", Company: "gofr.dev"}, models.User{Name: "Vikash", Company: "gofr.dev"}, nil},
 		{"get non existent entity", "ABC", nil, models.User{}, errors.EntityNotFound{Entity: "User", ID: "ABC"}},
 	}
 

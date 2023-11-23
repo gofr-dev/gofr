@@ -123,7 +123,7 @@ func Test_getNewAccessToken(t *testing.T) {
 
 func Test_getPayload(t *testing.T) {
 	const (
-		audience = "https://zopsmart.com"
+		audience = "https://gofr.dev"
 		scope    = "some-scope"
 	)
 

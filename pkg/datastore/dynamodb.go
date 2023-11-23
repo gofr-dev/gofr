@@ -86,19 +86,19 @@ func NewDynamoDB(logger log.Logger, c DynamoDBConfig) (DynamoDB, error) {
 // HealthCheck checks health of the Dya
 func (d *DynamoDB) HealthCheck() types.Health {
 	resp := types.Health{
-		Name:   DynamoDb,
+		Name:   DynamoStore,
 		Status: pkg.StatusDown,
 	}
 
 	// check if DynamoDB instance has been created during initialization
 	if d.DynamoDB == nil {
-		d.logger.Errorf("%v", errors.HealthCheckFailed{Dependency: DynamoDb, Reason: "DynamoDB not initialized."})
+		d.logger.Errorf("%v", errors.HealthCheckFailed{Dependency: DynamoStore, Reason: "DynamoDB not initialized."})
 		return resp
 	}
 
 	_, err := d.ListTables(&dynamodb.ListTablesInput{})
 	if err != nil {
-		d.logger.Errorf("%v", errors.HealthCheckFailed{Dependency: DynamoDb, Err: err})
+		d.logger.Errorf("%v", errors.HealthCheckFailed{Dependency: DynamoStore, Err: err})
 		return resp
 	}
 
@@ -407,7 +407,7 @@ func genQueryLogger(query []string) QueryLogger {
 		ql.Query = []string{q}
 	}
 
-	ql.DataStore = DynamoDb
+	ql.DataStore = DynamoStore
 
 	return ql
 }

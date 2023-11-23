@@ -22,9 +22,9 @@ import (
 const (
 	selectQuery             = "SELECT * from customers"
 	selectInformationSchema = "SELECT * FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'customers' AND COLUMN_NAME = 'country'"
-	insertQuery1            = `INSERT INTO customers VALUES ('37387615-aead-4b28-9adc-78c1eb714ca4','qwerty','yups@zopsmart.com',1234567890);`
-	insertQuery2            = `INSERT INTO customers VALUES ('37387615-aead-4b28-9adc-78c1eb714ca8','steve','golang@zopsmart.com',8899667722);`
-	insertQueryUpdatedID    = `INSERT INTO customers VALUES ('37387615-aead-4b28-9adc-78c1eb714ca1','yash','yash@zopsmart.com',8899667722)`
+	insertQuery1            = `INSERT INTO customers VALUES ('37387615-aead-4b28-9adc-78c1eb714ca4','qwerty','yups@gofr.dev',1234567890);`
+	insertQuery2            = `INSERT INTO customers VALUES ('37387615-aead-4b28-9adc-78c1eb714ca8','steve','golang@gofr.dev',8899667722);`
+	insertQueryUpdatedID    = `INSERT INTO customers VALUES ('37387615-aead-4b28-9adc-78c1eb714ca1','yash','yash@gofr.dev',8899667722)`
 )
 
 var version int

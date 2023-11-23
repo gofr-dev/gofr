@@ -24,7 +24,7 @@ type errorCase struct {
 func TestContext_Projections_success(t *testing.T) {
 	testCases := getSuccessCases()
 
-	k := Gofr{
+	g := Gofr{
 		ResourceMap: map[string][]string{
 			"products": {"inventory", "images", "brand", "prices"},
 			"brand":    {"certifications"},
@@ -43,7 +43,7 @@ func TestContext_Projections_success(t *testing.T) {
 		r := httptest.NewRequest(http.MethodGet, tc.target, nil)
 		req := request.NewHTTPRequest(r)
 
-		c := NewContext(nil, req, &k)
+		c := NewContext(nil, req, &g)
 
 		value, err := c.Projections(tc.resource)
 
@@ -60,7 +60,7 @@ func TestContext_Projections_success(t *testing.T) {
 func TestContext_Projections_errors(t *testing.T) {
 	testcases := getErrorsCases()
 
-	k := Gofr{
+	g := Gofr{
 		ResourceMap: map[string][]string{
 			"products": {"inventory", "images", "brand", "prices"},
 			"brand":    {"certifications"},
@@ -80,7 +80,7 @@ func TestContext_Projections_errors(t *testing.T) {
 		r := httptest.NewRequest(http.MethodGet, tc.target, nil)
 		req := request.NewHTTPRequest(r)
 
-		c := NewContext(nil, req, &k)
+		c := NewContext(nil, req, &g)
 		value, err := c.Projections(tc.resource)
 
 		if !assert.Equal(t, ProjectionMapType(nil), value) {

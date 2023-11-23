@@ -263,7 +263,7 @@ info:
   title: LogisticsAPI
   version: '0.1'
 servers:
-  - url: 'http://api.staging.zopsmart.com'
+  - url: 'http://api.staging.gofr.dev'
 paths:
   /hello-world:
     get:
@@ -279,12 +279,6 @@ paths:
         - Hello
       description: Sample API Hello with name
       parameters:
-        - name: x-zopsmart-tenent
-          in: header
-          schema:
-            type: string
-            format: uuid
-          example: 'good4more'
         - name: X-Correlation-ID
           in: header
           schema:
@@ -325,12 +319,6 @@ paths:
         - Hello
       description: Sample API Hello with name
       parameters:
-        - name: x-zopsmart-tenent
-          in: header
-          schema:
-            type: string
-            format: uuid
-          example: 'good4more'
         - name: X-Correlation-ID
           in: header
           schema:
@@ -394,7 +382,7 @@ info:
   title: LogisticsAPI
   version: '0.1'
 servers:
-  - url: 'http://api.staging.zopsmart.com'
+  - url: 'http://api.staging.gofr.dev'
 paths:
   /hello/{id}:
     put:

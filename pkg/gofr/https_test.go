@@ -21,9 +21,9 @@ func TestRedirectHttps(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	k := New()
+	g := New()
 	rr := httptest.NewRecorder()
-	handler := http.HandlerFunc(k.Server.redirectHandler)
+	handler := http.HandlerFunc(g.Server.redirectHandler)
 
 	handler.ServeHTTP(rr, req)
 
@@ -65,7 +65,7 @@ func TestGofrHttpsStart(t *testing.T) {
 }
 
 func TestHTTPSFail(t *testing.T) {
-	k := New()
+	g := New()
 
 	httpsServer := &HTTPS{
 		Port:            9011,
@@ -73,7 +73,7 @@ func TestHTTPSFail(t *testing.T) {
 		CertificateFile: "../../examples/sample-https/configs/server.crt",
 		KeyFile:         "failtestkey.pem",
 	}
-	httpsServer.StartServer(k.Logger, k.Server.Router)
+	httpsServer.StartServer(g.Logger, g.Server.Router)
 
 	req, _ := http.NewRequest(http.MethodGet, "https://localhost:9011/", http.NoBody)
 	client := http.Client{}

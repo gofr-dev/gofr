@@ -54,7 +54,7 @@ func (a *appInfo) getAppData() appInfo {
 // in terminal context and gives out json in non terminal context. Also, sends to echo if client is present.
 //
 //nolint:gocognit // reducing the function length reduces readability
-func (k *logger) log(level level, format string, args ...interface{}) {
+func (l *logger) log(level level, format string, args ...interface{}) {
 	mu.Lock()
 
 	lvl := rls.level
@@ -69,7 +69,7 @@ func (k *logger) log(level level, format string, args ...interface{}) {
 
 	e.Level = level
 	e.System = fetchSystemStats()
-	e.App = k.app.getAppData()
+	e.App = l.app.getAppData()
 
 	if isPerformanceLog {
 		// in performance log, app data is under the key `appData` instead of e.App.Data.
@@ -84,8 +84,8 @@ func (k *logger) log(level level, format string, args ...interface{}) {
 		e.App.Data[key] = val
 	}
 
-	if k.correlationID != "" { // CorrelationID from Application Log
-		e.CorrelationID = k.correlationID
+	if l.correlationID != "" { // CorrelationID from Application Log
+		e.CorrelationID = l.correlationID
 	} else if correlationID, ok := e.App.Data["correlationID"]; ok {
 		/*CorrelationID for middleware apart from Performance log.
 		For performance log the correlationID comes from Logline struct defined in logging.go.*/
@@ -100,10 +100,10 @@ func (k *logger) log(level level, format string, args ...interface{}) {
 	// Deleting the correlationId in case of any duplication.
 	delete(e.App.Data, "correlationID")
 
-	if k.isTerminal {
-		fmt.Fprint(k.out, e.TerminalOutput())
+	if l.isTerminal {
+		fmt.Fprint(l.out, e.TerminalOutput())
 	} else {
-		_ = json.NewEncoder(k.out).Encode(e)
+		_ = json.NewEncoder(l.out).Encode(e)
 	}
 }
 
@@ -116,79 +116,79 @@ func isJSON(s interface{}) (ok bool, hashmap map[string]interface{}) {
 }
 
 // Log logs messages at the default level.
-func (k *logger) Log(args ...interface{}) {
-	k.log(Info, "", args...)
+func (l *logger) Log(args ...interface{}) {
+	l.log(Info, "", args...)
 }
 
 // Logf logs formatted messages at default level.
-func (k *logger) Logf(format string, args ...interface{}) {
-	k.log(Info, format, args...)
+func (l *logger) Logf(format string, args ...interface{}) {
+	l.log(Info, format, args...)
 }
 
 // Info logs messages at the INFO level.
-func (k *logger) Info(args ...interface{}) {
-	k.log(Info, "", args...)
+func (l *logger) Info(args ...interface{}) {
+	l.log(Info, "", args...)
 }
 
 // Infof logs formatted messages at the INFO level.
-func (k *logger) Infof(format string, args ...interface{}) {
-	k.log(Info, format, args...)
+func (l *logger) Infof(format string, args ...interface{}) {
+	l.log(Info, format, args...)
 }
 
 // Debug logs messages at the DEBUG level.
-func (k *logger) Debug(args ...interface{}) {
-	k.log(Debug, "", args...)
+func (l *logger) Debug(args ...interface{}) {
+	l.log(Debug, "", args...)
 }
 
 // Debugf logs formatted messages at the DEBUG level.
-func (k *logger) Debugf(format string, args ...interface{}) {
-	k.log(Debug, format, args...)
+func (l *logger) Debugf(format string, args ...interface{}) {
+	l.log(Debug, format, args...)
 }
 
 // Warn logs messages at the WARN level.
-func (k *logger) Warn(args ...interface{}) {
-	k.log(Warn, "", args...)
+func (l *logger) Warn(args ...interface{}) {
+	l.log(Warn, "", args...)
 }
 
 // Warnf logs formatted messages at the WARN level.
-func (k *logger) Warnf(format string, args ...interface{}) {
-	k.log(Warn, format, args...)
+func (l *logger) Warnf(format string, args ...interface{}) {
+	l.log(Warn, format, args...)
 }
 
 // Error logs messages at the ERROR level and captures the stack trace.
-func (k *logger) Error(args ...interface{}) {
-	k.AddData("StackTrace", string(debug.Stack()))
-	k.log(Error, "", args...)
-	k.removeData("StackTrace")
+func (l *logger) Error(args ...interface{}) {
+	l.AddData("StackTrace", string(debug.Stack()))
+	l.log(Error, "", args...)
+	l.removeData("StackTrace")
 }
 
 // Errorf logs formatted messages at the ERROR level and captures the stack trace.
-func (k *logger) Errorf(format string, args ...interface{}) {
-	k.AddData("StackTrace", string(debug.Stack()))
-	k.log(Error, format, args...)
-	k.removeData("StackTrace")
+func (l *logger) Errorf(format string, args ...interface{}) {
+	l.AddData("StackTrace", string(debug.Stack()))
+	l.log(Error, format, args...)
+	l.removeData("StackTrace")
 }
 
 // Fatal logs messages at the FATAL level, captures the stack trace, and exits the application.
-func (k *logger) Fatal(args ...interface{}) {
-	k.AddData("StackTrace", string(debug.Stack()))
-	k.log(Fatal, "", args...)
+func (l *logger) Fatal(args ...interface{}) {
+	l.AddData("StackTrace", string(debug.Stack()))
+	l.log(Fatal, "", args...)
 	os.Exit(1)
 }
 
 // Fatalf logs formatted messages at the FATAL level, captures the stack trace, and exits the application.
-func (k *logger) Fatalf(format string, args ...interface{}) {
-	k.AddData("StackTrace", string(debug.Stack()))
-	k.log(Fatal, format, args...)
+func (l *logger) Fatalf(format string, args ...interface{}) {
+	l.AddData("StackTrace", string(debug.Stack()))
+	l.log(Fatal, format, args...)
 	os.Exit(1)
 }
 
 // AddData adds key-value data to the logger's application data.
-func (k *logger) AddData(key string, value interface{}) {
-	k.app.syncData.Store(key, value)
+func (l *logger) AddData(key string, value interface{}) {
+	l.app.syncData.Store(key, value)
 }
 
 // removeData removes the specified key from the logger's application data.
-func (k *logger) removeData(key string) {
-	k.app.syncData.Delete(key)
+func (l *logger) removeData(key string) {
+	l.app.syncData.Delete(key)
 }

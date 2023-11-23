@@ -6,30 +6,31 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	"gofr.dev/pkg"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestRouteLog(t *testing.T) {
-	k := New()
+	g := New()
 
-	k.GET("/", func(c *Context) (interface{}, error) { return helloWorld, nil })
-	k.GET("/hello-world", func(c *Context) (interface{}, error) { return helloWorld, nil })
-	k.GET("/hello-world/", func(c *Context) (interface{}, error) { return helloWorld, nil })
-	k.POST("/hello-world", func(c *Context) (interface{}, error) { return helloWorld, nil })
-	k.POST("/hello-world/", func(c *Context) (interface{}, error) { return helloWorld, nil })
-	k.POST("/hello", func(c *Context) (interface{}, error) { return helloWorld, nil })
-	k.POST("/hello/", func(c *Context) (interface{}, error) { return helloWorld, nil })
+	g.GET("/", func(c *Context) (interface{}, error) { return helloWorld, nil })
+	g.GET("/hello-world", func(c *Context) (interface{}, error) { return helloWorld, nil })
+	g.GET("/hello-world/", func(c *Context) (interface{}, error) { return helloWorld, nil })
+	g.POST("/hello-world", func(c *Context) (interface{}, error) { return helloWorld, nil })
+	g.POST("/hello-world/", func(c *Context) (interface{}, error) { return helloWorld, nil })
+	g.POST("/hello", func(c *Context) (interface{}, error) { return helloWorld, nil })
+	g.POST("/hello/", func(c *Context) (interface{}, error) { return helloWorld, nil })
 
 	// should not be returned from logRoutes() as method is invalid
-	k.Server.Router.Route("", "/failed", func(c *Context) (interface{}, error) { return helloWorld, nil })
+	g.Server.Router.Route("", "/failed", func(c *Context) (interface{}, error) { return helloWorld, nil })
 
 	// should not be returned from logRoutes() as path is invalid
-	k.POST("$$$$$", func(c *Context) (interface{}, error) { return helloWorld, nil })
+	g.POST("$$$$$", func(c *Context) (interface{}, error) { return helloWorld, nil })
 
 	expected := "GET / HEAD / GET /hello-world HEAD /hello-world POST /hello-world POST /hello "
 
-	got := fmt.Sprintf("%s"+"", k.Server.Router)
+	got := fmt.Sprintf("%s"+"", g.Server.Router)
 
 	if !reflect.DeepEqual(got, expected) {
 		t.Errorf("expected: %v, got: %v", expected, got)
@@ -61,16 +62,16 @@ func TestRouter_WellKnownEndpoint(t *testing.T) {
 			" /.well-known/heartbeat HEAD /.well-known/heartbeat "},
 	}
 	for i, tc := range testcases {
-		k := New()
+		g := New()
 
-		k.Server.Router.Prefix(tc.prefix)
-		k.GET(tc.route, func(c *Context) (interface{}, error) { return helloWorld, nil })
+		g.Server.Router.Prefix(tc.prefix)
+		g.GET(tc.route, func(c *Context) (interface{}, error) { return helloWorld, nil })
 
-		go k.Start()
+		go g.Start()
 
 		time.Sleep(3 * time.Second)
 
-		assert.Equal(t, tc.expectedLog, fmt.Sprintf("%s", k.Server.Router), "Test Failed[%d]:%v", i, tc.desc)
+		assert.Equal(t, tc.expectedLog, fmt.Sprintf("%s", g.Server.Router), "Test Failed[%d]:%v", i, tc.desc)
 	}
 }
 

@@ -65,6 +65,10 @@ func TestMain(m *testing.M) {
 }
 
 func TestUniversalIntegration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping testing in short mode")
+	}
+
 	// call the main function
 	go main()
 	// sleep, so that every data stores get initialized properly
@@ -86,7 +90,7 @@ func testDataStores(tb testing.TB) {
 		// Cassandra
 		{1, http.MethodGet, "/cassandra/employee?name=Aman", http.StatusOK, nil},
 		{2, http.MethodPost, "/cassandra/employee", http.StatusCreated,
-			[]byte(`{"id": 5, "name": "Sukanya", "phone": "01477", "email":"sukanya@zopsmart.com", "city":"Guwahati"}`)},
+			[]byte(`{"id": 5, "name": "Sukanya", "phone": "01477", "email":"sukanya@gofr.dev", "city":"Guwahati"}`)},
 		{3, http.MethodGet, "/cassandra/unknown", http.StatusNotFound, nil},
 		// Redis
 		{4, http.MethodGet, "/redis/config/key123", http.StatusInternalServerError, nil},
@@ -94,7 +98,7 @@ func testDataStores(tb testing.TB) {
 		// Postgres
 		{6, http.MethodGet, "/pgsql/employee", http.StatusOK, nil},
 		{7, http.MethodPost, "/pgsql/employee", http.StatusCreated,
-			[]byte(`{"id": 5, "name": "Sukanya", "phone": "01477", "email":"sukanya@zopsmart.com", "city":"Guwahati"}`)},
+			[]byte(`{"id": 5, "name": "Sukanya", "phone": "01477", "email":"sukanya@gofr.dev", "city":"Guwahati"}`)},
 	}
 	for _, tc := range tests {
 		req, _ := request.NewMock(tc.method, "http://localhost:9095"+tc.endpoint, bytes.NewBuffer(tc.body))
@@ -253,14 +257,14 @@ func cassandraTableInitialization(app *gofr.Gofr) {
 }
 
 // Postgres Table initialization, Remove table if already exists
-func postgresTableInitialization(k *gofr.Gofr) {
-	if k.DB() == nil {
+func postgresTableInitialization(g *gofr.Gofr) {
+	if g.DB() == nil {
 		return
 	}
 
 	query := `DROP TABLE IF EXISTS employees`
-	if _, err := k.DB().Exec(query); err != nil {
-		k.Logger.Errorf("Got error while dropping the existing table employees: ", err)
+	if _, err := g.DB().Exec(query); err != nil {
+		g.Logger.Errorf("Got error while dropping the existing table employees: ", err)
 	}
 
 	queryTable := `
@@ -272,8 +276,8 @@ func postgresTableInitialization(k *gofr.Gofr) {
  	   city       varchar(50))
 	`
 
-	if _, err := k.DB().Exec(queryTable); err != nil {
-		k.Logger.Errorf("Got error while sourcing the schema: ", err)
+	if _, err := g.DB().Exec(queryTable); err != nil {
+		g.Logger.Errorf("Got error while sourcing the schema: ", err)
 	}
 }
 

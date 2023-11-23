@@ -79,8 +79,8 @@ func TestCreate(t *testing.T) {
 		body []byte
 		err  error
 	}{
-		{"create success case", []byte(`{"id":"1", "name":  "gofr", "email": "gofr@zopsmart.com"}`), nil},
-		{"create fail case", []byte(`{"id":"1", "name":  "gofr", "email": "gofr@zopsmart.com"}`), errors.DB{}},
+		{"create success case", []byte(`{"id":"1", "name":  "gofr", "email": "gofr@gofr.dev"}`), nil},
+		{"create fail case", []byte(`{"id":"1", "name":  "gofr", "email": "gofr@gofr.dev"}`), errors.DB{}},
 	}
 
 	for i, tc := range tests {
@@ -104,8 +104,8 @@ func TestUpdate(t *testing.T) {
 		body []byte
 		err  error
 	}{
-		{"update success case", []byte(`{"id":"1", "name":  "gofr", "email": "gofr@zopsmart.com"}`), nil},
-		{"update fail case", []byte(`{"id":"1", "name":  "gofr", "email": "gofr@zopsmart.com"}`), errors.DB{}},
+		{"update success case", []byte(`{"id":"1", "name":  "gofr", "email": "gofr@gofr.dev"}`), nil},
+		{"update fail case", []byte(`{"id":"1", "name":  "gofr", "email": "gofr@gofr.dev"}`), errors.DB{}},
 	}
 
 	for i, tc := range tests {
@@ -131,7 +131,7 @@ func TestUpdate(t *testing.T) {
 }
 
 func Test_BindError(t *testing.T) {
-	body := []byte(`{"id": 1, "name":  "gofr", "email": "gofr@zopsmart.com"}`)
+	body := []byte(`{"id": 1, "name":  "gofr", "email": "gofr@gofr.dev"}`)
 
 	_, h, ctx := initializeTest(t, http.MethodPut, "/person", body)
 	ctx.SetPathParams(map[string]string{

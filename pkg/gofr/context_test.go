@@ -298,7 +298,7 @@ type company struct {
 }
 
 func TestContext_BindStrict(t *testing.T) {
-	reqBody := `{"name":"ZopSmart","location":"Bangalore"}`
+	reqBody := `{"name":"gofr.dev","location":"Bangalore"}`
 	r, _ := http.NewRequest("GET", "http://dummy", bytes.NewBuffer([]byte(reqBody)))
 	req := request.NewHTTPRequest(r)
 

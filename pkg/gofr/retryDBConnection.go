@@ -15,17 +15,17 @@ import (
 
 // awsSNSRetry retries connecting to aws SNS
 // once connection is successful, retrying is terminated
-func awsSNSRetry(c *awssns.Config, k *Gofr) {
+func awsSNSRetry(c *awssns.Config, g *Gofr) {
 	for {
 		time.Sleep(time.Duration(c.ConnRetryDuration) * time.Second)
 
-		k.Logger.Debug("Retrying AWS SNS connection")
+		g.Logger.Debug("Retrying AWS SNS connection")
 
 		var err error
 
-		k.Notifier, err = awssns.New(c)
+		g.Notifier, err = awssns.New(c)
 		if err == nil {
-			k.Logger.Info("AWS SNS initialized successfully")
+			g.Logger.Info("AWS SNS initialized successfully")
 
 			break
 		}
@@ -34,35 +34,35 @@ func awsSNSRetry(c *awssns.Config, k *Gofr) {
 
 // kafkaRetry retries connecting to kafka
 // once connection is successful, retrying is terminated
-func kafkaRetry(c *kafka.Config, avroConfig *avro.Config, k *Gofr) {
+func kafkaRetry(c *kafka.Config, avroConfig *avro.Config, g *Gofr) {
 	for {
 		time.Sleep(time.Duration(c.ConnRetryDuration) * time.Second)
 
-		k.Logger.Debug("Retrying Kafka connection")
+		g.Logger.Debug("Retrying Kafka connection")
 
 		var err error
 
-		k.PubSub, err = kafka.New(c, k.Logger)
+		g.PubSub, err = kafka.New(c, g.Logger)
 		if err == nil {
-			k.Logger.Info("Kafka initialized successfully")
+			g.Logger.Info("Kafka initialized successfully")
 
-			initializeAvro(avroConfig, k)
+			initializeAvro(avroConfig, g)
 
 			break
 		}
 	}
 }
-func eventbridgeRetry(c *eventbridge.Config, k *Gofr) {
+func eventbridgeRetry(c *eventbridge.Config, g *Gofr) {
 	for {
 		time.Sleep(time.Duration(c.ConnRetryDuration) * time.Second)
 
-		k.Logger.Debug("Retrying AWS EventBridge connection")
+		g.Logger.Debug("Retrying AWS EventBridge connection")
 
 		var err error
 
-		k.PubSub, err = eventbridge.New(c)
+		g.PubSub, err = eventbridge.New(c)
 		if err == nil {
-			k.Logger.Info("AWS EventBridge initialized successfully")
+			g.Logger.Info("AWS EventBridge initialized successfully")
 
 			break
 		}
@@ -72,170 +72,169 @@ func eventbridgeRetry(c *eventbridge.Config, k *Gofr) {
 // eventhubRetry retries connecting to eventhub
 // once connection is successful, retrying is terminated
 // also while retrying to connect to eventhub, initializes avro as well if configs are set
-func eventhubRetry(c *eventhub.Config, avroConfig *avro.Config, k *Gofr) {
+func eventhubRetry(c *eventhub.Config, avroConfig *avro.Config, g *Gofr) {
 	for {
 		time.Sleep(time.Duration(c.ConnRetryDuration) * time.Second)
 
-		k.Logger.Debug("Retrying Eventhub connection")
+		g.Logger.Debug("Retrying Eventhub connection")
 
 		var err error
 
-		k.PubSub, err = eventhub.New(c)
+		g.PubSub, err = eventhub.New(c)
 		if err == nil {
-			k.Logger.Info("Eventhub initialized successfully, Namespace: %v, Eventhub: %v\\n", c.Namespace, c.EventhubName)
+			g.Logger.Info("Eventhub initialized successfully, Namespace: %v, Eventhub: %v\\n", c.Namespace, c.EventhubName)
 
-			initializeAvro(avroConfig, k)
+			initializeAvro(avroConfig, g)
 
 			break
 		}
 	}
 }
 
-func mongoRetry(c *datastore.MongoConfig, k *Gofr) {
+func mongoRetry(c *datastore.MongoConfig, g *Gofr) {
 	for {
 		time.Sleep(time.Duration(c.ConnRetryDuration) * time.Second)
 
-		k.Logger.Debug("Retrying MongoDB connection")
+		g.Logger.Debug("Retrying MongoDB connection")
 
 		var err error
 
-		k.MongoDB, err = datastore.GetNewMongoDB(k.Logger, c)
+		g.MongoDB, err = datastore.GetNewMongoDB(g.Logger, c)
 
 		if err == nil {
-			k.Logger.Info("MongoDB initialized successfully")
+			g.Logger.Info("MongoDB initialized successfully")
 
 			break
 		}
 	}
 }
 
-func yclRetry(c *datastore.CassandraCfg, k *Gofr) {
+func yclRetry(c *datastore.CassandraCfg, g *Gofr) {
 	for {
 		time.Sleep(time.Duration(c.ConnRetryDuration) * time.Second)
 
-		k.Logger.Debug("Retrying Ycql connection")
+		g.Logger.Debug("Retrying Ycql connection")
 
 		var err error
 
-		k.YCQL, err = datastore.GetNewYCQL(k.Logger, c)
+		g.YCQL, err = datastore.GetNewYCQL(g.Logger, c)
 		if err == nil {
-			k.Logger.Info("Ycql initialized successfully")
+			g.Logger.Info("Ycql initialized successfully")
 			break
 		}
 	}
 }
 
-func cassandraRetry(c *datastore.CassandraCfg, k *Gofr) {
+func cassandraRetry(c *datastore.CassandraCfg, g *Gofr) {
 	for {
 		time.Sleep(time.Duration(c.ConnRetryDuration) * time.Second)
 
-		k.Logger.Debug("Retrying Cassandra connection")
+		g.Logger.Debug("Retrying Cassandra connection")
 
 		var err error
 
-		k.Cassandra, err = datastore.GetNewCassandra(k.Logger, c)
+		g.Cassandra, err = datastore.GetNewCassandra(g.Logger, c)
 		if err == nil {
-			k.Logger.Info("Cassandra initialized successfully")
+			g.Logger.Info("Cassandra initialized successfully")
 
 			break
 		}
 	}
 }
 
-func ormRetry(c *datastore.DBConfig, k *Gofr) {
+func ormRetry(c *datastore.DBConfig, g *Gofr) {
 	for {
 		time.Sleep(time.Duration(c.ConnRetryDuration) * time.Second)
 
-		k.Logger.Debug("Retrying ORM connection")
+		g.Logger.Debug("Retrying ORM connection")
 
 		db, err := datastore.NewORM(c)
 		if err == nil {
-			k.SetORM(db)
-			k.Logger.Info("ORM initialized successfully")
+			g.SetORM(db)
+			g.Logger.Info("ORM initialized successfully")
 
 			break
 		}
 	}
 }
 
-func sqlxRetry(c *datastore.DBConfig, k *Gofr) {
+func sqlxRetry(c *datastore.DBConfig, g *Gofr) {
 	for {
 		time.Sleep(time.Duration(c.ConnRetryDuration) * time.Second)
 
-		k.Logger.Debug("Retrying SQLX connection")
+		g.Logger.Debug("Retrying SQLX connection")
 
 		db, err := datastore.NewSQLX(c)
 		if err == nil {
-			k.SetORM(db)
-			k.Logger.Info("SQLX initialized successfully")
+			g.SetORM(db)
+			g.Logger.Info("SQLX initialized successfully")
 
 			break
 		}
 	}
 }
 
-func redisRetry(c *datastore.RedisConfig, k *Gofr) {
+func redisRetry(c *datastore.RedisConfig, g *Gofr) {
+	for {
+		time.Sleep(time.Duration(c.ConnectionRetryDuration) * time.Second)
+		g.Logger.Debug("Retrying Redis connection")
+
+		var err error
+
+		g.Redis, err = datastore.NewRedis(g.Logger, *c)
+		if err == nil {
+			g.Logger.Info("Redis initialized successfully")
+
+			break
+		}
+	}
+}
+
+func elasticSearchRetry(c *datastore.ElasticSearchCfg, g *Gofr) {
 	for {
 		time.Sleep(time.Duration(c.ConnectionRetryDuration) * time.Second)
 
-		k.Logger.Debug("Retrying Redis connection")
+		g.Logger.Debug("Retrying ElasticSearch connection")
 
 		var err error
 
-		k.Redis, err = datastore.NewRedis(k.Logger, *c)
+		g.Elasticsearch, err = datastore.NewElasticsearchClient(g.Logger, c)
 		if err == nil {
-			k.Logger.Info("Redis initialized successfully")
+			g.Logger.Infof("connected to elasticsearch, HOST: %s, PORT: %v\n", c.Host, c.Ports)
 
 			break
 		}
 	}
 }
 
-func elasticSearchRetry(c *datastore.ElasticSearchCfg, k *Gofr) {
-	for {
-		time.Sleep(time.Duration(c.ConnectionRetryDuration) * time.Second)
-
-		k.Logger.Debug("Retrying ElasticSearch connection")
-
-		var err error
-
-		k.Elasticsearch, err = datastore.NewElasticsearchClient(k.Logger, c)
-		if err == nil {
-			k.Logger.Infof("connected to elasticsearch, HOST: %s, PORT: %v\n", c.Host, c.Ports)
-
-			break
-		}
-	}
-}
-
-func dynamoRetry(c datastore.DynamoDBConfig, k *Gofr) {
+func dynamoRetry(c datastore.DynamoDBConfig, g *Gofr) {
 	for {
 		time.Sleep(time.Duration(c.ConnRetryDuration) * time.Second)
 
-		k.Logger.Debug("Retrying DynamoDB connection")
+		g.Logger.Debug("Retrying DynamoDB connection")
 
 		var err error
 
-		k.DynamoDB, err = datastore.NewDynamoDB(k.Logger, c)
+		g.DynamoDB, err = datastore.NewDynamoDB(g.Logger, c)
 		if err == nil {
-			k.Logger.Infof("DynamoDB initialized successfully, %v", c.Endpoint)
+			g.Logger.Infof("DynamoDB initialized successfully, %v", c.Endpoint)
 
 			break
 		}
 	}
 }
 
-func googlePubsubRetry(c google.Config, k *Gofr) {
+func googlePubsubRetry(c google.Config, g *Gofr) {
 	for {
 		time.Sleep(time.Duration(c.ConnRetryDuration) * time.Second)
 
-		k.Logger.Debug("Retrying Google Pub-Sub connection")
+		g.Logger.Debug("Retrying Google Pub-Sub connection")
 
 		var err error
 
-		k.PubSub, err = google.New(&c, k.Logger)
+		g.PubSub, err = google.New(&c, g.Logger)
 		if err == nil {
-			k.Logger.Infof("Google Pub-Sub initialized successfully")
+			g.Logger.Infof("Google Pub-Sub initialized successfully")
 
 			break
 		}

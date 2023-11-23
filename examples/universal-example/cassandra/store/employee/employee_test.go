@@ -35,11 +35,11 @@ func TestCassandraEmployee_Get(t *testing.T) {
 		input  entity.Employee
 		output []entity.Employee
 	}{
-		{entity.Employee{ID: 1}, []entity.Employee{{ID: 1, Name: "Rohan", Phone: "01222", Email: "rohan@zopsmart.com", City: "Berlin"}}},
-		{entity.Employee{ID: 1, Name: "Rohan", Phone: "01222", Email: "rohan@zopsmart.com", City: "Berlin"},
-			[]entity.Employee{{ID: 1, Name: "Rohan", Phone: "01222", Email: "rohan@zopsmart.com", City: "Berlin"}}},
-		{entity.Employee{}, []entity.Employee{{ID: 1, Name: "Rohan", Phone: "01222", Email: "rohan@zopsmart.com", City: "Berlin"},
-			{ID: 2, Name: "Aman", Phone: "22234", Email: "aman@zopsmart.com", City: "Florida"}}},
+		{entity.Employee{ID: 1}, []entity.Employee{{ID: 1, Name: "Rohan", Phone: "01222", Email: "rohan@gofr.dev", City: "Berlin"}}},
+		{entity.Employee{ID: 1, Name: "Rohan", Phone: "01222", Email: "rohan@gofr.dev", City: "Berlin"},
+			[]entity.Employee{{ID: 1, Name: "Rohan", Phone: "01222", Email: "rohan@gofr.dev", City: "Berlin"}}},
+		{entity.Employee{}, []entity.Employee{{ID: 1, Name: "Rohan", Phone: "01222", Email: "rohan@gofr.dev", City: "Berlin"},
+			{ID: 2, Name: "Aman", Phone: "22234", Email: "aman@gofr.dev", City: "Florida"}}},
 		{entity.Employee{ID: 7, Name: "Sunita"}, nil},
 	}
 
@@ -58,10 +58,10 @@ func TestCassandraEmployee_Create(t *testing.T) {
 		output []entity.Employee
 		err    error
 	}{
-		{entity.Employee{ID: 3, Name: "Sunita", Phone: "01234", Email: "sunita@zopsmart.com", City: "Darbhanga"},
-			[]entity.Employee{{ID: 3, Name: "Sunita", Phone: "01234", Email: "sunita@zopsmart.com", City: "Darbhanga"}}, nil},
-		{entity.Employee{ID: 4, Name: "Anna", Phone: "01333", Email: "anna@zopsmart.com", City: "Delhi"},
-			[]entity.Employee{{ID: 4, Name: "Anna", Phone: "01333", Email: "anna@zopsmart.com", City: "Delhi"}}, nil},
+		{entity.Employee{ID: 3, Name: "Sunita", Phone: "01234", Email: "sunita@gofr.dev", City: "Darbhanga"},
+			[]entity.Employee{{ID: 3, Name: "Sunita", Phone: "01234", Email: "sunita@gofr.dev", City: "Darbhanga"}}, nil},
+		{entity.Employee{ID: 4, Name: "Anna", Phone: "01333", Email: "anna@gofr.dev", City: "Delhi"},
+			[]entity.Employee{{ID: 4, Name: "Anna", Phone: "01333", Email: "anna@gofr.dev", City: "Delhi"}}, nil},
 	}
 
 	app := initializeTest(t)

@@ -427,3 +427,14 @@ func setQueryParams(params map[string]string) string {
 
 	return strings.TrimSuffix(url, "&")
 }
+
+func Test_validChecks(t *testing.T) {
+	methods := map[string]bool{"GET": true}
+	path := "hello-world"
+
+	file, _ := os.OpenFile("../../../examples/sample-api/main.go", os.O_RDONLY, migration.RWMode)
+
+	_, _, err := validChecks(methods, path, file)
+
+	assert.Nil(t, err, "TEST Failed")
+}

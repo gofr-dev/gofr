@@ -78,11 +78,11 @@ func Test_initializeDynamoDB(t *testing.T) {
 	}
 
 	for _, tc := range tcs {
-		k := NewWithConfig(tc.config)
+		g := NewWithConfig(tc.config)
 		b := new(bytes.Buffer)
 
-		k.Logger = log.NewMockLogger(b)
-		initializeDynamoDB(tc.config, k)
+		g.Logger = log.NewMockLogger(b)
+		initializeDynamoDB(tc.config, g)
 
 		if !strings.Contains(b.String(), tc.output) {
 			t.Errorf("FAILED, expected: `%v` in the logs, got: %v", tc.output, b.String())
@@ -91,11 +91,11 @@ func Test_initializeDynamoDB(t *testing.T) {
 }
 
 func Test_initializeDynamoDB_EmptyLog(t *testing.T) {
-	k := New()
+	g := New()
 	b := new(bytes.Buffer)
 
-	k.Logger = log.NewMockLogger(b)
-	initializeDynamoDB(&config.MockConfig{Data: map[string]string{}}, k)
+	g.Logger = log.NewMockLogger(b)
+	initializeDynamoDB(&config.MockConfig{Data: map[string]string{}}, g)
 
 	if strings.Contains(strings.ToLower(b.String()), "dynamodb") {
 		t.Errorf("FAILED, did not expect DynamoDB in logs")
@@ -105,18 +105,18 @@ func Test_initializeDynamoDB_EmptyLog(t *testing.T) {
 func Test_initializeRedis(t *testing.T) {
 	tcs := []struct {
 		c      Config
-		expStr string // expected in the logs, logged by k.Logger
+		expStr string // expected in the logs, logged by g.Logger
 	}{
 		{mockConfig{testCase: "redis error"}, "could not connect to Redis"},
 		{mockConfig{}, "Redis connected"},
 	}
 
 	for _, tc := range tcs {
-		k := New()
+		g := New()
 		b := new(bytes.Buffer)
 
-		k.Logger = log.NewMockLogger(b)
-		initializeRedis(tc.c, k)
+		g.Logger = log.NewMockLogger(b)
+		initializeRedis(tc.c, g)
 
 		if !strings.Contains(b.String(), tc.expStr) {
 			t.Errorf("FAILED, expected: `%v` in the logs, got: %v", tc.expStr, b.String())
@@ -153,11 +153,11 @@ func Test_RedisDBConnection(t *testing.T) {
 			},
 		}
 
-		k := NewWithConfig(&mockConfig)
+		g := NewWithConfig(&mockConfig)
 
-		k.Logger = logger
+		g.Logger = logger
 
-		inc, _ := k.Redis.Incr(context.Background(), "get-redis-db-connection").Result()
+		inc, _ := g.Redis.Incr(context.Background(), "get-redis-db-connection").Result()
 		assert.Equal(t, tc.exp, inc, "TEST[%d], failed.Expected:%v,Got:%v", i, tc.exp, inc)
 	}
 }
@@ -196,10 +196,10 @@ func Test_initializeDB(t *testing.T) {
 			},
 		}
 
-		k := NewWithConfig(&mockConfig)
-		k.Logger = logger
+		g := NewWithConfig(&mockConfig)
+		g.Logger = logger
 
-		initializeDB(&mockConfig, k)
+		initializeDB(&mockConfig, g)
 
 		if !strings.Contains(b.String(), tc.expectedLog) {
 			t.Errorf("[TESTCASE %d] Failed. Got: %v\tExpected: %v\n", i+1, b.String(), tc.expectedLog)
@@ -224,10 +224,10 @@ func Test_InitializeElasticsearch(t *testing.T) {
 	for i, tc := range testcases {
 		b := new(bytes.Buffer)
 
-		k := NewWithConfig(tc.config)
-		k.Logger = log.NewMockLogger(b)
+		g := NewWithConfig(tc.config)
+		g.Logger = log.NewMockLogger(b)
 
-		initializeElasticsearch(tc.config, k)
+		initializeElasticsearch(tc.config, g)
 
 		if !strings.Contains(b.String(), tc.expectedLog) {
 			t.Errorf("[TESTCASE%v] Failed.\nExpected: %v\nGot: %v", i+1, tc.expectedLog, b.String())
@@ -251,11 +251,11 @@ func Test_initializeMongoDB(t *testing.T) {
 	}
 
 	for _, tc := range tcs {
-		k := New()
+		g := New()
 		b := new(bytes.Buffer)
 
-		k.Logger = log.NewMockLogger(b)
-		initializeMongoDB(tc.configLoc, k)
+		g.Logger = log.NewMockLogger(b)
+		initializeMongoDB(tc.configLoc, g)
 
 		if !strings.Contains(b.String(), tc.expectedStr) {
 			t.Errorf("FAILED, expected: `%v` in the logs, got: %v", tc.expectedStr, b.String())
@@ -278,10 +278,10 @@ func Test_initializeCassandra(t *testing.T) {
 	}
 
 	for _, tc := range tcs {
-		k := &Gofr{}
-		k.Logger = logger
+		g := &Gofr{}
+		g.Logger = logger
 
-		initializeCassandra(mockConfig{}, k)
+		initializeCassandra(mockConfig{}, g)
 
 		if !strings.Contains(b.String(), tc.expectedStr) {
 			t.Errorf("FAILED, expected: `%v` in the logs, got: %v", tc.expectedStr, b.String())
@@ -296,10 +296,10 @@ func Test_initializeCassandra_InvalidDialect(t *testing.T) {
 	b := new(bytes.Buffer)
 	logger := log.NewMockLogger(b)
 
-	k := &Gofr{}
-	k.Logger = logger
+	g := &Gofr{}
+	g.Logger = logger
 
-	initializeCassandra(&c, k)
+	initializeCassandra(&c, g)
 
 	if !strings.Contains(b.String(), expectedLog) {
 		t.Errorf("FAILED, expected: `%v` in the logs, got: %v", expectedLog, b.String())
@@ -333,12 +333,12 @@ func Test_getYcqlConfigs(t *testing.T) {
 	for i, tc := range testCases {
 		b.Reset()
 
-		k := &Gofr{}
-		k.Logger = logger
+		g := &Gofr{}
+		g.Logger = logger
 
 		cfg.Data["CASS_DB_HOST"] = tc.host
 
-		initializeCassandra(cfg, k)
+		initializeCassandra(cfg, g)
 
 		if !strings.Contains(b.String(), tc.expectedStr) {
 			t.Errorf("FAILED case`%v`, expected: `%v` in the logs, got: %v", i, tc.expectedStr, b.String())
@@ -347,6 +347,38 @@ func Test_getYcqlConfigs(t *testing.T) {
 }
 
 func Test_PubSub(t *testing.T) {
+	t.Setenv("PUBSUB_EMULATOR_HOST", "localhost:8086")
+
+	b := new(bytes.Buffer)
+	logger := log.NewMockLogger(b)
+	conf := config.NewGoDotEnvProvider(logger, "../../configs")
+
+	g := &Gofr{Logger: logger}
+
+	testCases := []struct {
+		configLoc   Config
+		expectedStr string
+	}{
+		{mockConfig{}, "Kafka initialized"},
+		{&config.MockConfig{Data: map[string]string{
+			"PUBSUB_BACKEND":           "google",
+			"GOOGLE_TOPIC_NAME":        conf.Get("GOOGLE_TOPIC_NAME"),
+			"GOOGLE_PROJECT_ID":        conf.Get("GOOGLE_PROJECT_ID"),
+			"GOOGLE_SUBSCRIPTION_NAME": conf.Get("GOOGLE_SUBSCRIPTION_NAME"),
+		}}, "Google PubSub initialized"},
+	}
+
+	for i, tc := range testCases {
+		b.Reset()
+		initializePubSub(tc.configLoc, logger, g)
+
+		if !strings.Contains(b.String(), tc.expectedStr) {
+			t.Errorf("[FAILED %v], expected: `%v` in the logs, got: %v", i, tc.expectedStr, b.String())
+		}
+	}
+}
+
+func Test_PubSub_Eventhub(t *testing.T) {
 	t.Setenv("PUBSUB_EMULATOR_HOST", "localhost:8086")
 
 	if testing.Short() {
@@ -371,13 +403,12 @@ func Test_PubSub(t *testing.T) {
 		_, _ = w.Write(reBytes)
 	}))
 
-	k := &Gofr{Logger: logger}
+	g := &Gofr{Logger: logger}
 
 	testCases := []struct {
 		configLoc   Config
 		expectedStr string
 	}{
-		{mockConfig{}, "Kafka initialized"},
 		{&config.MockConfig{Data: map[string]string{
 			"EVENTHUB_NAMESPACE":  "zsmisc-dev",
 			"EVENTHUB_NAME":       "healthcheck",
@@ -395,17 +426,11 @@ func Test_PubSub(t *testing.T) {
 			"PUBSUB_BACKEND":      "EVENTHUB",
 			"AVRO_SCHEMA_URL":     ts.URL,
 		}}, "Avro initialized"},
-		{&config.MockConfig{Data: map[string]string{
-			"PUBSUB_BACKEND":           "google",
-			"GOOGLE_TOPIC_NAME":        conf.Get("GOOGLE_TOPIC_NAME"),
-			"GOOGLE_PROJECT_ID":        conf.Get("GOOGLE_PROJECT_ID"),
-			"GOOGLE_SUBSCRIPTION_NAME": conf.Get("GOOGLE_SUBSCRIPTION_NAME"),
-		}}, "Google PubSub initialized"},
 	}
 
 	for i, tc := range testCases {
 		b.Reset()
-		initializePubSub(tc.configLoc, logger, k)
+		initializePubSub(tc.configLoc, logger, g)
 
 		if !strings.Contains(b.String(), tc.expectedStr) {
 			t.Errorf("[FAILED %v], expected: `%v` in the logs, got: %v", i, tc.expectedStr, b.String())
@@ -432,7 +457,7 @@ func Test_Notifier(t *testing.T) {
 		_, _ = w.Write(reBytes)
 	}))
 
-	k := &Gofr{Logger: logger}
+	g := &Gofr{Logger: logger}
 
 	testCases := []struct {
 		configLoc   Config
@@ -451,7 +476,7 @@ func Test_Notifier(t *testing.T) {
 
 	for i, tc := range testCases {
 		b.Reset()
-		initializeNotifiers(tc.configLoc, k)
+		initializeNotifiers(tc.configLoc, g)
 
 		assert.Contains(t, b.String(), tc.expectedStr, "[FAILED %v], expected: `%v` in the logs, got: %v", i, tc.expectedStr, b.String())
 	}
@@ -476,7 +501,7 @@ func Test_initializeAvro(t *testing.T) {
 	logger := log.NewMockLogger(b)
 	c := config.NewGoDotEnvProvider(logger, "../../configs")
 
-	k := &Gofr{Logger: logger}
+	g := &Gofr{Logger: logger}
 	topic := c.Get("KAFKA_TOPIC") // CSV string
 	topics := strings.Split(topic, ",")
 	kafkaCfg := &kafka.Config{
@@ -498,9 +523,9 @@ func Test_initializeAvro(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		k.PubSub = tt.ps
+		g.PubSub = tt.ps
 		avroConfig := avroConfigFromEnv(tt.c, "")
-		initializeAvro(avroConfig, k)
+		initializeAvro(avroConfig, g)
 
 		if !strings.Contains(b.String(), tt.expectedStr) {
 			t.Errorf("FAILED, expected: `%v` in the logs, got: %v", tt.expectedStr, b.String())
@@ -532,10 +557,10 @@ func Test_initializeSolr(t *testing.T) {
 		},
 	}
 
-	k := &Gofr{Logger: logger}
+	g := &Gofr{Logger: logger}
 
 	for _, tc := range testCases {
-		initializeSolr(&tc.configLoc, k)
+		initializeSolr(&tc.configLoc, g)
 
 		if !strings.Contains(b.String(), tc.expectedStr) {
 			t.Errorf("FAILED, expected: `%v` in the logs, got: %v", tc.expectedStr, b.String())
@@ -546,8 +571,8 @@ func Test_initializeSolr(t *testing.T) {
 }
 
 func Test_GofrCMDConfig(t *testing.T) {
-	k := NewCMD()
-	if k.Redis == nil {
+	g := NewCMD()
+	if g.Redis == nil {
 		t.Errorf("expected redis to be connected through configs")
 	}
 }
@@ -562,8 +587,8 @@ func Test_initializeEventBridge(t *testing.T) {
 			"EVENT_BRIDGE_SOURCE": "Gofr-application",
 		},
 	}
-	k := &Gofr{Logger: logger}
-	initializeEventBridge(c, logger, k)
+	g := &Gofr{Logger: logger}
+	initializeEventBridge(c, logger, g)
 
 	assert.Contains(t, b.String(), "AWS EventBridge initialized successfully")
 }

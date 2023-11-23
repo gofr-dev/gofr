@@ -37,11 +37,11 @@ func TestCassandraEmployee_Get(t *testing.T) {
 		expectedResp []entity.Employee
 		mockErr      error
 	}{
-		{"id=1", []entity.Employee{{ID: 1, Name: "Rohan", Phone: "01222", Email: "rohan@zopsmart.com", City: "Berlin"}}, nil},
-		{"id=1&name=Rohan&phone=01222&email=rohan@zopsmart.com&city=Berlin",
-			[]entity.Employee{{ID: 1, Name: "Rohan", Phone: "01222", Email: "rohan@zopsmart.com", City: "Berlin"}}, nil},
-		{"", []entity.Employee{{ID: 1, Name: "Rohan", Phone: "01222", Email: "rohan@zopsmart.com", City: "Berlin"},
-			{ID: 2, Name: "Aman", Phone: "22234", Email: "aman@zopsmart.com", City: "florida"}}, nil},
+		{"id=1", []entity.Employee{{ID: 1, Name: "Rohan", Phone: "01222", Email: "rohan@gofr.dev", City: "Berlin"}}, nil},
+		{"id=1&name=Rohan&phone=01222&email=rohan@gofr.dev&city=Berlin",
+			[]entity.Employee{{ID: 1, Name: "Rohan", Phone: "01222", Email: "rohan@gofr.dev", City: "Berlin"}}, nil},
+		{"", []entity.Employee{{ID: 1, Name: "Rohan", Phone: "01222", Email: "rohan@gofr.dev", City: "Berlin"},
+			{ID: 2, Name: "Aman", Phone: "22234", Email: "aman@gofr.dev", City: "florida"}}, nil},
 		{"id=7&name=Sunita", nil, nil},
 	}
 
@@ -71,8 +71,8 @@ func TestCassandraEmployee_Create(t *testing.T) {
 		expectedResp interface{}
 		mockErr      error
 	}{
-		{`{"id": 3, "name":"Shasank", "phone": "01567", "email":"shasank@zopsmart.com", "city":"Banglore"}`,
-			[]entity.Employee{{ID: 3, Name: "Shasank", Phone: "01567", Email: "shasank@zopsmart.com", City: "Banglore"}}, nil},
+		{`{"id": 3, "name":"Shasank", "phone": "01567", "email":"shasank@gofr.dev", "city":"Banglore"}`,
+			[]entity.Employee{{ID: 3, Name: "Shasank", Phone: "01567", Email: "shasank@gofr.dev", City: "Banglore"}}, nil},
 		{`{"id": 4, "name":"Jay", "phone": "01933", "email":"jay@mahindra.com", "city":"Gujrat"}`,
 			[]entity.Employee{{ID: 4, Name: "Jay", Phone: "01933", Email: "jay@mahindra.com", City: "Gujrat"}}, nil},
 	}
@@ -106,11 +106,11 @@ func TestCassandraEmployee_Create_InvalidInput_JsonError(t *testing.T) {
 		mockErr       error
 	}{
 		// Invalid Input
-		{`{"id": 2, "name": "Aman", "phone": "22234", "email": "aman@zopsmart.com", "city": "Florida"}`,
-			nil, []entity.Employee{{ID: 2, Name: "Aman", Phone: "22234", Email: "aman@zopsmart.com", City: "Florida"}},
+		{`{"id": 2, "name": "Aman", "phone": "22234", "email": "aman@gofr.dev", "city": "Florida"}`,
+			nil, []entity.Employee{{ID: 2, Name: "Aman", Phone: "22234", Email: "aman@gofr.dev", City: "Florida"}},
 			errors.EntityAlreadyExists{}},
 		// JSON Error
-		{`{"id":    "2", "name":   "Aman", "phone": "22234", "email": "aman@zopsmart.com", "city": "Florida"}`, nil, nil,
+		{`{"id":    "2", "name":   "Aman", "phone": "22234", "email": "aman@gofr.dev", "city": "Florida"}`, nil, nil,
 			&json.UnmarshalTypeError{Value: "string", Type: reflect.TypeOf(2), Offset: 13, Struct: "Employee", Field: "id"}},
 	}
 

@@ -39,24 +39,24 @@ func TestGofr_ServeHTTP_TextResponse(t *testing.T) {
 		{http.MethodGet, "/params?name=Vikash", "Hello Vikash!", "content-type", "text/plain"}, // Example 2 with query parameters
 	}
 
-	k := New()
+	g := New()
 	// Added contextInjector middleware
-	k.Server.Router.Use(k.Server.contextInjector)
+	g.Server.Router.Use(g.Server.contextInjector)
 	// Example 1 Handler
-	k.GET("/hello", func(c *Context) (interface{}, error) {
+	g.GET("/hello", func(c *Context) (interface{}, error) {
 		return helloWorld, nil
 	})
 
-	k.PUT("/hello", func(c *Context) (interface{}, error) {
+	g.PUT("/hello", func(c *Context) (interface{}, error) {
 		return helloWorld, nil
 	})
 
-	k.POST("/hello", func(c *Context) (interface{}, error) {
+	g.POST("/hello", func(c *Context) (interface{}, error) {
 		return helloWorld, nil
 	})
 
 	// Example 2 Handler
-	k.GET("/params", func(c *Context) (interface{}, error) {
+	g.GET("/params", func(c *Context) (interface{}, error) {
 		return fmt.Sprintf("Hello %s!", c.Param("name")), nil
 	})
 
@@ -66,7 +66,7 @@ func TestGofr_ServeHTTP_TextResponse(t *testing.T) {
 
 		r.Header.Set("content-type", "text/plain")
 
-		k.Server.Router.ServeHTTP(w, r)
+		g.Server.Router.ServeHTTP(w, r)
 
 		expectedResp := fmt.Sprintf("%v", &types.Response{Data: tc.response})
 
@@ -81,7 +81,7 @@ func TestGofr_ServeHTTP_TextResponse(t *testing.T) {
 }
 
 func TestGofr_StartPanic(t *testing.T) {
-	k := New()
+	g := New()
 
 	http.DefaultServeMux = new(http.ServeMux)
 
@@ -91,7 +91,7 @@ func TestGofr_StartPanic(t *testing.T) {
 				t.Errorf("Start funcs panics on function call")
 			}
 		}()
-		k.Start()
+		g.Start()
 	}()
 	<-time.After(1 * time.Second)
 }
@@ -99,12 +99,12 @@ func TestGofr_StartPanic(t *testing.T) {
 func TestGofr_Start(t *testing.T) {
 	// only http server should run therefore wrong config location given
 	c := config.NewGoDotEnvProvider(log.NewMockLogger(os.Stderr), "../configserror")
-	k := NewWithConfig(c)
-	k.Server.UseMiddleware(sampleMW1)
+	g := NewWithConfig(c)
+	g.Server.UseMiddleware(sampleMW1)
 
 	http.DefaultServeMux = new(http.ServeMux)
 
-	go k.Start()
+	go g.Start()
 	time.Sleep(3 * time.Second)
 
 	var returned = make(chan bool)
@@ -124,22 +124,22 @@ func TestGofr_Start(t *testing.T) {
 }
 
 func TestGofrUseMiddleware(t *testing.T) {
-	k := New()
+	g := New()
 	mws := []Middleware{
 		sampleMW1,
 		sampleMW2,
 	}
 
-	k.Server.UseMiddleware(mws...)
+	g.Server.UseMiddleware(mws...)
 
-	if len(k.Server.mws) != 2 || !reflect.DeepEqual(k.Server.mws, mws) {
-		t.Errorf("FAILED, Expected: %v, Got: %v", mws, k.Server.mws)
+	if len(g.Server.mws) != 2 || !reflect.DeepEqual(g.Server.mws, mws) {
+		t.Errorf("FAILED, Expected: %v, Got: %v", mws, g.Server.mws)
 	}
 }
 
 func TestGofrUseMiddlewarePopulated(t *testing.T) {
-	k := New()
-	k.Server.mws = []Middleware{
+	g := New()
+	g.Server.mws = []Middleware{
 		sampleMW1,
 	}
 
@@ -147,10 +147,10 @@ func TestGofrUseMiddlewarePopulated(t *testing.T) {
 		sampleMW2,
 	}
 
-	k.Server.UseMiddleware(mws...)
+	g.Server.UseMiddleware(mws...)
 
-	if len(k.Server.mws) != 2 || reflect.DeepEqual(k.Server.mws, []Middleware{sampleMW1, sampleMW2}) {
-		t.Errorf("FAILED, Expected: %v, Got: %v", mws, k.Server.mws)
+	if len(g.Server.mws) != 2 || reflect.DeepEqual(g.Server.mws, []Middleware{sampleMW1, sampleMW2}) {
+		t.Errorf("FAILED, Expected: %v, Got: %v", mws, g.Server.mws)
 	}
 }
 
@@ -167,8 +167,8 @@ func TestGofr_Config(t *testing.T) { // check config is properly set or not?
 	c := config.NewGoDotEnvProvider(logger, "../../config")
 	expected := c.Get("APP_NAME")
 
-	k := New()
-	val := k.Config.Get("APP_NAME")
+	g := New()
+	val := g.Config.Get("APP_NAME")
 
 	if !reflect.DeepEqual(expected, val) {
 		t.Errorf("FAILED, Expected: %v, Got: %v", expected, val)

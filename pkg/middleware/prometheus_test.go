@@ -34,6 +34,10 @@ func newTestRouter() *mux.Router {
 		w.WriteHeader(http.StatusInternalServerError)
 	})
 
+	r.HandleFunc("/.well-known/health-check", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
 	return r
 }
 
@@ -52,7 +56,7 @@ func TestPrometheusMiddleware(t *testing.T) {
 	}{
 		{"GET", "/api/v1/users", http.StatusOK},
 		{"GET", "/api/v1/products/123", http.StatusOK},
-		{"GET", "/.well-known/health-check", http.StatusNotFound},
+		{"GET", "/.well-known/health-check", http.StatusOK},
 	}
 
 	for i, tc := range testCase {
@@ -79,7 +83,7 @@ func TestGetSystemStats(t *testing.T) {
 
 	assert.Greater(t, int(s.sys), 0, "Expected non-negative sys, got %f", s.sys)
 
-	assert.Greater(t, int(s.numGC), 0, "Expected non-negative numGC, got %f", s.numGC)
+	assert.GreaterOrEqualf(t, int(s.numGC), 0, "Expected non-negative numGC, got %v", int(s.numGC))
 }
 
 func TestPushDeprecatedFeature(t *testing.T) {

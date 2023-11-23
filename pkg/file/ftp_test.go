@@ -11,7 +11,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/google/uuid"
 	pkgFtp "github.com/jlaffaye/ftp"
 	"github.com/stretchr/testify/assert"
 
@@ -174,46 +173,39 @@ func Test_move_FTP(t *testing.T) {
 
 // Test_createNestedDirFTP to test behavior of createNestedDirFTP
 func Test_createNestedDirFTP(t *testing.T) {
-	t.Skip("Skipping the test as while creating directory on GHA will get permission denied error")
+	parentDir := "testDestination"
 
-	ftpCfg := &FTPConfig{
+	ftpCfg := FTPConfig{
 		Host:     "localhost",
 		User:     "myuser",
 		Password: "mypass",
 		Port:     21,
 	}
 
-	b := new(bytes.Buffer)
+	conn := initializeFTP(t, ftpCfg)
 
+	b := new(bytes.Buffer)
 	logger := log.NewMockLogger(b)
 
-	f, err := newFTPFile(ftpCfg, "ftp_test.txt", "rw")
-	if err != nil {
-		t.Fatalf("Error in creating connection to FTP: %v", err)
-	}
+	client := ftpConn{conn: conn, logger: logger}
 
-	client, ok := f.conn.(*ftpConn)
-	if !ok {
-		t.Fatalf("Unable to parse ftpConn")
-	}
-
-	client.logger = logger
-
-	parentDir := fmt.Sprintf("testDir%v", uuid.NewString())
-
-	testCases := []struct {
-		desc string
-		path string
+	tests := []struct {
+		desc   string
+		path   string
+		expLog string
 	}{
-		{"Success case: new directory will be created", parentDir},
-		{"Success case: parent dir already exists so only sub directory will be created", parentDir + "/innerTestFTPDir"},
+		{"Success case: creates a new directory", parentDir, ""},
+		{"Success case: parent dir already exists so creates only sub directory", parentDir + "/subDirectory",
+			"Error 550 Create directory operation failed. in creating directory /testDestination/"},
 	}
 
-	for i, tc := range testCases {
-		createNestedDirFTP(client, tc.path)
+	for i, tc := range tests {
+		createNestedDirFTP(&client, tc.path)
 
-		assert.Contains(t, b.String(), "", "Test [%d] Failed: %v", i+1, tc.desc)
+		assert.Containsf(t, b.String(), tc.expLog, "Test[%d] Failed: %v", i+1, tc.desc)
 	}
+
+	cleanUp(t, conn)
 }
 
 // mockFtpConn is the mock implementation of ftpOp
@@ -403,4 +395,8 @@ func cleanUp(t *testing.T, conn *pkgFtp.ServerConn) {
 	if err != nil {
 		t.Fatalf("error while closing the connection to the host: %v", err)
 	}
+}
+
+func (s *mockFtpConn) Close() error {
+	return nil
 }

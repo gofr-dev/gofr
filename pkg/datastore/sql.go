@@ -139,7 +139,7 @@ func (c *SQLClient) monitorQuery(begin time.Time, query string) {
 
 	ql := QueryLogger{
 		Query:     []string{query},
-		DataStore: SqlStore,
+		DataStore: SQLStore,
 	}
 
 	// log the query
@@ -290,7 +290,7 @@ func (c *SQLTx) monitorQuery(begin time.Time, query string) {
 	ql.Query = append(ql.Query, query)
 	ql.Duration = time.Since(begin).Microseconds()
 	ql.StartTime = begin
-	ql.DataStore = SqlStore
+	ql.DataStore = SQLStore
 
 	// push stats to prometheus
 	sqlStats.WithLabelValues(checkQueryOperation(query), hostName, dbName).Observe(dur)

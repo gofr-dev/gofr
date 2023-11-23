@@ -187,10 +187,10 @@ import (
 )
 
 func main() {
-	k := gofr.New()
+	g := gofr.New()
 	{{.Database}}	
 
-	err := migration.Migrate("{{.ProjectName}}", db, {{.Migration}}, "{{.Method}}", k.Logger)
+	err := migration.Migrate("{{.ProjectName}}", db, {{.Migration}}, "{{.Method}}", g.Logger)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%v", err)
 	}
