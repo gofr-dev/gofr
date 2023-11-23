@@ -48,8 +48,8 @@ func TestCustomer_Create(t *testing.T) {
 	}{
 		{"create success", []byte(`{"id":1,"name":"Ethen"}`), nil},
 		{"create failure", []byte(`{"id":1,"name":"error"}`), errors.Error("core error")},
-		{"create invalid param", []byte(`{"id":1}`), errors.InvalidParam{[]string{"name"}}},
-		{"create invalid body", []byte(`{"id":"1"}`), errors.InvalidParam{[]string{"body"}}},
+		{"create invalid param", []byte(`{"id":1}`), errors.InvalidParam{Param: []string{"name"}}},
+		{"create invalid body", []byte(`{"id":"1"}`), errors.InvalidParam{Param: []string{"body"}}},
 	}
 
 	c := New(&mockStore{})
@@ -75,8 +75,8 @@ func TestCustomer_Update(t *testing.T) {
 		{"update success", []byte(`{"id":1,"name":"Ethen"}`), nil},
 		{"update fail", []byte(`{"id":1,"name":"error"}`), errors.Error("core error")},
 		{"update with invalid name", []byte(`{"id":1}`), errors.InvalidParam{Param: []string{"name"}}},
-		{"update with invalid body", []byte(`{"id":"1"}`), errors.InvalidParam{[]string{"body"}}},
-		{"update with invalid id", []byte(`{"name":"Wen"}`), errors.InvalidParam{[]string{"id"}}},
+		{"update with invalid body", []byte(`{"id":"1"}`), errors.InvalidParam{Param: []string{"body"}}},
+		{"update with invalid id", []byte(`{"name":"Wen"}`), errors.InvalidParam{Param: []string{"id"}}},
 	}
 
 	c := New(&mockStore{})
