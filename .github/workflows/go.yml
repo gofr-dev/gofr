@@ -458,33 +458,6 @@ jobs:
           coverageLocations: artifacts/merged_profile.cov:gocov
           prefix: gofr.dev
 
-  Dockerize Website:
-    name: Docker GoFr Website
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out code into the Go module directory
-        uses: actions/checkout@v4
-
-      - name: Get Website Package
-        run: |
-          docker login ghcr.io -u ${{ github.actor }} -p ${{ secrets.GITHUB_TOKEN }}  
-          docker pull ghcr.io/gofr-dev/website:workflow-package
-
-      - name: Login to GCR
-        uses: docker/login-action@v1
-        with:
-          registry: gcr.io
-          username: _json_key
-          password: ${{ secrets.GCR_KEY }}
-
-      - name: Build and Push Docker Image to gar
-        uses: docker/build-push-action@v2
-        with:
-        push: true
-        context: .
-        file: ./docs/Dockerfile
-        tags:  gcr.io/zs-products/gofr-web:${{ github.sha }}
-
   code_quality:
     name: Code Quality🎖️
     runs-on: ubuntu-latest
