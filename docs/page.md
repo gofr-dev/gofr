@@ -4,7 +4,6 @@ GoFr is Opinionated Web Framework written in Go (Golang). It helps in building r
 
 In this section we will walk through what GoFr is, what problems it solves, and how it can help in building your project.
 
-
 {% quick-links %}
 
 {% quick-link title="Quick Start" icon="installation" href="/docs/v1/quick-start/introduction" description="Step-by-step guides to setting up your system and installing the library." /%}
