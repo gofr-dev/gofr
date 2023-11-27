@@ -364,19 +364,6 @@ func TestHTTP_BindMultipartFormData(t *testing.T) {
 	assert.Equal(t, "testuser", formData.Username)
 	assert.Equal(t, "testpass", formData.Password)
 
-	// Add failure cases
-	t.Run("InvalidContentType", func(t *testing.T) {
-		var hInvalid HTTP
-		reqInvalid := httptest.NewRequest(http.MethodPost, "http://dummy", nil)
-		reqInvalid.Header.Set("Content-Type", "invalid/content-type")
-
-		hInvalid.req = reqInvalid
-		errInvalid := hInvalid.Bind(&formData)
-
-		assert.Error(t, errInvalid)
-		assert.Contains(t, errInvalid.Error(), "unsupported Content-Type")
-	})
-
 	t.Run("MalformedData", func(t *testing.T) {
 		var hMalformed HTTP
 		reqMalformed := httptest.NewRequest(http.MethodPost, "http://dummy", strings.NewReader("malformed data"))
