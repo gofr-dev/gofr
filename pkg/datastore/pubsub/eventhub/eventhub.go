@@ -11,7 +11,6 @@ import (
 	"github.com/Azure/azure-amqp-common-go/v3/sas"
 	eventhub "github.com/Azure/azure-event-hubs-go/v3"
 	"github.com/Azure/go-autorest/autorest/azure"
-	"github.com/prometheus/client_golang/prometheus"
 
 	"gofr.dev/pkg"
 	"gofr.dev/pkg/datastore"
@@ -56,47 +55,9 @@ type Offset struct {
 	StartOffset string
 }
 
-//nolint:gochecknoglobals // The declared global variable can be accessed across multiple functions
-var (
-	subscribeRecieveCount = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: "zs_pubsub_receive_count",
-		Help: "Total number of subscribe operation",
-	}, []string{"topic", "consumerGroup"})
-
-	subscribeSuccessCount = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: "zs_pubsub_success_count",
-		Help: "Total number of successful subscribe operation",
-	}, []string{"topic", "consumerGroup"})
-
-	subscribeFailureCount = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: "zs_pubsub_failure_count",
-		Help: "Total number of failed subscribe operation",
-	}, []string{"topic", "consumerGroup"})
-
-	publishSuccessCount = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: "zs_pubsub_publish_success_count",
-		Help: "Counter for the number of messages successfully published",
-	}, []string{"topic", "consumerGroup"})
-
-	publishFailureCount = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: "zs_pubsub_publish_failure_count",
-		Help: "Counter for the number of failed publish operations",
-	}, []string{"topic", "consumerGroup"})
-
-	publishTotalCount = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: "zs_pubsub_publish_total_count",
-		Help: "Counter for the total number of publish operations",
-	}, []string{"topic", "consumerGroup"})
-)
-
 // New returns new client
 func New(c *Config) (pubsub.PublisherSubscriber, error) {
-	_ = prometheus.Register(subscribeRecieveCount)
-	_ = prometheus.Register(subscribeSuccessCount)
-	_ = prometheus.Register(subscribeFailureCount)
-	_ = prometheus.Register(publishSuccessCount)
-	_ = prometheus.Register(publishFailureCount)
-	_ = prometheus.Register(publishTotalCount)
+	pubsub.RegisterMetrics()
 
 	if c.SharedAccessKey != "" && c.SharedAccessName != "" {
 		tokenProviderOption := sas.TokenProviderWithKey(c.SharedAccessName, c.SharedAccessKey)
@@ -146,13 +107,15 @@ func (e *Eventhub) PublishEvent(key string, value interface{}, headers map[strin
 // PublishEventWithOptions publishes message to eventhub. Ability to provide additional options described in PublishOptions struct
 func (e *Eventhub) PublishEventWithOptions(key string, value interface{}, _ map[string]string,
 	_ *pubsub.PublishOptions) (err error) {
-	publishTotalCount.WithLabelValues(e.EventhubName, "").Inc()
+	// for every publish
+		pubsub.PublishTotalCount(e.EventhubName, "")
 
 	data, ok := value.([]byte)
 	if !ok {
 		data, err = json.Marshal(value)
 		if err != nil {
-			publishFailureCount.WithLabelValues(e.EventhubName, "").Inc()
+			// for unsuccessful publish 
+			pubsub.PublishFailureCount(e.EventhubName, "")
 
 			return err
 		}
@@ -162,12 +125,14 @@ func (e *Eventhub) PublishEventWithOptions(key string, value interface{}, _ map[
 
 	err = e.hub.Send(context.TODO(), event, eventhub.SendWithMessageID(key))
 	if err != nil {
-		publishFailureCount.WithLabelValues(e.EventhubName, "").Inc()
+		// for unsuccessful publish 
+		pubsub.PublishFailureCount(e.EventhubName, "")
 
 		return err
 	}
 
-	publishSuccessCount.WithLabelValues(e.EventhubName, "").Inc()
+	// for successful publish 
+	pubsub.PublishSuccessCount(e.EventhubName, "")
 
 	return nil
 }
@@ -175,7 +140,7 @@ func (e *Eventhub) PublishEventWithOptions(key string, value interface{}, _ map[
 // Subscribe read messages from eventhub configured
 func (e *Eventhub) Subscribe() (*pubsub.Message, error) {
 	// for every subscribe
-	subscribeRecieveCount.WithLabelValues(e.EventhubName, "").Inc()
+	pubsub.SubscribeReceiveCount(e.EventhubName, "")
 
 	msg := make(chan *pubsub.Message)
 
@@ -203,7 +168,7 @@ func (e *Eventhub) Subscribe() (*pubsub.Message, error) {
 	runtimeInfo, err := e.hub.GetRuntimeInformation(ctx)
 	if err != nil {
 		// for failed subscribe
-		subscribeFailureCount.WithLabelValues(e.EventhubName, "").Inc()
+		pubsub.SubscribeFailureCount(e.EventhubName, "")
 		return nil, err
 	}
 
@@ -222,12 +187,12 @@ func (e *Eventhub) Subscribe() (*pubsub.Message, error) {
 		_, err := e.hub.Receive(ctx, partitionID, handler, eventhub.ReceiveWithStartingOffset(offset))
 		if err != nil {
 			// for failed subscribe
-			subscribeFailureCount.WithLabelValues(e.EventhubName, "").Inc()
+			pubsub.SubscribeFailureCount(e.EventhubName, "")
 			return nil, err
 		}
 	}
 	// for successful subscribe
-	subscribeSuccessCount.WithLabelValues(e.EventhubName, "").Inc()
+	pubsub.SubscribeSuccessCount(e.EventhubName, "")
 
 	return <-msg, nil
 }
