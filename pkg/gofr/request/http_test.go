@@ -306,13 +306,6 @@ func TestHTTP_Bind(t *testing.T) {
 			false,
 			false,
 		},
-		{
-			bytes.NewBuffer([]byte(`unsupported content type`)),
-			nil,
-			fmt.Errorf("unsupported Content-Type: "),
-			false,
-			false,
-		},
 	}
 
 	for _, tc := range tcs {
@@ -323,8 +316,6 @@ func TestHTTP_Bind(t *testing.T) {
 
 		if tc.isXML {
 			req.Header.Set("Content-Type", "text/xml")
-		} else if tc.isJSON {
-			req.Header.Set("Content-Type", "application/json")
 		}
 
 		h.req = req

@@ -142,10 +142,8 @@ func (h *HTTP) Bind(i interface{}) error {
 		}
 
 		return mapstructure.Decode(data, &i)
-	case strings.HasPrefix(cType, "application/json"):
-		return json.Unmarshal(body, &i)
 	default:
-		return fmt.Errorf("unsupported Content-Type: %s", cType)
+		return json.Unmarshal(body, &i)
 	}
 }
 
