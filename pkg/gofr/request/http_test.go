@@ -5,10 +5,12 @@ import (
 	ctx "context"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/golang-jwt/jwt/v4"
@@ -281,23 +283,34 @@ func TestHTTP_Bind(t *testing.T) {
 		i       interface{}
 		err     error
 		isXML   bool
+		isJSON  bool
 	}{
 		{
 			bytes.NewBuffer([]byte(jsonData)),
 			resp{},
 			nil,
 			false,
+			true,
 		},
 		{
 			bytes.NewBuffer([]byte(xmlData)),
 			resp{},
 			nil,
 			true,
+			false,
 		},
 		{
 			malformedReader{},
 			nil,
 			fmt.Errorf("something unexpected occurred"),
+			false,
+			false,
+		},
+		{
+			bytes.NewBuffer([]byte(`unsupported content type`)),
+			nil,
+			fmt.Errorf("unsupported Content-Type: "),
+			false,
 			false,
 		},
 	}
@@ -310,6 +323,8 @@ func TestHTTP_Bind(t *testing.T) {
 
 		if tc.isXML {
 			req.Header.Set("Content-Type", "text/xml")
+		} else if tc.isJSON {
+			req.Header.Set("Content-Type", "application/json")
 		}
 
 		h.req = req
@@ -320,6 +335,68 @@ func TestHTTP_Bind(t *testing.T) {
 			t.Errorf("FAILED, expected: %v, got: %v", tc.err, err)
 		}
 	}
+}
+
+func TestHTTP_BindMultipartFormData(t *testing.T) {
+	var h HTTP
+
+	// Create a sample multipart form data request body
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+
+	// Add form fields
+	_ = writer.WriteField("username", "testuser")
+	_ = writer.WriteField("password", "testpass")
+
+	// Close the writer to add the boundary
+	writer.Close()
+
+	// Create a new request with the multipart form data
+	req := httptest.NewRequest(http.MethodPost, "http://dummy", body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+
+	h.req = req
+
+	// Create a struct to decode the form data into
+	type FormData struct {
+		Username string `form:"username"`
+		Password string `form:"password"`
+	}
+
+	var formData FormData
+
+	// Call the Bind method
+	err := h.Bind(&formData)
+
+	// Assert that there is no error and the form data is correctly decoded
+	assert.NoError(t, err)
+	assert.Equal(t, "testuser", formData.Username)
+	assert.Equal(t, "testpass", formData.Password)
+
+	// Add failure cases
+	t.Run("InvalidContentType", func(t *testing.T) {
+		var hInvalid HTTP
+		reqInvalid := httptest.NewRequest(http.MethodPost, "http://dummy", nil)
+		reqInvalid.Header.Set("Content-Type", "invalid/content-type")
+
+		hInvalid.req = reqInvalid
+		errInvalid := hInvalid.Bind(&formData)
+
+		assert.Error(t, errInvalid)
+		assert.Contains(t, errInvalid.Error(), "unsupported Content-Type")
+	})
+
+	t.Run("MalformedData", func(t *testing.T) {
+		var hMalformed HTTP
+		reqMalformed := httptest.NewRequest(http.MethodPost, "http://dummy", strings.NewReader("malformed data"))
+		reqMalformed.Header.Set("Content-Type", "multipart/form-data")
+
+		hMalformed.req = reqMalformed
+		errMalformed := hMalformed.Bind(&formData)
+
+		assert.Error(t, errMalformed)
+		assert.Contains(t, errMalformed.Error(), "no multipart boundary param")
+	})
 }
 
 func TestHTTP_BindStrict(t *testing.T) {

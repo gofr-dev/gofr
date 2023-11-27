@@ -2,7 +2,6 @@ package request
 
 import (
 	"bytes"
-
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
@@ -12,6 +11,7 @@ import (
 
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/gorilla/mux"
+	"github.com/mitchellh/mapstructure"
 
 	"gofr.dev/pkg/middleware/oauth"
 )
@@ -125,11 +125,27 @@ func (h *HTTP) Bind(i interface{}) error {
 	}
 
 	cType := h.req.Header.Get("Content-type")
-	switch cType {
-	case "text/xml", "application/xml":
+
+	switch {
+	case strings.HasPrefix(cType, "text/xml"), strings.HasPrefix(cType, "application/xml"):
 		return xml.Unmarshal(body, &i)
-	default:
+	case strings.HasPrefix(cType, "multipart/form-data"):
+		if err := h.req.ParseMultipartForm(0); err != nil {
+			return err
+		}
+
+		form := h.req.Form
+		data := make(map[string]interface{})
+
+		for key, values := range form {
+			data[key] = values[0]
+		}
+
+		return mapstructure.Decode(data, &i)
+	case strings.HasPrefix(cType, "application/json"):
 		return json.Unmarshal(body, &i)
+	default:
+		return fmt.Errorf("unsupported Content-Type: %s", cType)
 	}
 }
 
