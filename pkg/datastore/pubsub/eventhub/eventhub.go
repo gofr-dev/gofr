@@ -108,13 +108,13 @@ func (e *Eventhub) PublishEvent(key string, value interface{}, headers map[strin
 func (e *Eventhub) PublishEventWithOptions(key string, value interface{}, _ map[string]string,
 	_ *pubsub.PublishOptions) (err error) {
 	// for every publish
-		pubsub.PublishTotalCount(e.EventhubName, "")
+	pubsub.PublishTotalCount(e.EventhubName, "")
 
 	data, ok := value.([]byte)
 	if !ok {
 		data, err = json.Marshal(value)
 		if err != nil {
-			// for unsuccessful publish 
+			// for unsuccessful publish
 			pubsub.PublishFailureCount(e.EventhubName, "")
 
 			return err
@@ -125,13 +125,13 @@ func (e *Eventhub) PublishEventWithOptions(key string, value interface{}, _ map[
 
 	err = e.hub.Send(context.TODO(), event, eventhub.SendWithMessageID(key))
 	if err != nil {
-		// for unsuccessful publish 
+		// for unsuccessful publish
 		pubsub.PublishFailureCount(e.EventhubName, "")
 
 		return err
 	}
 
-	// for successful publish 
+	// for successful publish
 	pubsub.PublishSuccessCount(e.EventhubName, "")
 
 	return nil
