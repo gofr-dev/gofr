@@ -252,7 +252,7 @@ func (g *GCPubSub) SubscribeWithCommit(commitFunc pubsub.CommitFunc) (*pubsub.Me
 	res.Topic = g.config.TopicName
 
 	handler := func(_ context.Context, m *gpubsub.Message) {
-		g.handleReceivedMessage(m, &res, commitFunc, cancel)
+		g.processMessage(m, &res, commitFunc, cancel)
 	}
 
 	for {
@@ -273,7 +273,7 @@ func (g *GCPubSub) SubscribeWithCommit(commitFunc pubsub.CommitFunc) (*pubsub.Me
 	}
 }
 
-func (g *GCPubSub) handleReceivedMessage(m *gpubsub.Message, res *pubsub.Message, commitFunc pubsub.CommitFunc,
+func (g *GCPubSub) processMessage(m *gpubsub.Message, res *pubsub.Message, commitFunc pubsub.CommitFunc,
 	cancelFunc context.CancelFunc) {
 	g.logger.Debug("Received message: ", string(m.Data))
 	res.Value = string(m.Data)
