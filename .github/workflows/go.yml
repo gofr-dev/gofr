@@ -451,8 +451,9 @@ jobs:
           tail -n +2 ./PKG-Coverage-Report/profile.cov >> merged_profile.cov
           
       - name: Parse code-coverage value
+        working-directory: artifacts
         run: |
-          codeCoverage=$(go tool cover -func=build/test/merged_profile.cov | grep total | awk '{print $3}')
+          codeCoverage=$(go tool cover -func=merged_profile.cov | grep total | awk '{print $3}')
           codeCoverage=${codeCoverage%?}
           echo "CODE_COVERAGE=$codeCoverage" >> $GITHUB_ENV
           
