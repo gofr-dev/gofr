@@ -1,3 +1,4 @@
 .idea
+.vscode
 coverage.txt
 .DS_Store
