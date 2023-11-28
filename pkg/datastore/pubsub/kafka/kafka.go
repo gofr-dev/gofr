@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/Shopify/sarama"
-	"github.com/prometheus/client_golang/prometheus"
 
 	"golang.org/x/net/context"
 
@@ -126,39 +125,6 @@ type SASLConfig struct {
 	SSLVerify bool
 }
 
-//nolint:gochecknoglobals // metrics have to be intialized only once.
-var (
-	subscribeRecieveCount = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: "zs_pubsub_receive_count",
-		Help: "Total number of subscribe operation",
-	}, []string{"topic", "consumerGroup"})
-
-	subscribeSuccessCount = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: "zs_pubsub_success_count",
-		Help: "Total number of successful subscribe operation",
-	}, []string{"topic", "consumerGroup"})
-
-	subscribeFailureCount = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: "zs_pubsub_failure_count",
-		Help: "Total number of failed subscribe operation",
-	}, []string{"topic", "consumerGroup"})
-
-	publishSuccessCount = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: "zs_pubsub_publish_success_count",
-		Help: "Counter for the number of messages successfully published",
-	}, []string{"topic", "publisherGroup"})
-
-	publishFailureCount = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: "zs_pubsub_publish_failure_count",
-		Help: "Counter for the number of failed publish operations",
-	}, []string{"topic", "publisherGroup"})
-
-	publishTotalCount = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: "zs_pubsub_publish_total_count",
-		Help: "Counter for the total number of publish operations",
-	}, []string{"topic", "publisherGroup"})
-)
-
 // NewKafkaFromEnv fetches the config from environment variables and tries to connect to Kafka
 // Deprecated: Instead use pubsub.New
 func NewKafkaFromEnv() (*Kafka, error) {
@@ -207,12 +173,7 @@ func NewKafkaFromEnv() (*Kafka, error) {
 
 // New establishes connection to Kafka using the config provided in KafkaConfig
 func New(config *Config, logger log.Logger) (*Kafka, error) {
-	_ = prometheus.Register(subscribeRecieveCount)
-	_ = prometheus.Register(subscribeFailureCount)
-	_ = prometheus.Register(subscribeSuccessCount)
-	_ = prometheus.Register(publishFailureCount)
-	_ = prometheus.Register(publishSuccessCount)
-	_ = prometheus.Register(publishTotalCount)
+	pubsub.RegisterMetrics()
 
 	if config.SASL.Mechanism != SASLTypeSCRAMSHA512 && config.SASL.Mechanism != PLAIN && config.SASL.User != "" {
 		return nil, errInvalidMechanism
@@ -423,13 +384,13 @@ func (k *Kafka) PublishEventWithOptions(key string, value interface{}, headers m
 		options.Timestamp = time.Now()
 	}
 
-	publishTotalCount.WithLabelValues(options.Topic, k.config.GroupID).Inc()
+	pubsub.PublishTotalCount(options.Topic, k.config.GroupID)
 
 	valBytes, ok := value.([]byte)
 	if !ok {
 		valBytes, err = json.Marshal(value)
 		if err != nil {
-			publishFailureCount.WithLabelValues(options.Topic, k.config.GroupID).Inc()
+			pubsub.PublishFailureCount(options.Topic, k.config.GroupID)
 
 			return err
 		}
@@ -452,12 +413,12 @@ func (k *Kafka) PublishEventWithOptions(key string, value interface{}, headers m
 
 	_, _, err = k.Producer.SendMessage(message)
 	if err != nil {
-		publishFailureCount.WithLabelValues(message.Topic, k.config.GroupID).Inc()
+		pubsub.PublishFailureCount(message.Topic, k.config.GroupID)
 
 		return err
 	}
 
-	publishSuccessCount.WithLabelValues(message.Topic, k.config.GroupID).Inc()
+	pubsub.PublishSuccessCount(message.Topic, k.config.GroupID)
 
 	return nil
 }
@@ -534,12 +495,14 @@ func (k *Kafka) subscribeMessage() (*pubsub.Message, error) {
 // consumer group session rebalance, which handles the partition assignment
 // to multiple consumers in the group.
 func (k *Kafka) Subscribe() (*pubsub.Message, error) {
+	topics := strings.Join(k.config.Topics, ",")
+	// for every subscribe
+	pubsub.SubscribeReceiveCount(topics, k.config.GroupID)
+
 	message, err := k.subscribeMessage()
 	if err != nil {
 		// for unsuccessful subscribe
-		topics := strings.Join(k.config.Topics, ",")
-		subscribeFailureCount.WithLabelValues(topics, k.config.GroupID).Inc()
-		subscribeRecieveCount.WithLabelValues(topics, k.config.GroupID).Inc()
+		pubsub.SubscribeFailureCount(topics, k.config.GroupID)
 
 		return nil, err
 	}
@@ -550,8 +513,7 @@ func (k *Kafka) Subscribe() (*pubsub.Message, error) {
 		Offset:    message.Offset,
 	})
 	// for successful subscribe
-	subscribeSuccessCount.WithLabelValues(message.Topic, k.config.GroupID).Inc()
-	subscribeRecieveCount.WithLabelValues(message.Topic, k.config.GroupID).Inc()
+	pubsub.SubscribeSuccessCount(message.Topic, k.config.GroupID)
 
 	return message, nil
 }
@@ -562,12 +524,14 @@ whether to commit message and consume another message
 */
 func (k *Kafka) SubscribeWithCommit(f pubsub.CommitFunc) (*pubsub.Message, error) {
 	for {
+		topics := strings.Join(k.config.Topics, ",")
+		// for every subscribe
+		pubsub.SubscribeReceiveCount(topics, k.config.GroupID)
+
 		msg, err := k.subscribeMessage()
 		if err != nil {
 			// for unsuccessful subscribe
-			topics := strings.Join(k.config.Topics, ",")
-			subscribeFailureCount.WithLabelValues(topics, k.config.GroupID).Inc()
-			subscribeRecieveCount.WithLabelValues(topics, k.config.GroupID).Inc()
+			pubsub.SubscribeFailureCount(topics, k.config.GroupID)
 
 			return nil, err
 		}
@@ -577,8 +541,7 @@ func (k *Kafka) SubscribeWithCommit(f pubsub.CommitFunc) (*pubsub.Message, error
 		// avro will call f() after processing the message
 		if f == nil {
 			// for failed subscribe operation
-			subscribeFailureCount.WithLabelValues(msg.Topic, k.config.GroupID).Inc()
-			subscribeRecieveCount.WithLabelValues(msg.Topic, k.config.GroupID).Inc()
+			pubsub.SubscribeFailureCount(topics, k.config.GroupID)
 
 			return msg, nil
 		}
@@ -586,8 +549,7 @@ func (k *Kafka) SubscribeWithCommit(f pubsub.CommitFunc) (*pubsub.Message, error
 		isCommit, isContinue := f(msg)
 
 		// for successful subscribe
-		subscribeSuccessCount.WithLabelValues(msg.Topic, k.config.GroupID).Inc()
-		subscribeRecieveCount.WithLabelValues(msg.Topic, k.config.GroupID).Inc()
+		pubsub.SubscribeSuccessCount(topics, k.config.GroupID)
 
 		if isCommit {
 			k.CommitOffset(pubsub.TopicPartition{
