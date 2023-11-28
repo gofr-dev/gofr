@@ -86,6 +86,46 @@ func Test_createSubscription(t *testing.T) {
 	}
 }
 
+func Test_Subscribe(t *testing.T) {
+	t.Setenv("PUBSUB_BACKEND", "google")
+	t.Setenv("PUBSUB_EMULATOR_HOST", "localhost:8086")
+
+	conf := config.NewGoDotEnvProvider(log.NewLogger(), "../../../../configs")
+
+	sampleData := struct {
+		ID    string `avro:"Id"`
+		Name  string `avro:"Name"`
+		Email string `avro:"Email"`
+	}{
+		ID:    "1",
+		Name:  "Rohan",
+		Email: "rohan@email.xyz",
+	}
+	byteData, _ := json.Marshal(sampleData)
+
+	configs := Config{
+		ProjectID:           conf.Get("GOOGLE_PROJECT_ID"),
+		TopicName:           conf.Get("GOOGLE_TOPIC_NAME"),
+		TimeoutDuration:     30,
+		SubscriptionDetails: &Subscription{Name: conf.Get("GOOGLE_SUBSCRIPTION_NAME")},
+	}
+
+	conn, err := New(&configs, log.NewMockLogger(new(bytes.Buffer)))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_ = conn.PublishEvent("", sampleData, nil)
+
+	res, err := conn.Subscribe()
+
+	assert.Equal(t, res, &pubsub.Message{
+		Value: string(byteData),
+		Topic: conf.Get("GOOGLE_TOPIC_NAME")}, "Testcase Failed")
+
+	assert.Equal(t, err != nil, false, "Testcase Failed")
+}
+
 func Test_SubscribeWithCommit(t *testing.T) {
 	t.Setenv("PUBSUB_BACKEND", "google")
 	t.Setenv("PUBSUB_EMULATOR_HOST", "localhost:8086")
@@ -117,7 +157,9 @@ func Test_SubscribeWithCommit(t *testing.T) {
 
 	_ = conn.PublishEvent("", sampleData, nil)
 
-	res, err := conn.SubscribeWithCommit(nil)
+	res, err := conn.SubscribeWithCommit(func(message *pubsub.Message) (bool, bool) {
+		return true, false
+	})
 
 	assert.Equal(t, res, &pubsub.Message{
 		Value: string(byteData),
