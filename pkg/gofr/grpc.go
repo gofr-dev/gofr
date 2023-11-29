@@ -32,6 +32,8 @@ func (g *GRPC) Server() *grpc.Server {
 
 // NewGRPCServer creates a gRPC server instance with OpenTelemetry tracing, OpenCensus stats handling,
 // unary interceptors for tracing and recovery, and a custom logging interceptor.
+//
+//nolint:staticcheck //will be upgraded to grpc.NewServer in upcoming releases
 func NewGRPCServer() *grpc.Server {
 	return grpc.NewServer(
 		grpc.StreamInterceptor(otelgrpc.StreamServerInterceptor(otelgrpc.WithTracerProvider(otel.GetTracerProvider()))),
