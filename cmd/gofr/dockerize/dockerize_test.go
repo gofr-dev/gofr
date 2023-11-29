@@ -134,6 +134,25 @@ func Test_Dockerize(t *testing.T) {
 	}
 }
 
+func TestDockerize_Error(t *testing.T) {
+	initializeTest(t)
+	initialiseGit(t)
+
+	h := New("gofr-app", "1.0.0")
+
+	app := gofr.New()
+	expErr := &errors.Response{Reason: fmt.Sprintf(`unknown parameter(s) [` + strings.Join([]string{"tags"}, ",") + `]. ` +
+		`Run gofr <command_name> -h for help of the command.`)}
+
+	req := httptest.NewRequest("", setQueryParams(map[string]string{"tags": "commit"}), nil)
+	ctx := gofr.NewContext(nil, request.NewHTTPRequest(req), app)
+
+	resp, err := h.Dockerize(ctx)
+
+	assert.Nil(t, resp, "TEST Failed.")
+	assert.Equal(t, expErr, err, "TEST Failed.")
+}
+
 func TestDockerize_Fail(t *testing.T) {
 	h := New("gofr-app", "1.0.0")
 

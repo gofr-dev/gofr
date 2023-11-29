@@ -8,7 +8,6 @@ import (
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/eventbridge"
-	"github.com/prometheus/client_golang/prometheus"
 
 	"gofr.dev/pkg"
 	"gofr.dev/pkg/datastore"
@@ -37,24 +36,6 @@ type customProvider struct {
 	secretKey string
 }
 
-//nolint:gochecknoglobals // The declared global variable can be accessed across multiple functions
-var (
-	publishSuccessCount = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: "zs_pubsub_publish_success_count",
-		Help: "Counter for the number of events successfully published",
-	}, []string{"topic", "consumerGroup"})
-
-	publishFailureCount = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: "zs_pubsub_publish_failure_count",
-		Help: "Counter for the number of failed publish operations",
-	}, []string{"topic", "consumerGroup"})
-
-	publishTotalCount = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: "zs_pubsub_publish_total_count",
-		Help: "Counter for the total number of publish operations",
-	}, []string{"topic", "consumerGroup"})
-)
-
 // Retrieve returns the credentials and error
 func (cp customProvider) Retrieve() (credentials.Value, error) {
 	return credentials.Value{AccessKeyID: cp.keyID, SecretAccessKey: cp.secretKey}, nil
@@ -67,9 +48,7 @@ func (cp customProvider) IsExpired() bool {
 
 // New returns new client
 func New(cfg *Config) (*Client, error) {
-	_ = prometheus.Register(publishFailureCount)
-	_ = prometheus.Register(publishSuccessCount)
-	_ = prometheus.Register(publishTotalCount)
+	pubsub.RegisterMetrics()
 
 	awsCfg := aws.NewConfig().WithRegion(cfg.Region)
 	awsCfg.Credentials = credentials.NewCredentials(customProvider{cfg.AccessKeyID, cfg.SecretAccessKey})
@@ -89,11 +68,13 @@ func New(cfg *Config) (*Client, error) {
 
 // PublishEvent publishes the event to eventbridge
 func (c *Client) PublishEvent(detailType string, detail interface{}, _ map[string]string) error {
-	publishTotalCount.WithLabelValues(c.cfg.EventBus, "").Inc()
+	// for every publish
+	pubsub.PublishTotalCount(c.cfg.EventBus, "")
 
 	payload, err := json.Marshal(detail)
 	if err != nil {
-		publishFailureCount.WithLabelValues(c.cfg.EventBus, "").Inc()
+		// for unsuccessful publish
+		pubsub.PublishFailureCount(c.cfg.EventBus, "")
 		return err
 	}
 
@@ -110,11 +91,13 @@ func (c *Client) PublishEvent(detailType string, detail interface{}, _ map[strin
 
 	_, err = c.client.PutEvents(input)
 	if err != nil {
-		publishFailureCount.WithLabelValues(c.cfg.EventBus, "").Inc()
+		// for unsuccessful publish
+		pubsub.PublishFailureCount(c.cfg.EventBus, "")
 		return err
 	}
 
-	publishSuccessCount.WithLabelValues(c.cfg.EventBus, "").Inc()
+	// for successful publish
+	pubsub.PublishSuccessCount(c.cfg.EventBus, "")
 
 	return nil
 }
