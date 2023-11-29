@@ -14,7 +14,7 @@ require (
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/trace v1.21.0
 	github.com/Shopify/sarama v1.38.0
 	github.com/XSAM/otelsql v0.26.0
-	github.com/aws/aws-sdk-go v1.47.13
+	github.com/aws/aws-sdk-go v1.48.7
 	github.com/aws/aws-sdk-go-v2/credentials v1.16.3
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.44.0
 	github.com/bmizerany/assert v0.0.0-20160611221934-b7ed37b82869
