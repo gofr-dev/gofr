@@ -238,10 +238,59 @@ func (g *GCPubSub) Subscribe() (*pubsub.Message, error) {
 	return &res, nil
 }
 
-// SubscribeWithCommit function: Google Pub/Sub handles message acknowledgements automatically,
-// and you don't need to manually commit offsets like in some other messaging systems.
-func (g *GCPubSub) SubscribeWithCommit(pubsub.CommitFunc) (*pubsub.Message, error) {
-	return g.Subscribe()
+/*
+SubscribeWithCommit calls the CommitFunc after subscribing message from googlePubSub and based on the return values decides
+whether to commit message and consume another message
+*/
+func (g *GCPubSub) SubscribeWithCommit(commitFunc pubsub.CommitFunc) (*pubsub.Message, error) {
+	subscribeReceiveCount.WithLabelValues(g.config.TopicName, "").Inc()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	var res pubsub.Message
+	res.Topic = g.config.TopicName
+
+	handler := func(_ context.Context, m *gpubsub.Message) {
+		g.processMessage(m, &res, commitFunc, cancel)
+	}
+
+	for {
+		select {
+		case <-ctx.Done():
+			return &res, nil // Context canceled or timed out
+		default:
+			if err := g.config.Subscription.Receive(ctx, handler); err != nil {
+				subscribeFailureCount.WithLabelValues(g.config.TopicName, "").Inc()
+				g.logger.Debug("Error while receiving message: ", err)
+
+				return nil, err
+			}
+
+			subscribeSuccessCount.WithLabelValues(g.config.TopicName, "").Inc()
+			g.logger.Debug("Message received successfully.")
+		}
+	}
+}
+
+func (g *GCPubSub) processMessage(m *gpubsub.Message, res *pubsub.Message, commitFunc pubsub.CommitFunc,
+	cancelFunc context.CancelFunc) {
+	g.logger.Debug("Received message: ", string(m.Data))
+	res.Value = string(m.Data)
+
+	// Call the commit function
+	isCommit, isContinue := commitFunc(&pubsub.Message{
+		Topic: g.config.TopicName,
+		Value: string(m.Data),
+	})
+
+	if isCommit {
+		m.Ack() // Acknowledge that the message has been consumed
+	}
+
+	if !isContinue {
+		cancelFunc()
+	}
 }
 
 func (g *GCPubSub) Bind(message []byte, target interface{}) error {
