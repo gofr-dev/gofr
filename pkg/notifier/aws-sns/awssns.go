@@ -37,20 +37,20 @@ type Config struct {
 	Protocol          string
 }
 
-//nolint // The declared global variable can be accessed across multiple functions
+// nolint // The declared global variable can be accessed across multiple functions
 var (
 	notifierReceiveCount = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: "zs_notifier_receive_count",
+		Name: "gofr_notifier_receive_count",
 		Help: "Total number of subscribe operation",
 	}, []string{"topic"})
 
 	notifierSuccessCount = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: "zs_notifier_success_count",
+		Name: "gofr_notifier_success_count",
 		Help: "Total number of successful subscribe operation",
 	}, []string{"topic"})
 
 	notifierFailureCount = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: "zs_notifier_failure_count",
+		Name: "gofr_notifier_failure_count",
 		Help: "Total number of failed subscribe operation",
 	}, []string{"topic"})
 

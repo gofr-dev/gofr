@@ -23,7 +23,7 @@ import (
 //nolint:gochecknoglobals // dynamodbStats has to be a global variable for prometheus
 var (
 	dynamodbStats = prometheus.NewHistogramVec(prometheus.HistogramOpts{
-		Name:    "zs_dynamodb_stats",
+		Name:    "gofr_dynamodb_stats",
 		Help:    "Histogram for DynamoDB",
 		Buckets: []float64{.001, .003, .005, .01, .025, .05, .1, .2, .3, .4, .5, .75, 1, 2, 3, 5, 10, 30},
 	}, []string{"type", "host", "table"})

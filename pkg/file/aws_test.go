@@ -17,7 +17,7 @@ type mockClient struct{}
 
 func (mc *mockClient) GetObject(_ context.Context, params *s3.GetObjectInput, _ ...func(*s3.Options)) (*s3.GetObjectOutput, error) {
 	switch *params.Bucket {
-	case "test-bucket-zs":
+	case "test-bucket-gofr":
 		return &s3.GetObjectOutput{Body: io.NopCloser(strings.NewReader("Successful fetch"))}, nil
 	default:
 		return nil, errors.InvalidParam{Param: []string{"bucket"}}
@@ -26,7 +26,7 @@ func (mc *mockClient) GetObject(_ context.Context, params *s3.GetObjectInput, _ 
 
 func (mc *mockClient) PutObject(_ context.Context, params *s3.PutObjectInput, _ ...func(*s3.Options)) (*s3.PutObjectOutput, error) {
 	switch *params.Bucket {
-	case "test-bucket-zs":
+	case "test-bucket-gofr":
 		return nil, nil
 	default:
 		return nil, errors.InvalidParam{Param: []string{"bucket"}}
@@ -55,7 +55,7 @@ func TestAws_fetch(t *testing.T) {
 		cfg *aws
 		err error
 	}{
-		{&aws{fileName: "aws.txt", fileMode: APPEND, client: m, bucketName: "test-bucket-zs"}, nil},
+		{&aws{fileName: "aws.txt", fileMode: APPEND, client: m, bucketName: "test-bucket-gofr"}, nil},
 		{&aws{fileName: "aws.txt", fileMode: READ, client: m, bucketName: "random-bucket"},
 			&errors.Response{StatusCode: http.StatusInternalServerError, Code: "S3_ERROR", Reason: "Incorrect value for parameter: bucket"}},
 	}
@@ -81,7 +81,7 @@ func TestAws_push(t *testing.T) {
 	}{
 		{&aws{fileName: "aws.txt", fileMode: READWRITE, client: m, bucketName: "random-bucket"},
 			&errors.Response{StatusCode: http.StatusInternalServerError, Code: "S3_ERROR", Reason: "Incorrect value for parameter: bucket"}},
-		{&aws{fileName: "awstest.txt", fileMode: READ, client: m, bucketName: "test-bucket-zs"}, nil},
+		{&aws{fileName: "awstest.txt", fileMode: READ, client: m, bucketName: "test-bucket-gofr"}, nil},
 	}
 
 	for i, tc := range tests {

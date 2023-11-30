@@ -32,7 +32,7 @@ import (
 //nolint:gochecknoglobals // need to declare global variable to push metrics
 var (
 	frameworkInfo = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "zs_info",
+		Name: "gofr_info",
 		Help: "Gauge to count the pods running for each service and framework version",
 	}, []string{"app", "framework"})
 

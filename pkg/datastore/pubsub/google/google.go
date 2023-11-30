@@ -44,32 +44,32 @@ type GCPubSub struct {
 //nolint:gochecknoglobals // The declared global variable can be accessed across multiple functions
 var (
 	subscribeReceiveCount = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: "zs_gcpubsub_receive_count",
+		Name: "gofr_gcpubsub_receive_count",
 		Help: "Total number of subscribe operation",
 	}, []string{"topic", "consumerGroup"})
 
 	subscribeSuccessCount = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: "zs_gcpubsub_success_count",
+		Name: "gofr_gcpubsub_success_count",
 		Help: "Total number of successful subscribe operation",
 	}, []string{"topic", "consumerGroup"})
 
 	subscribeFailureCount = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: "zs_gcpubsub_failure_count",
+		Name: "gofr_gcpubsub_failure_count",
 		Help: "Total number of failed subscribe operation",
 	}, []string{"topic", "consumerGroup"})
 
 	publishSuccessCount = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: "zs_gcpubsub_publish_success_count",
+		Name: "gofr_gcpubsub_publish_success_count",
 		Help: "Counter for the number of messages successfully published",
 	}, []string{"topic", "publisherGroup"})
 
 	publishFailureCount = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: "zs_gcpubsub_publish_failure_count",
+		Name: "gofr_gcpubsub_publish_failure_count",
 		Help: "Counter for the number of failed publish operations",
 	}, []string{"topic", "publisherGroup"})
 
 	publishTotalCount = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: "zs_gcpubsub_publish_total_count",
+		Name: "gofr_gcpubsub_publish_total_count",
 		Help: "Counter for the total number of publish operations",
 	}, []string{"topic", "publisherGroup"})
 )

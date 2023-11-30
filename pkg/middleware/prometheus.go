@@ -19,43 +19,43 @@ import (
 //nolint:gochecknoglobals // metrics need to be initialized only once
 var (
 	httpResponse = promauto.NewHistogramVec(prometheus.HistogramOpts{
-		Name:    "zs_http_response",
+		Name:    "gofr_http_response",
 		Help:    "Histogram of HTTP response times in seconds",
 		Buckets: []float64{.001, .003, .005, .01, .025, .05, .1, .2, .3, .4, .5, .75, 1, 2, 3, 5, 10, 30},
 	}, []string{"path", "method", "status"})
 
 	goRoutines = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "zs_go_routines",
+		Name: "gofr_go_routines",
 		Help: "Gauge of Go routines running",
 	}, nil)
 
 	alloc = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "zs_sys_memory_alloc",
+		Name: "gofr_sys_memory_alloc",
 		Help: "Gauge of Heap allocations",
 	}, nil)
 
 	totalAlloc = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "zs_sys_total_alloc",
+		Name: "gofr_sys_total_alloc",
 		Help: "Gauge of cumulative bytes allocated for heap objects",
 	}, nil)
 
 	numGC = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "zs_go_numGC",
+		Name: "gofr_go_numGC",
 		Help: "Gauge of completed GC cycles",
 	}, nil)
 
 	sys = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "zs_go_sys",
+		Name: "gofr_go_sys",
 		Help: "Gauge of total bytes of memory",
 	}, nil)
 
 	ErrorTypesStats = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: "zs_server_error",
+		Name: "gofr_server_error",
 		Help: "Counter of HTTP Server Error",
 	}, []string{"type", "path", "method"})
 
 	deprecatedFeatureCount = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: "zs_deprecated_feature_counter",
+		Name: "gofr_deprecated_feature_counter",
 		Help: "Counter for deprecated features",
 	}, []string{"appName", "appVersion", "featureName"})
 

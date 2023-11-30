@@ -90,23 +90,23 @@ type SQLClient struct {
 //nolint:gochecknoglobals // sqlStats has to be a global variable for prometheus
 var (
 	sqlStats = prometheus.NewHistogramVec(prometheus.HistogramOpts{
-		Name:    "zs_sql_stats",
+		Name:    "gofr_sql_stats",
 		Help:    "Histogram for SQL",
 		Buckets: []float64{.001, .003, .005, .01, .025, .05, .1, .2, .3, .4, .5, .75, 1, 2, 3, 5, 10, 30},
 	}, []string{"type", "host", "database"})
 
 	sqlOpen = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "zs_sql_open_connections",
+		Name: "gofr_sql_open_connections",
 		Help: "Gauge for sql open connections",
 	}, []string{"database", "host"})
 
 	sqlIdle = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "zs_sql_idle_connections",
+		Name: "gofr_sql_idle_connections",
 		Help: "Gauge for sql idle connections",
 	}, []string{"database", "host"})
 
 	sqlInUse = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "zs_sql_inUse_connections",
+		Name: "gofr_sql_inUse_connections",
 		Help: "Gauge for sql InUse connections",
 	}, []string{"database", "host"})
 

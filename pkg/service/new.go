@@ -51,13 +51,13 @@ type SurgeProtectorOption struct {
 //nolint:gochecknoglobals,gocritic// The declared global variable can be accessed across multiple functions
 var (
 	httpServiceResponse = prometheus.NewHistogramVec(prometheus.HistogramOpts{
-		Name:    "zs_http_service_response",
+		Name:    "gofr_http_service_response",
 		Help:    "Histogram of HTTP response times in seconds and status",
 		Buckets: []float64{.001, .003, .005, .01, .025, .05, .1, .2, .3, .4, .5, .75, 1, 2, 3, 5, 10, 30},
 	}, []string{"path", "method", "status"})
 
 	circuitOpenCount = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: "zs_external_service_circuit_open_count",
+		Name: "gofr_external_service_circuit_open_count",
 		Help: "Counter to track the number of times circuit opens",
 	}, []string{"host"})
 )

@@ -14,5 +14,5 @@ const (
 	PathOpenAPI              = "/.well-known/openapi.json"
 	PathSwagger              = "/.well-known/swagger"
 	PathSwaggerWithPathParam = "/.well-known/swagger/{name}"
-	FrameworkMetricsPrefix   = "zs_"
+	FrameworkMetricsPrefix   = "gofr_"
 )

@@ -79,7 +79,7 @@ func Test_NewRemoteConfigProvider(t *testing.T) {
 	appName := appName
 	localConfig := &MockConfig{
 		Data: map[string]string{"APP_VERSION": "v0.16.0",
-			"REMOTE_NAMESPACE": "ZS_NAMESPACE",
+			"REMOTE_NAMESPACE": "GOFR_NAMESPACE",
 		},
 	}
 	remoteURL := testServer("success").URL
@@ -97,7 +97,7 @@ func Test_refreshConfigs(t *testing.T) {
 	appName := appName
 	localConfig := &MockConfig{
 		Data: map[string]string{"APP_VERSION": "v0.16.0",
-			"REMOTE_NAMESPACE": "ZS_NAMESPACE",
+			"REMOTE_NAMESPACE": "GOFR_NAMESPACE",
 		},
 	}
 
@@ -135,7 +135,7 @@ func Test_refreshConfigsErr(t *testing.T) {
 	server := testServer("error")
 	localConfig := &MockConfig{
 		Data: map[string]string{"APP_VERSION": "v0.16.0",
-			"REMOTE_NAMESPACE": "ZS_NAMESPACE",
+			"REMOTE_NAMESPACE": "GOFR_NAMESPACE",
 		},
 	}
 
