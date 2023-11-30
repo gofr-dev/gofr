@@ -37,7 +37,7 @@ type Config struct {
 	Protocol          string
 }
 
-// nolint // The declared global variable can be accessed across multiple functions
+//nolint // The declared global variable can be accessed across multiple functions
 var (
 	notifierReceiveCount = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "gofr_notifier_receive_count",
