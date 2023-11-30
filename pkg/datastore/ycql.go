@@ -27,7 +27,7 @@ type YCQL struct {
 //nolint:gochecknoglobals // cqlStats has to be a global variable for prometheus
 var (
 	cqlStats = prometheus.NewHistogramVec(prometheus.HistogramOpts{
-		Name:    "gofr_cql_stats",
+		Name:    pkg.FrameworkMetricsPrefix + "cql_stats",
 		Help:    "Histogram for CQL",
 		Buckets: []float64{.001, .003, .005, .01, .025, .05, .1, .2, .3, .4, .5, .75, 1, 2, 3, 5, 10, 30},
 	}, []string{"type", "host", "keyspace"})

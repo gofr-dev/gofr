@@ -42,7 +42,7 @@ type redisClusterClient struct {
 //nolint:gochecknoglobals // redisStats has to be a global variable for prometheus
 var (
 	redisStats = prometheus.NewHistogramVec(prometheus.HistogramOpts{
-		Name:    "gofr_redis_stats",
+		Name:    pkg.FrameworkMetricsPrefix + "redis_stats",
 		Help:    "Histogram for Redis",
 		Buckets: []float64{.001, .003, .005, .01, .025, .05, .1, .2, .3, .4, .5, .75, 1, 2, 3, 5, 10, 30},
 	}, []string{"type", "host"})
