@@ -56,7 +56,7 @@ func GetNewClickHouseDB(logger log.Logger, config *ClickHouseConfig) (ClickHouse
 	return db, nil
 }
 
-// HealthCheck pings the clickHouse instance in gorm. If the ping does not return an error, the healthCheck status will be set to UP,
+// HealthCheck pings the clickHouse instance. If the ping does not return an error, the healthCheck status will be set to UP,
 // else the healthCheck status will be DOWN
 func (c ClickHouseDB) HealthCheck() types.Health {
 	resp := types.Health{
@@ -64,7 +64,7 @@ func (c ClickHouseDB) HealthCheck() types.Health {
 		Status: pkg.StatusDown,
 		Host:   c.config.Host,
 	}
-	// The following check is for the condition when the connection to SQLX has not been made during initialization
+	// The following check is for the condition when the connection to ClickHouse has not been made during initialization
 	if c.DB == nil {
 		return resp
 	}
