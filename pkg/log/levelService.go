@@ -12,7 +12,6 @@ import (
 )
 
 type levelService struct {
-	logger       Logger
 	init         bool
 	level        level
 	url          string
@@ -26,13 +25,14 @@ type levelService struct {
 
 //nolint:gochecknoglobals,godox // need to create mutex only once
 var (
-	rls levelService // TODO - remove this
-	mu  sync.RWMutex
+	mu sync.RWMutex
 )
 
 const LevelFetchInterval = 10 // In seconds
 
 func newLevelService(l Logger, appName string) *levelService {
+	var rls levelService
+
 	if !rls.init {
 		lvl := getLevel(os.Getenv("LOG_LEVEL"))
 
@@ -47,7 +47,6 @@ func newLevelService(l Logger, appName string) *levelService {
 		rls.namespace = os.Getenv("LOG_SERVICE_NAMESPACE")
 		rls.cluster = os.Getenv("LOG_SERVICE_CLUSTER")
 		rls.userGroup = os.Getenv("LOG_SERVICE_USER_GROUP")
-		rls.logger = l
 
 		if rls.url != "" {
 			rls.init = true
@@ -69,7 +68,7 @@ func newLevelService(l Logger, appName string) *levelService {
 
 			go func(c *http.Client, r *http.Request) {
 				for {
-					rls.updateRemoteLevel(c, r)
+					rls.updateRemoteLevel(c, r, l)
 					time.Sleep(LevelFetchInterval * time.Second)
 				}
 			}(client, req)
@@ -79,14 +78,14 @@ func newLevelService(l Logger, appName string) *levelService {
 	return &rls
 }
 
-func (s *levelService) updateRemoteLevel(client *http.Client, req *http.Request) {
-	rls.rwMutex.Lock()
-	defer rls.rwMutex.Unlock()
-	rls.logger.Debugf("Making request to remote logging service %s", s.url)
+func (s *levelService) updateRemoteLevel(client *http.Client, req *http.Request, l Logger) {
+	s.rwMutex.Lock()
+	defer s.rwMutex.Unlock()
+	l.Debugf("Making request to remote logging service %s", s.url)
 
 	resp, err := client.Do(req)
 	if err != nil {
-		s.logger.Warnf("Could not create log service client. err:%v", err)
+		l.Warnf("Could not create log service client. err:%v", err)
 		s.failureCount++
 
 		return
@@ -95,19 +94,19 @@ func (s *levelService) updateRemoteLevel(client *http.Client, req *http.Request)
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		s.logger.Warnf("Logging Service returned %d status. Req: %s", resp.StatusCode, req.URL)
+		l.Warnf("Logging Service returned %d status. Req: %s", resp.StatusCode, req.URL)
 
 		return
 	}
 
 	b, _ := io.ReadAll(resp.Body)
-	if newLevel := s.getRemoteLevel(b); s.level != newLevel {
-		s.logger.Debugf("Changing log level from %s to %s because of remote log service", s.level, newLevel)
+	if newLevel := s.getRemoteLevel(b, l); s.level != newLevel {
+		l.Debugf("Changing log level from %s to %s because of remote log service", s.level, newLevel)
 
 		s.level = newLevel
 	}
 }
-func (s *levelService) getRemoteLevel(body []byte) level {
+func (s *levelService) getRemoteLevel(body []byte, l Logger) level {
 	type data struct {
 		ServiceName string            `json:"serviceName"`
 		Config      map[string]string `json:"config"`
@@ -120,7 +119,7 @@ func (s *levelService) getRemoteLevel(body []byte) level {
 
 	err := json.Unmarshal(body, &level)
 	if err != nil {
-		s.logger.Warnf("Logging Service returned %v", err)
+		l.Warnf("Logging Service returned %v", err)
 	}
 
 	if len(level.Data) > 0 {

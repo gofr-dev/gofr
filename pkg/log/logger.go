@@ -45,8 +45,8 @@ func newLogger() *logger {
 		syncData:  &sync.Map{},
 	}
 
-	if !rls.init {
-		rls = *newLevelService(l, name)
+	if !l.rls.init {
+		l.rls = *newLevelService(l, name)
 	}
 
 	// Set terminal to ensure proper output format.
@@ -55,12 +55,10 @@ func newLogger() *logger {
 	return l
 }
 
-// NewLogger  creates and returns a new logger instance that implements the Logger interface.
 func NewLogger() Logger {
 	return newLogger()
 }
 
-// NewCorrelationLogger creates and returns a new logger instance with a specified correlation ID.
 func NewCorrelationLogger(correlationID string) Logger {
 	l := newLogger()
 	l.correlationID = correlationID

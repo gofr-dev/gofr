@@ -6,13 +6,8 @@ import (
 )
 
 func NewMockLogger(output io.Writer) Logger {
-	mu.Lock()
-
-	rls.level = Debug
-
-	mu.Unlock()
-
 	return &logger{
+		rls: levelService{level: Debug},
 		out: output,
 		app: appInfo{
 			Data:      make(map[string]interface{}),

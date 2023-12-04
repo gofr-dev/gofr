@@ -22,6 +22,9 @@ type logger struct {
 	correlationID string
 
 	isTerminal bool
+
+	// remote logging service
+	rls levelService
 }
 
 type appInfo struct {
@@ -57,7 +60,7 @@ func (a *appInfo) getAppData() appInfo {
 func (l *logger) log(level level, format string, args ...interface{}) {
 	mu.Lock()
 
-	lvl := rls.level
+	lvl := l.rls.level
 
 	mu.Unlock()
 
