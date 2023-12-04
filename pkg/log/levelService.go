@@ -23,7 +23,7 @@ type levelService struct {
 	userGroup    string
 }
 
-//nolint:gochecknoglobals,godox // need to create mutex only once
+//nolint:gochecknoglobals // need to create mutex only once
 var (
 	mu sync.RWMutex
 )
