@@ -21,6 +21,7 @@ type DataStore struct {
 
 	Logger        log.Logger
 	MongoDB       MongoDB
+	ClickHouse    ClickHouseDB
 	Redis         Redis
 	ORM           interface{}
 	Cassandra     Cassandra
@@ -185,6 +186,12 @@ func (ds *DataStore) ElasticsearchHealthCheck() types.Health {
 // the healthCheck status will be set to UP, else the healthCheck status will be DOWN.
 func (ds *DataStore) MongoHealthCheck() types.Health {
 	return ds.MongoDB.HealthCheck()
+}
+
+// ClickHouseHealthCheck pings the ClickHouse instance. If the ping does not return an error,
+// the healthCheck status will be set to UP, else the healthCheck status will be DOWN.
+func (ds *DataStore) ClickHouseHealthCheck() types.Health {
+	return ds.ClickHouse.HealthCheck()
 }
 
 // RedisHealthCheck pings the redis instance. If the ping does not return an error,

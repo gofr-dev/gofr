@@ -293,6 +293,9 @@ func initializeDataStores(c Config, logger log.Logger, g *Gofr) {
 	// Mongo DB
 	initializeMongoDB(c, g)
 
+	// ClickHouse DB
+	initializeClickHouseDB(c, g)
+
 	// PubSub
 	initializePubSub(c, logger, g)
 
@@ -457,6 +460,30 @@ func initializeMongoDB(c Config, g *Gofr) {
 		}
 
 		g.Logger.Infof("MongoDB connected. HostName: %s, Port: %s, Database: %s", mongoConfig.HostName, mongoConfig.Port, mongoConfig.Database)
+	}
+}
+
+func initializeClickHouseDB(c Config, g *Gofr) {
+	hostName := c.Get("CLICKHOUSE_HOST")
+	port := c.Get("CLICKHOUSE_PORT")
+
+	if hostName != "" && port != "" {
+		clickHouseConfig := clickhouseDBConfigFromEnv(c, "")
+
+		var err error
+
+		g.ClickHouse, err = datastore.GetNewClickHouseDB(g.Logger, clickHouseConfig)
+		g.DatabaseHealth = append(g.DatabaseHealth, g.ClickHouseHealthCheck)
+
+		if err != nil {
+			g.Logger.Errorf("could not connect to ClickHouse, HOST: %s, PORT: %v, Error: %v\n", hostName, port, err)
+
+			go clickHouseRetry(clickHouseConfig, g)
+
+			return
+		}
+
+		g.Logger.Infof("ClickHouse connected. HostName: %s, Port: %s", clickHouseConfig.Host, clickHouseConfig.Port)
 	}
 }
 
