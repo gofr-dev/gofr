@@ -14,8 +14,8 @@ require (
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/trace v1.21.0
 	github.com/Shopify/sarama v1.38.0
 	github.com/XSAM/otelsql v0.26.0
-	github.com/aws/aws-sdk-go v1.47.13
-	github.com/aws/aws-sdk-go-v2/credentials v1.16.3
+	github.com/aws/aws-sdk-go v1.48.12
+	github.com/aws/aws-sdk-go-v2/credentials v1.16.9
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.44.0
 	github.com/bmizerany/assert v0.0.0-20160611221934-b7ed37b82869
 	github.com/elastic/go-elasticsearch/v7 v7.17.10
@@ -33,11 +33,12 @@ require (
 	github.com/gorilla/mux v1.8.1
 	github.com/gorilla/websocket v1.5.0
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0
-	github.com/hamba/avro/v2 v2.17.2
+	github.com/hamba/avro/v2 v2.18.0
 	github.com/jlaffaye/ftp v0.2.0
 	github.com/jmoiron/sqlx v1.3.5
 	github.com/joho/godotenv v1.5.1
 	github.com/lib/pq v1.10.9
+	github.com/mitchellh/mapstructure v1.5.0
 	github.com/newrelic/go-agent v3.20.2+incompatible
 	github.com/pkg/sftp v1.13.6
 	github.com/prometheus/client_golang v1.17.0
@@ -47,15 +48,15 @@ require (
 	github.com/zopsmart/gorm-opentelemetry v1.0.1-0.20211208062846-bf802ea1c033
 	go.mongodb.org/mongo-driver v1.11.9
 	go.opencensus.io v0.24.0
-	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.42.0
+	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.46.1
 	go.opentelemetry.io/contrib/instrumentation/net/http/httptrace/otelhttptrace v0.46.1
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.46.1
 	go.opentelemetry.io/otel v1.21.0
 	go.opentelemetry.io/otel/exporters/zipkin v1.21.0
 	go.opentelemetry.io/otel/sdk v1.21.0
 	go.opentelemetry.io/otel/trace v1.21.0
-	golang.org/x/crypto v0.15.0
-	golang.org/x/net v0.18.0
+	golang.org/x/crypto v0.16.0
+	golang.org/x/net v0.19.0
 	golang.org/x/text v0.14.0
 	google.golang.org/api v0.150.0
 	google.golang.org/grpc v1.59.0
@@ -84,16 +85,16 @@ require (
 	github.com/Azure/go-autorest/tracing v0.6.0 // indirect
 	github.com/Azure/go-ntlmssp v0.0.0-20221128193559-754e69321358 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/resourcemapping v0.45.0 // indirect
-	github.com/aws/aws-sdk-go-v2 v1.23.1 // indirect
+	github.com/aws/aws-sdk-go-v2 v1.23.5 // indirect
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.5.1 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/configsources v1.2.4 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.5.4 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/configsources v1.2.8 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.5.8 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/v4a v1.2.4 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.10.1 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.10.3 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/checksum v1.2.4 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.10.4 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.10.8 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.16.4 // indirect
-	github.com/aws/smithy-go v1.17.0 // indirect
+	github.com/aws/smithy-go v1.18.1 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
@@ -144,7 +145,6 @@ require (
 	github.com/mattn/go-sqlite3 v1.14.15 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.4 // indirect
 	github.com/microsoft/go-mssqldb v0.17.0 // indirect
-	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826 // indirect
@@ -169,8 +169,8 @@ require (
 	go.opentelemetry.io/otel/metric v1.21.0 // indirect
 	golang.org/x/oauth2 v0.13.0 // indirect
 	golang.org/x/sync v0.5.0 // indirect
-	golang.org/x/sys v0.14.0 // indirect
-	golang.org/x/term v0.14.0 // indirect
+	golang.org/x/sys v0.15.0 // indirect
+	golang.org/x/term v0.15.0 // indirect
 	golang.org/x/time v0.3.0 // indirect
 	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
