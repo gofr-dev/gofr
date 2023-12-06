@@ -14,7 +14,7 @@ require (
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/trace v1.21.0
 	github.com/Shopify/sarama v1.38.0
 	github.com/XSAM/otelsql v0.26.0
-	github.com/aws/aws-sdk-go v1.48.7
+	github.com/aws/aws-sdk-go v1.48.12
 	github.com/aws/aws-sdk-go-v2/credentials v1.16.3
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.44.0
 	github.com/bmizerany/assert v0.0.0-20160611221934-b7ed37b82869
@@ -33,7 +33,7 @@ require (
 	github.com/gorilla/mux v1.8.1
 	github.com/gorilla/websocket v1.5.0
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0
-	github.com/hamba/avro/v2 v2.17.2
+	github.com/hamba/avro/v2 v2.18.0
 	github.com/jlaffaye/ftp v0.2.0
 	github.com/jmoiron/sqlx v1.3.5
 	github.com/joho/godotenv v1.5.1
