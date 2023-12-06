@@ -30,7 +30,7 @@ func getIntergrationTestSchema(values *openapi3.Operation, method, endpoint stri
 		result.ParamsJSONString = ""
 	}
 
-	for k := range values.Extensions {
+	for k := range values.Responses.Map() {
 		result.ExpectedResponseCode = k
 		// Taking only the first response as a test case
 		break
