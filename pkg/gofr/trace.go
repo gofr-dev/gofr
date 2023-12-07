@@ -79,7 +79,7 @@ func (e *exporter) getZipkinExporter(c Config, logger log.Logger) (*trace.Tracer
 	}
 
 	// if isAlwaysSample is set true for any service, it will sample all the trace
-	// else it will be sampled based on parent of the span.
+	// else it will be sampled based on the parent of the span.
 	if isAlwaysSample {
 		tp = trace.NewTracerProvider(trace.WithSampler(trace.AlwaysSample()), trace.WithSpanProcessor(batcher), trace.WithResource(r))
 	} else {
