@@ -58,20 +58,20 @@ type Swagger struct {
 func (s *Swagger) convertIntoIntegrationTestSchema() IntegrationTestSchema {
 	resultSchema := IntegrationTestSchema{}
 
-	for k := range s.openapiSwagger.Paths {
-		v := s.openapiSwagger.Paths[k]
+	if s.openapiSwagger.Paths != nil {
+		for k, v := range s.openapiSwagger.Paths.Map() {
+			getVal := getIntergrationTestSchema(v.Get, http.MethodGet, k)
+			resultSchema.TestCases = populateSlice(resultSchema.TestCases, getVal)
 
-		getVal := getIntergrationTestSchema(v.Get, http.MethodGet, k)
-		resultSchema.TestCases = populateSlice(resultSchema.TestCases, getVal)
+			postVal := getIntergrationTestSchema(v.Post, http.MethodPost, k)
+			resultSchema.TestCases = populateSlice(resultSchema.TestCases, postVal)
 
-		postVal := getIntergrationTestSchema(v.Post, http.MethodPost, k)
-		resultSchema.TestCases = populateSlice(resultSchema.TestCases, postVal)
+			putVal := getIntergrationTestSchema(v.Put, http.MethodPut, k)
+			resultSchema.TestCases = populateSlice(resultSchema.TestCases, putVal)
 
-		putVal := getIntergrationTestSchema(v.Put, http.MethodPut, k)
-		resultSchema.TestCases = populateSlice(resultSchema.TestCases, putVal)
-
-		deleteVal := getIntergrationTestSchema(v.Delete, http.MethodDelete, k)
-		resultSchema.TestCases = populateSlice(resultSchema.TestCases, deleteVal)
+			deleteVal := getIntergrationTestSchema(v.Delete, http.MethodDelete, k)
+			resultSchema.TestCases = populateSlice(resultSchema.TestCases, deleteVal)
+		}
 	}
 
 	return resultSchema
