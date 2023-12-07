@@ -117,7 +117,6 @@ number of configurations can be added to the application.
 
 **CORS**
 
-
 | Config Name                      | Description                                  |
 | -------------------------------- | -------------------------------------------- |
 | **Access-Control-Allow-Headers** | Defines the allowed HTTP headers for CORS.   |
