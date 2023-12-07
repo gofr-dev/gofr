@@ -24,7 +24,7 @@ type logger struct {
 	isTerminal bool
 
 	// remote logging service
-	rls levelService
+	rls *levelService
 }
 
 type appInfo struct {
@@ -55,15 +55,8 @@ func (a *appInfo) getAppData() appInfo {
 
 // log does the actual logging. This function creates the entry message and outputs it in color format
 // in terminal context and gives out json in non terminal context. Also, sends to echo if client is present.
-//
-//nolint:gocognit // reducing the function length reduces readability
 func (l *logger) log(level level, format string, args ...interface{}) {
-	mu.Lock()
-
 	lvl := l.rls.level
-
-	mu.Unlock()
-
 	if lvl < level {
 		return // No need to do anything if we are not going to log it.
 	}

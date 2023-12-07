@@ -22,6 +22,10 @@ type Logger interface {
 	AddData(key string, value interface{})
 }
 
+var (
+	rlsInit bool
+)
+
 func newLogger() *logger {
 	l := &logger{
 		out: os.Stdout,
@@ -45,9 +49,7 @@ func newLogger() *logger {
 		syncData:  &sync.Map{},
 	}
 
-	if !l.rls.init {
-		l.rls = *newLevelService(l, name)
-	}
+	l.rls = newLevelService(l, name)
 
 	// Set terminal to ensure proper output format.
 	l.isTerminal = checkIfTerminal(l.out)

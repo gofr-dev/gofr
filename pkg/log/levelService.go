@@ -23,25 +23,14 @@ type levelService struct {
 	userGroup    string
 }
 
-//nolint:gochecknoglobals // need to create mutex only once
-var (
-	mu sync.RWMutex
-)
-
 const LevelFetchInterval = 10 // In seconds
 
 func newLevelService(l Logger, appName string) *levelService {
-	var rls levelService
+	rls := &levelService{}
 
 	if !rls.init {
 		lvl := getLevel(os.Getenv("LOG_LEVEL"))
-
-		mu.Lock()
-
 		rls.level = lvl
-
-		mu.Unlock()
-
 		rls.url = os.Getenv("LOG_SERVICE_URL")
 		rls.app = appName
 		rls.namespace = os.Getenv("LOG_SERVICE_NAMESPACE")
@@ -50,6 +39,7 @@ func newLevelService(l Logger, appName string) *levelService {
 
 		if rls.url != "" {
 			rls.init = true
+			rlsInit = true
 
 			queryParams := url.Values{}
 			// Add the parameters to the map
@@ -75,7 +65,7 @@ func newLevelService(l Logger, appName string) *levelService {
 		}
 	}
 
-	return &rls
+	return rls
 }
 
 func (s *levelService) updateRemoteLevel(client *http.Client, req *http.Request, l Logger) {

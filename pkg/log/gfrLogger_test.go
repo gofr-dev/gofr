@@ -66,7 +66,7 @@ func TestLog(t *testing.T) {
 	for i, tc := range tests {
 		b := new(bytes.Buffer)
 
-		l := logger{correlationID: tc.correlationID, out: b, isTerminal: tc.isTerminal, rls: levelService{level: 5}}
+		l := logger{correlationID: tc.correlationID, out: b, isTerminal: tc.isTerminal, rls: &levelService{level: 5}}
 		syncData := sync.Map{}
 		syncData.Store("correlationID", tc.correlationIDInMap)
 

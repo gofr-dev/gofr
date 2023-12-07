@@ -7,7 +7,7 @@ import (
 
 func NewMockLogger(output io.Writer) Logger {
 	return &logger{
-		rls: levelService{level: Debug},
+		rls: &levelService{level: Debug},
 		out: output,
 		app: appInfo{
 			Data:      make(map[string]interface{}),

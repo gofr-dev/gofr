@@ -111,7 +111,6 @@ func TestRemoteLevelLogging(t *testing.T) {
 	t.Setenv("LOG_SERVICE_URL", ts.URL)
 
 	l := &logger{
-		rls: levelService{level: Debug},
 		out: new(bytes.Buffer),
 		app: appInfo{
 			Data:      make(map[string]interface{}),
@@ -120,20 +119,18 @@ func TestRemoteLevelLogging(t *testing.T) {
 		},
 	}
 
-	rls := newLevelService(l, "gofr-app")
+	l.rls = newLevelService(l, "gofr-app")
 
 	time.Sleep(1 * time.Second)
 
-	mu.Lock()
-	lvl := rls.level
-	mu.Unlock()
+	lvl := l.rls.level
 
 	if lvl != Warn {
 		t.Errorf("expected WARN\tGot %v", lvl)
 	}
 
-	if rls.app != "gofr-app" {
-		t.Errorf("expected APP_NAME : test, Got : %v", rls.app)
+	if l.rls.app != "gofr-app" {
+		t.Errorf("expected APP_NAME : test, Got : %v", l.rls.app)
 	}
 }
 
