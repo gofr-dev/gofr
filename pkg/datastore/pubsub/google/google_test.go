@@ -23,34 +23,34 @@ import (
 	"gofr.dev/pkg/log"
 )
 
-func TestCreateSubscriptionWithNilSubscriptionDetails(t *testing.T) {
-    ctx := context.Background()
-    projectID := "test123"
-    topicName := "test"
+func Test_CreateSubscriptionWithNilSubscriptionDetails(t *testing.T) {
+	ctx := context.Background()
+	projectID := "test123"
+	topicName := "test"
 
-    client := &gpubsub.Client{} 
-    logger := log.NewMockLogger(io.Discard)
+	client := &gpubsub.Client{}
+	logger := log.NewMockLogger(io.Discard)
 
-    g := &GCPubSub{
-        config: &Config{
-            ProjectID:           projectID,
-            TopicName:           topicName,
-            SubscriptionDetails: nil,
-        },
-        client: client,
-        logger: logger,
-    }
+	g := &GCPubSub{
+		config: &Config{
+			ProjectID:           projectID,
+			TopicName:           topicName,
+			SubscriptionDetails: nil,
+		},
+		client: client,
+		logger: logger,
+	}
 
-    err := createSubscription(ctx, g)
+	err := createSubscription(ctx, g)
 
-    if err == nil {
-        t.Errorf("Expected an error when SubscriptionDetails is nil, got nil")
-    } else {
-        expectedErrMsg := "subscriptionDetails is necessary for creating a publisher"
-        if err.Error() != expectedErrMsg {
-            t.Errorf("Expected error message '%s', got '%s'", expectedErrMsg, err.Error())
-        }
-    }
+	if err == nil {
+		t.Errorf("Expected an error when SubscriptionDetails is nil, got nil")
+	} else {
+		expectedErrMsg := "subscriptionDetails is necessary for creating a publisher"
+		if err.Error() != expectedErrMsg {
+			t.Errorf("Expected error message '%s', got '%s'", expectedErrMsg, err.Error())
+		}
+	}
 }
 
 func Test_New(t *testing.T) {

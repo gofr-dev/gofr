@@ -133,7 +133,6 @@ func createTopicsIfNotExist(ctx context.Context, g *GCPubSub) error {
 }
 
 func createSubscription(ctx context.Context, g *GCPubSub) error {
-
 	// Check if SubscriptionDetails is nil before accessing its properties
 	if g.config.SubscriptionDetails == nil {
 		return errors.Error("subscriptionDetails is necessary for creating a publisher")
