@@ -144,10 +144,12 @@ func (h *httpService) initializeClientWithAuth(options Options) {
 		return
 	}
 
+	const basic = "Basic"
+
 	// simple auth
 	if options.UserName != "" && options.OAuthOption == nil { // OAuth and basic auth cannot co-exist
 		h.isSet = true
-		h.auth = "Basic " + base64.StdEncoding.EncodeToString([]byte(options.UserName+":"+options.Password))
+		h.auth = basic + " " + base64.StdEncoding.EncodeToString([]byte(options.UserName+":"+options.Password))
 	}
 
 	h.enableOAuth(options)

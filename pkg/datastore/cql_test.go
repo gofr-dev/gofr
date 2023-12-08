@@ -232,7 +232,8 @@ func TestDataStore_CassandraHealthCheck(t *testing.T) {
 	}
 
 	for i, tc := range testCases {
-		con, _ := GetNewCassandra(logger, &tc.c)
+		mockCassConfig := tc.c
+		con, _ := GetNewCassandra(logger, &mockCassConfig)
 		output := con.HealthCheck()
 
 		if !reflect.DeepEqual(tc.expected, output) {

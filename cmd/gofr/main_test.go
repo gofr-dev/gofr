@@ -14,7 +14,7 @@ import (
 	"gofr.dev/pkg/gofr/assert"
 )
 
-const RWXOwner = 0700
+const RWXOwner, testProject = 0700, "/testGoProject"
 
 // initializeTest function to create a sample go project in temporary directory
 func initializeTest(t *testing.T) {
@@ -149,43 +149,43 @@ func TestCLI(t *testing.T) {
 
 	assert.CMDOutputContains(t, main, "gofr init -name=testGoProject", "Successfully created project: testGoProject")
 
-	_ = os.Chdir(dir + "/testGoProject")
+	_ = os.Chdir(dir + testProject)
 
 	assert.CMDOutputContains(t, main, "gofr init -namee=testGoProject",
 		"unknown parameter(s) [namee]. Run gofr <command_name> -h for help of the command.")
 
-	_ = os.Chdir(dir + "/testGoProject")
+	_ = os.Chdir(dir + testProject)
 
 	assert.CMDOutputContains(t, main, "gofr add -methods=all -path=/foo", "Added route: /foo")
 
-	_ = os.Chdir(dir + "/testGoProject")
+	_ = os.Chdir(dir + testProject)
 
 	assert.CMDOutputContains(t, main, "gofr add -method=all -path=/foo",
 		"unknown parameter(s) [method]. Run gofr <command_name> -h for help of the command.")
 
-	_ = os.Chdir(dir + "/testGoProject")
+	_ = os.Chdir(dir + testProject)
 
 	assert.CMDOutputContains(t, main, "gofr add -methods= -path=/foo",
 		"Parameter methods is required for this request")
 
-	_ = os.Chdir(dir + "/testGoProject")
+	_ = os.Chdir(dir + testProject)
 
 	assert.CMDOutputContains(t, main, "gofr add -methods=all -path=", "Parameter path is required for this request")
 
-	_ = os.Chdir(dir + "/testGoProject")
+	_ = os.Chdir(dir + testProject)
 
 	assert.CMDOutputContains(t, main, "gofr add -methods=all -path=/foo", "route foo is already present")
 
-	_ = os.Chdir(dir + "/testGoProject")
+	_ = os.Chdir(dir + testProject)
 
 	assert.CMDOutputContains(t, main, "gofr entity -type=core -name=person", "Successfully created entity: person")
 
-	_ = os.Chdir(dir + "/testGoProject")
+	_ = os.Chdir(dir + testProject)
 
 	assert.CMDOutputContains(t, main, "gofr entity -type= -name=person",
 		"Parameter type is required for this request")
 
-	_ = os.Chdir(dir + "/testGoProject")
+	_ = os.Chdir(dir + testProject)
 
 	assert.CMDOutputContains(t, main, "gofr entity -typee=core -namee=person",
 		"unknown parameter(s) [namee,typee]. Run gofr <command_name> -h for help of the command.")
@@ -428,6 +428,8 @@ paths:
         '400':
           description: Sample API Hello`
 
+	const gofrTestHost = "gofr test -host="
+
 	d1 := []byte(ymlStr)
 
 	tempFile, err := os.CreateTemp(t.TempDir(), "dat1.yml")
@@ -445,7 +447,7 @@ paths:
 		_ = json.NewEncoder(w).Encode("{}")
 	}))
 	hostPort := strings.Replace(server.URL, "http://", "", 1)
-	assert.CMDOutputContains(t, main, "gofr test -host="+hostPort+" -source="+tempFile.Name(), "failed")
+	assert.CMDOutputContains(t, main, gofrTestHost+hostPort+" -source="+tempFile.Name(), "failed")
 
 	// case to check test help
 	assert.CMDOutputContains(t, main, "gofr test -h", "runs integration test for a given configuration")
@@ -455,11 +457,11 @@ paths:
 		"unknown parameter(s) [hosts]. Run gofr <command_name> -h for help of the command.")
 
 	// case when source not specified
-	assert.CMDOutputContains(t, main, "gofr test -host="+hostPort, "Parameter source is required for this request")
+	assert.CMDOutputContains(t, main, gofrTestHost+hostPort, "Parameter source is required for this request")
 
 	// case when host not specified
 	assert.CMDOutputContains(t, main, "gofr test -source="+tempFile.Name(), "Parameter host is required for this request")
 
 	// case when source is incorrect
-	assert.CMDOutputContains(t, main, "gofr test -host="+hostPort+" -source=/some/fake/path/data.yml", "no such file or directory")
+	assert.CMDOutputContains(t, main, gofrTestHost+hostPort+" -source=/some/fake/path/data.yml", "no such file or directory")
 }

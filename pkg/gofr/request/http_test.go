@@ -20,16 +20,18 @@ import (
 	"gofr.dev/pkg/middleware/oauth"
 )
 
+const httpDummyURL = "http://dummy"
+
 func TestNewHTTPRequest(*testing.T) {
-	NewHTTPRequest(httptest.NewRequest("GET", "http://dummy", nil))
+	NewHTTPRequest(httptest.NewRequest("GET", httpDummyURL, http.NoBody))
 }
 
 func TestHTTP_String(t *testing.T) {
 	var (
 		h      HTTP
 		method = "GET"
-		u      = "http://dummy"
-		req    = httptest.NewRequest(method, u, nil)
+		u      = httpDummyURL
+		req    = httptest.NewRequest(method, u, http.NoBody)
 	)
 
 	expected := fmt.Sprintf("%s %s", method, u)
@@ -48,7 +50,7 @@ func TestHTTP_Method(t *testing.T) {
 		expected = "GET"
 	)
 
-	h.req = httptest.NewRequest(expected, "http://dummy", nil)
+	h.req = httptest.NewRequest(expected, httpDummyURL, http.NoBody)
 	got := h.Method()
 
 	if expected != got {
@@ -62,7 +64,7 @@ func TestHTTP_URI(t *testing.T) {
 		expected = "/xyz"
 	)
 
-	h.req = httptest.NewRequest("GET", "http://dummy"+expected, nil)
+	h.req = httptest.NewRequest("GET", httpDummyURL+expected, http.NoBody)
 	got := h.URI()
 
 	if expected != got {
@@ -93,7 +95,7 @@ func TestHTTP_Param(t *testing.T) {
 	for i, tc := range tcs {
 		var h HTTP
 
-		h.req = httptest.NewRequest("GET", "http://dummy"+tc.queryParams, nil)
+		h.req = httptest.NewRequest("GET", httpDummyURL+tc.queryParams, http.NoBody)
 
 		got := h.Param(tc.k)
 
@@ -121,7 +123,7 @@ func TestHTTP_ParamNames(t *testing.T) {
 	for _, tc := range tcs {
 		var h HTTP
 
-		h.req = httptest.NewRequest("GET", "http://dummy"+tc.queryParams, nil)
+		h.req = httptest.NewRequest("GET", httpDummyURL+tc.queryParams, http.NoBody)
 
 		got := h.ParamNames()
 
@@ -162,7 +164,7 @@ func TestHTTP_Params(t *testing.T) {
 	for _, tc := range tcs {
 		var h HTTP
 
-		h.req = httptest.NewRequest("GET", "http://dummy"+tc.queryParams, nil)
+		h.req = httptest.NewRequest("GET", httpDummyURL+tc.queryParams, http.NoBody)
 
 		got := h.Params()
 
@@ -196,7 +198,7 @@ func TestHTTP_PathParam(t *testing.T) {
 	for _, tc := range tcs {
 		var h HTTP
 
-		h.req = httptest.NewRequest("GET", "http://dummy", nil)
+		h.req = httptest.NewRequest("GET", httpDummyURL, http.NoBody)
 		h.pathParams = tc.pathParams
 
 		if tc.pathParams == nil {
@@ -236,7 +238,7 @@ func TestHTTP_Body(t *testing.T) {
 	for _, tc := range tcs {
 		var (
 			h   HTTP
-			req = httptest.NewRequest(http.MethodPost, "http://dummy", tc.reqBody)
+			req = httptest.NewRequest(http.MethodPost, httpDummyURL, tc.reqBody)
 		)
 
 		h.req = req
@@ -258,7 +260,7 @@ func TestHTTP_Header(t *testing.T) {
 		h        HTTP
 		key      = "key123"
 		expected = "value123"
-		req      = httptest.NewRequest("GET", "http://dummy", nil)
+		req      = httptest.NewRequest("GET", httpDummyURL, http.NoBody)
 	)
 
 	req.Header.Set(key, expected)
@@ -311,7 +313,7 @@ func TestHTTP_Bind(t *testing.T) {
 	for _, tc := range tcs {
 		var (
 			h   HTTP
-			req = httptest.NewRequest(http.MethodPost, "http://dummy", tc.reqBody)
+			req = httptest.NewRequest(http.MethodPost, httpDummyURL, tc.reqBody)
 		)
 
 		if tc.isXML {
@@ -343,7 +345,7 @@ func TestHTTP_BindMultipartFormData(t *testing.T) {
 	writer.Close()
 
 	// Create a new request with the multipart form data
-	req := httptest.NewRequest(http.MethodPost, "http://dummy", body)
+	req := httptest.NewRequest(http.MethodPost, httpDummyURL, body)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 
 	h.req = req
@@ -366,7 +368,7 @@ func TestHTTP_BindMultipartFormData(t *testing.T) {
 
 	t.Run("MalformedData", func(t *testing.T) {
 		var hMalformed HTTP
-		reqMalformed := httptest.NewRequest(http.MethodPost, "http://dummy", strings.NewReader("malformed data"))
+		reqMalformed := httptest.NewRequest(http.MethodPost, httpDummyURL, strings.NewReader("malformed data"))
 		reqMalformed.Header.Set("Content-Type", "multipart/form-data")
 
 		hMalformed.req = reqMalformed
@@ -401,7 +403,7 @@ func TestHTTP_BindStrict(t *testing.T) {
 	for _, tc := range tcs {
 		var (
 			h   HTTP
-			req = httptest.NewRequest(http.MethodPost, "http://dummy", tc.reqBody)
+			req = httptest.NewRequest(http.MethodPost, httpDummyURL, tc.reqBody)
 		)
 
 		if tc.isXML {
@@ -420,7 +422,7 @@ func TestHTTP_BindStrict(t *testing.T) {
 func TestHTTP_Request(t *testing.T) {
 	var (
 		h        HTTP
-		expected = httptest.NewRequest("GET", "http://dummy", nil)
+		expected = httptest.NewRequest("GET", httpDummyURL, nil)
 	)
 
 	h.req = expected
@@ -443,7 +445,7 @@ func TestHTTP_GetClaims(t *testing.T) {
 	}
 
 	for i, tc := range testcases {
-		r := httptest.NewRequest("GET", "http://dummy", nil)
+		r := httptest.NewRequest("GET", httpDummyURL, nil)
 		r = r.Clone(ctx.WithValue(r.Context(), tc.ctxKey, tc.ctxVal))
 		req := NewHTTPRequest(r)
 
@@ -453,7 +455,7 @@ func TestHTTP_GetClaims(t *testing.T) {
 }
 
 func TestHTTP_GetClaim(t *testing.T) {
-	r := httptest.NewRequest("GET", "http://dummy", nil)
+	r := httptest.NewRequest("GET", httpDummyURL, nil)
 	r = r.Clone(ctx.WithValue(r.Context(), oauth.JWTContextKey("claims"),
 		jwt.MapClaims(map[string]interface{}{"sub": "trial-sub"})))
 	req := NewHTTPRequest(r)

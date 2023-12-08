@@ -18,7 +18,7 @@ import (
 	"gofr.dev/pkg/log"
 )
 
-const ycqlKeyspaceTest = "test"
+const ycqlKeyspaceTest, testPath = "test", "/test_data"
 
 type MockTesting struct {
 	TotalErrors int
@@ -416,7 +416,7 @@ func TestSeeder_RefreshMongoCollections(t *testing.T) {
 
 	d := DataStore{MongoDB: mongo}
 	path, _ := os.Getwd()
-	s := NewSeeder(&d, path+"/test_data")
+	s := NewSeeder(&d, path+testPath)
 
 	tester := &MockTesting{}
 	s.RefreshMongoCollections(tester, "customers")
@@ -439,11 +439,11 @@ func TestSeeder_RefreshMongoCollections_Errors(t *testing.T) {
 	s.RefreshMongoCollections(tester, "customers")
 
 	path, _ := os.Getwd()
-	s = NewSeeder(&d, path+"/test_data")
+	s = NewSeeder(&d, path+testPath)
 	s.RefreshMongoCollections(tester, "unknown")
 
 	// checking invalid json data
-	s = NewSeeder(&d, path+"/test_data")
+	s = NewSeeder(&d, path+testPath)
 	s.RefreshMongoCollections(tester, "customers1")
 
 	// expecting 3 errors
@@ -645,7 +645,7 @@ func initializeRedis() (Redis, error) {
 		Password: c.Get("REDIS_PASSWORD"),
 	}
 
-	redis, err := NewRedis(log.NewMockLogger(io.Discard), cfg)
+	redis, err := NewRedis(log.NewMockLogger(io.Discard), &cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -661,7 +661,7 @@ func TestSeeder_RefreshRedis(t *testing.T) {
 
 	d := DataStore{Redis: redis}
 	path, _ := os.Getwd()
-	s := NewSeeder(&d, path+"/test_data")
+	s := NewSeeder(&d, path+testPath)
 	tester := &MockTesting{}
 	s.RefreshRedis(tester, "storeKeyVal", "customers")
 
@@ -685,7 +685,7 @@ func TestSeeder_RefreshRedis_Error(t *testing.T) {
 
 	// case where invalid data is provided in csv
 	path, _ := os.Getwd()
-	s = NewSeeder(&d, path+"/test_data")
+	s = NewSeeder(&d, path+testPath)
 	s.RefreshRedis(tester, "storeKeyVal1")
 
 	expectedErrors := 2
@@ -862,7 +862,9 @@ func TestSeeder_resetIdentitySequence(t *testing.T) {
 	}
 
 	for _, tc := range testcases {
-		orm, err := NewORM(&tc.dbConfig)
+		mockDBConfig := tc.dbConfig
+		orm, err := NewORM(&mockDBConfig)
+
 		if err != nil {
 			t.Error(err)
 		}

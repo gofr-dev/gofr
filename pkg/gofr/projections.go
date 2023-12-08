@@ -216,8 +216,6 @@ func checkInMap(key string, inputMap interface{}) error {
 }
 
 // validateProjection validates raw projection parsed from the request
-//
-//nolint:gocognit // cognitive complexity cannot be decreased further.
 func validateProjection(parentKey string, projectionRawMap map[string]interface{}, resource string) error {
 	err := checkInMap(parentKey, projectionRawMap)
 	if err != nil {
@@ -251,8 +249,6 @@ func validateProjection(parentKey string, projectionRawMap map[string]interface{
 }
 
 // createProjections creates resultant projection map from raw projections parsed from the request
-//
-//nolint:gocognit // splitting the code will reduce readability
 func createProjections(parentKey string, projectionRawMap map[string]interface{}, projectionMap ProjectionMapType) {
 	for key, val := range projectionRawMap {
 		var projection string

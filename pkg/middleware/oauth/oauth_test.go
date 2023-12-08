@@ -88,7 +88,6 @@ type MultipleErrors struct {
 	Errors     []errors.Response `json:"errors" xml:"errors"`
 }
 
-//nolint:gocognit // breaking down function will reduce readability
 func Test_Middleware_Errors(t *testing.T) {
 	testcases := []struct {
 		jwtEndpoint   string
@@ -114,7 +113,7 @@ func Test_Middleware_Errors(t *testing.T) {
 	for i := range testcases {
 		t.Setenv("JWKS_ENDPOINT", testcases[i].jwtEndpoint)
 
-		request := httptest.NewRequest(http.MethodGet, "/auth", nil)
+		request := httptest.NewRequest(http.MethodGet, "/auth", http.NoBody)
 		request.Header.Set("Authorization", testcases[i].jwtToken)
 
 		b := new(bytes.Buffer)
@@ -171,7 +170,7 @@ func Test_Middleware_Success(t *testing.T) {
 	}
 
 	for i := range testcases {
-		request := httptest.NewRequest(http.MethodGet, testcases[i].target, nil)
+		request := httptest.NewRequest(http.MethodGet, testcases[i].target, http.NoBody)
 
 		if testcases[i].jwtToken != "" {
 			request.Header.Set("Authorization", testcases[i].jwtToken)
@@ -232,7 +231,7 @@ func Test_RequestClone(t *testing.T) {
 	jwtToken := "bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6IjIwMTEtMDQtMjk9PSJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiYWRtaW4iOnRydWUsImlhdCI6MTUxNjIzOTAyMn0.B5C9tz71T-PjyoMH-gv198iNFguDZ5SpVcwrgdLxU83A92o1tsJWh8_7Zm6ulMUupNEAzGD69DB077j01nXz6ut5XtnXWE50HNTxlS_19zndpPxqFcKnWyoArip5A1MCgQjKQ3exwZc7aFQwgBXvJMNk-5N4od_bUMGvOb0q3ApbfzbwIt94daToPjhfLy4xf8UoNhh_Lq14CNHCZXNgGeter5TvnHnDBN4oDfw6nziKdJnslNkUJ2hHsqp8VObUK57C8aS51x2UiOwTJ1NqDv0PFVgRbC7ncFZG6M87x9BGTwB0XvraXYU7Zimewp4plzdIMnjIXXp8kuviYl7feA"
 	target := "/auth"
 
-	request := httptest.NewRequest(http.MethodGet, target, nil)
+	request := httptest.NewRequest(http.MethodGet, target, http.NoBody)
 	request.Header.Set("Authorization", jwtToken)
 
 	w := new(MockedResponseWriter)

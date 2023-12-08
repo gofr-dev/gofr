@@ -240,8 +240,8 @@ func getAppData(ctx context.Context) map[string]interface{} {
 // createReq creates the request for service call
 // the endpoint and the method for the request are defined from the parameters provided to the function
 
-//nolint:lll,gocognit // cannot reduce the number of lines since there are many parameters.
-func (h *httpService) createReq(ctx context.Context, method, target string, params map[string]interface{}, body []byte, headers map[string]string) (*http.Request, error) {
+func (h *httpService) createReq(ctx context.Context, method, target string, params map[string]interface{}, body []byte,
+	headers map[string]string) (*http.Request, error) {
 	uri := h.url + "/" + target
 
 	if target == "" {

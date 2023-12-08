@@ -61,8 +61,8 @@ func (c *Cassandra) Run(m Migrator, app, name, method string, logger log.Logger)
 }
 
 func (c *Cassandra) preRun(app, method, name string) error {
-	migrationTableSchema := "CREATE TABLE IF NOT EXISTS gofr_migrations ( " +
-		"app text, version bigint, start_time timestamp, end_time timestamp, method text, PRIMARY KEY (app, version, method) )"
+	const migrationTableSchema = "CREATE TABLE IF NOT EXISTS gofr_migrations (app text, version bigint," +
+		"start_time timestamp, end_time timestamp, method text, PRIMARY KEY (app, version, method) )"
 
 	err := c.session.Query(migrationTableSchema).Exec()
 	if err != nil {
@@ -152,13 +152,14 @@ func (c *Cassandra) GetAllMigrations(app string) (upMigrations, downMigrations [
 
 // FinishMigration completes the migration
 func (c *Cassandra) FinishMigration() error {
+	const query = `INSERT INTO gofr_migrations(app, version, method, start_time, end_time) "VALUES (?, ?, ?, ?, ?)`
+
 	if c.session == nil {
 		return errors.DataStoreNotInitialized{DBName: datastore.CassandraStore}
 	}
 
 	for _, l := range c.newMigrations {
-		err := c.session.Query("INSERT INTO gofr_migrations(app, version, method, start_time, end_time) "+
-			"VALUES (?, ?, ?, ?, ?)", l.App, l.Version, l.Method, l.StartTime, l.EndTime).Exec()
+		err := c.session.Query(query, l.App, l.Version, l.Method, l.StartTime, l.EndTime).Exec()
 		if err != nil {
 			return err
 		}

@@ -84,7 +84,6 @@ func runUP(app string, database db.DBDriver, migrations map[string]db.Migrator, 
 	return rm, nil
 }
 
-//nolint:gocognit //cannot be optimized without hampering the readability
 func runDOWN(app string, database db.DBDriver, migrations map[string]db.Migrator, logger log.Logger) ([]string, error) {
 	var err error
 

@@ -32,13 +32,14 @@ type OAuthOption struct {
 	TimeBeforeExpiryToRefresh int // Time(in seconds) before token expiry to get the fresh token. Default is 5seconds
 }
 
-//nolint:gocognit // need to add new condition to check clientID and clientSecret
 func (h *httpService) setClientOauthHeader(option *OAuthOption) {
+	const basic = "Basic "
+
 	if option.ClientID == "" || option.ClientSecret == "" {
 		return
 	}
 
-	basicAuth := "Basic " + base64.StdEncoding.EncodeToString([]byte(option.ClientID+":"+option.ClientSecret))
+	basicAuth := basic + base64.StdEncoding.EncodeToString([]byte(option.ClientID+":"+option.ClientSecret))
 
 	if option.MaxSleep <= 0 {
 		option.MaxSleep = oAuthMaxSleep
