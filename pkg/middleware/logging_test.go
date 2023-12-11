@@ -424,7 +424,7 @@ func TestErrorMessages(t *testing.T) {
 
 	err := errors.Response{Reason: errorMessage}
 
-	req := httptest.NewRequest("GET", "/dummy", nil)
+	req := httptest.NewRequest("GET", "/dummy", http.NoBody)
 	req = req.Clone(context.WithValue(req.Context(), ErrorMessage, err.Error()))
 
 	handler := Logging(logger, "")(&MockHandler{statusCode: http.StatusInternalServerError})
@@ -445,7 +445,7 @@ func TestCookieLogging(t *testing.T) {
 
 	handler := Logging(logger, "")(&MockHandler{})
 
-	req := httptest.NewRequest("GET", "http://dummy", nil)
+	req := httptest.NewRequest("GET", "http://dummy", http.NoBody)
 	req.Header.Add("Cookie", "Some-Random-Value")
 
 	handler.ServeHTTP(MockWriteHandler{}, req)

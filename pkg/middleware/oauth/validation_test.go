@@ -240,7 +240,7 @@ func TestGetJWT(t *testing.T) {
 	for i, testCase := range testcases {
 		b := new(bytes.Buffer)
 		logger := log.NewMockLogger(b)
-		request := httptest.NewRequest(http.MethodGet, "/", nil)
+		request := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 		request.Header.Set("Authorization", testCase.jwtToken)
 		got, err := getJWT(logger, request)
 

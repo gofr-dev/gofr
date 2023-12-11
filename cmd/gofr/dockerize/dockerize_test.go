@@ -356,7 +356,7 @@ func Test_Run_getImageFailure(t *testing.T) {
 
 	h := New("gofr-app", "1.0.0")
 
-	req := httptest.NewRequest("", setQueryParams(map[string]string{"tag": "commit"}), nil)
+	req := httptest.NewRequest("", setQueryParams(map[string]string{"tag": "commit"}), http.NoBody)
 	ctx := gofr.NewContext(nil, request.NewHTTPRequest(req), gofr.New())
 
 	resp, err := h.Run(ctx)
@@ -373,7 +373,7 @@ func Test_Run_buildFailure(t *testing.T) {
 
 	h := New("gofr-app", "1.0.0")
 
-	req := httptest.NewRequest("", "/dummy", nil)
+	req := httptest.NewRequest("", "/dummy", http.NoBody)
 	ctx := gofr.NewContext(nil, request.NewHTTPRequest(req), gofr.New())
 
 	resp, err := h.Run(ctx)
@@ -389,7 +389,7 @@ func Test_Run_buildDockerFailure(t *testing.T) {
 
 	h := New("gofr-app", "1.0.0")
 
-	req := httptest.NewRequest("", "/dummy", nil)
+	req := httptest.NewRequest("", "/dummy", http.NoBody)
 	ctx := gofr.NewContext(nil, request.NewHTTPRequest(req), gofr.New())
 
 	resp, err := h.Run(ctx)
@@ -403,7 +403,7 @@ func Test_Run_runDockerFailure(t *testing.T) {
 
 	h := New("gofr-app", "1.0.0")
 
-	req := httptest.NewRequest("", setQueryParams(map[string]string{"image": "invalid"}), nil)
+	req := httptest.NewRequest("", setQueryParams(map[string]string{"image": "invalid"}), http.NoBody)
 	ctx := gofr.NewContext(nil, request.NewHTTPRequest(req), gofr.New())
 
 	resp, err := h.Run(ctx)

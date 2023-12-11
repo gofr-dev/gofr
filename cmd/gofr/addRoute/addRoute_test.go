@@ -409,7 +409,7 @@ func Test_AddRoute(t *testing.T) {
 	for i, tc := range tests {
 		_ = os.Chdir(dir)
 
-		req := httptest.NewRequest("", setQueryParams(tc.params), nil)
+		req := httptest.NewRequest("", setQueryParams(tc.params), http.NoBody)
 		ctx := gofr.NewContext(nil, request.NewHTTPRequest(req), gofr.New())
 
 		res, err := AddRoute(ctx)

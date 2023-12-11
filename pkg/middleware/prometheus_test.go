@@ -43,7 +43,7 @@ func newTestRouter() *mux.Router {
 
 // Helper function to create a new test request.
 func newTestRequest(method, path string) *http.Request {
-	return httptest.NewRequest(method, path, nil)
+	return httptest.NewRequest(method, path, http.NoBody)
 }
 
 func TestPrometheusMiddleware(t *testing.T) {

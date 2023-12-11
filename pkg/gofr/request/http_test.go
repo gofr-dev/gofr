@@ -422,7 +422,7 @@ func TestHTTP_BindStrict(t *testing.T) {
 func TestHTTP_Request(t *testing.T) {
 	var (
 		h        HTTP
-		expected = httptest.NewRequest("GET", httpDummyURL, nil)
+		expected = httptest.NewRequest("GET", httpDummyURL, http.NoBody)
 	)
 
 	h.req = expected
@@ -445,7 +445,7 @@ func TestHTTP_GetClaims(t *testing.T) {
 	}
 
 	for i, tc := range testcases {
-		r := httptest.NewRequest("GET", httpDummyURL, nil)
+		r := httptest.NewRequest("GET", httpDummyURL, http.NoBody)
 		r = r.Clone(ctx.WithValue(r.Context(), tc.ctxKey, tc.ctxVal))
 		req := NewHTTPRequest(r)
 
@@ -455,7 +455,7 @@ func TestHTTP_GetClaims(t *testing.T) {
 }
 
 func TestHTTP_GetClaim(t *testing.T) {
-	r := httptest.NewRequest("GET", httpDummyURL, nil)
+	r := httptest.NewRequest("GET", httpDummyURL, http.NoBody)
 	r = r.Clone(ctx.WithValue(r.Context(), oauth.JWTContextKey("claims"),
 		jwt.MapClaims(map[string]interface{}{"sub": "trial-sub"})))
 	req := NewHTTPRequest(r)
