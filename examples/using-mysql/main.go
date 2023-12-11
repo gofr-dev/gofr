@@ -18,7 +18,7 @@ func main() {
 	app.GET("/employee", h.Get)
 	app.POST("/employee", h.Create)
 
-	app.Server.HTTP.Port = 9001
+	app.Server.HTTP.Port = 3000
 	app.Server.MetricsPort = 2113
 
 	app.Start()
