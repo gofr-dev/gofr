@@ -61,8 +61,8 @@ func (c *Cassandra) Run(m Migrator, app, name, method string, logger log.Logger)
 }
 
 func (c *Cassandra) preRun(app, method, name string) error {
-	const migrationTableSchema = "CREATE TABLE IF NOT EXISTS gofr_migrations (app text, version bigint," +
-		"start_time timestamp, end_time timestamp, method text, PRIMARY KEY (app, version, method) )"
+	const migrationTableSchema = `CREATE TABLE IF NOT EXISTS gofr_migrations (app text, version bigint,` +
+		`start_time timestamp, end_time timestamp, method text, PRIMARY KEY (app, version, method) )`
 
 	err := c.session.Query(migrationTableSchema).Exec()
 	if err != nil {
