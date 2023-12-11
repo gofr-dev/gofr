@@ -20,6 +20,12 @@ import (
 // It puts out an interface and error as output depending on what needs to be responded
 type Handler func(c *Context) (interface{}, error)
 
+type prometheusLabel struct {
+	labelType string
+	path      string
+	method    string
+}
+
 // ServeHTTP processes incoming HTTP requests. It extracts the request context, handles errors,
 // determines appropriate responses based on the data type, and sends the response back to the client.
 // The method dynamically handles various response formats, such as custom types, templates, and raw data.
@@ -87,7 +93,11 @@ func processErrors(err error, path, method string, isPartialError bool, c *Conte
 			v.DateTime = errResp.DateTime
 		}
 		// pushing error type to prometheus
-		incrPrometheusCounter(isPartialError, c, err, errResp.StatusCode, "Unknown Error", path, method)
+		incrPrometheusCounter(isPartialError, c, &errResp, prometheusLabel{
+			labelType: "Unknown Error",
+			path:      path,
+			method:    method,
+		})
 
 		errResp = *v
 	case errors.MultipleErrors:
@@ -115,23 +125,31 @@ func processErrors(err error, path, method string, isPartialError bool, c *Conte
 		c.Logger.Errorf("DB error occurred %v", err)
 
 		// pushing error type to prometheus
-		incrPrometheusCounter(false, c, err, errResp.StatusCode, "DB Error", path, method)
+		incrPrometheusCounter(false, c, &errResp, prometheusLabel{
+			labelType: "DB error",
+			path:      path,
+			method:    method,
+		})
 	case errors.Raw:
 		return errors.MultipleErrors{StatusCode: v.StatusCode, Errors: []error{v}}
 	default:
 		errResp.StatusCode = http.StatusInternalServerError
 		errResp.Code = "Internal Server Error"
 		// pushing error type to prometheus
-		incrPrometheusCounter(isPartialError, c, err, errResp.StatusCode, "Unknown Error", path, method)
+		incrPrometheusCounter(isPartialError, c, &errResp, prometheusLabel{
+			labelType: "DB error",
+			path:      path,
+			method:    method,
+		})
 	}
 
 	return errors.MultipleErrors{StatusCode: errResp.StatusCode, Errors: []error{&errResp}}
 }
 
-func incrPrometheusCounter(isPartialError bool, c *Context, err error, statusCode int, labelType, path, method string) {
-	if (statusCode == http.StatusInternalServerError || statusCode == 0) && !isPartialError {
-		c.Logger.Errorf("error occurred %v", err)
-		middleware.ErrorTypesStats.With(prometheus.Labels{"type": labelType, "path": path, "method": method}).Inc()
+func incrPrometheusCounter(isPartialError bool, c *Context, errResp *errors.Response, label prometheusLabel) {
+	if (errResp.StatusCode == http.StatusInternalServerError || errResp.StatusCode == 0) && !isPartialError {
+		c.Logger.Errorf("error occurred %v", errResp.Reason)
+		middleware.ErrorTypesStats.With(prometheus.Labels{"type": label.labelType, "path": label.path, "method": label.method}).Inc()
 	}
 }
 
