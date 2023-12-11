@@ -152,8 +152,7 @@ func (c *Cassandra) GetAllMigrations(app string) (upMigrations, downMigrations [
 
 // FinishMigration completes the migration
 func (c *Cassandra) FinishMigration() error {
-	const query = `INSERT INTO gofr_migrations(app, version, method, start_time, end_time) "VALUES (?, ?, ?, ?, ?)`
-
+	const query = "INSERT INTO gofr_migrations(app, version, method, start_time, end_time) VALUES (?, ?, ?, ?, ?)"
 	if c.session == nil {
 		return errors.DataStoreNotInitialized{DBName: datastore.CassandraStore}
 	}
