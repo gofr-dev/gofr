@@ -16,7 +16,7 @@ import (
 type Handler struct {
 }
 
-const goExtension = ".go"
+const extensionGo = ".go"
 
 // Getwd returns a rooted path name corresponding to the current directory
 func (h Handler) Getwd() (string, error) {
@@ -137,7 +137,7 @@ func addCore(f fileSystem, projectDirectory, entity string) error {
 		return err
 	}
 	// create the interfaceFile , interface.go,  for core layer
-	interfaceFile, err := f.OpenFile("interface"+goExtension, os.O_APPEND|os.O_CREATE|os.O_WRONLY, migration.RWMode)
+	interfaceFile, err := f.OpenFile("interface"+extensionGo, os.O_APPEND|os.O_CREATE|os.O_WRONLY, migration.RWMode)
 	if err != nil {
 		return err
 	}
@@ -177,7 +177,7 @@ func addComposite(f fileSystem, projectDirectory, entity string) error {
 		return err
 	}
 
-	interfaceFile, err := f.OpenFile("interface"+goExtension, os.O_APPEND|os.O_CREATE|os.O_WRONLY, migration.RWMode)
+	interfaceFile, err := f.OpenFile("interface"+extensionGo, os.O_APPEND|os.O_CREATE|os.O_WRONLY, migration.RWMode)
 	if err != nil {
 		return err
 	}
@@ -215,7 +215,7 @@ func addConsumer(f fileSystem, projectDirectory, entity string) error {
 		return err
 	}
 
-	filePtr, err := f.OpenFile(entity+goExtension, os.O_APPEND|os.O_CREATE|os.O_WRONLY, migration.RWMode)
+	filePtr, err := f.OpenFile(entity+extensionGo, os.O_APPEND|os.O_CREATE|os.O_WRONLY, migration.RWMode)
 	if err != nil {
 		return err
 	}

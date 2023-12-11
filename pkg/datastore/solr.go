@@ -11,7 +11,7 @@ import (
 	"go.opencensus.io/plugin/ochttp"
 )
 
-const schema, update = "/schema", "/update"
+const schema, urlUpdatePath = "/schema", "/update"
 
 // Search searches documents in the given collections based on the parameters specified.
 // This can be used for making any queries to SOLR
@@ -23,21 +23,21 @@ func (c Client) Search(ctx context.Context, collection string, params map[string
 // Create makes documents in the specified collection. params can be used to send parameters like commit=true
 func (c Client) Create(ctx context.Context, collection string, document *bytes.Buffer,
 	params map[string]interface{}) (interface{}, error) {
-	url := c.url + collection + update
+	url := c.url + collection + urlUpdatePath
 	return call(ctx, "POST", url, params, document)
 }
 
 // Update updates documents in the specified collection. params can be used to send parameters like commit=true
 func (c Client) Update(ctx context.Context, collection string, document *bytes.Buffer,
 	params map[string]interface{}) (interface{}, error) {
-	url := c.url + collection + update
+	url := c.url + collection + urlUpdatePath
 	return call(ctx, "POST", url, params, document)
 }
 
-// Create deletes documents in the specified collection. params can be used to send parameters like commit=true
+// Delete deletes documents in the specified collection. params can be used to send parameters like commit=true
 func (c Client) Delete(ctx context.Context, collection string, document *bytes.Buffer,
 	params map[string]interface{}) (interface{}, error) {
-	url := c.url + collection + update
+	url := c.url + collection + urlUpdatePath
 	return call(ctx, "POST", url, params, document)
 }
 
