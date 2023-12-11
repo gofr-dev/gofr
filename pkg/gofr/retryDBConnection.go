@@ -109,24 +109,6 @@ func mongoRetry(c *datastore.MongoConfig, g *Gofr) {
 	}
 }
 
-func clickHouseRetry(c *datastore.ClickHouseConfig, g *Gofr) {
-	for {
-		time.Sleep(time.Duration(c.ConnRetryDuration) * time.Second)
-
-		g.Logger.Debug("Retrying ClickHouse connection")
-
-		var err error
-
-		g.ClickHouse, err = datastore.GetNewClickHouseDB(g.Logger, c)
-
-		if err == nil {
-			g.Logger.Info("ClickHouse initialized successfully")
-
-			break
-		}
-	}
-}
-
 func yclRetry(c *datastore.CassandraCfg, g *Gofr) {
 	for {
 		time.Sleep(time.Duration(c.ConnRetryDuration) * time.Second)

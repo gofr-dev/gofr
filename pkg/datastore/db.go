@@ -19,6 +19,7 @@ import (
 	// used for concrete implementation of the database driver.
 	_ "github.com/lib/pq"
 	"go.opentelemetry.io/otel"
+	"gorm.io/driver/clickhouse"
 	"gorm.io/driver/mysql"
 	"gorm.io/driver/postgres"
 	"gorm.io/driver/sqlite"
@@ -52,7 +53,7 @@ type DBConfig struct {
 	Password string
 	Database string
 	Port     string
-	Dialect  string // supported dialects are - mysql, mssql, sqlite, postgres
+	Dialect  string // supported dialects are - mysql, mssql, sqlite, postgres, clickhouse
 	// postgres and mysql related config only, accepts disable, allow, prefer, require,
 	// verify-ca and verify-full; default is disable
 	SSL               string
@@ -117,12 +118,15 @@ var (
 )
 
 // NewORM returns a new ORM object if the config is correct, otherwise it returns the error thrown
+//
+//nolint:gocyclo // cannot break down the function further
 func NewORM(cfg *DBConfig) (GORMClient, error) {
 	validDialects := map[string]bool{
-		"mysql":    true,
-		"mssql":    true,
-		"postgres": true,
-		"sqlite":   true,
+		"mysql":      true,
+		"mssql":      true,
+		"postgres":   true,
+		"sqlite":     true,
+		"clickhouse": true,
 	}
 
 	if _, ok := validDialects[cfg.Dialect]; !ok {
@@ -152,6 +156,8 @@ func NewORM(cfg *DBConfig) (GORMClient, error) {
 	case "mssql":
 		// driverName is not added to the config. Currently, it breaks migrations for sqlserver.
 		d = sqlserver.New(sqlserver.Config{DSN: connectionStr})
+	case ClickHouse:
+		d = clickhouse.Open(connectionStr)
 	default:
 		return GORMClient{config: cfg}, errors.DB{}
 	}
@@ -249,6 +255,9 @@ func formConnectionStr(cfg *DBConfig) string {
 			escapedUsrName, cfg.HostName, cfg.Port, cfg.Database, escapedPassword, cfg.SSL, cfg.CertificateFile, cfg.KeyFile)
 	case "mssql":
 		return fmt.Sprintf("sqlserver://%s:%s@%s:%s?database=%s",
+			escapedUsrName, escapedPassword, cfg.HostName, cfg.Port, cfg.Database)
+	case ClickHouse:
+		return fmt.Sprintf("clickhouse://%s:%s@%s:%s/%s",
 			escapedUsrName, escapedPassword, cfg.HostName, cfg.Port, cfg.Database)
 	default:
 		ssl := strings.ToLower(cfg.SSL)
