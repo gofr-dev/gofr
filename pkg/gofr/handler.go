@@ -36,7 +36,6 @@ func (h Handler) ServeHTTP(_ http.ResponseWriter, r *http.Request) {
 	var errorResp error
 
 	if _, ok := err.(errors.EntityAlreadyExists); ok || err == nil {
-		//c.Logger.Debugf("error being returned %v", err)
 		errorResp = err
 	} else {
 		isPartialResponse := data != nil // since err!=nil we can check if data is not nil
@@ -60,7 +59,7 @@ func (h Handler) ServeHTTP(_ http.ResponseWriter, r *http.Request) {
 	}
 }
 
-//nolint:gocognit,gocyclo // cannot be simplified further without hurting readability
+//nolint:gocyclo // cannot be simplified further without hurting readability
 func processErrors(err error, path, method string, isPartialError bool, c *Context) errors.MultipleErrors {
 	var errResp errors.Response
 
@@ -109,10 +108,12 @@ func processErrors(err error, path, method string, isPartialError bool, c *Conte
 
 		return finalErr
 	case errors.DB:
-		c.Logger.Errorf("DB error occurred %v", err)
 		errResp.StatusCode = http.StatusInternalServerError
 		errResp.Code = "Internal Server Error"
 		errResp.Reason = "DB Error"
+
+		c.Logger.Errorf("DB error occurred %v", err)
+
 		// pushing error type to prometheus
 		incrPrometheusCounter(false, c, err, errResp.StatusCode, "DB Error", path, method)
 	case errors.Raw:
