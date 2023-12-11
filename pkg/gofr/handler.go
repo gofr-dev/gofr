@@ -18,7 +18,6 @@ import (
 // Handler responds to HTTP request
 // It takes in a custom Context type which holds all the information related to the incoming HTTP request
 // It puts out an interface and error as output depending on what needs to be responded
-// It
 type Handler func(c *Context) (interface{}, error)
 
 // ServeHTTP processes incoming HTTP requests. It extracts the request context, handles errors,
@@ -37,10 +36,11 @@ func (h Handler) ServeHTTP(_ http.ResponseWriter, r *http.Request) {
 	var errorResp error
 
 	if _, ok := err.(errors.EntityAlreadyExists); ok || err == nil {
+		//c.Logger.Debugf("error being returned %v", err)
 		errorResp = err
 	} else {
 		isPartialResponse := data != nil // since err!=nil we can check if data is not nil
-		errorResp = processErrors(err, path, r.Method, isPartialResponse)
+		errorResp = processErrors(err, path, r.Method, isPartialResponse, c)
 
 		// set the error in the context, which can be fetched in the logging middleware
 		ctx := context.WithValue(r.Context(), middleware.ErrorMessage, err.Error())
@@ -61,7 +61,7 @@ func (h Handler) ServeHTTP(_ http.ResponseWriter, r *http.Request) {
 }
 
 //nolint:gocognit,gocyclo // cannot be simplified further without hurting readability
-func processErrors(err error, path, method string, isPartialError bool) errors.MultipleErrors {
+func processErrors(err error, path, method string, isPartialError bool, c *Context) errors.MultipleErrors {
 	var errResp errors.Response
 
 	errResp.Value, errResp.TimeZone = evaluateTimeAndTimeZone()
@@ -88,9 +88,7 @@ func processErrors(err error, path, method string, isPartialError bool) errors.M
 			v.DateTime = errResp.DateTime
 		}
 		// pushing error type to prometheus
-		if (v.StatusCode == http.StatusInternalServerError || v.StatusCode == 0) && !isPartialError {
-			middleware.ErrorTypesStats.With(prometheus.Labels{"type": "UnknownError", "path": path, "method": method}).Inc()
-		}
+		incrPrometheusCounter(isPartialError, c, err, errResp.StatusCode, "Unknown Error", path, method)
 
 		errResp = *v
 	case errors.MultipleErrors:
@@ -104,30 +102,36 @@ func processErrors(err error, path, method string, isPartialError bool) errors.M
 			resp.TimeZone = timeZone
 			resp.Value = now.UTC().Format(time.RFC3339)
 
-			errs := processErrors(v, path, method, isPartialError)
+			errs := processErrors(v, path, method, isPartialError, c)
 
 			finalErr.Errors = append(finalErr.Errors, errs.Errors...)
 		}
 
 		return finalErr
 	case errors.DB:
+		c.Logger.Errorf("DB error occurred %v", err)
 		errResp.StatusCode = http.StatusInternalServerError
 		errResp.Code = "Internal Server Error"
 		errResp.Reason = "DB Error"
 		// pushing error type to prometheus
-		middleware.ErrorTypesStats.With(prometheus.Labels{"type": "DBError", "path": path, "method": method}).Inc()
+		incrPrometheusCounter(false, c, err, errResp.StatusCode, "DB Error", path, method)
 	case errors.Raw:
 		return errors.MultipleErrors{StatusCode: v.StatusCode, Errors: []error{v}}
 	default:
 		errResp.StatusCode = http.StatusInternalServerError
 		errResp.Code = "Internal Server Error"
 		// pushing error type to prometheus
-		if !isPartialError {
-			middleware.ErrorTypesStats.With(prometheus.Labels{"type": "UnknownError", "path": path, "method": method}).Inc()
-		}
+		incrPrometheusCounter(isPartialError, c, err, errResp.StatusCode, "Unknown Error", path, method)
 	}
 
 	return errors.MultipleErrors{StatusCode: errResp.StatusCode, Errors: []error{&errResp}}
+}
+
+func incrPrometheusCounter(isPartialError bool, c *Context, err error, statusCode int, labelType, path, method string) {
+	if (statusCode == http.StatusInternalServerError || statusCode == 0) && !isPartialError {
+		c.Logger.Errorf("error occurred %v", err)
+		middleware.ErrorTypesStats.With(prometheus.Labels{"type": labelType, "path": path, "method": method}).Inc()
+	}
 }
 
 func evaluateTimeAndTimeZone() (formattedTime, timeZone string) {

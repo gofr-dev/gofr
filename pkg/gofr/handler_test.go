@@ -588,8 +588,10 @@ func Test_processErrors_RawError(t *testing.T) {
 			gofrErrors.MultipleErrors{StatusCode: err.StatusCode, Errors: []error{err}}},
 	}
 
+	c := NewContext(nil, nil, nil)
+
 	for i, tc := range testCases {
-		gotErr := processErrors(tc.arguments.error, tc.arguments.path, tc.arguments.method, tc.arguments.isPartialError)
+		gotErr := processErrors(tc.arguments.error, tc.arguments.path, tc.arguments.method, tc.arguments.isPartialError, c)
 
 		assert.Equalf(t, tc.expErr, gotErr, "Testcase [%d] Failed: %v", i+1, tc.desc)
 	}
@@ -684,13 +686,15 @@ func Test_processErrors(t *testing.T) {
 			"This request has invalid parameters"},
 	}
 
+	c := NewContext(nil, nil, nil)
+
 	for i, tc := range testCases {
 		errResp := gofrErrors.Response{StatusCode: tc.statusCode, Code: tc.ExpErrCode, Reason: tc.ExpErrReason,
 			DateTime: gofrErrors.DateTime{Value: expectedFormattedTime, TimeZone: expectedTimeZone}}
 
 		expErr := gofrErrors.MultipleErrors{StatusCode: tc.statusCode, Errors: []error{&errResp}}
 
-		err := processErrors(tc.err, http.MethodGet, "/dummy", tc.isPartialError)
+		err := processErrors(tc.err, http.MethodGet, "/dummy", tc.isPartialError, c)
 
 		assert.Equalf(t, expErr, err, "Test[%d] Failed: %v", i+1, tc.desc)
 		assert.Equalf(t, expErr.Errors, err.Errors, "Test[%d] Failed: %v", i+1, tc.desc)
