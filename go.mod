@@ -45,7 +45,7 @@ require (
 	github.com/stretchr/testify v1.8.4
 	github.com/xdg/scram v1.0.5
 	github.com/yugabyte/gocql v0.0.0-20230831121436-1e2272bb6bb6
-	github.com/zopsmart/gorm-opentelemetry v1.0.1-0.20220111124801-814382acb6e2
+	github.com/zopsmart/gorm-opentelemetry v1.0.1-0.20211208062846-bf802ea1c033
 	go.mongodb.org/mongo-driver v1.11.9
 	go.opencensus.io v0.24.0
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.46.1
