@@ -34,7 +34,7 @@ func TestTrace(t *testing.T) {
 
 	otel.SetTracerProvider(tp)
 
-	req := httptest.NewRequest("GET", "/dummy", nil)
+	req := httptest.NewRequest("GET", "/dummy", http.NoBody)
 	req = req.WithContext(context.WithValue(context.Background(), ctxKey, ""))
 	req.Header.Set("X-Correlation-ID", "123e4567e89b12d3a456426655440000")
 
@@ -71,7 +71,7 @@ func TestGetTraceID(t *testing.T) {
 	}
 
 	for i, v := range tests {
-		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 		req.Header.Set("X-B3-TraceId", v.traceID)
 		req.Header.Set("X-Correlation-ID", v.correlationID)
 		res := getTraceID(req)

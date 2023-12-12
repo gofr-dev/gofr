@@ -64,7 +64,7 @@ func TestValidateErrors(t *testing.T) {
 		b := new(bytes.Buffer)
 		logger := log.NewMockLogger(b)
 
-		req := httptest.NewRequest(http.MethodGet, "/dummy", nil)
+		req := httptest.NewRequest(http.MethodGet, "/dummy", http.NoBody)
 		req.Header.Set("Authorization", v.token)
 
 		key := PublicKey{
@@ -102,7 +102,7 @@ func TestValidateErrors(t *testing.T) {
 }
 
 func TestValidateSuccess(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/dummy", nil)
+	req := httptest.NewRequest(http.MethodGet, "/dummy", http.NoBody)
 	req.Header.Set("Authorization",
 		"bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6IjIwMTEtMDQtMjk9PSJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmF"+
 			"tZSI6IkpvaG4gRG9lIiwiYWRtaW4iOnRydWUsImlhdCI6MTUxNjIzOTAyMn0.B5C9tz71T-PjyoMH-gv198iNFguDZ5SpVcwrgdLxU83A92"+
@@ -172,7 +172,7 @@ func getTestServerURL() string {
 }
 
 func TestValidate_RawStdEncoding_Header(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/dummy", nil)
+	req := httptest.NewRequest(http.MethodGet, "/dummy", http.NoBody)
 	//nolint:lll // token value is long
 	req.Header.Set("Authorization", "bearer eyJhbGciOiJSUzI1NiIsImprdSI6Imh0dHBzOi8vYXBpLmdvZnIuZGV2L3YxLy53ZWxsLWtub3duL2p3a3MuanNvbiIsImtpZCI6IkJtaXhKM3p5RU5sVDFiMHpObWlta1E9PSIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJnb2ZyLmRldi10ZXN0LTBlM2NjMjc5NzY2M2Y2ZjI5MmY1NjhkZDU0YjhkOWQ5IiwiZXhwIjoxOTg5NDgxMTA3LCJpYXQiOjE1ODk0NzkzMDIsImlzcyI6ImFwaS1zYi5nb2ZyLmRldiIsInN1YiI6IjkxNDdlMWI5LWM3ODEtNTlmZS04MmRlLWYyMDU2MmYxNmYxYyIsInNjb3BlIjoiIiwiYXV0aEF0IjoxNTg5NDc5MzA3MDk0MDk3MDAwLCJhenAiOiJnb2ZyLmRldi10ZXN0LTBlM2NjMjc5NzY2M2Y2ZjI5MmY1NjhkZDU0YjhkOWQ5In0.qjgdCgG1wMPkqp7uKTjQNIhsbMjLBZA5Jrzsn9Ld8W6PW2YFDbRlL9uXO93Fvvz2I-y6GLZPgNB-9Ci3pBPjI2PX-xk5taLO-n5IPw-2O1RBA9utcHL3vhx0bybMi4aeU79jXEXl0E2E_9rcmiSIEByRdDvafIU03hxNsTrDPDTEMVTW43XeLgYo_9rEBSsKl_lF7esLaDLzvetYIWJKGr5A9oFwWYmqNrpsqmrU3xTgJHeGkptIKPxsbTk-udVHhrTSxJ4qYTyx-ceAHVe1qhiTNFLgI3rtwM-zY3O_S8_PVh5al34Gipl-OkuIbJfLVNYZvQkAESF4WTk-LvoU0g")
 
@@ -240,7 +240,7 @@ func TestGetJWT(t *testing.T) {
 	for i, testCase := range testcases {
 		b := new(bytes.Buffer)
 		logger := log.NewMockLogger(b)
-		request := httptest.NewRequest(http.MethodGet, "/", nil)
+		request := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 		request.Header.Set("Authorization", testCase.jwtToken)
 		got, err := getJWT(logger, request)
 

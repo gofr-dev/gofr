@@ -32,7 +32,7 @@ func TestContext_Param(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		r := httptest.NewRequest(http.MethodGet, tc.target, nil)
+		r := httptest.NewRequest(http.MethodGet, tc.target, http.NoBody)
 		req := request.NewHTTPRequest(r)
 
 		c := NewContext(nil, req, nil)
@@ -52,7 +52,7 @@ func TestContext_Params(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		r := httptest.NewRequest(http.MethodGet, "http://dummy?"+tc.query, nil)
+		r := httptest.NewRequest(http.MethodGet, "http://dummy?"+tc.query, http.NoBody)
 		req := request.NewHTTPRequest(r)
 
 		c := NewContext(nil, req, nil)
@@ -73,7 +73,7 @@ func TestContext_Header(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		r := httptest.NewRequest(http.MethodGet, "http://dummy", nil)
+		r := httptest.NewRequest(http.MethodGet, "http://dummy", http.NoBody)
 		r.Header.Set(tc.key, tc.value)
 		req := request.NewHTTPRequest(r)
 
@@ -127,7 +127,7 @@ func (c *customWriter) Header() http.Header {
 }
 
 func TestContext_Request(t *testing.T) {
-	expected := httptest.NewRequest(http.MethodGet, "http://dummy", nil)
+	expected := httptest.NewRequest(http.MethodGet, "http://dummy", http.NoBody)
 	req := request.NewHTTPRequest(expected)
 
 	c := NewContext(nil, req, nil)
@@ -140,7 +140,7 @@ func Test_SetPathParams(t *testing.T) {
 	key := "id"
 	expectedValue := "12345"
 
-	r := httptest.NewRequest(http.MethodGet, "http://dummy", nil)
+	r := httptest.NewRequest(http.MethodGet, "http://dummy", http.NoBody)
 
 	req := request.NewHTTPRequest(r)
 
@@ -173,7 +173,7 @@ func getAppData(c context.Context) map[string]interface{} {
 
 func Test_Log(t *testing.T) {
 	var (
-		r     = httptest.NewRequest(http.MethodGet, "http://dummy", nil)
+		r     = httptest.NewRequest(http.MethodGet, "http://dummy", http.NoBody)
 		req   = request.NewHTTPRequest(r)
 		c     = NewContext(nil, req, New())
 		key   = "testKey"
@@ -211,7 +211,7 @@ func Test_Log(t *testing.T) {
 
 func TestLog_CorrelationModify(t *testing.T) {
 	var (
-		r     = httptest.NewRequest("GET", "http://dummy", nil)
+		r     = httptest.NewRequest("GET", "http://dummy", http.NoBody)
 		req   = request.NewHTTPRequest(r)
 		c     = NewContext(nil, req, nil)
 		key   = "correlationID"
@@ -235,7 +235,7 @@ func TestLog_CorrelationModify(t *testing.T) {
 }
 
 func TestContext_ValidateClaimSubPFCX(t *testing.T) {
-	r := httptest.NewRequest("GET", "http://dummy", nil)
+	r := httptest.NewRequest("GET", "http://dummy", http.NoBody)
 
 	claims := jwt.MapClaims{}
 	claims["sub"] = "trial-sub" //nolint
@@ -267,7 +267,7 @@ func TestContext_ValidateClaimSubPFCX(t *testing.T) {
 }
 
 func TestContext_ValidateClaimSubScope(t *testing.T) {
-	r := httptest.NewRequest("GET", "http://dummy", nil)
+	r := httptest.NewRequest("GET", "http://dummy", http.NoBody)
 
 	claims := jwt.MapClaims{}
 	claims["scope"] = "trial-scope1 trial-scope2"
@@ -311,7 +311,7 @@ func TestContext_BindStrict(t *testing.T) {
 }
 
 func Test_GetClaim(t *testing.T) {
-	r := httptest.NewRequest("GET", "http://dummy", nil)
+	r := httptest.NewRequest("GET", "http://dummy", http.NoBody)
 
 	r = r.Clone(ctx.WithValue(r.Context(), oauth.JWTContextKey("claims"), jwt.MapClaims(map[string]interface{}{"sub": "trial-sub"})))
 	c := NewContext(nil, request.NewHTTPRequest(r), nil)
@@ -344,7 +344,7 @@ func Test_GetClaims(t *testing.T) {
 		{"api-key", "123", map[string]interface{}(nil)},
 	}
 	for i, tc := range testcases {
-		req := httptest.NewRequest("GET", "http://dummy", nil)
+		req := httptest.NewRequest("GET", "http://dummy", http.NoBody)
 		req = req.Clone(ctx.WithValue(req.Context(), tc.ctxKey, tc.ctxValue))
 		gofrCtx := NewContext(nil, request.NewHTTPRequest(req), nil)
 

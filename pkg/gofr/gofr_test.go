@@ -204,7 +204,7 @@ func TestGofr_Patch(t *testing.T) {
 
 	for _, tc := range testCases {
 		rr := httptest.NewRecorder()
-		r := httptest.NewRequest(http.MethodPatch, tc.target, nil)
+		r := httptest.NewRequest(http.MethodPatch, tc.target, http.NoBody)
 
 		app.Server.Router.ServeHTTP(rr, r)
 
@@ -240,7 +240,7 @@ func TestGofr_DELETE(t *testing.T) {
 
 	for i, tc := range testCases {
 		rr := httptest.NewRecorder()
-		r := httptest.NewRequest(http.MethodDelete, tc.target, nil)
+		r := httptest.NewRequest(http.MethodDelete, tc.target, http.NoBody)
 
 		app.Server.Router.ServeHTTP(rr, r)
 

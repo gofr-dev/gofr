@@ -30,8 +30,6 @@ func newLocalFile(filename string, mode Mode) *fileAbstractor {
 
 // Open It opens a file, either locally or remotely, based on the presence of a remote file abstractor.
 // It handles various modes (read, write, append) and file access operations while managing temporary files as needed.
-//
-//nolint:gocognit // cannot reduce complexity without affecting readability.
 func (l *fileAbstractor) Open() error {
 	if l.remoteFileAbstracter == nil {
 		file, err := os.OpenFile(l.fileName, l.fileMode, os.ModePerm)

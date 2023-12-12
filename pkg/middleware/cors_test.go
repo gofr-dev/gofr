@@ -33,7 +33,7 @@ func Test_CORS(t *testing.T) {
 	expectedHeaders := getValidCORSHeaders(nil)
 
 	for i, testCase := range testCases {
-		req := httptest.NewRequest(testCase.method, "/hello", nil)
+		req := httptest.NewRequest(testCase.method, "/hello", http.NoBody)
 		w := httptest.NewRecorder()
 		handler.ServeHTTP(w, req)
 

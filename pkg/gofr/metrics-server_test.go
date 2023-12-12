@@ -29,7 +29,7 @@ func TestMetricsServer(t *testing.T) {
 	serverURL := "http://localhost:" + strconv.Itoa(2121)
 
 	for _, u := range validURLs {
-		r := httptest.NewRequest(http.MethodGet, serverURL+u, nil)
+		r := httptest.NewRequest(http.MethodGet, serverURL+u, http.NoBody)
 		rr := httptest.NewRecorder()
 		srv.Handler.ServeHTTP(rr, r)
 
