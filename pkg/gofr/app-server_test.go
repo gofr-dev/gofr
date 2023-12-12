@@ -25,7 +25,7 @@ func TestContextInjector(t *testing.T) {
 
 	innerHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
 
-	req := httptest.NewRequest("GET", "/", nil)
+	req := httptest.NewRequest("GET", "/", http.NoBody)
 
 	w := httptest.NewRecorder()
 
@@ -139,12 +139,14 @@ func Test_APIFilePresent(t *testing.T) {
 	g := New()
 	g.Server.HTTP.Port = 8080
 
+	const apiPath = "/api"
+
 	wd, _ := os.Getwd()
-	_ = os.Mkdir(wd+"/api", 0777)
+	_ = os.Mkdir(wd+apiPath, 0777)
 
-	defer os.RemoveAll(wd + "/api/")
+	defer os.RemoveAll(wd + apiPath + "/")
 
-	_, _ = os.Create(wd + "/api/openapi.json")
+	_, _ = os.Create(wd + apiPath + "/openapi.json")
 
 	b := new(bytes.Buffer)
 	g.Logger = log.NewMockLogger(b)
@@ -354,7 +356,7 @@ func TestFilterValidRoutes(t *testing.T) {
 func TestExemptPathParam(t *testing.T) {
 	configs := config.MockConfig{}
 	app := NewWithConfig(&configs)
-	req := httptest.NewRequest("GET", "/users/123", nil)
+	req := httptest.NewRequest("GET", "/users/123", http.NoBody)
 	w := httptest.NewRecorder()
 
 	sampleHandler := func(ctx *Context) (interface{}, error) {

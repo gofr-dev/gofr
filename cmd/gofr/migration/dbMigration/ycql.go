@@ -65,8 +65,8 @@ func (y *YCQL) Run(m Migrator, app, name, method string, logger log.Logger) erro
 }
 
 func (y *YCQL) preRun(app, method, name string) error {
-	migrationTableSchema := "CREATE TABLE IF NOT EXISTS gofr_migrations ( " +
-		"app text, version bigint, start_time timestamp, end_time timestamp, method text, PRIMARY KEY (app, version, method) )"
+	//nolint:lll // Breaking the query string affects readability.
+	const migrationTableSchema = `CREATE TABLE IF NOT EXISTS gofr_migrations (app text, version bigint, start_time timestamp, end_time timestamp, method text, PRIMARY KEY (app, version, method) )`
 
 	err := y.session.Query(migrationTableSchema).Exec()
 	if err != nil {
@@ -157,13 +157,14 @@ func (y *YCQL) GetAllMigrations(app string) (upMigration, downMigration []int) {
 
 // FinishMigration completes the migration
 func (y *YCQL) FinishMigration() error {
+	const query = `INSERT INTO gofr_migrations(app, version, method, start_time, end_time) VALUES (?, ?, ?, ?, ?)`
+
 	if y.session == nil {
 		return errors.DataStoreNotInitialized{DBName: datastore.Ycql}
 	}
 
 	for _, l := range y.newMigrations {
-		err := y.session.Query("INSERT INTO gofr_migrations(app, version, method, start_time, end_time) "+
-			"VALUES (?, ?, ?, ?, ?)", l.App, l.Version, l.Method, l.StartTime, l.EndTime).Exec()
+		err := y.session.Query(query, l.App, l.Version, l.Method, l.StartTime, l.EndTime).Exec()
 		if err != nil {
 			return err
 		}

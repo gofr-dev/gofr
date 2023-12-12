@@ -351,7 +351,8 @@ func TestYCQLHealthCheck(t *testing.T) {
 	}
 
 	for i, tc := range tests {
-		ycql, _ := GetNewYCQL(mockLogger, &tc.config)
+		mockYCQLConfig := tc.config
+		ycql, _ := GetNewYCQL(mockLogger, &mockYCQLConfig)
 		ds := &DataStore{YCQL: ycql}
 
 		healthCheck := ds.YCQLHealthCheck()

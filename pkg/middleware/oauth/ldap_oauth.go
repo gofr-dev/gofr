@@ -30,7 +30,9 @@ func LDAPOAuth(logger log.Logger, ldapOptions *middleware.LDAPOptions, options O
 			}
 
 			var token *jwt.Token
-			if err := ldap.Validate(logger, req); err == nil {
+			var err error
+
+			if err = ldap.Validate(logger, req); err == nil {
 				inner.ServeHTTP(w, req)
 				return
 			} else if token, err = oAuth.Validate(logger, req); err == nil {
@@ -39,12 +41,11 @@ func LDAPOAuth(logger log.Logger, ldapOptions *middleware.LDAPOptions, options O
 				req = req.Clone(ctx)
 				inner.ServeHTTP(w, req)
 				return
-			} else {
-				description, code := middleware.GetDescription(err)
-				e := middleware.FetchErrResponseWithCode(code, description, err.Error())
-				middleware.ErrorResponse(w, req, logger, *e)
-				return
 			}
+
+			description, code := middleware.GetDescription(err)
+			e := middleware.FetchErrResponseWithCode(code, description, err.Error())
+			middleware.ErrorResponse(w, req, logger, *e)
 		})
 	}
 }

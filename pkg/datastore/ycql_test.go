@@ -215,7 +215,8 @@ func TestDataStore_YCQLHealthCheck(t *testing.T) {
 	}
 
 	for i, tc := range testCases {
-		con, _ := GetNewYCQL(logger, &tc.c)
+		mockConfig := tc.c
+		con, _ := GetNewYCQL(logger, &mockConfig)
 		output := con.HealthCheck()
 
 		if !reflect.DeepEqual(tc.expected, output) {

@@ -55,7 +55,7 @@ func TestPanicRecoveryContentType(t *testing.T) {
 	handler := Recover(logger)(&MockHandlerForPanic{})
 
 	for _, tc := range testcases {
-		req := httptest.NewRequest("GET", "/panic", nil)
+		req := httptest.NewRequest("GET", "/panic", http.NoBody)
 		req.Header.Add("Content-Type", tc.reqContentType)
 
 		w := httptest.NewRecorder()
@@ -91,7 +91,7 @@ func TestPanicRecovery(t *testing.T) {
 	muxRouter.NewRoute().Handler(handler)
 
 	for _, tc := range testcases {
-		req := httptest.NewRequest("GET", "/"+tc.endpoint, nil)
+		req := httptest.NewRequest("GET", "/"+tc.endpoint, http.NoBody)
 		req = req.Clone(context.WithValue(req.Context(), CorrelationIDKey, "gofrTest"))
 		muxRouter.ServeHTTP(w, req)
 
@@ -130,7 +130,7 @@ func TestPanicNewRelicErrorReport(t *testing.T) {
 	muxRouter.NewRoute().Handler(handler)
 
 	for _, tc := range testcases {
-		req := httptest.NewRequest("GET", "/"+tc.endpoint, nil)
+		req := httptest.NewRequest("GET", "/"+tc.endpoint, http.NoBody)
 		muxRouter.NewRoute().Path(req.URL.Path).Methods("GET").Handler(handler)
 		muxRouter.ServeHTTP(httptest.NewRecorder(), req)
 
@@ -160,7 +160,7 @@ func TestPanicAppDataLogging(t *testing.T) {
 	data := &sync.Map{}
 	data.Store("key", "value")
 
-	req := httptest.NewRequest("GET", "/panic", nil)
+	req := httptest.NewRequest("GET", "/panic", http.NoBody)
 	req = req.Clone(context.WithValue(req.Context(), appData, data))
 
 	handler.ServeHTTP(MockWriteHandler{}, req)
@@ -229,7 +229,7 @@ func makeRequestPlanet(t *testing.T, handler http.Handler, wg *sync.WaitGroup, t
 	for i := 0; i < n; i++ {
 		i := i
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
-			req := httptest.NewRequest("GET", target, nil)
+			req := httptest.NewRequest("GET", target, http.NoBody)
 			data := &sync.Map{}
 			data.Store("Planet", "Earth")
 			req.Header.Add("X-Correlation-ID", "gofrTest-planet")
@@ -247,7 +247,7 @@ func makeRequestGalaxy(t *testing.T, handler http.Handler, wg *sync.WaitGroup, t
 	for i := 0; i < n; i++ {
 		i := i
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
-			req := httptest.NewRequest("GET", target, nil)
+			req := httptest.NewRequest("GET", target, http.NoBody)
 			data := &sync.Map{}
 			data.Store("Galaxy", "MilkyWay")
 			req.Header.Add("X-Correlation-ID", "gofrTest-galaxy")
@@ -287,7 +287,6 @@ func Test_ValidAppLogDataInConcurrentRequest(t *testing.T) {
 	checkLogs(t, b)
 }
 
-//nolint:gocognit // splitting the code will reduce readability
 func checkLogs(t *testing.T, b *Buffer) {
 	if bufLen := len(b.String()); bufLen <= 0 {
 		t.Error("Nothing is logged")

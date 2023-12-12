@@ -20,9 +20,11 @@ type soapService struct {
 //
 //nolint:revive // this type cannot be exported since we don't want the user to have access to the members
 func NewSOAPClient(resourceURL string, logger log.Logger, user, pass string) *soapService {
+	const basic = "Basic "
+
 	auth := ""
 	if user != "" {
-		auth = "Basic " + base64.StdEncoding.EncodeToString([]byte(user+":"+pass))
+		auth = basic + base64.StdEncoding.EncodeToString([]byte(user+":"+pass))
 	}
 
 	transport := &ochttp.Transport{}
