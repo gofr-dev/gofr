@@ -356,7 +356,7 @@ func Test_SetContentType(t *testing.T) {
 	}
 
 	for i, v := range testcases {
-		req := httptest.NewRequest(http.MethodGet, "/dummy", nil)
+		req := httptest.NewRequest(http.MethodGet, "/dummy", http.NoBody)
 		setContentTypeAndAcceptHeader(req, v.body)
 
 		contentType := req.Header.Get("content-type")
@@ -369,7 +369,7 @@ func Test_SetContentType(t *testing.T) {
 
 func Test_SetAcceptHeader(t *testing.T) {
 	expectedHeader := "application/json,application/xml,text/plain"
-	req := httptest.NewRequest(http.MethodGet, "/dummy", nil)
+	req := httptest.NewRequest(http.MethodGet, "/dummy", http.NoBody)
 	setContentTypeAndAcceptHeader(req, nil)
 
 	header := req.Header.Get("accept")

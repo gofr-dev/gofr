@@ -187,6 +187,8 @@ func Test_addHandlerImport(t *testing.T) {
 }
 
 func Test_populateMain(t *testing.T) {
+	const pathTest = "/testEntity"
+
 	dir := t.TempDir()
 
 	ctrl := gomock.NewController(t)
@@ -218,7 +220,7 @@ func Test_populateMain(t *testing.T) {
 		wantErr   bool
 	}{
 		{"Error chdir", args{"package main"}, []*gomock.Call{
-			c.EXPECT().Getwd().Return(dir+"/testEntity", nil).MaxTimes(5),
+			c.EXPECT().Getwd().Return(dir+pathTest, nil).MaxTimes(5),
 			c.EXPECT().Chdir(gomock.AssignableToTypeOf(dir)).Return(errors.New("test error")),
 		}, true},
 
@@ -238,7 +240,7 @@ func Test_populateMain(t *testing.T) {
 		}, true},
 
 		{"Success OpenFile", args{"package main"}, []*gomock.Call{
-			c.EXPECT().Getwd().Return(dir+"/testEntity", nil).MaxTimes(1),
+			c.EXPECT().Getwd().Return(dir+pathTest, nil).MaxTimes(1),
 			c.EXPECT().Chdir(gomock.AssignableToTypeOf(dir)).Return(nil).MaxTimes(1),
 			c.EXPECT().OpenFile("main.go", gomock.Any(), gomock.Any()).Return(file, nil).Times(2),
 		}, false},
@@ -407,7 +409,7 @@ func Test_AddRoute(t *testing.T) {
 	for i, tc := range tests {
 		_ = os.Chdir(dir)
 
-		req := httptest.NewRequest("", setQueryParams(tc.params), nil)
+		req := httptest.NewRequest("", setQueryParams(tc.params), http.NoBody)
 		ctx := gofr.NewContext(nil, request.NewHTTPRequest(req), gofr.New())
 
 		res, err := AddRoute(ctx)

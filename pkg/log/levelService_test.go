@@ -155,6 +155,8 @@ func Test_Goroutine_Count(t *testing.T) {
 func TestRemoteLevelLogger_Race(t *testing.T) {
 	var s *levelService
 
+	const configSvcName = "/configs?serviceName=gofr-sample-api"
+
 	var b bytes.Buffer
 
 	rls.logger = NewMockLogger(&b)
@@ -180,9 +182,9 @@ func TestRemoteLevelLogger_Race(t *testing.T) {
 		level level
 		url   string
 	}{
-		{"case when log level is Debug", Debug, ts1.URL + "/configs?serviceName=gofr-sample-api"},
-		{"case when log level is Error", Error, ts2.URL + "/configs?serviceName=gofr-sample-api"},
-		{"case when log level is Warn", Warn, ts3.URL + "/configs?serviceName=gofr-sample-api"},
+		{"case when log level is Debug", Debug, ts1.URL + configSvcName},
+		{"case when log level is Error", Error, ts2.URL + configSvcName},
+		{"case when log level is Warn", Warn, ts3.URL + configSvcName},
 	}
 
 	wg := sync.WaitGroup{}

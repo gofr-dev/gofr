@@ -44,7 +44,9 @@ func TestNewElasticsearchClient(t *testing.T) {
 	}
 
 	for i, tc := range testcases {
-		_, err := NewElasticsearchClient(log.NewMockLogger(io.Discard), &tc.config)
+		mockElasticConfig := tc.config
+		_, err := NewElasticsearchClient(log.NewMockLogger(io.Discard), &mockElasticConfig)
+
 		if err == nil {
 			if tc.errStr != "" {
 				t.Errorf("TESTCASE[%v] expected error string %v", i, tc.errStr)
@@ -86,7 +88,8 @@ func TestDataStore_ElasticsearchHealthCheck(t *testing.T) {
 	}
 
 	for i, tc := range testCases {
-		conn, _ := NewElasticsearchClient(log.NewMockLogger(io.Discard), &tc.config)
+		mockConfig := tc.config
+		conn, _ := NewElasticsearchClient(log.NewMockLogger(io.Discard), &mockConfig)
 
 		output := conn.HealthCheck()
 		if !reflect.DeepEqual(output, tc.expected) {
@@ -120,7 +123,8 @@ func Test_bind(t *testing.T) {
 	}
 
 	for i, tc := range tcs {
-		err := bind(tc.data, &tc.resp)
+		mockResp := tc.resp
+		err := bind(tc.data, &mockResp)
 
 		if tc.err == nil {
 			assert.Equal(t, tc.err, err, "TESTCASE[%v]", i)

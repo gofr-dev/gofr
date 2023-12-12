@@ -181,7 +181,7 @@ func redisRetry(c *datastore.RedisConfig, g *Gofr) {
 
 		var err error
 
-		g.Redis, err = datastore.NewRedis(g.Logger, *c)
+		g.Redis, err = datastore.NewRedis(g.Logger, c)
 		if err == nil {
 			g.Logger.Info("Redis initialized successfully")
 
