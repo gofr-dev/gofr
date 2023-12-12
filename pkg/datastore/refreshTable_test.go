@@ -18,7 +18,7 @@ import (
 	"gofr.dev/pkg/log"
 )
 
-const ycqlKeyspaceTest, testPath = "test", "/test_data"
+const ycqlKeyspaceTest, pathTest = "test", "/test_data"
 
 type MockTesting struct {
 	TotalErrors int
@@ -416,7 +416,7 @@ func TestSeeder_RefreshMongoCollections(t *testing.T) {
 
 	d := DataStore{MongoDB: mongo}
 	path, _ := os.Getwd()
-	s := NewSeeder(&d, path+testPath)
+	s := NewSeeder(&d, path+pathTest)
 
 	tester := &MockTesting{}
 	s.RefreshMongoCollections(tester, "customers")
@@ -439,11 +439,11 @@ func TestSeeder_RefreshMongoCollections_Errors(t *testing.T) {
 	s.RefreshMongoCollections(tester, "customers")
 
 	path, _ := os.Getwd()
-	s = NewSeeder(&d, path+testPath)
+	s = NewSeeder(&d, path+pathTest)
 	s.RefreshMongoCollections(tester, "unknown")
 
 	// checking invalid json data
-	s = NewSeeder(&d, path+testPath)
+	s = NewSeeder(&d, path+pathTest)
 	s.RefreshMongoCollections(tester, "customers1")
 
 	// expecting 3 errors
@@ -661,7 +661,7 @@ func TestSeeder_RefreshRedis(t *testing.T) {
 
 	d := DataStore{Redis: redis}
 	path, _ := os.Getwd()
-	s := NewSeeder(&d, path+testPath)
+	s := NewSeeder(&d, path+pathTest)
 	tester := &MockTesting{}
 	s.RefreshRedis(tester, "storeKeyVal", "customers")
 
@@ -685,7 +685,7 @@ func TestSeeder_RefreshRedis_Error(t *testing.T) {
 
 	// case where invalid data is provided in csv
 	path, _ := os.Getwd()
-	s = NewSeeder(&d, path+testPath)
+	s = NewSeeder(&d, path+pathTest)
 	s.RefreshRedis(tester, "storeKeyVal1")
 
 	expectedErrors := 2

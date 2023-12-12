@@ -14,7 +14,7 @@ import (
 	"gofr.dev/pkg/gofr/assert"
 )
 
-const RWXOwner, testProject = 0700, "/testGoProject"
+const RWXOwner, pathTestProject = 0700, "/testGoProject"
 
 // initializeTest function to create a sample go project in temporary directory
 func initializeTest(t *testing.T) {
@@ -149,43 +149,43 @@ func TestCLI(t *testing.T) {
 
 	assert.CMDOutputContains(t, main, "gofr init -name=testGoProject", "Successfully created project: testGoProject")
 
-	_ = os.Chdir(dir + testProject)
+	_ = os.Chdir(dir + pathTestProject)
 
 	assert.CMDOutputContains(t, main, "gofr init -namee=testGoProject",
 		"unknown parameter(s) [namee]. Run gofr <command_name> -h for help of the command.")
 
-	_ = os.Chdir(dir + testProject)
+	_ = os.Chdir(dir + pathTestProject)
 
 	assert.CMDOutputContains(t, main, "gofr add -methods=all -path=/foo", "Added route: /foo")
 
-	_ = os.Chdir(dir + testProject)
+	_ = os.Chdir(dir + pathTestProject)
 
 	assert.CMDOutputContains(t, main, "gofr add -method=all -path=/foo",
 		"unknown parameter(s) [method]. Run gofr <command_name> -h for help of the command.")
 
-	_ = os.Chdir(dir + testProject)
+	_ = os.Chdir(dir + pathTestProject)
 
 	assert.CMDOutputContains(t, main, "gofr add -methods= -path=/foo",
 		"Parameter methods is required for this request")
 
-	_ = os.Chdir(dir + testProject)
+	_ = os.Chdir(dir + pathTestProject)
 
 	assert.CMDOutputContains(t, main, "gofr add -methods=all -path=", "Parameter path is required for this request")
 
-	_ = os.Chdir(dir + testProject)
+	_ = os.Chdir(dir + pathTestProject)
 
 	assert.CMDOutputContains(t, main, "gofr add -methods=all -path=/foo", "route foo is already present")
 
-	_ = os.Chdir(dir + testProject)
+	_ = os.Chdir(dir + pathTestProject)
 
 	assert.CMDOutputContains(t, main, "gofr entity -type=core -name=person", "Successfully created entity: person")
 
-	_ = os.Chdir(dir + testProject)
+	_ = os.Chdir(dir + pathTestProject)
 
 	assert.CMDOutputContains(t, main, "gofr entity -type= -name=person",
 		"Parameter type is required for this request")
 
-	_ = os.Chdir(dir + testProject)
+	_ = os.Chdir(dir + pathTestProject)
 
 	assert.CMDOutputContains(t, main, "gofr entity -typee=core -namee=person",
 		"unknown parameter(s) [namee,typee]. Run gofr <command_name> -h for help of the command.")

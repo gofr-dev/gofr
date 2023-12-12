@@ -33,8 +33,6 @@ type OAuthOption struct {
 }
 
 func (h *httpService) setClientOauthHeader(option *OAuthOption) {
-	const basic = "Basic "
-
 	if option.ClientID == "" || option.ClientSecret == "" {
 		return
 	}
