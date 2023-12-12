@@ -30,7 +30,7 @@ func Test_NewRedis(t *testing.T) {
 		e.Err = "address tcp/fake port: unknown port"
 		e.Name = "dial tcp"
 
-		if _, err := NewRedis(logger, RedisConfig{
+		if _, err := NewRedis(logger, &RedisConfig{
 			HostName: "fake host",
 			Port:     "6378",
 		}); err != nil && !errors.As(err, &e) {
@@ -118,7 +118,7 @@ func Test_RedisQueryLog(t *testing.T) {
 		Port:     c.Get("REDIS_PORT"),
 	}
 
-	redisClient, _ := NewRedis(logger, rc)
+	redisClient, _ := NewRedis(logger, &rc)
 
 	{ // test query logs
 		b.Reset()
@@ -162,7 +162,7 @@ func TestDataStore_RedisHealthCheck_Up(t *testing.T) {
 	cfg := RedisConfig{HostName: c.Get("REDIS_HOST"), Port: c.Get("REDIS_PORT")}
 	expHealth := types.Health{Name: RedisStore, Status: "UP", Host: c.Get("REDIS_HOST")}
 
-	conn, _ := NewRedis(logger, cfg)
+	conn, _ := NewRedis(logger, &cfg)
 	out := conn.HealthCheck()
 
 	if expHealth.Status != out.Status || expHealth.Host != out.Host || expHealth.Name != out.Name {
@@ -185,7 +185,7 @@ func TestDataStore_RedisHealthCheck_Down(t *testing.T) {
 	cfg := RedisConfig{HostName: "Random", Port: c.Get("REDIS_PORT")}
 	exp := types.Health{Name: RedisStore, Status: "DOWN", Host: "Random"}
 
-	conn, _ := NewRedis(logger, cfg)
+	conn, _ := NewRedis(logger, &cfg)
 
 	output := conn.HealthCheck()
 
@@ -207,7 +207,7 @@ func Test_RedisHealthCheckConnClose(t *testing.T) {
 	}
 	expLog := "Health check failed"
 
-	conn, _ := NewRedis(logger, conf)
+	conn, _ := NewRedis(logger, &conf)
 	conn.Close()
 	output := conn.HealthCheck()
 
@@ -224,10 +224,10 @@ func Test_goroutineCount(t *testing.T) {
 	c := config.NewGoDotEnvProvider(logger, "../../configs")
 	conf := RedisConfig{HostName: c.Get("REDIS_HOST"), Port: "3444"}
 
-	_, _ = NewRedis(logger, conf)
+	_, _ = NewRedis(logger, &conf)
 	prev := runtime.NumGoroutine()
 
-	_, _ = NewRedis(logger, conf)
+	_, _ = NewRedis(logger, &conf)
 	next := runtime.NumGoroutine()
 
 	if prev != next {

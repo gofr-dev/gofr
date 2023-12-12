@@ -43,7 +43,7 @@ func TestContext_Filters(t *testing.T) {
 		},
 	}
 	for i, tc := range testCases {
-		r := httptest.NewRequest(http.MethodGet, tc.target, nil)
+		r := httptest.NewRequest(http.MethodGet, tc.target, http.NoBody)
 		req := request.NewHTTPRequest(r)
 
 		c := NewContext(nil, req, nil)

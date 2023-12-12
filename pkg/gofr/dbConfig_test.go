@@ -95,7 +95,9 @@ func Test_cassandraConfigFromEnv(t *testing.T) {
 
 	for i, tc := range testCases {
 		cassandraConfig := cassandraConfigFromEnv(tc.configLoc, tc.prefix)
-		if !reflect.DeepEqual(cassandraConfig, &tc.expectedConfig) {
+		expectedConfig := tc.expectedConfig
+
+		if !reflect.DeepEqual(cassandraConfig, &expectedConfig) {
 			if tc.expectedError == false {
 				t.Errorf("Test[%d]Fail:%vGot: %v,expected:%v", i, tc.name, cassandraConfig, tc.expectedConfig)
 			}
@@ -178,7 +180,9 @@ func Test_kafkaConfigFromEnv(t *testing.T) {
 	}
 	for i, tc := range testcases {
 		res := kafkaConfigFromEnv(tc.config, "")
-		if !reflect.DeepEqual(res, &tc.expectedConfig) {
+		mockConfg := tc.expectedConfig
+
+		if !reflect.DeepEqual(res, &mockConfg) {
 			t.Errorf("Test case failed [%v]. Got: %v,expected:%v", i, tc.config, tc.expectedConfig)
 		}
 	}
@@ -256,8 +260,9 @@ func Test_mongoDBConfigFromEnv(t *testing.T) {
 
 	for _, tc := range testCases {
 		mongoConfig := mongoDBConfigFromEnv(tc.configLoc, tc.prefix)
+		expConfig := tc.expectedConfig
 
-		if !reflect.DeepEqual(mongoConfig, &tc.expectedConfig) {
+		if !reflect.DeepEqual(mongoConfig, &expConfig) {
 			if tc.expectedError == false {
 				t.Errorf("Got: %v,expected:%v", mongoConfig, tc.expectedConfig)
 			}
@@ -651,8 +656,9 @@ func Test_avroConfigFromEnv(t *testing.T) {
 
 	for i, tc := range testCase {
 		cfg := avroConfigFromEnv(tc.inputCfg, tc.prefix)
+		mockCfg := tc.expConfig
 
-		assert.Equalf(t, &tc.expConfig, cfg, "Test[%d] failed:%v", i, tc.desc)
+		assert.Equalf(t, &mockCfg, cfg, "Test[%d] failed:%v", i, tc.desc)
 	}
 }
 

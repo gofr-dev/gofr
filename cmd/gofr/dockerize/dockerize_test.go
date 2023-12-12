@@ -2,6 +2,7 @@ package dockerize
 
 import (
 	"fmt"
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"os/exec"
@@ -124,7 +125,7 @@ func Test_Dockerize(t *testing.T) {
 	}
 
 	for i, tc := range testCases {
-		req := httptest.NewRequest("", setQueryParams(tc.params), nil)
+		req := httptest.NewRequest("", setQueryParams(tc.params), http.NoBody)
 		ctx := gofr.NewContext(nil, request.NewHTTPRequest(req), app)
 
 		resp, err := h.Dockerize(ctx)
@@ -144,7 +145,7 @@ func TestDockerize_Error(t *testing.T) {
 	expErr := &errors.Response{Reason: fmt.Sprintf(`unknown parameter(s) [` + strings.Join([]string{"tags"}, ",") + `]. ` +
 		`Run gofr <command_name> -h for help of the command.`)}
 
-	req := httptest.NewRequest("", setQueryParams(map[string]string{"tags": "commit"}), nil)
+	req := httptest.NewRequest("", setQueryParams(map[string]string{"tags": "commit"}), http.NoBody)
 	ctx := gofr.NewContext(nil, request.NewHTTPRequest(req), app)
 
 	resp, err := h.Dockerize(ctx)
@@ -160,7 +161,7 @@ func TestDockerize_Fail(t *testing.T) {
 	params := map[string]string{"invalid": "testTag"}
 	expErr := &errors.Response{Reason: "unknown parameter(s) [invalid]. Run gofr <command_name> -h for help of the command."}
 
-	req := httptest.NewRequest("", setQueryParams(params), nil)
+	req := httptest.NewRequest("", setQueryParams(params), http.NoBody)
 	ctx := gofr.NewContext(nil, request.NewHTTPRequest(req), gofr.New())
 
 	resp, err := h.Run(ctx)
@@ -174,7 +175,7 @@ func Test_Dockerize_getImageFailure(t *testing.T) {
 
 	h := New("gofr-app", "1.0.0")
 
-	req := httptest.NewRequest("", setQueryParams(map[string]string{"tag": "commit"}), nil)
+	req := httptest.NewRequest("", setQueryParams(map[string]string{"tag": "commit"}), http.NoBody)
 	ctx := gofr.NewContext(nil, request.NewHTTPRequest(req), gofr.New())
 
 	resp, err := h.Dockerize(ctx)
@@ -191,7 +192,7 @@ func Test_Dockerize_buildFailure(t *testing.T) {
 
 	h := New("gofr-app", "1.0.0")
 
-	req := httptest.NewRequest("", "/dummy", nil)
+	req := httptest.NewRequest("", "/dummy", http.NoBody)
 	ctx := gofr.NewContext(nil, request.NewHTTPRequest(req), gofr.New())
 
 	resp, err := h.Dockerize(ctx)
@@ -207,7 +208,7 @@ func Test_Dockerize_buildDockerFailure(t *testing.T) {
 
 	h := New("gofr-app", "1.0.0")
 
-	req := httptest.NewRequest("", "/dummy", nil)
+	req := httptest.NewRequest("", "/dummy", http.NoBody)
 	ctx := gofr.NewContext(nil, request.NewHTTPRequest(req), gofr.New())
 
 	resp, err := h.Dockerize(ctx)
@@ -241,7 +242,7 @@ func TestRun(t *testing.T) {
 	}
 
 	for i, tc := range testCases {
-		req := httptest.NewRequest("", setQueryParams(tc.params), nil)
+		req := httptest.NewRequest("", setQueryParams(tc.params), http.NoBody)
 		ctx := gofr.NewContext(nil, request.NewHTTPRequest(req), app)
 
 		resp, err := h.Run(ctx)
@@ -258,7 +259,7 @@ func TestRun_Fail(t *testing.T) {
 	params := map[string]string{"invalid": "testTag"}
 	expErr := &errors.Response{Reason: "unknown parameter(s) [invalid]. Run gofr <command_name> -h for help of the command."}
 
-	req := httptest.NewRequest("", setQueryParams(params), nil)
+	req := httptest.NewRequest("", setQueryParams(params), http.NoBody)
 	ctx := gofr.NewContext(nil, request.NewHTTPRequest(req), gofr.New())
 
 	resp, err := h.Run(ctx)
@@ -281,7 +282,7 @@ func Test_populateFlags(t *testing.T) {
 	}
 
 	for i, tc := range testcases {
-		req := httptest.NewRequest("", setQueryParams(tc.params), nil)
+		req := httptest.NewRequest("", setQueryParams(tc.params), http.NoBody)
 		ctx := gofr.NewContext(nil, request.NewHTTPRequest(req), gofr.New())
 
 		res := populateFlags(ctx, "gofr-app")
@@ -305,7 +306,8 @@ func Test_getImageName(t *testing.T) {
 	}
 
 	for i, tc := range testCases {
-		imageName, err := getImageName(&tc.flag, "dev")
+		testFlag := tc.flag
+		imageName, err := getImageName(&testFlag, "dev")
 
 		assert.Contains(t, imageName, tc.expRes, "[TESTCASE %d] Failed Desc: %v\nexpected %v\tgot %v\n", i+1, tc.desc, tc.expRes, imageName)
 		assert.Nil(t, err, "[TESTCASE %d] Failed Desc: %v\nexpected %v\tgot %v\n", i+1, tc.desc, nil, err)
@@ -354,7 +356,7 @@ func Test_Run_getImageFailure(t *testing.T) {
 
 	h := New("gofr-app", "1.0.0")
 
-	req := httptest.NewRequest("", setQueryParams(map[string]string{"tag": "commit"}), nil)
+	req := httptest.NewRequest("", setQueryParams(map[string]string{"tag": "commit"}), http.NoBody)
 	ctx := gofr.NewContext(nil, request.NewHTTPRequest(req), gofr.New())
 
 	resp, err := h.Run(ctx)
@@ -371,7 +373,7 @@ func Test_Run_buildFailure(t *testing.T) {
 
 	h := New("gofr-app", "1.0.0")
 
-	req := httptest.NewRequest("", "/dummy", nil)
+	req := httptest.NewRequest("", "/dummy", http.NoBody)
 	ctx := gofr.NewContext(nil, request.NewHTTPRequest(req), gofr.New())
 
 	resp, err := h.Run(ctx)
@@ -387,7 +389,7 @@ func Test_Run_buildDockerFailure(t *testing.T) {
 
 	h := New("gofr-app", "1.0.0")
 
-	req := httptest.NewRequest("", "/dummy", nil)
+	req := httptest.NewRequest("", "/dummy", http.NoBody)
 	ctx := gofr.NewContext(nil, request.NewHTTPRequest(req), gofr.New())
 
 	resp, err := h.Run(ctx)
@@ -401,7 +403,7 @@ func Test_Run_runDockerFailure(t *testing.T) {
 
 	h := New("gofr-app", "1.0.0")
 
-	req := httptest.NewRequest("", setQueryParams(map[string]string{"image": "invalid"}), nil)
+	req := httptest.NewRequest("", setQueryParams(map[string]string{"image": "invalid"}), http.NoBody)
 	ctx := gofr.NewContext(nil, request.NewHTTPRequest(req), gofr.New())
 
 	resp, err := h.Run(ctx)

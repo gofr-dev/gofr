@@ -71,7 +71,7 @@ func TestHandler_ServeHTTP_StatusCode(t *testing.T) {
 		tc := tc
 		g := New()
 		w := newCustomWriter()
-		r := httptest.NewRequest("GET", "/Dummy", nil)
+		r := httptest.NewRequest("GET", "/Dummy", http.NoBody)
 		r = routeKeySetter(w, r)
 		req := request.NewHTTPRequest(r)
 		resp := responder.NewContextualResponder(w, r)
@@ -95,7 +95,7 @@ func TestHandler_ServeHTTP_StatusCode(t *testing.T) {
 func TestHandler_ServeHTTP_ErrorFormat(t *testing.T) {
 	g := New()
 	w := newCustomWriter()
-	r := httptest.NewRequest("GET", "/Dummy", nil)
+	r := httptest.NewRequest("GET", "/Dummy", http.NoBody)
 	r = routeKeySetter(w, r)
 	req := request.NewHTTPRequest(r)
 	resp := responder.NewContextualResponder(w, r)
@@ -121,7 +121,7 @@ func TestHandler_ServeHTTP_ErrorFormat(t *testing.T) {
 func TestHandler_ServeHTTP_RawErrorFormat(t *testing.T) {
 	g := New()
 	w := newCustomWriter()
-	r := httptest.NewRequest("GET", "/Dummy", nil)
+	r := httptest.NewRequest("GET", "/Dummy", http.NoBody)
 	r = routeKeySetter(w, r)
 	req := request.NewHTTPRequest(r)
 	resp := responder.NewContextualResponder(w, r)
@@ -151,7 +151,7 @@ func TestHandler_ServeHTTP_RawErrorFormat(t *testing.T) {
 func TestHandler_ServeHTTP_Content_Type(t *testing.T) {
 	g := New()
 	w := newCustomWriter()
-	r := httptest.NewRequest("GET", "/Dummy", nil)
+	r := httptest.NewRequest("GET", "/Dummy", http.NoBody)
 	r = routeKeySetter(w, r)
 	req := request.NewHTTPRequest(r)
 	resp := responder.NewContextualResponder(w, r)
@@ -171,7 +171,7 @@ func TestHandler_ServeHTTP_Content_Type(t *testing.T) {
 func TestHandler_ServeHTTP(t *testing.T) {
 	g := New()
 	w := newCustomWriter()
-	r := httptest.NewRequest("GET", "/Dummy", nil)
+	r := httptest.NewRequest("GET", "/Dummy", http.NoBody)
 	r = routeKeySetter(w, r)
 	req := request.NewHTTPRequest(r)
 	resp := responder.NewContextualResponder(w, r)
@@ -201,7 +201,7 @@ type product struct {
 func TestHandler_ServeHTTP_XML(t *testing.T) {
 	g := New()
 	w := newCustomWriter()
-	r := httptest.NewRequest("GET", "/Dummy", nil)
+	r := httptest.NewRequest("GET", "/Dummy", http.NoBody)
 	r.Header.Add("Content-type", "application/xml")
 	r = routeKeySetter(w, r)
 	req := request.NewHTTPRequest(r)
@@ -222,7 +222,7 @@ func TestHandler_ServeHTTP_XML(t *testing.T) {
 func TestHandler_ServeHTTP_Text(t *testing.T) {
 	g := New()
 	w := newCustomWriter()
-	r := httptest.NewRequest("GET", "/Dummy", nil)
+	r := httptest.NewRequest("GET", "/Dummy", http.NoBody)
 	r.Header.Add("Content-type", "text/plain")
 	r = routeKeySetter(w, r)
 	req := request.NewHTTPRequest(r)
@@ -242,7 +242,7 @@ func TestHandler_ServeHTTP_Text(t *testing.T) {
 func TestHandler_ServeHTTP_PartialContent(t *testing.T) {
 	g := New()
 	w := newCustomWriter()
-	r := httptest.NewRequest("GET", "/Dummy", nil)
+	r := httptest.NewRequest("GET", "/Dummy", http.NoBody)
 	r = routeKeySetter(w, r)
 	req := request.NewHTTPRequest(r)
 	resp := responder.NewContextualResponder(w, r)
@@ -273,7 +273,7 @@ func TestHandler_ServeHTTP_PartialContent(t *testing.T) {
 func TestHandler_ServeHTTP_EntityAlreadyExists(t *testing.T) {
 	g := New()
 	w := newCustomWriter()
-	r := httptest.NewRequest(http.MethodPost, "/Dummy", nil)
+	r := httptest.NewRequest(http.MethodPost, "/Dummy", http.NoBody)
 	r = routeKeySetter(w, r)
 	req := request.NewHTTPRequest(r)
 	resp := responder.NewContextualResponder(w, r)
@@ -317,7 +317,7 @@ func Test_HealthInvalidMethod(t *testing.T) {
 		tc := tc
 		g := New()
 		w := newCustomWriter()
-		r := httptest.NewRequest(tc.method, "/.well-known/health-check", nil)
+		r := httptest.NewRequest(tc.method, "/.well-known/health-check", http.NoBody)
 		r = routeKeySetter(w, r)
 		req := request.NewHTTPRequest(r)
 		resp := responder.NewContextualResponder(w, r)
@@ -346,7 +346,7 @@ func testEmptyStruct() (*product, error) {
 func TestHTTP_Respond_Nil(t *testing.T) {
 	g := New()
 	w := newCustomWriter()
-	r := httptest.NewRequest("GET", "/Dummy", nil)
+	r := httptest.NewRequest("GET", "/Dummy", http.NoBody)
 	r = routeKeySetter(w, r)
 	req := request.NewHTTPRequest(r)
 	resp := responder.NewContextualResponder(w, r)
@@ -392,7 +392,7 @@ func TestHTTP_Respond_Nil(t *testing.T) {
 func TestHTTP_Respond_Delete(t *testing.T) {
 	g := New()
 	w := newCustomWriter()
-	r := httptest.NewRequest(http.MethodDelete, "/delete", nil)
+	r := httptest.NewRequest(http.MethodDelete, "/delete", http.NoBody)
 	r = routeKeySetter(w, r)
 	req := request.NewHTTPRequest(r)
 	resp := responder.NewContextualResponder(w, r)
@@ -418,7 +418,7 @@ func TestHTTP_Respond_Delete(t *testing.T) {
 func TestHandler_ServeHTTP_Error(t *testing.T) {
 	g := New()
 	w := newCustomWriter()
-	r := httptest.NewRequest("GET", "/error", nil)
+	r := httptest.NewRequest("GET", "/error", http.NoBody)
 	r = routeKeySetter(w, r)
 	req := request.NewHTTPRequest(r)
 	resp := responder.NewContextualResponder(w, r)
@@ -461,7 +461,7 @@ func Test_Head(t *testing.T) {
 	g := New()
 	w := newCustomWriter()
 	// making the get request
-	r := httptest.NewRequest(http.MethodGet, "/Dummy", nil)
+	r := httptest.NewRequest(http.MethodGet, "/Dummy", http.NoBody)
 	r = routeKeySetter(w, r)
 	req := request.NewHTTPRequest(r)
 	resp := responder.NewContextualResponder(w, r)
@@ -476,7 +476,7 @@ func Test_Head(t *testing.T) {
 	expected := w.Headers.Get("content-length")
 
 	// making the HEAD request for the same endpoint
-	r = httptest.NewRequest(http.MethodHead, "/Dummy", nil)
+	r = httptest.NewRequest(http.MethodHead, "/Dummy", http.NoBody)
 	r = routeKeySetter(w, r)
 	req = request.NewHTTPRequest(r)
 	resp = responder.NewContextualResponder(w, r)
@@ -491,7 +491,7 @@ func Test_Head(t *testing.T) {
 func TestHandler_ServeHTTP_TypeResponse(t *testing.T) {
 	g := New()
 	w := newCustomWriter()
-	r := httptest.NewRequest("GET", "/Dummy", nil)
+	r := httptest.NewRequest("GET", "/Dummy", http.NoBody)
 	r.Header.Add("Content-type", "application/json")
 	r = routeKeySetter(w, r)
 	req := request.NewHTTPRequest(r)
@@ -514,7 +514,7 @@ func TestHandler_ServeHTTP_TypeResponse(t *testing.T) {
 func TestHandler_ServeHTTP_TypeRaw(t *testing.T) {
 	g := New()
 	w := newCustomWriter()
-	r := httptest.NewRequest("GET", "/Dummy", nil)
+	r := httptest.NewRequest("GET", "/Dummy", http.NoBody)
 	r.Header.Add("Content-type", "application/json")
 	r = routeKeySetter(w, r)
 	req := request.NewHTTPRequest(r)
@@ -536,7 +536,7 @@ func TestHandler_ServeHTTP_TypeRaw(t *testing.T) {
 func TestHandler_ServeHTTP_TypeDefault(t *testing.T) {
 	g := New()
 	w := newCustomWriter()
-	r := httptest.NewRequest("GET", "/Dummy", nil)
+	r := httptest.NewRequest("GET", "/Dummy", http.NoBody)
 	r.Header.Add("Content-type", "application/json")
 	r = routeKeySetter(w, r)
 	req := request.NewHTTPRequest(r)
@@ -601,7 +601,7 @@ func Test_processErrors_RawError(t *testing.T) {
 func TestHandler_ServeHTTP_WithContentType(t *testing.T) {
 	g := New()
 	w := newCustomWriter()
-	r := httptest.NewRequest("GET", "/Dummy", nil)
+	r := httptest.NewRequest("GET", "/Dummy", http.NoBody)
 	r.Header.Add("Content-type", "text/plain")
 	r = routeKeySetter(w, r)
 	req := request.NewHTTPRequest(r)

@@ -49,7 +49,7 @@ func TestNewContextualResponder(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		r := httptest.NewRequest("GET", "/dummy", nil)
+		r := httptest.NewRequest("GET", "/dummy", http.NoBody)
 
 		// handler to set the routeKey in request context
 		handler := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
