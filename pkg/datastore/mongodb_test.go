@@ -166,7 +166,8 @@ func TestDataStore_HealthCheck(t *testing.T) {
 	}
 
 	for i, tc := range tests {
-		conn, _ := GetNewMongoDB(logger, &tc.config)
+		mockConfig := tc.config
+		conn, _ := GetNewMongoDB(logger, &mockConfig)
 
 		output := conn.HealthCheck()
 		if !reflect.DeepEqual(output, tc.expected) {

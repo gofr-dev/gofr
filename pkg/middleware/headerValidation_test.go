@@ -104,7 +104,7 @@ func Test_validateMandatoryHeaders(t *testing.T) {
 		j := i
 
 		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodGet, "http://dummy", nil)
+			req := httptest.NewRequest(http.MethodGet, "http://dummy", http.NoBody)
 
 			for k, v := range tests[j].headers {
 				req.Header.Set(k, v)
@@ -146,7 +146,7 @@ func Test_HeaderValidation_Success(t *testing.T) {
 		"X-B3-TraceID":           "1s3d323adsd",
 		"Test-Header":            "test"}
 
-	req := httptest.NewRequest(http.MethodGet, "http://dummy", nil)
+	req := httptest.NewRequest(http.MethodGet, "http://dummy", http.NoBody)
 
 	for k, v := range headers {
 		req.Header.Set(k, v)
@@ -183,7 +183,7 @@ func Test_HeaderValidation_Success_ExemptPath(t *testing.T) {
 		"X-B3-TraceID":           "1s3d323adsd",
 		"Test-Header":            "test"}
 
-	req := httptest.NewRequest(http.MethodGet, "http://dummy/metrics", nil)
+	req := httptest.NewRequest(http.MethodGet, "http://dummy/metrics", http.NoBody)
 
 	for k, v := range headers {
 		req.Header.Set(k, v)

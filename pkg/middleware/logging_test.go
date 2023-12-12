@@ -48,7 +48,7 @@ func TestLogging(t *testing.T) {
 	logger := log.NewMockLogger(b)
 	handler := Logging(logger, "")(&MockHandler{})
 
-	req := httptest.NewRequest("GET", "/dummy", nil)
+	req := httptest.NewRequest("GET", "/dummy", http.NoBody)
 	handler.ServeHTTP(MockWriteHandler{}, req)
 
 	if len(b.Bytes()) == 0 {
@@ -66,7 +66,7 @@ func Test5xxLogs(t *testing.T) {
 	logger := log.NewMockLogger(b)
 	handler := Logging(logger, "")(&MockHandler{1})
 
-	req := httptest.NewRequest("GET", "/dummy", nil)
+	req := httptest.NewRequest("GET", "/dummy", http.NoBody)
 	handler.ServeHTTP(MockWriteHandler{}, req)
 
 	if len(b.Bytes()) == 0 {
@@ -80,19 +80,18 @@ func Test5xxLogs(t *testing.T) {
 
 func TestExemptPath(t *testing.T) {
 	b := new(bytes.Buffer)
-	logger := log.NewMockLogger(b)
-	handler := Logging(logger, "")(&MockHandler{})
+	handler := Logging(log.NewMockLogger(b), "")(&MockHandler{})
 
-	req := httptest.NewRequest("GET", "/metrics", nil)
-	handler.ServeHTTP(MockWriteHandler{}, req)
-
-	if len(b.Bytes()) == 0 {
-		t.Errorf("Failed to write the logs")
-	}
+	request := httptest.NewRequest("GET", "/metrics", http.NoBody)
+	handler.ServeHTTP(MockWriteHandler{}, request)
 
 	x := b.String()
 	if !strings.Contains(x, "time") || !strings.Contains(x, "level") {
 		t.Errorf("error, expected fields are not present in log, got: %v", x)
+	}
+
+	if len(b.Bytes()) == 0 {
+		t.Errorf("Failed to write the logs")
 	}
 }
 
@@ -101,7 +100,7 @@ func TestExemptPathWith5xxLogs(t *testing.T) {
 	logger := log.NewMockLogger(b)
 	handler := Logging(logger, "")(&MockHandler{http.StatusInternalServerError})
 
-	req := httptest.NewRequest("GET", "/.well-known/health-check", nil)
+	req := httptest.NewRequest("GET", "/.well-known/health-check", http.NoBody)
 	handler.ServeHTTP(MockWriteHandler{}, req)
 
 	if len(b.Bytes()) == 0 {
@@ -154,7 +153,7 @@ func TestLoggingCorrelationID(t *testing.T) {
 
 	handler := Logging(logger, "")(&MockHandler{})
 
-	req := httptest.NewRequest("GET", "/dummy", nil)
+	req := httptest.NewRequest("GET", "/dummy", http.NoBody)
 	req.Header.Add("X-B3-TraceID", "12bhu987")
 	handler.ServeHTTP(MockWriteHandler{}, req)
 
@@ -241,7 +240,7 @@ func TestLoggingOmitHeader(t *testing.T) {
 	omitHeaders := "X-Some-Random-Header-1,X-Some-Random-Header-2,X-Some-Random-Header-3"
 	handler := Logging(logger, omitHeaders)(&MockHandler{})
 
-	req := httptest.NewRequest("GET", "/dummy", nil)
+	req := httptest.NewRequest("GET", "/dummy", http.NoBody)
 	req.Header.Add("X-Some-Random-Header-1", "Some-Random-Value")
 	req.Header.Add("X-Some-Random-Header-2", "Some-Random-Value")
 	req.Header.Add("X-Some-random-header-3", "Some-Random-Value-Case-Insensitive")
@@ -264,7 +263,7 @@ func TestLoggingAuthorizationHeader(t *testing.T) {
 	logger := log.NewMockLogger(b)
 	handler := Logging(logger, "")(&MockHandler{})
 
-	req := httptest.NewRequest("GET", "/dummy", nil)
+	req := httptest.NewRequest("GET", "/dummy", http.NoBody)
 	req.Header.Add("Authorization", "Basic dXNlcjpwYXNz")
 	handler.ServeHTTP(MockWriteHandler{}, req)
 
@@ -282,7 +281,7 @@ func TestLoggingAuthorizationHeader(t *testing.T) {
 	// Authorization header should not be present as the auth token is invalid
 	b.Reset()
 
-	req = httptest.NewRequest("GET", "/dummy", nil)
+	req = httptest.NewRequest("GET", "/dummy", http.NoBody)
 	req.Header.Add("Authorization", "dummy")
 	handler.ServeHTTP(MockWriteHandler{}, req)
 
@@ -301,7 +300,7 @@ func TestLoggingAuthorizationHeader(t *testing.T) {
 
 	handler = Logging(logger, "Authorization")(&MockHandler{})
 
-	req = httptest.NewRequest("GET", "/dummy", nil)
+	req = httptest.NewRequest("GET", "/dummy", http.NoBody)
 	req.Header.Add("Authorization", "dummy")
 	handler.ServeHTTP(MockWriteHandler{}, req)
 
@@ -327,7 +326,7 @@ func TestAppData(t *testing.T) {
 	{
 		data := &sync.Map{}
 		data.Store("key1", "val1")
-		req := httptest.NewRequest("GET", "/dummy", nil)
+		req := httptest.NewRequest("GET", "/dummy", http.NoBody)
 		req = req.Clone(context.WithValue(req.Context(), appData, data))
 
 		handler.ServeHTTP(MockWriteHandler{}, req)
@@ -347,7 +346,7 @@ func TestAppData(t *testing.T) {
 		b.Reset()
 		data := &sync.Map{}
 		data.Store("key2", "val2")
-		req := httptest.NewRequest("GET", "/dummy", nil)
+		req := httptest.NewRequest("GET", "/dummy", http.NoBody)
 		req = req.Clone(context.WithValue(req.Context(), appData, data))
 
 		handler.ServeHTTP(MockWriteHandler{}, req)
@@ -425,7 +424,7 @@ func TestErrorMessages(t *testing.T) {
 
 	err := errors.Response{Reason: errorMessage}
 
-	req := httptest.NewRequest("GET", "/dummy", nil)
+	req := httptest.NewRequest("GET", "/dummy", http.NoBody)
 	req = req.Clone(context.WithValue(req.Context(), ErrorMessage, err.Error()))
 
 	handler := Logging(logger, "")(&MockHandler{statusCode: http.StatusInternalServerError})
@@ -446,7 +445,7 @@ func TestCookieLogging(t *testing.T) {
 
 	handler := Logging(logger, "")(&MockHandler{})
 
-	req := httptest.NewRequest("GET", "http://dummy", nil)
+	req := httptest.NewRequest("GET", "http://dummy", http.NoBody)
 	req.Header.Add("Cookie", "Some-Random-Value")
 
 	handler.ServeHTTP(MockWriteHandler{}, req)

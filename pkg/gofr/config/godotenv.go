@@ -42,14 +42,16 @@ func NewGoDotEnvProvider(l logger, configFolder string) *GoDotEnvProvider {
 // then it can be done by creating .env.local file
 // or by specifying the file prefix in environment variable GOFR_ENV.
 func (g *GoDotEnvProvider) readConfig(confLocation string) {
+	const env = ".env"
+
 	var (
-		defaultFile  = confLocation + "/.env"
-		overrideFile = confLocation + "/.local.env"
+		defaultFile  = confLocation + "/" + env
+		overrideFile = confLocation + "/.local" + env
 	)
 
 	gofrEnv := g.Get("GOFR_ENV")
 	if gofrEnv != "" {
-		overrideFile = confLocation + "/." + gofrEnv + ".env"
+		overrideFile = confLocation + "/." + gofrEnv + env
 	}
 
 	if err := godotenv.Load(overrideFile); err == nil {
