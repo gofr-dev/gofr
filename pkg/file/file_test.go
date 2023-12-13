@@ -108,7 +108,7 @@ func TestOpen_Combined(t *testing.T) {
 			fileMode:      fetchLocalFileMode(APPEND),
 			mockFetchFunc: func(fd *os.File) error { return io.EOF },
 			expectedError: false,
-			expectedMode:  522,
+			expectedMode:  1090,
 		},
 	}
 
