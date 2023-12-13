@@ -428,7 +428,7 @@ func TestLdap_ValidatePassword(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		req := httptest.NewRequest("GET", "/sample", nil)
+		req := httptest.NewRequest("GET", "/sample", http.NoBody)
 		req.Header.Set("Authorization", testCase.token)
 
 		err := l.Validate(logger, req)
@@ -468,7 +468,7 @@ func TestLdap_Validate(t *testing.T) {
 			CacheInvalidationFrequency: 10,
 			InsecureSkipVerify:         true,
 		})
-		req := httptest.NewRequest(testCase.method, testCase.url, nil)
+		req := httptest.NewRequest(testCase.method, testCase.url, http.NoBody)
 
 		if len(testCase.token) > 0 {
 			req.Header.Set("Authorization", testCase.token)

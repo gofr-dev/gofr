@@ -11,6 +11,8 @@ import (
 	"go.opencensus.io/plugin/ochttp"
 )
 
+const pathSchema, pathUpdate = "/schema", "/update"
+
 // Search searches documents in the given collections based on the parameters specified.
 // This can be used for making any queries to SOLR
 func (c Client) Search(ctx context.Context, collection string, params map[string]interface{}) (interface{}, error) {
@@ -21,53 +23,53 @@ func (c Client) Search(ctx context.Context, collection string, params map[string
 // Create makes documents in the specified collection. params can be used to send parameters like commit=true
 func (c Client) Create(ctx context.Context, collection string, document *bytes.Buffer,
 	params map[string]interface{}) (interface{}, error) {
-	url := c.url + collection + "/update"
+	url := c.url + collection + pathUpdate
 	return call(ctx, "POST", url, params, document)
 }
 
 // Update updates documents in the specified collection. params can be used to send parameters like commit=true
 func (c Client) Update(ctx context.Context, collection string, document *bytes.Buffer,
 	params map[string]interface{}) (interface{}, error) {
-	url := c.url + collection + "/update"
+	url := c.url + collection + pathUpdate
 	return call(ctx, "POST", url, params, document)
 }
 
-// Create deletes documents in the specified collection. params can be used to send parameters like commit=true
+// Delete deletes documents in the specified collection. params can be used to send parameters like commit=true
 func (c Client) Delete(ctx context.Context, collection string, document *bytes.Buffer,
 	params map[string]interface{}) (interface{}, error) {
-	url := c.url + collection + "/update"
+	url := c.url + collection + pathUpdate
 	return call(ctx, "POST", url, params, document)
 }
 
 // ListFields retrieves all the fields in the schema for the specified collection.
 // params can be used to send query parameters like wt, fl, includeDynamic etc.
 func (c Client) ListFields(ctx context.Context, collection string, params map[string]interface{}) (interface{}, error) {
-	url := c.url + collection + "/schema/fields"
+	url := c.url + collection + pathSchema + "/fields"
 	return call(ctx, "GET", url, params, nil)
 }
 
 // Retrieve retrieves the entire schema that includes all the fields,field types,dynamic rules and copy field rules.
 // params can be used to specify the format of response
 func (c Client) Retrieve(ctx context.Context, collection string, params map[string]interface{}) (interface{}, error) {
-	url := c.url + collection + "/schema"
+	url := c.url + collection + pathSchema
 	return call(ctx, "GET", url, params, nil)
 }
 
 // AddField adds Field in the schema for the specified collection
 func (c Client) AddField(ctx context.Context, collection string, document *bytes.Buffer) (interface{}, error) {
-	url := c.url + collection + "/schema"
+	url := c.url + collection + pathSchema
 	return call(ctx, "POST", url, nil, document)
 }
 
 // UpdateField updates the field definitions in the schema for the specified collection
 func (c Client) UpdateField(ctx context.Context, collection string, document *bytes.Buffer) (interface{}, error) {
-	url := c.url + collection + "/schema"
+	url := c.url + collection + pathSchema
 	return call(ctx, "POST", url, nil, document)
 }
 
 // DeleteField deletes the field definitions in the schema for the specified collection
 func (c Client) DeleteField(ctx context.Context, collection string, document *bytes.Buffer) (interface{}, error) {
-	url := c.url + collection + "/schema"
+	url := c.url + collection + pathSchema
 	return call(ctx, "POST", url, nil, document)
 }
 
