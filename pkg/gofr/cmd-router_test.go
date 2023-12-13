@@ -38,7 +38,7 @@ func TestHandler(t *testing.T) {
 			router: NewCMDRouter(),
 			path:   "user/john",
 			wantHandler: func(c *Context) (interface{}, error) {
-				return "Hi!", nil
+				return "Hello!", nil
 			},
 			wantErr: false,
 		},

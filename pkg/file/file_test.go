@@ -28,18 +28,19 @@ func (m *mockRemoteFileAbstractor) fetch(fd *os.File) error {
 	if m.fetchFunc != nil {
 		return m.fetchFunc(fd)
 	}
+
 	return errors.New("unimplemented: fetch")
 }
 
-func (m *mockRemoteFileAbstractor) push(fd *os.File) error {
+func (m *mockRemoteFileAbstractor) push(_ *os.File) error {
 	return errors.New("unimplemented: push") // stub behavior
 }
 
-func (m *mockRemoteFileAbstractor) list(folderName string) ([]string, error) {
+func (m *mockRemoteFileAbstractor) list(_ string) ([]string, error) {
 	return nil, errors.New("unimplemented: list") // stub behavior
 }
 
-func (m *mockRemoteFileAbstractor) move(source string, destination string) error {
+func (m *mockRemoteFileAbstractor) move(_, _ string) error {
 	return errors.New("unimplemented: move") // stub behavior
 }
 
@@ -91,7 +92,7 @@ func TestOpen_Combined(t *testing.T) {
 			fileMode:      fetchLocalFileMode(READ),
 			mockFetchFunc: func(fd *os.File) error { return nil },
 			expectedError: false,
-			expectedMode:  fetchLocalFileMode(READWRITE), // match requested mode
+			expectedMode:  fetchLocalFileMode(READWRITE),
 		},
 		{
 			desc:          "Error: Download fails",
@@ -99,7 +100,7 @@ func TestOpen_Combined(t *testing.T) {
 			fileMode:      fetchLocalFileMode(READ),
 			mockFetchFunc: func(fd *os.File) error { return errors.New("mocked error") },
 			expectedError: true,
-			expectedMode:  fetchLocalFileMode(READWRITE), // still set to desired mode
+			expectedMode:  fetchLocalFileMode(READWRITE),
 		},
 		{
 			desc:          "Error: Unexpected EOF during download but fileMode is Append",
@@ -112,29 +113,25 @@ func TestOpen_Combined(t *testing.T) {
 	}
 
 	for _, tc := range openTestCases {
-		t.Run(tc.desc, func(t *testing.T) {
-			l := &fileAbstractor{
-				fileName:             tc.fileName,
-				fileMode:             tc.fileMode,
-				remoteFileAbstracter: &mockRemoteFileAbstractor{},
-			}
+		l := &fileAbstractor{
+			fileName:             tc.fileName,
+			fileMode:             tc.fileMode,
+			remoteFileAbstracter: &mockRemoteFileAbstractor{},
+		}
 
-			mockAbstractor := l.remoteFileAbstracter.(*mockRemoteFileAbstractor)
-			mockAbstractor.SetFetchFunc(tc.mockFetchFunc)
+		mockAbstractor := l.remoteFileAbstracter.(*mockRemoteFileAbstractor)
+		mockAbstractor.SetFetchFunc(tc.mockFetchFunc)
 
-			err := l.Open()
-			if err != nil && !tc.expectedError {
-				t.Errorf("Unexpected error: %v", err)
-			} else if err == nil && tc.expectedError {
-				t.Errorf("Expected error, got nil")
-			}
+		err := l.Open()
+		if err != nil && !tc.expectedError {
+			t.Errorf("Unexpected error: %v", err)
+		} else if err == nil && tc.expectedError {
+			t.Errorf("Expected error, got nil")
+		}
 
-			if !tc.expectedError && l.fileMode != tc.expectedMode {
-				t.Errorf("Expected file mode %v after download, got %v", tc.expectedMode, l.fileMode)
-			}
-
-			defer l.Close()
-		})
+		if !tc.expectedError && l.fileMode != tc.expectedMode {
+			t.Errorf("Expected file mode %v after download, got %v", tc.expectedMode, l.fileMode)
+		}
 	}
 }
 
