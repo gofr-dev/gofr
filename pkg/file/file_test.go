@@ -78,7 +78,7 @@ func TestLocalFileOpen(t *testing.T) {
 }
 
 func TestOpen_Combined(t *testing.T) {
-	openTestCases := []struct {
+	testCases := []struct {
 		desc          string
 		fileName      string
 		fileMode      int
@@ -112,7 +112,7 @@ func TestOpen_Combined(t *testing.T) {
 		},
 	}
 
-	for _, tc := range openTestCases {
+	for i, tc := range testCases {
 		l := &fileAbstractor{
 			fileName:             tc.fileName,
 			fileMode:             tc.fileMode,
@@ -124,13 +124,14 @@ func TestOpen_Combined(t *testing.T) {
 
 		err := l.Open()
 		if err != nil && !tc.expectedError {
-			t.Errorf("Unexpected error: %v", err)
+			t.Errorf("TEST[%d] failed! Desc: %v \n", i, tc.desc)
 		} else if err == nil && tc.expectedError {
-			t.Errorf("Expected error, got nil")
+			t.Errorf("TEST[%d] failed! Desc: %v \n Expected error, got nil", i, tc.desc)
 		}
 
 		if !tc.expectedError && l.fileMode != tc.expectedMode {
-			t.Errorf("Expected file mode %v after download, got %v", tc.expectedMode, l.fileMode)
+			t.Errorf("TEST[%d] failed! Desc: %v\n Expected file mode %v after download, got %v", i, tc.desc,
+				tc.expectedMode, l.fileMode)
 		}
 	}
 }
