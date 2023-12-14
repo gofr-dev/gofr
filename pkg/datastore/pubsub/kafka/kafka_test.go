@@ -49,7 +49,9 @@ func TestNewKafka(t *testing.T) {
 	}
 
 	for i, tt := range testCases {
-		_, err := New(&tt.k, logger)
+		mockConfig := tt.k
+		_, err := New(&mockConfig, logger)
+
 		if !tt.wantErr && err != nil {
 			t.Errorf("FAILED[%v], expected: %v, got: %v", i+1, tt.wantErr, err)
 		}
@@ -462,7 +464,8 @@ func TestKafkaHealthCheck(t *testing.T) {
 	}
 
 	for i, tc := range testCases {
-		conn, _ := New(&tc.config, logger)
+		mockConfig := tc.config
+		conn, _ := New(&mockConfig, logger)
 		output := conn.HealthCheck()
 
 		if !reflect.DeepEqual(tc.expected, output) {
@@ -628,7 +631,9 @@ func TestNewKafkaWithAvro(t *testing.T) {
 	}
 
 	for i, tc := range testCases {
-		_, err := NewKafkaWithAvro(&tc.config, logger)
+		mockKafkaConfig := tc.config
+		_, err := NewKafkaWithAvro(&mockKafkaConfig, logger)
+
 		if !tc.wantErr && err != nil {
 			t.Errorf("FAILED[%v], expected: %v, got: %v", i+1, tc.wantErr, true)
 		}

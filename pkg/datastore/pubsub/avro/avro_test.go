@@ -219,7 +219,8 @@ func TestAvro_HealthCheck(t *testing.T) {
 
 	for i, tc := range tests {
 		sc := mockSchemaClient{}
-		a, _ := New(&tc.m, &sc, "latest", "test_topic")
+		mockPubSubCLinet := tc.m
+		a, _ := New(&mockPubSubCLinet, &sc, "latest", "test_topic")
 
 		resp := a.HealthCheck()
 

@@ -83,7 +83,8 @@ func TestEventhub_HealthCheck(t *testing.T) {
 	}
 
 	for i, v := range testcases {
-		conn, _ := New(&v.c)
+		testConfig := v.c
+		conn, _ := New(&testConfig)
 
 		resp := conn.HealthCheck()
 		if !reflect.DeepEqual(resp, v.resp) {
@@ -228,7 +229,9 @@ func Test_NewEventHubWithAvro(t *testing.T) {
 	}
 
 	for i, tc := range testCases {
-		_, err := NewEventHubWithAvro(&tc.config, logger)
+		tcConfig := tc.config
+		_, err := NewEventHubWithAvro(&tcConfig, logger)
+
 		if !tc.wantErr && err != nil {
 			t.Errorf("FAILED[%v], expected: %v, got: %v", i+1, tc.wantErr, true)
 		}

@@ -1,6 +1,7 @@
 package datastore
 
 import (
+	"bytes"
 	"database/sql"
 	"io"
 	"strconv"
@@ -205,6 +206,7 @@ func TestDataStore_DB(t *testing.T) {
 
 	{
 		ds := new(DataStore)
+		ds.Logger = log.NewMockLogger(new(bytes.Buffer))
 
 		// passing incorrect dsn will not establish a db connection. But gorm.ConnPool will not be nil.
 		// passing new(gorm.DB) panics, as gorm.ConnPool will be nil.
@@ -351,7 +353,8 @@ func TestYCQLHealthCheck(t *testing.T) {
 	}
 
 	for i, tc := range tests {
-		ycql, _ := GetNewYCQL(mockLogger, &tc.config)
+		mockYCQLConfig := tc.config
+		ycql, _ := GetNewYCQL(mockLogger, &mockYCQLConfig)
 		ds := &DataStore{YCQL: ycql}
 
 		healthCheck := ds.YCQLHealthCheck()

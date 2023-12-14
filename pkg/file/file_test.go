@@ -1,18 +1,48 @@
 package file
 
 import (
+	"io"
 	"io/fs"
 	"os"
 	"strings"
 	"syscall"
 	"testing"
 
+	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 
 	"gofr.dev/pkg/gofr/config"
 )
 
 const testFile = "/tmp/testData.txt"
+
+type mockRemoteFileAbstractor struct {
+	fetchFunc func(*os.File) error
+}
+
+func (m *mockRemoteFileAbstractor) SetFetchFunc(f func(*os.File) error) {
+	m.fetchFunc = f
+}
+
+func (m *mockRemoteFileAbstractor) fetch(fd *os.File) error {
+	if m.fetchFunc != nil {
+		return m.fetchFunc(fd)
+	}
+
+	return errors.New("unimplemented: fetch")
+}
+
+func (m *mockRemoteFileAbstractor) push(_ *os.File) error {
+	return errors.New("unimplemented: push") // stub behavior
+}
+
+func (m *mockRemoteFileAbstractor) list(_ string) ([]string, error) {
+	return nil, errors.New("unimplemented: list") // stub behavior
+}
+
+func (m *mockRemoteFileAbstractor) move(_, _ string) error {
+	return errors.New("unimplemented: move") // stub behavior
+}
 
 func TestLocalFileOpen(t *testing.T) {
 	testcases := []struct {
@@ -44,6 +74,65 @@ func TestLocalFileOpen(t *testing.T) {
 
 		err = f.Open()
 		assert.Equal(t, tc.expErr, err)
+	}
+}
+
+func TestOpen_Combined(t *testing.T) {
+	testCases := []struct {
+		desc          string
+		fileName      string
+		fileMode      int
+		mockFetchFunc func(*os.File) error
+		expectedError bool
+		expectedMode  int
+	}{
+		{
+			desc:          "Success: Download and open in READ mode",
+			fileName:      "testfile.txt",
+			fileMode:      fetchLocalFileMode(READ),
+			mockFetchFunc: func(fd *os.File) error { return nil },
+			expectedError: false,
+			expectedMode:  fetchLocalFileMode(READWRITE),
+		},
+		{
+			desc:          "Error: Download fails",
+			fileName:      "another.doc",
+			fileMode:      fetchLocalFileMode(READ),
+			mockFetchFunc: func(fd *os.File) error { return errors.New("mocked error") },
+			expectedError: true,
+			expectedMode:  fetchLocalFileMode(READWRITE),
+		},
+		{
+			desc:          "Error: Unexpected EOF during download but fileMode is Append",
+			fileName:      "bigfile.zip",
+			fileMode:      fetchLocalFileMode(APPEND),
+			mockFetchFunc: func(fd *os.File) error { return io.EOF },
+			expectedError: false,
+			expectedMode:  1090,
+		},
+	}
+
+	for i, tc := range testCases {
+		l := &fileAbstractor{
+			fileName:             tc.fileName,
+			fileMode:             tc.fileMode,
+			remoteFileAbstracter: &mockRemoteFileAbstractor{},
+		}
+
+		mockAbstractor := l.remoteFileAbstracter.(*mockRemoteFileAbstractor)
+		mockAbstractor.SetFetchFunc(tc.mockFetchFunc)
+
+		err := l.Open()
+		if err != nil && !tc.expectedError {
+			t.Errorf("TEST[%d] failed! Desc: %v \n", i, tc.desc)
+		} else if err == nil && tc.expectedError {
+			t.Errorf("TEST[%d] failed! Desc: %v \n Expected error, got nil", i, tc.desc)
+		}
+
+		if !tc.expectedError && l.fileMode != tc.expectedMode {
+			t.Errorf("TEST[%d] failed! Desc: %v\n Expected file mode %v after download, got %v", i, tc.desc,
+				tc.expectedMode, l.fileMode)
+		}
 	}
 }
 

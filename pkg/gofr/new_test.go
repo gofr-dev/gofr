@@ -560,7 +560,9 @@ func Test_initializeSolr(t *testing.T) {
 	g := &Gofr{Logger: logger}
 
 	for _, tc := range testCases {
-		initializeSolr(&tc.configLoc, g)
+		mockConfig := tc.configLoc
+
+		initializeSolr(&mockConfig, g)
 
 		if !strings.Contains(b.String(), tc.expectedStr) {
 			t.Errorf("FAILED, expected: `%v` in the logs, got: %v", tc.expectedStr, b.String())
