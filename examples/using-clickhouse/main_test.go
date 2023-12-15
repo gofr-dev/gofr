@@ -22,11 +22,8 @@ func TestIntegration(t *testing.T) {
 	}{
 		{"get user", http.MethodGet, "user", http.StatusOK, nil},
 		{"get user by id", http.MethodGet, "user/1", http.StatusBadRequest, nil},
-		{"post user", http.MethodPost, "user", http.StatusCreated, []byte(`{
-			"name":"stella",
-			"age":"21"
-		}`),
-		}}
+		{"post user", http.MethodPost, "user", http.StatusCreated, []byte(`{"name":"stella","age":"21"}`)},
+		{"get by id", http.MethodGet, "user/37387615-aead-4b28-9adc-78c1eb714ca2", http.StatusOK, nil}}
 
 	for i, tc := range tests {
 		req, _ := request.NewMock(tc.method, "http://localhost:9002/"+tc.endpoint, bytes.NewBuffer(tc.body))

@@ -45,7 +45,7 @@ func TestGet(t *testing.T) {
 	mockStore, h, app := initializeHandlerTest(t)
 
 	for i, tc := range tests {
-		req := httptest.NewRequest(http.MethodGet, "/user", nil)
+		req := httptest.NewRequest(http.MethodGet, "/user", http.NoBody)
 		r := request.NewHTTPRequest(req)
 		ctx := gofr.NewContext(nil, r, app)
 
@@ -77,7 +77,7 @@ func TestGetByID(t *testing.T) {
 	mockStore, h, app := initializeHandlerTest(t)
 
 	for i, tc := range tests {
-		req := httptest.NewRequest(http.MethodGet, "/user/{id}", nil)
+		req := httptest.NewRequest(http.MethodGet, "/user/{id}", http.NoBody)
 		r := request.NewHTTPRequest(req)
 		ctx := gofr.NewContext(nil, r, app)
 
