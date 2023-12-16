@@ -147,8 +147,8 @@ jobs:
 
       - name: Set up Clickhouse
         run: |
-          docker exec -i ${{ job.services.clickhouse.id }} clickhouse-client --user=root --password='password'
-          docker exec -i ${{ job.services.clickhouse.id }} clickhouse-client --user=root --password='password' < ${{ github.workspace }}/.github/setups/clickhouse_setup.sql
+          docker exec -i ${{ job.services.clickhouse.id }} clickhouse-client --query 'USE default;'
+          docker exec -i ${{ job.services.clickhouse.id }} clickhouse-client < ${{ github.workspace }}/.github/setups/clickhouse_setup.sql
 
       - name: Get dependencies
         run: |
