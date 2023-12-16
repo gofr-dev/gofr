@@ -57,13 +57,16 @@ jobs:
           MYSQL_ROOT_PASSWORD: "password"
 
       clickhouse:
-        image: yandex/clickhouse-server:21.3
+        image: clickhouse/clickhouse-server
         ports:
           - "8123:8123"
           - "9000:9000"
         env:
-          CLICKHOUSE_USER : "root"
-          CLICKHOUSE_PASSWORD : "password"
+          CLICKHOUSE_DB: "default"
+          CLICKHOUSE_USER: "root"
+          CLICKHOUSE_PASSWORD: "password"
+          CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
+          CLICKHOUSE_HTTP_PORT: "8123"
 
       redis:
         image: redis:7.0.5
@@ -144,7 +147,7 @@ jobs:
 
       - name: Set up Clickhouse
         run: |
-          docker exec -i ${{ job.services.clickhouse.id }} clickhouse-client --user=root --password='password' --query 'CREATE DATABASE users;'
+          docker exec -i ${{ job.services.clickhouse.id }} clickhouse-client --user=root --password='password'
           docker exec -i ${{ job.services.clickhouse.id }} clickhouse-client --user=root --password='password' < ${{ github.workspace }}/.github/setups/clickhouse_setup.sql
 
       - name: Get dependencies

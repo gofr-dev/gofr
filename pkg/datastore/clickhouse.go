@@ -33,7 +33,7 @@ type ClickHouseDB struct {
 	logger log.Logger
 }
 
-//nolint:gochecknoglobals // sqlStats has to be a global variable for prometheus
+//nolint:gochecknoglobals // clickhouseStats has to be a global variable for prometheus
 var (
 	clickhouseStats = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "zs_clickhouse_stats",
@@ -103,7 +103,7 @@ func (c ClickHouseDB) HealthCheck() types.Health {
 		Status: pkg.StatusDown,
 		Host:   c.config.Host,
 	}
-	// The following check is for the condition when the connection to SQLX has not been made during initialization
+	// The following check is for the condition when the connection to CLICKHOUSE has not been made during initialization
 	if c.Conn == nil {
 		return resp
 	}
@@ -134,7 +134,7 @@ func (c *ClickHouseDB) Query(ctx context.Context, query string, args ...interfac
 	return rows, err
 }
 
-// ExecContext executes a query without returning any rows.
+// Exec executes a query without returning any rows.
 // The args are for any placeholder parameters in the query.
 func (c *ClickHouseDB) Exec(ctx context.Context, query string, args ...interface{}) error {
 	if c == nil || c.Conn == nil {

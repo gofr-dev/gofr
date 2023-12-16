@@ -304,7 +304,6 @@ func initializeDataStores(c Config, logger log.Logger, g *Gofr) {
 	initializeDynamoDB(c, g)
 
 	// ClickHouseDB
-	// ClickHouse DB
 	initializeClickHouseDB(c, g)
 }
 
