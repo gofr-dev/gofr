@@ -842,6 +842,6 @@ func initializeClickHouseDB(c Config, g *Gofr) {
 			return
 		}
 
-		g.Logger.Infof("ClickHouse connected. HostName: %s, Port: %s", clickHouseConfig.Host, clickHouseConfig.Port)
+		g.Logger.Infof("ClickHouse connected, HostName: %s, Port: %s", clickHouseConfig.Host, clickHouseConfig.Port)
 	}
 }

@@ -363,3 +363,34 @@ func TestYCQLHealthCheck(t *testing.T) {
 		}
 	}
 }
+
+func TestDataStore_CLICKHOUSE_HealthCheck(t *testing.T) {
+	dc := ClickHouseConfig{
+		Host:     "localhost",
+		Username: "root",
+		Password: "password",
+		Database: "default",
+		Port:     "9000",
+	}
+
+	testcases := []struct {
+		host   string
+		status string
+	}{
+		{dc.Host, pkg.StatusUp},
+		{"invalid", pkg.StatusDown},
+	}
+
+	for i, v := range testcases {
+		dc.Host = v.host
+
+		db, _ := GetNewClickHouseDB(log.NewMockLogger(io.Discard), &dc)
+		db.config = &dc
+		clickhouse := DataStore{ClickHouse: db, Logger: db.logger}
+
+		healthCheck := clickhouse.ClickHouseHealthCheck()
+		if healthCheck.Status != v.status {
+			t.Errorf("[TESTCASE%d]CLICKHOUSE Failed. Expected status: %v\n Got: %v", i+1, v.status, healthCheck)
+		}
+	}
+}

@@ -905,3 +905,45 @@ func Test_initializeGooglePubSub(t *testing.T) {
 		assert.Containsf(t, b.String(), tc.expLog, "Test [%d] Failed: %v", i+1, tc.desc)
 	}
 }
+
+func Test_initializeClickHouse(t *testing.T) {
+	b := new(bytes.Buffer)
+	logger := log.NewMockLogger(b)
+
+	c := config.NewGoDotEnvProvider(logger, "../../configs")
+
+	hostName := c.Get("CLICKHOUSE_HOST")
+	port := c.Get("CLICKHOUSE_PORT")
+
+	testcases := []struct {
+		host        string
+		port        string
+		expectedLog string
+	}{
+		{"", "", ""},
+		{"incorrect-url", "7", "could not connect to ClickHouse"},
+		{hostName, port, "ClickHouse connected"},
+	}
+
+	for i, tc := range testcases {
+		b := new(bytes.Buffer)
+		logger := log.NewMockLogger(b)
+
+		mockConfig := config.MockConfig{
+			Data: map[string]string{"CLICKHOUSE_HOST": tc.host, "CLICKHOUSE_USER": c.Get("CLICKHOUSE_USER"),
+				"CLICKHOUSE_PASSWORD": c.Get("CLICKHOUSE_PASSWORD"), "CLICKHOUSE_DB": c.Get("CLICKHOUSE_NAME"),
+				"CLICKHOUSE_PORT": tc.port, "CLICKHOUSE_MAX_OPEN_CONN": c.Get("CLICKHOUSE_MAX_OPEN_CONN"),
+				"CLICKHOUSE_MAX_IDLE_CONN": c.Get("CLICKHOUSE_MAX_IDLE_CONN"), "CLICKHOUSE_MAX_CONN_LIFETIME": c.Get("CLICKHOUSE_MAX_CONN_LIFETIME"),
+			},
+		}
+
+		g := NewWithConfig(&mockConfig)
+		g.Logger = logger
+
+		initializeClickHouseDB(&mockConfig, g)
+
+		if !strings.Contains(b.String(), tc.expectedLog) {
+			t.Errorf("[TESTCASE %d] Failed. Got: %v\tExpected: %v\n", i+1, b.String(), tc.expectedLog)
+		}
+	}
+}

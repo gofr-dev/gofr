@@ -71,8 +71,6 @@ func GetNewClickHouseDB(logger log.Logger, config *ClickHouseConfig) (ClickHouse
 	if err := connect.Ping(context.Background()); err != nil {
 		if exception, ok := err.(*clickhouse.Exception); ok {
 			logger.Errorf("[%d] %s \n%s\n", exception.Code, exception.Message, exception.StackTrace)
-		} else {
-			return ClickHouseDB{}, err
 		}
 
 		return ClickHouseDB{}, err
@@ -80,7 +78,7 @@ func GetNewClickHouseDB(logger log.Logger, config *ClickHouseConfig) (ClickHouse
 
 	go pushClickhouseConnMetrics(config.Database, config.Host, connect)
 
-	db := ClickHouseDB{Conn: connect}
+	db := ClickHouseDB{Conn: connect, config: config}
 
 	return db, nil
 }
@@ -110,6 +108,7 @@ func (c ClickHouseDB) HealthCheck() types.Health {
 
 	err := c.Conn.Ping(context.Background())
 	if err != nil {
+		c.logger.Error(errors.HealthCheckFailed{Dependency: ClickHouse, Err: err})
 		return resp
 	}
 
@@ -123,7 +122,7 @@ func (c ClickHouseDB) HealthCheck() types.Health {
 // The args are for any placeholder parameters in the query.
 func (c *ClickHouseDB) Query(ctx context.Context, query string, args ...interface{}) (driver.Rows, error) {
 	if c == nil || c.Conn == nil {
-		return nil, errors.SQLNotInitialized
+		return nil, errors.CLICKHOUSENotInitialized
 	}
 
 	begin := time.Now()

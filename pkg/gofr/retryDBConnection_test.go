@@ -2,6 +2,7 @@ package gofr
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"strconv"
 	"testing"
@@ -306,4 +307,27 @@ func Test_googlePubsubRetry(t *testing.T) {
 	if !g.PubSub.IsSet() {
 		t.Errorf("FAILED, expected: GooglePubsub initialized successfully, got: g Pubsub initialization failed")
 	}
+}
+
+func Test_clickhouseRetry(t *testing.T) {
+	var g Gofr
+
+	logger := log.NewMockLogger(io.Discard)
+	c := config.NewGoDotEnvProvider(logger, "../../configs")
+	dc := datastore.ClickHouseConfig{
+		Host:              c.Get("CLICKHOUSE_HOST"),
+		Username:          c.Get("CLICKHOUSE_USER"),
+		Password:          c.Get("CLICKHOUSE_PASSWORD"),
+		Database:          c.Get("CLICKHOUSE_DB"),
+		Port:              c.Get("CLICKHOUSE_PORT"),
+		ConnRetryDuration: 1,
+	}
+
+	g.Logger = logger
+
+	clickHouseRetry(&dc, &g)
+
+	err := g.ClickHouse.Ping(context.Background())
+
+	assert.NoError(t, err, "FAILED, expected: ClickHouse initialized successfully, got: clickhouse initialisation failed")
 }
