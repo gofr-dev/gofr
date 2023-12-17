@@ -1,6 +1,6 @@
 module gofr.dev
 
-go 1.21
+go 1.21.5
 
 require (
 	cloud.google.com/go/pubsub v1.33.0
