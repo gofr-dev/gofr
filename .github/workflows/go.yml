@@ -65,7 +65,6 @@ jobs:
           CLICKHOUSE_DB: "default"
           CLICKHOUSE_USER: "root"
           CLICKHOUSE_PASSWORD: "password"
-          CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
           CLICKHOUSE_HTTP_PORT: "8123"
 
       redis:
@@ -372,7 +371,6 @@ jobs:
           CLICKHOUSE_DB: "default"
           CLICKHOUSE_USER: "root"
           CLICKHOUSE_PASSWORD: "password"
-          CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
           CLICKHOUSE_HTTP_PORT: "8123"
 
     steps:

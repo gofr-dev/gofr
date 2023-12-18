@@ -4,7 +4,7 @@
 
 ### Docker command
 ```c
-docker run --rm -e CLICKHOUSE_DB=users -e CLICKHOUSE_USER=root -e CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT=1 -e CLICKHOUSE_PASSWORD=password -e CLICKHOUSE_HTTP_PORT=8123 -p 9001:9000/tcp  -p 8080:8123/tcp clickhouse/clickhouse-server
+docker run --rm -e CLICKHOUSE_DB=users -e CLICKHOUSE_USER=root -e CLICKHOUSE_PASSWORD=password -e CLICKHOUSE_HTTP_PORT=8123 -p 9001:9000/tcp  -p 8080:8123/tcp clickhouse/clickhouse-server
 ```
 
 ### Create table inside clickhouse terminal
