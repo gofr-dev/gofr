@@ -110,10 +110,10 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up  Go 1.21
+      - name: Set up  Go 1.21.5
         uses: actions/setup-go@v4
         with:
-          go-version: 1.21
+          go-version: 1.21.5
         id: Go
 
       - name: Set up AWS-SNS
@@ -230,10 +230,10 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up  Go 1.21
+      - name: Set up  Go 1.21.5
         uses: actions/setup-go@v4
         with:
-          go-version: 1.21
+          go-version: 1.21.5
         id: Go
 
       - name: Load Schema of Cassandra
@@ -379,10 +379,10 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up  Go 1.21
+      - name: Set up  Go 1.21.5
         uses: actions/setup-go@v4
         with:
-          go-version: 1.21
+          go-version: 1.21.5
         id: Go
 
       - name: Set up AWS-SNS
