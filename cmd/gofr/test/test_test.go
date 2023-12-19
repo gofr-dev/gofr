@@ -3,6 +3,7 @@ package test
 import (
 	"fmt"
 	"io/fs"
+	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strings"
@@ -39,7 +40,7 @@ func Test_GenerateIntegrationTest(t *testing.T) {
 	}
 
 	for i, tc := range testCases {
-		req := httptest.NewRequest("", setQueryParams(tc.params), nil)
+		req := httptest.NewRequest("", setQueryParams(tc.params), http.NoBody)
 		ctx := gofr.NewContext(nil, request.NewHTTPRequest(req), gofr.New())
 
 		res, err := GenerateIntegrationTest(ctx)
@@ -61,7 +62,7 @@ func Test_GenerateIntegrationTestValidationFail(t *testing.T) {
 	}
 
 	for i, tc := range testCases {
-		req := httptest.NewRequest("", setQueryParams(tc.params), nil)
+		req := httptest.NewRequest("", setQueryParams(tc.params), http.NoBody)
 		ctx := gofr.NewContext(nil, request.NewHTTPRequest(req), gofr.New())
 
 		res, err := GenerateIntegrationTest(ctx)

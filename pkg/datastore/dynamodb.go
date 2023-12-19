@@ -303,6 +303,7 @@ func genPutItemQuery(input *dynamodb.PutItemInput) []string {
 	return query
 }
 
+//nolint:goconst // Can't make path suffix as constant
 func genGetItemQuery(input *dynamodb.GetItemInput) []string {
 	query := []string{"GetItem"}
 

@@ -3,6 +3,7 @@ package initialize
 import (
 	"errors"
 	"fmt"
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"strings"
@@ -159,7 +160,7 @@ func Test_Init(t *testing.T) {
 	for i, tc := range tests {
 		_ = os.Chdir(path)
 
-		req := httptest.NewRequest("", setQueryParams(tc.params), nil)
+		req := httptest.NewRequest("", setQueryParams(tc.params), http.NoBody)
 		ctx := gofr.NewContext(nil, request.NewHTTPRequest(req), gofr.New())
 
 		res, err := Init(ctx)

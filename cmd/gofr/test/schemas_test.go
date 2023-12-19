@@ -11,27 +11,18 @@ import (
 func TestSwagger_ConvertIntoIntegrationTestSchema(t *testing.T) {
 	// Create a Swagger instance with test data
 	swagger := &Swagger{
-		openapiSwagger: &openapi3.T{
-			Paths: map[string]*openapi3.PathItem{
-				"/api/v1/users": {
-					Get: &openapi3.Operation{
-						OperationID: "getUser",
-					},
-					Post: &openapi3.Operation{
-						OperationID: "createUser",
-					},
-				},
-				"/api/v1/users/{id}": {
-					Put: &openapi3.Operation{
-						OperationID: "updateUser",
-					},
-					Delete: &openapi3.Operation{
-						OperationID: "deleteUser",
-					},
-				},
+		&openapi3.T{
+			Paths: &openapi3.Paths{
+				Extensions: nil,
 			},
 		},
 	}
+
+	swagger.openapiSwagger.Paths.Set("/api/v1/users", &openapi3.PathItem{Get: &openapi3.Operation{OperationID: "getUser"},
+		Post: &openapi3.Operation{OperationID: "createUser"}})
+
+	swagger.openapiSwagger.Paths.Set("/api/v1/users/{id}", &openapi3.PathItem{Put: &openapi3.Operation{OperationID: "deleteUser"},
+		Delete: &openapi3.Operation{OperationID: "deleteUser"}})
 
 	// Convert Swagger into IntegrationTestSchema
 	integrationSchema := swagger.convertIntoIntegrationTestSchema()

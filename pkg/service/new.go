@@ -15,6 +15,8 @@ import (
 	"gofr.dev/pkg/log"
 )
 
+const basic = "Basic"
+
 // Options allows the user set all the options needs for http service like auth, service level headers, caching and surge protection
 type Options struct {
 	Headers           map[string]string // this can be used to pass service level headers.
@@ -147,7 +149,7 @@ func (h *httpService) initializeClientWithAuth(options Options) {
 	// simple auth
 	if options.UserName != "" && options.OAuthOption == nil { // OAuth and basic auth cannot co-exist
 		h.isSet = true
-		h.auth = "Basic " + base64.StdEncoding.EncodeToString([]byte(options.UserName+":"+options.Password))
+		h.auth = basic + " " + base64.StdEncoding.EncodeToString([]byte(options.UserName+":"+options.Password))
 	}
 
 	h.enableOAuth(options)

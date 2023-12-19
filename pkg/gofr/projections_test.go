@@ -40,7 +40,7 @@ func TestContext_Projections_success(t *testing.T) {
 	}
 
 	for i, tc := range testCases {
-		r := httptest.NewRequest(http.MethodGet, tc.target, nil)
+		r := httptest.NewRequest(http.MethodGet, tc.target, http.NoBody)
 		req := request.NewHTTPRequest(r)
 
 		c := NewContext(nil, req, &g)
@@ -77,7 +77,7 @@ func TestContext_Projections_errors(t *testing.T) {
 	}
 
 	for i, tc := range testcases {
-		r := httptest.NewRequest(http.MethodGet, tc.target, nil)
+		r := httptest.NewRequest(http.MethodGet, tc.target, http.NoBody)
 		req := request.NewHTTPRequest(r)
 
 		c := NewContext(nil, req, &g)

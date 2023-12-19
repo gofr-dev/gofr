@@ -39,7 +39,7 @@ func TestLDAPOAuth(t *testing.T) {
 
 	handler := LDAPOAuth(mockLogger, &ldapOptions, oAuthOptions)(&MockHandlerForLDAPOAuth{})
 	w := httptest.NewRecorder()
-	request := httptest.NewRequest(http.MethodGet, "/hello", nil)
+	request := httptest.NewRequest(http.MethodGet, "/hello", http.NoBody)
 	request.Header.Set("Authorization", basicHeader)
 	handler.ServeHTTP(w, request)
 	assert.Equal(t, 200, w.Code, "Test Failed")

@@ -47,8 +47,6 @@ func New() (g *Gofr) {
 }
 
 // NewWithConfig creates a new instance of gofr object based on the configurations provided
-//
-//nolint:gocognit  // It's a sequence of initialization. Easier to understand this way.
 func NewWithConfig(c Config) (g *Gofr) {
 	// Here we do things based on what is provided by Config
 	logger := log.NewLogger()
@@ -341,7 +339,7 @@ func initializeRedis(c Config, g *Gofr) {
 	if rc.HostName != "" || rc.Port != "" {
 		var err error
 
-		g.Redis, err = datastore.NewRedis(g.Logger, rc)
+		g.Redis, err = datastore.NewRedis(g.Logger, &rc)
 		g.DatabaseHealth = append(g.DatabaseHealth, g.RedisHealthCheck)
 
 		if err != nil {
@@ -360,13 +358,11 @@ func initializeRedis(c Config, g *Gofr) {
 // InitializeRedisFromConfigs initializes redis
 func InitializeRedisFromConfigs(c Config, l log.Logger, prefix string) (datastore.Redis, error) {
 	cfg := redisConfigFromEnv(c, prefix)
-	return datastore.NewRedis(l, cfg)
+	return datastore.NewRedis(l, &cfg)
 }
 
 // initializeDB initializes the ORM object in the Gofr struct if the DB configuration is set
 // in the environment, in case of an error, it logs the error
-//
-//nolint:gocognit //breaks code readability
 func initializeDB(c Config, g *Gofr) {
 	if c.Get("DB_HOST") != "" && c.Get("DB_PORT") != "" {
 		dc := sqlDBConfigFromEnv(c, "")
@@ -589,8 +585,6 @@ func initializeEventhubFromConfigs(c Config, prefix string) (pubsub.PublisherSub
 
 // initializeCassandra initializes the Cassandra/ YCQL client in the Gofr struct if the Cassandra configuration is set
 // in the environment, in case of an error, it logs the error
-//
-//nolint:gocognit // reducing the function further is not required
 func initializeCassandra(c Config, g *Gofr) {
 	validDialects := map[string]bool{
 		"cassandra": true,
