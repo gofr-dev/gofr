@@ -19,8 +19,10 @@ func Test_NewSFTPFile(t *testing.T) {
 	filename := "test.txt"
 	mode := READWRITE
 	c1 := &SFTPConfig{Host: "localhost", User: "", Password: "", Port: 22}
-	expErr := errors.New("")
+	expErr := fmt.Errorf("")
+
 	_, err := newSFTPFile(c1, filename, mode)
+
 	assert.IsTypef(t, expErr, err, "Test failed, Expected:%v, got:%v ", expErr, err)
 }
 
