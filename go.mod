@@ -56,7 +56,7 @@ require (
 	go.opentelemetry.io/otel/exporters/zipkin v1.21.0
 	go.opentelemetry.io/otel/sdk v1.21.0
 	go.opentelemetry.io/otel/trace v1.21.0
-	golang.org/x/crypto v0.16.0
+	golang.org/x/crypto v0.17.0
 	golang.org/x/net v0.19.0
 	golang.org/x/text v0.14.0
 	google.golang.org/api v0.154.0
