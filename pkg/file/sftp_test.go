@@ -19,7 +19,7 @@ func Test_NewSFTPFile(t *testing.T) {
 	filename := "test.txt"
 	mode := READWRITE
 	c1 := &SFTPConfig{Host: "localhost", User: "", Password: "", Port: 22}
-	expErr := fmt.Errorf("")
+	expErr := errors.New("")
 
 	_, err := newSFTPFile(c1, filename, mode)
 
