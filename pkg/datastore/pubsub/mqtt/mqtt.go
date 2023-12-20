@@ -2,7 +2,6 @@ package mqtt
 
 import (
 	"encoding/json"
-	"fmt"
 	"strconv"
 	"time"
 
@@ -35,16 +34,6 @@ type Config struct {
 	ConnectionRetryDuration int
 }
 
-// upon connection to the client, this is called
-var connectHandler mqtt.OnConnectHandler = func(client mqtt.Client) {
-	fmt.Println("Connected")
-}
-
-// this is called when the connection to the client is lost, it prints "Connection lost" and the corresponding error
-var connectLostHandler mqtt.ConnectionLostHandler = func(client mqtt.Client, err error) {
-	fmt.Printf("Connection lost: %v", err)
-}
-
 // New establishes connection to Kafka using the config provided in KafkaConfig
 func New(config *Config, logger log.Logger) (pubsub.PublisherSubscriber, error) {
 	options := mqtt.NewClientOptions()
@@ -60,8 +49,17 @@ func New(config *Config, logger log.Logger) (pubsub.PublisherSubscriber, error) 
 	}
 
 	options.SetOrderMatters(config.Order)
-	options.OnConnect = connectHandler
-	options.OnConnectionLost = connectLostHandler
+
+	// upon connection to the client, this is called
+	options.OnConnect = func(client mqtt.Client) {
+		logger.Debug("Connected")
+	}
+
+	// this is called when the connection to the client is lost; it prints "Connection lost" and the corresponding error
+	options.OnConnectionLost = func(client mqtt.Client, err error) {
+		logger.Errorf("Connection lost: %v", err)
+	}
+
 	options.ConnectRetryInterval = time.Second * time.Duration(config.ConnectionRetryDuration)
 
 	// create the client using the options above
@@ -78,7 +76,7 @@ func New(config *Config, logger log.Logger) (pubsub.PublisherSubscriber, error) 
 	return &MQTT{config: config, logger: logger, Client: client}, nil
 }
 
-func (m *MQTT) PublishEvent(key string, value interface{}, mp map[string]string) error {
+func (m *MQTT) PublishEvent(_ string, value interface{}, _ map[string]string) error {
 	if m.Client == nil {
 		m.logger.Debug("client not configured")
 
@@ -88,7 +86,8 @@ func (m *MQTT) PublishEvent(key string, value interface{}, mp map[string]string)
 	token := m.Client.Publish(m.config.Topic, m.config.QoS, false, value)
 	token.Wait()
 
-	// Check for errors during publishing (More on error reporting https://pkg.go.dev/github.com/eclipse/paho.mqtt.golang#readme-error-handling)
+	// Check for errors during publishing (More on error reporting
+	// https://pkg.go.dev/github.com/eclipse/paho.mqtt.golang#readme-error-handling)
 	if token.Error() != nil {
 		m.logger.Debug("Failed to publish to topic")
 
@@ -98,7 +97,7 @@ func (m *MQTT) PublishEvent(key string, value interface{}, mp map[string]string)
 	return nil
 }
 
-func (m *MQTT) PublishEventWithOptions(key string, value interface{}, headers map[string]string, options *pubsub.PublishOptions) error {
+func (m *MQTT) PublishEventWithOptions(key string, value interface{}, headers map[string]string, _ *pubsub.PublishOptions) error {
 	return m.PublishEvent(key, value, headers)
 }
 
@@ -129,7 +128,7 @@ func (m *MQTT) Subscribe() (*pubsub.Message, error) {
 	return <-msg, nil
 }
 
-func (m *MQTT) SubscribeWithCommit(commitFunc pubsub.CommitFunc) (*pubsub.Message, error) {
+func (m *MQTT) SubscribeWithCommit(_ pubsub.CommitFunc) (*pubsub.Message, error) {
 	return m.Subscribe()
 }
 
@@ -137,7 +136,7 @@ func (m *MQTT) Bind(message []byte, target interface{}) error {
 	return json.Unmarshal(message, target)
 }
 
-func (m *MQTT) CommitOffset(offsets pubsub.TopicPartition) {
+func (m *MQTT) CommitOffset(_ pubsub.TopicPartition) {
 }
 
 func (m *MQTT) Ping() error {

@@ -2,17 +2,18 @@ package mqtt
 
 import (
 	"bytes"
-	"gofr.dev/pkg"
-	"gofr.dev/pkg/datastore"
-	"gofr.dev/pkg/datastore/pubsub"
-	"gofr.dev/pkg/gofr/types"
 	"io"
 	"reflect"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
+	"gofr.dev/pkg"
+	"gofr.dev/pkg/datastore"
+	"gofr.dev/pkg/datastore/pubsub"
 	"gofr.dev/pkg/errors"
+	"gofr.dev/pkg/gofr/types"
 	"gofr.dev/pkg/log"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func Test_New(t *testing.T) {
@@ -181,16 +182,13 @@ func Test_HealthCheck(t *testing.T) {
 
 func Test_HealthCheckFailure(t *testing.T) {
 	var m *MQTT
+
 	exp := types.Health{Name: datastore.Mqtt, Status: pkg.StatusDown}
 	out := m.HealthCheck()
 
 	if !reflect.DeepEqual(exp, out) {
 		t.Errorf("TESTCASE FAILED\n Got: %v\n Expected: %v", out, exp)
 	}
-}
-
-func Test_Ping(t *testing.T) {
-
 }
 
 func Test_Bind(t *testing.T) {
