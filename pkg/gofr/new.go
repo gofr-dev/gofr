@@ -302,6 +302,9 @@ func initializeDataStores(c Config, logger log.Logger, g *Gofr) {
 
 	// DynamoDB
 	initializeDynamoDB(c, g)
+
+	// ClickHouseDB
+	initializeClickHouseDB(c, g)
 }
 
 func initializeDynamoDB(c Config, g *Gofr) {
@@ -817,4 +820,28 @@ func initializeGooglePubSub(c Config, g *Gofr) {
 	}
 
 	g.Logger.Infof("Google PubSub initialized")
+}
+
+func initializeClickHouseDB(c Config, g *Gofr) {
+	hostName := c.Get("CLICKHOUSE_HOST")
+	port := c.Get("CLICKHOUSE_PORT")
+
+	if hostName != "" && port != "" {
+		clickHouseConfig := clickhouseDBConfigFromEnv(c, "")
+
+		var err error
+
+		g.ClickHouse, err = datastore.GetNewClickHouseDB(g.Logger, clickHouseConfig)
+		g.DatabaseHealth = append(g.DatabaseHealth, g.ClickHouseHealthCheck)
+
+		if err != nil {
+			g.Logger.Errorf("could not connect to ClickHouse, HOST: %s, PORT: %v, Error: %v\n", hostName, port, err)
+
+			go clickHouseRetry(clickHouseConfig, g)
+
+			return
+		}
+
+		g.Logger.Infof("ClickHouse connected, HostName: %s, Port: %s", clickHouseConfig.Host, clickHouseConfig.Port)
+	}
 }

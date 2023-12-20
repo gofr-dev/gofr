@@ -360,3 +360,25 @@ func getTimoutDuration(envDuration string) int {
 
 	return timeoutDuration
 }
+
+func clickhouseDBConfigFromEnv(c Config, prefix string) *datastore.ClickHouseConfig {
+	if prefix != "" {
+		prefix += "_"
+	}
+
+	openC, _ := strconv.Atoi(c.Get(prefix + "CLICKHOUSE_MAX_OPEN_CONN"))
+	idleC, _ := strconv.Atoi(c.Get(prefix + "CLICKHOUSE_MAX_IDLE_CONN"))
+	connL, _ := strconv.Atoi(c.Get(prefix + "CLICKHOUSE_MAX_CONN_LIFETIME"))
+
+	return &datastore.ClickHouseConfig{
+		Host:              c.Get(prefix + "CLICKHOUSE_HOST"),
+		Username:          c.Get(prefix + "CLICKHOUSE_USER"),
+		Password:          c.Get(prefix + "CLICKHOUSE_PASSWORD"),
+		Port:              c.Get(prefix + "CLICKHOUSE_PORT"),
+		Database:          c.Get(prefix + "CLICKHOUSE_DB"),
+		ConnRetryDuration: getRetryDuration(c.Get(prefix + "CLICKHOUSE_CONN_RETRY")),
+		MaxOpenConn:       openC,
+		MaxIdleConn:       idleC,
+		MaxConnLife:       connL,
+	}
+}

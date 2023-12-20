@@ -14,4 +14,5 @@ const (
 	AWSSNS         = "aws-sns"
 	Avro           = "avro"
 	GooglePubSub   = "google"
+	ClickHouse     = "clickHouse"
 )
