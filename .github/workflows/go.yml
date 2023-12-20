@@ -416,9 +416,9 @@ jobs:
       - name: Start Mosquitto server
         uses: namoshek/mosquitto-github-action@v1
         with:
-          version: '1.6'
+          version: 'latest'
           ports: '8883:8883'
-          config: .github/setups/mosquitto.conf
+          config: ${{ github.workspace }}/.github/setups/mosquitto.conf
           container-name: 'mqtt'
 
       - name: Get dependencies
