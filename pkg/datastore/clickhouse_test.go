@@ -63,7 +63,7 @@ func TestCLICKHOUSEClient_Exec(t *testing.T) {
 
 	var d DataStore
 	err = d.ClickHouse.Exec(context.Background(), "Drop table test")
-	expErr := errors.CLICKHOUSENotInitialized
+	expErr := errors.ClickhouseNotInitialized
 
 	assert.Equal(t, expErr, err, "Exec operation failed")
 }
@@ -107,7 +107,7 @@ func TestCLCIKHOUSE_Query(t *testing.T) {
 	)
 
 	rows, err = d.ClickHouse.Query(context.Background(), "Select * from test")
-	expErr := errors.CLICKHOUSENotInitialized
+	expErr := errors.ClickhouseNotInitialized
 
 	assert.Equal(t, expErr, err, "Query operation failed")
 	assert.Equal(t, expRows, rows, "Query operation failed")

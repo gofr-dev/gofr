@@ -2,6 +2,7 @@ package datastore
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -10,7 +11,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 
 	"gofr.dev/pkg"
-	"gofr.dev/pkg/errors"
+	gofrErr "gofr.dev/pkg/errors"
 	"gofr.dev/pkg/gofr/types"
 	"gofr.dev/pkg/log"
 )
@@ -69,7 +70,8 @@ func GetNewClickHouseDB(logger log.Logger, config *ClickHouseConfig) (ClickHouse
 	}
 
 	if err := connect.Ping(context.Background()); err != nil {
-		if exception, ok := err.(*clickhouse.Exception); ok {
+		var exception *clickhouse.Exception
+		if errors.As(err, &exception) {
 			logger.Errorf("[%d] %s \n%s\n", exception.Code, exception.Message, exception.StackTrace)
 		}
 
@@ -108,7 +110,7 @@ func (c ClickHouseDB) HealthCheck() types.Health {
 
 	err := c.Conn.Ping(context.Background())
 	if err != nil {
-		c.logger.Error(errors.HealthCheckFailed{Dependency: ClickHouse, Err: err})
+		c.logger.Error(gofrErr.HealthCheckFailed{Dependency: ClickHouse, Err: err})
 		return resp
 	}
 
@@ -122,7 +124,7 @@ func (c ClickHouseDB) HealthCheck() types.Health {
 // The args are for any placeholder parameters in the query.
 func (c *ClickHouseDB) Query(ctx context.Context, query string, args ...interface{}) (driver.Rows, error) {
 	if c == nil || c.Conn == nil {
-		return nil, errors.CLICKHOUSENotInitialized
+		return nil, gofrErr.ClickhouseNotInitialized
 	}
 
 	begin := time.Now()
@@ -137,7 +139,7 @@ func (c *ClickHouseDB) Query(ctx context.Context, query string, args ...interfac
 // The args are for any placeholder parameters in the query.
 func (c *ClickHouseDB) Exec(ctx context.Context, query string, args ...interface{}) error {
 	if c == nil || c.Conn == nil {
-		return errors.CLICKHOUSENotInitialized
+		return gofrErr.ClickhouseNotInitialized
 	}
 
 	begin := time.Now()
@@ -150,8 +152,7 @@ func (c *ClickHouseDB) Exec(ctx context.Context, query string, args ...interface
 }
 
 // QueryRow executes a query that is expected to return at most one row.
-// QueryRow always returns a non-nil value. Errors are deferred until
-// Row's Scan method is called.
+// QueryRow always returns a non-nil value. Errors are deferred until Row's Scan method is called.
 func (c *ClickHouseDB) QueryRow(ctx context.Context, query string, args ...interface{}) driver.Row {
 	begin := time.Now()
 
