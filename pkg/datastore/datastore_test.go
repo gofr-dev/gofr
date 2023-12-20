@@ -1,6 +1,7 @@
 package datastore
 
 import (
+	"bytes"
 	"database/sql"
 	"io"
 	"strconv"
@@ -205,6 +206,7 @@ func TestDataStore_DB(t *testing.T) {
 
 	{
 		ds := new(DataStore)
+		ds.Logger = log.NewMockLogger(new(bytes.Buffer))
 
 		// passing incorrect dsn will not establish a db connection. But gorm.ConnPool will not be nil.
 		// passing new(gorm.DB) panics, as gorm.ConnPool will be nil.
@@ -358,6 +360,37 @@ func TestYCQLHealthCheck(t *testing.T) {
 		healthCheck := ds.YCQLHealthCheck()
 		if healthCheck.Status != tc.expected.Status {
 			t.Errorf("Test case [%d] failed.Expected YCQL health check status as: %v, got: %v", i, tc.expected.Status, healthCheck.Status)
+		}
+	}
+}
+
+func TestDataStore_CLICKHOUSE_HealthCheck(t *testing.T) {
+	dc := ClickHouseConfig{
+		Host:     "localhost",
+		Username: "root",
+		Password: "password",
+		Database: "default",
+		Port:     "9000",
+	}
+
+	testcases := []struct {
+		host   string
+		status string
+	}{
+		{dc.Host, pkg.StatusUp},
+		{"invalid", pkg.StatusDown},
+	}
+
+	for i, v := range testcases {
+		dc.Host = v.host
+
+		db, _ := GetNewClickHouseDB(log.NewMockLogger(io.Discard), &dc)
+		db.config = &dc
+		clickhouse := DataStore{ClickHouse: db, Logger: db.logger}
+
+		healthCheck := clickhouse.ClickHouseHealthCheck()
+		if healthCheck.Status != v.status {
+			t.Errorf("[TESTCASE%d]CLICKHOUSE Failed. Expected status: %v\n Got: %v", i+1, v.status, healthCheck)
 		}
 	}
 }

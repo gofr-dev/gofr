@@ -56,6 +56,17 @@ jobs:
         env:
           MYSQL_ROOT_PASSWORD: "password"
 
+      clickhouse:
+        image: clickhouse/clickhouse-server
+        ports:
+          - "8123:8123"
+          - "9000:9000"
+        env:
+          CLICKHOUSE_DB: "default"
+          CLICKHOUSE_USER: "root"
+          CLICKHOUSE_PASSWORD: "password"
+          CLICKHOUSE_HTTP_PORT: "8123"
+
       redis:
         image: redis:7.0.5
         ports:
@@ -132,6 +143,11 @@ jobs:
         run: |
           docker exec -i ${{ job.services.mysql.id }} mysql -uroot -ppassword -e 'CREATE DATABASE test;'
           docker exec -i ${{ job.services.mysql.id }} mysql -uroot -ppassword < ${{ github.workspace }}/.github/setups/setup.sql
+
+      - name: Set up Clickhouse
+        run: |
+          docker exec -i ${{ job.services.clickhouse.id }} clickhouse-client --query 'USE default;'
+          docker exec -i ${{ job.services.clickhouse.id }} clickhouse-client < ${{ github.workspace }}/.github/setups/clickhouse_setup.sql
 
       - name: Get dependencies
         run: |
@@ -345,6 +361,17 @@ jobs:
         ports:
           - 9041:9042
         options: --health-cmd "cqlsh --debug"
+
+      clickhouse:
+        image: clickhouse/clickhouse-server
+        ports:
+          - "8123:8123"
+          - "9000:9000"
+        env:
+          CLICKHOUSE_DB: "default"
+          CLICKHOUSE_USER: "root"
+          CLICKHOUSE_PASSWORD: "password"
+          CLICKHOUSE_HTTP_PORT: "8123"
 
     steps:
       - name: Checkout code into go module directory
