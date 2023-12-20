@@ -19,6 +19,8 @@ type DataStore struct {
 	gorm GORMClient
 	sqlx SQLXClient
 
+	ClickHouse ClickHouseDB
+
 	Logger        log.Logger
 	MongoDB       MongoDB
 	Redis         Redis
@@ -203,4 +205,10 @@ func (ds *DataStore) PubSubHealthCheck() types.Health {
 // the healthCheck status will be set to DOWN, else the healthCheck status will be UP
 func (ds *DataStore) DynamoDBHealthCheck() types.Health {
 	return ds.DynamoDB.HealthCheck()
+}
+
+// ClickHouseHealthCheck pings the ClickHouse instance. If the ping does not return an error,
+// the healthCheck status will be set to UP, else the healthCheck status will be DOWN.
+func (ds *DataStore) ClickHouseHealthCheck() types.Health {
+	return ds.ClickHouse.HealthCheck()
 }

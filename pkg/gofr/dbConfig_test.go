@@ -727,3 +727,32 @@ func Test_googlePubSubConfigFromEnv(t *testing.T) {
 		assert.Equalf(t, tc.expConfig, &cfg, "Test[%d] failed:%v", i, tc.desc)
 	}
 }
+
+func Test_clickHouseDBConfigFromEnv(t *testing.T) {
+	var (
+		configs = &config.MockConfig{Data: map[string]string{"CLICKHOUSE_HOST": "localhost", "CLICKHOUSE_USER": "root",
+			"CLICKHOUSE_PASSWORD": "pass", "CLICKHOUSE_DB": "users", "CLICKHOUSE_PORT": "8080", "CLICKHOUSE_CONN_RETRY": "5",
+			"CLICKHOUSE_MAX_CONN_LIFETIME": "100"}}
+		configsWithPrefix = &config.MockConfig{Data: map[string]string{"PRE_CLICKHOUSE_HOST": "localhost", "PRE_CLICKHOUSE_USER": "root",
+			"PRE_CLICKHOUSE_PASSWORD": "pass", "PRE_CLICKHOUSE_DB": "users", "PRE_CLICKHOUSE_PORT": "8080", "PRE_CLICKHOUSE_CONN_RETRY": "5",
+			"PRE_CLICKHOUSE_MAX_CONN_LIFETIME": "100"}}
+		expConfigs = &datastore.ClickHouseConfig{Host: "localhost", Username: "root",
+			Password: "pass", Database: "users", Port: "8080", ConnRetryDuration: 5, MaxConnLife: 100}
+	)
+
+	testcases := []struct {
+		desc     string
+		input    *config.MockConfig
+		expDBCfg *datastore.ClickHouseConfig
+		prefix   string
+	}{
+		{"valid configs", configs, expConfigs, ""},
+		{"valid configs with prefix", configsWithPrefix, expConfigs, "PRE"},
+	}
+
+	for i, tc := range testcases {
+		cfg := clickhouseDBConfigFromEnv(tc.input, tc.prefix)
+
+		assert.Equal(t, tc.expDBCfg, cfg, "TEST[%d], failed.\n%s", i, tc.desc)
+	}
+}
