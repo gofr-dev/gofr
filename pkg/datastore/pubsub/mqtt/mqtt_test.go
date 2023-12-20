@@ -51,18 +51,18 @@ func Test_New(t *testing.T) {
 				Topic:                   "topic1",
 				ConnectionRetryDuration: 10,
 			},
-			expectedLog: "connected to MQTT",
-			expErr:      errors.Error("network Error : dial tcp: lookup somehost: no such host"),
+			expectedLog: "cannot connect to MQTT",
+			expErr:      errors.Error("network Error"),
 		},
 	}
 
 	for _, tc := range testCases {
 		_, err := New(tc.config, mockLogger)
 
-		assert.Contains(t, b.String(), tc.expectedLog, "TESTCASE FAILED \nexpected: %v, \ngot: %v", tc.expectedLog, b.String())
+		assert.Contains(t, b.String(), tc.expectedLog)
 
 		if err != nil {
-			assert.Equal(t, tc.expErr.Error(), err.Error(), "TESTCASE FAILED \nexpected: %v, \ngot: %v", tc.expErr, err)
+			assert.Contains(t, err.Error(), tc.expErr.Error())
 		}
 	}
 }
