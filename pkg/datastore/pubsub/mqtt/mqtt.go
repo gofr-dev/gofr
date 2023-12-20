@@ -79,6 +79,12 @@ func New(config *Config, logger log.Logger) (pubsub.PublisherSubscriber, error) 
 }
 
 func (m *MQTT) PublishEvent(key string, value interface{}, mp map[string]string) error {
+	if m.Client == nil {
+		m.logger.Debug("client not configured")
+
+		return errors.Error("client not configured")
+	}
+
 	token := m.Client.Publish(m.config.Topic, m.config.QoS, false, value)
 	token.Wait()
 
