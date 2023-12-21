@@ -3,7 +3,8 @@ package mqtt
 import (
 	"encoding/json"
 	"strconv"
-	"time"
+
+	mqtt "github.com/eclipse/paho.mqtt.golang"
 
 	"gofr.dev/pkg"
 	"gofr.dev/pkg/datastore"
@@ -11,12 +12,10 @@ import (
 	"gofr.dev/pkg/errors"
 	"gofr.dev/pkg/gofr/types"
 	"gofr.dev/pkg/log"
-
-	mqtt "github.com/eclipse/paho.mqtt.golang"
 )
 
 type MQTT struct {
-	Client mqtt.Client
+	client mqtt.Client
 	logger log.Logger
 	config *Config
 }
@@ -36,8 +35,10 @@ type Config struct {
 
 // New establishes connection to Kafka using the config provided in KafkaConfig
 func New(config *Config, logger log.Logger) (pubsub.PublisherSubscriber, error) {
+	pubsub.RegisterMetrics()
+
 	options := mqtt.NewClientOptions()
-	options.AddBroker("tcp://" + config.Hostname + ":" + strconv.Itoa(config.Port))
+	options.AddBroker(config.Protocol + "://" + config.Hostname + ":" + strconv.Itoa(config.Port))
 	options.SetClientID(config.ClientID)
 
 	if config.Username != "" {
@@ -60,39 +61,47 @@ func New(config *Config, logger log.Logger) (pubsub.PublisherSubscriber, error) 
 		logger.Errorf("Connection lost: %v", err)
 	}
 
-	options.ConnectRetryInterval = time.Second * time.Duration(config.ConnectionRetryDuration)
-
 	// create the client using the options above
 	client := mqtt.NewClient(options)
 
 	if token := client.Connect(); token.Wait() && token.Error() != nil {
-		logger.Errorf("cannot connect to MQTT, HostName : %v, Port : %v, error : %v", config.Topic, config.Port, token.Error())
+		logger.Errorf("cannot connect to MQTT, HostName : %v, Port : %v, error : %v", config.Hostname, config.Port, token.Error())
 
 		return &MQTT{config: config, logger: logger}, token.Error()
 	}
 
-	logger.Debugf("connected to MQTT, HostName : %v, Port : %v", config.Topic, config.Port)
+	logger.Debugf("connected to MQTT, HostName : %v, Port : %v", config.Hostname, config.Port)
 
-	return &MQTT{config: config, logger: logger, Client: client}, nil
+	return &MQTT{config: config, logger: logger, client: client}, nil
 }
 
 func (m *MQTT) PublishEvent(_ string, value interface{}, _ map[string]string) error {
-	if m.Client == nil {
+	// for every publishing of event
+	pubsub.PublishTotalCount(m.config.Topic, "")
+
+	if m.client == nil {
 		m.logger.Debug("client not configured")
+		// for unsuccessful publish
+		pubsub.PublishFailureCount(m.config.Topic, "")
 
 		return errors.Error("client not configured")
 	}
 
-	token := m.Client.Publish(m.config.Topic, m.config.QoS, false, value)
+	token := m.client.Publish(m.config.Topic, m.config.QoS, false, value)
 	token.Wait()
 
 	// Check for errors during publishing (More on error reporting
 	// https://pkg.go.dev/github.com/eclipse/paho.mqtt.golang#readme-error-handling)
 	if token.Error() != nil {
 		m.logger.Debug("Failed to publish to topic")
+		// for unsuccessful publish
+		pubsub.PublishFailureCount(m.config.Topic, "")
 
 		return token.Error()
 	}
+
+	// for successful publishing
+	pubsub.PublishSuccessCount(m.config.Topic, "")
 
 	return nil
 }
@@ -114,7 +123,7 @@ func (m *MQTT) Subscribe() (*pubsub.Message, error) {
 		}
 	}
 
-	token := m.Client.Subscribe(m.config.Topic, m.config.QoS, handler)
+	token := m.client.Subscribe(m.config.Topic, m.config.QoS, handler)
 
 	if token.Wait() && token.Error() != nil {
 		// increment failure count for failed subscribing
@@ -123,7 +132,7 @@ func (m *MQTT) Subscribe() (*pubsub.Message, error) {
 	}
 
 	// increment success counter for successful subscribing
-	pubsub.PublishSuccessCount(m.config.Topic, "")
+	pubsub.SubscribeSuccessCount(m.config.Topic, "")
 
 	return <-msg, nil
 }
@@ -140,7 +149,7 @@ func (m *MQTT) CommitOffset(_ pubsub.TopicPartition) {
 }
 
 func (m *MQTT) Ping() error {
-	err := m.Client.Connect().Error()
+	err := m.client.Connect().Error()
 
 	if err != nil {
 		return err
@@ -164,7 +173,7 @@ func (m *MQTT) HealthCheck() types.Health {
 		Database: m.config.Topic,
 	}
 
-	if m.Client == nil {
+	if m.client == nil {
 		m.logger.Errorf("%v", errors.HealthCheckFailed{Dependency: datastore.Mqtt, Reason: "client is not initialized"})
 		return res
 	}
@@ -185,7 +194,7 @@ func (m *MQTT) IsSet() bool {
 		return false
 	}
 
-	if m.Client == nil {
+	if m.client == nil {
 		return false
 	}
 
