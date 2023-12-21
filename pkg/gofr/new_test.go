@@ -947,3 +947,76 @@ func Test_initializeClickHouse(t *testing.T) {
 		}
 	}
 }
+
+func Test_initializeMqtt(t *testing.T) {
+	b := new(bytes.Buffer)
+	logger := log.NewMockLogger(b)
+
+	c := config.NewGoDotEnvProvider(logger, "../../configs")
+	protocol := c.Get("MQTT_PROTOCOL")
+	host := c.Get("MQTT_HOST")
+	port := c.Get("MQTT_PORT")
+	testCases := []struct {
+		protocol    string
+		host        string
+		port        string
+		expectedLog string
+	}{
+		{
+			protocol:    "",
+			host:        "",
+			port:        "",
+			expectedLog: "",
+		},
+		{
+			protocol:    "",
+			host:        "localhost",
+			port:        "",
+			expectedLog: "",
+		},
+		{
+			protocol:    "tcp",
+			host:        "localhost",
+			port:        "",
+			expectedLog: "",
+		},
+		{
+			protocol:    "tcp",
+			host:        "incorrect-host",
+			port:        "999",
+			expectedLog: "could not connect to MQTT server",
+		},
+		{
+			protocol:    protocol,
+			host:        host,
+			port:        port,
+			expectedLog: "MQTT connected",
+		},
+	}
+
+	for _, tc := range testCases {
+		mockIO := new(bytes.Buffer)
+		l := log.NewMockLogger(mockIO)
+
+		mockConf := config.MockConfig{
+			Data: map[string]string{
+				"MQTT_PROTOCOL":   tc.protocol,
+				"MQTT_HOST":       tc.host,
+				"MQTT_PORT":       tc.port,
+				"MQTT_USER":       c.Get("MQTT_USER"),
+				"MQTT_CLIENT_ID":  c.Get("MQTT_CLIENT_ID"),
+				"MQTT_PASSWORD":   c.Get("MQTT_PASSWORD"),
+				"MQTT_TOPIC_NAME": c.Get("MQTT_TOPIC_NAME"),
+				"MQTT_QOS":        c.Get("MQTT_QOS"),
+				"MQTT_CONN_RETRY": c.Get("MQTT_CONN_RETRY"),
+			},
+		}
+
+		g := NewWithConfig(&mockConf)
+		g.Logger = l
+
+		initializeMqtt(&mockConf, g)
+
+		assert.Contains(t, mockIO.String(), tc.expectedLog)
+	}
+}

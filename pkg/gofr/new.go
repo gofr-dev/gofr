@@ -19,6 +19,7 @@ import (
 	"gofr.dev/pkg/datastore/pubsub/eventhub"
 	"gofr.dev/pkg/datastore/pubsub/google"
 	"gofr.dev/pkg/datastore/pubsub/kafka"
+	"gofr.dev/pkg/datastore/pubsub/mqtt"
 	"gofr.dev/pkg/errors"
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/request"
@@ -158,6 +159,8 @@ func initializePubSub(c Config, logger log.Logger, g *Gofr) {
 		initializeEventBridge(c, logger, g)
 	case datastore.GooglePubSub:
 		initializeGooglePubSub(c, g)
+	case datastore.Mqtt:
+		initializeMqtt(c, g)
 	}
 }
 
@@ -843,5 +846,28 @@ func initializeClickHouseDB(c Config, g *Gofr) {
 		}
 
 		g.Logger.Infof("ClickHouse connected, HostName: %s, Port: %s", clickHouseConfig.Host, clickHouseConfig.Port)
+	}
+}
+
+func initializeMqtt(c Config, g *Gofr) {
+	protocol := c.Get("MQTT_PROTOCOL")
+	hostName := c.Get("MQTT_HOST")
+	port := c.Get("MQTT_PORT")
+
+	if protocol != "" && hostName != "" && port != "" {
+		cfg := mqttConfigFromEnv(c, "")
+
+		var err error
+
+		g.PubSub, err = mqtt.New(cfg, g.Logger)
+		g.DatabaseHealth = append(g.DatabaseHealth, g.PubSubHealthCheck)
+
+		if err != nil {
+			g.Logger.Errorf("could not connect to MQTT server, HOST: %s, PORT: %v, Error: %v\n", hostName, port, err)
+
+			return
+		}
+
+		g.Logger.Infof("MQTT connected, HOST: %s, PORT: %v", hostName, port)
 	}
 }

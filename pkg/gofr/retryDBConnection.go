@@ -4,6 +4,8 @@ import (
 	"strconv"
 	"time"
 
+	"gofr.dev/pkg/datastore/pubsub/mqtt"
+
 	"gofr.dev/pkg/datastore"
 	"gofr.dev/pkg/datastore/pubsub/avro"
 	"gofr.dev/pkg/datastore/pubsub/eventbridge"
@@ -272,6 +274,23 @@ func clickHouseRetry(c *datastore.ClickHouseConfig, g *Gofr) {
 
 		if err == nil {
 			g.Logger.Info("ClickHouse initialized successfully")
+
+			break
+		}
+	}
+}
+
+func mqttRetry(c *mqtt.Config, g *Gofr) {
+	for {
+		time.Sleep(time.Duration(c.ConnectionRetryDuration) * time.Second)
+
+		g.Logger.Debug("Retrying MQTT connection")
+
+		var err error
+
+		g.PubSub, err = mqtt.New(c, g.Logger)
+		if err == nil {
+			g.Logger.Info("MQTT initialized successfully")
 
 			break
 		}

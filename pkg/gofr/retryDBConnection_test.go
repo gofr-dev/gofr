@@ -13,6 +13,7 @@ import (
 
 	"gofr.dev/pkg/datastore"
 	"gofr.dev/pkg/datastore/pubsub/google"
+	"gofr.dev/pkg/datastore/pubsub/mqtt"
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/log"
 )
@@ -330,4 +331,26 @@ func Test_clickhouseRetry(t *testing.T) {
 	err := g.ClickHouse.Ping(context.Background())
 
 	assert.NoError(t, err, "FAILED, expected: ClickHouse initialized successfully, got: clickhouse initialisation failed")
+}
+
+func Test_mqttRetry(t *testing.T) {
+	var g Gofr
+
+	logger := log.NewMockLogger(io.Discard)
+	c := config.NewGoDotEnvProvider(logger, "../../configs")
+	port, _ := strconv.Atoi(c.Get("MQTT_PORT"))
+	mqttConfig := mqtt.Config{
+		Protocol: c.Get("MQTT_PROTOCOL"),
+		Hostname: c.Get("MQTT_HOST"),
+		Port:     port,
+		ClientID: c.Get("MQTT_CLIENT_ID"),
+	}
+
+	g.Logger = logger
+
+	mqttRetry(&mqttConfig, &g)
+
+	err := g.PubSub.Ping()
+
+	assert.NoError(t, err)
 }

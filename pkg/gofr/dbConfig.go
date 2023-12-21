@@ -16,6 +16,7 @@ import (
 	"gofr.dev/pkg/datastore/pubsub/eventhub"
 	"gofr.dev/pkg/datastore/pubsub/google"
 	"gofr.dev/pkg/datastore/pubsub/kafka"
+	"gofr.dev/pkg/datastore/pubsub/mqtt"
 	"gofr.dev/pkg/log"
 	awssns "gofr.dev/pkg/notifier/aws-sns"
 )
@@ -380,5 +381,28 @@ func clickhouseDBConfigFromEnv(c Config, prefix string) *datastore.ClickHouseCon
 		MaxOpenConn:       openC,
 		MaxIdleConn:       idleC,
 		MaxConnLife:       connL,
+	}
+}
+
+func mqttConfigFromEnv(c Config, prefix string) *mqtt.Config {
+	if prefix != "" {
+		prefix += "_"
+	}
+
+	port, _ := strconv.Atoi(c.Get(prefix + "MQTT_PORT"))
+	qos, _ := strconv.Atoi(c.Get(prefix + "MQTT_QOS"))
+	order, _ := strconv.ParseBool(c.GetOrDefault(prefix+"MQTT_MESSAGE_ORDER", "false"))
+
+	return &mqtt.Config{
+		Protocol:                c.Get(prefix + "MQTT_PROTOCOL"),
+		Hostname:                c.Get(prefix + "MQTT_HOST"),
+		Port:                    port,
+		Username:                c.Get(prefix + "MQTT_USER"),
+		Password:                c.Get(prefix + "MQTT_PASSWORD"),
+		ClientID:                c.Get(prefix + "MQTT_CLIENT_ID"),
+		Topic:                   c.Get(prefix + "MQTT_TOPIC_NAME"),
+		QoS:                     byte(qos),
+		Order:                   order,
+		ConnectionRetryDuration: getRetryDuration(c.Get(prefix + "MQTT_CONN_RETRY")),
 	}
 }
