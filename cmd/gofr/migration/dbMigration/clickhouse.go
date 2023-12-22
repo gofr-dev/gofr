@@ -65,7 +65,7 @@ ORDER BY (app, version, method);
 
 	err := c.ClickHouseDB.Exec(context.Background(), migrationTableSchema)
 	if err != nil {
-		return &errors.Response{Reason: "unable to create table, err: " + err.Error()}
+		return &errors.Response{Reason: "unable to create table", Detail: err.Error()}
 	}
 
 	ver, _ := strconv.Atoi(name)
