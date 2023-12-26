@@ -4,18 +4,18 @@ go 1.21
 
 require (
 	cloud.google.com/go/pubsub v1.33.0
-	cloud.google.com/go/storage v1.35.1
+	cloud.google.com/go/storage v1.36.0
 	github.com/Azure/azure-amqp-common-go/v3 v3.2.3
 	github.com/Azure/azure-event-hubs-go/v3 v3.3.20
 	github.com/Azure/azure-pipeline-go v0.2.3
 	github.com/Azure/azure-storage-blob-go v0.15.0
 	github.com/Azure/go-autorest/autorest v0.11.29
-	github.com/ClickHouse/clickhouse-go/v2 v2.16.0
+	github.com/ClickHouse/clickhouse-go/v2 v2.17.0
 	github.com/DATA-DOG/go-sqlmock v1.5.1
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/trace v1.21.0
 	github.com/Shopify/sarama v1.38.0
 	github.com/XSAM/otelsql v0.26.0
-	github.com/aws/aws-sdk-go v1.49.0
+	github.com/aws/aws-sdk-go v1.49.9
 	github.com/aws/aws-sdk-go-v2/credentials v1.16.12
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.47.6
 	github.com/bmizerany/assert v0.0.0-20160611221934-b7ed37b82869
@@ -28,7 +28,7 @@ require (
 	github.com/gocql/gocql v1.6.0
 	github.com/golang-jwt/jwt/v4 v4.5.0
 	github.com/golang/mock v1.6.0
-	github.com/google/uuid v1.4.0
+	github.com/google/uuid v1.5.0
 	github.com/googleapis/gax-go/v2 v2.12.0
 	github.com/gookit/color v1.5.4
 	github.com/gorilla/mux v1.8.1
