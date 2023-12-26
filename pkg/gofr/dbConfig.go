@@ -385,12 +385,24 @@ func clickhouseDBConfigFromEnv(c Config, prefix string) *datastore.ClickHouseCon
 }
 
 func mqttConfigFromEnv(c Config, prefix string) *mqtt.Config {
+	var qos byte
+
 	if prefix != "" {
 		prefix += "_"
 	}
 
 	port, _ := strconv.Atoi(c.Get(prefix + "MQTT_PORT"))
-	qos, _ := strconv.Atoi(c.Get(prefix + "MQTT_QOS"))
+
+	// get the qos from the config only 0,1,2 are the possible values to be taken
+	switch c.Get("MQTT_QOS") {
+	case "1":
+		qos = 1
+	case "2":
+		qos = 2
+	default:
+		qos = 0
+	}
+
 	order, _ := strconv.ParseBool(c.GetOrDefault(prefix+"MQTT_MESSAGE_ORDER", "false"))
 
 	return &mqtt.Config{
@@ -401,7 +413,7 @@ func mqttConfigFromEnv(c Config, prefix string) *mqtt.Config {
 		Password:                c.Get(prefix + "MQTT_PASSWORD"),
 		ClientID:                c.Get(prefix + "MQTT_CLIENT_ID"),
 		Topic:                   c.Get(prefix + "MQTT_TOPIC_NAME"),
-		QoS:                     byte(qos),
+		QoS:                     qos,
 		Order:                   order,
 		ConnectionRetryDuration: getRetryDuration(c.Get(prefix + "MQTT_CONN_RETRY")),
 	}

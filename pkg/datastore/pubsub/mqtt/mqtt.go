@@ -42,7 +42,7 @@ func New(config *Config, logger log.Logger) (pubsub.PublisherSubscriber, error) 
 	options.SetClientID(config.ClientID)
 
 	if config.ClientID == "" {
-		logger.Warnf("client id not provided, please provide a clientID to prevent unexpected behaviours")
+		logger.Warnf("client id not provided, please provide a clientID to prevent unexpected behaviors")
 
 		options.SetClientID("gofr_mqtt_client")
 	}
