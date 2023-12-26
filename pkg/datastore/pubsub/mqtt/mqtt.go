@@ -41,6 +41,12 @@ func New(config *Config, logger log.Logger) (pubsub.PublisherSubscriber, error) 
 	options.AddBroker(config.Protocol + "://" + config.Hostname + ":" + strconv.Itoa(config.Port))
 	options.SetClientID(config.ClientID)
 
+	if config.ClientID == "" {
+		logger.Warnf("client id not provided, please provide a clientID to prevent unexpected behaviours")
+
+		options.SetClientID("gofr_mqtt_client")
+	}
+
 	if config.Username != "" {
 		options.SetUsername(config.Username)
 	}
