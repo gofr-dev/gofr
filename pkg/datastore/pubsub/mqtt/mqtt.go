@@ -93,6 +93,9 @@ func (m *MQTT) PublishEvent(_ string, value interface{}, _ map[string]string) er
 		return errors.Error("client not configured")
 	}
 
+	// marshal the value to convert it to bytes
+	value, _ = json.Marshal(value)
+
 	token := m.client.Publish(m.config.Topic, m.config.QoS, false, value)
 	token.Wait()
 
