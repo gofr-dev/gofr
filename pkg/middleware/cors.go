@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	allowedHeaders = "Authorization, Content-Type, x-requested-with, origin, true-client-ip, X-Correlation-ID"
+	allowedHeaders = "Authorization, Content-Type, x-requested-with, true-client-ip, X-Correlation-ID"
 	allowedMethods = "PUT, POST, GET, DELETE, OPTIONS, PATCH"
 )
 
@@ -47,8 +47,6 @@ func getValidCORSHeaders(envHeaders map[string]string) map[string]string {
 
 		// If config is not set - for the three headers, set default value.
 		switch header {
-		case "Access-Control-Allow-Origin":
-			validCORSHeadersAndValues[header] = "*"
 		case "Access-Control-Allow-Headers":
 			validCORSHeadersAndValues[header] = allowedHeaders
 		case "Access-Control-Allow-Methods":
@@ -68,7 +66,6 @@ func getValidCORSHeaders(envHeaders map[string]string) map[string]string {
 // AllowedCORSHeader returns the HTTP headers used for CORS configuration in web applications.
 func AllowedCORSHeader() []string {
 	return []string{
-		"Access-Control-Allow-Origin",
 		"Access-Control-Allow-Headers",
 		"Access-Control-Allow-Methods",
 		"Access-Control-Allow-Credentials",
