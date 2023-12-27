@@ -57,6 +57,7 @@ func Test_getValidCORSHeaders(t *testing.T) {
 	}{
 		{map[string]string{},
 			map[string]string{
+				"Access-Control-Allow-Origin":  "*",
 				"Access-Control-Allow-Headers": allowedHeaders,
 				"Access-Control-Allow-Methods": allowedMethods,
 			},
@@ -64,10 +65,12 @@ func Test_getValidCORSHeaders(t *testing.T) {
 		{map[string]string{
 			"Access-Control-Max-Age":       strconv.Itoa(600),
 			"Access-Control-Allow-Headers": "",
+			"Access-Control-Allow-Origin":  "same-origin",
 			"Access-Control-Allow-Methods": http.MethodPost,
 		},
 			map[string]string{
 				"Access-Control-Max-Age":       strconv.Itoa(600),
+				"Access-Control-Allow-Origin":  "same-origin",
 				"Access-Control-Allow-Headers": allowedHeaders,
 				"Access-Control-Allow-Methods": http.MethodPost,
 			},
@@ -76,6 +79,7 @@ func Test_getValidCORSHeaders(t *testing.T) {
 			"Access-Control-Allow-Headers": "clientid",
 		},
 			map[string]string{
+				"Access-Control-Allow-Origin":  "*",
 				"Access-Control-Allow-Headers": allowedHeaders + ", clientid",
 				"Access-Control-Allow-Methods": allowedMethods,
 			},
@@ -89,6 +93,7 @@ func Test_getValidCORSHeaders(t *testing.T) {
 			map[string]string{
 				"Access-Control-Allow-Credentials": "true",
 				"Access-Control-Max-Age":           strconv.Itoa(600),
+				"Access-Control-Allow-Origin":      "*",
 				"Access-Control-Allow-Headers":     allowedHeaders,
 				"Access-Control-Allow-Methods":     allowedMethods,
 			},
