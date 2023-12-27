@@ -39,6 +39,7 @@ type Kafka struct {
 	logger   log.Logger
 	Producer sarama.SyncProducer
 	Consumer *Consumer
+	avro     *avro.Client
 }
 
 // AvroWithKafkaConfig represents a configuration for using Avro with Kafka
@@ -171,6 +172,7 @@ func NewKafkaFromEnv() (*Kafka, error) {
 	return kafkaObj, nil
 }
 
+// Deprecated: This method will be removed in future instead use NewKafka
 // New establishes connection to Kafka using the config provided in KafkaConfig
 func New(config *Config, logger log.Logger) (*Kafka, error) {
 	pubsub.RegisterMetrics()
@@ -200,6 +202,63 @@ func New(config *Config, logger log.Logger) (*Kafka, error) {
 
 	if err := kafkaObj.Ping(); err != nil {
 		return &Kafka{config: config, logger: logger}, err
+	}
+
+	return kafkaObj, nil
+}
+
+// NewKafka establishes connection to Kafka and enables AVRO using the provided configs
+func NewKafka(kafkaConfig *Config, avroConfig *avro.Config, logger log.Logger) (*Kafka, error, error) {
+	pubsub.RegisterMetrics()
+
+	if kafkaConfig.SASL.Mechanism != SASLTypeSCRAMSHA512 && kafkaConfig.SASL.Mechanism != PLAIN && kafkaConfig.SASL.User != "" {
+		return nil, errInvalidMechanism, nil
+	}
+
+	populateOffsetTopic(kafkaConfig)
+	convertKafkaConfig(kafkaConfig)
+
+	sarama.Logger = kafkaLogger{logger: logger}
+
+	kafkaObj, err := initializePubSubInstance(kafkaConfig, logger)
+	if err != nil {
+		return &Kafka{config: kafkaConfig, logger: logger}, err, nil
+	}
+
+	logger.Infof("Kafka initialized. Hosts: %v, Topics: %v\n", kafkaConfig.Brokers, kafkaConfig.Topics)
+
+	a, err := avro.NewClient(avroConfig)
+	if err != nil {
+		return kafkaObj, nil, err
+	}
+
+	if a != nil {
+		kafkaObj.avro = a
+
+		logger.Infof("Avro initialized! SchemaRegistry: %v SchemaVersion: %v, Subject: %v",
+			avroConfig.URL, avroConfig.Version, avroConfig.Subject)
+	}
+
+	return kafkaObj, nil, nil
+}
+
+// initializePubSubInstance initialize the sarama producer and consumer instances on the basis of provided configs
+func initializePubSubInstance(cfg *Config, logger log.Logger) (*Kafka, error) {
+	brokers := strings.Split(cfg.Brokers, ",")
+
+	p, err := sarama.NewSyncProducer(brokers, cfg.Config)
+	if err != nil {
+		return &Kafka{config: cfg, logger: logger}, err
+	}
+
+	c, err := NewKafkaConsumer(cfg)
+	if err != nil {
+		return &Kafka{config: cfg, logger: logger}, err
+	}
+
+	kafkaObj := &Kafka{config: cfg, logger: logger, Producer: p, Consumer: c}
+	if err := kafkaObj.Ping(); err != nil {
+		return &Kafka{config: cfg, logger: logger}, nil
 	}
 
 	return kafkaObj, nil
@@ -371,20 +430,24 @@ func (k *Kafka) PublishEvent(key string, value interface{}, headers map[string]s
 
 // PublishEventWithOptions publishes message to kafka. Ability to provide additional options described in PublishOptions struct
 func (k *Kafka) PublishEventWithOptions(key string, value interface{}, headers map[string]string,
-	options *pubsub.PublishOptions) (err error) {
-	if options == nil {
-		options = &pubsub.PublishOptions{}
-	}
+	options *pubsub.PublishOptions) error {
+	options = populatePublishOptions(k.config.Topics[0], options)
 
-	if options.Topic == "" {
-		options.Topic = k.config.Topics[0]
-	}
-
-	if options.Timestamp.IsZero() {
-		options.Timestamp = time.Now()
-	}
+	var (
+		err       error
+		binaryMsg []byte
+	)
 
 	pubsub.PublishTotalCount(options.Topic, k.config.GroupID)
+
+	if k.avro != nil {
+		binaryMsg, err = k.avro.Serialize(value)
+		if err != nil {
+			return err
+		}
+
+		value = binaryMsg
+	}
 
 	valBytes, ok := value.([]byte)
 	if !ok {
@@ -421,6 +484,22 @@ func (k *Kafka) PublishEventWithOptions(key string, value interface{}, headers m
 	pubsub.PublishSuccessCount(message.Topic, k.config.GroupID)
 
 	return nil
+}
+
+func populatePublishOptions(topic string, options *pubsub.PublishOptions) *pubsub.PublishOptions {
+	if options == nil {
+		options = &pubsub.PublishOptions{}
+	}
+
+	if options.Topic == "" {
+		options.Topic = topic
+	}
+
+	if options.Timestamp.IsZero() {
+		options.Timestamp = time.Now()
+	}
+
+	return options
 }
 
 // rebalanceSession this method is responsible for rebalancing partitions
@@ -467,6 +546,11 @@ func (k *Kafka) subscribeMessage() (*pubsub.Message, error) {
 		return nil, errConsumeMsg
 	}
 
+	return k.processMessage(msg)
+}
+
+// processMessage method extracts the defined model from the consumed message
+func (k *Kafka) processMessage(msg *sarama.ConsumerMessage) (*pubsub.Message, error) {
 	headers := make(map[string]string, len(msg.Headers))
 
 	for _, v := range msg.Headers {
@@ -480,14 +564,20 @@ func (k *Kafka) subscribeMessage() (*pubsub.Message, error) {
 	k.Consumer.ConsumerGroupHandler.consumerGroupSession.MarkMessage(msg, "")
 	k.Consumer.ConsumerGroupHandler.mu.Unlock()
 
-	return &pubsub.Message{
+	message := &pubsub.Message{
 		Topic:     msg.Topic,
 		Partition: int(msg.Partition),
 		Offset:    msg.Offset,
 		Key:       string(msg.Key),
 		Value:     string(msg.Value),
 		Headers:   headers,
-	}, nil
+	}
+
+	if k.avro != nil {
+		return k.avro.Deserialize(message)
+	}
+
+	return message, nil
 }
 
 // Subscribe method is responsible for consuming a single message from a
@@ -512,6 +602,7 @@ func (k *Kafka) Subscribe() (*pubsub.Message, error) {
 		Partition: message.Partition,
 		Offset:    message.Offset,
 	})
+
 	// for successful subscribe
 	pubsub.SubscribeSuccessCount(message.Topic, k.config.GroupID)
 
@@ -567,6 +658,10 @@ func (k *Kafka) SubscribeWithCommit(f pubsub.CommitFunc) (*pubsub.Message, error
 
 // Bind parses the encoded data and stores the result in the value pointed to by target
 func (k *Kafka) Bind(message []byte, target interface{}) error {
+	if k.avro != nil {
+		return k.avro.Bind(message, target)
+	}
+
 	return json.Unmarshal(message, target)
 }
 
@@ -773,17 +868,16 @@ func (k *Kafka) IsSet() bool {
 
 // NewKafkaWithAvro initialize Kafka with Avro when EventHubConfig and AvroConfig are right
 func NewKafkaWithAvro(config *AvroWithKafkaConfig, logger log.Logger) (pubsub.PublisherSubscriber, error) {
-	kafka, err := New(&config.KafkaConfig, logger)
-	if err != nil {
-		logger.Errorf("Kafka cannot be initialized, err: %v", err)
-		return nil, err
+	kafka, kafkaErr, avroErr := NewKafka(&config.KafkaConfig, &config.AvroConfig, logger)
+	if kafkaErr != nil {
+		logger.Errorf("Kafka cannot be initialized, err: %v", kafkaErr)
+		return nil, kafkaErr
 	}
 
-	p, err := avro.NewWithConfig(&config.AvroConfig, kafka)
-	if err != nil {
-		logger.Errorf("Avro cannot be initialized, err: %v", err)
-		return nil, err
+	if avroErr != nil {
+		logger.Errorf("Avro cannot be initialized, err: %v", avroErr)
+		return nil, avroErr
 	}
 
-	return p, nil
+	return kafka, nil
 }

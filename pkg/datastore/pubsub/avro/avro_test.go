@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	avro "github.com/hamba/avro/v2"
 	"github.com/stretchr/testify/assert"
 
 	"gofr.dev/pkg"
@@ -92,8 +93,9 @@ func (m *mockSchemaClient) GetSchemaByVersion(subject, _ string) (id int, s stri
 
 	return 1, schema, nil
 }
+
 func (m *mockSchemaClient) GetSchema(id int) (string, error) {
-	if id == 808464433 {
+	if id == 808464433 || id == 1702065197 {
 		schema := `{"name": "name", "type": "string"}`
 		return schema, nil
 	}
@@ -292,12 +294,103 @@ func Test_NewAvroError(t *testing.T) {
 
 func Test_PublishEventWithOptionsError(t *testing.T) {
 	var (
-		options *pubsub.PublishOptions
-		avro    Avro
-		expErr  = &errors.Response{Code: "Missing schema", Reason: "Avro is initialized without schema"}
+		options  *pubsub.PublishOptions
+		testAvro Avro
+		expErr   = &errors.Response{Code: "Missing schema", Reason: "Avro is initialized without schema"}
 	)
 
-	err := avro.PublishEventWithOptions("1", "value", map[string]string{}, options)
+	err := testAvro.PublishEventWithOptions("1", "value", map[string]string{}, options)
 
 	assert.Equal(t, expErr, err, "Testcase failed. Expected: %v Got: %v", expErr, err)
+}
+
+func Test_NewAvroClient(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		respMap := map[string]interface{}{"subject": "gofr-value", "version": 2, "id": 293,
+			"schema": `{"type":"record","name":"test","fields":[{"name":"ID","type":"string"}]}`}
+		_ = json.NewEncoder(w).Encode(respMap)
+	}))
+
+	tests := []struct {
+		desc string
+		cfg  *Config
+	}{
+		{"empty configs", &Config{URL: "", Subject: ""}},
+		{"without avro subject", &Config{URL: server.URL, Subject: ""}},
+		{"with avro subject", &Config{URL: server.URL, Subject: "gofr-value"}},
+	}
+
+	for i, tc := range tests {
+		_, err := NewClient(tc.cfg)
+
+		assert.Nil(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
+	}
+}
+
+func Test_Serialize(t *testing.T) {
+	schemaJSON := `{
+		"type": "record",
+		"name": "example",
+		"fields": [
+			{"name": "name", "type": "string"},
+			{"name": "age", "type": "int"}
+		]
+	}`
+
+	a := Client{config: &Config{URL: "localhost:8080"}, schemaVersion: "1", schemaID: 1, subject: "test",
+		schemaRegistryClient: &mockSchemaClient{}}
+
+	tests := []struct {
+		desc   string
+		value  interface{}
+		schema avro.Schema
+		resp   []byte
+		expErr error
+	}{
+		{"Schema is nil case", "test-value", nil, nil,
+			&errors.Response{Code: "Missing schema", Reason: "Avro is initialized without schema"}},
+		{"Marshal error case", "test-value", avro.MustParse(schemaJSON), nil,
+			&errors.Response{Reason: "Error in Marshaling the schema"}},
+	}
+
+	for i, tc := range tests {
+		a.schema = tc.schema
+		actual, err := a.Serialize(tc.value)
+
+		assert.Equal(t, tc.expErr, err, "TEST[%d], Failed.\n%s", i, tc.desc)
+
+		assert.Equal(t, tc.resp, actual, "TEST[%d], Failed.\n%s", i, tc.desc)
+	}
+}
+
+func Test_Deserialize(t *testing.T) {
+	a := Client{config: &Config{}, schemaVersion: "1", schemaID: 1, subject: "test",
+		schemaRegistryClient: &mockSchemaClient{}}
+
+	type args struct {
+		msg *pubsub.Message
+	}
+
+	tests := []struct {
+		desc   string
+		args   args
+		expMsg *pubsub.Message
+		expErr error
+	}{
+		{"GetSchema error case", args{msg: &pubsub.Message{
+			Key: "test-key", Value: "tesc-value", Topic: "test-topic"}}, &pubsub.Message{SchemaID: 1702060845,
+			Key: "test-key", Value: "value", Topic: "test-topic"},
+			&errors.Response{Reason: "test error"}},
+		{"Success case", args{msg: &pubsub.Message{
+			Key: "test-key", Value: "test-value", Topic: "test-topic"}}, &pubsub.Message{SchemaID: 1702065197,
+			Key: "test-key", Value: "value", Topic: "test-topic"}, nil},
+	}
+
+	for i, tc := range tests {
+		finalMsg, err := a.Deserialize(tc.args.msg)
+
+		assert.Equal(t, tc.expErr, err, "TEST[%d], Failed.\n%s", i, tc.desc)
+
+		assert.Equal(t, tc.expMsg, finalMsg, "TEST[%d], Failed.\n%s", i, tc.desc)
+	}
 }

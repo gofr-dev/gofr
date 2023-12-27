@@ -11,7 +11,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -36,7 +35,7 @@ func TestNewKafka(t *testing.T) {
 
 	logger := log.NewMockLogger(io.Discard)
 
-	testCases := []struct {
+	tests := []struct {
 		k       Config
 		wantErr bool
 	}{
@@ -48,7 +47,7 @@ func TestNewKafka(t *testing.T) {
 		{Config{Brokers: "localhost:0000", Topics: []string{"test-topic"}}, true},
 	}
 
-	for i, tt := range testCases {
+	for i, tt := range tests {
 		mockConfig := tt.k
 		_, err := New(&mockConfig, logger)
 
@@ -83,18 +82,19 @@ func TestNewKafkaConsumer(t *testing.T) {
 	conf := sarama.NewConfig()
 	conf.Consumer.Group.Session.Timeout = 1
 	tests := []struct {
+		desc   string
 		config *Config
 		err    error
 	}{
-		{&Config{Brokers: "localhost:2009", Config: conf}, sarama.ConfigurationError("Consumer.Group.Session.Timeout must be >= 2ms")},
-		{&Config{Brokers: "localhost:2009", Topics: []string{"some-topic"}}, nil},
+		{"config error", &Config{Brokers: "localhost:2009", Config: conf},
+			sarama.ConfigurationError("Consumer.Group.Session.Timeout must be >= 2ms")},
+		{"success case", &Config{Brokers: "localhost:2009", Topics: []string{"some-topic"}}, nil},
 	}
 
-	for _, test := range tests {
-		_, err := NewKafkaConsumer(test.config)
-		if !reflect.DeepEqual(test.err, err) {
-			t.Errorf("FAILED, expected: %v, got: %v", test.err, err)
-		}
+	for i, tt := range tests {
+		_, err := NewKafkaConsumer(tt.config)
+
+		assert.Equal(t, tt.err, err, "TEST[%d], Failed.\n%s", i, tt.desc)
 	}
 }
 
@@ -128,12 +128,12 @@ func Test_PubSub(t *testing.T) {
 	logger := log.NewLogger()
 	c := config.NewGoDotEnvProvider(logger, "../../../../configs")
 
-	k, err := New(&Config{
+	k, err, _ := NewKafka(&Config{
 		Brokers:        c.Get("KAFKA_HOSTS"),
 		Topics:         []string{c.Get("KAFKA_TOPIC")},
 		InitialOffsets: OffsetOldest,
 		GroupID:        "testing-consumerGroup",
-	}, logger)
+	}, nil, logger)
 	if err != nil {
 		t.Errorf("Kafka connection failed : %v", err)
 		return
@@ -156,13 +156,13 @@ func Test_PubSubWithOffset(t *testing.T) {
 	c := config.NewGoDotEnvProvider(logger, "../../../../configs")
 	topic := c.Get("KAFKA_TOPIC")
 	// prereqisite
-	k, err := New(&Config{
+	k, err, _ := NewKafka(&Config{
 		Brokers:        c.Get("KAFKA_HOSTS"),
 		Topics:         []string{topic},
 		InitialOffsets: OffsetOldest,
 		GroupID:        "testing-consumerGroup",
 		Offsets:        []pubsub.TopicPartition{{Topic: topic, Partition: 0, Offset: 1}},
-	}, logger)
+	}, nil, logger)
 
 	if err != nil {
 		t.Errorf("Kafka connection failed : %v", err)
@@ -212,7 +212,7 @@ func PublishEventOptions(t *testing.T, k *Kafka) {
 		Timestamp: time.Now(),
 	}
 
-	testcases := []struct {
+	tests := []struct {
 		desc    string
 		options *pubsub.PublishOptions
 	}{
@@ -220,7 +220,7 @@ func PublishEventOptions(t *testing.T, k *Kafka) {
 		{"Publish Without Options", nil},
 	}
 
-	for i, tc := range testcases {
+	for i, tc := range tests {
 		err := k.PublishEventWithOptions("testKey", "testValue", map[string]string{
 			"header": "value",
 		}, tc.options)
@@ -417,7 +417,7 @@ func Test_KafkaAuthentication(t *testing.T) {
 			SASL:    SASLConfig{User: tc.userName, Password: tc.pass, Mechanism: tc.authMechanism},
 		}
 
-		_, err := New(cfg, log.NewMockLogger(io.Discard))
+		_, err, _ := NewKafka(cfg, nil, log.NewMockLogger(io.Discard))
 
 		assert.Equal(t, tc.err, err, "TEST[%d], failed.\n%s", i)
 	}
@@ -439,7 +439,7 @@ func Test_invalidSaslMechanism(t *testing.T) {
 		},
 	}
 
-	kafka, err := New(cfg, logger)
+	kafka, err, _ := NewKafka(cfg, nil, logger)
 
 	assert.Equal(t, errInvalidMechanism, err)
 
@@ -452,25 +452,24 @@ func TestKafkaHealthCheck(t *testing.T) {
 	c := config.NewGoDotEnvProvider(logger, "../../../../configs")
 	topic := c.Get("KAFKA_TOPIC")
 	topics := strings.Split(topic, ",")
-	testCases := []struct {
+	tests := []struct {
+		desc       string
 		config     Config
 		expected   types.Health
 		logMessage string
 	}{
-		{Config{Brokers: c.Get("KAFKA_HOSTS"), Topics: topics}, types.Health{Name: datastore.Kafka,
+		{"success case", Config{Brokers: c.Get("KAFKA_HOSTS"), Topics: topics}, types.Health{Name: datastore.Kafka,
 			Status: pkg.StatusUp, Host: c.Get("KAFKA_HOSTS"), Database: topic}, ""},
-		{Config{Brokers: "random", Topics: topics}, types.Health{Name: datastore.Kafka, Status: pkg.StatusDown,
+		{"failure case", Config{Brokers: "random", Topics: topics}, types.Health{Name: datastore.Kafka, Status: pkg.StatusDown,
 			Host: "random", Database: topic}, "Health check failed"},
 	}
 
-	for i, tc := range testCases {
+	for i, tc := range tests {
 		mockConfig := tc.config
-		conn, _ := New(&mockConfig, logger)
+		conn, _, _ := NewKafka(&mockConfig, nil, logger)
 		output := conn.HealthCheck()
 
-		if !reflect.DeepEqual(tc.expected, output) {
-			t.Errorf("[TESTCASE%v]Failed. Got%v Expected%v", i+1, output, tc.expected)
-		}
+		assert.Equal(t, output, tc.expected, "TEST[%d], Failed.\n%s", i, tc.desc)
 
 		if !strings.Contains(b.String(), tc.logMessage) {
 			t.Errorf("Test Failed \nExpected: %v\nGot: %v", tc.logMessage, b.String())
@@ -487,7 +486,7 @@ func TestKafka_HealthCheckDown(t *testing.T) {
 		Brokers: "localhost:2003",
 		Topics:  []string{"unknown-topic"},
 	}
-	conn1, _ := New(c, logger)
+	conn1, _, _ := NewKafka(c, nil, logger)
 
 	var conn2 *Kafka
 
@@ -495,7 +494,7 @@ func TestKafka_HealthCheckDown(t *testing.T) {
 	conn3.config = c
 	conn3.logger = logger
 
-	testcases := []struct {
+	tests := []struct {
 		desc             string
 		conn             *Kafka
 		expectedResponse types.Health
@@ -504,7 +503,7 @@ func TestKafka_HealthCheckDown(t *testing.T) {
 		{"connection without config", conn2, types.Health{Name: datastore.Kafka, Status: pkg.StatusDown}},
 		{"connection using new", conn3, types.Health{Name: datastore.Kafka, Status: pkg.StatusDown, Host: c.Brokers, Database: c.Topics[0]}},
 	}
-	for i, tc := range testcases {
+	for i, tc := range tests {
 		healthCheck := tc.conn.HealthCheck()
 
 		assert.Equal(t, tc.expectedResponse, healthCheck, "TEST[%d], failed.\n%s", i, tc.desc)
@@ -521,9 +520,9 @@ func TestIsSet(t *testing.T) {
 	logger := log.NewMockLogger(io.Discard)
 	c := config.NewGoDotEnvProvider(logger, "../../../../configs")
 	topic := c.Get("KAFKA_TOPIC")
-	conn, _ := New(&Config{Brokers: c.Get("KAFKA_HOSTS"), Topics: strings.Split(topic, ",")}, logger)
+	conn, _, _ := NewKafka(&Config{Brokers: c.Get("KAFKA_HOSTS"), Topics: strings.Split(topic, ",")}, nil, logger)
 
-	testcases := []struct {
+	tests := []struct {
 		k    *Kafka
 		resp bool
 	}{
@@ -534,7 +533,7 @@ func TestIsSet(t *testing.T) {
 		{conn, true},
 	}
 
-	for i, v := range testcases {
+	for i, v := range tests {
 		resp := v.k.IsSet()
 		if resp != v.resp {
 			t.Errorf("[TESTCASE%d]Failed.Expected %v\tGot %v\n", i+1, v.resp, resp)
@@ -546,7 +545,7 @@ func TestSubscribeError(t *testing.T) {
 	logger := log.NewMockLogger(io.Discard)
 	c := config.NewGoDotEnvProvider(logger, "../../../../configs")
 	topic := "dummy-topic"
-	conn, _ := New(&Config{Brokers: c.Get("KAFKA_HOSTS"), Topics: strings.Split(topic, ",")}, logger)
+	conn, _, _ := NewKafka(&Config{Brokers: c.Get("KAFKA_HOSTS"), Topics: strings.Split(topic, ",")}, nil, logger)
 
 	_ = conn.Consumer.ConsumerGroup.Close()
 
@@ -559,7 +558,7 @@ func TestSubscribeWithCommitError(t *testing.T) {
 	logger := log.NewMockLogger(io.Discard)
 	c := config.NewGoDotEnvProvider(logger, "../../../../configs")
 	topic := "dummy-topic"
-	conn, _ := New(&Config{Brokers: c.Get("KAFKA_HOSTS"), Topics: strings.Split(topic, ",")}, logger)
+	conn, _, _ := NewKafka(&Config{Brokers: c.Get("KAFKA_HOSTS"), Topics: strings.Split(topic, ",")}, nil, logger)
 
 	_ = conn.Consumer.ConsumerGroup.Close()
 
@@ -615,7 +614,7 @@ func TestNewKafkaWithAvro(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(respMap)
 	}))
 
-	testCases := []struct {
+	tests := []struct {
 		config  AvroWithKafkaConfig
 		wantErr bool
 	}{
@@ -630,7 +629,7 @@ func TestNewKafkaWithAvro(t *testing.T) {
 			AvroConfig: avro.Config{URL: "dummy-url.com", Subject: "gofr-value"}}, true},
 	}
 
-	for i, tc := range testCases {
+	for i, tc := range tests {
 		mockKafkaConfig := tc.config
 		_, err := NewKafkaWithAvro(&mockKafkaConfig, logger)
 
@@ -701,7 +700,7 @@ func TestKafka_SubscribeNilMessage(t *testing.T) {
 	c := config.NewGoDotEnvProvider(logger, "../../../../configs")
 
 	topic := "test-topic"
-	conn, _ := New(&Config{Brokers: c.Get("KAFKA_HOSTS"), Topics: strings.Split(topic, ",")}, logger)
+	conn, _, _ := NewKafka(&Config{Brokers: c.Get("KAFKA_HOSTS"), Topics: strings.Split(topic, ",")}, nil, logger)
 
 	// close the channel to get the msg as nil
 	close(conn.Consumer.ConsumerGroupHandler.msg)
@@ -800,3 +799,56 @@ type MockConsumerGroupSession struct {
 func (m *MockConsumerGroupSession) MarkOffset(string, int32, int64, string) {
 }
 func (m *MockConsumerGroupSession) MarkMessage(*sarama.ConsumerMessage, string) {}
+
+func Test_NewKafka(t *testing.T) {
+	kafkaConfig := sarama.NewConfig()
+	kafkaConfig.Producer.Return.Successes = false
+
+	logger := log.NewMockLogger(io.Discard)
+
+	tests := []struct {
+		desc     string
+		kafkaCfg *Config
+		avroCfg  *avro.Config
+		expErr   error
+	}{
+		{"invalid mechanism", &Config{Brokers: "localhost:2008,localhost:2009", Topics: []string{"test-topic"}, Config: nil,
+			SASL: SASLConfig{Mechanism: "ABC", User: "test-user"}}, &avro.Config{URL: "localhost:8080"}, errInvalidMechanism},
+		{"success case", &Config{Brokers: "localhost:2008,localhost:2009", Topics: []string{"test-topic"}},
+			&avro.Config{URL: "localhost:8080"}, nil},
+	}
+
+	for i, tc := range tests {
+		_, err, _ := NewKafka(tc.kafkaCfg, tc.avroCfg, logger)
+
+		assert.Equal(t, tc.expErr, err, "TEST[%d], Failed.\n%s", i, tc.desc)
+	}
+}
+
+func Test_initializePubSubInstance(t *testing.T) {
+	cfg := sarama.NewConfig()
+	cfg.Producer.Return.Successes = false
+	cfg1 := sarama.NewConfig()
+	cfg1.Producer.Return.Successes = true
+	cfg1.Consumer.Group.Rebalance.Timeout = -1
+
+	logger := log.NewMockLogger(io.Discard)
+
+	tests := []struct {
+		desc string
+		cfg  *Config
+		err  error
+	}{
+		{"producer initialization error case", &Config{Brokers: "localhost:2009", Config: cfg},
+			sarama.ConfigurationError("Producer.Return.Successes must be true to be used in a SyncProducer")},
+		{"consumer initialization error case", &Config{Brokers: "localhost:2009", Config: cfg1},
+			sarama.ConfigurationError("Consumer.Group.Rebalance.Timeout must be >= 1ms")},
+		{"success case", &Config{Topics: []string{"some-topic"}, Brokers: "localhost:2009"}, nil},
+	}
+
+	for i, tc := range tests {
+		_, err := initializePubSubInstance(tc.cfg, logger)
+
+		assert.Equal(t, tc.err, err, "TEST[%d], Failed.\n%s", i, tc.desc)
+	}
+}

@@ -70,7 +70,7 @@ func TestEventhub_HealthCheck(t *testing.T) {
 	}
 
 	conf := config.NewGoDotEnvProvider(log.NewLogger(), "../../../../configs")
-	testcases := []struct {
+	tests := []struct {
 		c    Config
 		resp types.Health
 	}{
@@ -82,7 +82,7 @@ func TestEventhub_HealthCheck(t *testing.T) {
 			types.Health{Name: datastore.EventHub, Status: pkg.StatusDown, Host: "host-name", Database: "eventhub"}},
 	}
 
-	for i, v := range testcases {
+	for i, v := range tests {
 		testConfig := v.c
 		conn, _ := New(&testConfig)
 
@@ -165,7 +165,7 @@ func TestIsSet(t *testing.T) {
 		ClientSecret: c.Get("AZURE_CLIENT_SECRET"), ClientID: c.Get("AZURE_CLIENT_ID"),
 		TenantID: c.Get("AZURE_TENANT_ID")})
 
-	testcases := []struct {
+	tests := []struct {
 		pubsub pubsub.PublisherSubscriber
 		resp   bool
 	}{
@@ -174,7 +174,7 @@ func TestIsSet(t *testing.T) {
 		{conn, true},
 	}
 
-	for i, v := range testcases {
+	for i, v := range tests {
 		resp := v.pubsub.IsSet()
 		if resp != v.resp {
 			t.Errorf("[TESTCASE%d]Failed.Expected %v\tGot %v\n", i+1, v.resp, resp)
@@ -191,7 +191,7 @@ func Test_NewEventHubWithAvro(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(respMap)
 	}))
 
-	testCases := []struct {
+	tests := []struct {
 		config  AvroWithEventhubConfig
 		wantErr bool
 	}{
@@ -228,7 +228,7 @@ func Test_NewEventHubWithAvro(t *testing.T) {
 		},
 	}
 
-	for i, tc := range testCases {
+	for i, tc := range tests {
 		tcConfig := tc.config
 		_, err := NewEventHubWithAvro(&tcConfig, logger)
 

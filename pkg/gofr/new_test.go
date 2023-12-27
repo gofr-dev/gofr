@@ -482,7 +482,7 @@ func Test_Notifier(t *testing.T) {
 	}
 }
 
-func Test_initializeAvro(t *testing.T) {
+func Test_initializeKafka(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		re := map[string]interface{}{
 			"subject": "gofr-value",
@@ -508,7 +508,9 @@ func Test_initializeAvro(t *testing.T) {
 		Brokers: c.Get("KAFKA_HOSTS"),
 		Topics:  topics,
 	}
-	kafkaObj, _ := kafka.New(kafkaCfg, logger)
+	avroCfg := &avro.Config{Version: "3", Subject: "gofr-value"}
+
+	kafkaObj, _, _ := kafka.NewKafka(kafkaCfg, avroCfg, logger)
 	tests := []struct {
 		c           Config
 		ps          pubsub.PublisherSubscriber
@@ -624,7 +626,7 @@ func Test_initializeAvroFromConfigs(t *testing.T) {
 		Brokers: c.Get("KAFKA_HOSTS"),
 		Topics:  topics,
 	}
-	kafkaObj, _ := kafka.New(kafkaCfg, logger)
+	kafkaObj, _, _ := kafka.NewKafka(kafkaCfg, cfg, logger)
 	testcases := []struct {
 		desc   string
 		ps     pubsub.PublisherSubscriber

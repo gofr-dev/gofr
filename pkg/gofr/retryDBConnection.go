@@ -40,14 +40,10 @@ func kafkaRetry(c *kafka.Config, avroConfig *avro.Config, g *Gofr) {
 
 		g.Logger.Debug("Retrying Kafka connection")
 
-		var err error
+		ps, kafkaErr, avroErr := kafka.NewKafka(c, avroConfig, g.Logger)
+		g.PubSub = ps
 
-		g.PubSub, err = kafka.New(c, g.Logger)
-		if err == nil {
-			g.Logger.Info("Kafka initialized successfully")
-
-			initializeAvro(avroConfig, g)
-
+		if kafkaErr == nil && avroErr == nil {
 			break
 		}
 	}

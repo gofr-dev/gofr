@@ -14,12 +14,24 @@ import (
 	"gofr.dev/pkg/gofr/types"
 )
 
+// Deprecated: This struct will be removed in future instead use avro.Client
 // Avro represents a configuration structure for working with Avro schema serialization and message publishing.
 type Avro struct {
 	schemaVersion        string
 	subject              string
 	schemaRegistryClient SchemaRegistryClientInterface
 	pubSub               pubsub.PublisherSubscriber
+	schema               avro.Schema
+	schemaID             int
+	subSchema            avro.Schema
+}
+
+// Client represents a configuration structure for working with Avro schema serialization
+type Client struct {
+	config               *Config
+	schemaVersion        string
+	subject              string
+	schemaRegistryClient SchemaRegistryClientInterface
 	schema               avro.Schema
 	schemaID             int
 	subSchema            avro.Schema
@@ -50,6 +62,7 @@ func NewWithConfig(c *Config, ps pubsub.PublisherSubscriber) (pubsub.PublisherSu
 	return New(ps, schemaRegistryClient, c.Version, c.Subject)
 }
 
+// Deprecated: This func will be removed in future instead use NewAvro
 // New initializes the avro pubsub model and sets the required fields
 func New(ps pubsub.PublisherSubscriber, src SchemaRegistryClientInterface, version, sub string) (pubsub.PublisherSubscriber, error) {
 	avroPubSub := &Avro{
@@ -79,6 +92,53 @@ func New(ps pubsub.PublisherSubscriber, src SchemaRegistryClientInterface, versi
 	return avroPubSub, nil
 }
 
+// NewClient initializes new Avro along with the configs and returns Avro client and error
+func NewClient(c *Config) (*Client, error) {
+	if c == nil || c.URL == "" {
+		return nil, nil
+	}
+
+	if c.Version == "" {
+		c.Version = "latest"
+	}
+
+	registryURLSlc := strings.Split(c.URL, ",")
+	schemaRegistryClient := NewSchemaRegistryClient(registryURLSlc, c.SchemaUser, c.SchemaPassword)
+
+	return NewAvro(c, schemaRegistryClient)
+}
+
+// NewAvro initializes the Avro Client model and sets the required fields
+func NewAvro(c *Config, src SchemaRegistryClientInterface) (*Client, error) {
+	avroObj := &Client{
+		config:               c,
+		schemaVersion:        c.Version,
+		schemaRegistryClient: src,
+	}
+
+	// Avro should be initialized even if subject is not provided
+	if c.Subject == "" {
+		return avroObj, nil
+	}
+
+	schemaID, schemaStr, err := src.GetSchemaByVersion(c.Subject, c.Version)
+	if err != nil {
+		return nil, err
+	}
+
+	schema, err := avro.Parse(schemaStr)
+	if err != nil {
+		return nil, err
+	}
+
+	avroObj.schemaID = schemaID
+	avroObj.schema = schema
+	avroObj.subject = c.Subject
+
+	return avroObj, nil
+}
+
+// Deprecated: This method will be removed in future instead use Client
 /*
 PublishEventWithOptions publishes message to the avro configured. Ability to provide additional options described in
 PublishOptions struct
@@ -104,11 +164,13 @@ func (a *Avro) PublishEventWithOptions(key string, value interface{}, headers ma
 	return a.pubSub.PublishEventWithOptions(key, binaryEncoded, headers, options)
 }
 
+// Deprecated: This method will be removed in future instead use Client
 // PublishEvent publishes an event onto the pubsub configured
 func (a *Avro) PublishEvent(key string, value interface{}, headers map[string]string) error {
 	return a.PublishEventWithOptions(key, value, headers, nil)
 }
 
+// Deprecated: This method will be removed in future instead use Client
 // Subscribe read messages from avro
 func (a *Avro) Subscribe() (*pubsub.Message, error) {
 	msg, err := a.pubSub.Subscribe()
@@ -119,6 +181,7 @@ func (a *Avro) Subscribe() (*pubsub.Message, error) {
 	return a.processMessage(msg)
 }
 
+// Deprecated: This method will be removed in future instead use avro.Client
 /*
 SubscribeWithCommit calls the CommitFunc after subscribing message from avro and based on the return values decides
 whether to commit message and consume another message
@@ -150,6 +213,7 @@ func (a *Avro) SubscribeWithCommit(f pubsub.CommitFunc) (*pubsub.Message, error)
 	}
 }
 
+// Deprecated: This method will be removed in future instead use Client
 func (a *Avro) processMessage(msg *pubsub.Message) (*pubsub.Message, error) {
 	value := []byte(msg.Value)
 	schemaID := binary.BigEndian.Uint32(value[1:5])
@@ -180,9 +244,7 @@ type Encoder struct {
 	Content  []byte
 }
 
-/* Note: the Confluent schema registry has special requirements for the Avro serialization rules,
-not only need to serialize the specific content, but also attach the Schema ID and Magic Byte.*/
-// Ref: https://docs.confluent.io/current/schema-registry/serializer-formatter.html#wire-format
+// Deprecated: This method will be removed in future instead use Client
 func (a *Encoder) Encode() []byte {
 	var binaryMsg []byte
 
@@ -204,21 +266,25 @@ func (a *Encoder) Encode() []byte {
 	return binaryMsg
 }
 
+// Deprecated: This method will be removed in future instead use Client
 // Bind parses the avro encoded data and stores the result in the value pointed to by target
 func (a *Avro) Bind(message []byte, target interface{}) error {
 	return avro.Unmarshal(a.subSchema, message, target)
 }
 
+// Deprecated: This method will be removed in future instead use Client
 // Ping checks for the health of avro, returns an error if it is down
 func (a *Avro) Ping() error {
 	return a.pubSub.Ping()
 }
 
+// Deprecated: This method will be removed in future instead use Client
 // HealthCheck returns the health of the PubSub
 func (a *Avro) HealthCheck() types.Health {
 	return a.pubSub.HealthCheck()
 }
 
+// Deprecated: This method will be removed in future instead use Client
 // IsSet checks whether avro is initialized or not
 func (a *Avro) IsSet() bool {
 	if a == nil {
@@ -232,7 +298,74 @@ func (a *Avro) IsSet() bool {
 	return true
 }
 
+// Deprecated: This method will be removed in future instead use Client
 // CommitOffset marks a particular offset on a specific partition as Read.
 func (a *Avro) CommitOffset(offsets pubsub.TopicPartition) {
 	a.pubSub.CommitOffset(offsets)
+}
+
+// Serialize method is used to serialize the value with a defined a schema and attaches
+// the schema Id with the value itself(wire format)
+/* Note: the Confluent schema registry has special requirements for the Avro serialization rules,
+not only need to serialize the specific content, but also attach the Schema ID and Magic Byte.*/
+// Ref: https://docs.confluent.io/current/schema-registry/serializer-formatter.html#wire-format
+func (a *Client) Serialize(value interface{}) ([]byte, error) {
+	var binaryMsg []byte
+
+	n := 4
+
+	// Confluent serialization format version number; currently always 0.
+	binaryMsg = append(binaryMsg, byte(0))
+
+	// 4-byte schema ID as returned by Schema Registry
+	binarySchemaID := make([]byte, n)
+
+	binary.BigEndian.PutUint32(binarySchemaID, uint32(a.schemaID))
+
+	binaryMsg = append(binaryMsg, binarySchemaID...)
+
+	// Missing schema will generate panic
+	if a.schema == nil {
+		return nil, &errors.Response{Code: "Missing schema", Reason: "Avro is initialized without schema"}
+	}
+
+	binaryValue, err := avro.Marshal(a.schema, value)
+	if err != nil {
+		return nil, &errors.Response{Reason: "Error in Marshaling the schema"}
+	}
+
+	// Avro serialized data in Avro's binary encoding
+	binaryMsg = append(binaryMsg, binaryValue...)
+
+	return binaryMsg, nil
+}
+
+// Deserialize method deserialize the event with checking the avro compatibility
+func (a *Client) Deserialize(msg *pubsub.Message) (finalMsg *pubsub.Message, err error) {
+	value := []byte(msg.Value)
+	schemaID := binary.BigEndian.Uint32(value[1:5])
+
+	finalMsg = &pubsub.Message{
+		SchemaID:  int(schemaID),
+		Topic:     msg.Topic,
+		Partition: msg.Partition,
+		Offset:    msg.Offset,
+		Key:       msg.Key,
+		Value:     msg.Value[5:],
+		Headers:   msg.Headers,
+	}
+
+	schema, err := a.schemaRegistryClient.GetSchema(int(schemaID))
+	if err != nil {
+		return finalMsg, err
+	}
+
+	a.subSchema, _ = avro.Parse(schema)
+
+	return finalMsg, err
+}
+
+// Bind method unmarshal the consumed message as per the defined target and schema
+func (a *Client) Bind(message []byte, target interface{}) error {
+	return avro.Unmarshal(a.subSchema, message, target)
 }

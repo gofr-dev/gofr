@@ -60,7 +60,7 @@ func Test_New(t *testing.T) {
 	incorrectTopicName := fmt.Sprintf("testTopic%v", time.Now())
 	logger := log.NewMockLogger(io.Discard)
 
-	testCases := []struct {
+	tests := []struct {
 		desc   string
 		config *Config
 		expErr error
@@ -75,7 +75,7 @@ func Test_New(t *testing.T) {
 			&apierror.APIError{}},
 	}
 
-	for i, tc := range testCases {
+	for i, tc := range tests {
 		res, err := New(tc.config, logger)
 
 		assert.IsTypef(t, &GCPubSub{}, res, "Test [%d] Failed: %v", i+1, tc.desc)
@@ -98,7 +98,7 @@ func Test_createSubscription(t *testing.T) {
 
 	cfg := config.NewGoDotEnvProvider(log.NewMockLogger(io.Discard), "../../../../configs")
 
-	testCases := []struct {
+	tests := []struct {
 		desc         string
 		Subscription *Subscription
 		expErr       error
@@ -108,7 +108,7 @@ func Test_createSubscription(t *testing.T) {
 		{"Failure case: invalid subscription name provided", &Subscription{Name: "9999"}, errors.Error("")},
 	}
 
-	for i, tc := range testCases {
+	for i, tc := range tests {
 		g.config.SubscriptionDetails = tc.Subscription
 		err := createSubscription(ctx, g)
 
@@ -207,7 +207,7 @@ func Test_PublishEventWithOptions(t *testing.T) {
 		fmt.Println("Error case")
 	}
 
-	testCases := []struct {
+	tests := []struct {
 		desc    string
 		value   interface{}
 		options *pubsub.PublishOptions
@@ -220,7 +220,7 @@ func Test_PublishEventWithOptions(t *testing.T) {
 		{"Success case: options is nil", "test value", nil, nil},
 	}
 
-	for i, tc := range testCases {
+	for i, tc := range tests {
 		err := g.PublishEventWithOptions("", tc.value, map[string]string{}, tc.options)
 
 		assert.IsTypef(t, tc.expErr, err, "Test [%d] Failed: %v", i+1, tc.desc)
@@ -257,7 +257,7 @@ func Test_Bind(t *testing.T) {
 func Test_Ping(t *testing.T) {
 	g := initializeTest(t)
 
-	testCases := []struct {
+	tests := []struct {
 		desc      string
 		topicName string
 		expErr    error
@@ -266,7 +266,7 @@ func Test_Ping(t *testing.T) {
 		{"Success case: value and options are given", "incorrectTopic", errors.Error("")},
 	}
 
-	for i, tc := range testCases {
+	for i, tc := range tests {
 		g.config.TopicName = tc.topicName
 		err := g.Ping()
 
@@ -346,7 +346,7 @@ func Test_IsSet(t *testing.T) {
 	t.Setenv("PUBSUB_BACKEND", "google")
 	t.Setenv("PUBSUB_EMULATOR_HOST", "localhost:8086")
 
-	testCases := []struct {
+	tests := []struct {
 		desc   string
 		client *gpubsub.Client
 		expRes bool
@@ -356,7 +356,7 @@ func Test_IsSet(t *testing.T) {
 	}
 	g := GCPubSub{}
 
-	for i, tc := range testCases {
+	for i, tc := range tests {
 		g.client = tc.client
 		res := g.IsSet()
 

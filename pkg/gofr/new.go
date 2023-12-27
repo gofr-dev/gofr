@@ -470,28 +470,28 @@ func initializeKafka(c Config, g *Gofr) {
 	topic := c.Get("KAFKA_TOPIC")
 
 	if hosts != "" && topic != "" {
-		var err error
-
 		kafkaConfig := kafkaConfigFromEnv(c, "")
 		avroConfig := avroConfigFromEnv(c, "")
 
-		g.PubSub, err = kafka.New(kafkaConfig, g.Logger)
+		ps, kafkaErr, avroErr := kafka.NewKafka(kafkaConfig, avroConfig, g.Logger)
+		g.PubSub = ps
+
 		g.DatabaseHealth = append(g.DatabaseHealth, g.PubSubHealthCheck)
 
-		if err != nil {
+		if kafkaErr != nil {
 			g.Logger.Errorf("Kafka could not be initialized, Hosts: %v, Topic: %v, error: %v\n",
-				hosts, topic, err)
+				hosts, topic, kafkaErr)
 
 			go kafkaRetry(kafkaConfig, avroConfig, g)
 
 			return
 		}
 
-		g.Logger.Infof("Kafka initialized. Hosts: %v, Topic: %v\n", hosts, topic)
+		if avroErr != nil {
+			g.Logger.Errorf("Avro could not be initialized! SchemaRegistry: %v, Subject: %v, Version: %v, error: %v\n",
+				avroConfig.URL, avroConfig.Subject, avroConfig.Version, avroErr)
 
-		// initialize Avro using Kafka pubsub if the schema url is specified
-		if avroConfig.URL != "" {
-			initializeAvro(avroConfig, g)
+			return
 		}
 	}
 }
@@ -499,15 +499,15 @@ func initializeKafka(c Config, g *Gofr) {
 // initializeKafkaFromConfigs initializes kafka
 func initializeKafkaFromConfigs(c Config, l log.Logger, prefix string) (pubsub.PublisherSubscriber, error) {
 	cfg := kafkaConfigFromEnv(c, prefix)
+	avroCfg := avroConfigFromEnv(c, prefix)
 
-	k, err := kafka.New(cfg, l)
-	if err != nil {
-		return nil, err
+	k, kafkaErr, avroErr := kafka.NewKafka(cfg, avroCfg, l)
+	if kafkaErr != nil {
+		return nil, kafkaErr
 	}
 
-	avroCfg := avroConfigFromEnv(c, prefix)
-	if avroCfg != nil && avroCfg.URL != "" {
-		return initializeAvroFromConfigs(avroCfg, k)
+	if avroErr != nil {
+		return nil, avroErr
 	}
 
 	return k, nil

@@ -33,7 +33,7 @@ func Test_New(t *testing.T) {
 
 func TestEventBridge_PublishEvent(t *testing.T) {
 	ch := make(chan int)
-	tcs := []struct {
+	tests := []struct {
 		region string
 		detail interface{}
 		err    error
@@ -43,7 +43,7 @@ func TestEventBridge_PublishEvent(t *testing.T) {
 		{"us-east-1", "sample payload", nil},
 	}
 
-	for i, tc := range tcs {
+	for i, tc := range tests {
 		var eBridge Client
 
 		awscfg := aws.NewConfig().WithRegion(tc.region)
@@ -67,7 +67,7 @@ func TestEventBridge_HealthCheck(t *testing.T) {
 	eBridge.cfg = &Config{EventBus: "gofr", EventSource: "application"}
 	eb := &eBridge
 
-	testcases := []struct {
+	tests := []struct {
 		client  *Client
 		expResp types.Health
 	}{
@@ -76,7 +76,7 @@ func TestEventBridge_HealthCheck(t *testing.T) {
 			expResp: types.Health{Name: datastore.EventBridge, Status: pkg.StatusDown, Host: "us-west-2", Database: "gofr"}},
 		{client: eb, expResp: types.Health{Name: datastore.EventBridge, Status: pkg.StatusUp, Host: "", Database: "gofr"}},
 	}
-	for i, tc := range testcases {
+	for i, tc := range tests {
 		resp := tc.client.HealthCheck()
 		assert.Equalf(t, tc.expResp, resp, "Test case failed [%v]. Expected: %v, got: %v", i, tc.expResp, resp)
 	}
@@ -140,7 +140,7 @@ func TestEventBridge_IsSet(t *testing.T) {
 	eBridge.cfg = &Config{EventBus: "gofr", EventSource: "application"}
 	eb := &eBridge
 
-	testcases := []struct {
+	tests := []struct {
 		client  *Client
 		expResp bool
 	}{
@@ -148,7 +148,7 @@ func TestEventBridge_IsSet(t *testing.T) {
 		{client: &Client{client: nil, cfg: &Config{}}, expResp: false},
 		{client: eb, expResp: true},
 	}
-	for i, tc := range testcases {
+	for i, tc := range tests {
 		resp := tc.client.IsSet()
 		assert.Equalf(t, tc.expResp, resp, "Test case failed [%v]. \n Expected: %v, got %v", i, tc.expResp, resp)
 	}
