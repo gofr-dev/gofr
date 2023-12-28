@@ -18,7 +18,16 @@ const (
 func CORS(envHeaders map[string]string) func(inner http.Handler) http.Handler {
 	return func(inner http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			corsHeadersConfig := getValidCORSHeaders(envHeaders)
+			corsHeaderMappings := map[string]string{
+				"ACCESS_CONTROL_ALLOW_HEADERS":     "Access-Control-Allow-Headers",
+				"ACCESS_CONTROL_ALLOW_METHODS":     "Access-Control-Allow-Methods",
+				"ACCESS_CONTROL_ALLOW_CREDENTIALS": "Access-Control-Allow-Credentials",
+				"ACCESS_CONTROL_EXPOSE_HEADERS":    "Access-Control-Expose-Headers",
+				"ACCESS_CONTROL_MAX_AGE":           "Access-Control-Max-Age",
+				"ACCESS_CONTROL_ALLOW_ORIGIN":      "Access-Control-Allow-Origin",
+			}
+
+			corsHeadersConfig := getValidCORSHeaders(envHeaders, corsHeaderMappings)
 			for k, v := range corsHeadersConfig {
 				w.Header().Set(k, v)
 			}
@@ -35,29 +44,29 @@ func CORS(envHeaders map[string]string) func(inner http.Handler) http.Handler {
 
 // getValidCORSHeaders returns a validated map of CORS headers.
 // values specified in env are present in envHeaders
-func getValidCORSHeaders(envHeaders map[string]string) map[string]string {
+func getValidCORSHeaders(configHeaders, headerMappings map[string]string) map[string]string {
 	validCORSHeadersAndValues := make(map[string]string)
 
 	for _, header := range AllowedCORSHeader() {
 		// If config is set, use that
-		if val, ok := envHeaders[header]; ok && val != "" {
-			validCORSHeadersAndValues[header] = val
+		if val, ok := configHeaders[header]; ok && val != "" {
+			validCORSHeadersAndValues[headerMappings[header]] = val
 			continue
 		}
 
 		// If config is not set - for the three headers, set default value.
 		switch header {
-		case "Access-Control-Allow-Headers":
-			validCORSHeadersAndValues[header] = allowedHeaders
-		case "Access-Control-Allow-Methods":
-			validCORSHeadersAndValues[header] = allowedMethods
+		case "ACCESS_CONTROL_ALLOW_HEADERS":
+			validCORSHeadersAndValues[headerMappings[header]] = allowedHeaders
+		case "ACCESS_CONTROL_ALLOW_METHODS":
+			validCORSHeadersAndValues[headerMappings[header]] = allowedMethods
 		}
 	}
 
-	val := validCORSHeadersAndValues["Access-Control-Allow-Headers"]
+	val := validCORSHeadersAndValues[headerMappings["ACCESS_CONTROL_ALLOW_HEADERS"]]
 
 	if val != allowedHeaders {
-		validCORSHeadersAndValues["Access-Control-Allow-Headers"] = allowedHeaders + ", " + val
+		validCORSHeadersAndValues[headerMappings["ACCESS_CONTROL_ALLOW_HEADERS"]] = allowedHeaders + ", " + val
 	}
 
 	return validCORSHeadersAndValues
@@ -66,10 +75,11 @@ func getValidCORSHeaders(envHeaders map[string]string) map[string]string {
 // AllowedCORSHeader returns the HTTP headers used for CORS configuration in web applications.
 func AllowedCORSHeader() []string {
 	return []string{
-		"Access-Control-Allow-Headers",
-		"Access-Control-Allow-Methods",
-		"Access-Control-Allow-Credentials",
-		"Access-Control-Expose-Headers",
-		"Access-Control-Max-Age",
+		"ACCESS_CONTROL_ALLOW_HEADERS",
+		"ACCESS_CONTROL_ALLOW_METHODS",
+		"ACCESS_CONTROL_ALLOW_CREDENTIALS",
+		"ACCESS_CONTROL_EXPOSE_HEADERS",
+		"ACCESS_CONTROL_MAX_AGE",
+		"ACCESS_CONTROL_ALLOW_ORIGIN",
 	}
 }
