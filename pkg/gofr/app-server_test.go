@@ -39,12 +39,12 @@ func TestContextInjector(t *testing.T) {
 func Test_getMWVars(t *testing.T) {
 	conf := &config.MockConfig{Data: map[string]string{
 		"VALIDATE_HEADERS":       "TRUE",
-		"Access-Control-Max-Age": "2000",
+		"ACCESS_CONTROL_MAX_AGE": "2000",
 	}}
 
 	expectedResult := map[string]string{
 		"VALIDATE_HEADERS":       "TRUE",
-		"Access-Control-Max-Age": "2000",
+		"ACCESS_CONTROL_MAX_AGE": "2000",
 		"LOG_OMIT_HEADERS":       "",
 	}
 
