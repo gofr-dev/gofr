@@ -14,10 +14,14 @@ import (
 	"gofr.dev/pkg/log"
 )
 
+// MQTT is the struct that implements PublisherSubscriber interface to
+// provide functionality for the MQTT as a pubsub
 type MQTT struct {
-	client mqtt.Client
-	logger log.Logger
-	config *Config
+	// contains filtered or unexported fields
+	client   mqtt.Client
+	logger   log.Logger
+	config   *Config
+	messages chan *pubsub.Message
 }
 
 type Config struct {
@@ -30,6 +34,7 @@ type Config struct {
 	Topic                   string
 	QoS                     byte
 	Order                   bool
+	RetrieveRetained        bool
 	ConnectionRetryDuration int
 }
 
@@ -56,6 +61,7 @@ func New(config *Config, logger log.Logger) (pubsub.PublisherSubscriber, error) 
 	}
 
 	options.SetOrderMatters(config.Order)
+	options.SetResumeSubs(config.RetrieveRetained)
 
 	// upon connection to the client, this is called
 	options.OnConnect = func(client mqtt.Client) {
@@ -76,9 +82,11 @@ func New(config *Config, logger log.Logger) (pubsub.PublisherSubscriber, error) 
 		return &MQTT{config: config, logger: logger}, token.Error()
 	}
 
+	msg := make(chan *pubsub.Message)
+
 	logger.Debugf("connected to MQTT, HostName : %v, Port : %v", config.Hostname, config.Port)
 
-	return &MQTT{config: config, logger: logger, client: client}, nil
+	return &MQTT{config: config, logger: logger, client: client, messages: msg}, nil
 }
 
 func (m *MQTT) PublishEvent(_ string, value interface{}, _ map[string]string) error {
@@ -123,10 +131,21 @@ func (m *MQTT) Subscribe() (*pubsub.Message, error) {
 	// for every subscribe increment metric count
 	pubsub.SubscribeReceiveCount(m.config.Topic, "")
 
-	msg := make(chan *pubsub.Message)
+	// check if there are any messages in the queue
+	// since the client would have called our handler defined below
+	// in goroutines continuously for every published message
+	select {
+	case <-m.messages:
+		return <-m.messages, nil
+	default:
+	}
 
+	// handler is the function called to receive messages
 	handler := func(_ mqtt.Client, message mqtt.Message) {
-		msg <- &pubsub.Message{
+		// increment success counter for successful subscribing
+		pubsub.SubscribeSuccessCount(m.config.Topic, "")
+
+		m.messages <- &pubsub.Message{
 			Value: string(message.Payload()),
 			Topic: message.Topic(),
 		}
@@ -140,10 +159,7 @@ func (m *MQTT) Subscribe() (*pubsub.Message, error) {
 		return nil, token.Error()
 	}
 
-	// increment success counter for successful subscribing
-	pubsub.SubscribeSuccessCount(m.config.Topic, "")
-
-	return <-msg, nil
+	return <-m.messages, nil
 }
 
 func (m *MQTT) SubscribeWithCommit(_ pubsub.CommitFunc) (*pubsub.Message, error) {
