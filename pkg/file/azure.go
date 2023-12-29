@@ -3,6 +3,7 @@ package file
 import (
 	"context"
 	"fmt"
+	"math"
 	"math/rand"
 	"net/url"
 	"os"
@@ -62,7 +63,11 @@ func newAzureFile(c *AzureConfig, filename string, mode Mode) (*azure, error) {
 			return nil, err
 		}
 
-		azFile.parallelism = uint16(pl)
+		if pl>=0 && pl<= math.MaxUint16{
+			azFile.parallelism = uint16(pl)
+		} else {
+			azFile.parallelism = uint16(0)
+		}
 	}
 
 	return azFile, nil
