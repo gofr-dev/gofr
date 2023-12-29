@@ -7,14 +7,6 @@
 docker run --rm -e CLICKHOUSE_DB=users -e CLICKHOUSE_USER=root -e CLICKHOUSE_PASSWORD=password -e CLICKHOUSE_HTTP_PORT=8123 -p 9001:9000/tcp  -p 8080:8123/tcp clickhouse/clickhouse-server
 ```
 
-### Create table inside clickhouse terminal
-
-#### Run the below steps inside Docker Terminal
-1. `clickhouse-client`
-2. ```c
-   CREATE TABLE IF NOT EXISTS users(id UUID PRIMARY KEY , name varchar(50) , age varchar(50)) ENGINE = MergeTree ORDER BY id;"
-   ```
-   
 ## Run
 
 Now run the example on path `/zopsmart/gofr/examples/using-clickhouse` by `go run main.go`
