@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
+	"math"
 	"net/url"
 	"strconv"
 	"testing"
@@ -100,6 +101,26 @@ func Test_azure_push(t *testing.T) {
 	assert.Equal(t, expErr, actualErr, "Tests failed")
 
 	_ = localFile.Close()
+}
+
+func TestValidateAndConvertToUint16(t *testing.T) {
+	tests := []struct {
+		desc   string
+		input  int
+		output uint16
+	}{
+		{"less than 0", -1, uint16(0)},
+		{"is 0", 0, uint16(0)},
+		{"is max uint16", math.MaxUint16, uint16(math.MaxUint16)},
+		{"in uint16 range", 10, uint16(10)},
+		{"greater than uint16 range", math.MaxUint16 + 1, uint16(0)},
+	}
+
+	for _, tc := range tests {
+		result := validateAndConvertToUint16(tc.input)
+
+		assert.Equal(t, tc.output, result)
+	}
 }
 
 func Test_azure_fetch(t *testing.T) {
