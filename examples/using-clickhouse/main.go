@@ -1,7 +1,10 @@
 package main
 
 import (
+	"gofr.dev/cmd/gofr/migration"
+	dbmigration "gofr.dev/cmd/gofr/migration/dbMigration"
 	"gofr.dev/examples/using-clickhouse/handler"
+	"gofr.dev/examples/using-clickhouse/migrations"
 	"gofr.dev/examples/using-clickhouse/store"
 	"gofr.dev/pkg/gofr"
 )
@@ -11,6 +14,16 @@ func main() {
 
 	s := store.New()
 	h := handler.New(s)
+
+	appName := app.Config.Get("APP_NAME")
+
+	err := migration.Migrate(appName, dbmigration.NewClickhouse(app.ClickHouse), migrations.All(),
+		dbmigration.UP, app.Logger)
+	if err != nil {
+		app.Logger.Error(err)
+
+		return
+	}
 
 	// specifying the different routes supported by this service
 	app.GET("/user", h.Get)
