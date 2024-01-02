@@ -231,12 +231,12 @@ func (m *mongoMonitor) Started(_ context.Context, evt *event.CommandStartedEvent
 func (m *mongoMonitor) Succeeded(_ context.Context, evt *event.CommandSucceededEvent) {
 	// since map gets populated for every mongo operation, we will delete the keys post operation to avoid a bulky map
 	query, _ := m.event.LoadAndDelete(evt.RequestID)
-	m.monitorMongo(fmt.Sprint(query), evt.CommandName, float64(evt.Duration))
+	m.monitorMongo(fmt.Sprint(query), evt.CommandName, float64(evt.Duration.Nanoseconds()))
 }
 
 // Failed indicates that the event has failed.
 func (m *mongoMonitor) Failed(_ context.Context, evt *event.CommandFailedEvent) {
 	// since map gets populated for every mongo operation, we will delete the keys post operation to avoid a bulky map
 	query, _ := m.event.LoadAndDelete(evt.RequestID)
-	m.monitorMongo(fmt.Sprint(query), evt.CommandName, float64(evt.Duration))
+	m.monitorMongo(fmt.Sprint(query), evt.CommandName, float64(evt.Duration.Nanoseconds()))
 }
