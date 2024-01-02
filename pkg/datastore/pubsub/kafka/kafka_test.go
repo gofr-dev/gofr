@@ -8,11 +8,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"reflect"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -375,7 +377,7 @@ func Test_processSASLConfigs(t *testing.T) {
 		expConfig.Net.SASL.Mechanism = sarama.SASLMechanism(tc.mechanism)
 		expConfig.Net.SASL.SCRAMClientGeneratorFunc = tc.SCRAMClientGeneratorFunc
 
-		saslConfig := SASLConfig{
+		saslConfig := &SASLConfig{
 			User:      "testuser",
 			Password:  "password",
 			Mechanism: tc.mechanism,
@@ -414,7 +416,7 @@ func Test_KafkaAuthentication(t *testing.T) {
 
 			Brokers: c.Get("KAFKA_HOSTS"),
 			Topics:  topics,
-			SASL:    SASLConfig{User: tc.userName, Password: tc.pass, Mechanism: tc.authMechanism},
+			SASL:    &SASLConfig{User: tc.userName, Password: tc.pass, Mechanism: tc.authMechanism},
 		}
 
 		_, err := New(cfg, log.NewMockLogger(io.Discard))
@@ -432,7 +434,7 @@ func Test_invalidSaslMechanism(t *testing.T) {
 	cfg := &Config{
 		Brokers: c.Get("KAFKA_HOSTS"),
 		Topics:  topics,
-		SASL: SASLConfig{
+		SASL: &SASLConfig{
 			User:      "invalid-user-name",
 			Password:  "password",
 			Mechanism: "invalid-mechanism",
@@ -799,4 +801,38 @@ type MockConsumerGroupSession struct {
 
 func (m *MockConsumerGroupSession) MarkOffset(string, int32, int64, string) {
 }
+
 func (m *MockConsumerGroupSession) MarkMessage(*sarama.ConsumerMessage, string) {}
+
+func Test_createTLSConfiguration(t *testing.T) {
+	tests := []struct {
+		desc           string
+		caCertPath     string
+		clientCertPath string
+		clientKeyPath  string
+		expErr         error
+	}{
+		{"when ca certificate is invalid", "../.github/setups/certFiles/ca-cert.pem",
+			"../../.github/setups/certFiles/client-cert.pem",
+			"../../.github/setups/certFiles/client-key.pem",
+			&fs.PathError{Op: "open", Path: "../.github/setups/certFiles/ca-cert.pem", Err: syscall.Errno(0x2)}},
+		{"when client certificate is invalid", "../.github/setups/certFiles/ca-cert.pem",
+			"../.github/setups/certFiles/client-cert.pem",
+			"../../.github/setups/certFiles/client-key.pem",
+			&fs.PathError{Op: "open", Path: "../.github/setups/certFiles/ca-cert.pem", Err: syscall.Errno(0x2)}},
+		{"when client private key file is invalid", "../.github/setups/certFiles/ca-cert.pem",
+			"../../.github/setups/certFiles/client-cert.pem",
+			"../.github/setups/certFiles/client-key.pem",
+			&fs.PathError{Op: "open", Path: "../.github/setups/certFiles/ca-cert.pem", Err: syscall.Errno(0x2)}},
+		{"when files are valid", "../../../../.github/setups/certFiles/ca-cert.pem",
+			"../../../../.github/setups/certFiles/client-cert.pem",
+			"../../../../.github/setups/certFiles/client-key.pem",
+			nil},
+	}
+
+	for i, tc := range tests {
+		_, err := createTLSConfiguration(tc.caCertPath, tc.clientCertPath, tc.clientKeyPath)
+
+		assert.Equal(t, err, tc.expErr, "Test [%d] Failed: %v", i+1, tc.desc)
+	}
+}

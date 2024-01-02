@@ -6,6 +6,7 @@ package kafka
 
 import (
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"net"
 	"os"
@@ -77,7 +78,7 @@ type Config struct {
 	Brokers string
 
 	// SASL provide configs for authentication
-	SASL SASLConfig
+	SASL *SASLConfig
 
 	// MaxRetry number of times to retry sending a failing message
 	MaxRetry int
@@ -123,6 +124,15 @@ type SASLConfig struct {
 
 	// SSLVerify set it to true if certificate verification is required
 	SSLVerify bool
+
+	// CertificateFile for TLS client authentication
+	CertificateFile string
+
+	// KeyFile for TLS client authentication
+	KeyFile string
+
+	// CACertificateFile is the certificate authority file for TLS client authentication
+	CACertificateFile string
 }
 
 // NewKafkaFromEnv fetches the config from environment variables and tries to connect to Kafka
@@ -139,7 +149,7 @@ func NewKafkaFromEnv() (*Kafka, error) {
 
 	config := &Config{
 		Brokers: hosts,
-		SASL: SASLConfig{
+		SASL: &SASLConfig{
 			User:      user,
 			Password:  password,
 			Mechanism: mechanism,
@@ -338,15 +348,22 @@ func setDefaultConfig(config *sarama.Config) {
 	}
 }
 
-func processSASLConfigs(s SASLConfig, conf *sarama.Config) {
+func processSASLConfigs(s *SASLConfig, conf *sarama.Config) {
 	if s.User != "" && s.Password != "" {
+		conf.Net.SASL.Enable = true
 		conf.Net.SASL.User = s.User
 		conf.Net.SASL.Password = s.Password
 		conf.Net.SASL.Handshake = true
-		conf.Net.SASL.Enable = true
-		conf.Net.TLS.Enable = true
-		conf.Net.TLS.Config = &tls.Config{
-			InsecureSkipVerify: true, //nolint:gosec // TLS InsecureSkipVerify set true.
+
+		if s.SSLVerify {
+			conf.Net.TLS.Enable = true
+			tlsConf, err := createTLSConfiguration(s.CACertificateFile, s.CertificateFile, s.KeyFile)
+
+			if err != nil {
+				return
+			}
+
+			conf.Net.TLS.Config = tlsConf
 		}
 
 		switch s.Mechanism {
@@ -359,6 +376,36 @@ func processSASLConfigs(s SASLConfig, conf *sarama.Config) {
 			conf.Net.SASL.Mechanism = sarama.SASLMechanism(s.Mechanism)
 		}
 	}
+}
+
+// createTLSConfiguration creates TLS configuration on the basis of provided configs
+func createTLSConfiguration(caCertPath, clientCertPath, clientKeyPath string) (*tls.Config, error) {
+	rootCertPool := x509.NewCertPool()
+
+	pem, err := os.ReadFile(caCertPath)
+	if err != nil {
+		return &tls.Config{MinVersion: tls.VersionTLS12}, err
+	}
+
+	if ok := rootCertPool.AppendCertsFromPEM(pem); !ok {
+		return &tls.Config{MinVersion: tls.VersionTLS12}, err
+	}
+
+	clientCert := make([]tls.Certificate, 0, 1)
+
+	certs, err := tls.LoadX509KeyPair(clientCertPath, clientKeyPath)
+	if err != nil {
+		return &tls.Config{MinVersion: tls.VersionTLS12}, err
+	}
+
+	clientCert = append(clientCert, certs)
+
+	return &tls.Config{
+		RootCAs:      rootCertPool,
+		Certificates: clientCert,
+		//nolint:gosec // cannot keep InsecureSkipVerify as false as one can use self signed certificates
+		InsecureSkipVerify: true, // needed for self signed certs
+	}, nil
 }
 
 // PublishEvent publishes the event to kafka

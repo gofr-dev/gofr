@@ -191,15 +191,20 @@ func kafkaConfigFromEnv(c Config, prefix string) *kafka.Config {
 	}
 
 	disableautocommit, _ := strconv.ParseBool(c.GetOrDefault(prefix+"KAFKA_AUTOCOMMIT_DISABLE", "false"))
+	sslVerify, _ := strconv.ParseBool(c.GetOrDefault(prefix+"SSL_VERIFY", "false"))
 
 	// converting the CSV string to slice of string
 	topics := strings.Split(topic, ",")
 	config := &kafka.Config{
 		Brokers: hosts,
-		SASL: kafka.SASLConfig{
-			User:      c.Get(prefix + "KAFKA_SASL_USER"),
-			Password:  c.Get(prefix + "KAFKA_SASL_PASS"),
-			Mechanism: c.Get(prefix + "KAFKA_SASL_MECHANISM"),
+		SASL: &kafka.SASLConfig{
+			SSLVerify:         sslVerify,
+			User:              c.Get(prefix + "KAFKA_SASL_USER"),
+			Password:          c.Get(prefix + "KAFKA_SASL_PASS"),
+			Mechanism:         c.Get(prefix + "KAFKA_SASL_MECHANISM"),
+			CertificateFile:   c.Get(prefix + "KAFKA_CERTIFICATE_FILE"),
+			KeyFile:           c.Get(prefix + "KAFKA_KEY_FILE"),
+			CACertificateFile: c.Get(prefix + "KAFKA_CA_CERTIFICATE_FILE"),
 		},
 		Topics:            topics,
 		MaxRetry:          maxRetry,
