@@ -3,6 +3,7 @@ package file
 import (
 	"context"
 	"fmt"
+	"math"
 	"math/rand"
 	"net/url"
 	"os"
@@ -62,7 +63,7 @@ func newAzureFile(c *AzureConfig, filename string, mode Mode) (*azure, error) {
 			return nil, err
 		}
 
-		azFile.parallelism = uint16(pl)
+		azFile.parallelism = validateAndConvertToUint16(pl)
 	}
 
 	return azFile, nil
@@ -99,4 +100,12 @@ func (a *azure) list(string) ([]string, error) {
 func randomString() string {
 	r := rand.New(rand.NewSource(time.Now().UnixNano())) //nolint:gosec //  Use of weak random number generator
 	return strconv.Itoa(r.Int())
+}
+
+func validateAndConvertToUint16(num int) uint16 {
+	if num >= 0 && num <= math.MaxUint16 {
+		return uint16(num)
+	}
+
+	return uint16(0)
 }
