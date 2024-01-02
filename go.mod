@@ -17,7 +17,7 @@ require (
 	github.com/XSAM/otelsql v0.27.0
 	github.com/aws/aws-sdk-go v1.49.9
 	github.com/aws/aws-sdk-go-v2/credentials v1.16.12
-	github.com/aws/aws-sdk-go-v2/service/s3 v1.47.6
+	github.com/aws/aws-sdk-go-v2/service/s3 v1.47.7
 	github.com/bmizerany/assert v0.0.0-20160611221934-b7ed37b82869
 	github.com/elastic/go-elasticsearch/v7 v7.17.10
 	github.com/getkin/kin-openapi v0.122.0
