@@ -337,7 +337,7 @@ func Test_MongoMonitorFailed(t *testing.T) {
 		expectedLog string
 	}{
 		{map[int64]string{92111: `{"delete":"test"}`}, 12300, 92111, map[int64]string{},
-			`{"datastore":"","duration":0p	,"host":"localhost","query":["{\"delete\":\"test\"}"]}`},
+			`{"datastore":"","duration":0,"host":"localhost","query":["{\"delete\":\"test\"}"]}`},
 		{map[int64]string{732383: `{"find":"test"}`, 89098: `{"insert":"customers}`}, 78,
 			732383, map[int64]string{89098: `{"insert":"customers}`},
 			`{"datastore":"","duration":0,"host":"localhost","query":["{\"find\":\"test\"}"]}`},
