@@ -55,6 +55,7 @@ jobs:
         run: >-
           echo "image=`echo gcr.io/${{ env.GCR_PROJECT }}/${{ env.APP_NAME
           }}:${{ github.sha }}`" >> "$GITHUB_OUTPUT"
+
   stage_deployment:
     runs-on: ubuntu-latest
     needs: stage_build
@@ -67,35 +68,35 @@ jobs:
           project_id: '${{ env.GCR_PROJECT }}'
           service_account_key: '${{ secrets.DEPLOY_KEY }}'
           export_default_credentials: true
-#  check-tag:
-#    runs-on: ubuntu-latest
-#    if: 'startsWith(github.ref, ''refs/tags/v'')'
-#    outputs:
-#      tag_exists: '${{ steps.tag-check.outputs.tag_exists }}'
-#    steps:
-#      - name: Checkout code
-#        uses: actions/checkout@v2
-#      - name: Set up Cloud SDK
-#        uses: google-github-actions/setup-gcloud@v0
-#        with:
-#          project_id: '${{ env.GCR_PROJECT }}'
-#          service_account_key: '${{ secrets.DEPLOY_KEY }}'
-#          export_default_credentials: true
-#      - name: Check if tag exists
-#        id: tag-check
-#        run: >
-#          if gcloud container images describe gcr.io/${{ env.GCR_PROJECT }}/${{
-#          env.APP_NAME }}:${{ github.sha }} 2>/dev/null; then
-#              echo "tag_exists=true" >> "$GITHUB_OUTPUT"
-#          else
-#              echo "tag_exists=false" >> "$GITHUB_OUTPUT"
-#          fi
-#      - name: Print commit has value
-#        run: |
-#          echo "${{ github.sha }}"
-#      - name: Print tag_exists value
-#        run: |
-#          echo "${{ steps.tag-check.outputs.tag_exists }}"
+  check-tag:
+    runs-on: ubuntu-latest
+    if: 'startsWith(github.ref, ''refs/tags/v'')'
+    outputs:
+      tag_exists: '${{ steps.tag-check.outputs.tag_exists }}'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v0
+        with:
+          project_id: '${{ env.GCR_PROJECT }}'
+          service_account_key: '${{ secrets.DEPLOY_KEY }}'
+          export_default_credentials: true
+      - name: Check if tag exists
+        id: tag-check
+        run: >
+          if gcloud container images describe gcr.io/${{ env.GCR_PROJECT }}/${{
+          env.APP_NAME }}:${{ github.sha }} 2>/dev/null; then
+              echo "tag_exists=true" >> "$GITHUB_OUTPUT"
+          else
+              echo "tag_exists=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Print commit has value
+        run: |
+          echo "${{ github.sha }}"
+      - name: Print tag_exists value
+        run: |
+          echo "${{ steps.tag-check.outputs.tag_exists }}"
 #  retag:
 #    name: Retagging existing image
 #    runs-on: ubuntu-latest
