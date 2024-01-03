@@ -224,6 +224,17 @@ jobs:
           - 9041:9042
         options: --health-cmd "cqlsh --debug"
 
+      clickhouse:
+        image: clickhouse/clickhouse-server
+        ports:
+          - "8123:8123"
+          - "9000:9000"
+        env:
+          CLICKHOUSE_DB: "default"
+          CLICKHOUSE_USER: "root"
+          CLICKHOUSE_PASSWORD: "password"
+          CLICKHOUSE_HTTP_PORT: "8123"
+
     steps:
       - name: Checkout code into go module directory
         uses: actions/checkout@v4
