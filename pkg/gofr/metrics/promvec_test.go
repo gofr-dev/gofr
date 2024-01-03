@@ -33,7 +33,6 @@ func Test_IncCounter(t *testing.T) {
 	}
 }
 
-//nolint:dupl // duplicate code is for different metrics
 func Test_AddCounter(t *testing.T) {
 	tcs := []struct {
 		desc string
@@ -108,7 +107,6 @@ func Test_SetGauge(t *testing.T) {
 	}
 }
 
-//nolint:dupl // duplicate code is for different metrics
 func Test_ObserveSummary(t *testing.T) {
 	tcs := []struct {
 		desc string

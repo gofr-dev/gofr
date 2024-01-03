@@ -350,7 +350,7 @@ func Test_getElasticSearchConfigFromEnv(t *testing.T) {
 	for i, tc := range testcases {
 		output := elasticSearchConfigFromEnv(tc.input, tc.prefix)
 
-		assert.Equal(t, tc, output, output, "TEST[%d], Failed.\n", i)
+		assert.Equal(t, tc.output, output, "TEST[%d], Failed.\n", i)
 	}
 }
 

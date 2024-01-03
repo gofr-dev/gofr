@@ -254,7 +254,6 @@ func TestJSONPatch(t *testing.T) {
 	assert.Equal(t, expected, body, "TEST Failed.\n")
 }
 
-//nolint:gocognit,gocyclo // breaking down function will reduce readability and reduce cognitive complexity
 func TestHTTPMethodWithHeaders(t *testing.T) {
 	expectedResp := []byte(`{"entity":"test"}`)
 

@@ -2,11 +2,12 @@ package oauth
 
 import (
 	"encoding/json"
-	"github.com/stretchr/testify/assert"
 	"net/http"
 	"net/http/httptest"
 	"sync"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 
 	"gofr.dev/pkg/log"
 	"gofr.dev/pkg/middleware"
@@ -52,7 +53,7 @@ func TestGetPublicKeyError(t *testing.T) {
 	}
 
 	key := o.cache.publicKeys.Get("")
-	expKey := PublicKey{}
+	expKey := &PublicKey{}
 
 	assert.Equal(t, expKey, key, "TEST Failed.\n")
 }

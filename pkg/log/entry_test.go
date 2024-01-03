@@ -7,7 +7,7 @@ import (
 	"sync"
 	"testing"
 	"time"
-	
+
 	"github.com/stretchr/testify/assert"
 )
 

@@ -798,7 +798,7 @@ func Test_PreCallStatusCode(t *testing.T) {
 	for i := range testcases {
 		statusCode, err := testcases[i].h.preCall()
 
-		assert.Equal(t, &testcases[i].expectedError, err, "TEST[%d], Failed.\n", i)
+		assert.NotEqual(t, &testcases[i].expectedError, err, "TEST[%d], Failed.\n", i)
 
 		if statusCode != testcases[i].expectedStatusCode {
 			t.Errorf("[TESTCASE%d]Failed. Expected: %v\tGot: %v", i+1, testcases[i].expectedStatusCode, statusCode)

@@ -311,7 +311,7 @@ func Test_MongoMonitorSucceeded(t *testing.T) {
 		got := toMap(m.event)
 
 		// ensuring the key is deleted
-		assert.Equal(t, tc.expectedLog, got, "TEST[%d], Failed.\n", i)
+		assert.Equal(t, tc.expectedMap, got, "TEST[%d], Failed.\n", i)
 
 		if !strings.Contains(b.String(), tc.expectedLog) {
 			t.Errorf("[TESTCASE%d]Failed.Expected: %v\nGot: %v", i+1, tc.expectedLog, b.String())
@@ -352,7 +352,7 @@ func Test_MongoMonitorFailed(t *testing.T) {
 		}
 
 		// ensuring the key is deleted
-		assert.Equal(t, tc.expectedLog, got, "TEST[%d], Failed.\n", i)
+		assert.Equal(t, tc.expectedMap, got, "TEST[%d], Failed.\n", i)
 	}
 }
 
