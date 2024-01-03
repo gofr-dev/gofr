@@ -78,8 +78,6 @@ func (r *router) Route(method, path string, handler Handler) {
 }
 
 // String returns all the route and methods registered for the server
-//
-//nolint:gocognit // reduces readability
 func (r *router) String() string {
 	var availableRoutes []string
 

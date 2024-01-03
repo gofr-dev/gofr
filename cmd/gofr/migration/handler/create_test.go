@@ -2,6 +2,7 @@ package handler
 
 import (
 	"fmt"
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"path"
@@ -37,7 +38,7 @@ func Test_CreateMigration(t *testing.T) {
 	}
 
 	for i, tc := range testCases {
-		req := httptest.NewRequest("", setQueryParams(tc.params), nil)
+		req := httptest.NewRequest("", setQueryParams(tc.params), http.NoBody)
 		ctx := gofr.NewContext(nil, request.NewHTTPRequest(req), gofr.New())
 
 		res, err := CreateMigration(ctx)
@@ -193,7 +194,7 @@ func Test_CreateMigrationValidationFail(t *testing.T) {
 	}
 
 	for i, tc := range testCases {
-		req := httptest.NewRequest("", setQueryParams(tc.params), nil)
+		req := httptest.NewRequest("", setQueryParams(tc.params), http.NoBody)
 		ctx := gofr.NewContext(nil, request.NewHTTPRequest(req), nil)
 
 		res, err := CreateMigration(ctx)

@@ -141,7 +141,7 @@ func TestRedisAndMongo_Migration(t *testing.T) {
 	c := config.NewGoDotEnvProvider(log.NewMockLogger(new(bytes.Buffer)), "../../../configs")
 
 	// initialize data stores
-	redis, _ := datastore.NewRedis(logger, datastore.RedisConfig{
+	redis, _ := datastore.NewRedis(logger, &datastore.RedisConfig{
 		HostName: c.Get("REDIS_HOST"),
 		Port:     c.Get("REDIS_PORT"),
 	})
@@ -351,7 +351,7 @@ func Test_DirtyTest(t *testing.T) {
 	c := config.NewGoDotEnvProvider(log.NewMockLogger(new(bytes.Buffer)), "../../../configs")
 
 	// initialize data stores
-	redis, _ := datastore.NewRedis(logger, datastore.RedisConfig{
+	redis, _ := datastore.NewRedis(logger, &datastore.RedisConfig{
 		HostName: c.Get("REDIS_HOST"),
 		Port:     c.Get("REDIS_PORT"),
 	})

@@ -181,7 +181,7 @@ func redisRetry(c *datastore.RedisConfig, g *Gofr) {
 
 		var err error
 
-		g.Redis, err = datastore.NewRedis(g.Logger, *c)
+		g.Redis, err = datastore.NewRedis(g.Logger, c)
 		if err == nil {
 			g.Logger.Info("Redis initialized successfully")
 
@@ -258,4 +258,22 @@ func getRedisDB(db string) int {
 	}
 
 	return DB
+}
+
+func clickHouseRetry(c *datastore.ClickHouseConfig, g *Gofr) {
+	for {
+		time.Sleep(time.Duration(c.ConnRetryDuration) * time.Second)
+
+		g.Logger.Debug("Retrying ClickHouse connection")
+
+		var err error
+
+		g.ClickHouse, err = datastore.GetNewClickHouseDB(g.Logger, c)
+
+		if err == nil {
+			g.Logger.Info("ClickHouse initialized successfully")
+
+			break
+		}
+	}
 }

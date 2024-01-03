@@ -63,9 +63,7 @@ type RedisConfig struct {
 }
 
 // NewRedis connects to Redis if the given config is correct, otherwise returns the error
-//
-//nolint:gocognit,gocritic // cannot reduce complexity without affecting readability.
-func NewRedis(logger log.Logger, config RedisConfig) (Redis, error) {
+func NewRedis(logger log.Logger, config *RedisConfig) (Redis, error) {
 	if config.Options != nil {
 		// handles the case where address might be provided through hostname and port instead of the Options.Addr
 		if config.Options.Addr == "" && config.HostName != "" && config.Port != "" {
@@ -103,10 +101,10 @@ func NewRedis(logger log.Logger, config RedisConfig) (Redis, error) {
 	if err := rc.Ping(context.Background()).Err(); err != nil {
 		// Close the redis connection
 		_ = rc.Close()
-		return &redisClient{logger: logger, config: config}, err
+		return &redisClient{logger: logger, config: *config}, err
 	}
 
-	return &redisClient{logger: logger, Client: rc, config: config}, nil
+	return &redisClient{logger: logger, Client: rc, config: *config}, nil
 }
 
 // NewRedisFromEnv reads the config from environment variables and connects to redis if the config is correct,
@@ -132,7 +130,7 @@ func NewRedisFromEnv(options *goRedis.Options) (Redis, error) {
 		config.Options = options
 	}
 
-	return NewRedis(log.NewLogger(), config)
+	return NewRedis(log.NewLogger(), &config)
 }
 
 // NewRedisCluster returns a new Redis cluster client object if the given config is correct, otherwise returns the error

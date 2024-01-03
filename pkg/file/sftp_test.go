@@ -19,9 +19,13 @@ func Test_NewSFTPFile(t *testing.T) {
 	filename := "test.txt"
 	mode := READWRITE
 	c1 := &SFTPConfig{Host: "localhost", User: "", Password: "", Port: 22}
-	expErr := errors.New("")
+
 	_, err := newSFTPFile(c1, filename, mode)
-	assert.IsTypef(t, expErr, err, "Test failed, Expected:%v, got:%v ", expErr, err)
+
+	expErrMsg := "ssh: handshake failed: ssh: unable to authenticate, attempted methods [none password], no supported methods remain"
+	expErr := errors.New(expErrMsg)
+
+	assert.Equal(t, expErr.Error(), err.Error(), "Test failed, Expected:%v, got:%v ", expErr, err)
 }
 
 type mockSftpClient struct {

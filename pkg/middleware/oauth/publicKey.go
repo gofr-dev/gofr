@@ -48,7 +48,6 @@ func (o *OAuth) loadJWK(logger log.Logger) ([]PublicKey, error) {
 	return k.Keys, nil
 }
 
-//nolint:revive //in accordance with RFC specification
 func (publicKeys *PublicKeys) Get(kID string) *PublicKey {
 	for k := range publicKeys.Keys {
 		key := publicKeys.Keys[k]

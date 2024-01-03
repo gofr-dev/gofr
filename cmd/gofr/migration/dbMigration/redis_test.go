@@ -37,7 +37,7 @@ func initRedisTests() *Redis {
 		Password: c.Get("REDIS_PASS"),
 	}
 
-	db, _ := datastore.NewRedis(logger, configs)
+	db, _ := datastore.NewRedis(logger, &configs)
 	redis := NewRedis(db)
 
 	return redis

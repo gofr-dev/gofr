@@ -57,12 +57,14 @@ type RestPatcher interface {
 // This will automatically generate routes for listing, retrieving, creating, updating, deleting, and patching
 // user entities using the provided handler (UserHandler).
 func (g *Gofr) REST(entity string, handler interface{}) {
+	const idPath = "/{id}"
+
 	if c, ok := handler.(RestIndexer); ok {
 		g.GET("/"+entity, c.Index)
 	}
 
 	if c, ok := handler.(RestReader); ok {
-		g.GET("/"+entity+"/{id}", c.Read)
+		g.GET("/"+entity+idPath, c.Read)
 	}
 
 	if c, ok := handler.(RestCreator); ok {
@@ -70,14 +72,14 @@ func (g *Gofr) REST(entity string, handler interface{}) {
 	}
 
 	if c, ok := handler.(RestDeleter); ok {
-		g.DELETE("/"+entity+"/{id}", c.Delete)
+		g.DELETE("/"+entity+idPath, c.Delete)
 	}
 
 	if c, ok := handler.(RestUpdater); ok {
-		g.PUT("/"+entity+"/{id}", c.Update)
+		g.PUT("/"+entity+idPath, c.Update)
 	}
 
 	if c, ok := handler.(RestPatcher); ok {
-		g.PATCH("/"+entity+"/{id}", c.Patch)
+		g.PATCH("/"+entity+idPath, c.Patch)
 	}
 }

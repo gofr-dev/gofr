@@ -47,8 +47,6 @@ func New() (g *Gofr) {
 }
 
 // NewWithConfig creates a new instance of gofr object based on the configurations provided
-//
-//nolint:gocognit  // It's a sequence of initialization. Easier to understand this way.
 func NewWithConfig(c Config) (g *Gofr) {
 	// Here we do things based on what is provided by Config
 	logger := log.NewLogger()
@@ -304,6 +302,9 @@ func initializeDataStores(c Config, logger log.Logger, g *Gofr) {
 
 	// DynamoDB
 	initializeDynamoDB(c, g)
+
+	// ClickHouseDB
+	initializeClickHouseDB(c, g)
 }
 
 func initializeDynamoDB(c Config, g *Gofr) {
@@ -341,7 +342,7 @@ func initializeRedis(c Config, g *Gofr) {
 	if rc.HostName != "" || rc.Port != "" {
 		var err error
 
-		g.Redis, err = datastore.NewRedis(g.Logger, rc)
+		g.Redis, err = datastore.NewRedis(g.Logger, &rc)
 		g.DatabaseHealth = append(g.DatabaseHealth, g.RedisHealthCheck)
 
 		if err != nil {
@@ -360,13 +361,11 @@ func initializeRedis(c Config, g *Gofr) {
 // InitializeRedisFromConfigs initializes redis
 func InitializeRedisFromConfigs(c Config, l log.Logger, prefix string) (datastore.Redis, error) {
 	cfg := redisConfigFromEnv(c, prefix)
-	return datastore.NewRedis(l, cfg)
+	return datastore.NewRedis(l, &cfg)
 }
 
 // initializeDB initializes the ORM object in the Gofr struct if the DB configuration is set
 // in the environment, in case of an error, it logs the error
-//
-//nolint:gocognit //breaks code readability
 func initializeDB(c Config, g *Gofr) {
 	if c.Get("DB_HOST") != "" && c.Get("DB_PORT") != "" {
 		dc := sqlDBConfigFromEnv(c, "")
@@ -589,8 +588,6 @@ func initializeEventhubFromConfigs(c Config, prefix string) (pubsub.PublisherSub
 
 // initializeCassandra initializes the Cassandra/ YCQL client in the Gofr struct if the Cassandra configuration is set
 // in the environment, in case of an error, it logs the error
-//
-//nolint:gocognit // reducing the function further is not required
 func initializeCassandra(c Config, g *Gofr) {
 	validDialects := map[string]bool{
 		"cassandra": true,
@@ -823,4 +820,28 @@ func initializeGooglePubSub(c Config, g *Gofr) {
 	}
 
 	g.Logger.Infof("Google PubSub initialized")
+}
+
+func initializeClickHouseDB(c Config, g *Gofr) {
+	hostName := c.Get("CLICKHOUSE_HOST")
+	port := c.Get("CLICKHOUSE_PORT")
+
+	if hostName != "" && port != "" {
+		clickHouseConfig := clickhouseDBConfigFromEnv(c, "")
+
+		var err error
+
+		g.ClickHouse, err = datastore.GetNewClickHouseDB(g.Logger, clickHouseConfig)
+		g.DatabaseHealth = append(g.DatabaseHealth, g.ClickHouseHealthCheck)
+
+		if err != nil {
+			g.Logger.Errorf("could not connect to ClickHouse, HOST: %s, PORT: %v, Error: %v\n", hostName, port, err)
+
+			go clickHouseRetry(clickHouseConfig, g)
+
+			return
+		}
+
+		g.Logger.Infof("ClickHouse connected, HostName: %s, Port: %s", clickHouseConfig.Host, clickHouseConfig.Port)
+	}
 }

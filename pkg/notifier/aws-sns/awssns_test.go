@@ -209,8 +209,8 @@ func TestSNS_HealthCheck(t *testing.T) {
 	}
 
 	for i, v := range testcases {
-		conn, _ := New(&v.c)
-
+		mockConfig := v.c
+		conn, _ := New(&mockConfig)
 		resp := conn.HealthCheck()
 
 		assert.Equalf(t, v.resp, resp, "[TESTCASE%d]Failed.Expected %v\tGot %v\n", i+1, v.resp, resp)
@@ -330,7 +330,8 @@ func TestNewWithTestingEndpoint(t *testing.T) {
 	}
 
 	for i, tc := range testCases {
-		notify, err := New(&tc.cfg)
+		mockConfig := tc.cfg
+		notify, err := New(&mockConfig)
 
 		if err != nil {
 			t.Errorf("Test Failed: New function returned an error: %v", err)

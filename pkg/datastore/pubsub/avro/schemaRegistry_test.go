@@ -63,7 +63,6 @@ func TestSchemaRegistryClient_GetSchemaByVersion(t *testing.T) {
 	}
 }
 
-//nolint:gocognit // cannot reduce the complexity further
 func TestSchemaRegistryClient_GetSchema(t *testing.T) {
 	logger := log.NewLogger()
 
@@ -153,7 +152,8 @@ func Test_checkForbiddenRequest(t *testing.T) {
 	}
 
 	for _, tc := range testcases {
-		err := checkForbiddenRequest(&tc.testResp, tc.uri)
+		mockResp := tc.testResp
+		err := checkForbiddenRequest(&mockResp, tc.uri)
 		assert.Equal(t, tc.expectedErr, err)
 	}
 }
