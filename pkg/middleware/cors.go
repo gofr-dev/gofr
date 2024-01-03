@@ -61,21 +61,10 @@ func getValidCORSHeaders(configHeaders, headerMappings map[string]string) map[st
 			}
 		}
 
-		// If config is not set for these two headers, set default value.
-		switch convertedHeader {
-		case "ACCESS_CONTROL_ALLOW_HEADERS":
-			if _, ok := validCORSHeadersAndValues[headerMappings[convertedHeader]]; !ok {
-				validCORSHeadersAndValues[headerMappings[convertedHeader]] = allowedHeaders
-			}
-
-		case "ACCESS_CONTROL_ALLOW_METHODS":
-			if _, ok := validCORSHeadersAndValues[headerMappings[convertedHeader]]; !ok {
-				validCORSHeadersAndValues[headerMappings[convertedHeader]] = allowedMethods
-			}
-		}
+		setDefaultHeaders(convertedHeader, validCORSHeadersAndValues, headerMappings)
 	}
 
-	val, _ := validCORSHeadersAndValues[headerMappings["ACCESS_CONTROL_ALLOW_HEADERS"]]
+	val := validCORSHeadersAndValues[headerMappings["ACCESS_CONTROL_ALLOW_HEADERS"]]
 
 	if val != allowedHeaders && val != "" {
 		validCORSHeadersAndValues[headerMappings["ACCESS_CONTROL_ALLOW_HEADERS"]] = allowedHeaders + ", " + val
@@ -102,10 +91,23 @@ func AllowedCORSHeader() []string {
 	}
 }
 
+func setDefaultHeaders(header string, validCORSHeadersAndValues, headerMappings map[string]string) {
+	// If config is not set for these two headers, set default value.
+	switch header {
+	case "ACCESS_CONTROL_ALLOW_HEADERS":
+		if _, ok := validCORSHeadersAndValues[headerMappings[header]]; !ok {
+			validCORSHeadersAndValues[headerMappings[header]] = allowedHeaders
+		}
+
+	case "ACCESS_CONTROL_ALLOW_METHODS":
+		if _, ok := validCORSHeadersAndValues[headerMappings[header]]; !ok {
+			validCORSHeadersAndValues[headerMappings[header]] = allowedMethods
+		}
+	}
+}
+
 func convertToUpper(input string) string {
-	if strings.Contains(input, "_") {
-		return input
-	} else {
+	if !strings.Contains(input, "_") {
 		// Separate words based on hyphens
 		words := strings.Split(input, "-")
 
@@ -119,4 +121,6 @@ func convertToUpper(input string) string {
 
 		return output
 	}
+
+	return input
 }
