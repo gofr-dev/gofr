@@ -1,12 +1,14 @@
 name: Workflow-Pipeline
-
 on:
   push:
     paths:
       - docs/**
     branches:
       - add-docs
-
+  pull_request:
+    branches:
+      - main
+      - development
 env:
   GCR_PROJECT: zs-products
   APP_NAME: gofr-web
@@ -14,7 +16,6 @@ env:
   STAGE_NAMESPACE: gofr-stage
   PROD_NAMESPACE: gofr
   REGISTRY: ghcr.io
-
 jobs:
   stage_build:
     runs-on: ubuntu-latest
@@ -30,9 +31,9 @@ jobs:
       - name: Log in to the Container registry
         uses: docker/login-action@v1
         with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          registry: '${{ env.REGISTRY }}'
+          username: '${{ github.actor }}'
+          password: '${{ secrets.GITHUB_TOKEN }}'
       - name: pull
         run: |
           docker pull ghcr.io/gofr-dev/website:workflow-package
