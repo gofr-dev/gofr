@@ -97,31 +97,31 @@ jobs:
       - name: Print tag_exists value
         run: |
           echo "${{ steps.tag-check.outputs.tag_exists }}"
-#  retag:
-#    name: Retagging existing image
-#    runs-on: ubuntu-latest
-#    needs: check-tag
-#    if: '${{ needs.check-tag.outputs.tag_exists == ''true'' }}'
-#    outputs:
-#      image: '${{ steps.output-image.outputs.image }}'
-#    steps:
-#      - name: Extract Release Tag
-#        run: 'echo "RELEASE_VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV'
-#      - name: Re tag and Push Docker Image to GCR
-#        run: >
-#          docker pull gcr.io/${{ env.GCR_PROJECT }}/${{ env.APP_NAME }}:${{
-#          github.sha }}
-#
-#          docker tag gcr.io/${{ env.GCR_PROJECT }}/${{ env.APP_NAME }}:${{
-#          github.sha }} gcr.io/${{ env.GCR_PROJECT }}/${{ env.APP_NAME }}:${{
-#          env.RELEASE_VERSION }}
-#
-#          docker push gcr.io/${{ env.GCR_PROJECT }}/${{ env.APP_NAME }}:${{
-#          env.RELEASE_VERSION }}
-#      - id: output-image
-#        run: >-
-#          echo "image=`echo gcr.io/${{ env.GCR_PROJECT }}/${{ env.APP_NAME
-#          }}:${{ env.RELEASE_VERSION }}`" >> "$GITHUB_OUTPUT"
+  retag:
+    name: Retagging existing image
+    runs-on: ubuntu-latest
+    needs: check-tag
+    if: '${{ needs.check-tag.outputs.tag_exists == ''true'' }}'
+    outputs:
+      image: '${{ steps.output-image.outputs.image }}'
+    steps:
+      - name: Extract Release Tag
+        run: 'echo "RELEASE_VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV'
+      - name: Re tag and Push Docker Image to GCR
+        run: >
+          docker pull gcr.io/${{ env.GCR_PROJECT }}/${{ env.APP_NAME }}:${{
+          github.sha }}
+
+          docker tag gcr.io/${{ env.GCR_PROJECT }}/${{ env.APP_NAME }}:${{
+          github.sha }} gcr.io/${{ env.GCR_PROJECT }}/${{ env.APP_NAME }}:${{
+          env.RELEASE_VERSION }}
+
+          docker push gcr.io/${{ env.GCR_PROJECT }}/${{ env.APP_NAME }}:${{
+          env.RELEASE_VERSION }}
+      - id: output-image
+        run: >-
+          echo "image=`echo gcr.io/${{ env.GCR_PROJECT }}/${{ env.APP_NAME
+          }}:${{ env.RELEASE_VERSION }}`" >> "$GITHUB_OUTPUT"
 #  prod_deployment:
 #    runs-on: ubuntu-latest
 #    name: "\U0001F680 Deploy to Prod"
