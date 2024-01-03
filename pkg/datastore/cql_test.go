@@ -4,14 +4,12 @@ import (
 	"bytes"
 	"crypto/tls"
 	"io"
-	"reflect"
 	"strconv"
 	"strings"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-
 	"github.com/gocql/gocql"
+	"github.com/stretchr/testify/assert"
 
 	"gofr.dev/pkg"
 	"gofr.dev/pkg/gofr/config"
@@ -236,9 +234,7 @@ func TestDataStore_CassandraHealthCheck(t *testing.T) {
 		con, _ := GetNewCassandra(logger, &mockCassConfig)
 		output := con.HealthCheck()
 
-		if !reflect.DeepEqual(tc.expected, output) {
-			t.Errorf("[FAILED]%v expected: %v, got: %v", i, tc.expected, output)
-		}
+		assert.Equal(t, tc.expected, output, "TEST[%d], Failed.\n", i)
 	}
 }
 
@@ -289,9 +285,7 @@ func Test_CassandraHealthCheck(t *testing.T) {
 
 	output := con.HealthCheck()
 
-	if !reflect.DeepEqual(expected, output) {
-		t.Errorf("expected: %v, got: %v", expected, output)
-	}
+	assert.Equal(t, expected, output, "TEST Failed.\n")
 }
 
 func TestCQL_HealthCheck_NilObject(t *testing.T) {
@@ -303,9 +297,8 @@ func TestCQL_HealthCheck_NilObject(t *testing.T) {
 	var cql *Cassandra
 
 	resp := cql.HealthCheck()
-	if !reflect.DeepEqual(expected, resp) {
-		t.Errorf("expected: %v, got: %v", expected, resp)
-	}
+
+	assert.Equal(t, expected, resp, "TEST Failed.\n")
 }
 
 func Test_IncorrectSSLCertPathCql(t *testing.T) {

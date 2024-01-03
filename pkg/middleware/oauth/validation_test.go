@@ -6,7 +6,6 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
-	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -155,9 +154,7 @@ func TestValidateSuccess(t *testing.T) {
 		t.Errorf("Expected no error, got %v\n", err)
 	}
 
-	if !reflect.DeepEqual(resp, expectedToken) {
-		t.Errorf("Failed. Got : %v\n Expected : %v\n", resp, expectedToken)
-	}
+	assert.Equal(t, expectedToken, resp, "TEST Failed.\n")
 }
 
 func getTestServerURL() string {

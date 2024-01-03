@@ -1,8 +1,9 @@
 package types
 
 import (
-	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 
 	"gofr.dev/pkg/errors"
 )
@@ -19,12 +20,12 @@ func TestDate_Check(t *testing.T) {
 		{"date format incorrect", "2018-10-1", errors.InvalidParam{Param: []string{"date"}}},
 		{"date format incorrect datetime", "2018-10-01 10-05-02", errors.InvalidParam{Param: []string{"date"}}},
 	}
-	for _, tt := range tests {
+
+	for i, tt := range tests {
 		tt := tt
 
 		err := Validate(tt.date)
-		if !reflect.DeepEqual(err, tt.err) {
-			t.Errorf("%v, Failed. Got :%v\tExpected: %v", tt.name, err, tt.err)
-		}
+
+		assert.Equal(t, tt.err, err, "TEST[%d], Failed.\n%s", i, tt.name)
 	}
 }

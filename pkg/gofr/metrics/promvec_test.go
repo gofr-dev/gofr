@@ -2,7 +2,6 @@ package metrics
 
 import (
 	"net/http"
-	"reflect"
 	"strings"
 	"testing"
 
@@ -29,9 +28,8 @@ func Test_IncCounter(t *testing.T) {
 
 	for i, tc := range tcs {
 		err = p.IncCounter(tc.name, "200", http.MethodPost)
-		if !reflect.DeepEqual(tc.err, err) {
-			t.Errorf("TESTCASE[%v] expected error %T, got %T", i, tc.err, err)
-		}
+
+		assert.Equal(t, tc.err, err, "TEST[%d], Failed.\n%s", i, tc.desc)
 	}
 }
 
@@ -55,9 +53,8 @@ func Test_AddCounter(t *testing.T) {
 
 	for i, tc := range tcs {
 		err = p.AddCounter(tc.name, float64(i), "200", http.MethodPost)
-		if !reflect.DeepEqual(tc.err, err) {
-			t.Errorf("TESTCASE[%v] expected error %v, got %v", i, tc.err, err)
-		}
+
+		assert.Equal(t, tc.err, err, "TEST[%d], Failed.\n%s", i, tc.desc)
 	}
 }
 
@@ -82,9 +79,8 @@ func Test_ObserveHistogram(t *testing.T) {
 
 	for i, tc := range tcs {
 		err = p.ObserveHistogram(tc.name, float64(i), "200", http.MethodPost)
-		if !reflect.DeepEqual(tc.err, err) {
-			t.Errorf("TESTCASE[%v] expected error %v, got %v", i, tc.err, err)
-		}
+
+		assert.Equal(t, tc.err, err, "TEST[%d], Failed.\n%s", i, tc.desc)
 	}
 }
 
@@ -107,9 +103,8 @@ func Test_SetGauge(t *testing.T) {
 
 	for i, tc := range tcs {
 		err = p.SetGauge(tc.name, float64(i), "no_of_go_routines")
-		if !reflect.DeepEqual(tc.err, err) {
-			t.Errorf("TESTCASE[%v] expected error %v, got %v", i, tc.err, err)
-		}
+
+		assert.Equal(t, tc.err, err, "TEST[%d], Failed.\n%s", i, tc.desc)
 	}
 }
 
@@ -133,9 +128,8 @@ func Test_ObserveSummary(t *testing.T) {
 
 	for i, tc := range tcs {
 		err = p.ObserveSummary(tc.name, float64(i), "200", http.MethodPost)
-		if !reflect.DeepEqual(tc.err, err) {
-			t.Errorf("TESTCASE[%v] expected error %v, got %v", i, tc.err, err)
-		}
+
+		assert.Equal(t, tc.err, err, "TEST[%d], Failed.\n%s", i, tc.desc)
 	}
 }
 

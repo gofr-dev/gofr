@@ -3,7 +3,6 @@ package gofr
 import (
 	"crypto/tls"
 	"io"
-	"reflect"
 	"testing"
 	"time"
 
@@ -97,10 +96,8 @@ func Test_cassandraConfigFromEnv(t *testing.T) {
 		cassandraConfig := cassandraConfigFromEnv(tc.configLoc, tc.prefix)
 		expectedConfig := tc.expectedConfig
 
-		if !reflect.DeepEqual(cassandraConfig, &expectedConfig) {
-			if tc.expectedError == false {
-				t.Errorf("Test[%d]Fail:%vGot: %v,expected:%v", i, tc.name, cassandraConfig, tc.expectedConfig)
-			}
+		if tc.expectedError == false {
+			assert.Equal(t, &expectedConfig, cassandraConfig, "TEST[%d], Failed.\n%s", i, tc.name)
 		}
 	}
 }
@@ -149,10 +146,9 @@ func Test_GetYcqlConfigs(t *testing.T) {
 
 	for i, tc := range testCases {
 		cassandraConfig := getYcqlConfigs(tc.configLoc, tc.prefix)
-		if !reflect.DeepEqual(cassandraConfig, tc.expectedConfig) {
-			if tc.expectedError == false {
-				t.Errorf("Testcase[%v] Failed:%vGot: %v,expected:%v", i, tc.name, cassandraConfig, tc.expectedConfig)
-			}
+
+		if tc.expectedError == false {
+			assert.Equal(t, tc.expectedConfig, cassandraConfig, "TEST[%d], Failed.\n%s", i, tc.name)
 		}
 	}
 }
@@ -182,9 +178,7 @@ func Test_kafkaConfigFromEnv(t *testing.T) {
 		res := kafkaConfigFromEnv(tc.config, "")
 		mockConfg := tc.expectedConfig
 
-		if !reflect.DeepEqual(res, &mockConfg) {
-			t.Errorf("Test case failed [%v]. Got: %v,expected:%v", i, tc.config, tc.expectedConfig)
-		}
+		assert.Equal(t, &mockConfg, res, "TEST[%d], Failed.\n", i)
 	}
 }
 
@@ -258,14 +252,12 @@ func Test_mongoDBConfigFromEnv(t *testing.T) {
 		},
 	}
 
-	for _, tc := range testCases {
+	for i, tc := range testCases {
 		mongoConfig := mongoDBConfigFromEnv(tc.configLoc, tc.prefix)
 		expConfig := tc.expectedConfig
 
-		if !reflect.DeepEqual(mongoConfig, &expConfig) {
-			if tc.expectedError == false {
-				t.Errorf("Got: %v,expected:%v", mongoConfig, tc.expectedConfig)
-			}
+		if tc.expectedError == false {
+			assert.Equal(t, &expConfig, mongoConfig, "TEST[%d], Failed.\n%s", i, tc.name)
 		}
 	}
 }
@@ -294,9 +286,8 @@ func Test_dynamoDBConfigFromEnv(t *testing.T) {
 
 	for i, tc := range testcases {
 		cfg := dynamoDBConfigFromEnv(tc.inputConfig, tc.prefix)
-		if !reflect.DeepEqual(cfg, expConfig) {
-			t.Errorf("Test case failed [%v], Got: %v,expected:%v", i, cfg, expConfig)
-		}
+
+		assert.Equal(t, expConfig, cfg, "TEST[%d], Failed.\n", i)
 	}
 }
 
@@ -359,9 +350,7 @@ func Test_getElasticSearchConfigFromEnv(t *testing.T) {
 	for i, tc := range testcases {
 		output := elasticSearchConfigFromEnv(tc.input, tc.prefix)
 
-		if !reflect.DeepEqual(output, tc.output) {
-			t.Errorf("[TESTCASE%v] Failed.\nExpected:%v\nGot: %v", i+1, tc.output, output)
-		}
+		assert.Equal(t, tc, output, output, "TEST[%d], Failed.\n", i)
 	}
 }
 

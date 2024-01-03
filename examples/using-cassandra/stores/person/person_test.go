@@ -2,15 +2,15 @@ package person
 
 import (
 	"os"
-	"reflect"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/stretchr/testify/assert"
+	
 	"gofr.dev/examples/using-cassandra/models"
 	"gofr.dev/pkg/datastore"
 	"gofr.dev/pkg/errors"
 	"gofr.dev/pkg/gofr"
-
-	"github.com/stretchr/testify/assert"
 )
 
 func TestMain(m *testing.M) {
@@ -41,7 +41,7 @@ func createMap(input []models.Person) map[models.Person]int {
 	output := make(map[models.Person]int)
 
 	for _, val := range input {
-		if reflect.DeepEqual(val, models.Person{}) {
+		if cmp.Equal(val, models.Person{}) {
 			output[val]++
 		}
 	}

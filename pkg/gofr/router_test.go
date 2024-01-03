@@ -2,7 +2,6 @@ package gofr
 
 import (
 	"fmt"
-	"reflect"
 	"testing"
 	"time"
 
@@ -32,9 +31,7 @@ func TestRouteLog(t *testing.T) {
 
 	got := fmt.Sprintf("%s"+"", g.Server.Router)
 
-	if !reflect.DeepEqual(got, expected) {
-		t.Errorf("expected: %v, got: %v", expected, got)
-	}
+	assert.Equal(t, expected, got, "TEST Failed.\n")
 }
 
 // TestRouter_WellKnownEndpoint test Router for well-known endpoints

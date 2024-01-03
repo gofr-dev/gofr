@@ -2,9 +2,9 @@ package test
 
 import (
 	"net/http"
-	"reflect"
 
 	"github.com/getkin/kin-openapi/openapi3"
+	"github.com/google/go-cmp/cmp"
 )
 
 type APIValues struct {
@@ -78,7 +78,7 @@ func (s *Swagger) convertIntoIntegrationTestSchema() IntegrationTestSchema {
 }
 
 func populateSlice(inputSlice []IntegrationTestCase, value IntegrationTestCase) []IntegrationTestCase {
-	if reflect.DeepEqual(IntegrationTestCase{}, value) {
+	if cmp.Equal(IntegrationTestCase{}, value) {
 		return inputSlice
 	}
 

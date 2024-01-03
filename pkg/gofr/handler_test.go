@@ -6,7 +6,6 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
-	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -187,9 +186,7 @@ func TestHandler_ServeHTTP(t *testing.T) {
 
 	expectedResponse := []byte(`{"data":{"product":{"name":"Orange","categoryId":1}}}`)
 
-	if !reflect.DeepEqual(string(expectedResponse), strings.TrimSpace(w.Body)) {
-		t.Errorf("Failed. Incorrect Response format. Expected %v\tGot %v\n", string(expectedResponse), w.Body)
-	}
+	assert.Equal(t, string(expectedResponse), strings.TrimSpace(w.Body), "TEST Failed.\n")
 }
 
 type product struct {
@@ -259,14 +256,9 @@ func TestHandler_ServeHTTP_PartialContent(t *testing.T) {
 	//nolint:lll // response should be of this type
 	expectedResponse := []byte(`{"data":{"errors":[{"code":"","reason":"test error","datetime":{"value":"2020-07-01T14:54:41Z","timezone":"IST"}}],"product":{"categoryId":1,"name":"Orange"}}}`)
 
-	if !reflect.DeepEqual(string(expectedResponse), strings.TrimSpace(w.Body)) {
-		t.Errorf("Failed. Incorrect Response format. Expected %v\tGot %v\n", string(expectedResponse), w.Body)
-		return
-	}
+	assert.Equal(t, string(expectedResponse), strings.TrimSpace(w.Body), "TEST Failed.\n")
 
-	if w.Status != 206 {
-		t.Errorf("Failed. StatusCode expected: 206, got: %v", w.Status)
-	}
+	assert.Equal(t, http.StatusPartialContent, w.Status, "TEST Failed.\n")
 }
 
 // TestHandler_ServeHTTP_EntityAlreadyExists
@@ -290,14 +282,9 @@ func TestHandler_ServeHTTP_EntityAlreadyExists(t *testing.T) {
 
 	expectedResponse := []byte(`{"data":{"product":{"name":"Orange","categoryId":1}}}`)
 
-	if !reflect.DeepEqual(string(expectedResponse), strings.TrimSpace(w.Body)) {
-		t.Errorf("Failed. Incorrect Response format. Expected %v\tGot %v\n", string(expectedResponse), w.Body)
-		return
-	}
+	assert.Equal(t, string(expectedResponse), strings.TrimSpace(w.Body), "TEST Failed.\n")
 
-	if w.Status != 200 {
-		t.Errorf("Failed. StatusCode expected: 200, got: %v", w.Status)
-	}
+	assert.Equal(t, http.StatusOK, w.Status, "TEST Failed.\n")
 }
 
 // Test_HealthInvalidMethod checks the health for method.
@@ -404,14 +391,9 @@ func TestHTTP_Respond_Delete(t *testing.T) {
 
 	expectedResponse := []byte(`{"data":null}`)
 
-	if !reflect.DeepEqual(string(expectedResponse), strings.TrimSpace(w.Body)) {
-		t.Errorf("Failed. Incorrect Response format. Expected %v\tGot %v\n", string(expectedResponse), w.Body)
-		return
-	}
+	assert.Equal(t, string(expectedResponse), strings.TrimSpace(w.Body), "TEST Failed.\n")
 
-	if w.Status != http.StatusNoContent {
-		t.Errorf("Failed. StatusCode expected: %v, got: %v", http.StatusNoContent, w.Status)
-	}
+	assert.Equal(t, http.StatusNoContent, w.Status, "TEST Failed.\n")
 }
 
 // TestHandler_ServeHTTP_Error tests the different error cases returned from Respond

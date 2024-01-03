@@ -1,8 +1,9 @@
 package types
 
 import (
-	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 
 	"gofr.dev/pkg/errors"
 )
@@ -28,12 +29,11 @@ func TestEmail_Check(t *testing.T) {
 		{"incorrect format for email with whitespace", "añ abcd@gmail.com", errors.InvalidParam{Param: []string{"emailAddress"}}},
 	}
 
-	for _, c := range tc {
+	for i, c := range tc {
 		c := c
 
 		r := Validate(c.email)
-		if !reflect.DeepEqual(r, c.expectedErr) {
-			t.Errorf("%v Expected value: %v for %v got %v", c.name, c.expectedErr, c.email, r)
-		}
+
+		assert.Equal(t, c.expectedErr, r, "TEST[%d], Failed.\n%s", i, c.name)
 	}
 }

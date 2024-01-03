@@ -2,9 +2,10 @@ package types
 
 import (
 	"encoding/json"
-	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 
 	"gofr.dev/pkg/errors"
 )
@@ -68,14 +69,13 @@ func TestAddress_Check(t *testing.T) {
 		{"address with county", Address{AddressLines: []string{"banglored"}, CityTown: "bengaluru",
 			StateProvince: "karnataka", CountryCode: "IN", PostalCode: "560043", DeliveryPoint: "23", County: "Franklin"}, nil},
 	}
-	for _, tt := range tests {
+
+	for i, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			err := Validate(&tt.addstruct)
 
-			if !reflect.DeepEqual(err, tt.err) {
-				t.Errorf("%v, Failed. Got :%v\tExpected: %v", tt.name, err, tt.err)
-			}
+			assert.Equal(t, tt.err, err, "TEST[%d], Failed.\n%s", i, tt.name)
 		})
 	}
 }

@@ -5,7 +5,6 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -87,9 +86,8 @@ func TestEventhub_HealthCheck(t *testing.T) {
 		conn, _ := New(&testConfig)
 
 		resp := conn.HealthCheck()
-		if !reflect.DeepEqual(resp, v.resp) {
-			t.Errorf("[TESTCASE%d]Failed.Got %v\tExpected %v\n", i+1, resp, v.resp)
-		}
+
+		assert.Equal(t, v.resp, resp, "TEST[%d], Failed.\n", i)
 	}
 }
 
@@ -105,9 +103,8 @@ func TestEventhub_HealthCheck_Down(t *testing.T) {
 		}
 
 		resp := e.HealthCheck()
-		if !reflect.DeepEqual(resp, expected) {
-			t.Errorf("Expected %v\tGot %v\n", expected, resp)
-		}
+
+		assert.Equal(t, expected, resp, "TEST Failed.\n")
 	}
 
 	{
@@ -123,9 +120,8 @@ func TestEventhub_HealthCheck_Down(t *testing.T) {
 		con, _ := New(&c)
 
 		resp := con.HealthCheck()
-		if !reflect.DeepEqual(resp, expected) {
-			t.Errorf("Expected %v\tGot %v\n", expected, resp)
-		}
+
+		assert.Equal(t, expected, resp, "TEST Failed.\n")
 	}
 
 	{
@@ -146,9 +142,8 @@ func TestEventhub_HealthCheck_Down(t *testing.T) {
 		e.hub = nil
 
 		resp := e.HealthCheck()
-		if !reflect.DeepEqual(resp, expected) {
-			t.Errorf("Expected %v\tGot %v\n", expected, resp)
-		}
+
+		assert.Equal(t, expected, resp, "TEST Failed.\n")
 	}
 }
 

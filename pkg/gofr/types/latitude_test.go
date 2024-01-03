@@ -1,8 +1,9 @@
 package types
 
 import (
-	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 
 	"gofr.dev/pkg/errors"
 )
@@ -21,8 +22,7 @@ func TestLatitude_Check(t *testing.T) {
 		tt := tt
 
 		err := Validate(&tt.latitude)
-		if !reflect.DeepEqual(err, tt.err) {
-			t.Errorf("[TESTCASE %d]Failed. Got :%v\tExpected: %v", i+1, err, tt.err)
-		}
+
+		assert.Equal(t, tt.err, err, "TEST[%d], Failed.\n", i)
 	}
 }

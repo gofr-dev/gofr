@@ -6,7 +6,6 @@ import (
 	"errors"
 	"io"
 	"net"
-	"reflect"
 	"runtime"
 	"strings"
 	"testing"
@@ -91,7 +90,7 @@ func TestNewRedisCluster(t *testing.T) {
 		{"Error case", args{log.NewLogger(), &goRedis.ClusterOptions{}}, nil, true},
 	}
 
-	for _, tt := range tests {
+	for i, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := NewRedisCluster(tt.args.clusterOptions)
@@ -101,9 +100,7 @@ func TestNewRedisCluster(t *testing.T) {
 				return
 			}
 
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("NewRedisCluster() got = %v, want %v", got, tt.want)
-			}
+			assert.Equal(t, tt.want, got, "TEST[%d], Failed.\n%s", i, tt.name)
 		})
 	}
 }

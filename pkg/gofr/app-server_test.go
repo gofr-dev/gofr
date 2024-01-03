@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -346,9 +345,8 @@ func TestFilterValidRoutes(t *testing.T) {
 	for i, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			result := filterValidRoutes(tc.input)
-			if !reflect.DeepEqual(result, tc.expected) {
-				t.Errorf("TEST[%d] Failed,Expected %v, but got %v", i, tc.expected, result)
-			}
+
+			assert.Equal(t, tc.expected, result, "TEST[%d], Failed.\n%s", i, tc.name)
 		})
 	}
 }

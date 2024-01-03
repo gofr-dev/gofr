@@ -11,7 +11,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -90,11 +89,10 @@ func TestNewKafkaConsumer(t *testing.T) {
 		{&Config{Brokers: "localhost:2009", Topics: []string{"some-topic"}}, nil},
 	}
 
-	for _, test := range tests {
+	for i, test := range tests {
 		_, err := NewKafkaConsumer(test.config)
-		if !reflect.DeepEqual(test.err, err) {
-			t.Errorf("FAILED, expected: %v, got: %v", test.err, err)
-		}
+
+		assert.Equal(t, test.err, err, "TEST[%d], Failed.\n", i)
 	}
 }
 
@@ -468,9 +466,7 @@ func TestKafkaHealthCheck(t *testing.T) {
 		conn, _ := New(&mockConfig, logger)
 		output := conn.HealthCheck()
 
-		if !reflect.DeepEqual(tc.expected, output) {
-			t.Errorf("[TESTCASE%v]Failed. Got%v Expected%v", i+1, output, tc.expected)
-		}
+		assert.Equal(t, tc.expected, output, "TEST[%d], Failed.\n", i)
 
 		if !strings.Contains(b.String(), tc.logMessage) {
 			t.Errorf("Test Failed \nExpected: %v\nGot: %v", tc.logMessage, b.String())

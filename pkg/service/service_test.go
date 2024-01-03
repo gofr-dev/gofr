@@ -8,8 +8,9 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 
 	"gofr.dev/pkg/log"
 )
@@ -28,9 +29,7 @@ func TestService_CallGet(t *testing.T) {
 		t.Errorf("Expected nil err but got %v", err)
 	}
 
-	if !reflect.DeepEqual(resp.Body, expectedResp) {
-		t.Errorf("Failed. Got %v\tExpected %v", resp.Body, expectedResp)
-	}
+	assert.Equal(t, expectedResp, resp.Body, "TEST Failed.\n")
 }
 
 func TestBind(t *testing.T) {
@@ -70,9 +69,7 @@ func TestBindStrict(t *testing.T) {
 	s := &httpService{contentType: TEXT}
 	_ = s.BindStrict(data, &str)
 
-	if !reflect.DeepEqual(str, expected) {
-		t.Errorf("Failed. Expected %v\tGot %v\n", expected, str)
-	}
+	assert.Equal(t, expected, str, "TEST Failed.\n")
 
 	type resp struct {
 		Name string `json:"name"`
@@ -120,9 +117,7 @@ func TestBindResponseText(t *testing.T) {
 	s := &httpService{contentType: TEXT}
 	_ = s.Bind(data, &input)
 
-	if !reflect.DeepEqual(input, expected) {
-		t.Errorf("Failed. Expected %v\tGot %v\n", expected, input)
-	}
+	assert.Equal(t, expected, input, "TEST Failed.\n")
 }
 
 func TestBindResponseJSON(t *testing.T) {
@@ -134,9 +129,7 @@ func TestBindResponseJSON(t *testing.T) {
 	s := &httpService{contentType: JSON}
 	_ = s.Bind(data, &input)
 
-	if !reflect.DeepEqual(input, expected) {
-		t.Errorf("Failed. Expected %v\tGot %v\n", expected, input)
-	}
+	assert.Equal(t, expected, input, "TEST Failed.\n")
 }
 
 func TestBindResponseXML(t *testing.T) {
@@ -153,9 +146,7 @@ func TestBindResponseXML(t *testing.T) {
 	s := &httpService{contentType: XML}
 	_ = s.Bind(b, &input)
 
-	if !reflect.DeepEqual(input, expected) {
-		t.Errorf("Failed. Expected %v\tGot %v\n", expected, input)
-	}
+	assert.Equal(t, expected, input, "TEST Failed.\n")
 }
 
 func TestXMLPOST(t *testing.T) {
@@ -220,9 +211,7 @@ func TestJSONPUT(t *testing.T) {
 
 	expected.headers = body.headers // needed to test the header fields, since the Date is not a constant.
 
-	if !reflect.DeepEqual(expected, body) {
-		t.Errorf("Failed.Expected %v\tGot %v", expected, re)
-	}
+	assert.Equal(t, expected, body, "TEST Failed.\n")
 
 	ts.Close()
 }
@@ -262,9 +251,7 @@ func TestJSONPatch(t *testing.T) {
 
 	expected.headers = body.headers // needed to test the header fields, since the Date is not a constant.
 
-	if !reflect.DeepEqual(expected, body) {
-		t.Errorf("Failed.Expected %v\tGot %v", expected, re)
-	}
+	assert.Equal(t, expected, body, "TEST Failed.\n")
 }
 
 //nolint:gocognit,gocyclo // breaking down function will reduce readability and reduce cognitive complexity
@@ -286,9 +273,7 @@ func TestHTTPMethodWithHeaders(t *testing.T) {
 		t.Errorf("Expected nil err but got %v", err)
 	}
 
-	if !reflect.DeepEqual(resp.Body, expectedResp) {
-		t.Errorf("Failed. Got %v\tExpected %v", resp.Body, expectedResp)
-	}
+	assert.Equal(t, expectedResp, resp.Body, "TEST Failed.\n")
 
 	// Test PostWithHeaders
 	resp, err = s.PostWithHeaders(context.TODO(), "", nil, nil, map[string]string{"entity": "test"})
@@ -296,9 +281,7 @@ func TestHTTPMethodWithHeaders(t *testing.T) {
 		t.Errorf("Expected nil err but got %v", err)
 	}
 
-	if !reflect.DeepEqual(resp.Body, expectedResp) {
-		t.Errorf("Failed. Got %v\tExpected %v", resp.Body, expectedResp)
-	}
+	assert.Equal(t, expectedResp, resp.Body, "TEST Failed.\n")
 
 	// Test PutWithHeaders
 	resp, err = s.PutWithHeaders(context.TODO(), "", nil, nil, map[string]string{"entity": "test"})
@@ -306,9 +289,7 @@ func TestHTTPMethodWithHeaders(t *testing.T) {
 		t.Errorf("Expected nil err but got %v", err)
 	}
 
-	if !reflect.DeepEqual(resp.Body, expectedResp) {
-		t.Errorf("Failed. Got %v\tExpected %v", resp.Body, expectedResp)
-	}
+	assert.Equal(t, expectedResp, resp.Body, "TEST Failed.\n")
 
 	// Test PatchWithHeaders
 	resp, err = s.PatchWithHeaders(context.TODO(), "", nil, nil, map[string]string{"entity": "test"})
@@ -316,9 +297,7 @@ func TestHTTPMethodWithHeaders(t *testing.T) {
 		t.Errorf("Expected nil err but got %v", err)
 	}
 
-	if !reflect.DeepEqual(resp.Body, expectedResp) {
-		t.Errorf("Failed. Got %v\tExpected %v", resp.Body, expectedResp)
-	}
+	assert.Equal(t, expectedResp, resp.Body, "TEST Failed.\n")
 
 	// Test DeleteWithHeaders
 	resp, err = s.DeleteWithHeaders(context.TODO(), "", nil, map[string]string{"entity": "test"})
@@ -326,7 +305,5 @@ func TestHTTPMethodWithHeaders(t *testing.T) {
 		t.Errorf("Expected nil err but got %v", err)
 	}
 
-	if !reflect.DeepEqual(resp.Body, expectedResp) {
-		t.Errorf("Failed. Got %v\tExpected %v", resp.Body, expectedResp)
-	}
+	assert.Equal(t, expectedResp, resp.Body, "TEST Failed.\n")
 }

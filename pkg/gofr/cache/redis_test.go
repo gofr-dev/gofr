@@ -1,9 +1,10 @@
 package cache
 
 import (
-	"reflect"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 
 	"gofr.dev/pkg/datastore"
 	"gofr.dev/pkg/gofr/config"
@@ -26,9 +27,8 @@ func testRedisCacherGet(t *testing.T, redis RedisCacher) {
 	expectedVal := []byte("123")
 
 	resp, _ := redis.Get("k1")
-	if !reflect.DeepEqual(resp, expectedVal) {
-		t.Errorf("[RedisGet]Failed.Got %v\tExpected %v\n", resp, expectedVal)
-	}
+
+	assert.Equal(t, expectedVal, resp, "TEST Failed.\n")
 }
 
 func testRedisCacherSet(t *testing.T, redis RedisCacher) {

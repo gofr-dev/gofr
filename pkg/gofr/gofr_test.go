@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"reflect"
 	"testing"
 	"time"
 
@@ -132,9 +131,9 @@ func TestGofrUseMiddleware(t *testing.T) {
 
 	g.Server.UseMiddleware(mws...)
 
-	if len(g.Server.mws) != 2 || !reflect.DeepEqual(g.Server.mws, mws) {
-		t.Errorf("FAILED, Expected: %v, Got: %v", mws, g.Server.mws)
-	}
+	assert.Equal(t, 2, len(g.Server.mws), "TEST Failed.\n")
+
+	assert.Equal(t, mws, g.Server.mws, "TEST Failed.\n")
 }
 
 func TestGofrUseMiddlewarePopulated(t *testing.T) {
@@ -149,9 +148,9 @@ func TestGofrUseMiddlewarePopulated(t *testing.T) {
 
 	g.Server.UseMiddleware(mws...)
 
-	if len(g.Server.mws) != 2 || reflect.DeepEqual(g.Server.mws, []Middleware{sampleMW1, sampleMW2}) {
-		t.Errorf("FAILED, Expected: %v, Got: %v", mws, g.Server.mws)
-	}
+	assert.Equal(t, 2, len(g.Server.mws), "TEST Failed.\n")
+
+	assert.Equal(t, []Middleware{sampleMW1, sampleMW2}, g.Server.mws, "TEST Failed.\n")
 }
 
 func sampleMW1(h http.Handler) http.Handler {
@@ -170,9 +169,7 @@ func TestGofr_Config(t *testing.T) { // check config is properly set or not?
 	g := New()
 	val := g.Config.Get("APP_NAME")
 
-	if !reflect.DeepEqual(expected, val) {
-		t.Errorf("FAILED, Expected: %v, Got: %v", expected, val)
-	}
+	assert.Equal(t, expected, val, "TEST Failed.\n")
 }
 
 func TestGofr_Patch(t *testing.T) {

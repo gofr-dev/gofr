@@ -1,8 +1,9 @@
 package types
 
 import (
-	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 
 	"gofr.dev/pkg/errors"
 )
@@ -22,8 +23,7 @@ func TestTime_Check(t *testing.T) {
 		tt := tt
 
 		err := Validate(tt.timecheck)
-		if !reflect.DeepEqual(err, tt.err) {
-			t.Errorf("%v, Failed. Got :%v\tExpected: %v", tt.name, err, tt.err)
-		}
+
+		assert.Equal(t, tt.err, err, "TEST[%d], Failed.\n")
 	}
 }

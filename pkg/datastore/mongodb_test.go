@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"io"
-	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -115,9 +114,8 @@ func TestGetMongoConfigFromEnv_SSL_RetryWrites(t *testing.T) {
 		t.Setenv("MONGO_DB_RETRY_WRITES", testcases[i].retryWrites)
 
 		_, err := getMongoConfigFromEnv()
-		if !reflect.DeepEqual(err, testcases[i].expErr) {
-			t.Errorf("Expected: %v, Got:%v", testcases[i].expErr, err)
-		}
+
+		assert.Equal(t, testcases[i].expErr, err, "TEST[%d], Failed.\n", i)
 	}
 
 	t.Setenv("MONGO_DB_ENABLE_SSL", oldEnableSSL)
@@ -170,9 +168,8 @@ func TestDataStore_HealthCheck(t *testing.T) {
 		conn, _ := GetNewMongoDB(logger, &mockConfig)
 
 		output := conn.HealthCheck()
-		if !reflect.DeepEqual(output, tc.expected) {
-			t.Errorf("TESTCASE [%v] FAILED, Got %v, Expected %v", i, output, tc.expected)
-		}
+
+		assert.Equal(t, tc.expected, output, "TEST[%d], Failed.\n", i)
 	}
 }
 
@@ -227,9 +224,8 @@ func TestDataStore_HealthCheck_Down(t *testing.T) {
 	}
 
 	resp := m.HealthCheck()
-	if !reflect.DeepEqual(resp, expectedResponse) {
-		t.Errorf("expected %v\tgot %v", expectedResponse, resp)
-	}
+
+	assert.Equal(t, expectedResponse, resp, "TEST Failed.\n")
 }
 
 func Test_MonitorMongo(t *testing.T) {
@@ -282,9 +278,7 @@ func Test_MongoMonitorStarted(t *testing.T) {
 
 		got := toMap(m.event)
 
-		if !reflect.DeepEqual(got, tc.expectedEvent) {
-			t.Errorf("[TESTCASE%d]Failed.Expected: %v\nGot: %v", i+1, tc.expectedEvent, got)
-		}
+		assert.Equal(t, tc.expectedEvent, got, "TEST[%d], Failed.\n", i)
 	}
 }
 
@@ -317,9 +311,7 @@ func Test_MongoMonitorSucceeded(t *testing.T) {
 		got := toMap(m.event)
 
 		// ensuring the key is deleted
-		if !reflect.DeepEqual(got, tc.expectedMap) {
-			t.Errorf("[TESTCASE%d]Failed.Expected: %v\nGot: %v", i+1, tc.expectedMap, got)
-		}
+		assert.Equal(t, tc.expectedLog, got, "TEST[%d], Failed.\n", i)
 
 		if !strings.Contains(b.String(), tc.expectedLog) {
 			t.Errorf("[TESTCASE%d]Failed.Expected: %v\nGot: %v", i+1, tc.expectedLog, b.String())
@@ -360,9 +352,7 @@ func Test_MongoMonitorFailed(t *testing.T) {
 		}
 
 		// ensuring the key is deleted
-		if !reflect.DeepEqual(got, tc.expectedMap) {
-			t.Errorf("[TESTCASE%d]Failed.Expected: %v\nGot: %v", i+1, tc.expectedMap, got)
-		}
+		assert.Equal(t, tc.expectedLog, got, "TEST[%d], Failed.\n", i)
 	}
 }
 

@@ -1,8 +1,9 @@
 package types
 
 import (
-	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 
 	"gofr.dev/pkg/errors"
 )
@@ -27,8 +28,7 @@ func TestEnum_Check(t *testing.T) {
 		e := Enum{ValidValues: v.valid, Value: v.value, Parameter: "abc"}
 
 		err := e.Check()
-		if !reflect.DeepEqual(err, v.err) {
-			t.Errorf("[TESTCASE%d]Failed.Got %v\tExpected %v\n", i+1, err, v.err)
-		}
+
+		assert.Equal(t, v.err, err, "TEST[%d], Failed.\n", i)
 	}
 }

@@ -1,8 +1,9 @@
 package log
 
 import (
-	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestGetLevel(t *testing.T) {
@@ -62,8 +63,6 @@ func TestLevel_MarshalJSON(t *testing.T) {
 	for i, v := range testcases {
 		resp, _ := v.input.MarshalJSON()
 
-		if !reflect.DeepEqual(resp, v.output) {
-			t.Errorf("[TEST CASE %d]Failed. Expected %s\tGot %s\n", i+1, v.output, resp)
-		}
+		assert.Equal(t, v.output, resp, "TEST[%d], Failed.\n", i)
 	}
 }

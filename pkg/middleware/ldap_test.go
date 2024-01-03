@@ -6,7 +6,6 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"reflect"
 	"runtime"
 	"strings"
 	"testing"
@@ -108,11 +107,11 @@ func Test_getGroupsFromEntries(t *testing.T) {
 		}}}, want: map[string]bool{"abc": true}},
 	}
 
-	for _, tt := range tests {
+	for i, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := getGroupsFromEntries(tt.args.entries); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("getGroupsFromEntries() = %v, want %v", got, tt.want)
-			}
+			got := getGroupsFromEntries(tt.args.entries)
+
+			assert.Equal(t, tt.want, got, "TEST[%d], Failed.\n", i)
 		})
 	}
 }

@@ -8,7 +8,6 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
-	"reflect"
 	"sort"
 	"strings"
 	"testing"
@@ -99,9 +98,7 @@ func TestHTTP_Param(t *testing.T) {
 
 		got := h.Param(tc.k)
 
-		if !reflect.DeepEqual(tc.expected, got) {
-			t.Errorf("FAILED, %v expected: %v, got: %v", i, tc.expected, got)
-		}
+		assert.Equal(t, tc.expected, got, "TEST[%d], Failed.\n", i)
 	}
 }
 
@@ -120,7 +117,7 @@ func TestHTTP_ParamNames(t *testing.T) {
 		},
 	}
 
-	for _, tc := range tcs {
+	for i, tc := range tcs {
 		var h HTTP
 
 		h.req = httptest.NewRequest("GET", urlHTTPDummy+tc.queryParams, http.NoBody)
@@ -131,9 +128,7 @@ func TestHTTP_ParamNames(t *testing.T) {
 			return len(got[i]) < len(got[j])
 		})
 
-		if !reflect.DeepEqual(tc.expected, got) {
-			t.Errorf("FAILED, expected: %v, got: %v", tc.expected, got)
-		}
+		assert.Equal(t, tc.expected, got, "TEST[%d], Failed.\n", i)
 	}
 }
 
@@ -161,16 +156,14 @@ func TestHTTP_Params(t *testing.T) {
 		},
 	}
 
-	for _, tc := range tcs {
+	for i, tc := range tcs {
 		var h HTTP
 
 		h.req = httptest.NewRequest("GET", urlHTTPDummy+tc.queryParams, http.NoBody)
 
 		got := h.Params()
 
-		if !reflect.DeepEqual(tc.expected, got) {
-			t.Errorf("FAILED, expected: %v, got: %v", tc.expected, got)
-		}
+		assert.Equal(t, tc.expected, got, "TEST[%d], Failed.\n", i)
 	}
 }
 
@@ -195,7 +188,7 @@ func TestHTTP_PathParam(t *testing.T) {
 		},
 	}
 
-	for _, tc := range tcs {
+	for i, tc := range tcs {
 		var h HTTP
 
 		h.req = httptest.NewRequest("GET", urlHTTPDummy, http.NoBody)
@@ -209,9 +202,7 @@ func TestHTTP_PathParam(t *testing.T) {
 
 		got := h.PathParam(tc.key)
 
-		if !reflect.DeepEqual(tc.expectedValue, got) {
-			t.Errorf("FAILED, expected: %v, got: %v", tc.expectedValue, got)
-		}
+		assert.Equal(t, tc.expectedValue, got, "TEST[%d], Failed.\n", i)
 	}
 }
 
@@ -235,7 +226,7 @@ func TestHTTP_Body(t *testing.T) {
 		},
 	}
 
-	for _, tc := range tcs {
+	for i, tc := range tcs {
 		var (
 			h   HTTP
 			req = httptest.NewRequest(http.MethodPost, urlHTTPDummy, tc.reqBody)
@@ -245,12 +236,10 @@ func TestHTTP_Body(t *testing.T) {
 
 		response, err := h.Body()
 
-		if reflect.DeepEqual(tc.reqBody, malformedReader{}) && err == nil {
-			t.Errorf("FAILED, expected: %v, got: %v", "read error", err)
-		}
+		if err == nil {
+			assert.NotEqual(t, tc.reqBody, malformedReader{}, "TEST[%d], Failed.\n", i)
 
-		if err == nil && string(response) != rb {
-			t.Errorf("FAILED, expected: %v, got: %v", rb, string(response))
+			assert.Equal(t, rb, string(response), "TEST[%d], Failed.\n", i)
 		}
 	}
 }
@@ -310,7 +299,7 @@ func TestHTTP_Bind(t *testing.T) {
 		},
 	}
 
-	for _, tc := range tcs {
+	for i, tc := range tcs {
 		var (
 			h   HTTP
 			req = httptest.NewRequest(http.MethodPost, urlHTTPDummy, tc.reqBody)
@@ -324,9 +313,7 @@ func TestHTTP_Bind(t *testing.T) {
 
 		err := h.Bind(tc.i)
 
-		if err != nil && !reflect.DeepEqual(tc.err, err) {
-			t.Errorf("FAILED, expected: %v, got: %v", tc.err, err)
-		}
+		assert.Equal(t, tc.err, err, "TEST[%d], Failed.\n", i)
 	}
 }
 

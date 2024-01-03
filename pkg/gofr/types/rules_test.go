@@ -1,8 +1,9 @@
 package types
 
 import (
-	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 
 	"gofr.dev/pkg/errors"
 )
@@ -16,13 +17,13 @@ func TestValidate(t *testing.T) {
 		{"valid phone", []Rule{Phone("+17777777777")}, nil},
 		{"invalid phone", []Rule{Phone("+17777777777qq")}, errors.InvalidParam{Param: []string{"Phone Number contains Non Numeric characters"}}},
 	}
-	for _, tt := range tests {
+
+	for i, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			err := Validate(tt.rules...)
-			if !reflect.DeepEqual(err, tt.wantErr) {
-				t.Errorf("%v Validate() error = %v, wantErr %v", tt.name, err, tt.wantErr)
-			}
+
+			assert.Equal(t, tt.wantErr, err, "TEST[%d], Failed.\n%s", i, tt.name)
 		})
 	}
 }

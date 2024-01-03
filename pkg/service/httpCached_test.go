@@ -9,10 +9,11 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"reflect"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/log"
@@ -45,9 +46,7 @@ func TestCacheGet(t *testing.T) {
 	// getting cached response even when order of parameter is different
 	body, _ := cacher.Get(context.TODO(), "brand", map[string]interface{}{"name": "xyz", "page": 1})
 
-	if !reflect.DeepEqual(body.Body, expected) {
-		t.Errorf("Failed.Expected %v\tGot %v", expected, body)
-	}
+	assert.Equal(t, expected, body.Body, "TEST Failed.\n")
 
 	if !strings.Contains(b.String(), expectedLog) {
 		t.Errorf("Failed.Expected Log %v\tGot %v", expectedLog, b.String())
@@ -158,9 +157,7 @@ func TestCacheGetWithHeaders(t *testing.T) {
 	body, _ := cacher.GetWithHeaders(context.TODO(), "brand", map[string]interface{}{"name": "xyz", "page": 1},
 		map[string]string{"entity": "test"})
 
-	if !reflect.DeepEqual(body.Body, expected) {
-		t.Errorf("Failed.Expected %v\tGot %v", expected, body)
-	}
+	assert.Equal(t, expected, body.Body, "TEST Failed.\n")
 
 	if !strings.Contains(b.String(), expectedLog) {
 		t.Errorf("Failed.Expected Log %v\tGot %v", expectedLog, b.String())
@@ -247,7 +244,5 @@ func TestCacheGetWithHeadersPassedKey(t *testing.T) {
 	_, _ = cacher.GetWithHeaders(context.TODO(), "brand", nil, nil)
 	body, _ := cacher.GetWithHeaders(context.TODO(), "brand", nil, nil)
 
-	if !reflect.DeepEqual(body.Body, expected) {
-		t.Errorf("Failed.Expected Log %v\tGot %v", expected, body)
-	}
+	assert.Equal(t, expected, body.Body, "TEST Failed.\n")
 }

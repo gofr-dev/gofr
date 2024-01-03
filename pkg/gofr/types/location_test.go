@@ -1,8 +1,9 @@
 package types
 
 import (
-	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 
 	"gofr.dev/pkg/errors"
 )
@@ -19,7 +20,8 @@ func TestLocation_Check(t *testing.T) {
 		{"correct location struct", 34.00, 12, nil},
 		{"invalid latitude and longitude", -100, 1110, errors.InvalidParam{Param: []string{"lat"}}},
 	}
-	for _, tt := range tests {
+
+	for i, tt := range tests {
 		tt := tt
 		locstruct := Location{
 			Latitude:  &tt.lat,
@@ -29,9 +31,7 @@ func TestLocation_Check(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := Validate(locstruct)
 
-			if !reflect.DeepEqual(err, tt.err) {
-				t.Errorf("%v, Failed. Got :%v\tExpected: %v", tt.name, err, tt.err)
-			}
+			assert.Equal(t, tt.err, err, "TEST[%d], Failed.\n%s", i, tt.name)
 		})
 	}
 }
@@ -56,7 +56,7 @@ func TestLocation_CheckEmpty(t *testing.T) {
 				errors.InvalidParam{Param: []string{"lng is nil"}}}}},
 	}
 
-	for _, tt := range tests {
+	for i, tt := range tests {
 		tt := tt
 		locstruct := Location{
 			Latitude:  tt.lat,
@@ -66,9 +66,7 @@ func TestLocation_CheckEmpty(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := Validate(locstruct)
 
-			if !reflect.DeepEqual(err, tt.err) {
-				t.Errorf("%v, Failed. Got :%v\tExpected: %v", tt.name, err, tt.err)
-			}
+			assert.Equal(t, tt.err, err, "TEST[%d], Failed.\n%s", i, tt.name)
 		})
 	}
 }

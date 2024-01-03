@@ -5,13 +5,13 @@ import (
 	"crypto/rsa"
 	"net/http"
 	"net/http/httptest"
-	"reflect"
 	"strings"
 	"testing"
 
-	"gofr.dev/pkg/middleware"
+	"github.com/stretchr/testify/assert"
 
 	"gofr.dev/pkg/log"
+	"gofr.dev/pkg/middleware"
 )
 
 func getTestServerURLWithInvalidJSON() string {
@@ -77,9 +77,7 @@ func TestOAuth_cacheInvalidation(t *testing.T) {
 			t.Errorf("Testcase %v  Failed. Error Expected %v\n Got %v\n", i, tc.err, err)
 		}
 
-		if !reflect.DeepEqual(oAuth.cache.publicKeys.Keys, tc.keys) {
-			t.Errorf("Testcase %v Failed. Public keys Expected %v\nGot %v\n", i, tc.keys, oAuth.cache.publicKeys.Keys)
-		}
+		assert.Equal(t, tc.keys, oAuth.cache.publicKeys.Keys, "TEST[%d], Failed.\n", i)
 
 		if !strings.Contains(b.String(), tc.logMessage) {
 			t.Errorf("Testcase %v Failed. Log message Expected %v\nGot %v\n", i, tc.logMessage, b.String())

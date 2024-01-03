@@ -2,9 +2,9 @@ package oauth
 
 import (
 	"encoding/json"
+	"github.com/stretchr/testify/assert"
 	"net/http"
 	"net/http/httptest"
-	"reflect"
 	"sync"
 	"testing"
 
@@ -33,9 +33,7 @@ func Test_getPublicKey(t *testing.T) {
 
 		outputKeys := keyCache.publicKeys.Get(testcases[i].redisKey)
 
-		if !reflect.DeepEqual(outputKeys, testcases[i].key) {
-			t.Errorf("Failed testcase %d , Expected KEY : %v, Got : %v", i+1, testcases[i].key, outputKeys)
-		}
+		assert.Equal(t, testcases[i].key, outputKeys, "TEST[%d], Failed.\n", i)
 	}
 }
 
@@ -56,9 +54,7 @@ func TestGetPublicKeyError(t *testing.T) {
 	key := o.cache.publicKeys.Get("")
 	expKey := PublicKey{}
 
-	if reflect.DeepEqual(key, expKey) {
-		t.Errorf("Expected nil, Got : %v", key)
-	}
+	assert.Equal(t, expKey, key, "TEST Failed.\n")
 }
 
 func TestPublicKeys_GetRSAKey(t *testing.T) {
@@ -124,7 +120,7 @@ func Test_LoadJWK(t *testing.T) {
 		{testServer.URL + "/BAD_JSON", nil, middleware.ErrServiceDown},
 		{testServer.URL + "/SUCCESS", k.Keys, nil},
 	}
-	for _, testCase := range testCases {
+	for i, testCase := range testCases {
 		oAuth := New(log.NewLogger(), Options{
 			ValidityFrequency: 0,
 			JWKPath:           testCase.JWKPath,
@@ -135,9 +131,7 @@ func Test_LoadJWK(t *testing.T) {
 			t.Errorf("Expected error: %v, got: %v", testCase.error, err)
 		}
 
-		if !reflect.DeepEqual(keys, testCase.keys) {
-			t.Errorf("Expected keys: %v, got: %v", testCase.keys, keys)
-		}
+		assert.Equal(t, testCase.keys, keys, "TEST[%d], Failed.\n", i)
 	}
 }
 

@@ -9,9 +9,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 
 	"gofr.dev/pkg/errors"
 	"gofr.dev/pkg/log"
@@ -218,11 +219,10 @@ func Test_generateRsaPublicKey(t *testing.T) {
 			nil},
 	}
 
-	for tc := range testcases {
-		_, err := generateRSAPublicKey(&testcases[tc].pubKey)
-		if !reflect.DeepEqual(err, testcases[tc].expErr) {
-			t.Errorf("Testcase[%v] failed: Expected: %v, Got: %v", tc, testcases[tc].expErr, err)
-		}
+	for i := range testcases {
+		_, err := generateRSAPublicKey(&testcases[i].pubKey)
+
+		assert.Equal(t, testcases[i].expErr, err, "TEST[%d], Failed.\n", i)
 	}
 }
 

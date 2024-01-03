@@ -5,7 +5,6 @@ import (
 	ctx "context"
 	"net/http"
 	"net/http/httptest"
-	"reflect"
 	"sync"
 	"testing"
 
@@ -58,9 +57,7 @@ func TestContext_Params(t *testing.T) {
 		c := NewContext(nil, req, nil)
 		params := c.Params()
 
-		if !reflect.DeepEqual(params, tc.expected) {
-			t.Errorf("FAILED, Expected: %v, Got: %v", tc.expected, params)
-		}
+		assert.Equal(t, tc.expected, params, "TEST[%d], Failed.\n")
 	}
 }
 
@@ -203,9 +200,8 @@ func Test_Log(t *testing.T) {
 		// fetch the appData from request context and generate a map of type map[string]interface{}, if appData is nil
 		// then getAppData will return empty map
 		data := getAppData(c.req.Request().Context())
-		if !reflect.DeepEqual(data, tc.data) {
-			t.Errorf("Failed[%v] expected value:%v \n got: %v", i, tc.data, data)
-		}
+
+		assert.Equal(t, tc.data, data, "TEST[%d], Failed.\n", i)
 	}
 }
 
@@ -229,9 +225,8 @@ func TestLog_CorrelationModify(t *testing.T) {
 	}
 
 	got, _ := c.req.Request().Context().Value(appData).(map[string]interface{})
-	if !reflect.DeepEqual(got, expected) {
-		t.Errorf("FAILED, Expected: %v, Got: %v", expected, got)
-	}
+
+	assert.Equal(t, expected, got, "TEST Failed.\n")
 }
 
 func TestContext_ValidateClaimSubPFCX(t *testing.T) {

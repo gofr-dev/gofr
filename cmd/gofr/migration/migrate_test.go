@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -177,14 +176,12 @@ func TestRedisAndMongo_Migration(t *testing.T) {
 
 	for i, v := range testcases {
 		err := Migrate(appName, dbmigration.NewRedis(redis), v.migrations, v.method, logger)
-		if !reflect.DeepEqual(err, v.err) {
-			t.Errorf("[TESTCASE%d]Redis : Got %v\tExpected %v\n", i+1, err, v.err)
-		}
+
+		assert.Equal(t, v.err, err, "TEST[%d], Failed.\n", i)
 
 		err = Migrate(appName, dbmigration.NewMongo(mongo), v.migrations, v.method, logger)
-		if !reflect.DeepEqual(err, v.err) {
-			t.Errorf("[TESTCASE%d]Mongo : Got %v\tExpected %v\n", i+1, err, v.err)
-		}
+
+		assert.Equal(t, v.err, err, "TEST[%d], Failed.\n", i)
 	}
 }
 
@@ -230,9 +227,8 @@ func TestSQL_Migration(t *testing.T) {
 
 	for i, v := range testcases {
 		err := Migrate(appName, dbmigration.NewGorm(pgsql.DB), v.migrations, v.method, logger)
-		if !reflect.DeepEqual(err, v.err) {
-			t.Errorf("[TESTCASE%d]Got %v\tExpected %v\n", i+1, err, v.err)
-		}
+
+		assert.Equal(t, v.err, err, "TEST[%d], Failed.\n", i)
 	}
 }
 
@@ -281,9 +277,8 @@ func TestCassandra_Migration(t *testing.T) {
 
 	for i, v := range testcases {
 		err := Migrate(appName, dbmigration.NewCassandra(&cassandra), v.migrations, v.method, logger)
-		if !reflect.DeepEqual(err, v.err) {
-			t.Errorf("[TESTCASE%d]Got %v\tExpected %v\n", i+1, err, v.err)
-		}
+
+		assert.Equal(t, v.err, err, "TEST[%d], Failed.\n", i)
 	}
 }
 

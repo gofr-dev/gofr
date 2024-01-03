@@ -5,8 +5,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 
 	"gofr.dev/pkg/errors"
 	"gofr.dev/pkg/log"
@@ -267,8 +268,8 @@ func TestOpenAPIHandlerError(t *testing.T) {
 	data := w.Body.Bytes()
 	_ = json.Unmarshal(data, &resp)
 
-	if w.Code != http.StatusNotFound && !reflect.DeepEqual(expResp, resp) {
-		t.Errorf("want status code 200 got= %v", w.Code)
+	if w.Code != http.StatusNotFound {
+		assert.Equal(t, expResp, resp, "TEST Failed.\n")
 	}
 }
 

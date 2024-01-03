@@ -2,7 +2,6 @@ package request
 
 import (
 	"net/http"
-	"reflect"
 	"strings"
 	"testing"
 
@@ -109,9 +108,7 @@ func TestCMD_Params(t *testing.T) {
 	got := c.Params()
 	expected := c.params
 
-	if !reflect.DeepEqual(expected, got) {
-		t.Errorf("FAILED, Expected: %v, Got: %v", expected, got)
-	}
+	assert.Equal(t, expected, got, "TEST Failed.\n")
 }
 
 func TestCMD_Request(t *testing.T) {

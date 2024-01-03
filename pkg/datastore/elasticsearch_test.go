@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"io"
-	"reflect"
 	"strings"
 	"testing"
 
@@ -67,9 +66,7 @@ func TestDataStore_ElasticsearchHealthCheck_ErrorLog(t *testing.T) {
 
 	output := conn.HealthCheck()
 
-	if !reflect.DeepEqual(output, expectedResp) {
-		t.Errorf("[TESTCASE] Failed.\nExpected: %v,\nGot: %v", expectedResp, output)
-	}
+	assert.Equal(t, expectedResp, output, "TEST Failed.\n")
 
 	if !assert.Contains(t, b.String(), expectedLogMessage) {
 		t.Errorf("expected: %v, got: %v", expectedLogMessage, b.String())
@@ -92,9 +89,8 @@ func TestDataStore_ElasticsearchHealthCheck(t *testing.T) {
 		conn, _ := NewElasticsearchClient(log.NewMockLogger(io.Discard), &mockConfig)
 
 		output := conn.HealthCheck()
-		if !reflect.DeepEqual(output, tc.expected) {
-			t.Errorf("[TESTCASE%v] Failed.\nExpected: %v,\nGot: %v", i+1, tc.expected, output)
-		}
+
+		assert.Equal(t, tc.expected, output, "TEST[%d], Failed.\n", i)
 	}
 }
 
@@ -181,9 +177,7 @@ func Test_Bind(t *testing.T) {
 			t.Errorf("TESTCASE[%v] expected no error, got %v", i, err)
 		}
 
-		if !reflect.DeepEqual(tc.expOut, d) {
-			t.Errorf("TESTCASE[%v] expected %v, got %v", i, tc.expOut, d)
-		}
+		assert.Equal(t, tc.expOut, d, "TEST[%d], Failed.\n", i)
 	}
 }
 
@@ -264,9 +258,7 @@ func Test_BindArray(t *testing.T) {
 		{ID: "1", Name: "test"},
 	}
 
-	if !reflect.DeepEqual(expData, d) {
-		t.Errorf("expected %v, got %v", expData, d)
-	}
+	assert.Equal(t, expData, d, "TEST Failed.\n")
 }
 
 func insertData(t *testing.T, es *Elasticsearch, data data) {

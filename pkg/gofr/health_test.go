@@ -3,7 +3,6 @@ package gofr
 import (
 	"fmt"
 	"net/http"
-	"reflect"
 	"testing"
 	"time"
 
@@ -90,7 +89,8 @@ func Test_server_HeartCheck(t *testing.T) {
 	}{
 		{"test1", "GET /.well-known/health-check"},
 	}
-	for _, tt := range tests {
+
+	for i, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			http.DefaultServeMux = new(http.ServeMux)
@@ -98,9 +98,7 @@ func Test_server_HeartCheck(t *testing.T) {
 			time.Sleep(3 * time.Second)
 			got := fmt.Sprintf("%s", s.Server.Router)
 
-			if reflect.DeepEqual(got, tt.want) {
-				t.Errorf(" got = %v, want %v", got, tt.want)
-			}
+			assert.Equal(t, tt.want, got, "TEST[%d], Failed.\n", i)
 		})
 	}
 }

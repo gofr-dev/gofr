@@ -3,11 +3,12 @@ package log
 import (
 	"bytes"
 	"fmt"
-	"reflect"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+	
+	"github.com/stretchr/testify/assert"
 )
 
 func TestEntryFromInputs(t *testing.T) {
@@ -36,10 +37,10 @@ func TestEntryFromInputs(t *testing.T) {
 
 	for i, v := range testcases {
 		e, _, _ := entryFromInputs(v.format, v.args...)
-		if !reflect.DeepEqual(e.Data, v.expectedEntry.Data) || !reflect.DeepEqual(e.Message, v.expectedEntry.Message) {
-			t.Errorf("[TESTCASE%d]Failed.Expected Data:%v Message %v\nGot Data:%v Message %v\n", i+1,
-				v.expectedEntry.Data, v.expectedEntry.Message, e.Data, e.Message)
-		}
+
+		assert.Equal(t, v.expectedEntry.Data, e.Data, "TEST[%d], Failed.\n%s", i, v.desc)
+
+		assert.Equal(t, v.expectedEntry.Message, e.Message, "TEST[%d], Failed.\n%s", i, v.desc)
 	}
 }
 
@@ -83,21 +84,14 @@ func TestEntryFromStringForJSON(t *testing.T) {
 
 	for i, tc := range tests {
 		e, _, isPerfLog := entryFromInputs("", tc.args)
-		if !reflect.DeepEqual(e.Data, tc.exp.Data) {
-			t.Errorf("TESTCASE [%v] Failed. Expected data %v\tGot %v\n", i, tc.exp.Data, e.Data)
-		}
 
-		if !reflect.DeepEqual(e.Message, tc.exp.Message) {
-			t.Errorf("TESTCASE [%v] Failed. Expected message %v\tGot %v\n", i, tc.exp.Message, e.Message)
-		}
+		assert.Equal(t, tc.exp.Data, e.Data, "TEST[%d], Failed.\n", i)
 
-		if !reflect.DeepEqual(e.CorrelationID, tc.exp.CorrelationID) {
-			t.Errorf("TESTCASE [%v] Failed. Expected correlationID %v\tGot %v\n", i, tc.exp.CorrelationID, e.CorrelationID)
-		}
+		assert.Equal(t, tc.exp.Message, e.Message, "TEST[%d], Failed.\n", i)
 
-		if isPerfLog != tc.expPerfLog {
-			t.Errorf("TESTCASE [%v] Failed. Expected performanceLog %v\tGot %v\n", i, tc.expPerfLog, isPerfLog)
-		}
+		assert.Equal(t, tc.exp.CorrelationID, e.CorrelationID, "TEST[%d], Failed.\n", i)
+
+		assert.Equal(t, tc.expPerfLog, isPerfLog, "TEST[%d], Failed.\n", i)
 	}
 }
 

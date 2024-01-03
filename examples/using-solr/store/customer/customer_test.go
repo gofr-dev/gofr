@@ -5,8 +5,9 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"reflect"
 	"testing"
+	
+	"github.com/stretchr/testify/assert"
 
 	"gofr.dev/examples/using-solr/store"
 	"gofr.dev/pkg/datastore"
@@ -46,9 +47,7 @@ func TestCustomer_ListResponse(t *testing.T) {
 		t.Errorf("Expected nil error\tGot %v", err)
 	}
 
-	if !reflect.DeepEqual(resp, expectedResp) {
-		t.Errorf("Expected %v\tGot %v\n", expectedResp, resp)
-	}
+	assert.Equal(t, expectedResp, resp, "TEST Failed.\n")
 }
 
 func TestCustomer_Create(t *testing.T) {

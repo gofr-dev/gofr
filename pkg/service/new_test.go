@@ -6,7 +6,6 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -111,9 +110,8 @@ func TestNewHTTPService_WithHeaders(t *testing.T) {
 		resourceURL := "http://example.com"
 
 		httpSvc := NewHTTPServiceWithOptions(resourceURL, log.NewMockLogger(io.Discard), &testCases[i].options)
-		if !reflect.DeepEqual(httpSvc.customHeaders, testCases[i].headers) {
-			t.Errorf("expected headers: %v\tgot: %v", testCases[i].headers, httpSvc.customHeaders)
-		}
+
+		assert.Equal(t, testCases[i].headers, httpSvc.customHeaders, "TEST[%d], Failed.\n", i)
 
 		if httpSvc.url != resourceURL {
 			t.Errorf("resource url is not set\t got %v\texpected %v", httpSvc.url, resourceURL)
@@ -236,9 +234,7 @@ func TestNewHTTPServiceWithOptions_MultipleFeatures(t *testing.T) {
 			t.Errorf("expected auth %v\tgot %v", testCases[i].httpSvc.auth, httpSvc.auth)
 		}
 
-		if !reflect.DeepEqual(httpSvc.customHeaders, testCases[i].httpSvc.customHeaders) {
-			t.Errorf("expected headers: %v\tgot: %v", testCases[i].httpSvc.customHeaders, httpSvc.customHeaders)
-		}
+		assert.Equal(t, testCases[i].httpSvc.customHeaders, httpSvc.customHeaders, "TEST[%d], Failed.\n", i)
 
 		if httpSvc.url != resourceURL {
 			t.Errorf("resource url is not set\t got %v\texpected %v", httpSvc.url, resourceURL)

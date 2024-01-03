@@ -1,7 +1,6 @@
 package file
 
 import (
-	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -38,9 +37,7 @@ func Test_gcp_fetch(t *testing.T) {
 
 	resp := gcpFile.fetch(localFile.FD)
 
-	if reflect.DeepEqual(resp, err) {
-		t.Errorf("expected: %v, got: %v", resp, err)
-	}
+	assert.NotEqual(t, err, resp, "TEST Failed.\n")
 
 	_ = localFile.Close()
 }
@@ -54,9 +51,7 @@ func Test_gcp_push(t *testing.T) {
 
 	resp := gcpFile.push(localFile.FD)
 
-	if reflect.DeepEqual(resp, nil) {
-		t.Errorf("expected: %v, got: %v", resp, nil)
-	}
+	assert.NotNil(t, resp, "TEST Failed.\n")
 
 	_ = localFile.Close()
 }

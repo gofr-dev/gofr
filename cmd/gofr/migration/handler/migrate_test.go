@@ -9,7 +9,6 @@ import (
 	"net/http/httptest"
 	"os"
 	"path"
-	"reflect"
 	"sort"
 	"strings"
 	"testing"
@@ -313,9 +312,7 @@ func Test_runMigration(t *testing.T) {
 			return
 		}
 
-		if !reflect.DeepEqual(got, tt.want) {
-			t.Errorf("TEST[%d] Faile runMigration() got = %v, want %v", i, got, tt.want)
-		}
+		assert.Equal(t, tt.want, got, "TEST[%d], Failed.\n%s", i, tt.name)
 	}
 }
 

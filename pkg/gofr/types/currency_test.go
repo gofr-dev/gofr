@@ -1,8 +1,9 @@
 package types
 
 import (
-	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 
 	"gofr.dev/pkg/errors"
 )
@@ -21,12 +22,11 @@ func TestCurrency_Check(t *testing.T) {
 		{"wrong currency format passed", "USD ABCD efg", errors.InvalidParam{Param: []string{"currency"}}},
 		{"symbolic representation of currency", "$ 123.00", errors.InvalidParam{Param: []string{"currencyCountryCode"}}},
 	}
-	for _, tt := range tests {
+
+	for i, tt := range tests {
 		tt := tt
 		err := Validate(tt.currency)
 
-		if !reflect.DeepEqual(err, tt.err) {
-			t.Errorf("%v, Failed. Got :%v\tExpected: %v", tt.name, err, tt.err)
-		}
+		assert.Equal(t, tt.err, err, "TEST[%d], Failed.\n%s", i, tt.name)
 	}
 }

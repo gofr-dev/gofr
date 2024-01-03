@@ -3,7 +3,6 @@ package datastore
 import (
 	"bytes"
 	"io"
-	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -219,9 +218,7 @@ func TestDataStore_YCQLHealthCheck(t *testing.T) {
 		con, _ := GetNewYCQL(logger, &mockConfig)
 		output := con.HealthCheck()
 
-		if !reflect.DeepEqual(tc.expected, output) {
-			t.Errorf("[FAILED]%v expected: %v, got: %v", i, tc.expected, output)
-		}
+		assert.Equal(t, tc.expected, output, "TEST[%d], Failed.\n", i)
 	}
 }
 
@@ -272,9 +269,7 @@ func Test_YCQLHealthCheck_Down(t *testing.T) {
 
 	output := con.HealthCheck()
 
-	if !reflect.DeepEqual(expected, output) {
-		t.Errorf("expected: %v, got: %v", expected, output)
-	}
+	assert.Equal(t, expected, output, "TEST Failed.\n")
 }
 
 func TestYCQL_HealthCheck_NilObject(t *testing.T) {
@@ -286,9 +281,8 @@ func TestYCQL_HealthCheck_NilObject(t *testing.T) {
 	var ycql *YCQL
 
 	resp := ycql.HealthCheck()
-	if !reflect.DeepEqual(expected, resp) {
-		t.Errorf("expected: %v, got: %v", expected, resp)
-	}
+
+	assert.Equal(t, expected, resp, "TEST Failed.\n")
 }
 
 func Test_IncorrectSSLCertPathYCQL(t *testing.T) {

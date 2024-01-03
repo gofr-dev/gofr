@@ -3,7 +3,6 @@ package handlers
 import (
 	"net/http"
 	"net/http/httptest"
-	"reflect"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -107,7 +106,7 @@ func TestProducerHandler(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "http://dummy", nil)
 	context := gofr.NewContext(nil, request.NewHTTPRequest(req), app)
 
-	for _, tt := range tests {
+	for i, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			context.SetPathParams(map[string]string{
@@ -122,9 +121,7 @@ func TestProducerHandler(t *testing.T) {
 				return
 			}
 
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("Producer() got = %v, want %v", got, tt.want)
-			}
+			assert.Equal(t, tt.want, got, "TEST[%d], Failed.\n", i)
 		})
 	}
 }

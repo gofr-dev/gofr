@@ -9,7 +9,6 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -293,9 +292,8 @@ func Test_OAuth_ctx_cancel_RequestTimeout(t *testing.T) {
 			defer cancel()
 
 			_, err := svc.Get(ctx, "dummy", nil)
-			if !reflect.DeepEqual(err, testcases[i].err) {
-				t.Errorf("[TESTCASE%d]Failed.\nExpected %v\nGot %v\n", i+1, testcases[i].err, err)
-			}
+
+			assert.Equal(t, testcases[i].err, err, "TEST[%d], Failed.\n", i)
 		}()
 	}
 }
@@ -313,9 +311,7 @@ func TestCallError(t *testing.T) {
 
 	_, err := client.call(context.TODO(), http.MethodGet, "", nil, nil, nil)
 
-	if !reflect.DeepEqual(err, expectedErr) {
-		t.Errorf("Failed.Expected %v\tGot %v", expectedErr, err)
-	}
+	assert.Equal(t, expectedErr, err, "TEST Failed.\n")
 }
 
 func TestLogError(t *testing.T) {
@@ -802,9 +798,7 @@ func Test_PreCallStatusCode(t *testing.T) {
 	for i := range testcases {
 		statusCode, err := testcases[i].h.preCall()
 
-		if reflect.DeepEqual(err, &testcases[i].expectedError) {
-			t.Errorf("[TESTCASE%d]Failed. Expected: %v\tGot: %v", i+1, testcases[i].expectedError, err)
-		}
+		assert.Equal(t, &testcases[i].expectedError, err, "TEST[%d], Failed.\n", i)
 
 		if statusCode != testcases[i].expectedStatusCode {
 			t.Errorf("[TESTCASE%d]Failed. Expected: %v\tGot: %v", i+1, testcases[i].expectedStatusCode, statusCode)

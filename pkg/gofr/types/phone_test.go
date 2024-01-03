@@ -1,8 +1,9 @@
 package types
 
 import (
-	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 
 	"gofr.dev/pkg/errors"
 )
@@ -27,8 +28,7 @@ func TestPhone_Check(t *testing.T) {
 		tt := tt
 
 		err := Validate(tt.phone)
-		if !reflect.DeepEqual(err, tt.err) {
-			t.Errorf("[TEST ID %d]Got %v\tExpected %v", i+1, err, tt.err)
-		}
+
+		assert.Equal(t, tt.err, err, "TEST[%d], Failed.\n", i)
 	}
 }

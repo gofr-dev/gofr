@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"reflect"
 	"testing"
 
 	"github.com/gorilla/mux"
@@ -48,7 +47,7 @@ func TestNewContextualResponder(t *testing.T) {
 		{"text/plain", "X-Correlation-ID", &HTTP{w: w, resType: TEXT, method: "GET", path: path, correlationID: correlationID}},
 	}
 
-	for _, tc := range testCases {
+	for i, tc := range testCases {
 		r := httptest.NewRequest("GET", "/dummy", http.NoBody)
 
 		// handler to set the routeKey in request context
@@ -65,9 +64,9 @@ func TestNewContextualResponder(t *testing.T) {
 		r.Header.Set("Content-Type", tc.contentType)
 		r.Header.Set(tc.correlationIDHeader, correlationID)
 
-		if got := NewContextualResponder(w, r); !reflect.DeepEqual(got, tc.want) {
-			t.Errorf("NewContextualResponder() = %v, want %v", got, tc.want)
-		}
+		got := NewContextualResponder(w, r)
+
+		assert.Equal(t, tc.want, got, "TEST[%d], Failed.\n", i)
 	}
 }
 

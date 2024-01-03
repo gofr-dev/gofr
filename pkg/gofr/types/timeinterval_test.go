@@ -1,7 +1,6 @@
 package types
 
 import (
-	"reflect"
 	"testing"
 	"time"
 
@@ -24,9 +23,8 @@ func TestTimeInterval_Check(t *testing.T) {
 
 	for i, v := range testcases {
 		err := v.input.Check()
-		if !reflect.DeepEqual(v.err, err) {
-			t.Errorf("[TESTCASE%d]Failed.Got %v\tExpected %v\n", i+1, err, v.err)
-		}
+
+		assert.Equal(t, v.err, err, "TEST[%d], Failed.\n", i)
 	}
 }
 

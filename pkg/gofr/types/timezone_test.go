@@ -1,8 +1,9 @@
 package types
 
 import (
-	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 
 	"gofr.dev/pkg/errors"
 )
@@ -19,12 +20,11 @@ func TestTimeZone_Check(t *testing.T) {
 		{"incorrect format for timezone", "warzone", errors.InvalidParam{Param: []string{"timeZone"}}},
 	}
 
-	for _, c := range tc {
+	for i, c := range tc {
 		c := c
 
 		r := Validate(c.timezone)
-		if !reflect.DeepEqual(r, c.expectedErr) {
-			t.Errorf("%v Expected value: for %v got %v", c.name, c.expectedErr, c.timezone)
-		}
+
+		assert.Equal(t, c.expectedErr, r, "TEST[%d], Failed.\n%s", i, c.name)
 	}
 }
