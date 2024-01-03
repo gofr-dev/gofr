@@ -1,30 +1,33 @@
-/*
-Package middleware provides set of middleware functions that can be used to authenticate and authorize
-requests in HTTP server.It also supports handling CORS, propagating headers, integrating with New Relic APM, and enabling
-distributed tracing using OpenTelemetry.
-*/
 package middleware
 
 import (
 	"net/http"
+	"strings"
 )
 
 const (
-	allowedHeaders = "Authorization, Content-Type, x-requested-with, true-client-ip, X-Correlation-ID"
 	allowedMethods = "PUT, POST, GET, DELETE, OPTIONS, PATCH"
+	allowedHeaders = "Authorization, Content-Type, x-requested-with, true-client-ip, X-Correlation-ID"
+
+	AccessControlAllowHeaders     = "Access-Control-Allow-Headers"
+	AccessControlAllowMethods     = "Access-Control-Allow-Methods"
+	AccessControlAllowCredentials = "Access-Control-Allow-Credentials"
+	AccessControlExposeHeaders    = "Access-Control-Expose-Headers"
+	AccessControlMaxAge           = "Access-Control-Max-Age"
+	AccessControlAllowOrigin      = "Access-Control-Allow-Origin"
 )
 
-// CORS an HTTP middleware that sets headers based on the provided envHeaders configuration
+// CORS is an HTTP middleware that sets headers based on the provided envHeaders configuration
 func CORS(envHeaders map[string]string) func(inner http.Handler) http.Handler {
 	return func(inner http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			corsHeaderMappings := map[string]string{
-				"ACCESS_CONTROL_ALLOW_HEADERS":     "Access-Control-Allow-Headers",
-				"ACCESS_CONTROL_ALLOW_METHODS":     "Access-Control-Allow-Methods",
-				"ACCESS_CONTROL_ALLOW_CREDENTIALS": "Access-Control-Allow-Credentials",
-				"ACCESS_CONTROL_EXPOSE_HEADERS":    "Access-Control-Expose-Headers",
-				"ACCESS_CONTROL_MAX_AGE":           "Access-Control-Max-Age",
-				"ACCESS_CONTROL_ALLOW_ORIGIN":      "Access-Control-Allow-Origin",
+				"ACCESS_CONTROL_ALLOW_HEADERS":     AccessControlAllowHeaders,
+				"ACCESS_CONTROL_ALLOW_METHODS":     AccessControlAllowMethods,
+				"ACCESS_CONTROL_ALLOW_CREDENTIALS": AccessControlAllowCredentials,
+				"ACCESS_CONTROL_EXPOSE_HEADERS":    AccessControlExposeHeaders,
+				"ACCESS_CONTROL_MAX_AGE":           AccessControlMaxAge,
+				"ACCESS_CONTROL_ALLOW_ORIGIN":      AccessControlAllowOrigin,
 			}
 
 			corsHeadersConfig := getValidCORSHeaders(envHeaders, corsHeaderMappings)
@@ -48,24 +51,33 @@ func getValidCORSHeaders(configHeaders, headerMappings map[string]string) map[st
 	validCORSHeadersAndValues := make(map[string]string)
 
 	for _, header := range AllowedCORSHeader() {
+		convertedHeader := convertToUpper(header)
+
 		// If config is set, use that
 		if val, ok := configHeaders[header]; ok && val != "" {
-			validCORSHeadersAndValues[headerMappings[header]] = val
-			continue
+			if _, ok := validCORSHeadersAndValues[convertedHeader]; !ok {
+				validCORSHeadersAndValues[headerMappings[convertedHeader]] = val
+				continue
+			}
 		}
 
-		// If config is not set - for the three headers, set default value.
-		switch header {
+		// If config is not set for these two headers, set default value.
+		switch convertedHeader {
 		case "ACCESS_CONTROL_ALLOW_HEADERS":
-			validCORSHeadersAndValues[headerMappings[header]] = allowedHeaders
+			if _, ok := validCORSHeadersAndValues[headerMappings[convertedHeader]]; !ok {
+				validCORSHeadersAndValues[headerMappings[convertedHeader]] = allowedHeaders
+			}
+
 		case "ACCESS_CONTROL_ALLOW_METHODS":
-			validCORSHeadersAndValues[headerMappings[header]] = allowedMethods
+			if _, ok := validCORSHeadersAndValues[headerMappings[convertedHeader]]; !ok {
+				validCORSHeadersAndValues[headerMappings[convertedHeader]] = allowedMethods
+			}
 		}
 	}
 
-	val := validCORSHeadersAndValues[headerMappings["ACCESS_CONTROL_ALLOW_HEADERS"]]
+	val, _ := validCORSHeadersAndValues[headerMappings["ACCESS_CONTROL_ALLOW_HEADERS"]]
 
-	if val != allowedHeaders {
+	if val != allowedHeaders && val != "" {
 		validCORSHeadersAndValues[headerMappings["ACCESS_CONTROL_ALLOW_HEADERS"]] = allowedHeaders + ", " + val
 	}
 
@@ -81,5 +93,30 @@ func AllowedCORSHeader() []string {
 		"ACCESS_CONTROL_EXPOSE_HEADERS",
 		"ACCESS_CONTROL_MAX_AGE",
 		"ACCESS_CONTROL_ALLOW_ORIGIN",
+		AccessControlAllowHeaders,
+		AccessControlAllowMethods,
+		AccessControlAllowCredentials,
+		AccessControlExposeHeaders,
+		AccessControlMaxAge,
+		AccessControlAllowOrigin,
+	}
+}
+
+func convertToUpper(input string) string {
+	if strings.Contains(input, "_") {
+		return input
+	} else {
+		// Separate words based on hyphens
+		words := strings.Split(input, "-")
+
+		// Capitalize each word
+		for i := range words {
+			words[i] = strings.ToUpper(words[i])
+		}
+
+		// Join words using underscores
+		output := strings.Join(words, "_")
+
+		return output
 	}
 }

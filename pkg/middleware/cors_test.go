@@ -1,7 +1,6 @@
 package middleware
 
 import (
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -49,7 +48,6 @@ func Test_CORS(t *testing.T) {
 
 		for _, header := range corsMapping {
 			w.Header().Get("Access-Control-Allow-Credentials")
-			fmt.Println(expectedHeaders[header])
 			assert.Equal(t, expectedHeaders[header], w.Header().Get(header), i)
 			w.Header().Del(header)
 		}
@@ -82,10 +80,10 @@ func Test_getValidCORSHeaders(t *testing.T) {
 			},
 		},
 		{map[string]string{
-			"ACCESS_CONTROL_MAX_AGE":       strconv.Itoa(600),
-			"ACCESS_CONTROL_ALLOW_HEADERS": "",
-			"ACCESS_CONTROL_ALLOW_METHODS": http.MethodPost,
-			"ACCESS_CONTROL_ALLOW_ORIGIN":  "abc.com",
+			"Access-Control-Max-Age":       strconv.Itoa(600),
+			"Access-Control-Allow-Headers": allowedHeaders,
+			"Access-Control-Allow-Methods": http.MethodPost,
+			"Access-Control-Allow-Origin":  "abc.com",
 		},
 			map[string]string{
 				"Access-Control-Max-Age":       strconv.Itoa(600),
@@ -97,6 +95,7 @@ func Test_getValidCORSHeaders(t *testing.T) {
 		{map[string]string{
 			"ACCESS_CONTROL_ALLOW_HEADERS": "clientid",
 			"ACCESS_CONTROL_ALLOW_ORIGIN":  "abc.com",
+			"Access-Control-Allow-Headers": "clientid",
 		},
 			map[string]string{
 				"Access-Control-Allow-Headers": allowedHeaders + ", clientid",
