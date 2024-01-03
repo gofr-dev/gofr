@@ -38,6 +38,7 @@ export const navigation = [
             { title: 'Logs', href: '/docs/references/logs' },
             { title: 'Errors', href: '/docs/references/errors' },
             { title: 'Swaggger', href: '/docs/references/swagger' },
+            { title: 'Swaggge2', href: '/docs/references/swagger' },
         ],
     },
 ]
