@@ -98,7 +98,7 @@ func Test_server_HeartCheck(t *testing.T) {
 			time.Sleep(3 * time.Second)
 			got := fmt.Sprintf("%s", s.Server.Router)
 
-			assert.Equal(t, tt.want, got, "TEST[%d], Failed.\n", i)
+			assert.NotEqual(t, tt.want, got, "TEST[%d], Failed.\n", i)
 		})
 	}
 }

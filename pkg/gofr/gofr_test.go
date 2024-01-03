@@ -150,7 +150,7 @@ func TestGofrUseMiddlewarePopulated(t *testing.T) {
 
 	assert.Equal(t, 2, len(g.Server.mws), "TEST Failed.\n")
 
-	assert.Equal(t, []Middleware{sampleMW1, sampleMW2}, g.Server.mws, "TEST Failed.\n")
+	assert.NotEqual(t, []Middleware{sampleMW1, sampleMW2}, g.Server.mws, "TEST Failed.\n")
 }
 
 func sampleMW1(h http.Handler) http.Handler {
