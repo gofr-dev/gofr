@@ -39,7 +39,7 @@ func TestWSHandler(t *testing.T) {
 	req.Header.Set("Connection", "upgrade")
 	req.Header.Set("Upgrade", "websocket")
 	req.Header.Set("Sec-Websocket-Version", "13")
-	req.Header.Set("Sec-WebSocket-Key", "wehkjeh21-sdjk210-wsknb")
+	req.Header.Set("Sec-WebSocket-Key", "dGhlIHNhbXBsZSBub25jZQ==")
 
 	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/ws"
 
