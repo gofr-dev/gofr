@@ -68,6 +68,15 @@ jobs:
           project_id: '${{ env.GCR_PROJECT }}'
           service_account_key: '${{ secrets.DEPLOY_KEY }}'
           export_default_credentials: true
+      - name: Update Kubectl component
+        run: gcloud --quiet components update kubectl
+
+      - name: Set GCloud Project and Fetch Cluster Credentials
+        run: gcloud container clusters get-credentials ${{ env.CLUSTER_NAME }} --zone=us-central1 --project=${{ env.GCR_PROJECT }}
+
+      - name: Set Deployment Image
+        run: kubectl set image deployment/${{ env.APP_NAME }} ${{ env.APP_NAME }}=${{ env.image }} --namespace ${{ env.STAGE_NAMESPACE }}
+
   check-tag:
     runs-on: ubuntu-latest
     if: 'startsWith(github.ref, ''refs/tags/v'')'
