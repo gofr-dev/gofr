@@ -80,7 +80,7 @@ func NewCMD() *App {
 
 	app.container = newContainer(app.Config)
 	app.cmd = &cmd{}
-	//app.container.Logger = logging.NewSilentLogger() // TODO - figure out a proper way to log in CMD
+	// app.container.Logger = logging.NewSilentLogger() // TODO - figure out a proper way to log in CMD
 
 	app.initTracer()
 

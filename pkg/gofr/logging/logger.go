@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"strings"
 	"time"
@@ -128,8 +127,8 @@ func NewLogger() Logger {
 // TODO - Do we need this? Only used for CMD log silencing.
 func NewSilentLogger() Logger {
 	l := &logger{
-		normalOut: ioutil.Discard,
-		errorOut:  ioutil.Discard,
+		normalOut: io.Discard,
+		errorOut:  io.Discard,
 	}
 
 	return l
