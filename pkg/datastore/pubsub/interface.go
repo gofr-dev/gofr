@@ -48,6 +48,10 @@ type TopicPartition struct {
 // if second return bool value is set to false, the function would exit and return the control back
 type CommitFunc func(message *Message) (bool, bool)
 
+// SubscribeFunc used to defines the functionality for the push-based messages for mqtt publisher subscriber.
+// This function would be executed whenever MQTT broker tries to push a message to the subscriber
+type SubscribeFunc func(msg *Message) error
+
 // PublisherSubscriber interface for publisher subscriber model
 // also contains utility method for health-check and binding the messages
 // received from Subscribe() method
@@ -121,6 +125,17 @@ type PublisherSubscriberV2 interface {
 	// Pause will be used to pause the processing in kafka/sarama
 	Pause() error
 
-	// resume will be used to resume all the consumer groups in kafka/sarama
+	// Resume will be used to resume all the consumer groups in kafka/sarama
 	Resume() error
+}
+
+type MQTTPublisherSubscriber interface {
+	Publish(payload []byte) error
+	Subscribe(subscribeFunc SubscribeFunc) error
+	Unsubscribe() error
+	Disconnect(waitTime uint)
+	Bind(message []byte, target interface{}) error
+	Ping() error
+	HealthCheck() types.Health
+	IsSet() bool
 }

@@ -859,7 +859,7 @@ func initializeMqtt(c Config, g *Gofr) {
 
 		var err error
 
-		g.PubSub, err = mqtt.New(cfg, g.Logger)
+		g.Mqtt, err = mqtt.New(cfg, g.Logger)
 		g.DatabaseHealth = append(g.DatabaseHealth, g.PubSubHealthCheck)
 
 		if err != nil {

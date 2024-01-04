@@ -21,6 +21,7 @@ import (
 
 	"gofr.dev/pkg/datastore"
 
+	"gofr.dev/pkg/datastore/pubsub"
 	"gofr.dev/pkg/gofr/metrics"
 	"gofr.dev/pkg/log"
 	"gofr.dev/pkg/notifier"
@@ -54,8 +55,9 @@ type Gofr struct {
 	// Metric is the metrics implementation that can be used to define custom metrics.
 	Metric metrics.Metric
 	// Notifier handles the publishing and subscribing of notifications.
-
 	Notifier notifier.Notifier
+	// MQTTPubSub handles the mqtt publisher subscriber
+	Mqtt pubsub.MQTTPublisherSubscriber
 
 	// ResourceMap is the default projections based on the resources that the application provides.
 	ResourceMap map[string][]string

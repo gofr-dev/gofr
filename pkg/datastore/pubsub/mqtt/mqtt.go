@@ -38,8 +38,9 @@ type Config struct {
 	ConnectionRetryDuration int
 }
 
-// New establishes connection to Kafka using the config provided in KafkaConfig
-func New(config *Config, logger log.Logger) (pubsub.PublisherSubscriber, error) {
+// New establishes a connection to MQTT Broker using the configs and return pubsub.MqttPublisherSubscriber
+// with more MQTT focused functionalities related to subscribing(push), unsubscribing and disconnecting from broker
+func New(config *Config, logger log.Logger) (pubsub.MQTTPublisherSubscriber, error) {
 	pubsub.RegisterMetrics()
 
 	options := mqtt.NewClientOptions()
@@ -89,28 +90,64 @@ func New(config *Config, logger log.Logger) (pubsub.PublisherSubscriber, error) 
 	return &MQTT{config: config, logger: logger, client: client, messages: msg}, nil
 }
 
-func (m *MQTT) PublishEvent(_ string, value interface{}, _ map[string]string) error {
+// Subscribe SubscribeBroker with a subscribing function, called whenever broker publishes a message
+func (m *MQTT) Subscribe(subscribeFunc pubsub.SubscribeFunc) error {
+	handler := func(_ mqtt.Client, msg mqtt.Message) {
+		// for every subscribe increment metric count
+		pubsub.SubscribeReceiveCount(msg.Topic(), "")
+
+		pubsubMsg := &pubsub.Message{
+			Topic: msg.Topic(),
+			Value: string(msg.Payload()),
+			Headers: map[string]string{
+				"qos":       string(msg.Qos()),
+				"retained":  strconv.FormatBool(msg.Retained()),
+				"messageID": strconv.Itoa(int(msg.MessageID())),
+			},
+		}
+
+		// call the user defined function
+		err := subscribeFunc(pubsubMsg)
+		if err != nil {
+			// increment failure count for failed subscribing
+			pubsub.SubscribeFailureCount(msg.Topic(), "")
+			return
+		}
+
+		// increment success counter for successful subscribing
+		pubsub.SubscribeSuccessCount(msg.Topic(), "")
+	}
+
+	token := m.client.Subscribe(m.config.Topic, m.config.QoS, handler)
+
+	if token.Wait() && token.Error() != nil {
+		// increment failure count for failed subscribing
+		pubsub.SubscribeFailureCount(m.config.Topic, "")
+		return token.Error()
+	}
+
+	return nil
+}
+
+func (m *MQTT) Publish(payload []byte) error {
 	// for every publishing of event
 	pubsub.PublishTotalCount(m.config.Topic, "")
 
 	if m.client == nil {
 		m.logger.Debug("client not configured")
+
 		// for unsuccessful publish
 		pubsub.PublishFailureCount(m.config.Topic, "")
 
 		return errors.Error("client not configured")
 	}
 
-	// marshal the value to convert it to bytes
-	value, _ = json.Marshal(value)
-
-	token := m.client.Publish(m.config.Topic, m.config.QoS, false, value)
-	token.Wait()
+	token := m.client.Publish(m.config.Topic, m.config.QoS, m.config.RetrieveRetained, payload)
 
 	// Check for errors during publishing (More on error reporting
 	// https://pkg.go.dev/github.com/eclipse/paho.mqtt.golang#readme-error-handling)
-	if token.Error() != nil {
-		m.logger.Debug("Failed to publish to topic")
+	if token.Wait() && token.Error() != nil {
+		m.logger.Errorf("error while publishing message, err : %v", token.Error())
 		// for unsuccessful publish
 		pubsub.PublishFailureCount(m.config.Topic, "")
 
@@ -123,54 +160,25 @@ func (m *MQTT) PublishEvent(_ string, value interface{}, _ map[string]string) er
 	return nil
 }
 
-func (m *MQTT) PublishEventWithOptions(key string, value interface{}, headers map[string]string, _ *pubsub.PublishOptions) error {
-	return m.PublishEvent(key, value, headers)
+func (m *MQTT) Unsubscribe() error {
+	token := m.client.Unsubscribe(m.config.Topic)
+	token.Wait()
+
+	if token.Error() != nil {
+		m.logger.Errorf("error while unsubscribing from  topic %s, err : %v", m.config.Topic, token.Error())
+
+		return token.Error()
+	}
+
+	return nil
 }
 
-func (m *MQTT) Subscribe() (*pubsub.Message, error) {
-	// for every subscribe increment metric count
-	pubsub.SubscribeReceiveCount(m.config.Topic, "")
-
-	// check if there are any messages in the queue
-	// since the client would have called our handler defined below
-	// in goroutines continuously for every published message
-	select {
-	case <-m.messages:
-		return <-m.messages, nil
-	default:
-	}
-
-	// handler is the function called to receive messages
-	handler := func(_ mqtt.Client, message mqtt.Message) {
-		// increment success counter for successful subscribing
-		pubsub.SubscribeSuccessCount(m.config.Topic, "")
-
-		m.messages <- &pubsub.Message{
-			Value: string(message.Payload()),
-			Topic: message.Topic(),
-		}
-	}
-
-	token := m.client.Subscribe(m.config.Topic, m.config.QoS, handler)
-
-	if token.Wait() && token.Error() != nil {
-		// increment failure count for failed subscribing
-		pubsub.SubscribeFailureCount(m.config.Topic, "")
-		return nil, token.Error()
-	}
-
-	return <-m.messages, nil
-}
-
-func (m *MQTT) SubscribeWithCommit(_ pubsub.CommitFunc) (*pubsub.Message, error) {
-	return m.Subscribe()
+func (m *MQTT) Disconnect(waitTime uint) {
+	m.client.Disconnect(waitTime)
 }
 
 func (m *MQTT) Bind(message []byte, target interface{}) error {
 	return json.Unmarshal(message, target)
-}
-
-func (m *MQTT) CommitOffset(_ pubsub.TopicPartition) {
 }
 
 func (m *MQTT) Ping() error {

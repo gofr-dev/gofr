@@ -82,7 +82,7 @@ func Test_PublishEvent(t *testing.T) {
 				Hostname:                "localhost",
 				Port:                    8883,
 				ClientID:                "test-id",
-				Topic:                   "topic1",
+				Topic:                   "test/topic1",
 				ConnectionRetryDuration: 10,
 			},
 			expErr: nil,
@@ -94,7 +94,7 @@ func Test_PublishEvent(t *testing.T) {
 				Hostname:                "localhost",
 				Port:                    8823,
 				ClientID:                "test-id",
-				Topic:                   "topic2",
+				Topic:                   "test/topic1",
 				ConnectionRetryDuration: 10,
 			},
 			expErr: errors.Error("client not configured"),
@@ -104,7 +104,7 @@ func Test_PublishEvent(t *testing.T) {
 	for i, tc := range testCases {
 		m, _ := New(tc.config, mockLogger)
 
-		err := m.PublishEvent("", "test-msg", nil)
+		err := m.Publish([]byte("test-msg"))
 		if err != nil && tc.expErr.Error() != err.Error() {
 			t.Errorf("TESTCASE [%d] FAILED\n Expected: %v\n Got: %v", i, tc.expErr, err)
 		}
@@ -124,7 +124,7 @@ func Test_IsSet(t *testing.T) {
 	var mq *MQTT
 
 	testCases := []struct {
-		m   pubsub.PublisherSubscriber
+		m   pubsub.MQTTPublisherSubscriber
 		exp bool
 	}{
 		{mq, false},

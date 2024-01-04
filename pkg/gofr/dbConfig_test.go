@@ -756,3 +756,7 @@ func Test_clickHouseDBConfigFromEnv(t *testing.T) {
 		assert.Equal(t, tc.expDBCfg, cfg, "TEST[%d], failed.\n%s", i, tc.desc)
 	}
 }
+
+func Test_mqttConfigFromEnv(t *testing.T) {
+
+}
