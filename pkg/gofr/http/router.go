@@ -20,7 +20,7 @@ func NewRouter() *Router {
 	muxRouter := mux.NewRouter().StrictSlash(false)
 	muxRouter.Use(
 		middleware.Tracer,
-		middleware.Logging(logging.NewLogger(logging.INFO)),
+		middleware.Logging(logging.NewLogger()),
 		middleware.CORS(),
 	)
 
