@@ -11,7 +11,7 @@ on:
       - '**/*.md'
   pull_request:
     branches:
-      - origin/main
+      - main
       - development
     paths-ignore:
       - '**/*.md'
