@@ -6,6 +6,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"strings"
 	"time"
 
 	"gofr.dev/pkg/gofr/http/middleware"
@@ -111,12 +112,13 @@ func (l *logger) prettyPrint(e logEntry, out io.Writer) {
 	}
 }
 
-func NewLogger(level level) Logger {
+func NewLogger() Logger {
 	l := &logger{
 		normalOut: os.Stdout,
 		errorOut:  os.Stderr,
-		level:     level,
 	}
+
+	l.level = getLevel(os.Getenv("LOG_LEVEL"))
 
 	l.isTerminal = checkIfTerminal(l.normalOut)
 
@@ -139,5 +141,22 @@ func checkIfTerminal(w io.Writer) bool {
 		return term.IsTerminal(int(v.Fd()))
 	default:
 		return false
+	}
+}
+
+func getLevel(level string) level {
+	switch strings.ToUpper(level) {
+	case "INFO":
+		return INFO
+	case "WARN":
+		return WARN
+	case "FATAL":
+		return FATAL
+	case "DEBUG":
+		return DEBUG
+	case "ERROR":
+		return ERROR
+	default:
+		return INFO
 	}
 }

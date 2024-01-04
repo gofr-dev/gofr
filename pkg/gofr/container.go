@@ -22,7 +22,7 @@ type Container struct {
 func newContainer(config Config) *Container {
 	c := &Container{
 		// TODO - Log Level should be set based on config.
-		Logger: logging.NewLogger(logging.DEBUG),
+		Logger: logging.NewLogger(),
 	}
 
 	c.Debug("Container is being created")
