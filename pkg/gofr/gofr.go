@@ -7,15 +7,15 @@ import (
 	"strconv"
 	"sync"
 
-	"github.com/vikash/gofr/pkg/gofr/config"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/zipkin"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
+	"gofr.dev/pkg/gofr/config"
 
-	gofrHTTP "github.com/vikash/gofr/pkg/gofr/http"
+	gofrHTTP "gofr.dev/pkg/gofr/http"
 	"google.golang.org/grpc"
 )
 

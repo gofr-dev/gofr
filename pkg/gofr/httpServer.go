@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"time"
 
-	http2 "github.com/vikash/gofr/pkg/gofr/http"
+	http2 "gofr.dev/pkg/gofr/http"
 )
 
 type httpServer struct {

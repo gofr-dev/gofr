@@ -53,11 +53,12 @@ func (d *DB) Select(ctx context.Context, data interface{}, query string, args ..
 	rvo := reflect.ValueOf(data)
 	if rvo.Kind() != reflect.Ptr {
 		fmt.Println("We did not get a pointer. data is not settable.")
+
 		return
 	}
 
-	// Deference the pointer to the underlying element, if underlying element is a slice, multiple rows are expected.
-	// If underlying element is a struct, one row is expected.
+	// Deference the pointer to the underlying element, if the underlying element is a slice, multiple rows are expected.
+	// If the underlying element is a struct, one row is expected.
 	rv := rvo.Elem()
 
 	switch rv.Kind() {
@@ -65,6 +66,7 @@ func (d *DB) Select(ctx context.Context, data interface{}, query string, args ..
 		rows, err := d.QueryContext(ctx, query, args...)
 		if err != nil {
 			fmt.Println(err)
+
 			return
 		}
 
