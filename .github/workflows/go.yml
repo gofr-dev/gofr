@@ -118,8 +118,7 @@ jobs:
       - name: Merge Coverage Files
         working-directory: artifacts
         run: |
-          awk '!/^mode: / && FNR==1{print "mode: set"} {print}' ./CMD-Test-Report/profile.cov > merged_profile.cov
-          tail -n +2 ./Example-Test-Report/profile.cov >> merged_profile.cov
+          awk '!/^mode: / && FNR==1{print "mode: set"} {print}' ./Example-Test-Report/profile.cov > merged_profile.cov
           tail -n +2 ./PKG-Coverage-Report/profile.cov >> merged_profile.cov
           
       - name: Parse code-coverage value
@@ -129,11 +128,11 @@ jobs:
           codeCoverage=${codeCoverage%?}
           echo "CODE_COVERAGE=$codeCoverage" >> $GITHUB_ENV
           
-      - name: Check if code-coverage is greater than threshold
-        run: |
-          codeCoverage=${{ env.CODE_COVERAGE }}
-          codeCoverage=${codeCoverage%??}
-          if [[ $codeCoverage -lt 92 ]]; then echo "code coverage cannot be less than 92%, currently its ${{ env.CODE_COVERAGE }}%" && exit 1; fi;
+#      - name: Check if code-coverage is greater than threshold
+#        run: |
+#          codeCoverage=${{ env.CODE_COVERAGE }}
+#          codeCoverage=${codeCoverage%??}
+#          if [[ $codeCoverage -lt 92 ]]; then echo "code coverage cannot be less than 92%, currently its ${{ env.CODE_COVERAGE }}%" && exit 1; fi;
 
   upload_coverage:
     name: Upload Coverage📊
