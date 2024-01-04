@@ -5,8 +5,7 @@ on:
     branches:
       - main
       - development
-    tags:
-      - "*"
+      - update-readme
   pull_request:
     branches:
       - main
