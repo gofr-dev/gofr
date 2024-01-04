@@ -3,7 +3,7 @@ name: Workflow-Pipeline
 on:
   push:
     branches:
-      - origin/main
+      - main
       - development
     tags:
       - "*"
