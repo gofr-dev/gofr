@@ -47,100 +47,13 @@ jobs:
       - name: Test
         run: |
           export GOFR_ENV=test
-          go test gofr.dev/examples/... -v -short -coverprofile profile.cov -coverpkg=developer.zopsmart.com/go/gofr/examples/...
+          go test gofr.dev/examples/... -v -short -coverprofile profile.cov -coverpkg=gofr.dev/examples/...
           go tool cover -func profile.cov
 
       - name: Upload Test Coverage
         uses: actions/upload-artifact@v3
         with:
           name: Example-Test-Report
-          path: profile.cov
-
-  CMD-Unit-Testing:
-    name: CMD Unit Testing🛠
-    runs-on: ubuntu-latest
-    services:
-      mysql:
-        image: mysql:8.0.30
-        ports:
-          - "3306:3306"
-        env:
-          MYSQL_ROOT_PASSWORD: "password"
-
-      redis:
-        image: redis:7.0.5
-        ports:
-          - "6379:6379"
-        options: "--entrypoint redis-server"
-
-      mongo:
-        image: mongo:6.0.2
-        ports:
-          - "27017:27017"
-        env:
-          MONGO_INITDB_ROOT_USERNAME: admin
-          MONGO_INITDB_ROOT_PASSWORD: admin123
-
-      mssql:
-        image: mcr.microsoft.com/mssql/server:2022-latest
-        ports:
-          - "1433:1433"
-        env:
-          ACCEPT_EULA: Y
-          SA_PASSWORD: reallyStrongPwd123
-
-      postgres:
-        image: postgres:15.1
-        ports:
-          - 5432:5432
-        env:
-          POSTGRES_PASSWORD: password
-          POSTGRES_USER: postgres
-          POSTGRES_DB: test
-
-      cassandra:
-        image: cassandra:4.1
-        ports:
-          - 9041:9042
-        options: --health-cmd "cqlsh --debug"
-
-      clickhouse:
-        image: clickhouse/clickhouse-server
-        ports:
-          - "8123:8123"
-          - "9000:9000"
-        env:
-          CLICKHOUSE_DB: "default"
-          CLICKHOUSE_USER: "root"
-          CLICKHOUSE_PASSWORD: "password"
-          CLICKHOUSE_HTTP_PORT: "8123"
-
-    steps:
-      - name: Checkout code into go module directory
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Set up  Go 1.21
-        uses: actions/setup-go@v4
-        with:
-          go-version: 1.21
-        id: Go
-
-      - name: Get dependencies
-        run: |
-          go mod download
-
-      - name: Test
-        run: |
-          export GOFR_ENV=test
-          go test developer.zopsmart.com/go/gofr/cmd/gofr/... -v -short -coverprofile profile.cov -coverpkg=developer.zopsmart.com/go/gofr/cmd/gofr/...
-          go tool cover -func profile.cov
-
-      - name: Upload Test Coverage
-        uses: actions/upload-artifact@v3
-        with:
-          name: CMD-Test-Report
           path: profile.cov
 
   PKG-Unit-Testing:
@@ -160,51 +73,6 @@ jobs:
           - "6379:6379"
         options: "--entrypoint redis-server"
 
-      zipkin:
-        image: openzipkin/zipkin:2
-        ports:
-          - "9411:9411"
-
-      elasticsearch:
-        image: elasticsearch:6.8.6
-        ports:
-          - 2012:9200
-          - 2013:9300
-          - 9200:9200
-        env:
-          discovery type: "single-node"
-
-      mongo:
-        image: mongo:6.0.2
-        ports:
-          - "27017:27017"
-        env:
-          MONGO_INITDB_ROOT_USERNAME: admin
-          MONGO_INITDB_ROOT_PASSWORD: admin123
-
-      mssql:
-        image: mcr.microsoft.com/mssql/server:2022-latest
-        ports:
-          - "1433:1433"
-        env:
-          ACCEPT_EULA: Y
-          SA_PASSWORD: reallyStrongPwd123
-
-      postgres:
-        image: postgres:15.1
-        ports:
-          - 5432:5432
-        env:
-          POSTGRES_PASSWORD: password
-          POSTGRES_USER: postgres
-          POSTGRES_DB: test
-
-      cassandra:
-        image: cassandra:4.1
-        ports:
-          - 9041:9042
-        options: --health-cmd "cqlsh --debug"
-
     steps:
       - name: Checkout code into go module directory
         uses: actions/checkout@v4
@@ -221,17 +89,11 @@ jobs:
         run: |
           go mod download
 
-      - name: Load Schema of Solr
-        run: |
-          docker run -d --name solr -p 8983:8983 solr:8 -DzkRun;
-          sleep 10s;
-          docker exec -i solr sh < .github/setups/solrSchema.sh;
-
       - name: Test
         run: |
           export GOFR_ENV=test
-          go test developer.zopsmart.com/go/gofr/pkg/... -v -short -coverprofile profile.cov -coverpkg=developer.zopsmart.com/go/gofr/pkg/...
-          go test developer.zopsmart.com/go/gofr/web/... -v -short -coverprofile web_profile.cov -coverpkg=developer.zopsmart.com/go/gofr/web/...
+          go test gofr.dev/pkg/... -v -short -coverprofile profile.cov -coverpkg=gofr.dev/pkg/...
+          go test gofr.dev/web/... -v -short -coverprofile web_profile.cov -coverpkg=gofr.dev/web/...
           tail -n +2 web_profile.cov >> profile.cov
           go tool cover -func profile.cov
 
@@ -302,7 +164,7 @@ jobs:
           CC_TEST_REPORTER_ID: ${{ secrets.CC_TEST_REPORTER_ID }}
         with:
           coverageLocations: artifacts/merged_profile.cov:gocov
-          prefix: developer.zopsmart.com/go/gofr
+          prefix: gofr.dev
 
   code_quality:
     name: Code Quality🎖️
