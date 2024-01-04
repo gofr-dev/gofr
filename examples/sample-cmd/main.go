@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/vikash/gofr/pkg/gofr"
+	"gofr.dev/pkg/gofr"
 )
 
 func main() {

@@ -3,8 +3,9 @@ package gofr
 import (
 	"fmt"
 	"net/http"
+	"time"
 
-	http2 "github.com/vikash/gofr/pkg/gofr/http"
+	http2 "gofr.dev/pkg/gofr/http"
 )
 
 type httpServer struct {
@@ -18,8 +19,9 @@ func (s *httpServer) Run(container *Container) {
 	container.Logf("Starting server on port: %d\n", s.port)
 
 	srv = &http.Server{
-		Addr:    fmt.Sprintf(":%d", s.port),
-		Handler: s.router,
+		Addr:              fmt.Sprintf(":%d", s.port),
+		Handler:           s.router,
+		ReadHeaderTimeout: 5 * time.Second,
 	}
 
 	container.Error(srv.ListenAndServe())

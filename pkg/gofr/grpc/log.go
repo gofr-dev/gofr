@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/vikash/gofr/pkg/gofr/logging"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
+	"gofr.dev/pkg/gofr/logging"
 	"google.golang.org/grpc"
 )
 

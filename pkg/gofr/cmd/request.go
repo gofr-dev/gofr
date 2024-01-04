@@ -80,6 +80,7 @@ func (r *Request) HostName() string {
 	if err != nil {
 		return ""
 	}
+
 	return h
 }
 

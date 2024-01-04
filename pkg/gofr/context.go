@@ -26,11 +26,15 @@ type Context struct {
 
 /*
 Trace returns an open telemetry span. We have to always close the span after corresponding work is done. Usages:
+
 	span := c.Trace("Some Work")
 	// Do some work here.
 	defer span.End()
+
 If an entire function has to traced as span, we can use a simpler format:
+
 	defer c.Trace("ExampleHandler").End()
+
 We can write this at the start of function and because of how defer works, trace will start at that line
 but End will be called after function ends.
 
