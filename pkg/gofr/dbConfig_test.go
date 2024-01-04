@@ -2,6 +2,7 @@ package gofr
 
 import (
 	"crypto/tls"
+	"gofr.dev/pkg/datastore/pubsub/mqtt"
 	"io"
 	"reflect"
 	"testing"
@@ -758,5 +759,71 @@ func Test_clickHouseDBConfigFromEnv(t *testing.T) {
 }
 
 func Test_mqttConfigFromEnv(t *testing.T) {
+	var (
+		configs = &config.MockConfig{Data: map[string]string{
+			"MQTT_PROTOCOL":      "tcp",
+			"MQTT_HOST":          "somehost",
+			"MQTT_PORT":          "1833",
+			"MQTT_USER":          "user1",
+			"MQTT_PASSWORD":      "pass1",
+			"MQTT_CLIENT_ID":     "client-id",
+			"MQTT_TOPIC_NAME":    "test/topic1",
+			"MQTT_QOS":           "1",
+			"MQTT_MESSAGE_ORDER": "true",
+			"MQTT_CONN_RETRY":    "10",
+		}}
 
+		configWithPrefix = &config.MockConfig{Data: map[string]string{
+			"PRE_MQTT_PROTOCOL":      "tcp",
+			"PRE_MQTT_HOST":          "somehost",
+			"PRE_MQTT_PORT":          "1833",
+			"PRE_MQTT_USER":          "user1",
+			"PRE_MQTT_PASSWORD":      "pass1",
+			"PRE_MQTT_CLIENT_ID":     "client-id",
+			"PRE_MQTT_TOPIC_NAME":    "test/topic1",
+			"PRE_MQTT_QOS":           "1",
+			"PRE_MQTT_MESSAGE_ORDER": "true",
+			"PRE_MQTT_CONN_RETRY":    "10",
+		}}
+
+		expConfigs = &mqtt.Config{
+			Protocol:                "tcp",
+			Hostname:                "somehost",
+			Port:                    1833,
+			Username:                "user1",
+			Password:                "pass1",
+			ClientID:                "client-id",
+			Topic:                   "test/topic1",
+			QoS:                     1,
+			Order:                   true,
+			RetrieveRetained:        false,
+			ConnectionRetryDuration: 10,
+		}
+	)
+
+	testCases := []struct {
+		desc        string
+		configs     *config.MockConfig
+		expMqttConf *mqtt.Config
+		prefix      string
+	}{
+		{
+			desc:        "valid configs",
+			configs:     configs,
+			prefix:      "",
+			expMqttConf: expConfigs,
+		},
+		{
+			desc:        "valid configs with a prefix",
+			configs:     configWithPrefix,
+			prefix:      "PRE",
+			expMqttConf: expConfigs,
+		},
+	}
+
+	for i, tc := range testCases {
+		cfg := mqttConfigFromEnv(tc.configs, tc.prefix)
+
+		assert.Equal(t, tc.expMqttConf, cfg, "TEST[%d], failed.\n%s", i, tc.desc)
+	}
 }

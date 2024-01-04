@@ -394,7 +394,7 @@ func mqttConfigFromEnv(c Config, prefix string) *mqtt.Config {
 	port, _ := strconv.Atoi(c.Get(prefix + "MQTT_PORT"))
 
 	// get the qos from the config only 0,1,2 are the possible values to be taken
-	switch c.Get("MQTT_QOS") {
+	switch c.Get(prefix + "MQTT_QOS") {
 	case "1":
 		qos = 1
 	case "2":
