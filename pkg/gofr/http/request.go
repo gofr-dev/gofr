@@ -5,7 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 
 	"github.com/gorilla/mux"
@@ -56,12 +56,12 @@ func (r *Request) HostName() string {
 }
 
 func (r *Request) body() ([]byte, error) {
-	bodyBytes, err := ioutil.ReadAll(r.req.Body)
+	bodyBytes, err := io.ReadAll(r.req.Body)
 	if err != nil {
 		return nil, err
 	}
 
-	r.req.Body = ioutil.NopCloser(bytes.NewBuffer(bodyBytes))
+	r.req.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 
 	return bodyBytes, nil
 }
