@@ -1,9 +1,9 @@
 package gofr
 
 import (
-	gofrHTTP "github.com/vikash/gofr/pkg/gofr/http"
-	"github.com/vikash/gofr/pkg/gofr/http/response"
-	"github.com/vikash/gofr/pkg/gofr/static"
+	gofrHTTP "gofr.dev/pkg/gofr/http"
+	"gofr.dev/pkg/gofr/http/response"
+	"gofr.dev/pkg/gofr/static"
 
 	"net/http"
 )

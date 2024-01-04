@@ -4,11 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
+	"strings"
 	"time"
 
-	"github.com/vikash/gofr/pkg/gofr/http/middleware"
+	"gofr.dev/pkg/gofr/http/middleware"
 
 	"golang.org/x/term"
 )
@@ -111,12 +111,13 @@ func (l *logger) prettyPrint(e logEntry, out io.Writer) {
 	}
 }
 
-func NewLogger(level level) Logger {
+func NewLogger() Logger {
 	l := &logger{
 		normalOut: os.Stdout,
 		errorOut:  os.Stderr,
-		level:     level,
 	}
+
+	l.level = getLevel(os.Getenv("LOG_LEVEL"))
 
 	l.isTerminal = checkIfTerminal(l.normalOut)
 
@@ -126,8 +127,8 @@ func NewLogger(level level) Logger {
 // TODO - Do we need this? Only used for CMD log silencing.
 func NewSilentLogger() Logger {
 	l := &logger{
-		normalOut: ioutil.Discard,
-		errorOut:  ioutil.Discard,
+		normalOut: io.Discard,
+		errorOut:  io.Discard,
 	}
 
 	return l
@@ -139,5 +140,22 @@ func checkIfTerminal(w io.Writer) bool {
 		return term.IsTerminal(int(v.Fd()))
 	default:
 		return false
+	}
+}
+
+func getLevel(level string) level {
+	switch strings.ToUpper(level) {
+	case "INFO":
+		return INFO
+	case "WARN":
+		return WARN
+	case "FATAL":
+		return FATAL
+	case "DEBUG":
+		return DEBUG
+	case "ERROR":
+		return ERROR
+	default:
+		return INFO
 	}
 }

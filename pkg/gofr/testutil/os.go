@@ -1,7 +1,7 @@
 package testutil
 
 import (
-	"io/ioutil"
+	"io"
 	"os"
 )
 
@@ -14,7 +14,7 @@ func StdoutOutputForFunc(f func()) string {
 
 	_ = w.Close()
 
-	out, _ := ioutil.ReadAll(r)
+	out, _ := io.ReadAll(r)
 	os.Stdout = old
 
 	return string(out)
@@ -29,7 +29,7 @@ func StderrOutputForFunc(f func()) string {
 
 	_ = w.Close()
 
-	out, _ := ioutil.ReadAll(r)
+	out, _ := io.ReadAll(r)
 	os.Stderr = old
 
 	return string(out)
