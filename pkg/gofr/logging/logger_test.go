@@ -2,16 +2,19 @@ package logging
 
 import (
 	"encoding/json"
+	"os"
 	"testing"
 
-	"github.com/vikash/gofr/pkg/gofr/testutil"
+	"gofr.dev/pkg/gofr/testutil"
 )
 
 func TestLogger_Log(t *testing.T) {
 	testLogStatement := "hello info log!"
 
+	os.Setenv("LOG_LEVEL", "DEBUG")
+
 	f := func() {
-		logger := NewLogger(DEBUG)
+		logger := NewLogger()
 		logger.Log(testLogStatement)
 	}
 
@@ -22,8 +25,10 @@ func TestLogger_Log(t *testing.T) {
 func TestLogger_Logf(t *testing.T) {
 	testLogStatement := "hello info logf!"
 
+	os.Setenv("LOG_LEVEL", "DEBUG")
+
 	f := func() {
-		logger := NewLogger(DEBUG)
+		logger := NewLogger()
 		logger.Logf("%s", testLogStatement)
 	}
 
@@ -35,8 +40,10 @@ func TestLogger_Logf(t *testing.T) {
 func TestLogger_Error(t *testing.T) {
 	testLogStatement := "hello error log!"
 
+	os.Setenv("LOG_LEVEL", "DEBUG")
+
 	f := func() {
-		logger := NewLogger(DEBUG)
+		logger := NewLogger()
 		logger.Error(testLogStatement)
 	}
 
@@ -48,8 +55,10 @@ func TestLogger_Error(t *testing.T) {
 func TestLogger_Errorf(t *testing.T) {
 	testLogStatement := "hello errorf log!"
 
+	os.Setenv("LOG_LEVEL", "DEBUG")
+
 	f := func() {
-		logger := NewLogger(DEBUG)
+		logger := NewLogger()
 		logger.Errorf("%s", testLogStatement)
 	}
 

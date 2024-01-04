@@ -3,13 +3,13 @@ package main
 import (
 	"errors"
 	"fmt"
-	"github.com/vikash/gofr/pkg/gofr/service"
+	"gofr.dev/pkg/gofr/service"
 	"sync"
 	"time"
 
 	"github.com/go-redis/redis/v8"
 
-	"github.com/vikash/gofr/pkg/gofr"
+	"gofr.dev/pkg/gofr"
 )
 
 func main() {
@@ -61,11 +61,11 @@ func TraceHandler(c *gofr.Context) (interface{}, error) {
 	count := 5
 	wg := sync.WaitGroup{}
 	wg.Add(count)
-	for i :=0; i<count ;i++ {
-	 go func(){
-	 	c.Redis.Ping(c)
-	 	wg.Done()
-	 }()
+	for i := 0; i < count; i++ {
+		go func() {
+			c.Redis.Ping(c)
+			wg.Done()
+		}()
 	}
 	wg.Wait()
 

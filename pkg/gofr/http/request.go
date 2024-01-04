@@ -4,7 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"io/ioutil"
+	"fmt"
+	"io"
 	"net/http"
 
 	"github.com/gorilla/mux"
@@ -45,13 +46,22 @@ func (r *Request) Bind(i interface{}) error {
 	return json.Unmarshal(body, &i)
 }
 
+func (r *Request) HostName() string {
+	proto := r.req.Header.Get("X-forwarded-proto")
+	if proto == "" {
+		proto = "http"
+	}
+
+	return fmt.Sprintf("%s://%s", proto, r.req.Host)
+}
+
 func (r *Request) body() ([]byte, error) {
-	bodyBytes, err := ioutil.ReadAll(r.req.Body)
+	bodyBytes, err := io.ReadAll(r.req.Body)
 	if err != nil {
 		return nil, err
 	}
 
-	r.req.Body = ioutil.NopCloser(bytes.NewBuffer(bodyBytes))
+	r.req.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 
 	return bodyBytes, nil
 }

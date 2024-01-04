@@ -3,7 +3,7 @@ package gofr
 import (
 	"strconv"
 
-	"github.com/vikash/gofr/pkg/gofr/logging"
+	"gofr.dev/pkg/gofr/logging"
 
 	"github.com/go-redis/redis/v8"
 	_ "github.com/go-sql-driver/mysql" // This is required to be blank import
@@ -21,7 +21,8 @@ type Container struct {
 
 func newContainer(config Config) *Container {
 	c := &Container{
-		Logger: logging.NewLogger(logging.INFO),
+		// TODO - Log Level should be set based on config.
+		Logger: logging.NewLogger(),
 	}
 
 	c.Debug("Container is being created")
@@ -57,7 +58,8 @@ func newContainer(config Config) *Container {
 		c.DB = &DB{db}
 
 		if err != nil {
-			c.Errorf("could not connect to database with Config %v error: %v", conf, err)
+			c.Errorf("could not connect with '%s' user to database '%s:%s'  error: %v",
+				conf.User, conf.HostName, conf.Port, err)
 		} else {
 			c.Logf("connected to '%s' database at %s:%s", conf.Database, conf.HostName, conf.Port)
 		}

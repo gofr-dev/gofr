@@ -26,7 +26,7 @@ func (h *httpService) Get(ctx context.Context, path string, params map[string]in
 	defer span.End()
 
 	ctx = httptrace.WithClientTrace(ctx, otelhttptrace.NewClientTrace(ctx))
-	req, _ := http.NewRequestWithContext(ctx, "GET", uri, nil)
+	req, _ := http.NewRequestWithContext(ctx, "GET", uri, http.NoBody)
 	encodeQueryParameters(req, params)
 
 	return h.Do(req)
