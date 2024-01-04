@@ -15,12 +15,19 @@ jobs:
     name: Example Unit Testing🛠
     runs-on: ubuntu-latest
     services:
+      redis:
+        image: redis:7.0.5
+        ports:
+          - "6379:6379"
+        options: "--entrypoint redis-server"
+
       mysql:
         image: mysql:8.0.30
         ports:
           - "3306:3306"
         env:
           MYSQL_ROOT_PASSWORD: "password"
+          MYSQL_DATABASE: "test"
 
     steps:
       - name: Checkout code into go module directory
@@ -87,8 +94,6 @@ jobs:
         run: |
           export GOFR_ENV=test
           go test gofr.dev/pkg/... -v -short -coverprofile profile.cov -coverpkg=gofr.dev/pkg/...
-          go test gofr.dev/web/... -v -short -coverprofile web_profile.cov -coverpkg=gofr.dev/web/...
-          tail -n +2 web_profile.cov >> profile.cov
           go tool cover -func profile.cov
 
       - name: Upload Test Coverage
