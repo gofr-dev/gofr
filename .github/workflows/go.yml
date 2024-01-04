@@ -61,7 +61,7 @@ jobs:
   code_quality:
     name: Code Quality
     runs-on: ubuntu-latest
-    container: golangci/golangci-lint:v1.37.1
+    container: golangci/golangci-lint:v1.55.2
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
