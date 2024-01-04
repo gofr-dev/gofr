@@ -27,16 +27,13 @@ jobs:
           - "3306:3306"
         env:
           MYSQL_ROOT_PASSWORD: "password"
+          MYSQL_DATABASE: "test"
 
     steps:
       - name: Checkout code into go module directory
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      - name: Set up MySQL
-        run: |
-          docker exec -i ${{ job.services.mysql.id }} mysql -uroot -ppassword -e 'CREATE DATABASE test;'
 
       - name: Set up  Go 1.21
         uses: actions/setup-go@v4
