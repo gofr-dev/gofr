@@ -3,7 +3,6 @@ package kafka
 import (
 	"bytes"
 	"crypto/sha512"
-	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -355,10 +354,6 @@ func Test_processSASLConfigs(t *testing.T) {
 	expConfig.Net.SASL.Password = "password"
 	expConfig.Net.SASL.Handshake = true
 	expConfig.Net.SASL.Enable = true
-	expConfig.Net.TLS.Enable = true
-	expConfig.Net.TLS.Config = &tls.Config{
-		InsecureSkipVerify: true, //nolint:gosec // TLS InsecureSkipVerify set true.
-	}
 
 	scramClientGeneratorFunc := func() sarama.SCRAMClient {
 		return &XDGSCRAMClient{HashGeneratorFcn: sha512.New}
@@ -381,6 +376,7 @@ func Test_processSASLConfigs(t *testing.T) {
 			User:      "testuser",
 			Password:  "password",
 			Mechanism: tc.mechanism,
+			SSLVerify: false,
 		}
 
 		conf := sarama.NewConfig()
