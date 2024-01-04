@@ -3,7 +3,7 @@ package gofr
 import (
 	"strconv"
 
-	"github.com/vikash/gofr/pkg/gofr/logging"
+	"gofr.dev/pkg/gofr/logging"
 
 	"github.com/go-redis/redis/v8"
 	_ "github.com/go-sql-driver/mysql" // This is required to be blank import

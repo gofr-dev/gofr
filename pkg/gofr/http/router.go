@@ -5,9 +5,9 @@ import (
 
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 
-	"github.com/vikash/gofr/pkg/gofr/logging"
+	"gofr.dev/pkg/gofr/logging"
 
-	"github.com/vikash/gofr/pkg/gofr/http/middleware"
+	"gofr.dev/pkg/gofr/http/middleware"
 
 	"github.com/gorilla/mux"
 )

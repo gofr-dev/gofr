@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/vikash/gofr/pkg/gofr/testutil"
+	"gofr.dev/pkg/gofr/testutil"
 )
 
 func TestLogger_Log(t *testing.T) {

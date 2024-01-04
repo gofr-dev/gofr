@@ -1,8 +1,8 @@
 package main
 
 import (
-	"github.com/vikash/gofr/examples/grpc-server/grpc"
-	"github.com/vikash/gofr/pkg/gofr"
+	"gofr.dev/examples/grpc-server/grpc"
+	"gofr.dev/pkg/gofr"
 )
 
 func main() {
