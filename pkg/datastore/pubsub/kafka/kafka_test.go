@@ -416,7 +416,7 @@ func Test_KafkaAuthentication(t *testing.T) {
 
 			Brokers: c.Get("KAFKA_HOSTS"),
 			Topics:  topics,
-			SASL:    &SASLConfig{User: tc.userName, Password: tc.pass, Mechanism: tc.authMechanism},
+			SASL:    SASLConfig{User: tc.userName, Password: tc.pass, Mechanism: tc.authMechanism},
 		}
 
 		_, err := New(cfg, log.NewMockLogger(io.Discard))
@@ -434,7 +434,7 @@ func Test_invalidSaslMechanism(t *testing.T) {
 	cfg := &Config{
 		Brokers: c.Get("KAFKA_HOSTS"),
 		Topics:  topics,
-		SASL: &SASLConfig{
+		SASL: SASLConfig{
 			User:      "invalid-user-name",
 			Password:  "password",
 			Mechanism: "invalid-mechanism",

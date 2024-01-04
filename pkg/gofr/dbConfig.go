@@ -197,7 +197,7 @@ func kafkaConfigFromEnv(c Config, prefix string) *kafka.Config {
 	topics := strings.Split(topic, ",")
 	config := &kafka.Config{
 		Brokers: hosts,
-		SASL: &kafka.SASLConfig{
+		SASL: kafka.SASLConfig{
 			SSLVerify:         sslVerify,
 			User:              c.Get(prefix + "KAFKA_SASL_USER"),
 			Password:          c.Get(prefix + "KAFKA_SASL_PASS"),

@@ -78,7 +78,7 @@ type Config struct {
 	Brokers string
 
 	// SASL provide configs for authentication
-	SASL *SASLConfig
+	SASL SASLConfig
 
 	// MaxRetry number of times to retry sending a failing message
 	MaxRetry int
@@ -149,7 +149,7 @@ func NewKafkaFromEnv() (*Kafka, error) {
 
 	config := &Config{
 		Brokers: hosts,
-		SASL: &SASLConfig{
+		SASL: SASLConfig{
 			User:      user,
 			Password:  password,
 			Mechanism: mechanism,
@@ -279,7 +279,7 @@ func convertKafkaConfig(config *Config) {
 
 	setDefaultConfig(config.Config)
 
-	processSASLConfigs(config.SASL, config.Config)
+	processSASLConfigs(&config.SASL, config.Config)
 
 	if config.InitialOffsets != 0 {
 		config.Config.Consumer.Offsets.Initial = config.InitialOffsets
