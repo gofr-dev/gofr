@@ -34,10 +34,6 @@ jobs:
           go-version: 1.21
         id: Go
 
-      - name: Set up MySQL
-        run: |
-          docker exec -i ${{ job.services.mysql.id }} mysql -uroot -ppassword -e 'CREATE DATABASE test;'
-
       - name: Get dependencies
         run: |
           go mod download
