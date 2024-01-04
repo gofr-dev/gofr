@@ -51,6 +51,7 @@ func (r *Request) HostName() string {
 	if proto == "" {
 		proto = "http"
 	}
+
 	return fmt.Sprintf("%s://%s", proto, r.req.Host)
 }
 

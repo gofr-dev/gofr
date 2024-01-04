@@ -1,13 +1,14 @@
 package http
 
 import (
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 )
 
 func TestParam(t *testing.T) {
-	req := NewRequest(httptest.NewRequest("GET", "/abc?a=b", nil))
+	req := NewRequest(httptest.NewRequest("GET", "/abc?a=b", http.NoBody))
 	if req.Param("a") != "b" {
 		t.Error("Can not parse the request params")
 	}

@@ -20,27 +20,28 @@ type DB struct {
 //
 // Example Usages:
 //
-// 1. Get multiple rows with only one column
-// 		ids := make([]int, 0)
-//		db.Select(ctx, &ids, "select id from users")
+//  1. Get multiple rows with only one column
+//     ids := make([]int, 0)
+//     db.Select(ctx, &ids, "select id from users")
 //
-// 2. Get a single object from database
-// 		type user struct {
-//			Name  string
-//			ID    int
-//			Image string
-//		}
-//		u := user{}
-//		db.Select(ctx, &u, "select * from users where id=?", 1)
+//  2. Get a single object from database
+//     type user struct {
+//     Name  string
+//     ID    int
+//     Image string
+//     }
+//     u := user{}
+//     db.Select(ctx, &u, "select * from users where id=?", 1)
 //
-// 3. Get array of objects from multiple rows
-//			type user struct {
-//				Name  string
-//				ID    int
-//				Image string `db:"image_url"`
-//			}
-//			users := []user{}
-//			db.Select(ctx, &users, "select * from users")
+//  3. Get array of objects from multiple rows
+//     type user struct {
+//     Name  string
+//     ID    int
+//     Image string `db:"image_url"`
+//     }
+//     users := []user{}
+//     db.Select(ctx, &users, "select * from users")
+//
 //nolint:exhaustive // We just want to take care of slice and struct in this case.
 func (d *DB) Select(ctx context.Context, data interface{}, query string, args ...interface{}) {
 	// If context is done, it is not needed
