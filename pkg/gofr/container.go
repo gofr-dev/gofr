@@ -1,9 +1,8 @@
 package gofr
 
 import (
-	"strconv"
-
 	"github.com/vikash/gofr/pkg/gofr/logging"
+	"strconv"
 
 	"github.com/go-redis/redis/v8"
 	_ "github.com/go-sql-driver/mysql" // This is required to be blank import
@@ -22,7 +21,7 @@ type Container struct {
 func newContainer(config Config) *Container {
 	c := &Container{
 		// TODO - Log Level should be set based on config.
-		Logger: logging.NewLogger(logging.DEBUG),
+		Logger: logging.NewLogger(),
 	}
 
 	c.Debug("Container is being created")
