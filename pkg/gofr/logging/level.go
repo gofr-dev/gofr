@@ -11,22 +11,30 @@ const (
 	WARN
 	ERROR
 	FATAL
+
+	// String constants for logging levels.
+	levelDEBUG  = "DEBUG"
+	levelINFO   = "INFO"
+	levelNOTICE = "NOTICE"
+	levelWARN   = "WARN"
+	levelERROR  = "ERROR"
+	levelFATAL  = "FATAL"
 )
 
 func (l level) String() string {
 	switch l {
 	case DEBUG:
-		return "DEBUG"
+		return levelDEBUG
 	case INFO:
-		return "INFO"
+		return levelINFO
 	case NOTICE:
-		return "NOTICE"
+		return levelNOTICE
 	case WARN:
-		return "WARN"
+		return levelWARN
 	case ERROR:
-		return "ERROR"
+		return levelERROR
 	case FATAL:
-		return "FATAL"
+		return levelFATAL
 	default:
 		return ""
 	}
