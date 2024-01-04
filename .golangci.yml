@@ -7,7 +7,7 @@ linters-settings:
     lines: 100
     statements: 50
   gci:
-    local-prefixes: github.com/vikash/gofr
+    local-prefixes: gofr.dev
   goconst:
     min-len: 2
     min-occurrences: 2
@@ -40,8 +40,8 @@ linters-settings:
     settings:
       printf:
         funcs:
-          - (github.com/vikash/gofr/pkg/gofr/Logger).Logf
-          - (github.com/vikash/gofr/pkg/gofr/Logger).Errorf
+          - (gofr.dev/pkg/gofr/Logger).Logf
+          - (gofr.dev/pkg/gofr/Logger).Errorf
   lll:
     line-length: 140
   maligned:

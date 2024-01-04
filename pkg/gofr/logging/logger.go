@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/vikash/gofr/pkg/gofr/http/middleware"
+	"gofr.dev/pkg/gofr/http/middleware"
 
 	"golang.org/x/term"
 )

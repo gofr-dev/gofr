@@ -1,8 +1,9 @@
 package gofr
 
 import (
-	"github.com/vikash/gofr/pkg/gofr/logging"
 	"strconv"
+
+	"gofr.dev/pkg/gofr/logging"
 
 	"github.com/go-redis/redis/v8"
 	_ "github.com/go-sql-driver/mysql" // This is required to be blank import
