@@ -151,8 +151,7 @@ jobs:
       - name: Merge Coverage Files
         working-directory: artifacts
         run: |
-          awk '!/^mode: / && FNR==1{print "mode: set"} {print}' ./CMD-Test-Report/profile.cov > merged_profile.cov
-          tail -n +2 ./Example-Test-Report/profile.cov >> merged_profile.cov
+          awk '!/^mode: / && FNR==1{print "mode: set"} {print}' ./Example-Test-Report/profile.cov > merged_profile.cov
           tail -n +2 ./PKG-Coverage-Report/profile.cov >> merged_profile.cov
 
 
