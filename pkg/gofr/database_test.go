@@ -1,22 +1,29 @@
 package gofr
 
 import (
-	"github.com/DATA-DOG/go-sqlmock"
-	"github.com/stretchr/testify/assert"
+	"database/sql"
+	"net"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
-// a successful case
-func Test_newMySqlPingFailure(t *testing.T) {
-	db, _, err := sqlmock.New()
-	if err != nil {
-		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
+func Test_newMySQL(t *testing.T) {
+	testCases := []struct {
+		desc   string
+		port   string
+		expDB  *sql.DB
+		expErr error
+	}{
+		{"db connected successfully", "3306", &sql.DB{}, nil},
+		{"db connection  failed", "2001", nil, &net.OpError{}},
 	}
-	defer db.Close()
 
-	db, err = newMYSQL(&dbConfig{HostName: "localhost", User: "root",
-		Password: "password", Port: "3306", Database: "mysql"})
+	for _, tc := range testCases {
+		db, err := newMYSQL(&dbConfig{HostName: "localhost", User: "root",
+			Password: "password", Port: tc.port, Database: "mysql"})
 
-	assert.NotNil(t, err)
-	assert.Nil(t, db)
+		assert.IsType(t, tc.expDB, db)
+		assert.IsType(t, tc.expErr, err)
+	}
 }

@@ -1,9 +1,11 @@
 package gofr
 
 import (
-	"github.com/stretchr/testify/assert"
-	"gofr.dev/pkg/gofr/config"
 	"testing"
+
+	"gofr.dev/pkg/gofr/config"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func Test_newContainerSuccessWithLogger(t *testing.T) {

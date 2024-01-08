@@ -3,11 +3,12 @@ package gofr
 import (
 	"bytes"
 	"context"
-	"github.com/stretchr/testify/assert"
-	gofrHTTP "gofr.dev/pkg/gofr/http"
 	"net/http"
-
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+
+	gofrHTTP "gofr.dev/pkg/gofr/http"
 )
 
 func TestTrace_ReturnsSpanObject(t *testing.T) {
@@ -34,7 +35,9 @@ func TestContext_Body_Response(t *testing.T) {
 
 	reqBody := []byte(`{"id":1,"name":"Bob"}`)
 
-	httpRequest, _ := http.NewRequest(http.MethodPost, "/test", bytes.NewReader(reqBody))
+	httpRequest, _ := http.NewRequestWithContext(context.Background(),
+		http.MethodPost, "/test", bytes.NewReader(reqBody))
+
 	req := gofrHTTP.NewRequest(httpRequest)
 
 	ctx := Context{Context: context.Background(), Request: req}
@@ -48,7 +51,8 @@ func TestContext_Body_Response(t *testing.T) {
 }
 
 func Test_newContext(t *testing.T) {
-	httpRequest, _ := http.NewRequest(http.MethodPost, "/test", nil)
+	httpRequest, _ := http.NewRequestWithContext(context.Background(),
+		http.MethodPost, "/test", http.NoBody)
 	req := gofrHTTP.NewRequest(httpRequest)
 
 	ctx := newContext(nil, req, nil)
