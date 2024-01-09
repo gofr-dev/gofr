@@ -73,6 +73,7 @@ jobs:
           - "2001:3306"
         env:
           MYSQL_ROOT_PASSWORD: "password"
+          MYSQL_DATABASE: "test"
     steps:
       - name: Checkout code into go module directory
         uses: actions/checkout@v4
