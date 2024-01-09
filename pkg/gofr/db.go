@@ -3,7 +3,7 @@ package gofr
 import (
 	"context"
 	"database/sql"
-	"fmt"
+	"gofr.dev/pkg/gofr/logging"
 	"reflect"
 	"regexp"
 	"strings"
@@ -12,6 +12,7 @@ import (
 // DB is a wrapper around sql.DB which provides some more features.
 type DB struct {
 	*sql.DB
+	logger logging.Logger
 }
 
 // Select runs a query with args and binds the result of the query to the data.
@@ -46,13 +47,15 @@ type DB struct {
 func (d *DB) Select(ctx context.Context, data interface{}, query string, args ...interface{}) {
 	// If context is done, it is not needed
 	if ctx.Err() != nil {
+		d.logger.Debug("context cancelled")
+
 		return
 	}
 
 	// First confirm that what we got in v is a pointer else it won't be settable
 	rvo := reflect.ValueOf(data)
 	if rvo.Kind() != reflect.Ptr {
-		fmt.Println("We did not get a pointer. data is not settable.")
+		d.logger.Error("We did not get a pointer. data is not settable.")
 
 		return
 	}
@@ -65,7 +68,7 @@ func (d *DB) Select(ctx context.Context, data interface{}, query string, args ..
 	case reflect.Slice:
 		rows, err := d.QueryContext(ctx, query, args...)
 		if err != nil {
-			fmt.Println(err)
+			d.logger.Errorf("Error running query : %v", err)
 
 			return
 		}
@@ -93,7 +96,7 @@ func (d *DB) Select(ctx context.Context, data interface{}, query string, args ..
 		}
 
 	default:
-		fmt.Println("a pointer to", rv.Kind(), "was not expected.")
+		d.logger.Debugf("a pointer to %v was not expected.", rv.Kind().String())
 	}
 }
 

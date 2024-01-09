@@ -38,12 +38,12 @@ type App struct {
 
 // RegisterService adds a grpc service to the gofr application.
 func (a *App) RegisterService(desc *grpc.ServiceDesc, impl interface{}) {
-	a.grpcRegistered = true
 	a.container.Logger.Infof("Registering GRPC Server: %s", desc.ServiceName)
 	a.grpcServer.server.RegisterService(desc, impl)
+	a.grpcRegistered = true
 }
 
-// New creates a HTTP Server Application and returns that App.
+// New creates an HTTP Server Application and returns that App.
 func New() *App {
 	app := &App{}
 	app.readConfig()

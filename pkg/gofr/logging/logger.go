@@ -124,6 +124,16 @@ func NewLogger() Logger {
 	return l
 }
 
+func NewMockLogger(b io.Writer) Logger {
+	l := &logger{
+		normalOut: b,
+		errorOut:  b,
+		level:     DEBUG,
+	}
+
+	return l
+}
+
 // TODO - Do we need this? Only used for CMD log silencing.
 func NewSilentLogger() Logger {
 	l := &logger{
