@@ -43,12 +43,14 @@ func Logging(logger logger) func(inner http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			start := time.Now()
 			srw := &StatusResponseWriter{ResponseWriter: w}
+			reqID := trace.SpanFromContext(r.Context()).SpanContext().TraceID().String()
+			srw.Header().Set("X-Correlation-ID", reqID)
 
 			defer func(res *StatusResponseWriter, req *http.Request) {
 				l := RequestLog{
-					ID:           trace.SpanFromContext(r.Context()).SpanContext().TraceID().String(),
+					ID:           reqID,
 					StartTime:    start.Format("2006-01-02T15:04:05.999999999-07:00"),
-					ResponseTime: time.Since(start).Nanoseconds() / 1000,
+					ResponseTime: time.Since(start).Nanoseconds() / 1000, //nolint:gomnd
 					Method:       req.Method,
 					UserAgent:    req.UserAgent(),
 					IP:           getIPAddress(req),

@@ -2,21 +2,28 @@ package gofr
 
 import (
 	"fmt"
+	"gofr.dev/pkg/gofr/container"
+	gofrHTTP "gofr.dev/pkg/gofr/http"
 	"net/http"
 	"time"
-
-	http2 "gofr.dev/pkg/gofr/http"
 )
 
 type httpServer struct {
-	router *http2.Router
+	router *gofrHTTP.Router
 	port   int
 }
 
-func (s *httpServer) Run(container *Container) {
+func newHTTPServer(container *container.Container, port int) *httpServer {
+	return &httpServer{
+		router: gofrHTTP.NewRouter(container),
+		port:   port,
+	}
+}
+
+func (s *httpServer) Run(container *container.Container) {
 	var srv *http.Server
 
-	container.Logf("Starting server on port: %d\n", s.port)
+	container.Logf("Starting server on port: %d", s.port)
 
 	srv = &http.Server{
 		Addr:              fmt.Sprintf(":%d", s.port),

@@ -49,7 +49,6 @@ linters-settings:
   misspell:
     locale: US
   nolintlint:
-    allow-leading-space: false # require machine-readable nolint directives (i.e. with no leading space)
     allow-unused: false # report any unused nolint directives
     require-explanation: true # require an explanation for nolint directives
     require-specific: true # require nolint directives to be specific about which linter is being skipped
@@ -61,11 +60,11 @@ linters:
   enable:
     - asciicheck
     - bodyclose
-    - deadcode
     - dogsled
     - dupl
     - errcheck
     - exhaustive
+    - exportloopref
     - funlen
     - gochecknoglobals
     - gochecknoinits
@@ -77,32 +76,26 @@ linters:
     - goerr113
     - gofmt
     - goimports
-    - golint
     - gomnd
     - goprintffuncname
     - gosec
     - gosimple
     - govet
     - ineffassign
-    - interfacer
     - lll
-    - maligned
     - misspell
     - nakedret
     - nestif
     - noctx
     - nolintlint
     - prealloc
+    - revive
     - rowserrcheck
-    - scopelint
     - staticcheck
-    - structcheck
     - stylecheck
-    - typecheck
     - unconvert
     - unparam
     - unused
-    - varcheck
     - whitespace
     - wsl
 
@@ -112,7 +105,7 @@ linters:
 
 
 service:
-  golangci-lint-version: 1.37.x
+  golangci-lint-version: 1.55.x
 
 issues:
   # exclude-use-default: false
