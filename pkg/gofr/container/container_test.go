@@ -18,8 +18,11 @@ func Test_newContainerSuccessWithLogger(t *testing.T) {
 
 func Test_newContainerDBIntializationSuccess(t *testing.T) {
 	t.Setenv("REDIS_HOST", "localhost")
-	t.Setenv("DB_HOST", "localhost")
 	t.Setenv("REDIS_PORT", "2002")
+
+	t.Setenv("DB_USER", "root")
+	t.Setenv("DB_PASSWORD", "password")
+	t.Setenv("DB_HOST", "localhost")
 	t.Setenv("DB_PORT", "2001")
 
 	cfg := config.NewEnvFile("")
