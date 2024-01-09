@@ -194,5 +194,4 @@ func (a *App) initTracer() {
 			a.container.Error(err)
 		}
 	}
-
 }
