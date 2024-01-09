@@ -1,6 +1,7 @@
 package gofr
 
 import (
+	"gofr.dev/pkg/gofr/container"
 	gofrHTTP "gofr.dev/pkg/gofr/http"
 	"gofr.dev/pkg/gofr/http/response"
 	"gofr.dev/pkg/gofr/static"
@@ -25,7 +26,7 @@ for now. In the future, this can be considered as well if we are writing our own
 
 type handler struct {
 	function  Handler
-	container *Container
+	container *container.Container
 }
 
 func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {

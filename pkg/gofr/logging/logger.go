@@ -25,19 +25,19 @@ type Logger interface {
 }
 
 type logger struct {
-	level      level
+	level      Level
 	normalOut  io.Writer
 	errorOut   io.Writer
 	isTerminal bool
 }
 
 type logEntry struct {
-	Level   level       `json:"level"`
+	Level   Level       `json:"Level"`
 	Time    time.Time   `json:"time"`
 	Message interface{} `json:"message"`
 }
 
-func (l *logger) logf(level level, format string, args ...interface{}) {
+func (l *logger) logf(level Level, format string, args ...interface{}) {
 	if level < l.level {
 		return
 	}
@@ -111,13 +111,13 @@ func (l *logger) prettyPrint(e logEntry, out io.Writer) {
 	}
 }
 
-func NewLogger() Logger {
+func NewLogger(level Level) Logger {
 	l := &logger{
 		normalOut: os.Stdout,
 		errorOut:  os.Stderr,
 	}
 
-	l.level = getLevel(os.Getenv("LOG_LEVEL"))
+	l.level = level
 
 	l.isTerminal = checkIfTerminal(l.normalOut)
 
@@ -143,7 +143,7 @@ func checkIfTerminal(w io.Writer) bool {
 	}
 }
 
-func getLevel(level string) level {
+func getLevel(level string) Level {
 	switch strings.ToUpper(level) {
 	case "INFO":
 		return INFO

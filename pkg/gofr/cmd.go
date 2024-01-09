@@ -1,6 +1,7 @@
 package gofr
 
 import (
+	"gofr.dev/pkg/gofr/container"
 	"os"
 	"regexp"
 
@@ -22,7 +23,7 @@ func (e ErrCommandNotFound) Error() string {
 	return "No Command Found!" //nolint:goconst // This error is needed and repetition is in test to check for the exact string.
 }
 
-func (cmd *cmd) Run(container *Container) {
+func (cmd *cmd) Run(container *container.Container) {
 	args := os.Args[1:] // First one is command itself
 	command := ""
 

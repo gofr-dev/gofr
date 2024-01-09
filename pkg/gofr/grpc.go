@@ -1,6 +1,7 @@
 package gofr
 
 import (
+	"gofr.dev/pkg/gofr/container"
 	"net"
 	"strconv"
 
@@ -16,7 +17,7 @@ type grpcServer struct {
 	port   int
 }
 
-func newGRPCServer(container *Container, port int) *grpcServer {
+func newGRPCServer(container *container.Container, port int) *grpcServer {
 	return &grpcServer{
 		server: grpc.NewServer(
 			grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(
@@ -27,7 +28,7 @@ func newGRPCServer(container *Container, port int) *grpcServer {
 	}
 }
 
-func (g *grpcServer) Run(container *Container) {
+func (g *grpcServer) Run(container *container.Container) {
 	addr := ":" + strconv.Itoa(g.port)
 
 	container.Logger.Infof("starting grpc server at %s", addr)
