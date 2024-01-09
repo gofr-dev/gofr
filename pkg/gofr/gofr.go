@@ -2,11 +2,13 @@ package gofr
 
 import (
 	"fmt"
-	container "gofr.dev/pkg/gofr/container"
 	"net/http"
 	"os"
 	"strconv"
 	"sync"
+
+	"gofr.dev/pkg/gofr/config"
+	"gofr.dev/pkg/gofr/container"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/zipkin"
@@ -14,7 +16,6 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
-	"gofr.dev/pkg/gofr/config"
 
 	"google.golang.org/grpc"
 )
@@ -171,20 +172,7 @@ func (a *App) initTracer() {
 	tracerHost := a.Config.Get("TRACER_HOST")
 	tracerPort := a.Config.GetOrDefault("TRACER_PORT", "9411")
 
-	if tracerHost == "" {
-		return
-	}
-
-	a.container.Log("Exporting traces to zipkin.")
-
-	exporter, err := zipkin.New(
-		fmt.Sprintf("http://%s:%s/api/v2/spans", tracerHost, tracerPort),
-	)
-
-	batcher := sdktrace.NewBatchSpanProcessor(exporter)
-
 	tp := sdktrace.NewTracerProvider(
-		sdktrace.WithSpanProcessor(batcher),
 		sdktrace.WithResource(resource.NewWithAttributes(
 			semconv.SchemaURL,
 			semconv.ServiceNameKey.String(a.Config.GetOrDefault("APP_NAME", "gofr-service")),
@@ -193,7 +181,18 @@ func (a *App) initTracer() {
 	otel.SetTracerProvider(tp)
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
 
-	if err != nil {
-		a.container.Error(err)
+	if tracerHost != "" {
+		a.container.Log("Exporting traces to zipkin.")
+
+		exporter, err := zipkin.New(
+			fmt.Sprintf("http://%s:%s/api/v2/spans", tracerHost, tracerPort),
+		)
+		batcher := sdktrace.NewBatchSpanProcessor(exporter)
+		tp.RegisterSpanProcessor(batcher)
+
+		if err != nil {
+			a.container.Error(err)
+		}
 	}
+
 }

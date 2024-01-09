@@ -105,8 +105,8 @@ func (l *logger) prettyPrint(e logEntry, out io.Writer) {
 	// in running the server. Decent tradeoff for the interface to struct conversion anti-pattern.
 	if rl, ok := e.Message.(middleware.RequestLog); ok {
 
-		fmt.Fprintf(out, "\u001B[38;5;%dm%s\u001B[0m [%s] \u001B[38;5;%dm%d\u001B[0m  %8dµs %s %s \n", e.Level.color(), e.Level.String()[0:4],
-			e.Time.Format("15:04:05"), colorForStatusCode(rl.Response), rl.Response, rl.ResponseTime, rl.Method, rl.URI)
+		fmt.Fprintf(out, "\u001B[38;5;%dm%s\u001B[0m [%s] \u001B[38;5;%dm%d\u001B[0m  %8dµs %s %s \n %s \n", e.Level.color(), e.Level.String()[0:4],
+			e.Time.Format("15:04:05"), colorForStatusCode(rl.Response), rl.Response, rl.ResponseTime, rl.Method, rl.URI, rl.ID)
 	} else {
 		fmt.Fprintf(out, "\u001B[38;5;%dm%s\u001B[0m [%s] %v\n", e.Level.color(), e.Level.String()[0:4], e.Time.Format("15:04:05"), e.Message)
 	}
