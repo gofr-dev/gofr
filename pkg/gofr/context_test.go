@@ -3,6 +3,7 @@ package gofr
 import (
 	"bytes"
 	"context"
+	"gofr.dev/pkg/gofr/container"
 	"net/http"
 	"testing"
 
@@ -54,11 +55,11 @@ func Test_newContext(t *testing.T) {
 		http.MethodPost, "/test", http.NoBody)
 	req := gofrHTTP.NewRequest(httpRequest)
 
-	ctx := newContext(nil, req, newContainer(config.NewEnvFile("")))
+	ctx := newContext(nil, req, container.NewContainer(config.NewEnvFile("")))
 
 	assert.Equal(t, &Context{Context: req.Context(),
 		Request:   req,
-		Container: &Container{Logger: logging.NewLogger()},
+		Container: &container.Container{Logger: logging.NewLogger(1)},
 		responder: nil,
 	}, ctx, "TEST, Failed.\n context creation successful")
 }
