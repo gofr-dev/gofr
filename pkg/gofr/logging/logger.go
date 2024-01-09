@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strings"
 	"time"
 
 	"gofr.dev/pkg/gofr/http/middleware"
@@ -140,16 +139,6 @@ func NewLogger(level Level) Logger {
 	return l
 }
 
-func NewMockLogger(b io.Writer) Logger {
-	l := &logger{
-		normalOut: b,
-		errorOut:  b,
-		level:     DEBUG,
-	}
-
-	return l
-}
-
 // TODO - Do we need this? Only used for CMD log silencing.
 func NewSilentLogger() Logger {
 	l := &logger{
@@ -166,22 +155,5 @@ func checkIfTerminal(w io.Writer) bool {
 		return term.IsTerminal(int(v.Fd()))
 	default:
 		return false
-	}
-}
-
-func getLevel(level string) Level {
-	switch strings.ToUpper(level) {
-	case "INFO":
-		return INFO
-	case "WARN":
-		return WARN
-	case "FATAL":
-		return FATAL
-	case "DEBUG":
-		return DEBUG
-	case "ERROR":
-		return ERROR
-	default:
-		return INFO
 	}
 }
