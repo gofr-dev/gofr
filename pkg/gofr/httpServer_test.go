@@ -1,6 +1,7 @@
 package gofr
 
 import (
+	"context"
 	"net/http"
 	"testing"
 	"time"
@@ -36,8 +37,14 @@ func TestRun_ServerStartsListening(t *testing.T) {
 	// Wait for the server to start listening
 	time.Sleep(1 * time.Second)
 
+	var netClient = &http.Client{
+		Timeout: time.Second * 10,
+	}
+
 	// Send a GET request to the server
-	resp, err := http.Get("http://localhost:8080")
+	re, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://localhost:8080", http.NoBody)
+	resp, err := netClient.Do(re)
+
 	assert.NoError(t, err)
 	assert.Equal(t, resp.StatusCode, http.StatusOK)
 

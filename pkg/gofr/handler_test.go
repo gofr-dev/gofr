@@ -16,7 +16,7 @@ import (
 )
 
 var (
-	err = errors.New("some error")
+	errTest = errors.New("some error")
 )
 
 func TestHandler_ServeHTTP(t *testing.T) {
@@ -35,7 +35,7 @@ func TestHandler_ServeHTTP(t *testing.T) {
 		{
 			desc:       "data is mil, error is not nil",
 			data:       nil,
-			err:        err,
+			err:        errTest,
 			statusCode: http.StatusInternalServerError,
 		},
 	}
