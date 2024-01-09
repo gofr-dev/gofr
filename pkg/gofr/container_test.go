@@ -24,7 +24,7 @@ func Test_newContainerDBIntializationSuccess(t *testing.T) {
 
 	container := newContainer(cfg)
 
-	// container is a pointer and we need to see if db are initialised, comparing the container object
+	// container is a pointer and we need to see if db are initialized, comparing the container object
 	// will not suffice the purpose of this test
 	assert.NotNil(t, container.DB.DB, "TEST, Failed.\nvalid db connections")
 	assert.NotNil(t, container.Redis, "TEST, Failed.\nvalid redis connections")
@@ -38,7 +38,7 @@ func Test_newContainerDBIntializationFail(t *testing.T) {
 
 	container := newContainer(cfg)
 
-	// container is a pointer and we need to see if db are not initialised, comparing the container object
+	// container is a pointer and we need to see if db are not initialized, comparing the container object
 	// will not suffice the purpose of this test
 	assert.Nil(t, container.DB.DB, "TEST, Failed.\ninvalid db connections")
 	assert.Nil(t, container.Redis, "TEST, Failed.\ninvalid redis connections")

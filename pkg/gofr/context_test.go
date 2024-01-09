@@ -3,14 +3,14 @@ package gofr
 import (
 	"bytes"
 	"context"
-	"gofr.dev/pkg/gofr/config"
-	"gofr.dev/pkg/gofr/logging"
 	"net/http"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 
+	"gofr.dev/pkg/gofr/config"
 	gofrHTTP "gofr.dev/pkg/gofr/http"
+	"gofr.dev/pkg/gofr/logging"
 )
 
 func TestTrace_ReturnsSpanObject(t *testing.T) {
