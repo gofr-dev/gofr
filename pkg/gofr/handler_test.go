@@ -3,14 +3,16 @@ package gofr
 import (
 	"context"
 	"errors"
-	"github.com/stretchr/testify/assert"
-	"gofr.dev/pkg/gofr/container"
-	"gofr.dev/pkg/gofr/http/response"
-	"gofr.dev/pkg/gofr/logging"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+
+	"gofr.dev/pkg/gofr/container"
+	"gofr.dev/pkg/gofr/http/response"
+	"gofr.dev/pkg/gofr/logging"
 )
 
 func TestHandler_ServeHTTP(t *testing.T) {
@@ -34,9 +36,9 @@ func TestHandler_ServeHTTP(t *testing.T) {
 		},
 	}
 
-	for _, tc := range testCases {
+	for i, tc := range testCases {
 		w := httptest.NewRecorder()
-		r := httptest.NewRequest(http.MethodGet, "/", nil)
+		r := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 		c := &container.Container{
 			Logger: logging.NewLogger(logging.FATAL),
 		}
@@ -48,7 +50,7 @@ func TestHandler_ServeHTTP(t *testing.T) {
 			container: c,
 		}.ServeHTTP(w, r)
 
-		assert.Equal(t, w.Code, tc.statusCode)
+		assert.Equalf(t, w.Code, tc.statusCode, "TEST[%d], Failed.\n%s", i, tc.desc)
 	}
 }
 

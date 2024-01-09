@@ -6,11 +6,11 @@ import (
 	"testing"
 	"time"
 
-	"gofr.dev/pkg/gofr/logging"
-	"gofr.dev/pkg/gofr/testutil"
-
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/stretchr/testify/assert"
+
+	"gofr.dev/pkg/gofr/logging"
+	"gofr.dev/pkg/gofr/testutil"
 )
 
 func getDB(t *testing.T) (*DB, sqlmock.Sqlmock) {
@@ -106,6 +106,7 @@ func TestDB_SelectSingleColumnFromStringToCustomInt(t *testing.T) {
 func TestDB_SelectContextError(t *testing.T) {
 	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(time.Microsecond))
 	time.Sleep(1 * time.Millisecond)
+
 	defer cancel()
 
 	t.Setenv("LOG_LEVEL", "DEBUG")
@@ -117,7 +118,7 @@ func TestDB_SelectContextError(t *testing.T) {
 		db.Select(ctx, nil, "select 1")
 	})
 
-	assert.Contains(t, out, "context cancelled", "TESTCASE FAILED")
+	assert.Contains(t, out, "context canceled", "TESTCASE FAILED")
 }
 
 func TestDB_SelectDataPointerError(t *testing.T) {

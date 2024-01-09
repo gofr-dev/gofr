@@ -3,10 +3,11 @@ package container
 import (
 	"context"
 	"database/sql"
-	"gofr.dev/pkg/gofr/logging"
 	"reflect"
 	"regexp"
 	"strings"
+
+	"gofr.dev/pkg/gofr/logging"
 )
 
 // DB is a wrapper around sql.DB which provides some more features.
@@ -47,7 +48,7 @@ type DB struct {
 func (d *DB) Select(ctx context.Context, data interface{}, query string, args ...interface{}) {
 	// If context is done, it is not needed
 	if ctx.Err() != nil {
-		d.logger.Debug("context cancelled")
+		d.logger.Debug("context canceled")
 
 		return
 	}

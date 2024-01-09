@@ -1,10 +1,12 @@
 package gofr
 
 import (
-	"gofr.dev/pkg/gofr/container"
 	"net/http"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"gofr.dev/pkg/gofr/container"
 
 	http2 "gofr.dev/pkg/gofr/http"
 	"gofr.dev/pkg/gofr/logging"
@@ -36,12 +38,8 @@ func TestRun_ServerStartsListening(t *testing.T) {
 
 	// Send a GET request to the server
 	resp, err := http.Get("http://localhost:8080")
-	if err != nil {
-		t.Errorf("Failed to send GET request: %v", err)
-	}
+	assert.NoError(t, err)
+	assert.Equal(t, resp.StatusCode, http.StatusOK)
 
-	// Check if the server is listening
-	if resp.StatusCode != http.StatusOK {
-		t.Errorf("Expected status code %d, but got %d", http.StatusOK, resp.StatusCode)
-	}
+	resp.Body.Close()
 }

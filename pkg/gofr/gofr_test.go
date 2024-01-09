@@ -3,6 +3,7 @@ package gofr
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/stretchr/testify/assert"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -50,6 +51,7 @@ func TestGofr_ServerRoutes(t *testing.T) {
 		{http.MethodPut, "/hello", "Hello World!", "content-type", "application/json"},
 		{http.MethodPost, "/hello", "Hello World!", "content-type", "application/json"},
 		{http.MethodGet, "/params?name=Vikash", "Hello Vikash!", "content-type", "application/json"},
+		{http.MethodDelete, "/delete", "Success", "content-type", "application/json"},
 	}
 
 	g := New()
@@ -70,7 +72,11 @@ func TestGofr_ServerRoutes(t *testing.T) {
 		return fmt.Sprintf("Hello %s!", c.Param("name")), nil
 	})
 
-	for _, tc := range testCases {
+	g.DELETE("/delete", func(c *Context) (interface{}, error) {
+		return "Success", nil
+	})
+
+	for i, tc := range testCases {
 		w := httptest.NewRecorder()
 		r := httptest.NewRequest(tc.method, tc.target, http.NoBody)
 
@@ -79,19 +85,12 @@ func TestGofr_ServerRoutes(t *testing.T) {
 		g.httpServer.router.ServeHTTP(w, r)
 
 		var res response
+
 		respBytes, _ := io.ReadAll(w.Body)
 		_ = json.Unmarshal(respBytes, &res)
 
-		if res.Data != tc.response {
-			t.Errorf("Unexpected response for %s %s. \t expected: %s \t got: %s", tc.method, tc.target, tc.response, res.Data)
-		}
-
-		if ctype := w.Header().Get(tc.headerKey); ctype != tc.headerVal {
-			t.Errorf("Header mismatch for %s %s. \t expected: %s \t got: %s", tc.method, tc.target, tc.headerVal, ctype)
-		}
+		assert.Equalf(t, res.Data, tc.response, "TEST FAILED FOR [%d] Unexpected response for %s %s.", i, tc.method, tc.target)
+		assert.Equalf(t, w.Header().Get(tc.headerKey), tc.headerVal,
+			"TEST FAILED FOR [%d] Header mismatch for %s %s", i, tc.method, tc.target)
 	}
-}
-
-func TestGofr_(t *testing.T) {
-
 }
