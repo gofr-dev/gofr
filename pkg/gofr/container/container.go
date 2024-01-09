@@ -6,8 +6,8 @@ import (
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/logging"
 
-	"github.com/go-redis/redis/v8"
 	_ "github.com/go-sql-driver/mysql" // This is required to be blank import
+	"github.com/redis/go-redis/v9"
 )
 
 // TODO - This can be a collection of interfaces instead of struct
