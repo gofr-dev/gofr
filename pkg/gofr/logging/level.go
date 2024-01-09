@@ -47,13 +47,13 @@ func (l Level) String() string {
 func (l Level) color() uint {
 	switch l {
 	case ERROR, FATAL:
-		return 31
+		return 160
 	case WARN, NOTICE:
-		return 33
+		return 220
 	case INFO:
-		return 36
+		return 6
 	case DEBUG:
-		return 36
+		return 8
 	default:
 		return 37
 	}
