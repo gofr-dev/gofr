@@ -40,7 +40,7 @@ func newContainer(config Config) *Container {
 		})
 
 		if err != nil {
-			c.Errorf("could not connect to redis at %s:%d\n error:", host, port, err)
+			c.Errorf("could not connect to redis at %s:%d. error: %s", host, port, err)
 		} else {
 			c.Logf("connected to redis at %s:%d", host, port)
 		}
