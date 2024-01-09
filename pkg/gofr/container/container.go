@@ -1,8 +1,9 @@
-package gofr
+package container
 
 import (
 	"strconv"
 
+	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/logging"
 
 	"github.com/go-redis/redis/v8"
@@ -19,10 +20,9 @@ type Container struct {
 	DB    *DB
 }
 
-func newContainer(config Config) *Container {
+func NewContainer(config config.Config) *Container {
 	c := &Container{
-		// TODO - Log Level should be set based on config.
-		Logger: logging.NewLogger(),
+		Logger: logging.NewLogger(logging.GetLevelFromString(config.Get("LOG_LEVEL"))),
 	}
 
 	c.Debug("Container is being created")
