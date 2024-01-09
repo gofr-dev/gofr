@@ -20,16 +20,16 @@ type Container struct {
 	DB    *DB
 }
 
-func NewContainer(config config.Config) *Container {
+func NewContainer(cfg config.Config) *Container {
 	c := &Container{
-		Logger: logging.NewLogger(logging.GetLevelFromString(config.Get("LOG_LEVEL"))),
+		Logger: logging.NewLogger(logging.GetLevelFromString(cfg.Get("LOG_LEVEL"))),
 	}
 
 	c.Debug("Container is being created")
 
 	// Connect Redis if REDIS_HOST is Set.
-	if host := config.Get("REDIS_HOST"); host != "" {
-		port, err := strconv.Atoi(config.Get("REDIS_PORT"))
+	if host := cfg.Get("REDIS_HOST"); host != "" {
+		port, err := strconv.Atoi(cfg.Get("REDIS_PORT"))
 		if err != nil {
 			port = defaultRedisPort
 		}
@@ -46,13 +46,13 @@ func NewContainer(config config.Config) *Container {
 		}
 	}
 
-	if host := config.Get("DB_HOST"); host != "" {
+	if host := cfg.Get("DB_HOST"); host != "" {
 		conf := dbConfig{
 			HostName: host,
-			User:     config.Get("DB_USER"),
-			Password: config.Get("DB_PASSWORD"),
-			Port:     config.GetOrDefault("DB_PORT", strconv.Itoa(defaultDBPort)),
-			Database: config.Get("DB_NAME"),
+			User:     cfg.Get("DB_USER"),
+			Password: cfg.Get("DB_PASSWORD"),
+			Port:     cfg.GetOrDefault("DB_PORT", strconv.Itoa(defaultDBPort)),
+			Database: cfg.Get("DB_NAME"),
 		}
 		db, err := newMYSQL(&conf)
 		c.DB = &DB{db}
