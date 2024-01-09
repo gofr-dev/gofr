@@ -52,16 +52,16 @@ jobs:
         run: |
           export GOFR_ENV=test
           if [ "${{ matrix.job-name }}" == "Example-Unit-Testing" ]; then
-            go test gofr.dev/examples/... -v -short -coverprofile ./Example-Test-Report/profile.cov -coverpkg=gofr.dev/examples/...
+            go test gofr.dev/examples/... -v -short -coverprofile profile.cov -coverpkg=gofr.dev/examples/...
           elif [ "${{ matrix.job-name }}" == "PKG-Unit-Testing" ]; then
-            go test gofr.dev/pkg/... -v -short -coverprofile ./PKG-Coverage-Report/profile.cov -coverpkg=gofr.dev/pkg/...
+            go test gofr.dev/pkg/... -v -short -coverprofile profile.cov -coverpkg=gofr.dev/pkg/...
           fi
           go tool cover -func profile.cov
 
       - name: Upload Test Coverage
         uses: actions/upload-artifact@v3
         with:
-          name: ${{ matrix.job-name }}-Coverage-Report
+          name: ${{ matrix.job-name }}-Test-Report
           path: profile.cov
 
   parse_coverage:
