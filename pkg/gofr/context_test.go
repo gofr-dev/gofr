@@ -22,17 +22,17 @@ func TestTrace_ReturnsSpanObject(t *testing.T) {
 }
 
 func TestContext_Body_Response(t *testing.T) {
-	type TestStruct struct {
-		ID   int    `json:"id"`
-		Name string `json:"name"`
+	type testStruct struct {
+		ID   int    `json:"ID"`
+		Name string `json:"Name"`
 	}
 
-	respBody := TestStruct{
+	respBody := testStruct{
 		ID:   1,
 		Name: "Bob",
 	}
 
-	reqBody := []byte(`{"id":1,"name":"Bob"}`)
+	reqBody := []byte(`{"ID":1,"Name":"Bob"}`)
 
 	httpRequest, _ := http.NewRequestWithContext(context.Background(),
 		http.MethodPost, "/test", bytes.NewReader(reqBody))
@@ -41,7 +41,7 @@ func TestContext_Body_Response(t *testing.T) {
 
 	ctx := Context{Context: context.Background(), Request: req}
 
-	body := TestStruct{}
+	body := testStruct{}
 
 	err := ctx.Bind(&body)
 
