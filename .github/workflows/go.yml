@@ -15,19 +15,19 @@ jobs:
     name: Example Unit Testing🛠
     runs-on: ubuntu-latest
     services:
-      mysql:
-        image: mysql:8.0.30
-        ports:
-          - "2001:3306"
-        env:
-          MYSQL_ROOT_PASSWORD: "password"
-          MYSQL_DATABASE: "test"
-
       redis:
         image: redis:7.0.5
         ports:
           - "2002:6379"
         options: "--entrypoint redis-server"
+
+      mysql:
+        image: mysql:8.2.0
+        ports:
+          - "2001:3306"
+        env:
+          MYSQL_ROOT_PASSWORD: "password"
+          MYSQL_DATABASE: "test"
 
     steps:
       - name: Checkout code into go module directory
@@ -68,7 +68,7 @@ jobs:
         options: "--entrypoint redis-server"
 
       mysql:
-        image: mysql:8.0.30
+        image: mysql:8.2.0
         ports:
           - "2001:3306"
         env:
