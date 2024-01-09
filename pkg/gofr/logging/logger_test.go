@@ -14,7 +14,7 @@ func TestLogger_Log(t *testing.T) {
 	os.Setenv("LOG_LEVEL", "DEBUG")
 
 	f := func() {
-		logger := NewLogger()
+		logger := NewLogger(DEBUG)
 		logger.Log(testLogStatement)
 	}
 
@@ -28,7 +28,7 @@ func TestLogger_Logf(t *testing.T) {
 	os.Setenv("LOG_LEVEL", "DEBUG")
 
 	f := func() {
-		logger := NewLogger()
+		logger := NewLogger(DEBUG)
 		logger.Logf("%s", testLogStatement)
 	}
 
@@ -43,7 +43,7 @@ func TestLogger_Error(t *testing.T) {
 	os.Setenv("LOG_LEVEL", "DEBUG")
 
 	f := func() {
-		logger := NewLogger()
+		logger := NewLogger(DEBUG)
 		logger.Error(testLogStatement)
 	}
 
@@ -58,7 +58,7 @@ func TestLogger_Errorf(t *testing.T) {
 	os.Setenv("LOG_LEVEL", "DEBUG")
 
 	f := func() {
-		logger := NewLogger()
+		logger := NewLogger(DEBUG)
 		logger.Errorf("%s", testLogStatement)
 	}
 
