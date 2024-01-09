@@ -67,6 +67,7 @@ jobs:
           - "2001:3306"
         env:
           MYSQL_ROOT_PASSWORD: "password"
+          MYSQL_DATABASE: "test"
 
       redis:
         image: redis:7.0.5
