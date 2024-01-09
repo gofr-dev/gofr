@@ -30,12 +30,12 @@ func TestLevelColor(t *testing.T) {
 		level         Level
 		expectedColor uint
 	}{
-		{ERROR, 31},
-		{FATAL, 31},
-		{WARN, 33},
-		{NOTICE, 33},
-		{INFO, 36},
-		{DEBUG, 36},
+		{ERROR, 160},
+		{FATAL, 160},
+		{WARN, 220},
+		{NOTICE, 220},
+		{INFO, 6},
+		{DEBUG, 8},
 		{Level(99), 37}, // Test default case
 	}
 
