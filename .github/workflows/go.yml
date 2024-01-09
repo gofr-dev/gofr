@@ -18,13 +18,13 @@ jobs:
       redis:
         image: redis:7.0.5
         ports:
-          - "6379:6379"
+          - "2002:6379"
         options: "--entrypoint redis-server"
 
       mysql:
-        image: mysql:8.0.30
+        image: mysql:8.2.0
         ports:
-          - "3306:3306"
+          - "2001:3306"
         env:
           MYSQL_ROOT_PASSWORD: "password"
           MYSQL_DATABASE: "test"
@@ -62,18 +62,18 @@ jobs:
     runs-on: ubuntu-latest
     services:
       mysql:
-        image: mysql:8.0.30
+        image: mysql:8.2.0
         ports:
-          - "3306:3306"
+          - "2001:3306"
         env:
           MYSQL_ROOT_PASSWORD: "password"
+          MYSQL_DATABASE: "test"
 
       redis:
         image: redis:7.0.5
         ports:
-          - "6379:6379"
+          - "2002:6379"
         options: "--entrypoint redis-server"
-
     steps:
       - name: Checkout code into go module directory
         uses: actions/checkout@v4
