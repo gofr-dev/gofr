@@ -23,6 +23,7 @@ func NewRouter() *Router {
 		middleware.Logging(logging.NewLogger()),
 		middleware.CORS(),
 	)
+
 	return &Router{
 		Router: *muxRouter,
 	}
