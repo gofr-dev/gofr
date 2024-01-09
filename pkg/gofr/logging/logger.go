@@ -25,19 +25,19 @@ type Logger interface {
 }
 
 type logger struct {
-	level      level
+	level      Level
 	normalOut  io.Writer
 	errorOut   io.Writer
 	isTerminal bool
 }
 
 type logEntry struct {
-	Level   level       `json:"level"`
+	Level   Level       `json:"Level"`
 	Time    time.Time   `json:"time"`
 	Message interface{} `json:"message"`
 }
 
-func (l *logger) logf(level level, format string, args ...interface{}) {
+func (l *logger) logf(level Level, format string, args ...interface{}) {
 	if level < l.level {
 		return
 	}
@@ -104,20 +104,36 @@ func (l *logger) prettyPrint(e logEntry, out io.Writer) {
 	// Giving special treatment to framework's request log in terminal display. This does not add any overhead
 	// in running the server. Decent tradeoff for the interface to struct conversion anti-pattern.
 	if rl, ok := e.Message.(middleware.RequestLog); ok {
-		fmt.Fprintf(out, "\u001B[%dm%s\u001B[0m [%s] %d  %8dµs %s %s \n", e.Level.color(), e.Level.String()[0:4],
-			e.Time.Format("15:04:05"), rl.Response, rl.ResponseTime, rl.Method, rl.URI)
+
+		fmt.Fprintf(out, "\u001B[38;5;%dm%s\u001B[0m [%s] \u001B[38;5;8m%s \u001B[38;5;%dm%d\u001B[0m  %8d\u001B[38;5;8mµs\u001B[0m %s %s \n", e.Level.color(), e.Level.String()[0:4],
+			e.Time.Format("15:04:05"), rl.ID, colorForStatusCode(rl.Response), rl.Response, rl.ResponseTime, rl.Method, rl.URI)
 	} else {
-		fmt.Fprintf(out, "\u001B[%dm%s\u001B[0m [%s] %v\n", e.Level.color(), e.Level.String()[0:4], e.Time.Format("15:04:05"), e.Message)
+		fmt.Fprintf(out, "\u001B[38;5;%dm%s\u001B[0m [%s] %v\n", e.Level.color(), e.Level.String()[0:4], e.Time.Format("15:04:05"), e.Message)
 	}
 }
 
-func NewLogger() Logger {
+// colorForStatusCode provide color for the status code in the terminal when logs is being pretty-printed.
+func colorForStatusCode(status int) int {
+	responseCodeColors := map[int]int{
+		200: 34,
+		404: 220,
+		500: 202,
+	}
+
+	if color, ok := responseCodeColors[status]; ok {
+		return color
+	}
+
+	return 0
+}
+
+func NewLogger(level Level) Logger {
 	l := &logger{
 		normalOut: os.Stdout,
 		errorOut:  os.Stderr,
 	}
 
-	l.level = getLevel(os.Getenv("LOG_LEVEL"))
+	l.level = level
 
 	l.isTerminal = checkIfTerminal(l.normalOut)
 
@@ -153,7 +169,7 @@ func checkIfTerminal(w io.Writer) bool {
 	}
 }
 
-func getLevel(level string) level {
+func getLevel(level string) Level {
 	switch strings.ToUpper(level) {
 	case "INFO":
 		return INFO
