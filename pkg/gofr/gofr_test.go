@@ -1,17 +1,22 @@
 package gofr
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 
 	"gofr.dev/pkg/gofr/testutil"
 )
+
+const helloWorld = "Hello World!"
 
 func TestNewCMD(t *testing.T) {
 	a := NewCMD()
@@ -32,8 +37,6 @@ func TestGofr_readConfig(t *testing.T) {
 	}
 }
 
-const helloWorld = "Hello World!"
-
 func TestGofr_ServerRoutes(t *testing.T) {
 	type response struct {
 		Data interface{} `json:"data"`
@@ -49,6 +52,7 @@ func TestGofr_ServerRoutes(t *testing.T) {
 		headerVal string
 	}{
 		{http.MethodGet, "/hello", "Hello World!", "content-type", "application/json"},
+		{http.MethodGet, "/hello2", "Hello World!", "content-type", "application/json"},
 		{http.MethodPut, "/hello", "Hello World!", "content-type", "application/json"},
 		{http.MethodPost, "/hello", "Hello World!", "content-type", "application/json"},
 		{http.MethodGet, "/params?name=Vikash", "Hello Vikash!", "content-type", "application/json"},
@@ -58,6 +62,11 @@ func TestGofr_ServerRoutes(t *testing.T) {
 	g := New()
 
 	g.GET("/hello", func(c *Context) (interface{}, error) {
+		return helloWorld, nil
+	})
+
+	// using add() func
+	g.add(http.MethodGet, "/hello2", func(c *Context) (interface{}, error) {
 		return helloWorld, nil
 	})
 
@@ -94,4 +103,28 @@ func TestGofr_ServerRoutes(t *testing.T) {
 		assert.Equalf(t, w.Header().Get(tc.headerKey), tc.headerVal,
 			"TEST FAILED FOR [%d] Header mismatch for %s %s", i, tc.method, tc.target)
 	}
+}
+
+func TestGofr_ServerRun(t *testing.T) {
+	g := New()
+
+	g.GET("/hello", func(c *Context) (interface{}, error) {
+		return helloWorld, nil
+	})
+
+	go g.Run()
+	time.Sleep(1 * time.Second)
+
+	var netClient = &http.Client{
+		Timeout: time.Second * 10,
+	}
+
+	re, _ := http.NewRequestWithContext(context.Background(), http.MethodGet,
+		"http://localhost:"+strconv.Itoa(defaultHTTPPort)+"/hello", http.NoBody)
+	resp, err := netClient.Do(re)
+
+	assert.NoError(t, err)
+	assert.Equal(t, resp.StatusCode, http.StatusOK)
+
+	resp.Body.Close()
 }

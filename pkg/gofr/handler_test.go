@@ -83,3 +83,14 @@ func TestHandler_faviconHandler(t *testing.T) {
 		ContentType: "image/x-icon",
 	})
 }
+
+func TestHandler_catchAllHandler(t *testing.T) {
+	c := Context{
+		Context: context.Background(),
+	}
+
+	data, err := catchAllHandler(&c)
+
+	assert.Equal(t, data, nil)
+	assert.Equal(t, http.ErrMissingFile, err)
+}
