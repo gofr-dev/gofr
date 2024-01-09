@@ -19,11 +19,11 @@ func Test_newMySQL(t *testing.T) {
 		{"db connection  failed", "2001", nil, &net.OpError{}},
 	}
 
-	for _, tc := range testCases {
+	for i, tc := range testCases {
 		db, err := newMYSQL(&dbConfig{HostName: "localhost", User: "root",
 			Password: "password", Port: tc.port, Database: "mysql"})
 
-		assert.IsType(t, tc.expDB, db)
-		assert.IsType(t, tc.expErr, err)
+		assert.IsType(t, tc.expDB, db, "TEST[%d], Failed.\n%s", i, tc.desc)
+		assert.IsType(t, tc.expErr, err, "TEST[%d], Failed.\n%s", i, tc.desc)
 	}
 }
