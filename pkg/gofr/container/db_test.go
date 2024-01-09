@@ -13,6 +13,10 @@ import (
 	"gofr.dev/pkg/gofr/testutil"
 )
 
+var (
+	errDB = errors.New("DB error")
+)
+
 func getDB(t *testing.T) (*DB, sqlmock.Sqlmock) {
 	mockDB, mock, err := sqlmock.New()
 	if err != nil {
@@ -241,7 +245,7 @@ func TestDB_SelectSingleColumnError(t *testing.T) {
 		defer db.DB.Close()
 
 		mock.ExpectQuery("^select id from users").
-			WillReturnError(errors.New("DB error"))
+			WillReturnError(errDB)
 
 		db.Select(context.TODO(), &ids, "select id from users")
 	})

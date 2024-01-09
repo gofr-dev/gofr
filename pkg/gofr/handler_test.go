@@ -15,6 +15,10 @@ import (
 	"gofr.dev/pkg/gofr/logging"
 )
 
+var (
+	err = errors.New("some error")
+)
+
 func TestHandler_ServeHTTP(t *testing.T) {
 	testCases := []struct {
 		desc       string
@@ -31,7 +35,7 @@ func TestHandler_ServeHTTP(t *testing.T) {
 		{
 			desc:       "data is mil, error is not nil",
 			data:       nil,
-			err:        errors.New("some error"),
+			err:        err,
 			statusCode: http.StatusInternalServerError,
 		},
 	}

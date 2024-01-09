@@ -1,20 +1,22 @@
 package gofr
 
 import (
+	"testing"
+
 	"github.com/stretchr/testify/assert"
+
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/testutil"
 	"google.golang.org/grpc"
-	"testing"
 )
 
 func TestNewGRPCServer(t *testing.T) {
-	container := container.Container{
+	c := container.Container{
 		Logger: logging.NewLogger(logging.DEBUG),
 	}
 
-	g := newGRPCServer(&container, 9999)
+	g := newGRPCServer(&c, 9999)
 	if g == nil {
 		t.Errorf("FAILED, Expected: a non nil value, Got: %v", g)
 	}
