@@ -15,8 +15,8 @@ func Test_newMySQL(t *testing.T) {
 		expDB  *sql.DB
 		expErr error
 	}{
-		{"db connected successfully", "3306", &sql.DB{}, nil},
-		{"db connection  failed", "2001", nil, &net.OpError{}},
+		{"db connected successfully", "2001", &sql.DB{}, nil},
+		{"db connection  failed", "3306", nil, &net.OpError{}},
 	}
 
 	for i, tc := range testCases {
