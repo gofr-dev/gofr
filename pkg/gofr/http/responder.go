@@ -2,6 +2,7 @@ package http
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 
 	resTypes "gofr.dev/pkg/gofr/http/response"
@@ -42,6 +43,12 @@ func (r Responder) Respond(data interface{}, err error) {
 func (r Responder) HTTPStatusFromError(err error) (status int, errObj interface{}) {
 	if err == nil {
 		return http.StatusOK, nil
+	}
+
+	if errors.Is(err, http.ErrMissingFile) {
+		return http.StatusNotFound, map[string]interface{}{
+			"message": err.Error(),
+		}
 	}
 
 	return http.StatusInternalServerError, map[string]interface{}{
