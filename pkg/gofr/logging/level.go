@@ -14,8 +14,10 @@ const (
 	WARN
 	ERROR
 	FATAL
+)
 
-	// String constants for logging levels.
+// String constants for logging levels.
+const (
 	levelDEBUG  = "DEBUG"
 	levelINFO   = "INFO"
 	levelNOTICE = "NOTICE"
@@ -69,17 +71,17 @@ func (l Level) MarshalJSON() ([]byte, error) {
 
 func GetLevelFromString(level string) Level {
 	switch strings.ToUpper(level) {
-	case "DEBUG":
+	case levelDEBUG:
 		return DEBUG
-	case "INFO":
+	case levelINFO:
 		return INFO
-	case "NOTICE":
+	case levelNOTICE:
 		return NOTICE
-	case "WARN":
+	case levelWARN:
 		return WARN
-	case "ERROR":
+	case levelERROR:
 		return ERROR
-	case "FATAL":
+	case levelFATAL:
 		return FATAL
 	default:
 		return INFO
