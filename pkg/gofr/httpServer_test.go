@@ -1,15 +1,13 @@
 package gofr
 
 import (
+	"gofr.dev/pkg/gofr/container"
 	"net/http"
-	"os"
 	"testing"
 	"time"
 
 	http2 "gofr.dev/pkg/gofr/http"
 	"gofr.dev/pkg/gofr/logging"
-
-	"github.com/go-redis/redis/v8"
 )
 
 func TestRun_ServerStartsListening(t *testing.T) {
@@ -20,10 +18,8 @@ func TestRun_ServerStartsListening(t *testing.T) {
 	}))
 
 	// Create a mock container
-	container := &Container{
-		Logger: logging.NewMockLogger(os.Stdout),
-		Redis:  &redis.Client{},
-		DB:     &DB{},
+	c := &container.Container{
+		Logger: logging.NewLogger(logging.INFO),
 	}
 
 	// Create an instance of httpServer
@@ -33,7 +29,7 @@ func TestRun_ServerStartsListening(t *testing.T) {
 	}
 
 	// Start the server
-	go server.Run(container)
+	go server.Run(c)
 
 	// Wait for the server to start listening
 	time.Sleep(1 * time.Second)

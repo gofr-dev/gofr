@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 	"github.com/stretchr/testify/assert"
+	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/http/response"
 	"gofr.dev/pkg/gofr/logging"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -37,15 +37,15 @@ func TestHandler_ServeHTTP(t *testing.T) {
 	for _, tc := range testCases {
 		w := httptest.NewRecorder()
 		r := httptest.NewRequest(http.MethodGet, "/", nil)
-		container := &Container{
-			Logger: logging.NewMockLogger(io.Discard),
+		c := &container.Container{
+			Logger: logging.NewLogger(logging.FATAL),
 		}
 
 		handler{
 			function: func(c *Context) (interface{}, error) {
 				return tc.data, tc.err
 			},
-			container: container,
+			container: c,
 		}.ServeHTTP(w, r)
 
 		assert.Equal(t, w.Code, tc.statusCode)

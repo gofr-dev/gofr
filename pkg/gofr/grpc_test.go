@@ -2,6 +2,7 @@ package gofr
 
 import (
 	"github.com/stretchr/testify/assert"
+	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/testutil"
 	"google.golang.org/grpc"
@@ -9,8 +10,8 @@ import (
 )
 
 func TestNewGRPCServer(t *testing.T) {
-	container := Container{
-		Logger: logging.NewLogger(),
+	container := container.Container{
+		Logger: logging.NewLogger(logging.DEBUG),
 	}
 
 	g := newGRPCServer(&container, 9999)
@@ -42,8 +43,8 @@ func TestGRPC_ServerRun(t *testing.T) {
 
 	for _, tc := range testCases {
 		f := func() {
-			c := &Container{
-				Logger: logging.NewLogger(),
+			c := &container.Container{
+				Logger: logging.NewLogger(logging.INFO),
 			}
 
 			g := &grpcServer{
