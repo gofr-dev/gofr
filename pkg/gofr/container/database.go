@@ -1,4 +1,4 @@
-package gofr
+package container
 
 import (
 	"database/sql"
