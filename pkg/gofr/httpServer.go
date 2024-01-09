@@ -16,7 +16,7 @@ type httpServer struct {
 func (s *httpServer) Run(container *Container) {
 	var srv *http.Server
 
-	container.Logf("Starting server on port: %d\n", s.port)
+	container.Logf("Starting server on port: %d", s.port)
 
 	srv = &http.Server{
 		Addr:              fmt.Sprintf(":%d", s.port),
