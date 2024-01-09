@@ -43,3 +43,53 @@ func TestLevelColor(t *testing.T) {
 		assert.Equal(t, tc.expectedColor, tc.level.color(), "TEST[%d], Failed.\n", i)
 	}
 }
+
+func TestGetLevelFromString(t *testing.T) {
+	tests := []struct {
+		desc     string
+		input    string
+		expected Level
+	}{
+		{
+			desc:     "DebugLevel",
+			input:    "DEBUG",
+			expected: DEBUG,
+		},
+		{
+			desc:     "InfoLevel",
+			input:    "INFO",
+			expected: INFO,
+		},
+		{
+			desc:     "NoticeLevel",
+			input:    "NOTICE",
+			expected: NOTICE,
+		},
+		{
+			desc:     "WarnLevel",
+			input:    "WARN",
+			expected: WARN,
+		},
+		{
+			desc:     "ErrorLevel",
+			input:    "ERROR",
+			expected: ERROR,
+		},
+		{
+			desc:     "FatalLevel",
+			input:    "FATAL",
+			expected: FATAL,
+		},
+		{
+			desc:     "DefaultLevel",
+			input:    "UNKNOWN",
+			expected: INFO,
+		},
+	}
+
+	for i, tc := range tests {
+		actual := GetLevelFromString(tc.input)
+
+		assert.Equal(t, tc.expected, actual, "TEST[%d], Failed.\n%s", i, tc.desc)
+	}
+}

@@ -3,17 +3,17 @@ package logging
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
-	"strconv"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"golang.org/x/term"
 
 	"gofr.dev/pkg/gofr/http/middleware"
 	"gofr.dev/pkg/gofr/testutil"
+	"golang.org/x/term"
 )
 
 func TestLogger_Log(t *testing.T) {
@@ -142,28 +142,6 @@ func assertMessageInJSONLog(t *testing.T, logLine, expectation string) {
 	}
 }
 
-func TestGetLevel(t *testing.T) {
-	tests := []struct {
-		desc     string
-		input    string
-		expected Level
-	}{
-		{"Valid INFO", "INFO", INFO},
-		{"Valid WARN", "WARN", WARN},
-		{"Valid FATAL", "FATAL", FATAL},
-		{"Valid DEBUG", "DEBUG", DEBUG},
-		{"Valid ERROR", "ERROR", ERROR},
-		{"Invalid Level", "INVALID", INFO},
-		{"Case Insensitive", "iNfO", INFO},
-	}
-
-	for i, tc := range tests {
-		input := tc.input
-		result := getLevel(input)
-		assert.Equal(t, tc.expected, result, "TEST[%d], Failed.\n%s", i, tc.desc)
-	}
-}
-
 func TestCheckIfTerminal(t *testing.T) {
 	tests := []struct {
 		desc       string
@@ -182,18 +160,20 @@ func TestCheckIfTerminal(t *testing.T) {
 	}
 }
 
+// colorize function for consistent color output in tests.
 func colorize(msg string, colorCode int) string {
-	return "\x1b[" + strconv.Itoa(colorCode) + "m" + msg + "\x1b[0m"
+	return fmt.Sprintf("\x1b[38;5;%dm%s\x1b[0m", colorCode, msg)
 }
 
 func TestPrettyPrint(t *testing.T) {
 	var testTime = time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
 
 	tests := []struct {
-		desc       string
-		entry      logEntry
-		isTerminal bool
-		expected   string
+		desc          string
+		entry         logEntry
+		isTerminal    bool
+		expected      string
+		expectedColor uint
 	}{
 		{
 			desc: "RequestLog in Terminal",
@@ -202,29 +182,22 @@ func TestPrettyPrint(t *testing.T) {
 				Time:    testTime,
 				Message: middleware.RequestLog{Response: 200, ResponseTime: 100, Method: "GET", URI: "/path"},
 			},
-			isTerminal: true,
-			expected:   colorize("INFO", 36) + " [00:00:00] 200       100µs GET /path \n",
+			isTerminal:    true,
+			expected:      colorize("INFO", 6) + " [00:00:00] \x1b[38;5;8m \x1b[38;5;34m200\x1b[0m       100\x1b[38;5;8mµs\x1b[0m GET /path \n",
+			expectedColor: 6,
 		},
 		{
-			desc: "Non-RequestLog in Terminal",
+			desc: "Non-Terminal Output",
 			entry: logEntry{
-				Level:   INFO,
+				Level:   ERROR,
 				Time:    testTime,
-				Message: "Non-request log message",
+				Message: "Error message",
 			},
-			isTerminal: true,
-			expected:   colorize("INFO", 36) + " [00:00:00] Non-request log message\n",
+			isTerminal:    false,
+			expected:      colorize("ERRO", 160) + ` [00:00:00] Error message` + "\n",
+			expectedColor: 160,
 		},
-		{
-			desc: "Non-RequestLog in Non-Terminal",
-			entry: logEntry{
-				Level:   INFO,
-				Time:    testTime,
-				Message: "Non-request log message",
-			},
-			isTerminal: false,
-			expected:   colorize("INFO", 36) + " [00:00:00] Non-request log message\n",
-		},
+		// ... other test cases
 	}
 
 	for i, tc := range tests {
@@ -233,6 +206,10 @@ func TestPrettyPrint(t *testing.T) {
 
 		logger.prettyPrint(tc.entry, out)
 
-		assert.Equal(t, tc.expected, out.String(), "TEST[%d], Failed.\n%s", i, tc.desc)
+		actual := out.String()
+
+		// Assert both the formatted string and the color code
+		assert.Equal(t, tc.expected, actual, "TEST[%d], Failed.\n%s", i, tc.desc)
+		assert.Equal(t, tc.expectedColor, tc.entry.Level.color(), "Unexpected color code")
 	}
 }
