@@ -40,7 +40,7 @@ func TestLevelColor(t *testing.T) {
 	}
 
 	for i, tc := range tests {
-		assert.Equal(t, tc.expectedColor, tc.level.color(), "TEST[%d], Failed.\n", i)
+		assert.Equal(t, tc.expectedColor, tc.level.color(), "TEST[%d], Failed.", i)
 	}
 }
 
