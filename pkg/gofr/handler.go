@@ -46,3 +46,7 @@ func faviconHandler(c *Context) (interface{}, error) {
 		ContentType: "image/x-icon",
 	}, err
 }
+
+func catchAllHandler(c *Context) (interface{}, error) {
+	return nil, http.ErrMissingFile
+}
