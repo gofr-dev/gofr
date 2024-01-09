@@ -50,7 +50,7 @@ func Logging(logger logger) func(inner http.Handler) http.Handler {
 				l := RequestLog{
 					ID:           reqID,
 					StartTime:    start.Format("2006-01-02T15:04:05.999999999-07:00"),
-					ResponseTime: time.Since(start).Nanoseconds() / 1000, //nolint:gomnd
+					ResponseTime: time.Since(start).Nanoseconds() / 1000,
 					Method:       req.Method,
 					UserAgent:    req.UserAgent(),
 					IP:           getIPAddress(req),
