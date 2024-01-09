@@ -29,6 +29,6 @@ func NewRouter(container *container.Container) *Router {
 }
 
 func (rou *Router) Add(method, pattern string, handler http.Handler) {
-	h := otelhttp.NewHandler(handler, "gofr-handler")
+	h := otelhttp.NewHandler(handler, "gofr-router")
 	rou.Router.NewRoute().Methods(method).Path(pattern).Handler(h)
 }
