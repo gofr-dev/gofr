@@ -1,4 +1,4 @@
-package container
+package datasource
 
 import (
 	"database/sql"

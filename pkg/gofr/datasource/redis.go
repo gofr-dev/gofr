@@ -1,4 +1,4 @@
-package container
+package datasource
 
 import (
 	"context"
@@ -8,7 +8,7 @@ import (
 	"github.com/go-redis/redis/v8"
 )
 
-type redisConfig struct {
+type RedisConfig struct {
 	HostName string
 	Port     int
 	Options  *redis.Options
@@ -16,7 +16,7 @@ type redisConfig struct {
 
 // newRedisClient return a redis client if connection is successful based on Config.
 // In case of error, it returns an error as second parameter.
-func newRedisClient(config redisConfig) (*redis.Client, error) {
+func NewRedisClient(config RedisConfig) (*redis.Client, error) {
 	if config.Options == nil {
 		config.Options = new(redis.Options)
 	}

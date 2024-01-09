@@ -1,4 +1,4 @@
-package container
+package datasource
 
 import (
 	"database/sql"
@@ -6,7 +6,7 @@ import (
 )
 
 // dbConfig has those members which are necessary variables while connecting to database.
-type dbConfig struct {
+type DBConfig struct {
 	HostName string
 	User     string
 	Password string
@@ -14,7 +14,7 @@ type dbConfig struct {
 	Database string
 }
 
-func newMYSQL(config *dbConfig) (*sql.DB, error) {
+func NewMYSQL(config *DBConfig) (*sql.DB, error) {
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8&parseTime=True&loc=Local&interpolateParams=true",
 		config.User,
 		config.Password,

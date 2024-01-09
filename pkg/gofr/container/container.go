@@ -1,6 +1,7 @@
 package container
 
 import (
+	"gofr.dev/pkg/gofr/datasource"
 	"strconv"
 
 	"gofr.dev/pkg/gofr/config"
@@ -17,7 +18,7 @@ import (
 type Container struct {
 	logging.Logger
 	Redis *redis.Client
-	DB    *DB
+	DB    *datasource.DB
 }
 
 func NewContainer(config config.Config) *Container {
@@ -34,7 +35,7 @@ func NewContainer(config config.Config) *Container {
 			port = defaultRedisPort
 		}
 
-		c.Redis, err = newRedisClient(redisConfig{
+		c.Redis, err = datasource.NewRedisClient(datasource.RedisConfig{
 			HostName: host,
 			Port:     port,
 		})
@@ -47,15 +48,15 @@ func NewContainer(config config.Config) *Container {
 	}
 
 	if host := config.Get("DB_HOST"); host != "" {
-		conf := dbConfig{
+		conf := datasource.DBConfig{
 			HostName: host,
 			User:     config.Get("DB_USER"),
 			Password: config.Get("DB_PASSWORD"),
 			Port:     config.GetOrDefault("DB_PORT", strconv.Itoa(defaultDBPort)),
 			Database: config.Get("DB_NAME"),
 		}
-		db, err := newMYSQL(&conf)
-		c.DB = &DB{db}
+		db, err := datasource.NewMYSQL(&conf)
+		c.DB = &datasource.DB{db}
 
 		if err != nil {
 			c.Errorf("could not connect with '%s' user to database '%s:%s'  error: %v",
