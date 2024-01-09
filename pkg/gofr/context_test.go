@@ -59,7 +59,7 @@ func Test_newContext(t *testing.T) {
 
 	assert.Equal(t, &Context{Context: req.Context(),
 		Request:   req,
-		Container: &container.Container{Logger: logging.NewLogger(1)},
+		Container: &container.Container{Logger: logging.NewLogger(2)},
 		responder: nil,
 	}, ctx, "TEST, Failed.\n context creation successful")
 }
