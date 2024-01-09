@@ -48,8 +48,6 @@ type DB struct {
 func (d *DB) Select(ctx context.Context, data interface{}, query string, args ...interface{}) {
 	// If context is done, it is not needed
 	if ctx.Err() != nil {
-		d.logger.Debug("context canceled")
-
 		return
 	}
 

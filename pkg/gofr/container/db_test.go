@@ -115,14 +115,11 @@ func TestDB_SelectContextError(t *testing.T) {
 
 	t.Setenv("LOG_LEVEL", "DEBUG")
 
-	out := testutil.StdoutOutputForFunc(func() {
-		db, _ := getDB(t)
-		defer db.DB.Close()
+	db, _ := getDB(t)
+	defer db.DB.Close()
 
-		db.Select(ctx, nil, "select 1")
-	})
-
-	assert.Contains(t, out, "context canceled", "TESTCASE FAILED")
+	// the query won't run, since context is past deadline and the function will simply return
+	db.Select(ctx, nil, "select 1")
 }
 
 func TestDB_SelectDataPointerError(t *testing.T) {
