@@ -33,8 +33,8 @@ func Test_addRouteNotNilHandler(t *testing.T) {
 
 		cmd.addRoute(tc.pattern, tc.handler)
 
-		assert.Equalf(t, tc.pattern, cmd.routes[0].pattern, "TEST[%d], Failed.\n%s", i, tc.desc)
-		assert.NotNilf(t, cmd.routes[0].handler, "TEST[%d], Failed.\n%s", i, tc.desc)
+		assert.Equal(t, tc.pattern, cmd.routes[0].pattern, "TEST[%d], Failed.\n%s", i, tc.desc)
+		assert.NotNil(t, cmd.routes[0].handler, "TEST[%d], Failed.\n%s", i, tc.desc)
 	}
 }
 
@@ -53,8 +53,8 @@ func Test_addRouteNilHanlder(t *testing.T) {
 
 		cmd.addRoute(tc.pattern, tc.handler)
 
-		assert.Equalf(t, tc.pattern, cmd.routes[0].pattern, "TEST[%d], Failed.\n%s", i, tc.desc)
-		assert.Nilf(t, cmd.routes[0].handler, "TEST[%d], Failed.\n%s", i, tc.desc)
+		assert.Equal(t, tc.pattern, cmd.routes[0].pattern, "TEST[%d], Failed.\n%s", i, tc.desc)
+		assert.Nil(t, cmd.routes[0].handler, "TEST[%d], Failed.\n%s", i, tc.desc)
 	}
 }
 
@@ -106,6 +106,6 @@ func Test_handlerReturnsNil(t *testing.T) {
 	for i, tc := range testCases {
 		r := tc.cmd.handler(tc.pattern)
 
-		assert.Nilf(t, r, "TEST[%d], Failed.\n%s", i, tc.desc)
+		assert.Nil(t, r, "TEST[%d], Failed.\n%s", i, tc.desc)
 	}
 }
