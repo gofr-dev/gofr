@@ -3,7 +3,6 @@ package logging
 import (
 	"bytes"
 	"encoding/json"
-	"golang.org/x/term"
 	"io"
 	"os"
 	"strconv"
@@ -11,13 +10,14 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"golang.org/x/term"
 
 	"gofr.dev/pkg/gofr/http/middleware"
 	"gofr.dev/pkg/gofr/testutil"
 )
 
 func TestLogger_Log(t *testing.T) {
-	testLogStatement := "hello info log!"
+	testLogStatement := "hello log!"
 
 	t.Setenv("LOG_LEVEL", "INFO")
 
@@ -31,7 +31,7 @@ func TestLogger_Log(t *testing.T) {
 }
 
 func TestLogger_Logf(t *testing.T) {
-	testLogStatement := "hello info logf!"
+	testLogStatement := "hello logf!"
 
 	t.Setenv("LOG_LEVEL", "INFO")
 
@@ -42,6 +42,34 @@ func TestLogger_Logf(t *testing.T) {
 
 	output := testutil.StdoutOutputForFunc(f)
 
+	assertMessageInJSONLog(t, output, testLogStatement)
+}
+
+func TestLogger_Info(t *testing.T) {
+	testLogStatement := "hello info log!"
+
+	t.Setenv("LOG_LEVEL", "INFO")
+
+	f := func() {
+		logger := NewLogger()
+		logger.Info(testLogStatement)
+	}
+
+	output := testutil.StdoutOutputForFunc(f)
+	assertMessageInJSONLog(t, output, testLogStatement)
+}
+
+func TestLogger_Infof(t *testing.T) {
+	testLogStatement := "hello infof log!"
+
+	t.Setenv("LOG_LEVEL", "INFO")
+
+	f := func() {
+		logger := NewLogger()
+		logger.Infof(testLogStatement)
+	}
+
+	output := testutil.StdoutOutputForFunc(f)
 	assertMessageInJSONLog(t, output, testLogStatement)
 }
 
@@ -82,7 +110,7 @@ func TestLogger_Debug(t *testing.T) {
 
 	f := func() {
 		logger := NewLogger()
-		logger.Debugf("%s", testLogStatement)
+		logger.Debug(testLogStatement)
 	}
 
 	output := testutil.StdoutOutputForFunc(f)
@@ -116,7 +144,7 @@ func assertMessageInJSONLog(t *testing.T, logLine, expectation string) {
 
 func TestGetLevel(t *testing.T) {
 	tests := []struct {
-		name     string
+		desc     string
 		input    string
 		expected level
 	}{
@@ -129,17 +157,16 @@ func TestGetLevel(t *testing.T) {
 		{"Case Insensitive", "iNfO", INFO},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := getLevel(tt.input)
-			assert.Equal(t, tt.expected, result)
-		})
+	for i, tc := range tests {
+		input := tc.input
+		result := getLevel(input)
+		assert.Equal(t, tc.expected, result, "TEST[%d], Failed.\n%s", i, tc.desc)
 	}
 }
 
 func TestCheckIfTerminal(t *testing.T) {
 	tests := []struct {
-		name       string
+		desc       string
 		writer     io.Writer
 		isTerminal bool
 	}{
@@ -148,11 +175,10 @@ func TestCheckIfTerminal(t *testing.T) {
 		{"Non-Terminal Writer (not *os.File)", &bytes.Buffer{}, false},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := checkIfTerminal(tt.writer)
-			assert.Equal(t, tt.isTerminal, result)
-		})
+	for i, tc := range tests {
+		result := checkIfTerminal(tc.writer)
+
+		assert.Equal(t, tc.isTerminal, result, "TEST[%d], Failed.\n%s", i, tc.desc)
 	}
 }
 
@@ -164,13 +190,13 @@ func TestPrettyPrint(t *testing.T) {
 	var testTime = time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
 
 	tests := []struct {
-		name       string
+		desc       string
 		entry      logEntry
 		isTerminal bool
 		expected   string
 	}{
 		{
-			name: "RequestLog in Terminal",
+			desc: "RequestLog in Terminal",
 			entry: logEntry{
 				Level:   INFO,
 				Time:    testTime,
@@ -180,7 +206,7 @@ func TestPrettyPrint(t *testing.T) {
 			expected:   colorize("INFO", 36) + " [00:00:00] 200       100µs GET /path \n",
 		},
 		{
-			name: "Non-RequestLog in Terminal",
+			desc: "Non-RequestLog in Terminal",
 			entry: logEntry{
 				Level:   INFO,
 				Time:    testTime,
@@ -190,7 +216,7 @@ func TestPrettyPrint(t *testing.T) {
 			expected:   colorize("INFO", 36) + " [00:00:00] Non-request log message\n",
 		},
 		{
-			name: "Non-RequestLog in Non-Terminal",
+			desc: "Non-RequestLog in Non-Terminal",
 			entry: logEntry{
 				Level:   INFO,
 				Time:    testTime,
@@ -201,14 +227,12 @@ func TestPrettyPrint(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			out := &bytes.Buffer{}
-			logger := &logger{isTerminal: tt.isTerminal}
+	for i, tc := range tests {
+		out := &bytes.Buffer{}
+		logger := &logger{isTerminal: tc.isTerminal}
 
-			logger.prettyPrint(tt.entry, out)
+		logger.prettyPrint(tc.entry, out)
 
-			assert.Equal(t, tt.expected, out.String())
-		})
+		assert.Equal(t, tc.expected, out.String(), "TEST[%d], Failed.\n%s", i, tc.desc)
 	}
 }
