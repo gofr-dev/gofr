@@ -8,7 +8,7 @@ import (
 
 func TestLevelString(t *testing.T) {
 	tests := []struct {
-		level          level
+		level          Level
 		expectedString string
 	}{
 		{DEBUG, levelDEBUG},
@@ -17,7 +17,7 @@ func TestLevelString(t *testing.T) {
 		{WARN, levelWARN},
 		{ERROR, levelERROR},
 		{FATAL, levelFATAL},
-		{level(99), ""}, // Test default case
+		{Level(99), ""}, // Test default case
 	}
 
 	for i, tc := range tests {
@@ -27,7 +27,7 @@ func TestLevelString(t *testing.T) {
 
 func TestLevelColor(t *testing.T) {
 	tests := []struct {
-		level         level
+		level         Level
 		expectedColor uint
 	}{
 		{ERROR, 31},
@@ -36,7 +36,7 @@ func TestLevelColor(t *testing.T) {
 		{NOTICE, 33},
 		{INFO, 36},
 		{DEBUG, 36},
-		{level(99), 37}, // Test default case
+		{Level(99), 37}, // Test default case
 	}
 
 	for i, tc := range tests {

@@ -22,7 +22,7 @@ func TestLogger_Log(t *testing.T) {
 	t.Setenv("LOG_LEVEL", "INFO")
 
 	f := func() {
-		logger := NewLogger()
+		logger := NewLogger(2)
 		logger.Log(testLogStatement)
 	}
 
@@ -36,7 +36,7 @@ func TestLogger_Logf(t *testing.T) {
 	t.Setenv("LOG_LEVEL", "INFO")
 
 	f := func() {
-		logger := NewLogger()
+		logger := NewLogger(2)
 		logger.Logf("%s", testLogStatement)
 	}
 
@@ -51,7 +51,7 @@ func TestLogger_Info(t *testing.T) {
 	t.Setenv("LOG_LEVEL", "INFO")
 
 	f := func() {
-		logger := NewLogger()
+		logger := NewLogger(2)
 		logger.Info(testLogStatement)
 	}
 
@@ -65,7 +65,7 @@ func TestLogger_Infof(t *testing.T) {
 	t.Setenv("LOG_LEVEL", "INFO")
 
 	f := func() {
-		logger := NewLogger()
+		logger := NewLogger(2)
 		logger.Infof(testLogStatement)
 	}
 
@@ -79,7 +79,7 @@ func TestLogger_Error(t *testing.T) {
 	t.Setenv("LOG_LEVEL", "ERROR")
 
 	f := func() {
-		logger := NewLogger()
+		logger := NewLogger(5)
 		logger.Error(testLogStatement)
 	}
 
@@ -94,7 +94,7 @@ func TestLogger_Errorf(t *testing.T) {
 	t.Setenv("LOG_LEVEL", "ERROR")
 
 	f := func() {
-		logger := NewLogger()
+		logger := NewLogger(5)
 		logger.Errorf("%s", testLogStatement)
 	}
 
@@ -109,7 +109,7 @@ func TestLogger_Debug(t *testing.T) {
 	t.Setenv("LOG_LEVEL", "DEBUG")
 
 	f := func() {
-		logger := NewLogger()
+		logger := NewLogger(1)
 		logger.Debug(testLogStatement)
 	}
 
@@ -124,7 +124,7 @@ func TestLogger_Debugf(t *testing.T) {
 	t.Setenv("LOG_LEVEL", "DEBUG")
 
 	f := func() {
-		logger := NewLogger()
+		logger := NewLogger(1)
 		logger.Debugf("%s", testLogStatement)
 	}
 
@@ -146,7 +146,7 @@ func TestGetLevel(t *testing.T) {
 	tests := []struct {
 		desc     string
 		input    string
-		expected level
+		expected Level
 	}{
 		{"Valid INFO", "INFO", INFO},
 		{"Valid WARN", "WARN", WARN},
