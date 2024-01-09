@@ -197,7 +197,6 @@ func TestPrettyPrint(t *testing.T) {
 			expected:      colorize("ERRO", 160) + ` [00:00:00] Error message` + "\n",
 			expectedColor: 160,
 		},
-		// ... other test cases
 	}
 
 	for i, tc := range tests {
