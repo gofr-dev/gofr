@@ -1,4 +1,4 @@
-package gofr
+package container
 
 import (
 	"testing"
@@ -11,7 +11,7 @@ import (
 func Test_newContainerSuccessWithLogger(t *testing.T) {
 	cfg := config.NewEnvFile("")
 
-	container := newContainer(cfg)
+	container := NewContainer(cfg)
 
 	assert.NotNilf(t, container.Logger, "TEST, Failed.\nlogger initialisation")
 }
@@ -19,10 +19,12 @@ func Test_newContainerSuccessWithLogger(t *testing.T) {
 func Test_newContainerDBIntializationSuccess(t *testing.T) {
 	t.Setenv("REDIS_HOST", "localhost")
 	t.Setenv("DB_HOST", "localhost")
+	t.Setenv("REDIS_PORT", "2002")
+	t.Setenv("DB_PORT", "2001")
 
 	cfg := config.NewEnvFile("")
 
-	container := newContainer(cfg)
+	container := NewContainer(cfg)
 
 	// container is a pointer and we need to see if db are initialized, comparing the container object
 	// will not suffice the purpose of this test
@@ -36,7 +38,7 @@ func Test_newContainerDBIntializationFail(t *testing.T) {
 
 	cfg := config.NewEnvFile("")
 
-	container := newContainer(cfg)
+	container := NewContainer(cfg)
 
 	// container is a pointer and we need to see if db are not initialized, comparing the container object
 	// will not suffice the purpose of this test
