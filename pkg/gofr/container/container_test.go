@@ -13,7 +13,7 @@ func Test_newContainerSuccessWithLogger(t *testing.T) {
 
 	container := NewContainer(cfg)
 
-	assert.NotNilf(t, container.Logger, "TEST, Failed.\nlogger initialisation")
+	assert.NotNil(t, container.Logger, "TEST, Failed.\nlogger initialisation")
 }
 
 func Test_newContainerDBIntializationSuccess(t *testing.T) {

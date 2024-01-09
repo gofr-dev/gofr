@@ -14,7 +14,7 @@ func TestLogger_Log(t *testing.T) {
 	os.Setenv("LOG_LEVEL", "DEBUG")
 
 	f := func() {
-		logger := NewLogger(1)
+		logger := NewLogger(DEBUG)
 		logger.Log(testLogStatement)
 	}
 

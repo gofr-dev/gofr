@@ -3,13 +3,13 @@ package gofr
 import (
 	"bytes"
 	"context"
-	"gofr.dev/pkg/gofr/container"
 	"net/http"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 
 	"gofr.dev/pkg/gofr/config"
+	"gofr.dev/pkg/gofr/container"
 	gofrHTTP "gofr.dev/pkg/gofr/http"
 	"gofr.dev/pkg/gofr/logging"
 )
@@ -46,8 +46,8 @@ func TestContext_Body_Response(t *testing.T) {
 
 	err := ctx.Bind(&body)
 
-	assert.Equalf(t, respBody, body, "TEST, Failed.\n body binded to struct")
-	assert.Nilf(t, err, "TEST, Failed.\n body binded to struct")
+	assert.Equal(t, respBody, body, "TEST, Failed.\n body binded to struct")
+	assert.Nil(t, err, "TEST, Failed.\n body binded to struct")
 }
 
 func Test_newContext(t *testing.T) {
