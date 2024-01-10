@@ -1,111 +1,173 @@
 package gofr
 
 import (
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	"gofr.dev/pkg/gofr/config"
+	"gofr.dev/pkg/gofr/container"
+	"gofr.dev/pkg/gofr/testutil"
 )
 
-func Test_ErrCommandNotFound(t *testing.T) {
-	err := ErrCommandNotFound{}
+func Test_Run_SuccessCallRegisteredArgument(t *testing.T) {
+	os.Args = []string{"", "log"}
 
-	result := err.Error()
+	c := cmd{}
 
-	assert.Equal(t, "No Command Found!", result, "Test Failed \nMatch Error String")
-}
+	c.addRoute("log", func(c *Context) (interface{}, error) {
+		c.Logger.Info("handler called")
 
-func Test_addRouteNotNilHandler(t *testing.T) {
-	testHandler := func(c *Context) (interface{}, error) {
 		return nil, nil
-	}
+	})
 
+	logs := testutil.StdoutOutputForFunc(func() {
+		c.Run(container.NewContainer(config.NewEnvFile("")))
+	})
+
+	assert.Contains(t, logs, "handler called")
+}
+
+func Test_Run_SuccessSkipEmptySpaceAndMatchCommandWithSpace(t *testing.T) {
+	os.Args = []string{"", "", " ", "log"}
+
+	c := cmd{}
+
+	c.addRoute("log", func(c *Context) (interface{}, error) {
+		c.Logger.Info("handler called")
+
+		return nil, nil
+	})
+
+	logs := testutil.StdoutOutputForFunc(func() {
+		c.Run(container.NewContainer(config.NewEnvFile("")))
+	})
+
+	assert.Contains(t, logs, "handler called")
+}
+
+func Test_Run_SuccessCommandWithMultipleParameters(t *testing.T) {
+	os.Args = []string{"", "log", "-param=value", "-b", "-c"}
+
+	c := cmd{}
+
+	c.addRoute("log", func(c *Context) (interface{}, error) {
+		assert.Equal(t, c.Request.Param("param"), "value")
+		assert.Equal(t, c.Request.Param("b"), "true")
+
+		c.Logger.Info("handler called")
+
+		return nil, nil
+	})
+
+	logs := testutil.StdoutOutputForFunc(func() {
+		c.Run(container.NewContainer(config.NewEnvFile("")))
+	})
+
+	assert.Contains(t, logs, "handler called")
+}
+
+func Test_Run_ErrorRouteWithSpecialCharacters(t *testing.T) {
 	testCases := []struct {
-		desc    string
-		pattern string
-		handler func(c *Context) (interface{}, error)
+		desc string
+		args []string
 	}{
-		{"valid pattern and handler", "test", testHandler},
-		{"empty pattern and valid handler", " ", testHandler},
+		{"special character $", []string{"", "command-with-special-characters$"}},
+		{"special character ^", []string{"", "command-with-special-characters^"}},
 	}
 
 	for i, tc := range testCases {
-		cmd := &cmd{}
+		os.Args = tc.args
+		c := cmd{}
 
-		cmd.addRoute(tc.pattern, tc.handler)
+		c.addRoute(tc.args[1], func(c *Context) (interface{}, error) {
+			c.Logger.Info("handler called")
 
-		assert.Equal(t, tc.pattern, cmd.routes[0].pattern, "TEST[%d], Failed.\n%s", i, tc.desc)
-		assert.NotNil(t, cmd.routes[0].handler, "TEST[%d], Failed.\n%s", i, tc.desc)
+			return nil, nil
+		})
+
+		logs := testutil.StderrOutputForFunc(func() {
+			c.Run(container.NewContainer(config.NewEnvFile("")))
+		})
+
+		assert.NotContains(t, logs, "handler called", "TEST[%d] Failed.\n %s", i, tc.desc)
+		assert.Contains(t, logs, "No Command Found!", "TEST[%d] Failed.\n %s", i, tc.desc)
 	}
 }
 
-func Test_addRouteNilHanlder(t *testing.T) {
-	testCases := []struct {
-		desc    string
-		pattern string
-		handler func(c *Context) (interface{}, error)
-	}{
-		{"valid pattern and nil handler", "test", nil},
-		{"empty pattern and nil handler", " ", nil},
-	}
+func Test_Run_ErrorParamNotReadWithoutHyphen(t *testing.T) {
+	os.Args = []string{"", "log", "hello=world"}
 
-	for i, tc := range testCases {
-		cmd := &cmd{}
+	c := cmd{}
 
-		cmd.addRoute(tc.pattern, tc.handler)
+	c.addRoute("log", func(c *Context) (interface{}, error) {
+		assert.Equal(t, c.Request.Param("hello"), "")
+		c.Logger.Info("handler called")
 
-		assert.Equal(t, tc.pattern, cmd.routes[0].pattern, "TEST[%d], Failed.\n%s", i, tc.desc)
-		assert.Nil(t, cmd.routes[0].handler, "TEST[%d], Failed.\n%s", i, tc.desc)
-	}
+		return nil, nil
+	})
+
+	logs := testutil.StdoutOutputForFunc(func() {
+		c.Run(container.NewContainer(config.NewEnvFile("")))
+	})
+
+	assert.Contains(t, logs, "handler called")
 }
 
-func Test_handlerReturnsNilIfRouteHandlerIsNotNil(t *testing.T) {
-	cmd := &cmd{
-		routes: []route{
-			{pattern: "pattern", handler: func(c *Context) (interface{}, error) {
-				return nil, nil
-			}},
-		},
-	}
-	path := "pattern"
+func Test_Run_ErrorNotARegisteredCommand(t *testing.T) {
+	os.Args = []string{"", "log"}
 
-	result := cmd.handler(path)
+	c := cmd{}
 
-	assert.NotNil(t, result, "TEST, Failed.\n not nil handler")
+	logs := testutil.StderrOutputForFunc(func() {
+		c.Run(container.NewContainer(config.NewEnvFile("")))
+	})
+
+	assert.Contains(t, logs, "No Command Found!")
 }
 
-func Test_handlerReturnsNil(t *testing.T) {
-	nonMatchingPattern := &cmd{
-		routes: []route{
-			{pattern: "pattern1", handler: func(c *Context) (interface{}, error) {
-				return nil, nil
-			}},
-			{pattern: "pattern2", handler: func(c *Context) (interface{}, error) {
-				return nil, nil
-			}},
-		},
-	}
+func Test_Run_ErrorNoArgumentGiven(t *testing.T) {
+	os.Args = []string{""}
 
-	emptyRouteSlice := &cmd{routes: []route{}}
+	c := cmd{}
 
-	nilHandler := &cmd{
-		routes: []route{
-			{pattern: "pattern", handler: nil},
-		},
-	}
+	logs := testutil.StderrOutputForFunc(func() {
+		c.Run(container.NewContainer(config.NewEnvFile("")))
+	})
 
-	testCases := []struct {
-		desc    string
-		cmd     cmd
-		pattern string
-	}{
-		{"pattern not matching with routes", *nonMatchingPattern, "non-matching-pattern"},
-		{"routes slice in empty", *emptyRouteSlice, "pattern"},
-		{"handler in nil", *nilHandler, "pattern"},
-	}
+	assert.Contains(t, logs, "No Command Found!")
+}
 
-	for i, tc := range testCases {
-		r := tc.cmd.handler(tc.pattern)
+func Test_Run_ErrorWhenOnlyParamAreGiven(t *testing.T) {
+	os.Args = []string{"", "-route"}
 
-		assert.Nil(t, r, "TEST[%d], Failed.\n%s", i, tc.desc)
-	}
+	c := cmd{}
+
+	c.addRoute("-route", func(c *Context) (interface{}, error) {
+		c.Logger.Info("handler called of route -route")
+
+		return nil, nil
+	})
+
+	logs := testutil.StderrOutputForFunc(func() {
+		c.Run(container.NewContainer(config.NewEnvFile("")))
+	})
+
+	assert.Contains(t, logs, "No Command Found!")
+	assert.NotContains(t, logs, "handler called of route -route")
+}
+
+func Test_Run_ErrorRouteRegisteredButNilHandler(t *testing.T) {
+	os.Args = []string{"", "route"}
+
+	c := cmd{}
+
+	c.addRoute("route", nil)
+
+	logs := testutil.StderrOutputForFunc(func() {
+		c.Run(container.NewContainer(config.NewEnvFile("")))
+	})
+
+	assert.Contains(t, logs, "No Command Found!")
 }
