@@ -177,3 +177,27 @@ func TestGofr_ServerHealthHandlerAddCheck(t *testing.T) {
 
 	resp.Body.Close()
 }
+
+func TestGofr_ServerNotRunningForNoRoutes(t *testing.T) {
+	g := New()
+	g.httpServer.port = 8001
+
+	go g.Run()
+
+	var (
+		netClient = &http.Client{}
+		url       = "http://localhost:8001"
+	)
+
+	// Send a GET request to the server
+	re, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, url+"/", http.NoBody)
+	resp, err := netClient.Do(re)
+
+	assert.Nil(t, resp)
+	assert.Contains(t, err.Error(), "connection refused")
+
+	// necessary closing of response body
+	if resp != nil {
+		resp.Body.Close()
+	}
+}
