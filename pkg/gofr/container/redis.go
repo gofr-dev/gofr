@@ -3,9 +3,9 @@ package container
 import (
 	"context"
 	"fmt"
+	"github.com/redis/go-redis/extra/redisotel/v9"
 
-	"github.com/go-redis/redis/extra/redisotel"
-	"github.com/go-redis/redis/v8"
+	"github.com/redis/go-redis/v9"
 )
 
 type redisConfig struct {
@@ -30,7 +30,14 @@ func newRedisClient(config redisConfig) (*redis.Client, error) {
 		return nil, err
 	}
 
-	rc.AddHook(redisotel.TracingHook{})
+	if err := redisotel.InstrumentTracing(rc); err != nil {
+		panic(err)
+	}
+
+	//// Enable metrics instrumentation.
+	//if err := redisotel.InstrumentMetrics(rc); err != nil {
+	//	panic(err)
+	//}
 
 	return rc, nil
 }
