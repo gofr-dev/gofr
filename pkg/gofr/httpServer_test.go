@@ -7,15 +7,15 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"gofr.dev/pkg/gofr/container"
 
-	http2 "gofr.dev/pkg/gofr/http"
+	"gofr.dev/pkg/gofr/container"
+	gofrHttp "gofr.dev/pkg/gofr/http"
 	"gofr.dev/pkg/gofr/logging"
 )
 
 func TestRun_ServerStartsListening(t *testing.T) {
 	// Create a mock router and add a new route
-	router := &http2.Router{}
+	router := &gofrHttp.Router{}
 	router.Add(http.MethodGet, "/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -42,11 +42,12 @@ func TestRun_ServerStartsListening(t *testing.T) {
 	}
 
 	// Send a GET request to the server
-	re, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://localhost:8080", http.NoBody)
-	resp, err := netClient.Do(re)
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://localhost:8080", http.NoBody)
+	resp, err := netClient.Do(req)
 
-	assert.NoError(t, err)
-	assert.Equal(t, resp.StatusCode, http.StatusOK)
+	assert.NoError(t, err, "TEST Failed.\n")
+
+	assert.Equal(t, resp.StatusCode, http.StatusOK, "TEST Failed.\n")
 
 	resp.Body.Close()
 }

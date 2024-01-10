@@ -4,11 +4,11 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"google.golang.org/grpc"
 
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/testutil"
-	"google.golang.org/grpc"
 )
 
 func TestNewGRPCServer(t *testing.T) {
@@ -17,33 +17,22 @@ func TestNewGRPCServer(t *testing.T) {
 	}
 
 	g := newGRPCServer(&c, 9999)
-	if g == nil {
-		t.Errorf("FAILED, Expected: a non nil value, Got: %v", g)
-	}
+
+	assert.NotNil(t, g, "TEST Failed.\n")
 }
 
 func TestGRPC_ServerRun(t *testing.T) {
 	testCases := []struct {
-		desc        string
-		grcpServer  *grpc.Server
-		port        int
-		expectedLog string
+		desc       string
+		grcpServer *grpc.Server
+		port       int
+		expLog     string
 	}{
-		{
-			desc:        "net.Listen() error",
-			grcpServer:  nil,
-			port:        99999,
-			expectedLog: "error in starting grpc server",
-		},
-		{
-			desc:        "server.Serve() error",
-			grcpServer:  new(grpc.Server),
-			port:        10000,
-			expectedLog: "error in starting grpc serve",
-		},
+		{"net.Listen() error", nil, 99999, "error in starting grpc server"},
+		{"server.Serve() error", new(grpc.Server), 10000, "error in starting grpc server"},
 	}
 
-	for _, tc := range testCases {
+	for i, tc := range testCases {
 		f := func() {
 			c := &container.Container{
 				Logger: logging.NewLogger(logging.INFO),
@@ -59,6 +48,6 @@ func TestGRPC_ServerRun(t *testing.T) {
 
 		out := testutil.StderrOutputForFunc(f)
 
-		assert.Contains(t, out, tc.expectedLog)
+		assert.Contains(t, out, tc.expLog, "TEST[%d], Failed.\n", i)
 	}
 }

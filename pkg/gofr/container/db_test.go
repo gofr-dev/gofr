@@ -38,7 +38,8 @@ func TestDB_SelectSingleColumnFromIntToString(t *testing.T) {
 
 	ids := make([]string, 0)
 	db.Select(context.TODO(), &ids, "select id from users")
-	assert.Equal(t, []string{"1", "2"}, ids)
+
+	assert.Equal(t, []string{"1", "2"}, ids, "TEST Failed.\n")
 }
 
 func TestDB_SelectSingleColumnFromStringToString(t *testing.T) {
@@ -53,7 +54,8 @@ func TestDB_SelectSingleColumnFromStringToString(t *testing.T) {
 
 	ids := make([]string, 0)
 	db.Select(context.TODO(), &ids, "select id from users")
-	assert.Equal(t, []string{"1", "2"}, ids)
+
+	assert.Equal(t, []string{"1", "2"}, ids, "TEST Failed.\n")
 }
 
 func TestDB_SelectSingleColumnFromIntToInt(t *testing.T) {
@@ -68,7 +70,8 @@ func TestDB_SelectSingleColumnFromIntToInt(t *testing.T) {
 
 	ids := make([]int, 0)
 	db.Select(context.TODO(), &ids, "select id from users")
-	assert.Equal(t, []int{1, 2}, ids)
+
+	assert.Equal(t, []int{1, 2}, ids, "TEST Failed.\n")
 }
 
 func TestDB_SelectSingleColumnFromIntToCustomInt(t *testing.T) {
@@ -86,7 +89,8 @@ func TestDB_SelectSingleColumnFromIntToCustomInt(t *testing.T) {
 	ids := make([]CustomInt, 0)
 
 	db.Select(context.TODO(), &ids, "select id from users")
-	assert.Equal(t, []CustomInt{1, 2}, ids)
+
+	assert.Equal(t, []CustomInt{1, 2}, ids, "TEST Failed.\n")
 }
 
 func TestDB_SelectSingleColumnFromStringToCustomInt(t *testing.T) {
@@ -104,7 +108,8 @@ func TestDB_SelectSingleColumnFromStringToCustomInt(t *testing.T) {
 	ids := make([]CustomInt, 0)
 
 	db.Select(context.TODO(), &ids, "select id from users")
-	assert.Equal(t, []CustomInt{1, 2}, ids)
+
+	assert.Equal(t, []CustomInt{1, 2}, ids, "TEST Failed.\n")
 }
 
 func TestDB_SelectContextError(t *testing.T) {
@@ -130,7 +135,7 @@ func TestDB_SelectDataPointerError(t *testing.T) {
 		db.Select(context.Background(), nil, "select 1")
 	})
 
-	assert.Contains(t, out, "We did not get a pointer. data is not settable.", "TESTCASE FAILED")
+	assert.Contains(t, out, "We did not get a pointer. data is not settable.", "TEST Failed.\n")
 }
 
 func TestDB_SelectSingleColumnFromStringToCustomString(t *testing.T) {
@@ -148,7 +153,8 @@ func TestDB_SelectSingleColumnFromStringToCustomString(t *testing.T) {
 	ids := make([]CustomStr, 0)
 
 	db.Select(context.TODO(), &ids, "select id from users")
-	assert.Equal(t, []CustomStr{"1", "2"}, ids)
+
+	assert.Equal(t, []CustomStr{"1", "2"}, ids, "TEST Failed.\n")
 }
 
 func TestDB_SelectSingleRowMultiColumn(t *testing.T) {
@@ -174,7 +180,7 @@ func TestDB_SelectSingleRowMultiColumn(t *testing.T) {
 		Name:  "Vikash",
 		ID:    1,
 		Image: "http://via.placeholder.com/150",
-	}, u)
+	}, u, "TEST Failed.\n")
 }
 
 func TestDB_SelectSingleRowMultiColumnWithTags(t *testing.T) {
@@ -195,11 +201,12 @@ func TestDB_SelectSingleRowMultiColumnWithTags(t *testing.T) {
 	u := user{}
 
 	db.Select(context.TODO(), &u, "select 1 user")
+
 	assert.Equal(t, user{
 		Name:  "Vikash",
 		ID:    1,
 		Image: "http://via.placeholder.com/150",
-	}, u)
+	}, u, "TEST Failed.\n")
 }
 
 func TestDB_SelectMultiRowMultiColumnWithTags(t *testing.T) {
@@ -221,6 +228,7 @@ func TestDB_SelectMultiRowMultiColumnWithTags(t *testing.T) {
 	users := []user{}
 
 	db.Select(context.TODO(), &users, "select users")
+
 	assert.Equal(t, []user{
 		{
 			Name:  "Vikash",
@@ -231,7 +239,7 @@ func TestDB_SelectMultiRowMultiColumnWithTags(t *testing.T) {
 			Name: "Gofr",
 			ID:   2,
 		},
-	}, users)
+	}, users, "TEST Failed.\n")
 }
 
 func TestDB_SelectSingleColumnError(t *testing.T) {
@@ -247,8 +255,9 @@ func TestDB_SelectSingleColumnError(t *testing.T) {
 		db.Select(context.TODO(), &ids, "select id from users")
 	})
 
-	assert.Contains(t, out, "DB error")
-	assert.Equal(t, []string{}, ids)
+	assert.Contains(t, out, "DB error", "TEST Failed.\n")
+
+	assert.Equal(t, []string{}, ids, "TEST Failed.\n")
 }
 
 func TestDB_SelectDataPointerNotExpected(t *testing.T) {
@@ -263,5 +272,5 @@ func TestDB_SelectDataPointerNotExpected(t *testing.T) {
 		db.Select(context.Background(), &m, "select id from users")
 	})
 
-	assert.Contains(t, out, "a pointer to map was not expected.")
+	assert.Contains(t, out, "a pointer to map was not expected.", "TEST Failed.\n")
 }
