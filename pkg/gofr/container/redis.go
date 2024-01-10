@@ -3,8 +3,8 @@ package container
 import (
 	"context"
 	"fmt"
-	"github.com/redis/go-redis/extra/redisotel/v9"
 
+	"github.com/redis/go-redis/extra/redisotel/v9"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -34,10 +34,10 @@ func newRedisClient(config redisConfig) (*redis.Client, error) {
 		panic(err)
 	}
 
-	//// Enable metrics instrumentation.
-	//if err := redisotel.InstrumentMetrics(rc); err != nil {
+	// Enable metrics instrumentation.
+	// if err := redisotel.InstrumentMetrics(rc); err != nil {
 	//	panic(err)
-	//}
+	// }
 
 	return rc, nil
 }
