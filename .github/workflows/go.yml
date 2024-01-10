@@ -11,7 +11,8 @@ on:
       - development
 
 jobs:
-  run_tests:
+  Example-Unit-Testing:
+    name: Example Unit Testing🛠
     runs-on: ubuntu-latest
     services:
       redis:
@@ -34,20 +35,16 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up Go 1.21
+      - name: Set up  Go 1.21
         uses: actions/setup-go@v4
         with:
           go-version: 1.21
         id: Go
 
       - name: Get dependencies
-        run: go mod download
+        run: |
+          go mod download
 
-  example_unit_testing:
-    name: Example Unit Testing🛠
-    runs-on: ubuntu-latest
-    needs: run_tests
-    steps:
       - name: Test
         run: |
           export GOFR_ENV=test
@@ -60,11 +57,39 @@ jobs:
           name: Example-Test-Report
           path: profile.cov
 
-  pkg_unit_testing:
+  PKG-Unit-Testing:
     name: PKG Unit Testing🛠
     runs-on: ubuntu-latest
-    needs: run_tests
+    services:
+      redis:
+        image: redis:7.0.5
+        ports:
+          - "2002:6379"
+        options: "--entrypoint redis-server"
+
+      mysql:
+        image: mysql:8.2.0
+        ports:
+          - "2001:3306"
+        env:
+          MYSQL_ROOT_PASSWORD: "password"
+          MYSQL_DATABASE: "test"
     steps:
+      - name: Checkout code into go module directory
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up  Go 1.21
+        uses: actions/setup-go@v4
+        with:
+          go-version: 1.21
+        id: Go
+
+      - name: Get dependencies
+        run: |
+          go mod download
+
       - name: Test
         run: |
           export GOFR_ENV=test
@@ -80,12 +105,12 @@ jobs:
   parse_coverage:
     name: Code Coverage
     runs-on: ubuntu-latest
-    needs: [example_unit_testing, pkg_unit_testing]
+    needs: [Example-Unit-Testing,PKG-Unit-Testing]
     steps:
       - name: Check out code into the Go module directory
         uses: actions/checkout@v4
 
-      - name: Download Coverage Reports
+      - name: Download Coverage Report
         uses: actions/download-artifact@v3
         with:
           path: artifacts
@@ -93,8 +118,8 @@ jobs:
       - name: Merge Coverage Files
         working-directory: artifacts
         run: |
-          awk '!/^mode: / && FNR==1{print "mode: set"} {print}' ./example_unit_testing/profile.cov > merged_profile.cov
-          tail -n +2 ./pkg_unit_testing/profile.cov >> merged_profile.cov
+          awk '!/^mode: / && FNR==1{print "mode: set"} {print}' ./Example-Test-Report/profile.cov > merged_profile.cov
+          tail -n +2 ./PKG-Coverage-Report/profile.cov >> merged_profile.cov
 
       - name: Parse code-coverage value
         working-directory: artifacts
@@ -103,10 +128,16 @@ jobs:
           codeCoverage=${codeCoverage%?}
           echo "CODE_COVERAGE=$codeCoverage" >> $GITHUB_ENV
 
+  #      - name: Check if code-coverage is greater than threshold
+  #        run: |
+  #          codeCoverage=${{ env.CODE_COVERAGE }}
+  #          codeCoverage=${codeCoverage%??}
+  #          if [[ $codeCoverage -lt 92 ]]; then echo "code coverage cannot be less than 92%, currently its ${{ env.CODE_COVERAGE }}%" && exit 1; fi;
+
   upload_coverage:
     name: Upload Coverage📊
     runs-on: ubuntu-latest
-    needs: parse_coverage
+    needs: [Example-Unit-Testing,PKG-Unit-Testing]
     if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/development' }}
     steps:
       - name: Check out code into the Go module directory
@@ -120,8 +151,9 @@ jobs:
       - name: Merge Coverage Files
         working-directory: artifacts
         run: |
-          awk '!/^mode: / && FNR==1{print "mode: set"} {print}' ./example_unit_testing/profile.cov > merged_profile.cov
-          tail -n +2 ./pkg_unit_testing/profile.cov >> merged_profile.cov
+          awk '!/^mode: / && FNR==1{print "mode: set"} {print}' ./Example-Test-Report/profile.cov > merged_profile.cov
+          tail -n +2 ./PKG-Coverage-Report/profile.cov >> merged_profile.cov
+
 
       - name: Upload
         uses: paambaati/codeclimate-action@v5.0.0
@@ -135,7 +167,6 @@ jobs:
     name: Code Quality🎖️
     runs-on: ubuntu-latest
     container: "golangci/golangci-lint:v1.55.2"
-    needs: run_tests
     steps:
       - name: Check out code into the Go module directory
         uses: actions/checkout@v4
