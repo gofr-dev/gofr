@@ -14,7 +14,7 @@ type DBConfig struct {
 	Database string
 }
 
-func NewMYSQL(config *DBConfig) (*sql.DB, error) {
+func NewMYSQL(config *DBConfig) (*DB, error) {
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8&parseTime=True&loc=Local&interpolateParams=true",
 		config.User,
 		config.Password,
@@ -32,5 +32,5 @@ func NewMYSQL(config *DBConfig) (*sql.DB, error) {
 		return nil, err
 	}
 
-	return db, nil
+	return &DB{DB: db}, nil
 }
