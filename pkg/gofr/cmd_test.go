@@ -68,13 +68,17 @@ func Test_Run_SuccessCommandWithMultipleParameters(t *testing.T) {
 	assert.Contains(t, logs, "handler called")
 }
 
-func Test_Run_ErrorRouteWithSpecialCharacters(t *testing.T) {
+func Test_Run_SuccessRouteWithSpecialCharacters(t *testing.T) {
 	testCases := []struct {
 		desc string
 		args []string
 	}{
-		{"special character $", []string{"", "command-with-special-characters$"}},
-		{"special character ^", []string{"", "command-with-special-characters^"}},
+		{"special character !", []string{"", "command-with-special-characters!"}},
+		{"special character @", []string{"", "command-with-special-characters@"}},
+		{"special character #", []string{"", "command-with-special-characters#"}},
+		{"special character %", []string{"", "command-with-special-characters%"}},
+		{"special character &", []string{"", "command-with-special-characters&"}},
+		{"special character *", []string{"", "command-with-special-characters*"}},
 	}
 
 	for i, tc := range testCases {
@@ -87,12 +91,12 @@ func Test_Run_ErrorRouteWithSpecialCharacters(t *testing.T) {
 			return nil, nil
 		})
 
-		logs := testutil.StderrOutputForFunc(func() {
+		logs := testutil.StdoutOutputForFunc(func() {
 			c.Run(container.NewContainer(config.NewEnvFile("")))
 		})
 
-		assert.NotContains(t, logs, "handler called", "TEST[%d] Failed.\n %s", i, tc.desc)
-		assert.Contains(t, logs, "No Command Found!", "TEST[%d] Failed.\n %s", i, tc.desc)
+		assert.Contains(t, logs, "handler called", "TEST[%d] Failed.\n %s", i, tc.desc)
+		assert.NotContains(t, logs, "No Command Found!", "TEST[%d] Failed.\n %s", i, tc.desc)
 	}
 }
 
