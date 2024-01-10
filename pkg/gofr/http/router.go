@@ -1,8 +1,9 @@
 package http
 
 import (
-	"gofr.dev/pkg/gofr/container"
 	"net/http"
+
+	"gofr.dev/pkg/gofr/container"
 
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 
@@ -15,11 +16,11 @@ type Router struct {
 	mux.Router
 }
 
-func NewRouter(container *container.Container) *Router {
+func NewRouter(c *container.Container) *Router {
 	muxRouter := mux.NewRouter().StrictSlash(false)
 	muxRouter.Use(
 		middleware.Tracer,
-		middleware.Logging(container.Logger),
+		middleware.Logging(c.Logger),
 		middleware.CORS(),
 	)
 
