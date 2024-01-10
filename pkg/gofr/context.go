@@ -2,6 +2,7 @@ package gofr
 
 import (
 	"context"
+
 	"gofr.dev/pkg/gofr/container"
 
 	"go.opentelemetry.io/otel"
@@ -59,11 +60,11 @@ func (c *Context) Bind(i interface{}) error {
 //	// c.Logger = nil // For now, all loggers are same. So, no need to set nil.
 // }
 
-func newContext(w Responder, r Request, container *container.Container) *Context {
+func newContext(w Responder, r Request, newContainer *container.Container) *Context {
 	return &Context{
 		Context:   r.Context(),
 		Request:   r,
 		responder: w,
-		Container: container,
+		Container: newContainer,
 	}
 }
