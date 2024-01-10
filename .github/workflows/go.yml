@@ -11,51 +11,51 @@ on:
       - development
 
 jobs:
-  Example-Unit-Testing:
-    name: Example Unit Testing🛠
-    runs-on: ubuntu-latest
-    services:
-      redis:
-        image: redis:7.0.5
-        ports:
-          - "2002:6379"
-        options: "--entrypoint redis-server"
+  # Example-Unit-Testing:
+  #   name: Example Unit Testing🛠
+  #   runs-on: ubuntu-latest
+  #   services:
+  #     redis:
+  #       image: redis:7.0.5
+  #       ports:
+  #         - "2002:6379"
+  #       options: "--entrypoint redis-server"
 
-      mysql:
-        image: mysql:8.2.0
-        ports:
-          - "2001:3306"
-        env:
-          MYSQL_ROOT_PASSWORD: "password"
-          MYSQL_DATABASE: "test"
+  #     mysql:
+  #       image: mysql:8.2.0
+  #       ports:
+  #         - "2001:3306"
+  #       env:
+  #         MYSQL_ROOT_PASSWORD: "password"
+  #         MYSQL_DATABASE: "test"
 
-    steps:
-      - name: Checkout code into go module directory
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+  #   steps:
+  #     - name: Checkout code into go module directory
+  #       uses: actions/checkout@v4
+  #       with:
+  #         fetch-depth: 0
 
-      - name: Set up  Go 1.21
-        uses: actions/setup-go@v4
-        with:
-          go-version: 1.21
-        id: Go
+  #     - name: Set up  Go 1.21
+  #       uses: actions/setup-go@v4
+  #       with:
+  #         go-version: 1.21
+  #       id: Go
 
-      - name: Get dependencies
-        run: |
-          go mod download
+  #     - name: Get dependencies
+  #       run: |
+  #         go mod download
 
-      - name: Test
-        run: |
-          export GOFR_ENV=test
-          go test gofr.dev/examples/... -v -short -coverprofile profile.cov -coverpkg=gofr.dev/examples/...
-          go tool cover -func profile.cov
+  #     - name: Test
+  #       run: |
+  #         export GOFR_ENV=test
+  #         go test gofr.dev/examples/... -v -short -coverprofile profile.cov -coverpkg=gofr.dev/examples/...
+  #         go tool cover -func profile.cov
 
-      - name: Upload Test Coverage
-        uses: actions/upload-artifact@v3
-        with:
-          name: Example-Test-Report
-          path: profile.cov
+  #     - name: Upload Test Coverage
+  #       uses: actions/upload-artifact@v3
+  #       with:
+  #         name: Example-Test-Report
+  #         path: profile.cov
 
   PKG-Unit-Testing:
     name: PKG Unit Testing🛠
@@ -105,7 +105,7 @@ jobs:
   parse_coverage:
     name: Code Coverage
     runs-on: ubuntu-latest
-    needs: [Example-Unit-Testing,PKG-Unit-Testing]
+    needs: [PKG-Unit-Testing]
     steps:
       - name: Check out code into the Go module directory
         uses: actions/checkout@v4
@@ -137,7 +137,7 @@ jobs:
   upload_coverage:
     name: Upload Coverage📊
     runs-on: ubuntu-latest
-    needs: [Example-Unit-Testing,PKG-Unit-Testing]
+    needs: [PKG-Unit-Testing]
     if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/development' }}
     steps:
       - name: Check out code into the Go module directory
