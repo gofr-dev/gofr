@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"gofr.dev/pkg/gofr/testutil"
+
 	"github.com/stretchr/testify/assert"
 
 	"gofr.dev/pkg/gofr/http/middleware"
@@ -23,10 +25,15 @@ func TestLogger_LevelInfo(t *testing.T) {
 		logger.Error("Test Error Log")
 	}
 
-	infoLog, errLog := captureLogOutput(printLog)
+	infoLog := testutil.StdoutOutputForFunc(printLog)
+	errLog := testutil.StderrOutputForFunc(printLog)
 
 	assertMessageInJSONLog(t, infoLog, "Test Info Log")
 	assertMessageInJSONLog(t, errLog, "Test Error Log")
+
+	if strings.Contains(infoLog, "DEBUG") {
+		t.Errorf("TestLogger_LevelInfo Failed. DEBUG log not expected ")
+	}
 }
 
 func TestLogger_LevelError(t *testing.T) {
@@ -38,7 +45,8 @@ func TestLogger_LevelError(t *testing.T) {
 		logger.Errorf("%s", "Test Error Log")
 	}
 
-	infoLog, errLog := captureLogOutput(printLog)
+	infoLog := testutil.StdoutOutputForFunc(printLog)
+	errLog := testutil.StderrOutputForFunc(printLog)
 
 	assert.Equal(t, "", infoLog) // Since log level is ERROR we will not get any INFO logs.
 	assertMessageInJSONLog(t, errLog, "Test Error Log")
@@ -53,7 +61,8 @@ func TestLogger_LevelDebug(t *testing.T) {
 		logger.Error("Test Error Log")
 	}
 
-	infoLog, errLog := captureLogOutput(printLog)
+	infoLog := testutil.StdoutOutputForFunc(printLog)
+	errLog := testutil.StderrOutputForFunc(printLog)
 
 	if !(strings.Contains(infoLog, "DEBUG") && strings.Contains(infoLog, "INFO")) {
 		// Debug Log Level will contain all types of logs i.e. DEBUG, INFO and ERROR
@@ -148,25 +157,4 @@ func TestPrettyPrint(t *testing.T) {
 			assert.Contains(t, actual, part, "Expected format part not found")
 		}
 	}
-}
-
-func captureLogOutput(f func()) (stdout, stderr string) {
-	rOut, wOut, _ := os.Pipe()
-	rErr, wErr, _ := os.Pipe()
-	oldOut := os.Stdout
-	oldErr := os.Stderr
-	os.Stdout = wOut
-	os.Stderr = wErr
-
-	f()
-
-	_ = wOut.Close()
-	_ = wErr.Close()
-
-	out, _ := io.ReadAll(rOut)
-	err, _ := io.ReadAll(rErr)
-	os.Stdout = oldOut
-	os.Stderr = oldErr
-
-	return string(out), string(err)
 }
