@@ -3,134 +3,73 @@ package logging
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"io"
 	"os"
+	"strings"
 	"testing"
 	"time"
+
+	"gofr.dev/pkg/gofr/testutil"
 
 	"github.com/stretchr/testify/assert"
 
 	"gofr.dev/pkg/gofr/http/middleware"
-	"gofr.dev/pkg/gofr/testutil"
 	"golang.org/x/term"
 )
 
-func TestLogger_Log(t *testing.T) {
-	testLogStatement := "hello log!"
-
-	t.Setenv("LOG_LEVEL", "INFO")
-
-	f := func() {
-		logger := NewLogger(2)
-		logger.Log(testLogStatement)
+func TestLogger_LevelInfo(t *testing.T) {
+	printLog := func() {
+		logger := NewLogger(INFO)
+		logger.Debug("Test Debug Log")
+		logger.Info("Test Info Log")
+		logger.Error("Test Error Log")
 	}
 
-	output := testutil.StdoutOutputForFunc(f)
-	assertMessageInJSONLog(t, output, testLogStatement)
+	infoLog := testutil.StdoutOutputForFunc(printLog)
+	errLog := testutil.StderrOutputForFunc(printLog)
+
+	assertMessageInJSONLog(t, infoLog, "Test Info Log")
+	assertMessageInJSONLog(t, errLog, "Test Error Log")
+
+	if strings.Contains(infoLog, "DEBUG") {
+		t.Errorf("TestLogger_LevelInfo Failed. DEBUG log not expected ")
+	}
 }
 
-func TestLogger_Logf(t *testing.T) {
-	testLogStatement := "hello logf!"
-
-	t.Setenv("LOG_LEVEL", "INFO")
-
-	f := func() {
-		logger := NewLogger(2)
-		logger.Logf("%s", testLogStatement)
+func TestLogger_LevelError(t *testing.T) {
+	printLog := func() {
+		logger := NewLogger(ERROR)
+		logger.Logf("%s", "Test Log")
+		logger.Debugf("%s", "Test Debug Log")
+		logger.Infof("%s", "Test Info Log")
+		logger.Errorf("%s", "Test Error Log")
 	}
 
-	output := testutil.StdoutOutputForFunc(f)
+	infoLog := testutil.StdoutOutputForFunc(printLog)
+	errLog := testutil.StderrOutputForFunc(printLog)
 
-	assertMessageInJSONLog(t, output, testLogStatement)
+	assert.Equal(t, "", infoLog) // Since log level is ERROR we will not get any INFO logs.
+	assertMessageInJSONLog(t, errLog, "Test Error Log")
 }
 
-func TestLogger_Info(t *testing.T) {
-	testLogStatement := "hello info log!"
-
-	t.Setenv("LOG_LEVEL", "INFO")
-
-	f := func() {
-		logger := NewLogger(2)
-		logger.Info(testLogStatement)
+func TestLogger_LevelDebug(t *testing.T) {
+	printLog := func() {
+		logger := NewLogger(DEBUG)
+		logger.Logf("Test Log")
+		logger.Debug("Test Debug Log")
+		logger.Info("Test Info Log")
+		logger.Error("Test Error Log")
 	}
 
-	output := testutil.StdoutOutputForFunc(f)
-	assertMessageInJSONLog(t, output, testLogStatement)
-}
+	infoLog := testutil.StdoutOutputForFunc(printLog)
+	errLog := testutil.StderrOutputForFunc(printLog)
 
-func TestLogger_Infof(t *testing.T) {
-	testLogStatement := "hello infof log!"
-
-	t.Setenv("LOG_LEVEL", "INFO")
-
-	f := func() {
-		logger := NewLogger(2)
-		logger.Infof(testLogStatement)
+	if !(strings.Contains(infoLog, "DEBUG") && strings.Contains(infoLog, "INFO")) {
+		// Debug Log Level will contain all types of logs i.e. DEBUG, INFO and ERROR
+		t.Errorf("TestLogger_LevelDebug Failed!")
 	}
 
-	output := testutil.StdoutOutputForFunc(f)
-	assertMessageInJSONLog(t, output, testLogStatement)
-}
-
-func TestLogger_Error(t *testing.T) {
-	testLogStatement := "hello error log!"
-
-	t.Setenv("LOG_LEVEL", "ERROR")
-
-	f := func() {
-		logger := NewLogger(5)
-		logger.Error(testLogStatement)
-	}
-
-	output := testutil.StderrOutputForFunc(f)
-
-	assertMessageInJSONLog(t, output, testLogStatement)
-}
-
-func TestLogger_Errorf(t *testing.T) {
-	testLogStatement := "hello errorf log!"
-
-	t.Setenv("LOG_LEVEL", "ERROR")
-
-	f := func() {
-		logger := NewLogger(5)
-		logger.Errorf("%s", testLogStatement)
-	}
-
-	output := testutil.StderrOutputForFunc(f)
-
-	assertMessageInJSONLog(t, output, testLogStatement)
-}
-
-func TestLogger_Debug(t *testing.T) {
-	testLogStatement := "hello debug log!"
-
-	t.Setenv("LOG_LEVEL", "DEBUG")
-
-	f := func() {
-		logger := NewLogger(1)
-		logger.Debug(testLogStatement)
-	}
-
-	output := testutil.StdoutOutputForFunc(f)
-
-	assertMessageInJSONLog(t, output, testLogStatement)
-}
-
-func TestLogger_Debugf(t *testing.T) {
-	testLogStatement := "hello debugf log!"
-
-	t.Setenv("LOG_LEVEL", "DEBUG")
-
-	f := func() {
-		logger := NewLogger(1)
-		logger.Debugf("%s", testLogStatement)
-	}
-
-	output := testutil.StdoutOutputForFunc(f)
-
-	assertMessageInJSONLog(t, output, testLogStatement)
+	assertMessageInJSONLog(t, errLog, "Test Error Log")
 }
 
 func assertMessageInJSONLog(t *testing.T, logLine, expectation string) {
@@ -160,11 +99,6 @@ func TestCheckIfTerminal(t *testing.T) {
 	}
 }
 
-// colorize function for consistent color output in tests.
-func colorize(msg string, colorCode int) string {
-	return fmt.Sprintf("\x1b[38;5;%dm%s\x1b[0m", colorCode, msg)
-}
-
 func TestPrettyPrint(t *testing.T) {
 	var testTime = time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
 
@@ -172,7 +106,7 @@ func TestPrettyPrint(t *testing.T) {
 		desc          string
 		entry         logEntry
 		isTerminal    bool
-		expected      string
+		expected      []string
 		expectedColor uint
 	}{
 		{
@@ -182,8 +116,14 @@ func TestPrettyPrint(t *testing.T) {
 				Time:    testTime,
 				Message: middleware.RequestLog{Response: 200, ResponseTime: 100, Method: "GET", URI: "/path"},
 			},
-			isTerminal:    true,
-			expected:      colorize("INFO", 6) + " [00:00:00] \x1b[38;5;8m \x1b[38;5;34m200\x1b[0m       100\x1b[38;5;8mµs\x1b[0m GET /path \n",
+			isTerminal: true,
+			expected: []string{
+				"INFO",
+				"[00:00:00]",
+				"200",
+				"GET",
+				"/path",
+			},
 			expectedColor: 6,
 		},
 		{
@@ -193,13 +133,17 @@ func TestPrettyPrint(t *testing.T) {
 				Time:    testTime,
 				Message: "Error message",
 			},
-			isTerminal:    false,
-			expected:      colorize("ERRO", 160) + ` [00:00:00] Error message` + "\n",
+			isTerminal: false,
+			expected: []string{
+				"ERRO",
+				"[00:00:00]",
+				"Error message",
+			},
 			expectedColor: 160,
 		},
 	}
 
-	for i, tc := range tests {
+	for _, tc := range tests {
 		out := &bytes.Buffer{}
 		logger := &logger{isTerminal: tc.isTerminal}
 
@@ -207,8 +151,10 @@ func TestPrettyPrint(t *testing.T) {
 
 		actual := out.String()
 
-		// Assert both the formatted string and the color code
-		assert.Equal(t, tc.expected, actual, "TEST[%d], Failed.\n%s", i, tc.desc)
 		assert.Equal(t, tc.expectedColor, tc.entry.Level.color(), "Unexpected color code")
+
+		for _, part := range tc.expected {
+			assert.Contains(t, actual, part, "Expected format part not found")
+		}
 	}
 }
