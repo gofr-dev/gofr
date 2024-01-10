@@ -3,13 +3,11 @@ package http
 import (
 	"net/http"
 
-	"gofr.dev/pkg/gofr/container"
-
+	"github.com/gorilla/mux"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 
+	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/http/middleware"
-
-	"github.com/gorilla/mux"
 )
 
 type Router struct {

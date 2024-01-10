@@ -26,18 +26,8 @@ func TestHandler_ServeHTTP(t *testing.T) {
 		err        error
 		statusCode int
 	}{
-		{
-			desc:       "data is nil and error is nil",
-			data:       nil,
-			err:        nil,
-			statusCode: http.StatusOK,
-		},
-		{
-			desc:       "data is mil, error is not nil",
-			data:       nil,
-			err:        errTest,
-			statusCode: http.StatusInternalServerError,
-		},
+		{"data is nil and error is nil", nil, nil, http.StatusOK},
+		{"data is mil, error is not nil", nil, errTest, http.StatusInternalServerError},
 	}
 
 	for i, tc := range testCases {
@@ -54,7 +44,7 @@ func TestHandler_ServeHTTP(t *testing.T) {
 			container: c,
 		}.ServeHTTP(w, r)
 
-		assert.Equalf(t, w.Code, tc.statusCode, "TEST[%d], Failed.\n%s", i, tc.desc)
+		assert.Equal(t, w.Code, tc.statusCode, "TEST[%d], Failed.\n%s", i, tc.desc)
 	}
 }
 
@@ -65,8 +55,9 @@ func TestHandler_healthHandler(t *testing.T) {
 
 	data, err := healthHandler(&c)
 
-	assert.Equal(t, "OK", data)
-	assert.NoError(t, err)
+	assert.Equal(t, "OK", data, "TEST Failed.\n")
+
+	assert.NoError(t, err, "TEST Failed.\n")
 }
 
 func TestHandler_faviconHandler(t *testing.T) {
@@ -77,11 +68,12 @@ func TestHandler_faviconHandler(t *testing.T) {
 	d, _ := os.ReadFile("static/favicon.ico")
 	data, err := faviconHandler(&c)
 
-	assert.NoError(t, err)
+	assert.NoError(t, err, "TEST Failed.\n")
+
 	assert.Equal(t, data, response.File{
 		Content:     d,
 		ContentType: "image/x-icon",
-	})
+	}, "TEST Failed.\n")
 }
 
 func TestHandler_catchAllHandler(t *testing.T) {
@@ -91,6 +83,7 @@ func TestHandler_catchAllHandler(t *testing.T) {
 
 	data, err := catchAllHandler(&c)
 
-	assert.Equal(t, data, nil)
-	assert.Equal(t, http.ErrMissingFile, err)
+	assert.Equal(t, data, nil, "TEST Failed.\n")
+
+	assert.Equal(t, http.ErrMissingFile, err, "TEST Failed.\n")
 }
