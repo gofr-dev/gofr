@@ -67,7 +67,7 @@ func TestLoggingInterceptor(t *testing.T) {
 
 	for i, tc := range tests {
 		ctx := context.WithValue(context.Background(), key, tc.id)
-		l := logging.NewLogger()
+		l := logging.NewLogger(logging.INFO)
 
 		resp, err := LoggingInterceptor(l)(ctx, nil, serverInfo, tc.handler)
 

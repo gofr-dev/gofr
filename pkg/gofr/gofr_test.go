@@ -99,9 +99,10 @@ func TestGofr_ServerRoutes(t *testing.T) {
 		respBytes, _ := io.ReadAll(w.Body)
 		_ = json.Unmarshal(respBytes, &res)
 
-		assert.Equalf(t, res.Data, tc.response, "TEST FAILED FOR [%d] Unexpected response for %s %s.", i, tc.method, tc.target)
-		assert.Equalf(t, w.Header().Get(tc.headerKey), tc.headerVal,
-			"TEST FAILED FOR [%d] Header mismatch for %s %s", i, tc.method, tc.target)
+		assert.Equal(t, res.Data, tc.response, "TEST[%d], Failed.\nUnexpected response for %s %s.", i, tc.method, tc.target)
+
+		assert.Equal(t, w.Header().Get(tc.headerKey), tc.headerVal,
+			"TEST[%d], Failed.\nHeader mismatch for %s %s", i, tc.method, tc.target)
 	}
 }
 
@@ -123,8 +124,9 @@ func TestGofr_ServerRun(t *testing.T) {
 		"http://localhost:"+strconv.Itoa(defaultHTTPPort)+"/hello", http.NoBody)
 	resp, err := netClient.Do(re)
 
-	assert.NoError(t, err)
-	assert.Equal(t, resp.StatusCode, http.StatusOK)
+	assert.NoError(t, err, "TEST Failed.\n")
+
+	assert.Equal(t, resp.StatusCode, http.StatusOK, "TEST Failed.\n")
 
 	resp.Body.Close()
 }
