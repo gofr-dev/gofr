@@ -7,8 +7,9 @@ import (
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
-	"gofr.dev/pkg/gofr/logging"
 	"google.golang.org/grpc"
+
+	"gofr.dev/pkg/gofr/logging"
 )
 
 type RPCLog struct {

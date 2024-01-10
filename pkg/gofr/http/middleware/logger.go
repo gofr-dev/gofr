@@ -10,7 +10,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-// Define own Response Writer to be used for logging of status - as http.ResponseWriter does not let us read status.
+// StatusResponseWriter Define own Response Writer to be used for logging of status - as http.ResponseWriter does not let us read status.
 type StatusResponseWriter struct {
 	http.ResponseWriter
 	status int
