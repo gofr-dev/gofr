@@ -11,7 +11,7 @@ on:
       - development
 
 jobs:
-  unit-testing:
+  run_tests:
     runs-on: ubuntu-latest
     services:
       redis:
@@ -28,10 +28,6 @@ jobs:
           MYSQL_ROOT_PASSWORD: "password"
           MYSQL_DATABASE: "test"
 
-    strategy:
-      matrix:
-        job-name: ['Example-Unit-Testing', 'PKG-Unit-Testing']
-
     steps:
       - name: Checkout code into go module directory
         uses: actions/checkout@v4
@@ -45,34 +41,51 @@ jobs:
         id: Go
 
       - name: Get dependencies
-        run: |
-          go mod download
+        run: go mod download
 
+  example_unit_testing:
+    name: Example Unit Testing🛠
+    runs-on: ubuntu-latest
+    needs: run_tests
+    steps:
       - name: Test
         run: |
           export GOFR_ENV=test
-          if [ "${{ matrix.job-name }}" == "Example-Unit-Testing" ]; then
-            go test gofr.dev/examples/... -v -short -coverprofile profile.cov -coverpkg=gofr.dev/examples/...
-          elif [ "${{ matrix.job-name }}" == "PKG-Unit-Testing" ]; then
-            go test gofr.dev/pkg/... -v -short -coverprofile profile.cov -coverpkg=gofr.dev/pkg/...
-          fi
+          go test gofr.dev/examples/... -v -short -coverprofile profile.cov -coverpkg=gofr.dev/examples/...
           go tool cover -func profile.cov
 
       - name: Upload Test Coverage
         uses: actions/upload-artifact@v3
         with:
-          name: ${{ matrix.job-name }}-Test-Report
+          name: Example-Test-Report
+          path: profile.cov
+
+  pkg_unit_testing:
+    name: PKG Unit Testing🛠
+    runs-on: ubuntu-latest
+    needs: run_tests
+    steps:
+      - name: Test
+        run: |
+          export GOFR_ENV=test
+          go test gofr.dev/pkg/... -v -short -coverprofile profile.cov -coverpkg=gofr.dev/pkg/...
+          go tool cover -func profile.cov
+
+      - name: Upload Test Coverage
+        uses: actions/upload-artifact@v3
+        with:
+          name: PKG-Coverage-Report
           path: profile.cov
 
   parse_coverage:
     name: Code Coverage
     runs-on: ubuntu-latest
-    needs: [unit-testing]
+    needs: [example_unit_testing, pkg_unit_testing]
     steps:
       - name: Check out code into the Go module directory
         uses: actions/checkout@v4
 
-      - name: Download Coverage Report
+      - name: Download Coverage Reports
         uses: actions/download-artifact@v3
         with:
           path: artifacts
@@ -80,8 +93,8 @@ jobs:
       - name: Merge Coverage Files
         working-directory: artifacts
         run: |
-          awk '!/^mode: / && FNR==1{print "mode: set"} {print}' ./Example-Test-Report/profile.cov > merged_profile.cov
-          tail -n +2 ./PKG-Coverage-Report/profile.cov >> merged_profile.cov
+          awk '!/^mode: / && FNR==1{print "mode: set"} {print}' ./example_unit_testing/profile.cov > merged_profile.cov
+          tail -n +2 ./pkg_unit_testing/profile.cov >> merged_profile.cov
 
       - name: Parse code-coverage value
         working-directory: artifacts
@@ -90,16 +103,10 @@ jobs:
           codeCoverage=${codeCoverage%?}
           echo "CODE_COVERAGE=$codeCoverage" >> $GITHUB_ENV
 
-  #      - name: Check if code-coverage is greater than threshold
-  #        run: |
-  #          codeCoverage=${{ env.CODE_COVERAGE }}
-  #          codeCoverage=${codeCoverage%??}
-  #          if [[ $codeCoverage -lt 92 ]]; then echo "code coverage cannot be less than 92%, currently its ${{ env.CODE_COVERAGE }}%" && exit 1; fi;
-
   upload_coverage:
     name: Upload Coverage📊
     runs-on: ubuntu-latest
-    needs: [unit-testing]
+    needs: parse_coverage
     if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/development' }}
     steps:
       - name: Check out code into the Go module directory
@@ -113,9 +120,8 @@ jobs:
       - name: Merge Coverage Files
         working-directory: artifacts
         run: |
-          awk '!/^mode: / && FNR==1{print "mode: set"} {print}' ./Example-Test-Report/profile.cov > merged_profile.cov
-          tail -n +2 ./PKG-Coverage-Report/profile.cov >> merged_profile.cov
-
+          awk '!/^mode: / && FNR==1{print "mode: set"} {print}' ./example_unit_testing/profile.cov > merged_profile.cov
+          tail -n +2 ./pkg_unit_testing/profile.cov >> merged_profile.cov
 
       - name: Upload
         uses: paambaati/codeclimate-action@v5.0.0
@@ -129,6 +135,7 @@ jobs:
     name: Code Quality🎖️
     runs-on: ubuntu-latest
     container: "golangci/golangci-lint:v1.55.2"
+    needs: run_tests
     steps:
       - name: Check out code into the Go module directory
         uses: actions/checkout@v4
