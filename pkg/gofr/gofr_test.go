@@ -3,6 +3,7 @@ package gofr
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"gofr.dev/pkg/gofr/http/response"
 	"gofr.dev/pkg/gofr/testutil"
 )
 
@@ -127,6 +129,51 @@ func TestGofr_ServerRun(t *testing.T) {
 	assert.NoError(t, err, "TEST Failed.\n")
 
 	assert.Equal(t, resp.StatusCode, http.StatusOK, "TEST Failed.\n")
+
+	resp.Body.Close()
+}
+
+func TestGofr_ServerHealthHandlerAddCheck(t *testing.T) {
+	var (
+		netClient = &http.Client{}
+		url       = "http://localhost:8000"
+		respn     response.Raw
+	)
+
+	g := New()
+	// Need to add a route to enable http server
+	g.GET("/", nil)
+	// Run the server
+	go g.Run()
+	time.Sleep(1 * time.Second)
+
+	// Send a GET request to the server
+	re, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, url+"/.well-known/health", http.NoBody)
+	resp, err := netClient.Do(re)
+
+	// Assert that connection was successful
+	assert.NoError(t, err)
+
+	// make response bytes slice with content-length
+	responseBytes := make([]byte, resp.ContentLength)
+
+	// read the response into responseBytes
+	_, err = resp.Body.Read(responseBytes)
+	if err != nil && !errors.Is(err, io.EOF) {
+		t.Errorf("TEST failed: %v", err)
+
+		return
+	}
+
+	err = json.Unmarshal(responseBytes, &respn)
+	if err != nil {
+		t.Errorf("TEST failed %v", err)
+
+		return
+	}
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, response.Raw{Data: "OK"}, respn)
 
 	resp.Body.Close()
 }
