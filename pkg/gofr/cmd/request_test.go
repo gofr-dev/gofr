@@ -28,17 +28,25 @@ func TestRequest_Bind(t *testing.T) {
 }
 
 func TestRequest_Param(t *testing.T) {
-	r := Request{params: map[string]string{"name": "gofr"}}
+	r := NewRequest([]string{"-name=gofr", "-valid=true", "-value=12", "-test"})
 
-	resp := r.Param("name")
+	testCases := []struct {
+		param string
+		want  string
+	}{
+		{"name", "gofr"},
+		{"valid", "true"},
+		{"value", "12"},
+		{"test", "true"},
+	}
 
-	assert.Equal(t, "gofr", resp, "TEST Failed.\n")
-}
+	for i, tc := range testCases {
+		resp := r.Param(tc.param)
 
-func TestRequest_PathParam(t *testing.T) {
-	r := Request{params: map[string]string{"name": "gofr"}}
+		assert.Equal(t, tc.want, resp, "TEST[%d], Failed.\n", i)
 
-	resp := r.PathParam("name")
+		resp = r.PathParam(tc.param)
 
-	assert.Equal(t, "gofr", resp, "TEST Failed.\n")
+		assert.Equal(t, tc.want, resp, "TEST[%d], Failed.\n", i)
+	}
 }

@@ -1,6 +1,7 @@
 package config
 
 import (
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -13,36 +14,72 @@ func TestNewEnvFile(t *testing.T) {
 }
 
 func TestNewGoDotEnvProvider(t *testing.T) {
-	f := new(EnvFile)
+	var (
+		configs = "TEST=test\nNAME=gofr\nKEY_123=value123"
+		path    = createTestConfigFile(t, configs)
+		f       = NewEnvFile(path)
+	)
 
-	t.Setenv("APP_NAME", "gofr-sample")
+	defer os.RemoveAll(path)
 
-	app := f.Get("APP_NAME")
+	testCases := []struct {
+		key      string
+		expected string
+	}{
+		{"TEST", "test"},
+		{"NAME", "gofr"},
+		{"KEY_123", "value123"},
+	}
 
-	assert.Equal(t, "gofr-sample", app, "TEST Failed.\n")
+	for i, tc := range testCases {
+		resp := f.Get(tc.key)
+
+		assert.Equal(t, tc.expected, resp, "TEST[%d], Failed.\n", i)
+	}
 }
 
 func TestEnvFile_GetOrDefault(t *testing.T) {
 	var (
-		key   = "random123"
-		value = "value123"
-		f     = new(EnvFile)
+		configs = "VALID=true"
+		path    = createTestConfigFile(t, configs)
+		f       = NewEnvFile(path)
 	)
 
-	t.Setenv(key, value)
+	defer os.RemoveAll(path)
 
-	tests := []struct {
-		desc  string
-		key   string
-		value string
+	testCases := []struct {
+		desc     string
+		key      string
+		expected string
 	}{
-		{"success case", key, value},
+		{"success case", "VALID", "true"},
 		{"key doesn't exists", "someKeyThatDoesntExist", "default"},
 	}
 
-	for i, tc := range tests {
+	for i, tc := range testCases {
 		resp := f.GetOrDefault(tc.key, "default")
 
-		assert.Equal(t, tc.value, resp, "TEST[%d], Failed.\n%s", i, tc.desc)
+		assert.Equal(t, tc.expected, resp, "TEST[%d], Failed.\n%s", i, tc.desc)
 	}
+}
+
+func createTestConfigFile(t *testing.T, configs string) string {
+	path, err := os.MkdirTemp("", "test")
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	_ = os.Chdir(path)
+
+	f, err := os.Create(".env")
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	_, err = f.WriteString(configs)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	return path
 }
