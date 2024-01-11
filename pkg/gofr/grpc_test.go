@@ -7,13 +7,13 @@ import (
 	"google.golang.org/grpc"
 
 	"gofr.dev/pkg/gofr/container"
-	"gofr.dev/pkg/gofr/logging"
+	"gofr.dev/pkg/gofr/logger"
 	"gofr.dev/pkg/gofr/testutil"
 )
 
 func TestNewGRPCServer(t *testing.T) {
 	c := container.Container{
-		Logger: logging.NewLogger(logging.DEBUG),
+		Logger: logger.NewLogger(logger.DEBUG),
 	}
 
 	g := newGRPCServer(&c, 9999)
@@ -35,7 +35,7 @@ func TestGRPC_ServerRun(t *testing.T) {
 	for i, tc := range testCases {
 		f := func() {
 			c := &container.Container{
-				Logger: logging.NewLogger(logging.INFO),
+				Logger: logger.NewLogger(logger.INFO),
 			}
 
 			g := &grpcServer{

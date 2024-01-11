@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc"
 
-	"gofr.dev/pkg/gofr/logging"
+	"gofr.dev/pkg/gofr/logger"
 )
 
 type contextKey string
@@ -67,7 +67,7 @@ func TestLoggingInterceptor(t *testing.T) {
 
 	for i, tc := range tests {
 		ctx := context.WithValue(context.Background(), key, tc.id)
-		l := logging.NewLogger(logging.INFO)
+		l := logger.NewLogger(logger.INFO)
 
 		resp, err := LoggingInterceptor(l)(ctx, nil, serverInfo, tc.handler)
 

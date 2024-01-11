@@ -9,7 +9,7 @@ import (
 	"github.com/redis/go-redis/extra/redisotel/v9"
 	"github.com/redis/go-redis/v9"
 
-	"gofr.dev/pkg/gofr/logging"
+	"gofr.dev/pkg/gofr/logger"
 )
 
 type contextKey string
@@ -23,10 +23,10 @@ type RedisConfig struct {
 }
 
 type queryLogger struct {
-	Query     []string       `json:"query"`
-	Duration  int64          `json:"duration"`
-	StartTime time.Time      `json:"-"`
-	Logger    logging.Logger `json:"-"`
+	Query     []string      `json:"query"`
+	Duration  int64         `json:"duration"`
+	StartTime time.Time     `json:"-"`
+	Logger    logger.Logger `json:"-"`
 }
 
 // newRedisClient return a redis client if connection is successful based on Config.

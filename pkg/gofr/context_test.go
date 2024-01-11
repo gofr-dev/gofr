@@ -11,7 +11,7 @@ import (
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
 	gofrHTTP "gofr.dev/pkg/gofr/http"
-	"gofr.dev/pkg/gofr/logging"
+	"gofr.dev/pkg/gofr/logger"
 )
 
 func TestTrace_ReturnsSpanObject(t *testing.T) {
@@ -59,7 +59,7 @@ func Test_newContext(t *testing.T) {
 
 	assert.Equal(t, &Context{Context: req.Context(),
 		Request:   req,
-		Container: &container.Container{Logger: logging.NewLogger(2)},
+		Container: &container.Container{Logger: logger.NewLogger(2)},
 		responder: nil,
 	}, ctx, "TEST, Failed.\n context creation successful")
 }

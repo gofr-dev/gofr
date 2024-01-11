@@ -10,7 +10,7 @@ import (
 
 	"gofr.dev/pkg/gofr/container"
 	gofrHttp "gofr.dev/pkg/gofr/http"
-	"gofr.dev/pkg/gofr/logging"
+	"gofr.dev/pkg/gofr/logger"
 )
 
 func TestRun_ServerStartsListening(t *testing.T) {
@@ -22,7 +22,7 @@ func TestRun_ServerStartsListening(t *testing.T) {
 
 	// Create a mock container
 	c := &container.Container{
-		Logger: logging.NewLogger(logging.INFO),
+		Logger: logger.NewLogger(logger.INFO),
 	}
 
 	// Create an instance of httpServer

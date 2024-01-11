@@ -1,16 +1,15 @@
-package container
+package datasource
 
 import (
 	"context"
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-
 	"github.com/go-redis/redismock/v9"
 	"github.com/redis/go-redis/v9"
+	"github.com/stretchr/testify/assert"
 
-	"gofr.dev/pkg/gofr/logging"
+	"gofr.dev/pkg/gofr/logger"
 	"gofr.dev/pkg/gofr/testutil"
 )
 
@@ -22,7 +21,7 @@ func Test_QueryLoggerSingleCommand(t *testing.T) {
 	ctx := context.Background()
 
 	outputLog := testutil.StdoutOutputForFunc(func() {
-		logger := logging.NewLogger(logging.DEBUG)
+		logger := logger.NewLogger(logger.DEBUG)
 
 		queryLogger := &queryLogger{Logger: logger}
 
@@ -48,7 +47,7 @@ func Test_QueryLoggerPipeline(t *testing.T) {
 	ctx := context.Background()
 
 	outputLog := testutil.StdoutOutputForFunc(func() {
-		logger := logging.NewLogger(logging.DEBUG)
+		logger := logger.NewLogger(logger.DEBUG)
 
 		queryLogger := &queryLogger{Logger: logger}
 

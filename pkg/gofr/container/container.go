@@ -5,7 +5,7 @@ import (
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/datasource"
-	"gofr.dev/pkg/gofr/logging"
+	"gofr.dev/pkg/gofr/logger"
 
 	_ "github.com/go-sql-driver/mysql" // This is required to be blank import
 	"github.com/redis/go-redis/v9"
@@ -16,17 +16,17 @@ import (
 // Container is a collection of all common application level concerns. Things like Logger, Connection Pool for Redis
 // etc which is shared across is placed here.
 type Container struct {
-	logging.Logger
+	logger.Logger
 	Redis *redis.Client
 	DB    *datasource.DB
 }
 
 func NewContainer(conf config.Config) *Container {
 	c := &Container{
-		Logger: logging.NewLogger(logging.GetLevelFromString(conf.Get("LOG_LEVEL"))),
+		Logger: logger.NewLogger(logger.GetLevelFromString(conf.Get("LOG_LEVEL"))),
 	}
 
-	c.Debug("Container is being created")
+	c.Logger.Debug("Container is being created")
 
 	// Connect Redis if REDIS_HOST is Set.
 	if host := conf.Get("REDIS_HOST"); host != "" {
@@ -41,9 +41,9 @@ func NewContainer(conf config.Config) *Container {
 		})
 
 		if err != nil {
-			c.Errorf("could not connect to redis at %s:%d. error: %s", host, port, err)
+			c.Logger.Errorf("could not connect to redis at %s:%d. error: %s", host, port, err)
 		} else {
-			c.Logf("connected to redis at %s:%d", host, port)
+			c.Logger.Logf("connected to redis at %s:%d", host, port)
 		}
 	}
 
@@ -61,10 +61,10 @@ func NewContainer(conf config.Config) *Container {
 		c.DB, err = datasource.NewMYSQL(&conf, c.Logger)
 
 		if err != nil {
-			c.Errorf("could not connect with '%s' user to database '%s:%s'  error: %v",
+			c.Logger.Errorf("could not connect with '%s' user to database '%s:%s'  error: %v",
 				conf.User, conf.HostName, conf.Port, err)
 		} else {
-			c.Logf("connected to '%s' database at %s:%s", conf.Database, conf.HostName, conf.Port)
+			c.Logger.Logf("connected to '%s' database at %s:%s", conf.Database, conf.HostName, conf.Port)
 		}
 	}
 

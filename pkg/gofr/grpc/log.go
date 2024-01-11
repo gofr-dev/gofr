@@ -9,7 +9,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
 
-	"gofr.dev/pkg/gofr/logging"
+	"gofr.dev/pkg/gofr/logger"
 )
 
 type RPCLog struct {
@@ -24,7 +24,7 @@ func (l RPCLog) String() string {
 	return string(line)
 }
 
-func LoggingInterceptor(logger logging.Logger) grpc.UnaryServerInterceptor {
+func LoggingInterceptor(logger logger.Logger) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (_ interface{}, err error) {
 		ctx, span := otel.GetTracerProvider().Tracer("gofr",
 			trace.WithInstrumentationVersion("v0.1")).Start(ctx, info.FullMethod)
