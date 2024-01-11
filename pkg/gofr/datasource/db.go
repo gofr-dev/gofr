@@ -26,7 +26,7 @@ func (d *DB) logQuery(start time.Time, queryType, query string, args ...interfac
 	d.logger.Debug(SQLLog{
 		Type:     queryType,
 		Query:    query,
-		Duration: time.Since(start).Nanoseconds(),
+		Duration: time.Since(start).Microseconds(),
 		Args:     args,
 	})
 }
@@ -71,7 +71,12 @@ type Tx struct {
 }
 
 func (t *Tx) logQuery(start time.Time, queryType, query string, args ...interface{}) {
-	t.logger.Debugf("%s: %s, Args: %v, Duration: %v", queryType, query, args, time.Since(start))
+	t.logger.Debug(SQLLog{
+		Type:     queryType,
+		Query:    query,
+		Duration: time.Since(start).Microseconds(),
+		Args:     args,
+	})
 }
 
 func (t *Tx) Query(query string, args ...interface{}) (*sql.Rows, error) {
