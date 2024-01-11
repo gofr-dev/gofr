@@ -1,6 +1,7 @@
 package container
 
 import (
+	"gofr.dev/pkg/gofr/datasource"
 	"strconv"
 
 	"gofr.dev/pkg/gofr/config"
@@ -17,24 +18,24 @@ import (
 type Container struct {
 	logging.Logger
 	Redis *redis.Client
-	DB    *DB
+	DB    *datasource.DB
 }
 
-func NewContainer(cfg config.Config) *Container {
+func NewContainer(config config.Config) *Container {
 	c := &Container{
-		Logger: logging.NewLogger(logging.GetLevelFromString(cfg.Get("LOG_LEVEL"))),
+		Logger: logging.NewLogger(logging.GetLevelFromString(config.Get("LOG_LEVEL"))),
 	}
 
 	c.Debug("Container is being created")
 
 	// Connect Redis if REDIS_HOST is Set.
-	if host := cfg.Get("REDIS_HOST"); host != "" {
-		port, err := strconv.Atoi(cfg.Get("REDIS_PORT"))
+	if host := config.Get("REDIS_HOST"); host != "" {
+		port, err := strconv.Atoi(config.Get("REDIS_PORT"))
 		if err != nil {
 			port = defaultRedisPort
 		}
 
-		c.Redis, err = newRedisClient(redisConfig{
+		c.Redis, err = datasource.NewRedisClient(datasource.RedisConfig{
 			HostName: host,
 			Port:     port,
 		})
@@ -46,16 +47,17 @@ func NewContainer(cfg config.Config) *Container {
 		}
 	}
 
-	if host := cfg.Get("DB_HOST"); host != "" {
-		conf := dbConfig{
+	if host := config.Get("DB_HOST"); host != "" {
+		conf := datasource.DBConfig{
 			HostName: host,
-			User:     cfg.Get("DB_USER"),
-			Password: cfg.Get("DB_PASSWORD"),
-			Port:     cfg.GetOrDefault("DB_PORT", strconv.Itoa(defaultDBPort)),
-			Database: cfg.Get("DB_NAME"),
+			User:     config.Get("DB_USER"),
+			Password: config.Get("DB_PASSWORD"),
+			Port:     config.GetOrDefault("DB_PORT", strconv.Itoa(defaultDBPort)),
+			Database: config.Get("DB_NAME"),
 		}
-		db, err := newMYSQL(&conf)
-		c.DB = &DB{db, c.Logger}
+		var err error
+
+		c.DB, err = datasource.NewMYSQL(&conf, c.Logger)
 
 		if err != nil {
 			c.Errorf("could not connect with '%s' user to database '%s:%s'  error: %v",
