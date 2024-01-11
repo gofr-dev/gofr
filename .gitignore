@@ -17,6 +17,7 @@ coverage.txt
 vendor/
 
 .idea
+*.impl
 
 # IDE Cache
 .vscode
