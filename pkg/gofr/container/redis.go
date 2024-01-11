@@ -6,16 +6,15 @@ import (
 	"strings"
 	"time"
 
-	"gofr.dev/pkg/gofr/logging"
-
 	"github.com/redis/go-redis/extra/redisotel/v9"
-
 	"github.com/redis/go-redis/v9"
+
+	"gofr.dev/pkg/gofr/logging"
 )
 
 type contextKey string
 
-const redisStartTimeKey contextKey = "redisStartTime"
+const redisStartTimeKey, redisPipelineStartTime contextKey = "redisStartTime", "redisPipelineStartTime"
 
 type redisConfig struct {
 	HostName string
@@ -24,12 +23,10 @@ type redisConfig struct {
 }
 
 type queryLogger struct {
-	Hosts     string         `json:"host,omitempty"`
 	Query     []string       `json:"query"`
 	Duration  int64          `json:"duration"`
 	StartTime time.Time      `json:"-"`
 	Logger    logging.Logger `json:"-"`
-	DataStore string         `json:"datastore"`
 }
 
 // newRedisClient return a redis client if connection is successful based on Config.
@@ -88,6 +85,36 @@ func (l *queryLogger) AfterRedisCommand(ctx context.Context, cmd redis.Cmder) er
 	duration := endTime.Sub(startTime).Microseconds()
 
 	l.Logger.Debugf("Redis query: %s, duration: %dµs", s[0], duration)
+
+	return nil
+}
+
+func (l *queryLogger) BeforeProcessPipeline(ctx context.Context) (context.Context, error) {
+	return context.WithValue(ctx, redisPipelineStartTime, time.Now()), nil
+}
+
+func (l *queryLogger) AfterProcessPipeline(ctx context.Context, cmds []redis.Cmder) error {
+	startTime, ok := ctx.Value(redisPipelineStartTime).(time.Time)
+	if !ok {
+		l.Logger.Error("Failed to retrieve pipeline start time from context")
+		return nil
+	}
+
+	endTime := time.Now()
+
+	// Format queries as a single string with newlines for readability
+	queries := make([]string, len(cmds))
+
+	for i, cmd := range cmds {
+		query := formatRedisQuery(cmd.Args()...)
+		queries[i] = query
+	}
+
+	query := strings.Join(queries, " , ")
+
+	duration := endTime.Sub(startTime).Microseconds()
+
+	l.Logger.Debugf("Redis pipeline: %d queries : [ %v ] ,duration: %dµs", len(cmds), query, duration)
 
 	return nil
 }
