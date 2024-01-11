@@ -3,7 +3,6 @@ package datasource
 import (
 	"context"
 	"database/sql"
-	"log"
 	"reflect"
 	"regexp"
 	"strings"
@@ -18,35 +17,32 @@ type DB struct {
 	logger logging.Logger
 }
 
-func (d *DB) logQuery(queryType, query string, args ...interface{}) {
-	start := time.Now()
-	defer func() {
-		d.logger.Debugf("%s: %s, Args: %v, Duration: %v", queryType, query, args, time.Since(start))
-	}()
+func (d *DB) logQuery(start time.Time, queryType, query string, args ...interface{}) {
+	d.logger.Debugf("%s: %s, Args: %v, Duration: %v", queryType, query, args, time.Since(start))
 }
 
 func (d *DB) Query(query string, args ...interface{}) (*sql.Rows, error) {
-	d.logQuery("Query", query, args...)
+	defer d.logQuery(time.Now(), "Query", query, args...)
 	return d.DB.Query(query, args...)
 }
 
 func (d *DB) QueryRow(query string, args ...interface{}) *sql.Row {
-	d.logQuery("QueryRow", query, args...)
+	d.logQuery(time.Now(), "QueryRow", query, args...)
 	return d.DB.QueryRow(query, args...)
 }
 
 func (d *DB) QueryRowContext(ctx context.Context, query string, args ...interface{}) *sql.Row {
-	d.logQuery("QueryRowContext", query, args...)
+	d.logQuery(time.Now(), "QueryRowContext", query, args...)
 	return d.DB.QueryRowContext(ctx, query, args...)
 }
 
 func (d *DB) Exec(query string, args ...interface{}) (sql.Result, error) {
-	d.logQuery("Exec", query, args...)
+	d.logQuery(time.Now(), "Exec", query, args...)
 	return d.DB.Exec(query, args...)
 }
 
 func (d *DB) Prepare(query string) (*sql.Stmt, error) {
-	d.logQuery("Prepare", query)
+	d.logQuery(time.Now(), "Prepare", query)
 	return d.DB.Prepare(query)
 }
 
@@ -55,52 +51,51 @@ func (d *DB) Begin() (*Tx, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Tx{Tx: tx}, nil
+
+	return &Tx{Tx: tx, logger: d.logger}, nil
 }
 
 type Tx struct {
 	*sql.Tx
+	logger logging.Logger
 }
 
-func (t *Tx) logQuery(queryType, query string, args ...interface{}) {
-	start := time.Now()
-	defer func() {
-		log.Printf("%s: %s, Args: %v, Duration: %v", queryType, query, args, time.Since(start))
-	}()
+func (t *Tx) logQuery(start time.Time, queryType, query string, args ...interface{}) {
+	t.logger.Debugf("%s: %s, Args: %v, Duration: %v", queryType, query, args, time.Since(start))
 }
 
 func (t *Tx) Query(query string, args ...interface{}) (*sql.Rows, error) {
-	t.logQuery("TxQuery", query, args...)
+	defer t.logQuery(time.Now(), "TxQuery", query, args...)
 	return t.Tx.Query(query, args...)
 }
 
 func (t *Tx) QueryRow(query string, args ...interface{}) *sql.Row {
-	t.logQuery("TxQueryRow", query, args...)
+	defer t.logQuery(time.Now(), "TxQueryRow", query, args...)
 	return t.Tx.QueryRow(query, args...)
 }
 
 func (t *Tx) QueryRowContext(ctx context.Context, query string, args ...interface{}) *sql.Row {
-	t.logQuery("TxQueryRowContext", query, args...)
+	defer t.logQuery(time.Now(), "TxQueryRowContext", query, args...)
 	return t.Tx.QueryRowContext(ctx, query, args...)
 }
 
 func (t *Tx) Exec(query string, args ...interface{}) (sql.Result, error) {
-	t.logQuery("TxExec", query, args...)
+	defer t.logQuery(time.Now(), "TxExec", query, args...)
 	return t.Tx.Exec(query, args...)
 }
 
 func (t *Tx) Prepare(query string) (*sql.Stmt, error) {
-	t.logQuery("TxPrepare", query)
+	defer t.logQuery(time.Now(), "TxPrepare", query)
 	return t.Tx.Prepare(query)
 }
 
 func (t *Tx) Commit() error {
-	t.logQuery("TxCommit", "COMMIT")
+	defer t.logQuery(time.Now(), "TxCommit", "COMMIT")
 	return t.Tx.Commit()
 }
 
 func (t *Tx) Rollback() error {
-	t.logQuery("TxRollback", "ROLLBACK")
+	defer t.logQuery(time.Now(), "TxRollback", "ROLLBACK")
 	return t.Tx.Rollback()
 }
 
