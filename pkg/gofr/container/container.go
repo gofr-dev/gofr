@@ -56,7 +56,8 @@ func NewContainer(config config.Config) *Container {
 			Database: config.Get("DB_NAME"),
 		}
 		var err error
-		c.DB, err = datasource.NewMYSQL(&conf)
+
+		c.DB, err = datasource.NewMYSQL(&conf, c.Logger)
 
 		if err != nil {
 			c.Errorf("could not connect with '%s' user to database '%s:%s'  error: %v",

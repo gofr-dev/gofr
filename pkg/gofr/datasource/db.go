@@ -3,9 +3,11 @@ package datasource
 import (
 	"context"
 	"database/sql"
+	"log"
 	"reflect"
 	"regexp"
 	"strings"
+	"time"
 
 	"gofr.dev/pkg/gofr/logging"
 )
@@ -14,6 +16,92 @@ import (
 type DB struct {
 	*sql.DB
 	logger logging.Logger
+}
+
+func (d *DB) logQuery(queryType, query string, args ...interface{}) {
+	start := time.Now()
+	defer func() {
+		d.logger.Debugf("%s: %s, Args: %v, Duration: %v", queryType, query, args, time.Since(start))
+	}()
+}
+
+func (d *DB) Query(query string, args ...interface{}) (*sql.Rows, error) {
+	d.logQuery("Query", query, args...)
+	return d.DB.Query(query, args...)
+}
+
+func (d *DB) QueryRow(query string, args ...interface{}) *sql.Row {
+	d.logQuery("QueryRow", query, args...)
+	return d.DB.QueryRow(query, args...)
+}
+
+func (d *DB) QueryRowContext(ctx context.Context, query string, args ...interface{}) *sql.Row {
+	d.logQuery("QueryRowContext", query, args...)
+	return d.DB.QueryRowContext(ctx, query, args...)
+}
+
+func (d *DB) Exec(query string, args ...interface{}) (sql.Result, error) {
+	d.logQuery("Exec", query, args...)
+	return d.DB.Exec(query, args...)
+}
+
+func (d *DB) Prepare(query string) (*sql.Stmt, error) {
+	d.logQuery("Prepare", query)
+	return d.DB.Prepare(query)
+}
+
+func (d *DB) Begin() (*Tx, error) {
+	tx, err := d.DB.Begin()
+	if err != nil {
+		return nil, err
+	}
+	return &Tx{Tx: tx}, nil
+}
+
+type Tx struct {
+	*sql.Tx
+}
+
+func (t *Tx) logQuery(queryType, query string, args ...interface{}) {
+	start := time.Now()
+	defer func() {
+		log.Printf("%s: %s, Args: %v, Duration: %v", queryType, query, args, time.Since(start))
+	}()
+}
+
+func (t *Tx) Query(query string, args ...interface{}) (*sql.Rows, error) {
+	t.logQuery("TxQuery", query, args...)
+	return t.Tx.Query(query, args...)
+}
+
+func (t *Tx) QueryRow(query string, args ...interface{}) *sql.Row {
+	t.logQuery("TxQueryRow", query, args...)
+	return t.Tx.QueryRow(query, args...)
+}
+
+func (t *Tx) QueryRowContext(ctx context.Context, query string, args ...interface{}) *sql.Row {
+	t.logQuery("TxQueryRowContext", query, args...)
+	return t.Tx.QueryRowContext(ctx, query, args...)
+}
+
+func (t *Tx) Exec(query string, args ...interface{}) (sql.Result, error) {
+	t.logQuery("TxExec", query, args...)
+	return t.Tx.Exec(query, args...)
+}
+
+func (t *Tx) Prepare(query string) (*sql.Stmt, error) {
+	t.logQuery("TxPrepare", query)
+	return t.Tx.Prepare(query)
+}
+
+func (t *Tx) Commit() error {
+	t.logQuery("TxCommit", "COMMIT")
+	return t.Tx.Commit()
+}
+
+func (t *Tx) Rollback() error {
+	t.logQuery("TxRollback", "ROLLBACK")
+	return t.Tx.Rollback()
 }
 
 // Select runs a query with args and binds the result of the query to the data.
