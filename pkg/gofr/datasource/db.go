@@ -7,18 +7,28 @@ import (
 	"regexp"
 	"strings"
 	"time"
-
-	"gofr.dev/pkg/gofr/logging"
 )
 
 // DB is a wrapper around sql.DB which provides some more features.
 type DB struct {
 	*sql.DB
-	logger logging.Logger
+	logger Logger
+}
+
+type SQLLog struct {
+	Type     string        `json:"type"`
+	Query    string        `json:"query"`
+	Duration int64         `json:"duration"`
+	Args     []interface{} `json:"args,omitempty"`
 }
 
 func (d *DB) logQuery(start time.Time, queryType, query string, args ...interface{}) {
-	d.logger.Debugf("%s: %s, Args: %v, Duration: %v", queryType, query, args, time.Since(start))
+	d.logger.Debug(SQLLog{
+		Type:     queryType,
+		Query:    query,
+		Duration: time.Since(start).Nanoseconds(),
+		Args:     args,
+	})
 }
 
 func (d *DB) Query(query string, args ...interface{}) (*sql.Rows, error) {
@@ -57,7 +67,7 @@ func (d *DB) Begin() (*Tx, error) {
 
 type Tx struct {
 	*sql.Tx
-	logger logging.Logger
+	logger Logger
 }
 
 func (t *Tx) logQuery(start time.Time, queryType, query string, args ...interface{}) {
