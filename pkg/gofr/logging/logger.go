@@ -7,10 +7,10 @@ import (
 	"os"
 	"time"
 
+	"golang.org/x/term"
+
 	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/http/middleware"
-
-	"golang.org/x/term"
 )
 
 type Logger interface {
