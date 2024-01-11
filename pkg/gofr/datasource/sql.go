@@ -3,8 +3,6 @@ package datasource
 import (
 	"database/sql"
 	"fmt"
-
-	"gofr.dev/pkg/gofr/logging"
 )
 
 // DBConfig has those members which are necessary variables while connecting to database.
@@ -16,7 +14,7 @@ type DBConfig struct {
 	Database string
 }
 
-func NewMYSQL(config *DBConfig, logger logging.Logger) (*DB, error) {
+func NewMYSQL(config *DBConfig, logger Logger) (*DB, error) {
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8&parseTime=True&loc=Local&interpolateParams=true",
 		config.User,
 		config.Password,
