@@ -9,7 +9,6 @@ import (
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/stretchr/testify/assert"
 
-	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/testutil"
 )
 
@@ -23,7 +22,7 @@ func getDB(t *testing.T) (*DB, sqlmock.Sqlmock) {
 		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
 	}
 
-	return &DB{mockDB, logging.NewLogger(logging.DEBUG)}, mock
+	return &DB{mockDB, nil}, mock
 }
 
 func TestDB_SelectSingleColumnFromIntToString(t *testing.T) {
