@@ -35,8 +35,8 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	c.responder.Respond(h.function(c))
 }
 
-func healthHandler(*Context) (interface{}, error) {
-	return "OK", nil
+func healthHandler(c *Context) (interface{}, error) {
+	return c.Health(), nil
 }
 
 func faviconHandler(*Context) (interface{}, error) {

@@ -5,6 +5,7 @@ import (
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/datasource"
+	"gofr.dev/pkg/gofr/datasource/sql"
 	"gofr.dev/pkg/gofr/logging"
 
 	_ "github.com/go-sql-driver/mysql" // This is required to be blank import
@@ -18,7 +19,15 @@ import (
 type Container struct {
 	logging.Logger
 	Redis *redis.Client
-	DB    *datasource.DB
+	DB    *sql.DB
+}
+
+func (c *Container) Health() interface{} {
+	datasources := make(map[string]interface{})
+
+	datasources["sql"] = c.DB.HealthCheck()
+
+	return datasources
 }
 
 func NewContainer(conf config.Config) *Container {
@@ -48,7 +57,7 @@ func NewContainer(conf config.Config) *Container {
 	}
 
 	if host := conf.Get("DB_HOST"); host != "" {
-		conf := datasource.DBConfig{
+		conf := sql.DBConfig{
 			HostName: host,
 			User:     conf.Get("DB_USER"),
 			Password: conf.Get("DB_PASSWORD"),
@@ -58,7 +67,7 @@ func NewContainer(conf config.Config) *Container {
 
 		var err error
 
-		c.DB, err = datasource.NewMYSQL(&conf, c.Logger)
+		c.DB, err = sql.NewMYSQL(&conf, c.Logger)
 
 		if err != nil {
 			c.Errorf("could not connect with '%s' user to database '%s:%s'  error: %v",
