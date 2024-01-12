@@ -3,14 +3,13 @@ package service
 import (
 	"bytes"
 	"fmt"
-	"net/http"
-	"net/http/httptrace"
-	"strings"
-
 	"go.opentelemetry.io/contrib/instrumentation/net/http/httptrace/otelhttptrace"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
+	"net/http"
+	"net/http/httptrace"
+	"strings"
 
 	"gofr.dev/pkg/gofr"
 )
@@ -102,6 +101,14 @@ func (h *httpService) createAndSendRequest(ctx *gofr.Context, method string, pat
 	encodeQueryParameters(req, queryParams)
 
 	resp, err := h.Do(req)
+
+	ctx.Logger.Log(HTTPCallLog{
+		MessageId:    "test",
+		ResponseCode: resp.StatusCode,
+		ResponseTime: 0,
+		Method:       method,
+		URI:          uri,
+	})
 
 	return resp, err
 }
