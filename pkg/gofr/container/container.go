@@ -3,12 +3,13 @@ package container
 import (
 	"strconv"
 
+	"gofr.dev/pkg/gofr/datasource/redis"
+
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/logging"
 
 	_ "github.com/go-sql-driver/mysql" // This is required to be blank import
-	"github.com/redis/go-redis/v9"
 )
 
 // TODO - This can be a collection of interfaces instead of struct
@@ -17,7 +18,7 @@ import (
 // etc which is shared across is placed here.
 type Container struct {
 	logging.Logger
-	Redis *redis.Client
+	Redis *redis.Redis
 	DB    *datasource.DB
 }
 
@@ -35,10 +36,10 @@ func NewContainer(conf config.Config) *Container {
 			port = defaultRedisPort
 		}
 
-		c.Redis, err = datasource.NewRedisClient(datasource.RedisConfig{
+		c.Redis, err = redis.NewRedisClient(redis.Config{
 			HostName: host,
 			Port:     port,
-		})
+		}, c.Logger)
 
 		if err != nil {
 			c.Errorf("could not connect to redis at %s:%d. error: %s", host, port, err)
