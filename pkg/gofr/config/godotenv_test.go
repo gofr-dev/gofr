@@ -15,7 +15,7 @@ func TestNewEnvFile(t *testing.T) {
 
 func TestNewGoDotEnvProvider(t *testing.T) {
 	var (
-		configs = "TEST=test\nNAME=gofr\nKEY_123=value123"
+		configs = "TEST=test\nNAME=gofr\nKEY_123=value123\nKEY_SPECIAL=value!@#\nKEY_EMPTY="
 		path    = createTestConfigFile(t, configs)
 		f       = NewEnvFile(path)
 	)
@@ -29,6 +29,9 @@ func TestNewGoDotEnvProvider(t *testing.T) {
 		{"TEST", "test"},
 		{"NAME", "gofr"},
 		{"KEY_123", "value123"},
+		{"KEY_SPECIAL", "value!@#"},
+		{"KEY_EMPTY", ""},
+		{"someKeyThatDoesntExist", ""},
 	}
 
 	for i, tc := range testCases {

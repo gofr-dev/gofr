@@ -28,7 +28,7 @@ func TestRequest_Bind(t *testing.T) {
 }
 
 func TestRequest_Param(t *testing.T) {
-	r := NewRequest([]string{"-name=gofr", "-valid=true", "-value=12", "-test"})
+	r := NewRequest([]string{"-name=gofr", "-valid=true", "-value=12", "-test", "-param!@#=value!@#", "-param=", ""})
 
 	testCases := []struct {
 		param string
@@ -38,6 +38,8 @@ func TestRequest_Param(t *testing.T) {
 		{"valid", "true"},
 		{"value", "12"},
 		{"test", "true"},
+		{"param!@#", "value!@#"},
+		{"param", ""},
 	}
 
 	for i, tc := range testCases {
