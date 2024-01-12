@@ -8,6 +8,7 @@ import (
 
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/http/middleware"
+	"gofr.dev/pkg/gofr/metric"
 )
 
 type Router struct {
@@ -20,6 +21,7 @@ func NewRouter(c *container.Container) *Router {
 		middleware.Tracer,
 		middleware.Logging(c.Logger),
 		middleware.CORS(),
+		metric.Prometheus,
 	)
 
 	return &Router{

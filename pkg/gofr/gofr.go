@@ -9,6 +9,7 @@ import (
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
+	"gofr.dev/pkg/gofr/metric"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/zipkin"
@@ -25,8 +26,9 @@ type App struct {
 	// Config can be used by applications to fetch custom configurations from environment or file.
 	Config config.Config // If we directly embed, unnecessary confusion between app.Get and app.GET will happen.
 
-	grpcServer *grpcServer
-	httpServer *httpServer
+	grpcServer   *grpcServer
+	httpServer   *httpServer
+	metricServer *metric.Server
 
 	cmd *cmd
 
@@ -52,8 +54,16 @@ func New() *App {
 
 	app.initTracer()
 
+	// Metrics Server
+	port, err := strconv.Atoi(app.Config.Get("METRICS_PORT"))
+	if err != nil || port <= 0 {
+		port = defaultMetricPort
+	}
+
+	app.metricServer = metric.NewServer(app.container, port)
+
 	// HTTP Server
-	port, err := strconv.Atoi(app.Config.Get("HTTP_PORT"))
+	port, err = strconv.Atoi(app.Config.Get("HTTP_PORT"))
 	if err != nil || port <= 0 {
 		port = defaultHTTPPort
 	}
