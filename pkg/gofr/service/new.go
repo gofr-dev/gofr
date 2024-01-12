@@ -3,14 +3,16 @@ package service
 import (
 	"bytes"
 	"fmt"
-	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
-	"go.opentelemetry.io/otel/trace"
-	"gofr.dev/pkg/gofr"
 	"net/http"
 	"net/http/httptrace"
+	"strings"
 
 	"go.opentelemetry.io/contrib/instrumentation/net/http/httptrace/otelhttptrace"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace"
+
+	"gofr.dev/pkg/gofr"
 )
 
 type httpService struct {
@@ -21,9 +23,10 @@ type httpService struct {
 
 type HTTP interface {
 	Get(ctx *gofr.Context, api string, queryParams map[string]interface{}) (*http.Response, error)
+	GetWithHeaders(ctx *gofr.Context, path string, queryParams map[string]interface{}, headers map[string]string) (*http.Response, error)
 
-	Patch(ctx *gofr.Context, api string, queryParams map[string]interface{}, body []byte) (*http.Response, error)
-	PatchWithHeaders(ctx *gofr.Context, api string, queryParams map[string]interface{}, body []byte, headers map[string]string) (*http.Response, error)
+	Post(ctx *gofr.Context, path string, queryParams map[string]interface{}, body []byte) (*http.Response, error)
+	PostWithHeaders(ctx *gofr.Context, path string, queryParams map[string]interface{}, body []byte, headers map[string]string) (*http.Response, error)
 
 	Put(ctx *gofr.Context, api string, queryParams map[string]interface{}, body []byte) (*http.Response, error)
 	PutWithHeaders(ctx *gofr.Context, api string, queryParams map[string]interface{}, body []byte, headers map[string]string) (*http.Response, error)
@@ -42,6 +45,18 @@ func NewHTTPService(serviceAddress string) HTTP {
 
 func (h *httpService) Get(ctx *gofr.Context, path string, queryParams map[string]interface{}) (*http.Response, error) {
 	return h.createAndSendRequest(ctx, http.MethodGet, path, queryParams, nil, nil)
+}
+
+func (h *httpService) GetWithHeaders(ctx *gofr.Context, path string, queryParams map[string]interface{}, headers map[string]string) (*http.Response, error) {
+	return h.createAndSendRequest(ctx, http.MethodGet, path, queryParams, nil, headers)
+}
+
+func (h *httpService) Post(ctx *gofr.Context, path string, queryParams map[string]interface{}, body []byte) (*http.Response, error) {
+	return h.createAndSendRequest(ctx, http.MethodPost, path, queryParams, body, nil)
+}
+
+func (h *httpService) PostWithHeaders(ctx *gofr.Context, path string, queryParams map[string]interface{}, body []byte, headers map[string]string) (*http.Response, error) {
+	return h.createAndSendRequest(ctx, http.MethodPost, path, queryParams, body, headers)
 }
 
 func (h *httpService) Patch(ctx *gofr.Context, path string, queryParams map[string]interface{}, body []byte) (*http.Response, error) {
@@ -71,6 +86,7 @@ func (h *httpService) DeleteWithHeaders(ctx *gofr.Context, path string, body []b
 func (h *httpService) createAndSendRequest(ctx *gofr.Context, method string, path string,
 	queryParams map[string]interface{}, body []byte, headers map[string]string) (*http.Response, error) {
 	uri := h.url + "/" + path
+	uri = strings.TrimRight(uri, "/")
 
 	spanContext, span := h.Tracer.Start(ctx, uri)
 	defer span.End()
@@ -85,7 +101,9 @@ func (h *httpService) createAndSendRequest(ctx *gofr.Context, method string, pat
 
 	encodeQueryParameters(req, queryParams)
 
-	return h.Do(req)
+	resp, err := h.Do(req)
+
+	return resp, err
 }
 
 func encodeQueryParameters(req *http.Request, queryParams map[string]interface{}) {
