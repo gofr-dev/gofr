@@ -4,7 +4,6 @@ import (
 	"strconv"
 
 	"gofr.dev/pkg/gofr/config"
-	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/datasource/redis"
 	"gofr.dev/pkg/gofr/datasource/sql"
 	"gofr.dev/pkg/gofr/logging"
@@ -19,7 +18,7 @@ import (
 type Container struct {
 	logging.Logger
 	Redis *redis.Redis
-	DB    *datasource.DB
+	DB    *sql.DB
 }
 
 func (c *Container) Health() interface{} {
