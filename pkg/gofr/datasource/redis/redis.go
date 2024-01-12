@@ -55,3 +55,5 @@ func NewRedisClient(config Config, logger datasource.Logger) (*Redis, error) {
 // type Redis interface {
 //	Get(string) (string, error)
 // }
+
+type RedisHook struct{}
