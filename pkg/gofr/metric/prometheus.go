@@ -14,33 +14,33 @@ import (
 //nolint:gochecknoglobals // The declared global variable can be accessed across multiple functions
 var (
 	httpResponse = prometheus.NewHistogramVec(prometheus.HistogramOpts{
-		Name:    "gofr_http_response",
+		Name:    "app_http_response",
 		Help:    "Histogram of HTTP response times in seconds",
 		Buckets: []float64{.001, .003, .005, .01, .02, .03, .05, .1, .2, .3, .5, .75, 1, 2, 3, 5, 10, 30},
 	}, []string{"path", "method", "status"})
 
 	goRoutines = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "gofr_go_routines",
+		Name: "app_go_routines",
 		Help: "Gauge of Go routines running",
 	}, nil)
 
 	alloc = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "gofr_sys_memory_alloc",
+		Name: "app_sys_memory_alloc",
 		Help: "Gauge of Heap allocations",
 	}, nil)
 
 	totalAlloc = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "gofr_sys_total_alloc",
+		Name: "app_sys_total_alloc",
 		Help: "Gauge of cumulative bytes allocated for heap objects",
 	}, nil)
 
 	numGC = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "gofr_go_numGC",
+		Name: "app_go_numGC",
 		Help: "Gauge of completed GC cycles",
 	}, nil)
 
 	sys = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "gofr_go_sys",
+		Name: "app_go_sys",
 		Help: "Gauge of total bytes of memory",
 	}, nil)
 
