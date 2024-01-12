@@ -1,4 +1,4 @@
-package datasource
+package sql
 
 import (
 	"context"
@@ -7,15 +7,17 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"gofr.dev/pkg/gofr/datasource"
 )
 
 // DB is a wrapper around sql.DB which provides some more features.
 type DB struct {
 	*sql.DB
-	logger Logger
+	logger datasource.Logger
 }
 
-type SQLLog struct {
+type Log struct {
 	Type     string        `json:"type"`
 	Query    string        `json:"query"`
 	Duration int64         `json:"duration"`
@@ -23,7 +25,7 @@ type SQLLog struct {
 }
 
 func (d *DB) logQuery(start time.Time, queryType, query string, args ...interface{}) {
-	d.logger.Debug(SQLLog{
+	d.logger.Debug(Log{
 		Type:     queryType,
 		Query:    query,
 		Duration: time.Since(start).Microseconds(),
@@ -67,11 +69,11 @@ func (d *DB) Begin() (*Tx, error) {
 
 type Tx struct {
 	*sql.Tx
-	logger Logger
+	logger datasource.Logger
 }
 
 func (t *Tx) logQuery(start time.Time, queryType, query string, args ...interface{}) {
-	t.logger.Debug(SQLLog{
+	t.logger.Debug(Log{
 		Type:     queryType,
 		Query:    query,
 		Duration: time.Since(start).Microseconds(),
