@@ -1,6 +1,7 @@
 package container
 
 import (
+	"gofr.dev/pkg/gofr/service"
 	"strconv"
 
 	"gofr.dev/pkg/gofr/config"
@@ -18,8 +19,9 @@ import (
 // etc which is shared across is placed here.
 type Container struct {
 	logging.Logger
-	Redis *redis.Client
-	DB    *sql.DB
+	Redis    *redis.Client
+	DB       *sql.DB
+	Services map[string]service.HTTP
 }
 
 func (c *Container) Health() interface{} {
@@ -78,4 +80,8 @@ func NewContainer(conf config.Config) *Container {
 	}
 
 	return c
+}
+
+func (c *Container) GetHTTPService(serviceName string) service.HTTP {
+	return c.Services[serviceName]
 }

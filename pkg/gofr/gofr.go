@@ -2,6 +2,7 @@ package gofr
 
 import (
 	"fmt"
+	"gofr.dev/pkg/gofr/service"
 	"net/http"
 	"os"
 	"strconv"
@@ -132,6 +133,19 @@ func (a *App) readConfig() {
 	}
 
 	a.Config = config.NewEnvFile(configLocation)
+}
+
+// GET adds a Handler for http GET method for a route pattern.
+func (a *App) AddHTTPService(serviceName, serviceAddress string) {
+	if a.container.Services == nil {
+		a.container.Services = make(map[string]service.HTTP)
+	}
+
+	if _, ok := a.container.Services[serviceName]; ok {
+		a.container.Debugf("Service already registered Name: %v", serviceName)
+	}
+
+	a.container.Services[serviceName] = service.NewHTTPService(serviceAddress, a.container.Logger)
 }
 
 // GET adds a Handler for http GET method for a route pattern.

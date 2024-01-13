@@ -2,7 +2,9 @@ package service
 
 import (
 	"bytes"
+	"context"
 	"fmt"
+
 	"go.opentelemetry.io/contrib/instrumentation/net/http/httptrace/otelhttptrace"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel"
@@ -10,79 +12,79 @@ import (
 	"net/http"
 	"net/http/httptrace"
 	"strings"
-
-	"gofr.dev/pkg/gofr"
 )
 
 type httpService struct {
 	*http.Client
 	trace.Tracer
 	url string
+	Logger
 }
 
 type HTTP interface {
-	Get(ctx *gofr.Context, api string, queryParams map[string]interface{}) (*http.Response, error)
-	GetWithHeaders(ctx *gofr.Context, path string, queryParams map[string]interface{}, headers map[string]string) (*http.Response, error)
+	Get(ctx context.Context, api string, queryParams map[string]interface{}) (*http.Response, error)
+	GetWithHeaders(ctx context.Context, path string, queryParams map[string]interface{}, headers map[string]string) (*http.Response, error)
 
-	Post(ctx *gofr.Context, path string, queryParams map[string]interface{}, body []byte) (*http.Response, error)
-	PostWithHeaders(ctx *gofr.Context, path string, queryParams map[string]interface{}, body []byte, headers map[string]string) (*http.Response, error)
+	Post(ctx context.Context, path string, queryParams map[string]interface{}, body []byte) (*http.Response, error)
+	PostWithHeaders(ctx context.Context, path string, queryParams map[string]interface{}, body []byte, headers map[string]string) (*http.Response, error)
 
-	Put(ctx *gofr.Context, api string, queryParams map[string]interface{}, body []byte) (*http.Response, error)
-	PutWithHeaders(ctx *gofr.Context, api string, queryParams map[string]interface{}, body []byte, headers map[string]string) (*http.Response, error)
+	Put(ctx context.Context, api string, queryParams map[string]interface{}, body []byte) (*http.Response, error)
+	PutWithHeaders(ctx context.Context, api string, queryParams map[string]interface{}, body []byte, headers map[string]string) (*http.Response, error)
 
-	Delete(ctx *gofr.Context, api string, body []byte) (*http.Response, error)
-	DeleteWithHeaders(ctx *gofr.Context, api string, body []byte, headers map[string]string) (*http.Response, error)
+	Delete(ctx context.Context, api string, body []byte) (*http.Response, error)
+	DeleteWithHeaders(ctx context.Context, api string, body []byte, headers map[string]string) (*http.Response, error)
 }
 
-func NewHTTPService(serviceAddress string) HTTP {
+func NewHTTPService(serviceAddress string, logger Logger) HTTP {
 	return &httpService{
 		Client: &http.Client{Transport: otelhttp.NewTransport(http.DefaultTransport)},
 		url:    serviceAddress,
 		Tracer: otel.Tracer("gofr-http-client"),
+		Logger: logger,
 	}
 }
 
-func (h *httpService) Get(ctx *gofr.Context, path string, queryParams map[string]interface{}) (*http.Response, error) {
+func (h *httpService) Get(ctx context.Context, path string, queryParams map[string]interface{}) (*http.Response, error) {
 	return h.createAndSendRequest(ctx, http.MethodGet, path, queryParams, nil, nil)
 }
 
-func (h *httpService) GetWithHeaders(ctx *gofr.Context, path string, queryParams map[string]interface{}, headers map[string]string) (*http.Response, error) {
+func (h *httpService) GetWithHeaders(ctx context.Context, path string, queryParams map[string]interface{}, headers map[string]string) (*http.Response, error) {
 	return h.createAndSendRequest(ctx, http.MethodGet, path, queryParams, nil, headers)
 }
 
-func (h *httpService) Post(ctx *gofr.Context, path string, queryParams map[string]interface{}, body []byte) (*http.Response, error) {
+func (h *httpService) Post(ctx context.Context, path string, queryParams map[string]interface{}, body []byte) (*http.Response, error) {
 	return h.createAndSendRequest(ctx, http.MethodPost, path, queryParams, body, nil)
 }
 
-func (h *httpService) PostWithHeaders(ctx *gofr.Context, path string, queryParams map[string]interface{}, body []byte, headers map[string]string) (*http.Response, error) {
+func (h *httpService) PostWithHeaders(ctx context.Context, path string, queryParams map[string]interface{}, body []byte, headers map[string]string) (*http.Response, error) {
 	return h.createAndSendRequest(ctx, http.MethodPost, path, queryParams, body, headers)
 }
 
-func (h *httpService) Patch(ctx *gofr.Context, path string, queryParams map[string]interface{}, body []byte) (*http.Response, error) {
+func (h *httpService) Patch(ctx context.Context, path string, queryParams map[string]interface{}, body []byte) (*http.Response, error) {
 	return h.PatchWithHeaders(ctx, path, queryParams, body, nil)
 }
 
-func (h *httpService) PatchWithHeaders(ctx *gofr.Context, path string, queryParams map[string]interface{}, body []byte, headers map[string]string) (*http.Response, error) {
+func (h *httpService) PatchWithHeaders(ctx context.Context, path string, queryParams map[string]interface{}, body []byte, headers map[string]string) (*http.Response, error) {
 	return h.createAndSendRequest(ctx, http.MethodPatch, path, queryParams, body, headers)
 }
 
-func (h *httpService) Put(ctx *gofr.Context, path string, queryParams map[string]interface{}, body []byte) (*http.Response, error) {
+func (h *httpService) Put(ctx context.Context, path string, queryParams map[string]interface{}, body []byte) (*http.Response, error) {
 	return h.PutWithHeaders(ctx, path, queryParams, body, nil)
 }
 
-func (h *httpService) PutWithHeaders(ctx *gofr.Context, path string, queryParams map[string]interface{}, body []byte, headers map[string]string) (*http.Response, error) {
+func (h *httpService) PutWithHeaders(ctx context.Context, path string, queryParams map[string]interface{}, body []byte, headers map[string]string) (*http.Response, error) {
 	return h.createAndSendRequest(ctx, http.MethodPut, path, queryParams, body, headers)
 }
 
-func (h *httpService) Delete(ctx *gofr.Context, path string, body []byte) (*http.Response, error) {
+func (h *httpService) Delete(ctx context.Context, path string, body []byte) (*http.Response, error) {
 	return h.DeleteWithHeaders(ctx, path, body, nil)
 }
 
-func (h *httpService) DeleteWithHeaders(ctx *gofr.Context, path string, body []byte, headers map[string]string) (*http.Response, error) {
+func (h *httpService) DeleteWithHeaders(ctx context.Context, path string, body []byte, headers map[string]string) (*http.Response, error) {
 	return h.createAndSendRequest(ctx, http.MethodDelete, path, nil, body, headers)
 }
 
-func (h *httpService) createAndSendRequest(ctx *gofr.Context, method string, path string,
+func (h *httpService) createAndSendRequest(ctx context.Context, method string, path string,
 	queryParams map[string]interface{}, body []byte, headers map[string]string) (*http.Response, error) {
 	uri := h.url + "/" + path
 	uri = strings.TrimRight(uri, "/")
@@ -93,6 +95,15 @@ func (h *httpService) createAndSendRequest(ctx *gofr.Context, method string, pat
 	spanContext = httptrace.WithClientTrace(spanContext, otelhttptrace.NewClientTrace(ctx))
 	req, _ := http.NewRequestWithContext(spanContext, method, uri, bytes.NewBuffer(body))
 
+	// TODO : Has to be added properly
+	h.Log(HTTPCallLog{
+		MessageId:    "Error",
+		ResponseCode: 201,
+		ResponseTime: 0,
+		Method:       "",
+		URI:          "",
+	})
+
 	// set headers
 	for k, v := range headers {
 		req.Header.Set(k, v)
@@ -101,14 +112,6 @@ func (h *httpService) createAndSendRequest(ctx *gofr.Context, method string, pat
 	encodeQueryParameters(req, queryParams)
 
 	resp, err := h.Do(req)
-
-	ctx.Logger.Log(HTTPCallLog{
-		MessageId:    "test",
-		ResponseCode: resp.StatusCode,
-		ResponseTime: 0,
-		Method:       method,
-		URI:          uri,
-	})
 
 	return resp, err
 }

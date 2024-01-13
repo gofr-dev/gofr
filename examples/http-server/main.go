@@ -9,12 +9,13 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"gofr.dev/pkg/gofr"
-	"gofr.dev/pkg/gofr/service"
 )
 
 func main() {
 	// Create a new application
 	a := gofr.New()
+
+	a.AddHTTPService("anotherService", "http://localhost:9000")
 
 	// Add all the routes
 	a.GET("/hello", HelloHandler)
@@ -71,8 +72,7 @@ func TraceHandler(c *gofr.Context) (interface{}, error) {
 	wg.Wait()
 
 	// Call Another service
-	anotherService := service.NewHTTPService("http://localhost:9000")
-	anotherService.Get(c, "redis", nil)
+	c.GetHTTPService("anotherService").Get(c, "redis", nil)
 
 	return "Tracing Success", nil
 }
