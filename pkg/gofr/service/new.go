@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-
 	"go.opentelemetry.io/contrib/instrumentation/net/http/httptrace/otelhttptrace"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel"
@@ -12,7 +11,13 @@ import (
 	"net/http"
 	"net/http/httptrace"
 	"strings"
+	"time"
 )
+
+//type Context interface {
+//	context.Context
+//	HostName() string
+//}
 
 type httpService struct {
 	*http.Client
@@ -95,15 +100,6 @@ func (h *httpService) createAndSendRequest(ctx context.Context, method string, p
 	spanContext = httptrace.WithClientTrace(spanContext, otelhttptrace.NewClientTrace(ctx))
 	req, _ := http.NewRequestWithContext(spanContext, method, uri, bytes.NewBuffer(body))
 
-	// TODO : Has to be added properly
-	h.Log(HTTPCallLog{
-		MessageId:    "Error",
-		ResponseCode: 201,
-		ResponseTime: 0,
-		Method:       "",
-		URI:          "",
-	})
-
 	// set headers
 	for k, v := range headers {
 		req.Header.Set(k, v)
@@ -111,9 +107,25 @@ func (h *httpService) createAndSendRequest(ctx context.Context, method string, p
 
 	encodeQueryParameters(req, queryParams)
 
+	log := Log{Timestamp: time.Now(), CorrelationID: fmt.Sprint(ctx.Value("correlationId")), HTTPMethod: method,
+		Endpoint: path, URI: h.url}
+
+	requestStart := time.Now()
+
 	resp, err := h.Do(req)
 
-	return resp, err
+	log.ResponseCode = resp.StatusCode
+	log.ResponseTime = time.Since(requestStart).Nanoseconds() / 1000
+
+	if err != nil {
+		h.Log(ErrorLog{Log: log, ErrorMessage: err.Error()})
+
+		return resp, err
+	}
+
+	h.Log(log)
+
+	return resp, nil
 }
 
 func encodeQueryParameters(req *http.Request, queryParams map[string]interface{}) {
