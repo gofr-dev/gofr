@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"go.opentelemetry.io/otel/trace"
 	"os"
 	"reflect"
 	"strconv"
@@ -12,6 +13,7 @@ import (
 // to create cmd applications in same way we would create a HTTP server application.
 // Gofr's http.Request is another such abstraction.
 type Request struct {
+	id     string
 	flags  map[string]bool
 	params map[string]string
 }
@@ -111,4 +113,8 @@ func (r *Request) Bind(i interface{}) error {
 	}
 
 	return nil
+}
+
+func (r *Request) GetID() string {
+	return trace.SpanFromContext(r.Context()).SpanContext().TraceID().String()
 }

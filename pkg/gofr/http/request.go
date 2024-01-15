@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"gofr.dev/pkg/gofr/http/middleware"
 	"io"
 	"net/http"
 
@@ -64,4 +65,8 @@ func (r *Request) body() ([]byte, error) {
 	r.req.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 
 	return bodyBytes, nil
+}
+
+func (r *Request) GetID() string {
+	return middleware.GetCorrelationID(r.req)
 }
