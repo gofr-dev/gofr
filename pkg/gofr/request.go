@@ -13,5 +13,4 @@ type Request interface {
 	PathParam(string) string
 	Bind(interface{}) error
 	HostName() string
-	GetID() string
 }

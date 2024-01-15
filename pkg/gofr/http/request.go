@@ -9,8 +9,6 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
-
-	"gofr.dev/pkg/gofr/http/middleware"
 )
 
 // Request is an abstraction over the underlying http.Request. This abstraction is useful because it allows us
@@ -66,8 +64,4 @@ func (r *Request) body() ([]byte, error) {
 	r.req.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 
 	return bodyBytes, nil
-}
-
-func (r *Request) GetID() string {
-	return middleware.GetCorrelationID(r.req)
 }
