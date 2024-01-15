@@ -103,6 +103,17 @@ type systemStats struct {
 	numGC         float64
 }
 
+// PushSystemStats push metrics for system stats.
+func PushSystemStats() {
+	stats := getSystemStats()
+
+	goRoutines.WithLabelValues().Set(stats.numGoRoutines)
+	alloc.WithLabelValues().Set(stats.alloc)
+	totalAlloc.WithLabelValues().Set(stats.totalAlloc)
+	sys.WithLabelValues().Set(stats.sys)
+	numGC.WithLabelValues().Set(stats.numGC)
+}
+
 func getSystemStats() systemStats {
 	var (
 		stats systemStats
@@ -118,15 +129,4 @@ func getSystemStats() systemStats {
 	stats.sys = float64(m.Sys)
 
 	return stats
-}
-
-// PushSystemStats push metrics for system stats.
-func PushSystemStats() {
-	stats := getSystemStats()
-
-	goRoutines.WithLabelValues().Set(stats.numGoRoutines)
-	alloc.WithLabelValues().Set(stats.alloc)
-	totalAlloc.WithLabelValues().Set(stats.totalAlloc)
-	sys.WithLabelValues().Set(stats.sys)
-	numGC.WithLabelValues().Set(stats.numGC)
 }

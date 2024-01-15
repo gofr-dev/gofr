@@ -41,5 +41,7 @@ func MetricsServer(logger logging.Logger, port int) *http.Server {
 		}
 	}()
 
+	PushSystemStats()
+
 	return srv
 }
