@@ -104,7 +104,7 @@ func (h *httpService) createAndSendRequest(ctx Context, method string, path stri
 	reqID := ctx.GetID()
 
 	// set headers
-	req.Header.Set("X-Correlation-Id", reqID)
+	req.Header.Set("X-Correlation-ID", reqID)
 
 	for k, v := range headers {
 		req.Header.Set(k, v)

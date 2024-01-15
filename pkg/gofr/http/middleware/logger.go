@@ -47,7 +47,7 @@ func Logging(logger logger) func(inner http.Handler) http.Handler {
 			start := time.Now()
 			srw := &StatusResponseWriter{ResponseWriter: w}
 			reqID := GetCorrelationID(r)
-			srw.Header().Set("X-Correlation-Id", reqID)
+			srw.Header().Set("X-Correlation-ID", reqID)
 
 			defer func(res *StatusResponseWriter, req *http.Request) {
 				l := RequestLog{
@@ -117,7 +117,7 @@ func panicRecovery(w http.ResponseWriter, logger logger) {
 }
 
 func GetCorrelationID(r *http.Request) string {
-	correlationIDFromRequest, err := trace.TraceIDFromHex(r.Header.Get("X-Correlation-Id"))
+	correlationIDFromRequest, err := trace.TraceIDFromHex(r.Header.Get("X-Correlation-ID"))
 	if err != nil {
 		correlationIDFromSpan := trace.SpanFromContext(r.Context()).SpanContext().TraceID().String()
 		// if tracing is not enabled, otel sets the trace-ID to "00000000000000000000000000000000" (nil type of [16]byte)
