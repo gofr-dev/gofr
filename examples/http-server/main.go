@@ -15,7 +15,7 @@ func main() {
 	// Create a new application
 	a := gofr.New()
 
-	a.AddHTTPService("anotherService", "http://localhost:8000")
+	a.AddHTTPService("anotherService", "http://localhost:9000")
 
 	// Add all the routes
 	a.GET("/hello", HelloHandler)
