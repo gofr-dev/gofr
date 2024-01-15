@@ -17,7 +17,6 @@ type Log struct {
 	CorrelationID string    `json:"correlationId"`
 	ResponseCode  int       `json:"responseCode"`
 	HTTPMethod    string    `json:"http_method"`
-	Endpoint      string    `json:"endpoint"`
 	URI           string    `json:"uri"`
 }
 

@@ -116,8 +116,7 @@ func (h *httpService) createAndSendRequest(ctx Context, method string, path stri
 		Timestamp:     time.Now(),
 		CorrelationID: reqID,
 		HTTPMethod:    method,
-		Endpoint:      path,
-		URI:           h.url,
+		URI:           uri,
 	}
 
 	requestStart := time.Now()
@@ -135,7 +134,7 @@ func (h *httpService) createAndSendRequest(ctx Context, method string, path stri
 
 	log.ResponseCode = resp.StatusCode
 
-	h.Debug(log)
+	h.Log(log)
 
 	return resp, nil
 }
