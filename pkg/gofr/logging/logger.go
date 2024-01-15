@@ -114,10 +114,12 @@ func (l *logger) prettyPrint(e logEntry, out io.Writer) {
 			e.Level.color(), e.Level.String()[0:4], e.Time.Format("15:04:05"), msg.Type, "SQL", msg.Duration, msg.Query)
 	case service.Log:
 		fmt.Fprintf(out, "\u001B[38;5;%dm%s\u001B[0m [%s] \u001B[38;5;8m%s \u001B[38;5;%dm%d\u001B[0m %8d\u001B[38;5;8mµs\u001B[0m %s %s \n",
-			e.Level.color(), e.Level.String()[0:4], e.Time.Format("15:04:05"), msg.CorrelationID, colorForStatusCode(msg.ResponseCode), msg.ResponseCode, msg.ResponseTime, msg.HTTPMethod, msg.URI)
+			e.Level.color(), e.Level.String()[0:4], e.Time.Format("15:04:05"), msg.CorrelationID, colorForStatusCode(msg.ResponseCode),
+			msg.ResponseCode, msg.ResponseTime, msg.HTTPMethod, msg.URI)
 	case service.ErrorLog:
-		fmt.Fprintf(out, "\u001B[38;5;%dm%s\u001B[0m [%s] \u001B[38;5;8m%s \u001B[38;5;%dm%d\u001B[0m %8d\u001B[38;5;8mµs\u001B[0m %s %s \n",
-			e.Level.color(), e.Level.String()[0:4], e.Time.Format("15:04:05"), msg.CorrelationID, colorForStatusCode(msg.ResponseCode), msg.ResponseCode, msg.ResponseTime, msg.HTTPMethod, msg.URI)
+		fmt.Fprintf(out, "\u001B[38;5;%dm%s\u001B[0m [%s] \u001B[38;5;8m%s \u001B[38;5;%dm%d\u001B[0m %8d\u001B[38;5;8mµs\u001B[0m %s %s \033[0;31m %s \n",
+			e.Level.color(), e.Level.String()[0:4], e.Time.Format("15:04:05"), msg.CorrelationID, colorForStatusCode(msg.ResponseCode),
+			msg.ResponseCode, msg.ResponseTime, msg.HTTPMethod, msg.URI, msg.ErrorMessage)
 	default:
 		fmt.Fprintf(out, "\u001B[38;5;%dm%s\u001B[0m [%s] %v\n", e.Level.color(), e.Level.String()[0:4], e.Time.Format("15:04:05"), e.Message)
 	}
@@ -125,14 +127,13 @@ func (l *logger) prettyPrint(e logEntry, out io.Writer) {
 
 // colorForStatusCode provide color for the status code in the terminal when logs is being pretty-printed.
 func colorForStatusCode(status int) int {
-	responseCodeColors := map[int]int{
-		200: 34,
-		404: 220,
-		500: 202,
-	}
-
-	if color, ok := responseCodeColors[status]; ok {
-		return color
+	switch {
+	case status >= 200 && status < 300:
+		return 34
+	case status >= 400 && status < 500:
+		return 220
+	case status >= 500 && status < 600:
+		return 202
 	}
 
 	return 0
