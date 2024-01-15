@@ -127,7 +127,7 @@ func (h *httpService) createAndSendRequest(ctx Context, method string, path stri
 
 	if err != nil {
 		log.ResponseCode = http.StatusInternalServerError
-		h.Error(ErrorLog{Log: log, ErrorMessage: err.Error()})
+		h.Log(ErrorLog{Log: log, ErrorMessage: err.Error()})
 
 		return resp, err
 	}
