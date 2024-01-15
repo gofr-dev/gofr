@@ -4,14 +4,15 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"go.opentelemetry.io/contrib/instrumentation/net/http/httptrace/otelhttptrace"
-	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/trace"
 	"net/http"
 	"net/http/httptrace"
 	"strings"
 	"time"
+
+	"go.opentelemetry.io/contrib/instrumentation/net/http/httptrace/otelhttptrace"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type Context interface {
@@ -111,23 +112,30 @@ func (h *httpService) createAndSendRequest(ctx Context, method string, path stri
 
 	encodeQueryParameters(req, queryParams)
 
-	log := Log{Timestamp: time.Now(), CorrelationID: reqID, HTTPMethod: method,
-		Endpoint: path, URI: h.url}
+	log := Log{
+		Timestamp:     time.Now(),
+		CorrelationID: reqID,
+		HTTPMethod:    method,
+		Endpoint:      path,
+		URI:           h.url,
+	}
 
 	requestStart := time.Now()
 
 	resp, err := h.Do(req)
 
-	log.ResponseCode = resp.StatusCode
 	log.ResponseTime = time.Since(requestStart).Nanoseconds() / 1000
 
 	if err != nil {
-		h.Log(ErrorLog{Log: log, ErrorMessage: err.Error()})
+		log.ResponseCode = http.StatusInternalServerError
+		h.Error(ErrorLog{Log: log, ErrorMessage: err.Error()})
 
 		return resp, err
 	}
 
-	h.Log(log)
+	log.ResponseCode = resp.StatusCode
+
+	h.Debug(log)
 
 	return resp, nil
 }
