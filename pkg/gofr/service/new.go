@@ -15,11 +15,6 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-type Context interface {
-	context.Context
-	GetID() string
-}
-
 type httpService struct {
 	*http.Client
 	trace.Tracer
@@ -28,17 +23,17 @@ type httpService struct {
 }
 
 type HTTP interface {
-	Get(ctx Context, api string, queryParams map[string]interface{}) (*http.Response, error)
-	GetWithHeaders(ctx Context, path string, queryParams map[string]interface{}, headers map[string]string) (*http.Response, error)
+	Get(ctx context.Context, api string, queryParams map[string]interface{}) (*http.Response, error)
+	GetWithHeaders(ctx context.Context, path string, queryParams map[string]interface{}, headers map[string]string) (*http.Response, error)
 
-	Post(ctx Context, path string, queryParams map[string]interface{}, body []byte) (*http.Response, error)
-	PostWithHeaders(ctx Context, path string, queryParams map[string]interface{}, body []byte, headers map[string]string) (*http.Response, error)
+	Post(ctx context.Context, path string, queryParams map[string]interface{}, body []byte) (*http.Response, error)
+	PostWithHeaders(ctx context.Context, path string, queryParams map[string]interface{}, body []byte, headers map[string]string) (*http.Response, error)
 
-	Put(ctx Context, api string, queryParams map[string]interface{}, body []byte) (*http.Response, error)
-	PutWithHeaders(ctx Context, api string, queryParams map[string]interface{}, body []byte, headers map[string]string) (*http.Response, error)
+	Put(ctx context.Context, api string, queryParams map[string]interface{}, body []byte) (*http.Response, error)
+	PutWithHeaders(ctx context.Context, api string, queryParams map[string]interface{}, body []byte, headers map[string]string) (*http.Response, error)
 
-	Delete(ctx Context, api string, body []byte) (*http.Response, error)
-	DeleteWithHeaders(ctx Context, api string, body []byte, headers map[string]string) (*http.Response, error)
+	Delete(ctx context.Context, api string, body []byte) (*http.Response, error)
+	DeleteWithHeaders(ctx context.Context, api string, body []byte, headers map[string]string) (*http.Response, error)
 }
 
 func NewHTTPService(serviceAddress string, logger Logger) HTTP {
@@ -50,47 +45,47 @@ func NewHTTPService(serviceAddress string, logger Logger) HTTP {
 	}
 }
 
-func (h *httpService) Get(ctx Context, path string, queryParams map[string]interface{}) (*http.Response, error) {
+func (h *httpService) Get(ctx context.Context, path string, queryParams map[string]interface{}) (*http.Response, error) {
 	return h.createAndSendRequest(ctx, http.MethodGet, path, queryParams, nil, nil)
 }
 
-func (h *httpService) GetWithHeaders(ctx Context, path string, queryParams map[string]interface{}, headers map[string]string) (*http.Response, error) {
+func (h *httpService) GetWithHeaders(ctx context.Context, path string, queryParams map[string]interface{}, headers map[string]string) (*http.Response, error) {
 	return h.createAndSendRequest(ctx, http.MethodGet, path, queryParams, nil, headers)
 }
 
-func (h *httpService) Post(ctx Context, path string, queryParams map[string]interface{}, body []byte) (*http.Response, error) {
+func (h *httpService) Post(ctx context.Context, path string, queryParams map[string]interface{}, body []byte) (*http.Response, error) {
 	return h.createAndSendRequest(ctx, http.MethodPost, path, queryParams, body, nil)
 }
 
-func (h *httpService) PostWithHeaders(ctx Context, path string, queryParams map[string]interface{}, body []byte, headers map[string]string) (*http.Response, error) {
+func (h *httpService) PostWithHeaders(ctx context.Context, path string, queryParams map[string]interface{}, body []byte, headers map[string]string) (*http.Response, error) {
 	return h.createAndSendRequest(ctx, http.MethodPost, path, queryParams, body, headers)
 }
 
-func (h *httpService) Patch(ctx Context, path string, queryParams map[string]interface{}, body []byte) (*http.Response, error) {
+func (h *httpService) Patch(ctx context.Context, path string, queryParams map[string]interface{}, body []byte) (*http.Response, error) {
 	return h.PatchWithHeaders(ctx, path, queryParams, body, nil)
 }
 
-func (h *httpService) PatchWithHeaders(ctx Context, path string, queryParams map[string]interface{}, body []byte, headers map[string]string) (*http.Response, error) {
+func (h *httpService) PatchWithHeaders(ctx context.Context, path string, queryParams map[string]interface{}, body []byte, headers map[string]string) (*http.Response, error) {
 	return h.createAndSendRequest(ctx, http.MethodPatch, path, queryParams, body, headers)
 }
 
-func (h *httpService) Put(ctx Context, path string, queryParams map[string]interface{}, body []byte) (*http.Response, error) {
+func (h *httpService) Put(ctx context.Context, path string, queryParams map[string]interface{}, body []byte) (*http.Response, error) {
 	return h.PutWithHeaders(ctx, path, queryParams, body, nil)
 }
 
-func (h *httpService) PutWithHeaders(ctx Context, path string, queryParams map[string]interface{}, body []byte, headers map[string]string) (*http.Response, error) {
+func (h *httpService) PutWithHeaders(ctx context.Context, path string, queryParams map[string]interface{}, body []byte, headers map[string]string) (*http.Response, error) {
 	return h.createAndSendRequest(ctx, http.MethodPut, path, queryParams, body, headers)
 }
 
-func (h *httpService) Delete(ctx Context, path string, body []byte) (*http.Response, error) {
+func (h *httpService) Delete(ctx context.Context, path string, body []byte) (*http.Response, error) {
 	return h.DeleteWithHeaders(ctx, path, body, nil)
 }
 
-func (h *httpService) DeleteWithHeaders(ctx Context, path string, body []byte, headers map[string]string) (*http.Response, error) {
+func (h *httpService) DeleteWithHeaders(ctx context.Context, path string, body []byte, headers map[string]string) (*http.Response, error) {
 	return h.createAndSendRequest(ctx, http.MethodDelete, path, nil, body, headers)
 }
 
-func (h *httpService) createAndSendRequest(ctx Context, method string, path string,
+func (h *httpService) createAndSendRequest(ctx context.Context, method string, path string,
 	queryParams map[string]interface{}, body []byte, headers map[string]string) (*http.Response, error) {
 	uri := h.url + "/" + path
 	uri = strings.TrimRight(uri, "/")
@@ -101,7 +96,7 @@ func (h *httpService) createAndSendRequest(ctx Context, method string, path stri
 	spanContext = httptrace.WithClientTrace(spanContext, otelhttptrace.NewClientTrace(ctx))
 	req, _ := http.NewRequestWithContext(spanContext, method, uri, bytes.NewBuffer(body))
 
-	reqID := ctx.GetID()
+	reqID := trace.SpanFromContext(ctx).SpanContext().TraceID().String()
 
 	// set headers
 	req.Header.Set("X-Correlation-ID", reqID)
