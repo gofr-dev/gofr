@@ -3,11 +3,12 @@ package middleware
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/google/uuid"
 	"net/http"
 	"runtime/debug"
 	"strings"
 	"time"
+
+	"github.com/google/uuid"
 
 	"go.opentelemetry.io/otel/trace"
 )
@@ -116,36 +117,24 @@ func panicRecovery(w http.ResponseWriter, logger logger) {
 }
 
 func GetCorrelationID(r *http.Request) string {
-	var correlationID string
-
-	cID, err := trace.TraceIDFromHex(getTraceID(r))
+	correlationIDFromRequest, err := trace.TraceIDFromHex(r.Header.Get("X-Correlation-Id"))
 	if err != nil {
-		correlationID = trace.SpanFromContext(r.Context()).SpanContext().TraceID().String()
+		correlationIDFromSpan := trace.SpanFromContext(r.Context()).SpanContext().TraceID().String()
 		// if tracing is not enabled, otel sets the trace-ID to "00000000000000000000000000000000" (nil type of [16]byte)
 
 		const correlationIDLength = 32
 
 		nullCorrelationID := fmt.Sprintf("%0*s", correlationIDLength, "")
 
-		if correlationID == nullCorrelationID {
+		if correlationIDFromSpan == nullCorrelationID {
 			id, _ := uuid.NewUUID()
 			s := strings.Split(id.String(), "-")
 
-			correlationID = strings.Join(s, "")
+			correlationIDFromSpan = strings.Join(s, "")
 		}
-	} else {
-		correlationID = cID.String()
+
+		return correlationIDFromSpan
 	}
 
-	r.Header.Set("X-Correlation-Id", correlationID)
-
-	return correlationID
-}
-
-func getTraceID(r *http.Request) string {
-	if id := r.Header.Get("X-B3-TraceId"); id != "" {
-		return id
-	}
-
-	return r.Header.Get("X-Correlation-Id")
+	return correlationIDFromRequest.String()
 }

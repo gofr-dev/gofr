@@ -1,16 +1,16 @@
 package container
 
 import (
-	"gofr.dev/pkg/gofr/service"
 	"strconv"
+
+	_ "github.com/go-sql-driver/mysql" // This is required to be blank import
+	"github.com/redis/go-redis/v9"
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/datasource/sql"
 	"gofr.dev/pkg/gofr/logging"
-
-	_ "github.com/go-sql-driver/mysql" // This is required to be blank import
-	"github.com/redis/go-redis/v9"
+	"gofr.dev/pkg/gofr/service"
 )
 
 // TODO - This can be a collection of interfaces instead of struct

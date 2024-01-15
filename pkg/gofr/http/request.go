@@ -5,11 +5,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"gofr.dev/pkg/gofr/http/middleware"
 	"io"
 	"net/http"
 
 	"github.com/gorilla/mux"
+
+	"gofr.dev/pkg/gofr/http/middleware"
 )
 
 // Request is an abstraction over the underlying http.Request. This abstraction is useful because it allows us

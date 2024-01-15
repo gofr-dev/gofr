@@ -2,18 +2,18 @@ package cmd
 
 import (
 	"context"
-	"go.opentelemetry.io/otel/trace"
 	"os"
 	"reflect"
 	"strconv"
 	"strings"
+
+	"go.opentelemetry.io/otel/trace"
 )
 
 // Request is an abstraction over the actual command with flags. This abstraction is useful because it allows us
 // to create cmd applications in same way we would create a HTTP server application.
 // Gofr's http.Request is another such abstraction.
 type Request struct {
-	id     string
 	flags  map[string]bool
 	params map[string]string
 }

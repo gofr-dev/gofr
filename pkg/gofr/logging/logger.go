@@ -3,15 +3,15 @@ package logging
 import (
 	"encoding/json"
 	"fmt"
-	"gofr.dev/pkg/gofr/service"
 	"io"
 	"os"
 	"time"
 
+	"golang.org/x/term"
+
 	"gofr.dev/pkg/gofr/datasource/sql"
 	"gofr.dev/pkg/gofr/http/middleware"
-
-	"golang.org/x/term"
+	"gofr.dev/pkg/gofr/service"
 )
 
 type Logger interface {

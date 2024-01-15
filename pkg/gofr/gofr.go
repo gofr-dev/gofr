@@ -2,7 +2,6 @@ package gofr
 
 import (
 	"fmt"
-	"gofr.dev/pkg/gofr/service"
 	"net/http"
 	"os"
 	"strconv"
@@ -10,6 +9,7 @@ import (
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
+	"gofr.dev/pkg/gofr/service"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/zipkin"
