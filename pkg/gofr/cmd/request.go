@@ -6,8 +6,6 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
-
-	"go.opentelemetry.io/otel/trace"
 )
 
 // Request is an abstraction over the actual command with flags. This abstraction is useful because it allows us
@@ -113,8 +111,4 @@ func (r *Request) Bind(i interface{}) error {
 	}
 
 	return nil
-}
-
-func (r *Request) GetID() string {
-	return trace.SpanFromContext(r.Context()).SpanContext().TraceID().String()
 }
