@@ -115,10 +115,10 @@ func panicRecovery(w http.ResponseWriter, logger logger) {
 }
 
 func GetTracerID(r *http.Request) string {
-	correlationIDFromRequest, err := trace.TraceIDFromHex(r.Header.Get("X-Correlation-ID"))
+	tracerIDFromRequest, err := trace.TraceIDFromHex(r.Header.Get("X-Correlation-ID"))
 	if err != nil {
 		return trace.SpanFromContext(r.Context()).SpanContext().TraceID().String()
 	}
 
-	return correlationIDFromRequest.String()
+	return tracerIDFromRequest.String()
 }
