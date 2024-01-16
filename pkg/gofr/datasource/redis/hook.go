@@ -40,7 +40,7 @@ func (r *Redis) ProcessPipelineHook(next redis.ProcessPipelineHook) redis.Proces
 	return func(ctx context.Context, cmds []redis.Cmder) error {
 		start := time.Now()
 		err := next(ctx, cmds)
-		r.logQuery(start, "pipeline", cmds)
+		r.logQuery(start, "pipeline", cmds[:len(cmds)-1])
 
 		return err
 	}
