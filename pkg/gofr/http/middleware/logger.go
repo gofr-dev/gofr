@@ -44,7 +44,7 @@ func Logging(logger logger) func(inner http.Handler) http.Handler {
 			start := time.Now()
 			srw := &StatusResponseWriter{ResponseWriter: w}
 
-			reqID := GetCorrelationID(r)
+			reqID := GetTracerID(r)
 			srw.Header().Set("X-Correlation-ID", reqID)
 
 			defer func(res *StatusResponseWriter, req *http.Request) {
@@ -114,7 +114,7 @@ func panicRecovery(w http.ResponseWriter, logger logger) {
 	}
 }
 
-func GetCorrelationID(r *http.Request) string {
+func GetTracerID(r *http.Request) string {
 	correlationIDFromRequest, err := trace.TraceIDFromHex(r.Header.Get("X-Correlation-ID"))
 	if err != nil {
 		return trace.SpanFromContext(r.Context()).SpanContext().TraceID().String()
