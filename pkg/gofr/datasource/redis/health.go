@@ -17,14 +17,14 @@ func (r *Redis) HealthCheck() datasource.Health {
 		r.logger.Error("")
 	}
 
-	health := r.InfoMap(ctx).Val()
-	if len(health) == 0 {
+	info := r.InfoMap(ctx).Val()
+	if len(info) == 0 {
 		h.Status = "DOWN"
 
 		return h
 	}
 
-	bytes, err := json.Marshal(health)
+	bytes, err := json.Marshal(info)
 	if err != nil {
 		r.logger.Error("Failed to Marshal REDIS Stats :%v", err)
 	}
