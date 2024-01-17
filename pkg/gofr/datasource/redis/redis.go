@@ -33,7 +33,7 @@ func NewRedisClient(config Config, logger datasource.Logger) (*Redis, error) {
 	}
 
 	rc := redis.NewClient(config.Options)
-	rc.AddHook(&Redis{Client: rc, logger: logger})
+	rc.AddHook(&redisHook{logger: logger})
 
 	if err := rc.Ping(context.TODO()).Err(); err != nil {
 		return nil, err

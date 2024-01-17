@@ -114,23 +114,7 @@ func (l *logger) prettyPrint(e logEntry, out io.Writer) {
 		fmt.Fprintf(out, "\u001B[38;5;%dm%s\u001B[0m [%s] \u001B[38;5;8m%-32s \u001B[38;5;24m%s\u001B[0m %8d\u001B[38;5;8mµs\u001B[0m   %v\n",
 			e.Level.color(), e.Level.String()[0:4], e.Time.Format("15:04:05"), msg.Type, "SQL", msg.Duration, msg.Query)
 	case redis.QueryLog:
-		args := msg.Args.([]interface{})
-		strArgs := make([]string, 0, len(args))
-		for _, arg := range args {
-			strArgs = append(strArgs, fmt.Sprint(arg))
-		}
-
-		// INFO | TIMESTAMP | 	ID | Operation/DB Name | Duration | Status Code
-
-		switch msg.Query {
-		case "pipeline":
-			fmt.Fprintf(out, "\u001B[38;5;%dm%s\u001B[0m [%s] \u001B[38;5;8m%-32s \u001B[38;5;24m%s\u001B[0m %8d\u001B[38;5;8mµs\u001B[0m %s\n",
-				e.Level.color(), e.Level.String()[0:4], e.Time.Format("15:04:05"), msg.Query, "REDIS", msg.Duration, strArgs[0][1:len(strArgs[0])-1])
-		default:
-			fmt.Fprintf(out, "\u001B[38;5;%dm%s\u001B[0m [%s] \u001B[38;5;8m%-32s \u001B[38;5;24m%s\u001B[0m %8d\u001B[38;5;8mµs\u001B[0m \n",
-				e.Level.color(), e.Level.String()[0:4], e.Time.Format("15:04:05"), strings.Join(strArgs, " "), "REDIS", msg.Duration)
-
-		}
+		l.printRedisQueryLog(e, msg, out)
 	default:
 		fmt.Fprintf(out, "\u001B[38;5;%dm%s\u001B[0m [%s] %v\n", e.Level.color(), e.Level.String()[0:4], e.Time.Format("15:04:05"), e.Message)
 	}
@@ -180,5 +164,23 @@ func checkIfTerminal(w io.Writer) bool {
 		return term.IsTerminal(int(v.Fd()))
 	default:
 		return false
+	}
+}
+
+func (l *logger) printRedisQueryLog(e logEntry, msg redis.QueryLog, out io.Writer) {
+	args := msg.Args.([]interface{})
+	strArgs := make([]string, 0, len(args))
+
+	for _, arg := range args {
+		strArgs = append(strArgs, fmt.Sprint(arg))
+	}
+
+	switch msg.Query {
+	case "pipeline":
+		fmt.Fprintf(out, "\u001B[38;5;%dm%s\u001B[0m [%s] \u001B[38;5;8m%-32s \u001B[38;5;24m%s\u001B[0m %8d\u001B[38;5;8mµs\u001B[0m %s\n",
+			e.Level.color(), e.Level.String()[0:4], e.Time.Format("15:04:05"), msg.Query, "REDIS", msg.Duration, strArgs[0][1:len(strArgs[0])-1])
+	default:
+		fmt.Fprintf(out, "\u001B[38;5;%dm%s\u001B[0m [%s] \u001B[38;5;8m%-32s \u001B[38;5;24m%s\u001B[0m %8d\u001B[38;5;8mµs\u001B[0m %v\n",
+			e.Level.color(), e.Level.String()[0:4], e.Time.Format("15:04:05"), strArgs[0], "REDIS", msg.Duration, strings.Join(strArgs, " "))
 	}
 }
