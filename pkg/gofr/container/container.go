@@ -23,7 +23,7 @@ type Container struct {
 func (c *Container) Health() interface{} {
 	datasources := make(map[string]interface{})
 
-	//datasources["sql"] = c.DB.HealthCheck()
+	datasources["sql"] = c.DB.HealthCheck()
 	datasources["redis"] = c.Redis.HealthCheck()
 
 	return datasources
