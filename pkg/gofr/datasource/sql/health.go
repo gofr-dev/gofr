@@ -16,9 +16,10 @@ func (d *DB) HealthCheck() datasource.Health {
 	defer cancel()
 
 	err := d.PingContext(ctx)
-
 	if err != nil {
 		h.Status = "DOWN"
+
+		return h
 	}
 
 	h.Status = "UP"
