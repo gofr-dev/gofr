@@ -3,13 +3,13 @@ package container
 import (
 	"strconv"
 
-	"gofr.dev/pkg/gofr/datasource/redis"
-
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/datasource"
+	"gofr.dev/pkg/gofr/datasource/sql"
 	"gofr.dev/pkg/gofr/logging"
 
 	_ "github.com/go-sql-driver/mysql" // This is required to be blank import
+	"github.com/redis/go-redis/v9"
 )
 
 // TODO - This can be a collection of interfaces instead of struct
@@ -18,8 +18,16 @@ import (
 // etc which is shared across is placed here.
 type Container struct {
 	logging.Logger
-	Redis *redis.Redis
-	DB    *datasource.DB
+	Redis *redis.Client
+	DB    *sql.DB
+}
+
+func (c *Container) Health() interface{} {
+	datasources := make(map[string]interface{})
+
+	datasources["sql"] = c.DB.HealthCheck()
+
+	return datasources
 }
 
 func NewContainer(conf config.Config) *Container {
@@ -36,10 +44,10 @@ func NewContainer(conf config.Config) *Container {
 			port = defaultRedisPort
 		}
 
-		c.Redis, err = redis.NewRedisClient(redis.Config{
+		c.Redis, err = datasource.NewRedisClient(datasource.RedisConfig{
 			HostName: host,
 			Port:     port,
-		}, c.Logger)
+		})
 
 		if err != nil {
 			c.Errorf("could not connect to redis at %s:%d. error: %s", host, port, err)
@@ -49,7 +57,7 @@ func NewContainer(conf config.Config) *Container {
 	}
 
 	if host := conf.Get("DB_HOST"); host != "" {
-		conf := datasource.DBConfig{
+		conf := sql.DBConfig{
 			HostName: host,
 			User:     conf.Get("DB_USER"),
 			Password: conf.Get("DB_PASSWORD"),
@@ -59,7 +67,7 @@ func NewContainer(conf config.Config) *Container {
 
 		var err error
 
-		c.DB, err = datasource.NewMYSQL(&conf, c.Logger)
+		c.DB, err = sql.NewMYSQL(&conf, c.Logger)
 
 		if err != nil {
 			c.Errorf("could not connect with '%s' user to database '%s:%s'  error: %v",
