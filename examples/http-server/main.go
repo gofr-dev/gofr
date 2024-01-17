@@ -6,8 +6,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/redis/go-redis/v9"
-
 	"gofr.dev/pkg/gofr"
 	"gofr.dev/pkg/gofr/service"
 )
@@ -42,12 +40,8 @@ func ErrorHandler(c *gofr.Context) (interface{}, error) {
 }
 
 func RedisHandler(c *gofr.Context) (interface{}, error) {
-	val, err := c.Redis.Get(c, "test").Result()
-	if err != nil && err != redis.Nil { // If key is not found, we are not considering this an error and returning "".
-		return nil, err
-	}
-
-	return val, nil
+	fmt.Println(c.Container.Health())
+	return nil, nil
 }
 
 func TraceHandler(c *gofr.Context) (interface{}, error) {

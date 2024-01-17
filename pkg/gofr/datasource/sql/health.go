@@ -17,12 +17,12 @@ func (d *DB) HealthCheck() datasource.Health {
 
 	err := d.PingContext(ctx)
 	if err != nil {
-		h.Status = "DOWN"
+		h.Status = datasource.StatusDown
 
 		return h
 	}
 
-	h.Status = "UP"
+	h.Status = datasource.StatusUp
 	h.Details["stats"] = d.Stats()
 
 	return h

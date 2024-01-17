@@ -2,7 +2,6 @@ package redis
 
 import (
 	"context"
-	"encoding/json"
 	"gofr.dev/pkg/gofr/datasource"
 	"time"
 )
@@ -13,33 +12,18 @@ func (r *Redis) HealthCheck() datasource.Health {
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	if cancel != nil {
-		r.logger.Error("")
-	}
+	defer cancel()
 
-	info := r.InfoMap(ctx).Val()
-	if len(info) == 0 {
-		h.Status = "DOWN"
+	info, err := r.InfoMap(ctx, "Stats").Result()
+	if err != nil {
+		h.Status = datasource.StatusDown
+		h.Details["error"] = err.Error()
 
 		return h
 	}
 
-	bytes, err := json.Marshal(info)
-	if err != nil {
-		r.logger.Error("Failed to Marshal REDIS Stats :%v", err)
-	}
-
-	stat := struct {
-		Stat map[string]interface{} `json:"stats"`
-	}{}
-
-	err = json.Unmarshal(bytes, &stat)
-	if err != nil {
-		r.logger.Error("Failed to Unmarshal REDIS Stats :%v", err)
-	}
-
-	h.Status = "UP"
-	h.Details["stats"] = stat
+	h.Status = datasource.StatusUp
+	h.Details["stats"] = info
 
 	return h
 }
