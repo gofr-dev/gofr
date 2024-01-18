@@ -16,19 +16,17 @@ type redisHook struct {
 
 // QueryLog represents a logged Redis query.
 type QueryLog struct {
-	Query     string      `json:"query"`
-	Duration  int64       `json:"duration"`
-	StartTime time.Time   `json:"-"`
-	Args      interface{} `json:"args,omitempty"`
+	Query    string      `json:"query"`
+	Duration int64       `json:"duration"`
+	Args     interface{} `json:"args,omitempty"`
 }
 
 // logQuery logs the Redis query information.
 func (r *redisHook) logQuery(start time.Time, query string, args ...interface{}) {
 	r.logger.Debug(QueryLog{
-		Query:     query,
-		Duration:  time.Since(start).Microseconds(),
-		StartTime: start,
-		Args:      args,
+		Query:    query,
+		Duration: time.Since(start).Microseconds(),
+		Args:     args,
 	})
 }
 

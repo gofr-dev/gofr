@@ -7,12 +7,11 @@ import (
 	"strconv"
 	"sync"
 
-	"go.opentelemetry.io/otel/exporters/zipkin"
-
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
 
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/exporters/zipkin"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"

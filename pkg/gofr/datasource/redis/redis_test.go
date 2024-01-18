@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/alicebob/miniredis/v2"
-	"github.com/go-redis/redismock/v9"
 	"github.com/stretchr/testify/assert"
 
 	"go.uber.org/mock/gomock"
@@ -30,18 +29,12 @@ func TestRedis_QueryLogging(t *testing.T) {
 	port, err := strconv.Atoi(s.Port())
 	assert.Nil(t, err)
 
-	// Mock Redis client setup
-	_, mockClient := redismock.NewClientMock()
-	mockClient.ExpectPing().SetVal("PONG")
-	mockClient.ExpectSet("key", "value", 1*time.Minute).SetVal("OK")
-
-	// Config for Redis client
+	// Config for  miniRedis server
 	config := Config{
 		HostName: s.Host(),
 		Port:     port,
 	}
 
-	// Execute Redis command
 	result := testutil.StdoutOutputForFunc(func() {
 		mockLogger := datasource.NewMockLogger(0)
 		client, err := NewRedisClient(config, mockLogger)
@@ -65,17 +58,11 @@ func TestRedis_PipelineQueryLogging(t *testing.T) {
 	s, err := miniredis.Run()
 	assert.Nil(t, err)
 
-	defer s.Close()
+	s.Close()
 
 	// Convert port to integer
 	port, err := strconv.Atoi(s.Port())
 	assert.Nil(t, err)
-
-	// Mock Redis client setup
-	_, mockClient := redismock.NewClientMock()
-	mockClient.ExpectPing().SetVal("PONG")
-	mockClient.ExpectSet("key1", "value1", 1*time.Minute).SetVal("OK")
-	mockClient.ExpectGet("key2").SetVal("value1")
 
 	// Config for Redis client
 	config := Config{

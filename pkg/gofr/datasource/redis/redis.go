@@ -3,12 +3,15 @@ package redis
 import (
 	"context"
 	"fmt"
+	"time"
 
 	otel "github.com/redis/go-redis/extra/redisotel/v9"
 	"github.com/redis/go-redis/v9"
 
 	"gofr.dev/pkg/gofr/datasource"
 )
+
+const redisPingTimeout = 5 * time.Second
 
 type Redis struct {
 	*redis.Client
@@ -35,7 +38,10 @@ func NewRedisClient(config Config, logger datasource.Logger) (*Redis, error) {
 	rc := redis.NewClient(config.Options)
 	rc.AddHook(&redisHook{logger: logger})
 
-	if err := rc.Ping(context.TODO()).Err(); err != nil {
+	ctx, cancel := context.WithTimeout(context.TODO(), redisPingTimeout)
+	defer cancel()
+
+	if err := rc.Ping(ctx).Err(); err != nil {
 		return nil, err
 	}
 

@@ -108,7 +108,7 @@ func (l *logger) prettyPrint(e logEntry, out io.Writer) {
 	switch msg := e.Message.(type) {
 	case middleware.RequestLog:
 		fmt.Fprintf(out, "\u001B[38;5;%dm%s\u001B[0m [%s] \u001B[38;5;8m%s \u001B[38;5;%dm%d\u001B[0m "+
-			"%10d\u001B[38;5;8mµs\u001B[0m %s %s \n", e.Level.color(), e.Level.String()[0:4],
+			"%8d\u001B[38;5;8mµs\u001B[0m %s %s \n", e.Level.color(), e.Level.String()[0:4],
 			e.Time.Format("15:04:05"), msg.ID, colorForStatusCode(msg.Response), msg.Response, msg.ResponseTime, msg.Method, msg.URI)
 	case sql.Log:
 		fmt.Fprintf(out, "\u001B[38;5;%dm%s\u001B[0m [%s] \u001B[38;5;8m%-32s \u001B[38;5;24m%s\u001B[0m %8d\u001B[38;5;8mµs\u001B[0m   %v\n",
@@ -176,7 +176,7 @@ func (l *logger) printRedisQueryLog(e logEntry, msg redis.QueryLog, out io.Write
 		strArgs = append(strArgs, fmt.Sprint(arg))
 	}
 
-	// // Formatting and printing the log entry based on the Redis query type.
+	// Formatting and printing the log entry based on the Redis query type.
 	switch msg.Query {
 	case "pipeline":
 		fmt.Fprintf(out, "\u001B[38;5;%dm%s\u001B[0m [%s] \u001B[38;5;8m%-32s \u001B[38;5;24m%s\u001B[0m %8d\u001B[38;5;8mµs\u001B[0m %s\n",
