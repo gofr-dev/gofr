@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/redis/go-redis/extra/redisotel/v9"
+	otel "github.com/redis/go-redis/extra/redisotel/v9"
 	"github.com/redis/go-redis/v9"
 
 	"gofr.dev/pkg/gofr/datasource"
@@ -39,7 +39,7 @@ func NewRedisClient(config Config, logger datasource.Logger) (*Redis, error) {
 		return nil, err
 	}
 
-	if err := redisotel.InstrumentTracing(rc); err != nil {
+	if err := otel.InstrumentTracing(rc); err != nil {
 		panic(err)
 	}
 

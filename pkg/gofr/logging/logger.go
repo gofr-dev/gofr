@@ -167,6 +167,7 @@ func checkIfTerminal(w io.Writer) bool {
 	}
 }
 
+//  printRedisQueryLog formats and prints the log entry for Redis queries.
 func (l *logger) printRedisQueryLog(e logEntry, msg redis.QueryLog, out io.Writer) {
 	args := msg.Args.([]interface{})
 	strArgs := make([]string, 0, len(args))
@@ -175,6 +176,7 @@ func (l *logger) printRedisQueryLog(e logEntry, msg redis.QueryLog, out io.Write
 		strArgs = append(strArgs, fmt.Sprint(arg))
 	}
 
+	// // Formatting and printing the log entry based on the Redis query type.
 	switch msg.Query {
 	case "pipeline":
 		fmt.Fprintf(out, "\u001B[38;5;%dm%s\u001B[0m [%s] \u001B[38;5;8m%-32s \u001B[38;5;24m%s\u001B[0m %8d\u001B[38;5;8mµs\u001B[0m %s\n",
