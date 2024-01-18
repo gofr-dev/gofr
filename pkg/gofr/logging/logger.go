@@ -167,7 +167,7 @@ func checkIfTerminal(w io.Writer) bool {
 	}
 }
 
-//  printRedisQueryLog formats and prints the log entry for Redis queries.
+// printRedisQueryLog formats and prints the log entry for Redis queries.
 func (l *logger) printRedisQueryLog(e logEntry, msg redis.QueryLog, out io.Writer) {
 	args := msg.Args.([]interface{})
 	strArgs := make([]string, 0, len(args))
