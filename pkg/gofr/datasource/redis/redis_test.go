@@ -37,7 +37,7 @@ func TestRedis_QueryLogging(t *testing.T) {
 
 	result := testutil.StdoutOutputForFunc(func() {
 		mockLogger := datasource.NewMockLogger(0)
-		client, err := NewRedisClient(config, mockLogger)
+		client, err := NewClient(config, mockLogger)
 		assert.Nil(t, err)
 
 		result, err := client.Set(context.TODO(), "key", "value", 1*time.Minute).Result()
@@ -73,7 +73,7 @@ func TestRedis_PipelineQueryLogging(t *testing.T) {
 	// Execute Redis pipeline
 	result := testutil.StdoutOutputForFunc(func() {
 		mockLogger := datasource.NewMockLogger(0)
-		client, err := NewRedisClient(config, mockLogger)
+		client, err := NewClient(config, mockLogger)
 		assert.Nil(t, err)
 
 		// Pipeline execution

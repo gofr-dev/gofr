@@ -43,7 +43,7 @@ func NewContainer(conf config.Config) *Container {
 			port = defaultRedisPort
 		}
 
-		c.Redis, err = redis.NewRedisClient(redis.Config{
+		c.Redis, err = redis.NewClient(redis.Config{
 			HostName: host,
 			Port:     port,
 		}, c.Logger)

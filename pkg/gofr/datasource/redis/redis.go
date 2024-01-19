@@ -24,9 +24,9 @@ type Config struct {
 	Options  *redis.Options
 }
 
-// NewRedisClient return a redis client if connection is successful based on Config.
+// NewClient return a redis client if connection is successful based on Config.
 // In case of error, it returns an error as second parameter.
-func NewRedisClient(config Config, logger datasource.Logger) (*Redis, error) {
+func NewClient(config Config, logger datasource.Logger) (*Redis, error) {
 	if config.Options == nil {
 		config.Options = new(redis.Options)
 	}
