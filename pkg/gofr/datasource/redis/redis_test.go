@@ -57,6 +57,7 @@ func TestRedis_PipelineQueryLogging(t *testing.T) {
 	// Mock Redis server setup
 	s, err := miniredis.Run()
 	assert.Nil(t, err)
+
 	defer s.Close()
 
 	// Convert port to integer
