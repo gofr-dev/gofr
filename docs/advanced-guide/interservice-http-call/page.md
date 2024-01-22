@@ -1,9 +1,9 @@
 # Interservice HTTP Calls
 
-GoFr supports inter service http calls which provide the following benefits :
+GoFr supports inter-service http calls which provide the following benefits :
 
 1. Access to the following method from container - GET, PUT, POST, PATCH, DELETE.
-2. Info logs and traces for the request.
+2. Logs and traces for the request.
 
 ## Usage
 
