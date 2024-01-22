@@ -2,8 +2,9 @@ package redis
 
 import (
 	"context"
-	"gofr.dev/pkg/gofr/datasource"
 	"time"
+
+	"gofr.dev/pkg/gofr/datasource"
 )
 
 func (r *Redis) HealthCheck() datasource.Health {

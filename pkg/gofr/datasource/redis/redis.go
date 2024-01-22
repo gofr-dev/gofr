@@ -3,12 +3,15 @@ package redis
 import (
 	"context"
 	"fmt"
+	"time"
 
-	"github.com/redis/go-redis/extra/redisotel/v9"
+	otel "github.com/redis/go-redis/extra/redisotel/v9"
 	"github.com/redis/go-redis/v9"
 
 	"gofr.dev/pkg/gofr/datasource"
 )
+
+const redisPingTimeout = 5 * time.Second
 
 type Redis struct {
 	*redis.Client
@@ -21,9 +24,9 @@ type Config struct {
 	Options  *redis.Options
 }
 
-// NewRedisClient return a redis client if connection is successful based on Config.
+// NewClient return a redis client if connection is successful based on Config.
 // In case of error, it returns an error as second parameter.
-func NewRedisClient(config Config, logger datasource.Logger) (*Redis, error) {
+func NewClient(config Config, logger datasource.Logger) (*Redis, error) {
 	if config.Options == nil {
 		config.Options = new(redis.Options)
 	}
@@ -33,13 +36,16 @@ func NewRedisClient(config Config, logger datasource.Logger) (*Redis, error) {
 	}
 
 	rc := redis.NewClient(config.Options)
-	rc.AddHook(&Redis{Client: rc, logger: logger})
+	rc.AddHook(&redisHook{logger: logger})
 
-	if err := rc.Ping(context.TODO()).Err(); err != nil {
+	ctx, cancel := context.WithTimeout(context.TODO(), redisPingTimeout)
+	defer cancel()
+
+	if err := rc.Ping(ctx).Err(); err != nil {
 		return nil, err
 	}
 
-	if err := redisotel.InstrumentTracing(rc); err != nil {
+	if err := otel.InstrumentTracing(rc); err != nil {
 		panic(err)
 	}
 
@@ -55,5 +61,3 @@ func NewRedisClient(config Config, logger datasource.Logger) (*Redis, error) {
 // type Redis interface {
 //	Get(string) (string, error)
 // }
-
-type RedisHook struct{}

@@ -3,11 +3,13 @@ package container
 import (
 	"strconv"
 
-	_ "github.com/go-sql-driver/mysql" // This is required to be blank import
 	"gofr.dev/pkg/gofr/config"
-	gofrRedis "gofr.dev/pkg/gofr/datasource/redis"
+	"gofr.dev/pkg/gofr/datasource/redis"
 	"gofr.dev/pkg/gofr/datasource/sql"
 	"gofr.dev/pkg/gofr/logging"
+	"gofr.dev/pkg/gofr/service"
+
+	_ "github.com/go-sql-driver/mysql" // This is required to be blank import
 )
 
 // TODO - This can be a collection of interfaces instead of struct
@@ -16,8 +18,9 @@ import (
 // etc which is shared across is placed here.
 type Container struct {
 	logging.Logger
-	Redis *gofrRedis.Redis
-	DB    *sql.DB
+	Services map[string]service.HTTP
+	Redis    *redis.Redis
+	DB       *sql.DB
 }
 
 func (c *Container) Health() interface{} {
@@ -43,7 +46,7 @@ func NewContainer(conf config.Config) *Container {
 			port = defaultRedisPort
 		}
 
-		c.Redis, err = gofrRedis.NewRedisClient(gofrRedis.Config{
+		c.Redis, err = redis.NewClient(redis.Config{
 			HostName: host,
 			Port:     port,
 			Options:  nil,
@@ -54,7 +57,6 @@ func NewContainer(conf config.Config) *Container {
 		} else {
 			c.Logf("connected to redis at %s:%d", host, port)
 		}
-
 	}
 
 	if host := conf.Get("DB_HOST"); host != "" {
@@ -79,4 +81,10 @@ func NewContainer(conf config.Config) *Container {
 	}
 
 	return c
+}
+
+// GetHTTPService returns registered http services.
+// HTTP services are registered from AddHTTPService method of gofr object.
+func (c *Container) GetHTTPService(serviceName string) service.HTTP {
+	return c.Services[serviceName]
 }

@@ -1,4 +1,4 @@
-package datasource
+package testutil
 
 import (
 	"fmt"
@@ -7,9 +7,9 @@ import (
 )
 
 const (
-	debugLevel = iota
-	logLevel
-	errorLevel
+	DEBUGLOG = iota + 1
+	INFOLOG
+	ERRORLOG
 )
 
 type MockLogger struct {
@@ -27,27 +27,27 @@ func NewMockLogger(level int) *MockLogger {
 }
 
 func (m *MockLogger) Debug(args ...interface{}) {
-	m.logf(debugLevel, "%v", args...) // Add "%v" formatting directive
+	m.logf(DEBUGLOG, "%v", args...) // Add "%v" formatting directive
 }
 
 func (m *MockLogger) Debugf(format string, args ...interface{}) {
-	m.logf(debugLevel, format, args...)
+	m.logf(DEBUGLOG, format, args...)
 }
 
 func (m *MockLogger) Log(args ...interface{}) {
-	m.logf(logLevel, "%v", args...)
+	m.logf(INFOLOG, "%v", args...)
 }
 
 func (m *MockLogger) Logf(format string, args ...interface{}) {
-	m.logf(logLevel, format, args...)
+	m.logf(INFOLOG, format, args...)
 }
 
 func (m *MockLogger) Error(args ...interface{}) {
-	m.logf(errorLevel, "%v", args...)
+	m.logf(ERRORLOG, "%v", args...)
 }
 
 func (m *MockLogger) Errorf(format string, args ...interface{}) {
-	m.logf(errorLevel, format, args...)
+	m.logf(ERRORLOG, format, args...)
 }
 
 func (m *MockLogger) logf(level int, format string, args ...interface{}) {
@@ -56,7 +56,7 @@ func (m *MockLogger) logf(level int, format string, args ...interface{}) {
 	}
 
 	out := m.out
-	if level == errorLevel {
+	if level == ERRORLOG {
 		out = m.errOut
 	}
 

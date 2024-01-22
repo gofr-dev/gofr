@@ -3,14 +3,17 @@ package logging
 import (
 	"encoding/json"
 	"fmt"
-	"golang.org/x/term"
 	"io"
 	"os"
+	"strings"
 	"time"
+
+	"golang.org/x/term"
 
 	"gofr.dev/pkg/gofr/datasource/redis"
 	"gofr.dev/pkg/gofr/datasource/sql"
 	"gofr.dev/pkg/gofr/http/middleware"
+	"gofr.dev/pkg/gofr/service"
 )
 
 type Logger interface {
@@ -109,11 +112,19 @@ func (l *logger) prettyPrint(e logEntry, out io.Writer) {
 			"%8d\u001B[38;5;8mµs\u001B[0m %s %s \n", e.Level.color(), e.Level.String()[0:4],
 			e.Time.Format("15:04:05"), msg.ID, colorForStatusCode(msg.Response), msg.Response, msg.ResponseTime, msg.Method, msg.URI)
 	case sql.Log:
-		fmt.Fprintf(out, "\u001B[38;5;%dm%s\u001B[0m [%s] \u001B[38;5;8m%-32s \u001B[38;5;24m%s\u001B[0m %8d\u001B[38;5;8mµs\u001B[0m %v\n",
+		fmt.Fprintf(out, "\u001B[38;5;%dm%s\u001B[0m [%s] \u001B[38;5;8m%-32s \u001B[38;5;24m%s\u001B[0m %8d\u001B[38;5;8mµs\u001B[0m   %v\n",
 			e.Level.color(), e.Level.String()[0:4], e.Time.Format("15:04:05"), msg.Type, "SQL", msg.Duration, msg.Query)
 	case redis.QueryLog:
-		fmt.Fprintf(out, "\u001B[38;5;%dm%s\u001B[0m [%s] \u001B[38;5;8m%-32s \u001B[38;5;24m%s\u001B[0m %8d\u001B[38;5;8mµs\u001B[0m %v\n",
-			e.Level.color(), e.Level.String()[0:4], e.Time.Format("15:04:05"), "REDIS", msg.Query, msg.Duration, msg.Args)
+		l.printRedisQueryLog(e, msg, out)
+	case service.Log:
+		fmt.Fprintf(out, "\u001B[38;5;%dm%s\u001B[0m [%s] \u001B[38;5;8m%s \u001B[38;5;%dm%d\u001B[0m %8d\u001B[38;5;8mµs\u001B[0m %s %s \n",
+			e.Level.color(), e.Level.String()[0:4], e.Time.Format("15:04:05"), msg.CorrelationID, colorForStatusCode(msg.ResponseCode),
+			msg.ResponseCode, msg.ResponseTime, msg.HTTPMethod, msg.URI)
+	case service.ErrorLog:
+		fmt.Fprintf(out, "\u001B[38;5;%dm%s\u001B[0m [%s] \u001B[38;5;8m%s "+
+			"\u001B[38;5;%dm%d\u001B[0m %8d\u001B[38;5;8mµs\u001B[0m %s %s \033[0;31m %s \n",
+			e.Level.color(), e.Level.String()[0:4], e.Time.Format("15:04:05"), msg.CorrelationID, colorForStatusCode(msg.ResponseCode),
+			msg.ResponseCode, msg.ResponseTime, msg.HTTPMethod, msg.URI, msg.ErrorMessage)
 	default:
 		fmt.Fprintf(out, "\u001B[38;5;%dm%s\u001B[0m [%s] %v\n", e.Level.color(), e.Level.String()[0:4], e.Time.Format("15:04:05"), e.Message)
 	}
@@ -121,14 +132,19 @@ func (l *logger) prettyPrint(e logEntry, out io.Writer) {
 
 // colorForStatusCode provide color for the status code in the terminal when logs is being pretty-printed.
 func colorForStatusCode(status int) int {
-	responseCodeColors := map[int]int{
-		200: 34,
-		404: 220,
-		500: 202,
-	}
+	const (
+		blue   = 34
+		red    = 202
+		yellow = 220
+	)
 
-	if color, ok := responseCodeColors[status]; ok {
-		return color
+	switch {
+	case status >= 200 && status < 300:
+		return blue
+	case status >= 400 && status < 500:
+		return yellow
+	case status >= 500 && status < 600:
+		return red
 	}
 
 	return 0
@@ -163,5 +179,25 @@ func checkIfTerminal(w io.Writer) bool {
 		return term.IsTerminal(int(v.Fd()))
 	default:
 		return false
+	}
+}
+
+// printRedisQueryLog formats and prints the log entry for Redis queries.
+func (l *logger) printRedisQueryLog(e logEntry, msg redis.QueryLog, out io.Writer) {
+	args := msg.Args.([]interface{})
+	strArgs := make([]string, 0, len(args))
+
+	for _, arg := range args {
+		strArgs = append(strArgs, fmt.Sprint(arg))
+	}
+
+	// Formatting and printing the log entry based on the Redis query type.
+	switch msg.Query {
+	case "pipeline":
+		fmt.Fprintf(out, "\u001B[38;5;%dm%s\u001B[0m [%s] \u001B[38;5;8m%-32s \u001B[38;5;24m%s\u001B[0m %8d\u001B[38;5;8mµs\u001B[0m %s\n",
+			e.Level.color(), e.Level.String()[0:4], e.Time.Format("15:04:05"), msg.Query, "REDIS", msg.Duration, strArgs[0][1:len(strArgs[0])-1])
+	default:
+		fmt.Fprintf(out, "\u001B[38;5;%dm%s\u001B[0m [%s] \u001B[38;5;8m%-32s \u001B[38;5;24m%s\u001B[0m %8d\u001B[38;5;8mµs\u001B[0m %v\n",
+			e.Level.color(), e.Level.String()[0:4], e.Time.Format("15:04:05"), strArgs[0], "REDIS", msg.Duration, strings.Join(strArgs, " "))
 	}
 }
