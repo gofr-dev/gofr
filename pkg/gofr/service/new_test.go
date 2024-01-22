@@ -8,6 +8,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"go.opentelemetry.io/otel"
+
 	"gofr.dev/pkg/gofr/testutil"
 )
 
