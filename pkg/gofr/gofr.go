@@ -135,6 +135,7 @@ func (a *App) readConfig() {
 	a.Config = config.NewEnvFile(configLocation)
 }
 
+// AddHTTPService registers HTTP service in container.
 func (a *App) AddHTTPService(serviceName, serviceAddress string) {
 	if a.container.Services == nil {
 		a.container.Services = make(map[string]service.HTTP)
