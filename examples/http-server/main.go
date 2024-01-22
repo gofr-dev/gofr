@@ -3,11 +3,10 @@ package main
 import (
 	"errors"
 	"fmt"
-	"gofr.dev/pkg/gofr/service"
 	"sync"
 	"time"
 
-	"github.com/go-redis/redis/v8"
+	"github.com/redis/go-redis/v9"
 
 	"gofr.dev/pkg/gofr"
 )
@@ -15,6 +14,8 @@ import (
 func main() {
 	// Create a new application
 	a := gofr.New()
+
+	a.AddHTTPService("anotherService", "http://localhost:9000")
 
 	// Add all the routes
 	a.GET("/hello", HelloHandler)
@@ -54,13 +55,14 @@ func TraceHandler(c *gofr.Context) (interface{}, error) {
 	defer c.Trace("traceHandler").End()
 
 	span2 := c.Trace("some-sample-work")
-	<-time.After(time.Millisecond * 1) // Waiting for 1ms to simulate workload
+	<-time.After(time.Millisecond * 1) //nolint:wsl    // Waiting for 1ms to simulate workload
 	span2.End()
 
 	// Ping redis 5 times concurrently and wait.
 	count := 5
 	wg := sync.WaitGroup{}
 	wg.Add(count)
+
 	for i := 0; i < count; i++ {
 		go func() {
 			c.Redis.Ping(c)
@@ -69,11 +71,13 @@ func TraceHandler(c *gofr.Context) (interface{}, error) {
 	}
 	wg.Wait()
 
-	// Call Another service
-	anotherService := service.NewHTTPService("http://localhost:8000")
-	anotherService.Get(c, "redis", nil)
+	//Call Another service
+	resp, err := c.GetHTTPService("anotherService").Get(c, "redis", nil)
+	if err != nil {
+		return nil, err
+	}
 
-	return "Tracing Success", nil
+	return resp, nil
 }
 
 func MysqlHandler(c *gofr.Context) (interface{}, error) {

@@ -5,18 +5,26 @@ import (
 	"net/http"
 	"time"
 
-	http2 "gofr.dev/pkg/gofr/http"
+	"gofr.dev/pkg/gofr/container"
+	gofrHTTP "gofr.dev/pkg/gofr/http"
 )
 
 type httpServer struct {
-	router *http2.Router
+	router *gofrHTTP.Router
 	port   int
 }
 
-func (s *httpServer) Run(container *Container) {
+func newHTTPServer(c *container.Container, port int) *httpServer {
+	return &httpServer{
+		router: gofrHTTP.NewRouter(c),
+		port:   port,
+	}
+}
+
+func (s *httpServer) Run(c *container.Container) {
 	var srv *http.Server
 
-	container.Logf("Starting server on port: %d\n", s.port)
+	c.Logf("Starting server on port: %d", s.port)
 
 	srv = &http.Server{
 		Addr:              fmt.Sprintf(":%d", s.port),
@@ -24,5 +32,5 @@ func (s *httpServer) Run(container *Container) {
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
-	container.Error(srv.ListenAndServe())
+	c.Error(srv.ListenAndServe())
 }

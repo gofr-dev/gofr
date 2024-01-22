@@ -1,18 +1,23 @@
 package logging
 
-import "bytes"
+import (
+	"bytes"
+	"strings"
+)
 
-type level int
+type Level int
 
 const (
-	DEBUG level = iota + 1
+	DEBUG Level = iota + 1
 	INFO
 	NOTICE
 	WARN
 	ERROR
 	FATAL
+)
 
-	// String constants for logging levels.
+// String constants for logging levels.
+const (
 	levelDEBUG  = "DEBUG"
 	levelINFO   = "INFO"
 	levelNOTICE = "NOTICE"
@@ -21,7 +26,7 @@ const (
 	levelFATAL  = "FATAL"
 )
 
-func (l level) String() string {
+func (l Level) String() string {
 	switch l {
 	case DEBUG:
 		return levelDEBUG
@@ -41,25 +46,44 @@ func (l level) String() string {
 }
 
 //nolint:gomnd // Color codes are sent as numbers
-func (l level) color() uint {
+func (l Level) color() uint {
 	switch l {
 	case ERROR, FATAL:
-		return 31
+		return 160
 	case WARN, NOTICE:
-		return 33
+		return 220
 	case INFO:
-		return 36
+		return 6
 	case DEBUG:
-		return 36
+		return 8
 	default:
 		return 37
 	}
 }
 
-func (l level) MarshalJSON() ([]byte, error) {
+func (l Level) MarshalJSON() ([]byte, error) {
 	buffer := bytes.NewBufferString(`"`)
 	buffer.WriteString(l.String())
 	buffer.WriteString(`"`)
 
 	return buffer.Bytes(), nil
+}
+
+func GetLevelFromString(level string) Level {
+	switch strings.ToUpper(level) {
+	case levelDEBUG:
+		return DEBUG
+	case levelINFO:
+		return INFO
+	case levelNOTICE:
+		return NOTICE
+	case levelWARN:
+		return WARN
+	case levelERROR:
+		return ERROR
+	case levelFATAL:
+		return FATAL
+	default:
+		return INFO
+	}
 }

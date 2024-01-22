@@ -4,6 +4,8 @@ import (
 	"net"
 	"strconv"
 
+	"gofr.dev/pkg/gofr/container"
+
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	grpc_recovery "github.com/grpc-ecosystem/go-grpc-middleware/recovery"
 	grpc2 "gofr.dev/pkg/gofr/grpc"
@@ -16,30 +18,30 @@ type grpcServer struct {
 	port   int
 }
 
-func newGRPCServer(container *Container, port int) *grpcServer {
+func newGRPCServer(c *container.Container, port int) *grpcServer {
 	return &grpcServer{
 		server: grpc.NewServer(
 			grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(
 				grpc_recovery.UnaryServerInterceptor(),
-				grpc2.LoggingInterceptor(container.Logger),
+				grpc2.LoggingInterceptor(c.Logger),
 			))),
 		port: port,
 	}
 }
 
-func (g *grpcServer) Run(container *Container) {
+func (g *grpcServer) Run(c *container.Container) {
 	addr := ":" + strconv.Itoa(g.port)
 
-	container.Logger.Infof("starting grpc server at %s", addr)
+	c.Logger.Infof("starting grpc server at %s", addr)
 
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
-		container.Logger.Errorf("error in starting grpc server at %s: %s", addr, err)
+		c.Logger.Errorf("error in starting grpc server at %s: %s", addr, err)
 		return
 	}
 
 	if err := g.server.Serve(listener); err != nil {
-		container.Logger.Errorf("error in starting grpc server at %s: %s", addr, err)
+		c.Logger.Errorf("error in starting grpc server at %s: %s", addr, err)
 		return
 	}
 }

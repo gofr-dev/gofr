@@ -3,24 +3,22 @@ package http
 import (
 	"net/http"
 
+	"github.com/gorilla/mux"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 
-	"gofr.dev/pkg/gofr/logging"
-
+	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/http/middleware"
-
-	"github.com/gorilla/mux"
 )
 
 type Router struct {
 	mux.Router
 }
 
-func NewRouter() *Router {
+func NewRouter(c *container.Container) *Router {
 	muxRouter := mux.NewRouter().StrictSlash(false)
 	muxRouter.Use(
 		middleware.Tracer,
-		middleware.Logging(logging.NewLogger()),
+		middleware.Logging(c.Logger),
 		middleware.CORS(),
 	)
 
@@ -30,6 +28,6 @@ func NewRouter() *Router {
 }
 
 func (rou *Router) Add(method, pattern string, handler http.Handler) {
-	h := otelhttp.NewHandler(handler, "gofr-handler")
+	h := otelhttp.NewHandler(handler, "gofr-router")
 	rou.Router.NewRoute().Methods(method).Path(pattern).Handler(h)
 }
