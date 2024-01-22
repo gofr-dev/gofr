@@ -3,6 +3,7 @@ package gofr
 import (
 	"context"
 	"errors"
+	config2 "gofr.dev/pkg/gofr/config"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -50,12 +51,13 @@ func TestHandler_ServeHTTP(t *testing.T) {
 
 func TestHandler_healthHandler(t *testing.T) {
 	c := Context{
-		Context: context.Background(),
+		Context:   context.Background(),
+		Container: container.NewContainer(config2.NewEnvFile("")),
 	}
 
 	data, err := healthHandler(&c)
 
-	assert.Equal(t, "OK", data, "TEST Failed.\n")
+	assert.Equal(t, make(map[string]interface{}), data, "TEST Failed.\n")
 
 	assert.NoError(t, err, "TEST Failed.\n")
 }
