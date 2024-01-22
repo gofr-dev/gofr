@@ -8,8 +8,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"go.opentelemetry.io/otel"
-
-	"gofr.dev/pkg/gofr"
+	"gofr.dev/pkg/gofr/testutil"
 )
 
 func TestNewHTTPService(t *testing.T) {
@@ -41,6 +40,7 @@ func TestHTTPService_Get(t *testing.T) {
 		Client: http.DefaultClient,
 		url:    server.URL,
 		Tracer: otel.Tracer("gofr-http-client"),
+		Logger: testutil.NewMockLogger(testutil.INFOLOG),
 	}
 
 	tests := []struct {
@@ -56,7 +56,7 @@ func TestHTTPService_Get(t *testing.T) {
 
 	for i, tc := range tests {
 		t.Run(tc.desc, func(t *testing.T) {
-			ctx := &gofr.Context{Context: context.Background()}
+			ctx := context.Background()
 			resp, err := service.Get(ctx, tc.path, tc.params)
 
 			assert.NoError(t, err)
@@ -70,9 +70,13 @@ func TestHTTPService_Get(t *testing.T) {
 func TestHTTPService_createAndSendRequest(t *testing.T) {
 	// Setup a test server
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		//read request body
+		// read request body
 		var body []byte
-		r.Body.Read(body)
+
+		_, err := r.Body.Read(body)
+		if err != nil {
+			t.Fatal("Unable to read request body")
+		}
 
 		assert.Equal(t, "POST", r.Method)
 		assert.Equal(t, "/test-path", r.URL.Path)
@@ -88,17 +92,19 @@ func TestHTTPService_createAndSendRequest(t *testing.T) {
 		Client: http.DefaultClient,
 		url:    server.URL,
 		Tracer: otel.Tracer("gofr-http-client"),
+		Logger: testutil.NewMockLogger(testutil.INFOLOG),
 	}
 
-	ctx := &gofr.Context{Context: context.Background()}
+	ctx := context.Background()
 	// when params value is of type []string then last value is sent in request
 	resp, err := service.createAndSendRequest(ctx,
 		http.MethodPost, "test-path", map[string]interface{}{"key": "value", "name": []string{"gofr", "test"}},
 		[]byte("{Test Body}"), map[string]string{"header1": "value1"})
 
+	if err != nil {
+		defer resp.Body.Close()
+	}
+
 	assert.NoError(t, err)
 	assert.NotNil(t, resp, "TEST[%d], Failed.\n%s")
-
-	defer resp.Body.Close()
-
 }
