@@ -15,8 +15,8 @@ func main() {
 	a := gofr.New()
 
 	a.AddHTTPService("anotherService", "http://localhost:9000")
-
-    a.GET("/redis", RedisHandler)
+	
+	a.GET("/redis", RedisHandler)
 	
 	// Run the application
 	a.Run()
