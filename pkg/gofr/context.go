@@ -3,6 +3,8 @@ package gofr
 import (
 	"context"
 
+	"gofr.dev/pkg/gofr/container"
+
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 )
@@ -16,7 +18,7 @@ type Context struct {
 	Request
 
 	// Same logic as above.
-	*Container
+	*container.Container
 
 	// responder is private as Handlers do not need to worry about how to respond. But it is still an abstraction over
 	// normal response writer as we want to keep the context independent of http. Will help us in writing CMD application
@@ -58,11 +60,11 @@ func (c *Context) Bind(i interface{}) error {
 //	// c.Logger = nil // For now, all loggers are same. So, no need to set nil.
 // }
 
-func newContext(w Responder, r Request, container *Container) *Context {
+func newContext(w Responder, r Request, newContainer *container.Container) *Context {
 	return &Context{
 		Context:   r.Context(),
 		Request:   r,
 		responder: w,
-		Container: container,
+		Container: newContainer,
 	}
 }

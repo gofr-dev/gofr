@@ -7,22 +7,24 @@ import (
 	"strconv"
 	"sync"
 
+	"gofr.dev/pkg/gofr/config"
+	"gofr.dev/pkg/gofr/container"
+	"gofr.dev/pkg/gofr/service"
+
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/zipkin"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
-	"gofr.dev/pkg/gofr/config"
 
-	gofrHTTP "gofr.dev/pkg/gofr/http"
 	"google.golang.org/grpc"
 )
 
 // App is the main application in the gofr framework.
 type App struct {
 	// Config can be used by applications to fetch custom configurations from environment or file.
-	Config Config // If we directly embed, unnecessary confusion between app.Get and app.GET will happen.
+	Config config.Config // If we directly embed, unnecessary confusion between app.Get and app.GET will happen.
 
 	grpcServer *grpcServer
 	httpServer *httpServer
@@ -30,7 +32,7 @@ type App struct {
 	cmd *cmd
 
 	// container is unexported because this is an internal implementation and applications are provided access to it via Context
-	container *Container
+	container *container.Container
 
 	grpcRegistered bool
 	httpRegistered bool
@@ -38,16 +40,16 @@ type App struct {
 
 // RegisterService adds a grpc service to the gofr application.
 func (a *App) RegisterService(desc *grpc.ServiceDesc, impl interface{}) {
-	a.grpcRegistered = true
 	a.container.Logger.Infof("Registering GRPC Server: %s", desc.ServiceName)
 	a.grpcServer.server.RegisterService(desc, impl)
+	a.grpcRegistered = true
 }
 
-// New creates a HTTP Server Application and returns that App.
+// New creates an HTTP Server Application and returns that App.
 func New() *App {
 	app := &App{}
 	app.readConfig()
-	app.container = newContainer(app.Config)
+	app.container = container.NewContainer(app.Config)
 
 	app.initTracer()
 
@@ -57,10 +59,7 @@ func New() *App {
 		port = defaultHTTPPort
 	}
 
-	app.httpServer = &httpServer{
-		router: gofrHTTP.NewRouter(),
-		port:   port,
-	}
+	app.httpServer = newHTTPServer(app.container, port)
 
 	// GRPC Server
 	port, err = strconv.Atoi(app.Config.Get("GRPC_PORT"))
@@ -78,7 +77,7 @@ func NewCMD() *App {
 	app := &App{}
 	app.readConfig()
 
-	app.container = newContainer(app.Config)
+	app.container = container.NewContainer(app.Config)
 	app.cmd = &cmd{}
 	// app.container.Logger = logging.NewSilentLogger() // TODO - figure out a proper way to log in CMD
 
@@ -102,6 +101,10 @@ func (a *App) Run() {
 		// Add Default routes
 		a.add(http.MethodGet, "/.well-known/health", healthHandler)
 		a.add(http.MethodGet, "/favicon.ico", faviconHandler)
+		a.httpServer.router.PathPrefix("/").Handler(handler{
+			function:  catchAllHandler,
+			container: a.container,
+		})
 
 		go func(s *httpServer) {
 			defer wg.Done()
@@ -130,6 +133,19 @@ func (a *App) readConfig() {
 	}
 
 	a.Config = config.NewEnvFile(configLocation)
+}
+
+// AddHTTPService registers HTTP service in container.
+func (a *App) AddHTTPService(serviceName, serviceAddress string) {
+	if a.container.Services == nil {
+		a.container.Services = make(map[string]service.HTTP)
+	}
+
+	if _, ok := a.container.Services[serviceName]; ok {
+		a.container.Debugf("Service already registered Name: %v", serviceName)
+	}
+
+	a.container.Services[serviceName] = service.NewHTTPService(serviceAddress, a.container.Logger)
 }
 
 // GET adds a Handler for http GET method for a route pattern.
@@ -170,20 +186,7 @@ func (a *App) initTracer() {
 	tracerHost := a.Config.Get("TRACER_HOST")
 	tracerPort := a.Config.GetOrDefault("TRACER_PORT", "9411")
 
-	if tracerHost == "" {
-		return
-	}
-
-	a.container.Log("Exporting traces to zipkin.")
-
-	exporter, err := zipkin.New(
-		fmt.Sprintf("http://%s:%s/api/v2/spans", tracerHost, tracerPort),
-	)
-
-	batcher := sdktrace.NewBatchSpanProcessor(exporter)
-
 	tp := sdktrace.NewTracerProvider(
-		sdktrace.WithSpanProcessor(batcher),
 		sdktrace.WithResource(resource.NewWithAttributes(
 			semconv.SchemaURL,
 			semconv.ServiceNameKey.String(a.Config.GetOrDefault("APP_NAME", "gofr-service")),
@@ -192,7 +195,17 @@ func (a *App) initTracer() {
 	otel.SetTracerProvider(tp)
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
 
-	if err != nil {
-		a.container.Error(err)
+	if tracerHost != "" {
+		a.container.Log("Exporting traces to zipkin.")
+
+		exporter, err := zipkin.New(
+			fmt.Sprintf("http://%s:%s/api/v2/spans", tracerHost, tracerPort),
+		)
+		batcher := sdktrace.NewBatchSpanProcessor(exporter)
+		tp.RegisterSpanProcessor(batcher)
+
+		if err != nil {
+			a.container.Error(err)
+		}
 	}
 }

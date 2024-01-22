@@ -1,17 +1,119 @@
-package gofr
+package sql
 
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"reflect"
 	"regexp"
 	"strings"
+	"time"
+
+	"gofr.dev/pkg/gofr/datasource"
 )
 
 // DB is a wrapper around sql.DB which provides some more features.
 type DB struct {
 	*sql.DB
+	logger datasource.Logger
+}
+
+type Log struct {
+	Type     string        `json:"type"`
+	Query    string        `json:"query"`
+	Duration int64         `json:"duration"`
+	Args     []interface{} `json:"args,omitempty"`
+}
+
+func (d *DB) logQuery(start time.Time, queryType, query string, args ...interface{}) {
+	d.logger.Debug(Log{
+		Type:     queryType,
+		Query:    query,
+		Duration: time.Since(start).Microseconds(),
+		Args:     args,
+	})
+}
+
+func (d *DB) Query(query string, args ...interface{}) (*sql.Rows, error) {
+	defer d.logQuery(time.Now(), "Query", query, args...)
+	return d.DB.Query(query, args...)
+}
+
+func (d *DB) QueryRow(query string, args ...interface{}) *sql.Row {
+	d.logQuery(time.Now(), "QueryRow", query, args...)
+	return d.DB.QueryRow(query, args...)
+}
+
+func (d *DB) QueryRowContext(ctx context.Context, query string, args ...interface{}) *sql.Row {
+	d.logQuery(time.Now(), "QueryRowContext", query, args...)
+	return d.DB.QueryRowContext(ctx, query, args...)
+}
+
+func (d *DB) Exec(query string, args ...interface{}) (sql.Result, error) {
+	d.logQuery(time.Now(), "Exec", query, args...)
+	return d.DB.Exec(query, args...)
+}
+
+func (d *DB) Prepare(query string) (*sql.Stmt, error) {
+	d.logQuery(time.Now(), "Prepare", query)
+	return d.DB.Prepare(query)
+}
+
+func (d *DB) Begin() (*Tx, error) {
+	tx, err := d.DB.Begin()
+	if err != nil {
+		return nil, err
+	}
+
+	return &Tx{Tx: tx, logger: d.logger}, nil
+}
+
+type Tx struct {
+	*sql.Tx
+	logger datasource.Logger
+}
+
+func (t *Tx) logQuery(start time.Time, queryType, query string, args ...interface{}) {
+	t.logger.Debug(Log{
+		Type:     queryType,
+		Query:    query,
+		Duration: time.Since(start).Microseconds(),
+		Args:     args,
+	})
+}
+
+func (t *Tx) Query(query string, args ...interface{}) (*sql.Rows, error) {
+	defer t.logQuery(time.Now(), "TxQuery", query, args...)
+	return t.Tx.Query(query, args...)
+}
+
+func (t *Tx) QueryRow(query string, args ...interface{}) *sql.Row {
+	defer t.logQuery(time.Now(), "TxQueryRow", query, args...)
+	return t.Tx.QueryRow(query, args...)
+}
+
+func (t *Tx) QueryRowContext(ctx context.Context, query string, args ...interface{}) *sql.Row {
+	defer t.logQuery(time.Now(), "TxQueryRowContext", query, args...)
+	return t.Tx.QueryRowContext(ctx, query, args...)
+}
+
+func (t *Tx) Exec(query string, args ...interface{}) (sql.Result, error) {
+	defer t.logQuery(time.Now(), "TxExec", query, args...)
+	return t.Tx.Exec(query, args...)
+}
+
+func (t *Tx) Prepare(query string) (*sql.Stmt, error) {
+	defer t.logQuery(time.Now(), "TxPrepare", query)
+	return t.Tx.Prepare(query)
+}
+
+func (t *Tx) Commit() error {
+	defer t.logQuery(time.Now(), "TxCommit", "COMMIT")
+	return t.Tx.Commit()
+}
+
+func (t *Tx) Rollback() error {
+	defer t.logQuery(time.Now(), "TxRollback", "ROLLBACK")
+	return t.Tx.Rollback()
 }
 
 // Select runs a query with args and binds the result of the query to the data.
@@ -52,7 +154,7 @@ func (d *DB) Select(ctx context.Context, data interface{}, query string, args ..
 	// First confirm that what we got in v is a pointer else it won't be settable
 	rvo := reflect.ValueOf(data)
 	if rvo.Kind() != reflect.Ptr {
-		fmt.Println("We did not get a pointer. data is not settable.")
+		d.logger.Error("We did not get a pointer. data is not settable.")
 
 		return
 	}
@@ -65,7 +167,7 @@ func (d *DB) Select(ctx context.Context, data interface{}, query string, args ..
 	case reflect.Slice:
 		rows, err := d.QueryContext(ctx, query, args...)
 		if err != nil {
-			fmt.Println(err)
+			d.logger.Errorf("Error running query : %v", err)
 
 			return
 		}
@@ -93,7 +195,7 @@ func (d *DB) Select(ctx context.Context, data interface{}, query string, args ..
 		}
 
 	default:
-		fmt.Println("a pointer to", rv.Kind(), "was not expected.")
+		d.logger.Debugf("a pointer to %v was not expected.", rv.Kind().String())
 	}
 }
 
