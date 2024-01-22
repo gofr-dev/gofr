@@ -26,7 +26,13 @@ type Container struct {
 func (c *Container) Health() interface{} {
 	datasources := make(map[string]interface{})
 
-	datasources["sql"] = c.DB.HealthCheck()
+	if c.DB != nil {
+		datasources["sql"] = c.DB.HealthCheck()
+	}
+
+	if c.Redis != nil {
+		datasources["redis"] = c.Redis.HealthCheck()
+	}
 
 	return datasources
 }
@@ -48,6 +54,7 @@ func NewContainer(conf config.Config) *Container {
 		c.Redis, err = redis.NewClient(redis.Config{
 			HostName: host,
 			Port:     port,
+			Options:  nil,
 		}, c.Logger)
 
 		if err != nil {
