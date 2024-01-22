@@ -132,13 +132,19 @@ func (l *logger) prettyPrint(e logEntry, out io.Writer) {
 
 // colorForStatusCode provide color for the status code in the terminal when logs is being pretty-printed.
 func colorForStatusCode(status int) int {
+	const (
+		blue   = 34
+		red    = 202
+		yellow = 220
+	)
+
 	switch {
 	case status >= 200 && status < 300:
-		return 34
+		return blue
 	case status >= 400 && status < 500:
-		return 220
+		return yellow
 	case status >= 500 && status < 600:
-		return 202
+		return red
 	}
 
 	return 0
