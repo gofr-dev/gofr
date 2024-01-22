@@ -1,4 +1,4 @@
-package sql
+package redis
 
 import (
 	"context"
@@ -7,7 +7,7 @@ import (
 	"gofr.dev/pkg/gofr/datasource"
 )
 
-func (d *DB) HealthCheck() datasource.Health {
+func (r *Redis) HealthCheck() datasource.Health {
 	h := datasource.Health{
 		Details: make(map[string]interface{}),
 	}
@@ -15,15 +15,16 @@ func (d *DB) HealthCheck() datasource.Health {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
-	err := d.PingContext(ctx)
+	info, err := r.InfoMap(ctx, "Stats").Result()
 	if err != nil {
 		h.Status = datasource.StatusDown
+		h.Details["error"] = err.Error()
 
 		return h
 	}
 
 	h.Status = datasource.StatusUp
-	h.Details["stats"] = d.Stats()
+	h.Details["stats"] = info
 
 	return h
 }
