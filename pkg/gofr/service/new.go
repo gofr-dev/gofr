@@ -23,16 +23,29 @@ type httpService struct {
 }
 
 type HTTP interface {
+	// Get performs an HTTP GET request.
 	Get(ctx context.Context, api string, queryParams map[string]interface{}) (*http.Response, error)
+	// GetWithHeaders performs an HTTP GET request with custom headers.
 	GetWithHeaders(ctx context.Context, path string, queryParams map[string]interface{}, headers map[string]string) (*http.Response, error)
 
+	// Post performs an HTTP POST request.
 	Post(ctx context.Context, path string, queryParams map[string]interface{}, body []byte) (*http.Response, error)
+	// PostWithHeaders performs an HTTP POST request with custom headers.
 	PostWithHeaders(ctx context.Context, path string, queryParams map[string]interface{}, body []byte, headers map[string]string) (*http.Response, error)
 
+	// Put performs an HTTP PUT request.
 	Put(ctx context.Context, api string, queryParams map[string]interface{}, body []byte) (*http.Response, error)
+	// PutWithHeaders performs an HTTP PUT request with custom headers.
 	PutWithHeaders(ctx context.Context, api string, queryParams map[string]interface{}, body []byte, headers map[string]string) (*http.Response, error)
 
+	// Patch performs an HTTP PATCH request.
+	Patch(ctx context.Context, api string, queryParams map[string]interface{}, body []byte) (*http.Response, error)
+	// PatchWithHeaders performs an HTTP PATCH request with custom headers.
+	PatchWithHeaders(ctx context.Context, api string, queryParams map[string]interface{}, body []byte, headers map[string]string) (*http.Response, error)
+
+	// Delete performs an HTTP DELETE request.
 	Delete(ctx context.Context, api string, body []byte) (*http.Response, error)
+	// DeleteWithHeaders performs an HTTP DELETE request with custom headers.
 	DeleteWithHeaders(ctx context.Context, api string, body []byte, headers map[string]string) (*http.Response, error)
 }
 
@@ -94,7 +107,10 @@ func (h *httpService) createAndSendRequest(ctx context.Context, method string, p
 	defer span.End()
 
 	spanContext = httptrace.WithClientTrace(spanContext, otelhttptrace.NewClientTrace(ctx))
-	req, _ := http.NewRequestWithContext(spanContext, method, uri, bytes.NewBuffer(body))
+	req, err := http.NewRequestWithContext(spanContext, method, uri, bytes.NewBuffer(body))
+	if err != nil {
+		return nil, err
+	}
 
 	reqID := trace.SpanFromContext(ctx).SpanContext().TraceID().String()
 
@@ -115,7 +131,7 @@ func (h *httpService) createAndSendRequest(ctx context.Context, method string, p
 
 	resp, err := h.Do(req)
 
-	log.ResponseTime = time.Since(requestStart).Nanoseconds() / 1000
+	log.ResponseTime = time.Since(requestStart).Microseconds()
 
 	if err != nil {
 		log.ResponseCode = http.StatusInternalServerError

@@ -82,6 +82,8 @@ func NewContainer(conf config.Config) *Container {
 	return c
 }
 
+// GetHTTPService returns registered http services.
+// HTTP services are registered from AddHTTPService method of gofr object.
 func (c *Container) GetHTTPService(serviceName string) service.HTTP {
 	return c.Services[serviceName]
 }

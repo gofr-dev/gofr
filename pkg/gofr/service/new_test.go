@@ -2,13 +2,14 @@ package service
 
 import (
 	"context"
-	"go.opentelemetry.io/otel"
-	"gofr.dev/pkg/gofr"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"go.opentelemetry.io/otel"
+
+	"gofr.dev/pkg/gofr"
 )
 
 func TestNewHTTPService(t *testing.T) {

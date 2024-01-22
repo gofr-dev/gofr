@@ -11,7 +11,7 @@ type Log struct {
 	ResponseTime  int64     `json:"latency"`
 	CorrelationID string    `json:"correlationId"`
 	ResponseCode  int       `json:"responseCode"`
-	HTTPMethod    string    `json:"http_method"`
+	HTTPMethod    string    `json:"httpMethod"`
 	URI           string    `json:"uri"`
 }
 

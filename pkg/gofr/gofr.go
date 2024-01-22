@@ -135,7 +135,6 @@ func (a *App) readConfig() {
 	a.Config = config.NewEnvFile(configLocation)
 }
 
-// GET adds a Handler for http GET method for a route pattern.
 func (a *App) AddHTTPService(serviceName, serviceAddress string) {
 	if a.container.Services == nil {
 		a.container.Services = make(map[string]service.HTTP)
