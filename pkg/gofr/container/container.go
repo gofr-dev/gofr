@@ -7,6 +7,7 @@ import (
 	"gofr.dev/pkg/gofr/datasource/redis"
 	"gofr.dev/pkg/gofr/datasource/sql"
 	"gofr.dev/pkg/gofr/logging"
+	"gofr.dev/pkg/gofr/service"
 
 	_ "github.com/go-sql-driver/mysql" // This is required to be blank import
 )
@@ -17,8 +18,9 @@ import (
 // etc which is shared across is placed here.
 type Container struct {
 	logging.Logger
-	Redis *redis.Redis
-	DB    *sql.DB
+	Services map[string]service.HTTP
+	Redis    *redis.Redis
+	DB       *sql.DB
 }
 
 func (c *Container) Health() interface{} {
@@ -77,4 +79,10 @@ func NewContainer(conf config.Config) *Container {
 	}
 
 	return c
+}
+
+// GetHTTPService returns registered http services.
+// HTTP services are registered from AddHTTPService method of gofr object.
+func (c *Container) GetHTTPService(serviceName string) service.HTTP {
+	return c.Services[serviceName]
 }
