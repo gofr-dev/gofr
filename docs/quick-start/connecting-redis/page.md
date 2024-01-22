@@ -21,6 +21,9 @@ GoFr requires certain configurations to connect to Redis. The necessary configur
 `REDIS_HOST`and `REDIS_PORT`. Update the `.env` file in the configs directory with the following content:
 
 ```dotenv
+APP_NAME=test-service
+HTTP_PORT=9000
+
 REDIS_HOST=localhost
 REDIS_PORT=6379
 ```
