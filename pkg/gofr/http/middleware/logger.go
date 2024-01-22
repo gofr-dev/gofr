@@ -43,8 +43,7 @@ func Logging(logger logger) func(inner http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			start := time.Now()
 			srw := &StatusResponseWriter{ResponseWriter: w}
-
-			reqID := GetTracerID(r)
+			reqID := trace.SpanFromContext(r.Context()).SpanContext().TraceID().String()
 			srw.Header().Set("X-Correlation-ID", reqID)
 
 			defer func(res *StatusResponseWriter, req *http.Request) {
@@ -112,13 +111,4 @@ func panicRecovery(w http.ResponseWriter, logger logger) {
 		res := map[string]interface{}{"code": http.StatusInternalServerError, "status": "ERROR", "message": "Some unexpected error has occurred"}
 		_ = json.NewEncoder(w).Encode(res)
 	}
-}
-
-func GetTracerID(r *http.Request) string {
-	tracerIDFromRequest, err := trace.TraceIDFromHex(r.Header.Get("X-Correlation-ID"))
-	if err != nil {
-		return trace.SpanFromContext(r.Context()).SpanContext().TraceID().String()
-	}
-
-	return tracerIDFromRequest.String()
 }

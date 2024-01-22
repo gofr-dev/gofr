@@ -98,9 +98,6 @@ func (h *httpService) createAndSendRequest(ctx context.Context, method string, p
 
 	reqID := trace.SpanFromContext(ctx).SpanContext().TraceID().String()
 
-	// set headers
-	req.Header.Set("X-Correlation-ID", reqID)
-
 	for k, v := range headers {
 		req.Header.Set(k, v)
 	}
