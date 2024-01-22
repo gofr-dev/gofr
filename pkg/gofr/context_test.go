@@ -3,10 +3,11 @@ package gofr
 import (
 	"bytes"
 	"context"
-	"github.com/stretchr/testify/assert"
+
 	"net/http"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
 	gofrHTTP "gofr.dev/pkg/gofr/http"
@@ -27,6 +28,6 @@ func Test_newContextSuccess(t *testing.T) {
 
 	err = ctx.Bind(&body)
 
-	assert.Equal(t, map[string]string{"key": "value"}, body)
-	assert.Nil(t, err)
+	assert.Equal(t, map[string]string{"key": "value"}, body, "TEST Failed \n unable to read body")
+	assert.Nil(t, err, "TEST Failed \n unable to read body")
 }
