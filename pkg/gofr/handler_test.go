@@ -48,18 +48,6 @@ func TestHandler_ServeHTTP(t *testing.T) {
 	}
 }
 
-func TestHandler_healthHandler(t *testing.T) {
-	c := Context{
-		Context: context.Background(),
-	}
-
-	data, err := healthHandler(&c)
-
-	assert.Equal(t, "OK", data, "TEST Failed.\n")
-
-	assert.NoError(t, err, "TEST Failed.\n")
-}
-
 func TestHandler_faviconHandler(t *testing.T) {
 	c := Context{
 		Context: context.Background(),

@@ -1,4 +1,4 @@
-package datasource
+package sql
 
 import (
 	"context"
@@ -16,17 +16,17 @@ var (
 	errDB = errors.New("DB error")
 )
 
-func getDB(t *testing.T) (*DB, sqlmock.Sqlmock) {
+func getDB(t *testing.T, logLevel int) (*DB, sqlmock.Sqlmock) {
 	mockDB, mock, err := sqlmock.New()
 	if err != nil {
 		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
 	}
 
-	return &DB{mockDB, nil}, mock
+	return &DB{mockDB, testutil.NewMockLogger(logLevel)}, mock
 }
 
 func TestDB_SelectSingleColumnFromIntToString(t *testing.T) {
-	db, mock := getDB(t)
+	db, mock := getDB(t, testutil.INFOLOG)
 	defer db.DB.Close()
 
 	rows := sqlmock.NewRows([]string{"id"}).
@@ -42,7 +42,7 @@ func TestDB_SelectSingleColumnFromIntToString(t *testing.T) {
 }
 
 func TestDB_SelectSingleColumnFromStringToString(t *testing.T) {
-	db, mock := getDB(t)
+	db, mock := getDB(t, testutil.INFOLOG)
 	defer db.DB.Close()
 
 	rows := sqlmock.NewRows([]string{"id"}).
@@ -58,7 +58,7 @@ func TestDB_SelectSingleColumnFromStringToString(t *testing.T) {
 }
 
 func TestDB_SelectSingleColumnFromIntToInt(t *testing.T) {
-	db, mock := getDB(t)
+	db, mock := getDB(t, testutil.INFOLOG)
 	defer db.DB.Close()
 
 	rows := sqlmock.NewRows([]string{"id"}).
@@ -74,7 +74,7 @@ func TestDB_SelectSingleColumnFromIntToInt(t *testing.T) {
 }
 
 func TestDB_SelectSingleColumnFromIntToCustomInt(t *testing.T) {
-	db, mock := getDB(t)
+	db, mock := getDB(t, testutil.INFOLOG)
 	defer db.DB.Close()
 
 	rows := sqlmock.NewRows([]string{"id"}).
@@ -93,7 +93,7 @@ func TestDB_SelectSingleColumnFromIntToCustomInt(t *testing.T) {
 }
 
 func TestDB_SelectSingleColumnFromStringToCustomInt(t *testing.T) {
-	db, mock := getDB(t)
+	db, mock := getDB(t, testutil.INFOLOG)
 	defer db.DB.Close()
 
 	rows := sqlmock.NewRows([]string{"id"}).
@@ -117,9 +117,7 @@ func TestDB_SelectContextError(t *testing.T) {
 
 	defer cancel()
 
-	t.Setenv("LOG_LEVEL", "DEBUG")
-
-	db, _ := getDB(t)
+	db, _ := getDB(t, testutil.DEBUGLOG)
 	defer db.DB.Close()
 
 	// the query won't run, since context is past deadline and the function will simply return
@@ -128,7 +126,7 @@ func TestDB_SelectContextError(t *testing.T) {
 
 func TestDB_SelectDataPointerError(t *testing.T) {
 	out := testutil.StderrOutputForFunc(func() {
-		db, _ := getDB(t)
+		db, _ := getDB(t, testutil.INFOLOG)
 		defer db.DB.Close()
 
 		db.Select(context.Background(), nil, "select 1")
@@ -138,7 +136,7 @@ func TestDB_SelectDataPointerError(t *testing.T) {
 }
 
 func TestDB_SelectSingleColumnFromStringToCustomString(t *testing.T) {
-	db, mock := getDB(t)
+	db, mock := getDB(t, testutil.INFOLOG)
 	defer db.DB.Close()
 
 	rows := sqlmock.NewRows([]string{"id"}).
@@ -157,7 +155,7 @@ func TestDB_SelectSingleColumnFromStringToCustomString(t *testing.T) {
 }
 
 func TestDB_SelectSingleRowMultiColumn(t *testing.T) {
-	db, mock := getDB(t)
+	db, mock := getDB(t, testutil.INFOLOG)
 	defer db.DB.Close()
 
 	rows := sqlmock.NewRows([]string{"id", "name", "image"}).
@@ -183,7 +181,7 @@ func TestDB_SelectSingleRowMultiColumn(t *testing.T) {
 }
 
 func TestDB_SelectSingleRowMultiColumnWithTags(t *testing.T) {
-	db, mock := getDB(t)
+	db, mock := getDB(t, testutil.INFOLOG)
 	defer db.DB.Close()
 
 	rows := sqlmock.NewRows([]string{"id", "name", "image_url"}).
@@ -209,7 +207,7 @@ func TestDB_SelectSingleRowMultiColumnWithTags(t *testing.T) {
 }
 
 func TestDB_SelectMultiRowMultiColumnWithTags(t *testing.T) {
-	db, mock := getDB(t)
+	db, mock := getDB(t, testutil.INFOLOG)
 	defer db.DB.Close()
 
 	rows := sqlmock.NewRows([]string{"id", "name", "image_url"}).
@@ -245,7 +243,7 @@ func TestDB_SelectSingleColumnError(t *testing.T) {
 	ids := make([]string, 0)
 
 	out := testutil.StderrOutputForFunc(func() {
-		db, mock := getDB(t)
+		db, mock := getDB(t, testutil.INFOLOG)
 		defer db.DB.Close()
 
 		mock.ExpectQuery("^select id from users").
@@ -260,12 +258,10 @@ func TestDB_SelectSingleColumnError(t *testing.T) {
 }
 
 func TestDB_SelectDataPointerNotExpected(t *testing.T) {
-	t.Setenv("LOG_LEVEL", "DEBUG")
-
 	m := make(map[int]int)
 
 	out := testutil.StdoutOutputForFunc(func() {
-		db, _ := getDB(t)
+		db, _ := getDB(t, testutil.DEBUGLOG)
 		defer db.DB.Close()
 
 		db.Select(context.Background(), &m, "select id from users")
