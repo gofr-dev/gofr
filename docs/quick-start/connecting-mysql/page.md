@@ -1,4 +1,3 @@
-﻿
 # Connecting MySQL
 
 Just like any other datasource gofr also supports connection to MySQL database based on configuration variables. It automatically manages the connection pool, connection retry etc.
