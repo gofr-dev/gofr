@@ -3,7 +3,6 @@ package main
 import (
 	"errors"
 	"fmt"
-	"gofr.dev/pkg/gofr/service"
 	"sync"
 	"time"
 
@@ -15,6 +14,8 @@ import (
 func main() {
 	// Create a new application
 	a := gofr.New()
+
+	a.AddHTTPService("anotherService", "http://localhost:9000")
 
 	// Add all the routes
 	a.GET("/hello", HelloHandler)
@@ -70,11 +71,13 @@ func TraceHandler(c *gofr.Context) (interface{}, error) {
 	}
 	wg.Wait()
 
-	// Call Another service
-	anotherService := service.NewHTTPService("http://localhost:9000")
-	anotherService.Get(c, "redis", nil)
+	//Call Another service
+	resp, err := c.GetHTTPService("anotherService").Get(c, "redis", nil)
+	if err != nil {
+		return nil, err
+	}
 
-	return "Tracing Success", nil
+	return resp, nil
 }
 
 func MysqlHandler(c *gofr.Context) (interface{}, error) {
