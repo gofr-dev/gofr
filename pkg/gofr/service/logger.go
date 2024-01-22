@@ -17,5 +17,5 @@ type Log struct {
 
 type ErrorLog struct {
 	Log
-	ErrorMessage string `json:"error_message"`
+	ErrorMessage string `json:"errorMessage"`
 }
