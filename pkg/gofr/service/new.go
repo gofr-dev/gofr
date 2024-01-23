@@ -53,8 +53,11 @@ type HTTP interface {
 	DeleteWithHeaders(ctx context.Context, api string, body []byte, headers map[string]string) (*http.Response, error)
 }
 
+// NewHTTPService function creates a new instance of the httpService struct, which implements the HTTP interface.
+// It initializes the http.Client, url, Tracer, and Logger fields of the httpService struct with the provided values.
 func NewHTTPService(serviceAddress string, logger Logger) HTTP {
 	return &httpService{
+		// using default http client to do http communication
 		Client: &http.Client{},
 		url:    serviceAddress,
 		Tracer: otel.Tracer("gofr-http-client"),
