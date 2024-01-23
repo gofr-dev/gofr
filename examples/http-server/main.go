@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/redis/go-redis/v9"
+	rds "github.com/redis/go-redis/v9"
 
 	"gofr.dev/pkg/gofr"
 )
@@ -44,7 +44,7 @@ func ErrorHandler(c *gofr.Context) (interface{}, error) {
 
 func RedisHandler(c *gofr.Context) (interface{}, error) {
 	val, err := c.Redis.Get(c, "test").Result()
-	if err != nil && !errors.Is(err, redis.Nil) { // If key is not found, we are not considering this error and returning "".
+	if err != nil && !errors.Is(err, rds.Nil) { // If key is not found, we are not considering this error and returning "".
 		return nil, err
 	}
 
