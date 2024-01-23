@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"go.opentelemetry.io/contrib/instrumentation/net/http/httptrace/otelhttptrace"
-	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -55,7 +55,7 @@ type HTTP interface {
 
 func NewHTTPService(serviceAddress string, logger Logger) HTTP {
 	return &httpService{
-		Client: &http.Client{Transport: otelhttp.NewTransport(http.DefaultTransport)},
+		Client: &http.Client{},
 		url:    serviceAddress,
 		Tracer: otel.Tracer("gofr-http-client"),
 		Logger: logger,
@@ -123,17 +123,19 @@ func (h *httpService) createAndSendRequest(ctx context.Context, method string, p
 		return nil, err
 	}
 
-	reqID := trace.SpanFromContext(ctx).SpanContext().TraceID().String()
-
 	for k, v := range headers {
 		req.Header.Set(k, v)
 	}
 
+	// encode the query parameters on the request
 	encodeQueryParameters(req, queryParams)
+
+	// inject the TraceParent header manually in the request headers
+	otel.GetTextMapPropagator().Inject(spanContext, propagation.HeaderCarrier(req.Header))
 
 	log := Log{
 		Timestamp:     time.Now(),
-		CorrelationID: reqID,
+		CorrelationID: trace.SpanFromContext(ctx).SpanContext().TraceID().String(),
 		HTTPMethod:    method,
 		URI:           uri,
 	}
