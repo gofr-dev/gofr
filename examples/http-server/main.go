@@ -44,7 +44,7 @@ func ErrorHandler(c *gofr.Context) (interface{}, error) {
 
 func RedisHandler(c *gofr.Context) (interface{}, error) {
 	val, err := c.Redis.Get(c, "test").Result()
-	if err != nil && err != redis.Nil { // If key is not found, we are not considering this an error and returning "".
+	if err != nil && !errors.Is(err, redis.Nil) { // If key is not found, we are not considering this error and returning "".
 		return nil, err
 	}
 
@@ -71,13 +71,13 @@ func TraceHandler(c *gofr.Context) (interface{}, error) {
 	}
 	wg.Wait()
 
-	//Call Another service
-	resp, err := c.GetHTTPService("anotherService").Get(c, "redis", nil)
+	// Call Another service
+	_, err := c.GetHTTPService("anotherService").Get(c, "redis", nil)
 	if err != nil {
 		return nil, err
 	}
 
-	return resp, nil
+	return "Tracing complete", nil
 }
 
 func MysqlHandler(c *gofr.Context) (interface{}, error) {
