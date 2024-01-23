@@ -45,7 +45,8 @@ Developer Note: If you chain methods in a defer statement, everything except the
 func (c *Context) Trace(name string) trace.Span {
 	tr := otel.GetTracerProvider().Tracer("gofr-context")
 	ctx, span := tr.Start(c.Context, name)
-	c.Context = ctx // TODO - wanted to change the internal context to the newly returned context. But it crashes.
+	c.Context = ctx
+
 	return span
 }
 
