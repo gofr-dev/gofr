@@ -53,7 +53,12 @@ type HTTP interface {
 	DeleteWithHeaders(ctx context.Context, api string, body []byte, headers map[string]string) (*http.Response, error)
 }
 
-func NewHTTPService(serviceAddress string, logger Logger) HTTP {
+type HTTPService interface {
+	HTTP
+	Ready(ctx context.Context) interface{}
+}
+
+func NewHTTPService(serviceAddress string, logger Logger) HTTPService {
 	return &httpService{
 		Client: &http.Client{Transport: otelhttp.NewTransport(http.DefaultTransport)},
 		url:    serviceAddress,
@@ -173,4 +178,16 @@ func encodeQueryParameters(req *http.Request, queryParams map[string]interface{}
 	}
 
 	req.URL.RawQuery = q.Encode()
+}
+
+func (h *httpService) Ready(ctx context.Context) interface{} {
+	resp, err := h.Get(ctx, "/.well-known/ready", nil)
+	resp.Body.Close()
+
+	switch {
+	case err != nil || resp.StatusCode != http.StatusOK:
+		return "DOWN"
+	default:
+		return "UP"
+	}
 }
