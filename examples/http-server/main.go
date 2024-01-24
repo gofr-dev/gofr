@@ -19,7 +19,7 @@ func main() {
 	a.AddHTTPService("anotherService", "http://localhost:9000")
 
 	a.AddHTTPService("cachedService", "http://localhost:9000", &service.Cache{
-		TTL: 5 * time.Minute,
+		TTL: 5 * time.Second,
 	})
 
 	// Add all the routes
@@ -90,7 +90,7 @@ func MysqlHandler(c *gofr.Context) (interface{}, error) {
 	var value int
 	err := c.DB.QueryRowContext(c, "select 2+2").Scan(&value)
 
-	time.Sleep(10 * time.Second)
+	time.Sleep(3 * time.Second)
 	return value, err
 }
 
