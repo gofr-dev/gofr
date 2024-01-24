@@ -51,6 +51,10 @@ func (c *Container) Health(ctx context.Context) interface{} {
 		}
 	}
 
+	if len(datasources) == 0 {
+		datasources = nil
+	}
+
 	return Health{
 		Status:     status,
 		Services:   svcHealth,
