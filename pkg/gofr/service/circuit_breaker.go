@@ -67,8 +67,8 @@ func NewCircuitBreaker(config CircuitBreakerConfig, logger Logger) *CircuitBreak
 }
 
 // ExecuteWithCircuitBreaker executes the given function with circuit breaker protection.
-func (cb *CircuitBreaker) ExecuteWithCircuitBreaker(ctx context.Context, f func(ctx context.Context) (interface{},
-	error)) (interface{}, error) {
+func (cb *CircuitBreaker) ExecuteWithCircuitBreaker(ctx context.Context, f func(ctx context.Context) (*http.Response,
+	error)) (*http.Response, error) {
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
 
