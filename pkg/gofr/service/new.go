@@ -3,7 +3,6 @@ package service
 import (
 	"bytes"
 	"context"
-	"encoding/gob"
 	"fmt"
 	"net/http"
 	"net/http/httptrace"
@@ -226,28 +225,4 @@ func encodeQueryParameters(req *http.Request, queryParams map[string]interface{}
 	}
 
 	req.URL.RawQuery = q.Encode()
-}
-
-// serializeResponse serializes an *http.Response to a []byte using gob.
-func serializeResponse(response *http.Response) ([]byte, error) {
-	var buf bytes.Buffer
-	encoder := gob.NewEncoder(&buf)
-	err := encoder.Encode(response)
-	if err != nil {
-		return nil, err
-	}
-
-	return buf.Bytes(), nil
-}
-
-// deserializeResponse deserializes a []byte to an *http.Response using gob.
-func deserializeResponse(data []byte) (*http.Response, error) {
-	var response http.Response
-	decoder := gob.NewDecoder(bytes.NewReader(data))
-	err := decoder.Decode(&response)
-	if err != nil {
-		return nil, err
-	}
-
-	return &response, nil
 }
