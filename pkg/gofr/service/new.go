@@ -3,6 +3,7 @@ package service
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptrace"
@@ -20,6 +21,7 @@ type httpService struct {
 	trace.Tracer
 	url string
 	Logger
+	*CircuitBreaker
 }
 
 type HTTP interface {
@@ -53,12 +55,14 @@ type HTTP interface {
 	DeleteWithHeaders(ctx context.Context, api string, body []byte, headers map[string]string) (*http.Response, error)
 }
 
-func NewHTTPService(serviceAddress string, logger Logger) HTTP {
+func NewHTTPService(serviceAddress string, logger Logger, circuitBreakerConfig *CircuitBreakerConfig) HTTP {
+	cb := NewCircuitBreaker(*circuitBreakerConfig, logger)
 	return &httpService{
-		Client: &http.Client{Transport: otelhttp.NewTransport(http.DefaultTransport)},
-		url:    serviceAddress,
-		Tracer: otel.Tracer("gofr-http-client"),
-		Logger: logger,
+		Client:         &http.Client{Transport: otelhttp.NewTransport(http.DefaultTransport)},
+		url:            serviceAddress,
+		Tracer:         otel.Tracer("gofr-http-client"),
+		Logger:         logger,
+		CircuitBreaker: cb,
 	}
 }
 
@@ -140,7 +144,39 @@ func (h *httpService) createAndSendRequest(ctx context.Context, method string, p
 
 	requestStart := time.Now()
 
-	resp, err := h.Do(req)
+	var (
+		resp *http.Response
+	)
+
+	if h.CircuitBreaker != nil && h.CircuitBreaker.IsOpen() {
+		if time.Since(h.CircuitBreaker.lastChecked) > h.CircuitBreaker.timeout {
+			// Check health before potentially closing the circuit
+			if h.CircuitBreaker.healthCheck() {
+				h.CircuitBreaker.resetCircuit()
+			}
+		}
+		return nil, ErrCircuitOpen
+	}
+
+	// Handle circuit breaker
+	if h.CircuitBreaker != nil {
+		result, err := h.CircuitBreaker.ExecuteWithCircuitBreaker(ctx, func(ctx context.Context) (interface{}, error) {
+			return h.Do(req)
+		})
+
+		// Handle circuit breaker result
+		if err != nil {
+			h.Log(ErrorLog{Log: log, ErrorMessage: err.Error()})
+		} else if result, ok := result.(*http.Response); ok {
+			resp = result
+		} else {
+			errMsg := fmt.Errorf("unexpected result type from circuit breaker: %t", result)
+			h.Log(ErrorLog{Log: log, ErrorMessage: errMsg.Error()})
+		}
+	} else {
+		// Execute the request directly if circuit breaker is disabled
+		resp, err = h.Do(req)
+	}
 
 	log.ResponseTime = time.Since(requestStart).Microseconds()
 
@@ -173,4 +209,13 @@ func encodeQueryParameters(req *http.Request, queryParams map[string]interface{}
 	}
 
 	req.URL.RawQuery = q.Encode()
+}
+
+// handleCircuitBreakerError logs errors related to the circuit breaker.
+func (h *httpService) handleCircuitBreakerError(log Log, err error) {
+	if errors.Is(err, ErrCircuitOpen) {
+		h.logger.Log("CircuitBreaker", "Circuit breaker is open, request failed")
+	} else {
+		h.Log(ErrorLog{Log: log, ErrorMessage: err.Error()})
+	}
 }
