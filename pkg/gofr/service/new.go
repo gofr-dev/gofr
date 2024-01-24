@@ -181,6 +181,7 @@ func encodeQueryParameters(req *http.Request, queryParams map[string]interface{}
 }
 
 func (h *httpService) Ready(ctx context.Context) interface{} {
+	// TODO support custom url after circuit breaker and caching
 	resp, err := h.Get(ctx, "/.well-known/ready", nil)
 	resp.Body.Close()
 
