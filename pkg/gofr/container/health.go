@@ -2,6 +2,12 @@ package container
 
 import "context"
 
+const (
+	StatusUp       = "UP"
+	StatusDown     = "DOWN"
+	StatusDegraded = "DEGRADED"
+)
+
 type HealthChecker interface {
 	HealthCheck() interface{}
 }
@@ -16,8 +22,7 @@ type Health struct {
 	Datasource map[string]interface{} `json:"datasource,omitempty"`
 }
 
-const (
-	StatusUp       = "UP"
-	StatusDown     = "DOWN"
-	StatusDegraded = "DEGRADED"
-)
+type ServiceHealth struct {
+	Name   string `json:"name,omitempty"`
+	Status string `json:"status,omitempty"`
+}
