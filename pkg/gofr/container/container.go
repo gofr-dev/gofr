@@ -38,16 +38,16 @@ func (c *Container) Health(ctx context.Context) interface{} {
 
 	svcHealth := make([]ServiceHealth, 0)
 
-	for k, v := range c.Services {
-		resp := v.Ready(ctx)
+	for name, svc := range c.Services {
+		resp := svc.Ready(ctx)
 
 		switch resp {
 		case "DOWN":
 			status = StatusDegraded
 
-			svcHealth = append(svcHealth, ServiceHealth{Name: k, Status: StatusDown})
+			svcHealth = append(svcHealth, ServiceHealth{Name: name, Status: StatusDown})
 		default:
-			svcHealth = append(svcHealth, ServiceHealth{Name: k, Status: StatusUp})
+			svcHealth = append(svcHealth, ServiceHealth{Name: name, Status: StatusUp})
 		}
 	}
 
