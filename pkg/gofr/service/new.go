@@ -55,15 +55,22 @@ type HTTP interface {
 	DeleteWithHeaders(ctx context.Context, api string, body []byte, headers map[string]string) (*http.Response, error)
 }
 
-func NewHTTPService(serviceAddress string, logger Logger, circuitBreakerConfig *CircuitBreakerConfig) HTTP {
-	cb := NewCircuitBreaker(*circuitBreakerConfig, logger)
-	return &httpService{
-		Client:         &http.Client{Transport: otelhttp.NewTransport(http.DefaultTransport)},
-		url:            serviceAddress,
-		Tracer:         otel.Tracer("gofr-http-client"),
-		Logger:         logger,
-		CircuitBreaker: cb,
+func NewHTTPService(serviceAddress string, logger Logger, options ...Options) HTTP {
+	h := &httpService{
+		Client: &http.Client{Transport: otelhttp.NewTransport(http.DefaultTransport)},
+		url:    serviceAddress,
+		Tracer: otel.Tracer("gofr-http-client"),
+		Logger: logger,
 	}
+
+	// if options are given, then add them to the httpService struct
+	if options != nil {
+		for _, o := range options {
+			o.apply(h)
+		}
+	}
+
+	return h
 }
 
 func (h *httpService) Get(ctx context.Context, path string, queryParams map[string]interface{}) (*http.Response, error) {
