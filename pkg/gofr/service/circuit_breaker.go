@@ -23,19 +23,17 @@ var (
 // CircuitBreakerConfig holds the configuration for the CircuitBreaker.
 type CircuitBreakerConfig struct {
 	Enabled   bool
-	MaxRetry  int
-	Threshold int
-	Timeout   time.Duration
-	Interval  time.Duration
-	HealthURL string
+	Threshold int           // Threshold represents the max no of retry before switching the circuit breaker state.
+	Timeout   time.Duration // Timeout represents the time duration for which circuit breaker maintains it's open state.
+	Interval  time.Duration // Interval represents the time interval duration between hitting the HealthURL
+	HealthURL string        // HealthURL represents the health url of the underlying service.
 }
 
 // CircuitBreaker represents a circuit breaker implementation.
 type CircuitBreaker struct {
-	mu           sync.Mutex
+	mu           sync.RWMutex
 	state        int // ClosedState or OpenState
 	failureCount int
-	maxRetry     int
 	threshold    int
 	timeout      time.Duration
 	interval     time.Duration
@@ -52,7 +50,6 @@ func NewCircuitBreaker(config CircuitBreakerConfig, logger Logger) *CircuitBreak
 
 	cb := &CircuitBreaker{
 		state:     ClosedState,
-		maxRetry:  config.MaxRetry,
 		threshold: config.Threshold,
 		timeout:   config.Timeout,
 		interval:  config.Interval,
@@ -84,17 +81,17 @@ func (cb *CircuitBreaker) ExecuteWithCircuitBreaker(ctx context.Context, f func(
 		return nil, ErrCircuitOpen
 	}
 
-	if cb.failureCount > cb.threshold {
-		cb.openCircuit()
-		return nil, ErrCircuitOpen
-	}
-
 	result, err := f(ctx)
 
 	if err != nil {
 		cb.handleFailure()
 	} else {
 		cb.resetFailureCount()
+	}
+
+	if cb.failureCount > cb.threshold {
+		cb.openCircuit()
+		return nil, ErrCircuitOpen
 	}
 
 	return result, err
@@ -123,12 +120,16 @@ func (cb *CircuitBreaker) healthCheck() bool {
 		return false
 	}
 
+	client := &http.Client{
+		Timeout: cb.timeout,
+	}
+
 	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, cb.healthURL, http.NoBody)
 	if err != nil {
 		return false
 	}
 
-	resp, err := http.DefaultClient.Do(req) // Use http.DefaultClient with context
+	resp, err := client.Do(req) // Use custom HTTP client with timeout
 	if err != nil {
 		return false
 	}
