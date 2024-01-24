@@ -9,6 +9,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"gofr.dev/pkg/gofr"
+	"gofr.dev/pkg/gofr/service"
 )
 
 func main() {
@@ -17,12 +18,18 @@ func main() {
 
 	a.AddHTTPService("anotherService", "http://localhost:9000")
 
+	a.AddHTTPService("cachedService", "http://localhost:9000", &service.Cache{
+		// Need to inject a cacher here
+		TTL: 5 * time.Minute,
+	})
+
 	// Add all the routes
 	a.GET("/hello", HelloHandler)
 	a.GET("/error", ErrorHandler)
 	a.GET("/redis", RedisHandler)
 	a.GET("/trace", TraceHandler)
 	a.GET("/mysql", MysqlHandler)
+	a.GET("/cachedService", CachedServiceHandler)
 
 	// Run the application
 	a.Run()
@@ -85,4 +92,10 @@ func MysqlHandler(c *gofr.Context) (interface{}, error) {
 	err := c.DB.QueryRowContext(c, "select 2+2").Scan(&value)
 
 	return value, err
+}
+
+func CachedServiceHandler(c *gofr.Context) (interface{}, error) {
+	resp, err := c.GetHTTPService("cachedService").Get(c, "mysql", nil)
+
+	return resp, err
 }
