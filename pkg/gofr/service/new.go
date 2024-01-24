@@ -21,7 +21,7 @@ type httpService struct {
 	trace.Tracer
 	url string
 	Logger
-	cache *Cache
+	cache HTTPCacher
 }
 
 type HTTP interface {
@@ -193,12 +193,12 @@ func (h *httpService) getCachedResponse(ctx context.Context,
 	// TODO - make this key fix sized // example - hashing
 
 	// get the response stored in the cacher
-	r, _ := h.cache.Get(ctx, key)
+	resp = h.cache.Get(ctx, key)
 
-	if string(r) == "" {
+	if resp == nil {
 		resp, err = h.createAndSendRequest(ctx, method, path, queryParams, body, headers)
 	} else {
-		return deserializeResponse(r)
+		return resp, nil
 	}
 
 	// checking for any error while calling http service
@@ -206,11 +206,7 @@ func (h *httpService) getCachedResponse(ctx context.Context,
 		return nil, err
 	}
 
-	// serialize the response and add it to cache
-	val, _ := serializeResponse(resp)
-
-	// not required to check any errors
-	_ = h.cache.Set(ctx, key, val)
+	h.cache.Set(ctx, key, resp)
 
 	return resp, nil
 }

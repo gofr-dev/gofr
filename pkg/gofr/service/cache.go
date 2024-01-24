@@ -2,44 +2,35 @@ package service
 
 import (
 	"context"
+	"net/http"
 	"time"
-
-	"gofr.dev/pkg/gofr/datasource/redis"
 )
 
 type HTTPCacher interface {
-	Get(ctx context.Context, key string) ([]byte, error)
-	Set(ctx context.Context, key string, value []byte) error
+	Get(ctx context.Context, key string) *http.Response
+	Set(ctx context.Context, key string, value *http.Response)
 }
 
 type Cache struct {
-	redis *redis.Redis
-	TTL   time.Duration
-}
-
-func NewCache(ttl time.Duration) HTTPCacher {
-	c := &Cache{TTL: ttl}
-
-	// need to initialize a redis Client or inject it
-
-	return c
+	cacher map[string]*http.Response
+	TTL    time.Duration
 }
 
 func (c *Cache) apply(h *httpService) {
+	c.cacher = make(map[string]*http.Response)
+
 	h.cache = c
 }
 
-func (c *Cache) Get(ctx context.Context, key string) ([]byte, error) {
-	cmd := c.redis.Get(ctx, key)
-	if cmd.Err() != nil {
-		return nil, cmd.Err()
+func (c *Cache) Get(ctx context.Context, key string) *http.Response {
+	v, ok := c.cacher[key]
+	if !ok {
+		return nil
 	}
 
-	return cmd.Bytes()
+	return v
 }
 
-func (c *Cache) Set(ctx context.Context, key string, value []byte) error {
-	cmd := c.redis.Set(ctx, key, value, c.TTL)
-
-	return cmd.Err()
+func (c *Cache) Set(ctx context.Context, key string, value *http.Response) {
+	c.cacher[key] = value
 }
