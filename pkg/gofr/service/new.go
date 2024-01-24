@@ -3,7 +3,6 @@ package service
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptrace"
@@ -64,10 +63,8 @@ func NewHTTPService(serviceAddress string, logger Logger, options ...Options) HT
 	}
 
 	// if options are given, then add them to the httpService struct
-	if options != nil {
-		for _, o := range options {
-			o.apply(h, logger)
-		}
+	for _, o := range options {
+		o.apply(h, logger)
 	}
 
 	return h
@@ -124,12 +121,7 @@ func (h *httpService) createAndSendRequest(ctx context.Context, method string, p
 	uri := h.url + "/" + path
 	uri = strings.TrimRight(uri, "/")
 
-	spanContext, span := h.Tracer.Start(ctx, uri)
-	defer span.End()
-
-	spanContext = httptrace.WithClientTrace(spanContext, otelhttptrace.NewClientTrace(ctx))
-
-	req, err := http.NewRequestWithContext(spanContext, method, uri, bytes.NewBuffer(body))
+	req, err := buildRequest(ctx, method, uri, body, h.Tracer)
 	if err != nil {
 		return nil, err
 	}
@@ -151,37 +143,26 @@ func (h *httpService) createAndSendRequest(ctx context.Context, method string, p
 
 	requestStart := time.Now()
 
-	var (
-		resp *http.Response
-	)
-
 	if h.CircuitBreaker != nil && h.CircuitBreaker.IsOpen() {
-		if time.Since(h.CircuitBreaker.lastChecked) > h.CircuitBreaker.timeout {
-			// Check health before potentially closing the circuit
-			if h.CircuitBreaker.healthCheck() {
-				h.CircuitBreaker.resetCircuit()
-			}
+		if !h.tryCircuitRecovery() {
+			h.logger.Log("CircuitBreaker", "Circuit breaker is open, request failed")
+			return nil, ErrCircuitOpen
 		}
-		return nil, ErrCircuitOpen
 	}
 
-	// Handle circuit breaker
+	var resp *http.Response
+
 	if h.CircuitBreaker != nil {
-		result, err := h.CircuitBreaker.ExecuteWithCircuitBreaker(ctx, func(ctx context.Context) (interface{}, error) {
+		result, cbError := h.CircuitBreaker.ExecuteWithCircuitBreaker(ctx, func(ctx context.Context) (interface{}, error) {
 			return h.Do(req)
 		})
 
-		// Handle circuit breaker result
+		// Handle circuit breaker result and error
+		resp, err = h.handleCircuitBreakerResult(result, cbError, &log)
 		if err != nil {
-			h.Log(ErrorLog{Log: log, ErrorMessage: err.Error()})
-		} else if result, ok := result.(*http.Response); ok {
-			resp = result
-		} else {
-			errMsg := fmt.Errorf("unexpected result type from circuit breaker: %t", result)
-			h.Log(ErrorLog{Log: log, ErrorMessage: errMsg.Error()})
+			return nil, err
 		}
 	} else {
-		// Execute the request directly if circuit breaker is disabled
 		resp, err = h.Do(req)
 	}
 
@@ -218,11 +199,41 @@ func encodeQueryParameters(req *http.Request, queryParams map[string]interface{}
 	req.URL.RawQuery = q.Encode()
 }
 
-// handleCircuitBreakerError logs errors related to the circuit breaker.
-func (h *httpService) handleCircuitBreakerError(log Log, err error) {
-	if errors.Is(err, ErrCircuitOpen) {
-		h.logger.Log("CircuitBreaker", "Circuit breaker is open, request failed")
-	} else {
-		h.Log(ErrorLog{Log: log, ErrorMessage: err.Error()})
+func buildRequest(ctx context.Context, method, uri string, body []byte, tracer trace.Tracer) (*http.Request, error) {
+	spanContext, span := tracer.Start(ctx, uri)
+	defer span.End()
+
+	spanContext = httptrace.WithClientTrace(spanContext, otelhttptrace.NewClientTrace(ctx))
+
+	req, err := http.NewRequestWithContext(spanContext, method, uri, bytes.NewBuffer(body))
+	if err != nil {
+		return nil, err
 	}
+
+	return req, nil
+}
+
+func (h *httpService) tryCircuitRecovery() bool {
+	if time.Since(h.CircuitBreaker.lastChecked) > h.CircuitBreaker.timeout && h.CircuitBreaker.healthCheck() {
+		h.CircuitBreaker.resetCircuit()
+		return true
+	}
+
+	return false
+}
+
+func (h *httpService) handleCircuitBreakerResult(result interface{}, err error, log *Log) (*http.Response, error) {
+	if err != nil {
+		h.Log(ErrorLog{Log: *log, ErrorMessage: err.Error()})
+
+		return nil, err
+	}
+
+	response, ok := result.(*http.Response)
+	if !ok {
+		h.Log(ErrorLog{Log: *log, ErrorMessage: ErrUnexpectedCircuitBreakerResultType.Error()})
+		return nil, ErrUnexpectedCircuitBreakerResultType
+	}
+
+	return response, nil
 }
