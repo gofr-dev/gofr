@@ -17,9 +17,9 @@ type Readiness interface {
 }
 
 type Health struct {
-	Status     string                 `json:"status,omitempty"`
-	Services   []ServiceHealth        `json:"services,omitempty"`
-	Datasource map[string]interface{} `json:"datasource,omitempty"`
+	Status      string                 `json:"status,omitempty"`
+	Services    []ServiceHealth        `json:"services,omitempty"`
+	Datasources map[string]interface{} `json:"datasource,omitempty"`
 }
 
 type ServiceHealth struct {
