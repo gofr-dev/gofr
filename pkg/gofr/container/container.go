@@ -24,11 +24,6 @@ type Container struct {
 	DB       *sql.DB
 }
 
-type ServiceHealth struct {
-	Name   string `json:"name,omitempty"`
-	Status string `json:"status,omitempty"`
-}
-
 func (c *Container) Health(ctx context.Context) interface{} {
 	status := StatusUp
 	datasources := make(map[string]interface{}, 0)
