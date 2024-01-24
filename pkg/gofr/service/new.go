@@ -210,7 +210,7 @@ func (h *httpService) getCachedResponse(ctx context.Context,
 	val, _ := serializeResponse(resp)
 
 	// not required to check any errors
-	_ = h.cache.Set(ctx, key, val, h.cache.ttl)
+	_ = h.cache.Set(ctx, key, val)
 
 	return resp, nil
 }
