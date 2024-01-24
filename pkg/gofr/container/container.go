@@ -1,15 +1,16 @@
 package container
 
 import (
+	"context"
 	"strconv"
+
+	_ "github.com/go-sql-driver/mysql" // This is required to be blank import
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/datasource/redis"
 	"gofr.dev/pkg/gofr/datasource/sql"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/service"
-
-	_ "github.com/go-sql-driver/mysql" // This is required to be blank import
 )
 
 // TODO - This can be a collection of interfaces instead of struct
@@ -18,13 +19,19 @@ import (
 // etc which is shared across is placed here.
 type Container struct {
 	logging.Logger
-	Services map[string]service.HTTP
+	Services map[string]service.HTTPService
 	Redis    *redis.Redis
 	DB       *sql.DB
 }
 
-func (c *Container) Health() interface{} {
-	datasources := make(map[string]interface{})
+type ServiceHealth struct {
+	Name   string `json:"name,omitempty"`
+	Status string `json:"status,omitempty"`
+}
+
+func (c *Container) Health(ctx context.Context) interface{} {
+	status := StatusUp
+	datasources := make(map[string]interface{}, 0)
 
 	if c.DB != nil {
 		datasources["sql"] = c.DB.HealthCheck()
@@ -34,7 +41,26 @@ func (c *Container) Health() interface{} {
 		datasources["redis"] = c.Redis.HealthCheck()
 	}
 
-	return datasources
+	svcHealth := make([]ServiceHealth, 0)
+
+	for k, v := range c.Services {
+		resp := v.Ready(ctx)
+
+		switch resp {
+		case "DOWN":
+			status = StatusDegraded
+
+			svcHealth = append(svcHealth, ServiceHealth{Name: k, Status: StatusDown})
+		default:
+			svcHealth = append(svcHealth, ServiceHealth{Name: k, Status: StatusUp})
+		}
+	}
+
+	return Health{
+		Status:     status,
+		Services:   svcHealth,
+		Datasource: datasources,
+	}
 }
 
 func NewContainer(conf config.Config) *Container {

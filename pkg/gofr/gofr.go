@@ -100,6 +100,7 @@ func (a *App) Run() {
 
 		// Add Default routes
 		a.add(http.MethodGet, "/.well-known/health", healthHandler)
+		a.add(http.MethodGet, "/.well-known/ready", readinessHandler)
 		a.add(http.MethodGet, "/favicon.ico", faviconHandler)
 		a.httpServer.router.PathPrefix("/").Handler(handler{
 			function:  catchAllHandler,
@@ -138,7 +139,7 @@ func (a *App) readConfig() {
 // AddHTTPService registers HTTP service in container.
 func (a *App) AddHTTPService(serviceName, serviceAddress string) {
 	if a.container.Services == nil {
-		a.container.Services = make(map[string]service.HTTP)
+		a.container.Services = make(map[string]service.HTTPService)
 	}
 
 	if _, ok := a.container.Services[serviceName]; ok {
