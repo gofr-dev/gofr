@@ -2,15 +2,13 @@ package gofr
 
 import (
 	"fmt"
+	"gofr.dev/pkg/gofr/config"
+	"gofr.dev/pkg/gofr/container"
+	"gofr.dev/pkg/gofr/service"
 	"net/http"
 	"os"
 	"strconv"
 	"sync"
-	"time"
-
-	"gofr.dev/pkg/gofr/config"
-	"gofr.dev/pkg/gofr/container"
-	"gofr.dev/pkg/gofr/service"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/zipkin"
@@ -137,7 +135,7 @@ func (a *App) readConfig() {
 }
 
 // AddHTTPService registers HTTP service in container.
-func (a *App) AddHTTPService(serviceName, serviceAddress string) {
+func (a *App) AddHTTPService(serviceName, serviceAddress string, options ...service.Options) {
 	if a.container.Services == nil {
 		a.container.Services = make(map[string]service.HTTP)
 	}
@@ -146,14 +144,7 @@ func (a *App) AddHTTPService(serviceName, serviceAddress string) {
 		a.container.Debugf("Service already registered Name: %v", serviceName)
 	}
 
-	a.container.Services[serviceName] = service.NewHTTPService(serviceAddress, a.container.Logger, &service.CircuitBreakerConfig{
-		Enabled:   true,
-		MaxRetry:  5,
-		Threshold: 5,
-		Timeout:   100,
-		Interval:  2 * time.Second,
-		HealthURL: "http://localhost:8000/.well-known/health",
-	})
+	a.container.Services[serviceName] = service.NewHTTPService(serviceAddress, a.container.Logger, options...)
 }
 
 // GET adds a Handler for http GET method for a route pattern.
