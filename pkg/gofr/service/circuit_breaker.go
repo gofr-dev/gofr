@@ -162,7 +162,7 @@ func (cb *CircuitBreaker) resetFailureCount() {
 	cb.failureCount = 0
 }
 
-func (cbc *CircuitBreakerConfig) apply(h *httpService) {
-	cb := NewCircuitBreaker(*cbc, h.logger)
+func (cbc *CircuitBreakerConfig) apply(h *httpService, logger Logger) {
+	cb := NewCircuitBreaker(*cbc, logger)
 	h.CircuitBreaker = cb
 }
