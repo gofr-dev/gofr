@@ -6,6 +6,7 @@ import (
 	"os"
 	"strconv"
 	"sync"
+	"time"
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
@@ -145,7 +146,14 @@ func (a *App) AddHTTPService(serviceName, serviceAddress string) {
 		a.container.Debugf("Service already registered Name: %v", serviceName)
 	}
 
-	a.container.Services[serviceName] = service.NewHTTPService(serviceAddress, a.container.Logger)
+	a.container.Services[serviceName] = service.NewHTTPService(serviceAddress, a.container.Logger, &service.CircuitBreakerConfig{
+		Enabled:   true,
+		MaxRetry:  5,
+		Threshold: 5,
+		Timeout:   100,
+		Interval:  2 * time.Second,
+		HealthURL: "http://localhost:8000/.well-known/health",
+	})
 }
 
 // GET adds a Handler for http GET method for a route pattern.
