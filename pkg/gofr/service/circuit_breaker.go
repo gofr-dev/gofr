@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-// CircuitBreaker states
+// CircuitBreaker states.
 const (
 	ClosedState = iota
 	OpenState
@@ -16,7 +16,8 @@ const (
 
 var (
 	// ErrCircuitOpen indicates that the circuit breaker is open.
-	ErrCircuitOpen = errors.New("circuit breaker is open")
+	ErrCircuitOpen                        = errors.New("circuit breaker is open")
+	ErrUnexpectedCircuitBreakerResultType = errors.New("unexpected result type from circuit breaker")
 )
 
 // CircuitBreakerConfig holds the configuration for the CircuitBreaker.
@@ -31,7 +32,7 @@ type CircuitBreakerConfig struct {
 
 // CircuitBreaker represents a circuit breaker implementation.
 type CircuitBreaker struct {
-	sync.Mutex
+	mu           sync.Mutex
 	state        int // ClosedState or OpenState
 	failureCount int
 	maxRetry     int
@@ -49,7 +50,7 @@ func NewCircuitBreaker(config CircuitBreakerConfig, logger Logger) *CircuitBreak
 		return nil
 	}
 
-	return &CircuitBreaker{
+	cb := &CircuitBreaker{
 		state:     ClosedState,
 		maxRetry:  config.MaxRetry,
 		threshold: config.Threshold,
@@ -58,12 +59,18 @@ func NewCircuitBreaker(config CircuitBreakerConfig, logger Logger) *CircuitBreak
 		healthURL: config.HealthURL,
 		logger:    logger,
 	}
+
+	// Perform asynchronous health checks
+	go cb.startHealthChecks()
+
+	return cb
 }
 
 // ExecuteWithCircuitBreaker executes the given function with circuit breaker protection.
-func (cb *CircuitBreaker) ExecuteWithCircuitBreaker(ctx context.Context, f func(ctx context.Context) (interface{}, error)) (interface{}, error) {
-	cb.Lock()
-	defer cb.Unlock()
+func (cb *CircuitBreaker) ExecuteWithCircuitBreaker(ctx context.Context, f func(ctx context.Context) (interface{},
+	error)) (interface{}, error) {
+	cb.mu.Lock()
+	defer cb.mu.Unlock()
 
 	if cb.state == OpenState {
 		if time.Since(cb.lastChecked) > cb.timeout {
@@ -73,6 +80,7 @@ func (cb *CircuitBreaker) ExecuteWithCircuitBreaker(ctx context.Context, f func(
 				return nil, nil
 			}
 		}
+
 		return nil, ErrCircuitOpen
 	}
 
@@ -94,15 +102,17 @@ func (cb *CircuitBreaker) ExecuteWithCircuitBreaker(ctx context.Context, f func(
 
 // IsOpen returns true if the circuit breaker is in the open state.
 func (cb *CircuitBreaker) IsOpen() bool {
-	cb.Lock()
-	defer cb.Unlock()
+	cb.mu.Lock()
+	defer cb.mu.Unlock()
+
 	return cb.state == OpenState
 }
 
 // FailureCount returns the current failure count.
 func (cb *CircuitBreaker) FailureCount() int {
-	cb.Lock()
-	defer cb.Unlock()
+	cb.mu.Lock()
+	defer cb.mu.Unlock()
+
 	return cb.failureCount
 }
 
@@ -113,7 +123,12 @@ func (cb *CircuitBreaker) healthCheck() bool {
 		return false
 	}
 
-	resp, err := http.Get(cb.healthURL)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, cb.healthURL, http.NoBody)
+	if err != nil {
+		return false
+	}
+
+	resp, err := http.DefaultClient.Do(req) // Use http.DefaultClient with context
 	if err != nil {
 		return false
 	}
