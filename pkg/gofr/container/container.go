@@ -56,9 +56,9 @@ func (c *Container) Health(ctx context.Context) interface{} {
 	}
 
 	return Health{
-		Status:     status,
-		Services:   svcHealth,
-		Datasource: datasources,
+		Status:      status,
+		Services:    svcHealth,
+		Datasources: datasources,
 	}
 }
 
