@@ -13,16 +13,16 @@ type Context struct {
 	context.Context
 
 	// Request needs to be public because handlers need to access request details. Else, we need to provide all
-	// functionalities of the Request as a method in context. This is not needed because Request here is an interface
+	// functionalities of the Request as a method on context. This is not needed because Request here is an interface
 	// So, internals are not exposed anyway.
 	Request
 
 	// Same logic as above.
 	*container.Container
 
-	// Responder is private as Handlers do not need to worry about how to respond. But it is still an abstraction over
-	// normal response writer as we want to keep the context independent of http. It Will help us in writing CMD application
-	// or grpc servers, etc. using the same handler signature.
+	// responder is private as Handlers do not need to worry about how to respond. But it is still an abstraction over
+	// normal response writer as we want to keep the context independent of http. Will help us in writing CMD application
+	// or grpc servers etc using the same handler signature.
 	responder Responder
 }
 
@@ -33,11 +33,11 @@ Trace returns an open telemetry span. We have to always close the span after cor
 	// Do some work here.
 	defer span.End()
 
-If an entire function has to trace as span, we can use a simpler format:
+If an entire function has to traced as span, we can use a simpler format:
 
 	defer c.Trace("ExampleHandler").End()
 
-We can write this at the start of function and because of how defer works, trace will start at that line,
+We can write this at the start of function and because of how defer works, trace will start at that line
 but End will be called after function ends.
 
 Developer Note: If you chain methods in a defer statement, everything except the last function will be evaluated at call time.
