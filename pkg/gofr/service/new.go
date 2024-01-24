@@ -153,7 +153,7 @@ func (h *httpService) createAndSendRequest(ctx context.Context, method string, p
 	var resp *http.Response
 
 	if h.CircuitBreaker != nil {
-		result, cbError := h.CircuitBreaker.ExecuteWithCircuitBreaker(ctx, func(ctx context.Context) (interface{}, error) {
+		result, cbError := h.CircuitBreaker.ExecuteWithCircuitBreaker(ctx, func(ctx context.Context) (*http.Response, error) {
 			return h.Do(req)
 		})
 
