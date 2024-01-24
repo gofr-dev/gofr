@@ -1,8 +1,10 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"sync"
 	"time"
 
@@ -95,7 +97,14 @@ func MysqlHandler(c *gofr.Context) (interface{}, error) {
 }
 
 func CachedServiceHandler(c *gofr.Context) (interface{}, error) {
-	resp, err := c.GetHTTPService("cachedService").Get(c, "mysql", nil)
+	var res struct {
+		Data interface{} `json:"data"`
+	}
 
-	return resp, err
+	resp, err := c.GetHTTPService("cachedService").Get(c, "mysql", nil)
+	defer resp.Body.Close()
+	bodyBytes, err := io.ReadAll(resp.Body)
+	_ = json.Unmarshal(bodyBytes, &res)
+
+	return res.Data, err
 }
