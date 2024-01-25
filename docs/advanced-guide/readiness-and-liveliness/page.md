@@ -16,3 +16,5 @@ It returns the following for these datasources :
 1. Redis - It contains the [stats](https://redis.io/commands/info/) field of redis INFO.
 
 2. SQL - It contains the [stats](https://github.com/golang/go/blob/2c35def7efab9b8305487c23cb0575751642ce1e/src/database/sql/sql.go#L1183) for the sql.
+
+If a service is `DOWN` OR it encounters error while fetching datasource stats the status of the application changes to `DEGRADED` from `UP`.
