@@ -60,20 +60,7 @@ jobs:
   PKG-Unit-Testing:
     name: PKG Unit Testing🛠
     runs-on: ubuntu-latest
-    services:
-      redis:
-        image: redis:7.0.5
-        ports:
-          - "2002:6379"
-        options: "--entrypoint redis-server"
 
-      mysql:
-        image: mysql:8.2.0
-        ports:
-          - "2001:3306"
-        env:
-          MYSQL_ROOT_PASSWORD: "password"
-          MYSQL_DATABASE: "test"
     steps:
       - name: Checkout code into go module directory
         uses: actions/checkout@v4

@@ -11,7 +11,6 @@ import (
 
 	"go.uber.org/mock/gomock"
 
-	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/testutil"
 )
 
@@ -36,7 +35,7 @@ func TestRedis_QueryLogging(t *testing.T) {
 	}
 
 	result := testutil.StdoutOutputForFunc(func() {
-		mockLogger := datasource.NewMockLogger(0)
+		mockLogger := testutil.NewMockLogger(testutil.DEBUGLOG)
 		client, err := NewClient(config, mockLogger)
 		assert.Nil(t, err)
 
@@ -72,7 +71,7 @@ func TestRedis_PipelineQueryLogging(t *testing.T) {
 
 	// Execute Redis pipeline
 	result := testutil.StdoutOutputForFunc(func() {
-		mockLogger := datasource.NewMockLogger(0)
+		mockLogger := testutil.NewMockLogger(testutil.DEBUGLOG)
 		client, err := NewClient(config, mockLogger)
 		assert.Nil(t, err)
 
