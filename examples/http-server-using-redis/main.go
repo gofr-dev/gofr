@@ -2,9 +2,6 @@ package main
 
 import (
 	"errors"
-	"fmt"
-	"github.com/redis/go-redis/v9"
-	"sync"
 	"time"
 
 	"gofr.dev/pkg/gofr"
@@ -12,85 +9,67 @@ import (
 
 func main() {
 	// Create a new application
-	a := gofr.New()
+	app := gofr.New()
 
-	a.AddHTTPService("anotherService", "http://localhost:9000")
-
-	// Add all the routes
-	a.GET("/hello", HelloHandler)
-	a.GET("/error", ErrorHandler)
-	a.GET("/redis", RedisHandler)
-	a.GET("/trace", TraceHandler)
-	a.GET("/mysql", MysqlHandler)
+	// Add routes for Redis operations
+	app.GET("/redis/{key}", RedisGetHandler)
+	app.POST("/redis", RedisSetHandler)
+	app.GET("/redis-pipeline", RedisPipelineHandler)
 
 	// Run the application
-	a.Run()
+	app.Run()
 }
 
-func HelloHandler(c *gofr.Context) (interface{}, error) {
-	name := c.Param("name")
-	if name == "" {
-		c.Log("Name came empty")
-		name = "World"
-	}
+// RedisSetHandler sets a key-value pair in Redis using the Set Command
+func RedisSetHandler(c *gofr.Context) (interface{}, error) {
+	input := make(map[string]string)
 
-	return fmt.Sprintf("Hello %s!", name), nil
-}
-
-func ErrorHandler(c *gofr.Context) (interface{}, error) {
-	return nil, errors.New("some error occurred")
-}
-
-func RedisHandler(c *gofr.Context) (interface{}, error) {
-	_, err := c.Redis.HMSet(c, "test2", "value2", "value3", "value4").Result()
-	if err != nil && !errors.Is(err, redis.Nil) { // If key is not found, we are not considering this an error and returning "".
+	if err := c.Request.Bind(&input); err != nil {
 		return nil, err
 	}
 
-	pipe := c.Redis.Pipeline()
-	pipe.Get(c, "test").Result()
-	pipe.Set(c, "test", "testValue", 1*time.Minute)
+	for key, value := range input {
+		err := c.Redis.Set(c, key, value, 5*time.Minute).Err()
+		if err != nil {
+			return nil, err
+		}
+	}
 
-	res, err := pipe.Exec(c)
+	return "Successful", nil
+}
+
+// RedisGetHandler gets the value from Redis
+func RedisGetHandler(c *gofr.Context) (interface{}, error) {
+	key := c.PathParam("key")
+	if key == "" {
+		return nil, errors.New("missing key to get from redids")
+	}
+
+	value, err := c.Redis.Get(c, key).Result()
 	if err != nil {
 		return nil, err
 	}
 
-	return res, nil
-}
-
-func TraceHandler(c *gofr.Context) (interface{}, error) {
-	defer c.Trace("traceHandler").End()
-
-	span2 := c.Trace("some-sample-work")
-	<-time.After(time.Millisecond * 1) //nolint:wsl    // Waiting for 1ms to simulate workload
-	span2.End()
-
-	// Ping redis 5 times concurrently and wait.
-	count := 5
-	wg := sync.WaitGroup{}
-	wg.Add(count)
-
-	for i := 0; i < count; i++ {
-		go func() {
-			c.Redis.Ping(c)
-			wg.Done()
-		}()
-	}
-	wg.Wait()
-
-	//Call Another service
-	resp, err := c.GetHTTPService("anotherService").Get(c, "redis", nil)
-	if err != nil {
-		return nil, err
-	}
+	resp := make(map[string]string)
+	resp[key] = value
 
 	return resp, nil
 }
 
-func MysqlHandler(c *gofr.Context) (interface{}, error) {
-	var value int
-	err := c.DB.QueryRowContext(c, "select 2+2").Scan(&value)
+// RedisPipelineHandler demonstrates using multiple Redis commands efficiently within a pipeline
+func RedisPipelineHandler(c *gofr.Context) (interface{}, error) {
+	pipe := c.Redis.Pipeline()
 
-	return value, err
+	// Add multiple commands to the pipeline
+	pipe.Set(c, "testKey1", "testValue1", 2*time.Minute)
+	pipe.Get(c, "testKey1")
+
+	// Execute the pipeline and get results
+	cmds, err := pipe.Exec(c)
+	if err != nil {
+		return nil, err
+	}
+
+	// Process or return the results of each command in the pipeline (implementation omitted for brevity)
+	return cmds, nil
 }
