@@ -16,8 +16,8 @@ func main() {
 
 	a.AddHTTPService("anotherService", "http://localhost:9000")
 	
-	a.GET("/customer", Get)
-	a.GET("/user", GetUser)
+	a.GET("/customer", Customer)
+	a.GET("/user", User)
 	
 	// Run the application
 	a.Run()
@@ -27,7 +27,7 @@ func main() {
 ### Accessing HTTP Service in handler
 
 ```go
-func Get(ctx *gofr.Context) (interface{}, error) {
+func Customer(ctx *gofr.Context) (interface{}, error) {
     //Get & Call Another service
     resp, err := ctx.GetHTTPService("anotherService").Get(ctx, "user", nil)
     if err != nil {
@@ -42,7 +42,7 @@ func Get(ctx *gofr.Context) (interface{}, error) {
     return string(body), nil
 }
 
-func GetUser(_ *gofr.Context) (interface{}, error) {
+func User(_ *gofr.Context) (interface{}, error) {
     return "GoFr", nil
 }
 ```
