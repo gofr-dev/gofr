@@ -55,8 +55,8 @@ type HTTP interface {
 
 // NewHTTPService function creates a new instance of the httpService struct, which implements the HTTP interface.
 // It initializes the http.Client, url, Tracer, and Logger fields of the httpService struct with the provided values.
-func NewHTTPService(serviceAddress string, logger Logger,options ...Options) HTTP {
-	h:= &httpService{
+func NewHTTPService(serviceAddress string, logger Logger, options ...Options) HTTP {
+	h := &httpService{
 		// using default http client to do http communication
 		Client: &http.Client{},
 		url:    serviceAddress,
@@ -154,11 +154,9 @@ func (h *httpService) createAndSendRequest(ctx context.Context, method string, p
 
 	requestStart := time.Now()
 
-	var resp *http.Response
+	resp, err := h.Do(req)
 
 	log.ResponseTime = time.Since(requestStart).Microseconds()
-
-	resp, err = h.Do(req)
 
 	if err != nil {
 		log.ResponseCode = http.StatusInternalServerError

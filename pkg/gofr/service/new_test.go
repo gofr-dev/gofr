@@ -109,35 +109,3 @@ func TestHTTPService_createAndSendRequest(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, resp, "TEST[%d], Failed.\n%s")
 }
-
-//func TestHTTPService_ReadyFailureInvalidServer(t *testing.T) {
-//service := &httpService{
-//	Client: http.DefaultClient,
-//	url:    "server.URL",
-//	Tracer: otel.Tracer("gofr-http-client"),
-//	Logger: testutil.NewMockLogger(testutil.INFOLOG),
-//}
-
-//resp := service.Ready(context.Background())
-
-//assert.Equal(t, "DOWN", resp, "TEST[%d], Failed.\n%s")
-//}
-
-func TestHTTPService_ReadySuccess(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// read request body
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer server.Close()
-
-	//service := &httpService{
-	//	Client: http.DefaultClient,
-	//	url:    server.URL,
-	//	Tracer: otel.Tracer("gofr-http-client"),
-	//	Logger: testutil.NewMockLogger(testutil.INFOLOG),
-	//}
-	//
-	////resp := service.Ready(context.Background())
-	//
-	//assert.Equal(t, "UP", resp, "TEST[%d], Failed.\n%s")
-}
