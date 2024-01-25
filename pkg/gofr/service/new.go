@@ -64,7 +64,7 @@ func NewHTTPService(serviceAddress string, logger Logger, options ...Options) HT
 
 	// if options are given, then add them to the httpService struct
 	for _, o := range options {
-		o.apply(h, logger)
+		o.apply(h)
 	}
 
 	return h
@@ -145,7 +145,7 @@ func (h *httpService) createAndSendRequest(ctx context.Context, method string, p
 
 	if h.CircuitBreaker != nil && h.CircuitBreaker.IsOpen() {
 		if !h.tryCircuitRecovery() {
-			h.logger.Log("CircuitBreaker", "Circuit breaker is open, request failed")
+			h.Logger.Log("CircuitBreaker", "Circuit breaker is open, request failed")
 			return nil, ErrCircuitOpen
 		}
 	}

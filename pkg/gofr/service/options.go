@@ -1,5 +1,5 @@
 package service
 
 type Options interface {
-	apply(h *httpService, logger Logger)
+	apply(h *httpService)
 }
