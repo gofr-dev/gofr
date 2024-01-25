@@ -137,7 +137,7 @@ func (a *App) readConfig() {
 }
 
 // AddHTTPService registers HTTP service in container.
-func (a *App) AddHTTPService(serviceName, serviceAddress string) {
+func (a *App) AddHTTPService(serviceName, serviceAddress string, options ...service.Options) {
 	if a.container.Services == nil {
 		a.container.Services = make(map[string]service.HTTPService)
 	}
@@ -146,7 +146,7 @@ func (a *App) AddHTTPService(serviceName, serviceAddress string) {
 		a.container.Debugf("Service already registered Name: %v", serviceName)
 	}
 
-	a.container.Services[serviceName] = service.NewHTTPService(serviceAddress, a.container.Logger)
+	a.container.Services[serviceName] = service.NewHTTPService(serviceAddress, a.container.Logger, options...)
 }
 
 // GET adds a Handler for http GET method for a route pattern.

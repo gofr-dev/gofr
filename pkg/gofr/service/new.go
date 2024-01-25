@@ -20,6 +20,7 @@ type httpService struct {
 	trace.Tracer
 	url string
 	Logger
+	*CircuitBreaker
 }
 
 type HTTP interface {
@@ -58,13 +59,20 @@ type HTTPService interface {
 	Ready(ctx context.Context) interface{}
 }
 
-func NewHTTPService(serviceAddress string, logger Logger) HTTPService {
-	return &httpService{
+func NewHTTPService(serviceAddress string, logger Logger,options ...Options) HTTPService {
+	h := &httpService{
 		Client: &http.Client{Transport: otelhttp.NewTransport(http.DefaultTransport)},
 		url:    serviceAddress,
 		Tracer: otel.Tracer("gofr-http-client"),
 		Logger: logger,
 	}
+
+	// if options are given, then add them to the httpService struct
+	for _, o := range options {
+		o.apply(h)
+	}
+
+	return h
 }
 
 func (h *httpService) Get(ctx context.Context, path string, queryParams map[string]interface{}) (*http.Response, error) {
@@ -118,12 +126,7 @@ func (h *httpService) createAndSendRequest(ctx context.Context, method string, p
 	uri := h.url + "/" + path
 	uri = strings.TrimRight(uri, "/")
 
-	spanContext, span := h.Tracer.Start(ctx, uri)
-	defer span.End()
-
-	spanContext = httptrace.WithClientTrace(spanContext, otelhttptrace.NewClientTrace(ctx))
-
-	req, err := http.NewRequestWithContext(spanContext, method, uri, bytes.NewBuffer(body))
+	req, err := buildRequest(ctx, method, uri, body, h.Tracer)
 	if err != nil {
 		return nil, err
 	}
@@ -145,7 +148,28 @@ func (h *httpService) createAndSendRequest(ctx context.Context, method string, p
 
 	requestStart := time.Now()
 
-	resp, err := h.Do(req)
+	if h.CircuitBreaker != nil && h.CircuitBreaker.IsOpen() {
+		if !h.tryCircuitRecovery() {
+			h.Logger.Log("CircuitBreaker", "Circuit breaker is open, request failed")
+			return nil, ErrCircuitOpen
+		}
+	}
+
+	var resp *http.Response
+
+	if h.CircuitBreaker != nil {
+		result, cbError := h.CircuitBreaker.ExecuteWithCircuitBreaker(ctx, func(ctx context.Context) (*http.Response, error) {
+			return h.Do(req)
+		})
+
+		// Handle circuit breaker result and error
+		resp, err = h.handleCircuitBreakerResult(result, cbError, &log)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		resp, err = h.Do(req)
+	}
 
 	log.ResponseTime = time.Since(requestStart).Microseconds()
 
@@ -178,6 +202,45 @@ func encodeQueryParameters(req *http.Request, queryParams map[string]interface{}
 	}
 
 	req.URL.RawQuery = q.Encode()
+}
+
+func buildRequest(ctx context.Context, method, uri string, body []byte, tracer trace.Tracer) (*http.Request, error) {
+	spanContext, span := tracer.Start(ctx, uri)
+	defer span.End()
+
+	spanContext = httptrace.WithClientTrace(spanContext, otelhttptrace.NewClientTrace(ctx))
+
+	req, err := http.NewRequestWithContext(spanContext, method, uri, bytes.NewBuffer(body))
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+func (h *httpService) tryCircuitRecovery() bool {
+	if time.Since(h.CircuitBreaker.lastChecked) > h.CircuitBreaker.timeout && h.CircuitBreaker.healthCheck() {
+		h.CircuitBreaker.resetCircuit()
+		return true
+	}
+
+	return false
+}
+
+func (h *httpService) handleCircuitBreakerResult(result interface{}, err error, log *Log) (*http.Response, error) {
+	if err != nil {
+		h.Log(ErrorLog{Log: *log, ErrorMessage: err.Error()})
+
+		return nil, err
+	}
+
+	response, ok := result.(*http.Response)
+	if !ok {
+		h.Log(ErrorLog{Log: *log, ErrorMessage: ErrUnexpectedCircuitBreakerResultType.Error()})
+		return nil, ErrUnexpectedCircuitBreakerResultType
+	}
+
+	return response, nil
 }
 
 func (h *httpService) Ready(ctx context.Context) interface{} {
