@@ -39,11 +39,10 @@ type CircuitBreaker struct {
 	interval     time.Duration
 	healthURL    string
 	lastChecked  time.Time
-	logger       Logger
 }
 
 // NewCircuitBreaker creates a new CircuitBreaker instance based on the provided config.
-func NewCircuitBreaker(config CircuitBreakerConfig, logger Logger) *CircuitBreaker {
+func NewCircuitBreaker(config CircuitBreakerConfig) *CircuitBreaker {
 	if !config.Enabled {
 		return nil
 	}
@@ -54,7 +53,6 @@ func NewCircuitBreaker(config CircuitBreakerConfig, logger Logger) *CircuitBreak
 		timeout:   config.Timeout,
 		interval:  config.Interval,
 		healthURL: config.HealthURL,
-		logger:    logger,
 	}
 
 	// Perform asynchronous health checks
@@ -116,7 +114,6 @@ func (cb *CircuitBreaker) FailureCount() int {
 // healthCheck performs the health check for the circuit breaker.
 func (cb *CircuitBreaker) healthCheck() bool {
 	if cb.healthURL == "" {
-		cb.logger.Log("Circuit breaker: Missing health check URL")
 		return false
 	}
 
@@ -178,7 +175,13 @@ func (cb *CircuitBreaker) resetFailureCount() {
 	cb.failureCount = 0
 }
 
-func (cbc *CircuitBreakerConfig) apply(h *httpService, logger Logger) {
-	cb := NewCircuitBreaker(*cbc, logger)
+func (cbc *CircuitBreakerConfig) apply(h *httpService) {
+	cb := NewCircuitBreaker(*cbc)
+
+	if cb.healthURL == "" {
+		h.Logger.Log("Circuit breaker: Missing health check URL")
+		return
+	}
+
 	h.CircuitBreaker = cb
 }
