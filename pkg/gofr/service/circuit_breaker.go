@@ -16,7 +16,7 @@ const (
 
 var (
 	// ErrCircuitOpen indicates that the circuit breaker is open.
-	ErrCircuitOpen                        = errors.New("circuit breaker is open")
+	ErrCircuitOpen                        = errors.New("unable to connect to server at host")
 	ErrUnexpectedCircuitBreakerResultType = errors.New("unexpected result type from circuit breaker")
 )
 
