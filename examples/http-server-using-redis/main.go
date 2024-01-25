@@ -1,11 +1,12 @@
 package main
 
 import (
-	"errors"
 	"time"
 
 	"gofr.dev/pkg/gofr"
 )
+
+const redisExpiryTime = 5
 
 func main() {
 	// Create a new application
@@ -20,7 +21,7 @@ func main() {
 	app.Run()
 }
 
-// RedisSetHandler sets a key-value pair in Redis using the Set Command
+// RedisSetHandler sets a key-value pair in Redis using the Set Command.
 func RedisSetHandler(c *gofr.Context) (interface{}, error) {
 	input := make(map[string]string)
 
@@ -29,7 +30,7 @@ func RedisSetHandler(c *gofr.Context) (interface{}, error) {
 	}
 
 	for key, value := range input {
-		err := c.Redis.Set(c, key, value, 5*time.Minute).Err()
+		err := c.Redis.Set(c, key, value, redisExpiryTime*time.Minute).Err()
 		if err != nil {
 			return nil, err
 		}
@@ -38,11 +39,11 @@ func RedisSetHandler(c *gofr.Context) (interface{}, error) {
 	return "Successful", nil
 }
 
-// RedisGetHandler gets the value from Redis
+// RedisGetHandler gets the value from Redis.
 func RedisGetHandler(c *gofr.Context) (interface{}, error) {
 	key := c.PathParam("key")
 	if key == "" {
-		return nil, errors.New("missing key to get from redids")
+		return nil, nil
 	}
 
 	value, err := c.Redis.Get(c, key).Result()
@@ -56,12 +57,12 @@ func RedisGetHandler(c *gofr.Context) (interface{}, error) {
 	return resp, nil
 }
 
-// RedisPipelineHandler demonstrates using multiple Redis commands efficiently within a pipeline
+// RedisPipelineHandler demonstrates using multiple Redis commands efficiently within a pipeline.
 func RedisPipelineHandler(c *gofr.Context) (interface{}, error) {
 	pipe := c.Redis.Pipeline()
 
 	// Add multiple commands to the pipeline
-	pipe.Set(c, "testKey1", "testValue1", 2*time.Minute)
+	pipe.Set(c, "testKey1", "testValue1", redisExpiryTime*time.Minute)
 	pipe.Get(c, "testKey1")
 
 	// Execute the pipeline and get results
