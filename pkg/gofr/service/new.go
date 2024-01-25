@@ -20,7 +20,6 @@ type httpService struct {
 	trace.Tracer
 	url string
 	Logger
-	*CircuitBreaker
 }
 
 type HTTP interface {
@@ -54,12 +53,7 @@ type HTTP interface {
 	DeleteWithHeaders(ctx context.Context, api string, body []byte, headers map[string]string) (*http.Response, error)
 }
 
-type HTTPService interface {
-	HTTP
-	Ready(ctx context.Context) interface{}
-}
-
-func NewHTTPService(serviceAddress string, logger Logger,options ...Options) HTTPService {
+func NewHTTPService(serviceAddress string, logger Logger, options ...Options) HTTP {
 	h := &httpService{
 		Client: &http.Client{Transport: otelhttp.NewTransport(http.DefaultTransport)},
 		url:    serviceAddress,
@@ -67,12 +61,14 @@ func NewHTTPService(serviceAddress string, logger Logger,options ...Options) HTT
 		Logger: logger,
 	}
 
+	var svc HTTP
+
 	// if options are given, then add them to the httpService struct
 	for _, o := range options {
-		o.apply(h)
+		svc = o.apply(h)
 	}
 
-	return h
+	return svc
 }
 
 func (h *httpService) Get(ctx context.Context, path string, queryParams map[string]interface{}) (*http.Response, error) {
@@ -148,30 +144,11 @@ func (h *httpService) createAndSendRequest(ctx context.Context, method string, p
 
 	requestStart := time.Now()
 
-	if h.CircuitBreaker != nil && h.CircuitBreaker.IsOpen() {
-		if !h.tryCircuitRecovery() {
-			h.Logger.Log("CircuitBreaker", "Circuit breaker is open, request failed")
-			return nil, ErrCircuitOpen
-		}
-	}
-
 	var resp *http.Response
 
-	if h.CircuitBreaker != nil {
-		result, cbError := h.CircuitBreaker.ExecuteWithCircuitBreaker(ctx, func(ctx context.Context) (*http.Response, error) {
-			return h.Do(req)
-		})
-
-		// Handle circuit breaker result and error
-		resp, err = h.handleCircuitBreakerResult(result, cbError, &log)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		resp, err = h.Do(req)
-	}
-
 	log.ResponseTime = time.Since(requestStart).Microseconds()
+
+	resp, err = h.Do(req)
 
 	if err != nil {
 		log.ResponseCode = http.StatusInternalServerError
@@ -216,44 +193,4 @@ func buildRequest(ctx context.Context, method, uri string, body []byte, tracer t
 	}
 
 	return req, nil
-}
-
-func (h *httpService) tryCircuitRecovery() bool {
-	if time.Since(h.CircuitBreaker.lastChecked) > h.CircuitBreaker.timeout && h.CircuitBreaker.healthCheck() {
-		h.CircuitBreaker.resetCircuit()
-		return true
-	}
-
-	return false
-}
-
-func (h *httpService) handleCircuitBreakerResult(result interface{}, err error, log *Log) (*http.Response, error) {
-	if err != nil {
-		h.Log(ErrorLog{Log: *log, ErrorMessage: err.Error()})
-
-		return nil, err
-	}
-
-	response, ok := result.(*http.Response)
-	if !ok {
-		h.Log(ErrorLog{Log: *log, ErrorMessage: ErrUnexpectedCircuitBreakerResultType.Error()})
-		return nil, ErrUnexpectedCircuitBreakerResultType
-	}
-
-	return response, nil
-}
-
-func (h *httpService) Ready(ctx context.Context) interface{} {
-	// TODO support custom url after circuit breaker and caching
-	resp, err := h.Get(ctx, "/.well-known/ready", nil)
-	if resp != nil {
-		defer resp.Body.Close()
-	}
-
-	switch {
-	case err != nil || resp.StatusCode != http.StatusOK:
-		return "DOWN"
-	default:
-		return "UP"
-	}
 }

@@ -39,10 +39,12 @@ type CircuitBreaker struct {
 	interval     time.Duration
 	healthURL    string
 	lastChecked  time.Time
+
+	HTTP
 }
 
 // NewCircuitBreaker creates a new CircuitBreaker instance based on the provided config.
-func NewCircuitBreaker(config CircuitBreakerConfig) *CircuitBreaker {
+func NewCircuitBreaker(config CircuitBreakerConfig, h HTTP) *CircuitBreaker {
 	if !config.Enabled {
 		return nil
 	}
@@ -53,6 +55,7 @@ func NewCircuitBreaker(config CircuitBreakerConfig) *CircuitBreaker {
 		timeout:   config.Timeout,
 		interval:  config.Interval,
 		healthURL: config.HealthURL,
+		HTTP:      h,
 	}
 
 	// Perform asynchronous health checks
@@ -175,13 +178,112 @@ func (cb *CircuitBreaker) resetFailureCount() {
 	cb.failureCount = 0
 }
 
-func (cbc *CircuitBreakerConfig) apply(h *httpService) {
-	cb := NewCircuitBreaker(*cbc)
+func (cb *CircuitBreakerConfig) apply(h HTTP) HTTP {
+	return NewCircuitBreaker(*cb, h)
+}
 
-	if cb.healthURL == "" {
-		h.Logger.Log("Circuit breaker: Missing health check URL")
-		return
+func (cb *CircuitBreaker) tryCircuitRecovery() bool {
+	if time.Since(cb.lastChecked) > cb.timeout && cb.healthCheck() {
+		cb.resetCircuit()
+		return true
 	}
 
-	h.CircuitBreaker = cb
+	return false
+}
+
+func (cb *CircuitBreaker) handleCircuitBreakerResult(result interface{}, err error) (*http.Response, error) {
+	if err != nil {
+		return nil, err
+	}
+
+	response, ok := result.(*http.Response)
+	if !ok {
+		return nil, ErrUnexpectedCircuitBreakerResultType
+	}
+
+	return response, nil
+}
+
+func (cb *CircuitBreaker) doRequest(ctx context.Context, method string, path string, queryParams map[string]interface{}, body []byte, headers map[string]string) (*http.Response, error) {
+	if cb.IsOpen() {
+		if !cb.tryCircuitRecovery() {
+			return nil, ErrCircuitOpen
+		}
+	}
+
+	var result interface{}
+	var cbError error
+
+	switch method {
+	case "GET":
+		result, cbError = cb.ExecuteWithCircuitBreaker(ctx, func(ctx context.Context) (*http.Response, error) {
+			return cb.HTTP.GetWithHeaders(ctx, path, queryParams, headers)
+		})
+	case "POST":
+		result, cbError = cb.ExecuteWithCircuitBreaker(ctx, func(ctx context.Context) (*http.Response, error) {
+			return cb.HTTP.PostWithHeaders(ctx, path, queryParams, body, headers)
+		})
+	case "PATCH":
+		result, cbError = cb.ExecuteWithCircuitBreaker(ctx, func(ctx context.Context) (*http.Response, error) {
+			return cb.HTTP.PatchWithHeaders(ctx, path, queryParams, body, headers)
+		})
+	case "PUT":
+		result, cbError = cb.ExecuteWithCircuitBreaker(ctx, func(ctx context.Context) (*http.Response, error) {
+			return cb.HTTP.PutWithHeaders(ctx, path, queryParams, body, headers)
+		})
+	case "DELETE":
+		result, cbError = cb.ExecuteWithCircuitBreaker(ctx, func(ctx context.Context) (*http.Response, error) {
+			return cb.HTTP.DeleteWithHeaders(ctx, path, body, headers)
+		})
+	}
+
+	resp, err := cb.handleCircuitBreakerResult(result, cbError)
+	if err != nil {
+		return nil, err
+	}
+
+	return resp, err
+}
+
+func (cb *CircuitBreaker) Get(ctx context.Context, api string, queryParams map[string]interface{}) (*http.Response, error) {
+	return cb.doRequest(ctx, "GET", api, queryParams, nil, nil)
+}
+func (cb *CircuitBreaker) GetWithHeaders(ctx context.Context, path string, queryParams map[string]interface{},
+	headers map[string]string) (*http.Response, error) {
+	return cb.doRequest(ctx, "GET", path, queryParams, nil, headers)
+}
+
+// Post is a wrapper for doRequest with the POST method.
+func (cb *CircuitBreaker) Post(ctx context.Context, path string, queryParams map[string]interface{}, body []byte) (*http.Response, error) {
+	return cb.doRequest(ctx, "POST", path, queryParams, body, nil)
+}
+
+// PostWithHeaders is a wrapper for doRequest with the POST method and headers.
+func (cb *CircuitBreaker) PostWithHeaders(ctx context.Context, path string, queryParams map[string]interface{}, body []byte, headers map[string]string) (*http.Response, error) {
+	return cb.doRequest(ctx, "POST", path, queryParams, body, headers)
+}
+
+// Patch is a wrapper for doRequest with the PATCH method.
+func (cb *CircuitBreaker) Patch(ctx context.Context, path string, queryParams map[string]interface{}, body []byte) (*http.Response, error) {
+	return cb.doRequest(ctx, "PATCH", path, queryParams, body, nil)
+}
+
+// PatchWithHeaders is a wrapper for doRequest with the PATCH method and headers.
+func (cb *CircuitBreaker) PatchWithHeaders(ctx context.Context, path string, queryParams map[string]interface{}, body []byte, headers map[string]string) (*http.Response, error) {
+	return cb.doRequest(ctx, "PATCH", path, queryParams, body, headers)
+}
+
+// PutWithHeaders is a wrapper for doRequest with the PUT method and headers.
+func (cb *CircuitBreaker) PutWithHeaders(ctx context.Context, path string, queryParams map[string]interface{}, body []byte, headers map[string]string) (*http.Response, error) {
+	return cb.doRequest(ctx, "PUT", path, queryParams, body, headers)
+}
+
+// Delete is a wrapper for doRequest with the DELETE method.
+func (cb *CircuitBreaker) Delete(ctx context.Context, path string, body []byte) (*http.Response, error) {
+	return cb.doRequest(ctx, "DELETE", path, nil, body, nil)
+}
+
+// DeleteWithHeaders is a wrapper for doRequest with the DELETE method and headers.
+func (cb *CircuitBreaker) DeleteWithHeaders(ctx context.Context, path string, body []byte, headers map[string]string) (*http.Response, error) {
+	return cb.doRequest(ctx, "DELETE", path, nil, body, headers)
 }

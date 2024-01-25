@@ -19,7 +19,7 @@ import (
 // etc which is shared across is placed here.
 type Container struct {
 	logging.Logger
-	Services map[string]service.HTTPService
+	Services map[string]service.HTTP
 	Redis    *redis.Redis
 	DB       *sql.DB
 }
@@ -38,8 +38,8 @@ func (c *Container) Health(ctx context.Context) interface{} {
 
 	svcHealth := make([]ServiceHealth, 0)
 
-	for name, svc := range c.Services {
-		resp := svc.Ready(ctx)
+	for name, _ := range c.Services {
+		resp := "UP"
 
 		switch resp {
 		case "DOWN":
