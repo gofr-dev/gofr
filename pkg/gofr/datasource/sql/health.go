@@ -7,9 +7,17 @@ import (
 	"gofr.dev/pkg/gofr/datasource"
 )
 
-func (d *DB) HealthCheck() datasource.Health {
+func (d *DB) HealthCheck() *datasource.Health {
 	h := datasource.Health{
 		Details: make(map[string]interface{}),
+	}
+
+	h.Details["host"] = d.config.HostName + ":" + d.config.Port + "/" + d.config.Database
+
+	if d.DB == nil {
+		h.Status = datasource.StatusDown
+
+		return &h
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
@@ -19,11 +27,11 @@ func (d *DB) HealthCheck() datasource.Health {
 	if err != nil {
 		h.Status = datasource.StatusDown
 
-		return h
+		return &h
 	}
 
 	h.Status = datasource.StatusUp
 	h.Details["stats"] = d.Stats()
 
-	return h
+	return &h
 }
