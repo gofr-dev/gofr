@@ -64,8 +64,8 @@ func NewCircuitBreaker(config CircuitBreakerConfig, h HTTP) *CircuitBreaker {
 	return cb
 }
 
-// ExecuteWithCircuitBreaker executes the given function with circuit breaker protection.
-func (cb *CircuitBreaker) ExecuteWithCircuitBreaker(ctx context.Context, f func(ctx context.Context) (*http.Response,
+// executeWithCircuitBreaker executes the given function with circuit breaker protection.
+func (cb *CircuitBreaker) executeWithCircuitBreaker(ctx context.Context, f func(ctx context.Context) (*http.Response,
 	error)) (*http.Response, error) {
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
@@ -98,16 +98,16 @@ func (cb *CircuitBreaker) ExecuteWithCircuitBreaker(ctx context.Context, f func(
 	return result, err
 }
 
-// IsOpen returns true if the circuit breaker is in the open state.
-func (cb *CircuitBreaker) IsOpen() bool {
+// isOpen returns true if the circuit breaker is in the open state.
+func (cb *CircuitBreaker) isOpen() bool {
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
 
 	return cb.state == OpenState
 }
 
-// FailureCount returns the current failure count.
-func (cb *CircuitBreaker) FailureCount() int {
+// failedCount returns the current failure count.
+func (cb *CircuitBreaker) failedCount() int {
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
 
@@ -143,7 +143,7 @@ func (cb *CircuitBreaker) startHealthChecks() {
 	ticker := time.NewTicker(cb.interval)
 
 	for range ticker.C {
-		if cb.IsOpen() {
+		if cb.isOpen() {
 			go func() {
 				if cb.healthCheck() {
 					cb.resetCircuit()
@@ -205,7 +205,7 @@ func (cb *CircuitBreaker) handleCircuitBreakerResult(result interface{}, err err
 }
 
 func (cb *CircuitBreaker) doRequest(ctx context.Context, method string, path string, queryParams map[string]interface{}, body []byte, headers map[string]string) (*http.Response, error) {
-	if cb.IsOpen() {
+	if cb.isOpen() {
 		if !cb.tryCircuitRecovery() {
 			return nil, ErrCircuitOpen
 		}
@@ -216,23 +216,23 @@ func (cb *CircuitBreaker) doRequest(ctx context.Context, method string, path str
 
 	switch method {
 	case "GET":
-		result, cbError = cb.ExecuteWithCircuitBreaker(ctx, func(ctx context.Context) (*http.Response, error) {
+		result, cbError = cb.executeWithCircuitBreaker(ctx, func(ctx context.Context) (*http.Response, error) {
 			return cb.HTTP.GetWithHeaders(ctx, path, queryParams, headers)
 		})
 	case "POST":
-		result, cbError = cb.ExecuteWithCircuitBreaker(ctx, func(ctx context.Context) (*http.Response, error) {
+		result, cbError = cb.executeWithCircuitBreaker(ctx, func(ctx context.Context) (*http.Response, error) {
 			return cb.HTTP.PostWithHeaders(ctx, path, queryParams, body, headers)
 		})
 	case "PATCH":
-		result, cbError = cb.ExecuteWithCircuitBreaker(ctx, func(ctx context.Context) (*http.Response, error) {
+		result, cbError = cb.executeWithCircuitBreaker(ctx, func(ctx context.Context) (*http.Response, error) {
 			return cb.HTTP.PatchWithHeaders(ctx, path, queryParams, body, headers)
 		})
 	case "PUT":
-		result, cbError = cb.ExecuteWithCircuitBreaker(ctx, func(ctx context.Context) (*http.Response, error) {
+		result, cbError = cb.executeWithCircuitBreaker(ctx, func(ctx context.Context) (*http.Response, error) {
 			return cb.HTTP.PutWithHeaders(ctx, path, queryParams, body, headers)
 		})
 	case "DELETE":
-		result, cbError = cb.ExecuteWithCircuitBreaker(ctx, func(ctx context.Context) (*http.Response, error) {
+		result, cbError = cb.executeWithCircuitBreaker(ctx, func(ctx context.Context) (*http.Response, error) {
 			return cb.HTTP.DeleteWithHeaders(ctx, path, body, headers)
 		})
 	}
