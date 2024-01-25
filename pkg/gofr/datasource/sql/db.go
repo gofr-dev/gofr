@@ -13,8 +13,10 @@ import (
 
 // DB is a wrapper around sql.DB which provides some more features.
 type DB struct {
+	// contains unexported or private fields
 	*sql.DB
 	logger datasource.Logger
+	config *DBConfig
 }
 
 type Log struct {
