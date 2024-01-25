@@ -1,13 +1,13 @@
 # Readiness and Liveliness
 To check the liveliness and readiness of your service, use the following endpoints exposed by gofr application.
 
-### Readiness 
+### Liveliness 
 
 Endpoint : `/.well-known/ready`
 
 It will give the response if the service is either `UP` or `DOWN` with a `200` response code.
 
-### Liveliness
+### Readiness
 Endpoint : `/.well-known/health`
 
 It checks the stats of datasources and readiness of connected services.
