@@ -2,6 +2,8 @@ package redis
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"time"
 
 	"gofr.dev/pkg/gofr/datasource"
@@ -19,6 +21,24 @@ type QueryLog struct {
 	Query    string      `json:"query"`
 	Duration int64       `json:"duration"`
 	Args     interface{} `json:"args,omitempty"`
+}
+
+func (ql QueryLog) String() string {
+	if ql.Args == nil {
+		return ""
+	}
+
+	switch args := ql.Args.(type) {
+	case []interface{}:
+		strArgs := make([]string, len(args))
+		for i, arg := range args {
+			strArgs[i] = fmt.Sprint(arg)
+		}
+
+		return strings.Join(strArgs, " ")
+	default:
+		return fmt.Sprint(ql.Args)
+	}
 }
 
 // logQuery logs the Redis query information.

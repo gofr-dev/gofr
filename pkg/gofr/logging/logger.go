@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strings"
 	"time"
 
 	"golang.org/x/term"
@@ -112,10 +111,17 @@ func (l *logger) prettyPrint(e logEntry, out io.Writer) {
 			"%8d\u001B[38;5;8mµs\u001B[0m %s %s \n", e.Level.color(), e.Level.String()[0:4],
 			e.Time.Format("15:04:05"), msg.ID, colorForStatusCode(msg.Response), msg.Response, msg.ResponseTime, msg.Method, msg.URI)
 	case sql.Log:
-		fmt.Fprintf(out, "\u001B[38;5;%dm%s\u001B[0m [%s] \u001B[38;5;8m%-32s \u001B[38;5;24m%s\u001B[0m %8d\u001B[38;5;8mµs\u001B[0m   %v\n",
+		fmt.Fprintf(out, "\u001B[38;5;%dm%s\u001B[0m [%s] \u001B[38;5;8m%-32s \u001B[38;5;24m%s\u001B[0m %8d\u001B[38;5;8mµs\u001B[0m %s\n",
 			e.Level.color(), e.Level.String()[0:4], e.Time.Format("15:04:05"), msg.Type, "SQL", msg.Duration, msg.Query)
 	case redis.QueryLog:
-		l.printRedisQueryLog(e, msg, out)
+		if msg.Query == "pipeline" {
+			fmt.Fprintf(out, "\u001B[38;5;%dm%s\u001B[0m [%s] \u001B[38;5;8m%-32s \u001B[38;5;24m%s\u001B[0m %6d\u001B[38;5;8mµs\u001B[0m %s\n",
+				e.Level.color(), e.Level.String()[0:4], e.Time.Format("15:04:05"), msg.Query, "REDIS", msg.Duration,
+				msg.String()[1:len(msg.String())-1])
+		} else {
+			fmt.Fprintf(out, "\u001B[38;5;%dm%s\u001B[0m [%s] \u001B[38;5;8m%-32s \u001B[38;5;24m%s\u001B[0m %6d\u001B[38;5;8mµs\u001B[0m %v\n",
+				e.Level.color(), e.Level.String()[0:4], e.Time.Format("15:04:05"), msg.Query, "REDIS", msg.Duration, msg.String())
+		}
 	case service.Log:
 		fmt.Fprintf(out, "\u001B[38;5;%dm%s\u001B[0m [%s] \u001B[38;5;8m%s \u001B[38;5;%dm%d\u001B[0m %8d\u001B[38;5;8mµs\u001B[0m %s %s \n",
 			e.Level.color(), e.Level.String()[0:4], e.Time.Format("15:04:05"), msg.CorrelationID, colorForStatusCode(msg.ResponseCode),
@@ -179,25 +185,5 @@ func checkIfTerminal(w io.Writer) bool {
 		return term.IsTerminal(int(v.Fd()))
 	default:
 		return false
-	}
-}
-
-// printRedisQueryLog formats and prints the log entry for Redis queries.
-func (l *logger) printRedisQueryLog(e logEntry, msg redis.QueryLog, out io.Writer) {
-	args := msg.Args.([]interface{})
-	strArgs := make([]string, 0, len(args))
-
-	for _, arg := range args {
-		strArgs = append(strArgs, fmt.Sprint(arg))
-	}
-
-	// Formatting and printing the log entry based on the Redis query type.
-	switch msg.Query {
-	case "pipeline":
-		fmt.Fprintf(out, "\u001B[38;5;%dm%s\u001B[0m [%s] \u001B[38;5;8m%-32s \u001B[38;5;24m%s\u001B[0m %8d\u001B[38;5;8mµs\u001B[0m %s\n",
-			e.Level.color(), e.Level.String()[0:4], e.Time.Format("15:04:05"), msg.Query, "REDIS", msg.Duration, strArgs[0][1:len(strArgs[0])-1])
-	default:
-		fmt.Fprintf(out, "\u001B[38;5;%dm%s\u001B[0m [%s] \u001B[38;5;8m%-32s \u001B[38;5;24m%s\u001B[0m %8d\u001B[38;5;8mµs\u001B[0m %v\n",
-			e.Level.color(), e.Level.String()[0:4], e.Time.Format("15:04:05"), strArgs[0], "REDIS", msg.Duration, strings.Join(strArgs, " "))
 	}
 }
