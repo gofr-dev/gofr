@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"go.opentelemetry.io/contrib/instrumentation/net/http/httptrace/otelhttptrace"
-	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -53,9 +53,12 @@ type HTTP interface {
 	DeleteWithHeaders(ctx context.Context, api string, body []byte, headers map[string]string) (*http.Response, error)
 }
 
-func NewHTTPService(serviceAddress string, logger Logger, options ...Options) HTTP {
-	h := &httpService{
-		Client: &http.Client{Transport: otelhttp.NewTransport(http.DefaultTransport)},
+// NewHTTPService function creates a new instance of the httpService struct, which implements the HTTP interface.
+// It initializes the http.Client, url, Tracer, and Logger fields of the httpService struct with the provided values.
+func NewHTTPService(serviceAddress string, logger Logger,options ...Options) HTTP {
+	h:= &httpService{
+		// using default http client to do http communication
+		Client: &http.Client{},
 		url:    serviceAddress,
 		Tracer: otel.Tracer("gofr-http-client"),
 		Logger: logger,
@@ -122,22 +125,29 @@ func (h *httpService) createAndSendRequest(ctx context.Context, method string, p
 	uri := h.url + "/" + path
 	uri = strings.TrimRight(uri, "/")
 
-	req, err := buildRequest(ctx, method, uri, body, h.Tracer)
+	spanContext, span := h.Tracer.Start(ctx, uri)
+	defer span.End()
+
+	spanContext = httptrace.WithClientTrace(spanContext, otelhttptrace.NewClientTrace(ctx))
+
+	req, err := http.NewRequestWithContext(spanContext, method, uri, bytes.NewBuffer(body))
 	if err != nil {
 		return nil, err
 	}
-
-	reqID := trace.SpanFromContext(ctx).SpanContext().TraceID().String()
 
 	for k, v := range headers {
 		req.Header.Set(k, v)
 	}
 
+	// encode the query parameters on the request
 	encodeQueryParameters(req, queryParams)
+
+	// inject the TraceParent header manually in the request headers
+	otel.GetTextMapPropagator().Inject(spanContext, propagation.HeaderCarrier(req.Header))
 
 	log := Log{
 		Timestamp:     time.Now(),
-		CorrelationID: reqID,
+		CorrelationID: trace.SpanFromContext(ctx).SpanContext().TraceID().String(),
 		HTTPMethod:    method,
 		URI:           uri,
 	}
@@ -179,18 +189,4 @@ func encodeQueryParameters(req *http.Request, queryParams map[string]interface{}
 	}
 
 	req.URL.RawQuery = q.Encode()
-}
-
-func buildRequest(ctx context.Context, method, uri string, body []byte, tracer trace.Tracer) (*http.Request, error) {
-	spanContext, span := tracer.Start(ctx, uri)
-	defer span.End()
-
-	spanContext = httptrace.WithClientTrace(spanContext, otelhttptrace.NewClientTrace(ctx))
-
-	req, err := http.NewRequestWithContext(spanContext, method, uri, bytes.NewBuffer(body))
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
 }
