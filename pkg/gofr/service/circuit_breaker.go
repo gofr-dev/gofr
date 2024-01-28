@@ -212,32 +212,32 @@ func (cb *CircuitBreaker) doRequest(ctx context.Context, method string, path str
 	}
 
 	var result interface{}
-	var cbError error
+	var err error
 
 	switch method {
 	case "GET":
-		result, cbError = cb.executeWithCircuitBreaker(ctx, func(ctx context.Context) (*http.Response, error) {
+		result, err = cb.executeWithCircuitBreaker(ctx, func(ctx context.Context) (*http.Response, error) {
 			return cb.HTTP.GetWithHeaders(ctx, path, queryParams, headers)
 		})
 	case "POST":
-		result, cbError = cb.executeWithCircuitBreaker(ctx, func(ctx context.Context) (*http.Response, error) {
+		result, err = cb.executeWithCircuitBreaker(ctx, func(ctx context.Context) (*http.Response, error) {
 			return cb.HTTP.PostWithHeaders(ctx, path, queryParams, body, headers)
 		})
 	case "PATCH":
-		result, cbError = cb.executeWithCircuitBreaker(ctx, func(ctx context.Context) (*http.Response, error) {
+		result, err = cb.executeWithCircuitBreaker(ctx, func(ctx context.Context) (*http.Response, error) {
 			return cb.HTTP.PatchWithHeaders(ctx, path, queryParams, body, headers)
 		})
 	case "PUT":
-		result, cbError = cb.executeWithCircuitBreaker(ctx, func(ctx context.Context) (*http.Response, error) {
+		result, err = cb.executeWithCircuitBreaker(ctx, func(ctx context.Context) (*http.Response, error) {
 			return cb.HTTP.PutWithHeaders(ctx, path, queryParams, body, headers)
 		})
 	case "DELETE":
-		result, cbError = cb.executeWithCircuitBreaker(ctx, func(ctx context.Context) (*http.Response, error) {
+		result, err = cb.executeWithCircuitBreaker(ctx, func(ctx context.Context) (*http.Response, error) {
 			return cb.HTTP.DeleteWithHeaders(ctx, path, body, headers)
 		})
 	}
 
-	resp, err := cb.handleCircuitBreakerResult(result, cbError)
+	resp, err := cb.handleCircuitBreakerResult(result, err)
 	if err != nil {
 		return nil, err
 	}
