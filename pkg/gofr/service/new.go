@@ -20,8 +20,6 @@ type httpService struct {
 	trace.Tracer
 	url string
 	Logger
-
-	cache HTTPCacher
 }
 
 type HTTP interface {
@@ -83,10 +81,6 @@ func (h *httpService) Get(ctx context.Context, path string, queryParams map[stri
 
 func (h *httpService) GetWithHeaders(ctx context.Context, path string, queryParams map[string]interface{},
 	headers map[string]string) (*http.Response, error) {
-	if h.cache != nil {
-		return h.getCachedResponse(ctx, http.MethodGet, path, queryParams, nil, headers)
-	}
-
 	return h.createAndSendRequest(ctx, http.MethodGet, path, queryParams, nil, headers)
 }
 
@@ -175,44 +169,6 @@ func (h *httpService) createAndSendRequest(ctx context.Context, method string, p
 	log.ResponseCode = resp.StatusCode
 
 	h.Log(log)
-
-	return resp, nil
-}
-
-func (h *httpService) getCachedResponse(ctx context.Context,
-	method string, path string,
-	queryParams map[string]interface{}, body []byte, headers map[string]string) (*http.Response, error) {
-	var (
-		resp *http.Response
-		err  error
-		key  = h.url + method + path
-	)
-
-	for _, param := range queryParams {
-		key += fmt.Sprintf("%v_", param)
-	}
-
-	for _, header := range headers {
-		key += fmt.Sprintf("%v_", header)
-	}
-
-	// TODO - make this key fix sized // example - hashing
-
-	// get the response stored in the cacher
-	resp = h.cache.Get(ctx, key)
-
-	if resp == nil {
-		resp, err = h.createAndSendRequest(ctx, method, path, queryParams, body, headers)
-	} else {
-		return resp, nil
-	}
-
-	// checking for any error while calling http service
-	if err != nil {
-		return nil, err
-	}
-
-	h.cache.Set(ctx, key, resp)
 
 	return resp, nil
 }

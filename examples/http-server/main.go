@@ -1,10 +1,8 @@
 package main
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"sync"
 	"time"
 
@@ -12,7 +10,6 @@ import (
 	"gofr.dev/pkg/gofr/service"
 
 	"gofr.dev/pkg/gofr"
-	"gofr.dev/pkg/gofr/service"
 )
 
 func main() {
@@ -24,11 +21,8 @@ func main() {
 		Timeout:   5 * time.Second,
 		Interval:  1 * time.Second,
 		HealthURL: "http://localhost:9000/.well-known/health",
-	})
-
-	a.AddHTTPService("cachedService", "http://localhost:9000", &service.Cache{
-		TTL: 5 * time.Second,
-	})
+	}, &service.CacheConfig{TTL: 50 * time.Second},
+	)
 
 	// Add all the routes
 	a.GET("/hello", HelloHandler)
@@ -36,7 +30,6 @@ func main() {
 	a.GET("/redis", RedisHandler)
 	a.GET("/trace", TraceHandler)
 	a.GET("/mysql", MysqlHandler)
-	a.GET("/cachedService", CachedServiceHandler)
 
 	// Run the application
 	a.Run()
@@ -48,6 +41,8 @@ func HelloHandler(c *gofr.Context) (interface{}, error) {
 		c.Log("Name came empty")
 		name = "World"
 	}
+
+	c.Redis.Set(c, "test", name, 100*time.Second)
 
 	return fmt.Sprintf("Hello %s!", name), nil
 }
@@ -100,17 +95,4 @@ func MysqlHandler(c *gofr.Context) (interface{}, error) {
 
 	time.Sleep(3 * time.Second)
 	return value, err
-}
-
-func CachedServiceHandler(c *gofr.Context) (interface{}, error) {
-	var res struct {
-		Data interface{} `json:"data"`
-	}
-
-	resp, err := c.GetHTTPService("cachedService").Get(c, "mysql", nil)
-	defer resp.Body.Close()
-	bodyBytes, err := io.ReadAll(resp.Body)
-	_ = json.Unmarshal(bodyBytes, &res)
-
-	return res.Data, err
 }
