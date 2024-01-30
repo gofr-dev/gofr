@@ -37,7 +37,7 @@ func (c *Container) Health() interface{} {
 
 func NewContainer(conf config.Config) *Container {
 	c := &Container{
-		Logger: logging.NewLogger(logging.GetLevelFromString(conf.Get("LOG_LEVEL"))),
+		Logger: logging.NewLogger(conf),
 	}
 
 	c.Debug("Container is being created")

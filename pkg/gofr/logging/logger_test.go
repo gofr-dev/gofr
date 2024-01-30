@@ -9,17 +9,20 @@ import (
 	"testing"
 	"time"
 
+	"gofr.dev/pkg/gofr/http/middleware"
 	"gofr.dev/pkg/gofr/testutil"
 
 	"github.com/stretchr/testify/assert"
-
-	"gofr.dev/pkg/gofr/http/middleware"
 	"golang.org/x/term"
 )
 
 func TestLogger_LevelInfo(t *testing.T) {
+	testConf := testConfig{
+		"LOG_LEVEL": "INFO",
+	}
+
 	printLog := func() {
-		logger := NewLogger(INFO)
+		logger := NewLogger(testConf)
 		logger.Debug("Test Debug Log")
 		logger.Info("Test Info Log")
 		logger.Error("Test Error Log")
@@ -37,8 +40,12 @@ func TestLogger_LevelInfo(t *testing.T) {
 }
 
 func TestLogger_LevelError(t *testing.T) {
+	testConf := testConfig{
+		"LOG_LEVEL": "ERROR",
+	}
+
 	printLog := func() {
-		logger := NewLogger(ERROR)
+		logger := NewLogger(testConf)
 		logger.Logf("%s", "Test Log")
 		logger.Debugf("%s", "Test Debug Log")
 		logger.Infof("%s", "Test Info Log")
@@ -53,8 +60,12 @@ func TestLogger_LevelError(t *testing.T) {
 }
 
 func TestLogger_LevelDebug(t *testing.T) {
+	testConf := testConfig{
+		"LOG_LEVEL": "DEBUG",
+	}
+
 	printLog := func() {
-		logger := NewLogger(DEBUG)
+		logger := NewLogger(testConf)
 		logger.Logf("Test Log")
 		logger.Debug("Test Debug Log")
 		logger.Info("Test Info Log")
@@ -157,4 +168,17 @@ func TestPrettyPrint(t *testing.T) {
 			assert.Contains(t, actual, part, "Expected format part not found")
 		}
 	}
+}
+
+type testConfig map[string]string
+
+func (c testConfig) Get(key string) string {
+	return c[key]
+}
+
+func (c testConfig) GetOrDefault(key, defaultValue string) string {
+	if value, ok := c[key]; ok {
+		return value
+	}
+	return defaultValue
 }

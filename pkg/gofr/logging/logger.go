@@ -7,6 +7,8 @@ import (
 	"os"
 	"time"
 
+	"gofr.dev/pkg/gofr/config"
+
 	"golang.org/x/term"
 
 	"gofr.dev/pkg/gofr/datasource/redis"
@@ -156,15 +158,31 @@ func colorForStatusCode(status int) int {
 	return 0
 }
 
-func NewLogger(level Level) Logger {
+func NewLogger(conf config.Config) Logger {
 	l := &logger{
 		normalOut: os.Stdout,
 		errorOut:  os.Stderr,
 	}
 
-	l.level = level
+	l.level = GetLevelFromString(conf.Get("LOG_LEVEL"))
 
 	l.isTerminal = checkIfTerminal(l.normalOut)
+
+	if url := conf.Get("REMOTE_LOG_URL"); url != "" {
+		appName := conf.Get("APP_NAME")
+		accessKey := conf.Get("REMOTE_ACCESS_KEY")
+
+		remoteLogger := &RemoteLevelService{
+			url:       url,
+			accessKey: accessKey,
+			appName:   appName,
+			LogLevel:  l.level,
+			logger:    l,
+			ticker:    time.NewTicker(10 * time.Second),
+		}
+
+		go remoteLogger.updateLogLevel()
+	}
 
 	return l
 }

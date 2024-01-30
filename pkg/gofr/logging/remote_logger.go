@@ -1,0 +1,87 @@
+package logging
+
+import (
+	"encoding/json"
+	"io"
+	"net/http"
+	"time"
+)
+
+type RemoteLevelService struct {
+	url             string
+	accessKey       string
+	appName         string
+	LogLevel        Level
+	logger          Logger
+	ticker          *time.Ticker
+	logLevelChannel chan Level
+}
+
+func (rl *RemoteLevelService) updateLogLevel() {
+	defer rl.ticker.Stop()
+
+	for {
+		select {
+		case <-rl.ticker.C:
+			newLevel, err := rl.fetchLogLevel()
+			if err != nil {
+				rl.logger.Errorf("Failed to fetch remote log level: %v", err)
+				continue
+			}
+
+			// Send the new log level to the channel
+			rl.logLevelChannel <- newLevel
+
+		case newLevel := <-rl.logLevelChannel:
+			rl.LogLevel = newLevel
+		}
+	}
+}
+
+func (rl *RemoteLevelService) fetchLogLevel() (Level, error) {
+	client := &http.Client{
+		Timeout: 5 * time.Second, // Add timeout for request
+	}
+
+	req, err := http.NewRequest("GET", rl.url, nil)
+	if err != nil {
+		return rl.LogLevel, err
+	}
+
+	req.Header.Set("Access-Key", rl.accessKey)
+	req.Header.Set("App-Name", rl.appName)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return rl.LogLevel, err
+	}
+	defer resp.Body.Close()
+
+	type data struct {
+		ServiceName string            `json:"serviceName"`
+		Level       map[string]string `json:"logLevel"`
+	}
+
+	level := struct {
+		Data []data `json:"data"`
+	}{}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return rl.LogLevel, err
+	}
+
+	err = json.Unmarshal(body, &level)
+	if err != nil {
+		rl.logger.Errorf("Logging Service returned %v", err)
+	}
+
+	if len(level.Data) > 0 {
+		logLevel := level.Data[0].Level["LOG_LEVEL"]
+		newLevel := GetLevelFromString(logLevel)
+
+		return newLevel, nil
+	}
+
+	return rl.LogLevel, nil
+}
