@@ -86,7 +86,7 @@ func (h *httpService) GetWithHeaders(ctx context.Context, path string, queryPara
 
 func (h *httpService) Post(ctx context.Context, path string, queryParams map[string]interface{},
 	body []byte) (*http.Response, error) {
-	return h.PostWithHeaders(ctx, path, queryParams, body, nil)
+	return h.createAndSendRequest(ctx, http.MethodPost, path, queryParams, body, nil)
 }
 
 func (h *httpService) PostWithHeaders(ctx context.Context, path string, queryParams map[string]interface{},
