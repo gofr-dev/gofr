@@ -151,7 +151,7 @@ func (c *cache) Put(ctx context.Context, path string, queryParams map[string]int
 
 func (c *cache) PutWithHeaders(ctx context.Context, path string, queryParams map[string]interface{},
 	body []byte, headers map[string]string) (*http.Response, error) {
-	return c.PutWithHeaders(ctx, path, queryParams, body, headers)
+	return c.HTTP.PutWithHeaders(ctx, path, queryParams, body, headers)
 }
 
 func (c *cache) Delete(ctx context.Context, path string, body []byte) (*http.Response, error) {
@@ -159,5 +159,5 @@ func (c *cache) Delete(ctx context.Context, path string, body []byte) (*http.Res
 }
 
 func (c *cache) DeleteWithHeaders(ctx context.Context, path string, body []byte, headers map[string]string) (*http.Response, error) {
-	return c.DeleteWithHeaders(ctx, path, body, headers)
+	return c.HTTP.DeleteWithHeaders(ctx, path, body, headers)
 }
