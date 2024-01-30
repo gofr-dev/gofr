@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
+	"gofr.dev/pkg/gofr/service"
 
 	"gofr.dev/pkg/gofr"
 )
@@ -15,7 +16,12 @@ func main() {
 	// Create a new application
 	a := gofr.New()
 
-	a.AddHTTPService("anotherService", "http://localhost:9000")
+	a.AddHTTPService("anotherService", "http://localhost:9000", &service.CircuitBreakerConfig{
+		Threshold: 4,
+		Timeout:   5 * time.Second,
+		Interval:  1 * time.Second,
+		HealthURL: "http://localhost:9000/.well-known/health",
+	})
 
 	// Add all the routes
 	a.GET("/hello", HelloHandler)

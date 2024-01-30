@@ -55,14 +55,24 @@ type HTTP interface {
 
 // NewHTTPService function creates a new instance of the httpService struct, which implements the HTTP interface.
 // It initializes the http.Client, url, Tracer, and Logger fields of the httpService struct with the provided values.
-func NewHTTPService(serviceAddress string, logger Logger) HTTP {
-	return &httpService{
+func NewHTTPService(serviceAddress string, logger Logger, options ...Options) HTTP {
+	h := &httpService{
 		// using default http client to do http communication
 		Client: &http.Client{},
 		url:    serviceAddress,
 		Tracer: otel.Tracer("gofr-http-client"),
 		Logger: logger,
 	}
+
+	var svc HTTP
+	svc = h
+
+	// if options are given, then add them to the httpService struct
+	for _, o := range options {
+		svc = o.apply(h)
+	}
+
+	return svc
 }
 
 func (h *httpService) Get(ctx context.Context, path string, queryParams map[string]interface{}) (*http.Response, error) {

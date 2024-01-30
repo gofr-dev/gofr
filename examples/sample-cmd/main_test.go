@@ -15,7 +15,7 @@ func TestCMDRunWithNoArg(t *testing.T) {
 	expErr := "No Command Found!"
 	output := testutil.StderrOutputForFunc(main)
 
-	assert.Equal(t, expErr, output, "TEST Failed.\n")
+	assert.Equal(t, output, expErr, "TEST Failed.\n")
 }
 
 func TestCMDRunWithProperArg(t *testing.T) {
