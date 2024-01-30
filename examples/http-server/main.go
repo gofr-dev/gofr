@@ -21,8 +21,7 @@ func main() {
 		Timeout:   5 * time.Second,
 		Interval:  1 * time.Second,
 		HealthURL: "http://localhost:9000/.well-known/health",
-	}, &service.CacheConfig{TTL: 50 * time.Second},
-	)
+	}, &service.CacheConfig{TTL: 5 * time.Second})
 
 	// Add all the routes
 	a.GET("/hello", HelloHandler)
@@ -41,8 +40,6 @@ func HelloHandler(c *gofr.Context) (interface{}, error) {
 		c.Log("Name came empty")
 		name = "World"
 	}
-
-	c.Redis.Set(c, "test", name, 100*time.Second)
 
 	return fmt.Sprintf("Hello %s!", name), nil
 }
@@ -93,6 +90,5 @@ func MysqlHandler(c *gofr.Context) (interface{}, error) {
 	var value int
 	err := c.DB.QueryRowContext(c, "select 2+2").Scan(&value)
 
-	time.Sleep(3 * time.Second)
 	return value, err
 }
