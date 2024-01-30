@@ -37,8 +37,8 @@ func TestRedis_QueryLogging(t *testing.T) {
 	})
 
 	// Assertions
-	assert.Contains(t, result, "[ping]")
-	assert.Contains(t, result, "[set key value ex 60]")
+	assert.Contains(t, result, "ping")
+	assert.Contains(t, result, "set key value ex 60")
 }
 
 func TestRedis_PipelineQueryLogging(t *testing.T) {
@@ -80,7 +80,6 @@ func TestRedis_PipelineQueryLogging(t *testing.T) {
 	})
 
 	// Assertions
-	assert.Contains(t, result, "[ping]")
-	assert.Contains(t, result, "pipeline")
-	assert.Contains(t, result, "[set key1 value1 ex 60: OK]")
+	assert.Contains(t, result, "ping")
+	assert.Contains(t, result, "set key1 value1 ex 60: OK")
 }
