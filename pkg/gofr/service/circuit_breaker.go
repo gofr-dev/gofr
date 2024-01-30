@@ -22,7 +22,6 @@ var (
 
 // CircuitBreakerConfig holds the configuration for the CircuitBreaker.
 type CircuitBreakerConfig struct {
-	Enabled   bool
 	Threshold int           // Threshold represents the max no of retry before switching the circuit breaker state.
 	Timeout   time.Duration // Timeout represents the time duration for which circuit breaker maintains it's open state.
 	Interval  time.Duration // Interval represents the time interval duration between hitting the HealthURL
@@ -45,10 +44,6 @@ type CircuitBreaker struct {
 
 // NewCircuitBreaker creates a new CircuitBreaker instance based on the provided config.
 func NewCircuitBreaker(config CircuitBreakerConfig, h HTTP) *CircuitBreaker {
-	if !config.Enabled {
-		return nil
-	}
-
 	cb := &CircuitBreaker{
 		state:     ClosedState,
 		threshold: config.Threshold,

@@ -17,7 +17,6 @@ func main() {
 	a := gofr.New()
 
 	a.AddHTTPService("anotherService", "http://localhost:9000", &service.CircuitBreakerConfig{
-		Enabled:   true,
 		Threshold: 4,
 		Timeout:   5 * time.Second,
 		Interval:  1 * time.Second,
