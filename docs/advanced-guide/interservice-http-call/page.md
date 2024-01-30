@@ -16,7 +16,8 @@ func main() {
 
 	a.AddHTTPService("anotherService", "http://localhost:9000")
 	
-	a.GET("/redis", RedisHandler)
+	a.GET("/customer", Customer)
+	a.GET("/user", User)
 	
 	// Run the application
 	a.Run()
@@ -26,13 +27,24 @@ func main() {
 ### Accessing HTTP Service in handler
 
 ```go
-func RedisHandler(ctx *gofr.Context) (interface{}, error) {
-	//Call Another service
-	resp, err := ctx.GetHTTPService("anotherService").Get(c, "redis", nil)
-	if err != nil {
-		return nil, err
-	}
+func Customer(ctx *gofr.Context) (interface{}, error) {
+    //Get & Call Another service
+    resp, err := ctx.GetHTTPService("anotherService").Get(ctx, "user", nil)
+    if err != nil {
+        return nil, err
+    }
+	
+	defer resp.Body.Close()
+	
+    body, err := io.ReadAll(resp.Body)
+    if err != nil {
+        return nil, err
+    }
+    
+    return string(body), nil
+}
 
-	return resp, nil
+func User(_ *gofr.Context) (interface{}, error) {
+    return "GoFr", nil
 }
 ```

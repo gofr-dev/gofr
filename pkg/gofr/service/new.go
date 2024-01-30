@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"go.opentelemetry.io/contrib/instrumentation/net/http/httptrace/otelhttptrace"
-	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -20,6 +20,7 @@ type httpService struct {
 	trace.Tracer
 	url string
 	Logger
+
 	cache HTTPCacher
 }
 
@@ -54,22 +55,26 @@ type HTTP interface {
 	DeleteWithHeaders(ctx context.Context, api string, body []byte, headers map[string]string) (*http.Response, error)
 }
 
+// NewHTTPService function creates a new instance of the httpService struct, which implements the HTTP interface.
+// It initializes the http.Client, url, Tracer, and Logger fields of the httpService struct with the provided values.
 func NewHTTPService(serviceAddress string, logger Logger, options ...Options) HTTP {
 	h := &httpService{
-		Client: &http.Client{Transport: otelhttp.NewTransport(http.DefaultTransport)},
+		// using default http client to do http communication
+		Client: &http.Client{},
 		url:    serviceAddress,
 		Tracer: otel.Tracer("gofr-http-client"),
 		Logger: logger,
 	}
 
+	var svc HTTP
+	svc = h
+
 	// if options are given, then add them to the httpService struct
-	if options != nil {
-		for _, o := range options {
-			o.apply(h)
-		}
+	for _, o := range options {
+		svc = o.apply(h)
 	}
 
-	return h
+	return svc
 }
 
 func (h *httpService) Get(ctx context.Context, path string, queryParams map[string]interface{}) (*http.Response, error) {
@@ -137,17 +142,19 @@ func (h *httpService) createAndSendRequest(ctx context.Context, method string, p
 		return nil, err
 	}
 
-	reqID := trace.SpanFromContext(ctx).SpanContext().TraceID().String()
-
 	for k, v := range headers {
 		req.Header.Set(k, v)
 	}
 
+	// encode the query parameters on the request
 	encodeQueryParameters(req, queryParams)
+
+	// inject the TraceParent header manually in the request headers
+	otel.GetTextMapPropagator().Inject(spanContext, propagation.HeaderCarrier(req.Header))
 
 	log := Log{
 		Timestamp:     time.Now(),
-		CorrelationID: reqID,
+		CorrelationID: trace.SpanFromContext(ctx).SpanContext().TraceID().String(),
 		HTTPMethod:    method,
 		URI:           uri,
 	}
