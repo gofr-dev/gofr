@@ -3,15 +3,15 @@ package grpc
 import (
 	"context"
 	"errors"
+
 	"net/http"
 	"testing"
-
-	"gofr.dev/pkg/gofr/config"
 
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc"
 
 	"gofr.dev/pkg/gofr/logging"
+	"gofr.dev/pkg/gofr/testutil"
 )
 
 type contextKey string
@@ -45,10 +45,6 @@ func TestLoggingInterceptor(t *testing.T) {
 		}
 	)
 
-	testConf := config.TestConfig{
-		"LOG_LEVEL": "INFO",
-	}
-
 	serverInfo := &grpc.UnaryServerInfo{FullMethod: "/ExampleService/abc"}
 	expLog := `"method":"ExampleService"`
 	expLogWithTraceID := `\"id\":\"` + id + `"\",` + expLog
@@ -73,7 +69,9 @@ func TestLoggingInterceptor(t *testing.T) {
 
 	for i, tc := range tests {
 		ctx := context.WithValue(context.Background(), key, tc.id)
-		l := logging.NewLogger(testConf)
+		l := logging.NewLogger(testutil.NewMockConfig(map[string]string{
+			"LOG_LEVEL": "INFO",
+		}))
 
 		resp, err := LoggingInterceptor(l)(ctx, nil, serverInfo, tc.handler)
 

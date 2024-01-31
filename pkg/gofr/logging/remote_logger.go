@@ -1,11 +1,14 @@
 package logging
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
 	"time"
 )
+
+const levelFetchInterval = 10
 
 type RemoteLevelService struct {
 	url             string
@@ -43,7 +46,7 @@ func (rl *RemoteLevelService) fetchLogLevel() (Level, error) {
 		Timeout: 5 * time.Second, // Add timeout for request
 	}
 
-	req, err := http.NewRequest("GET", rl.url, http.NoBody)
+	req, err := http.NewRequestWithContext(context.Background(), "GET", rl.url, http.NoBody)
 	if err != nil {
 		return rl.LogLevel, err
 	}

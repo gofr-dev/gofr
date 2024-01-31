@@ -178,7 +178,7 @@ func NewLogger(conf config.Config) Logger {
 			appName:   appName,
 			LogLevel:  l.level,
 			logger:    l,
-			ticker:    time.NewTicker(10 * time.Second),
+			ticker:    time.NewTicker(levelFetchInterval * time.Second),
 		}
 
 		go remoteLogger.updateLogLevel()

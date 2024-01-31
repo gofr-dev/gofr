@@ -8,10 +8,10 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
 	gofrHttp "gofr.dev/pkg/gofr/http"
 	"gofr.dev/pkg/gofr/logging"
+	"gofr.dev/pkg/gofr/testutil"
 )
 
 func TestRun_ServerStartsListening(t *testing.T) {
@@ -21,13 +21,11 @@ func TestRun_ServerStartsListening(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	testConf := config.TestConfig{
-		"LOG_LEVEL": "INFO",
-	}
-
 	// Create a mock container
 	c := &container.Container{
-		Logger: logging.NewLogger(testConf),
+		Logger: logging.NewLogger(testutil.NewMockConfig(map[string]string{
+			"LOG_LEVEL": "INFO",
+		})),
 	}
 
 	// Create an instance of httpServer

@@ -9,8 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"gofr.dev/pkg/gofr/config"
-
 	"gofr.dev/pkg/gofr/http/middleware"
 	"gofr.dev/pkg/gofr/testutil"
 
@@ -19,12 +17,10 @@ import (
 )
 
 func TestLogger_LevelInfo(t *testing.T) {
-	testConf := config.TestConfig{
-		"LOG_LEVEL": "INFO",
-	}
-
 	printLog := func() {
-		logger := NewLogger(testConf)
+		logger := NewLogger(testutil.NewMockConfig(map[string]string{
+			"LOG_LEVEL": "INFO",
+		}))
 		logger.Debug("Test Debug Log")
 		logger.Info("Test Info Log")
 		logger.Error("Test Error Log")
@@ -42,12 +38,10 @@ func TestLogger_LevelInfo(t *testing.T) {
 }
 
 func TestLogger_LevelError(t *testing.T) {
-	testConf := config.TestConfig{
-		"LOG_LEVEL": "ERROR",
-	}
-
 	printLog := func() {
-		logger := NewLogger(testConf)
+		logger := NewLogger(testutil.NewMockConfig(map[string]string{
+			"LOG_LEVEL": "ERROR",
+		}))
 		logger.Logf("%s", "Test Log")
 		logger.Debugf("%s", "Test Debug Log")
 		logger.Infof("%s", "Test Info Log")
@@ -62,12 +56,10 @@ func TestLogger_LevelError(t *testing.T) {
 }
 
 func TestLogger_LevelDebug(t *testing.T) {
-	testConf := config.TestConfig{
-		"LOG_LEVEL": "DEBUG",
-	}
-
 	printLog := func() {
-		logger := NewLogger(testConf)
+		logger := NewLogger(testutil.NewMockConfig(map[string]string{
+			"LOG_LEVEL": "DEBUG",
+		}))
 		logger.Logf("Test Log")
 		logger.Debug("Test Debug Log")
 		logger.Info("Test Info Log")
