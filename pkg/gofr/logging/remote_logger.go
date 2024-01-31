@@ -3,19 +3,20 @@ package logging
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"time"
 )
 
-const levelFetchInterval = 10
+const levelFetchInterval = 2
 
 type RemoteLevelService struct {
 	url             string
 	accessKey       string
 	appName         string
 	LogLevel        Level
-	logger          Logger
+	logger          *logger
 	ticker          *time.Ticker
 	logLevelChannel chan Level
 }
@@ -27,6 +28,7 @@ func (rl *RemoteLevelService) updateLogLevel() {
 		select {
 		case <-rl.ticker.C:
 			newLevel, err := rl.fetchLogLevel()
+			fmt.Errorf("fetched the log level %s", newLevel)
 			if err != nil {
 				rl.logger.Errorf("Failed to fetch remote log level: %v", err)
 				continue
@@ -36,7 +38,9 @@ func (rl *RemoteLevelService) updateLogLevel() {
 			rl.logLevelChannel <- newLevel
 
 		case newLevel := <-rl.logLevelChannel:
-			rl.LogLevel = newLevel
+			rl.logger.level = newLevel
+
+		default:
 		}
 	}
 }

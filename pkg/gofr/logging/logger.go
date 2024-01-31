@@ -173,12 +173,13 @@ func NewLogger(conf config.Config) Logger {
 		accessKey := conf.Get("REMOTE_ACCESS_KEY")
 
 		remoteLogger := &RemoteLevelService{
-			url:       url,
-			accessKey: accessKey,
-			appName:   appName,
-			LogLevel:  l.level,
-			logger:    l,
-			ticker:    time.NewTicker(levelFetchInterval * time.Second),
+			url:             url,
+			accessKey:       accessKey,
+			appName:         appName,
+			LogLevel:        l.level,
+			logger:          l,
+			ticker:          time.NewTicker(levelFetchInterval * time.Second),
+			logLevelChannel: make(chan Level, 1),
 		}
 
 		go remoteLogger.updateLogLevel()
