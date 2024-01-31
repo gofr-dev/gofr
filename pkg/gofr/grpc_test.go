@@ -70,5 +70,6 @@ func (c testConfig) GetOrDefault(key, defaultValue string) string {
 	if value, ok := c[key]; ok {
 		return value
 	}
+
 	return defaultValue
 }

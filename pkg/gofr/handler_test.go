@@ -10,6 +10,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/http/response"
 	"gofr.dev/pkg/gofr/logging"
@@ -20,6 +21,10 @@ var (
 )
 
 func TestHandler_ServeHTTP(t *testing.T) {
+	testConf := config.TestConfig{
+		"LOG_LEVEL": "FATAL",
+	}
+
 	testCases := []struct {
 		desc       string
 		data       interface{}
@@ -34,7 +39,7 @@ func TestHandler_ServeHTTP(t *testing.T) {
 		w := httptest.NewRecorder()
 		r := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 		c := &container.Container{
-			Logger: logging.NewLogger(logging.FATAL),
+			Logger: logging.NewLogger(testConf),
 		}
 
 		handler{

@@ -43,7 +43,7 @@ func (rl *RemoteLevelService) fetchLogLevel() (Level, error) {
 		Timeout: 5 * time.Second, // Add timeout for request
 	}
 
-	req, err := http.NewRequest("GET", rl.url, nil)
+	req, err := http.NewRequest("GET", rl.url, http.NoBody)
 	if err != nil {
 		return rl.LogLevel, err
 	}

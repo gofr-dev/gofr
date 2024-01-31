@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"gofr.dev/pkg/gofr/config"
+
 	"gofr.dev/pkg/gofr/http/middleware"
 	"gofr.dev/pkg/gofr/testutil"
 
@@ -17,7 +19,7 @@ import (
 )
 
 func TestLogger_LevelInfo(t *testing.T) {
-	testConf := testConfig{
+	testConf := config.TestConfig{
 		"LOG_LEVEL": "INFO",
 	}
 
@@ -40,7 +42,7 @@ func TestLogger_LevelInfo(t *testing.T) {
 }
 
 func TestLogger_LevelError(t *testing.T) {
-	testConf := testConfig{
+	testConf := config.TestConfig{
 		"LOG_LEVEL": "ERROR",
 	}
 
@@ -60,7 +62,7 @@ func TestLogger_LevelError(t *testing.T) {
 }
 
 func TestLogger_LevelDebug(t *testing.T) {
-	testConf := testConfig{
+	testConf := config.TestConfig{
 		"LOG_LEVEL": "DEBUG",
 	}
 
@@ -168,17 +170,4 @@ func TestPrettyPrint(t *testing.T) {
 			assert.Contains(t, actual, part, "Expected format part not found")
 		}
 	}
-}
-
-type testConfig map[string]string
-
-func (c testConfig) Get(key string) string {
-	return c[key]
-}
-
-func (c testConfig) GetOrDefault(key, defaultValue string) string {
-	if value, ok := c[key]; ok {
-		return value
-	}
-	return defaultValue
 }
