@@ -23,7 +23,7 @@ func TestRemoteLevelService_LogLevelUpdate(t *testing.T) {
 	defer mockServer.Close()
 
 	result := testutil.StdoutOutputForFunc(func() {
-		logger := NewLogger(testutil.NewMockConfig(map[string]string{
+		logger := NewRemoteLogger(testutil.NewMockConfig(map[string]string{
 			"LOG_LEVEL":         "DEBUG",
 			"REMOTE_LOG_URL":    mockServer.URL,
 			"REMOTE_ACCESS_KEY": "test-key",
@@ -33,8 +33,8 @@ func TestRemoteLevelService_LogLevelUpdate(t *testing.T) {
 		time.Sleep(7 * time.Second)
 
 		// Log statements to test the updated log level
-		logger.Debugf("testing the debug log")
-		logger.Info("testing the info log")
+		logger.Logger.Debug("testing the debug log")
+		logger.Logger.Info("testing the info log")
 	})
 
 	assert.NotContains(t, result, "debug log")

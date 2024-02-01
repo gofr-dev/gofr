@@ -13,7 +13,6 @@ import (
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/http/response"
 	"gofr.dev/pkg/gofr/logging"
-	"gofr.dev/pkg/gofr/testutil"
 )
 
 var (
@@ -35,9 +34,7 @@ func TestHandler_ServeHTTP(t *testing.T) {
 		w := httptest.NewRecorder()
 		r := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 		c := &container.Container{
-			Logger: logging.NewLogger(testutil.NewMockConfig(map[string]string{
-				"LOG_LEVEL": "FATAL",
-			})),
+			Logger: logging.NewLogger(logging.FATAL),
 		}
 
 		handler{

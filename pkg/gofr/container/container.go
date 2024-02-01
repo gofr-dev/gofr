@@ -1,13 +1,12 @@
 package container
 
 import (
+	_ "github.com/go-sql-driver/mysql" // This is required to be blank import
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/datasource/redis"
 	"gofr.dev/pkg/gofr/datasource/sql"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/service"
-
-	_ "github.com/go-sql-driver/mysql" // This is required to be blank import
 )
 
 // TODO - This can be a collection of interfaces instead of struct
@@ -36,8 +35,14 @@ func (c *Container) Health() interface{} {
 }
 
 func NewContainer(conf config.Config) *Container {
-	c := &Container{
-		Logger: logging.NewLogger(conf),
+	c := &Container{}
+
+	if url := conf.Get("REMOTE_LOG_URL"); url != "" {
+		remoteLogger := logging.NewRemoteLogger(conf)
+
+		c.Logger = remoteLogger.Logger
+	} else {
+		c.Logger = logging.NewLogger(logging.GetLevelFromString(conf.Get("LOG_LEVEL")))
 	}
 
 	c.Debug("Container is being created")

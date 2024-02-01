@@ -5,23 +5,46 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"os"
 	"time"
+
+	"gofr.dev/pkg/gofr/config"
 )
 
 const levelFetchInterval = 5
 
-type remoteLevelService struct {
+type RemoteLevelService struct {
 	url             string
 	accessKey       string
 	appName         string
 	logLevel        Level
-	logger          *logger
+	Logger          *logger
 	ticker          *time.Ticker
 	logLevelChannel chan Level
 }
 
+func NewRemoteLogger(conf config.Config) *RemoteLevelService {
+	level := GetLevelFromString(conf.Get("LOG_LEVEL"))
+
+	remoteLogger := &RemoteLevelService{
+		url:             conf.Get("REMOTE_LOG_URL"),
+		accessKey:       conf.Get("REMOTE_ACCESS_KEY"),
+		appName:         conf.Get("APP_NAME"),
+		logLevel:        level,
+		Logger:          &logger{normalOut: os.Stdout, errorOut: os.Stderr},
+		ticker:          time.NewTicker(levelFetchInterval * time.Second),
+		logLevelChannel: make(chan Level, 1),
+	}
+
+	remoteLogger.Logger.level = level
+
+	go remoteLogger.updateLogLevel()
+
+	return remoteLogger
+}
+
 // updateLogLevel continuously fetches and updates the log level from the remote service.
-func (rl *remoteLevelService) updateLogLevel() {
+func (rl *RemoteLevelService) updateLogLevel() {
 	defer rl.ticker.Stop()
 
 	for {
@@ -29,7 +52,7 @@ func (rl *remoteLevelService) updateLogLevel() {
 		case <-rl.ticker.C:
 			newLevel, err := rl.fetchLogLevel()
 			if err != nil {
-				rl.logger.Errorf("Failed to fetch remote log level: %v", err)
+				rl.Logger.Errorf("Failed to fetch remote log level: %v", err)
 				continue
 			}
 
@@ -38,20 +61,20 @@ func (rl *remoteLevelService) updateLogLevel() {
 
 		case newLevel := <-rl.logLevelChannel:
 			// Update the logger's log level based on the fetched value.
-			rl.logger.level = newLevel
+			rl.Logger.level = newLevel
 		}
 	}
 }
 
 // fetchLogLevel fetches the log level from the remote logging service.
-func (rl *remoteLevelService) fetchLogLevel() (Level, error) {
+func (rl *RemoteLevelService) fetchLogLevel() (Level, error) {
 	client := &http.Client{
 		Timeout: 5 * time.Second, // Add timeout for request
 	}
 
 	req, err := http.NewRequestWithContext(context.Background(), "GET", rl.url, http.NoBody)
 	if err != nil {
-		rl.logger.Errorf("Failed to fetch remote log level: %v", err)
+		rl.Logger.Errorf("Failed to fetch remote log level: %v", err)
 		return rl.logLevel, err
 	}
 
@@ -78,7 +101,7 @@ func (rl *remoteLevelService) fetchLogLevel() (Level, error) {
 
 	err = json.Unmarshal(responseBody, &response)
 	if err != nil {
-		rl.logger.Errorf("Logging Service returned %v", err)
+		rl.Logger.Errorf("Logging Service returned %v", err)
 	}
 
 	if len(response.Data) > 0 {

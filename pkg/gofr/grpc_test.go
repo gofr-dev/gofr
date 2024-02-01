@@ -12,12 +12,8 @@ import (
 )
 
 func TestNewGRPCServer(t *testing.T) {
-	testConf := testConfig{
-		"LOG_LEVEL": "DEBUG",
-	}
-
 	c := container.Container{
-		Logger: logging.NewLogger(testConf),
+		Logger: logging.NewLogger(logging.DEBUG),
 	}
 
 	g := newGRPCServer(&c, 9999)
@@ -26,10 +22,6 @@ func TestNewGRPCServer(t *testing.T) {
 }
 
 func TestGRPC_ServerRun(t *testing.T) {
-	testConf := testConfig{
-		"LOG_LEVEL": "INFO",
-	}
-
 	testCases := []struct {
 		desc       string
 		grcpServer *grpc.Server
@@ -43,7 +35,7 @@ func TestGRPC_ServerRun(t *testing.T) {
 	for i, tc := range testCases {
 		f := func() {
 			c := &container.Container{
-				Logger: logging.NewLogger(testConf),
+				Logger: logging.NewLogger(logging.INFO),
 			}
 
 			g := &grpcServer{
@@ -58,18 +50,4 @@ func TestGRPC_ServerRun(t *testing.T) {
 
 		assert.Contains(t, out, tc.expLog, "TEST[%d], Failed.\n", i)
 	}
-}
-
-type testConfig map[string]string
-
-func (c testConfig) Get(key string) string {
-	return c[key]
-}
-
-func (c testConfig) GetOrDefault(key, defaultValue string) string {
-	if value, ok := c[key]; ok {
-		return value
-	}
-
-	return defaultValue
 }

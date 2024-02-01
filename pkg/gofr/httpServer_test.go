@@ -11,7 +11,6 @@ import (
 	"gofr.dev/pkg/gofr/container"
 	gofrHttp "gofr.dev/pkg/gofr/http"
 	"gofr.dev/pkg/gofr/logging"
-	"gofr.dev/pkg/gofr/testutil"
 )
 
 func TestRun_ServerStartsListening(t *testing.T) {
@@ -23,9 +22,7 @@ func TestRun_ServerStartsListening(t *testing.T) {
 
 	// Create a mock container
 	c := &container.Container{
-		Logger: logging.NewLogger(testutil.NewMockConfig(map[string]string{
-			"LOG_LEVEL": "INFO",
-		})),
+		Logger: logging.NewLogger(logging.INFO),
 	}
 
 	// Create an instance of httpServer
