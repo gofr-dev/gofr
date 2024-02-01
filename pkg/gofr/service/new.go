@@ -18,8 +18,17 @@ import (
 type httpService struct {
 	*http.Client
 	trace.Tracer
-	url string
+	url            string
+	healthEndpoint string
 	Logger
+}
+
+type HTTPService interface {
+	// HTTP is embedded as HTTPService would be able to access it's clients method
+	HTTP
+
+	// HealthCheck to get the service health and report it to the current application
+	HealthCheck() interface{}
 }
 
 type HTTP interface {
@@ -55,7 +64,7 @@ type HTTP interface {
 
 // NewHTTPService function creates a new instance of the httpService struct, which implements the HTTP interface.
 // It initializes the http.Client, url, Tracer, and Logger fields of the httpService struct with the provided values.
-func NewHTTPService(serviceAddress string, logger Logger, options ...Options) HTTP {
+func NewHTTPService(serviceAddress string, logger Logger, options ...Options) HTTPService {
 	h := &httpService{
 		// using default http client to do http communication
 		Client: &http.Client{},
@@ -64,12 +73,22 @@ func NewHTTPService(serviceAddress string, logger Logger, options ...Options) HT
 		Logger: logger,
 	}
 
-	var svc HTTP
+	var svc HTTPService
 	svc = h
 
 	// if options are given, then add them to the httpService struct
 	for _, o := range options {
-		svc = o.apply(h)
+		if v, ok := o.(*CustomHealthConfig); ok {
+			h.healthEndpoint = v.HealthEndpoint
+
+			continue
+		}
+
+		svc = o.addOption(h)
+	}
+
+	if h.healthEndpoint == "" {
+		h.healthEndpoint = ".well-known/health"
 	}
 
 	return svc
@@ -171,6 +190,40 @@ func (h *httpService) createAndSendRequest(ctx context.Context, method string, p
 	h.Log(log)
 
 	return resp, nil
+}
+
+// HealthCheck default healthcheck for HTTP Service
+func (h *httpService) HealthCheck() interface{} {
+	var hlth = Health{
+		Details: make(map[string]interface{}),
+	}
+
+	// get a tracing context
+	ctx, _ := otel.GetTracerProvider().Tracer("gofr").Start(context.Background(), "health-check")
+
+	rsp, err := h.Get(ctx, h.healthEndpoint, nil)
+
+	if err != nil || rsp == nil {
+		hlth.Status = ServiceDown
+		hlth.Details["error"] = err.Error()
+
+		return &hlth
+	}
+
+	defer rsp.Body.Close()
+
+	hlth.Details["host"] = rsp.Request.URL.Host
+
+	if rsp.StatusCode == http.StatusOK {
+		hlth.Status = ServiceUp
+
+		return &hlth
+	}
+
+	hlth.Status = ServiceDown
+	hlth.Details["error"] = "service down"
+
+	return &hlth
 }
 
 func encodeQueryParameters(req *http.Request, queryParams map[string]interface{}) {
