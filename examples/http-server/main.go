@@ -16,12 +16,32 @@ func main() {
 	// Create a new application
 	a := gofr.New()
 
-	a.AddHTTPService("anotherService", "http://localhost:9000", &service.CircuitBreakerConfig{
-		Threshold: 4,
-		Timeout:   5 * time.Second,
-		Interval:  1 * time.Second,
-		HealthURL: "http://localhost:9000/.well-known/health",
-	})
+	//HTTP service with default health check endpoint
+	a.AddHTTPService("service1", "http://localhost:8000")
+
+	// HTTP service with Circuit Breaker config given, uses default health check
+	a.AddHTTPService("service2", "http://localhost:8000",
+		&service.CircuitBreakerConfig{
+			Threshold: 4,
+			Timeout:   5 * time.Second,
+			Interval:  1 * time.Second,
+		})
+
+	// HTTP service with Health check config for custom health check endpoint
+	a.AddHTTPService("service3", "http://localhost:8000",
+		&service.CustomHealthConfig{
+			HealthEndpoint: ".custom/health1",
+		})
+
+	a.AddHTTPService("service4", "http://localhost:8000",
+		&service.CircuitBreakerConfig{
+			Threshold: 4,
+			Timeout:   5 * time.Second,
+			Interval:  1 * time.Second,
+		},
+		&service.CustomHealthConfig{
+			HealthEndpoint: ".well-known/health",
+		})
 
 	// Add all the routes
 	a.GET("/hello", HelloHandler)

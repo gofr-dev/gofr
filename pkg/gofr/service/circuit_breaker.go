@@ -25,7 +25,6 @@ type CircuitBreakerConfig struct {
 	Threshold int           // Threshold represents the max no of retry before switching the circuit breaker state.
 	Timeout   time.Duration // Timeout represents the time duration for which circuit breaker maintains it's open state.
 	Interval  time.Duration // Interval represents the time interval duration between hitting the HealthURL
-	HealthURL string        // HealthURL represents the health url of the underlying service.
 }
 
 // CircuitBreaker represents a circuit breaker implementation.
@@ -36,21 +35,19 @@ type CircuitBreaker struct {
 	threshold    int
 	timeout      time.Duration
 	interval     time.Duration
-	healthURL    string
 	lastChecked  time.Time
 
-	HTTP
+	HTTPService
 }
 
 // NewCircuitBreaker creates a new CircuitBreaker instance based on the provided config.
-func NewCircuitBreaker(config CircuitBreakerConfig, h HTTP) *CircuitBreaker {
+func NewCircuitBreaker(config CircuitBreakerConfig, h HTTPService) *CircuitBreaker {
 	cb := &CircuitBreaker{
-		state:     ClosedState,
-		threshold: config.Threshold,
-		timeout:   config.Timeout,
-		interval:  config.Interval,
-		healthURL: config.HealthURL,
-		HTTP:      h,
+		state:       ClosedState,
+		threshold:   config.Threshold,
+		timeout:     config.Timeout,
+		interval:    config.Interval,
+		HTTPService: h,
 	}
 
 	// Perform asynchronous health checks
@@ -103,26 +100,10 @@ func (cb *CircuitBreaker) isOpen() bool {
 
 // healthCheck performs the health check for the circuit breaker.
 func (cb *CircuitBreaker) healthCheck() bool {
-	if cb.healthURL == "" {
-		return false
-	}
+	rsp := cb.HTTPService.HealthCheck()
+	v := rsp.(*Health)
 
-	client := &http.Client{
-		Timeout: cb.timeout,
-	}
-
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, cb.healthURL, http.NoBody)
-	if err != nil {
-		return false
-	}
-
-	resp, err := client.Do(req) // Use custom HTTP client with timeout
-	if err != nil {
-		return false
-	}
-	defer resp.Body.Close()
-
-	return resp.StatusCode == http.StatusOK
+	return v.Status == ServiceUp
 }
 
 // startHealthChecks initiates periodic health checks.
@@ -165,7 +146,7 @@ func (cb *CircuitBreaker) resetFailureCount() {
 	cb.failureCount = 0
 }
 
-func (cb *CircuitBreakerConfig) apply(h HTTP) HTTP {
+func (cb *CircuitBreakerConfig) addOption(h HTTPService) HTTPService {
 	return NewCircuitBreaker(*cb, h)
 }
 
@@ -206,23 +187,23 @@ func (cb *CircuitBreaker) doRequest(ctx context.Context, method, path string, qu
 	switch method {
 	case "GET":
 		result, err = cb.executeWithCircuitBreaker(ctx, func(ctx context.Context) (*http.Response, error) {
-			return cb.HTTP.GetWithHeaders(ctx, path, queryParams, headers)
+			return cb.HTTPService.GetWithHeaders(ctx, path, queryParams, headers)
 		})
 	case "POST":
 		result, err = cb.executeWithCircuitBreaker(ctx, func(ctx context.Context) (*http.Response, error) {
-			return cb.HTTP.PostWithHeaders(ctx, path, queryParams, body, headers)
+			return cb.HTTPService.PostWithHeaders(ctx, path, queryParams, body, headers)
 		})
 	case "PATCH":
 		result, err = cb.executeWithCircuitBreaker(ctx, func(ctx context.Context) (*http.Response, error) {
-			return cb.HTTP.PatchWithHeaders(ctx, path, queryParams, body, headers)
+			return cb.HTTPService.PatchWithHeaders(ctx, path, queryParams, body, headers)
 		})
 	case "PUT":
 		result, err = cb.executeWithCircuitBreaker(ctx, func(ctx context.Context) (*http.Response, error) {
-			return cb.HTTP.PutWithHeaders(ctx, path, queryParams, body, headers)
+			return cb.HTTPService.PutWithHeaders(ctx, path, queryParams, body, headers)
 		})
 	case "DELETE":
 		result, err = cb.executeWithCircuitBreaker(ctx, func(ctx context.Context) (*http.Response, error) {
-			return cb.HTTP.DeleteWithHeaders(ctx, path, body, headers)
+			return cb.HTTPService.DeleteWithHeaders(ctx, path, body, headers)
 		})
 	}
 
@@ -280,4 +261,8 @@ func (cb *CircuitBreaker) Delete(ctx context.Context, path string, body []byte) 
 func (cb *CircuitBreaker) DeleteWithHeaders(ctx context.Context, path string, body []byte, headers map[string]string) (
 	*http.Response, error) {
 	return cb.doRequest(ctx, "DELETE", path, nil, body, headers)
+}
+
+func (cb *CircuitBreaker) HealthCheck() interface{} {
+	return cb.HTTPService.HealthCheck()
 }

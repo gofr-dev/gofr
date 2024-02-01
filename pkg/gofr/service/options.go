@@ -1,5 +1,5 @@
 package service
 
 type Options interface {
-	apply(h HTTP) HTTP
+	addOption(h HTTPService) HTTPService
 }
