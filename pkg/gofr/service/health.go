@@ -10,10 +10,10 @@ type Health struct {
 	Details map[string]interface{} `json:"details"`
 }
 
-type CustomHealthConfig struct {
+type HealthConfig struct {
 	HealthEndpoint string
 }
 
-func (h *CustomHealthConfig) addOption(svc HTTPService) HTTPService {
+func (h *HealthConfig) addOption(svc HTTPService) HTTPService {
 	return svc
 }
