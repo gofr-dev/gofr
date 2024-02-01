@@ -204,7 +204,7 @@ func (h *httpService) HealthCheck() interface{} {
 	rsp, err := h.Get(ctx, h.healthEndpoint, nil)
 
 	if err != nil || rsp == nil {
-		hlth.Status = ServiceDown
+		hlth.Status = serviceDown
 		hlth.Details["error"] = err.Error()
 
 		return &hlth
@@ -215,12 +215,12 @@ func (h *httpService) HealthCheck() interface{} {
 	hlth.Details["host"] = rsp.Request.URL.Host
 
 	if rsp.StatusCode == http.StatusOK {
-		hlth.Status = ServiceUp
+		hlth.Status = serviceUp
 
 		return &hlth
 	}
 
-	hlth.Status = ServiceDown
+	hlth.Status = serviceDown
 	hlth.Details["error"] = "service down"
 
 	return &hlth
