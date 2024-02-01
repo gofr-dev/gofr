@@ -3,7 +3,6 @@ package grpc
 import (
 	"context"
 	"errors"
-
 	"net/http"
 	"testing"
 
