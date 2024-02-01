@@ -192,7 +192,7 @@ func (h *httpService) createAndSendRequest(ctx context.Context, method string, p
 	return resp, nil
 }
 
-// HealthCheck default healthcheck for HTTP Service
+// HealthCheck default healthcheck for HTTP Service.
 func (h *httpService) HealthCheck() interface{} {
 	var hlth = Health{
 		Details: make(map[string]interface{}),
