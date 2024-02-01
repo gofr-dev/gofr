@@ -1,8 +1,8 @@
 package service
 
 const (
-	ServiceUp   = "UP"
-	ServiceDown = "DOWN"
+	serviceUp   = "UP"
+	serviceDown = "DOWN"
 )
 
 type Health struct {

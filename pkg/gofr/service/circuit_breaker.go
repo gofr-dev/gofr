@@ -103,7 +103,7 @@ func (cb *CircuitBreaker) healthCheck() bool {
 	rsp := cb.HTTPService.HealthCheck()
 	v := rsp.(*Health)
 
-	return v.Status == ServiceUp
+	return v.Status == serviceUp
 }
 
 // startHealthChecks initiates periodic health checks.
