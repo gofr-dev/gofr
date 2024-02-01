@@ -17,7 +17,7 @@ func main() {
 	a := gofr.New()
 
 	//HTTP service with default health check endpoint
-	a.AddHTTPService("service1", "http://localhost:8000")
+	a.AddHTTPService("service1", "http://localhost:9000")
 
 	// HTTP service with Circuit Breaker config given, uses default health check
 	a.AddHTTPService("service2", "http://localhost:8000",
@@ -98,7 +98,7 @@ func TraceHandler(c *gofr.Context) (interface{}, error) {
 	wg.Wait()
 
 	//Call Another service
-	resp, err := c.GetHTTPService("anotherService").Get(c, "redis", nil)
+	resp, err := c.GetHTTPService("service1").Get(c, "redis", nil)
 	if err != nil {
 		return nil, err
 	}
