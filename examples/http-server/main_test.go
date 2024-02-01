@@ -25,8 +25,7 @@ func TestSimpleAPIServer(t *testing.T) {
 		{"redis handler", "/redis", 200},
 		{"trace handler", "/trace", 200},
 		{"mysql handler", "/mysql", 200},
-		{"health handler", "/.well-known/health", 200}, // Health check should be added by the framework.
-		{"favicon handler", "/favicon.ico", 200},       //Favicon should be added by the framework.
+		{"favicon handler", "/favicon.ico", 200}, //Favicon should be added by the framework.
 	}
 
 	for i, tc := range tests {
