@@ -29,7 +29,7 @@ func main() {
 
 	// HTTP service with Health check config for custom health check endpoint
 	a.AddHTTPService("service3", "http://localhost:8000",
-		&service.CustomHealthConfig{
+		&service.HealthConfig{
 			HealthEndpoint: ".custom/health1",
 		})
 
@@ -39,7 +39,7 @@ func main() {
 			Timeout:   5 * time.Second,
 			Interval:  1 * time.Second,
 		},
-		&service.CustomHealthConfig{
+		&service.HealthConfig{
 			HealthEndpoint: ".well-known/health",
 		})
 

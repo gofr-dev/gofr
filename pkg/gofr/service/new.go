@@ -78,7 +78,7 @@ func NewHTTPService(serviceAddress string, logger Logger, options ...Options) HT
 
 	// if options are given, then add them to the httpService struct
 	for _, o := range options {
-		if v, ok := o.(*CustomHealthConfig); ok {
+		if v, ok := o.(*HealthConfig); ok {
 			h.healthEndpoint = v.HealthEndpoint
 
 			continue
