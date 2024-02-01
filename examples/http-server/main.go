@@ -7,8 +7,6 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
-	"gofr.dev/pkg/gofr/service"
-
 	"gofr.dev/pkg/gofr"
 )
 
@@ -17,31 +15,7 @@ func main() {
 	a := gofr.New()
 
 	//HTTP service with default health check endpoint
-	a.AddHTTPService("service1", "http://localhost:9000")
-
-	// HTTP service with Circuit Breaker config given, uses default health check
-	a.AddHTTPService("service2", "http://localhost:8000",
-		&service.CircuitBreakerConfig{
-			Threshold: 4,
-			Timeout:   5 * time.Second,
-			Interval:  1 * time.Second,
-		})
-
-	// HTTP service with Health check config for custom health check endpoint
-	a.AddHTTPService("service3", "http://localhost:8000",
-		&service.HealthConfig{
-			HealthEndpoint: ".custom/health1",
-		})
-
-	a.AddHTTPService("service4", "http://localhost:8000",
-		&service.CircuitBreakerConfig{
-			Threshold: 4,
-			Timeout:   5 * time.Second,
-			Interval:  1 * time.Second,
-		},
-		&service.HealthConfig{
-			HealthEndpoint: ".well-known/health",
-		})
+	a.AddHTTPService("anotherService", "http://localhost:9000")
 
 	// Add all the routes
 	a.GET("/hello", HelloHandler)
@@ -98,7 +72,7 @@ func TraceHandler(c *gofr.Context) (interface{}, error) {
 	wg.Wait()
 
 	//Call Another service
-	resp, err := c.GetHTTPService("service1").Get(c, "redis", nil)
+	resp, err := c.GetHTTPService("anotherService").Get(c, "redis", nil)
 	if err != nil {
 		return nil, err
 	}
