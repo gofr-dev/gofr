@@ -10,7 +10,7 @@ import (
 )
 
 func Test_main(t *testing.T) {
-	const host = "http://localhost:9000"
+	const host = "http://localhost:9001"
 	c := &http.Client{}
 
 	go main()
