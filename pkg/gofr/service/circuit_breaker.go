@@ -25,7 +25,6 @@ type CircuitBreakerConfig struct {
 	Threshold int           // Threshold represents the max no of retry before switching the circuit breaker state.
 	Timeout   time.Duration // Timeout represents the time duration for which circuit breaker maintains it's open state.
 	Interval  time.Duration // Interval represents the time interval duration between hitting the HealthURL
-	HealthURL string        // HealthURL represents the health url of the underlying service.
 }
 
 // CircuitBreaker represents a circuit breaker implementation.
@@ -36,7 +35,6 @@ type CircuitBreaker struct {
 	threshold    int
 	timeout      time.Duration
 	interval     time.Duration
-	healthURL    string
 	lastChecked  time.Time
 
 	HTTP
@@ -49,7 +47,6 @@ func NewCircuitBreaker(config CircuitBreakerConfig, h HTTP) *CircuitBreaker {
 		threshold: config.Threshold,
 		timeout:   config.Timeout,
 		interval:  config.Interval,
-		healthURL: config.HealthURL,
 		HTTP:      h,
 	}
 
@@ -103,26 +100,9 @@ func (cb *CircuitBreaker) isOpen() bool {
 
 // healthCheck performs the health check for the circuit breaker.
 func (cb *CircuitBreaker) healthCheck() bool {
-	if cb.healthURL == "" {
-		return false
-	}
+	resp := cb.HealthCheck()
 
-	client := &http.Client{
-		Timeout: cb.timeout,
-	}
-
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, cb.healthURL, http.NoBody)
-	if err != nil {
-		return false
-	}
-
-	resp, err := client.Do(req) // Use custom HTTP client with timeout
-	if err != nil {
-		return false
-	}
-	defer resp.Body.Close()
-
-	return resp.StatusCode == http.StatusOK
+	return resp.Status == serviceUp
 }
 
 // startHealthChecks initiates periodic health checks.
@@ -165,7 +145,7 @@ func (cb *CircuitBreaker) resetFailureCount() {
 	cb.failureCount = 0
 }
 
-func (cb *CircuitBreakerConfig) apply(h HTTP) HTTP {
+func (cb *CircuitBreakerConfig) addOption(h HTTP) HTTP {
 	return NewCircuitBreaker(*cb, h)
 }
 
