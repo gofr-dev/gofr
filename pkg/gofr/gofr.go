@@ -139,7 +139,7 @@ func (a *App) readConfig() {
 // AddHTTPService registers HTTP service in container.
 func (a *App) AddHTTPService(serviceName, serviceAddress string, options ...service.Options) {
 	if a.container.Services == nil {
-		a.container.Services = make(map[string]service.HTTPService)
+		a.container.Services = make(map[string]service.HTTP)
 	}
 
 	if _, ok := a.container.Services[serviceName]; ok {

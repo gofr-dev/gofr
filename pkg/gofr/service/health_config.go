@@ -4,18 +4,18 @@ type HealthConfig struct {
 	HealthEndpoint string
 }
 
-func (h *HealthConfig) addOption(svc HTTPService) HTTPService {
+func (h *HealthConfig) addOption(svc HTTP) HTTP {
 	return &customHealthService{
 		healthEndpoint: h.HealthEndpoint,
-		HTTPService:    svc,
+		HTTP:           svc,
 	}
 }
 
 type customHealthService struct {
 	healthEndpoint string
-	HTTPService
+	HTTP
 }
 
 func (c *customHealthService) HealthCheck() *Health {
-	return c.HTTPService.getHealthResponseForEndpoint(c.healthEndpoint)
+	return c.HTTP.getHealthResponseForEndpoint(c.healthEndpoint)
 }
