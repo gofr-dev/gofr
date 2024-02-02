@@ -40,7 +40,7 @@ func NewContainer(conf config.Config) *Container {
 		Logger: logging.NewLogger(logging.GetLevelFromString(conf.Get("LOG_LEVEL"))),
 	}
 
-	c.Logger.Debug("Container is being created")
+	c.Debug("Container is being created")
 
 	c.Redis = redis.NewClient(conf, c.Logger)
 
