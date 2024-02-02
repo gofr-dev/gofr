@@ -24,6 +24,8 @@ type Logger interface {
 	Infof(format string, args ...interface{})
 	Error(args ...interface{})
 	Errorf(format string, args ...interface{})
+
+	changeLevel(level Level)
 }
 
 type logger struct {
@@ -186,4 +188,8 @@ func checkIfTerminal(w io.Writer) bool {
 	default:
 		return false
 	}
+}
+
+func (l *logger) changeLevel(level Level) {
+	l.level = level
 }
