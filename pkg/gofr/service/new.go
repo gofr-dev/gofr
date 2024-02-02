@@ -23,6 +23,15 @@ type httpService struct {
 }
 
 type HTTP interface {
+	// HTTP is embedded as HTTP would be able to access it's clients method
+	httpClient
+
+	// HealthCheck to get the service health and report it to the current application
+	HealthCheck() *Health
+	getHealthResponseForEndpoint(endpoint string) *Health
+}
+
+type httpClient interface {
 	// Get performs an HTTP GET request.
 	Get(ctx context.Context, api string, queryParams map[string]interface{}) (*http.Response, error)
 	// GetWithHeaders performs an HTTP GET request with custom headers.
@@ -69,7 +78,7 @@ func NewHTTPService(serviceAddress string, logger Logger, options ...Options) HT
 
 	// if options are given, then add them to the httpService struct
 	for _, o := range options {
-		svc = o.apply(h)
+		svc = o.addOption(h)
 	}
 
 	return svc
@@ -172,6 +181,8 @@ func (h *httpService) createAndSendRequest(ctx context.Context, method string, p
 
 	return resp, nil
 }
+
+// HealthCheck default healthcheck for HTTP Service.
 
 func encodeQueryParameters(req *http.Request, queryParams map[string]interface{}) {
 	q := req.URL.Query()

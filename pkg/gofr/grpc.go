@@ -4,13 +4,12 @@ import (
 	"net"
 	"strconv"
 
-	"gofr.dev/pkg/gofr/container"
-
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	grpc_recovery "github.com/grpc-ecosystem/go-grpc-middleware/recovery"
 	grpc2 "gofr.dev/pkg/gofr/grpc"
-
 	"google.golang.org/grpc"
+
+	"gofr.dev/pkg/gofr/container"
 )
 
 type grpcServer struct {
