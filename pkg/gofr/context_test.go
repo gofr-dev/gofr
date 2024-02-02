@@ -3,13 +3,13 @@ package gofr
 import (
 	"bytes"
 	"context"
+	"gofr.dev/pkg/gofr/container"
 
 	"net/http"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"gofr.dev/pkg/gofr/config"
-	"gofr.dev/pkg/gofr/container"
 	gofrHTTP "gofr.dev/pkg/gofr/http"
 )
 

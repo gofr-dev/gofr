@@ -18,7 +18,8 @@ func main() {
 			Length int    `json:"length"`
 		}{}
 
-		resp, err := c.GetHTTPService("service1").Get(c, "fact", map[string]interface{}{
+		var service1 = c.GetHTTPService("service1")
+		resp, err := service1.Get(c, "fact", map[string]interface{}{
 			"max_length": 20,
 		})
 		if err != nil {

@@ -1,12 +1,12 @@
 package gofr
 
 import (
+	"gofr.dev/pkg/gofr/container"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc"
 
-	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/testutil"
 )
