@@ -1,12 +1,12 @@
 package http
 
 import (
+	"gofr.dev/pkg/gofr/container"
 	"net/http"
 
 	"github.com/gorilla/mux"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 
-	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/http/middleware"
 )
 

@@ -100,10 +100,9 @@ func (cb *CircuitBreaker) isOpen() bool {
 
 // healthCheck performs the health check for the circuit breaker.
 func (cb *CircuitBreaker) healthCheck() bool {
-	rsp := cb.HTTPService.HealthCheck()
-	v := rsp.(*Health)
+	resp := cb.HealthCheck()
 
-	return v.Status == serviceUp
+	return resp.Status == serviceUp
 }
 
 // startHealthChecks initiates periodic health checks.
@@ -261,8 +260,4 @@ func (cb *CircuitBreaker) Delete(ctx context.Context, path string, body []byte) 
 func (cb *CircuitBreaker) DeleteWithHeaders(ctx context.Context, path string, body []byte, headers map[string]string) (
 	*http.Response, error) {
 	return cb.doRequest(ctx, "DELETE", path, nil, body, headers)
-}
-
-func (cb *CircuitBreaker) HealthCheck() interface{} {
-	return cb.HTTPService.HealthCheck()
 }

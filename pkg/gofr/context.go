@@ -2,7 +2,6 @@ package gofr
 
 import (
 	"context"
-
 	"gofr.dev/pkg/gofr/container"
 
 	"go.opentelemetry.io/otel"
