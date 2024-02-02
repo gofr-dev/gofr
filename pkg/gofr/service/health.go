@@ -16,17 +16,15 @@ type Health struct {
 }
 
 func (h *httpService) HealthCheck() *Health {
+	return h.getHealthResponseForEndpoint(".well-known/health")
+}
+
+func (h *httpService) getHealthResponseForEndpoint(endpoint string) *Health {
 	var healthResponse = Health{
 		Details: make(map[string]interface{}),
 	}
 
-	var (
-		resp *http.Response
-		err  error
-	)
-
-	// TODO - Think about a cleaner approach.
-	resp, err = h.Get(context.TODO(), h.GetHealthCheckEndpoint(), nil)
+	resp, err := h.Get(context.TODO(), endpoint, nil)
 
 	if err != nil || resp == nil {
 		healthResponse.Status = serviceDown

@@ -28,6 +28,7 @@ type HTTPService interface {
 
 	// HealthCheck to get the service health and report it to the current application
 	HealthCheck() *Health
+	getHealthResponseForEndpoint(endpoint string) *Health
 }
 
 type httpClient interface {
@@ -81,10 +82,6 @@ func NewHTTPService(serviceAddress string, logger Logger, options ...Options) HT
 	}
 
 	return svc
-}
-
-func (h *httpService) GetHealthCheckEndpoint() string {
-	return ".well-known/health"
 }
 
 func (h *httpService) Get(ctx context.Context, path string, queryParams map[string]interface{}) (*http.Response, error) {

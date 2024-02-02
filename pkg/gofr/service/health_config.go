@@ -16,6 +16,6 @@ type customHealthService struct {
 	HTTPService
 }
 
-func (h *HealthConfig) GetHealthEndpoint() string {
-	return h.HealthEndpoint
+func (c *customHealthService) HealthCheck() *Health {
+	return c.HTTPService.getHealthResponseForEndpoint(c.healthEndpoint)
 }
