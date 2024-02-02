@@ -144,7 +144,7 @@ func TestPrettyPrint(t *testing.T) {
 
 	for _, tc := range tests {
 		out := &bytes.Buffer{}
-		logger := &logger{isTerminal: tc.isTerminal}
+		logger := &Logging{isTerminal: tc.isTerminal}
 
 		logger.prettyPrint(tc.entry, out)
 

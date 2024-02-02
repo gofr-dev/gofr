@@ -15,7 +15,7 @@ import (
 // Container is a collection of all common application level concerns. Things like Logger, Connection Pool for Redis
 // etc which is shared across is placed here.
 type Container struct {
-	logging.Logger
+	Logger   logging.Logger
 	Services map[string]service.HTTP
 	Redis    *redis.Redis
 	DB       *sql.DB
@@ -36,17 +36,11 @@ func (c *Container) Health() interface{} {
 }
 
 func NewContainer(conf config.Config) *Container {
-	c := &Container{}
-
-	if url := conf.Get("REMOTE_LOG_URL"); url != "" {
-		remoteLogger := logging.NewRemoteLogger(conf)
-
-		c.Logger = remoteLogger.Logger
-	} else {
-		c.Logger = logging.NewLogger(logging.GetLevelFromString(conf.Get("LOG_LEVEL")))
+	c := &Container{
+		Logger: logging.NewLogger(logging.GetLevelFromString(conf.Get("LOG_LEVEL"))),
 	}
 
-	c.Debug("Container is being created")
+	c.Logger.Debug("Container is being created")
 
 	c.Redis = redis.NewClient(conf, c.Logger)
 

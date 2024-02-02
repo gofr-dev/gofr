@@ -1,14 +1,19 @@
 package gofr
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"strconv"
 	"sync"
+	"time"
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
+	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/service"
 
 	"go.opentelemetry.io/otel"
@@ -20,6 +25,8 @@ import (
 
 	"google.golang.org/grpc"
 )
+
+var loggerMutex sync.Mutex
 
 // App is the main application in the gofr framework.
 type App struct {
@@ -50,6 +57,12 @@ func New() *App {
 	app := &App{}
 	app.readConfig()
 	app.container = container.NewContainer(app.Config)
+
+	fmt.Printf("Address of logger made at New()  : %v\n", &app.container.Logger)
+
+	if url := app.Config.Get("REMOTE_LOG_URL"); url != "" {
+		go app.startRemoteLevelService(url)
+	}
 
 	app.initTracer()
 
@@ -142,7 +155,7 @@ func (a *App) AddHTTPService(serviceName, serviceAddress string) {
 	}
 
 	if _, ok := a.container.Services[serviceName]; ok {
-		a.container.Debugf("Service already registered Name: %v", serviceName)
+		a.container.Logger.Debugf("Service already registered Name: %v", serviceName)
 	}
 
 	a.container.Services[serviceName] = service.NewHTTPService(serviceAddress, a.container.Logger)
@@ -196,7 +209,7 @@ func (a *App) initTracer() {
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
 
 	if tracerHost != "" {
-		a.container.Log("Exporting traces to zipkin.")
+		a.container.Logger.Log("Exporting traces to zipkin.")
 
 		exporter, err := zipkin.New(
 			fmt.Sprintf("http://%s:%s/api/v2/spans", tracerHost, tracerPort),
@@ -205,7 +218,63 @@ func (a *App) initTracer() {
 		tp.RegisterSpanProcessor(batcher)
 
 		if err != nil {
-			a.container.Error(err)
+			a.container.Logger.Error(err)
 		}
 	}
+}
+
+func (a *App) startRemoteLevelService(url string) {
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+
+	remoteService := service.NewHTTPService(url, a.container.Logger)
+
+	for range ticker.C {
+		newLevel, err := a.fetchAndUpdateLogLevel(remoteService)
+		if err != nil {
+			a.container.Logger.Error(err)
+		} else {
+			logger, ok := a.container.Logger.(*logging.Logging)
+			if !ok {
+				break
+			}
+			loggerMutex.Lock()
+			logger.SetLevel(newLevel)
+			//a.container.Logger = logging.NewLogger(newLevel)
+			loggerMutex.Unlock()
+			fmt.Printf("Address of new updated logger : %v\n", &a.container.Logger)
+		}
+	}
+}
+
+func (a *App) fetchAndUpdateLogLevel(remoteService service.HTTP) (logging.Level, error) {
+	resp, err := remoteService.Get(context.Background(), "", nil)
+	if err != nil {
+		return logging.INFO, err
+	}
+	defer resp.Body.Close()
+
+	var response struct {
+		Data []struct {
+			ServiceName string            `json:"serviceName"`
+			Level       map[string]string `json:"logLevel"`
+		} `json:"data"`
+	}
+
+	responseBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return logging.INFO, err
+	}
+
+	err = json.Unmarshal(responseBody, &response)
+	if err != nil {
+		return logging.INFO, err
+	}
+
+	if len(response.Data) > 0 {
+		newLevel := logging.GetLevelFromString(response.Data[0].Level["LOG_LEVEL"])
+		return newLevel, nil
+	}
+
+	return logging.INFO, nil
 }

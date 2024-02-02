@@ -26,7 +26,7 @@ type Logger interface {
 	Errorf(format string, args ...interface{})
 }
 
-type logger struct {
+type Logging struct {
 	level      Level
 	normalOut  io.Writer
 	errorOut   io.Writer
@@ -39,7 +39,7 @@ type logEntry struct {
 	Message interface{} `json:"message"`
 }
 
-func (l *logger) logf(level Level, format string, args ...interface{}) {
+func (l *Logging) logf(level Level, format string, args ...interface{}) {
 	if level < l.level {
 		return
 	}
@@ -70,39 +70,39 @@ func (l *logger) logf(level Level, format string, args ...interface{}) {
 	}
 }
 
-func (l *logger) Debug(args ...interface{}) {
+func (l *Logging) Debug(args ...interface{}) {
 	l.logf(DEBUG, "", args...)
 }
 
-func (l *logger) Debugf(format string, args ...interface{}) {
+func (l *Logging) Debugf(format string, args ...interface{}) {
 	l.logf(DEBUG, format, args...)
 }
 
-func (l *logger) Info(args ...interface{}) {
+func (l *Logging) Info(args ...interface{}) {
 	l.logf(INFO, "", args...)
 }
 
-func (l *logger) Infof(format string, args ...interface{}) {
+func (l *Logging) Infof(format string, args ...interface{}) {
 	l.logf(INFO, format, args...)
 }
 
-func (l *logger) Log(args ...interface{}) {
+func (l *Logging) Log(args ...interface{}) {
 	l.logf(INFO, "", args...)
 }
 
-func (l *logger) Logf(format string, args ...interface{}) {
+func (l *Logging) Logf(format string, args ...interface{}) {
 	l.logf(INFO, format, args...)
 }
 
-func (l *logger) Error(args ...interface{}) {
+func (l *Logging) Error(args ...interface{}) {
 	l.logf(ERROR, "", args...)
 }
 
-func (l *logger) Errorf(format string, args ...interface{}) {
+func (l *Logging) Errorf(format string, args ...interface{}) {
 	l.logf(ERROR, format, args...)
 }
 
-func (l *logger) prettyPrint(e logEntry, out io.Writer) {
+func (l *Logging) prettyPrint(e logEntry, out io.Writer) {
 	// Giving special treatment to framework's request logs in terminal display. This does not add any overhead
 	// in running the server.
 	switch msg := e.Message.(type) {
@@ -157,7 +157,7 @@ func colorForStatusCode(status int) int {
 }
 
 func NewLogger(level Level) Logger {
-	l := &logger{
+	l := &Logging{
 		normalOut: os.Stdout,
 		errorOut:  os.Stderr,
 	}
@@ -171,7 +171,7 @@ func NewLogger(level Level) Logger {
 
 // TODO - Do we need this? Only used for CMD log silencing.
 func NewSilentLogger() Logger {
-	l := &logger{
+	l := &Logging{
 		normalOut: io.Discard,
 		errorOut:  io.Discard,
 	}
@@ -186,4 +186,13 @@ func checkIfTerminal(w io.Writer) bool {
 	default:
 		return false
 	}
+}
+
+func (l *Logging) GetLevel() Level {
+	return l.level
+}
+
+// SetLevel is a setter method for level.
+func (l *Logging) SetLevel(level Level) {
+	l.level = level
 }
