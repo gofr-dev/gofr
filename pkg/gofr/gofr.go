@@ -26,9 +26,6 @@ import (
 	"google.golang.org/grpc"
 )
 
-var loggerMutex sync.Mutex
-
-// App is the main application in the gofr framework.
 type App struct {
 	// Config can be used by applications to fetch custom configurations from environment or file.
 	Config config.Config // If we directly embed, unnecessary confusion between app.Get and app.GET will happen.
@@ -41,8 +38,9 @@ type App struct {
 	// container is unexported because this is an internal implementation and applications are provided access to it via Context
 	container *container.Container
 
-	grpcRegistered bool
-	httpRegistered bool
+	grpcRegistered   bool
+	httpRegistered   bool
+	remoteLevelMutex sync.Mutex
 }
 
 // RegisterService adds a grpc service to the gofr application.
@@ -238,10 +236,9 @@ func (a *App) startRemoteLevelService(url string) {
 			if !ok {
 				break
 			}
-			loggerMutex.Lock()
+			a.remoteLevelMutex.Lock()
 			logger.SetLevel(newLevel)
-			//a.container.Logger = logging.NewLogger(newLevel)
-			loggerMutex.Unlock()
+			a.remoteLevelMutex.Unlock()
 			fmt.Printf("Address of new updated logger : %v\n", &a.container.Logger)
 		}
 	}
