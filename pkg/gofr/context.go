@@ -3,10 +3,10 @@ package gofr
 import (
 	"context"
 
-	"gofr.dev/pkg/gofr/container"
-
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
+
+	"gofr.dev/pkg/gofr/container"
 )
 
 type Context struct {

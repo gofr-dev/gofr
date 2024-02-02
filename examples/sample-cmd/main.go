@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-
 	"gofr.dev/pkg/gofr"
 )
 
