@@ -37,17 +37,17 @@ type CircuitBreaker struct {
 	interval     time.Duration
 	lastChecked  time.Time
 
-	HTTPService
+	HTTP
 }
 
 // NewCircuitBreaker creates a new CircuitBreaker instance based on the provided config.
-func NewCircuitBreaker(config CircuitBreakerConfig, h HTTPService) *CircuitBreaker {
+func NewCircuitBreaker(config CircuitBreakerConfig, h HTTP) *CircuitBreaker {
 	cb := &CircuitBreaker{
-		state:       ClosedState,
-		threshold:   config.Threshold,
-		timeout:     config.Timeout,
-		interval:    config.Interval,
-		HTTPService: h,
+		state:     ClosedState,
+		threshold: config.Threshold,
+		timeout:   config.Timeout,
+		interval:  config.Interval,
+		HTTP:      h,
 	}
 
 	// Perform asynchronous health checks
@@ -145,7 +145,7 @@ func (cb *CircuitBreaker) resetFailureCount() {
 	cb.failureCount = 0
 }
 
-func (cb *CircuitBreakerConfig) addOption(h HTTPService) HTTPService {
+func (cb *CircuitBreakerConfig) addOption(h HTTP) HTTP {
 	return NewCircuitBreaker(*cb, h)
 }
 
@@ -186,23 +186,23 @@ func (cb *CircuitBreaker) doRequest(ctx context.Context, method, path string, qu
 	switch method {
 	case "GET":
 		result, err = cb.executeWithCircuitBreaker(ctx, func(ctx context.Context) (*http.Response, error) {
-			return cb.HTTPService.GetWithHeaders(ctx, path, queryParams, headers)
+			return cb.HTTP.GetWithHeaders(ctx, path, queryParams, headers)
 		})
 	case "POST":
 		result, err = cb.executeWithCircuitBreaker(ctx, func(ctx context.Context) (*http.Response, error) {
-			return cb.HTTPService.PostWithHeaders(ctx, path, queryParams, body, headers)
+			return cb.HTTP.PostWithHeaders(ctx, path, queryParams, body, headers)
 		})
 	case "PATCH":
 		result, err = cb.executeWithCircuitBreaker(ctx, func(ctx context.Context) (*http.Response, error) {
-			return cb.HTTPService.PatchWithHeaders(ctx, path, queryParams, body, headers)
+			return cb.HTTP.PatchWithHeaders(ctx, path, queryParams, body, headers)
 		})
 	case "PUT":
 		result, err = cb.executeWithCircuitBreaker(ctx, func(ctx context.Context) (*http.Response, error) {
-			return cb.HTTPService.PutWithHeaders(ctx, path, queryParams, body, headers)
+			return cb.HTTP.PutWithHeaders(ctx, path, queryParams, body, headers)
 		})
 	case "DELETE":
 		result, err = cb.executeWithCircuitBreaker(ctx, func(ctx context.Context) (*http.Response, error) {
-			return cb.HTTPService.DeleteWithHeaders(ctx, path, body, headers)
+			return cb.HTTP.DeleteWithHeaders(ctx, path, body, headers)
 		})
 	}
 

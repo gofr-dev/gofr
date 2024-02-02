@@ -22,8 +22,8 @@ type httpService struct {
 	Logger
 }
 
-type HTTPService interface {
-	// HTTP is embedded as HTTPService would be able to access it's clients method
+type HTTP interface {
+	// HTTP is embedded as HTTP would be able to access it's clients method
 	httpClient
 
 	// HealthCheck to get the service health and report it to the current application
@@ -64,7 +64,7 @@ type httpClient interface {
 
 // NewHTTPService function creates a new instance of the httpService struct, which implements the HTTP interface.
 // It initializes the http.Client, url, Tracer, and Logger fields of the httpService struct with the provided values.
-func NewHTTPService(serviceAddress string, logger Logger, options ...Options) HTTPService {
+func NewHTTPService(serviceAddress string, logger Logger, options ...Options) HTTP {
 	h := &httpService{
 		// using default http client to do http communication
 		Client: &http.Client{},
@@ -73,7 +73,7 @@ func NewHTTPService(serviceAddress string, logger Logger, options ...Options) HT
 		Logger: logger,
 	}
 
-	var svc HTTPService
+	var svc HTTP
 	svc = h
 
 	// if options are given, then add them to the httpService struct
