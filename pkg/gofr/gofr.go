@@ -56,8 +56,6 @@ func New() *App {
 	app.readConfig()
 	app.container = container.NewContainer(app.Config)
 
-	fmt.Printf("Address of logger made at New()  : %v\n", &app.container.Logger)
-
 	if url := app.Config.Get("REMOTE_LOG_URL"); url != "" {
 		go app.startRemoteLevelService(url)
 	}
@@ -239,7 +237,6 @@ func (a *App) startRemoteLevelService(url string) {
 			a.remoteLevelMutex.Lock()
 			logger.SetLevel(newLevel)
 			a.remoteLevelMutex.Unlock()
-			fmt.Printf("Address of new updated logger : %v\n", &a.container.Logger)
 		}
 	}
 }
