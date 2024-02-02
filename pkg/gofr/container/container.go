@@ -21,20 +21,6 @@ type Container struct {
 	DB       *sql.DB
 }
 
-func (c *Container) Health() interface{} {
-	datasources := make(map[string]interface{})
-
-	if c.DB != nil {
-		datasources["sql"] = c.DB.HealthCheck()
-	}
-
-	if c.Redis != nil {
-		datasources["redis"] = c.Redis.HealthCheck()
-	}
-
-	return datasources
-}
-
 func NewContainer(conf config.Config) *Container {
 	c := &Container{
 		Logger: logging.NewLogger(logging.GetLevelFromString(conf.Get("LOG_LEVEL"))),

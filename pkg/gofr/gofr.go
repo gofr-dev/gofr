@@ -26,6 +26,7 @@ import (
 	"google.golang.org/grpc"
 )
 
+// App is the main application in the gofr framework.
 type App struct {
 	// Config can be used by applications to fetch custom configurations from environment or file.
 	Config config.Config // If we directly embed, unnecessary confusion between app.Get and app.GET will happen.
