@@ -3,8 +3,6 @@ package gofr
 import (
 	"context"
 	"errors"
-	"gofr.dev/pkg/gofr/container"
-	http2 "gofr.dev/pkg/gofr/http"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -12,6 +10,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"gofr.dev/pkg/gofr/container"
+	"gofr.dev/pkg/gofr/http/response"
 	"gofr.dev/pkg/gofr/logging"
 )
 
@@ -58,7 +58,7 @@ func TestHandler_faviconHandler(t *testing.T) {
 
 	assert.NoError(t, err, "TEST Failed.\n")
 
-	assert.Equal(t, data, http2.response.File{
+	assert.Equal(t, data, response.File{
 		Content:     d,
 		ContentType: "image/x-icon",
 	}, "TEST Failed.\n")

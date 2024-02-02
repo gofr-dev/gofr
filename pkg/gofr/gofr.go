@@ -3,13 +3,13 @@ package gofr
 import (
 	"fmt"
 
-	"gofr.dev/pkg/gofr/container"
 	"net/http"
 	"os"
 	"strconv"
 	"sync"
 
 	"gofr.dev/pkg/gofr/config"
+	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/service"
 
 	"go.opentelemetry.io/otel"
