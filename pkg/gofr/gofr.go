@@ -45,7 +45,7 @@ type App struct {
 
 // RegisterService adds a grpc service to the gofr application.
 func (a *App) RegisterService(desc *grpc.ServiceDesc, impl interface{}) {
-	a.container.Logger.Infof("Registering GRPC Server: %s", desc.ServiceName)
+	a.container.Infof("Registering GRPC Server: %s", desc.ServiceName)
 	a.grpcServer.server.RegisterService(desc, impl)
 	a.grpcRegistered = true
 }
@@ -153,7 +153,7 @@ func (a *App) AddHTTPService(serviceName, serviceAddress string, options ...serv
 	}
 
 	if _, ok := a.container.Services[serviceName]; ok {
-		a.container.Logger.Debugf("Service already registered Name: %v", serviceName)
+		a.container.Debugf("Service already registered Name: %v", serviceName)
 	}
 
 	a.container.Services[serviceName] = service.NewHTTPService(serviceAddress, a.container.Logger, options...)
@@ -207,7 +207,7 @@ func (a *App) initTracer() {
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
 
 	if tracerHost != "" {
-		a.container.Logger.Log("Exporting traces to zipkin.")
+		a.container.Log("Exporting traces to zipkin.")
 
 		exporter, err := zipkin.New(
 			fmt.Sprintf("http://%s:%s/api/v2/spans", tracerHost, tracerPort),
@@ -216,7 +216,7 @@ func (a *App) initTracer() {
 		tp.RegisterSpanProcessor(batcher)
 
 		if err != nil {
-			a.container.Logger.Error(err)
+			a.container.Error(err)
 		}
 	}
 }

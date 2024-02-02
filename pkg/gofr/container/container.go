@@ -15,7 +15,7 @@ import (
 // Container is a collection of all common application level concerns. Things like Logger, Connection Pool for Redis
 // etc which is shared across is placed here.
 type Container struct {
-	Logger   logging.Logger
+	logging.Logger
 	Services map[string]service.HTTP
 	Redis    *redis.Redis
 	DB       *sql.DB
