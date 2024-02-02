@@ -1,9 +1,10 @@
 package gofr
 
 import (
-	"gofr.dev/pkg/gofr/container"
 	"os"
 	"regexp"
+
+	"gofr.dev/pkg/gofr/container"
 
 	cmd2 "gofr.dev/pkg/gofr/cmd"
 )
