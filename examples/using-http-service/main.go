@@ -34,17 +34,6 @@ func main() {
 
 		return data, nil
 	})
-	a.POST("/metrics", func(c *gofr.Context) (interface{}, error) {
-		var data = make(map[string]string)
-		err := c.Request.Bind(&data)
-		if err != nil {
-			c.Logger.Errorf("error : %v", err)
-		}
-
-		c.Logger.Info(data)
-
-		return nil, nil
-	})
 
 	// HTTP service with Circuit Breaker config given, uses default health check
 	// Note: /breeds is not an actual health check endpoint for "https://catfact.ninja"
