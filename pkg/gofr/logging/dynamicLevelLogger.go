@@ -18,7 +18,9 @@ func NewRemoteLogger(level Level, remoteConfigURL string) Logger {
 		currentLevel: level,
 	}
 
-	go l.UpdateLogLevel()
+	if remoteConfigURL != "" {
+		go l.UpdateLogLevel()
+	}
 
 	return l
 }
