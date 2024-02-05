@@ -14,7 +14,6 @@ import (
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/zipkin"
-	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
@@ -192,12 +191,8 @@ func (a *App) add(method, pattern string, h Handler) {
 	})
 }
 
-func (a *App) Metrics() metrics.Registrer {
+func (a *App) Metrics() metrics.Manager {
 	return a.container.MetricsManager
-}
-
-func (a *App) SetMetricsExporter(m metric.Meter) {
-	a.container.SetMetricsExporter(m)
 }
 
 // SubCommand adds a sub-command to the CLI application.

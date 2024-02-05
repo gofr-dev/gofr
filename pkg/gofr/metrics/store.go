@@ -11,18 +11,6 @@ var (
 	errMetricAlreadyExist = errors.New("metrics with given name already exists")
 )
 
-type MetricStore interface {
-	GetCounter(name string) (metric.Int64Counter, error)
-	GetUpDownCounter(name string) (metric.Float64UpDownCounter, error)
-	GetHistogram(name string) (metric.Float64Histogram, error)
-	GetGauge(name string) (metric.Float64ObservableGauge, error)
-
-	setCounter(name string, m metric.Int64Counter) error
-	setUpDownCounter(name string, m metric.Float64UpDownCounter) error
-	setHistogram(name string, m metric.Float64Histogram) error
-	setGauge(name string, m metric.Float64ObservableGauge) error
-}
-
 type store struct {
 	counter       map[string]metric.Int64Counter
 	upDownCounter map[string]metric.Float64UpDownCounter
@@ -30,7 +18,17 @@ type store struct {
 	gauge         map[string]metric.Float64ObservableGauge
 }
 
-func (s store) GetCounter(name string) (metric.Int64Counter, error) {
+// Interface is not being returned because it is not being used anywhere else apart from the metrics package.
+func newOtelStore() store {
+	return store{
+		counter:       make(map[string]metric.Int64Counter),
+		upDownCounter: make(map[string]metric.Float64UpDownCounter),
+		histogram:     make(map[string]metric.Float64Histogram),
+		gauge:         make(map[string]metric.Float64ObservableGauge),
+	}
+}
+
+func (s store) getCounter(name string) (metric.Int64Counter, error) {
 	m, ok := s.counter[name]
 	if !ok {
 		return nil, errMetricDoesNotExist
@@ -39,7 +37,7 @@ func (s store) GetCounter(name string) (metric.Int64Counter, error) {
 	return m, nil
 }
 
-func (s store) GetUpDownCounter(name string) (metric.Float64UpDownCounter, error) {
+func (s store) getUpDownCounter(name string) (metric.Float64UpDownCounter, error) {
 	m, ok := s.upDownCounter[name]
 	if !ok {
 		return nil, errMetricDoesNotExist
@@ -48,7 +46,7 @@ func (s store) GetUpDownCounter(name string) (metric.Float64UpDownCounter, error
 	return m, nil
 }
 
-func (s store) GetHistogram(name string) (metric.Float64Histogram, error) {
+func (s store) getHistogram(name string) (metric.Float64Histogram, error) {
 	m, ok := s.histogram[name]
 	if !ok {
 		return nil, errMetricDoesNotExist
@@ -57,7 +55,7 @@ func (s store) GetHistogram(name string) (metric.Float64Histogram, error) {
 	return m, nil
 }
 
-func (s store) GetGauge(name string) (metric.Float64ObservableGauge, error) {
+func (s store) getGauge(name string) (metric.Float64ObservableGauge, error) {
 	m, ok := s.gauge[name]
 	if !ok {
 		return nil, errMetricDoesNotExist
@@ -108,13 +106,4 @@ func (s store) setGauge(name string, m metric.Float64ObservableGauge) error {
 	}
 
 	return errMetricAlreadyExist
-}
-
-func newStore() MetricStore {
-	return store{
-		counter:       make(map[string]metric.Int64Counter),
-		upDownCounter: make(map[string]metric.Float64UpDownCounter),
-		histogram:     make(map[string]metric.Float64Histogram),
-		gauge:         make(map[string]metric.Float64ObservableGauge),
-	}
 }

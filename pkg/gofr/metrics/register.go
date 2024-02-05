@@ -7,31 +7,27 @@ import (
 	"go.opentelemetry.io/otel/metric"
 )
 
-type Registrer interface {
+type Manager interface {
 	NewCounter(name, desc string) error
 	NewUpDownCounter(name, desc string) error
 	NewHistogram(name, desc string, buckets ...float64) error
 	NewGauge(name, desc string) error
-}
 
-type Manager interface {
-	Registrer
-	Updater
-}
-
-type Updater interface {
-	IncrementCounter(ctx context.Context, name string, labels ...string) error
+	IncCounter(ctx context.Context, name string, labels ...string) error
+	DeltaUpDownCounter(ctx context.Context, name string, value float64, labels ...string) error
+	RecordHistogram(ctx context.Context, name string, value float64, labels ...string) error
+	SetGauge(name string, value float64) error
 }
 
 type metricsManager struct {
 	meter metric.Meter
-	store MetricStore
+	store store
 }
 
 func NewMetricManager(meter metric.Meter) Manager {
 	return &metricsManager{
 		meter: meter,
-		store: newStore(),
+		store: newOtelStore(),
 	}
 }
 
@@ -92,15 +88,59 @@ func (m *metricsManager) NewGauge(name, desc string) error {
 	return nil
 }
 
-func (m *metricsManager) IncrementCounter(ctx context.Context, name string, labels ...string) error {
-	mt, err := m.store.GetCounter(name)
+func (m *metricsManager) IncCounter(ctx context.Context, name string, labels ...string) error {
+	counter, err := m.store.getCounter(name)
 	if err != nil {
 		return errMetricDoesNotExist
 	}
 
-	mt.Add(ctx, 1, metric.WithAttributes(getAttributes(labels...)...))
+	counter.Add(ctx, 1, metric.WithAttributes(getAttributes(labels...)...))
 
 	return nil
+}
+
+func (m *metricsManager) DeltaUpDownCounter(ctx context.Context, name string, value float64, labels ...string) error {
+	upDownCounter, err := m.store.getUpDownCounter(name)
+	if err != nil {
+		return errMetricDoesNotExist
+	}
+
+	upDownCounter.Add(context.Background(), value, metric.WithAttributes(getAttributes(labels...)...))
+
+	return nil
+}
+
+func (m *metricsManager) RecordHistogram(ctx context.Context, name string, value float64, labels ...string) error {
+	histogram, err := m.store.getHistogram(name)
+	if err != nil {
+		return errMetricDoesNotExist
+	}
+
+	histogram.Record(context.Background(), value, metric.WithAttributes(getAttributes(labels...)...))
+
+	return nil
+}
+
+func (m *metricsManager) SetGauge(name string, value float64) error {
+	gauge, err := m.store.getGauge(name)
+	if err != nil {
+		return err
+	}
+
+	_, err = m.meter.RegisterCallback(callbackFunc(gauge, value), gauge)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func callbackFunc(name metric.Float64ObservableGauge, field float64) func(_ context.Context, o metric.Observer) error {
+	return func(_ context.Context, o metric.Observer) error {
+		o.ObserveFloat64(name, field)
+
+		return nil
+	}
 }
 
 func getAttributes(labels ...string) []attribute.KeyValue {
