@@ -2,7 +2,7 @@ package gofr
 
 import (
 	"fmt"
-
+	"gofr.dev/pkg/gofr/metrics"
 	"net/http"
 	"os"
 	"strconv"
@@ -14,6 +14,7 @@ import (
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/zipkin"
+	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
@@ -27,8 +28,9 @@ type App struct {
 	// Config can be used by applications to fetch custom configurations from environment or file.
 	Config config.Config // If we directly embed, unnecessary confusion between app.Get and app.GET will happen.
 
-	grpcServer *grpcServer
-	httpServer *httpServer
+	grpcServer   *grpcServer
+	httpServer   *httpServer
+	metricServer *metricServer
 
 	cmd *cmd
 
@@ -70,6 +72,10 @@ func New() *App {
 
 	app.grpcServer = newGRPCServer(app.container, port)
 
+	// Run metrics server
+	port, _ = strconv.Atoi(app.Config.GetOrDefault("METRICS_PORT", defaultMetricPort))
+	app.metricServer = newMetricServer(port)
+
 	return app
 }
 
@@ -94,6 +100,15 @@ func (a *App) Run() {
 	}
 
 	wg := sync.WaitGroup{}
+
+	// Run metrics server
+	// running metrics server before http and grpc
+	wg.Add(1)
+
+	go func(m *metricServer) {
+		defer wg.Done()
+		m.Run(a.container)
+	}(a.metricServer)
 
 	// Start HTTP Server
 	if a.httpRegistered {
@@ -175,6 +190,14 @@ func (a *App) add(method, pattern string, h Handler) {
 		function:  h,
 		container: a.container,
 	})
+}
+
+func (a *App) Metrics() metrics.Registrer {
+	return a.container.MetricsManager
+}
+
+func (a *App) SetMetricsExporter(m metric.Meter) {
+	a.container.SetMetricsExporter(m)
 }
 
 // SubCommand adds a sub-command to the CLI application.
