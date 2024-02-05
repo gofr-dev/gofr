@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"gofr.dev/pkg/gofr/cache"
 	"io"
 	"time"
 
@@ -45,7 +46,7 @@ func main() {
 		&service.HealthConfig{
 			HealthEndpoint: "breeds",
 		},
-		&service.CacheConfig{TTL: time.Second * 5},
+		&service.CacheConfig{CacheProvider: cache.NewMemoryProvider()},
 	)
 
 	// HTTP service with Health check config for custom health check endpoint

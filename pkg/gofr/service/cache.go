@@ -2,82 +2,38 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	cache2 "gofr.dev/pkg/gofr/cache"
 	"net/http"
 	"strings"
-	"sync"
 	"time"
 )
 
-type cacheResponse struct {
-	resp    *http.Response
-	setTime int64
-}
-
-type store struct {
-	entry map[string]cacheResponse
-	m     sync.Mutex
-}
-
 type cache struct {
-	cacher *store
-	TTL    time.Duration
+	CacheProvider cache2.Provider
+	TTL           time.Duration
 
 	HTTP
 }
 
 type CacheConfig struct {
-	TTL time.Duration
+	TTL           time.Duration
+	CacheProvider cache2.Provider
 }
 
 func newCache(config CacheConfig, h HTTP) *cache {
 	c := &cache{
-		cacher: &store{entry: make(map[string]cacheResponse)},
-		TTL:    config.TTL,
-		HTTP:   h,
+		CacheProvider: config.CacheProvider,
+		TTL:           config.TTL,
+		HTTP:          h,
 	}
-
-	go func() {
-		ticker := time.NewTicker(time.Millisecond)
-		defer ticker.Stop()
-
-		for t := range ticker.C {
-			c.cacher.m.Lock()
-			for k, v := range c.cacher.entry {
-				if t.Unix()-v.setTime > int64(c.TTL.Seconds()) {
-					delete(c.cacher.entry, k)
-				}
-			}
-			c.cacher.m.Unlock()
-		}
-	}()
 
 	return c
 }
 
 func (c *CacheConfig) addOption(h HTTP) HTTP {
 	return newCache(*c, h)
-}
-
-func (c *cache) get(key string) *http.Response {
-	c.cacher.m.Lock()
-	v, ok := c.cacher.entry[key]
-	c.cacher.m.Unlock()
-
-	if !ok {
-		return nil
-	}
-
-	return v.resp
-}
-
-func (c *cache) set(key string, value *http.Response) {
-	c.cacher.m.Lock()
-	c.cacher.entry[key] = cacheResponse{
-		resp:    value,
-		setTime: time.Now().Unix(),
-	}
-	c.cacher.m.Unlock()
 }
 
 func (c *cache) GetWithHeaders(ctx context.Context, path string, queryParams map[string]interface{},
@@ -101,10 +57,13 @@ func (c *cache) GetWithHeaders(ctx context.Context, path string, queryParams map
 
 	key := keyBuilder.String()
 
-	// TODO - make this key fix sized // example - hashing
-
 	// get the cacheResponse stored in the cacher
-	resp = c.get(key)
+	val, err := c.CacheProvider.Get(ctx, key)
+	if err != nil {
+		return nil, err
+	}
+
+	err = json.Unmarshal([]byte(val), resp)
 
 	if resp == nil {
 		resp, err = c.HTTP.GetWithHeaders(ctx, path, queryParams, headers)
@@ -117,7 +76,12 @@ func (c *cache) GetWithHeaders(ctx context.Context, path string, queryParams map
 		return nil, err
 	}
 
-	c.set(key, resp)
+	jsonResponse, err := json.Marshal(resp)
+	if err != nil {
+		return nil, err
+	}
+
+	c.CacheProvider.Set(ctx, key, string(jsonResponse))
 
 	return resp, nil
 }
