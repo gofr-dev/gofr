@@ -61,8 +61,6 @@ func TransactionHandler(c *gofr.Context) (interface{}, error) {
 
 	tranTime := time.Now().Sub(transactionStartTime).Microseconds()
 
-	fmt.Printf(fmt.Sprintf("%v", tranTime))
-
 	c.MetricsManager.RecordHistogram(c, transactionTime, float64(tranTime))
 	if err != nil {
 		c.Logger.Info("unable to increase the metric %v : %v", totalCreditDaySales, err)
