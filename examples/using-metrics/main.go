@@ -35,7 +35,6 @@ func main() {
 		fmt.Printf("failed to register metric %v : %v\n", transactionTime, err)
 	}
 
-	// Register the Gauge metric for product stock
 	err = a.Metrics().NewGauge(productStock, "used to track the number of products in stock")
 	if err != nil {
 		fmt.Printf("failed to register metric %v : %v\n", productStock, err)
