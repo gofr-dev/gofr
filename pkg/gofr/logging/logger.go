@@ -18,12 +18,16 @@ import (
 type Logger interface {
 	Debug(args ...interface{})
 	Debugf(format string, args ...interface{})
-	Log(args ...interface{})
-	Logf(format string, args ...interface{})
 	Info(args ...interface{})
 	Infof(format string, args ...interface{})
+	Notice(args ...interface{})
+	Noticef(format string, args ...interface{})
+	Warn(args ...interface{})
+	Warnf(format string, args ...interface{})
 	Error(args ...interface{})
 	Errorf(format string, args ...interface{})
+	Log(args ...interface{})
+	Logf(format string, args ...interface{})
 }
 
 type logger struct {
@@ -84,6 +88,22 @@ func (l *logger) Info(args ...interface{}) {
 
 func (l *logger) Infof(format string, args ...interface{}) {
 	l.logf(INFO, format, args...)
+}
+
+func (l *logger) Notice(args ...interface{}) {
+	l.logf(NOTICE, "", args...)
+}
+
+func (l *logger) Noticef(format string, args ...interface{}) {
+	l.logf(NOTICE, format, args...)
+}
+
+func (l *logger) Warn(args ...interface{}) {
+	l.logf(WARN, "", args...)
+}
+
+func (l *logger) Warnf(format string, args ...interface{}) {
+	l.logf(WARN, format, args...)
 }
 
 func (l *logger) Log(args ...interface{}) {
