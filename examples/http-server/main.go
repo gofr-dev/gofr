@@ -17,12 +17,6 @@ func main() {
 	//HTTP service with default health check endpoint
 	a.AddHTTPService("anotherService", "http://localhost:9000")
 
-	err := a.Metrics().NewCounter("hello_handler_request_count",
-		"counts the number of times /hello handler is called")
-	if err != nil {
-		return
-	}
-
 	// Add all the routes
 	a.GET("/hello", HelloHandler)
 	a.GET("/error", ErrorHandler)
@@ -35,11 +29,6 @@ func main() {
 }
 
 func HelloHandler(c *gofr.Context) (interface{}, error) {
-	err := c.UpdateMetric().IncrementCounter(c, "hello_handler_request_count")
-	if err != nil {
-		c.Container.Logger.Infof("unable to increment metrics %v : %v", "hello_request_count", err.Error())
-	}
-
 	name := c.Param("name")
 	if name == "" {
 		c.Log("Name came empty")
