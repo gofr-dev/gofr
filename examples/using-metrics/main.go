@@ -53,7 +53,7 @@ func TransactionHandler(c *gofr.Context) (interface{}, error) {
 
 	transactionStartTime := time.Now()
 
-	err := c.MetricsManager.IncCounter(c, transactionSuccessful)
+	err := c.MetricsManager.IncrementCounter(c, transactionSuccessful)
 	if err != nil {
 		c.Logger.Info("unable to increase the metric %v : %v", transactionSuccessful, err)
 	}

@@ -13,7 +13,7 @@ type Manager interface {
 	NewHistogram(name, desc string, buckets ...float64) error
 	NewGauge(name, desc string) error
 
-	IncCounter(ctx context.Context, name string, labels ...string) error
+	IncrementCounter(ctx context.Context, name string, labels ...string) error
 	DeltaUpDownCounter(ctx context.Context, name string, value float64, labels ...string) error
 	RecordHistogram(ctx context.Context, name string, value float64, labels ...string) error
 	SetGauge(name string, value float64) error
@@ -88,7 +88,7 @@ func (m *metricsManager) NewGauge(name, desc string) error {
 	return nil
 }
 
-func (m *metricsManager) IncCounter(ctx context.Context, name string, labels ...string) error {
+func (m *metricsManager) IncrementCounter(ctx context.Context, name string, labels ...string) error {
 	counter, err := m.store.getCounter(name)
 	if err != nil {
 		return errMetricDoesNotExist
