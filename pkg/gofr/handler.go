@@ -40,7 +40,7 @@ func healthHandler(c *Context) (interface{}, error) {
 }
 
 func liveHandler(*Context) (interface{}, error) {
-	return "OK", nil
+	return "UP", nil
 }
 
 func faviconHandler(*Context) (interface{}, error) {
