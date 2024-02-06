@@ -38,23 +38,23 @@ func TransactionHandler(c *gofr.Context) (interface{}, error) {
 
 	// transaction logic
 
-	c.MetricsManager.IncrementCounter(c, transactionSuccessful)
+	c.Metrics().IncrementCounter(c, transactionSuccessful)
 
 	tranTime := time.Now().Sub(transactionStartTime).Microseconds()
 
-	c.MetricsManager.RecordHistogram(c, transactionTime, float64(tranTime))
-	c.MetricsManager.DeltaUpDownCounter(c, totalCreditDaySales, 1000, "sale_type", "transaction")
-	c.MetricsManager.SetGauge(productStock, 10)
+	c.Metrics().RecordHistogram(c, transactionTime, float64(tranTime))
+	c.Metrics().DeltaUpDownCounter(c, totalCreditDaySales, 1000, "sale_type", "transaction")
+	c.Metrics().SetGauge(productStock, 10)
 
 	return "Transaction Successful", nil
 }
 
 func ReturnHandler(c *gofr.Context) (interface{}, error) {
 	// logic to create a sales return
-	c.MetricsManager.DeltaUpDownCounter(c, totalCreditDaySales, -1000, "sale_type", "return")
+	c.Metrics().DeltaUpDownCounter(c, totalCreditDaySales, -1000, "sale_type", "return")
 
 	// Update the Gauge metric for product stock
-	c.MetricsManager.SetGauge(productStock, 50)
+	c.Metrics().SetGauge(productStock, 50)
 
 	return "Return Successful", nil
 }

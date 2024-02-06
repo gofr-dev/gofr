@@ -20,7 +20,7 @@ type Container struct {
 	logging.Logger
 
 	Services       map[string]service.HTTP
-	MetricsManager metrics.Manager
+	metricsManager metrics.Manager
 
 	Redis *redis.Redis
 	DB    *sql.DB
@@ -37,7 +37,7 @@ func NewContainer(conf config.Config) *Container {
 
 	c.DB = sql.NewSQL(conf, c.Logger)
 
-	c.MetricsManager = metrics.NewMetricManager(exporters.Prometheus(
+	c.metricsManager = metrics.NewMetricManager(exporters.Prometheus(
 		conf.GetOrDefault("APP_NAME", "gofr-app"),
 		conf.GetOrDefault("APP_VERSION", "dev")), c.Logger)
 
@@ -48,4 +48,8 @@ func NewContainer(conf config.Config) *Container {
 // HTTP services are registered from AddHTTPService method of gofr object.
 func (c *Container) GetHTTPService(serviceName string) service.HTTP {
 	return c.Services[serviceName]
+}
+
+func (c *Container) Metrics() metrics.Manager {
+	return c.metricsManager
 }

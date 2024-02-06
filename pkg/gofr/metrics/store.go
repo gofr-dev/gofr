@@ -11,8 +11,18 @@ type store struct {
 	gauge         map[string]metric.Float64ObservableGauge
 }
 
-// Interface is not being returned because it is not being used anywhere else apart from the metrics package.
-func newOtelStore() store {
+type Store interface {
+	getCounter(name string) (metric.Int64Counter, error)
+	getUpDownCounter(name string) (metric.Float64UpDownCounter, error)
+	getHistogram(name string) (metric.Float64Histogram, error)
+	getGauge(name string) (metric.Float64ObservableGauge, error)
+	setCounter(name string, m metric.Int64Counter) error
+	setUpDownCounter(name string, m metric.Float64UpDownCounter) error
+	setHistogram(name string, m metric.Float64Histogram) error
+	setGauge(name string, m metric.Float64ObservableGauge) error
+}
+
+func newOtelStore() Store {
 	return store{
 		counter:       make(map[string]metric.Int64Counter),
 		upDownCounter: make(map[string]metric.Float64UpDownCounter),
