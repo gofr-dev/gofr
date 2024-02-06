@@ -2,15 +2,11 @@ package gofr
 
 import (
 	"fmt"
-	"gofr.dev/pkg/gofr/metrics"
+
 	"net/http"
 	"os"
 	"strconv"
 	"sync"
-
-	"gofr.dev/pkg/gofr/config"
-	"gofr.dev/pkg/gofr/container"
-	"gofr.dev/pkg/gofr/service"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/zipkin"
@@ -20,6 +16,11 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
 
 	"google.golang.org/grpc"
+
+	"gofr.dev/pkg/gofr/config"
+	"gofr.dev/pkg/gofr/container"
+	"gofr.dev/pkg/gofr/metrics"
+	"gofr.dev/pkg/gofr/service"
 )
 
 // App is the main application in the gofr framework.

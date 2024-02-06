@@ -120,7 +120,7 @@ func (m *metricsManager) DeltaUpDownCounter(ctx context.Context, name string, va
 		return
 	}
 
-	upDownCounter.Add(context.Background(), value, metric.WithAttributes(getAttributes(labels...)...))
+	upDownCounter.Add(ctx, value, metric.WithAttributes(getAttributes(labels...)...))
 }
 
 func (m *metricsManager) RecordHistogram(ctx context.Context, name string, value float64, labels ...string) {
@@ -131,7 +131,7 @@ func (m *metricsManager) RecordHistogram(ctx context.Context, name string, value
 		return
 	}
 
-	histogram.Record(context.Background(), value, metric.WithAttributes(getAttributes(labels...)...))
+	histogram.Record(ctx, value, metric.WithAttributes(getAttributes(labels...)...))
 }
 
 func (m *metricsManager) SetGauge(name string, value float64) {
