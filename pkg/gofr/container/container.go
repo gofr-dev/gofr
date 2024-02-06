@@ -23,7 +23,7 @@ type Container struct {
 
 func NewContainer(conf config.Config) *Container {
 	c := &Container{
-		Logger: logging.NewLogger(logging.GetLevelFromString(conf.Get("LOG_LEVEL"))),
+		Logger: logging.NewRemoteLogger(logging.GetLevelFromString(conf.Get("LOG_LEVEL")), conf.Get("REMOTE_LOG_URL")),
 	}
 
 	c.Debug("Container is being created")
