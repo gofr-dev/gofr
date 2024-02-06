@@ -22,10 +22,16 @@ type Logger interface {
 	Logf(format string, args ...interface{})
 	Info(args ...interface{})
 	Infof(format string, args ...interface{})
+	Notice(args ...interface{})
+	Noticef(format string, args ...interface{})
+	Warn(args ...interface{})
+	Warnf(format string, args ...interface{})
 	Error(args ...interface{})
 	Errorf(format string, args ...interface{})
-
+	Fatal(args ...interface{})
+	Fatalf(format string, args ...interface{})
 	changeLevel(level Level)
+
 }
 
 type logger struct {
@@ -88,6 +94,22 @@ func (l *logger) Infof(format string, args ...interface{}) {
 	l.logf(INFO, format, args...)
 }
 
+func (l *logger) Notice(args ...interface{}) {
+	l.logf(NOTICE, "", args...)
+}
+
+func (l *logger) Noticef(format string, args ...interface{}) {
+	l.logf(NOTICE, format, args...)
+}
+
+func (l *logger) Warn(args ...interface{}) {
+	l.logf(WARN, "", args...)
+}
+
+func (l *logger) Warnf(format string, args ...interface{}) {
+	l.logf(WARN, format, args...)
+}
+
 func (l *logger) Log(args ...interface{}) {
 	l.logf(INFO, "", args...)
 }
@@ -102,6 +124,18 @@ func (l *logger) Error(args ...interface{}) {
 
 func (l *logger) Errorf(format string, args ...interface{}) {
 	l.logf(ERROR, format, args...)
+}
+
+func (l *logger) Fatal(args ...interface{}) {
+	l.logf(FATAL, "", args...)
+
+	// exit status is 1 as it denotes failure as signified by Fatal log
+	os.Exit(1)
+}
+
+func (l *logger) Fatalf(format string, args ...interface{}) {
+	l.logf(FATAL, format, args...)
+	os.Exit(1)
 }
 
 func (l *logger) prettyPrint(e logEntry, out io.Writer) {
