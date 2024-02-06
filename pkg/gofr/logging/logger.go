@@ -31,7 +31,6 @@ type Logger interface {
 	Fatal(args ...interface{})
 	Fatalf(format string, args ...interface{})
 	changeLevel(level Level)
-
 }
 
 type logger struct {
