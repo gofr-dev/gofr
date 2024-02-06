@@ -2,18 +2,18 @@ package metrics
 
 import "fmt"
 
-type metricAlreadyRegistered struct {
+type metricsAlreadyRegistered struct {
 	metricsName string
 }
 
-type metricNotRegistered struct {
+type metricsNotRegistered struct {
 	metricsName string
 }
 
-func (e metricAlreadyRegistered) Error() string {
+func (e metricsAlreadyRegistered) Error() string {
 	return fmt.Sprintf("Metrics %v already registered", e.metricsName)
 }
 
-func (e metricNotRegistered) Error() string {
+func (e metricsNotRegistered) Error() string {
 	return fmt.Sprintf("Metrics %v is not registered", e.metricsName)
 }
