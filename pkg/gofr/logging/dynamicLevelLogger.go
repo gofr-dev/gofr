@@ -44,7 +44,11 @@ func (r *remoteLogger) UpdateLogLevel() {
 		newLevel, err := fetchAndUpdateLogLevel(remoteService)
 		if err == nil {
 			r.changeLevel(newLevel)
-			r.currentLevel = newLevel
+
+			if r.currentLevel != newLevel {
+				r.Infof("LOG_LEVEL updated from %v to %v", r.currentLevel, newLevel)
+				r.currentLevel = newLevel
+			}
 		}
 	}
 }
