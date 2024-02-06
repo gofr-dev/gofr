@@ -13,7 +13,7 @@ import (
 type Manager interface {
 	// NewCounter registers a new counter metrics. It can not be reduced.
 	NewCounter(name, desc string)
-	// NewUpDownCounter registers a new UpDown Counter metrics which can be either be increased or decreased by any factor.
+	// NewUpDownCounter registers a new UpDown Counter metrics which can be either be increased or decreased by value.
 	NewUpDownCounter(name, desc string)
 	// NewHistogram registers a new histogram metrics with different buckets.
 	NewHistogram(name, desc string, buckets ...float64)
