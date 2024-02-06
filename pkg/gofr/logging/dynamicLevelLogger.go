@@ -9,7 +9,10 @@ import (
 	"gofr.dev/pkg/gofr/service"
 )
 
-const levelFetchInterval = 5
+const (
+	levelFetchInterval = 15 * time.Second
+	requestTimeout     = 5 * time.Second
+)
 
 func NewRemoteLogger(level Level, remoteConfigURL string) Logger {
 	l := remoteLogger{
@@ -32,7 +35,7 @@ type remoteLogger struct {
 }
 
 func (r *remoteLogger) UpdateLogLevel() {
-	ticker := time.NewTicker(levelFetchInterval * time.Minute)
+	ticker := time.NewTicker(levelFetchInterval)
 	defer ticker.Stop()
 
 	remoteService := service.NewHTTPService(r.remoteURL, r.Logger)
@@ -47,7 +50,10 @@ func (r *remoteLogger) UpdateLogLevel() {
 }
 
 func fetchAndUpdateLogLevel(remoteService service.HTTP) (Level, error) {
-	resp, err := remoteService.Get(context.Background(), "", nil)
+	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout) // Set timeout for 5 seconds
+	defer cancel()
+
+	resp, err := remoteService.Get(ctx, "", nil)
 	if err != nil {
 		return INFO, err
 	}
