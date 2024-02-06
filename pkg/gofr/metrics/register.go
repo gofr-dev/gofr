@@ -7,132 +7,145 @@ import (
 	"go.opentelemetry.io/otel/metric"
 )
 
-type Manager interface {
-	NewCounter(name, desc string) error
-	NewUpDownCounter(name, desc string) error
-	NewHistogram(name, desc string, buckets ...float64) error
-	NewGauge(name, desc string) error
+// Error can also be returned from all the methods but it is decided not to do so such that to keep the usage clean -
+// as any errors are already being logged from here. Otherwise, user would need to check the error everytime.
 
-	IncrementCounter(ctx context.Context, name string, labels ...string) error
-	DeltaUpDownCounter(ctx context.Context, name string, value float64, labels ...string) error
-	RecordHistogram(ctx context.Context, name string, value float64, labels ...string) error
-	SetGauge(name string, value float64) error
+type Manager interface {
+	NewCounter(name, desc string)
+	NewUpDownCounter(name, desc string)
+	NewHistogram(name, desc string, buckets ...float64)
+	NewGauge(name, desc string)
+
+	IncrementCounter(ctx context.Context, name string, labels ...string)
+	DeltaUpDownCounter(ctx context.Context, name string, value float64, labels ...string)
+	RecordHistogram(ctx context.Context, name string, value float64, labels ...string)
+	SetGauge(name string, value float64)
+}
+
+type Logger interface {
+	Error(args ...interface{})
+	Errorf(format string, args ...interface{})
 }
 
 type metricsManager struct {
-	meter metric.Meter
-	store store
+	meter  metric.Meter
+	store  store
+	logger Logger
 }
 
-func NewMetricManager(meter metric.Meter) Manager {
+func NewMetricManager(meter metric.Meter, logger Logger) Manager {
 	return &metricsManager{
-		meter: meter,
-		store: newOtelStore(),
+		meter:  meter,
+		store:  newOtelStore(),
+		logger: logger,
 	}
 }
 
-func (m *metricsManager) NewCounter(name, desc string) error {
+// Not checking the name or desc parameter because the OTEL package already takes care of the mandatory params
+// and return the error.
+
+func (m *metricsManager) NewCounter(name, desc string) {
 	counter, err := m.meter.Int64Counter(name, metric.WithDescription(desc))
 	if err != nil {
-		return err
+		m.logger.Error(err)
+
+		return
 	}
 
 	err = m.store.setCounter(name, counter)
 	if err != nil {
-		return err
+		m.logger.Error(err)
 	}
-
-	return nil
 }
 
-func (m *metricsManager) NewUpDownCounter(name, desc string) error {
+func (m *metricsManager) NewUpDownCounter(name, desc string) {
 	upDownCounter, err := m.meter.Float64UpDownCounter(name, metric.WithDescription(desc))
 	if err != nil {
-		return err
+		m.logger.Error(err)
+
+		return
 	}
 
 	err = m.store.setUpDownCounter(name, upDownCounter)
 	if err != nil {
-		return err
+		m.logger.Error(err)
 	}
-
-	return nil
 }
 
-func (m *metricsManager) NewHistogram(name, desc string, buckets ...float64) error {
+func (m *metricsManager) NewHistogram(name, desc string, buckets ...float64) {
 	histogram, err := m.meter.Float64Histogram(name, metric.WithDescription(desc),
 		metric.WithExplicitBucketBoundaries(buckets...))
 	if err != nil {
-		return err
+		m.logger.Error(err)
+
+		return
 	}
 
 	err = m.store.setHistogram(name, histogram)
 	if err != nil {
-		return err
+		m.logger.Error(err)
 	}
-
-	return nil
 }
 
-func (m *metricsManager) NewGauge(name, desc string) error {
+func (m *metricsManager) NewGauge(name, desc string) {
 	gauge, err := m.meter.Float64ObservableGauge(name, metric.WithDescription(desc))
 	if err != nil {
-		return err
+		m.logger.Error(err)
+
+		return
 	}
 
 	err = m.store.setGauge(name, gauge)
 	if err != nil {
-		return err
+		m.logger.Error(err)
 	}
-
-	return nil
 }
 
-func (m *metricsManager) IncrementCounter(ctx context.Context, name string, labels ...string) error {
+func (m *metricsManager) IncrementCounter(ctx context.Context, name string, labels ...string) {
 	counter, err := m.store.getCounter(name)
 	if err != nil {
-		return errMetricDoesNotExist
+		m.logger.Error(err)
+
+		return
 	}
 
 	counter.Add(ctx, 1, metric.WithAttributes(getAttributes(labels...)...))
-
-	return nil
 }
 
-func (m *metricsManager) DeltaUpDownCounter(ctx context.Context, name string, value float64, labels ...string) error {
+func (m *metricsManager) DeltaUpDownCounter(ctx context.Context, name string, value float64, labels ...string) {
 	upDownCounter, err := m.store.getUpDownCounter(name)
 	if err != nil {
-		return errMetricDoesNotExist
+		m.logger.Error(err)
+
+		return
 	}
 
 	upDownCounter.Add(context.Background(), value, metric.WithAttributes(getAttributes(labels...)...))
-
-	return nil
 }
 
-func (m *metricsManager) RecordHistogram(ctx context.Context, name string, value float64, labels ...string) error {
+func (m *metricsManager) RecordHistogram(ctx context.Context, name string, value float64, labels ...string) {
 	histogram, err := m.store.getHistogram(name)
 	if err != nil {
-		return errMetricDoesNotExist
+		m.logger.Error(err)
+
+		return
 	}
 
 	histogram.Record(context.Background(), value, metric.WithAttributes(getAttributes(labels...)...))
-
-	return nil
 }
 
-func (m *metricsManager) SetGauge(name string, value float64) error {
+func (m *metricsManager) SetGauge(name string, value float64) {
 	gauge, err := m.store.getGauge(name)
 	if err != nil {
-		return err
+		m.logger.Error(err)
+
+		return
 	}
 
 	_, err = m.meter.RegisterCallback(callbackFunc(gauge, value), gauge)
 	if err != nil {
-		return err
+		m.logger.Error(err)
 	}
-
-	return nil
 }
 
 func callbackFunc(name metric.Float64ObservableGauge, field float64) func(_ context.Context, o metric.Observer) error {
