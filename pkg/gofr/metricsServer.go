@@ -9,8 +9,6 @@ import (
 	"gofr.dev/pkg/gofr/metrics"
 )
 
-const defaultMetricPort = "2121"
-
 type metricServer struct {
 	port int
 }
