@@ -105,12 +105,12 @@ func (a *App) Run() {
 
 	wg := sync.WaitGroup{}
 
-	// Start Metrics Server
-	// running metrics server before http and grpc
-	wg.Add(1)
-
 	// start the metrics server only when http or grpc is registered
 	if a.cmd == nil {
+		// Start Metrics Server
+		// running metrics server before http and grpc
+		wg.Add(1)
+
 		go func(m *metricServer) {
 			defer wg.Done()
 			m.Run(a.container)
