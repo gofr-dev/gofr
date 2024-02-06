@@ -30,6 +30,7 @@ type Logger interface {
 	Errorf(format string, args ...interface{})
 	Fatal(args ...interface{})
 	Fatalf(format string, args ...interface{})
+	changeLevel(level Level)
 }
 
 type logger struct {
@@ -40,7 +41,7 @@ type logger struct {
 }
 
 type logEntry struct {
-	Level   Level       `json:"Level"`
+	Level   Level       `json:"level"`
 	Time    time.Time   `json:"time"`
 	Message interface{} `json:"message"`
 }
@@ -143,7 +144,7 @@ func (l *logger) prettyPrint(e logEntry, out io.Writer) {
 	case middleware.RequestLog:
 		fmt.Fprintf(out, "\u001B[38;5;%dm%s\u001B[0m [%s] \u001B[38;5;8m%s \u001B[38;5;%dm%d\u001B[0m "+
 			"%8d\u001B[38;5;8mµs\u001B[0m %s %s \n", e.Level.color(), e.Level.String()[0:4],
-			e.Time.Format("15:04:05"), msg.ID, colorForStatusCode(msg.Response), msg.Response, msg.ResponseTime, msg.Method, msg.URI)
+			e.Time.Format("15:04:05"), msg.TraceID, colorForStatusCode(msg.Response), msg.Response, msg.ResponseTime, msg.Method, msg.URI)
 	case sql.Log:
 		fmt.Fprintf(out, "\u001B[38;5;%dm%s\u001B[0m [%s] \u001B[38;5;8m%-32s \u001B[38;5;24m%s\u001B[0m %8d\u001B[38;5;8mµs\u001B[0m %s\n",
 			e.Level.color(), e.Level.String()[0:4], e.Time.Format("15:04:05"), msg.Type, "SQL", msg.Duration, msg.Query)
@@ -220,4 +221,8 @@ func checkIfTerminal(w io.Writer) bool {
 	default:
 		return false
 	}
+}
+
+func (l *logger) changeLevel(level Level) {
+	l.level = level
 }
