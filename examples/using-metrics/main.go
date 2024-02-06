@@ -34,9 +34,9 @@ func main() {
 }
 
 func TransactionHandler(c *gofr.Context) (interface{}, error) {
-	// transaction logic
-
 	transactionStartTime := time.Now()
+
+	// transaction logic
 
 	c.MetricsManager.IncrementCounter(c, transactionSuccessful)
 
