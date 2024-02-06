@@ -11,14 +11,22 @@ import (
 // as any errors are already being logged from here. Otherwise, user would need to check the error everytime.
 
 type Manager interface {
+	// NewCounter registers a counter metrics. It can not be reduced.
 	NewCounter(name, desc string)
+	// NewUpDownCounter registers a UpDown Counter metrics which can be either be increased or decreased by any factor.
 	NewUpDownCounter(name, desc string)
+	// NewHistogram registers a histogram metrics with different buckets.
 	NewHistogram(name, desc string, buckets ...float64)
+	// NewGauge registers a new gauge metrics. It doesn't track the last value for the metrics.
 	NewGauge(name, desc string)
 
+	// IncrementCounter will increase the counter metrics specified by 1.
 	IncrementCounter(ctx context.Context, name string, labels ...string)
+	// DeltaUpDownCounter increases or decreases the last value with the value specified.
 	DeltaUpDownCounter(ctx context.Context, name string, value float64, labels ...string)
+	// RecordHistogram gets the value and increase the value in the respective buckets.
 	RecordHistogram(ctx context.Context, name string, value float64, labels ...string)
+	// SetGauge sets the value to the particular value.
 	SetGauge(name string, value float64)
 }
 
