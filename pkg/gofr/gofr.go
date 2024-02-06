@@ -120,6 +120,7 @@ func (a *App) Run() {
 
 		// Add Default routes
 		a.add(http.MethodGet, "/.well-known/health", healthHandler)
+		a.add(http.MethodGet, "/.well-known/alive", liveHandler)
 		a.add(http.MethodGet, "/favicon.ico", faviconHandler)
 		a.httpServer.router.PathPrefix("/").Handler(handler{
 			function:  catchAllHandler,
