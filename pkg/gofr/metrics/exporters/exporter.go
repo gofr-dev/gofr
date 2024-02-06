@@ -24,8 +24,7 @@ func Prometheus(appName, appVersion string) metric.Meter {
 	return meter
 }
 
-// TODO : OTLPStdOut and OTLPMetricHTTP are not being used but has to be metrics
-// has to be modified such that user can decide the exporter.
+// TODO : OTLPStdOut and OTLPMetricHTTP are not being used but has to be modified such that user can decide the exporter.
 
 // func OTLPStdOut(appName, appVersion string) metric.Meter {
 //	exporter, err := stdoutmetric.New()

@@ -1,9 +1,9 @@
 package main
 
 import (
-	"fmt"
-	"gofr.dev/pkg/gofr"
 	"time"
+
+	"gofr.dev/pkg/gofr"
 )
 
 // This example simulates the usage of custom metrics for transactions of an ecommerce store.
@@ -43,15 +43,15 @@ func TransactionHandler(c *gofr.Context) (interface{}, error) {
 	tranTime := time.Now().Sub(transactionStartTime).Microseconds()
 
 	c.MetricsManager.RecordHistogram(c, transactionTime, float64(tranTime))
-	c.MetricsManager.DeltaUpDownCounter(c, totalCreditDaySales, 1000)
+	c.MetricsManager.DeltaUpDownCounter(c, totalCreditDaySales, 1000, "sale_type", "transaction")
 	c.MetricsManager.SetGauge(productStock, 10)
 
-	return fmt.Sprintf("transaction successful"), nil
+	return "Transaction Successful", nil
 }
 
 func ReturnHandler(c *gofr.Context) (interface{}, error) {
 	// logic to create a sales return
-	c.MetricsManager.DeltaUpDownCounter(c, totalCreditDaySales, -1000)
+	c.MetricsManager.DeltaUpDownCounter(c, totalCreditDaySales, -1000, "sale_type", "return")
 
 	// Update the Gauge metric for product stock
 	c.MetricsManager.SetGauge(productStock, 50)

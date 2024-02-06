@@ -72,8 +72,12 @@ func New() *App {
 
 	app.grpcServer = newGRPCServer(app.container, port)
 
-	// Run metrics server
-	port, _ = strconv.Atoi(app.Config.GetOrDefault("METRICS_PORT", defaultMetricPort))
+	// Metrics Server
+	port, err = strconv.Atoi(app.Config.Get("METRICS_PORT"))
+	if err != nil || port <= 0 {
+		port = defaultMetricPort
+	}
+
 	app.metricServer = newMetricServer(port)
 
 	return app
@@ -101,7 +105,7 @@ func (a *App) Run() {
 
 	wg := sync.WaitGroup{}
 
-	// Run metrics server
+	// Start Metrics Server
 	// running metrics server before http and grpc
 	wg.Add(1)
 
