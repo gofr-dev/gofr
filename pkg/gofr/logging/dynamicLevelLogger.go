@@ -41,7 +41,7 @@ func (r *remoteLogger) UpdateLogLevel() {
 	remoteService := service.NewHTTPService(r.remoteURL, r.Logger)
 
 	for range ticker.C {
-		newLevel, err := fetchAndUpdateLogLevel(remoteService)
+		newLevel, err := fetchAndUpdateLogLevel(remoteService, r.currentLevel)
 		if err == nil {
 			r.changeLevel(newLevel)
 
@@ -53,13 +53,13 @@ func (r *remoteLogger) UpdateLogLevel() {
 	}
 }
 
-func fetchAndUpdateLogLevel(remoteService service.HTTP) (Level, error) {
+func fetchAndUpdateLogLevel(remoteService service.HTTP, currentLevel Level) (Level, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout) // Set timeout for 5 seconds
 	defer cancel()
 
 	resp, err := remoteService.Get(ctx, "", nil)
 	if err != nil {
-		return INFO, err
+		return currentLevel, err
 	}
 	defer resp.Body.Close()
 
@@ -72,12 +72,12 @@ func fetchAndUpdateLogLevel(remoteService service.HTTP) (Level, error) {
 
 	responseBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return INFO, err
+		return currentLevel, err
 	}
 
 	err = json.Unmarshal(responseBody, &response)
 	if err != nil {
-		return INFO, err
+		return currentLevel, err
 	}
 
 	if len(response.Data) > 0 {
@@ -85,5 +85,5 @@ func fetchAndUpdateLogLevel(remoteService service.HTTP) (Level, error) {
 		return newLevel, nil
 	}
 
-	return INFO, nil
+	return currentLevel, nil
 }
