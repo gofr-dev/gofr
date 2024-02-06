@@ -18,6 +18,8 @@ import (
 type Logger interface {
 	Debug(args ...interface{})
 	Debugf(format string, args ...interface{})
+	Log(args ...interface{})
+	Logf(format string, args ...interface{})
 	Info(args ...interface{})
 	Infof(format string, args ...interface{})
 	Notice(args ...interface{})
@@ -26,8 +28,6 @@ type Logger interface {
 	Warnf(format string, args ...interface{})
 	Error(args ...interface{})
 	Errorf(format string, args ...interface{})
-	Log(args ...interface{})
-	Logf(format string, args ...interface{})
 	Fatal(args ...interface{})
 	Fatalf(format string, args ...interface{})
 }
@@ -126,6 +126,8 @@ func (l *logger) Errorf(format string, args ...interface{}) {
 
 func (l *logger) Fatal(args ...interface{}) {
 	l.logf(FATAL, "", args...)
+
+	// exit status is 1 as it denotes failure as signified by Fatal log
 	os.Exit(1)
 }
 
