@@ -95,31 +95,31 @@ jobs:
 #          name: PKG-Coverage-Report
 #          path: profile.cov
 
-  parse_coverage:
-    name: Code Coverage
-    runs-on: ubuntu-latest
-    needs: [Example-Unit-Testing,PKG-Unit-Testing]
-    steps:
-      - name: Check out code into the Go module directory
-        uses: actions/checkout@v4
-
-      - name: Download Coverage Report
-        uses: actions/download-artifact@v3
-        with:
-          path: artifacts
-
-      - name: Merge Coverage Files
-        working-directory: artifacts
-        run: |
-          awk '!/^mode: / && FNR==1{print "mode: set"} {print}' ./Example-Test-Report/profile.cov > merged_profile.cov
-          tail -n +2 ./PKG-Coverage-Report/profile.cov >> merged_profile.cov
-
-      - name: Parse code-coverage value
-        working-directory: artifacts
-        run: |
-          codeCoverage=$(go tool cover -func=merged_profile.cov | grep total | awk '{print $3}')
-          codeCoverage=${codeCoverage%?}
-          echo "CODE_COVERAGE=$codeCoverage" >> $GITHUB_ENV
+#  parse_coverage:
+#    name: Code Coverage
+#    runs-on: ubuntu-latest
+#    needs: [Example-Unit-Testing,PKG-Unit-Testing]
+#    steps:
+#      - name: Check out code into the Go module directory
+#        uses: actions/checkout@v4
+#
+#      - name: Download Coverage Report
+#        uses: actions/download-artifact@v3
+#        with:
+#          path: artifacts
+#
+#      - name: Merge Coverage Files
+#        working-directory: artifacts
+#        run: |
+#          awk '!/^mode: / && FNR==1{print "mode: set"} {print}' ./Example-Test-Report/profile.cov > merged_profile.cov
+#          tail -n +2 ./PKG-Coverage-Report/profile.cov >> merged_profile.cov
+#
+#      - name: Parse code-coverage value
+#        working-directory: artifacts
+#        run: |
+#          codeCoverage=$(go tool cover -func=merged_profile.cov | grep total | awk '{print $3}')
+#          codeCoverage=${codeCoverage%?}
+#          echo "CODE_COVERAGE=$codeCoverage" >> $GITHUB_ENV
 
   #      - name: Check if code-coverage is greater than threshold
   #        run: |
