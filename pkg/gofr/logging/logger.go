@@ -34,7 +34,7 @@ type logger struct {
 }
 
 type logEntry struct {
-	Level   Level       `json:"Level"`
+	Level   Level       `json:"level"`
 	Time    time.Time   `json:"time"`
 	Message interface{} `json:"message"`
 }
