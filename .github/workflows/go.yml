@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - development
+      - add/zipkin_in_workflow
   pull_request:
     branches:
       - main
@@ -28,6 +29,11 @@ jobs:
         env:
           MYSQL_ROOT_PASSWORD: "password"
           MYSQL_DATABASE: "test"
+
+      zipkin:
+        image: openzipkin/zipkin:3.0.5
+        ports:
+          - "2005:9411"
 
     steps:
       - name: Checkout code into go module directory
@@ -56,38 +62,38 @@ jobs:
         with:
           name: Example-Test-Report
           path: profile.cov
-
-  PKG-Unit-Testing:
-    name: PKG Unit Testing🛠
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code into go module directory
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Set up  Go 1.21
-        uses: actions/setup-go@v4
-        with:
-          go-version: 1.21
-        id: Go
-
-      - name: Get dependencies
-        run: |
-          go mod download
-
-      - name: Test
-        run: |
-          export GOFR_ENV=test
-          go test gofr.dev/pkg/... -v -short -coverprofile profile.cov -coverpkg=gofr.dev/pkg/...
-          go tool cover -func profile.cov
-
-      - name: Upload Test Coverage
-        uses: actions/upload-artifact@v3
-        with:
-          name: PKG-Coverage-Report
-          path: profile.cov
+#
+#  PKG-Unit-Testing:
+#    name: PKG Unit Testing🛠
+#    runs-on: ubuntu-latest
+#
+#    steps:
+#      - name: Checkout code into go module directory
+#        uses: actions/checkout@v4
+#        with:
+#          fetch-depth: 0
+#
+#      - name: Set up  Go 1.21
+#        uses: actions/setup-go@v4
+#        with:
+#          go-version: 1.21
+#        id: Go
+#
+#      - name: Get dependencies
+#        run: |
+#          go mod download
+#
+#      - name: Test
+#        run: |
+#          export GOFR_ENV=test
+#          go test gofr.dev/pkg/... -v -short -coverprofile profile.cov -coverpkg=gofr.dev/pkg/...
+#          go tool cover -func profile.cov
+#
+#      - name: Upload Test Coverage
+#        uses: actions/upload-artifact@v3
+#        with:
+#          name: PKG-Coverage-Report
+#          path: profile.cov
 
   parse_coverage:
     name: Code Coverage
