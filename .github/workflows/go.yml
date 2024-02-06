@@ -5,7 +5,6 @@ on:
     branches:
       - main
       - development
-      - add/zipkin_in_workflow
   pull_request:
     branches:
       - main
@@ -31,7 +30,7 @@ jobs:
           MYSQL_DATABASE: "test"
 
       zipkin:
-        image: openzipkin/zipkin:3.0.5
+        image: openzipkin/zipkin:2
         ports:
           - "9411:9411"
 
@@ -62,7 +61,7 @@ jobs:
         with:
           name: Example-Test-Report
           path: profile.cov
-#
+
 #  PKG-Unit-Testing:
 #    name: PKG Unit Testing🛠
 #    runs-on: ubuntu-latest
@@ -94,7 +93,7 @@ jobs:
 #        with:
 #          name: PKG-Coverage-Report
 #          path: profile.cov
-
+#
 #  parse_coverage:
 #    name: Code Coverage
 #    runs-on: ubuntu-latest
@@ -120,13 +119,13 @@ jobs:
 #          codeCoverage=$(go tool cover -func=merged_profile.cov | grep total | awk '{print $3}')
 #          codeCoverage=${codeCoverage%?}
 #          echo "CODE_COVERAGE=$codeCoverage" >> $GITHUB_ENV
-
-  #      - name: Check if code-coverage is greater than threshold
-  #        run: |
-  #          codeCoverage=${{ env.CODE_COVERAGE }}
-  #          codeCoverage=${codeCoverage%??}
-  #          if [[ $codeCoverage -lt 92 ]]; then echo "code coverage cannot be less than 92%, currently its ${{ env.CODE_COVERAGE }}%" && exit 1; fi;
-
+#
+#        - name: Check if code-coverage is greater than threshold
+#          run: |
+#            codeCoverage=${{ env.CODE_COVERAGE }}
+#            codeCoverage=${codeCoverage%??}
+#            if [[ $codeCoverage -lt 92 ]]; then echo "code coverage cannot be less than 92%, currently its ${{ env.CODE_COVERAGE }}%" && exit 1; fi;
+#
 #  upload_coverage:
 #    name: Upload Coverage📊
 #    runs-on: ubuntu-latest
