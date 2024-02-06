@@ -37,7 +37,7 @@ type Logger interface {
 
 type metricsManager struct {
 	meter  metric.Meter
-	store  store
+	store  Store
 	logger Logger
 }
 

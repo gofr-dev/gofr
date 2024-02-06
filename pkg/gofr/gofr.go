@@ -197,7 +197,7 @@ func (a *App) add(method, pattern string, h Handler) {
 }
 
 func (a *App) Metrics() metrics.Manager {
-	return a.container.MetricsManager
+	return a.container.Metrics()
 }
 
 // SubCommand adds a sub-command to the CLI application.
