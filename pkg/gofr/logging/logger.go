@@ -28,6 +28,8 @@ type Logger interface {
 	Errorf(format string, args ...interface{})
 	Log(args ...interface{})
 	Logf(format string, args ...interface{})
+	Fatal(args ...interface{})
+	Fatalf(format string, args ...interface{})
 }
 
 type logger struct {
@@ -120,6 +122,16 @@ func (l *logger) Error(args ...interface{}) {
 
 func (l *logger) Errorf(format string, args ...interface{}) {
 	l.logf(ERROR, format, args...)
+}
+
+func (l *logger) Fatal(args ...interface{}) {
+	l.logf(FATAL, "", args...)
+	os.Exit(1)
+}
+
+func (l *logger) Fatalf(format string, args ...interface{}) {
+	l.logf(FATAL, format, args...)
+	os.Exit(1)
 }
 
 func (l *logger) prettyPrint(e logEntry, out io.Writer) {
