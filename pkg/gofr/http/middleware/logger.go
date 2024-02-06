@@ -22,7 +22,7 @@ func (w *StatusResponseWriter) WriteHeader(status int) {
 }
 
 type RequestLog struct {
-	ID           string `json:"id,omitempty"`
+	TraceID      string `json:"trace_id,omitempty"`
 	SpanID       string `json:"span_id,omitempty"`
 	StartTime    string `json:"start_time,omitempty"`
 	ResponseTime int64  `json:"response_time,omitempty"`
@@ -50,7 +50,7 @@ func Logging(logger logger) func(inner http.Handler) http.Handler {
 
 			defer func(res *StatusResponseWriter, req *http.Request) {
 				l := RequestLog{
-					ID:           reqID,
+					TraceID:      reqID,
 					SpanID:       spanID,
 					StartTime:    start.Format("2006-01-02T15:04:05.999999999-07:00"),
 					ResponseTime: time.Since(start).Nanoseconds() / 1000,
