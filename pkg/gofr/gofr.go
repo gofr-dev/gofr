@@ -10,6 +10,7 @@ import (
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
+	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/service"
 
 	"go.opentelemetry.io/otel"
@@ -195,6 +196,7 @@ func (a *App) initTracer() {
 	)
 	otel.SetTracerProvider(tp)
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
+	otel.SetErrorHandler(&otelErrorHandler{logger: a.container.Logger})
 
 	if tracerHost != "" {
 		a.container.Log("Exporting traces to zipkin.")
@@ -209,4 +211,12 @@ func (a *App) initTracer() {
 			a.container.Error(err)
 		}
 	}
+}
+
+type otelErrorHandler struct {
+	logger logging.Logger
+}
+
+func (o *otelErrorHandler) Handle(e error) {
+	o.logger.Error(e)
 }
