@@ -39,7 +39,7 @@ func NewContainer(conf config.Config) *Container {
 
 	c.MetricsManager = metrics.NewMetricManager(exporters.Prometheus(
 		conf.GetOrDefault("APP_NAME", "gofr-app"),
-		conf.GetOrDefault("APP_VERSION", "dev")))
+		conf.GetOrDefault("APP_VERSION", "dev")), c.Logger)
 
 	return c
 }

@@ -1,14 +1,7 @@
 package metrics
 
 import (
-	"errors"
-
 	"go.opentelemetry.io/otel/metric"
-)
-
-var (
-	errMetricDoesNotExist = errors.New("metrics with given name does not exists")
-	errMetricAlreadyExist = errors.New("metrics with given name already exists")
 )
 
 type store struct {
@@ -31,7 +24,7 @@ func newOtelStore() store {
 func (s store) getCounter(name string) (metric.Int64Counter, error) {
 	m, ok := s.counter[name]
 	if !ok {
-		return nil, errMetricDoesNotExist
+		return nil, metricNotRegistered{metricsName: name}
 	}
 
 	return m, nil
@@ -40,7 +33,7 @@ func (s store) getCounter(name string) (metric.Int64Counter, error) {
 func (s store) getUpDownCounter(name string) (metric.Float64UpDownCounter, error) {
 	m, ok := s.upDownCounter[name]
 	if !ok {
-		return nil, errMetricDoesNotExist
+		return nil, metricNotRegistered{metricsName: name}
 	}
 
 	return m, nil
@@ -49,7 +42,7 @@ func (s store) getUpDownCounter(name string) (metric.Float64UpDownCounter, error
 func (s store) getHistogram(name string) (metric.Float64Histogram, error) {
 	m, ok := s.histogram[name]
 	if !ok {
-		return nil, errMetricDoesNotExist
+		return nil, metricNotRegistered{metricsName: name}
 	}
 
 	return m, nil
@@ -58,7 +51,7 @@ func (s store) getHistogram(name string) (metric.Float64Histogram, error) {
 func (s store) getGauge(name string) (metric.Float64ObservableGauge, error) {
 	m, ok := s.gauge[name]
 	if !ok {
-		return nil, errMetricDoesNotExist
+		return nil, metricNotRegistered{metricsName: name}
 	}
 
 	return m, nil
@@ -72,7 +65,7 @@ func (s store) setCounter(name string, m metric.Int64Counter) error {
 		return nil
 	}
 
-	return errMetricAlreadyExist
+	return metricAlreadyRegistered{metricsName: name}
 }
 
 func (s store) setUpDownCounter(name string, m metric.Float64UpDownCounter) error {
@@ -83,7 +76,7 @@ func (s store) setUpDownCounter(name string, m metric.Float64UpDownCounter) erro
 		return nil
 	}
 
-	return errMetricAlreadyExist
+	return metricAlreadyRegistered{metricsName: name}
 }
 
 func (s store) setHistogram(name string, m metric.Float64Histogram) error {
@@ -94,7 +87,7 @@ func (s store) setHistogram(name string, m metric.Float64Histogram) error {
 		return nil
 	}
 
-	return errMetricAlreadyExist
+	return metricAlreadyRegistered{metricsName: name}
 }
 
 func (s store) setGauge(name string, m metric.Float64ObservableGauge) error {
@@ -105,5 +98,5 @@ func (s store) setGauge(name string, m metric.Float64ObservableGauge) error {
 		return nil
 	}
 
-	return errMetricAlreadyExist
+	return metricAlreadyRegistered{metricsName: name}
 }
