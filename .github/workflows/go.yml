@@ -32,7 +32,7 @@ jobs:
       zipkin:
         image: openzipkin/zipkin:2
         ports:
-          - "9411:9411"
+          - 2005:9411
 
     steps:
       - name: Checkout code into go module directory
