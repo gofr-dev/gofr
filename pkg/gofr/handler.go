@@ -36,7 +36,7 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func healthHandler(c *Context) (interface{}, error) {
-	return c.Health(), nil
+	return c.Health(c), nil
 }
 
 func liveHandler(*Context) (interface{}, error) {

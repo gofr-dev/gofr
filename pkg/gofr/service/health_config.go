@@ -1,5 +1,7 @@
 package service
 
+import "context"
+
 type HealthConfig struct {
 	HealthEndpoint string
 }
@@ -16,6 +18,6 @@ type customHealthService struct {
 	HTTP
 }
 
-func (c *customHealthService) HealthCheck() *Health {
-	return c.HTTP.getHealthResponseForEndpoint(c.healthEndpoint)
+func (c *customHealthService) HealthCheck(ctx context.Context) *Health {
+	return c.HTTP.getHealthResponseForEndpoint(ctx, c.healthEndpoint)
 }
