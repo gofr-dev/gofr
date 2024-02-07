@@ -29,10 +29,10 @@ jobs:
           MYSQL_ROOT_PASSWORD: "password"
           MYSQL_DATABASE: "test"
 
-      zipkin:
-        image: openzipkin/zipkin:2
-        ports:
-          - 2005:9411
+#      zipkin:
+#        image: openzipkin/zipkin:2
+#        ports:
+#          - 2005:9411
 
     steps:
       - name: Checkout code into go module directory
@@ -50,11 +50,17 @@ jobs:
         run: |
           go mod download
 
+      - name: Start Zipkin
+        run: docker run -d -p 2005:9411 openzipkin/zipkin:latest
+
       - name: Test
         run: |
           export GOFR_ENV=test
           go test gofr.dev/examples/... -v -short -coverprofile profile.cov -coverpkg=gofr.dev/examples/...
           go tool cover -func profile.cov
+
+      - name: Check Zipkin Health
+        run: curl -f http://localhost:9411/api/v2/services
 
       - name: Upload Test Coverage
         uses: actions/upload-artifact@v3
