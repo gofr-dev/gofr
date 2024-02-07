@@ -181,7 +181,7 @@ func (m *metricsManager) getAttributes(labels ...string) []attribute.KeyValue {
 	var attributes []attribute.KeyValue
 
 	if labels != nil {
-		for i := 0; i < len(labels); i += 2 {
+		for i := 0; i < len(labels)-1; i += 2 {
 			attributes = append(attributes, attribute.String(labels[i], labels[i+1]))
 		}
 	}
