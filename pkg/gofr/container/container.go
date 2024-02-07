@@ -19,6 +19,9 @@ import (
 type Container struct {
 	logging.Logger
 
+	appName    string
+	appVersion string
+
 	Services       map[string]service.HTTP
 	metricsManager metrics.Manager
 
@@ -28,7 +31,9 @@ type Container struct {
 
 func NewContainer(conf config.Config) *Container {
 	c := &Container{
-		Logger: logging.NewRemoteLogger(logging.GetLevelFromString(conf.Get("LOG_LEVEL")), conf.Get("REMOTE_LOG_URL")),
+		Logger:     logging.NewRemoteLogger(logging.GetLevelFromString(conf.Get("LOG_LEVEL")), conf.Get("REMOTE_LOG_URL")),
+		appName:    conf.GetOrDefault("APP_NAME", "gofr-app"),
+		appVersion: conf.GetOrDefault("APP_VERSION", "dev"),
 	}
 
 	c.Debug("Container is being created")
@@ -37,9 +42,7 @@ func NewContainer(conf config.Config) *Container {
 
 	c.DB = sql.NewSQL(conf, c.Logger)
 
-	c.metricsManager = metrics.NewMetricManager(exporters.Prometheus(
-		conf.GetOrDefault("APP_NAME", "gofr-app"),
-		conf.GetOrDefault("APP_VERSION", "dev")), c.Logger)
+	c.metricsManager = metrics.NewMetricManager(exporters.Prometheus(c.appName, c.appVersion), c.Logger)
 
 	return c
 }
@@ -52,4 +55,12 @@ func (c *Container) GetHTTPService(serviceName string) service.HTTP {
 
 func (c *Container) Metrics() metrics.Manager {
 	return c.metricsManager
+}
+
+func (c *Container) AppName() string {
+	return c.appName
+}
+
+func (c *Container) AppVersion() string {
+	return c.appVersion
 }
