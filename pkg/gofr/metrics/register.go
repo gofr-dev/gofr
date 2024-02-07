@@ -33,6 +33,8 @@ type Manager interface {
 type Logger interface {
 	Error(args ...interface{})
 	Errorf(format string, args ...interface{})
+	Warn(args ...interface{})
+	Warnf(format string, args ...interface{})
 }
 
 type metricsManager struct {
@@ -117,7 +119,7 @@ func (m *metricsManager) IncrementCounter(ctx context.Context, name string, labe
 		return
 	}
 
-	counter.Add(ctx, 1, metric.WithAttributes(getAttributes(labels...)...))
+	counter.Add(ctx, 1, metric.WithAttributes(m.getAttributes(labels...)...))
 }
 
 func (m *metricsManager) DeltaUpDownCounter(ctx context.Context, name string, value float64, labels ...string) {
@@ -128,7 +130,7 @@ func (m *metricsManager) DeltaUpDownCounter(ctx context.Context, name string, va
 		return
 	}
 
-	upDownCounter.Add(ctx, value, metric.WithAttributes(getAttributes(labels...)...))
+	upDownCounter.Add(ctx, value, metric.WithAttributes(m.getAttributes(labels...)...))
 }
 
 func (m *metricsManager) RecordHistogram(ctx context.Context, name string, value float64, labels ...string) {
@@ -139,7 +141,7 @@ func (m *metricsManager) RecordHistogram(ctx context.Context, name string, value
 		return
 	}
 
-	histogram.Record(ctx, value, metric.WithAttributes(getAttributes(labels...)...))
+	histogram.Record(ctx, value, metric.WithAttributes(m.getAttributes(labels...)...))
 }
 
 func (m *metricsManager) SetGauge(name string, value float64) {
@@ -164,10 +166,17 @@ func callbackFunc(name metric.Float64ObservableGauge, field float64) func(_ cont
 	}
 }
 
-func getAttributes(labels ...string) []attribute.KeyValue {
-	// TODO - add checks for labelsCount and add warn logs:
-	// 1. should always be even as it contains pairs of label key and value.
-	// 2. should not exceed 20 to control cardinality
+func (m *metricsManager) getAttributes(labels ...string) []attribute.KeyValue {
+	labelsCount := len(labels)
+	if labelsCount%2 != 0 {
+		m.logger.Warnf("last value neglected! As invalid label-value pairs provided: %v", labels)
+	}
+
+	cardinalityLimit := 20
+	if labelsCount > cardinalityLimit {
+		m.logger.Warnf("label-value pair count: %v, exceeds the limit of 20! May cause high cardinality", labelsCount)
+	}
+
 	var attributes []attribute.KeyValue
 
 	if labels != nil {
