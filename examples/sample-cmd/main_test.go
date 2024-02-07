@@ -11,12 +11,12 @@ import (
 )
 
 // TestCMDRunWithNoArg checks that if no subcommand is found then error comes on stderr.
-//func TestCMDRunWithNoArg(t *testing.T) {
-//	expErr := "No Command Found!"
-//	output := testutil.StderrOutputForFunc(main)
-//
-//	assert.Equal(t, output, expErr, "TEST Failed.\n")
-//}
+func TestCMDRunWithNoArg(t *testing.T) {
+	expErr := "No Command Found!"
+	output := testutil.StderrOutputForFunc(main)
+
+	assert.Equal(t, output, expErr, "TEST Failed.\n")
+}
 
 func TestCMDRunWithProperArg(t *testing.T) {
 	expResp := "Hello World!"
