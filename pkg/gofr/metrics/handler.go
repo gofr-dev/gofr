@@ -12,12 +12,12 @@ func GetHandler(m Manager) http.Handler {
 	var router = mux.NewRouter()
 
 	// Prometheus
-	router.NewRoute().Methods(http.MethodGet).Path("/metrics").Handler(systemMetrics(m, promhttp.Handler()))
+	router.NewRoute().Methods(http.MethodGet).Path("/metrics").Handler(systemMetricsHandler(m, promhttp.Handler()))
 
 	return router
 }
 
-func systemMetrics(m Manager, next http.Handler) http.Handler {
+func systemMetricsHandler(m Manager, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var stats runtime.MemStats
 
