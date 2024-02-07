@@ -22,6 +22,9 @@ func newHTTPServer(c *container.Container, port int) *httpServer {
 }
 
 func (s *httpServer) Run(c *container.Container) {
+	histogramBuckets := []float64{.001, .003, .005, .01, .02, .03, .05, .1, .2, .3, .5, .75, 1, 2, 3, 5, 10, 30}
+	c.Metrics().NewHistogram("app_http_response", "Histogram of HTTP response times in seconds", histogramBuckets...)
+
 	var srv *http.Server
 
 	c.Logf("Starting server on port: %d", s.port)
