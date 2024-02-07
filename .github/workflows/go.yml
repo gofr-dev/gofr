@@ -59,9 +59,6 @@ jobs:
           go test gofr.dev/examples/... -v -short -coverprofile profile.cov -coverpkg=gofr.dev/examples/...
           go tool cover -func profile.cov
 
-      - name: Check Zipkin Health
-        run: curl -f http://localhost:9411/api/v2/services
-
       - name: Upload Test Coverage
         uses: actions/upload-artifact@v3
         with:
