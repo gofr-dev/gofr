@@ -72,7 +72,7 @@ func (s sqlDB) Migrate(keys []int64, migrationsMap map[int64]Migration, containe
 			return
 		}
 
-		container.Logger.Infof("Migration [%v] ran successfully", version)
+		container.Logger.Infof("MIGRATION [%v] ran successfully", version)
 	}
 
 }
