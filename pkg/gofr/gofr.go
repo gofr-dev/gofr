@@ -19,6 +19,7 @@ import (
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
+	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/metrics"
 	"gofr.dev/pkg/gofr/service"
 )
