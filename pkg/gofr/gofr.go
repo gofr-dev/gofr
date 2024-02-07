@@ -2,6 +2,7 @@ package gofr
 
 import (
 	"fmt"
+	"gofr.dev/pkg/gofr/migrations"
 
 	"net/http"
 	"os"
@@ -206,6 +207,11 @@ func (a *App) Metrics() metrics.Manager {
 // Can be used to create commands like "kubectl get" or "kubectl get ingress".
 func (a *App) SubCommand(pattern string, handler Handler) {
 	a.cmd.addRoute(pattern, handler)
+}
+
+func (a *App) Migrate(migrationsMap map[int64]migrations.Migration, dialect migrations.TransactionDB) {
+	migrations.Migrate(migrationsMap, dialect, a.container)
+
 }
 
 func (a *App) initTracer() {

@@ -4,13 +4,14 @@ import (
 	"fmt"
 	"gofr.dev/examples/using-migrations/migrations"
 	"gofr.dev/pkg/gofr"
+	migrate "gofr.dev/pkg/gofr/migrations"
 )
 
 func main() {
 	// Create a new application
 	a := gofr.New()
 
-	a.Migrate(db, migrations.All())
+	a.Migrate(migrations.All(), migrate.SqlDB)
 
 	// Add all the routes
 	a.GET("/hello", HelloHandler)
