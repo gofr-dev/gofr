@@ -209,9 +209,8 @@ func (a *App) SubCommand(pattern string, handler Handler) {
 	a.cmd.addRoute(pattern, handler)
 }
 
-func (a *App) Migrate(migrationsMap map[int64]migrations.Migration, dialect migrations.TransactionDB) {
+func (a *App) Migrate(migrationsMap map[int64]migrations.Migration, dialect migrations.Migrator) {
 	migrations.Migrate(migrationsMap, dialect, a.container)
-
 }
 
 func (a *App) initTracer() {
