@@ -43,7 +43,7 @@ func TransactionHandler(c *gofr.Context) (interface{}, error) {
 	tranTime := time.Now().Sub(transactionStartTime).Microseconds()
 
 	c.Metrics().RecordHistogram(c, transactionTime, float64(tranTime))
-	c.Metrics().DeltaUpDownCounter(c, totalCreditDaySales, 1000, "sale_type", "transaction")
+	c.Metrics().DeltaUpDownCounter(c, totalCreditDaySales, 1000, "sale_type", "credit")
 	c.Metrics().SetGauge(productStock, 10)
 
 	return "Transaction Successful", nil
@@ -51,7 +51,7 @@ func TransactionHandler(c *gofr.Context) (interface{}, error) {
 
 func ReturnHandler(c *gofr.Context) (interface{}, error) {
 	// logic to create a sales return
-	c.Metrics().DeltaUpDownCounter(c, totalCreditDaySales, -1000, "sale_type", "return")
+	c.Metrics().DeltaUpDownCounter(c, totalCreditDaySales, -1000, "sale_type", "credit_return")
 
 	// Update the Gauge metric for product stock
 	c.Metrics().SetGauge(productStock, 50)
