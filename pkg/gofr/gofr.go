@@ -218,5 +218,5 @@ type otelErrorHandler struct {
 }
 
 func (o *otelErrorHandler) Handle(e error) {
-	o.logger.Error(e)
+	o.logger.Error(e.Error())
 }
