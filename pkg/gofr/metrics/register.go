@@ -51,12 +51,10 @@ func NewMetricManager(meter metric.Meter, logger Logger) Manager {
 // message is logged using the provided logger.
 //
 // Usage:
-//   manager.NewCounter("requests_total", "Total number of requests")
+// m.NewCounter("requests_total", "Total number of requests")
 //
 // Example:
-//   Once registered, you can use the counter to track cumulative values. For instance:
-//   manager.IncrementCounter(ctx, "requests_total") // Increment total requests by 1
-
+// m.IncrementCounter(ctx, "requests_total") // increments total counter by 1.
 func (m *metricsManager) NewCounter(name, desc string) {
 	counter, err := m.meter.Int64Counter(name, metric.WithDescription(desc))
 	if err != nil {
@@ -79,13 +77,13 @@ func (m *metricsManager) NewCounter(name, desc string) {
 //
 // Usage:
 //
-//	manager.NewUpDownCounter("active_users", "Number of active users")
+// m.NewUpDownCounter("active_users", "Number of active users")
 //
 // Example:
 //
-//	Once registered, you can use the UpDown counter to track changes in values. For instance:
-//	manager.DeltaUpDownCounter(ctx, "active_users", 10) // Increase active users by 10
-//	manager.DeltaUpDownCounter(ctx, "active_users", -10) // Decrease active users by 10
+// Once registered, you can use the UpDown counter to track changes in values. For instance:
+// m.DeltaUpDownCounter(ctx, "active_users", 10) // Increase active users by 10.
+// m.DeltaUpDownCounter(ctx, "active_users", -10) // Decrease active users by 10.
 func (m *metricsManager) NewUpDownCounter(name, desc string) {
 	upDownCounter, err := m.meter.Float64UpDownCounter(name, metric.WithDescription(desc))
 	if err != nil {
@@ -122,7 +120,7 @@ func (m *metricsManager) NewUpDownCounter(name, desc string) {
 // Example:
 //
 // Once registered, you can record values to the histogram
-// m.RecordHistogram(ctx, "response_times", 15) // Record a response time of 15ms
+// m.RecordHistogram(ctx, "response_times", 15) // Record a response time of 15ms.
 func (m *metricsManager) NewHistogram(name, desc string, buckets ...float64) {
 	histogram, err := m.meter.Float64Histogram(name, metric.WithDescription(desc),
 		metric.WithExplicitBucketBoundaries(buckets...))
@@ -146,12 +144,12 @@ func (m *metricsManager) NewHistogram(name, desc string, buckets ...float64) {
 //
 // Usage:
 //
-//	manager.NewGauge("memory_usage", "Current memory usage in bytes")
+// m.NewGauge("memory_usage", "Current memory usage in bytes")
 //
 // Example:
 //
-//	Once registered, you can use the gauge to track instantaneous values. For instance:
-//	manager.SetGauge("memory_usage", 1024*1024*100) // Set memory usage to 100 MB
+// Once registered, you can use the gauge to track instantaneous values. For instance:
+// m.SetGauge("memory_usage", 1024*1024*100) // Set memory usage to 100 MB.
 func (m *metricsManager) NewGauge(name, desc string) {
 	gauge, err := m.meter.Float64ObservableGauge(name, metric.WithDescription(desc))
 	if err != nil {
@@ -170,11 +168,11 @@ func (m *metricsManager) NewGauge(name, desc string) {
 //
 // Usage:
 //
-//		// Increment a counter metric without labels
-//		m.IncrementCounter(ctx, "example_counter")
+// Increment a counter metric without labels
+// m.IncrementCounter(ctx, "example_counter")
 //
-//		// Increment a counter metric with labels
-//	  m.IncrementCounter(ctx, "example_counter_with_labels", "label1", "value1", "label2", "value2")
+// Increment a counter metric with labels
+// m.IncrementCounter(ctx, "example_counter_with_labels", "label1", "value1", "label2", "value2")
 //
 // The IncrementCounter method is used to increase the specified counter metric by 1. If the counter metric
 // does not exist, an error is logged. Optionally, you can provide labels to associate additional information
@@ -196,11 +194,11 @@ func (m *metricsManager) IncrementCounter(ctx context.Context, name string, labe
 //
 // Usage:
 //
-//	// Increase the number of active users by 1.5 without any additional labels
-//	manager.DeltaUpDownCounter(ctx, "active_users", 1.5)
+// Increase the number of active users by 1.5 without any additional labels
+// m.DeltaUpDownCounter(ctx, "active_users", 1.5)
 //
-//	// Increase the number of successful logins by 1.5 with labels.
-//	manager.DeltaUpDownCounter(ctx, "successful_logins", 1.5, "label1", "value1", "label2", "value2")
+// Increase the number of successful logins by 1.5 with labels.
+// m.DeltaUpDownCounter(ctx, "successful_logins", 1.5, "label1", "value1", "label2", "value2")
 //
 // The DeltaUpDownCounter method is used to increase or decrease the last value of the specified UpDown counter metric
 // by the given value. For example, you might use this method to track changes in the number of active users or
@@ -221,11 +219,10 @@ func (m *metricsManager) DeltaUpDownCounter(ctx context.Context, name string, va
 //
 // Usage:
 //
-//	// Record the latency of an API request without any additional labels
-//	manager.RecordHistogram(ctx, "api_request_latency", 25.5)
+// m.RecordHistogram(ctx, "api_request_latency", 25.5) // Record the latency of an API request without any  labels.
 //
-//	// Record the latency of an API request with labels
-//	manager.RecordHistogram(ctx, "api_request_latency", 25.5, "label1", "value1", "label2", "value2")
+// m.RecordHistogram(ctx, "api_request_latency", 25.5, "label1", "value1", "label2", "value2") // Record the latency of
+// an API request with labels.
 func (m *metricsManager) RecordHistogram(ctx context.Context, name string, value float64, labels ...string) {
 	histogram, err := m.store.getHistogram(name)
 	if err != nil {
@@ -240,6 +237,9 @@ func (m *metricsManager) RecordHistogram(ctx context.Context, name string, value
 // SetGauge gets the value and sets the metric to the specified value.
 // Unlike counters, gauges do not track the last value for the metric. This method allows you to
 // directly set the value of the gauge to the specified value.
+//
+// Usage:
+// manager.SetGauge("memory_usage", 1024*1024*100) // Set memory usage to 100 MB
 //
 // If the gauge metric does not exist,  an error message is logged using the provided logger.
 // If an error occurs during the setting  process, such as if the metric with the same name does not exist
