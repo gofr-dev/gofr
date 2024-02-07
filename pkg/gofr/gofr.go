@@ -204,11 +204,13 @@ func (a *App) Metrics() metrics.Manager {
 	return a.container.Metrics()
 }
 
+// Developer Note: Registering only system metrics here, and other metrics will be registered at their respective initialisation.
+// Because if all metrics are registered at a single place then we would be registering all the metrics irrespective of the usage.
 func (a *App) registerSystemMetrics() {
 	a.Metrics().NewGauge("app_go_routines", "Gauge of Go routines running.")
 	a.Metrics().NewGauge("app_sys_memory_alloc", "Gauge of Heap allocations.")
 	a.Metrics().NewGauge("app_sys_total_alloc", "Gauge of cumulative bytes allocated for heap objects.")
-	a.Metrics().NewGauge("app_go_numGC", "Gauge of completed GC cycles.")
+	a.Metrics().NewGauge("app_go_numGC", "Gauge of completed Garbage Collector cycles.")
 	a.Metrics().NewGauge("app_go_sys", "Gauge of total bytes of memory.")
 }
 
