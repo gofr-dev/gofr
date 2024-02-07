@@ -78,7 +78,7 @@ func NewHTTPService(serviceAddress string, logger Logger, options ...Options) HT
 
 	// if options are given, then add them to the httpService struct
 	for _, o := range options {
-		svc = o.addOption(h)
+		svc = o.addOption(svc)
 	}
 
 	return svc

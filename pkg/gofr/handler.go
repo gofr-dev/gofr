@@ -39,6 +39,10 @@ func healthHandler(c *Context) (interface{}, error) {
 	return c.Health(), nil
 }
 
+func liveHandler(*Context) (interface{}, error) {
+	return "UP", nil
+}
+
 func faviconHandler(*Context) (interface{}, error) {
 	data, err := static.Files.ReadFile("favicon.ico")
 

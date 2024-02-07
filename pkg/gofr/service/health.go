@@ -16,7 +16,7 @@ type Health struct {
 }
 
 func (h *httpService) HealthCheck() *Health {
-	return h.getHealthResponseForEndpoint(".well-known/health")
+	return h.getHealthResponseForEndpoint(".well-known/alive")
 }
 
 func (h *httpService) getHealthResponseForEndpoint(endpoint string) *Health {
