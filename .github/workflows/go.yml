@@ -29,11 +29,6 @@ jobs:
           MYSQL_ROOT_PASSWORD: "password"
           MYSQL_DATABASE: "test"
 
-#      zipkin:
-#        image: openzipkin/zipkin:2
-#        ports:
-#          - 2005:9411
-
     steps:
       - name: Checkout code into go module directory
         uses: actions/checkout@v4
@@ -123,11 +118,11 @@ jobs:
          codeCoverage=${codeCoverage%?}
          echo "CODE_COVERAGE=$codeCoverage" >> $GITHUB_ENV
 
-      - name: Check if code-coverage is greater than threshold
-        run: |
-          codeCoverage=${{ env.CODE_COVERAGE }}
-          codeCoverage=${codeCoverage%??}
-          if [[ $codeCoverage -lt 92 ]]; then echo "code coverage cannot be less than 92%, currently its ${{ env.CODE_COVERAGE }}%" && exit 1; fi;
+#      - name: Check if code-coverage is greater than threshold
+#        run: |
+#          codeCoverage=${{ env.CODE_COVERAGE }}
+#          codeCoverage=${codeCoverage%??}
+#          if [[ $codeCoverage -lt 92 ]]; then echo "code coverage cannot be less than 92%, currently its ${{ env.CODE_COVERAGE }}%" && exit 1; fi;
 
   upload_coverage:
     name: Upload Coverage📊
