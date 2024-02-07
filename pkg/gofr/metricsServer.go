@@ -20,13 +20,15 @@ func newMetricServer(port int) *metricServer {
 func (m *metricServer) Run(c *container.Container) {
 	var srv *http.Server
 
-	c.Logf("Starting metrics server on port: %d", m.port)
+	if m != nil {
+		c.Logf("Starting metrics server on port: %d", m.port)
 
-	srv = &http.Server{
-		Addr:              fmt.Sprintf(":%d", m.port),
-		Handler:           metrics.GetHandler(),
-		ReadHeaderTimeout: 5 * time.Second,
+		srv = &http.Server{
+			Addr:              fmt.Sprintf(":%d", m.port),
+			Handler:           metrics.GetHandler(),
+			ReadHeaderTimeout: 5 * time.Second,
+		}
+
+		c.Error(srv.ListenAndServe())
 	}
-
-	c.Error(srv.ListenAndServe())
 }
