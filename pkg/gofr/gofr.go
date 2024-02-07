@@ -81,6 +81,8 @@ func New() *App {
 
 	app.metricServer = newMetricServer(port)
 
+	app.registerSystemMetrics()
+
 	return app
 }
 
@@ -200,6 +202,14 @@ func (a *App) add(method, pattern string, h Handler) {
 
 func (a *App) Metrics() metrics.Manager {
 	return a.container.Metrics()
+}
+
+func (a *App) registerSystemMetrics() {
+	a.Metrics().NewGauge("app_go_routines", "Gauge of Go routines running.")
+	a.Metrics().NewGauge("app_sys_memory_alloc", "Gauge of Heap allocations.")
+	a.Metrics().NewGauge("app_sys_total_alloc", "Gauge of cumulative bytes allocated for heap objects.")
+	a.Metrics().NewGauge("app_go_numGC", "Gauge of completed GC cycles.")
+	a.Metrics().NewGauge("app_go_sys", "Gauge of total bytes of memory.")
 }
 
 // SubCommand adds a sub-command to the CLI application.
