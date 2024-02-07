@@ -27,8 +27,8 @@ type HTTP interface {
 	httpClient
 
 	// HealthCheck to get the service health and report it to the current application
-	HealthCheck() *Health
-	getHealthResponseForEndpoint(endpoint string) *Health
+	HealthCheck(ctx context.Context) *Health
+	getHealthResponseForEndpoint(ctx context.Context, endpoint string) *Health
 }
 
 type httpClient interface {
@@ -78,7 +78,7 @@ func NewHTTPService(serviceAddress string, logger Logger, options ...Options) HT
 
 	// if options are given, then add them to the httpService struct
 	for _, o := range options {
-		svc = o.addOption(h)
+		svc = o.addOption(svc)
 	}
 
 	return svc

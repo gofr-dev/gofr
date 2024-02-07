@@ -15,16 +15,16 @@ type Health struct {
 	Details map[string]interface{} `json:"details"`
 }
 
-func (h *httpService) HealthCheck() *Health {
-	return h.getHealthResponseForEndpoint(".well-known/health")
+func (h *httpService) HealthCheck(ctx context.Context) *Health {
+	return h.getHealthResponseForEndpoint(ctx, ".well-known/alive")
 }
 
-func (h *httpService) getHealthResponseForEndpoint(endpoint string) *Health {
+func (h *httpService) getHealthResponseForEndpoint(ctx context.Context, endpoint string) *Health {
 	var healthResponse = Health{
 		Details: make(map[string]interface{}),
 	}
 
-	resp, err := h.Get(context.TODO(), endpoint, nil)
+	resp, err := h.Get(ctx, endpoint, nil)
 
 	if err != nil || resp == nil {
 		healthResponse.Status = serviceDown

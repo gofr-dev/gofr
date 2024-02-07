@@ -65,7 +65,7 @@ func (cb *CircuitBreaker) executeWithCircuitBreaker(ctx context.Context, f func(
 	if cb.state == OpenState {
 		if time.Since(cb.lastChecked) > cb.timeout {
 			// Check health before potentially closing the circuit
-			if cb.healthCheck() {
+			if cb.healthCheck(ctx) {
 				cb.resetCircuit()
 				return nil, nil
 			}
@@ -99,8 +99,8 @@ func (cb *CircuitBreaker) isOpen() bool {
 }
 
 // healthCheck performs the health check for the circuit breaker.
-func (cb *CircuitBreaker) healthCheck() bool {
-	resp := cb.HealthCheck()
+func (cb *CircuitBreaker) healthCheck(ctx context.Context) bool {
+	resp := cb.HealthCheck(ctx)
 
 	return resp.Status == serviceUp
 }
@@ -112,7 +112,7 @@ func (cb *CircuitBreaker) startHealthChecks() {
 	for range ticker.C {
 		if cb.isOpen() {
 			go func() {
-				if cb.healthCheck() {
+				if cb.healthCheck(context.TODO()) {
 					cb.resetCircuit()
 				}
 			}()
@@ -150,7 +150,7 @@ func (cb *CircuitBreakerConfig) addOption(h HTTP) HTTP {
 }
 
 func (cb *CircuitBreaker) tryCircuitRecovery() bool {
-	if time.Since(cb.lastChecked) > cb.timeout && cb.healthCheck() {
+	if time.Since(cb.lastChecked) > cb.timeout && cb.healthCheck(context.TODO()) {
 		cb.resetCircuit()
 		return true
 	}

@@ -8,10 +8,6 @@ import (
 	"strconv"
 	"sync"
 
-	"gofr.dev/pkg/gofr/config"
-	"gofr.dev/pkg/gofr/container"
-	"gofr.dev/pkg/gofr/service"
-
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/zipkin"
 	"go.opentelemetry.io/otel/propagation"
@@ -20,6 +16,12 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
 
 	"google.golang.org/grpc"
+
+	"gofr.dev/pkg/gofr/config"
+	"gofr.dev/pkg/gofr/container"
+	"gofr.dev/pkg/gofr/logging"
+	"gofr.dev/pkg/gofr/metrics"
+	"gofr.dev/pkg/gofr/service"
 )
 
 // App is the main application in the gofr framework.
@@ -27,8 +29,9 @@ type App struct {
 	// Config can be used by applications to fetch custom configurations from environment or file.
 	Config config.Config // If we directly embed, unnecessary confusion between app.Get and app.GET will happen.
 
-	grpcServer *grpcServer
-	httpServer *httpServer
+	grpcServer   *grpcServer
+	httpServer   *httpServer
+	metricServer *metricServer
 
 	cmd *cmd
 
@@ -70,6 +73,14 @@ func New() *App {
 
 	app.grpcServer = newGRPCServer(app.container, port)
 
+	// Metrics Server
+	port, err = strconv.Atoi(app.Config.Get("METRICS_PORT"))
+	if err != nil || port <= 0 {
+		port = defaultMetricPort
+	}
+
+	app.metricServer = newMetricServer(port)
+
 	return app
 }
 
@@ -95,12 +106,22 @@ func (a *App) Run() {
 
 	wg := sync.WaitGroup{}
 
+	// Start Metrics Server
+	// running metrics server before http and grpc
+	wg.Add(1)
+
+	go func(m *metricServer) {
+		defer wg.Done()
+		m.Run(a.container)
+	}(a.metricServer)
+
 	// Start HTTP Server
 	if a.httpRegistered {
 		wg.Add(1)
 
 		// Add Default routes
 		a.add(http.MethodGet, "/.well-known/health", healthHandler)
+		a.add(http.MethodGet, "/.well-known/alive", liveHandler)
 		a.add(http.MethodGet, "/favicon.ico", faviconHandler)
 		a.httpServer.router.PathPrefix("/").Handler(handler{
 			function:  catchAllHandler,
@@ -177,6 +198,10 @@ func (a *App) add(method, pattern string, h Handler) {
 	})
 }
 
+func (a *App) Metrics() metrics.Manager {
+	return a.container.Metrics()
+}
+
 // SubCommand adds a sub-command to the CLI application.
 // Can be used to create commands like "kubectl get" or "kubectl get ingress".
 func (a *App) SubCommand(pattern string, handler Handler) {
@@ -195,6 +220,7 @@ func (a *App) initTracer() {
 	)
 	otel.SetTracerProvider(tp)
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
+	otel.SetErrorHandler(&otelErrorHandler{logger: a.container.Logger})
 
 	if tracerHost != "" {
 		a.container.Log("Exporting traces to zipkin.")
@@ -209,4 +235,12 @@ func (a *App) initTracer() {
 			a.container.Error(err)
 		}
 	}
+}
+
+type otelErrorHandler struct {
+	logger logging.Logger
+}
+
+func (o *otelErrorHandler) Handle(e error) {
+	o.logger.Error(e.Error())
 }
