@@ -166,6 +166,7 @@ func callbackFunc(name metric.Float64ObservableGauge, field float64) func(_ cont
 	}
 }
 
+// getAttributes validates the given labels and convert them to corresponding otel attributes.
 func (m *metricsManager) getAttributes(labels ...string) []attribute.KeyValue {
 	labelsCount := len(labels)
 	if labelsCount%2 != 0 {
