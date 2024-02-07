@@ -45,6 +45,9 @@ jobs:
         run: |
           go mod download
 
+      - name: Start Zipkin
+        run: docker run -d -p 2005:9411 openzipkin/zipkin:latest
+
       - name: Test
         run: |
           export GOFR_ENV=test
@@ -115,11 +118,11 @@ jobs:
           codeCoverage=${codeCoverage%?}
           echo "CODE_COVERAGE=$codeCoverage" >> $GITHUB_ENV
 
-  #      - name: Check if code-coverage is greater than threshold
-  #        run: |
-  #          codeCoverage=${{ env.CODE_COVERAGE }}
-  #          codeCoverage=${codeCoverage%??}
-  #          if [[ $codeCoverage -lt 92 ]]; then echo "code coverage cannot be less than 92%, currently its ${{ env.CODE_COVERAGE }}%" && exit 1; fi;
+#      - name: Check if code-coverage is greater than threshold
+#        run: |
+#          codeCoverage=${{ env.CODE_COVERAGE }}
+#          codeCoverage=${codeCoverage%??}
+#          if [[ $codeCoverage -lt 92 ]]; then echo "code coverage cannot be less than 92%, currently its ${{ env.CODE_COVERAGE }}%" && exit 1; fi;
 
   upload_coverage:
     name: Upload Coverage📊
