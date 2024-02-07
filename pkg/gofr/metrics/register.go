@@ -119,7 +119,7 @@ func (m *metricsManager) IncrementCounter(ctx context.Context, name string, labe
 		return
 	}
 
-	counter.Add(ctx, 1, metric.WithAttributes(m.getAttributes(labels...)...))
+	counter.Add(ctx, 1, metric.WithAttributes(m.getAttributes(name, labels...)...))
 }
 
 func (m *metricsManager) DeltaUpDownCounter(ctx context.Context, name string, value float64, labels ...string) {
@@ -130,7 +130,7 @@ func (m *metricsManager) DeltaUpDownCounter(ctx context.Context, name string, va
 		return
 	}
 
-	upDownCounter.Add(ctx, value, metric.WithAttributes(m.getAttributes(labels...)...))
+	upDownCounter.Add(ctx, value, metric.WithAttributes(m.getAttributes(name, labels...)...))
 }
 
 func (m *metricsManager) RecordHistogram(ctx context.Context, name string, value float64, labels ...string) {
@@ -141,7 +141,7 @@ func (m *metricsManager) RecordHistogram(ctx context.Context, name string, value
 		return
 	}
 
-	histogram.Record(ctx, value, metric.WithAttributes(m.getAttributes(labels...)...))
+	histogram.Record(ctx, value, metric.WithAttributes(m.getAttributes(name, labels...)...))
 }
 
 func (m *metricsManager) SetGauge(name string, value float64) {
@@ -167,15 +167,15 @@ func callbackFunc(name metric.Float64ObservableGauge, field float64) func(_ cont
 }
 
 // getAttributes validates the given labels and convert them to corresponding otel attributes.
-func (m *metricsManager) getAttributes(labels ...string) []attribute.KeyValue {
+func (m *metricsManager) getAttributes(name string, labels ...string) []attribute.KeyValue {
 	labelsCount := len(labels)
 	if labelsCount%2 != 0 {
-		m.logger.Warnf("last value neglected! As invalid label-value pairs provided: %v", labels)
+		m.logger.Warnf("Metrics %v label has invalid key-value pairs", name)
 	}
 
 	cardinalityLimit := 20
 	if labelsCount > cardinalityLimit {
-		m.logger.Warnf("label-value pair count: %v, exceeds the limit of 20! May cause high cardinality", labelsCount)
+		m.logger.Warnf("Metrics %v cardinality high : %v", name, labelsCount)
 	}
 
 	var attributes []attribute.KeyValue
