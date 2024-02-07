@@ -215,7 +215,7 @@ func (a *App) initTracer() {
 	tp := sdktrace.NewTracerProvider(
 		sdktrace.WithResource(resource.NewWithAttributes(
 			semconv.SchemaURL,
-			semconv.ServiceNameKey.String(a.container.AppName()),
+			semconv.ServiceNameKey.String(a.container.GetAppName()),
 		)),
 	)
 	otel.SetTracerProvider(tp)

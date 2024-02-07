@@ -57,10 +57,10 @@ func (c *Container) Metrics() metrics.Manager {
 	return c.metricsManager
 }
 
-func (c *Container) AppName() string {
+func (c *Container) GetAppName() string {
 	return c.appName
 }
 
-func (c *Container) AppVersion() string {
+func (c *Container) GetAppVersion() string {
 	return c.appVersion
 }
