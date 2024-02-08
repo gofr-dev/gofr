@@ -7,6 +7,16 @@ name: Build and Deploy
       - main
       - development
       - refactor-quick-docs
+
+env:
+  APP_NAME:gofr-web
+  REGISTRY:gcr.io
+  WEBSITE_REGISTRY:ghcr.io
+  GCR_PROJECT:zs-products
+  CLUSTER_NAME:products-cluster
+  DEPLOYMENT_ZONE:us-central1
+  STAGE_NAMESPACE:gofr-stage
+  PROD_NAMESPACE:gofr
 jobs:
   dockerize_stage:
     runs-on: ubuntu-latest
@@ -24,20 +34,20 @@ jobs:
       - name: Login to GCR
         uses: docker/login-action@v2
         with:
-          registry: gcr.io
+          registry: ${{ env.REGISTRY }}
           username: _json_key
           password: ${{ secrets.GCR_KEY }}
 
       - name: Log in to the Container registry
         uses: docker/login-action@v1
         with:
-          registry: ghcr.io
+          registry: ${{ env.WEBSITE_REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Download UI Image
         run: |
-          docker pull ghcr.io/gofr-dev/website:workflow-package
+          docker pull ${{ env.WEBSITE_REGISTRY }}/gofr-dev/website:workflow-package
 
       - name: Build and Push Image Stage
         uses: docker/build-push-action@v4
@@ -45,10 +55,10 @@ jobs:
           push: true
           context: ./
           file: ./docs/Dockerfile
-          tags: gcr.io/zs-products/gofr-web:${{ github.sha }}
+          tags: ${{ env.REGISTRY }}/${{ env.GCR_PROJECT }}/${{ env.APP_NAME }}:${{ github.sha }}
 
       - id: output-image
-        run: echo "image=`echo gcr.io/${{ inputs.GCR_PROJECT }}/${{ inputs.APP_NAME }}:${{ inputs.SHA }}`" >> "$GITHUB_OUTPUT"
+        run: echo "image=`echo ${{ env.REGISTRY }}/${{ inputs.GCR_PROJECT }}/${{ inputs.APP_NAME }}:${{ inputs.SHA }}`" >> "$GITHUB_OUTPUT"
 
   stage_deployment:
     runs-on: ubuntu-latest
@@ -69,10 +79,10 @@ jobs:
 
       - name: Set GCloud Project and Fetch Cluster Credentials
         run:
-          gcloud container clusters get-credentials products-cluster --zone=us-central1 --project=zs-products
+          gcloud container clusters get-credentials ${{ env.CLUSTER_NAME }} --zone=${{ env.DEPLOYMENT_ZONE }} --project=${{ env.GCR_PROJECT }}
 
       - name: Update Deployment Image
-        run: kubectl set image deployment/gofr-web gofr-web=${{ env.image }} --namespace gofr-stage
+        run: kubectl set image deployment/${{ env.APP_NAME }} ${{ env.APP_NAME }}=${{ env.image }} --namespace ${{ env.STAGE_NAMESPACE }}
 
   check-tag:
     runs-on: ubuntu-latest
@@ -92,7 +102,7 @@ jobs:
       - name: Check if tag exists
         id: tag-check
         run: |
-          if gcloud container images describe gcr.io/zs-products/gofr-web:${{ github.sha }} 2>/dev/null; then
+          if gcloud container images describe ${{ env.REGISTRY }}/${{ env.GCR_PROJECT }}/${{ env.APP_NAME }}:${{ github.sha }} 2>/dev/null; then
               echo "tag_exists=true" >> "$GITHUB_OUTPUT"
           else
               echo "tag_exists=false" >> "$GITHUB_OUTPUT"
@@ -124,18 +134,18 @@ jobs:
       - name: Login to GCR
         uses: docker/login-action@v1
         with:
-          registry: gcr.io
+          registry: ${{ env.REGISTRY }}
           username: _json_key
           password: ${{ secrets.GCR_KEY }}
 
       - name: Re tag and Push Docker Image to GCR
         run: |
-          docker pull gcr.io/zs-products/gofr-web:${{ github.sha }}
-          docker tag gcr.io/zs-products/gofr-web:${{ github.sha }} gcr.io/zs-products/gofr-web:${{ env.RELEASE_VERSION }}
-          docker push gcr.io/zs-products/gofr-web:${{ env.RELEASE_VERSION }}
+          docker pull ${{ env.REGISTRY }}/${{ env.GCR_PROJECT }}/${{ env.APP_NAME }}:${{ github.sha }}
+          docker tag ${{ env.REGISTRY }}/${{ env.GCR_PROJECT }}/${{ env.APP_NAME }}:${{ github.sha }} ${{ env.REGISTRY }}/${{ env.GCR_PROJECT }}/${{ env.APP_NAME }}:${{ env.RELEASE_VERSION }}
+          docker push ${{ env.REGISTRY }}/${{ env.GCR_PROJECT }}/${{ env.APP_NAME }}:${{ env.RELEASE_VERSION }}
 
       - id: output-image
-        run: echo "image=`echo gcr.io/zs-products/gofr-web:${{ env.RELEASE_VERSION }}`" >> "$GITHUB_OUTPUT"
+        run: echo "image=`echo ${{ env.REGISTRY }}/${{ env.GCR_PROJECT }}/${{ env.APP_NAME }}:${{ env.RELEASE_VERSION }}`" >> "$GITHUB_OUTPUT"
 
   prod_deployment:
     runs-on: ubuntu-latest
@@ -156,7 +166,7 @@ jobs:
           credentials_json: ${{ secrets.DEPLOY_KEY }}
 
       - name: Set GCloud Project and Fetch Cluster Credentials
-        run: gcloud container clusters get-credentials products-cluster --zone=us-central1 --project=zs-products
+        run: gcloud container clusters get-credentials ${{ env.CLUSTER_NAME }} --zone=${{ env.DEPLOYMENT_ZONE }} --project=${{ env.GCR_PROJECT }}
 
       - name: Update Deployment Image
-        run: kubectl set image deployment/gofr-web gofr-web=${{ env.image }} --namespace gofr
+        run: kubectl set image deployment/${{ env.APP_NAME }} ${{ env.APP_NAME }}=${{ env.image }} --namespace ${{ env.PROD_NAMESPACE }}
