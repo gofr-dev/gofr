@@ -1,19 +1,18 @@
 package migrations
 
 const (
-	createMySQLGoFrMigrationsTable = `CREATE TABLE gofr_migrations (
-    app_name VARCHAR(50),
+	createMySQLGoFrMigrationsTable = `CREATE TABLE IF NOT EXISTS gofr_migrations (
     version BIGINT,
+    method VARCHAR(4),
     start_time TIMESTAMP,
-    duration BIGINT,
-    method VARCHAR(4)
+    duration BIGINT
 );`
 
 	checkMySQLGoFrMigrationsTable = `SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'gofr_migrations');`
 
 	getLastMySQLGoFrMigration = `SELECT COALESCE(MAX(version), 0) FROM gofr_migrations;`
 
-	insertGoFrMigrationRow = `INSERT INTO gofr_migrations (app_name, version, start_time, method) VALUES (?, ?, ?, ?);`
+	insertGoFrMigrationRow = `INSERT INTO gofr_migrations (version, method, start_time) VALUES (?, ?, ?);`
 
-	updateDurationInMigrationRecord = `UPDATE gofr_migrations SET duration = ? WHERE app_name = ? AND version = ? AND duration IS NULL AND method = 'UP';`
+	updateDurationInMigrationRecord = `UPDATE gofr_migrations SET duration = ? WHERE version = ? AND method = 'UP' AND duration IS NULL;`
 )

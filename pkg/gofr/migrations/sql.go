@@ -46,22 +46,22 @@ func (s sqlDB) Migrate(keys []int64, migrationsMap map[int64]Migration, containe
 
 		// Insert migration record
 		startTime := time.Now()
-		if err := insertMigrationRecord(container, tx, version, startTime); err != nil {
-			container.Logger.Error("unable to insert migration record: %v", err)
+		if err := insertMigrationRecord(tx, version, startTime); err != nil {
+			container.Logger.Errorf("unable to insert migration record: %v", err)
 			rollbackAndLog(container, tx)
 			return
 		}
 
 		// Run migration
 		if err := migrationsMap[version].UP(migrator); err != nil {
-			container.Logger.Error("unable to run migration: %v", err)
+			container.Logger.Errorf("unable to run migration: %v", err)
 			rollbackAndLog(container, tx)
 			return
 		}
 
 		// Update migration duration
-		if err := updateMigrationDuration(container, tx, version, startTime); err != nil {
-			container.Logger.Error("unable to update migration duration: %v", err)
+		if err := updateMigrationDuration(tx, version, startTime); err != nil {
+			container.Logger.Errorf("unable to update migration duration: %v", err)
 			rollbackAndLog(container, tx)
 			return
 		}
@@ -83,7 +83,7 @@ func ensureMigrationTableExists(container *container.Container) {
 
 	if exists != 1 {
 		if _, err := container.DB.Exec(createMySQLGoFrMigrationsTable); err != nil {
-			container.Logger.Error("unable to create gofr_migrations table: %v", err)
+			container.Logger.Errorf("unable to create gofr_migrations table: %v", err)
 		}
 	}
 }
@@ -94,13 +94,13 @@ func getLastMigration(container *container.Container) int64 {
 	return lastMigration
 }
 
-func insertMigrationRecord(container *container.Container, tx SQL, version int64, startTime time.Time) error {
-	_, err := tx.Exec(insertGoFrMigrationRow, container.GetAppName(), version, startTime, "UP")
+func insertMigrationRecord(tx SQL, version int64, startTime time.Time) error {
+	_, err := tx.Exec(insertGoFrMigrationRow, version, "UP", startTime)
 	return err
 }
 
-func updateMigrationDuration(container *container.Container, tx SQL, version int64, startTime time.Time) error {
-	_, err := tx.Exec(updateDurationInMigrationRecord, time.Since(startTime).Milliseconds(), container.GetAppName(), version)
+func updateMigrationDuration(tx SQL, version int64, startTime time.Time) error {
+	_, err := tx.Exec(updateDurationInMigrationRecord, time.Since(startTime).Milliseconds(), version)
 	return err
 }
 
