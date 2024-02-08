@@ -207,11 +207,11 @@ func (a *App) Metrics() metrics.Manager {
 // Developer Note: Registering only system metrics here, and other metrics will be registered at their respective initialisation.
 // Because if all metrics are registered at a single place then we would be registering all the metrics irrespective of the usage.
 func (a *App) registerSystemMetrics() {
-	a.Metrics().NewGauge("app_go_routines", "Gauge of Go routines running.")
-	a.Metrics().NewGauge("app_sys_memory_alloc", "Gauge of Heap allocations.")
-	a.Metrics().NewGauge("app_sys_total_alloc", "Gauge of cumulative bytes allocated for heap objects.")
-	a.Metrics().NewGauge("app_go_numGC", "Gauge of completed Garbage Collector cycles.")
-	a.Metrics().NewGauge("app_go_sys", "Gauge of total bytes of memory.")
+	a.Metrics().NewGauge("app_go_routines", "Number of Go routines running.")
+	a.Metrics().NewGauge("app_sys_memory_alloc", "Number of bytes allocated for heap objects.")
+	a.Metrics().NewGauge("app_sys_total_alloc", "Number of cumulative bytes allocated for heap objects.")
+	a.Metrics().NewGauge("app_go_numGC", "Number of completed Garbage Collector cycles.")
+	a.Metrics().NewGauge("app_go_sys", "Number of total bytes of memory.")
 }
 
 // SubCommand adds a sub-command to the CLI application.
