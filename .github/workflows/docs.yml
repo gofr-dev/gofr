@@ -1,0 +1,87 @@
+name: Build and Deploy
+'on':
+  pull_request:
+    types:
+      - review_requested
+  push:
+    tags:
+      - '*'
+    branches:
+      - main
+      - development
+jobs:
+  build:
+    uses: zopsmart/zs-workflows/.github/workflows/ui_yarn_build.yaml@v0.2.2
+    with:
+      APP_NAME: gofr-web
+      NODE_VERSION: '16.x'
+      BUILD_COMMAND: |
+        CI=false yarn run build
+        tar -zcf gofr-web.zip .next
+      TEST_COMMAND: |
+        CI=false yarn test:coverage
+      ARTIFACT_PATH: |
+        gofr-web.zip
+        node_modules.zip
+      LINTER_CHECKS: false
+      PRETTIER_CHECKS: false
+      ENABLE_TESTS: false
+    secrets:
+      PAT: '${{ secrets.GITHUB_TOKEN }}'
+
+  stage_deployment:
+    needs:
+      - build
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - DOCKER_FILE_PATH: Dockerfile
+            app_name: gofr-web
+            namespace: gofr-stage
+            type: deployment
+    uses: zopsmart/zs-workflows/.github/workflows/ui_stage_deploy.yaml@v0.2.2
+    with:
+      DOCKER_FILE_PATH: '${{ matrix.DOCKER_FILE_PATH }}'
+      BUILD_ARGUMENTS: |
+        VERSION=edge
+        APP_NAME=main
+      APP_NAME: '${{ matrix.app_name }}'
+      NAMESPACE: '${{ matrix.namespace }}'
+      IMAGE_REGISTRY: gcr.io
+      username: _json_key
+      GCR_PROJECT: zs-products
+      CLUSTER_NAME: products-cluster
+      CLUSTER_PROJECT: zs-products
+      SHA: '${{ needs.build.outputs.SHA }}'
+      TYPE: '${{ matrix.type }}'
+      ENV_FILE_PATH: ./configs/.stage.env
+      UNZIP_COMMAND: |
+        tar -xf gofr-web.zip
+        tar -xf node_modules.zip
+    secrets:
+      GCR_KEY: '${{ secrets.GCR_KEY }}'
+      DEPLOY_KEY: '${{ secrets.DEPLOY_KEY }}'
+  prod_deployment:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - DOCKER_FILE_PATH: Dockerfile
+            app_name: gofr-web
+            namespace: gofr
+            type: deployment
+    uses: zopsmart/zs-workflows/.github/workflows/gcr_prod_deploy.yaml@v0.2.2
+    with:
+      IMAGE_REGISTRY: gcr.io
+      username: _json_key
+      GCR_PROJECT: zs-products
+      APP_NAME: '${{ matrix.app_name }}'
+      CLUSTER_NAME: products-cluster
+      NAMESPACE: '${{ matrix.namespace }}'
+      CLUSTER_PROJECT: zs-products
+      TYPE: '${{ matrix.type }}'
+      ENV_FILE_PATH: ./configs/.prod.env
+    secrets:
+      GCR_KEY: '${{ secrets.GCR_KEY }}'
+      DEPLOY_KEY: '${{ secrets.DEPLOY_KEY }}'

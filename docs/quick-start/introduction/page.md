@@ -1,4 +1,4 @@
-## Prerequisite
+# Prerequisite
 
 - Install or update [Go](https://go.dev/dl/).
 
