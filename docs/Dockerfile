@@ -2,10 +2,10 @@ FROM ghcr.io/gofr-dev/website:workflow-package AS base
 
 WORKDIR /app
 
-COPY  quick-start /app/src/app/docs/quick-start
-COPY  advanced-guide /app/src/app/docs/advanced-guide
-COPY  page.md /app/src/app/docs
-COPY  navigation.js /app/src/lib
+COPY  docs/quick-start /app/src/app/docs/quick-start
+COPY  docs/advanced-guide /app/src/app/docs/advanced-guide
+COPY  docs/page.md /app/src/app/docs
+COPY  docs/navigation.js /app/src/lib
 
 ENV NODE_ENV production
 
