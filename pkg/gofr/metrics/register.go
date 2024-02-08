@@ -25,6 +25,8 @@ type Manager interface {
 type Logger interface {
 	Error(args ...interface{})
 	Errorf(format string, args ...interface{})
+	Warn(args ...interface{})
+	Warnf(format string, args ...interface{})
 }
 
 type metricsManager struct {
@@ -150,7 +152,7 @@ func (m *metricsManager) IncrementCounter(ctx context.Context, name string, labe
 		return
 	}
 
-	counter.Add(ctx, 1, metric.WithAttributes(getAttributes(labels...)...))
+	counter.Add(ctx, 1, metric.WithAttributes(m.getAttributes(name, labels...)...))
 }
 
 // DeltaUpDownCounter increases or decreases the last value with the value specified.
@@ -175,7 +177,7 @@ func (m *metricsManager) DeltaUpDownCounter(ctx context.Context, name string, va
 		return
 	}
 
-	upDownCounter.Add(ctx, value, metric.WithAttributes(getAttributes(labels...)...))
+	upDownCounter.Add(ctx, value, metric.WithAttributes(m.getAttributes(name, labels...)...))
 }
 
 // RecordHistogram records the specified value in the respective buckets of the histogram metric.
@@ -195,7 +197,7 @@ func (m *metricsManager) RecordHistogram(ctx context.Context, name string, value
 		return
 	}
 
-	histogram.Record(ctx, value, metric.WithAttributes(getAttributes(labels...)...))
+	histogram.Record(ctx, value, metric.WithAttributes(m.getAttributes(name, labels...)...))
 }
 
 // SetGauge gets the value and sets the metric to the specified value.
@@ -227,14 +229,22 @@ func callbackFunc(name metric.Float64ObservableGauge, field float64) func(_ cont
 	}
 }
 
-func getAttributes(labels ...string) []attribute.KeyValue {
-	// TODO - add checks for labelsCount and add warn logs:
-	// 1. should always be even as it contains pairs of label key and value.
-	// 2. should not exceed 20 to control cardinality
+// getAttributes validates the given labels and convert them to corresponding otel attributes.
+func (m *metricsManager) getAttributes(name string, labels ...string) []attribute.KeyValue {
+	labelsCount := len(labels)
+	if labelsCount%2 != 0 {
+		m.logger.Warnf("Metrics %v label has invalid key-value pairs", name)
+	}
+
+	cardinalityLimit := 20
+	if labelsCount > cardinalityLimit {
+		m.logger.Warnf("Metrics %v has high cardinality: %v", name, labelsCount)
+	}
+
 	var attributes []attribute.KeyValue
 
 	if labels != nil {
-		for i := 0; i < len(labels); i += 2 {
+		for i := 0; i < len(labels)-1; i += 2 {
 			attributes = append(attributes, attribute.String(labels[i], labels[i+1]))
 		}
 	}
