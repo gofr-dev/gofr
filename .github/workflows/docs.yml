@@ -40,7 +40,7 @@ jobs:
           docker pull ghcr.io/gofr-dev/website:workflow-package
 
       - name: Build and Push Image Stage
-        uses: docker/build-push-action@v2
+        uses: docker/build-push-action@v4
         with:
           push: true
           context: ./
