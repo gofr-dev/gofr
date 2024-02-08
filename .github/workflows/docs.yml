@@ -53,7 +53,7 @@ jobs:
   stage_deployment:
     runs-on: ubuntu-latest
     name: 🚀 Deploy to Stage
-    if: (github.ref == 'refs/heads/development')
+    if: (github.ref == 'refs/heads/development' || github.ref == 'refs/heads/refactor-quick-docs')
     needs: dockerize_stage
     container:
       image: ghcr.io/zopsmart/gha-images:deployments-0.1.3
