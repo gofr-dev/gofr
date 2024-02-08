@@ -47,7 +47,7 @@ func (s sqlDB) Migrate(keys []int64, migrationsMap map[int64]Migration, c *conta
 		}
 
 		// Insert migration record
-		startTime := time.Now()
+		startTime := time.Now().UTC()
 		if err := insertMigrationRecord(tx, version, startTime); err != nil {
 			c.Logger.Errorf("unable to insert migration record: %v", err)
 			rollbackAndLog(c, tx)
