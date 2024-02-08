@@ -2,7 +2,6 @@ package gofr
 
 import (
 	"fmt"
-	"gofr.dev/pkg/gofr/migrations"
 
 	"net/http"
 	"os"
@@ -22,6 +21,7 @@ import (
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/metrics"
+	"gofr.dev/pkg/gofr/migrations"
 	"gofr.dev/pkg/gofr/service"
 )
 
