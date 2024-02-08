@@ -17,7 +17,7 @@ type httpServer struct {
 func newHTTPServer(c *container.Container, port int) *httpServer {
 	histogramBuckets := []float64{.001, .003, .005, .01, .02, .03, .05, .1, .2, .3, .5, .75, 1, 2, 3, 5, 10, 30}
 	c.Metrics().NewHistogram("app_http_response", "Histogram of HTTP response times in seconds", histogramBuckets...)
-	
+
 	return &httpServer{
 		router: gofrHTTP.NewRouter(c),
 		port:   port,

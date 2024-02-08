@@ -57,8 +57,16 @@ func New() *App {
 
 	app.initTracer()
 
+	// Metrics Server
+	port, err := strconv.Atoi(app.Config.Get("METRICS_PORT"))
+	if err != nil || port <= 0 {
+		port = defaultMetricPort
+	}
+
+	app.metricServer = newMetricServer(port)
+
 	// HTTP Server
-	port, err := strconv.Atoi(app.Config.Get("HTTP_PORT"))
+	port, err = strconv.Atoi(app.Config.Get("HTTP_PORT"))
 	if err != nil || port <= 0 {
 		port = defaultHTTPPort
 	}
@@ -73,14 +81,7 @@ func New() *App {
 
 	app.grpcServer = newGRPCServer(app.container, port)
 
-	// Metrics Server
-	port, err = strconv.Atoi(app.Config.Get("METRICS_PORT"))
-	if err != nil || port <= 0 {
-		port = defaultMetricPort
-	}
-
-	app.metricServer = newMetricServer(port)
-
+	// Register system metrics
 	app.registerSystemMetrics()
 
 	return app
