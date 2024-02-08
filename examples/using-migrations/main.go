@@ -3,9 +3,10 @@ package main
 import (
 	"fmt"
 
-	"gofr.dev/examples/using-migrations/migrations"
 	"gofr.dev/pkg/gofr"
-	migrate "gofr.dev/pkg/gofr/migrations"
+	gofrMigration "gofr.dev/pkg/gofr/migration"
+
+	"gofr.dev/examples/using-migrations/migrations"
 )
 
 func main() {
@@ -13,7 +14,7 @@ func main() {
 	a := gofr.New()
 
 	// Add migrations to run
-	a.Migrate(migrate.NewSQL(), migrations.All())
+	a.Migrate(gofrMigration.SQL(), migrations.All())
 
 	// Add all the routes
 	a.GET("/hello", HelloHandler)

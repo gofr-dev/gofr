@@ -1,11 +1,11 @@
 package migrations
 
 import (
-	"gofr.dev/pkg/gofr/migrations"
+	"gofr.dev/pkg/gofr/migration"
 )
 
-func All() map[int64]migrations.Migration {
-	return map[int64]migrations.Migration{
+func All() map[int64]migration.Migrate {
+	return map[int64]migration.Migrate{
 		1707211654: createTableEmployee(),
 	}
 }

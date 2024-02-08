@@ -21,7 +21,7 @@ import (
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/metrics"
-	"gofr.dev/pkg/gofr/migrations"
+	"gofr.dev/pkg/gofr/migration"
 	"gofr.dev/pkg/gofr/service"
 )
 
@@ -209,8 +209,8 @@ func (a *App) SubCommand(pattern string, handler Handler) {
 	a.cmd.addRoute(pattern, handler)
 }
 
-func (a *App) Migrate(migrator migrations.Migrator, migrationsMap map[int64]migrations.Migration) {
-	migrations.Migrate(migrator, migrationsMap, a.container)
+func (a *App) Migrate(migrator migration.Migrator, migrationsMap map[int64]migration.Migrate) {
+	migration.Run(migrator, migrationsMap, a.container)
 }
 
 func (a *App) initTracer() {

@@ -1,4 +1,4 @@
-package migrations
+package migration
 
 const (
 	createMySQLGoFrMigrationsTable = `CREATE TABLE IF NOT EXISTS gofr_migrations (

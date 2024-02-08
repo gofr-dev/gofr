@@ -1,4 +1,4 @@
-package migrations
+package migration
 
 import (
 	"fmt"
@@ -11,12 +11,12 @@ import (
 
 type MigrateFunc func(d Datasource) error
 
-type Migration struct {
+type Migrate struct {
 	UP MigrateFunc
 }
 
 type Migrator interface {
-	Migrate(keys []int64, migrationsMap map[int64]Migration, container *container.Container)
+	Run(keys []int64, migrationsMap map[int64]Migrate, container *container.Container)
 }
 
 type Logger interface {
@@ -29,13 +29,13 @@ type Logger interface {
 type Datasource struct {
 	Logger
 
-	DB    SQL
+	DB    DB
 	Redis *redis.Redis
 }
 
-func Migrate(migrator Migrator, migrationsMap map[int64]Migration, c *container.Container) {
+func Run(migrator Migrator, migrationsMap map[int64]Migrate, c *container.Container) {
 	if migrationsMap == nil || migrator == nil {
-		c.Logger.Error("Migration Failed! migrationsMap or migrator is nil")
+		c.Logger.Error("Run Failed! migrationsMap or migrator is nil")
 
 		return
 	}
@@ -56,12 +56,12 @@ func Migrate(migrator Migrator, migrationsMap map[int64]Migration, c *container.
 	}
 
 	if len(invalidKeys) > 0 {
-		c.Logger.Errorf("Migration Failed! UP not defined for the following keys: %v", invalidKeys[0:len(invalidKeys)-1])
+		c.Logger.Errorf("Run Failed! UP not defined for the following keys: %v", invalidKeys[0:len(invalidKeys)-1])
 
 		return
 	}
 
 	sortkeys.Int64s(keys)
 
-	migrator.Migrate(keys, migrationsMap, c)
+	migrator.Run(keys, migrationsMap, c)
 }

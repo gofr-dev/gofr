@@ -1,4 +1,4 @@
-package migrations
+package migration
 
 import (
 	"context"
@@ -12,18 +12,18 @@ import (
 type sqlDB struct {
 }
 
-func NewSQL() Migrator {
+func SQL() Migrator {
 	return sqlDB{}
 }
 
-type SQL interface {
+type DB interface {
 	Query(query string, args ...interface{}) (*sql.Rows, error)
 	QueryRow(query string, args ...interface{}) *sql.Row
 	QueryRowContext(ctx context.Context, query string, args ...interface{}) *sql.Row
 	Exec(query string, args ...interface{}) (sql.Result, error)
 }
 
-func (s sqlDB) Migrate(keys []int64, migrationsMap map[int64]Migration, c *container.Container) {
+func (s sqlDB) Run(keys []int64, migrationsMap map[int64]Migrate, c *container.Container) {
 	migrator := Datasource{Redis: c.Redis, Logger: c.Logger, DB: c.DB}
 
 	// Ensure migration table exists
@@ -102,13 +102,13 @@ func getLastMigration(c *container.Container) int64 {
 	return lastMigration
 }
 
-func insertMigrationRecord(tx SQL, version int64, startTime time.Time) error {
+func insertMigrationRecord(tx DB, version int64, startTime time.Time) error {
 	_, err := tx.Exec(insertGoFrMigrationRow, version, "UP", startTime)
 
 	return err
 }
 
-func updateMigrationDuration(tx SQL, version int64, startTime time.Time) error {
+func updateMigrationDuration(tx DB, version int64, startTime time.Time) error {
 	_, err := tx.Exec(updateDurationInMigrationRecord, time.Since(startTime).Milliseconds(), version)
 
 	return err
