@@ -6,6 +6,8 @@ name: Build and Deploy
     branches:
       - main
       - development
+      - refactor-quick-docs
+
 defaults:
   runs-on: ubuntu-latest
   container:
@@ -28,7 +30,7 @@ variables:
 jobs:
   dockerize_stage:
     name: 🐳 Dockerize Stage
-    if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/development') && (github.event_name == 'push')
+    if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' ||github.ref == 'refs/heads/refactor-quick-docs' || github.ref == 'refs/heads/development') && (github.event_name == 'push')
     outputs:
       image: ${{ steps.output-image.outputs.image }}
     steps:
