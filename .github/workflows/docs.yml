@@ -44,7 +44,7 @@ jobs:
         with:
           push: true
           context: ./
-          file: docs/Dockerfile
+          file: ./docs/Dockerfile
           tags: gcr.io/${{ env.GCR_PROJECT }}/${{ env.APP_NAME }}:${{ github.sha }}
 
       - id: output-image
