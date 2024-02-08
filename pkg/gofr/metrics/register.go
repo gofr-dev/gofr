@@ -175,7 +175,7 @@ func (m *metricsManager) getAttributes(name string, labels ...string) []attribut
 
 	cardinalityLimit := 20
 	if labelsCount > cardinalityLimit {
-		m.logger.Warnf("Metrics %v cardinality high : %v", name, labelsCount)
+		m.logger.Warnf("Metrics %v has high cardinality: %v", name, labelsCount)
 	}
 
 	var attributes []attribute.KeyValue
