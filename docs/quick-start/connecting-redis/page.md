@@ -1,6 +1,6 @@
 # Connecting to Redis 
 
-GoFr simplifies the process of connecting to Redis, managing the connection pool, and handling connection retry automatically. 
+GoFr simplifies the process of connecting to Redis. 
 
 ### Setup:
 Before using Redis with GoFr, you need to have Redis installed. You can use Docker to set up a Redis container:
@@ -34,25 +34,33 @@ Below is an example of how to retrieve data from Redis in the `main.go` file:
 ```golang
 package main
 
-import "gofr.dev/pkg/gofr"
+import (
+	"errors"
+
+	"github.com/redis/go-redis/v9"
+
+	"gofr.dev/pkg/gofr"
+)
 
 func main() {
-    // Initialize GoFr object
-    app := gofr.New()
+	// Initialize GoFr object
+	app := gofr.New()
 
-    app.GET("/greet", func(ctx *gofr.Context) (interface{}, error) {
-        // Get the value using the Redis instance
-        val, err := ctx.Redis.Get(ctx.Context, "test").Result()
-	if err != nil && !errors.Is(err, redis.Nil) {
-		// If the key is not found, we are not considering this an error and returning ""
-		return nil, err
-	}
+	app.GET("/redis", func(ctx *gofr.Context) (interface{}, error) {
+		// Get the value using the Redis instance
 
-	return val, nil
-    })
+		val, err := ctx.Redis.Get(ctx.Context, "test").Result()
+		if err != nil && !errors.Is(err, redis.Nil) {
+			// If the key is not found, we are not considering this an error and returning ""
+			return nil, err
+		}
 
-    // Run the application
-	a.Run()
+		return val, nil
+	})
+
+	// Run the application
+
+	app.Run()
 }
 ```
 
