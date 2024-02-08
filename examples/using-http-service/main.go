@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"gofr.dev/pkg/gofr/cache"
 	"io"
 	"time"
 
@@ -25,7 +26,6 @@ func main() {
 		if err != nil {
 			return nil, err
 		}
-
 		b, _ := io.ReadAll(resp.Body)
 		err = json.Unmarshal(b, &data)
 		if err != nil {
@@ -46,6 +46,7 @@ func main() {
 		&service.HealthConfig{
 			HealthEndpoint: "breeds",
 		},
+		&service.CacheConfig{CacheProvider: cache.NewMemoryProvider()},
 	)
 
 	// HTTP service with Health check config for custom health check endpoint
