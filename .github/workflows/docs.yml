@@ -40,12 +40,12 @@ jobs:
           docker pull ghcr.io/gofr-dev/website:workflow-package
 
       - name: Build and Push Image Stage
-        uses: docker/build-push-action@v4
+        uses: docker/build-push-action@v2
         with:
           push: true
           context: ./
           file: ./docs/Dockerfile
-          tags: gcr.io/${{ env.GCR_PROJECT }}/${{ env.APP_NAME }}:${{ github.sha }}
+          tags: gcr.io/zs-products/gofr-web:${{ github.sha }}
 
       - id: output-image
         run: echo "image=`echo gcr.io/${{ inputs.GCR_PROJECT }}/${{ inputs.APP_NAME }}:${{ inputs.SHA }}`" >> "$GITHUB_OUTPUT"
