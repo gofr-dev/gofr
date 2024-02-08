@@ -31,7 +31,7 @@ type Datasource struct {
 	Logger
 }
 
-func Migrate(migrationsMap map[int64]Migration, migrator Migrator, container *container.Container) {
+func Migrate(migrator Migrator, migrationsMap map[int64]Migration, container *container.Container) {
 	if migrationsMap == nil || migrator == nil {
 		container.Logger.Error("Migration failed as migrationsMap or migrator is nil")
 

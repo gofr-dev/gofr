@@ -12,7 +12,7 @@ func main() {
 	// Create a new application
 	a := gofr.New()
 
-	a.Migrate(migrations.All(), migrate.NewSQL())
+	a.Migrate(migrate.NewSQL(), migrations.All())
 
 	// Add all the routes
 	a.GET("/hello", HelloHandler)
