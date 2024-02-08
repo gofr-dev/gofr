@@ -9,14 +9,14 @@ name: Build and Deploy
       - refactor-quick-docs
 
 env:
-  APP_NAME:gofr-web
-  REGISTRY:gcr.io
-  WEBSITE_REGISTRY:ghcr.io
-  GCR_PROJECT:zs-products
-  CLUSTER_NAME:products-cluster
-  DEPLOYMENT_ZONE:us-central1
-  STAGE_NAMESPACE:gofr-stage
-  PROD_NAMESPACE:gofr
+  APP_NAME: gofr-web
+  REGISTRY: gcr.io
+  WEBSITE_REGISTRY: ghcr.io
+  GCR_PROJECT: zs-products
+  CLUSTER_NAME: products-cluster
+  DEPLOYMENT_ZONE: us-central1
+  STAGE_NAMESPACE: gofr-stage
+  PROD_NAMESPACE: gofr
 jobs:
   dockerize_stage:
     runs-on: ubuntu-latest
