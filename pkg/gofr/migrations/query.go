@@ -2,10 +2,11 @@ package migrations
 
 const (
 	createMySQLGoFrMigrationsTable = `CREATE TABLE IF NOT EXISTS gofr_migrations (
-    version BIGINT,
-    method VARCHAR(4),
-    start_time TIMESTAMP,
-    duration BIGINT
+    version BIGINT not null ,
+    method VARCHAR(4) not null ,
+    start_time TIMESTAMP not null ,
+    duration BIGINT,
+    constraint primary_key primary key (version, method)
 );`
 
 	checkMySQLGoFrMigrationsTable = `SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'gofr_migrations');`
