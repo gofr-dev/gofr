@@ -1,13 +1,8 @@
 name: Build and Deploy
 'on':
   push:
-    tags:
-      - '*'
-    branches:
-      - main
-      - development
-      - refactor-quick-docs
-
+    paths:
+      - 'docs/**'
 env:
   APP_NAME: gofr-web
   REGISTRY: gcr.io
@@ -20,7 +15,7 @@ env:
 jobs:
   dockerize_stage:
     runs-on: ubuntu-latest
-    if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'|| github.ref == 'refs/heads/refactor-quick-docs' || github.ref == 'refs/heads/development') && (github.event_name == 'push')
+    if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/development') && (github.event_name == 'push')
     outputs:
       image: ${{ steps.output-image.outputs.image }}
     name: 🐳 Dockerize Stage
@@ -63,7 +58,7 @@ jobs:
   stage_deployment:
     runs-on: ubuntu-latest
     name: 🚀 Deploy to Stage
-    if: (github.ref == 'refs/heads/development' || github.ref == 'refs/heads/refactor-quick-docs')
+    if: (github.ref == 'refs/heads/development' || github.ref == 'refs/heads/main')
     needs: dockerize_stage
     container:
       image: ghcr.io/zopsmart/gha-images:deployments-0.1.3
@@ -157,9 +152,6 @@ jobs:
     env:
       image: ${{needs.dockerize_prod.outputs.image}}
     steps:
-      - name: Extract Release Tag
-        run: echo "RELEASE_VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
-
       - name: Authorize to GCP service account
         uses: google-github-actions/auth@v1
         with:
