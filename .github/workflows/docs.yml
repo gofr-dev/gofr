@@ -58,7 +58,7 @@ jobs:
           tags: ${{ env.REGISTRY }}/${{ env.GCR_PROJECT }}/${{ env.APP_NAME }}:${{ github.sha }}
 
       - id: output-image
-        run: echo "image=`${{ env.REGISTRY }}/${{ inputs.GCR_PROJECT }}/${{ inputs.APP_NAME }}:${{ inputs.SHA }}`" >> "$GITHUB_OUTPUT"
+        run: echo "image=`${{ env.REGISTRY }}/${{ env.GCR_PROJECT }}/${{ env.APP_NAME }}:${{ github.sha }}`" >> "$GITHUB_OUTPUT"
 
   stage_deployment:
     runs-on: ubuntu-latest
