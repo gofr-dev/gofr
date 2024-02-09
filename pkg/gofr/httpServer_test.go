@@ -9,13 +9,13 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"gofr.dev/pkg/gofr/container"
-	gofrHttp "gofr.dev/pkg/gofr/http"
+	gofrHTTP "gofr.dev/pkg/gofr/http"
 	"gofr.dev/pkg/gofr/logging"
 )
 
 func TestRun_ServerStartsListening(t *testing.T) {
 	// Create a mock router and add a new route
-	router := &gofrHttp.Router{}
+	router := &gofrHTTP.Router{}
 	router.Add(http.MethodGet, "/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))

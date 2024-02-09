@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strings"
 	"time"
 
 	"golang.org/x/term"
@@ -23,8 +22,15 @@ type Logger interface {
 	Logf(format string, args ...interface{})
 	Info(args ...interface{})
 	Infof(format string, args ...interface{})
+	Notice(args ...interface{})
+	Noticef(format string, args ...interface{})
+	Warn(args ...interface{})
+	Warnf(format string, args ...interface{})
 	Error(args ...interface{})
 	Errorf(format string, args ...interface{})
+	Fatal(args ...interface{})
+	Fatalf(format string, args ...interface{})
+	changeLevel(level Level)
 }
 
 type logger struct {
@@ -35,7 +41,7 @@ type logger struct {
 }
 
 type logEntry struct {
-	Level   Level       `json:"Level"`
+	Level   Level       `json:"level"`
 	Time    time.Time   `json:"time"`
 	Message interface{} `json:"message"`
 }
@@ -87,6 +93,22 @@ func (l *logger) Infof(format string, args ...interface{}) {
 	l.logf(INFO, format, args...)
 }
 
+func (l *logger) Notice(args ...interface{}) {
+	l.logf(NOTICE, "", args...)
+}
+
+func (l *logger) Noticef(format string, args ...interface{}) {
+	l.logf(NOTICE, format, args...)
+}
+
+func (l *logger) Warn(args ...interface{}) {
+	l.logf(WARN, "", args...)
+}
+
+func (l *logger) Warnf(format string, args ...interface{}) {
+	l.logf(WARN, format, args...)
+}
+
 func (l *logger) Log(args ...interface{}) {
 	l.logf(INFO, "", args...)
 }
@@ -103,6 +125,18 @@ func (l *logger) Errorf(format string, args ...interface{}) {
 	l.logf(ERROR, format, args...)
 }
 
+func (l *logger) Fatal(args ...interface{}) {
+	l.logf(FATAL, "", args...)
+
+	// exit status is 1 as it denotes failure as signified by Fatal log
+	os.Exit(1)
+}
+
+func (l *logger) Fatalf(format string, args ...interface{}) {
+	l.logf(FATAL, format, args...)
+	os.Exit(1)
+}
+
 func (l *logger) prettyPrint(e logEntry, out io.Writer) {
 	// Giving special treatment to framework's request logs in terminal display. This does not add any overhead
 	// in running the server.
@@ -110,12 +144,19 @@ func (l *logger) prettyPrint(e logEntry, out io.Writer) {
 	case middleware.RequestLog:
 		fmt.Fprintf(out, "\u001B[38;5;%dm%s\u001B[0m [%s] \u001B[38;5;8m%s \u001B[38;5;%dm%d\u001B[0m "+
 			"%8d\u001B[38;5;8mµs\u001B[0m %s %s \n", e.Level.color(), e.Level.String()[0:4],
-			e.Time.Format("15:04:05"), msg.ID, colorForStatusCode(msg.Response), msg.Response, msg.ResponseTime, msg.Method, msg.URI)
+			e.Time.Format("15:04:05"), msg.TraceID, colorForStatusCode(msg.Response), msg.Response, msg.ResponseTime, msg.Method, msg.URI)
 	case sql.Log:
-		fmt.Fprintf(out, "\u001B[38;5;%dm%s\u001B[0m [%s] \u001B[38;5;8m%-32s \u001B[38;5;24m%s\u001B[0m %8d\u001B[38;5;8mµs\u001B[0m   %v\n",
+		fmt.Fprintf(out, "\u001B[38;5;%dm%s\u001B[0m [%s] \u001B[38;5;8m%-32s \u001B[38;5;24m%s\u001B[0m %8d\u001B[38;5;8mµs\u001B[0m %s\n",
 			e.Level.color(), e.Level.String()[0:4], e.Time.Format("15:04:05"), msg.Type, "SQL", msg.Duration, msg.Query)
 	case redis.QueryLog:
-		l.printRedisQueryLog(e, msg, out)
+		if msg.Query == "pipeline" {
+			fmt.Fprintf(out, "\u001B[38;5;%dm%s\u001B[0m [%s] \u001B[38;5;8m%-32s \u001B[38;5;24m%s\u001B[0m %6d\u001B[38;5;8mµs\u001B[0m %s\n",
+				e.Level.color(), e.Level.String()[0:4], e.Time.Format("15:04:05"), msg.Query, "REDIS", msg.Duration,
+				msg.String()[1:len(msg.String())-1])
+		} else {
+			fmt.Fprintf(out, "\u001B[38;5;%dm%s\u001B[0m [%s] \u001B[38;5;8m%-32s \u001B[38;5;24m%s\u001B[0m %6d\u001B[38;5;8mµs\u001B[0m %v\n",
+				e.Level.color(), e.Level.String()[0:4], e.Time.Format("15:04:05"), msg.Query, "REDIS", msg.Duration, msg.String())
+		}
 	case service.Log:
 		fmt.Fprintf(out, "\u001B[38;5;%dm%s\u001B[0m [%s] \u001B[38;5;8m%s \u001B[38;5;%dm%d\u001B[0m %8d\u001B[38;5;8mµs\u001B[0m %s %s \n",
 			e.Level.color(), e.Level.String()[0:4], e.Time.Format("15:04:05"), msg.CorrelationID, colorForStatusCode(msg.ResponseCode),
@@ -182,22 +223,6 @@ func checkIfTerminal(w io.Writer) bool {
 	}
 }
 
-// printRedisQueryLog formats and prints the log entry for Redis queries.
-func (l *logger) printRedisQueryLog(e logEntry, msg redis.QueryLog, out io.Writer) {
-	args := msg.Args.([]interface{})
-	strArgs := make([]string, 0, len(args))
-
-	for _, arg := range args {
-		strArgs = append(strArgs, fmt.Sprint(arg))
-	}
-
-	// Formatting and printing the log entry based on the Redis query type.
-	switch msg.Query {
-	case "pipeline":
-		fmt.Fprintf(out, "\u001B[38;5;%dm%s\u001B[0m [%s] \u001B[38;5;8m%-32s \u001B[38;5;24m%s\u001B[0m %8d\u001B[38;5;8mµs\u001B[0m %s\n",
-			e.Level.color(), e.Level.String()[0:4], e.Time.Format("15:04:05"), msg.Query, "REDIS", msg.Duration, strArgs[0][1:len(strArgs[0])-1])
-	default:
-		fmt.Fprintf(out, "\u001B[38;5;%dm%s\u001B[0m [%s] \u001B[38;5;8m%-32s \u001B[38;5;24m%s\u001B[0m %8d\u001B[38;5;8mµs\u001B[0m %v\n",
-			e.Level.color(), e.Level.String()[0:4], e.Time.Format("15:04:05"), strArgs[0], "REDIS", msg.Duration, strings.Join(strArgs, " "))
-	}
+func (l *logger) changeLevel(level Level) {
+	l.level = level
 }

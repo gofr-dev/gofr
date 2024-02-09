@@ -1,4 +1,4 @@
-## Prerequisite
+# Prerequisite
 
 - Install or update [Go](https://go.dev/dl/).
 
@@ -41,7 +41,7 @@ func main() {
 
     // Runs the server, it will listen on the default port 8000.
     // it can be over-ridden through configs
-    a.Run()
+   app.Run()
 }
 ```
 
@@ -65,7 +65,7 @@ The `hello-world` server involves three essential steps:
 
 1. **Creating GoFr Server:**
 
-   When `gofr.New()` is called, it initializes the framework and handles various setup tasks like configuring database connection pools, initialising logger, setting CORS headers etc based on the configs.
+   When `gofr.New()` is called, it initializes the framework and handles various setup tasks like initialising logger, metrics, datasources etc based on the configs.
 
    _This single line is a standard part of all gofr-based servers._
 

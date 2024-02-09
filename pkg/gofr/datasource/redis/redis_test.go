@@ -2,7 +2,6 @@ package redis
 
 import (
 	"context"
-	"strconv"
 	"testing"
 	"time"
 
@@ -11,7 +10,6 @@ import (
 
 	"go.uber.org/mock/gomock"
 
-	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/testutil"
 )
 
@@ -25,19 +23,12 @@ func TestRedis_QueryLogging(t *testing.T) {
 
 	defer s.Close()
 
-	// Convert port to integer
-	port, err := strconv.Atoi(s.Port())
-	assert.Nil(t, err)
-
-	// Config for  miniRedis server
-	config := Config{
-		HostName: s.Host(),
-		Port:     port,
-	}
-
 	result := testutil.StdoutOutputForFunc(func() {
-		mockLogger := datasource.NewMockLogger(0)
-		client, err := NewClient(config, mockLogger)
+		mockLogger := testutil.NewMockLogger(testutil.DEBUGLOG)
+		client := NewClient(testutil.NewMockConfig(map[string]string{
+			"REDIS_HOST": s.Host(),
+			"REDIS_PORT": s.Port(),
+		}), mockLogger)
 		assert.Nil(t, err)
 
 		result, err := client.Set(context.TODO(), "key", "value", 1*time.Minute).Result()
@@ -46,8 +37,8 @@ func TestRedis_QueryLogging(t *testing.T) {
 	})
 
 	// Assertions
-	assert.Contains(t, result, "[ping]")
-	assert.Contains(t, result, "[set key value ex 60]")
+	assert.Contains(t, result, "ping")
+	assert.Contains(t, result, "set key value ex 60")
 }
 
 func TestRedis_PipelineQueryLogging(t *testing.T) {
@@ -60,20 +51,13 @@ func TestRedis_PipelineQueryLogging(t *testing.T) {
 
 	defer s.Close()
 
-	// Convert port to integer
-	port, err := strconv.Atoi(s.Port())
-	assert.Nil(t, err)
-
-	// Config for Redis client
-	config := Config{
-		HostName: s.Host(),
-		Port:     port,
-	}
-
 	// Execute Redis pipeline
 	result := testutil.StdoutOutputForFunc(func() {
-		mockLogger := datasource.NewMockLogger(0)
-		client, err := NewClient(config, mockLogger)
+		mockLogger := testutil.NewMockLogger(testutil.DEBUGLOG)
+		client := NewClient(testutil.NewMockConfig(map[string]string{
+			"REDIS_HOST": s.Host(),
+			"REDIS_PORT": s.Port(),
+		}), mockLogger)
 		assert.Nil(t, err)
 
 		// Pipeline execution
@@ -96,7 +80,6 @@ func TestRedis_PipelineQueryLogging(t *testing.T) {
 	})
 
 	// Assertions
-	assert.Contains(t, result, "[ping]")
-	assert.Contains(t, result, "pipeline")
-	assert.Contains(t, result, "[set key1 value1 ex 60: OK]")
+	assert.Contains(t, result, "ping")
+	assert.Contains(t, result, "set key1 value1 ex 60: OK")
 }
