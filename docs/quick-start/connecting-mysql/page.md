@@ -1,10 +1,10 @@
 # Connecting MySQL
 
-Just like any other datasource gofr also supports connection to MySQL database based on configuration variables. It automatically manages the connection pool, connection retry etc.
+Just like any other datasource gofr also supports connection to MySQL database based on configuration variables.
 
 ## Setup
 
-You can run the mysql server and create a database locally using the following docker command:
+You can run MySQL and create a database locally using the following docker command:
 
 ```bash
 docker run --name gofr-mysql -e MYSQL_ROOT_PASSWORD=root123 -e MYSQL_DATABASE=test_db -p 3306:3306 -d mysql:8.0.30
@@ -40,12 +40,18 @@ DB_PORT=3306
 Now in the following example let's store customer data using **POST** `/customer` and then use **GET** `/customer` to retrieve the same.
 We will be storing the customer data with `id` and `name`.
 
-After adding code to add and retrieve data from MySQL datastore `main.go` will be updated to the following.
+After adding code to add and retrieve data from MySQL datastore, `main.go` will be updated to the following.
 
 ```go
 package main
 
-import "gofr.dev/pkg/gofr"
+import (
+	"errors"
+
+	"github.com/redis/go-redis/v9"
+	
+	"gofr.dev/pkg/gofr"
+)
 
 type Customer struct {
 	ID   int    `json:"id"`
@@ -56,11 +62,16 @@ func main() {
 	// initialise gofr object
 	app := gofr.New()
 
-	app.GET("/greet", func(ctx *gofr.Context) (interface{}, error) {
-		// Get the value using the redis instance
-		value, err := ctx.Redis.Get(ctx.Context, "greeting").Result()
+	app.GET("/redis", func(ctx *gofr.Context) (interface{}, error) {
+		// Get the value using the Redis instance
 
-		return value, err
+		val, err := ctx.Redis.Get(ctx.Context, "test").Result()
+		if err != nil && !errors.Is(err, redis.Nil) {
+			// If the key is not found, we are not considering this an error and returning ""
+			return nil, err
+		}
+
+		return val, nil
 	})
 
 	app.POST("/customer/{name}", func(ctx *gofr.Context) (interface{}, error) {
