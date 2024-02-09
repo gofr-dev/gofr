@@ -1,4 +1,4 @@
-FROM ghcr.io/gofr-dev/website:workflow-package AS base
+FROM ghcr.io/gofr-dev/website:latest AS base
 
 WORKDIR /app
 

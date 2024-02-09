@@ -42,7 +42,7 @@ jobs:
 
       - name: Download UI Image
         run: |
-          docker pull ${{ env.WEBSITE_REGISTRY }}/gofr-dev/website:workflow-package
+          docker pull ${{ env.WEBSITE_REGISTRY }}/gofr-dev/website:latest
 
       - name: Build and Push Image Stage
         uses: docker/build-push-action@v4
