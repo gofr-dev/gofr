@@ -12,7 +12,7 @@ export const navigation = [
     {
         title: 'Advanced Guide',
         links: [
-            // { title: 'Middlewares', href: '/docs/advanced-guide/middleware' },
+            { title: 'Inter-service HTTP Calls', href: '/docs/advanced-guide/interservice-http-call' },
             { title: 'Publishing Custom Metrics', href: '/docs/advanced-guide/pushing-custom-metrics' },
             // { title: 'Handling Data Migrations', href: '/docs/advanced-guide/data-migrations' },
             // { title: 'Dealing with Remote Files', href: '/docs/advanced-guide/remote-files' },
