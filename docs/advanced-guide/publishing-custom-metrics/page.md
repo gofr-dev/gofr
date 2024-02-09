@@ -17,7 +17,7 @@ func main() {
     a := gofr.New()
 
     // Register all the custom metrics
-	a.Metrics().NewCounter(transactionSuccessful, "used to track the count of successful transactions")
+    a.Metrics().NewCounter(transactionSuccessful, "used to track the count of successful transactions")
     a.Metrics().NewUpDownCounter(totalCreditDaySales, "used to track the total credit sales in a day")
     a.Metrics().NewGauge(productStock, "used to track the number of products in stock")
     a.Metrics().NewHistogram(transactionTime, "used to track the time taken by a transaction", 5, 10, 15, 20, 25, 35)
