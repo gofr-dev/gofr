@@ -28,5 +28,3 @@ In this section we will walk through what GoFr is, what problems it solves, and 
 - Encourage a more functional way of programming.
 - Avoid code duplication.
 - Log and store data for analysis purposes.
-
-*If you need better performance and good productivity of your applications, you will love GoFr.*
