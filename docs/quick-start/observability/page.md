@@ -7,9 +7,9 @@ Now that you have created your server, lets see how GoFr by default manages obse
   When we run our server we see the following - logs for reading configs, database connection, requests, database queries, logs for missing configs etc.
   They contain information such as request's correlation ID, status codes, request time etc.
 
-  Logs are generated only for events equal to or above the specified log level, by default GoFr logs at INFO level.
+  Logs are generated only for events equal to or above the specified log level, by default GoFr logs at _INFO_ level.
 
-  Log Level can be changed by setting the environment variable `LOG_LEVEL` value to _WARN,DEBUG,ERROR or FATAL_.
+  Log Level can be changed by setting the environment variable `LOG_LEVEL` value to _WARN,DEBUG,ERROR,NOTICE or FATAL_.
 
   ```bash
     DEBU [16:32:47] Container is being created
@@ -23,31 +23,10 @@ Now that you have created your server, lets see how GoFr by default manages obse
 
   Logs are well-structured, they are of type JSON when exported to a file, such that they can be pushed to logging systems such as [Loki](https://grafana.com/oss/loki/), elastic search etc.
 
-## Metrics
-
-  GoFr gathers and pushes [essential metrics](/docs/v1/references/metrics) for different datastores(sql, redis etc), pubsubs, memory utilisation, request-response statistics etc automatically to port [http://localhost:2121/metrics](http://localhost:2121/metrics) in prometheus format.
-
-  ```bash
-  # TYPE go_gc_duration_seconds summary
-  go_gc_duration_seconds{quantile="0"} 4.275e-05
-  go_gc_duration_seconds{quantile="0.25"} 4.275e-05
-  go_gc_duration_seconds{quantile="0.5"} 6.8542e-05
-  # TYPE app_go_numGC gauge
-  app_go_numGC{otel_scope_name="test-service",otel_scope_version="dev"} 0
-  # TYPE app_go_routines gauge
-  app_go_routines{otel_scope_name="test-service",otel_scope_version="dev"} 10
-  # TYPE app_go_sys gauge
-  app_go_sys{otel_scope_name="test-service",otel_scope_version="dev"} 1.274984e+07
-  # TYPE app_http_response histogram
-  app_http_response_bucket{method="GET",otel_scope_name="test-service",otel_scope_version="dev",path="/customer",status="200",le="0.001"} 0
-  app_http_response_bucket{method="GET",otel_scope_name="test-service",otel_scope_version="dev",path="/customer",status="200",le="0.003"} 0
-  app_http_response_bucket{method="GET",otel_scope_name="test-service",otel_scope_version="dev",path="/customer",status="200",le="0.005"} 1
-  ```
-
 ## Tracing
 
-  GoFr adds traces by default and samples them for all the request and response, allows you to enable it by adding the configs.
-  It allows to monitor the request going through different parts of our app like database, handler etc.
+  GoFr adds traces by default for all the request and response,which allows you to export it to zipkin by adding the configs.
+  It allows to monitor the request going through different parts of application like database, handler etc.
 
   To see the traces install zipkin image using the following docker command
 
