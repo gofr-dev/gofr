@@ -25,6 +25,13 @@ func main() {
 		},
 	)
 
+	// service with improper health-check to test health check
+	a.AddHTTPService("fact-checker", "https://catfact.ninja",
+		&service.HealthConfig{
+			HealthEndpoint: "breed",
+		},
+	)
+
 	a.GET("/fact", Handler)
 
 	a.Run()
