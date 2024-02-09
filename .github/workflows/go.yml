@@ -5,10 +5,14 @@ on:
     branches:
       - main
       - development
+    paths-ignore:
+      - 'docs/**'
   pull_request:
     branches:
       - main
       - development
+    paths-ignore:
+      - 'docs/**'
 
 jobs:
   Example-Unit-Testing:
