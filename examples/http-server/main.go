@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
-
 	"gofr.dev/pkg/gofr"
 )
 
@@ -15,6 +14,7 @@ func main() {
 	// Create a new application
 	a := gofr.New()
 
+	//HTTP service with default health check endpoint
 	a.AddHTTPService("anotherService", "http://localhost:9000")
 
 	// Add all the routes

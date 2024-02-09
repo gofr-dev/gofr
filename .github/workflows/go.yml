@@ -5,10 +5,14 @@ on:
     branches:
       - main
       - development
+    paths-ignore:
+      - 'docs/**'
   pull_request:
     branches:
       - main
       - development
+    paths-ignore:
+      - 'docs/**'
 
 jobs:
   Example-Unit-Testing:
@@ -45,6 +49,9 @@ jobs:
         run: |
           go mod download
 
+      - name: Start Zipkin
+        run: docker run -d -p 2005:9411 openzipkin/zipkin:latest
+
       - name: Test
         run: |
           export GOFR_ENV=test
@@ -60,20 +67,7 @@ jobs:
   PKG-Unit-Testing:
     name: PKG Unit Testing🛠
     runs-on: ubuntu-latest
-    services:
-      redis:
-        image: redis:7.0.5
-        ports:
-          - "2002:6379"
-        options: "--entrypoint redis-server"
 
-      mysql:
-        image: mysql:8.2.0
-        ports:
-          - "2001:3306"
-        env:
-          MYSQL_ROOT_PASSWORD: "password"
-          MYSQL_DATABASE: "test"
     steps:
       - name: Checkout code into go module directory
         uses: actions/checkout@v4
@@ -128,11 +122,11 @@ jobs:
           codeCoverage=${codeCoverage%?}
           echo "CODE_COVERAGE=$codeCoverage" >> $GITHUB_ENV
 
-  #      - name: Check if code-coverage is greater than threshold
-  #        run: |
-  #          codeCoverage=${{ env.CODE_COVERAGE }}
-  #          codeCoverage=${codeCoverage%??}
-  #          if [[ $codeCoverage -lt 92 ]]; then echo "code coverage cannot be less than 92%, currently its ${{ env.CODE_COVERAGE }}%" && exit 1; fi;
+#      - name: Check if code-coverage is greater than threshold
+#        run: |
+#          codeCoverage=${{ env.CODE_COVERAGE }}
+#          codeCoverage=${codeCoverage%??}
+#          if [[ $codeCoverage -lt 92 ]]; then echo "code coverage cannot be less than 92%, currently its ${{ env.CODE_COVERAGE }}%" && exit 1; fi;
 
   upload_coverage:
     name: Upload Coverage📊

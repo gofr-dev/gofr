@@ -3,10 +3,10 @@ package gofr
 import (
 	"context"
 
-	"gofr.dev/pkg/gofr/container"
-
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
+
+	"gofr.dev/pkg/gofr/container"
 )
 
 type Context struct {
@@ -44,8 +44,9 @@ Developer Note: If you chain methods in a defer statement, everything except the
 */
 func (c *Context) Trace(name string) trace.Span {
 	tr := otel.GetTracerProvider().Tracer("gofr-context")
-	_, span := tr.Start(c.Context, name)
-	// c.Context = context // TODO - wanted to change the internal context to the newly returned context. But it crashes.
+	ctx, span := tr.Start(c.Context, name)
+	c.Context = ctx
+
 	return span
 }
 
@@ -60,11 +61,11 @@ func (c *Context) Bind(i interface{}) error {
 //	// c.Logger = nil // For now, all loggers are same. So, no need to set nil.
 // }
 
-func newContext(w Responder, r Request, newContainer *container.Container) *Context {
+func newContext(w Responder, r Request, c *container.Container) *Context {
 	return &Context{
 		Context:   r.Context(),
 		Request:   r,
 		responder: w,
-		Container: newContainer,
+		Container: c,
 	}
 }
