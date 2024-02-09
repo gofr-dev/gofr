@@ -40,7 +40,6 @@ func main() {
 	a.AddHTTPService("service1", "https://catfact.ninja",
 		&service.CircuitBreakerConfig{
 			Threshold: 4,
-			Timeout:   5 * time.Second,
 			Interval:  1 * time.Second,
 		},
 		&service.HealthConfig{
