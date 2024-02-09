@@ -9,21 +9,21 @@ export const navigation = [
             // { title: 'Observability', href: '/docs/quick-start/observability' },
         ],
     },
-    // {
-    //     title: 'Advanced Guide',
-    //     links: [
-    //         { title: 'Middlewares', href: '/docs/advanced-guide/middleware' },
-    //         { title: 'Publishing Custom Metrics', href: '/docs/advanced-guide/pushing-custom-metrics' },
-    //         { title: 'Handling Data Migrations', href: '/docs/advanced-guide/data-migrations' },
-    //         { title: 'Dealing with Remote Files', href: '/docs/advanced-guide/remote-files' },
-    //         { title: 'Dynamic Configurations', href: '/docs/advanced-guide/dynamic-configs' },
-    //         { title: 'Supporting OAuth', href: '/docs/advanced-guide/oauth' },
-    //         // { title: 'Circuit Breaker Support', href: '/docs/advanced-guide/circuit-breaker' },
-    //         { title: 'Writing gRPC Server', href: '/docs/advanced-guide/grpc' },
-    //         { title: 'Creating a Static File Server', href: '/docs/advanced-guide/static-file-server' },
-    //         { title: 'WebSockets', href: '/docs/advanced-guide/websockets' },
-    //     ],
-    // },
+    {
+        title: 'Advanced Guide',
+        links: [
+            // { title: 'Middlewares', href: '/docs/advanced-guide/middleware' },
+            // { title: 'Publishing Custom Metrics', href: '/docs/advanced-guide/pushing-custom-metrics' },
+            // { title: 'Handling Data Migrations', href: '/docs/advanced-guide/data-migrations' },
+            // { title: 'Dealing with Remote Files', href: '/docs/advanced-guide/remote-files' },
+            { title: 'Dynamic Log Level Change', href: '/docs/advanced-guide/dynamic-log-level-change' },
+            // { title: 'Supporting OAuth', href: '/docs/advanced-guide/oauth' },
+            // { title: 'Circuit Breaker Support', href: '/docs/advanced-guide/circuit-breaker' },
+            // { title: 'Writing gRPC Server', href: '/docs/advanced-guide/grpc' },
+            // { title: 'Creating a Static File Server', href: '/docs/advanced-guide/static-file-server' },
+            // { title: 'WebSockets', href: '/docs/advanced-guide/websockets' },
+        ],
+    },
     // {
     //     title: 'References',
     //     links: [
