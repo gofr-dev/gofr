@@ -30,7 +30,6 @@ func main() {
 	// service with circuit breaker
 	a.AddHTTPService("catalogue", "http://localhost:8000",&service.CircuitBreakerConfig{
 		Threshold: 4, // after how many failed request circuit breaker will start blocking the requests
-		Timeout:   5 * time.Second, //  duration for which circuit breaker maintains it's open state. 
 		Interval:  1 * time.Second, //  time interval duration between hitting the HealthURL
 	},)
 	
