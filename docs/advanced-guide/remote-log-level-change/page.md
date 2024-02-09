@@ -1,4 +1,4 @@
-# Dynamic Log Level Change
+# Remote Log Level Change
 
 Gofr provides support for dynamic remote log level updates, allowing users to adjust the log level of their application on-the-go. 
 This feature is facilitated through simple configuration settings.

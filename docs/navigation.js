@@ -16,7 +16,7 @@ export const navigation = [
             // { title: 'Publishing Custom Metrics', href: '/docs/advanced-guide/pushing-custom-metrics' },
             // { title: 'Handling Data Migrations', href: '/docs/advanced-guide/data-migrations' },
             // { title: 'Dealing with Remote Files', href: '/docs/advanced-guide/remote-files' },
-            { title: 'Dynamic Log Level Change', href: '/docs/advanced-guide/dynamic-log-level-change' },
+            { title: 'Remote Log Level Change', href: '/docs/advanced-guide/remote-log-level-change' },
             // { title: 'Supporting OAuth', href: '/docs/advanced-guide/oauth' },
             // { title: 'Circuit Breaker Support', href: '/docs/advanced-guide/circuit-breaker' },
             // { title: 'Writing gRPC Server', href: '/docs/advanced-guide/grpc' },
