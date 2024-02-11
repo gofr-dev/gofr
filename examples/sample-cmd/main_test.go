@@ -34,6 +34,7 @@ func TestCMDRunWithParams(t *testing.T) {
 		"command params -name=Vikash",
 		"command params   -name=Vikash",
 		"command -name=Vikash params",
+		"command params -name=Vikash -",
 	}
 
 	for i, command := range commands {
