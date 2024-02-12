@@ -15,6 +15,7 @@ env:
 jobs:
   dockerize_stage:
     runs-on: ubuntu-latest
+    if: (github.ref == 'refs/heads/development' || github.ref == 'refs/heads/main' || github.event_name == 'pull_request' )
     outputs:
       image: ${{ steps.output-image.outputs.image }}
     name: 🐳 Dockerize Stage
