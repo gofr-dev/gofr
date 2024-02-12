@@ -57,6 +57,9 @@ func New() *App {
 
 	app.initTracer()
 
+	// Register system metrics
+	app.registerFrameworkMetrics()
+
 	// Metrics Server
 	port, err := strconv.Atoi(app.Config.Get("METRICS_PORT"))
 	if err != nil || port <= 0 {
@@ -80,9 +83,6 @@ func New() *App {
 	}
 
 	app.grpcServer = newGRPCServer(app.container, port)
-
-	// Register system metrics
-	app.registerSystemMetrics()
 
 	return app
 }
@@ -207,12 +207,17 @@ func (a *App) Metrics() metrics.Manager {
 
 // Developer Note: Registering only system metrics here, and other metrics will be registered at their respective initialisation.
 // Because if all metrics are registered at a single place then we would be registering all the metrics irrespective of the usage.
-func (a *App) registerSystemMetrics() {
+func (a *App) registerFrameworkMetrics() {
+	// system info metrics
 	a.Metrics().NewGauge("app_go_routines", "Number of Go routines running.")
 	a.Metrics().NewGauge("app_sys_memory_alloc", "Number of bytes allocated for heap objects.")
 	a.Metrics().NewGauge("app_sys_total_alloc", "Number of cumulative bytes allocated for heap objects.")
 	a.Metrics().NewGauge("app_go_numGC", "Number of completed Garbage Collector cycles.")
 	a.Metrics().NewGauge("app_go_sys", "Number of total bytes of memory.")
+
+	// http metrics
+	histogramBuckets := []float64{.001, .003, .005, .01, .02, .03, .05, .1, .2, .3, .5, .75, 1, 2, 3, 5, 10, 30}
+	a.Metrics().NewHistogram("app_http_response", "response time of http requests in seconds", histogramBuckets...)
 }
 
 // SubCommand adds a sub-command to the CLI application.
