@@ -1,7 +1,10 @@
 package gofr
 
 import (
+	"context"
 	"fmt"
+
+	"gofr.dev/pkg/gofr/datasource/pubsub"
 
 	"net/http"
 	"os"
@@ -243,4 +246,30 @@ type otelErrorHandler struct {
 
 func (o *otelErrorHandler) Handle(e error) {
 	o.logger.Error(e.Error())
+}
+
+func (a *App) Subscribe(topic string, handler func(c *Context, message []byte)) {
+	// Create a new gofr.Context for subscription
+	if a.container.Pubsub == nil {
+		a.container.Logger.Errorf("Subscriber not initialized in the container")
+		return
+	}
+
+	go func() {
+		for {
+			var (
+				err error
+				msg pubsub.Message
+			)
+
+			ctx := newContext(nil, &msg, a.container)
+			msg, err = a.container.Pubsub.Subscribe(context.Background(), topic)
+
+			if err != nil {
+				a.container.Logger.Errorf("error while reading from kafka, err : %v", err.Error())
+			}
+
+			handler(ctx, msg.Value)
+		}
+	}()
 }

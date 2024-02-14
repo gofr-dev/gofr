@@ -1,8 +1,11 @@
 package container
 
 import (
+	"strconv"
+
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/datasource/pubsub"
+	"gofr.dev/pkg/gofr/datasource/pubsub/kafka"
 	"gofr.dev/pkg/gofr/datasource/redis"
 	"gofr.dev/pkg/gofr/datasource/sql"
 	"gofr.dev/pkg/gofr/logging"
@@ -25,7 +28,7 @@ type Container struct {
 
 	Services       map[string]service.HTTP
 	metricsManager metrics.Manager
-	pubsub         pubsub.Client
+	Pubsub         pubsub.Client
 
 	Redis *redis.Redis
 	DB    *sql.DB
@@ -46,7 +49,17 @@ func NewContainer(conf config.Config) *Container {
 
 	c.metricsManager = metrics.NewMetricManager(exporters.Prometheus(c.appName, c.appVersion), c.Logger)
 
-	c.pubsub = pubsub.New(conf, c.Logger)
+	if conf.Get("PUBSUB_BROKER") != "" {
+		partition, _ := strconv.Atoi(conf.GetOrDefault("PARTITION_SIZE", "0"))
+
+		c.Pubsub = kafka.New(kafka.Config{
+			Broker:          conf.Get("PUBSUB_BROKER"),
+			Partition:       partition,
+			Offset:          0,
+			ConsumerGroupID: conf.Get("CONSUMER_ID"),
+			Topic:           conf.Get("PUBSUB_TOPIC"),
+		}, c.Logger)
+	}
 
 	return c
 }

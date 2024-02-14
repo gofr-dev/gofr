@@ -3,11 +3,11 @@ package pubsub
 import "context"
 
 type Publisher interface {
-	Publish(ctx context.Context, topic string, message interface{}) error
+	Publish(ctx context.Context, topic string, message []byte) error
 }
 
 type Subscriber interface {
-	Subscribe(ctx context.Context, topic string) Message
+	Subscribe(ctx context.Context, topic string) (Message, error)
 }
 
 type Client interface {
