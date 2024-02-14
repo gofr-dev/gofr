@@ -2,7 +2,6 @@ package metrics
 
 import (
 	"context"
-
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 )
@@ -43,10 +42,12 @@ type metricsManager struct {
 var globalMetricsManager *metricsManager
 
 func NewMetricsManager(meter metric.Meter, logger Logger) Manager {
-	globalMetricsManager = &metricsManager{
-		meter:  meter,
-		store:  newOtelStore(),
-		logger: logger,
+	if globalMetricsManager == nil {
+		globalMetricsManager = &metricsManager{
+			meter:  meter,
+			store:  newOtelStore(),
+			logger: logger,
+		}
 	}
 
 	return globalMetricsManager

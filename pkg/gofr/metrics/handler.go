@@ -19,12 +19,11 @@ func GetHandler() http.Handler {
 
 func systemMetricsHandler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		m := GetMetricsManager()
-
 		var stats runtime.MemStats
 
 		runtime.ReadMemStats(&stats)
 
+		m := GetMetricsManager()
 		m.SetGauge("app_go_routines", float64(runtime.NumGoroutine()))
 		m.SetGauge("app_sys_memory_alloc", float64(stats.Alloc))
 		m.SetGauge("app_sys_total_alloc", float64(stats.TotalAlloc))
