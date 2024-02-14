@@ -2,8 +2,9 @@ package main
 
 import (
 	"fmt"
-
 	"gofr.dev/examples/using-migrations/migrations"
+	"gofr.dev/pkg/gofr/migration"
+
 	"gofr.dev/pkg/gofr"
 )
 
@@ -12,7 +13,7 @@ func main() {
 	a := gofr.New()
 
 	// Add migrations to run
-	a.Migrate(migrations.All())
+	a.Migrate(map[int64]migration.Migrate{1: migrations.K1_createTableEmployee()})
 
 	// Add all the routes
 	a.GET("/hello", HelloHandler)
