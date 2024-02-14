@@ -42,15 +42,17 @@ type metricsManager struct {
 var globalMetricsManager *metricsManager
 
 func NewMetricsManager(meter metric.Meter, logger Logger) Manager {
-	if globalMetricsManager == nil {
-		globalMetricsManager = &metricsManager{
-			meter:  meter,
-			store:  newOtelStore(),
-			logger: logger,
-		}
+	manager := &metricsManager{
+		meter:  meter,
+		store:  newOtelStore(),
+		logger: logger,
 	}
 
-	return globalMetricsManager
+	if globalMetricsManager == nil {
+		globalMetricsManager = manager
+	}
+
+	return manager
 }
 
 func GetMetricsManager() Manager {
