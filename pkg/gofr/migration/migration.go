@@ -6,7 +6,6 @@ import (
 	"github.com/gogo/protobuf/sortkeys"
 
 	"gofr.dev/pkg/gofr/container"
-	"gofr.dev/pkg/gofr/datasource/redis"
 )
 
 type MigrateFunc func(d Datasource) error
@@ -15,30 +14,8 @@ type Migrate struct {
 	UP MigrateFunc
 }
 
-type Migrator interface {
-	Run(keys []int64, migrationsMap map[int64]Migrate, container *container.Container)
-}
-
-type Logger interface {
-	Info(args ...interface{})
-	Infof(format string, args ...interface{})
-	Error(args ...interface{})
-	Errorf(format string, args ...interface{})
-}
-
-type Datasource struct {
-	Logger
-
-	DB    DB
-	Redis *redis.Redis
-}
-
-func Run(migrator Migrator, migrationsMap map[int64]Migrate, c *container.Container) {
-	if migrationsMap == nil || migrator == nil {
-		c.Logger.Error("Run Failed! migrationsMap or migrator is nil")
-
-		return
-	}
+func Run(migrationsMap map[int64]Migrate, c *container.Container) {
+	d := newDatasource(c)
 
 	invalidKeys := ""
 
@@ -63,5 +40,11 @@ func Run(migrator Migrator, migrationsMap map[int64]Migrate, c *container.Contai
 
 	sortkeys.Int64s(keys)
 
-	migrator.Run(keys, migrationsMap, c)
+	for _, v := range keys {
+		d.DB.migrationVersion = v
+		err := migrationsMap[v].UP(d)
+		if err != nil {
+			return
+		}
+	}
 }
