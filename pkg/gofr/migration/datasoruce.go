@@ -19,7 +19,7 @@ func newDatasource(c *container.Container) Datasource {
 		d.DB = newMysql(c)
 	}
 
-	d.Redis.Client = c.Redis.Client
+	d.Redis = c.Redis
 
 	return d
 }
