@@ -25,7 +25,7 @@ func (m *metricServer) Run(c *container.Container) {
 
 		srv = &http.Server{
 			Addr:              fmt.Sprintf(":%d", m.port),
-			Handler:           metrics.GetHandler(c.Metrics()),
+			Handler:           metrics.GetHandler(),
 			ReadHeaderTimeout: 5 * time.Second,
 		}
 

@@ -217,7 +217,7 @@ func (a *App) registerFrameworkMetrics() {
 
 	// http metrics
 	histogramBuckets := []float64{.001, .003, .005, .01, .02, .03, .05, .1, .2, .3, .5, .75, 1, 2, 3, 5, 10, 30}
-	a.Metrics().NewHistogram("app_http_response", "response time of http requests in seconds", histogramBuckets...)
+	a.Metrics().NewHistogram("app_http_response", "Response time of http requests in seconds", histogramBuckets...)
 }
 
 // SubCommand adds a sub-command to the CLI application.

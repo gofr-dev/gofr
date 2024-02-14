@@ -8,17 +8,19 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
-func GetHandler(m Manager) http.Handler {
+func GetHandler() http.Handler {
 	var router = mux.NewRouter()
 
 	// Prometheus
-	router.NewRoute().Methods(http.MethodGet).Path("/metrics").Handler(systemMetricsHandler(m, promhttp.Handler()))
+	router.NewRoute().Methods(http.MethodGet).Path("/metrics").Handler(systemMetricsHandler(promhttp.Handler()))
 
 	return router
 }
 
-func systemMetricsHandler(m Manager, next http.Handler) http.Handler {
+func systemMetricsHandler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		m := GetMetricsManager()
+
 		var stats runtime.MemStats
 
 		runtime.ReadMemStats(&stats)

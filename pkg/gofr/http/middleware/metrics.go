@@ -9,7 +9,7 @@ import (
 	"gofr.dev/pkg/gofr/metrics"
 )
 
-func Metrics(m metrics.Manager) func(inner http.Handler) http.Handler {
+func Metrics() func(inner http.Handler) http.Handler {
 	return func(inner http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			start := time.Now()
@@ -20,6 +20,7 @@ func Metrics(m metrics.Manager) func(inner http.Handler) http.Handler {
 			defer func(res *StatusResponseWriter, req *http.Request) {
 				duration := time.Since(start)
 
+				m := metrics.GetMetricsManager()
 				m.RecordHistogram(context.Background(), "app_http_response", duration.Seconds(),
 					"path", r.URL.Path, "method", req.Method, "status", fmt.Sprintf("%d", res.status))
 			}(srw, r)

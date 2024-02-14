@@ -38,7 +38,7 @@ func NewContainer(conf config.Config) *Container {
 
 	c.Debug("Container is being created")
 
-	c.metricsManager = metrics.NewMetricManager(exporters.Prometheus(c.appName, c.appVersion), c.Logger)
+	c.metricsManager = metrics.NewMetricsManager(exporters.Prometheus(c.appName, c.appVersion), c.Logger)
 
 	c.Redis = redis.NewClient(conf, c.Logger)
 
