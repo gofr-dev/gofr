@@ -2,6 +2,7 @@ package container
 
 import (
 	"gofr.dev/pkg/gofr/config"
+	"gofr.dev/pkg/gofr/datasource/pubsub"
 	"gofr.dev/pkg/gofr/datasource/redis"
 	"gofr.dev/pkg/gofr/datasource/sql"
 	"gofr.dev/pkg/gofr/logging"
@@ -24,6 +25,7 @@ type Container struct {
 
 	Services       map[string]service.HTTP
 	metricsManager metrics.Manager
+	pubsub         pubsub.Client
 
 	Redis *redis.Redis
 	DB    *sql.DB
@@ -43,6 +45,8 @@ func NewContainer(conf config.Config) *Container {
 	c.DB = sql.NewSQL(conf, c.Logger)
 
 	c.metricsManager = metrics.NewMetricManager(exporters.Prometheus(c.appName, c.appVersion), c.Logger)
+
+	c.pubsub = pubsub.New(conf, c.Logger)
 
 	return c
 }

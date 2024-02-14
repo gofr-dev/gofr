@@ -10,6 +10,7 @@ import (
 type Config struct {
 	Broker    string
 	Partition int
+	Offset    int64
 }
 
 type kafkaClient struct {
@@ -17,14 +18,22 @@ type kafkaClient struct {
 	logger pubsub.Logger
 }
 
-func New(conf Config) *kafkaClient {
+func New(conf Config, logger pubsub.Logger) pubsub.Client {
 	conn, err := kafka.Dial("tcp", conf.Broker)
 	if err != nil {
-		return &kafkaClient{}
+		logger.Errorf("could not connect to Kafka at %v, error : %v", conf.Broker, err.Error())
+		return &kafkaClient{
+			logger: logger,
+		}
+	}
+
+	if conf.Offset != 0 {
+		conn.Seek(conf.Offset, kafka.SeekStart)
 	}
 
 	return &kafkaClient{
-		conn: conn,
+		conn:   conn,
+		logger: logger,
 	}
 }
 
