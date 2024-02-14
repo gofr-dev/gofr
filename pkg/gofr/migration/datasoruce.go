@@ -8,8 +8,6 @@ import (
 type Datasource struct {
 	Logger
 
-	migrationVersion int64
-
 	DB    sqlDB
 	Redis *redis.Redis
 }
