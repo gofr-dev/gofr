@@ -23,7 +23,6 @@ var (
 // CircuitBreakerConfig holds the configuration for the CircuitBreaker.
 type CircuitBreakerConfig struct {
 	Threshold int           // Threshold represents the max no of retry before switching the circuit breaker state.
-	Timeout   time.Duration // Timeout represents the time duration for which circuit breaker maintains it's open state.
 	Interval  time.Duration // Interval represents the time interval duration between hitting the HealthURL
 }
 
@@ -33,7 +32,6 @@ type CircuitBreaker struct {
 	state        int // ClosedState or OpenState
 	failureCount int
 	threshold    int
-	timeout      time.Duration
 	interval     time.Duration
 	lastChecked  time.Time
 
@@ -45,7 +43,6 @@ func NewCircuitBreaker(config CircuitBreakerConfig, h HTTP) *CircuitBreaker {
 	cb := &CircuitBreaker{
 		state:     ClosedState,
 		threshold: config.Threshold,
-		timeout:   config.Timeout,
 		interval:  config.Interval,
 		HTTP:      h,
 	}
@@ -63,7 +60,7 @@ func (cb *CircuitBreaker) executeWithCircuitBreaker(ctx context.Context, f func(
 	defer cb.mu.Unlock()
 
 	if cb.state == OpenState {
-		if time.Since(cb.lastChecked) > cb.timeout {
+		if time.Since(cb.lastChecked) > cb.interval {
 			// Check health before potentially closing the circuit
 			if cb.healthCheck(ctx) {
 				cb.resetCircuit()
@@ -150,7 +147,7 @@ func (cb *CircuitBreakerConfig) addOption(h HTTP) HTTP {
 }
 
 func (cb *CircuitBreaker) tryCircuitRecovery() bool {
-	if time.Since(cb.lastChecked) > cb.timeout && cb.healthCheck(context.TODO()) {
+	if time.Since(cb.lastChecked) > cb.interval && cb.healthCheck(context.TODO()) {
 		cb.resetCircuit()
 		return true
 	}

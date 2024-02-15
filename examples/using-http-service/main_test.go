@@ -24,15 +24,15 @@ func Test_main(t *testing.T) {
 	}{
 		{
 			desc:        "simple service handler",
-			path:        "/service",
+			path:        "/fact",
 			expectedRes: `{"data":{"fact":"Cats have 3 eyelids.","length":20}}` + "\n",
 			statusCode:  200,
 		},
 		{
 			desc: "health check",
 			path: "/.well-known/health",
-			expectedRes: `{"data":{"service1":{"status":"UP","details":{"host":"catfact.ninja"}},` +
-				`"service2":{"status":"DOWN","details":{"error":"service down","host":"catfact.ninja"}}}}` + "\n",
+			expectedRes: `{"data":{"cat-facts":{"status":"UP","details":{"host":"catfact.ninja"}},` +
+				`"fact-checker":{"status":"DOWN","details":{"error":"service down","host":"catfact.ninja"}}}}` + "\n",
 			statusCode: 200,
 		},
 	}

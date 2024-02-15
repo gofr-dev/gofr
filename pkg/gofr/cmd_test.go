@@ -203,3 +203,21 @@ func Test_Run_ErrorNoArgumentGiven(t *testing.T) {
 
 	assert.Contains(t, logs, "No Command Found!")
 }
+
+func Test_Run_SuccessCallInvalidHypens(t *testing.T) {
+	os.Args = []string{"", "log", "-param=value", "-b", "-"}
+
+	c := cmd{}
+
+	c.addRoute("log", func(c *Context) (interface{}, error) {
+		c.Logger.Info("handler called")
+
+		return nil, nil
+	})
+
+	logs := testutil.StdoutOutputForFunc(func() {
+		c.Run(container.NewContainer(config.NewEnvFile("")))
+	})
+
+	assert.Contains(t, logs, "handler called")
+}
