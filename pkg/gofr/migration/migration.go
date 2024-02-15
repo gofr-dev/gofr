@@ -15,9 +15,7 @@ type Migrate struct {
 }
 
 func Run(migrationsMap map[int64]Migrate, c *container.Container) {
-	keys := make([]int64, 0, len(migrationsMap))
-
-	invalidKeys := getInvalidKeys(keys, migrationsMap)
+	invalidKeys, keys := getSequence(migrationsMap)
 	if len(invalidKeys) > 0 {
 		c.Logger.Errorf("Run Failed! UP not defined for the following keys: %v", invalidKeys)
 	}
@@ -49,11 +47,11 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 			return
 		}
 
-		p := c.Redis.TxPipeline()
+		//p := c.Redis.TxPipeline()
 
-		sql := newMysql(v, tx)
+		sql := newMysql(tx)
 
-		datasource := newDatasource(c.Logger, sql, newRedis(v, p))
+		datasource := newDatasource(c.Logger, sql, nil)
 
 		err = migrationsMap[v].UP(datasource)
 		if err != nil {
@@ -61,12 +59,13 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 			return
 		}
 
-		sqlPostRun(c, tx, v, start, sql.used)
+		sqlPostRun(c, tx, v, start)
 	}
 }
 
-func getInvalidKeys(keys []int64, migrationsMap map[int64]Migrate) []int64 {
-	invalidKey := make([]int64, len(keys))
+func getSequence(migrationsMap map[int64]Migrate) ([]int64, []int64) {
+	invalidKey := make([]int64, 0, len(migrationsMap))
+	keys := make([]int64, 0, len(migrationsMap))
 
 	for k, v := range migrationsMap {
 		if v.UP == nil {
@@ -78,5 +77,5 @@ func getInvalidKeys(keys []int64, migrationsMap map[int64]Migrate) []int64 {
 		keys = append(keys, k)
 	}
 
-	return invalidKey
+	return invalidKey, keys
 }

@@ -16,30 +16,25 @@ type db interface {
 }
 
 type sqlDB struct {
-	migrationVersion int64
-	used             bool
+	operation chan bool
 
 	db
 }
 
-func newMysql(version int64, d db) sqlDB {
-	return sqlDB{db: d, migrationVersion: version}
+func newMysql(d db) sqlDB {
+	return sqlDB{db: d}
 }
 
-func (s sqlDB) Query(query string, args ...interface{}) (*goSql.Rows, error) {
-	s.used = true
+func (s *sqlDB) Query(query string, args ...interface{}) (*goSql.Rows, error) {
 	return s.db.Query(query, args...)
 }
-func (s sqlDB) QueryRow(query string, args ...interface{}) *goSql.Row {
-	s.used = true
+func (s *sqlDB) QueryRow(query string, args ...interface{}) *goSql.Row {
 	return s.db.QueryRow(query, args...)
 }
-func (s sqlDB) QueryRowContext(ctx context.Context, query string, args ...interface{}) *goSql.Row {
-	s.used = true
+func (s *sqlDB) QueryRowContext(ctx context.Context, query string, args ...interface{}) *goSql.Row {
 	return s.db.QueryRowContext(ctx, query, args...)
 }
-func (s sqlDB) Exec(query string, args ...interface{}) (goSql.Result, error) {
-	s.used = true
+func (s *sqlDB) Exec(query string, args ...interface{}) (goSql.Result, error) {
 	return s.db.Exec(query, args...)
 }
 
@@ -83,21 +78,28 @@ func rollbackAndLog(c *container.Container, tx *sql.Tx) {
 	}
 }
 
-func sqlPostRun(c *container.Container, tx *sql.Tx, currentMigration int64, start time.Time, used bool) {
-	if !used {
-		rollbackAndLog(c, tx)
-		return
-	}
+func sqlPostRun(c *container.Container, tx *sql.Tx, currentMigration int64, start time.Time) {
+	//if len(operation) > 0 {
+	//	rollbackAndLog(c, tx)
+	//
+	//	return
+	//}
 
 	err := insertMigrationRecord(tx, currentMigration, start)
 	if err != nil {
 		rollbackAndLog(c, tx)
+
+		return
 	}
 
 	// Commit transaction
 	if err := tx.Commit(); err != nil {
 		c.Logger.Error("unable to commit transaction: %v", err)
+
+		return
 	}
+
+	c.Logger.Infof("Migration %v ran successfully", currentMigration)
 }
 
 const (
