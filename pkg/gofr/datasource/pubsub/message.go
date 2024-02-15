@@ -17,11 +17,11 @@ func (m *Message) Context() context.Context {
 	return m.ctx
 }
 
-func (m *Message) Param(s string) string {
+func (m *Message) Param(_ string) string {
 	return ""
 }
 
-func (m *Message) PathParam(s string) string {
+func (m *Message) PathParam(_ string) string {
 	return ""
 }
 

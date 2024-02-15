@@ -55,7 +55,6 @@ func NewContainer(conf config.Config) *Container {
 		c.Pubsub = kafka.New(kafka.Config{
 			Broker:          conf.Get("PUBSUB_BROKER"),
 			Partition:       partition,
-			Offset:          0,
 			ConsumerGroupID: conf.Get("CONSUMER_ID"),
 			Topic:           conf.Get("PUBSUB_TOPIC"),
 		}, c.Logger)

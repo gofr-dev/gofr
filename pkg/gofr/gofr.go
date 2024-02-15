@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"gofr.dev/pkg/gofr/datasource/pubsub"
-
 	"net/http"
 	"os"
 	"strconv"
@@ -257,19 +255,20 @@ func (a *App) Subscribe(topic string, handler func(c *Context, message []byte)) 
 
 	go func() {
 		for {
-			var (
-				err error
-				msg pubsub.Message
-			)
-
-			ctx := newContext(nil, &msg, a.container)
-			msg, err = a.container.Pubsub.Subscribe(context.Background(), topic)
+			ctx := context.Background()
+			msg, err := a.container.Pubsub.Subscribe(ctx, topic)
 
 			if err != nil {
-				a.container.Logger.Errorf("error while reading from kafka, err : %v", err.Error())
+				a.container.Logger.Errorf("error while reading from Kafka, err: %v", err.Error())
+				continue
 			}
 
-			handler(ctx, msg.Value)
+			handler(newContext(nil, &msg, a.container), msg.Value)
+
+			err = a.container.Pubsub.Commit(ctx, msg)
+			if err != nil {
+				a.container.Logger.Errorf("error committing message: %v", err)
+			}
 		}
 	}()
 }

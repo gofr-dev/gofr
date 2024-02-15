@@ -1,6 +1,8 @@
 package pubsub
 
-import "context"
+import (
+	"context"
+)
 
 type Publisher interface {
 	Publish(ctx context.Context, topic string, message []byte) error
@@ -8,6 +10,7 @@ type Publisher interface {
 
 type Subscriber interface {
 	Subscribe(ctx context.Context, topic string) (Message, error)
+	Commit(ctx context.Context, msg Message) error
 }
 
 type Client interface {
