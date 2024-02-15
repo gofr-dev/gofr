@@ -15,7 +15,6 @@ type Migrate struct {
 }
 
 func Run(migrationsMap map[int64]Migrate, c *container.Container) {
-	d := newDatasource(c)
 
 	invalidKeys := ""
 
@@ -41,8 +40,16 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 	sortkeys.Int64s(keys)
 
 	for _, v := range keys {
-		d.DB.migrationVersion = v
-		err := migrationsMap[v].UP(d)
+		tx, err := c.DB.Begin()
+		if err != nil {
+			tx.Rollback()
+		}
+
+		p := c.Redis.TxPipeline()
+
+		datasource := newDatasource(c.Logger, newMysql(v, tx), newRedis(v, p))
+
+		err = migrationsMap[v].UP(datasource)
 		if err != nil {
 			return
 		}

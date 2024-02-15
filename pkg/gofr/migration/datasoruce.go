@@ -1,25 +1,43 @@
 package migration
 
 import (
-	"gofr.dev/pkg/gofr/container"
-	"gofr.dev/pkg/gofr/datasource/redis"
+	"context"
+	"time"
+
+	goRedis "github.com/redis/go-redis/v9"
 )
 
 type Datasource struct {
 	Logger
 
 	DB    sqlDB
-	Redis *redis.Redis
+	Redis redis
 }
 
-func newDatasource(c *container.Container) Datasource {
-	d := Datasource{Logger: c.Logger}
-
-	if c.DB.DB != nil {
-		d.DB = newMysql(c)
+func newDatasource(l Logger, db sqlDB, r redis) Datasource {
+	return Datasource{
+		Logger: l,
+		DB:     db,
+		Redis:  r,
 	}
+}
 
-	d.Redis = c.Redis
+type redisCache struct {
+	migrationVersion int64
 
-	return d
+	redis
+}
+
+func newRedis(version int64, r redis) redisCache {
+	return redisCache{
+		migrationVersion: version,
+		redis:            r,
+	}
+}
+
+type redis interface {
+	Get(ctx context.Context, key string) *goRedis.StringCmd
+	Set(ctx context.Context, key string, value interface{}, expiration time.Duration) *goRedis.StatusCmd
+	Del(ctx context.Context, keys ...string) *goRedis.IntCmd
+	Rename(ctx context.Context, key, newkey string) *goRedis.StatusCmd
 }

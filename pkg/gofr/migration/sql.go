@@ -16,76 +16,31 @@ type db interface {
 }
 
 type sqlDB struct {
-	container        *gofrContainer.Container
 	migrationVersion int64
+	used             bool
 
 	db
 }
 
-func newMysql(c *gofrContainer.Container) sqlDB {
-	return sqlDB{container: c}
+func newMysql(version int64, d db) sqlDB {
+	return sqlDB{db: d, migrationVersion: version}
 }
 
 func (s sqlDB) Query(query string, args ...interface{}) (*sql.Rows, error) {
-	return s.container.DB.Query(query, args)
+	s.used = true
+	return s.db.Query(query, args...)
 }
 func (s sqlDB) QueryRow(query string, args ...interface{}) *sql.Row {
-	return s.container.DB.QueryRow(query, args)
+	s.used = true
+	return s.db.QueryRow(query, args...)
 }
 func (s sqlDB) QueryRowContext(ctx context.Context, query string, args ...interface{}) *sql.Row {
-	return s.container.DB.QueryRowContext(ctx, query, args)
+	s.used = true
+	return s.db.QueryRowContext(ctx, query, args...)
 }
 func (s sqlDB) Exec(query string, args ...interface{}) (sql.Result, error) {
-	ensureMigrationTableExists(s.container)
-
-	// Get last migration version
-	lastMigration := getLastMigration(s.container)
-	if s.migrationVersion <= lastMigration {
-		// TODO exit as it has already executed
-	}
-
-	// Begin transaction
-	tx, err := s.container.DB.Begin()
-	if err != nil {
-		s.container.Logger.Error("unable to begin transaction: %v", err)
-
-		return nil, err
-	}
-
-	// Insert migration record
-	startTime := time.Now().UTC()
-	if err := insertMigrationRecord(tx, s.migrationVersion, startTime); err != nil {
-		s.container.Logger.Errorf("unable to insert migration record: %v", err)
-		rollbackAndLog(s.container, tx)
-
-		return nil, err
-	}
-
-	// Run migration
-	result, err := tx.Exec(query, args...)
-	if err != nil {
-		s.container.Logger.Errorf("unable to run migration: %v", err)
-		rollbackAndLog(s.container, tx)
-
-		return nil, err
-	}
-
-	// Update migration duration
-	if err := updateMigrationDuration(tx, s.migrationVersion, startTime); err != nil {
-		s.container.Logger.Errorf("unable to update migration duration: %v", err)
-		rollbackAndLog(s.container, tx)
-
-		return nil, err
-	}
-
-	// Commit transaction
-	if err := tx.Commit(); err != nil {
-		s.container.Logger.Error("unable to commit transaction: %v", err)
-
-		return nil, err
-	}
-
-	return result, nil
+	s.used = true
+	return s.db.Exec(query, args...)
 }
 
 func ensureMigrationTableExists(c *gofrContainer.Container) {
