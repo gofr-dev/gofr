@@ -49,7 +49,7 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 
 		//p := c.Redis.TxPipeline()
 
-		sql := newMysql(tx)
+		sql := newMysql(tx, &sqlUsage{})
 
 		datasource := newDatasource(c.Logger, sql, nil)
 
@@ -59,7 +59,7 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 			return
 		}
 
-		sqlPostRun(c, tx, v, start)
+		sqlPostRun(c, tx, v, start, sql.setter)
 	}
 }
 
