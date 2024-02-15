@@ -23,7 +23,7 @@ type Container struct {
 	appVersion string
 
 	Services       map[string]service.HTTP
-	metricsManager metrics.Manager
+	metricsManager metrics.MetricsManager
 
 	Redis *redis.Redis
 	DB    *sql.DB
@@ -51,10 +51,6 @@ func NewContainer(conf config.Config) *Container {
 // HTTP services are registered from AddHTTPService method of gofr object.
 func (c *Container) GetHTTPService(serviceName string) service.HTTP {
 	return c.Services[serviceName]
-}
-
-func (c *Container) Metrics() metrics.Manager {
-	return c.metricsManager
 }
 
 func (c *Container) GetAppName() string {

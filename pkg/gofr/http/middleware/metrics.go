@@ -4,7 +4,10 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
+
+	"github.com/gorilla/mux"
 
 	"gofr.dev/pkg/gofr/metrics"
 )
@@ -16,13 +19,15 @@ func Metrics() func(inner http.Handler) http.Handler {
 
 			srw := &StatusResponseWriter{ResponseWriter: w}
 
+			path, _ := mux.CurrentRoute(r).GetPathTemplate()
+			path = strings.TrimSuffix(path, "/")
+
 			// this has to be called in the end so that status code is populated
 			defer func(res *StatusResponseWriter, req *http.Request) {
 				duration := time.Since(start)
 
-				m := metrics.GetMetricsManager()
-				m.RecordHistogram(context.Background(), "app_http_response", duration.Seconds(),
-					"path", r.URL.Path, "method", req.Method, "status", fmt.Sprintf("%d", res.status))
+				metrics.Manager().RecordHistogram(context.Background(), "app_http_response", duration.Seconds(),
+					"path", path, "method", req.Method, "status", fmt.Sprintf("%d", res.status))
 			}(srw, r)
 
 			inner.ServeHTTP(srw, r)

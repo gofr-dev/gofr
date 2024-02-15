@@ -13,6 +13,8 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/trace"
+
+	"gofr.dev/pkg/gofr/metrics"
 )
 
 type httpService struct {
@@ -166,7 +168,12 @@ func (h *httpService) createAndSendRequest(ctx context.Context, method string, p
 
 	resp, err := h.Do(req)
 
-	log.ResponseTime = time.Since(requestStart).Microseconds()
+	respTime := time.Since(requestStart)
+
+	metrics.Manager().RecordHistogram(ctx, "app_http_service_response", respTime.Seconds(), "path", h.url, "method", method,
+		"status", fmt.Sprintf("%v", resp.StatusCode))
+
+	log.ResponseTime = respTime.Microseconds()
 
 	if err != nil {
 		log.ResponseCode = http.StatusInternalServerError
