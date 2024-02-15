@@ -13,6 +13,10 @@ type Message struct {
 	MetaData interface{}
 }
 
+func NewMessage() *Message {
+	return &Message{ctx: context.Background()}
+}
+
 func (m *Message) Context() context.Context {
 	return m.ctx
 }

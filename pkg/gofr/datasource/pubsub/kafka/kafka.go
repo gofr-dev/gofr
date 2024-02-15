@@ -65,7 +65,7 @@ func (k *kafkaClient) Publish(ctx context.Context, topic string, message []byte)
 	return nil
 }
 
-func (k *kafkaClient) Subscribe(ctx context.Context, topic string) (pubsub.Message, error) {
+func (k *kafkaClient) Subscribe(ctx context.Context, topic string) (*pubsub.Message, error) {
 	if k.reader == nil {
 		reader := kafka.NewReader(kafka.ReaderConfig{
 			GroupID:  k.config.ConsumerGroupID,
@@ -83,10 +83,17 @@ func (k *kafkaClient) Subscribe(ctx context.Context, topic string) (pubsub.Messa
 	msg, err := k.reader.ReadMessage(ctx)
 	if err != nil {
 		k.logger.Errorf("failed to read message from Kafka topic %s: %v", topic, err)
-		return pubsub.Message{}, err
+		return nil, err
 	}
 
-	return pubsub.Message{
+	err = k.reader.CommitMessages(ctx, msg)
+	if err != nil {
+		k.logger.Errorf("failed to commit message from topic %s: %w", msg.Topic, err)
+
+		return nil, err
+	}
+
+	return &pubsub.Message{
 		Value: msg.Value,
 		Topic: topic,
 	}, nil
@@ -95,6 +102,7 @@ func (k *kafkaClient) Subscribe(ctx context.Context, topic string) (pubsub.Messa
 func (k *kafkaClient) Commit(ctx context.Context, msg pubsub.Message) error {
 	err := k.reader.CommitMessages(ctx, kafka.Message{
 		Topic:     msg.Topic,
+		Value:     msg.Value,
 		Partition: k.config.Partition,
 	})
 	if err != nil {

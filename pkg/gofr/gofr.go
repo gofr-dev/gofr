@@ -3,7 +3,6 @@ package gofr
 import (
 	"context"
 	"fmt"
-
 	"net/http"
 	"os"
 	"strconv"
@@ -246,7 +245,7 @@ func (o *otelErrorHandler) Handle(e error) {
 	o.logger.Error(e.Error())
 }
 
-func (a *App) Subscribe(topic string, handler func(c *Context, message []byte)) {
+func (a *App) Subscribe(topic string, handler func(c *Context)) {
 	// Create a new gofr.Context for subscription
 	if a.container.Pubsub == nil {
 		a.container.Logger.Errorf("Subscriber not initialized in the container")
@@ -255,20 +254,16 @@ func (a *App) Subscribe(topic string, handler func(c *Context, message []byte)) 
 
 	go func() {
 		for {
-			ctx := context.Background()
-			msg, err := a.container.Pubsub.Subscribe(ctx, topic)
+			msg, err := a.container.Pubsub.Subscribe(context.Background(), topic)
+			ctx := newContext(nil, msg, a.container)
+			ctx.Request = msg
 
 			if err != nil {
 				a.container.Logger.Errorf("error while reading from Kafka, err: %v", err.Error())
 				continue
 			}
 
-			handler(newContext(nil, &msg, a.container), msg.Value)
-
-			err = a.container.Pubsub.Commit(ctx, msg)
-			if err != nil {
-				a.container.Logger.Errorf("error committing message: %v", err)
-			}
+			handler(ctx)
 		}
 	}()
 }
