@@ -10,7 +10,7 @@ import (
 // Error can also be returned from all the methods, but it is decided not to do so such that to keep the usage clean -
 // as any errors are already being logged from here. Otherwise, user would need to check the error everytime.
 
-type MetricsManager interface {
+type Manager interface {
 	NewCounter(name, desc string)
 	NewUpDownCounter(name, desc string)
 	NewHistogram(name, desc string, buckets ...float64)
@@ -42,7 +42,7 @@ type metricsManager struct {
 //nolint:gochecknoglobals // globalMetricsManager has to be global to follow singleton design
 var globalMetricsManager *metricsManager
 
-func NewMetricsManager(meter metric.Meter, logger Logger) MetricsManager {
+func NewMetricsManager(meter metric.Meter, logger Logger) Manager {
 	manager := &metricsManager{
 		meter:  meter,
 		store:  newOtelStore(),
@@ -56,7 +56,7 @@ func NewMetricsManager(meter metric.Meter, logger Logger) MetricsManager {
 	return manager
 }
 
-func Manager() MetricsManager {
+func GetMetricsManager() Manager {
 	return globalMetricsManager
 }
 

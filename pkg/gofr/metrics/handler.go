@@ -23,11 +23,11 @@ func systemMetricsHandler(next http.Handler) http.Handler {
 
 		runtime.ReadMemStats(&stats)
 
-		Manager().SetGauge("app_go_routines", float64(runtime.NumGoroutine()))
-		Manager().SetGauge("app_sys_memory_alloc", float64(stats.Alloc))
-		Manager().SetGauge("app_sys_total_alloc", float64(stats.TotalAlloc))
-		Manager().SetGauge("app_go_numGC", float64(stats.NumGC))
-		Manager().SetGauge("app_go_sys", float64(stats.Sys))
+		GetMetricsManager().SetGauge("app_go_routines", float64(runtime.NumGoroutine()))
+		GetMetricsManager().SetGauge("app_sys_memory_alloc", float64(stats.Alloc))
+		GetMetricsManager().SetGauge("app_sys_total_alloc", float64(stats.TotalAlloc))
+		GetMetricsManager().SetGauge("app_go_numGC", float64(stats.NumGC))
+		GetMetricsManager().SetGauge("app_go_sys", float64(stats.Sys))
 
 		next.ServeHTTP(w, r)
 	})

@@ -26,7 +26,7 @@ func Metrics() func(inner http.Handler) http.Handler {
 			defer func(res *StatusResponseWriter, req *http.Request) {
 				duration := time.Since(start)
 
-				metrics.Manager().RecordHistogram(context.Background(), "app_http_response", duration.Seconds(),
+				metrics.GetMetricsManager().RecordHistogram(context.Background(), "app_http_response", duration.Seconds(),
 					"path", path, "method", req.Method, "status", fmt.Sprintf("%d", res.status))
 			}(srw, r)
 

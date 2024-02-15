@@ -170,7 +170,7 @@ func (h *httpService) createAndSendRequest(ctx context.Context, method string, p
 
 	respTime := time.Since(requestStart)
 
-	metrics.Manager().RecordHistogram(ctx, "app_http_service_response", respTime.Seconds(), "path", h.url, "method", method,
+	metrics.GetMetricsManager().RecordHistogram(ctx, "app_http_service_response", respTime.Seconds(), "path", h.url, "method", method,
 		"status", fmt.Sprintf("%v", resp.StatusCode))
 
 	log.ResponseTime = respTime.Microseconds()

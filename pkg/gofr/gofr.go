@@ -201,18 +201,22 @@ func (a *App) add(method, pattern string, h Handler) {
 	})
 }
 
+func (a *App) Metrics() metrics.Manager {
+	return a.container.Metrics()
+}
+
 func (a *App) registerFrameworkMetrics() {
 	// system info metrics
-	metrics.Manager().NewGauge("app_go_routines", "Number of Go routines running.")
-	metrics.Manager().NewGauge("app_sys_memory_alloc", "Number of bytes allocated for heap objects.")
-	metrics.Manager().NewGauge("app_sys_total_alloc", "Number of cumulative bytes allocated for heap objects.")
-	metrics.Manager().NewGauge("app_go_numGC", "Number of completed Garbage Collector cycles.")
-	metrics.Manager().NewGauge("app_go_sys", "Number of total bytes of memory.")
+	a.Metrics().NewGauge("app_go_routines", "Number of Go routines running.")
+	a.Metrics().NewGauge("app_sys_memory_alloc", "Number of bytes allocated for heap objects.")
+	a.Metrics().NewGauge("app_sys_total_alloc", "Number of cumulative bytes allocated for heap objects.")
+	a.Metrics().NewGauge("app_go_numGC", "Number of completed Garbage Collector cycles.")
+	a.Metrics().NewGauge("app_go_sys", "Number of total bytes of memory.")
 
 	// http metrics
 	histogramBuckets := []float64{.001, .003, .005, .01, .02, .03, .05, .1, .2, .3, .5, .75, 1, 2, 3, 5, 10, 30}
-	metrics.Manager().NewHistogram("app_http_response", "Response time of http requests in seconds.", histogramBuckets...)
-	metrics.Manager().NewHistogram("app_http_service_response", "Response time of http service requests in seconds.", histogramBuckets...)
+	a.Metrics().NewHistogram("app_http_response", "Response time of http requests in seconds.", histogramBuckets...)
+	a.Metrics().NewHistogram("app_http_service_response", "Response time of http service requests in seconds.", histogramBuckets...)
 }
 
 // SubCommand adds a sub-command to the CLI application.
