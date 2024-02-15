@@ -3,6 +3,7 @@ package gofr
 import (
 	"context"
 	"fmt"
+
 	"net/http"
 	"os"
 	"strconv"
@@ -23,6 +24,8 @@ import (
 	"gofr.dev/pkg/gofr/metrics"
 	"gofr.dev/pkg/gofr/service"
 )
+
+type SubscribeFunc func(c *Context)
 
 // App is the main application in the gofr framework.
 type App struct {
@@ -245,16 +248,16 @@ func (o *otelErrorHandler) Handle(e error) {
 	o.logger.Error(e.Error())
 }
 
-func (a *App) Subscribe(topic string, handler func(c *Context)) {
+func (a *App) Subscribe(topic string, handler SubscribeFunc) {
 	// Create a new gofr.Context for subscription
-	if a.container.Pubsub == nil {
+	if a.container.GetSubscriber() == nil {
 		a.container.Logger.Errorf("Subscriber not initialized in the container")
 		return
 	}
 
 	go func() {
 		for {
-			msg, err := a.container.Pubsub.Subscribe(context.Background(), topic)
+			msg, err := a.container.GetSubscriber().Subscribe(context.Background(), topic)
 			ctx := newContext(nil, msg, a.container)
 			ctx.Request = msg
 
