@@ -1,8 +1,6 @@
 package migration
 
 import (
-	"fmt"
-	"gofr.dev/pkg/gofr/datasource/sql"
 	"time"
 
 	"github.com/gogo/protobuf/sortkeys"
@@ -17,25 +15,11 @@ type Migrate struct {
 }
 
 func Run(migrationsMap map[int64]Migrate, c *container.Container) {
-	invalidKeys := ""
-
-	// Sort migrations by version
 	keys := make([]int64, 0, len(migrationsMap))
 
-	for k, v := range migrationsMap {
-		if v.UP == nil {
-			invalidKeys += fmt.Sprintf("%v,", k)
-
-			continue
-		}
-
-		keys = append(keys, k)
-	}
-
+	invalidKeys := getInvalidKeys(keys, migrationsMap)
 	if len(invalidKeys) > 0 {
-		c.Logger.Errorf("Run Failed! UP not defined for the following keys: %v", invalidKeys[0:len(invalidKeys)-1])
-
-		return
+		c.Logger.Errorf("Run Failed! UP not defined for the following keys: %v", invalidKeys)
 	}
 
 	sortkeys.Int64s(keys)
@@ -81,19 +65,18 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 	}
 }
 
-func sqlPostRun(c *container.Container, tx *sql.Tx, currentMigration int64, start time.Time, used bool) {
-	if !used {
-		rollbackAndLog(c, tx)
-		return
+func getInvalidKeys(keys []int64, migrationsMap map[int64]Migrate) []int64 {
+	invalidKey := make([]int64, len(keys))
+
+	for k, v := range migrationsMap {
+		if v.UP == nil {
+			invalidKey = append(invalidKey, k)
+
+			continue
+		}
+
+		keys = append(keys, k)
 	}
 
-	err := insertMigrationRecord(tx, currentMigration, start)
-	if err != nil {
-		rollbackAndLog(c, tx)
-	}
-
-	// Commit transaction
-	if err := tx.Commit(); err != nil {
-		c.Logger.Error("unable to commit transaction: %v", err)
-	}
+	return invalidKey
 }
