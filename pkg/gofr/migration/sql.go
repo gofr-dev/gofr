@@ -43,34 +43,36 @@ func (s sqlDB) Exec(query string, args ...interface{}) (sql.Result, error) {
 	return s.db.Exec(query, args...)
 }
 
-func ensureMigrationTableExists(c *gofrContainer.Container) {
+func ensureSQLMigrationTableExists(c *gofrContainer.Container) error {
 	var exists int
 
-	_ = c.DB.QueryRow(checkMySQLGoFrMigrationsTable).Scan(&exists)
+	err := c.DB.QueryRow(checkMySQLGoFrMigrationsTable).Scan(&exists)
+	if err != nil {
+		return err
+	}
 
 	if exists != 1 {
 		if _, err := c.DB.Exec(createMySQLGoFrMigrationsTable); err != nil {
-			c.Logger.Errorf("unable to create gofr_migrations table: %v", err)
+			return err
 		}
 	}
+
+	return nil
 }
 
 func getLastMigration(c *gofrContainer.Container) int64 {
 	var lastMigration int64
 
-	_ = c.DB.QueryRowContext(context.Background(), getLastMySQLGoFrMigration).Scan(&lastMigration)
+	err := c.DB.QueryRowContext(context.Background(), getLastMySQLGoFrMigration).Scan(&lastMigration)
+	if err != nil {
+		return 0
+	}
 
 	return lastMigration
 }
 
-func insertMigrationRecord(tx db, version int64, startTime time.Time) error {
-	_, err := tx.Exec(insertGoFrMigrationRow, version, "UP", startTime)
-
-	return err
-}
-
-func updateMigrationDuration(tx db, version int64, startTime time.Time) error {
-	_, err := tx.Exec(updateDurationInMigrationRecord, time.Since(startTime).Milliseconds(), version)
+func insertMigrationRecord(tx *gofrSql.Tx, version int64, startTime time.Time) error {
+	_, err := tx.Exec(insertGoFrMigrationRow, version, "UP", startTime, time.Since(startTime).Milliseconds())
 
 	return err
 }
@@ -94,7 +96,5 @@ const (
 
 	getLastMySQLGoFrMigration = `SELECT COALESCE(MAX(version), 0) FROM gofr_migrations;`
 
-	insertGoFrMigrationRow = `INSERT INTO gofr_migrations (version, method, start_time) VALUES (?, ?, ?);`
-
-	updateDurationInMigrationRecord = `UPDATE gofr_migrations SET duration = ? WHERE version = ? AND method = 'UP' AND duration IS NULL;`
+	insertGoFrMigrationRow = `INSERT INTO gofr_migrations (version, method, start_time,duration) VALUES (?, ?, ?, ?);`
 )
