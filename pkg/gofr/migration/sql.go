@@ -15,46 +15,29 @@ type db interface {
 	Exec(query string, args ...interface{}) (goSql.Result, error)
 }
 
-type setter interface {
-	set(x string)
-	get() string
-}
-
 type sqlDB struct {
 	db
-	setter
+	usageTracker
 }
 
-type sqlUsage struct {
-	status string
-}
-
-func (s *sqlUsage) set(x string) {
-	s.status = x
-}
-
-func (s *sqlUsage) get() string {
-	return s.status
-}
-
-func newMysql(d db, s setter) sqlDB {
-	return sqlDB{db: d, setter: s}
+func newMysql(d db, s usageTracker) sqlDB {
+	return sqlDB{db: d, usageTracker: s}
 }
 
 func (s *sqlDB) Query(query string, args ...interface{}) (*goSql.Rows, error) {
-	s.set("sql")
+	s.set()
 	return s.db.Query(query, args...)
 }
 func (s *sqlDB) QueryRow(query string, args ...interface{}) *goSql.Row {
-	s.set("sql")
+	s.set()
 	return s.db.QueryRow(query, args...)
 }
 func (s *sqlDB) QueryRowContext(ctx context.Context, query string, args ...interface{}) *goSql.Row {
-	s.set("sql")
+	s.set()
 	return s.db.QueryRowContext(ctx, query, args...)
 }
 func (s *sqlDB) Exec(query string, args ...interface{}) (goSql.Result, error) {
-	s.set("sql")
+	s.set()
 	return s.db.Exec(query, args...)
 }
 
@@ -98,8 +81,8 @@ func rollbackAndLog(c *container.Container, tx *sql.Tx) {
 	}
 }
 
-func sqlPostRun(c *container.Container, tx *sql.Tx, currentMigration int64, start time.Time, s setter) {
-	if s.get() != "sql" {
+func sqlPostRun(c *container.Container, tx *sql.Tx, currentMigration int64, start time.Time, s usageTracker) {
+	if s.get() != true {
 		rollbackAndLog(c, tx)
 
 		return
