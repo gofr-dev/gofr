@@ -64,9 +64,9 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 	}
 }
 
-func getKeys(migrationsMap map[int64]Migrate) ([]int64, []int64) {
-	invalidKey := make([]int64, 0, len(migrationsMap))
-	keys := make([]int64, 0, len(migrationsMap))
+func getKeys(migrationsMap map[int64]Migrate) (invalidKey, keys []int64) {
+	invalidKey = make([]int64, 0, len(migrationsMap))
+	keys = make([]int64, 0, len(migrationsMap))
 
 	for k, v := range migrationsMap {
 		if v.UP == nil {
@@ -78,5 +78,5 @@ func getKeys(migrationsMap map[int64]Migrate) ([]int64, []int64) {
 		keys = append(keys, k)
 	}
 
-	return invalidKey, keys
+	return
 }
