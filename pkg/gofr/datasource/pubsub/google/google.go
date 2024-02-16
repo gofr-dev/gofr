@@ -1,14 +1,16 @@
 package google
 
 import (
-	gcPubSub "cloud.google.com/go/pubsub"
 	"context"
 	"errors"
-	"gofr.dev/pkg/gofr/datasource/pubsub"
+	"fmt"
 	"sync"
+
+	gcPubSub "cloud.google.com/go/pubsub"
+	"gofr.dev/pkg/gofr/datasource/pubsub"
 )
 
-var currentMsg *gcPubSub.Message
+var errSubscriptionExistCheck = fmt.Errorf("unable to check the existence of subscription: ")
 
 type Config struct {
 	ProjectID        string
@@ -24,6 +26,7 @@ type googleClient struct {
 	mu           *sync.Mutex
 }
 
+//nolint:revive // We do not want anyone using the client without initialization steps.
 func New(conf Config, logger pubsub.Logger) *googleClient {
 	client, err := gcPubSub.NewClient(context.Background(), conf.ProjectID)
 	if err != nil {
@@ -45,7 +48,10 @@ func (g *googleClient) Publish(ctx context.Context, topic string, message []byte
 	t := g.client.Topic(topic)
 
 	if ok, err := t.Exists(ctx); !ok || err != nil {
-		g.client.CreateTopic(ctx, topic)
+		_, err := g.client.CreateTopic(ctx, topic)
+		if err != nil {
+			return err
+		}
 	}
 
 	result := t.Publish(ctx, &gcPubSub.Message{
@@ -65,7 +71,10 @@ func (g *googleClient) Subscribe(ctx context.Context, topic string) (*pubsub.Mes
 
 	t := g.client.Topic(topic)
 	if ok, err := t.Exists(ctx); !ok || err != nil {
-		g.client.CreateTopic(ctx, topic)
+		_, err := g.client.CreateTopic(ctx, topic)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	if g.subscription == nil {
@@ -74,9 +83,9 @@ func (g *googleClient) Subscribe(ctx context.Context, topic string) (*pubsub.Mes
 
 	ok, err := g.subscription.Exists(context.Background())
 	if err != nil {
-		g.logger.Errorf("Unable to check the existence of subscription: " + err.Error())
+		g.logger.Errorf(errSubscriptionExistCheck.Error() + err.Error())
 
-		return nil, errors.New("Unable to check the existence of subscription: " + err.Error())
+		return nil, errors.New(errSubscriptionExistCheck.Error() + err.Error())
 	}
 
 	if !ok {

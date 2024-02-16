@@ -16,6 +16,7 @@ type Config struct {
 	Partition       int
 	ConsumerGroupID string
 	Topic           string
+	OffSet          int
 }
 
 type kafkaClient struct {
@@ -68,12 +69,13 @@ func (k *kafkaClient) Publish(ctx context.Context, topic string, message []byte)
 func (k *kafkaClient) Subscribe(ctx context.Context, topic string) (*pubsub.Message, error) {
 	if k.reader == nil {
 		reader := kafka.NewReader(kafka.ReaderConfig{
-			GroupID:  k.config.ConsumerGroupID,
-			Brokers:  []string{k.config.Broker},
-			Topic:    topic,
-			MinBytes: 10e3,
-			MaxBytes: 10e6,
-			Dialer:   k.dialer,
+			GroupID:     k.config.ConsumerGroupID,
+			Brokers:     []string{k.config.Broker},
+			Topic:       topic,
+			MinBytes:    10e3,
+			MaxBytes:    10e6,
+			Dialer:      k.dialer,
+			StartOffset: int64(k.config.OffSet),
 		})
 
 		k.reader = reader
