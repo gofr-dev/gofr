@@ -85,7 +85,7 @@ func NewHTTPService(serviceAddress string, logger Logger, options ...Options) HT
 }
 
 func (h *httpService) Get(ctx context.Context, path string, queryParams map[string]interface{}) (*http.Response, error) {
-	return h.createAndSendRequest(ctx, http.MethodGet, path, queryParams, nil, nil)
+	return h.GetWithHeaders(ctx, path, queryParams, nil)
 }
 
 func (h *httpService) GetWithHeaders(ctx context.Context, path string, queryParams map[string]interface{},
@@ -95,7 +95,7 @@ func (h *httpService) GetWithHeaders(ctx context.Context, path string, queryPara
 
 func (h *httpService) Post(ctx context.Context, path string, queryParams map[string]interface{},
 	body []byte) (*http.Response, error) {
-	return h.createAndSendRequest(ctx, http.MethodPost, path, queryParams, body, nil)
+	return h.PostWithHeaders(ctx, path, queryParams, body, nil)
 }
 
 func (h *httpService) PostWithHeaders(ctx context.Context, path string, queryParams map[string]interface{},
