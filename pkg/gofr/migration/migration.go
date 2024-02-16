@@ -27,7 +27,7 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 	if c.DB != nil {
 		err := ensureSQLMigrationTableExists(c)
 		if err != nil {
-			c.Logger.Errorf("unable to verify sql migration table due to : %v", err)
+			c.Logger.Errorf("unable to verify sql migration table due to: %v", err)
 			return
 		}
 
@@ -47,11 +47,12 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 			return
 		}
 
-		//p := c.Redis.TxPipeline()
+		p := c.Redis.TxPipeline()
 
 		sql := newMysql(tx, &sqlUsage{})
+		r := newRedis(v, p)
 
-		datasource := newDatasource(c.Logger, sql, nil)
+		datasource := newDatasource(c.Logger, sql, r)
 
 		err = migrationsMap[v].UP(datasource)
 		if err != nil {
@@ -60,6 +61,7 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 		}
 
 		sqlPostRun(c, tx, v, start, sql.setter)
+		r.redisPostRun(c, p, v, start)
 	}
 }
 
