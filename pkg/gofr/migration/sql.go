@@ -20,8 +20,8 @@ type sqlDB struct {
 	usageTracker
 }
 
-func newMysql(d db, s usageTracker) sqlDB {
-	return sqlDB{db: d, usageTracker: s}
+func newMysql(d db) sqlDB {
+	return sqlDB{db: d, usageTracker: &usage{}}
 }
 
 func (s *sqlDB) Query(query string, args ...interface{}) (*goSql.Rows, error) {

@@ -17,7 +17,7 @@ type Migrate struct {
 func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 	invalidKeys, keys := getKeys(migrationsMap)
 	if len(invalidKeys) > 0 {
-		c.Logger.Errorf("Run Failed! UP not defined for the following keys: %currentMigration", invalidKeys)
+		c.Logger.Errorf("Run Failed! UP not defined for the following keys: %v", invalidKeys)
 	}
 
 	sortkeys.Int64s(keys)
@@ -27,7 +27,7 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 	if c.DB != nil {
 		err := ensureSQLMigrationTableExists(c)
 		if err != nil {
-			c.Logger.Errorf("unable to verify sql migration table due to: %currentMigration", err)
+			c.Logger.Errorf("unable to verify sql migration table due to: %v", err)
 			return
 		}
 
@@ -47,9 +47,7 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 			return
 		}
 
-		sql := newMysql(tx, &usage{})
-
-		datasource := newDatasource(c.Logger, sql)
+		datasource := newDatasource(c.Logger, newMysql(tx))
 
 		err = migrationsMap[currentMigration].UP(datasource)
 		if err != nil {
@@ -57,7 +55,7 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 			return
 		}
 
-		sqlPostRun(c, tx, currentMigration, start, sql.usageTracker)
+		sqlPostRun(c, tx, currentMigration, start, datasource.DB.usageTracker)
 	}
 }
 
