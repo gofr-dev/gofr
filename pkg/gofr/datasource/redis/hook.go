@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"gofr.dev/pkg/gofr/datasource"
+	"gofr.dev/pkg/gofr/metrics"
 
 	"github.com/redis/go-redis/v9"
 )
@@ -43,11 +44,16 @@ func (ql QueryLog) String() string {
 
 // logQuery logs the Redis query information.
 func (r *redisHook) logQuery(start time.Time, query string, args ...interface{}) {
+	duration := time.Since(start)
+
 	r.logger.Debug(QueryLog{
 		Query:    query,
-		Duration: time.Since(start).Microseconds(),
+		Duration: duration.Microseconds(),
 		Args:     args,
 	})
+
+	metrics.GetMetricsManager().RecordHistogram(context.Background(), "app_redis_stats",
+		duration.Seconds(), "type", query)
 }
 
 // DialHook implements the redis.DialHook interface.

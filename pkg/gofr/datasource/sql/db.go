@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"gofr.dev/pkg/gofr/datasource"
+	"gofr.dev/pkg/gofr/metrics"
 )
 
 // DB is a wrapper around sql.DB which provides some more features.
@@ -27,12 +28,24 @@ type Log struct {
 }
 
 func (d *DB) logQuery(start time.Time, queryType, query string, args ...interface{}) {
+	duration := time.Since(start)
+
 	d.logger.Debug(Log{
 		Type:     queryType,
 		Query:    query,
-		Duration: time.Since(start).Microseconds(),
+		Duration: duration.Microseconds(),
 		Args:     args,
 	})
+
+	metrics.GetMetricsManager().RecordHistogram(context.Background(), "app_sql_stats",
+		duration.Seconds(), "type", getOperationType(query))
+}
+
+func getOperationType(query string) string {
+	query = strings.TrimSpace(query)
+	words := strings.Split(query, " ")
+
+	return words[0]
 }
 
 func (d *DB) Query(query string, args ...interface{}) (*sql.Rows, error) {
@@ -75,12 +88,16 @@ type Tx struct {
 }
 
 func (t *Tx) logQuery(start time.Time, queryType, query string, args ...interface{}) {
+	duration := time.Since(start)
+
 	t.logger.Debug(Log{
 		Type:     queryType,
 		Query:    query,
-		Duration: time.Since(start).Microseconds(),
+		Duration: duration.Microseconds(),
 		Args:     args,
 	})
+
+	metrics.GetMetricsManager().RecordHistogram(context.Background(), "app_sql_stats", duration.Seconds())
 }
 
 func (t *Tx) Query(query string, args ...interface{}) (*sql.Rows, error) {
