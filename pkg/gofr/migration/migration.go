@@ -47,9 +47,7 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 			return
 		}
 
-		sqlUsage := usage{}
-
-		sql := newMysql(tx, &sqlUsage)
+		sql := newMysql(tx, &usage{})
 
 		datasource := newDatasource(c.Logger, sql)
 
