@@ -13,8 +13,6 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/trace"
-
-	"gofr.dev/pkg/gofr/metrics"
 )
 
 type httpService struct {
@@ -22,6 +20,7 @@ type httpService struct {
 	trace.Tracer
 	url string
 	Logger
+	Metrics
 }
 
 type HTTP interface {
@@ -170,7 +169,7 @@ func (h *httpService) createAndSendRequest(ctx context.Context, method string, p
 
 	respTime := time.Since(requestStart)
 
-	metrics.GetMetricsManager().RecordHistogram(ctx, "app_http_service_response", respTime.Seconds(), "path", h.url, "method", method,
+	h.RecordHistogram(ctx, "app_http_service_response", respTime.Seconds(), "path", h.url, "method", method,
 		"status", fmt.Sprintf("%v", resp.StatusCode))
 
 	log.ResponseTime = respTime.Microseconds()

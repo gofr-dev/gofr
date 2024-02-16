@@ -7,14 +7,14 @@ import (
 	"time"
 
 	"gofr.dev/pkg/gofr/datasource"
-	"gofr.dev/pkg/gofr/metrics"
 
 	"github.com/redis/go-redis/v9"
 )
 
 // redisHook is a custom Redis hook for logging queries and their durations.
 type redisHook struct {
-	logger datasource.Logger
+	logger  datasource.Logger
+	metrics datasource.Metrics
 }
 
 // QueryLog represents a logged Redis query.
@@ -52,7 +52,7 @@ func (r *redisHook) logQuery(start time.Time, query string, args ...interface{})
 		Args:     args,
 	})
 
-	metrics.GetMetricsManager().RecordHistogram(context.Background(), "app_redis_stats",
+	r.metrics.RecordHistogram(context.Background(), "app_redis_stats",
 		duration.Seconds(), "type", query)
 }
 

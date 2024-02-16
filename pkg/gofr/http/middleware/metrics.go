@@ -9,10 +9,10 @@ import (
 
 	"github.com/gorilla/mux"
 
-	"gofr.dev/pkg/gofr/metrics"
+	gofrHTTP "gofr.dev/pkg/gofr/http"
 )
 
-func Metrics() func(inner http.Handler) http.Handler {
+func Metrics(metrics gofrHTTP.Metrics) func(inner http.Handler) http.Handler {
 	return func(inner http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			start := time.Now()
@@ -26,7 +26,7 @@ func Metrics() func(inner http.Handler) http.Handler {
 			defer func(res *StatusResponseWriter, req *http.Request) {
 				duration := time.Since(start)
 
-				metrics.GetMetricsManager().RecordHistogram(context.Background(), "app_http_response", duration.Seconds(),
+				metrics.RecordHistogram(context.Background(), "app_http_response", duration.Seconds(),
 					"path", path, "method", req.Method, "status", fmt.Sprintf("%d", res.status))
 			}(srw, r)
 

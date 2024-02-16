@@ -35,29 +35,12 @@ type metricsManager struct {
 	logger Logger
 }
 
-// Developer Note: we are making this global because restricting metrics usage from app or container will add dependency
-// of container in every datasource wherever we are adding metrics internally.
-// However, user is not required to use this and can use app or context to generate metrics.
-
-//nolint:gochecknoglobals // globalMetricsManager has to be global to follow singleton design
-var globalMetricsManager *metricsManager
-
 func NewMetricsManager(meter metric.Meter, logger Logger) Manager {
-	manager := &metricsManager{
+	return &metricsManager{
 		meter:  meter,
 		store:  newOtelStore(),
 		logger: logger,
 	}
-
-	if globalMetricsManager == nil {
-		globalMetricsManager = manager
-	}
-
-	return manager
-}
-
-func GetMetricsManager() Manager {
-	return globalMetricsManager
 }
 
 // Developer Note : we are not checking the name or desc parameter because the OTEL

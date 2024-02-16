@@ -20,7 +20,7 @@ func NewRouter(c *container.Container) *Router {
 		middleware.Tracer,
 		middleware.Logging(c.Logger),
 		middleware.CORS(),
-		middleware.Metrics(),
+		middleware.Metrics(c.Metrics()),
 	)
 
 	return &Router{

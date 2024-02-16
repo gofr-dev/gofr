@@ -8,7 +8,6 @@ import (
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/datasource"
-	"gofr.dev/pkg/gofr/metrics"
 )
 
 const defaultDBPort = 3306
@@ -22,7 +21,7 @@ type DBConfig struct {
 	Database string
 }
 
-func NewSQL(configs config.Config, logger datasource.Logger) *DB {
+func NewSQL(configs config.Config, logger datasource.Logger, metrics datasource.Metrics) *DB {
 	dbConfig := getDBConfig(configs)
 
 	// if Hostname is not provided, we won't try to connect to DB
@@ -55,7 +54,7 @@ func NewSQL(configs config.Config, logger datasource.Logger) *DB {
 
 	logger.Logf("connected to '%s' database at %s:%s", dbConfig.Database, dbConfig.HostName, dbConfig.Port)
 
-	go pushDBMetrics(db)
+	go pushDBMetrics(db, metrics)
 
 	return &DB{DB: db, config: dbConfig, logger: logger}
 }
@@ -70,14 +69,14 @@ func getDBConfig(configs config.Config) *DBConfig {
 	}
 }
 
-func pushDBMetrics(db *sql.DB) {
+func pushDBMetrics(db *sql.DB, metrics datasource.Metrics) {
 	const frequency = 10
 
 	for {
 		stats := db.Stats()
 
-		metrics.GetMetricsManager().SetGauge("app_sql_open_connections", float64(stats.OpenConnections))
-		metrics.GetMetricsManager().SetGauge("app_sql_inUse_connections", float64(stats.InUse))
+		metrics.SetGauge("app_sql_open_connections", float64(stats.OpenConnections))
+		metrics.SetGauge("app_sql_inUse_connections", float64(stats.InUse))
 
 		time.Sleep(frequency * time.Second)
 	}
