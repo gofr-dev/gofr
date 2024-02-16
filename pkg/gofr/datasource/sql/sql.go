@@ -42,21 +42,21 @@ func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *D
 		logger.Errorf("could not connect with '%s' user to database '%s:%s'  error: %v",
 			dbConfig.User, dbConfig.HostName, dbConfig.Port, err)
 
-		return &DB{config: dbConfig}
+		return &DB{config: dbConfig, metrics: metrics}
 	}
 
 	if err := db.Ping(); err != nil {
 		logger.Errorf("could not connect with '%s' user to database '%s:%s'  error: %v",
 			dbConfig.User, dbConfig.HostName, dbConfig.Port, err)
 
-		return &DB{config: dbConfig}
+		return &DB{config: dbConfig, metrics: metrics}
 	}
 
 	logger.Logf("connected to '%s' database at %s:%s", dbConfig.Database, dbConfig.HostName, dbConfig.Port)
 
 	go pushDBMetrics(db, metrics)
 
-	return &DB{DB: db, config: dbConfig, logger: logger}
+	return &DB{DB: db, config: dbConfig, logger: logger, metrics: metrics}
 }
 
 func getDBConfig(configs config.Config) *DBConfig {
