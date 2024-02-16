@@ -73,11 +73,14 @@ func (c *Container) registerFrameworkMetrics() {
 	// http metrics
 	c.Metrics().NewHistogram("app_http_response", "Response time of http requests in seconds.", histogramBuckets...)
 	c.Metrics().NewHistogram("app_http_service_response", "Response time of http service requests in seconds.", histogramBuckets...)
+	c.Metrics().NewCounter("app_circuit_breaker_count", "Number of times circuit breaker opens.")
 
 	// redis metrics
 	c.Metrics().NewHistogram("app_redis_stats", "Observes the response time for Redis commands.", histogramBuckets...)
 
 	// sql metrics
+	c.Metrics().NewGauge("app_sql_open_connections", "Number of open SQL connections.")
+	c.Metrics().NewGauge("app_sql_inUse_connections", "Number of inUse SQL connections.")
 	c.Metrics().NewHistogram("app_sql_stats", "Observes the response time for SQL queries.", histogramBuckets...)
 }
 

@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"sync"
 	"time"
+
+	"gofr.dev/pkg/gofr/metrics"
 )
 
 // CircuitBreaker states.
@@ -121,6 +123,8 @@ func (cb *CircuitBreaker) startHealthChecks() {
 func (cb *CircuitBreaker) openCircuit() {
 	cb.state = OpenState
 	cb.lastChecked = time.Now()
+
+	metrics.GetMetricsManager().IncrementCounter(context.Background(), "app_circuit_breaker_count")
 }
 
 // resetCircuit transitions the circuit breaker to the closed state.

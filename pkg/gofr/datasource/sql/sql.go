@@ -4,9 +4,11 @@ import (
 	"database/sql"
 	"fmt"
 	"strconv"
+	"time"
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/datasource"
+	"gofr.dev/pkg/gofr/metrics"
 )
 
 const defaultDBPort = 3306
@@ -53,6 +55,8 @@ func NewSQL(configs config.Config, logger datasource.Logger) *DB {
 
 	logger.Logf("connected to '%s' database at %s:%s", dbConfig.Database, dbConfig.HostName, dbConfig.Port)
 
+	go pushDBMetrics(db)
+
 	return &DB{DB: db, config: dbConfig, logger: logger}
 }
 
@@ -63,5 +67,18 @@ func getDBConfig(configs config.Config) *DBConfig {
 		Password: configs.Get("DB_PASSWORD"),
 		Port:     configs.GetOrDefault("DB_PORT", strconv.Itoa(defaultDBPort)),
 		Database: configs.Get("DB_NAME"),
+	}
+}
+
+func pushDBMetrics(db *sql.DB) {
+	const frequency = 10
+
+	for {
+		stats := db.Stats()
+
+		metrics.GetMetricsManager().SetGauge("app_sql_open_connections", float64(stats.OpenConnections))
+		metrics.GetMetricsManager().SetGauge("app_sql_inUse_connections", float64(stats.InUse))
+
+		time.Sleep(frequency * time.Second)
 	}
 }
