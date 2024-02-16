@@ -1,18 +1,18 @@
 package migration
 
 type usageTracker interface {
-	set()
-	get() bool
+	setUsage()
+	checkUsage() bool
 }
 
 type usage struct {
 	status bool
 }
 
-func (r *usage) set() {
+func (r *usage) setUsage() {
 	r.status = true
 }
 
-func (r *usage) get() bool {
+func (r *usage) checkUsage() bool {
 	return r.status
 }

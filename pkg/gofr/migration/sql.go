@@ -26,19 +26,19 @@ func newMysql(d db) sqlDB {
 }
 
 func (s *sqlDB) Query(query string, args ...interface{}) (*sql.Rows, error) {
-	s.set()
+	s.setUsage()
 	return s.db.Query(query, args...)
 }
 func (s *sqlDB) QueryRow(query string, args ...interface{}) *sql.Row {
-	s.set()
+	s.setUsage()
 	return s.db.QueryRow(query, args...)
 }
 func (s *sqlDB) QueryRowContext(ctx context.Context, query string, args ...interface{}) *sql.Row {
-	s.set()
+	s.setUsage()
 	return s.db.QueryRowContext(ctx, query, args...)
 }
 func (s *sqlDB) Exec(query string, args ...interface{}) (sql.Result, error) {
-	s.set()
+	s.setUsage()
 	return s.db.Exec(query, args...)
 }
 
@@ -83,7 +83,7 @@ func rollbackAndLog(c *container.Container, tx *gofrSql.Tx) {
 }
 
 func sqlPostRun(c *container.Container, tx *gofrSql.Tx, currentMigration int64, start time.Time, s usageTracker) {
-	if s.get() != true {
+	if s.checkUsage() != true {
 		rollbackAndLog(c, tx)
 
 		return
