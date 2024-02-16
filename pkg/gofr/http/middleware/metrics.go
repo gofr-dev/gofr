@@ -8,11 +8,16 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
-
-	gofrHTTP "gofr.dev/pkg/gofr/http"
 )
 
-func Metrics(metrics gofrHTTP.Metrics) func(inner http.Handler) http.Handler {
+type metrics interface {
+	IncrementCounter(ctx context.Context, name string, labels ...string)
+	DeltaUpDownCounter(ctx context.Context, name string, value float64, labels ...string)
+	RecordHistogram(ctx context.Context, name string, value float64, labels ...string)
+	SetGauge(name string, value float64)
+}
+
+func Metrics(metrics metrics) func(inner http.Handler) http.Handler {
 	return func(inner http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			start := time.Now()

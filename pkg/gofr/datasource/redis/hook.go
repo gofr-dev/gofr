@@ -14,7 +14,7 @@ import (
 // redisHook is a custom Redis hook for logging queries and their durations.
 type redisHook struct {
 	logger  datasource.Logger
-	metrics datasource.Metrics
+	metrics Metrics
 }
 
 // QueryLog represents a logged Redis query.

@@ -21,7 +21,7 @@ type DBConfig struct {
 	Database string
 }
 
-func NewSQL(configs config.Config, logger datasource.Logger, metrics datasource.Metrics) *DB {
+func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *DB {
 	dbConfig := getDBConfig(configs)
 
 	// if Hostname is not provided, we won't try to connect to DB
@@ -69,7 +69,7 @@ func getDBConfig(configs config.Config) *DBConfig {
 	}
 }
 
-func pushDBMetrics(db *sql.DB, metrics datasource.Metrics) {
+func pushDBMetrics(db *sql.DB, metrics Metrics) {
 	const frequency = 10
 
 	for {

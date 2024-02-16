@@ -32,7 +32,7 @@ type Redis struct {
 
 // NewClient return a redis client if connection is successful based on Config.
 // In case of error, it returns an error as second parameter.
-func NewClient(c config.Config, logger datasource.Logger, metrics datasource.Metrics) *Redis {
+func NewClient(c config.Config, logger datasource.Logger, metrics Metrics) *Redis {
 	var redisConfig = &Config{}
 
 	if redisConfig.HostName = c.Get("REDIS_HOST"); redisConfig.HostName == "" {

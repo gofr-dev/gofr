@@ -17,7 +17,7 @@ type DB struct {
 	*sql.DB
 	logger  datasource.Logger
 	config  *DBConfig
-	metrics datasource.Metrics
+	metrics Metrics
 }
 
 type Log struct {
@@ -85,7 +85,7 @@ func (d *DB) Begin() (*Tx, error) {
 type Tx struct {
 	*sql.Tx
 	logger  datasource.Logger
-	metrics datasource.Metrics
+	metrics Metrics
 }
 
 func (t *Tx) logQuery(start time.Time, queryType, query string, args ...interface{}) {
