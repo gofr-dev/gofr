@@ -28,7 +28,7 @@ func TestRedis_QueryLogging(t *testing.T) {
 		client := NewClient(testutil.NewMockConfig(map[string]string{
 			"REDIS_HOST": s.Host(),
 			"REDIS_PORT": s.Port(),
-		}), mockLogger)
+		}), mockLogger, nil)
 		assert.Nil(t, err)
 
 		result, err := client.Set(context.TODO(), "key", "value", 1*time.Minute).Result()
@@ -57,7 +57,7 @@ func TestRedis_PipelineQueryLogging(t *testing.T) {
 		client := NewClient(testutil.NewMockConfig(map[string]string{
 			"REDIS_HOST": s.Host(),
 			"REDIS_PORT": s.Port(),
-		}), mockLogger)
+		}), mockLogger, nil)
 		assert.Nil(t, err)
 
 		// Pipeline execution
