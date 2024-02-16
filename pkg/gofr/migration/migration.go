@@ -29,7 +29,7 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 	if c.DB != nil {
 		err := ensureSQLMigrationTableExists(c)
 		if err != nil {
-			c.Logger.Errorf("unable to verify sql migration table due to: %v", err)
+			c.Logger.Errorf("Unable to verify sql migration table due to: %v", err)
 
 			return
 		}
