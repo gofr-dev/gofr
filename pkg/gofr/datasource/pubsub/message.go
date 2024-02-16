@@ -33,20 +33,9 @@ func (m *Message) PathParam(_ string) string {
 }
 
 func (m *Message) Bind(i interface{}) error {
-	switch v := i.(type) {
-	case string:
-		m.Value = []byte(v)
-	case []byte:
-		m.Value = v
-	case json.RawMessage:
-		m.Value = v
-	case fmt.Stringer:
-		m.Value = []byte(v.String())
-	default:
-		return errUnsupportedBindType
-	}
-
-	return nil
+	// TODO - implement other binding functionality
+	err := json.Unmarshal(m.Value, i)
+	return err
 }
 
 func (m *Message) HostName() string {
