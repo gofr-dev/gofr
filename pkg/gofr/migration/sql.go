@@ -83,7 +83,7 @@ func rollbackAndLog(c *container.Container, tx *gofrSql.Tx) {
 }
 
 func sqlPostRun(c *container.Container, tx *gofrSql.Tx, currentMigration int64, start time.Time, s usageTracker) {
-	if s.checkUsage() != true {
+	if !s.checkUsage() {
 		rollbackAndLog(c, tx)
 
 		return
