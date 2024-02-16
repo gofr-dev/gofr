@@ -181,23 +181,23 @@ func (cb *CircuitBreaker) doRequest(ctx context.Context, method, path string, qu
 	var err error
 
 	switch method {
-	case "GET":
+	case http.MethodGet:
 		result, err = cb.executeWithCircuitBreaker(ctx, func(ctx context.Context) (*http.Response, error) {
 			return cb.HTTP.GetWithHeaders(ctx, path, queryParams, headers)
 		})
-	case "POST":
+	case http.MethodPost:
 		result, err = cb.executeWithCircuitBreaker(ctx, func(ctx context.Context) (*http.Response, error) {
 			return cb.HTTP.PostWithHeaders(ctx, path, queryParams, body, headers)
 		})
-	case "PATCH":
+	case http.MethodPatch:
 		result, err = cb.executeWithCircuitBreaker(ctx, func(ctx context.Context) (*http.Response, error) {
 			return cb.HTTP.PatchWithHeaders(ctx, path, queryParams, body, headers)
 		})
-	case "PUT":
+	case http.MethodPut:
 		result, err = cb.executeWithCircuitBreaker(ctx, func(ctx context.Context) (*http.Response, error) {
 			return cb.HTTP.PutWithHeaders(ctx, path, queryParams, body, headers)
 		})
-	case "DELETE":
+	case http.MethodDelete:
 		result, err = cb.executeWithCircuitBreaker(ctx, func(ctx context.Context) (*http.Response, error) {
 			return cb.HTTP.DeleteWithHeaders(ctx, path, body, headers)
 		})
@@ -211,50 +211,31 @@ func (cb *CircuitBreaker) doRequest(ctx context.Context, method, path string, qu
 	return resp, err
 }
 
-func (cb *CircuitBreaker) Get(ctx context.Context, api string, queryParams map[string]interface{}) (*http.Response, error) {
-	return cb.doRequest(ctx, "GET", api, queryParams, nil, nil)
-}
 func (cb *CircuitBreaker) GetWithHeaders(ctx context.Context, path string, queryParams map[string]interface{},
 	headers map[string]string) (*http.Response, error) {
-	return cb.doRequest(ctx, "GET", path, queryParams, nil, headers)
-}
-
-// Post is a wrapper for doRequest with the POST method.
-func (cb *CircuitBreaker) Post(ctx context.Context, path string, queryParams map[string]interface{}, body []byte) (*http.Response, error) {
-	return cb.doRequest(ctx, "POST", path, queryParams, body, nil)
+	return cb.doRequest(ctx, http.MethodGet, path, queryParams, nil, headers)
 }
 
 // PostWithHeaders is a wrapper for doRequest with the POST method and headers.
 func (cb *CircuitBreaker) PostWithHeaders(ctx context.Context, path string, queryParams map[string]interface{},
 	body []byte, headers map[string]string) (*http.Response, error) {
-	return cb.doRequest(ctx, "POST", path, queryParams, body, headers)
-}
-
-// Patch is a wrapper for doRequest with the PATCH method.
-func (cb *CircuitBreaker) Patch(ctx context.Context, path string, queryParams map[string]interface{},
-	body []byte) (*http.Response, error) {
-	return cb.doRequest(ctx, "PATCH", path, queryParams, body, nil)
+	return cb.doRequest(ctx, http.MethodPost, path, queryParams, body, headers)
 }
 
 // PatchWithHeaders is a wrapper for doRequest with the PATCH method and headers.
 func (cb *CircuitBreaker) PatchWithHeaders(ctx context.Context, path string, queryParams map[string]interface{},
 	body []byte, headers map[string]string) (*http.Response, error) {
-	return cb.doRequest(ctx, "PATCH", path, queryParams, body, headers)
+	return cb.doRequest(ctx, http.MethodPatch, path, queryParams, body, headers)
 }
 
 // PutWithHeaders is a wrapper for doRequest with the PUT method and headers.
 func (cb *CircuitBreaker) PutWithHeaders(ctx context.Context, path string, queryParams map[string]interface{},
 	body []byte, headers map[string]string) (*http.Response, error) {
-	return cb.doRequest(ctx, "PUT", path, queryParams, body, headers)
-}
-
-// Delete is a wrapper for doRequest with the DELETE method.
-func (cb *CircuitBreaker) Delete(ctx context.Context, path string, body []byte) (*http.Response, error) {
-	return cb.doRequest(ctx, "DELETE", path, nil, body, nil)
+	return cb.doRequest(ctx, http.MethodPut, path, queryParams, body, headers)
 }
 
 // DeleteWithHeaders is a wrapper for doRequest with the DELETE method and headers.
 func (cb *CircuitBreaker) DeleteWithHeaders(ctx context.Context, path string, body []byte, headers map[string]string) (
 	*http.Response, error) {
-	return cb.doRequest(ctx, "DELETE", path, nil, body, headers)
+	return cb.doRequest(ctx, http.MethodDelete, path, nil, body, headers)
 }
