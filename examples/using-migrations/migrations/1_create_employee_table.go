@@ -4,7 +4,7 @@ import (
 	"gofr.dev/pkg/gofr/migration"
 )
 
-const createTable = `create table employee
+const createTable = `create TEMPORARY table employee
 (
     id             int         not null
         primary key,
