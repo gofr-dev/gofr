@@ -2,17 +2,18 @@ package migration
 
 import (
 	"context"
-	goSql "database/sql"
-	"gofr.dev/pkg/gofr/container"
-	"gofr.dev/pkg/gofr/datasource/sql"
+	"database/sql"
 	"time"
+
+	"gofr.dev/pkg/gofr/container"
+	gofrSql "gofr.dev/pkg/gofr/datasource/sql"
 )
 
 type db interface {
-	Query(query string, args ...interface{}) (*goSql.Rows, error)
-	QueryRow(query string, args ...interface{}) *goSql.Row
-	QueryRowContext(ctx context.Context, query string, args ...interface{}) *goSql.Row
-	Exec(query string, args ...interface{}) (goSql.Result, error)
+	Query(query string, args ...interface{}) (*sql.Rows, error)
+	QueryRow(query string, args ...interface{}) *sql.Row
+	QueryRowContext(ctx context.Context, query string, args ...interface{}) *sql.Row
+	Exec(query string, args ...interface{}) (sql.Result, error)
 }
 
 type sqlDB struct {
@@ -24,19 +25,19 @@ func newMysql(d db) sqlDB {
 	return sqlDB{db: d, usageTracker: &usage{}}
 }
 
-func (s *sqlDB) Query(query string, args ...interface{}) (*goSql.Rows, error) {
+func (s *sqlDB) Query(query string, args ...interface{}) (*sql.Rows, error) {
 	s.set()
 	return s.db.Query(query, args...)
 }
-func (s *sqlDB) QueryRow(query string, args ...interface{}) *goSql.Row {
+func (s *sqlDB) QueryRow(query string, args ...interface{}) *sql.Row {
 	s.set()
 	return s.db.QueryRow(query, args...)
 }
-func (s *sqlDB) QueryRowContext(ctx context.Context, query string, args ...interface{}) *goSql.Row {
+func (s *sqlDB) QueryRowContext(ctx context.Context, query string, args ...interface{}) *sql.Row {
 	s.set()
 	return s.db.QueryRowContext(ctx, query, args...)
 }
-func (s *sqlDB) Exec(query string, args ...interface{}) (goSql.Result, error) {
+func (s *sqlDB) Exec(query string, args ...interface{}) (sql.Result, error) {
 	s.set()
 	return s.db.Exec(query, args...)
 }
@@ -58,7 +59,7 @@ func ensureSQLMigrationTableExists(c *container.Container) error {
 	return nil
 }
 
-func getLastMigration(c *container.Container) int64 {
+func getSQLLastMigration(c *container.Container) int64 {
 	var lastMigration int64
 
 	err := c.DB.QueryRowContext(context.Background(), getLastMySQLGoFrMigration).Scan(&lastMigration)
@@ -69,19 +70,19 @@ func getLastMigration(c *container.Container) int64 {
 	return lastMigration
 }
 
-func insertMigrationRecord(tx *sql.Tx, version int64, startTime time.Time) error {
+func insertMigrationRecord(tx *gofrSql.Tx, version int64, startTime time.Time) error {
 	_, err := tx.Exec(insertGoFrMigrationRow, version, "UP", startTime, time.Since(startTime).Milliseconds())
 
 	return err
 }
 
-func rollbackAndLog(c *container.Container, tx *sql.Tx) {
+func rollbackAndLog(c *container.Container, tx *gofrSql.Tx) {
 	if err := tx.Rollback(); err != nil {
 		c.Logger.Error("unable to rollback transaction: %v", err)
 	}
 }
 
-func sqlPostRun(c *container.Container, tx *sql.Tx, currentMigration int64, start time.Time, s usageTracker) {
+func sqlPostRun(c *container.Container, tx *gofrSql.Tx, currentMigration int64, start time.Time, s usageTracker) {
 	if s.get() != true {
 		rollbackAndLog(c, tx)
 

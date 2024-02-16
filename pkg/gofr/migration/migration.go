@@ -18,6 +18,8 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 	invalidKeys, keys := getKeys(migrationsMap)
 	if len(invalidKeys) > 0 {
 		c.Logger.Errorf("Run Failed! UP not defined for the following keys: %v", invalidKeys)
+
+		return
 	}
 
 	sortkeys.Int64s(keys)
@@ -28,10 +30,11 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 		err := ensureSQLMigrationTableExists(c)
 		if err != nil {
 			c.Logger.Errorf("unable to verify sql migration table due to: %v", err)
+
 			return
 		}
 
-		lastMigration = getLastMigration(c)
+		lastMigration = getSQLLastMigration(c)
 	}
 
 	for _, currentMigration := range keys {
@@ -44,6 +47,7 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 		tx, err := c.DB.Begin()
 		if err != nil {
 			rollbackAndLog(c, tx)
+
 			return
 		}
 
@@ -52,6 +56,7 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 		err = migrationsMap[currentMigration].UP(datasource)
 		if err != nil {
 			rollbackAndLog(c, tx)
+
 			return
 		}
 
