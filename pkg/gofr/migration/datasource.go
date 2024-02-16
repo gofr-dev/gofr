@@ -3,14 +3,12 @@ package migration
 type Datasource struct {
 	Logger
 
-	DB    sqlDB
-	Redis redis
+	DB sqlDB
 }
 
-func newDatasource(l Logger, db sqlDB, r redis) Datasource {
+func newDatasource(l Logger, db sqlDB) Datasource {
 	return Datasource{
 		Logger: l,
 		DB:     db,
-		Redis:  r,
 	}
 }

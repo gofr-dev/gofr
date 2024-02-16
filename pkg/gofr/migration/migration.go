@@ -1,7 +1,6 @@
 package migration
 
 import (
-	"context"
 	"time"
 
 	"github.com/gogo/protobuf/sortkeys"
@@ -35,14 +34,6 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 		lastMigration = getLastMigration(c)
 	}
 
-	if c.Redis != nil {
-		resp, err := c.Redis.Get(context.Background(), "gofr_migrations").Result()
-		if err != nil {
-			return
-		}
-
-	}
-
 	for _, currentMigration := range keys {
 		if currentMigration <= lastMigration {
 			continue
@@ -56,15 +47,11 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 			return
 		}
 
-		p := c.Redis.TxPipeline()
-
 		sqlUsage := usage{}
-		redisUsage := usage{}
 
 		sql := newMysql(tx, &sqlUsage)
-		r := newRedis(p, &redisUsage)
 
-		datasource := newDatasource(c.Logger, sql, r)
+		datasource := newDatasource(c.Logger, sql)
 
 		err = migrationsMap[currentMigration].UP(datasource)
 		if err != nil {
@@ -73,7 +60,6 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 		}
 
 		sqlPostRun(c, tx, currentMigration, start, sql.usageTracker)
-		redisPostRun(c, p, currentMigration, start, r.usageTracker)
 	}
 }
 
