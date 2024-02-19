@@ -24,7 +24,7 @@ require (
 	go.opentelemetry.io/otel/sdk/metric v1.23.1
 	go.opentelemetry.io/otel/trace v1.23.1
 	go.uber.org/mock v0.4.0
-	golang.org/x/term v0.16.0
+	golang.org/x/term v0.17.0
 	google.golang.org/grpc v1.61.0
 	google.golang.org/protobuf v1.32.0
 )
@@ -49,7 +49,7 @@ require (
 	github.com/rogpeppe/go-internal v1.11.0 // indirect
 	github.com/yuin/gopher-lua v1.1.0 // indirect
 	golang.org/x/net v0.20.0 // indirect
-	golang.org/x/sys v0.16.0 // indirect
+	golang.org/x/sys v0.17.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240108191215-35c7eff3a6b1 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
