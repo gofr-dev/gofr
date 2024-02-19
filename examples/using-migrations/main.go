@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"gofr.dev/examples/using-migrations/migrations"
-	"gofr.dev/examples/using-migrations/model"
 	"gofr.dev/pkg/gofr"
 )
 
@@ -29,6 +28,14 @@ func main() {
 	a.Run()
 }
 
+type Employee struct {
+	ID     int    `json:"id"`
+	Name   string `json:"name"`
+	Gender string `json:"gender"`
+	Phone  int    `json:"contact_number"`
+	DOB    string `json:"dob"`
+}
+
 // GetHandler handles GET requests for retrieving employee information
 func GetHandler(c *gofr.Context) (interface{}, error) {
 	name := c.Param("name")
@@ -41,7 +48,7 @@ func GetHandler(c *gofr.Context) (interface{}, error) {
 		return nil, errors.New(fmt.Sprintf("DB Error : %v", row.Err()))
 	}
 
-	var emp model.Employee
+	var emp Employee
 
 	err := row.Scan(&emp.ID, &emp.Name, &emp.Gender, &emp.Phone, &emp.DOB)
 	if err != nil {
@@ -53,7 +60,7 @@ func GetHandler(c *gofr.Context) (interface{}, error) {
 
 // PostHandler handles POST requests for creating new employees
 func PostHandler(c *gofr.Context) (interface{}, error) {
-	var emp model.Employee
+	var emp Employee
 	if err := c.Bind(&emp); err != nil {
 		c.Logger.Errorf("error in binding: %v", err)
 		return nil, errors.New("invalid body")
@@ -63,7 +70,7 @@ func PostHandler(c *gofr.Context) (interface{}, error) {
 	_, err := c.DB.ExecContext(c, queryInsertEmployee, emp.ID, emp.Name, emp.Gender, emp.Phone, emp.DOB)
 
 	if err != nil {
-		return model.Employee{}, errors.New(fmt.Sprintf("DB Error : %v", err))
+		return Employee{}, errors.New(fmt.Sprintf("DB Error : %v", err))
 	}
 
 	return fmt.Sprintf("succesfully posted entity : %v", emp.Name), nil
