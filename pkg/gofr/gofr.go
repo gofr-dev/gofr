@@ -57,8 +57,16 @@ func New() *App {
 
 	app.initTracer()
 
+	// Metrics Server
+	port, err := strconv.Atoi(app.Config.Get("METRICS_PORT"))
+	if err != nil || port <= 0 {
+		port = defaultMetricPort
+	}
+
+	app.metricServer = newMetricServer(port)
+
 	// HTTP Server
-	port, err := strconv.Atoi(app.Config.Get("HTTP_PORT"))
+	port, err = strconv.Atoi(app.Config.Get("HTTP_PORT"))
 	if err != nil || port <= 0 {
 		port = defaultHTTPPort
 	}
@@ -72,14 +80,6 @@ func New() *App {
 	}
 
 	app.grpcServer = newGRPCServer(app.container, port)
-
-	// Metrics Server
-	port, err = strconv.Atoi(app.Config.Get("METRICS_PORT"))
-	if err != nil || port <= 0 {
-		port = defaultMetricPort
-	}
-
-	app.metricServer = newMetricServer(port)
 
 	return app
 }
@@ -167,7 +167,7 @@ func (a *App) AddHTTPService(serviceName, serviceAddress string, options ...serv
 		a.container.Debugf("Service already registered Name: %v", serviceName)
 	}
 
-	a.container.Services[serviceName] = service.NewHTTPService(serviceAddress, a.container.Logger, options...)
+	a.container.Services[serviceName] = service.NewHTTPService(serviceAddress, a.container.Logger, a.container.Metrics(), options...)
 }
 
 // GET adds a Handler for http GET method for a route pattern.
