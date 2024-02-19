@@ -37,3 +37,11 @@ func createTableEmployee() migration.Migrate {
 		},
 	}
 }
+
+func runMigration() migration.Migrate {
+	return migration.Migrate{
+		UP: func(d migration.Datasource) error {
+			return nil
+		},
+	}
+}
