@@ -28,7 +28,7 @@ func TestRedis_QueryLogging(t *testing.T) {
 		client := NewClient(testutil.NewMockConfig(map[string]string{
 			"REDIS_HOST": s.Host(),
 			"REDIS_PORT": s.Port(),
-		}), mockLogger, nil)
+		}), mockLogger, mockMetrics{})
 		assert.Nil(t, err)
 
 		result, err := client.Set(context.TODO(), "key", "value", 1*time.Minute).Result()
@@ -57,7 +57,7 @@ func TestRedis_PipelineQueryLogging(t *testing.T) {
 		client := NewClient(testutil.NewMockConfig(map[string]string{
 			"REDIS_HOST": s.Host(),
 			"REDIS_PORT": s.Port(),
-		}), mockLogger, nil)
+		}), mockLogger, mockMetrics{})
 		assert.Nil(t, err)
 
 		// Pipeline execution
@@ -82,4 +82,19 @@ func TestRedis_PipelineQueryLogging(t *testing.T) {
 	// Assertions
 	assert.Contains(t, result, "ping")
 	assert.Contains(t, result, "set key1 value1 ex 60: OK")
+}
+
+type mockMetrics struct {
+}
+
+func (m mockMetrics) IncrementCounter(ctx context.Context, name string, labels ...string) {
+}
+
+func (m mockMetrics) DeltaUpDownCounter(ctx context.Context, name string, value float64, labels ...string) {
+}
+
+func (m mockMetrics) RecordHistogram(ctx context.Context, name string, value float64, labels ...string) {
+}
+
+func (m mockMetrics) SetGauge(name string, value float64) {
 }
