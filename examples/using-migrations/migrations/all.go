@@ -6,6 +6,6 @@ import (
 
 func All() map[int64]migration.Migrate {
 	return map[int64]migration.Migrate{
-		1: createTableEmployee(),
+		1708322067: createTableEmployee(),
 	}
 }
