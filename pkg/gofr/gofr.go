@@ -21,6 +21,7 @@ import (
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/metrics"
+	"gofr.dev/pkg/gofr/migration"
 	"gofr.dev/pkg/gofr/service"
 )
 
@@ -57,8 +58,16 @@ func New() *App {
 
 	app.initTracer()
 
+	// Metrics Server
+	port, err := strconv.Atoi(app.Config.Get("METRICS_PORT"))
+	if err != nil || port <= 0 {
+		port = defaultMetricPort
+	}
+
+	app.metricServer = newMetricServer(port)
+
 	// HTTP Server
-	port, err := strconv.Atoi(app.Config.Get("HTTP_PORT"))
+	port, err = strconv.Atoi(app.Config.Get("HTTP_PORT"))
 	if err != nil || port <= 0 {
 		port = defaultHTTPPort
 	}
@@ -72,14 +81,6 @@ func New() *App {
 	}
 
 	app.grpcServer = newGRPCServer(app.container, port)
-
-	// Metrics Server
-	port, err = strconv.Atoi(app.Config.Get("METRICS_PORT"))
-	if err != nil || port <= 0 {
-		port = defaultMetricPort
-	}
-
-	app.metricServer = newMetricServer(port)
 
 	return app
 }
@@ -167,7 +168,7 @@ func (a *App) AddHTTPService(serviceName, serviceAddress string, options ...serv
 		a.container.Debugf("Service already registered Name: %v", serviceName)
 	}
 
-	a.container.Services[serviceName] = service.NewHTTPService(serviceAddress, a.container.Logger, options...)
+	a.container.Services[serviceName] = service.NewHTTPService(serviceAddress, a.container.Logger, a.container.Metrics(), options...)
 }
 
 // GET adds a Handler for http GET method for a route pattern.
@@ -206,6 +207,10 @@ func (a *App) Metrics() metrics.Manager {
 // Can be used to create commands like "kubectl get" or "kubectl get ingress".
 func (a *App) SubCommand(pattern string, handler Handler) {
 	a.cmd.addRoute(pattern, handler)
+}
+
+func (a *App) Migrate(migrationsMap map[int64]migration.Migrate) {
+	migration.Run(migrationsMap, a.container)
 }
 
 func (a *App) initTracer() {

@@ -42,6 +42,10 @@ func NewRequest(args []string) *Request {
 			continue
 		}
 
+		if len(arg) == 1 {
+			continue
+		}
+
 		a := ""
 		if arg[1] == '-' {
 			a = arg[2:]
@@ -75,6 +79,7 @@ func (r *Request) PathParam(key string) string {
 func (r *Request) Context() context.Context {
 	return context.Background()
 }
+
 func (r *Request) HostName() string {
 	h, err := os.Hostname()
 	if err != nil {

@@ -15,7 +15,7 @@ export const navigation = [
             { title: 'Inter-service HTTP Calls', href: '/docs/advanced-guide/interservice-http-call' },
             { title: 'Publishing Custom Metrics', href: '/docs/advanced-guide/publishing-custom-metrics' },
             { title: 'Remote Log Level Change', href: '/docs/advanced-guide/remote-log-level-change' },
-            // { title: 'Handling Data Migrations', href: '/docs/advanced-guide/data-migrations' },
+            { title: 'Handling Data Migrations', href: '/docs/advanced-guide/handling-data-migrations' },
             // { title: 'Dealing with Remote Files', href: '/docs/advanced-guide/remote-files' },
             // { title: 'Dynamic Configurations', href: '/docs/advanced-guide/dynamic-configs' },
             // { title: 'Supporting OAuth', href: '/docs/advanced-guide/oauth' },

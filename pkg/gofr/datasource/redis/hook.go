@@ -13,7 +13,8 @@ import (
 
 // redisHook is a custom Redis hook for logging queries and their durations.
 type redisHook struct {
-	logger datasource.Logger
+	logger  datasource.Logger
+	metrics Metrics
 }
 
 // QueryLog represents a logged Redis query.
@@ -43,11 +44,16 @@ func (ql QueryLog) String() string {
 
 // logQuery logs the Redis query information.
 func (r *redisHook) logQuery(start time.Time, query string, args ...interface{}) {
+	duration := time.Since(start)
+
 	r.logger.Debug(QueryLog{
 		Query:    query,
-		Duration: time.Since(start).Microseconds(),
+		Duration: duration.Microseconds(),
 		Args:     args,
 	})
+
+	r.metrics.RecordHistogram(context.Background(), "app_redis_stats",
+		duration.Seconds(), "type", query)
 }
 
 // DialHook implements the redis.DialHook interface.

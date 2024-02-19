@@ -22,7 +22,7 @@ func getDB(t *testing.T, logLevel int) (*DB, sqlmock.Sqlmock) {
 		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
 	}
 
-	return &DB{mockDB, testutil.NewMockLogger(logLevel), nil}, mock
+	return &DB{mockDB, testutil.NewMockLogger(logLevel), nil, nil}, mock
 }
 
 func TestDB_SelectSingleColumnFromIntToString(t *testing.T) {
