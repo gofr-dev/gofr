@@ -60,7 +60,7 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 			return
 		}
 
-		sqlPostRun(c, tx, currentMigration, start, datasource.DB.usageTracker)
+		sqlPostRun(c, tx, currentMigration, start)
 	}
 }
 

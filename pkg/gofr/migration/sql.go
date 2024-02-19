@@ -18,27 +18,22 @@ type db interface {
 
 type sqlDB struct {
 	db
-	usageTracker
 }
 
 func newMysql(d db) sqlDB {
-	return sqlDB{db: d, usageTracker: &usage{}}
+	return sqlDB{db: d}
 }
 
 func (s *sqlDB) Query(query string, args ...interface{}) (*sql.Rows, error) {
-	s.setUsage()
 	return s.db.Query(query, args...)
 }
 func (s *sqlDB) QueryRow(query string, args ...interface{}) *sql.Row {
-	s.setUsage()
 	return s.db.QueryRow(query, args...)
 }
 func (s *sqlDB) QueryRowContext(ctx context.Context, query string, args ...interface{}) *sql.Row {
-	s.setUsage()
 	return s.db.QueryRowContext(ctx, query, args...)
 }
 func (s *sqlDB) Exec(query string, args ...interface{}) (sql.Result, error) {
-	s.setUsage()
 	return s.db.Exec(query, args...)
 }
 
@@ -82,13 +77,7 @@ func rollbackAndLog(c *container.Container, tx *gofrSql.Tx) {
 	}
 }
 
-func sqlPostRun(c *container.Container, tx *gofrSql.Tx, currentMigration int64, start time.Time, s usageTracker) {
-	if !s.checkUsage() {
-		rollbackAndLog(c, tx)
-
-		return
-	}
-
+func sqlPostRun(c *container.Container, tx *gofrSql.Tx, currentMigration int64, start time.Time) {
 	err := insertMigrationRecord(tx, currentMigration, start)
 	if err != nil {
 		rollbackAndLog(c, tx)
