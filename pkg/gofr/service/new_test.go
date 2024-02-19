@@ -24,7 +24,7 @@ func TestNewHTTPService(t *testing.T) {
 
 	for i, tc := range tests {
 		t.Run(tc.desc, func(t *testing.T) {
-			service := NewHTTPService(tc.serviceAddress, nil)
+			service := NewHTTPService(tc.serviceAddress, nil, nil)
 			assert.NotNil(t, service, "TEST[%d], Failed.\n%s", i, tc.desc)
 		})
 	}

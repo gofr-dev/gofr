@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"strconv"
+	"time"
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/datasource"
@@ -20,7 +21,7 @@ type DBConfig struct {
 	Database string
 }
 
-func NewSQL(configs config.Config, logger datasource.Logger) *DB {
+func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *DB {
 	dbConfig := getDBConfig(configs)
 
 	// if Hostname is not provided, we won't try to connect to DB
@@ -41,19 +42,21 @@ func NewSQL(configs config.Config, logger datasource.Logger) *DB {
 		logger.Errorf("could not connect with '%s' user to database '%s:%s'  error: %v",
 			dbConfig.User, dbConfig.HostName, dbConfig.Port, err)
 
-		return &DB{config: dbConfig}
+		return &DB{config: dbConfig, metrics: metrics}
 	}
 
 	if err := db.Ping(); err != nil {
 		logger.Errorf("could not connect with '%s' user to database '%s:%s'  error: %v",
 			dbConfig.User, dbConfig.HostName, dbConfig.Port, err)
 
-		return &DB{config: dbConfig}
+		return &DB{config: dbConfig, metrics: metrics}
 	}
 
 	logger.Logf("connected to '%s' database at %s:%s", dbConfig.Database, dbConfig.HostName, dbConfig.Port)
 
-	return &DB{DB: db, config: dbConfig, logger: logger}
+	go pushDBMetrics(db, metrics)
+
+	return &DB{DB: db, config: dbConfig, logger: logger, metrics: metrics}
 }
 
 func getDBConfig(configs config.Config) *DBConfig {
@@ -63,5 +66,18 @@ func getDBConfig(configs config.Config) *DBConfig {
 		Password: configs.Get("DB_PASSWORD"),
 		Port:     configs.GetOrDefault("DB_PORT", strconv.Itoa(defaultDBPort)),
 		Database: configs.Get("DB_NAME"),
+	}
+}
+
+func pushDBMetrics(db *sql.DB, metrics Metrics) {
+	const frequency = 10
+
+	for {
+		stats := db.Stats()
+
+		metrics.SetGauge("app_sql_open_connections", float64(stats.OpenConnections))
+		metrics.SetGauge("app_sql_inUse_connections", float64(stats.InUse))
+
+		time.Sleep(frequency * time.Second)
 	}
 }

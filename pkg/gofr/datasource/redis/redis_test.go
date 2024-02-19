@@ -23,12 +23,16 @@ func TestRedis_QueryLogging(t *testing.T) {
 
 	defer s.Close()
 
+	mockMetric := NewMockMetrics(ctrl)
+	mockMetric.EXPECT().RecordHistogram(gomock.Any(), "app_redis_stats", gomock.Any(), "type", "ping")
+	mockMetric.EXPECT().RecordHistogram(gomock.Any(), "app_redis_stats", gomock.Any(), "type", "set")
+
 	result := testutil.StdoutOutputForFunc(func() {
 		mockLogger := testutil.NewMockLogger(testutil.DEBUGLOG)
 		client := NewClient(testutil.NewMockConfig(map[string]string{
 			"REDIS_HOST": s.Host(),
 			"REDIS_PORT": s.Port(),
-		}), mockLogger)
+		}), mockLogger, mockMetric)
 		assert.Nil(t, err)
 
 		result, err := client.Set(context.TODO(), "key", "value", 1*time.Minute).Result()
@@ -51,13 +55,17 @@ func TestRedis_PipelineQueryLogging(t *testing.T) {
 
 	defer s.Close()
 
+	mockMetric := NewMockMetrics(ctrl)
+	mockMetric.EXPECT().RecordHistogram(gomock.Any(), "app_redis_stats", gomock.Any(), "type", "ping")
+	mockMetric.EXPECT().RecordHistogram(gomock.Any(), "app_redis_stats", gomock.Any(), "type", "pipeline")
+
 	// Execute Redis pipeline
 	result := testutil.StdoutOutputForFunc(func() {
 		mockLogger := testutil.NewMockLogger(testutil.DEBUGLOG)
 		client := NewClient(testutil.NewMockConfig(map[string]string{
 			"REDIS_HOST": s.Host(),
 			"REDIS_PORT": s.Port(),
-		}), mockLogger)
+		}), mockLogger, mockMetric)
 		assert.Nil(t, err)
 
 		// Pipeline execution
