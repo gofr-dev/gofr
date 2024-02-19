@@ -1,10 +1,17 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 
 	"gofr.dev/examples/using-migrations/migrations"
+	"gofr.dev/examples/using-migrations/model"
 	"gofr.dev/pkg/gofr"
+)
+
+const (
+	queryGetEmployee    = "SELECT id,name,gender,contact_number,dob from employee where name = ?"
+	queryInsertEmployee = "INSERT INTO employee (id, name, gender, contact_number,dob) values (?, ?, ?, ?, ?)"
 )
 
 func main() {
@@ -15,18 +22,49 @@ func main() {
 	a.Migrate(migrations.All())
 
 	// Add all the routes
-	a.GET("/hello", HelloHandler)
+	a.GET("/employee", GetHandler)
+	a.POST("/employee", PostHandler)
 
 	// Run the application
 	a.Run()
 }
 
-func HelloHandler(c *gofr.Context) (interface{}, error) {
+// GetHandler handles GET requests for retrieving employee information
+func GetHandler(c *gofr.Context) (interface{}, error) {
 	name := c.Param("name")
 	if name == "" {
-		c.Log("Name came empty")
-		name = "World"
+		return nil, errors.New("name can't be empty")
 	}
 
-	return fmt.Sprintf("Hello %s!", name), nil
+	row := c.DB.QueryRowContext(c, queryGetEmployee, name)
+	if row.Err() != nil {
+		return nil, errors.New(fmt.Sprintf("DB Error : %v", row.Err()))
+	}
+
+	var emp model.Employee
+
+	err := row.Scan(&emp.ID, &emp.Name, &emp.Gender, &emp.Phone, &emp.DOB)
+	if err != nil {
+		return nil, errors.New(fmt.Sprintf("DB Error : %v", err))
+	}
+
+	return emp, nil
+}
+
+// PostHandler handles POST requests for creating new employees
+func PostHandler(c *gofr.Context) (interface{}, error) {
+	var emp model.Employee
+	if err := c.Bind(&emp); err != nil {
+		c.Logger.Errorf("error in binding: %v", err)
+		return nil, errors.New("invalid body")
+	}
+
+	// Execute the INSERT query
+	_, err := c.DB.ExecContext(c, queryInsertEmployee, emp.ID, emp.Name, emp.Gender, emp.Phone, emp.DOB)
+
+	if err != nil {
+		return model.Employee{}, errors.New(fmt.Sprintf("DB Error : %v", err))
+	}
+
+	return fmt.Sprintf("succesfully posted entity : %v", emp.Name), nil
 }
