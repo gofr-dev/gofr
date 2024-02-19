@@ -21,6 +21,7 @@ import (
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/metrics"
+	"gofr.dev/pkg/gofr/migration"
 	"gofr.dev/pkg/gofr/service"
 )
 
@@ -206,6 +207,10 @@ func (a *App) Metrics() metrics.Manager {
 // Can be used to create commands like "kubectl get" or "kubectl get ingress".
 func (a *App) SubCommand(pattern string, handler Handler) {
 	a.cmd.addRoute(pattern, handler)
+}
+
+func (a *App) Migrate(migrationsMap map[int64]migration.Migrate) {
+	migration.Run(migrationsMap, a.container)
 }
 
 func (a *App) initTracer() {
