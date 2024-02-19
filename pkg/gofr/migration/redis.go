@@ -3,7 +3,6 @@ package migration
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"gofr.dev/pkg/gofr/container"
 	"strconv"
 	"time"
@@ -62,10 +61,44 @@ func redisPostRun(c *container.Container, tx goRedis.Pipeliner, currentMigration
 
 	_, _ = c.Redis.HSet(context.Background(), "gofr_migrations", map[string]string{migrationVersion: string(data)}).Result()
 
-	cmd, err := tx.Exec(context.Background())
+	_, err := tx.Exec(context.Background())
 	if err != nil {
 		c.Logger.Errorf("Migration for Redis %v failed with err : %v", err)
 	}
+}
 
-	fmt.Println(cmd)
+func getRedisLastMigration(c *container.Container) int64 {
+	var lastMigration int64
+
+	table, err := c.Redis.HGetAll(context.Background(), "gofr_migrations").Result()
+	if err != nil {
+		c.Logger.Errorf("Failed to get migration record from Redis : %v", err)
+
+		return -1
+	}
+
+	val := make(map[int64]migration)
+
+	for key, value := range table {
+		integer_value, _ := strconv.ParseInt(key, 10, 64)
+
+		if integer_value > lastMigration {
+			lastMigration = integer_value
+		}
+
+		d := []byte(value)
+
+		var migrationData migration
+
+		err = json.Unmarshal(d, &migrationData)
+		if err != nil {
+			c.Logger.Errorf("Failed to unmarshal redis Migration data : %v", err)
+
+			return -1
+		}
+
+		val[integer_value] = migrationData
+	}
+
+	return lastMigration
 }

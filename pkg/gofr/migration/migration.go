@@ -1,9 +1,8 @@
 package migration
 
 import (
-	"context"
-	"encoding/json"
-	"strconv"
+	goRedis "github.com/redis/go-redis/v9"
+	gofrSql "gofr.dev/pkg/gofr/datasource/sql"
 	"time"
 
 	"github.com/gogo/protobuf/sortkeys"
@@ -41,27 +40,15 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 	}
 
 	if c.Redis != nil {
-		table, err := c.Redis.HGetAll(context.Background(), "gofr_migrations").Result()
-		if err != nil {
+		redisLastMigration := getRedisLastMigration(c)
+
+		switch {
+		case redisLastMigration == -1:
 			return
-		}
 
-		val := make(map[int64]migration)
+		case redisLastMigration > lastMigration:
+			lastMigration = redisLastMigration
 
-		for key, value := range table {
-			integer_value, _ := strconv.ParseInt(key, 10, 64)
-
-			if integer_value > lastMigration {
-				lastMigration = integer_value
-			}
-
-			d := []byte(value)
-
-			var migrationData migration
-
-			_ = json.Unmarshal(d, &migrationData)
-
-			val[integer_value] = migrationData
 		}
 	}
 
@@ -72,28 +59,42 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 
 		start := time.Now()
 
-		tx, err := c.DB.Begin()
-		if err != nil {
-			rollbackAndLog(c, tx)
+		var datasource Datasource
+		var sqlTx *gofrSql.Tx
+		var redisTx goRedis.Pipeliner
+		var err error
 
-			return
+		if c.DB != nil {
+			sqlTx, err = c.DB.Begin()
+			if err != nil {
+				rollbackAndLog(c, sqlTx)
+
+				return
+			}
+
+			datasource.DB = newMysql(sqlTx)
 		}
 
-		redisTx := c.Redis.TxPipeline()
-		sql := newMysql(tx)
-		r := newRedis(redisTx)
+		if c.Redis != nil {
+			redisTx = c.Redis.TxPipeline()
 
-		datasource := newDatasource(c.Logger, sql, r)
+			datasource.Redis = newRedis(redisTx)
+		}
 
 		err = migrationsMap[currentMigration].UP(datasource)
 		if err != nil {
-			rollbackAndLog(c, tx)
+			rollbackAndLog(c, sqlTx)
 
 			return
 		}
 
-		sqlPostRun(c, tx, currentMigration, start)
-		redisPostRun(c, redisTx, currentMigration, start)
+		if c.DB != nil {
+			sqlPostRun(c, sqlTx, currentMigration, start)
+		}
+
+		if c.Redis != nil {
+			redisPostRun(c, redisTx, currentMigration, start)
+		}
 	}
 }
 
