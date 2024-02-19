@@ -35,7 +35,7 @@ type metricsManager struct {
 	logger Logger
 }
 
-func NewMetricManager(meter metric.Meter, logger Logger) Manager {
+func NewMetricsManager(meter metric.Meter, logger Logger) Manager {
 	return &metricsManager{
 		meter:  meter,
 		store:  newOtelStore(),

@@ -15,8 +15,9 @@ import (
 type DB struct {
 	// contains unexported or private fields
 	*sql.DB
-	logger datasource.Logger
-	config *DBConfig
+	logger  datasource.Logger
+	config  *DBConfig
+	metrics Metrics
 }
 
 type Log struct {
@@ -27,12 +28,24 @@ type Log struct {
 }
 
 func (d *DB) logQuery(start time.Time, queryType, query string, args ...interface{}) {
+	duration := time.Since(start)
+
 	d.logger.Debug(Log{
 		Type:     queryType,
 		Query:    query,
-		Duration: time.Since(start).Microseconds(),
+		Duration: duration.Microseconds(),
 		Args:     args,
 	})
+
+	d.metrics.RecordHistogram(context.Background(), "app_sql_stats",
+		duration.Seconds(), "type", getOperationType(query))
+}
+
+func getOperationType(query string) string {
+	query = strings.TrimSpace(query)
+	words := strings.Split(query, " ")
+
+	return words[0]
 }
 
 func (d *DB) Query(query string, args ...interface{}) (*sql.Rows, error) {
@@ -66,21 +79,26 @@ func (d *DB) Begin() (*Tx, error) {
 		return nil, err
 	}
 
-	return &Tx{Tx: tx, logger: d.logger}, nil
+	return &Tx{Tx: tx, logger: d.logger, metrics: d.metrics}, nil
 }
 
 type Tx struct {
 	*sql.Tx
-	logger datasource.Logger
+	logger  datasource.Logger
+	metrics Metrics
 }
 
 func (t *Tx) logQuery(start time.Time, queryType, query string, args ...interface{}) {
+	duration := time.Since(start)
+
 	t.logger.Debug(Log{
 		Type:     queryType,
 		Query:    query,
-		Duration: time.Since(start).Microseconds(),
+		Duration: duration.Microseconds(),
 		Args:     args,
 	})
+
+	t.metrics.RecordHistogram(context.Background(), "app_sql_stats", duration.Seconds())
 }
 
 func (t *Tx) Query(query string, args ...interface{}) (*sql.Rows, error) {
