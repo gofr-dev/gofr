@@ -167,7 +167,7 @@ func (a *App) AddHTTPService(serviceName, serviceAddress string, options ...serv
 		a.container.Debugf("Service already registered Name: %v", serviceName)
 	}
 
-	a.container.Services[serviceName] = service.NewHTTPService(serviceAddress, a.container.Logger, options...)
+	a.container.Services[serviceName] = service.NewHTTPService(serviceAddress, a.container.Logger, a.container.Metrics(), options...)
 }
 
 // GET adds a Handler for http GET method for a route pattern.

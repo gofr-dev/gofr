@@ -65,13 +65,14 @@ type httpClient interface {
 
 // NewHTTPService function creates a new instance of the httpService struct, which implements the HTTP interface.
 // It initializes the http.Client, url, Tracer, and Logger fields of the httpService struct with the provided values.
-func NewHTTPService(serviceAddress string, logger Logger, options ...Options) HTTP {
+func NewHTTPService(serviceAddress string, logger Logger, metrics Metrics, options ...Options) HTTP {
 	h := &httpService{
 		// using default http client to do http communication
-		Client: &http.Client{},
-		url:    serviceAddress,
-		Tracer: otel.Tracer("gofr-http-client"),
-		Logger: logger,
+		Client:  &http.Client{},
+		url:     serviceAddress,
+		Tracer:  otel.Tracer("gofr-http-client"),
+		Logger:  logger,
+		Metrics: metrics,
 	}
 
 	var svc HTTP
@@ -169,8 +170,10 @@ func (h *httpService) createAndSendRequest(ctx context.Context, method string, p
 
 	respTime := time.Since(requestStart)
 
-	h.RecordHistogram(ctx, "app_http_service_response", respTime.Seconds(), "path", h.url, "method", method,
-		"status", fmt.Sprintf("%v", resp.StatusCode))
+	if h.Metrics != nil {
+		h.RecordHistogram(ctx, "app_http_service_response", respTime.Seconds(), "path", h.url, "method", method,
+			"status", fmt.Sprintf("%v", resp.StatusCode))
+	}
 
 	log.ResponseTime = respTime.Microseconds()
 
