@@ -3,9 +3,10 @@ package migration
 import (
 	"context"
 	"encoding/json"
-	"gofr.dev/pkg/gofr/container"
 	"strconv"
 	"time"
+
+	"gofr.dev/pkg/gofr/container"
 
 	goRedis "github.com/redis/go-redis/v9"
 )
@@ -50,7 +51,6 @@ func (r redis) Rename(ctx context.Context, key, newKey string) *goRedis.StatusCm
 }
 
 func redisPostRun(c *container.Container, tx goRedis.Pipeliner, currentMigration int64, start time.Time) {
-
 	data, _ := json.Marshal(migration{
 		Method:    "UP",
 		StartTime: start,
@@ -80,10 +80,10 @@ func getRedisLastMigration(c *container.Container) int64 {
 	val := make(map[int64]migration)
 
 	for key, value := range table {
-		integer_value, _ := strconv.ParseInt(key, 10, 64)
+		integerValue, _ := strconv.ParseInt(key, 10, 64)
 
-		if integer_value > lastMigration {
-			lastMigration = integer_value
+		if integerValue > lastMigration {
+			lastMigration = integerValue
 		}
 
 		d := []byte(value)
@@ -97,7 +97,7 @@ func getRedisLastMigration(c *container.Container) int64 {
 			return -1
 		}
 
-		val[integer_value] = migrationData
+		val[integerValue] = migrationData
 	}
 
 	return lastMigration

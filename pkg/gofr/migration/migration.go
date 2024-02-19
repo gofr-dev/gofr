@@ -1,9 +1,10 @@
 package migration
 
 import (
+	"time"
+
 	goRedis "github.com/redis/go-redis/v9"
 	gofrSql "gofr.dev/pkg/gofr/datasource/sql"
-	"time"
 
 	"github.com/gogo/protobuf/sortkeys"
 
@@ -16,6 +17,9 @@ type Migrate struct {
 	UP MigrateFunc
 }
 
+// TODO : Use composition to handler different databases which would also remove this nolint
+//
+//nolint:gocyclo // reducing complexity may hamper readability.
 func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 	invalidKeys, keys := getKeys(migrationsMap)
 	if len(invalidKeys) > 0 {
@@ -48,7 +52,6 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 
 		case redisLastMigration > lastMigration:
 			lastMigration = redisLastMigration
-
 		}
 	}
 
@@ -59,10 +62,12 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 
 		start := time.Now()
 
-		var datasource Datasource
-		var sqlTx *gofrSql.Tx
-		var redisTx goRedis.Pipeliner
-		var err error
+		var (
+			datasource Datasource
+			sqlTx      *gofrSql.Tx
+			redisTx    goRedis.Pipeliner
+			err        error
+		)
 
 		if c.DB != nil {
 			sqlTx, err = c.DB.Begin()
@@ -98,9 +103,9 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 	}
 }
 
-func getKeys(migrationsMap map[int64]Migrate) ([]int64, []int64) {
-	invalidKey := make([]int64, 0, len(migrationsMap))
-	keys := make([]int64, 0, len(migrationsMap))
+func getKeys(migrationsMap map[int64]Migrate) (invalidKey, keys []int64) {
+	invalidKey = make([]int64, 0, len(migrationsMap))
+	keys = make([]int64, 0, len(migrationsMap))
 
 	for k, v := range migrationsMap {
 		if v.UP == nil {
