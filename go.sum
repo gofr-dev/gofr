@@ -116,10 +116,10 @@ github.com/yuin/goldmark v1.1.27/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9de
 github.com/yuin/goldmark v1.2.1/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
 github.com/yuin/gopher-lua v1.1.0 h1:BojcDhfyDWgU2f2TOzYK/g5p2gxMrku8oupLDqlnSqE=
 github.com/yuin/gopher-lua v1.1.0/go.mod h1:GBR0iDaNXjAgGg9zfCvksxSRnQx76gclCIb7kdAd1Pw=
-go.opentelemetry.io/contrib/instrumentation/net/http/httptrace/otelhttptrace v0.47.0 h1:rw+yB4sMhufNzbVHGG9SDMSrw1CKSnRqfjJnMpAH4dE=
-go.opentelemetry.io/contrib/instrumentation/net/http/httptrace/otelhttptrace v0.47.0/go.mod h1:2NonlJyJNVbDK/hCwiLsu5gsD2bVtmIzQ/tGzWq58us=
-go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.47.0 h1:sv9kVfal0MK0wBMCOGr+HeJm9v803BkJxGrk2au7j08=
-go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.47.0/go.mod h1:SK2UL73Zy1quvRPonmOmRDiWk1KBV3LyIeeIxcEApWw=
+go.opentelemetry.io/contrib/instrumentation/net/http/httptrace/otelhttptrace v0.48.0 h1:ZeW4++xt1VrFSdnd0pFXz0PkrjLb89/VPOUOyPDJG/g=
+go.opentelemetry.io/contrib/instrumentation/net/http/httptrace/otelhttptrace v0.48.0/go.mod h1:ZdzuQW6m/OEtOLWWJs+k5ddZXsUq9xs2vx+ZT9G9eJ0=
+go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.48.0 h1:doUP+ExOpH3spVTLS0FcWGLnQrPct/hD/bCPbDRUEAU=
+go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.48.0/go.mod h1:rdENBZMT2OE6Ne/KLwpiXudnAsbdrdBaqBvTN8M8BgA=
 go.opentelemetry.io/otel v1.23.1 h1:Za4UzOqJYS+MUczKI320AtqZHZb7EqxO00jAHE0jmQY=
 go.opentelemetry.io/otel v1.23.1/go.mod h1:Td0134eafDLcTS4y+zQ26GE8u3dEuRBiBCTUIRHaikA=
 go.opentelemetry.io/otel/exporters/prometheus v0.45.2 h1:pe2Jqk1K18As0RCw7J08QhgXNqr+6npx0a5W4IgAFA8=
