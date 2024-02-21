@@ -14,22 +14,32 @@ type Message struct {
 	Topic    string
 	Value    []byte
 	MetaData interface{}
+
+	Committer
 }
 
-func NewMessage() *Message {
-	return &Message{ctx: context.Background()}
+func NewMessage(ctx context.Context) *Message {
+	if ctx == nil {
+		return &Message{ctx: context.Background()}
+	}
+
+	return &Message{ctx: ctx}
 }
 
 func (m *Message) Context() context.Context {
 	return m.ctx
 }
 
-func (m *Message) Param(_ string) string {
+func (m *Message) Param(p string) string {
+	if p == "topic" {
+		return m.Topic
+	}
+
 	return ""
 }
 
-func (m *Message) PathParam(_ string) string {
-	return ""
+func (m *Message) PathParam(p string) string {
+	return m.Param(p)
 }
 
 func (m *Message) Bind(i interface{}) error {

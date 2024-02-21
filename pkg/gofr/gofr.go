@@ -15,7 +15,6 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
-
 	"google.golang.org/grpc"
 
 	"gofr.dev/pkg/gofr/config"
@@ -24,8 +23,6 @@ import (
 	"gofr.dev/pkg/gofr/metrics"
 	"gofr.dev/pkg/gofr/service"
 )
-
-type SubscribeFunc func(c *Context)
 
 // App is the main application in the gofr framework.
 type App struct {
@@ -255,7 +252,6 @@ func (o *otelErrorHandler) Handle(e error) {
 }
 
 func (a *App) Subscribe(topic string, handler SubscribeFunc) {
-	// Create a new gofr.Context for subscription
 	if a.container.GetSubscriber() == nil {
 		a.container.Logger.Errorf("Subscriber not initialized in the container")
 
@@ -268,15 +264,25 @@ func (a *App) Subscribe(topic string, handler SubscribeFunc) {
 	go func() {
 		for {
 			msg, err := a.container.GetSubscriber().Subscribe(context.Background(), topic)
-			ctx := newContext(nil, msg, a.container)
-			ctx.Request = msg
-
-			if err != nil {
-				a.container.Logger.Errorf("error while reading from Kafka, err: %v", err.Error())
+			if msg == nil {
 				continue
 			}
 
-			handler(ctx)
+			if err != nil {
+				a.container.Logger.Errorf("error while reading from Kafka, err: %v", err.Error())
+
+				continue
+			}
+
+			// create a gofr context with message as request
+			ctx := newContext(nil, msg, a.container)
+
+			err = handler(ctx)
+
+			// commit the message if the subscription function does not return error
+			if err == nil {
+				msg.Commit()
+			}
 		}
 	}()
 }

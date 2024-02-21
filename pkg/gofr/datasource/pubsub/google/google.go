@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sync"
 
 	gcPubSub "cloud.google.com/go/pubsub"
+
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 )
 
@@ -20,10 +20,8 @@ type Config struct {
 type googleClient struct {
 	Config
 
-	client       *gcPubSub.Client
-	subscription *gcPubSub.Subscription
-	logger       pubsub.Logger
-	mu           *sync.Mutex
+	client *gcPubSub.Client
+	logger pubsub.Logger
 }
 
 //nolint:revive // We do not want anyone using the client without initialization steps.
@@ -63,13 +61,17 @@ func (g *googleClient) Publish(ctx context.Context, topic string, message []byte
 		return err
 	}
 
+	g.logger.Debugf("published google message %v on topic %v", string(message), topic)
+
 	return nil
 }
 
 func (g *googleClient) Subscribe(ctx context.Context, topic string) (*pubsub.Message, error) {
-	var m *pubsub.Message
+	var m = pubsub.NewMessage(ctx)
 
 	t := g.client.Topic(topic)
+
+	// check if topic exists, if not create the topic
 	if ok, err := t.Exists(ctx); !ok || err != nil {
 		_, err := g.client.CreateTopic(ctx, topic)
 		if err != nil {
@@ -77,11 +79,10 @@ func (g *googleClient) Subscribe(ctx context.Context, topic string) (*pubsub.Mes
 		}
 	}
 
-	if g.subscription == nil {
-		g.subscription = g.client.Subscription(g.SubscriptionName)
-	}
+	// check for subscription
+	subscription := g.client.Subscription(g.SubscriptionName + "-" + topic)
 
-	ok, err := g.subscription.Exists(context.Background())
+	ok, err := subscription.Exists(context.Background())
 	if err != nil {
 		g.logger.Errorf(errSubscriptionExistCheck.Error() + err.Error())
 
@@ -89,7 +90,7 @@ func (g *googleClient) Subscribe(ctx context.Context, topic string) (*pubsub.Mes
 	}
 
 	if !ok {
-		g.subscription, err = g.client.CreateSubscription(ctx, g.SubscriptionName, gcPubSub.SubscriptionConfig{
+		subscription, err = g.client.CreateSubscription(ctx, g.SubscriptionName+"-"+topic, gcPubSub.SubscriptionConfig{
 			Topic: t,
 		})
 
@@ -100,13 +101,15 @@ func (g *googleClient) Subscribe(ctx context.Context, topic string) (*pubsub.Mes
 
 	ctx, cancel := context.WithCancel(ctx)
 
-	err = g.subscription.Receive(ctx, func(_ context.Context, msg *gcPubSub.Message) {
+	err = subscription.Receive(ctx, func(_ context.Context, msg *gcPubSub.Message) {
 		defer cancel()
 
 		m = &pubsub.Message{
 			Topic:    topic,
 			Value:    msg.Data,
 			MetaData: msg.Attributes,
+
+			Committer: newGoogleMessage(msg),
 		}
 
 		msg.Ack()
@@ -118,9 +121,19 @@ func (g *googleClient) Subscribe(ctx context.Context, topic string) (*pubsub.Mes
 		return nil, err
 	}
 
+	g.logger.Debugf("received google message %v on topic %v", string(m.Value), m.Topic)
+
 	return m, nil
 }
 
-func (g *googleClient) Commit(ctx context.Context, msg pubsub.Message) error {
-	return nil
+type googleMessage struct {
+	msg *gcPubSub.Message
+}
+
+func newGoogleMessage(msg *gcPubSub.Message) *googleMessage {
+	return &googleMessage{msg: msg}
+}
+
+func (gmsg *googleMessage) Commit() {
+	gmsg.msg.Ack()
 }

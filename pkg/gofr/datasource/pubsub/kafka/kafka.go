@@ -22,7 +22,8 @@ type Config struct {
 type kafkaClient struct {
 	dialer *kafka.Dialer
 	writer *kafka.Writer
-	reader *kafka.Reader
+	reader map[string]*kafka.Reader
+
 	logger pubsub.Logger
 	config Config
 }
@@ -39,13 +40,17 @@ func New(conf Config, logger pubsub.Logger) *kafkaClient {
 		Dialer:  dialer,
 	})
 
+	reader := make(map[string]*kafka.Reader)
+
 	return &kafkaClient{
 		config: conf,
 		dialer: dialer,
+		reader: reader,
 		logger: logger,
 		writer: writer,
 	}
 }
+
 func (k *kafkaClient) Publish(ctx context.Context, topic string, message []byte) error {
 	if k.writer == nil || topic == "" {
 		return errPublisherNotConfigured
@@ -58,6 +63,8 @@ func (k *kafkaClient) Publish(ctx context.Context, topic string, message []byte)
 		},
 	)
 
+	k.logger.Debugf("Published kafka message %v", string(message))
+
 	if err != nil {
 		k.logger.Error("failed to publish message to kafka broker")
 		return err
@@ -67,7 +74,7 @@ func (k *kafkaClient) Publish(ctx context.Context, topic string, message []byte)
 }
 
 func (k *kafkaClient) Subscribe(ctx context.Context, topic string) (*pubsub.Message, error) {
-	if k.reader == nil {
+	if k.reader[topic] == nil {
 		reader := kafka.NewReader(kafka.ReaderConfig{
 			GroupID:     k.config.ConsumerGroupID,
 			Brokers:     []string{k.config.Broker},
@@ -78,49 +85,50 @@ func (k *kafkaClient) Subscribe(ctx context.Context, topic string) (*pubsub.Mess
 			StartOffset: int64(k.config.OffSet),
 		})
 
-		k.reader = reader
+		k.reader[topic] = reader
 	}
 
 	// Read a single message from the topic
-	msg, err := k.reader.ReadMessage(ctx)
+	msg, err := k.reader[topic].ReadMessage(ctx)
 	if err != nil {
 		k.logger.Errorf("failed to read message from Kafka topic %s: %v", topic, err)
-		return nil, err
-	}
-
-	err = k.reader.CommitMessages(ctx, msg)
-	if err != nil {
-		k.logger.Errorf("failed to commit message from topic %s: %w", msg.Topic, err)
 
 		return nil, err
 	}
 
-	return &pubsub.Message{
+	kmsg := &kafkaMessage{
+		msg:    &msg,
+		reader: k.reader[topic],
+	}
+
+	m := &pubsub.Message{
 		Value: msg.Value,
 		Topic: topic,
-	}, nil
-}
 
-func (k *kafkaClient) Commit(ctx context.Context, msg pubsub.Message) error {
-	err := k.reader.CommitMessages(ctx, kafka.Message{
-		Topic:     msg.Topic,
-		Value:     msg.Value,
-		Partition: k.config.Partition,
-	})
-	if err != nil {
-		k.logger.Errorf("failed to commit message from topic %s: %w", msg.Topic, err)
-		return err
+		Committer: kmsg,
 	}
 
-	return nil
+	k.logger.Debugf("Received kafka message %v on topic %v", msg.Topic, string(msg.Value))
+
+	return m, err
 }
 
 func (k *kafkaClient) Close() error {
 	err := k.writer.Close()
 	if err != nil {
 		k.logger.Errorf("failed to close Kafka writer: %v", err)
+
 		return err
 	}
 
 	return nil
+}
+
+type kafkaMessage struct {
+	msg    *kafka.Message
+	reader *kafka.Reader
+}
+
+func (kmsg *kafkaMessage) Commit() {
+	_ = kmsg.reader.CommitMessages(context.Background(), *kmsg.msg)
 }

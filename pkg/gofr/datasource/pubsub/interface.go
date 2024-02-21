@@ -10,7 +10,6 @@ type Publisher interface {
 
 type Subscriber interface {
 	Subscribe(ctx context.Context, topic string) (*Message, error)
-	Commit(ctx context.Context, msg Message) error
 }
 
 type Client interface {
@@ -18,7 +17,13 @@ type Client interface {
 	Subscriber
 }
 
+type Committer interface {
+	Commit()
+}
+
 type Logger interface {
+	Debugf(format string, args ...interface{})
+	Debug(args ...interface{})
 	Logf(format string, args ...interface{})
 	Log(args ...interface{})
 	Errorf(format string, args ...interface{})
