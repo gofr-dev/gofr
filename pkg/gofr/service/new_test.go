@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"fmt"
+	"go.uber.org/mock/gomock"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -31,6 +33,10 @@ func TestNewHTTPService(t *testing.T) {
 }
 
 func TestHTTPService_createAndSendRequest(t *testing.T) {
+	ctrl := gomock.NewController(t)
+
+	metrics := NewMockMetrics(ctrl)
+
 	// Setup a test server
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// read request body
@@ -52,13 +58,17 @@ func TestHTTPService_createAndSendRequest(t *testing.T) {
 	defer server.Close()
 
 	service := &httpService{
-		Client: http.DefaultClient,
-		url:    server.URL,
-		Tracer: otel.Tracer("gofr-http-client"),
-		Logger: testutil.NewMockLogger(testutil.INFOLOG),
+		Client:  http.DefaultClient,
+		url:     server.URL,
+		Tracer:  otel.Tracer("gofr-http-client"),
+		Logger:  testutil.NewMockLogger(testutil.INFOLOG),
+		Metrics: metrics,
 	}
 
 	ctx := context.Background()
+
+	metrics.EXPECT().RecordHistogram(ctx, "app_http_service_response", gomock.Any(), "path", server.URL, "method", http.MethodPost, "status", fmt.Sprintf("%v", http.StatusOK)).AnyTimes()
+
 	// when params value is of type []string then last value is sent in request
 	resp, err := service.createAndSendRequest(ctx,
 		http.MethodPost, "test-path", map[string]interface{}{"key": "value", "name": []string{"gofr", "test"}},
