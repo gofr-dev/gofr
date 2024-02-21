@@ -3,13 +3,13 @@ package service
 import (
 	"context"
 	"fmt"
-	"go.uber.org/mock/gomock"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"go.opentelemetry.io/otel"
+	"go.uber.org/mock/gomock"
 
 	"gofr.dev/pkg/gofr/testutil"
 )
@@ -67,7 +67,8 @@ func TestHTTPService_createAndSendRequest(t *testing.T) {
 
 	ctx := context.Background()
 
-	metrics.EXPECT().RecordHistogram(ctx, "app_http_service_response", gomock.Any(), "path", server.URL, "method", http.MethodPost, "status", fmt.Sprintf("%v", http.StatusOK)).AnyTimes()
+	metrics.EXPECT().RecordHistogram(ctx, "app_http_service_response", gomock.Any(), "path", server.URL,
+		"method", http.MethodPost, "status", fmt.Sprintf("%v", http.StatusOK)).AnyTimes()
 
 	// when params value is of type []string then last value is sent in request
 	resp, err := service.createAndSendRequest(ctx,
@@ -75,7 +76,9 @@ func TestHTTPService_createAndSendRequest(t *testing.T) {
 		[]byte("{Test Body}"), map[string]string{"header1": "value1"})
 
 	if err != nil {
-		defer resp.Body.Close()
+		if resp != nil {
+			defer resp.Body.Close()
+		}
 	}
 
 	assert.NoError(t, err)
@@ -105,11 +108,12 @@ func TestHTTPService_Get(t *testing.T) {
 	resp, err := service.Get(context.Background(), "test-path",
 		map[string]interface{}{"key": "value", "name": []string{"gofr", "test"}})
 
+	if resp != nil {
+		defer resp.Body.Close()
+	}
+
 	assert.NoError(t, err)
 	assert.NotNil(t, resp, "TEST, Failed.")
-
-	defer resp.Body.Close()
-
 }
 
 func TestHTTPService_GetWithHeaders(t *testing.T) {
@@ -137,17 +141,17 @@ func TestHTTPService_GetWithHeaders(t *testing.T) {
 		map[string]interface{}{"key": "value", "name": []string{"gofr", "test"}},
 		map[string]string{"header1": "value1"})
 
+	if resp != nil {
+		defer resp.Body.Close()
+	}
+
 	assert.NoError(t, err)
 	assert.NotNil(t, resp, "TEST, Failed.")
-
-	defer resp.Body.Close()
-
 }
 
 func TestHTTPService_Put(t *testing.T) {
 	// Setup a test server
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-
 		// read request body
 		var body []byte
 
@@ -177,16 +181,17 @@ func TestHTTPService_Put(t *testing.T) {
 	resp, err := service.Put(context.Background(), "test-path",
 		map[string]interface{}{"key": "value", "name": []string{"gofr", "test"}}, []byte("{Test Body}"))
 
+	if resp != nil {
+		defer resp.Body.Close()
+	}
+
 	assert.NoError(t, err)
 	assert.NotNil(t, resp, "TEST, Failed.")
-
-	defer resp.Body.Close()
 }
 
 func TestHTTPService_PutWithHeaders(t *testing.T) {
 	// Setup a test server
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-
 		// read request body
 		var body []byte
 
@@ -218,16 +223,17 @@ func TestHTTPService_PutWithHeaders(t *testing.T) {
 		map[string]interface{}{"key": "value", "name": []string{"gofr", "test"}}, []byte("{Test Body}"),
 		map[string]string{"header1": "value1"})
 
+	if resp != nil {
+		defer resp.Body.Close()
+	}
+
 	assert.NoError(t, err)
 	assert.NotNil(t, resp, "TEST, Failed.")
-
-	defer resp.Body.Close()
 }
 
 func TestHTTPService_Patch(t *testing.T) {
 	// Setup a test server
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-
 		// read request body
 		var body []byte
 
@@ -257,16 +263,17 @@ func TestHTTPService_Patch(t *testing.T) {
 	resp, err := service.Patch(context.Background(), "test-path",
 		map[string]interface{}{"key": "value", "name": []string{"gofr", "test"}}, []byte("{Test Body}"))
 
+	if resp != nil {
+		defer resp.Body.Close()
+	}
+
 	assert.NoError(t, err)
 	assert.NotNil(t, resp, "TEST, Failed.")
-
-	defer resp.Body.Close()
 }
 
 func TestHTTPService_PatchWithHeaders(t *testing.T) {
 	// Setup a test server
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-
 		// read request body
 		var body []byte
 
@@ -298,16 +305,17 @@ func TestHTTPService_PatchWithHeaders(t *testing.T) {
 		map[string]interface{}{"key": "value", "name": []string{"gofr", "test"}}, []byte("{Test Body}"),
 		map[string]string{"header1": "value1"})
 
+	if resp != nil {
+		defer resp.Body.Close()
+	}
+
 	assert.NoError(t, err)
 	assert.NotNil(t, resp, "TEST, Failed.")
-
-	defer resp.Body.Close()
 }
 
 func TestHTTPService_Post(t *testing.T) {
 	// Setup a test server
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-
 		// read request body
 		var body []byte
 
@@ -337,16 +345,17 @@ func TestHTTPService_Post(t *testing.T) {
 	resp, err := service.Post(context.Background(), "test-path",
 		map[string]interface{}{"key": "value", "name": []string{"gofr", "test"}}, []byte("{Test Body}"))
 
+	if resp != nil {
+		defer resp.Body.Close()
+	}
+
 	assert.NoError(t, err)
 	assert.NotNil(t, resp, "TEST, Failed.")
-
-	defer resp.Body.Close()
 }
 
 func TestHTTPService_PostWithHeaders(t *testing.T) {
 	// Setup a test server
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-
 		// read request body
 		var body []byte
 
@@ -378,16 +387,17 @@ func TestHTTPService_PostWithHeaders(t *testing.T) {
 		map[string]interface{}{"key": "value", "name": []string{"gofr", "test"}}, []byte("{Test Body}"),
 		map[string]string{"header1": "value1"})
 
+	if resp != nil {
+		defer resp.Body.Close()
+	}
+
 	assert.NoError(t, err)
 	assert.NotNil(t, resp, "TEST, Failed.")
-
-	defer resp.Body.Close()
 }
 
 func TestHTTPService_Delete(t *testing.T) {
 	// Setup a test server
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-
 		// read request body
 		var body []byte
 
@@ -415,16 +425,17 @@ func TestHTTPService_Delete(t *testing.T) {
 
 	resp, err := service.Delete(context.Background(), "test-path", []byte("{Test Body}"))
 
+	if resp != nil {
+		defer resp.Body.Close()
+	}
+
 	assert.NoError(t, err)
 	assert.NotNil(t, resp, "TEST, Failed.")
-
-	defer resp.Body.Close()
 }
 
 func TestHTTPService_DeleteWithHeaders(t *testing.T) {
 	// Setup a test server
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-
 		// read request body
 		var body []byte
 
@@ -454,10 +465,12 @@ func TestHTTPService_DeleteWithHeaders(t *testing.T) {
 	resp, err := service.DeleteWithHeaders(context.Background(), "test-path", []byte("{Test Body}"),
 		map[string]string{"header1": "value1"})
 
+	if resp != nil {
+		defer resp.Body.Close()
+	}
+
 	assert.NoError(t, err)
 	assert.NotNil(t, resp, "TEST, Failed.")
-
-	defer resp.Body.Close()
 }
 
 func TestHTTPService_createAndSendRequestCreateRequestFailure(t *testing.T) {
@@ -472,6 +485,10 @@ func TestHTTPService_createAndSendRequestCreateRequestFailure(t *testing.T) {
 	resp, err := service.createAndSendRequest(ctx,
 		"!@#$", "test-path", map[string]interface{}{"key": "value", "name": []string{"gofr", "test"}},
 		[]byte("{Test Body}"), map[string]string{"header1": "value1"})
+
+	if resp != nil {
+		defer resp.Body.Close()
+	}
 
 	assert.NotNil(t, err)
 	assert.Nil(t, resp, "TEST[%d], Failed.\n%s")
@@ -489,6 +506,10 @@ func TestHTTPService_createAndSendRequestServerError(t *testing.T) {
 	resp, err := service.createAndSendRequest(ctx,
 		http.MethodPost, "test-path", map[string]interface{}{"key": "value", "name": []string{"gofr", "test"}},
 		[]byte("{Test Body}"), map[string]string{"header1": "value1"})
+
+	if resp != nil {
+		defer resp.Body.Close()
+	}
 
 	assert.NotNil(t, err)
 	assert.Nil(t, resp, "TEST[%d], Failed.\n%s")

@@ -23,7 +23,7 @@ func TestHTTPService_HealthCheck(t *testing.T) {
 		// read request body
 		assert.Equal(t, "/.well-known/alive", r.URL.Path)
 
-		w.Write([]byte(`{"data":"UP"}`))
+		_, _ = w.Write([]byte(`{"data":"UP"}`))
 	}))
 	defer server.Close()
 
@@ -31,7 +31,8 @@ func TestHTTPService_HealthCheck(t *testing.T) {
 
 	ctx := context.Background()
 
-	metrics.EXPECT().RecordHistogram(ctx, "app_http_service_response", gomock.Any(), "path", server.URL, "method", http.MethodGet, "status", fmt.Sprintf("%v", http.StatusOK)).AnyTimes()
+	metrics.EXPECT().RecordHistogram(ctx, "app_http_service_response", gomock.Any(), "path", server.URL,
+		"method", http.MethodGet, "status", fmt.Sprintf("%v", http.StatusOK)).Times(1)
 
 	// when params value is of type []string then last value is sent in request
 	resp := service.HealthCheck(ctx)
@@ -50,7 +51,7 @@ func TestHTTPService_HealthCheckCustomURL(t *testing.T) {
 		// read request body
 		assert.Equal(t, "/.well-known/ready", r.URL.Path)
 
-		w.Write([]byte(`{"data":"UP"}`))
+		_, _ = w.Write([]byte(`{"data":"UP"}`))
 	}))
 	defer server.Close()
 
@@ -59,7 +60,8 @@ func TestHTTPService_HealthCheckCustomURL(t *testing.T) {
 
 	ctx := context.Background()
 
-	metrics.EXPECT().RecordHistogram(ctx, "app_http_service_response", gomock.Any(), "path", server.URL, "method", http.MethodGet, "status", fmt.Sprintf("%v", http.StatusOK)).AnyTimes()
+	metrics.EXPECT().RecordHistogram(ctx, "app_http_service_response", gomock.Any(), "path", server.URL,
+		"method", http.MethodGet, "status", fmt.Sprintf("%v", http.StatusOK)).Times(1)
 
 	// when params value is of type []string then last value is sent in request
 	resp := service.HealthCheck(ctx)
@@ -83,7 +85,8 @@ func TestHTTPService_HealthCheckErrorResponse(t *testing.T) {
 
 	ctx := context.Background()
 
-	metrics.EXPECT().RecordHistogram(ctx, "app_http_service_response", gomock.Any(), "path", server.URL, "method", http.MethodGet, "status", fmt.Sprintf("%v", http.StatusBadRequest)).AnyTimes()
+	metrics.EXPECT().RecordHistogram(ctx, "app_http_service_response", gomock.Any(), "path", server.URL,
+		"method", http.MethodGet, "status", fmt.Sprintf("%v", http.StatusBadRequest)).AnyTimes()
 
 	// when params value is of type []string then last value is sent in request
 	resp := service.HealthCheck(ctx)
