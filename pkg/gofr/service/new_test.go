@@ -30,6 +30,48 @@ func TestNewHTTPService(t *testing.T) {
 	}
 }
 
+func TestHTTPService_createAndSendRequest(t *testing.T) {
+	// Setup a test server
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// read request body
+		var body []byte
+
+		_, err := r.Body.Read(body)
+		if err != nil {
+			t.Fatal("Unable to read request body")
+		}
+
+		assert.Equal(t, "POST", r.Method)
+		assert.Equal(t, "/test-path", r.URL.Path)
+		assert.Equal(t, "key=value&name=test", r.URL.RawQuery)
+		assert.Contains(t, "value1", r.Header.Get("header1"))
+		assert.Contains(t, "Test Body", string(body))
+
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	service := &httpService{
+		Client: http.DefaultClient,
+		url:    server.URL,
+		Tracer: otel.Tracer("gofr-http-client"),
+		Logger: testutil.NewMockLogger(testutil.INFOLOG),
+	}
+
+	ctx := context.Background()
+	// when params value is of type []string then last value is sent in request
+	resp, err := service.createAndSendRequest(ctx,
+		http.MethodPost, "test-path", map[string]interface{}{"key": "value", "name": []string{"gofr", "test"}},
+		[]byte("{Test Body}"), map[string]string{"header1": "value1"})
+
+	if err != nil {
+		defer resp.Body.Close()
+	}
+
+	assert.NoError(t, err)
+	assert.NotNil(t, resp, "TEST[%d], Failed.\n%s")
+}
+
 func TestHTTPService_Get(t *testing.T) {
 	// Setup a test server
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -406,46 +448,4 @@ func TestHTTPService_DeleteWithHeaders(t *testing.T) {
 	assert.NotNil(t, resp, "TEST, Failed.")
 
 	defer resp.Body.Close()
-}
-
-func TestHTTPService_createAndSendRequest(t *testing.T) {
-	// Setup a test server
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// read request body
-		var body []byte
-
-		_, err := r.Body.Read(body)
-		if err != nil {
-			t.Fatal("Unable to read request body")
-		}
-
-		assert.Equal(t, "POST", r.Method)
-		assert.Equal(t, "/test-path", r.URL.Path)
-		assert.Equal(t, "key=value&name=test", r.URL.RawQuery)
-		assert.Contains(t, "value1", r.Header.Get("header1"))
-		assert.Contains(t, "Test Body", string(body))
-
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer server.Close()
-
-	service := &httpService{
-		Client: http.DefaultClient,
-		url:    server.URL,
-		Tracer: otel.Tracer("gofr-http-client"),
-		Logger: testutil.NewMockLogger(testutil.INFOLOG),
-	}
-
-	ctx := context.Background()
-	// when params value is of type []string then last value is sent in request
-	resp, err := service.createAndSendRequest(ctx,
-		http.MethodPost, "test-path", map[string]interface{}{"key": "value", "name": []string{"gofr", "test"}},
-		[]byte("{Test Body}"), map[string]string{"header1": "value1"})
-
-	if err != nil {
-		defer resp.Body.Close()
-	}
-
-	assert.NoError(t, err)
-	assert.NotNil(t, resp, "TEST[%d], Failed.\n%s")
 }
