@@ -1,6 +1,9 @@
 package service
 
-import "time"
+import (
+	"context"
+	"time"
+)
 
 type Logger interface {
 	Log(args ...interface{})
@@ -18,4 +21,11 @@ type Log struct {
 type ErrorLog struct {
 	Log
 	ErrorMessage string `json:"errorMessage"`
+}
+
+type Metrics interface {
+	IncrementCounter(ctx context.Context, name string, labels ...string)
+	DeltaUpDownCounter(ctx context.Context, name string, value float64, labels ...string)
+	RecordHistogram(ctx context.Context, name string, value float64, labels ...string)
+	SetGauge(name string, value float64)
 }

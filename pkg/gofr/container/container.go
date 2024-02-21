@@ -45,11 +45,14 @@ func NewContainer(conf config.Config) *Container {
 
 	c.Debug("Container is being created")
 
-	c.Redis = redis.NewClient(conf, c.Logger)
+	c.metricsManager = metrics.NewMetricsManager(exporters.Prometheus(c.appName, c.appVersion), c.Logger)
 
-	c.DB = sql.NewSQL(conf, c.Logger)
+	// Register framework metrics
+	c.registerFrameworkMetrics()
 
-	c.metricsManager = metrics.NewMetricManager(exporters.Prometheus(c.appName, c.appVersion), c.Logger)
+	c.Redis = redis.NewClient(conf, c.Logger, c.metricsManager)
+
+	c.DB = sql.NewSQL(conf, c.Logger, c.metricsManager)
 
 	switch strings.ToUpper(conf.Get("PUBSUB_BACKEND")) {
 	case "KAFKA":
@@ -83,6 +86,29 @@ func (c *Container) GetHTTPService(serviceName string) service.HTTP {
 
 func (c *Container) Metrics() metrics.Manager {
 	return c.metricsManager
+}
+
+func (c *Container) registerFrameworkMetrics() {
+	// system info metrics
+	c.Metrics().NewGauge("app_go_routines", "Number of Go routines running.")
+	c.Metrics().NewGauge("app_sys_memory_alloc", "Number of bytes allocated for heap objects.")
+	c.Metrics().NewGauge("app_sys_total_alloc", "Number of cumulative bytes allocated for heap objects.")
+	c.Metrics().NewGauge("app_go_numGC", "Number of completed Garbage Collector cycles.")
+	c.Metrics().NewGauge("app_go_sys", "Number of total bytes of memory.")
+
+	histogramBuckets := []float64{.001, .003, .005, .01, .02, .03, .05, .1, .2, .3, .5, .75, 1, 2, 3, 5, 10, 30}
+
+	// http metrics
+	c.Metrics().NewHistogram("app_http_response", "Response time of http requests in seconds.", histogramBuckets...)
+	c.Metrics().NewHistogram("app_http_service_response", "Response time of http service requests in seconds.", histogramBuckets...)
+
+	// redis metrics
+	c.Metrics().NewHistogram("app_redis_stats", "Observes the response time for Redis commands.", histogramBuckets...)
+
+	// sql metrics
+	c.Metrics().NewHistogram("app_sql_stats", "Observes the response time for SQL queries.", histogramBuckets...)
+	c.Metrics().NewGauge("app_sql_open_connections", "Number of open SQL connections.")
+	c.Metrics().NewGauge("app_sql_inUse_connections", "Number of inUse SQL connections.")
 }
 
 func (c *Container) GetAppName() string {

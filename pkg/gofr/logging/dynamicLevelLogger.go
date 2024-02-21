@@ -38,7 +38,7 @@ func (r *remoteLogger) UpdateLogLevel() {
 	ticker := time.NewTicker(levelFetchInterval)
 	defer ticker.Stop()
 
-	remoteService := service.NewHTTPService(r.remoteURL, r.Logger)
+	remoteService := service.NewHTTPService(r.remoteURL, r.Logger, nil)
 
 	for range ticker.C {
 		newLevel, err := fetchAndUpdateLogLevel(remoteService, r.currentLevel)
