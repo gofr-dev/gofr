@@ -449,3 +449,37 @@ func TestHTTPService_DeleteWithHeaders(t *testing.T) {
 
 	defer resp.Body.Close()
 }
+
+func TestHTTPService_createAndSendRequestCreateRequestFailure(t *testing.T) {
+	service := &httpService{
+		Client: http.DefaultClient,
+		Tracer: otel.Tracer("gofr-http-client"),
+		Logger: testutil.NewMockLogger(testutil.INFOLOG),
+	}
+
+	ctx := context.Background()
+	// when params value is of type []string then last value is sent in request
+	resp, err := service.createAndSendRequest(ctx,
+		"!@#$", "test-path", map[string]interface{}{"key": "value", "name": []string{"gofr", "test"}},
+		[]byte("{Test Body}"), map[string]string{"header1": "value1"})
+
+	assert.NotNil(t, err)
+	assert.Nil(t, resp, "TEST[%d], Failed.\n%s")
+}
+
+func TestHTTPService_createAndSendRequestServerError(t *testing.T) {
+	service := &httpService{
+		Client: http.DefaultClient,
+		Tracer: otel.Tracer("gofr-http-client"),
+		Logger: testutil.NewMockLogger(testutil.INFOLOG),
+	}
+
+	ctx := context.Background()
+	// when params value is of type []string then last value is sent in request
+	resp, err := service.createAndSendRequest(ctx,
+		http.MethodPost, "test-path", map[string]interface{}{"key": "value", "name": []string{"gofr", "test"}},
+		[]byte("{Test Body}"), map[string]string{"header1": "value1"})
+
+	assert.NotNil(t, err)
+	assert.Nil(t, resp, "TEST[%d], Failed.\n%s")
+}
