@@ -43,7 +43,7 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 		lastMigration = getSQLLastMigration(c)
 	}
 
-	if c.Redis != nil {
+	if c.Redis.Client != nil {
 		redisLastMigration := getRedisLastMigration(c)
 
 		switch {
@@ -80,7 +80,7 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 			datasource.DB = newMysql(sqlTx)
 		}
 
-		if c.Redis != nil {
+		if c.Redis.Client != nil {
 			redisTx = c.Redis.TxPipeline()
 
 			datasource.Redis = newRedis(redisTx)
@@ -97,7 +97,7 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 			sqlPostRun(c, sqlTx, currentMigration, start)
 		}
 
-		if c.Redis != nil {
+		if c.Redis.Client != nil {
 			redisPostRun(c, redisTx, currentMigration, start)
 		}
 	}

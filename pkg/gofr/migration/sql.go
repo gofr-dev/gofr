@@ -5,6 +5,9 @@ import (
 	"database/sql"
 	"time"
 
+	"github.com/go-sql-driver/mysql"
+	"github.com/lib/pq"
+
 	"gofr.dev/pkg/gofr/container"
 	gofrSql "gofr.dev/pkg/gofr/datasource/sql"
 )
@@ -38,16 +41,32 @@ func (s *sqlDB) Exec(query string, args ...interface{}) (sql.Result, error) {
 }
 
 func ensureSQLMigrationTableExists(c *container.Container) error {
-	var exists int
+	switch c.DB.DB.Driver().(type) {
+	case *mysql.MySQLDriver:
+		var exists int
 
-	err := c.DB.QueryRow(checkMySQLGoFrMigrationsTable).Scan(&exists)
-	if err != nil {
-		return err
-	}
-
-	if exists != 1 {
-		if _, err := c.DB.Exec(createMySQLGoFrMigrationsTable); err != nil {
+		err := c.DB.QueryRow(checkMySQLGoFrMigrationsTable).Scan(&exists)
+		if err != nil {
 			return err
+		}
+
+		if exists != 1 {
+			if _, err := c.DB.Exec(createMySQLGoFrMigrationsTable); err != nil {
+				return err
+			}
+		}
+	case *pq.Driver:
+		var exists bool
+
+		err := c.DB.QueryRow(checkMySQLGoFrMigrationsTable).Scan(&exists)
+		if err != nil {
+			return err
+		}
+
+		if !exists {
+			if _, err := c.DB.Exec(createMySQLGoFrMigrationsTable); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -65,8 +84,8 @@ func getSQLLastMigration(c *container.Container) int64 {
 	return lastMigration
 }
 
-func insertMigrationRecord(tx *gofrSql.Tx, version int64, startTime time.Time) error {
-	_, err := tx.Exec(insertGoFrMigrationRow, version, "UP", startTime, time.Since(startTime).Milliseconds())
+func insertMigrationRecord(tx *gofrSql.Tx, query string, version int64, startTime time.Time) error {
+	_, err := tx.Exec(query, version, "UP", startTime, time.Since(startTime).Milliseconds())
 
 	return err
 }
@@ -78,11 +97,21 @@ func rollbackAndLog(c *container.Container, tx *gofrSql.Tx) {
 }
 
 func sqlPostRun(c *container.Container, tx *gofrSql.Tx, currentMigration int64, start time.Time) {
-	err := insertMigrationRecord(tx, currentMigration, start)
-	if err != nil {
-		rollbackAndLog(c, tx)
+	switch c.DB.DB.Driver().(type) {
+	case *mysql.MySQLDriver:
+		err := insertMigrationRecord(tx, insertGoFrMigrationRowSQL, currentMigration, start)
+		if err != nil {
+			rollbackAndLog(c, tx)
 
-		return
+			return
+		}
+	case *pq.Driver:
+		err := insertMigrationRecord(tx, insertGoFrMigrationRowPostgres, currentMigration, start)
+		if err != nil {
+			rollbackAndLog(c, tx)
+
+			return
+		}
 	}
 
 	// Commit transaction
@@ -108,5 +137,7 @@ const (
 
 	getLastMySQLGoFrMigration = `SELECT COALESCE(MAX(version), 0) FROM gofr_migrations;`
 
-	insertGoFrMigrationRow = `INSERT INTO gofr_migrations (version, method, start_time,duration) VALUES (?, ?, ?, ?);`
+	insertGoFrMigrationRowSQL = `INSERT INTO gofr_migrations (version, method, start_time,duration) VALUES (?, ?, ?, ?);`
+
+	insertGoFrMigrationRowPostgres = `INSERT INTO gofr_migrations (version, method, start_time,duration) VALUES ($1, $2, $3, $4);`
 )
