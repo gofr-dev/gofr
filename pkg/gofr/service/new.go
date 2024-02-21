@@ -166,6 +166,8 @@ func (h *httpService) createAndSendRequest(ctx context.Context, method string, p
 
 	requestStart := time.Now()
 
+	// TODO : panic when resp in nil as we are checking the status code in line 177.
+
 	resp, err := h.Do(req)
 
 	respTime := time.Since(requestStart)
