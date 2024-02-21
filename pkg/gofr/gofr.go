@@ -41,8 +41,9 @@ type App struct {
 	// container is unexported because this is an internal implementation and applications are provided access to it via Context
 	container *container.Container
 
-	grpcRegistered bool
-	httpRegistered bool
+	grpcRegistered       bool
+	httpRegistered       bool
+	subscriberRegistered bool
 }
 
 // RegisterService adds a grpc service to the gofr application.
@@ -145,6 +146,11 @@ func (a *App) Run() {
 			defer wg.Done()
 			s.Run(a.container)
 		}(a.grpcServer)
+	}
+
+	// If subscriber is registered, block main go routine to wait for subscriber to receive messages
+	if a.subscriberRegistered {
+		wg.Add(1)
 	}
 
 	wg.Wait()
@@ -252,9 +258,13 @@ func (a *App) Subscribe(topic string, handler SubscribeFunc) {
 	// Create a new gofr.Context for subscription
 	if a.container.GetSubscriber() == nil {
 		a.container.Logger.Errorf("Subscriber not initialized in the container")
+
 		return
 	}
 
+	a.subscriberRegistered = true
+
+	// continuously subscribe in an infinite loop
 	go func() {
 		for {
 			msg, err := a.container.GetSubscriber().Subscribe(context.Background(), topic)
