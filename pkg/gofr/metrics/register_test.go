@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
 	"gofr.dev/pkg/gofr/metrics/exporters"
 	"gofr.dev/pkg/gofr/testutil"
 )
@@ -65,7 +66,7 @@ func Test_NewMetricsManagerSuccess(t *testing.T) {
 }
 
 func Test_NewMetricsManagerMetricsNotRegistered(t *testing.T) {
-	getLogs := func() {
+	logs := func() {
 		metrics := NewMetricsManager(exporters.Prometheus("testing-app", "v1.0.0"),
 			testutil.NewMockLogger(testutil.INFOLOG))
 
@@ -75,7 +76,7 @@ func Test_NewMetricsManagerMetricsNotRegistered(t *testing.T) {
 		metrics.RecordHistogram(context.Background(), "histogram-test", 1)
 	}
 
-	log := testutil.StderrOutputForFunc(getLogs)
+	log := testutil.StderrOutputForFunc(logs)
 
 	assert.Contains(t, log, `Metrics gauge-test is not registered`, "TEST Failed. gauge-test metrics registered")
 	assert.Contains(t, log, `Metrics counter-test is not registered`, "TEST Failed. counter-test metrics registered")
@@ -84,7 +85,7 @@ func Test_NewMetricsManagerMetricsNotRegistered(t *testing.T) {
 }
 
 func Test_NewMetricsManagerDuplicateMetricsRegistration(t *testing.T) {
-	getLogs := func() {
+	logs := func() {
 		metrics := NewMetricsManager(exporters.Prometheus("testing-app", "v1.0.0"),
 			testutil.NewMockLogger(testutil.INFOLOG))
 
@@ -99,7 +100,7 @@ func Test_NewMetricsManagerDuplicateMetricsRegistration(t *testing.T) {
 		metrics.NewHistogram("histogram-test", "this is metric to test histogram")
 	}
 
-	log := testutil.StderrOutputForFunc(getLogs)
+	log := testutil.StderrOutputForFunc(logs)
 
 	assert.Contains(t, log, `Metrics gauge-test already registered`, "TEST Failed. gauge-test metrics not registered")
 	assert.Contains(t, log, `Metrics counter-test already registered`, "TEST Failed. counter-test metrics not registered")
@@ -108,7 +109,7 @@ func Test_NewMetricsManagerDuplicateMetricsRegistration(t *testing.T) {
 }
 
 func Test_NewMetricsManagerInvalidLabelPairErrors(t *testing.T) {
-	getLogs := func() {
+	logs := func() {
 		metrics := NewMetricsManager(exporters.Prometheus("testing-app", "v1.0.0"),
 			testutil.NewMockLogger(testutil.INFOLOG))
 
@@ -118,13 +119,13 @@ func Test_NewMetricsManagerInvalidLabelPairErrors(t *testing.T) {
 			"label1", "value1", "label2", "value2", "label3")
 	}
 
-	log := testutil.StdoutOutputForFunc(getLogs)
+	log := testutil.StdoutOutputForFunc(logs)
 
 	assert.Contains(t, log, `Metrics counter-test label has invalid key-value pairs`, "TEST Failed. Invalid key-value pair for labels")
 }
 
 func Test_NewMetricsManagerLabelHighCardianality(t *testing.T) {
-	getLogs := func() {
+	logs := func() {
 		metrics := NewMetricsManager(exporters.Prometheus("testing-app", "v1.0.0"),
 			testutil.NewMockLogger(testutil.INFOLOG))
 
@@ -135,7 +136,7 @@ func Test_NewMetricsManagerLabelHighCardianality(t *testing.T) {
 			"label7", "value7", "label8", "value8", "label9", "value9", "label10", "value10", "label11", "valu11", "label12", "value12")
 	}
 
-	log := testutil.StdoutOutputForFunc(getLogs)
+	log := testutil.StdoutOutputForFunc(logs)
 
 	assert.Contains(t, log, `Metrics counter-test has high cardinality: 24`, "TEST Failed. high cardinality of metrics")
 }

@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
 	"gofr.dev/pkg/gofr/metrics/exporters"
 	"gofr.dev/pkg/gofr/testutil"
 )
@@ -15,7 +16,7 @@ import (
 func Test_MetricsGetHandler_MetricsNotRegistered(t *testing.T) {
 	var server *httptest.Server
 
-	getLogs := func() {
+	logs := func() {
 		manager := NewMetricsManager(exporters.Prometheus("test-app", "v1.0.0"),
 			testutil.NewMockLogger(testutil.INFOLOG))
 
@@ -31,15 +32,16 @@ func Test_MetricsGetHandler_MetricsNotRegistered(t *testing.T) {
 		}
 	}
 
-	assert.Contains(t, "Metrics app_go_routines is not registered\nMetrics app_sys_memory_alloc is not registered\n"+
-		"Metrics app_sys_total_alloc is not registered\nMetrics app_go_numGC is not registered\n"+
-		"Metrics app_go_sys is not registered\n", testutil.StderrOutputForFunc(getLogs))
+	assert.Contains(t, testutil.StderrOutputForFunc(logs), "Metrics app_go_routines is not registered\n"+
+		"Metrics app_sys_memory_alloc is not registered\n"+"Metrics app_sys_total_alloc is not registered\n"+
+		"Metrics app_go_numGC is not registered\n"+"Metrics app_go_sys is not registered\n")
 }
 
 func Test_MetricsGetHandler_SystemMetricsRegistered(t *testing.T) {
 	manager := NewMetricsManager(exporters.Prometheus("test-app", "v1.0.0"),
 		testutil.NewMockLogger(testutil.INFOLOG))
 
+	// Registering the metrics because the values are being set in the GetHandler function.
 	manager.NewGauge("app_go_routines", "Number of Go routines running.")
 	manager.NewGauge("app_sys_memory_alloc", "Number of bytes allocated for heap objects.")
 	manager.NewGauge("app_sys_total_alloc", "Number of cumulative bytes allocated for heap objects.")
