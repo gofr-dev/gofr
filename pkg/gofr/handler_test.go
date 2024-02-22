@@ -3,7 +3,6 @@ package gofr
 import (
 	"context"
 	"errors"
-	gofrHTTP "gofr.dev/pkg/gofr/http"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -12,6 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"gofr.dev/pkg/gofr/container"
+	gofrHTTP "gofr.dev/pkg/gofr/http"
 	"gofr.dev/pkg/gofr/http/response"
 	"gofr.dev/pkg/gofr/logging"
 )
@@ -95,7 +95,7 @@ func TestHandler_healthHandler(t *testing.T) {
 
 	a.AddHTTPService("test-service", server.URL)
 
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "", http.NoBody)
 
 	r := gofrHTTP.NewRequest(req)
 

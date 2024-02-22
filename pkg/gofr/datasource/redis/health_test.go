@@ -1,13 +1,15 @@
 package redis
 
 import (
+	"testing"
+
 	"github.com/alicebob/miniredis/v2"
 	"github.com/stretchr/testify/assert"
 
 	"go.uber.org/mock/gomock"
+
 	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/testutil"
-	"testing"
 )
 
 func TestRedis_HealthHandlerError(t *testing.T) {
@@ -28,6 +30,7 @@ func TestRedis_HealthHandlerError(t *testing.T) {
 		"REDIS_HOST": s.Host(),
 		"REDIS_PORT": s.Port(),
 	}), testutil.NewMockLogger(testutil.DEBUGLOG), mockMetric)
+
 	assert.Nil(t, err)
 
 	health := client.HealthCheck()

@@ -142,9 +142,10 @@ func Test_AddHTTPService(t *testing.T) {
 
 	g.AddHTTPService("test-service", server.URL)
 
-	resp, err := g.container.GetHTTPService("test-service").
+	resp, _ := g.container.GetHTTPService("test-service").
 		Get(context.Background(), "test", nil)
 
-	assert.Nil(t, err)
+	defer resp.Body.Close()
+
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 }
