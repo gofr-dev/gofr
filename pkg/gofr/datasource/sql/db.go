@@ -68,6 +68,11 @@ func (d *DB) Exec(query string, args ...interface{}) (sql.Result, error) {
 	return d.DB.Exec(query, args...)
 }
 
+func (d *DB) ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
+	d.logQuery(time.Now(), "Exec", query, args...)
+	return d.DB.ExecContext(ctx, query, args...)
+}
+
 func (d *DB) Prepare(query string) (*sql.Stmt, error) {
 	d.logQuery(time.Now(), "Prepare", query)
 	return d.DB.Prepare(query)
@@ -119,6 +124,11 @@ func (t *Tx) QueryRowContext(ctx context.Context, query string, args ...interfac
 func (t *Tx) Exec(query string, args ...interface{}) (sql.Result, error) {
 	defer t.logQuery(time.Now(), "TxExec", query, args...)
 	return t.Tx.Exec(query, args...)
+}
+
+func (t *Tx) ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
+	defer t.logQuery(time.Now(), "TxExec", query, args...)
+	return t.Tx.ExecContext(ctx, query, args...)
 }
 
 func (t *Tx) Prepare(query string) (*sql.Stmt, error) {
