@@ -3,10 +3,7 @@ package pubsub
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 )
-
-var errUnsupportedBindType = fmt.Errorf("unsupported type for binding message")
 
 type Message struct {
 	ctx context.Context

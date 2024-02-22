@@ -2,7 +2,6 @@ package google
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	gcPubSub "cloud.google.com/go/pubsub"
@@ -84,9 +83,9 @@ func (g *googleClient) Subscribe(ctx context.Context, topic string) (*pubsub.Mes
 
 	ok, err := subscription.Exists(context.Background())
 	if err != nil {
-		g.logger.Errorf(errSubscriptionExistCheck.Error() + err.Error())
+		g.logger.Error(errSubscriptionExistCheck.Error() + err.Error())
 
-		return nil, errors.New(errSubscriptionExistCheck.Error() + err.Error())
+		return nil, err
 	}
 
 	if !ok {

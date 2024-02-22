@@ -63,12 +63,12 @@ func (k *kafkaClient) Publish(ctx context.Context, topic string, message []byte)
 		},
 	)
 
-	k.logger.Debugf("Published kafka message %v", string(message))
-
 	if err != nil {
 		k.logger.Error("failed to publish message to kafka broker")
 		return err
 	}
+
+	k.logger.Debugf("published kafka message %v on topic %v", string(message), topic)
 
 	return nil
 }
@@ -108,7 +108,7 @@ func (k *kafkaClient) Subscribe(ctx context.Context, topic string) (*pubsub.Mess
 		Committer: kmsg,
 	}
 
-	k.logger.Debugf("Received kafka message %v on topic %v", msg.Topic, string(msg.Value))
+	k.logger.Debugf("received kafka message %v on topic %v", string(msg.Value), msg.Topic)
 
 	return m, err
 }
