@@ -3,6 +3,7 @@ package logging
 import (
 	"bytes"
 	"encoding/json"
+
 	"io"
 	"os"
 	"strings"
@@ -160,7 +161,7 @@ func TestCheckIfTerminal(t *testing.T) {
 	}
 }
 
-func TestPrettyPrint(t *testing.T) {
+func TestPrettyPrint_DbAndTerminalLogs(t *testing.T) {
 	var testTime = time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
 
 	tests := []struct {
@@ -168,7 +169,6 @@ func TestPrettyPrint(t *testing.T) {
 		entry          logEntry
 		isTerminal     bool
 		expectedOutput []string
-		expectedColor  uint
 	}{
 		{
 			desc: "RequestLog in Terminal",
@@ -186,7 +186,6 @@ func TestPrettyPrint(t *testing.T) {
 				"GET",
 				"/path",
 			},
-			expectedColor: 6,
 		},
 		{
 			desc: "SQL Log",
@@ -203,7 +202,6 @@ func TestPrettyPrint(t *testing.T) {
 				"100",
 				"SELECT * FROM table",
 			},
-			expectedColor: 6,
 		},
 		{
 			desc: "Redis Query Log",
@@ -220,7 +218,6 @@ func TestPrettyPrint(t *testing.T) {
 				"50",
 				"GET key",
 			},
-			expectedColor: 6,
 		},
 		{
 			desc: "Redis Pipeline Log",
@@ -238,8 +235,35 @@ func TestPrettyPrint(t *testing.T) {
 				"pipeline",
 				"get set",
 			},
-			expectedColor: 6,
 		},
+	}
+
+	for _, tc := range tests {
+		out := &bytes.Buffer{}
+		logger := &logger{isTerminal: tc.isTerminal}
+
+		logger.prettyPrint(tc.entry, out)
+
+		actual := out.String()
+
+		assert.Equal(t, uint(6), tc.entry.Level.color(), "Unexpected color code")
+
+		for _, part := range tc.expectedOutput {
+			assert.Contains(t, actual, part, "Expected format part not found")
+		}
+	}
+}
+
+func TestPrettyPrint_ServiceAndDefaultLogs(t *testing.T) {
+	var testTime = time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	tests := []struct {
+		desc           string
+		entry          logEntry
+		isTerminal     bool
+		expectedOutput []string
+		expectedColor  uint
+	}{
 		{
 			desc: "Service Log",
 			entry: logEntry{
