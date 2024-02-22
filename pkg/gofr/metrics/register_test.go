@@ -2,12 +2,14 @@ package metrics
 
 import (
 	"context"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
 	"github.com/stretchr/testify/assert"
 	"gofr.dev/pkg/gofr/metrics/exporters"
 	"gofr.dev/pkg/gofr/testutil"
-	"io"
-	"net/http/httptest"
-	"testing"
 )
 
 func Test_NewMetricsManagerSuccess(t *testing.T) {
@@ -26,9 +28,12 @@ func Test_NewMetricsManagerSuccess(t *testing.T) {
 
 	server := httptest.NewServer(GetHandler(metrics))
 
-	resp, _ := server.Client().Get(server.URL + "/metrics")
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, server.URL+"/metrics", http.NoBody)
+
+	resp, _ := server.Client().Do(req)
 
 	body, _ := io.ReadAll(resp.Body)
+	defer resp.Body.Close()
 
 	stringBody := string(body)
 

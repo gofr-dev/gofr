@@ -1,12 +1,15 @@
 package metrics
 
 import (
+	"context"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
 	"github.com/stretchr/testify/assert"
 	"gofr.dev/pkg/gofr/metrics/exporters"
 	"gofr.dev/pkg/gofr/testutil"
-	"io"
-	"net/http/httptest"
-	"testing"
 )
 
 func Test_MetricsGetHandler_MetricsNotRegistered(t *testing.T) {
@@ -20,11 +23,17 @@ func Test_MetricsGetHandler_MetricsNotRegistered(t *testing.T) {
 
 		server = httptest.NewServer(handler)
 
-		server.Client().Get(server.URL + "/metrics")
+		req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, server.URL+"/metrics", http.NoBody)
+
+		resp, _ := server.Client().Do(req)
+		if resp != nil {
+			defer resp.Body.Close()
+		}
 	}
 
-	assert.Contains(t, "Metrics app_go_routines is not registered\nMetrics app_sys_memory_alloc is not registered\nMetrics app_sys_total_alloc is not registered\nMetrics app_go_numGC is not registered\nMetrics app_go_sys is not registered\n",
-		testutil.StderrOutputForFunc(getLogs))
+	assert.Contains(t, "Metrics app_go_routines is not registered\nMetrics app_sys_memory_alloc is not registered\n"+
+		"Metrics app_sys_total_alloc is not registered\nMetrics app_go_numGC is not registered\n"+
+		"Metrics app_go_sys is not registered\n", testutil.StderrOutputForFunc(getLogs))
 }
 
 func Test_MetricsGetHandler_SystemMetricsRegistered(t *testing.T) {
@@ -41,11 +50,14 @@ func Test_MetricsGetHandler_SystemMetricsRegistered(t *testing.T) {
 
 	server := httptest.NewServer(handler)
 
-	resp, err := server.Client().Get(server.URL + "/metrics")
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, server.URL+"/metrics", http.NoBody)
+
+	resp, err := server.Client().Do(req)
 
 	assert.Nil(t, err)
 
-	body, err := io.ReadAll(resp.Body)
+	body, _ := io.ReadAll(resp.Body)
+	defer resp.Body.Close()
 
 	bodyString := string(body)
 
