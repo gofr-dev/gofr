@@ -2,8 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"math/rand"
-	"strconv"
 
 	"gofr.dev/pkg/gofr"
 )
@@ -19,21 +17,21 @@ func main() {
 }
 
 func order(ctx *gofr.Context) (interface{}, error) {
-	type data struct {
+	type orderStatus struct {
 		OrderId string `json:"orderId"`
 		Status  string `json:"status"`
 	}
 
-	d := data{
-		OrderId: strconv.Itoa(rand.Int()),
-		Status:  "COMPLETED",
+	var data orderStatus
+
+	err := ctx.Bind(&data)
+	if err != nil {
+		return nil, err
 	}
 
-	ctx.Log("Published order ", d)
+	msg, _ := json.Marshal(data)
 
-	msg, _ := json.Marshal(d)
-
-	err := ctx.GetPublisher().Publish(ctx, "order-logs", msg)
+	err = ctx.GetPublisher().Publish(ctx, "order-logs", msg)
 	if err != nil {
 		return nil, err
 	}
@@ -42,21 +40,21 @@ func order(ctx *gofr.Context) (interface{}, error) {
 }
 
 func product(ctx *gofr.Context) (interface{}, error) {
-	type data struct {
+	type productInfo struct {
 		ProductId string `json:"productId"`
 		Price     string `json:"price"`
 	}
 
-	d := data{
-		ProductId: strconv.Itoa(rand.Int()),
-		Price:     strconv.Itoa(rand.Int() % 100),
+	var data productInfo
+
+	err := ctx.Bind(&data)
+	if err != nil {
+		return nil, err
 	}
 
-	ctx.Log("Published product ", d)
+	msg, _ := json.Marshal(data)
 
-	msg, _ := json.Marshal(d)
-
-	err := ctx.GetPublisher().Publish(ctx, "products", msg)
+	err = ctx.GetPublisher().Publish(ctx, "products", msg)
 	if err != nil {
 		return nil, err
 	}
