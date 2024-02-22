@@ -9,7 +9,10 @@ import (
 const (
 	DEBUGLOG = iota + 1
 	INFOLOG
+	NOTICELOG
+	WARNLOG
 	ERRORLOG
+	FATALLOG
 )
 
 type MockLogger struct {
@@ -40,6 +43,13 @@ func (m *MockLogger) Log(args ...interface{}) {
 
 func (m *MockLogger) Logf(format string, args ...interface{}) {
 	m.logf(INFOLOG, format, args...)
+}
+
+func (m *MockLogger) Warn(args ...interface{}) {
+	m.logf(WARNLOG, "%v", args...)
+}
+func (m *MockLogger) Warnf(format string, args ...interface{}) {
+	m.logf(WARNLOG, format, args...)
 }
 
 func (m *MockLogger) Error(args ...interface{}) {
