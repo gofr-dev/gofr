@@ -14,20 +14,8 @@ import (
 )
 
 func TestHTTPService_HealthCheck(t *testing.T) {
-	ctrl := gomock.NewController(t)
-
-	metrics := NewMockMetrics(ctrl)
-
-	// Setup a test server
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// read request body
-		assert.Equal(t, "/.well-known/alive", r.URL.Path)
-
-		_, _ = w.Write([]byte(`{"data":"UP"}`))
-	}))
+	service, server, metrics := initialSetup(t, "alive")
 	defer server.Close()
-
-	service := NewHTTPService(server.URL, testutil.NewMockLogger(testutil.INFOLOG), metrics)
 
 	ctx := context.Background()
 
@@ -42,21 +30,8 @@ func TestHTTPService_HealthCheck(t *testing.T) {
 }
 
 func TestHTTPService_HealthCheckCustomURL(t *testing.T) {
-	ctrl := gomock.NewController(t)
-
-	metrics := NewMockMetrics(ctrl)
-
-	// Setup a test server
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// read request body
-		assert.Equal(t, "/.well-known/ready", r.URL.Path)
-
-		_, _ = w.Write([]byte(`{"data":"UP"}`))
-	}))
+	service, server, metrics := initialSetup(t, "ready")
 	defer server.Close()
-
-	service := NewHTTPService(server.URL, testutil.NewMockLogger(testutil.INFOLOG), metrics,
-		&HealthConfig{HealthEndpoint: ".well-known/ready"})
 
 	ctx := context.Background()
 
@@ -71,17 +46,8 @@ func TestHTTPService_HealthCheckCustomURL(t *testing.T) {
 }
 
 func TestHTTPService_HealthCheckErrorResponse(t *testing.T) {
-	ctrl := gomock.NewController(t)
-
-	metrics := NewMockMetrics(ctrl)
-
-	// Setup a test server
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusBadRequest)
-	}))
+	service, server, metrics := initialSetup(t, "bad-request")
 	defer server.Close()
-
-	service := NewHTTPService(server.URL, testutil.NewMockLogger(testutil.INFOLOG), metrics)
 
 	ctx := context.Background()
 
@@ -94,4 +60,20 @@ func TestHTTPService_HealthCheckErrorResponse(t *testing.T) {
 	assert.Equal(t, &Health{Status: serviceDown,
 		Details: map[string]interface{}{"host": server.URL[7:], "error": "service down"}},
 		resp, "TEST[%d], Failed.\n%s")
+}
+
+func initialSetup(t *testing.T, urlSuffix string) (HTTP, *httptest.Server, *MockMetrics) {
+	ctrl := gomock.NewController(t)
+	metrics := NewMockMetrics(ctrl)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/.well-known/"+urlSuffix, r.URL.Path)
+
+		_, _ = w.Write([]byte(`{"data":"UP"}`))
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	service := NewHTTPService(server.URL, testutil.NewMockLogger(testutil.INFOLOG), metrics,
+		&HealthConfig{HealthEndpoint: ".well-known/" + urlSuffix})
+
+	return service, server, metrics
 }
