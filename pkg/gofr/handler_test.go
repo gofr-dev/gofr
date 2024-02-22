@@ -3,6 +3,7 @@ package gofr
 import (
 	"context"
 	"errors"
+	gofrHTTP "gofr.dev/pkg/gofr/http"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -74,4 +75,34 @@ func TestHandler_catchAllHandler(t *testing.T) {
 	assert.Equal(t, data, nil, "TEST Failed.\n")
 
 	assert.Equal(t, http.ErrMissingFile, err, "TEST Failed.\n")
+}
+
+func TestHandler_livelinessHandler(t *testing.T) {
+	resp, err := liveHandler(&Context{})
+
+	assert.Nil(t, err)
+	assert.Equal(t, resp, "UP")
+}
+
+func TestHandler_healthHandler(t *testing.T) {
+	a := New()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/.well-known/alive", r.URL.Path)
+
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	a.AddHTTPService("test-service", server.URL)
+
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "", nil)
+
+	r := gofrHTTP.NewRequest(req)
+
+	ctx := newContext(nil, r, a.container)
+
+	h, err := healthHandler(ctx)
+
+	assert.Nil(t, err)
+	assert.NotNil(t, h)
 }
