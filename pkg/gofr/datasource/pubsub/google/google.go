@@ -68,34 +68,14 @@ func (g *googleClient) Publish(ctx context.Context, topic string, message []byte
 func (g *googleClient) Subscribe(ctx context.Context, topic string) (*pubsub.Message, error) {
 	var m = pubsub.NewMessage(ctx)
 
-	t := g.client.Topic(topic)
-
-	// check if topic exists, if not create the topic
-	if ok, err := t.Exists(ctx); !ok || err != nil {
-		_, err := g.client.CreateTopic(ctx, topic)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	// check for subscription
-	subscription := g.client.Subscription(g.SubscriptionName + "-" + topic)
-
-	ok, err := subscription.Exists(context.Background())
+	t, err := g.getTopic(ctx, topic)
 	if err != nil {
-		g.logger.Error(errSubscriptionExistCheck.Error() + err.Error())
-
 		return nil, err
 	}
 
-	if !ok {
-		subscription, err = g.client.CreateSubscription(ctx, g.SubscriptionName+"-"+topic, gcPubSub.SubscriptionConfig{
-			Topic: t,
-		})
-
-		if err != nil {
-			return nil, err
-		}
+	subscription, err := g.getSubscription(ctx, t)
+	if err != nil {
+		return nil, err
 	}
 
 	ctx, cancel := context.WithCancel(ctx)
@@ -123,6 +103,45 @@ func (g *googleClient) Subscribe(ctx context.Context, topic string) (*pubsub.Mes
 	g.logger.Debugf("received google message %v on topic %v", string(m.Value), m.Topic)
 
 	return m, nil
+}
+
+func (g *googleClient) getTopic(ctx context.Context, topic string) (*gcPubSub.Topic, error) {
+	t := g.client.Topic(topic)
+
+	// check if topic exists, if not create the topic
+	if ok, err := t.Exists(ctx); !ok || err != nil {
+		_, errTopicCreate := g.client.CreateTopic(ctx, topic)
+		if errTopicCreate != nil {
+			return nil, errTopicCreate
+		}
+	}
+
+	return t, nil
+}
+
+func (g *googleClient) getSubscription(ctx context.Context, topic *gcPubSub.Topic) (*gcPubSub.Subscription, error) {
+	subscription := g.client.Subscription(g.SubscriptionName + "-" + topic.String())
+
+	// check if subscription already exists or not
+	ok, err := subscription.Exists(context.Background())
+	if err != nil {
+		g.logger.Error(errSubscriptionExistCheck.Error() + err.Error())
+
+		return nil, err
+	}
+
+	// if subscription is not present, create a new
+	if !ok {
+		subscription, err = g.client.CreateSubscription(ctx, g.SubscriptionName+"-"+topic.String(), gcPubSub.SubscriptionConfig{
+			Topic: topic,
+		})
+
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return subscription, nil
 }
 
 type googleMessage struct {
