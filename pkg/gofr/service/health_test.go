@@ -14,7 +14,7 @@ import (
 )
 
 func TestHTTPService_HealthCheck(t *testing.T) {
-	service, server, metrics := initialSetup(t, "alive")
+	service, server, metrics := initializeTest(t, "alive", http.StatusOK)
 	defer server.Close()
 
 	ctx := context.Background()
@@ -30,7 +30,7 @@ func TestHTTPService_HealthCheck(t *testing.T) {
 }
 
 func TestHTTPService_HealthCheckCustomURL(t *testing.T) {
-	service, server, metrics := initialSetup(t, "ready")
+	service, server, metrics := initializeTest(t, "ready", http.StatusOK)
 	defer server.Close()
 
 	ctx := context.Background()
@@ -46,7 +46,7 @@ func TestHTTPService_HealthCheckCustomURL(t *testing.T) {
 }
 
 func TestHTTPService_HealthCheckErrorResponse(t *testing.T) {
-	service, server, metrics := initialSetup(t, "bad-request")
+	service, server, metrics := initializeTest(t, "bad-request", http.StatusBadRequest)
 	defer server.Close()
 
 	ctx := context.Background()
@@ -62,14 +62,17 @@ func TestHTTPService_HealthCheckErrorResponse(t *testing.T) {
 		resp, "TEST[%d], Failed.\n%s")
 }
 
-func initialSetup(t *testing.T, urlSuffix string) (HTTP, *httptest.Server, *MockMetrics) {
+func initializeTest(t *testing.T, urlSuffix string, statusCode int) (HTTP, *httptest.Server, *MockMetrics) {
 	ctrl := gomock.NewController(t)
 	metrics := NewMockMetrics(ctrl)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/.well-known/"+urlSuffix, r.URL.Path)
 
-		_, _ = w.Write([]byte(`{"data":"UP"}`))
-		w.WriteHeader(http.StatusOK)
+		if statusCode == http.StatusOK {
+			_, _ = w.Write([]byte(`{"data":"UP"}`))
+		}
+
+		w.WriteHeader(statusCode)
 	}))
 
 	service := NewHTTPService(server.URL, testutil.NewMockLogger(testutil.INFOLOG), metrics,
