@@ -3,9 +3,11 @@ FROM ghcr.io/gofr-dev/website:latest
 WORKDIR /app
 
 COPY  docs/quick-start /app/src/app/docs/quick-start
+COPY  docs/public /app/public
 COPY  docs/advanced-guide /app/src/app/docs/advanced-guide
 COPY  docs/page.md /app/src/app/docs
 COPY  docs/navigation.js /app/src/lib
+
 
 ENV NODE_ENV production
 

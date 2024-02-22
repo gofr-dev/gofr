@@ -28,5 +28,6 @@ The remote log level endpoint should return a JSON response in the following for
 
 GoFr will automatically fetch the response from this URL and then update the log level dynamically.
 
-By default the time-interval between the request to fetch log level is `15 Seconds`. 
+The time-interval between the request to fetch log level is `15 Seconds`.
+ **The support to override this config is coming soon.**
 
