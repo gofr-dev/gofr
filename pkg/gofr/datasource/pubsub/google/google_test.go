@@ -19,7 +19,7 @@ func getGoogleClient(t *testing.T) *gcPubSub.Client {
 
 	conn, err := grpc.Dial(srv.Addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Errorf("could not intialize a connection to dummy server")
+		t.Errorf("could not initialize a connection to dummy server")
 	}
 
 	client, err := gcPubSub.NewClient(context.Background(), "project", option.WithGRPCConn(conn))
@@ -105,6 +105,6 @@ func TestGoogleClient_getSubscription(t *testing.T) {
 	assert.NotNil(t, sub)
 }
 
-func TestGoogleMessage_Commit(t *testing.T) {
+func TestGoogleMessage_Commit(_ *testing.T) {
 	newGoogleMessage(&gcPubSub.Message{}).Commit()
 }
