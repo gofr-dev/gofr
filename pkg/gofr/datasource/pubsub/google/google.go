@@ -81,8 +81,6 @@ func (g *googleClient) Subscribe(ctx context.Context, topic string) (*pubsub.Mes
 
 			Committer: newGoogleMessage(msg),
 		}
-
-		msg.Ack()
 	})
 
 	if err != nil {
@@ -111,7 +109,7 @@ func (g *googleClient) getTopic(ctx context.Context, topic string) (*gcPubSub.To
 }
 
 func (g *googleClient) getSubscription(ctx context.Context, topic *gcPubSub.Topic) (*gcPubSub.Subscription, error) {
-	subscription := g.client.Subscription(g.SubscriptionName + "-" + topic.String())
+	subscription := g.client.Subscription(g.SubscriptionName + "-" + topic.ID())
 
 	// check if subscription already exists or not
 	ok, err := subscription.Exists(context.Background())
@@ -123,7 +121,7 @@ func (g *googleClient) getSubscription(ctx context.Context, topic *gcPubSub.Topi
 
 	// if subscription is not present, create a new
 	if !ok {
-		subscription, err = g.client.CreateSubscription(ctx, g.SubscriptionName+"-"+topic.String(), gcPubSub.SubscriptionConfig{
+		subscription, err = g.client.CreateSubscription(ctx, g.SubscriptionName+"-"+topic.ID(), gcPubSub.SubscriptionConfig{
 			Topic: topic,
 		})
 
