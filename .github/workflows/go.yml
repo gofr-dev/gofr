@@ -87,7 +87,8 @@ jobs:
       - name: Test
         run: |
           export GOFR_ENV=test
-          go test gofr.dev/pkg/... -v -short -coverprofile profile.cov -coverpkg=gofr.dev/pkg/...
+          go test gofr.dev/pkg/... -v -short -coverprofile profile.text -coverpkg=gofr.dev/pkg/...
+          grep -v "gofr.dev/pkg/gofr/testutil" profile.text > profile.cov
           go tool cover -func profile.cov
 
       - name: Upload Test Coverage
