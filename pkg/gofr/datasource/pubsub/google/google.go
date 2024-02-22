@@ -2,14 +2,11 @@ package google
 
 import (
 	"context"
-	"fmt"
 
 	gcPubSub "cloud.google.com/go/pubsub"
 
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 )
-
-var errSubscriptionExistCheck = fmt.Errorf("unable to check the existence of subscription: ")
 
 type Config struct {
 	ProjectID        string
@@ -32,8 +29,6 @@ func New(conf Config, logger pubsub.Logger) *googleClient {
 		}
 	}
 
-	// create subscription
-
 	return &googleClient{
 		Config: conf,
 		client: client,
@@ -42,20 +37,16 @@ func New(conf Config, logger pubsub.Logger) *googleClient {
 }
 
 func (g *googleClient) Publish(ctx context.Context, topic string, message []byte) error {
-	t := g.client.Topic(topic)
-
-	if ok, err := t.Exists(ctx); !ok || err != nil {
-		_, err := g.client.CreateTopic(ctx, topic)
-		if err != nil {
-			return err
-		}
+	t, err := g.getTopic(ctx, topic)
+	if err != nil {
+		return err
 	}
 
 	result := t.Publish(ctx, &gcPubSub.Message{
 		Data: message,
 	})
 
-	_, err := result.Get(ctx)
+	_, err = result.Get(ctx)
 	if err != nil {
 		return err
 	}
@@ -125,7 +116,7 @@ func (g *googleClient) getSubscription(ctx context.Context, topic *gcPubSub.Topi
 	// check if subscription already exists or not
 	ok, err := subscription.Exists(context.Background())
 	if err != nil {
-		g.logger.Error(errSubscriptionExistCheck.Error() + err.Error())
+		g.logger.Errorf("unable to check the existence of subscription, err : %v ", err.Error())
 
 		return nil, err
 	}
@@ -152,6 +143,6 @@ func newGoogleMessage(msg *gcPubSub.Message) *googleMessage {
 	return &googleMessage{msg: msg}
 }
 
-func (gmsg *googleMessage) Commit() {
-	gmsg.msg.Ack()
+func (gm *googleMessage) Commit() {
+	gm.msg.Ack()
 }
