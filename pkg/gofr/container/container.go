@@ -31,7 +31,8 @@ type Container struct {
 
 func NewContainer(conf config.Config) *Container {
 	c := &Container{
-		Logger:     logging.NewRemoteLogger(logging.GetLevelFromString(conf.Get("LOG_LEVEL")), conf.Get("REMOTE_LOG_URL")),
+		Logger: logging.NewRemoteLogger(logging.GetLevelFromString(conf.Get("LOG_LEVEL")), conf.Get("REMOTE_LOG_URL"),
+			conf.GetOrDefault("REMOTE_LOG_FETCH_INTERVAL", "15")),
 		appName:    conf.GetOrDefault("APP_NAME", "gofr-app"),
 		appVersion: conf.GetOrDefault("APP_VERSION", "dev"),
 	}
