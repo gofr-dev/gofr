@@ -30,7 +30,7 @@ func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *D
 	dbConfig := getDBConfig(configs)
 
 	// if Hostname is not provided, we won't try to connect to DB
-	if dbConfig.HostName == "" {
+	if dbConfig.HostName == "" || dbConfig.Dialect == "" {
 		return nil
 	}
 
