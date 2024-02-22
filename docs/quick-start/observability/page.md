@@ -11,7 +11,7 @@ Now that you have created your server, lets see how GoFr by default manages obse
 
   Log Level can be changed by setting the environment variable `LOG_LEVEL` value to _WARN,DEBUG,ERROR,NOTICE or FATAL_.
 
-![Pretty Printed Logs](img.png)
+{% figure src="/quick-start-logs.png" alt="Pretty Printed Logs" /%}
 
   Logs are well-structured, they are of type JSON when exported to a file, such that they can be pushed to logging systems such as [Loki](https://grafana.com/oss/loki/), elastic search etc.
 
@@ -53,4 +53,5 @@ Now that you have created your server, lets see how GoFr by default manages obse
 
   Open [zipkin](http://localhost:2005/zipkin/) and search by TraceID (correlationID) to see the trace.
 
-  ![Zipkin Trace Image](https://drive.google.com/file/d/1FFTiqWT8rhg-r7AgDj5wrgJOnLdAtECO/view)
+{% figure src="/quick-start-trace.png" alt="Pretty Printed Logs" /%}
+
