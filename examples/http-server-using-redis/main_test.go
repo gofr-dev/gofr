@@ -12,7 +12,7 @@ import (
 func TestHTTPServerUsingRedis(t *testing.T) {
 	const host = "http://localhost:8000"
 	go main()
-	time.Sleep(time.Second * 3) // Giving some time to start the server
+	time.Sleep(time.Second * 1) // Giving some time to start the server
 
 	tests := []struct {
 		desc       string
