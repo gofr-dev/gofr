@@ -325,7 +325,7 @@ func Test_MigrationSQLMigrationTableCheckFailed(t *testing.T) {
 		cntnr := container.NewContainer(&config.EnvFile{})
 		mockDB, mock, err := sqlmock.New()
 		if err != nil {
-			t.Fatalf("Mocks not initialised %v", err)
+			t.Fatalf("Mocks not initialized %v", err)
 		}
 
 		defer mockDB.Close()
@@ -357,7 +357,7 @@ func Test_MigrationMySQLTransactionCreationFailure(t *testing.T) {
 		cntnr := container.NewContainer(&config.EnvFile{})
 		mockDB, mock, err := sqlmock.New()
 		if err != nil {
-			t.Fatalf("Mocks not initialised %v", err)
+			t.Fatalf("Mocks not initialized %v", err)
 		}
 
 		defer mockDB.Close()
@@ -391,7 +391,7 @@ func Test_MigrationMySQLCreateGoFrMigrationError(t *testing.T) {
 		cntnr := container.NewContainer(&config.EnvFile{})
 		mockDB, mock, err := sqlmock.New()
 		if err != nil {
-			t.Fatalf("Mocks not initialised %v", err)
+			t.Fatalf("Mocks not initialized %v", err)
 		}
 
 		defer mockDB.Close()
