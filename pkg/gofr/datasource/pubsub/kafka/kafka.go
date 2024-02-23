@@ -9,7 +9,11 @@ import (
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 )
 
-var errPublisherNotConfigured = errors.New("can't publish message. Publisher not configured or topic is empty")
+var (
+	errBrokerNotProvided        = errors.New("kafka broker address not provided")
+	errConsumerGroupNotProvided = errors.New("consumer group id not provided")
+	errPublisherNotConfigured   = errors.New("can't publish message. Publisher not configured or topic is empty")
+)
 
 type Config struct {
 	Broker          string
@@ -29,6 +33,13 @@ type kafkaClient struct {
 
 //nolint:revive // We do not want anyone using the client without initialization steps.
 func New(conf Config, logger pubsub.Logger) *kafkaClient {
+	err := validateConfigs(conf)
+	if err != nil {
+		logger.Errorf("could not initialize kafka, err : %v", err)
+
+		return nil
+	}
+
 	dialer := &kafka.Dialer{
 		Timeout:   10 * time.Second,
 		DualStack: true,
@@ -48,6 +59,18 @@ func New(conf Config, logger pubsub.Logger) *kafkaClient {
 		logger: logger,
 		writer: writer,
 	}
+}
+
+func validateConfigs(conf Config) error {
+	if conf.Broker == "" {
+		return errBrokerNotProvided
+	}
+
+	if conf.ConsumerGroupID == "" {
+		return errConsumerGroupNotProvided
+	}
+
+	return nil
 }
 
 func (k *kafkaClient) Publish(ctx context.Context, topic string, message []byte) error {

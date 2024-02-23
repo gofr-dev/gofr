@@ -2,10 +2,16 @@ package google
 
 import (
 	"context"
+	"errors"
 
 	gcPubSub "cloud.google.com/go/pubsub"
 
 	"gofr.dev/pkg/gofr/datasource/pubsub"
+)
+
+var (
+	errProjectIDNotProvided    = errors.New("google project id not provided")
+	errSubscriptionNotProvided = errors.New("subscription name not provided")
 )
 
 type Config struct {
@@ -22,6 +28,13 @@ type googleClient struct {
 
 //nolint:revive // We do not want anyone using the client without initialization steps.
 func New(conf Config, logger pubsub.Logger) *googleClient {
+	err := validateConfigs(&conf)
+	if err != nil {
+		logger.Errorf("google pubsub could not be configured, err : %v", err)
+
+		return nil
+	}
+
 	client, err := gcPubSub.NewClient(context.Background(), conf.ProjectID)
 	if err != nil {
 		return &googleClient{
@@ -34,6 +47,18 @@ func New(conf Config, logger pubsub.Logger) *googleClient {
 		client: client,
 		logger: logger,
 	}
+}
+
+func validateConfigs(conf *Config) error {
+	if conf.ProjectID == "" {
+		return errProjectIDNotProvided
+	}
+
+	if conf.SubscriptionName == "" {
+		return errSubscriptionNotProvided
+	}
+
+	return nil
 }
 
 func (g *googleClient) Publish(ctx context.Context, topic string, message []byte) error {
@@ -131,16 +156,4 @@ func (g *googleClient) getSubscription(ctx context.Context, topic *gcPubSub.Topi
 	}
 
 	return subscription, nil
-}
-
-type googleMessage struct {
-	msg *gcPubSub.Message
-}
-
-func newGoogleMessage(msg *gcPubSub.Message) *googleMessage {
-	return &googleMessage{msg: msg}
-}
-
-func (gm *googleMessage) Commit() {
-	gm.msg.Ack()
 }

@@ -30,6 +30,21 @@ func getGoogleClient(t *testing.T) *gcPubSub.Client {
 	return client
 }
 
+func TestGoogleClient_New_Error(t *testing.T) {
+	var (
+		g *googleClient
+	)
+
+	out := testutil.StderrOutputForFunc(func() {
+		logger := testutil.NewMockLogger(testutil.ERRORLOG)
+
+		g = New(Config{}, logger)
+	})
+
+	assert.Nil(t, g)
+	assert.Contains(t, out, "google pubsub could not be configured")
+}
+
 func TestGoogleClient_Publish_Success(t *testing.T) {
 	client := getGoogleClient(t)
 	defer client.Close()
@@ -42,7 +57,10 @@ func TestGoogleClient_Publish_Success(t *testing.T) {
 		g := &googleClient{
 			logger: testutil.NewMockLogger(testutil.DEBUGLOG),
 			client: client,
-			Config: Config{},
+			Config: Config{
+				ProjectID:        "test",
+				SubscriptionName: "sub",
+			},
 		}
 
 		err := g.Publish(context.Background(), topic, message)
@@ -54,7 +72,10 @@ func TestGoogleClient_Publish_Success(t *testing.T) {
 }
 
 func TestGoogleClient_PublishTopic_Error(t *testing.T) {
-	g := &googleClient{client: getGoogleClient(t)}
+	g := &googleClient{client: getGoogleClient(t), Config: Config{
+		ProjectID:        "test",
+		SubscriptionName: "sub",
+	}}
 	defer g.client.Close()
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -68,7 +89,10 @@ func TestGoogleClient_PublishTopic_Error(t *testing.T) {
 }
 
 func TestGoogleClient_getTopic_Success(t *testing.T) {
-	g := &googleClient{client: getGoogleClient(t)}
+	g := &googleClient{client: getGoogleClient(t), Config: Config{
+		ProjectID:        "test",
+		SubscriptionName: "sub",
+	}}
 	defer g.client.Close()
 
 	topic, err := g.getTopic(context.Background(), "test-topic")
@@ -81,7 +105,10 @@ func TestGoogleClient_getTopic_Error(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	g := &googleClient{client: getGoogleClient(t)}
+	g := &googleClient{client: getGoogleClient(t), Config: Config{
+		ProjectID:        "test",
+		SubscriptionName: "sub",
+	}}
 	defer g.client.Close()
 
 	topic, err := g.getTopic(ctx, "test-topic")
@@ -105,6 +132,20 @@ func TestGoogleClient_getSubscription(t *testing.T) {
 	assert.NotNil(t, sub)
 }
 
-func TestGoogleMessage_Commit(_ *testing.T) {
-	newGoogleMessage(&gcPubSub.Message{}).Commit()
+func Test_validateConfigs(t *testing.T) {
+	testCases := []struct {
+		desc   string
+		input  *Config
+		expErr error
+	}{
+		{desc: "project id not provided", input: &Config{}, expErr: errProjectIDNotProvided},
+		{desc: "subscription not provided", input: &Config{ProjectID: "test"}, expErr: errSubscriptionNotProvided},
+		{desc: "success", input: &Config{ProjectID: "test", SubscriptionName: "subs"}, expErr: nil},
+	}
+
+	for _, tc := range testCases {
+		err := validateConfigs(tc.input)
+
+		assert.Equal(t, tc.expErr, err)
+	}
 }
