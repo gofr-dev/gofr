@@ -26,6 +26,8 @@ func TestHTTPServerUsingRedis(t *testing.T) {
 		{"post invalid body", http.MethodPost, []byte(`{key:abc}`), "/redis",
 			http.StatusInternalServerError},
 		{"get handler", http.MethodGet, nil, "/redis/key1", http.StatusOK},
+		{"get handler invalid key", http.MethodGet, nil, "/redis/key2",
+			http.StatusInternalServerError},
 		{"pipeline handler", http.MethodGet, nil, "/redis-pipeline", http.StatusOK},
 	}
 
