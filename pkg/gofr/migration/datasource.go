@@ -3,6 +3,6 @@ package migration
 type Datasource struct {
 	Logger
 
-	DB    db
+	SQL   db
 	Redis commands
 }

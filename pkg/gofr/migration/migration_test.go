@@ -34,7 +34,7 @@ func Test_MigrationMySQLSuccess(t *testing.T) {
 
 		defer dbMock.Close()
 
-		cntnr.DB.DB = dbMock
+		cntnr.SQL.DB = dbMock
 
 		mock.ExpectQuery("SELECT.*").WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(0))
 		mock.ExpectExec("CREATE.*").WillReturnResult(sqlmock.NewResult(0, 0))
@@ -54,27 +54,27 @@ func Test_MigrationMySQLSuccess(t *testing.T) {
 					e int
 				)
 
-				_, err := d.DB.Exec("CREATE table customer(id int not null);")
+				_, err := d.SQL.Exec("CREATE table customer(id int not null);")
 				if err != nil {
 					return err
 				}
 
-				rows, err := d.DB.Query("SELECT id from customers")
+				rows, err := d.SQL.Query("SELECT id from customers")
 				if err != nil && rows.Err() == nil {
 					return err
 				}
 
-				err = d.DB.QueryRow("SELECT id from customers WHERE id = ?", 1).Scan(&e)
+				err = d.SQL.QueryRow("SELECT id from customers WHERE id = ?", 1).Scan(&e)
 				if err != nil {
 					return err
 				}
 
-				err = d.DB.QueryRowContext(context.Background(), "SELECT * FROM customers").Scan(&e)
+				err = d.SQL.QueryRowContext(context.Background(), "SELECT * FROM customers").Scan(&e)
 				if err != nil {
 					return err
 				}
 
-				_, err = d.DB.ExecContext(context.Background(), "DELETE FROM customers WHERE id = 1")
+				_, err = d.SQL.ExecContext(context.Background(), "DELETE FROM customers WHERE id = 1")
 				if err != nil {
 					return err
 				}
@@ -99,7 +99,7 @@ func Test_MigrationMySQLAndRedisLastMigrationAreDifferent(t *testing.T) {
 
 		defer sqlClient.Close()
 
-		cntnr.DB.DB = sqlClient
+		cntnr.SQL.DB = sqlClient
 
 		cntnr.Redis.Client = redisClient
 
@@ -122,7 +122,7 @@ func Test_MigrationMySQLAndRedisLastMigrationAreDifferent(t *testing.T) {
 
 		Run(map[int64]Migrate{
 			1: {UP: func(d Datasource) error {
-				_, err := d.DB.Exec("CREATE table customer(id int not null);")
+				_, err := d.SQL.Exec("CREATE table customer(id int not null);")
 				if err != nil {
 					return err
 				}
@@ -154,7 +154,7 @@ func Test_MigrationMySQLPostRunFailed(t *testing.T) {
 
 		defer mockDB.Close()
 
-		cntnr.DB.DB = mockDB
+		cntnr.SQL.DB = mockDB
 
 		mock.ExpectQuery("SELECT.*").WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(0))
 		mock.ExpectExec("CREATE.*").WillReturnResult(sqlmock.NewResult(0, 0))
@@ -165,7 +165,7 @@ func Test_MigrationMySQLPostRunFailed(t *testing.T) {
 
 		Run(map[int64]Migrate{
 			1: {UP: func(d Datasource) error {
-				_, err := d.DB.Exec("CREATE table customer(id int not null);")
+				_, err := d.SQL.Exec("CREATE table customer(id int not null);")
 				if err != nil {
 					return err
 				}
@@ -192,7 +192,7 @@ func Test_MigrationMySQLPostRunRollBackFailed(t *testing.T) {
 
 		defer mockDB.Close()
 
-		cntnr.DB.DB = mockDB
+		cntnr.SQL.DB = mockDB
 
 		mock.ExpectQuery("SELECT.*").WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(0))
 		mock.ExpectExec("CREATE.*").WillReturnResult(sqlmock.NewResult(0, 0))
@@ -203,7 +203,7 @@ func Test_MigrationMySQLPostRunRollBackFailed(t *testing.T) {
 
 		Run(map[int64]Migrate{
 			1: {UP: func(d Datasource) error {
-				_, err := d.DB.Exec("CREATE table customer(id int not null);")
+				_, err := d.SQL.Exec("CREATE table customer(id int not null);")
 				if err != nil {
 					return err
 				}
@@ -230,7 +230,7 @@ func Test_MigrationMySQLTransactionCommitFailed(t *testing.T) {
 
 		defer mockDB.Close()
 
-		cntnr.DB.DB = mockDB
+		cntnr.SQL.DB = mockDB
 
 		mock.ExpectQuery("SELECT.*").WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(0))
 		mock.ExpectExec("CREATE.*").WillReturnResult(sqlmock.NewResult(0, 0))
@@ -241,7 +241,7 @@ func Test_MigrationMySQLTransactionCommitFailed(t *testing.T) {
 
 		Run(map[int64]Migrate{
 			1: {UP: func(d Datasource) error {
-				_, err := d.DB.Exec("CREATE table customer(id int not null);")
+				_, err := d.SQL.Exec("CREATE table customer(id int not null);")
 				if err != nil {
 					return err
 				}
@@ -267,14 +267,14 @@ func Test_MigrationMySQLRunSameMigrationAgain(t *testing.T) {
 
 		defer mockDB.Close()
 
-		cntnr.DB.DB = mockDB
+		cntnr.SQL.DB = mockDB
 
 		mock.ExpectQuery("SELECT.*").WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(1))
 		mock.ExpectQuery("SELECT.*").WillReturnRows(sqlmock.NewRows([]string{"row"}).AddRow(1))
 
 		Run(map[int64]Migrate{
 			1: {UP: func(d Datasource) error {
-				_, err := d.DB.Exec("CREATE table customer(id int not null);")
+				_, err := d.SQL.Exec("CREATE table customer(id int not null);")
 				if err != nil {
 					return err
 				}
@@ -301,7 +301,7 @@ func Test_MigrationUPFailed(t *testing.T) {
 
 		defer mockDB.Close()
 
-		cntnr.DB.DB = mockDB
+		cntnr.SQL.DB = mockDB
 
 		mock.ExpectQuery("SELECT.*").WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(0))
 		mock.ExpectExec("CREATE.*").WillReturnResult(sqlmock.NewResult(0, 0))
@@ -311,7 +311,7 @@ func Test_MigrationUPFailed(t *testing.T) {
 
 		Run(map[int64]Migrate{
 			1: {UP: func(d Datasource) error {
-				_, err := d.DB.Exec("SELECT 2+2")
+				_, err := d.SQL.Exec("SELECT 2+2")
 				if err != nil {
 					return err
 				}
@@ -338,13 +338,13 @@ func Test_MigrationSQLMigrationTableCheckFailed(t *testing.T) {
 
 		defer mockDB.Close()
 
-		cntnr.DB.DB = mockDB
+		cntnr.SQL.DB = mockDB
 
 		mock.ExpectQuery("SELECT.*").WillReturnError(testutil.CustomError{ErrorMessage: "row not found"})
 
 		Run(map[int64]Migrate{
 			1: {UP: func(d Datasource) error {
-				_, err := d.DB.Exec("SELECT 2+2")
+				_, err := d.SQL.Exec("SELECT 2+2")
 				if err != nil {
 					return err
 				}
@@ -371,7 +371,7 @@ func Test_MigrationMySQLTransactionCreationFailure(t *testing.T) {
 
 		defer mockDB.Close()
 
-		cntnr.DB.DB = mockDB
+		cntnr.SQL.DB = mockDB
 
 		mock.ExpectQuery("SELECT.*").WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(0))
 		mock.ExpectExec("CREATE.*").WillReturnResult(sqlmock.NewResult(0, 0))
@@ -379,7 +379,7 @@ func Test_MigrationMySQLTransactionCreationFailure(t *testing.T) {
 
 		Run(map[int64]Migrate{
 			1: {UP: func(d Datasource) error {
-				_, err := d.DB.Exec("SELECT 2+2")
+				_, err := d.SQL.Exec("SELECT 2+2")
 				if err != nil {
 					return err
 				}
@@ -406,14 +406,14 @@ func Test_MigrationMySQLCreateGoFrMigrationError(t *testing.T) {
 
 		defer mockDB.Close()
 
-		cntnr.DB.DB = mockDB
+		cntnr.SQL.DB = mockDB
 
 		mock.ExpectQuery("SELECT.*").WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(0))
 		mock.ExpectExec("CREATE.*").WillReturnError(testutil.CustomError{ErrorMessage: "creation failed"})
 
 		Run(map[int64]Migrate{
 			1: {UP: func(d Datasource) error {
-				_, err := d.DB.Exec("SELECT 2+2")
+				_, err := d.SQL.Exec("SELECT 2+2")
 				if err != nil {
 					return err
 				}
@@ -523,7 +523,7 @@ func Test_MigrationRedisGoFrDataUnmarshalFail(t *testing.T) {
 
 		Run(map[int64]Migrate{
 			1: {UP: func(d Datasource) error {
-				_, err := d.DB.Exec("CREATE table customer(id int not null);")
+				_, err := d.SQL.Exec("CREATE table customer(id int not null);")
 				if err != nil {
 					return err
 				}
