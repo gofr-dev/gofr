@@ -10,7 +10,7 @@ import (
 )
 
 func TestExampleMigration(t *testing.T) {
-	const host = "http://localhost:9000"
+	const host = "http://localhost:9100"
 	go main()
 	time.Sleep(time.Second * 3) // Giving some time to start the server
 
