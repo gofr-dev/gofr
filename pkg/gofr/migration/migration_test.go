@@ -21,12 +21,19 @@ func Test_MigrationMySQLSuccess(t *testing.T) {
 
 	logs := testutil.StdoutOutputForFunc(func() {
 		cntnr := container.NewContainer(&config.EnvFile{})
-		db, mock, _ := sqlmock.New()
+
+		db, mock, err := sqlmock.New()
+		if err != nil {
+			t.Fatalf("Mocks not initialised %v", err)
+		}
+
+		defer db.Close()
 
 		cntnr.DB.DB = db
 
 		mock.ExpectQuery("SELECT.*").WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(0))
 		mock.ExpectExec("CREATE.*").WillReturnResult(sqlmock.NewResult(0, 0))
+		mock.ExpectQuery("SELECT.*").WillReturnRows(sqlmock.NewRows([]string{"lastMigration"}).AddRow(0))
 		mock.ExpectBegin()
 		mock.ExpectExec("CREATE.*").WillReturnResult(sqlmock.NewResult(1, 1))
 		mock.ExpectQuery("SELECT.*").WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
@@ -171,7 +178,10 @@ func Test_MigrationMySQLPostRunFailed(t *testing.T) {
 
 	logs := testutil.StderrOutputForFunc(func() {
 		cntnr := container.NewContainer(&config.EnvFile{})
-		db, mock, _ := sqlmock.New()
+		db, mock, err := sqlmock.New()
+		if err != nil {
+			t.Fatalf("Mocks not initialised %v", err)
+		}
 
 		cntnr.DB.DB = db
 
@@ -203,7 +213,10 @@ func Test_MigrationMySQLPostRunRollBackFailed(t *testing.T) {
 
 	logs := testutil.StderrOutputForFunc(func() {
 		cntnr := container.NewContainer(&config.EnvFile{})
-		db, mock, _ := sqlmock.New()
+		db, mock, err := sqlmock.New()
+		if err != nil {
+			t.Fatalf("Mocks not initialised %v", err)
+		}
 
 		cntnr.DB.DB = db
 
@@ -235,7 +248,10 @@ func Test_MigrationMySQLTransactionCommitFailed(t *testing.T) {
 
 	logs := testutil.StderrOutputForFunc(func() {
 		cntnr := container.NewContainer(&config.EnvFile{})
-		db, mock, _ := sqlmock.New()
+		db, mock, err := sqlmock.New()
+		if err != nil {
+			t.Fatalf("Mocks not initialised %v", err)
+		}
 
 		cntnr.DB.DB = db
 
@@ -267,7 +283,10 @@ func Test_MigrationMySQLRunSameMigrationAgain(t *testing.T) {
 
 	logs := testutil.StdoutOutputForFunc(func() {
 		cntnr := container.NewContainer(&config.EnvFile{})
-		db, mock, _ := sqlmock.New()
+		db, mock, err := sqlmock.New()
+		if err != nil {
+			t.Fatalf("Mocks not initialised %v", err)
+		}
 
 		cntnr.DB.DB = db
 
@@ -295,7 +314,10 @@ func Test_MigrationUPFailed(t *testing.T) {
 
 	logs := testutil.StderrOutputForFunc(func() {
 		cntnr := container.NewContainer(&config.EnvFile{})
-		db, mock, _ := sqlmock.New()
+		db, mock, err := sqlmock.New()
+		if err != nil {
+			t.Fatalf("Mocks not initialised %v", err)
+		}
 
 		cntnr.DB.DB = db
 
@@ -326,7 +348,10 @@ func Test_MigrationSQLMigrationTableCheckFailed(t *testing.T) {
 
 	logs := testutil.StderrOutputForFunc(func() {
 		cntnr := container.NewContainer(&config.EnvFile{})
-		db, mock, _ := sqlmock.New()
+		db, mock, err := sqlmock.New()
+		if err != nil {
+			t.Fatalf("Mocks not initialised %v", err)
+		}
 
 		cntnr.DB.DB = db
 
@@ -353,7 +378,10 @@ func Test_MigrationMySQLTransactionCreationFailure(t *testing.T) {
 
 	logs := testutil.StderrOutputForFunc(func() {
 		cntnr := container.NewContainer(&config.EnvFile{})
-		db, mock, _ := sqlmock.New()
+		db, mock, err := sqlmock.New()
+		if err != nil {
+			t.Fatalf("Mocks not initialised %v", err)
+		}
 
 		cntnr.DB.DB = db
 
@@ -397,7 +425,10 @@ func Test_MigrationMySQLCreateGoFrMigrationError(t *testing.T) {
 
 	logs := testutil.StderrOutputForFunc(func() {
 		cntnr := container.NewContainer(&config.EnvFile{})
-		db, mock, _ := sqlmock.New()
+		db, mock, err := sqlmock.New()
+		if err != nil {
+			t.Fatalf("Mocks not initialised %v", err)
+		}
 
 		cntnr.DB.DB = db
 
