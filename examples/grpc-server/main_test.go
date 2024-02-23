@@ -46,6 +46,12 @@ func TestGRPCServer(t *testing.T) {
 	assert.Equal(t, "rpc error: code = Internal desc = grpc: error while marshaling: proto: "+
 		"Marshal called with nil", err.Error())
 
+	// Test context cancellation
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err = client.SayHello(ctx, &grpcExample.HelloRequest{Name: "Test"})
+	assert.Equal(t, err.Error(), "rpc error: code = Canceled desc = context canceled")
+
 }
 
 func createGRPCClient(t *testing.T, host string) (grpcExample.HelloClient, *grpc.ClientConn) {
