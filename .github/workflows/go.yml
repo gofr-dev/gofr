@@ -87,10 +87,8 @@ jobs:
       - name: Test
         run: |
           export GOFR_ENV=test
-          go test gofr.dev/pkg/... -v -short -coverprofile packageWithMigration.cov -coverpkg=gofr.dev/pkg/...
-          
+          go test gofr.dev/pkg/... -tags migration -v -short -coverprofile packageWithMigration.cov -coverpkg=gofr.dev/pkg/...
           grep -v 'gofr.dev/pkg/gofr/migration' packageWithMigration.cov > profile.cov
-          
           go tool cover -func profile.cov
 
       - name: Upload Test Coverage
@@ -100,12 +98,13 @@ jobs:
           path: profile.cov
 
   MIGRATION-Unit-Testing:
-    name: PKG Unit Testing🛠
+    name: Migration Unit Testing🛠
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code into go module directory
         uses: actions/checkout@v4
+        needs: [Example-Unit-Testing,PKG-Unit-Testing]
         with:
           fetch-depth: 0
 
