@@ -2,8 +2,10 @@ package migration
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/go-redis/redismock/v9"
@@ -74,6 +76,96 @@ func Test_MigrationMySQLSuccess(t *testing.T) {
 	assert.Contains(t, logs, "Migration 1 ran successfully")
 }
 
+func Test_MigrationMySQLAndRedisLastMigrationAreDifferent(t *testing.T) {
+	t.Setenv("DB_HOST", "localhost")
+	t.Setenv("DB_DIALECT", "mysql")
+	t.Setenv("REDIS_HOST", "localhost")
+
+	logs := testutil.StdoutOutputForFunc(func() {
+		cntnr := container.NewContainer(&config.EnvFile{})
+		sqlClient, mock, _ := sqlmock.New()
+		redisClient, redisMock := redismock.NewClientMock()
+
+		cntnr.DB.DB = sqlClient
+
+		cntnr.Redis.Client = redisClient
+
+		start := time.Now()
+
+		data, _ := json.Marshal(migration{
+			Method:    "UP",
+			StartTime: start,
+			Duration:  time.Since(start).Milliseconds(),
+		})
+
+		redisMock.ExpectHGetAll("gofr_migrations").SetVal(map[string]string{"1": string(data)})
+
+		mock.ExpectQuery("SELECT.*").WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(0))
+		mock.ExpectExec("CREATE.*").WillReturnResult(sqlmock.NewResult(0, 0))
+		mock.ExpectBegin()
+		mock.ExpectExec("CREATE.*").WillReturnResult(sqlmock.NewResult(1, 1))
+		mock.ExpectExec("INSERT.*").WillReturnResult(sqlmock.NewResult(1, 1))
+		mock.ExpectCommit()
+
+		Run(map[int64]Migrate{
+			1: {UP: func(d Datasource) error {
+				_, err := d.DB.Exec("CREATE table customer(id int not null);")
+				if err != nil {
+					return err
+				}
+
+				_, err = d.Redis.Set(context.Background(), "key", "value", 0).Result()
+				if err != nil {
+					return err
+				}
+
+				return nil
+			}},
+		}, cntnr)
+	})
+
+	assert.NotContains(t, logs, "Migration 1 ran successfully")
+}
+
+func Test_MigrationRedisGoFrDataUnmarshalFail(t *testing.T) {
+	t.Setenv("REDIS_HOST", "localhost")
+
+	logs := testutil.StdoutOutputForFunc(func() {
+		cntnr := container.NewContainer(&config.EnvFile{})
+		redisClient, redisMock := redismock.NewClientMock()
+
+		cntnr.Redis.Client = redisClient
+
+		start := time.Now()
+
+		data, _ := json.Marshal(migration{
+			Method:    "UP",
+			StartTime: start,
+			Duration:  time.Since(start).Milliseconds(),
+		})
+
+		redisMock.ExpectHGetAll("gofr_migrations").SetVal(map[string]string{"1": string(data)[10:]})
+
+		Run(map[int64]Migrate{
+			1: {UP: func(d Datasource) error {
+				_, err := d.DB.Exec("CREATE table customer(id int not null);")
+				if err != nil {
+					return err
+				}
+
+				_, err = d.Redis.Set(context.Background(), "key", "value", 0).Result()
+				if err != nil {
+					return err
+				}
+
+				return nil
+			}},
+		}, cntnr)
+	})
+
+	assert.NotContains(t, logs, "Migration 1 ran successfully")
+}
+
 func Test_MigrationMySQLPostRunFailed(t *testing.T) {
 	t.Setenv("DB_HOST", "localhost")
 	t.Setenv("DB_DIALECT", "mysql")
@@ -90,6 +182,38 @@ func Test_MigrationMySQLPostRunFailed(t *testing.T) {
 		mock.ExpectExec("CREATE.*").WillReturnResult(sqlmock.NewResult(1, 1))
 		mock.ExpectExec("INSERT.*").WillReturnError(errors.New("failed"))
 		mock.ExpectRollback()
+
+		Run(map[int64]Migrate{
+			1: {UP: func(d Datasource) error {
+				_, err := d.DB.Exec("CREATE table customer(id int not null);")
+				if err != nil {
+					return err
+				}
+
+				return nil
+			}},
+		}, cntnr)
+	})
+
+	assert.Contains(t, logs, "Migration transaction rolled back")
+}
+
+func Test_MigrationMySQLPostRunRollBackFailed(t *testing.T) {
+	t.Setenv("DB_HOST", "localhost")
+	t.Setenv("DB_DIALECT", "mysql")
+
+	logs := testutil.StderrOutputForFunc(func() {
+		cntnr := container.NewContainer(&config.EnvFile{})
+		db, mock, _ := sqlmock.New()
+
+		cntnr.DB.DB = db
+
+		mock.ExpectQuery("SELECT.*").WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(0))
+		mock.ExpectExec("CREATE.*").WillReturnResult(sqlmock.NewResult(0, 0))
+		mock.ExpectBegin()
+		mock.ExpectExec("CREATE.*").WillReturnResult(sqlmock.NewResult(1, 1))
+		mock.ExpectExec("INSERT.*").WillReturnError(errors.New("failed"))
+		mock.ExpectRollback().WillReturnError(errors.New("rollback failed"))
 
 		Run(map[int64]Migrate{
 			1: {UP: func(d Datasource) error {
@@ -298,7 +422,6 @@ func Test_MigrationMySQLCreateGoFrMigrationError(t *testing.T) {
 
 func Test_MigrationRedisTransactionFailure(t *testing.T) {
 	t.Setenv("REDIS_HOST", "localhost")
-	t.Setenv("DB_DIALECT", "mysql")
 
 	logs := testutil.StderrOutputForFunc(func() {
 		cntnr := container.NewContainer(&config.EnvFile{})
