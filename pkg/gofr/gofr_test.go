@@ -130,3 +130,22 @@ func TestGofr_ServerRun(t *testing.T) {
 
 	resp.Body.Close()
 }
+
+func Test_AddHTTPService(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/test", r.URL.Path)
+
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	g := New()
+
+	g.AddHTTPService("test-service", server.URL)
+
+	resp, _ := g.container.GetHTTPService("test-service").
+		Get(context.Background(), "test", nil)
+
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+}
