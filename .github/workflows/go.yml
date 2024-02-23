@@ -51,7 +51,6 @@ jobs:
   Example-Unit-Testing:
     name: Example Unit Testing🛠
     runs-on: ubuntu-latest
-    needs: [MIGRATION-Unit-Testing]
     services:
       redis:
         image: redis:7.0.5
@@ -101,7 +100,6 @@ jobs:
   PKG-Unit-Testing:
     name: PKG Unit Testing🛠
     runs-on: ubuntu-latest
-    needs: [MIGRATION-Unit-Testing]
 
     steps:
       - name: Checkout code into go module directory

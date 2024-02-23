@@ -17,6 +17,8 @@ import (
 	"gofr.dev/pkg/gofr/testutil"
 )
 
+// TODO : Remove Skips because tests are failing in pipeline.
+
 func Test_MigrationMySQLSuccess(t *testing.T) {
 	t.Skip()
 	t.Setenv("DB_HOST", "localhost")
