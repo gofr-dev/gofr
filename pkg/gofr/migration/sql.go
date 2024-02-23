@@ -41,30 +41,30 @@ func (s *sqlDB) Exec(query string, args ...interface{}) (sql.Result, error) {
 }
 
 func ensureSQLMigrationTableExists(c *container.Container) error {
-	switch c.DB.DB.Driver().(type) {
+	switch c.DB.Driver().(type) {
 	case *mysql.MySQLDriver:
 		var exists int
 
-		err := c.DB.QueryRow(checkMySQLGoFrMigrationsTable).Scan(&exists)
+		err := c.DB.QueryRow(checkSQLGoFrMigrationsTable).Scan(&exists)
 		if err != nil {
 			return err
 		}
 
 		if exists != 1 {
-			if _, err := c.DB.Exec(createMySQLGoFrMigrationsTable); err != nil {
+			if _, err := c.DB.Exec(createSQLGoFrMigrationsTable); err != nil {
 				return err
 			}
 		}
 	case *pq.Driver:
 		var exists bool
 
-		err := c.DB.QueryRow(checkMySQLGoFrMigrationsTable).Scan(&exists)
+		err := c.DB.QueryRow(checkSQLGoFrMigrationsTable).Scan(&exists)
 		if err != nil {
 			return err
 		}
 
 		if !exists {
-			if _, err := c.DB.Exec(createMySQLGoFrMigrationsTable); err != nil {
+			if _, err := c.DB.Exec(createSQLGoFrMigrationsTable); err != nil {
 				return err
 			}
 		}
@@ -76,7 +76,7 @@ func ensureSQLMigrationTableExists(c *container.Container) error {
 func getSQLLastMigration(c *container.Container) int64 {
 	var lastMigration int64
 
-	err := c.DB.QueryRowContext(context.Background(), getLastMySQLGoFrMigration).Scan(&lastMigration)
+	err := c.DB.QueryRowContext(context.Background(), getLastSQLGoFrMigration).Scan(&lastMigration)
 	if err != nil {
 		return 0
 	}
@@ -97,9 +97,9 @@ func rollbackAndLog(c *container.Container, tx *gofrSql.Tx) {
 }
 
 func sqlPostRun(c *container.Container, tx *gofrSql.Tx, currentMigration int64, start time.Time) {
-	switch c.DB.DB.Driver().(type) {
+	switch c.DB.Driver().(type) {
 	case *mysql.MySQLDriver:
-		err := insertMigrationRecord(tx, insertGoFrMigrationRowSQL, currentMigration, start)
+		err := insertMigrationRecord(tx, insertGoFrMigrationRowMySQL, currentMigration, start)
 		if err != nil {
 			rollbackAndLog(c, tx)
 
@@ -125,7 +125,7 @@ func sqlPostRun(c *container.Container, tx *gofrSql.Tx, currentMigration int64, 
 }
 
 const (
-	createMySQLGoFrMigrationsTable = `CREATE TABLE IF NOT EXISTS gofr_migrations (
+	createSQLGoFrMigrationsTable = `CREATE TABLE IF NOT EXISTS gofr_migrations (
     version BIGINT not null ,
     method VARCHAR(4) not null ,
     start_time TIMESTAMP not null ,
@@ -133,11 +133,11 @@ const (
     constraint primary_key primary key (version, method)
 );`
 
-	checkMySQLGoFrMigrationsTable = `SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'gofr_migrations');`
+	checkSQLGoFrMigrationsTable = `SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'gofr_migrations');`
 
-	getLastMySQLGoFrMigration = `SELECT COALESCE(MAX(version), 0) FROM gofr_migrations;`
+	getLastSQLGoFrMigration = `SELECT COALESCE(MAX(version), 0) FROM gofr_migrations;`
 
-	insertGoFrMigrationRowSQL = `INSERT INTO gofr_migrations (version, method, start_time,duration) VALUES (?, ?, ?, ?);`
+	insertGoFrMigrationRowMySQL = `INSERT INTO gofr_migrations (version, method, start_time,duration) VALUES (?, ?, ?, ?);`
 
 	insertGoFrMigrationRowPostgres = `INSERT INTO gofr_migrations (version, method, start_time,duration) VALUES ($1, $2, $3, $4);`
 )
