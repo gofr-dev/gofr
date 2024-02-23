@@ -121,7 +121,7 @@ jobs:
       - name: Test
         run: |
           export GOFR_ENV=test
-          go test gofr.dev/pkg/gofr/migration... -v -short -coverprofile profile.cov -coverpkg=gofr.dev/pkg/gofr/migration...
+          go test gofr.dev/pkg/gofr/migration... -v -short -coverprofile profile.cov -coverpkg=gofr.dev/pkg/...
 
           go tool cover -func profile.cov
 
