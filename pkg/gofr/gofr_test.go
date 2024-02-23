@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/DATA-DOG/go-sqlmock"
-	"gofr.dev/pkg/gofr/migration"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -13,8 +11,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/stretchr/testify/assert"
 
+	"gofr.dev/pkg/gofr/migration"
 	"gofr.dev/pkg/gofr/testutil"
 )
 
@@ -152,46 +152,34 @@ func Test_AddHTTPService(t *testing.T) {
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 }
 
-func Test_AddHTTPService(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/test", r.URL.Path)
-
-		w.WriteHeader(http.StatusOK)
-	}))
-
-	g := New()
-
-	g.AddHTTPService("test-service", server.URL)
-
-	resp, _ := g.container.GetHTTPService("test-service").
-		Get(context.Background(), "test", nil)
-
-	defer resp.Body.Close()
-
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
-}
-
-func Test_Migration(t *testing.T) {
+func Test_MigrationMySQLSuccess(t *testing.T) {
 	t.Setenv("DB_HOST", "localhost")
+	t.Setenv("DB_DIALECT", "mysql")
 
-	a := New()
-	db, mock, _ := sqlmock.New()
+	logs := testutil.StdoutOutputForFunc(func() {
+		a := New()
+		db, mock, _ := sqlmock.New()
 
-	a.container.DB.DB = db
+		a.container.DB.DB = db
 
-	//mock.ExpectBegin()
-	mock.ExpectQuery("SELECT.*").WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(0))
-	//mock.ExpectExec("INSERT INTO product_viewers").WithArgs(2, 3).WillReturnResult(sqlmock.NewResult(1, 1))
-	//mock.ExpectCommit()
+		mock.ExpectQuery("SELECT.*").WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(0))
+		mock.ExpectExec("CREATE.*").WillReturnResult(sqlmock.NewResult(0, 0))
+		mock.ExpectBegin()
+		mock.ExpectExec("SELECT.*").WillReturnResult(sqlmock.NewResult(1, 1))
+		mock.ExpectExec("INSERT.*").WillReturnResult(sqlmock.NewResult(1, 1))
+		mock.ExpectCommit()
 
-	a.Migrate(map[int64]migration.Migrate{
-		1: migration.Migrate{UP: func(d migration.Datasource) error {
-			_, err := d.DB.Exec("SELECT 2+2")
-			if err != nil {
-				return err
-			}
+		a.Migrate(map[int64]migration.Migrate{
+			1: {UP: func(d migration.Datasource) error {
+				_, err := d.DB.Exec("SELECT 2+2")
+				if err != nil {
+					return err
+				}
 
-			return nil
-		}},
+				return nil
+			}},
+		})
 	})
+
+	assert.Contains(t, logs, "Migration 1 ran successfully")
 }
