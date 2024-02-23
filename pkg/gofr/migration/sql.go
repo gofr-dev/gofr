@@ -17,6 +17,7 @@ type db interface {
 	QueryRow(query string, args ...interface{}) *sql.Row
 	QueryRowContext(ctx context.Context, query string, args ...interface{}) *sql.Row
 	Exec(query string, args ...interface{}) (sql.Result, error)
+	ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
 }
 
 type sqlDB struct {
@@ -38,6 +39,10 @@ func (s *sqlDB) QueryRowContext(ctx context.Context, query string, args ...inter
 }
 func (s *sqlDB) Exec(query string, args ...interface{}) (sql.Result, error) {
 	return s.db.Exec(query, args...)
+}
+
+func (s *sqlDB) ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
+	return s.db.ExecContext(ctx, query, args...)
 }
 
 func ensureSQLMigrationTableExists(c *container.Container) error {
