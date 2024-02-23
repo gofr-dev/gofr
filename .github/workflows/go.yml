@@ -167,7 +167,7 @@ jobs:
   upload_coverage:
     name: Upload Coverage📊
     runs-on: ubuntu-latest
-    needs: [Example-Unit-Testing,PKG-Unit-Testing]
+    needs: [Example-Unit-Testing,PKG-Unit-Testing,MIGRATION-Unit-Testing]
     if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/development' }}
     steps:
       - name: Check out code into the Go module directory
