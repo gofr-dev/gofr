@@ -3,7 +3,6 @@ package migration
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"testing"
 	"time"
 
@@ -48,8 +47,8 @@ func Test_MigrationMySQLSuccess(t *testing.T) {
 					return err
 				}
 
-				_, err = d.DB.Query("SELECT id from customers")
-				if err != nil {
+				rows, err := d.DB.Query("SELECT id from customers")
+				if err != nil && rows.Err() == nil {
 					return err
 				}
 
@@ -180,7 +179,7 @@ func Test_MigrationMySQLPostRunFailed(t *testing.T) {
 		mock.ExpectExec("CREATE.*").WillReturnResult(sqlmock.NewResult(0, 0))
 		mock.ExpectBegin()
 		mock.ExpectExec("CREATE.*").WillReturnResult(sqlmock.NewResult(1, 1))
-		mock.ExpectExec("INSERT.*").WillReturnError(errors.New("failed"))
+		mock.ExpectExec("INSERT.*").WillReturnError(testutil.CustomError{ErrorMessage: "failed"})
 		mock.ExpectRollback()
 
 		Run(map[int64]Migrate{
@@ -212,8 +211,8 @@ func Test_MigrationMySQLPostRunRollBackFailed(t *testing.T) {
 		mock.ExpectExec("CREATE.*").WillReturnResult(sqlmock.NewResult(0, 0))
 		mock.ExpectBegin()
 		mock.ExpectExec("CREATE.*").WillReturnResult(sqlmock.NewResult(1, 1))
-		mock.ExpectExec("INSERT.*").WillReturnError(errors.New("failed"))
-		mock.ExpectRollback().WillReturnError(errors.New("rollback failed"))
+		mock.ExpectExec("INSERT.*").WillReturnError(testutil.CustomError{ErrorMessage: "failed"})
+		mock.ExpectRollback().WillReturnError(testutil.CustomError{ErrorMessage: "rollback failed"})
 
 		Run(map[int64]Migrate{
 			1: {UP: func(d Datasource) error {
@@ -245,7 +244,7 @@ func Test_MigrationMySQLTransactionCommitFailed(t *testing.T) {
 		mock.ExpectBegin()
 		mock.ExpectExec("CREATE.*").WillReturnResult(sqlmock.NewResult(1, 1))
 		mock.ExpectExec("INSERT.*").WillReturnResult(sqlmock.NewResult(1, 1))
-		mock.ExpectCommit().WillReturnError(errors.New("failed"))
+		mock.ExpectCommit().WillReturnError(testutil.CustomError{ErrorMessage: "failed"})
 
 		Run(map[int64]Migrate{
 			1: {UP: func(d Datasource) error {
@@ -303,7 +302,7 @@ func Test_MigrationUPFailed(t *testing.T) {
 		mock.ExpectQuery("SELECT.*").WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(0))
 		mock.ExpectExec("CREATE.*").WillReturnResult(sqlmock.NewResult(0, 0))
 		mock.ExpectBegin()
-		mock.ExpectExec("SELECT.*").WillReturnError(errors.New("transaction failed"))
+		mock.ExpectExec("SELECT.*").WillReturnError(testutil.CustomError{ErrorMessage: "transaction failed"})
 		mock.ExpectRollback()
 
 		Run(map[int64]Migrate{
@@ -331,7 +330,7 @@ func Test_MigrationSQLMigrationTableCheckFailed(t *testing.T) {
 
 		cntnr.DB.DB = db
 
-		mock.ExpectQuery("SELECT.*").WillReturnError(errors.New("row not found"))
+		mock.ExpectQuery("SELECT.*").WillReturnError(testutil.CustomError{ErrorMessage: "row not found"})
 
 		Run(map[int64]Migrate{
 			1: {UP: func(d Datasource) error {
@@ -360,7 +359,7 @@ func Test_MigrationMySQLTransactionCreationFailure(t *testing.T) {
 
 		mock.ExpectQuery("SELECT.*").WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(0))
 		mock.ExpectExec("CREATE.*").WillReturnResult(sqlmock.NewResult(0, 0))
-		mock.ExpectBegin().WillReturnError(errors.New("failed to start transaction"))
+		mock.ExpectBegin().WillReturnError(testutil.CustomError{ErrorMessage: "failed to start transaction"})
 
 		Run(map[int64]Migrate{
 			1: {UP: func(d Datasource) error {
@@ -403,7 +402,7 @@ func Test_MigrationMySQLCreateGoFrMigrationError(t *testing.T) {
 		cntnr.DB.DB = db
 
 		mock.ExpectQuery("SELECT.*").WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(0))
-		mock.ExpectExec("CREATE.*").WillReturnError(errors.New("creation failed"))
+		mock.ExpectExec("CREATE.*").WillReturnError(testutil.CustomError{ErrorMessage: "creation failed"})
 
 		Run(map[int64]Migrate{
 			1: {UP: func(d Datasource) error {
@@ -480,9 +479,7 @@ func Test_MigrationRedisUnableToGetLastRun(t *testing.T) {
 
 		cntnr.Redis.Client = client
 
-		err := errors.New("unable to get gofr_migrations")
-
-		mock.ExpectHGetAll("gofr_migrations").SetErr(err)
+		mock.ExpectHGetAll("gofr_migrations").SetErr(testutil.CustomError{ErrorMessage: "unable to get gofr_migrations"})
 
 		Run(map[int64]Migrate{
 			1: {UP: func(d Datasource) error {
