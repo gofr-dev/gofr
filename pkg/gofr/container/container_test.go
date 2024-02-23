@@ -18,6 +18,7 @@ func Test_newContainerSuccessWithLogger(t *testing.T) {
 
 func Test_newContainerDBIntializationFail(t *testing.T) {
 	t.Setenv("REDIS_HOST", "invalid")
+	t.Setenv("DB_DIALECT", "mysql")
 	t.Setenv("DB_HOST", "invalid")
 
 	cfg := config.NewEnvFile("")
