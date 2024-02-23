@@ -52,7 +52,7 @@ func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *D
 		logger.Errorf("could not connect with '%s' user to database '%s:%s'  error: %v",
 			dbConfig.User, dbConfig.HostName, dbConfig.Port, err)
 
-		return &DB{config: dbConfig, metrics: metrics}
+		return &DB{config: dbConfig, metrics: metrics, logger: logger}
 	}
 
 	logger.Logf("connected to '%s' database at %s:%s", dbConfig.Database, dbConfig.HostName, dbConfig.Port)

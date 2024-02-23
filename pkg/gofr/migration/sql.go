@@ -103,6 +103,8 @@ func rollbackAndLog(c *container.Container, tx *gofrSql.Tx) {
 	if err := tx.Rollback(); err != nil {
 		c.Logger.Error("unable to rollback transaction: %v", err)
 	}
+
+	c.Logger.Error("Migration transaction rolled back")
 }
 
 func sqlPostRun(c *container.Container, tx *gofrSql.Tx, currentMigration int64, start time.Time) {
