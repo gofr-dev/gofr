@@ -32,7 +32,7 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 
 	var lastMigration int64
 
-	if c.DB != nil {
+	if c.SQL != nil {
 		err := ensureSQLMigrationTableExists(c)
 		if err != nil {
 			c.Logger.Errorf("Unable to verify sql migration table due to: %v", err)
@@ -69,15 +69,15 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 			err        error
 		)
 
-		if c.DB != nil {
-			sqlTx, err = c.DB.Begin()
+		if c.SQL != nil {
+			sqlTx, err = c.SQL.Begin()
 			if err != nil {
 				c.Logger.Errorf("unable to begin transaction: %v", err)
 
 				return
 			}
 
-			datasource.DB = newMysql(sqlTx)
+			datasource.SQL = newMysql(sqlTx)
 		}
 
 		if c.Redis != nil {
@@ -93,7 +93,7 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 			return
 		}
 
-		if c.DB != nil {
+		if c.SQL != nil {
 			sqlPostRun(c, sqlTx, currentMigration, start)
 		}
 

@@ -56,7 +56,7 @@ func TestCreateTableEmployee(t *testing.T) {
 		assert.NoError(t, err)
 		defer db.Close()
 
-		datasource := migration.Datasource{DB: db}
+		datasource := migration.Datasource{SQL: db}
 
 		// Set mock expectations
 		tc.mockBehaviors(mock)

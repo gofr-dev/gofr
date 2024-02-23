@@ -74,7 +74,7 @@ func TestContainer_Health(t *testing.T) {
 	c.Services = make(map[string]service.HTTP)
 	c.Services["test-service"] = service.NewHTTPService(srv.URL, logger, nil)
 
-	c.DB.DB = mockDB
+	c.SQL.DB = mockDB
 
 	mock.ExpectPing()
 
