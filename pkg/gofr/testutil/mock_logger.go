@@ -2,6 +2,7 @@ package testutil
 
 import (
 	"fmt"
+	"gofr.dev/pkg/gofr/logging"
 	"io"
 	"os"
 )
@@ -19,6 +20,11 @@ type MockLogger struct {
 	level  int
 	out    io.Writer
 	errOut io.Writer
+}
+
+func (m *MockLogger) changeLevel(level logging.Level) {
+	//TODO implement me
+	panic("implement me")
 }
 
 func NewMockLogger(level int) *MockLogger {

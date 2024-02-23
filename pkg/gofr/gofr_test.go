@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/DATA-DOG/go-sqlmock"
+	"gofr.dev/pkg/gofr/migration"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -148,4 +150,29 @@ func Test_AddHTTPService(t *testing.T) {
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
+}
+
+func Test_Migration(t *testing.T) {
+	t.Setenv("DB_HOST", "localhost")
+
+	a := New()
+	db, mock, _ := sqlmock.New()
+
+	a.container.DB.DB = db
+
+	//mock.ExpectBegin()
+	mock.ExpectQuery("SELECT.*").WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(0))
+	//mock.ExpectExec("INSERT INTO product_viewers").WithArgs(2, 3).WillReturnResult(sqlmock.NewResult(1, 1))
+	//mock.ExpectCommit()
+
+	a.Migrate(map[int64]migration.Migrate{
+		1: migration.Migrate{UP: func(d migration.Datasource) error {
+			_, err := d.DB.Exec("SELECT 2+2")
+			if err != nil {
+				return err
+			}
+
+			return nil
+		}},
+	})
 }
