@@ -72,7 +72,7 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 		if c.SQL != nil {
 			sqlTx, err = c.SQL.Begin()
 			if err != nil {
-				rollbackAndLog(c, sqlTx)
+				c.Logger.Errorf("unable to begin transaction: %v", err)
 
 				return
 			}
