@@ -22,14 +22,14 @@ func Test_MigrationMySQLSuccess(t *testing.T) {
 	logs := testutil.StdoutOutputForFunc(func() {
 		cntnr := container.NewContainer(&config.EnvFile{})
 
-		db, mock, err := sqlmock.New()
+		dbMock, mock, err := sqlmock.New()
 		if err != nil {
 			t.Fatalf("Mocks not initialised %v", err)
 		}
 
-		defer db.Close()
+		defer dbMock.Close()
 
-		cntnr.DB.DB = db
+		cntnr.DB.DB = dbMock
 
 		mock.ExpectQuery("SELECT.*").WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(0))
 		mock.ExpectExec("CREATE.*").WillReturnResult(sqlmock.NewResult(0, 0))
@@ -92,6 +92,8 @@ func Test_MigrationMySQLAndRedisLastMigrationAreDifferent(t *testing.T) {
 		sqlClient, mock, _ := sqlmock.New()
 		redisClient, redisMock := redismock.NewClientMock()
 
+		defer sqlClient.Close()
+
 		cntnr.DB.DB = sqlClient
 
 		cntnr.Redis.Client = redisClient
@@ -133,57 +135,20 @@ func Test_MigrationMySQLAndRedisLastMigrationAreDifferent(t *testing.T) {
 	assert.NotContains(t, logs, "Migration 1 ran successfully")
 }
 
-func Test_MigrationRedisGoFrDataUnmarshalFail(t *testing.T) {
-	t.Setenv("REDIS_HOST", "localhost")
-
-	logs := testutil.StdoutOutputForFunc(func() {
-		cntnr := container.NewContainer(&config.EnvFile{})
-		redisClient, redisMock := redismock.NewClientMock()
-
-		cntnr.Redis.Client = redisClient
-
-		start := time.Now()
-
-		data, _ := json.Marshal(migration{
-			Method:    "UP",
-			StartTime: start,
-			Duration:  time.Since(start).Milliseconds(),
-		})
-
-		redisMock.ExpectHGetAll("gofr_migrations").SetVal(map[string]string{"1": string(data)[10:]})
-
-		Run(map[int64]Migrate{
-			1: {UP: func(d Datasource) error {
-				_, err := d.DB.Exec("CREATE table customer(id int not null);")
-				if err != nil {
-					return err
-				}
-
-				_, err = d.Redis.Set(context.Background(), "key", "value", 0).Result()
-				if err != nil {
-					return err
-				}
-
-				return nil
-			}},
-		}, cntnr)
-	})
-
-	assert.NotContains(t, logs, "Migration 1 ran successfully")
-}
-
 func Test_MigrationMySQLPostRunFailed(t *testing.T) {
 	t.Setenv("DB_HOST", "localhost")
 	t.Setenv("DB_DIALECT", "mysql")
 
 	logs := testutil.StderrOutputForFunc(func() {
 		cntnr := container.NewContainer(&config.EnvFile{})
-		db, mock, err := sqlmock.New()
+		mockDB, mock, err := sqlmock.New()
 		if err != nil {
 			t.Fatalf("Mocks not initialised %v", err)
 		}
 
-		cntnr.DB.DB = db
+		defer mockDB.Close()
+
+		cntnr.DB.DB = mockDB
 
 		mock.ExpectQuery("SELECT.*").WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(0))
 		mock.ExpectExec("CREATE.*").WillReturnResult(sqlmock.NewResult(0, 0))
@@ -213,12 +178,14 @@ func Test_MigrationMySQLPostRunRollBackFailed(t *testing.T) {
 
 	logs := testutil.StderrOutputForFunc(func() {
 		cntnr := container.NewContainer(&config.EnvFile{})
-		db, mock, err := sqlmock.New()
+		mockDB, mock, err := sqlmock.New()
 		if err != nil {
 			t.Fatalf("Mocks not initialised %v", err)
 		}
 
-		cntnr.DB.DB = db
+		defer mockDB.Close()
+
+		cntnr.DB.DB = mockDB
 
 		mock.ExpectQuery("SELECT.*").WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(0))
 		mock.ExpectExec("CREATE.*").WillReturnResult(sqlmock.NewResult(0, 0))
@@ -248,12 +215,14 @@ func Test_MigrationMySQLTransactionCommitFailed(t *testing.T) {
 
 	logs := testutil.StderrOutputForFunc(func() {
 		cntnr := container.NewContainer(&config.EnvFile{})
-		db, mock, err := sqlmock.New()
+		mockDB, mock, err := sqlmock.New()
 		if err != nil {
 			t.Fatalf("Mocks not initialised %v", err)
 		}
 
-		cntnr.DB.DB = db
+		defer mockDB.Close()
+
+		cntnr.DB.DB = mockDB
 
 		mock.ExpectQuery("SELECT.*").WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(0))
 		mock.ExpectExec("CREATE.*").WillReturnResult(sqlmock.NewResult(0, 0))
@@ -283,12 +252,14 @@ func Test_MigrationMySQLRunSameMigrationAgain(t *testing.T) {
 
 	logs := testutil.StdoutOutputForFunc(func() {
 		cntnr := container.NewContainer(&config.EnvFile{})
-		db, mock, err := sqlmock.New()
+		mockDB, mock, err := sqlmock.New()
 		if err != nil {
 			t.Fatalf("Mocks not initialised %v", err)
 		}
 
-		cntnr.DB.DB = db
+		defer mockDB.Close()
+
+		cntnr.DB.DB = mockDB
 
 		mock.ExpectQuery("SELECT.*").WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(1))
 		mock.ExpectQuery("SELECT.*").WillReturnRows(sqlmock.NewRows([]string{"row"}).AddRow(1))
@@ -314,12 +285,14 @@ func Test_MigrationUPFailed(t *testing.T) {
 
 	logs := testutil.StderrOutputForFunc(func() {
 		cntnr := container.NewContainer(&config.EnvFile{})
-		db, mock, err := sqlmock.New()
+		mockDB, mock, err := sqlmock.New()
 		if err != nil {
 			t.Fatalf("Mocks not initialised %v", err)
 		}
 
-		cntnr.DB.DB = db
+		defer mockDB.Close()
+
+		cntnr.DB.DB = mockDB
 
 		mock.ExpectQuery("SELECT.*").WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(0))
 		mock.ExpectExec("CREATE.*").WillReturnResult(sqlmock.NewResult(0, 0))
@@ -348,12 +321,14 @@ func Test_MigrationSQLMigrationTableCheckFailed(t *testing.T) {
 
 	logs := testutil.StderrOutputForFunc(func() {
 		cntnr := container.NewContainer(&config.EnvFile{})
-		db, mock, err := sqlmock.New()
+		mockDB, mock, err := sqlmock.New()
 		if err != nil {
 			t.Fatalf("Mocks not initialised %v", err)
 		}
 
-		cntnr.DB.DB = db
+		defer mockDB.Close()
+
+		cntnr.DB.DB = mockDB
 
 		mock.ExpectQuery("SELECT.*").WillReturnError(testutil.CustomError{ErrorMessage: "row not found"})
 
@@ -378,12 +353,14 @@ func Test_MigrationMySQLTransactionCreationFailure(t *testing.T) {
 
 	logs := testutil.StderrOutputForFunc(func() {
 		cntnr := container.NewContainer(&config.EnvFile{})
-		db, mock, err := sqlmock.New()
+		mockDB, mock, err := sqlmock.New()
 		if err != nil {
 			t.Fatalf("Mocks not initialised %v", err)
 		}
 
-		cntnr.DB.DB = db
+		defer mockDB.Close()
+
+		cntnr.DB.DB = mockDB
 
 		mock.ExpectQuery("SELECT.*").WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(0))
 		mock.ExpectExec("CREATE.*").WillReturnResult(sqlmock.NewResult(0, 0))
@@ -404,33 +381,20 @@ func Test_MigrationMySQLTransactionCreationFailure(t *testing.T) {
 	assert.Contains(t, logs, "unable to begin transaction: failed to start transaction")
 }
 
-func Test_MigrationInvalidKeys(t *testing.T) {
-	t.Setenv("DB_HOST", "localhost")
-	t.Setenv("DB_DIALECT", "mysql")
-
-	logs := testutil.StderrOutputForFunc(func() {
-		cntnr := container.NewContainer(&config.EnvFile{})
-
-		Run(map[int64]Migrate{
-			1: {UP: nil},
-		}, cntnr)
-	})
-
-	assert.Contains(t, logs, "UP not defined for the following keys: [1]")
-}
-
 func Test_MigrationMySQLCreateGoFrMigrationError(t *testing.T) {
 	t.Setenv("DB_HOST", "localhost")
 	t.Setenv("DB_DIALECT", "mysql")
 
 	logs := testutil.StderrOutputForFunc(func() {
 		cntnr := container.NewContainer(&config.EnvFile{})
-		db, mock, err := sqlmock.New()
+		mockDB, mock, err := sqlmock.New()
 		if err != nil {
 			t.Fatalf("Mocks not initialised %v", err)
 		}
 
-		cntnr.DB.DB = db
+		defer mockDB.Close()
+
+		cntnr.DB.DB = mockDB
 
 		mock.ExpectQuery("SELECT.*").WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(0))
 		mock.ExpectExec("CREATE.*").WillReturnError(testutil.CustomError{ErrorMessage: "creation failed"})
@@ -524,4 +488,58 @@ func Test_MigrationRedisUnableToGetLastRun(t *testing.T) {
 	})
 
 	assert.Contains(t, logs, "Failed to get migration record from Redis : unable to get gofr_migrations")
+}
+
+func Test_MigrationRedisGoFrDataUnmarshalFail(t *testing.T) {
+	t.Setenv("REDIS_HOST", "localhost")
+
+	logs := testutil.StdoutOutputForFunc(func() {
+		cntnr := container.NewContainer(&config.EnvFile{})
+		redisClient, redisMock := redismock.NewClientMock()
+
+		cntnr.Redis.Client = redisClient
+
+		start := time.Now()
+
+		data, _ := json.Marshal(migration{
+			Method:    "UP",
+			StartTime: start,
+			Duration:  time.Since(start).Milliseconds(),
+		})
+
+		redisMock.ExpectHGetAll("gofr_migrations").SetVal(map[string]string{"1": string(data)[10:]})
+
+		Run(map[int64]Migrate{
+			1: {UP: func(d Datasource) error {
+				_, err := d.DB.Exec("CREATE table customer(id int not null);")
+				if err != nil {
+					return err
+				}
+
+				_, err = d.Redis.Set(context.Background(), "key", "value", 0).Result()
+				if err != nil {
+					return err
+				}
+
+				return nil
+			}},
+		}, cntnr)
+	})
+
+	assert.NotContains(t, logs, "Migration 1 ran successfully")
+}
+
+func Test_MigrationInvalidKeys(t *testing.T) {
+	t.Setenv("DB_HOST", "localhost")
+	t.Setenv("DB_DIALECT", "mysql")
+
+	logs := testutil.StderrOutputForFunc(func() {
+		cntnr := container.NewContainer(&config.EnvFile{})
+
+		Run(map[int64]Migrate{
+			1: {UP: nil},
+		}, cntnr)
+	})
+
+	assert.Contains(t, logs, "UP not defined for the following keys: [1]")
 }
