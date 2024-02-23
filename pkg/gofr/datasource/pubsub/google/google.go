@@ -3,6 +3,7 @@ package google
 import (
 	"context"
 	"errors"
+	"time"
 
 	gcPubSub "cloud.google.com/go/pubsub"
 
@@ -68,7 +69,8 @@ func (g *googleClient) Publish(ctx context.Context, topic string, message []byte
 	}
 
 	result := t.Publish(ctx, &gcPubSub.Message{
-		Data: message,
+		Data:        message,
+		PublishTime: time.Now(),
 	})
 
 	_, err = result.Get(ctx)

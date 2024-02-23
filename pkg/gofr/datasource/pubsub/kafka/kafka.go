@@ -82,6 +82,7 @@ func (k *kafkaClient) Publish(ctx context.Context, topic string, message []byte)
 		kafka.Message{
 			Topic: topic,
 			Value: message,
+			Time:  time.Now(),
 		},
 	)
 
