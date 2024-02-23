@@ -6,14 +6,19 @@ import (
 	"strconv"
 	"time"
 
+	_ "github.com/lib/pq" // used for concrete implementation of the database driver.
+
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/datasource"
 )
 
 const defaultDBPort = 3306
 
+var errUnsupportedDialect = fmt.Errorf("unsupported db dialect : supported dialects are - mysql, postgres")
+
 // DBConfig has those members which are necessary variables while connecting to database.
 type DBConfig struct {
+	Dialect  string
 	HostName string
 	User     string
 	Password string
@@ -25,19 +30,17 @@ func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *D
 	dbConfig := getDBConfig(configs)
 
 	// if Hostname is not provided, we won't try to connect to DB
-	if dbConfig.HostName == "" {
+	if dbConfig.HostName == "" || dbConfig.Dialect == "" {
 		return nil
 	}
 
-	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8&parseTime=True&loc=Local&interpolateParams=true",
-		dbConfig.User,
-		dbConfig.Password,
-		dbConfig.HostName,
-		dbConfig.Port,
-		dbConfig.Database,
-	)
+	dbConnectionString, err := getDBConnectionString(dbConfig)
+	if err != nil {
+		logger.Error(errUnsupportedDialect)
+		return nil
+	}
 
-	db, err := sql.Open("mysql", dsn)
+	db, err := sql.Open(dbConfig.Dialect, dbConnectionString)
 	if err != nil {
 		logger.Errorf("could not connect with '%s' user to database '%s:%s'  error: %v",
 			dbConfig.User, dbConfig.HostName, dbConfig.Port, err)
@@ -61,11 +64,30 @@ func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *D
 
 func getDBConfig(configs config.Config) *DBConfig {
 	return &DBConfig{
+		Dialect:  configs.Get("DB_DIALECT"),
 		HostName: configs.Get("DB_HOST"),
 		User:     configs.Get("DB_USER"),
 		Password: configs.Get("DB_PASSWORD"),
 		Port:     configs.GetOrDefault("DB_PORT", strconv.Itoa(defaultDBPort)),
 		Database: configs.Get("DB_NAME"),
+	}
+}
+
+func getDBConnectionString(dbConfig *DBConfig) (string, error) {
+	switch dbConfig.Dialect {
+	case "mysql":
+		return fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8&parseTime=True&loc=Local&interpolateParams=true",
+			dbConfig.User,
+			dbConfig.Password,
+			dbConfig.HostName,
+			dbConfig.Port,
+			dbConfig.Database,
+		), nil
+	case "postgres":
+		return fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
+			dbConfig.HostName, dbConfig.Port, dbConfig.User, dbConfig.Password, dbConfig.Database), nil
+	default:
+		return "", errUnsupportedDialect
 	}
 }
 
