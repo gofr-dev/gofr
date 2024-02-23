@@ -46,6 +46,8 @@ func (s *sqlDB) ExecContext(ctx context.Context, query string, args ...interface
 }
 
 func ensureSQLMigrationTableExists(c *container.Container) error {
+	// this can be replaced with having switch case only in the exists variable - but we have chosen to differentiate based
+	// on driver because if new dialect comes will follow the same, also this complete has to be refactored as mentioned in RUN.
 	switch c.DB.Driver().(type) {
 	case *mysql.MySQLDriver:
 		var exists int
