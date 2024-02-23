@@ -13,7 +13,7 @@ import (
 )
 
 func TestGRPCServer(t *testing.T) {
-	const host = "localhost:9000"
+	const host = "localhost:10000"
 
 	go main()
 	time.Sleep(time.Second * 1)
