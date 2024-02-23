@@ -24,19 +24,21 @@ type sqlDB struct {
 	db
 }
 
-func newMysql(d db) sqlDB {
-	return sqlDB{db: d}
+func newMysql(d db) *sqlDB {
+	return &sqlDB{db: d}
 }
 
 func (s *sqlDB) Query(query string, args ...interface{}) (*sql.Rows, error) {
 	return s.db.Query(query, args...)
 }
+
 func (s *sqlDB) QueryRow(query string, args ...interface{}) *sql.Row {
 	return s.db.QueryRow(query, args...)
 }
 func (s *sqlDB) QueryRowContext(ctx context.Context, query string, args ...interface{}) *sql.Row {
 	return s.db.QueryRowContext(ctx, query, args...)
 }
+
 func (s *sqlDB) Exec(query string, args ...interface{}) (sql.Result, error) {
 	return s.db.Exec(query, args...)
 }
