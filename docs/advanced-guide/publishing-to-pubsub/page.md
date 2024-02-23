@@ -2,7 +2,6 @@
 Gofr currently supports Apache Kafka and Google PubSub.
 
 ## Usage
-
 To publish to pub/sub topic following configurations has to be done in .env.
 
 ### Kafka configs
@@ -16,10 +15,9 @@ PUBSUB_BROKER=localhost:9092
 PUBSUB_BACKEND=GOOGLE
 GOOGLE_PROJECT_ID=project-order
 ```
-
 > To set GOOGLE_APPLICATION_CREDENTIAL - refer [here](https://cloud.google.com/docs/authentication/application-default-credentials)
 
-GoFr allows to publish message to a topic from gofr context. 
+Messages can be published to a topic from gofr context.
 
 ```go
 ctx.GetPublisher().Publish(ctx, "topic", msg)

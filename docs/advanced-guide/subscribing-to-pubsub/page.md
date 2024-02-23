@@ -4,26 +4,9 @@ Gofr currently supports Apache Kafka and Google PubSub.
 ## Usage
 Adding a subscriber is similar to adding a HTTP handler.
 
-The subscriber handler has the following signature.
-```go
-func(ctx *gofr.Context) error
-```
-The context `ctx` provides you with the `Bind()` function to Bind the message value to a given
-interface. 
-
-> The returned error determines which messages are to be committed and which ones are to be consumed again.
-
-```go
-// First argument is the `topic name` followed by a handler which would process the 
-// published messages continuously and asynchronously.
-app.Subscribe("order-status", func(ctx *gofr.Context)error{
-    // Handle the pub-sub message here
-})
-```
-
-Using `app.Subscribe` will continuously read a message from the configured `PUBSUB_BACKEND` which
+`Subscribe` method of GoFr App will continuously read a message from the configured `PUBSUB_BACKEND` which
 can be either `KAFKA` or `GOOGLE` as of now. These can be configured in your configs folder under `.env`
-     
+
 ### Kafka configs
 ```dotenv
 PUBSUB_BACKEND=KAFKA
@@ -39,6 +22,26 @@ GOOGLE_SUBSCRIPTION_NAME=order-consumer
 ```
 
 > To set GOOGLE_APPLICATION_CREDENTIAL - refer [here](https://cloud.google.com/docs/authentication/application-default-credentials)
+
+The subscriber handler has the following signature.
+```go
+func(ctx *gofr.Context) error
+```
+> The returned error determines which messages are to be committed and which ones are to be consumed again.
+
+```go
+// First argument is the `topic name` followed by a handler which would process the 
+// published messages continuously and asynchronously.
+app.Subscribe("order-status", func(ctx *gofr.Context)error{
+    // Handle the pub-sub message here
+})
+```
+
+The context `ctx` provides you with the following methods :
+
+Bind() - Bind the message value to a given interface.
+Param(p string)/PathParam(p string) - Will return the topic when the same is passed as param.
+
 
 ### Example
 ```go
