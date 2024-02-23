@@ -33,7 +33,7 @@ type Container struct {
 	pubsub         pubsub.Client
 
 	Redis *redis.Redis
-	DB    *sql.DB
+	SQL   *sql.DB
 }
 
 func NewContainer(conf config.Config) *Container {
@@ -53,7 +53,7 @@ func NewContainer(conf config.Config) *Container {
 
 	c.Redis = redis.NewClient(conf, c.Logger, c.metricsManager)
 
-	c.DB = sql.NewSQL(conf, c.Logger, c.metricsManager)
+	c.SQL = sql.NewSQL(conf, c.Logger, c.metricsManager)
 
 	switch strings.ToUpper(conf.Get("PUBSUB_BACKEND")) {
 	case "KAFKA":
