@@ -118,16 +118,11 @@ func (k *kafkaClient) Subscribe(ctx context.Context, topic string) (*pubsub.Mess
 		return nil, err
 	}
 
-	kmsg := &kafkaMessage{
-		msg:    &msg,
-		reader: k.reader[topic],
-	}
-
 	m := &pubsub.Message{
 		Value: msg.Value,
 		Topic: topic,
 
-		Committer: kmsg,
+		Committer: newKafkaMessage(&msg, k.reader[topic], k.logger),
 	}
 
 	k.logger.Debugf("received kafka message %v on topic %v", string(msg.Value), msg.Topic)
@@ -144,13 +139,4 @@ func (k *kafkaClient) Close() error {
 	}
 
 	return nil
-}
-
-type kafkaMessage struct {
-	msg    *kafka.Message
-	reader *kafka.Reader
-}
-
-func (kmsg *kafkaMessage) Commit() {
-	_ = kmsg.reader.CommitMessages(context.Background(), *kmsg.msg)
 }
