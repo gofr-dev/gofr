@@ -15,7 +15,6 @@ type Config struct {
 	Broker          string
 	Partition       int
 	ConsumerGroupID string
-	Topic           string
 	OffSet          int
 }
 

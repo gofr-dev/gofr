@@ -65,7 +65,6 @@ func NewContainer(conf config.Config) *Container {
 				Broker:          conf.Get("PUBSUB_HOST"),
 				Partition:       partition,
 				ConsumerGroupID: conf.Get("CONSUMER_ID"),
-				Topic:           conf.Get("PUBSUB_TOPIC"),
 				OffSet:          offSet,
 			}, c.Logger)
 		}
