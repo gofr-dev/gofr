@@ -3,6 +3,10 @@ name: Build and Deploy
   push:
     paths:
       - 'docs/**'
+  pull_request:
+    paths:
+      - 'docs/**'
+
 env:
   APP_NAME: gofr-web
   REGISTRY: gcr.io
