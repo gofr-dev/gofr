@@ -74,6 +74,34 @@ func Test_MigrationMySQLSuccess(t *testing.T) {
 	assert.Contains(t, logs, "Migration 1 ran successfully")
 }
 
+func Test_MigrationMySQLRunSameMigrationAgain(t *testing.T) {
+	t.Setenv("DB_HOST", "localhost")
+	t.Setenv("DB_DIALECT", "mysql")
+
+	logs := testutil.StdoutOutputForFunc(func() {
+		cntnr := container.NewContainer(&config.EnvFile{})
+		db, mock, _ := sqlmock.New()
+
+		cntnr.DB.DB = db
+
+		mock.ExpectQuery("SELECT.*").WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(1))
+		mock.ExpectQuery("SELECT.*").WillReturnRows(sqlmock.NewRows([]string{"row"}).AddRow(1))
+
+		Run(map[int64]Migrate{
+			1: {UP: func(d Datasource) error {
+				_, err := d.DB.Exec("CREATE table customer(id int not null);")
+				if err != nil {
+					return err
+				}
+
+				return nil
+			}},
+		}, cntnr)
+	})
+
+	assert.NotContains(t, logs, "Migration 1 ran successfully")
+}
+
 func Test_MigrationUPFailed(t *testing.T) {
 	t.Setenv("DB_HOST", "localhost")
 	t.Setenv("DB_DIALECT", "mysql")
@@ -103,6 +131,33 @@ func Test_MigrationUPFailed(t *testing.T) {
 	})
 
 	assert.Contains(t, logs, "Migration transaction rolled back")
+}
+
+func Test_MigrationSQLMigrationTableCheckFailed(t *testing.T) {
+	t.Setenv("DB_HOST", "localhost")
+	t.Setenv("DB_DIALECT", "mysql")
+
+	logs := testutil.StderrOutputForFunc(func() {
+		cntnr := container.NewContainer(&config.EnvFile{})
+		db, mock, _ := sqlmock.New()
+
+		cntnr.DB.DB = db
+
+		mock.ExpectQuery("SELECT.*").WillReturnError(errors.New("row not found"))
+
+		Run(map[int64]Migrate{
+			1: {UP: func(d Datasource) error {
+				_, err := d.DB.Exec("SELECT 2+2")
+				if err != nil {
+					return err
+				}
+
+				return nil
+			}},
+		}, cntnr)
+	})
+
+	assert.Contains(t, logs, "Unable to verify sql migration table due to: row not found")
 }
 
 func Test_MigrationMySQLTransactionCreationFailure(t *testing.T) {
