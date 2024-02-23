@@ -74,6 +74,70 @@ func Test_MigrationMySQLSuccess(t *testing.T) {
 	assert.Contains(t, logs, "Migration 1 ran successfully")
 }
 
+func Test_MigrationMySQLPostRunFailed(t *testing.T) {
+	t.Setenv("DB_HOST", "localhost")
+	t.Setenv("DB_DIALECT", "mysql")
+
+	logs := testutil.StderrOutputForFunc(func() {
+		cntnr := container.NewContainer(&config.EnvFile{})
+		db, mock, _ := sqlmock.New()
+
+		cntnr.DB.DB = db
+
+		mock.ExpectQuery("SELECT.*").WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(0))
+		mock.ExpectExec("CREATE.*").WillReturnResult(sqlmock.NewResult(0, 0))
+		mock.ExpectBegin()
+		mock.ExpectExec("CREATE.*").WillReturnResult(sqlmock.NewResult(1, 1))
+		mock.ExpectExec("INSERT.*").WillReturnError(errors.New("failed"))
+		mock.ExpectRollback()
+
+		Run(map[int64]Migrate{
+			1: {UP: func(d Datasource) error {
+				_, err := d.DB.Exec("CREATE table customer(id int not null);")
+				if err != nil {
+					return err
+				}
+
+				return nil
+			}},
+		}, cntnr)
+	})
+
+	assert.Contains(t, logs, "Migration transaction rolled back")
+}
+
+func Test_MigrationMySQLTransactionCommitFailed(t *testing.T) {
+	t.Setenv("DB_HOST", "localhost")
+	t.Setenv("DB_DIALECT", "mysql")
+
+	logs := testutil.StderrOutputForFunc(func() {
+		cntnr := container.NewContainer(&config.EnvFile{})
+		db, mock, _ := sqlmock.New()
+
+		cntnr.DB.DB = db
+
+		mock.ExpectQuery("SELECT.*").WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(0))
+		mock.ExpectExec("CREATE.*").WillReturnResult(sqlmock.NewResult(0, 0))
+		mock.ExpectBegin()
+		mock.ExpectExec("CREATE.*").WillReturnResult(sqlmock.NewResult(1, 1))
+		mock.ExpectExec("INSERT.*").WillReturnResult(sqlmock.NewResult(1, 1))
+		mock.ExpectCommit().WillReturnError(errors.New("failed"))
+
+		Run(map[int64]Migrate{
+			1: {UP: func(d Datasource) error {
+				_, err := d.DB.Exec("CREATE table customer(id int not null);")
+				if err != nil {
+					return err
+				}
+
+				return nil
+			}},
+		}, cntnr)
+	})
+
+	assert.Contains(t, logs, "unable to commit transaction")
+}
+
 func Test_MigrationMySQLRunSameMigrationAgain(t *testing.T) {
 	t.Setenv("DB_HOST", "localhost")
 	t.Setenv("DB_DIALECT", "mysql")
