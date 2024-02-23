@@ -1,7 +1,13 @@
 package container
 
 import (
+	"strconv"
+	"strings"
+
 	"gofr.dev/pkg/gofr/config"
+	"gofr.dev/pkg/gofr/datasource/pubsub"
+	"gofr.dev/pkg/gofr/datasource/pubsub/google"
+	"gofr.dev/pkg/gofr/datasource/pubsub/kafka"
 	"gofr.dev/pkg/gofr/datasource/redis"
 	"gofr.dev/pkg/gofr/datasource/sql"
 	"gofr.dev/pkg/gofr/logging"
@@ -24,6 +30,7 @@ type Container struct {
 
 	Services       map[string]service.HTTP
 	metricsManager metrics.Manager
+	pubsub         pubsub.Client
 
 	Redis *redis.Redis
 	DB    *sql.DB
@@ -47,6 +54,26 @@ func NewContainer(conf config.Config) *Container {
 	c.Redis = redis.NewClient(conf, c.Logger, c.metricsManager)
 
 	c.DB = sql.NewSQL(conf, c.Logger, c.metricsManager)
+
+	switch strings.ToUpper(conf.Get("PUBSUB_BACKEND")) {
+	case "KAFKA":
+		if conf.Get("PUBSUB_BROKER") != "" {
+			partition, _ := strconv.Atoi(conf.GetOrDefault("PARTITION_SIZE", "0"))
+			offSet, _ := strconv.Atoi(conf.GetOrDefault("PUBSUB_OFFSET", "-1"))
+
+			c.pubsub = kafka.New(kafka.Config{
+				Broker:          conf.Get("PUBSUB_HOST"),
+				Partition:       partition,
+				ConsumerGroupID: conf.Get("CONSUMER_ID"),
+				OffSet:          offSet,
+			}, c.Logger)
+		}
+	case "GOOGLE":
+		c.pubsub = google.New(google.Config{
+			ProjectID:        conf.Get("GOOGLE_PROJECT_ID"),
+			SubscriptionName: conf.Get("GOOGLE_SUBSCRIPTION_NAME"),
+		}, c.Logger)
+	}
 
 	return c
 }
@@ -90,4 +117,12 @@ func (c *Container) GetAppName() string {
 
 func (c *Container) GetAppVersion() string {
 	return c.appVersion
+}
+
+func (c *Container) GetPublisher() pubsub.Publisher {
+	return c.pubsub
+}
+
+func (c *Container) GetSubscriber() pubsub.Subscriber {
+	return c.pubsub
 }
