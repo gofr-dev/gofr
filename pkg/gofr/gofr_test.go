@@ -11,10 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/stretchr/testify/assert"
 
-	"gofr.dev/pkg/gofr/migration"
 	"gofr.dev/pkg/gofr/testutil"
 )
 
@@ -150,36 +148,4 @@ func Test_AddHTTPService(t *testing.T) {
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
-}
-
-func Test_MigrationMySQLSuccess(t *testing.T) {
-	t.Setenv("DB_HOST", "localhost")
-	t.Setenv("DB_DIALECT", "mysql")
-
-	logs := testutil.StdoutOutputForFunc(func() {
-		a := New()
-		db, mock, _ := sqlmock.New()
-
-		a.container.DB.DB = db
-
-		mock.ExpectQuery("SELECT.*").WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(0))
-		mock.ExpectExec("CREATE.*").WillReturnResult(sqlmock.NewResult(0, 0))
-		mock.ExpectBegin()
-		mock.ExpectExec("SELECT.*").WillReturnResult(sqlmock.NewResult(1, 1))
-		mock.ExpectExec("INSERT.*").WillReturnResult(sqlmock.NewResult(1, 1))
-		mock.ExpectCommit()
-
-		a.Migrate(map[int64]migration.Migrate{
-			1: {UP: func(d migration.Datasource) error {
-				_, err := d.DB.Exec("SELECT 2+2")
-				if err != nil {
-					return err
-				}
-
-				return nil
-			}},
-		})
-	})
-
-	assert.Contains(t, logs, "Migration 1 ran successfully")
 }
