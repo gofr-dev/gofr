@@ -13,26 +13,24 @@ func TestAddEmployeeInRedis(t *testing.T) {
 	client, mock := redismock.NewClientMock()
 	datasource := migration.Datasource{Redis: client}
 
-	t.Run("TestSuccess", func(t *testing.T) {
-		// Set expectations for the Set method
-		mock.ExpectSet("Umang", "0987654321", 0).SetVal("OK")
+	// Set expectations for the Set method
+	mock.ExpectSet("Umang", "0987654321", 0).SetVal("OK")
 
-		// Call the UP method of the migration
-		err := addEmployeeInRedis().UP(datasource)
-		assert.NoError(t, err)
-	})
+	// Call the UP method of the migration
+	err := addEmployeeInRedis().UP(datasource)
+	assert.NoError(t, err)
+}
 
-	t.Run("TestError", func(t *testing.T) {
-		mock.ExpectSet("Umang", "0987654321", 0).SetErr(errors.New("redis error"))
+func TestAddEmployeeInRedis_Error(t *testing.T) {
+	client, mock := redismock.NewClientMock()
+	datasource := migration.Datasource{Redis: client}
 
-		// Create an instance of migration.Datasource using the mock Redis client
-		datasource := migration.Datasource{Redis: client}
+	mock.ExpectSet("Umang", "0987654321", 0).SetErr(errors.New("redis error"))
 
-		// Call the UP method of the migration
-		err := addEmployeeInRedis().UP(datasource)
+	// Call the UP method of the migration
+	err := addEmployeeInRedis().UP(datasource)
 
-		if err == nil || err.Error() != "redis error" {
-			t.Errorf("TestAddEmployeeInRedis Error failed! unexpected error: %v", err)
-		}
-	})
+	if err == nil || err.Error() != "redis error" {
+		t.Errorf("TestAddEmployeeInRedis Error failed! unexpected error: %v", err)
+	}
 }
