@@ -100,7 +100,6 @@ jobs:
   MIGRATION-Unit-Testing:
     name: Migration Unit Testing🛠
     runs-on: ubuntu-latest
-    needs: [Example-Unit-Testing,PKG-Unit-Testing]
 
     steps:
       - name: Checkout code into go module directory
