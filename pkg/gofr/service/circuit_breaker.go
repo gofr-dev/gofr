@@ -239,3 +239,31 @@ func (cb *CircuitBreaker) DeleteWithHeaders(ctx context.Context, path string, bo
 	*http.Response, error) {
 	return cb.doRequest(ctx, http.MethodDelete, path, nil, body, headers)
 }
+
+func (cb *CircuitBreaker) Get(ctx context.Context, path string, queryParams map[string]interface{}) (*http.Response, error) {
+	return cb.doRequest(ctx, http.MethodGet, path, queryParams, nil, nil)
+}
+
+// Post is a wrapper for doRequest with the POST method and headers.
+func (cb *CircuitBreaker) Post(ctx context.Context, path string, queryParams map[string]interface{},
+	body []byte) (*http.Response, error) {
+	return cb.doRequest(ctx, http.MethodPost, path, queryParams, body, nil)
+}
+
+// Patch is a wrapper for doRequest with the PATCH method and headers.
+func (cb *CircuitBreaker) Patch(ctx context.Context, path string, queryParams map[string]interface{},
+	body []byte) (*http.Response, error) {
+	return cb.doRequest(ctx, http.MethodPatch, path, queryParams, body, nil)
+}
+
+// Put is a wrapper for doRequest with the PUT method and headers.
+func (cb *CircuitBreaker) Put(ctx context.Context, path string, queryParams map[string]interface{},
+	body []byte) (*http.Response, error) {
+	return cb.doRequest(ctx, http.MethodPut, path, queryParams, body, nil)
+}
+
+// Delete is a wrapper for doRequest with the DELETE method and headers.
+func (cb *CircuitBreaker) Delete(ctx context.Context, path string, body []byte) (
+	*http.Response, error) {
+	return cb.doRequest(ctx, http.MethodDelete, path, nil, body, nil)
+}
