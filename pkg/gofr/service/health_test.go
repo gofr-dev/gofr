@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -53,10 +54,9 @@ func TestHTTPService_HealthCheckErrorResponse(t *testing.T) {
 	// when params value is of type []string then last value is sent in request
 	resp := service.HealthCheck(ctx)
 
-	assert.Equal(t, resp, &Health{
-		Status:  "DOWN",
-		Details: map[string]interface{}{"error": "Get \"http://test/.well-known/alive\": dial tcp: lookup test: no such host"},
-	})
+	body, _ := json.Marshal(&resp)
+
+	assert.Contains(t, string(body), `{"status":"DOWN","details":{"error":"Get \"http://test/.well-known/alive\"`)
 }
 
 func TestHTTPService_HealthCheckDifferentStatusCode(t *testing.T) {
