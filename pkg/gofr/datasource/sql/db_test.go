@@ -3,7 +3,6 @@ package sql
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"testing"
 	"time"
 
@@ -15,9 +14,9 @@ import (
 )
 
 var (
-	errDB     = errors.New("DB error")
-	errSyntax = errors.New("syntax error")
-	errTx     = errors.New("error starting transaction")
+	errDB     = testutil.CustomError{ErrorMessage: "DB error"}
+	errSyntax = testutil.CustomError{ErrorMessage: "syntax error"}
+	errTx     = testutil.CustomError{ErrorMessage: "error starting transaction"}
 )
 
 func getDB(t *testing.T, logLevel int) (*DB, sqlmock.Sqlmock) {
