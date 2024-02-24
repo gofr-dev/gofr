@@ -55,9 +55,8 @@ jobs:
       - name: Test
         run: |
           export GOFR_ENV=test
-          go test gofr.dev/examples/... -v -short -coverprofile profile.cov -coverpkg=gofr.dev/examples/...
+          go test gofr.dev/examples/... -v -short -coverprofile packageWithPBGO.cov -coverpkg=gofr.dev/examples/...
           grep -vE '^gofr\.dev\/.*\.pb\.go' packageWithPBGO.cov > profile.cov
-          
           
           go tool cover -func profile.cov
 
@@ -90,8 +89,7 @@ jobs:
       - name: Test
         run: |
           export GOFR_ENV=test
-          go test gofr.dev/pkg/... -tags migration -v -short -coverprofile packageWithMigration.cov -coverpkg=gofr.dev/pkg/...
-          grep -vE '^gofr\.dev\/.*\.pb\.go' packageWithMigration.cov > profile.cov
+          go test gofr.dev/pkg/... -tags migration -v -short -coverprofile profile.cov -coverpkg=gofr.dev/pkg/...
           go tool cover -func profile.cov
 
       - name: Upload Test Coverage
