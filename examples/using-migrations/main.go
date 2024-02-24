@@ -43,7 +43,7 @@ func GetHandler(c *gofr.Context) (interface{}, error) {
 		return nil, errors.New("name can't be empty")
 	}
 
-	row := c.DB.QueryRowContext(c, queryGetEmployee, name)
+	row := c.SQL.QueryRowContext(c, queryGetEmployee, name)
 	if row.Err() != nil {
 		return nil, errors.New(fmt.Sprintf("DB Error : %v", row.Err()))
 	}
@@ -67,7 +67,7 @@ func PostHandler(c *gofr.Context) (interface{}, error) {
 	}
 
 	// Execute the INSERT query
-	_, err := c.DB.ExecContext(c, queryInsertEmployee, emp.ID, emp.Name, emp.Gender, emp.Phone, emp.DOB)
+	_, err := c.SQL.ExecContext(c, queryInsertEmployee, emp.ID, emp.Name, emp.Gender, emp.Phone, emp.DOB)
 
 	if err != nil {
 		return Employee{}, errors.New(fmt.Sprintf("DB Error : %v", err))
