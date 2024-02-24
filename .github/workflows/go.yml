@@ -55,8 +55,7 @@ jobs:
       - name: Test
         run: |
           export GOFR_ENV=test
-          go test gofr.dev/examples/... -v -short -coverprofile packageWithPBGO.cov -coverpkg=gofr.dev/examples/...
-          grep -vE '^gofr\.dev\/.*\.pb\.go' packageWithPBGO.cov > profile.cov
+          go test gofr.dev/examples/... -v -short -coverprofile profile.cov -coverpkg=gofr.dev/examples/...
           
           go tool cover -func profile.cov
 
