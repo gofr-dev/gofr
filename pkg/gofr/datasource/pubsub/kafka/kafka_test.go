@@ -26,5 +26,5 @@ func Test_validateConfigsErrBrokerNotProvided(t *testing.T) {
 
 	err := validateConfigs(config)
 
-	assert.Nil(t, err, errBrokerNotProvided)
+	assert.Equal(t, err, errBrokerNotProvided)
 }
