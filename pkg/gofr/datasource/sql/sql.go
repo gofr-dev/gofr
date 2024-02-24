@@ -91,6 +91,7 @@ func getDBConnectionString(dbConfig *DBConfig) (string, error) {
 	}
 }
 
+// TODO: Metrics should be published when metrics endpoint is being called
 func pushDBMetrics(db *sql.DB, metrics Metrics) {
 	const frequency = 10
 
