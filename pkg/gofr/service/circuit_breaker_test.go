@@ -2,29 +2,25 @@ package service
 
 import (
 	"context"
-	"github.com/stretchr/testify/assert"
-	"gofr.dev/pkg/gofr/testutil"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+
+	"gofr.dev/pkg/gofr/testutil"
 )
 
-func testServer(handler *http.Handler) *httptest.Server {
-	var h http.Handler
+func testServer() *httptest.Server {
+	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
 
-	if handler == nil {
-		h = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusOK)
-		})
-
-		handler = &h
-	}
-
-	return httptest.NewServer(*handler)
+	return httptest.NewServer(h)
 }
 
 func TestHttpService_GetSuccessRequests(t *testing.T) {
-	server := testServer(nil)
+	server := testServer()
 	defer server.Close()
 
 	service := NewHTTPService(server.URL, testutil.NewMockLogger(testutil.DEBUGLOG), nil, &CircuitBreakerConfig{
@@ -34,12 +30,14 @@ func TestHttpService_GetSuccessRequests(t *testing.T) {
 
 	resp, err := service.Get(context.Background(), "test", nil)
 
+	defer resp.Body.Close().Error()
+
 	assert.Nil(t, err)
 	assert.Equal(t, resp.StatusCode, http.StatusOK)
 }
 
 func TestHttpService_GetWithHeaderSuccessRequests(t *testing.T) {
-	server := testServer(nil)
+	server := testServer()
 	defer server.Close()
 
 	service := NewHTTPService(server.URL, testutil.NewMockLogger(testutil.DEBUGLOG), nil, &CircuitBreakerConfig{
@@ -49,12 +47,14 @@ func TestHttpService_GetWithHeaderSuccessRequests(t *testing.T) {
 
 	resp, err := service.GetWithHeaders(context.Background(), "test", nil, nil)
 
+	defer resp.Body.Close().Error()
+
 	assert.Nil(t, err)
 	assert.Equal(t, resp.StatusCode, http.StatusOK)
 }
 
 func TestHttpService_PutSuccessRequests(t *testing.T) {
-	server := testServer(nil)
+	server := testServer()
 	defer server.Close()
 
 	service := NewHTTPService(server.URL, testutil.NewMockLogger(testutil.DEBUGLOG), nil, &CircuitBreakerConfig{
@@ -64,12 +64,14 @@ func TestHttpService_PutSuccessRequests(t *testing.T) {
 
 	resp, err := service.Put(context.Background(), "test", nil, nil)
 
+	defer resp.Body.Close().Error()
+
 	assert.Nil(t, err)
 	assert.Equal(t, resp.StatusCode, http.StatusOK)
 }
 
 func TestHttpService_PutWithHeaderSuccessRequests(t *testing.T) {
-	server := testServer(nil)
+	server := testServer()
 	defer server.Close()
 
 	service := NewHTTPService(server.URL, testutil.NewMockLogger(testutil.DEBUGLOG), nil, &CircuitBreakerConfig{
@@ -79,12 +81,14 @@ func TestHttpService_PutWithHeaderSuccessRequests(t *testing.T) {
 
 	resp, err := service.PutWithHeaders(context.Background(), "test", nil, nil, nil)
 
+	defer resp.Body.Close().Error()
+
 	assert.Nil(t, err)
 	assert.Equal(t, resp.StatusCode, http.StatusOK)
 }
 
 func TestHttpService_PatchSuccessRequests(t *testing.T) {
-	server := testServer(nil)
+	server := testServer()
 	defer server.Close()
 
 	service := NewHTTPService(server.URL, testutil.NewMockLogger(testutil.DEBUGLOG), nil, &CircuitBreakerConfig{
@@ -94,12 +98,14 @@ func TestHttpService_PatchSuccessRequests(t *testing.T) {
 
 	resp, err := service.Get(context.Background(), "test", nil)
 
+	defer resp.Body.Close().Error()
+
 	assert.Nil(t, err)
 	assert.Equal(t, resp.StatusCode, http.StatusOK)
 }
 
 func TestHttpService_PatchWithHeaderSuccessRequests(t *testing.T) {
-	server := testServer(nil)
+	server := testServer()
 	defer server.Close()
 
 	service := NewHTTPService(server.URL, testutil.NewMockLogger(testutil.DEBUGLOG), nil, &CircuitBreakerConfig{
@@ -109,12 +115,14 @@ func TestHttpService_PatchWithHeaderSuccessRequests(t *testing.T) {
 
 	resp, err := service.GetWithHeaders(context.Background(), "test", nil, nil)
 
+	defer resp.Body.Close().Error()
+
 	assert.Nil(t, err)
 	assert.Equal(t, resp.StatusCode, http.StatusOK)
 }
 
 func TestHttpService_PostSuccessRequests(t *testing.T) {
-	server := testServer(nil)
+	server := testServer()
 	defer server.Close()
 
 	service := NewHTTPService(server.URL, testutil.NewMockLogger(testutil.DEBUGLOG), nil, &CircuitBreakerConfig{
@@ -124,12 +132,14 @@ func TestHttpService_PostSuccessRequests(t *testing.T) {
 
 	resp, err := service.Post(context.Background(), "test", nil, nil)
 
+	defer resp.Body.Close().Error()
+
 	assert.Nil(t, err)
 	assert.Equal(t, resp.StatusCode, http.StatusOK)
 }
 
 func TestHttpService_PostWithHeaderSuccessRequests(t *testing.T) {
-	server := testServer(nil)
+	server := testServer()
 	defer server.Close()
 
 	service := NewHTTPService(server.URL, testutil.NewMockLogger(testutil.DEBUGLOG), nil, &CircuitBreakerConfig{
@@ -139,12 +149,14 @@ func TestHttpService_PostWithHeaderSuccessRequests(t *testing.T) {
 
 	resp, err := service.PostWithHeaders(context.Background(), "test", nil, nil, nil)
 
+	defer resp.Body.Close().Error()
+
 	assert.Nil(t, err)
 	assert.Equal(t, resp.StatusCode, http.StatusOK)
 }
 
 func TestHttpService_DeleteSuccessRequests(t *testing.T) {
-	server := testServer(nil)
+	server := testServer()
 	defer server.Close()
 
 	service := NewHTTPService(server.URL, testutil.NewMockLogger(testutil.DEBUGLOG), nil, &CircuitBreakerConfig{
@@ -154,12 +166,14 @@ func TestHttpService_DeleteSuccessRequests(t *testing.T) {
 
 	resp, err := service.Delete(context.Background(), "test", nil)
 
+	defer resp.Body.Close().Error()
+
 	assert.Nil(t, err)
 	assert.Equal(t, resp.StatusCode, http.StatusOK)
 }
 
 func TestHttpService_DeleteWithHeaderSuccessRequests(t *testing.T) {
-	server := testServer(nil)
+	server := testServer()
 	defer server.Close()
 
 	service := NewHTTPService(server.URL, testutil.NewMockLogger(testutil.DEBUGLOG), nil, &CircuitBreakerConfig{
@@ -168,6 +182,8 @@ func TestHttpService_DeleteWithHeaderSuccessRequests(t *testing.T) {
 	})
 
 	resp, err := service.DeleteWithHeaders(context.Background(), "test", nil, nil)
+
+	defer resp.Body.Close().Error()
 
 	assert.Nil(t, err)
 	assert.Equal(t, resp.StatusCode, http.StatusOK)
