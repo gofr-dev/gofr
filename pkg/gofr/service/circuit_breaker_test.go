@@ -3,15 +3,17 @@ package service
 import (
 	"bytes"
 	"context"
-	"errors"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
-	"go.opentelemetry.io/otel"
-	"gofr.dev/pkg/gofr/testutil"
+
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	"go.opentelemetry.io/otel"
+
+	"gofr.dev/pkg/gofr/testutil"
 )
 
 func testServer() *httptest.Server {
@@ -22,7 +24,7 @@ func testServer() *httptest.Server {
 	return httptest.NewServer(h)
 }
 
-func setupHttpServiceTestServerForCircuitBreaker() (*httptest.Server, HTTP) {
+func setupHTTPServiceTestServerForCircuitBreaker() (*httptest.Server, HTTP) {
 	// Start a test HTTP server
 	server := testServer()
 
@@ -92,7 +94,7 @@ func TestHttpService_GetWithHeaderSuccessRequests(t *testing.T) {
 }
 
 func TestHttpService_GetCBOpenRequests(t *testing.T) {
-	server, service := setupHttpServiceTestServerForCircuitBreaker()
+	server, service := setupHTTPServiceTestServerForCircuitBreaker()
 	defer server.Close()
 
 	// Test cases
@@ -119,12 +121,11 @@ func TestHttpService_GetCBOpenRequests(t *testing.T) {
 			assert.NotNil(t, resp)
 			_ = resp.Body.Close()
 		}
-
 	}
 }
 
 func TestHttpService_GetWithHeaderCBOpenRequests(t *testing.T) {
-	server, service := setupHttpServiceTestServerForCircuitBreaker()
+	server, service := setupHTTPServiceTestServerForCircuitBreaker()
 	defer server.Close()
 
 	// Test cases
@@ -199,7 +200,7 @@ func TestHttpService_PutWithHeaderSuccessRequests(t *testing.T) {
 }
 
 func TestHttpService_PutCBOpenRequests(t *testing.T) {
-	server, service := setupHttpServiceTestServerForCircuitBreaker()
+	server, service := setupHTTPServiceTestServerForCircuitBreaker()
 	defer server.Close()
 
 	// Test cases
@@ -226,12 +227,11 @@ func TestHttpService_PutCBOpenRequests(t *testing.T) {
 			assert.NotNil(t, resp)
 			_ = resp.Body.Close()
 		}
-
 	}
 }
 
 func TestHttpService_PutWithHeaderCBOpenRequests(t *testing.T) {
-	server, service := setupHttpServiceTestServerForCircuitBreaker()
+	server, service := setupHTTPServiceTestServerForCircuitBreaker()
 	defer server.Close()
 
 	// Test cases
@@ -306,7 +306,7 @@ func TestHttpService_PatchWithHeaderSuccessRequests(t *testing.T) {
 }
 
 func TestHttpService_PatchCBOpenRequests(t *testing.T) {
-	server, service := setupHttpServiceTestServerForCircuitBreaker()
+	server, service := setupHTTPServiceTestServerForCircuitBreaker()
 	defer server.Close()
 
 	// Test cases
@@ -333,12 +333,11 @@ func TestHttpService_PatchCBOpenRequests(t *testing.T) {
 			assert.NotNil(t, resp)
 			_ = resp.Body.Close()
 		}
-
 	}
 }
 
 func TestHttpService_PatchWithHeaderCBOpenRequests(t *testing.T) {
-	server, service := setupHttpServiceTestServerForCircuitBreaker()
+	server, service := setupHTTPServiceTestServerForCircuitBreaker()
 	defer server.Close()
 
 	// Test cases
@@ -413,7 +412,7 @@ func TestHttpService_PostWithHeaderSuccessRequests(t *testing.T) {
 }
 
 func TestHttpService_PostCBOpenRequests(t *testing.T) {
-	server, service := setupHttpServiceTestServerForCircuitBreaker()
+	server, service := setupHTTPServiceTestServerForCircuitBreaker()
 	defer server.Close()
 
 	// Test cases
@@ -440,12 +439,11 @@ func TestHttpService_PostCBOpenRequests(t *testing.T) {
 			assert.NotNil(t, resp)
 			_ = resp.Body.Close()
 		}
-
 	}
 }
 
 func TestHttpService_PostWithHeaderCBOpenRequests(t *testing.T) {
-	server, service := setupHttpServiceTestServerForCircuitBreaker()
+	server, service := setupHTTPServiceTestServerForCircuitBreaker()
 	defer server.Close()
 
 	// Test cases
@@ -520,7 +518,7 @@ func TestHttpService_DeleteWithHeaderSuccessRequests(t *testing.T) {
 }
 
 func TestHttpService_DeleteCBOpenRequests(t *testing.T) {
-	server, service := setupHttpServiceTestServerForCircuitBreaker()
+	server, service := setupHTTPServiceTestServerForCircuitBreaker()
 	defer server.Close()
 
 	// Test cases
@@ -547,12 +545,11 @@ func TestHttpService_DeleteCBOpenRequests(t *testing.T) {
 			assert.NotNil(t, resp)
 			_ = resp.Body.Close()
 		}
-
 	}
 }
 
 func TestHttpService_DeleteWithHeaderCBOpenRequests(t *testing.T) {
-	server, service := setupHttpServiceTestServerForCircuitBreaker()
+	server, service := setupHTTPServiceTestServerForCircuitBreaker()
 	defer server.Close()
 
 	// Test cases
@@ -602,6 +599,5 @@ func (c *customTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 		}, nil
 	}
 
-	return nil, errors.New("circuit breaker error")
-
+	return nil, testutil.CustomError{ErrorMessage: "cb error"}
 }
