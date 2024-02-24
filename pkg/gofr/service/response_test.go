@@ -27,5 +27,5 @@ func TestResponse_GetHeaderNil(t *testing.T) {
 
 	result := response.GetHeader("Content-Type")
 
-	assert.Equal(t, "", resul)
+	assert.Equal(t, "", result)
 }
