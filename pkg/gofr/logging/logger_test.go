@@ -334,3 +334,21 @@ func TestPrettyPrint_ServiceAndDefaultLogs(t *testing.T) {
 		}
 	}
 }
+
+func Test_NewSilentLoggerSTDOutput(t *testing.T) {
+	logs := testutil.StdoutOutputForFunc(func() {
+		l := NewSilentLogger()
+
+		l.Info("Info Logs")
+		l.Debug("Debug Logs")
+		l.Notice("Notic Logs")
+		l.Warn("Warn Logs")
+		l.Infof("%v Logs", "Infof")
+		l.Debugf("%v Logs", "Debugf")
+		l.Noticef("%v Logs", "Noticef")
+		l.Warnf("%v Logs", "warnf")
+	})
+
+	assert.Equal(t, "", logs)
+
+}
