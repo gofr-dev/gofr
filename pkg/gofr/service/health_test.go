@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -46,6 +47,19 @@ func TestHTTPService_HealthCheckCustomURL(t *testing.T) {
 }
 
 func TestHTTPService_HealthCheckErrorResponse(t *testing.T) {
+	service := NewHTTPService("http://test", testutil.NewMockLogger(testutil.INFOLOG), nil)
+
+	ctx := context.Background()
+
+	// when params value is of type []string then last value is sent in request
+	resp := service.HealthCheck(ctx)
+
+	body, _ := json.Marshal(&resp)
+
+	assert.Contains(t, string(body), `{"status":"DOWN","details":{"error":"Get \"http://test/.well-known/alive\"`)
+}
+
+func TestHTTPService_HealthCheckDifferentStatusCode(t *testing.T) {
 	service, server, metrics := initializeTest(t, "bad-request", http.StatusBadRequest)
 	defer server.Close()
 
