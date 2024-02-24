@@ -350,5 +350,4 @@ func Test_NewSilentLoggerSTDOutput(t *testing.T) {
 	})
 
 	assert.Equal(t, "", logs)
-
 }
