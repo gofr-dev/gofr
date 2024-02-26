@@ -87,7 +87,7 @@ func (k *kafkaClient) Publish(ctx context.Context, topic string, message []byte)
 	)
 
 	if err != nil {
-		k.logger.Error("failed to publish message to kafka broker")
+		k.logger.Errorf("failed to publish message to kafka broker: %v", err)
 		return err
 	}
 

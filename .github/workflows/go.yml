@@ -52,6 +52,17 @@ jobs:
     name: Example Unit Testing🛠
     runs-on: ubuntu-latest
     services:
+      kafka:
+        image: krisgeus/docker-kafka
+        ports:
+          - 2008:9092
+        env:
+          ADVERTISED_LISTENERS: 'PLAINTEXT://localhost:9092'
+          KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT"
+          SECURITY_PROTOCOL_MAP: 'PLAINTEXT:PLAINTEXT,INTERNAL:PLAINTEXT'
+          AUTO_CREATE_TOPICS: true
+          KAFKA_CREATE_TOPICS: "products','order-logs"
+
       redis:
         image: redis:7.0.5
         ports:
@@ -65,17 +76,6 @@ jobs:
         env:
           MYSQL_ROOT_PASSWORD: "password"
           MYSQL_DATABASE: "test"
-
-      kafka:
-        image: krisgeus/docker-kafka
-        ports:
-          - 2008:9092
-        env:
-          ADVERTISED_LISTENERS: 'PLAINTEXT://localhost:9092'
-          KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT"
-          SECURITY_PROTOCOL_MAP: 'PLAINTEXT:PLAINTEXT,INTERNAL:PLAINTEXT'
-          AUTO_CREATE_TOPICS: true
-          KAFKA_CREATE_TOPICS: "products','order-logs"
 
     steps:
       - name: Checkout code into go module directory
@@ -95,6 +95,9 @@ jobs:
 
       - name: Start Zipkin
         run: docker run -d -p 2005:9411 openzipkin/zipkin:latest
+
+      - name: Create kafka topics
+        run: docker exec -i ${{ job.services.kafka.id }}
 
       - name: Test
         run: |
