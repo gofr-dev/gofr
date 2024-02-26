@@ -3,9 +3,11 @@ package kafka
 import (
 	"context"
 	"errors"
+	"sync"
 	"time"
 
 	"github.com/segmentio/kafka-go"
+
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 )
 
@@ -25,7 +27,7 @@ type Config struct {
 type kafkaClient struct {
 	dialer *kafka.Dialer
 	writer *kafka.Writer
-	reader map[string]*kafka.Reader
+	reader sync.Map
 
 	logger pubsub.Logger
 	config Config
@@ -50,12 +52,10 @@ func New(conf Config, logger pubsub.Logger) *kafkaClient {
 		Dialer:  dialer,
 	})
 
-	reader := make(map[string]*kafka.Reader)
-
 	return &kafkaClient{
 		config: conf,
 		dialer: dialer,
-		reader: reader,
+		reader: sync.Map{},
 		logger: logger,
 		writer: writer,
 	}
@@ -97,22 +97,17 @@ func (k *kafkaClient) Publish(ctx context.Context, topic string, message []byte)
 }
 
 func (k *kafkaClient) Subscribe(ctx context.Context, topic string) (*pubsub.Message, error) {
-	if k.reader[topic] == nil {
-		reader := kafka.NewReader(kafka.ReaderConfig{
-			GroupID:     k.config.ConsumerGroupID,
-			Brokers:     []string{k.config.Broker},
-			Topic:       topic,
-			MinBytes:    10e3,
-			MaxBytes:    10e6,
-			Dialer:      k.dialer,
-			StartOffset: int64(k.config.OffSet),
-		})
-
-		k.reader[topic] = reader
-	}
+	reader, _ := k.reader.LoadOrStore(topic, kafka.NewReader(kafka.ReaderConfig{GroupID: k.config.ConsumerGroupID,
+		Brokers:     []string{k.config.Broker},
+		Topic:       topic,
+		MinBytes:    10e3,
+		MaxBytes:    10e6,
+		Dialer:      k.dialer,
+		StartOffset: int64(k.config.OffSet),
+	}))
 
 	// Read a single message from the topic
-	msg, err := k.reader[topic].ReadMessage(ctx)
+	msg, err := reader.(*kafka.Reader).ReadMessage(ctx)
 	if err != nil {
 		k.logger.Errorf("failed to read message from Kafka topic %s: %v", topic, err)
 
@@ -123,7 +118,7 @@ func (k *kafkaClient) Subscribe(ctx context.Context, topic string) (*pubsub.Mess
 		Value: msg.Value,
 		Topic: topic,
 
-		Committer: newKafkaMessage(&msg, k.reader[topic], k.logger),
+		Committer: newKafkaMessage(&msg, reader.(*kafka.Reader), k.logger),
 	}
 
 	k.logger.Debugf("received kafka message %v on topic %v", string(msg.Value), msg.Topic)
