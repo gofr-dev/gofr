@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"gofr.dev/pkg/gofr/logging"
-	"gofr.dev/pkg/gofr/migration"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -15,6 +13,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"gofr.dev/pkg/gofr/logging"
+	"gofr.dev/pkg/gofr/migration"
 	"gofr.dev/pkg/gofr/testutil"
 )
 
@@ -179,7 +179,7 @@ func TestApp_MigrateInvalidKeys(t *testing.T) {
 func Test_otelErrorHandler(t *testing.T) {
 	logs := testutil.StderrOutputForFunc(func() {
 		h := otelErrorHandler{logging.NewLogger(logging.DEBUG)}
-		h.Handle(testutil.CustomError{"OTEL Error override"})
+		h.Handle(testutil.CustomError{ErrorMessage: "OTEL Error override"})
 	})
 
 	assert.Contains(t, logs, `"message":"OTEL Error override"`)
