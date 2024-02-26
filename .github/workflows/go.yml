@@ -100,9 +100,6 @@ jobs:
       - name: Start Zipkin
         run: docker run -d -p 2005:9411 openzipkin/zipkin:latest
 
-      - name: Verify kafka connectivity
-        run:
-
       - name: Load Schema of Cassandra
         run: |
           docker exec -it ${{ job.services.kafka.id }} /bin/sh
