@@ -1,7 +1,7 @@
 # Interservice HTTP Calls
 GoFr promotes microservice architechure and to facilitate the same, it provides the support
 to initialize HTTP services at application level using `AddHTTPService()` method.
-Support for inter-service http calls provide the following benefits :
+Support for inter-service http calls provide the following benefits:
 
 1. Access to the method from container - GET, PUT, POST, PATCH, DELETE.
 2. Logs and traces for the request.
@@ -12,11 +12,11 @@ Support for inter-service http calls provide the following benefits :
 
 ### Registering a simple HTTP Service
 Users can register a new HTTP service using the application method `AddHTTPService()`. 
-It takes in a service name and service address argument to register your dependent service at applicataion level.
-Users can easily register multiple dependent services easily, which is a common use case in a microserivce architechture.
->The services intances are maintained by the container.
+It takes in a service name and service address argument to register your dependent service at application level.
+Users can easily register multiple dependent services easily, which is a common use case in a microservice architecture.
+> The services instances are maintained by the container.
 
-Users can provide other options additionaly to coat their basic http client with features like circuit-breaker and 
+Users can provide other options additionally to coat their basic http client with features like circuit-breaker and 
 custom health check to add to the functionality of the HTTP service.
 The design choice for this was made so that user can add as many options as required and are order agnostic,
 i.e. the order of the options is not important.
@@ -31,10 +31,7 @@ app.AddHTTPService(<service_name> , <service_address>)
 package main
 
 import (
-	"time"
-
 	"gofr.dev/pkg/gofr"
-	"gofr.dev/pkg/gofr/service"
 )
 
 func main() {

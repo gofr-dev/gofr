@@ -1,21 +1,20 @@
 # Publisher Subscriber
-Publisher Subscriber is a architechtural design pattern for asynchronous communication between different entitites.
+Publisher Subscriber is an architectural design pattern for asynchronous communication between different entities.
 These could be different applications or different instances of the same application.
-Thus, the movement of messages 
-between the components is made possible without the components being aware of each other's identities, meaning
-the components are decoupled.
+Thus, the movement of messages between the components is made possible without the components being aware of each other's
+identities, meaning the components are decoupled.
 This makes the application/system more flexible and scalable as each component can be 
 scaled and maintained according to its own requirement.
 
 ## Design choice
 In GoFr application if a user wants to use the Publisher-Subscriber design, it supports two message brokers—Apache Kafka
 and Google PubSub.
-The initialization of the pubsub is done in an IoC container which handles the pubsub client dependency.
-With this, the control lies with the framework and thus promotes modularity, testability, and resueability.
+The initialization of the PubSub is done in an IoC container which handles the PubSub client dependency.
+With this, the control lies with the framework and thus promotes modularity, testability, and re-usability.
 Users can do publish and subscribe to multiple topics in a single application, by providing the topic name.
 Users can access the methods of the container to get the Publisher and Subscriber interface to perform subscription 
 to get a single message or publish a message on the message broker.
-> Container is part of the gofr Context
+> Container is part of the GoFr Context
 
 ## Configuration and Setup
 Some of the configurations that are required to configure the PubSub backend that an application is to use
@@ -71,11 +70,11 @@ docker run --name=gcloud-emulator -d -p 8086:8086 \
 ```
 > **Note**: To set GOOGLE_APPLICATION_CREDENTIAL - refer [here](https://cloud.google.com/docs/authentication/application-default-credentials)
 
-> **Note**: In Google PubSub only one susbcription name can access one topic, framework appends the topic name and subscription name to form the
+> **Note**: In Google PubSub only one subscription name can access one topic, framework appends the topic name and subscription name to form the
 > unique subscription name on the Google client.
 
-## Subscibing to Pub/Sub
-Adding a subscriber is similar to adding a HTTP handler, which makes it easier to develop scalable applications,
+## Subscribing to Pub/Sub
+Adding a subscriber is similar to adding an HTTP handler, which makes it easier to develop scalable applications,
 as it decoupled from the Sender/Publisher.
 Users can define a subscriber handler and do the message processing and
 use `app.Subscribe` to inject the handler into the application.
@@ -142,7 +141,7 @@ func main() {
 ```
 
 ## Publishing to Pub/Sub
-The publishing of message is adviced to done at the point where the message is being generated.
+The publishing of message is advised to done at the point where the message is being generated.
 To facilitate this, user can access the publishing interface from `gofr Context(ctx)` to publish messages.
 
 ```go
@@ -150,8 +149,8 @@ ctx.GetPublisher().Publish(ctx, "topic", msg)
 ```
 
 Users can provide the topic to which the message is to be published. 
-GoFr also supports multiplie topic publishing.
-This is benificial as applications may need to send multiple kinds of messages in multiple topics.
+GoFr also supports multiple topic publishing.
+This is beneficial as applications may need to send multiple kinds of messages in multiple topics.
 
 ### Example
 ```go
