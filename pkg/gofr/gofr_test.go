@@ -164,6 +164,7 @@ func Test_AddDuplicateHTTPService(t *testing.T) {
 
 	assert.Contains(t, logs, "Service already registered Name: test-service")
 }
+
 func TestApp_Metrics(t *testing.T) {
 	app := New()
 
