@@ -102,7 +102,7 @@ jobs:
 
       - name: Load Schema of Cassandra
         run: |
-          docker exec -it ${{ job.services.kafka.id }} /bin/sh
+          docker exec -i ${{ job.services.kafka.id }} /bin/sh
           echo "Test message" | kafka-console-producer.sh --broker-list localhost:9092 --topic products
           echo "Test message 2" | kafka-console-producer.sh --broker-list localhost:9092 --topic order-logs
           kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic products --from-beginning
