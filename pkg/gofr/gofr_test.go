@@ -13,6 +13,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"gofr.dev/pkg/gofr/logging"
+	"gofr.dev/pkg/gofr/migration"
 	"gofr.dev/pkg/gofr/testutil"
 )
 
@@ -148,4 +150,38 @@ func Test_AddHTTPService(t *testing.T) {
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
+}
+func TestApp_Metrics(t *testing.T) {
+	app := New()
+
+	assert.NotNil(t, app.Metrics())
+}
+
+func TestApp_AddAndGetHTTPService(t *testing.T) {
+	app := New()
+
+	app.AddHTTPService("test-service", "http://test")
+
+	svc := app.container.GetHTTPService("test-service")
+
+	assert.NotNil(t, svc)
+}
+
+func TestApp_MigrateInvalidKeys(t *testing.T) {
+	logs := testutil.StderrOutputForFunc(func() {
+		app := New()
+		app.Migrate(map[int64]migration.Migrate{1: {}})
+	})
+
+	assert.Contains(t, logs, `"message":"Run Failed! UP not defined for the following keys: [1]"`)
+}
+
+func Test_otelErrorHandler(t *testing.T) {
+	logs := testutil.StderrOutputForFunc(func() {
+		h := otelErrorHandler{logging.NewLogger(logging.DEBUG)}
+		h.Handle(testutil.CustomError{ErrorMessage: "OTEL Error override"})
+	})
+
+	assert.Contains(t, logs, `"message":"OTEL Error override"`)
+	assert.Contains(t, logs, `"level":"ERROR"`)
 }
