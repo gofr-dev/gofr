@@ -41,7 +41,7 @@ func TestRequest_Bind(t *testing.T) {
 
 	assert.Equal(t, context.Background(), ctx, "TEST Failed.\n context is not context.Background.")
 
-	assert.Equal(t, osHostName, hostName, "TEST Failed.\n Hostname name did not match.")
+	assert.Equal(t, osHostName, hostName, "TEST Failed.\n Hostname did not match.")
 }
 
 func TestRequest_WithOneArg(t *testing.T) {
@@ -52,5 +52,5 @@ func TestRequest_WithOneArg(t *testing.T) {
 		params: make(map[string]string),
 	}
 
-	assert.Equal(t, req, r, "TEST Failed.\n Hostname name did not match.")
+	assert.Equal(t, req, r, "TEST Failed.\n Hostname did not match.")
 }
