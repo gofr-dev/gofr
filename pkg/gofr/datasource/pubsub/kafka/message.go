@@ -10,11 +10,11 @@ import (
 
 type kafkaMessage struct {
 	msg    *kafka.Message
-	reader *kafka.Reader
+	reader Reader
 	logger pubsub.Logger
 }
 
-func newKafkaMessage(msg *kafka.Message, reader *kafka.Reader, logger pubsub.Logger) *kafkaMessage {
+func newKafkaMessage(msg *kafka.Message, reader Reader, logger pubsub.Logger) *kafkaMessage {
 	return &kafkaMessage{
 		msg:    msg,
 		reader: reader,

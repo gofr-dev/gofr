@@ -3,6 +3,7 @@ package kafka
 import (
 	"context"
 	"errors"
+	"sync"
 	"time"
 
 	"github.com/segmentio/kafka-go"
@@ -24,8 +25,9 @@ type Config struct {
 
 type kafkaClient struct {
 	dialer *kafka.Dialer
-	writer *kafka.Writer
-	reader map[string]*kafka.Reader
+	writer Writer
+	reader map[string]Reader
+	mu     *sync.RWMutex
 
 	logger pubsub.Logger
 	config Config
@@ -50,7 +52,7 @@ func New(conf Config, logger pubsub.Logger) *kafkaClient {
 		Dialer:  dialer,
 	})
 
-	reader := make(map[string]*kafka.Reader)
+	reader := make(map[string]Reader)
 
 	return &kafkaClient{
 		config: conf,
@@ -58,6 +60,7 @@ func New(conf Config, logger pubsub.Logger) *kafkaClient {
 		reader: reader,
 		logger: logger,
 		writer: writer,
+		mu:     &sync.RWMutex{},
 	}
 }
 
@@ -97,22 +100,20 @@ func (k *kafkaClient) Publish(ctx context.Context, topic string, message []byte)
 }
 
 func (k *kafkaClient) Subscribe(ctx context.Context, topic string) (*pubsub.Message, error) {
-	if k.reader[topic] == nil {
-		reader := kafka.NewReader(kafka.ReaderConfig{
-			GroupID:     k.config.ConsumerGroupID,
-			Brokers:     []string{k.config.Broker},
-			Topic:       topic,
-			MinBytes:    10e3,
-			MaxBytes:    10e6,
-			Dialer:      k.dialer,
-			StartOffset: int64(k.config.OffSet),
-		})
+	var reader Reader
+	// Lock the reader map to ensure only one subscriber access the reader at a time
+	k.mu.Lock()
 
-		k.reader[topic] = reader
+	if k.reader[topic] == nil {
+		k.reader[topic] = k.getNewReader(topic)
 	}
 
+	// Release the lock on the reader map after update
+	k.mu.Unlock()
+
 	// Read a single message from the topic
-	msg, err := k.reader[topic].ReadMessage(ctx)
+	reader = k.reader[topic]
+	msg, err := reader.ReadMessage(ctx)
 	if err != nil {
 		k.logger.Errorf("failed to read message from Kafka topic %s: %v", topic, err)
 
@@ -140,4 +141,18 @@ func (k *kafkaClient) Close() error {
 	}
 
 	return nil
+}
+
+func (k *kafkaClient) getNewReader(topic string) Reader {
+	reader := kafka.NewReader(kafka.ReaderConfig{
+		GroupID:     k.config.ConsumerGroupID,
+		Brokers:     []string{k.config.Broker},
+		Topic:       topic,
+		MinBytes:    10e3,
+		MaxBytes:    10e6,
+		Dialer:      k.dialer,
+		StartOffset: int64(k.config.OffSet),
+	})
+
+	return reader
 }
