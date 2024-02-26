@@ -62,7 +62,7 @@ func NewContainer(conf config.Config) *Container {
 			offSet, _ := strconv.Atoi(conf.GetOrDefault("PUBSUB_OFFSET", "-1"))
 
 			c.pubsub = kafka.New(kafka.Config{
-				Broker:          []string{conf.Get("PUBSUB_BROKER")},
+				Broker:          strings.Split(conf.Get("PUBSUB_BROKER"), ","),
 				Partition:       partition,
 				ConsumerGroupID: conf.Get("CONSUMER_ID"),
 				OffSet:          offSet,
