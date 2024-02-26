@@ -1,20 +1,36 @@
 # Interservice HTTP Calls
-GoFr supports inter-service http calls which provide the following benefits :
+GoFr promotes microservice architechure and to facilitate the same, it provides the support
+to initialize HTTP services at application level using `AddHTTPService()` method.
+Support for inter-service http calls provide the following benefits :
 
-1. Access to the following method from container - GET, PUT, POST, PATCH, DELETE.
+1. Access to the method from container - GET, PUT, POST, PATCH, DELETE.
 2. Logs and traces for the request.
 3. Circuit breaking for enhanced resilience and fault tolerance.
 4. Custom Health Check Endpoints
 
 ## Usage
 
-### Registering HTTP Service
+### Registering a simple HTTP Service
+Users can register a new HTTP service using the application method `AddHTTPService()`. 
+It takes in a service name and service address argument to register your dependent service at applicataion level.
+Users can easily register multiple dependent services easily, which is a common use case in a microserivce architechture.
+>The services intances are maintained by the container.
 
+Users can provide other options additionaly to coat their basic http client with features like circuit-breaker and 
+custom health check to add to the functionality of the HTTP service.
+The design choice for this was made so that user can add as many options as required and are order agnostic,
+i.e. the order of the options is not important.
+> Service names are to be kept unique to one service.
+
+```go
+app.AddHTTPService(<service_name> , <service_address>)
+```
+
+#### Example
 ```go
 package main
 
 import (
-	"io"
 	"time"
 
 	"gofr.dev/pkg/gofr"
@@ -23,36 +39,33 @@ import (
 
 func main() {
 	// Create a new application
-	a := gofr.New()
+	app := gofr.New()
 
-	a.AddHTTPService("order", "http://localhost:9000",nil)
+	// register a payment service which is hosted at http://localhost:9000
+	app.AddHTTPService("payment", "http://localhost:9000")
 
-	// service with circuit breaker
-	a.AddHTTPService("catalogue", "http://localhost:8000",&service.CircuitBreakerConfig{
-		Threshold: 4, // after how many failed request circuit breaker will start blocking the requests
-		Interval:  1 * time.Second, //  time interval duration between hitting the HealthURL
-	},)
-	
-	// gofr by default hits the `/.well-known/alive` endpoint for service health check.
-	// it can be over-ridden using the following option
-	a.AddHTTPService("payment", "http://localhost:7000",&service.HealthConfig{
-		HealthEndpoint: "my-health",
-	},)
-
-	a.GET("/customer", Customer)
+	app.GET("/customer", Customer)
 
 	// Run the application
-	a.Run()
-}
+	app.Run()
 }
 ```
 
 ### Accessing HTTP Service in handler
+Users can access the HTTP service client from anywhere using the gofr.Context that gets passed on from the handler.
+The service name that was given at the time of registering the service.
+
+```go
+svc := ctx.GetHTTPService(<service_name>)
+```
 
 ```go
 func Customer(ctx *gofr.Context) (interface{}, error) {
-    //Get & Call Another service
-    resp, err := ctx.GetHTTPService("payment").Get(ctx, "user", nil)
+    // Get the payment service client 
+    paymentSvc := ctx.GetHTTPService("payment")
+	
+	// Use the Get method to call the GET /user endpoint of payments service
+	resp, err := paymentSvc.Get(ctx, "user", nil)
     if err != nil {
         return nil, err
     }
