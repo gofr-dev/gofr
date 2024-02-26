@@ -5,8 +5,8 @@ If there is a requirement of a metric other than the GoFr defaults, you can crea
 
 GoFr supports the following [metric](https://opentelemetry.io/docs/specs/otel/metrics/) types in prometheus format:
 
-1. Counter 
-2. UpDownCounter  
+1. Counter
+2. UpDownCounter
 3. Histogram
 4. Gauge
 
