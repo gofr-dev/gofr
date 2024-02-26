@@ -69,8 +69,8 @@ jobs:
       kafka:
         image: krisgeus/docker-kafka
         ports:
-          - 2008:2008
-          - 2009:2009
+          - 9092:9092
+
         env:
           ADVERTISED_LISTENERS: 'PLAINTEXT://localhost:9092'
           KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT"
