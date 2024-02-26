@@ -151,6 +151,19 @@ func Test_AddHTTPService(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 }
+
+func Test_AddDuplicateHTTPService(t *testing.T) {
+	t.Setenv("LOG_LEVEL", "DEBUG")
+
+	logs := testutil.StdoutOutputForFunc(func() {
+		a := New()
+
+		a.AddHTTPService("test-service", "http://localhost")
+		a.AddHTTPService("test-service", "http://google")
+	})
+
+	assert.Contains(t, logs, "Service already registered Name: test-service")
+}
 func TestApp_Metrics(t *testing.T) {
 	app := New()
 
@@ -184,4 +197,20 @@ func Test_otelErrorHandler(t *testing.T) {
 
 	assert.Contains(t, logs, `"message":"OTEL Error override"`)
 	assert.Contains(t, logs, `"level":"ERROR"`)
+}
+
+func Test_addRoute(t *testing.T) {
+	logs := testutil.StdoutOutputForFunc(func() {
+		a := NewCMD()
+
+		a.SubCommand("log", func(c *Context) (interface{}, error) {
+			c.Logger.Info("handler called")
+
+			return nil, nil
+		})
+
+		a.Run()
+	})
+
+	assert.Contains(t, logs, "handler called")
 }
