@@ -2,11 +2,12 @@ package http
 
 import (
 	"context"
-	"github.com/stretchr/testify/assert"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestParam(t *testing.T) {
@@ -32,7 +33,7 @@ func TestBind(t *testing.T) {
 }
 
 func Test_GetContext(t *testing.T) {
-	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "test/hello", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "test/hello", http.NoBody)
 	r := Request{req: req, pathParams: map[string]string{"key": "hello"}}
 
 	assert.Equal(t, context.Background(), r.Context())
