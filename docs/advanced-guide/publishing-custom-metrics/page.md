@@ -1,13 +1,16 @@
 # Publishing Custom Metrics
 
-Gofr supports the following [metric](https://opentelemetry.io/docs/specs/otel/metrics/) types in prometheus format:
+For GoFr default metrics refer: [observability](/docs/quick-start/observability).
+If there is a requirement of a metric other than the GoFr defaults, you can create them using custom metrics as shown below.
 
-1. Counter 
-2. UpDownCounter  
+GoFr supports the following [metric](https://opentelemetry.io/docs/specs/otel/metrics/) types in prometheus format:
+
+1. Counter
+2. UpDownCounter
 3. Histogram
 4. Gauge
 
-Gofr is capable of handling multiple counter, UpDownCounter, Histogram, and Gauge metrics concurrently, each uniquely identified by its name during initialization.
+GoFr is capable of handling multiple Counter, UpDownCounter, Histogram, and Gauge metrics concurrently, each uniquely identified by its name during initialization.
 
 ## Usage
 
