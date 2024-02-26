@@ -18,17 +18,17 @@ const employee_date = `INSERT INTO employee (id, name, gender, contact_number) V
 func createTableEmployee() migration.Migrate {
 	return migration.Migrate{
 		UP: func(d migration.Datasource) error {
-			_, err := d.DB.Exec(createTable)
+			_, err := d.SQL.Exec(createTable)
 			if err != nil {
 				return err
 			}
 
-			_, err = d.DB.Exec(employee_date)
+			_, err = d.SQL.Exec(employee_date)
 			if err != nil {
 				return err
 			}
 
-			_, err = d.DB.Exec("alter table employee add dob varchar(11) null;")
+			_, err = d.SQL.Exec("alter table employee add dob varchar(11) null;")
 			if err != nil {
 				return err
 			}

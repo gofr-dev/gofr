@@ -33,7 +33,7 @@ type Container struct {
 	pubsub         pubsub.Client
 
 	Redis *redis.Redis
-	DB    *sql.DB
+	SQL   *sql.DB
 }
 
 func NewContainer(conf config.Config) *Container {
@@ -53,7 +53,27 @@ func NewContainer(conf config.Config) *Container {
 
 	c.Redis = redis.NewClient(conf, c.Logger, c.metricsManager)
 
-	c.DB = sql.NewSQL(conf, c.Logger, c.metricsManager)
+	c.SQL = sql.NewSQL(conf, c.Logger, c.metricsManager)
+
+	switch strings.ToUpper(conf.Get("PUBSUB_BACKEND")) {
+	case "KAFKA":
+		if conf.Get("PUBSUB_BROKER") != "" {
+			partition, _ := strconv.Atoi(conf.GetOrDefault("PARTITION_SIZE", "0"))
+			offSet, _ := strconv.Atoi(conf.GetOrDefault("PUBSUB_OFFSET", "-1"))
+
+			c.pubsub = kafka.New(kafka.Config{
+				Broker:          conf.Get("PUBSUB_HOST"),
+				Partition:       partition,
+				ConsumerGroupID: conf.Get("CONSUMER_ID"),
+				OffSet:          offSet,
+			}, c.Logger)
+		}
+	case "GOOGLE":
+		c.pubsub = google.New(google.Config{
+			ProjectID:        conf.Get("GOOGLE_PROJECT_ID"),
+			SubscriptionName: conf.Get("GOOGLE_SUBSCRIPTION_NAME"),
+		}, c.Logger)
+	}
 
 	switch strings.ToUpper(conf.Get("PUBSUB_BACKEND")) {
 	case "KAFKA":
