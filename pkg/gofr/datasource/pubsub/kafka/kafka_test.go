@@ -7,7 +7,7 @@ import (
 )
 
 func Test_validateConfigs(t *testing.T) {
-	config := Config{Broker: "kafkabroker", ConsumerGroupID: "1"}
+	config := Config{Broker: []string{"kafkabroker"}, ConsumerGroupID: "1"}
 
 	err := validateConfigs(config)
 
@@ -15,7 +15,7 @@ func Test_validateConfigs(t *testing.T) {
 }
 
 func Test_validateConfigsErrConsumerGroupNotFound(t *testing.T) {
-	config := Config{Broker: "kafkabroker"}
+	config := Config{Broker: []string{"kafkabroker"}}
 
 	err := validateConfigs(config)
 
