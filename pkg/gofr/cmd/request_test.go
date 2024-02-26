@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"os"
 	"testing"
 
@@ -9,7 +10,7 @@ import (
 
 func TestRequest_Bind(t *testing.T) {
 	// TODO: Only fields starting with Capital letter can be 'bind' right now.
-	r := NewRequest([]string{"command", "-Name=gofr", "-Valid=true", "-Value=12", "-test", "--name=Gofr"})
+	r := NewRequest([]string{"command", "-Name=gofr", "-Valid=true", "-Value=12", "-test", "--name=Gofr", ""})
 
 	assert.Equal(t, "gofr", r.Param("Name"), "TEST Failed.\n Unable to read param from request")
 
@@ -34,7 +35,22 @@ func TestRequest_Bind(t *testing.T) {
 
 	hostName := r.HostName()
 
+	ctx := r.Context()
+
 	osHostName, _ := os.Hostname()
 
-	assert.Equal(t, osHostName, hostName, "TEST Failed.\n Hostname name did not match.")
+	assert.Equal(t, context.Background(), ctx, "TEST Failed.\n context is not context.Background.")
+
+	assert.Equal(t, osHostName, hostName, "TEST Failed.\n Hostname did not match.")
+}
+
+func TestRequest_WithOneArg(t *testing.T) {
+	r := NewRequest([]string{"-"})
+
+	req := &Request{
+		flags:  make(map[string]bool),
+		params: make(map[string]string),
+	}
+
+	assert.Equal(t, req, r, "TEST Failed.\n Hostname did not match.")
 }
