@@ -18,7 +18,7 @@ var (
 )
 
 type Config struct {
-	Broker          string
+	Broker          []string
 	Partition       int
 	ConsumerGroupID string
 	OffSet          int
@@ -48,7 +48,7 @@ func New(conf Config, logger pubsub.Logger) *kafkaClient {
 	}
 
 	writer := kafka.NewWriter(kafka.WriterConfig{
-		Brokers: []string{conf.Broker},
+		Brokers: conf.Broker,
 		Dialer:  dialer,
 	})
 
@@ -62,7 +62,7 @@ func New(conf Config, logger pubsub.Logger) *kafkaClient {
 }
 
 func validateConfigs(conf Config) error {
-	if conf.Broker == "" {
+	if conf.Broker == nil {
 		return errBrokerNotProvided
 	}
 
@@ -98,7 +98,7 @@ func (k *kafkaClient) Publish(ctx context.Context, topic string, message []byte)
 
 func (k *kafkaClient) Subscribe(ctx context.Context, topic string) (*pubsub.Message, error) {
 	reader, _ := k.reader.LoadOrStore(topic, kafka.NewReader(kafka.ReaderConfig{GroupID: k.config.ConsumerGroupID,
-		Brokers:     []string{k.config.Broker},
+		Brokers:     k.config.Broker,
 		Topic:       topic,
 		MinBytes:    10e3,
 		MaxBytes:    10e6,
