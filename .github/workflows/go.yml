@@ -102,8 +102,8 @@ jobs:
 
       - name: Create Kafka topics
         run: |
-          docker exec -it ${{ job.services.kafka.id }} kafka-topics.sh --create --bootstrap-server localhost:9092 --replication-factor 1 --partitions 1 --topic products
-          docker exec -it ${{ job.services.kafka.id }} kafka-topics.sh --create --bootstrap-server localhost:9092 --replication-factor 1 --partitions 1 --topic order-logs
+          docker exec ${{ job.services.kafka.id }} kafka-topics.sh --create --bootstrap-server localhost:9092 --replication-factor 1 --partitions 1 --topic products
+          docker exec ${{ job.services.kafka.id }} kafka-topics.sh --create --bootstrap-server localhost:9092 --replication-factor 1 --partitions 1 --topic order-logs
 
       - name: Start Zipkin
         run: docker run -d -p 2005:9411 openzipkin/zipkin:latest
