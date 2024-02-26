@@ -18,8 +18,10 @@ Now that you have created your server, lets see how GoFr by default manages obse
 
 ## Metrics
 
-  GoFr gathers and pushes some _essential metrics_ for different datastores(sql, redis etc.), pubsubs, memory utilisation, request-response statistics etc.
-  automatically to port [http://localhost:2121/metrics](http://localhost:2121/metrics) in prometheus format.
+  GoFr gathers and pushes _essential metrics_ for different datastores(sql, redis), memory utilisation, request-response statistics etc.
+  automatically to port: _2121_ on _/metrics_ endpoint in prometheus format.
+
+  For example: When running application locally, you can access /metrics endpoint on port 2121 from: [http://localhost:2121/metrics](http://localhost:2121/metrics)
 
 {% table %}
 
