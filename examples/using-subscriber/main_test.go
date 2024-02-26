@@ -10,11 +10,10 @@ import (
 )
 
 func TestExampleSubscriber(t *testing.T) {
-	t.Skip()
 	log := testutil.StdoutOutputForFunc(func() {
 		const host = "http://localhost:8200"
 		go main()
-		time.Sleep(time.Minute * 1)
+		time.Sleep(time.Minute * 2)
 	})
 
 	testCases := []struct {

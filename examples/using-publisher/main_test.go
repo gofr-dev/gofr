@@ -10,11 +10,9 @@ import (
 )
 
 func TestExamplePublisher(t *testing.T) {
-	t.Parallel()
-
 	const host = "http://localhost:8100"
 	go main()
-	time.Sleep(time.Second * 3)
+	time.Sleep(time.Second * 1)
 
 	testCases := []struct {
 		desc               string
