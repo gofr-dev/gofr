@@ -111,7 +111,8 @@ jobs:
       - name: Test
         run: |
           export GOFR_ENV=test
-          go test gofr.dev/examples/... -v -short -parallel 2 -coverprofile profile.cov -coverpkg=gofr.dev/examples/...
+          go test gofr.dev/examples/... -v -short -parallel 2 -coverprofile packageWithpbgo.cov -coverpkg=gofr.dev/examples/...
+          grep -vE '^gofr\.dev\/.*\.pb\.go' packageWithpbgo.cov > profile.cov
           go tool cover -func profile.cov
 
       - name: Upload Test Coverage
