@@ -15,7 +15,7 @@ To set a sample key, run the following command:
 docker exec -it gofr-redis bash -c 'redis-cli SET greeting "Hello from Redis."'
 ```
 
-## Using Redis in GoFr
+## Configuration & Usage
 
 GoFr requires certain configurations to connect to Redis. The necessary configurations include 
 `REDIS_HOST`and `REDIS_PORT`. Update the `.env` file in the configs directory with the following content:

@@ -13,12 +13,10 @@ By adding custom spans in traces to your requests, you can:
 - **Improve debugging:** Custom spans enhance your ability to debug issues by providing visibility into the execution 
       flow of your application.
 
-## Adding Custom Spans:
+## Usage
 
 To add a custom trace to a request, you can use the `Trace()` method of GoFr context, which takes the name of the span as an argument 
 and returns a trace.Span. 
-
-### Usage
 
 ```go
 func MyHandler(c context.Context) error {

@@ -4,7 +4,7 @@ Gofr makes it easy to adjust the detail captured in your application's logs, eve
 This feature allows users to effortlessly fine-tune logging levels without the need for redeployment, enhancing the monitoring and debugging experience.
 It is facilitated through simple configuration settings.
 
-## Why it is important?
+## How it helps?
   - **Effortless Adjustments:** Modify the level of detail in your logs anytime without restarting your application. 
  This is especially helpful during troubleshooting.
   - **Enhanced Visibility:** Easily switch to a more detailed log level (e.g., `DEBUG`) to gain deeper insights into specific issues, 
