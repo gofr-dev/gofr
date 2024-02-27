@@ -34,40 +34,6 @@ func (m *MockMetrics) EXPECT() *MockMetricsMockRecorder {
 	return m.recorder
 }
 
-// DeltaUpDownCounter mocks base method.
-func (m *MockMetrics) DeltaUpDownCounter(ctx context.Context, name string, value float64, labels ...string) {
-	m.ctrl.T.Helper()
-	varargs := []interface{}{ctx, name, value}
-	for _, a := range labels {
-		varargs = append(varargs, a)
-	}
-	m.ctrl.Call(m, "DeltaUpDownCounter", varargs...)
-}
-
-// DeltaUpDownCounter indicates an expected call of DeltaUpDownCounter.
-func (mr *MockMetricsMockRecorder) DeltaUpDownCounter(ctx, name, value interface{}, labels ...interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	varargs := append([]interface{}{ctx, name, value}, labels...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeltaUpDownCounter", reflect.TypeOf((*MockMetrics)(nil).DeltaUpDownCounter), varargs...)
-}
-
-// IncrementCounter mocks base method.
-func (m *MockMetrics) IncrementCounter(ctx context.Context, name string, labels ...string) {
-	m.ctrl.T.Helper()
-	varargs := []interface{}{ctx, name}
-	for _, a := range labels {
-		varargs = append(varargs, a)
-	}
-	m.ctrl.Call(m, "IncrementCounter", varargs...)
-}
-
-// IncrementCounter indicates an expected call of IncrementCounter.
-func (mr *MockMetricsMockRecorder) IncrementCounter(ctx, name interface{}, labels ...interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	varargs := append([]interface{}{ctx, name}, labels...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IncrementCounter", reflect.TypeOf((*MockMetrics)(nil).IncrementCounter), varargs...)
-}
-
 // RecordHistogram mocks base method.
 func (m *MockMetrics) RecordHistogram(ctx context.Context, name string, value float64, labels ...string) {
 	m.ctrl.T.Helper()
@@ -83,16 +49,4 @@ func (mr *MockMetricsMockRecorder) RecordHistogram(ctx, name, value interface{},
 	mr.mock.ctrl.T.Helper()
 	varargs := append([]interface{}{ctx, name, value}, labels...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RecordHistogram", reflect.TypeOf((*MockMetrics)(nil).RecordHistogram), varargs...)
-}
-
-// SetGauge mocks base method.
-func (m *MockMetrics) SetGauge(name string, value float64) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "SetGauge", name, value)
-}
-
-// SetGauge indicates an expected call of SetGauge.
-func (mr *MockMetricsMockRecorder) SetGauge(name, value interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetGauge", reflect.TypeOf((*MockMetrics)(nil).SetGauge), name, value)
 }

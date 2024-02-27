@@ -15,10 +15,61 @@ on:
       - 'docs/**'
 
 jobs:
+  MIGRATION-Unit-Testing:
+    name: Migration Unit Testing🛠
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code into go module directory
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up  Go 1.21
+        uses: actions/setup-go@v4
+        with:
+          go-version: 1.21
+        id: Go
+
+      - name: Get dependencies
+        run: |
+          go mod download
+
+      - name: Test
+        run: |
+          export GOFR_ENV=test
+          go test gofr.dev/pkg/gofr/migration... -v -short -coverprofile profile.cov -coverpkg=gofr.dev/pkg/gofr/migration...
+
+          go tool cover -func profile.cov
+
+      - name: Upload Test Coverage
+        uses: actions/upload-artifact@v3
+        with:
+          name: MIGRATION-Coverage-Report
+          path: profile.cov
+
   Example-Unit-Testing:
     name: Example Unit Testing🛠
     runs-on: ubuntu-latest
     services:
+      zookeeper:
+        image: wurstmeister/zookeeper
+        ports:
+          - "2181:2181"
+
+      kafka:
+        image: wurstmeister/kafka
+        ports:
+          - "9092:9092"
+        env:
+          KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT://localhost:9092'
+          KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT'
+          KAFKA_INTER_BROKER_LISTENER_NAME: 'PLAINTEXT'
+          KAFKA_ADVERTISED_HOST_NAME: 'localhost'
+          KAFKA_LISTENERS: 'PLAINTEXT://0.0.0.0:9092'
+          KAFKA_AUTO_CREATE_TOPICS_ENABLE: true
+          KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
+
       redis:
         image: redis:7.0.5
         ports:
@@ -49,13 +100,19 @@ jobs:
         run: |
           go mod download
 
+      - name: Create Kafka topics for test
+        run: |
+          docker exec ${{ job.services.kafka.id }} kafka-topics.sh --create --bootstrap-server localhost:9092 --replication-factor 1 --partitions 1 --topic products
+          docker exec ${{ job.services.kafka.id }} kafka-topics.sh --create --bootstrap-server localhost:9092 --replication-factor 1 --partitions 1 --topic order-logs
+
       - name: Start Zipkin
         run: docker run -d -p 2005:9411 openzipkin/zipkin:latest
 
       - name: Test
         run: |
           export GOFR_ENV=test
-          go test gofr.dev/examples/... -v -short -coverprofile profile.cov -coverpkg=gofr.dev/examples/...
+          go test gofr.dev/examples/... -v -short -coverprofile packageWithpbgo.cov -coverpkg=gofr.dev/examples/...
+          grep -vE '^gofr\.dev\/.*\.pb\.go' packageWithpbgo.cov > profile.cov
           go tool cover -func profile.cov
 
       - name: Upload Test Coverage
@@ -87,7 +144,8 @@ jobs:
       - name: Test
         run: |
           export GOFR_ENV=test
-          go test gofr.dev/pkg/... -v -short -coverprofile profile.cov -coverpkg=gofr.dev/pkg/...
+          go test gofr.dev/pkg/... -tags migration -v -short -coverprofile packageWithMigration.cov -coverpkg=gofr.dev/pkg/...
+          grep -v 'gofr.dev/pkg/gofr/migration' packageWithMigration.cov > profile.cov
           go tool cover -func profile.cov
 
       - name: Upload Test Coverage
@@ -99,7 +157,7 @@ jobs:
   parse_coverage:
     name: Code Coverage
     runs-on: ubuntu-latest
-    needs: [Example-Unit-Testing,PKG-Unit-Testing]
+    needs: [Example-Unit-Testing,PKG-Unit-Testing,MIGRATION-Unit-Testing]
     steps:
       - name: Check out code into the Go module directory
         uses: actions/checkout@v4
@@ -114,6 +172,7 @@ jobs:
         run: |
           awk '!/^mode: / && FNR==1{print "mode: set"} {print}' ./Example-Test-Report/profile.cov > merged_profile.cov
           tail -n +2 ./PKG-Coverage-Report/profile.cov >> merged_profile.cov
+          tail -n +2 ./MIGRATION-Coverage-Report/profile.cov >> merged_profile.cov
 
       - name: Parse code-coverage value
         working-directory: artifacts
@@ -131,7 +190,7 @@ jobs:
   upload_coverage:
     name: Upload Coverage📊
     runs-on: ubuntu-latest
-    needs: [Example-Unit-Testing,PKG-Unit-Testing]
+    needs: [Example-Unit-Testing,PKG-Unit-Testing,MIGRATION-Unit-Testing]
     if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/development' }}
     steps:
       - name: Check out code into the Go module directory

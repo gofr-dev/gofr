@@ -1,13 +1,17 @@
 # Publishing Custom Metrics
 
-Gofr supports the following [metric](https://opentelemetry.io/docs/specs/otel/metrics/) types in prometheus format:
+For GoFr default metrics refer: [observability](/docs/quick-start/observability).
 
-1. Counter 
-2. UpDownCounter  
+GoFr can handle multiple different metrics concurrently, each uniquely identified by its name during initialization.
+It supports the following [metrics](https://opentelemetry.io/docs/specs/otel/metrics/) types in prometheus format:
+
+1. Counter
+2. UpDownCounter
 3. Histogram
 4. Gauge
 
-Gofr is capable of handling multiple counter, UpDownCounter, Histogram, and Gauge metrics concurrently, each uniquely identified by its name during initialization.
+If any metric other than defaults provided, you can create them using custom metrics as shown below.
+
 
 ## Usage
 
@@ -132,4 +136,19 @@ func main() {
 
 	app.Run()
 }
+```
+
+**Good To Know**
+```doc
+While registering a metrics two key pieces of information of required
+- Name
+- Description
+   
+When a registered Metrics has to be used 3 key pieces of information are required:
+- Metrics name
+- Value
+- A set of key-value pairs called tags or labels.
+
+A permutation of these key-value values provides the metric cardinality.
+Lower the cardinality, faster the query performance and lower the monitoring resource utilisation.
 ```

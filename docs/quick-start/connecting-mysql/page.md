@@ -1,6 +1,6 @@
 # Connecting MySQL
 
-Just like any other datasource gofr also supports connection to MySQL database based on configuration variables.
+Just like Redis gofr also supports connection to SQL(mysql and postgres) databases based on configuration variables.
 
 ## Setup
 
@@ -16,7 +16,7 @@ Access `test_db` database and create table customer with columns `id` and `name`
 docker exec -it gofr-mysql mysql -uroot -proot123 test_db -e "CREATE TABLE customers (id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(255) NOT NULL);"
 ```
 
-Now the database with table is ready, we can connect our server to MySQL
+Now the database with table is ready, we can connect our GoFr server to MySQL
 
 ## Configuration & Usage
 
@@ -78,7 +78,7 @@ func main() {
 		name := ctx.PathParam("name")
 
 		// Inserting a customer row in database using SQL
-		_, err := ctx.DB.ExecContext(ctx, "INSERT INTO customers (name) VALUES (?)", name)
+		_, err := ctx.SQL.ExecContext(ctx, "INSERT INTO customers (name) VALUES (?)", name)
 
 		return nil, err
 	})
@@ -87,7 +87,7 @@ func main() {
 		var customers []Customer
 
 		// Getting the customer from the database using SQL
-		rows, err := ctx.DB.QueryContext(ctx, "SELECT * FROM customers")
+		rows, err := ctx.SQL.QueryContext(ctx, "SELECT * FROM customers")
 		if err != nil {
 			return nil, err
 		}

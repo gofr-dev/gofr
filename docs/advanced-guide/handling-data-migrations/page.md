@@ -1,16 +1,9 @@
 # Handling Data Migrations
 
-Gofr supports data migrations for MySQL and Redis which allows to alter the state of a database, be it adding a new column to existing table or modifying the data type of an existing column or adding constraints to an existing table, setting and removing keys etc.
-
-**How Migrations help?**
-
-Suppose you manually edit fragments of your database, and now it's your responsibility to inform other developers to execute them. Additionally, you need to keep track of which changes should be applied to production machines in the next deployment.
-
-GoFr maintains the table called **gofr_migration** which helps in such case. This table tracks which migrations have already been executed and ensures that only migrations that have never been run are executed. This way, you only need to ensure that your migrations are properly in place. ([Learn more](https://cloud.google.com/architecture/database-migration-concepts-principles-part-1))
+Suppose you manually make changes to your database, and now it's your responsibility to inform other developers to execute them. Additionally, you need to keep track of which changes should be applied to production machines in the next deployment.
+Gofr supports data migrations for MySQL, Postgres and Redis which allows to alter the state of a database, be it adding a new column to existing table or modifying the data type of  existing column or adding constraints to an existing table, setting and removing keys etc.
 
 ## Usage
-
-We will create an employee table using migrations.
 
 ### Creating Migration Files
 
@@ -18,11 +11,12 @@ It is recommended to maintain a migrations directory in your project root to enh
 
 **Migration file names**
 
-It is recommended that each migration file should be numbered using the unix timestamp when the migration was created, This helps prevent numbering conflicts when working in a team environment.
+It is recommended that each migration file should be numbered in the format of *YYYYMMDDHHMMSS* when the migration was created.
+This helps prevent numbering conflicts and allows for maintaining the correct sort order by name in different filesystem views.
 
 Create the following file in migrations directory.
 
-**Filename : 1708322067_create_employee_table.go**
+**Filename : 20240226153000_create_employee_table.go**
 ```go
 package migrations
 
@@ -41,7 +35,7 @@ const createTable = `CREATE TABLE IF NOT EXISTS employee
 func createTableEmployee() migration.Migrate {
 	return migration.Migrate{
 		UP: func(d migration.Datasource) error {
-			_, err := d.DB.Exec(createTable)
+			_, err := d.SQL.Exec(createTable)
 			if err != nil {
 				return err
 			}
@@ -51,10 +45,10 @@ func createTableEmployee() migration.Migrate {
 }
 ```
 
-`migration.Datasource` have the datasources whose migrations are supported which are Redis and MySQL. 
-All the migrations run in transactions by default.
+`migration.Datasource` have the datasources whose migrations are supported i.e. Redis and SQL (MySQL and PostgreSQL). 
+All the migrations always run in a transaction.
 
-For MySQL it is highly recommended to use `IF EXISTS` and `IF NOT EXIST` in DDL commands as MySQL implicitly commits these Commands.
+For MySQL it is highly recommended to use `IF EXISTS` and `IF NOT EXIST` in DDL commands as MySQL implicitly commits these commands.
 
 **Create a function which returns all the migrations in a map**
 
@@ -66,7 +60,7 @@ import "gofr.dev/pkg/gofr/migration"
 
 func All() map[int64]migration.Migrate {
 	return map[int64]migration.Migrate{
-		1708322067: createTableEmployee(),
+		20240226153000: createTableEmployee(),
 	}
 }
 ```
@@ -78,9 +72,6 @@ Migrations will run in ascending order of keys in this map.
 package main
 
 import (
-	"errors"
-	"fmt"
-
 	"gofr.dev/examples/using-migrations/migrations"
 	"gofr.dev/pkg/gofr"
 )
@@ -101,9 +92,56 @@ func main() {
 When we run the app we will see the following logs for migrations which ran successfully.
 
 ```bash
-INFO [16:55:46] Migration 1708322067 ran successfully
+INFO [16:55:46] Migration 20240226153000 ran successfully
 ```
 
 
 
 
+GoFr maintains the records in the database itself which helps in tracking which migrations have already been executed and ensures that only migrations that have never been run are executed.
+This way, you only need to ensure that your migrations are properly in place. ([Learn more](https://cloud.google.com/architecture/database-migration-concepts-principles-part-1))
+
+## Migration Records
+
+**SQL**
+
+Migration records are stored and maintained in **gofr_migrations** table which has the following schema:
+
+{% table %}
+* Field
+* Type
+---
+* version
+* bigint
+---
+* method
+* varchar(4)
+---
+* start_time
+* timestamp
+---
+* duration
+* bigint
+---
+{% /table %}
+
+**REDIS**
+
+Migration records are stored and maintained in a Redis Hash named **gofr_migrations** where key is the version and value contains other details in JSON format.
+
+Example :
+
+Key : 20240226153000
+
+Value : {"method":"UP","startTime":"2024-02-26T15:03:46.844558+05:30","duration":0}
+
+Where,
+
+**Version** : Migration version is the number provided in the map, i.e. sequence number.
+
+**Start Time** : Time when Migration Started in UTC.
+
+**Duration** : Time taken by Migration since it started in milliseconds.
+
+**Method** : It contains the method(UP/DOWN) in which migration ran.
+(For now only method UP is supported)

@@ -170,7 +170,7 @@ func (h *httpService) createAndSendRequest(ctx context.Context, method string, p
 
 	respTime := time.Since(requestStart)
 
-	if h.Metrics != nil {
+	if h.Metrics != nil && resp != nil {
 		h.RecordHistogram(ctx, "app_http_service_response", respTime.Seconds(), "path", h.url, "method", method,
 			"status", fmt.Sprintf("%v", resp.StatusCode))
 	}
