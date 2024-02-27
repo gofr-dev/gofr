@@ -40,7 +40,9 @@ func healthHandler(c *Context) (interface{}, error) {
 }
 
 func liveHandler(*Context) (interface{}, error) {
-	return "UP", nil
+	return struct {
+		Status string `json:"status"`
+	}{Status: "UP"}, nil
 }
 
 func faviconHandler(*Context) (interface{}, error) {

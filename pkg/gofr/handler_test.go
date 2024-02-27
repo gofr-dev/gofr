@@ -3,6 +3,7 @@ package gofr
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -81,7 +82,7 @@ func TestHandler_livelinessHandler(t *testing.T) {
 	resp, err := liveHandler(&Context{})
 
 	assert.Nil(t, err)
-	assert.Equal(t, resp, "UP")
+	assert.Contains(t, fmt.Sprint(resp), "UP")
 }
 
 func TestHandler_healthHandler(t *testing.T) {
