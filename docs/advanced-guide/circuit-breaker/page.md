@@ -14,7 +14,10 @@ GoFr inherently provides the functionality, it can be enabled by passing circuit
 package main
 
 import (
+	"time"
+
 	"gofr.dev/pkg/gofr"
+	"gofr.dev/pkg/gofr/service"
 )
 
 func main() {
@@ -41,4 +44,3 @@ Circuit breaker state changes to open when number of consecutive failed requests
 When it is open GoFr makes request to the aliveness endpoint (default being -  /.well-known/alive) at equal interval of time provided in config.
 
 To override the default aliveness endpoint [refer](/docs/advanced-guide/monitoring-service-health)
-

@@ -1,7 +1,7 @@
 # Monitoring Service Health
 
 As there can be multiple service, they need to be checked if they are UP or not.
-Gofr registers two endpoints by default which are :
+GoFr registers two endpoints by default which are :
 
 1. Aliveness - /.well-known/alive
 
@@ -26,7 +26,7 @@ To override the endpoint when registering HTTP Service pass the following option
 
 2. Health-Check - /.well-known/health-check
 
-It return if the service is UP or DOWN along with stats, host, status about the dependent datasources and services.
+It returns if the service is UP or DOWN along with stats, host, status about the dependent datasources and services.
 
 Sample response of how it appears when all the services, and connected data sources are up.
 
@@ -117,8 +117,3 @@ Sample response of how it appears when all the services, and connected data sour
     }
 }
 ```
-
-
-
-
-
