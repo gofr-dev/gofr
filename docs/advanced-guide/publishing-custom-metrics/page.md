@@ -139,7 +139,7 @@ func main() {
 ```
 
 **Good To Know**
-```
+```doc
 While registering a metrics two key pieces of information of required
 - Name
 - Description
