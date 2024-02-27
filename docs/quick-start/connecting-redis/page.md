@@ -28,7 +28,7 @@ REDIS_HOST=localhost
 REDIS_PORT=6379
 ```
 
-Once the Redis configurations are set, you can utilize Redis in your GoFr application. 
+Once the Redis configurations are set, you can use Redis in your GoFr application. 
 Below is an example of how to retrieve data from Redis in the `main.go` file:
 
 ```golang
