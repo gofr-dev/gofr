@@ -12,13 +12,13 @@ export const navigation = [
     {
         title: 'Advanced Guide',
         links: [
-            { title: 'Publishing Custom Metrics', href: '/docs/advanced-guide/publishing-custom-metrics' },
             { title: 'Remote Log Level Change', href: '/docs/advanced-guide/remote-log-level-change' },
-            { title: 'Handling Data Migrations', href: '/docs/advanced-guide/handling-data-migrations' },
+            { title: 'Publishing Custom Metrics', href: '/docs/advanced-guide/publishing-custom-metrics' },
+            { title: 'Custom Spans in Tracing', href: '/docs/advanced-guide/custom-spans-in-tracing' },
             { title: 'HTTP Communication', href: '/docs/advanced-guide/http-communication' },
             { title: 'Circuit Breaker Support', href: '/docs/advanced-guide/circuit-breaker' },
             { title: 'Monitoring Service Health', href: '/docs/advanced-guide/monitoring-service-health' },
-            { title: 'Custom Spans in Tracning', href: '/docs/advanced-guide/custom-spans-in-tracing' },
+            { title: 'Handling Data Migrations', href: '/docs/advanced-guide/handling-data-migrations' },
             // { title: 'Dealing with Remote Files', href: '/docs/advanced-guide/remote-files' },
             // { title: 'Supporting OAuth', href: '/docs/advanced-guide/oauth' },
             // { title: 'Writing gRPC Server', href: '/docs/advanced-guide/grpc' },
