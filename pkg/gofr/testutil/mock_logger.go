@@ -9,7 +9,10 @@ import (
 const (
 	DEBUGLOG = iota + 1
 	INFOLOG
+	NOTICELOG
+	WARNLOG
 	ERRORLOG
+	FATALLOG
 )
 
 type MockLogger struct {
@@ -26,6 +29,28 @@ func NewMockLogger(level int) *MockLogger {
 	}
 }
 
+func (m *MockLogger) Info(args ...interface{}) {
+	m.logf(INFOLOG, "%v", args...) // Add "%v" formatting directive
+}
+
+func (m *MockLogger) Infof(format string, args ...interface{}) {
+	m.logf(INFOLOG, format, args...)
+}
+
+func (m *MockLogger) Fatal(args ...interface{}) {
+	m.logf(FATALLOG, "%v", args...) // Add "%v" formatting directive
+}
+func (m *MockLogger) Fatalf(format string, args ...interface{}) {
+	m.logf(FATALLOG, format, args...)
+}
+
+func (m *MockLogger) Notice(args ...interface{}) {
+	m.logf(NOTICELOG, "%v", args...) // Add "%v" formatting directive
+}
+func (m *MockLogger) Noticef(format string, args ...interface{}) {
+	m.logf(NOTICELOG, format, args...)
+}
+
 func (m *MockLogger) Debug(args ...interface{}) {
 	m.logf(DEBUGLOG, "%v", args...) // Add "%v" formatting directive
 }
@@ -40,6 +65,13 @@ func (m *MockLogger) Log(args ...interface{}) {
 
 func (m *MockLogger) Logf(format string, args ...interface{}) {
 	m.logf(INFOLOG, format, args...)
+}
+
+func (m *MockLogger) Warn(args ...interface{}) {
+	m.logf(WARNLOG, "%v", args...)
+}
+func (m *MockLogger) Warnf(format string, args ...interface{}) {
+	m.logf(WARNLOG, format, args...)
 }
 
 func (m *MockLogger) Error(args ...interface{}) {

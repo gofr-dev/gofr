@@ -82,7 +82,7 @@ func TraceHandler(c *gofr.Context) (interface{}, error) {
 
 func MysqlHandler(c *gofr.Context) (interface{}, error) {
 	var value int
-	err := c.DB.QueryRowContext(c, "select 2+2").Scan(&value)
+	err := c.SQL.QueryRowContext(c, "select 2+2").Scan(&value)
 
 	return value, err
 }

@@ -13,6 +13,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"gofr.dev/pkg/gofr/logging"
+	"gofr.dev/pkg/gofr/migration"
 	"gofr.dev/pkg/gofr/testutil"
 )
 
@@ -129,4 +131,87 @@ func TestGofr_ServerRun(t *testing.T) {
 	assert.Equal(t, resp.StatusCode, http.StatusOK, "TEST Failed.\n")
 
 	resp.Body.Close()
+}
+
+func Test_AddHTTPService(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/test", r.URL.Path)
+
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	g := New()
+
+	g.AddHTTPService("test-service", server.URL)
+
+	resp, _ := g.container.GetHTTPService("test-service").
+		Get(context.Background(), "test", nil)
+
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+}
+
+func Test_AddDuplicateHTTPService(t *testing.T) {
+	t.Setenv("LOG_LEVEL", "DEBUG")
+
+	logs := testutil.StdoutOutputForFunc(func() {
+		a := New()
+
+		a.AddHTTPService("test-service", "http://localhost")
+		a.AddHTTPService("test-service", "http://google")
+	})
+
+	assert.Contains(t, logs, "Service already registered Name: test-service")
+}
+
+func TestApp_Metrics(t *testing.T) {
+	app := New()
+
+	assert.NotNil(t, app.Metrics())
+}
+
+func TestApp_AddAndGetHTTPService(t *testing.T) {
+	app := New()
+
+	app.AddHTTPService("test-service", "http://test")
+
+	svc := app.container.GetHTTPService("test-service")
+
+	assert.NotNil(t, svc)
+}
+
+func TestApp_MigrateInvalidKeys(t *testing.T) {
+	logs := testutil.StderrOutputForFunc(func() {
+		app := New()
+		app.Migrate(map[int64]migration.Migrate{1: {}})
+	})
+
+	assert.Contains(t, logs, `"message":"Run Failed! UP not defined for the following keys: [1]"`)
+}
+
+func Test_otelErrorHandler(t *testing.T) {
+	logs := testutil.StderrOutputForFunc(func() {
+		h := otelErrorHandler{logging.NewLogger(logging.DEBUG)}
+		h.Handle(testutil.CustomError{ErrorMessage: "OTEL Error override"})
+	})
+
+	assert.Contains(t, logs, `"message":"OTEL Error override"`)
+	assert.Contains(t, logs, `"level":"ERROR"`)
+}
+
+func Test_addRoute(t *testing.T) {
+	logs := testutil.StdoutOutputForFunc(func() {
+		a := NewCMD()
+
+		a.SubCommand("log", func(c *Context) (interface{}, error) {
+			c.Logger.Info("handler called")
+
+			return nil, nil
+		})
+
+		a.Run()
+	})
+
+	assert.Contains(t, logs, "handler called")
 }

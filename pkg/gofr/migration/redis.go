@@ -12,9 +12,9 @@ import (
 )
 
 type migration struct {
-	Method    string
-	StartTime time.Time
-	Duration  int64
+	Method    string    `json:"method"`
+	StartTime time.Time `json:"startTime"`
+	Duration  int64     `json:"duration"`
 }
 
 type redis struct {

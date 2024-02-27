@@ -4,21 +4,27 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"strconv"
 	"time"
 
 	"gofr.dev/pkg/gofr/service"
 )
 
 const (
-	levelFetchInterval = 15 * time.Second
-	requestTimeout     = 5 * time.Second
+	requestTimeout = 5 * time.Second
 )
 
-func NewRemoteLogger(level Level, remoteConfigURL string) Logger {
+func NewRemoteLogger(level Level, remoteConfigURL, loggerFetchInterval string) Logger {
+	interval, err := strconv.Atoi(loggerFetchInterval)
+	if err != nil {
+		interval = 15
+	}
+
 	l := remoteLogger{
-		remoteURL:    remoteConfigURL,
-		Logger:       NewLogger(level),
-		currentLevel: level,
+		remoteURL:          remoteConfigURL,
+		Logger:             NewLogger(level),
+		levelFetchInterval: interval,
+		currentLevel:       level,
 	}
 
 	if remoteConfigURL != "" {
@@ -29,13 +35,16 @@ func NewRemoteLogger(level Level, remoteConfigURL string) Logger {
 }
 
 type remoteLogger struct {
-	remoteURL    string
-	currentLevel Level
+	remoteURL          string
+	levelFetchInterval int
+	currentLevel       Level
 	Logger
 }
 
 func (r *remoteLogger) UpdateLogLevel() {
-	ticker := time.NewTicker(levelFetchInterval)
+	interval := time.Duration(r.levelFetchInterval) * time.Second
+	ticker := time.NewTicker(interval)
+
 	defer ticker.Stop()
 
 	remoteService := service.NewHTTPService(r.remoteURL, r.Logger, nil)

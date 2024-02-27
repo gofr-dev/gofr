@@ -42,9 +42,6 @@ func RedisSetHandler(c *gofr.Context) (interface{}, error) {
 // RedisGetHandler gets the value from Redis.
 func RedisGetHandler(c *gofr.Context) (interface{}, error) {
 	key := c.PathParam("key")
-	if key == "" {
-		return nil, nil
-	}
 
 	value, err := c.Redis.Get(c, key).Result()
 	if err != nil {
