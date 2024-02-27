@@ -9,9 +9,9 @@ import (
 func main() {
 	app := gofr.New()
 
-	app.GET("/publish-order", order)
+	app.POST("/publish-order", order)
 
-	app.GET("/publish-product", product)
+	app.POST("/publish-product", product)
 
 	app.Run()
 }
