@@ -15,18 +15,18 @@ By adding custom spans in traces to your requests, you can:
 
 ## Adding Custom Spans:
 
-To add a custom trace to a request, you can use the `c.Trace()` method, which takes the name of the span as an argument 
+To add a custom trace to a request, you can use the `Trace()` method of GoFr context, which takes the name of the span as an argument 
 and returns a trace.Span. 
 
-Here's an example:
+### Usage
 
 ```go
 func MyHandler(c context.Context) error {
-span := c.Trace("my-custom-span")
-defer span.Close()
-
-// Do some work here
-return nil
+    span := c.Trace("my-custom-span")
+    defer span.Close()
+    
+    // Do some work here
+    return nil
 }
 ```
 
