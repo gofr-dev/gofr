@@ -25,10 +25,10 @@ export const navigation = [
             // { title: 'WebSockets', href: '/docs/advanced-guide/websockets' },
         ],
     },
-    {
-        title: 'References',
-        links: [
-            { title: 'Context', href: '/docs/references/context' },
+    // {
+        // title: 'References',
+        // links: [
+            // { title: 'Context', href: '/docs/references/context' },
             // { title: 'Configuration', href: '/docs/references/configs' },
             // { title: 'HTTP Service', href: '/docs/references/http-service' },
             // { title: 'Files', href: '/docs/references/files' },
@@ -39,6 +39,6 @@ export const navigation = [
             // { title: 'Logs', href: '/docs/references/logs' },
             // { title: 'Errors', href: '/docs/references/errors' },
             // { title: 'Swaggger', href: '/docs/references/swagger' },
-        ],
-    },
+        // ],
+    // },
 ]
