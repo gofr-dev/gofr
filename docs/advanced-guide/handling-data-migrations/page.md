@@ -35,7 +35,7 @@ const createTable = `CREATE TABLE IF NOT EXISTS employee
 func createTableEmployee() migration.Migrate {
 	return migration.Migrate{
 		UP: func(d migration.Datasource) error {
-			_, err := d.DB.Exec(createTable)
+			_, err := d.SQL.Exec(createTable)
 			if err != nil {
 				return err
 			}
@@ -72,9 +72,6 @@ Migrations will run in ascending order of keys in this map.
 package main
 
 import (
-	"errors"
-	"fmt"
-
 	"gofr.dev/examples/using-migrations/migrations"
 	"gofr.dev/pkg/gofr"
 )
@@ -148,4 +145,3 @@ Where,
 
 **Method** : It contains the method(UP/DOWN) in which migration ran.
 (For now only method UP is supported)
-
