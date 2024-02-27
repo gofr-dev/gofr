@@ -1,7 +1,7 @@
 # Monitoring Service Health
+Health check in microservices refers to a mechanism or process implemented within each service to assess its operational status and readiness to handle requests. It involves regularly querying the service to determine if it is functioning correctly, typically by evaluating its responsiveness and ability to perform essential tasks. Health checks play a critical role in ensuring service availability, detecting failures, preventing cascading issues, and facilitating effective traffic routing in distributed systems.
 
-As there can be multiple service, they need to be checked if they are UP or not.
-GoFr registers two endpoints by default which are :
+GoFr by default registers two endpoints which are :
 
 1. Aliveness - /.well-known/alive
 
