@@ -5,6 +5,7 @@ WORKDIR /app
 COPY  docs/quick-start /app/src/app/docs/quick-start
 COPY  docs/public /app/public
 COPY  docs/advanced-guide /app/src/app/docs/advanced-guide
+COPY  docs/references /app/src/app/docs/references
 COPY  docs/page.md /app/src/app/docs
 COPY  docs/navigation.js /app/src/lib
 
