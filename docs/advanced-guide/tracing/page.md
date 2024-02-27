@@ -5,19 +5,19 @@ through a system. A trace on its own is distinguishable by a `TraceID`.
 
 To know more about Tracing click [here](https://opentelemetry.io/docs/concepts/signals/#traces).
 
-### Why it is important?
+## Why it is important?
 
 In complex distributed systems, understanding how requests flow through the system is crucial for troubleshooting performance
 issues and identifying bottlenecks. Traditional logging approaches often fall short, providing limited visibility into
 the intricate interactions between components.
 
 
-### Automated Tracing in GoFr
+## Automated Tracing in GoFr
 GoFr makes it easy to use tracing by automatically adding traces to all requests and responses. GoFr uses
 [OpenTelemetry](https://opentelemetry.io/docs/concepts/what-is-opentelemetry/), a popular tracing framework, to
 automatically add traces to all requests and responses.
 
-### Configs for enabling tracing
+## Configs for enabling tracing
 
 To enable tracing in your gofr application use the following configs:
 
@@ -32,7 +32,7 @@ To run `zipkin` docker container locally , use the below docker command:
 ```console
 docker run --name gofr-zipkin -p 2005:9411 -d openzipkin/zipkin:latest
 ```
-### GoFr's Automatic Correlation ID Propagation:
+## GoFr's Automatic Correlation ID Propagation:
 
 When a request enters your GoFr application, GoFr automatically generates a correlation ID and adds it to the request headers.
 This correlation ID is then propagated to all downstream requests. This means that you can track a request as it travels
