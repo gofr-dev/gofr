@@ -1,13 +1,13 @@
 # GoFr Context
-Gofr context is an object injected by the gofr handler. It contains all the request-specific data, so for each
+GoFr context is an object injected by the GoFr handler. It contains all the request-specific data, so for each
 request-response cycle a new context is created. The request can be of any type be it an HTTP request, GRPC call or
 a message from Pub-Sub.
 GoFr Context also embeds the **_container_** which maintains all the dependencies like databases, logger, http service clients,
 , metrics manager, etc. This reduces the complexity of the application as users don't have to maintain and keep track of
-all the dependecies by themselves.
+all the dependencies by themselves.
 
-Gofr context is an extension of the default go context, providing a wrapper around the request and response providing the
-user access to the dependecies on the go. 
+GoFr context is an extension of the default go context, providing a wrapper around the request and response providing the
+user access to the dependencies on the go. 
 
 # Usage
 ## Reading HTTP requests
@@ -17,7 +17,7 @@ parts of the request.
     ```go
     ctx.Request.Context()
     ```
-- `Param(string)` - to access the query parameters present in the request, it retruns the value of the key provided
+- `Param(string)` - to access the query parameters present in the request, it returns the value of the key provided
   ```go
   // Example: Request is /configs?key1=value1&key2=value2
   value := ctx.Request.Param("key1")
@@ -53,7 +53,7 @@ parts of the request.
   // Note: the protocol if not provided in the headers will be set to http by default
   ``` 
   
-## Accessing dependecies
-As mentioned earlier, gofr context embeds the container object which provides the access to 
+## Accessing dependencies
+As mentioned earlier, GoFr context embeds the container object which provides the access to 
 all the injected dependencies by the users. Users can access the fields and methods provided 
 by the **_container_**.
