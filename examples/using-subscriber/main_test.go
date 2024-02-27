@@ -31,7 +31,6 @@ func TestExampleSubscriber(t *testing.T) {
 	}
 
 	for i, tc := range testCases {
-		fmt.Print(log)
 		if !strings.Contains(log, tc.expectedLog) {
 			t.Errorf("TEST[%d], Failed.\n%s", i, tc.desc)
 		}
