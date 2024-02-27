@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/segmentio/kafka-go"
-
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 )
 
@@ -18,7 +17,7 @@ var (
 )
 
 type Config struct {
-	Broker          []string
+	Broker          string
 	Partition       int
 	ConsumerGroupID string
 	OffSet          int
@@ -26,8 +25,9 @@ type Config struct {
 
 type kafkaClient struct {
 	dialer *kafka.Dialer
-	writer *kafka.Writer
-	reader sync.Map
+	writer Writer
+	reader map[string]Reader
+	mu     *sync.RWMutex
 
 	logger pubsub.Logger
 	config Config
@@ -48,21 +48,24 @@ func New(conf Config, logger pubsub.Logger) *kafkaClient {
 	}
 
 	writer := kafka.NewWriter(kafka.WriterConfig{
-		Brokers: conf.Broker,
+		Brokers: []string{conf.Broker},
 		Dialer:  dialer,
 	})
+
+	reader := make(map[string]Reader)
 
 	return &kafkaClient{
 		config: conf,
 		dialer: dialer,
-		reader: sync.Map{},
+		reader: reader,
 		logger: logger,
 		writer: writer,
+		mu:     &sync.RWMutex{},
 	}
 }
 
 func validateConfigs(conf Config) error {
-	if conf.Broker == nil {
+	if conf.Broker == "" {
 		return errBrokerNotProvided
 	}
 
@@ -87,7 +90,7 @@ func (k *kafkaClient) Publish(ctx context.Context, topic string, message []byte)
 	)
 
 	if err != nil {
-		k.logger.Errorf("failed to publish message to kafka broker: %v", err)
+		k.logger.Error("failed to publish message to kafka broker")
 		return err
 	}
 
@@ -97,17 +100,21 @@ func (k *kafkaClient) Publish(ctx context.Context, topic string, message []byte)
 }
 
 func (k *kafkaClient) Subscribe(ctx context.Context, topic string) (*pubsub.Message, error) {
-	reader, _ := k.reader.LoadOrStore(topic, kafka.NewReader(kafka.ReaderConfig{GroupID: k.config.ConsumerGroupID,
-		Brokers:     k.config.Broker,
-		Topic:       topic,
-		MinBytes:    10e3,
-		MaxBytes:    10e6,
-		Dialer:      k.dialer,
-		StartOffset: int64(k.config.OffSet),
-	}))
+	var reader Reader
+	// Lock the reader map to ensure only one subscriber access the reader at a time
+	k.mu.Lock()
+
+	if k.reader[topic] == nil {
+		k.reader[topic] = k.getNewReader(topic)
+	}
+
+	// Release the lock on the reader map after update
+	k.mu.Unlock()
 
 	// Read a single message from the topic
-	msg, err := reader.(*kafka.Reader).ReadMessage(ctx)
+	reader = k.reader[topic]
+	msg, err := reader.ReadMessage(ctx)
+
 	if err != nil {
 		k.logger.Errorf("failed to read message from Kafka topic %s: %v", topic, err)
 
@@ -118,7 +125,7 @@ func (k *kafkaClient) Subscribe(ctx context.Context, topic string) (*pubsub.Mess
 		Value: msg.Value,
 		Topic: topic,
 
-		Committer: newKafkaMessage(&msg, reader.(*kafka.Reader), k.logger),
+		Committer: newKafkaMessage(&msg, k.reader[topic], k.logger),
 	}
 
 	k.logger.Debugf("received kafka message %v on topic %v", string(msg.Value), msg.Topic)
@@ -135,4 +142,18 @@ func (k *kafkaClient) Close() error {
 	}
 
 	return nil
+}
+
+func (k *kafkaClient) getNewReader(topic string) Reader {
+	reader := kafka.NewReader(kafka.ReaderConfig{
+		GroupID:     k.config.ConsumerGroupID,
+		Brokers:     []string{k.config.Broker},
+		Topic:       topic,
+		MinBytes:    10e3,
+		MaxBytes:    10e6,
+		Dialer:      k.dialer,
+		StartOffset: int64(k.config.OffSet),
+	})
+
+	return reader
 }
