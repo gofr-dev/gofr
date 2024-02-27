@@ -52,6 +52,24 @@ jobs:
     name: Example Unit Testing🛠
     runs-on: ubuntu-latest
     services:
+      zookeeper:
+        image: wurstmeister/zookeeper
+        ports:
+          - "2181:2181"
+
+      kafka:
+        image: wurstmeister/kafka
+        ports:
+          - "9092:9092"
+        env:
+          KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT://localhost:9092'
+          KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT'
+          KAFKA_INTER_BROKER_LISTENER_NAME: 'PLAINTEXT'
+          KAFKA_ADVERTISED_HOST_NAME: 'localhost'
+          KAFKA_LISTENERS: 'PLAINTEXT://0.0.0.0:9092'
+          KAFKA_AUTO_CREATE_TOPICS_ENABLE: true
+          KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
+
       redis:
         image: redis:7.0.5
         ports:
@@ -81,6 +99,11 @@ jobs:
       - name: Get dependencies
         run: |
           go mod download
+
+      - name: Create Kafka topics for test
+        run: |
+          docker exec ${{ job.services.kafka.id }} kafka-topics.sh --create --bootstrap-server localhost:9092 --replication-factor 1 --partitions 1 --topic products
+          docker exec ${{ job.services.kafka.id }} kafka-topics.sh --create --bootstrap-server localhost:9092 --replication-factor 1 --partitions 1 --topic order-logs
 
       - name: Start Zipkin
         run: docker run -d -p 2005:9411 openzipkin/zipkin:latest

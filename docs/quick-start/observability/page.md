@@ -3,14 +3,18 @@
 Now that you have created your server, lets see how GoFr by default manages observability in different ways:
 
 ## Logs
+  Logs offer real-time information, providing valuable insights and immediate visibility into the ongoing state and activities of the system.
+  It helps in identifying errors, debugging and troubleshooting, monitor performance, analysing application usage, communications etc.
+
+  GoFr logger has customizable log level which provides flexibility to adjust logs based on specific needs.
+
+  Logs are generated only for events equal to or above the specified log level, by default GoFr logs at _INFO_ level.
+  Log Level can be changed by setting the environment variable `LOG_LEVEL` value to _WARN,DEBUG,ERROR,NOTICE or FATAL_.
+
   When we run our server we see the following - logs for reading configs, database connection, requests, database queries, logs for missing configs etc.
   They contain information such as request's correlation ID, status codes, request time etc.
 
-  Logs are generated only for events equal to or above the specified log level, by default GoFr logs at _INFO_ level.
-
-  Log Level can be changed by setting the environment variable `LOG_LEVEL` value to _WARN,DEBUG,ERROR,NOTICE or FATAL_.
-
-  {% figure src="/quick-start-logs.png" alt="Pretty Printed Logs" /%}
+{% figure src="/quick-start-logs.png" alt="Pretty Printed Logs" /%}
 
   Logs are well-structured, they are of type JSON when exported to a file, such that they can be pushed to logging systems such as [Loki](https://grafana.com/oss/loki/), elastic search etc.
 
