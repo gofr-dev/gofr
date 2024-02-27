@@ -20,6 +20,7 @@ export const navigation = [
             { title: 'Monitoring Service Health', href: '/docs/advanced-guide/monitoring-service-health' },
             // { title: 'Supporting OAuth', href: '/docs/advanced-guide/oauth' },
             { title: 'Circuit Breaker Support', href: '/docs/advanced-guide/circuit-breaker' },
+            { title: 'Custom Spans in Tracning', href: '/docs/advanced-guide/custom-spans-in-tracing' },
             // { title: 'Writing gRPC Server', href: '/docs/advanced-guide/grpc' },
             // { title: 'Creating a Static File Server', href: '/docs/advanced-guide/static-file-server' },
             // { title: 'WebSockets', href: '/docs/advanced-guide/websockets' },
