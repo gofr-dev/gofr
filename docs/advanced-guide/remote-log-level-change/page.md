@@ -40,7 +40,7 @@ The remote log level endpoint should return a JSON response in the following for
 - **logLevel:** The new log level you want to set for the specified service.
 
 
-GoFr intelligently parses this response and dynamically adjusts log levels according to the provided configurations.
+GoFr parses this response and dynamically adjusts log levels according to the provided configurations.
 
  
 
