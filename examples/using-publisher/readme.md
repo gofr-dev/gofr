@@ -1,6 +1,6 @@
 # Publisher Example
 
-This example in GoFr demonstrates a simple Publisher that publishes to the given topic when an http request is made to it's
+This GoFr example demonstrates a simple Publisher that publishes to the given topic when an http request is made to it's
 matching route.
 
 ### To run the example follow the below steps:

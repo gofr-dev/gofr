@@ -1,6 +1,6 @@
 # Subscriber Example
 
-This example in GoFr demonstrates a simple Subscriber that subscribes asynchronously to a given topic and commits based
+This GoFr example demonstrates a simple Subscriber that subscribes asynchronously to a given topic and commits based
 on the handler response.
 
 

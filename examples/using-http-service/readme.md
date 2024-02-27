@@ -1,6 +1,6 @@
 # Http-Service Example
 
-This example in GoFr demonstrates the inter-service http communication along with circuit-breaker as well as 
+This GoFr example demonstrates an inter-service http communication along with circuit-breaker as well as 
 service health config addition.
 
 User can use the `AddHTTPService` method to add an http service and then later get it using `GetHTTPService("service-name")`

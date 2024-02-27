@@ -1,6 +1,6 @@
 # Migrations Example
 
-This example in GoFr demonstrates the use of `migrations` through a simple http server using mysql and redis.
+This GoFr example demonstrates the use of `migrations` through a simple http server using mysql and redis.
 
 ### To run the example follow the below steps:
 - Run the docker image of mysql and redis
