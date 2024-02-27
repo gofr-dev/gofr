@@ -78,7 +78,7 @@ func main() {
 		name := ctx.PathParam("name")
 
 		// Inserting a customer row in database using SQL
-		_, err := ctx.DB.ExecContext(ctx, "INSERT INTO customers (name) VALUES (?)", name)
+		_, err := ctx.SQL.ExecContext(ctx, "INSERT INTO customers (name) VALUES (?)", name)
 
 		return nil, err
 	})
@@ -87,7 +87,7 @@ func main() {
 		var customers []Customer
 
 		// Getting the customer from the database using SQL
-		rows, err := ctx.DB.QueryContext(ctx, "SELECT * FROM customers")
+		rows, err := ctx.SQL.QueryContext(ctx, "SELECT * FROM customers")
 		if err != nil {
 			return nil, err
 		}
