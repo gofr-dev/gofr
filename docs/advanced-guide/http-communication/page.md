@@ -1,12 +1,12 @@
 # Interservice HTTP Calls
-GoFr promotes microservice architechure and to facilitate the same, it provides the support
+GoFr promotes microservice architecture and to facilitate the same, it provides the support
 to initialize HTTP services at application level using `AddHTTPService()` method.
 Support for inter-service http calls provide the following benefits:
 
 1. Access to the method from container - GET, PUT, POST, PATCH, DELETE.
 2. Logs and traces for the request.
-3. Circuit breaking for enhanced resilience and fault tolerance.
-4. Custom Health Check Endpoints
+3. [Circuit breaking](/docs/advanced-guide/circuit-breaker) for enhanced resilience and fault tolerance.
+4. [Custom Health Check](/docs/advanced-guide/monitoring-service-health) Endpoints
 
 ## Usage
 

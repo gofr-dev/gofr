@@ -1,16 +1,19 @@
 # Remote Log Level Change
-Gofr makes it easy to adjust the detail captured in your application's logs, even while it's running! This feature empowers 
-users to effortlessly fine-tune logging levels without the need for redeployment, enhancing the monitoring and debugging experience.
-This feature is facilitated through simple configuration settings.
+Gofr makes it easy to adjust the detail captured in your application's logs, even while it's running! 
 
-## Why it is important?
-- **Effortless Adjustments:** Modify the level of detail in your logs anytime without restarting your application. 
-    This is especially helpful during troubleshooting or when log volume needs to be adjusted based on the situation.
-- **Enhanced Visibility:** Easily switch to a more detailed log level (e.g., `DEBUG`) to gain deeper insights into specific issues, 
-                       and then switch back to a less detailed level (e.g., `INFO`) for regular operation.
+This feature allows users to effortlessly fine-tune logging levels without the need for redeployment, enhancing the monitoring and debugging experience.
+It is facilitated through simple configuration settings.
+
+## How it helps?
+  - **Effortless Adjustments:** Modify the level of detail in your logs anytime without restarting your application. 
+ This is especially helpful during troubleshooting.
+  - **Enhanced Visibility:** Easily switch to a more detailed log level (e.g., `DEBUG`) to gain deeper insights into specific issues, 
+    and then switch back to a less detailed level (e.g., `INFO`) for regular operation.
+  - **Improved Performance:** Generating a large number of logs can overwhelm the logging system, leading to increased I/O operations and resource consumption,
+  changing to Warn or Error Level reduces the number of logs, and enhancing performance.
 
 ## Configuration
-To enable remote log level updating, users need to specify the following configuration parameter:
+To enable remote log level update, users need to specify the following configuration parameter:
 
 ```dotenv
 REMOTE_LOG_URL=<URL to your remote log level endpoint> (e.g., https://your-service.com/log-levels)
@@ -40,7 +43,7 @@ The remote log level endpoint should return a JSON response in the following for
 - **logLevel:** The new log level you want to set for the specified service.
 
 
-GoFr parses this response and dynamically adjusts log levels according to the provided configurations.
+GoFr parses this response and adjusts log levels based on the provided configurations.
 
  
 

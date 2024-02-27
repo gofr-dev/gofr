@@ -3,7 +3,6 @@
 Now that you have created your server, lets see how GoFr by default manages observability in different ways:
 
 ## Logs
-
   Logs offer real-time information, providing valuable insights and immediate visibility into the ongoing state and activities of the system.
   It helps in identifying errors, debugging and troubleshooting, monitor performance, analysing application usage, communications etc.
 
@@ -19,13 +18,16 @@ Now that you have created your server, lets see how GoFr by default manages obse
 
   Logs are well-structured, they are of type JSON when exported to a file, such that they can be pushed to logging systems such as [Loki](https://grafana.com/oss/loki/), elastic search etc.
 
-
 ## Metrics
+Metrics enable performance monitoring by providing insights into response times, latency, throughput, and resource utilization.
 
-  GoFr gathers and pushes _essential metrics_ for different datastores(sql, redis), memory utilisation, request-response statistics etc.
-  automatically to port: _2121_ on _/metrics_ endpoint in prometheus format.
+They aid in tracking CPU, memory, and disk I/O consumption across services, facilitating capacity planning and scalability efforts.
 
-  For example: When running application locally, you can access /metrics endpoint on port 2121 from: [http://localhost:2121/metrics](http://localhost:2121/metrics)
+Metrics play a pivotal role in fault detection and troubleshooting, offering visibility into system behavior.
+
+They are instrumental in measuring and meeting service-level agreements (SLAs) to ensure expected performance and reliability.
+
+GoFr by default publishes metrics automatically to port: _2121_ on _/metrics_ endpoint in prometheus format.
 
 {% table %}
 
@@ -79,6 +81,8 @@ Now that you have created your server, lets see how GoFr by default manages obse
 
 {% /table %}
 
+For example: When running application locally, you can access /metrics endpoint on port 2121 from: [http://localhost:2121/metrics](http://localhost:2121/metrics)
+
   GoFr also provides supports to create requirement specific metrics using [custom metrics](/docs/advanced-guide/publishing-custom-metrics).
 
 ## Tracing
@@ -107,8 +111,12 @@ a request as it travels through your distributed system by simply looking at the
 
 
 ### Configuration & Usage
+To see the traces install zipkin image using the following docker command
+```bash
+  docker run --name gofr-zipkin -p 2005:9411 -d openzipkin/zipkin:latest
+  ```
 
-  Add Tracer configs in `.env` file, your .env will be updated to
+Add Tracer configs in `.env` file, your .env will be updated to
 
   ```bash
   APP_NAME=test-service

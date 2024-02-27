@@ -1,10 +1,9 @@
 # Prerequisite
 
-- Install or update [Go](https://go.dev/dl/).
+-  Go 1.19 or above.
+   To check the version use the following command `go version`.
 
-  To check the version use the following command `go version`.
-
-- Prior familiarity with Golang syntax is essential. [Golang Tour](https://tour.golang.org/) is highly recommended as it has an excellent guided tour.
+-  Prior familiarity with Golang syntax is essential. [Golang Tour](https://tour.golang.org/) is highly recommended as it has an excellent guided tour.
 
 ## Write your first GoFr API
 
@@ -45,7 +44,7 @@ func main() {
 }
 ```
 
-Before running the server run the following command to go needs to download and sync the required modules.
+Before running the server run the following go command to download and sync the required modules.
 
 `go mod tidy`
 
@@ -69,20 +68,22 @@ The `hello-world` server involves three essential steps:
 
    _This single line is a standard part of all gofr-based servers._
 
+
 2. **Attaching a Handler to a Path:**
 
    In this step, we instruct the server to associate an HTTP request with a specific handler function. This is achieved through `app.GET("/greet", HandlerFunction)`, where _GET /hello_ maps to HandlerFunction. Likewise, `app.POST("/todo", ToDoCreationHandler)` links a _POST_ request to the /todo endpoint with _ToDoCreationHandler_.
 
+
    **Good To Know**
 
-   In Go, functions are first-class citizens, allowing easy handler definition and reference.
-   Handler functions should follow the `func(ctx *gofr.Context) (interface{}, error)` signature.
-   They take a context as input, returning two values: the response data and an error (set to `nil` on success).
+>  In Go, functions are first-class citizens, allowing easy handler definition and reference.
+   HTTP Handler functions should follow the `func(ctx *gofr.Context) (interface{}, error)` signature.
+   They take a context as input, returning two values: the response data and an error (set to `nil` when there is no error).
 
    In GoFr `ctx *gofr.Context` serves as a wrapper for requests, responses, and dependencies, providing various functionalities.
 
-   For more details about context, refer [here](/docs/v1/references/context).
+   For more details about context, refer [here](/docs/references/context).
 
 3. **Starting the server**
 
-   When `app.Run()` is called, it configures ,initiates and runs the HTTP server, middlewares based on provided configs. It manages essential features such as routes for health checks, swagger UI etc. It starts the server on the default port 8000.
+   When `app.Run()` is called, it configures ,initiates and runs the HTTP server, middlewares. It manages essential features such as routes for health check endpoints, metrics server, favicon etc. It starts the server on the default port 8000.
