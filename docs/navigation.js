@@ -18,6 +18,7 @@ export const navigation = [
             { title: 'HTTP Communication', href: '/docs/advanced-guide/http-communication' },
             { title: 'Circuit Breaker Support', href: '/docs/advanced-guide/circuit-breaker' },
             { title: 'Monitoring Service Health', href: '/docs/advanced-guide/monitoring-service-health' },
+            { title: 'Custom Spans in Tracning', href: '/docs/advanced-guide/custom-spans-in-tracing' },
             // { title: 'Dealing with Remote Files', href: '/docs/advanced-guide/remote-files' },
             // { title: 'Supporting OAuth', href: '/docs/advanced-guide/oauth' },
             // { title: 'Writing gRPC Server', href: '/docs/advanced-guide/grpc' },
