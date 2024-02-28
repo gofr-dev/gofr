@@ -17,7 +17,7 @@ on:
 
 jobs:
   MIGRATION-Unit-Testing:
-    name: Migration Unit Testing🛠
+    name: Migration Unit Testing (v${{ matrix.go-version }} 🛠)
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -29,10 +29,10 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up  Go 1.21
+      - name: Set up Go ${{ matrix.go-version }}
         uses: actions/setup-go@v4
         with:
-          go-version: 1.21
+          go-version: ${{ matrix.go-version }}
         id: Go
 
       - name: Get dependencies
@@ -53,7 +53,7 @@ jobs:
           path: profile.cov
 
   Example-Unit-Testing:
-    name: Example Unit Testing🛠
+    name: Example Unit Testing (v${{ matrix.go-version }}🛠)
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -98,10 +98,10 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up  Go 1.21
+      - name: Set up Go ${{ matrix.go-version }}
         uses: actions/setup-go@v4
         with:
-          go-version: 1.21
+          go-version: ${{ matrix.go-version }}
         id: Go
 
       - name: Get dependencies
@@ -130,7 +130,7 @@ jobs:
           path: profile.cov
 
   PKG-Unit-Testing:
-    name: PKG Unit Testing🛠
+    name: PKG Unit Testing (v${{ matrix.go-version }}🛠)
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -142,10 +142,10 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up  Go 1.21
+      - name: Set up Go ${{ matrix.go-version }}
         uses: actions/setup-go@v4
         with:
-          go-version: 1.21
+          go-version: ${{ matrix.go-version }}
         id: Go
 
       - name: Get dependencies
