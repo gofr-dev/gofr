@@ -21,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go-version: [ 1.22, 1.21 ]
+        go-version: [  '1.22', '1.21', '1.20']
 
     steps:
       - name: Checkout code into go module directory
@@ -47,6 +47,7 @@ jobs:
           go tool cover -func profile.cov
 
       - name: Upload Test Coverage
+        if: ${{ matrix.go-version == '1.21'}}
         uses: actions/upload-artifact@v3
         with:
           name: MIGRATION-Coverage-Report
@@ -57,7 +58,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go-version: [ 1.22, 1.21 ]
+        go-version: [ '1.22', '1.21', '1.20' ]
 
     services:
       zookeeper:
@@ -124,6 +125,7 @@ jobs:
           go tool cover -func profile.cov
 
       - name: Upload Test Coverage
+        if: ${{ matrix.go-version == '1.21'}}
         uses: actions/upload-artifact@v3
         with:
           name: Example-Test-Report
@@ -160,70 +162,71 @@ jobs:
           go tool cover -func profile.cov
 
       - name: Upload Test Coverage
+        if: ${{ matrix.go-version == '1.21'}}
         uses: actions/upload-artifact@v3
         with:
           name: PKG-Coverage-Report
           path: profile.cov
 
-#
-#      - name: Merge Coverage Files
-#        working-directory: artifacts
+
+      - name: Merge Coverage Files
+        working-directory: artifacts
+        run: |
+          awk '!/^mode: / && FNR==1{print "mode: set"} {print}' ./Example-Test-Report/profile.cov > merged_profile.cov
+          tail -n +2 ./PKG-Coverage-Report/profile.cov >> merged_profile.cov
+          tail -n +2 ./MIGRATION-Coverage-Report/profile.cov >> merged_profile.cov
+
+      - name: Parse code-coverage value
+        working-directory: artifacts
+        run: |
+          codeCoverage=$(go tool cover -func=merged_profile.cov | grep total | awk '{print $3}')
+          codeCoverage=${codeCoverage%?}
+          echo "CODE_COVERAGE=$codeCoverage" >> $GITHUB_ENV
+
+#      - name: Check if code-coverage is greater than threshold
 #        run: |
-#          awk '!/^mode: / && FNR==1{print "mode: set"} {print}' ./Example-Test-Report/profile.cov > merged_profile.cov
-#          tail -n +2 ./PKG-Coverage-Report/profile.cov >> merged_profile.cov
-#          tail -n +2 ./MIGRATION-Coverage-Report/profile.cov >> merged_profile.cov
-#
-#      - name: Parse code-coverage value
-#        working-directory: artifacts
-#        run: |
-#          codeCoverage=$(go tool cover -func=merged_profile.cov | grep total | awk '{print $3}')
-#          codeCoverage=${codeCoverage%?}
-#          echo "CODE_COVERAGE=$codeCoverage" >> $GITHUB_ENV
-#
-##      - name: Check if code-coverage is greater than threshold
-##        run: |
-##          codeCoverage=${{ env.CODE_COVERAGE }}
-##          codeCoverage=${codeCoverage%??}
-##          if [[ $codeCoverage -lt 92 ]]; then echo "code coverage cannot be less than 92%, currently its ${{ env.CODE_COVERAGE }}%" && exit 1; fi;
-#
-#  upload_coverage:
-#    name: Upload Coverage📊
-#    runs-on: ubuntu-latest
-#    needs: [Example-Unit-Testing,PKG-Unit-Testing,MIGRATION-Unit-Testing]
-#    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/development' }}
-#    steps:
-#      - name: Check out code into the Go module directory
-#        uses: actions/checkout@v4
-#
-#      - name: Download Coverage Report
-#        uses: actions/download-artifact@v3
-#        with:
-#          path: artifacts
-#
-#      - name: Merge Coverage Files
-#        working-directory: artifacts
-#        run: |
-#          awk '!/^mode: / && FNR==1{print "mode: set"} {print}' ./Example-Test-Report/profile.cov > merged_profile.cov
-#          tail -n +2 ./PKG-Coverage-Report/profile.cov >> merged_profile.cov
-#
-#
-#      - name: Upload
-#        uses: paambaati/codeclimate-action@v5.0.0
-#        env:
-#          CC_TEST_REPORTER_ID: ${{ secrets.CC_TEST_REPORTER_ID }}
-#        with:
-#          coverageLocations: artifacts/merged_profile.cov:gocov
-#          prefix: gofr.dev
-#
-#  code_quality:
-#    name: Code Quality🎖️
-#    runs-on: ubuntu-latest
-#    container: "golangci/golangci-lint:v1.55.2"
-#    steps:
-#      - name: Check out code into the Go module directory
-#        uses: actions/checkout@v4
-#      - name: Get dependencies
-#        run: go get -v -t -d ./...
-#      - name: GolangCI-Lint
-#        run: |
-#          golangci-lint run --timeout 9m0s
+#          codeCoverage=${{ env.CODE_COVERAGE }}
+#          codeCoverage=${codeCoverage%??}
+#          if [[ $codeCoverage -lt 92 ]]; then echo "code coverage cannot be less than 92%, currently its ${{ env.CODE_COVERAGE }}%" && exit 1; fi;
+
+  upload_coverage:
+    name: Upload Coverage📊
+    runs-on: ubuntu-latest
+    needs: [Example-Unit-Testing,PKG-Unit-Testing,MIGRATION-Unit-Testing]
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/development'}}
+    steps:
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v4
+
+      - name: Download Coverage Report
+        uses: actions/download-artifact@v3
+        with:
+          path: artifacts
+
+      - name: Merge Coverage Files
+        working-directory: artifacts
+        run: |
+          awk '!/^mode: / && FNR==1{print "mode: set"} {print}' ./Example-Test-Report/profile.cov > merged_profile.cov
+          tail -n +2 ./PKG-Coverage-Report/profile.cov >> merged_profile.cov
+
+
+      - name: Upload
+        uses: paambaati/codeclimate-action@v5.0.0
+        env:
+          CC_TEST_REPORTER_ID: ${{ secrets.CC_TEST_REPORTER_ID }}
+        with:
+          coverageLocations: artifacts/merged_profile.cov:gocov
+          prefix: gofr.dev
+
+  code_quality:
+    name: Code Quality🎖️
+    runs-on: ubuntu-latest
+    container: "golangci/golangci-lint:v1.55.2"
+    steps:
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v4
+      - name: Get dependencies
+        run: go get -v -t -d ./...
+      - name: GolangCI-Lint
+        run: |
+          golangci-lint run --timeout 9m0s
