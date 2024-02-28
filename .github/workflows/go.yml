@@ -168,6 +168,19 @@ jobs:
           name: PKG-Coverage-Report
           path: profile.cov
 
+  parse_coverage:
+    name: Code Coverage
+    runs-on: ubuntu-latest
+    needs: [ Example-Unit-Testing,PKG-Unit-Testing,MIGRATION-Unit-Testing ]
+    steps:
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v4
+
+      - name: Download Coverage Report
+        uses: actions/download-artifact@v3
+        with:
+          path: artifacts
+
 
       - name: Merge Coverage Files
         working-directory: artifacts
