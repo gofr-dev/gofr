@@ -42,6 +42,7 @@ type App struct {
 	grpcRegistered       bool
 	httpRegistered       bool
 	subscriberRegistered bool
+	subscriptionManager  *SubscriptionManager
 }
 
 // RegisterService adds a grpc service to the gofr application.
@@ -82,6 +83,9 @@ func New() *App {
 	}
 
 	app.grpcServer = newGRPCServer(app.container, port)
+
+	app.subscriptionManager = newSubscriptionManager()
+	app.subscriptionManager.Container = app.container
 
 	return app
 }
@@ -150,6 +154,14 @@ func (a *App) Run() {
 	if a.subscriberRegistered {
 		wg.Add(1)
 	}
+
+	// Start subscribers concurrently using go-routines
+	for topic, handler := range a.subscriptionManager.subscriptions {
+		a.subscriptionManager.wg.Add(1)
+		go a.startSubscriber(context.Background(), topic, handler) // Pass context for cancellation
+	}
+
+	a.subscriptionManager.wg.Wait()
 
 	wg.Wait()
 }
@@ -257,7 +269,7 @@ func (o *otelErrorHandler) Handle(e error) {
 }
 
 func (a *App) Subscribe(topic string, handler SubscribeFunc) {
-	if a.container.GetSubscriber() == nil {
+	if a.subscriptionManager.GetSubscriber() == nil {
 		a.container.Logger.Errorf("Subscriber not initialized in the container")
 
 		return
@@ -265,29 +277,37 @@ func (a *App) Subscribe(topic string, handler SubscribeFunc) {
 
 	a.subscriberRegistered = true
 
+	a.subscriptionManager.subscriptions[topic] = handler
+}
+
+func (a *App) startSubscriber(ctx context.Context, topic string, handler SubscribeFunc) {
+	defer a.subscriptionManager.wg.Done()
+
 	// continuously subscribe in an infinite loop
-	go func() {
-		for {
-			msg, err := a.container.GetSubscriber().Subscribe(context.Background(), topic)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			msg, err := a.subscriptionManager.GetSubscriber().Subscribe(ctx, topic)
 			if msg == nil {
 				continue
 			}
 
 			if err != nil {
 				a.container.Logger.Errorf("error while reading from Kafka, err: %v", err.Error())
-
 				continue
 			}
 
-			// create a gofr context with message as request
 			ctx := newContext(nil, msg, a.container)
-
 			err = handler(ctx)
 
 			// commit the message if the subscription function does not return error
 			if err == nil {
 				msg.Commit()
+			} else {
+				a.container.Logger.Errorf("error in handler for topic %s: %v", topic, err)
 			}
 		}
-	}()
+	}
 }
