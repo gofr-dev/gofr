@@ -1,7 +1,6 @@
 package gofr
 
 import (
-	"context"
 	"fmt"
 
 	"net/http"
@@ -39,10 +38,10 @@ type App struct {
 	// container is unexported because this is an internal implementation and applications are provided access to it via Context
 	container *container.Container
 
-	grpcRegistered       bool
-	httpRegistered       bool
-	subscriberRegistered bool
-	subscriptionManager  *SubscriptionManager
+	grpcRegistered bool
+	httpRegistered bool
+
+	subscriptionManager SubscriptionManager
 }
 
 // RegisterService adds a grpc service to the gofr application.
@@ -84,8 +83,7 @@ func New() *App {
 
 	app.grpcServer = newGRPCServer(app.container, port)
 
-	app.subscriptionManager = newSubscriptionManager()
-	app.subscriptionManager.Container = app.container
+	app.subscriptionManager = newSubscriptionManager(app.container)
 
 	return app
 }
@@ -151,13 +149,13 @@ func (a *App) Run() {
 	}
 
 	// If subscriber is registered, block main go routine to wait for subscriber to receive messages
-	if a.subscriberRegistered {
-		wg.Add(1)
-	}
+	if a.subscriptionManager.subscriptions != nil {
+		// Start subscribers concurrently using go-routines
+		for topic, handler := range a.subscriptionManager.subscriptions {
+			go a.subscriptionManager.startSubscriber(topic, handler)
+		}
 
-	// Start subscribers concurrently using go-routines
-	for topic, handler := range a.subscriptionManager.subscriptions {
-		go a.subscriptionManager.startSubscriber(context.Background(), topic, handler)
+		wg.Add(1)
 	}
 
 	wg.Wait()
@@ -266,13 +264,11 @@ func (o *otelErrorHandler) Handle(e error) {
 }
 
 func (a *App) Subscribe(topic string, handler SubscribeFunc) {
-	if a.subscriptionManager.GetSubscriber() == nil {
+	if a.container.GetSubscriber() == nil {
 		a.container.Logger.Errorf("Subscriber not initialized in the container")
 
 		return
 	}
-
-	a.subscriberRegistered = true
 
 	a.subscriptionManager.subscriptions[topic] = handler
 }
