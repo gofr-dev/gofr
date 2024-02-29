@@ -2,12 +2,14 @@ package main
 
 import (
 	"encoding/json"
-
+	"fmt"
 	"gofr.dev/pkg/gofr"
 )
 
 func main() {
 	app := gofr.New()
+
+	fmt.Println(app.Config.Get("PUBSUB_BROKER"))
 
 	app.POST("/publish-order", order)
 

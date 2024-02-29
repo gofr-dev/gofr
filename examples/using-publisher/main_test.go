@@ -62,7 +62,7 @@ func TestExamplePublisher(t *testing.T) {
 }
 
 func TestExamplePublisherFailureCases(t *testing.T) {
-	t.Setenv("PUBSUB_BROKER", "localhost:1000")
+	t.Setenv("PUBSUB_BROKER", "localhost:1")
 
 	const host = "http://localhost:8100"
 	go main()
