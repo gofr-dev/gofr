@@ -30,11 +30,11 @@ func TestIntegration(t *testing.T) {
 		t.Fatalf("request to /transaction failed %v", err)
 	}
 
-	req, _ = http.NewRequest("GET", "http://localhost:2121/metrics", nil)
+	req, _ = http.NewRequest("GET", "http://localhost:2120/metrics", nil)
 
 	resp, err := c.Do(req)
 	if err != nil {
-		t.Fatalf("request to localhost:2121/metrics failed %v", err)
+		t.Fatalf("request to localhost:2120/metrics failed %v", err)
 	}
 
 	body, _ := io.ReadAll(resp.Body)
