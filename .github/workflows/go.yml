@@ -16,11 +16,11 @@ on:
 
 jobs:
   MIGRATION-Unit-Testing:
-    name: Migration Unit Testing (v${{ matrix.go-version }} 🛠)
+    name: Migration Unit Testing (v${{ matrix.go-version }})🛠
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go-version: [  '1.22', '1.21', '1.20']
+        go-version: [  '1.22', '1.21.0', '1.20']
 
     steps:
       - name: Checkout code into go module directory
@@ -46,18 +46,18 @@ jobs:
           go tool cover -func profile.cov
 
       - name: Upload Test Coverage
-        if: ${{ matrix.go-version == '1.21'}}
+        if: ${{ matrix.go-version == '1.22'}}
         uses: actions/upload-artifact@v3
         with:
           name: MIGRATION-Coverage-Report
           path: profile.cov
 
   Example-Unit-Testing:
-    name: Example Unit Testing (v${{ matrix.go-version }}🛠)
+    name: Example Unit Testing (v${{ matrix.go-version }})🛠
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go-version: [ '1.22', '1.21', '1.20' ]
+        go-version: [ '1.22', '1.21.0', '1.20' ]
 
     services:
       zookeeper:
@@ -124,18 +124,18 @@ jobs:
           go tool cover -func profile.cov
 
       - name: Upload Test Coverage
-        if: ${{ matrix.go-version == '1.21'}}
+        if: ${{ matrix.go-version == '1.22'}}
         uses: actions/upload-artifact@v3
         with:
           name: Example-Test-Report
           path: profile.cov
 
   PKG-Unit-Testing:
-    name: PKG Unit Testing (v${{ matrix.go-version }}🛠)
+    name: PKG Unit Testing (v${{ matrix.go-version }})🛠
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go-version: [ '1.22', '1.21', '1.20' ]
+        go-version: [ '1.22', '1.21.0', '1.20' ]
 
     steps:
       - name: Checkout code into go module directory
@@ -161,7 +161,7 @@ jobs:
           go tool cover -func profile.cov
 
       - name: Upload Test Coverage
-        if: ${{ matrix.go-version == '1.21'}}
+        if: ${{ matrix.go-version == '1.22'}}
         uses: actions/upload-artifact@v3
         with:
           name: PKG-Coverage-Report
