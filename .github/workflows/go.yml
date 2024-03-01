@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go-version: ['1.22', '1.21', '1.20']
+        go-version: ['1.21', '1.20']
 
     steps:
       - name: Checkout code into go module directory
@@ -46,7 +46,7 @@ jobs:
           go tool cover -func profile.cov
 
       - name: Upload Test Coverage
-        if: ${{ matrix.go-version == '1.22'}}
+        if: ${{ matrix.go-version == '1.21'}}
         uses: actions/upload-artifact@v3
         with:
           name: MIGRATION-Coverage-Report
@@ -57,7 +57,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go-version: ['1.22', '1.21', '1.20']
+        go-version: ['1.21', '1.20']
 
     services:
       zookeeper:
@@ -124,7 +124,7 @@ jobs:
           go tool cover -func profile.cov
 
       - name: Upload Test Coverage
-        if: ${{ matrix.go-version == '1.22'}}
+        if: ${{ matrix.go-version == '1.21'}}
         uses: actions/upload-artifact@v3
         with:
           name: Example-Test-Report
@@ -135,7 +135,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go-version: ['1.22', '1.21', '1.20']
+        go-version: ['1.21', '1.20']
 
     steps:
       - name: Checkout code into go module directory
@@ -161,7 +161,7 @@ jobs:
           go tool cover -func profile.cov
 
       - name: Upload Test Coverage
-        if: ${{ matrix.go-version == '1.22'}}
+        if: ${{ matrix.go-version == '1.21'}}
         uses: actions/upload-artifact@v3
         with:
           name: PKG-Coverage-Report
