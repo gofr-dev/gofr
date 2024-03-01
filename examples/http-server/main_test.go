@@ -2,17 +2,18 @@ package main
 
 import (
 	"context"
+	"net/http"
+	"testing"
+	"time"
+
 	"github.com/go-redis/redismock/v9"
+	"github.com/stretchr/testify/assert"
+
 	"gofr.dev/pkg/gofr"
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/datasource/redis"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/testutil"
-	"net/http"
-	"testing"
-	"time"
-
-	"github.com/stretchr/testify/assert"
 )
 
 func TestIntegration_SimpleAPIServer(t *testing.T) {

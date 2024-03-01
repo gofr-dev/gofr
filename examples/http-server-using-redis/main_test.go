@@ -3,18 +3,20 @@ package main
 import (
 	"bytes"
 	"context"
+
+	"net/http"
+	"testing"
+	"time"
+
 	"github.com/go-redis/redismock/v9"
+	"github.com/stretchr/testify/assert"
+
 	"gofr.dev/pkg/gofr"
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/datasource/redis"
 	gofrHTTP "gofr.dev/pkg/gofr/http"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/testutil"
-	"net/http"
-	"testing"
-	"time"
-
-	"github.com/stretchr/testify/assert"
 )
 
 func TestHTTPServerUsingRedis(t *testing.T) {

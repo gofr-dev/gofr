@@ -3,11 +3,6 @@ package main
 import (
 	"bytes"
 	"context"
-	"gofr.dev/pkg/gofr"
-	"gofr.dev/pkg/gofr/container"
-	gofrHTTP "gofr.dev/pkg/gofr/http"
-	"gofr.dev/pkg/gofr/logging"
-	"gofr.dev/pkg/gofr/service"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -15,6 +10,12 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+
+	"gofr.dev/pkg/gofr"
+	"gofr.dev/pkg/gofr/container"
+	gofrHTTP "gofr.dev/pkg/gofr/http"
+	"gofr.dev/pkg/gofr/logging"
+	"gofr.dev/pkg/gofr/service"
 )
 
 func Test_main(t *testing.T) {
