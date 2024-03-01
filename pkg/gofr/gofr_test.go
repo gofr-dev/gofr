@@ -205,9 +205,9 @@ func Test_addRoute(t *testing.T) {
 		a := NewCMD()
 
 		a.SubCommand("log", func(c *Context) (interface{}, error) {
-			c.Logger.Info("handler called")
+			c.Logger.Info("logging in handler")
 
-			return nil, nil
+			return "handler called", nil
 		})
 
 		a.Run()

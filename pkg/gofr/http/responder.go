@@ -18,7 +18,6 @@ type Responder struct {
 
 func (r Responder) Respond(data interface{}, err error) {
 	statusCode, errorObj := r.HTTPStatusFromError(err)
-	r.w.WriteHeader(statusCode)
 
 	var resp interface{}
 	switch v := data.(type) {
@@ -26,6 +25,8 @@ func (r Responder) Respond(data interface{}, err error) {
 		resp = v.Data
 	case resTypes.File:
 		r.w.Header().Set("Content-Type", v.ContentType)
+		r.w.WriteHeader(statusCode)
+
 		_, _ = r.w.Write(v.Content)
 
 		return
@@ -36,7 +37,10 @@ func (r Responder) Respond(data interface{}, err error) {
 		}
 	}
 
-	r.w.Header().Set("Content-type", "application/json")
+	r.w.Header().Set("Content-Type", "application/json")
+
+	r.w.WriteHeader(statusCode)
+
 	_ = json.NewEncoder(r.w).Encode(resp)
 }
 

@@ -15,6 +15,8 @@ import (
 	"gofr.dev/pkg/gofr/service"
 )
 
+const fileMode = 0644
+
 type Logger interface {
 	Debug(args ...interface{})
 	Debugf(format string, args ...interface{})
@@ -205,11 +207,23 @@ func NewLogger(level Level) Logger {
 }
 
 // TODO - Do we need this? Only used for CMD log silencing.
-func NewSilentLogger() Logger {
+func NewFileLogger(path string) Logger {
 	l := &logger{
 		normalOut: io.Discard,
 		errorOut:  io.Discard,
 	}
+
+	if path != "" {
+		return l
+	}
+
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, fileMode)
+	if err != nil {
+		return l
+	}
+
+	l.normalOut = f
+	l.errorOut = f
 
 	return l
 }
