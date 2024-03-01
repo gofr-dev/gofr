@@ -68,5 +68,5 @@ func PostHandler(c *gofr.Context) (interface{}, error) {
 		return Employee{}, errors.New(fmt.Sprintf("DB Error : %v", err))
 	}
 
-	return fmt.Sprintf("succesfully posted entity : %v", emp.Name), nil
+	return fmt.Sprintf("successfully posted entity : %v", emp.Name), nil
 }
