@@ -337,7 +337,7 @@ func TestPrettyPrint_ServiceAndDefaultLogs(t *testing.T) {
 
 func Test_NewSilentLoggerSTDOutput(t *testing.T) {
 	logs := testutil.StdoutOutputForFunc(func() {
-		l := NewSilentLogger()
+		l := NewFileLogger("")
 
 		l.Info("Info Logs")
 		l.Debug("Debug Logs")

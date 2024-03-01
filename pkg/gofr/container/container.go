@@ -36,12 +36,33 @@ type Container struct {
 	SQL   *sql.DB
 }
 
+func NewEmptyContainer() *Container {
+	return &Container{}
+}
+
 func NewContainer(conf config.Config) *Container {
 	c := &Container{
-		Logger: logging.NewRemoteLogger(logging.GetLevelFromString(conf.Get("LOG_LEVEL")), conf.Get("REMOTE_LOG_URL"),
-			conf.GetOrDefault("REMOTE_LOG_FETCH_INTERVAL", "15")),
 		appName:    conf.GetOrDefault("APP_NAME", "gofr-app"),
 		appVersion: conf.GetOrDefault("APP_VERSION", "dev"),
+	}
+
+	c.Create(conf)
+
+	return c
+}
+
+func (c *Container) Create(conf config.Config) {
+	if c.appName != "" {
+		c.appName = conf.GetOrDefault("APP_NAME", "gofr-app")
+	}
+
+	if c.appVersion != "" {
+		c.appVersion = conf.GetOrDefault("APP_VERSION", "dev")
+	}
+
+	if c.Logger == nil {
+		c.Logger = logging.NewRemoteLogger(logging.GetLevelFromString(conf.Get("LOG_LEVEL")), conf.Get("REMOTE_LOG_URL"),
+			conf.GetOrDefault("REMOTE_LOG_FETCH_INTERVAL", "15"))
 	}
 
 	c.Debug("Container is being created")
@@ -74,8 +95,6 @@ func NewContainer(conf config.Config) *Container {
 			SubscriptionName: conf.Get("GOOGLE_SUBSCRIPTION_NAME"),
 		}, c.Logger)
 	}
-
-	return c
 }
 
 // GetHTTPService returns registered http services.
