@@ -1,12 +1,21 @@
 package main
 
 import (
+	"bytes"
+	"context"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+
+	"gofr.dev/pkg/gofr"
+	"gofr.dev/pkg/gofr/container"
+	gofrHTTP "gofr.dev/pkg/gofr/http"
+	"gofr.dev/pkg/gofr/logging"
+	"gofr.dev/pkg/gofr/service"
 )
 
 func Test_main(t *testing.T) {
@@ -53,4 +62,47 @@ func Test_main(t *testing.T) {
 
 		resp.Body.Close()
 	}
+}
+
+func TestHTTPHandlerURLError(t *testing.T) {
+	logger := logging.NewLogger(logging.DEBUG)
+
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://localhost:5000/handle", bytes.NewBuffer([]byte(`{"key":"value"}`)))
+
+	gofrReq := gofrHTTP.NewRequest(req)
+
+	ctx := &gofr.Context{Context: context.Background(),
+		Request: gofrReq, Container: &container.Container{Logger: logger}}
+
+	ctx.Container.Services = map[string]service.HTTP{"cat-facts": service.NewHTTPService("http://invalid", ctx.Logger, nil)}
+
+	resp, err := Handler(ctx)
+
+	assert.Nil(t, resp)
+	assert.NotNil(t, err)
+}
+
+func TestHTTPHandlerResponseUnmarshalError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// read request body
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{invalid body}`))
+	}))
+	defer server.Close()
+
+	logger := logging.NewLogger(logging.DEBUG)
+
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://localhost:5000/handle", bytes.NewBuffer([]byte(`{"key":"value"}`)))
+
+	gofrReq := gofrHTTP.NewRequest(req)
+
+	ctx := &gofr.Context{Context: context.Background(),
+		Request: gofrReq, Container: &container.Container{Logger: logger}}
+
+	ctx.Container.Services = map[string]service.HTTP{"cat-facts": service.NewHTTPService(server.URL, ctx.Logger, nil)}
+
+	resp, err := Handler(ctx)
+
+	assert.Nil(t, resp)
+	assert.NotNil(t, err)
 }

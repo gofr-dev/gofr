@@ -2,11 +2,21 @@ package main
 
 import (
 	"bytes"
+	"context"
+
 	"net/http"
 	"testing"
 	"time"
 
+	"github.com/go-redis/redismock/v9"
 	"github.com/stretchr/testify/assert"
+
+	"gofr.dev/pkg/gofr"
+	"gofr.dev/pkg/gofr/container"
+	"gofr.dev/pkg/gofr/datasource/redis"
+	gofrHTTP "gofr.dev/pkg/gofr/http"
+	"gofr.dev/pkg/gofr/logging"
+	"gofr.dev/pkg/gofr/testutil"
 )
 
 func TestHTTPServerUsingRedis(t *testing.T) {
@@ -40,4 +50,51 @@ func TestHTTPServerUsingRedis(t *testing.T) {
 
 		assert.Equal(t, tc.statusCode, resp.StatusCode, "TEST[%d], Failed.\n%s", i, tc.desc)
 	}
+}
+
+func TestRedisSetHandler(t *testing.T) {
+	a := gofr.New()
+	logger := logging.NewLogger(logging.DEBUG)
+	redisClient, mock := redismock.NewClientMock()
+
+	rc := redis.NewClient(testutil.NewMockConfig(map[string]string{"REDIS_HOST": "localhost", "REDIS_PORT": "2001"}), logger, a.Metrics())
+	rc.Client = redisClient
+
+	mock.ExpectSet("key", "value", 5*time.Minute).SetErr(testutil.CustomError{ErrorMessage: "redis get error"})
+
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://localhost:5000/handle", bytes.NewBuffer([]byte(`{"key":"value"}`)))
+
+	gofrReq := gofrHTTP.NewRequest(req)
+
+	ctx := &gofr.Context{Context: context.Background(),
+		Request: gofrReq, Container: &container.Container{Logger: logger, Redis: rc}}
+
+	resp, err := RedisSetHandler(ctx)
+
+	assert.Nil(t, resp)
+	assert.NotNil(t, err)
+}
+
+func TestRedisPipelineHandler(t *testing.T) {
+	a := gofr.New()
+	logger := logging.NewLogger(logging.DEBUG)
+	redisClient, mock := redismock.NewClientMock()
+
+	rc := redis.NewClient(testutil.NewMockConfig(map[string]string{"REDIS_HOST": "localhost", "REDIS_PORT": "2001"}), logger, a.Metrics())
+	rc.Client = redisClient
+
+	mock.ExpectSet("testKey1", "testValue1", time.Minute*5).SetErr(testutil.CustomError{ErrorMessage: "redis get error"})
+	mock.ClearExpect()
+
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://localhost:5000/handle", bytes.NewBuffer([]byte(`{"key":"value"}`)))
+
+	gofrReq := gofrHTTP.NewRequest(req)
+
+	ctx := &gofr.Context{Context: context.Background(),
+		Request: gofrReq, Container: &container.Container{Logger: logger, Redis: rc}}
+
+	resp, err := RedisPipelineHandler(ctx)
+
+	assert.Nil(t, resp)
+	assert.NotNil(t, err)
 }
