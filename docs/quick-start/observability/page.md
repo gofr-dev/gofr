@@ -78,6 +78,22 @@ GoFr by default publishes metrics automatically to port: _2121_ on _/metrics_ en
 * app_redis_stats
 * histogram
 * Observes the response time for Redis commands
+---
+* app_pubsub_publish_total_count
+* counter
+* Number of total publish operations
+---
+* app_pubsub_publish_success_count
+* counter
+* Number of successful publish operations
+---
+* app_pubsub_subscribe_total_count
+* counter
+* Number of total subscribe operations
+---
+* app_pubsub_subscribe_success_count
+* counter
+* Number of successful subscribe operations
 
 {% /table %}
 
