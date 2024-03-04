@@ -44,16 +44,16 @@ func (ql QueryLog) String() string {
 
 // logQuery logs the Redis query information.
 func (r *redisHook) logQuery(start time.Time, query string, args ...interface{}) {
-	duration := time.Since(start)
+	duration := time.Since(start).Microseconds()
 
 	r.logger.Debug(QueryLog{
 		Query:    query,
-		Duration: duration.Microseconds(),
+		Duration: duration,
 		Args:     args,
 	})
 
 	r.metrics.RecordHistogram(context.Background(), "app_redis_stats",
-		duration.Seconds(), "type", query)
+		float64(duration), "type", query)
 }
 
 // DialHook implements the redis.DialHook interface.

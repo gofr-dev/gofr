@@ -115,17 +115,18 @@ func (c *Container) registerFrameworkMetrics() {
 	c.Metrics().NewGauge("app_go_numGC", "Number of completed Garbage Collector cycles.")
 	c.Metrics().NewGauge("app_go_sys", "Number of total bytes of memory.")
 
-	histogramBuckets := []float64{.001, .003, .005, .01, .02, .03, .05, .1, .2, .3, .5, .75, 1, 2, 3, 5, 10, 30}
-
 	// http metrics
-	c.Metrics().NewHistogram("app_http_response", "Response time of http requests in seconds.", histogramBuckets...)
-	c.Metrics().NewHistogram("app_http_service_response", "Response time of http service requests in seconds.", histogramBuckets...)
+	httpBuckets := []float64{.001, .003, .005, .01, .02, .03, .05, .1, .2, .3, .5, .75, 1, 2, 3, 5, 10, 30}
+	c.Metrics().NewHistogram("app_http_response", "Response time of http requests in seconds.", httpBuckets...)
+	c.Metrics().NewHistogram("app_http_service_response", "Response time of http service requests in seconds.", httpBuckets...)
 
 	// redis metrics
-	c.Metrics().NewHistogram("app_redis_stats", "Observes the response time for Redis commands.", histogramBuckets...)
+	redisBuckets := []float64{50, 75, 100, 125, 150, 200, 300, 500, 750, 1000, 1250, 1500, 2000, 2500, 3000}
+	c.Metrics().NewHistogram("app_redis_stats", "Response time of Redis commands in microseconds.", redisBuckets...)
 
 	// sql metrics
-	c.Metrics().NewHistogram("app_sql_stats", "Observes the response time for SQL queries.", histogramBuckets...)
+	sqlBuckets := []float64{50, 75, 100, 125, 150, 200, 300, 500, 750, 1000, 2000, 3000, 4000, 5000, 7500, 10000}
+	c.Metrics().NewHistogram("app_sql_stats", "Response time of SQL queries in microseconds.", sqlBuckets...)
 	c.Metrics().NewGauge("app_sql_open_connections", "Number of open SQL connections.")
 	c.Metrics().NewGauge("app_sql_inUse_connections", "Number of inUse SQL connections.")
 }
