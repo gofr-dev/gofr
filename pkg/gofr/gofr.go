@@ -93,10 +93,11 @@ func NewCMD() *App {
 	app := &App{}
 	app.readConfig()
 
-	app.container = container.NewContainer(app.Config)
+	app.container = container.NewEmptyContainer()
+	app.container.Logger = logging.NewFileLogger(app.Config.Get("CMD_LOGS_FILE"))
 	app.cmd = &cmd{}
-	// app.container.Logger = logging.NewSilentLogger() // TODO - figure out a proper way to log in CMD
 
+	app.container.Create(app.Config)
 	app.initTracer()
 
 	return app
