@@ -87,13 +87,13 @@ func (c *Container) Create(conf config.Config) {
 				Partition:       partition,
 				ConsumerGroupID: conf.Get("CONSUMER_ID"),
 				OffSet:          offSet,
-			}, c.Logger)
+			}, c.Logger, c.metricsManager)
 		}
 	case "GOOGLE":
 		c.pubsub = google.New(google.Config{
 			ProjectID:        conf.Get("GOOGLE_PROJECT_ID"),
 			SubscriptionName: conf.Get("GOOGLE_SUBSCRIPTION_NAME"),
-		}, c.Logger)
+		}, c.Logger, c.metricsManager)
 	}
 }
 
@@ -129,6 +129,12 @@ func (c *Container) registerFrameworkMetrics() {
 	c.Metrics().NewHistogram("app_sql_stats", "Response time of SQL queries in microseconds.", sqlBuckets...)
 	c.Metrics().NewGauge("app_sql_open_connections", "Number of open SQL connections.")
 	c.Metrics().NewGauge("app_sql_inUse_connections", "Number of inUse SQL connections.")
+
+	// pubsub metrics
+	c.Metrics().NewCounter("app_pubsub_publish_total_count", "Number of total publish operations.")
+	c.Metrics().NewCounter("app_pubsub_publish_success_count", "Number of successful publish operations.")
+	c.Metrics().NewCounter("app_pubsub_subscribe_total_count", "Number of total subscribe operations.")
+	c.Metrics().NewCounter("app_pubsub_subscribe_success_count", "Number of successful subscribe operations.")
 }
 
 func (c *Container) GetAppName() string {

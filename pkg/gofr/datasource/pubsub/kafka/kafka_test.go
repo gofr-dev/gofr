@@ -47,7 +47,8 @@ func TestKafkaClient_PublishError(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockWriter := NewMockWriter(ctrl)
-	k := &kafkaClient{writer: mockWriter}
+	mockMetrics := NewMockMetrics(ctrl)
+	k := &kafkaClient{writer: mockWriter, metrics: mockMetrics}
 	ctx := context.TODO()
 
 	testCases := []struct {
@@ -61,7 +62,7 @@ func TestKafkaClient_PublishError(t *testing.T) {
 	}{
 		{
 			desc:   "error writer is nil",
-			client: &kafkaClient{},
+			client: &kafkaClient{metrics: mockMetrics},
 			topic:  "test",
 			expErr: errPublisherNotConfigured,
 		},
@@ -85,6 +86,8 @@ func TestKafkaClient_PublishError(t *testing.T) {
 			logger := testutil.NewMockLogger(testutil.DEBUGLOG)
 			k.logger = logger
 
+			mockMetrics.EXPECT().IncrementCounter(ctx, "app_pubsub_publish_total_count", "topic", tc.topic)
+
 			err = tc.client.Publish(ctx, tc.topic, tc.msg)
 		}
 
@@ -102,14 +105,17 @@ func TestKafkaClient_Publish(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockWriter := NewMockWriter(ctrl)
+	mockMetrics := NewMockMetrics(ctrl)
 
 	logs := testutil.StdoutOutputForFunc(func() {
 		ctx := context.TODO()
 		logger := testutil.NewMockLogger(testutil.DEBUGLOG)
-		k := &kafkaClient{writer: mockWriter, logger: logger}
+		k := &kafkaClient{writer: mockWriter, logger: logger, metrics: mockMetrics}
 
 		mockWriter.EXPECT().WriteMessages(ctx, gomock.Any()).
 			Return(nil)
+		mockMetrics.EXPECT().IncrementCounter(ctx, "app_pubsub_publish_total_count", "topic", "test")
+		mockMetrics.EXPECT().IncrementCounter(ctx, "app_pubsub_publish_success_count", "topic", "test")
 
 		err = k.Publish(ctx, "test", []byte(`hello`))
 	})
@@ -129,6 +135,7 @@ func TestKafkaClient_SubscribeSuccess(t *testing.T) {
 
 	ctx := context.TODO()
 	mockReader := NewMockReader(ctrl)
+	mockMetrics := NewMockMetrics(ctrl)
 	k := &kafkaClient{
 		dialer: &kafka.Dialer{},
 		writer: nil,
@@ -141,7 +148,8 @@ func TestKafkaClient_SubscribeSuccess(t *testing.T) {
 			Broker:          "kafkabroker",
 			OffSet:          -1,
 		},
-		mu: &sync.RWMutex{},
+		mu:      &sync.RWMutex{},
+		metrics: mockMetrics,
 	}
 
 	expMessage := pubsub.Message{
@@ -151,6 +159,8 @@ func TestKafkaClient_SubscribeSuccess(t *testing.T) {
 
 	mockReader.EXPECT().ReadMessage(ctx).
 		Return(kafka.Message{Value: []byte(`hello`), Topic: "test"}, nil)
+	mockMetrics.EXPECT().IncrementCounter(ctx, "app_pubsub_subscribe_total_count", "topic", "test")
+	mockMetrics.EXPECT().IncrementCounter(ctx, "app_pubsub_subscribe_success_count", "topic", "test")
 
 	logs := testutil.StdoutOutputForFunc(func() {
 		logger := testutil.NewMockLogger(testutil.DEBUGLOG)
@@ -177,6 +187,7 @@ func TestKafkaClient_SubscribeError(t *testing.T) {
 
 	ctx := context.TODO()
 	mockReader := NewMockReader(ctrl)
+	mockMetrics := NewMockMetrics(ctrl)
 	k := &kafkaClient{
 		dialer: &kafka.Dialer{},
 		writer: nil,
@@ -189,11 +200,13 @@ func TestKafkaClient_SubscribeError(t *testing.T) {
 			Broker:          "kafkabroker",
 			OffSet:          -1,
 		},
-		mu: &sync.RWMutex{},
+		mu:      &sync.RWMutex{},
+		metrics: mockMetrics,
 	}
 
 	mockReader.EXPECT().ReadMessage(ctx).
 		Return(kafka.Message{}, errSub)
+	mockMetrics.EXPECT().IncrementCounter(ctx, "app_pubsub_subscribe_total_count", "topic", "test")
 
 	logs := testutil.StderrOutputForFunc(func() {
 		logger := testutil.NewMockLogger(testutil.DEBUGLOG)
@@ -264,6 +277,9 @@ func TestKafkaClient_getNewReader(t *testing.T) {
 }
 
 func TestNewKafkaClient(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
 	testCases := []struct {
 		desc     string
 		config   Config
@@ -287,7 +303,7 @@ func TestNewKafkaClient(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		k := New(tc.config, testutil.NewMockLogger(testutil.ERRORLOG))
+		k := New(tc.config, testutil.NewMockLogger(testutil.ERRORLOG), NewMockMetrics(ctrl))
 
 		if tc.expected {
 			assert.NotNil(t, k)

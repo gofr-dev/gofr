@@ -23,12 +23,13 @@ type Config struct {
 type googleClient struct {
 	Config
 
-	client *gcPubSub.Client
-	logger pubsub.Logger
+	client  *gcPubSub.Client
+	logger  pubsub.Logger
+	metrics Metrics
 }
 
 //nolint:revive // We do not want anyone using the client without initialization steps.
-func New(conf Config, logger pubsub.Logger) *googleClient {
+func New(conf Config, logger pubsub.Logger, metrics Metrics) *googleClient {
 	err := validateConfigs(&conf)
 	if err != nil {
 		logger.Errorf("google pubsub could not be configured, err : %v", err)
@@ -44,9 +45,10 @@ func New(conf Config, logger pubsub.Logger) *googleClient {
 	}
 
 	return &googleClient{
-		Config: conf,
-		client: client,
-		logger: logger,
+		Config:  conf,
+		client:  client,
+		logger:  logger,
+		metrics: metrics,
 	}
 }
 
@@ -63,6 +65,8 @@ func validateConfigs(conf *Config) error {
 }
 
 func (g *googleClient) Publish(ctx context.Context, topic string, message []byte) error {
+	g.metrics.IncrementCounter(ctx, "app_pubsub_publish_total_count", "topic", topic)
+
 	t, err := g.getTopic(ctx, topic)
 	if err != nil {
 		return err
@@ -80,10 +84,14 @@ func (g *googleClient) Publish(ctx context.Context, topic string, message []byte
 
 	g.logger.Debugf("published google message %v on topic %v", string(message), topic)
 
+	g.metrics.IncrementCounter(ctx, "app_pubsub_publish_success_count", "topic", topic)
+
 	return nil
 }
 
 func (g *googleClient) Subscribe(ctx context.Context, topic string) (*pubsub.Message, error) {
+	g.metrics.IncrementCounter(ctx, "app_pubsub_subscribe_total_count", "topic", topic)
+
 	var m = pubsub.NewMessage(ctx)
 
 	t, err := g.getTopic(ctx, topic)
@@ -117,6 +125,8 @@ func (g *googleClient) Subscribe(ctx context.Context, topic string) (*pubsub.Mes
 	}
 
 	g.logger.Debugf("received google message %v on topic %v", string(m.Value), m.Topic)
+
+	g.metrics.IncrementCounter(ctx, "app_pubsub_subscribe_success_count", "topic", topic)
 
 	return m, nil
 }
