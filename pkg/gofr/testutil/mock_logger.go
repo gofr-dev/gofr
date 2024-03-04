@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+
+	"gofr.dev/pkg/gofr/logging"
 )
 
 const (
@@ -19,6 +21,10 @@ type MockLogger struct {
 	level  int
 	out    io.Writer
 	errOut io.Writer
+}
+
+func (m *MockLogger) changeLevel(level logging.Level) {
+	m.level = int(level)
 }
 
 func NewMockLogger(level int) *MockLogger {

@@ -30,7 +30,7 @@ type Container struct {
 
 	Services       map[string]service.HTTP
 	metricsManager metrics.Manager
-	pubsub         pubsub.Client
+	PubSub         pubsub.Client
 
 	Redis *redis.Redis
 	SQL   *sql.DB
@@ -82,7 +82,7 @@ func (c *Container) Create(conf config.Config) {
 			partition, _ := strconv.Atoi(conf.GetOrDefault("PARTITION_SIZE", "0"))
 			offSet, _ := strconv.Atoi(conf.GetOrDefault("PUBSUB_OFFSET", "-1"))
 
-			c.pubsub = kafka.New(kafka.Config{
+			c.PubSub = kafka.New(kafka.Config{
 				Broker:          conf.Get("PUBSUB_BROKER"),
 				Partition:       partition,
 				ConsumerGroupID: conf.Get("CONSUMER_ID"),
@@ -90,7 +90,7 @@ func (c *Container) Create(conf config.Config) {
 			}, c.Logger)
 		}
 	case "GOOGLE":
-		c.pubsub = google.New(google.Config{
+		c.PubSub = google.New(google.Config{
 			ProjectID:        conf.Get("GOOGLE_PROJECT_ID"),
 			SubscriptionName: conf.Get("GOOGLE_SUBSCRIPTION_NAME"),
 		}, c.Logger)
@@ -139,9 +139,9 @@ func (c *Container) GetAppVersion() string {
 }
 
 func (c *Container) GetPublisher() pubsub.Publisher {
-	return c.pubsub
+	return c.PubSub
 }
 
 func (c *Container) GetSubscriber() pubsub.Subscriber {
-	return c.pubsub
+	return c.PubSub
 }
