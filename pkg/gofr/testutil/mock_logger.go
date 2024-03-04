@@ -20,6 +20,14 @@ type MockLogger struct {
 	out    io.Writer
 	errOut io.Writer
 }
+type (
+	Level int
+)
+
+//nolint:unused //changeLevel is present to satisfy the mocking of logger inside testutil.
+func (m *MockLogger) changeLevel(level Level) {
+	m.level = int(level)
+}
 
 func NewMockLogger(level int) *MockLogger {
 	return &MockLogger{
@@ -35,13 +43,6 @@ func (m *MockLogger) Info(args ...interface{}) {
 
 func (m *MockLogger) Infof(format string, args ...interface{}) {
 	m.logf(INFOLOG, format, args...)
-}
-
-func (m *MockLogger) Fatal(args ...interface{}) {
-	m.logf(FATALLOG, "%v", args...) // Add "%v" formatting directive
-}
-func (m *MockLogger) Fatalf(format string, args ...interface{}) {
-	m.logf(FATALLOG, format, args...)
 }
 
 func (m *MockLogger) Notice(args ...interface{}) {

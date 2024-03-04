@@ -58,7 +58,7 @@ func Test_newContainerPubSubIntializationFail(t *testing.T) {
 	for _, tc := range testCases {
 		c := NewContainer(testutil.NewMockConfig(tc.configs))
 
-		assert.Nil(t, c.pubsub)
+		assert.Nil(t, c.PubSub)
 	}
 }
 
@@ -112,7 +112,7 @@ func TestContainer_GetAppVersion(t *testing.T) {
 func TestContainer_GetPublisher(t *testing.T) {
 	publisher := &mockPubSub{}
 
-	c := &Container{pubsub: publisher}
+	c := &Container{PubSub: publisher}
 
 	out := c.GetPublisher()
 
@@ -122,7 +122,7 @@ func TestContainer_GetPublisher(t *testing.T) {
 func TestContainer_GetSubscriber(t *testing.T) {
 	subscriber := &mockPubSub{}
 
-	c := &Container{pubsub: subscriber}
+	c := &Container{PubSub: subscriber}
 
 	out := c.GetSubscriber()
 
