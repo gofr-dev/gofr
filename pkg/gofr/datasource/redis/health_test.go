@@ -40,3 +40,19 @@ func TestRedis_HealthHandlerError(t *testing.T) {
 		Details: map[string]interface{}{"error": "section (Stats) is not supported", "host": s.Host() + ":" + s.Port()},
 	}, health)
 }
+
+func TestRedisHealth_WithoutRedis(t *testing.T) {
+	client := Redis{
+		Client: nil,
+		logger: testutil.NewMockLogger(testutil.ERRORLOG),
+		config: &Config{
+			HostName: "localhost",
+			Port:     2003,
+		},
+	}
+
+	health := client.HealthCheck()
+
+	assert.Equal(t, health.Status, datasource.StatusDown)
+	assert.Equal(t, health.Details["error"], "redis not connected")
+}
