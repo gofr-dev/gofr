@@ -27,9 +27,12 @@ type Config struct {
 
 type kafkaClient struct {
 	dialer *kafka.Dialer
+	conn   *kafka.Conn
+
 	writer Writer
 	reader map[string]Reader
-	mu     *sync.RWMutex
+
+	mu *sync.RWMutex
 
 	logger  pubsub.Logger
 	config  Config
@@ -43,6 +46,11 @@ func New(conf Config, logger pubsub.Logger, metrics Metrics) *kafkaClient {
 		logger.Errorf("could not initialize kafka, err : %v", err)
 
 		return nil
+	}
+
+	conn, err := kafka.Dial("tcp", conf.Broker)
+	if err != nil {
+		logger.Errorf("Failed to connect to KAFKA at %v", conf.Broker)
 	}
 
 	dialer := &kafka.Dialer{
@@ -61,6 +69,7 @@ func New(conf Config, logger pubsub.Logger, metrics Metrics) *kafkaClient {
 		config:  conf,
 		dialer:  dialer,
 		reader:  reader,
+		conn:    conn,
 		logger:  logger,
 		writer:  writer,
 		mu:      &sync.RWMutex{},
@@ -172,6 +181,12 @@ func (k *kafkaClient) getNewReader(topic string) Reader {
 
 func (k *kafkaClient) Health() (health datasource.Health) {
 	health = datasource.Health{Details: make(map[string]interface{})}
+
+	health.Status = "UP"
+	_, err := k.conn.Controller()
+	if err != nil {
+		health.Status = "DOWN"
+	}
 
 	health.Details["host"] = k.config.Broker
 	health.Details["backend"] = "KAFKA"
