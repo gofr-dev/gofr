@@ -30,7 +30,7 @@ type Container struct {
 
 	Services       map[string]service.HTTP
 	metricsManager metrics.Manager
-	pubsub         pubsub.Client
+	PubSub         pubsub.Client
 
 	Redis *redis.Redis
 	SQL   *sql.DB
@@ -82,18 +82,18 @@ func (c *Container) Create(conf config.Config) {
 			partition, _ := strconv.Atoi(conf.GetOrDefault("PARTITION_SIZE", "0"))
 			offSet, _ := strconv.Atoi(conf.GetOrDefault("PUBSUB_OFFSET", "-1"))
 
-			c.pubsub = kafka.New(kafka.Config{
+			c.PubSub = kafka.New(kafka.Config{
 				Broker:          conf.Get("PUBSUB_BROKER"),
 				Partition:       partition,
 				ConsumerGroupID: conf.Get("CONSUMER_ID"),
 				OffSet:          offSet,
-			}, c.Logger)
+			}, c.Logger, c.metricsManager)
 		}
 	case "GOOGLE":
-		c.pubsub = google.New(google.Config{
+		c.PubSub = google.New(google.Config{
 			ProjectID:        conf.Get("GOOGLE_PROJECT_ID"),
 			SubscriptionName: conf.Get("GOOGLE_SUBSCRIPTION_NAME"),
-		}, c.Logger)
+		}, c.Logger, c.metricsManager)
 	}
 }
 
@@ -115,19 +115,26 @@ func (c *Container) registerFrameworkMetrics() {
 	c.Metrics().NewGauge("app_go_numGC", "Number of completed Garbage Collector cycles.")
 	c.Metrics().NewGauge("app_go_sys", "Number of total bytes of memory.")
 
-	histogramBuckets := []float64{.001, .003, .005, .01, .02, .03, .05, .1, .2, .3, .5, .75, 1, 2, 3, 5, 10, 30}
-
 	// http metrics
-	c.Metrics().NewHistogram("app_http_response", "Response time of http requests in seconds.", histogramBuckets...)
-	c.Metrics().NewHistogram("app_http_service_response", "Response time of http service requests in seconds.", histogramBuckets...)
+	httpBuckets := []float64{.001, .003, .005, .01, .02, .03, .05, .1, .2, .3, .5, .75, 1, 2, 3, 5, 10, 30}
+	c.Metrics().NewHistogram("app_http_response", "Response time of http requests in seconds.", httpBuckets...)
+	c.Metrics().NewHistogram("app_http_service_response", "Response time of http service requests in seconds.", httpBuckets...)
 
 	// redis metrics
-	c.Metrics().NewHistogram("app_redis_stats", "Observes the response time for Redis commands.", histogramBuckets...)
+	redisBuckets := []float64{50, 75, 100, 125, 150, 200, 300, 500, 750, 1000, 1250, 1500, 2000, 2500, 3000}
+	c.Metrics().NewHistogram("app_redis_stats", "Response time of Redis commands in microseconds.", redisBuckets...)
 
 	// sql metrics
-	c.Metrics().NewHistogram("app_sql_stats", "Observes the response time for SQL queries.", histogramBuckets...)
+	sqlBuckets := []float64{50, 75, 100, 125, 150, 200, 300, 500, 750, 1000, 2000, 3000, 4000, 5000, 7500, 10000}
+	c.Metrics().NewHistogram("app_sql_stats", "Response time of SQL queries in microseconds.", sqlBuckets...)
 	c.Metrics().NewGauge("app_sql_open_connections", "Number of open SQL connections.")
 	c.Metrics().NewGauge("app_sql_inUse_connections", "Number of inUse SQL connections.")
+
+	// pubsub metrics
+	c.Metrics().NewCounter("app_pubsub_publish_total_count", "Number of total publish operations.")
+	c.Metrics().NewCounter("app_pubsub_publish_success_count", "Number of successful publish operations.")
+	c.Metrics().NewCounter("app_pubsub_subscribe_total_count", "Number of total subscribe operations.")
+	c.Metrics().NewCounter("app_pubsub_subscribe_success_count", "Number of successful subscribe operations.")
 }
 
 func (c *Container) GetAppName() string {
@@ -139,9 +146,9 @@ func (c *Container) GetAppVersion() string {
 }
 
 func (c *Container) GetPublisher() pubsub.Publisher {
-	return c.pubsub
+	return c.PubSub
 }
 
 func (c *Container) GetSubscriber() pubsub.Subscriber {
-	return c.pubsub
+	return c.PubSub
 }

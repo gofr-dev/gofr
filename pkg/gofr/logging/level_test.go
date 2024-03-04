@@ -1,6 +1,7 @@
 package logging
 
 import (
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -92,4 +93,17 @@ func TestGetLevelFromString(t *testing.T) {
 
 		assert.Equal(t, tc.expected, actual, "TEST[%d], Failed.\n%s", i, tc.desc)
 	}
+}
+
+func Test_changeLevel(t *testing.T) {
+	l := logger{
+		level:      INFO,
+		normalOut:  os.Stdout,
+		errorOut:   os.Stderr,
+		isTerminal: false,
+	}
+
+	l.changeLevel(ERROR)
+
+	assert.Equal(t, ERROR, l.level, "Test_changeLevel failed! expected level to be error ")
 }

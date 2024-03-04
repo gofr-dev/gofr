@@ -84,6 +84,25 @@ func Test_NewMetricsManagerMetricsNotRegistered(t *testing.T) {
 	assert.Contains(t, log, `Metrics histogram-test is not registered`, "TEST Failed. histogram-test metrics registered")
 }
 
+func Test_NewMetricsManagerInvalidMetricsName(t *testing.T) {
+	logs := func() {
+		metrics := NewMetricsManager(exporters.Prometheus("testing-app", "v1.0.0"),
+			testutil.NewMockLogger(testutil.INFOLOG))
+
+		metrics.NewCounter("", "counter metric with empty name")
+		metrics.NewUpDownCounter("", "up-down-counter metric with empty name")
+		metrics.NewHistogram("", "histogram metric with empty name")
+		metrics.NewGauge("", "gauge metric with empty name")
+	}
+
+	log := testutil.StderrOutputForFunc(logs)
+
+	assert.Contains(t, log, `invalid instrument name`, "TEST Failed. counter metric with empty name")
+	assert.Contains(t, log, `invalid instrument name`, "TEST Failed. up-down-counter metric with empty name")
+	assert.Contains(t, log, `invalid instrument name`, "TEST Failed. histogram metric with empty name")
+	assert.Contains(t, log, `invalid instrument name`, "TEST Failed. gauge metric with empty name")
+}
+
 func Test_NewMetricsManagerDuplicateMetricsRegistration(t *testing.T) {
 	logs := func() {
 		metrics := NewMetricsManager(exporters.Prometheus("testing-app", "v1.0.0"),
@@ -124,7 +143,7 @@ func Test_NewMetricsManagerInvalidLabelPairErrors(t *testing.T) {
 	assert.Contains(t, log, `Metrics counter-test label has invalid key-value pairs`, "TEST Failed. Invalid key-value pair for labels")
 }
 
-func Test_NewMetricsManagerLabelHighCardianality(t *testing.T) {
+func Test_NewMetricsManagerLabelHighCardinality(t *testing.T) {
 	logs := func() {
 		metrics := NewMetricsManager(exporters.Prometheus("testing-app", "v1.0.0"),
 			testutil.NewMockLogger(testutil.INFOLOG))

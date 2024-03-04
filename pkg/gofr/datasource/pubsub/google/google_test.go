@@ -7,6 +7,7 @@ import (
 	gcPubSub "cloud.google.com/go/pubsub"
 	"cloud.google.com/go/pubsub/pstest"
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/mock/gomock"
 	"google.golang.org/api/option"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -35,10 +36,13 @@ func TestGoogleClient_New_Error(t *testing.T) {
 		g *googleClient
 	)
 
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
 	out := testutil.StderrOutputForFunc(func() {
 		logger := testutil.NewMockLogger(testutil.ERRORLOG)
 
-		g = New(Config{}, logger)
+		g = New(Config{}, logger, NewMockMetrics(ctrl))
 	})
 
 	assert.Nil(t, g)
@@ -48,6 +52,11 @@ func TestGoogleClient_New_Error(t *testing.T) {
 func TestGoogleClient_Publish_Success(t *testing.T) {
 	client := getGoogleClient(t)
 	defer client.Close()
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockMetrics := NewMockMetrics(ctrl)
 
 	topic := "test-topic"
 	message := []byte("test message")
@@ -61,7 +70,11 @@ func TestGoogleClient_Publish_Success(t *testing.T) {
 				ProjectID:        "test",
 				SubscriptionName: "sub",
 			},
+			metrics: mockMetrics,
 		}
+
+		mockMetrics.EXPECT().IncrementCounter(context.Background(), "app_pubsub_publish_total_count", "topic", topic)
+		mockMetrics.EXPECT().IncrementCounter(context.Background(), "app_pubsub_publish_success_count", "topic", topic)
 
 		err := g.Publish(context.Background(), topic, message)
 
@@ -72,15 +85,22 @@ func TestGoogleClient_Publish_Success(t *testing.T) {
 }
 
 func TestGoogleClient_PublishTopic_Error(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockMetrics := NewMockMetrics(ctrl)
+
 	g := &googleClient{client: getGoogleClient(t), Config: Config{
 		ProjectID:        "test",
 		SubscriptionName: "sub",
-	}}
+	}, metrics: mockMetrics}
 	defer g.client.Close()
 
 	ctx, cancel := context.WithCancel(context.Background())
 
 	cancel()
+
+	mockMetrics.EXPECT().IncrementCounter(ctx, "app_pubsub_publish_total_count", "topic", "test-topic")
 
 	err := g.Publish(ctx, "test-topic", []byte(""))
 	if assert.Error(t, err) {
