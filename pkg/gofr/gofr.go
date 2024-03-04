@@ -1,7 +1,6 @@
 package gofr
 
 import (
-	"context"
 	"fmt"
 
 	"net/http"
@@ -39,9 +38,10 @@ type App struct {
 	// container is unexported because this is an internal implementation and applications are provided access to it via Context
 	container *container.Container
 
-	grpcRegistered       bool
-	httpRegistered       bool
-	subscriberRegistered bool
+	grpcRegistered bool
+	httpRegistered bool
+
+	subscriptionManager SubscriptionManager
 }
 
 // RegisterService adds a grpc service to the gofr application.
@@ -82,6 +82,8 @@ func New() *App {
 	}
 
 	app.grpcServer = newGRPCServer(app.container, port)
+
+	app.subscriptionManager = newSubscriptionManager(app.container)
 
 	return app
 }
@@ -148,7 +150,12 @@ func (a *App) Run() {
 	}
 
 	// If subscriber is registered, block main go routine to wait for subscriber to receive messages
-	if a.subscriberRegistered {
+	if a.subscriptionManager.subscriptions != nil {
+		// Start subscribers concurrently using go-routines
+		for topic, handler := range a.subscriptionManager.subscriptions {
+			go a.subscriptionManager.startSubscriber(topic, handler)
+		}
+
 		wg.Add(1)
 	}
 
@@ -264,31 +271,5 @@ func (a *App) Subscribe(topic string, handler SubscribeFunc) {
 		return
 	}
 
-	a.subscriberRegistered = true
-
-	// continuously subscribe in an infinite loop
-	go func() {
-		for {
-			msg, err := a.container.GetSubscriber().Subscribe(context.Background(), topic)
-			if msg == nil {
-				continue
-			}
-
-			if err != nil {
-				a.container.Logger.Errorf("error while reading from Kafka, err: %v", err.Error())
-
-				continue
-			}
-
-			// create a gofr context with message as request
-			ctx := newContext(nil, msg, a.container)
-
-			err = handler(ctx)
-
-			// commit the message if the subscription function does not return error
-			if err == nil {
-				msg.Commit()
-			}
-		}
-	}()
+	a.subscriptionManager.subscriptions[topic] = handler
 }
