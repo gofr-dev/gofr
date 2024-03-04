@@ -8,17 +8,15 @@ import (
 	"testing"
 	"time"
 
-	"gofr.dev/pkg/gofr/datasource/pubsub"
-
 	"gofr.dev/pkg/gofr/container"
-
+	"gofr.dev/pkg/gofr/datasource/pubsub"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/testutil"
 )
 
-var errHandler = errors.New("error in db")
+var errHandler = errors.New("error in subscribing")
 
-func handlerError(err string) error {
+func handleError(err string) error {
 	return fmt.Errorf("%w: %s", errHandler, err)
 }
 
@@ -69,7 +67,7 @@ func TestSubscriptionManager_HandlerError(t *testing.T) {
 		go func() {
 			subscriptionManager.startSubscriber("test-topic",
 				func(c *Context) error {
-					return handlerError("error in db")
+					return handleError("error in test-topic")
 				})
 		}()
 
@@ -99,7 +97,7 @@ func TestSubscriptionManager_SubscribeError(t *testing.T) {
 		go func() {
 			subscriptionManager.startSubscriber("abc",
 				func(c *Context) error {
-					return handlerError("error in db")
+					return handleError("error in abc")
 				})
 		}()
 
