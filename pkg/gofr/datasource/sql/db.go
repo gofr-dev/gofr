@@ -28,17 +28,17 @@ type Log struct {
 }
 
 func (d *DB) logQuery(start time.Time, queryType, query string, args ...interface{}) {
-	duration := time.Since(start)
+	duration := time.Since(start).Microseconds()
 
 	d.logger.Debug(Log{
 		Type:     queryType,
 		Query:    query,
-		Duration: duration.Microseconds(),
+		Duration: duration,
 		Args:     args,
 	})
 
-	d.metrics.RecordHistogram(context.Background(), "app_sql_stats",
-		duration.Seconds(), "type", getOperationType(query))
+	d.metrics.RecordHistogram(context.Background(), "app_sql_stats", float64(duration),
+		"type", getOperationType(query))
 }
 
 func getOperationType(query string) string {
@@ -54,27 +54,27 @@ func (d *DB) Query(query string, args ...interface{}) (*sql.Rows, error) {
 }
 
 func (d *DB) QueryRow(query string, args ...interface{}) *sql.Row {
-	d.logQuery(time.Now(), "QueryRow", query, args...)
+	defer d.logQuery(time.Now(), "QueryRow", query, args...)
 	return d.DB.QueryRow(query, args...)
 }
 
 func (d *DB) QueryRowContext(ctx context.Context, query string, args ...interface{}) *sql.Row {
-	d.logQuery(time.Now(), "QueryRowContext", query, args...)
+	defer d.logQuery(time.Now(), "QueryRowContext", query, args...)
 	return d.DB.QueryRowContext(ctx, query, args...)
 }
 
 func (d *DB) Exec(query string, args ...interface{}) (sql.Result, error) {
-	d.logQuery(time.Now(), "Exec", query, args...)
+	defer d.logQuery(time.Now(), "Exec", query, args...)
 	return d.DB.Exec(query, args...)
 }
 
 func (d *DB) ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
-	d.logQuery(time.Now(), "ExecContext", query, args...)
+	defer d.logQuery(time.Now(), "ExecContext", query, args...)
 	return d.DB.ExecContext(ctx, query, args...)
 }
 
 func (d *DB) Prepare(query string) (*sql.Stmt, error) {
-	d.logQuery(time.Now(), "Prepare", query)
+	defer d.logQuery(time.Now(), "Prepare", query)
 	return d.DB.Prepare(query)
 }
 
@@ -94,16 +94,17 @@ type Tx struct {
 }
 
 func (t *Tx) logQuery(start time.Time, queryType, query string, args ...interface{}) {
-	duration := time.Since(start)
+	duration := time.Since(start).Microseconds()
 
 	t.logger.Debug(Log{
 		Type:     queryType,
 		Query:    query,
-		Duration: duration.Microseconds(),
+		Duration: duration,
 		Args:     args,
 	})
 
-	t.metrics.RecordHistogram(context.Background(), "app_sql_stats", duration.Seconds())
+	t.metrics.RecordHistogram(context.Background(), "app_sql_stats", float64(duration),
+		"type", getOperationType(query))
 }
 
 func (t *Tx) Query(query string, args ...interface{}) (*sql.Rows, error) {

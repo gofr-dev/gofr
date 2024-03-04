@@ -1,12 +1,76 @@
 package sql
 
 import (
+	"strings"
 	"testing"
+
+	"go.uber.org/mock/gomock"
 
 	"github.com/stretchr/testify/assert"
 
 	"gofr.dev/pkg/gofr/testutil"
 )
+
+func TestNewSQL_ErrorCase(t *testing.T) {
+	ctrl := gomock.NewController(t)
+
+	expectedLog := "could not connect with 'testuser' user to database 'localhost:3306'  error"
+
+	mockConfig := testutil.NewMockConfig(map[string]string{
+		"DB_DIALECT":  "mysql",
+		"DB_HOST":     "localhost",
+		"DB_USER":     "testuser",
+		"DB_PASSWORD": "testpassword",
+		"DB_PORT":     "3306",
+		"DB_NAME":     "testdb",
+	})
+
+	testLogs := testutil.StderrOutputForFunc(func() {
+		mockLogger := testutil.NewMockLogger(testutil.ERRORLOG)
+		mockMetrics := NewMockMetrics(ctrl)
+
+		NewSQL(mockConfig, mockLogger, mockMetrics)
+	})
+
+	if !strings.Contains(testLogs, expectedLog) {
+		t.Errorf("TestNewSQL_ErrorCase Failed! Expcted error log doesn't match actual.")
+	}
+}
+
+func TestNewSQL_InvalidDialect(t *testing.T) {
+	ctrl := gomock.NewController(t)
+
+	mockConfig := testutil.NewMockConfig(map[string]string{
+		"DB_DIALECT": "abc",
+		"DB_HOST":    "localhost",
+	})
+
+	testLogs := testutil.StderrOutputForFunc(func() {
+		mockLogger := testutil.NewMockLogger(testutil.ERRORLOG)
+		mockMetrics := NewMockMetrics(ctrl)
+
+		NewSQL(mockConfig, mockLogger, mockMetrics)
+	})
+
+	if !strings.Contains(testLogs, errUnsupportedDialect.Error()) {
+		t.Errorf("TestNewSQL_ErrorCase Failed! Expcted error log doesn't match actual.")
+	}
+}
+
+func TestNewSQL_InvalidConfig(t *testing.T) {
+	ctrl := gomock.NewController(t)
+
+	mockConfig := testutil.NewMockConfig(map[string]string{
+		"DB_DIALECT": "",
+	})
+
+	mockLogger := testutil.NewMockLogger(testutil.ERRORLOG)
+	mockMetrics := NewMockMetrics(ctrl)
+
+	db := NewSQL(mockConfig, mockLogger, mockMetrics)
+
+	assert.Nil(t, db, "TestNewSQL_InvalidConfig. expected db to be nil.")
+}
 
 func TestSQL_GetDBConfig(t *testing.T) {
 	mockConfig := testutil.NewMockConfig(map[string]string{

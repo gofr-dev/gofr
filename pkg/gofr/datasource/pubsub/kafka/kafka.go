@@ -31,12 +31,13 @@ type kafkaClient struct {
 	reader map[string]Reader
 	mu     *sync.RWMutex
 
-	logger pubsub.Logger
-	config Config
+	logger  pubsub.Logger
+	config  Config
+	metrics Metrics
 }
 
 //nolint:revive // We do not want anyone using the client without initialization steps.
-func New(conf Config, logger pubsub.Logger) *kafkaClient {
+func New(conf Config, logger pubsub.Logger, metrics Metrics) *kafkaClient {
 	err := validateConfigs(conf)
 	if err != nil {
 		logger.Errorf("could not initialize kafka, err : %v", err)
@@ -57,12 +58,13 @@ func New(conf Config, logger pubsub.Logger) *kafkaClient {
 	reader := make(map[string]Reader)
 
 	return &kafkaClient{
-		config: conf,
-		dialer: dialer,
-		reader: reader,
-		logger: logger,
-		writer: writer,
-		mu:     &sync.RWMutex{},
+		config:  conf,
+		dialer:  dialer,
+		reader:  reader,
+		logger:  logger,
+		writer:  writer,
+		mu:      &sync.RWMutex{},
+		metrics: metrics,
 	}
 }
 
@@ -79,6 +81,8 @@ func validateConfigs(conf Config) error {
 }
 
 func (k *kafkaClient) Publish(ctx context.Context, topic string, message []byte) error {
+	k.metrics.IncrementCounter(ctx, "app_pubsub_publish_total_count", "topic", topic)
+
 	if k.writer == nil || topic == "" {
 		return errPublisherNotConfigured
 	}
@@ -98,10 +102,14 @@ func (k *kafkaClient) Publish(ctx context.Context, topic string, message []byte)
 
 	k.logger.Debugf("published kafka message %v on topic %v", string(message), topic)
 
+	k.metrics.IncrementCounter(ctx, "app_pubsub_publish_success_count", "topic", topic)
+
 	return nil
 }
 
 func (k *kafkaClient) Subscribe(ctx context.Context, topic string) (*pubsub.Message, error) {
+	k.metrics.IncrementCounter(ctx, "app_pubsub_subscribe_total_count", "topic", topic)
+
 	var reader Reader
 	// Lock the reader map to ensure only one subscriber access the reader at a time
 	k.mu.Lock()
@@ -131,6 +139,8 @@ func (k *kafkaClient) Subscribe(ctx context.Context, topic string) (*pubsub.Mess
 	}
 
 	k.logger.Debugf("received kafka message %v on topic %v", string(msg.Value), msg.Topic)
+
+	k.metrics.IncrementCounter(ctx, "app_pubsub_subscribe_success_count", "topic", topic)
 
 	return m, err
 }
