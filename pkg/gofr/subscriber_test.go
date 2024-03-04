@@ -78,7 +78,7 @@ func TestSubscriptionManager_HandlerError(t *testing.T) {
 	// signal the test to end
 	close(done)
 
-	if !strings.Contains(testLogs, "error in handler for topic test-topic: error in db") {
+	if !strings.Contains(testLogs, "error in handler for topic test-topic: error in subscribing: error in test-topic") {
 		t.Error("TestSubscriptionManager_HandlerError Failed! Missing log message about handler error")
 	}
 }
