@@ -2,6 +2,7 @@ package pubsub
 
 import (
 	"context"
+	"gofr.dev/pkg/gofr/datasource"
 )
 
 type Publisher interface {
@@ -15,6 +16,7 @@ type Subscriber interface {
 type Client interface {
 	Publisher
 	Subscriber
+	Health() datasource.Health
 }
 
 type Committer interface {

@@ -3,6 +3,7 @@ package google
 import (
 	"context"
 	"errors"
+	"gofr.dev/pkg/gofr/datasource"
 	"time"
 
 	gcPubSub "cloud.google.com/go/pubsub"
@@ -25,6 +26,11 @@ type googleClient struct {
 
 	client *gcPubSub.Client
 	logger pubsub.Logger
+}
+
+func (g *googleClient) Health() datasource.Health {
+	//TODO implement me
+	panic("implement me")
 }
 
 //nolint:revive // We do not want anyone using the client without initialization steps.
