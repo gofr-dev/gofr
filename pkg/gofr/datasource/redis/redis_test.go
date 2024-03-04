@@ -13,6 +13,33 @@ import (
 	"gofr.dev/pkg/gofr/testutil"
 )
 
+func Test_NewClient_HostNameMissing(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockLogger := testutil.NewMockLogger(testutil.ERRORLOG)
+	mockMetrics := NewMockMetrics(ctrl)
+	mockConfig := testutil.NewMockConfig(map[string]string{"REDIS_HOST": ""})
+
+	client := NewClient(mockConfig, mockLogger, mockMetrics)
+	assert.Nil(t, client, "Test_NewClient_HostNameMissing Failed! Expected redis client to be nil")
+}
+
+func Test_NewClient_InvalidPort(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockLogger := testutil.NewMockLogger(testutil.ERRORLOG)
+	mockMetrics := NewMockMetrics(ctrl)
+	mockConfig := testutil.NewMockConfig(map[string]string{"REDIS_HOST": "localhost",
+		"REDIS_PORT": "&&^%%^&*"})
+
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_redis_stats", gomock.Any(), "type", "ping")
+
+	client := NewClient(mockConfig, mockLogger, mockMetrics)
+	assert.Nil(t, client.Client, "Test_NewClient_InvalidPort Failed! Expected redis client to be nil")
+}
+
 func TestRedis_QueryLogging(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
