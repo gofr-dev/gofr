@@ -602,7 +602,7 @@ func TestTx_Query(t *testing.T) {
 		mock.ExpectQuery("SELECT 1").
 			WillReturnRows(sqlmock.NewRows([]string{"1"}).AddRow("1"))
 		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats",
-			gomock.Any())
+			gomock.Any(), "type", "SELECT")
 
 		rows, err = tx.Query("SELECT 1")
 		assert.Nil(t, err)
@@ -632,7 +632,7 @@ func TestTx_QueryError(t *testing.T) {
 		mock.ExpectQuery("SELECT ").
 			WillReturnError(errSyntax)
 		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats",
-			gomock.Any())
+			gomock.Any(), "type", "SELECT")
 
 		rows, err = tx.Query("SELECT")
 		if !assert.Nil(t, rows) {
@@ -665,7 +665,7 @@ func TestTx_QueryRow(t *testing.T) {
 		mock.ExpectQuery("SELECT name FROM employee WHERE id = ?").WithArgs(1).
 			WillReturnRows(sqlmock.NewRows([]string{"name"}).AddRow("jhon"))
 		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats",
-			gomock.Any())
+			gomock.Any(), "type", "SELECT")
 
 		row = tx.QueryRow("SELECT name FROM employee WHERE id = ?", 1)
 		assert.NotNil(t, row)
@@ -692,7 +692,7 @@ func TestTx_QueryRowContext(t *testing.T) {
 
 		mock.ExpectQuery("SELECT name FROM employee WHERE id = ?").WithArgs(1)
 		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats",
-			gomock.Any())
+			gomock.Any(), "type", "SELECT")
 
 		row = tx.QueryRowContext(context.Background(), "SELECT name FROM employee WHERE id = ?", 1)
 		assert.NotNil(t, row)
@@ -721,7 +721,7 @@ func TestTx_Exec(t *testing.T) {
 		mock.ExpectExec("INSERT INTO employee VALUES(?, ?)").
 			WithArgs(2, "doe").WillReturnResult(sqlmock.NewResult(1, 1))
 		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats",
-			gomock.Any())
+			gomock.Any(), "type", "INSERT")
 
 		res, err = tx.Exec("INSERT INTO employee VALUES(?, ?)", 2, "doe")
 		assert.Nil(t, err)
@@ -751,7 +751,7 @@ func TestTx_ExecError(t *testing.T) {
 		mock.ExpectExec("INSERT INTO employee VALUES(?, ?").
 			WithArgs(2, "doe").WillReturnError(errSyntax)
 		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats",
-			gomock.Any())
+			gomock.Any(), "type", "INSERT")
 
 		res, err = tx.Exec("INSERT INTO employee VALUES(?, ?", 2, "doe")
 		assert.Nil(t, res)
@@ -782,7 +782,7 @@ func TestTx_ExecContext(t *testing.T) {
 		mock.ExpectExec(`INSERT INTO employee VALUES(?, ?)`).
 			WithArgs(2, "doe").WillReturnResult(sqlmock.NewResult(1, 1))
 		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats",
-			gomock.Any())
+			gomock.Any(), "type", "INSERT")
 
 		res, err = tx.ExecContext(context.Background(), "INSERT INTO employee VALUES(?, ?)", 2, "doe")
 		assert.Nil(t, err)
@@ -812,7 +812,7 @@ func TestTx_ExecContextError(t *testing.T) {
 		mock.ExpectExec(`INSERT INTO employee VALUES(?, ?)`).
 			WithArgs(2, "doe").WillReturnResult(sqlmock.NewResult(1, 1))
 		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats",
-			gomock.Any())
+			gomock.Any(), "type", "INSERT")
 
 		res, err = tx.ExecContext(context.Background(), "INSERT INTO employee VALUES(?, ?)", 2, "doe")
 		assert.Nil(t, err)
@@ -841,7 +841,7 @@ func TestTx_Prepare(t *testing.T) {
 
 		mock.ExpectPrepare("SELECT name FROM employee WHERE id = ?")
 		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats",
-			gomock.Any())
+			gomock.Any(), "type", "SELECT")
 
 		stmt, err = tx.Prepare("SELECT name FROM employee WHERE id = ?")
 		assert.Nil(t, err)
@@ -870,7 +870,7 @@ func TestTx_PrepareError(t *testing.T) {
 
 		mock.ExpectPrepare("SELECT name FROM employee WHERE id = ?")
 		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats",
-			gomock.Any())
+			gomock.Any(), "type", "SELECT")
 
 		stmt, err = tx.Prepare("SELECT name FROM employee WHERE id = ?")
 		assert.Nil(t, err)
@@ -894,7 +894,7 @@ func TestTx_Commit(t *testing.T) {
 		tx := getTransaction(db, mock)
 
 		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats",
-			gomock.Any())
+			gomock.Any(), "type", "COMMIT")
 		mock.ExpectCommit()
 
 		err = tx.Commit()
@@ -918,7 +918,7 @@ func TestTx_CommitError(t *testing.T) {
 		tx := getTransaction(db, mock)
 
 		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats",
-			gomock.Any())
+			gomock.Any(), "type", "COMMIT")
 		mock.ExpectCommit().WillReturnError(errDB)
 
 		err = tx.Commit()
@@ -943,7 +943,7 @@ func TestTx_RollBack(t *testing.T) {
 		tx := getTransaction(db, mock)
 
 		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats",
-			gomock.Any())
+			gomock.Any(), "type", "ROLLBACK")
 		mock.ExpectRollback()
 
 		err = tx.Rollback()
@@ -967,7 +967,7 @@ func TestTx_RollbackError(t *testing.T) {
 		tx := getTransaction(db, mock)
 
 		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats",
-			gomock.Any())
+			gomock.Any(), "type", "ROLLBACK")
 		mock.ExpectRollback().WillReturnError(errDB)
 
 		err = tx.Rollback()

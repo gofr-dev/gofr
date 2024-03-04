@@ -28,17 +28,17 @@ type Log struct {
 }
 
 func (d *DB) logQuery(start time.Time, queryType, query string, args ...interface{}) {
-	duration := time.Since(start)
+	duration := time.Since(start).Microseconds()
 
 	d.logger.Debug(Log{
 		Type:     queryType,
 		Query:    query,
-		Duration: duration.Microseconds(),
+		Duration: duration,
 		Args:     args,
 	})
 
-	d.metrics.RecordHistogram(context.Background(), "app_sql_stats",
-		duration.Seconds(), "type", getOperationType(query))
+	d.metrics.RecordHistogram(context.Background(), "app_sql_stats", float64(duration),
+		"type", getOperationType(query))
 }
 
 func getOperationType(query string) string {
@@ -94,16 +94,17 @@ type Tx struct {
 }
 
 func (t *Tx) logQuery(start time.Time, queryType, query string, args ...interface{}) {
-	duration := time.Since(start)
+	duration := time.Since(start).Microseconds()
 
 	t.logger.Debug(Log{
 		Type:     queryType,
 		Query:    query,
-		Duration: duration.Microseconds(),
+		Duration: duration,
 		Args:     args,
 	})
 
-	t.metrics.RecordHistogram(context.Background(), "app_sql_stats", duration.Seconds())
+	t.metrics.RecordHistogram(context.Background(), "app_sql_stats", float64(duration),
+		"type", getOperationType(query))
 }
 
 func (t *Tx) Query(query string, args ...interface{}) (*sql.Rows, error) {
