@@ -2,12 +2,12 @@ package google
 
 import (
 	"context"
-	"go.uber.org/mock/gomock"
 	"testing"
 
 	gcPubSub "cloud.google.com/go/pubsub"
 	"cloud.google.com/go/pubsub/pstest"
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/mock/gomock"
 	"google.golang.org/api/option"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
