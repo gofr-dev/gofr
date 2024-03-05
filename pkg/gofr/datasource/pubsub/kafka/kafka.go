@@ -25,7 +25,7 @@ type Config struct {
 
 type kafkaClient struct {
 	dialer *kafka.Dialer
-	conn   *kafka.Conn
+	conn   Connection
 
 	writer Writer
 	reader map[string]Reader
@@ -175,4 +175,8 @@ func (k *kafkaClient) getNewReader(topic string) Reader {
 	})
 
 	return reader
+}
+
+func (k *kafkaClient) Controller() (broker kafka.Broker, err error) {
+	return k.conn.Controller()
 }

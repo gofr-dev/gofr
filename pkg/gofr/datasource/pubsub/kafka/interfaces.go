@@ -17,3 +17,7 @@ type Writer interface {
 	Close() error
 	Stats() kafka.WriterStats
 }
+
+type Connection interface {
+	Controller() (broker kafka.Broker, err error)
+}

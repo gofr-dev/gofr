@@ -157,3 +157,41 @@ func (mr *MockWriterMockRecorder) WriteMessages(ctx any, msg ...any) *gomock.Cal
 	varargs := append([]any{ctx}, msg...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WriteMessages", reflect.TypeOf((*MockWriter)(nil).WriteMessages), varargs...)
 }
+
+// MockConnection is a mock of Connection interface.
+type MockConnection struct {
+	ctrl     *gomock.Controller
+	recorder *MockConnectionMockRecorder
+}
+
+// MockConnectionMockRecorder is the mock recorder for MockConnection.
+type MockConnectionMockRecorder struct {
+	mock *MockConnection
+}
+
+// NewMockConnection creates a new mock instance.
+func NewMockConnection(ctrl *gomock.Controller) *MockConnection {
+	mock := &MockConnection{ctrl: ctrl}
+	mock.recorder = &MockConnectionMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockConnection) EXPECT() *MockConnectionMockRecorder {
+	return m.recorder
+}
+
+// Controller mocks base method.
+func (m *MockConnection) Controller() (kafka.Broker, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Controller")
+	ret0, _ := ret[0].(kafka.Broker)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Controller indicates an expected call of Controller.
+func (mr *MockConnectionMockRecorder) Controller() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Controller", reflect.TypeOf((*MockConnection)(nil).Controller))
+}
