@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"gofr.dev/pkg/gofr/datasource"
+	"google.golang.org/api/iterator"
 	"time"
 
 	gcPubSub "cloud.google.com/go/pubsub"
@@ -29,9 +30,61 @@ type googleClient struct {
 	metrics Metrics
 }
 
-func (g *googleClient) Health() datasource.Health {
-	//TODO implement me
-	panic("implement me")
+func (g *googleClient) Health() (health datasource.Health) {
+	health.Details = make(map[string]interface{})
+
+	health.Status = "UP"
+	health.Details["backend"] = "GOOGLE"
+
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+
+	it := g.client.Topics(ctx)
+
+	topics := make(map[string]interface{})
+
+	for {
+		topic, err := it.Next()
+		if err == iterator.Done {
+			break
+		}
+
+		if err != nil {
+			health.Status = "DOWN"
+		}
+
+		if topic != nil {
+			topics[topic.ID()] = topic
+		}
+	}
+
+	health.Details["writers"] = topics
+
+	ctx, cancel = context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+
+	subIt := g.client.Subscriptions(ctx)
+
+	subscriptions := make(map[string]interface{})
+
+	for {
+		subcription, err := subIt.Next()
+		if err == iterator.Done {
+			break
+		}
+
+		if err != nil {
+			health.Status = "DOWN"
+		}
+
+		if subcription != nil {
+			subscriptions[subcription.ID()] = subcription
+		}
+	}
+
+	health.Details["readers"] = subscriptions
+
+	return health
 }
 
 //nolint:revive // We do not want anyone using the client without initialization steps.
