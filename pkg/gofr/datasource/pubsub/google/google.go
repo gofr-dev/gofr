@@ -23,7 +23,7 @@ type Config struct {
 type googleClient struct {
 	Config
 
-	client  *gcPubSub.Client
+	client  Client
 	logger  pubsub.Logger
 	metrics Metrics
 }
