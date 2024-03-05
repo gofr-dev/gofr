@@ -5,11 +5,11 @@ import "gofr.dev/pkg/gofr/datasource"
 func (k *kafkaClient) Health() (health datasource.Health) {
 	health = datasource.Health{Details: make(map[string]interface{})}
 
-	health.Status = "UP"
+	health.Status = datasource.StatusUp
 
 	_, err := k.conn.Controller()
 	if err != nil {
-		health.Status = "DOWN"
+		health.Status = datasource.StatusDown
 	}
 
 	health.Details["host"] = k.config.Broker
