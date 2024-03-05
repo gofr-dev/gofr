@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"gofr.dev/pkg/gofr/datasource"
 	"sync"
 	"time"
 
@@ -179,23 +178,6 @@ func (k *kafkaClient) getNewReader(topic string) Reader {
 	return reader
 }
 
-func (k *kafkaClient) Health() (health datasource.Health) {
-	health = datasource.Health{Details: make(map[string]interface{})}
-
-	health.Status = "UP"
-	_, err := k.conn.Controller()
-	if err != nil {
-		health.Status = "DOWN"
-	}
-
-	health.Details["host"] = k.config.Broker
-	health.Details["backend"] = "KAFKA"
-	health.Details["writer"] = k.getWriterStatsAsMap()
-	health.Details["readers"] = k.getReaderStatsAsMap()
-
-	return
-}
-
 func (k *kafkaClient) getReaderStatsAsMap() []interface{} {
 	readerStats := make([]interface{}, 0)
 
@@ -223,8 +205,8 @@ func (k *kafkaClient) getWriterStatsAsMap() map[string]interface{} {
 	return writerStats
 }
 
-// convertStructToMap tries to convert any struct to a map representation by first marshalling it to JSON, then unmarshalling into a map.
-func convertStructToMap(input interface{}, output interface{}) error {
+// convertStructToMap tries to convert any struct to a map representation by first marshaling it to JSON, then unmarshalling into a map.
+func convertStructToMap(input, output interface{}) error {
 	body, err := json.Marshal(input)
 	if err != nil {
 		return err

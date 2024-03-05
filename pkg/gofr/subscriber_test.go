@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"gofr.dev/pkg/gofr/container"
+	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/testutil"
@@ -27,6 +28,10 @@ func subscriptionError(err string) error {
 }
 
 type mockSubscriber struct {
+}
+
+func (s mockSubscriber) Health() datasource.Health {
+	return datasource.Health{}
 }
 
 func (s mockSubscriber) Publish(_ context.Context, _ string, _ []byte) error {
