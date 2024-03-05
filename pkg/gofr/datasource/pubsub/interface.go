@@ -19,7 +19,7 @@ type Client interface {
 	Subscriber
 	Health() datasource.Health
 
-	CreateTopic(name string) error
+	CreateTopic(context context.Context, name string) error
 }
 
 type Committer interface {

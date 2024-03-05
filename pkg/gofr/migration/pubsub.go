@@ -1,7 +1,9 @@
 package migration
 
+import "context"
+
 type client interface {
-	CreateTopic(name string) error
+	CreateTopic(context context.Context, name string) error
 }
 
 type pubsub struct {
@@ -12,6 +14,6 @@ func newPubSub(p client) *pubsub {
 	return &pubsub{client: p}
 }
 
-func (s *pubsub) CreateTopic(name string) error {
-	return s.client.CreateTopic(name)
+func (s *pubsub) CreateTopic(context context.Context, name string) error {
+	return s.client.CreateTopic(context, name)
 }

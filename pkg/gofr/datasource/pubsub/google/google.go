@@ -3,7 +3,7 @@ package google
 import (
 	"context"
 	"errors"
-	"fmt"
+	"strings"
 	"time"
 
 	gcPubSub "cloud.google.com/go/pubsub"
@@ -29,10 +29,14 @@ type googleClient struct {
 	metrics Metrics
 }
 
-func (g *googleClient) CreateTopic(name string) error {
-	fmt.Print("topic created")
+func (g *googleClient) CreateTopic(ctx context.Context, name string) error {
+	_, err := g.client.CreateTopic(ctx, name)
 
-	return nil
+	if strings.Contains(err.Error(), "Topic already exists") {
+		return nil
+	}
+
+	return err
 }
 
 //nolint:revive // We do not want anyone using the client without initialization steps.

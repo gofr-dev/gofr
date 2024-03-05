@@ -100,6 +100,10 @@ func insertMigrationRecord(tx *gofrSql.Tx, query string, version int64, startTim
 }
 
 func rollbackAndLog(c *container.Container, tx *gofrSql.Tx) {
+	if tx == nil {
+		return
+	}
+
 	if err := tx.Rollback(); err != nil {
 		c.Logger.Error("unable to rollback transaction: %v", err)
 	}
