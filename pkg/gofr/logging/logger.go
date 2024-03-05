@@ -3,7 +3,9 @@ package logging
 import (
 	"encoding/json"
 	"fmt"
+	"gofr.dev/pkg/gofr/grpc"
 	"io"
+	"math"
 	"os"
 	"time"
 
@@ -168,6 +170,14 @@ func (l *logger) prettyPrint(e logEntry, out io.Writer) {
 			"\u001B[38;5;%dm%d\u001B[0m %8d\u001B[38;5;8mµs\u001B[0m %s %s \033[0;31m %s \n",
 			e.Level.color(), e.Level.String()[0:4], e.Time.Format("15:04:05"), msg.CorrelationID, colorForStatusCode(msg.ResponseCode),
 			msg.ResponseCode, msg.ResponseTime, msg.HTTPMethod, msg.URI, msg.ErrorMessage)
+	case grpc.RPCLog:
+		// checking the length of status code to match the spacing that is being done in HTTP logs after status codes
+		statusCodeLen := int(math.Log10(float64(msg.StatusCode))) + 1
+
+		fmt.Fprintf(out, "\u001B[38;5;%dm%s\u001B[0m [%s] \u001B[38;5;8m%s "+
+			"\u001B[38;5;%dm%d\u001B[0m %*d\u001B[38;5;8mµs\u001B[0m %s \n",
+			e.Level.color(), e.Level.String()[0:4], e.Time.Format("15:04:05"), msg.ID, colorForGRPCCode(msg.StatusCode), msg.StatusCode, 9-statusCodeLen, msg.ResponseTime,
+			msg.Method)
 	default:
 		fmt.Fprintf(out, "\u001B[38;5;%dm%s\u001B[0m [%s] %v\n", e.Level.color(), e.Level.String()[0:4], e.Time.Format("15:04:05"), e.Message)
 	}
@@ -191,6 +201,19 @@ func colorForStatusCode(status int) int {
 	}
 
 	return 0
+}
+
+func colorForGRPCCode(status int32) int {
+	const (
+		blue = 34
+		red  = 202
+	)
+
+	if status == 0 {
+		return blue
+	} else {
+		return red
+	}
 }
 
 func NewLogger(level Level) Logger {
