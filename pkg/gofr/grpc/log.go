@@ -30,7 +30,7 @@ func (l RPCLog) String() string {
 }
 
 func LoggingInterceptor(logger Logger) grpc.UnaryServerInterceptor {
-	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (_ interface{}, err error) {
+	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 		ctx, span := otel.GetTracerProvider().Tracer("gofr",
 			trace.WithInstrumentationVersion("v0.1")).Start(ctx, info.FullMethod)
 		start := time.Now()
@@ -63,6 +63,6 @@ func LoggingInterceptor(logger Logger) grpc.UnaryServerInterceptor {
 			span.End()
 		}()
 
-		return resp, err
+		return resp, er
 	}
 }
