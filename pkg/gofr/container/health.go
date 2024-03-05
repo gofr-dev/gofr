@@ -13,6 +13,10 @@ func (c *Container) Health(ctx context.Context) interface{} {
 		datasources["redis"] = c.Redis.HealthCheck()
 	}
 
+	if c.PubSub != nil {
+		datasources["pubsub"] = c.PubSub.Health()
+	}
+
 	for name, svc := range c.Services {
 		datasources[name] = svc.HealthCheck(ctx)
 	}

@@ -25,9 +25,12 @@ type Config struct {
 
 type kafkaClient struct {
 	dialer *kafka.Dialer
+	conn   Connection
+
 	writer Writer
 	reader map[string]Reader
-	mu     *sync.RWMutex
+
+	mu *sync.RWMutex
 
 	logger  pubsub.Logger
 	config  Config
@@ -48,6 +51,11 @@ func New(conf Config, logger pubsub.Logger, metrics Metrics) *kafkaClient {
 		return nil
 	}
 
+	conn, err := kafka.Dial("tcp", conf.Broker)
+	if err != nil {
+		logger.Errorf("Failed to connect to KAFKA at %v", conf.Broker)
+	}
+
 	dialer := &kafka.Dialer{
 		Timeout:   10 * time.Second,
 		DualStack: true,
@@ -64,6 +72,7 @@ func New(conf Config, logger pubsub.Logger, metrics Metrics) *kafkaClient {
 		config:  conf,
 		dialer:  dialer,
 		reader:  reader,
+		conn:    conn,
 		logger:  logger,
 		writer:  writer,
 		mu:      &sync.RWMutex{},
@@ -171,4 +180,8 @@ func (k *kafkaClient) getNewReader(topic string) Reader {
 	})
 
 	return reader
+}
+
+func (k *kafkaClient) Controller() (broker kafka.Broker, err error) {
+	return k.conn.Controller()
 }
