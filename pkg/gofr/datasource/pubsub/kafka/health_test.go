@@ -1,12 +1,14 @@
 package kafka
 
 import (
+	"testing"
+
 	"github.com/segmentio/kafka-go"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
+
 	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/testutil"
-	"testing"
 )
 
 func TestKafkaClient_HealthStatusUP(t *testing.T) {
@@ -40,8 +42,8 @@ func TestKafkaClient_HealthStatusUP(t *testing.T) {
 	assert.Equal(t, expectedHealth.Details["host"], health.Details["host"])
 	assert.Equal(t, expectedHealth.Details["backend"], health.Details["backend"])
 	assert.Equal(t, expectedHealth.Status, health.Status)
-
 }
+
 func TestKafkaClient_HealthStatusDown(t *testing.T) {
 	ctrl := gomock.NewController(t)
 
@@ -64,7 +66,7 @@ func TestKafkaClient_HealthStatusDown(t *testing.T) {
 		},
 	}
 
-	conn.EXPECT().Controller().Return(kafka.Broker{}, testutil.CustomError{"connection failed"})
+	conn.EXPECT().Controller().Return(kafka.Broker{}, testutil.CustomError{ErrorMessage: "connection failed"})
 	writer.EXPECT().Stats().Return(kafka.WriterStats{Topic: "test"})
 	reader.EXPECT().Stats().Return(kafka.ReaderStats{Topic: "test"})
 
@@ -73,7 +75,6 @@ func TestKafkaClient_HealthStatusDown(t *testing.T) {
 	assert.Equal(t, expectedHealth.Details["host"], health.Details["host"])
 	assert.Equal(t, expectedHealth.Details["backend"], health.Details["backend"])
 	assert.Equal(t, expectedHealth.Status, health.Status)
-
 }
 
 func TestKafkaClient_getWriterStatsAsMap(t *testing.T) {
@@ -111,13 +112,12 @@ func TestKafkaClient_getReaderStatsAsMap(t *testing.T) {
 }
 
 func TestKafkaClint_convertStructToMap(t *testing.T) {
-
 	testCases := []struct {
 		desc   string
 		input  interface{}
 		output interface{}
 	}{
-		{"unmarhsal error", make(chan int, 0), nil},
+		{"unmarhsal error", make(chan int), nil},
 	}
 
 	for _, v := range testCases {
