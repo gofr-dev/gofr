@@ -14,7 +14,7 @@ func (k *kafkaClient) Health() (health datasource.Health) {
 
 	health.Details["host"] = k.config.Broker
 	health.Details["backend"] = "KAFKA"
-	health.Details["writer"] = k.getWriterStatsAsMap()
+	health.Details["writers"] = k.getWriterStatsAsMap()
 	health.Details["readers"] = k.getReaderStatsAsMap()
 
 	return
