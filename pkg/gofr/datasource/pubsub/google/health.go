@@ -15,6 +15,7 @@ func (g *googleClient) Health() (health datasource.Health) {
 	health.Details = make(map[string]interface{})
 
 	health.Status = datasource.StatusUp
+	health.Details["projectID"] = g.Config.ProjectID
 	health.Details["backend"] = "GOOGLE"
 
 	ctx, cancel := context.WithTimeout(context.Background(), contextTimeoutDuration*time.Millisecond)
