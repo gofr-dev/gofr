@@ -34,6 +34,11 @@ type kafkaClient struct {
 	metrics Metrics
 }
 
+func (k *kafkaClient) CreateTopic(name string) error {
+
+	return nil
+}
+
 //nolint:revive // We do not want anyone using the client without initialization steps.
 func New(conf Config, logger pubsub.Logger, metrics Metrics) *kafkaClient {
 	err := validateConfigs(conf)

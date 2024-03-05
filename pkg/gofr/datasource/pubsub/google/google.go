@@ -3,6 +3,7 @@ package google
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	gcPubSub "cloud.google.com/go/pubsub"
@@ -26,6 +27,12 @@ type googleClient struct {
 	client  *gcPubSub.Client
 	logger  pubsub.Logger
 	metrics Metrics
+}
+
+func (g *googleClient) CreateTopic(name string) error {
+	fmt.Print("topic created")
+
+	return nil
 }
 
 //nolint:revive // We do not want anyone using the client without initialization steps.

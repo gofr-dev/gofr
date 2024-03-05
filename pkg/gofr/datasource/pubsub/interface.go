@@ -15,6 +15,8 @@ type Subscriber interface {
 type Client interface {
 	Publisher
 	Subscriber
+
+	CreateTopic(name string) error
 }
 
 type Committer interface {
