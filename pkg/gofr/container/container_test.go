@@ -129,6 +129,16 @@ func TestContainer_GetSubscriber(t *testing.T) {
 	assert.Equal(t, subscriber, out)
 }
 
+func TestContainer_NewEmptyContainer(t *testing.T) {
+	container := NewEmptyContainer()
+
+	assert.Nil(t, container.Redis, "TestContainer_NewEmptyContainer Failed!")
+	assert.Nil(t, container.SQL, "TestContainer_NewEmptyContainer Failed")
+	assert.Nil(t, container.Services, "TestContainer_NewEmptyContainer Failed")
+	assert.Nil(t, container.PubSub, "TestContainer_NewEmptyContainer Failed")
+	assert.Nil(t, container.Logger, "TestContainer_NewEmptyContainer Failed")
+}
+
 type mockPubSub struct {
 }
 
