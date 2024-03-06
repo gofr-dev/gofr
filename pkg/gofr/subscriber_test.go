@@ -46,12 +46,6 @@ func (s mockSubscriber) Publish(_ context.Context, _ string, _ []byte) error {
 	return nil
 }
 
-type Message struct {
-	Topic    string
-	Value    []byte
-	MetaData interface{}
-}
-
 func (mockSubscriber) Subscribe(_ context.Context, topic string) (*pubsub.Message, error) {
 	if topic == "test-topic" {
 		return &pubsub.Message{
