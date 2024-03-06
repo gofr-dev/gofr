@@ -30,11 +30,11 @@ func subscriptionError(err string) error {
 type mockSubscriber struct {
 }
 
-func (s mockSubscriber) CreateTopic(context context.Context, name string) error {
+func (s mockSubscriber) CreateTopic(_ context.Context, _ string) error {
 	return nil
 }
 
-func (s mockSubscriber) DeleteTopic(context context.Context, name string) error {
+func (s mockSubscriber) DeleteTopic(_ context.Context, _ string) error {
 	return nil
 }
 
