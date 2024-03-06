@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"gofr.dev/pkg/gofr/config"
+	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 	"gofr.dev/pkg/gofr/service"
 	"gofr.dev/pkg/gofr/testutil"
@@ -140,6 +141,18 @@ func TestContainer_NewEmptyContainer(t *testing.T) {
 }
 
 type mockPubSub struct {
+}
+
+func (m *mockPubSub) CreateTopic(_ context.Context, _ string) error {
+	return nil
+}
+
+func (m *mockPubSub) DeleteTopic(_ context.Context, _ string) error {
+	return nil
+}
+
+func (m *mockPubSub) Health() datasource.Health {
+	return datasource.Health{}
 }
 
 func (m *mockPubSub) Publish(_ context.Context, _ string, _ []byte) error {
