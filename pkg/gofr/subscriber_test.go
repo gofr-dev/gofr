@@ -30,6 +30,14 @@ func subscriptionError(err string) error {
 type mockSubscriber struct {
 }
 
+func (s mockSubscriber) CreateTopic(context context.Context, name string) error {
+	return nil
+}
+
+func (s mockSubscriber) DeleteTopic(context context.Context, name string) error {
+	return nil
+}
+
 func (s mockSubscriber) Health() datasource.Health {
 	return datasource.Health{}
 }

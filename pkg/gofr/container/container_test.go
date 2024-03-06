@@ -133,6 +133,14 @@ func TestContainer_GetSubscriber(t *testing.T) {
 type mockPubSub struct {
 }
 
+func (m *mockPubSub) CreateTopic(context context.Context, name string) error {
+	return nil
+}
+
+func (m *mockPubSub) DeleteTopic(context context.Context, name string) error {
+	return nil
+}
+
 func (m *mockPubSub) Health() datasource.Health {
 	return datasource.Health{}
 }
