@@ -12,12 +12,18 @@ import (
 func (g *googleClient) Health() (health datasource.Health) {
 	health.Details = make(map[string]interface{})
 
+	var writerStatus, readerStatus string
+
 	health.Status = datasource.StatusUp
 	health.Details["projectID"] = g.Config.ProjectID
 	health.Details["backend"] = "GOOGLE"
 
-	health.Status, health.Details["writers"] = g.getWriterDetails()
-	health.Status, health.Details["readers"] = g.getReaderDetails()
+	writerStatus, health.Details["writers"] = g.getWriterDetails()
+	readerStatus, health.Details["readers"] = g.getReaderDetails()
+
+	if readerStatus == datasource.StatusDown || writerStatus == datasource.StatusDown {
+		health.Status = datasource.StatusDown
+	}
 
 	return health
 }
