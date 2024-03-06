@@ -18,6 +18,9 @@ type Client interface {
 	Publisher
 	Subscriber
 	Health() datasource.Health
+
+	CreateTopic(context context.Context, name string) error
+	DeleteTopic(context context.Context, name string) error
 }
 
 type Committer interface {
