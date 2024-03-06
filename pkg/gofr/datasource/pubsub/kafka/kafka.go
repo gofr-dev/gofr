@@ -186,7 +186,12 @@ func (k *kafkaClient) Controller() (broker kafka.Broker, err error) {
 }
 
 func (k *kafkaClient) CreateTopic(_ context.Context, name string) error {
-	topics := kafka.TopicConfig{Topic: name}
+	topics := kafka.TopicConfig{Topic: name, NumPartitions: 1, ReplicationFactor: 1}
 
-	return k.conn.CreateTopics(topics)
+	err := k.conn.CreateTopics(topics)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

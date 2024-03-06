@@ -34,7 +34,7 @@ func (g *googleClient) DeleteTopic(ctx context.Context, name string) error {
 
 	err := topic.Delete(ctx)
 
-	if strings.Contains(err.Error(), "NOT_FOUND") {
+	if err != nil && strings.Contains(err.Error(), "Topic not found") {
 		return nil
 	}
 
@@ -44,7 +44,7 @@ func (g *googleClient) DeleteTopic(ctx context.Context, name string) error {
 func (g *googleClient) CreateTopic(ctx context.Context, name string) error {
 	_, err := g.client.CreateTopic(ctx, name)
 
-	if strings.Contains(err.Error(), "Topic already exists") {
+	if err != nil && strings.Contains(err.Error(), "Topic already exists") {
 		return nil
 	}
 
