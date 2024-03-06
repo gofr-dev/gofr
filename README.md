@@ -28,10 +28,11 @@ We will focus ourselves towards deployment in kubernetes and aspire to provide o
 
 1. Simple API syntax
 2. REST Standards by default
-3. [Configuration management](https://gofr.dev/docs/v1/references/configs)
+3. Configuration management
 4. Inbuilt Middlewares
-5. [Error Management](https://gofr.dev/docs/v1/references/errors)
-6. [gRPC support](https://gofr.dev/docs/v1/advanced-guide/grpc)
+5. [gRPC support](https://gofr.dev/docs/advanced-guide/grpc)
+6. [HTTP service](https://gofr.dev/docs/advanced-guide/http-communication) with support for [Circuit Breaker](https://gofr.dev/docs/advanced-guide/circuit-breaker) and 
+[Health Check](https://gofr.dev/docs/advanced-guide/monitoring-service-health)
 
 ## 👍 Contribute
 If you want to say thank you and/or support the active development of GoFr:
