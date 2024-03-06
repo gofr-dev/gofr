@@ -20,4 +20,6 @@ type Writer interface {
 
 type Connection interface {
 	Controller() (broker kafka.Broker, err error)
+	CreateTopics(topics ...kafka.TopicConfig) error
+	DeleteTopics(topics ...string) error
 }

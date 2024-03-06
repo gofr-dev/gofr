@@ -195,3 +195,39 @@ func (mr *MockConnectionMockRecorder) Controller() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Controller", reflect.TypeOf((*MockConnection)(nil).Controller))
 }
+
+// CreateTopics mocks base method.
+func (m *MockConnection) CreateTopics(topics ...kafka.TopicConfig) error {
+	m.ctrl.T.Helper()
+	varargs := []any{}
+	for _, a := range topics {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "CreateTopics", varargs...)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CreateTopics indicates an expected call of CreateTopics.
+func (mr *MockConnectionMockRecorder) CreateTopics(topics ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateTopics", reflect.TypeOf((*MockConnection)(nil).CreateTopics), topics...)
+}
+
+// DeleteTopics mocks base method.
+func (m *MockConnection) DeleteTopics(topics ...string) error {
+	m.ctrl.T.Helper()
+	varargs := []any{}
+	for _, a := range topics {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "DeleteTopics", varargs...)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteTopics indicates an expected call of DeleteTopics.
+func (mr *MockConnectionMockRecorder) DeleteTopics(topics ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteTopics", reflect.TypeOf((*MockConnection)(nil).DeleteTopics), topics...)
+}
