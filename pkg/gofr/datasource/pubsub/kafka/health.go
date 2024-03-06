@@ -45,6 +45,7 @@ func (k *kafkaClient) getWriterStatsAsMap() map[string]interface{} {
 
 	if err := convertStructToMap(k.writer.Stats(), &writerStats); err != nil {
 		k.logger.Errorf("Kafka Writer Stats processing failed: %v", err)
+
 		return nil
 	}
 
