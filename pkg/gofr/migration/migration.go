@@ -69,6 +69,10 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 			err        error
 		)
 
+		if c.PubSub != nil {
+			datasource.PubSub = newPubSub(c.PubSub)
+		}
+
 		if c.SQL != nil {
 			sqlTx, err = c.SQL.Begin()
 			if err != nil {

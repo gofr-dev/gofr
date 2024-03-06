@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"gofr.dev/examples/using-migrations/migrations"
+
 	"gofr.dev/pkg/gofr"
 )
 

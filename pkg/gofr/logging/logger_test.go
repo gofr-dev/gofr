@@ -15,6 +15,7 @@ import (
 
 	"gofr.dev/pkg/gofr/datasource/redis"
 	"gofr.dev/pkg/gofr/datasource/sql"
+	"gofr.dev/pkg/gofr/grpc"
 	"gofr.dev/pkg/gofr/http/middleware"
 	"gofr.dev/pkg/gofr/service"
 	"gofr.dev/pkg/gofr/testutil"
@@ -235,6 +236,15 @@ func TestPrettyPrint_DbAndTerminalLogs(t *testing.T) {
 				"pipeline",
 				"get set",
 			},
+		},
+		{
+			desc: "Redis Pipeline Log",
+			entry: logEntry{
+				Level: INFO, Time: testTime,
+				Message: grpc.RPCLog{ID: "b8810022", Method: "/test", StatusCode: 0},
+			},
+			isTerminal:     true,
+			expectedOutput: []string{"INFO", "[00:00:00]", "0", "/test"},
 		},
 	}
 

@@ -25,9 +25,12 @@ type Config struct {
 
 type kafkaClient struct {
 	dialer *kafka.Dialer
+	conn   Connection
+
 	writer Writer
 	reader map[string]Reader
-	mu     *sync.RWMutex
+
+	mu *sync.RWMutex
 
 	logger  pubsub.Logger
 	config  Config
@@ -41,6 +44,11 @@ func New(conf Config, logger pubsub.Logger, metrics Metrics) *kafkaClient {
 		logger.Errorf("could not initialize kafka, err : %v", err)
 
 		return nil
+	}
+
+	conn, err := kafka.Dial("tcp", conf.Broker)
+	if err != nil {
+		logger.Errorf("Failed to connect to KAFKA at %v", conf.Broker)
 	}
 
 	dialer := &kafka.Dialer{
@@ -59,6 +67,7 @@ func New(conf Config, logger pubsub.Logger, metrics Metrics) *kafkaClient {
 		config:  conf,
 		dialer:  dialer,
 		reader:  reader,
+		conn:    conn,
 		logger:  logger,
 		writer:  writer,
 		mu:      &sync.RWMutex{},
@@ -166,4 +175,23 @@ func (k *kafkaClient) getNewReader(topic string) Reader {
 	})
 
 	return reader
+}
+
+func (k *kafkaClient) DeleteTopic(_ context.Context, name string) error {
+	return k.conn.DeleteTopics(name)
+}
+
+func (k *kafkaClient) Controller() (broker kafka.Broker, err error) {
+	return k.conn.Controller()
+}
+
+func (k *kafkaClient) CreateTopic(_ context.Context, name string) error {
+	topics := kafka.TopicConfig{Topic: name, NumPartitions: 1, ReplicationFactor: 1}
+
+	err := k.conn.CreateTopics(topics)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

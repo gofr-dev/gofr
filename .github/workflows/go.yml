@@ -108,11 +108,6 @@ jobs:
         run: |
           go mod download
 
-      - name: Create Kafka topics for test
-        run: |
-          docker exec ${{ job.services.kafka.id }} kafka-topics.sh --create --bootstrap-server localhost:9092 --replication-factor 1 --partitions 1 --topic products
-          docker exec ${{ job.services.kafka.id }} kafka-topics.sh --create --bootstrap-server localhost:9092 --replication-factor 1 --partitions 1 --topic order-logs
-
       - name: Start Zipkin
         run: docker run -d -p 2005:9411 openzipkin/zipkin:latest
 
@@ -157,7 +152,8 @@ jobs:
         run: |
           export GOFR_ENV=test
           go test gofr.dev/pkg/... -tags migration -v -short -coverprofile packageWithMigration.cov -coverpkg=gofr.dev/pkg/...
-          grep -v 'gofr.dev/pkg/gofr/migration' packageWithMigration.cov > profile.cov
+          grep -v 'gofr.dev/pkg/gofr/migration' packageWithMigration.cov > packageWithoutMigration.cov
+          grep -v 'google/mock_interfaces\.go' packageWithoutMigration.cov > profile.cov
           go tool cover -func profile.cov
 
       - name: Upload Test Coverage
@@ -220,7 +216,6 @@ jobs:
         run: |
           awk '!/^mode: / && FNR==1{print "mode: set"} {print}' ./Example-Test-Report/profile.cov > merged_profile.cov
           tail -n +2 ./PKG-Coverage-Report/profile.cov >> merged_profile.cov
-
 
       - name: Upload
         uses: paambaati/codeclimate-action@v5.0.0
