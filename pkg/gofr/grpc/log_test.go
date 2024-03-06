@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc"
 
-	"gofr.dev/pkg/gofr/logging"
+	"gofr.dev/pkg/gofr/testutil"
 )
 
 type contextKey string
@@ -20,12 +20,13 @@ const (
 
 func TestRPCLog_String(t *testing.T) {
 	l := RPCLog{
-		ID:        "123",
-		StartTime: "2020-01-01T12:12:12",
-		Method:    http.MethodGet,
+		ID:         "123",
+		StartTime:  "2020-01-01T12:12:12",
+		Method:     http.MethodGet,
+		StatusCode: 0,
 	}
 
-	expLog := `{"id":"123","startTime":"2020-01-01T12:12:12","responseTime":0,"method":"GET"}`
+	expLog := `{"id":"123","startTime":"2020-01-01T12:12:12","responseTime":0,"method":"GET","statusCode":0}`
 
 	assert.Equal(t, expLog, l.String())
 }
@@ -67,7 +68,7 @@ func TestLoggingInterceptor(t *testing.T) {
 
 	for i, tc := range tests {
 		ctx := context.WithValue(context.Background(), key, tc.id)
-		l := logging.NewLogger(logging.INFO)
+		l := testutil.NewMockLogger(testutil.INFOLOG)
 
 		resp, err := LoggingInterceptor(l)(ctx, nil, serverInfo, tc.handler)
 
