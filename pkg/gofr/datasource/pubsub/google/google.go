@@ -29,6 +29,18 @@ type googleClient struct {
 	metrics Metrics
 }
 
+func (g *googleClient) DeleteTopic(context context.Context, name string) error {
+	topic := g.client.Topic(name)
+
+	err := topic.Delete(context)
+
+	if strings.Contains(err.Error(), "NOT_FOUND") {
+		return nil
+	}
+
+	return err
+}
+
 func (g *googleClient) CreateTopic(ctx context.Context, name string) error {
 	_, err := g.client.CreateTopic(ctx, name)
 

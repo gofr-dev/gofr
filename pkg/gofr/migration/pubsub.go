@@ -4,6 +4,7 @@ import "context"
 
 type client interface {
 	CreateTopic(context context.Context, name string) error
+	DeleteTopic(context context.Context, name string) error
 }
 
 type pubsub struct {
@@ -16,4 +17,8 @@ func newPubSub(p client) *pubsub {
 
 func (s *pubsub) CreateTopic(context context.Context, name string) error {
 	return s.client.CreateTopic(context, name)
+}
+
+func (s *pubsub) DeleteTopic(context context.Context, name string) error {
+	return s.client.DeleteTopic(context, name)
 }

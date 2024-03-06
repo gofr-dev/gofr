@@ -37,6 +37,10 @@ type kafkaClient struct {
 	metrics Metrics
 }
 
+func (k *kafkaClient) DeleteTopic(_ context.Context, name string) error {
+	return k.conn.DeleteTopics(name)
+}
+
 //nolint:revive // We do not want anyone using the client without initialization steps.
 func New(conf Config, logger pubsub.Logger, metrics Metrics) *kafkaClient {
 	err := validateConfigs(conf)
@@ -50,8 +54,6 @@ func New(conf Config, logger pubsub.Logger, metrics Metrics) *kafkaClient {
 	if err != nil {
 		logger.Errorf("Failed to connect to KAFKA at %v", conf.Broker)
 	}
-
-	conn.CreateTopics()
 
 	dialer := &kafka.Dialer{
 		Timeout:   10 * time.Second,
