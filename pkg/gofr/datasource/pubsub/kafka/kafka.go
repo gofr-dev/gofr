@@ -37,9 +37,6 @@ type kafkaClient struct {
 	metrics Metrics
 }
 
-func (k *kafkaClient) DeleteTopic(_ context.Context, name string) error {
-	return k.conn.DeleteTopics(name)
-}
 
 //nolint:revive // We do not want anyone using the client without initialization steps.
 func New(conf Config, logger pubsub.Logger, metrics Metrics) *kafkaClient {
@@ -179,6 +176,10 @@ func (k *kafkaClient) getNewReader(topic string) Reader {
 	})
 
 	return reader
+}
+
+func (k *kafkaClient) DeleteTopic(_ context.Context, name string) error {
+	return k.conn.DeleteTopics(name)
 }
 
 func (k *kafkaClient) Controller() (broker kafka.Broker, err error) {

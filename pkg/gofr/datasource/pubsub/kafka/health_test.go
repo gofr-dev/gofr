@@ -117,7 +117,7 @@ func TestKafkaClint_convertStructToMap(t *testing.T) {
 		input  interface{}
 		output interface{}
 	}{
-		{"unmarhsal error", make(chan int), nil},
+		{"unmarshal error", make(chan int), nil},
 	}
 
 	for _, v := range testCases {
