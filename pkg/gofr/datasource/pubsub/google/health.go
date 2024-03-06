@@ -10,20 +10,36 @@ import (
 )
 
 func (g *googleClient) Health() (health datasource.Health) {
-	const contextTimeoutDuration = 50
-
 	health.Details = make(map[string]interface{})
+
+	var writerStatus, readerStatus string
 
 	health.Status = datasource.StatusUp
 	health.Details["projectID"] = g.Config.ProjectID
 	health.Details["backend"] = "GOOGLE"
+
+	writerStatus, health.Details["writers"] = g.getWriterDetails()
+	readerStatus, health.Details["readers"] = g.getReaderDetails()
+
+	if readerStatus == datasource.StatusDown || writerStatus == datasource.StatusDown {
+		health.Status = datasource.StatusDown
+	}
+
+	return health
+}
+
+//nolint:dupl // getWriterDetails provides the publishing details for current google publishers.
+func (g *googleClient) getWriterDetails() (status string, details map[string]interface{}) {
+	const contextTimeoutDuration = 50
+
+	status = datasource.StatusUp
 
 	ctx, cancel := context.WithTimeout(context.Background(), contextTimeoutDuration*time.Millisecond)
 	defer cancel()
 
 	it := g.client.Topics(ctx)
 
-	topics := make(map[string]interface{})
+	details = make(map[string]interface{})
 
 	for {
 		topic, err := it.Next()
@@ -32,43 +48,48 @@ func (g *googleClient) Health() (health datasource.Health) {
 		}
 
 		if err != nil {
-			health.Status = datasource.StatusDown
+			status = datasource.StatusDown
 
 			break
 		}
 
 		if topic != nil {
-			topics[topic.ID()] = topic
+			details[topic.ID()] = topic
 		}
 	}
 
-	health.Details["writers"] = topics
+	return status, details
+}
 
-	ctx, cancel = context.WithTimeout(context.Background(), contextTimeoutDuration*time.Millisecond)
+//nolint:dupl // getReaderDetails provides the subscription details for current google subscriptions.
+func (g *googleClient) getReaderDetails() (status string, details map[string]interface{}) {
+	const contextTimeoutDuration = 50
+
+	status = datasource.StatusUp
+
+	ctx, cancel := context.WithTimeout(context.Background(), contextTimeoutDuration*time.Millisecond)
 	defer cancel()
 
 	subIt := g.client.Subscriptions(ctx)
 
-	subscriptions := make(map[string]interface{})
+	details = make(map[string]interface{})
 
 	for {
-		subcription, err := subIt.Next()
+		subscription, err := subIt.Next()
 		if errors.Is(err, iterator.Done) {
 			break
 		}
 
 		if err != nil {
-			health.Status = datasource.StatusDown
+			status = datasource.StatusDown
 
 			break
 		}
 
-		if subcription != nil {
-			subscriptions[subcription.ID()] = subcription
+		if subscription != nil {
+			details[subscription.ID()] = subscription
 		}
 	}
 
-	health.Details["readers"] = subscriptions
-
-	return health
+	return status, details
 }
