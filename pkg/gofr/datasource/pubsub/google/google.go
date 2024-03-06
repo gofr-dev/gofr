@@ -29,28 +29,6 @@ type googleClient struct {
 	metrics Metrics
 }
 
-func (g *googleClient) DeleteTopic(ctx context.Context, name string) error {
-	topic := g.client.Topic(name)
-
-	err := topic.Delete(ctx)
-
-	if err != nil && strings.Contains(err.Error(), "Topic not found") {
-		return nil
-	}
-
-	return err
-}
-
-func (g *googleClient) CreateTopic(ctx context.Context, name string) error {
-	_, err := g.client.CreateTopic(ctx, name)
-
-	if err != nil && strings.Contains(err.Error(), "Topic already exists") {
-		return nil
-	}
-
-	return err
-}
-
 //nolint:revive // We do not want anyone using the client without initialization steps.
 func New(conf Config, logger pubsub.Logger, metrics Metrics) *googleClient {
 	err := validateConfigs(&conf)
@@ -191,4 +169,24 @@ func (g *googleClient) getSubscription(ctx context.Context, topic *gcPubSub.Topi
 	}
 
 	return subscription, nil
+}
+
+func (g *googleClient) DeleteTopic(ctx context.Context, name string) error {
+	err := g.client.Topic(name).Delete(ctx)
+
+	if err != nil && strings.Contains(err.Error(), "Topic not found") {
+		return nil
+	}
+
+	return err
+}
+
+func (g *googleClient) CreateTopic(ctx context.Context, name string) error {
+	_, err := g.client.CreateTopic(ctx, name)
+
+	if err != nil && strings.Contains(err.Error(), "Topic already exists") {
+		return nil
+	}
+
+	return err
 }
