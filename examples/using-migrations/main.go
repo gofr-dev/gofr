@@ -3,8 +3,6 @@ package main
 import (
 	"errors"
 	"fmt"
-	"os"
-
 	"gofr.dev/examples/using-migrations/migrations"
 	"gofr.dev/pkg/gofr"
 )
@@ -15,7 +13,6 @@ const (
 )
 
 func main() {
-	os.Setenv("PUBSUB_EMULATOR_HOST", "localhost:8085")
 	// Create a new application
 	a := gofr.New()
 
