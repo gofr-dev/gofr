@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"gofr.dev/pkg/gofr/config"
+	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 	"gofr.dev/pkg/gofr/service"
 	"gofr.dev/pkg/gofr/testutil"
@@ -130,6 +131,10 @@ func TestContainer_GetSubscriber(t *testing.T) {
 }
 
 type mockPubSub struct {
+}
+
+func (m *mockPubSub) Health() datasource.Health {
+	return datasource.Health{}
 }
 
 func (m *mockPubSub) Publish(_ context.Context, _ string, _ []byte) error {
