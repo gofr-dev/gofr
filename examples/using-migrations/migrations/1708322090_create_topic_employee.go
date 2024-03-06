@@ -5,7 +5,7 @@ import (
 	"gofr.dev/pkg/gofr/migration"
 )
 
-func createTopicEmployee() migration.Migrate {
+func createTopicsForStore() migration.Migrate {
 	return migration.Migrate{
 		UP: func(d migration.Datasource) error {
 			err := d.PubSub.CreateTopic(context.Background(), "products")
