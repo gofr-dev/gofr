@@ -312,3 +312,62 @@ func TestNewKafkaClient(t *testing.T) {
 		}
 	}
 }
+
+func TestKafkaClient_Controller(t *testing.T) {
+	ctrl := gomock.NewController(t)
+
+	mockClient := NewMockConnection(ctrl)
+
+	client := kafkaClient{
+		conn: mockClient,
+	}
+
+	mockClient.EXPECT().Controller().Return(kafka.Broker{}, nil)
+
+	broker, err := client.Controller()
+
+	assert.NotNil(t, broker)
+	assert.Nil(t, err)
+}
+
+func TestKafkaClient_DeleteTopic(t *testing.T) {
+	ctrl := gomock.NewController(t)
+
+	mockClient := NewMockConnection(ctrl)
+
+	client := kafkaClient{
+		conn: mockClient,
+	}
+
+	mockClient.EXPECT().DeleteTopics("test").Return(nil)
+
+	err := client.DeleteTopic(context.Background(), "test")
+
+	assert.Nil(t, err)
+}
+
+func TestKafkaClient_CreateTopic(t *testing.T) {
+	ctrl := gomock.NewController(t)
+
+	mockClient := NewMockConnection(ctrl)
+
+	client := kafkaClient{
+		conn: mockClient,
+	}
+
+	testCases := []struct {
+		desc string
+		err  error
+	}{
+		{"create success", nil},
+		{"delete success", testutil.CustomError{ErrorMessage: "custom error"}},
+	}
+
+	for _, tc := range testCases {
+		mockClient.EXPECT().CreateTopics(gomock.Any()).Return(tc.err)
+
+		err := client.CreateTopic(context.Background(), "test")
+
+		assert.Equal(t, tc.err, err)
+	}
+}
