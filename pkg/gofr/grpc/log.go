@@ -35,7 +35,7 @@ func LoggingInterceptor(logger Logger) grpc.UnaryServerInterceptor {
 			trace.WithInstrumentationVersion("v0.1")).Start(ctx, info.FullMethod)
 		start := time.Now()
 
-		resp, er := handler(ctx, req)
+		resp, err := handler(ctx, req)
 
 		defer func() {
 			l := RPCLog{
@@ -45,9 +45,9 @@ func LoggingInterceptor(logger Logger) grpc.UnaryServerInterceptor {
 				Method:       info.FullMethod,
 			}
 
-			if er != nil {
+			if err != nil {
 				// Check if the error is a gRPC status error
-				if statusErr, ok := status.FromError(er); ok {
+				if statusErr, ok := status.FromError(err); ok {
 					// You can access the gRPC status code here
 					l.StatusCode = int32(statusErr.Code())
 				}
@@ -63,6 +63,6 @@ func LoggingInterceptor(logger Logger) grpc.UnaryServerInterceptor {
 			span.End()
 		}()
 
-		return resp, er
+		return resp, err
 	}
 }
