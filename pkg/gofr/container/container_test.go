@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"gofr.dev/pkg/gofr/config"
+	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 	"gofr.dev/pkg/gofr/service"
 	"gofr.dev/pkg/gofr/testutil"
@@ -129,7 +130,29 @@ func TestContainer_GetSubscriber(t *testing.T) {
 	assert.Equal(t, subscriber, out)
 }
 
+func TestContainer_NewEmptyContainer(t *testing.T) {
+	container := NewEmptyContainer()
+
+	assert.Nil(t, container.Redis, "TestContainer_NewEmptyContainer Failed!")
+	assert.Nil(t, container.SQL, "TestContainer_NewEmptyContainer Failed")
+	assert.Nil(t, container.Services, "TestContainer_NewEmptyContainer Failed")
+	assert.Nil(t, container.PubSub, "TestContainer_NewEmptyContainer Failed")
+	assert.Nil(t, container.Logger, "TestContainer_NewEmptyContainer Failed")
+}
+
 type mockPubSub struct {
+}
+
+func (m *mockPubSub) CreateTopic(_ context.Context, _ string) error {
+	return nil
+}
+
+func (m *mockPubSub) DeleteTopic(_ context.Context, _ string) error {
+	return nil
+}
+
+func (m *mockPubSub) Health() datasource.Health {
+	return datasource.Health{}
 }
 
 func (m *mockPubSub) Publish(_ context.Context, _ string, _ []byte) error {

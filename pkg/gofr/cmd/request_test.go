@@ -54,3 +54,18 @@ func TestRequest_WithOneArg(t *testing.T) {
 
 	assert.Equal(t, req, r, "TEST Failed.\n Hostname did not match.")
 }
+
+func TestHostName(t *testing.T) {
+	r := &Request{}
+
+	// Get the hostname using os.Hostname()
+	hostname, err := os.Hostname()
+	if err != nil {
+		t.Fatalf("Error getting hostname: %v", err)
+	}
+
+	// Get the hostname from the mock request
+	result := r.HostName()
+
+	assert.Equal(t, hostname, result, "TestHostName Failed!")
+}

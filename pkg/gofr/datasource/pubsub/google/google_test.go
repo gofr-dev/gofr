@@ -169,3 +169,50 @@ func Test_validateConfigs(t *testing.T) {
 		assert.Equal(t, tc.expErr, err)
 	}
 }
+
+func TestGoogleClient_CreateTopicSuccess(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mock := NewMockClient(ctrl)
+
+	client := googleClient{
+		client: mock,
+	}
+
+	mock.EXPECT().CreateTopic(context.Background(), "test-topic").Return(&gcPubSub.Topic{}, nil)
+
+	err := client.CreateTopic(context.Background(), "test-topic")
+
+	assert.Nil(t, err)
+}
+
+func TestGoogleClient_CreateTopic_AlreadyExist(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mock := NewMockClient(ctrl)
+
+	client := googleClient{
+		client: mock,
+	}
+
+	mock.EXPECT().CreateTopic(context.Background(), "test-topic").Return(&gcPubSub.Topic{},
+		testutil.CustomError{ErrorMessage: "Topic already exists"})
+
+	err := client.CreateTopic(context.Background(), "test-topic")
+
+	assert.Nil(t, err)
+}
+
+func TestGoogleClient_CreateTopicFailure(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mock := NewMockClient(ctrl)
+
+	client := googleClient{
+		client: mock,
+	}
+
+	mock.EXPECT().CreateTopic(context.Background(), "test-topic").Return(&gcPubSub.Topic{},
+		testutil.CustomError{ErrorMessage: "Unknown Error"})
+
+	err := client.CreateTopic(context.Background(), "test-topic")
+
+	assert.NotNil(t, err)
+}

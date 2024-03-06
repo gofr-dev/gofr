@@ -3,6 +3,7 @@ package google
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	gcPubSub "cloud.google.com/go/pubsub"
@@ -23,7 +24,7 @@ type Config struct {
 type googleClient struct {
 	Config
 
-	client  *gcPubSub.Client
+	client  Client
 	logger  pubsub.Logger
 	metrics Metrics
 }
@@ -168,4 +169,24 @@ func (g *googleClient) getSubscription(ctx context.Context, topic *gcPubSub.Topi
 	}
 
 	return subscription, nil
+}
+
+func (g *googleClient) DeleteTopic(ctx context.Context, name string) error {
+	err := g.client.Topic(name).Delete(ctx)
+
+	if err != nil && strings.Contains(err.Error(), "Topic not found") {
+		return nil
+	}
+
+	return err
+}
+
+func (g *googleClient) CreateTopic(ctx context.Context, name string) error {
+	_, err := g.client.CreateTopic(ctx, name)
+
+	if err != nil && strings.Contains(err.Error(), "Topic already exists") {
+		return nil
+	}
+
+	return err
 }
