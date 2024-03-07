@@ -37,9 +37,9 @@ func main() {
 		&service.OAuthConfig{
 			SigningMethod: jwt.SigningMethodHS256,
 			Claims: jwt.MapClaims{
-				"sub": "gofr_admin", // Subject (user identifier)
-				"iss": "todo-app",   // Issuer
-				"aud": "admin",      // Audience (user role)
+				"sub": "gofr_admin",             // Subject (user identifier)
+				"iss": a.Config.Get("APP_NAME"), // Issuer
+				"aud": "admin",                  // Audience (user role)
 			},
 			SecretKey: a.Config.Get("ANOTHER_SERVICE_OAUTH_SECRET_KEY"),
 		})
