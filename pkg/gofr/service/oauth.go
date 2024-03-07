@@ -10,6 +10,7 @@ import (
 
 type OAuthConfig struct {
 	// TODO jwt.SigningMethod should not be known to user, he should be able to pass it in different way.
+	// It can be an interface.
 	SigningMethod jwt.SigningMethod
 	Claims        map[string]interface{}
 	SecretKey     string
