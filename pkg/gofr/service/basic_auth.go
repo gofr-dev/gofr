@@ -37,7 +37,7 @@ func (ba *BasicAuthProvider) addAuthorizationHeader(headers map[string]string) e
 		return err
 	}
 
-	encodedAuth := b64.StdEncoding.EncodeToString(append([]byte(ba.userName+":"), decodedPassword...))
+	encodedAuth := b64.StdEncoding.EncodeToString([]byte(ba.userName + ":" + string(decodedPassword)))
 
 	headers["Authorization"] = "basic " + encodedAuth
 
@@ -48,7 +48,8 @@ func (ba *BasicAuthProvider) Get(ctx context.Context, path string, queryParams m
 	return ba.GetWithHeaders(ctx, path, queryParams, nil)
 }
 
-func (ba *BasicAuthProvider) GetWithHeaders(ctx context.Context, path string, queryParams map[string]interface{}, headers map[string]string) (*http.Response, error) {
+func (ba *BasicAuthProvider) GetWithHeaders(ctx context.Context, path string, queryParams map[string]interface{},
+	headers map[string]string) (*http.Response, error) {
 	if headers == nil {
 		headers = make(map[string]string)
 	}
@@ -61,11 +62,13 @@ func (ba *BasicAuthProvider) GetWithHeaders(ctx context.Context, path string, qu
 	return ba.HTTP.GetWithHeaders(ctx, path, queryParams, headers)
 }
 
-func (ba *BasicAuthProvider) Post(ctx context.Context, path string, queryParams map[string]interface{}, body []byte) (*http.Response, error) {
+func (ba *BasicAuthProvider) Post(ctx context.Context, path string, queryParams map[string]interface{},
+	body []byte) (*http.Response, error) {
 	return ba.PostWithHeaders(ctx, path, queryParams, body, nil)
 }
 
-func (ba *BasicAuthProvider) PostWithHeaders(ctx context.Context, path string, queryParams map[string]interface{}, body []byte, headers map[string]string) (*http.Response, error) {
+func (ba *BasicAuthProvider) PostWithHeaders(ctx context.Context, path string, queryParams map[string]interface{},
+	body []byte, headers map[string]string) (*http.Response, error) {
 	if headers == nil {
 		headers = make(map[string]string)
 	}
@@ -82,7 +85,8 @@ func (ba *BasicAuthProvider) Put(ctx context.Context, api string, queryParams ma
 	return ba.PutWithHeaders(ctx, api, queryParams, body, nil)
 }
 
-func (ba *BasicAuthProvider) PutWithHeaders(ctx context.Context, path string, queryParams map[string]interface{}, body []byte, headers map[string]string) (*http.Response, error) {
+func (ba *BasicAuthProvider) PutWithHeaders(ctx context.Context, path string, queryParams map[string]interface{},
+	body []byte, headers map[string]string) (*http.Response, error) {
 	if headers == nil {
 		headers = make(map[string]string)
 	}
@@ -95,16 +99,18 @@ func (ba *BasicAuthProvider) PutWithHeaders(ctx context.Context, path string, qu
 	return ba.HTTP.PutWithHeaders(ctx, path, queryParams, body, headers)
 }
 
-func (ba *BasicAuthProvider) Patch(ctx context.Context, path string, queryParams map[string]interface{}, body []byte) (*http.Response, error) {
+func (ba *BasicAuthProvider) Patch(ctx context.Context, path string, queryParams map[string]interface{},
+	body []byte) (*http.Response, error) {
 	return ba.PatchWithHeaders(ctx, path, queryParams, body, nil)
 }
 
-func (ba *BasicAuthProvider) PatchWithHeaders(ctx context.Context, path string, queryParams map[string]interface{}, body []byte, headers map[string]string) (*http.Response, error) {
-	err := ba.addAuthorizationHeader(headers)
+func (ba *BasicAuthProvider) PatchWithHeaders(ctx context.Context, path string, queryParams map[string]interface{},
+	body []byte, headers map[string]string) (*http.Response, error) {
 	if headers == nil {
 		headers = make(map[string]string)
 	}
 
+	err := ba.addAuthorizationHeader(headers)
 	if err != nil {
 		return nil, err
 	}
@@ -116,7 +122,8 @@ func (ba *BasicAuthProvider) Delete(ctx context.Context, path string, body []byt
 	return ba.DeleteWithHeaders(ctx, path, body, nil)
 }
 
-func (ba *BasicAuthProvider) DeleteWithHeaders(ctx context.Context, path string, body []byte, headers map[string]string) (*http.Response, error) {
+func (ba *BasicAuthProvider) DeleteWithHeaders(ctx context.Context, path string, body []byte,
+	headers map[string]string) (*http.Response, error) {
 	if headers == nil {
 		headers = make(map[string]string)
 	}

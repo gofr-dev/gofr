@@ -6,6 +6,8 @@ import (
 	"strings"
 )
 
+const credentialLength = 2
+
 type AuthenticationProvider interface {
 	ValidateUser(username, password string) bool
 }
@@ -31,8 +33,8 @@ func BasicAuthMiddleware(authProvider AuthenticationProvider) func(handler http.
 				return
 			}
 
-			credentials := strings.SplitN(string(payload), ":", 2)
-			if len(credentials) != 2 {
+			credentials := strings.SplitN(string(payload), ":", credentialLength)
+			if len(credentials) != credentialLength {
 				http.Error(w, "Invalid Credentials", http.StatusUnauthorized)
 				return
 			}
