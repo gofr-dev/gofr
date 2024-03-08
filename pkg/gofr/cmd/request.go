@@ -86,6 +86,10 @@ func (r *Request) HostName() (hostname string) {
 	return hostname
 }
 
+func (r *Request) Headers() map[string][]string {
+	return r.Headers()
+}
+
 func (r *Request) Bind(i interface{}) error {
 	// pointer to struct - addressable
 	ps := reflect.ValueOf(i)

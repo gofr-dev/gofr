@@ -27,7 +27,8 @@ type BasicAuthProvider struct {
 }
 
 func (ba *BasicAuthProvider) ValidateUser(username, password string) bool {
-	return true
+	// Placeholder for user validation logic
+	return username == ba.userName && password == ba.password
 }
 
 func (ba *BasicAuthProvider) addAuthorizationHeader(headers map[string]string) error {

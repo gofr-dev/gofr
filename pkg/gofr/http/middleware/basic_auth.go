@@ -20,7 +20,7 @@ func BasicAuthMiddleware(authProvider AuthenticationProvider) func(handler http.
 			}
 
 			authParts := strings.Split(authHeader, " ")
-			if len(authParts) != 2 || authParts[0] != "Basic" {
+			if len(authParts) != 2 || authParts[0] != "basic" {
 				http.Error(w, "Invalid Authorization header", http.StatusUnauthorized)
 				return
 			}
@@ -31,7 +31,7 @@ func BasicAuthMiddleware(authProvider AuthenticationProvider) func(handler http.
 				return
 			}
 
-			credentials := strings.Split(string(payload), ":")
+			credentials := strings.SplitN(string(payload), ":", 2)
 			if len(credentials) != 2 {
 				http.Error(w, "Invalid Credentials", http.StatusUnauthorized)
 				return
