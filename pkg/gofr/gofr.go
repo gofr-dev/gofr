@@ -2,13 +2,12 @@ package gofr
 
 import (
 	"fmt"
-	"github.com/gorilla/mux"
-
 	"net/http"
 	"os"
 	"strconv"
 	"sync"
 
+	"github.com/gorilla/mux"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/zipkin"
 	"go.opentelemetry.io/otel/propagation"
