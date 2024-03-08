@@ -4,7 +4,7 @@ import (
 	"testing"
 )
 
-func TestMessage(t *testing.T) {
+func TestMessage(_ *testing.T) {
 	msg := message{msg: mockMessage{}}
 
 	msg.Commit()

@@ -14,6 +14,7 @@ type Logger interface {
 }
 
 type Metrics interface {
+	IncrementCounter(ctx context.Context, name string, labels ...string)
 }
 
 type PubSub interface {

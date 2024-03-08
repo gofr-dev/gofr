@@ -28,10 +28,14 @@ type SubscribeFunc func(*pubsub.Message) error
 type MQTT struct {
 	// contains filtered or unexported fields
 	mqtt.Client
-	logger     Logger
+
+	logger  Logger
+	metrics Metrics
+
 	config     *Config
 	msgChanMap map[string]chan *pubsub.Message
-	mu         *sync.RWMutex
+
+	mu *sync.RWMutex
 }
 
 type Config struct {
@@ -71,7 +75,7 @@ func New(config *Config, logger Logger, metrics Metrics) *MQTT {
 
 	logger.Debugf("connected to MQTT, HostName : %v, Port : %v", config.Hostname, config.Port)
 
-	return &MQTT{Client: client, config: config, logger: logger, msgChanMap: msg, mu: new(sync.RWMutex)}
+	return &MQTT{Client: client, config: config, logger: logger, msgChanMap: msg, mu: new(sync.RWMutex), metrics: metrics}
 }
 
 func getMQTTClientOptions(config *Config, logger Logger) *mqtt.ClientOptions {
@@ -126,6 +130,8 @@ func validateConfigs(conf *Config) error {
 }
 
 func (m *MQTT) Subscribe(ctx context.Context, topic string) (*pubsub.Message, error) {
+	m.metrics.IncrementCounter(ctx, "app_pubsub_subscribe_total_count", "topic", topic)
+
 	var messg = pubsub.NewMessage(ctx)
 
 	m.mu.Lock()
@@ -158,11 +164,15 @@ func (m *MQTT) Subscribe(ctx context.Context, topic string) (*pubsub.Message, er
 		return nil, token.Error()
 	}
 
+	m.metrics.IncrementCounter(ctx, "app_pubsub_subscribe_success_count", "topic", topic)
+
 	// blocks if there are no messages in the channel
 	return <-msgChan, nil
 }
 
-func (m *MQTT) Publish(_ context.Context, topic string, message []byte) error {
+func (m *MQTT) Publish(ctx context.Context, topic string, message []byte) error {
+	m.metrics.IncrementCounter(ctx, "app_pubsub_publish_total_count", "topic", topic)
+
 	if m.Client == nil {
 		m.logger.Debug("client not configured")
 
@@ -178,6 +188,8 @@ func (m *MQTT) Publish(_ context.Context, topic string, message []byte) error {
 
 		return token.Error()
 	}
+
+	m.metrics.IncrementCounter(ctx, "app_pubsub_publish_success_count", "topic", topic)
 
 	return nil
 }

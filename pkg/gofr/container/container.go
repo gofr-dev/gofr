@@ -96,12 +96,18 @@ func (c *Container) Create(conf config.Config) {
 			SubscriptionName: conf.Get("GOOGLE_SUBSCRIPTION_NAME"),
 		}, c.Logger, c.metricsManager)
 	case "MQTT":
+		var qos byte
+
 		port, _ := strconv.Atoi(conf.Get("MQTT_PORT"))
 		order, _ := strconv.ParseBool(conf.GetOrDefault("MQTT_MESSAGE_ORDER", "false"))
-		qos, _ := strconv.Atoi(conf.Get("MQTT_QOS"))
 
-		if qos > 2 {
+		switch conf.Get("MQTT_QOS") {
+		case "1":
 			qos = 1
+		case "2":
+			qos = 2
+		default:
+			qos = 0
 		}
 
 		configs := &mqtt.Config{
@@ -111,7 +117,7 @@ func (c *Container) Create(conf config.Config) {
 			Username: conf.Get("MQTT_USER"),
 			Password: conf.Get("MQTT_PASSWORD"),
 			ClientID: conf.Get("MQTT_CLIENT_ID"),
-			QoS:      byte(qos),
+			QoS:      qos,
 			Order:    order,
 		}
 
