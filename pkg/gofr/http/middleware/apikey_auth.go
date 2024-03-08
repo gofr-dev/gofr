@@ -4,11 +4,11 @@ import (
 	"net/http"
 )
 
-type ApiKeyAuthProvider interface {
+type APIKeyAuthProvider interface {
 	ValidateKey(apiKey string) bool
 }
 
-func ApiKeyAuthMiddleware(authProvider ApiKeyAuthProvider) func(handler http.Handler) http.Handler {
+func APIKeyAuthMiddleware(authProvider APIKeyAuthProvider) func(handler http.Handler) http.Handler {
 	return func(handler http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			authKey := r.Header.Get("X-API-KEY")
