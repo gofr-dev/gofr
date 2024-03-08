@@ -2,6 +2,7 @@ package gofr
 
 import (
 	"fmt"
+	"github.com/gorilla/mux"
 
 	"net/http"
 	"os"
@@ -262,6 +263,10 @@ type otelErrorHandler struct {
 
 func (o *otelErrorHandler) Handle(e error) {
 	o.logger.Error(e.Error())
+}
+
+func (a *App) UseMiddleware(middlewareFunc ...mux.MiddlewareFunc) {
+	a.httpServer.router.Use(middlewareFunc...)
 }
 
 func (a *App) Subscribe(topic string, handler SubscribeFunc) {
