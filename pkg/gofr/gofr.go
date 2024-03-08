@@ -7,6 +7,7 @@ import (
 	"os"
 	"strconv"
 	"sync"
+	"time"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/zipkin"
@@ -18,6 +19,7 @@ import (
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
+	"gofr.dev/pkg/gofr/http/middleware"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/metrics"
 	"gofr.dev/pkg/gofr/migration"
@@ -107,6 +109,32 @@ func NewCMD() *App {
 func (a *App) Run() {
 	if a.cmd != nil {
 		a.cmd.Run(a.container)
+	}
+
+	jwksEndpoint := a.Config.Get("JWKS_ENDPOINT")
+	if jwksEndpoint != "" {
+		a.AddHTTPService("gofr_oauth", jwksEndpoint, &service.CircuitBreakerConfig{
+			Threshold: 5,
+			Interval:  5,
+		})
+
+		var refreshTime int64
+		var err error
+
+		jwksEndpointRefresh := a.Config.Get("JWKS_ENDPOINT_REFRESH_INTERVAL")
+		if jwksEndpointRefresh == "" {
+			refreshTime, err = strconv.ParseInt(jwksEndpointRefresh, 10, 64)
+			if err != nil {
+				refreshTime = 10
+			}
+		}
+
+		oauthOption := middleware.OauthConfigs{
+			Provider:        a.container.GetHTTPService("gofr_oauth"),
+			RefreshInterval: time.Second * time.Duration(refreshTime),
+		}
+
+		a.httpServer.router.Use(middleware.OAuth(middleware.NewOAuth(oauthOption)))
 	}
 
 	wg := sync.WaitGroup{}

@@ -42,6 +42,7 @@ func main() {
 				"aud": "admin",                  // Audience (user role)
 			},
 			SecretKey: a.Config.Get("ANOTHER_SERVICE_OAUTH_SECRET_KEY"),
+			Validity:  time.Second * 10,
 		})
 
 	a.GET("/fact", Handler)

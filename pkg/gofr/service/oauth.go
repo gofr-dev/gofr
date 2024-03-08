@@ -8,10 +8,14 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
+type SigningMethod interface {
+	Verify(signingString string, sig []byte, key interface{}) error // Returns nil if signature is valid
+	Sign(signingString string, key interface{}) ([]byte, error)     // Returns signature or error
+	Alg() string                                                    // returns the alg identifier for this method (example: 'HS256')
+}
+
 type OAuthConfig struct {
-	// TODO jwt.SigningMethod should not be known to user, he should be able to pass it in different way.
-	// It can be an interface.
-	SigningMethod jwt.SigningMethod
+	SigningMethod SigningMethod
 	Claims        map[string]interface{}
 	SecretKey     string
 	Validity      time.Duration
@@ -28,7 +32,7 @@ func (h *OAuthConfig) addOption(svc HTTP) HTTP {
 }
 
 type oAuth struct {
-	SigningMethod jwt.SigningMethod
+	SigningMethod SigningMethod
 	Claims        map[string]interface{}
 	SecretKey     string
 	Validity      time.Duration
@@ -36,8 +40,10 @@ type oAuth struct {
 }
 
 func (o *oAuth) createToken() (string, error) {
-	o.Claims["exp"] = time.Now().Add(o.Validity).Unix() // Expiration time
-	o.Claims["iss"] = time.Now()
+	issueTime := time.Now()
+
+	o.Claims["iss"] = issueTime
+	o.Claims["exp"] = issueTime.Add(o.Validity).Unix() // Expiration time
 
 	var claimMap jwt.MapClaims
 
