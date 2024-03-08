@@ -26,6 +26,10 @@ type BasicAuthProvider struct {
 	HTTP
 }
 
+func (ba *BasicAuthProvider) ValidateUser(username, password string) bool {
+	return true
+}
+
 func (ba *BasicAuthProvider) addAuthorizationHeader(headers map[string]string) error {
 	decodedPassword, err := b64.StdEncoding.DecodeString(ba.password)
 	if err != nil {

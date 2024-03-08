@@ -1,7 +1,6 @@
 package http
 
 import (
-	"gofr.dev/pkg/gofr/service"
 	"net/http"
 
 	"github.com/gorilla/mux"
@@ -22,7 +21,6 @@ func NewRouter(c *container.Container) *Router {
 		middleware.Logging(c.Logger),
 		middleware.CORS(),
 		middleware.Metrics(c.Metrics()),
-		middleware.BasicAuthMiddleware(service.BasicAuthProvider{}),
 	)
 
 	return &Router{

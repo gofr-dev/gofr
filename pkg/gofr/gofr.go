@@ -2,6 +2,7 @@ package gofr
 
 import (
 	"fmt"
+	"gofr.dev/pkg/gofr/http/middleware"
 
 	"net/http"
 	"os"
@@ -262,6 +263,10 @@ type otelErrorHandler struct {
 
 func (o *otelErrorHandler) Handle(e error) {
 	o.logger.Error(e.Error())
+}
+
+func (a *App) BasicAuth(middlewareFunc middleware.AuthenticationProvider) {
+	a.httpServer.router.Use(middleware.BasicAuthMiddleware(middlewareFunc))
 }
 
 func (a *App) Subscribe(topic string, handler SubscribeFunc) {

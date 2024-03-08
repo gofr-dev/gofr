@@ -9,8 +9,20 @@ import (
 	"gofr.dev/pkg/gofr/service"
 )
 
+type UserNamePassword struct {
+}
+
+func (a UserNamePassword) ValidateUser(username string, password string) bool {
+	if username == "abc" && password == "pass" {
+		return true
+	}
+	return false
+}
+
 func main() {
 	a := gofr.New()
+
+	a.BasicAuth(UserNamePassword{})
 
 	// HTTP service with Circuit Breaker config given, uses custom health check
 	// either of circuit breaker or health can be used as well, as both implement service.Options interface.
@@ -23,6 +35,7 @@ func main() {
 		&service.HealthConfig{
 			HealthEndpoint: "breeds",
 		},
+		&service.Authentication{UserName: "abc", Password: "pass"},
 	)
 
 	// service with improper health-check to test health check
