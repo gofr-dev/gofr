@@ -2,7 +2,6 @@ package gofr
 
 import (
 	"fmt"
-
 	"net/http"
 	"os"
 	"strconv"
@@ -18,6 +17,7 @@ import (
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
+	"gofr.dev/pkg/gofr/http/middleware"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/metrics"
 	"gofr.dev/pkg/gofr/migration"
@@ -262,6 +262,10 @@ type otelErrorHandler struct {
 
 func (o *otelErrorHandler) Handle(e error) {
 	o.logger.Error(e.Error())
+}
+
+func (a *App) ApiKeyAuth(middlewareFunc middleware.ApiKeyAuthProvider) {
+	a.httpServer.router.Use(middleware.ApiKeyAuthMiddleware(middlewareFunc))
 }
 
 func (a *App) Subscribe(topic string, handler SubscribeFunc) {
