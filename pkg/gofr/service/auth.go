@@ -6,37 +6,33 @@ import (
 	"net/http"
 )
 
-type AuthenticationProvider interface {
-	ValidateUser() bool
-}
-
 type Authentication struct {
-	AuthenticationProvider
+	UserName string
+	Password string
 }
 
 func (a *Authentication) addOption(h HTTP) HTTP {
 	return &BasicAuthProvider{
-		AuthenticationProvider: a.AuthenticationProvider,
-		HTTP:                   h,
+		userName: a.UserName,
+		password: a.Password,
+		HTTP:     h,
 	}
 }
 
 type BasicAuthProvider struct {
-	UserName string
-	Password string
-
-	AuthenticationProvider
+	userName string
+	password string
 
 	HTTP
 }
 
 func (ba *BasicAuthProvider) addAuthorizationHeader(headers map[string]string) error {
-	decodedPassword, err := b64.StdEncoding.DecodeString(ba.Password)
+	decodedPassword, err := b64.StdEncoding.DecodeString(ba.password)
 	if err != nil {
 		return err
 	}
 
-	encodedAuth := b64.StdEncoding.EncodeToString(append([]byte(ba.UserName+":"), decodedPassword...))
+	encodedAuth := b64.StdEncoding.EncodeToString(append([]byte(ba.userName+":"), decodedPassword...))
 
 	headers["Authorization"] = "basic " + encodedAuth
 
