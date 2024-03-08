@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"io"
 	"time"
 
@@ -9,20 +8,8 @@ import (
 	"gofr.dev/pkg/gofr/service"
 )
 
-type UserNamePassword struct {
-}
-
-func (a UserNamePassword) ValidateUser(username string, password string) bool {
-	if username == "abc" && password == "pass" {
-		return true
-	}
-	return false
-}
-
 func main() {
 	a := gofr.New()
-
-	a.BasicAuth(UserNamePassword{})
 
 	// HTTP service with Circuit Breaker config given, uses custom health check
 	// either of circuit breaker or health can be used as well, as both implement service.Options interface.
@@ -35,8 +22,10 @@ func main() {
 		&service.HealthConfig{
 			HealthEndpoint: "breeds",
 		},
-		&service.Authentication{UserName: "abc", Password: "pass"},
 	)
+
+	a.AddHTTPService("test-service", "http://localhost:9000",
+		&service.Authentication{UserName: "abc", Password: "pass"})
 
 	// service with improper health-check to test health check
 	a.AddHTTPService("fact-checker", "https://catfact.ninja",
@@ -51,25 +40,38 @@ func main() {
 }
 
 func Handler(c *gofr.Context) (any, error) {
-	var data = struct {
-		Fact   string `json:"fact"`
-		Length int    `json:"length"`
-	}{}
+	//var data = struct {
+	//	Fact   string `json:"fact"`
+	//	Length int    `json:"length"`
+	//}{}
+	//
+	//var catFacts = c.GetHTTPService("cat-facts")
+	//
+	//resp, err := catFacts.Get(c, "fact", map[string]interface{}{
+	//	"max_length": 20,
+	//})
+	//if err != nil {
+	//	return nil, err
+	//}
+	//
+	//b, _ := io.ReadAll(resp.Body)
+	//err = json.Unmarshal(b, &data)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//
+	//return data, nil
 
-	var catFacts = c.GetHTTPService("cat-facts")
-
-	resp, err := catFacts.Get(c, "fact", map[string]interface{}{
-		"max_length": 20,
-	})
+	var testService = c.GetHTTPService("test-service")
+	resp, err := testService.Get(c, "auth", nil)
 	if err != nil {
 		return nil, err
 	}
 
-	b, _ := io.ReadAll(resp.Body)
-	err = json.Unmarshal(b, &data)
+	b, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}
 
-	return data, nil
+	return string(b), nil
 }

@@ -48,7 +48,3 @@ func (m *Message) Bind(i interface{}) error {
 func (m *Message) HostName() string {
 	return ""
 }
-
-func (m *Message) Headers() map[string][]string {
-	return nil
-}

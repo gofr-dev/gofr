@@ -55,10 +55,6 @@ func (r *Request) HostName() string {
 	return fmt.Sprintf("%s://%s", proto, r.req.Host)
 }
 
-func (r *Request) Headers() map[string][]string {
-	return r.req.Header
-}
-
 func (r *Request) body() ([]byte, error) {
 	bodyBytes, err := io.ReadAll(r.req.Body)
 	if err != nil {
