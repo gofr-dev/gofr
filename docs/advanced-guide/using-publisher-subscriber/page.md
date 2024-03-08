@@ -73,6 +73,29 @@ docker run --name=gcloud-emulator -d -p 8086:8086 \
 > **Note**: In Google PubSub only one subscription name can access one topic, framework appends the topic name and subscription name to form the
 > unique subscription name on the Google client.
 
+### Mqtt
+
+#### Configs
+```dotenv
+PUBSUB_BACKEND=MQTT            // using Mqtt as pubsub
+MQTT_PROTOCOL=tcp              // protocol for connecting to broker
+MQTT_HOST=localhost            // broker host url
+MQTT_PORT=8883                 // broker port
+MQTT_CLIENT_ID=test-publisher  // unique client id to connect to broker
+```
+
+#### Docker setup
+```shell 
+docker run -d \
+  --name mqtt \
+  -p 8883:8883 \
+  -v <path-to>/mosquitto.conf:/mosquitto/config/mosquitto.conf \
+  eclipse-mosquitto:latest
+```
+>**Note**: find the default mosquitto config file [here](https://github.com/eclipse/mosquitto/blob/master/mosquitto.conf)
+
+
+
 ## Subscribing to Pub/Sub
 Adding a subscriber is similar to adding an HTTP handler, which makes it easier to develop scalable applications,
 as it decoupled from the Sender/Publisher.
