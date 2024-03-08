@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"io"
 	"time"
 
@@ -24,9 +25,6 @@ func main() {
 		},
 	)
 
-	a.AddHTTPService("test-service", "http://localhost:9000",
-		&service.Authentication{UserName: "abc", Password: "pass"})
-
 	// service with improper health-check to test health check
 	a.AddHTTPService("fact-checker", "https://catfact.ninja",
 		&service.HealthConfig{
@@ -40,38 +38,25 @@ func main() {
 }
 
 func Handler(c *gofr.Context) (any, error) {
-	//var data = struct {
-	//	Fact   string `json:"fact"`
-	//	Length int    `json:"length"`
-	//}{}
-	//
-	//var catFacts = c.GetHTTPService("cat-facts")
-	//
-	//resp, err := catFacts.Get(c, "fact", map[string]interface{}{
-	//	"max_length": 20,
-	//})
-	//if err != nil {
-	//	return nil, err
-	//}
-	//
-	//b, _ := io.ReadAll(resp.Body)
-	//err = json.Unmarshal(b, &data)
-	//if err != nil {
-	//	return nil, err
-	//}
-	//
-	//return data, nil
+	var data = struct {
+		Fact   string `json:"fact"`
+		Length int    `json:"length"`
+	}{}
 
-	var testService = c.GetHTTPService("test-service")
-	resp, err := testService.Get(c, "auth", nil)
+	var catFacts = c.GetHTTPService("cat-facts")
+
+	resp, err := catFacts.Get(c, "fact", map[string]interface{}{
+		"max_length": 20,
+	})
 	if err != nil {
 		return nil, err
 	}
 
-	b, err := io.ReadAll(resp.Body)
+	b, _ := io.ReadAll(resp.Body)
+	err = json.Unmarshal(b, &data)
 	if err != nil {
 		return nil, err
 	}
 
-	return string(b), nil
+	return data, nil
 }
