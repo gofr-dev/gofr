@@ -54,6 +54,12 @@ func Test_newContainerPubSubIntializationFail(t *testing.T) {
 				"PUBSUB_BACKEND": "GOOGLE",
 			},
 		},
+		{
+			desc: "Mqtt PubSub fail",
+			configs: map[string]string{
+				"PUBSUB_BACKEND": "MQTT",
+			},
+		},
 	}
 
 	for _, tc := range testCases {

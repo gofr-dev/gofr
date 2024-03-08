@@ -8,6 +8,7 @@ import (
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 	"gofr.dev/pkg/gofr/datasource/pubsub/google"
 	"gofr.dev/pkg/gofr/datasource/pubsub/kafka"
+	"gofr.dev/pkg/gofr/datasource/pubsub/mqtt"
 	"gofr.dev/pkg/gofr/datasource/redis"
 	"gofr.dev/pkg/gofr/datasource/sql"
 	"gofr.dev/pkg/gofr/logging"
@@ -94,6 +95,27 @@ func (c *Container) Create(conf config.Config) {
 			ProjectID:        conf.Get("GOOGLE_PROJECT_ID"),
 			SubscriptionName: conf.Get("GOOGLE_SUBSCRIPTION_NAME"),
 		}, c.Logger, c.metricsManager)
+	case "MQTT":
+		port, _ := strconv.Atoi(conf.Get("MQTT_PORT"))
+		order, _ := strconv.ParseBool(conf.GetOrDefault("MQTT_MESSAGE_ORDER", "false"))
+		qos, _ := strconv.Atoi(conf.Get("MQTT_QOS"))
+
+		if qos > 2 {
+			qos = 1
+		}
+
+		configs := &mqtt.Config{
+			Protocol: conf.Get("MQTT_PROTOCOL"),
+			Hostname: conf.Get("MQTT_HOST"),
+			Port:     port,
+			Username: conf.Get("MQTT_USER"),
+			Password: conf.Get("MQTT_PASSWORD"),
+			ClientID: conf.Get("MQTT_CLIENT_ID"),
+			QoS:      byte(qos),
+			Order:    order,
+		}
+
+		c.PubSub = mqtt.New(configs, c.Logger, c.metricsManager)
 	}
 }
 
