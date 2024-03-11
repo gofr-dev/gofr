@@ -223,14 +223,14 @@ func TestEnableBasicAuthWithFunc(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	container := container.NewContainer(testutil.NewMockConfig(nil))
+	c := container.NewContainer(testutil.NewMockConfig(nil))
 
 	// Initialize a new App instance
 	a := &App{
 		httpServer: &httpServer{
-			router: gofrHTTP.NewRouter(container),
+			router: gofrHTTP.NewRouter(c),
 		},
-		container: container,
+		container: c,
 	}
 
 	a.httpServer.router.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -245,7 +245,7 @@ func TestEnableBasicAuthWithFunc(t *testing.T) {
 	client := server.Client()
 
 	// Create a mock HTTP request
-	req, err := http.NewRequest(http.MethodGet, server.URL, nil)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, server.URL, http.NoBody)
 	if err != nil {
 		t.Fatal(err)
 	}
