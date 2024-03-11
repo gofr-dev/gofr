@@ -264,8 +264,21 @@ func (o *otelErrorHandler) Handle(e error) {
 	o.logger.Error(e.Error())
 }
 
-func (a *App) BasicAuth(middlewareFunc middleware.AuthenticationProvider) {
-	a.httpServer.router.Use(middleware.BasicAuthMiddleware(middlewareFunc))
+func (a *App) EnableBasicAuth(credentials ...string) {
+	if len(credentials)%2 != 0 {
+		a.container.Error("Invalid number of arguments for EnableBasicAuth")
+	}
+
+	users := make(map[string]string)
+	for i := 0; i < len(credentials); i += 2 {
+		users[credentials[i]] = credentials[i+1]
+	}
+
+	a.httpServer.router.Use(middleware.BasicAuthMiddleware(middleware.BasicAuthProvider{Users: users}))
+}
+
+func (a *App) EnableBasicAuthWithFunc(validateFunc func(username, password string) bool) {
+	a.httpServer.router.Use(middleware.BasicAuthMiddleware(middleware.BasicAuthProvider{ValidateFunc: validateFunc}))
 }
 
 func (a *App) Subscribe(topic string, handler SubscribeFunc) {

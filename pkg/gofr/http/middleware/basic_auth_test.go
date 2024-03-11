@@ -8,51 +8,67 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-type MockAuthProvider struct {
-	Username string
-	Password string
-	Result   bool
-}
-
-func (m *MockAuthProvider) ValidateUser(username, password string) bool {
-	return m.Username == username && m.Password == password && m.Result
-}
-
 func TestBasicAuthMiddleware(t *testing.T) {
+	validationFunc := func(user, pass string) bool {
+		if user == "abc" && pass == "pass123" {
+			return true
+		}
+
+		return false
+	}
+
 	testCases := []struct {
 		name               string
 		authHeader         string
-		authProvider       *MockAuthProvider
+		authProvider       BasicAuthProvider
 		expectedStatusCode int
 	}{
 		{
 			name:               "Valid Authorization",
 			authHeader:         "basic dXNlcjpwYXNzd29yZA==",
-			authProvider:       &MockAuthProvider{Username: "user", Password: "password", Result: true},
+			authProvider:       BasicAuthProvider{Users: map[string]string{"user": "password"}},
 			expectedStatusCode: http.StatusOK,
+		},
+		{
+			name:               "Valid Authorization with validation Func",
+			authHeader:         "basic YWJjOnBhc3MxMjM=",
+			authProvider:       BasicAuthProvider{ValidateFunc: validationFunc},
+			expectedStatusCode: http.StatusOK,
+		},
+		{
+			name:               "false from validation Func",
+			authHeader:         "basic dXNlcjpwYXNzd29yZA==",
+			authProvider:       BasicAuthProvider{ValidateFunc: validationFunc},
+			expectedStatusCode: http.StatusUnauthorized,
 		},
 		{
 			name:               "No Authorization Header",
 			authHeader:         "",
-			authProvider:       &MockAuthProvider{Username: "user", Password: "password", Result: true},
+			authProvider:       BasicAuthProvider{},
 			expectedStatusCode: http.StatusUnauthorized,
 		},
 		{
 			name:               "Invalid Authorization Header",
 			authHeader:         "Bearer token",
-			authProvider:       &MockAuthProvider{Username: "user", Password: "password", Result: true},
+			authProvider:       BasicAuthProvider{},
 			expectedStatusCode: http.StatusUnauthorized,
 		},
 		{
 			name:               "Invalid encoding",
 			authHeader:         "basic invalidbase64encoding==",
-			authProvider:       &MockAuthProvider{Username: "user", Password: "password", Result: true},
+			authProvider:       BasicAuthProvider{},
+			expectedStatusCode: http.StatusUnauthorized,
+		},
+		{
+			name:               "improper credentials format",
+			authHeader:         "basic dXNlcis=",
+			authProvider:       BasicAuthProvider{},
 			expectedStatusCode: http.StatusUnauthorized,
 		},
 		{
 			name:               "Unauthorized",
 			authHeader:         "basic dXNlcjpwYXNzd29yZA==",
-			authProvider:       &MockAuthProvider{Username: "user", Password: "wrongpassword", Result: false},
+			authProvider:       BasicAuthProvider{},
 			expectedStatusCode: http.StatusUnauthorized,
 		},
 	}
