@@ -146,7 +146,7 @@ Use `EnableOAuth(jwks-endpoint,refresh_interval)` to configure Gofr with pre-def
 func main() {
 	app := gofr.New()
 
-	app.EnableOAuth("http://jwks-endpoint", 20) // Replace with your credentials
+	app.EnableOAuth("http://jwks-endpoint", 20) 
     
 	app.GET("/protected-resource", func(c *gofr.Context) (interface{}, error) {
 		// Handle protected resource access 
@@ -157,7 +157,7 @@ func main() {
 }
 ```
 
-### Adding Basic Authentication to HTTP Services
+### Adding OAuth Authentication to HTTP Services
 For server-to-server communication it follows two-legged OAuth, also known as "client credentials" flow,
 where the client application directly exchanges its own credentials (ClientID and ClientSecret)
 for an access token without involving any end-user interaction.
@@ -166,7 +166,7 @@ This code snippet demonstrates how two-legged OAuth authentication is added to a
 
 ```go
 a.AddHTTPService("orders", "http://localhost:9000",
-    &service.OAuthConfig{
+    &service.OAuthConfig{   // Replace with your credentials
     ClientID:     "0iyeGcLYWudLGqZfD6HvOdZHZ5TlciAJ",
     ClientSecret: "GQXTY2f9186nUS3C9WWi7eJz8-iVEsxq7lKxdjfhOJbsEPPtEszL3AxFn8k_NAER",
     TokenURL:     "https://dev-zq6tvaxf3v7p0g7j.us.auth0.com/oauth/token",
