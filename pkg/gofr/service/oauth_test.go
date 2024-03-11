@@ -2,13 +2,11 @@ package service
 
 import (
 	"context"
+	"go.opentelemetry.io/otel"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
-	"time"
-
-	"go.opentelemetry.io/otel"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/assert"
@@ -28,7 +26,7 @@ func oAuthHttpServer(t *testing.T) *httptest.Server {
 
 		claims, _ := parsedToken.Claims.GetAudience()
 
-		assert.Equal(t, claims[0], "gofr-test")
+		assert.Equal(t, claims[0], "https://dev-zq6tvaxf3v7p0g7j.us.auth0.com/api/v2/")
 
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -47,10 +45,12 @@ func setupHTTPServiceTestServerForOAuth(server *httptest.Server) HTTP {
 
 	// Circuit breaker configuration
 	oauthConfig := OAuthConfig{
-		SigningMethod: jwt.SigningMethodHS256,
-		Claims:        jwt.MapClaims{"aud": "gofr-test"},
-		SecretKey:     `my-secret-key`,
-		Validity:      10 * time.Hour,
+		ClientID:     "0iyeGcLYWudLGqZfD6HvOdZHZ5TlciAJ",
+		ClientSecret: "GQXTY2f9186nUS3C9WWi7eJz8-iVEsxq7lKxdjfhOJbsEPPtEszL3AxFn8k_NAER",
+		TokenURL:     "https://dev-zq6tvaxf3v7p0g7j.us.auth0.com/oauth/token",
+		EndpointParams: map[string][]string{
+			"audience": {"https://dev-zq6tvaxf3v7p0g7j.us.auth0.com/api/v2/"},
+		},
 	}
 
 	// Apply circuit breaker option to the HTTP service
@@ -68,12 +68,7 @@ func setupHTTPServiceTestServerForOAuthWithUnSupportedMethod() HTTP {
 	}
 
 	// Circuit breaker configuration
-	oauthConfig := OAuthConfig{
-		SigningMethod: jwt.SigningMethodRS256,
-		Claims:        jwt.MapClaims{"aud": "gofr-test"},
-		SecretKey:     `my-secret-key`,
-		Validity:      10 * time.Hour,
-	}
+	oauthConfig := OAuthConfig{}
 
 	// Apply circuit breaker option to the HTTP service
 	httpSvc := oauthConfig.addOption(&service)
@@ -146,47 +141,47 @@ func TestHttpService_DeleteSuccessRequestsOAuth(t *testing.T) {
 	_ = resp.Body.Close()
 }
 
-func TestHttpService_DeleteSuccessRequestsOAuthError(t *testing.T) {
+func TestHttpService_DeleteRequestsOAuthError(t *testing.T) {
 	service := setupHTTPServiceTestServerForOAuthWithUnSupportedMethod()
 
 	resp, err := service.Delete(context.Background(), "test", nil)
 
 	assert.Nil(t, resp)
-	assert.Contains(t, err.Error(), `key is of invalid type: RSA sign expects *rsa.PrivateKey`)
+	assert.Contains(t, err.Error(), `unsupported protocol scheme`)
 }
 
-func TestHttpService_PutSuccessRequestsOAuthError(t *testing.T) {
+func TestHttpService_PutRequestsOAuthError(t *testing.T) {
 	service := setupHTTPServiceTestServerForOAuthWithUnSupportedMethod()
 
 	resp, err := service.Put(context.Background(), "test", nil, nil)
 
 	assert.Nil(t, resp)
-	assert.Contains(t, err.Error(), `key is of invalid type: RSA sign expects *rsa.PrivateKey`)
+	assert.Contains(t, err.Error(), `unsupported protocol scheme`)
 }
 
-func TestHttpService_PatchSuccessRequestsOAuthError(t *testing.T) {
+func TestHttpService_PatchRequestsOAuthError(t *testing.T) {
 	service := setupHTTPServiceTestServerForOAuthWithUnSupportedMethod()
 
 	resp, err := service.Patch(context.Background(), "test", nil, nil)
 
 	assert.Nil(t, resp)
-	assert.Contains(t, err.Error(), `key is of invalid type: RSA sign expects *rsa.PrivateKey`)
+	assert.Contains(t, err.Error(), `unsupported protocol scheme`)
 }
 
-func TestHttpService_PostSuccessRequestsOAuthError(t *testing.T) {
+func TestHttpService_PostRequestsOAuthError(t *testing.T) {
 	service := setupHTTPServiceTestServerForOAuthWithUnSupportedMethod()
 
 	resp, err := service.Post(context.Background(), "test", nil, nil)
 
 	assert.Nil(t, resp)
-	assert.Contains(t, err.Error(), `key is of invalid type: RSA sign expects *rsa.PrivateKey`)
+	assert.Contains(t, err.Error(), `unsupported protocol scheme`)
 }
 
-func TestHttpService_GetSuccessRequestsOAuthError(t *testing.T) {
+func TestHttpService_GetRequestsOAuthError(t *testing.T) {
 	service := setupHTTPServiceTestServerForOAuthWithUnSupportedMethod()
 
 	resp, err := service.Get(context.Background(), "test", nil)
 
 	assert.Nil(t, resp)
-	assert.Contains(t, err.Error(), `key is of invalid type: RSA sign expects *rsa.PrivateKey`)
+	assert.Contains(t, err.Error(), `unsupported protocol scheme`)
 }

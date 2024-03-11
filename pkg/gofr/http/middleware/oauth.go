@@ -5,6 +5,7 @@ import (
 	"crypto/rsa"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math/big"
@@ -75,20 +76,38 @@ type PublicKeyProvider interface {
 func OAuth(key PublicKeyProvider) func(inner http.Handler) http.Handler {
 	return func(inner http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			token, err := jwt.Parse(r.Header.Get("Authorization"), func(token *jwt.Token) (interface{}, error) {
+			authHeader := r.Header.Get("Authorization")
+			if authHeader == "" {
+				http.Error(w, "Authorization header is required", http.StatusUnauthorized)
+				return
+			}
+
+			headerParts := strings.Split(authHeader, " ")
+			if len(headerParts) != 2 || headerParts[0] != "Bearer" {
+				http.Error(w, "Authorization header format must be Bearer {token}", http.StatusUnauthorized)
+				return
+			}
+
+			tokenString := headerParts[1]
+
+			_, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 				kid := token.Header["kid"]
+
+				jwks := key.Get(fmt.Sprint(kid))
+				if jwks == nil {
+					return nil, errors.New("invalid JWKS endpoint")
+				}
 
 				return key.Get(fmt.Sprint(kid)), nil
 			})
 
-			switch {
-			case token.Valid:
-				inner.ServeHTTP(w, r)
-
-			default:
+			if err != nil {
 				w.WriteHeader(http.StatusUnauthorized)
 				w.Write([]byte(err.Error()))
+				return
 			}
+
+			inner.ServeHTTP(w, r)
 		})
 	}
 }
