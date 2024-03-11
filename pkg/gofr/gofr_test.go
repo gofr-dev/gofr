@@ -4,6 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+
+	"gofr.dev/pkg/gofr/container"
+	gofrHTTP "gofr.dev/pkg/gofr/http"
+
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -214,4 +218,44 @@ func Test_addRoute(t *testing.T) {
 	})
 
 	assert.Contains(t, logs, "handler called")
+}
+
+func TestEnableBasicAuthWithFunc(t *testing.T) {
+	// Initialize a new App instance
+	a := &App{
+		httpServer: &httpServer{
+			router: gofrHTTP.NewRouter(container.NewContainer(testutil.NewMockConfig(nil))),
+		},
+	}
+
+	a.httpServer.router.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Println(w, "Hello, world!")
+	}))
+
+	a.EnableBasicAuthWithFunc(func(username, password string) bool {
+		return username == "user" && password == "password"
+	})
+
+	server := httptest.NewServer(a.httpServer.router)
+	defer server.Close()
+
+	client := server.Client()
+
+	// Create a mock HTTP request
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, server.URL, http.NoBody)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Add a basic authorization header
+	req.Header.Add("Authorization", "basic dXNlcjpwYXNzd29yZA==")
+
+	// Send the HTTP request
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode, "TestEnableBasicAuthWithFunc Failed!")
 }
