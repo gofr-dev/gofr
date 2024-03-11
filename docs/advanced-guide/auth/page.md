@@ -1,5 +1,5 @@
-# Authorization Support
-Authorization is a crucial aspect of web applications, controlling access to resources based on user roles or permissions. 
+# HTTP Authentication
+Authentication is a crucial aspect of web applications, controlling access to resources based on user roles or permissions. 
 Authentication is the process of verifying a user's identity to grant access to protected resources. It ensures only
 authorized users can perform certain actions or access sensitive data within an application.
 
