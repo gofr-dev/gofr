@@ -9,6 +9,7 @@ import (
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/datasource/pubsub"
+	"gofr.dev/pkg/gofr/datasource/pubsub/mqtt"
 	"gofr.dev/pkg/gofr/service"
 	"gofr.dev/pkg/gofr/testutil"
 )
@@ -54,12 +55,6 @@ func Test_newContainerPubSubIntializationFail(t *testing.T) {
 				"PUBSUB_BACKEND": "GOOGLE",
 			},
 		},
-		{
-			desc: "Mqtt PubSub fail",
-			configs: map[string]string{
-				"PUBSUB_BACKEND": "MQTT",
-			},
-		},
 	}
 
 	for _, tc := range testCases {
@@ -67,6 +62,19 @@ func Test_newContainerPubSubIntializationFail(t *testing.T) {
 
 		assert.Nil(t, c.PubSub)
 	}
+}
+
+func TestContianer_MQTTInitialization_Default(t *testing.T) {
+	configs := map[string]string{
+		"PUBSUB_BACKEND": "MQTT",
+	}
+
+	c := NewContainer(testutil.NewMockConfig(configs))
+
+	assert.NotNil(t, c.PubSub)
+	m, ok := c.PubSub.(*mqtt.MQTT)
+	assert.True(t, ok)
+	assert.NotNil(t, m.Client)
 }
 
 func TestContainer_GetHTTPService(t *testing.T) {

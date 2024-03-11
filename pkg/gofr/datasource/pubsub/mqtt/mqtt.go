@@ -3,21 +3,23 @@ package mqtt
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strconv"
 	"sync"
 
+	mqtt "github.com/eclipse/paho.mqtt.golang"
+	"github.com/google/uuid"
+
 	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/datasource/pubsub"
-
-	mqtt "github.com/eclipse/paho.mqtt.golang"
 )
 
-const messageBuffer = 10
+const (
+	publicBroker  = "broker.hivemq.com"
+	messageBuffer = 10
+)
 
 var (
-	errProtocolNotProvided = errors.New("protocol not provided")
-	errHostNotProvided     = errors.New("hostname not provided")
-	errInvalidPort         = errors.New("invalid port")
 	errClientNotConfigured = errors.New("client not configured")
 )
 
@@ -53,11 +55,8 @@ type Config struct {
 // New establishes a connection to MQTT Broker using the configs and return pubsub.MqttPublisherSubscriber
 // with more MQTT focused functionalities related to subscribing(push), unsubscribing and disconnecting from broker.
 func New(config *Config, logger Logger, metrics Metrics) *MQTT {
-	err := validateConfigs(config)
-	if err != nil {
-		logger.Errorf("could not initialize MQTT, err : %v", err)
-
-		return nil
+	if config.Hostname == "" {
+		return getDefaultClient(config, logger, metrics)
 	}
 
 	options := getMQTTClientOptions(config, logger)
@@ -68,8 +67,39 @@ func New(config *Config, logger Logger, metrics Metrics) *MQTT {
 	if token := client.Connect(); token.Wait() && token.Error() != nil {
 		logger.Errorf("cannot connect to MQTT, HostName : %v, Port : %v, error : %v", config.Hostname, config.Port, token.Error())
 
-		return &MQTT{config: config, logger: logger}
+		return &MQTT{Client: client, config: config, logger: logger}
 	}
+
+	msg := make(map[string]chan *pubsub.Message)
+
+	logger.Debugf("connected to MQTT, HostName : %v, Port : %v", config.Hostname, config.Port)
+
+	return &MQTT{Client: client, config: config, logger: logger, msgChanMap: msg, mu: new(sync.RWMutex), metrics: metrics}
+}
+
+func getDefaultClient(config *Config, logger Logger, metrics Metrics) *MQTT {
+	var (
+		host     = publicBroker
+		port     = 1883
+		clientID = getClientID(config.ClientID)
+	)
+
+	logger.Debugf("using %v clientID for this session", clientID)
+
+	opts := mqtt.NewClientOptions()
+	opts.AddBroker(fmt.Sprintf("tcp://%s:%d", host, port))
+	opts.SetClientID(clientID)
+	client := mqtt.NewClient(opts)
+
+	if token := client.Connect(); token.Wait() && token.Error() != nil {
+		logger.Errorf("cannot connect to MQTT, HostName : %v, Port : %v, error : %v", host, port, token.Error())
+
+		return &MQTT{Client: client, config: config, logger: logger}
+	}
+
+	config.Hostname = host
+	config.Port = port
+	config.ClientID = clientID
 
 	msg := make(map[string]chan *pubsub.Message)
 
@@ -80,14 +110,12 @@ func New(config *Config, logger Logger, metrics Metrics) *MQTT {
 
 func getMQTTClientOptions(config *Config, logger Logger) *mqtt.ClientOptions {
 	options := mqtt.NewClientOptions()
-	options.AddBroker(config.Protocol + "://" + config.Hostname + ":" + strconv.Itoa(config.Port))
-	options.SetClientID(config.ClientID)
+	options.AddBroker(fmt.Sprintf("%s://%s:%d", config.Protocol, config.Hostname, config.Port))
 
-	if config.ClientID == "" {
-		logger.Warnf("client id not provided, please provide a clientID to prevent unexpected behaviors")
+	clientID := getClientID(config.ClientID)
+	options.SetClientID(clientID)
 
-		options.SetClientID("gofr_mqtt_client")
-	}
+	logger.Debugf("using %v clientID for this session", clientID)
 
 	if config.Username != "" {
 		options.SetUsername(config.Username)
@@ -100,33 +128,20 @@ func getMQTTClientOptions(config *Config, logger Logger) *mqtt.ClientOptions {
 	options.SetOrderMatters(config.Order)
 	options.SetResumeSubs(config.RetrieveRetained)
 
-	// upon connection to the client, this is called
-	options.OnConnect = func(client mqtt.Client) {
-		logger.Debug("Connected")
-	}
-
-	// this is called when the connection to the client is lost; it prints "Connection lost" and the corresponding error
-	options.OnConnectionLost = func(client mqtt.Client, err error) {
-		logger.Errorf("Connection lost: %v", err)
-	}
-
 	return options
 }
 
-func validateConfigs(conf *Config) error {
-	if conf.Protocol == "" {
-		return errProtocolNotProvided
+func getClientID(clientID string) string {
+	if clientID != "" {
+		clientID = "-" + clientID
 	}
 
-	if conf.Hostname == "" {
-		return errHostNotProvided
+	id, err := uuid.NewRandom()
+	if err != nil {
+		return "gofr-mqtt-default-client-id" + clientID
 	}
 
-	if conf.Port == 0 {
-		return errInvalidPort
-	}
-
-	return nil
+	return id.String() + clientID
 }
 
 func (m *MQTT) Subscribe(ctx context.Context, topic string) (*pubsub.Message, error) {
@@ -261,7 +276,7 @@ func (m *MQTT) SubscribeWithFunction(topic string, subscribeFunc SubscribeFunc) 
 		}
 	}
 
-	token := m.Client.Subscribe(topic, m.config.QoS, handler)
+	token := m.Client.Subscribe(topic, 1, handler)
 
 	if token.Wait() && token.Error() != nil {
 		return token.Error()
@@ -288,7 +303,9 @@ func (m *MQTT) Disconnect(waitTime uint) {
 }
 
 func (m *MQTT) Ping() error {
-	err := m.Client.Connect().Error()
+	token := m.Client.Connect()
+	token.Wait()
+	err := token.Error()
 
 	if err != nil {
 		return err
