@@ -38,7 +38,7 @@ func TestBasicAuthProvider_Get(t *testing.T) {
 
 	// Create a new HTTP service instance with basic auth
 	httpService := NewHTTPService(server.URL, testutil.NewMockLogger(testutil.INFOLOG), nil,
-		&Authentication{UserName: "user", Password: "cGFzc3dvcmQ="})
+		&BasicAuthConfig{UserName: "user", Password: "cGFzc3dvcmQ="})
 
 	// Make the GET request
 	resp, err := httpService.Get(context.Background(), path, queryParams)
@@ -74,7 +74,7 @@ func TestBasicAuthProvider_Post(t *testing.T) {
 
 	// Create a new HTTP service instance with basic auth
 	httpService := NewHTTPService(server.URL, testutil.NewMockLogger(testutil.INFOLOG), nil,
-		&Authentication{UserName: "user", Password: "cGFzc3dvcmQ="})
+		&BasicAuthConfig{UserName: "user", Password: "cGFzc3dvcmQ="})
 
 	// Make the POST request
 	resp, err := httpService.Post(context.Background(), path, queryParams, body)
@@ -106,7 +106,7 @@ func TestBasicAuthProvider_Put(t *testing.T) {
 
 	// Create a new HTTP service instance with basic auth
 	httpService := NewHTTPService(server.URL, testutil.NewMockLogger(testutil.INFOLOG), nil,
-		&Authentication{UserName: "user", Password: "cGFzc3dvcmQ="})
+		&BasicAuthConfig{UserName: "user", Password: "cGFzc3dvcmQ="})
 
 	// Make the PUT request
 	resp, err := httpService.Put(context.Background(), path, queryParams, body)
@@ -138,7 +138,7 @@ func TestBasicAuthProvider_Patch(t *testing.T) {
 
 	// Create a new HTTP service instance with basic auth
 	httpService := NewHTTPService(server.URL, testutil.NewMockLogger(testutil.INFOLOG), nil,
-		&Authentication{UserName: "user", Password: "cGFzc3dvcmQ="})
+		&BasicAuthConfig{UserName: "user", Password: "cGFzc3dvcmQ="})
 
 	// Make the PATCH request
 	resp, err := httpService.Patch(context.Background(), path, queryParams, body)
@@ -169,7 +169,7 @@ func TestBasicAuthProvider_Delete(t *testing.T) {
 
 	// Create a new HTTP service instance with basic auth
 	httpService := NewHTTPService(server.URL, testutil.NewMockLogger(testutil.INFOLOG), nil,
-		&Authentication{UserName: "user", Password: "cGFzc3dvcmQ="})
+		&BasicAuthConfig{UserName: "user", Password: "cGFzc3dvcmQ="})
 
 	// Make the DELETE request
 	resp, err := httpService.Delete(context.Background(), path, body)
@@ -186,7 +186,7 @@ func checkAuthHeaders(r *http.Request, t *testing.T) {
 	authHeader := r.Header.Get("Authorization")
 	authParts := strings.Split(authHeader, " ")
 	payload, _ := base64.StdEncoding.DecodeString(authParts[1])
-	credentials := strings.SplitN(string(payload), ":", 2)
+	credentials := strings.Split(string(payload), ":")
 
 	assert.Equal(t, "user", credentials[0])
 	assert.Equal(t, "password", credentials[1])

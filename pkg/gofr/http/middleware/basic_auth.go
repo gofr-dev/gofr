@@ -34,7 +34,7 @@ func BasicAuthMiddleware(basicAuthProvider BasicAuthProvider) func(handler http.
 				return
 			}
 
-			credentials := strings.SplitN(string(payload), ":", credentialLength)
+			credentials := strings.Split(string(payload), ":")
 			if len(credentials) != credentialLength {
 				http.Error(w, "Unauthorized: Invalid credentials", http.StatusUnauthorized)
 				return
