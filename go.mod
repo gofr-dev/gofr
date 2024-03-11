@@ -6,10 +6,12 @@ require (
 	cloud.google.com/go/pubsub v1.36.2
 	github.com/DATA-DOG/go-sqlmock v1.5.2
 	github.com/alicebob/miniredis/v2 v2.31.1
+	github.com/eclipse/paho.mqtt.golang v1.4.3
 	github.com/go-redis/redismock/v9 v9.2.0
 	github.com/go-sql-driver/mysql v1.7.1
 	github.com/gogo/protobuf v1.3.2
 	github.com/golang-jwt/jwt/v5 v5.2.1
+	github.com/google/uuid v1.6.0
 	github.com/gorilla/mux v1.8.1
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0
 	github.com/joho/godotenv v1.5.1
@@ -29,7 +31,7 @@ require (
 	go.opentelemetry.io/otel/sdk/metric v1.24.0
 	go.opentelemetry.io/otel/trace v1.24.0
 	go.uber.org/mock v0.4.0
-	golang.org/x/oauth2 v0.18.0
+	golang.org/x/oauth2 v0.17.0
 	golang.org/x/term v0.18.0
 	google.golang.org/api v0.166.0
 	google.golang.org/grpc v1.61.1
@@ -55,6 +57,7 @@ require (
 	github.com/google/s2a-go v0.1.7 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.3.2 // indirect
 	github.com/googleapis/gax-go/v2 v2.12.1 // indirect
+	github.com/gorilla/websocket v1.5.0 // indirect
 	github.com/klauspost/compress v1.16.6 // indirect
 	github.com/openzipkin/zipkin-go v0.4.2 // indirect
 	github.com/pierrec/lz4/v4 v4.1.17 // indirect
