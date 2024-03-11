@@ -265,11 +265,11 @@ func (o *otelErrorHandler) Handle(e error) {
 }
 
 func (a *App) EnableAPIKeyAuth(apiKeys ...string) {
-	a.httpServer.router.Use(middleware.APIKeyAuthMiddleware(apiKeys...))
+	a.httpServer.router.Use(middleware.APIKeyAuthMiddleware(nil, apiKeys...))
 }
 
 func (a *App) EnableAPIKeyAuthWithFunc(validator func(apiKey string) bool) {
-	a.httpServer.router.Use(middleware.APIKeyAuthMiddlewareWithFunc(validator))
+	a.httpServer.router.Use(middleware.APIKeyAuthMiddleware(validator))
 }
 
 func (a *App) Subscribe(topic string, handler SubscribeFunc) {
