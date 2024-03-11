@@ -2,7 +2,6 @@ package middleware
 
 import (
 	"net/http"
-	"slices"
 )
 
 func APIKeyAuthMiddleware(apiKeys ...string) func(handler http.Handler) http.Handler {
@@ -14,7 +13,7 @@ func APIKeyAuthMiddleware(apiKeys ...string) func(handler http.Handler) http.Han
 				return
 			}
 
-			if !slices.Contains(apiKeys, authKey) {
+			if !isPresent(authKey, apiKeys...) {
 				http.Error(w, "Unauthorized", http.StatusUnauthorized)
 				return
 			}
@@ -22,6 +21,16 @@ func APIKeyAuthMiddleware(apiKeys ...string) func(handler http.Handler) http.Han
 			handler.ServeHTTP(w, r)
 		})
 	}
+}
+
+func isPresent(authKey string, apiKeys ...string) bool {
+	for _, key := range apiKeys {
+		if authKey == key {
+			return true
+		}
+	}
+
+	return false
 }
 
 func APIKeyAuthMiddlewareWithFunc(validator func(apiKey string) bool) func(handler http.Handler) http.Handler {
