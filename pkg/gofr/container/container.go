@@ -111,7 +111,7 @@ func (c *Container) Create(conf config.Config) {
 		}
 
 		configs := &mqtt.Config{
-			Protocol: conf.Get("MQTT_PROTOCOL"),
+			Protocol: conf.GetOrDefault("MQTT_PROTOCOL", "tcp"), // using tcp as default method to connect to broker
 			Hostname: conf.Get("MQTT_HOST"),
 			Port:     port,
 			Username: conf.Get("MQTT_USER"),

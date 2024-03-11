@@ -78,12 +78,12 @@ docker run --name=gcloud-emulator -d -p 8086:8086 \
 #### Configs
 ```dotenv
 PUBSUB_BACKEND=MQTT            // using Mqtt as pubsub
-MQTT_PROTOCOL=tcp              // protocol for connecting to broker can be tcp, tls, ws or wss
 MQTT_HOST=localhost            // broker host url
 MQTT_PORT=1883                 // broker port
 MQTT_CLIENT_ID_SUFFIX=test     // suffix to a random generated client-id(uuid v4)
 
 #some additional configs(optional)
+MQTT_PROTOCOL=tcp              // protocol for connecting to broker can be tcp, tls, ws or wss
 MQTT_MESSAGE_ORDER=true  // config to maintain/retain message publish order, by defualt this is false
 MQTT_USER=username       // authentication username
 MQTT_PASSWORD=password   // authentication password 
