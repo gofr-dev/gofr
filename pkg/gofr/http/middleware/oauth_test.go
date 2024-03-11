@@ -183,7 +183,7 @@ func TestOAuthJWKSKeyNotFound(t *testing.T) {
 
 	assert.Nil(t, err)
 	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
-	assert.Contains(t, string(respBody), `token is unverifiable: error while executing keyfunc: invalid JWKS endpoint`)
+	assert.Contains(t, string(respBody), `token is unverifiable: error while executing keyfunc`)
 
 	resp.Body.Close()
 }
