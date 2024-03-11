@@ -2,13 +2,10 @@ package middleware
 
 import (
 	"net/http"
+	"slices"
 )
 
-type APIKeyAuthProvider interface {
-	ValidateKey(apiKey string) bool
-}
-
-func APIKeyAuthMiddleware(authProvider APIKeyAuthProvider) func(handler http.Handler) http.Handler {
+func APIKeyAuthMiddleware(apiKeys ...string) func(handler http.Handler) http.Handler {
 	return func(handler http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			authKey := r.Header.Get("X-API-KEY")
@@ -17,7 +14,26 @@ func APIKeyAuthMiddleware(authProvider APIKeyAuthProvider) func(handler http.Han
 				return
 			}
 
-			if !authProvider.ValidateKey(authKey) {
+			if !slices.Contains(apiKeys, authKey) {
+				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+				return
+			}
+
+			handler.ServeHTTP(w, r)
+		})
+	}
+}
+
+func APIKeyAuthMiddlewareWithFunc(validator func(apiKey string) bool) func(handler http.Handler) http.Handler {
+	return func(handler http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			authKey := r.Header.Get("X-API-KEY")
+			if authKey == "" {
+				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+				return
+			}
+
+			if !validator(authKey) {
 				http.Error(w, "Unauthorized", http.StatusUnauthorized)
 				return
 			}

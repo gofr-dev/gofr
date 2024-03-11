@@ -264,8 +264,12 @@ func (o *otelErrorHandler) Handle(e error) {
 	o.logger.Error(e.Error())
 }
 
-func (a *App) APIKeyAuth(authMiddleware middleware.APIKeyAuthProvider) {
-	a.httpServer.router.Use(middleware.APIKeyAuthMiddleware(authMiddleware))
+func (a *App) EnableAPIKeyAuth(apiKeys ...string) {
+	a.httpServer.router.Use(middleware.APIKeyAuthMiddleware(apiKeys...))
+}
+
+func (a *App) EnableAPIKeyAuthWithFunc(validator func(apiKey string) bool) {
+	a.httpServer.router.Use(middleware.APIKeyAuthMiddlewareWithFunc(validator))
 }
 
 func (a *App) Subscribe(topic string, handler SubscribeFunc) {
