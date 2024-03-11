@@ -9,10 +9,10 @@ import (
 	"strings"
 	"testing"
 
-	"go.uber.org/mock/gomock"
-	"gofr.dev/pkg/gofr/testutil"
-
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/mock/gomock"
+
+	"gofr.dev/pkg/gofr/testutil"
 )
 
 func TestBasicAuthProvider_Get(t *testing.T) {
