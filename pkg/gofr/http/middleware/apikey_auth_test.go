@@ -40,6 +40,7 @@ func Test_ApiKeyAuthMiddleware(t *testing.T) {
 
 	for i, tc := range testCases {
 		rr := httptest.NewRecorder()
+
 		req.Header.Set("X-API-KEY", tc.apiKey)
 
 		wrappedHandler := APIKeyAuthMiddleware(tc.validator, "valid-key-1", "valid-key-2")(testHandler)
