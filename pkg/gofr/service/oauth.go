@@ -3,10 +3,11 @@ package service
 import (
 	"context"
 	"fmt"
-	"golang.org/x/oauth2"
-	"golang.org/x/oauth2/clientcredentials"
 	"net/http"
 	"net/url"
+
+	"golang.org/x/oauth2"
+	"golang.org/x/oauth2/clientcredentials"
 )
 
 // OAuthConfig describes a 2-legged OAuth2 flow, with both the

@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"go.opentelemetry.io/otel"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -10,11 +9,12 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/assert"
+	"go.opentelemetry.io/otel"
 
 	"gofr.dev/pkg/gofr/testutil"
 )
 
-func oAuthHttpServer(t *testing.T) *httptest.Server {
+func oAuthHTTPServer(t *testing.T) *httptest.Server {
 	// Start a test HTTP server
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		header := r.Header.Get("Authorization")
@@ -77,7 +77,7 @@ func setupHTTPServiceTestServerForOAuthWithUnSupportedMethod() HTTP {
 }
 
 func TestHttpService_GetSuccessRequestsOAuth(t *testing.T) {
-	server := oAuthHttpServer(t)
+	server := oAuthHTTPServer(t)
 
 	service := setupHTTPServiceTestServerForOAuth(server)
 
@@ -90,7 +90,7 @@ func TestHttpService_GetSuccessRequestsOAuth(t *testing.T) {
 }
 
 func TestHttpService_PostSuccessRequestsOAuth(t *testing.T) {
-	server := oAuthHttpServer(t)
+	server := oAuthHTTPServer(t)
 
 	service := setupHTTPServiceTestServerForOAuth(server)
 
@@ -103,7 +103,7 @@ func TestHttpService_PostSuccessRequestsOAuth(t *testing.T) {
 }
 
 func TestHttpService_PatchSuccessRequestsOAuth(t *testing.T) {
-	server := oAuthHttpServer(t)
+	server := oAuthHTTPServer(t)
 
 	service := setupHTTPServiceTestServerForOAuth(server)
 
@@ -116,7 +116,7 @@ func TestHttpService_PatchSuccessRequestsOAuth(t *testing.T) {
 }
 
 func TestHttpService_PutSuccessRequestsOAuth(t *testing.T) {
-	server := oAuthHttpServer(t)
+	server := oAuthHTTPServer(t)
 
 	service := setupHTTPServiceTestServerForOAuth(server)
 
@@ -129,7 +129,7 @@ func TestHttpService_PutSuccessRequestsOAuth(t *testing.T) {
 }
 
 func TestHttpService_DeleteSuccessRequestsOAuth(t *testing.T) {
-	server := oAuthHttpServer(t)
+	server := oAuthHTTPServer(t)
 
 	service := setupHTTPServiceTestServerForOAuth(server)
 
@@ -148,6 +148,10 @@ func TestHttpService_DeleteRequestsOAuthError(t *testing.T) {
 
 	assert.Nil(t, resp)
 	assert.Contains(t, err.Error(), `unsupported protocol scheme`)
+
+	if resp != nil {
+		resp.Body.Close()
+	}
 }
 
 func TestHttpService_PutRequestsOAuthError(t *testing.T) {
@@ -157,6 +161,10 @@ func TestHttpService_PutRequestsOAuthError(t *testing.T) {
 
 	assert.Nil(t, resp)
 	assert.Contains(t, err.Error(), `unsupported protocol scheme`)
+
+	if resp != nil {
+		resp.Body.Close()
+	}
 }
 
 func TestHttpService_PatchRequestsOAuthError(t *testing.T) {
@@ -166,6 +174,10 @@ func TestHttpService_PatchRequestsOAuthError(t *testing.T) {
 
 	assert.Nil(t, resp)
 	assert.Contains(t, err.Error(), `unsupported protocol scheme`)
+
+	if resp != nil {
+		resp.Body.Close()
+	}
 }
 
 func TestHttpService_PostRequestsOAuthError(t *testing.T) {
@@ -175,6 +187,10 @@ func TestHttpService_PostRequestsOAuthError(t *testing.T) {
 
 	assert.Nil(t, resp)
 	assert.Contains(t, err.Error(), `unsupported protocol scheme`)
+
+	if resp != nil {
+		resp.Body.Close()
+	}
 }
 
 func TestHttpService_GetRequestsOAuthError(t *testing.T) {
@@ -184,4 +200,8 @@ func TestHttpService_GetRequestsOAuthError(t *testing.T) {
 
 	assert.Nil(t, resp)
 	assert.Contains(t, err.Error(), `unsupported protocol scheme`)
+
+	if resp != nil {
+		resp.Body.Close()
+	}
 }

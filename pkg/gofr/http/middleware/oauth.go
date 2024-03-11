@@ -5,7 +5,6 @@ import (
 	"crypto/rsa"
 	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"math/big"
@@ -16,8 +15,17 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
+type JWTClaim string
+
 type PublicKeys struct {
 	keys map[string]*rsa.PublicKey
+}
+
+type JWKNotFound struct {
+}
+
+func (i JWKNotFound) Error() string {
+	return "JWKS Not Found"
 }
 
 func (p *PublicKeys) Get(kid string) *rsa.PublicKey {
@@ -52,6 +60,8 @@ func NewOAuth(config OauthConfigs) PublicKeyProvider {
 			if err != nil {
 				continue
 			}
+
+			resp.Body.Close()
 
 			var jwks JWKS
 
@@ -95,7 +105,7 @@ func OAuth(key PublicKeyProvider) func(inner http.Handler) http.Handler {
 
 				jwks := key.Get(fmt.Sprint(kid))
 				if jwks == nil {
-					return nil, errors.New("invalid JWKS endpoint")
+					return nil, JWKNotFound{}
 				}
 
 				return key.Get(fmt.Sprint(kid)), nil
@@ -103,11 +113,12 @@ func OAuth(key PublicKeyProvider) func(inner http.Handler) http.Handler {
 
 			if err != nil {
 				w.WriteHeader(http.StatusUnauthorized)
-				w.Write([]byte(err.Error()))
+				_, _ = w.Write([]byte(err.Error()))
+
 				return
 			}
 
-			ctx := context.WithValue(r.Context(), "JWTClaims", token.Claims)
+			ctx := context.WithValue(r.Context(), JWTClaim("JWTClaims"), token.Claims)
 			*r = *r.Clone(ctx)
 
 			inner.ServeHTTP(w, r)
@@ -138,13 +149,17 @@ func publicKeyFromJWKS(jwks JWKS) map[string]*rsa.PublicKey {
 	keys := make(map[string]*rsa.PublicKey)
 
 	for _, jwk := range jwks.Keys {
-		keys[jwk.ID], _ = rsaPublicKeyStringFromJWK(jwk)
+		var val = jwk
+
+		keys[jwk.ID], _ = rsaPublicKeyStringFromJWK(&val)
 	}
+
+	// Store the result of rsaPublicKeyStringFromJWK before the next iteration
 
 	return keys
 }
 
-func rsaPublicKeyStringFromJWK(jwk JSONWebKey) (*rsa.PublicKey, error) {
+func rsaPublicKeyStringFromJWK(jwk *JSONWebKey) (*rsa.PublicKey, error) {
 	n, err := base64.RawURLEncoding.DecodeString(jwk.Modulus)
 	if err != nil {
 		return nil, err

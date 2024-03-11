@@ -118,8 +118,10 @@ func (a *App) Run() {
 			Interval:  5,
 		})
 
-		var refreshTime int64
-		var err error
+		var (
+			refreshTime int64
+			err         error
+		)
 
 		jwksEndpointRefresh := a.Config.Get("JWKS_ENDPOINT_REFRESH_INTERVAL")
 		if jwksEndpointRefresh == "" {
