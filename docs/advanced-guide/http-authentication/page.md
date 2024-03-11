@@ -119,11 +119,11 @@ func main() {
 }
 ```
 
-### Adding Basic Authentication to HTTP Services
+### Adding API-KEY Authentication to HTTP Services
 This code snippet demonstrates how to add API Key authentication to an HTTP service in GoFr and make a request with the appropriate Authorization header:
 
 ```go
-app.AddHTTPService("http-server-using-redis", "http://localhost:8000", &service.APIKeyAuth{APIKey: "9221e451-451f-4cd6-a23d-2b2d3adea9cf"})
+app.AddHTTPService("http-server-using-redis", "http://localhost:8000", &service.APIKeyConfig{APIKey: "9221e451-451f-4cd6-a23d-2b2d3adea9cf"})
 ```
 
 ## 3. OAuth 2.0
