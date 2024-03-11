@@ -228,17 +228,6 @@ func (a *App) Migrate(migrationsMap map[int64]migration.Migrate) {
 	migration.Run(migrationsMap, a.container)
 }
 
-func (a *App) EnableOAuth(jwksEndpoint string, refreshInterval int) {
-	a.AddHTTPService("gofr_oauth", jwksEndpoint)
-
-	oauthOption := middleware.OauthConfigs{
-		Provider:        a.container.GetHTTPService("gofr_oauth"),
-		RefreshInterval: time.Second * time.Duration(refreshInterval),
-	}
-
-	a.httpServer.router.Use(middleware.OAuth(middleware.NewOAuth(oauthOption)))
-}
-
 func (a *App) initTracer() {
 	tracerHost := a.Config.Get("TRACER_HOST")
 	tracerPort := a.Config.GetOrDefault("TRACER_PORT", "9411")
@@ -291,6 +280,25 @@ func (a *App) EnableBasicAuth(credentials ...string) {
 
 func (a *App) EnableBasicAuthWithFunc(validateFunc func(username, password string) bool) {
 	a.httpServer.router.Use(middleware.BasicAuthMiddleware(middleware.BasicAuthProvider{ValidateFunc: validateFunc}))
+}
+
+func (a *App) EnableAPIKeyAuth(apiKeys ...string) {
+	a.httpServer.router.Use(middleware.APIKeyAuthMiddleware(nil, apiKeys...))
+}
+
+func (a *App) EnableAPIKeyAuthWithFunc(validator func(apiKey string) bool) {
+	a.httpServer.router.Use(middleware.APIKeyAuthMiddleware(validator))
+}
+
+func (a *App) EnableOAuth(jwksEndpoint string, refreshInterval int) {
+	a.AddHTTPService("gofr_oauth", jwksEndpoint)
+
+	oauthOption := middleware.OauthConfigs{
+		Provider:        a.container.GetHTTPService("gofr_oauth"),
+		RefreshInterval: time.Second * time.Duration(refreshInterval),
+	}
+
+	a.httpServer.router.Use(middleware.OAuth(middleware.NewOAuth(oauthOption)))
 }
 
 func (a *App) Subscribe(topic string, handler SubscribeFunc) {
