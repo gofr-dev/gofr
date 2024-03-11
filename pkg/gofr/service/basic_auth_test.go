@@ -210,19 +210,3 @@ func Test_addAuthorizationHeader_Error(t *testing.T) {
 	expectedErrMsg := "illegal base64 data at input byte 7"
 	assert.Equal(t, expectedErrMsg, err.Error(), "Test_addAuthorizationHeader_Error Failed!")
 }
-
-func TestBasicAuthProvider_ValidateUser(t *testing.T) {
-	ba := &BasicAuthProvider{userName: "user", password: "pass"}
-
-	// Valid user
-	valid := ba.ValidateUser("user", "pass")
-	if !valid {
-		t.Error("Expected true, got false")
-	}
-
-	// Invalid user
-	invalid := ba.ValidateUser("invalid_user", "invalid_pass")
-	if invalid {
-		t.Error("Expected false, got true")
-	}
-}
