@@ -205,8 +205,8 @@ func (m *MQTT) Health() datasource.Health {
 	res := datasource.Health{
 		Status: "DOWN",
 		Details: map[string]interface{}{
-			"Name": "MQTT",
-			"Host": m.config.Hostname,
+			"backend": "MQTT",
+			"host":    m.config.Hostname,
 		},
 	}
 
