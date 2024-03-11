@@ -2,80 +2,73 @@ package service
 
 import (
 	"context"
+	"fmt"
+	"golang.org/x/oauth2"
+	"golang.org/x/oauth2/clientcredentials"
 	"net/http"
-	"time"
-
-	"github.com/golang-jwt/jwt/v5"
+	"net/url"
 )
 
-type SigningMethod interface {
-	Verify(signingString string, sig []byte, key interface{}) error // Returns nil if signature is valid
-	Sign(signingString string, key interface{}) ([]byte, error)     // Returns signature or error
-	Alg() string                                                    // returns the alg identifier for this method (example: 'HS256')
-}
-
+// OAuthConfig describes a 2-legged OAuth2 flow, with both the
+// client application information and the server's endpoint URLs.
 type OAuthConfig struct {
-	SigningMethod SigningMethod
-	Claims        map[string]interface{}
-	SecretKey     string
-	Validity      time.Duration
+	// ClientID is the application's ID.
+	ClientID string
+
+	// ClientSecret is the application's secret.
+	ClientSecret string
+
+	// TokenURL is the resource server's token endpoint
+	// URL. This is a constant specific to each server.
+	TokenURL string
+
+	// Scope specifies optional requested permissions.
+	Scopes []string
+
+	// EndpointParams specifies additional parameters for requests to the token endpoint.
+	EndpointParams url.Values
 }
 
 func (h *OAuthConfig) addOption(svc HTTP) HTTP {
 	return &oAuth{
-		SigningMethod: h.SigningMethod,
-		Claims:        h.Claims,
-		SecretKey:     h.SecretKey,
-		Validity:      h.Validity,
-		HTTP:          svc,
+		Config: clientcredentials.Config{
+			ClientID:       h.ClientID,
+			ClientSecret:   h.ClientSecret,
+			TokenURL:       h.TokenURL,
+			Scopes:         h.Scopes,
+			EndpointParams: h.EndpointParams,
+			AuthStyle:      oauth2.AuthStyleInHeader,
+		},
+		HTTP: svc,
 	}
 }
 
 type oAuth struct {
-	SigningMethod SigningMethod
-	Claims        map[string]interface{}
-	SecretKey     string
-	Validity      time.Duration
+	clientcredentials.Config
 
 	HTTP
 }
 
-func (o *oAuth) createToken() (string, error) {
-	issueTime := time.Now()
-
-	o.Claims["iss"] = issueTime
-	o.Claims["exp"] = issueTime.Add(o.Validity).Unix() // Expiration time
-
-	var claimMap jwt.MapClaims = o.Claims
-
-	claims := jwt.NewWithClaims(o.SigningMethod, claimMap)
-
-	tokenString, err := claims.SignedString([]byte(o.SecretKey))
-	if err != nil {
-		return "", err
-	}
-
-	return "Bearer " + tokenString, nil
-}
-
-func (o *oAuth) addAuthorizationHeader(headers map[string]string) (map[string]string, error) {
+func (o *oAuth) addAuthorizationHeader(ctx context.Context, headers map[string]string) (map[string]string, error) {
 	var err error
 
 	if headers == nil {
 		headers = make(map[string]string)
 	}
 
-	headers["Authorization"], err = o.createToken()
+	token, err := o.TokenSource(ctx).Token()
 	if err != nil {
 		return nil, err
 	}
+
+	headers["Authorization"] = fmt.Sprintf("%v %v", token.TokenType, token.AccessToken)
 
 	return headers, nil
 }
 
 func (o *oAuth) GetWithHeaders(ctx context.Context, path string, queryParams map[string]interface{},
 	headers map[string]string) (*http.Response, error) {
-	headers, err := o.addAuthorizationHeader(headers)
+	headers, err := o.addAuthorizationHeader(ctx, headers)
 	if err != nil {
 		return nil, err
 	}
@@ -86,7 +79,7 @@ func (o *oAuth) GetWithHeaders(ctx context.Context, path string, queryParams map
 // PostWithHeaders is a wrapper for doRequest with the POST method and headers.
 func (o *oAuth) PostWithHeaders(ctx context.Context, path string, queryParams map[string]interface{},
 	body []byte, headers map[string]string) (*http.Response, error) {
-	headers, err := o.addAuthorizationHeader(headers)
+	headers, err := o.addAuthorizationHeader(ctx, headers)
 	if err != nil {
 		return nil, err
 	}
@@ -97,7 +90,7 @@ func (o *oAuth) PostWithHeaders(ctx context.Context, path string, queryParams ma
 // PatchWithHeaders is a wrapper for doRequest with the PATCH method and headers.
 func (o *oAuth) PatchWithHeaders(ctx context.Context, path string, queryParams map[string]interface{},
 	body []byte, headers map[string]string) (*http.Response, error) {
-	headers, err := o.addAuthorizationHeader(headers)
+	headers, err := o.addAuthorizationHeader(ctx, headers)
 	if err != nil {
 		return nil, err
 	}
@@ -108,7 +101,7 @@ func (o *oAuth) PatchWithHeaders(ctx context.Context, path string, queryParams m
 // PutWithHeaders is a wrapper for doRequest with the PUT method and headers.
 func (o *oAuth) PutWithHeaders(ctx context.Context, path string, queryParams map[string]interface{},
 	body []byte, headers map[string]string) (*http.Response, error) {
-	headers, err := o.addAuthorizationHeader(headers)
+	headers, err := o.addAuthorizationHeader(ctx, headers)
 	if err != nil {
 		return nil, err
 	}
@@ -119,7 +112,7 @@ func (o *oAuth) PutWithHeaders(ctx context.Context, path string, queryParams map
 // DeleteWithHeaders is a wrapper for doRequest with the DELETE method and headers.
 func (o *oAuth) DeleteWithHeaders(ctx context.Context, path string, body []byte, headers map[string]string) (
 	*http.Response, error) {
-	headers, err := o.addAuthorizationHeader(headers)
+	headers, err := o.addAuthorizationHeader(ctx, headers)
 	if err != nil {
 		return nil, err
 	}
