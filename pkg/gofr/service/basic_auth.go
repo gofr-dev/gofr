@@ -45,7 +45,7 @@ func (ba *BasicAuthProvider) Get(ctx context.Context, path string, queryParams m
 
 func (ba *BasicAuthProvider) GetWithHeaders(ctx context.Context, path string, queryParams map[string]interface{},
 	headers map[string]string) (*http.Response, error) {
-	err := ba.checkAndPopulateHeaders(headers)
+	err := ba.populateHeaders(headers)
 	if err != nil {
 		return nil, err
 	}
@@ -60,7 +60,7 @@ func (ba *BasicAuthProvider) Post(ctx context.Context, path string, queryParams 
 
 func (ba *BasicAuthProvider) PostWithHeaders(ctx context.Context, path string, queryParams map[string]interface{},
 	body []byte, headers map[string]string) (*http.Response, error) {
-	err := ba.checkAndPopulateHeaders(headers)
+	err := ba.populateHeaders(headers)
 	if err != nil {
 		return nil, err
 	}
@@ -74,7 +74,7 @@ func (ba *BasicAuthProvider) Put(ctx context.Context, api string, queryParams ma
 
 func (ba *BasicAuthProvider) PutWithHeaders(ctx context.Context, path string, queryParams map[string]interface{},
 	body []byte, headers map[string]string) (*http.Response, error) {
-	err := ba.checkAndPopulateHeaders(headers)
+	err := ba.populateHeaders(headers)
 	if err != nil {
 		return nil, err
 	}
@@ -89,7 +89,7 @@ func (ba *BasicAuthProvider) Patch(ctx context.Context, path string, queryParams
 
 func (ba *BasicAuthProvider) PatchWithHeaders(ctx context.Context, path string, queryParams map[string]interface{},
 	body []byte, headers map[string]string) (*http.Response, error) {
-	err := ba.checkAndPopulateHeaders(headers)
+	err := ba.populateHeaders(headers)
 	if err != nil {
 		return nil, err
 	}
@@ -103,7 +103,7 @@ func (ba *BasicAuthProvider) Delete(ctx context.Context, path string, body []byt
 
 func (ba *BasicAuthProvider) DeleteWithHeaders(ctx context.Context, path string, body []byte,
 	headers map[string]string) (*http.Response, error) {
-	err := ba.checkAndPopulateHeaders(headers)
+	err := ba.populateHeaders(headers)
 	if err != nil {
 		return nil, err
 	}
@@ -111,7 +111,7 @@ func (ba *BasicAuthProvider) DeleteWithHeaders(ctx context.Context, path string,
 	return ba.HTTP.DeleteWithHeaders(ctx, path, body, headers)
 }
 
-func (ba *BasicAuthProvider) checkAndPopulateHeaders(headers map[string]string) error {
+func (ba *BasicAuthProvider) populateHeaders(headers map[string]string) error {
 	if headers == nil {
 		headers = make(map[string]string)
 	}
