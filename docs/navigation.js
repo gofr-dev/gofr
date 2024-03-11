@@ -21,6 +21,7 @@ export const navigation = [
             { title: 'Handling Data Migrations', href: '/docs/advanced-guide/handling-data-migrations' },
             { title: 'Writing gRPC Server', href: '/docs/advanced-guide/grpc' },
             { title: 'HTTP Authentication', href: '/docs/advanced-guide/auth' },
+            { title: 'Using Publisher and Subscriber', href: '/docs/advanced-guide/using-publisher-subscriber' }
             // { title: 'Dealing with Remote Files', href: '/docs/advanced-guide/remote-files' },
             // { title: 'Creating a Static File Server', href: '/docs/advanced-guide/static-file-server' },
             // { title: 'WebSockets', href: '/docs/advanced-guide/websockets' },

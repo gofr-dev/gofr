@@ -8,6 +8,7 @@ import (
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 	"gofr.dev/pkg/gofr/datasource/pubsub/google"
 	"gofr.dev/pkg/gofr/datasource/pubsub/kafka"
+	"gofr.dev/pkg/gofr/datasource/pubsub/mqtt"
 	"gofr.dev/pkg/gofr/datasource/redis"
 	"gofr.dev/pkg/gofr/datasource/sql"
 	"gofr.dev/pkg/gofr/logging"
@@ -94,6 +95,33 @@ func (c *Container) Create(conf config.Config) {
 			ProjectID:        conf.Get("GOOGLE_PROJECT_ID"),
 			SubscriptionName: conf.Get("GOOGLE_SUBSCRIPTION_NAME"),
 		}, c.Logger, c.metricsManager)
+	case "MQTT":
+		var qos byte
+
+		port, _ := strconv.Atoi(conf.Get("MQTT_PORT"))
+		order, _ := strconv.ParseBool(conf.GetOrDefault("MQTT_MESSAGE_ORDER", "false"))
+
+		switch conf.Get("MQTT_QOS") {
+		case "1":
+			qos = 1
+		case "2":
+			qos = 2
+		default:
+			qos = 0
+		}
+
+		configs := &mqtt.Config{
+			Protocol: conf.GetOrDefault("MQTT_PROTOCOL", "tcp"), // using tcp as default method to connect to broker
+			Hostname: conf.Get("MQTT_HOST"),
+			Port:     port,
+			Username: conf.Get("MQTT_USER"),
+			Password: conf.Get("MQTT_PASSWORD"),
+			ClientID: conf.Get("MQTT_CLIENT_ID_SUFFIX"),
+			QoS:      qos,
+			Order:    order,
+		}
+
+		c.PubSub = mqtt.New(configs, c.Logger, c.metricsManager)
 	}
 }
 
