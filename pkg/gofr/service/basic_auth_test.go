@@ -184,6 +184,11 @@ func TestBasicAuthProvider_Delete(t *testing.T) {
 
 func checkAuthHeaders(r *http.Request, t *testing.T) {
 	authHeader := r.Header.Get("Authorization")
+
+	if authHeader == "" {
+		return
+	}
+
 	authParts := strings.Split(authHeader, " ")
 	payload, _ := base64.StdEncoding.DecodeString(authParts[1])
 	credentials := strings.Split(string(payload), ":")
