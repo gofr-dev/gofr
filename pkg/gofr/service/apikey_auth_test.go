@@ -75,7 +75,7 @@ func Test_APIKeyAuthProvider_Post(t *testing.T) {
 	assert.Nil(t, err)
 }
 
-func TestBasicAuthProvider_Put(t *testing.T) {
+func TestApiKeyProvider_Put(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -102,7 +102,7 @@ func TestBasicAuthProvider_Put(t *testing.T) {
 	assert.Nil(t, err)
 }
 
-func TestBasicAuthProvider_Patch(t *testing.T) {
+func TestApiKeyAuthProvider_Patch(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -129,7 +129,7 @@ func TestBasicAuthProvider_Patch(t *testing.T) {
 	assert.Nil(t, err)
 }
 
-func TestBasicAuthProvider_Delete(t *testing.T) {
+func TestApiKeyAuthProvider_Delete(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
