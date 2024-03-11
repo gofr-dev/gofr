@@ -292,7 +292,7 @@ func TestMQTT_Health(t *testing.T) {
 		res := m.Health()
 		assert.Equal(t, datasource.Health{
 			Status:  "DOWN",
-			Details: map[string]interface{}{"Name": "MQTT", "Host": ""},
+			Details: map[string]interface{}{"backend": "MQTT", "host": ""},
 		}, res)
 	})
 
@@ -307,7 +307,7 @@ func TestMQTT_Health(t *testing.T) {
 		res := m.Health()
 		assert.Equal(t, datasource.Health{
 			Status:  "DOWN",
-			Details: map[string]interface{}{"Name": "MQTT", "Host": publicBroker},
+			Details: map[string]interface{}{"backend": "MQTT", "host": publicBroker},
 		}, res)
 	})
 
@@ -319,7 +319,7 @@ func TestMQTT_Health(t *testing.T) {
 		res := m.Health()
 		assert.Equal(t, datasource.Health{
 			Status:  "UP",
-			Details: map[string]interface{}{"Name": "MQTT", "Host": publicBroker},
+			Details: map[string]interface{}{"backend": "MQTT", "host": publicBroker},
 		}, res)
 	})
 }
