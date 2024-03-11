@@ -3,7 +3,6 @@ package main
 import (
 	"errors"
 	"fmt"
-	"gofr.dev/pkg/gofr/service"
 	"sync"
 	"time"
 
@@ -16,16 +15,7 @@ func main() {
 	a := gofr.New()
 
 	//HTTP service with default health check endpoint
-	a.AddHTTPService("orders", "http://localhost:9000",
-		&service.OAuthConfig{
-			ClientID:     "0iyeGcLYWudLGqZfD6HvOdZHZ5TlciAJ",
-			ClientSecret: "GQXTY2f9186nUS3C9WWi7eJz8-iVEsxq7lKxdjfhOJbsEPPtEszL3AxFn8k_NAER",
-			TokenURL:     "https://dev-zq6tvaxf3v7p0g7j.us.auth0.com/oauth/token",
-			Scopes:       []string{"read:order"},
-			EndpointParams: map[string][]string{
-				"audience": {"https://dev-zq6tvaxf3v7p0g7j.us.auth0.com/api/v2/"},
-			},
-		})
+	a.AddHTTPService("anotherService", "http://localhost:9000")
 
 	// Add all the routes
 	a.GET("/hello", HelloHandler)
