@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/mux"
 )
 
@@ -44,6 +45,15 @@ func (r *Request) Bind(i interface{}) error {
 	}
 
 	return json.Unmarshal(body, &i)
+}
+
+func (r *Request) GetClaims() map[string]interface{} {
+	claims, ok := r.Context().Value("JWTClaims").(jwt.MapClaims)
+	if !ok {
+		return nil
+	}
+
+	return claims
 }
 
 func (r *Request) HostName() string {
