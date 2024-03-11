@@ -301,7 +301,6 @@ func (a *App) EnableOAuth(jwksEndpoint string, refreshInterval int) {
 	a.httpServer.router.Use(middleware.OAuth(middleware.NewOAuth(oauthOption)))
 }
 
-
 func (a *App) Subscribe(topic string, handler SubscribeFunc) {
 	if a.container.GetSubscriber() == nil {
 		a.container.Logger.Errorf("Subscriber not initialized in the container")
