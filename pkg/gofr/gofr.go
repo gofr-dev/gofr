@@ -6,6 +6,7 @@ import (
 	"os"
 	"strconv"
 	"sync"
+	"time"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/zipkin"
@@ -264,6 +265,23 @@ func (o *otelErrorHandler) Handle(e error) {
 	o.logger.Error(e.Error())
 }
 
+func (a *App) EnableBasicAuth(credentials ...string) {
+	if len(credentials)%2 != 0 {
+		a.container.Error("Invalid number of arguments for EnableBasicAuth")
+	}
+
+	users := make(map[string]string)
+	for i := 0; i < len(credentials); i += 2 {
+		users[credentials[i]] = credentials[i+1]
+	}
+
+	a.httpServer.router.Use(middleware.BasicAuthMiddleware(middleware.BasicAuthProvider{Users: users}))
+}
+
+func (a *App) EnableBasicAuthWithFunc(validateFunc func(username, password string) bool) {
+	a.httpServer.router.Use(middleware.BasicAuthMiddleware(middleware.BasicAuthProvider{ValidateFunc: validateFunc}))
+}
+
 func (a *App) EnableAPIKeyAuth(apiKeys ...string) {
 	a.httpServer.router.Use(middleware.APIKeyAuthMiddleware(nil, apiKeys...))
 }
@@ -271,6 +289,18 @@ func (a *App) EnableAPIKeyAuth(apiKeys ...string) {
 func (a *App) EnableAPIKeyAuthWithFunc(validator func(apiKey string) bool) {
 	a.httpServer.router.Use(middleware.APIKeyAuthMiddleware(validator))
 }
+
+func (a *App) EnableOAuth(jwksEndpoint string, refreshInterval int) {
+	a.AddHTTPService("gofr_oauth", jwksEndpoint)
+
+	oauthOption := middleware.OauthConfigs{
+		Provider:        a.container.GetHTTPService("gofr_oauth"),
+		RefreshInterval: time.Second * time.Duration(refreshInterval),
+	}
+
+	a.httpServer.router.Use(middleware.OAuth(middleware.NewOAuth(oauthOption)))
+}
+
 
 func (a *App) Subscribe(topic string, handler SubscribeFunc) {
 	if a.container.GetSubscriber() == nil {
