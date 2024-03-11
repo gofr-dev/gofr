@@ -219,20 +219,25 @@ func Test_addRoute(t *testing.T) {
 }
 
 func TestEnableBasicAuthWithFunc(t *testing.T) {
+	jwksServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	c := container.NewContainer(testutil.NewMockConfig(nil))
+
 	// Initialize a new App instance
 	a := &App{
 		httpServer: &httpServer{
-			router: gofrHTTP.NewRouter(container.NewContainer(testutil.NewMockConfig(nil))),
+			router: gofrHTTP.NewRouter(c),
 		},
+		container: c,
 	}
 
 	a.httpServer.router.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Println(w, "Hello, world!")
 	}))
 
-	a.EnableBasicAuthWithFunc(func(username, password string) bool {
-		return username == "user" && password == "password"
-	})
+	a.EnableOAuth(jwksServer.URL, 600)
 
 	server := httptest.NewServer(a.httpServer.router)
 	defer server.Close()
@@ -246,7 +251,7 @@ func TestEnableBasicAuthWithFunc(t *testing.T) {
 	}
 
 	// Add a basic authorization header
-	req.Header.Add("Authorization", "basic dXNlcjpwYXNzd29yZA==")
+	req.Header.Add("Authorization", "dXNlcjpwYXNzd29yZA==")
 
 	// Send the HTTP request
 	resp, err := client.Do(req)
@@ -255,5 +260,5 @@ func TestEnableBasicAuthWithFunc(t *testing.T) {
 	}
 	defer resp.Body.Close()
 
-	assert.Equal(t, http.StatusOK, resp.StatusCode, "TestEnableBasicAuthWithFunc Failed!")
+	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode, "TestEnableBasicAuthWithFunc Failed!")
 }

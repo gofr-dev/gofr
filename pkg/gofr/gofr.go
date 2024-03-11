@@ -6,6 +6,7 @@ import (
 	"os"
 	"strconv"
 	"sync"
+	"time"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/zipkin"
@@ -225,6 +226,17 @@ func (a *App) SubCommand(pattern string, handler Handler) {
 
 func (a *App) Migrate(migrationsMap map[int64]migration.Migrate) {
 	migration.Run(migrationsMap, a.container)
+}
+
+func (a *App) EnableOAuth(jwksEndpoint string, refreshInterval int) {
+	a.AddHTTPService("gofr_oauth", jwksEndpoint)
+
+	oauthOption := middleware.OauthConfigs{
+		Provider:        a.container.GetHTTPService("gofr_oauth"),
+		RefreshInterval: time.Second * time.Duration(refreshInterval),
+	}
+
+	a.httpServer.router.Use(middleware.OAuth(middleware.NewOAuth(oauthOption)))
 }
 
 func (a *App) initTracer() {
