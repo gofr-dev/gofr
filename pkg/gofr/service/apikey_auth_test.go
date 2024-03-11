@@ -33,7 +33,7 @@ func Test_APIKeyAuthProvider_Get(t *testing.T) {
 	defer server.Close()
 
 	httpService := NewHTTPService(server.URL, testutil.NewMockLogger(testutil.INFOLOG), nil,
-		&APIKeyAuth{"valid-key"})
+		&APIKeyConfig{"valid-key"})
 
 	resp, err := httpService.Get(context.Background(), path, queryParams)
 	assert.Nil(t, err)
@@ -64,7 +64,7 @@ func Test_APIKeyAuthProvider_Post(t *testing.T) {
 	defer server.Close()
 
 	httpService := NewHTTPService(server.URL, testutil.NewMockLogger(testutil.INFOLOG), nil,
-		&APIKeyAuth{"valid-key"})
+		&APIKeyConfig{"valid-key"})
 
 	resp, err := httpService.Post(context.Background(), path, queryParams, body)
 	assert.Nil(t, err)
@@ -91,7 +91,7 @@ func TestBasicAuthProvider_Put(t *testing.T) {
 	defer server.Close()
 
 	httpService := NewHTTPService(server.URL, testutil.NewMockLogger(testutil.INFOLOG), nil,
-		&APIKeyAuth{"valid-key"})
+		&APIKeyConfig{"valid-key"})
 
 	resp, err := httpService.Put(context.Background(), path, queryParams, body)
 	assert.Nil(t, err)
@@ -118,7 +118,7 @@ func TestBasicAuthProvider_Patch(t *testing.T) {
 	defer server.Close()
 
 	httpService := NewHTTPService(server.URL, testutil.NewMockLogger(testutil.INFOLOG), nil,
-		&APIKeyAuth{"valid-key"})
+		&APIKeyConfig{"valid-key"})
 
 	resp, err := httpService.Patch(context.Background(), path, queryParams, body)
 	assert.Nil(t, err)
@@ -144,7 +144,7 @@ func TestBasicAuthProvider_Delete(t *testing.T) {
 	defer server.Close()
 
 	httpService := NewHTTPService(server.URL, testutil.NewMockLogger(testutil.INFOLOG), nil,
-		&APIKeyAuth{"valid-key"})
+		&APIKeyConfig{"valid-key"})
 
 	resp, err := httpService.Delete(context.Background(), path, body)
 	assert.Nil(t, err)
