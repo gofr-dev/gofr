@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/golang-jwt/jwt/v5"
 	"io"
 	"net/http"
 
@@ -44,6 +45,15 @@ func (r *Request) Bind(i interface{}) error {
 	}
 
 	return json.Unmarshal(body, &i)
+}
+
+func (r *Request) GetClaims(i interface{}) map[string]interface{} {
+	claims, ok := r.Context().Value("JWTClaims").(jwt.MapClaims)
+	if !ok {
+		return nil
+	}
+
+	return claims
 }
 
 func (r *Request) HostName() string {

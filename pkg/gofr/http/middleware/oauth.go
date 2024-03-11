@@ -90,7 +90,7 @@ func OAuth(key PublicKeyProvider) func(inner http.Handler) http.Handler {
 
 			tokenString := headerParts[1]
 
-			_, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+			token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 				kid := token.Header["kid"]
 
 				jwks := key.Get(fmt.Sprint(kid))
@@ -106,6 +106,9 @@ func OAuth(key PublicKeyProvider) func(inner http.Handler) http.Handler {
 				w.Write([]byte(err.Error()))
 				return
 			}
+
+			ctx := context.WithValue(r.Context(), "JWTClaims", token.Claims)
+			*r = *r.Clone(ctx)
 
 			inner.ServeHTTP(w, r)
 		})
