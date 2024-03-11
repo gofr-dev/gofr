@@ -162,7 +162,7 @@ For server-to-server communication it follows two-legged OAuth, also known as "c
 where the client application directly exchanges its own credentials (ClientID and ClientSecret)
 for an access token without involving any end-user interaction.
 
-This code snippet demonstrates how to two-legged OAuth authentication to an HTTP service in GoFr and make a request with the appropriate Authorization header.
+This code snippet demonstrates how two-legged OAuth authentication is added to an HTTP service in GoFr and make a request with the appropriate Authorization header.
 
 ```go
 a.AddHTTPService("orders", "http://localhost:9000",
