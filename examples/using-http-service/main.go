@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"github.com/golang-jwt/jwt/v5"
 	"io"
 	"time"
 
@@ -32,18 +31,6 @@ func main() {
 			HealthEndpoint: "breed",
 		},
 	)
-
-	a.AddHTTPService("anotherService", "http://localhost:9000",
-		&service.OAuthConfig{
-			SigningMethod: jwt.SigningMethodHS256,
-			Claims: jwt.MapClaims{
-				"sub": "gofr_admin",             // Subject (user identifier)
-				"iss": a.Config.Get("APP_NAME"), // Issuer
-				"aud": "admin",                  // Audience (user role)
-			},
-			SecretKey: a.Config.Get("ANOTHER_SERVICE_OAUTH_SECRET_KEY"),
-			Validity:  time.Second * 10,
-		})
 
 	a.GET("/fact", Handler)
 
