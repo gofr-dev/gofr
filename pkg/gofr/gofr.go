@@ -111,34 +111,6 @@ func (a *App) Run() {
 		a.cmd.Run(a.container)
 	}
 
-	jwksEndpoint := a.Config.Get("JWKS_ENDPOINT")
-	if jwksEndpoint != "" {
-		a.AddHTTPService("gofr_oauth", jwksEndpoint, &service.CircuitBreakerConfig{
-			Threshold: 5,
-			Interval:  5,
-		})
-
-		var (
-			refreshTime int64
-			err         error
-		)
-
-		jwksEndpointRefresh := a.Config.Get("JWKS_ENDPOINT_REFRESH_INTERVAL")
-		if jwksEndpointRefresh == "" {
-			refreshTime, err = strconv.ParseInt(jwksEndpointRefresh, 10, 64)
-			if err != nil {
-				refreshTime = 10
-			}
-		}
-
-		oauthOption := middleware.OauthConfigs{
-			Provider:        a.container.GetHTTPService("gofr_oauth"),
-			RefreshInterval: time.Second * time.Duration(refreshTime),
-		}
-
-		a.httpServer.router.Use(middleware.OAuth(middleware.NewOAuth(oauthOption)))
-	}
-
 	wg := sync.WaitGroup{}
 
 	// Start Metrics Server
@@ -255,6 +227,17 @@ func (a *App) SubCommand(pattern string, handler Handler) {
 
 func (a *App) Migrate(migrationsMap map[int64]migration.Migrate) {
 	migration.Run(migrationsMap, a.container)
+}
+
+func (a *App) EnableOAuth(jwksEndpoint string, refreshInterval int) {
+	a.AddHTTPService("gofr_oauth", jwksEndpoint)
+
+	oauthOption := middleware.OauthConfigs{
+		Provider:        a.container.GetHTTPService("gofr_oauth"),
+		RefreshInterval: time.Second * time.Duration(refreshInterval),
+	}
+
+	a.httpServer.router.Use(middleware.OAuth(middleware.NewOAuth(oauthOption)))
 }
 
 func (a *App) initTracer() {
