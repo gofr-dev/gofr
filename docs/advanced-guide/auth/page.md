@@ -23,15 +23,15 @@ Use `EnableBasicAuth(username, password)` to configure Gofr with pre-defined cre
 
 ```go
 func main() {
-    app := gofr.New()
+	app := gofr.New()
     
 	app.EnableBasicAuth("admin", "secret_password") // Replace with your credentials
     
 	app.GET("/protected-resource", func(c *gofr.Context) (interface{}, error) {
-    // Handle protected resource access
-    return nil, nil
-    })
-    
+		// Handle protected resource access 
+		return nil, nil
+	})
+	
 	app.Run()
 }
 ```
@@ -41,20 +41,21 @@ func main() {
 Use `EnableBasicAuthWithFunc(validationFunc)` to implement your own validation logic for credentials. The `validationFunc` takes the username and password as arguments and returns true if valid, false otherwise.
 
 ```go
-func validateUser(username string, password string) bool { 
-// Implement your credential validation logic here  
-// This example uses hardcoded credentials for illustration only   
+func validateUser(username string, password string) bool {
+	// Implement your credential validation logic here 
+	// This example uses hardcoded credentials for illustration only   
 	return username == "john" && password == "doe123" 
 } 
 
 func main() { 
 	app := gofr.New() 
-	
+
 	app.EnableBasicAuthWithFunc(validateUser) 
 
 	app.GET("/secure-data", func(c *gofer.Context) error { 
-		// Handle access to secure data  
-	return  nil }) 
+		// Handle access to secure data 
+		return  nil })
+
 	app.Run()
 }
 ```
@@ -101,9 +102,9 @@ func main() {
 package main
 
 func apiKeyValidator(apiKey string) bool {
-  validKeys := []string{"f0e1dffd-0ff0-4ac8-92a3-22d44a1464e4", "d7e4b46e-5b04-47b2-836c-2c7c91250f40"}
+	validKeys := []string{"f0e1dffd-0ff0-4ac8-92a3-22d44a1464e4", "d7e4b46e-5b04-47b2-836c-2c7c91250f40"}
 
-  return slices.Contains(validKeys, apiKey)
+	return slices.Contains(validKeys, apiKey)
 }
 
 func main() {
