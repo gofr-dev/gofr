@@ -16,6 +16,7 @@ export const navigation = [
             { title: 'Publishing Custom Metrics', href: '/docs/advanced-guide/publishing-custom-metrics' },
             { title: 'Custom Spans in Tracing', href: '/docs/advanced-guide/custom-spans-in-tracing' },
             { title: 'HTTP Communication', href: '/docs/advanced-guide/http-communication' },
+            { title: 'HTTP Authentication', href: '/docs/advanced-guide/auth' },
             { title: 'Circuit Breaker Support', href: '/docs/advanced-guide/circuit-breaker' },
             { title: 'Monitoring Service Health', href: '/docs/advanced-guide/monitoring-service-health' },
             { title: 'Handling Data Migrations', href: '/docs/advanced-guide/handling-data-migrations' },
