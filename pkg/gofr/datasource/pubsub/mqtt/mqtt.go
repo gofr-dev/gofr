@@ -19,9 +19,7 @@ const (
 	messageBuffer = 10
 )
 
-var (
-	errClientNotConfigured = errors.New("client not configured")
-)
+var errClientNotConnected = errors.New("client not connected")
 
 type SubscribeFunc func(*pubsub.Message) error
 
@@ -188,12 +186,6 @@ func (m *MQTT) Subscribe(ctx context.Context, topic string) (*pubsub.Message, er
 func (m *MQTT) Publish(ctx context.Context, topic string, message []byte) error {
 	m.metrics.IncrementCounter(ctx, "app_pubsub_publish_total_count", "topic", topic)
 
-	if m.Client == nil {
-		m.logger.Debug("client not configured")
-
-		return errClientNotConfigured
-	}
-
 	token := m.Client.Publish(topic, m.config.QoS, m.config.RetrieveRetained, message)
 
 	// Check for errors during publishing (More on error reporting
@@ -210,17 +202,7 @@ func (m *MQTT) Publish(ctx context.Context, topic string, message []byte) error 
 }
 
 func (m *MQTT) Health() datasource.Health {
-	if m == nil {
-		return datasource.Health{
-			Details: map[string]interface{}{
-				"Name": "MQTT",
-			},
-			Status: "DOWN",
-		}
-	}
-
 	res := datasource.Health{
-
 		Status: "DOWN",
 		Details: map[string]interface{}{
 			"Name": "MQTT",
@@ -246,10 +228,21 @@ func (m *MQTT) Health() datasource.Health {
 	return res
 }
 
-func (m *MQTT) CreateTopic(_ context.Context, _ string) error {
+func (m *MQTT) CreateTopic(_ context.Context, topic string) error {
+	token := m.Client.Publish(topic, m.config.QoS, m.config.RetrieveRetained, []byte("topic creation"))
+	token.Wait()
+
+	if token.Error() != nil {
+		m.logger.Errorf("unable to create topic - %s, error : %v", topic, token.Error())
+
+		return token.Error()
+	}
+
 	return nil
 }
 
+// DeleteTopic is implemented to adhere to the PubSub Client interface
+// Note: there is no concept of deletion.
 func (m *MQTT) DeleteTopic(_ context.Context, _ string) error {
 	return nil
 }
@@ -290,7 +283,7 @@ func (m *MQTT) Unsubscribe(topic string) error {
 	token.Wait()
 
 	if token.Error() != nil {
-		m.logger.Errorf("error while unsubscribing from  topic %s, err : %v", topic, token.Error())
+		m.logger.Errorf("error while unsubscribing from topic %s, err : %v", topic, token.Error())
 
 		return token.Error()
 	}
@@ -303,12 +296,10 @@ func (m *MQTT) Disconnect(waitTime uint) {
 }
 
 func (m *MQTT) Ping() error {
-	token := m.Client.Connect()
-	token.Wait()
-	err := token.Error()
+	connected := m.Client.IsConnected()
 
-	if err != nil {
-		return err
+	if !connected {
+		return errClientNotConnected
 	}
 
 	return nil
