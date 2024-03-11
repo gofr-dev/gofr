@@ -4,10 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-
-	"gofr.dev/pkg/gofr/container"
-	gofrHTTP "gofr.dev/pkg/gofr/http"
-
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -17,6 +13,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"gofr.dev/pkg/gofr/container"
+	gofrHTTP "gofr.dev/pkg/gofr/http"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/migration"
 	"gofr.dev/pkg/gofr/testutil"
