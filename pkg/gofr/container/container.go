@@ -116,7 +116,7 @@ func (c *Container) Create(conf config.Config) {
 			Port:     port,
 			Username: conf.Get("MQTT_USER"),
 			Password: conf.Get("MQTT_PASSWORD"),
-			ClientID: conf.Get("MQTT_CLIENT_ID"),
+			ClientID: conf.Get("MQTT_CLIENT_ID_SUFFIX"),
 			QoS:      qos,
 			Order:    order,
 		}

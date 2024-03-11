@@ -78,11 +78,18 @@ docker run --name=gcloud-emulator -d -p 8086:8086 \
 #### Configs
 ```dotenv
 PUBSUB_BACKEND=MQTT            // using Mqtt as pubsub
-MQTT_PROTOCOL=tcp              // protocol for connecting to broker
+MQTT_PROTOCOL=tcp              // protocol for connecting to broker can be tcp, tls, ws or wss
 MQTT_HOST=localhost            // broker host url
-MQTT_PORT=8883                 // broker port
-MQTT_CLIENT_ID=test-publisher  // unique client id to connect to broker
+MQTT_PORT=1883                 // broker port
+MQTT_CLIENT_ID_SUFFIX=test     // suffix to a random generated client-id(uuid v4)
+
+#some additional configs(optional)
+MQTT_MESSAGE_ORDER=true  // config to maintain/retain message publish order, by defualt this is false
+MQTT_USER=username       // authentication username
+MQTT_PASSWORD=password   // authentication password 
 ```
+> **Note** : If `MQTT_HOST` config is not provided, the application will connect to a public broker
+> [HiveMQ](https://www.hivemq.com/mqtt/public-mqtt-broker/)
 
 #### Docker setup
 ```shell 
@@ -92,7 +99,7 @@ docker run -d \
   -v <path-to>/mosquitto.conf:/mosquitto/config/mosquitto.conf \
   eclipse-mosquitto:latest
 ```
->**Note**: find the default mosquitto config file [here](https://github.com/eclipse/mosquitto/blob/master/mosquitto.conf)
+> **Note**: find the default mosquitto config file [here](https://github.com/eclipse/mosquitto/blob/master/mosquitto.conf)
 
 
 
