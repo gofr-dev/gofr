@@ -31,7 +31,7 @@ func main() {
 		// Handle protected resource access 
 		return nil, nil
 	})
-	
+
 	app.Run()
 }
 ```
@@ -52,9 +52,10 @@ func main() {
 
 	app.EnableBasicAuthWithFunc(validateUser) 
 
-	app.GET("/secure-data", func(c *gofer.Context) error { 
+	app.GET("/secure-data", func(c *gofr.Context) (interface{}, error) { 
 		// Handle access to secure data 
-		return  nil })
+		return nil, nil
+	})
 
 	app.Run()
 }
