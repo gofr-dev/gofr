@@ -13,22 +13,26 @@ Basic auth is the simplest way to authenticate your APIs.  It's built on
 [HTTP protocol authentication scheme](https://datatracker.ietf.org/doc/html/rfc7617). It involves sending the term 
 `Basic` trailed by the Base64-encoded `<username>:<password>` within the standard `Authorization` header.
 
-### Basic Authentication in Gofr
+### Basic Authentication in GoFr
 
-Gofr offers two ways to implement basic authentication:
+GoFr offers two ways to implement basic authentication:
 
 **1. Predefined Credentials**
 
 Use `EnableBasicAuth(username, password)` to configure Gofr with pre-defined credentials.
 
 ```go
-func main() { 
-	app := gofr.New() 
-	app.EnableBasicAuth("admin", "secret_password") // Replace with your credentials 
-	app.GET("/protected-resource", func(c *gofer.Context) error { 
-		// Handle protected resource access  
-	return  nil }) 
-	app.Run() 
+func main() {
+    app := gofr.New()
+    
+	app.EnableBasicAuth("admin", "secret_password") // Replace with your credentials
+    
+	app.GET("/protected-resource", func(c *gofr.Context) (interface{}, error) {
+    // Handle protected resource access
+    return nil, nil
+    })
+    
+	app.Run()
 }
 ```
 
@@ -57,22 +61,24 @@ func main() {
 
 ### Adding Basic Authentication to HTTP Services
 
-This code snippet demonstrates how to add basic authentication to an HTTP service in Gofr and make a request with the appropriate Authorization header:
+This code snippet demonstrates how to add basic authentication to an HTTP service in GoFr and make a request with the appropriate Authorization header:
 
 ```go
-a.AddHTTPService("cat-facts", "https://catfact.ninja",
+app.AddHTTPService("cat-facts", "https://catfact.ninja",
     &service.Authentication{UserName: "abc", Password: "pass"},
 )
 ```
 
 
-
-## 2. API Keys
+## 2. API Keys Auth
 Users include a unique API key in the request header for validation against a store of authorized keys.
 
 ### Usage:
-There are two methods to enable API Keys authentication. 
-- User can either select the framework's default validation using **_EnableAPIKeyAuth(apiKeys ...string)_**
+GoFr offers two ways to implement API Keys authentication.
+
+**1. Framework Default Validation**
+- Users can select the framework's default validation using **_EnableAPIKeyAuth(apiKeys ...string)_**
+
 ```go
 package main
 
@@ -88,7 +94,8 @@ func main() {
 }
 ```
 
-- User can create their own validator function `apiKeyValidator(apiKey string) bool` for validating APIKeys and pass the func in **_EnableAPIKeyAuthWithFunc(validator)_**
+**2. Custom Validation Function**
+- Users can create their own validator function `apiKeyValidator(apiKey string) bool` for validating APIKeys and pass the func in **_EnableAPIKeyAuthWithFunc(validator)_**
 
 ```go
 package main
@@ -111,10 +118,9 @@ func main() {
 }
 ```
 
-### NOTE:
-To add a downstream service with auth enabled, user can pass the auth as options in `AddHTTPService` function.
+### Adding Basic Authentication to HTTP Services
+This code snippet demonstrates how to add API Key authentication to an HTTP service in GoFr and make a request with the appropriate Authorization header:
 
-**Example:**
 ```go
 app.AddHTTPService("http-server-using-redis", "http://localhost:8000", &service.APIKeyAuth{APIKey: "9221e451-451f-4cd6-a23d-2b2d3adea9cf"})
 ```
