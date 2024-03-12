@@ -186,9 +186,9 @@ func CRUDFromStruct(entity interface{}, app *gofr.App) error {
 	})
 
 	// Register DELETE handler to delete entity by ID
-	app.DELETE(fmt.Sprintf("/%s/:%s", structName, primaryKeyFieldName), func(c *gofr.Context) (interface{}, error) {
+	app.DELETE(fmt.Sprintf("/%s/{%s}", structName, primaryKeyFieldName), func(c *gofr.Context) (interface{}, error) {
 		// Implement logic to delete entity by ID
-		id := c.Param("id")
+		id := c.PathParam("id")
 		query := fmt.Sprintf("DELETE FROM %s WHERE %s = ?", structName, primaryKeyFieldName)
 
 		result, err := c.SQL.ExecContext(c, query, id)
@@ -207,13 +207,8 @@ func CRUDFromStruct(entity interface{}, app *gofr.App) error {
 
 		c.Logf("DELETE %s by %s", structName)
 
-		return fmt.Sprintf("%s successfully deleted", structName), nil
+		return fmt.Sprintf("%s successfully deleted with id : %v", structName, id), nil
 	})
-
-	for i := 0; i < entityType.NumField(); i++ {
-		field := entityType.Field(i)
-		fmt.Printf("Field %d: Name: %s, Type: %s\n", i+1, field.Name, field.Type)
-	}
 
 	return nil
 }
