@@ -327,22 +327,23 @@ func (a *App) CRUDFromStruct(entity interface{}) error {
 	primaryKeyFieldName := strings.ToLower(primaryKeyField.Name)
 
 	crudHandlers := CRUDHandlers{}
+	handlerType := reflect.TypeOf(Handler(nil)).Elem()
 
 	for i := 0; i < entityType.NumMethod(); i++ {
 		method := entityType.Method(i)
-		// Check if the method is exported and has the correct signature
-		if method.Func.IsValid() && method.Func.Type().NumIn() == 2 && method.Func.Type().In(1) == reflect.TypeOf(&Context{}) && method.Func.Type().NumOut() == 2 {
+		// Check if the method is exported and has the correct handler signature
+		if method.Func.IsValid() && method.Func.Type().ConvertibleTo(handlerType) {
 			switch method.Name {
 			case "GetAll":
 				crudHandlers.GetAll = wrapGetAll(method.Func, entityType)
 			case "GetByID":
-				crudHandlers.GetByID = method.Func.Interface().(func(c *Context) (interface{}, error))
+				crudHandlers.GetByID = wrapGet(method.Func, entityType)
 			case "Post":
-				crudHandlers.Post = method.Func.Interface().(func(c *Context) (interface{}, error))
+				crudHandlers.Post = wrapPost(method.Func, entityType)
 			case "Put":
-				crudHandlers.Put = method.Func.Interface().(func(c *Context) (interface{}, error))
+				crudHandlers.Put = wrapPut(method.Func, entityType)
 			case "Delete":
-				crudHandlers.Delete = method.Func.Interface().(func(c *Context) (interface{}, error))
+				crudHandlers.Delete = wrapDelete(method.Func, entityType)
 			}
 		}
 	}
@@ -350,11 +351,4 @@ func (a *App) CRUDFromStruct(entity interface{}) error {
 	a.registerCRUDHandlers(crudHandlers, entityType, structName, primaryKeyFieldName)
 
 	return nil
-}
-
-func wrapGetAll(fn reflect.Value, entityType reflect.Type) func(*Context) (interface{}, error) {
-	return func(c *Context) (interface{}, error) {
-		user := reflect.New(entityType).Elem().Interface()
-		return fn.Call([]reflect.Value{reflect.ValueOf(user), reflect.ValueOf(c)})[0].Interface(), nil
-	}
 }

@@ -83,7 +83,7 @@ func defaultGetHandler(entityType reflect.Type, structName, primaryKeyFieldName 
 	}
 }
 
-func defaultPostHandler(entityType reflect.Type, structName, primaryKeyFieldName string) func(c *Context) (interface{}, error) {
+func defaultPostHandler(entityType reflect.Type, structName, _ string) func(c *Context) (interface{}, error) {
 	return func(c *Context) (interface{}, error) {
 		newEntity := reflect.New(entityType).Interface()
 		err := c.Bind(newEntity)
@@ -143,5 +143,40 @@ func defaultDeleteHandler(structName, primaryKeyFieldName string) func(c *Contex
 		}
 
 		return fmt.Sprintf("%s successfully deleted with id : %v", structName, id), nil
+	}
+}
+
+func wrapGetAll(fn reflect.Value, entityType reflect.Type) func(*Context) (interface{}, error) {
+	return func(c *Context) (interface{}, error) {
+		user := reflect.New(entityType).Elem().Interface()
+		return fn.Call([]reflect.Value{reflect.ValueOf(user), reflect.ValueOf(c)})[0].Interface(), nil
+	}
+}
+
+func wrapGet(fn reflect.Value, entityType reflect.Type) func(*Context) (interface{}, error) {
+	return func(c *Context) (interface{}, error) {
+		user := reflect.New(entityType).Elem().Interface()
+		return fn.Call([]reflect.Value{reflect.ValueOf(user), reflect.ValueOf(c)})[0].Interface(), nil
+	}
+}
+
+func wrapPost(fn reflect.Value, entityType reflect.Type) func(*Context) (interface{}, error) {
+	return func(c *Context) (interface{}, error) {
+		user := reflect.New(entityType).Elem().Interface()
+		return fn.Call([]reflect.Value{reflect.ValueOf(user), reflect.ValueOf(c)})[0].Interface(), nil
+	}
+}
+
+func wrapPut(fn reflect.Value, entityType reflect.Type) func(*Context) (interface{}, error) {
+	return func(c *Context) (interface{}, error) {
+		user := reflect.New(entityType).Elem().Interface()
+		return fn.Call([]reflect.Value{reflect.ValueOf(user), reflect.ValueOf(c)})[0].Interface(), nil
+	}
+}
+
+func wrapDelete(fn reflect.Value, entityType reflect.Type) func(*Context) (interface{}, error) {
+	return func(c *Context) (interface{}, error) {
+		user := reflect.New(entityType).Elem().Interface()
+		return fn.Call([]reflect.Value{reflect.ValueOf(user), reflect.ValueOf(c)})[0].Interface(), nil
 	}
 }
