@@ -1,7 +1,6 @@
 package gofr
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -327,10 +326,6 @@ func (a *App) CRUDFromStruct(entity interface{}) error {
 	primaryKeyField := entityType.Field(0)
 	primaryKeyFieldName := strings.ToLower(primaryKeyField.Name)
 
-	ctx := context.WithValue(context.Background(), "entityType", reflect.TypeOf(entity))
-	ctx = context.WithValue(ctx, "structName", structName)
-	ctx = context.WithValue(ctx, "primaryKeyFieldName", primaryKeyFieldName)
-
 	crudHandlers := CRUDHandlers{}
 
 	for i := 0; i < entityType.NumMethod(); i++ {
@@ -339,7 +334,7 @@ func (a *App) CRUDFromStruct(entity interface{}) error {
 		if method.Func.IsValid() && method.Func.Type().NumIn() == 2 && method.Func.Type().In(1) == reflect.TypeOf(&Context{}) && method.Func.Type().NumOut() == 2 {
 			switch method.Name {
 			case "GetAll":
-				crudHandlers.GetAll = method.Func.Interface().(func(c *Context) (interface{}, error))
+				crudHandlers.GetAll = wrapGetAll(method.Func, entityType)
 			case "GetByID":
 				crudHandlers.GetByID = method.Func.Interface().(func(c *Context) (interface{}, error))
 			case "Post":
@@ -352,19 +347,14 @@ func (a *App) CRUDFromStruct(entity interface{}) error {
 		}
 	}
 
-	a.registerCRUDHandlers(crudHandlers, structName, primaryKeyFieldName)
+	a.registerCRUDHandlers(crudHandlers, entityType, structName, primaryKeyFieldName)
 
 	return nil
 }
 
-func setEntityInfo(entity interface{}, info *entityInfo) {
-	entityType := reflect.TypeOf(entity)
-	structName := entityType.Name()
-
-	primaryKeyField := entityType.Field(0)
-	primaryKeyFieldName := strings.ToLower(primaryKeyField.Name)
-
-	info.entityType = entityType
-	info.entityName = structName
-	info.primaryKeyFieldName = primaryKeyFieldName
+func wrapGetAll(fn reflect.Value, entityType reflect.Type) func(*Context) (interface{}, error) {
+	return func(c *Context) (interface{}, error) {
+		user := reflect.New(entityType).Elem().Interface()
+		return fn.Call([]reflect.Value{reflect.ValueOf(user), reflect.ValueOf(c)})[0].Interface(), nil
+	}
 }
