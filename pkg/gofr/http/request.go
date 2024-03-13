@@ -23,9 +23,9 @@ const (
 )
 
 var (
-	errNonPointerBind         = errors.New("err")
+	errNonPointerBind         = errors.New("bind error, not a pointer")
 	errUnsupportedContentType = errors.New("unsupported content type")
-	errIncompatibleType       = errors.New("")
+	errIncompatibleType       = errors.New("incompatible file type")
 )
 
 // Request is an abstraction over the underlying http.Request. This abstraction is useful because it allows us
