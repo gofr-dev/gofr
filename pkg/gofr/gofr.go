@@ -1,10 +1,14 @@
 package gofr
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
+	"reflect"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -309,4 +313,58 @@ func (a *App) Subscribe(topic string, handler SubscribeFunc) {
 	}
 
 	a.subscriptionManager.subscriptions[topic] = handler
+}
+
+func (a *App) CRUDFromStruct(entity interface{}) error {
+	entityType := reflect.TypeOf(entity)
+	if entityType.Kind() != reflect.Struct {
+		return errors.New("unexpected field passed for CRUDFromStruct")
+	}
+
+	structName := entityType.Name()
+
+	// Assume the first field is the primary key
+	primaryKeyField := entityType.Field(0)
+	primaryKeyFieldName := strings.ToLower(primaryKeyField.Name)
+
+	ctx := context.WithValue(context.Background(), "entityType", reflect.TypeOf(entity))
+	ctx = context.WithValue(ctx, "structName", structName)
+	ctx = context.WithValue(ctx, "primaryKeyFieldName", primaryKeyFieldName)
+
+	crudHandlers := CRUDHandlers{}
+
+	for i := 0; i < entityType.NumMethod(); i++ {
+		method := entityType.Method(i)
+		// Check if the method is exported and has the correct signature
+		if method.Func.IsValid() && method.Func.Type().NumIn() == 2 && method.Func.Type().In(1) == reflect.TypeOf(&Context{}) && method.Func.Type().NumOut() == 2 {
+			switch method.Name {
+			case "GetAll":
+				crudHandlers.GetAll = method.Func.Interface().(func(c *Context) (interface{}, error))
+			case "GetByID":
+				crudHandlers.GetByID = method.Func.Interface().(func(c *Context) (interface{}, error))
+			case "Post":
+				crudHandlers.Post = method.Func.Interface().(func(c *Context) (interface{}, error))
+			case "Put":
+				crudHandlers.Put = method.Func.Interface().(func(c *Context) (interface{}, error))
+			case "Delete":
+				crudHandlers.Delete = method.Func.Interface().(func(c *Context) (interface{}, error))
+			}
+		}
+	}
+
+	a.registerCRUDHandlers(crudHandlers, structName, primaryKeyFieldName)
+
+	return nil
+}
+
+func setEntityInfo(entity interface{}, info *entityInfo) {
+	entityType := reflect.TypeOf(entity)
+	structName := entityType.Name()
+
+	primaryKeyField := entityType.Field(0)
+	primaryKeyFieldName := strings.ToLower(primaryKeyField.Name)
+
+	info.entityType = entityType
+	info.entityName = structName
+	info.primaryKeyFieldName = primaryKeyFieldName
 }
