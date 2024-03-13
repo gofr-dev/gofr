@@ -187,3 +187,11 @@ func TestOAuthJWKSKeyNotFound(t *testing.T) {
 
 	resp.Body.Close()
 }
+
+func TestPublicKeyFromJWKS_EmptyJWKS_ReturnsNil(t *testing.T) {
+	jwks := JWKS{}
+
+	result := publicKeyFromJWKS(jwks)
+
+	assert.Nil(t, result)
+}
