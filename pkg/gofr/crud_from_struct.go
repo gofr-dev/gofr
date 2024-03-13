@@ -1,7 +1,6 @@
 package gofr
 
 import (
-	"errors"
 	"fmt"
 	"reflect"
 	"strings"
@@ -15,11 +14,17 @@ type CRUDHandlers struct {
 	Delete  func(c *Context) (interface{}, error)
 }
 
+type EntityNotFound struct{}
+
+func (e EntityNotFound) Error() string {
+	return "entity not found!"
+}
+
 func (a *App) registerCRUDHandlers(handlers CRUDHandlers, entityType reflect.Type, structName, primaryKeyFieldName string) {
 	if handlers.GetAll != nil {
 		a.GET(fmt.Sprintf("/%s", structName), handlers.GetAll)
 	} else {
-		a.GET(fmt.Sprintf("/%s", structName), defaultGetAllHandler(entityType, structName, primaryKeyFieldName))
+		a.GET(fmt.Sprintf("/%s", structName), defaultGetAllHandler(entityType, structName))
 	}
 
 	if handlers.GetByID != nil {
@@ -50,13 +55,13 @@ func (a *App) registerCRUDHandlers(handlers CRUDHandlers, entityType reflect.Typ
 	}
 }
 
-func defaultGetAllHandler(entityType reflect.Type, structName, primaryKeyFieldName string) func(c *Context) (interface{}, error) {
+func defaultGetAllHandler(entityType reflect.Type, structName string) func(c *Context) (interface{}, error) {
 	return func(c *Context) (interface{}, error) {
 		newEntity := reflect.New(entityType).Interface()
 		query := fmt.Sprintf("SELECT * FROM %s", structName)
 
 		rows, err := c.SQL.QueryContext(c, query)
-		if err != nil {
+		if err != nil || rows.Err() != nil {
 			return nil, err
 		}
 
@@ -151,6 +156,7 @@ func defaultPostHandler(entityType reflect.Type, structName, _ string) func(c *C
 func defaultPutHandler(entityType reflect.Type, structName, primaryKeyFieldName string) func(c *Context) (interface{}, error) {
 	return func(c *Context) (interface{}, error) {
 		newEntity := reflect.New(entityType).Interface()
+
 		err := c.Bind(newEntity)
 		if err != nil {
 			return nil, err
@@ -209,7 +215,7 @@ func defaultDeleteHandler(structName, primaryKeyFieldName string) func(c *Contex
 		}
 
 		if rowsAffected == 0 {
-			return nil, errors.New("entity not found")
+			return nil, EntityNotFound{}
 		}
 
 		return fmt.Sprintf("%s successfully deleted with id : %v", structName, id), nil

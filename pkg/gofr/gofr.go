@@ -1,7 +1,6 @@
 package gofr
 
 import (
-	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -314,10 +313,16 @@ func (a *App) Subscribe(topic string, handler SubscribeFunc) {
 	a.subscriptionManager.subscriptions[topic] = handler
 }
 
+type invalidType struct{}
+
+func (i invalidType) Error() string {
+	return "unexpected field passed for CRUDFromStruct"
+}
+
 func (a *App) CRUDFromStruct(entity interface{}) error {
 	entityType := reflect.TypeOf(entity)
 	if entityType.Kind() != reflect.Struct {
-		return errors.New("unexpected field passed for CRUDFromStruct")
+		return invalidType{}
 	}
 
 	structName := entityType.Name()
