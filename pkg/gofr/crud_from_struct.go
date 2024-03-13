@@ -19,7 +19,7 @@ func (a *App) registerCRUDHandlers(handlers CRUDHandlers, entityType reflect.Typ
 	if handlers.GetAll != nil {
 		a.GET(fmt.Sprintf("/%s", structName), handlers.GetAll)
 	} else {
-		a.GET(fmt.Sprintf("/%s", structName), defaultGetAllHandler(structName, primaryKeyFieldName))
+		a.GET(fmt.Sprintf("/%s", structName), defaultGetAllHandler(entityType, structName, primaryKeyFieldName))
 	}
 
 	if handlers.GetByID != nil {
@@ -50,9 +50,41 @@ func (a *App) registerCRUDHandlers(handlers CRUDHandlers, entityType reflect.Typ
 	}
 }
 
-func defaultGetAllHandler(structName, primaryKeyFieldName string) func(c *Context) (interface{}, error) {
+func defaultGetAllHandler(entityType reflect.Type, structName, primaryKeyFieldName string) func(c *Context) (interface{}, error) {
 	return func(c *Context) (interface{}, error) {
-		return nil, nil
+		newEntity := reflect.New(entityType).Interface()
+		query := fmt.Sprintf("SELECT * FROM %s", structName)
+
+		rows, err := c.SQL.QueryContext(c, query)
+		if err != nil {
+			return nil, err
+		}
+
+		defer rows.Close()
+
+		// Create a slice of pointers to the struct's fields
+		dest := make([]interface{}, entityType.NumField())
+		val := reflect.ValueOf(newEntity).Elem()
+
+		for i := 0; i < val.NumField(); i++ {
+			dest[i] = val.Field(i).Addr().Interface()
+		}
+
+		var resp []interface{}
+
+		// Scan the result into the struct's fields
+		for rows.Next() {
+			err = rows.Scan(dest...)
+			if err != nil {
+				return nil, err
+			}
+
+			resp = append(resp, newEntity)
+		}
+
+		c.Logf("GET ALL %s", structName)
+
+		return resp, nil
 	}
 }
 
@@ -118,7 +150,45 @@ func defaultPostHandler(entityType reflect.Type, structName, _ string) func(c *C
 
 func defaultPutHandler(entityType reflect.Type, structName, primaryKeyFieldName string) func(c *Context) (interface{}, error) {
 	return func(c *Context) (interface{}, error) {
-		return nil, nil
+		newEntity := reflect.New(entityType).Interface()
+		err := c.Bind(newEntity)
+		if err != nil {
+			return nil, err
+		}
+
+		fieldNames := make([]string, 0, entityType.NumField())
+		fieldValues := make([]interface{}, 0, entityType.NumField())
+
+		for i := 0; i < entityType.NumField(); i++ {
+			field := entityType.Field(i)
+			fieldNames = append(fieldNames, field.Name)
+			fieldValues = append(fieldValues, reflect.ValueOf(newEntity).Elem().Field(i).Interface())
+		}
+
+		id := c.PathParam("id")
+
+		var paramsList []string
+		for i := 1; i < len(fieldNames); i++ {
+			paramsList = append(paramsList, fmt.Sprintf("%s=?", fieldNames[i]))
+		}
+
+		query := strings.Join(paramsList, ", ")
+
+		stmt := fmt.Sprintf("UPDATE %s SET %s WHERE %s = %s",
+			structName,
+			query,
+			primaryKeyFieldName,
+			id,
+		)
+
+		_, err = c.SQL.ExecContext(c, stmt, fieldValues[1:]...)
+		if err != nil {
+			return nil, err
+		}
+
+		c.Logf("PUT %s", structName)
+
+		return fmt.Sprintf("PUT %s by %v", structName, primaryKeyFieldName), nil
 	}
 }
 
