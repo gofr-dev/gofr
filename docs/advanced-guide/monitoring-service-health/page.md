@@ -14,7 +14,7 @@ It is an endpoint which return the following response when the service is UP wit
 }
 ```
 
-It is also used when state of [circuit breaker](/docs/advanced-guide/circuit-breaker) is open.
+It is also used when state of {% new-tab-link title="circuit breaker" href="/docs/advanced-guide/circuit-breaker" /%} is open.
 
 To override the endpoint when registering HTTP Service pass the following option.
 

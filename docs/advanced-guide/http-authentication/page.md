@@ -10,7 +10,8 @@ GoFr offer various approaches to implement authorization.
 transmitted in the request header in a Base64-encoded format.
 
 Basic auth is the simplest way to authenticate your APIs.  It's built on
-[HTTP protocol authentication scheme](https://datatracker.ietf.org/doc/html/rfc7617). It involves sending the term 
+{% new-tab-link title="HTTP protocol authentication scheme" href="https://datatracker.ietf.org/doc/html/rfc7617" /%}. It involves sending the term
+
 `Basic` trailed by the Base64-encoded `<username>:<password>` within the standard `Authorization` header.
 
 ### Basic Authentication in GoFr
@@ -129,7 +130,7 @@ app.AddHTTPService("http-server-using-redis", "http://localhost:8000", &service.
 ## 3. OAuth 2.0
 OAuth 2.0 is the industry-standard protocol for authorization. 
 It focuses on client developer simplicity while providing specific authorization flows for web applications, desktop applications, mobile phones, and living room devices.
-To know more about it refer [here](https://www.rfc-editor.org/rfc/rfc6749)
+To know more about it refer {% new-tab-link title="here" href="https://www.rfc-editor.org/rfc/rfc6749" /%}
 
 It involves sending the term `Bearer` trailed by the encoded token within the standard `Authorization` header.
 

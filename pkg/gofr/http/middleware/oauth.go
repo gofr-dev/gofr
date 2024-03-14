@@ -154,8 +154,6 @@ func publicKeyFromJWKS(jwks JWKS) map[string]*rsa.PublicKey {
 		keys[jwk.ID], _ = rsaPublicKeyStringFromJWK(&val)
 	}
 
-	// Store the result of rsaPublicKeyStringFromJWK before the next iteration
-
 	return keys
 }
 
