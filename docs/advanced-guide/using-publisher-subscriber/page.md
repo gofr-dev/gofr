@@ -21,7 +21,7 @@ Some of the configurations that are required to configure the PubSub backend tha
 that are specific for the type of message broker user wants to use. 
 `PUBSUB_BACKEND` defines which message broker the application needs to use.
 
-### Kafka
+### KAFKA
 
 #### Configs
 ```dotenv
@@ -52,7 +52,7 @@ docker run -d \
   confluentinc/cp-kafka:7.0.1
 ```
 
-### Google
+### GOOGLE
 
 #### Configs
 ```dotenv
@@ -73,7 +73,7 @@ docker run --name=gcloud-emulator -d -p 8086:8086 \
 > **Note**: In Google PubSub only one subscription name can access one topic, framework appends the topic name and subscription name to form the
 > unique subscription name on the Google client.
 
-### Mqtt
+### MQTT
 
 #### Configs
 ```dotenv
@@ -101,7 +101,7 @@ docker run -d \
 ```
 > **Note**: find the default mosquitto config file {% new-tab-link title="here" href="https://github.com/eclipse/mosquitto/blob/master/mosquitto.conf" /%}
 
-## Subscribing to Pub/Sub
+## Subscribing
 Adding a subscriber is similar to adding an HTTP handler, which makes it easier to develop scalable applications,
 as it decoupled from the Sender/Publisher.
 Users can define a subscriber handler and do the message processing and
@@ -168,7 +168,7 @@ func main() {
 }
 ```
 
-## Publishing to Pub/Sub
+## Publishing
 The publishing of message is advised to done at the point where the message is being generated.
 To facilitate this, user can access the publishing interface from `gofr Context(ctx)` to publish messages.
 
