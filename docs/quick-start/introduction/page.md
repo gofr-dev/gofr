@@ -2,8 +2,8 @@
 -  Go 1.20 or above.
    To check the version use the following command `go version`.
 
--  Prior familiarity with Golang syntax is essential. [Golang Tour](https://tour.golang.org/) is highly recommended as it has an excellent guided tour.
-
+-  Prior familiarity with Golang syntax is essential. {% new-tab-link title="Golang Tour" href="https://tour.golang.org/" /%} is highly recommended as it has an excellent guided tour.
+   
 ## Write your first GoFr API
 
 Let's start by initializing the go module by using the following command.
