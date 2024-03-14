@@ -68,7 +68,7 @@ docker run --name=gcloud-emulator -d -p 8086:8086 \
        gcr.io/google.com/cloudsdktool/google-cloud-cli:emulators gcloud beta emulators pubsub start --project=test123 \
        --host-port=0.0.0.0:8086
 ```
-> **Note**: To set GOOGLE_APPLICATION_CREDENTIAL - refer [here](https://cloud.google.com/docs/authentication/application-default-credentials)
+> **Note**: To set GOOGLE_APPLICATION_CREDENTIAL - refer {% new-tab-link title="here" href="https://cloud.google.com/docs/authentication/application-default-credentials" /%}
 
 > **Note**: In Google PubSub only one subscription name can access one topic, framework appends the topic name and subscription name to form the
 > unique subscription name on the Google client.
@@ -89,7 +89,7 @@ MQTT_USER=username       // authentication username
 MQTT_PASSWORD=password   // authentication password 
 ```
 > **Note** : If `MQTT_HOST` config is not provided, the application will connect to a public broker
-> [HiveMQ](https://www.hivemq.com/mqtt/public-mqtt-broker/)
+> {% new-tab-link title="HiveMQ" href="https://www.hivemq.com/mqtt/public-mqtt-broker/" /%}
 
 #### Docker setup
 ```shell 
@@ -99,9 +99,7 @@ docker run -d \
   -v <path-to>/mosquitto.conf:/mosquitto/config/mosquitto.conf \
   eclipse-mosquitto:latest
 ```
-> **Note**: find the default mosquitto config file [here](https://github.com/eclipse/mosquitto/blob/master/mosquitto.conf)
-
-
+> **Note**: find the default mosquitto config file {% new-tab-link title="here" href="https://github.com/eclipse/mosquitto/blob/master/mosquitto.conf" /%}
 
 ## Subscribing to Pub/Sub
 Adding a subscriber is similar to adding an HTTP handler, which makes it easier to develop scalable applications,

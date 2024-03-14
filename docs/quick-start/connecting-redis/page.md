@@ -49,7 +49,7 @@ func main() {
 	app.GET("/redis", func(ctx *gofr.Context) (interface{}, error) {
 		// Get the value using the Redis instance
 
-		val, err := ctx.Redis.Get(ctx.Context, "test").Result()
+		val, err := ctx.Redis.Get(ctx.Context, "greeting").Result()
 		if err != nil && !errors.Is(err, redis.Nil) {
 			// If the key is not found, we are not considering this an error and returning ""
 			return nil, err
