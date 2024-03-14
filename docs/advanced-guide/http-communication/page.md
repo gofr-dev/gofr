@@ -5,8 +5,8 @@ Support for inter-service http calls provide the following benefits:
 
 1. Access to the method from container - GET, PUT, POST, PATCH, DELETE.
 2. Logs and traces for the request.
-3. [Circuit breaking](/docs/advanced-guide/circuit-breaker) for enhanced resilience and fault tolerance.
-4. [Custom Health Check](/docs/advanced-guide/monitoring-service-health) Endpoints
+3. {% new-tab-link title="Circuit breaking" href="/docs/advanced-guide/circuit-breaker" /%} for enhanced resilience and fault tolerance.
+4. {% new-tab-link title="Custom Health Check" href="/docs/advanced-guide/monitoring-service-health" /%} Endpoints
 
 ## Usage
 
