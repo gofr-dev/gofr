@@ -21,7 +21,7 @@ export const navigation = [
             { title: 'Monitoring Service Health', href: '/docs/advanced-guide/monitoring-service-health' },
             { title: 'Handling Data Migrations', href: '/docs/advanced-guide/handling-data-migrations' },
             { title: 'Writing gRPC Server', href: '/docs/advanced-guide/grpc' },
-            { title: 'Using Publisher and Subscriber', href: '/docs/advanced-guide/using-publisher-subscriber' }
+            { title: 'Using Pub/Sub', href: '/docs/advanced-guide/using-publisher-subscriber' }
             // { title: 'Dealing with Remote Files', href: '/docs/advanced-guide/remote-files' },
             // { title: 'Supporting OAuth', href: '/docs/advanced-guide/oauth' },
             // { title: 'Creating a Static File Server', href: '/docs/advanced-guide/static-file-server' },

@@ -42,9 +42,9 @@ func TestGRPCServer(t *testing.T) {
 	}
 
 	// case of empty request
-	_, err := client.SayHello(context.Background(), nil)
-	assert.Equal(t, "rpc error: code = Internal desc = grpc: error while marshaling: proto: "+
-		"Marshal called with nil", err.Error())
+	resp, err := client.SayHello(context.Background(), nil)
+	assert.Equal(t, "Hello World!", resp.Message)
+	assert.Nil(t, err)
 
 	// Test context cancellation
 	ctx, cancel := context.WithCancel(context.Background())

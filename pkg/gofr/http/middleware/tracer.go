@@ -7,6 +7,8 @@ import (
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
+
+	"gofr.dev/pkg/gofr/version"
 )
 
 func Tracer(inner http.Handler) http.Handler {
@@ -19,8 +21,7 @@ func Tracer(inner http.Handler) http.Handler {
 		// its parentID, thus connecting two spans
 		ctx = otel.GetTextMapPropagator().Extract(ctx, propagation.HeaderCarrier(r.Header))
 
-		// TODO - inject version
-		tr := otel.GetTracerProvider().Tracer("gofr")
+		tr := otel.GetTracerProvider().Tracer("gofr-" + version.Framework)
 		ctx, span := tr.Start(ctx, fmt.Sprintf("%s %s", strings.ToUpper(r.Method), r.URL.Path))
 		defer span.End()
 
