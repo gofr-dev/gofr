@@ -15,6 +15,7 @@ import (
 	"gofr.dev/pkg/gofr/grpc"
 	"gofr.dev/pkg/gofr/http/middleware"
 	"gofr.dev/pkg/gofr/service"
+	"gofr.dev/pkg/gofr/version"
 )
 
 const fileMode = 0644
@@ -45,9 +46,10 @@ type logger struct {
 }
 
 type logEntry struct {
-	Level   Level       `json:"level"`
-	Time    time.Time   `json:"time"`
-	Message interface{} `json:"message"`
+	Level       Level       `json:"level"`
+	Time        time.Time   `json:"time"`
+	Message     interface{} `json:"message"`
+	GofrVersion string      `json:"gofrVersion"`
 }
 
 func (l *logger) logf(level Level, format string, args ...interface{}) {
@@ -61,8 +63,9 @@ func (l *logger) logf(level Level, format string, args ...interface{}) {
 	}
 
 	entry := logEntry{
-		Level: level,
-		Time:  time.Now(),
+		Level:       level,
+		Time:        time.Now(),
+		GofrVersion: version.Framework,
 	}
 
 	switch {
