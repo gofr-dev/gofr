@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"reflect"
 	"strconv"
 	"sync"
 	"time"
@@ -325,12 +324,11 @@ func (a *App) CRUDFromStruct(entity interface{}) error {
 	}
 
 	crudHandlers := CRUDHandlers{}
-	handlerType := reflect.TypeOf(Handler(nil)).Elem()
 
 	for i := 0; i < entityConfig.entityType.NumMethod(); i++ {
 		method := entityConfig.entityType.Method(i)
 		// Check if the method is exported and has the correct handler signature
-		if method.Func.IsValid() && method.Func.Type().ConvertibleTo(handlerType) {
+		if method.Func.IsValid() && verifyHandlerSignature(method) {
 			switch method.Name {
 			case "GetAll":
 				crudHandlers.GetAll = wrapGetAll(method.Func, entityConfig.entityType)

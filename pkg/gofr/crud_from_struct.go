@@ -45,6 +45,12 @@ func scanEntity(entity interface{}) (*entityConfig, error) {
 	}, nil
 }
 
+func verifyHandlerSignature(method reflect.Method) bool {
+	methodType := method.Func.Type()
+	isContext := methodType.In(1) == reflect.TypeOf(&Context{})
+	return method.Func.IsValid() && methodType.NumIn() == 2 && isContext && methodType.NumOut() == 2
+}
+
 func (a *App) registerCRUDHandlers(handlers CRUDHandlers, ec entityConfig) {
 	if handlers.GetAll != nil {
 		a.GET(fmt.Sprintf("/%s", ec.name), handlers.GetAll)
