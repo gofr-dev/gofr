@@ -23,7 +23,7 @@ const (
 )
 
 var (
-	errNonPointerBind         = errors.New("bind error, not a pointer")
+	errNonPointerBind         = errors.New("bind error, cannot bind to a non pointer type")
 	errUnsupportedContentType = errors.New("unsupported content type")
 	errIncompatibleType       = errors.New("incompatible file type")
 )
@@ -106,7 +106,7 @@ type File struct {
 	// it embeds the file type that is present in the request
 	multipart.File
 
-	// Header has the properties of the file like name, size, content type are present in Header
+	// Header has the properties of the file like name, size, etc. are present in Header
 	Header *multipart.FileHeader
 }
 
@@ -114,7 +114,7 @@ func (uf *File) Close() error {
 	return uf.File.Close()
 }
 
-func (r *Request) bindMultipart(ptr interface{}) error {
+func (r *Request) bindMultipart(ptr any) error {
 	vType := reflect.TypeOf(ptr)
 	vKind := vType.Kind()
 
@@ -129,7 +129,11 @@ func (r *Request) bindMultipart(ptr interface{}) error {
 	val := vType.Elem()
 
 	for i := 0; i < val.NumField(); i++ {
-		fileHeader, ok := r.req.MultipartForm.File[val.Field(i).Name]
+		if val.Field(i).Tag == "-" {
+			continue
+		}
+
+		fileHeader, ok := getFileHeader(r.req.MultipartForm.File, val, i)
 		if !ok {
 			continue
 		}
@@ -139,17 +143,12 @@ func (r *Request) bindMultipart(ptr interface{}) error {
 			continue
 		}
 
-		f, err := fileHeader[0].Open()
+		f, err := fileHeader.Open()
 		if err != nil {
 			return err
 		}
 
-		content, err := io.ReadAll(f)
-		if err != nil {
-			return err
-		}
-
-		err = trySet(content, field)
+		err = trySet(f, fileHeader, field)
 		if err != nil {
 			return err
 		}
@@ -158,23 +157,50 @@ func (r *Request) bindMultipart(ptr interface{}) error {
 	return nil
 }
 
-func trySet(content []byte, value reflect.Value) error {
+func trySet(f multipart.File, header *multipart.FileHeader, value reflect.Value) error {
+	content, err := io.ReadAll(f)
+	if err != nil {
+		return err
+	}
+
 	contentType := http.DetectContentType(content)
-	switch contentType {
-	case "application/zip":
+	switch {
+	case contentType == "application/zip" && value.Type() == reflect.TypeOf(&file.Zip{}):
 		zip, err := file.NewZip(content)
 		if err != nil {
 			return err
 		}
 
-		if value.Type() == reflect.TypeOf(zip) {
-			value.Set(reflect.ValueOf(zip))
-
-			return nil
-		}
-
-		return errIncompatibleType
+		value.Set(reflect.ValueOf(zip))
+	case value.Type() == reflect.TypeOf(&File{}):
+		value.Set(reflect.ValueOf(&File{f, header}))
 	default:
 		return errIncompatibleType
 	}
+
+	return nil
+}
+
+func getFileHeader(file map[string][]*multipart.FileHeader, val reflect.Type, i int) (*multipart.FileHeader, bool) {
+	var (
+		tag = "file"
+		key string
+	)
+
+	if val.Field(i).Tag.Get(tag) == "-" {
+		return nil, false
+	}
+
+	if val.Field(i).Tag.Get(tag) == "" {
+		key = val.Field(i).Name
+	} else {
+		key = val.Field(i).Tag.Get(tag)
+	}
+
+	fileHeader, ok := file[key]
+	if !ok {
+		return nil, false
+	}
+
+	return fileHeader[0], true
 }

@@ -3,12 +3,17 @@ package file
 import (
 	"archive/zip"
 	"bytes"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
 )
 
-const maxFileSize = 100 * 1024 * 1024
+const maxFileSize = 100 * 1024 * 1024 // 100MB
+
+var (
+	errMaxFileSize = errors.New("uncompressed file is greater than file size limit of 100MBs")
+)
 
 type File struct {
 	name    string
@@ -37,9 +42,8 @@ func NewZip(content []byte) (*Zip, error) {
 			return nil, err
 		}
 
-		buf := new(bytes.Buffer)
-		if _, err := io.CopyN(buf, f, maxFileSize); err != nil {
-			f.Close()
+		buf, err := copyToBuffer(f, file.UncompressedSize64)
+		if err != nil {
 			return nil, err
 		}
 
@@ -91,4 +95,19 @@ func (z *Zip) CreateLocalCopies(dest string) error {
 	}
 
 	return nil
+}
+
+func copyToBuffer(f io.ReadCloser, size uint64) (*bytes.Buffer, error) {
+	if size > maxFileSize {
+		return nil, errMaxFileSize
+	}
+
+	buf := new(bytes.Buffer)
+	if n, err := io.CopyN(buf, f, maxFileSize); err != nil && err != io.EOF && uint64(n) < size {
+		f.Close()
+
+		return nil, err
+	}
+
+	return buf, nil
 }
