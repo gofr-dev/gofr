@@ -122,7 +122,7 @@ automatically add traces to all requests and responses.
 **Automatic Correlation ID Propagation:**
 
 When a request enters your GoFr application, GoFr automatically generates a correlation ID X-Correlation-ID and adds it 
-to the request headers. This correlation ID is then propagated to all downstream requests. This means that you can track
+to the response headers. This correlation ID is then propagated to all downstream requests. This means that you can track
 a request as it travels through your distributed system by simply looking at the correlation ID in the request headers.
 
 

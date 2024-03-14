@@ -1,7 +1,6 @@
 # Configurations
 
-GoFr reads configuration via environment variables. It provides an easy way to manage this. Application code is decoupled from how configuration is managed as per the [12-factor](https://12factor.net/config).
-
+GoFr reads configuration via environment variables. It provides an easy way to manage this. Application code is decoupled from how configuration is managed as per the {% new-tab-link title="12-factor" href="https://12factor.net/config" /%}.
 Configs in GoFr can be used to initialise datasources, tracing. In doing so it abstract the logic and gives an easy interface to setup different things.
 
 To set configs create a `configs` directory in the project's root and add `.env` file.

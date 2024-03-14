@@ -35,6 +35,7 @@ DB_USER=root
 DB_PASSWORD=root123
 DB_NAME=test_db
 DB_PORT=3306
+DB_DIALECT=mysql
 ```
 
 Now in the following example let's store customer data using **POST** `/customer` and then use **GET** `/customer` to retrieve the same.
@@ -104,9 +105,7 @@ func main() {
 		// return the customer
 		return customers, nil
 	})
-
-	// Starts the server, it will listen on the default port 8000.
-	// it can be over-ridden through configs
+	
 	app.Run()
 }
 ```

@@ -52,7 +52,7 @@ To run the server, use the command
 
 `go run main.go`
 
-This would start the server at 8000 port, you can access [http://localhost:8000/greet](http://localhost:8000/greet) from your browser, you would be able to see the output as following with _Status Code 200_ as per REST Standard
+This would start the server at 8000 port, you can access {% new-tab-link title="http://localhost:8000/greet" href="http://localhost:8000/greet" /%} from your browser, you would be able to see the output as following with _Status Code 200_ as per REST Standard
 
 ```json
 { "data": "Hello World!" }
@@ -71,7 +71,7 @@ The `hello-world` server involves three essential steps:
 
 2. **Attaching a Handler to a Path:**
 
-   In this step, we instruct the server to associate an HTTP request with a specific handler function. This is achieved through `app.GET("/greet", HandlerFunction)`, where _GET /hello_ maps to HandlerFunction. Likewise, `app.POST("/todo", ToDoCreationHandler)` links a _POST_ request to the /todo endpoint with _ToDoCreationHandler_.
+   In this step, we instruct the server to associate an HTTP request with a specific handler function. This is achieved through `app.GET("/greet", HandlerFunction)`, where _GET /greet_ maps to HandlerFunction. Likewise, `app.POST("/todo", ToDoCreationHandler)` links a _POST_ request to the /todo endpoint with _ToDoCreationHandler_.
 
 
    **Good To Know**
@@ -82,7 +82,7 @@ The `hello-world` server involves three essential steps:
 
    In GoFr `ctx *gofr.Context` serves as a wrapper for requests, responses, and dependencies, providing various functionalities.
 
-   For more details about context, refer [here](/docs/references/context).
+   For more details about context, refer {% new-tab-link title="here" href="/docs/references/context" /%}.
 
 3. **Starting the server**
 
