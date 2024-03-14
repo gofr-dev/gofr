@@ -82,7 +82,6 @@ func (a *App) registerCRUDHandlers(handlers CRUDHandlers, ec entityConfig) {
 
 func defaultGetAllHandler(entityType reflect.Type, structName string) func(c *Context) (interface{}, error) {
 	return func(c *Context) (interface{}, error) {
-		newEntity := reflect.New(entityType).Interface()
 		query := fmt.Sprintf("SELECT * FROM %s", structName)
 
 		rows, err := c.SQL.QueryContext(c, query)
@@ -94,27 +93,39 @@ func defaultGetAllHandler(entityType reflect.Type, structName string) func(c *Co
 
 		// Create a slice of pointers to the struct's fields
 		dest := make([]interface{}, entityType.NumField())
-		val := reflect.ValueOf(newEntity).Elem()
+		val := reflect.New(entityType).Elem()
 
-		for i := 0; i < val.NumField(); i++ {
+		for i := 0; i < entityType.NumField(); i++ {
 			dest[i] = val.Field(i).Addr().Interface()
 		}
 
-		var resp []interface{}
+		var entities []interface{}
 
 		// Scan the result into the struct's fields
 		for rows.Next() {
+			// Reset newEntity for each row
+			newEntity := reflect.New(entityType).Interface()
+			newVal := reflect.ValueOf(newEntity).Elem() // Get Elem of newEntity
+
+			// Scan the result into the struct's fields
 			err = rows.Scan(dest...)
 			if err != nil {
 				return nil, err
 			}
 
-			resp = append(resp, newEntity)
+			// Set struct field values using reflection (consider type safety)
+			for i := 0; i < entityType.NumField(); i++ {
+				scanVal := reflect.ValueOf(dest[i]).Elem().Interface()
+				newVal.Field(i).Set(reflect.ValueOf(scanVal))
+			}
+
+			// Append the entity to the list
+			entities = append(entities, newEntity)
 		}
 
 		c.Logf("GET ALL %s", structName)
 
-		return resp, nil
+		return entities, nil
 	}
 }
 
