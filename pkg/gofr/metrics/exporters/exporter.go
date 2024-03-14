@@ -1,7 +1,6 @@
 package exporters
 
 import (
-	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/prometheus"
 	"go.opentelemetry.io/otel/metric"
@@ -13,7 +12,7 @@ import (
 )
 
 func Prometheus(appName, appVersion string) metric.Meter {
-	exporter, err := prometheus.New()
+	exporter, err := prometheus.New(prometheus.WithoutTargetInfo())
 	if err != nil {
 		return nil
 	}
@@ -23,9 +22,8 @@ func Prometheus(appName, appVersion string) metric.Meter {
 		metricSdk.WithResource(resource.NewWithAttributes(
 			semconv.SchemaURL,
 			semconv.ServiceNameKey.String(appName),
-			semconv.ServiceVersionKey.String(appVersion),
 			attribute.String("framework_version", version.Framework),
-		))).Meter("go.opentelemetry.io/otel", metric.WithInstrumentationVersion(otel.Version()))
+		))).Meter(appName, metric.WithInstrumentationVersion(appVersion))
 
 	return meter
 }
