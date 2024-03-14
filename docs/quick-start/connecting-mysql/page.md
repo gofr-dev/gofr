@@ -125,7 +125,7 @@ You will see the following output if database is successfully updated
 {}
 ```
 
-Now when we access the [http://localhost:9000/customer](http://localhost:9000/customer) we should see the following output
+Now when we access {% new-tab-link title="http://localhost:9000/customer" href="http://localhost:9000/customer" /%} we should see the following output
 
 ```json
 {

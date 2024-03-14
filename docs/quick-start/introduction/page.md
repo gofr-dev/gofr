@@ -1,5 +1,4 @@
 # Prerequisite
-
 -  Go 1.20 or above.
    To check the version use the following command `go version`.
 
@@ -13,9 +12,9 @@ Let's start by initializing the go module by using the following command.
 go mod init github.com/example
 ```
 
-To know more about go modules refer [here](https://go.dev/ref/mod)
+To know more about go modules refer {% new-tab-link title="here" href="https://go.dev/ref/mod" /%}.
 
-Add [gofr](https://github.com/gofr-dev/gofr) package to the project using the following command
+Add {% new-tab-link title="gofr" href="https://github.com/gofr-dev/gofr" /%} package to the project using the following command
 
 ```bash
 go get gofr.dev
