@@ -20,38 +20,63 @@ func (e EntityNotFound) Error() string {
 	return "entity not found!"
 }
 
-func (a *App) registerCRUDHandlers(handlers CRUDHandlers, entityType reflect.Type, structName, primaryKeyFieldName string) {
+type entityConfig struct {
+	name       string
+	entityType reflect.Type
+	primaryKey string
+}
+
+func scanEntity(entity interface{}) (*entityConfig, error) {
+	entityType := reflect.TypeOf(entity)
+	if entityType.Kind() != reflect.Struct {
+		return nil, invalidType{}
+	}
+
+	structName := entityType.Name()
+
+	// Assume the first field is the primary key
+	primaryKeyField := entityType.Field(0)
+	primaryKeyFieldName := strings.ToLower(primaryKeyField.Name)
+
+	return &entityConfig{
+		name:       structName,
+		entityType: entityType,
+		primaryKey: primaryKeyFieldName,
+	}, nil
+}
+
+func (a *App) registerCRUDHandlers(handlers CRUDHandlers, ec entityConfig) {
 	if handlers.GetAll != nil {
-		a.GET(fmt.Sprintf("/%s", structName), handlers.GetAll)
+		a.GET(fmt.Sprintf("/%s", ec.name), handlers.GetAll)
 	} else {
-		a.GET(fmt.Sprintf("/%s", structName), defaultGetAllHandler(entityType, structName))
+		a.GET(fmt.Sprintf("/%s", ec.name), defaultGetAllHandler(ec.entityType, ec.name))
 	}
 
 	if handlers.GetByID != nil {
-		a.GET(fmt.Sprintf("/%s/{%s}", structName, primaryKeyFieldName), handlers.GetByID)
+		a.GET(fmt.Sprintf("/%s/{%s}", ec.name, ec.primaryKey), handlers.GetByID)
 	} else {
-		a.GET(fmt.Sprintf("/%s/{%s}", structName, primaryKeyFieldName),
-			defaultGetHandler(entityType, structName, primaryKeyFieldName))
+		a.GET(fmt.Sprintf("/%s/{%s}", ec.name, ec.primaryKey),
+			defaultGetHandler(ec.entityType, ec.name, ec.primaryKey))
 	}
 
 	if handlers.Post != nil {
-		a.POST(fmt.Sprintf("/%s", structName), handlers.Post)
+		a.POST(fmt.Sprintf("/%s", ec.name), handlers.Post)
 	} else {
-		a.POST(fmt.Sprintf("/%s", structName), defaultPostHandler(entityType, structName, primaryKeyFieldName))
+		a.POST(fmt.Sprintf("/%s", ec.name), defaultPostHandler(ec.entityType, ec.name, ec.primaryKey))
 	}
 
 	if handlers.Put != nil {
-		a.PUT(fmt.Sprintf("/%s/{%s}", structName, primaryKeyFieldName), handlers.Put)
+		a.PUT(fmt.Sprintf("/%s/{%s}", ec.name, ec.primaryKey), handlers.Put)
 	} else {
-		a.PUT(fmt.Sprintf("/%s/{%s}", structName, primaryKeyFieldName),
-			defaultPutHandler(entityType, structName, primaryKeyFieldName))
+		a.PUT(fmt.Sprintf("/%s/{%s}", ec.name, ec.primaryKey),
+			defaultPutHandler(ec.entityType, ec.name, ec.primaryKey))
 	}
 
 	if handlers.Delete != nil {
-		a.DELETE(fmt.Sprintf("/%s/{%s}", structName, primaryKeyFieldName), handlers.Delete)
+		a.DELETE(fmt.Sprintf("/%s/{%s}", ec.name, ec.primaryKey), handlers.Delete)
 	} else {
-		a.DELETE(fmt.Sprintf("/%s/{%s}", structName, primaryKeyFieldName),
-			defaultDeleteHandler(structName, primaryKeyFieldName))
+		a.DELETE(fmt.Sprintf("/%s/{%s}", ec.name, ec.primaryKey),
+			defaultDeleteHandler(ec.name, ec.primaryKey))
 	}
 }
 

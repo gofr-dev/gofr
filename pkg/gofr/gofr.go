@@ -6,7 +6,6 @@ import (
 	"os"
 	"reflect"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -320,40 +319,34 @@ func (i invalidType) Error() string {
 }
 
 func (a *App) CRUDFromStruct(entity interface{}) error {
-	entityType := reflect.TypeOf(entity)
-	if entityType.Kind() != reflect.Struct {
-		return invalidType{}
+	entityConfig, err := scanEntity(entity)
+	if err != nil {
+		return err
 	}
-
-	structName := entityType.Name()
-
-	// Assume the first field is the primary key
-	primaryKeyField := entityType.Field(0)
-	primaryKeyFieldName := strings.ToLower(primaryKeyField.Name)
 
 	crudHandlers := CRUDHandlers{}
 	handlerType := reflect.TypeOf(Handler(nil)).Elem()
 
-	for i := 0; i < entityType.NumMethod(); i++ {
-		method := entityType.Method(i)
+	for i := 0; i < entityConfig.entityType.NumMethod(); i++ {
+		method := entityConfig.entityType.Method(i)
 		// Check if the method is exported and has the correct handler signature
 		if method.Func.IsValid() && method.Func.Type().ConvertibleTo(handlerType) {
 			switch method.Name {
 			case "GetAll":
-				crudHandlers.GetAll = wrapGetAll(method.Func, entityType)
+				crudHandlers.GetAll = wrapGetAll(method.Func, entityConfig.entityType)
 			case "GetByID":
-				crudHandlers.GetByID = wrapGet(method.Func, entityType)
+				crudHandlers.GetByID = wrapGet(method.Func, entityConfig.entityType)
 			case "Post":
-				crudHandlers.Post = wrapPost(method.Func, entityType)
+				crudHandlers.Post = wrapPost(method.Func, entityConfig.entityType)
 			case "Put":
-				crudHandlers.Put = wrapPut(method.Func, entityType)
+				crudHandlers.Put = wrapPut(method.Func, entityConfig.entityType)
 			case "Delete":
-				crudHandlers.Delete = wrapDelete(method.Func, entityType)
+				crudHandlers.Delete = wrapDelete(method.Func, entityConfig.entityType)
 			}
 		}
 	}
 
-	a.registerCRUDHandlers(crudHandlers, entityType, structName, primaryKeyFieldName)
+	a.registerCRUDHandlers(crudHandlers, *entityConfig)
 
 	return nil
 }
