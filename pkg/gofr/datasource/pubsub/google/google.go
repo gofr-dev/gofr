@@ -1,3 +1,5 @@
+// Package google provides a client for interacting with Google Cloud Pub/Sub.This package facilitates interaction with
+// Google Cloud Pub/Sub, allowing publishing and subscribing to topics, managing subscriptions, and handling messages.
 package google
 
 import (

@@ -1,3 +1,6 @@
+// Package sql provides functionalities to interact with SQL databases using the database/sql package.This package
+// includes a wrapper around sql.DB and sql.Tx to provide additional features such as query logging, metrics recording,
+// and error handling.
 package sql
 
 import (
