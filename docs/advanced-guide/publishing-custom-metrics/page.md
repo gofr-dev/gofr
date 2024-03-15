@@ -1,9 +1,9 @@
 # Publishing Custom Metrics
 
-For GoFr default metrics refer: [observability](/docs/quick-start/observability).
+For GoFr default metrics refer: {% new-tab-link title="observability" href="/docs/quick-start/observability" /%}.
 
 GoFr can handle multiple different metrics concurrently, each uniquely identified by its name during initialization.
-It supports the following [metrics](https://opentelemetry.io/docs/specs/otel/metrics/) types in prometheus format:
+It supports the following {% new-tab-link title="metrics" href="https://opentelemetry.io/docs/specs/otel/metrics/" /%} types in prometheus format:
 
 1. Counter
 2. UpDownCounter
@@ -17,7 +17,7 @@ If any metric other than defaults provided, you can create them using custom met
 
 ## 1. Counter Metrics
 
-Counter is a [synchronous Instrument](https://opentelemetry.io/docs/specs/otel/metrics/api/#synchronous-instrument-api) which supports non-negative increments.
+Counter is a {% new-tab-link title="synchronous Instrument" href="https://opentelemetry.io/docs/specs/otel/metrics/api/#synchronous-instrument-api" /%} which supports non-negative increments.
 
 ### Usage
 
@@ -46,7 +46,7 @@ func main() {
 
 ## 2. UpDown Counter Metrics
 
-UpDownCounter is a [synchronous Instrument](https://opentelemetry.io/docs/specs/otel/metrics/api/#synchronous-instrument-api) which supports increments and decrements.
+UpDownCounter is a {% new-tab-link title="synchronous Instrument" href="https://opentelemetry.io/docs/specs/otel/metrics/api/#synchronous-instrument-api" /%} which supports increments and decrements.
 Note: if the value is monotonically increasing, use Counter instead.
 
 ### Usage
@@ -76,7 +76,7 @@ func main() {
 
 ## 3. Histogram Metrics
 
-Histogram is a [synchronous Instrument](https://opentelemetry.io/docs/specs/otel/metrics/api/#synchronous-instrument-api) which can be used to report arbitrary values that are likely to be statistically meaningful. It is intended for statistics such as histograms, summaries, and percentile.
+Histogram is a {% new-tab-link title="synchronous Instrument" href="https://opentelemetry.io/docs/specs/otel/metrics/api/#synchronous-instrument-api" /%} which can be used to report arbitrary values that are likely to be statistically meaningful. It is intended for statistics such as histograms, summaries, and percentile.
 
 ### Usage
 
@@ -112,7 +112,7 @@ func main() {
 
 ## 4. Gauge Metrics
 
-Gauge is a [synchronous Instrument](https://opentelemetry.io/docs/specs/otel/metrics/api/#synchronous-instrument-api) which can be used to record non-additive value(s)  when changes occur.
+Gauge is a {% new-tab-link title="synchronous Instrument" href="https://opentelemetry.io/docs/specs/otel/metrics/api/#synchronous-instrument-api" /%} which can be used to record non-additive value(s)  when changes occur.
 ### Usage
 
 ```go

@@ -1,11 +1,14 @@
 package exporters
 
 import (
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/prometheus"
 	"go.opentelemetry.io/otel/metric"
 	metricSdk "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
 	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
+
+	"gofr.dev/pkg/gofr/version"
 )
 
 func Prometheus(appName, appVersion string) metric.Meter {
@@ -19,6 +22,7 @@ func Prometheus(appName, appVersion string) metric.Meter {
 		metricSdk.WithResource(resource.NewWithAttributes(
 			semconv.SchemaURL,
 			semconv.ServiceNameKey.String(appName),
+			attribute.String("framework_version", version.Framework),
 		))).Meter(appName, metric.WithInstrumentationVersion(appVersion))
 
 	return meter
