@@ -6,6 +6,7 @@ import (
 	"strings"
 )
 
+// CRUDHandlers defines the interface for CRUD operations.
 type CRUDHandlers struct {
 	GetAll  func(c *Context) (interface{}, error)
 	GetByID func(c *Context) (interface{}, error)
@@ -14,18 +15,21 @@ type CRUDHandlers struct {
 	Delete  func(c *Context) (interface{}, error)
 }
 
+// EntityNotFound is an error type for indicating when an entity is not found.
 type EntityNotFound struct{}
 
 func (e EntityNotFound) Error() string {
 	return "entity not found!"
 }
 
+// entityConfig stores information about an entity.
 type entityConfig struct {
 	name       string
 	entityType reflect.Type
 	primaryKey string
 }
 
+// scanEntity extracts entity information for CRUD operations.
 func scanEntity(entity interface{}) (*entityConfig, error) {
 	entityType := reflect.TypeOf(entity)
 	if entityType.Kind() != reflect.Struct {
@@ -45,50 +49,55 @@ func scanEntity(entity interface{}) (*entityConfig, error) {
 	}, nil
 }
 
-func verifyHandlerSignature(method reflect.Method) bool {
+// verifyHandlerSignature checks if the handler method signature is valid.
+func verifyHandlerSignature(method *reflect.Method) bool {
 	methodType := method.Func.Type()
 	isContext := methodType.In(1) == reflect.TypeOf(&Context{})
+
 	return method.Func.IsValid() && methodType.NumIn() == 2 && isContext && methodType.NumOut() == 2
 }
 
-func (a *App) registerCRUDHandlers(handlers CRUDHandlers, ec entityConfig) {
+// registerCRUDHandlers registers CRUD handlers for an entity.
+func (a *App) registerCRUDHandlers(
+	handlers CRUDHandlers, ec entityConfig) {
 	if handlers.GetAll != nil {
 		a.GET(fmt.Sprintf("/%s", ec.name), handlers.GetAll)
 	} else {
-		a.GET(fmt.Sprintf("/%s", ec.name), defaultGetAllHandler(ec.entityType, ec.name))
+		a.GET(fmt.Sprintf("/%s", ec.name), defaultGetAllHandler(ec))
 	}
 
 	if handlers.GetByID != nil {
 		a.GET(fmt.Sprintf("/%s/{%s}", ec.name, ec.primaryKey), handlers.GetByID)
 	} else {
 		a.GET(fmt.Sprintf("/%s/{%s}", ec.name, ec.primaryKey),
-			defaultGetHandler(ec.entityType, ec.name, ec.primaryKey))
+			defaultGetHandler(ec))
 	}
 
 	if handlers.Post != nil {
 		a.POST(fmt.Sprintf("/%s", ec.name), handlers.Post)
 	} else {
-		a.POST(fmt.Sprintf("/%s", ec.name), defaultPostHandler(ec.entityType, ec.name, ec.primaryKey))
+		a.POST(fmt.Sprintf("/%s", ec.name), defaultPostHandler(ec))
 	}
 
 	if handlers.Put != nil {
 		a.PUT(fmt.Sprintf("/%s/{%s}", ec.name, ec.primaryKey), handlers.Put)
 	} else {
 		a.PUT(fmt.Sprintf("/%s/{%s}", ec.name, ec.primaryKey),
-			defaultPutHandler(ec.entityType, ec.name, ec.primaryKey))
+			defaultPutHandler(ec))
 	}
 
 	if handlers.Delete != nil {
 		a.DELETE(fmt.Sprintf("/%s/{%s}", ec.name, ec.primaryKey), handlers.Delete)
 	} else {
 		a.DELETE(fmt.Sprintf("/%s/{%s}", ec.name, ec.primaryKey),
-			defaultDeleteHandler(ec.name, ec.primaryKey))
+			defaultDeleteHandler(ec))
 	}
 }
 
-func defaultGetAllHandler(entityType reflect.Type, structName string) func(c *Context) (interface{}, error) {
+// defaultGetAllHandler is the default handler for the GetAll operation.
+func defaultGetAllHandler(ec entityConfig) func(c *Context) (interface{}, error) {
 	return func(c *Context) (interface{}, error) {
-		query := fmt.Sprintf("SELECT * FROM %s", structName)
+		query := fmt.Sprintf("SELECT * FROM %s", ec.name)
 
 		rows, err := c.SQL.QueryContext(c, query)
 		if err != nil || rows.Err() != nil {
@@ -98,10 +107,10 @@ func defaultGetAllHandler(entityType reflect.Type, structName string) func(c *Co
 		defer rows.Close()
 
 		// Create a slice of pointers to the struct's fields
-		dest := make([]interface{}, entityType.NumField())
-		val := reflect.New(entityType).Elem()
+		dest := make([]interface{}, ec.entityType.NumField())
+		val := reflect.New(ec.entityType).Elem()
 
-		for i := 0; i < entityType.NumField(); i++ {
+		for i := 0; i < ec.entityType.NumField(); i++ {
 			dest[i] = val.Field(i).Addr().Interface()
 		}
 
@@ -110,7 +119,7 @@ func defaultGetAllHandler(entityType reflect.Type, structName string) func(c *Co
 		// Scan the result into the struct's fields
 		for rows.Next() {
 			// Reset newEntity for each row
-			newEntity := reflect.New(entityType).Interface()
+			newEntity := reflect.New(ec.entityType).Interface()
 			newVal := reflect.ValueOf(newEntity).Elem() // Get Elem of newEntity
 
 			// Scan the result into the struct's fields
@@ -120,7 +129,7 @@ func defaultGetAllHandler(entityType reflect.Type, structName string) func(c *Co
 			}
 
 			// Set struct field values using reflection (consider type safety)
-			for i := 0; i < entityType.NumField(); i++ {
+			for i := 0; i < ec.entityType.NumField(); i++ {
 				scanVal := reflect.ValueOf(dest[i]).Elem().Interface()
 				newVal.Field(i).Set(reflect.ValueOf(scanVal))
 			}
@@ -129,23 +138,24 @@ func defaultGetAllHandler(entityType reflect.Type, structName string) func(c *Co
 			entities = append(entities, newEntity)
 		}
 
-		c.Logf("GET ALL %s", structName)
+		c.Logf("GET ALL %s", ec.name)
 
 		return entities, nil
 	}
 }
 
-func defaultGetHandler(entityType reflect.Type, structName, primaryKeyFieldName string) func(c *Context) (interface{}, error) {
+// defaultGetHandler is the default handler for the GetByID operation.
+func defaultGetHandler(ec entityConfig) func(c *Context) (interface{}, error) {
 	return func(c *Context) (interface{}, error) {
-		newEntity := reflect.New(entityType).Interface()
+		newEntity := reflect.New(ec.entityType).Interface()
 		// Implement logic to fetch entity by ID to fetch entity from database based on ID
 		id := c.Request.PathParam("id")
-		query := fmt.Sprintf("SELECT * FROM %s WHERE %s = ?", structName, primaryKeyFieldName)
+		query := fmt.Sprintf("SELECT * FROM %s WHERE %s = ?", ec.name, ec.primaryKey)
 
 		row := c.SQL.QueryRowContext(c, query, id)
 
 		// Create a slice of pointers to the struct's fields
-		dest := make([]interface{}, entityType.NumField())
+		dest := make([]interface{}, ec.entityType.NumField())
 		val := reflect.ValueOf(newEntity).Elem()
 
 		for i := 0; i < val.NumField(); i++ {
@@ -162,26 +172,27 @@ func defaultGetHandler(entityType reflect.Type, structName, primaryKeyFieldName 
 	}
 }
 
-func defaultPostHandler(entityType reflect.Type, structName, _ string) func(c *Context) (interface{}, error) {
+// defaultPostHandler is the default handler for the Post operation.
+func defaultPostHandler(ec entityConfig) func(c *Context) (interface{}, error) {
 	return func(c *Context) (interface{}, error) {
-		newEntity := reflect.New(entityType).Interface()
+		newEntity := reflect.New(ec.entityType).Interface()
 		err := c.Bind(newEntity)
 
 		if err != nil {
 			return nil, err
 		}
 
-		fieldNames := make([]string, 0, entityType.NumField())
-		fieldValues := make([]interface{}, 0, entityType.NumField())
+		fieldNames := make([]string, 0, ec.entityType.NumField())
+		fieldValues := make([]interface{}, 0, ec.entityType.NumField())
 
-		for i := 0; i < entityType.NumField(); i++ {
-			field := entityType.Field(i)
+		for i := 0; i < ec.entityType.NumField(); i++ {
+			field := ec.entityType.Field(i)
 			fieldNames = append(fieldNames, field.Name)
 			fieldValues = append(fieldValues, reflect.ValueOf(newEntity).Elem().Field(i).Interface())
 		}
 
 		stmt := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)",
-			structName,
+			ec.name,
 			strings.Join(fieldNames, ", "),
 			strings.Repeat("?, ", len(fieldNames)-1)+"?",
 		)
@@ -191,24 +202,25 @@ func defaultPostHandler(entityType reflect.Type, structName, _ string) func(c *C
 			return nil, err
 		}
 
-		return fmt.Sprintf("%s successfully created with id: %d", structName, fieldValues[0]), nil
+		return fmt.Sprintf("%s successfully created with id: %d", ec.name, fieldValues[0]), nil
 	}
 }
 
-func defaultPutHandler(entityType reflect.Type, structName, primaryKeyFieldName string) func(c *Context) (interface{}, error) {
+// defaultPutHandler is the default handler for the Put operation.
+func defaultPutHandler(ec entityConfig) func(c *Context) (interface{}, error) {
 	return func(c *Context) (interface{}, error) {
-		newEntity := reflect.New(entityType).Interface()
+		newEntity := reflect.New(ec.entityType).Interface()
 
 		err := c.Bind(newEntity)
 		if err != nil {
 			return nil, err
 		}
 
-		fieldNames := make([]string, 0, entityType.NumField())
-		fieldValues := make([]interface{}, 0, entityType.NumField())
+		fieldNames := make([]string, 0, ec.entityType.NumField())
+		fieldValues := make([]interface{}, 0, ec.entityType.NumField())
 
-		for i := 0; i < entityType.NumField(); i++ {
-			field := entityType.Field(i)
+		for i := 0; i < ec.entityType.NumField(); i++ {
+			field := ec.entityType.Field(i)
 			fieldNames = append(fieldNames, field.Name)
 			fieldValues = append(fieldValues, reflect.ValueOf(newEntity).Elem().Field(i).Interface())
 		}
@@ -223,9 +235,9 @@ func defaultPutHandler(entityType reflect.Type, structName, primaryKeyFieldName 
 		query := strings.Join(paramsList, ", ")
 
 		stmt := fmt.Sprintf("UPDATE %s SET %s WHERE %s = %s",
-			structName,
+			ec.name,
 			query,
-			primaryKeyFieldName,
+			ec.primaryKey,
 			id,
 		)
 
@@ -234,17 +246,18 @@ func defaultPutHandler(entityType reflect.Type, structName, primaryKeyFieldName 
 			return nil, err
 		}
 
-		c.Logf("PUT %s", structName)
+		c.Logf("PUT %s", ec.name)
 
-		return fmt.Sprintf("PUT %s by %v", structName, primaryKeyFieldName), nil
+		return fmt.Sprintf("PUT %s by %v", ec.name, ec.primaryKey), nil
 	}
 }
 
-func defaultDeleteHandler(structName, primaryKeyFieldName string) func(c *Context) (interface{}, error) {
+// defaultDeleteHandler is the default handler for the Delete operation.
+func defaultDeleteHandler(ec entityConfig) func(c *Context) (interface{}, error) {
 	return func(c *Context) (interface{}, error) {
 		// Implement logic to delete entity by ID
 		id := c.PathParam("id")
-		query := fmt.Sprintf("DELETE FROM %s WHERE %s = ?", structName, primaryKeyFieldName)
+		query := fmt.Sprintf("DELETE FROM %s WHERE %s = ?", ec.name, ec.primaryKey)
 
 		result, err := c.SQL.ExecContext(c, query, id)
 		if err != nil {
@@ -260,41 +273,14 @@ func defaultDeleteHandler(structName, primaryKeyFieldName string) func(c *Contex
 			return nil, EntityNotFound{}
 		}
 
-		return fmt.Sprintf("%s successfully deleted with id : %v", structName, id), nil
+		return fmt.Sprintf("%s successfully deleted with id : %v", ec.name, id), nil
 	}
 }
 
-func wrapGetAll(fn reflect.Value, entityType reflect.Type) func(*Context) (interface{}, error) {
+// wrapHandler wraps a handler function with the entity type as its first argument.
+func wrapHandler(fn reflect.Value, entityType reflect.Type) func(*Context) (interface{}, error) {
 	return func(c *Context) (interface{}, error) {
-		user := reflect.New(entityType).Elem().Interface()
-		return fn.Call([]reflect.Value{reflect.ValueOf(user), reflect.ValueOf(c)})[0].Interface(), nil
-	}
-}
-
-func wrapGet(fn reflect.Value, entityType reflect.Type) func(*Context) (interface{}, error) {
-	return func(c *Context) (interface{}, error) {
-		user := reflect.New(entityType).Elem().Interface()
-		return fn.Call([]reflect.Value{reflect.ValueOf(user), reflect.ValueOf(c)})[0].Interface(), nil
-	}
-}
-
-func wrapPost(fn reflect.Value, entityType reflect.Type) func(*Context) (interface{}, error) {
-	return func(c *Context) (interface{}, error) {
-		user := reflect.New(entityType).Elem().Interface()
-		return fn.Call([]reflect.Value{reflect.ValueOf(user), reflect.ValueOf(c)})[0].Interface(), nil
-	}
-}
-
-func wrapPut(fn reflect.Value, entityType reflect.Type) func(*Context) (interface{}, error) {
-	return func(c *Context) (interface{}, error) {
-		user := reflect.New(entityType).Elem().Interface()
-		return fn.Call([]reflect.Value{reflect.ValueOf(user), reflect.ValueOf(c)})[0].Interface(), nil
-	}
-}
-
-func wrapDelete(fn reflect.Value, entityType reflect.Type) func(*Context) (interface{}, error) {
-	return func(c *Context) (interface{}, error) {
-		user := reflect.New(entityType).Elem().Interface()
-		return fn.Call([]reflect.Value{reflect.ValueOf(user), reflect.ValueOf(c)})[0].Interface(), nil
+		entity := reflect.New(entityType).Elem().Interface()
+		return fn.Call([]reflect.Value{reflect.ValueOf(entity), reflect.ValueOf(c)})[0].Interface(), nil
 	}
 }

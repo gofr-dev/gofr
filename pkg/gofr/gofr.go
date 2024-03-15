@@ -327,19 +327,19 @@ func (a *App) CRUDFromStruct(entity interface{}) error {
 
 	for i := 0; i < entityConfig.entityType.NumMethod(); i++ {
 		method := entityConfig.entityType.Method(i)
-		// Check if the method is exported and has the correct handler signature
-		if method.Func.IsValid() && verifyHandlerSignature(method) {
+		// Check if the method is exported and has the correct gofr handler signature
+		if method.Func.IsValid() && verifyHandlerSignature(&method) {
 			switch method.Name {
 			case "GetAll":
-				crudHandlers.GetAll = wrapGetAll(method.Func, entityConfig.entityType)
+				crudHandlers.GetAll = wrapHandler(method.Func, entityConfig.entityType)
 			case "GetByID":
-				crudHandlers.GetByID = wrapGet(method.Func, entityConfig.entityType)
+				crudHandlers.GetByID = wrapHandler(method.Func, entityConfig.entityType)
 			case "Post":
-				crudHandlers.Post = wrapPost(method.Func, entityConfig.entityType)
+				crudHandlers.Post = wrapHandler(method.Func, entityConfig.entityType)
 			case "Put":
-				crudHandlers.Put = wrapPut(method.Func, entityConfig.entityType)
+				crudHandlers.Put = wrapHandler(method.Func, entityConfig.entityType)
 			case "Delete":
-				crudHandlers.Delete = wrapDelete(method.Func, entityConfig.entityType)
+				crudHandlers.Delete = wrapHandler(method.Func, entityConfig.entityType)
 			}
 		}
 	}
