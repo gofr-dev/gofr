@@ -15,13 +15,6 @@ var (
 	errMaxFileSize = errors.New("uncompressed file is greater than file size limit of 100MBs")
 )
 
-type File struct {
-	name    string
-	isDir   bool
-	content []byte
-	size    int64
-}
-
 type Zip struct {
 	files map[string]File
 }
@@ -48,10 +41,10 @@ func NewZip(content []byte) (*Zip, error) {
 		}
 
 		files[file.Name] = File{
-			name:    file.Name,
+			Name:    file.Name,
 			content: buf.Bytes(),
 			isDir:   file.FileInfo().IsDir(),
-			size:    file.FileInfo().Size(),
+			Size:    file.FileInfo().Size(),
 		}
 
 		f.Close()
@@ -67,7 +60,7 @@ func (z *Zip) GetFiles() map[string]File {
 func (z *Zip) CreateLocalCopies(dest string) error {
 	for _, zf := range z.files {
 		basePath, _ := os.Getwd()
-		destPath := filepath.Join(basePath, dest, zf.name)
+		destPath := filepath.Join(basePath, dest, zf.Name)
 
 		if zf.isDir {
 			err := os.MkdirAll(destPath, os.ModePerm)
