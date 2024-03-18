@@ -11,6 +11,8 @@ type store struct {
 	gauge         map[string]metric.Float64ObservableGauge
 }
 
+// Store represents a store for registered metrics. It provides methods to retrieve and manage different
+// types of metrics (counters, up-down counters, histograms, and gauges).
 type Store interface {
 	getCounter(name string) (metric.Int64Counter, error)
 	getUpDownCounter(name string) (metric.Float64UpDownCounter, error)
