@@ -1,9 +1,10 @@
 # Prerequisite
--  Go 1.20 or above.
-   To check the version use the following command `go version`.
 
--  Prior familiarity with Golang syntax is essential. {% new-tab-link title="Golang Tour" href="https://tour.golang.org/" /%} is highly recommended as it has an excellent guided tour.
-   
+- Go 1.20 or above.
+  To check the version use the following command `go version`.
+
+- Prior familiarity with Golang syntax is essential. {% new-tab-link title="Golang Tour" href="https://tour.golang.org/" /%} is highly recommended as it has an excellent guided tour.
+
 ## Write your first GoFr API
 
 Let's start by initializing the go module by using the following command.
@@ -67,21 +68,19 @@ The `hello-world` server involves three essential steps:
 
    _This single line is a standard part of all gofr-based servers._
 
-
 2. **Attaching a Handler to a Path:**
 
    In this step, we instruct the server to associate an HTTP request with a specific handler function. This is achieved through `app.GET("/greet", HandlerFunction)`, where _GET /greet_ maps to HandlerFunction. Likewise, `app.POST("/todo", ToDoCreationHandler)` links a _POST_ request to the /todo endpoint with _ToDoCreationHandler_.
 
-
    **Good To Know**
 
->  In Go, functions are first-class citizens, allowing easy handler definition and reference.
-   HTTP Handler functions should follow the `func(ctx *gofr.Context) (interface{}, error)` signature.
-   They take a context as input, returning two values: the response data and an error (set to `nil` when there is no error).
+> In Go, functions are first-class citizens, allowing easy handler definition and reference.
+> HTTP Handler functions should follow the `func(ctx *gofr.Context) (interface{}, error)` signature.
+> They take a context as input, returning two values: the response data and an error (set to `nil` when there is no error).
 
-   In GoFr `ctx *gofr.Context` serves as a wrapper for requests, responses, and dependencies, providing various functionalities.
+In GoFr `ctx *gofr.Context` serves as a wrapper for requests, responses, and dependencies, providing various functionalities.
 
-   For more details about context, refer {% new-tab-link title="here" href="/docs/references/context" /%}.
+For more details about context, refer {% new-tab-link  newtab=false title="here" href="/docs/references/context" /%}.
 
 3. **Starting the server**
 
