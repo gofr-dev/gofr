@@ -8,10 +8,9 @@ To set configs create a `configs` directory in the project's root and add `.env`
 By default, GoFr starts HTTP server at port 8000, in order to change that we can add the config `HTTP_PORT`
 Similarly to Set the app-name you can add `APP_NAME`. For example:
 
-```dotenv
+```bash
 # configs/.env
 
 APP_NAME=test-service
 HTTP_PORT=9000
 ```
-
