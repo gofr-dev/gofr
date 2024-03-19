@@ -10,25 +10,9 @@ import (
 	"gofr.dev/pkg/gofr"
 )
 
-type user struct {
-	Id         int    `json:"id"`
-	Name       string `json:"name"`
-	Age        int    `json:"age"`
-	IsEmployed bool   `json:"isEmployed"`
-}
-
-func (u *user) GetAll(c *gofr.Context) (interface{}, error) {
-	return nil, nil
-}
-
 func main() {
 	// Create a new application
 	a := gofr.New()
-
-	err := a.CRUDFromStruct(user{})
-	if err != nil {
-		return
-	}
 
 	//HTTP service with default health check endpoint
 	a.AddHTTPService("anotherService", "http://localhost:9000")
