@@ -311,40 +311,15 @@ func (a *App) Subscribe(topic string, handler SubscribeFunc) {
 	a.subscriptionManager.subscriptions[topic] = handler
 }
 
-type invalidType struct{}
-
-func (i invalidType) Error() string {
-	return "unexpected field passed for CRUDFromStruct"
-}
-
-func (a *App) CRUDFromStruct(entity interface{}) error {
-	entityConfig, err := scanEntity(entity)
+func (a *App) CRUDFromStruct(entity CRUD) error {
+	cfg, err := scanEntity(entity)
 	if err != nil {
 		return err
 	}
 
-	crudHandlers := CRUDHandlers{}
+	h := handlers{config: cfg}
 
-	for i := 0; i < entityConfig.entityType.NumMethod(); i++ {
-		method := entityConfig.entityType.Method(i)
-		// Check if the method is exported and has the correct gofr handler signature
-		if method.Func.IsValid() && verifyHandlerSignature(&method) {
-			switch method.Name {
-			case "GetAll":
-				crudHandlers.GetAll = wrapHandler(method.Func, entityConfig.entityType)
-			case "GetByID":
-				crudHandlers.GetByID = wrapHandler(method.Func, entityConfig.entityType)
-			case "Post":
-				crudHandlers.Post = wrapHandler(method.Func, entityConfig.entityType)
-			case "Put":
-				crudHandlers.Put = wrapHandler(method.Func, entityConfig.entityType)
-			case "Delete":
-				crudHandlers.Delete = wrapHandler(method.Func, entityConfig.entityType)
-			}
-		}
-	}
-
-	a.registerCRUDHandlers(crudHandlers, *entityConfig)
+	a.registerCRUDHandlers(h)
 
 	return nil
 }
