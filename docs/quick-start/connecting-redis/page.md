@@ -1,8 +1,9 @@
-# Connecting to Redis 
+# Connecting to Redis
 
-GoFr simplifies the process of connecting to Redis. 
+GoFr simplifies the process of connecting to Redis.
 
 ## Setup:
+
 Before using Redis with GoFr, you need to have Redis installed. You can use Docker to set up a Redis container:
 
 ```bash
@@ -12,15 +13,15 @@ docker run --name gofr-redis -p 6379:6379 -d redis
 To set a sample key, run the following command:
 
 ```bash
-docker exec -it gofr-redis bash -c 'redis-cli SET greeting "Hello from Redis."'
+docker exec -it gofr-redis bash -c 'redis-cli SET greeting "Hello from Redis."'docker exec -it gofr-redis bash -c 'redis-cli SET greeting "Hello from Redis."'
 ```
 
 ## Configuration & Usage
 
-GoFr requires certain configurations to connect to Redis. The necessary configurations include 
+GoFr requires certain configurations to connect to Redis. The necessary configurations include
 `REDIS_HOST`and `REDIS_PORT`. Update the `.env` file in the configs directory with the following content:
 
-```dotenv
+```swift
 APP_NAME=test-service
 HTTP_PORT=9000
 
@@ -28,10 +29,10 @@ REDIS_HOST=localhost
 REDIS_PORT=6379
 ```
 
-Once the Redis configurations are set, you can use Redis in your GoFr application. 
+Once the Redis configurations are set, you can use Redis in your GoFr application.
 Below is an example of how to retrieve data from Redis in the `main.go` file:
 
-```golang
+```go
 package main
 
 import (
@@ -49,7 +50,7 @@ func main() {
 	app.GET("/redis", func(ctx *gofr.Context) (interface{}, error) {
 		// Get the value using the Redis instance
 
-		val, err := ctx.Redis.Get(ctx.Context, "test").Result()
+		val, err := ctx.Redis.Get(ctx.Context, "greeting").Result()
 		if err != nil && !errors.Is(err, redis.Nil) {
 			// If the key is not found, we are not considering this an error and returning ""
 			return nil, err
