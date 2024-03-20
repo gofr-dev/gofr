@@ -16,10 +16,10 @@ var (
 )
 
 type Zip struct {
-	files map[string]File
+	Files map[string]file
 }
 
-func NewZip(content []byte) (*Zip, error) {
+func GenerateFile(content []byte) (*Zip, error) {
 	reader := bytes.NewReader(content)
 
 	zipReader, err := zip.NewReader(reader, int64(len(content)))
@@ -27,38 +27,34 @@ func NewZip(content []byte) (*Zip, error) {
 		return nil, err
 	}
 	// Create a map to store file contents
-	files := make(map[string]File)
+	files := make(map[string]file)
 
-	for _, file := range zipReader.File {
-		f, err := file.Open()
+	for _, zrf := range zipReader.File {
+		f, err := zrf.Open()
 		if err != nil {
 			return nil, err
 		}
 
-		buf, err := copyToBuffer(f, file.UncompressedSize64)
+		buf, err := copyToBuffer(f, zrf.UncompressedSize64)
 		if err != nil {
 			return nil, err
 		}
 
-		files[file.Name] = File{
-			Name:    file.Name,
+		files[zrf.Name] = file{
+			Name:    zrf.Name,
 			content: buf.Bytes(),
-			isDir:   file.FileInfo().IsDir(),
-			Size:    file.FileInfo().Size(),
+			isDir:   zrf.FileInfo().IsDir(),
+			Size:    zrf.FileInfo().Size(),
 		}
 
 		f.Close()
 	}
 
-	return &Zip{files: files}, nil
-}
-
-func (z *Zip) GetFiles() map[string]File {
-	return z.files
+	return &Zip{Files: files}, nil
 }
 
 func (z *Zip) CreateLocalCopies(dest string) error {
-	for _, zf := range z.files {
+	for _, zf := range z.Files {
 		basePath, _ := os.Getwd()
 		destPath := filepath.Join(basePath, dest, zf.Name)
 

@@ -23,9 +23,9 @@ const (
 )
 
 var (
-	errNonPointerBind         = errors.New("bind error, cannot bind to a non pointer type")
-	errUnsupportedContentType = errors.New("unsupported content type")
-	errIncompatibleType       = errors.New("incompatible file type")
+	errNoFileFound      = errors.New("no files were bounded")
+	errIncompatibleType = errors.New("incompatible file type")
+	errNonPointerBind   = errors.New("bind error, cannot bind to a non pointer type")
 )
 
 // Request is an abstraction over the underlying http.Request. This abstraction is useful because it allows us
@@ -68,9 +68,9 @@ func (r *Request) Bind(i interface{}) error {
 		return json.Unmarshal(body, &i)
 	case "multipart/form-data":
 		return r.bindMultipart(i)
-	default:
-		return errUnsupportedContentType
 	}
+
+	return nil
 }
 
 func (r *Request) GetClaims() map[string]interface{} {
@@ -102,23 +102,15 @@ func (r *Request) body() ([]byte, error) {
 	return bodyBytes, nil
 }
 
-type File struct {
-	// it embeds the file type that is present in the request
-	multipart.File
-
-	// Header has the properties of the file like name, size, etc. are present in Header
-	Header *multipart.FileHeader
-}
-
-func (uf *File) Close() error {
-	return uf.File.Close()
+type formData struct {
+	files map[string][]*multipart.FileHeader
 }
 
 func (r *Request) bindMultipart(ptr any) error {
-	vType := reflect.TypeOf(ptr)
-	vKind := vType.Kind()
-
-	if vKind != reflect.Pointer {
+	ptrVal := reflect.ValueOf(ptr)
+	if ptrVal.Kind() == reflect.Ptr {
+		ptrVal = ptrVal.Elem()
+	} else {
 		return errNonPointerBind
 	}
 
@@ -126,81 +118,140 @@ func (r *Request) bindMultipart(ptr any) error {
 		return err
 	}
 
-	val := vType.Elem()
+	fd := formData{files: r.req.MultipartForm.File}
 
-	for i := 0; i < val.NumField(); i++ {
-		if val.Field(i).Tag == "-" {
-			continue
-		}
-
-		fileHeader, ok := getFileHeader(r.req.MultipartForm.File, val, i)
-		if !ok {
-			continue
-		}
-
-		field := reflect.ValueOf(ptr).Elem().Field(i)
-		if !field.CanSet() {
-			continue
-		}
-
-		f, err := fileHeader.Open()
-		if err != nil {
-			return err
-		}
-
-		err = trySet(f, fileHeader, field)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func trySet(f multipart.File, header *multipart.FileHeader, value reflect.Value) error {
-	content, err := io.ReadAll(f)
+	ok, err := fd.mapStruct(ptrVal, &reflect.StructField{})
 	if err != nil {
 		return err
 	}
 
-	contentType := http.DetectContentType(content)
-	switch {
-	case contentType == "application/zip" && value.Type() == reflect.TypeOf(&file.Zip{}):
-		zip, err := file.NewZip(content)
-		if err != nil {
-			return err
-		}
-
-		value.Set(reflect.ValueOf(zip))
-	case value.Type() == reflect.TypeOf(&File{}):
-		value.Set(reflect.ValueOf(&File{f, header}))
-	default:
-		return errIncompatibleType
+	if !ok {
+		return errNoFileFound
 	}
 
 	return nil
 }
 
-func getFileHeader(file map[string][]*multipart.FileHeader, val reflect.Type, i int) (*multipart.FileHeader, bool) {
+func (uf *formData) mapStruct(val reflect.Value, field *reflect.StructField) (bool, error) {
+	vKind := val.Kind()
+
+	if vKind == reflect.Pointer {
+		var isNew bool
+
+		vPtr := val
+
+		if val.IsNil() {
+			isNew = true
+			vPtr = reflect.New(val.Type().Elem())
+		}
+
+		ok, err := uf.mapStruct(vPtr.Elem(), field)
+		if err != nil {
+			return false, err
+		}
+
+		if isNew && ok {
+			val.Set(vPtr)
+		}
+
+		return ok, nil
+	}
+
+	if vKind != reflect.Struct || !field.Anonymous {
+		set, err := uf.trySet(val, field)
+		if err != nil {
+			return false, err
+		}
+
+		if set {
+			return true, nil
+		}
+	}
+
+	if vKind == reflect.Struct {
+		var set bool
+
+		tVal := val.Type()
+
+		for i := 0; i < val.NumField(); i++ {
+			sf := tVal.Field(i)
+			if sf.PkgPath != "" && sf.Anonymous {
+				continue
+			}
+
+			ok, err := uf.mapStruct(val.Field(i), &sf)
+			if err != nil {
+				return false, err
+			}
+
+			set = set || ok
+		}
+
+		return set, nil
+	}
+
+	return false, nil
+}
+
+func (uf *formData) trySet(value reflect.Value, field *reflect.StructField) (bool, error) {
+	tag, ok := getFileName(field)
+	if !ok {
+		return false, nil
+	}
+
+	header, ok := uf.files[tag]
+	if !ok {
+		return false, nil
+	}
+
+	f, err := header[0].Open()
+	if err != nil {
+		return false, err
+	}
+
+	content, err := io.ReadAll(f)
+	if err != nil {
+		return false, err
+	}
+
+	switch {
+	case value.Type() == reflect.TypeOf(file.Zip{}):
+		zip, err := file.GenerateFile(content)
+		if err != nil {
+			return false, err
+		}
+
+		if value.Kind() == reflect.Ptr {
+			value.Set(reflect.ValueOf(zip))
+		} else {
+			value.Set(reflect.ValueOf(*zip))
+		}
+	default:
+		return false, errIncompatibleType
+	}
+
+	return true, nil
+}
+
+func getFileName(field *reflect.StructField) (string, bool) {
 	var (
 		tag = "file"
 		key string
 	)
 
-	if val.Field(i).Tag.Get(tag) == "-" {
-		return nil, false
+	if field.Tag.Get(tag) == "-" {
+		return "", false
 	}
 
-	if val.Field(i).Tag.Get(tag) == "" {
-		key = val.Field(i).Name
+	if field.Tag.Get(tag) == "" {
+		key = field.Name
 	} else {
-		key = val.Field(i).Tag.Get(tag)
+		key = field.Tag.Get(tag)
 	}
 
-	fileHeader, ok := file[key]
-	if !ok {
-		return nil, false
+	if key == "" {
+		return "", false
 	}
 
-	return fileHeader[0], true
+	return key, true
 }

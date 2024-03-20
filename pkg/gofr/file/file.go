@@ -1,16 +1,16 @@
 package file
 
-type File struct {
+type file struct {
 	Name    string
 	content []byte
 	Size    int64
 	isDir   bool
 }
 
-func (f *File) IsDir() bool {
+func (f file) IsDir() bool {
 	return f.isDir
 }
 
-func (f *File) Bytes() []byte {
+func (f file) Bytes() []byte {
 	return f.content
 }
