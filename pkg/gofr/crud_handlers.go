@@ -6,6 +6,13 @@ import (
 	"strings"
 )
 
+// EntityNotFound is an error type for indicating when an entity is not found.
+type EntityNotFound struct{}
+
+func (e EntityNotFound) Error() string {
+	return "entity not found!"
+}
+
 type CRUD interface {
 	Create(c *Context) (interface{}, error)
 	GetAll(c *Context) (interface{}, error)
@@ -14,18 +21,18 @@ type CRUD interface {
 	Delete(c *Context) (interface{}, error)
 }
 
-// CRUDHandlers defines the interface for CRUD operations.
-type handlers struct {
-	CRUD
-
-	config *entityConfig
-}
-
 // entityConfig stores information about an entity.
 type entityConfig struct {
 	name       string
 	entityType reflect.Type
 	primaryKey string
+}
+
+// CRUDHandlers defines the interface for CRUD operations.
+type handlers struct {
+	CRUD
+
+	config *entityConfig
 }
 
 // scanEntity extracts entity information for CRUD operations.
@@ -169,7 +176,7 @@ func (h *handlers) Update(c *Context) (interface{}, error) {
 	fieldNames := make([]string, 0, h.config.entityType.NumField())
 	fieldValues := make([]interface{}, 0, h.config.entityType.NumField())
 
-	for i := 0; i < h.config.entityType.NumField(); i++ {
+	for i := 0; i < h.config.entityType.NumField()-1; i++ {
 		field := h.config.entityType.Field(i)
 		fieldNames = append(fieldNames, field.Name)
 		fieldValues = append(fieldValues, reflect.ValueOf(newEntity).Elem().Field(i).Interface())
@@ -218,11 +225,4 @@ func (h *handlers) Delete(c *Context) (interface{}, error) {
 	}
 
 	return fmt.Sprintf("%s successfully deleted with id: %v", h.config.name, id), nil
-}
-
-// EntityNotFound is an error type for indicating when an entity is not found.
-type EntityNotFound struct{}
-
-func (e EntityNotFound) Error() string {
-	return "entity not found!"
 }
