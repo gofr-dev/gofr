@@ -1,6 +1,10 @@
 package main
 
 import (
+	"fmt"
+	"io"
+	"mime/multipart"
+
 	"gofr.dev/pkg/gofr"
 	"gofr.dev/pkg/gofr/file"
 )
@@ -19,6 +23,10 @@ type Data struct {
 	// the tag `upload` signifies the key for the form where the file is uploaded
 	// if the tag is not present, the field name would be taken as a key.
 	Compressed file.Zip `file:"upload"`
+
+	// The FileHeader determines the generic file format that we can get
+	// from the multipart form that gets parsed by the incoming http request
+	FileHeader *multipart.FileHeader `file:"a"`
 }
 
 func UploadHandler(c *gofr.Context) (interface{}, error) {
@@ -36,6 +44,19 @@ func UploadHandler(c *gofr.Context) (interface{}, error) {
 		return nil, err
 	}
 
+	f, err := d.FileHeader.Open()
+	if err != nil {
+		return nil, err
+	}
+
+	defer f.Close()
+
+	// read the file content
+	content, err := io.ReadAll(f)
+	if err != nil {
+		return false, err
+	}
+
 	// return the number of compressed files recieved
-	return len(d.Compressed.Files), nil
+	return fmt.Sprintf("zipped files %d, len of file a %d", len(d.Compressed.Files), len(content)), nil
 }
