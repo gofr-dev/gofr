@@ -19,7 +19,7 @@ type Zip struct {
 	Files map[string]file
 }
 
-func GenerateFile(content []byte) (*Zip, error) {
+func NewZip(content []byte) (*Zip, error) {
 	reader := bytes.NewReader(content)
 
 	zipReader, err := zip.NewReader(reader, int64(len(content)))
@@ -41,10 +41,10 @@ func GenerateFile(content []byte) (*Zip, error) {
 		}
 
 		files[zrf.Name] = file{
-			Name:    zrf.Name,
+			name:    zrf.Name,
 			content: buf.Bytes(),
 			isDir:   zrf.FileInfo().IsDir(),
-			Size:    zrf.FileInfo().Size(),
+			size:    zrf.FileInfo().Size(),
 		}
 
 		f.Close()
@@ -56,7 +56,7 @@ func GenerateFile(content []byte) (*Zip, error) {
 func (z *Zip) CreateLocalCopies(dest string) error {
 	for _, zf := range z.Files {
 		basePath, _ := os.Getwd()
-		destPath := filepath.Join(basePath, dest, zf.Name)
+		destPath := filepath.Join(basePath, dest, zf.name)
 
 		if zf.isDir {
 			err := os.MkdirAll(destPath, os.ModePerm)

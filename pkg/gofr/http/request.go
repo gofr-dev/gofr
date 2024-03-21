@@ -7,15 +7,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"mime/multipart"
 	"net/http"
 	"reflect"
 	"strings"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/mux"
-
-	"gofr.dev/pkg/gofr/file"
 )
 
 const (
@@ -102,10 +99,6 @@ func (r *Request) body() ([]byte, error) {
 	return bodyBytes, nil
 }
 
-type formData struct {
-	files map[string][]*multipart.FileHeader
-}
-
 func (r *Request) bindMultipart(ptr any) error {
 	ptrVal := reflect.ValueOf(ptr)
 	if ptrVal.Kind() == reflect.Ptr {
@@ -130,128 +123,4 @@ func (r *Request) bindMultipart(ptr any) error {
 	}
 
 	return nil
-}
-
-func (uf *formData) mapStruct(val reflect.Value, field *reflect.StructField) (bool, error) {
-	vKind := val.Kind()
-
-	if vKind == reflect.Pointer {
-		var isNew bool
-
-		vPtr := val
-
-		if val.IsNil() {
-			isNew = true
-			vPtr = reflect.New(val.Type().Elem())
-		}
-
-		ok, err := uf.mapStruct(vPtr.Elem(), field)
-		if err != nil {
-			return false, err
-		}
-
-		if isNew && ok {
-			val.Set(vPtr)
-		}
-
-		return ok, nil
-	}
-
-	if vKind != reflect.Struct || !field.Anonymous {
-		set, err := uf.trySet(val, field)
-		if err != nil {
-			return false, err
-		}
-
-		if set {
-			return true, nil
-		}
-	}
-
-	if vKind == reflect.Struct {
-		var set bool
-
-		tVal := val.Type()
-
-		for i := 0; i < val.NumField(); i++ {
-			sf := tVal.Field(i)
-			if sf.PkgPath != "" && sf.Anonymous {
-				continue
-			}
-
-			ok, err := uf.mapStruct(val.Field(i), &sf)
-			if err != nil {
-				return false, err
-			}
-
-			set = set || ok
-		}
-
-		return set, nil
-	}
-
-	return false, nil
-}
-
-func (uf *formData) trySet(value reflect.Value, field *reflect.StructField) (bool, error) {
-	tag, ok := getFileName(field)
-	if !ok {
-		return false, nil
-	}
-
-	header, ok := uf.files[tag]
-	if !ok {
-		return false, nil
-	}
-
-	f, err := header[0].Open()
-	if err != nil {
-		return false, err
-	}
-
-	content, err := io.ReadAll(f)
-	if err != nil {
-		return false, err
-	}
-
-	switch {
-	case value.Type() == reflect.TypeOf(file.Zip{}):
-		zip, err := file.GenerateFile(content)
-		if err != nil {
-			return false, err
-		}
-
-		if value.Kind() == reflect.Ptr {
-			value.Set(reflect.ValueOf(zip))
-		} else {
-			value.Set(reflect.ValueOf(*zip))
-		}
-	default:
-		return false, errIncompatibleType
-	}
-
-	return true, nil
-}
-
-func getFileName(field *reflect.StructField) (string, bool) {
-	var (
-		tag = "file"
-		key string
-	)
-
-	if field.Tag.Get(tag) == "-" {
-		return "", false
-	}
-
-	if field.Tag.Get(tag) == "" {
-		key = field.Name
-	} else {
-		key = field.Tag.Get(tag)
-	}
-
-	if key == "" {
-		return "", false
-	}
-
-	return key, true
 }
