@@ -124,3 +124,15 @@ func Test_bindMultipart_Fails(t *testing.T) {
 	assert.NotNil(t, err)
 	assert.Equal(t, errNoFileFound, err)
 }
+
+func Test_bindMultipart_Fail_ParseMultiPart(t *testing.T) {
+	r := NewRequest(generateMultipartrequestZip(t))
+	input2 := struct {
+		File *file.Zip `file:"zip"`
+	}{}
+
+	r.req.MultipartReader()
+	err := r.bindMultipart(&input2)
+	assert.NotNil(t, err)
+	assert.Equal(t, "http: multipart handled by MultipartReader", err.Error())
+}
