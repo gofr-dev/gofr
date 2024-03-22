@@ -115,7 +115,7 @@ func (ctx *gofr.Context) error
 ```
 
 `Subscribe` method of GoFr App will continuously read a message from the configured `PUBSUB_BACKEND` which
-can be either `KAFKA` or `GOOGLE` as of now. These can be configured in your configs folder under `.env`
+can be either `KAFKA` or `GOOGLE` as of now. These can be configured in the configs folder under `.env`
 
 > The returned error determines which messages are to be committed and which ones are to be consumed again.
 
@@ -127,7 +127,7 @@ app.Subscribe("order-status", func(ctx *gofr.Context)error{
 })
 ```
 
-The context `ctx` provides you with the following methods :
+The context `ctx` provides user with the following methods :
 
 Bind() - Bind the message value to a given interface.
 Param(p string)/PathParam(p string) - Will return the topic when the same is passed as param.
