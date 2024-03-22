@@ -11,7 +11,7 @@ type APIKeyConfig struct {
 	APIKey string
 }
 
-func (a *APIKeyConfig) addOption(h HTTP) HTTP {
+func (a *APIKeyConfig) AddOption(h HTTP) HTTP {
 	return &APIKeyAuthProvider{
 		apiKey: a.APIKey,
 		HTTP:   h,
