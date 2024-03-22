@@ -79,7 +79,6 @@ func TestGofr_ServerRoutes(t *testing.T) {
 	})
 
 	g.POST("/hello", func(c *Context) (interface{}, error) {
-
 		return helloWorld, nil
 	})
 
