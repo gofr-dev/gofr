@@ -1,3 +1,5 @@
+// Package service provides an HTTP client with features for logging, metrics, and resilience.It supports various
+// functionalities like health checks, circuit-breaker and various authentication.
 package service
 
 import (

@@ -77,9 +77,7 @@ The `hello-world` server involves three essential steps:
 > HTTP Handler functions should follow the `func(ctx *gofr.Context) (interface{}, error)` signature.
 > They take a context as input, returning two values: the response data and an error (set to `nil` when there is no error).
 
-In GoFr `ctx *gofr.Context` serves as a wrapper for requests, responses, and dependencies, providing various functionalities.
-
-For more details about context, refer {% new-tab-link  newtab=false title="here" href="/docs/references/context" /%}.
+GoFr {% new-tab-link  newtab=false title="context" href="/docs/references/context" /%} `ctx *gofr.Context` serves as a wrapper for requests, responses, and dependencies, providing various functionalities.
 
 3. **Starting the server**
 

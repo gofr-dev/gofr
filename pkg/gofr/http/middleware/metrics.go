@@ -17,6 +17,7 @@ type metrics interface {
 	SetGauge(name string, value float64)
 }
 
+// Metrics is a middleware that records request response time metrics using the provided metrics interface.
 func Metrics(metrics metrics) func(inner http.Handler) http.Handler {
 	return func(inner http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

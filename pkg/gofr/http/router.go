@@ -10,10 +10,12 @@ import (
 	"gofr.dev/pkg/gofr/http/middleware"
 )
 
+// Router is responsible for routing HTTP request.
 type Router struct {
 	mux.Router
 }
 
+// NewRouter creates a new Router instance.
 func NewRouter(c *container.Container) *Router {
 	muxRouter := mux.NewRouter().StrictSlash(false)
 	muxRouter.Use(
@@ -28,6 +30,7 @@ func NewRouter(c *container.Container) *Router {
 	}
 }
 
+// Add adds a new route with the given HTTP method, pattern, and handler, wrapping the handler with OpenTelemetry instrumentation.
 func (rou *Router) Add(method, pattern string, handler http.Handler) {
 	h := otelhttp.NewHandler(handler, "gofr-router")
 	rou.Router.NewRoute().Methods(method).Path(pattern).Handler(h)
