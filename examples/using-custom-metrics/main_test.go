@@ -17,6 +17,7 @@ func TestIntegration(t *testing.T) {
 	c := http.Client{}
 
 	req, _ := http.NewRequest("POST", host+"/transaction", nil)
+	req.Header.Set("content-type", "application/json")
 
 	_, err := c.Do(req)
 	if err != nil {
