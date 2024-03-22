@@ -128,9 +128,8 @@ app.AddHTTPService("http-server-using-redis", "http://localhost:8000", &service.
 ```
 
 ## 3. OAuth 2.0
-OAuth 2.0 is the industry-standard protocol for authorization. 
+{% new-tab-link title="OAuth" href="https://www.rfc-editor.org/rfc/rfc6749" /%} 2.0 is the industry-standard protocol for authorization. 
 It focuses on client developer simplicity while providing specific authorization flows for web applications, desktop applications, mobile phones, and living room devices.
-Reference for {% new-tab-link title="rfc6749" href="https://www.rfc-editor.org/rfc/rfc6749" /%}
 
 It involves sending the prefix `Bearer` trailed by the encoded token within the standard `Authorization` header.
 
