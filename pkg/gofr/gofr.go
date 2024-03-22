@@ -201,6 +201,11 @@ func (a *App) POST(pattern string, handler Handler) {
 	a.add("POST", pattern, handler)
 }
 
+// PATCH adds a Handler for http PATCH method for a route pattern.
+func (a *App) PATCH(pattern string, handler Handler) {
+	a.add("PATCH", pattern, handler)
+}
+
 // DELETE adds a Handler for http DELETE method for a route pattern.
 func (a *App) DELETE(pattern string, handler Handler) {
 	a.add("DELETE", pattern, handler)
