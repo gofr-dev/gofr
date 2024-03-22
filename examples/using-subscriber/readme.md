@@ -19,7 +19,6 @@ docker run --rm -d -p 2181:2181 -p 443:2008 -p 2008:2008 -p 2009:2009 \
 ```
 
 - Now run the example using below command :
-
 ```console
 go run main.go
 ```

@@ -1,6 +1,6 @@
 # Circuit Breaker in HTTP Communication
 
-Calls to remote resources and services can fail due to temporary issues like slow network connections or timeouts, as well as longer-lasting problems such as service unavailability. While transient faults can be mitigated using the "Retry pattern," there are cases where continual retries are futile, such as during severe service failures.
+Calls to remote resources and services can fail due to temporary issues like slow network connections or timeouts, service unavailability. While transient faults can be mitigated using the "Retry pattern", there are cases where continual retries are futile, such as during severe service failures.
 
 In such scenarios, it's crucial for applications to recognize when an operation is unlikely to succeed and handle the failure appropriately rather than persistently retrying. Indiscriminate use of HTTP retries can even lead to unintentional denial-of-service attacks within the software itself, as multiple clients may flood a failing service with retry attempts.
 
