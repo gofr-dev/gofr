@@ -69,7 +69,7 @@ func (r *Request) Bind(i interface{}) error {
 	case "multipart/form-data":
 		return r.bindMultipart(i)
 	}
-  
+
 	return nil
 }
 
