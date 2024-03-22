@@ -82,8 +82,6 @@ func getDefaultClient(config *Config, logger Logger, metrics Metrics) *MQTT {
 		clientID = getClientID(config.ClientID)
 	)
 
-	logger.Debugf("using %v clientID for this session", clientID)
-
 	opts := mqtt.NewClientOptions()
 	opts.AddBroker(fmt.Sprintf("tcp://%s:%d", host, port))
 	opts.SetClientID(clientID)
@@ -102,6 +100,7 @@ func getDefaultClient(config *Config, logger Logger, metrics Metrics) *MQTT {
 	msg := make(map[string]chan *pubsub.Message)
 
 	logger.Debugf("connected to MQTT, HostName : %v, Port : %v", config.Hostname, config.Port)
+	logger.Debugf("using %v clientID for this MQTT session", clientID)
 
 	return &MQTT{Client: client, config: config, logger: logger, msgChanMap: msg, mu: new(sync.RWMutex), metrics: metrics}
 }
@@ -177,6 +176,8 @@ func (m *MQTT) Subscribe(ctx context.Context, topic string) (*pubsub.Message, er
 		return nil, token.Error()
 	}
 
+	m.logger.Debugf("received mqtt message %v on topic %v", string(messg.Value), topic)
+
 	m.metrics.IncrementCounter(ctx, "app_pubsub_subscribe_success_count", "topic", topic)
 
 	// blocks if there are no messages in the channel
@@ -195,6 +196,8 @@ func (m *MQTT) Publish(ctx context.Context, topic string, message []byte) error 
 
 		return token.Error()
 	}
+
+	m.logger.Debugf("published  message %v on topic %v", string(message), topic)
 
 	m.metrics.IncrementCounter(ctx, "app_pubsub_publish_success_count", "topic", topic)
 
