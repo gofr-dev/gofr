@@ -1,8 +1,8 @@
 # gRPC
 We have already seen how GoFr can help ease the development of HTTP servers, but there are
 cases where performance is primiraliy required sacrificing flexibility. In these types of 
-scenarios gRPC protocol comes into picture. gRPC is an open-source RPC(Remote Procedure Call)
-framework initially developed by Google. {% new-tab-link title="Learn more" href="https://grpc.io/docs/what-is-grpc/introduction/" /%}
+scenarios gRPC protocol comes into picture. {% new-tab-link title="gRPC" href="https://grpc.io/docs/what-is-grpc/introduction/" /%} is an open-source RPC(Remote Procedure Call)
+framework initially developed by Google. 
 
 ## Prerequisites
 - Install the `protoc` protocol buffer compilation
@@ -30,7 +30,7 @@ framework initially developed by Google. {% new-tab-link title="Learn more" href
 ## Creating protocol buffers
 For a detailed guide, please take a look at the {% new-tab-link title="Tutorial" href="https://grpc.io/docs/languages/go/basics/" /%} at official gRPC docs.
 
-Fistly, we need to create a `customer.proto` file to define our service and the rpc methods that the service provides.
+We need to create a `customer.proto` file to define our service and the rpc methods that the service provides.
 ```protobuf
 // Indicates the protocol buffer version that is being used
 syntax = "proto3";
@@ -67,7 +67,7 @@ message CustomerData {
 }
 ```
 
-Now run the following command to gegnerate go code using the Go gRPC plugins:
+Now run the following command to generate go code using the Go gRPC plugins:
 ```shell
 protoc \
 --go_out=. \
