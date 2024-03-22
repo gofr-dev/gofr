@@ -45,7 +45,7 @@ func UploadHandler(c *gofr.Context) (interface{}, error) {
 		return nil, err
 	}
 
-	defer os.RemoveAll("tmp")
+	defer os.RemoveAll("gofr")
 
 	f, err := d.FileHeader.Open()
 	if err != nil {
