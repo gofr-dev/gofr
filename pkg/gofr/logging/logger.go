@@ -20,6 +20,7 @@ import (
 
 const fileMode = 0644
 
+// Logger represents a logging interface.
 type Logger interface {
 	Debug(args ...interface{})
 	Debugf(format string, args ...interface{})
@@ -219,6 +220,7 @@ func colorForGRPCCode(status int32) int {
 	return red
 }
 
+// NewLogger creates a new logger instance with the specified logging level.
 func NewLogger(level Level) Logger {
 	l := &logger{
 		normalOut: os.Stdout,
@@ -232,7 +234,7 @@ func NewLogger(level Level) Logger {
 	return l
 }
 
-// TODO - Do we need this? Only used for CMD log silencing.
+// NewFileLogger creates a new logger instance with logging to a file.
 func NewFileLogger(path string) Logger {
 	l := &logger{
 		normalOut: io.Discard,

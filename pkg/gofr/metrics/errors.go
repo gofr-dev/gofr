@@ -1,3 +1,4 @@
+// Package metrics provides functionalities for instrumenting Gofr applications with metrics.
 package metrics
 
 import "fmt"

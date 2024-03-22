@@ -1,26 +1,26 @@
 # Prerequisite
--  Go 1.20 or above.
-   To check the version use the following command `go version`.
 
--  Prior familiarity with Golang syntax is essential. {% new-tab-link title="Golang Tour" href="https://tour.golang.org/" /%} is highly recommended as it has an excellent guided tour.
-   
+- Go 1.20 or above.
+  To check Go version use the following command `go version`.
+
+- Prior familiarity with Golang syntax is essential. {% new-tab-link title="Golang Tour" href="https://tour.golang.org/" /%} is highly recommended as it has an excellent guided tour.
+
 ## Write your first GoFr API
 
-Let's start by initializing the go module by using the following command.
+Let's start by initializing the {% new-tab-link title="go module" href="https://go.dev/ref/mod" /%} by using the following command.
 
 ```bash
 go mod init github.com/example
 ```
 
-To know more about go modules refer {% new-tab-link title="here" href="https://go.dev/ref/mod" /%}.
-
-Add {% new-tab-link title="gofr" href="https://github.com/gofr-dev/gofr" /%} package to the project using the following command
+Add {% new-tab-link title="gofr" href="https://github.com/gofr-dev/gofr" /%} package to the project using the following command.
 
 ```bash
 go get gofr.dev
 ```
 
-Now add the following code to _main.go_ file
+This code snippet showcases the creation of a simple GoFr application that defines a route and serves a response. 
+You can add this code to your main.go file.
 
 ```go
 package main
@@ -43,15 +43,15 @@ func main() {
 }
 ```
 
-Before running the server run the following go command to download and sync the required modules.
+Before starting the server, run the following command in your terminal to ensure you have downloaded and synchronized all required dependencies for your project.
 
 `go mod tidy`
 
-To run the server, use the command
+Once the dependencies are synchronized, start the GoFr server using the following command:
 
 `go run main.go`
 
-This would start the server at 8000 port, you can access {% new-tab-link title="http://localhost:8000/greet" href="http://localhost:8000/greet" /%} from your browser, you would be able to see the output as following with _Status Code 200_ as per REST Standard
+This would start the server at 8000 port, `/greet` endpoint can be accessed from your browser at {% new-tab-link title="http://localhost:8000/greet" href="http://localhost:8000/greet" /%} , you would be able to see the output as following with _Status Code 200_ as per REST Standard.
 
 ```json
 { "data": "Hello World!" }
@@ -65,23 +65,19 @@ The `hello-world` server involves three essential steps:
 
    When `gofr.New()` is called, it initializes the framework and handles various setup tasks like initialising logger, metrics, datasources etc based on the configs.
 
-   _This single line is a standard part of all gofr-based servers._
-
+   _This single line is a standard part of all gofr servers._
 
 2. **Attaching a Handler to a Path:**
 
-   In this step, we instruct the server to associate an HTTP request with a specific handler function. This is achieved through `app.GET("/greet", HandlerFunction)`, where _GET /greet_ maps to HandlerFunction. Likewise, `app.POST("/todo", ToDoCreationHandler)` links a _POST_ request to the /todo endpoint with _ToDoCreationHandler_.
-
+   In this step, the server is instructed to associate an HTTP request with a specific handler function. This is achieved through `app.GET("/greet", HandlerFunction)`, where _GET /greet_ maps to HandlerFunction. Likewise, `app.POST("/todo", ToDoCreationHandler)` links a _POST_ request to the /todo endpoint with _ToDoCreationHandler_.
 
    **Good To Know**
 
->  In Go, functions are first-class citizens, allowing easy handler definition and reference.
-   HTTP Handler functions should follow the `func(ctx *gofr.Context) (interface{}, error)` signature.
-   They take a context as input, returning two values: the response data and an error (set to `nil` when there is no error).
+> In Go, functions are first-class citizens, allowing easy handler definition and reference.
+> HTTP Handler functions should follow the `func(ctx *gofr.Context) (interface{}, error)` signature.
+> They take a context as input, returning two values: the response data and an error (set to `nil` when there is no error).
 
-   In GoFr `ctx *gofr.Context` serves as a wrapper for requests, responses, and dependencies, providing various functionalities.
-
-   For more details about context, refer {% new-tab-link title="here" href="/docs/references/context" /%}.
+GoFr {% new-tab-link  newtab=false title="context" href="/docs/references/context" /%} `ctx *gofr.Context` serves as a wrapper for requests, responses, and dependencies, providing various functionalities.
 
 3. **Starting the server**
 

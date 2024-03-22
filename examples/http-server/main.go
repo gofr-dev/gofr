@@ -71,7 +71,7 @@ func TraceHandler(c *gofr.Context) (interface{}, error) {
 	}
 	wg.Wait()
 
-	//Call Another service
+	//Call to Another service
 	resp, err := c.GetHTTPService("anotherService").Get(c, "redis", nil)
 	if err != nil {
 		return nil, err

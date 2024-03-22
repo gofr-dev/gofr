@@ -1,3 +1,5 @@
+// Package google provides a client for interacting with Google Cloud Pub/Sub.This package facilitates interaction with
+// Google Cloud Pub/Sub, allowing publishing and subscribing to topics, managing subscriptions, and handling messages.
 package google
 
 import (
@@ -70,6 +72,8 @@ func (g *googleClient) Publish(ctx context.Context, topic string, message []byte
 
 	t, err := g.getTopic(ctx, topic)
 	if err != nil {
+		g.logger.Errorf("error creating %s err: %v", topic, err)
+
 		return err
 	}
 
@@ -80,6 +84,8 @@ func (g *googleClient) Publish(ctx context.Context, topic string, message []byte
 
 	_, err = result.Get(ctx)
 	if err != nil {
+		g.logger.Errorf("error publishing to google topic %s err: %v", topic, err)
+
 		return err
 	}
 
@@ -120,7 +126,7 @@ func (g *googleClient) Subscribe(ctx context.Context, topic string) (*pubsub.Mes
 	})
 
 	if err != nil {
-		g.logger.Errorf("Error getting a message: %s", err.Error())
+		g.logger.Errorf("error getting a message from google: %s", err.Error())
 
 		return nil, err
 	}

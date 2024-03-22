@@ -54,7 +54,7 @@ func setupHTTPServiceTestServerForOAuth(server *httptest.Server) HTTP {
 	}
 
 	// Apply circuit breaker option to the HTTP service
-	httpSvc := oauthConfig.addOption(&service)
+	httpSvc := oauthConfig.AddOption(&service)
 
 	return httpSvc
 }
@@ -71,7 +71,7 @@ func setupHTTPServiceTestServerForOAuthWithUnSupportedMethod() HTTP {
 	oauthConfig := OAuthConfig{}
 
 	// Apply circuit breaker option to the HTTP service
-	httpSvc := oauthConfig.addOption(&service)
+	httpSvc := oauthConfig.AddOption(&service)
 
 	return httpSvc
 }

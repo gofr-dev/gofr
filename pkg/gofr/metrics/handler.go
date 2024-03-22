@@ -8,6 +8,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
+// GetHandler creates a new HTTP handler that serves metrics collected by the provided metrics manager to '/metrics' route`.
 func GetHandler(m Manager) http.Handler {
 	var router = mux.NewRouter()
 
