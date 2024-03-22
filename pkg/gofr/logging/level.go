@@ -5,6 +5,7 @@ import (
 	"strings"
 )
 
+// Level represents different logging levels.
 type Level int
 
 const (
@@ -26,6 +27,7 @@ const (
 	levelFATAL  = "FATAL"
 )
 
+// String returns the string representation of the log level.
 func (l Level) String() string {
 	switch l {
 	case DEBUG:
@@ -69,6 +71,7 @@ func (l Level) MarshalJSON() ([]byte, error) {
 	return buffer.Bytes(), nil
 }
 
+// GetLevelFromString converts a string to a logging level.
 func GetLevelFromString(level string) Level {
 	switch strings.ToUpper(level) {
 	case levelDEBUG:

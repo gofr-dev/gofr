@@ -11,6 +11,7 @@ import (
 	"gofr.dev/pkg/gofr/version"
 )
 
+// Tracer is a middleware that  starts a new OpenTelemetry trace span for each request.
 func Tracer(inner http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Start context and Tracing

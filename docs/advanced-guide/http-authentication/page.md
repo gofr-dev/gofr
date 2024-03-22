@@ -1,7 +1,8 @@
 # HTTP Authentication
+
 Authentication is a crucial aspect of web applications, controlling access to resources based on user roles or permissions. 
-It is the process of verifying a user's identity to grant access to protected resources. It ensures only
-authenticated users can perform actions or access data within an application.
+It is the process of verifying a user's identity to grant access to protected resources. It ensures that only authenticated
+users can perform actions or access data within an application.
 
 GoFr offer various approaches to implement authorization.
 
@@ -9,10 +10,9 @@ GoFr offer various approaches to implement authorization.
 *Basic Authentication* is a simple HTTP authentication scheme where the user's credentials (username and password) are 
 transmitted in the request header in a Base64-encoded format.
 
-Basic auth is the simplest way to authenticate your APIs.  It's built on
-{% new-tab-link title="HTTP protocol authentication scheme" href="https://datatracker.ietf.org/doc/html/rfc7617" /%}. It involves sending the term
-
-`Basic` trailed by the Base64-encoded `<username>:<password>` within the standard `Authorization` header.
+Basic auth is the simplest way to authenticate your APIs. It's built on
+{% new-tab-link title="HTTP protocol authentication scheme" href="https://datatracker.ietf.org/doc/html/rfc7617" /%}.
+It involves sending the prefix `Basic` trailed by the Base64-encoded `<username>:<password>` within the standard `Authorization` header.
 
 ### Basic Authentication in GoFr
 
@@ -20,7 +20,7 @@ GoFr offers two ways to implement basic authentication:
 
 **1. Predefined Credentials**
 
-Use `EnableBasicAuth(username, password)` to configure Gofr with pre-defined credentials.
+Use `EnableBasicAuth(username, password)` to configure GoFr with pre-defined credentials.
 
 ```go
 func main() {
@@ -39,7 +39,8 @@ func main() {
 
 **2. Custom Validation Function**
 
-Use `EnableBasicAuthWithFunc(validationFunc)` to implement your own validation logic for credentials. The `validationFunc` takes the username and password as arguments and returns true if valid, false otherwise.
+Use `EnableBasicAuthWithFunc(validationFunc)` to implement your own validation logic for credentials.
+The `validationFunc` takes the username and password as arguments and returns true if valid, false otherwise.
 
 ```go
 func validateUser(username string, password string) bool {
@@ -63,7 +64,6 @@ func main() {
 ```
 
 ### Adding Basic Authentication to HTTP Services
-
 This code snippet demonstrates how to add basic authentication to an HTTP service in GoFr and make a request with the appropriate Authorization header:
 
 ```go
@@ -73,13 +73,13 @@ app.AddHTTPService("order", "https://localhost:2000",
 ```
 
 ## 2. API Keys Auth
-Users include a unique API key in the request header for validation against a store of authorized keys.
+*API Key Authentication* is an HTTP authentication scheme where a unique API key is included in the request header for validation against a store of authorized keys.
 
 ### Usage:
 GoFr offers two ways to implement API Keys authentication.
 
 **1. Framework Default Validation**
-- Users can select the framework's default validation using **_EnableAPIKeyAuth(apiKeys ...string)_**
+- GoFr's default validation can be selected using **_EnableAPIKeyAuth(apiKeys ...string)_**
 
 ```go
 package main
@@ -97,7 +97,7 @@ func main() {
 ```
 
 **2. Custom Validation Function**
-- Users can create their own validator function `apiKeyValidator(apiKey string) bool` for validating APIKeys and pass the func in **_EnableAPIKeyAuthWithFunc(validator)_**
+- GoFr allows a custom validator function `apiKeyValidator(apiKey string) bool` for validating APIKeys and pass the func in **_EnableAPIKeyAuthWithFunc(validator)_**
 
 ```go
 package main
@@ -128,11 +128,10 @@ app.AddHTTPService("http-server-using-redis", "http://localhost:8000", &service.
 ```
 
 ## 3. OAuth 2.0
-OAuth 2.0 is the industry-standard protocol for authorization. 
+{% new-tab-link title="OAuth" href="https://www.rfc-editor.org/rfc/rfc6749" /%} 2.0 is the industry-standard protocol for authorization. 
 It focuses on client developer simplicity while providing specific authorization flows for web applications, desktop applications, mobile phones, and living room devices.
-To know more about it refer {% new-tab-link title="here" href="https://www.rfc-editor.org/rfc/rfc6749" /%}
 
-It involves sending the term `Bearer` trailed by the encoded token within the standard `Authorization` header.
+It involves sending the prefix `Bearer` trailed by the encoded token within the standard `Authorization` header.
 
 ### OAuth Authentication in GoFr
 
@@ -141,7 +140,7 @@ GoFr supports authenticating tokens encoded by algorithm `RS256/384/512`.
 ### App level Authentication
 Enable OAuth 2.0 with three-legged flow to authenticate requests
 
-Use `EnableOAuth(jwks-endpoint,refresh_interval)` to configure Gofr with pre-defined credentials.
+Use `EnableOAuth(jwks-endpoint,refresh_interval)` to configure GoFr with pre-defined credentials.
 
 ```go
 func main() {
@@ -163,17 +162,17 @@ For server-to-server communication it follows two-legged OAuth, also known as "c
 where the client application directly exchanges its own credentials (ClientID and ClientSecret)
 for an access token without involving any end-user interaction.
 
-This code snippet demonstrates how two-legged OAuth authentication is added to an HTTP service in GoFr and make a request with the appropriate Authorization header.
+This code snippet demonstrates how two-legged OAuth authentication is added to an HTTP service in GoFr and make a request with the appropriate Authorization header:
 
 ```go
-a.AddHTTPService("orders", "http://localhost:9000",
+app.AddHTTPService("orders", "http://localhost:9000",
     &service.OAuthConfig{   // Replace with your credentials
-    ClientID:     "0iyeGcLYWudLGqZfD6HvOdZHZ5TlciAJ",
-    ClientSecret: "GQXTY2f9186nUS3C9WWi7eJz8-iVEsxq7lKxdjfhOJbsEPPtEszL3AxFn8k_NAER",
-    TokenURL:     "https://dev-zq6tvaxf3v7p0g7j.us.auth0.com/oauth/token",
-    Scopes:       []string{"read:order"},
-    EndpointParams: map[string][]string{
-    "audience": {"https://dev-zq6tvaxf3v7p0g7j.us.auth0.com/api/v2/"},
+        ClientID:     "0iyeGcLYWudLGqZfD6HvOdZHZ5TlciAJ",
+        ClientSecret: "GQXTY2f9186nUS3C9WWi7eJz8-iVEsxq7lKxdjfhOJbsEPPtEszL3AxFn8k_NAER",
+        TokenURL:     "https://dev-zq6tvaxf3v7p0g7j.us.auth0.com/oauth/token",
+        Scopes:       []string{"read:order"},
+        EndpointParams: map[string][]string{
+            "audience": {"https://dev-zq6tvaxf3v7p0g7j.us.auth0.com/api/v2/"},
     },
 })
 ```

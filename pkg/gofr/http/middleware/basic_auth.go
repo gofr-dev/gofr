@@ -8,11 +8,13 @@ import (
 
 const credentialLength = 2
 
+// BasicAuthProvider represents a basic authentication provider.
 type BasicAuthProvider struct {
 	Users        map[string]string
 	ValidateFunc func(username, password string) bool
 }
 
+// BasicAuthMiddleware creates a middleware function that enforces basic authentication using the provided BasicAuthProvider.
 func BasicAuthMiddleware(basicAuthProvider BasicAuthProvider) func(handler http.Handler) http.Handler {
 	return func(handler http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
