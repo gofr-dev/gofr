@@ -63,14 +63,14 @@ func New(config *Config, logger Logger, metrics Metrics) *MQTT {
 	client := mqtt.NewClient(options)
 
 	if token := client.Connect(); token.Wait() && token.Error() != nil {
-		logger.Errorf("cannot connect to MQTT, HostName : %v, Port : %v, error : %v", config.Hostname, config.Port, token.Error())
+		logger.Errorf("cannot connect to MQTT, host: %v, port: %v, error: %v", config.Hostname, config.Port, token.Error())
 
 		return &MQTT{Client: client, config: config, logger: logger}
 	}
 
 	msg := make(map[string]chan *pubsub.Message)
 
-	logger.Debugf("connected to MQTT, HostName : %v, Port : %v", config.Hostname, config.Port)
+	logger.Debugf("connected to MQTT, host: %v, port: %v", config.Hostname, config.Port)
 
 	return &MQTT{Client: client, config: config, logger: logger, msgChanMap: msg, mu: new(sync.RWMutex), metrics: metrics}
 }
@@ -88,7 +88,7 @@ func getDefaultClient(config *Config, logger Logger, metrics Metrics) *MQTT {
 	client := mqtt.NewClient(opts)
 
 	if token := client.Connect(); token.Wait() && token.Error() != nil {
-		logger.Errorf("cannot connect to MQTT, HostName : %v, Port : %v, error : %v", host, port, token.Error())
+		logger.Errorf("cannot connect to MQTT, host: %v, port: %v, error: %v", host, port, token.Error())
 
 		return &MQTT{Client: client, config: config, logger: logger}
 	}
