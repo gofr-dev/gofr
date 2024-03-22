@@ -11,7 +11,6 @@ import (
 
 const (
 	maxFileSize = 100 * 1024 * 1024 // 100MB
-	staticPath  = "gofr"
 )
 
 var (
@@ -57,13 +56,14 @@ func NewZip(content []byte) (*Zip, error) {
 }
 
 func (z *Zip) CreateLocalCopies(dest string) error {
+	dest = filepath.Clean(dest)
 	for _, zf := range z.Files {
-		destPath := filepath.Join(staticPath, filepath.Clean(dest), zf.name)
+		destPath := filepath.Join(dest, zf.name)
 
 		if zf.isDir {
 			err := os.MkdirAll(destPath, os.ModeDir)
 			if err != nil {
-				return nil
+				return err
 			}
 
 			continue
