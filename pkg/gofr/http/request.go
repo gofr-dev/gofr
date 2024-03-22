@@ -11,7 +11,6 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/mux"
 )
 
@@ -20,9 +19,8 @@ const (
 )
 
 var (
-	errNoFileFound      = errors.New("no files were bounded")
-	errIncompatibleType = errors.New("incompatible file type")
-	errNonPointerBind   = errors.New("bind error, cannot bind to a non pointer type")
+	errNoFileFound    = errors.New("no files were bounded")
+	errNonPointerBind = errors.New("bind error, cannot bind to a non pointer type")
 )
 
 // Request is an abstraction over the underlying http.Request. This abstraction is useful because it allows us
@@ -68,15 +66,6 @@ func (r *Request) Bind(i interface{}) error {
 	}
 
 	return nil
-}
-
-func (r *Request) GetClaims() map[string]interface{} {
-	claims, ok := r.Context().Value("JWTClaims").(jwt.MapClaims)
-	if !ok {
-		return nil
-	}
-
-	return claims
 }
 
 func (r *Request) HostName() string {
