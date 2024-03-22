@@ -71,7 +71,7 @@ func (uf *formData) checkStruct(val reflect.Value) (bool, error) {
 
 	for i := 0; i < val.NumField(); i++ {
 		sf := tVal.Field(i)
-		if sf.PkgPath != "" && sf.Anonymous {
+		if sf.PkgPath != "" && !sf.Anonymous {
 			continue
 		}
 
@@ -140,7 +140,8 @@ func getFileName(field *reflect.StructField) (string, bool) {
 		return "", false
 	}
 
-	if field.Tag.Get(tag) == "" {
+	// we do not want to set unexported field
+	if field.Tag.Get(tag) == "" && field.IsExported() {
 		key = field.Name
 	} else {
 		key = field.Tag.Get(tag)
