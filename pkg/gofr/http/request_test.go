@@ -40,6 +40,78 @@ func TestBind(t *testing.T) {
 	}
 }
 
+func TestBind_FileSuccess(t *testing.T) {
+	r := NewRequest(generateMultipartrequestZip(t))
+	x := struct {
+		// Zip file bind for zip struct
+		Zip file.Zip `file:"zip"`
+
+		// Zip file bind for zip pointer
+		ZipPtr *file.Zip `file:"zip"`
+
+		// FileHeader multipart.FileHeader bind(value)
+		FileHeader multipart.FileHeader `file:"hello"`
+
+		// FileHeaderPtr mulitpart.FileHeader bind for pointer
+		FileHeaderPtr *multipart.FileHeader `file:"hello"`
+
+		// Skip bind
+		Skip *file.Zip `file:"-"`
+
+		// Incompatible type cannot be bound
+		Incompatible string `file:"hello"`
+
+		// File not in multipart form
+		FileNotPresent *multipart.FileHeader `file:"text"`
+	}{}
+
+	err := r.Bind(&x)
+	assert.Nil(t, err)
+
+	// Assert zip file bind
+	assert.Equal(t, 2, len(x.Zip.Files))
+	assert.Equal(t, "Hello! This is file A.\n", string(x.Zip.Files["a.txt"].Bytes()))
+	assert.Equal(t, "Hello! This is file B.\n\n", string(x.Zip.Files["b.txt"].Bytes()))
+
+	// Assert zip file bind for pinter
+	assert.NotNil(t, x.ZipPtr)
+	assert.Equal(t, 2, len(x.ZipPtr.Files))
+	assert.Equal(t, "Hello! This is file A.\n", string(x.ZipPtr.Files["a.txt"].Bytes()))
+	assert.Equal(t, "Hello! This is file B.\n\n", string(x.ZipPtr.Files["b.txt"].Bytes()))
+
+	// Assert FileHeader struct type
+	assert.Equal(t, "hello.txt", x.FileHeader.Filename)
+
+	f, err := x.FileHeader.Open()
+	assert.Nil(t, err)
+	assert.NotNil(t, f)
+
+	content, err := io.ReadAll(f)
+	assert.Nil(t, err)
+	assert.Equal(t, "Test hello!", string(content))
+
+	// Assert FileHeader pointer type
+	assert.NotNil(t, x.FileHeader)
+	assert.Equal(t, "hello.txt", x.FileHeader.Filename)
+
+	f, err = x.FileHeader.Open()
+	assert.Nil(t, err)
+	assert.NotNil(t, f)
+
+	content, err = io.ReadAll(f)
+	assert.Nil(t, err)
+	assert.Equal(t, "Test hello!", string(content))
+
+	// Assert skipped field
+	assert.Nil(t, x.Skip)
+
+	// Assert incompatible
+	assert.Equal(t, "", x.Incompatible)
+
+	// Assert file not present
+	assert.Nil(t, x.FileNotPresent)
+}
+
 func TestBind_NoContentType(t *testing.T) {
 	req := NewRequest(httptest.NewRequest("POST", "/abc", strings.NewReader(`{"a": "b", "b": 5}`)))
 	x := struct {
@@ -84,6 +156,16 @@ func generateMultipartrequestZip(t *testing.T) *http.Request {
 		t.Fatalf("Failed to write file to form: %v", err)
 	}
 
+	fileHeader, err := writer.CreateFormFile("hello", "hello.txt")
+	if err != nil {
+		t.Fatalf("Failed to create form file: %v", err)
+	}
+
+	_, err = io.Copy(fileHeader, bytes.NewReader([]byte(`Test hello!`)))
+	if err != nil {
+		t.Fatalf("Failed to write file to form: %v", err)
+	}
+
 	// Close the multipart writer
 	writer.Close()
 
@@ -92,20 +174,6 @@ func generateMultipartrequestZip(t *testing.T) *http.Request {
 	req.Header.Set("content-type", writer.FormDataContentType())
 
 	return req
-}
-
-func Test_bindMultipart(t *testing.T) {
-	r := NewRequest(generateMultipartrequestZip(t))
-	x := struct {
-		X *file.Zip `file:"zip"`
-	}{}
-
-	_ = r.bindMultipart(&x)
-
-	assert.NotNil(t, x.X)
-	assert.Equal(t, 2, len(x.X.Files))
-	assert.Equal(t, []byte("Hello! This is file A.\n"), x.X.Files["a.txt"].Bytes())
-	assert.Equal(t, []byte("Hello! This is file B.\n\n"), x.X.Files["b.txt"].Bytes())
 }
 
 func Test_bindMultipart_Fails(t *testing.T) {
@@ -131,7 +199,10 @@ func Test_bindMultipart_Fail_ParseMultiPart(t *testing.T) {
 		File *file.Zip `file:"zip"`
 	}{}
 
-	r.req.MultipartReader()
+	// Call the multipart reader to handle form from a multipart reader
+	// This is called to invoke error while parsing Multipart form in bind
+	_, _ = r.req.MultipartReader()
+
 	err := r.bindMultipart(&input2)
 	assert.NotNil(t, err)
 	assert.Equal(t, "http: multipart handled by MultipartReader", err.Error())

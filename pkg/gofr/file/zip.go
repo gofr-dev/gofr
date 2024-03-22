@@ -87,6 +87,7 @@ func (z *Zip) CreateLocalCopies(dest string) error {
 }
 
 func copyToBuffer(f io.ReadCloser, size uint64) (*bytes.Buffer, error) {
+	// check that max file size of unzipped file is less than 100MB
 	if size > maxFileSize {
 		return nil, errMaxFileSize
 	}
