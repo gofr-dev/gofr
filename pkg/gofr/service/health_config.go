@@ -6,7 +6,7 @@ type HealthConfig struct {
 	HealthEndpoint string
 }
 
-func (h *HealthConfig) addOption(svc HTTP) HTTP {
+func (h *HealthConfig) AddOption(svc HTTP) HTTP {
 	return &customHealthService{
 		healthEndpoint: h.HealthEndpoint,
 		HTTP:           svc,
