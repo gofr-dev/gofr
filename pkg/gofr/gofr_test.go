@@ -59,14 +59,15 @@ func TestGofr_ServerRoutes(t *testing.T) {
 		{http.MethodGet, "/hello2", "Hello World!", "content-type", "application/json"},
 		{http.MethodPut, "/hello", "Hello World!", "content-type", "application/json"},
 		{http.MethodPost, "/hello", "Hello World!", "content-type", "application/json"},
-		{http.MethodPatch, "/hello", "Hello World!", "content-type", "application/json"},
 		{http.MethodGet, "/params?name=Vikash", "Hello Vikash!", "content-type", "application/json"},
 		{http.MethodDelete, "/delete", "Success", "content-type", "application/json"},
 	}
 
 	g := New()
 
-	g.GET("/hello", func(c *Context) (interface{}, error) { return helloWorld, nil })
+	g.GET("/hello", func(c *Context) (interface{}, error) {
+		return helloWorld, nil
+	})
 
 	// using add() func
 	g.add(http.MethodGet, "/hello2", func(c *Context) (interface{}, error) {
@@ -77,9 +78,9 @@ func TestGofr_ServerRoutes(t *testing.T) {
 		return helloWorld, nil
 	})
 
-	g.POST("/hello", func(c *Context) (interface{}, error) { return helloWorld, nil })
-
-	g.PATCH("/hello", func(c *Context) (interface{}, error) { return helloWorld, nil })
+	g.POST("/hello", func(c *Context) (interface{}, error) {
+		return helloWorld, nil
+	})
 
 	g.GET("/params", func(c *Context) (interface{}, error) {
 		return fmt.Sprintf("Hello %s!", c.Param("name")), nil

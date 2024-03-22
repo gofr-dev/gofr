@@ -47,7 +47,7 @@ func createTableEmployee() migration.Migrate {
 ```
 
 `migration.Datasource` have the datasources whose migrations are supported i.e. Redis and SQL (MySQL and PostgreSQL).
-All the migrations always run in a transaction.
+All migrations always run in a transaction.
 
 For MySQL it is highly recommended to use `IF EXISTS` and `IF NOT EXIST` in DDL commands as MySQL implicitly commits these commands.
 
@@ -67,7 +67,7 @@ func All() map[int64]migration.Migrate {
 }
 ```
 
-Migrations will run in ascending order of keys in this map.
+Migrations run in ascending order of keys in this map.
 
 ### Initialisation from main.go
 
@@ -99,7 +99,6 @@ INFO [16:55:46] Migration 20240226153000 ran successfully
 ```
 
 GoFr maintains the records in the database itself which helps in tracking which migrations have already been executed and ensures that only migrations that have never been run are executed.
-This way, you only need to ensure that your migrations are properly in place. {% new-tab-link  title="Learn more" href="https://cloud.google.com/architecture/database-migration-concepts-principles-part-1" /%}
 
 ## Migration Records
 
