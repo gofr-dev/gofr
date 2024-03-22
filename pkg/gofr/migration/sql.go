@@ -99,7 +99,7 @@ func insertMigrationRecord(tx *gofrSql.Tx, query string, version int64, startTim
 	return err
 }
 
-func rollbackAndLog(c *container.Container, tx *gofrSql.Tx, err error) {
+func rollbackAndLog(c *container.Container, version int64, tx *gofrSql.Tx, err error) {
 	c.Logger.Error(err)
 
 	if tx == nil {
@@ -110,7 +110,7 @@ func rollbackAndLog(c *container.Container, tx *gofrSql.Tx, err error) {
 		c.Logger.Error("unable to rollback transaction: %v", err)
 	}
 
-	c.Logger.Error("Migration rolled back")
+	c.Logger.Errorf("Migration %v rolled back", version)
 }
 
 func sqlPostRun(c *container.Container, tx *gofrSql.Tx, currentMigration int64, start time.Time) {
@@ -118,14 +118,14 @@ func sqlPostRun(c *container.Container, tx *gofrSql.Tx, currentMigration int64, 
 	case *mysql.MySQLDriver:
 		err := insertMigrationRecord(tx, insertGoFrMigrationRowMySQL, currentMigration, start)
 		if err != nil {
-			rollbackAndLog(c, tx, err)
+			rollbackAndLog(c, currentMigration, tx, err)
 
 			return
 		}
 	case *pq.Driver:
 		err := insertMigrationRecord(tx, insertGoFrMigrationRowPostgres, currentMigration, start)
 		if err != nil {
-			rollbackAndLog(c, tx, err)
+			rollbackAndLog(c, currentMigration, tx, err)
 
 			return
 		}
