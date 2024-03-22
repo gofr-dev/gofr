@@ -92,7 +92,7 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 
 		err = migrationsMap[currentMigration].UP(datasource)
 		if err != nil {
-			rollbackAndLog(c, sqlTx)
+			rollbackAndLog(c, currentMigration, sqlTx, err)
 
 			return
 		}
