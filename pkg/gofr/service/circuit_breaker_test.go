@@ -44,7 +44,7 @@ func setupHTTPServiceTestServerForCircuitBreaker() (*httptest.Server, HTTP) {
 	}
 
 	// Apply circuit breaker option to the HTTP service
-	httpservice := cbConfig.addOption(&service)
+	httpservice := cbConfig.AddOption(&service)
 
 	return server, httpservice
 }

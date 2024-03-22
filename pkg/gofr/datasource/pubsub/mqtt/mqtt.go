@@ -63,14 +63,14 @@ func New(config *Config, logger Logger, metrics Metrics) *MQTT {
 	client := mqtt.NewClient(options)
 
 	if token := client.Connect(); token.Wait() && token.Error() != nil {
-		logger.Errorf("cannot connect to MQTT, HostName : %v, Port : %v, error : %v", config.Hostname, config.Port, token.Error())
+		logger.Errorf("cannot connect to MQTT, host: %v, port: %v, error: %v", config.Hostname, config.Port, token.Error())
 
 		return &MQTT{Client: client, config: config, logger: logger}
 	}
 
 	msg := make(map[string]chan *pubsub.Message)
 
-	logger.Debugf("connected to MQTT, HostName : %v, Port : %v", config.Hostname, config.Port)
+	logger.Debugf("connected to MQTT, host: %v, port: %v", config.Hostname, config.Port)
 
 	return &MQTT{Client: client, config: config, logger: logger, msgChanMap: msg, mu: new(sync.RWMutex), metrics: metrics}
 }
@@ -82,15 +82,13 @@ func getDefaultClient(config *Config, logger Logger, metrics Metrics) *MQTT {
 		clientID = getClientID(config.ClientID)
 	)
 
-	logger.Debugf("using %v clientID for this session", clientID)
-
 	opts := mqtt.NewClientOptions()
 	opts.AddBroker(fmt.Sprintf("tcp://%s:%d", host, port))
 	opts.SetClientID(clientID)
 	client := mqtt.NewClient(opts)
 
 	if token := client.Connect(); token.Wait() && token.Error() != nil {
-		logger.Errorf("cannot connect to MQTT, HostName : %v, Port : %v, error : %v", host, port, token.Error())
+		logger.Errorf("cannot connect to MQTT, host: %v, port: %v, error: %v", host, port, token.Error())
 
 		return &MQTT{Client: client, config: config, logger: logger}
 	}
@@ -102,6 +100,7 @@ func getDefaultClient(config *Config, logger Logger, metrics Metrics) *MQTT {
 	msg := make(map[string]chan *pubsub.Message)
 
 	logger.Debugf("connected to MQTT, HostName : %v, Port : %v", config.Hostname, config.Port)
+	logger.Debugf("using %v clientID for this MQTT session", clientID)
 
 	return &MQTT{Client: client, config: config, logger: logger, msgChanMap: msg, mu: new(sync.RWMutex), metrics: metrics}
 }
@@ -174,8 +173,12 @@ func (m *MQTT) Subscribe(ctx context.Context, topic string) (*pubsub.Message, er
 	token := m.Client.Subscribe(topic, m.config.QoS, handler)
 
 	if token.Wait() && token.Error() != nil {
+		m.logger.Errorf("error getting a message from MQTT, err: %v", token.Error())
+
 		return nil, token.Error()
 	}
+
+	m.logger.Debugf("received mqtt message %v on topic %v", string(messg.Value), topic)
 
 	m.metrics.IncrementCounter(ctx, "app_pubsub_subscribe_success_count", "topic", topic)
 
@@ -195,6 +198,8 @@ func (m *MQTT) Publish(ctx context.Context, topic string, message []byte) error 
 
 		return token.Error()
 	}
+
+	m.logger.Debugf("published  message %v on topic %v", string(message), topic)
 
 	m.metrics.IncrementCounter(ctx, "app_pubsub_publish_success_count", "topic", topic)
 

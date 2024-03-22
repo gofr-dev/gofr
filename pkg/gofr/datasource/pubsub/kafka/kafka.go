@@ -1,3 +1,5 @@
+// Package kafka provides a client for interacting with Apache Kafka message queues.This package facilitates interaction
+// with Apache Kafka, allowing publishing and subscribing to topics, managing consumer groups, and handling messages.
 package kafka
 
 import (

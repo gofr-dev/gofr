@@ -142,7 +142,7 @@ func (cb *CircuitBreaker) resetFailureCount() {
 	cb.failureCount = 0
 }
 
-func (cb *CircuitBreakerConfig) addOption(h HTTP) HTTP {
+func (cb *CircuitBreakerConfig) AddOption(h HTTP) HTTP {
 	return NewCircuitBreaker(*cb, h)
 }
 

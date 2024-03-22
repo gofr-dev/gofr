@@ -3,7 +3,6 @@
 This GoFr example demonstrates a simple Subscriber that subscribes asynchronously to a given topic and commits based
 on the handler response.
 
-
 ### To run the example follow the below steps:
 
 - Run the docker image of kafka and zookeeper and ensure that your provided topics are created before subscribing.
@@ -19,7 +18,6 @@ docker run --rm -d -p 2181:2181 -p 443:2008 -p 2008:2008 -p 2009:2009 \
 ```
 
 - Now run the example using below command :
-
 ```console
 go run main.go
 ```

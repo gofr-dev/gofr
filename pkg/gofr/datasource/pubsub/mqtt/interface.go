@@ -1,3 +1,5 @@
+// Package mqtt provides a client for interacting with MQTT message brokers.This package facilitates interaction with
+// MQTT brokers, allowing publishing and subscribing to topics, managing subscriptions, and handling messages.
 package mqtt
 
 import (

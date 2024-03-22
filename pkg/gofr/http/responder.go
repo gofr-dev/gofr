@@ -8,14 +8,18 @@ import (
 	resTypes "gofr.dev/pkg/gofr/http/response"
 )
 
+// NewResponder creates a new Responder instance from the given http.ResponseWriter..
 func NewResponder(w http.ResponseWriter) *Responder {
 	return &Responder{w: w}
 }
 
+// Responder encapsulates an http.ResponseWriter and is responsible for crafting structured responses.
 type Responder struct {
 	w http.ResponseWriter
 }
 
+// Respond sends a response with the given data and handles potential errors, setting appropriate
+// status codes and formatting responses as JSON or raw data as needed.
 func (r Responder) Respond(data interface{}, err error) {
 	statusCode, errorObj := r.HTTPStatusFromError(err)
 
@@ -44,6 +48,7 @@ func (r Responder) Respond(data interface{}, err error) {
 	_ = json.NewEncoder(r.w).Encode(resp)
 }
 
+// HTTPStatusFromError maps errors to HTTP status codes.
 func (r Responder) HTTPStatusFromError(err error) (status int, errObj interface{}) {
 	if err == nil {
 		return http.StatusOK, nil
@@ -60,6 +65,7 @@ func (r Responder) HTTPStatusFromError(err error) (status int, errObj interface{
 	}
 }
 
+// response represents an HTTP response.
 type response struct {
 	Error interface{} `json:"error,omitempty"`
 	Data  interface{} `json:"data,omitempty"`
