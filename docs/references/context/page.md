@@ -1,13 +1,13 @@
 # GoFr Context
-GoFr context is an object injected by the GoFr handler. It contains all the request-specific data, so for each
-request-response cycle a new context is created. The request can be of any type be it an HTTP request, GRPC call or
+GoFr context is an object injected by the GoFr handler. It contains all the request-specific data, for each
+request-response cycle a new context is created. The request can be either an HTTP request, GRPC call or
 a message from Pub-Sub.
 GoFr Context also embeds the **_container_** which maintains all the dependencies like databases, logger, http service clients,
 , metrics manager, etc. This reduces the complexity of the application as users don't have to maintain and keep track of
 all the dependencies by themselves.
 
-GoFr context is an extension of the default go context, providing a wrapper around the request and response providing the
-user access to the dependencies on the go. 
+GoFr context is an extension of the go context, providing a wrapper around the request and response providing
+user access to dependencies. 
 
 # Usage
 ## Reading HTTP requests
@@ -54,6 +54,6 @@ parts of the request.
   ``` 
   
 ## Accessing dependencies
-As mentioned earlier, GoFr context embeds the container object which provides the access to 
+GoFr context embeds the container object which provides access to 
 all the injected dependencies by the users. Users can access the fields and methods provided 
 by the **_container_**.
