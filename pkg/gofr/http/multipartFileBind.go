@@ -114,17 +114,11 @@ func (uf *formData) trySet(value reflect.Value, field *reflect.StructField) (boo
 			return false, err
 		}
 
-		if value.Kind() == reflect.Ptr {
-			value.Set(reflect.ValueOf(zip))
-		} else {
-			value.Set(reflect.ValueOf(*zip))
-		}
-	case *multipart.FileHeader:
-		value.Set(reflect.ValueOf(header[0]))
+		value.Set(reflect.ValueOf(*zip))
 	case multipart.FileHeader:
 		value.Set(reflect.ValueOf(*header[0]))
 	default:
-		return false, errIncompatibleType
+		return false, nil
 	}
 
 	return true, nil
