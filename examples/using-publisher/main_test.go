@@ -51,6 +51,7 @@ func TestExamplePublisher(t *testing.T) {
 
 	for i, tc := range testCases {
 		req, _ := http.NewRequest(http.MethodPost, host+tc.path, bytes.NewBuffer(tc.body))
+		req.Header.Set("content-type", "application/json")
 		resp, err := c.Do(req)
 
 		assert.Equal(t, tc.expectedStatusCode, resp.StatusCode, "TEST[%d], Failed.\n%s", i, tc.desc)
@@ -94,6 +95,7 @@ func TestExamplePublisherError(t *testing.T) {
 
 	for i, tc := range testCases {
 		req, _ := http.NewRequest(http.MethodPost, host+tc.path, bytes.NewBuffer(tc.body))
+		req.Header.Set("content-type", "application/json")
 		resp, err := c.Do(req)
 
 		assert.Equal(t, tc.expectedStatusCode, resp.StatusCode, "TEST[%d], Failed.\n%s", i, tc.desc)
