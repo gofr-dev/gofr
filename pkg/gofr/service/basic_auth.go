@@ -11,7 +11,7 @@ type BasicAuthConfig struct {
 	Password string
 }
 
-func (a *BasicAuthConfig) addOption(h HTTP) HTTP {
+func (a *BasicAuthConfig) AddOption(h HTTP) HTTP {
 	return &BasicAuthProvider{
 		userName: a.UserName,
 		password: a.Password,

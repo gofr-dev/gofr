@@ -15,12 +15,15 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
+// JWTClaim represents a custom key used to store JWT claims within the request context.
 type JWTClaim string
 
+// PublicKeys stores a map of public keys identified by their key ID (kid).
 type PublicKeys struct {
 	keys map[string]*rsa.PublicKey
 }
 
+// JWKNotFound is an error type indicating a missing JSON Web Key Set (JWKS).
 type JWKNotFound struct {
 }
 
@@ -28,6 +31,7 @@ func (i JWKNotFound) Error() string {
 	return "JWKS Not Found"
 }
 
+// Get retrieves a public key from the PublicKeys map by its key ID.
 func (p *PublicKeys) Get(kid string) *rsa.PublicKey {
 	kid = strings.TrimSpace(kid)
 
@@ -39,11 +43,13 @@ type JWKSProvider interface {
 		headers map[string]string) (*http.Response, error)
 }
 
+// OauthConfigs holds configuration for OAuth middleware.
 type OauthConfigs struct {
 	Provider        JWKSProvider
 	RefreshInterval time.Duration
 }
 
+// NewOAuth creates a PublicKeyProvider that periodically fetches and updates public keys from a JWKS endpoint.
 func NewOAuth(config OauthConfigs) PublicKeyProvider {
 	var publicKeys PublicKeys
 
@@ -79,10 +85,12 @@ func NewOAuth(config OauthConfigs) PublicKeyProvider {
 	return &publicKeys
 }
 
+// PublicKeyProvider defines an interface for retrieving a public key by its key ID.
 type PublicKeyProvider interface {
 	Get(kid string) *rsa.PublicKey
 }
 
+// OAuth is a middleware function that validates JWT access tokens using a provided PublicKeyProvider.
 func OAuth(key PublicKeyProvider) func(inner http.Handler) http.Handler {
 	return func(inner http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -131,6 +139,7 @@ type JWKS struct {
 	Keys []JSONWebKey `json:"keys"`
 }
 
+// JSONWebKey represents a JSON Web Key.
 type JSONWebKey struct {
 	ID   string `json:"kid"`
 	Type string `json:"kty"`

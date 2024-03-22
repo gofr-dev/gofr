@@ -93,7 +93,7 @@ func TestGoogleClient_PublishTopic_Error(t *testing.T) {
 	g := &googleClient{client: getGoogleClient(t), Config: Config{
 		ProjectID:        "test",
 		SubscriptionName: "sub",
-	}, metrics: mockMetrics}
+	}, metrics: mockMetrics, logger: testutil.NewMockLogger(testutil.DEBUGLOG)}
 	defer g.client.Close()
 
 	ctx, cancel := context.WithCancel(context.Background())

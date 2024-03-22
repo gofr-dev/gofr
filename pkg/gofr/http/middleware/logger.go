@@ -21,6 +21,7 @@ func (w *StatusResponseWriter) WriteHeader(status int) {
 	w.ResponseWriter.WriteHeader(status)
 }
 
+// RequestLog represents a log entry for HTTP requests.
 type RequestLog struct {
 	TraceID      string `json:"trace_id,omitempty"`
 	SpanID       string `json:"span_id,omitempty"`

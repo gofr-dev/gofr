@@ -43,6 +43,7 @@ func TestHTTPServerUsingRedis(t *testing.T) {
 
 	for i, tc := range tests {
 		req, _ := http.NewRequest(tc.method, host+tc.path, bytes.NewBuffer(tc.body))
+		req.Header.Set("content-type", "application/json")
 		c := http.Client{}
 		resp, err := c.Do(req)
 
@@ -63,7 +64,7 @@ func TestRedisSetHandler(t *testing.T) {
 	mock.ExpectSet("key", "value", 5*time.Minute).SetErr(testutil.CustomError{ErrorMessage: "redis get error"})
 
 	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://localhost:5000/handle", bytes.NewBuffer([]byte(`{"key":"value"}`)))
-
+	req.Header.Set("content-type", "application/json")
 	gofrReq := gofrHTTP.NewRequest(req)
 
 	ctx := &gofr.Context{Context: context.Background(),
@@ -87,6 +88,7 @@ func TestRedisPipelineHandler(t *testing.T) {
 	mock.ClearExpect()
 
 	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://localhost:5000/handle", bytes.NewBuffer([]byte(`{"key":"value"}`)))
+	req.Header.Set("content-type", "application/json")
 
 	gofrReq := gofrHTTP.NewRequest(req)
 

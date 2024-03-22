@@ -10,6 +10,8 @@ import (
 // Error can also be returned from all the methods, but it is decided not to do so such that to keep the usage clean -
 // as any errors are already being logged from here. Otherwise, user would need to check the error everytime.
 
+// Manager defines the interface for registering and interacting with different types of metrics
+// (counters, up-down counters, histograms, and gauges).
 type Manager interface {
 	NewCounter(name, desc string)
 	NewUpDownCounter(name, desc string)
@@ -22,6 +24,7 @@ type Manager interface {
 	SetGauge(name string, value float64)
 }
 
+// Logger defines a simple interface for logging messages at different log levels.
 type Logger interface {
 	Error(args ...interface{})
 	Errorf(format string, args ...interface{})
@@ -35,6 +38,7 @@ type metricsManager struct {
 	logger Logger
 }
 
+// NewMetricsManager creates a new metrics manager instance with the provided metric  meter and logger.
 func NewMetricsManager(meter metric.Meter, logger Logger) Manager {
 	return &metricsManager{
 		meter:  meter,
