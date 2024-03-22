@@ -2,6 +2,7 @@ package middleware
 
 import "net/http"
 
+// CORS ia a middleware that adds CORS (Cross-Origin Resource Sharing) headers to the response.
 func CORS() func(inner http.Handler) http.Handler {
 	return func(inner http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

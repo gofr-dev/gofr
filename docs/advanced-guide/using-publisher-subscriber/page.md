@@ -1,4 +1,5 @@
 # Publisher Subscriber
+
 Publisher Subscriber is an architectural design pattern for asynchronous communication between different entities.
 These could be different applications or different instances of the same application.
 Thus, the movement of messages between the components is made possible without the components being aware of each other's
@@ -7,6 +8,7 @@ This makes the application/system more flexible and scalable as each component c
 scaled and maintained according to its own requirement.
 
 ## Design choice
+
 In GoFr application if a user wants to use the Publisher-Subscriber design, it supports two message brokers—Apache Kafka
 and Google PubSub.
 The initialization of the PubSub is done in an IoC container which handles the PubSub client dependency.
@@ -17,6 +19,7 @@ to get a single message or publish a message on the message broker.
 > Container is part of the GoFr Context
 
 ## Configuration and Setup
+
 Some of the configurations that are required to configure the PubSub backend that an application is to use
 that are specific for the type of message broker user wants to use. 
 `PUBSUB_BACKEND` defines which message broker the application needs to use.

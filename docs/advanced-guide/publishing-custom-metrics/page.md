@@ -1,6 +1,6 @@
 # Publishing Custom Metrics
 
-For GoFr default metrics refer: {% new-tab-link newtab=false title="observability" href="/docs/quick-start/observability" /%}.
+GoFr publishes some {% new-tab-link newtab=false title="default metrics" href="/docs/quick-start/observability" /%}.
 
 GoFr can handle multiple different metrics concurrently, each uniquely identified by its name during initialization.
 It supports the following {% new-tab-link title="metrics" href="https://opentelemetry.io/docs/specs/otel/metrics/" /%} types in prometheus format:
@@ -10,7 +10,7 @@ It supports the following {% new-tab-link title="metrics" href="https://opentele
 3. Histogram
 4. Gauge
 
-If any metric other than defaults provided, you can create them using custom metrics as shown below.
+If any custom metric is required, it can be created by using custom metrics as shown below:
 
 ## Usage
 
@@ -46,7 +46,7 @@ func main() {
 ## 2. UpDown Counter Metrics
 
 UpDownCounter is a {% new-tab-link title="synchronous Instrument" href="https://opentelemetry.io/docs/specs/otel/metrics/api/#synchronous-instrument-api" /%} which supports increments and decrements.
-Note: if the value is monotonically increasing, use Counter instead.
+Note: If the value is monotonically increasing, use Counter instead.
 
 ### Usage
 
@@ -75,7 +75,8 @@ func main() {
 
 ## 3. Histogram Metrics
 
-Histogram is a {% new-tab-link title="synchronous Instrument" href="https://opentelemetry.io/docs/specs/otel/metrics/api/#synchronous-instrument-api" /%} which can be used to report arbitrary values that are likely to be statistically meaningful. It is intended for statistics such as histograms, summaries, and percentile.
+Histogram is a {% new-tab-link title="synchronous Instrument" href="https://opentelemetry.io/docs/specs/otel/metrics/api/#synchronous-instrument-api" /%} which can be used to
+report arbitrary values that are likely to be statistically meaningful. It is intended for statistics such as histograms, summaries, and percentile.
 
 ### Usage
 
@@ -141,12 +142,12 @@ func main() {
 **Good To Know**
 
 ```doc
-While registering a metrics two key pieces of information of required
+While registering a metrics 2 key pieces of information of required:
 - Name
 - Description
 
-When a registered Metrics has to be used 3 key pieces of information are required:
-- Metrics name
+When a registered metrics has to be used 3 key pieces of information are required:
+- Name
 - Value
 - A set of key-value pairs called tags or labels.
 

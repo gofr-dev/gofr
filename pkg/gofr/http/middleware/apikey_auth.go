@@ -1,9 +1,13 @@
+// Package middleware provides a collection of middleware functions that handles various aspects of request handling,
+// such as authentication, logging, tracing, and metrics collection.
 package middleware
 
 import (
 	"net/http"
 )
 
+// APIKeyAuthMiddleware creates a middleware function that enforces API key authentication based on the provided API
+// keys or a validation function.
 func APIKeyAuthMiddleware(validator func(apiKey string) bool, apiKeys ...string) func(handler http.Handler) http.Handler {
 	return func(handler http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

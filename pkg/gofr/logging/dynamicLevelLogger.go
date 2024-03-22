@@ -1,3 +1,4 @@
+// Package logging provides logging functionalities for Gofr applications.
 package logging
 
 import (
@@ -14,6 +15,11 @@ const (
 	requestTimeout = 5 * time.Second
 )
 
+/*
+NewRemoteLogger creates a new RemoteLogger instance with the provided level, remote configuration URL, and level fetch interval.
+The remote configuration URL is expected to be a JSON endpoint that returns the desired log level for the service.
+The level fetch interval determines how often the logger checks for updates to the remote configuration.
+*/
 func NewRemoteLogger(level Level, remoteConfigURL, loggerFetchInterval string) Logger {
 	interval, err := strconv.Atoi(loggerFetchInterval)
 	if err != nil {
@@ -41,6 +47,8 @@ type remoteLogger struct {
 	Logger
 }
 
+// UpdateLogLevel continuously fetches the log level from the remote configuration URL at the specified interval
+// and updates the underlying log level if it has changed.
 func (r *remoteLogger) UpdateLogLevel() {
 	interval := time.Duration(r.levelFetchInterval) * time.Second
 	ticker := time.NewTicker(interval)

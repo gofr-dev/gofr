@@ -42,5 +42,3 @@ func main() {
 
 Circuit breaker state changes to open when number of consecutive failed requests increases the threshold.
 When it is in open state, GoFr makes request to the aliveness endpoint (default being - /.well-known/alive) at an equal interval of time provided in config.
-
-To override the default aliveness endpoint {% new-tab-link newtab=false title="refer" href="/docs/advanced-guide/monitoring-service-health" /%}.
