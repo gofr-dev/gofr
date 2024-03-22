@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"mime/multipart"
+	"os"
 
 	"gofr.dev/pkg/gofr"
 	"gofr.dev/pkg/gofr/file"
@@ -44,6 +45,8 @@ func UploadHandler(c *gofr.Context) (interface{}, error) {
 		return nil, err
 	}
 
+	defer os.RemoveAll("tmp")
+
 	f, err := d.FileHeader.Open()
 	if err != nil {
 		return nil, err
@@ -58,5 +61,5 @@ func UploadHandler(c *gofr.Context) (interface{}, error) {
 	}
 
 	// return the number of compressed files recieved
-	return fmt.Sprintf("zipped files %d, len of file a %d", len(d.Compressed.Files), len(content)), nil
+	return fmt.Sprintf("zipped files: %d, len of file `a`: %d", len(d.Compressed.Files), len(content)), nil
 }
