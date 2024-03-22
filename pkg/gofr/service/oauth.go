@@ -30,7 +30,7 @@ type OAuthConfig struct {
 	EndpointParams url.Values
 }
 
-func (h *OAuthConfig) addOption(svc HTTP) HTTP {
+func (h *OAuthConfig) AddOption(svc HTTP) HTTP {
 	return &oAuth{
 		Config: clientcredentials.Config{
 			ClientID:       h.ClientID,
