@@ -173,6 +173,8 @@ func (m *MQTT) Subscribe(ctx context.Context, topic string) (*pubsub.Message, er
 	token := m.Client.Subscribe(topic, m.config.QoS, handler)
 
 	if token.Wait() && token.Error() != nil {
+		m.logger.Errorf("error getting a message from MQTT, err: %v", token.Error())
+
 		return nil, token.Error()
 	}
 
