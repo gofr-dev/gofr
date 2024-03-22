@@ -140,7 +140,7 @@ func generateMultipartrequestZip(t *testing.T) *http.Request {
 	var buf bytes.Buffer
 	writer := multipart.NewWriter(&buf)
 
-	f, err := os.Open("test.zip")
+	f, err := os.Open("../testutil/test.zip")
 	if err != nil {
 		t.Fatalf("Failed to open test.zip: %v", err)
 	}

@@ -9,7 +9,10 @@ import (
 	"path/filepath"
 )
 
-const maxFileSize = 100 * 1024 * 1024 // 100MB
+const (
+	maxFileSize = 100 * 1024 * 1024 // 100MB
+	staticPath  = "gofr"
+)
 
 var (
 	errMaxFileSize = errors.New("uncompressed file is greater than file size limit of 100MBs")
@@ -55,11 +58,10 @@ func NewZip(content []byte) (*Zip, error) {
 
 func (z *Zip) CreateLocalCopies(dest string) error {
 	for _, zf := range z.Files {
-		basePath, _ := os.Getwd()
-		destPath := filepath.Join(basePath, dest, zf.name)
+		destPath := filepath.Join(staticPath, filepath.Clean(dest), zf.name)
 
 		if zf.isDir {
-			err := os.MkdirAll(destPath, os.ModePerm)
+			err := os.MkdirAll(destPath, os.ModeDir)
 			if err != nil {
 				return nil
 			}
