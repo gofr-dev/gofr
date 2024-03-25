@@ -50,7 +50,7 @@ func New(conf Config, logger pubsub.Logger, metrics Metrics) *kafkaClient {
 
 	conn, err := kafka.Dial("tcp", conf.Broker)
 	if err != nil {
-		logger.Errorf("Failed to connect to KAFKA at %v", conf.Broker)
+		logger.Errorf("failed to connect to KAFKA at %v", conf.Broker)
 	}
 
 	dialer := &kafka.Dialer{
@@ -64,6 +64,10 @@ func New(conf Config, logger pubsub.Logger, metrics Metrics) *kafkaClient {
 	})
 
 	reader := make(map[string]Reader)
+
+	dialer.Dial("tcp", conf.Broker)
+
+	logger.Debugf("connected to Kafka, broker: %s", conf.Broker)
 
 	return &kafkaClient{
 		config:  conf,

@@ -47,6 +47,8 @@ func New(conf Config, logger pubsub.Logger, metrics Metrics) *googleClient {
 		}
 	}
 
+	logger.Debugf("intialized google pubsub client, projectID: %s", client.Project())
+
 	return &googleClient{
 		Config:  conf,
 		client:  client,
