@@ -47,7 +47,7 @@ func (e *EnvFileProvider) read(folder string) {
 	if err := godotenv.Load(overrideFile); err != nil {
 		e.logger.Warnf("Failed to load config from file: %v, Err: %v", overrideFile, err)
 	} else {
-		e.logger.Log("Loaded config from file: ", overrideFile)
+		e.logger.Infof("Loaded config from file: %v", overrideFile)
 
 		return
 	}
@@ -55,7 +55,7 @@ func (e *EnvFileProvider) read(folder string) {
 	if err := godotenv.Load(defaultFile); err != nil {
 		e.logger.Warnf("Failed to load config from file: %v, Err: %v", defaultFile, err)
 	} else {
-		e.logger.Log("Loaded config from file: ", defaultFile)
+		e.logger.Infof("Loaded config from file: %v", defaultFile)
 	}
 }
 

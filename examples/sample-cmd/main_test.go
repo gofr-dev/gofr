@@ -19,15 +19,20 @@ func TestCMDRunWithNoArg(t *testing.T) {
 }
 
 func TestCMDRunWithProperArg(t *testing.T) {
+	t.Setenv("GOFR_ENV", "test")
+
 	expResp := "Hello World!"
 	os.Args = []string{"command", "hello"}
 
 	output := testutil.StdoutOutputForFunc(main)
 
-	assert.Equal(t, expResp, output, "TEST Failed.\n")
+	assert.Contains(t, output, "Loaded config from file: ./configs/.test.env", "TEST Failed.\n")
+	assert.Contains(t, output, expResp, "TEST Failed.\n")
 }
 
 func TestCMDRunWithParams(t *testing.T) {
+	t.Setenv("GOFR_ENV", "test")
+
 	expResp := "Hello Vikash!"
 
 	commands := []string{
@@ -41,6 +46,7 @@ func TestCMDRunWithParams(t *testing.T) {
 		os.Args = strings.Split(command, " ")
 		output := testutil.StdoutOutputForFunc(main)
 
-		assert.Equal(t, expResp, output, "TEST[%d], Failed.\n", i)
+		assert.Contains(t, output, "Loaded config from file: ./configs/.test.env", "TEST Failed.\n")
+		assert.Contains(t, output, expResp, "TEST[%d], Failed.\n", i)
 	}
 }
