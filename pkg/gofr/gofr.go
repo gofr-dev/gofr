@@ -170,6 +170,12 @@ func (a *App) readConfig() {
 		configLocation = "./configs"
 	}
 
+	if a.container == nil {
+		a.Config = config.NewEnvFile(configLocation, logging.NewLogger(logging.INFO))
+
+		return
+	}
+
 	a.Config = config.NewEnvFile(configLocation, a.container.Logger)
 }
 
