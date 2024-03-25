@@ -31,7 +31,7 @@ func Test_EnvSuccess(t *testing.T) {
 }
 
 func Test_EnvSuccess_GofrEnv(t *testing.T) {
-	t.Setenv("GOFR_ENV", "prod")
+	t.Setenv("APP_ENV", "prod")
 
 	envData := map[string]string{
 		"DATABASE_URL": "localhost:5432",

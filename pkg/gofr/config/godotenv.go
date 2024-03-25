@@ -32,7 +32,7 @@ func (e *EnvFileProvider) read(folder string) {
 	var defaultFile = folder + "/.env"
 
 	overrideFile := func() string {
-		gofrEnv := e.Get("GOFR_ENV")
+		gofrEnv := e.Get("APP_ENV")
 		if gofrEnv != "" {
 			return fmt.Sprintf("%s/.%s.env", folder, gofrEnv)
 		}
@@ -40,9 +40,9 @@ func (e *EnvFileProvider) read(folder string) {
 		return fmt.Sprintf("%s/.local.env", folder)
 	}()
 
-	// If 'GOFR_ENV' is set to x, then GoFr will try to read '.x.env' file from configs directory, if failed it will read
+	// If 'APP_ENV' is set to x, then GoFr will try to read '.x.env' file from configs directory, if failed it will read
 	// the default file '.env'.
-	// If 'GOFR_ENV' is not set , GoFr will first try to read '.local.env', if failed then it
+	// If 'APP_ENV' is not set , GoFr will first try to read '.local.env', if failed then it
 	// will read default env file.
 	if err := godotenv.Load(overrideFile); err != nil {
 		e.logger.Warnf("Failed to load config from file: %v, Err: %v", overrideFile, err)
