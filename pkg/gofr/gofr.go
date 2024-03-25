@@ -170,7 +170,7 @@ func (a *App) readConfig() {
 		configLocation = "./configs"
 	}
 
-	a.Config = config.NewEnvFile(configLocation)
+	a.Config = config.NewEnvFile(configLocation, a.container.Logger)
 }
 
 // AddHTTPService registers HTTP service in container.
