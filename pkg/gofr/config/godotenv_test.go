@@ -5,6 +5,8 @@ import (
 	"os"
 	"testing"
 
+	"gofr.dev/pkg/gofr/testutil"
+
 	"github.com/stretchr/testify/assert"
 )
 
@@ -15,7 +17,7 @@ func Test_EnvSuccess(t *testing.T) {
 		"small_case":   "small_case_value",
 	}
 
-	logger := NewMockLogger(DEBUGLOG)
+	logger := testutil.NewMockLogger(testutil.DEBUGLOG)
 
 	// Call the function to create the .env file
 	createEnvFile(t, ".env", envData)
@@ -39,7 +41,7 @@ func Test_EnvSuccess_GofrEnv(t *testing.T) {
 		"small_case":   "small_case_value",
 	}
 
-	logger := NewMockLogger(DEBUGLOG)
+	logger := testutil.NewMockLogger(testutil.DEBUGLOG)
 
 	// Call the function to create the .env file
 	createEnvFile(t, ".prod.env", envData)
@@ -60,7 +62,7 @@ func Test_EnvFailureWithHypen(t *testing.T) {
 		"UNABLE_TO_LOAD":  "VALUE",
 	}
 
-	logger := NewMockLogger(DEBUGLOG)
+	logger := testutil.NewMockLogger(testutil.DEBUGLOG)
 
 	// Call the function to create the .env file
 	createEnvFile(t, ".env", envData)

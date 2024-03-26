@@ -7,28 +7,23 @@ import (
 	"github.com/joho/godotenv"
 )
 
-type EnvFileProvider struct {
+type EnvLoader struct {
 	logger logger
 }
 
 type logger interface {
-	Log(args ...interface{})
-	Warn(args ...interface{})
 	Warnf(format string, a ...interface{})
-	Error(args ...interface{})
-	Errorf(format string, a ...interface{})
-	Info(args ...interface{})
 	Infof(format string, a ...interface{})
 }
 
-func NewEnvFile(configFolder string, logger logger) *EnvFileProvider {
-	conf := &EnvFileProvider{logger: logger}
+func NewEnvFile(configFolder string, logger logger) *EnvLoader {
+	conf := &EnvLoader{logger: logger}
 	conf.read(configFolder)
 
 	return conf
 }
 
-func (e *EnvFileProvider) read(folder string) {
+func (e *EnvLoader) read(folder string) {
 	var defaultFile = folder + "/.env"
 
 	overrideFile := func() string {
@@ -59,11 +54,11 @@ func (e *EnvFileProvider) read(folder string) {
 	}
 }
 
-func (e *EnvFileProvider) Get(key string) string {
+func (e *EnvLoader) Get(key string) string {
 	return os.Getenv(key)
 }
 
-func (e *EnvFileProvider) GetOrDefault(key, defaultValue string) string {
+func (e *EnvLoader) GetOrDefault(key, defaultValue string) string {
 	if val := os.Getenv(key); val != "" {
 		return val
 	}
