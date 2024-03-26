@@ -7,8 +7,6 @@ type user struct {
 	Name       string `json:"name"`
 	Age        int    `json:"age"`
 	IsEmployed bool   `json:"isEmployed"`
-
-	gofr.CRUD `json:"-"`
 }
 
 // GetAll : User can overwrite the specific handlers by implementing them like this

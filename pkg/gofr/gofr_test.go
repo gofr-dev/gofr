@@ -3,6 +3,7 @@ package gofr
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -261,4 +262,30 @@ func TestEnableBasicAuthWithFunc(t *testing.T) {
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode, "TestEnableBasicAuthWithFunc Failed!")
+}
+
+func Test_CRUDFromStruct(t *testing.T) {
+	app := New()
+
+	type user struct {
+		Id   int
+		Name string
+	}
+
+	var invalidResource int
+
+	tests := []struct {
+		desc  string
+		input interface{}
+		err   error
+	}{
+		{"success case", &user{}, nil},
+		{"invalid resource", &invalidResource, errors.New("unexpected resource given for CRUDFromStruct")},
+	}
+
+	for i, tc := range tests {
+		err := app.CRUDFromStruct(tc.input)
+
+		assert.Equal(t, tc.err, err, "TEST[%d], Failed.\n%s", i, tc.desc)
+	}
 }

@@ -9,13 +9,10 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func Test_Main(t *testing.T) {
+func TestIntegration_CRUDFromStruct(t *testing.T) {
 	const host = "http://localhost:9000"
-
 	go main()
-	time.Sleep(1 * time.Second)
-
-	c := http.Client{}
+	time.Sleep(time.Second * 1) // Giving some time to start the server
 
 	tests := []struct {
 		desc       string
@@ -35,11 +32,12 @@ func Test_Main(t *testing.T) {
 	}
 
 	for i, tc := range tests {
-		req, _ := http.NewRequest(tc.method, host+tc.path, bytes.NewBuffer(tc.body))
-
+		req, _ := http.NewRequest(tc.method, host+tc.path, bytes.NewReader(tc.body))
+		c := http.Client{}
 		resp, err := c.Do(req)
 
-		assert.Equal(t, tc.statusCode, resp.StatusCode, "TEST[%d], Failed.\n%s", i, tc.desc)
 		assert.Nil(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
+
+		assert.Equal(t, tc.statusCode, resp.StatusCode, "TEST[%d], Failed.\n%s", i, tc.desc)
 	}
 }

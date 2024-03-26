@@ -311,15 +311,15 @@ func (a *App) Subscribe(topic string, handler SubscribeFunc) {
 	a.subscriptionManager.subscriptions[topic] = handler
 }
 
-func (a *App) CRUDFromStruct(entity CRUD) error {
-	cfg, err := scanEntity(entity)
+func (a *App) CRUDFromStruct(resource interface{}) error {
+	cfg, err := scanEntity(resource)
 	if err != nil {
 		return err
 	}
 
-	h := handlers{config: cfg}
+	e := entity{cfg.name, cfg.entityType, cfg.primaryKey}
 
-	a.registerCRUDHandlers(h)
+	a.registerCRUDHandlers(e, resource)
 
 	return nil
 }
