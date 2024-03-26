@@ -6,6 +6,7 @@ import (
 	"io"
 	"math"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 
@@ -156,20 +157,15 @@ func (l *logger) prettyPrint(e logEntry, out io.Writer) {
 			e.Time.Format("15:04:05"), msg.TraceID, colorForStatusCode(msg.Response), msg.Response, msg.ResponseTime, msg.Method, msg.URI)
 	case sql.Log:
 		fmt.Fprintf(out, "\u001B[38;5;%dm%s\u001B[0m [%s] \u001B[38;5;8m%-32s \u001B[38;5;24m%s\u001B[0m %8d\u001B[38;5;8mµs\u001B[0m %s\n",
-			e.Level.color(), e.Level.String()[0:4], e.Time.Format("15:04:05"), msg.Type, "SQL", msg.Duration,
-			strings.ReplaceAll(strings.ReplaceAll(msg.Query, "\t", ""), "\n", ""))
+			e.Level.color(), e.Level.String()[0:4], e.Time.Format("15:04:05"), msg.Type, "SQL", msg.Duration, clean(msg.Query))
 	case redis.QueryLog:
 		if msg.Query == "pipeline" {
 			fmt.Fprintf(out, "\u001B[38;5;%dm%s\u001B[0m [%s] \u001B[38;5;8m%-32s \u001B[38;5;24m%s\u001B[0m %6d\u001B[38;5;8mµs\u001B[0m %s\n",
-				e.Level.color(), e.Level.String()[0:4], e.Time.Format("15:04:05"),
-				strings.ReplaceAll(strings.ReplaceAll(msg.Query, "\t", ""), "\n", ""),
-				"REDIS", msg.Duration,
+				e.Level.color(), e.Level.String()[0:4], e.Time.Format("15:04:05"), clean(msg.Query), "REDIS", msg.Duration,
 				msg.String()[1:len(msg.String())-1])
 		} else {
 			fmt.Fprintf(out, "\u001B[38;5;%dm%s\u001B[0m [%s] \u001B[38;5;8m%-32s \u001B[38;5;24m%s\u001B[0m %6d\u001B[38;5;8mµs\u001B[0m %v\n",
-				e.Level.color(), e.Level.String()[0:4], e.Time.Format("15:04:05"),
-				strings.ReplaceAll(strings.ReplaceAll(msg.Query, "\t", ""), "\n", ""),
-				"REDIS", msg.Duration, msg.String())
+				e.Level.color(), e.Level.String()[0:4], e.Time.Format("15:04:05"), clean(msg.Query), "REDIS", msg.Duration, msg.String())
 		}
 	case service.Log:
 		fmt.Fprintf(out, "\u001B[38;5;%dm%s\u001B[0m [%s] \u001B[38;5;8m%s \u001B[38;5;%dm%d\u001B[0m %8d\u001B[38;5;8mµs\u001B[0m %s %s \n",
@@ -273,4 +269,11 @@ func checkIfTerminal(w io.Writer) bool {
 
 func (l *logger) changeLevel(level Level) {
 	l.level = level
+}
+
+func clean(query string) string {
+	query = regexp.MustCompile(`\s+`).ReplaceAllString(query, " ")
+	query = strings.TrimSpace(query)
+
+	return query
 }
