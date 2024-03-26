@@ -14,6 +14,8 @@ func CORS() func(inner http.Handler) http.Handler {
 				return
 			}
 
+			w.Header().Set("Access-Control-Allow-Headers", "content-type")
+
 			inner.ServeHTTP(w, r)
 		})
 	}
