@@ -1,7 +1,7 @@
 # Handling Data Migrations
 
 Suppose you manually make changes to your database, and now it's your responsibility to inform other developers to execute them. Additionally, you need to keep track of which changes should be applied to production machines in the next deployment.
-Gofr supports data migrations for MySQL, Postgres and Redis which allows to alter the state of a database, be it adding a new column to existing table or modifying the data type of  existing column or adding constraints to an existing table, setting and removing keys etc.
+Gofr supports data migrations for MySQL, Postgres and Redis which allows to alter the state of a database, be it adding a new column to existing table or modifying the data type of existing column or adding constraints to an existing table, setting and removing keys etc.
 
 ## Usage
 
@@ -11,12 +11,13 @@ It is recommended to maintain a migrations directory in your project root to enh
 
 **Migration file names**
 
-It is recommended that each migration file should be numbered in the format of *YYYYMMDDHHMMSS* when the migration was created.
+It is recommended that each migration file should be numbered in the format of _YYYYMMDDHHMMSS_ when the migration was created.
 This helps prevent numbering conflicts and allows for maintaining the correct sort order by name in different filesystem views.
 
 Create the following file in migrations directory.
 
 **Filename : 20240226153000_create_employee_table.go**
+
 ```go
 package migrations
 
@@ -45,14 +46,15 @@ func createTableEmployee() migration.Migrate {
 }
 ```
 
-`migration.Datasource` have the datasources whose migrations are supported i.e. Redis and SQL (MySQL and PostgreSQL). 
-All the migrations always run in a transaction.
+`migration.Datasource` have the datasources whose migrations are supported i.e. Redis and SQL (MySQL and PostgreSQL).
+All migrations always run in a transaction.
 
 For MySQL it is highly recommended to use `IF EXISTS` and `IF NOT EXIST` in DDL commands as MySQL implicitly commits these commands.
 
 **Create a function which returns all the migrations in a map**
 
 **Filename : all.go**
+
 ```go
 package migrations
 
@@ -65,9 +67,10 @@ func All() map[int64]migration.Migrate {
 }
 ```
 
-Migrations will run in ascending order of keys in this map.
+Migrations run in ascending order of keys in this map.
 
-### Initialisation from main.go 
+### Initialisation from main.go
+
 ```go
 package main
 
@@ -95,11 +98,7 @@ When we run the app we will see the following logs for migrations which ran succ
 INFO [16:55:46] Migration 20240226153000 ran successfully
 ```
 
-
-
-
 GoFr maintains the records in the database itself which helps in tracking which migrations have already been executed and ensures that only migrations that have never been run are executed.
-This way, you only need to ensure that your migrations are properly in place. {% new-tab-link title="Learn more" href="https://cloud.google.com/architecture/database-migration-concepts-principles-part-1" /%}
 
 ## Migration Records
 
@@ -108,21 +107,32 @@ This way, you only need to ensure that your migrations are properly in place. {%
 Migration records are stored and maintained in **gofr_migrations** table which has the following schema:
 
 {% table %}
-* Field
-* Type
+
+- Field
+- Type
+
 ---
-* version
-* bigint
+
+- version
+- bigint
+
 ---
-* method
-* varchar(4)
+
+- method
+- varchar(4)
+
 ---
-* start_time
-* timestamp
+
+- start_time
+- timestamp
+
 ---
-* duration
-* bigint
+
+- duration
+- bigint
+
 ---
+
 {% /table %}
 
 **REDIS**

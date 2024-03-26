@@ -4,7 +4,7 @@ Just like Redis gofr also supports connection to SQL(mysql and postgres) databas
 
 ## Setup
 
-You can run MySQL and create a database locally using the following docker command:
+Users can run MySQL and create a database locally using the following docker command:
 
 ```bash
 docker run --name gofr-mysql -e MYSQL_ROOT_PASSWORD=root123 -e MYSQL_DATABASE=test_db -p 3306:3306 -d mysql:8.0.30
@@ -38,7 +38,7 @@ DB_PORT=3306
 DB_DIALECT=mysql
 ```
 
-Now in the following example let's store customer data using **POST** `/customer` and then use **GET** `/customer` to retrieve the same.
+Now in the following example, we'll store customer data using **POST** `/customer` and then use **GET** `/customer` to retrieve the same.
 We will be storing the customer data with `id` and `name`.
 
 After adding code to add and retrieve data from MySQL datastore, `main.go` will be updated to the following.
@@ -118,13 +118,6 @@ curl --location --request POST 'http://localhost:9000/customer/abc'
 
 curl --location --request POST 'http://localhost:9000/customer/xyz'
 ```
-
-You will see the following output if database is successfully updated
-
-```json
-{}
-```
-
 Now when we access {% new-tab-link title="http://localhost:9000/customer" href="http://localhost:9000/customer" /%} we should see the following output
 
 ```json

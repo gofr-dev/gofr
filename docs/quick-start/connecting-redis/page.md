@@ -1,15 +1,18 @@
-# Connecting to Redis 
+# Connecting to Redis
 
-GoFr simplifies the process of connecting to Redis. 
+GoFr simplifies the process of connecting to Redis.
 
 ## Setup:
-Before using Redis with GoFr, you need to have Redis installed. You can use Docker to set up a Redis container:
+
+Ensure you have Redis installed on your system.
+
+Optionally, you can use Docker to set up a development environment as described below.
 
 ```bash
 docker run --name gofr-redis -p 6379:6379 -d redis
 ```
 
-To set a sample key, run the following command:
+You can set a sample key `greeting` using the following command:
 
 ```bash
 docker exec -it gofr-redis bash -c 'redis-cli SET greeting "Hello from Redis."'
@@ -17,10 +20,15 @@ docker exec -it gofr-redis bash -c 'redis-cli SET greeting "Hello from Redis."'
 
 ## Configuration & Usage
 
-GoFr requires certain configurations to connect to Redis. The necessary configurations include 
-`REDIS_HOST`and `REDIS_PORT`. Update the `.env` file in the configs directory with the following content:
+GoFr applications relies on environment variables to configure and connect to a Redis server. 
+These variables are stored in a file named `.env` located within the configs directory in your project root.
 
-```dotenv
+Following configuration keys are required for Redis connectivity:
+
+* `REDIS_HOST`: It specifies the hostname or IP address of your Redis server.
+* `REDIS_PORT`: It specifies the port number on which your Redis server is listening. The default Redis port is 6379.
+
+```bash
 APP_NAME=test-service
 HTTP_PORT=9000
 
@@ -28,10 +36,9 @@ REDIS_HOST=localhost
 REDIS_PORT=6379
 ```
 
-Once the Redis configurations are set, you can use Redis in your GoFr application. 
-Below is an example of how to retrieve data from Redis in the `main.go` file:
+The following code snippet demonstrates how to retrieve data from a Redis key named "greeting":
 
-```golang
+```go
 package main
 
 import (
@@ -63,6 +70,3 @@ func main() {
 	app.Run()
 }
 ```
-
-The above code demonstrates how to perform Redis operations using the latest GoFr syntax.
-You can adapt this example to fit your application's specific requirements.

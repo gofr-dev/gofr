@@ -1,3 +1,5 @@
+// Package redis provides a client for interacting with Redis key-value stores.This package allows creating and
+// managing Redis clients, executing Redis commands, and handling connections to Redis databases.
 package redis
 
 import (

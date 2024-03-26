@@ -39,6 +39,8 @@ func TestIntegration_SimpleAPIServer(t *testing.T) {
 
 	for i, tc := range tests {
 		req, _ := http.NewRequest("GET", host+tc.path, nil)
+		req.Header.Set("content-type", "application/json")
+
 		c := http.Client{}
 		resp, err := c.Do(req)
 
