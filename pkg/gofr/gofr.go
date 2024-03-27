@@ -55,7 +55,7 @@ func (a *App) RegisterService(desc *grpc.ServiceDesc, impl interface{}) {
 // New creates an HTTP Server Application and returns that App.
 func New() *App {
 	app := &App{}
-	app.readConfig()
+	app.readConfig(false)
 	app.container = container.NewContainer(app.Config)
 
 	app.initTracer()
@@ -92,7 +92,7 @@ func New() *App {
 // NewCMD creates a command line application.
 func NewCMD() *App {
 	app := &App{}
-	app.readConfig()
+	app.readConfig(true)
 
 	app.container = container.NewEmptyContainer()
 	app.container.Logger = logging.NewFileLogger(app.Config.Get("CMD_LOGS_FILE"))
@@ -164,13 +164,19 @@ func (a *App) Run() {
 }
 
 // readConfig reads the configuration from the default location.
-func (a *App) readConfig() {
+func (a *App) readConfig(isAppCMD bool) {
 	var configLocation string
 	if _, err := os.Stat("./configs"); err == nil {
 		configLocation = "./configs"
 	}
 
-	a.Config = config.NewEnvFile(configLocation)
+	if isAppCMD {
+		a.Config = config.NewEnvFile(configLocation, logging.NewFileLogger(""))
+
+		return
+	}
+
+	a.Config = config.NewEnvFile(configLocation, logging.NewLogger(logging.INFO))
 }
 
 // AddHTTPService registers HTTP service in container.

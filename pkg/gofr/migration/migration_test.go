@@ -25,7 +25,7 @@ func Test_MigrationMySQLSuccess(t *testing.T) {
 	t.Setenv("DB_DIALECT", "mysql")
 
 	logs := testutil.StdoutOutputForFunc(func() {
-		cntnr := container.NewContainer(&config.EnvFile{})
+		cntnr := container.NewContainer(&config.EnvLoader{})
 
 		dbMock, mock, err := sqlmock.New()
 		if err != nil {
@@ -93,7 +93,7 @@ func Test_MigrationMySQLAndRedisLastMigrationAreDifferent(t *testing.T) {
 	t.Setenv("REDIS_HOST", "localhost")
 
 	logs := testutil.StdoutOutputForFunc(func() {
-		cntnr := container.NewContainer(&config.EnvFile{})
+		cntnr := container.NewContainer(&config.EnvLoader{})
 		sqlClient, mock, _ := sqlmock.New()
 		redisClient, redisMock := redismock.NewClientMock()
 
@@ -146,7 +146,7 @@ func Test_MigrationMySQLPostRunFailed(t *testing.T) {
 	t.Setenv("DB_DIALECT", "mysql")
 
 	logs := testutil.StderrOutputForFunc(func() {
-		cntnr := container.NewContainer(&config.EnvFile{})
+		cntnr := container.NewContainer(&config.EnvLoader{})
 		mockDB, mock, err := sqlmock.New()
 		if err != nil {
 			t.Fatalf("Mocks not initialized %v", err)
@@ -184,7 +184,7 @@ func Test_MigrationMySQLPostRunRollBackFailed(t *testing.T) {
 	t.Setenv("DB_DIALECT", "mysql")
 
 	logs := testutil.StderrOutputForFunc(func() {
-		cntnr := container.NewContainer(&config.EnvFile{})
+		cntnr := container.NewContainer(&config.EnvLoader{})
 		mockDB, mock, err := sqlmock.New()
 		if err != nil {
 			t.Fatalf("Mocks not initialized %v", err)
@@ -222,7 +222,7 @@ func Test_MigrationMySQLTransactionCommitFailed(t *testing.T) {
 	t.Setenv("DB_DIALECT", "mysql")
 
 	logs := testutil.StderrOutputForFunc(func() {
-		cntnr := container.NewContainer(&config.EnvFile{})
+		cntnr := container.NewContainer(&config.EnvLoader{})
 		mockDB, mock, err := sqlmock.New()
 		if err != nil {
 			t.Fatalf("Mocks not initialized %v", err)
@@ -259,7 +259,7 @@ func Test_MigrationMySQLRunSameMigrationAgain(t *testing.T) {
 	t.Setenv("DB_DIALECT", "mysql")
 
 	logs := testutil.StdoutOutputForFunc(func() {
-		cntnr := container.NewContainer(&config.EnvFile{})
+		cntnr := container.NewContainer(&config.EnvLoader{})
 		mockDB, mock, err := sqlmock.New()
 		if err != nil {
 			t.Fatalf("Mocks not initialized %v", err)
@@ -293,7 +293,7 @@ func Test_MigrationUPFailed(t *testing.T) {
 	t.Setenv("DB_DIALECT", "mysql")
 
 	logs := testutil.StderrOutputForFunc(func() {
-		cntnr := container.NewContainer(&config.EnvFile{})
+		cntnr := container.NewContainer(&config.EnvLoader{})
 		mockDB, mock, err := sqlmock.New()
 		if err != nil {
 			t.Fatalf("Mocks not initialized %v", err)
@@ -330,7 +330,7 @@ func Test_MigrationSQLMigrationTableCheckFailed(t *testing.T) {
 	t.Setenv("DB_DIALECT", "mysql")
 
 	logs := testutil.StderrOutputForFunc(func() {
-		cntnr := container.NewContainer(&config.EnvFile{})
+		cntnr := container.NewContainer(&config.EnvLoader{})
 		mockDB, mock, err := sqlmock.New()
 		if err != nil {
 			t.Fatalf("Mocks not initialized %v", err)
@@ -363,7 +363,7 @@ func Test_MigrationMySQLTransactionCreationFailure(t *testing.T) {
 	t.Setenv("DB_DIALECT", "mysql")
 
 	logs := testutil.StderrOutputForFunc(func() {
-		cntnr := container.NewContainer(&config.EnvFile{})
+		cntnr := container.NewContainer(&config.EnvLoader{})
 		mockDB, mock, err := sqlmock.New()
 		if err != nil {
 			t.Fatalf("Mocks not initialized %v", err)
@@ -398,7 +398,7 @@ func Test_MigrationMySQLCreateGoFrMigrationError(t *testing.T) {
 	t.Setenv("DB_DIALECT", "mysql")
 
 	logs := testutil.StderrOutputForFunc(func() {
-		cntnr := container.NewContainer(&config.EnvFile{})
+		cntnr := container.NewContainer(&config.EnvLoader{})
 		mockDB, mock, err := sqlmock.New()
 		if err != nil {
 			t.Fatalf("Mocks not initialized %v", err)
@@ -430,7 +430,7 @@ func Test_MigrationRedisTransactionFailure(t *testing.T) {
 	t.Setenv("REDIS_HOST", "localhost")
 
 	logs := testutil.StderrOutputForFunc(func() {
-		cntnr := container.NewContainer(&config.EnvFile{})
+		cntnr := container.NewContainer(&config.EnvLoader{})
 
 		client, mock := redismock.NewClientMock()
 
@@ -480,7 +480,7 @@ func Test_MigrationRedisUnableToGetLastRun(t *testing.T) {
 	t.Setenv("DB_DIALECT", "mysql")
 
 	logs := testutil.StderrOutputForFunc(func() {
-		cntnr := container.NewContainer(&config.EnvFile{})
+		cntnr := container.NewContainer(&config.EnvLoader{})
 
 		client, mock := redismock.NewClientMock()
 
@@ -506,7 +506,7 @@ func Test_MigrationRedisGoFrDataUnmarshalFail(t *testing.T) {
 	t.Setenv("REDIS_HOST", "localhost")
 
 	logs := testutil.StdoutOutputForFunc(func() {
-		cntnr := container.NewContainer(&config.EnvFile{})
+		cntnr := container.NewContainer(&config.EnvLoader{})
 		redisClient, redisMock := redismock.NewClientMock()
 
 		cntnr.Redis.Client = redisClient
@@ -546,7 +546,7 @@ func Test_MigrationInvalidKeys(t *testing.T) {
 	t.Setenv("DB_DIALECT", "mysql")
 
 	logs := testutil.StderrOutputForFunc(func() {
-		cntnr := container.NewContainer(&config.EnvFile{})
+		cntnr := container.NewContainer(&config.EnvLoader{})
 
 		Run(map[int64]Migrate{
 			1: {UP: nil},
