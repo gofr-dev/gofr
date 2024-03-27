@@ -311,15 +311,17 @@ func (a *App) Subscribe(topic string, handler SubscribeFunc) {
 	a.subscriptionManager.subscriptions[topic] = handler
 }
 
-func (a *App) CRUDFromStruct(resource interface{}) error {
-	cfg, err := scanEntity(resource)
+func (a *App) CRUDFromStruct(object interface{}) error {
+	cfg, err := scanEntity(object)
 	if err != nil {
+		a.container.Logger.Errorf("Invalid resource for CRUDFromStruct")
+
 		return err
 	}
 
 	e := entity{cfg.name, cfg.entityType, cfg.primaryKey}
 
-	a.registerCRUDHandlers(e, resource)
+	a.registerCRUDHandlers(e, object)
 
 	return nil
 }
