@@ -43,14 +43,14 @@ type kafkaClient struct {
 func New(conf Config, logger pubsub.Logger, metrics Metrics) *kafkaClient {
 	err := validateConfigs(conf)
 	if err != nil {
-		logger.Errorf("could not initialize kafka, err : %v", err)
+		logger.Errorf("could not initialize kafka, err: %v", err)
 
 		return nil
 	}
 
 	conn, err := kafka.Dial("tcp", conf.Broker)
 	if err != nil {
-		logger.Errorf("Failed to connect to KAFKA at %v", conf.Broker)
+		logger.Errorf("failed to connect to KAFKA at %v", conf.Broker)
 	}
 
 	dialer := &kafka.Dialer{
@@ -64,6 +64,8 @@ func New(conf Config, logger pubsub.Logger, metrics Metrics) *kafkaClient {
 	})
 
 	reader := make(map[string]Reader)
+
+	logger.Debugf("connected to Kafka, broker: %s", conf.Broker)
 
 	return &kafkaClient{
 		config:  conf,

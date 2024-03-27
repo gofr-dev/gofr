@@ -38,6 +38,6 @@ func TestRouter(t *testing.T) {
 
 	// verify if middleware logger is properly functioning inside new router
 	if !strings.Contains(log, "\"method\":\"GET\",\"ip\":\"192.0.2.1:1234\",\"uri\":\"/test\",\"response\":200") {
-		t.Errorf("TestRouter Failed! expected log not found : %v", log)
+		t.Errorf("TestRouter Failed! expected log not found: %v", log)
 	}
 }

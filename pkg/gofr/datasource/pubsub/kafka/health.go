@@ -30,7 +30,7 @@ func (k *kafkaClient) getReaderStatsAsMap() []interface{} {
 	for _, reader := range k.reader {
 		var readerStat map[string]interface{}
 		if err := convertStructToMap(reader.Stats(), &readerStat); err != nil {
-			k.logger.Errorf("Kafka Reader Stats processing failed: %v", err)
+			k.logger.Errorf("kafka Reader Stats processing failed: %v", err)
 			continue // Log the error but continue processing other readers
 		}
 
@@ -44,7 +44,7 @@ func (k *kafkaClient) getWriterStatsAsMap() map[string]interface{} {
 	writerStats := make(map[string]interface{})
 
 	if err := convertStructToMap(k.writer.Stats(), &writerStats); err != nil {
-		k.logger.Errorf("Kafka Writer Stats processing failed: %v", err)
+		k.logger.Errorf("kafka Writer Stats processing failed: %v", err)
 
 		return nil
 	}

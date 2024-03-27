@@ -47,9 +47,9 @@ func Test_NewMockLoggerErrorLogs(t *testing.T) {
 		logger := NewMockLogger(DEBUGLOG)
 
 		logger.Error("ERROR Log")
-		logger.Errorf("Error Log with Format Value: %v", "errorf")
+		logger.Errorf("error Log with Format Value: %v", "errorf")
 	})
 
 	assert.Contains(t, logs, "ERROR Log")
-	assert.Contains(t, logs, "Error Log with Format Value: errorf")
+	assert.Contains(t, logs, "error Log with Format Value: errorf")
 }

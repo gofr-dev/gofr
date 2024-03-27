@@ -472,7 +472,7 @@ func Test_MigrationRedisTransactionFailure(t *testing.T) {
 		}, cntnr)
 	})
 
-	assert.Contains(t, logs, "Migration for Redis redis: nil failed with err")
+	assert.Contains(t, logs, "migration for Redis redis: nil failed with err")
 }
 
 func Test_MigrationRedisUnableToGetLastRun(t *testing.T) {
@@ -499,7 +499,7 @@ func Test_MigrationRedisUnableToGetLastRun(t *testing.T) {
 		}, cntnr)
 	})
 
-	assert.Contains(t, logs, "Failed to get migration record from Redis : unable to get gofr_migrations")
+	assert.Contains(t, logs, "failed to get migration record from Redis err: unable to get gofr_migrations")
 }
 
 func Test_MigrationRedisGoFrDataUnmarshalFail(t *testing.T) {
