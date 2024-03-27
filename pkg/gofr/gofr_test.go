@@ -3,7 +3,6 @@ package gofr
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -268,7 +267,7 @@ func Test_CRUDFromStruct(t *testing.T) {
 	app := New()
 
 	type user struct {
-		Id   int
+		ID   int
 		Name string
 	}
 
@@ -280,7 +279,7 @@ func Test_CRUDFromStruct(t *testing.T) {
 		err   error
 	}{
 		{"success case", &user{}, nil},
-		{"invalid resource", &invalidResource, errors.New("unexpected resource given for CRUDFromStruct")},
+		{"invalid resource", &invalidResource, errInvalidResource},
 	}
 
 	for i, tc := range tests {

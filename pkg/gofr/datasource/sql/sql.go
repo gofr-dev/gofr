@@ -4,7 +4,12 @@ import (
 	"database/sql"
 	"fmt"
 	"strconv"
+	"testing"
 	"time"
+
+	"github.com/DATA-DOG/go-sqlmock"
+	"go.uber.org/mock/gomock"
+	"gofr.dev/pkg/gofr/testutil"
 
 	_ "github.com/lib/pq" // used for concrete implementation of the database driver.
 
@@ -102,4 +107,21 @@ func pushDBMetrics(db *sql.DB, metrics Metrics) {
 
 		time.Sleep(frequency * time.Second)
 	}
+}
+
+func NewMockSQLDB(t *testing.T) (*DB, sqlmock.Sqlmock, *MockMetrics) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
+	}
+
+	ctrl := gomock.NewController(t)
+	mockMetrics := NewMockMetrics(ctrl)
+
+	return &DB{
+		DB:      db,
+		logger:  testutil.NewMockLogger(testutil.DEBUGLOG),
+		config:  nil,
+		metrics: mockMetrics,
+	}, mock, mockMetrics
 }
