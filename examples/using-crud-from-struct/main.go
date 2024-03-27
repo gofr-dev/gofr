@@ -1,6 +1,9 @@
 package main
 
-import "gofr.dev/pkg/gofr"
+import (
+	"gofr.dev/examples/using-crud-from-struct/migrations"
+	"gofr.dev/pkg/gofr"
+)
 
 type user struct {
 	Id         int    `json:"id"`
@@ -17,6 +20,9 @@ func (u *user) GetAll(c *gofr.Context) (interface{}, error) {
 func main() {
 	// Create a new application
 	a := gofr.New()
+
+	// Add migrations to run
+	a.Migrate(migrations.All())
 
 	// CRUDFromStruct creates CRUD handles for the given entity
 	err := a.CRUDFromStruct(&user{})

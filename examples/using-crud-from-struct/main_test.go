@@ -33,6 +33,8 @@ func TestIntegration_CRUDFromStruct(t *testing.T) {
 
 	for i, tc := range tests {
 		req, _ := http.NewRequest(tc.method, host+tc.path, bytes.NewReader(tc.body))
+		req.Header.Set("content-type", "application/json")
+
 		c := http.Client{}
 		resp, err := c.Do(req)
 
