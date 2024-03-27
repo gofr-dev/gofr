@@ -6,6 +6,6 @@ import (
 
 func All() map[int64]migration.Migrate {
 	return map[int64]migration.Migrate{
-		1708322067: createTableUser(),
+		1708322061: createTableUser(),
 	}
 }

@@ -6,10 +6,11 @@ import (
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/stretchr/testify/assert"
+
 	"gofr.dev/pkg/gofr/migration"
 )
 
-func TestCreateTableEmployee(t *testing.T) {
+func TestCreateTableUser(t *testing.T) {
 	tests := []struct {
 		desc          string
 		mockBehaviors func(mock sqlmock.Sqlmock)
