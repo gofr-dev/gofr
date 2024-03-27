@@ -99,7 +99,7 @@ func getDefaultClient(config *Config, logger Logger, metrics Metrics) *MQTT {
 
 	msg := make(map[string]chan *pubsub.Message)
 
-	logger.Debugf("connected to MQTT, HostName : %v, Port : %v", config.Hostname, config.Port)
+	logger.Debugf("connected to MQTT, HostName: %v, Port: %v", config.Hostname, config.Port)
 	logger.Debugf("using %v clientID for this MQTT session", clientID)
 
 	return &MQTT{Client: client, config: config, logger: logger, msgChanMap: msg, mu: new(sync.RWMutex), metrics: metrics}
@@ -194,7 +194,7 @@ func (m *MQTT) Publish(ctx context.Context, topic string, message []byte) error 
 	// Check for errors during publishing (More on error reporting
 	// https://pkg.go.dev/github.com/eclipse/paho.mqtt.golang#readme-error-handling)
 	if token.Wait() && token.Error() != nil {
-		m.logger.Errorf("error while publishing message, err : %v", token.Error())
+		m.logger.Errorf("error while publishing message, err  %v", token.Error())
 
 		return token.Error()
 	}
@@ -238,7 +238,7 @@ func (m *MQTT) CreateTopic(_ context.Context, topic string) error {
 	token.Wait()
 
 	if token.Error() != nil {
-		m.logger.Errorf("unable to create topic - %s, error : %v", topic, token.Error())
+		m.logger.Errorf("unable to create topic - %s, error: %v", topic, token.Error())
 
 		return token.Error()
 	}
@@ -288,7 +288,7 @@ func (m *MQTT) Unsubscribe(topic string) error {
 	token.Wait()
 
 	if token.Error() != nil {
-		m.logger.Errorf("error while unsubscribing from topic %s, err : %v", topic, token.Error())
+		m.logger.Errorf("error while unsubscribing from topic %s, err: %v", topic, token.Error())
 
 		return token.Error()
 	}

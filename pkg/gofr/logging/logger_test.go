@@ -361,3 +361,29 @@ func Test_NewSilentLoggerSTDOutput(t *testing.T) {
 
 	assert.Equal(t, "", logs)
 }
+
+func Test_SQLLog(t *testing.T) {
+	s := sql.Log{
+		Type:     "Query",
+		Query:    "Select * from \t \t \n test",
+		Duration: 123,
+		Args:     nil,
+	}
+
+	out := testutil.StdoutOutputForFunc(func() {
+		l := &logger{isTerminal: true, normalOut: os.Stdout}
+		l.Info(s)
+	})
+
+	assert.Contains(t, out, "Select * from test")
+}
+
+func Test_clean(t *testing.T) {
+	input := `select   * from
+		employee`
+
+	expected := "select * from employee"
+	query := clean(input)
+
+	assert.Equal(t, expected, query)
+}

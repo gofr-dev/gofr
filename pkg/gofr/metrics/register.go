@@ -237,12 +237,12 @@ func callbackFunc(name metric.Float64ObservableGauge, field float64) func(_ cont
 func (m *metricsManager) getAttributes(name string, labels ...string) []attribute.KeyValue {
 	labelsCount := len(labels)
 	if labelsCount%2 != 0 {
-		m.logger.Warnf("Metrics %v label has invalid key-value pairs", name)
+		m.logger.Warnf("metrics %v label has invalid key-value pairs", name)
 	}
 
 	cardinalityLimit := 20
 	if labelsCount > cardinalityLimit {
-		m.logger.Warnf("Metrics %v has high cardinality: %v", name, labelsCount)
+		m.logger.Warnf("metrics %v has high cardinality: %v", name, labelsCount)
 	}
 
 	var attributes []attribute.KeyValue
