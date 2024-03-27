@@ -1,7 +1,6 @@
 package gofr
 
 import (
-	"errors"
 	"reflect"
 	"testing"
 
@@ -12,7 +11,7 @@ func Test_scanEntity(t *testing.T) {
 	var invalidResource int
 
 	type user struct {
-		Id   int
+		ID   int
 		Name string
 	}
 
@@ -23,7 +22,7 @@ func Test_scanEntity(t *testing.T) {
 		err   error
 	}{
 		{"success case", &user{}, &entity{name: "user", entityType: reflect.TypeOf(user{}), primaryKey: "id"}, nil},
-		{"invalid resource", &invalidResource, nil, errors.New("unexpected resource given for CRUDFromStruct")},
+		{"invalid resource", &invalidResource, nil, errInvalidResource},
 	}
 
 	for i, tc := range tests {
