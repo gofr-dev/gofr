@@ -50,7 +50,7 @@ func TestMQTT_EmptyConfigs(t *testing.T) {
 
 	assert.NotNil(t, client)
 	assert.Contains(t, out, "connected to MQTT")
-	assert.Contains(t, out, "Port : 1883")
+	assert.Contains(t, out, "Port: 1883")
 }
 
 func TestMQTT_getMQTTClientOptions(t *testing.T) {

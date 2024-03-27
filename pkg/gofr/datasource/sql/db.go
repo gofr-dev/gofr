@@ -201,7 +201,7 @@ func (d *DB) Select(ctx context.Context, data interface{}, query string, args ..
 	case reflect.Slice:
 		rows, err := d.QueryContext(ctx, query, args...)
 		if err != nil {
-			d.logger.Errorf("error running query : %v", err)
+			d.logger.Errorf("error running query: %v", err)
 
 			return
 		}

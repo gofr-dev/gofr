@@ -35,7 +35,7 @@ type googleClient struct {
 func New(conf Config, logger pubsub.Logger, metrics Metrics) *googleClient {
 	err := validateConfigs(&conf)
 	if err != nil {
-		logger.Errorf("google pubsub could not be configured, err : %v", err)
+		logger.Errorf("google pubsub could not be configured, err: %v", err)
 
 		return nil
 	}
@@ -160,7 +160,7 @@ func (g *googleClient) getSubscription(ctx context.Context, topic *gcPubSub.Topi
 	// check if subscription already exists or not
 	ok, err := subscription.Exists(context.Background())
 	if err != nil {
-		g.logger.Errorf("unable to check the existence of subscription, err : %v ", err.Error())
+		g.logger.Errorf("unable to check the existence of subscription, err: %v ", err.Error())
 
 		return nil, err
 	}

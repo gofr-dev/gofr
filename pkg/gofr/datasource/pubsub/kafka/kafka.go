@@ -43,7 +43,7 @@ type kafkaClient struct {
 func New(conf Config, logger pubsub.Logger, metrics Metrics) *kafkaClient {
 	err := validateConfigs(conf)
 	if err != nil {
-		logger.Errorf("could not initialize kafka, err : %v", err)
+		logger.Errorf("could not initialize kafka, err: %v", err)
 
 		return nil
 	}
