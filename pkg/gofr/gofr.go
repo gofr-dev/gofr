@@ -11,7 +11,7 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/zipkin"
 	"go.opentelemetry.io/otel/propagation"
-	"go.opentelemetry.io/otel/sdk/resource"
+	otelResource "go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
 	"google.golang.org/grpc"
@@ -233,7 +233,7 @@ func (a *App) initTracer() {
 	tracerPort := a.Config.GetOrDefault("TRACER_PORT", "9411")
 
 	tp := sdktrace.NewTracerProvider(
-		sdktrace.WithResource(resource.NewWithAttributes(
+		sdktrace.WithResource(otelResource.NewWithAttributes(
 			semconv.SchemaURL,
 			semconv.ServiceNameKey.String(a.container.GetAppName()),
 		)),
@@ -309,4 +309,19 @@ func (a *App) Subscribe(topic string, handler SubscribeFunc) {
 	}
 
 	a.subscriptionManager.subscriptions[topic] = handler
+}
+
+func (a *App) CRUDFromStruct(object interface{}) error {
+	cfg, err := scanEntity(object)
+	if err != nil {
+		a.container.Logger.Errorf("Invalid resource for CRUDFromStruct")
+
+		return err
+	}
+
+	e := entity{cfg.name, cfg.entityType, cfg.primaryKey}
+
+	a.registerCRUDHandlers(e, object)
+
+	return nil
 }
