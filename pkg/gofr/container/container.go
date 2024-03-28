@@ -1,6 +1,7 @@
 package container
 
 import (
+	"context"
 	"strconv"
 	"strings"
 
@@ -34,7 +35,22 @@ type Container struct {
 	PubSub         pubsub.Client
 
 	Redis *redis.Redis
-	SQL   *sql.DB
+	SQL   DBInterface
+}
+
+type Interface interface {
+	logging.Logger
+
+	Health(ctx context.Context) interface{}
+	Create(conf config.Config)
+	GetHTTPService(serviceName string) service.HTTP
+	Metrics() metrics.Manager
+	GetAppName() string
+	GetAppVersion() string
+	GetPublisher() pubsub.Publisher
+	GetSubscriber() pubsub.Subscriber
+	GetDB() DBInterface
+	GetRedis() RedisInterface
 }
 
 func NewEmptyContainer() *Container {
@@ -179,4 +195,12 @@ func (c *Container) GetPublisher() pubsub.Publisher {
 
 func (c *Container) GetSubscriber() pubsub.Subscriber {
 	return c.PubSub
+}
+
+func (c *Container) GetDB() DBInterface {
+	return c.SQL
+}
+
+func (c *Container) GetRedis() RedisInterface {
+	return c.Redis
 }

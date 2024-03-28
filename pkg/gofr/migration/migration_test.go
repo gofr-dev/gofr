@@ -34,7 +34,7 @@ func Test_MigrationMySQLSuccess(t *testing.T) {
 
 		defer dbMock.Close()
 
-		cntnr.SQL.DB = dbMock
+		cntnr.SQL = dbMock
 
 		mock.ExpectQuery("SELECT.*").WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(0))
 		mock.ExpectExec("CREATE.*").WillReturnResult(sqlmock.NewResult(0, 0))
