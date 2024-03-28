@@ -67,7 +67,7 @@ func NewClient(c config.Config, logger datasource.Logger, metrics Metrics) *Redi
 	}
 
 	if err := otel.InstrumentTracing(rc); err != nil {
-		logger.Errorf("could not add tracing instrumentation, error : %s", err)
+		logger.Errorf("could not add tracing instrumentation, error: %s", err)
 	}
 
 	logger.Logf("connected to redis at %s:%d", redisConfig.HostName, redisConfig.Port)

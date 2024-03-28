@@ -19,7 +19,7 @@ import (
 func TestContainer_Health(t *testing.T) {
 	mockDB, mock, err := sqlmock.New()
 	if err != nil {
-		t.Fatalf("could not initialize mock database err : %v", err)
+		t.Fatalf("could not initialize mock database err: %v", err)
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
