@@ -135,7 +135,7 @@ func TestDB_SelectDataPointerError(t *testing.T) {
 		db.Select(context.Background(), nil, "select 1")
 	})
 
-	assert.Contains(t, out, "We did not get a pointer. data is not settable.", "TEST Failed.\n")
+	assert.Contains(t, out, "we did not get a pointer. data is not settable.", "TEST Failed.\n")
 }
 
 func TestDB_SelectSingleColumnFromStringToCustomString(t *testing.T) {

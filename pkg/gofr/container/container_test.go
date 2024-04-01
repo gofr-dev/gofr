@@ -17,7 +17,7 @@ import (
 )
 
 func Test_newContainerSuccessWithLogger(t *testing.T) {
-	cfg := config.NewEnvFile("")
+	cfg := config.NewEnvFile("", testutil.NewMockLogger(testutil.DEBUGLOG))
 
 	container := NewContainer(cfg)
 
@@ -29,7 +29,7 @@ func Test_newContainerDBInitializationFail(t *testing.T) {
 	t.Setenv("DB_DIALECT", "mysql")
 	t.Setenv("DB_HOST", "invalid")
 
-	cfg := config.NewEnvFile("")
+	cfg := config.NewEnvFile("", testutil.NewMockLogger(testutil.DEBUGLOG))
 
 	container := NewContainer(cfg)
 

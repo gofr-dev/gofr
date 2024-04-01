@@ -23,7 +23,7 @@ type Migrate struct {
 func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 	invalidKeys, keys := getKeys(migrationsMap)
 	if len(invalidKeys) > 0 {
-		c.Logger.Errorf("Run Failed! UP not defined for the following keys: %v", invalidKeys)
+		c.Logger.Errorf("run failed! UP not defined for the following keys: %v", invalidKeys)
 
 		return
 	}
@@ -35,7 +35,7 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 	if c.SQL.(*gofrSql.DB) != nil {
 		err := ensureSQLMigrationTableExists(c)
 		if err != nil {
-			c.Logger.Errorf("Unable to verify sql migration table due to: %v", err)
+			c.Logger.Errorf("unable to verify sql migration table due to: %v", err)
 
 			return
 		}
