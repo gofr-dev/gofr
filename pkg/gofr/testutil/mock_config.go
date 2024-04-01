@@ -1,14 +1,15 @@
 package testutil
 
-import (
-	"gofr.dev/pkg/gofr/config"
-)
-
 type mockConfig struct {
 	conf map[string]string
 }
 
-func NewMockConfig(configMap map[string]string) config.Config {
+type Config interface {
+	Get(string) string
+	GetOrDefault(string, string) string
+}
+
+func NewMockConfig(configMap map[string]string) Config {
 	return &mockConfig{
 		conf: configMap,
 	}

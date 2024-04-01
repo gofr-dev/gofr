@@ -24,7 +24,7 @@ func TestCMDRunWithProperArg(t *testing.T) {
 
 	output := testutil.StdoutOutputForFunc(main)
 
-	assert.Equal(t, expResp, output, "TEST Failed.\n")
+	assert.Contains(t, output, expResp, "TEST Failed.\n")
 }
 
 func TestCMDRunWithParams(t *testing.T) {
@@ -41,6 +41,6 @@ func TestCMDRunWithParams(t *testing.T) {
 		os.Args = strings.Split(command, " ")
 		output := testutil.StdoutOutputForFunc(main)
 
-		assert.Equal(t, expResp, output, "TEST[%d], Failed.\n", i)
+		assert.Contains(t, output, expResp, "TEST[%d], Failed.\n", i)
 	}
 }

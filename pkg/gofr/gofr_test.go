@@ -34,7 +34,7 @@ func TestNewCMD(t *testing.T) {
 func TestGofr_readConfig(t *testing.T) {
 	app := App{}
 
-	app.readConfig()
+	app.readConfig(false)
 
 	if app.Config == nil {
 		t.Errorf("config was not read")
