@@ -11,9 +11,7 @@ import (
 	"gofr.dev/pkg/gofr/service"
 )
 
-const (
-	requestTimeout = 5 * time.Second
-)
+const requestTimeout = 5 * time.Second
 
 /*
 NewRemoteLogger creates a new RemoteLogger instance with the provided level, remote configuration URL, and level fetch interval.
