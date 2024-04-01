@@ -10,7 +10,7 @@ GoFr offer various approaches to implement authorization.
 *Basic Authentication* is a simple HTTP authentication scheme where the user's credentials (username and password) are 
 transmitted in the request header in a Base64-encoded format.
 
-Basic auth is the simplest way to authenticate your APIs. It's built on
+Basic auth is the simplest way to authenticate APIs. It's built on
 {% new-tab-link title="HTTP protocol authentication scheme" href="https://datatracker.ietf.org/doc/html/rfc7617" /%}.
 It involves sending the prefix `Basic` trailed by the Base64-encoded `<username>:<password>` within the standard `Authorization` header.
 
@@ -26,7 +26,7 @@ Use `EnableBasicAuth(username, password)` to configure GoFr with pre-defined cre
 func main() {
 	app := gofr.New()
     
-	app.EnableBasicAuth("admin", "secret_password") // Replace with your credentials
+	app.EnableBasicAuth("admin", "secret_password") // Replace with the credentials
     
 	app.GET("/protected-resource", func(c *gofr.Context) (interface{}, error) {
 		// Handle protected resource access 
@@ -39,12 +39,12 @@ func main() {
 
 **2. Custom Validation Function**
 
-Use `EnableBasicAuthWithFunc(validationFunc)` to implement your own validation logic for credentials.
+Use `EnableBasicAuthWithFunc(validationFunc)` to implement custom validation logic for credentials.
 The `validationFunc` takes the username and password as arguments and returns true if valid, false otherwise.
 
 ```go
 func validateUser(username string, password string) bool {
-	// Implement your credential validation logic here 
+	// Implement custom credential validation logic here 
 	// This example uses hardcoded credentials for illustration only   
 	return username == "john" && password == "doe123" 
 } 
@@ -166,7 +166,7 @@ This code snippet demonstrates how two-legged OAuth authentication is added to a
 
 ```go
 app.AddHTTPService("orders", "http://localhost:9000",
-    &service.OAuthConfig{   // Replace with your credentials
+    &service.OAuthConfig{   // Replace with the credentials
         ClientID:     "0iyeGcLYWudLGqZfD6HvOdZHZ5TlciAJ",
         ClientSecret: "GQXTY2f9186nUS3C9WWi7eJz8-iVEsxq7lKxdjfhOJbsEPPtEszL3AxFn8k_NAER",
         TokenURL:     "https://dev-zq6tvaxf3v7p0g7j.us.auth0.com/oauth/token",

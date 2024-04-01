@@ -4,15 +4,15 @@ GoFr simplifies the process of connecting to Redis.
 
 ## Setup:
 
-Ensure you have Redis installed on your system.
+Ensure Redis is installed on the system.
 
-Optionally, you can use Docker to set up a development environment as described below.
+Optionally, user can use Docker to set up a development environment as described below.
 
 ```bash
 docker run --name gofr-redis -p 6379:6379 -d redis
 ```
 
-You can set a sample key `greeting` using the following command:
+User can set a sample key `greeting` using the following command:
 
 ```bash
 docker exec -it gofr-redis bash -c 'redis-cli SET greeting "Hello from Redis."'
@@ -21,12 +21,12 @@ docker exec -it gofr-redis bash -c 'redis-cli SET greeting "Hello from Redis."'
 ## Configuration & Usage
 
 GoFr applications relies on environment variables to configure and connect to a Redis server. 
-These variables are stored in a file named `.env` located within the configs directory in your project root.
+These variables are stored in a file named `.env` located within the configs directory in the project root.
 
 Following configuration keys are required for Redis connectivity:
 
-* `REDIS_HOST`: It specifies the hostname or IP address of your Redis server.
-* `REDIS_PORT`: It specifies the port number on which your Redis server is listening. The default Redis port is 6379.
+* `REDIS_HOST`: It specifies the hostname or IP address of the Redis server.
+* `REDIS_PORT`: It specifies the port number on which the Redis server is listening. The default Redis port is 6379.
 
 ```bash
 APP_NAME=test-service

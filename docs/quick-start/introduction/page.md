@@ -5,7 +5,7 @@
 
 - Prior familiarity with Golang syntax is essential. {% new-tab-link title="Golang Tour" href="https://tour.golang.org/" /%} is highly recommended as it has an excellent guided tour.
 
-## Write your first GoFr API
+## Write a first GoFr API
 
 Let's start by initializing the {% new-tab-link title="go module" href="https://go.dev/ref/mod" /%} by using the following command.
 
@@ -20,7 +20,7 @@ go get gofr.dev
 ```
 
 This code snippet showcases the creation of a simple GoFr application that defines a route and serves a response. 
-You can add this code to your main.go file.
+User can add this code to it's main.go file.
 
 ```go
 package main
@@ -43,7 +43,7 @@ func main() {
 }
 ```
 
-Before starting the server, run the following command in your terminal to ensure you have downloaded and synchronized all required dependencies for your project.
+Before starting the server, execute the following command in the terminal to ensure all necessary dependencies for the project have been downloaded and synchronized.
 
 `go mod tidy`
 
@@ -51,7 +51,7 @@ Once the dependencies are synchronized, start the GoFr server using the followin
 
 `go run main.go`
 
-This would start the server at 8000 port, `/greet` endpoint can be accessed from your browser at {% new-tab-link title="http://localhost:8000/greet" href="http://localhost:8000/greet" /%} , you would be able to see the output as following with _Status Code 200_ as per REST Standard.
+This would start the server at 8000 port, `/greet` endpoint can be accessed from the browser at {% new-tab-link title="http://localhost:8000/greet" href="http://localhost:8000/greet" /%} , user would be able to see the output as following with _Status Code 200_ as per REST Standard.
 
 ```json
 { "data": "Hello World!" }

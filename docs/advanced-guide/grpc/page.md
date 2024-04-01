@@ -77,7 +77,7 @@ protoc \
 customer.proto
 ```
 Above command will generate two files `customer.pb.go` and `customer_grpc.pb.go` and these contain necessary code to perform rpc calls.
-In `customer.pb.go` you can find `CustomerService` interface-
+In `customer.pb.go` file look for  `CustomerService` interface-
 ```go
 // CustomerServiceServer is the server API for CustomerService service.
 type CustomerServiceServer interface {

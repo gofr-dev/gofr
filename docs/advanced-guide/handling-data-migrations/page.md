@@ -1,13 +1,13 @@
 # Handling Data Migrations
 
-Suppose you manually make changes to your database, and now it's your responsibility to inform other developers to execute them. Additionally, you need to keep track of which changes should be applied to production machines in the next deployment.
-Gofr supports data migrations for MySQL, Postgres and Redis which allows to alter the state of a database, be it adding a new column to existing table or modifying the data type of existing column or adding constraints to an existing table, setting and removing keys etc.
+Suppose a developer manually make changes to the database, and now it's the responsibility to inform other developers to execute them. Additionally, the developer need to keep track of which changes should be applied to production machines in the next deployment.
+Gofr supports data migrations for MySQL, Postgres and Redis and PubSub which allows to alter the state of a database, be it adding a new column to existing table or modifying the data type of existing column or adding constraints to an existing table, setting and removing keys, creating topics etc.
 
 ## Usage
 
 ### Creating Migration Files
 
-It is recommended to maintain a migrations directory in your project root to enhance readability and maintainability.
+It is recommended to maintain a migrations directory in the project root to enhance readability and maintainability.
 
 **Migration file names**
 

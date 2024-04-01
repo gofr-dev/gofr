@@ -127,13 +127,13 @@ GoFr publishes metrics to port: _2121_ on _/metrics_ endpoint in prometheus form
 
 {% /table %}
 
-For example: When running application locally, you can access /metrics endpoint on port 2121 from: {% new-tab-link title="http://localhost:2121/metrics" href="http://localhost:2121/metrics" /%}
+For example: When running application locally, user can access /metrics endpoint on port 2121 from: {% new-tab-link title="http://localhost:2121/metrics" href="http://localhost:2121/metrics" /%}
 
 GoFr also supports creating {% new-tab-link newtab=false title="custom metrics" href="/docs/advanced-guide/publishing-custom-metrics" /%}.
 
 ## Tracing
 
-{% new-tab-link title="Tracing" href="https://opentelemetry.io/docs/concepts/signals/#traces" /%} is a powerful tool for gaining insights into your application's behaviour, identifying bottlenecks, and improving
+{% new-tab-link title="Tracing" href="https://opentelemetry.io/docs/concepts/signals/#traces" /%} is a powerful tool for gaining insights into application's behaviour, identifying bottlenecks, and improving
 system performance. A trace is a tree of spans. It is a collective of observable signals showing the path of work
 through a system. A trace on its own is distinguishable by a `TraceID`.
 
@@ -151,9 +151,9 @@ automatically add traces to all requests and responses.
 
 **Automatic Correlation ID Propagation:**
 
-When a request enters your GoFr application, GoFr automatically generates a correlation-ID `X-Correlation-ID` and adds it
-to the response headers. This correlation ID is then propagated to all downstream requests. This means that you can track
-a request as it travels through your distributed system by simply looking at the correlation ID in the request headers.
+When a request enters a GoFr application, GoFr automatically generates a correlation-ID `X-Correlation-ID` and adds it
+to the response headers. This correlation ID is then propagated to all downstream requests. This means that user can track
+a request as it travels through the distributed system by simply looking at the correlation ID in the request headers.
 
 ### Configuration & Usage
 
@@ -163,7 +163,7 @@ To see the traces install zipkin image using the following docker command
   docker run --name gofr-zipkin -p 2005:9411 -d openzipkin/zipkin:latest
 ```
 
-Add Tracer configs in `.env` file, your .env will be updated to
+Add Tracer configs in `.env` file, the .env will be updated to
 
 ```bash
 APP_NAME=test-service
