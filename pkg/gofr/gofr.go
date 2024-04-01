@@ -47,7 +47,7 @@ type App struct {
 
 // RegisterService adds a grpc service to the gofr application.
 func (a *App) RegisterService(desc *grpc.ServiceDesc, impl interface{}) {
-	a.container.Logger.Infof("Registering GRPC Server: %s", desc.ServiceName)
+	a.container.Logger.Infof("registering GRPC Server: %s", desc.ServiceName)
 	a.grpcServer.server.RegisterService(desc, impl)
 	a.grpcRegistered = true
 }
@@ -309,7 +309,7 @@ func (a *App) EnableOAuth(jwksEndpoint string, refreshInterval int) {
 
 func (a *App) Subscribe(topic string, handler SubscribeFunc) {
 	if a.container.GetSubscriber() == nil {
-		a.container.Logger.Errorf("Subscriber not initialized in the container")
+		a.container.Logger.Errorf("subscriber not initialized in the container")
 
 		return
 	}
