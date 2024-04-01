@@ -40,7 +40,7 @@ func TransactionHandler(c *gofr.Context) (interface{}, error) {
 
 	c.Metrics().IncrementCounter(c, transactionSuccessful)
 
-	tranTime := time.Now().Sub(transactionStartTime).Microseconds()
+	tranTime := time.Now().Sub(transactionStartTime).Milliseconds()
 
 	c.Metrics().RecordHistogram(c, transactionTime, float64(tranTime))
 	c.Metrics().DeltaUpDownCounter(c, totalCreditDaySales, 1000, "sale_type", "credit")
