@@ -44,7 +44,7 @@ func (ql QueryLog) String() string {
 
 // logQuery logs the Redis query information.
 func (r *redisHook) logQuery(start time.Time, query string, args ...interface{}) {
-	duration := time.Since(start).Microseconds()
+	duration := time.Since(start).Milliseconds()
 
 	r.logger.Debug(QueryLog{
 		Query:    query,

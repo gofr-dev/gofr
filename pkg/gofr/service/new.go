@@ -175,7 +175,7 @@ func (h *httpService) createAndSendRequest(ctx context.Context, method string, p
 			"status", fmt.Sprintf("%v", resp.StatusCode))
 	}
 
-	log.ResponseTime = respTime.Microseconds()
+	log.ResponseTime = respTime.Milliseconds()
 
 	if err != nil {
 		log.ResponseCode = http.StatusInternalServerError

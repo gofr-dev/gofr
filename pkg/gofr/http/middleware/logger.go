@@ -39,7 +39,7 @@ type logger interface {
 	Error(...interface{})
 }
 
-// Logging is a middleware which logs response status and time in microseconds along with other data.
+// Logging is a middleware which logs response status and time in milliseconds along with other data.
 func Logging(logger logger) func(inner http.Handler) http.Handler {
 	return func(inner http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
