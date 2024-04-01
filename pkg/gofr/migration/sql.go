@@ -100,17 +100,17 @@ func insertMigrationRecord(tx *gofrSql.Tx, query string, version int64, startTim
 }
 
 func rollbackAndLog(c *container.Container, version int64, tx *gofrSql.Tx, err error) {
-	c.Error(err)
+	c.Logger.Error(err)
 
 	if tx == nil {
 		return
 	}
 
 	if err := tx.Rollback(); err != nil {
-		c.Error("unable to rollback transaction: %v", err)
+		c.Logger.Error("unable to rollback transaction: %v", err)
 	}
 
-	c.Errorf("Migration %v rolled back", version)
+	c.Logger.Errorf("Migration %v rolled back", version)
 }
 
 func sqlPostRun(c *container.Container, tx *gofrSql.Tx, currentMigration int64, start time.Time) {
@@ -133,12 +133,12 @@ func sqlPostRun(c *container.Container, tx *gofrSql.Tx, currentMigration int64, 
 
 	// Commit transaction
 	if err := tx.Commit(); err != nil {
-		c.Error("unable to commit transaction: %v", err)
+		c.Logger.Error("unable to commit transaction: %v", err)
 
 		return
 	}
 
-	c.Infof("Migration %v ran successfully", currentMigration)
+	c.Logger.Infof("Migration %v ran successfully", currentMigration)
 }
 
 const (

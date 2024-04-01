@@ -3,11 +3,12 @@ package migration
 import (
 	"time"
 
-	"github.com/gogo/protobuf/sortkeys"
 	goRedis "github.com/redis/go-redis/v9"
+	gofrSql "gofr.dev/pkg/gofr/datasource/sql"
+
+	"github.com/gogo/protobuf/sortkeys"
 
 	"gofr.dev/pkg/gofr/container"
-	gofrSql "gofr.dev/pkg/gofr/datasource/sql"
 )
 
 type MigrateFunc func(d Datasource) error
@@ -22,7 +23,7 @@ type Migrate struct {
 func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 	invalidKeys, keys := getKeys(migrationsMap)
 	if len(invalidKeys) > 0 {
-		c.Errorf("Run Failed! UP not defined for the following keys: %v", invalidKeys)
+		c.Logger.Errorf("Run Failed! UP not defined for the following keys: %v", invalidKeys)
 
 		return
 	}
@@ -34,7 +35,7 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 	if c.SQL != nil {
 		err := ensureSQLMigrationTableExists(c)
 		if err != nil {
-			c.Errorf("Unable to verify sql migration table due to: %v", err)
+			c.Logger.Errorf("Unable to verify sql migration table due to: %v", err)
 
 			return
 		}
@@ -75,7 +76,7 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 		if c.SQL != nil {
 			sqlTx, err = c.SQL.Begin()
 			if err != nil {
-				c.Errorf("unable to begin transaction: %v", err)
+				c.Logger.Errorf("unable to begin transaction: %v", err)
 
 				return
 			}

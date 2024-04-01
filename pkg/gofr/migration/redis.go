@@ -63,7 +63,7 @@ func redisPostRun(c *container.Container, tx goRedis.Pipeliner, currentMigration
 
 	_, err := tx.Exec(context.Background())
 	if err != nil {
-		c.Errorf("Migration for Redis %v failed with err : %v", err)
+		c.Logger.Errorf("Migration for Redis %v failed with err : %v", err)
 	}
 }
 
@@ -72,7 +72,7 @@ func getRedisLastMigration(c *container.Container) int64 {
 
 	table, err := c.Redis.HGetAll(context.Background(), "gofr_migrations").Result()
 	if err != nil {
-		c.Errorf("Failed to get migration record from Redis : %v", err)
+		c.Logger.Errorf("Failed to get migration record from Redis : %v", err)
 
 		return -1
 	}
@@ -92,7 +92,7 @@ func getRedisLastMigration(c *container.Container) int64 {
 
 		err = json.Unmarshal(d, &migrationData)
 		if err != nil {
-			c.Errorf("Failed to unmarshal redis Migration data : %v", err)
+			c.Logger.Errorf("Failed to unmarshal redis Migration data : %v", err)
 
 			return -1
 		}
