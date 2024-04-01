@@ -47,33 +47,33 @@ func (s *sqlDB) ExecContext(ctx context.Context, query string, args ...interface
 	return s.db.ExecContext(ctx, query, args...)
 }
 
-func ensureSQLMigrationTableExists(c container.Interface) error {
+func ensureSQLMigrationTableExists(c *container.Container) error {
 	// this can be replaced with having switch case only in the exists variable - but we have chosen to differentiate based
 	// on driver because if new dialect comes will follow the same, also this complete has to be refactored as mentioned in RUN.
-	switch c.GetDB().Driver().(type) {
+	switch c.SQL.Driver().(type) {
 	case *mysql.MySQLDriver:
 		var exists int
 
-		err := c.GetDB().QueryRow(checkSQLGoFrMigrationsTable).Scan(&exists)
+		err := c.SQL.QueryRow(checkSQLGoFrMigrationsTable).Scan(&exists)
 		if err != nil {
 			return err
 		}
 
 		if exists != 1 {
-			if _, err := c.GetDB().Exec(createSQLGoFrMigrationsTable); err != nil {
+			if _, err := c.SQL.Exec(createSQLGoFrMigrationsTable); err != nil {
 				return err
 			}
 		}
 	case *pq.Driver:
 		var exists bool
 
-		err := c.GetDB().QueryRow(checkSQLGoFrMigrationsTable).Scan(&exists)
+		err := c.SQL.QueryRow(checkSQLGoFrMigrationsTable).Scan(&exists)
 		if err != nil {
 			return err
 		}
 
 		if !exists {
-			if _, err := c.GetDB().Exec(createSQLGoFrMigrationsTable); err != nil {
+			if _, err := c.SQL.Exec(createSQLGoFrMigrationsTable); err != nil {
 				return err
 			}
 		}
@@ -82,10 +82,10 @@ func ensureSQLMigrationTableExists(c container.Interface) error {
 	return nil
 }
 
-func getSQLLastMigration(c container.Interface) int64 {
+func getSQLLastMigration(c *container.Container) int64 {
 	var lastMigration int64
 
-	err := c.GetDB().QueryRowContext(context.Background(), getLastSQLGoFrMigration).Scan(&lastMigration)
+	err := c.SQL.QueryRowContext(context.Background(), getLastSQLGoFrMigration).Scan(&lastMigration)
 	if err != nil {
 		return 0
 	}
@@ -99,7 +99,7 @@ func insertMigrationRecord(tx *gofrSql.Tx, query string, version int64, startTim
 	return err
 }
 
-func rollbackAndLog(c container.Interface, version int64, tx *gofrSql.Tx, err error) {
+func rollbackAndLog(c *container.Container, version int64, tx *gofrSql.Tx, err error) {
 	c.Error(err)
 
 	if tx == nil {
@@ -113,8 +113,8 @@ func rollbackAndLog(c container.Interface, version int64, tx *gofrSql.Tx, err er
 	c.Errorf("Migration %v rolled back", version)
 }
 
-func sqlPostRun(c container.Interface, tx *gofrSql.Tx, currentMigration int64, start time.Time) {
-	switch c.GetDB().Driver().(type) {
+func sqlPostRun(c *container.Container, tx *gofrSql.Tx, currentMigration int64, start time.Time) {
+	switch c.SQL.Driver().(type) {
 	case *mysql.MySQLDriver:
 		err := insertMigrationRecord(tx, insertGoFrMigrationRowMySQL, currentMigration, start)
 		if err != nil {

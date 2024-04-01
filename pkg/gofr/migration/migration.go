@@ -1,7 +1,6 @@
 package migration
 
 import (
-	"reflect"
 	"time"
 
 	"github.com/gogo/protobuf/sortkeys"
@@ -20,7 +19,7 @@ type Migrate struct {
 // TODO : Use composition to handler different databases which would also remove this nolint
 //
 //nolint:gocyclo // reducing complexity may hamper readability.
-func Run(migrationsMap map[int64]Migrate, c container.Interface) {
+func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 	invalidKeys, keys := getKeys(migrationsMap)
 	if len(invalidKeys) > 0 {
 		c.Errorf("Run Failed! UP not defined for the following keys: %v", invalidKeys)
@@ -32,7 +31,7 @@ func Run(migrationsMap map[int64]Migrate, c container.Interface) {
 
 	var lastMigration int64
 
-	if !reflect.ValueOf(c.GetDB()).IsNil() {
+	if c.SQL != nil {
 		err := ensureSQLMigrationTableExists(c)
 		if err != nil {
 			c.Errorf("Unable to verify sql migration table due to: %v", err)
@@ -43,7 +42,7 @@ func Run(migrationsMap map[int64]Migrate, c container.Interface) {
 		lastMigration = getSQLLastMigration(c)
 	}
 
-	if !reflect.ValueOf(c.GetRedis()).IsNil() {
+	if c.Redis != nil {
 		redisLastMigration := getRedisLastMigration(c)
 
 		switch {
@@ -69,12 +68,12 @@ func Run(migrationsMap map[int64]Migrate, c container.Interface) {
 			err        error
 		)
 
-		if !reflect.ValueOf(c.GetPubSub()).IsNil() {
-			datasource.PubSub = newPubSub(c.GetPubSub())
+		if c.PubSub != nil {
+			datasource.PubSub = newPubSub(c.PubSub)
 		}
 
-		if c.GetDB() != nil {
-			sqlTx, err = c.GetDB().Begin()
+		if c.SQL != nil {
+			sqlTx, err = c.SQL.Begin()
 			if err != nil {
 				c.Errorf("unable to begin transaction: %v", err)
 
@@ -84,8 +83,8 @@ func Run(migrationsMap map[int64]Migrate, c container.Interface) {
 			datasource.SQL = newMysql(sqlTx)
 		}
 
-		if c.GetRedis() != nil {
-			redisTx = c.GetRedis().TxPipeline()
+		if c.Redis != nil {
+			redisTx = c.Redis.TxPipeline()
 
 			datasource.Redis = newRedis(redisTx)
 		}
@@ -97,11 +96,11 @@ func Run(migrationsMap map[int64]Migrate, c container.Interface) {
 			return
 		}
 
-		if c.GetDB() != nil {
+		if c.SQL != nil {
 			sqlPostRun(c, sqlTx, currentMigration, start)
 		}
 
-		if c.GetRedis() != nil {
+		if c.Redis != nil {
 			redisPostRun(c, redisTx, currentMigration, start)
 		}
 	}

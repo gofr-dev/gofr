@@ -7,7 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/stretchr/testify/assert"
 
 	"gofr.dev/pkg/gofr/datasource"
@@ -17,10 +16,7 @@ import (
 )
 
 func TestContainer_Health(t *testing.T) {
-	mockDB, mock, err := sqlmock.New()
-	if err != nil {
-		t.Fatalf("could not initialize mock database err : %v", err)
-	}
+	_, mocks := NewMockContainer(t)
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -74,9 +70,7 @@ func TestContainer_Health(t *testing.T) {
 	c.Services = make(map[string]service.HTTP)
 	c.Services["test-service"] = service.NewHTTPService(srv.URL, logger, nil)
 
-	c.SQL.DB = mockDB
-
-	mock.ExpectPing()
+	mocks.SQL.ExpectPing()
 
 	healthData := c.Health(context.Background())
 

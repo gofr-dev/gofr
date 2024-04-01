@@ -50,7 +50,7 @@ func (r redis) Rename(ctx context.Context, key, newKey string) *goRedis.StatusCm
 	return r.commands.Rename(ctx, key, newKey)
 }
 
-func redisPostRun(c container.Interface, tx goRedis.Pipeliner, currentMigration int64, start time.Time) {
+func redisPostRun(c *container.Container, tx goRedis.Pipeliner, currentMigration int64, start time.Time) {
 	data, _ := json.Marshal(migration{
 		Method:    "UP",
 		StartTime: start,
@@ -59,7 +59,7 @@ func redisPostRun(c container.Interface, tx goRedis.Pipeliner, currentMigration 
 
 	migrationVersion := strconv.FormatInt(currentMigration, 10)
 
-	_, _ = c.GetRedis().HSet(context.Background(), "gofr_migrations", map[string]string{migrationVersion: string(data)}).Result()
+	_, _ = c.Redis.HSet(context.Background(), "gofr_migrations", map[string]string{migrationVersion: string(data)}).Result()
 
 	_, err := tx.Exec(context.Background())
 	if err != nil {
@@ -67,10 +67,10 @@ func redisPostRun(c container.Interface, tx goRedis.Pipeliner, currentMigration 
 	}
 }
 
-func getRedisLastMigration(c container.Interface) int64 {
+func getRedisLastMigration(c *container.Container) int64 {
 	var lastMigration int64
 
-	table, err := c.GetRedis().HGetAll(context.Background(), "gofr_migrations").Result()
+	table, err := c.Redis.HGetAll(context.Background(), "gofr_migrations").Result()
 	if err != nil {
 		c.Errorf("Failed to get migration record from Redis : %v", err)
 
