@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"gofr.dev/pkg/gofr/config"
+	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 	"gofr.dev/pkg/gofr/datasource/pubsub/google"
 	"gofr.dev/pkg/gofr/datasource/pubsub/kafka"
@@ -35,6 +36,7 @@ type Container struct {
 
 	Redis *redis.Redis
 	SQL   *sql.DB
+	Mongo datasource.Mongo
 }
 
 func NewEmptyContainer() *Container {

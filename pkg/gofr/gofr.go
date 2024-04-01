@@ -2,6 +2,7 @@ package gofr
 
 import (
 	"fmt"
+	"gofr.dev/pkg/gofr/datasource"
 	"net/http"
 	"os"
 	"strconv"
@@ -309,4 +310,8 @@ func (a *App) Subscribe(topic string, handler SubscribeFunc) {
 	}
 
 	a.subscriptionManager.subscriptions[topic] = handler
+}
+
+func (a *App) UseMongo(datasource func(conf datasource.Config, logger datasource.Logger, metrics datasource.Metrics) datasource.Mongo) {
+	a.container.Mongo = datasource(a.Config, a.container.Logger, a.Metrics())
 }
