@@ -99,7 +99,7 @@ func main() {
 
 		// transaction logic
 
-		tranTime := time.Now().Sub(transactionStartTime).Microseconds()
+		tranTime := time.Now().Sub(transactionStartTime).Milliseconds()
 
 		ctx.Metrics().RecordHistogram(ctx, "transaction_time", float64(tranTime))
 
