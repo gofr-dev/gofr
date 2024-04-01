@@ -1,13 +1,13 @@
 package migration
 
 import (
-	"reflect"
 	"time"
 
 	"github.com/gogo/protobuf/sortkeys"
 	goRedis "github.com/redis/go-redis/v9"
 
 	"gofr.dev/pkg/gofr/container"
+	gofrRedis "gofr.dev/pkg/gofr/datasource/redis"
 	gofrSql "gofr.dev/pkg/gofr/datasource/sql"
 )
 
@@ -30,9 +30,16 @@ func Run(migrationsMap map[int64]Migrate, c container.Interface) {
 
 	sortkeys.Int64s(keys)
 
-	var lastMigration int64
+	var (
+		lastMigration int64
+		ok            bool
+	)
 
-	if !reflect.ValueOf(c.GetDB()).IsNil() {
+	sql, _ := c.GetDB().(*gofrSql.DB)
+
+	if sql != nil && sql.DB != nil {
+		ok = true
+
 		err := ensureSQLMigrationTableExists(c)
 		if err != nil {
 			c.Errorf("Unable to verify sql migration table due to: %v", err)
@@ -43,7 +50,11 @@ func Run(migrationsMap map[int64]Migrate, c container.Interface) {
 		lastMigration = getSQLLastMigration(c)
 	}
 
-	if !reflect.ValueOf(c.GetRedis()).IsNil() {
+	redisClient, _ := c.GetRedis().(*gofrRedis.Redis)
+
+	if redisClient != nil && redisClient.Client != nil {
+		ok = true
+
 		redisLastMigration := getRedisLastMigration(c)
 
 		switch {
@@ -53,6 +64,18 @@ func Run(migrationsMap map[int64]Migrate, c container.Interface) {
 		case redisLastMigration > lastMigration:
 			lastMigration = redisLastMigration
 		}
+	}
+
+	if c.GetPubSub() != nil {
+		ok = true
+	}
+
+	// Returning with an error log as migration would eventually fail as No databases are initialized.
+	// Pub/Sub is considered as initialized if its configurations are given.
+	if !ok {
+		c.Errorf("No Migrations are running as no datasource are initialised")
+
+		return
 	}
 
 	for _, currentMigration := range keys {
@@ -69,7 +92,7 @@ func Run(migrationsMap map[int64]Migrate, c container.Interface) {
 			err        error
 		)
 
-		if !reflect.ValueOf(c.GetPubSub()).IsNil() {
+		if c.GetPubSub() != nil {
 			datasource.PubSub = newPubSub(c.GetPubSub())
 		}
 
