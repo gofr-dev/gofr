@@ -1,7 +1,7 @@
 // //go:build !migration
 package migration
 
-//import (
+// import (
 //	"context"
 //	"encoding/json"
 //	"testing"
@@ -18,7 +18,7 @@ package migration
 //
 //// TODO : Remove Skips because tests are failing in pipeline.
 //
-//func Test_MigrationMySQLSuccess(t *testing.T) {
+// func Test_MigrationMySQLSuccess(t *testing.T) {
 //	t.Skip()
 //	t.Setenv("DB_HOST", "localhost")
 //	t.Setenv("DB_DIALECT", "mysql")
@@ -86,7 +86,7 @@ package migration
 //	assert.Contains(t, logs, "Migration 1 ran successfully")
 //}
 //
-//func Test_MigrationMySQLAndRedisLastMigrationAreDifferent(t *testing.T) {
+// func Test_MigrationMySQLAndRedisLastMigrationAreDifferent(t *testing.T) {
 //	t.Setenv("DB_HOST", "localhost")
 //	t.Setenv("DB_DIALECT", "mysql")
 //	t.Setenv("REDIS_HOST", "localhost")
@@ -139,7 +139,7 @@ package migration
 //	assert.NotContains(t, logs, "Migration 1 ran successfully")
 //}
 //
-//func Test_MigrationMySQLPostRunFailed(t *testing.T) {
+// func Test_MigrationMySQLPostRunFailed(t *testing.T) {
 //	t.Skip()
 //	t.Setenv("DB_HOST", "localhost")
 //	t.Setenv("DB_DIALECT", "mysql")
@@ -177,7 +177,7 @@ package migration
 //	assert.Contains(t, logs, "Migration transaction rolled back")
 //}
 //
-//func Test_MigrationMySQLPostRunRollBackFailed(t *testing.T) {
+// func Test_MigrationMySQLPostRunRollBackFailed(t *testing.T) {
 //	t.Skip()
 //	t.Setenv("DB_HOST", "localhost")
 //	t.Setenv("DB_DIALECT", "mysql")
@@ -215,7 +215,7 @@ package migration
 //	assert.Contains(t, logs, "Migration transaction rolled back")
 //}
 //
-//func Test_MigrationMySQLTransactionCommitFailed(t *testing.T) {
+// func Test_MigrationMySQLTransactionCommitFailed(t *testing.T) {
 //	t.Skip()
 //	t.Setenv("DB_HOST", "localhost")
 //	t.Setenv("DB_DIALECT", "mysql")
@@ -253,7 +253,7 @@ package migration
 //	assert.Contains(t, logs, "unable to commit transaction")
 //}
 //
-//func Test_MigrationMySQLRunSameMigrationAgain(t *testing.T) {
+// func Test_MigrationMySQLRunSameMigrationAgain(t *testing.T) {
 //	t.Setenv("DB_HOST", "localhost")
 //	t.Setenv("DB_DIALECT", "mysql")
 //
@@ -286,7 +286,7 @@ package migration
 //	assert.NotContains(t, logs, "Migration 1 ran successfully")
 //}
 //
-//func Test_MigrationUPFailed(t *testing.T) {
+// func Test_MigrationUPFailed(t *testing.T) {
 //	t.Skip()
 //	t.Setenv("DB_HOST", "localhost")
 //	t.Setenv("DB_DIALECT", "mysql")
@@ -323,7 +323,7 @@ package migration
 //	assert.Contains(t, logs, "Migration transaction rolled back")
 //}
 //
-//func Test_MigrationSQLMigrationTableCheckFailed(t *testing.T) {
+// func Test_MigrationSQLMigrationTableCheckFailed(t *testing.T) {
 //	t.Skip()
 //	t.Setenv("DB_HOST", "localhost")
 //	t.Setenv("DB_DIALECT", "mysql")
@@ -356,7 +356,7 @@ package migration
 //	assert.Contains(t, logs, "Unable to verify sql migration table due to: row not found")
 //}
 //
-//func Test_MigrationMySQLTransactionCreationFailure(t *testing.T) {
+// func Test_MigrationMySQLTransactionCreationFailure(t *testing.T) {
 //	t.Skip()
 //	t.Setenv("DB_HOST", "localhost")
 //	t.Setenv("DB_DIALECT", "mysql")
@@ -391,7 +391,7 @@ package migration
 //	assert.Contains(t, logs, "unable to begin transaction: failed to start transaction")
 //}
 //
-//func Test_MigrationMySQLCreateGoFrMigrationError(t *testing.T) {
+// func Test_MigrationMySQLCreateGoFrMigrationError(t *testing.T) {
 //	t.Skip()
 //	t.Setenv("DB_HOST", "localhost")
 //	t.Setenv("DB_DIALECT", "mysql")
@@ -425,7 +425,7 @@ package migration
 //	assert.Contains(t, logs, "Unable to verify sql migration table due to: creation failed")
 //}
 //
-//func Test_MigrationRedisTransactionFailure(t *testing.T) {
+// func Test_MigrationRedisTransactionFailure(t *testing.T) {
 //	t.Setenv("REDIS_HOST", "localhost")
 //
 //	logs := testutil.StderrOutputForFunc(func() {
@@ -474,7 +474,7 @@ package migration
 //	assert.Contains(t, logs, "Migration for Redis redis: nil failed with err")
 //}
 //
-//func Test_MigrationRedisUnableToGetLastRun(t *testing.T) {
+// func Test_MigrationRedisUnableToGetLastRun(t *testing.T) {
 //	t.Setenv("REDIS_HOST", "localhost")
 //	t.Setenv("DB_DIALECT", "mysql")
 //
@@ -501,7 +501,7 @@ package migration
 //	assert.Contains(t, logs, "failed to get migration record from Redis err: unable to get gofr_migrations")
 //}
 //
-//func Test_MigrationRedisGoFrDataUnmarshalFail(t *testing.T) {
+// func Test_MigrationRedisGoFrDataUnmarshalFail(t *testing.T) {
 //	t.Setenv("REDIS_HOST", "localhost")
 //
 //	logs := testutil.StdoutOutputForFunc(func() {
@@ -540,7 +540,7 @@ package migration
 //	assert.NotContains(t, logs, "Migration 1 ran successfully")
 //}
 //
-//func Test_MigrationInvalidKeys(t *testing.T) {
+// func Test_MigrationInvalidKeys(t *testing.T) {
 //	t.Setenv("DB_HOST", "localhost")
 //	t.Setenv("DB_DIALECT", "mysql")
 //
