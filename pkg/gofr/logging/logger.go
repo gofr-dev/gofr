@@ -243,7 +243,7 @@ func NewFileLogger(path string) Logger {
 		errorOut:  io.Discard,
 	}
 
-	if path != "" {
+	if path == "" {
 		return l
 	}
 
