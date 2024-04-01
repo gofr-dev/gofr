@@ -31,7 +31,7 @@ type Log struct {
 }
 
 func (d *DB) logQuery(start time.Time, queryType, query string, args ...interface{}) {
-	duration := time.Since(start).Microseconds()
+	duration := time.Since(start).Milliseconds()
 
 	d.logger.Debug(Log{
 		Type:     queryType,
@@ -97,7 +97,7 @@ type Tx struct {
 }
 
 func (t *Tx) logQuery(start time.Time, queryType, query string, args ...interface{}) {
-	duration := time.Since(start).Microseconds()
+	duration := time.Since(start).Milliseconds()
 
 	t.logger.Debug(Log{
 		Type:     queryType,
