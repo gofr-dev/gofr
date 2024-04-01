@@ -3,12 +3,12 @@ package migration
 import (
 	"time"
 
-	goRedis "github.com/redis/go-redis/v9"
-	gofrSql "gofr.dev/pkg/gofr/datasource/sql"
-
 	"github.com/gogo/protobuf/sortkeys"
+	goRedis "github.com/redis/go-redis/v9"
 
 	"gofr.dev/pkg/gofr/container"
+	gofrRedis "gofr.dev/pkg/gofr/datasource/redis"
+	gofrSql "gofr.dev/pkg/gofr/datasource/sql"
 )
 
 type MigrateFunc func(d Datasource) error
@@ -32,7 +32,7 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 
 	var lastMigration int64
 
-	if c.SQL != nil {
+	if c.SQL.(*gofrSql.DB) != nil {
 		err := ensureSQLMigrationTableExists(c)
 		if err != nil {
 			c.Logger.Errorf("Unable to verify sql migration table due to: %v", err)
@@ -43,7 +43,7 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 		lastMigration = getSQLLastMigration(c)
 	}
 
-	if c.Redis != nil {
+	if c.Redis.(*gofrRedis.Redis) != nil {
 		redisLastMigration := getRedisLastMigration(c)
 
 		switch {
@@ -73,7 +73,7 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 			datasource.PubSub = newPubSub(c.PubSub)
 		}
 
-		if c.SQL != nil {
+		if c.SQL.(*gofrSql.DB) != nil {
 			sqlTx, err = c.SQL.Begin()
 			if err != nil {
 				c.Logger.Errorf("unable to begin transaction: %v", err)
@@ -84,7 +84,7 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 			datasource.SQL = newMysql(sqlTx)
 		}
 
-		if c.Redis != nil {
+		if c.Redis.(*gofrRedis.Redis) != nil {
 			redisTx = c.Redis.TxPipeline()
 
 			datasource.Redis = newRedis(redisTx)
@@ -97,11 +97,11 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 			return
 		}
 
-		if c.SQL != nil {
+		if c.SQL.(*gofrSql.DB) != nil {
 			sqlPostRun(c, sqlTx, currentMigration, start)
 		}
 
-		if c.Redis != nil {
+		if c.Redis.(*gofrRedis.Redis) != nil {
 			redisPostRun(c, redisTx, currentMigration, start)
 		}
 	}

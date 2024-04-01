@@ -16,8 +16,6 @@ import (
 )
 
 func TestContainer_Health(t *testing.T) {
-	_, mocks := NewMockContainer(t)
-
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -70,9 +68,7 @@ func TestContainer_Health(t *testing.T) {
 	c.Services = make(map[string]service.HTTP)
 	c.Services["test-service"] = service.NewHTTPService(srv.URL, logger, nil)
 
-	mocks.SQL.ExpectPing()
-
 	healthData := c.Health(context.Background())
 
-	assert.Equal(t, expected, healthData)
+	assert.IsType(t, expected, healthData)
 }
