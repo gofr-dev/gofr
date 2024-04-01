@@ -92,7 +92,7 @@ func getRedisLastMigration(c container.Interface) int64 {
 
 		err = json.Unmarshal(d, &migrationData)
 		if err != nil {
-			c.Logger.Errorf("Failed to unmarshal redis Migration data : %v", err)
+			c.Errorf("Failed to unmarshal redis Migration data : %v", err)
 
 			return -1
 		}

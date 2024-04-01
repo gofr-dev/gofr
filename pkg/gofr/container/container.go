@@ -34,7 +34,7 @@ type Container struct {
 	metricsManager metrics.Manager
 	PubSub         pubsub.Client
 
-	Redis *redis.Redis
+	Redis RedisInterface
 	SQL   DBInterface
 }
 
@@ -51,6 +51,7 @@ type Interface interface {
 	GetSubscriber() pubsub.Subscriber
 	GetDB() DBInterface
 	GetRedis() RedisInterface
+	GetPubSub() pubsub.Client
 }
 
 func NewEmptyContainer() *Container {
@@ -203,4 +204,8 @@ func (c *Container) GetDB() DBInterface {
 
 func (c *Container) GetRedis() RedisInterface {
 	return c.Redis
+}
+
+func (c *Container) GetPubSub() pubsub.Client {
+	return c.PubSub
 }

@@ -4,7 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"database/sql/driver"
+
 	"github.com/redis/go-redis/v9"
+
 	"gofr.dev/pkg/gofr/datasource"
 	gofrSQL "gofr.dev/pkg/gofr/datasource/sql"
 )
@@ -24,8 +26,7 @@ type DBInterface interface {
 }
 
 type RedisInterface interface {
-	DialHook(next redis.DialHook) redis.DialHook
-	ProcessHook(next redis.ProcessHook) redis.ProcessHook
-	ProcessPipelineHook(next redis.ProcessPipelineHook) redis.ProcessPipelineHook
-	TxPipeline() redis.Pipeliner
+	redis.Cmdable
+	redis.HashCmdable
+	HealthCheck() datasource.Health
 }

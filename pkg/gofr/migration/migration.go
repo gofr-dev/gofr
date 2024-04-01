@@ -1,14 +1,14 @@
 package migration
 
 import (
+	"reflect"
 	"time"
 
-	goRedis "github.com/redis/go-redis/v9"
-	gofrSql "gofr.dev/pkg/gofr/datasource/sql"
-
 	"github.com/gogo/protobuf/sortkeys"
+	goRedis "github.com/redis/go-redis/v9"
 
 	"gofr.dev/pkg/gofr/container"
+	gofrSql "gofr.dev/pkg/gofr/datasource/sql"
 )
 
 type MigrateFunc func(d Datasource) error
@@ -32,7 +32,7 @@ func Run(migrationsMap map[int64]Migrate, c container.Interface) {
 
 	var lastMigration int64
 
-	if c.GetDB() != nil {
+	if !reflect.ValueOf(c.GetDB()).IsNil() {
 		err := ensureSQLMigrationTableExists(c)
 		if err != nil {
 			c.Errorf("Unable to verify sql migration table due to: %v", err)
@@ -43,7 +43,7 @@ func Run(migrationsMap map[int64]Migrate, c container.Interface) {
 		lastMigration = getSQLLastMigration(c)
 	}
 
-	if c.GetRedis() != nil {
+	if !reflect.ValueOf(c.GetRedis()).IsNil() {
 		redisLastMigration := getRedisLastMigration(c)
 
 		switch {
@@ -69,8 +69,8 @@ func Run(migrationsMap map[int64]Migrate, c container.Interface) {
 			err        error
 		)
 
-		if c.PubSub != nil {
-			datasource.PubSub = newPubSub(c.PubSub)
+		if !reflect.ValueOf(c.GetPubSub()).IsNil() {
+			datasource.PubSub = newPubSub(c.GetPubSub())
 		}
 
 		if c.GetDB() != nil {
