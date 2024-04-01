@@ -23,12 +23,13 @@ func Test_CORS(t *testing.T) {
 	handler := CORS()(&MockHandlerForCORS{statusCode: http.StatusFound, response: "Sample Response"})
 
 	tests := []struct {
-		method   string
-		respBody string
-		respCode int
+		method     string
+		respBody   string
+		respCode   int
+		expHeaders int
 	}{
-		{http.MethodGet, "Sample Response", http.StatusFound},
-		{http.MethodOptions, "", http.StatusOK},
+		{http.MethodGet, "Sample Response", http.StatusFound, 3},
+		{http.MethodOptions, "", http.StatusOK, 2},
 	}
 
 	for i, tc := range tests {
@@ -38,10 +39,7 @@ func Test_CORS(t *testing.T) {
 
 		assert.Equal(t, "*", w.Header().Get("Access-Control-Allow-Origin"), "TEST[%d], Failed.\n", i)
 		assert.Equal(t, "POST, GET, OPTIONS, PUT, DELETE", w.Header().Get("Access-Control-Allow-Methods"), "TEST[%d], Failed.\n", i)
-
-		// Check if no other headers apart from the allowed headers are being set
-		assert.Equal(t, 2, len(w.Header()), "TEST[%d], Failed.\n", i)
-
+		assert.Equal(t, tc.expHeaders, len(w.Header()), "TEST[%d], Failed.\n", i)
 		assert.Equal(t, tc.respCode, w.Code, "TEST[%d], Failed.\n", i)
 		assert.Equal(t, tc.respBody, w.Body.String(), "TEST[%d], Failed.\n", i)
 	}

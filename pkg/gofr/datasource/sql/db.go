@@ -188,7 +188,7 @@ func (d *DB) Select(ctx context.Context, data interface{}, query string, args ..
 	// First confirm that what we got in v is a pointer else it won't be settable
 	rvo := reflect.ValueOf(data)
 	if rvo.Kind() != reflect.Ptr {
-		d.logger.Error("We did not get a pointer. data is not settable.")
+		d.logger.Error("we did not get a pointer. data is not settable.")
 
 		return
 	}
@@ -201,7 +201,7 @@ func (d *DB) Select(ctx context.Context, data interface{}, query string, args ..
 	case reflect.Slice:
 		rows, err := d.QueryContext(ctx, query, args...)
 		if err != nil {
-			d.logger.Errorf("Error running query : %v", err)
+			d.logger.Errorf("error running query: %v", err)
 
 			return
 		}
