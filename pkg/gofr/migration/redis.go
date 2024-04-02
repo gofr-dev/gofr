@@ -88,17 +88,19 @@ func (d redisMigrator) getLastMigration(c *container.Container) int64 {
 
 		d := []byte(value)
 
-		var migrationData migration
+		var mdata migration
 
-		err = json.Unmarshal(d, &migrationData)
+		err = json.Unmarshal(d, &mdata)
 		if err != nil {
 			c.Logger.Errorf("failed to unmarshal redis Migration data err: %v", err)
 
 			return -1
 		}
 
-		val[integerValue] = migrationData
+		val[integerValue] = mdata
 	}
+
+	c.Debugf("Redis last migration fetched value is: %v", lastMigration)
 
 	lm2 := d.Migrator.getLastMigration(c)
 	if lm2 > lastMigration {

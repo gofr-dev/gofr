@@ -113,6 +113,8 @@ func (d sqlMigrator) getLastMigration(c *container.Container) int64 {
 		return 0
 	}
 
+	c.Debugf("SQL last migration fetched value is: %v", lastMigration)
+
 	lm2 := d.Migrator.getLastMigration(c)
 
 	if lm2 > lastMigration {
@@ -139,8 +141,6 @@ func (d sqlMigrator) commitMigration(c *container.Container, data migrationData)
 
 	// Commit transaction
 	if err := data.SQLTx.Commit(); err != nil {
-		c.Error("unable to migrationData transaction: %v", err)
-
 		return err
 	}
 
@@ -173,7 +173,7 @@ func (d sqlMigrator) rollback(c *container.Container, data migrationData) {
 		c.Error("unable to rollback transaction: %v", err)
 	}
 
-	c.Errorf("Migration %v rolled back", data.MigrationNumber)
+	c.Errorf("Migration %v failed and rolled back", data.MigrationNumber)
 
 	d.Migrator.rollback(c, data)
 }

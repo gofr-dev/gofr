@@ -50,6 +50,8 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 			continue
 		}
 
+		c.Logger.Debugf("Running migration %v", currentMigration)
+
 		transactionsObjects := mg.beginTransaction(c)
 
 		ds.SQL = newMysql(transactionsObjects.SQLTx)
