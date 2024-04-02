@@ -141,6 +141,116 @@ func sqlPostRun(c container.Interface, tx *gofrSql.Tx, currentMigration int64, s
 	c.Infof("Migration %v ran successfully", currentMigration)
 }
 
+type sqlMigratorObject struct {
+	db
+}
+
+type sqlMigrator struct {
+	db
+
+	Migrator
+}
+
+func (s sqlMigratorObject) apply(m Migrator) Migrator {
+	return sqlMigrator{
+		db:       s.db,
+		Migrator: m,
+	}
+}
+
+func (d sqlMigrator) CheckAndCreateMigrationTable(c container.Interface) error {
+	// this can be replaced with having switch case only in the exists variable - but we have chosen to differentiate based
+	// on driver because if new dialect comes will follow the same, also this complete has to be refactored as mentioned in RUN.
+	switch c.GetDB().Driver().(type) {
+	case *mysql.MySQLDriver:
+		var exists int
+
+		err := c.GetDB().QueryRow(checkSQLGoFrMigrationsTable).Scan(&exists)
+		if err != nil {
+			return err
+		}
+
+		if exists != 1 {
+			if _, err := c.GetDB().Exec(createSQLGoFrMigrationsTable); err != nil {
+				return err
+			}
+		}
+	case *pq.Driver:
+		var exists bool
+
+		err := c.GetDB().QueryRow(checkSQLGoFrMigrationsTable).Scan(&exists)
+		if err != nil {
+			return err
+		}
+
+		if !exists {
+			if _, err := c.GetDB().Exec(createSQLGoFrMigrationsTable); err != nil {
+				return err
+			}
+		}
+	}
+
+	return d.Migrator.CheckAndCreateMigrationTable(c)
+}
+
+func (d sqlMigrator) GetLastMigration(c container.Interface) int64 {
+	var lastMigration int64
+
+	err := c.GetDB().QueryRowContext(context.Background(), getLastSQLGoFrMigration).Scan(&lastMigration)
+	if err != nil {
+		return 0
+	}
+
+	lm2 := d.Migrator.GetLastMigration(c)
+
+	if lm2 > lastMigration {
+		return lm2
+	}
+
+	return lastMigration
+}
+
+func (d sqlMigrator) CommitMigration(c container.Interface, data commit) error {
+	switch c.GetDB().Driver().(type) {
+	case *mysql.MySQLDriver:
+		err := insertMigrationRecord(data.SQLTx, insertGoFrMigrationRowMySQL, data.MigrationNumber, data.StartTime)
+		if err != nil {
+			return err
+		}
+
+	case *pq.Driver:
+		err := insertMigrationRecord(data.SQLTx, insertGoFrMigrationRowPostgres, data.MigrationNumber, data.StartTime)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Commit transaction
+	if err := data.SQLTx.Commit(); err != nil {
+		c.Error("unable to commit transaction: %v", err)
+
+		return err
+	}
+
+	c.Infof("Migration %v ran successfully", data.MigrationNumber)
+
+	return nil
+}
+
+func (d sqlMigrator) Rollback(c container.Interface, data commit) error {
+	if data.SQLTx == nil {
+		return nil
+	}
+
+	if err := data.SQLTx.Rollback(); err != nil {
+		c.Error("unable to rollback transaction: %v", err)
+	}
+
+	c.Errorf("Migration %v rolled back", data.MigrationNumber)
+
+	return nil
+}
+
 const (
 	createSQLGoFrMigrationsTable = `CREATE TABLE IF NOT EXISTS gofr_migrations (
     version BIGINT not null ,

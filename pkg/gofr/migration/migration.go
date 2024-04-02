@@ -37,6 +37,17 @@ func Run(migrationsMap map[int64]Migrate, c container.Interface) {
 
 	sql, _ := c.GetDB().(*gofrSql.DB)
 
+	//var x Datasource
+
+	//x.SQL = sql
+	//
+	//mg := SqlMigrator{x.SQL}
+	//rg := SqlMigrator{x.SQL}
+	//
+	//y := mg.apply(x)
+	//z := rg.apply(y)
+	//
+	//z.CheckAndCreateMigrationTable(c)
 	if sql != nil && sql.DB != nil {
 		ok = true
 
@@ -73,7 +84,7 @@ func Run(migrationsMap map[int64]Migrate, c container.Interface) {
 	// Returning with an error log as migration would eventually fail as No databases are initialized.
 	// Pub/Sub is considered as initialized if its configurations are given.
 	if !ok {
-		c.Errorf("No Migrations are running as no datasource are initialised")
+		c.Errorf("No Migrations are running as datasources are not initialised")
 
 		return
 	}
