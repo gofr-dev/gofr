@@ -33,8 +33,8 @@ type Container struct {
 	metricsManager metrics.Manager
 	PubSub         pubsub.Client
 
-	Redis RedisInterface
-	SQL   DBInterface
+	Redis Redis
+	SQL   DB
 }
 
 func NewContainer(conf config.Config) *Container {
