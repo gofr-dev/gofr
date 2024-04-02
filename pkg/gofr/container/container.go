@@ -37,11 +37,11 @@ type Container struct {
 	SQL   DBInterface
 }
 
-func NewEmptyContainer() *Container {
-	return &Container{}
-}
-
 func NewContainer(conf config.Config) *Container {
+	if conf == nil {
+		return &Container{}
+	}
+
 	c := &Container{
 		appName:    conf.GetOrDefault("APP_NAME", "gofr-app"),
 		appVersion: conf.GetOrDefault("APP_VERSION", "dev"),

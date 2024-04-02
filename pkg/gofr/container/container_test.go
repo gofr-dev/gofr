@@ -149,14 +149,16 @@ func TestContainer_GetSubscriber(t *testing.T) {
 	assert.Equal(t, subscriber, out)
 }
 
-func TestContainer_NewEmptyContainer(t *testing.T) {
-	container := NewEmptyContainer()
+func TestContainer_newContainerWithNilConfig(t *testing.T) {
+	container := NewContainer(nil)
 
-	assert.Nil(t, container.Redis, "TestContainer_NewEmptyContainer Failed!")
-	assert.Nil(t, container.SQL, "TestContainer_NewEmptyContainer Failed")
-	assert.Nil(t, container.Services, "TestContainer_NewEmptyContainer Failed")
-	assert.Nil(t, container.PubSub, "TestContainer_NewEmptyContainer Failed")
-	assert.Nil(t, container.Logger, "TestContainer_NewEmptyContainer Failed")
+	failureMsg := "TestContainer_newContainerWithNilConfig Failed!"
+
+	assert.Nil(t, container.Redis, "%s", failureMsg)
+	assert.Nil(t, container.SQL, "%s", failureMsg)
+	assert.Nil(t, container.Services, "%s", failureMsg)
+	assert.Nil(t, container.PubSub, "%s", failureMsg)
+	assert.Nil(t, container.Logger, "%s", failureMsg)
 }
 
 type mockPubSub struct {
