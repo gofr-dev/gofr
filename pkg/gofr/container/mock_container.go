@@ -1,34 +1,29 @@
 package container
 
 import (
-	"github.com/DATA-DOG/go-sqlmock"
-	"go.uber.org/mock/gomock"
-	"gofr.dev/pkg/gofr/logging"
 	"testing"
+
+	"go.uber.org/mock/gomock"
+
+	"gofr.dev/pkg/gofr/logging"
 )
 
-type MockContainer struct {
-	Logger logging.Logger
-
-	appName    string
-	appVersion string
-
-	//Redis *redis.Redis
-	SQL     DBInterface
-	SQLMock sqlmock.Sqlmock
+type Mocks struct {
+	Redis *MockRedisInterface
+	SQL   *MockDBInterface
 }
 
-func NewMockContainer(t *testing.T) MockContainer {
-	container := MockContainer{}
-	container.SQL = NewMockDBInterface(gomock.NewController(t))
+func NewMockContainer(t *testing.T) (*Container, Mocks) {
+	container := &Container{}
 	container.Logger = logging.NewLogger(logging.DEBUG)
 
-	_, mock, err := sqlmock.New()
-	if err != nil {
-		t.Fatalf("SQL mock not initialized %v", err)
-	}
+	sqlMock := NewMockDBInterface(gomock.NewController(t))
+	container.SQL = sqlMock
 
-	container.SQLMock = mock
+	redisMock := NewMockRedisInterface(gomock.NewController(t))
+	container.Redis = redisMock
 
-	return container
+	mocks := Mocks{Redis: redisMock, SQL: sqlMock}
+
+	return container, mocks
 }

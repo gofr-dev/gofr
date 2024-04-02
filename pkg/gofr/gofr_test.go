@@ -34,7 +34,7 @@ func TestNewCMD(t *testing.T) {
 func TestGofr_readConfig(t *testing.T) {
 	app := App{}
 
-	app.readConfig()
+	app.readConfig(false)
 
 	if app.Config == nil {
 		t.Errorf("config was not read")
@@ -189,7 +189,7 @@ func TestApp_MigrateInvalidKeys(t *testing.T) {
 		app.Migrate(map[int64]migration.Migrate{1: {}})
 	})
 
-	assert.Contains(t, logs, `"message":"Run Failed! UP not defined for the following keys: [1]"`)
+	assert.Contains(t, logs, `"message":"run failed! UP not defined for the following keys: [1]"`)
 }
 
 func Test_otelErrorHandler(t *testing.T) {

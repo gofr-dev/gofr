@@ -3,11 +3,7 @@ package sql
 import (
 	"database/sql"
 	"fmt"
-	"github.com/DATA-DOG/go-sqlmock"
-	"go.uber.org/mock/gomock"
-	"gofr.dev/pkg/gofr/testutil"
 	"strconv"
-	"testing"
 	"time"
 
 	_ "github.com/lib/pq" // used for concrete implementation of the database driver.
@@ -18,7 +14,7 @@ import (
 
 const defaultDBPort = 3306
 
-var errUnsupportedDialect = fmt.Errorf("unsupported db dialect : supported dialects are - mysql, postgres")
+var errUnsupportedDialect = fmt.Errorf("unsupported db dialect; supported dialects are - mysql, postgres")
 
 // DBConfig has those members which are necessary variables while connecting to database.
 type DBConfig struct {
@@ -106,21 +102,4 @@ func pushDBMetrics(db *sql.DB, metrics Metrics) {
 
 		time.Sleep(frequency * time.Second)
 	}
-}
-
-func NewMockSQLDB(t *testing.T) (*DB, sqlmock.Sqlmock, *MockMetrics) {
-	db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherEqual))
-	if err != nil {
-		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
-	}
-
-	ctrl := gomock.NewController(t)
-	mockMetrics := NewMockMetrics(ctrl)
-
-	return &DB{
-		DB:      db,
-		logger:  testutil.NewMockLogger(testutil.DEBUGLOG),
-		config:  nil,
-		metrics: mockMetrics,
-	}, mock, mockMetrics
 }

@@ -5,11 +5,15 @@ import "context"
 func (c *Container) Health(ctx context.Context) interface{} {
 	datasources := make(map[string]interface{})
 
-	if c.SQL != nil {
+	switch c.SQL.(type) {
+	case nil:
+	default:
 		datasources["sql"] = c.SQL.HealthCheck()
 	}
 
-	if c.Redis != nil {
+	switch c.Redis.(type) {
+	case nil:
+	default:
 		datasources["redis"] = c.Redis.HealthCheck()
 	}
 

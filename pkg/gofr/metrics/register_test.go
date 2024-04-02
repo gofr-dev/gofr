@@ -140,7 +140,7 @@ func Test_NewMetricsManagerInvalidLabelPairErrors(t *testing.T) {
 
 	log := testutil.StdoutOutputForFunc(logs)
 
-	assert.Contains(t, log, `Metrics counter-test label has invalid key-value pairs`, "TEST Failed. Invalid key-value pair for labels")
+	assert.Contains(t, log, `metrics counter-test label has invalid key-value pairs`, "TEST Failed. Invalid key-value pair for labels")
 }
 
 func Test_NewMetricsManagerLabelHighCardinality(t *testing.T) {
@@ -157,5 +157,5 @@ func Test_NewMetricsManagerLabelHighCardinality(t *testing.T) {
 
 	log := testutil.StdoutOutputForFunc(logs)
 
-	assert.Contains(t, log, `Metrics counter-test has high cardinality: 24`, "TEST Failed. high cardinality of metrics")
+	assert.Contains(t, log, `metrics counter-test has high cardinality: 24`, "TEST Failed. high cardinality of metrics")
 }
