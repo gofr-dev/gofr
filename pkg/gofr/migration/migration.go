@@ -26,7 +26,7 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 
 	sortkeys.Int64s(keys)
 
-	ds, mg, ok := updateMigrator(c)
+	ds, mg, ok := getMigrator(c)
 
 	// Returning with an error log as migration would eventually fail as No databases are initialized.
 	// Pub/Sub is considered as initialized if its configurations are given.
@@ -94,7 +94,7 @@ func getKeys(migrationsMap map[int64]Migrate) (invalidKey, keys []int64) {
 	return invalidKey, keys
 }
 
-func updateMigrator(c *container.Container) (Datasource, Migrator, bool) {
+func getMigrator(c *container.Container) (Datasource, Migrator, bool) {
 	var (
 		ok bool
 		ds Datasource
