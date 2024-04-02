@@ -26,17 +26,7 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 
 	sortkeys.Int64s(keys)
 
-	var (
-		ok bool
-		ds Datasource
-		mg Migrator = ds
-	)
-
-	mg, ok = updateMigrator(c, ds, mg)
-
-	if c.PubSub != nil {
-		ok = true
-	}
+	ds, mg, ok := updateMigrator(c)
 
 	// Returning with an error log as migration would eventually fail as No databases are initialized.
 	// Pub/Sub is considered as initialized if its configurations are given.
@@ -104,8 +94,12 @@ func getKeys(migrationsMap map[int64]Migrate) (invalidKey, keys []int64) {
 	return invalidKey, keys
 }
 
-func updateMigrator(c *container.Container, ds Datasource, mg Migrator) (Migrator, bool) {
-	var ok bool
+func updateMigrator(c *container.Container) (Datasource, Migrator, bool) {
+	var (
+		ok bool
+		ds Datasource
+		mg Migrator = ds
+	)
 
 	sql, _ := c.SQL.(*gofrSql.DB)
 
@@ -127,5 +121,9 @@ func updateMigrator(c *container.Container, ds Datasource, mg Migrator) (Migrato
 		mg = redisMigratorObject{ds.Redis}.apply(mg)
 	}
 
-	return mg, ok
+	if c.PubSub != nil {
+		ok = true
+	}
+
+	return ds, mg, ok
 }
