@@ -4,8 +4,6 @@ import (
 	"time"
 
 	"github.com/gogo/protobuf/sortkeys"
-	goRedis "github.com/redis/go-redis/v9"
-
 	"gofr.dev/pkg/gofr/container"
 	gofrRedis "gofr.dev/pkg/gofr/datasource/redis"
 	gofrSql "gofr.dev/pkg/gofr/datasource/sql"
@@ -20,7 +18,7 @@ type Migrate struct {
 // TODO : Use composition to handler different databases which would also remove this nolint
 //
 //nolint:gocyclo // reducing complexity may hamper readability.
-func Run(migrationsMap map[int64]Migrate, c container.Interface) {
+func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 	invalidKeys, keys := getKeys(migrationsMap)
 	if len(invalidKeys) > 0 {
 		c.Errorf("Run Failed! UP not defined for the following keys: %v", invalidKeys)
@@ -31,112 +29,80 @@ func Run(migrationsMap map[int64]Migrate, c container.Interface) {
 	sortkeys.Int64s(keys)
 
 	var (
-		lastMigration int64
-		ok            bool
+		ok bool
+		ds Datasource
+		mg Migrator = ds
 	)
 
-	sql, _ := c.GetDB().(*gofrSql.DB)
+	sql, _ := c.SQL.(*gofrSql.DB)
 
-	//var x Datasource
-
-	//x.SQL = sql
-	//
-	//mg := SqlMigrator{x.SQL}
-	//rg := SqlMigrator{x.SQL}
-	//
-	//y := mg.apply(x)
-	//z := rg.apply(y)
-	//
-	//z.CheckAndCreateMigrationTable(c)
 	if sql != nil && sql.DB != nil {
 		ok = true
 
-		err := ensureSQLMigrationTableExists(c)
-		if err != nil {
-			c.Errorf("Unable to verify sql migration table due to: %v", err)
+		ds.SQL = sql
 
-			return
-		}
-
-		lastMigration = getSQLLastMigration(c)
+		mg = sqlMigratorObject{ds.SQL}.apply(mg)
 	}
 
-	redisClient, _ := c.GetRedis().(*gofrRedis.Redis)
+	redisClient, _ := c.Redis.(*gofrRedis.Redis)
 
 	if redisClient != nil && redisClient.Client != nil {
 		ok = true
 
-		redisLastMigration := getRedisLastMigration(c)
+		ds.Redis = redisClient
 
-		switch {
-		case redisLastMigration == -1:
-			return
-
-		case redisLastMigration > lastMigration:
-			lastMigration = redisLastMigration
-		}
+		mg = redisMigratorObject{ds.Redis}.apply(mg)
 	}
 
-	if c.GetPubSub() != nil {
+	if c.PubSub != nil {
 		ok = true
 	}
 
 	// Returning with an error log as migration would eventually fail as No databases are initialized.
 	// Pub/Sub is considered as initialized if its configurations are given.
 	if !ok {
-		c.Errorf("No Migrations are running as datasources are not initialised")
+		c.Errorf("No Migrations are running as datasources are not initialized")
 
 		return
 	}
+
+	err := mg.CheckAndCreateMigrationTable(c)
+	if err != nil {
+		c.Errorf("Failed to create migration table: %v", err)
+
+		return
+	}
+
+	lastMigration := mg.GetLastMigration(c)
 
 	for _, currentMigration := range keys {
 		if currentMigration <= lastMigration {
 			continue
 		}
 
-		start := time.Now()
+		transactionsObjects := mg.BeginTransaction(c)
 
-		var (
-			datasource Datasource
-			sqlTx      *gofrSql.Tx
-			redisTx    goRedis.Pipeliner
-			err        error
-		)
+		ds.SQL = newMysql(transactionsObjects.SQLTx)
+		ds.Redis = newRedis(transactionsObjects.RedisTx)
+		ds.PubSub = newPubSub(c.PubSub)
 
-		if c.GetPubSub() != nil {
-			datasource.PubSub = newPubSub(c.GetPubSub())
-		}
+		transactionsObjects.StartTime = time.Now()
+		transactionsObjects.MigrationNumber = currentMigration
 
-		if c.GetDB() != nil {
-			sqlTx, err = c.GetDB().Begin()
-			if err != nil {
-				c.Errorf("unable to begin transaction: %v", err)
-
-				return
-			}
-
-			datasource.SQL = newMysql(sqlTx)
-		}
-
-		if c.GetRedis() != nil {
-			redisTx = c.GetRedis().TxPipeline()
-
-			datasource.Redis = newRedis(redisTx)
-		}
-
-		err = migrationsMap[currentMigration].UP(datasource)
+		err = migrationsMap[currentMigration].UP(ds)
 		if err != nil {
-			rollbackAndLog(c, currentMigration, sqlTx, err)
+			mg.Rollback(c, transactionsObjects)
 
 			return
 		}
 
-		if c.GetDB() != nil {
-			sqlPostRun(c, sqlTx, currentMigration, start)
-		}
+		err = mg.CommitMigration(c, transactionsObjects)
+		if err != nil {
+			c.Errorf("Failed to migrationData migration: %v", err)
 
-		if c.GetRedis() != nil {
-			redisPostRun(c, redisTx, currentMigration, start)
+			mg.Rollback(c, transactionsObjects)
+
+			return
 		}
 	}
 }
