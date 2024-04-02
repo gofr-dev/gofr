@@ -1,20 +1,19 @@
 package container
 
-import (
-	"context"
-
-	gofrRedis "gofr.dev/pkg/gofr/datasource/redis"
-	gofrSQL "gofr.dev/pkg/gofr/datasource/sql"
-)
+import "context"
 
 func (c *Container) Health(ctx context.Context) interface{} {
 	datasources := make(map[string]interface{})
 
-	if c.SQL.(*gofrSQL.DB) != nil {
+	switch c.SQL.(type) {
+	case nil:
+	default:
 		datasources["sql"] = c.SQL.HealthCheck()
 	}
 
-	if c.Redis.(*gofrRedis.Redis) != nil {
+	switch c.Redis.(type) {
+	case nil:
+	default:
 		datasources["redis"] = c.Redis.HealthCheck()
 	}
 

@@ -32,7 +32,7 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 
 	var lastMigration int64
 
-	if c.SQL.(*gofrSql.DB) != nil {
+	if validDatasource(c.SQL) {
 		err := ensureSQLMigrationTableExists(c)
 		if err != nil {
 			c.Logger.Errorf("unable to verify sql migration table due to: %v", err)
@@ -43,7 +43,7 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 		lastMigration = getSQLLastMigration(c)
 	}
 
-	if c.Redis.(*gofrRedis.Redis) != nil {
+	if validDatasource(c.Redis) {
 		redisLastMigration := getRedisLastMigration(c)
 
 		switch {
@@ -73,7 +73,7 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 			datasource.PubSub = newPubSub(c.PubSub)
 		}
 
-		if c.SQL.(*gofrSql.DB) != nil {
+		if validDatasource(c.SQL) {
 			sqlTx, err = c.SQL.Begin()
 			if err != nil {
 				c.Logger.Errorf("unable to begin transaction: %v", err)
@@ -84,7 +84,7 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 			datasource.SQL = newMysql(sqlTx)
 		}
 
-		if c.Redis.(*gofrRedis.Redis) != nil {
+		if validDatasource(c.Redis) {
 			redisTx = c.Redis.TxPipeline()
 
 			datasource.Redis = newRedis(redisTx)
@@ -97,11 +97,11 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 			return
 		}
 
-		if c.SQL.(*gofrSql.DB) != nil {
+		if validDatasource(c.SQL) {
 			sqlPostRun(c, sqlTx, currentMigration, start)
 		}
 
-		if c.Redis.(*gofrRedis.Redis) != nil {
+		if validDatasource(c.Redis) {
 			redisPostRun(c, redisTx, currentMigration, start)
 		}
 	}
@@ -122,4 +122,17 @@ func getKeys(migrationsMap map[int64]Migrate) (invalidKey, keys []int64) {
 	}
 
 	return invalidKey, keys
+}
+
+func validDatasource(d interface{}) bool {
+	switch d.(type) {
+	case *gofrSql.DB:
+		sql := d.(*gofrSql.DB)
+		return sql != nil
+	case *gofrRedis.Redis:
+		redis := d.(*gofrRedis.Redis)
+		return redis != nil
+	default:
+		return false
+	}
 }

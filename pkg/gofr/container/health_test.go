@@ -55,20 +55,38 @@ func TestContainer_Health(t *testing.T) {
 		},
 	}
 
-	c := NewContainer(testutil.NewMockConfig(map[string]string{
-		"DB_HOST":     "localhost",
-		"DB_DIALECT":  "mysql",
-		"DB_USER":     "user",
-		"DB_PASSWORD": "password",
-		"DB_NAME":     "test",
-		"REDIS_HOST":  "localhost",
-		"REDIS_PORT":  "6379",
-	}))
+	c, mocks := NewMockContainer(t)
 
 	c.Services = make(map[string]service.HTTP)
 	c.Services["test-service"] = service.NewHTTPService(srv.URL, logger, nil)
 
+	mocks.SQL.EXPECT().HealthCheck().Return(&datasource.Health{
+		Status: "UP",
+		Details: map[string]interface{}{
+			"host": "localhost:3306/test",
+			"stats": sql.DBStats{
+				MaxOpenConnections: 0,
+				OpenConnections:    1,
+				InUse:              0,
+				Idle:               1,
+				WaitCount:          0,
+				WaitDuration:       0,
+				MaxIdleClosed:      0,
+				MaxIdleTimeClosed:  0,
+				MaxLifetimeClosed:  0,
+			},
+		},
+	})
+
+	mocks.Redis.EXPECT().HealthCheck().Return(datasource.Health{
+		Status: "DOWN",
+		Details: map[string]interface{}{
+			"host":  "localhost:6379",
+			"error": "redis not connected",
+		},
+	})
+
 	healthData := c.Health(context.Background())
 
-	assert.IsType(t, expected, healthData)
+	assert.Equal(t, expected, healthData)
 }
