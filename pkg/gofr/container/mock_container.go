@@ -9,18 +9,18 @@ import (
 )
 
 type Mocks struct {
-	Redis *MockRedisInterface
-	SQL   *MockDBInterface
+	Redis *MockRedis
+	SQL   *MockDB
 }
 
 func NewMockContainer(t *testing.T) (*Container, Mocks) {
 	container := &Container{}
 	container.Logger = logging.NewLogger(logging.DEBUG)
 
-	sqlMock := NewMockDBInterface(gomock.NewController(t))
+	sqlMock := NewMockDB(gomock.NewController(t))
 	container.SQL = sqlMock
 
-	redisMock := NewMockRedisInterface(gomock.NewController(t))
+	redisMock := NewMockRedis(gomock.NewController(t))
 	container.Redis = redisMock
 
 	mocks := Mocks{Redis: redisMock, SQL: sqlMock}

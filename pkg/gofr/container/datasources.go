@@ -11,7 +11,7 @@ import (
 	gofrSQL "gofr.dev/pkg/gofr/datasource/sql"
 )
 
-type DBInterface interface {
+type DB interface {
 	Driver() driver.Driver
 	Query(query string, args ...interface{}) (*sql.Rows, error)
 	QueryRow(query string, args ...interface{}) *sql.Row
@@ -25,7 +25,7 @@ type DBInterface interface {
 	HealthCheck() *datasource.Health
 }
 
-type RedisInterface interface {
+type Redis interface {
 	redis.Cmdable
 	redis.HashCmdable
 	HealthCheck() datasource.Health
