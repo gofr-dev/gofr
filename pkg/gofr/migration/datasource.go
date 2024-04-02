@@ -17,38 +17,38 @@ type Datasource struct {
 }
 
 type Migrator interface {
-	CheckAndCreateMigrationTable(c *container.Container) error
-	GetLastMigration(c *container.Container) int64
+	checkAndCreateMigrationTable(c *container.Container) error
+	getLastMigration(c *container.Container) int64
 
-	BeginTransaction(c *container.Container) migrationData
+	beginTransaction(c *container.Container) migrationData
 
-	CommitMigration(c *container.Container, data migrationData) error
-	Rollback(c *container.Container, data migrationData)
+	commitMigration(c *container.Container, data migrationData) error
+	rollback(c *container.Container, data migrationData)
 }
 
 type Datasources interface {
 	apply(m Migrator) Migrator
 }
 
-func (d Datasource) CheckAndCreateMigrationTable(*container.Container) error {
+func (d Datasource) checkAndCreateMigrationTable(*container.Container) error {
 	return nil
 }
 
-func (d Datasource) GetLastMigration(*container.Container) int64 {
+func (d Datasource) getLastMigration(*container.Container) int64 {
 	return 0
 }
 
-func (d Datasource) BeginTransaction(*container.Container) migrationData {
+func (d Datasource) beginTransaction(*container.Container) migrationData {
 	return migrationData{}
 }
 
-func (d Datasource) CommitMigration(c *container.Container, data migrationData) error {
+func (d Datasource) commitMigration(c *container.Container, data migrationData) error {
 	c.Infof("Migration %v ran successfully", data.MigrationNumber)
 
 	return nil
 }
 
-func (d Datasource) Rollback(*container.Container, migrationData) {}
+func (d Datasource) rollback(*container.Container, migrationData) {}
 
 type migrationData struct {
 	StartTime       time.Time

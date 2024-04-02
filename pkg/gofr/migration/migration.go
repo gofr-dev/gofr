@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/gogo/protobuf/sortkeys"
+
 	"gofr.dev/pkg/gofr/container"
 	gofrRedis "gofr.dev/pkg/gofr/datasource/redis"
 	gofrSql "gofr.dev/pkg/gofr/datasource/sql"
@@ -15,9 +16,6 @@ type Migrate struct {
 	UP MigrateFunc
 }
 
-// TODO : Use composition to handler different databases which would also remove this nolint
-//
-//nolint:gocyclo // reducing complexity may hamper readability.
 func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 	invalidKeys, keys := getKeys(migrationsMap)
 	if len(invalidKeys) > 0 {
@@ -34,25 +32,7 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 		mg Migrator = ds
 	)
 
-	sql, _ := c.SQL.(*gofrSql.DB)
-
-	if sql != nil && sql.DB != nil {
-		ok = true
-
-		ds.SQL = sql
-
-		mg = sqlMigratorObject{ds.SQL}.apply(mg)
-	}
-
-	redisClient, _ := c.Redis.(*gofrRedis.Redis)
-
-	if redisClient != nil && redisClient.Client != nil {
-		ok = true
-
-		ds.Redis = redisClient
-
-		mg = redisMigratorObject{ds.Redis}.apply(mg)
-	}
+	mg, ok = updateMigrator(c, ds, mg)
 
 	if c.PubSub != nil {
 		ok = true
@@ -66,21 +46,21 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 		return
 	}
 
-	err := mg.CheckAndCreateMigrationTable(c)
+	err := mg.checkAndCreateMigrationTable(c)
 	if err != nil {
 		c.Errorf("Failed to create migration table: %v", err)
 
 		return
 	}
 
-	lastMigration := mg.GetLastMigration(c)
+	lastMigration := mg.getLastMigration(c)
 
 	for _, currentMigration := range keys {
 		if currentMigration <= lastMigration {
 			continue
 		}
 
-		transactionsObjects := mg.BeginTransaction(c)
+		transactionsObjects := mg.beginTransaction(c)
 
 		ds.SQL = newMysql(transactionsObjects.SQLTx)
 		ds.Redis = newRedis(transactionsObjects.RedisTx)
@@ -91,16 +71,16 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 
 		err = migrationsMap[currentMigration].UP(ds)
 		if err != nil {
-			mg.Rollback(c, transactionsObjects)
+			mg.rollback(c, transactionsObjects)
 
 			return
 		}
 
-		err = mg.CommitMigration(c, transactionsObjects)
+		err = mg.commitMigration(c, transactionsObjects)
 		if err != nil {
 			c.Errorf("Failed to migrationData migration: %v", err)
 
-			mg.Rollback(c, transactionsObjects)
+			mg.rollback(c, transactionsObjects)
 
 			return
 		}
@@ -122,4 +102,30 @@ func getKeys(migrationsMap map[int64]Migrate) (invalidKey, keys []int64) {
 	}
 
 	return invalidKey, keys
+}
+
+func updateMigrator(c *container.Container, ds Datasource, mg Migrator) (Migrator, bool) {
+	var ok bool
+
+	sql, _ := c.SQL.(*gofrSql.DB)
+
+	if sql != nil && sql.DB != nil {
+		ok = true
+
+		ds.SQL = sql
+
+		mg = sqlMigratorObject{ds.SQL}.apply(mg)
+	}
+
+	redisClient, _ := c.Redis.(*gofrRedis.Redis)
+
+	if redisClient != nil && redisClient.Client != nil {
+		ok = true
+
+		ds.Redis = redisClient
+
+		mg = redisMigratorObject{ds.Redis}.apply(mg)
+	}
+
+	return mg, ok
 }

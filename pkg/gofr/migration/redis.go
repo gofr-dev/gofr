@@ -67,7 +67,7 @@ func (s redisMigratorObject) apply(m Migrator) Migrator {
 	}
 }
 
-func (d redisMigrator) GetLastMigration(c *container.Container) int64 {
+func (d redisMigrator) getLastMigration(c *container.Container) int64 {
 	var lastMigration int64
 
 	table, err := c.Redis.HGetAll(context.Background(), "gofr_migrations").Result()
@@ -100,7 +100,7 @@ func (d redisMigrator) GetLastMigration(c *container.Container) int64 {
 		val[integerValue] = migrationData
 	}
 
-	lm2 := d.Migrator.GetLastMigration(c)
+	lm2 := d.Migrator.getLastMigration(c)
 	if lm2 > lastMigration {
 		return lm2
 	}
@@ -108,7 +108,7 @@ func (d redisMigrator) GetLastMigration(c *container.Container) int64 {
 	return lastMigration
 }
 
-func (d redisMigrator) CommitMigration(c *container.Container, data migrationData) error {
+func (d redisMigrator) commitMigration(c *container.Container, data migrationData) error {
 	jsonData, err := json.Marshal(migration{
 		Method:    "UP",
 		StartTime: data.StartTime,
@@ -136,19 +136,19 @@ func (d redisMigrator) CommitMigration(c *container.Container, data migrationDat
 		return err
 	}
 
-	return d.Migrator.CommitMigration(c, data)
+	return d.Migrator.commitMigration(c, data)
 }
 
-func (d redisMigrator) Rollback(c *container.Container, data migrationData) {
+func (d redisMigrator) rollback(c *container.Container, data migrationData) {
 	data.RedisTx.Discard()
 
-	d.Migrator.Rollback(c, data)
+	d.Migrator.rollback(c, data)
 }
 
-func (d redisMigrator) BeginTransaction(c *container.Container) migrationData {
+func (d redisMigrator) beginTransaction(c *container.Container) migrationData {
 	redisTx := c.Redis.TxPipeline()
 
-	cmt := d.Migrator.BeginTransaction(c)
+	cmt := d.Migrator.beginTransaction(c)
 
 	cmt.RedisTx = redisTx
 

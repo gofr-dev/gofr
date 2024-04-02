@@ -70,7 +70,7 @@ func (s sqlMigratorObject) apply(m Migrator) Migrator {
 	}
 }
 
-func (d sqlMigrator) CheckAndCreateMigrationTable(c *container.Container) error {
+func (d sqlMigrator) checkAndCreateMigrationTable(c *container.Container) error {
 	// this can be replaced with having switch case only in the exists variable - but we have chosen to differentiate based
 	// on driver because if new dialect comes will follow the same, also this complete has to be refactored as mentioned in RUN.
 	switch c.SQL.Driver().(type) {
@@ -102,10 +102,10 @@ func (d sqlMigrator) CheckAndCreateMigrationTable(c *container.Container) error 
 		}
 	}
 
-	return d.Migrator.CheckAndCreateMigrationTable(c)
+	return d.Migrator.checkAndCreateMigrationTable(c)
 }
 
-func (d sqlMigrator) GetLastMigration(c *container.Container) int64 {
+func (d sqlMigrator) getLastMigration(c *container.Container) int64 {
 	var lastMigration int64
 
 	err := c.SQL.QueryRowContext(context.Background(), getLastSQLGoFrMigration).Scan(&lastMigration)
@@ -113,7 +113,7 @@ func (d sqlMigrator) GetLastMigration(c *container.Container) int64 {
 		return 0
 	}
 
-	lm2 := d.Migrator.GetLastMigration(c)
+	lm2 := d.Migrator.getLastMigration(c)
 
 	if lm2 > lastMigration {
 		return lm2
@@ -122,7 +122,7 @@ func (d sqlMigrator) GetLastMigration(c *container.Container) int64 {
 	return lastMigration
 }
 
-func (d sqlMigrator) CommitMigration(c *container.Container, data migrationData) error {
+func (d sqlMigrator) commitMigration(c *container.Container, data migrationData) error {
 	switch c.SQL.Driver().(type) {
 	case *mysql.MySQLDriver:
 		err := insertMigrationRecord(data.SQLTx, insertGoFrMigrationRowMySQL, data.MigrationNumber, data.StartTime)
@@ -144,10 +144,10 @@ func (d sqlMigrator) CommitMigration(c *container.Container, data migrationData)
 		return err
 	}
 
-	return d.Migrator.CommitMigration(c, data)
+	return d.Migrator.commitMigration(c, data)
 }
 
-func (d sqlMigrator) BeginTransaction(c *container.Container) migrationData {
+func (d sqlMigrator) beginTransaction(c *container.Container) migrationData {
 	sqlTx, err := c.SQL.Begin()
 	if err != nil {
 		c.Errorf("unable to begin transaction: %v", err)
@@ -155,7 +155,7 @@ func (d sqlMigrator) BeginTransaction(c *container.Container) migrationData {
 		return migrationData{}
 	}
 
-	cmt := d.Migrator.BeginTransaction(c)
+	cmt := d.Migrator.beginTransaction(c)
 
 	cmt.SQLTx = sqlTx
 
@@ -164,7 +164,7 @@ func (d sqlMigrator) BeginTransaction(c *container.Container) migrationData {
 	return cmt
 }
 
-func (d sqlMigrator) Rollback(c *container.Container, data migrationData) {
+func (d sqlMigrator) rollback(c *container.Container, data migrationData) {
 	if data.SQLTx == nil {
 		return
 	}
@@ -175,7 +175,7 @@ func (d sqlMigrator) Rollback(c *container.Container, data migrationData) {
 
 	c.Errorf("Migration %v rolled back", data.MigrationNumber)
 
-	d.Migrator.Rollback(c, data)
+	d.Migrator.rollback(c, data)
 }
 
 const (
