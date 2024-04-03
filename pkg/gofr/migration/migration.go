@@ -1,13 +1,12 @@
 package migration
 
 import (
+	"reflect"
 	"time"
 
 	"github.com/gogo/protobuf/sortkeys"
 
 	"gofr.dev/pkg/gofr/container"
-	gofrRedis "gofr.dev/pkg/gofr/datasource/redis"
-	gofrSql "gofr.dev/pkg/gofr/datasource/sql"
 )
 
 type MigrateFunc func(d Datasource) error
@@ -103,22 +102,18 @@ func getMigrator(c *container.Container) (Datasource, Migrator, bool) {
 		mg Migrator = ds
 	)
 
-	sql, _ := c.SQL.(*gofrSql.DB)
-
-	if sql != nil && sql.DB != nil {
+	if !isNil(c.SQL) {
 		ok = true
 
-		ds.SQL = sql
+		ds.SQL = c.SQL
 
 		mg = sqlMigratorObject{ds.SQL}.apply(mg)
 	}
 
-	redisClient, _ := c.Redis.(*gofrRedis.Redis)
-
-	if redisClient != nil && redisClient.Client != nil {
+	if !isNil(c.Redis) {
 		ok = true
 
-		ds.Redis = redisClient
+		ds.Redis = c.Redis
 
 		mg = redisMigratorObject{ds.Redis}.apply(mg)
 	}
@@ -128,4 +123,12 @@ func getMigrator(c *container.Container) (Datasource, Migrator, bool) {
 	}
 
 	return ds, mg, ok
+}
+
+func isNil(i interface{}) bool {
+	// Get the value of the interface
+	val := reflect.ValueOf(i)
+
+	// If the interface is not assigned or is nil, return true
+	return !val.IsValid() || val.IsNil()
 }
