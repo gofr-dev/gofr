@@ -36,7 +36,7 @@ func createTestContext(method, path, id string, body []byte, cont *container.Con
 }
 
 func Test_scanEntity(t *testing.T) {
-	var invalidResource int
+	var invalidObject int
 
 	type user struct {
 		ID   int
@@ -50,7 +50,7 @@ func Test_scanEntity(t *testing.T) {
 		err   error
 	}{
 		{"success case", &user{}, &entity{name: "user", entityType: reflect.TypeOf(user{}), primaryKey: "id"}, nil},
-		{"invalid resource", &invalidResource, nil, errInvalidResource},
+		{"invalid object", &invalidObject, nil, errInvalidObject},
 	}
 
 	for i, tc := range tests {

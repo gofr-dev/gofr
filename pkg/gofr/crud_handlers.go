@@ -8,8 +8,8 @@ import (
 )
 
 var (
-	errInvalidResource = errors.New("unexpected resource given for CRUDFromStruct")
-	errEntityNotFound  = errors.New("entity not found")
+	errInvalidObject  = errors.New("unexpected object given for CRUDFromStruct")
+	errEntityNotFound = errors.New("entity not found")
 )
 
 // EntityNotFound is an error type for indicating when an entity is not found.
@@ -55,15 +55,15 @@ type entity struct {
 }
 
 // scanEntity extracts entity information for CRUD operations.
-func scanEntity(resource interface{}) (*entity, error) {
-	entityType := reflect.TypeOf(resource).Elem()
+func scanEntity(object interface{}) (*entity, error) {
+	entityType := reflect.TypeOf(object).Elem()
 	if entityType.Kind() != reflect.Struct {
-		return nil, errInvalidResource
+		return nil, errInvalidObject
 	}
 
 	structName := entityType.Name()
 
-	entityValue := reflect.ValueOf(resource).Elem().Type()
+	entityValue := reflect.ValueOf(object).Elem().Type()
 	primaryKeyField := entityValue.Field(0) // Assume the first field is the primary key
 	primaryKeyFieldName := strings.ToLower(primaryKeyField.Name)
 
@@ -75,32 +75,32 @@ func scanEntity(resource interface{}) (*entity, error) {
 }
 
 // registerCRUDHandlers registers CRUD handlers for an entity.
-func (a *App) registerCRUDHandlers(e entity, resource interface{}) {
-	if fn, ok := resource.(Create); ok {
+func (a *App) registerCRUDHandlers(e entity, object interface{}) {
+	if fn, ok := object.(Create); ok {
 		a.POST(fmt.Sprintf("/%s", e.name), fn.Create)
 	} else {
 		a.POST(fmt.Sprintf("/%s", e.name), e.Create)
 	}
 
-	if fn, ok := resource.(GetAll); ok {
+	if fn, ok := object.(GetAll); ok {
 		a.GET(fmt.Sprintf("/%s", e.name), fn.GetAll)
 	} else {
 		a.GET(fmt.Sprintf("/%s", e.name), e.GetAll)
 	}
 
-	if fn, ok := resource.(Get); ok {
+	if fn, ok := object.(Get); ok {
 		a.GET(fmt.Sprintf("/%s/{%s}", e.name, e.primaryKey), fn.Get)
 	} else {
 		a.GET(fmt.Sprintf("/%s/{%s}", e.name, e.primaryKey), e.Get)
 	}
 
-	if fn, ok := resource.(Update); ok {
+	if fn, ok := object.(Update); ok {
 		a.PUT(fmt.Sprintf("/%s/{%s}", e.name, e.primaryKey), fn.Update)
 	} else {
 		a.PUT(fmt.Sprintf("/%s/{%s}", e.name, e.primaryKey), e.Update)
 	}
 
-	if fn, ok := resource.(Delete); ok {
+	if fn, ok := object.(Delete); ok {
 		a.DELETE(fmt.Sprintf("/%s/{%s}", e.name, e.primaryKey), fn.Delete)
 	} else {
 		a.DELETE(fmt.Sprintf("/%s/{%s}", e.name, e.primaryKey), e.Delete)

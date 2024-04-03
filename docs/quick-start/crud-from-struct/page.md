@@ -1,17 +1,20 @@
 # CRUD From Struct
 
-Gofr simplifies the process of implementing CRUD (Create, Read, Update, Delete) operations by enabling the automatic generation of handlers directly from Go structs. This feature eliminates the need for writing repetitive boilerplate code, allowing developers to focus on application logic.
+GoFr simplifies the process of implementing CRUD (Create, Read, Update, Delete) operations by enabling the automatic generation of handlers directly from Go structs.
+This feature eliminates the need for writing repetitive boilerplate code, allowing developers to focus on application logic.
 
 ## Default Behaviour
 
-If the user don't implement custom methods on their struct, Gofr provides default handlers for each CRUD operation. These handlers handle basic database interactions:
+If the custom handlers ain't implemented on the struct, GoFr provides default handlers for each CRUD operation. These handlers handle basic database interactions:
 
-- **Create**: Inserts a new record based on data provided in a JSON request body.
+- **Create**: `/entity` Inserts a new record based on data provided in a JSON request body.
 - **Read**:
-  - **GET /entities**: Retrieves all entities of the type specified by the struct.
-  - **GET /entities/{id}**: Retrieves a specific entity identified by the {id} path parameter.
-- **Update**: Updates an existing record based on data provided in a JSON request body.
-- **Delete**: Deletes an existing record identified by the {id} path parameter.
+  - **GET**:  `/entity` Retrieves all entities of the type specified by the struct.
+  - **GET**:  `/entity/{id}` Retrieves a specific entity identified by the {id} path parameter.
+- **Update**: `/entity/{id}` Updates an existing record identified by the {id} path parameter, based on data provided in a JSON request body.
+- **Delete**  `/entity/{id}` Deletes an existing record identified by the {id} path parameter.
+
+**NOTE**: The registered routes will have the same name as the given struct.
 
 ## Overriding Default Handlers
 
@@ -64,10 +67,10 @@ func main() {
 }
 ```
 
-In this example, we define a user struct representing a database entity. The GetAll method in the provided code demonstrates how to override the default behavior for retrieving all entities. This method can be used to implement custom logic for filtering, sorting, or retrieving additional data along with the entities.
-
+In this example, we define a user struct representing a database entity. The GetAll method in the provided code demonstrates how to override the default behavior for retrieving all entities.
+This method can be used to implement custom logic for filtering, sorting, or retrieving additional data along with the entities.
 
 
 > Few Points to consider:
-> 1. Struct Naming Convention: By default, Gofr assumes the struct name matches the database table name for querying data.
-> 2. Primary Key: The first field of the struct is typically used as the primary key for data operations. However, user can customize this behavior using Gofr's features. 
+> 1. Struct Naming Convention: By default, GoFr assumes the struct name matches the database table name for querying data.
+> 2. Primary Key: The first field of the struct is typically used as the primary key for data operations. However, user can customize this behavior using GoFr's features. 

@@ -271,7 +271,7 @@ func Test_CRUDFromStruct(t *testing.T) {
 		Name string
 	}
 
-	var invalidResource int
+	var invalidObject int
 
 	tests := []struct {
 		desc  string
@@ -279,7 +279,7 @@ func Test_CRUDFromStruct(t *testing.T) {
 		err   error
 	}{
 		{"success case", &user{}, nil},
-		{"invalid resource", &invalidResource, errInvalidResource},
+		{"invalid object", &invalidObject, errInvalidObject},
 	}
 
 	for i, tc := range tests {
