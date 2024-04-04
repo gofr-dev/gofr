@@ -44,9 +44,11 @@ func (e *EnvLoader) read(folder string) {
 	// If 'APP_ENV' is not set , GoFr will first try to read '.local.env', if failed then it
 	// will read default env file.
 	err := godotenv.Load(overrideFile)
-	if err != nil && env != "" {
-		e.logger.Warnf("Failed to load config from file: %v, Err: %v", overrideFile, err)
-	} else if err == nil {
+	if err != nil {
+		if env != "" {
+			e.logger.Warnf("Failed to load config from file: %v, Err: %v", overrideFile, err)
+		}
+	} else {
 		e.logger.Infof("Loaded config from file: %v", overrideFile)
 
 		return
