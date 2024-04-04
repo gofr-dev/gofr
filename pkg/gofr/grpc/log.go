@@ -41,7 +41,7 @@ func LoggingInterceptor(logger Logger) grpc.UnaryServerInterceptor {
 			l := RPCLog{
 				ID:           trace.SpanFromContext(ctx).SpanContext().TraceID().String(),
 				StartTime:    start.Format("2006-01-02T15:04:05.999999999-07:00"),
-				ResponseTime: time.Since(start).Microseconds(),
+				ResponseTime: time.Since(start).Milliseconds(),
 				Method:       info.FullMethod,
 			}
 
