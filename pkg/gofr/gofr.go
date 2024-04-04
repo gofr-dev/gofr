@@ -219,6 +219,8 @@ func (a *App) Metrics() metrics.Manager {
 	return a.container.Metrics()
 }
 
+func (a *App) Logger() logging.Logger { return a.container.Logger }
+
 // SubCommand adds a sub-command to the CLI application.
 // Can be used to create commands like "kubectl get" or "kubectl get ingress".
 func (a *App) SubCommand(pattern string, handler Handler) {
