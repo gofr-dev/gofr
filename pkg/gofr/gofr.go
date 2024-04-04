@@ -314,6 +314,6 @@ func (a *App) Subscribe(topic string, handler SubscribeFunc) {
 	a.subscriptionManager.subscriptions[topic] = handler
 }
 
-func (a *App) UseMongo(datasource func(conf datasource.Config, logger datasource.Logger, metrics datasource.Metrics) datasource.Mongo) {
-	a.container.Mongo = datasource(a.Config, a.container.Logger, a.Metrics())
+func (a *App) UseMongo(datasource datasource.Mongo) {
+	a.container.Mongo = datasource
 }
