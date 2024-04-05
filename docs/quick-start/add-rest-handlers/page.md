@@ -19,9 +19,9 @@ If the custom handlers ain't implemented on the struct, GoFr provides default ha
 ## Overriding Default Handlers
 
 While the default handlers provide basic functionality, user might want to customize their behavior for specific use cases. 
-The CRUD from Struct feature allows user to override these handlers by implementing methods within the struct itself.
+The AddRESTHandlers feature allows user to override these handlers by implementing methods within the struct itself.
 
-## Benefits of CRUD from Struct
+## Benefits of Adding REST Handlers of GoFr
 
 1. Reduced Boilerplate Code: Eliminate repetitive code for CRUD operations, freeing user to focus on core application logic.
 2. Consistency: Ensures consistency in CRUD operations across different entities by using a standardized approach.
@@ -56,7 +56,7 @@ func main() {
 	// Add migrations to run
 	a.Migrate(migrations.All())
 
-	// CRUDFromStruct creates CRUD handles for the given entity
+	// AddRESTHandlers creates CRUD handles for the given entity
 	err := a.AddRESTHandlers(&user{})
 	if err != nil {
 		return
