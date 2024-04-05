@@ -38,7 +38,7 @@ In the absence of the `APP_ENV` variable, GoFr will first attempt to load the �
 
 _For example, to run the application in the ‘dev’ environment, use the following command:_
 
-```
+```dotenv
 APP_ENV=dev go run main.go
 ```
 
