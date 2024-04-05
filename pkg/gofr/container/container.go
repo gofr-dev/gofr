@@ -20,10 +20,8 @@ import (
 	_ "github.com/go-sql-driver/mysql" // This is required to be blank import
 )
 
-// TODO - This can be a collection of interfaces instead of struct
-
 // Container is a collection of all common application level concerns. Things like Logger, Connection Pool for Redis
-// etc which is shared across is placed here.
+// etc. which is shared across is placed here.
 type Container struct {
 	logging.Logger
 
@@ -34,16 +32,16 @@ type Container struct {
 	metricsManager metrics.Manager
 	PubSub         pubsub.Client
 
-	Redis *redis.Redis
-	SQL   *sql.DB
+	Redis Redis
+	SQL   DB
 	Mongo datasource.Mongo
 }
 
-func NewEmptyContainer() *Container {
-	return &Container{}
-}
-
 func NewContainer(conf config.Config) *Container {
+	if conf == nil {
+		return &Container{}
+	}
+
 	c := &Container{
 		appName:    conf.GetOrDefault("APP_NAME", "gofr-app"),
 		appVersion: conf.GetOrDefault("APP_VERSION", "dev"),
