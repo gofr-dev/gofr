@@ -23,6 +23,7 @@ export const navigation = [
             { title: 'Writing gRPC Server', href: '/docs/advanced-guide/grpc' },
             { title: 'Using Pub/Sub', href: '/docs/advanced-guide/using-publisher-subscriber' },
             { title: 'Injecting Databases', href: '/docs/advanced-guide/injecting-databases-drivers' },
+            { title: 'Dealing with Datasources', href: '/docs/advanced-guide/dealing-with-datasources' },
             // { title: 'Dealing with Remote Files', href: '/docs/advanced-guide/remote-files' },
             // { title: 'Supporting OAuth', href: '/docs/advanced-guide/oauth' },
             // { title: 'Creating a Static File Server', href: '/docs/advanced-guide/static-file-server' },
