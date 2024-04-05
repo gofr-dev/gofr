@@ -19,10 +19,8 @@ import (
 	_ "github.com/go-sql-driver/mysql" // This is required to be blank import
 )
 
-// TODO - This can be a collection of interfaces instead of struct
-
 // Container is a collection of all common application level concerns. Things like Logger, Connection Pool for Redis
-// etc which is shared across is placed here.
+// etc. which is shared across is placed here.
 type Container struct {
 	logging.Logger
 
