@@ -18,6 +18,7 @@ import (
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
+	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/http/middleware"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/metrics"
@@ -151,7 +152,7 @@ func (a *App) Run() {
 	}
 
 	// If subscriber is registered, block main go routine to wait for subscriber to receive messages
-	if a.subscriptionManager.subscriptions != nil {
+	if len(a.subscriptionManager.subscriptions) != 0 {
 		// Start subscribers concurrently using go-routines
 		for topic, handler := range a.subscriptionManager.subscriptions {
 			go a.subscriptionManager.startSubscriber(topic, handler)
@@ -223,6 +224,8 @@ func (a *App) add(method, pattern string, h Handler) {
 func (a *App) Metrics() metrics.Manager {
 	return a.container.Metrics()
 }
+
+func (a *App) Logger() logging.Logger { return a.container.Logger }
 
 // SubCommand adds a sub-command to the CLI application.
 // Can be used to create commands like "kubectl get" or "kubectl get ingress".
@@ -315,4 +318,8 @@ func (a *App) Subscribe(topic string, handler SubscribeFunc) {
 	}
 
 	a.subscriptionManager.subscriptions[topic] = handler
+}
+
+func (a *App) UseMongo(db datasource.Mongo) {
+	a.container.Mongo = db
 }
