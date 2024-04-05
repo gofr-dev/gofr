@@ -189,7 +189,7 @@ func TestApp_MigrateInvalidKeys(t *testing.T) {
 		app.Migrate(map[int64]migration.Migrate{1: {}})
 	})
 
-	assert.Contains(t, logs, `"message":"run failed! UP not defined for the following keys: [1]"`)
+	assert.Contains(t, logs, "migration run failed! UP not defined for the following keys: [1]")
 }
 
 func Test_otelErrorHandler(t *testing.T) {
