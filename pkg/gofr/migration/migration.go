@@ -18,7 +18,7 @@ type Migrate struct {
 func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 	invalidKeys, keys := getKeys(migrationsMap)
 	if len(invalidKeys) > 0 {
-		c.Errorf("Run Failed! UP not defined for the following keys: %v", invalidKeys)
+		c.Errorf("migration run failed! UP not defined for the following keys: %v", invalidKeys)
 
 		return
 	}
@@ -30,14 +30,14 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 	// Returning with an error log as migration would eventually fail as No databases are initialized.
 	// Pub/Sub is considered as initialized if its configurations are given.
 	if !ok {
-		c.Errorf("No Migrations are running as datasources are not initialized")
+		c.Errorf("no migrations are running as datasources are not initialized")
 
 		return
 	}
 
 	err := mg.checkAndCreateMigrationTable(c)
 	if err != nil {
-		c.Errorf("Failed to create migration table: %v", err)
+		c.Errorf("failed to create gofr_migration table, err: %v", err)
 
 		return
 	}
@@ -49,7 +49,7 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 			continue
 		}
 
-		c.Logger.Debugf("Running migration %v", currentMigration)
+		c.Logger.Debugf("running migration %v", currentMigration)
 
 		transactionsObjects := mg.beginTransaction(c)
 
@@ -69,7 +69,7 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 
 		err = mg.commitMigration(c, transactionsObjects)
 		if err != nil {
-			c.Errorf("Failed to migrationData migration: %v", err)
+			c.Errorf("failed to commit migration, err: %v", err)
 
 			mg.rollback(c, transactionsObjects)
 

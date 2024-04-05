@@ -107,31 +107,31 @@ func (mr *MockMigratorMockRecorder) rollback(c, data any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "rollback", reflect.TypeOf((*MockMigrator)(nil).rollback), c, data)
 }
 
-// MockDatasources is a mock of Datasources interface.
-type MockDatasources struct {
+// MockOptions is a mock of Options interface.
+type MockOptions struct {
 	ctrl     *gomock.Controller
-	recorder *MockDatasourcesMockRecorder
+	recorder *MockOptionsMockRecorder
 }
 
-// MockDatasourcesMockRecorder is the mock recorder for MockDatasources.
-type MockDatasourcesMockRecorder struct {
-	mock *MockDatasources
+// MockOptionsMockRecorder is the mock recorder for MockOptions.
+type MockOptionsMockRecorder struct {
+	mock *MockOptions
 }
 
-// NewMockDatasources creates a new mock instance.
-func NewMockDatasources(ctrl *gomock.Controller) *MockDatasources {
-	mock := &MockDatasources{ctrl: ctrl}
-	mock.recorder = &MockDatasourcesMockRecorder{mock}
+// NewMockOptions creates a new mock instance.
+func NewMockOptions(ctrl *gomock.Controller) *MockOptions {
+	mock := &MockOptions{ctrl: ctrl}
+	mock.recorder = &MockOptionsMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockDatasources) EXPECT() *MockDatasourcesMockRecorder {
+func (m *MockOptions) EXPECT() *MockOptionsMockRecorder {
 	return m.recorder
 }
 
 // apply mocks base method.
-func (m_2 *MockDatasources) apply(m Migrator) Migrator {
+func (m_2 *MockOptions) apply(m Migrator) Migrator {
 	m_2.ctrl.T.Helper()
 	ret := m_2.ctrl.Call(m_2, "apply", m)
 	ret0, _ := ret[0].(Migrator)
@@ -139,7 +139,7 @@ func (m_2 *MockDatasources) apply(m Migrator) Migrator {
 }
 
 // apply indicates an expected call of apply.
-func (mr *MockDatasourcesMockRecorder) apply(m any) *gomock.Call {
+func (mr *MockOptionsMockRecorder) apply(m any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "apply", reflect.TypeOf((*MockDatasources)(nil).apply), m)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "apply", reflect.TypeOf((*MockOptions)(nil).apply), m)
 }

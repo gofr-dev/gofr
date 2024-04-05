@@ -12,6 +12,24 @@ import (
 	gofrSql "gofr.dev/pkg/gofr/datasource/sql"
 )
 
+const (
+	createSQLGoFrMigrationsTable = `CREATE TABLE IF NOT EXISTS gofr_migrations (
+    version BIGINT not null ,
+    method VARCHAR(4) not null ,
+    start_time TIMESTAMP not null ,
+    duration BIGINT,
+    constraint primary_key primary key (version, method)
+);`
+
+	checkSQLGoFrMigrationsTable = `SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'gofr_migrations');`
+
+	getLastSQLGoFrMigration = `SELECT COALESCE(MAX(version), 0) FROM gofr_migrations;`
+
+	insertGoFrMigrationRowMySQL = `INSERT INTO gofr_migrations (version, method, start_time,duration) VALUES (?, ?, ?, ?);`
+
+	insertGoFrMigrationRowPostgres = `INSERT INTO gofr_migrations (version, method, start_time,duration) VALUES ($1, $2, $3, $4);`
+)
+
 type db interface {
 	Query(query string, args ...interface{}) (*sql.Rows, error)
 	QueryRow(query string, args ...interface{}) *sql.Row
@@ -35,6 +53,7 @@ func (s *sqlDB) Query(query string, args ...interface{}) (*sql.Rows, error) {
 func (s *sqlDB) QueryRow(query string, args ...interface{}) *sql.Row {
 	return s.db.QueryRow(query, args...)
 }
+
 func (s *sqlDB) QueryRowContext(ctx context.Context, query string, args ...interface{}) *sql.Row {
 	return s.db.QueryRowContext(ctx, query, args...)
 }
@@ -177,21 +196,3 @@ func (d sqlMigrator) rollback(c *container.Container, data migrationData) {
 
 	d.Migrator.rollback(c, data)
 }
-
-const (
-	createSQLGoFrMigrationsTable = `CREATE TABLE IF NOT EXISTS gofr_migrations (
-    version BIGINT not null ,
-    method VARCHAR(4) not null ,
-    start_time TIMESTAMP not null ,
-    duration BIGINT,
-    constraint primary_key primary key (version, method)
-);`
-
-	checkSQLGoFrMigrationsTable = `SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'gofr_migrations');`
-
-	getLastSQLGoFrMigration = `SELECT COALESCE(MAX(version), 0) FROM gofr_migrations;`
-
-	insertGoFrMigrationRowMySQL = `INSERT INTO gofr_migrations (version, method, start_time,duration) VALUES (?, ?, ?, ?);`
-
-	insertGoFrMigrationRowPostgres = `INSERT INTO gofr_migrations (version, method, start_time,duration) VALUES ($1, $2, $3, $4);`
-)

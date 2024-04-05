@@ -4,6 +4,7 @@ import (
 	"time"
 
 	goRedis "github.com/redis/go-redis/v9"
+
 	"gofr.dev/pkg/gofr/container"
 	gofrSql "gofr.dev/pkg/gofr/datasource/sql"
 )
@@ -26,7 +27,7 @@ type Migrator interface {
 	rollback(c *container.Container, data migrationData)
 }
 
-type Datasources interface {
+type Options interface {
 	apply(m Migrator) Migrator
 }
 
