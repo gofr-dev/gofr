@@ -68,7 +68,7 @@ jobs:
       kafka:
         image: wurstmeister/kafka
         ports:
-          - "2008:9092"
+          - "9092:9092"
         env:
           KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT://localhost:9092'
           KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT'
