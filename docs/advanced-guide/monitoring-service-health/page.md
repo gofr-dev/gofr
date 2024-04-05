@@ -28,7 +28,7 @@ To override this endpoint, pass the following option while registering HTTP Serv
 		}
 ```
 
-### 2. Health-Check - /.well-known/health-check
+### 2. Health-Check - /.well-known/health
 
 It is an endpoint which returns whether the service is UP or DOWN along with stats, host, status about the dependent datasources and services.
 
