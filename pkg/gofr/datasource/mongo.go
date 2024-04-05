@@ -6,10 +6,12 @@ import (
 
 // Mongo is an interface representing a MongoDB database client with common CRUD operations.
 type Mongo interface {
-	// Find executes a query to find documents in a collection based on a filter and stores the results into the provided results interface.
+	// Find executes a query to find documents in a collection based on a filter and stores the results
+	// into the provided results interface.
 	Find(ctx context.Context, collection string, filter interface{}, results interface{}) error
 
-	// FindOne executes a query to find a single document in a collection based on a filter and stores the result into the provided result interface.
+	// FindOne executes a query to find a single document in a collection based on a filter and stores the result
+	// into the provided result interface.
 	FindOne(ctx context.Context, collection string, filter interface{}, result interface{}) error
 
 	// InsertOne inserts a single document into a collection.

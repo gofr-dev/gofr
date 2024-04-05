@@ -152,7 +152,7 @@ func (a *App) Run() {
 	}
 
 	// If subscriber is registered, block main go routine to wait for subscriber to receive messages
-	if a.subscriptionManager.subscriptions != nil {
+	if len(a.subscriptionManager.subscriptions) != 0 {
 		// Start subscribers concurrently using go-routines
 		for topic, handler := range a.subscriptionManager.subscriptions {
 			go a.subscriptionManager.startSubscriber(topic, handler)
