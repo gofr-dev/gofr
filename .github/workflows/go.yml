@@ -40,7 +40,7 @@ jobs:
 
       - name: Test
         run: |
-          export GOFR_ENV=test
+          export APP_ENV=test
           go test gofr.dev/pkg/gofr/migration... -v -short -coverprofile profile.cov -coverpkg=gofr.dev/pkg/gofr/migration...
 
           go tool cover -func profile.cov
@@ -113,7 +113,7 @@ jobs:
 
       - name: Test
         run: |
-          export GOFR_ENV=test
+          export APP_ENV=test
           go test gofr.dev/examples/... -v -short -coverprofile packageWithpbgo.cov -coverpkg=gofr.dev/examples/...
           grep -vE '^gofr\.dev\/.*\.pb\.go' packageWithpbgo.cov > profile.cov
           go tool cover -func profile.cov
@@ -150,7 +150,7 @@ jobs:
 
       - name: Test
         run: |
-          export GOFR_ENV=test
+          export APP_ENV=test
           go test gofr.dev/pkg/... -tags migration -v -short -coverprofile packageWithMigration.cov -coverpkg=gofr.dev/pkg/...
           grep -v 'gofr.dev/pkg/gofr/migration' packageWithMigration.cov > packageWithoutMigration.cov
           grep -v 'google/mock_interfaces\.go' packageWithoutMigration.cov > profile.cov
