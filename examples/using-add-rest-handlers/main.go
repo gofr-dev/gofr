@@ -1,7 +1,7 @@
 package main
 
 import (
-	"gofr.dev/examples/using-crud-from-struct/migrations"
+	"gofr.dev/examples/using-add-rest-handlers/migrations"
 	"gofr.dev/pkg/gofr"
 )
 
@@ -24,8 +24,8 @@ func main() {
 	// Add migrations to run
 	a.Migrate(migrations.All())
 
-	// CRUDFromStruct creates CRUD handles for the given entity
-	err := a.CRUDFromStruct(&user{})
+	// AddRESTHandlers creates CRUD handles for the given entity
+	err := a.AddRESTHandlers(&user{})
 	if err != nil {
 		return
 	}

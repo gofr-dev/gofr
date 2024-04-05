@@ -1,4 +1,4 @@
-# CRUD From Struct Example
+# AddRESTHandlers Example
 
 This GoFr example demonstrates a simple http server with CRUD operations which are created by GoFr using the given struct.
 

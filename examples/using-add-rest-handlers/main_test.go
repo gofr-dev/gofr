@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestIntegration_CRUDFromStruct(t *testing.T) {
+func TestIntegration_AddRESTHandlers(t *testing.T) {
 	const host = "http://localhost:9090"
 	go main()
 	time.Sleep(time.Second * 1) // Giving some time to start the server

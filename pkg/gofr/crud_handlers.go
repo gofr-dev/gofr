@@ -8,7 +8,7 @@ import (
 )
 
 var (
-	errInvalidObject  = errors.New("unexpected object given for CRUDFromStruct")
+	errInvalidObject  = errors.New("unexpected object given for AddRESTHandlers")
 	errEntityNotFound = errors.New("entity not found")
 )
 

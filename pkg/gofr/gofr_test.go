@@ -263,7 +263,7 @@ func TestEnableBasicAuthWithFunc(t *testing.T) {
 	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode, "TestEnableBasicAuthWithFunc Failed!")
 }
 
-func Test_CRUDFromStruct(t *testing.T) {
+func Test_AddRESTHandlers(t *testing.T) {
 	app := New()
 
 	type user struct {
@@ -283,7 +283,7 @@ func Test_CRUDFromStruct(t *testing.T) {
 	}
 
 	for i, tc := range tests {
-		err := app.CRUDFromStruct(tc.input)
+		err := app.AddRESTHandlers(tc.input)
 
 		assert.Equal(t, tc.err, err, "TEST[%d], Failed.\n%s", i, tc.desc)
 	}

@@ -1,4 +1,4 @@
-# CRUD From Struct
+# Add REST Handlers
 
 GoFr simplifies the process of implementing CRUD (Create, Read, Update, Delete) operations by enabling the automatic generation of handlers directly from Go structs.
 This feature eliminates the need for writing repetitive boilerplate code, allowing developers to focus on application logic.
@@ -57,7 +57,7 @@ func main() {
 	a.Migrate(migrations.All())
 
 	// CRUDFromStruct creates CRUD handles for the given entity
-	err := a.CRUDFromStruct(&user{})
+	err := a.AddRESTHandlers(&user{})
 	if err != nil {
 		return
 	}

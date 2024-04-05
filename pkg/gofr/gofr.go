@@ -317,10 +317,10 @@ func (a *App) Subscribe(topic string, handler SubscribeFunc) {
 	a.subscriptionManager.subscriptions[topic] = handler
 }
 
-func (a *App) CRUDFromStruct(object interface{}) error {
+func (a *App) AddRESTHandlers(object interface{}) error {
 	cfg, err := scanEntity(object)
 	if err != nil {
-		a.container.Logger.Errorf("invalid object for CRUDFromStruct")
+		a.container.Logger.Errorf("invalid object for AddRESTHandlers")
 
 		return err
 	}
