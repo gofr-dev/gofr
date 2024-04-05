@@ -63,7 +63,7 @@ func Test_scanEntity(t *testing.T) {
 }
 
 func Test_CreateHandler(t *testing.T) {
-	cont := container.NewEmptyContainer()
+	cont := container.NewContainer(nil)
 
 	type user struct {
 		ID   int    `json:"id"`
@@ -132,7 +132,7 @@ func Test_CreateHandler(t *testing.T) {
 }
 
 func Test_GetAllHandler(t *testing.T) {
-	cont := container.NewEmptyContainer()
+	cont := container.NewContainer(nil)
 
 	type user struct {
 		ID   int    `json:"id"`
@@ -201,7 +201,7 @@ func Test_GetAllHandler(t *testing.T) {
 }
 
 func Test_GetHandler(t *testing.T) {
-	cont := container.NewEmptyContainer()
+	cont := container.NewContainer(nil)
 
 	type user struct {
 		ID   int    `json:"id"`
@@ -268,7 +268,7 @@ func Test_GetHandler(t *testing.T) {
 }
 
 func Test_UpdateHandler(t *testing.T) {
-	cont := container.NewEmptyContainer()
+	cont := container.NewContainer(nil)
 
 	type user struct {
 		ID   int    `json:"id"`
@@ -336,7 +336,7 @@ func Test_UpdateHandler(t *testing.T) {
 }
 
 func Test_DeleteHandler(t *testing.T) {
-	cont := container.NewEmptyContainer()
+	cont := container.NewContainer(nil)
 
 	db, mock, mockMetrics := gofrSql.NewMockSQLDB(t)
 	defer db.Close()
