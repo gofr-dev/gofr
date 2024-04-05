@@ -19,7 +19,7 @@ func TestMigration_InvalidKeys(t *testing.T) {
 		}, c)
 	})
 
-	assert.Contains(t, logs, "UP not defined for the following keys: [1]")
+	assert.Contains(t, logs, "migration run failed! UP not defined for the following keys: [1]")
 }
 
 func TestMigration_NoDatasource(t *testing.T) {
