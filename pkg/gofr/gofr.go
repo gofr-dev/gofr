@@ -94,7 +94,7 @@ func NewCMD() *App {
 	app := &App{}
 	app.readConfig(true)
 
-	app.container = container.NewEmptyContainer()
+	app.container = container.NewContainer(nil)
 	app.container.Logger = logging.NewFileLogger(app.Config.Get("CMD_LOGS_FILE"))
 	app.cmd = &cmd{}
 
