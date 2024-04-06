@@ -39,13 +39,12 @@ func UploadHandler(c *gofr.Context) (interface{}, error) {
 		return nil, err
 	}
 
-	// create local copies of the zipped files in tmp folder
-	err = d.Compressed.CreateLocalCopies("tmp")
-	if err != nil {
-		return nil, err
-	}
-
-	defer os.RemoveAll("tmp")
+	// Defer removing the temporary folder after the function exits
+	defer func() {
+		if err := os.RemoveAll("tmp"); err != nil {
+			fmt.Println("Error removing tmp folder:", err)
+		}
+	}()
 
 	f, err := d.FileHeader.Open()
 	if err != nil {
@@ -61,5 +60,5 @@ func UploadHandler(c *gofr.Context) (interface{}, error) {
 	}
 
 	// return the number of compressed files recieved
-	return fmt.Sprintf("zipped files: %d, len of file `a`: %d", len(d.Compressed.Files), len(content)), nil
+	return fmt.Sprintf("Zipped files: %d, Length of generic file `a`: %d", len(d.Compressed.Files), len(content)), nil
 }
