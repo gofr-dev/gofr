@@ -12,6 +12,24 @@ import (
 	gofrSql "gofr.dev/pkg/gofr/datasource/sql"
 )
 
+const (
+	createSQLGoFrMigrationsTable = `CREATE TABLE IF NOT EXISTS gofr_migrations (
+    version BIGINT not null ,
+    method VARCHAR(4) not null ,
+    start_time TIMESTAMP not null ,
+    duration BIGINT,
+    constraint primary_key primary key (version, method)
+);`
+
+	checkSQLGoFrMigrationsTable = `SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'gofr_migrations');`
+
+	getLastSQLGoFrMigration = `SELECT COALESCE(MAX(version), 0) FROM gofr_migrations;`
+
+	insertGoFrMigrationRowMySQL = `INSERT INTO gofr_migrations (version, method, start_time,duration) VALUES (?, ?, ?, ?);`
+
+	insertGoFrMigrationRowPostgres = `INSERT INTO gofr_migrations (version, method, start_time,duration) VALUES ($1, $2, $3, $4);`
+)
+
 type db interface {
 	Query(query string, args ...interface{}) (*sql.Rows, error)
 	QueryRow(query string, args ...interface{}) *sql.Row
@@ -35,6 +53,7 @@ func (s *sqlDB) Query(query string, args ...interface{}) (*sql.Rows, error) {
 func (s *sqlDB) QueryRow(query string, args ...interface{}) *sql.Row {
 	return s.db.QueryRow(query, args...)
 }
+
 func (s *sqlDB) QueryRowContext(ctx context.Context, query string, args ...interface{}) *sql.Row {
 	return s.db.QueryRowContext(ctx, query, args...)
 }
@@ -47,7 +66,30 @@ func (s *sqlDB) ExecContext(ctx context.Context, query string, args ...interface
 	return s.db.ExecContext(ctx, query, args...)
 }
 
-func ensureSQLMigrationTableExists(c *container.Container) error {
+func insertMigrationRecord(tx *gofrSql.Tx, query string, version int64, startTime time.Time) error {
+	_, err := tx.Exec(query, version, "UP", startTime, time.Since(startTime).Milliseconds())
+
+	return err
+}
+
+type sqlMigratorObject struct {
+	db
+}
+
+type sqlMigrator struct {
+	db
+
+	Migrator
+}
+
+func (s sqlMigratorObject) apply(m Migrator) Migrator {
+	return sqlMigrator{
+		db:       s.db,
+		Migrator: m,
+	}
+}
+
+func (d sqlMigrator) checkAndCreateMigrationTable(c *container.Container) error {
 	// this can be replaced with having switch case only in the exists variable - but we have chosen to differentiate based
 	// on driver because if new dialect comes will follow the same, also this complete has to be refactored as mentioned in RUN.
 	switch c.SQL.Driver().(type) {
@@ -79,10 +121,10 @@ func ensureSQLMigrationTableExists(c *container.Container) error {
 		}
 	}
 
-	return nil
+	return d.Migrator.checkAndCreateMigrationTable(c)
 }
 
-func getSQLLastMigration(c *container.Container) int64 {
+func (d sqlMigrator) getLastMigration(c *container.Container) int64 {
 	var lastMigration int64
 
 	err := c.SQL.QueryRowContext(context.Background(), getLastSQLGoFrMigration).Scan(&lastMigration)
@@ -90,71 +132,67 @@ func getSQLLastMigration(c *container.Container) int64 {
 		return 0
 	}
 
+	c.Debugf("SQL last migration fetched value is: %v", lastMigration)
+
+	lm2 := d.Migrator.getLastMigration(c)
+
+	if lm2 > lastMigration {
+		return lm2
+	}
+
 	return lastMigration
 }
 
-func insertMigrationRecord(tx *gofrSql.Tx, query string, version int64, startTime time.Time) error {
-	_, err := tx.Exec(query, version, "UP", startTime, time.Since(startTime).Milliseconds())
-
-	return err
-}
-
-func rollbackAndLog(c *container.Container, version int64, tx *gofrSql.Tx, err error) {
-	c.Logger.Error(err)
-
-	if tx == nil {
-		return
-	}
-
-	if err := tx.Rollback(); err != nil {
-		c.Logger.Error("unable to rollback transaction: %v", err)
-	}
-
-	c.Logger.Errorf("migration %v rolled back", version)
-}
-
-func sqlPostRun(c *container.Container, tx *gofrSql.Tx, currentMigration int64, start time.Time) {
+func (d sqlMigrator) commitMigration(c *container.Container, data migrationData) error {
 	switch c.SQL.Driver().(type) {
 	case *mysql.MySQLDriver:
-		err := insertMigrationRecord(tx, insertGoFrMigrationRowMySQL, currentMigration, start)
+		err := insertMigrationRecord(data.SQLTx, insertGoFrMigrationRowMySQL, data.MigrationNumber, data.StartTime)
 		if err != nil {
-			rollbackAndLog(c, currentMigration, tx, err)
-
-			return
+			return err
 		}
-	case *pq.Driver:
-		err := insertMigrationRecord(tx, insertGoFrMigrationRowPostgres, currentMigration, start)
-		if err != nil {
-			rollbackAndLog(c, currentMigration, tx, err)
 
-			return
+	case *pq.Driver:
+		err := insertMigrationRecord(data.SQLTx, insertGoFrMigrationRowPostgres, data.MigrationNumber, data.StartTime)
+		if err != nil {
+			return err
 		}
 	}
 
 	// Commit transaction
-	if err := tx.Commit(); err != nil {
-		c.Logger.Error("unable to commit transaction: %v", err)
+	if err := data.SQLTx.Commit(); err != nil {
+		return err
+	}
 
+	return d.Migrator.commitMigration(c, data)
+}
+
+func (d sqlMigrator) beginTransaction(c *container.Container) migrationData {
+	sqlTx, err := c.SQL.Begin()
+	if err != nil {
+		c.Errorf("unable to begin transaction: %v", err)
+
+		return migrationData{}
+	}
+
+	cmt := d.Migrator.beginTransaction(c)
+
+	cmt.SQLTx = sqlTx
+
+	c.Debug("SQL Transaction begin successful")
+
+	return cmt
+}
+
+func (d sqlMigrator) rollback(c *container.Container, data migrationData) {
+	if data.SQLTx == nil {
 		return
 	}
 
-	c.Logger.Infof("migration %v ran successfully", currentMigration)
+	if err := data.SQLTx.Rollback(); err != nil {
+		c.Error("unable to rollback transaction: %v", err)
+	}
+
+	c.Errorf("Migration %v failed and rolled back", data.MigrationNumber)
+
+	d.Migrator.rollback(c, data)
 }
-
-const (
-	createSQLGoFrMigrationsTable = `CREATE TABLE IF NOT EXISTS gofr_migrations (
-    version BIGINT not null ,
-    method VARCHAR(4) not null ,
-    start_time TIMESTAMP not null ,
-    duration BIGINT,
-    constraint primary_key primary key (version, method)
-);`
-
-	checkSQLGoFrMigrationsTable = `SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'gofr_migrations');`
-
-	getLastSQLGoFrMigration = `SELECT COALESCE(MAX(version), 0) FROM gofr_migrations;`
-
-	insertGoFrMigrationRowMySQL = `INSERT INTO gofr_migrations (version, method, start_time,duration) VALUES (?, ?, ?, ?);`
-
-	insertGoFrMigrationRowPostgres = `INSERT INTO gofr_migrations (version, method, start_time,duration) VALUES ($1, $2, $3, $4);`
-)

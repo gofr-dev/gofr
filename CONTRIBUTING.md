@@ -53,27 +53,18 @@ Some services will be required to pass the entire test suite. We recommend using
 
 docker run --name gofr-mysql -e MYSQL_ROOT_PASSWORD=password -p 2001:3306 -d mysql:8.0.30
 docker run --name gofr-redis -p 2002:6379 -d redis:7.0.5
-docker run --name gofr-cassandra -d -p 2003:9042 cassandra:4.1
-docker run --name gofr-solr -p 2020:8983 solr:8 -DzkRun
-docker run --name gofr-mongo -d -e MONGO_INITDB_ROOT_USERNAME=admin -e MONGO_INITDB_ROOT_PASSWORD=admin123 -p 2004:27017 mongo:6.0.2
 docker run --name gofr-zipkin -d -p 2005:9411 openzipkin/zipkin:2
 docker run --name gofr-pgsql -d -e POSTGRES_DB=customers -e POSTGRES_PASSWORD=root123 -p 2006:5432 postgres:15.1
 docker run --name gofr-mssql -d -e 'ACCEPT_EULA=Y' -e 'SA_PASSWORD=reallyStrongPwd123' -p 2007:1433 mcr.microsoft.com/azure-sql-edge
-docker run --rm -d -p 2181:2181 -p 443:2008 -p 2008:2008 -p 2009:2009 \
-    --env ADVERTISED_LISTENERS=PLAINTEXT://localhost:443,INTERNAL://localhost:2009 \
-    --env LISTENERS=PLAINTEXT://0.0.0.0:2008,INTERNAL://0.0.0.0:2009 \
-    --env SECURITY_PROTOCOL_MAP=PLAINTEXT:PLAINTEXT,INTERNAL:PLAINTEXT \
-    --env INTER_BROKER=INTERNAL \
-    --env KAFKA_CREATE_TOPICS="test-topic,test:36:1,krisgeus:12:1:compact" \
-    --name gofr-kafka \
-    krisgeus/docker-kafka
-
-docker run --name gofr-yugabyte -p 2011:9042 -d yugabytedb/yugabyte:2.14.5.0-b18 bin/yugabyted start --daemon=false  
-docker run -d --name gofr-elasticsearch -p 2012:9200 -p 2013:9300 -e "discovery.type=single-node" elasticsearch:6.8.6 
-docker run -d --name gofr-dynamodb -p 2021:8000 amazon/dynamodb-local:1.22.0
-docker run -d --name=gofr-cockroachdb -p 26257:26257 cockroachdb/cockroach:v21.2.4 start-single-node --insecure
-docker run --name=gcloud-emulator -d -p 8086:8086 gcr.io/google.com/cloudsdktool/google-cloud-cli:emulators gcloud beta emulators pubsub start --project=test123 \
-    --host-port=0.0.0.0:8086
+docker run --name zookeeper -e ZOOKEEPER_CLIENT_PORT=2181 -e ZOOKEEPER_TICK_TIME=2000 confluentinc/cp-zookeeper:7.0.1
+docker run --name broker -p 9092:9092 --link zookeeper -e KAFKA_BROKER_ID=1 \
+-e KAFKA_ZOOKEEPER_CONNECT=zookeeper:2181 \
+-e KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=PLAINTEXT:PLAINTEXT,PLAINTEXT_INTERNAL:PLAINTEXT \
+-e KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://localhost:9092,PLAINTEXT_INTERNAL://broker:29092 \
+-e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1 \
+-e KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1 \
+-e KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1 \
+confluentinc/cp-kafka:7.0.1
 
 Please note that the recommended local port for the services are different than the actual ports. This is done to avoid conflict with the local installation on developer machines. This method also allows a developer to work on multiple projects which uses the same services but bound on different ports. One can choose to change the port for these services. Just remember to add the same in configs/.local.env, if you decide to do that.
 ```
