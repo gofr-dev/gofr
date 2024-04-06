@@ -1,10 +1,8 @@
 package migration
 
 import (
+	"reflect"
 	"time"
-
-	goRedis "github.com/redis/go-redis/v9"
-	gofrSql "gofr.dev/pkg/gofr/datasource/sql"
 
 	"github.com/gogo/protobuf/sortkeys"
 
@@ -17,92 +15,65 @@ type Migrate struct {
 	UP MigrateFunc
 }
 
-// TODO : Use composition to handler different databases which would also remove this nolint
-//
-//nolint:gocyclo // reducing complexity may hamper readability.
 func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 	invalidKeys, keys := getKeys(migrationsMap)
 	if len(invalidKeys) > 0 {
-		c.Logger.Errorf("run failed! UP not defined for the following keys: %v", invalidKeys)
+		c.Errorf("migration run failed! UP not defined for the following keys: %v", invalidKeys)
 
 		return
 	}
 
 	sortkeys.Int64s(keys)
 
-	var lastMigration int64
+	ds, mg, ok := getMigrator(c)
 
-	if c.SQL != nil {
-		err := ensureSQLMigrationTableExists(c)
-		if err != nil {
-			c.Logger.Errorf("unable to verify sql migration table due to: %v", err)
+	// Returning with an error log as migration would eventually fail as No databases are initialized.
+	// Pub/Sub is considered as initialized if its configurations are given.
+	if !ok {
+		c.Errorf("no migrations are running as datasources are not initialized")
 
-			return
-		}
-
-		lastMigration = getSQLLastMigration(c)
+		return
 	}
 
-	if c.Redis != nil {
-		redisLastMigration := getRedisLastMigration(c)
+	err := mg.checkAndCreateMigrationTable(c)
+	if err != nil {
+		c.Errorf("failed to create gofr_migration table, err: %v", err)
 
-		switch {
-		case redisLastMigration == -1:
-			return
-
-		case redisLastMigration > lastMigration:
-			lastMigration = redisLastMigration
-		}
+		return
 	}
+
+	lastMigration := mg.getLastMigration(c)
 
 	for _, currentMigration := range keys {
 		if currentMigration <= lastMigration {
 			continue
 		}
 
-		start := time.Now()
+		c.Logger.Debugf("running migration %v", currentMigration)
 
-		var (
-			datasource Datasource
-			sqlTx      *gofrSql.Tx
-			redisTx    goRedis.Pipeliner
-			err        error
-		)
+		transactionsObjects := mg.beginTransaction(c)
 
-		if c.PubSub != nil {
-			datasource.PubSub = newPubSub(c.PubSub)
-		}
+		ds.SQL = newMysql(transactionsObjects.SQLTx)
+		ds.Redis = newRedis(transactionsObjects.RedisTx)
+		ds.PubSub = newPubSub(c.PubSub)
 
-		if c.SQL != nil {
-			sqlTx, err = c.SQL.Begin()
-			if err != nil {
-				c.Logger.Errorf("unable to begin transaction: %v", err)
+		transactionsObjects.StartTime = time.Now()
+		transactionsObjects.MigrationNumber = currentMigration
 
-				return
-			}
-
-			datasource.SQL = newMysql(sqlTx)
-		}
-
-		if c.Redis != nil {
-			redisTx = c.Redis.TxPipeline()
-
-			datasource.Redis = newRedis(redisTx)
-		}
-
-		err = migrationsMap[currentMigration].UP(datasource)
+		err = migrationsMap[currentMigration].UP(ds)
 		if err != nil {
-			rollbackAndLog(c, currentMigration, sqlTx, err)
+			mg.rollback(c, transactionsObjects)
 
 			return
 		}
 
-		if c.SQL != nil {
-			sqlPostRun(c, sqlTx, currentMigration, start)
-		}
+		err = mg.commitMigration(c, transactionsObjects)
+		if err != nil {
+			c.Errorf("failed to commit migration, err: %v", err)
 
-		if c.Redis != nil {
-			redisPostRun(c, redisTx, currentMigration, start)
+			mg.rollback(c, transactionsObjects)
+
+			return
 		}
 	}
 }
@@ -122,4 +93,42 @@ func getKeys(migrationsMap map[int64]Migrate) (invalidKey, keys []int64) {
 	}
 
 	return invalidKey, keys
+}
+
+func getMigrator(c *container.Container) (Datasource, Migrator, bool) {
+	var (
+		ok bool
+		ds Datasource
+		mg Migrator = ds
+	)
+
+	if !isNil(c.SQL) {
+		ok = true
+
+		ds.SQL = c.SQL
+
+		mg = sqlMigratorObject{ds.SQL}.apply(mg)
+	}
+
+	if !isNil(c.Redis) {
+		ok = true
+
+		ds.Redis = c.Redis
+
+		mg = redisMigratorObject{ds.Redis}.apply(mg)
+	}
+
+	if c.PubSub != nil {
+		ok = true
+	}
+
+	return ds, mg, ok
+}
+
+func isNil(i interface{}) bool {
+	// Get the value of the interface
+	val := reflect.ValueOf(i)
+
+	// If the interface is not assigned or is nil, return true
+	return !val.IsValid() || val.IsNil()
 }
