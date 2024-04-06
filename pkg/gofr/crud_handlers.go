@@ -12,13 +12,6 @@ var (
 	errEntityNotFound = errors.New("entity not found")
 )
 
-// EntityNotFound is an error type for indicating when an entity is not found.
-type EntityNotFound struct{}
-
-func (e EntityNotFound) Error() string {
-	return "entity not found!"
-}
-
 type Create interface {
 	Create(c *Context) (interface{}, error)
 }

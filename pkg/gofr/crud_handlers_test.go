@@ -63,16 +63,15 @@ func Test_scanEntity(t *testing.T) {
 }
 
 func Test_CreateHandler(t *testing.T) {
-	cont := container.NewContainer(nil)
+	c, mocks := container.NewMockContainer(t)
+
+	ctrl := gomock.NewController(t)
+	mockMetrics := gofrSql.NewMockMetrics(ctrl)
 
 	type user struct {
 		ID   int    `json:"id"`
 		Name string `json:"name"`
 	}
-
-	db, mock, mockMetrics := gofrSql.NewMockSQLDB(t)
-	defer db.Close()
-	cont.SQL = db
 
 	e := entity{
 		name:       "user",
@@ -81,67 +80,44 @@ func Test_CreateHandler(t *testing.T) {
 	}
 
 	tests := []struct {
-		desc        string
-		reqBody     []byte
-		id          int
-		mockErr     error
-		expectedRes interface{}
-		expectedErr error
+		desc         string
+		reqBody      []byte
+		id           int
+		mockErr      error
+		expectedResp interface{}
+		expectedErr  error
 	}{
-		{
-			desc:        "Success Case",
-			reqBody:     []byte(`{"id":1,"name":"goFr"}`),
-			id:          1,
-			mockErr:     nil,
-			expectedRes: "user successfully created with id: 1",
-			expectedErr: nil,
-		},
-		{
-			desc:        "Bing Error",
-			reqBody:     []byte(`{"id":"2"}`),
-			id:          2,
-			mockErr:     nil,
-			expectedRes: nil,
-			expectedErr: &json.UnmarshalTypeError{Value: "string", Offset: 9, Struct: "user", Field: "id"},
-		},
-		{
-			desc:        "DB Error Case",
-			reqBody:     []byte(`{"id":3,"name":"goFr"}`),
-			id:          3,
-			mockErr:     errTest,
-			expectedRes: nil,
-			expectedErr: errTest,
-		},
+		{"success case", []byte(`{"id":1,"name":"goFr"}`), 1, nil,
+			"user successfully created with id: 1", nil},
+		{"bind error", []byte(`{"id":"2"}`), 2, nil, nil,
+			&json.UnmarshalTypeError{Value: "string", Offset: 9, Struct: "user", Field: "id"}},
 	}
 
 	for i, tc := range tests {
-		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats", gomock.Any(), "type", "INSERT").
-			MaxTimes(2)
+		ctx := createTestContext(http.MethodGet, "/users", "", tc.reqBody, c)
 
-		mock.ExpectExec("INSERT INTO user (ID, Name) VALUES (?, ?)").WithArgs(tc.id, "goFr").
-			WillReturnResult(sqlmock.NewResult(1, 1)).WillReturnError(tc.expectedErr)
+		mockMetrics.EXPECT().RecordHistogram(ctx, "app_sql_stats", gomock.Any(), "type", "INSERT").MaxTimes(2)
+		mocks.SQL.EXPECT().ExecContext(ctx, "INSERT INTO user (ID, Name) VALUES (?, ?)", tc.id, "goFr").MaxTimes(2)
 
-		c := createTestContext(http.MethodGet, "/users", "", tc.reqBody, cont)
+		resp, err := e.Create(ctx)
 
-		res, err := e.Create(c)
-
-		assert.Equal(t, tc.expectedRes, res, "TEST[%d], Failed.\n%s", i, tc.desc)
+		assert.Equal(t, tc.expectedResp, resp, "TEST[%d], Failed.\n%s", i, tc.desc)
 
 		assert.IsType(t, tc.expectedErr, err, "TEST[%d], Failed.\n%s", i, tc.desc)
 	}
 }
 
 func Test_GetAllHandler(t *testing.T) {
-	cont := container.NewContainer(nil)
+	c := container.NewContainer(nil)
+
+	db, mock, _ := gofrSql.NewSQLMocks(t)
+	defer db.Close()
+	c.SQL = db
 
 	type user struct {
 		ID   int    `json:"id"`
 		Name string `json:"name"`
 	}
-
-	db, mock, _ := gofrSql.NewMockSQLDB(t)
-	defer db.Close()
-	cont.SQL = db
 
 	e := entity{
 		name:       "user",
@@ -150,67 +126,47 @@ func Test_GetAllHandler(t *testing.T) {
 	}
 
 	tests := []struct {
-		desc        string
-		mockRows    *sqlmock.Rows
-		mockErr     error
-		expectedRes interface{}
-		expectedErr error
+		desc         string
+		mockResp     *sqlmock.Rows
+		mockErr      error
+		expectedResp interface{}
+		expectedErr  error
 	}{
-		{
-			desc: "Success Case",
-			mockRows: sqlmock.NewRows([]string{"id", "name"}).
-				AddRow(1, "John Doe").
-				AddRow(2, "Jane Doe"),
-			expectedRes: []interface{}{
-				&user{ID: 1, Name: "John Doe"},
-				&user{ID: 2, Name: "Jane Doe"},
-			},
-			expectedErr: nil,
-		},
-		{
-			desc:        "Error Retrieving Rows",
-			mockRows:    sqlmock.NewRows([]string{"id", "name"}),
-			mockErr:     errTest,
-			expectedRes: nil,
-			expectedErr: errTest,
-		},
-		{
-			desc: "Error Scanning Rows",
-			mockRows: sqlmock.NewRows([]string{"id", "name"}).
-				AddRow("as", ""),
-			expectedRes: nil,
-			expectedErr: errSQLScan,
-		},
+		{"success case", sqlmock.NewRows([]string{"id", "name"}).AddRow(1, "John Doe").AddRow(2, "Jane Doe"),
+			nil, []interface{}{&user{ID: 1, Name: "John Doe"}, &user{ID: 2, Name: "Jane Doe"}}, nil},
+		{"error retrieving rows", sqlmock.NewRows([]string{"id", "name"}), errTest, nil, errTest},
+		{"error scanning rows", sqlmock.NewRows([]string{"id", "name"}).AddRow("as", ""),
+			nil, nil, errSQLScan},
 	}
 
-	for i, tt := range tests {
-		mock.ExpectQuery("SELECT * FROM user").WillReturnRows(tt.mockRows).WillReturnError(tt.mockErr)
+	for i, tc := range tests {
+		ctx := createTestContext(http.MethodGet, "/users", "", nil, c)
 
-		c := createTestContext(http.MethodGet, "/users", "", nil, cont)
+		mock.ExpectQuery("SELECT * FROM user").WillReturnRows(tc.mockResp).WillReturnError(tc.mockErr)
 
-		res, err := e.GetAll(c)
+		resp, err := e.GetAll(ctx)
 
-		assert.Equal(t, tt.expectedRes, res, "TEST[%d], Failed.\n%s", i, tt.desc)
+		assert.Equal(t, tc.expectedResp, resp, "TEST[%d], Failed.\n%s", i, tc.desc)
 
-		if tt.expectedErr != nil {
-			assert.Equal(t, tt.expectedErr.Error(), err.Error(), "TEST[%d], Failed.\n%s", i, tt.desc)
+		if tc.expectedErr != nil {
+			assert.Equal(t, tc.expectedErr.Error(), err.Error(), "TEST[%d], Failed.\n%s", i, tc.desc)
 		} else {
-			assert.Nil(t, err, "TEST[%d], Failed.\n%s", i, tt.desc)
+			assert.Nil(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
 		}
 	}
 }
 
 func Test_GetHandler(t *testing.T) {
-	cont := container.NewContainer(nil)
+	c := container.NewContainer(nil)
+
+	db, mock, mockMetrics := gofrSql.NewSQLMocks(t)
+	defer db.Close()
+	c.SQL = db
 
 	type user struct {
 		ID   int    `json:"id"`
 		Name string `json:"name"`
 	}
-
-	db, mock, mockMetrics := gofrSql.NewMockSQLDB(t)
-	defer db.Close()
-	cont.SQL = db
 
 	e := entity{
 		name:       "user",
@@ -219,65 +175,48 @@ func Test_GetHandler(t *testing.T) {
 	}
 
 	tests := []struct {
-		desc        string
-		id          string
-		mockRow     *sqlmock.Rows
-		expectedRes interface{}
-		expectedErr error
+		desc         string
+		id           string
+		mockRow      *sqlmock.Rows
+		expectedResp interface{}
+		expectedErr  error
 	}{
-		{
-			desc:        "Success Case",
-			id:          "1",
-			mockRow:     sqlmock.NewRows([]string{"id", "name"}).AddRow(1, "John Doe"), // Mocked row data
-			expectedRes: &user{ID: 1, Name: "John Doe"},                                // Expected result
-			expectedErr: nil,
-		},
-		{
-			desc:        "No Rows Found",
-			id:          "2",
-			mockRow:     sqlmock.NewRows(nil), // No rows returned
-			expectedRes: nil,
-			expectedErr: sql.ErrNoRows,
-		},
-		{
-			desc:        "Error Scanning Rows",
-			id:          "3",
-			mockRow:     sqlmock.NewRows([]string{"id", "name"}).AddRow("as", ""),
-			expectedRes: nil,
-			expectedErr: errSQLScan,
-		},
+		{"success case", "1", sqlmock.NewRows([]string{"id", "name"}).AddRow(1, "John Doe"),
+			&user{ID: 1, Name: "John Doe"}, nil},
+		{"no rows found", "2", sqlmock.NewRows(nil), nil, sql.ErrNoRows},
+		{"error scanning rows", "3", sqlmock.NewRows([]string{"id", "name"}).AddRow("as", ""),
+			nil, errSQLScan},
 	}
 
-	for i, tt := range tests {
-		c := createTestContext(http.MethodGet, "/user", tt.id, nil, cont)
+	for i, tc := range tests {
+		ctx := createTestContext(http.MethodGet, "/user", tc.id, nil, c)
 
 		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats", gomock.Any(), "type", "SELECT")
+		mock.ExpectQuery("SELECT * FROM user WHERE id = ?").WithArgs(tc.id).WillReturnRows(tc.mockRow)
 
-		mock.ExpectQuery("SELECT * FROM user WHERE id = ?").WithArgs(tt.id).WillReturnRows(tt.mockRow)
+		resp, err := e.Get(ctx)
 
-		res, err := e.Get(c)
+		assert.Equal(t, tc.expectedResp, resp, "TEST[%d], Failed.\n%s", i, tc.desc)
 
-		assert.Equal(t, tt.expectedRes, res, "TEST[%d], Failed.\n%s", i, tt.desc)
-
-		if tt.expectedErr != nil {
-			assert.Equal(t, tt.expectedErr.Error(), err.Error(), "TEST[%d], Failed.\n%s", i, tt.desc)
+		if tc.expectedErr != nil {
+			assert.Equal(t, tc.expectedErr.Error(), err.Error(), "TEST[%d], Failed.\n%s", i, tc.desc)
 		} else {
-			assert.Nil(t, err, "TEST[%d], Failed.\n%s", i, tt.desc)
+			assert.Nil(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
 		}
 	}
 }
 
 func Test_UpdateHandler(t *testing.T) {
-	cont := container.NewContainer(nil)
+	c := container.NewContainer(nil)
+
+	db, mock, mockMetrics := gofrSql.NewSQLMocks(t)
+	defer db.Close()
+	c.SQL = db
 
 	type user struct {
 		ID   int    `json:"id"`
 		Name string `json:"name"`
 	}
-
-	db, mock, mockMetrics := gofrSql.NewMockSQLDB(t)
-	defer db.Close()
-	cont.SQL = db
 
 	e := entity{
 		name:       "user",
@@ -286,41 +225,23 @@ func Test_UpdateHandler(t *testing.T) {
 	}
 
 	tests := []struct {
-		desc           string
-		id             string
-		reqBody        []byte
-		mockErr        error
-		expectedResult interface{}
-		expectedErr    error
+		desc         string
+		id           string
+		reqBody      []byte
+		mockErr      error
+		expectedResp interface{}
+		expectedErr  error
 	}{
-		{
-			desc:           "Success Case",
-			id:             "1",
-			reqBody:        []byte(`{"id":1,"name":"goFr"}`),
-			mockErr:        nil,
-			expectedResult: "user successfully updated with id: 1",
-			expectedErr:    nil,
-		},
-		{
-			desc:           "Bind Error",
-			id:             "2",
-			reqBody:        []byte(`{"id":"2"}`),
-			mockErr:        nil,
-			expectedResult: nil,
-			expectedErr:    &json.UnmarshalTypeError{Value: "string", Offset: 9, Struct: "user", Field: "id"},
-		},
-		{
-			desc:           "Error From DB",
-			id:             "3",
-			reqBody:        []byte(`{"id":3,"name":"goFr"}`),
-			mockErr:        sqlmock.ErrCancelled,
-			expectedResult: nil,
-			expectedErr:    sqlmock.ErrCancelled,
-		},
+		{"success case", "1", []byte(`{"id":1,"name":"goFr"}`), nil,
+			"user successfully updated with id: 1", nil},
+		{"bind error", "2", []byte(`{"id":"2"}`), nil, nil,
+			&json.UnmarshalTypeError{Value: "string", Offset: 9, Struct: "user", Field: "id"}},
+		{"error From DB", "3", []byte(`{"id":3,"name":"goFr"}`), sqlmock.ErrCancelled,
+			nil, sqlmock.ErrCancelled},
 	}
 
-	for i, tt := range tests {
-		c := createTestContext(http.MethodPut, "/user", tt.id, tt.reqBody, cont)
+	for i, tc := range tests {
+		ctx := createTestContext(http.MethodPut, "/user", tc.id, tc.reqBody, c)
 
 		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats", gomock.Any(),
 			"type", "UPDATE").MaxTimes(2)
@@ -328,19 +249,16 @@ func Test_UpdateHandler(t *testing.T) {
 		mock.ExpectExec("UPDATE user SET Name=? WHERE id = 1").WithArgs("goFr").
 			WillReturnResult(sqlmock.NewResult(1, 1)).WillReturnError(nil)
 
-		res, err := e.Update(c)
+		resp, err := e.Update(ctx)
 
-		assert.Equal(t, tt.expectedResult, res, "TEST[%d], Failed.\n%s", i, tt.desc)
-		assert.IsType(t, tt.expectedErr, err, "TEST[%d], Failed.\n%s", i, tt.desc)
+		assert.Equal(t, tc.expectedResp, resp, "TEST[%d], Failed.\n%s", i, tc.desc)
+
+		assert.IsType(t, tc.expectedErr, err, "TEST[%d], Failed.\n%s", i, tc.desc)
 	}
 }
 
 func Test_DeleteHandler(t *testing.T) {
-	cont := container.NewContainer(nil)
-
-	db, mock, mockMetrics := gofrSql.NewMockSQLDB(t)
-	defer db.Close()
-	cont.SQL = db
+	c, mocks := container.NewMockContainer(t)
 
 	e := entity{
 		name:       "user",
@@ -349,50 +267,29 @@ func Test_DeleteHandler(t *testing.T) {
 	}
 
 	tests := []struct {
-		desc       string
-		id         string
-		mockReturn driver.Result
-		mockErr    error
-		wantErr    error
-		wantRes    interface{}
+		desc         string
+		id           string
+		mockResp     driver.Result
+		mockErr      error
+		expectedErr  error
+		expectedResp interface{}
 	}{
-		{
-			desc:       "Success Case",
-			id:         "1",
-			mockReturn: sqlmock.NewResult(1, 1),
-			mockErr:    nil,
-			wantErr:    nil,
-			wantRes:    "user successfully deleted with id: 1",
-		},
-		{
-			desc:       "SQL Error Case",
-			id:         "2",
-			mockReturn: nil,
-			mockErr:    errTest,
-			wantErr:    errTest,
-			wantRes:    nil,
-		},
-		{
-			desc:       "No Rows Affected Case",
-			id:         "3",
-			mockReturn: sqlmock.NewResult(0, 0),
-			mockErr:    nil,
-			wantErr:    errEntityNotFound,
-			wantRes:    nil,
-		},
+		{"success case", "1", sqlmock.NewResult(1, 1), nil,
+			nil, "user successfully deleted with id: 1"},
+		{"SQL error case", "2", nil, errTest, errTest, nil},
+		{"no rows affected", "3", sqlmock.NewResult(0, 0), nil,
+			errEntityNotFound, nil},
 	}
 
-	for i, tt := range tests {
-		c := createTestContext(http.MethodDelete, "/user", tt.id, nil, cont)
+	for i, tc := range tests {
+		ctx := createTestContext(http.MethodDelete, "/user", tc.id, nil, c)
 
-		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats", gomock.Any(), "type", "DELETE")
+		mocks.SQL.EXPECT().ExecContext(ctx, "DELETE FROM user WHERE id = ?", tc.id).Return(tc.mockResp, tc.mockErr)
 
-		mock.ExpectExec("DELETE FROM user WHERE id = ?").WithArgs(tt.id).
-			WillReturnResult(tt.mockReturn).WillReturnError(tt.mockErr)
+		resp, err := e.Delete(ctx)
 
-		res, err := e.Delete(c)
+		assert.Equal(t, tc.expectedResp, resp, "TEST[%d], Failed.\n%s", i, tc.desc)
 
-		assert.Equal(t, tt.wantRes, res, "TEST[%d], Failed.\n%s", i, tt.desc)
-		assert.Equal(t, tt.wantErr, err, "TEST[%d], Failed.\n%s", i, tt.desc)
+		assert.Equal(t, tc.expectedErr, err, "TEST[%d], Failed.\n%s", i, tc.desc)
 	}
 }
