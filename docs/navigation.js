@@ -7,6 +7,7 @@ export const navigation = [
             { title: 'Connecting Redis', href: '/docs/quick-start/connecting-redis' },
             { title: 'Connecting MySQL', href: '/docs/quick-start/connecting-mysql' },
             { title: 'Observability', href: '/docs/quick-start/observability' },
+            { title: 'Adding REST Handlers', href: '/docs/quick-start/add-rest-handler' },
         ],
     },
     {
