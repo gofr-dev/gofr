@@ -28,11 +28,16 @@ func TestHandler_ServeHTTP(t *testing.T) {
 		data       interface{}
 		err        error
 		statusCode int
+		body       string
 	}{
-		{"method is get, data is nil and error is nil", http.MethodGet, nil, nil, http.StatusOK},
-		{"method is get, data is mil, error is not nil", http.MethodGet, nil, errTest, http.StatusInternalServerError},
-		{"method is post, data is nil and error is nil", http.MethodPost, nil, nil, http.StatusCreated},
-		{"method is delete, data is nil and error is nil", http.MethodDelete, nil, nil, http.StatusNoContent},
+		{"method is get, data is nil and error is nil", http.MethodGet, nil, nil, http.StatusOK,
+			`{}`},
+		{"method is get, data is mil, error is not nil", http.MethodGet, nil, errTest, http.StatusInternalServerError,
+			`{"error":{"message":"some error"}}`},
+		{"method is post, data is nil and error is nil", http.MethodPost, "Created", nil, http.StatusCreated,
+			`{"data":"Created"}`},
+		{"method is delete, data is nil and error is nil", http.MethodDelete, nil, nil, http.StatusNoContent,
+			`{}`},
 	}
 
 	for i, tc := range testCases {
@@ -49,7 +54,8 @@ func TestHandler_ServeHTTP(t *testing.T) {
 			container: c,
 		}.ServeHTTP(w, r)
 
-		assert.Equal(t, w.Code, tc.statusCode, "TEST[%d], Failed.\n%s", i, tc.desc)
+		assert.Containsf(t, w.Body.String(), tc.body, "TEST[%d], Failed.\n%s", i, tc.desc)
+		assert.Equal(t, tc.statusCode, w.Code, "TEST[%d], Failed.\n%s", i, tc.desc)
 	}
 }
 
