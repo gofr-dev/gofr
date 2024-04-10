@@ -11,7 +11,7 @@ import (
 )
 
 func TestResponder_Respond(t *testing.T) {
-	r := NewResponder(httptest.NewRecorder())
+	r := NewResponder(httptest.NewRecorder(), http.MethodGet)
 
 	tests := []struct {
 		desc        string
@@ -32,7 +32,7 @@ func TestResponder_Respond(t *testing.T) {
 }
 
 func TestResponder_HTTPStatusFromError(t *testing.T) {
-	r := NewResponder(httptest.NewRecorder())
+	r := NewResponder(httptest.NewRecorder(), http.MethodGet)
 
 	tests := []struct {
 		desc       string
@@ -56,110 +56,22 @@ func TestResponder_HTTPStatusFromError(t *testing.T) {
 	}
 }
 
-func TestPostResponder_Respond(t *testing.T) {
-	const expStatusCode = "201 Created"
-
-	w := httptest.NewRecorder()
-	r := NewPostResponder(w)
-
-	tests := []struct {
-		desc        string
-		data        interface{}
-		contentType string
-	}{
-		{"raw response type", resTypes.Raw{}, "application/json"},
-		{"file response type", resTypes.File{ContentType: "image/png"}, "image/png"},
-		{"map response type", map[string]string{}, "application/json"},
-	}
-
-	for i, tc := range tests {
-		r.Respond(tc.data, nil)
-
-		contentType := w.Header().Get("Content-Type")
-		result := w.Result()
-
-		assert.Equal(t, expStatusCode, result.Status, "TEST[%d], Failed.\n%s", i, tc.desc)
-		assert.Equal(t, tc.contentType, contentType, "TEST[%d], Failed.\n%s", i, tc.desc)
-
-		result.Body.Close()
-	}
-}
-
-func TestPostResponder_HTTPStatusFromError(t *testing.T) {
-	r := NewPostResponder(httptest.NewRecorder())
-
+func TestResponder_HTTPStatusFromRequestMethod(t *testing.T) {
 	tests := []struct {
 		desc       string
-		input      error
+		method     string
 		statusCode int
-		errObj     interface{}
 	}{
-		{"success case", nil, http.StatusCreated, nil},
-		{"file not found", http.ErrMissingFile, http.StatusNotFound, map[string]interface{}{
-			"message": http.ErrMissingFile.Error()}},
-		{"internal server error", http.ErrHandlerTimeout, http.StatusInternalServerError,
-			map[string]interface{}{"message": http.ErrHandlerTimeout.Error()}},
+		{"get method is used", http.MethodGet, http.StatusOK},
+		{"post method is used", http.MethodPost, http.StatusCreated},
+		{"delete method is used", http.MethodDelete, http.StatusNoContent},
 	}
 
 	for i, tc := range tests {
-		statusCode, errObj := r.HTTPStatusFromError(tc.input)
+		r := NewResponder(httptest.NewRecorder(), tc.method)
+
+		statusCode := r.HTTPStatusFromRequestMethod()
 
 		assert.Equal(t, tc.statusCode, statusCode, "TEST[%d], Failed.\n%s", i, tc.desc)
-
-		assert.Equal(t, tc.errObj, errObj, "TEST[%d], Failed.\n%s", i, tc.desc)
-	}
-}
-
-func TestDeleteResponder_Respond(t *testing.T) {
-	const expStatusCode = 204
-
-	w := httptest.NewRecorder()
-	r := NewDeleteResponder(w)
-
-	tests := []struct {
-		desc        string
-		data        interface{}
-		contentType string
-	}{
-		{"raw response type", resTypes.Raw{}, "application/json"},
-		{"file response type", resTypes.File{ContentType: "image/png"}, "image/png"},
-		{"map response type", map[string]string{}, "application/json"},
-	}
-
-	for i, tc := range tests {
-		r.Respond(tc.data, nil)
-
-		contentType := w.Header().Get("Content-Type")
-		result := w.Result()
-
-		assert.Equal(t, expStatusCode, result.StatusCode, "TEST[%d], Failed.\n%s", i, tc.desc)
-		assert.Equal(t, tc.contentType, contentType, "TEST[%d], Failed.\n%s", i, tc.desc)
-
-		result.Body.Close()
-	}
-}
-
-func TestDeleteResponder_HTTPStatusFromError(t *testing.T) {
-	r := NewDeleteResponder(httptest.NewRecorder())
-
-	tests := []struct {
-		desc       string
-		input      error
-		statusCode int
-		errObj     interface{}
-	}{
-		{"success case", nil, http.StatusNoContent, nil},
-		{"file not found", http.ErrMissingFile, http.StatusNotFound, map[string]interface{}{
-			"message": http.ErrMissingFile.Error()}},
-		{"internal server error", http.ErrHandlerTimeout, http.StatusInternalServerError,
-			map[string]interface{}{"message": http.ErrHandlerTimeout.Error()}},
-	}
-
-	for i, tc := range tests {
-		statusCode, errObj := r.HTTPStatusFromError(tc.input)
-
-		assert.Equal(t, tc.statusCode, statusCode, "TEST[%d], Failed.\n%s", i, tc.desc)
-
-		assert.Equal(t, tc.errObj, errObj, "TEST[%d], Failed.\n%s", i, tc.desc)
 	}
 }

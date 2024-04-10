@@ -30,18 +30,7 @@ type handler struct {
 }
 
 func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	var responder Responder
-
-	switch r.Method {
-	case http.MethodPost:
-		responder = gofrHTTP.NewPostResponder(w)
-	case http.MethodDelete:
-		responder = gofrHTTP.NewDeleteResponder(w)
-	default:
-		responder = gofrHTTP.NewResponder(w)
-	}
-
-	c := newContext(responder, gofrHTTP.NewRequest(r), h.container)
+	c := newContext(gofrHTTP.NewResponder(w, r.Method), gofrHTTP.NewRequest(r), h.container)
 	defer c.Trace("gofr-handler").End()
 	c.responder.Respond(h.function(c))
 }
