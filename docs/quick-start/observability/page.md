@@ -149,6 +149,8 @@ GoFr automatically exports traces for all requests and responses. GoFr uses
 {% new-tab-link title="OpenTelemetry" href="https://opentelemetry.io/docs/concepts/what-is-opentelemetry/" /%} , a popular tracing framework, to
 automatically add traces to all requests and responses.
 
+GoFr has support for both zipkin as well as jaeger trace exporters.
+
 **Automatic Correlation ID Propagation:**
 
 When a request enters your GoFr application, GoFr automatically generates a correlation-ID `X-Correlation-ID` and adds it
@@ -179,14 +181,15 @@ DB_NAME=test_db
 DB_PORT=3306
 
 # tracing configs
+TRACE_EXPORTER=zipkin  // Supported : zipkin,jaeger
 TRACER_HOST=localhost
 TRACER_PORT=2005
 
 LOG_LEVEL=DEBUG
 ```
 
-> **NOTE:** If the value of `TRACER_PORT` is not
-> provided, gofr uses port `9411` by default.
+> **NOTE:** If the value of `TRACE_EXPORTER` and `TRACER_PORT` is not
+> provided, gofr uses `zipkin` exporter and  port `9411` by default. 
 
 Open {% new-tab-link title="zipkin" href="http://localhost:2005/zipkin/" /%} and search by TraceID (correlationID) to see the trace.
 {% figure src="/quick-start-trace.png" alt="Zapin traces" /%}
