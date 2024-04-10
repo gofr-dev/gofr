@@ -30,7 +30,7 @@ func TestMain_BindError(t *testing.T) {
 	req.Header.Set("content-type", contentType)
 
 	resp, err = c.Do(req)
-	assert.Equal(t, 200, resp.StatusCode)
+	assert.Equal(t, 201, resp.StatusCode)
 }
 
 func generateMultiPartBody(t *testing.T) (*bytes.Buffer, string) {

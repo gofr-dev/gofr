@@ -25,7 +25,7 @@ func TestExamplePublisher(t *testing.T) {
 			desc:               "valid order",
 			path:               "/publish-order",
 			body:               []byte(`{"data":{"orderId":"123","status":"pending"}}`),
-			expectedStatusCode: http.StatusOK,
+			expectedStatusCode: http.StatusCreated,
 		},
 		{
 			desc:               "invalid order",
@@ -37,7 +37,7 @@ func TestExamplePublisher(t *testing.T) {
 			desc:               "valid product",
 			path:               "/publish-product",
 			body:               []byte(`{"data":{"productId":"123","price":"599"}}`),
-			expectedStatusCode: http.StatusOK,
+			expectedStatusCode: http.StatusCreated,
 		},
 		{
 			desc:               "invalid product",
