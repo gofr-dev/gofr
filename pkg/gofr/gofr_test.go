@@ -13,6 +13,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
 	gofrHTTP "gofr.dev/pkg/gofr/http"
 	"gofr.dev/pkg/gofr/logging"
@@ -286,5 +287,43 @@ func Test_AddRESTHandlers(t *testing.T) {
 		err := app.AddRESTHandlers(tc.input)
 
 		assert.Equal(t, tc.err, err, "TEST[%d], Failed.\n%s", i, tc.desc)
+	}
+}
+
+func Test_initTracer(t *testing.T) {
+	mockConfig1 := testutil.NewMockConfig(map[string]string{
+		"TRACE_EXPORTER": "zipkin",
+		"TRACER_HOST":    "localhost",
+		"TRACER_PORT":    "2005",
+	})
+
+	mockConfig2 := testutil.NewMockConfig(map[string]string{
+		"TRACE_EXPORTER": "jaeger",
+		"TRACER_HOST":    "localhost",
+		"TRACER_PORT":    "2005",
+	})
+
+	tests := []struct {
+		desc               string
+		config             config.Config
+		expectedLogMessage string
+	}{
+		{"zipkin exporter", mockConfig1, "Exporting traces to zipkin."},
+		{"jaeger exporter", mockConfig2, "Exporting traces to jaeger."},
+	}
+
+	for _, tc := range tests {
+		logMessage := testutil.StdoutOutputForFunc(func() {
+			mockContainer, _ := container.NewMockContainer(t)
+
+			a := App{
+				Config:    tc.config,
+				container: mockContainer,
+			}
+
+			a.initTracer()
+		})
+
+		assert.Contains(t, logMessage, tc.expectedLogMessage)
 	}
 }

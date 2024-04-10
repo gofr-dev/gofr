@@ -1,14 +1,17 @@
 package gofr
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/exporters/zipkin"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
@@ -240,6 +243,7 @@ func (a *App) Migrate(migrationsMap map[int64]migration.Migrate) {
 }
 
 func (a *App) initTracer() {
+	traceExporter := a.Config.GetOrDefault("TRACE_EXPORTER", "zipkin")
 	tracerHost := a.Config.Get("TRACER_HOST")
 	tracerPort := a.Config.GetOrDefault("TRACER_PORT", "9411")
 
@@ -253,19 +257,31 @@ func (a *App) initTracer() {
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
 	otel.SetErrorHandler(&otelErrorHandler{logger: a.container.Logger})
 
-	if tracerHost != "" {
+	var (
+		exporter sdktrace.SpanExporter
+		err      error
+	)
+
+	switch strings.ToLower(traceExporter) {
+	case "jaeger":
+		a.container.Log("Exporting traces to jaeger.")
+
+		exporter, err = otlptracegrpc.New(context.Background(), otlptracegrpc.WithInsecure(),
+			otlptracegrpc.WithEndpoint(fmt.Sprintf("%s:%s", tracerHost, tracerPort)))
+	default:
 		a.container.Log("Exporting traces to zipkin.")
 
-		exporter, err := zipkin.New(
+		exporter, err = zipkin.New(
 			fmt.Sprintf("http://%s:%s/api/v2/spans", tracerHost, tracerPort),
 		)
-		batcher := sdktrace.NewBatchSpanProcessor(exporter)
-		tp.RegisterSpanProcessor(batcher)
-
-		if err != nil {
-			a.container.Error(err)
-		}
 	}
+
+	if err != nil {
+		a.container.Error(err)
+	}
+
+	batcher := sdktrace.NewBatchSpanProcessor(exporter)
+	tp.RegisterSpanProcessor(batcher)
 }
 
 type otelErrorHandler struct {
