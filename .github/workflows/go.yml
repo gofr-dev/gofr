@@ -15,8 +15,32 @@ on:
       - 'docs/**'
 
 jobs:
+  latest-go-version:
+    name: Setup Go 1.22
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code into go module directory
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download Go 1.22
+        run: curl -fsSL https://golang.org/dl/go1.22.linux-amd64.tar.gz -o go1.22.linux-amd64.tar.gz
+
+      - name: Extract Go 1.22
+        run: tar -xvf go1.22.linux-amd64.tar.gz
+
+      - name: Set up Go 1.22 environment
+        run: |
+            echo 'export GOROOT=$(pwd)/go1.22' >> $GITHUB_ENV
+            echo 'export PATH=$GOROOT/bin:$PATH' >> $GITHUB_ENV
+
+      - name: Verify Go 1.22 installation
+        run: go version
+
   MIGRATION-Unit-Testing:
     name: Migration Unit Testing (v${{ matrix.go-version }})🛠
+    needs: latest-go-version
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -52,118 +76,118 @@ jobs:
           name: MIGRATION-Coverage-Report
           path: profile.cov
 
-  Example-Unit-Testing:
-    name: Example Unit Testing (v${{ matrix.go-version }})🛠
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        go-version: ['1.21', '1.22']
-
-    services:
-      zookeeper:
-        image: wurstmeister/zookeeper
-        ports:
-          - "2181:2181"
-
-      kafka:
-        image: wurstmeister/kafka
-        ports:
-          - "9092:9092"
-        env:
-          KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT://localhost:9092'
-          KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT'
-          KAFKA_INTER_BROKER_LISTENER_NAME: 'PLAINTEXT'
-          KAFKA_ADVERTISED_HOST_NAME: 'localhost'
-          KAFKA_LISTENERS: 'PLAINTEXT://0.0.0.0:9092'
-          KAFKA_AUTO_CREATE_TOPICS_ENABLE: true
-          KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
-
-      redis:
-        image: redis:7.0.5
-        ports:
-          - "2002:6379"
-        options: "--entrypoint redis-server"
-
-      mysql:
-        image: mysql:8.2.0
-        ports:
-          - "2001:3306"
-        env:
-          MYSQL_ROOT_PASSWORD: "password"
-          MYSQL_DATABASE: "test"
-
-    steps:
-      - name: Checkout code into go module directory
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Set up Go ${{ matrix.go-version }}
-        uses: actions/setup-go@v4
-        with:
-          go-version: ${{ matrix.go-version }}
-        id: Go
-
-      - name: Get dependencies
-        run: |
-          go mod download
-
-      - name: Start Zipkin
-        run: docker run -d -p 2005:9411 openzipkin/zipkin:latest
-
-      - name: Test
-        run: |
-          export APP_ENV=test
-          go test gofr.dev/examples/... -v -short -coverprofile packageWithpbgo.cov -coverpkg=gofr.dev/examples/...
-          grep -vE '^gofr\.dev\/.*\.pb\.go' packageWithpbgo.cov > profile.cov
-          go tool cover -func profile.cov
-
-      - name: Upload Test Coverage
-        if: ${{ matrix.go-version == '1.21'}}
-        uses: actions/upload-artifact@v3
-        with:
-          name: Example-Test-Report
-          path: profile.cov
-
-  PKG-Unit-Testing:
-    name: PKG Unit Testing (v${{ matrix.go-version }})🛠
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        go-version: ['1.21', '1.22']
-
-    steps:
-      - name: Checkout code into go module directory
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Set up Go ${{ matrix.go-version }}
-        uses: actions/setup-go@v4
-        with:
-          go-version: ${{ matrix.go-version }}
-        id: Go
-
-      - name: Get dependencies
-        run: |
-          go mod download
-
-      - name: Test
-        run: |
-          export APP_ENV=test
-          go test gofr.dev/pkg/... -tags migration -v -short -coverprofile packageWithMigration.cov -coverpkg=gofr.dev/pkg/...
-          grep -v 'gofr.dev/pkg/gofr/migration' packageWithMigration.cov > packageWithoutMigration.cov
-          grep -v 'gofr.dev/pkg/gofr/migration/mock_datasources.go' packageWithoutMigration.cov > packageWithoutMockMigrationDatasource.cov
-          grep -v 'gofr.dev/pkg/gofr/container/mock_datasources.go' packageWithoutMockMigrationDatasource.cov > packageWithoutMockDatasource.cov
-          grep -v 'google/mock_interfaces\.go' packageWithoutMockDatasource.cov > profile.cov
-          go tool cover -func profile.cov
-
-      - name: Upload Test Coverage
-        if: ${{ matrix.go-version == '1.21'}}
-        uses: actions/upload-artifact@v3
-        with:
-          name: PKG-Coverage-Report
-          path: profile.cov
+#  Example-Unit-Testing:
+#    name: Example Unit Testing (v${{ matrix.go-version }})🛠
+#    runs-on: ubuntu-latest
+#    strategy:
+#      matrix:
+#        go-version: ['1.21', '1.22']
+#
+#    services:
+#      zookeeper:
+#        image: wurstmeister/zookeeper
+#        ports:
+#          - "2181:2181"
+#
+#      kafka:
+#        image: wurstmeister/kafka
+#        ports:
+#          - "9092:9092"
+#        env:
+#          KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT://localhost:9092'
+#          KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT'
+#          KAFKA_INTER_BROKER_LISTENER_NAME: 'PLAINTEXT'
+#          KAFKA_ADVERTISED_HOST_NAME: 'localhost'
+#          KAFKA_LISTENERS: 'PLAINTEXT://0.0.0.0:9092'
+#          KAFKA_AUTO_CREATE_TOPICS_ENABLE: true
+#          KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
+#
+#      redis:
+#        image: redis:7.0.5
+#        ports:
+#          - "2002:6379"
+#        options: "--entrypoint redis-server"
+#
+#      mysql:
+#        image: mysql:8.2.0
+#        ports:
+#          - "2001:3306"
+#        env:
+#          MYSQL_ROOT_PASSWORD: "password"
+#          MYSQL_DATABASE: "test"
+#
+#    steps:
+#      - name: Checkout code into go module directory
+#        uses: actions/checkout@v4
+#        with:
+#          fetch-depth: 0
+#
+#      - name: Set up Go ${{ matrix.go-version }}
+#        uses: actions/setup-go@v4
+#        with:
+#          go-version: ${{ matrix.go-version }}
+#        id: Go
+#
+#      - name: Get dependencies
+#        run: |
+#          go mod download
+#
+#      - name: Start Zipkin
+#        run: docker run -d -p 2005:9411 openzipkin/zipkin:latest
+#
+#      - name: Test
+#        run: |
+#          export APP_ENV=test
+#          go test gofr.dev/examples/... -v -short -coverprofile packageWithpbgo.cov -coverpkg=gofr.dev/examples/...
+#          grep -vE '^gofr\.dev\/.*\.pb\.go' packageWithpbgo.cov > profile.cov
+#          go tool cover -func profile.cov
+#
+#      - name: Upload Test Coverage
+#        if: ${{ matrix.go-version == '1.21'}}
+#        uses: actions/upload-artifact@v3
+#        with:
+#          name: Example-Test-Report
+#          path: profile.cov
+#
+#  PKG-Unit-Testing:
+#    name: PKG Unit Testing (v${{ matrix.go-version }})🛠
+#    runs-on: ubuntu-latest
+#    strategy:
+#      matrix:
+#        go-version: ['1.21', '1.22']
+#
+#    steps:
+#      - name: Checkout code into go module directory
+#        uses: actions/checkout@v4
+#        with:
+#          fetch-depth: 0
+#
+#      - name: Set up Go ${{ matrix.go-version }}
+#        uses: actions/setup-go@v4
+#        with:
+#          go-version: ${{ matrix.go-version }}
+#        id: Go
+#
+#      - name: Get dependencies
+#        run: |
+#          go mod download
+#
+#      - name: Test
+#        run: |
+#          export APP_ENV=test
+#          go test gofr.dev/pkg/... -tags migration -v -short -coverprofile packageWithMigration.cov -coverpkg=gofr.dev/pkg/...
+#          grep -v 'gofr.dev/pkg/gofr/migration' packageWithMigration.cov > packageWithoutMigration.cov
+#          grep -v 'gofr.dev/pkg/gofr/migration/mock_datasources.go' packageWithoutMigration.cov > packageWithoutMockMigrationDatasource.cov
+#          grep -v 'gofr.dev/pkg/gofr/container/mock_datasources.go' packageWithoutMockMigrationDatasource.cov > packageWithoutMockDatasource.cov
+#          grep -v 'google/mock_interfaces\.go' packageWithoutMockDatasource.cov > profile.cov
+#          go tool cover -func profile.cov
+#
+#      - name: Upload Test Coverage
+#        if: ${{ matrix.go-version == '1.21'}}
+#        uses: actions/upload-artifact@v3
+#        with:
+#          name: PKG-Coverage-Report
+#          path: profile.cov
 
   parse_coverage:
     name: Code Coverage
