@@ -111,7 +111,7 @@ func TestPostResponder_HTTPStatusFromError(t *testing.T) {
 }
 
 func TestDeleteResponder_Respond(t *testing.T) {
-	const expStatusCode = "204 No Content"
+	const expStatusCode = 204
 
 	w := httptest.NewRecorder()
 	r := NewDeleteResponder(w)
