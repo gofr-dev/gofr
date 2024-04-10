@@ -32,7 +32,7 @@ func createTestContext(method, path, id string, body []byte, cont *container.Con
 	testReq.Header.Set("Content-Type", "application/json")
 	gofrReq := gofrHTTP.NewRequest(testReq)
 
-	return newContext(gofrHTTP.NewResponder(httptest.NewRecorder()), gofrReq, cont)
+	return newContext(gofrHTTP.NewResponder(httptest.NewRecorder(), method), gofrReq, cont)
 }
 
 func Test_scanEntity(t *testing.T) {

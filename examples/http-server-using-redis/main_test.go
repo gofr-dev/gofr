@@ -32,7 +32,7 @@ func TestHTTPServerUsingRedis(t *testing.T) {
 		statusCode int
 	}{
 		{"post handler", http.MethodPost, []byte(`{"key1":"GoFr"}`), "/redis",
-			http.StatusOK},
+			http.StatusCreated},
 		{"post invalid body", http.MethodPost, []byte(`{key:abc}`), "/redis",
 			http.StatusInternalServerError},
 		{"get handler", http.MethodGet, nil, "/redis/key1", http.StatusOK},
