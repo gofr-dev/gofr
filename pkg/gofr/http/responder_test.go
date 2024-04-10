@@ -11,7 +11,7 @@ import (
 )
 
 func TestResponder_Respond(t *testing.T) {
-	r := NewResponder(httptest.NewRecorder())
+	r := NewResponder(httptest.NewRecorder(), http.MethodGet)
 
 	tests := []struct {
 		desc        string
@@ -32,7 +32,7 @@ func TestResponder_Respond(t *testing.T) {
 }
 
 func TestResponder_HTTPStatusFromError(t *testing.T) {
-	r := NewResponder(httptest.NewRecorder())
+	r := NewResponder(httptest.NewRecorder(), http.MethodGet)
 
 	tests := []struct {
 		desc       string

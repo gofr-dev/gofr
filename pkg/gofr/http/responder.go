@@ -9,13 +9,14 @@ import (
 )
 
 // NewResponder creates a new Responder instance from the given http.ResponseWriter..
-func NewResponder(w http.ResponseWriter) *Responder {
-	return &Responder{w: w}
+func NewResponder(w http.ResponseWriter, method string) *Responder {
+	return &Responder{w: w, method: method}
 }
 
 // Responder encapsulates an http.ResponseWriter and is responsible for crafting structured responses.
 type Responder struct {
-	w http.ResponseWriter
+	w      http.ResponseWriter
+	method string
 }
 
 // Respond sends a response with the given data and handles potential errors, setting appropriate
@@ -51,7 +52,14 @@ func (r Responder) Respond(data interface{}, err error) {
 // HTTPStatusFromError maps errors to HTTP status codes.
 func (r Responder) HTTPStatusFromError(err error) (status int, errObj interface{}) {
 	if err == nil {
-		return http.StatusOK, nil
+		switch r.method {
+		case http.MethodPost:
+			return http.StatusCreated, nil
+		case http.MethodDelete:
+			return http.StatusNoContent, nil
+		default:
+			return http.StatusOK, nil
+		}
 	}
 
 	if errors.Is(err, http.ErrMissingFile) {
