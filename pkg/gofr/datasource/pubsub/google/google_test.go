@@ -18,7 +18,7 @@ import (
 func getGoogleClient(t *testing.T) *gcPubSub.Client {
 	srv := pstest.NewServer()
 
-	conn, err := grpc.Dial(srv.Addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(srv.Addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Errorf("could not initialize a connection to dummy server")
 	}
