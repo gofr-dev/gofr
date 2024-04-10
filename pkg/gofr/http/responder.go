@@ -24,10 +24,6 @@ type Responder struct {
 func (r Responder) Respond(data interface{}, err error) {
 	statusCode, errorObj := r.HTTPStatusFromError(err)
 
-	if errorObj == nil {
-		statusCode = r.HTTPStatusFromRequestMethod()
-	}
-
 	var resp interface{}
 	switch v := data.(type) {
 	case resTypes.Raw:
@@ -56,7 +52,14 @@ func (r Responder) Respond(data interface{}, err error) {
 // HTTPStatusFromError maps errors to HTTP status codes.
 func (r Responder) HTTPStatusFromError(err error) (status int, errObj interface{}) {
 	if err == nil {
-		return http.StatusOK, nil
+		switch r.method {
+		case http.MethodPost:
+			return http.StatusCreated, nil
+		case http.MethodDelete:
+			return http.StatusNoContent, nil
+		default:
+			return http.StatusOK, nil
+		}
 	}
 
 	if errors.Is(err, http.ErrMissingFile) {
@@ -68,22 +71,6 @@ func (r Responder) HTTPStatusFromError(err error) (status int, errObj interface{
 	return http.StatusInternalServerError, map[string]interface{}{
 		"message": err.Error(),
 	}
-}
-
-// HTTPStatusFromRequestMethod maps request method to HTTP status codes.
-func (r Responder) HTTPStatusFromRequestMethod() int {
-	var statusCode int
-
-	switch r.method {
-	case http.MethodPost:
-		statusCode = http.StatusCreated
-	case http.MethodDelete:
-		statusCode = http.StatusNoContent
-	default:
-		statusCode = http.StatusOK
-	}
-
-	return statusCode
 }
 
 // response represents an HTTP response.

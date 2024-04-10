@@ -55,23 +55,3 @@ func TestResponder_HTTPStatusFromError(t *testing.T) {
 		assert.Equal(t, tc.errObj, errObj, "TEST[%d], Failed.\n%s", i, tc.desc)
 	}
 }
-
-func TestResponder_HTTPStatusFromRequestMethod(t *testing.T) {
-	tests := []struct {
-		desc       string
-		method     string
-		statusCode int
-	}{
-		{"get method is used", http.MethodGet, http.StatusOK},
-		{"post method is used", http.MethodPost, http.StatusCreated},
-		{"delete method is used", http.MethodDelete, http.StatusNoContent},
-	}
-
-	for i, tc := range tests {
-		r := NewResponder(httptest.NewRecorder(), tc.method)
-
-		statusCode := r.HTTPStatusFromRequestMethod()
-
-		assert.Equal(t, tc.statusCode, statusCode, "TEST[%d], Failed.\n%s", i, tc.desc)
-	}
-}
