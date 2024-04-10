@@ -18,6 +18,7 @@ import (
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
+	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/http/middleware"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/metrics"
@@ -224,6 +225,10 @@ func (a *App) Metrics() metrics.Manager {
 	return a.container.Metrics()
 }
 
+func (a *App) Logger() logging.Logger {
+	return a.container.Logger
+}
+
 // SubCommand adds a sub-command to the CLI application.
 // Can be used to create commands like "kubectl get" or "kubectl get ingress".
 func (a *App) SubCommand(pattern string, handler Handler) {
@@ -315,4 +320,23 @@ func (a *App) Subscribe(topic string, handler SubscribeFunc) {
 	}
 
 	a.subscriptionManager.subscriptions[topic] = handler
+}
+
+func (a *App) AddRESTHandlers(object interface{}) error {
+	cfg, err := scanEntity(object)
+	if err != nil {
+		a.container.Logger.Errorf("invalid object for AddRESTHandlers")
+
+		return err
+	}
+
+	e := entity{cfg.name, cfg.entityType, cfg.primaryKey}
+
+	a.registerCRUDHandlers(e, object)
+
+	return nil
+}
+
+func (a *App) UseMongo(db datasource.Mongo) {
+	a.container.Mongo = db
 }

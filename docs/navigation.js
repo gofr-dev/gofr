@@ -7,6 +7,7 @@ export const navigation = [
             { title: 'Connecting Redis', href: '/docs/quick-start/connecting-redis' },
             { title: 'Connecting MySQL', href: '/docs/quick-start/connecting-mysql' },
             { title: 'Observability', href: '/docs/quick-start/observability' },
+            { title: 'Adding REST Handlers', href: '/docs/quick-start/add-rest-handler' },
         ],
     },
     {
@@ -21,7 +22,9 @@ export const navigation = [
             { title: 'Monitoring Service Health', href: '/docs/advanced-guide/monitoring-service-health' },
             { title: 'Handling Data Migrations', href: '/docs/advanced-guide/handling-data-migrations' },
             { title: 'Writing gRPC Server', href: '/docs/advanced-guide/grpc' },
-            { title: 'Using Pub/Sub', href: '/docs/advanced-guide/using-publisher-subscriber' }
+            { title: 'Using Pub/Sub', href: '/docs/advanced-guide/using-publisher-subscriber' },
+            { title: 'Injecting Databases', href: '/docs/advanced-guide/injecting-databases-drivers' },
+            { title: 'Dealing with Datasources', href: '/docs/advanced-guide/dealing-with-datasources' },
             // { title: 'Dealing with Remote Files', href: '/docs/advanced-guide/remote-files' },
             // { title: 'Supporting OAuth', href: '/docs/advanced-guide/oauth' },
             // { title: 'Creating a Static File Server', href: '/docs/advanced-guide/static-file-server' },

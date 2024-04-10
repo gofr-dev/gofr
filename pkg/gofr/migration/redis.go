@@ -6,9 +6,9 @@ import (
 	"strconv"
 	"time"
 
-	"gofr.dev/pkg/gofr/container"
-
 	goRedis "github.com/redis/go-redis/v9"
+
+	"gofr.dev/pkg/gofr/container"
 )
 
 type migration struct {
@@ -50,29 +50,29 @@ func (r redis) Rename(ctx context.Context, key, newKey string) *goRedis.StatusCm
 	return r.commands.Rename(ctx, key, newKey)
 }
 
-func redisPostRun(c *container.Container, tx goRedis.Pipeliner, currentMigration int64, start time.Time) {
-	data, _ := json.Marshal(migration{
-		Method:    "UP",
-		StartTime: start,
-		Duration:  time.Since(start).Milliseconds(),
-	})
+type redisMigratorObject struct {
+	commands
+}
 
-	migrationVersion := strconv.FormatInt(currentMigration, 10)
+type redisMigrator struct {
+	commands
 
-	_, _ = c.Redis.HSet(context.Background(), "gofr_migrations", map[string]string{migrationVersion: string(data)}).Result()
+	Migrator
+}
 
-	_, err := tx.Exec(context.Background())
-	if err != nil {
-		c.Logger.Errorf("migration for Redis %v failed with err: %v", err)
+func (s redisMigratorObject) apply(m Migrator) Migrator {
+	return redisMigrator{
+		commands: s.commands,
+		Migrator: m,
 	}
 }
 
-func getRedisLastMigration(c *container.Container) int64 {
+func (d redisMigrator) getLastMigration(c *container.Container) int64 {
 	var lastMigration int64
 
 	table, err := c.Redis.HGetAll(context.Background(), "gofr_migrations").Result()
 	if err != nil {
-		c.Logger.Errorf("failed to get migration record from Redis err: %v", err)
+		c.Logger.Errorf("failed to get migration record from Redis. err: %v", err)
 
 		return -1
 	}
@@ -88,17 +88,73 @@ func getRedisLastMigration(c *container.Container) int64 {
 
 		d := []byte(value)
 
-		var migrationData migration
+		var data migration
 
-		err = json.Unmarshal(d, &migrationData)
+		err = json.Unmarshal(d, &data)
 		if err != nil {
 			c.Logger.Errorf("failed to unmarshal redis Migration data err: %v", err)
 
 			return -1
 		}
 
-		val[integerValue] = migrationData
+		val[integerValue] = data
+	}
+
+	c.Debugf("Redis last migration fetched value is: %v", lastMigration)
+
+	last := d.Migrator.getLastMigration(c)
+	if last > lastMigration {
+		return last
 	}
 
 	return lastMigration
+}
+
+func (d redisMigrator) beginTransaction(c *container.Container) migrationData {
+	redisTx := c.Redis.TxPipeline()
+
+	cmt := d.Migrator.beginTransaction(c)
+
+	cmt.RedisTx = redisTx
+
+	c.Debug("Redis Transaction begin successful")
+
+	return cmt
+}
+
+func (d redisMigrator) commitMigration(c *container.Container, data migrationData) error {
+	migrationVersion := strconv.FormatInt(data.MigrationNumber, 10)
+
+	jsonData, err := json.Marshal(migration{
+		Method:    "UP",
+		StartTime: data.StartTime,
+		Duration:  time.Since(data.StartTime).Milliseconds(),
+	})
+	if err != nil {
+		c.Logger.Errorf("migration %v for Redis failed with err: %v", migrationVersion, err)
+
+		return err
+	}
+
+	_, err = data.RedisTx.HSet(context.Background(), "gofr_migrations", map[string]string{migrationVersion: string(jsonData)}).Result()
+	if err != nil {
+		c.Logger.Errorf("migration %v for Redis failed with err: %v", migrationVersion, err)
+
+		return err
+	}
+
+	_, err = data.RedisTx.Exec(context.Background())
+	if err != nil {
+		c.Logger.Errorf("migration %v for Redis failed with err: %v", migrationVersion, err)
+
+		return err
+	}
+
+	return d.Migrator.commitMigration(c, data)
+}
+
+func (d redisMigrator) rollback(c *container.Container, data migrationData) {
+	data.RedisTx.Discard()
+
+	d.Migrator.rollback(c, data)
 }
