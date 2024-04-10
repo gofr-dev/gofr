@@ -10,6 +10,6 @@ FROM alpine:latest
 RUN apk add --no-cache tzdata ca-certificates
 COPY --from=0 /src/main /main
 COPY --from=0 /src/configs /configs
-EXPOSE 9090
+EXPOSE 9100
 
 CMD ["/main"]
