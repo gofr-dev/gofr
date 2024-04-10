@@ -12,7 +12,7 @@ import (
 	"gofr.dev/pkg/gofr/testutil"
 
 	_ "github.com/lib/pq" // used for concrete implementation of the database driver.
-	_ "github.com/mattn/go-sqlite3"
+	_ "modernc.org/sqlite"
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/datasource"
@@ -20,7 +20,7 @@ import (
 
 const defaultDBPort = 3306
 
-var errUnsupportedDialect = fmt.Errorf("unsupported db dialect; supported dialects are - mysql, postgres, sqlite3")
+var errUnsupportedDialect = fmt.Errorf("unsupported db dialect; supported dialects are - mysql, postgres, sqlite")
 
 // DBConfig has those members which are necessary variables while connecting to database.
 type DBConfig struct {
@@ -92,7 +92,7 @@ func getDBConnectionString(dbConfig *DBConfig) (string, error) {
 	case "postgres":
 		return fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
 			dbConfig.HostName, dbConfig.Port, dbConfig.User, dbConfig.Password, dbConfig.Database), nil
-	case "sqlite3":
+	case "sqlite":
 		return dbConfig.HostName, nil
 	default:
 		return "", errUnsupportedDialect

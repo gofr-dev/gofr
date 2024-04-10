@@ -7,6 +7,7 @@ import (
 
 	"github.com/go-sql-driver/mysql"
 	"github.com/lib/pq"
+	"modernc.org/sqlite"
 
 	"gofr.dev/pkg/gofr/container"
 	gofrSql "gofr.dev/pkg/gofr/datasource/sql"
@@ -20,8 +21,6 @@ const (
     duration BIGINT,
     constraint primary_key primary key (version, method)
 );`
-
-	checkSQLGoFrMigrationsTable = `SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'gofr_migrations');`
 
 	getLastSQLGoFrMigration = `SELECT COALESCE(MAX(version), 0) FROM gofr_migrations;`
 
@@ -93,31 +92,10 @@ func (d sqlMigrator) checkAndCreateMigrationTable(c *container.Container) error 
 	// this can be replaced with having switch case only in the exists variable - but we have chosen to differentiate based
 	// on driver because if new dialect comes will follow the same, also this complete has to be refactored as mentioned in RUN.
 	switch c.SQL.Driver().(type) {
-	case *mysql.MySQLDriver:
-		var exists int
-
-		err := c.SQL.QueryRow(checkSQLGoFrMigrationsTable).Scan(&exists)
+	case *mysql.MySQLDriver, *pq.Driver, *sqlite.Driver:
+		_, err := c.SQL.Exec(createSQLGoFrMigrationsTable)
 		if err != nil {
 			return err
-		}
-
-		if exists != 1 {
-			if _, err := c.SQL.Exec(createSQLGoFrMigrationsTable); err != nil {
-				return err
-			}
-		}
-	case *pq.Driver:
-		var exists bool
-
-		err := c.SQL.QueryRow(checkSQLGoFrMigrationsTable).Scan(&exists)
-		if err != nil {
-			return err
-		}
-
-		if !exists {
-			if _, err := c.SQL.Exec(createSQLGoFrMigrationsTable); err != nil {
-				return err
-			}
 		}
 	}
 
@@ -145,7 +123,7 @@ func (d sqlMigrator) getLastMigration(c *container.Container) int64 {
 
 func (d sqlMigrator) commitMigration(c *container.Container, data migrationData) error {
 	switch c.SQL.Driver().(type) {
-	case *mysql.MySQLDriver:
+	case *mysql.MySQLDriver, *sqlite.Driver:
 		err := insertMigrationRecord(data.SQLTx, insertGoFrMigrationRowMySQL, data.MigrationNumber, data.StartTime)
 		if err != nil {
 			return err

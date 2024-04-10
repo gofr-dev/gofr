@@ -5,7 +5,7 @@ which allows to connect to different SQL dialects without going into complexity 
 Following are the currently supported SQL Dialects:
 - mysql
 - postgres
-- sqlite3
+- sqlite
 
 With GoFr, connecting to different SQL databases is as straightforward as setting the DB_DIALECT environment variable to the respective dialect.
 For instance, to connect with PostgreSQL, set `DB_DIALECT` to `postgres`. Similarly, To connect with MySQL, simply set `DB_DIALECT` to `mysql`.
@@ -23,15 +23,14 @@ DB_NAME=test_db
 DB_PORT=3306
 ```
 
-# Usage for SQLite
-Set the following in your .env file:
+## Usage for SQLite
+To start using sqlite as the database, set the `DB_DIALECT` and `DB_HOST` configs as shown below:
 
 ```dotenv
-DB_DIALECT=sqlite3
-DB_HOST=file:mydatabase.db # connection string here
+DB_DIALECT=sqlite
+DB_HOST=file:test.db # Data Source Name
 ```
 >**Note:** 
-> - It is compulsory to have a `gcc` compiler present within your path, and building/running your application with `CGO_ENABLED=1` when using SQLite.
-> - For details on connection string options, refer to the go-sqlite3 documentation: https://github.com/mattn/go-sqlite3?tab=readme-ov-file#connection-string
+> - For details on DSN string options, refer to the documentation [here](https://github.com/mattn/go-sqlite3?tab=readme-ov-file#connection-string). 
 
 
