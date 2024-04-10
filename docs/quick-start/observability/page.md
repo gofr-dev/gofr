@@ -188,8 +188,8 @@ TRACER_PORT=2005
 LOG_LEVEL=DEBUG
 ```
 
-> **NOTE:** If the value of `TRACE_EXPORTER` and `TRACER_PORT` is not
-> provided, gofr uses `zipkin` exporter and  port `9411` by default. 
+> **NOTE:** If the value of `TRACER_PORT` is not
+> provided, gofr uses  port `9411` by default. 
 
 Open {% new-tab-link title="zipkin" href="http://localhost:2005/zipkin/" /%} and search by TraceID (correlationID) to see the trace.
 {% figure src="/quick-start-trace.png" alt="Zapin traces" /%}

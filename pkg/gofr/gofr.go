@@ -243,7 +243,7 @@ func (a *App) Migrate(migrationsMap map[int64]migration.Migrate) {
 }
 
 func (a *App) initTracer() {
-	traceExporter := a.Config.GetOrDefault("TRACE_EXPORTER", "zipkin")
+	traceExporter := a.Config.Get("TRACE_EXPORTER")
 	tracerHost := a.Config.Get("TRACER_HOST")
 	tracerPort := a.Config.GetOrDefault("TRACER_PORT", "9411")
 
@@ -257,31 +257,35 @@ func (a *App) initTracer() {
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
 	otel.SetErrorHandler(&otelErrorHandler{logger: a.container.Logger})
 
-	var (
-		exporter sdktrace.SpanExporter
-		err      error
-	)
-
-	switch strings.ToLower(traceExporter) {
-	case "jaeger":
-		a.container.Log("Exporting traces to jaeger.")
-
-		exporter, err = otlptracegrpc.New(context.Background(), otlptracegrpc.WithInsecure(),
-			otlptracegrpc.WithEndpoint(fmt.Sprintf("%s:%s", tracerHost, tracerPort)))
-	default:
-		a.container.Log("Exporting traces to zipkin.")
-
-		exporter, err = zipkin.New(
-			fmt.Sprintf("http://%s:%s/api/v2/spans", tracerHost, tracerPort),
+	if traceExporter != "" && tracerHost != "" {
+		var (
+			exporter sdktrace.SpanExporter
+			err      error
 		)
-	}
 
-	if err != nil {
-		a.container.Error(err)
-	}
+		switch strings.ToLower(traceExporter) {
+		case "jaeger":
+			a.container.Log("Exporting traces to jaeger.")
 
-	batcher := sdktrace.NewBatchSpanProcessor(exporter)
-	tp.RegisterSpanProcessor(batcher)
+			exporter, err = otlptracegrpc.New(context.Background(), otlptracegrpc.WithInsecure(),
+				otlptracegrpc.WithEndpoint(fmt.Sprintf("%s:%s", tracerHost, tracerPort)))
+		case "zipkin":
+			a.container.Log("Exporting traces to zipkin.")
+
+			exporter, err = zipkin.New(
+				fmt.Sprintf("http://%s:%s/api/v2/spans", tracerHost, tracerPort),
+			)
+		default:
+			a.container.Error("unsupported trace exporter.")
+		}
+
+		if err != nil {
+			a.container.Error(err)
+		}
+
+		batcher := sdktrace.NewBatchSpanProcessor(exporter)
+		tp.RegisterSpanProcessor(batcher)
+	}
 }
 
 type otelErrorHandler struct {

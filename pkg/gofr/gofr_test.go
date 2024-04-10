@@ -327,3 +327,24 @@ func Test_initTracer(t *testing.T) {
 		assert.Contains(t, logMessage, tc.expectedLogMessage)
 	}
 }
+
+func Test_initTracer_invalidConfig(t *testing.T) {
+	mockConfig := testutil.NewMockConfig(map[string]string{
+		"TRACE_EXPORTER": "abc",
+		"TRACER_HOST":    "localhost",
+		"TRACER_PORT":    "2005",
+	})
+
+	errLogMessage := testutil.StderrOutputForFunc(func() {
+		mockContainer, _ := container.NewMockContainer(t)
+
+		a := App{
+			Config:    mockConfig,
+			container: mockContainer,
+		}
+
+		a.initTracer()
+	})
+
+	assert.Contains(t, errLogMessage, "unsupported trace exporter.")
+}
