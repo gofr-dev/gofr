@@ -25,7 +25,7 @@ jobs:
           fetch-depth: 0
 
       - name: Download Go 1.22
-        run: curl -fsSL https://golang.org/dl/go1.22.linux-amd64.tar.gz -o go1.22.linux-amd64.tar.gz
+        run: curl -fsSL https://go.dev/dl/go1.22.2.linux-amd64.tar.gz -o go1.22.linux-amd64.tar.gz
 
       - name: Extract Go 1.22
         run: tar -xvf go1.22.linux-amd64.tar.gz
