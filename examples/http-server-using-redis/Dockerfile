@@ -1,4 +1,4 @@
-FROM golang:1.16
+FROM golang:1.21
 
 RUN mkdir /src/
 WORKDIR /src/
@@ -10,6 +10,6 @@ FROM alpine:latest
 RUN apk add --no-cache tzdata ca-certificates
 COPY --from=0 /src/main /main
 COPY --from=0 /src/configs /configs
-EXPOSE 9000
+EXPOSE 8000
 
 CMD ["/main"]
