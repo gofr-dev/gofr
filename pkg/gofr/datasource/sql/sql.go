@@ -3,6 +3,7 @@ package sql
 import (
 	"database/sql"
 	"fmt"
+	"github.com/XSAM/otelsql"
 	"strconv"
 	"testing"
 	"time"
@@ -45,7 +46,13 @@ func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *D
 		return nil
 	}
 
-	db, err := sql.Open(dbConfig.Dialect, dbConnectionString)
+	otelRegisteredDialect, err := otelsql.Register(dbConfig.Dialect)
+	if err != nil {
+		logger.Error(err)
+		return nil
+	}
+
+	db, err := sql.Open(otelRegisteredDialect, dbConnectionString)
 	if err != nil {
 		logger.Errorf("could not connect with '%s' user to database '%s:%s'  error: %v",
 			dbConfig.User, dbConfig.HostName, dbConfig.Port, err)

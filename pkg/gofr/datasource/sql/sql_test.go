@@ -14,7 +14,7 @@ import (
 func TestNewSQL_ErrorCase(t *testing.T) {
 	ctrl := gomock.NewController(t)
 
-	expectedLog := "could not connect with 'testuser' user to database 'localhost:3306'  error"
+	expectedLog := "sql: unknown driver \"mysql\" (forgotten import?)"
 
 	mockConfig := testutil.NewMockConfig(map[string]string{
 		"DB_DIALECT":  "mysql",
