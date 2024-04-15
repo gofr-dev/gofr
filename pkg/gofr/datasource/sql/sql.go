@@ -3,12 +3,12 @@ package sql
 import (
 	"database/sql"
 	"fmt"
-	"github.com/XSAM/otelsql"
 	"strconv"
 	"testing"
 	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/XSAM/otelsql"
 	"go.uber.org/mock/gomock"
 	"gofr.dev/pkg/gofr/testutil"
 
