@@ -6,6 +6,7 @@ import (
 	"io"
 	"math"
 	"os"
+	"reflect"
 	"regexp"
 	"strings"
 	"time"
@@ -41,11 +42,81 @@ type Logger interface {
 	changeLevel(level Level)
 }
 
+// Filter represents a filter interface to filter log entries
+type Filter interface {
+	Filter(entry *logEntry) *logEntry
+}
+
+// DefaultFilter is the default implementation of the Filter interface
+type DefaultFilter struct {
+	// Fields to mask, e.g. ["password", "credit_card_number"]
+	MaskFields []string
+}
+
+func (f *DefaultFilter) Filter(entry *logEntry) *logEntry {
+	// Get the value of the message using reflection
+	val := reflect.ValueOf(entry.Message)
+
+	// If the message is not a struct, return the original entry
+	if val.Kind() != reflect.Struct {
+		return entry
+	}
+
+	// Create a new copy of the struct value
+	newVal := reflect.New(val.Type()).Elem()
+	newVal.Set(val)
+
+	// Iterate over the struct fields
+	fmt.Println(f.MaskFields)
+	for i := 0; i < val.NumField(); i++ {
+		field := newVal.Field(i)
+		fieldType := val.Type().Field(i)
+
+		// Check if the field name matches any of the mask fields (case-insensitive)
+		fieldName := fieldType.Name
+		fmt.Println(fieldName)
+		if contains(f.MaskFields, fieldName) {
+			// Mask the field value
+			switch field.Kind() {
+			case reflect.String:
+				field.SetString(maskString(field.String()))
+			case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+				field.SetInt(0)
+			case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+				field.SetUint(0)
+			case reflect.Float32, reflect.Float64:
+				field.SetFloat(0)
+				// Add more cases for other types if needed
+			}
+		}
+	}
+
+	// Update the original message with the modified value
+	entry.Message = newVal.Interface()
+
+	return entry
+}
+
+func contains(slice []string, str string) bool {
+	for _, s := range slice {
+		if strings.EqualFold(s, str) {
+			return true
+		}
+	}
+	return false
+}
+func maskString(str string) string {
+	// Mask the string with asterisks
+	masked := strings.Repeat("*", len(str))
+	return masked
+}
+
 type logger struct {
 	level      Level
 	normalOut  io.Writer
 	errorOut   io.Writer
 	isTerminal bool
+	filter     Filter
 }
 
 type logEntry struct {
@@ -77,7 +148,11 @@ func (l *logger) logf(level Level, format string, args ...interface{}) {
 	case len(args) != 1 && format == "":
 		entry.Message = args
 	case format != "":
-		entry.Message = fmt.Sprintf(format+"", args...) // TODO - this is stupid. We should not need empty string.
+		entry.Message = fmt.Sprintf(format+"", args...)
+	}
+
+	if l.filter != nil {
+		entry = *l.filter.Filter(&entry)
 	}
 
 	if l.isTerminal {
@@ -164,8 +239,7 @@ func (l *logger) prettyPrint(e logEntry, out io.Writer) {
 				e.Level.color(), e.Level.String()[0:4], e.Time.Format("15:04:05"), clean(msg.Query), "REDIS", msg.Duration,
 				msg.String()[1:len(msg.String())-1])
 		} else {
-			fmt.Fprintf(out, "\u001B[38;5;%dm%s\u001B[0m [%s] \u001B[38;5;8m%-32s \u001B[38;5;24m%s\u001B[0m %6d\u001B[38;5;8mµs\u001B[0m %v\n",
-				e.Level.color(), e.Level.String()[0:4], e.Time.Format("15:04:05"), clean(msg.Query), "REDIS", msg.Duration, msg.String())
+			fmt.Fprintf(out, "\u001B[38;5;%dm%s\u001B[0m [%s] \u001B[38;5;8m%-32s \u001B[38;5;24m%s\u001B[0m %6d\u001B[38;5;8mµs\u001B[0m %v\n", e.Level.color(), e.Level.String()[0:4], e.Time.Format("15:04:05"), clean(msg.Query), "REDIS", msg.Duration, msg.String())
 		}
 	case service.Log:
 		fmt.Fprintf(out, "\u001B[38;5;%dm%s\u001B[0m [%s] \u001B[38;5;8m%s \u001B[38;5;%dm%d\u001B[0m %8d\u001B[38;5;8mµs\u001B[0m %s %s \n",
@@ -223,13 +297,34 @@ func colorForGRPCCode(status int32) int {
 }
 
 // NewLogger creates a new logger instance with the specified logging level.
-func NewLogger(level Level) Logger {
+func NewLogger(level Level, args ...interface{}) Logger {
+	var filter Filter
+	if len(args) > 0 {
+		filter = args[0].(Filter)
+	} else {
+		filter = &DefaultFilter{
+			MaskFields: []string{
+				"password",
+				"name",
+				"email",
+				"phone",
+				"address",
+				"dateOfBirth",
+				"socialSecurityNumber",
+				"creditCardNumber",
+				"medicalRecords",
+				"biometricData",
+				"ipAddress",
+				// Add any other relevant fields here
+			},
+		}
+	}
 	l := &logger{
 		normalOut: os.Stdout,
 		errorOut:  os.Stderr,
+		level:     level,
+		filter:    filter,
 	}
-
-	l.level = level
 
 	l.isTerminal = checkIfTerminal(l.normalOut)
 
@@ -237,10 +332,34 @@ func NewLogger(level Level) Logger {
 }
 
 // NewFileLogger creates a new logger instance with logging to a file.
-func NewFileLogger(path string) Logger {
+func NewFileLogger(path string, args ...interface{}) Logger {
+
+	var filter Filter
+	if len(args) > 0 {
+		filter = args[0].(Filter)
+	} else {
+		filter = &DefaultFilter{
+			MaskFields: []string{
+				"password",
+				"name",
+				"email",
+				"phone",
+				"address",
+				"dateOfBirth",
+				"socialSecurityNumber",
+				"creditCardNumber",
+				"medicalRecords",
+				"biometricData",
+				"ipAddress",
+				// Add any other relevant fields here
+			},
+		}
+	}
 	l := &logger{
+
 		normalOut: io.Discard,
 		errorOut:  io.Discard,
+		filter:    filter,
 	}
 
 	if path == "" {

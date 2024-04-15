@@ -387,3 +387,78 @@ func Test_clean(t *testing.T) {
 
 	assert.Equal(t, expected, query)
 }
+
+func TestDefaultFilterMaskingPII(t *testing.T) {
+	testCases := []struct {
+		name     string
+		input    interface{}
+		expected string
+	}{
+		{
+			name: "mask string fields",
+			input: struct {
+				Name     string `json:"name"`
+				Email    string `json:"email"`
+				Password string `json:"password"`
+			}{
+				Name:     "John Doe",
+				Email:    "john.doe@example.com",
+				Password: "secret123",
+			},
+			expected: `{"name":"********","email":"********************","password":"*********"}`,
+		},
+		{
+			name: "mask numeric fields",
+			input: struct {
+				PhoneNumber          int64   `json:"phoneNumber"`
+				SocialSecurityNumber int     `json:"socialSecurityNumber"`
+				CreditCardNumber     uint64  `json:"creditCardNumber"`
+				DateOfBirth          int     `json:"dateOfBirth"`
+				BiometricData        float64 `json:"biometricData"`
+				IPAddress            string  `json:"ipAddress"`
+			}{
+				PhoneNumber:          1234567890,
+				SocialSecurityNumber: 123456789,
+				CreditCardNumber:     1234567890123456,
+				DateOfBirth:          19800101,
+				BiometricData:        123.456,
+				IPAddress:            "192.168.1.1",
+			},
+			expected: `{"phoneNumber":0,"socialSecurityNumber":0,"creditCardNumber":0,"dateOfBirth":0,"biometricData":0,"ipAddress":"***********"}`,
+		},
+		// Add more test cases as needed
+	}
+
+	filter := &DefaultFilter{
+		MaskFields: []string{
+			"name",
+			"email",
+			"password",
+			"phoneNumber",
+			"socialSecurityNumber",
+			"creditCardNumber",
+			"dateOfBirth",
+			"biometricData",
+			"ipAddress",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			entry := &logEntry{
+				Message: tc.input,
+			}
+
+			filteredEntry := filter.Filter(entry)
+			maskedMessage, err := json.Marshal(filteredEntry.Message)
+			if err != nil {
+				t.Errorf("Failed to marshal masked message: %v", err)
+				return
+			}
+
+			if string(maskedMessage) != tc.expected {
+				t.Errorf("Expected %s, but got %s", tc.expected, maskedMessage)
+			}
+		})
+	}
+}
