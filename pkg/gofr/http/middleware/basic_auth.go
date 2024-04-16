@@ -47,7 +47,7 @@ func BasicAuthMiddleware(basicAuthProvider BasicAuthProvider) func(handler http.
 				return
 			}
 
-			if !validCredentials(basicAuthProvider, credentials, w) {
+			if !validateCredentials(basicAuthProvider, credentials) {
 				http.Error(w, "Unauthorized: Invalid username or password", http.StatusUnauthorized)
 				return
 			}
@@ -57,7 +57,7 @@ func BasicAuthMiddleware(basicAuthProvider BasicAuthProvider) func(handler http.
 	}
 }
 
-func validCredentials(provider BasicAuthProvider, credentials []string, w http.ResponseWriter) bool {
+func validateCredentials(provider BasicAuthProvider, credentials []string) bool {
 	if provider.ValidateFunc != nil {
 		if !provider.ValidateFunc(credentials[0], credentials[1]) {
 			return false
