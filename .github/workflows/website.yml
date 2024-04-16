@@ -33,7 +33,7 @@ jobs:
         with:
           registry: us-central1-docker.pkg.dev
           username: _json_key
-          password: ${{ secrets.DEPLOYMENT_KEY }}
+          password: ${{ secrets.deploy_key }}
 
       - name: Log in to the GitHub Container registry
         uses: docker/login-action@v1
