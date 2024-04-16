@@ -3,14 +3,15 @@ package logging
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"golang.org/x/term"
 
-	"github.com/stretchr/testify/assert"
 	"gofr.dev/pkg/gofr/testutil"
 )
 
@@ -172,12 +173,44 @@ func Test_NewSilentLoggerSTDOutput(t *testing.T) {
 	assert.Equal(t, "", logs)
 }
 
-func Test_clean(t *testing.T) {
-	input := `select   * from
-		employee`
+type mockLog struct {
+	msg string
+}
 
-	expected := "select * from employee"
-	query := clean(input)
+func (m *mockLog) PrettyPrint(writer io.Writer) {
+	fmt.Fprintf(writer, "TEST "+m.msg)
+}
 
-	assert.Equal(t, expected, query)
+func TestPrettyPrint(t *testing.T) {
+	m := &mockLog{msg: "mock test log"}
+	out := &bytes.Buffer{}
+	l := &logger{isTerminal: true}
+
+	// case PrettyPrint is implemented
+	l.prettyPrint(logEntry{
+		Level:   INFO,
+		Message: m,
+	}, out)
+
+	outputLog := out.String()
+	expOut := []string{"INFO", "[00:00:00]", "TEST mock test log"}
+
+	for _, v := range expOut {
+		assert.Contains(t, outputLog, v)
+	}
+
+	// case pretty print is not implemented
+	out.Reset()
+
+	l.prettyPrint(logEntry{
+		Level:   DEBUG,
+		Message: "test log for normal log",
+	}, out)
+
+	outputLog = out.String()
+	expOut = []string{"DEBU", "[00:00:00]", "test log for normal log"}
+
+	for _, v := range expOut {
+		assert.Contains(t, outputLog, v)
+	}
 }

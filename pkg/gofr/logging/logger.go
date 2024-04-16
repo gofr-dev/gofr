@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"regexp"
-	"strings"
 	"time"
 
 	"golang.org/x/term"
@@ -157,7 +155,7 @@ func (l *logger) prettyPrint(e logEntry, out io.Writer) {
 		fmt.Fprintf(out, "\u001B[38;5;%dm%s\u001B[0m [%s] ", e.Level.color(), e.Level.String()[0:4],
 			e.Time.Format("15:04:05"))
 
-		fmt.Printf("%v\n", e.Message)
+		fmt.Fprintf(out, "%v\n", e.Message)
 	}
 }
 
@@ -208,11 +206,4 @@ func checkIfTerminal(w io.Writer) bool {
 
 func (l *logger) changeLevel(level Level) {
 	l.level = level
-}
-
-func clean(query string) string {
-	query = regexp.MustCompile(`\s+`).ReplaceAllString(query, " ")
-	query = strings.TrimSpace(query)
-
-	return query
 }
