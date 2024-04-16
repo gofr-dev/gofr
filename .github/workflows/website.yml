@@ -17,6 +17,33 @@ env:
   CLUSTER_PROJECT: raramuri-tech
   NAMESPACE: gofr-dev
 jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      image: ${{ steps.output-image.outputs.image }}
+    name: 🐳 Dockerize
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Download UI Image
+        run: |
+          docker pull ${{ env.WEBSITE_REGISTRY }}/gofr-dev/website:latest
+
+      - name: Build and Push Image Stage
+        uses: docker/build-push-action@v4
+        with:
+          push: false
+          context: ./
+          file: ./docs/Dockerfile
+          tags: us-central1-docker.pkg.dev/${{ env.GAR_PROJECT }}/${{ env.GAR_REGISTRY }}/${{ env.APP_NAME }}:${{ github.sha }}
+
+      - id: output-image
+        run: echo "image=`echo us-central1-docker.pkg.dev/${{ env.GAR_PROJECT }}/${{ env.GAR_REGISTRY }}/${{ env.APP_NAME }}:${{ github.sha }}`" >> "$GITHUB_OUTPUT"
+
   dockerize:
     runs-on: ubuntu-latest
     outputs:
