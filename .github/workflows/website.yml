@@ -1,41 +1,32 @@
-name: Build and Deploy for Go service
-
-on:
+name: Build and Deploy
+'on':
   push:
-    branches: [ development ]
+    branches:
+      - development
   pull_request:
-    branches: [ development ]
+    branches:
+      - development
 
 env:
   APP_NAME: gofr-website
-  NAMESPACE: gofr-dev
-  CLUSTER_NAME: raramuri-tech
-  CLUSTER_PROJECT: raramuri-tech
+  WEBSITE_REGISTRY: ghcr.io
   GAR_PROJECT: raramuri-tech
   GAR_REGISTRY: kops-dev
-
+  CLUSTER_NAME: raramuri-tech
+  CLUSTER_PROJECT: raramuri-tech
+  NAMESPACE: gofr-dev
 jobs:
   dockerize:
     runs-on: ubuntu-latest
-    name: 🐳 Dockerize
-
     outputs:
       image: ${{ steps.output-image.outputs.image }}
+    name: 🐳 Dockerize
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Setup Go
-        uses: actions/setup-go@v4
-        with:
-          go-version: '1.21'
-      - name: Get dependencies
-        run: |
-          go mod download
-
-      - name: Build
-        run: |
-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -buildvcs=false -o main
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
 
       - name: Login to GAR
         uses: docker/login-action@v2
@@ -44,24 +35,37 @@ jobs:
           username: _json_key
           password: ${{ secrets.deploy_key }}
 
-      - name: Build and Push Docker Image to GAR
-        uses: docker/build-push-action@v2
+      - name: Log in to the GitHub Container registry
+        uses: docker/login-action@v1
+        with:
+          registry: ${{ env.WEBSITE_REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download UI Image
+        run: |
+          docker pull ${{ env.WEBSITE_REGISTRY }}/gofr-dev/website:latest
+
+      - name: Build and Push Image Stage
+        uses: docker/build-push-action@v4
         with:
           push: true
-          context: .
-          file: ./Dockerfile
-          tags:
-            us-central1-docker.pkg.dev/${{ env.GAR_PROJECT }}/${{ env.GAR_REGISTRY }}/${{ env.APP_NAME }}:${{ github.sha }}
+          context: ./
+          file: ./docs/Dockerfile
+          tags: us-central1-docker.pkg.dev/${{ env.GAR_PROJECT }}/${{ env.GAR_REGISTRY }}/${{ env.APP_NAME }}:${{ github.sha }}
+
       - id: output-image
-        run:
-          echo "image=`echo us-central1-docker.pkg.dev/${{ env.GAR_PROJECT }}/${{ env.GAR_REGISTRY }}/${{ env.APP_NAME }}:${{ github.sha }}`" >> "$GITHUB_OUTPUT"
+        run: echo "image=`echo us-central1-docker.pkg.dev/${{ env.GAR_PROJECT }}/${{ env.GAR_REGISTRY }}/${{ env.APP_NAME }}:${{ github.sha }}}`" >> "$GITHUB_OUTPUT"
 
   deployment:
     runs-on: ubuntu-latest
+    name: 🚀 Deploy to Stage
     needs: dockerize
-    name: 🚀 Deploy
+    container:
+      image: ghcr.io/zopsmart/gha-images:deployments-0.1.3
+      options: --rm
     env:
-      image: ${{ needs.dockerize.outputs.image }}
+      image: ${{needs.dockerize.outputs.image}}
 
     steps:
       - name: Checkout Code
@@ -72,13 +76,8 @@ jobs:
         with:
           credentials_json: ${{ secrets.deploy_key }}
 
-      - name: Update Kubectl component
-        run: gcloud --quiet components update kubectl
-
       - name: Set GCloud Project and Fetch Cluster Credentials
-        run: |
-          gcloud container clusters get-credentials ${{ env.CLUSTER_NAME }} --region=us-central1 --project=${{ env.CLUSTER_PROJECT }}
+        run: gcloud container clusters get-credentials ${{ env.CLUSTER_NAME }} --region=us-central1 --project=${{ env.CLUSTER_PROJECT }}
 
       - name: Update Deployment Image
-        run: |
-          kubectl set image deployment/${{ env.APP_NAME }} ${{ env.APP_NAME }}=${{ env.image }} --namespace ${{ env.NAMESPACE }}
+        run: kubectl set image deployment/${{ env.APP_NAME }} ${{ env.APP_NAME }}=${{ env.image }} --namespace ${{ env.NAMESPACE }}
