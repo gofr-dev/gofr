@@ -25,19 +25,19 @@ func TestBasicAuthMiddleware(t *testing.T) {
 	}{
 		{
 			name:               "Valid Authorization",
-			authHeader:         "basic dXNlcjpwYXNzd29yZA==",
+			authHeader:         "Basic dXNlcjpwYXNzd29yZA==",
 			authProvider:       BasicAuthProvider{Users: map[string]string{"user": "password"}},
 			expectedStatusCode: http.StatusOK,
 		},
 		{
 			name:               "Valid Authorization with validation Func",
-			authHeader:         "basic YWJjOnBhc3MxMjM=",
+			authHeader:         "Basic YWJjOnBhc3MxMjM=",
 			authProvider:       BasicAuthProvider{ValidateFunc: validationFunc},
 			expectedStatusCode: http.StatusOK,
 		},
 		{
 			name:               "false from validation Func",
-			authHeader:         "basic dXNlcjpwYXNzd29yZA==",
+			authHeader:         "Basic dXNlcjpwYXNzd29yZA==",
 			authProvider:       BasicAuthProvider{ValidateFunc: validationFunc},
 			expectedStatusCode: http.StatusUnauthorized,
 		},
@@ -55,19 +55,19 @@ func TestBasicAuthMiddleware(t *testing.T) {
 		},
 		{
 			name:               "Invalid encoding",
-			authHeader:         "basic invalidbase64encoding==",
+			authHeader:         "Basic invalidbase64encoding==",
 			authProvider:       BasicAuthProvider{},
 			expectedStatusCode: http.StatusUnauthorized,
 		},
 		{
 			name:               "improper credentials format",
-			authHeader:         "basic dXNlcis=",
+			authHeader:         "Basic dXNlcis=",
 			authProvider:       BasicAuthProvider{},
 			expectedStatusCode: http.StatusUnauthorized,
 		},
 		{
 			name:               "Unauthorized",
-			authHeader:         "basic dXNlcjpwYXNzd29yZA==",
+			authHeader:         "Basic dXNlcjpwYXNzd29yZA==",
 			authProvider:       BasicAuthProvider{},
 			expectedStatusCode: http.StatusUnauthorized,
 		},
