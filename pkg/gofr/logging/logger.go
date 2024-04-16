@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"math"
 	"os"
 	"regexp"
 	"strings"
@@ -12,15 +11,14 @@ import (
 
 	"golang.org/x/term"
 
-	"gofr.dev/pkg/gofr/datasource/redis"
-	"gofr.dev/pkg/gofr/datasource/sql"
-	"gofr.dev/pkg/gofr/grpc"
-	"gofr.dev/pkg/gofr/http/middleware"
-	"gofr.dev/pkg/gofr/service"
 	"gofr.dev/pkg/gofr/version"
 )
 
 const fileMode = 0644
+
+type PrettyPrint interface {
+	PrettyPrint(writer io.Writer)
+}
 
 // Logger represents a logging interface.
 type Logger interface {
@@ -150,76 +148,17 @@ func (l *logger) Fatalf(format string, args ...interface{}) {
 func (l *logger) prettyPrint(e logEntry, out io.Writer) {
 	// Giving special treatment to framework's request logs in terminal display. This does not add any overhead
 	// in running the server.
-	switch msg := e.Message.(type) {
-	case middleware.RequestLog:
-		fmt.Fprintf(out, "\u001B[38;5;%dm%s\u001B[0m [%s] \u001B[38;5;8m%s \u001B[38;5;%dm%d\u001B[0m "+
-			"%8d\u001B[38;5;8mµs\u001B[0m %s %s \n", e.Level.color(), e.Level.String()[0:4],
-			e.Time.Format("15:04:05"), msg.TraceID, colorForStatusCode(msg.Response), msg.Response, msg.ResponseTime, msg.Method, msg.URI)
-	case sql.Log:
-		fmt.Fprintf(out, "\u001B[38;5;%dm%s\u001B[0m [%s] \u001B[38;5;8m%-32s \u001B[38;5;24m%s\u001B[0m %8d\u001B[38;5;8mµs\u001B[0m %s\n",
-			e.Level.color(), e.Level.String()[0:4], e.Time.Format("15:04:05"), msg.Type, "SQL", msg.Duration, clean(msg.Query))
-	case redis.QueryLog:
-		if msg.Query == "pipeline" {
-			fmt.Fprintf(out, "\u001B[38;5;%dm%s\u001B[0m [%s] \u001B[38;5;8m%-32s \u001B[38;5;24m%s\u001B[0m %6d\u001B[38;5;8mµs\u001B[0m %s\n",
-				e.Level.color(), e.Level.String()[0:4], e.Time.Format("15:04:05"), clean(msg.Query), "REDIS", msg.Duration,
-				msg.String()[1:len(msg.String())-1])
-		} else {
-			fmt.Fprintf(out, "\u001B[38;5;%dm%s\u001B[0m [%s] \u001B[38;5;8m%-32s \u001B[38;5;24m%s\u001B[0m %6d\u001B[38;5;8mµs\u001B[0m %v\n",
-				e.Level.color(), e.Level.String()[0:4], e.Time.Format("15:04:05"), clean(msg.Query), "REDIS", msg.Duration, msg.String())
-		}
-	case service.Log:
-		fmt.Fprintf(out, "\u001B[38;5;%dm%s\u001B[0m [%s] \u001B[38;5;8m%s \u001B[38;5;%dm%d\u001B[0m %8d\u001B[38;5;8mµs\u001B[0m %s %s \n",
-			e.Level.color(), e.Level.String()[0:4], e.Time.Format("15:04:05"), msg.CorrelationID, colorForStatusCode(msg.ResponseCode),
-			msg.ResponseCode, msg.ResponseTime, msg.HTTPMethod, msg.URI)
-	case service.ErrorLog:
-		fmt.Fprintf(out, "\u001B[38;5;%dm%s\u001B[0m [%s] \u001B[38;5;8m%s "+
-			"\u001B[38;5;%dm%d\u001B[0m %8d\u001B[38;5;8mµs\u001B[0m %s %s \033[0;31m %s \n",
-			e.Level.color(), e.Level.String()[0:4], e.Time.Format("15:04:05"), msg.CorrelationID, colorForStatusCode(msg.ResponseCode),
-			msg.ResponseCode, msg.ResponseTime, msg.HTTPMethod, msg.URI, msg.ErrorMessage)
-	case grpc.RPCLog:
-		// checking the length of status code to match the spacing that is being done in HTTP logs after status codes
-		statusCodeLen := 9 - int(math.Log10(float64(msg.StatusCode))) + 1
+	if fn, ok := e.Message.(PrettyPrint); ok {
+		fmt.Fprintf(out, "\u001B[38;5;%dm%s\u001B[0m [%s] ", e.Level.color(), e.Level.String()[0:4],
+			e.Time.Format("15:04:05"))
 
-		fmt.Fprintf(out, "\u001B[38;5;%dm%s\u001B[0m [%s] \u001B[38;5;8m%s \u001B[38;5;%dm%d"+
-			"\u001B[0m %*d\u001B[38;5;8mµs\u001B[0m %s \n",
-			e.Level.color(), e.Level.String()[0:4], e.Time.Format("15:04:05"), msg.ID, colorForGRPCCode(msg.StatusCode),
-			msg.StatusCode, statusCodeLen, msg.ResponseTime, msg.Method)
-	default:
-		fmt.Fprintf(out, "\u001B[38;5;%dm%s\u001B[0m [%s] %v\n", e.Level.color(), e.Level.String()[0:4], e.Time.Format("15:04:05"), e.Message)
+		fn.PrettyPrint(out)
+	} else {
+		fmt.Fprintf(out, "\u001B[38;5;%dm%s\u001B[0m [%s] ", e.Level.color(), e.Level.String()[0:4],
+			e.Time.Format("15:04:05"))
+
+		fmt.Printf("%v\n", e.Message)
 	}
-}
-
-// colorForStatusCode provide color for the status code in the terminal when logs is being pretty-printed.
-func colorForStatusCode(status int) int {
-	const (
-		blue   = 34
-		red    = 202
-		yellow = 220
-	)
-
-	switch {
-	case status >= 200 && status < 300:
-		return blue
-	case status >= 400 && status < 500:
-		return yellow
-	case status >= 500 && status < 600:
-		return red
-	}
-
-	return 0
-}
-
-func colorForGRPCCode(status int32) int {
-	const (
-		blue = 34
-		red  = 202
-	)
-
-	if status == 0 {
-		return blue
-	}
-
-	return red
 }
 
 // NewLogger creates a new logger instance with the specified logging level.

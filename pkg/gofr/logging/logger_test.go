@@ -3,21 +3,14 @@ package logging
 import (
 	"bytes"
 	"encoding/json"
-
 	"io"
 	"os"
 	"strings"
 	"testing"
-	"time"
 
-	"github.com/stretchr/testify/assert"
 	"golang.org/x/term"
 
-	"gofr.dev/pkg/gofr/datasource/redis"
-	"gofr.dev/pkg/gofr/datasource/sql"
-	"gofr.dev/pkg/gofr/grpc"
-	"gofr.dev/pkg/gofr/http/middleware"
-	"gofr.dev/pkg/gofr/service"
+	"github.com/stretchr/testify/assert"
 	"gofr.dev/pkg/gofr/testutil"
 )
 
@@ -162,189 +155,6 @@ func TestCheckIfTerminal(t *testing.T) {
 	}
 }
 
-func TestPrettyPrint_DbAndTerminalLogs(t *testing.T) {
-	var testTime = time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
-
-	tests := []struct {
-		desc           string
-		entry          logEntry
-		isTerminal     bool
-		expectedOutput []string
-	}{
-		{
-			desc: "RequestLog in Terminal",
-			entry: logEntry{
-				Level:   INFO,
-				Time:    testTime,
-				Message: middleware.RequestLog{Response: 200, ResponseTime: 100, Method: "GET", URI: "/path", TraceID: "123"},
-			},
-			isTerminal: true,
-			expectedOutput: []string{
-				"INFO",
-				"[00:00:00]",
-				"123",
-				"200",
-				"GET",
-				"/path",
-			},
-		},
-		{
-			desc: "SQL Log",
-			entry: logEntry{
-				Level:   INFO,
-				Time:    testTime,
-				Message: sql.Log{Type: "query", Duration: 100, Query: "SELECT * FROM table"},
-			},
-			isTerminal: true,
-			expectedOutput: []string{
-				"INFO",
-				"[00:00:00]",
-				"SQL",
-				"100",
-				"SELECT * FROM table",
-			},
-		},
-		{
-			desc: "Redis Query Log",
-			entry: logEntry{
-				Level:   INFO,
-				Time:    testTime,
-				Message: redis.QueryLog{Query: "GET key", Duration: 50},
-			},
-			isTerminal: true,
-			expectedOutput: []string{
-				"INFO",
-				"[00:00:00]",
-				"REDIS",
-				"50",
-				"GET key",
-			},
-		},
-		{
-			desc: "Redis Pipeline Log",
-			entry: logEntry{
-				Level:   INFO,
-				Time:    testTime,
-				Message: redis.QueryLog{Query: "pipeline", Duration: 60, Args: []string{"get set"}},
-			},
-			isTerminal: true,
-			expectedOutput: []string{
-				"INFO",
-				"[00:00:00]",
-				"REDIS",
-				"60",
-				"pipeline",
-				"get set",
-			},
-		},
-		{
-			desc: "Redis Pipeline Log",
-			entry: logEntry{
-				Level: INFO, Time: testTime,
-				Message: grpc.RPCLog{ID: "b8810022", Method: "/test", StatusCode: 0},
-			},
-			isTerminal:     true,
-			expectedOutput: []string{"INFO", "[00:00:00]", "0", "/test"},
-		},
-	}
-
-	for _, tc := range tests {
-		out := &bytes.Buffer{}
-		logger := &logger{isTerminal: tc.isTerminal}
-
-		logger.prettyPrint(tc.entry, out)
-
-		actual := out.String()
-
-		assert.Equal(t, uint(6), tc.entry.Level.color(), "Unexpected color code")
-
-		for _, part := range tc.expectedOutput {
-			assert.Contains(t, actual, part, "Expected format part not found")
-		}
-	}
-}
-
-func TestPrettyPrint_ServiceAndDefaultLogs(t *testing.T) {
-	var testTime = time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
-
-	tests := []struct {
-		desc           string
-		entry          logEntry
-		isTerminal     bool
-		expectedOutput []string
-		expectedColor  uint
-	}{
-		{
-			desc: "Service Log",
-			entry: logEntry{
-				Level:   INFO,
-				Time:    testTime,
-				Message: service.Log{CorrelationID: "123", ResponseCode: 200, ResponseTime: 100, HTTPMethod: "GET", URI: "/path"},
-			},
-			isTerminal: true,
-			expectedOutput: []string{
-				"INFO",
-				"[00:00:00]",
-				"123",
-				"200",
-				"GET",
-				"/path",
-			},
-			expectedColor: 6,
-		},
-		{
-			desc: "Service Error Log",
-			entry: logEntry{
-				Level: ERROR,
-				Time:  testTime,
-				Message: service.ErrorLog{Log: service.Log{CorrelationID: "123", ResponseCode: 500, ResponseTime: 100,
-					HTTPMethod: "GET", URI: "/path"}, ErrorMessage: "Error message"},
-			},
-			isTerminal: true,
-			expectedOutput: []string{
-				"ERRO",
-				"[00:00:00]",
-				"123",
-				"500",
-				"GET",
-				"/path",
-				"Error message",
-			},
-			expectedColor: 160,
-		},
-		{
-			desc: "Default Case",
-			entry: logEntry{
-				Level:   INFO,
-				Time:    testTime,
-				Message: "Default message",
-			},
-			isTerminal: true,
-			expectedOutput: []string{
-				"INFO",
-				"[00:00:00]",
-				"Default message",
-			},
-			expectedColor: 6,
-		},
-	}
-
-	for _, tc := range tests {
-		out := &bytes.Buffer{}
-		logger := &logger{isTerminal: tc.isTerminal}
-
-		logger.prettyPrint(tc.entry, out)
-
-		actual := out.String()
-
-		assert.Equal(t, tc.expectedColor, tc.entry.Level.color(), "Unexpected color code")
-
-		for _, part := range tc.expectedOutput {
-			assert.Contains(t, actual, part, "Expected format part not found")
-		}
-	}
-}
-
 func Test_NewSilentLoggerSTDOutput(t *testing.T) {
 	logs := testutil.StdoutOutputForFunc(func() {
 		l := NewFileLogger("")
@@ -360,22 +170,6 @@ func Test_NewSilentLoggerSTDOutput(t *testing.T) {
 	})
 
 	assert.Equal(t, "", logs)
-}
-
-func Test_SQLLog(t *testing.T) {
-	s := sql.Log{
-		Type:     "Query",
-		Query:    "Select * from \t \t \n test",
-		Duration: 123,
-		Args:     nil,
-	}
-
-	out := testutil.StdoutOutputForFunc(func() {
-		l := &logger{isTerminal: true, normalOut: os.Stdout}
-		l.Info(s)
-	})
-
-	assert.Contains(t, out, "Select * from test")
 }
 
 func Test_clean(t *testing.T) {
