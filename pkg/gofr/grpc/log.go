@@ -3,6 +3,9 @@ package grpc
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"io"
+	"math"
 	"time"
 
 	"go.opentelemetry.io/otel"
@@ -22,6 +25,29 @@ type RPCLog struct {
 	ResponseTime int64  `json:"responseTime"`
 	Method       string `json:"method"`
 	StatusCode   int32  `json:"statusCode"`
+}
+
+func (l RPCLog) PrettyPrint(writer io.Writer) {
+	/// checking the length of status code to match the spacing that is being done in HTTP logs after status codes
+	statusCodeLen := 9 - int(math.Log10(float64(l.StatusCode))) + 1
+
+	fmt.Fprintf(writer, "\u001B[38;5;8m%s \u001B[38;5;%dm%d"+
+		"\u001B[0m %*d\u001B[38;5;8mµs\u001B[0m %s \n",
+		l.ID, colorForGRPCCode(l.StatusCode),
+		l.StatusCode, statusCodeLen, l.ResponseTime, l.Method)
+}
+
+func colorForGRPCCode(s int32) int {
+	const (
+		blue = 34
+		red  = 202
+	)
+
+	if s == 0 {
+		return blue
+	}
+
+	return red
 }
 
 func (l RPCLog) String() string {
