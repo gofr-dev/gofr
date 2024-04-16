@@ -29,6 +29,13 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
 
+      - name: Log in to the GitHub Container registry
+        uses: docker/login-action@v1
+        with:
+          registry: ${{ env.WEBSITE_REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Download UI Image
         run: |
           docker pull ${{ env.WEBSITE_REGISTRY }}/gofr-dev/website:latest
@@ -49,6 +56,7 @@ jobs:
     outputs:
       image: ${{ steps.output-image.outputs.image }}
     name: 🐳 Dockerize
+    needs: build
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
