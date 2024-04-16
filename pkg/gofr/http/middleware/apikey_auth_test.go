@@ -30,12 +30,12 @@ func Test_ApiKeyAuthMiddleware(t *testing.T) {
 		responseCode int
 		responseBody string
 	}{
-		{"missing api-key", nil, "", 401, "Unauthorized"},
-		{"invalid api-key", nil, "invalid-key", 401, "Unauthorized"},
+		{"missing api-key", nil, "", 401, "Unauthorized: Authorization header missing\n"},
+		{"invalid api-key", nil, "invalid-key", 401, "Unauthorized: Invalid Authorization header\n"},
 		{"valid api-key", nil, "valid-key-1", 200, "Success"},
 		{"another valid api-key", nil, "valid-key-2", 200, "Success"},
 		{"custom validator valid key", validator, "valid-key", 200, "Success"},
-		{"custom validator in-valid key", validator, "invalid-key", 401, "Unauthorized"},
+		{"custom validator in-valid key", validator, "invalid-key", 401, "Unauthorized: Invalid Authorization header\n"},
 	}
 
 	for i, tc := range testCases {
@@ -48,7 +48,7 @@ func Test_ApiKeyAuthMiddleware(t *testing.T) {
 
 		assert.Equal(t, tc.responseCode, rr.Code, "TEST[%d], Failed.\n%s", i, tc.desc)
 
-		assert.Contains(t, rr.Body.String(), tc.responseBody, "TEST[%d], Failed.\n%s", i, tc.desc)
+		assert.Equal(t, tc.responseBody, rr.Body.String(), "TEST[%d], Failed.\n%s", i, tc.desc)
 	}
 }
 
