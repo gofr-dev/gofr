@@ -1,6 +1,7 @@
 package sql
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -14,7 +15,8 @@ import (
 func TestNewSQL_ErrorCase(t *testing.T) {
 	ctrl := gomock.NewController(t)
 
-	expectedLog := "sql: unknown driver \"mysql\" (forgotten import?)"
+	expectedLog := fmt.Sprintf("could not register sql dialect '%s' for traces due to error: '%s'", "mysql",
+		"sql: unknown driver \"mysql\" (forgotten import?)")
 
 	mockConfig := testutil.NewMockConfig(map[string]string{
 		"DB_DIALECT":  "mysql",
