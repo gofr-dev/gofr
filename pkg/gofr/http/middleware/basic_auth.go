@@ -47,19 +47,26 @@ func BasicAuthMiddleware(basicAuthProvider BasicAuthProvider) func(handler http.
 				return
 			}
 
-			if basicAuthProvider.ValidateFunc != nil {
-				if !basicAuthProvider.ValidateFunc(credentials[0], credentials[1]) {
-					http.Error(w, "Unauthorized: Invalid username or password", http.StatusUnauthorized)
-					return
-				}
-			} else {
-				if storedPass, ok := basicAuthProvider.Users[credentials[0]]; !ok || storedPass != credentials[1] {
-					http.Error(w, "Unauthorized: Invalid username or password", http.StatusUnauthorized)
-					return
-				}
+			if !validCredentials(basicAuthProvider, credentials, w) {
+				http.Error(w, "Unauthorized: Invalid username or password", http.StatusUnauthorized)
+				return
 			}
 
 			handler.ServeHTTP(w, r)
 		})
 	}
+}
+
+func validCredentials(provider BasicAuthProvider, credentials []string, w http.ResponseWriter) bool {
+	if provider.ValidateFunc != nil {
+		if !provider.ValidateFunc(credentials[0], credentials[1]) {
+			return false
+		}
+	} else {
+		if storedPass, ok := provider.Users[credentials[0]]; !ok || storedPass != credentials[1] {
+			return false
+		}
+	}
+
+	return true
 }

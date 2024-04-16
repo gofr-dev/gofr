@@ -19,18 +19,18 @@ func APIKeyAuthMiddleware(validator func(apiKey string) bool, apiKeys ...string)
 
 			authKey := r.Header.Get("X-API-KEY")
 			if authKey == "" {
-				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+				http.Error(w, "Unauthorized: Authorization header missing", http.StatusUnauthorized)
 				return
 			}
 
 			if validator != nil {
 				if !validator(authKey) {
-					http.Error(w, "Unauthorized", http.StatusUnauthorized)
+					http.Error(w, "Unauthorized: Invalid Authorization header", http.StatusUnauthorized)
 					return
 				}
 			} else {
 				if !isPresent(authKey, apiKeys...) {
-					http.Error(w, "Unauthorized", http.StatusUnauthorized)
+					http.Error(w, "Unauthorized: Invalid Authorization header", http.StatusUnauthorized)
 					return
 				}
 			}
