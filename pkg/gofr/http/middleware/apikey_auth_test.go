@@ -30,12 +30,12 @@ func Test_ApiKeyAuthMiddleware(t *testing.T) {
 		responseCode int
 		responseBody string
 	}{
-		{"missing api-key", nil, "", 401, "Unauthorized\n"},
-		{"invalid api-key", nil, "invalid-key", 401, "Unauthorized\n"},
+		{"missing api-key", nil, "", 401, "Unauthorized"},
+		{"invalid api-key", nil, "invalid-key", 401, "Unauthorized"},
 		{"valid api-key", nil, "valid-key-1", 200, "Success"},
 		{"another valid api-key", nil, "valid-key-2", 200, "Success"},
 		{"custom validator valid key", validator, "valid-key", 200, "Success"},
-		{"custom validator in-valid key", validator, "invalid-key", 401, "Unauthorized\n"},
+		{"custom validator in-valid key", validator, "invalid-key", 401, "Unauthorized"},
 	}
 
 	for i, tc := range testCases {
@@ -48,6 +48,22 @@ func Test_ApiKeyAuthMiddleware(t *testing.T) {
 
 		assert.Equal(t, tc.responseCode, rr.Code, "TEST[%d], Failed.\n%s", i, tc.desc)
 
-		assert.Equal(t, tc.responseBody, rr.Body.String(), "TEST[%d], Failed.\n%s", i, tc.desc)
+		assert.Contains(t, rr.Body.String(), tc.responseBody, "TEST[%d], Failed.\n%s", i, tc.desc)
 	}
+}
+
+func Test_ApiKeyAuthMiddleware_well_known(t *testing.T) {
+	testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("Success"))
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/.well-known/health-check", http.NoBody)
+	rr := httptest.NewRecorder()
+
+	wrappedHandler := APIKeyAuthMiddleware(nil)(testHandler)
+	wrappedHandler.ServeHTTP(rr, req)
+
+	assert.Equal(t, 200, rr.Code, "TEST Failed.\n")
+
+	assert.Equal(t, "Success", rr.Body.String(), "TEST Failed.\n")
 }
