@@ -11,7 +11,7 @@ env:
   APP_NAME: gofr-website
   WEBSITE_REGISTRY: ghcr.io
   GAR_PROJECT: raramuri-tech
-  GAR_REGISTRY: kops-dev-registry
+  GAR_REGISTRY: kops-dev
   CLUSTER_NAME: raramuri-tech
   CLUSTER_PROJECT: raramuri-tech
   NAMESPACE: gofr-dev
