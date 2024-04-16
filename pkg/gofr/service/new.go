@@ -157,7 +157,7 @@ func (h *httpService) createAndSendRequest(ctx context.Context, method string, p
 	// inject the TraceParent header manually in the request headers
 	otel.GetTextMapPropagator().Inject(spanContext, propagation.HeaderCarrier(req.Header))
 
-	log := Log{
+	log := &Log{
 		Timestamp:     time.Now(),
 		CorrelationID: trace.SpanFromContext(ctx).SpanContext().TraceID().String(),
 		HTTPMethod:    method,
@@ -179,7 +179,7 @@ func (h *httpService) createAndSendRequest(ctx context.Context, method string, p
 
 	if err != nil {
 		log.ResponseCode = http.StatusInternalServerError
-		h.Log(ErrorLog{Log: log, ErrorMessage: err.Error()})
+		h.Log(&ErrorLog{Log: log, ErrorMessage: err.Error()})
 
 		return resp, err
 	}
