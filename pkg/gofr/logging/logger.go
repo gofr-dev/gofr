@@ -42,72 +42,86 @@ type Logger interface {
 	changeLevel(level Level)
 }
 
-// Filter represents a filter interface to filter log entries
-type Filter interface {
-	Filter(entry *logEntry) *logEntry
+// Filterer represents an interface to filter log messages.
+type Filterer interface {
+	Filter(message interface{}) interface{}
 }
 
-// DefaultFilter is the default implementation of the Filter interface
+// DefaultFilter is the default implementation of the Filterer interface.
 type DefaultFilter struct {
-	// Fields to mask, e.g. ["password", "credit_card_number"]
+	// MaskFields is a slice of fields to mask, e.g. ["password", "credit_card_number"]
 	MaskFields []string
+	// EnableMasking is a flag to enable or disable masking
+	EnableMasking bool
 }
 
-func (f *DefaultFilter) Filter(entry *logEntry) *logEntry {
+func (f *DefaultFilter) Filter(message interface{}) interface{} {
 	// Get the value of the message using reflection
-	val := reflect.ValueOf(entry.Message)
+	val := reflect.ValueOf(message)
 
-	// If the message is not a struct, return the original entry
-	if val.Kind() != reflect.Struct {
-		return entry
+	// If masking is disabled or the message is not a struct, return the original message
+	if !f.EnableMasking || val.Kind() != reflect.Struct {
+		return message
 	}
 
 	// Create a new copy of the struct value
 	newVal := reflect.New(val.Type()).Elem()
 	newVal.Set(val)
 
-	// Iterate over the struct fields
-	fmt.Println(f.MaskFields)
+	// Recursively filter the struct fields
+	f.filterFields(newVal)
+
+	return newVal.Interface()
+}
+func (f *DefaultFilter) filterFields(val reflect.Value) {
 	for i := 0; i < val.NumField(); i++ {
-		field := newVal.Field(i)
+		field := val.Field(i)
 		fieldType := val.Type().Field(i)
 
 		// Check if the field name matches any of the mask fields (case-insensitive)
 		fieldName := fieldType.Name
-		fmt.Println(fieldName)
 		if contains(f.MaskFields, fieldName) {
 			// Mask the field value
-			switch field.Kind() {
-			case reflect.String:
-				field.SetString(maskString(field.String()))
-			case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-				field.SetInt(0)
-			case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-				field.SetUint(0)
-			case reflect.Float32, reflect.Float64:
-				field.SetFloat(0)
-				// Add more cases for other types if needed
-			}
+			f.maskField(field, fieldName)
+		} else if field.Kind() == reflect.Struct {
+			// If the field is a struct, recursively filter its fields
+			f.filterFields(field)
 		}
 	}
-
-	// Update the original message with the modified value
-	entry.Message = newVal.Interface()
-
-	return entry
 }
 
-func contains(slice []string, str string) bool {
-	for _, s := range slice {
-		if strings.EqualFold(s, str) {
+func (f *DefaultFilter) maskField(field reflect.Value, fieldName string) {
+	switch field.Kind() {
+	case reflect.String:
+		if fieldName == "Password" {
+			field.SetString(maskString(field.String(), 10)) // Mask password with fixed length of 10
+		} else {
+			field.SetString(maskString(field.String()))
+		}
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		field.SetInt(0)
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		field.SetUint(0)
+	case reflect.Float32, reflect.Float64:
+		field.SetFloat(0)
+		// Add more cases for other types if needed
+	}
+}
+func contains(maskFields []string, fieldName string) bool {
+	for _, field := range maskFields {
+		if strings.EqualFold(field, fieldName) {
 			return true
 		}
 	}
 	return false
 }
-func maskString(str string) string {
-	// Mask the string with asterisks
-	masked := strings.Repeat("*", len(str))
+
+func maskString(str string, maskLength ...int) string {
+	length := len(str)
+	if len(maskLength) > 0 {
+		length = maskLength[0]
+	}
+	masked := strings.Repeat("*", length)
 	return masked
 }
 
@@ -116,9 +130,8 @@ type logger struct {
 	normalOut  io.Writer
 	errorOut   io.Writer
 	isTerminal bool
-	filter     Filter
+	filter     Filterer
 }
-
 type logEntry struct {
 	Level       Level       `json:"level"`
 	Time        time.Time   `json:"time"`
@@ -152,7 +165,7 @@ func (l *logger) logf(level Level, format string, args ...interface{}) {
 	}
 
 	if l.filter != nil {
-		entry = *l.filter.Filter(&entry)
+		entry.Message = l.filter.Filter(entry.Message)
 	}
 
 	if l.isTerminal {
@@ -298,27 +311,25 @@ func colorForGRPCCode(status int32) int {
 
 // NewLogger creates a new logger instance with the specified logging level.
 func NewLogger(level Level, args ...interface{}) Logger {
-	var filter Filter
+	var filter Filterer
 	if len(args) > 0 {
-		filter = args[0].(Filter)
+		f, ok := args[0].(Filterer)
+		if !ok {
+			// If the provided argument does not implement the Filterer interface, use the default filter
+			filter = &DefaultFilter{
+				MaskFields:    []string{},
+				EnableMasking: true,
+			}
+		} else {
+			filter = f
+		}
 	} else {
 		filter = &DefaultFilter{
-			MaskFields: []string{
-				"password",
-				"name",
-				"email",
-				"phone",
-				"address",
-				"dateOfBirth",
-				"socialSecurityNumber",
-				"creditCardNumber",
-				"medicalRecords",
-				"biometricData",
-				"ipAddress",
-				// Add any other relevant fields here
-			},
+			MaskFields:    []string{},
+			EnableMasking: true,
 		}
 	}
+
 	l := &logger{
 		normalOut: os.Stdout,
 		errorOut:  os.Stderr,
@@ -333,30 +344,26 @@ func NewLogger(level Level, args ...interface{}) Logger {
 
 // NewFileLogger creates a new logger instance with logging to a file.
 func NewFileLogger(path string, args ...interface{}) Logger {
-
-	var filter Filter
+	var filter Filterer
 	if len(args) > 0 {
-		filter = args[0].(Filter)
+		f, ok := args[0].(Filterer)
+		if !ok {
+			// If the provided argument does not implement the Filterer interface, use the default filter
+			filter = &DefaultFilter{
+				MaskFields:    []string{},
+				EnableMasking: true,
+			}
+		} else {
+			filter = f
+		}
 	} else {
 		filter = &DefaultFilter{
-			MaskFields: []string{
-				"password",
-				"name",
-				"email",
-				"phone",
-				"address",
-				"dateOfBirth",
-				"socialSecurityNumber",
-				"creditCardNumber",
-				"medicalRecords",
-				"biometricData",
-				"ipAddress",
-				// Add any other relevant fields here
-			},
+			MaskFields:    []string{},
+			EnableMasking: true,
 		}
 	}
-	l := &logger{
 
+	l := &logger{
 		normalOut: io.Discard,
 		errorOut:  io.Discard,
 		filter:    filter,
