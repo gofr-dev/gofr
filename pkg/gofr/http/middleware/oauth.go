@@ -94,7 +94,7 @@ type PublicKeyProvider interface {
 func OAuth(key PublicKeyProvider) func(inner http.Handler) http.Handler {
 	return func(inner http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if strings.HasPrefix(r.URL.Path, "/.well-known") {
+			if isWellKnown(r.URL.Path) {
 				inner.ServeHTTP(w, r)
 				return
 			}
