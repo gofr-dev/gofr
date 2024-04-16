@@ -4,6 +4,7 @@ package middleware
 
 import (
 	"net/http"
+	"strings"
 )
 
 // APIKeyAuthMiddleware creates a middleware function that enforces API key authentication based on the provided API
@@ -11,6 +12,11 @@ import (
 func APIKeyAuthMiddleware(validator func(apiKey string) bool, apiKeys ...string) func(handler http.Handler) http.Handler {
 	return func(handler http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if strings.HasPrefix(r.URL.Path, "/.well-known") {
+				handler.ServeHTTP(w, r)
+				return
+			}
+
 			authKey := r.Header.Get("X-API-KEY")
 			if authKey == "" {
 				http.Error(w, "Unauthorized", http.StatusUnauthorized)
