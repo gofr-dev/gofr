@@ -15,41 +15,47 @@ import (
 	"gofr.dev/pkg/gofr/logging"
 )
 
+// errUnexpectedStatusCode is returned when an unexpected status code is received from the remote endpoint.
 var errUnexpectedStatusCode = errors.New("unexpected response status code")
 
-type CustomExporter struct {
-	endpoint string
-	logger   logging.Logger
+// Exporter is responsible for exporting spans to a remote endpoint.
+type Exporter struct {
+	endpoint string         // The endpoint to which spans will be exported.
+	logger   logging.Logger // Logger for logging errors and other messages.
 }
 
-func NewCustomExporter(endpoint string, logger logging.Logger) *CustomExporter {
-	return &CustomExporter{
+// NewCustomExporter creates a new Exporter instance with a custom endpoint and logger.
+func NewCustomExporter(endpoint string, logger logging.Logger) *Exporter {
+	return &Exporter{
 		endpoint: endpoint,
 		logger:   logger,
 	}
 }
 
+// Span represents a span that will be exported.
 type Span struct {
-	TraceID       string            `json:"traceId"`
-	ID            string            `json:"id"`
-	ParentID      string            `json:"parentId,omitempty"`
-	Name          string            `json:"name"`
-	Timestamp     int64             `json:"timestamp"`
-	Duration      int64             `json:"duration"`
-	Tags          map[string]string `json:"tags,omitempty"`
-	LocalEndpoint map[string]string `json:"localEndpoint"`
+	TraceID       string            `json:"traceId"`            // Trace ID of the span.
+	ID            string            `json:"id"`                 // ID of the span.
+	ParentID      string            `json:"parentId,omitempty"` // Parent ID of the span.
+	Name          string            `json:"name"`               // Name of the span.
+	Timestamp     int64             `json:"timestamp"`          // Timestamp of the span.
+	Duration      int64             `json:"duration"`           // Duration of the span.
+	Tags          map[string]string `json:"tags,omitempty"`     // Tags associated with the span.
+	LocalEndpoint map[string]string `json:"localEndpoint"`      // Local endpoint of the span.
 }
 
-func (e *CustomExporter) ExportSpans(ctx context.Context, spans []sdktrace.ReadOnlySpan) error {
+// ExportSpans exports spans to the configured remote endpoint.
+func (e *Exporter) ExportSpans(ctx context.Context, spans []sdktrace.ReadOnlySpan) error {
 	return e.processSpans(ctx, e.logger, spans)
 }
 
 // Shutdown shuts down the exporter.
-func (e *CustomExporter) Shutdown(context.Context) error {
+func (e *Exporter) Shutdown(context.Context) error {
 	return nil
 }
 
-func (e *CustomExporter) processSpans(ctx context.Context, logger logging.Logger, spans []sdktrace.ReadOnlySpan) error {
+// processSpans processes spans and exports them to the configured endpoint.
+func (e *Exporter) processSpans(ctx context.Context, logger logging.Logger, spans []sdktrace.ReadOnlySpan) error {
 	if len(spans) == 0 {
 		return nil
 	}
@@ -84,6 +90,7 @@ func (e *CustomExporter) processSpans(ctx context.Context, logger logging.Logger
 	return nil
 }
 
+// convertSpans converts OpenTelemetry spans to the format expected by the exporter.
 func convertSpans(spans []sdktrace.ReadOnlySpan) []Span {
 	convertedSpans := make([]Span, 0, len(spans))
 
@@ -96,9 +103,6 @@ func convertSpans(spans []sdktrace.ReadOnlySpan) []Span {
 			Timestamp: s.StartTime().UnixNano() / int64(time.Microsecond),
 			Duration:  s.EndTime().Sub(s.StartTime()).Nanoseconds() / int64(time.Microsecond),
 			Tags:      make(map[string]string, len(s.Attributes())+len(s.Resource().Attributes())),
-			LocalEndpoint: map[string]string{
-				"serviceName": s.Name(),
-			},
 		}
 
 		for _, kv := range s.Attributes() {
@@ -113,7 +117,7 @@ func convertSpans(spans []sdktrace.ReadOnlySpan) []Span {
 
 		convertedSpans = append(convertedSpans, convertedSpan)
 
-		convertedSpans[i].LocalEndpoint = map[string]string{"serviceName": s.Name()}
+		convertedSpans[i].LocalEndpoint = map[string]string{"serviceName": convertedSpans[0].Tags["service.name"]}
 	}
 
 	return convertedSpans

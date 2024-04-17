@@ -27,7 +27,7 @@ func Test_ExportSpans(t *testing.T) {
 		desc  string
 		spans []sdktrace.ReadOnlySpan
 	}{
-		//	{"Empty Spans Slice", []sdktrace.ReadOnlySpan{}},
+		{"Empty Spans Slice", []sdktrace.ReadOnlySpan{}},
 		{"Success case", provideSampleSpan(t)},
 	}
 
