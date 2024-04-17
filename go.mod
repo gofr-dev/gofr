@@ -2,8 +2,6 @@ module gofr.dev
 
 go 1.22.0
 
-replace gofr.dev/gofr-exporter => ../../../custom-tracer/gofr-tracer
-
 require (
 	cloud.google.com/go/pubsub v1.37.0
 	github.com/DATA-DOG/go-sqlmock v1.5.2
@@ -34,7 +32,6 @@ require (
 	go.opentelemetry.io/otel/sdk/metric v1.24.0
 	go.opentelemetry.io/otel/trace v1.25.0
 	go.uber.org/mock v0.4.0
-	gofr.dev/gofr-exporter v0.0.0-00010101000000-000000000000
 	golang.org/x/oauth2 v0.19.0
 	golang.org/x/term v0.19.0
 	google.golang.org/api v0.172.0

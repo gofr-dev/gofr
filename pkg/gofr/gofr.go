@@ -17,7 +17,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
-	exp "gofr.dev/gofr-exporter"
+
 	"google.golang.org/grpc"
 
 	"gofr.dev/pkg/gofr/config"
@@ -277,7 +277,7 @@ func (a *App) initTracer() {
 				fmt.Sprintf("http://%s:%s/api/v2/spans", tracerHost, tracerPort),
 			)
 		case "gofr":
-			exporter = exp.NewCustomExporter(fmt.Sprintf("http://%s:%s/api/spans", "localhost",
+			exporter = NewCustomExporter(fmt.Sprintf("http://%s:%s/api/spans", "localhost",
 				tracerPort), logging.NewLogger(logging.INFO))
 
 			a.container.Log("Exporting traces to gofr.")
