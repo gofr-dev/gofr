@@ -70,7 +70,7 @@ func New(config *Config, logger Logger, metrics Metrics) *MQTT {
 
 	msg := make(map[string]chan *pubsub.Message)
 
-	logger.Debugf("connected to MQTT, host: %v, port: %v", config.Hostname, config.Port)
+	logger.Infof("connected to MQTT at %v:%v, clientID: %v", config.Hostname, config.Port, options.ClientID)
 
 	return &MQTT{Client: client, config: config, logger: logger, msgChanMap: msg, mu: new(sync.RWMutex), metrics: metrics}
 }
@@ -99,8 +99,7 @@ func getDefaultClient(config *Config, logger Logger, metrics Metrics) *MQTT {
 
 	msg := make(map[string]chan *pubsub.Message)
 
-	logger.Debugf("connected to MQTT, HostName: %v, Port: %v", config.Hostname, config.Port)
-	logger.Debugf("using %v clientID for this MQTT session", clientID)
+	logger.Infof("connected to MQTT at %v:%v, clientID: %v", config.Hostname, config.Port, clientID)
 
 	return &MQTT{Client: client, config: config, logger: logger, msgChanMap: msg, mu: new(sync.RWMutex), metrics: metrics}
 }
@@ -111,8 +110,6 @@ func getMQTTClientOptions(config *Config, logger Logger) *mqtt.ClientOptions {
 
 	clientID := getClientID(config.ClientID)
 	options.SetClientID(clientID)
-
-	logger.Debugf("using %v clientID for this session", clientID)
 
 	if config.Username != "" {
 		options.SetUsername(config.Username)
@@ -168,6 +165,8 @@ func (m *MQTT) Subscribe(ctx context.Context, topic string) (*pubsub.Message, er
 
 		// store the message in the channel
 		msgChan <- messg
+
+		m.logger.Debugf("received mqtt message %v on topic %v", string(messg.Value), topic)
 	}
 
 	token := m.Client.Subscribe(topic, m.config.QoS, handler)
@@ -177,8 +176,6 @@ func (m *MQTT) Subscribe(ctx context.Context, topic string) (*pubsub.Message, er
 
 		return nil, token.Error()
 	}
-
-	m.logger.Debugf("received mqtt message %v on topic %v", string(messg.Value), topic)
 
 	m.metrics.IncrementCounter(ctx, "app_pubsub_subscribe_success_count", "topic", topic)
 
