@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/XSAM/otelsql"
 	"go.uber.org/mock/gomock"
 	"gofr.dev/pkg/gofr/testutil"
 
@@ -45,7 +46,13 @@ func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *D
 		return nil
 	}
 
-	db, err := sql.Open(dbConfig.Dialect, dbConnectionString)
+	otelRegisteredDialect, err := otelsql.Register(dbConfig.Dialect)
+	if err != nil {
+		logger.Errorf("could not register sql dialect '%s' for traces due to error: '%s'", dbConfig.Dialect, err)
+		return nil
+	}
+
+	db, err := sql.Open(otelRegisteredDialect, dbConnectionString)
 	if err != nil {
 		logger.Errorf("could not connect with '%s' user to database '%s:%s'  error: %v",
 			dbConfig.User, dbConfig.HostName, dbConfig.Port, err)

@@ -5,6 +5,7 @@ go 1.21
 require (
 	cloud.google.com/go/pubsub v1.37.0
 	github.com/DATA-DOG/go-sqlmock v1.5.2
+	github.com/XSAM/otelsql v0.29.0
 	github.com/alicebob/miniredis/v2 v2.32.1
 	github.com/eclipse/paho.mqtt.golang v1.4.3
 	github.com/go-redis/redismock/v9 v9.2.0
