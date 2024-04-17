@@ -13,6 +13,12 @@ import (
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 )
 
+const (
+	gcpBackend    = "GCP"
+	modePublish   = "PUB"
+	modeSubscribe = "SUB"
+)
+
 var (
 	errProjectIDNotProvided    = errors.New("google project id not provided")
 	errSubscriptionNotProvided = errors.New("subscription name not provided")
@@ -84,14 +90,21 @@ func (g *googleClient) Publish(ctx context.Context, topic string, message []byte
 		PublishTime: time.Now(),
 	})
 
-	_, err = result.Get(ctx)
+	id, err := result.Get(ctx)
 	if err != nil {
 		g.logger.Errorf("error publishing to google topic %s err: %v", topic, err)
 
 		return err
 	}
 
-	g.logger.Debugf("published google message %v on topic %v", string(message), topic)
+	g.logger.Debug(&pubsub.Log{
+		Mode:          modePublish,
+		MessageID:     id,
+		MessageValue:  string(message),
+		Topic:         topic,
+		Host:          g.ProjectID,
+		PubSubBackend: gcpBackend,
+	})
 
 	g.metrics.IncrementCounter(ctx, "app_pubsub_publish_success_count", "topic", topic)
 
@@ -118,13 +131,19 @@ func (g *googleClient) Subscribe(ctx context.Context, topic string) (*pubsub.Mes
 	err = subscription.Receive(ctx, func(_ context.Context, msg *gcPubSub.Message) {
 		defer cancel()
 
-		m = &pubsub.Message{
-			Topic:    topic,
-			Value:    msg.Data,
-			MetaData: msg.Attributes,
+		m.Topic = topic
+		m.Value = msg.Data
+		m.MetaData = msg.Attributes
+		m.Committer = newGoogleMessage(msg)
 
-			Committer: newGoogleMessage(msg),
-		}
+		g.logger.Debug(&pubsub.Log{
+			Mode:          modeSubscribe,
+			MessageID:     msg.ID,
+			MessageValue:  string(m.Value),
+			Topic:         topic,
+			Host:          g.Config.ProjectID,
+			PubSubBackend: gcpBackend,
+		})
 	})
 
 	if err != nil {
@@ -132,8 +151,6 @@ func (g *googleClient) Subscribe(ctx context.Context, topic string) (*pubsub.Mes
 
 		return nil, err
 	}
-
-	g.logger.Debugf("received google message %v on topic %v", string(m.Value), m.Topic)
 
 	g.metrics.IncrementCounter(ctx, "app_pubsub_subscribe_success_count", "topic", topic)
 
