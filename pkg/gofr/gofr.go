@@ -277,8 +277,8 @@ func (a *App) initTracer() {
 				fmt.Sprintf("http://%s:%s/api/v2/spans", tracerHost, tracerPort),
 			)
 		case "gofr":
-			exporter = NewCustomExporter(fmt.Sprintf("http://%s:%s/api/spans", "localhost",
-				tracerPort), logging.NewLogger(logging.INFO))
+			exporter = NewCustomExporter(fmt.Sprintf("%s/api/spans", "https://tracer-api.gofr.dev"),
+				logging.NewLogger(logging.INFO))
 
 			a.container.Log("Exporting traces to gofr.")
 		default:
