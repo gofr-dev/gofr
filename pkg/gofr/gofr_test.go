@@ -305,8 +305,6 @@ func Test_initTracer(t *testing.T) {
 
 	mockConfig3 := testutil.NewMockConfig(map[string]string{
 		"TRACE_EXPORTER": "gofr",
-		"TRACER_HOST":    "localhost",
-		"TRACER_PORT":    "2005",
 	})
 
 	tests := []struct {
