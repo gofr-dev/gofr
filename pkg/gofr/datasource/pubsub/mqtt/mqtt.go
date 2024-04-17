@@ -57,7 +57,7 @@ func New(config *Config, logger Logger, metrics Metrics) *MQTT {
 		return getDefaultClient(config, logger, metrics)
 	}
 
-	options := getMQTTClientOptions(config, logger)
+	options := getMQTTClientOptions(config)
 
 	// create the client using the options above
 	client := mqtt.NewClient(options)
@@ -104,7 +104,7 @@ func getDefaultClient(config *Config, logger Logger, metrics Metrics) *MQTT {
 	return &MQTT{Client: client, config: config, logger: logger, msgChanMap: msg, mu: new(sync.RWMutex), metrics: metrics}
 }
 
-func getMQTTClientOptions(config *Config, logger Logger) *mqtt.ClientOptions {
+func getMQTTClientOptions(config *Config) *mqtt.ClientOptions {
 	options := mqtt.NewClientOptions()
 	options.AddBroker(fmt.Sprintf("%s://%s:%d", config.Protocol, config.Hostname, config.Port))
 
