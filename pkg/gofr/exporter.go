@@ -24,8 +24,8 @@ type Exporter struct {
 	logger   logging.Logger // Logger for logging errors and other messages.
 }
 
-// NewCustomExporter creates a new Exporter instance with a custom endpoint and logger.
-func NewCustomExporter(endpoint string, logger logging.Logger) *Exporter {
+// NewExporter creates a new Exporter instance with a custom endpoint and logger.
+func NewExporter(endpoint string, logger logging.Logger) *Exporter {
 	return &Exporter{
 		endpoint: endpoint,
 		logger:   logger,

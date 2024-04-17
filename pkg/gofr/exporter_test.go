@@ -21,7 +21,7 @@ func Test_ExportSpans(t *testing.T) {
 	defer server.Close()
 
 	logger := logging.NewLogger(logging.INFO)
-	exporter := NewCustomExporter(server.URL, logger)
+	exporter := NewExporter(server.URL, logger)
 
 	tests := []struct {
 		desc  string
@@ -43,7 +43,7 @@ func Test_ExportSpansError(t *testing.T) {
 	}))
 	server.Close()
 
-	exporter := NewCustomExporter(server.URL, logging.NewLogger(logging.INFO))
+	exporter := NewExporter(server.URL, logging.NewLogger(logging.INFO))
 
 	err := exporter.ExportSpans(context.Background(), provideSampleSpan(t))
 	assert.Error(t, err, "Expected error for failed request")
