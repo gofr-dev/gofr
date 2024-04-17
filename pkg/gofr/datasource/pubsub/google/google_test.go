@@ -2,6 +2,7 @@ package google
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	gcPubSub "cloud.google.com/go/pubsub"
@@ -12,6 +13,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
+	"gofr.dev/pkg/gofr/datasource/pubsub"
 	"gofr.dev/pkg/gofr/testutil"
 )
 
@@ -60,7 +62,14 @@ func TestGoogleClient_Publish_Success(t *testing.T) {
 
 	topic := "test-topic"
 	message := []byte("test message")
-	expectedLog := "published google message test message on topic test-topic\n"
+	expectedLog := fmt.Sprintf("%v\n", &pubsub.Log{
+		Mode:          modePublish,
+		MessageID:     "m0",
+		MessageValue:  "test message",
+		Topic:         "test-topic",
+		Host:          "test",
+		PubSubBackend: "GCP",
+	})
 
 	out := testutil.StdoutOutputForFunc(func() {
 		g := &googleClient{
