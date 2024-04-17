@@ -149,11 +149,11 @@ func (c *Container) registerFrameworkMetrics() {
 	c.Metrics().NewHistogram("app_http_service_response", "Response time of http service requests in seconds.", httpBuckets...)
 
 	// redis metrics
-	redisBuckets := []float64{50, 75, 100, 125, 150, 200, 300, 500, 750, 1000, 1250, 1500, 2000, 2500, 3000}
+	redisBuckets := []float64{.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 1.25, 1.5, 2, 2.5, 3}
 	c.Metrics().NewHistogram("app_redis_stats", "Response time of Redis commands in milliseconds.", redisBuckets...)
 
 	// sql metrics
-	sqlBuckets := []float64{50, 75, 100, 125, 150, 200, 300, 500, 750, 1000, 2000, 3000, 4000, 5000, 7500, 10000}
+	sqlBuckets := []float64{.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 4, 5, 7.5, 10}
 	c.Metrics().NewHistogram("app_sql_stats", "Response time of SQL queries in milliseconds.", sqlBuckets...)
 	c.Metrics().NewGauge("app_sql_open_connections", "Number of open SQL connections.")
 	c.Metrics().NewGauge("app_sql_inUse_connections", "Number of inUse SQL connections.")
