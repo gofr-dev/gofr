@@ -65,7 +65,7 @@ func TestMQTT_getMQTTClientOptions(t *testing.T) {
 	}
 
 	expectedURL, _ := url.Parse("tcp://localhost:1883")
-	options := getMQTTClientOptions(&conf, testutil.NewMockLogger(testutil.ERRORLOG))
+	options := getMQTTClientOptions(&conf)
 
 	assert.Contains(t, options.ClientID, conf.ClientID)
 	assert.ElementsMatch(t, options.Servers, []*url.URL{expectedURL})
