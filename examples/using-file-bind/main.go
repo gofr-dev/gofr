@@ -42,7 +42,7 @@ func UploadHandler(c *gofr.Context) (interface{}, error) {
 	// Defer removing the temporary folder after the function exits
 	defer func() {
 		if err := os.RemoveAll("tmp"); err != nil {
-			fmt.Println("Error removing tmp folder:", err)
+			c.Logger("Error removing tmp folder:", err)
 		}
 	}()
 
