@@ -96,9 +96,6 @@ func convertSpans(spans []sdktrace.ReadOnlySpan) []Span {
 			Timestamp: s.StartTime().UnixNano() / int64(time.Microsecond),
 			Duration:  s.EndTime().Sub(s.StartTime()).Nanoseconds() / int64(time.Microsecond),
 			Tags:      make(map[string]string, len(s.Attributes())+len(s.Resource().Attributes())),
-			LocalEndpoint: map[string]string{
-				"serviceName": s.Name(),
-			},
 		}
 
 		for _, kv := range s.Attributes() {
@@ -113,7 +110,7 @@ func convertSpans(spans []sdktrace.ReadOnlySpan) []Span {
 
 		convertedSpans = append(convertedSpans, convertedSpan)
 
-		convertedSpans[i].LocalEndpoint = map[string]string{"serviceName": s.Name()}
+		convertedSpans[i].LocalEndpoint = map[string]string{"serviceName": convertedSpans[0].Tags["service.name"]}
 	}
 
 	return convertedSpans
