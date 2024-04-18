@@ -5,7 +5,7 @@ GoFr by default manages observability in different ways once the server starts:
 ## Logs
 
 Logs offer real-time information, providing valuable insights and immediate visibility into the ongoing state and activities of the system.
-It helps in identifying errors, debugging and troubleshooting, monitor performance, analysing application usage, communications etc.
+It helps in identifying errors, debugging and troubleshooting, monitor performance, analyzing application usage, communications etc.
 
 GoFr logger allows to customize log level which provides flexibility to adjust logs based on specific needs.
 
