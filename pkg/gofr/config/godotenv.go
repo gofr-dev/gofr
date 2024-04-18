@@ -19,6 +19,7 @@ type EnvLoader struct {
 type logger interface {
 	Warnf(format string, a ...interface{})
 	Infof(format string, a ...interface{})
+	Debugf(format string, a ...interface{})
 }
 
 func NewEnvFile(configFolder string, logger logger) *EnvLoader {
@@ -44,24 +45,26 @@ func (e *EnvLoader) read(folder string) {
 
 	switch env {
 	case "":
-		// If 'APP_ENV' is not set , GoFr will first read '.env' and override any configs present in '.local.env'
+		// If 'APP_ENV' is not set ,then GoFr will read '.env' from configs directory and and then it will be overwritten
+		// by configs present in file '.local.env'
 		err := godotenv.Overload(overrideFile)
 		if err != nil {
-			e.logger.Warnf("Failed to load config from file: %v, Err: %v", overrideFile, err)
+			e.logger.Debugf("Failed to load config from file: %v, Err: %v", overrideFile, err)
+		} else {
+			e.logger.Infof("Loaded config from file: %v", overrideFile)
 		}
 
-		e.logger.Infof("Loaded config from file: %v", overrideFile)
 	default:
-		// If 'APP_ENV' is set to x, then GoFr will read '.env' file from configs directory, and then it will be overwritten
+		// If 'APP_ENV' is set to x, then GoFr will read '.env' from configs directory, and then it will be overwritten
 		// by configs present in file '.x.env'
 		overrideFile = fmt.Sprintf("%s/.%s.env", folder, env)
 
 		err := godotenv.Overload(overrideFile)
 		if err != nil {
 			e.logger.Warnf("Failed to load config from file: %v, Err: %v", overrideFile, err)
+		} else {
+			e.logger.Infof("Loaded config from file: %v", overrideFile)
 		}
-
-		e.logger.Infof("Loaded config from file: %v", overrideFile)
 	}
 }
 
