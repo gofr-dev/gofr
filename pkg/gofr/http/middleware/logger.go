@@ -2,6 +2,8 @@ package middleware
 
 import (
 	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
 	"runtime/debug"
 	"strings"
@@ -34,6 +36,30 @@ type RequestLog struct {
 	Response     int    `json:"response,omitempty"`
 }
 
+func (rl *RequestLog) PrettyPrint(writer io.Writer) {
+	fmt.Fprintf(writer, "\u001B[38;5;8m%s \u001B[38;5;%dm%d\u001B[0m "+
+		"%8d\u001B[38;5;8mµs\u001B[0m %s %s \n", rl.TraceID, colorForStatusCode(rl.Response), rl.Response, rl.ResponseTime, rl.Method, rl.URI)
+}
+
+func colorForStatusCode(status int) int {
+	const (
+		blue   = 34
+		red    = 202
+		yellow = 220
+	)
+
+	switch {
+	case status >= 200 && status < 300:
+		return blue
+	case status >= 400 && status < 500:
+		return yellow
+	case status >= 500 && status < 600:
+		return red
+	}
+
+	return 0
+}
+
 type logger interface {
 	Log(...interface{})
 	Error(...interface{})
@@ -50,7 +76,7 @@ func Logging(logger logger) func(inner http.Handler) http.Handler {
 			srw.Header().Set("X-Correlation-ID", traceID)
 
 			defer func(res *StatusResponseWriter, req *http.Request) {
-				l := RequestLog{
+				l := &RequestLog{
 					TraceID:      traceID,
 					SpanID:       spanID,
 					StartTime:    start.Format("2006-01-02T15:04:05.999999999-07:00"),

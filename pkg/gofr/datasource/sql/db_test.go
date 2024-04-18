@@ -1,6 +1,7 @@
 package sql
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"testing"
@@ -976,4 +977,29 @@ func TestTx_RollbackError(t *testing.T) {
 	})
 
 	assert.Contains(t, out, "TxRollback ROLLBACK")
+}
+
+func TestPrettyPrint(t *testing.T) {
+	b := make([]byte, 0)
+	w := bytes.NewBuffer(b)
+	l := &Log{
+		Type:     "Query",
+		Query:    "SELECT 2 + 2",
+		Duration: 12912,
+	}
+
+	l.PrettyPrint(w)
+
+	assert.Equal(t,
+		"\u001B[38;5;8mQuery                            "+
+			"\u001B[38;5;24mSQL\u001B[0m    12912\u001B[38;5;8mµs\u001B[0m SELECT 2 + 2\n",
+		w.String())
+}
+
+func TestClean(t *testing.T) {
+	query := ""
+
+	out := clean(query)
+
+	assert.Equal(t, "", out)
 }
