@@ -16,6 +16,7 @@ import (
 	"gofr.dev/pkg/gofr/metrics"
 	"gofr.dev/pkg/gofr/metrics/exporters"
 	"gofr.dev/pkg/gofr/service"
+	"gofr.dev/pkg/gofr/version"
 
 	_ "github.com/go-sql-driver/mysql" // This is required to be blank import
 )
@@ -72,6 +73,9 @@ func (c *Container) Create(conf config.Config) {
 
 	// Register framework metrics
 	c.registerFrameworkMetrics()
+
+	c.Metrics().SetGauge("app_info", 1,
+		"app_name", c.GetAppName(), "app_version", c.GetAppVersion(), "framework_version", version.Framework)
 
 	c.Redis = redis.NewClient(conf, c.Logger, c.metricsManager)
 
@@ -137,6 +141,7 @@ func (c *Container) Metrics() metrics.Manager {
 
 func (c *Container) registerFrameworkMetrics() {
 	// system info metrics
+	c.Metrics().NewGauge("app_info", "Info for app_name, app and framework versions.")
 	c.Metrics().NewGauge("app_go_routines", "Number of Go routines running.")
 	c.Metrics().NewGauge("app_sys_memory_alloc", "Number of bytes allocated for heap objects.")
 	c.Metrics().NewGauge("app_sys_total_alloc", "Number of cumulative bytes allocated for heap objects.")
