@@ -6,6 +6,8 @@ package sql
 import (
 	"context"
 	"database/sql"
+	"fmt"
+	"io"
 	"reflect"
 	"regexp"
 	"strings"
@@ -30,10 +32,22 @@ type Log struct {
 	Args     []interface{} `json:"args,omitempty"`
 }
 
+func (l *Log) PrettyPrint(writer io.Writer) {
+	fmt.Fprintf(writer, "\u001B[38;5;8m%-32s \u001B[38;5;24m%s\u001B[0m %8d\u001B[38;5;8mµs\u001B[0m %s\n",
+		l.Type, "SQL", l.Duration, clean(l.Query))
+}
+
+func clean(query string) string {
+	query = regexp.MustCompile(`\s+`).ReplaceAllString(query, " ")
+	query = strings.TrimSpace(query)
+
+	return query
+}
+
 func (d *DB) logQuery(start time.Time, queryType, query string, args ...interface{}) {
 	duration := time.Since(start).Milliseconds()
 
-	d.logger.Debug(Log{
+	d.logger.Debug(&Log{
 		Type:     queryType,
 		Query:    query,
 		Duration: duration,
@@ -99,7 +113,7 @@ type Tx struct {
 func (t *Tx) logQuery(start time.Time, queryType, query string, args ...interface{}) {
 	duration := time.Since(start).Milliseconds()
 
-	t.logger.Debug(Log{
+	t.logger.Debug(&Log{
 		Type:     queryType,
 		Query:    query,
 		Duration: duration,
