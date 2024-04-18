@@ -3,6 +3,8 @@ package redis
 import (
 	"context"
 	"fmt"
+	"io"
+	"regexp"
 	"strings"
 	"time"
 
@@ -24,7 +26,25 @@ type QueryLog struct {
 	Args     interface{} `json:"args,omitempty"`
 }
 
-func (ql QueryLog) String() string {
+func (ql *QueryLog) PrettyPrint(writer io.Writer) {
+	if ql.Query == "pipeline" {
+		fmt.Fprintf(writer, "\u001B[38;5;8m%-32s \u001B[38;5;24m%s\u001B[0m %6d\u001B[38;5;8mµs\u001B[0m %s\n",
+			clean(ql.Query), "REDIS", ql.Duration,
+			ql.String()[1:len(ql.String())-1])
+	} else {
+		fmt.Fprintf(writer, "\u001B[38;5;8m%-32s \u001B[38;5;24m%s\u001B[0m %6d\u001B[38;5;8mµs\u001B[0m %v\n",
+			clean(ql.Query), "REDIS", ql.Duration, ql.String())
+	}
+}
+
+func clean(query string) string {
+	query = regexp.MustCompile(`\s+`).ReplaceAllString(query, " ")
+	query = strings.TrimSpace(query)
+
+	return query
+}
+
+func (ql *QueryLog) String() string {
 	if ql.Args == nil {
 		return ""
 	}
@@ -46,7 +66,7 @@ func (ql QueryLog) String() string {
 func (r *redisHook) logQuery(start time.Time, query string, args ...interface{}) {
 	duration := time.Since(start).Milliseconds()
 
-	r.logger.Debug(QueryLog{
+	r.logger.Debug(&QueryLog{
 		Query:    query,
 		Duration: duration,
 		Args:     args,
