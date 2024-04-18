@@ -57,13 +57,18 @@ func (mr *MockMetricsMockRecorder) RecordHistogram(ctx, name, value any, labels 
 }
 
 // SetGauge mocks base method.
-func (m *MockMetrics) SetGauge(name string, value float64) {
+func (m *MockMetrics) SetGauge(name string, value float64, labels ...string) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "SetGauge", name, value)
+	varargs := []any{name, value}
+	for _, a := range labels {
+		varargs = append(varargs, a)
+	}
+	m.ctrl.Call(m, "SetGauge", varargs...)
 }
 
 // SetGauge indicates an expected call of SetGauge.
-func (mr *MockMetricsMockRecorder) SetGauge(name, value any) *gomock.Call {
+func (mr *MockMetricsMockRecorder) SetGauge(name, value any, labels ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetGauge", reflect.TypeOf((*MockMetrics)(nil).SetGauge), name, value)
+	varargs := append([]any{name, value}, labels...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetGauge", reflect.TypeOf((*MockMetrics)(nil).SetGauge), varargs...)
 }
