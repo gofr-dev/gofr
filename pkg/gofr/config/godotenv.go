@@ -45,9 +45,9 @@ func (e *EnvLoader) read(folder string) {
 
 	switch env {
 	case "":
-		// If 'APP_ENV' is not set ,then GoFr will read '.env' from configs directory and and then it will be overwritten
+		// If 'APP_ENV' is not set, then GoFr will read '.env' from configs directory, and then it will be overwritten
 		// by configs present in file '.local.env'
-		err := godotenv.Overload(overrideFile)
+		err = godotenv.Overload(overrideFile)
 		if err != nil {
 			e.logger.Debugf("Failed to load config from file: %v, Err: %v", overrideFile, err)
 		} else {
@@ -59,7 +59,7 @@ func (e *EnvLoader) read(folder string) {
 		// by configs present in file '.x.env'
 		overrideFile = fmt.Sprintf("%s/.%s.env", folder, env)
 
-		err := godotenv.Overload(overrideFile)
+		err = godotenv.Overload(overrideFile)
 		if err != nil {
 			e.logger.Warnf("Failed to load config from file: %v, Err: %v", overrideFile, err)
 		} else {
