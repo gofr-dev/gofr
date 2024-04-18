@@ -38,6 +38,13 @@ type metricsManager struct {
 	logger Logger
 }
 
+// Developer Note: float64Gauge is used instead of metric.Float64ObservableGauge because we need a synchronous gauge metric
+// and otel/metric supports only asynchronous gauge (Float64ObservableGauge).
+// And if we use the otel/metric, we would not be able to have support for labels, Hence created a custom type to implement it.
+type float64Gauge struct {
+	observations map[attribute.Set]float64
+}
+
 // NewMetricsManager creates a new metrics manager instance with the provided metric  meter and logger.
 func NewMetricsManager(meter metric.Meter, logger Logger) Manager {
 	return &metricsManager{
@@ -112,13 +119,6 @@ func (m *metricsManager) NewHistogram(name, desc string, buckets ...float64) {
 	if err != nil {
 		m.logger.Error(err)
 	}
-}
-
-// Developer Note: float64Gauge is used instead of metric.Float64ObservableGauge because we need a synchronous gauge metric
-// and otel/metric supports only asynchronous (Float64ObservableGauge) metric.
-// And if we use the otel/metric, we would not be able to have support for labels, Hence created a custom type to implement it.
-type float64Gauge struct {
-	observations map[attribute.Set]float64
 }
 
 // NewGauge registers a new gauge metrics. This metric can set
