@@ -258,7 +258,7 @@ func (a *App) initTracer() {
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
 	otel.SetErrorHandler(&otelErrorHandler{logger: a.container.Logger})
 
-	if traceExporter != "" && tracerHost != "" {
+	if (traceExporter != "" && tracerHost != "") || traceExporter == "gofr" {
 		var (
 			exporter sdktrace.SpanExporter
 			err      error
