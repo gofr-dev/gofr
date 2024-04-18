@@ -1,6 +1,6 @@
 # gRPC
 We have already seen how GoFr can help ease the development of HTTP servers, but there are
-cases where performance is primiraliy required sacrificing flexibility. In these types of 
+cases where performance is primarily required sacrificing flexibility. In these types of 
 scenarios gRPC protocol comes into picture. {% new-tab-link title="gRPC" href="https://grpc.io/docs/what-is-grpc/introduction/" /%} is an open-source RPC(Remote Procedure Call)
 framework initially developed by Google. 
 
@@ -16,7 +16,7 @@ framework initially developed by Google.
         $ brew install protobuf
         $ protoc --version  # Ensure compiler version is 3+  
         ```
-- Install **Go Puligins** for protocol compiler:
+- Install **Go Plugins** for protocol compiler:
     1. Install prtocol compiler plugins for Go
        ```shell
        $ go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.28
@@ -63,7 +63,7 @@ message CustomerData {
   int64 id = 1;
   string name = 2;
   string address = 3;
-  // other customer releated fields
+  // other customer related fields
 }
 ```
 
