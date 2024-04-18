@@ -121,17 +121,13 @@ type float64Gauge struct {
 	observations map[attribute.Set]float64
 }
 
-func newFloat64Gauge() *float64Gauge {
-	return &float64Gauge{observations: make(map[attribute.Set]float64)}
-}
-
 // NewGauge registers a new gauge metrics. This metric can set
 // the value of metric to a particular value, but it doesn't store the last recorded value for the metrics.
 //
 //	Usage:
 //	m.NewGauge("memory_usage", "Current memory usage in bytes")
 func (m *metricsManager) NewGauge(name, desc string) {
-	gauge := *newFloat64Gauge()
+	gauge := float64Gauge{observations: make(map[attribute.Set]float64)}
 
 	_, err := m.meter.Float64ObservableGauge(name, metric.WithDescription(desc), metric.WithFloat64Callback(gauge.callbackFunc))
 	if err != nil {
@@ -242,9 +238,7 @@ func (m *metricsManager) SetGauge(name string, value float64, labels ...string) 
 		return
 	}
 
-	attrs := m.getAttributes(name, labels...)
-
-	gauge.set(value, attribute.NewSet(attrs...))
+	gauge.set(value, attribute.NewSet(m.getAttributes(name, labels...)...))
 }
 
 func (f *float64Gauge) set(val float64, attrs attribute.Set) {
