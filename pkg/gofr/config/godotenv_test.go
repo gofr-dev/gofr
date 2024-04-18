@@ -65,6 +65,8 @@ func Test_EnvSuccess_AppEnv_Override(t *testing.T) {
 }
 
 func Test_EnvSuccess_Local_Override(t *testing.T) {
+	t.Setenv("APP_ENV", "")
+
 	envData := map[string]string{
 		"API_KEY": "your_api_key_here",
 	}
