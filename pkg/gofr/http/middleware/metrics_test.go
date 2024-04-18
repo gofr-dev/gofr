@@ -27,7 +27,7 @@ func (m *mockMetrics) RecordHistogram(ctx context.Context, name string, value fl
 	m.Called(ctx, name, value, labels)
 }
 
-func (m *mockMetrics) SetGauge(name string, value float64) {
+func (m *mockMetrics) SetGauge(name string, value float64, labels ...string) {
 	m.Called(name, value)
 }
 
