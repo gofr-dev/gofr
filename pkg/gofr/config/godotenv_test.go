@@ -42,8 +42,6 @@ func Test_EnvSuccess_AppEnv_Override(t *testing.T) {
 
 	envData := map[string]string{
 		"DATABASE_URL": "localhost:5432",
-		"API_KEY":      "your_api_key_here",
-		"small_case":   "small_case_value",
 	}
 
 	err := createConfigsDirectory()
@@ -64,9 +62,31 @@ func Test_EnvSuccess_AppEnv_Override(t *testing.T) {
 	defer os.RemoveAll("configs")
 
 	assert.Equal(t, "localhost:2001", env.Get("DATABASE_URL"), "TEST Failed.\n godotenv success")
-	assert.Equal(t, "your_api_key_here", env.GetOrDefault("API_KEY", "xyz"), "TEST Failed.\n godotenv success")
-	assert.Equal(t, "test", env.GetOrDefault("DATABASE", "test"), "TEST Failed.\n godotenv success")
-	assert.Equal(t, "small_case_value", env.Get("small_case"), "TEST Failed.\n godotenv success")
+}
+
+func Test_EnvSuccess_Local_Override(t *testing.T) {
+	envData := map[string]string{
+		"API_KEY": "your_api_key_here",
+	}
+
+	err := createConfigsDirectory()
+	if err != nil {
+		t.Error(err)
+	}
+
+	// Call the function to create the .env file
+	createEnvFile(t, ".env", envData)
+
+	// override database url in '.prod.env' file to test if value if being overridden
+	createEnvFile(t, ".local.env", map[string]string{"API_KEY": "overloaded_api_key"})
+
+	logger := testutil.NewMockLogger(testutil.DEBUGLOG)
+
+	env := NewEnvFile("configs", logger)
+
+	defer os.RemoveAll("configs")
+
+	assert.Equal(t, "overloaded_api_key", env.Get("API_KEY"), "TEST Failed.\n godotenv success")
 }
 
 func Test_EnvFailureWithHypen(t *testing.T) {
