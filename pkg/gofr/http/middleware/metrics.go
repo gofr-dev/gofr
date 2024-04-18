@@ -14,7 +14,7 @@ type metrics interface {
 	IncrementCounter(ctx context.Context, name string, labels ...string)
 	DeltaUpDownCounter(ctx context.Context, name string, value float64, labels ...string)
 	RecordHistogram(ctx context.Context, name string, value float64, labels ...string)
-	SetGauge(name string, value float64)
+	SetGauge(name string, value float64, labels ...string)
 }
 
 // Metrics is a middleware that records request response time metrics using the provided metrics interface.
