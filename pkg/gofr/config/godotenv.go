@@ -53,7 +53,7 @@ func (e *EnvLoader) read(folder string) {
 		e.logger.Infof("Loaded config from file: %v", overrideFile)
 	default:
 		// If 'APP_ENV' is set to x, then GoFr will read '.env' file from configs directory, and then it will be overwritten
-		// by files '.x.env'
+		// by configs present in file '.x.env'
 		overrideFile = fmt.Sprintf("%s/.%s.env", folder, env)
 
 		err := godotenv.Overload(overrideFile)
