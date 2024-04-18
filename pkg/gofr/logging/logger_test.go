@@ -217,177 +217,227 @@ func TestPrettyPrint(t *testing.T) {
 	}
 }
 
-func TestDefaultFilterMaskingPII(t *testing.T) {
-	testCases := []struct {
-		name           string
-		input          interface{}
-		expected       string
-		enableMasking  bool
-		maskingFields  []string
-		expectedOutput interface{}
+func TestDefaultFilterMaskingStringFields(t *testing.T) {
+	filter := &DefaultFilter{
+		MaskFields:    []string{"name", "email", "password"},
+		EnableMasking: true,
+	}
+
+	input := struct {
+		Name     string `json:"name"`
+		Email    string `json:"email"`
+		Password string `json:"password"`
 	}{
-		{
-			name: "mask string fields",
-			input: struct {
-				Name     string `json:"name"`
-				Email    string `json:"email"`
-				Password string `json:"password"`
-			}{
-				Name:     "John Doe",
-				Email:    "john.doe@example.com",
-				Password: "secret123",
-			},
-			expected:      `{"name":"********","email":"********************","password":"**********"}`,
-			enableMasking: true,
-			maskingFields: []string{"name", "email", "password"},
-			expectedOutput: struct {
-				Name     string `json:"name"`
-				Email    string `json:"email"`
-				Password string `json:"password"`
-			}{
-				Name:     "********",
-				Email:    "********************",
-				Password: "**********",
-			},
+		Name:     "John Doe",
+		Email:    "john.doe@example.com",
+		Password: "secret123",
+	}
+
+	expectedOutput := struct {
+		Name     string `json:"name"`
+		Email    string `json:"email"`
+		Password string `json:"password"`
+	}{
+		Name:     "********",
+		Email:    "********************",
+		Password: "**********",
+	}
+
+	filteredMessage := filter.Filter(input)
+
+	maskedMessage, err := json.Marshal(filteredMessage)
+	if err != nil {
+		t.Errorf("Failed to marshal masked message: %v", err)
+		return
+	}
+
+	expected := `{"name":"********","email":"********************","password":"**********"}`
+	if string(maskedMessage) != expected {
+		t.Errorf("Expected %s, but got %s", expected, maskedMessage)
+	}
+
+	if !reflect.DeepEqual(filteredMessage, expectedOutput) {
+		t.Errorf("Expected output %v, but got %v", expectedOutput, filteredMessage)
+	}
+}
+
+func TestDefaultFilterMaskingNumericFields(t *testing.T) {
+	filter := &DefaultFilter{
+		MaskFields: []string{
+			"phoneNumber",
+			"socialSecurityNumber",
+			"creditCardNumber",
+			"dateOfBirth",
+			"biometricData",
+			"ipAddress",
 		},
-		{
-			name: "mask numeric fields",
-			input: struct {
-				PhoneNumber          int64   `json:"phoneNumber"`
-				SocialSecurityNumber int     `json:"socialSecurityNumber"`
-				CreditCardNumber     uint64  `json:"creditCardNumber"`
-				DateOfBirth          int     `json:"dateOfBirth"`
-				BiometricData        float64 `json:"biometricData"`
-				IPAddress            string  `json:"ipAddress"`
-			}{
-				PhoneNumber:          1234567890,
-				SocialSecurityNumber: 123456789,
-				CreditCardNumber:     1234567890123456,
-				DateOfBirth:          19800101,
-				BiometricData:        123.456,
-				IPAddress:            "192.168.1.1",
-			},
-			expected:      `{"phoneNumber":0,"socialSecurityNumber":0,"creditCardNumber":0,"dateOfBirth":0,"biometricData":0,"ipAddress":"***********"}`,
-			enableMasking: true,
-			maskingFields: []string{"phoneNumber", "socialSecurityNumber", "creditCardNumber", "dateOfBirth", "biometricData", "ipAddress"},
-			expectedOutput: struct {
-				PhoneNumber          int64   `json:"phoneNumber"`
-				SocialSecurityNumber int     `json:"socialSecurityNumber"`
-				CreditCardNumber     uint64  `json:"creditCardNumber"`
-				DateOfBirth          int     `json:"dateOfBirth"`
-				BiometricData        float64 `json:"biometricData"`
-				IPAddress            string  `json:"ipAddress"`
-			}{
-				PhoneNumber:          0,
-				SocialSecurityNumber: 0,
-				CreditCardNumber:     0,
-				DateOfBirth:          0,
-				BiometricData:        0,
-				IPAddress:            "***********",
-			},
+		EnableMasking: true,
+	}
+
+	input := struct {
+		PhoneNumber          int64   `json:"phoneNumber"`
+		SocialSecurityNumber int     `json:"socialSecurityNumber"`
+		CreditCardNumber     uint64  `json:"creditCardNumber"`
+		DateOfBirth          int     `json:"dateOfBirth"`
+		BiometricData        float64 `json:"biometricData"`
+		IPAddress            string  `json:"ipAddress"`
+	}{
+		PhoneNumber:          1234567890,
+		SocialSecurityNumber: 123456789,
+		CreditCardNumber:     1234567890123456,
+		DateOfBirth:          19800101,
+		BiometricData:        123.456,
+		IPAddress:            "192.168.1.1",
+	}
+
+	expectedOutput := struct {
+		PhoneNumber          int64   `json:"phoneNumber"`
+		SocialSecurityNumber int     `json:"socialSecurityNumber"`
+		CreditCardNumber     uint64  `json:"creditCardNumber"`
+		DateOfBirth          int     `json:"dateOfBirth"`
+		BiometricData        float64 `json:"biometricData"`
+		IPAddress            string  `json:"ipAddress"`
+	}{
+		PhoneNumber:          0,
+		SocialSecurityNumber: 0,
+		CreditCardNumber:     0,
+		DateOfBirth:          0,
+		BiometricData:        0,
+		IPAddress:            "***********",
+	}
+
+	filteredMessage := filter.Filter(input)
+
+	maskedMessage, err := json.Marshal(filteredMessage)
+	if err != nil {
+		t.Errorf("Failed to marshal masked message: %v", err)
+		return
+	}
+	//nolint:golangci-lint  //This is because we need the exact expected value
+	expected := `{"phoneNumber":0,"socialSecurityNumber":0,"creditCardNumber":0,"dateOfBirth":0,"biometricData":0,"ipAddress":"***********"}`
+	if string(maskedMessage) != strings.ReplaceAll(expected, "\t", "") {
+		t.Errorf("Expected %s, but got %s", expected, maskedMessage)
+	}
+
+	if !reflect.DeepEqual(filteredMessage, expectedOutput) {
+		t.Errorf("Expected output %v, but got %v", expectedOutput, filteredMessage)
+	}
+}
+
+func TestDefaultFilterMaskingDisabled(t *testing.T) {
+	filter := &DefaultFilter{
+		MaskFields:    []string{"name"},
+		EnableMasking: false,
+	}
+
+	input := struct{ Name string }{Name: "John Doe"}
+	expectedOutput := struct{ Name string }{Name: "John Doe"}
+
+	filteredMessage := filter.Filter(input)
+
+	maskedMessage, err := json.Marshal(filteredMessage)
+	if err != nil {
+		t.Errorf("Failed to marshal masked message: %v", err)
+		return
+	}
+
+	expected := `{"Name":"John Doe"}`
+	if string(maskedMessage) != expected {
+		t.Errorf("Expected %s, but got %s", expected, maskedMessage)
+	}
+
+	if !reflect.DeepEqual(filteredMessage, expectedOutput) {
+		t.Errorf("Expected output %v, but got %v", expectedOutput, filteredMessage)
+	}
+}
+
+func TestDefaultFilterMaskingNestedFields(t *testing.T) {
+	filter := &DefaultFilter{
+		MaskFields:    []string{"name", "email", "street", "number", "cvv", "city"},
+		EnableMasking: true,
+	}
+
+	input := struct {
+		Name    string `json:"name"`
+		Email   string `json:"email"`
+		Address struct {
+			Street string `json:"street"`
+			City   string `json:"city"`
+			Zip    int    `json:"zip"`
+		} `json:"address"`
+		CreditCard struct {
+			Number string `json:"number"`
+			CVV    int    `json:"cvv"`
+		} `json:"creditCard"`
+	}{
+		Name:  "John Doe",
+		Email: "john.doe@example.com",
+		Address: struct {
+			Street string `json:"street"`
+			City   string `json:"city"`
+			Zip    int    `json:"zip"`
+		}{
+			Street: "123 Main St",
+			City:   "Anytown",
+			Zip:    12345,
 		},
-		{
-			name:           "masking disabled",
-			input:          struct{ Name string }{Name: "John Doe"},
-			expected:       `{"Name":"John Doe"}`,
-			enableMasking:  false,
-			maskingFields:  []string{"name"},
-			expectedOutput: struct{ Name string }{Name: "John Doe"},
-		},
-		{
-			name: "mask fields in nested struct",
-			input: struct {
-				Name    string `json:"name"`
-				Email   string `json:"email"`
-				Address struct {
-					Street string `json:"street"`
-					City   string `json:"city"`
-					Zip    int    `json:"zip"`
-				} `json:"address"`
-				CreditCard struct {
-					Number string `json:"number"`
-					CVV    int    `json:"cvv"`
-				} `json:"creditCard"`
-			}{
-				Name:  "John Doe",
-				Email: "john.doe@example.com",
-				Address: struct {
-					Street string `json:"street"`
-					City   string `json:"city"`
-					Zip    int    `json:"zip"`
-				}{
-					Street: "123 Main St",
-					City:   "Anytown",
-					Zip:    12345,
-				},
-				CreditCard: struct {
-					Number string `json:"number"`
-					CVV    int    `json:"cvv"`
-				}{
-					Number: "1234567890123456",
-					CVV:    123,
-				},
-			},
-			expected:      `{"name":"********","email":"********************","address":{"street":"***********","city":"*******","zip":12345},"creditCard":{"number":"****************","cvv":0}}`,
-			enableMasking: true,
-			maskingFields: []string{"name", "email", "street", "number", "cvv", "city"},
-			expectedOutput: struct {
-				Name    string `json:"name"`
-				Email   string `json:"email"`
-				Address struct {
-					Street string `json:"street"`
-					City   string `json:"city"`
-					Zip    int    `json:"zip"`
-				} `json:"address"`
-				CreditCard struct {
-					Number string `json:"number"`
-					CVV    int    `json:"cvv"`
-				} `json:"creditCard"`
-			}{
-				Name:  "********",
-				Email: "********************",
-				Address: struct {
-					Street string `json:"street"`
-					City   string `json:"city"`
-					Zip    int    `json:"zip"`
-				}{
-					Street: "***********",
-					City:   "*******",
-					Zip:    12345,
-				},
-				CreditCard: struct {
-					Number string `json:"number"`
-					CVV    int    `json:"cvv"`
-				}{
-					Number: "****************",
-					CVV:    0,
-				},
-			},
+		CreditCard: struct {
+			Number string `json:"number"`
+			CVV    int    `json:"cvv"`
+		}{
+			Number: "1234567890123456",
+			CVV:    123,
 		},
 	}
 
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			filter := &DefaultFilter{
-				MaskFields:    tc.maskingFields,
-				EnableMasking: tc.enableMasking,
-			}
+	expectedOutput := struct {
+		Name    string `json:"name"`
+		Email   string `json:"email"`
+		Address struct {
+			Street string `json:"street"`
+			City   string `json:"city"`
+			Zip    int    `json:"zip"`
+		} `json:"address"`
+		CreditCard struct {
+			Number string `json:"number"`
+			CVV    int    `json:"cvv"`
+		} `json:"creditCard"`
+	}{
+		Name:  "********",
+		Email: "********************",
+		Address: struct {
+			Street string `json:"street"`
+			City   string `json:"city"`
+			Zip    int    `json:"zip"`
+		}{
+			Street: "***********",
+			City:   "*******",
+			Zip:    12345,
+		},
+		CreditCard: struct {
+			Number string `json:"number"`
+			CVV    int    `json:"cvv"`
+		}{
+			Number: "****************",
+			CVV:    0,
+		},
+	}
 
-			filteredMessage := filter.Filter(tc.input)
+	filteredMessage := filter.Filter(input)
 
-			maskedMessage, err := json.Marshal(filteredMessage)
-			if err != nil {
-				t.Errorf("Failed to marshal masked message: %v", err)
-				return
-			}
+	maskedMessage, err := json.Marshal(filteredMessage)
+	if err != nil {
+		t.Errorf("Failed to marshal masked message: %v", err)
+		return
+	}
+	expected := `{"name":"********","email":"********************","address":{"street":"***********",` +
+		`"city":"*******","zip":12345},"creditCard":{"number":"****************","cvv":0}}`
 
-			if string(maskedMessage) != tc.expected {
-				t.Errorf("Expected %s, but got %s", tc.expected, maskedMessage)
-			}
+	if string(maskedMessage) != strings.ReplaceAll(expected, "\t", "") {
+		t.Errorf("Expected %s, but got %s", expected, maskedMessage)
+	}
 
-			if !reflect.DeepEqual(filteredMessage, tc.expectedOutput) {
-				t.Errorf("Expected output %v, but got %v", tc.expectedOutput, filteredMessage)
-			}
-		})
+	if !reflect.DeepEqual(filteredMessage, expectedOutput) {
+		t.Errorf("Expected output %v, but got %v", expectedOutput, filteredMessage)
 	}
 }

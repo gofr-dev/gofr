@@ -14,7 +14,10 @@ import (
 	"gofr.dev/pkg/gofr/version"
 )
 
-const fileMode = 0644
+const (
+	fileMode       = 0644
+	passwordLength = 10
+)
 
 type PrettyPrint interface {
 	PrettyPrint(writer io.Writer)
@@ -70,6 +73,7 @@ func (f *DefaultFilter) Filter(message interface{}) interface{} {
 
 	return newVal.Interface()
 }
+
 func (f *DefaultFilter) filterFields(val reflect.Value) {
 	for i := 0; i < val.NumField(); i++ {
 		field := val.Field(i)
@@ -88,10 +92,11 @@ func (f *DefaultFilter) filterFields(val reflect.Value) {
 }
 
 func (f *DefaultFilter) maskField(field reflect.Value, fieldName string) {
+	//nolint:exhaustive // Only handling specific types needed for masking
 	switch field.Kind() {
 	case reflect.String:
 		if fieldName == "Password" {
-			field.SetString(maskString(field.String(), 10)) // Mask password with fixed length of 10
+			field.SetString(maskString(field.String(), passwordLength))
 		} else {
 			field.SetString(maskString(field.String()))
 		}
@@ -101,15 +106,16 @@ func (f *DefaultFilter) maskField(field reflect.Value, fieldName string) {
 		field.SetUint(0)
 	case reflect.Float32, reflect.Float64:
 		field.SetFloat(0)
-		// Add more cases for other types if needed
 	}
 }
+
 func contains(maskFields []string, fieldName string) bool {
 	for _, field := range maskFields {
 		if strings.EqualFold(field, fieldName) {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -118,7 +124,9 @@ func maskString(str string, maskLength ...int) string {
 	if len(maskLength) > 0 {
 		length = maskLength[0]
 	}
+
 	masked := strings.Repeat("*", length)
+
 	return masked
 }
 
@@ -129,6 +137,7 @@ type logger struct {
 	isTerminal bool
 	filter     Filterer
 }
+
 type logEntry struct {
 	Level       Level       `json:"level"`
 	Time        time.Time   `json:"time"`
@@ -251,6 +260,7 @@ func (l *logger) prettyPrint(e logEntry, out io.Writer) {
 // NewLogger creates a new logger instance with the specified logging level.
 func NewLogger(level Level, args ...interface{}) Logger {
 	var filter Filterer
+
 	if len(args) > 0 {
 		f, ok := args[0].(Filterer)
 		if !ok {
@@ -284,6 +294,7 @@ func NewLogger(level Level, args ...interface{}) Logger {
 // NewFileLogger creates a new logger instance with logging to a file.
 func NewFileLogger(path string, args ...interface{}) Logger {
 	var filter Filterer
+
 	if len(args) > 0 {
 		f, ok := args[0].(Filterer)
 		if !ok {
