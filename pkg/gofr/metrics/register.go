@@ -144,7 +144,7 @@ func (m *metricsManager) NewGauge(name, desc string) {
 
 // callbackFunc implements the callback function for the underlying asynchronous gauge
 // it observes the current state of all previous set() calls.
-func (f *float64Gauge) callbackFunc(ctx context.Context, o metric.Float64Observer) error {
+func (f *float64Gauge) callbackFunc(_ context.Context, o metric.Float64Observer) error {
 	for attrs, val := range f.observations {
 		o.Observe(val, metric.WithAttributeSet(attrs))
 	}
