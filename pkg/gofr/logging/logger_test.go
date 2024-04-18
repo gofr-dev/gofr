@@ -430,6 +430,7 @@ func TestDefaultFilterMaskingNestedFields(t *testing.T) {
 		t.Errorf("Failed to marshal masked message: %v", err)
 		return
 	}
+	
 	expected := `{"name":"********","email":"********************","address":{"street":"***********",` +
 		`"city":"*******","zip":12345},"creditCard":{"number":"****************","cvv":0}}`
 
