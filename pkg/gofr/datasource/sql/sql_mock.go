@@ -1,10 +1,13 @@
 package sql
 
 import (
-	"github.com/DATA-DOG/go-sqlmock"
-	"go.uber.org/mock/gomock"
-	"gofr.dev/pkg/gofr/testutil"
 	"testing"
+
+	"go.uber.org/mock/gomock"
+
+	"github.com/DATA-DOG/go-sqlmock"
+
+	"gofr.dev/pkg/gofr/testutil"
 )
 
 func NewSQLMocks(t *testing.T) (*DB, sqlmock.Sqlmock, *MockMetrics) {
