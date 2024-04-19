@@ -9,6 +9,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/testutil"
 )
 
@@ -18,7 +19,7 @@ func TestNewSQL_ErrorCase(t *testing.T) {
 	expectedLog := fmt.Sprintf("could not register sql dialect '%s' for traces due to error: '%s'", "mysql",
 		"sql: unknown driver \"mysql\" (forgotten import?)")
 
-	mockConfig := testutil.NewMockConfig(map[string]string{
+	mockConfig := config.NewMockConfig(map[string]string{
 		"DB_DIALECT":  "mysql",
 		"DB_HOST":     "localhost",
 		"DB_USER":     "testuser",
@@ -42,7 +43,7 @@ func TestNewSQL_ErrorCase(t *testing.T) {
 func TestNewSQL_InvalidDialect(t *testing.T) {
 	ctrl := gomock.NewController(t)
 
-	mockConfig := testutil.NewMockConfig(map[string]string{
+	mockConfig := config.NewMockConfig(map[string]string{
 		"DB_DIALECT": "abc",
 		"DB_HOST":    "localhost",
 	})
@@ -62,7 +63,7 @@ func TestNewSQL_InvalidDialect(t *testing.T) {
 func TestNewSQL_InvalidConfig(t *testing.T) {
 	ctrl := gomock.NewController(t)
 
-	mockConfig := testutil.NewMockConfig(map[string]string{
+	mockConfig := config.NewMockConfig(map[string]string{
 		"DB_DIALECT": "",
 	})
 
@@ -75,7 +76,7 @@ func TestNewSQL_InvalidConfig(t *testing.T) {
 }
 
 func TestSQL_GetDBConfig(t *testing.T) {
-	mockConfig := testutil.NewMockConfig(map[string]string{
+	mockConfig := config.NewMockConfig(map[string]string{
 		"DB_DIALECT":  "mysql",
 		"DB_HOST":     "host",
 		"DB_USER":     "user",
