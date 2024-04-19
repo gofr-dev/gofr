@@ -293,3 +293,29 @@ func Test_DeleteHandler(t *testing.T) {
 		assert.Equal(t, tc.expectedErr, err, "TEST[%d], Failed.\n%s", i, tc.desc)
 	}
 }
+
+type testObject struct {
+	CRUD
+}
+
+func Test_registerCRUDHandlers(_ *testing.T) {
+	app := New()
+
+	e := entity{
+		name:       "user",
+		entityType: nil,
+		primaryKey: "id",
+	}
+
+	tests := []struct {
+		desc   string
+		object interface{}
+	}{
+		{"nil object", nil},
+		{"object implementing all CRUD methods", testObject{}},
+	}
+
+	for _, tc := range tests {
+		app.registerCRUDHandlers(e, tc.object)
+	}
+}
