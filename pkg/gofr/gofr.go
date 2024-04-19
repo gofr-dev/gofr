@@ -30,8 +30,6 @@ import (
 	"gofr.dev/pkg/gofr/service"
 )
 
-const TraceExporterGoFr = "gofr"
-
 // App is the main application in the gofr framework.
 type App struct {
 	// Config can be used by applications to fetch custom configurations from environment or file.
@@ -260,7 +258,9 @@ func (a *App) initTracer() {
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
 	otel.SetErrorHandler(&otelErrorHandler{logger: a.container.Logger})
 
-	if (traceExporter != "" && tracerHost != "") || traceExporter == TraceExporterGoFr {
+	const traceExporterGoFr = "gofr"
+
+	if (traceExporter != "" && tracerHost != "") || traceExporter == traceExporterGoFr {
 		var (
 			exporter sdktrace.SpanExporter
 			err      error
@@ -278,7 +278,7 @@ func (a *App) initTracer() {
 			exporter, err = zipkin.New(
 				fmt.Sprintf("http://%s:%s/api/v2/spans", tracerHost, tracerPort),
 			)
-		case TraceExporterGoFr:
+		case traceExporterGoFr:
 			exporter = NewExporter("https://tracer-api.gofr.dev/api/spans", logging.NewLogger(logging.INFO))
 
 			a.container.Log("Exporting traces to gofr at https://tracer.gofr.dev")
