@@ -17,6 +17,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
+
 	"google.golang.org/grpc"
 
 	"gofr.dev/pkg/gofr/config"
@@ -257,7 +258,9 @@ func (a *App) initTracer() {
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
 	otel.SetErrorHandler(&otelErrorHandler{logger: a.container.Logger})
 
-	if traceExporter != "" && tracerHost != "" {
+	const traceExporterGoFr = "gofr"
+
+	if (traceExporter != "" && tracerHost != "") || traceExporter == traceExporterGoFr {
 		var (
 			exporter sdktrace.SpanExporter
 			err      error
@@ -275,6 +278,10 @@ func (a *App) initTracer() {
 			exporter, err = zipkin.New(
 				fmt.Sprintf("http://%s:%s/api/v2/spans", tracerHost, tracerPort),
 			)
+		case traceExporterGoFr:
+			exporter = NewExporter("https://tracer-api.gofr.dev/api/spans", logging.NewLogger(logging.INFO))
+
+			a.container.Log("Exporting traces to gofr at https://tracer.gofr.dev")
 		default:
 			a.container.Error("unsupported trace exporter.")
 		}

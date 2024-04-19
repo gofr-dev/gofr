@@ -303,6 +303,10 @@ func Test_initTracer(t *testing.T) {
 		"TRACER_PORT":    "2005",
 	})
 
+	mockConfig3 := testutil.NewMockConfig(map[string]string{
+		"TRACE_EXPORTER": "gofr",
+	})
+
 	tests := []struct {
 		desc               string
 		config             config.Config
@@ -310,6 +314,7 @@ func Test_initTracer(t *testing.T) {
 	}{
 		{"zipkin exporter", mockConfig1, "Exporting traces to zipkin."},
 		{"jaeger exporter", mockConfig2, "Exporting traces to jaeger."},
+		{"gofr exporter", mockConfig3, "Exporting traces to gofr at https://tracer.gofr.dev"},
 	}
 
 	for _, tc := range tests {
