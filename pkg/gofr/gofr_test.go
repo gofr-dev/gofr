@@ -314,7 +314,7 @@ func Test_initTracer(t *testing.T) {
 	}{
 		{"zipkin exporter", mockConfig1, "Exporting traces to zipkin."},
 		{"jaeger exporter", mockConfig2, "Exporting traces to jaeger."},
-		{"gofr exporter", mockConfig3, "Exporting traces to gofr."},
+		{"gofr exporter", mockConfig3, "Exporting traces to gofr at https://tracer.gofr.dev"},
 	}
 
 	for _, tc := range tests {

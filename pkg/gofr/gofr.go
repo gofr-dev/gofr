@@ -281,7 +281,7 @@ func (a *App) initTracer() {
 		case TraceExporterGoFr:
 			exporter = NewExporter("https://tracer-api.gofr.dev/api/spans", logging.NewLogger(logging.INFO))
 
-			a.container.Log("Exporting traces to gofr.")
+			a.container.Log("Exporting traces to gofr at https://tracer.gofr.dev")
 		default:
 			a.container.Error("unsupported trace exporter.")
 		}
