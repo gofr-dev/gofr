@@ -16,6 +16,7 @@ import (
 	"gofr.dev/pkg/gofr/metrics"
 	"gofr.dev/pkg/gofr/metrics/exporters"
 	"gofr.dev/pkg/gofr/service"
+	"gofr.dev/pkg/gofr/version"
 
 	_ "github.com/go-sql-driver/mysql" // This is required to be blank import
 )
@@ -72,6 +73,10 @@ func (c *Container) Create(conf config.Config) {
 
 	// Register framework metrics
 	c.registerFrameworkMetrics()
+
+	// Populating an instance of app_info with the app details, the value is set as 1 to depict the no. of instances
+	c.Metrics().SetGauge("app_info", 1,
+		"app_name", c.GetAppName(), "app_version", c.GetAppVersion(), "framework_version", version.Framework)
 
 	c.Redis = redis.NewClient(conf, c.Logger, c.metricsManager)
 
@@ -137,6 +142,7 @@ func (c *Container) Metrics() metrics.Manager {
 
 func (c *Container) registerFrameworkMetrics() {
 	// system info metrics
+	c.Metrics().NewGauge("app_info", "Info for app_name, app_version and framework_version.")
 	c.Metrics().NewGauge("app_go_routines", "Number of Go routines running.")
 	c.Metrics().NewGauge("app_sys_memory_alloc", "Number of bytes allocated for heap objects.")
 	c.Metrics().NewGauge("app_sys_total_alloc", "Number of cumulative bytes allocated for heap objects.")
@@ -149,11 +155,11 @@ func (c *Container) registerFrameworkMetrics() {
 	c.Metrics().NewHistogram("app_http_service_response", "Response time of http service requests in seconds.", httpBuckets...)
 
 	// redis metrics
-	redisBuckets := []float64{50, 75, 100, 125, 150, 200, 300, 500, 750, 1000, 1250, 1500, 2000, 2500, 3000}
+	redisBuckets := []float64{.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 1.25, 1.5, 2, 2.5, 3}
 	c.Metrics().NewHistogram("app_redis_stats", "Response time of Redis commands in milliseconds.", redisBuckets...)
 
 	// sql metrics
-	sqlBuckets := []float64{50, 75, 100, 125, 150, 200, 300, 500, 750, 1000, 2000, 3000, 4000, 5000, 7500, 10000}
+	sqlBuckets := []float64{.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 4, 5, 7.5, 10}
 	c.Metrics().NewHistogram("app_sql_stats", "Response time of SQL queries in milliseconds.", sqlBuckets...)
 	c.Metrics().NewGauge("app_sql_open_connections", "Number of open SQL connections.")
 	c.Metrics().NewGauge("app_sql_inUse_connections", "Number of inUse SQL connections.")

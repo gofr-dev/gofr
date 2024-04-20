@@ -1,6 +1,7 @@
 package sql
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -14,7 +15,8 @@ import (
 func TestNewSQL_ErrorCase(t *testing.T) {
 	ctrl := gomock.NewController(t)
 
-	expectedLog := "could not connect with 'testuser' user to database 'localhost:3306'  error"
+	expectedLog := fmt.Sprintf("could not register sql dialect '%s' for traces due to error: '%s'", "mysql",
+		"sql: unknown driver \"mysql\" (forgotten import?)")
 
 	mockConfig := testutil.NewMockConfig(map[string]string{
 		"DB_DIALECT":  "mysql",
@@ -143,4 +145,12 @@ func TestSQL_getDBConnectionString(t *testing.T) {
 			assert.Equal(t, tc.expErr, err)
 		})
 	}
+}
+
+func Test_NewSQLMock(t *testing.T) {
+	db, mock, mockMetric := NewSQLMocks(t)
+
+	assert.NotNil(t, db)
+	assert.NotNil(t, mock)
+	assert.NotNil(t, mockMetric)
 }
