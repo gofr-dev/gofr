@@ -1,12 +1,11 @@
 name: Build and Deploy
 'on':
   push:
-    branches:
-      - deployment
+    paths:
+      - 'docs/**'
   pull_request:
-    branches:
-      - development
-
+    paths:
+      - 'docs/**'
 
 env:
   APP_NAME: gofr-website
@@ -19,9 +18,10 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
+    if: (github.ref == 'refs/heads/development' || github.ref == 'refs/heads/main' || github.event_name == 'pull_request' )
     outputs:
       image: ${{ steps.output-image.outputs.image }}
-    name: Build
+    name: 🔧Build
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -53,6 +53,7 @@ jobs:
 
   dockerize:
     runs-on: ubuntu-latest
+    if: ${{ startsWith(github.ref, 'refs/tags/v')}}
     outputs:
       image: ${{ steps.output-image.outputs.image }}
     name: 🐳 Dockerize
