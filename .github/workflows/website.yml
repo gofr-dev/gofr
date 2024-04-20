@@ -96,7 +96,7 @@ jobs:
 
   deployment:
     runs-on: ubuntu-latest
-    name: 🚀 Deploy to Stage
+    name: 🚀 Deploy
     needs: dockerize
     container:
       image: ghcr.io/zopsmart/gha-images:deployments-0.1.3
