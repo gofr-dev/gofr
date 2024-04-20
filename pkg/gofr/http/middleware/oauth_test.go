@@ -195,3 +195,19 @@ func TestPublicKeyFromJWKS_EmptyJWKS_ReturnsNil(t *testing.T) {
 
 	assert.Nil(t, result)
 }
+
+func Test_OAuth_well_known(t *testing.T) {
+	testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("Success"))
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/.well-known/health-check", http.NoBody)
+	rr := httptest.NewRecorder()
+
+	authMiddleware := OAuth(nil)(testHandler)
+	authMiddleware.ServeHTTP(rr, req)
+
+	assert.Equal(t, 200, rr.Code, "TEST Failed.\n")
+
+	assert.Equal(t, "Success", rr.Body.String(), "TEST Failed.\n")
+}

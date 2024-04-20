@@ -18,6 +18,11 @@ type BasicAuthProvider struct {
 func BasicAuthMiddleware(basicAuthProvider BasicAuthProvider) func(handler http.Handler) http.Handler {
 	return func(handler http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if isWellKnown(r.URL.Path) {
+				handler.ServeHTTP(w, r)
+				return
+			}
+
 			authHeader := r.Header.Get("Authorization")
 			if authHeader == "" {
 				http.Error(w, "Unauthorized: Authorization header missing", http.StatusUnauthorized)
@@ -25,7 +30,7 @@ func BasicAuthMiddleware(basicAuthProvider BasicAuthProvider) func(handler http.
 			}
 
 			authParts := strings.Split(authHeader, " ")
-			if len(authParts) != 2 || authParts[0] != "basic" {
+			if len(authParts) != 2 || authParts[0] != "Basic" {
 				http.Error(w, "Unauthorized: Invalid Authorization header", http.StatusUnauthorized)
 				return
 			}
@@ -42,19 +47,26 @@ func BasicAuthMiddleware(basicAuthProvider BasicAuthProvider) func(handler http.
 				return
 			}
 
-			if basicAuthProvider.ValidateFunc != nil {
-				if !basicAuthProvider.ValidateFunc(credentials[0], credentials[1]) {
-					http.Error(w, "Unauthorized: Invalid username or password", http.StatusUnauthorized)
-					return
-				}
-			} else {
-				if storedPass, ok := basicAuthProvider.Users[credentials[0]]; !ok || storedPass != credentials[1] {
-					http.Error(w, "Unauthorized: Invalid username or password", http.StatusUnauthorized)
-					return
-				}
+			if !validateCredentials(basicAuthProvider, credentials) {
+				http.Error(w, "Unauthorized: Invalid username or password", http.StatusUnauthorized)
+				return
 			}
 
 			handler.ServeHTTP(w, r)
 		})
 	}
+}
+
+func validateCredentials(provider BasicAuthProvider, credentials []string) bool {
+	if provider.ValidateFunc != nil {
+		if !provider.ValidateFunc(credentials[0], credentials[1]) {
+			return false
+		}
+	} else {
+		if storedPass, ok := provider.Users[credentials[0]]; !ok || storedPass != credentials[1] {
+			return false
+		}
+	}
+
+	return true
 }

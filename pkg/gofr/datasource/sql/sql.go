@@ -4,13 +4,9 @@ import (
 	"database/sql"
 	"fmt"
 	"strconv"
-	"testing"
 	"time"
 
-	"github.com/DATA-DOG/go-sqlmock"
-	"go.uber.org/mock/gomock"
-	"gofr.dev/pkg/gofr/testutil"
-
+	"github.com/XSAM/otelsql"
 	_ "github.com/lib/pq" // used for concrete implementation of the database driver.
 
 	"gofr.dev/pkg/gofr/config"
@@ -45,7 +41,13 @@ func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *D
 		return nil
 	}
 
-	db, err := sql.Open(dbConfig.Dialect, dbConnectionString)
+	otelRegisteredDialect, err := otelsql.Register(dbConfig.Dialect)
+	if err != nil {
+		logger.Errorf("could not register sql dialect '%s' for traces due to error: '%s'", dbConfig.Dialect, err)
+		return nil
+	}
+
+	db, err := sql.Open(otelRegisteredDialect, dbConnectionString)
 	if err != nil {
 		logger.Errorf("could not connect with '%s' user to database '%s:%s'  error: %v",
 			dbConfig.User, dbConfig.HostName, dbConfig.Port, err)
@@ -107,21 +109,4 @@ func pushDBMetrics(db *sql.DB, metrics Metrics) {
 
 		time.Sleep(frequency * time.Second)
 	}
-}
-
-func NewSQLMocks(t *testing.T) (*DB, sqlmock.Sqlmock, *MockMetrics) {
-	db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherEqual))
-	if err != nil {
-		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
-	}
-
-	ctrl := gomock.NewController(t)
-	mockMetrics := NewMockMetrics(ctrl)
-
-	return &DB{
-		DB:      db,
-		logger:  testutil.NewMockLogger(testutil.DEBUGLOG),
-		config:  nil,
-		metrics: mockMetrics,
-	}, mock, mockMetrics
 }

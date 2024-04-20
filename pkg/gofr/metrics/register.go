@@ -21,7 +21,7 @@ type Manager interface {
 	IncrementCounter(ctx context.Context, name string, labels ...string)
 	DeltaUpDownCounter(ctx context.Context, name string, value float64, labels ...string)
 	RecordHistogram(ctx context.Context, name string, value float64, labels ...string)
-	SetGauge(name string, value float64)
+	SetGauge(name string, value float64, labels ...string)
 }
 
 // Logger defines a simple interface for logging messages at different log levels.
@@ -36,6 +36,13 @@ type metricsManager struct {
 	meter  metric.Meter
 	store  Store
 	logger Logger
+}
+
+// Developer Note: float64Gauge is used instead of metric.Float64ObservableGauge because we need a synchronous gauge metric
+// and otel/metric supports only asynchronous gauge (Float64ObservableGauge).
+// And if we use the otel/metric, we would not be able to have support for labels, Hence created a custom type to implement it.
+type float64Gauge struct {
+	observations map[attribute.Set]float64
 }
 
 // NewMetricsManager creates a new metrics manager instance with the provided metric  meter and logger.
@@ -115,12 +122,14 @@ func (m *metricsManager) NewHistogram(name, desc string, buckets ...float64) {
 }
 
 // NewGauge registers a new gauge metrics. This metric can set
-// the value of metric to a particular value but it doesn't store the last recorded value for the metrics.
+// the value of metric to a particular value, but it doesn't store the last recorded value for the metrics.
 //
 //	Usage:
 //	m.NewGauge("memory_usage", "Current memory usage in bytes")
 func (m *metricsManager) NewGauge(name, desc string) {
-	gauge, err := m.meter.Float64ObservableGauge(name, metric.WithDescription(desc))
+	gauge := float64Gauge{observations: make(map[attribute.Set]float64)}
+
+	_, err := m.meter.Float64ObservableGauge(name, metric.WithDescription(desc), metric.WithFloat64Callback(gauge.callbackFunc))
 	if err != nil {
 		m.logger.Error(err)
 
@@ -131,6 +140,16 @@ func (m *metricsManager) NewGauge(name, desc string) {
 	if err != nil {
 		m.logger.Error(err)
 	}
+}
+
+// callbackFunc implements the callback function for the underlying asynchronous gauge
+// it observes the current state of all previous set() calls.
+func (f *float64Gauge) callbackFunc(_ context.Context, o metric.Float64Observer) error {
+	for attrs, val := range f.observations {
+		o.Observe(val, metric.WithAttributeSet(attrs))
+	}
+
+	return nil
 }
 
 // IncrementCounter increases the specified registered counter metric by 1.
@@ -211,7 +230,7 @@ func (m *metricsManager) RecordHistogram(ctx context.Context, name string, value
 //	Usage:
 //	manager.SetGauge("memory_usage", 1024*1024*100)
 //	// Set memory usage to 100 MB
-func (m *metricsManager) SetGauge(name string, value float64) {
+func (m *metricsManager) SetGauge(name string, value float64, labels ...string) {
 	gauge, err := m.store.getGauge(name)
 	if err != nil {
 		m.logger.Error(err)
@@ -219,18 +238,11 @@ func (m *metricsManager) SetGauge(name string, value float64) {
 		return
 	}
 
-	_, err = m.meter.RegisterCallback(callbackFunc(gauge, value), gauge)
-	if err != nil {
-		m.logger.Error(err)
-	}
+	gauge.set(value, attribute.NewSet(m.getAttributes(name, labels...)...))
 }
 
-func callbackFunc(name metric.Float64ObservableGauge, field float64) func(_ context.Context, o metric.Observer) error {
-	return func(_ context.Context, o metric.Observer) error {
-		o.ObserveFloat64(name, field)
-
-		return nil
-	}
+func (f *float64Gauge) set(val float64, attrs attribute.Set) {
+	f.observations[attrs] = val
 }
 
 // getAttributes validates the given labels and convert them to corresponding otel attributes.
