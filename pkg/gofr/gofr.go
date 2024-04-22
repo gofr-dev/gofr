@@ -240,6 +240,8 @@ func (a *App) SubCommand(pattern string, handler Handler) {
 }
 
 func (a *App) Migrate(migrationsMap map[int64]migration.Migrate) {
+	defer panicRecovery(a.container.Logger)
+
 	migration.Run(migrationsMap, a.container)
 }
 
