@@ -35,15 +35,16 @@ require (
 	go.uber.org/mock v0.4.0
 	golang.org/x/oauth2 v0.19.0
 	golang.org/x/term v0.19.0
-	google.golang.org/api v0.172.0
+	google.golang.org/api v0.176.0
 	google.golang.org/grpc v1.63.2
 	google.golang.org/protobuf v1.33.0
 )
 
 require (
 	cloud.google.com/go v0.112.1 // indirect
-	cloud.google.com/go/compute v1.24.0 // indirect
-	cloud.google.com/go/compute/metadata v0.2.3 // indirect
+	cloud.google.com/go/auth v0.2.2 // indirect
+	cloud.google.com/go/auth/oauth2adapt v0.2.1 // indirect
+	cloud.google.com/go/compute/metadata v0.3.0 // indirect
 	cloud.google.com/go/iam v1.1.6 // indirect
 	filippo.io/edwards25519 v1.1.0 // indirect
 	github.com/alicebob/gopher-json v0.0.0-20200520072559-a9ecdc9d1d3a // indirect
@@ -87,6 +88,6 @@ require (
 	golang.org/x/time v0.5.0 // indirect
 	google.golang.org/genproto v0.0.0-20240227224415-6ceb2ff114de // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20240311132316-a219d84964c2 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20240412170617-26222e5d3d56 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20240415180920-8c6c420018be // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
