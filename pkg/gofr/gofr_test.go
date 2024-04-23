@@ -203,7 +203,6 @@ func TestApp_MigratePanicRecovery(t *testing.T) {
 
 		app.Migrate(map[int64]migration.Migrate{1: {UP: func(d migration.Datasource) error {
 			panic("test panic")
-			return nil
 		}}})
 	})
 
@@ -378,18 +377,18 @@ func (m mockPubsub) Health() datasource.Health {
 	return datasource.Health{}
 }
 
-func (m mockPubsub) CreateTopic(context context.Context, name string) error {
+func (m mockPubsub) CreateTopic(context.Context, string) error {
 	return nil
 }
 
-func (m mockPubsub) DeleteTopic(context context.Context, name string) error {
+func (m mockPubsub) DeleteTopic(context.Context, string) error {
 	return nil
 }
 
-func (m mockPubsub) Publish(ctx context.Context, topic string, message []byte) error {
+func (m mockPubsub) Publish(context.Context, string, []byte) error {
 	return nil
 }
 
-func (m mockPubsub) Subscribe(ctx context.Context, topic string) (*pubsub.Message, error) {
+func (m mockPubsub) Subscribe(context.Context, string) (*pubsub.Message, error) {
 	return nil, nil
 }

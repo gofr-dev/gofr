@@ -135,7 +135,6 @@ func TestSubscriptionManager_PanicRecovery(t *testing.T) {
 			subscriptionManager.startSubscriber("abc",
 				func(c *Context) error {
 					panic("test panic")
-					return nil
 				})
 		}()
 
