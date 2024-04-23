@@ -8,14 +8,15 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/testutil"
 )
 
 func TestRouter(t *testing.T) {
 	log := testutil.StdoutOutputForFunc(func() {
-		config := map[string]string{"HTTP_PORT": "8000", "LOG_LEVEL": "INFO"}
-		c := container.NewContainer(testutil.NewMockConfig(config))
+		cfg := map[string]string{"HTTP_PORT": "8000", "LOG_LEVEL": "INFO"}
+		c := container.NewContainer(config.NewMockConfig(cfg))
 
 		c.Metrics().NewCounter("test-counter", "test")
 
