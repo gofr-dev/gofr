@@ -8,6 +8,7 @@ import (
 
 	"go.uber.org/mock/gomock"
 
+	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/testutil"
 )
@@ -26,7 +27,7 @@ func TestRedis_HealthHandlerError(t *testing.T) {
 	mockMetric.EXPECT().RecordHistogram(gomock.Any(), "app_redis_stats", gomock.Any(), "type", "ping")
 	mockMetric.EXPECT().RecordHistogram(gomock.Any(), "app_redis_stats", gomock.Any(), "type", "info")
 
-	client := NewClient(testutil.NewMockConfig(map[string]string{
+	client := NewClient(config.NewMockConfig(map[string]string{
 		"REDIS_HOST": s.Host(),
 		"REDIS_PORT": s.Port(),
 	}), testutil.NewMockLogger(testutil.DEBUGLOG), mockMetric)
