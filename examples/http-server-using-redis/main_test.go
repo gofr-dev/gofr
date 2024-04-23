@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"context"
-
 	"net/http"
 	"testing"
 	"time"
