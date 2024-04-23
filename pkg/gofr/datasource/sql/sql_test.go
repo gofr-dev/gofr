@@ -147,3 +147,11 @@ func TestSQL_getDBConnectionString(t *testing.T) {
 		})
 	}
 }
+
+func Test_NewSQLMock(t *testing.T) {
+	db, mock, mockMetric := NewSQLMocks(t)
+
+	assert.NotNil(t, db)
+	assert.NotNil(t, mock)
+	assert.NotNil(t, mockMetric)
+}
