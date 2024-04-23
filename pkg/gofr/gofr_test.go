@@ -303,7 +303,7 @@ func Test_initTracer(t *testing.T) {
 		"TRACER_PORT":    "2005",
 	})
 
-	mockConfig3 := testutil.NewMockConfig(map[string]string{
+	mockConfig3 := config.NewMockConfig(map[string]string{
 		"TRACE_EXPORTER": "gofr",
 	})
 
