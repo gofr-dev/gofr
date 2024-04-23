@@ -29,6 +29,8 @@ type Container struct {
 	appName    string
 	appVersion string
 
+	FaviconPath string
+
 	Services       map[string]service.HTTP
 	metricsManager metrics.Manager
 	PubSub         pubsub.Client
@@ -44,8 +46,9 @@ func NewContainer(conf config.Config) *Container {
 	}
 
 	c := &Container{
-		appName:    conf.GetOrDefault("APP_NAME", "gofr-app"),
-		appVersion: conf.GetOrDefault("APP_VERSION", "dev"),
+		appName:     conf.GetOrDefault("APP_NAME", "gofr-app"),
+		appVersion:  conf.GetOrDefault("APP_VERSION", "dev"),
+		FaviconPath: conf.Get("FAV_ICON"),
 	}
 
 	c.Create(conf)
@@ -173,6 +176,10 @@ func (c *Container) registerFrameworkMetrics() {
 
 func (c *Container) GetAppName() string {
 	return c.appName
+}
+
+func (c *Container) GetFavIcon() string {
+	return c.FaviconPath
 }
 
 func (c *Container) GetAppVersion() string {

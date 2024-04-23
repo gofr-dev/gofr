@@ -19,13 +19,14 @@ my-gofr-app/
 ```
 
 By default, GoFr starts HTTP server at port 8000, in order to change that we can add the config `HTTP_PORT`
-Similarly to Set the app-name user can add `APP_NAME`. For example:
+Similarly to Set the app-name user can add `APP_NAME` and to Set the favicon user can add `FAV_ICON`. For example:
 
 ```bash
 # configs/.env
 
 APP_NAME=test-service
 HTTP_PORT=9000
+FAV_ICON=./gopher.png
 ```
 
 ## Configuring Environments in GoFr

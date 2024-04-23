@@ -1,12 +1,13 @@
 package gofr
 
 import (
+	"net/http"
+	"os"
+
 	"gofr.dev/pkg/gofr/container"
 	gofrHTTP "gofr.dev/pkg/gofr/http"
 	"gofr.dev/pkg/gofr/http/response"
 	"gofr.dev/pkg/gofr/static"
-
-	"net/http"
 )
 
 type Handler func(c *Context) (interface{}, error)
@@ -45,7 +46,16 @@ func liveHandler(*Context) (interface{}, error) {
 	}{Status: "UP"}, nil
 }
 
-func faviconHandler(*Context) (interface{}, error) {
+func faviconHandler(c *Context) (interface{}, error) {
+	if faviconPath := c.GetFavIcon(); faviconPath != "" {
+		data, err := os.ReadFile(faviconPath)
+		return response.File{
+			Content:     data,
+			ContentType: "image/x-icon",
+		}, err
+
+	}
+
 	data, err := static.Files.ReadFile("favicon.ico")
 
 	return response.File{
