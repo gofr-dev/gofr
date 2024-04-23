@@ -31,7 +31,7 @@ func (s *SubscriptionManager) startSubscriber(topic string, handler SubscribeFun
 		}
 
 		if err != nil {
-			s.container.Logger.Errorf("error while reading from Kafka, err: %v", err.Error())
+			s.container.Logger.Errorf("error while reading from topic %v, err: %v", topic, err.Error())
 			continue
 		}
 

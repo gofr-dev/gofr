@@ -15,6 +15,8 @@ import (
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
+	"gofr.dev/pkg/gofr/datasource"
+	"gofr.dev/pkg/gofr/datasource/pubsub"
 	gofrHTTP "gofr.dev/pkg/gofr/http"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/migration"
@@ -193,6 +195,21 @@ func TestApp_MigrateInvalidKeys(t *testing.T) {
 	assert.Contains(t, logs, "migration run failed! UP not defined for the following keys: [1]")
 }
 
+func TestApp_MigratePanicRecovery(t *testing.T) {
+	logs := testutil.StderrOutputForFunc(func() {
+		app := New()
+
+		app.container.PubSub = mockPubsub{}
+
+		app.Migrate(map[int64]migration.Migrate{1: {UP: func(d migration.Datasource) error {
+			panic("test panic")
+			return nil
+		}}})
+	})
+
+	assert.Contains(t, logs, "test panic")
+}
+
 func Test_otelErrorHandler(t *testing.T) {
 	logs := testutil.StderrOutputForFunc(func() {
 		h := otelErrorHandler{logging.NewLogger(logging.DEBUG)}
@@ -352,4 +369,27 @@ func Test_initTracer_invalidConfig(t *testing.T) {
 	})
 
 	assert.Contains(t, errLogMessage, "unsupported trace exporter.")
+}
+
+type mockPubsub struct {
+}
+
+func (m mockPubsub) Health() datasource.Health {
+	return datasource.Health{}
+}
+
+func (m mockPubsub) CreateTopic(context context.Context, name string) error {
+	return nil
+}
+
+func (m mockPubsub) DeleteTopic(context context.Context, name string) error {
+	return nil
+}
+
+func (m mockPubsub) Publish(ctx context.Context, topic string, message []byte) error {
+	return nil
+}
+
+func (m mockPubsub) Subscribe(ctx context.Context, topic string) (*pubsub.Message, error) {
+	return nil, nil
 }
