@@ -1,7 +1,6 @@
 package gofr
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -16,7 +15,6 @@ import (
 	gofrHTTP "gofr.dev/pkg/gofr/http"
 	"gofr.dev/pkg/gofr/http/response"
 	"gofr.dev/pkg/gofr/logging"
-	"gofr.dev/pkg/gofr/static"
 )
 
 var (
@@ -62,92 +60,19 @@ func TestHandler_ServeHTTP(t *testing.T) {
 }
 
 func TestHandler_faviconHandler(t *testing.T) {
-	// Define a mock Context with a custom favicon path
-	mockContext := &Context{
-		Container: &container.Container{
-			FaviconPath: func() string {
-				return "static/favicon.ico"
-			}(),
-		},
+	c := Context{
+		Context: context.Background(),
 	}
 
-	// Test case 1: Success with custom favicon path
-	expectedData, err := os.ReadFile("static/favicon.ico")
-	if err != nil {
-		t.Errorf("Error reading custom favicon file: %v", err)
-	}
-	result, err := faviconHandler(mockContext)
-	if err != nil {
-		t.Errorf("Unexpected error with custom favicon path: %v", err)
-	}
-	fileResult, ok := result.(response.File)
-	if !ok {
-		t.Errorf("Expected response.File, got %T", result)
-	}
-	if !bytes.Equal(fileResult.Content, expectedData) {
-		t.Errorf("Expected content to match custom favicon file")
-	}
-	if fileResult.ContentType != "image/x-icon" {
-		t.Errorf("Expected ContentType to be image/x-icon")
-	}
+	d, _ := os.ReadFile("static/favicon.ico")
+	data, err := faviconHandler(&c)
 
-	// Define a mock Context with no custom favicon path
-	mockContext.FaviconPath = func() string {
-		return ""
-	}()
+	assert.NoError(t, err, "TEST Failed.\n")
 
-	// Test case 2: Success with default favicon.ico
-	expectedData, err = static.Files.ReadFile("favicon.ico")
-	if err != nil {
-		t.Errorf("Error reading default favicon.ico: %v", err)
-	}
-	result, err = faviconHandler(mockContext)
-	if err != nil {
-		t.Errorf("Unexpected error with default favicon.ico: %v", err)
-	}
-	fileResult, ok = result.(response.File)
-	if !ok {
-		t.Errorf("Expected response.File, got %T", result)
-	}
-	if !bytes.Equal(fileResult.Content, expectedData) {
-		t.Errorf("Expected content to match default favicon.ico")
-	}
-	if fileResult.ContentType != "image/x-icon" {
-		t.Errorf("Expected ContentType to be image/x-icon")
-	}
-
-	// Test case 3: Error reading custom favicon path
-	mockContext.FaviconPath = func() string {
-		return "/invalid/path.ico"
-	}()
-	_, err = faviconHandler(mockContext)
-	if err == nil {
-		t.Errorf("Expected error reading invalid favicon path")
-	}
-
-	// Test case 4: Empty custom favicon path (optional)
-	mockContext.FaviconPath = func() string {
-		return "" // Empty string even if configured for custom path
-	}()
-	// Expected behavior: Fallback to default favicon.ico
-	expectedData, err = static.Files.ReadFile("favicon.ico")
-	if err != nil {
-		t.Errorf("Error reading default favicon.ico: %v", err)
-	}
-	result, err = faviconHandler(mockContext)
-	if err != nil {
-		t.Errorf("Unexpected error with empty custom favicon path: %v", err)
-	}
-	fileResult, ok = result.(response.File)
-	if !ok {
-		t.Errorf("Expected response.File, got %T", result)
-	}
-	if !bytes.Equal(fileResult.Content, expectedData) {
-		t.Errorf("Expected content to match default favicon.ico")
-	}
-	if fileResult.ContentType != "image/x-icon" {
-		t.Errorf("Expected ContentType to be image/x-icon")
-	}
+	assert.Equal(t, data, response.File{
+		Content:     d,
+		ContentType: "image/x-icon",
+	}, "TEST Failed.\n")
 }
 
 func TestHandler_catchAllHandler(t *testing.T) {

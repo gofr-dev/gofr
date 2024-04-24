@@ -120,13 +120,6 @@ func TestContainer_GetAppName(t *testing.T) {
 
 	assert.Equal(t, "test-app", out)
 }
-func TestContainer_GetFavIcon(t *testing.T) {
-	c := &Container{FaviconPath: "./test-favicon.png"}
-
-	out := c.GetFavIcon()
-
-	assert.Equal(t, "./test-favicon.png", out)
-}
 
 func TestContainer_GetAppVersion(t *testing.T) {
 	c := &Container{appVersion: "v0.1.0"}
