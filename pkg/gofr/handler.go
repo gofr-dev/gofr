@@ -1,6 +1,8 @@
 package gofr
 
 import (
+	"os"
+
 	"gofr.dev/pkg/gofr/container"
 	gofrHTTP "gofr.dev/pkg/gofr/http"
 	"gofr.dev/pkg/gofr/http/response"
@@ -46,12 +48,21 @@ func liveHandler(*Context) (interface{}, error) {
 }
 
 func faviconHandler(*Context) (interface{}, error) {
-	data, err := static.Files.ReadFile("favicon.ico")
 
+	data, err := os.ReadFile("./static/favicon.ico")
+	if err != nil {
+		data, err = static.Files.ReadFile("favicon.ico")
+
+		return response.File{
+			Content:     data,
+			ContentType: "image/x-icon",
+		}, err
+	}
 	return response.File{
 		Content:     data,
 		ContentType: "image/x-icon",
 	}, err
+
 }
 
 func catchAllHandler(*Context) (interface{}, error) {
