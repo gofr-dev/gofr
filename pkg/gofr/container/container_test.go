@@ -63,7 +63,7 @@ func Test_newContainerPubSubInitializationFail(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		c := NewContainer(testutil.NewMockConfig(tc.configs))
+		c := NewContainer(config.NewMockConfig(tc.configs))
 
 		assert.Nil(t, c.PubSub)
 	}
@@ -74,7 +74,7 @@ func TestContainer_MQTTInitialization_Default(t *testing.T) {
 		"PUBSUB_BACKEND": "MQTT",
 	}
 
-	c := NewContainer(testutil.NewMockConfig(configs))
+	c := NewContainer(config.NewMockConfig(configs))
 
 	assert.NotNil(t, c.PubSub)
 	m, ok := c.PubSub.(*mqtt.MQTT)
