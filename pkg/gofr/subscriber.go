@@ -37,6 +37,7 @@ func (s *SubscriptionManager) startSubscriber(topic string, handler SubscribeFun
 
 		ctx := newContext(nil, msg, s.container)
 		err = func(ctx *Context) error {
+			// TODO : Move panic recovery at central location which will manage for all the different cases.
 			defer panicRecovery(ctx.Logger)
 			return handler(ctx)
 		}(ctx)
