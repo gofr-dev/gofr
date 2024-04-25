@@ -84,13 +84,13 @@ func retryConnection(database *DB) {
 	const ConnRetryFrequencyInSeconds = 10
 
 	for {
-		time.Sleep(ConnRetryFrequencyInSeconds * time.Second)
-
 		if database.DB.Ping() != nil {
-			database.logger.Infof("Retrying SQL database connection")
+			database.logger.Log("Retrying SQL database connection")
 
 			database = pingToTestConnection(database)
 		}
+
+		time.Sleep(ConnRetryFrequencyInSeconds * time.Second)
 	}
 }
 
