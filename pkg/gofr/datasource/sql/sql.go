@@ -51,7 +51,7 @@ func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *D
 
 	database.DB, err = sql.Open(otelRegisteredDialect, dbConnectionString)
 	if err != nil {
-		database.logger.Errorf("could not connect with '%s' user to database '%s:%s'  error: %v",
+		database.logger.Errorf("could not open connection with '%s' user to database '%s:%s' error: %v",
 			database.config.User, database.config.HostName, database.config.Port, err)
 
 		return database
@@ -68,29 +68,29 @@ func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *D
 
 func pingToTestConnection(database *DB) *DB {
 	if err := database.DB.Ping(); err != nil {
-		database.logger.Errorf("could not connect with '%s' user to database '%s:%s'  error: %v",
+		database.logger.Errorf("could not connect with '%s' user to database '%s:%s' error: %v",
 			database.config.User, database.config.HostName, database.config.Port, err)
 
 		return database
 	}
 
-	database.logger.Infof("connected to '%s' database at %s:%s", database.config.Database,
+	database.logger.Logf("connected to '%s' database at %s:%s", database.config.Database,
 		database.config.HostName, database.config.Port)
 
 	return database
 }
 
 func retryConnection(database *DB) {
-	const ConnRetryFrequencyInSeconds = 10
+	const connRetryFrequencyInSeconds = 10
 
 	for {
 		if database.DB.Ping() != nil {
-			database.logger.Log("Retrying SQL database connection")
+			database.logger.Log("retrying SQL database connection")
 
 			database = pingToTestConnection(database)
 		}
 
-		time.Sleep(ConnRetryFrequencyInSeconds * time.Second)
+		time.Sleep(connRetryFrequencyInSeconds * time.Second)
 	}
 }
 

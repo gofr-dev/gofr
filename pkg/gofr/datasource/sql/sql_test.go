@@ -2,7 +2,6 @@ package sql
 
 import (
 	"fmt"
-
 	"strings"
 	"testing"
 	"time"
@@ -181,5 +180,5 @@ func Test_SQLRetryConnectionInfoLog(t *testing.T) {
 		time.Sleep(2 * time.Second)
 	})
 
-	assert.Contains(t, logs, "Retrying SQL database connection")
+	assert.Contains(t, logs, "retrying SQL database connection")
 }

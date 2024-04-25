@@ -9,7 +9,6 @@ package datasource
 type Logger interface {
 	Debug(args ...interface{})
 	Debugf(format string, args ...interface{})
-	Infof(format string, args ...interface{})
 	Log(args ...interface{})
 	Logf(format string, args ...interface{})
 	Error(args ...interface{})
