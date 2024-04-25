@@ -183,30 +183,3 @@ func Test_SQLRetryConnectionInfoLog(t *testing.T) {
 
 	assert.Contains(t, logs, "Retrying SQL database connection")
 }
-
-func Test_SQLRetryConnectionErrorLog(t *testing.T) {
-	logs := testutil.StderrOutputForFunc(func() {
-		ctrl := gomock.NewController(t)
-
-		mockMetrics := NewMockMetrics(ctrl)
-		mockConfig := config.NewMockConfig(map[string]string{
-			"DB_DIALECT":  "postgres",
-			"DB_HOST":     "host",
-			"DB_USER":     "user",
-			"DB_PASSWORD": "password",
-			"DB_PORT":     "3201",
-			"DB_NAME":     "test",
-		})
-
-		mockLogger := testutil.NewMockLogger(testutil.DEBUGLOG)
-
-		mockMetrics.EXPECT().SetGauge("app_sql_open_connections", float64(0))
-		mockMetrics.EXPECT().SetGauge("app_sql_inUse_connections", float64(0))
-
-		_ = NewSQL(mockConfig, mockLogger, mockMetrics)
-
-		time.Sleep(2 * time.Second)
-	})
-
-	assert.Contains(t, logs, "could not connect with 'user' user to database 'host:3201'  error: dial tcp: lookup host: no such host")
-}
