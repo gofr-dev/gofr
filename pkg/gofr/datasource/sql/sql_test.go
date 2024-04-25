@@ -162,7 +162,7 @@ func Test_SQLRetryConnectionInfoLog(t *testing.T) {
 		ctrl := gomock.NewController(t)
 
 		mockMetrics := NewMockMetrics(ctrl)
-		mockConfig := testutil.NewMockConfig(map[string]string{
+		mockConfig := config.NewMockConfig(map[string]string{
 			"DB_DIALECT":  "postgres",
 			"DB_HOST":     "host",
 			"DB_USER":     "user",
@@ -189,7 +189,7 @@ func Test_SQLRetryConnectionErrorLog(t *testing.T) {
 		ctrl := gomock.NewController(t)
 
 		mockMetrics := NewMockMetrics(ctrl)
-		mockConfig := testutil.NewMockConfig(map[string]string{
+		mockConfig := config.NewMockConfig(map[string]string{
 			"DB_DIALECT":  "postgres",
 			"DB_HOST":     "host",
 			"DB_USER":     "user",
