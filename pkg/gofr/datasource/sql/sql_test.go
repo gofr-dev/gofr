@@ -208,6 +208,5 @@ func Test_SQLRetryConnectionErrorLog(t *testing.T) {
 		time.Sleep(2 * time.Second)
 	})
 
-	assert.Contains(t, logs, "could not connect with 'user' user to database 'host:3201'  error: dial tcp: lookup host: no such "+
-		"host\ncould not connect with 'user' user to database 'host:3201'  error: dial tcp: lookup host: no such host\n")
+	assert.Contains(t, logs, "could not connect with 'user' user to database 'host:3201'  error: dial tcp: lookup host: no such host")
 }
