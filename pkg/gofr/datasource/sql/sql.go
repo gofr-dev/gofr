@@ -87,7 +87,19 @@ func retryConnection(database *DB) {
 		if database.DB.Ping() != nil {
 			database.logger.Log("retrying SQL database connection")
 
-			database = pingToTestConnection(database)
+			for {
+				if err := database.DB.Ping(); err != nil {
+					database.logger.Debugf("could not connect with '%s' user to database '%s:%s' error: %v",
+						database.config.User, database.config.HostName, database.config.Port, err)
+
+					time.Sleep(connRetryFrequencyInSeconds * time.Second)
+				} else {
+					database.logger.Logf("connected to '%s' database at %s:%s", database.config.Database,
+						database.config.HostName, database.config.Port)
+
+					break
+				}
+			}
 		}
 
 		time.Sleep(connRetryFrequencyInSeconds * time.Second)
