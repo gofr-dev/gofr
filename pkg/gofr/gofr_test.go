@@ -15,8 +15,6 @@ import (
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
-	"gofr.dev/pkg/gofr/datasource"
-	"gofr.dev/pkg/gofr/datasource/pubsub"
 	gofrHTTP "gofr.dev/pkg/gofr/http"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/migration"
@@ -199,7 +197,7 @@ func TestApp_MigratePanicRecovery(t *testing.T) {
 	logs := testutil.StderrOutputForFunc(func() {
 		app := New()
 
-		app.container.PubSub = mockPubsub{}
+		app.container.PubSub = &container.MockPubSub{}
 
 		app.Migrate(map[int64]migration.Migrate{1: {UP: func(d migration.Datasource) error {
 			panic("test panic")
@@ -368,27 +366,4 @@ func Test_initTracer_invalidConfig(t *testing.T) {
 	})
 
 	assert.Contains(t, errLogMessage, "unsupported trace exporter.")
-}
-
-type mockPubsub struct {
-}
-
-func (m mockPubsub) Health() datasource.Health {
-	return datasource.Health{}
-}
-
-func (m mockPubsub) CreateTopic(context.Context, string) error {
-	return nil
-}
-
-func (m mockPubsub) DeleteTopic(context.Context, string) error {
-	return nil
-}
-
-func (m mockPubsub) Publish(context.Context, string, []byte) error {
-	return nil
-}
-
-func (m mockPubsub) Subscribe(context.Context, string) (*pubsub.Message, error) {
-	return nil, nil
 }
