@@ -238,7 +238,7 @@ func TestEnableBasicAuthWithFunc(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	c := container.NewContainer(testutil.NewMockConfig(nil))
+	c := container.NewContainer(config.NewMockConfig(nil))
 
 	// Initialize a new App instance
 	a := &App{
@@ -305,19 +305,19 @@ func Test_AddRESTHandlers(t *testing.T) {
 }
 
 func Test_initTracer(t *testing.T) {
-	mockConfig1 := testutil.NewMockConfig(map[string]string{
+	mockConfig1 := config.NewMockConfig(map[string]string{
 		"TRACE_EXPORTER": "zipkin",
 		"TRACER_HOST":    "localhost",
 		"TRACER_PORT":    "2005",
 	})
 
-	mockConfig2 := testutil.NewMockConfig(map[string]string{
+	mockConfig2 := config.NewMockConfig(map[string]string{
 		"TRACE_EXPORTER": "jaeger",
 		"TRACER_HOST":    "localhost",
 		"TRACER_PORT":    "2005",
 	})
 
-	mockConfig3 := testutil.NewMockConfig(map[string]string{
+	mockConfig3 := config.NewMockConfig(map[string]string{
 		"TRACE_EXPORTER": "gofr",
 	})
 
@@ -348,7 +348,7 @@ func Test_initTracer(t *testing.T) {
 }
 
 func Test_initTracer_invalidConfig(t *testing.T) {
-	mockConfig := testutil.NewMockConfig(map[string]string{
+	mockConfig := config.NewMockConfig(map[string]string{
 		"TRACE_EXPORTER": "abc",
 		"TRACER_HOST":    "localhost",
 		"TRACER_PORT":    "2005",

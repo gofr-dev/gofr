@@ -1,12 +1,7 @@
-package testutil
+package config
 
 type mockConfig struct {
 	conf map[string]string
-}
-
-type Config interface {
-	Get(string) string
-	GetOrDefault(string, string) string
 }
 
 func NewMockConfig(configMap map[string]string) Config {
