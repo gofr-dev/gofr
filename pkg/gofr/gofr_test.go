@@ -193,6 +193,20 @@ func TestApp_MigrateInvalidKeys(t *testing.T) {
 	assert.Contains(t, logs, "migration run failed! UP not defined for the following keys: [1]")
 }
 
+func TestApp_MigratePanicRecovery(t *testing.T) {
+	logs := testutil.StderrOutputForFunc(func() {
+		app := New()
+
+		app.container.PubSub = &container.MockPubSub{}
+
+		app.Migrate(map[int64]migration.Migrate{1: {UP: func(d migration.Datasource) error {
+			panic("test panic")
+		}}})
+	})
+
+	assert.Contains(t, logs, "test panic")
+}
+
 func Test_otelErrorHandler(t *testing.T) {
 	logs := testutil.StderrOutputForFunc(func() {
 		h := otelErrorHandler{logging.NewLogger(logging.DEBUG)}
