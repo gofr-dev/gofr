@@ -89,6 +89,7 @@ func TestQueryRow(t *testing.T) {
 
 func TestQueryRowContext(t *testing.T) {
 	ctx := context.Background()
+
 	t.Run("successful query row context", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		mockDB := container.NewMockDB(ctrl)
@@ -146,6 +147,7 @@ func TestExec(t *testing.T) {
 
 func TestExecContext(t *testing.T) {
 	ctx := context.Background()
+
 	t.Run("successful exec context", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		mockDB := container.NewMockDB(ctrl)
@@ -174,6 +176,7 @@ func TestCheckAndCreateMigrationTableSuccess(t *testing.T) {
 
 	mockMigrator.EXPECT().checkAndCreateMigrationTable(mockContainer)
 	mocks.SQL.EXPECT().Exec(createSQLGoFrMigrationsTable).Return(nil, nil)
+
 	migrator := sqlMigrator{
 		db:       mockDB,
 		Migrator: mockMigrator,
