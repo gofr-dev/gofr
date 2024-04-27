@@ -22,7 +22,7 @@ type logger interface {
 	Debugf(format string, a ...interface{})
 }
 
-func NewEnvFile(configFolder string, logger logger) *EnvLoader {
+func NewEnvFile(configFolder string, logger logger) Config {
 	conf := &EnvLoader{logger: logger}
 	conf.read(configFolder)
 
