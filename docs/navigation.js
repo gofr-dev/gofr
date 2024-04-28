@@ -13,6 +13,7 @@ export const navigation = [
     {
         title: 'Advanced Guide',
         links: [
+            { title: 'Overriding Default', href: '/docs/advanced-guide/overriding-default' },
             { title: 'Remote Log Level Change', href: '/docs/advanced-guide/remote-log-level-change' },
             { title: 'Publishing Custom Metrics', href: '/docs/advanced-guide/publishing-custom-metrics' },
             { title: 'Custom Spans in Tracing', href: '/docs/advanced-guide/custom-spans-in-tracing' },
