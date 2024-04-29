@@ -9,6 +9,7 @@ import (
 	"time"
 
 	gcPubSub "cloud.google.com/go/pubsub"
+	"go.opentelemetry.io/otel"
 
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 )
@@ -76,6 +77,9 @@ func validateConfigs(conf *Config) error {
 }
 
 func (g *googleClient) Publish(ctx context.Context, topic string, message []byte) error {
+	ctx, span := otel.GetTracerProvider().Tracer("gofr").Start(ctx, "publish-gcp")
+	defer span.End()
+
 	g.metrics.IncrementCounter(ctx, "app_pubsub_publish_total_count", "topic", topic)
 
 	t, err := g.getTopic(ctx, topic)
@@ -85,12 +89,14 @@ func (g *googleClient) Publish(ctx context.Context, topic string, message []byte
 		return err
 	}
 
+	start := time.Now()
 	result := t.Publish(ctx, &gcPubSub.Message{
 		Data:        message,
 		PublishTime: time.Now(),
 	})
+	end := time.Since(start)
 
-	id, err := result.Get(ctx)
+	_, err = result.Get(ctx)
 	if err != nil {
 		g.logger.Errorf("error publishing to google topic %s err: %v", topic, err)
 
@@ -99,11 +105,12 @@ func (g *googleClient) Publish(ctx context.Context, topic string, message []byte
 
 	g.logger.Debug(&pubsub.Log{
 		Mode:          modePublish,
-		MessageID:     id,
+		CorrelationID: span.SpanContext().TraceID().String(),
 		MessageValue:  string(message),
 		Topic:         topic,
 		Host:          g.ProjectID,
 		PubSubBackend: gcpBackend,
+		Time:          end.Microseconds(),
 	})
 
 	g.metrics.IncrementCounter(ctx, "app_pubsub_publish_success_count", "topic", topic)
@@ -112,6 +119,9 @@ func (g *googleClient) Publish(ctx context.Context, topic string, message []byte
 }
 
 func (g *googleClient) Subscribe(ctx context.Context, topic string) (*pubsub.Message, error) {
+	ctx, span := otel.GetTracerProvider().Tracer("gofr").Start(ctx, "gcp-subscribe")
+	defer span.End()
+
 	g.metrics.IncrementCounter(ctx, "app_pubsub_subscribe_total_count", "topic", topic)
 
 	var m = pubsub.NewMessage(ctx)
@@ -128,7 +138,9 @@ func (g *googleClient) Subscribe(ctx context.Context, topic string) (*pubsub.Mes
 
 	ctx, cancel := context.WithCancel(ctx)
 
+	start := time.Now()
 	err = subscription.Receive(ctx, func(_ context.Context, msg *gcPubSub.Message) {
+		end := time.Since(start)
 		defer cancel()
 
 		m.Topic = topic
@@ -138,11 +150,12 @@ func (g *googleClient) Subscribe(ctx context.Context, topic string) (*pubsub.Mes
 
 		g.logger.Debug(&pubsub.Log{
 			Mode:          modeSubscribe,
-			MessageID:     msg.ID,
+			CorrelationID: span.SpanContext().TraceID().String(),
 			MessageValue:  string(m.Value),
 			Topic:         topic,
 			Host:          g.Config.ProjectID,
 			PubSubBackend: gcpBackend,
+			Time:          end.Microseconds(),
 		})
 	})
 

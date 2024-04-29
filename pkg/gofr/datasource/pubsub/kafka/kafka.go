@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/segmentio/kafka-go"
+	"go.opentelemetry.io/otel"
+
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 )
 
@@ -51,6 +53,12 @@ func New(conf Config, logger pubsub.Logger, metrics Metrics) *kafkaClient {
 	conn, err := kafka.Dial("tcp", conf.Broker)
 	if err != nil {
 		logger.Errorf("failed to connect to KAFKA at %v", conf.Broker)
+
+		return &kafkaClient{
+			logger:  logger,
+			config:  Config{},
+			metrics: metrics,
+		}
 	}
 
 	dialer := &kafka.Dialer{
@@ -92,12 +100,16 @@ func validateConfigs(conf Config) error {
 }
 
 func (k *kafkaClient) Publish(ctx context.Context, topic string, message []byte) error {
+	ctx, span := otel.GetTracerProvider().Tracer("gofr").Start(ctx, "subscribe")
+	defer span.End()
+
 	k.metrics.IncrementCounter(ctx, "app_pubsub_publish_total_count", "topic", topic)
 
 	if k.writer == nil || topic == "" {
 		return errPublisherNotConfigured
 	}
 
+	start := time.Now()
 	err := k.writer.WriteMessages(ctx,
 		kafka.Message{
 			Topic: topic,
@@ -105,13 +117,22 @@ func (k *kafkaClient) Publish(ctx context.Context, topic string, message []byte)
 			Time:  time.Now(),
 		},
 	)
+	end := time.Since(start)
 
 	if err != nil {
 		k.logger.Error("failed to publish message to kafka broker")
 		return err
 	}
 
-	k.logger.Debugf("published kafka message %v on topic %v", string(message), topic)
+	k.logger.Debug(&pubsub.Log{
+		Mode:          "PUB",
+		CorrelationID: span.SpanContext().TraceID().String(),
+		MessageValue:  string(message),
+		Topic:         topic,
+		Host:          k.config.Broker,
+		PubSubBackend: "KAFKA",
+		Time:          end.Microseconds(),
+	})
 
 	k.metrics.IncrementCounter(ctx, "app_pubsub_publish_success_count", "topic", topic)
 
@@ -119,6 +140,9 @@ func (k *kafkaClient) Publish(ctx context.Context, topic string, message []byte)
 }
 
 func (k *kafkaClient) Subscribe(ctx context.Context, topic string) (*pubsub.Message, error) {
+	ctx, span := otel.GetTracerProvider().Tracer("gofr").Start(ctx, "subscribe")
+	defer span.End()
+
 	k.metrics.IncrementCounter(ctx, "app_pubsub_subscribe_total_count", "topic", topic)
 
 	var reader Reader
@@ -131,6 +155,8 @@ func (k *kafkaClient) Subscribe(ctx context.Context, topic string) (*pubsub.Mess
 
 	// Release the lock on the reader map after update
 	k.mu.Unlock()
+
+	start := time.Now()
 
 	// Read a single message from the topic
 	reader = k.reader[topic]
@@ -149,7 +175,17 @@ func (k *kafkaClient) Subscribe(ctx context.Context, topic string) (*pubsub.Mess
 		Committer: newKafkaMessage(&msg, k.reader[topic], k.logger),
 	}
 
-	k.logger.Debugf("received kafka message %v on topic %v", string(msg.Value), msg.Topic)
+	end := time.Since(start)
+
+	k.logger.Debug(&pubsub.Log{
+		Mode:          "PUB",
+		CorrelationID: span.SpanContext().TraceID().String(),
+		MessageValue:  string(msg.Value),
+		Topic:         topic,
+		Host:          k.config.Broker,
+		PubSubBackend: "KAFKA",
+		Time:          end.Microseconds(),
+	})
 
 	k.metrics.IncrementCounter(ctx, "app_pubsub_subscribe_success_count", "topic", topic)
 
