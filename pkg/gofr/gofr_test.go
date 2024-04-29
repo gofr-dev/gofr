@@ -11,10 +11,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/segmentio/kafka-go"
 	"github.com/stretchr/testify/assert"
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
+	"gofr.dev/pkg/gofr/datasource"
 	gofrHTTP "gofr.dev/pkg/gofr/http"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/migration"
@@ -366,4 +368,20 @@ func Test_initTracer_invalidConfig(t *testing.T) {
 	})
 
 	assert.Contains(t, errLogMessage, "unsupported trace exporter.")
+}
+
+type tmpkfk struct{}
+
+var _ datasource.Kafka = (*tmpkfk)(nil)
+
+func (tk tmpkfk) Publish(context.Context, kafka.Message) error {
+	return nil
+}
+
+func Test_UseKafka(t *testing.T) {
+	app := New()
+	tmp := tmpkfk{}
+	app.UseKafka(&tmp)
+
+	assert.Equal(t, &tmp, app.container.Kafka)
 }

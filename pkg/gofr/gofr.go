@@ -370,3 +370,7 @@ func (a *App) AddRESTHandlers(object interface{}) error {
 func (a *App) UseMongo(db datasource.Mongo) {
 	a.container.Mongo = db
 }
+
+func (a *App) UseKafka(kfk datasource.Kafka) {
+	a.container.Kafka = kfk
+}

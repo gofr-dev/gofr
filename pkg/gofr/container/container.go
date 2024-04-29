@@ -36,6 +36,7 @@ type Container struct {
 	Redis Redis
 	SQL   DB
 	Mongo datasource.Mongo
+	Kafka datasource.Kafka
 }
 
 func NewContainer(conf config.Config) *Container {
