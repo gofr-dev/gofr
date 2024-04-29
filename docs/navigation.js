@@ -29,6 +29,7 @@ export const navigation = [
             // { title: 'Supporting OAuth', href: '/docs/advanced-guide/oauth' },
             // { title: 'Creating a Static File Server', href: '/docs/advanced-guide/static-file-server' },
             // { title: 'WebSockets', href: '/docs/advanced-guide/websockets' },
+            { title: 'Filtered Logging', href:'/docs/advanced-guide/filtered-logging' }
         ],
     },
     {
