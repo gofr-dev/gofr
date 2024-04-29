@@ -491,27 +491,35 @@ func TestDefaultFilterMaskingPointerFields(t *testing.T) {
 		return
 	}
 
-	expected := `{"username":"john.doe","password":"**********","email":"********************","creditCard":"*******************","age":30,"score":7.5}`
+	expected := `{"username":"john.doe","password":"**********",` +
+		`"email":"********************","creditCard":"*******************","age":30,` +
+		`"score":7.5}`
 	if string(maskedMessage) != expected {
 		t.Errorf("Expected %s, but got %s", expected, maskedMessage)
 	}
 
 	filteredUser := filteredMessage.(*User)
+
 	if *filteredUser.Username != *expectedOutput.Username {
 		t.Errorf("Expected username %s, but got %s", *expectedOutput.Username, *filteredUser.Username)
 	}
+
 	if *filteredUser.Password != *expectedOutput.Password {
 		t.Errorf("Expected password %s, but got %s", *expectedOutput.Password, *filteredUser.Password)
 	}
+
 	if *filteredUser.Email != *expectedOutput.Email {
 		t.Errorf("Expected email %s, but got %s", *expectedOutput.Email, *filteredUser.Email)
 	}
+
 	if *filteredUser.CreditCard != *expectedOutput.CreditCard {
 		t.Errorf("Expected credit card %s, but got %s", *expectedOutput.CreditCard, *filteredUser.CreditCard)
 	}
+
 	if *filteredUser.Age != *expectedOutput.Age {
 		t.Errorf("Expected age %d, but got %d", *expectedOutput.Age, *filteredUser.Age)
 	}
+
 	if *filteredUser.Score != *expectedOutput.Score {
 		t.Errorf("Expected score %f, but got %f", *expectedOutput.Score, *filteredUser.Score)
 	}
