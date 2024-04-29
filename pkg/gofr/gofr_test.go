@@ -193,6 +193,20 @@ func TestApp_MigrateInvalidKeys(t *testing.T) {
 	assert.Contains(t, logs, "migration run failed! UP not defined for the following keys: [1]")
 }
 
+func TestApp_MigratePanicRecovery(t *testing.T) {
+	logs := testutil.StderrOutputForFunc(func() {
+		app := New()
+
+		app.container.PubSub = &container.MockPubSub{}
+
+		app.Migrate(map[int64]migration.Migrate{1: {UP: func(d migration.Datasource) error {
+			panic("test panic")
+		}}})
+	})
+
+	assert.Contains(t, logs, "test panic")
+}
+
 func Test_otelErrorHandler(t *testing.T) {
 	logs := testutil.StderrOutputForFunc(func() {
 		h := otelErrorHandler{logging.NewLogger(logging.DEBUG)}
@@ -224,7 +238,7 @@ func TestEnableBasicAuthWithFunc(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	c := container.NewContainer(testutil.NewMockConfig(nil))
+	c := container.NewContainer(config.NewMockConfig(nil))
 
 	// Initialize a new App instance
 	a := &App{
@@ -291,16 +305,20 @@ func Test_AddRESTHandlers(t *testing.T) {
 }
 
 func Test_initTracer(t *testing.T) {
-	mockConfig1 := testutil.NewMockConfig(map[string]string{
+	mockConfig1 := config.NewMockConfig(map[string]string{
 		"TRACE_EXPORTER": "zipkin",
 		"TRACER_HOST":    "localhost",
 		"TRACER_PORT":    "2005",
 	})
 
-	mockConfig2 := testutil.NewMockConfig(map[string]string{
+	mockConfig2 := config.NewMockConfig(map[string]string{
 		"TRACE_EXPORTER": "jaeger",
 		"TRACER_HOST":    "localhost",
 		"TRACER_PORT":    "2005",
+	})
+
+	mockConfig3 := config.NewMockConfig(map[string]string{
+		"TRACE_EXPORTER": "gofr",
 	})
 
 	tests := []struct {
@@ -310,6 +328,7 @@ func Test_initTracer(t *testing.T) {
 	}{
 		{"zipkin exporter", mockConfig1, "Exporting traces to zipkin."},
 		{"jaeger exporter", mockConfig2, "Exporting traces to jaeger."},
+		{"gofr exporter", mockConfig3, "Exporting traces to gofr at https://tracer.gofr.dev"},
 	}
 
 	for _, tc := range tests {
@@ -329,7 +348,7 @@ func Test_initTracer(t *testing.T) {
 }
 
 func Test_initTracer_invalidConfig(t *testing.T) {
-	mockConfig := testutil.NewMockConfig(map[string]string{
+	mockConfig := config.NewMockConfig(map[string]string{
 		"TRACE_EXPORTER": "abc",
 		"TRACER_HOST":    "localhost",
 		"TRACER_PORT":    "2005",
