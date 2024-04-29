@@ -1,4 +1,4 @@
-# Overriding default
+# Overriding Default
 
 GoFr allows to override default behavior of its features.
 
@@ -48,7 +48,7 @@ Response example:
 }
 ```
 
-If you want to have raw a response structure - wrap it in `response.Raw`:
+If you want to have a raw response structure - wrap it in `response.Raw`:
 ```go
 app.GET("/users", func(ctx *gofr.Context) (interface{}, error) {
 
