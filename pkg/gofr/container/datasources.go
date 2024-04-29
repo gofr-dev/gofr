@@ -3,7 +3,6 @@ package container
 import (
 	"context"
 	"database/sql"
-	"database/sql/driver"
 
 	"github.com/redis/go-redis/v9"
 
@@ -12,7 +11,6 @@ import (
 )
 
 type DB interface {
-	Driver() driver.Driver
 	Query(query string, args ...interface{}) (*sql.Rows, error)
 	QueryRow(query string, args ...interface{}) *sql.Row
 	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
@@ -23,6 +21,7 @@ type DB interface {
 	Begin() (*gofrSQL.Tx, error)
 	Select(ctx context.Context, data interface{}, query string, args ...interface{})
 	HealthCheck() *datasource.Health
+	Dialect() string
 }
 
 type Redis interface {

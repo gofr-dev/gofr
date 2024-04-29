@@ -70,6 +70,10 @@ func (d *DB) Query(query string, args ...interface{}) (*sql.Rows, error) {
 	return d.DB.Query(query, args...)
 }
 
+func (d *DB) Dialect() string {
+	return d.config.Dialect
+}
+
 func (d *DB) QueryRow(query string, args ...interface{}) *sql.Row {
 	defer d.logQuery(time.Now(), "QueryRow", query, args...)
 	return d.DB.QueryRow(query, args...)

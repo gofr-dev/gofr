@@ -1,6 +1,6 @@
 # Getting started
-GoFr is Opinionated Web Framework written in Go (Golang). It helps in building robust and scalable applications. This framework is designed to offer a user-friendly and familiar abstraction for all the developers . We prioritise simplicity over complexity.
 
+GoFr is Opinionated Web Framework written in Go (Golang). It helps in building robust and scalable applications. This framework is designed to offer a user-friendly and familiar abstraction for all the developers . We prioritize simplicity over complexity.
 
 In this section we will walk through what GoFr is, what problems it solves, and how it can help in building your project.
 
@@ -13,6 +13,7 @@ In this section we will walk through what GoFr is, what problems it solves, and 
 {% /quick-links %}
 
 ## Key Features
+
 - Logging
 - Support for various response types such as JSON, FILE.
 - Health check and Readiness monitoring for checking continuous service availability.

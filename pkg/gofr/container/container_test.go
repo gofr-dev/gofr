@@ -1,14 +1,11 @@
 package container
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 
 	"gofr.dev/pkg/gofr/config"
-	"gofr.dev/pkg/gofr/datasource"
-	"gofr.dev/pkg/gofr/datasource/pubsub"
 	"gofr.dev/pkg/gofr/datasource/pubsub/mqtt"
 	gofrRedis "gofr.dev/pkg/gofr/datasource/redis"
 	gofrSql "gofr.dev/pkg/gofr/datasource/sql"
@@ -38,7 +35,7 @@ func Test_newContainerDBInitializationFail(t *testing.T) {
 
 	// container is a pointer, and we need to see if db are not initialized, comparing the container object
 	// will not suffice the purpose of this test
-	assert.Nil(t, db.DB, "TEST, Failed.\ninvalid db connections")
+	assert.Error(t, db.DB.Ping(), "TEST, Failed.\ninvalid db connections")
 	assert.Nil(t, redis.Client, "TEST, Failed.\ninvalid redis connections")
 }
 
@@ -63,7 +60,7 @@ func Test_newContainerPubSubInitializationFail(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		c := NewContainer(testutil.NewMockConfig(tc.configs))
+		c := NewContainer(config.NewMockConfig(tc.configs))
 
 		assert.Nil(t, c.PubSub)
 	}
@@ -74,7 +71,7 @@ func TestContainer_MQTTInitialization_Default(t *testing.T) {
 		"PUBSUB_BACKEND": "MQTT",
 	}
 
-	c := NewContainer(testutil.NewMockConfig(configs))
+	c := NewContainer(config.NewMockConfig(configs))
 
 	assert.NotNil(t, c.PubSub)
 	m, ok := c.PubSub.(*mqtt.MQTT)
@@ -130,7 +127,7 @@ func TestContainer_GetAppVersion(t *testing.T) {
 }
 
 func TestContainer_GetPublisher(t *testing.T) {
-	publisher := &mockPubSub{}
+	publisher := &MockPubSub{}
 
 	c := &Container{PubSub: publisher}
 
@@ -140,7 +137,7 @@ func TestContainer_GetPublisher(t *testing.T) {
 }
 
 func TestContainer_GetSubscriber(t *testing.T) {
-	subscriber := &mockPubSub{}
+	subscriber := &MockPubSub{}
 
 	c := &Container{PubSub: subscriber}
 
@@ -159,27 +156,4 @@ func TestContainer_newContainerWithNilConfig(t *testing.T) {
 	assert.Nil(t, container.Services, "%s", failureMsg)
 	assert.Nil(t, container.PubSub, "%s", failureMsg)
 	assert.Nil(t, container.Logger, "%s", failureMsg)
-}
-
-type mockPubSub struct {
-}
-
-func (m *mockPubSub) CreateTopic(_ context.Context, _ string) error {
-	return nil
-}
-
-func (m *mockPubSub) DeleteTopic(_ context.Context, _ string) error {
-	return nil
-}
-
-func (m *mockPubSub) Health() datasource.Health {
-	return datasource.Health{}
-}
-
-func (m *mockPubSub) Publish(_ context.Context, _ string, _ []byte) error {
-	return nil
-}
-
-func (m *mockPubSub) Subscribe(_ context.Context, _ string) (*pubsub.Message, error) {
-	return nil, nil
 }

@@ -4,14 +4,9 @@ import (
 	"database/sql"
 	"fmt"
 	"strconv"
-	"testing"
 	"time"
 
-	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/XSAM/otelsql"
-	"go.uber.org/mock/gomock"
-	"gofr.dev/pkg/gofr/testutil"
-
 	_ "github.com/lib/pq" // used for concrete implementation of the database driver.
 
 	"gofr.dev/pkg/gofr/config"
@@ -52,26 +47,63 @@ func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *D
 		return nil
 	}
 
-	db, err := sql.Open(otelRegisteredDialect, dbConnectionString)
+	database := &DB{config: dbConfig, logger: logger, metrics: metrics}
+
+	database.DB, err = sql.Open(otelRegisteredDialect, dbConnectionString)
 	if err != nil {
-		logger.Errorf("could not connect with '%s' user to database '%s:%s'  error: %v",
-			dbConfig.User, dbConfig.HostName, dbConfig.Port, err)
+		database.logger.Errorf("could not open connection with '%s' user to database '%s:%s' error: %v",
+			database.config.User, database.config.HostName, database.config.Port, err)
 
-		return &DB{config: dbConfig, metrics: metrics}
+		return database
 	}
 
-	if err := db.Ping(); err != nil {
-		logger.Errorf("could not connect with '%s' user to database '%s:%s'  error: %v",
-			dbConfig.User, dbConfig.HostName, dbConfig.Port, err)
+	database = pingToTestConnection(database)
 
-		return &DB{config: dbConfig, metrics: metrics, logger: logger}
+	go retryConnection(database)
+
+	go pushDBMetrics(database.DB, metrics)
+
+	return database
+}
+
+func pingToTestConnection(database *DB) *DB {
+	if err := database.DB.Ping(); err != nil {
+		database.logger.Errorf("could not connect with '%s' user to database '%s:%s' error: %v",
+			database.config.User, database.config.HostName, database.config.Port, err)
+
+		return database
 	}
 
-	logger.Logf("connected to '%s' database at %s:%s", dbConfig.Database, dbConfig.HostName, dbConfig.Port)
+	database.logger.Logf("connected to '%s' database at %s:%s", database.config.Database,
+		database.config.HostName, database.config.Port)
 
-	go pushDBMetrics(db, metrics)
+	return database
+}
 
-	return &DB{DB: db, config: dbConfig, logger: logger, metrics: metrics}
+func retryConnection(database *DB) {
+	const connRetryFrequencyInSeconds = 10
+
+	for {
+		if database.DB.Ping() != nil {
+			database.logger.Log("retrying SQL database connection")
+
+			for {
+				if err := database.DB.Ping(); err != nil {
+					database.logger.Debugf("could not connect with '%s' user to database '%s:%s' error: %v",
+						database.config.User, database.config.HostName, database.config.Port, err)
+
+					time.Sleep(connRetryFrequencyInSeconds * time.Second)
+				} else {
+					database.logger.Logf("connected to '%s' database at %s:%s", database.config.Database,
+						database.config.HostName, database.config.Port)
+
+					break
+				}
+			}
+		}
+
+		time.Sleep(connRetryFrequencyInSeconds * time.Second)
+	}
 }
 
 func getDBConfig(configs config.Config) *DBConfig {
@@ -107,28 +139,13 @@ func pushDBMetrics(db *sql.DB, metrics Metrics) {
 	const frequency = 10
 
 	for {
-		stats := db.Stats()
+		if db != nil {
+			stats := db.Stats()
 
-		metrics.SetGauge("app_sql_open_connections", float64(stats.OpenConnections))
-		metrics.SetGauge("app_sql_inUse_connections", float64(stats.InUse))
+			metrics.SetGauge("app_sql_open_connections", float64(stats.OpenConnections))
+			metrics.SetGauge("app_sql_inUse_connections", float64(stats.InUse))
 
-		time.Sleep(frequency * time.Second)
+			time.Sleep(frequency * time.Second)
+		}
 	}
-}
-
-func NewSQLMocks(t *testing.T) (*DB, sqlmock.Sqlmock, *MockMetrics) {
-	db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherEqual))
-	if err != nil {
-		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
-	}
-
-	ctrl := gomock.NewController(t)
-	mockMetrics := NewMockMetrics(ctrl)
-
-	return &DB{
-		DB:      db,
-		logger:  testutil.NewMockLogger(testutil.DEBUGLOG),
-		config:  nil,
-		metrics: mockMetrics,
-	}, mock, mockMetrics
 }
