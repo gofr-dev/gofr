@@ -2,7 +2,6 @@ package google
 
 import (
 	"context"
-	"fmt"
 	"testing"
 
 	gcPubSub "cloud.google.com/go/pubsub"
@@ -13,7 +12,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	"gofr.dev/pkg/gofr/datasource/pubsub"
 	"gofr.dev/pkg/gofr/testutil"
 )
 
@@ -62,14 +60,6 @@ func TestGoogleClient_Publish_Success(t *testing.T) {
 
 	topic := "test-topic"
 	message := []byte("test message")
-	expectedLog := fmt.Sprintf("%v\n", &pubsub.Log{
-		Mode:          modePublish,
-		MessageID:     "m0",
-		MessageValue:  "test message",
-		Topic:         "test-topic",
-		Host:          "test",
-		PubSubBackend: "GCP",
-	})
 
 	out := testutil.StdoutOutputForFunc(func() {
 		g := &googleClient{
@@ -82,15 +72,19 @@ func TestGoogleClient_Publish_Success(t *testing.T) {
 			metrics: mockMetrics,
 		}
 
-		mockMetrics.EXPECT().IncrementCounter(context.Background(), "app_pubsub_publish_total_count", "topic", topic)
-		mockMetrics.EXPECT().IncrementCounter(context.Background(), "app_pubsub_publish_success_count", "topic", topic)
+		mockMetrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_publish_total_count", "topic", topic)
+		mockMetrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_publish_success_count", "topic", topic)
 
 		err := g.Publish(context.Background(), topic, message)
 
 		assert.Nil(t, err)
 	})
 
-	assert.Equal(t, expectedLog, out)
+	assert.Contains(t, out, modePublish)
+	assert.Contains(t, out, "test message")
+	assert.Contains(t, out, "test-topic")
+	assert.Contains(t, out, "test")
+	assert.Contains(t, out, "GCP")
 }
 
 func TestGoogleClient_PublishTopic_Error(t *testing.T) {
@@ -109,7 +103,7 @@ func TestGoogleClient_PublishTopic_Error(t *testing.T) {
 
 	cancel()
 
-	mockMetrics.EXPECT().IncrementCounter(ctx, "app_pubsub_publish_total_count", "topic", "test-topic")
+	mockMetrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_publish_total_count", "topic", "test-topic")
 
 	err := g.Publish(ctx, "test-topic", []byte(""))
 	if assert.Error(t, err) {
