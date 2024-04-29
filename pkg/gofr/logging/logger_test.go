@@ -442,3 +442,81 @@ func TestDefaultFilterMaskingNestedFields(t *testing.T) {
 		t.Errorf("Expected output %v, but got %v", expectedOutput, filteredMessage)
 	}
 }
+
+func TestDefaultFilterMaskingPointerFields(t *testing.T) {
+	filter := &DefaultFilter{
+		MaskFields:    []string{"password", "email", "creditCard"},
+		EnableMasking: true,
+	}
+
+	type User struct {
+		Username   *string  `json:"username"`
+		Password   *string  `json:"password"`
+		Email      *string  `json:"email"`
+		CreditCard *string  `json:"creditCard"`
+		Age        *int     `json:"age"`
+		Score      *float64 `json:"score"`
+	}
+
+	username := "john.doe"
+	password := "secret123"
+	email := "john.doe@example.com"
+	creditCard := "1234-5678-9012-3456"
+	age := 30
+	score := 7.5
+
+	input := &User{
+		Username:   &username,
+		Password:   &password,
+		Email:      &email,
+		CreditCard: &creditCard,
+		Age:        &age,
+		Score:      &score,
+	}
+
+	expectedOutput := &User{
+		Username:   &username,
+		Password:   stringPtr("**********"),
+		Email:      stringPtr("********************"),
+		CreditCard: stringPtr("*******************"),
+		Age:        &age,
+		Score:      &score,
+	}
+
+	filteredMessage := filter.Filter(input)
+
+	maskedMessage, err := json.Marshal(filteredMessage)
+	if err != nil {
+		t.Errorf("Failed to marshal masked message: %v", err)
+		return
+	}
+
+	expected := `{"username":"john.doe","password":"**********","email":"********************","creditCard":"*******************","age":30,"score":7.5}`
+	if string(maskedMessage) != expected {
+		t.Errorf("Expected %s, but got %s", expected, maskedMessage)
+	}
+
+	filteredUser := filteredMessage.(*User)
+	if *filteredUser.Username != *expectedOutput.Username {
+		t.Errorf("Expected username %s, but got %s", *expectedOutput.Username, *filteredUser.Username)
+	}
+	if *filteredUser.Password != *expectedOutput.Password {
+		t.Errorf("Expected password %s, but got %s", *expectedOutput.Password, *filteredUser.Password)
+	}
+	if *filteredUser.Email != *expectedOutput.Email {
+		t.Errorf("Expected email %s, but got %s", *expectedOutput.Email, *filteredUser.Email)
+	}
+	if *filteredUser.CreditCard != *expectedOutput.CreditCard {
+		t.Errorf("Expected credit card %s, but got %s", *expectedOutput.CreditCard, *filteredUser.CreditCard)
+	}
+	if *filteredUser.Age != *expectedOutput.Age {
+		t.Errorf("Expected age %d, but got %d", *expectedOutput.Age, *filteredUser.Age)
+	}
+	if *filteredUser.Score != *expectedOutput.Score {
+		t.Errorf("Expected score %f, but got %f", *expectedOutput.Score, *filteredUser.Score)
+	}
+}
+
+func stringPtr(s string) *string {
+	return &s
+}
