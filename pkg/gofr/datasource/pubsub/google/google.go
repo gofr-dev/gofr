@@ -14,12 +14,6 @@ import (
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 )
 
-const (
-	gcpBackend    = "GCP"
-	modePublish   = "PUB"
-	modeSubscribe = "SUB"
-)
-
 var (
 	errProjectIDNotProvided    = errors.New("google project id not provided")
 	errSubscriptionNotProvided = errors.New("subscription name not provided")
@@ -104,12 +98,12 @@ func (g *googleClient) Publish(ctx context.Context, topic string, message []byte
 	}
 
 	g.logger.Debug(&pubsub.Log{
-		Mode:          modePublish,
+		Mode:          "PUB",
 		CorrelationID: span.SpanContext().TraceID().String(),
 		MessageValue:  string(message),
 		Topic:         topic,
 		Host:          g.ProjectID,
-		PubSubBackend: gcpBackend,
+		PubSubBackend: "GCP",
 		Time:          end.Microseconds(),
 	})
 
@@ -149,12 +143,12 @@ func (g *googleClient) Subscribe(ctx context.Context, topic string) (*pubsub.Mes
 		m.Committer = newGoogleMessage(msg)
 
 		g.logger.Debug(&pubsub.Log{
-			Mode:          modeSubscribe,
+			Mode:          "SUB",
 			CorrelationID: span.SpanContext().TraceID().String(),
 			MessageValue:  string(m.Value),
 			Topic:         topic,
 			Host:          g.Config.ProjectID,
-			PubSubBackend: gcpBackend,
+			PubSubBackend: "GCP",
 			Time:          end.Microseconds(),
 		})
 	})

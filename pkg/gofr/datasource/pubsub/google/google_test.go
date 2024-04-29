@@ -80,7 +80,7 @@ func TestGoogleClient_Publish_Success(t *testing.T) {
 		assert.Nil(t, err)
 	})
 
-	assert.Contains(t, out, modePublish)
+	assert.Contains(t, out, "PUB")
 	assert.Contains(t, out, "test message")
 	assert.Contains(t, out, "test-topic")
 	assert.Contains(t, out, "test")
