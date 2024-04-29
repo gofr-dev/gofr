@@ -12,7 +12,6 @@ package container
 import (
 	context "context"
 	sql "database/sql"
-	driver "database/sql/driver"
 	reflect "reflect"
 	time "time"
 
@@ -60,18 +59,18 @@ func (mr *MockDBMockRecorder) Begin() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Begin", reflect.TypeOf((*MockDB)(nil).Begin))
 }
 
-// Driver mocks base method.
-func (m *MockDB) Driver() driver.Driver {
+// Dialect mocks base method.
+func (m *MockDB) Dialect() string {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Driver")
-	ret0, _ := ret[0].(driver.Driver)
+	ret := m.ctrl.Call(m, "Dialect")
+	ret0, _ := ret[0].(string)
 	return ret0
 }
 
-// Driver indicates an expected call of Driver.
-func (mr *MockDBMockRecorder) Driver() *gomock.Call {
+// Dialect indicates an expected call of Dialect.
+func (mr *MockDBMockRecorder) Dialect() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Driver", reflect.TypeOf((*MockDB)(nil).Driver))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Dialect", reflect.TypeOf((*MockDB)(nil).Dialect))
 }
 
 // Exec mocks base method.

@@ -4,11 +4,12 @@ import (
 	"fmt"
 	"strings"
 	"testing"
-
-	"go.uber.org/mock/gomock"
+	"time"
 
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/mock/gomock"
 
+	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/testutil"
 )
 
@@ -18,7 +19,7 @@ func TestNewSQL_ErrorCase(t *testing.T) {
 	expectedLog := fmt.Sprintf("could not register sql dialect '%s' for traces due to error: '%s'", "mysql",
 		"sql: unknown driver \"mysql\" (forgotten import?)")
 
-	mockConfig := testutil.NewMockConfig(map[string]string{
+	mockConfig := config.NewMockConfig(map[string]string{
 		"DB_DIALECT":  "mysql",
 		"DB_HOST":     "localhost",
 		"DB_USER":     "testuser",
@@ -42,7 +43,7 @@ func TestNewSQL_ErrorCase(t *testing.T) {
 func TestNewSQL_InvalidDialect(t *testing.T) {
 	ctrl := gomock.NewController(t)
 
-	mockConfig := testutil.NewMockConfig(map[string]string{
+	mockConfig := config.NewMockConfig(map[string]string{
 		"DB_DIALECT": "abc",
 		"DB_HOST":    "localhost",
 	})
@@ -62,7 +63,7 @@ func TestNewSQL_InvalidDialect(t *testing.T) {
 func TestNewSQL_InvalidConfig(t *testing.T) {
 	ctrl := gomock.NewController(t)
 
-	mockConfig := testutil.NewMockConfig(map[string]string{
+	mockConfig := config.NewMockConfig(map[string]string{
 		"DB_DIALECT": "",
 	})
 
@@ -75,7 +76,7 @@ func TestNewSQL_InvalidConfig(t *testing.T) {
 }
 
 func TestSQL_GetDBConfig(t *testing.T) {
-	mockConfig := testutil.NewMockConfig(map[string]string{
+	mockConfig := config.NewMockConfig(map[string]string{
 		"DB_DIALECT":  "mysql",
 		"DB_HOST":     "host",
 		"DB_USER":     "user",
@@ -153,4 +154,31 @@ func Test_NewSQLMock(t *testing.T) {
 	assert.NotNil(t, db)
 	assert.NotNil(t, mock)
 	assert.NotNil(t, mockMetric)
+}
+
+func Test_SQLRetryConnectionInfoLog(t *testing.T) {
+	logs := testutil.StdoutOutputForFunc(func() {
+		ctrl := gomock.NewController(t)
+
+		mockMetrics := NewMockMetrics(ctrl)
+		mockConfig := config.NewMockConfig(map[string]string{
+			"DB_DIALECT":  "postgres",
+			"DB_HOST":     "host",
+			"DB_USER":     "user",
+			"DB_PASSWORD": "password",
+			"DB_PORT":     "3201",
+			"DB_NAME":     "test",
+		})
+
+		mockLogger := testutil.NewMockLogger(testutil.DEBUGLOG)
+
+		mockMetrics.EXPECT().SetGauge("app_sql_open_connections", float64(0))
+		mockMetrics.EXPECT().SetGauge("app_sql_inUse_connections", float64(0))
+
+		_ = NewSQL(mockConfig, mockLogger, mockMetrics)
+
+		time.Sleep(2 * time.Second)
+	})
+
+	assert.Contains(t, logs, "retrying SQL database connection")
 }
