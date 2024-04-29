@@ -75,7 +75,7 @@ func TestKafkaClient_PublishError(t *testing.T) {
 			desc:      "error while publishing message",
 			client:    k,
 			topic:     "test",
-			mockCalls: mockWriter.EXPECT().WriteMessages(ctx, gomock.Any()).Return(errPublish),
+			mockCalls: mockWriter.EXPECT().WriteMessages(gomock.Any(), gomock.Any()).Return(errPublish),
 			expErr:    errPublish,
 			expLog:    "failed to publish message to kafka broker",
 		},
@@ -86,7 +86,7 @@ func TestKafkaClient_PublishError(t *testing.T) {
 			logger := testutil.NewMockLogger(testutil.DEBUGLOG)
 			k.logger = logger
 
-			mockMetrics.EXPECT().IncrementCounter(ctx, "app_pubsub_publish_total_count", "topic", tc.topic)
+			mockMetrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_publish_total_count", "topic", tc.topic)
 
 			err = tc.client.Publish(ctx, tc.topic, tc.msg)
 		}
@@ -112,16 +112,19 @@ func TestKafkaClient_Publish(t *testing.T) {
 		logger := testutil.NewMockLogger(testutil.DEBUGLOG)
 		k := &kafkaClient{writer: mockWriter, logger: logger, metrics: mockMetrics}
 
-		mockWriter.EXPECT().WriteMessages(ctx, gomock.Any()).
+		mockWriter.EXPECT().WriteMessages(gomock.Any(), gomock.Any()).
 			Return(nil)
-		mockMetrics.EXPECT().IncrementCounter(ctx, "app_pubsub_publish_total_count", "topic", "test")
-		mockMetrics.EXPECT().IncrementCounter(ctx, "app_pubsub_publish_success_count", "topic", "test")
+		mockMetrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_publish_total_count", "topic", "test")
+		mockMetrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_publish_success_count", "topic", "test")
 
 		err = k.Publish(ctx, "test", []byte(`hello`))
 	})
 
 	assert.Nil(t, err)
-	assert.Contains(t, logs, "published kafka message hello on topic test")
+	assert.Contains(t, logs, "KAFKA")
+	assert.Contains(t, logs, "PUB")
+	assert.Contains(t, logs, "hello")
+	assert.Contains(t, logs, "test")
 }
 
 func TestKafkaClient_SubscribeSuccess(t *testing.T) {
@@ -157,10 +160,10 @@ func TestKafkaClient_SubscribeSuccess(t *testing.T) {
 		Topic: "test",
 	}
 
-	mockReader.EXPECT().ReadMessage(ctx).
+	mockReader.EXPECT().ReadMessage(gomock.Any()).
 		Return(kafka.Message{Value: []byte(`hello`), Topic: "test"}, nil)
-	mockMetrics.EXPECT().IncrementCounter(ctx, "app_pubsub_subscribe_total_count", "topic", "test")
-	mockMetrics.EXPECT().IncrementCounter(ctx, "app_pubsub_subscribe_success_count", "topic", "test")
+	mockMetrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_subscribe_total_count", "topic", "test")
+	mockMetrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_subscribe_success_count", "topic", "test")
 
 	logs := testutil.StdoutOutputForFunc(func() {
 		logger := testutil.NewMockLogger(testutil.DEBUGLOG)
@@ -172,7 +175,10 @@ func TestKafkaClient_SubscribeSuccess(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, expMessage.Value, msg.Value)
 	assert.Equal(t, expMessage.Topic, msg.Topic)
-	assert.Contains(t, logs, "received kafka message hello on topic test")
+	assert.Contains(t, logs, "KAFKA")
+	assert.Contains(t, logs, "hello")
+	assert.Contains(t, logs, "kafkabroker")
+	assert.Contains(t, logs, "test")
 }
 
 func TestKafkaClient_SubscribeError(t *testing.T) {
@@ -204,9 +210,9 @@ func TestKafkaClient_SubscribeError(t *testing.T) {
 		metrics: mockMetrics,
 	}
 
-	mockReader.EXPECT().ReadMessage(ctx).
+	mockReader.EXPECT().ReadMessage(gomock.Any()).
 		Return(kafka.Message{}, errSub)
-	mockMetrics.EXPECT().IncrementCounter(ctx, "app_pubsub_subscribe_total_count", "topic", "test")
+	mockMetrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_subscribe_total_count", "topic", "test")
 
 	logs := testutil.StderrOutputForFunc(func() {
 		logger := testutil.NewMockLogger(testutil.DEBUGLOG)
