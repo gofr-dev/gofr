@@ -100,7 +100,7 @@ func validateConfigs(conf Config) error {
 }
 
 func (k *kafkaClient) Publish(ctx context.Context, topic string, message []byte) error {
-	ctx, span := otel.GetTracerProvider().Tracer("gofr").Start(ctx, "subscribe")
+	ctx, span := otel.GetTracerProvider().Tracer("gofr").Start(ctx, "kafka-publish")
 	defer span.End()
 
 	k.metrics.IncrementCounter(ctx, "app_pubsub_publish_total_count", "topic", topic)
@@ -140,7 +140,7 @@ func (k *kafkaClient) Publish(ctx context.Context, topic string, message []byte)
 }
 
 func (k *kafkaClient) Subscribe(ctx context.Context, topic string) (*pubsub.Message, error) {
-	ctx, span := otel.GetTracerProvider().Tracer("gofr").Start(ctx, "subscribe")
+	ctx, span := otel.GetTracerProvider().Tracer("gofr").Start(ctx, "kafka-subscribe")
 	defer span.End()
 
 	k.metrics.IncrementCounter(ctx, "app_pubsub_subscribe_total_count", "topic", topic)
@@ -178,7 +178,7 @@ func (k *kafkaClient) Subscribe(ctx context.Context, topic string) (*pubsub.Mess
 	end := time.Since(start)
 
 	k.logger.Debug(&pubsub.Log{
-		Mode:          "PUB",
+		Mode:          "SUB",
 		CorrelationID: span.SpanContext().TraceID().String(),
 		MessageValue:  string(msg.Value),
 		Topic:         topic,
