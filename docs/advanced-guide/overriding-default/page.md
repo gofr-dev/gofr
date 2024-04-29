@@ -14,7 +14,7 @@ package main
 import "gofr.dev/pkg/gofr"
 
 type user struct {
-  Id   int    `json:"id"`
+  ID   int    `json:"id"`
   Name string `json:"name"`
 }
 
@@ -23,7 +23,7 @@ func main() {
 
   app.GET("/users", func(ctx *gofr.Context) (interface{}, error) {
 
-    users := []user{{Id: 1, Name: "Daria"}, {Id: 2, Name: "Ihor"}}
+    users := []user{{ID: 1, Name: "Daria"}, {ID: 2, Name: "Ihor"}}
 
     return users, nil
   })
@@ -52,7 +52,7 @@ If you want to have a raw response structure - wrap it in `response.Raw`:
 ```go
 app.GET("/users", func(ctx *gofr.Context) (interface{}, error) {
 
-    users := []user{{Id: 1, Name: "Daria"}, {Id: 2, Name: "Ihor"}}
+    users := []user{{ID: 1, Name: "Daria"}, {ID: 2, Name: "Ihor"}}
 
     return response.Raw{Data: users}, nil	
 })
