@@ -28,11 +28,11 @@ type QueryLog struct {
 
 func (ql *QueryLog) PrettyPrint(writer io.Writer) {
 	if ql.Query == "pipeline" {
-		fmt.Fprintf(writer, "\u001B[38;5;8m%-32s \u001B[38;5;24m%s\u001B[0m %6d\u001B[38;5;8mµs\u001B[0m %s\n",
+		fmt.Fprintf(writer, "\u001B[38;5;8m%-32s \u001B[38;5;24m%-6s\u001B[0m %8d\u001B[38;5;8mµs\u001B[0m %s\n",
 			clean(ql.Query), "REDIS", ql.Duration,
 			ql.String()[1:len(ql.String())-1])
 	} else {
-		fmt.Fprintf(writer, "\u001B[38;5;8m%-32s \u001B[38;5;24m%s\u001B[0m %6d\u001B[38;5;8mµs\u001B[0m %v\n",
+		fmt.Fprintf(writer, "\u001B[38;5;8m%-32s \u001B[38;5;24m%-6s\u001B[0m %8d\u001B[38;5;8mµs\u001B[0m %v\n",
 			clean(ql.Query), "REDIS", ql.Duration, ql.String())
 	}
 }
