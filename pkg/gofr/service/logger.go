@@ -31,7 +31,7 @@ type ErrorLog struct {
 }
 
 func (el *ErrorLog) PrettyPrint(writer io.Writer) {
-	fmt.Fprintf(writer, "\u001B[38;5;8m%s \u001B[38;5;%dm%d\u001B[0m %8d\u001B[38;5;8mµs\u001B[0m %s %s \n",
+	fmt.Fprintf(writer, "\u001B[38;5;8m%s \u001B[38;5;%dm%-6d\u001B[0m %8d\u001B[38;5;8mµs\u001B[0m %s %s \n",
 		el.CorrelationID, colorForStatusCode(el.ResponseCode),
 		el.ResponseCode, el.ResponseTime, el.HTTPMethod, el.URI)
 }
