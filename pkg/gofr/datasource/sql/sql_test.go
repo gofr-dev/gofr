@@ -156,6 +156,15 @@ func Test_NewSQLMock(t *testing.T) {
 	assert.NotNil(t, mockMetric)
 }
 
+func Test_NewSQLMockWithConfig(t *testing.T) {
+	dbConfig := DBConfig{Dialect: "dialect", HostName: "hostname", User: "user", Password: "password", Port: "port", Database: "database"}
+	db, mock, mockMetric := NewSQLMocksWithConfig(t, &dbConfig)
+	assert.NotNil(t, db)
+	assert.Equal(t, db.config, &dbConfig)
+	assert.NotNil(t, mock)
+	assert.NotNil(t, mockMetric)
+}
+
 func Test_SQLRetryConnectionInfoLog(t *testing.T) {
 	logs := testutil.StdoutOutputForFunc(func() {
 		ctrl := gomock.NewController(t)
