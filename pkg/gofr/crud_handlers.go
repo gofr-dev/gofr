@@ -119,14 +119,14 @@ func (e *entity) Create(c *Context) (interface{}, error) {
 		fieldValues = append(fieldValues, reflect.ValueOf(newEntity).Elem().Field(i).Interface())
 	}
 
-	stmt := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)",
+	rawStmt := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)",
 		e.name,
 		strings.Join(fieldNames, ", "),
 		strings.Repeat("?, ", len(fieldNames)-1)+"?",
 	)
-	rStmt := sql.Rebind(c.SQL.Dialect(), stmt)
+	stmt := sql.Rebind(c.SQL.Dialect(), rawStmt)
 
-	_, err = c.SQL.ExecContext(c, rStmt, fieldValues...)
+	_, err = c.SQL.ExecContext(c, stmt, fieldValues...)
 	if err != nil {
 		return nil, err
 	}
@@ -177,10 +177,10 @@ func (e *entity) Get(c *Context) (interface{}, error) {
 	newEntity := reflect.New(e.entityType).Interface()
 	id := c.Request.PathParam("id")
 
-	query := fmt.Sprintf("SELECT * FROM %s WHERE %s = ?", e.name, e.primaryKey)
-	rQuery := sql.Rebind(c.SQL.Dialect(), query)
+	rawQuery := fmt.Sprintf("SELECT * FROM %s WHERE %s = ?", e.name, e.primaryKey)
+	query := sql.Rebind(c.SQL.Dialect(), rawQuery)
 
-	row := c.SQL.QueryRowContext(c, rQuery, id)
+	row := c.SQL.QueryRowContext(c, query, id)
 
 	dest := make([]interface{}, e.entityType.NumField())
 	val := reflect.ValueOf(newEntity).Elem()
@@ -224,15 +224,15 @@ func (e *entity) Update(c *Context) (interface{}, error) {
 
 	query := strings.Join(paramsList, ", ")
 
-	stmt := fmt.Sprintf("UPDATE %s SET %s WHERE %s = %s",
+	rawStmt := fmt.Sprintf("UPDATE %s SET %s WHERE %s = %s",
 		e.name,
 		query,
 		e.primaryKey,
 		id,
 	)
-	rStmt := sql.Rebind(c.SQL.Dialect(), stmt)
+	stmt := sql.Rebind(c.SQL.Dialect(), rawStmt)
 
-	_, err = c.SQL.ExecContext(c, rStmt, fieldValues[1:]...)
+	_, err = c.SQL.ExecContext(c, stmt, fieldValues[1:]...)
 	if err != nil {
 		return nil, err
 	}
@@ -243,10 +243,10 @@ func (e *entity) Update(c *Context) (interface{}, error) {
 func (e *entity) Delete(c *Context) (interface{}, error) {
 	id := c.PathParam("id")
 
-	query := fmt.Sprintf("DELETE FROM %s WHERE %s = ?", e.name, e.primaryKey)
-	rQuery := sql.Rebind(c.SQL.Dialect(), query)
+	rawQuery := fmt.Sprintf("DELETE FROM %s WHERE %s = ?", e.name, e.primaryKey)
+	query := sql.Rebind(c.SQL.Dialect(), rawQuery)
 
-	result, err := c.SQL.ExecContext(c, rQuery, id)
+	result, err := c.SQL.ExecContext(c, query, id)
 	if err != nil {
 		return nil, err
 	}
