@@ -132,7 +132,7 @@ func TestRequestLog_PrettyPrint(t *testing.T) {
 	w := new(bytes.Buffer)
 	rl.PrettyPrint(w)
 
-	assert.Equal(t, w.String(), "\u001B[38;5;8m7e5c0e9a58839071d4d006dd1d0f4f3a \u001B[38;5;34m200\u001B[0m"+
+	assert.Equal(t, w.String(), "\u001B[38;5;8m7e5c0e9a58839071d4d006dd1d0f4f3a \u001B[38;5;34m200   \u001B[0m"+
 		"     1432\u001B[38;5;8mµs\u001B[0m GET /test \n")
 }
 
