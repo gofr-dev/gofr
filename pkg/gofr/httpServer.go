@@ -34,8 +34,3 @@ func (s *httpServer) Run(c *container.Container) {
 
 	c.Error(srv.ListenAndServe())
 }
-
-// useMiddleware redirects the middleware registration to the router.
-func (s *httpServer) useMiddleware(mws ...gofrHTTP.Middleware) {
-	s.router.UseMiddleware(mws...)
-}

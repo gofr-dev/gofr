@@ -3,6 +3,7 @@ package gofr
 import (
 	"context"
 	"fmt"
+	gofrHTTP "gofr.dev/pkg/gofr/http"
 	"net/http"
 	"os"
 	"strconv"
@@ -23,7 +24,6 @@ import (
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/datasource"
-	gofrHTTP "gofr.dev/pkg/gofr/http"
 	"gofr.dev/pkg/gofr/http/middleware"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/metrics"
@@ -370,7 +370,7 @@ func (a *App) AddRESTHandlers(object interface{}) error {
 
 // UseMiddleware is a setter method for adding user defined custom middleware to GoFr's router.
 func (a *App) UseMiddleware(middlewares ...gofrHTTP.Middleware) {
-	a.httpServer.useMiddleware(middlewares...)
+	a.httpServer.router.UseMiddleware(middlewares...)
 }
 
 func (a *App) UseMongo(db datasource.Mongo) {
