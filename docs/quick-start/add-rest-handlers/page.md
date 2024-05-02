@@ -5,7 +5,7 @@ This feature eliminates the need for writing repetitive boilerplate code, allowi
 
 ## Default Behaviour
 
-If the custom handlers ain't implemented on the struct, GoFr provides default handlers for each CRUD operation. These handlers handle basic database interactions:
+If custom handlers ain't implemented on the struct, GoFr provides default handlers for each CRUD operation. These handlers handle basic database interactions:
 
 - **Create**: `/entity` Inserts a new record based on data provided in a JSON request body.
 - **Read**:
