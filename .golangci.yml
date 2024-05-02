@@ -101,7 +101,6 @@ linters:
     - unused
     - whitespace
     - wsl
-#    - shadow
 
   # don't enable:
   # - godox  # Disabling because we need TODO lines at this stage of project.
