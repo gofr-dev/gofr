@@ -367,3 +367,52 @@ func Test_initTracer_invalidConfig(t *testing.T) {
 
 	assert.Contains(t, errLogMessage, "unsupported trace exporter.")
 }
+
+func Test_UseMiddleware(t *testing.T) {
+	testMiddleware := func(inner http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("X-Test-Middleware", "applied")
+			inner.ServeHTTP(w, r)
+		})
+	}
+
+	c := container.NewContainer(config.NewMockConfig(nil))
+
+	app := &App{
+		httpServer: &httpServer{
+			router: gofrHTTP.NewRouter(c),
+			port:   8001,
+		},
+		container: c,
+	}
+
+	app.UseMiddleware(testMiddleware)
+
+	app.GET("/test", func(c *Context) (interface{}, error) {
+		return "success", nil
+	})
+
+	go app.Run()
+	time.Sleep(1 * time.Second)
+
+	var netClient = &http.Client{
+		Timeout: time.Second * 10,
+	}
+
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet,
+		"http://localhost:8001"+"/test", http.NoBody)
+
+	resp, err := netClient.Do(req)
+	if err != nil {
+		t.Errorf("error while making http request in Test_UseMiddleware. err : %v", err)
+		return
+	}
+
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode, "Test_UseMiddleware Failed! Expected Status 200 Got : %v", resp.StatusCode)
+
+	// checking if the testMiddleware has added the required header in the response properly.
+	testHeaderValue := resp.Header.Get("X-Test-Middleware")
+	assert.Equal(t, "applied", testHeaderValue, "Test_UseMiddleware Failed! header value mismatch.")
+}
