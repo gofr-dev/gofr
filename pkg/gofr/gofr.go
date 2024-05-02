@@ -3,7 +3,6 @@ package gofr
 import (
 	"context"
 	"fmt"
-	gofrHTTP "gofr.dev/pkg/gofr/http"
 	"net/http"
 	"os"
 	"strconv"
@@ -24,6 +23,7 @@ import (
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/datasource"
+	gofrHTTP "gofr.dev/pkg/gofr/http"
 	"gofr.dev/pkg/gofr/http/middleware"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/metrics"
