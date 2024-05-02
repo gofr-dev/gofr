@@ -43,7 +43,7 @@ func Test_Rebind(t *testing.T) {
 func Test_BindType(t *testing.T) {
 	tests := []struct {
 		dialect  string
-		expected uint
+		expected BindVarType
 	}{
 		{
 			dialect:  "mysql",
