@@ -2,10 +2,10 @@ name: Build and Deploy
 'on':
   push:
     paths:
-      - './docs/**'
+      - '/docs/**'
   pull_request:
     paths:
-      - './docs/**'
+      - '/docs/**'
 
 env:
   APP_NAME: gofr-website
