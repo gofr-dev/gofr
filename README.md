@@ -39,4 +39,4 @@ If you want to say thank you and/or support the active development of GoFr:
 
 1. Add a [GitHub Star](https://github.com/gofr-dev/gofr/stargazers) to the project.
 2. Write a review or tutorial on [Medium](https://medium.com/), [Dev.to](https://dev.to/) or personal blog.
-3. Visit [CONTRIBUTING](CONTRIBUTING.md) for details on submitting patches and the contribution workflow. After your PR is merged to the repo, fill this [google form](https://forms.gle/R1Yz7ZzY3U5WWTgy5) and we will send you a free GoFr T-Shirt and Stickers as a token of appreciation. 
+3. Visit [CONTRIBUTING](CONTRIBUTING.md) for details on submitting patches and the contribution workflow. After your PR is merged to the repo, fill the [google form](https://forms.gle/R1Yz7ZzY3U5WWTgy5), and we will send you a GoFr T-Shirt and Stickers as a token of appreciation. 
