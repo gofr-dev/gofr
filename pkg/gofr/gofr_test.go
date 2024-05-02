@@ -388,7 +388,7 @@ func Test_UseMiddleware(t *testing.T) {
 
 	app.UseMiddleware(testMiddleware)
 
-	app.GET("/test", func(c *Context) (interface{}, error) {
+	app.GET("/test", func(_ *Context) (interface{}, error) {
 		return "success", nil
 	})
 
