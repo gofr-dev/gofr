@@ -24,6 +24,7 @@ func Tracer(inner http.Handler) http.Handler {
 
 		tr := otel.GetTracerProvider().Tracer("gofr-" + version.Framework)
 		ctx, span := tr.Start(ctx, fmt.Sprintf("%s %s", strings.ToUpper(r.Method), r.URL.Path))
+
 		defer span.End()
 
 		inner.ServeHTTP(w, r.WithContext(ctx))
