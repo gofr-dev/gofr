@@ -20,9 +20,7 @@ const (
 )
 
 func Rebind(dialect, query string) string {
-	//nolint:exhaustive // we have only dollar bindvar type specific logic for now.
-	switch bindType(dialect) {
-	case DOLLAR:
+	if DOLLAR == bindType(dialect) {
 		queryFormat := strings.Replace(query, "?", "%v", -1)
 		count := strings.Count(query, "?")
 		replacement := make([]interface{}, count)
@@ -32,9 +30,9 @@ func Rebind(dialect, query string) string {
 		}
 
 		return fmt.Sprintf(queryFormat, replacement...)
-	default:
-		return query
 	}
+
+	return query
 }
 
 func bindType(dialect string) BindVarType {
