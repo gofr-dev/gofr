@@ -376,7 +376,16 @@ func Test_UseMiddleware(t *testing.T) {
 		})
 	}
 
-	app := New()
+	c := container.NewContainer(config.NewMockConfig(nil))
+
+	app := &App{
+		httpServer: &httpServer{
+			router: gofrHTTP.NewRouter(c),
+			port:   8001,
+		},
+		container: c,
+	}
+
 	app.UseMiddleware(testMiddleware)
 
 	app.GET("/test", func(c *Context) (interface{}, error) {
@@ -391,7 +400,7 @@ func Test_UseMiddleware(t *testing.T) {
 	}
 
 	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet,
-		"http://localhost:"+strconv.Itoa(defaultHTTPPort)+"/test", http.NoBody)
+		"http://localhost:8001"+"/test", http.NoBody)
 
 	resp, err := netClient.Do(req)
 	if err != nil {
