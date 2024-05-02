@@ -24,7 +24,7 @@ func TestRouter(t *testing.T) {
 		router := NewRouter(c)
 
 		// Add a test handler to the router
-		router.Add("GET", "/test", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		router.Add("GET", "/test", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusOK)
 		}))
 

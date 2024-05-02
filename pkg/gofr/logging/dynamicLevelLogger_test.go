@@ -15,20 +15,14 @@ import (
 
 func TestDynamicLoggerSuccess(t *testing.T) {
 	// Create a mock server that returns a predefined log level
-	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		body := `{
-			"data": [
-				{
-					"serviceName": "test-service",
-					"logLevel": {
-						"LOG_LEVEL": "DEBUG"
-					}
-				}
-			]
-		}`
+
+		body := `{"data":[{"serviceName":"test-service","logLevel":{"LOG_LEVEL":"DEBUG"}}]}`
+
 		_, _ = w.Write([]byte(body))
 	}))
+
 	defer mockServer.Close()
 
 	log := testutil.StdoutOutputForFunc(func() {
@@ -56,8 +50,9 @@ func Test_fetchAndUpdateLogLevel_ErrorCases(t *testing.T) {
 
 	remoteService := service.NewHTTPService("http://", logger, nil)
 
-	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
+
 		body := `{
 			"data": [
 				{
