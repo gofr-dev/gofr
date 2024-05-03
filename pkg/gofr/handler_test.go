@@ -48,7 +48,7 @@ func TestHandler_ServeHTTP(t *testing.T) {
 		}
 
 		handler{
-			function: func(c *Context) (interface{}, error) {
+			function: func(*Context) (interface{}, error) {
 				return tc.data, tc.err
 			},
 			container: c,

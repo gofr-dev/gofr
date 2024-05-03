@@ -147,10 +147,12 @@ func TestMQTT_PublishFailure(t *testing.T) {
 		// case where the client has been disconnected, resulting in a Publishing failure
 		mockMetrics.EXPECT().
 			IncrementCounter(ctx, "app_pubsub_publish_total_count", "topic", "test/topic")
+
 		m := New(&Config{}, mockLogger, mockMetrics)
 
 		// Disconnect the client
 		m.Client.Disconnect(1)
+
 		err := m.Publish(ctx, "test/topic", []byte(`hello world`))
 
 		assert.NotNil(t, err)
@@ -231,7 +233,7 @@ func TestMQTT_SubscribeWithFunc(t *testing.T) {
 		return nil
 	}
 
-	subcriptionFuncErr := func(msg *pubsub.Message) error {
+	subcriptionFuncErr := func(*pubsub.Message) error {
 		return errTest
 	}
 
