@@ -115,16 +115,11 @@ func (e *entity) Create(c *Context) (interface{}, error) {
 
 	for i := 0; i < e.entityType.NumField(); i++ {
 		field := e.entityType.Field(i)
-		fieldNames = append(fieldNames, field.Name)
+		fieldNames = append(fieldNames, strings.ToLower(field.Name))
 		fieldValues = append(fieldValues, reflect.ValueOf(newEntity).Elem().Field(i).Interface())
 	}
 
-	rawStmt := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)",
-		e.name,
-		strings.Join(fieldNames, ", "),
-		strings.Repeat("?, ", len(fieldNames)-1)+"?",
-	)
-	stmt := sql.Rebind(c.SQL.Dialect(), rawStmt)
+	stmt := sql.InsertQuery(c.SQL.Dialect(), e.name, fieldNames)
 
 	_, err = c.SQL.ExecContext(c, stmt, fieldValues...)
 	if err != nil {
@@ -135,7 +130,7 @@ func (e *entity) Create(c *Context) (interface{}, error) {
 }
 
 func (e *entity) GetAll(c *Context) (interface{}, error) {
-	query := fmt.Sprintf("SELECT * FROM %s", e.name)
+	query := sql.SelectQuery(c.SQL.Dialect(), e.name)
 
 	rows, err := c.SQL.QueryContext(c, query)
 	if err != nil || rows.Err() != nil {
@@ -177,8 +172,7 @@ func (e *entity) Get(c *Context) (interface{}, error) {
 	newEntity := reflect.New(e.entityType).Interface()
 	id := c.Request.PathParam("id")
 
-	rawQuery := fmt.Sprintf("SELECT * FROM %s WHERE %s = ?", e.name, e.primaryKey)
-	query := sql.Rebind(c.SQL.Dialect(), rawQuery)
+	query := sql.SelectByQuery(c.SQL.Dialect(), e.name, e.primaryKey)
 
 	row := c.SQL.QueryRowContext(c, query, id)
 
@@ -211,28 +205,15 @@ func (e *entity) Update(c *Context) (interface{}, error) {
 	for i := 0; i < e.entityType.NumField(); i++ {
 		field := e.entityType.Field(i)
 
-		fieldNames = append(fieldNames, field.Name)
+		fieldNames = append(fieldNames, strings.ToLower(field.Name))
 		fieldValues = append(fieldValues, reflect.ValueOf(newEntity).Elem().Field(i).Interface())
 	}
 
 	id := c.PathParam("id")
 
-	var paramsList []string
-	for i := 1; i < len(fieldNames); i++ {
-		paramsList = append(paramsList, fmt.Sprintf("%s=?", fieldNames[i]))
-	}
+	stmt := sql.UpdateByQuery(c.SQL.Dialect(), e.name, fieldNames[1:], e.primaryKey)
 
-	query := strings.Join(paramsList, ", ")
-
-	rawStmt := fmt.Sprintf("UPDATE %s SET %s WHERE %s = %s",
-		e.name,
-		query,
-		e.primaryKey,
-		id,
-	)
-	stmt := sql.Rebind(c.SQL.Dialect(), rawStmt)
-
-	_, err = c.SQL.ExecContext(c, stmt, fieldValues[1:]...)
+	_, err = c.SQL.ExecContext(c, stmt, append(fieldValues[1:], fieldValues[0])...)
 	if err != nil {
 		return nil, err
 	}
@@ -243,8 +224,7 @@ func (e *entity) Update(c *Context) (interface{}, error) {
 func (e *entity) Delete(c *Context) (interface{}, error) {
 	id := c.PathParam("id")
 
-	rawQuery := fmt.Sprintf("DELETE FROM %s WHERE %s = ?", e.name, e.primaryKey)
-	query := sql.Rebind(c.SQL.Dialect(), rawQuery)
+	query := sql.DeleteByQuery(c.SQL.Dialect(), e.name, e.primaryKey)
 
 	result, err := c.SQL.ExecContext(c, query, id)
 	if err != nil {
