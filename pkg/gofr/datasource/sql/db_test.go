@@ -327,6 +327,7 @@ func TestDB_QueryError(t *testing.T) {
 		if !assert.Nil(t, rows) {
 			assert.Nil(t, rows.Err())
 		}
+
 		assert.NotNil(t, err)
 		assert.Equal(t, errSyntax, err)
 	})
