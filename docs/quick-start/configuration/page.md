@@ -10,7 +10,7 @@ To set configs create a `configs` directory in the project's root and add `.env`
 Follow this directory structure within the GoFr project:
 ```dotenv
 my-gofr-app/
-├── config/
+├── configs/
 │   ├── dev.env
 │   ├── staging.env
 │   └── prod.env

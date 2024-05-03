@@ -75,15 +75,16 @@ func TestBasicAuthMiddleware(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(http.StatusOK)
 			})
 
 			req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 			req.Header.Set("Authorization", tc.authHeader)
-			rr := httptest.NewRecorder()
 
+			rr := httptest.NewRecorder()
 			authMiddleware := BasicAuthMiddleware(tc.authProvider)
+
 			authMiddleware(handler).ServeHTTP(rr, req)
 
 			assert.Equal(t, tc.expectedStatusCode, rr.Code)
@@ -92,7 +93,7 @@ func TestBasicAuthMiddleware(t *testing.T) {
 }
 
 func Test_BasicAuthMiddleware_well_known(t *testing.T) {
-	testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	testHandler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte("Success"))
 	})
 
