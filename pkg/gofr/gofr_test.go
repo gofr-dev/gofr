@@ -66,20 +66,20 @@ func TestGofr_ServerRoutes(t *testing.T) {
 
 	g := New()
 
-	g.GET("/hello", func(_ *Context) (interface{}, error) {
+	g.GET("/hello", func(*Context) (interface{}, error) {
 		return helloWorld, nil
 	})
 
 	// using add() func
-	g.add(http.MethodGet, "/hello2", func(_ *Context) (interface{}, error) {
+	g.add(http.MethodGet, "/hello2", func(*Context) (interface{}, error) {
 		return helloWorld, nil
 	})
 
-	g.PUT("/hello", func(_ *Context) (interface{}, error) {
+	g.PUT("/hello", func(*Context) (interface{}, error) {
 		return helloWorld, nil
 	})
 
-	g.POST("/hello", func(_ *Context) (interface{}, error) {
+	g.POST("/hello", func(*Context) (interface{}, error) {
 		return helloWorld, nil
 	})
 
@@ -87,7 +87,7 @@ func TestGofr_ServerRoutes(t *testing.T) {
 		return fmt.Sprintf("Hello %s!", c.Param("name")), nil
 	})
 
-	g.DELETE("/delete", func(_ *Context) (interface{}, error) {
+	g.DELETE("/delete", func(*Context) (interface{}, error) {
 		return "Success", nil
 	})
 
@@ -114,7 +114,7 @@ func TestGofr_ServerRoutes(t *testing.T) {
 func TestGofr_ServerRun(t *testing.T) {
 	g := New()
 
-	g.GET("/hello", func(_ *Context) (interface{}, error) {
+	g.GET("/hello", func(*Context) (interface{}, error) {
 		return helloWorld, nil
 	})
 
@@ -388,7 +388,7 @@ func Test_UseMiddleware(t *testing.T) {
 
 	app.UseMiddleware(testMiddleware)
 
-	app.GET("/test", func(_ *Context) (interface{}, error) {
+	app.GET("/test", func(*Context) (interface{}, error) {
 		return "success", nil
 	})
 

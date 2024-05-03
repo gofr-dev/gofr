@@ -233,7 +233,7 @@ func TestMQTT_SubscribeWithFunc(t *testing.T) {
 		return nil
 	}
 
-	subcriptionFuncErr := func(_ *pubsub.Message) error {
+	subcriptionFuncErr := func(*pubsub.Message) error {
 		return errTest
 	}
 

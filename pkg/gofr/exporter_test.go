@@ -39,7 +39,7 @@ func Test_ExportSpans(t *testing.T) {
 }
 
 func Test_ExportSpansError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {}))
+	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
 
 	server.Close()
 
