@@ -20,7 +20,7 @@ func oAuthHTTPServer(t *testing.T) *httptest.Server {
 		header := r.Header.Get("Authorization")
 		token := strings.Split(header, " ")
 
-		parsedToken, _ := jwt.Parse(token[1], func(_ *jwt.Token) (interface{}, error) {
+		parsedToken, _ := jwt.Parse(token[1], func(*jwt.Token) (interface{}, error) {
 			return []byte("my-secret-key"), nil
 		})
 
