@@ -2,7 +2,6 @@ package sql
 
 import (
 	"fmt"
-	"strings"
 )
 
 const (
@@ -19,22 +18,6 @@ const (
 	DOLLAR
 )
 
-func Rebind(dialect, query string) string {
-	if DOLLAR == bindType(dialect) {
-		queryFormat := strings.Replace(query, "?", "%v", -1)
-		count := strings.Count(query, "?")
-		replacement := make([]interface{}, count)
-
-		for i := 0; i < count; i++ {
-			replacement[i] = fmt.Sprintf("$%v", i+1)
-		}
-
-		return fmt.Sprintf(queryFormat, replacement...)
-	}
-
-	return query
-}
-
 func bindType(dialect string) BindVarType {
 	switch dialect {
 	case DialectMysql:
@@ -44,4 +27,32 @@ func bindType(dialect string) BindVarType {
 	default:
 		return UNKNOWN
 	}
+}
+
+func bindVar(dialect string, position int) string {
+	if DOLLAR == bindType(dialect) {
+		return fmt.Sprintf("$%v", position)
+	}
+
+	return "?"
+}
+
+// QuoteType represents different type of quotes in SQL queries.
+type QuoteType uint
+
+const (
+	QuoteBack   = "`"
+	QuoteDouble = `"`
+)
+
+func quote(dialect string) string {
+	if DialectPostgres == dialect {
+		return QuoteDouble
+	}
+
+	return QuoteBack
+}
+
+func quotedString(q, s string) string {
+	return fmt.Sprintf("%s%s%s", q, s, q)
 }
