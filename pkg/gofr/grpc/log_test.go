@@ -38,10 +38,11 @@ func TestLoggingInterceptor(t *testing.T) {
 		err            = errors.New("DB error") //nolint:goerr113 // We are testing if a dynamic error would work
 		key contextKey = "id"
 
-		successHandler = func(ctx context.Context, req interface{}) (interface{}, error) {
+		successHandler = func(context.Context, interface{}) (interface{}, error) {
 			return "success", nil
 		}
-		errorHandler = func(ctx context.Context, req interface{}) (interface{}, error) {
+
+		errorHandler = func(context.Context, interface{}) (interface{}, error) {
 			return nil, err
 		}
 	)
