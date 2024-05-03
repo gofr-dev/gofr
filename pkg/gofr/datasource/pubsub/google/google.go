@@ -135,6 +135,7 @@ func (g *googleClient) Subscribe(ctx context.Context, topic string) (*pubsub.Mes
 	start := time.Now()
 	err = subscription.Receive(ctx, func(_ context.Context, msg *gcPubSub.Message) {
 		end := time.Since(start)
+
 		defer cancel()
 
 		m.Topic = topic

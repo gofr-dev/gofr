@@ -73,7 +73,7 @@ func TestSubscriptionManager_HandlerError(t *testing.T) {
 		// Run the subscriber in a goroutine
 		go func() {
 			subscriptionManager.startSubscriber("test-topic",
-				func(c *Context) error {
+				func(*Context) error {
 					return handleError("error in test-topic")
 				})
 		}()
@@ -103,7 +103,7 @@ func TestSubscriptionManager_SubscribeError(t *testing.T) {
 		// Run the subscriber in a goroutine
 		go func() {
 			subscriptionManager.startSubscriber("abc",
-				func(c *Context) error {
+				func(*Context) error {
 					return handleError("error in abc")
 				})
 		}()
@@ -133,7 +133,7 @@ func TestSubscriptionManager_PanicRecovery(t *testing.T) {
 		// Run the subscriber in a goroutine
 		go func() {
 			subscriptionManager.startSubscriber("abc",
-				func(c *Context) error {
+				func(*Context) error {
 					panic("test panic")
 				})
 		}()

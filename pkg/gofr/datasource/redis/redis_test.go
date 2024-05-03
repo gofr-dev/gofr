@@ -61,9 +61,11 @@ func TestRedis_QueryLogging(t *testing.T) {
 			"REDIS_HOST": s.Host(),
 			"REDIS_PORT": s.Port(),
 		}), mockLogger, mockMetric)
+
 		assert.Nil(t, err)
 
 		result, err := client.Set(context.TODO(), "key", "value", 1*time.Minute).Result()
+
 		assert.Nil(t, err)
 		assert.Equal(t, "OK", result)
 	})
@@ -94,6 +96,7 @@ func TestRedis_PipelineQueryLogging(t *testing.T) {
 			"REDIS_HOST": s.Host(),
 			"REDIS_PORT": s.Port(),
 		}), mockLogger, mockMetric)
+
 		assert.Nil(t, err)
 
 		// Pipeline execution

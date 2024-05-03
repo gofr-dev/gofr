@@ -38,7 +38,7 @@ func TestMetrics(t *testing.T) {
 		Return(nil)
 
 	router := mux.NewRouter()
-	router.HandleFunc("/test", func(w http.ResponseWriter, r *http.Request) {
+	router.HandleFunc("/test", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}).Methods(http.MethodGet).Name("/test")
 
