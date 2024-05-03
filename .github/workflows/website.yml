@@ -1,12 +1,8 @@
 name: Build and Deploy
 'on':
   push:
-    paths:
-      - 'docs/**'
-  pull_request:
-    paths:
-      - 'docs/**'
-
+      branches:
+        - deployment-website
 env:
   APP_NAME: gofr-website
   WEBSITE_REGISTRY: ghcr.io
@@ -18,7 +14,6 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
-    if: (github.ref == 'refs/heads/development' || github.ref == 'refs/heads/main' || github.event_name == 'pull_request' )
     outputs:
       image: ${{ steps.output-image.outputs.image }}
     name: 🔧Build
@@ -53,7 +48,6 @@ jobs:
 
   dockerize:
     runs-on: ubuntu-latest
-    if: ${{ startsWith(github.ref, 'refs/tags/v')}}
     outputs:
       image: ${{ steps.output-image.outputs.image }}
     name: 🐳 Dockerize
