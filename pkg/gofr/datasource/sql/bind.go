@@ -37,9 +37,6 @@ func bindVar(dialect string, position int) string {
 	return "?"
 }
 
-// QuoteType represents different type of quotes in SQL queries.
-type QuoteType uint
-
 const (
 	QuoteBack   = "`"
 	QuoteDouble = `"`
