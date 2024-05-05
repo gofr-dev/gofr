@@ -218,7 +218,7 @@ func TestPrettyPrint(t *testing.T) {
 }
 
 func TestDefaultFilterMaskingStringFields(t *testing.T) {
-	filter := &DefaultFilter{
+	filter := &MaskingFilter{
 		MaskFields:    []string{"name", "email", "password"},
 		EnableMasking: true,
 	}
@@ -262,7 +262,7 @@ func TestDefaultFilterMaskingStringFields(t *testing.T) {
 }
 
 func TestDefaultFilterMaskingNumericFields(t *testing.T) {
-	filter := &DefaultFilter{
+	filter := &MaskingFilter{
 		MaskFields: []string{
 			"phoneNumber",
 			"socialSecurityNumber",
@@ -325,7 +325,7 @@ func TestDefaultFilterMaskingNumericFields(t *testing.T) {
 }
 
 func TestDefaultFilterMaskingDisabled(t *testing.T) {
-	filter := &DefaultFilter{
+	filter := &MaskingFilter{
 		MaskFields:    []string{"name"},
 		EnableMasking: false,
 	}
@@ -352,7 +352,7 @@ func TestDefaultFilterMaskingDisabled(t *testing.T) {
 }
 
 func TestDefaultFilterMaskingNestedFields(t *testing.T) {
-	filter := &DefaultFilter{
+	filter := &MaskingFilter{
 		MaskFields:    []string{"name", "email", "street", "number", "cvv", "city"},
 		EnableMasking: true,
 	}

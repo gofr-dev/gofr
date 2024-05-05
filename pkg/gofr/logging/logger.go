@@ -47,15 +47,15 @@ type Filterer interface {
 	Filter(message interface{}) interface{}
 }
 
-// DefaultFilter is the default implementation of the Filterer interface.
-type DefaultFilter struct {
+// MaskingFilter is the default implementation of the Filterer interface.
+type MaskingFilter struct {
 	// MaskFields is a slice of fields to mask, e.g. ["password", "credit_card_number"]
 	MaskFields []string
 	// EnableMasking is a flag to enable or disable masking
 	EnableMasking bool
 }
 
-func (f *DefaultFilter) Filter(message interface{}) interface{} {
+func (f *MaskingFilter) Filter(message interface{}) interface{} {
 	// Get the value of the message using reflection
 	val := reflect.ValueOf(message)
 
@@ -74,7 +74,7 @@ func (f *DefaultFilter) Filter(message interface{}) interface{} {
 	return newVal.Interface()
 }
 
-func (f *DefaultFilter) filterFields(val reflect.Value) {
+func (f *MaskingFilter) filterFields(val reflect.Value) {
 	for i := 0; i < val.NumField(); i++ {
 		field := val.Field(i)
 		fieldType := val.Type().Field(i)
@@ -91,7 +91,7 @@ func (f *DefaultFilter) filterFields(val reflect.Value) {
 	}
 }
 
-func (f *DefaultFilter) maskField(field reflect.Value, fieldName string) {
+func (f *MaskingFilter) maskField(field reflect.Value, fieldName string) {
 	//nolint:exhaustive // Only handling specific types needed for masking
 	switch field.Kind() {
 	case reflect.String:
@@ -265,7 +265,7 @@ func NewLogger(level Level, args ...interface{}) Logger {
 		f, ok := args[0].(Filterer)
 		if !ok {
 			// If the provided argument does not implement the Filterer interface, use the default filter
-			filter = &DefaultFilter{
+			filter = &MaskingFilter{
 				MaskFields:    []string{},
 				EnableMasking: true,
 			}
@@ -273,7 +273,7 @@ func NewLogger(level Level, args ...interface{}) Logger {
 			filter = f
 		}
 	} else {
-		filter = &DefaultFilter{
+		filter = &MaskingFilter{
 			MaskFields:    []string{},
 			EnableMasking: true,
 		}
@@ -299,7 +299,7 @@ func NewFileLogger(path string, args ...interface{}) Logger {
 		f, ok := args[0].(Filterer)
 		if !ok {
 			// If the provided argument does not implement the Filterer interface, use the default filter
-			filter = &DefaultFilter{
+			filter = &MaskingFilter{
 				MaskFields:    []string{},
 				EnableMasking: true,
 			}
@@ -307,7 +307,7 @@ func NewFileLogger(path string, args ...interface{}) Logger {
 			filter = f
 		}
 	} else {
-		filter = &DefaultFilter{
+		filter = &MaskingFilter{
 			MaskFields:    []string{},
 			EnableMasking: true,
 		}
