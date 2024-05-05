@@ -93,3 +93,9 @@ Please note that the recommended local port for the services are different than 
     - All dependencies must be abstracted as an interface. This will make it easier to switch libraries at later point
       of time.
 * Version tagging as per Semantic versioning (https://semver.org/)
+
+### Documentation
+* After adding or modifying code existing code, update the documentation too - [development/docs](https://github.com/gofr-dev/gofr/tree/development/docs).
+* If needed, update or add proper code examples for your changes.
+* Make sure you don't break existing links and refernces.
+* The [gofr.dev documentation]([url](https://gofr.dev/docs)) site is updated upon push to `/docs` path in the repo. Verify your changes are live after PullRequest is merged.
