@@ -41,13 +41,13 @@ func Test_BindVar(t *testing.T) {
 	}{
 		{
 			name:     "Postgres bind var",
-			dialect:  DialectPostgres,
+			dialect:  dialectPostgres,
 			position: 1,
 			expected: "$1",
 		},
 		{
 			name:     "MySQL bind var",
-			dialect:  DialectMysql,
+			dialect:  dialectMysql,
 			position: 1,
 			expected: "?",
 		},
@@ -75,18 +75,18 @@ func Test_Quote(t *testing.T) {
 	}{
 		{
 			name:     "Postgres quote",
-			dialect:  DialectPostgres,
-			expected: QuoteDouble,
+			dialect:  dialectPostgres,
+			expected: quoteDouble,
 		},
 		{
 			name:     "MySQL quote",
-			dialect:  DialectMysql,
-			expected: QuoteBack,
+			dialect:  dialectMysql,
+			expected: quoteBack,
 		},
 		{
 			name:     "Unknown dialect quote",
 			dialect:  "unknown",
-			expected: QuoteBack,
+			expected: quoteBack,
 		},
 	}
 
@@ -107,13 +107,13 @@ func Test_QuotedString(t *testing.T) {
 	}{
 		{
 			name:     "Double quote",
-			q:        QuoteDouble,
+			q:        quoteDouble,
 			s:        "test",
 			expected: `"test"`,
 		},
 		{
 			name:     "Back quote",
-			q:        QuoteBack,
+			q:        quoteBack,
 			s:        "test",
 			expected: "`test`",
 		},
