@@ -79,7 +79,7 @@ func TestHandler_faviconHandlerError(t *testing.T) {
 	}
 
 	defer func() {
-		err := os.Rename("static/newFavicon.ico", "static/favicon.ico")
+		err = os.Rename("static/newFavicon.ico", "static/favicon.ico")
 		if err != nil {
 			t.Errorf("error in renaming file back to favicon.ico")
 		}
