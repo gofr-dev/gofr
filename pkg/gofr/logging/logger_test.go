@@ -217,7 +217,7 @@ func TestPrettyPrint(t *testing.T) {
 	}
 }
 
-func TestDefaultFilterMaskingStringFields(t *testing.T) {
+func TestMaskingFilterMaskingStringFields(t *testing.T) {
 	filter := &MaskingFilter{
 		MaskFields: []string{"name", "email", "password"},
 	}
@@ -260,7 +260,7 @@ func TestDefaultFilterMaskingStringFields(t *testing.T) {
 	}
 }
 
-func TestDefaultFilterMaskingNumericFields(t *testing.T) {
+func TestMaskingFilterMaskingNumericFields(t *testing.T) {
 	filter := &MaskingFilter{
 		MaskFields: []string{
 			"phoneNumber",
@@ -322,7 +322,7 @@ func TestDefaultFilterMaskingNumericFields(t *testing.T) {
 	}
 }
 
-func TestDefaultFilterMaskingNestedFields(t *testing.T) {
+func TestMaskingFilterMaskingNestedFields(t *testing.T) {
 	filter := &MaskingFilter{
 		MaskFields: []string{"name", "email", "street", "number", "cvv", "city"},
 	}
@@ -413,10 +413,9 @@ func TestDefaultFilterMaskingNestedFields(t *testing.T) {
 	}
 }
 
-func TestDefaultFilterMaskingPointerFields(t *testing.T) {
-	filter := &DefaultFilter{
-		MaskFields:    []string{"password", "email", "creditCard"},
-		EnableMasking: true,
+func TestMaskingFilterMaskingPointerFields(t *testing.T) {
+	filter := &MaskingFilter{
+		MaskFields: []string{"password", "email", "creditCard"},
 	}
 
 	type User struct {
