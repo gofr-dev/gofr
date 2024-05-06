@@ -9,7 +9,7 @@ For instance, to connect with PostgreSQL, set `DB_DIALECT` to `postgres`. Simila
 ## Usage
 Add the following configs in .env file.
 
-```bash
+```dotenv
 DB_HOST=localhost
 DB_USER=root
 DB_PASSWORD=root123
