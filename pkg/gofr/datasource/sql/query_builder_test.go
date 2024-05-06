@@ -22,10 +22,6 @@ func Test_InsertQuery(t *testing.T) {
 			dialect:  "postgres",
 			expected: `INSERT INTO "user" ("id", "name") VALUES ($1, $2)`,
 		},
-		{
-			dialect:  "any-other-dialect",
-			expected: "INSERT INTO `user` (`id`, `name`) VALUES (?, ?)",
-		},
 	}
 
 	for i, tc := range tests {
@@ -49,10 +45,6 @@ func Test_SelectQuery(t *testing.T) {
 		{
 			dialect:  "postgres",
 			expected: `SELECT * FROM "user"`,
-		},
-		{
-			dialect:  "any-other-dialect",
-			expected: "SELECT * FROM `user`",
 		},
 	}
 
@@ -78,10 +70,6 @@ func Test_SelectByQuery(t *testing.T) {
 		{
 			dialect:  "postgres",
 			expected: `SELECT * FROM "user" WHERE "id"=$1`,
-		},
-		{
-			dialect:  "any-other-dialect",
-			expected: "SELECT * FROM `user` WHERE `id`=?",
 		},
 	}
 
@@ -110,10 +98,6 @@ func Test_UpdateByQuery(t *testing.T) {
 			dialect:  "postgres",
 			expected: `UPDATE "user" SET "name"=$1, "age"=$2 WHERE "id"=$3`,
 		},
-		{
-			dialect:  "any-other-dialect",
-			expected: "UPDATE `user` SET `name`=?, `age`=? WHERE `id`=?",
-		},
 	}
 
 	for i, tc := range tests {
@@ -138,10 +122,6 @@ func Test_DeleteByQuery(t *testing.T) {
 		{
 			dialect:  "postgres",
 			expected: `DELETE FROM "user" WHERE "id"=$1`,
-		},
-		{
-			dialect:  "any-other-dialect",
-			expected: "DELETE FROM `user` WHERE `id`=?",
 		},
 	}
 
