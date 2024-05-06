@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"gofr.dev/pkg/gofr"
+	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/datasource/redis"
 	"gofr.dev/pkg/gofr/logging"
@@ -55,7 +56,7 @@ func TestRedisHandler(t *testing.T) {
 	logger := logging.NewLogger(logging.DEBUG)
 	redisClient, mock := redismock.NewClientMock()
 
-	rc := redis.NewClient(testutil.NewMockConfig(map[string]string{"REDIS_HOST": "localhost", "REDIS_PORT": "2001"}), logger, a.Metrics())
+	rc := redis.NewClient(config.NewMockConfig(map[string]string{"REDIS_HOST": "localhost", "REDIS_PORT": "2001"}), logger, a.Metrics())
 	rc.Client = redisClient
 
 	mock.ExpectGet("test").SetErr(testutil.CustomError{ErrorMessage: "redis get error"})

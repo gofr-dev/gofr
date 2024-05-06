@@ -62,6 +62,17 @@ func (f *MaskingFilter) Filter(message interface{}) interface{} {
 	// Get the value of the message using reflection
 	val := reflect.ValueOf(message)
 
+	// If the message is a pointer, get the underlying value
+	if val.Kind() == reflect.Ptr {
+		val = val.Elem()
+	}
+
+	// If the message is a pointer, get the underlying value
+	if val.Kind() == reflect.Ptr {
+		val = val.Elem()
+	}
+	
+
 	// If the message is not a struct, return the original message
 	if val.Kind() != reflect.Struct {
 		return message
@@ -74,6 +85,11 @@ func (f *MaskingFilter) Filter(message interface{}) interface{} {
 	// Recursively filter the struct fields
 	f.filterFields(newVal)
 
+	// If the original message was a pointer, return a pointer to the new value
+	if message != nil && reflect.TypeOf(message).Kind() == reflect.Ptr {
+		return newVal.Addr().Interface()
+	}
+
 	return newVal.Interface()
 }
 
@@ -81,6 +97,11 @@ func (f *MaskingFilter) filterFields(val reflect.Value) {
 	for i := 0; i < val.NumField(); i++ {
 		field := val.Field(i)
 		fieldType := val.Type().Field(i)
+
+		// If the field is a pointer, get the underlying value
+		if field.Kind() == reflect.Ptr {
+			field = field.Elem()
+		}
 
 		// Check if the field name matches any of the mask fields (case-insensitive)
 		fieldName := fieldType.Name

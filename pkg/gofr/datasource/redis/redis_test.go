@@ -10,6 +10,7 @@ import (
 
 	"go.uber.org/mock/gomock"
 
+	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/testutil"
 )
 
@@ -19,7 +20,7 @@ func Test_NewClient_HostNameMissing(t *testing.T) {
 
 	mockLogger := testutil.NewMockLogger(testutil.ERRORLOG)
 	mockMetrics := NewMockMetrics(ctrl)
-	mockConfig := testutil.NewMockConfig(map[string]string{"REDIS_HOST": ""})
+	mockConfig := config.NewMockConfig(map[string]string{"REDIS_HOST": ""})
 
 	client := NewClient(mockConfig, mockLogger, mockMetrics)
 	assert.Nil(t, client, "Test_NewClient_HostNameMissing Failed! Expected redis client to be nil")
@@ -31,7 +32,7 @@ func Test_NewClient_InvalidPort(t *testing.T) {
 
 	mockLogger := testutil.NewMockLogger(testutil.ERRORLOG)
 	mockMetrics := NewMockMetrics(ctrl)
-	mockConfig := testutil.NewMockConfig(map[string]string{"REDIS_HOST": "localhost",
+	mockConfig := config.NewMockConfig(map[string]string{"REDIS_HOST": "localhost",
 		"REDIS_PORT": "&&^%%^&*"})
 
 	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_redis_stats", gomock.Any(), "type", "ping")
@@ -56,7 +57,7 @@ func TestRedis_QueryLogging(t *testing.T) {
 
 	result := testutil.StdoutOutputForFunc(func() {
 		mockLogger := testutil.NewMockLogger(testutil.DEBUGLOG)
-		client := NewClient(testutil.NewMockConfig(map[string]string{
+		client := NewClient(config.NewMockConfig(map[string]string{
 			"REDIS_HOST": s.Host(),
 			"REDIS_PORT": s.Port(),
 		}), mockLogger, mockMetric)
@@ -89,7 +90,7 @@ func TestRedis_PipelineQueryLogging(t *testing.T) {
 	// Execute Redis pipeline
 	result := testutil.StdoutOutputForFunc(func() {
 		mockLogger := testutil.NewMockLogger(testutil.DEBUGLOG)
-		client := NewClient(testutil.NewMockConfig(map[string]string{
+		client := NewClient(config.NewMockConfig(map[string]string{
 			"REDIS_HOST": s.Host(),
 			"REDIS_PORT": s.Port(),
 		}), mockLogger, mockMetric)
