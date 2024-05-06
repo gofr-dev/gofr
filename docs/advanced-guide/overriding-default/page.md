@@ -71,3 +71,10 @@ Response example:
   }
 ]
 ```
+
+## Favicon.ico
+
+By default GoFr load it's own `favicon.ico` present in root directory for an application. To override `favicon.ico` user 
+can place it's custom icon in the **static** directory of it's application.
+
+> NOTE: The custom favicon should also be named as `favicon.ico` in the static directory of application.
