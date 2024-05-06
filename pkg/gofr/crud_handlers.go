@@ -60,7 +60,7 @@ func scanEntity(object interface{}) (*entity, error) {
 
 	entityValue := reflect.ValueOf(object).Elem().Type()
 	primaryKeyField := entityValue.Field(0) // Assume the first field is the primary key
-	primaryKeyFieldName := strings.ToLower(primaryKeyField.Name)
+	primaryKeyFieldName := toSnakeCase(primaryKeyField.Name)
 
 	return &entity{
 		name:       structName,
@@ -115,11 +115,11 @@ func (e *entity) Create(c *Context) (interface{}, error) {
 
 	for i := 0; i < e.entityType.NumField(); i++ {
 		field := e.entityType.Field(i)
-		fieldNames = append(fieldNames, strings.ToLower(field.Name))
+		fieldNames = append(fieldNames, toSnakeCase(field.Name))
 		fieldValues = append(fieldValues, reflect.ValueOf(newEntity).Elem().Field(i).Interface())
 	}
 
-	stmt := sql.InsertQuery(c.SQL.Dialect(), e.name, fieldNames)
+	stmt := sql.InsertQuery(c.SQL.Dialect(), toSnakeCase(e.name), fieldNames)
 
 	_, err = c.SQL.ExecContext(c, stmt, fieldValues...)
 	if err != nil {
@@ -130,7 +130,7 @@ func (e *entity) Create(c *Context) (interface{}, error) {
 }
 
 func (e *entity) GetAll(c *Context) (interface{}, error) {
-	query := sql.SelectQuery(c.SQL.Dialect(), e.name)
+	query := sql.SelectQuery(c.SQL.Dialect(), toSnakeCase(e.name))
 
 	rows, err := c.SQL.QueryContext(c, query)
 	if err != nil || rows.Err() != nil {
@@ -172,7 +172,7 @@ func (e *entity) Get(c *Context) (interface{}, error) {
 	newEntity := reflect.New(e.entityType).Interface()
 	id := c.Request.PathParam("id")
 
-	query := sql.SelectByQuery(c.SQL.Dialect(), e.name, e.primaryKey)
+	query := sql.SelectByQuery(c.SQL.Dialect(), toSnakeCase(e.name), e.primaryKey)
 
 	row := c.SQL.QueryRowContext(c, query, id)
 
@@ -205,13 +205,13 @@ func (e *entity) Update(c *Context) (interface{}, error) {
 	for i := 0; i < e.entityType.NumField(); i++ {
 		field := e.entityType.Field(i)
 
-		fieldNames = append(fieldNames, strings.ToLower(field.Name))
+		fieldNames = append(fieldNames, toSnakeCase(field.Name))
 		fieldValues = append(fieldValues, reflect.ValueOf(newEntity).Elem().Field(i).Interface())
 	}
 
 	id := c.PathParam("id")
 
-	stmt := sql.UpdateByQuery(c.SQL.Dialect(), e.name, fieldNames[1:], e.primaryKey)
+	stmt := sql.UpdateByQuery(c.SQL.Dialect(), toSnakeCase(e.name), fieldNames[1:], e.primaryKey)
 
 	_, err = c.SQL.ExecContext(c, stmt, append(fieldValues[1:], fieldValues[0])...)
 	if err != nil {
@@ -224,7 +224,7 @@ func (e *entity) Update(c *Context) (interface{}, error) {
 func (e *entity) Delete(c *Context) (interface{}, error) {
 	id := c.PathParam("id")
 
-	query := sql.DeleteByQuery(c.SQL.Dialect(), e.name, e.primaryKey)
+	query := sql.DeleteByQuery(c.SQL.Dialect(), toSnakeCase(e.name), e.primaryKey)
 
 	result, err := c.SQL.ExecContext(c, query, id)
 	if err != nil {
@@ -241,4 +241,26 @@ func (e *entity) Delete(c *Context) (interface{}, error) {
 	}
 
 	return fmt.Sprintf("%s successfully deleted with id: %v", e.name, id), nil
+}
+
+func toSnakeCase(str string) string {
+	diff := 'a' - 'A'
+	length := len(str)
+
+	var builder strings.Builder
+
+	for i, char := range str {
+		if char >= 'a' {
+			builder.WriteRune(char)
+			continue
+		}
+
+		if (i != 0 || i == length-1) && ((i > 0 && rune(str[i-1]) >= 'a') || (i < length-1 && rune(str[i+1]) >= 'a')) {
+			builder.WriteRune('_')
+		}
+
+		builder.WriteRune(char + diff)
+	}
+
+	return builder.String()
 }
