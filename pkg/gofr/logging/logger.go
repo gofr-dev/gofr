@@ -198,7 +198,7 @@ func (l *logger) createLogEntry(level Level, format string, args ...interface{})
 	case len(args) != 1 && format == "":
 		entry.Message = args
 	case format != "":
-		entry.Message = fmt.Sprintf(format+"", args...)
+		entry.Message = fmt.Sprintf(format+"", args...) // TODO - this is stupid. We should not need empty string.
 	}
 
 	return entry
