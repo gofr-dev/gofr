@@ -376,3 +376,7 @@ func (a *App) UseMiddleware(middlewares ...gofrHTTP.Middleware) {
 func (a *App) UseMongo(db datasource.Mongo) {
 	a.container.Mongo = db
 }
+
+func (a *App) UseCassandra(db datasource.Cassandra) {
+	a.container.Cassandra = db
+}
