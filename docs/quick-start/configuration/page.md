@@ -22,7 +22,7 @@ my-gofr-app/
 By default, GoFr starts HTTP server at port 8000, in order to change that we can add the config `HTTP_PORT`
 Similarly to Set the app-name user can add `APP_NAME`. For example:
 
-```bash
+```dotenv
 # configs/.env
 
 APP_NAME=test-service
@@ -37,9 +37,9 @@ If `APP_ENV` is set to ‘dev’, GoFr will attempt to load the ‘.dev.env’ f
 
 In the absence of the `APP_ENV` variable, GoFr will first attempt to load the ‘.local.env’ file. If this file is not found, it will default to loading the ‘.env’ file.
 
-_For example, to run the application in the ‘dev’ environment, use the following command:_
+_For example, to run the application in the `dev` environment, use the following command:_
 
-```dotenv
+```bash
 APP_ENV=dev go run main.go
 ```
 
