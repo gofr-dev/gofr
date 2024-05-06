@@ -19,11 +19,6 @@ const (
 	passwordLength = 10
 )
 
-var (
-	maskingEnabled bool
-	maskingFields  []string
-)
-
 type PrettyPrint interface {
 	PrettyPrint(writer io.Writer)
 }
@@ -45,6 +40,8 @@ type Logger interface {
 	Fatal(args ...interface{})
 	Fatalf(format string, args ...interface{})
 	changeLevel(level Level)
+	SetMaskingFilters(fields []string)
+	GetMaskingFilters() []string
 }
 
 // Filterer represents an interface to filter log messages.
@@ -66,12 +63,6 @@ func (f *MaskingFilter) Filter(message interface{}) interface{} {
 	if val.Kind() == reflect.Ptr {
 		val = val.Elem()
 	}
-
-	// If the message is a pointer, get the underlying value
-	if val.Kind() == reflect.Ptr {
-		val = val.Elem()
-	}
-	
 
 	// If the message is not a struct, return the original message
 	if val.Kind() != reflect.Struct {
@@ -155,11 +146,13 @@ func maskString(str string, maskLength ...int) string {
 }
 
 type logger struct {
-	level      Level
-	normalOut  io.Writer
-	errorOut   io.Writer
-	isTerminal bool
-	filter     Filterer
+	level          Level
+	normalOut      io.Writer
+	errorOut       io.Writer
+	isTerminal     bool
+	filter         Filterer
+	maskingEnabled bool
+	maskingFields  []string
 }
 
 type logEntry struct {
@@ -194,7 +187,7 @@ func (l *logger) logf(level Level, format string, args ...interface{}) {
 		entry.Message = fmt.Sprintf(format+"", args...)
 	}
 
-	if l.filter != nil {
+	if l.maskingEnabled && l.filter != nil {
 		entry.Message = l.filter.Filter(entry.Message)
 	}
 
@@ -283,18 +276,10 @@ func (l *logger) prettyPrint(e logEntry, out io.Writer) {
 
 // NewLogger creates a new logger instance with the specified logging level.
 func NewLogger(level Level) Logger {
-	var filter Filterer
-	if maskingEnabled {
-		filter = &MaskingFilter{
-			MaskFields: maskingFields,
-		}
-	}
-
 	l := &logger{
 		normalOut: os.Stdout,
 		errorOut:  os.Stderr,
 		level:     level,
-		filter:    filter,
 	}
 
 	l.isTerminal = checkIfTerminal(l.normalOut)
@@ -304,17 +289,9 @@ func NewLogger(level Level) Logger {
 
 // NewFileLogger creates a new logger instance with logging to a file.
 func NewFileLogger(path string) Logger {
-	var filter Filterer
-	if maskingEnabled {
-		filter = &MaskingFilter{
-			MaskFields: maskingFields,
-		}
-	}
-
 	l := &logger{
 		normalOut: io.Discard,
 		errorOut:  io.Discard,
-		filter:    filter,
 	}
 
 	if path == "" {
@@ -346,11 +323,15 @@ func (l *logger) changeLevel(level Level) {
 }
 
 // SetMaskingFilters sets the masking fields and enables masking for the logger.
-func SetMaskingFilters(fields []string) {
-	maskingEnabled = true
-	maskingFields = fields
+func (l *logger) SetMaskingFilters(fields []string) {
+	l.maskingEnabled = true
+	l.maskingFields = fields
+	l.filter = &MaskingFilter{
+		MaskFields: fields,
+	}
 }
 
-func GetMaskingFilters() []string {
-	return maskingFields
+// GetMaskingFilters returns the current masking fields.
+func (l *logger) GetMaskingFilters() []string {
+	return l.maskingFields
 }
