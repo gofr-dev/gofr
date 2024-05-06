@@ -64,6 +64,8 @@ func New() *App {
 
 	app.initTracer()
 
+	app.EnableLoggerMasking(app.Config)
+
 	// Metrics Server
 	port, err := strconv.Atoi(app.Config.Get("METRICS_PORT"))
 	if err != nil || port <= 0 {
@@ -91,6 +93,23 @@ func New() *App {
 	app.subscriptionManager = newSubscriptionManager(app.container)
 
 	return app
+}
+
+func (a *App) EnableLoggerMasking(config config.Config) {
+	if config.GetOrDefault("LOGGER_MASKING_ENABLED", "false") == "true" {
+		maskingFields := config.GetOrDefault("LOGGER_MASKING_FIELDS", "")
+		fields := strings.Split(maskingFields, ",")
+
+		// Remove any empty fields
+		var filteredFields []string
+		for _, field := range fields {
+			field = strings.TrimSpace(field)
+			if field != "" {
+				filteredFields = append(filteredFields, field)
+			}
+		}
+		logging.SetMaskingFilters(filteredFields)
+	}
 }
 
 // NewCMD creates a command line application.

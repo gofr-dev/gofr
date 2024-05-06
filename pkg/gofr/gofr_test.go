@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strconv"
 	"testing"
 	"time"
@@ -347,4 +348,70 @@ func Test_initTracer_invalidConfig(t *testing.T) {
 	})
 
 	assert.Contains(t, errLogMessage, "unsupported trace exporter.")
+}
+
+func TestLoggerMasking(t *testing.T) {
+	// Test cases
+	testCases := []struct {
+		name           string
+		maskingEnabled string
+		maskingFields  string
+		expectedFields []string
+	}{
+		{
+			name:           "Masking enabled with multiple fields",
+			maskingEnabled: "true",
+			maskingFields:  "password,email,creditCard",
+			expectedFields: []string{"password", "email", "creditCard"},
+		},
+		{
+			name:           "Masking enabled with single field",
+			maskingEnabled: "true",
+			maskingFields:  "password",
+			expectedFields: []string{"password"},
+		},
+		{
+			name:           "Masking disabled",
+			maskingEnabled: "false",
+			maskingFields:  "password,email",
+			expectedFields: []string{},
+		},
+		{
+			name:           "Masking enabled with empty fields",
+			maskingEnabled: "true",
+			maskingFields:  "password,,email,  ,creditCard",
+			expectedFields: []string{"password", "email", "creditCard"},
+		},
+		{
+			name:           "Masking enabled with invalid configuration",
+			maskingEnabled: "invalid",
+			maskingFields:  "password,email",
+			expectedFields: []string{},
+		},
+	}
+
+	// Iterate over test cases
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Create a new instance of the App
+			mockConfig := testutil.NewMockConfig(map[string]string{
+				"LOGGER_MASKING_ENABLED": tc.maskingEnabled,
+				"LOGGER_MASKING_FIELDS":  tc.maskingFields,
+			})
+			app := New()
+
+			app.EnableLoggerMasking(mockConfig)
+
+			// Get the actual masking fields from the logging package
+			actualFields := logging.GetMaskingFilters()
+
+			// Compare the actual fields with the expected fields
+			if !reflect.DeepEqual(actualFields, tc.expectedFields) {
+				t.Errorf("Expected masking fields: %v, but got: %v", tc.expectedFields, actualFields)
+			}
+
+			// Reset the filters after each run
+			logging.SetMaskingFilters([]string{})
+		})
+	}
 }

@@ -19,6 +19,11 @@ const (
 	passwordLength = 10
 )
 
+var (
+	maskingEnabled bool
+	maskingFields  []string
+)
+
 type PrettyPrint interface {
 	PrettyPrint(writer io.Writer)
 }
@@ -47,20 +52,18 @@ type Filterer interface {
 	Filter(message interface{}) interface{}
 }
 
-// MaskingFilter is the default implementation of the Filterer interface.
+// MaskingFilter is an implementation of the Filterer interface that masks sensitive fields.
 type MaskingFilter struct {
 	// MaskFields is a slice of fields to mask, e.g. ["password", "credit_card_number"]
 	MaskFields []string
-	// EnableMasking is a flag to enable or disable masking
-	EnableMasking bool
 }
 
 func (f *MaskingFilter) Filter(message interface{}) interface{} {
 	// Get the value of the message using reflection
 	val := reflect.ValueOf(message)
 
-	// If masking is disabled or the message is not a struct, return the original message
-	if !f.EnableMasking || val.Kind() != reflect.Struct {
+	// If the message is not a struct, return the original message
+	if val.Kind() != reflect.Struct {
 		return message
 	}
 
@@ -258,24 +261,11 @@ func (l *logger) prettyPrint(e logEntry, out io.Writer) {
 }
 
 // NewLogger creates a new logger instance with the specified logging level.
-func NewLogger(level Level, args ...interface{}) Logger {
+func NewLogger(level Level) Logger {
 	var filter Filterer
-
-	if len(args) > 0 {
-		f, ok := args[0].(Filterer)
-		if !ok {
-			// If the provided argument does not implement the Filterer interface, use the default filter
-			filter = &MaskingFilter{
-				MaskFields:    []string{},
-				EnableMasking: true,
-			}
-		} else {
-			filter = f
-		}
-	} else {
+	if maskingEnabled {
 		filter = &MaskingFilter{
-			MaskFields:    []string{},
-			EnableMasking: true,
+			MaskFields: maskingFields,
 		}
 	}
 
@@ -292,24 +282,11 @@ func NewLogger(level Level, args ...interface{}) Logger {
 }
 
 // NewFileLogger creates a new logger instance with logging to a file.
-func NewFileLogger(path string, args ...interface{}) Logger {
+func NewFileLogger(path string) Logger {
 	var filter Filterer
-
-	if len(args) > 0 {
-		f, ok := args[0].(Filterer)
-		if !ok {
-			// If the provided argument does not implement the Filterer interface, use the default filter
-			filter = &MaskingFilter{
-				MaskFields:    []string{},
-				EnableMasking: true,
-			}
-		} else {
-			filter = f
-		}
-	} else {
+	if maskingEnabled {
 		filter = &MaskingFilter{
-			MaskFields:    []string{},
-			EnableMasking: true,
+			MaskFields: maskingFields,
 		}
 	}
 
@@ -345,4 +322,14 @@ func checkIfTerminal(w io.Writer) bool {
 
 func (l *logger) changeLevel(level Level) {
 	l.level = level
+}
+
+// SetMaskingFilters sets the masking fields and enables masking for the logger.
+func SetMaskingFilters(fields []string) {
+	maskingEnabled = true
+	maskingFields = fields
+}
+
+func GetMaskingFilters() []string {
+	return maskingFields
 }

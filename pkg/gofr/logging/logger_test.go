@@ -219,8 +219,7 @@ func TestPrettyPrint(t *testing.T) {
 
 func TestDefaultFilterMaskingStringFields(t *testing.T) {
 	filter := &MaskingFilter{
-		MaskFields:    []string{"name", "email", "password"},
-		EnableMasking: true,
+		MaskFields: []string{"name", "email", "password"},
 	}
 
 	input := struct {
@@ -271,7 +270,6 @@ func TestDefaultFilterMaskingNumericFields(t *testing.T) {
 			"biometricData",
 			"ipAddress",
 		},
-		EnableMasking: true,
 	}
 
 	input := struct {
@@ -324,37 +322,9 @@ func TestDefaultFilterMaskingNumericFields(t *testing.T) {
 	}
 }
 
-func TestDefaultFilterMaskingDisabled(t *testing.T) {
-	filter := &MaskingFilter{
-		MaskFields:    []string{"name"},
-		EnableMasking: false,
-	}
-
-	input := struct{ Name string }{Name: "John Doe"}
-	expectedOutput := struct{ Name string }{Name: "John Doe"}
-
-	filteredMessage := filter.Filter(input)
-
-	maskedMessage, err := json.Marshal(filteredMessage)
-	if err != nil {
-		t.Errorf("Failed to marshal masked message: %v", err)
-		return
-	}
-
-	expected := `{"Name":"John Doe"}`
-	if string(maskedMessage) != expected {
-		t.Errorf("Expected %s, but got %s", expected, maskedMessage)
-	}
-
-	if !reflect.DeepEqual(filteredMessage, expectedOutput) {
-		t.Errorf("Expected output %v, but got %v", expectedOutput, filteredMessage)
-	}
-}
-
 func TestDefaultFilterMaskingNestedFields(t *testing.T) {
 	filter := &MaskingFilter{
-		MaskFields:    []string{"name", "email", "street", "number", "cvv", "city"},
-		EnableMasking: true,
+		MaskFields: []string{"name", "email", "street", "number", "cvv", "city"},
 	}
 
 	input := struct {
