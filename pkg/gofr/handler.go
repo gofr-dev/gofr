@@ -51,11 +51,6 @@ func faviconHandler(*Context) (interface{}, error) {
 	data, err := os.ReadFile("./static/favicon.ico")
 	if err != nil {
 		data, err = static.Files.ReadFile("favicon.ico")
-
-		return response.File{
-			Content:     data,
-			ContentType: "image/x-icon",
-		}, err
 	}
 
 	return response.File{
