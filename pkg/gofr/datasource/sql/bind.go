@@ -5,11 +5,11 @@ import (
 )
 
 const (
-	DialectMysql    = "mysql"
-	DialectPostgres = "postgres"
+	dialectMysql    = "mysql"
+	dialectPostgres = "postgres"
 
-	QuoteBack   = "`"
-	QuoteDouble = `"`
+	quoteBack   = "`"
+	quoteDouble = `"`
 )
 
 // BindVarType represents different type of bindvars in SQL queries.
@@ -23,9 +23,9 @@ const (
 
 func bindType(dialect string) BindVarType {
 	switch dialect {
-	case DialectMysql:
+	case dialectMysql:
 		return QUESTION
-	case DialectPostgres:
+	case dialectPostgres:
 		return DOLLAR
 	default:
 		return UNKNOWN
@@ -40,11 +40,11 @@ func bindVar(dialect string, position int) string {
 	return "?"
 }
 func quote(dialect string) string {
-	if DialectPostgres == dialect {
-		return QuoteDouble
+	if dialectPostgres == dialect {
+		return quoteDouble
 	}
 
-	return QuoteBack
+	return quoteBack
 }
 
 func quotedString(q, s string) string {
