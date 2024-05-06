@@ -230,7 +230,7 @@ jobs:
   code_quality:
     name: Code Quality🎖️
     runs-on: ubuntu-latest
-    container: "golangci/golangci-lint:v1.55.2"
+    container: "golangci/golangci-lint:v1.57.2"
     steps:
       - name: Check out code into the Go module directory
         uses: actions/checkout@v4
