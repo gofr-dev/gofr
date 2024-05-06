@@ -167,11 +167,25 @@ func (l *logger) logf(level Level, format string, args ...interface{}) {
 		return
 	}
 
-	out := l.normalOut
-	if level >= ERROR {
-		out = l.errorOut
+	out := l.getOutputWriter(level)
+	entry := l.createLogEntry(level, format, args...)
+
+	if l.maskingEnabled && l.filter != nil {
+		entry.Message = l.filter.Filter(entry.Message)
 	}
 
+	l.writeLogEntry(entry, out)
+}
+
+func (l *logger) getOutputWriter(level Level) io.Writer {
+	if level >= ERROR {
+		return l.errorOut
+	}
+
+	return l.normalOut
+}
+
+func (l *logger) createLogEntry(level Level, format string, args ...interface{}) logEntry {
 	entry := logEntry{
 		Level:       level,
 		Time:        time.Now(),
@@ -187,10 +201,10 @@ func (l *logger) logf(level Level, format string, args ...interface{}) {
 		entry.Message = fmt.Sprintf(format+"", args...)
 	}
 
-	if l.maskingEnabled && l.filter != nil {
-		entry.Message = l.filter.Filter(entry.Message)
-	}
+	return entry
+}
 
+func (l *logger) writeLogEntry(entry logEntry, out io.Writer) {
 	if l.isTerminal {
 		l.prettyPrint(entry, out)
 	} else {

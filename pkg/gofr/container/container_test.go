@@ -157,3 +157,71 @@ func TestContainer_newContainerWithNilConfig(t *testing.T) {
 	assert.Nil(t, container.PubSub, "%s", failureMsg)
 	assert.Nil(t, container.Logger, "%s", failureMsg)
 }
+
+func TestLoggerMasking(t *testing.T) {
+	// Test cases
+	testCases := []struct {
+		name           string
+		maskingEnabled string
+		maskingFields  string
+		expectedFields []string
+	}{
+		{
+			name:           "Masking enabled with multiple fields",
+			maskingEnabled: "true",
+			maskingFields:  "password,email,creditCard",
+			expectedFields: []string{"password", "email", "creditCard"},
+		},
+		{
+			name:           "Masking enabled with single field",
+			maskingEnabled: "true",
+			maskingFields:  "password",
+			expectedFields: []string{"password"},
+		},
+		{
+			name:           "Masking disabled",
+			maskingEnabled: "false",
+			maskingFields:  "password,email",
+			expectedFields: []string{},
+		},
+		{
+			name:           "Masking enabled with empty fields",
+			maskingEnabled: "true",
+			maskingFields:  "password,,email,  ,creditCard",
+			expectedFields: []string{"password", "email", "creditCard"},
+		},
+	}
+
+	// Iterate over test cases
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Create a mock configuration
+			mockConfig := config.NewMockConfig(map[string]string{
+				"LOGGER_MASKING_ENABLED": tc.maskingEnabled,
+				"LOGGER_MASKING_FIELDS":  tc.maskingFields,
+				"LOG_LEVEL":              "INFO",
+			})
+
+			// Create a new container using the mock configuration
+			c := NewContainer(mockConfig)
+
+			// Get the logger from the container
+			logger := c.Logger
+
+			// Get the actual masking fields from the logger
+			actualFields := logger.GetMaskingFilters()
+
+			// Compare the lengths of the actual fields and expected fields
+			if len(actualFields) != len(tc.expectedFields) {
+				t.Errorf("Expected masking fields length: %d, but got: %d", len(tc.expectedFields), len(actualFields))
+			}
+
+			// Compare the actual fields with the expected fields
+			for i := range actualFields {
+				if actualFields[i] != tc.expectedFields[i] {
+					t.Errorf("Expected masking field: %s, but got: %s", tc.expectedFields[i], actualFields[i])
+				}
+			}
+		})
+	}
+}
