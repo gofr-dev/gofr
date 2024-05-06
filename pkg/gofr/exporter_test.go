@@ -15,7 +15,7 @@ import (
 )
 
 func Test_ExportSpans(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusCreated)
 	}))
 	defer server.Close()
@@ -39,8 +39,8 @@ func Test_ExportSpans(t *testing.T) {
 }
 
 func Test_ExportSpansError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-	}))
+	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+
 	server.Close()
 
 	exporter := NewExporter(server.URL, logging.NewLogger(logging.INFO))
