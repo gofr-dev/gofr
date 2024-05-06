@@ -97,19 +97,21 @@ func New() *App {
 	return app
 }
 
-func (a *App) EnableLoggerMasking(config config.Config) {
-	if config.GetOrDefault("LOGGER_MASKING_ENABLED", "false") == "true" {
-		maskingFields := config.GetOrDefault("LOGGER_MASKING_FIELDS", "")
+func (a *App) EnableLoggerMasking(cfg config.Config) {
+	if cfg.GetOrDefault("LOGGER_MASKING_ENABLED", "false") == "true" {
+		maskingFields := cfg.GetOrDefault("LOGGER_MASKING_FIELDS", "")
 		fields := strings.Split(maskingFields, ",")
 
 		// Remove any empty fields
 		var filteredFields []string
+
 		for _, field := range fields {
 			field = strings.TrimSpace(field)
 			if field != "" {
 				filteredFields = append(filteredFields, field)
 			}
 		}
+
 		logging.SetMaskingFilters(filteredFields)
 	}
 }
