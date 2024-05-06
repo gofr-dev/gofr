@@ -102,7 +102,7 @@ func (a *App) EnableLoggerMasking(cfg config.Config) {
 		maskingFields := cfg.GetOrDefault("LOGGER_MASKING_FIELDS", "")
 		fields := strings.Split(maskingFields, ",")
 
-		// Remove any empty fields
+		// Remove any empty field
 		var filteredFields []string
 
 		for _, field := range fields {
