@@ -147,7 +147,6 @@ func Test_CreateHandler(t *testing.T) {
 	}
 }
 
-//nolint:funlen // test fails when used 2 loops in test cases approach
 func Test_GetAllHandler(t *testing.T) {
 	type user struct {
 		ID   int    `json:"id"`
@@ -160,117 +159,85 @@ func Test_GetAllHandler(t *testing.T) {
 		primaryKey: "id",
 	}
 
-	type testCase struct {
+	dialectCases := []struct {
 		dialect       string
 		expectedQuery string
-		desc          string
-		mockResp      *sqlmock.Rows
-		mockErr       error
-		expectedResp  interface{}
-		expectedErr   error
-	}
-
-	testCases := []testCase{
+	}{
 		{
 			dialect:       "mysql",
 			expectedQuery: "SELECT * FROM `user`",
-			desc:          "success case",
-			mockResp:      sqlmock.NewRows([]string{"id", "name"}).AddRow(1, "John Doe").AddRow(2, "Jane Doe"),
-			mockErr:       nil,
-			expectedResp:  []interface{}{&user{ID: 1, Name: "John Doe"}, &user{ID: 2, Name: "Jane Doe"}},
-			expectedErr:   nil,
 		},
 		{
 			dialect:       "postgres",
 			expectedQuery: `SELECT * FROM "user"`,
-			desc:          "success case",
-			mockResp:      sqlmock.NewRows([]string{"id", "name"}).AddRow(1, "John Doe").AddRow(2, "Jane Doe"),
-			mockErr:       nil,
-			expectedResp:  []interface{}{&user{ID: 1, Name: "John Doe"}, &user{ID: 2, Name: "Jane Doe"}},
-			expectedErr:   nil,
-		},
-		{
-			dialect:       "mysql",
-			expectedQuery: "SELECT * FROM `user`",
-			desc:          "error retrieving rows",
-			mockResp:      sqlmock.NewRows([]string{"id", "name"}),
-			mockErr:       errMock,
-			expectedResp:  nil,
-			expectedErr:   errMock,
-		},
-		{
-			dialect:       "postgres",
-			expectedQuery: `SELECT * FROM "user"`,
-			desc:          "error retrieving rows",
-			mockResp:      sqlmock.NewRows([]string{"id", "name"}),
-			mockErr:       errMock,
-			expectedResp:  nil,
-			expectedErr:   errMock,
-		},
-		{
-			dialect:       "mysql",
-			expectedQuery: "SELECT * FROM `user`",
-			desc:          "error scanning rows",
-			mockResp:      sqlmock.NewRows([]string{"id", "name"}).AddRow("as", ""),
-			mockErr:       nil,
-			expectedResp:  nil,
-			expectedErr:   errSQLScan,
-		},
-		{
-			dialect:       "postgres",
-			expectedQuery: `SELECT * FROM "user"`,
-			desc:          "error scanning rows",
-			mockResp:      sqlmock.NewRows([]string{"id", "name"}).AddRow("as", ""),
-			mockErr:       nil,
-			expectedResp:  nil,
-			expectedErr:   errSQLScan,
-		},
-		{
-			dialect:       "mysql",
-			expectedQuery: "SELECT * FROM `user`",
-			desc:          "error retrieving rows",
-			mockResp:      sqlmock.NewRows([]string{"id", "name"}),
-			mockErr:       errTest,
-			expectedResp:  nil,
-			expectedErr:   errTest,
-		},
-		{
-			dialect:       "postgres",
-			expectedQuery: `SELECT * FROM "user"`,
-			desc:          "error retrieving rows",
-			mockResp:      sqlmock.NewRows([]string{"id", "name"}),
-			mockErr:       errTest,
-			expectedResp:  nil,
-			expectedErr:   errTest,
 		},
 	}
 
-	for _, tc := range testCases {
-		t.Run(tc.dialect+" "+tc.desc, func(t *testing.T) {
-			c := container.NewContainer(nil)
-			db, mock, _ := gofrSql.NewSQLMocksWithConfig(t, &gofrSql.DBConfig{Dialect: tc.dialect})
-			c.SQL = db
+	type testCase struct {
+		desc         string
+		mockResp     *sqlmock.Rows
+		mockErr      error
+		expectedResp interface{}
+		expectedErr  error
+	}
 
-			defer db.Close()
+	for _, dc := range dialectCases {
+		tests := []testCase{
+			{
+				desc:         "success case",
+				mockResp:     sqlmock.NewRows([]string{"id", "name"}).AddRow(1, "John Doe").AddRow(2, "Jane Doe"),
+				mockErr:      nil,
+				expectedResp: []interface{}{&user{ID: 1, Name: "John Doe"}, &user{ID: 2, Name: "Jane Doe"}},
+				expectedErr:  nil,
+			},
+			{
+				desc:         "error retrieving rows",
+				mockResp:     sqlmock.NewRows([]string{"id", "name"}),
+				mockErr:      errMock,
+				expectedResp: nil,
+				expectedErr:  errMock,
+			},
+			{
+				desc:         "error scanning rows",
+				mockResp:     sqlmock.NewRows([]string{"id", "name"}).AddRow("as", ""),
+				mockErr:      nil,
+				expectedResp: nil,
+				expectedErr:  errSQLScan,
+			},
+			{
+				desc:         "error retrieving rows",
+				mockResp:     sqlmock.NewRows([]string{"id", "name"}),
+				mockErr:      errTest,
+				expectedResp: nil,
+				expectedErr:  errTest,
+			},
+		}
+		for _, tc := range tests {
+			t.Run(dc.dialect+" "+tc.desc, func(t *testing.T) {
+				c := container.NewContainer(nil)
+				db, mock, _ := gofrSql.NewSQLMocksWithConfig(t, &gofrSql.DBConfig{Dialect: dc.dialect})
+				c.SQL = db
 
-			ctx := createTestContext(http.MethodGet, "/users", "", nil, c)
+				defer db.Close()
 
-			mock.ExpectQuery(tc.expectedQuery).WillReturnRows(tc.mockResp).WillReturnError(tc.mockErr)
+				ctx := createTestContext(http.MethodGet, "/users", "", nil, c)
 
-			resp, err := e.GetAll(ctx)
+				mock.ExpectQuery(dc.expectedQuery).WillReturnRows(tc.mockResp).WillReturnError(tc.mockErr)
 
-			assert.Equal(t, tc.expectedResp, resp, "Failed.\n%s", tc.desc)
+				resp, err := e.GetAll(ctx)
 
-			if tc.expectedErr != nil {
-				assert.Equal(t, tc.expectedErr.Error(), err.Error(), "Failed.\n%s", tc.desc)
-			} else {
-				assert.Nil(t, err, "Failed.\n%s", tc.desc)
-			}
-		})
+				assert.Equal(t, tc.expectedResp, resp, "Failed.\n%s", tc.desc)
+
+				if tc.expectedErr != nil {
+					assert.Equal(t, tc.expectedErr.Error(), err.Error(), "Failed.\n%s", tc.desc)
+				} else {
+					assert.Nil(t, err, "Failed.\n%s", tc.desc)
+				}
+			})
+		}
 	}
 }
 
-//nolint:funlen // test fails when used 2 loops in test cases approach
 func Test_GetHandler(t *testing.T) {
 	type user struct {
 		ID   int    `json:"id"`
@@ -283,103 +250,81 @@ func Test_GetHandler(t *testing.T) {
 		primaryKey: "id",
 	}
 
-	type testCase struct {
+	dialectCases := []struct {
 		dialect       string
 		expectedQuery string
-		desc          string
-		id            string
-		mockRow       *sqlmock.Rows
-		mockErr       error
-		expectedResp  interface{}
-		expectedErr   error
-	}
-
-	testCases := []testCase{
+	}{
 		{
 			dialect:       "mysql",
 			expectedQuery: "SELECT * FROM `user` WHERE `id`=?",
-			desc:          "success case",
-			id:            "1",
-			mockRow:       sqlmock.NewRows([]string{"id", "name"}).AddRow(1, "John Doe"),
-			mockErr:       nil,
-			expectedResp:  &user{ID: 1, Name: "John Doe"},
-			expectedErr:   nil,
 		},
 		{
 			dialect:       "postgres",
 			expectedQuery: `SELECT * FROM "user" WHERE "id"=$1`,
-			desc:          "success case",
-			id:            "1",
-			mockRow:       sqlmock.NewRows([]string{"id", "name"}).AddRow(1, "John Doe"),
-			mockErr:       nil,
-			expectedResp:  &user{ID: 1, Name: "John Doe"},
-			expectedErr:   nil,
-		},
-		{
-			dialect:       "mysql",
-			expectedQuery: "SELECT * FROM `user` WHERE `id`=?",
-			desc:          "no rows found",
-			id:            "2",
-			mockRow:       sqlmock.NewRows(nil),
-			mockErr:       nil,
-			expectedResp:  nil,
-			expectedErr:   sql.ErrNoRows,
-		},
-		{
-			dialect:       "postgres",
-			expectedQuery: `SELECT * FROM "user" WHERE "id"=$1`,
-			desc:          "no rows found",
-			id:            "2",
-			mockRow:       sqlmock.NewRows(nil),
-			mockErr:       nil,
-			expectedResp:  nil,
-			expectedErr:   sql.ErrNoRows,
-		},
-		{
-			dialect:       "mysql",
-			expectedQuery: "SELECT * FROM `user` WHERE `id`=?",
-			desc:          "error scanning rows",
-			id:            "3",
-			mockRow:       sqlmock.NewRows([]string{"id", "name"}).AddRow("as", ""),
-			mockErr:       nil,
-			expectedResp:  nil,
-			expectedErr:   errSQLScan,
-		},
-		{
-			dialect:       "postgres",
-			expectedQuery: `SELECT * FROM "user" WHERE "id"=$1`,
-			desc:          "error scanning rows",
-			id:            "3",
-			mockRow:       sqlmock.NewRows([]string{"id", "name"}).AddRow("as", ""),
-			mockErr:       nil,
-			expectedResp:  nil,
-			expectedErr:   errSQLScan,
 		},
 	}
 
-	for _, tc := range testCases {
-		t.Run(tc.dialect+" "+tc.desc, func(t *testing.T) {
-			c := container.NewContainer(nil)
-			db, mock, mockMetrics := gofrSql.NewSQLMocksWithConfig(t, &gofrSql.DBConfig{Dialect: tc.dialect})
-			c.SQL = db
+	type testCase struct {
+		desc         string
+		id           string
+		mockRow      *sqlmock.Rows
+		mockErr      error
+		expectedResp interface{}
+		expectedErr  error
+	}
 
-			defer db.Close()
+	for _, dc := range dialectCases {
+		testCases := []testCase{
+			{
+				desc:         "success case",
+				id:           "1",
+				mockRow:      sqlmock.NewRows([]string{"id", "name"}).AddRow(1, "John Doe"),
+				mockErr:      nil,
+				expectedResp: &user{ID: 1, Name: "John Doe"},
+				expectedErr:  nil,
+			},
+			{
+				desc:         "no rows found",
+				id:           "2",
+				mockRow:      sqlmock.NewRows(nil),
+				mockErr:      nil,
+				expectedResp: nil,
+				expectedErr:  sql.ErrNoRows,
+			},
+			{
+				desc:         "error scanning rows",
+				id:           "3",
+				mockRow:      sqlmock.NewRows([]string{"id", "name"}).AddRow("as", ""),
+				mockErr:      nil,
+				expectedResp: nil,
+				expectedErr:  errSQLScan,
+			},
+		}
 
-			ctx := createTestContext(http.MethodGet, "/user", tc.id, nil, c)
+		for _, tc := range testCases {
+			t.Run(dc.dialect+" "+tc.desc, func(t *testing.T) {
+				c := container.NewContainer(nil)
+				db, mock, mockMetrics := gofrSql.NewSQLMocksWithConfig(t, &gofrSql.DBConfig{Dialect: dc.dialect})
+				c.SQL = db
 
-			mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats", gomock.Any(), "type", "SELECT")
-			mock.ExpectQuery(tc.expectedQuery).WithArgs(tc.id).WillReturnRows(tc.mockRow).WillReturnError(tc.mockErr)
+				defer db.Close()
 
-			resp, err := e.Get(ctx)
+				ctx := createTestContext(http.MethodGet, "/user", tc.id, nil, c)
 
-			assert.Equal(t, tc.expectedResp, resp, "Failed.\n%s", tc.desc)
+				mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats", gomock.Any(), "type", "SELECT")
+				mock.ExpectQuery(dc.expectedQuery).WithArgs(tc.id).WillReturnRows(tc.mockRow).WillReturnError(tc.mockErr)
 
-			if tc.expectedErr != nil {
-				assert.Equal(t, tc.expectedErr.Error(), err.Error(), "Failed.\n%s", tc.desc)
-			} else {
-				assert.Nil(t, err, "Failed.\n%s", tc.desc)
-			}
-		})
+				resp, err := e.Get(ctx)
+
+				assert.Equal(t, tc.expectedResp, resp, "Failed.\n%s", tc.desc)
+
+				if tc.expectedErr != nil {
+					assert.Equal(t, tc.expectedErr.Error(), err.Error(), "Failed.\n%s", tc.desc)
+				} else {
+					assert.Nil(t, err, "Failed.\n%s", tc.desc)
+				}
+			})
+		}
 	}
 }
 
