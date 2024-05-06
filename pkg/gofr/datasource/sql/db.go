@@ -33,7 +33,7 @@ type Log struct {
 }
 
 func (l *Log) PrettyPrint(writer io.Writer) {
-	fmt.Fprintf(writer, "\u001B[38;5;8m%-32s \u001B[38;5;24m%s\u001B[0m %8d\u001B[38;5;8mµs\u001B[0m %s\n",
+	fmt.Fprintf(writer, "\u001B[38;5;8m%-32s \u001B[38;5;24m%-6s\u001B[0m %8d\u001B[38;5;8mµs\u001B[0m %s\n",
 		l.Type, "SQL", l.Duration, clean(l.Query))
 }
 
@@ -68,6 +68,10 @@ func getOperationType(query string) string {
 func (d *DB) Query(query string, args ...interface{}) (*sql.Rows, error) {
 	defer d.logQuery(time.Now(), "Query", query, args...)
 	return d.DB.Query(query, args...)
+}
+
+func (d *DB) Dialect() string {
+	return d.config.Dialect
 }
 
 func (d *DB) QueryRow(query string, args ...interface{}) *sql.Row {

@@ -66,20 +66,20 @@ func TestGofr_ServerRoutes(t *testing.T) {
 
 	g := New()
 
-	g.GET("/hello", func(c *Context) (interface{}, error) {
+	g.GET("/hello", func(*Context) (interface{}, error) {
 		return helloWorld, nil
 	})
 
 	// using add() func
-	g.add(http.MethodGet, "/hello2", func(c *Context) (interface{}, error) {
+	g.add(http.MethodGet, "/hello2", func(*Context) (interface{}, error) {
 		return helloWorld, nil
 	})
 
-	g.PUT("/hello", func(c *Context) (interface{}, error) {
+	g.PUT("/hello", func(*Context) (interface{}, error) {
 		return helloWorld, nil
 	})
 
-	g.POST("/hello", func(c *Context) (interface{}, error) {
+	g.POST("/hello", func(*Context) (interface{}, error) {
 		return helloWorld, nil
 	})
 
@@ -87,7 +87,7 @@ func TestGofr_ServerRoutes(t *testing.T) {
 		return fmt.Sprintf("Hello %s!", c.Param("name")), nil
 	})
 
-	g.DELETE("/delete", func(c *Context) (interface{}, error) {
+	g.DELETE("/delete", func(*Context) (interface{}, error) {
 		return "Success", nil
 	})
 
@@ -114,7 +114,7 @@ func TestGofr_ServerRoutes(t *testing.T) {
 func TestGofr_ServerRun(t *testing.T) {
 	g := New()
 
-	g.GET("/hello", func(c *Context) (interface{}, error) {
+	g.GET("/hello", func(*Context) (interface{}, error) {
 		return helloWorld, nil
 	})
 
@@ -193,6 +193,20 @@ func TestApp_MigrateInvalidKeys(t *testing.T) {
 	assert.Contains(t, logs, "migration run failed! UP not defined for the following keys: [1]")
 }
 
+func TestApp_MigratePanicRecovery(t *testing.T) {
+	logs := testutil.StderrOutputForFunc(func() {
+		app := New()
+
+		app.container.PubSub = &container.MockPubSub{}
+
+		app.Migrate(map[int64]migration.Migrate{1: {UP: func(_ migration.Datasource) error {
+			panic("test panic")
+		}}})
+	})
+
+	assert.Contains(t, logs, "test panic")
+}
+
 func Test_otelErrorHandler(t *testing.T) {
 	logs := testutil.StderrOutputForFunc(func() {
 		h := otelErrorHandler{logging.NewLogger(logging.DEBUG)}
@@ -220,7 +234,7 @@ func Test_addRoute(t *testing.T) {
 }
 
 func TestEnableBasicAuthWithFunc(t *testing.T) {
-	jwksServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	jwksServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
@@ -234,7 +248,7 @@ func TestEnableBasicAuthWithFunc(t *testing.T) {
 		container: c,
 	}
 
-	a.httpServer.router.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	a.httpServer.router.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		fmt.Println(w, "Hello, world!")
 	}))
 
@@ -352,4 +366,53 @@ func Test_initTracer_invalidConfig(t *testing.T) {
 	})
 
 	assert.Contains(t, errLogMessage, "unsupported trace exporter.")
+}
+
+func Test_UseMiddleware(t *testing.T) {
+	testMiddleware := func(inner http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("X-Test-Middleware", "applied")
+			inner.ServeHTTP(w, r)
+		})
+	}
+
+	c := container.NewContainer(config.NewMockConfig(nil))
+
+	app := &App{
+		httpServer: &httpServer{
+			router: gofrHTTP.NewRouter(c),
+			port:   8001,
+		},
+		container: c,
+	}
+
+	app.UseMiddleware(testMiddleware)
+
+	app.GET("/test", func(*Context) (interface{}, error) {
+		return "success", nil
+	})
+
+	go app.Run()
+	time.Sleep(1 * time.Second)
+
+	var netClient = &http.Client{
+		Timeout: time.Second * 10,
+	}
+
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet,
+		"http://localhost:8001"+"/test", http.NoBody)
+
+	resp, err := netClient.Do(req)
+	if err != nil {
+		t.Errorf("error while making http request in Test_UseMiddleware. err : %v", err)
+		return
+	}
+
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode, "Test_UseMiddleware Failed! Expected Status 200 Got : %v", resp.StatusCode)
+
+	// checking if the testMiddleware has added the required header in the response properly.
+	testHeaderValue := resp.Header.Get("X-Test-Middleware")
+	assert.Equal(t, "applied", testHeaderValue, "Test_UseMiddleware Failed! header value mismatch.")
 }

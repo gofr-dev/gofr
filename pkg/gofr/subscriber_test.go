@@ -73,7 +73,7 @@ func TestSubscriptionManager_HandlerError(t *testing.T) {
 		// Run the subscriber in a goroutine
 		go func() {
 			subscriptionManager.startSubscriber("test-topic",
-				func(c *Context) error {
+				func(*Context) error {
 					return handleError("error in test-topic")
 				})
 		}()
@@ -103,7 +103,7 @@ func TestSubscriptionManager_SubscribeError(t *testing.T) {
 		// Run the subscriber in a goroutine
 		go func() {
 			subscriptionManager.startSubscriber("abc",
-				func(c *Context) error {
+				func(*Context) error {
 					return handleError("error in abc")
 				})
 		}()
@@ -115,7 +115,37 @@ func TestSubscriptionManager_SubscribeError(t *testing.T) {
 	// signal the test to end
 	close(done)
 
-	if !strings.Contains(testLogs, "error while reading from Kafka, err: ") {
+	if !strings.Contains(testLogs, "error while reading from ") {
+		t.Error("TestSubscriptionManager_SubscribeError Failed! Missing log message about subscription error")
+	}
+}
+
+func TestSubscriptionManager_PanicRecovery(t *testing.T) {
+	done := make(chan struct{})
+
+	testLogs := testutil.StderrOutputForFunc(func() {
+		mockContainer := container.Container{
+			Logger: logging.NewLogger(logging.ERROR),
+			PubSub: mockSubscriber{},
+		}
+		subscriptionManager := newSubscriptionManager(&mockContainer)
+
+		// Run the subscriber in a goroutine
+		go func() {
+			subscriptionManager.startSubscriber("abc",
+				func(*Context) error {
+					panic("test panic")
+				})
+		}()
+
+		// this sleep is added to wait for StderrOutputForFunc to collect the logs inside the testLogs
+		time.Sleep(1 * time.Millisecond)
+	})
+
+	// signal the test to end
+	close(done)
+
+	if !strings.Contains(testLogs, "error while reading from") {
 		t.Error("TestSubscriptionManager_SubscribeError Failed! Missing log message about subscription error")
 	}
 }

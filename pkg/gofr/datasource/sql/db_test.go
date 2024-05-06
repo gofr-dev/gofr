@@ -327,6 +327,7 @@ func TestDB_QueryError(t *testing.T) {
 		if !assert.Nil(t, rows) {
 			assert.Nil(t, rows.Err())
 		}
+
 		assert.NotNil(t, err)
 		assert.Equal(t, errSyntax, err)
 	})
@@ -992,7 +993,7 @@ func TestPrettyPrint(t *testing.T) {
 
 	assert.Equal(t,
 		"\u001B[38;5;8mQuery                            "+
-			"\u001B[38;5;24mSQL\u001B[0m    12912\u001B[38;5;8mµs\u001B[0m SELECT 2 + 2\n",
+			"\u001B[38;5;24mSQL   \u001B[0m    12912\u001B[38;5;8mµs\u001B[0m SELECT 2 + 2\n",
 		w.String())
 }
 

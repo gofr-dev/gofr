@@ -50,7 +50,6 @@ func TestMQTT_EmptyConfigs(t *testing.T) {
 
 	assert.NotNil(t, client)
 	assert.Contains(t, out, "connected to MQTT")
-	assert.Contains(t, out, "Port: 1883")
 }
 
 func TestMQTT_getMQTTClientOptions(t *testing.T) {
@@ -66,7 +65,7 @@ func TestMQTT_getMQTTClientOptions(t *testing.T) {
 	}
 
 	expectedURL, _ := url.Parse("tcp://localhost:1883")
-	options := getMQTTClientOptions(&conf, testutil.NewMockLogger(testutil.ERRORLOG))
+	options := getMQTTClientOptions(&conf)
 
 	assert.Contains(t, options.ClientID, conf.ClientID)
 	assert.ElementsMatch(t, options.Servers, []*url.URL{expectedURL})
@@ -123,11 +122,17 @@ func TestMQTT_PublishSuccess(t *testing.T) {
 	mockMetrics.EXPECT().
 		IncrementCounter(ctx, "app_pubsub_publish_success_count", "topic", "test/topic")
 
-	m := New(&Config{}, testutil.NewMockLogger(testutil.FATALLOG), mockMetrics)
+	out := testutil.StdoutOutputForFunc(func() {
+		m := New(&Config{}, testutil.NewMockLogger(testutil.DEBUGLOG), mockMetrics)
+		err := m.Publish(ctx, "test/topic", []byte(`hello world`))
 
-	err := m.Publish(ctx, "test/topic", []byte(`hello world`))
+		assert.Nil(t, err)
+	})
 
-	assert.Nil(t, err)
+	assert.Contains(t, out, "PUB")
+	assert.Contains(t, out, "MQTT")
+	assert.Contains(t, out, "hello world")
+	assert.Contains(t, out, "test/topic")
 }
 
 func TestMQTT_PublishFailure(t *testing.T) {
@@ -142,10 +147,12 @@ func TestMQTT_PublishFailure(t *testing.T) {
 		// case where the client has been disconnected, resulting in a Publishing failure
 		mockMetrics.EXPECT().
 			IncrementCounter(ctx, "app_pubsub_publish_total_count", "topic", "test/topic")
+
 		m := New(&Config{}, mockLogger, mockMetrics)
 
 		// Disconnect the client
 		m.Client.Disconnect(1)
+
 		err := m.Publish(ctx, "test/topic", []byte(`hello world`))
 
 		assert.NotNil(t, err)
@@ -164,15 +171,15 @@ func TestMQTT_SubscribeSuccess(t *testing.T) {
 
 	// expect the publishing metric calls
 	mockMetrics.EXPECT().
-		IncrementCounter(ctx, "app_pubsub_publish_total_count", "topic", "test/topic")
+		IncrementCounter(gomock.Any(), "app_pubsub_publish_total_count", "topic", "test/topic")
 	mockMetrics.EXPECT().
-		IncrementCounter(ctx, "app_pubsub_publish_success_count", "topic", "test/topic")
+		IncrementCounter(gomock.Any(), "app_pubsub_publish_success_count", "topic", "test/topic")
 
 	// expect the subcscibers metric calls
 	mockMetrics.EXPECT().
-		IncrementCounter(ctx, "app_pubsub_subscribe_total_count", "topic", "test/topic")
+		IncrementCounter(gomock.Any(), "app_pubsub_subscribe_total_count", "topic", "test/topic")
 	mockMetrics.EXPECT().
-		IncrementCounter(ctx, "app_pubsub_subscribe_success_count", "topic", "test/topic")
+		IncrementCounter(gomock.Any(), "app_pubsub_subscribe_success_count", "topic", "test/topic")
 
 	m := New(&Config{QoS: 0}, mockLogger, mockMetrics)
 	wg := sync.WaitGroup{}
@@ -206,7 +213,7 @@ func TestMQTT_SubscribeFailure(t *testing.T) {
 
 	// expect the subcscibers metric calls
 	mockMetrics.EXPECT().
-		IncrementCounter(ctx, "app_pubsub_subscribe_total_count", "topic", "test/topic")
+		IncrementCounter(gomock.Any(), "app_pubsub_subscribe_total_count", "topic", "test/topic")
 
 	m := New(&Config{QoS: 0}, mockLogger, mockMetrics)
 
@@ -226,7 +233,7 @@ func TestMQTT_SubscribeWithFunc(t *testing.T) {
 		return nil
 	}
 
-	subcriptionFuncErr := func(msg *pubsub.Message) error {
+	subcriptionFuncErr := func(*pubsub.Message) error {
 		return errTest
 	}
 

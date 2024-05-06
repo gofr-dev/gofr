@@ -23,6 +23,7 @@ import (
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/datasource"
+	gofrHTTP "gofr.dev/pkg/gofr/http"
 	"gofr.dev/pkg/gofr/http/middleware"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/metrics"
@@ -240,6 +241,9 @@ func (a *App) SubCommand(pattern string, handler Handler) {
 }
 
 func (a *App) Migrate(migrationsMap map[int64]migration.Migrate) {
+	// TODO : Move panic recovery at central location which will manage for all the different cases.
+	defer panicRecovery(a.container.Logger)
+
 	migration.Run(migrationsMap, a.container)
 }
 
@@ -362,6 +366,11 @@ func (a *App) AddRESTHandlers(object interface{}) error {
 	a.registerCRUDHandlers(e, object)
 
 	return nil
+}
+
+// UseMiddleware is a setter method for adding user defined custom middleware to GoFr's router.
+func (a *App) UseMiddleware(middlewares ...gofrHTTP.Middleware) {
+	a.httpServer.router.UseMiddleware(middlewares...)
 }
 
 func (a *App) UseMongo(db datasource.Mongo) {

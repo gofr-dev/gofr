@@ -29,6 +29,7 @@ func TestBasicAuthProvider_Get(t *testing.T) {
 		assert.Equal(t, http.MethodGet, r.Method)
 
 		w.WriteHeader(http.StatusOK)
+
 		_, err := w.Write(body)
 		if err != nil {
 			return
