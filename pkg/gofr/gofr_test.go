@@ -462,7 +462,7 @@ func TestLoggerMasking(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			// Create a new instance of the App
-			mockConfig := testutil.NewMockConfig(map[string]string{
+			mockConfig := config.NewMockConfig(map[string]string{
 				"LOGGER_MASKING_ENABLED": tc.maskingEnabled,
 				"LOGGER_MASKING_FIELDS":  tc.maskingFields,
 			})

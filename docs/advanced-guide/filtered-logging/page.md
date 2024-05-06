@@ -4,86 +4,69 @@ Filtered logging is a feature that allows you to mask sensitive data in your log
 
 ## Usage
 
-To use filtered logging, you need to create a logger instance with a filter that specifies the fields to mask. Here's an example of how to set up and use filtered logging:
+To use filtered logging, you need to set the masking configuration in your `.env` file. The following configuration options are available:
+
+- `LOGGER_MASKING_ENABLED`: Set to `true` to enable masking of sensitive fields in log messages. Default is `false`.
+- `LOGGER_MASKING_FIELDS`: A comma-separated list of field names that should be masked in log messages.
+
+Here's an example of how you can configure the masking options in your `.env` file:
+
+```
+LOGGER_MASKING_ENABLED=true
+LOGGER_MASKING_FIELDS=password,email,creditCard
+```
+
+In this example, masking is enabled, and the fields "password", "email", and "creditCard" will be masked in the log messages.
+
+Once you have configured the masking options in the `.env` file, the logger will automatically apply the masking based on the configuration. You don't need to call any additional functions or make any changes to your code.
+
+Here's an example of how you can use the logger:
 
 ```go
 package main
 
 import (
-	"gofr.dev/pkg/gofr/logging"
+    "gofr.dev/pkg/gofr"
+    "gofr.dev/pkg/gofr/logging"
 )
 
 func main() {
-	// Create a custom filter with specific masking fields
-	filter := &logging.DefaultFilter{
-		MaskFields: []string{"password", "email", "creditCard"},
-	}
+    app := gofr.New()
 
-	// Create a logger with the custom filter
-	logger := logging.NewLogger(logging.INFO, filter)
-
-	// Log a message with sensitive data
-	logger.Info("User login", map[string]interface{}{
-		"username":   "john.doe",
-		"password":   "secret123",
-		"email":      "john.doe@example.com",
-		"creditCard": "1234-5678-9012-3456",
-	})
-
-	// Output:
-	// {"level":"INFO","time":"2023-06-08T10:30:00Z","message":{"username":"john.doe","password":"**********","email":"*********************","creditCard":"****************"},"gofrVersion":"1.0.0"}
+    // Use the logger
+    logger := logging.NewLogger(logging.INFO)
+    logger.Info("User login", map[string]interface{}{
+        "username": "john.doe",
+        "password": "secret123",
+        "email":    "john.doe@example.com",
+    })
 }
 ```
 
-In this example, we create a custom filter (`DefaultFilter`) and specify the fields we want to mask (`password`, `email`, `creditCard`). Then, we create a logger instance with the custom filter using `logging.NewLogger()`.
+In this example, the `New` function is called to create a new instance of the `App`. The logger is then created using `logging.NewLogger(logging.INFO)`, and the log message is generated using `logger.Info()`.
 
 When logging a message that contains sensitive data, the specified fields will be masked in the output. The masked fields will be replaced with asterisks (`*`) to protect the sensitive information.
 
-## Enabling and Disabling Masking
+## How It Works Internally
 
-By default, masking is enabled when you create a filter. However, you can easily enable or disable masking as needed.
+Internally, the filtered logging feature works as follows:
 
-To disable masking, set the `EnableMasking` flag to `false` on the filter:
+1. The `New` function of the `App` reads the masking configuration from the `.env` file.
+2. If masking is enabled (`LOGGER_MASKING_ENABLED` is set to `true`), the function splits the `LOGGER_MASKING_FIELDS` value into a slice of field names.
+3. The function removes any empty or whitespace-only field names from the slice.
+4. The resulting slice of field names is passed to the `logging.SetMaskingFilters` function to set the masking filters.
+5. When a log message is generated, the logger checks if any of the fields in the message match the masking filters.
+6. If a field matches a masking filter, the value of that field is replaced with asterisks (`*`) to mask the sensitive data.
+7. The masked log message is then outputted to the configured log destination (e.g., console, file).
 
-```go
-filter.EnableMasking = false
-```
+## Points to Keep in Mind
 
-When masking is disabled, the log messages will include the actual values of the fields without any masking.
+When using the filtered logging feature, developers should keep the following points in mind:
 
-To enable masking again, set the `EnableMasking` flag to `true`:
-
-```go
-filter.EnableMasking = true
-```
-
-With masking enabled, the specified fields will be masked in the log output.
-
-## Customizing Masking Fields
-
-You can customize the fields that you want to mask by modifying the `MaskFields` slice on the filter. Add the field names that you want to mask to the slice:
-
-```go
-filter := &logging.DefaultFilter{
-	MaskFields: []string{"password", "email", "creditCard", "ssn"},
-}
-```
-
-In this example, the `password`, `email`, `creditCard`, and `ssn` fields will be masked in the log output.
-
-## Handling Pointers
-
-The filtered logging feature handles pointers correctly. If a field is a pointer, the masking will be applied to the underlying value.
-
-For example, if you have a struct with pointer fields:
-
-```go
-type User struct {
-	Username *string
-	Password *string
-	Email    *string
-}
-```
-
-The filtered logging will mask the values of the `Username`, `Password`, and `Email` fields even though they are pointers.
-
+1. The masking configuration is read from the `.env` file. Make sure to set the appropriate values for `LOGGER_MASKING_ENABLED` and `LOGGER_MASKING_FIELDS` in your `.env` file.
+2. The `LOGGER_MASKING_FIELDS` value should be a comma-separated list of field names. Ensure that the field names are specified correctly and match the field names in your log messages.
+3. If a field name specified in `LOGGER_MASKING_FIELDS` does not exist in a log message, it will be ignored.
+4. The masking process replaces the entire value of a sensitive field with asterisks (`*`). It does not preserve the original length or format of the value.
+5. The filtered logging feature only masks the specified fields in the log messages. It does not provide encryption or secure storage of sensitive data.
+6. Be cautious when specifying the masking fields to avoid masking non-sensitive data unintentionally.
+7. If the `LOGGER_MASKING_ENABLED` configuration is set to an invalid value (other than `true` or `false`), masking will be disabled.
