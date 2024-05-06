@@ -11,9 +11,10 @@ Follow this directory structure within the GoFr project:
 ```dotenv
 my-gofr-app/
 ├── configs/
-│   ├── dev.env
-│   ├── staging.env
-│   └── prod.env
+│   ├── .local.env
+│   ├── .dev.env
+│   ├── .staging.env
+│   └── .prod.env
 ├── main.go
 └── ...
 ```
