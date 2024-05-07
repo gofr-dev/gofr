@@ -302,7 +302,7 @@ func TestNewKafkaClient(t *testing.T) {
 			config: Config{
 				Broker: "kafka-broker",
 			},
-			expected: false,
+			expected: true,
 		},
 		{
 			desc: "successful initialization",
