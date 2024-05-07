@@ -293,16 +293,14 @@ func TestNewKafkaClient(t *testing.T) {
 	defer ctrl.Finish()
 
 	testCases := []struct {
-		desc     string
-		config   Config
-		expected bool
+		desc   string
+		config Config
 	}{
 		{
 			desc: "validation of configs fail",
 			config: Config{
 				Broker: "kafka-broker",
 			},
-			expected: true,
 		},
 		{
 			desc: "successful initialization",
@@ -310,18 +308,13 @@ func TestNewKafkaClient(t *testing.T) {
 				Broker:          "kafka-broker",
 				ConsumerGroupID: "consumer",
 			},
-			expected: true,
 		},
 	}
 
 	for _, tc := range testCases {
 		k := New(tc.config, testutil.NewMockLogger(testutil.ERRORLOG), NewMockMetrics(ctrl))
 
-		if tc.expected {
-			assert.NotNil(t, k)
-		} else {
-			assert.Nil(t, k)
-		}
+		assert.NotNil(t, k)
 	}
 }
 

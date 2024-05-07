@@ -3,8 +3,9 @@ package gofr
 import (
 	"context"
 	"errors"
-	"gofr.dev/pkg/gofr/datasource/pubsub/kafka"
 	"runtime/debug"
+
+	"gofr.dev/pkg/gofr/datasource/pubsub/kafka"
 
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/logging"
