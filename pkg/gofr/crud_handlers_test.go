@@ -52,8 +52,18 @@ func Test_scanEntity(t *testing.T) {
 		resp  *entity
 		err   error
 	}{
-		{"success case", &userEntity{}, &entity{name: "userEntity", entityType: reflect.TypeOf(userEntity{}), primaryKey: "id"}, nil},
-		{"invalid object", &invalidObject, nil, errInvalidObject},
+		{
+			desc:  "success case",
+			input: &userEntity{},
+			resp:  &entity{name: "userEntity", entityType: reflect.TypeOf(userEntity{}), primaryKey: "id"},
+			err:   nil,
+		},
+		{
+			desc:  "invalid object",
+			input: &invalidObject,
+			resp:  nil,
+			err:   errInvalidObject,
+		},
 	}
 
 	for i, tc := range tests {
