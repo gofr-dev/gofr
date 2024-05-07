@@ -29,7 +29,6 @@ Following configuration keys are required for Redis connectivity:
 * `REDIS_PORT`: It specifies the port number on which your Redis server is listening. The default Redis port is 6379.
 
 ```dotenv
-# configs/.local.env
 APP_NAME=test-service
 HTTP_PORT=9000
 
