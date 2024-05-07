@@ -21,14 +21,6 @@ func Test_validateConfigs(t *testing.T) {
 	assert.Nil(t, err)
 }
 
-func Test_validateConfigsErrConsumerGroupNotFound(t *testing.T) {
-	config := Config{Broker: "kafkabroker"}
-
-	err := validateConfigs(config)
-
-	assert.Equal(t, errConsumerGroupNotProvided, err)
-}
-
 func Test_validateConfigsErrBrokerNotProvided(t *testing.T) {
 	config := Config{ConsumerGroupID: "1"}
 
@@ -181,6 +173,20 @@ func TestKafkaClient_SubscribeSuccess(t *testing.T) {
 	assert.Contains(t, logs, "test")
 }
 
+func TestKafkaClient_Subscribe_ErrConsumerGroupID(t *testing.T) {
+	k := &kafkaClient{
+		dialer: &kafka.Dialer{},
+		config: Config{
+			Broker: "kafkabroker",
+			OffSet: -1,
+		},
+	}
+
+	msg, err := k.Subscribe(context.TODO(), "test")
+	assert.NotNil(t, msg)
+	assert.Equal(t, ErrConsumerGroupNotProvided, err)
+}
+
 func TestKafkaClient_SubscribeError(t *testing.T) {
 	var (
 		msg    *pubsub.Message
@@ -287,16 +293,14 @@ func TestNewKafkaClient(t *testing.T) {
 	defer ctrl.Finish()
 
 	testCases := []struct {
-		desc     string
-		config   Config
-		expected bool
+		desc   string
+		config Config
 	}{
 		{
 			desc: "validation of configs fail",
 			config: Config{
 				Broker: "kafka-broker",
 			},
-			expected: false,
 		},
 		{
 			desc: "successful initialization",
@@ -304,18 +308,13 @@ func TestNewKafkaClient(t *testing.T) {
 				Broker:          "kafka-broker",
 				ConsumerGroupID: "consumer",
 			},
-			expected: true,
 		},
 	}
 
 	for _, tc := range testCases {
 		k := New(tc.config, testutil.NewMockLogger(testutil.ERRORLOG), NewMockMetrics(ctrl))
 
-		if tc.expected {
-			assert.NotNil(t, k)
-		} else {
-			assert.Nil(t, k)
-		}
+		assert.NotNil(t, k)
 	}
 }
 

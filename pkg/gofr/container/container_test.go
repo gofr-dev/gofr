@@ -45,13 +45,6 @@ func Test_newContainerPubSubInitializationFail(t *testing.T) {
 		configs map[string]string
 	}{
 		{
-			desc: "Kafka failure",
-			configs: map[string]string{
-				"PUBSUB_BACKEND": "KAFKA",
-				"PUBSUB_BROKER":  "invalid",
-			},
-		},
-		{
 			desc: "Google PubSub fail",
 			configs: map[string]string{
 				"PUBSUB_BACKEND": "GOOGLE",
