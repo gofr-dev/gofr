@@ -5,7 +5,7 @@ on the handler response.
 
 ### To run the example follow the below steps:
 
-- Run the docker image of kafka and zookeeper and ensure that your provided topics are created before subscribing.
+- Run the docker image of kafka and ensure that your provided topics are created before subscribing.
 ```console
 docker run --name kafka-1 -p 9092:9092 \
  -e KAFKA_ENABLE_KRAFT=yes \
