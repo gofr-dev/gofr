@@ -21,14 +21,6 @@ func Test_validateConfigs(t *testing.T) {
 	assert.Nil(t, err)
 }
 
-func Test_validateConfigsErrConsumerGroupNotFound(t *testing.T) {
-	config := Config{Broker: "kafkabroker"}
-
-	err := validateConfigs(config)
-
-	assert.Equal(t, errConsumerGroupNotProvided, err)
-}
-
 func Test_validateConfigsErrBrokerNotProvided(t *testing.T) {
 	config := Config{ConsumerGroupID: "1"}
 
@@ -179,6 +171,20 @@ func TestKafkaClient_SubscribeSuccess(t *testing.T) {
 	assert.Contains(t, logs, "hello")
 	assert.Contains(t, logs, "kafkabroker")
 	assert.Contains(t, logs, "test")
+}
+
+func TestKafkaClient_Subscribe_ErrConsumerGroupID(t *testing.T) {
+	k := &kafkaClient{
+		dialer: &kafka.Dialer{},
+		config: Config{
+			Broker: "kafkabroker",
+			OffSet: -1,
+		},
+	}
+
+	msg, err := k.Subscribe(context.TODO(), "test")
+	assert.Nil(t, msg)
+	assert.Equal(t, errConsumerGroupNotProvided, err)
 }
 
 func TestKafkaClient_SubscribeError(t *testing.T) {
