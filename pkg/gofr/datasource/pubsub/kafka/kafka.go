@@ -16,7 +16,7 @@ import (
 
 var (
 	errBrokerNotProvided        = errors.New("kafka broker address not provided")
-	errConsumerGroupNotProvided = errors.New("consumer group id not provided")
+	ErrConsumerGroupNotProvided = errors.New("consumer group id not provided")
 	errPublisherNotConfigured   = errors.New("can't publish message. Publisher not configured or topic is empty")
 )
 
@@ -137,7 +137,7 @@ func (k *kafkaClient) Publish(ctx context.Context, topic string, message []byte)
 
 func (k *kafkaClient) Subscribe(ctx context.Context, topic string) (*pubsub.Message, error) {
 	if k.config.ConsumerGroupID == "" {
-		return nil, errConsumerGroupNotProvided
+		return &pubsub.Message{}, ErrConsumerGroupNotProvided
 	}
 
 	ctx, span := otel.GetTracerProvider().Tracer("gofr").Start(ctx, "kafka-subscribe")

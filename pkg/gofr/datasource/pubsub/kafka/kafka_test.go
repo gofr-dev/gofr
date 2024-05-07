@@ -184,7 +184,7 @@ func TestKafkaClient_Subscribe_ErrConsumerGroupID(t *testing.T) {
 
 	msg, err := k.Subscribe(context.TODO(), "test")
 	assert.Nil(t, msg)
-	assert.Equal(t, errConsumerGroupNotProvided, err)
+	assert.Equal(t, ErrConsumerGroupNotProvided, err)
 }
 
 func TestKafkaClient_SubscribeError(t *testing.T) {
