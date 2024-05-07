@@ -5,7 +5,7 @@ matching route.
 
 ### To run the example follow the below steps:
 
-- Run the docker image of kafka and zookeeper and ensure that your provided topics are created before publishing
+- Run the docker image of kafka and ensure that your provided topics are created before publishing
 ```console
 docker run --name kafka-1 -p 9092:9092 \
  -e KAFKA_ENABLE_KRAFT=yes \
