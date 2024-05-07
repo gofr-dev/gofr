@@ -5,9 +5,8 @@ import (
 	"errors"
 	"runtime/debug"
 
-	"gofr.dev/pkg/gofr/datasource/pubsub/kafka"
-
 	"gofr.dev/pkg/gofr/container"
+	"gofr.dev/pkg/gofr/datasource/pubsub/kafka"
 	"gofr.dev/pkg/gofr/logging"
 )
 
@@ -33,11 +32,10 @@ func (s *SubscriptionManager) startSubscriber(topic string, handler SubscribeFun
 			continue
 		}
 
-		switch {
-		case errors.Is(err, kafka.ErrConsumerGroupNotProvided):
+		if errors.Is(err, kafka.ErrConsumerGroupNotProvided) {
 			s.container.Logger.Errorf("cannot subscribe as consumer_id is not provided in configs")
 			return
-		case err != nil:
+		} else if err != nil {
 			s.container.Logger.Errorf("error while reading from topic %v, err: %v", topic, err.Error())
 			continue
 		}

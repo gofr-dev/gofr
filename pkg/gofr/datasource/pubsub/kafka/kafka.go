@@ -15,8 +15,8 @@ import (
 )
 
 var (
-	errBrokerNotProvided        = errors.New("kafka broker address not provided")
 	ErrConsumerGroupNotProvided = errors.New("consumer group id not provided")
+	errBrokerNotProvided        = errors.New("kafka broker address not provided")
 	errPublisherNotConfigured   = errors.New("can't publish message. Publisher not configured or topic is empty")
 )
 
