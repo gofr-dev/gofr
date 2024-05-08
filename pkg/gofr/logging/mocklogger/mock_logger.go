@@ -1,3 +1,6 @@
+// Package mocklogger provides mock functionalities for GoFr logger
+// Developer's Note: This is created as a separate package due to cyclic dependency issue. As logging package depends on service package
+// for remote-logger, and service package depends upon logging package (mock_logger) for testing purposes
 package mocklogger
 
 import (
