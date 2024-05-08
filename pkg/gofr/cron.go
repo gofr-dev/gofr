@@ -4,12 +4,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"gofr.dev/pkg/gofr/container"
 	"regexp"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"go.opentelemetry.io/otel"
+
+	"gofr.dev/pkg/gofr/container"
+	"gofr.dev/pkg/gofr/version"
 )
 
 type CronFunc func(ctx *Context)
@@ -21,7 +25,6 @@ type Crontab struct {
 	ticker    *time.Ticker
 	jobs      []*job
 	contianer *container.Container
-	stopCh    chan struct{}
 
 	sync.RWMutex
 }
@@ -33,7 +36,8 @@ type job struct {
 	month     map[int]struct{}
 	dayOfWeek map[int]struct{}
 
-	fn CronFunc
+	name string
+	fn   CronFunc
 }
 
 type tick struct {
@@ -49,6 +53,7 @@ func NewCron(container *container.Container) *Crontab {
 	c := &Crontab{
 		ticker:    time.NewTicker(time.Minute),
 		contianer: container,
+		jobs:      make([]*job, 0),
 	}
 
 	go func() {
@@ -62,10 +67,9 @@ func NewCron(container *container.Container) *Crontab {
 
 // this will compile the regex once instead of compiling it each time when it is being called.
 var (
-	matchSpaces      = regexp.MustCompile(`\s+`)
-	matchN           = regexp.MustCompile(`(.*)/(\d+)`)
-	matchRange       = regexp.MustCompile(`^(\d+)-(\d+)$`)
-	ErrBadCronFormat = errors.New("schedule string must have five components like * * * * *")
+	matchSpaces = regexp.MustCompile(`\s+`)
+	matchN      = regexp.MustCompile(`(.*)/(\d+)`)
+	matchRange  = regexp.MustCompile(`^(\d+)-(\d+)$`)
 )
 
 // parseSchedule string and creates job struct with filled times to launch, or error if synthax is wrong
@@ -73,34 +77,35 @@ func parseSchedule(s string) (*job, error) {
 	var err error
 	j := &job{}
 	s = matchSpaces.ReplaceAllLiteralString(s, " ")
+	s = strings.Trim(s, " ")
 	parts := strings.Split(s, " ")
 	if len(parts) != 5 {
-		return j, errors.New("Schedule string must have five components like * * * * *")
+		return nil, errors.New("schedule string must have five components like * * * * *")
 	}
 
 	j.min, err = parsePart(parts[0], 0, 59)
 	if err != nil {
-		return j, err
+		return nil, err
 	}
 
 	j.hour, err = parsePart(parts[1], 0, 23)
 	if err != nil {
-		return j, err
+		return nil, err
 	}
 
 	j.day, err = parsePart(parts[2], 1, 31)
 	if err != nil {
-		return j, err
+		return nil, err
 	}
 
 	j.month, err = parsePart(parts[3], 1, 12)
 	if err != nil {
-		return j, err
+		return nil, err
 	}
 
 	j.dayOfWeek, err = parsePart(parts[4], 0, 6)
 	if err != nil {
-		return j, err
+		return nil, err
 	}
 
 	//  day/dayOfWeek combination
@@ -130,10 +135,10 @@ func parsePart(s string, min, max int) (map[int]struct{}, error) {
 				localMin, _ = strconv.Atoi(rng[1])
 				localMax, _ = strconv.Atoi(rng[2])
 				if localMin < min || localMax > max {
-					return nil, fmt.Errorf("Out of range for %s in %s. %s must be in range %d-%d", rng[1], s, rng[1], min, max)
+					return nil, fmt.Errorf("out of range for %s in %s. %s must be in range %d-%d", rng[1], s, rng[1], min, max)
 				}
 			} else {
-				return nil, fmt.Errorf("Unable to parse %s part in %s", matches[1], s)
+				return nil, fmt.Errorf("unable to parse %s part in %s", matches[1], s)
 			}
 		}
 		n, _ := strconv.Atoi(matches[2])
@@ -142,30 +147,30 @@ func parsePart(s string, min, max int) (map[int]struct{}, error) {
 
 	// 1,2,4 or 1,2,10-15,20,30-45 pattern
 	parts := strings.Split(s, ",")
-	var r map[int]struct{}
+	var r = make(map[int]struct{})
 	for _, x := range parts {
 		if rng := matchRange.FindStringSubmatch(x); rng != nil {
 			localMin, _ := strconv.Atoi(rng[1])
 			localMax, _ := strconv.Atoi(rng[2])
 
 			if localMin < min || localMax > max {
-				return nil, fmt.Errorf("Out of range for %s in %s. %s must be in range %d-%d", x, s, x, min, max)
+				return nil, fmt.Errorf("out of range for %s in %s. %s must be in range %d-%d", x, s, x, min, max)
 			}
 
 			r = getDefaultJobField(localMin, localMax, 1)
 		} else if i, err := strconv.Atoi(x); err == nil {
 			if i < min || i > max {
-				return nil, fmt.Errorf("Out of range for %d in %s. %d must be in range %d-%d", i, s, i, min, max)
+				return nil, fmt.Errorf("out of range for %d in %s. %d must be in range %d-%d", i, s, i, min, max)
 			}
 
 			r[i] = struct{}{}
 		} else {
-			return nil, fmt.Errorf("Unable to parse %s part in %s", x, s)
+			return nil, fmt.Errorf("unable to parse %s part in %s", x, s)
 		}
 	}
 
 	if len(r) == 0 {
-		return nil, fmt.Errorf("Unable to parse %s", s)
+		return nil, fmt.Errorf("unable to parse %s", s)
 	}
 
 	return r, nil
@@ -192,12 +197,21 @@ func (c *Crontab) runScheduled(t time.Time) {
 
 	for _, j := range jb {
 		if j.tick(getTick(t)) {
-			go j.fn(&Context{
-				Context:   context.Background(),
-				Container: c.contianer,
-			})
+			go j.run(c.contianer)
 		}
 	}
+}
+
+func (j *job) run(container *container.Container) {
+	tr := otel.GetTracerProvider().Tracer("gofr-" + version.Framework)
+	ctx, span := tr.Start(context.Background(), j.name)
+	defer span.End()
+
+	j.fn(&Context{
+		Context:   ctx,
+		Container: container,
+		Request:   noopRequest{},
+	})
 }
 
 func (j *job) tick(t *tick) bool {
@@ -225,18 +239,17 @@ func (j *job) tick(t *tick) bool {
 }
 
 // AddJob to cron tab, returns error if the cron syntax can't be parsed or is out of bounds
-func (c *Crontab) AddJob(schedule string, fn CronFunc) error {
+func (c *Crontab) AddJob(schedule, jobName string, fn CronFunc) error {
 	j, err := parseSchedule(schedule)
 	if err != nil {
 		return err
 	}
 
+	j.name = jobName
 	j.fn = fn
 
 	c.Lock()
-
 	c.jobs = append(c.jobs, j)
-
 	c.Unlock()
 
 	return nil
@@ -250,4 +263,29 @@ func getTick(t time.Time) *tick {
 		month:     int(t.Month()),
 		dayOfWeek: int(t.Weekday()),
 	}
+}
+
+// noopRequest is a non-operating implementation of Request intreface
+// this is required to prevent panics while executing cron jobs
+type noopRequest struct {
+}
+
+func (b noopRequest) Context() context.Context {
+	return context.Background()
+}
+
+func (b noopRequest) Param(string) string {
+	return ""
+}
+
+func (b noopRequest) PathParam(string) string {
+	return ""
+}
+
+func (b noopRequest) HostName() string {
+	return "gofr"
+}
+
+func (b noopRequest) Bind(interface{}) error {
+	return nil
 }

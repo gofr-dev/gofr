@@ -379,12 +379,12 @@ func (a *App) UseMongo(db datasource.Mongo) {
 	a.container.Mongo = db
 }
 
-func (a *App) AddCronJob(schedule string, job CronFunc) {
+func (a *App) AddCronJob(schedule, jobName string, job CronFunc) {
 	if a.cron == nil {
 		a.cron = NewCron(a.container)
 	}
 
-	if err := a.cron.AddJob(schedule, job); err != nil {
+	if err := a.cron.AddJob(schedule, jobName, job); err != nil {
 		a.Logger().Errorf("error adding cron job, err : %v", err)
 	}
 }
