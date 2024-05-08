@@ -1,11 +1,8 @@
 name: Build and Deploy
-'on':
+on:
   push:
-    paths:
-      - 'docs/**'
-  pull_request:
-    paths:
-      - 'docs/**'
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]"
 
 env:
   APP_NAME: gofr-website
