@@ -5,12 +5,11 @@ import (
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/stretchr/testify/assert"
-
 	"go.uber.org/mock/gomock"
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/datasource"
-	"gofr.dev/pkg/gofr/testutil"
+	"gofr.dev/pkg/gofr/logging/mocklogger"
 )
 
 func TestRedis_HealthHandlerError(t *testing.T) {
@@ -30,7 +29,7 @@ func TestRedis_HealthHandlerError(t *testing.T) {
 	client := NewClient(config.NewMockConfig(map[string]string{
 		"REDIS_HOST": s.Host(),
 		"REDIS_PORT": s.Port(),
-	}), testutil.NewMockLogger(testutil.DEBUGLOG), mockMetric)
+	}), mocklogger.NewMockLogger(mocklogger.DEBUGLOG), mockMetric)
 
 	assert.Nil(t, err)
 
@@ -45,7 +44,7 @@ func TestRedis_HealthHandlerError(t *testing.T) {
 func TestRedisHealth_WithoutRedis(t *testing.T) {
 	client := Redis{
 		Client: nil,
-		logger: testutil.NewMockLogger(testutil.ERRORLOG),
+		logger: mocklogger.NewMockLogger(mocklogger.ERRORLOG),
 		config: &Config{
 			HostName: "localhost",
 			Port:     2003,

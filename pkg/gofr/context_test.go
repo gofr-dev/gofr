@@ -11,7 +11,7 @@ import (
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
 	gofrHTTP "gofr.dev/pkg/gofr/http"
-	"gofr.dev/pkg/gofr/testutil"
+	"gofr.dev/pkg/gofr/logging/mocklogger"
 )
 
 func Test_newContextSuccess(t *testing.T) {
@@ -26,7 +26,7 @@ func Test_newContextSuccess(t *testing.T) {
 	req := gofrHTTP.NewRequest(httpRequest)
 
 	ctx := newContext(nil, req, container.NewContainer(config.NewEnvFile("",
-		testutil.NewMockLogger(testutil.DEBUGLOG))))
+		mocklogger.NewMockLogger(mocklogger.DEBUGLOG))))
 
 	body := map[string]string{}
 
