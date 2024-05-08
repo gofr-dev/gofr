@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strconv"
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
@@ -24,6 +25,8 @@ import (
 var (
 	errSQLScan = errors.New("sql: Scan error on column index 0, name \"id\": converting driver.Value type string " +
 		"(\"as\") to a int: invalid syntax")
+
+	errMock = errors.New("mock error")
 )
 
 func createTestContext(method, path, id string, body []byte, cont *container.Container) *Context {
@@ -38,7 +41,7 @@ func createTestContext(method, path, id string, body []byte, cont *container.Con
 func Test_scanEntity(t *testing.T) {
 	var invalidObject int
 
-	type user struct {
+	type userEntity struct {
 		ID   int
 		Name string
 	}
@@ -49,8 +52,18 @@ func Test_scanEntity(t *testing.T) {
 		resp  *entity
 		err   error
 	}{
-		{"success case", &user{}, &entity{name: "user", entityType: reflect.TypeOf(user{}), primaryKey: "id"}, nil},
-		{"invalid object", &invalidObject, nil, errInvalidObject},
+		{
+			desc:  "success case",
+			input: &userEntity{},
+			resp:  &entity{name: "userEntity", entityType: reflect.TypeOf(userEntity{}), primaryKey: "id"},
+			err:   nil,
+		},
+		{
+			desc:  "invalid object",
+			input: &invalidObject,
+			resp:  nil,
+			err:   errInvalidObject,
+		},
 	}
 
 	for i, tc := range tests {
@@ -63,14 +76,15 @@ func Test_scanEntity(t *testing.T) {
 }
 
 func Test_CreateHandler(t *testing.T) {
-	type user struct {
-		ID   int    `json:"id"`
-		Name string `json:"name"`
+	type userEntity struct {
+		ID         int    `json:"id"`
+		Name       string `json:"name"`
+		IsEmployed bool   `json:"isEmployed"`
 	}
 
 	e := entity{
-		name:       "user",
-		entityType: reflect.TypeOf(user{}),
+		name:       "userEntity",
+		entityType: reflect.TypeOf(userEntity{}),
 		primaryKey: "id",
 	}
 
@@ -87,21 +101,21 @@ func Test_CreateHandler(t *testing.T) {
 		{
 			desc:          "success case",
 			dialect:       "mysql",
-			reqBody:       []byte(`{"id":1,"name":"goFr"}`),
+			reqBody:       []byte(`{"id":1,"name":"goFr","isEmployed":true}`),
 			id:            1,
 			mockErr:       nil,
-			expectedQuery: "INSERT INTO user (ID, Name) VALUES (?, ?)",
-			expectedResp:  "user successfully created with id: 1",
+			expectedQuery: "INSERT INTO `user_entity` (`id`, `name`, `is_employed`) VALUES (?, ?, ?)",
+			expectedResp:  "userEntity successfully created with id: 1",
 			expectedErr:   nil,
 		},
 		{
 			desc:          "success case",
 			dialect:       "postgres",
-			reqBody:       []byte(`{"id":1,"name":"goFr"}`),
+			reqBody:       []byte(`{"id":1,"name":"goFr","isEmployed":true}`),
 			id:            1,
 			mockErr:       nil,
-			expectedQuery: "INSERT INTO user (ID, Name) VALUES ($1, $2)",
-			expectedResp:  "user successfully created with id: 1",
+			expectedQuery: `INSERT INTO "user_entity" ("id", "name", "is_employed") VALUES ($1, $2, $3)`,
+			expectedResp:  "userEntity successfully created with id: 1",
 			expectedErr:   nil,
 		},
 		{
@@ -112,7 +126,7 @@ func Test_CreateHandler(t *testing.T) {
 			mockErr:       nil,
 			expectedQuery: "",
 			expectedResp:  nil,
-			expectedErr:   &json.UnmarshalTypeError{Value: "string", Offset: 9, Struct: "user", Field: "id"},
+			expectedErr:   &json.UnmarshalTypeError{Value: "string", Offset: 9, Struct: "userEntity", Field: "id"},
 		},
 	}
 
@@ -132,7 +146,7 @@ func Test_CreateHandler(t *testing.T) {
 			}
 
 			if tc.expectedQuery != "" {
-				mocks.SQL.EXPECT().ExecContext(ctx, tc.expectedQuery, tc.id, "goFr").Times(1)
+				mocks.SQL.EXPECT().ExecContext(ctx, tc.expectedQuery, tc.id, "goFr", true).Times(1)
 			}
 
 			resp, err := e.Create(ctx)
@@ -145,65 +159,15 @@ func Test_CreateHandler(t *testing.T) {
 }
 
 func Test_GetAllHandler(t *testing.T) {
-	c := container.NewContainer(nil)
-
-	db, mock, _ := gofrSql.NewSQLMocks(t)
-	defer db.Close()
-	c.SQL = db
-
-	type user struct {
-		ID   int    `json:"id"`
-		Name string `json:"name"`
+	type userEntity struct {
+		ID         int    `json:"id"`
+		Name       string `json:"name"`
+		IsEmployed bool   `json:"isEmployed"`
 	}
 
 	e := entity{
-		name:       "user",
-		entityType: reflect.TypeOf(user{}),
-		primaryKey: "id",
-	}
-
-	tests := []struct {
-		desc         string
-		mockResp     *sqlmock.Rows
-		mockErr      error
-		expectedResp interface{}
-		expectedErr  error
-	}{
-		{"success case", sqlmock.NewRows([]string{"id", "name"}).AddRow(1, "John Doe").AddRow(2, "Jane Doe"),
-			nil, []interface{}{&user{ID: 1, Name: "John Doe"}, &user{ID: 2, Name: "Jane Doe"}}, nil},
-		{"error retrieving rows", sqlmock.NewRows([]string{"id", "name"}), errTest, nil, errTest},
-		{"error scanning rows", sqlmock.NewRows([]string{"id", "name"}).AddRow("as", ""),
-			nil, nil, errSQLScan},
-	}
-
-	for i, tc := range tests {
-		ctx := createTestContext(http.MethodGet, "/users", "", nil, c)
-
-		mock.ExpectQuery("SELECT * FROM user").WillReturnRows(tc.mockResp).WillReturnError(tc.mockErr)
-
-		resp, err := e.GetAll(ctx)
-
-		assert.Equal(t, tc.expectedResp, resp, "TEST[%d], Failed.\n%s", i, tc.desc)
-
-		if tc.expectedErr != nil {
-			assert.Equal(t, tc.expectedErr.Error(), err.Error(), "TEST[%d], Failed.\n%s", i, tc.desc)
-		} else {
-			assert.Nil(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
-		}
-	}
-}
-
-func Test_GetHandler(t *testing.T) {
-	c := container.NewContainer(nil)
-
-	type user struct {
-		ID   int    `json:"id"`
-		Name string `json:"name"`
-	}
-
-	e := entity{
-		name:       "user",
-		entityType: reflect.TypeOf(user{}),
+		name:       "userEntity",
+		entityType: reflect.TypeOf(userEntity{}),
 		primaryKey: "id",
 	}
 
@@ -213,18 +177,18 @@ func Test_GetHandler(t *testing.T) {
 	}{
 		{
 			dialect:       "mysql",
-			expectedQuery: "SELECT * FROM user WHERE id = ?",
+			expectedQuery: "SELECT * FROM `user_entity`",
 		},
 		{
 			dialect:       "postgres",
-			expectedQuery: "SELECT * FROM user WHERE id = $1",
+			expectedQuery: `SELECT * FROM "user_entity"`,
 		},
 	}
 
 	type testCase struct {
 		desc         string
-		id           string
-		mockRow      *sqlmock.Rows
+		mockResp     *sqlmock.Rows
+		mockErr      error
 		expectedResp interface{}
 		expectedErr  error
 	}
@@ -232,41 +196,50 @@ func Test_GetHandler(t *testing.T) {
 	for _, dc := range dialectCases {
 		tests := []testCase{
 			{
-				desc:         "success case",
-				id:           "1",
-				mockRow:      sqlmock.NewRows([]string{"id", "name"}).AddRow(1, "John Doe"),
-				expectedResp: &user{ID: 1, Name: "John Doe"},
-				expectedErr:  nil,
+				desc:     "success case",
+				mockResp: sqlmock.NewRows([]string{"id", "name", "is_employed"}).AddRow(1, "John Doe", true).AddRow(2, "Jane Doe", false),
+				mockErr:  nil,
+				expectedResp: []interface{}{&userEntity{ID: 1, Name: "John Doe", IsEmployed: true},
+					&userEntity{ID: 2, Name: "Jane Doe", IsEmployed: false}},
+				expectedErr: nil,
 			},
 			{
-				desc:         "no rows found",
-				id:           "2",
-				mockRow:      sqlmock.NewRows(nil),
+				desc:         "error retrieving rows",
+				mockResp:     sqlmock.NewRows([]string{"id", "name", "is_employed"}),
+				mockErr:      errMock,
 				expectedResp: nil,
-				expectedErr:  sql.ErrNoRows,
+				expectedErr:  errMock,
 			},
 			{
 				desc:         "error scanning rows",
-				id:           "3",
-				mockRow:      sqlmock.NewRows([]string{"id", "name"}).AddRow("as", ""),
+				mockResp:     sqlmock.NewRows([]string{"id", "name", "is_employed"}).AddRow("as", "", false),
+				mockErr:      nil,
 				expectedResp: nil,
 				expectedErr:  errSQLScan,
 			},
+			{
+				desc:         "error retrieving rows",
+				mockResp:     sqlmock.NewRows([]string{"id", "name", "is_employed"}),
+				mockErr:      errTest,
+				expectedResp: nil,
+				expectedErr:  errTest,
+			},
 		}
-
-		db, mock, mockMetrics := gofrSql.NewSQLMocksWithConfig(t, &gofrSql.DBConfig{Dialect: dc.dialect})
-		c.SQL = db
-
 		for i, tc := range tests {
 			t.Run(dc.dialect+" "+tc.desc, func(t *testing.T) {
-				ctx := createTestContext(http.MethodGet, "/user", tc.id, nil, c)
+				c := container.NewContainer(nil)
+				db, mock, _ := gofrSql.NewSQLMocksWithConfig(t, &gofrSql.DBConfig{Dialect: dc.dialect})
+				c.SQL = db
 
-				mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats", gomock.Any(), "type", "SELECT")
-				mock.ExpectQuery(dc.expectedQuery).WithArgs(tc.id).WillReturnRows(tc.mockRow)
+				defer db.Close()
 
-				resp, err := e.Get(ctx)
+				ctx := createTestContext(http.MethodGet, "/users", "", nil, c)
 
-				assert.Equal(t, tc.expectedResp, resp, "TEST[%d], Failed.\n%s", i, tc.desc)
+				mock.ExpectQuery(dc.expectedQuery).WillReturnRows(tc.mockResp).WillReturnError(tc.mockErr)
+
+				resp, err := e.GetAll(ctx)
+
+				assert.Equal(t, tc.expectedResp, resp, "Failed.\n%s", tc.desc)
 
 				if tc.expectedErr != nil {
 					assert.Equal(t, tc.expectedErr.Error(), err.Error(), "TEST[%d], Failed.\n%s", i, tc.desc)
@@ -275,24 +248,19 @@ func Test_GetHandler(t *testing.T) {
 				}
 			})
 		}
-
-		t.Cleanup(func() {
-			db.Close()
-		})
 	}
 }
 
-func Test_UpdateHandler(t *testing.T) {
-	c := container.NewContainer(nil)
-
-	type user struct {
-		ID   int    `json:"id"`
-		Name string `json:"name"`
+func Test_GetHandler(t *testing.T) {
+	type userEntity struct {
+		ID         int    `json:"id"`
+		Name       string `json:"name"`
+		IsEmployed bool   `json:"isEmployed"`
 	}
 
 	e := entity{
-		name:       "user",
-		entityType: reflect.TypeOf(user{}),
+		name:       "userEntity",
+		entityType: reflect.TypeOf(userEntity{}),
 		primaryKey: "id",
 	}
 
@@ -302,17 +270,110 @@ func Test_UpdateHandler(t *testing.T) {
 	}{
 		{
 			dialect:       "mysql",
-			expectedQuery: "UPDATE user SET Name=? WHERE id = 1",
+			expectedQuery: "SELECT * FROM `user_entity` WHERE `id`=?",
 		},
 		{
 			dialect:       "postgres",
-			expectedQuery: "UPDATE user SET Name=$1 WHERE id = 1",
+			expectedQuery: `SELECT * FROM "user_entity" WHERE "id"=$1`,
 		},
 	}
 
 	type testCase struct {
 		desc         string
 		id           string
+		mockRow      *sqlmock.Rows
+		mockErr      error
+		expectedResp interface{}
+		expectedErr  error
+	}
+
+	for _, dc := range dialectCases {
+		testCases := []testCase{
+			{
+				desc:         "success case",
+				id:           "1",
+				mockRow:      sqlmock.NewRows([]string{"id", "name", "is_employed"}).AddRow(1, "John Doe", true),
+				mockErr:      nil,
+				expectedResp: &userEntity{ID: 1, Name: "John Doe", IsEmployed: true},
+				expectedErr:  nil,
+			},
+			{
+				desc:         "no rows found",
+				id:           "2",
+				mockRow:      sqlmock.NewRows(nil),
+				mockErr:      nil,
+				expectedResp: nil,
+				expectedErr:  sql.ErrNoRows,
+			},
+			{
+				desc:         "error scanning rows",
+				id:           "3",
+				mockRow:      sqlmock.NewRows([]string{"id", "name", "is_employed"}).AddRow("as", "", false),
+				mockErr:      nil,
+				expectedResp: nil,
+				expectedErr:  errSQLScan,
+			},
+		}
+
+		for _, tc := range testCases {
+			t.Run(dc.dialect+" "+tc.desc, func(t *testing.T) {
+				c := container.NewContainer(nil)
+				db, mock, mockMetrics := gofrSql.NewSQLMocksWithConfig(t, &gofrSql.DBConfig{Dialect: dc.dialect})
+				c.SQL = db
+
+				defer db.Close()
+
+				ctx := createTestContext(http.MethodGet, "/user", tc.id, nil, c)
+
+				mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats", gomock.Any(), "type", "SELECT")
+				mock.ExpectQuery(dc.expectedQuery).WithArgs(tc.id).WillReturnRows(tc.mockRow).WillReturnError(tc.mockErr)
+
+				resp, err := e.Get(ctx)
+
+				assert.Equal(t, tc.expectedResp, resp, "Failed.\n%s", tc.desc)
+
+				if tc.expectedErr != nil {
+					assert.Equal(t, tc.expectedErr.Error(), err.Error(), "Failed.\n%s", tc.desc)
+				} else {
+					assert.Nil(t, err, "Failed.\n%s", tc.desc)
+				}
+			})
+		}
+	}
+}
+
+func Test_UpdateHandler(t *testing.T) {
+	c := container.NewContainer(nil)
+
+	type userEntity struct {
+		ID         int    `json:"id"`
+		Name       string `json:"name"`
+		IsEmployed bool   `json:"isEmployed"`
+	}
+
+	e := entity{
+		name:       "userEntity",
+		entityType: reflect.TypeOf(userEntity{}),
+		primaryKey: "id",
+	}
+
+	dialectCases := []struct {
+		dialect       string
+		expectedQuery string
+	}{
+		{
+			dialect:       "mysql",
+			expectedQuery: "UPDATE `user_entity` SET `name`=?, `is_employed`=? WHERE `id`=?",
+		},
+		{
+			dialect:       "postgres",
+			expectedQuery: `UPDATE "user_entity" SET "name"=$1, "is_employed"=$2 WHERE "id"=$3`,
+		},
+	}
+
+	type testCase struct {
+		desc         string
+		id           int
 		reqBody      []byte
 		mockErr      error
 		expectedResp interface{}
@@ -323,15 +384,15 @@ func Test_UpdateHandler(t *testing.T) {
 		tests := []testCase{
 			{
 				desc:         "success case",
-				id:           "1",
-				reqBody:      []byte(`{"id":1,"name":"goFr"}`),
+				id:           1,
+				reqBody:      []byte(`{"id":1,"name":"goFr","isEmployed":true}`),
 				mockErr:      nil,
-				expectedResp: "user successfully updated with id: 1",
+				expectedResp: "userEntity successfully updated with id: 1",
 				expectedErr:  nil,
 			},
 			{
 				desc:         "bind error",
-				id:           "2",
+				id:           2,
 				reqBody:      []byte(`{"id":"2"}`),
 				mockErr:      nil,
 				expectedResp: nil,
@@ -339,8 +400,8 @@ func Test_UpdateHandler(t *testing.T) {
 			},
 			{
 				desc:         "error From DB",
-				id:           "3",
-				reqBody:      []byte(`{"id":3,"name":"goFr"}`),
+				id:           3,
+				reqBody:      []byte(`{"id":3,"name":"goFr","isEmployed":false}`),
 				mockErr:      sqlmock.ErrCancelled,
 				expectedResp: nil,
 				expectedErr:  sqlmock.ErrCancelled,
@@ -352,12 +413,12 @@ func Test_UpdateHandler(t *testing.T) {
 
 		for i, tc := range tests {
 			t.Run(dc.dialect+" "+tc.desc, func(t *testing.T) {
-				ctx := createTestContext(http.MethodPut, "/user", tc.id, tc.reqBody, c)
+				ctx := createTestContext(http.MethodPut, "/user", strconv.Itoa(tc.id), tc.reqBody, c)
 
 				mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats", gomock.Any(),
 					"type", "UPDATE").MaxTimes(2)
 
-				mock.ExpectExec(dc.expectedQuery).WithArgs("goFr").
+				mock.ExpectExec(dc.expectedQuery).WithArgs("goFr", true, tc.id).
 					WillReturnResult(sqlmock.NewResult(1, 1)).WillReturnError(nil)
 
 				resp, err := e.Update(ctx)
@@ -378,7 +439,7 @@ func Test_DeleteHandler(t *testing.T) {
 	c, mocks := container.NewMockContainer(t)
 
 	e := entity{
-		name:       "user",
+		name:       "userEntity",
 		entityType: nil,
 		primaryKey: "id",
 	}
@@ -389,11 +450,11 @@ func Test_DeleteHandler(t *testing.T) {
 	}{
 		{
 			dialect:       "mysql",
-			expectedQuery: "DELETE FROM user WHERE id = ?",
+			expectedQuery: "DELETE FROM `user_entity` WHERE `id`=?",
 		},
 		{
 			dialect:       "postgres",
-			expectedQuery: "DELETE FROM user WHERE id = $1",
+			expectedQuery: `DELETE FROM "user_entity" WHERE "id"=$1`,
 		},
 	}
 
@@ -414,7 +475,7 @@ func Test_DeleteHandler(t *testing.T) {
 				mockResp:     sqlmock.NewResult(1, 1),
 				mockErr:      nil,
 				expectedErr:  nil,
-				expectedResp: "user successfully deleted with id: 1",
+				expectedResp: "userEntity successfully deleted with id: 1",
 			},
 			{
 				desc:         "SQL error case",
