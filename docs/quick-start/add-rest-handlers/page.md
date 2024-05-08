@@ -72,5 +72,6 @@ This method can be used to implement custom logic for filtering, sorting, or ret
 
 
 > Few Points to consider:
-> 1. Struct Naming Convention: By default, GoFr assumes the struct name matches the database table name for querying data.
-> 2. Primary Key: The first field of the struct is typically used as the primary key for data operations. However, user can customize this behavior using GoFr's features. 
+> 1. Struct Naming Convention: By default, GoFr assumes the struct name in snake-case matches the database table name for querying data. For example, `UserEntity` struct matches `user_entity` database table, `cardConfig` struct matches `card_config` database table, etc. 
+> 2. Field Naming Convention: GoFr assumes the struct fields in snake-case match the database column names. For example, `IsEmployed` field in the struct matches `is_employed` column in the database, `Age` field matches `age` column, etc.
+> 3. Primary Key: The first field of the struct is typically used as the primary key for data operations. However, user can customize this behavior using GoFr's features. 
