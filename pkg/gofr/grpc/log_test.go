@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc"
 
+	"gofr.dev/pkg/gofr/logging/mocklogger"
 	"gofr.dev/pkg/gofr/testutil"
 )
 
@@ -71,7 +72,7 @@ func TestLoggingInterceptor(t *testing.T) {
 
 	for i, tc := range tests {
 		ctx := context.WithValue(context.Background(), key, tc.id)
-		l := testutil.NewMockLogger(testutil.INFOLOG)
+		l := mocklogger.NewMockLogger(mocklogger.INFOLOG)
 
 		resp, err := LoggingInterceptor(l)(ctx, nil, serverInfo, tc.handler)
 

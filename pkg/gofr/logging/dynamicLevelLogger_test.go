@@ -9,6 +9,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"gofr.dev/pkg/gofr/logging/mocklogger"
 	"gofr.dev/pkg/gofr/service"
 	"gofr.dev/pkg/gofr/testutil"
 )
@@ -46,7 +47,7 @@ func TestDynamicLoggerSuccess(t *testing.T) {
 }
 
 func Test_fetchAndUpdateLogLevel_ErrorCases(t *testing.T) {
-	logger := testutil.NewMockLogger(testutil.INFOLOG)
+	logger := mocklogger.NewMockLogger(mocklogger.INFOLOG)
 
 	remoteService := service.NewHTTPService("http://", logger, nil)
 
@@ -72,8 +73,8 @@ func Test_fetchAndUpdateLogLevel_ErrorCases(t *testing.T) {
 		remoteService   service.HTTP
 		currentLogLevel Level
 	}{
-		{"invalid URL for remote service", remoteService, testutil.INFOLOG},
-		{"invalid response from remote service", remoteService2, testutil.DEBUGLOG},
+		{"invalid URL for remote service", remoteService, mocklogger.INFOLOG},
+		{"invalid response from remote service", remoteService2, mocklogger.DEBUGLOG},
 	}
 
 	for i, tc := range tests {
