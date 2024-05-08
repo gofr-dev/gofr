@@ -1,4 +1,4 @@
-package testutil
+package mocklogger
 
 import (
 	"fmt"
@@ -19,14 +19,6 @@ type MockLogger struct {
 	level  int
 	out    io.Writer
 	errOut io.Writer
-}
-type (
-	Level int
-)
-
-//nolint:unused //changeLevel is present to satisfy the mocking of logger inside testutil.
-func (m *MockLogger) changeLevel(level Level) {
-	m.level = int(level)
 }
 
 func NewMockLogger(level int) *MockLogger {

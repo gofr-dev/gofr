@@ -1,13 +1,15 @@
-package testutil
+package mocklogger
 
 import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	"gofr.dev/pkg/gofr/testutil"
 )
 
 func Test_NewMockLogger(t *testing.T) {
-	logs := StdoutOutputForFunc(func() {
+	logs := testutil.StdoutOutputForFunc(func() {
 		logger := NewMockLogger(DEBUGLOG)
 
 		logger.Info("INFO Log")
@@ -43,7 +45,7 @@ func Test_NewMockLogger(t *testing.T) {
 }
 
 func Test_NewMockLoggerErrorLogs(t *testing.T) {
-	logs := StderrOutputForFunc(func() {
+	logs := testutil.StderrOutputForFunc(func() {
 		logger := NewMockLogger(DEBUGLOG)
 
 		logger.Error("ERROR Log")
