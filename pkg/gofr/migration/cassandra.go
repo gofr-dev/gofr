@@ -1,7 +1,6 @@
 package migration
 
 import (
-	"fmt"
 	"time"
 
 	"gofr.dev/pkg/gofr/container"
@@ -31,12 +30,16 @@ func newCassandra(c datasource.Cassandra) datasource.Cassandra {
 	return &cassandra{Cassandra: c}
 }
 
-func (c *cassandra) Query(stmt string, values ...interface{}) datasource.Query {
-	return c.Cassandra.Query(stmt, values...)
+func (c *cassandra) Query(result interface{}, stmt string, values ...interface{}) error {
+	return c.Cassandra.Query(result, stmt, values...)
 }
 
-func (c *cassandra) Iter(stmt string, values ...interface{}) datasource.Iter {
-	return c.Cassandra.Iter(stmt, values...)
+func (c *cassandra) QueryRow(result interface{}, stmt string, values ...interface{}) error {
+	return c.Cassandra.QueryRow(result, stmt, values...)
+}
+
+func (c *cassandra) Exec(stmt string, values ...interface{}) error {
+	return c.Cassandra.Exec(stmt, values...)
 }
 
 type cassandraMigratorObject struct {
@@ -57,7 +60,7 @@ func (c cassandraMigratorObject) apply(m Migrator) Migrator {
 }
 
 func (d cassandraMigrator) checkAndCreateMigrationTable(c *container.Container) error {
-	if err := d.Cassandra.Query(createCassandraGoFrMigrationsTable).Exec(); err != nil {
+	if err := d.Cassandra.Exec(createCassandraGoFrMigrationsTable); err != nil {
 		return err
 	}
 
@@ -67,11 +70,8 @@ func (d cassandraMigrator) checkAndCreateMigrationTable(c *container.Container) 
 func (d cassandraMigrator) getLastMigration(c *container.Container) int64 {
 	var lastMigration int64
 
-	iter := d.Cassandra.Iter(getLastGoFrMigrationCassandra)
-
-	defer iter.Close()
-
-	if !iter.Scan(&lastMigration) {
+	err := d.Cassandra.QueryRow(&lastMigration, getLastGoFrMigrationCassandra)
+	if err != nil {
 		return 0
 	}
 
@@ -90,14 +90,10 @@ func (d cassandraMigrator) beginTransaction(c *container.Container) migrationDat
 }
 
 func (d cassandraMigrator) commitMigration(c *container.Container, data migrationData) error {
-	applied, err := d.Cassandra.Query(insertGoFrMigrationRowCassandra, data.MigrationNumber, "UP", data.StartTime,
-		time.Since(data.StartTime).Milliseconds()).ScanCAS()
+	err := d.Cassandra.Exec(insertGoFrMigrationRowCassandra, data.MigrationNumber, "UP", data.StartTime,
+		time.Since(data.StartTime).Milliseconds())
 	if err != nil {
 		return err
-	}
-
-	if !applied {
-		return migrationExistsErr(data.MigrationNumber)
 	}
 
 	return d.Migrator.commitMigration(c, data)
@@ -105,10 +101,4 @@ func (d cassandraMigrator) commitMigration(c *container.Container, data migratio
 
 func (d cassandraMigrator) rollback(c *container.Container, data migrationData) {
 	d.Migrator.rollback(c, data)
-}
-
-type migrationExistsErr int64
-
-func (m migrationExistsErr) Error() string {
-	return fmt.Sprintf("migration %d already exists", m)
 }
