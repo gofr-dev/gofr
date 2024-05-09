@@ -1,25 +1,23 @@
 package local
 
 import (
-	"fmt"
-	"gofr.dev/pkg/gofr/datasource"
 	"io"
 	"io/fs"
 	"os"
 
-	"gofr.dev/pkg/gofr/datasource/file"
+	"gofr.dev/pkg/gofr/datasource"
 )
 
 type local struct {
 	datasource.Logger
 }
 
-func New() file.File {
-	return local{}
+func New(logger datasource.Logger) local {
+	return local{logger}
 }
 
 func (c local) CreateDir(name string) error {
-	return os.MkdirAll(name, fs.ModeDir)
+	return os.MkdirAll(name, fs.ModePerm)
 }
 
 // Create creates the file named path along with any necessary parents,
@@ -35,12 +33,6 @@ func (c local) Create(name string, data []byte) error {
 	// os.O_EXCL: Fails if the file already exists (exclusive creation).
 	f, err := os.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0666)
 	if err != nil {
-		// Handle existing file error or other errors
-		if os.IsExist(err) {
-			c.Logger.Errorf("file %v already exists: %v", name, err)
-			return err
-		}
-
 		return err
 	}
 
@@ -82,11 +74,6 @@ func (c local) Update(name string, data []byte) error {
 	// Open the file for writing with truncation
 	f, err := os.OpenFile(name, os.O_WRONLY|os.O_TRUNC, 0666)
 	if err != nil {
-		// Handle file existence error or other errors
-		if os.IsNotExist(err) {
-			c.Errorf("file does not exist: %s", name)
-			return err
-		}
 		return err
 	}
 	defer f.Close()
@@ -94,7 +81,7 @@ func (c local) Update(name string, data []byte) error {
 	// Write data to the file
 	_, err = f.Write(data)
 	if err != nil {
-		return fmt.Errorf("error writing data to file: %s", err)
+		return err
 	}
 
 	// Success

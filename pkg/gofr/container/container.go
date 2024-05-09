@@ -133,7 +133,7 @@ func (c *Container) Create(conf config.Config) {
 	}
 
 	if conf.Get("FILE_SYSTEM") != "" {
-		c.File = file.New(conf)
+		c.File = file.New(conf, c.Logger)
 	}
 }
 
