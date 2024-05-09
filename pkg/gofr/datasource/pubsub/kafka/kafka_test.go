@@ -165,6 +165,7 @@ func TestKafkaClient_SubscribeSuccess(t *testing.T) {
 	})
 
 	assert.Nil(t, err)
+	assert.NotNil(t, msg.Context())
 	assert.Equal(t, expMessage.Value, msg.Value)
 	assert.Equal(t, expMessage.Topic, msg.Topic)
 	assert.Contains(t, logs, "KAFKA")
