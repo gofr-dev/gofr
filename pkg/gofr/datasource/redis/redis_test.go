@@ -11,7 +11,7 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"gofr.dev/pkg/gofr/config"
-	"gofr.dev/pkg/gofr/logging/mocklogger"
+	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/testutil"
 )
 
@@ -19,7 +19,7 @@ func Test_NewClient_HostNameMissing(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockLogger := mocklogger.NewMockLogger(mocklogger.ERRORLOG)
+	mockLogger := logging.NewMockLogger(logging.ERROR)
 	mockMetrics := NewMockMetrics(ctrl)
 	mockConfig := config.NewMockConfig(map[string]string{"REDIS_HOST": ""})
 
@@ -31,7 +31,7 @@ func Test_NewClient_InvalidPort(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockLogger := mocklogger.NewMockLogger(mocklogger.ERRORLOG)
+	mockLogger := logging.NewMockLogger(logging.ERROR)
 	mockMetrics := NewMockMetrics(ctrl)
 	mockConfig := config.NewMockConfig(map[string]string{"REDIS_HOST": "localhost",
 		"REDIS_PORT": "&&^%%^&*"})
@@ -57,7 +57,7 @@ func TestRedis_QueryLogging(t *testing.T) {
 	mockMetric.EXPECT().RecordHistogram(gomock.Any(), "app_redis_stats", gomock.Any(), "type", "set")
 
 	result := testutil.StdoutOutputForFunc(func() {
-		mockLogger := mocklogger.NewMockLogger(mocklogger.DEBUGLOG)
+		mockLogger := logging.NewMockLogger(logging.DEBUG)
 		client := NewClient(config.NewMockConfig(map[string]string{
 			"REDIS_HOST": s.Host(),
 			"REDIS_PORT": s.Port(),
@@ -92,7 +92,7 @@ func TestRedis_PipelineQueryLogging(t *testing.T) {
 
 	// Execute Redis pipeline
 	result := testutil.StdoutOutputForFunc(func() {
-		mockLogger := mocklogger.NewMockLogger(mocklogger.DEBUGLOG)
+		mockLogger := logging.NewMockLogger(logging.DEBUG)
 		client := NewClient(config.NewMockConfig(map[string]string{
 			"REDIS_HOST": s.Host(),
 			"REDIS_PORT": s.Port(),

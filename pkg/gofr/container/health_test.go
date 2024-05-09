@@ -11,7 +11,7 @@ import (
 
 	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/datasource/sql"
-	"gofr.dev/pkg/gofr/logging/mocklogger"
+	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/service"
 )
 
@@ -20,7 +20,7 @@ func TestContainer_Health(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	logger := mocklogger.NewMockLogger(mocklogger.ERRORLOG)
+	logger := logging.NewMockLogger(logging.ERROR)
 
 	expected := map[string]interface{}{
 		"redis": datasource.Health{

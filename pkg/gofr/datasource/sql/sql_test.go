@@ -10,7 +10,7 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"gofr.dev/pkg/gofr/config"
-	"gofr.dev/pkg/gofr/logging/mocklogger"
+	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/testutil"
 )
 
@@ -30,7 +30,7 @@ func TestNewSQL_ErrorCase(t *testing.T) {
 	})
 
 	testLogs := testutil.StderrOutputForFunc(func() {
-		mockLogger := mocklogger.NewMockLogger(mocklogger.ERRORLOG)
+		mockLogger := logging.NewMockLogger(logging.ERROR)
 		mockMetrics := NewMockMetrics(ctrl)
 
 		NewSQL(mockConfig, mockLogger, mockMetrics)
@@ -50,7 +50,7 @@ func TestNewSQL_InvalidDialect(t *testing.T) {
 	})
 
 	testLogs := testutil.StderrOutputForFunc(func() {
-		mockLogger := mocklogger.NewMockLogger(mocklogger.ERRORLOG)
+		mockLogger := logging.NewMockLogger(logging.ERROR)
 		mockMetrics := NewMockMetrics(ctrl)
 
 		NewSQL(mockConfig, mockLogger, mockMetrics)
@@ -68,7 +68,7 @@ func TestNewSQL_InvalidConfig(t *testing.T) {
 		"DB_DIALECT": "",
 	})
 
-	mockLogger := mocklogger.NewMockLogger(mocklogger.ERRORLOG)
+	mockLogger := logging.NewMockLogger(logging.ERROR)
 	mockMetrics := NewMockMetrics(ctrl)
 
 	db := NewSQL(mockConfig, mockLogger, mockMetrics)
@@ -181,7 +181,7 @@ func Test_SQLRetryConnectionInfoLog(t *testing.T) {
 			"DB_NAME":     "test",
 		})
 
-		mockLogger := mocklogger.NewMockLogger(mocklogger.DEBUGLOG)
+		mockLogger := logging.NewMockLogger(logging.DEBUG)
 
 		mockMetrics.EXPECT().SetGauge("app_sql_open_connections", float64(0))
 		mockMetrics.EXPECT().SetGauge("app_sql_inUse_connections", float64(0))

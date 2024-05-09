@@ -1,4 +1,4 @@
-package mocklogger
+package logging
 
 import (
 	"testing"
@@ -10,7 +10,7 @@ import (
 
 func Test_NewMockLogger(t *testing.T) {
 	logs := testutil.StdoutOutputForFunc(func() {
-		logger := NewMockLogger(DEBUGLOG)
+		logger := NewMockLogger(DEBUG)
 
 		logger.Info("INFO Log")
 		logger.Infof("Info Log with Format Value: %v", "infof")
@@ -46,7 +46,7 @@ func Test_NewMockLogger(t *testing.T) {
 
 func Test_NewMockLoggerErrorLogs(t *testing.T) {
 	logs := testutil.StderrOutputForFunc(func() {
-		logger := NewMockLogger(DEBUGLOG)
+		logger := NewMockLogger(DEBUG)
 
 		logger.Error("ERROR Log")
 		logger.Errorf("error Log with Format Value: %v", "errorf")

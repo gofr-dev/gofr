@@ -9,12 +9,12 @@ import (
 	"gofr.dev/pkg/gofr/datasource/pubsub/mqtt"
 	gofrRedis "gofr.dev/pkg/gofr/datasource/redis"
 	gofrSql "gofr.dev/pkg/gofr/datasource/sql"
-	"gofr.dev/pkg/gofr/logging/mocklogger"
+	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/service"
 )
 
 func Test_newContainerSuccessWithLogger(t *testing.T) {
-	cfg := config.NewEnvFile("", mocklogger.NewMockLogger(mocklogger.DEBUGLOG))
+	cfg := config.NewEnvFile("", logging.NewMockLogger(logging.DEBUG))
 
 	container := NewContainer(cfg)
 
@@ -26,7 +26,7 @@ func Test_newContainerDBInitializationFail(t *testing.T) {
 	t.Setenv("DB_DIALECT", "mysql")
 	t.Setenv("DB_HOST", "invalid")
 
-	cfg := config.NewEnvFile("", mocklogger.NewMockLogger(mocklogger.DEBUGLOG))
+	cfg := config.NewEnvFile("", logging.NewMockLogger(logging.DEBUG))
 
 	container := NewContainer(cfg)
 
