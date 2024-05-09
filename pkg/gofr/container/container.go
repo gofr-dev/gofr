@@ -13,6 +13,7 @@ import (
 	"gofr.dev/pkg/gofr/datasource/redis"
 	"gofr.dev/pkg/gofr/datasource/sql"
 	"gofr.dev/pkg/gofr/logging"
+	"gofr.dev/pkg/gofr/logging/remotelogger"
 	"gofr.dev/pkg/gofr/metrics"
 	"gofr.dev/pkg/gofr/metrics/exporters"
 	"gofr.dev/pkg/gofr/service"
@@ -63,7 +64,7 @@ func (c *Container) Create(conf config.Config) {
 	}
 
 	if c.Logger == nil {
-		c.Logger = logging.NewRemoteLogger(logging.GetLevelFromString(conf.Get("LOG_LEVEL")), conf.Get("REMOTE_LOG_URL"),
+		c.Logger = remotelogger.NewRemoteLogger(logging.GetLevelFromString(conf.Get("LOG_LEVEL")), conf.Get("REMOTE_LOG_URL"),
 			conf.GetOrDefault("REMOTE_LOG_FETCH_INTERVAL", "15"))
 	}
 

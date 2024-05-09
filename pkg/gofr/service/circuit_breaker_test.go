@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"go.opentelemetry.io/otel"
 
-	"gofr.dev/pkg/gofr/logging/mocklogger"
+	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/testutil"
 )
 
@@ -34,7 +34,7 @@ func setupHTTPServiceTestServerForCircuitBreaker() (*httptest.Server, HTTP) {
 		Client:  &http.Client{Transport: &customTransport{}},
 		url:     server.URL,
 		Tracer:  otel.Tracer("gofr-http-client"),
-		Logger:  mocklogger.NewMockLogger(mocklogger.DEBUGLOG),
+		Logger:  logging.NewMockLogger(logging.DEBUG),
 		Metrics: nil,
 	}
 
@@ -59,7 +59,7 @@ func TestHttpService_GetSuccessRequests(t *testing.T) {
 	mockMetric.On("RecordHistogram", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
 		Return(nil)
 
-	service := NewHTTPService(server.URL, mocklogger.NewMockLogger(mocklogger.DEBUGLOG), mockMetric, &CircuitBreakerConfig{
+	service := NewHTTPService(server.URL, logging.NewMockLogger(logging.DEBUG), mockMetric, &CircuitBreakerConfig{
 		Threshold: 1,
 		Interval:  1,
 	})
@@ -81,7 +81,7 @@ func TestHttpService_GetWithHeaderSuccessRequests(t *testing.T) {
 	mockMetric.On("RecordHistogram", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
 		Return(nil)
 
-	service := NewHTTPService(server.URL, mocklogger.NewMockLogger(mocklogger.DEBUGLOG), mockMetric, &CircuitBreakerConfig{
+	service := NewHTTPService(server.URL, logging.NewMockLogger(logging.DEBUG), mockMetric, &CircuitBreakerConfig{
 		Threshold: 1,
 		Interval:  1,
 	})
@@ -165,7 +165,7 @@ func TestHttpService_PutSuccessRequests(t *testing.T) {
 	mockMetric.On("RecordHistogram", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
 		Return(nil)
 
-	service := NewHTTPService(server.URL, mocklogger.NewMockLogger(mocklogger.DEBUGLOG), mockMetric, &CircuitBreakerConfig{
+	service := NewHTTPService(server.URL, logging.NewMockLogger(logging.DEBUG), mockMetric, &CircuitBreakerConfig{
 		Threshold: 1,
 		Interval:  1,
 	})
@@ -187,7 +187,7 @@ func TestHttpService_PutWithHeaderSuccessRequests(t *testing.T) {
 	mockMetric.On("RecordHistogram", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
 		Return(nil)
 
-	service := NewHTTPService(server.URL, mocklogger.NewMockLogger(mocklogger.DEBUGLOG), mockMetric, &CircuitBreakerConfig{
+	service := NewHTTPService(server.URL, logging.NewMockLogger(logging.DEBUG), mockMetric, &CircuitBreakerConfig{
 		Threshold: 1,
 		Interval:  1,
 	})
@@ -271,7 +271,7 @@ func TestHttpService_PatchSuccessRequests(t *testing.T) {
 	mockMetric.On("RecordHistogram", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
 		Return(nil)
 
-	service := NewHTTPService(server.URL, mocklogger.NewMockLogger(mocklogger.DEBUGLOG), mockMetric, &CircuitBreakerConfig{
+	service := NewHTTPService(server.URL, logging.NewMockLogger(logging.DEBUG), mockMetric, &CircuitBreakerConfig{
 		Threshold: 1,
 		Interval:  1,
 	})
@@ -293,7 +293,7 @@ func TestHttpService_PatchWithHeaderSuccessRequests(t *testing.T) {
 	mockMetric.On("RecordHistogram", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
 		Return(nil)
 
-	service := NewHTTPService(server.URL, mocklogger.NewMockLogger(mocklogger.DEBUGLOG), mockMetric, &CircuitBreakerConfig{
+	service := NewHTTPService(server.URL, logging.NewMockLogger(logging.DEBUG), mockMetric, &CircuitBreakerConfig{
 		Threshold: 1,
 		Interval:  1,
 	})
@@ -377,7 +377,7 @@ func TestHttpService_PostSuccessRequests(t *testing.T) {
 	mockMetric.On("RecordHistogram", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
 		Return(nil)
 
-	service := NewHTTPService(server.URL, mocklogger.NewMockLogger(mocklogger.DEBUGLOG), mockMetric, &CircuitBreakerConfig{
+	service := NewHTTPService(server.URL, logging.NewMockLogger(logging.DEBUG), mockMetric, &CircuitBreakerConfig{
 		Threshold: 1,
 		Interval:  1,
 	})
@@ -399,7 +399,7 @@ func TestHttpService_PostWithHeaderSuccessRequests(t *testing.T) {
 	mockMetric.On("RecordHistogram", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
 		Return(nil)
 
-	service := NewHTTPService(server.URL, mocklogger.NewMockLogger(mocklogger.DEBUGLOG), mockMetric, &CircuitBreakerConfig{
+	service := NewHTTPService(server.URL, logging.NewMockLogger(logging.DEBUG), mockMetric, &CircuitBreakerConfig{
 		Threshold: 1,
 		Interval:  1,
 	})
@@ -483,7 +483,7 @@ func TestHttpService_DeleteSuccessRequests(t *testing.T) {
 	mockMetric.On("RecordHistogram", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
 		Return(nil)
 
-	service := NewHTTPService(server.URL, mocklogger.NewMockLogger(mocklogger.DEBUGLOG), mockMetric, &CircuitBreakerConfig{
+	service := NewHTTPService(server.URL, logging.NewMockLogger(logging.DEBUG), mockMetric, &CircuitBreakerConfig{
 		Threshold: 1,
 		Interval:  1,
 	})
@@ -505,7 +505,7 @@ func TestHttpService_DeleteWithHeaderSuccessRequests(t *testing.T) {
 	mockMetric.On("RecordHistogram", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
 		Return(nil)
 
-	service := NewHTTPService(server.URL, mocklogger.NewMockLogger(mocklogger.DEBUGLOG), mockMetric, &CircuitBreakerConfig{
+	service := NewHTTPService(server.URL, logging.NewMockLogger(logging.DEBUG), mockMetric, &CircuitBreakerConfig{
 		Threshold: 1,
 		Interval:  1,
 	})
