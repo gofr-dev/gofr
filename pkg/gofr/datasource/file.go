@@ -1,4 +1,4 @@
-package file
+package datasource
 
 import "io/fs"
 
@@ -37,6 +37,5 @@ type File interface {
 
 	// Stat returns stat for the file.
 	// name contains the file name along with the path.
-	// os.IsExist() can
 	Stat(name string) (fs.FileInfo, error)
 }

@@ -1,10 +1,12 @@
-package local
+package file
 
 import (
-	"github.com/stretchr/testify/assert"
-	"gofr.dev/pkg/gofr/testutil"
 	"os"
 	"testing"
+
+	"gofr.dev/pkg/gofr/testutil"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func Test_LocalFileSystemDirectoryCreation(t *testing.T) {

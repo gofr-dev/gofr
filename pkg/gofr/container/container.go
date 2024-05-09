@@ -132,9 +132,7 @@ func (c *Container) Create(conf config.Config) {
 		c.PubSub = mqtt.New(configs, c.Logger, c.metricsManager)
 	}
 
-	if conf.Get("FILE_SYSTEM") != "" {
-		c.File = file.New(conf, c.Logger)
-	}
+	c.File = file.New(c.Logger)
 }
 
 // GetHTTPService returns registered http services.
