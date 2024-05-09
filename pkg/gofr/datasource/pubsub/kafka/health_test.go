@@ -8,7 +8,7 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"gofr.dev/pkg/gofr/datasource"
-	"gofr.dev/pkg/gofr/logging/mocklogger"
+	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/testutil"
 )
 
@@ -84,7 +84,7 @@ func TestKafkaClient_getWriterStatsAsMap(t *testing.T) {
 	writer := NewMockWriter(ctrl)
 
 	client := &kafkaClient{
-		logger: mocklogger.NewMockLogger(mocklogger.DEBUGLOG),
+		logger: logging.NewMockLogger(logging.DEBUG),
 		writer: writer,
 	}
 
@@ -101,7 +101,7 @@ func TestKafkaClient_getReaderStatsAsMap(t *testing.T) {
 	reader := NewMockReader(ctrl)
 
 	client := &kafkaClient{
-		logger: mocklogger.NewMockLogger(mocklogger.DEBUGLOG),
+		logger: logging.NewMockLogger(logging.DEBUG),
 		reader: map[string]Reader{"test": reader},
 	}
 

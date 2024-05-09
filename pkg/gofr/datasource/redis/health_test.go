@@ -9,7 +9,7 @@ import (
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/datasource"
-	"gofr.dev/pkg/gofr/logging/mocklogger"
+	"gofr.dev/pkg/gofr/logging"
 )
 
 func TestRedis_HealthHandlerError(t *testing.T) {
@@ -29,7 +29,7 @@ func TestRedis_HealthHandlerError(t *testing.T) {
 	client := NewClient(config.NewMockConfig(map[string]string{
 		"REDIS_HOST": s.Host(),
 		"REDIS_PORT": s.Port(),
-	}), mocklogger.NewMockLogger(mocklogger.DEBUGLOG), mockMetric)
+	}), logging.NewMockLogger(logging.DEBUG), mockMetric)
 
 	assert.Nil(t, err)
 
@@ -44,7 +44,7 @@ func TestRedis_HealthHandlerError(t *testing.T) {
 func TestRedisHealth_WithoutRedis(t *testing.T) {
 	client := Redis{
 		Client: nil,
-		logger: mocklogger.NewMockLogger(mocklogger.ERRORLOG),
+		logger: logging.NewMockLogger(logging.ERROR),
 		config: &Config{
 			HostName: "localhost",
 			Port:     2003,
