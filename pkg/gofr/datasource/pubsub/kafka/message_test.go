@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 
-	"gofr.dev/pkg/gofr/logging/mocklogger"
+	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/testutil"
 )
 
@@ -28,7 +28,7 @@ func TestKafkaMessage_Commit(t *testing.T) {
 	mockReader := NewMockReader(ctrl)
 
 	msg := &kafka.Message{Topic: "test", Value: []byte("hello")}
-	logger := mocklogger.NewMockLogger(mocklogger.ERRORLOG)
+	logger := logging.NewMockLogger(logging.ERROR)
 	k := newKafkaMessage(msg, mockReader, logger)
 
 	mockReader.EXPECT().CommitMessages(gomock.Any(), *msg).Return(nil)
@@ -44,7 +44,7 @@ func TestKafkaMessage_CommitError(t *testing.T) {
 
 	out := testutil.StderrOutputForFunc(func() {
 		msg := &kafka.Message{Topic: "test", Value: []byte("hello")}
-		logger := mocklogger.NewMockLogger(mocklogger.ERRORLOG)
+		logger := logging.NewMockLogger(logging.ERROR)
 		k := newKafkaMessage(msg, mockReader, logger)
 
 		mockReader.EXPECT().CommitMessages(gomock.Any(), *msg).

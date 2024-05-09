@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 
-	"gofr.dev/pkg/gofr/logging/mocklogger"
+	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/testutil"
 )
 
@@ -21,17 +21,17 @@ var (
 	errTx     = testutil.CustomError{ErrorMessage: "error starting transaction"}
 )
 
-func getDB(t *testing.T, logLevel int) (*DB, sqlmock.Sqlmock) {
+func getDB(t *testing.T, logLevel logging.Level) (*DB, sqlmock.Sqlmock) {
 	mockDB, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherEqual), sqlmock.MonitorPingsOption(true))
 	if err != nil {
 		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
 	}
 
-	return &DB{mockDB, mocklogger.NewMockLogger(logLevel), nil, nil}, mock
+	return &DB{mockDB, logging.NewMockLogger(logLevel), nil, nil}, mock
 }
 
 func TestDB_SelectSingleColumnFromIntToString(t *testing.T) {
-	db, mock := getDB(t, mocklogger.INFOLOG)
+	db, mock := getDB(t, logging.INFO)
 	defer db.DB.Close()
 
 	rows := sqlmock.NewRows([]string{"id"}).
@@ -47,7 +47,7 @@ func TestDB_SelectSingleColumnFromIntToString(t *testing.T) {
 }
 
 func TestDB_SelectSingleColumnFromStringToString(t *testing.T) {
-	db, mock := getDB(t, mocklogger.INFOLOG)
+	db, mock := getDB(t, logging.INFO)
 	defer db.DB.Close()
 
 	rows := sqlmock.NewRows([]string{"id"}).
@@ -63,7 +63,7 @@ func TestDB_SelectSingleColumnFromStringToString(t *testing.T) {
 }
 
 func TestDB_SelectSingleColumnFromIntToInt(t *testing.T) {
-	db, mock := getDB(t, mocklogger.INFOLOG)
+	db, mock := getDB(t, logging.INFO)
 	defer db.DB.Close()
 
 	rows := sqlmock.NewRows([]string{"id"}).
@@ -79,7 +79,7 @@ func TestDB_SelectSingleColumnFromIntToInt(t *testing.T) {
 }
 
 func TestDB_SelectSingleColumnFromIntToCustomInt(t *testing.T) {
-	db, mock := getDB(t, mocklogger.INFOLOG)
+	db, mock := getDB(t, logging.INFO)
 	defer db.DB.Close()
 
 	rows := sqlmock.NewRows([]string{"id"}).
@@ -98,7 +98,7 @@ func TestDB_SelectSingleColumnFromIntToCustomInt(t *testing.T) {
 }
 
 func TestDB_SelectSingleColumnFromStringToCustomInt(t *testing.T) {
-	db, mock := getDB(t, mocklogger.INFOLOG)
+	db, mock := getDB(t, logging.INFO)
 	defer db.DB.Close()
 
 	rows := sqlmock.NewRows([]string{"id"}).
@@ -122,7 +122,7 @@ func TestDB_SelectContextError(t *testing.T) {
 
 	defer cancel()
 
-	db, _ := getDB(t, mocklogger.DEBUGLOG)
+	db, _ := getDB(t, logging.DEBUG)
 	defer db.DB.Close()
 
 	// the query won't run, since context is past deadline and the function will simply return
@@ -131,7 +131,7 @@ func TestDB_SelectContextError(t *testing.T) {
 
 func TestDB_SelectDataPointerError(t *testing.T) {
 	out := testutil.StderrOutputForFunc(func() {
-		db, _ := getDB(t, mocklogger.INFOLOG)
+		db, _ := getDB(t, logging.INFO)
 		defer db.DB.Close()
 
 		db.Select(context.Background(), nil, "select 1")
@@ -141,7 +141,7 @@ func TestDB_SelectDataPointerError(t *testing.T) {
 }
 
 func TestDB_SelectSingleColumnFromStringToCustomString(t *testing.T) {
-	db, mock := getDB(t, mocklogger.INFOLOG)
+	db, mock := getDB(t, logging.INFO)
 	defer db.DB.Close()
 
 	rows := sqlmock.NewRows([]string{"id"}).
@@ -160,7 +160,7 @@ func TestDB_SelectSingleColumnFromStringToCustomString(t *testing.T) {
 }
 
 func TestDB_SelectSingleRowMultiColumn(t *testing.T) {
-	db, mock := getDB(t, mocklogger.INFOLOG)
+	db, mock := getDB(t, logging.INFO)
 	defer db.DB.Close()
 
 	rows := sqlmock.NewRows([]string{"id", "name", "image"}).
@@ -186,7 +186,7 @@ func TestDB_SelectSingleRowMultiColumn(t *testing.T) {
 }
 
 func TestDB_SelectSingleRowMultiColumnWithTags(t *testing.T) {
-	db, mock := getDB(t, mocklogger.INFOLOG)
+	db, mock := getDB(t, logging.INFO)
 	defer db.DB.Close()
 
 	rows := sqlmock.NewRows([]string{"id", "name", "image_url"}).
@@ -212,7 +212,7 @@ func TestDB_SelectSingleRowMultiColumnWithTags(t *testing.T) {
 }
 
 func TestDB_SelectMultiRowMultiColumnWithTags(t *testing.T) {
-	db, mock := getDB(t, mocklogger.INFOLOG)
+	db, mock := getDB(t, logging.INFO)
 	defer db.DB.Close()
 
 	rows := sqlmock.NewRows([]string{"id", "name", "image_url"}).
@@ -248,7 +248,7 @@ func TestDB_SelectSingleColumnError(t *testing.T) {
 	ids := make([]string, 0)
 
 	out := testutil.StderrOutputForFunc(func() {
-		db, mock := getDB(t, mocklogger.INFOLOG)
+		db, mock := getDB(t, logging.INFO)
 		defer db.DB.Close()
 
 		mock.ExpectQuery("select id from users").
@@ -266,7 +266,7 @@ func TestDB_SelectDataPointerNotExpected(t *testing.T) {
 	m := make(map[int]int)
 
 	out := testutil.StdoutOutputForFunc(func() {
-		db, _ := getDB(t, mocklogger.DEBUGLOG)
+		db, _ := getDB(t, logging.DEBUG)
 		defer db.DB.Close()
 
 		db.Select(context.Background(), &m, "select id from users")
@@ -282,7 +282,7 @@ func TestDB_Query(t *testing.T) {
 	)
 
 	out := testutil.StdoutOutputForFunc(func() {
-		db, mock := getDB(t, mocklogger.DEBUGLOG)
+		db, mock := getDB(t, logging.DEBUG)
 		defer db.DB.Close()
 
 		ctrl := gomock.NewController(t)
@@ -311,7 +311,7 @@ func TestDB_QueryError(t *testing.T) {
 	)
 
 	out := testutil.StdoutOutputForFunc(func() {
-		db, mock := getDB(t, mocklogger.DEBUGLOG)
+		db, mock := getDB(t, logging.DEBUG)
 		defer db.DB.Close()
 
 		ctrl := gomock.NewController(t)
@@ -342,7 +342,7 @@ func TestDB_QueryRow(t *testing.T) {
 	)
 
 	out := testutil.StdoutOutputForFunc(func() {
-		db, mock := getDB(t, mocklogger.DEBUGLOG)
+		db, mock := getDB(t, logging.DEBUG)
 		defer db.DB.Close()
 
 		ctrl := gomock.NewController(t)
@@ -368,7 +368,7 @@ func TestDB_QueryRowContext(t *testing.T) {
 	)
 
 	out := testutil.StdoutOutputForFunc(func() {
-		db, mock := getDB(t, mocklogger.DEBUGLOG)
+		db, mock := getDB(t, logging.DEBUG)
 		defer db.DB.Close()
 
 		ctrl := gomock.NewController(t)
@@ -394,7 +394,7 @@ func TestDB_Exec(t *testing.T) {
 	)
 
 	out := testutil.StdoutOutputForFunc(func() {
-		db, mock := getDB(t, mocklogger.DEBUGLOG)
+		db, mock := getDB(t, logging.DEBUG)
 		defer db.DB.Close()
 
 		ctrl := gomock.NewController(t)
@@ -422,7 +422,7 @@ func TestDB_ExecError(t *testing.T) {
 	)
 
 	out := testutil.StdoutOutputForFunc(func() {
-		db, mock := getDB(t, mocklogger.DEBUGLOG)
+		db, mock := getDB(t, logging.DEBUG)
 		defer db.DB.Close()
 
 		ctrl := gomock.NewController(t)
@@ -451,7 +451,7 @@ func TestDB_ExecContext(t *testing.T) {
 	)
 
 	out := testutil.StdoutOutputForFunc(func() {
-		db, mock := getDB(t, mocklogger.DEBUGLOG)
+		db, mock := getDB(t, logging.DEBUG)
 		defer db.DB.Close()
 
 		ctrl := gomock.NewController(t)
@@ -479,7 +479,7 @@ func TestDB_ExecContextError(t *testing.T) {
 	)
 
 	out := testutil.StdoutOutputForFunc(func() {
-		db, mock := getDB(t, mocklogger.DEBUGLOG)
+		db, mock := getDB(t, logging.DEBUG)
 		defer db.DB.Close()
 
 		ctrl := gomock.NewController(t)
@@ -507,7 +507,7 @@ func TestDB_Prepare(t *testing.T) {
 	)
 
 	out := testutil.StdoutOutputForFunc(func() {
-		db, mock := getDB(t, mocklogger.DEBUGLOG)
+		db, mock := getDB(t, logging.DEBUG)
 		defer db.DB.Close()
 
 		ctrl := gomock.NewController(t)
@@ -534,7 +534,7 @@ func TestDB_PrepareError(t *testing.T) {
 	)
 
 	out := testutil.StdoutOutputForFunc(func() {
-		db, mock := getDB(t, mocklogger.DEBUGLOG)
+		db, mock := getDB(t, logging.DEBUG)
 		defer db.DB.Close()
 
 		ctrl := gomock.NewController(t)
@@ -555,7 +555,7 @@ func TestDB_PrepareError(t *testing.T) {
 }
 
 func TestDB_Begin(t *testing.T) {
-	db, mock := getDB(t, mocklogger.INFOLOG)
+	db, mock := getDB(t, logging.INFO)
 
 	mock.ExpectBegin()
 
@@ -566,7 +566,7 @@ func TestDB_Begin(t *testing.T) {
 }
 
 func TestDB_BeginError(t *testing.T) {
-	db, mock := getDB(t, mocklogger.INFOLOG)
+	db, mock := getDB(t, logging.INFO)
 
 	mock.ExpectBegin().WillReturnError(errTx)
 
@@ -592,7 +592,7 @@ func TestTx_Query(t *testing.T) {
 	)
 
 	out := testutil.StdoutOutputForFunc(func() {
-		db, mock := getDB(t, mocklogger.DEBUGLOG)
+		db, mock := getDB(t, logging.DEBUG)
 		ctrl := gomock.NewController(t)
 		mockMetrics := NewMockMetrics(ctrl)
 
@@ -623,7 +623,7 @@ func TestTx_QueryError(t *testing.T) {
 	)
 
 	out := testutil.StdoutOutputForFunc(func() {
-		db, mock := getDB(t, mocklogger.DEBUGLOG)
+		db, mock := getDB(t, logging.DEBUG)
 		defer db.DB.Close()
 
 		ctrl := gomock.NewController(t)
@@ -655,7 +655,7 @@ func TestTx_QueryRow(t *testing.T) {
 	)
 
 	out := testutil.StdoutOutputForFunc(func() {
-		db, mock := getDB(t, mocklogger.DEBUGLOG)
+		db, mock := getDB(t, logging.DEBUG)
 		defer db.DB.Close()
 
 		ctrl := gomock.NewController(t)
@@ -683,7 +683,7 @@ func TestTx_QueryRowContext(t *testing.T) {
 	)
 
 	out := testutil.StdoutOutputForFunc(func() {
-		db, mock := getDB(t, mocklogger.DEBUGLOG)
+		db, mock := getDB(t, logging.DEBUG)
 		defer db.DB.Close()
 
 		ctrl := gomock.NewController(t)
@@ -711,7 +711,7 @@ func TestTx_Exec(t *testing.T) {
 	)
 
 	out := testutil.StdoutOutputForFunc(func() {
-		db, mock := getDB(t, mocklogger.DEBUGLOG)
+		db, mock := getDB(t, logging.DEBUG)
 		defer db.DB.Close()
 
 		ctrl := gomock.NewController(t)
@@ -741,7 +741,7 @@ func TestTx_ExecError(t *testing.T) {
 	)
 
 	out := testutil.StdoutOutputForFunc(func() {
-		db, mock := getDB(t, mocklogger.DEBUGLOG)
+		db, mock := getDB(t, logging.DEBUG)
 		defer db.DB.Close()
 
 		ctrl := gomock.NewController(t)
@@ -772,7 +772,7 @@ func TestTx_ExecContext(t *testing.T) {
 	)
 
 	out := testutil.StdoutOutputForFunc(func() {
-		db, mock := getDB(t, mocklogger.DEBUGLOG)
+		db, mock := getDB(t, logging.DEBUG)
 		defer db.DB.Close()
 
 		ctrl := gomock.NewController(t)
@@ -802,7 +802,7 @@ func TestTx_ExecContextError(t *testing.T) {
 	)
 
 	out := testutil.StdoutOutputForFunc(func() {
-		db, mock := getDB(t, mocklogger.DEBUGLOG)
+		db, mock := getDB(t, logging.DEBUG)
 		defer db.DB.Close()
 
 		ctrl := gomock.NewController(t)
@@ -832,7 +832,7 @@ func TestTx_Prepare(t *testing.T) {
 	)
 
 	out := testutil.StdoutOutputForFunc(func() {
-		db, mock := getDB(t, mocklogger.DEBUGLOG)
+		db, mock := getDB(t, logging.DEBUG)
 		defer db.DB.Close()
 
 		ctrl := gomock.NewController(t)
@@ -861,7 +861,7 @@ func TestTx_PrepareError(t *testing.T) {
 	)
 
 	out := testutil.StdoutOutputForFunc(func() {
-		db, mock := getDB(t, mocklogger.DEBUGLOG)
+		db, mock := getDB(t, logging.DEBUG)
 		defer db.DB.Close()
 
 		ctrl := gomock.NewController(t)
@@ -887,7 +887,7 @@ func TestTx_Commit(t *testing.T) {
 	var err error
 
 	out := testutil.StdoutOutputForFunc(func() {
-		db, mock := getDB(t, mocklogger.DEBUGLOG)
+		db, mock := getDB(t, logging.DEBUG)
 		ctrl := gomock.NewController(t)
 		mockMetrics := NewMockMetrics(ctrl)
 
@@ -911,7 +911,7 @@ func TestTx_CommitError(t *testing.T) {
 	var err error
 
 	out := testutil.StdoutOutputForFunc(func() {
-		db, mock := getDB(t, mocklogger.DEBUGLOG)
+		db, mock := getDB(t, logging.DEBUG)
 		ctrl := gomock.NewController(t)
 		mockMetrics := NewMockMetrics(ctrl)
 
@@ -936,7 +936,7 @@ func TestTx_RollBack(t *testing.T) {
 	var err error
 
 	out := testutil.StdoutOutputForFunc(func() {
-		db, mock := getDB(t, mocklogger.DEBUGLOG)
+		db, mock := getDB(t, logging.DEBUG)
 		ctrl := gomock.NewController(t)
 		mockMetrics := NewMockMetrics(ctrl)
 
@@ -960,7 +960,7 @@ func TestTx_RollbackError(t *testing.T) {
 	var err error
 
 	out := testutil.StdoutOutputForFunc(func() {
-		db, mock := getDB(t, mocklogger.DEBUGLOG)
+		db, mock := getDB(t, logging.DEBUG)
 		ctrl := gomock.NewController(t)
 		mockMetrics := NewMockMetrics(ctrl)
 
