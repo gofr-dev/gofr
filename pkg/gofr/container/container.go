@@ -1,6 +1,7 @@
 package container
 
 import (
+	"gofr.dev/pkg/gofr/datasource/file"
 	"strconv"
 	"strings"
 
@@ -36,6 +37,8 @@ type Container struct {
 	Redis Redis
 	SQL   DB
 	Mongo datasource.Mongo
+
+	File File
 }
 
 func NewContainer(conf config.Config) *Container {
@@ -127,6 +130,10 @@ func (c *Container) Create(conf config.Config) {
 		}
 
 		c.PubSub = mqtt.New(configs, c.Logger, c.metricsManager)
+	}
+
+	if conf.Get("FILE_SYSTEM") != "" {
+		c.File = file.New(conf)
 	}
 }
 

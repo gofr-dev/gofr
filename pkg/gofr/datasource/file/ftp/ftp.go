@@ -3,6 +3,7 @@ package ftp
 import (
 	"bytes"
 	"fmt"
+	"gofr.dev/pkg/gofr/config"
 	"io/fs"
 
 	"github.com/jlaffaye/ftp"
@@ -19,15 +20,15 @@ type Config struct {
 	client *ftp.ServerConn
 }
 
-func New(config Config) (file.File, error) {
+func New(config config.Config) file.File {
 	conn, err := ftp.Dial(fmt.Sprintf("%v:%v", config.Host, config.Port))
 	if err != nil {
-		return nil, err
+		return nil
 	}
 
 	config.client = conn
 
-	return config, nil
+	return config
 }
 
 func (c Config) CreateDir(path string) error {

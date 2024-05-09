@@ -75,11 +75,7 @@ func (c local) Read(path string) ([]byte, error) {
 		return nil, err
 	}
 
-	return data, nil // Return data and nil error on success
-}
-
-func (c local) Rename(src string, dest string) error {
-	return os.Rename(src, dest)
+	return data, nil
 }
 
 func (c local) Update(name string, data []byte) error {
@@ -106,13 +102,13 @@ func (c local) Update(name string, data []byte) error {
 }
 
 func (c local) Delete(path string) error {
-	return nil
+	return os.RemoveAll(path)
 }
 
 func (c local) Move(src string, dest string) error {
-	return nil
+	return os.Rename(src, dest)
 }
 
 func (c local) Stat(name string) (fs.FileInfo, error) {
-	return nil, nil
+	return os.Stat(name)
 }
