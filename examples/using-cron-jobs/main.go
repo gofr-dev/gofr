@@ -5,8 +5,6 @@ import (
 	"time"
 
 	"gofr.dev/pkg/gofr"
-
-	"gofr.dev/examples/using-cron-jobs/migrations"
 )
 
 var (
@@ -16,17 +14,8 @@ var (
 
 const minute = 3
 
-type user struct {
-	id   int
-	name string
-	age  int
-}
-
 func main() {
 	app := gofr.New()
-
-	// Add migrations to run
-	app.Migrate(migrations.All())
 
 	// runs every minute
 	app.AddCronJob("* * * * *", "counter", count)
