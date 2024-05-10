@@ -2,12 +2,13 @@ package gofr
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"github.com/stretchr/testify/assert"
-	"gofr.dev/pkg/gofr/testutil"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+
+	"gofr.dev/pkg/gofr/testutil"
 )
 
 func TestCron_parseSchedule_Success(t *testing.T) {
@@ -82,7 +83,7 @@ func TestCron_parseSchedule_Success(t *testing.T) {
 			expJob: &job{
 				min:       getDefaultJobField(0, 59, 20),
 				hour:      getDefaultJobField(3, 5, 2),
-				day:       map[int]struct{}{22: struct{}{}},
+				day:       map[int]struct{}{22: {}},
 				month:     getDefaultJobField(1, 12, 5),
 				dayOfWeek: map[int]struct{}{},
 			},
@@ -195,7 +196,7 @@ func TestCronTab_AddJob(t *testing.T) {
 		},
 		{
 			schedule: "* * * *",
-			expErr:   errors.New("schedule string must have five components like * * * * *"),
+			expErr:   errBadScheduleFormat,
 		},
 	}
 
