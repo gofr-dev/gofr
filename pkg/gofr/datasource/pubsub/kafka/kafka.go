@@ -168,12 +168,10 @@ func (k *kafkaClient) Subscribe(ctx context.Context, topic string) (*pubsub.Mess
 		return nil, err
 	}
 
-	m := &pubsub.Message{
-		Value: msg.Value,
-		Topic: topic,
-
-		Committer: newKafkaMessage(&msg, k.reader[topic], k.logger),
-	}
+	m := pubsub.NewMessage(ctx)
+	m.Value = msg.Value
+	m.Topic = topic
+	m.Committer = newKafkaMessage(&msg, k.reader[topic], k.logger)
 
 	end := time.Since(start)
 

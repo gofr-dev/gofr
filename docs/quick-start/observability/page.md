@@ -167,7 +167,7 @@ To see the traces install zipkin image using the following docker command
 
 Add Tracer configs in `.env` file, your .env will be updated to
 
-```bash
+```dotenv
 APP_NAME=test-service
 HTTP_PORT=9000
 
