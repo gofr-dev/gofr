@@ -185,7 +185,7 @@ func TestCron_getTick(t *testing.T) {
 }
 
 func TestCronTab_AddJob(t *testing.T) {
-	fn := func(c *Context) {}
+	fn := func(*Context) {}
 
 	testCases := []struct {
 		schedule string
@@ -216,7 +216,7 @@ func TestCronTab_runScheduled(t *testing.T) {
 		day:       map[int]struct{}{1: {}},
 		month:     map[int]struct{}{1: {}},
 		dayOfWeek: map[int]struct{}{1: {}},
-		fn:        func(ctx *Context) { fmt.Println("hello from cron") },
+		fn:        func(*Context) { fmt.Println("hello from cron") },
 	}
 
 	// can make container nil as we are not testing the internal working of
