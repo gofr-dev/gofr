@@ -28,7 +28,7 @@ func TestDynamicLoggerSuccess(t *testing.T) {
 
 	log := testutil.StdoutOutputForFunc(func() {
 		// Create a new remote logger with the mock server URL
-		remoteLogger := NewRemoteLogger(logging.INFO, mockServer.URL, "1")
+		remoteLogger := New(logging.INFO, mockServer.URL, "1")
 
 		// Wait for the remote logger to update the log level
 		time.Sleep(2 * time.Second)
