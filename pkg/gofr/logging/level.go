@@ -1,3 +1,4 @@
+// Package logging provides logging functionalities for GoFr applications.
 package logging
 
 import (

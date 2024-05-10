@@ -6,11 +6,11 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"gofr.dev/pkg/gofr/datasource"
-	"gofr.dev/pkg/gofr/testutil"
+	"gofr.dev/pkg/gofr/logging"
 )
 
 func TestHealth_HealthCheck(t *testing.T) {
-	db, mock := getDB(t, testutil.INFOLOG)
+	db, mock := getDB(t, logging.INFO)
 	defer db.DB.Close()
 
 	mock.ExpectPing()
@@ -66,7 +66,7 @@ func TestHealth_HealthCheckDBNotConnected(t *testing.T) {
 }
 
 func TestHealth_HealthCheckDBPingFailed(t *testing.T) {
-	db, mock := getDB(t, testutil.INFOLOG)
+	db, mock := getDB(t, logging.INFO)
 	defer db.DB.Close()
 
 	mock.ExpectPing().WillReturnError(errDB)
