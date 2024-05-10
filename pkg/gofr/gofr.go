@@ -42,6 +42,8 @@ type App struct {
 
 	cmd *cmd
 
+	cron *Crontab
+
 	// container is unexported because this is an internal implementation and applications are provided access to it via Context
 	container *container.Container
 
@@ -375,4 +377,16 @@ func (a *App) UseMiddleware(middlewares ...gofrHTTP.Middleware) {
 
 func (a *App) UseMongo(db datasource.Mongo) {
 	a.container.Mongo = db
+}
+
+// AddCronJob registers a cron job to the cron table, the schedule is in * * * * * (6 part) format
+// denoting minutes, hours, days, months and day of week respectively.
+func (a *App) AddCronJob(schedule, jobName string, job CronFunc) {
+	if a.cron == nil {
+		a.cron = NewCron(a.container)
+	}
+
+	if err := a.cron.AddJob(schedule, jobName, job); err != nil {
+		a.Logger().Errorf("error adding cron job, err : %v", err)
+	}
 }
