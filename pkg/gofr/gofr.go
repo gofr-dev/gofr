@@ -379,6 +379,8 @@ func (a *App) UseMongo(db datasource.Mongo) {
 	a.container.Mongo = db
 }
 
+// AddCronJob registers a cron job to the cron table, the schedule is in * * * * * (6 part) format
+// denoting minutes, hours, days, months and day of week respectively.
 func (a *App) AddCronJob(schedule, jobName string, job CronFunc) {
 	if a.cron == nil {
 		a.cron = NewCron(a.container)
