@@ -26,5 +26,5 @@ Here are the steps:
 - Place the `openapi.json` file inside the static directory in your project.
 - Start your GoFr server.
 - Navigate to `/.well-known/swagger` on your server’s URL.
-- 
+
 You should now see a beautifully rendered, interactive documentation for your API that users can use to understand and interact with your API.
