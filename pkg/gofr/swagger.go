@@ -2,7 +2,6 @@ package gofr
 
 import (
 	"embed"
-	"html/template"
 	"mime"
 	"os"
 	"path/filepath"
@@ -14,24 +13,26 @@ import (
 //go:embed swagger/*
 var fs embed.FS
 
+const (
+	OpenAPIJSON = "openapi.json"
+)
+
+// OpenAPIHandler serves the `openapi.json` file at the specified path.
+// It reads the file from the disk and returns its content as a response.
 func OpenAPIHandler(c *Context) (interface{}, error) {
 	rootDir, _ := os.Getwd()
-	fileDir := rootDir + "/" + "api"
+	filePath := filepath.Join(rootDir, "api", OpenAPIJSON)
 
-	_, err := template.New("openapi.json").ParseFiles(fileDir + "/" + "openapi.json")
+	b, err := os.ReadFile(filepath.Clean(filePath))
 	if err != nil {
-		return nil, err
-	}
-
-	path := fileDir + "/" + "openapi.json"
-	b, err := os.ReadFile(filepath.Clean(path))
-	if err != nil {
+		c.Errorf("Failed to read OpenAPI JSON file at path %s: %v", filePath, err)
 		return nil, err
 	}
 
 	return response.File{Content: b, ContentType: "application/json"}, nil
 }
 
+// SwaggerUIHandler serves the static files of the Swagger UI.
 func SwaggerUIHandler(c *Context) (interface{}, error) {
 	fileName := c.PathParam("name")
 	if fileName == "" {
@@ -41,14 +42,11 @@ func SwaggerUIHandler(c *Context) (interface{}, error) {
 
 	data, err := fs.ReadFile("swagger/" + fileName)
 	if err != nil {
-		c.Errorf("error while reading the index.html file. err : %v", err)
+		c.Errorf("Failed to read Swagger UI file %s from embedded file system: %v", fileName, err)
 		return nil, err
 	}
 
 	split := strings.Split(fileName, ".")
-	if len(split) < 2 {
-		return response.File{Content: data}, nil
-	}
 
 	ct := mime.TypeByExtension("." + split[1])
 
