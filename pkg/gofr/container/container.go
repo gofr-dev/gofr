@@ -64,7 +64,7 @@ func (c *Container) Create(conf config.Config) {
 	}
 
 	if c.Logger == nil {
-		c.Logger = remotelogger.NewRemoteLogger(logging.GetLevelFromString(conf.Get("LOG_LEVEL")), conf.Get("REMOTE_LOG_URL"),
+		c.Logger = remotelogger.New(logging.GetLevelFromString(conf.Get("LOG_LEVEL")), conf.Get("REMOTE_LOG_URL"),
 			conf.GetOrDefault("REMOTE_LOG_FETCH_INTERVAL", "15"))
 	}
 

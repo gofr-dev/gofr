@@ -16,11 +16,11 @@ const (
 )
 
 /*
-NewRemoteLogger creates a new RemoteLogger instance with the provided level, remote configuration URL, and level fetch interval.
+New creates a new RemoteLogger instance with the provided level, remote configuration URL, and level fetch interval.
 The remote configuration URL is expected to be a JSON endpoint that returns the desired log level for the service.
 The level fetch interval determines how often the logger checks for updates to the remote configuration.
 */
-func NewRemoteLogger(level logging.Level, remoteConfigURL, loggerFetchInterval string) logging.Logger {
+func New(level logging.Level, remoteConfigURL, loggerFetchInterval string) logging.Logger {
 	interval, err := strconv.Atoi(loggerFetchInterval)
 	if err != nil {
 		interval = 15
