@@ -462,3 +462,39 @@ func Test_SwaggerEndpoints(t *testing.T) {
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	assert.Equal(t, "text/html; charset=utf-8", resp.Header.Get("Content-Type"))
 }
+
+func Test_AddCronJob_Fail(t *testing.T) {
+	a := App{container: &container.Container{}}
+	stderr := testutil.StderrOutputForFunc(func() {
+		a.container.Logger = logging.NewLogger(logging.ERROR)
+
+		a.AddCronJob("* * * *", "test-job", func(ctx *Context) {
+			ctx.Logger.Info("test-job-fail")
+		})
+	})
+
+	assert.Contains(t, stderr, "error adding cron job")
+	assert.NotContains(t, stderr, "test-job-fail")
+}
+
+func Test_AddCronJob_Success(t *testing.T) {
+	pass := false
+	a := App{
+		container: &container.Container{},
+	}
+
+	a.AddCronJob("* * * * *", "test-job", func(ctx *Context) {
+		ctx.Logger.Info("test-job-success")
+	})
+
+	assert.Equal(t, len(a.cron.jobs), 1)
+
+	for _, j := range a.cron.jobs {
+		if j.name == "test-job" {
+			pass = true
+			break
+		}
+	}
+
+	assert.Truef(t, pass, "unable to add cron job to cron table")
+}
