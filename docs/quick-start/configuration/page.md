@@ -11,9 +11,10 @@ Follow this directory structure within the GoFr project:
 ```dotenv
 my-gofr-app/
 ├── configs/
-│   ├── dev.env
-│   ├── staging.env
-│   └── prod.env
+│   ├── .local.env
+│   ├── .dev.env
+│   ├── .staging.env
+│   └── .prod.env
 ├── main.go
 └── ...
 ```
@@ -21,7 +22,7 @@ my-gofr-app/
 By default, GoFr starts HTTP server at port 8000, in order to change that we can add the config `HTTP_PORT`
 Similarly to Set the app-name user can add `APP_NAME`. For example:
 
-```bash
+```dotenv
 # configs/.env
 
 APP_NAME=test-service
@@ -29,18 +30,18 @@ HTTP_PORT=9000
 ```
 
 ## Configuring Environments in GoFr
-GoFr uses an environment variable, `APP_ENV`, to determine the application’s current environment. This variable also guides GoFr to load the corresponding environment file.
+GoFr uses an environment variable, `APP_ENV`, to determine the application's current environment. This variable also guides GoFr to load the corresponding environment file.
 
 ### Example:
-If `APP_ENV` is set to ‘dev’, GoFr will attempt to load the ‘.dev.env’ file from the configs directory. If this file is not found, GoFr will default to loading the ‘.env’ file.
+If `APP_ENV` is set to `dev`, GoFr will attempt to load the `.dev.env` file from the configs directory. If this file is not found, GoFr will default to loading the `.env` file.
 
-In the absence of the `APP_ENV` variable, GoFr will first attempt to load the ‘.local.env’ file. If this file is not found, it will default to loading the ‘.env’ file.
+In the absence of the `APP_ENV` variable, GoFr will first attempt to load the `.local.env` file. If this file is not found, it will default to loading the `.env` file.
 
-_For example, to run the application in the ‘dev’ environment, use the following command:_
+_For example, to run the application in the `dev` environment, use the following command:_
 
-```dotenv
+```bash
 APP_ENV=dev go run main.go
 ```
 
 
-This approach ensures that the correct configurations are used for each environment, providing flexibility and control over the application’s behavior in different contexts.
+This approach ensures that the correct configurations are used for each environment, providing flexibility and control over the application's behavior in different contexts.
