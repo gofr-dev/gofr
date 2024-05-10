@@ -1,10 +1,12 @@
 package main
 
 import (
-	"gofr.dev/examples/using-cron-jobs/migrations"
-	"gofr.dev/pkg/gofr"
 	"sync"
 	"time"
+
+	"gofr.dev/pkg/gofr"
+
+	"gofr.dev/examples/using-cron-jobs/migrations"
 )
 
 var (
