@@ -10,6 +10,7 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"gofr.dev/pkg/gofr/datasource/pubsub"
+	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/testutil"
 )
 
@@ -75,7 +76,7 @@ func TestKafkaClient_PublishError(t *testing.T) {
 
 	for _, tc := range testCases {
 		testFunc := func() {
-			logger := testutil.NewMockLogger(testutil.DEBUGLOG)
+			logger := logging.NewMockLogger(logging.DEBUG)
 			k.logger = logger
 
 			mockMetrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_publish_total_count", "topic", tc.topic)
@@ -101,7 +102,7 @@ func TestKafkaClient_Publish(t *testing.T) {
 
 	logs := testutil.StdoutOutputForFunc(func() {
 		ctx := context.TODO()
-		logger := testutil.NewMockLogger(testutil.DEBUGLOG)
+		logger := logging.NewMockLogger(logging.DEBUG)
 		k := &kafkaClient{writer: mockWriter, logger: logger, metrics: mockMetrics}
 
 		mockWriter.EXPECT().WriteMessages(gomock.Any(), gomock.Any()).
@@ -158,7 +159,7 @@ func TestKafkaClient_SubscribeSuccess(t *testing.T) {
 	mockMetrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_subscribe_success_count", "topic", "test")
 
 	logs := testutil.StdoutOutputForFunc(func() {
-		logger := testutil.NewMockLogger(testutil.DEBUGLOG)
+		logger := logging.NewMockLogger(logging.DEBUG)
 		k.logger = logger
 
 		msg, err = k.Subscribe(ctx, "test")
@@ -222,7 +223,7 @@ func TestKafkaClient_SubscribeError(t *testing.T) {
 	mockMetrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_subscribe_total_count", "topic", "test")
 
 	logs := testutil.StderrOutputForFunc(func() {
-		logger := testutil.NewMockLogger(testutil.DEBUGLOG)
+		logger := logging.NewMockLogger(logging.DEBUG)
 		k.logger = logger
 
 		msg, err = k.Subscribe(ctx, "test")
@@ -263,7 +264,7 @@ func TestKafkaClient_CloseError(t *testing.T) {
 	mockWriter.EXPECT().Close().Return(errClose)
 
 	logs := testutil.StderrOutputForFunc(func() {
-		logger := testutil.NewMockLogger(testutil.ERRORLOG)
+		logger := logging.NewMockLogger(logging.ERROR)
 		k.logger = logger
 
 		err = k.Close()
@@ -313,7 +314,7 @@ func TestNewKafkaClient(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		k := New(tc.config, testutil.NewMockLogger(testutil.ERRORLOG), NewMockMetrics(ctrl))
+		k := New(tc.config, logging.NewMockLogger(logging.ERROR), NewMockMetrics(ctrl))
 
 		assert.NotNil(t, k)
 	}
