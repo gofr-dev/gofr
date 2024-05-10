@@ -35,7 +35,7 @@ func TestOpenAPIHandler(t *testing.T) {
 	// Defer removal of the api directory
 	defer func() {
 		if err := os.RemoveAll("api"); err != nil {
-			t.Fatalf("Failed to remove api directory: %v", err)
+			t.Errorf("Failed to remove api directory: %v", err)
 		}
 	}()
 
@@ -50,7 +50,7 @@ func TestOpenAPIHandler(t *testing.T) {
 
 	fileResponse, ok := result.(response.File)
 	if !ok {
-		t.Fatal("Expected a FileResponse")
+		t.Errorf("Expected a FileResponse")
 	}
 
 	if fileResponse.ContentType != "application/json" {
@@ -99,7 +99,7 @@ func TestSwaggerHandler(t *testing.T) {
 
 		fileResponse, ok := resp.(response.File)
 		if !ok {
-			t.Fatal("Expected a FileResponse")
+			t.Errorf("Expected a FileResponse")
 		}
 
 		if strings.Split(fileResponse.ContentType, ";")[0] != tc.contentType {
