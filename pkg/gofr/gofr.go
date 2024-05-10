@@ -137,6 +137,13 @@ func (a *App) Run() {
 		a.add(http.MethodGet, "/.well-known/health", healthHandler)
 		a.add(http.MethodGet, "/.well-known/alive", liveHandler)
 		a.add(http.MethodGet, "/favicon.ico", faviconHandler)
+
+		if _, err := os.Stat("./static/openapi.json"); err == nil {
+			a.add(http.MethodGet, "/.well-known/openapi.json", OpenAPIHandler)
+			a.add(http.MethodGet, "/.well-known/swagger", SwaggerUIHandler)
+			a.add(http.MethodGet, "/.well-known/{name}", SwaggerUIHandler)
+		}
+
 		a.httpServer.router.PathPrefix("/").Handler(handler{
 			function:  catchAllHandler,
 			container: a.container,
