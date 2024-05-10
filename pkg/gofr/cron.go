@@ -81,7 +81,8 @@ var (
 	matchRange  = regexp.MustCompile(`^(\d+)-(\d+)$`)
 )
 
-// parseSchedule string and creates job struct with filled times to launch, or error if synthax is wrong.
+// parseSchedule parses schedule string and create job struct with filled times to launch,
+// or error if syntax is wrong.
 func parseSchedule(s string) (*job, error) {
 	var err error
 

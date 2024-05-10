@@ -3,6 +3,8 @@ package main
 import (
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func Test_UserPurgeCron(t *testing.T) {
@@ -17,7 +19,5 @@ func Test_UserPurgeCron(t *testing.T) {
 	m = n
 	mu.Unlock()
 
-	if m != expected {
-		t.Errorf("FAILED, Expected: %v, Got: %v", expected, m)
-	}
+	assert.Equal(t, expected, m)
 }

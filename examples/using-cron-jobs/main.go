@@ -12,7 +12,7 @@ var (
 	mu sync.RWMutex
 )
 
-const minute = 3
+const duration = 3
 
 func main() {
 	app := gofr.New()
@@ -21,7 +21,7 @@ func main() {
 	app.AddCronJob("* * * * *", "counter", count)
 
 	// setting the maximum duration of this application
-	time.Sleep(minute * time.Minute)
+	time.Sleep(duration * time.Minute)
 
 	// not running the app to close after we have completed the crons runnning
 	// since this is an example the cron will not be running forever
