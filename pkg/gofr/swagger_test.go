@@ -19,23 +19,18 @@ import (
 )
 
 func TestOpenAPIHandler(t *testing.T) {
-	// Create the api directory within the temporary directory
-	if err := os.Mkdir("api", 0755); err != nil {
-		t.Fatalf("Failed to create api directory: %v", err)
-	}
-
-	// Create the openapi.json file within the api directory
-	openAPIFilePath := filepath.Join("api", OpenAPIJSON)
+	// Create the openapi.json file within the static directory
+	openAPIFilePath := filepath.Join("static", OpenAPIJSON)
 
 	openAPIContent := []byte(`{"swagger": "2.0", "info": {"version": "1.0.0", "title": "Sample API"}}`)
 	if err := os.WriteFile(openAPIFilePath, openAPIContent, 0600); err != nil {
 		t.Fatalf("Failed to create openapi.json file: %v", err)
 	}
 
-	// Defer removal of the api directory
+	// Defer removal of the openapi.json file from static directory
 	defer func() {
-		if err := os.RemoveAll("api"); err != nil {
-			t.Errorf("Failed to remove api directory: %v", err)
+		if err := os.Remove("static/openapi.json"); err != nil {
+			t.Errorf("Failed to remove file from static directory: %v", err)
 		}
 	}()
 
@@ -70,7 +65,7 @@ func TestOpenAPIHandler_Error(t *testing.T) {
 	result, err := OpenAPIHandler(ctx)
 
 	assert.Nil(t, result, "Expected result to be nil")
-	errors.Is(err, &os.PathError{Path: "/Users/raramuri/Projects/gofr.dev/gofr/pkg/gofr/api/openapi.json"})
+	errors.Is(err, &os.PathError{Path: "/Users/raramuri/Projects/gofr.dev/gofr/pkg/gofr/static/openapi.json"})
 	assert.NotNil(t, err, "Expected error")
 }
 
@@ -120,5 +115,5 @@ func TestSwaggerUIHandler_Error(t *testing.T) {
 	resp, err := SwaggerUIHandler(ctx)
 
 	assert.Nil(t, resp)
-	errors.Is(err, &os.PathError{Path: "/Users/raramuri/Projects/gofr.dev/gofr/pkg/gofr/swagger/abc.abc"})
+	errors.Is(err, &os.PathError{Path: "/Users/raramuri/Projects/gofr.dev/gofr/pkg/gofr/static/abc.abc"})
 }
