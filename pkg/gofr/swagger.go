@@ -10,7 +10,7 @@ import (
 	"gofr.dev/pkg/gofr/http/response"
 )
 
-//go:embed swagger/*
+//go:embed static/*
 var fs embed.FS
 
 const (
@@ -21,7 +21,7 @@ const (
 // It reads the file from the disk and returns its content as a response.
 func OpenAPIHandler(c *Context) (interface{}, error) {
 	rootDir, _ := os.Getwd()
-	filePath := filepath.Join(rootDir, "api", OpenAPIJSON)
+	filePath := filepath.Join(rootDir, "static", OpenAPIJSON)
 
 	b, err := os.ReadFile(filepath.Clean(filePath))
 	if err != nil {
@@ -40,7 +40,7 @@ func SwaggerUIHandler(c *Context) (interface{}, error) {
 		fileName = "index.html"
 	}
 
-	data, err := fs.ReadFile("swagger/" + fileName)
+	data, err := fs.ReadFile("static/" + fileName)
 	if err != nil {
 		c.Errorf("Failed to read Swagger UI file %s from embedded file system: %v", fileName, err)
 		return nil, err

@@ -420,14 +420,8 @@ func Test_UseMiddleware(t *testing.T) {
 }
 
 func Test_SwaggerEndpoints(t *testing.T) {
-	// Create the api directory within the temporary directory
-	if err := os.Mkdir("api", 0755); err != nil {
-		t.Errorf("Failed to create api directory: %v", err)
-		return
-	}
-
 	// Create the openapi.json file within the api directory
-	openAPIFilePath := filepath.Join("api", OpenAPIJSON)
+	openAPIFilePath := filepath.Join("static", OpenAPIJSON)
 
 	openAPIContent := []byte(`{"swagger": "2.0", "info": {"version": "1.0.0", "title": "Sample API"}}`)
 	if err := os.WriteFile(openAPIFilePath, openAPIContent, 0600); err != nil {
@@ -437,8 +431,8 @@ func Test_SwaggerEndpoints(t *testing.T) {
 
 	// Defer removal of the api directory
 	defer func() {
-		if err := os.RemoveAll("api"); err != nil {
-			t.Errorf("Failed to remove api directory: %v", err)
+		if err := os.RemoveAll("static/openapi.json"); err != nil {
+			t.Errorf("Failed to remove swagger file from static directory: %v", err)
 		}
 	}()
 

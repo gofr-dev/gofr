@@ -136,7 +136,7 @@ func (a *App) Run() {
 		a.add(http.MethodGet, "/.well-known/alive", liveHandler)
 		a.add(http.MethodGet, "/favicon.ico", faviconHandler)
 
-		if _, err := os.Stat("./api/openapi.json"); err == nil {
+		if _, err := os.Stat("./static/openapi.json"); err == nil {
 			a.add(http.MethodGet, "/.well-known/openapi.json", OpenAPIHandler)
 			a.add(http.MethodGet, "/.well-known/swagger", SwaggerUIHandler)
 			a.add(http.MethodGet, "/.well-known/{name}", SwaggerUIHandler)
