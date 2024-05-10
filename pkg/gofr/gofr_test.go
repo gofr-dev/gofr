@@ -7,6 +7,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strconv"
 	"testing"
 	"time"
@@ -415,4 +417,54 @@ func Test_UseMiddleware(t *testing.T) {
 	// checking if the testMiddleware has added the required header in the response properly.
 	testHeaderValue := resp.Header.Get("X-Test-Middleware")
 	assert.Equal(t, "applied", testHeaderValue, "Test_UseMiddleware Failed! header value mismatch.")
+}
+
+func Test_SwaggerEndpoints(t *testing.T) {
+	// Create the api directory within the temporary directory
+	if err := os.Mkdir("api", 0755); err != nil {
+		t.Errorf("Failed to create api directory: %v", err)
+		return
+	}
+
+	// Create the openapi.json file within the api directory
+	openAPIFilePath := filepath.Join("api", OpenAPIJSON)
+
+	openAPIContent := []byte(`{"swagger": "2.0", "info": {"version": "1.0.0", "title": "Sample API"}}`)
+	if err := os.WriteFile(openAPIFilePath, openAPIContent, 0600); err != nil {
+		t.Errorf("Failed to create openapi.json file: %v", err)
+		return
+	}
+
+	// Defer removal of the api directory
+	defer func() {
+		if err := os.RemoveAll("api"); err != nil {
+			t.Errorf("Failed to remove api directory: %v", err)
+		}
+	}()
+
+	app := New()
+	app.httpRegistered = true
+	app.httpServer.port = 8002
+
+	go app.Run()
+	time.Sleep(1 * time.Second)
+
+	var netClient = &http.Client{
+		Timeout: time.Second * 5,
+	}
+
+	re, _ := http.NewRequestWithContext(context.Background(), http.MethodGet,
+		"http://localhost:8002"+"/.well-known/swagger", http.NoBody)
+	resp, err := netClient.Do(re)
+
+	defer func() {
+		err = resp.Body.Close()
+		if err != nil {
+			t.Errorf("error closing response body: %v", err)
+		}
+	}()
+
+	assert.Nil(t, err, "Expected error to be nil, got : %v", err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, "text/html; charset=utf-8", resp.Header.Get("Content-Type"))
 }
