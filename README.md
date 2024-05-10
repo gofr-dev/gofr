@@ -16,13 +16,13 @@
 
 <br>
 
-Gofr is an opinionated microservice development framework. Listed in [CNCF Landscape](https://landscape.cncf.io/?selected=go-fr).
+Gofr is an opinionated microservice development framework listed in [CNCF Landscape](https://landscape.cncf.io/?selected=go-fr).
 
 Visit <a href="https://gofr.dev"/>https://gofr.dev</a> for more details and documentation.
 
 ## 🎯 Goal
 Even though generic applications can be written using Gofr, our main focus is to simplify the development of microservices.
-We will focus ourselves towards deployment in kubernetes and aspire to provide out-of-the-box observability.
+We will focus on deployment in Kubernetes and aspire to provide out-of-the-box observability.
 
 ## 💡 Advantages/Features
 
