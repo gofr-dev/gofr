@@ -416,3 +416,39 @@ func Test_UseMiddleware(t *testing.T) {
 	testHeaderValue := resp.Header.Get("X-Test-Middleware")
 	assert.Equal(t, "applied", testHeaderValue, "Test_UseMiddleware Failed! header value mismatch.")
 }
+
+func Test_AddCronJob_Fail(t *testing.T) {
+	a := App{container: &container.Container{}}
+	stderr := testutil.StderrOutputForFunc(func() {
+		a.container.Logger = logging.NewLogger(logging.ERROR)
+
+		a.AddCronJob("* * * *", "test-job", func(ctx *Context) {
+			ctx.Logger.Info("test-job-fail")
+		})
+	})
+
+	assert.Contains(t, stderr, "error adding cron job")
+	assert.NotContains(t, stderr, "test-job-fail")
+}
+
+func Test_AddCronJob_Success(t *testing.T) {
+	pass := false
+	a := App{
+		container: &container.Container{},
+	}
+
+	a.AddCronJob("* * * * *", "test-job", func(ctx *Context) {
+		ctx.Logger.Info("test-job-success")
+	})
+
+	assert.Equal(t, len(a.cron.jobs), 1)
+
+	for _, j := range a.cron.jobs {
+		if j.name == "test-job" {
+			pass = true
+			break
+		}
+	}
+
+	assert.Truef(t, pass, "unable to add cron job to cron table")
+}

@@ -320,7 +320,7 @@ func (e errParsing) Error() string {
 	return fmt.Sprintf("unable to parse %s", e.invalidPart)
 }
 
-// noopRequest is a non-operating implementation of Request intreface
+// noopRequest is a non-operating implementation of Request interface
 // this is required to prevent panics while executing cron jobs.
 type noopRequest struct {
 }

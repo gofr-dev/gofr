@@ -1,6 +1,6 @@
 module github.com/gofr-dev/gofr/examples/using-cron-jobs
 
-go 1.22.0
+go 1.21
 
 replace (
 	gofr.dev v1.5.0 => ../../../gofr
