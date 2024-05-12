@@ -15,7 +15,7 @@ Basically, any task that can be expressed as a command or script can be automate
 Writing a cron job!
 On linux like systems cron jobs can be added by adding a line to the crontab file, specifying the schedule and the command
 that needs to be run at that schedule. The cron schedule is expressed in the following format.
-```
+```bash
 minute hour day_of_month month day_of_week
 ```
 Each field can take a specific value or combination of values to define the schedule. Users can use special characters like 
