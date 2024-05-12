@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 
-	"gofr.dev/pkg/gofr/testutil"
+	"gofr.dev/pkg/gofr/logging"
 )
 
 func TestHTTPService_HealthCheck(t *testing.T) {
@@ -47,7 +47,7 @@ func TestHTTPService_HealthCheckCustomURL(t *testing.T) {
 }
 
 func TestHTTPService_HealthCheckErrorResponse(t *testing.T) {
-	service := NewHTTPService("http://test", testutil.NewMockLogger(testutil.INFOLOG), nil)
+	service := NewHTTPService("http://test", logging.NewMockLogger(logging.INFO), nil)
 
 	ctx := context.Background()
 
@@ -89,7 +89,7 @@ func initializeTest(t *testing.T, urlSuffix string, statusCode int) (HTTP, *http
 		w.WriteHeader(statusCode)
 	}))
 
-	service := NewHTTPService(server.URL, testutil.NewMockLogger(testutil.INFOLOG), metrics,
+	service := NewHTTPService(server.URL, logging.NewMockLogger(logging.INFO), metrics,
 		&HealthConfig{HealthEndpoint: ".well-known/" + urlSuffix})
 
 	return service, server, metrics

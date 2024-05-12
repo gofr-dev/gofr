@@ -12,6 +12,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
+	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/testutil"
 )
 
@@ -40,7 +41,7 @@ func TestGoogleClient_New_Error(t *testing.T) {
 	defer ctrl.Finish()
 
 	out := testutil.StderrOutputForFunc(func() {
-		logger := testutil.NewMockLogger(testutil.ERRORLOG)
+		logger := logging.NewMockLogger(logging.ERROR)
 
 		g = New(Config{}, logger, NewMockMetrics(ctrl))
 	})
@@ -63,7 +64,7 @@ func TestGoogleClient_Publish_Success(t *testing.T) {
 
 	out := testutil.StdoutOutputForFunc(func() {
 		g := &googleClient{
-			logger: testutil.NewMockLogger(testutil.DEBUGLOG),
+			logger: logging.NewMockLogger(logging.DEBUG),
 			client: client,
 			Config: Config{
 				ProjectID:        "test",
@@ -96,7 +97,7 @@ func TestGoogleClient_PublishTopic_Error(t *testing.T) {
 	g := &googleClient{client: getGoogleClient(t), Config: Config{
 		ProjectID:        "test",
 		SubscriptionName: "sub",
-	}, metrics: mockMetrics, logger: testutil.NewMockLogger(testutil.DEBUGLOG)}
+	}, metrics: mockMetrics, logger: logging.NewMockLogger(logging.DEBUG)}
 	defer g.client.Close()
 
 	ctx, cancel := context.WithCancel(context.Background())

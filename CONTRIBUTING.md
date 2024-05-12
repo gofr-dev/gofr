@@ -56,15 +56,23 @@ docker run --name gofr-redis -p 2002:6379 -d redis:7.0.5
 docker run --name gofr-zipkin -d -p 2005:9411 openzipkin/zipkin:2
 docker run --name gofr-pgsql -d -e POSTGRES_DB=customers -e POSTGRES_PASSWORD=root123 -p 2006:5432 postgres:15.1
 docker run --name gofr-mssql -d -e 'ACCEPT_EULA=Y' -e 'SA_PASSWORD=reallyStrongPwd123' -p 2007:1433 mcr.microsoft.com/azure-sql-edge
-docker run --name zookeeper -e ZOOKEEPER_CLIENT_PORT=2181 -e ZOOKEEPER_TICK_TIME=2000 confluentinc/cp-zookeeper:7.0.1
-docker run --name broker -p 9092:9092 --link zookeeper -e KAFKA_BROKER_ID=1 \
--e KAFKA_ZOOKEEPER_CONNECT=zookeeper:2181 \
--e KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=PLAINTEXT:PLAINTEXT,PLAINTEXT_INTERNAL:PLAINTEXT \
--e KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://localhost:9092,PLAINTEXT_INTERNAL://broker:29092 \
--e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1 \
--e KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1 \
--e KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1 \
-confluentinc/cp-kafka:7.0.1
+docker run --name kafka-1 -p 9092:9092 \
+ -e KAFKA_ENABLE_KRAFT=yes \
+-e KAFKA_CFG_PROCESS_ROLES=broker,controller \
+-e KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER \
+-e KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093 \
+-e KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT \
+-e KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://127.0.0.1:9092 \
+-e KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE=true \
+-e KAFKA_BROKER_ID=1 \
+-e KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=1@127.0.0.1:9093 \
+-e ALLOW_PLAINTEXT_LISTENER=yes \
+-e KAFKA_CFG_NODE_ID=1 \
+-v kafka_data:/bitnami \
+bitnami/kafka:3.4 
+
+
+
 
 Please note that the recommended local port for the services are different than the actual ports. This is done to avoid conflict with the local installation on developer machines. This method also allows a developer to work on multiple projects which uses the same services but bound on different ports. One can choose to change the port for these services. Just remember to add the same in configs/.local.env, if you decide to do that.
 ```
@@ -93,3 +101,16 @@ Please note that the recommended local port for the services are different than 
     - All dependencies must be abstracted as an interface. This will make it easier to switch libraries at later point
       of time.
 * Version tagging as per Semantic versioning (https://semver.org/)
+
+### Documentation
+* After adding or modifying code existing code, update the documentation too - [development/docs](https://github.com/gofr-dev/gofr/tree/development/docs).
+* When you consider a new documentation page is needed, start by adding a new file and writing your new documentation. Then - add a reference to it in [navigation.js](https://gofr.dev/docs/navigation.js).
+* If needed, update or add proper code examples for your changes.
+* In case images are needed, add it to [docs/public](https://gofr.dev/docs/public) folder.
+* Make sure you don't break existing links and refernces.
+* Maintain Markdown standards, you can read more [here](https://www.markdownguide.org/basic-syntax/), this includes:
+    - Headings (`#`, `##`, etc.) should be placed in order.
+    - Use trailing white space or the <br> HTML tag at the end of the line.
+    - Use "`" sign to add single line code and "```" to add multi-line code block.
+    - Use relative references to images (in `public` folder as mentioned above.)
+* The [gofr.dev documentation]([url](https://gofr.dev/docs)) site is updated upon push to `/docs` path in the repo. Verify your changes are live after next gofr version.

@@ -11,7 +11,7 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.uber.org/mock/gomock"
 
-	"gofr.dev/pkg/gofr/testutil"
+	"gofr.dev/pkg/gofr/logging"
 )
 
 func TestNewHTTPService(t *testing.T) {
@@ -61,7 +61,7 @@ func TestHTTPService_createAndSendRequest(t *testing.T) {
 		Client:  http.DefaultClient,
 		url:     server.URL,
 		Tracer:  otel.Tracer("gofr-http-client"),
-		Logger:  testutil.NewMockLogger(testutil.INFOLOG),
+		Logger:  logging.NewMockLogger(logging.INFO),
 		Metrics: metrics,
 	}
 
@@ -100,7 +100,7 @@ func TestHTTPService_Get(t *testing.T) {
 		Client: http.DefaultClient,
 		url:    server.URL,
 		Tracer: otel.Tracer("gofr-http-client"),
-		Logger: testutil.NewMockLogger(testutil.INFOLOG),
+		Logger: logging.NewMockLogger(logging.INFO),
 	}
 
 	// TODO : Nil Correlation ID is coming in logs, it has to be fixed
@@ -132,7 +132,7 @@ func TestHTTPService_GetWithHeaders(t *testing.T) {
 		Client: http.DefaultClient,
 		url:    server.URL,
 		Tracer: otel.Tracer("gofr-http-client"),
-		Logger: testutil.NewMockLogger(testutil.INFOLOG),
+		Logger: logging.NewMockLogger(logging.INFO),
 	}
 
 	// TODO : Nil Correlation ID is coming in logs, it has to be fixed
@@ -173,7 +173,7 @@ func TestHTTPService_Put(t *testing.T) {
 		Client: http.DefaultClient,
 		url:    server.URL,
 		Tracer: otel.Tracer("gofr-http-client"),
-		Logger: testutil.NewMockLogger(testutil.INFOLOG),
+		Logger: logging.NewMockLogger(logging.INFO),
 	}
 
 	// TODO : Nil Correlation ID is coming in logs, it has to be fixed
@@ -214,7 +214,7 @@ func TestHTTPService_PutWithHeaders(t *testing.T) {
 		Client: http.DefaultClient,
 		url:    server.URL,
 		Tracer: otel.Tracer("gofr-http-client"),
-		Logger: testutil.NewMockLogger(testutil.INFOLOG),
+		Logger: logging.NewMockLogger(logging.INFO),
 	}
 
 	// TODO : Nil Correlation ID is coming in logs, it has to be fixed
@@ -255,7 +255,7 @@ func TestHTTPService_Patch(t *testing.T) {
 		Client: http.DefaultClient,
 		url:    server.URL,
 		Tracer: otel.Tracer("gofr-http-client"),
-		Logger: testutil.NewMockLogger(testutil.INFOLOG),
+		Logger: logging.NewMockLogger(logging.INFO),
 	}
 
 	// TODO : Nil Correlation ID is coming in logs, it has to be fixed
@@ -296,7 +296,7 @@ func TestHTTPService_PatchWithHeaders(t *testing.T) {
 		Client: http.DefaultClient,
 		url:    server.URL,
 		Tracer: otel.Tracer("gofr-http-client"),
-		Logger: testutil.NewMockLogger(testutil.INFOLOG),
+		Logger: logging.NewMockLogger(logging.INFO),
 	}
 
 	// TODO : Nil Correlation ID is coming in logs, it has to be fixed
@@ -337,7 +337,7 @@ func TestHTTPService_Post(t *testing.T) {
 		Client: http.DefaultClient,
 		url:    server.URL,
 		Tracer: otel.Tracer("gofr-http-client"),
-		Logger: testutil.NewMockLogger(testutil.INFOLOG),
+		Logger: logging.NewMockLogger(logging.INFO),
 	}
 
 	// TODO : Nil Correlation ID is coming in logs, it has to be fixed
@@ -378,7 +378,7 @@ func TestHTTPService_PostWithHeaders(t *testing.T) {
 		Client: http.DefaultClient,
 		url:    server.URL,
 		Tracer: otel.Tracer("gofr-http-client"),
-		Logger: testutil.NewMockLogger(testutil.INFOLOG),
+		Logger: logging.NewMockLogger(logging.INFO),
 	}
 
 	// TODO : Nil Correlation ID is coming in logs, it has to be fixed
@@ -418,7 +418,7 @@ func TestHTTPService_Delete(t *testing.T) {
 		Client: http.DefaultClient,
 		url:    server.URL,
 		Tracer: otel.Tracer("gofr-http-client"),
-		Logger: testutil.NewMockLogger(testutil.INFOLOG),
+		Logger: logging.NewMockLogger(logging.INFO),
 	}
 
 	// TODO : Nil Correlation ID is coming in logs, it has to be fixed
@@ -457,7 +457,7 @@ func TestHTTPService_DeleteWithHeaders(t *testing.T) {
 		Client: http.DefaultClient,
 		url:    server.URL,
 		Tracer: otel.Tracer("gofr-http-client"),
-		Logger: testutil.NewMockLogger(testutil.INFOLOG),
+		Logger: logging.NewMockLogger(logging.INFO),
 	}
 
 	// TODO : Nil Correlation ID is coming in logs, it has to be fixed
@@ -477,7 +477,7 @@ func TestHTTPService_createAndSendRequestCreateRequestFailure(t *testing.T) {
 	service := &httpService{
 		Client: http.DefaultClient,
 		Tracer: otel.Tracer("gofr-http-client"),
-		Logger: testutil.NewMockLogger(testutil.INFOLOG),
+		Logger: logging.NewMockLogger(logging.INFO),
 	}
 
 	ctx := context.Background()
@@ -498,7 +498,7 @@ func TestHTTPService_createAndSendRequestServerError(t *testing.T) {
 	service := &httpService{
 		Client: http.DefaultClient,
 		Tracer: otel.Tracer("gofr-http-client"),
-		Logger: testutil.NewMockLogger(testutil.INFOLOG),
+		Logger: logging.NewMockLogger(logging.INFO),
 	}
 
 	ctx := context.Background()

@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 
-	"gofr.dev/pkg/gofr/testutil"
+	"gofr.dev/pkg/gofr/logging"
 )
 
 func Test_APIKeyAuthProvider_Get(t *testing.T) {
@@ -25,6 +25,7 @@ func Test_APIKeyAuthProvider_Get(t *testing.T) {
 		assert.Equal(t, http.MethodGet, r.Method)
 
 		w.WriteHeader(http.StatusOK)
+
 		_, err := w.Write(body)
 		if err != nil {
 			return
@@ -32,7 +33,7 @@ func Test_APIKeyAuthProvider_Get(t *testing.T) {
 	}))
 	defer server.Close()
 
-	httpService := NewHTTPService(server.URL, testutil.NewMockLogger(testutil.INFOLOG), nil,
+	httpService := NewHTTPService(server.URL, logging.NewMockLogger(logging.INFO), nil,
 		&APIKeyConfig{"valid-key"})
 
 	resp, err := httpService.Get(context.Background(), path, queryParams)
@@ -63,7 +64,7 @@ func Test_APIKeyAuthProvider_Post(t *testing.T) {
 	}))
 	defer server.Close()
 
-	httpService := NewHTTPService(server.URL, testutil.NewMockLogger(testutil.INFOLOG), nil,
+	httpService := NewHTTPService(server.URL, logging.NewMockLogger(logging.INFO), nil,
 		&APIKeyConfig{"valid-key"})
 
 	resp, err := httpService.Post(context.Background(), path, queryParams, body)
@@ -90,7 +91,7 @@ func TestApiKeyProvider_Put(t *testing.T) {
 	}))
 	defer server.Close()
 
-	httpService := NewHTTPService(server.URL, testutil.NewMockLogger(testutil.INFOLOG), nil,
+	httpService := NewHTTPService(server.URL, logging.NewMockLogger(logging.INFO), nil,
 		&APIKeyConfig{"valid-key"})
 
 	resp, err := httpService.Put(context.Background(), path, queryParams, body)
@@ -117,7 +118,7 @@ func TestApiKeyAuthProvider_Patch(t *testing.T) {
 	}))
 	defer server.Close()
 
-	httpService := NewHTTPService(server.URL, testutil.NewMockLogger(testutil.INFOLOG), nil,
+	httpService := NewHTTPService(server.URL, logging.NewMockLogger(logging.INFO), nil,
 		&APIKeyConfig{"valid-key"})
 
 	resp, err := httpService.Patch(context.Background(), path, queryParams, body)
@@ -143,7 +144,7 @@ func TestApiKeyAuthProvider_Delete(t *testing.T) {
 	}))
 	defer server.Close()
 
-	httpService := NewHTTPService(server.URL, testutil.NewMockLogger(testutil.INFOLOG), nil,
+	httpService := NewHTTPService(server.URL, logging.NewMockLogger(logging.INFO), nil,
 		&APIKeyConfig{"valid-key"})
 
 	resp, err := httpService.Delete(context.Background(), path, body)

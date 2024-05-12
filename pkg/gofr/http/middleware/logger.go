@@ -73,6 +73,7 @@ func Logging(logger logger) func(inner http.Handler) http.Handler {
 			srw := &StatusResponseWriter{ResponseWriter: w}
 			traceID := trace.SpanFromContext(r.Context()).SpanContext().TraceID().String()
 			spanID := trace.SpanFromContext(r.Context()).SpanContext().SpanID().String()
+
 			srw.Header().Set("X-Correlation-ID", traceID)
 
 			defer func(res *StatusResponseWriter, req *http.Request) {

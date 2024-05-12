@@ -60,23 +60,22 @@ jobs:
         go-version: ['1.21', '1.20']
 
     services:
-      zookeeper:
-        image: wurstmeister/zookeeper
-        ports:
-          - "2181:2181"
-
       kafka:
-        image: wurstmeister/kafka
+        image: bitnami/kafka:3.4
         ports:
           - "9092:9092"
         env:
-          KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT://localhost:9092'
-          KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT'
-          KAFKA_INTER_BROKER_LISTENER_NAME: 'PLAINTEXT'
-          KAFKA_ADVERTISED_HOST_NAME: 'localhost'
-          KAFKA_LISTENERS: 'PLAINTEXT://0.0.0.0:9092'
-          KAFKA_AUTO_CREATE_TOPICS_ENABLE: true
-          KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
+          KAFKA_ENABLE_KRAFT: yes
+          KAFKA_CFG_PROCESS_ROLES: broker,controller
+          KAFKA_CFG_CONTROLLER_LISTENER_NAMES: CONTROLLER
+          KAFKA_CFG_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+          KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+          KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://127.0.0.1:9092
+          KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: true
+          KAFKA_BROKER_ID: 1
+          KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: 1@127.0.0.1:9093
+          ALLOW_PLAINTEXT_LISTENER: yes
+          KAFKA_CFG_NODE_ID: 1
 
       redis:
         image: redis:7.0.5
@@ -230,7 +229,7 @@ jobs:
   code_quality:
     name: Code Quality🎖️
     runs-on: ubuntu-latest
-    container: "golangci/golangci-lint:v1.55.2"
+    container: "golangci/golangci-lint:v1.57.2"
     steps:
       - name: Check out code into the Go module directory
         uses: actions/checkout@v4

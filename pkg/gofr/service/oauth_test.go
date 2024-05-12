@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.opentelemetry.io/otel"
 
-	"gofr.dev/pkg/gofr/testutil"
+	"gofr.dev/pkg/gofr/logging"
 )
 
 func oAuthHTTPServer(t *testing.T) *httptest.Server {
@@ -20,7 +20,7 @@ func oAuthHTTPServer(t *testing.T) *httptest.Server {
 		header := r.Header.Get("Authorization")
 		token := strings.Split(header, " ")
 
-		parsedToken, _ := jwt.Parse(token[1], func(token *jwt.Token) (interface{}, error) {
+		parsedToken, _ := jwt.Parse(token[1], func(*jwt.Token) (interface{}, error) {
 			return []byte("my-secret-key"), nil
 		})
 
@@ -40,7 +40,7 @@ func setupHTTPServiceTestServerForOAuth(server *httptest.Server) HTTP {
 		Client: &http.Client{},
 		url:    server.URL,
 		Tracer: otel.Tracer("gofr-http-client"),
-		Logger: testutil.NewMockLogger(testutil.DEBUGLOG),
+		Logger: logging.NewMockLogger(logging.DEBUG),
 	}
 
 	// Circuit breaker configuration
@@ -64,7 +64,7 @@ func setupHTTPServiceTestServerForOAuthWithUnSupportedMethod() HTTP {
 	service := httpService{
 		Client: &http.Client{},
 		Tracer: otel.Tracer("gofr-http-client"),
-		Logger: testutil.NewMockLogger(testutil.DEBUGLOG),
+		Logger: logging.NewMockLogger(logging.DEBUG),
 	}
 
 	// Circuit breaker configuration

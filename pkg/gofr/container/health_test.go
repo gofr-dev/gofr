@@ -11,16 +11,16 @@ import (
 
 	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/datasource/sql"
+	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/service"
-	"gofr.dev/pkg/gofr/testutil"
 )
 
 func TestContainer_Health(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	logger := testutil.NewMockLogger(testutil.ERRORLOG)
+	logger := logging.NewMockLogger(logging.ERROR)
 
 	expected := map[string]interface{}{
 		"redis": datasource.Health{

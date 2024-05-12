@@ -10,7 +10,7 @@ import (
 )
 
 func Test_ApiKeyAuthMiddleware(t *testing.T) {
-	testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	testHandler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte("Success"))
 	})
 
@@ -53,7 +53,7 @@ func Test_ApiKeyAuthMiddleware(t *testing.T) {
 }
 
 func Test_ApiKeyAuthMiddleware_well_known(t *testing.T) {
-	testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	testHandler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte("Success"))
 	})
 
