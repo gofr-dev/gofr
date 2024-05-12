@@ -16,7 +16,7 @@ import (
 func TestRun_ServerStartsListening(t *testing.T) {
 	// Create a mock router and add a new route
 	router := &gofrHTTP.Router{}
-	router.Add(http.MethodGet, "/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	router.Add(http.MethodGet, "/", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 

@@ -53,7 +53,7 @@ func (m *MockProvider) GetWithHeaders(context.Context, string, map[string]interf
 
 func TestOAuthSuccess(t *testing.T) {
 	router := mux.NewRouter()
-	router.HandleFunc("/test", func(w http.ResponseWriter, r *http.Request) {
+	router.HandleFunc("/test", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}).Methods(http.MethodGet).Name("/test")
 	router.Use(OAuth(NewOAuth(OauthConfigs{Provider: &MockProvider{}, RefreshInterval: 10})))
@@ -83,7 +83,7 @@ func TestOAuthSuccess(t *testing.T) {
 
 func TestOAuthInvalidTokenFormat(t *testing.T) {
 	router := mux.NewRouter()
-	router.HandleFunc("/test", func(w http.ResponseWriter, r *http.Request) {
+	router.HandleFunc("/test", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}).Methods(http.MethodGet).Name("/test")
 	router.Use(OAuth(NewOAuth(OauthConfigs{Provider: &MockProvider{}, RefreshInterval: 10})))
@@ -108,7 +108,7 @@ func TestOAuthInvalidTokenFormat(t *testing.T) {
 
 func TestOAuthEmptyAuthHeader(t *testing.T) {
 	router := mux.NewRouter()
-	router.HandleFunc("/test", func(w http.ResponseWriter, r *http.Request) {
+	router.HandleFunc("/test", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}).Methods(http.MethodGet).Name("/test")
 	router.Use(OAuth(NewOAuth(OauthConfigs{Provider: &MockProvider{}, RefreshInterval: 10})))
@@ -132,7 +132,7 @@ func TestOAuthEmptyAuthHeader(t *testing.T) {
 
 func TestOAuthMalformedToken(t *testing.T) {
 	router := mux.NewRouter()
-	router.HandleFunc("/test", func(w http.ResponseWriter, r *http.Request) {
+	router.HandleFunc("/test", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}).Methods(http.MethodGet).Name("/test")
 	router.Use(OAuth(NewOAuth(OauthConfigs{Provider: &MockProvider{}, RefreshInterval: 10})))
@@ -157,7 +157,7 @@ func TestOAuthMalformedToken(t *testing.T) {
 
 func TestOAuthJWKSKeyNotFound(t *testing.T) {
 	router := mux.NewRouter()
-	router.HandleFunc("/test", func(w http.ResponseWriter, r *http.Request) {
+	router.HandleFunc("/test", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}).Methods(http.MethodGet).Name("/test")
 	router.Use(OAuth(NewOAuth(OauthConfigs{Provider: &MockProvider{}, RefreshInterval: 10})))
@@ -197,7 +197,7 @@ func TestPublicKeyFromJWKS_EmptyJWKS_ReturnsNil(t *testing.T) {
 }
 
 func Test_OAuth_well_known(t *testing.T) {
-	testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	testHandler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte("Success"))
 	})
 

@@ -48,7 +48,7 @@ func TestHandler_ServeHTTP(t *testing.T) {
 		}
 
 		handler{
-			function: func(c *Context) (interface{}, error) {
+			function: func(*Context) (interface{}, error) {
 				return tc.data, tc.err
 			},
 			container: c,
@@ -57,6 +57,42 @@ func TestHandler_ServeHTTP(t *testing.T) {
 		assert.Containsf(t, w.Body.String(), tc.body, "TEST[%d], Failed.\n%s", i, tc.desc)
 		assert.Equal(t, tc.statusCode, w.Code, "TEST[%d], Failed.\n%s", i, tc.desc)
 	}
+}
+
+func TestHandler_faviconHandlerError(t *testing.T) {
+	c := Context{
+		Context: context.Background(),
+	}
+
+	d, _ := os.ReadFile("static/favicon.ico")
+
+	// renaming the file to produce the error case and rename it back to original after completion of test.
+	_, err := os.Stat("static/favicon.ico")
+	if err != nil {
+		t.Errorf("favicon.ico file not found in static directory")
+		return
+	}
+
+	err = os.Rename("static/favicon.ico", "static/newFavicon.ico")
+	if err != nil {
+		t.Errorf("error in renaming favicon.ico!")
+	}
+
+	defer func() {
+		err = os.Rename("static/newFavicon.ico", "static/favicon.ico")
+		if err != nil {
+			t.Errorf("error in renaming file back to favicon.ico")
+		}
+	}()
+
+	data, err := faviconHandler(&c)
+
+	assert.NoError(t, err, "TEST Failed.\n")
+
+	assert.Equal(t, data, response.File{
+		Content:     d,
+		ContentType: "image/x-icon",
+	}, "TEST Failed.\n")
 }
 
 func TestHandler_faviconHandler(t *testing.T) {
