@@ -7,6 +7,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strconv"
 	"testing"
 	"time"
@@ -66,20 +68,20 @@ func TestGofr_ServerRoutes(t *testing.T) {
 
 	g := New()
 
-	g.GET("/hello", func(c *Context) (interface{}, error) {
+	g.GET("/hello", func(*Context) (interface{}, error) {
 		return helloWorld, nil
 	})
 
 	// using add() func
-	g.add(http.MethodGet, "/hello2", func(c *Context) (interface{}, error) {
+	g.add(http.MethodGet, "/hello2", func(*Context) (interface{}, error) {
 		return helloWorld, nil
 	})
 
-	g.PUT("/hello", func(c *Context) (interface{}, error) {
+	g.PUT("/hello", func(*Context) (interface{}, error) {
 		return helloWorld, nil
 	})
 
-	g.POST("/hello", func(c *Context) (interface{}, error) {
+	g.POST("/hello", func(*Context) (interface{}, error) {
 		return helloWorld, nil
 	})
 
@@ -87,7 +89,7 @@ func TestGofr_ServerRoutes(t *testing.T) {
 		return fmt.Sprintf("Hello %s!", c.Param("name")), nil
 	})
 
-	g.DELETE("/delete", func(c *Context) (interface{}, error) {
+	g.DELETE("/delete", func(*Context) (interface{}, error) {
 		return "Success", nil
 	})
 
@@ -114,7 +116,7 @@ func TestGofr_ServerRoutes(t *testing.T) {
 func TestGofr_ServerRun(t *testing.T) {
 	g := New()
 
-	g.GET("/hello", func(c *Context) (interface{}, error) {
+	g.GET("/hello", func(*Context) (interface{}, error) {
 		return helloWorld, nil
 	})
 
@@ -199,7 +201,7 @@ func TestApp_MigratePanicRecovery(t *testing.T) {
 
 		app.container.PubSub = &container.MockPubSub{}
 
-		app.Migrate(map[int64]migration.Migrate{1: {UP: func(d migration.Datasource) error {
+		app.Migrate(map[int64]migration.Migrate{1: {UP: func(_ migration.Datasource) error {
 			panic("test panic")
 		}}})
 	})
@@ -234,7 +236,7 @@ func Test_addRoute(t *testing.T) {
 }
 
 func TestEnableBasicAuthWithFunc(t *testing.T) {
-	jwksServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	jwksServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
@@ -248,7 +250,7 @@ func TestEnableBasicAuthWithFunc(t *testing.T) {
 		container: c,
 	}
 
-	a.httpServer.router.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	a.httpServer.router.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		fmt.Println(w, "Hello, world!")
 	}))
 
@@ -388,7 +390,7 @@ func Test_UseMiddleware(t *testing.T) {
 
 	app.UseMiddleware(testMiddleware)
 
-	app.GET("/test", func(c *Context) (interface{}, error) {
+	app.GET("/test", func(*Context) (interface{}, error) {
 		return "success", nil
 	})
 
@@ -415,4 +417,84 @@ func Test_UseMiddleware(t *testing.T) {
 	// checking if the testMiddleware has added the required header in the response properly.
 	testHeaderValue := resp.Header.Get("X-Test-Middleware")
 	assert.Equal(t, "applied", testHeaderValue, "Test_UseMiddleware Failed! header value mismatch.")
+}
+
+func Test_SwaggerEndpoints(t *testing.T) {
+	// Create the openapi.json file within the static directory
+	openAPIFilePath := filepath.Join("static", OpenAPIJSON)
+
+	openAPIContent := []byte(`{"swagger": "2.0", "info": {"version": "1.0.0", "title": "Sample API"}}`)
+	if err := os.WriteFile(openAPIFilePath, openAPIContent, 0600); err != nil {
+		t.Errorf("Failed to create openapi.json file: %v", err)
+		return
+	}
+
+	// Defer removal of swagger file from the static directory
+	defer func() {
+		if err := os.RemoveAll("static/openapi.json"); err != nil {
+			t.Errorf("Failed to remove swagger file from static directory: %v", err)
+		}
+	}()
+
+	app := New()
+	app.httpRegistered = true
+	app.httpServer.port = 8002
+
+	go app.Run()
+	time.Sleep(1 * time.Second)
+
+	var netClient = &http.Client{
+		Timeout: time.Second * 5,
+	}
+
+	re, _ := http.NewRequestWithContext(context.Background(), http.MethodGet,
+		"http://localhost:8002"+"/.well-known/swagger", http.NoBody)
+	resp, err := netClient.Do(re)
+
+	defer func() {
+		err = resp.Body.Close()
+		if err != nil {
+			t.Errorf("error closing response body: %v", err)
+		}
+	}()
+
+	assert.Nil(t, err, "Expected error to be nil, got : %v", err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, "text/html; charset=utf-8", resp.Header.Get("Content-Type"))
+}
+
+func Test_AddCronJob_Fail(t *testing.T) {
+	a := App{container: &container.Container{}}
+	stderr := testutil.StderrOutputForFunc(func() {
+		a.container.Logger = logging.NewLogger(logging.ERROR)
+
+		a.AddCronJob("* * * *", "test-job", func(ctx *Context) {
+			ctx.Logger.Info("test-job-fail")
+		})
+	})
+
+	assert.Contains(t, stderr, "error adding cron job")
+	assert.NotContains(t, stderr, "test-job-fail")
+}
+
+func Test_AddCronJob_Success(t *testing.T) {
+	pass := false
+	a := App{
+		container: &container.Container{},
+	}
+
+	a.AddCronJob("* * * * *", "test-job", func(ctx *Context) {
+		ctx.Logger.Info("test-job-success")
+	})
+
+	assert.Equal(t, len(a.cron.jobs), 1)
+
+	for _, j := range a.cron.jobs {
+		if j.name == "test-job" {
+			pass = true
+			break
+		}
+	}
+
+	assert.Truef(t, pass, "unable to add cron job to cron table")
 }

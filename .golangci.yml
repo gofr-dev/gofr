@@ -7,7 +7,8 @@ linters-settings:
     lines: 100
     statements: 50
   gci:
-    local-prefixes: gofr.dev
+    sections:
+      - prefix(gofr.dev)
   goconst:
     min-len: 2
     min-occurrences: 2
@@ -31,12 +32,14 @@ linters-settings:
   golint:
     min-confidence: 0
   gomnd:
-    settings:
-      mnd:
-        # don't include the "operation" and "assign"
-        checks: argument,case,condition,return
+    checks:
+      - argument
+      - case
+      - condition
+      - return
   govet:
-    check-shadowing: true
+    enable:
+      - shadow
     settings:
       printf:
         funcs:
@@ -105,7 +108,7 @@ linters:
 
 
 service:
-  golangci-lint-version: 1.55.x
+  golangci-lint-version: 1.57.x
 
 issues:
   # exclude-use-default: false
