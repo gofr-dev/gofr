@@ -227,6 +227,10 @@ func (a *App) DELETE(pattern string, handler Handler) {
 	a.add("DELETE", pattern, handler)
 }
 
+func (a *App) PATCH(pattern string, handler Handler) {
+	a.add("PATCH", pattern, handler)
+}
+
 func (a *App) add(method, pattern string, h Handler) {
 	a.httpRegistered = true
 	a.httpServer.router.Add(method, pattern, handler{
