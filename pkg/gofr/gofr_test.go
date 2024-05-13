@@ -64,6 +64,7 @@ func TestGofr_ServerRoutes(t *testing.T) {
 		{http.MethodPost, "/hello", "Hello World!", "content-type", "application/json"},
 		{http.MethodGet, "/params?name=Vikash", "Hello Vikash!", "content-type", "application/json"},
 		{http.MethodDelete, "/delete", "Success", "content-type", "application/json"},
+		{http.MethodPatch, "/patch", "Success", "content-type", "application/json"},
 	}
 
 	g := New()
@@ -90,6 +91,10 @@ func TestGofr_ServerRoutes(t *testing.T) {
 	})
 
 	g.DELETE("/delete", func(*Context) (interface{}, error) {
+		return "Success", nil
+	})
+
+	g.PATCH("/patch", func(c *Context) (interface{}, error) {
 		return "Success", nil
 	})
 
