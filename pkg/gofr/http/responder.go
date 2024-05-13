@@ -74,6 +74,7 @@ func (r Responder) HTTPStatusFromError(err error) (status int, errObj interface{
 
 	if t.Implements(ss) {
 		m, _ := reflect.ValueOf(err).Interface().(StatusCodeResponder)
+
 		return m.StatusCode(), map[string]interface{}{
 			"message": err.Error(),
 		}

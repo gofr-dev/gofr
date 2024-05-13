@@ -2,10 +2,11 @@ package errors
 
 import (
 	"fmt"
+
 	"github.com/pkg/errors"
 )
 
-// GofrError represents a generic GoFr error
+// GofrError represents a generic GoFr error.
 type GofrError struct {
 	error
 	message string
@@ -16,6 +17,7 @@ func (e *GofrError) Error() string {
 	if e.error != nil {
 		return fmt.Sprintf("%s: %v", e.message, e.error)
 	}
+
 	return e.message
 }
 

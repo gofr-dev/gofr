@@ -1,6 +1,7 @@
 package http
 
 import (
+	"gofr.dev/pkg/gofr/errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -33,6 +34,7 @@ func TestResponder_Respond(t *testing.T) {
 
 func TestResponder_HTTPStatusFromError(t *testing.T) {
 	r := NewResponder(httptest.NewRecorder(), http.MethodGet)
+	errInvalidParam := errors.InvalidParamError{Param: []string{"name"}}
 
 	tests := []struct {
 		desc       string
@@ -45,6 +47,8 @@ func TestResponder_HTTPStatusFromError(t *testing.T) {
 			"message": http.ErrMissingFile.Error()}},
 		{"internal server error", http.ErrHandlerTimeout, http.StatusInternalServerError,
 			map[string]interface{}{"message": http.ErrHandlerTimeout.Error()}},
+		{"invalid parameters error", &errInvalidParam, http.StatusBadRequest,
+			map[string]interface{}{"message": errInvalidParam.Error()}},
 	}
 
 	for i, tc := range tests {
