@@ -3,12 +3,13 @@ package main
 import (
 	"errors"
 	"fmt"
-	gofrError "gofr.dev/pkg/gofr/errors"
 	"sync"
 	"time"
 
 	"github.com/redis/go-redis/v9"
+
 	"gofr.dev/pkg/gofr"
+	gofrError "gofr.dev/pkg/gofr/errors"
 )
 
 func main() {
