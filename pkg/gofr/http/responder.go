@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"reflect"
 
 	resTypes "gofr.dev/pkg/gofr/http/response"
 )
@@ -68,6 +69,16 @@ func (r Responder) HTTPStatusFromError(err error) (status int, errObj interface{
 		}
 	}
 
+	t := reflect.TypeOf(err)
+	ss := reflect.TypeOf(new(StatusCodeResponder)).Elem()
+
+	if t.Implements(ss) {
+		m, _ := reflect.ValueOf(err).Interface().(StatusCodeResponder)
+		return m.StatusCode(), map[string]interface{}{
+			"message": err.Error(),
+		}
+	}
+
 	return http.StatusInternalServerError, map[string]interface{}{
 		"message": err.Error(),
 	}
@@ -77,4 +88,8 @@ func (r Responder) HTTPStatusFromError(err error) (status int, errObj interface{
 type response struct {
 	Error interface{} `json:"error,omitempty"`
 	Data  interface{} `json:"data,omitempty"`
+}
+
+type StatusCodeResponder interface {
+	StatusCode() int
 }

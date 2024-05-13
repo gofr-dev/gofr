@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	gofrError "gofr.dev/pkg/gofr/errors"
 	"sync"
 	"time"
 
@@ -45,7 +46,7 @@ func ErrorHandler(c *gofr.Context) (interface{}, error) {
 func RedisHandler(c *gofr.Context) (interface{}, error) {
 	val, err := c.Redis.Get(c, "test").Result()
 	if err != nil && err != redis.Nil { // If key is not found, we are not considering this an error and returning "".
-		return nil, err
+		return nil, gofrError.NewDBError(err, "error from redis db")
 	}
 
 	return val, nil
@@ -82,7 +83,10 @@ func TraceHandler(c *gofr.Context) (interface{}, error) {
 
 func MysqlHandler(c *gofr.Context) (interface{}, error) {
 	var value int
-	err := c.SQL.QueryRowContext(c, "select 2+2").Scan(&value)
+	row := c.SQL.QueryRowContext(c, "select 2+2")
+	if row.Err() != nil {
+		return nil, gofrError.NewDBError(row.Err(), "error from sql db")
+	}
 
-	return value, err
+	return value, nil
 }
