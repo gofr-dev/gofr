@@ -12,7 +12,7 @@ func TestEntityNotFoundError_Error(t *testing.T) {
 	fieldName := "id"
 	fieldValue := "2"
 
-	err := EntityNotFoundError{fieldName: fieldName, fieldValue: fieldValue}
+	err := EntityNotFoundError{FieldName: fieldName, FieldValue: fieldValue}
 	expectedMsg := fmt.Sprintf("No entity found with %s : %s", fieldName, fieldValue)
 
 	assert.Equal(t, err.Error(), expectedMsg, "TestEntityNotFoundError_Error Failed!")
