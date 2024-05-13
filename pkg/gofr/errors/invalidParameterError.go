@@ -6,10 +6,12 @@ import (
 	"strings"
 )
 
+// InvalidParamError represents an error for invalid parameter values.
 type InvalidParamError struct {
-	Param []string `json:"param,omitempty"`
+	Param []string `json:"param,omitempty"` // Param contains the list of invalid parameter names.
 }
 
+// Error returns the formatted error message.
 func (e *InvalidParamError) Error() string {
 	if len(e.Param) == 1 {
 		return fmt.Sprintf("Parameter '%s' is invalid", e.Param[0])

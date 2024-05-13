@@ -6,10 +6,12 @@ import (
 	"strings"
 )
 
+// MissingParamError represents an error for missing parameters in a request.
 type MissingParamError struct {
 	Param []string `json:"param,omitempty"`
 }
 
+// Error returns the formatted error message.
 func (e *MissingParamError) Error() string {
 	if len(e.Param) == 0 {
 		return "This request is missing parameters"

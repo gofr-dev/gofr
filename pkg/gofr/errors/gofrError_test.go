@@ -20,7 +20,7 @@ func TestNewGofrError(t *testing.T) {
 	}
 
 	// without underlying error
-	gofrErr = NewGofrError(nil, "custom message")
+	gofrErr = NewGofrError(nil, "custom message").WithStack()
 	expectedMsg = "custom message"
 
 	if !assert.Equal(t, gofrErr.Error(), expectedMsg) {

@@ -28,3 +28,8 @@ func NewGofrError(wrapErr error, message string) *GofrError {
 		message: message,
 	}
 }
+
+func (e *GofrError) WithStack() *GofrError {
+	e.error = errors.WithStack(e.error)
+	return e
+}
