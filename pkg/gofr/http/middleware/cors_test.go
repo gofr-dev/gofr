@@ -38,7 +38,7 @@ func Test_CORS(t *testing.T) {
 		handler.ServeHTTP(w, req)
 
 		assert.Equal(t, "*", w.Header().Get("Access-Control-Allow-Origin"), "TEST[%d], Failed.\n", i)
-		assert.Equal(t, "POST, GET, OPTIONS, PUT, DELETE", w.Header().Get("Access-Control-Allow-Methods"), "TEST[%d], Failed.\n", i)
+		assert.Equal(t, "POST, GET, OPTIONS, PUT, DELETE, PATCH", w.Header().Get("Access-Control-Allow-Methods"), "TEST[%d], Failed.\n", i)
 		assert.Equal(t, tc.expHeaders, len(w.Header()), "TEST[%d], Failed.\n", i)
 		assert.Equal(t, tc.respCode, w.Code, "TEST[%d], Failed.\n", i)
 		assert.Equal(t, tc.respBody, w.Body.String(), "TEST[%d], Failed.\n", i)
