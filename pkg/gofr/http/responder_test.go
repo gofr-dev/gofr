@@ -1,13 +1,13 @@
 package http
 
 import (
-	"gofr.dev/pkg/gofr/errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 
+	"gofr.dev/pkg/gofr/errors"
 	resTypes "gofr.dev/pkg/gofr/http/response"
 )
 
