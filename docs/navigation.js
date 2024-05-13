@@ -13,11 +13,12 @@ export const navigation = [
     {
         title: 'Advanced Guide',
         links: [
+            { title: "Scheduling Cron Jobs", href: "/docs/advanced-guide/using-cron"},
             { title: 'Overriding Default', href: '/docs/advanced-guide/overriding-default' },
             { title: 'Remote Log Level Change', href: '/docs/advanced-guide/remote-log-level-change' },
             { title: 'Publishing Custom Metrics', href: '/docs/advanced-guide/publishing-custom-metrics' },
             { title: 'Custom Spans in Tracing', href: '/docs/advanced-guide/custom-spans-in-tracing' },
-            {title: 'Adding Custom Middleware',href: '/docs/advanced-guide/middlewares'},
+            { title: 'Adding Custom Middleware',href: '/docs/advanced-guide/middlewares'},
             { title: 'HTTP Communication', href: '/docs/advanced-guide/http-communication' },
             { title: 'HTTP Authentication', href: '/docs/advanced-guide/http-authentication' },
             { title: 'Circuit Breaker Support', href: '/docs/advanced-guide/circuit-breaker' },
