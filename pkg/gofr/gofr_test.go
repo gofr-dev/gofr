@@ -92,7 +92,7 @@ func TestGofr_ServerRoutes(t *testing.T) {
 		return "Success", nil
 	})
 
-	g.PATCH("/patch", func(c *Context) (interface{}, error) {
+	g.PATCH("/patch", func(*Context) (interface{}, error) {
 		return "Success", nil
 	})
 
