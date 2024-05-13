@@ -227,6 +227,7 @@ func (a *App) DELETE(pattern string, handler Handler) {
 	a.add("DELETE", pattern, handler)
 }
 
+// PATCH adds a Handler for http PATCH method for a route pattern.
 func (a *App) PATCH(pattern string, handler Handler) {
 	a.add("PATCH", pattern, handler)
 }
