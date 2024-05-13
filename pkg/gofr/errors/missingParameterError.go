@@ -17,6 +17,7 @@ func (e *MissingParamError) Error() string {
 
 	paramCount := len(e.Param)
 	paramList := strings.Join(e.Param, ", ")
+
 	return fmt.Sprintf("%d parameter(s) %s are missing for this request", paramCount, paramList)
 }
 
