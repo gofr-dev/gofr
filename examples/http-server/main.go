@@ -9,7 +9,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"gofr.dev/pkg/gofr"
-	gofrError "gofr.dev/pkg/gofr/errors"
+	"gofr.dev/pkg/gofr/datasource"
 )
 
 func main() {
@@ -47,7 +47,7 @@ func ErrorHandler(c *gofr.Context) (interface{}, error) {
 func RedisHandler(c *gofr.Context) (interface{}, error) {
 	val, err := c.Redis.Get(c, "test").Result()
 	if err != nil && err != redis.Nil { // If key is not found, we are not considering this an error and returning "".
-		return nil, gofrError.NewDBError(err, "error from redis db")
+		return nil, datasource.DBError(err, "error from redis db")
 	}
 
 	return val, nil
@@ -86,7 +86,7 @@ func MysqlHandler(c *gofr.Context) (interface{}, error) {
 	var value int
 	row := c.SQL.QueryRowContext(c, "select 2+2")
 	if row.Err() != nil {
-		return nil, gofrError.NewDBError(row.Err(), "error from sql db")
+		return nil, datasource.DBError(row.Err(), "error from sql db")
 	}
 
 	return value, nil

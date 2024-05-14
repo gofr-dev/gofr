@@ -1,4 +1,4 @@
-package errors
+package datasource
 
 import (
 	"fmt"
@@ -13,7 +13,7 @@ import (
 func TestNewDBError(t *testing.T) {
 	// Test with wrapped error
 	wrappedErr := errors.New("underlying error")
-	dbErr := NewDBError(wrappedErr, "custom message")
+	dbErr := DBError(wrappedErr, "custom message").WithStack()
 
 	expectedMsg := fmt.Sprintf("custom message: %v", dbErr.error)
 	if !assert.Equal(t, dbErr.Error(), expectedMsg) {
@@ -21,7 +21,7 @@ func TestNewDBError(t *testing.T) {
 	}
 
 	// Test with no wrapped error
-	dbErr = NewDBError(nil, "custom message")
+	dbErr = DBError(nil, "custom message")
 
 	expectedMsg = "custom message"
 	if !assert.Equal(t, dbErr.Error(), expectedMsg) {
@@ -30,7 +30,7 @@ func TestNewDBError(t *testing.T) {
 }
 
 func TestDBError_StatusCode(t *testing.T) {
-	dbErr := NewDBError(nil, "custom message").WithStack()
+	dbErr := DBError(nil, "custom message")
 
 	expectedCode := http.StatusInternalServerError
 	if got := dbErr.StatusCode(); got != expectedCode {

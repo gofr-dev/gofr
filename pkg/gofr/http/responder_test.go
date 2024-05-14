@@ -7,7 +7,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"gofr.dev/pkg/gofr/errors"
 	resTypes "gofr.dev/pkg/gofr/http/response"
 )
 
@@ -34,7 +33,7 @@ func TestResponder_Respond(t *testing.T) {
 
 func TestResponder_HTTPStatusFromError(t *testing.T) {
 	r := NewResponder(httptest.NewRecorder(), http.MethodGet)
-	errInvalidParam := errors.InvalidParamError{Param: []string{"name"}}
+	errInvalidParam := ErrorInvalidParam{Param: []string{"name"}}
 
 	tests := []struct {
 		desc       string
