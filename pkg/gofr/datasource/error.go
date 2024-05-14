@@ -23,7 +23,7 @@ func (e *DBErr) Error() string {
 	return e.message
 }
 
-// DBError creates a new DBError with the provided error and  message
+// DBError creates a new DBError with the provided error and  message.
 func DBError(err error, message ...string) *DBErr {
 	return &DBErr{
 		error:   errors.Wrap(err, message[0]),

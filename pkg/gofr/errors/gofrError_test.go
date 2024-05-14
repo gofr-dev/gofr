@@ -1,7 +1,6 @@
 package errors
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -14,7 +13,7 @@ func TestNewGofrError(t *testing.T) {
 	wrappedErr := errors.New("underlying error")
 	gofrErr := New(wrappedErr, "custom message")
 
-	expectedMsg := fmt.Sprintf("custom message: %v", gofrErr.error)
+	expectedMsg := "custom message: underlying error"
 	if !assert.Equal(t, gofrErr.Error(), expectedMsg) {
 		t.Errorf("TestNewGofrError Failed")
 	}

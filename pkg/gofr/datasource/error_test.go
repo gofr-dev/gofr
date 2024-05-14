@@ -1,7 +1,6 @@
 package datasource
 
 import (
-	"fmt"
 	"net/http"
 	"testing"
 
@@ -15,7 +14,7 @@ func TestNewDBError(t *testing.T) {
 	wrappedErr := errors.New("underlying error")
 	dbErr := DBError(wrappedErr, "custom message").WithStack()
 
-	expectedMsg := fmt.Sprintf("custom message: %v", dbErr.error)
+	expectedMsg := "custom message: underlying error"
 	if !assert.Equal(t, dbErr.Error(), expectedMsg) {
 		t.Errorf("TestNewGofrError Failed")
 	}
