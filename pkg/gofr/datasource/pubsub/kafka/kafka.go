@@ -73,7 +73,7 @@ func New(conf Config, logger pubsub.Logger, metrics Metrics) *kafkaClient {
 
 	reader := make(map[string]Reader)
 
-	logger.Logf("connected to Kafka, broker: %s, ", conf.Broker)
+	logger.Logf("connected to Kafka, broker: %s", conf.Broker)
 
 	return &kafkaClient{
 		config:  conf,
