@@ -407,9 +407,7 @@ func Test_HealthCheck(t *testing.T) {
 	metrics := NewMockMetrics(gomock.NewController(t))
 
 	cl := Client{metrics: metrics}
-
-	metrics.EXPECT().RecordHistogram(context.Background(), "app_mongo_stats",
-		gomock.Any(), "type", gomock.Any()).AnyTimes()
+	s
 
 	cl.logger = NewMockLogger(DEBUG)
 
