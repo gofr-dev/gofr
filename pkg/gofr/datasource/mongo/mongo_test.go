@@ -407,7 +407,6 @@ func Test_HealthCheck(t *testing.T) {
 	metrics := NewMockMetrics(gomock.NewController(t))
 
 	cl := Client{metrics: metrics}
-	s
 
 	cl.logger = NewMockLogger(DEBUG)
 
