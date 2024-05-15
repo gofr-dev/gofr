@@ -38,6 +38,7 @@ func Test_NewMongoClientError(t *testing.T) {
 }
 
 func Test_InsertCommands(t *testing.T) {
+	// Create a connected client using the mock database
 	mt := mtest.New(t, mtest.NewOptions().ClientType(mtest.Mock))
 
 	metrics := NewMockMetrics(gomock.NewController(t))
@@ -46,8 +47,6 @@ func Test_InsertCommands(t *testing.T) {
 
 	metrics.EXPECT().RecordHistogram(context.Background(), "app_mongo_stats",
 		gomock.Any(), "type", gomock.Any()).AnyTimes()
-
-	// Create a connected client using the mock database
 
 	cl.logger = NewMockLogger(DEBUG)
 
@@ -111,6 +110,7 @@ func Test_InsertCommands(t *testing.T) {
 }
 
 func Test_FindMultipleCommands(t *testing.T) {
+	// Create a connected client using the mock database
 	mt := mtest.New(t, mtest.NewOptions().ClientType(mtest.Mock))
 
 	metrics := NewMockMetrics(gomock.NewController(t))
@@ -119,8 +119,6 @@ func Test_FindMultipleCommands(t *testing.T) {
 
 	metrics.EXPECT().RecordHistogram(context.Background(), "app_mongo_stats",
 		gomock.Any(), "type", gomock.Any()).AnyTimes()
-
-	// Create a connected client using the mock database
 
 	cl.logger = NewMockLogger(DEBUG)
 
@@ -140,7 +138,7 @@ func Test_FindMultipleCommands(t *testing.T) {
 		killCursors := mtest.CreateCursorResponse(0, "foo.bar", mtest.NextBatch)
 		mt.AddMockResponses(first, killCursors)
 
-		mt.AddMockResponses(first) // Likely don't need LastRespons
+		mt.AddMockResponses(first) // Likely don't need LastResponse
 
 		err := cl.Find(context.Background(), mt.Coll.Name(), bson.D{{}}, &foundDocuments)
 
@@ -172,7 +170,7 @@ func Test_FindMultipleCommands(t *testing.T) {
 
 		mt.AddMockResponses(first)
 
-		mt.AddMockResponses(first) // Likely don't need LastRespons
+		mt.AddMockResponses(first) // Likely don't need LastResponse
 
 		err := cl.Find(context.Background(), mt.Coll.Name(), bson.D{{}}, &foundDocuments)
 
@@ -182,6 +180,7 @@ func Test_FindMultipleCommands(t *testing.T) {
 }
 
 func Test_FindOneCommands(t *testing.T) {
+	// Create a connected client using the mock database
 	mt := mtest.New(t, mtest.NewOptions().ClientType(mtest.Mock))
 
 	metrics := NewMockMetrics(gomock.NewController(t))
@@ -190,8 +189,6 @@ func Test_FindOneCommands(t *testing.T) {
 
 	metrics.EXPECT().RecordHistogram(context.Background(), "app_mongo_stats",
 		gomock.Any(), "type", gomock.Any()).AnyTimes()
-
-	// Create a connected client using the mock database
 
 	cl.logger = NewMockLogger(DEBUG)
 
@@ -246,6 +243,7 @@ func Test_FindOneCommands(t *testing.T) {
 }
 
 func Test_UpdateCommands(t *testing.T) {
+	// Create a connected client using the mock database
 	mt := mtest.New(t, mtest.NewOptions().ClientType(mtest.Mock))
 
 	metrics := NewMockMetrics(gomock.NewController(t))
@@ -254,8 +252,6 @@ func Test_UpdateCommands(t *testing.T) {
 
 	metrics.EXPECT().RecordHistogram(context.Background(), "app_mongo_stats",
 		gomock.Any(), "type", gomock.Any()).AnyTimes()
-
-	// Create a connected client using the mock database
 
 	cl.logger = NewMockLogger(DEBUG)
 
@@ -311,7 +307,7 @@ func Test_CountDocuments(t *testing.T) {
 		// below code returns the count
 		mt.AddMockResponses(mtest.CreateCursorResponse(1, "test.restaurants", mtest.FirstBatch, bson.D{{Key: "n", Value: 1}}))
 
-		// For count to work, mongo needs an index. So we need to create that. Index view should contains a key. Value does not matter
+		// For count to work, mongo needs an index. So we need to create that. Index view should contain a key. Value does not matter
 		indexView := mt.Coll.Indexes()
 		_, err := indexView.CreateOne(context.Background(), mongo.IndexModel{
 			Keys: bson.D{{Key: "x", Value: 1}},
@@ -326,6 +322,7 @@ func Test_CountDocuments(t *testing.T) {
 }
 
 func Test_DeleteCommands(t *testing.T) {
+	// Create a connected client using the mock database
 	mt := mtest.New(t, mtest.NewOptions().ClientType(mtest.Mock))
 
 	metrics := NewMockMetrics(gomock.NewController(t))
@@ -334,8 +331,6 @@ func Test_DeleteCommands(t *testing.T) {
 
 	metrics.EXPECT().RecordHistogram(context.Background(), "app_mongo_stats",
 		gomock.Any(), "type", gomock.Any()).AnyTimes()
-
-	// Create a connected client using the mock database
 
 	cl.logger = NewMockLogger(DEBUG)
 
@@ -393,6 +388,7 @@ func Test_DeleteCommands(t *testing.T) {
 }
 
 func Test_Drop(t *testing.T) {
+	// Create a connected client using the mock database
 	mt := mtest.New(t, mtest.NewOptions().ClientType(mtest.Mock))
 
 	metrics := NewMockMetrics(gomock.NewController(t))
@@ -401,8 +397,6 @@ func Test_Drop(t *testing.T) {
 
 	metrics.EXPECT().RecordHistogram(context.Background(), "app_mongo_stats",
 		gomock.Any(), "type", gomock.Any()).AnyTimes()
-
-	// Create a connected client using the mock database
 
 	cl.logger = NewMockLogger(DEBUG)
 
@@ -418,6 +412,7 @@ func Test_Drop(t *testing.T) {
 }
 
 func Test_HealthCheck(t *testing.T) {
+	// Create a connected client using the mock database
 	mt := mtest.New(t, mtest.NewOptions().ClientType(mtest.Mock))
 
 	metrics := NewMockMetrics(gomock.NewController(t))
@@ -426,8 +421,6 @@ func Test_HealthCheck(t *testing.T) {
 
 	metrics.EXPECT().RecordHistogram(context.Background(), "app_mongo_stats",
 		gomock.Any(), "type", gomock.Any()).AnyTimes()
-
-	// Create a connected client using the mock database
 
 	cl.logger = NewMockLogger(DEBUG)
 
