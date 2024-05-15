@@ -17,7 +17,6 @@ func Test_CustomDomainProvider_Get(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	path := "/path"
 	queryParams := map[string]interface{}{"key": "value"}
 	body := []byte("body")
 
@@ -33,14 +32,14 @@ func Test_CustomDomainProvider_Get(t *testing.T) {
 	}))
 	defer server.Close()
 
-	httpService := NewHTTPService(server.URL, logging.NewMockLogger(logging.INFO), nil,
-		&CustomHeader{
-			Header: map[string]string{
+	customHeaderService := NewHTTPService(server.URL, logging.NewMockLogger(logging.INFO), nil,
+		&Headers{
+			Headers: map[string]string{
 				"TEST_KEY": "test_value",
 			},
 		})
 
-	resp, err := httpService.Get(context.Background(), path, queryParams)
+	resp, err := customHeaderService.Get(context.Background(), "/path", queryParams)
 	assert.Nil(t, err)
 
 	defer resp.Body.Close()
@@ -57,7 +56,6 @@ func Test_CustomDomainProvider_Post(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	path := "/path"
 	queryParams := map[string]interface{}{"key": "value"}
 	body := []byte("body")
 
@@ -68,13 +66,13 @@ func Test_CustomDomainProvider_Post(t *testing.T) {
 	}))
 	defer server.Close()
 
-	httpService := NewHTTPService(server.URL, logging.NewMockLogger(logging.INFO), nil,
-		&CustomHeader{
-			Header: map[string]string{
+	customHeaderService := NewHTTPService(server.URL, logging.NewMockLogger(logging.INFO), nil,
+		&Headers{
+			Headers: map[string]string{
 				"TEST_KEY": "test_value",
 			}})
 
-	resp, err := httpService.Post(context.Background(), path, queryParams, body)
+	resp, err := customHeaderService.Post(context.Background(), "/path", queryParams, body)
 	assert.Nil(t, err)
 
 	defer resp.Body.Close()
@@ -87,7 +85,6 @@ func TestCustomDomainProvider_Put(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	path := "/path"
 	queryParams := map[string]interface{}{"key": "value"}
 	body := []byte("body")
 
@@ -98,13 +95,13 @@ func TestCustomDomainProvider_Put(t *testing.T) {
 	}))
 	defer server.Close()
 
-	httpService := NewHTTPService(server.URL, logging.NewMockLogger(logging.INFO), nil,
-		&CustomHeader{
-			Header: map[string]string{
+	customHeaderService := NewHTTPService(server.URL, logging.NewMockLogger(logging.INFO), nil,
+		&Headers{
+			Headers: map[string]string{
 				"TEST_KEY": "test_value",
 			}})
 
-	resp, err := httpService.Put(context.Background(), path, queryParams, body)
+	resp, err := customHeaderService.Put(context.Background(), "/path", queryParams, body)
 	assert.Nil(t, err)
 
 	defer resp.Body.Close()
@@ -117,7 +114,6 @@ func TestCustomDomainProvider_Patch(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	path := "/path"
 	queryParams := map[string]interface{}{"key": "value"}
 	body := []byte("body")
 
@@ -128,13 +124,13 @@ func TestCustomDomainProvider_Patch(t *testing.T) {
 	}))
 	defer server.Close()
 
-	httpService := NewHTTPService(server.URL, logging.NewMockLogger(logging.INFO), nil,
-		&CustomHeader{
-			Header: map[string]string{
+	customHeaderService := NewHTTPService(server.URL, logging.NewMockLogger(logging.INFO), nil,
+		&Headers{
+			Headers: map[string]string{
 				"TEST_KEY": "test_value",
 			}})
 
-	resp, err := httpService.Patch(context.Background(), path, queryParams, body)
+	resp, err := customHeaderService.Patch(context.Background(), "/path", queryParams, body)
 	assert.Nil(t, err)
 
 	defer resp.Body.Close()
@@ -147,7 +143,6 @@ func TestCustomDomainProvider_Delete(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	path := "/path"
 	body := []byte("body")
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -157,13 +152,13 @@ func TestCustomDomainProvider_Delete(t *testing.T) {
 	}))
 	defer server.Close()
 
-	httpService := NewHTTPService(server.URL, logging.NewMockLogger(logging.INFO), nil,
-		&CustomHeader{
-			Header: map[string]string{
+	customHeaderService := NewHTTPService(server.URL, logging.NewMockLogger(logging.INFO), nil,
+		&Headers{
+			Headers: map[string]string{
 				"TEST_KEY": "test_value",
 			}})
 
-	resp, err := httpService.Delete(context.Background(), path, body)
+	resp, err := customHeaderService.Delete(context.Background(), "/path", body)
 	assert.Nil(t, err)
 
 	defer resp.Body.Close()
