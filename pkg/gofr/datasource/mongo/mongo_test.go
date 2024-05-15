@@ -46,14 +46,14 @@ func Test_InsertCommands(t *testing.T) {
 	cl := Client{metrics: metrics}
 
 	metrics.EXPECT().RecordHistogram(context.Background(), "app_mongo_stats",
-		gomock.Any(), "type", gomock.Any()).AnyTimes()
+		gomock.Any(), "type", gomock.Any()).Times(4)
 
 	cl.logger = NewMockLogger(DEBUG)
 
 	mt.Run("insertOneSuccess", func(mt *mtest.T) {
 		cl.Database = mt.DB
 		mt.AddMockResponses(mtest.CreateSuccessResponse())
-		// Create a document to insert
+
 		doc := map[string]interface{}{"name": "Aryan"}
 
 		resp, err := cl.InsertOne(context.Background(), mt.Coll.Name(), doc)
@@ -70,7 +70,6 @@ func Test_InsertCommands(t *testing.T) {
 			Message: "duplicate key error",
 		}))
 
-		// Create a document to insert
 		doc := map[string]interface{}{"name": "Aryan"}
 
 		resp, err := cl.InsertOne(context.Background(), mt.Coll.Name(), doc)
@@ -82,7 +81,7 @@ func Test_InsertCommands(t *testing.T) {
 	mt.Run("insertManySuccess", func(mt *mtest.T) {
 		cl.Database = mt.DB
 		mt.AddMockResponses(mtest.CreateSuccessResponse())
-		// Create a document to insert
+
 		doc := map[string]interface{}{"name": "Aryan"}
 
 		resp, err := cl.InsertMany(context.Background(), mt.Coll.Name(), []interface{}{doc, doc})
@@ -99,7 +98,6 @@ func Test_InsertCommands(t *testing.T) {
 			Message: "duplicate key error",
 		}))
 
-		// Create a document to insert
 		doc := map[string]interface{}{"name": "Aryan"}
 
 		resp, err := cl.InsertMany(context.Background(), mt.Coll.Name(), []interface{}{doc, doc})
@@ -118,7 +116,7 @@ func Test_FindMultipleCommands(t *testing.T) {
 	cl := Client{metrics: metrics}
 
 	metrics.EXPECT().RecordHistogram(context.Background(), "app_mongo_stats",
-		gomock.Any(), "type", gomock.Any()).AnyTimes()
+		gomock.Any(), "type", gomock.Any()).Times(3)
 
 	cl.logger = NewMockLogger(DEBUG)
 
@@ -138,11 +136,10 @@ func Test_FindMultipleCommands(t *testing.T) {
 		killCursors := mtest.CreateCursorResponse(0, "foo.bar", mtest.NextBatch)
 		mt.AddMockResponses(first, killCursors)
 
-		mt.AddMockResponses(first) // Likely don't need LastResponse
+		mt.AddMockResponses(first)
 
 		err := cl.Find(context.Background(), mt.Coll.Name(), bson.D{{}}, &foundDocuments)
 
-		// Add comment explaining expected error type
 		assert.Nil(t, err, "Unexpected error during Find operation")
 	})
 
@@ -170,11 +167,10 @@ func Test_FindMultipleCommands(t *testing.T) {
 
 		mt.AddMockResponses(first)
 
-		mt.AddMockResponses(first) // Likely don't need LastResponse
+		mt.AddMockResponses(first)
 
 		err := cl.Find(context.Background(), mt.Coll.Name(), bson.D{{}}, &foundDocuments)
 
-		// Add comment explaining expected error type
 		assert.Equal(t, "cursor.nextBatch should be an array but is a BSON invalid", err.Error())
 	})
 }
@@ -188,7 +184,7 @@ func Test_FindOneCommands(t *testing.T) {
 	cl := Client{metrics: metrics}
 
 	metrics.EXPECT().RecordHistogram(context.Background(), "app_mongo_stats",
-		gomock.Any(), "type", gomock.Any()).AnyTimes()
+		gomock.Any(), "type", gomock.Any()).Times(2)
 
 	cl.logger = NewMockLogger(DEBUG)
 
@@ -217,7 +213,6 @@ func Test_FindOneCommands(t *testing.T) {
 
 		err := cl.FindOne(context.Background(), mt.Coll.Name(), bson.D{{}}, &foundDocuments)
 
-		// Add comment explaining expected error type
 		assert.Equal(t, expectedUser.Name, foundDocuments.Name)
 		assert.Nil(t, err)
 	})
@@ -237,7 +232,6 @@ func Test_FindOneCommands(t *testing.T) {
 
 		err := cl.FindOne(context.Background(), mt.Coll.Name(), bson.D{{}}, &foundDocuments)
 
-		// Add comment explaining expected error type
 		assert.NotNil(t, err)
 	})
 }
@@ -251,7 +245,7 @@ func Test_UpdateCommands(t *testing.T) {
 	cl := Client{metrics: metrics}
 
 	metrics.EXPECT().RecordHistogram(context.Background(), "app_mongo_stats",
-		gomock.Any(), "type", gomock.Any()).AnyTimes()
+		gomock.Any(), "type", gomock.Any()).Times(3)
 
 	cl.logger = NewMockLogger(DEBUG)
 
@@ -296,7 +290,7 @@ func Test_CountDocuments(t *testing.T) {
 	cl := Client{metrics: metrics}
 
 	metrics.EXPECT().RecordHistogram(context.Background(), "app_mongo_stats",
-		gomock.Any(), "type", gomock.Any()).AnyTimes()
+		gomock.Any(), "type", gomock.Any()).Times(1)
 
 	cl.logger = NewMockLogger(DEBUG)
 
@@ -304,7 +298,7 @@ func Test_CountDocuments(t *testing.T) {
 		cl.Database = mt.DB
 
 		mt.AddMockResponses(mtest.CreateSuccessResponse())
-		// below code returns the count
+
 		mt.AddMockResponses(mtest.CreateCursorResponse(1, "test.restaurants", mtest.FirstBatch, bson.D{{Key: "n", Value: 1}}))
 
 		// For count to work, mongo needs an index. So we need to create that. Index view should contain a key. Value does not matter
@@ -313,7 +307,7 @@ func Test_CountDocuments(t *testing.T) {
 			Keys: bson.D{{Key: "x", Value: 1}},
 		})
 		require.Nil(mt, err, "CreateOne error for index: %v", err)
-		// Create a document to insert
+
 		resp, err := cl.CountDocuments(context.Background(), mt.Coll.Name(), bson.D{{Key: "name", Value: "test"}})
 
 		assert.Equal(t, int64(1), resp)
@@ -330,14 +324,13 @@ func Test_DeleteCommands(t *testing.T) {
 	cl := Client{metrics: metrics}
 
 	metrics.EXPECT().RecordHistogram(context.Background(), "app_mongo_stats",
-		gomock.Any(), "type", gomock.Any()).AnyTimes()
+		gomock.Any(), "type", gomock.Any()).Times(4)
 
 	cl.logger = NewMockLogger(DEBUG)
 
 	mt.Run("DeleteOne", func(mt *mtest.T) {
 		cl.Database = mt.DB
 		mt.AddMockResponses(mtest.CreateSuccessResponse())
-		// Create a document to insert
 
 		resp, err := cl.DeleteOne(context.Background(), mt.Coll.Name(), bson.D{{}})
 
@@ -352,7 +345,6 @@ func Test_DeleteCommands(t *testing.T) {
 			Code:    11000,
 			Message: "duplicate key error",
 		}))
-		// Create a document to insert
 
 		resp, err := cl.DeleteOne(context.Background(), mt.Coll.Name(), bson.D{{}})
 
@@ -363,7 +355,6 @@ func Test_DeleteCommands(t *testing.T) {
 	mt.Run("DeleteMany", func(mt *mtest.T) {
 		cl.Database = mt.DB
 		mt.AddMockResponses(mtest.CreateSuccessResponse())
-		// Create a document to insert
 
 		resp, err := cl.DeleteMany(context.Background(), mt.Coll.Name(), bson.D{{}})
 
@@ -378,7 +369,6 @@ func Test_DeleteCommands(t *testing.T) {
 			Code:    11000,
 			Message: "duplicate key error",
 		}))
-		// Create a document to insert
 
 		resp, err := cl.DeleteMany(context.Background(), mt.Coll.Name(), bson.D{{}})
 
@@ -396,14 +386,13 @@ func Test_Drop(t *testing.T) {
 	cl := Client{metrics: metrics}
 
 	metrics.EXPECT().RecordHistogram(context.Background(), "app_mongo_stats",
-		gomock.Any(), "type", gomock.Any()).AnyTimes()
+		gomock.Any(), "type", gomock.Any()).Times(1)
 
 	cl.logger = NewMockLogger(DEBUG)
 
 	mt.Run("Drop", func(mt *mtest.T) {
 		cl.Database = mt.DB
 		mt.AddMockResponses(mtest.CreateSuccessResponse())
-		// Create a document to insert
 
 		err := cl.Drop(context.Background(), mt.Coll.Name())
 
@@ -427,7 +416,6 @@ func Test_HealthCheck(t *testing.T) {
 	mt.Run("HealthCheck Success", func(mt *mtest.T) {
 		cl.Database = mt.DB
 		mt.AddMockResponses(mtest.CreateSuccessResponse())
-		// Create a document to insert
 
 		resp := cl.HealthCheck()
 
@@ -441,7 +429,6 @@ func Test_HealthCheck(t *testing.T) {
 			Code:    11000,
 			Message: "duplicate key error",
 		}))
-		// Create a document to insert
 
 		resp := cl.HealthCheck()
 
