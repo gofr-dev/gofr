@@ -2,7 +2,6 @@ package mongo
 
 import (
 	"context"
-
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
