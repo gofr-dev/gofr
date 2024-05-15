@@ -18,7 +18,7 @@ type QueryLog struct {
 	Duration   int64       `json:"duration"`
 	Collection string      `json:"collection,omitempty"`
 	Filter     interface{} `json:"filter,omitempty"`
-	ID         interface{} `json:"ID,omitempty"`
+	ID         interface{} `json:"id,omitempty"`
 	Update     interface{} `json:"update,omitempty"`
 }
 
