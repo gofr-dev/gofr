@@ -1,4 +1,4 @@
-module github.com/gofr-dev/mongo
+module gofr.dev/pkg/gofr/datasource/mongo
 
 go 1.22.0
 
