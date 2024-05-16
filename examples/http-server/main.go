@@ -35,11 +35,6 @@ func HelloHandler(c *gofr.Context) (interface{}, error) {
 		name = "World"
 	}
 
-	err := c.Mongo.Drop(c, "xyz")
-	if err != nil {
-		return nil, err
-	}
-
 	return fmt.Sprintf("Hello %s!", name), nil
 }
 
