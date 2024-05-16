@@ -89,7 +89,11 @@ func Logging(logger logger) func(inner http.Handler) http.Handler {
 					Response:     res.status,
 				}
 				if logger != nil {
-					logger.Log(l)
+					if res.status >= http.StatusInternalServerError {
+						logger.Error(l)
+					} else {
+						logger.Log(l)
+					}
 				}
 			}(srw, r)
 
