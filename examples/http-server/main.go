@@ -47,7 +47,7 @@ func ErrorHandler(c *gofr.Context) (interface{}, error) {
 func RedisHandler(c *gofr.Context) (interface{}, error) {
 	val, err := c.Redis.Get(c, "test").Result()
 	if err != nil && err != redis.Nil { // If key is not found, we are not considering this an error and returning "".
-		return nil, datasource.NewError(err, "error from redis db")
+		return nil, datasource.Error(err, "error from redis db")
 	}
 
 	return val, nil
@@ -86,7 +86,7 @@ func MysqlHandler(c *gofr.Context) (interface{}, error) {
 	var value int
 	row := c.SQL.QueryRowContext(c, "select 2+2")
 	if row.Err() != nil {
-		return nil, datasource.NewError(row.Err(), "error from sql db")
+		return nil, datasource.Error(row.Err(), "error from sql db")
 	}
 
 	return value, nil

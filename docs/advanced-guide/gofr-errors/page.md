@@ -24,7 +24,7 @@ Database errors in GoFr, represented in the `datasource` package, encapsulate er
 as database connection, query failure, availability etc. User can use the database errors in following way:
 ```go
 // Creating a custom error for database operations
-dbErr := datasource.NewError(err, "database operation failed")
+dbErr := datasource.Error(err, "database operation failed")
 
 // Adding stack trace to the error
 dbErr = dbErr.WithStack()
@@ -40,7 +40,7 @@ representation.
 ```go
 func ValidateDOB(name string, email string) error {
   if name == "" {
-    return gofrerror.NewError(nil, "dob should be greater than 2000.")
+    return gofrerror.New(nil, "dob should be greater than 2000.")
   }
   // ... other validations
   return nil

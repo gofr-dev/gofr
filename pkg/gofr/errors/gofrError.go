@@ -25,8 +25,8 @@ func (e *errorGoFr) Error() string {
 	return e.message
 }
 
-//nolint:revive // NewError creates a new GoFr error and wraps the error with the provided message.
-func NewError(err error, message ...string) *errorGoFr {
+//nolint:revive // New creates a new GoFr error and wraps the error with the provided message.
+func New(err error, message ...string) *errorGoFr {
 	errMsg := strings.Join(message, " ")
 
 	if errMsg != "" {

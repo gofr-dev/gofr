@@ -24,8 +24,8 @@ func (e *errorDB) Error() string {
 	return e.message
 }
 
-//nolint:revive // NewError creates a new database error with the provided error and  message.
-func NewError(err error, message ...string) *errorDB {
+//nolint:revive // Error creates a new database error with the provided error and  message.
+func Error(err error, message ...string) *errorDB {
 	errMsg := strings.Join(message, " ")
 
 	if errMsg != "" {
@@ -40,7 +40,7 @@ func NewError(err error, message ...string) *errorDB {
 	}
 }
 
-// WithStack adds a stack trace to the NewError.
+// WithStack adds a stack trace to the Error.
 func (e *errorDB) WithStack() *errorDB {
 	e.error = errors.WithStack(e.error)
 	return e
