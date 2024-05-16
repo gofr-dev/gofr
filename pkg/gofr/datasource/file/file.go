@@ -16,7 +16,7 @@ func New(logger datasource.Logger) local {
 	return local{logger}
 }
 
-func (c local) CreateDir(name string) error {
+func (c local) CreateDir(name string, _ ...interface{}) error {
 	return os.MkdirAll(name, fs.ModePerm)
 }
 
@@ -26,7 +26,7 @@ func (c local) CreateDir(name string) error {
 // If file does not exist, it is created with mode 0666
 // Error return are of type *fs.PathError.
 // name contains the file name along with the path.
-func (c local) Create(name string, data []byte) error {
+func (c local) Create(name string, data []byte, _ ...interface{}) error {
 	// Open the file for writing with exclusive creation flag
 	// os.O_WRONLY: Opens the file for writing only.
 	// os.O_CREATE: Creates the file if it doesn't exist.
@@ -52,7 +52,7 @@ func (c local) Create(name string, data []byte) error {
 // Read reads the content of file and writes it in data.
 // If there is an error, it will be of type *fs.PathError.
 // name contains the file name along with the path.
-func (c local) Read(path string) ([]byte, error) {
+func (c local) Read(path string, _ ...interface{}) ([]byte, error) {
 	// Open the file for reading
 	f, err := os.Open(path)
 	if err != nil {
@@ -70,7 +70,7 @@ func (c local) Read(path string) ([]byte, error) {
 	return data, nil
 }
 
-func (c local) Update(name string, data []byte) error {
+func (c local) Update(name string, data []byte, _ ...interface{}) error {
 	// Open the file for writing with truncation
 	f, err := os.OpenFile(name, os.O_WRONLY|os.O_TRUNC, 0666)
 	if err != nil {
@@ -88,14 +88,14 @@ func (c local) Update(name string, data []byte) error {
 	return nil
 }
 
-func (c local) Delete(path string) error {
+func (c local) Delete(path string, _ ...interface{}) error {
 	return os.RemoveAll(path)
 }
 
-func (c local) Move(src string, dest string) error {
+func (c local) Move(src string, dest string, _ ...interface{}) error {
 	return os.Rename(src, dest)
 }
 
-func (c local) Stat(name string) (fs.FileInfo, error) {
+func (c local) Stat(name string, _ ...interface{}) (fs.FileInfo, error) {
 	return os.Stat(name)
 }
