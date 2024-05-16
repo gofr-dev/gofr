@@ -50,3 +50,11 @@ type Mongo interface {
 	// It returns an error if any.
 	Drop(ctx context.Context, collection string) error
 }
+
+// MongoBuilder has been created such that other requirements, such that logger, metrics configs can be passed
+// without making the user aware for the same.
+type MongoBuilder interface {
+	Mongo
+
+	Build(o ...interface{})
+}

@@ -387,7 +387,9 @@ func (a *App) UseMiddleware(middlewares ...gofrHTTP.Middleware) {
 	a.httpServer.router.UseMiddleware(middlewares...)
 }
 
-func (a *App) UseMongo(db datasource.Mongo) {
+func (a *App) UseMongo(db datasource.MongoBuilder) {
+	db.Build(a.Config, a.Logger(), a.Metrics())
+
 	a.container.Mongo = db
 }
 

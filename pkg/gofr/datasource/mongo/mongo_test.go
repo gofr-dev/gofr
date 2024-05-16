@@ -22,7 +22,8 @@ func Test_NewMongoClient(t *testing.T) {
 
 	metrics.EXPECT().NewHistogram("app_mongo_stats", "Response time of MONGO queries in milliseconds.", gomock.Any())
 
-	client := New(cfg, NewMockLogger(DEBUG), metrics)
+	client := New()
+	client.Build(cfg, NewMockLogger(DEBUG), metrics)
 
 	assert.NotNil(t, client)
 }
@@ -32,9 +33,10 @@ func Test_NewMongoClientError(t *testing.T) {
 
 	metrics := NewMockMetrics(gomock.NewController(t))
 
-	client := New(cfg, NewMockLogger(DEBUG), metrics)
+	client := New()
+	client.Build(cfg, NewMockLogger(DEBUG), metrics)
 
-	assert.Nil(t, client)
+	assert.Nil(t, client.Database)
 }
 
 func Test_InsertCommands(t *testing.T) {
