@@ -39,7 +39,7 @@ type Container struct {
 	SQL   DB
 	Mongo datasource.Mongo
 
-	File File
+	File datasource.File
 }
 
 func NewContainer(conf config.Config) *Container {

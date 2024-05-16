@@ -15,7 +15,7 @@ type File interface {
 	// If file does not exist, it is created with mode 0666
 	// Error return are of type *fs.PathError.
 	// name contains the file name along with the path.
-	Create(name string, option ...interface{}) error
+	Create(name string, data []byte, option ...interface{}) error
 
 	// Read reads the content of file and writes it in data.
 	// If there is an error, it will be of type *fs.PathError.

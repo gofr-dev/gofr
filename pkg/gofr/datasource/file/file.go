@@ -9,11 +9,22 @@ import (
 )
 
 type local struct {
-	datasource.Logger
+	logger datasource.Logger
 }
 
-func New(logger datasource.Logger) local {
-	return local{logger}
+func New(option ...interface{}) datasource.File {
+	var l local
+
+	for _, o := range option {
+		switch o.(type) {
+		case datasource.Logger:
+			l.logger = o.(datasource.Logger)
+		default:
+			return l
+		}
+	}
+
+	return l
 }
 
 func (c local) CreateDir(name string, _ ...interface{}) error {
@@ -41,7 +52,7 @@ func (c local) Create(name string, data []byte, _ ...interface{}) error {
 	// Write data to the file
 	_, err = f.Write(data)
 	if err != nil {
-		c.Logger.Errorf("error writing data to file: %v", err)
+		c.logger.Errorf("error writing data to file: %v", err)
 
 		return err
 	}
@@ -63,7 +74,7 @@ func (c local) Read(path string, _ ...interface{}) ([]byte, error) {
 	// Allocate buffer for reading the file
 	data, err := io.ReadAll(f)
 	if err != nil {
-		c.Logger.Errorf("error reading file: %w", err)
+		c.logger.Errorf("error reading file: %w", err)
 		return nil, err
 	}
 
