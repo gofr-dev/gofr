@@ -2,9 +2,9 @@ package mongo
 
 import (
 	"bytes"
-	"fmt"
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestPrettyPrint(t *testing.T) {
@@ -39,8 +39,6 @@ func TestPrettyPrint(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			var buf bytes.Buffer
 			tc.queryLog.PrettyPrint(&buf)
-			fmt.Println(buf.String())
-			fmt.Println(tc.expected)
 
 			assert.Contains(t, buf.String(), tc.expected)
 		})
