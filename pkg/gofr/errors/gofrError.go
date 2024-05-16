@@ -1,20 +1,21 @@
-package errors
+package gofrerror
 
 import (
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/pkg/errors"
 )
 
-// GofrError represents a generic GoFr error.
-type GofrError struct {
+// errorGoFr represents a generic GoFr error.
+type errorGoFr struct {
 	error
 	message string
 }
 
 // Error returns the formatted error message.
-func (e *GofrError) Error() string {
+func (e *errorGoFr) Error() string {
 	if e.error != nil && e.message != "" {
 		return fmt.Sprintf("%v", e.error)
 	} else if e.error != nil {
@@ -24,14 +25,22 @@ func (e *GofrError) Error() string {
 	return e.message
 }
 
-// New creates a new GofrError and wraps the error with the provided message.
-func New(err error, message ...string) *GofrError {
-	return &GofrError{
-		error:   errors.Wrap(err, message[0]),
-		message: message[0],
+//nolint:revive // NewError creates a new GoFr error and wraps the error with the provided message.
+func NewError(err error, message ...string) *errorGoFr {
+	errMsg := strings.Join(message, " ")
+
+	if errMsg != "" {
+		return &errorGoFr{
+			error:   errors.Wrap(err, errMsg),
+			message: errMsg,
+		}
+	}
+
+	return &errorGoFr{
+		error: err,
 	}
 }
 
-func (e *GofrError) StatusCode() int {
+func (e *errorGoFr) StatusCode() int {
 	return http.StatusInternalServerError
 }

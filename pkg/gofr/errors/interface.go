@@ -1,4 +1,4 @@
-package errors
+package gofrerror
 
 // GoFrErr represents a generic interface for gofr's error.
 type GoFrErr interface {

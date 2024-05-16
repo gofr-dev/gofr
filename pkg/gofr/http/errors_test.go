@@ -12,7 +12,7 @@ func TestErrorEntityNotFound(t *testing.T) {
 	fieldName := "id"
 	fieldValue := "2"
 
-	err := ErrorEntityNotFound{FieldName: fieldName, FieldValue: fieldValue}
+	err := ErrorEntityNotFound{Name: fieldName, Value: fieldValue}
 	expectedMsg := fmt.Sprintf("No entity found with %s : %s", fieldName, fieldValue)
 
 	assert.Equal(t, err.Error(), expectedMsg, "TestErrorEntityNotFound Failed!")
@@ -49,23 +49,6 @@ func TestInvalidParameter_StatusCode(t *testing.T) {
 	expectedCode := http.StatusBadRequest
 
 	assert.Equal(t, err.StatusCode(), expectedCode, "TestErrorInvalidParam_StatusCode Failed!")
-}
-
-func TestErrorMethodNotAllowed(t *testing.T) {
-	url := "https://test.com"
-	method := http.MethodGet
-
-	err := ErrorMethodNotAllowed{URL: url, Method: method}
-	expectedMsg := fmt.Sprintf("Method '%s' is not allowed on URL '%s'", method, url)
-
-	assert.Equal(t, err.Error(), expectedMsg, "TestErrorMethodNotAllowed Failed!")
-}
-
-func TestErrorMethodNotAllowed_StatusCode(t *testing.T) {
-	err := ErrorMethodNotAllowed{}
-	expectedCode := http.StatusMethodNotAllowed
-
-	assert.Equal(t, err.StatusCode(), expectedCode, "TestErrorMethodNotAllowed_StatusCode Failed!")
 }
 
 func TestErrorMissingParam(t *testing.T) {

@@ -3,17 +3,18 @@ package datasource
 import (
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/pkg/errors"
 )
 
-// DBErr represents an error specific to database operations.
-type DBErr struct {
+// errorDB represents an error specific to database operations.
+type errorDB struct {
 	error
 	message string
 }
 
-func (e *DBErr) Error() string {
+func (e *errorDB) Error() string {
 	if e.error != nil && e.message != "" {
 		return fmt.Sprintf("%v", e.error)
 	} else if e.error != nil {
@@ -23,20 +24,28 @@ func (e *DBErr) Error() string {
 	return e.message
 }
 
-// DBError creates a new DBError with the provided error and  message.
-func DBError(err error, message ...string) *DBErr {
-	return &DBErr{
-		error:   errors.Wrap(err, message[0]),
-		message: message[0],
+//nolint:revive // NewError creates a new database error with the provided error and  message.
+func NewError(err error, message ...string) *errorDB {
+	errMsg := strings.Join(message, " ")
+
+	if errMsg != "" {
+		return &errorDB{
+			error:   errors.Wrap(err, errMsg),
+			message: errMsg,
+		}
+	}
+
+	return &errorDB{
+		error: err,
 	}
 }
 
-// WithStack adds a stack trace to the DBError.
-func (e *DBErr) WithStack() *DBErr {
+// WithStack adds a stack trace to the NewError.
+func (e *errorDB) WithStack() *errorDB {
 	e.error = errors.WithStack(e.error)
 	return e
 }
 
-func (e *DBErr) StatusCode() int {
+func (e *errorDB) StatusCode() int {
 	return http.StatusInternalServerError
 }
