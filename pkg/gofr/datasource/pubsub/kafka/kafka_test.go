@@ -155,8 +155,10 @@ func TestKafkaClient_SubscribeSuccess(t *testing.T) {
 
 	mockReader.EXPECT().ReadMessage(gomock.Any()).
 		Return(kafka.Message{Value: []byte(`hello`), Topic: "test"}, nil)
-	mockMetrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_subscribe_total_count", "topic", "test")
-	mockMetrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_subscribe_success_count", "topic", "test")
+	mockMetrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_subscribe_total_count", "topic", "test",
+		"consumer_group", gomock.Any())
+	mockMetrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_subscribe_success_count", "topic", "test",
+		"consumer_group", gomock.Any())
 
 	logs := testutil.StdoutOutputForFunc(func() {
 		logger := logging.NewMockLogger(logging.DEBUG)

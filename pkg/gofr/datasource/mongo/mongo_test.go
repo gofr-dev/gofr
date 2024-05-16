@@ -45,8 +45,8 @@ func Test_InsertCommands(t *testing.T) {
 
 	cl := Client{metrics: metrics}
 
-	metrics.EXPECT().RecordHistogram(context.Background(), "app_mongo_stats",
-		gomock.Any(), "type", gomock.Any()).Times(4)
+	metrics.EXPECT().RecordHistogram(context.Background(), "app_mongo_stats", gomock.Any(), "hostname",
+		gomock.Any(), "database", gomock.Any(), "type", gomock.Any()).Times(4)
 
 	cl.logger = NewMockLogger(DEBUG)
 
@@ -115,8 +115,8 @@ func Test_FindMultipleCommands(t *testing.T) {
 
 	cl := Client{metrics: metrics}
 
-	metrics.EXPECT().RecordHistogram(context.Background(), "app_mongo_stats",
-		gomock.Any(), "type", gomock.Any()).Times(3)
+	metrics.EXPECT().RecordHistogram(context.Background(), "app_mongo_stats", gomock.Any(), "hostname",
+		gomock.Any(), "database", gomock.Any(), "type", gomock.Any()).Times(3)
 
 	cl.logger = NewMockLogger(DEBUG)
 
@@ -183,8 +183,8 @@ func Test_FindOneCommands(t *testing.T) {
 
 	cl := Client{metrics: metrics}
 
-	metrics.EXPECT().RecordHistogram(context.Background(), "app_mongo_stats",
-		gomock.Any(), "type", gomock.Any()).Times(2)
+	metrics.EXPECT().RecordHistogram(context.Background(), "app_mongo_stats", gomock.Any(), "hostname",
+		gomock.Any(), "database", gomock.Any(), "type", gomock.Any()).Times(2)
 
 	cl.logger = NewMockLogger(DEBUG)
 
@@ -244,8 +244,8 @@ func Test_UpdateCommands(t *testing.T) {
 
 	cl := Client{metrics: metrics}
 
-	metrics.EXPECT().RecordHistogram(context.Background(), "app_mongo_stats",
-		gomock.Any(), "type", gomock.Any()).Times(3)
+	metrics.EXPECT().RecordHistogram(context.Background(), "app_mongo_stats", gomock.Any(), "hostname",
+		gomock.Any(), "database", gomock.Any(), "type", gomock.Any()).Times(3)
 
 	cl.logger = NewMockLogger(DEBUG)
 
@@ -289,8 +289,8 @@ func Test_CountDocuments(t *testing.T) {
 
 	cl := Client{metrics: metrics}
 
-	metrics.EXPECT().RecordHistogram(context.Background(), "app_mongo_stats",
-		gomock.Any(), "type", gomock.Any()).Times(1)
+	metrics.EXPECT().RecordHistogram(context.Background(), "app_mongo_stats", gomock.Any(), "hostname",
+		gomock.Any(), "database", gomock.Any(), "type", gomock.Any()).Times(1)
 
 	cl.logger = NewMockLogger(DEBUG)
 
@@ -323,8 +323,8 @@ func Test_DeleteCommands(t *testing.T) {
 
 	cl := Client{metrics: metrics}
 
-	metrics.EXPECT().RecordHistogram(context.Background(), "app_mongo_stats",
-		gomock.Any(), "type", gomock.Any()).Times(4)
+	metrics.EXPECT().RecordHistogram(context.Background(), "app_mongo_stats", gomock.Any(), "hostname",
+		gomock.Any(), "database", gomock.Any(), "type", gomock.Any()).Times(4)
 
 	cl.logger = NewMockLogger(DEBUG)
 
@@ -385,8 +385,8 @@ func Test_Drop(t *testing.T) {
 
 	cl := Client{metrics: metrics}
 
-	metrics.EXPECT().RecordHistogram(context.Background(), "app_mongo_stats",
-		gomock.Any(), "type", gomock.Any()).Times(1)
+	metrics.EXPECT().RecordHistogram(context.Background(), "app_mongo_stats", gomock.Any(), "hostname",
+		gomock.Any(), "database", gomock.Any(), "type", gomock.Any()).Times(1)
 
 	cl.logger = NewMockLogger(DEBUG)
 
