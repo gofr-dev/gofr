@@ -7,7 +7,7 @@ type File interface {
 	// along with any necessary parents with fs.ModeDir FileMode.
 	// If directory already exist it will do nothing and return nil.
 	// name contains the file name along with the path.
-	CreateDir(name string) error
+	CreateDir(name string, option ...Option) error
 
 	// Create creates the file named path along with any necessary parents,
 	// and writes the given data to it.
@@ -38,4 +38,10 @@ type File interface {
 	// Stat returns stat for the file.
 	// name contains the file name along with the path.
 	Stat(name string) (fs.FileInfo, error)
+}
+
+type Option func(Setter)
+
+type Setter interface {
+	Apply()
 }
