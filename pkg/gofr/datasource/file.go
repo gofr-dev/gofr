@@ -2,7 +2,11 @@ package datasource
 
 import "io/fs"
 
-type File interface {
+// FileStorer interface implements different functionalities to do operations on a file.
+// All the methods accept the last paramater as ...interface{} such that to keep the interface consistent
+// across all the different filesystems such as FTP, SFTP or cloud stores such as S3, so we can implement
+// their specific configs as well.
+type FileStorer interface {
 	// CreateDir creates a new directory with the specified named name,
 	// along with any necessary parents with fs.ModeDir FileMode.
 	// If directory already exist it will do nothing and return nil.
