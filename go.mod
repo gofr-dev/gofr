@@ -1,8 +1,6 @@
 module gofr.dev
 
-go 1.22.0
-
-replace gofr.dev/pkg/gofr/datasource/mongo v0.0.0-20240515102221-4af1b054674e => ../gofr/pkg/gofr/datasource/mongo
+go 1.21
 
 require (
 	cloud.google.com/go/pubsub v1.38.0
