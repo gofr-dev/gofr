@@ -88,6 +88,7 @@ func Logging(logger logger) func(inner http.Handler) http.Handler {
 					URI:          req.RequestURI,
 					Response:     res.status,
 				}
+
 				if logger != nil {
 					if res.status >= http.StatusInternalServerError {
 						logger.Error(l)
