@@ -182,7 +182,7 @@ DB_NAME=test_db
 DB_PORT=3306
 
 # tracing configs
-TRACE_EXPORTER=zipkin  // Supported : zipkin,jaeger
+TRACE_EXPORTER=zipkin  
 TRACER_HOST=localhost
 TRACER_PORT=2005
 
@@ -193,7 +193,7 @@ LOG_LEVEL=DEBUG
 > provided, gofr uses  port `9411` by default. 
 
 Open {% new-tab-link title="zipkin" href="http://localhost:2005/zipkin/" /%} and search by TraceID (correlationID) to see the trace.
-{% figure src="/quick-start-trace.png" alt="Zapin traces" /%}
+{% figure src="/quick-start-trace.png" alt="Zipkin traces" /%}
 
 #### 2. [Jeager](https://www.jaegertracing.io/):
 
@@ -208,4 +208,30 @@ docker run -d --name jaeger \
   jaegertracing/all-in-one:1.41
 ```
 
-Add Tracer configs in `.env` file, your .env will be updated to
+Add Jaeger Tracer configs in `.env` file, your .env will be updated to
+```dotenv
+# ... no change in other env variables
+
+# tracing configs
+TRACE_EXPORTER=jaeger
+TRACER_HOST=localhost
+TRACER_PORT=14317
+```
+
+Open {% new-tab-link title="zipkin" href="http://localhost:16686/trace/" /%} and search by TraceID (correlationID) to see the trace.
+{% figure src="/jaeger-tracing.png" alt="Jaeger traces" /%}
+
+#### 3. [GoFr Tracer](https://tracer.gofr.dev/)
+
+GoFr tracer is gofr's own custom trace exporter as well as collector. You can search a trace by it's TraceID (correlationID)
+in gofr's own tracer service available anywhere, anytime.
+
+Add GoFr Tracer configs in `.env` file, your .env will be updated to
+```dotenv
+# ... no change in other env variables
+
+# tracing configs
+TRACE_EXPORTER=gofr
+```
+
+Open {% new-tab-link title="gofr-tracer" href="https://tracer.gofr.dev/" /%} and search by TraceID (correlationID) to see the trace.
