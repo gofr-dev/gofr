@@ -29,7 +29,7 @@ export const navigation = [
             { title: 'Injecting Databases', href: '/docs/advanced-guide/injecting-databases-drivers' },
             { title: 'Dealing with Datasources', href: '/docs/advanced-guide/dealing-with-datasources' },
             { title: 'Automatic SwaggerUI Rendering', href: '/docs/advanced-guide/swagger-documentation' },
-            {title: 'Errors package in GoFr',href: '/docs/advanced-guide/gofr-errors'}
+            {title: 'Errors Handling',href: '/docs/advanced-guide/gofr-errors'}
             // { title: 'Dealing with Remote Files', href: '/docs/advanced-guide/remote-files' },
             // { title: 'Supporting OAuth', href: '/docs/advanced-guide/oauth' },
             // { title: 'Creating a Static File Server', href: '/docs/advanced-guide/static-file-server' },
