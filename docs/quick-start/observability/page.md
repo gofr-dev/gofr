@@ -149,17 +149,18 @@ GoFr automatically exports traces for all requests and responses. GoFr uses
 {% new-tab-link title="OpenTelemetry" href="https://opentelemetry.io/docs/concepts/what-is-opentelemetry/" /%} , a popular tracing framework, to
 automatically add traces to all requests and responses.
 
-GoFr has support for both zipkin as well as jaeger trace exporters.
-
 **Automatic Correlation ID Propagation:**
 
 When a request enters your GoFr application, GoFr automatically generates a correlation-ID `X-Correlation-ID` and adds it
 to the response headers. This correlation ID is then propagated to all downstream requests. This means that you can track
 a request as it travels through your distributed system by simply looking at the correlation ID in the request headers.
 
-### Configuration & Usage
+### Configuration & Usage:
 
-To see the traces install zipkin image using the following docker command
+GoFr has support for following trace-exporters:
+#### 1. [Zipkin](https://zipkin.io/): 
+
+To see the traces install zipkin image using the following docker command:
 
 ```bash
   docker run --name gofr-zipkin -p 2005:9411 -d openzipkin/zipkin:latest
@@ -193,3 +194,18 @@ LOG_LEVEL=DEBUG
 
 Open {% new-tab-link title="zipkin" href="http://localhost:2005/zipkin/" /%} and search by TraceID (correlationID) to see the trace.
 {% figure src="/quick-start-trace.png" alt="Zapin traces" /%}
+
+#### 2. [Jeager](https://www.jaegertracing.io/):
+
+To see the traces install jaeger image using the following docker command:
+
+```bash
+docker run -d --name jaeger \
+  -e COLLECTOR_OTLP_ENABLED=true \
+  -p 16686:16686 \
+  -p 14317:4317 \
+  -p 14318:4318 \
+  jaegertracing/all-in-one:1.41
+```
+
+Add Tracer configs in `.env` file, your .env will be updated to
