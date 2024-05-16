@@ -7,11 +7,12 @@ import (
 	"sync"
 	"testing"
 
-	"gofr.dev/pkg/gofr/datasource"
-	"gofr.dev/pkg/gofr/datasource/pubsub"
-
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
+
+	"gofr.dev/pkg/gofr/datasource"
+	"gofr.dev/pkg/gofr/datasource/pubsub"
+	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/testutil"
 )
 
@@ -30,7 +31,7 @@ func TestMQTT_New(t *testing.T) {
 	}
 
 	out := testutil.StderrOutputForFunc(func() {
-		mockLogger := testutil.NewMockLogger(testutil.ERRORLOG)
+		mockLogger := logging.NewMockLogger(logging.ERROR)
 		client = New(&conf, mockLogger, nil)
 	})
 
@@ -44,7 +45,7 @@ func TestMQTT_EmptyConfigs(t *testing.T) {
 	var client *MQTT
 
 	out := testutil.StdoutOutputForFunc(func() {
-		mockLogger := testutil.NewMockLogger(testutil.DEBUGLOG)
+		mockLogger := logging.NewMockLogger(logging.DEBUG)
 		client = New(&Config{}, mockLogger, nil)
 	})
 
@@ -75,7 +76,7 @@ func TestMQTT_getMQTTClientOptions(t *testing.T) {
 }
 
 func TestMQTT_Ping(t *testing.T) {
-	m := New(&Config{}, testutil.NewMockLogger(testutil.FATALLOG), nil)
+	m := New(&Config{}, logging.NewMockLogger(logging.FATAL), nil)
 
 	// Success Case
 	err := m.Ping()
@@ -97,7 +98,7 @@ func TestMQTT_Disconnect(t *testing.T) {
 	ctx := context.TODO()
 	mockMetrics := NewMockMetrics(ctrl)
 
-	mockLogger := testutil.NewMockLogger(testutil.ERRORLOG)
+	mockLogger := logging.NewMockLogger(logging.ERROR)
 	client := New(&Config{}, mockLogger, mockMetrics)
 
 	mockMetrics.EXPECT().
@@ -123,7 +124,7 @@ func TestMQTT_PublishSuccess(t *testing.T) {
 		IncrementCounter(ctx, "app_pubsub_publish_success_count", "topic", "test/topic")
 
 	out := testutil.StdoutOutputForFunc(func() {
-		m := New(&Config{}, testutil.NewMockLogger(testutil.DEBUGLOG), mockMetrics)
+		m := New(&Config{}, logging.NewMockLogger(logging.DEBUG), mockMetrics)
 		err := m.Publish(ctx, "test/topic", []byte(`hello world`))
 
 		assert.Nil(t, err)
@@ -142,7 +143,7 @@ func TestMQTT_PublishFailure(t *testing.T) {
 	ctx := context.TODO()
 	mockMetrics := NewMockMetrics(ctrl)
 	out := testutil.StderrOutputForFunc(func() {
-		mockLogger := testutil.NewMockLogger(testutil.ERRORLOG)
+		mockLogger := logging.NewMockLogger(logging.ERROR)
 
 		// case where the client has been disconnected, resulting in a Publishing failure
 		mockMetrics.EXPECT().
@@ -167,7 +168,7 @@ func TestMQTT_SubscribeSuccess(t *testing.T) {
 
 	ctx := context.TODO()
 	mockMetrics := NewMockMetrics(ctrl)
-	mockLogger := testutil.NewMockLogger(testutil.ERRORLOG)
+	mockLogger := logging.NewMockLogger(logging.ERROR)
 
 	// expect the publishing metric calls
 	mockMetrics.EXPECT().
@@ -209,7 +210,7 @@ func TestMQTT_SubscribeFailure(t *testing.T) {
 
 	ctx := context.TODO()
 	mockMetrics := NewMockMetrics(ctrl)
-	mockLogger := testutil.NewMockLogger(testutil.ERRORLOG)
+	mockLogger := logging.NewMockLogger(logging.ERROR)
 
 	// expect the subcscibers metric calls
 	mockMetrics.EXPECT().
@@ -237,7 +238,7 @@ func TestMQTT_SubscribeWithFunc(t *testing.T) {
 		return errTest
 	}
 
-	m := New(&Config{}, testutil.NewMockLogger(testutil.ERRORLOG), nil)
+	m := New(&Config{}, logging.NewMockLogger(logging.ERROR), nil)
 
 	// Success case
 	err := m.SubscribeWithFunction("test/topic", subcriptionFunc)
@@ -258,7 +259,7 @@ func TestMQTT_SubscribeWithFunc(t *testing.T) {
 
 func TestMQTT_Unsubscribe(t *testing.T) {
 	out := testutil.StderrOutputForFunc(func() {
-		mockLogger := testutil.NewMockLogger(testutil.ERRORLOG)
+		mockLogger := logging.NewMockLogger(logging.ERROR)
 		m := New(&Config{}, mockLogger, nil)
 
 		// Success case
@@ -276,7 +277,7 @@ func TestMQTT_Unsubscribe(t *testing.T) {
 
 func TestMQTT_CreateTopic(t *testing.T) {
 	out := testutil.StderrOutputForFunc(func() {
-		mockLogger := testutil.NewMockLogger(testutil.ERRORLOG)
+		mockLogger := logging.NewMockLogger(logging.ERROR)
 		m := New(&Config{}, mockLogger, nil)
 
 		// Success case
@@ -295,7 +296,7 @@ func TestMQTT_CreateTopic(t *testing.T) {
 func TestMQTT_Health(t *testing.T) {
 	// The Client is not configured(nil)
 	out := testutil.StderrOutputForFunc(func() {
-		m := &MQTT{config: &Config{}, logger: testutil.NewMockLogger(testutil.ERRORLOG)}
+		m := &MQTT{config: &Config{}, logger: logging.NewMockLogger(logging.ERROR)}
 		res := m.Health()
 		assert.Equal(t, datasource.Health{
 			Status:  "DOWN",
@@ -307,7 +308,7 @@ func TestMQTT_Health(t *testing.T) {
 
 	// The client ping fails
 	out = testutil.StderrOutputForFunc(func() {
-		m := New(&Config{}, testutil.NewMockLogger(testutil.ERRORLOG), nil)
+		m := New(&Config{}, logging.NewMockLogger(logging.ERROR), nil)
 
 		m.Disconnect(1)
 
@@ -322,7 +323,7 @@ func TestMQTT_Health(t *testing.T) {
 
 	// Success Case - Status UP
 	_ = testutil.StderrOutputForFunc(func() {
-		m := New(&Config{}, testutil.NewMockLogger(testutil.ERRORLOG), nil)
+		m := New(&Config{}, logging.NewMockLogger(logging.ERROR), nil)
 		res := m.Health()
 		assert.Equal(t, datasource.Health{
 			Status:  "UP",

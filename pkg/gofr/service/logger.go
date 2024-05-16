@@ -20,7 +20,7 @@ type Log struct {
 }
 
 func (l *Log) PrettyPrint(writer io.Writer) {
-	fmt.Fprintf(writer, "\u001B[38;5;8m%s \u001B[38;5;%dm%d\u001B[0m %8d\u001B[38;5;8mµs\u001B[0m %s %s \n",
+	fmt.Fprintf(writer, "\u001B[38;5;8m%s \u001B[38;5;%dm%-6d\u001B[0m %8d\u001B[38;5;8mµs\u001B[0m %s %s \n",
 		l.CorrelationID, colorForStatusCode(l.ResponseCode),
 		l.ResponseCode, l.ResponseTime, l.HTTPMethod, l.URI)
 }

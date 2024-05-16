@@ -1,5 +1,4 @@
-// Package logging provides logging functionalities for Gofr applications.
-package logging
+package remotelogger
 
 import (
 	"context"
@@ -8,6 +7,7 @@ import (
 	"strconv"
 	"time"
 
+	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/service"
 )
 
@@ -16,11 +16,11 @@ const (
 )
 
 /*
-NewRemoteLogger creates a new RemoteLogger instance with the provided level, remote configuration URL, and level fetch interval.
+New creates a new RemoteLogger instance with the provided level, remote configuration URL, and level fetch interval.
 The remote configuration URL is expected to be a JSON endpoint that returns the desired log level for the service.
 The level fetch interval determines how often the logger checks for updates to the remote configuration.
 */
-func NewRemoteLogger(level Level, remoteConfigURL, loggerFetchInterval string) Logger {
+func New(level logging.Level, remoteConfigURL, loggerFetchInterval string) logging.Logger {
 	interval, err := strconv.Atoi(loggerFetchInterval)
 	if err != nil {
 		interval = 15
@@ -28,7 +28,7 @@ func NewRemoteLogger(level Level, remoteConfigURL, loggerFetchInterval string) L
 
 	l := remoteLogger{
 		remoteURL:          remoteConfigURL,
-		Logger:             NewLogger(level),
+		Logger:             logging.NewLogger(level),
 		levelFetchInterval: interval,
 		currentLevel:       level,
 	}
@@ -43,8 +43,8 @@ func NewRemoteLogger(level Level, remoteConfigURL, loggerFetchInterval string) L
 type remoteLogger struct {
 	remoteURL          string
 	levelFetchInterval int
-	currentLevel       Level
-	Logger
+	currentLevel       logging.Level
+	logging.Logger
 }
 
 // UpdateLogLevel continuously fetches the log level from the remote configuration URL at the specified interval
@@ -60,7 +60,7 @@ func (r *remoteLogger) UpdateLogLevel() {
 	for range ticker.C {
 		newLevel, err := fetchAndUpdateLogLevel(remoteService, r.currentLevel)
 		if err == nil {
-			r.changeLevel(newLevel)
+			r.ChangeLevel(newLevel)
 
 			if r.currentLevel != newLevel {
 				r.Infof("LOG_LEVEL updated from %v to %v", r.currentLevel, newLevel)
@@ -70,7 +70,7 @@ func (r *remoteLogger) UpdateLogLevel() {
 	}
 }
 
-func fetchAndUpdateLogLevel(remoteService service.HTTP, currentLevel Level) (Level, error) {
+func fetchAndUpdateLogLevel(remoteService service.HTTP, currentLevel logging.Level) (logging.Level, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout) // Set timeout for 5 seconds
 	defer cancel()
 
@@ -98,7 +98,7 @@ func fetchAndUpdateLogLevel(remoteService service.HTTP, currentLevel Level) (Lev
 	}
 
 	if len(response.Data) > 0 {
-		newLevel := GetLevelFromString(response.Data[0].Level["LOG_LEVEL"])
+		newLevel := logging.GetLevelFromString(response.Data[0].Level["LOG_LEVEL"])
 		return newLevel, nil
 	}
 

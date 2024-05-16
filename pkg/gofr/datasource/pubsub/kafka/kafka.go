@@ -73,7 +73,7 @@ func New(conf Config, logger pubsub.Logger, metrics Metrics) *kafkaClient {
 
 	reader := make(map[string]Reader)
 
-	logger.Logf("connected to Kafka, broker: %s, ", conf.Broker)
+	logger.Logf("connected to Kafka, broker: %s", conf.Broker)
 
 	return &kafkaClient{
 		config:  conf,
@@ -168,12 +168,10 @@ func (k *kafkaClient) Subscribe(ctx context.Context, topic string) (*pubsub.Mess
 		return nil, err
 	}
 
-	m := &pubsub.Message{
-		Value: msg.Value,
-		Topic: topic,
-
-		Committer: newKafkaMessage(&msg, k.reader[topic], k.logger),
-	}
+	m := pubsub.NewMessage(ctx)
+	m.Value = msg.Value
+	m.Topic = topic
+	m.Committer = newKafkaMessage(&msg, k.reader[topic], k.logger)
 
 	end := time.Since(start)
 
