@@ -383,7 +383,7 @@ func Test_UseMiddleware(t *testing.T) {
 		})
 	}
 
-	c := container.NewContainer(config.NewMockConfig(nil))
+	c := container.NewContainer(config.NewMockConfig(make(map[string]string)))
 
 	app := &App{
 		httpServer: &httpServer{

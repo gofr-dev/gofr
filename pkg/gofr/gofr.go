@@ -82,7 +82,7 @@ func New() *App {
 		port = defaultHTTPPort
 	}
 
-	app.httpServer = newHTTPServer(app.container, port)
+	app.httpServer = newHTTPServer(app.container, port, app.Config.GetOrDefault("REQUEST_TIMEOUT", "5"))
 
 	// GRPC Server
 	port, err = strconv.Atoi(app.Config.Get("GRPC_PORT"))

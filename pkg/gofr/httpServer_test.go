@@ -51,3 +51,11 @@ func TestRun_ServerStartsListening(t *testing.T) {
 
 	resp.Body.Close()
 }
+
+func TestNewHTTPServer_InvalidTimeout(t *testing.T) {
+	cntnr, _ := container.NewMockContainer(t)
+
+	server := newHTTPServer(cntnr, 8080, "-1")
+
+	assert.Equal(t, 5*time.Second, server.requestTimeout, "Default timeout should be 5 seconds for invalid value")
+}
