@@ -10,70 +10,70 @@ type DefaultHeaders struct {
 }
 
 func (a *DefaultHeaders) AddOption(h HTTP) HTTP {
-	return &CustomHeader{
+	return &customHeader{
 		Headers: a.Headers,
 		HTTP:    h,
 	}
 }
 
-type CustomHeader struct {
+type customHeader struct {
 	Headers map[string]string
 
 	HTTP
 }
 
-func (a *CustomHeader) Get(ctx context.Context, path string, queryParams map[string]interface{}) (*http.Response, error) {
+func (a *customHeader) Get(ctx context.Context, path string, queryParams map[string]interface{}) (*http.Response, error) {
 	return a.GetWithHeaders(ctx, path, queryParams, nil)
 }
 
-func (a *CustomHeader) GetWithHeaders(ctx context.Context, path string, queryParams map[string]interface{},
+func (a *customHeader) GetWithHeaders(ctx context.Context, path string, queryParams map[string]interface{},
 	headers map[string]string) (*http.Response, error) {
 	headers = setCustomHeader(headers, a.Headers)
 
 	return a.HTTP.GetWithHeaders(ctx, path, queryParams, headers)
 }
 
-func (a *CustomHeader) Post(ctx context.Context, path string, queryParams map[string]interface{},
+func (a *customHeader) Post(ctx context.Context, path string, queryParams map[string]interface{},
 	body []byte) (*http.Response, error) {
 	return a.PostWithHeaders(ctx, path, queryParams, body, nil)
 }
 
-func (a *CustomHeader) PostWithHeaders(ctx context.Context, path string, queryParams map[string]interface{}, body []byte,
+func (a *customHeader) PostWithHeaders(ctx context.Context, path string, queryParams map[string]interface{}, body []byte,
 	headers map[string]string) (*http.Response, error) {
 	headers = setCustomHeader(headers, a.Headers)
 
 	return a.HTTP.PostWithHeaders(ctx, path, queryParams, body, headers)
 }
 
-func (a *CustomHeader) Put(ctx context.Context, api string, queryParams map[string]interface{}, body []byte) (
+func (a *customHeader) Put(ctx context.Context, api string, queryParams map[string]interface{}, body []byte) (
 	*http.Response, error) {
 	return a.PutWithHeaders(ctx, api, queryParams, body, nil)
 }
 
-func (a *CustomHeader) PutWithHeaders(ctx context.Context, path string, queryParams map[string]interface{}, body []byte,
+func (a *customHeader) PutWithHeaders(ctx context.Context, path string, queryParams map[string]interface{}, body []byte,
 	headers map[string]string) (*http.Response, error) {
 	headers = setCustomHeader(headers, a.Headers)
 
 	return a.HTTP.PutWithHeaders(ctx, path, queryParams, body, headers)
 }
 
-func (a *CustomHeader) Patch(ctx context.Context, path string, queryParams map[string]interface{}, body []byte) (
+func (a *customHeader) Patch(ctx context.Context, path string, queryParams map[string]interface{}, body []byte) (
 	*http.Response, error) {
 	return a.PatchWithHeaders(ctx, path, queryParams, body, nil)
 }
 
-func (a *CustomHeader) PatchWithHeaders(ctx context.Context, path string, queryParams map[string]interface{}, body []byte,
+func (a *customHeader) PatchWithHeaders(ctx context.Context, path string, queryParams map[string]interface{}, body []byte,
 	headers map[string]string) (*http.Response, error) {
 	headers = setCustomHeader(headers, a.Headers)
 
 	return a.HTTP.PatchWithHeaders(ctx, path, queryParams, body, headers)
 }
 
-func (a *CustomHeader) Delete(ctx context.Context, path string, body []byte) (*http.Response, error) {
+func (a *customHeader) Delete(ctx context.Context, path string, body []byte) (*http.Response, error) {
 	return a.DeleteWithHeaders(ctx, path, body, nil)
 }
 
-func (a *CustomHeader) DeleteWithHeaders(ctx context.Context, path string, body []byte, headers map[string]string) (
+func (a *customHeader) DeleteWithHeaders(ctx context.Context, path string, body []byte, headers map[string]string) (
 	*http.Response, error) {
 	headers = setCustomHeader(headers, a.Headers)
 
