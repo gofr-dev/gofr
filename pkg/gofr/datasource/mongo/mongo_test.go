@@ -290,7 +290,7 @@ func Test_CountDocuments(t *testing.T) {
 	cl := Client{metrics: metrics}
 
 	metrics.EXPECT().RecordHistogram(context.Background(), "app_mongo_stats", gomock.Any(), "hostname",
-		gomock.Any(), "database", gomock.Any(), "type", gomock.Any()).Times(1)
+		gomock.Any(), "database", gomock.Any(), "type", gomock.Any())
 
 	cl.logger = NewMockLogger(DEBUG)
 
@@ -386,7 +386,7 @@ func Test_Drop(t *testing.T) {
 	cl := Client{metrics: metrics}
 
 	metrics.EXPECT().RecordHistogram(context.Background(), "app_mongo_stats", gomock.Any(), "hostname",
-		gomock.Any(), "database", gomock.Any(), "type", gomock.Any()).Times(1)
+		gomock.Any(), "database", gomock.Any(), "type", gomock.Any())
 
 	cl.logger = NewMockLogger(DEBUG)
 

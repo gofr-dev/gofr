@@ -85,18 +85,6 @@ GoFr publishes metrics to port: _2121_ on _/metrics_ endpoint in prometheus form
 
 ---
 
-- app_server_error
-- counter
-- Number of HTTP server errors
-
----
-
-- app_circuit_open_count
-- counter
-- Number of times the circuit breaker opens
-
----
-
 - app_sql_open_connections
 - gauge
 - Number of open SQL connections

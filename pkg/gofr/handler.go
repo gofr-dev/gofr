@@ -32,7 +32,7 @@ type handler struct {
 }
 
 func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	c := newContext(gofrHTTP.NewResponder(w, r.Method, h.container.Metrics()), gofrHTTP.NewRequest(r), h.container)
+	c := newContext(gofrHTTP.NewResponder(w, r.Method), gofrHTTP.NewRequest(r), h.container)
 	defer c.Trace("gofr-handler").End()
 	c.responder.Respond(h.function(c))
 }

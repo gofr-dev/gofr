@@ -154,9 +154,6 @@ func (c *Container) registerFrameworkMetrics() {
 		httpBuckets := []float64{.001, .003, .005, .01, .02, .03, .05, .1, .2, .3, .5, .75, 1, 2, 3, 5, 10, 30}
 		c.Metrics().NewHistogram("app_http_response", "Response time of http requests in seconds.", httpBuckets...)
 		c.Metrics().NewHistogram("app_http_service_response", "Response time of http service requests in seconds.", httpBuckets...)
-
-		c.Metrics().NewCounter("app_server_error", "Number of HTTP server errors.")
-		c.Metrics().NewCounter("app_circuit_open_count", "Number of times the circuit breaker opens.")
 	}
 
 	{ // redis metrics

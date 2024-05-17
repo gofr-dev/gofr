@@ -39,23 +39,6 @@ func (m *MockMetrics) EXPECT() *MockMetricsMockRecorder {
 	return m.recorder
 }
 
-// IncrementCounter mocks base method.
-func (m *MockMetrics) IncrementCounter(ctx context.Context, name string, labels ...string) {
-	m.ctrl.T.Helper()
-	varargs := []any{ctx, name}
-	for _, a := range labels {
-		varargs = append(varargs, a)
-	}
-	m.ctrl.Call(m, "IncrementCounter", varargs...)
-}
-
-// IncrementCounter indicates an expected call of IncrementCounter.
-func (mr *MockMetricsMockRecorder) IncrementCounter(ctx, name any, labels ...any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{ctx, name}, labels...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IncrementCounter", reflect.TypeOf((*MockMetrics)(nil).IncrementCounter), varargs...)
-}
-
 // RecordHistogram mocks base method.
 func (m *MockMetrics) RecordHistogram(ctx context.Context, name string, value float64, labels ...string) {
 	m.ctrl.T.Helper()
