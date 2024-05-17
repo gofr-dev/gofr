@@ -22,7 +22,6 @@ import (
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
-	"gofr.dev/pkg/gofr/datasource"
 	gofrHTTP "gofr.dev/pkg/gofr/http"
 	"gofr.dev/pkg/gofr/http/middleware"
 	"gofr.dev/pkg/gofr/logging"
@@ -385,12 +384,6 @@ func (a *App) AddRESTHandlers(object interface{}) error {
 // UseMiddleware is a setter method for adding user defined custom middleware to GoFr's router.
 func (a *App) UseMiddleware(middlewares ...gofrHTTP.Middleware) {
 	a.httpServer.router.UseMiddleware(middlewares...)
-}
-
-func (a *App) UseMongo(db datasource.MongoBuilder) {
-	db.Build(a.Config, a.Logger(), a.Metrics())
-
-	a.container.Mongo = db
 }
 
 // AddCronJob registers a cron job to the cron table, the schedule is in * * * * * (6 part) format

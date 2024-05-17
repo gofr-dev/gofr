@@ -1,6 +1,8 @@
 module gofr.dev/pkg/gofr/datasource/mongo
 
-go 1.22.0
+go 1.22
+
+toolchain go1.22.3
 
 require (
 	github.com/stretchr/testify v1.9.0
@@ -11,7 +13,6 @@ require (
 require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/golang/snappy v0.0.4 // indirect
-	github.com/joho/godotenv v1.5.1 // indirect
 	github.com/klauspost/compress v1.17.8 // indirect
 	github.com/montanaflynn/stats v0.7.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
