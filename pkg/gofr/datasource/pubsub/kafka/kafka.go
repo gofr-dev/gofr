@@ -18,6 +18,9 @@ var (
 	ErrConsumerGroupNotProvided = errors.New("consumer group id not provided")
 	errBrokerNotProvided        = errors.New("kafka broker address not provided")
 	errPublisherNotConfigured   = errors.New("can't publish message. Publisher not configured or topic is empty")
+	errBatchSize                = errors.New("batch size must be greater than 0")
+	errBatchBytes               = errors.New("batch bytes must be greater than 0")
+	errBatchTimeout             = errors.New("batch timeout must be greater than 0")
 )
 
 type Config struct {
@@ -25,6 +28,9 @@ type Config struct {
 	Partition       int
 	ConsumerGroupID string
 	OffSet          int
+	BatchSize       int
+	BatchBytes      int
+	BatchTimeout    int
 }
 
 type kafkaClient struct {
@@ -67,8 +73,11 @@ func New(conf Config, logger pubsub.Logger, metrics Metrics) *kafkaClient {
 	}
 
 	writer := kafka.NewWriter(kafka.WriterConfig{
-		Brokers: []string{conf.Broker},
-		Dialer:  dialer,
+		Brokers:      []string{conf.Broker},
+		Dialer:       dialer,
+		BatchSize:    conf.BatchSize,
+		BatchBytes:   conf.BatchBytes,
+		BatchTimeout: time.Duration(conf.BatchTimeout) * time.Millisecond,
 	})
 
 	reader := make(map[string]Reader)
@@ -90,6 +99,18 @@ func New(conf Config, logger pubsub.Logger, metrics Metrics) *kafkaClient {
 func validateConfigs(conf Config) error {
 	if conf.Broker == "" {
 		return errBrokerNotProvided
+	}
+
+	if conf.BatchSize <= 0 {
+		return errBatchSize
+	}
+
+	if conf.BatchBytes <= 0 {
+		return errBatchBytes
+	}
+
+	if conf.BatchTimeout <= 0 {
+		return errBatchTimeout
 	}
 
 	return nil

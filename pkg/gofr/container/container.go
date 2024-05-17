@@ -88,12 +88,18 @@ func (c *Container) Create(conf config.Config) {
 		if conf.Get("PUBSUB_BROKER") != "" {
 			partition, _ := strconv.Atoi(conf.GetOrDefault("PARTITION_SIZE", "0"))
 			offSet, _ := strconv.Atoi(conf.GetOrDefault("PUBSUB_OFFSET", "-1"))
+			batchSize, _ := strconv.Atoi(conf.GetOrDefault("KAFKA_BATCH_SIZE", "100"))
+			batchBytes, _ := strconv.Atoi(conf.GetOrDefault("KAFKA_BATCH_BYTES", "1048576"))
+			batchTimeout, _ := strconv.Atoi(conf.GetOrDefault("KAFKA_BATCH_TIMEOUT", "1000"))
 
 			c.PubSub = kafka.New(kafka.Config{
 				Broker:          conf.Get("PUBSUB_BROKER"),
 				Partition:       partition,
 				ConsumerGroupID: conf.Get("CONSUMER_ID"),
 				OffSet:          offSet,
+				BatchSize:       batchSize,
+				BatchBytes:      batchBytes,
+				BatchTimeout:    batchTimeout,
 			}, c.Logger, c.metricsManager)
 		}
 	case "GOOGLE":

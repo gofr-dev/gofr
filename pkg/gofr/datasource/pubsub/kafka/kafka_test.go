@@ -2,6 +2,7 @@ package kafka
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"testing"
 
@@ -14,20 +15,47 @@ import (
 	"gofr.dev/pkg/gofr/testutil"
 )
 
-func Test_validateConfigs(t *testing.T) {
-	config := Config{Broker: "kafkabroker", ConsumerGroupID: "1"}
+func TestValidateConfigs(t *testing.T) {
+	testCases := []struct {
+		name     string
+		config   Config
+		expected error
+	}{
+		{
+			name:     "Valid Config",
+			config:   Config{Broker: "kafkabroker", BatchSize: 1, BatchBytes: 1, BatchTimeout: 1},
+			expected: nil,
+		},
+		{
+			name:     "Empty Broker",
+			config:   Config{BatchSize: 1, BatchBytes: 1, BatchTimeout: 1},
+			expected: errBrokerNotProvided,
+		},
+		{
+			name:     "Zero BatchSize",
+			config:   Config{Broker: "kafkabroker", BatchSize: 0, BatchBytes: 1, BatchTimeout: 1},
+			expected: errBatchSize,
+		},
+		{
+			name:     "Zero BatchBytes",
+			config:   Config{Broker: "kafkabroker", BatchSize: 1, BatchBytes: 0, BatchTimeout: 1},
+			expected: errBatchBytes,
+		},
+		{
+			name:     "Zero BatchTimeout",
+			config:   Config{Broker: "kafkabroker", BatchSize: 1, BatchBytes: 1, BatchTimeout: 0},
+			expected: errBatchTimeout,
+		},
+	}
 
-	err := validateConfigs(config)
-
-	assert.Nil(t, err)
-}
-
-func Test_validateConfigsErrBrokerNotProvided(t *testing.T) {
-	config := Config{ConsumerGroupID: "1"}
-
-	err := validateConfigs(config)
-
-	assert.Equal(t, err, errBrokerNotProvided)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validateConfigs(tc.config)
+			if !errors.Is(err, tc.expected) {
+				t.Errorf("Expected error %v, but got %v", tc.expected, err)
+			}
+		})
+	}
 }
 
 func TestKafkaClient_PublishError(t *testing.T) {
