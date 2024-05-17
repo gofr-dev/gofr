@@ -9,7 +9,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-func TestNewGofrError(t *testing.T) {
+func Test_ErrorGoFr(t *testing.T) {
 	// with underlying error
 	wrappedErr := errors.New("underlying error")
 	gofrErr := New(wrappedErr, "custom message")

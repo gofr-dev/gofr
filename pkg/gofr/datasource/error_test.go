@@ -9,7 +9,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-func TestNewDBError(t *testing.T) {
+func Test_ErrorDB(t *testing.T) {
 	// Test with wrapped error
 	wrappedErr := errors.New("underlying error")
 	dbErr := Error(wrappedErr, "custom message").WithStack()
@@ -28,7 +28,7 @@ func TestNewDBError(t *testing.T) {
 	}
 }
 
-func TestDBError_StatusCode(t *testing.T) {
+func TestErrorDB_StatusCode(t *testing.T) {
 	dbErr := Error(nil, "custom message")
 
 	expectedCode := http.StatusInternalServerError

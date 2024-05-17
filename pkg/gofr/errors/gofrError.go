@@ -1,7 +1,6 @@
 package gofrerror
 
 import (
-	"fmt"
 	"net/http"
 	"strings"
 
@@ -16,9 +15,7 @@ type errorGoFr struct {
 
 // Error returns the formatted error message.
 func (e *errorGoFr) Error() string {
-	if e.error != nil && e.message != "" {
-		return fmt.Sprintf("%v", e.error)
-	} else if e.error != nil {
+	if e.error != nil {
 		return e.error.Error()
 	}
 

@@ -1,7 +1,6 @@
 package datasource
 
 import (
-	"fmt"
 	"net/http"
 	"strings"
 
@@ -15,9 +14,7 @@ type errorDB struct {
 }
 
 func (e *errorDB) Error() string {
-	if e.error != nil && e.message != "" {
-		return fmt.Sprintf("%v", e.error)
-	} else if e.error != nil {
+	if e.error != nil {
 		return e.error.Error()
 	}
 
