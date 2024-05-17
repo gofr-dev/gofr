@@ -30,7 +30,7 @@ func NewMockLogger(level Level) Logger {
 }
 
 func (m *MockLogger) Debugf(pattern string, args ...interface{}) {
-	m.logf(DEBUG, pattern, args...) // Add "%v" formatting directive
+	m.logf(DEBUG, pattern, args...)
 }
 
 func (m *MockLogger) Logf(pattern string, args ...interface{}) {
