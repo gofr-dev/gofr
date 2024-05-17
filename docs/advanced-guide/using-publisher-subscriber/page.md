@@ -35,7 +35,7 @@ that are specific for the type of message broker user wants to use.
 | `PUBSUB_OFFSET`       | Determines from whence the consumer group should begin consuming when it finds a partition without a committed offset. | -            | `-1`      | `10`             | int              |
 | `KAFKA_BATCH_SIZE`    | Limit on how many messages will be buffered before being sent to a partition.                                          | -            | `100`     | `10`             | Positive int     |
 | `KAFKA_BATCH_BYTES`   | Limit the maximum size of a request in bytes before being sent to a partition.                                         | -            | `1048576` | `65536`          | Positive int     |
-| `KAFKA_BATCH_TIMEOUT` | Time limit on how often incomplete message batches will be flushed to kafka.                                           | -            | `1000`    | `300`            | Positive int     |
+| `KAFKA_BATCH_TIMEOUT` | Time limit on how often incomplete message batches will be flushed to Kafka (in milliseconds).                         | -            | `1000`    | `300`            | Positive int     |
 
 ```dotenv
 PUBSUB_BACKEND=KAFKA# using apache kafka as message broker

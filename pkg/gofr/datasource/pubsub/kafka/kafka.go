@@ -77,7 +77,7 @@ func New(conf Config, logger pubsub.Logger, metrics Metrics) *kafkaClient {
 		Dialer:       dialer,
 		BatchSize:    conf.BatchSize,
 		BatchBytes:   conf.BatchBytes,
-		BatchTimeout: time.Duration(conf.BatchTimeout) * time.Millisecond,
+		BatchTimeout: time.Duration(conf.BatchTimeout),
 	})
 
 	reader := make(map[string]Reader)
