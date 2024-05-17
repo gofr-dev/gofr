@@ -41,7 +41,7 @@ func main() {
 }
 ```
 
-In this example, the `New` function is called to create a new instance of the `App`. The logger is then created using `logging.NewLogger(logging.INFO)`, and the log message is generated using `logger.Info()`.
+In this example, the `New` function is called to create a new instance of the `App`. The logger is then retrieved using `app.Logger()`, and the log message is generated using `logger.Info()`.
 
 When logging a message that contains sensitive data, the specified fields will be masked in the output. The masked fields will be replaced with asterisks (`*`) to protect the sensitive information.
 
