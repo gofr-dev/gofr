@@ -222,7 +222,8 @@ func TestKafkaClient_SubscribeError(t *testing.T) {
 
 	mockReader.EXPECT().ReadMessage(gomock.Any()).
 		Return(kafka.Message{}, errSub)
-	mockMetrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_subscribe_total_count", "topic", "test")
+	mockMetrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_subscribe_total_count",
+		"topic", "test", "consumer_group", k.config.ConsumerGroupID)
 
 	logs := testutil.StderrOutputForFunc(func() {
 		logger := logging.NewMockLogger(logging.DEBUG)
