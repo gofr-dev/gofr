@@ -54,24 +54,76 @@ func NewContainer(conf config.Config) *Container {
 }
 
 func (c *Container) Create(conf config.Config) {
-	c.setAppName(conf)
-	c.setAppVersion(conf)
-	c.createLogger(conf)
-	c.createMetricsManager()
-	c.createRedis(conf)
-	c.createSQL(conf)
-	c.createPubSub(conf)
-}
-
-func (c *Container) setAppName(conf config.Config) {
 	if c.appName != "" {
 		c.appName = conf.GetOrDefault("APP_NAME", "gofr-app")
 	}
-}
 
-func (c *Container) setAppVersion(conf config.Config) {
 	if c.appVersion != "" {
 		c.appVersion = conf.GetOrDefault("APP_VERSION", "dev")
+	}
+
+	c.createLogger(conf)
+
+	c.Debug("Container is being created")
+
+	c.metricsManager = metrics.NewMetricsManager(exporters.Prometheus(c.appName, c.appVersion), c.Logger)
+
+	// Register framework metrics
+	c.registerFrameworkMetrics()
+
+	// Populating an instance of app_info with the app details, the value is set as 1 to depict the no. of instances
+	c.Metrics().SetGauge("app_info", 1,
+		"app_name", c.GetAppName(), "app_version", c.GetAppVersion(), "framework_version", version.Framework)
+
+	c.Redis = redis.NewClient(conf, c.Logger, c.metricsManager)
+
+	c.SQL = sql.NewSQL(conf, c.Logger, c.metricsManager)
+
+	switch strings.ToUpper(conf.Get("PUBSUB_BACKEND")) {
+	case "KAFKA":
+		if conf.Get("PUBSUB_BROKER") != "" {
+			partition, _ := strconv.Atoi(conf.GetOrDefault("PARTITION_SIZE", "0"))
+			offSet, _ := strconv.Atoi(conf.GetOrDefault("PUBSUB_OFFSET", "-1"))
+
+			c.PubSub = kafka.New(kafka.Config{
+				Broker:          conf.Get("PUBSUB_BROKER"),
+				Partition:       partition,
+				ConsumerGroupID: conf.Get("CONSUMER_ID"),
+				OffSet:          offSet,
+			}, c.Logger, c.metricsManager)
+		}
+	case "GOOGLE":
+		c.PubSub = google.New(google.Config{
+			ProjectID:        conf.Get("GOOGLE_PROJECT_ID"),
+			SubscriptionName: conf.Get("GOOGLE_SUBSCRIPTION_NAME"),
+		}, c.Logger, c.metricsManager)
+	case "MQTT":
+		var qos byte
+
+		port, _ := strconv.Atoi(conf.Get("MQTT_PORT"))
+		order, _ := strconv.ParseBool(conf.GetOrDefault("MQTT_MESSAGE_ORDER", "false"))
+
+		switch conf.Get("MQTT_QOS") {
+		case "1":
+			qos = 1
+		case "2":
+			qos = 2
+		default:
+			qos = 0
+		}
+
+		configs := &mqtt.Config{
+			Protocol: conf.GetOrDefault("MQTT_PROTOCOL", "tcp"), // using tcp as default method to connect to broker
+			Hostname: conf.Get("MQTT_HOST"),
+			Port:     port,
+			Username: conf.Get("MQTT_USER"),
+			Password: conf.Get("MQTT_PASSWORD"),
+			ClientID: conf.Get("MQTT_CLIENT_ID_SUFFIX"),
+			QoS:      qos,
+			Order:    order,
+		}
+
+		c.PubSub = mqtt.New(configs, c.Logger, c.metricsManager)
 	}
 }
 
@@ -80,8 +132,8 @@ func (c *Container) createLogger(conf config.Config) {
 		c.Logger = logging.NewRemoteLogger(logging.GetLevelFromString(conf.Get("LOG_LEVEL")), conf.Get("REMOTE_LOG_URL"),
 			conf.GetOrDefault("REMOTE_LOG_FETCH_INTERVAL", "15"))
 
-		if conf.GetOrDefault("LOGGER_MASKING_ENABLED", "false") == "true" {
-			maskingFields := conf.GetOrDefault("LOGGER_MASKING_FIELDS", "")
+		maskingFields := conf.GetOrDefault("LOGGER_MASKING_FIELDS", "")
+		if maskingFields != "" {
 			fields := strings.Split(maskingFields, ",")
 
 			var filteredFields []string
@@ -98,82 +150,6 @@ func (c *Container) createLogger(conf config.Config) {
 	}
 
 	c.Debug("Container is being created")
-}
-
-func (c *Container) createMetricsManager() {
-	c.metricsManager = metrics.NewMetricsManager(exporters.Prometheus(c.appName, c.appVersion), c.Logger)
-	c.registerFrameworkMetrics()
-	c.Metrics().SetGauge("app_info", 1,
-		"app_name", c.GetAppName(), "app_version", c.GetAppVersion(), "framework_version", version.Framework)
-}
-
-func (c *Container) createRedis(conf config.Config) {
-	c.Redis = redis.NewClient(conf, c.Logger, c.metricsManager)
-}
-
-func (c *Container) createSQL(conf config.Config) {
-	c.SQL = sql.NewSQL(conf, c.Logger, c.metricsManager)
-}
-
-func (c *Container) createPubSub(conf config.Config) {
-	switch strings.ToUpper(conf.Get("PUBSUB_BACKEND")) {
-	case "KAFKA":
-		c.createKafkaPubSub(conf)
-	case "GOOGLE":
-		c.createGooglePubSub(conf)
-	case "MQTT":
-		c.createMQTTPubSub(conf)
-	}
-}
-
-func (c *Container) createKafkaPubSub(conf config.Config) {
-	if conf.Get("PUBSUB_BROKER") != "" {
-		partition, _ := strconv.Atoi(conf.GetOrDefault("PARTITION_SIZE", "0"))
-		offSet, _ := strconv.Atoi(conf.GetOrDefault("PUBSUB_OFFSET", "-1"))
-
-		c.PubSub = kafka.New(kafka.Config{
-			Broker:          conf.Get("PUBSUB_BROKER"),
-			Partition:       partition,
-			ConsumerGroupID: conf.Get("CONSUMER_ID"),
-			OffSet:          offSet,
-		}, c.Logger, c.metricsManager)
-	}
-}
-
-func (c *Container) createGooglePubSub(conf config.Config) {
-	c.PubSub = google.New(google.Config{
-		ProjectID:        conf.Get("GOOGLE_PROJECT_ID"),
-		SubscriptionName: conf.Get("GOOGLE_SUBSCRIPTION_NAME"),
-	}, c.Logger, c.metricsManager)
-}
-
-func (c *Container) createMQTTPubSub(conf config.Config) {
-	var qos byte
-
-	port, _ := strconv.Atoi(conf.Get("MQTT_PORT"))
-	order, _ := strconv.ParseBool(conf.GetOrDefault("MQTT_MESSAGE_ORDER", "false"))
-
-	switch conf.Get("MQTT_QOS") {
-	case "1":
-		qos = 1
-	case "2":
-		qos = 2
-	default:
-		qos = 0
-	}
-
-	configs := &mqtt.Config{
-		Protocol: conf.GetOrDefault("MQTT_PROTOCOL", "tcp"),
-		Hostname: conf.Get("MQTT_HOST"),
-		Port:     port,
-		Username: conf.Get("MQTT_USER"),
-		Password: conf.Get("MQTT_PASSWORD"),
-		ClientID: conf.Get("MQTT_CLIENT_ID_SUFFIX"),
-		QoS:      qos,
-		Order:    order,
-	}
-
-	c.PubSub = mqtt.New(configs, c.Logger, c.metricsManager)
 }
 
 // GetHTTPService returns registered http services.
@@ -195,20 +171,23 @@ func (c *Container) registerFrameworkMetrics() {
 	c.Metrics().NewGauge("app_go_numGC", "Number of completed Garbage Collector cycles.")
 	c.Metrics().NewGauge("app_go_sys", "Number of total bytes of memory.")
 
-	// http metrics
-	httpBuckets := []float64{.001, .003, .005, .01, .02, .03, .05, .1, .2, .3, .5, .75, 1, 2, 3, 5, 10, 30}
-	c.Metrics().NewHistogram("app_http_response", "Response time of http requests in seconds.", httpBuckets...)
-	c.Metrics().NewHistogram("app_http_service_response", "Response time of http service requests in seconds.", httpBuckets...)
+	{ // http metrics
+		httpBuckets := []float64{.001, .003, .005, .01, .02, .03, .05, .1, .2, .3, .5, .75, 1, 2, 3, 5, 10, 30}
+		c.Metrics().NewHistogram("app_http_response", "Response time of http requests in seconds.", httpBuckets...)
+		c.Metrics().NewHistogram("app_http_service_response", "Response time of http service requests in seconds.", httpBuckets...)
+	}
 
-	// redis metrics
-	redisBuckets := []float64{.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 1.25, 1.5, 2, 2.5, 3}
-	c.Metrics().NewHistogram("app_redis_stats", "Response time of Redis commands in milliseconds.", redisBuckets...)
+	{ // redis metrics
+		redisBuckets := []float64{.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 1.25, 1.5, 2, 2.5, 3}
+		c.Metrics().NewHistogram("app_redis_stats", "Response time of Redis commands in milliseconds.", redisBuckets...)
+	}
 
-	// sql metrics
-	sqlBuckets := []float64{.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 4, 5, 7.5, 10}
-	c.Metrics().NewHistogram("app_sql_stats", "Response time of SQL queries in milliseconds.", sqlBuckets...)
-	c.Metrics().NewGauge("app_sql_open_connections", "Number of open SQL connections.")
-	c.Metrics().NewGauge("app_sql_inUse_connections", "Number of inUse SQL connections.")
+	{ // sql metrics
+		sqlBuckets := []float64{.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 4, 5, 7.5, 10}
+		c.Metrics().NewHistogram("app_sql_stats", "Response time of SQL queries in milliseconds.", sqlBuckets...)
+		c.Metrics().NewGauge("app_sql_open_connections", "Number of open SQL connections.")
+		c.Metrics().NewGauge("app_sql_inUse_connections", "Number of inUse SQL connections.")
+	}
 
 	// pubsub metrics
 	c.Metrics().NewCounter("app_pubsub_publish_total_count", "Number of total publish operations.")

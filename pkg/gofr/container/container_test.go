@@ -168,25 +168,21 @@ func TestLoggerMasking(t *testing.T) {
 	}{
 		{
 			name:           "Masking enabled with multiple fields",
-			maskingEnabled: "true",
 			maskingFields:  "password,email,creditCard",
 			expectedFields: []string{"password", "email", "creditCard"},
 		},
 		{
 			name:           "Masking enabled with single field",
-			maskingEnabled: "true",
 			maskingFields:  "password",
 			expectedFields: []string{"password"},
 		},
 		{
 			name:           "Masking disabled",
-			maskingEnabled: "false",
-			maskingFields:  "password,email",
+			maskingFields:  "",
 			expectedFields: []string{},
 		},
 		{
 			name:           "Masking enabled with empty fields",
-			maskingEnabled: "true",
 			maskingFields:  "password,,email,  ,creditCard",
 			expectedFields: []string{"password", "email", "creditCard"},
 		},
@@ -197,9 +193,8 @@ func TestLoggerMasking(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			// Create a mock configuration
 			mockConfig := config.NewMockConfig(map[string]string{
-				"LOGGER_MASKING_ENABLED": tc.maskingEnabled,
-				"LOGGER_MASKING_FIELDS":  tc.maskingFields,
-				"LOG_LEVEL":              "INFO",
+				"LOGGER_MASKING_FIELDS": tc.maskingFields,
+				"LOG_LEVEL":             "INFO",
 			})
 
 			// Create a new container using the mock configuration

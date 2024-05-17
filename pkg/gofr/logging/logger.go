@@ -146,13 +146,12 @@ func maskString(str string, maskLength ...int) string {
 }
 
 type logger struct {
-	level          Level
-	normalOut      io.Writer
-	errorOut       io.Writer
-	isTerminal     bool
-	filter         Filterer
-	maskingEnabled bool
-	maskingFields  []string
+	level         Level
+	normalOut     io.Writer
+	errorOut      io.Writer
+	isTerminal    bool
+	filter        Filterer
+	maskingFields []string
 }
 
 type logEntry struct {
@@ -170,7 +169,7 @@ func (l *logger) logf(level Level, format string, args ...interface{}) {
 	out := l.getOutputWriter(level)
 	entry := l.createLogEntry(level, format, args...)
 
-	if l.maskingEnabled && l.filter != nil {
+	if l.filter != nil {
 		entry.Message = l.filter.Filter(entry.Message)
 	}
 
@@ -338,7 +337,6 @@ func (l *logger) changeLevel(level Level) {
 
 // SetMaskingFilters sets the masking fields and enables masking for the logger.
 func (l *logger) SetMaskingFilters(fields []string) {
-	l.maskingEnabled = true
 	l.maskingFields = fields
 	l.filter = &MaskingFilter{
 		MaskFields: fields,

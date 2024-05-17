@@ -6,13 +6,11 @@ Filtered logging is a feature that allows you to mask sensitive data in your log
 
 To use filtered logging, you need to set the masking configuration in your `.env` file. The following configuration options are available:
 
-- `LOGGER_MASKING_ENABLED`: Set to `true` to enable masking of sensitive fields in log messages. Default is `false`.
 - `LOGGER_MASKING_FIELDS`: A comma-separated list of field names that should be masked in log messages.
 
 Here's an example of how you can configure the masking options in your `.env` file:
 
 ```
-LOGGER_MASKING_ENABLED=true
 LOGGER_MASKING_FIELDS=password,email,creditCard
 ```
 
@@ -34,7 +32,7 @@ func main() {
     app := gofr.New()
 
     // Use the logger
-    logger := logging.NewLogger(logging.INFO)
+    logger := app.Logger()
     logger.Info("User login", map[string]interface{}{
         "username": "john.doe",
         "password": "secret123",
@@ -52,7 +50,7 @@ When logging a message that contains sensitive data, the specified fields will b
 Internally, the filtered logging feature works as follows:
 
 1. The `New` function of the `App` reads the masking configuration from the `.env` file.
-2. If masking is enabled (`LOGGER_MASKING_ENABLED` is set to `true`), the function splits the `LOGGER_MASKING_FIELDS` value into a slice of field names.
+2. If masking is enabled (`LOGGER_MASKING_FIELDS` has comma separated values), the function splits the `LOGGER_MASKING_FIELDS` value into a slice of field names.
 3. The function removes any empty or whitespace-only field names from the slice.
 4. The resulting slice of field names is passed to the `logging.SetMaskingFilters` function to set the masking filters.
 5. When a log message is generated, the logger checks if any of the fields in the message match the masking filters.
@@ -63,10 +61,9 @@ Internally, the filtered logging feature works as follows:
 
 When using the filtered logging feature, developers should keep the following points in mind:
 
-1. The masking configuration is read from the `.env` file. Make sure to set the appropriate values for `LOGGER_MASKING_ENABLED` and `LOGGER_MASKING_FIELDS` in your `.env` file.
+1. The masking configuration is read from the `.env` file. Make sure to set the appropriate value for `LOGGER_MASKING_FIELDS` in your `.env` file.
 2. The `LOGGER_MASKING_FIELDS` value should be a comma-separated list of field names. Ensure that the field names are specified correctly and match the field names in your log messages.
 3. If a field name specified in `LOGGER_MASKING_FIELDS` does not exist in a log message, it will be ignored.
 4. The masking process replaces the entire value of a sensitive field with asterisks (`*`). It does not preserve the original length or format of the value.
 5. The filtered logging feature only masks the specified fields in the log messages. It does not provide encryption or secure storage of sensitive data.
 6. Be cautious when specifying the masking fields to avoid masking non-sensitive data unintentionally.
-7. If the `LOGGER_MASKING_ENABLED` configuration is set to an invalid value (other than `true` or `false`), masking will be disabled.
