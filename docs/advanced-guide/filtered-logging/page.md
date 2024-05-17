@@ -45,6 +45,7 @@ In this example, the `New` function is called to create a new instance of the `A
 
 When logging a message that contains sensitive data, the specified fields will be masked in the output. The masked fields will be replaced with asterisks (`*`) to protect the sensitive information.
 
+
 ## How It Works Internally
 
 Internally, the filtered logging feature works as follows:
