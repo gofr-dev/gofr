@@ -232,7 +232,7 @@ func TestKafkaClient_SubscribeError(t *testing.T) {
 	assert.NotNil(t, err)
 	assert.Equal(t, errSub, err)
 	assert.Nil(t, msg)
-	assert.Contains(t, logs, "failed to read message from Kafka topic test: error while subscribing")
+	assert.Contains(t, logs, "failed to read message from kafka topic test: error while subscribing")
 }
 
 func TestKafkaClient_Close(t *testing.T) {
@@ -272,7 +272,7 @@ func TestKafkaClient_CloseError(t *testing.T) {
 
 	assert.NotNil(t, err)
 	assert.Equal(t, errClose, err)
-	assert.Contains(t, logs, "failed to close Kafka writer")
+	assert.Contains(t, logs, "failed to close kafka writer")
 }
 
 func TestKafkaClient_getNewReader(t *testing.T) {
