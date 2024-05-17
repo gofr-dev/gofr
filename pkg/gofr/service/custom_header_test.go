@@ -33,7 +33,7 @@ func Test_CustomDomainProvider_Get(t *testing.T) {
 	defer server.Close()
 
 	customHeaderService := NewHTTPService(server.URL, logging.NewMockLogger(logging.INFO), nil,
-		&Headers{
+		&DefaultHeaders{
 			Headers: map[string]string{
 				"TEST_KEY": "test_value",
 			},
@@ -67,7 +67,7 @@ func Test_CustomDomainProvider_Post(t *testing.T) {
 	defer server.Close()
 
 	customHeaderService := NewHTTPService(server.URL, logging.NewMockLogger(logging.INFO), nil,
-		&Headers{
+		&DefaultHeaders{
 			Headers: map[string]string{
 				"TEST_KEY": "test_value",
 			}})
@@ -96,7 +96,7 @@ func TestCustomDomainProvider_Put(t *testing.T) {
 	defer server.Close()
 
 	customHeaderService := NewHTTPService(server.URL, logging.NewMockLogger(logging.INFO), nil,
-		&Headers{
+		&DefaultHeaders{
 			Headers: map[string]string{
 				"TEST_KEY": "test_value",
 			}})
@@ -125,7 +125,7 @@ func TestCustomDomainProvider_Patch(t *testing.T) {
 	defer server.Close()
 
 	customHeaderService := NewHTTPService(server.URL, logging.NewMockLogger(logging.INFO), nil,
-		&Headers{
+		&DefaultHeaders{
 			Headers: map[string]string{
 				"TEST_KEY": "test_value",
 			}})
@@ -153,7 +153,7 @@ func TestCustomDomainProvider_Delete(t *testing.T) {
 	defer server.Close()
 
 	customHeaderService := NewHTTPService(server.URL, logging.NewMockLogger(logging.INFO), nil,
-		&Headers{
+		&DefaultHeaders{
 			Headers: map[string]string{
 				"TEST_KEY": "test_value",
 			}})

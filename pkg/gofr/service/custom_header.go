@@ -5,11 +5,11 @@ import (
 	"net/http"
 )
 
-type Headers struct {
+type DefaultHeaders struct {
 	Headers map[string]string
 }
 
-func (a *Headers) AddOption(h HTTP) HTTP {
+func (a *DefaultHeaders) AddOption(h HTTP) HTTP {
 	return &CustomHeader{
 		Headers: a.Headers,
 		HTTP:    h,
