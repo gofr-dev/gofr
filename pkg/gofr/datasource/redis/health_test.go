@@ -23,8 +23,10 @@ func TestRedis_HealthHandlerError(t *testing.T) {
 	defer s.Close()
 
 	mockMetric := NewMockMetrics(ctrl)
-	mockMetric.EXPECT().RecordHistogram(gomock.Any(), "app_redis_stats", gomock.Any(), "type", "ping")
-	mockMetric.EXPECT().RecordHistogram(gomock.Any(), "app_redis_stats", gomock.Any(), "type", "info")
+	mockMetric.EXPECT().RecordHistogram(gomock.Any(), "app_redis_stats", gomock.Any(),
+		"hostname", gomock.Any(), "type", "ping")
+	mockMetric.EXPECT().RecordHistogram(gomock.Any(), "app_redis_stats", gomock.Any(),
+		"hostname", gomock.Any(), "type", "info")
 
 	client := NewClient(config.NewMockConfig(map[string]string{
 		"REDIS_HOST": s.Host(),

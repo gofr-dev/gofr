@@ -15,6 +15,7 @@ import (
 
 // redisHook is a custom Redis hook for logging queries and their durations.
 type redisHook struct {
+	config  *Config
 	logger  datasource.Logger
 	metrics Metrics
 }
@@ -73,7 +74,7 @@ func (r *redisHook) logQuery(start time.Time, query string, args ...interface{})
 	})
 
 	r.metrics.RecordHistogram(context.Background(), "app_redis_stats",
-		float64(duration), "type", query)
+		float64(duration), "hostname", r.config.HostName, "type", query)
 }
 
 // DialHook implements the redis.DialHook interface.
