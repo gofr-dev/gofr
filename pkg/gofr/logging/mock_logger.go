@@ -7,9 +7,11 @@ import (
 )
 
 type MockLogger struct {
-	level  Level
-	out    io.Writer
-	errOut io.Writer
+	level         Level
+	out           io.Writer
+	errOut        io.Writer
+	filter        Filterer
+	maskingFields []string
 }
 
 func NewMockLogger(level Level) Logger {
@@ -102,4 +104,17 @@ func (m *MockLogger) Logf(format string, args ...interface{}) {
 
 func (m *MockLogger) ChangeLevel(level Level) {
 	m.level = level
+}
+
+// SetMaskingFilters sets the masking fields and enables masking for the logger.
+func (m *MockLogger) SetMaskingFilters(fields []string) {
+	m.maskingFields = fields
+	m.filter = &MaskingFilter{
+		MaskFields: fields,
+	}
+}
+
+// GetMaskingFilters returns the current masking fields.
+func (m *MockLogger) GetMaskingFilters() []string {
+	return m.maskingFields
 }
