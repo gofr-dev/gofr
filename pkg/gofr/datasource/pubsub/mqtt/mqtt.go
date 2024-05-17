@@ -61,18 +61,20 @@ func New(config *Config, logger Logger, metrics Metrics) *MQTT {
 
 	options := getMQTTClientOptions(config)
 
+	logger.Debugf("connecting to MQTT at '%v:%v' with clientID '%v'", config.Hostname, config.Port, config.ClientID)
+
 	// create the client using the options above
 	client := mqtt.NewClient(options)
 
 	if token := client.Connect(); token.Wait() && token.Error() != nil {
-		logger.Errorf("cannot connect to MQTT, host: %v, port: %v, error: %v", config.Hostname, config.Port, token.Error())
+		logger.Errorf("could not connect to MQTT at '%v:%v', error: %v", config.Hostname, config.Port, token.Error())
 
 		return &MQTT{Client: client, config: config, logger: logger}
 	}
 
 	msg := make(map[string]chan *pubsub.Message)
 
-	logger.Infof("connected to MQTT at %v:%v, clientID: %v", config.Hostname, config.Port, options.ClientID)
+	logger.Infof("connected to MQTT at '%v:%v' with clientID '%v'", config.Hostname, config.Port, options.ClientID)
 
 	return &MQTT{Client: client, config: config, logger: logger, msgChanMap: msg, mu: new(sync.RWMutex), metrics: metrics}
 }
@@ -90,7 +92,7 @@ func getDefaultClient(config *Config, logger Logger, metrics Metrics) *MQTT {
 	client := mqtt.NewClient(opts)
 
 	if token := client.Connect(); token.Wait() && token.Error() != nil {
-		logger.Errorf("cannot connect to MQTT, host: %v, port: %v, error: %v", host, port, token.Error())
+		logger.Errorf("could not connect to MQTT at '%v:%v', error: %v", config.Hostname, config.Port, token.Error())
 
 		return &MQTT{Client: client, config: config, logger: logger}
 	}
@@ -101,7 +103,7 @@ func getDefaultClient(config *Config, logger Logger, metrics Metrics) *MQTT {
 
 	msg := make(map[string]chan *pubsub.Message)
 
-	logger.Infof("connected to MQTT at %v:%v, clientID: %v", config.Hostname, config.Port, clientID)
+	logger.Infof("connected to MQTT at '%v:%v' with clientID '%v'", config.Hostname, config.Port, clientID)
 
 	return &MQTT{Client: client, config: config, logger: logger, msgChanMap: msg, mu: new(sync.RWMutex), metrics: metrics}
 }
@@ -184,7 +186,7 @@ func (m *MQTT) Subscribe(ctx context.Context, topic string) (*pubsub.Message, er
 	token := m.Client.Subscribe(topic, m.config.QoS, handler)
 
 	if token.Wait() && token.Error() != nil {
-		m.logger.Errorf("error getting a message from MQTT, err: %v", token.Error())
+		m.logger.Errorf("error getting a message from MQTT, error: %v", token.Error())
 
 		return nil, token.Error()
 	}
@@ -208,7 +210,7 @@ func (m *MQTT) Publish(ctx context.Context, topic string, message []byte) error 
 	// Check for errors during publishing (More on error reporting
 	// https://pkg.go.dev/github.com/eclipse/paho.mqtt.golang#readme-error-handling)
 	if token.Wait() && token.Error() != nil {
-		m.logger.Errorf("error while publishing message, err  %v", token.Error())
+		m.logger.Errorf("error while publishing message, error: %v", token.Error())
 
 		return token.Error()
 	}
@@ -262,7 +264,7 @@ func (m *MQTT) CreateTopic(_ context.Context, topic string) error {
 	token.Wait()
 
 	if token.Error() != nil {
-		m.logger.Errorf("unable to create topic - %s, error: %v", topic, token.Error())
+		m.logger.Errorf("unable to create topic '%s', error: %v", topic, token.Error())
 
 		return token.Error()
 	}
@@ -312,7 +314,7 @@ func (m *MQTT) Unsubscribe(topic string) error {
 	token.Wait()
 
 	if token.Error() != nil {
-		m.logger.Errorf("error while unsubscribing from topic %s, err: %v", topic, token.Error())
+		m.logger.Errorf("error while unsubscribing from topic '%s', error: %v", topic, token.Error())
 
 		return token.Error()
 	}

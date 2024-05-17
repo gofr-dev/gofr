@@ -36,7 +36,7 @@ func TestMQTT_New(t *testing.T) {
 	})
 
 	assert.NotNil(t, client.Client)
-	assert.Contains(t, out, "cannot connect to MQTT")
+	assert.Contains(t, out, "could not connect to MQTT")
 }
 
 // TestMQTT_EmptyConfigs test the scenario where configs are not provided and
@@ -272,7 +272,7 @@ func TestMQTT_Unsubscribe(t *testing.T) {
 		assert.NotNil(t, err)
 	})
 
-	assert.Contains(t, out, "error while unsubscribing from topic test/topic")
+	assert.Contains(t, out, "error while unsubscribing from topic 'test/topic'")
 }
 
 func TestMQTT_CreateTopic(t *testing.T) {
@@ -290,7 +290,7 @@ func TestMQTT_CreateTopic(t *testing.T) {
 		assert.NotNil(t, err)
 	})
 
-	assert.Contains(t, out, "unable to create topic - test/topic")
+	assert.Contains(t, out, "unable to create topic 'test/topic'")
 }
 
 func TestMQTT_Health(t *testing.T) {
