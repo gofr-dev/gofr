@@ -14,22 +14,30 @@ type errorDB struct {
 }
 
 func (e *errorDB) Error() string {
-	if e.error != nil {
-		return e.error.Error()
-	}
-
-	return e.message
+	return e.error.Error()
 }
 
-//nolint:revive // Error creates a new database error with the provided error and  message.
-func Error(err error, message ...string) *errorDB {
+//nolint:revive // Error creates a new DB error with provided message.
+func Error(message string) *errorDB {
+	return &errorDB{
+		error:   errors.New(message),
+		message: message,
+	}
+}
+
+//nolint:revive // ErrorWrapped creates a new database error with the provided error and  message.
+func ErrorWrapped(err error, message ...string) *errorDB {
 	errMsg := strings.Join(message, " ")
 
-	if errMsg != "" {
+	if err != nil && errMsg != "" {
 		return &errorDB{
 			error:   errors.Wrap(err, errMsg),
 			message: errMsg,
 		}
+	}
+
+	if errMsg != "" {
+		return Error(errMsg)
 	}
 
 	return &errorDB{

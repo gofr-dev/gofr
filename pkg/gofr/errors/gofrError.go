@@ -1,4 +1,4 @@
-package gofrerror
+package error
 
 import (
 	"net/http"
@@ -15,22 +15,30 @@ type errorGoFr struct {
 
 // Error returns the formatted error message.
 func (e *errorGoFr) Error() string {
-	if e.error != nil {
-		return e.error.Error()
-	}
-
-	return e.message
+	return e.error.Error()
 }
 
-//nolint:revive // New creates a new GoFr error and wraps the error with the provided message.
-func New(err error, message ...string) *errorGoFr {
+//nolint:revive // New creates a new GoFr error with provided message.
+func New(message string) *errorGoFr {
+	return &errorGoFr{
+		error:   errors.New(message),
+		message: message,
+	}
+}
+
+//nolint:revive // NewWrapped creates a new GoFr error and wraps the error with the provided message.
+func NewWrapped(err error, message ...string) *errorGoFr {
 	errMsg := strings.Join(message, " ")
 
-	if errMsg != "" {
+	if err != nil && errMsg != "" {
 		return &errorGoFr{
 			error:   errors.Wrap(err, errMsg),
 			message: errMsg,
 		}
+	}
+
+	if errMsg != "" {
+		return New(errMsg)
 	}
 
 	return &errorGoFr{
