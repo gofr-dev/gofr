@@ -103,7 +103,7 @@ func Test_changeLevel(t *testing.T) {
 		isTerminal: false,
 	}
 
-	l.changeLevel(ERROR)
+	l.ChangeLevel(ERROR)
 
 	assert.Equal(t, ERROR, l.level, "Test_changeLevel failed! expected level to be error ")
 }

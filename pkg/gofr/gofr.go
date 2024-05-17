@@ -42,6 +42,8 @@ type App struct {
 
 	cmd *cmd
 
+	cron *Crontab
+
 	// container is unexported because this is an internal implementation and applications are provided access to it via Context
 	container *container.Container
 
@@ -135,6 +137,13 @@ func (a *App) Run() {
 		a.add(http.MethodGet, "/.well-known/health", healthHandler)
 		a.add(http.MethodGet, "/.well-known/alive", liveHandler)
 		a.add(http.MethodGet, "/favicon.ico", faviconHandler)
+
+		if _, err := os.Stat("./static/openapi.json"); err == nil {
+			a.add(http.MethodGet, "/.well-known/openapi.json", OpenAPIHandler)
+			a.add(http.MethodGet, "/.well-known/swagger", SwaggerUIHandler)
+			a.add(http.MethodGet, "/.well-known/{name}", SwaggerUIHandler)
+		}
+
 		a.httpServer.router.PathPrefix("/").Handler(handler{
 			function:  catchAllHandler,
 			container: a.container,
@@ -216,6 +225,11 @@ func (a *App) POST(pattern string, handler Handler) {
 // DELETE adds a Handler for http DELETE method for a route pattern.
 func (a *App) DELETE(pattern string, handler Handler) {
 	a.add("DELETE", pattern, handler)
+}
+
+// PATCH adds a Handler for http PATCH method for a route pattern.
+func (a *App) PATCH(pattern string, handler Handler) {
+	a.add("PATCH", pattern, handler)
 }
 
 func (a *App) add(method, pattern string, h Handler) {
@@ -375,4 +389,16 @@ func (a *App) UseMiddleware(middlewares ...gofrHTTP.Middleware) {
 
 func (a *App) UseMongo(db datasource.Mongo) {
 	a.container.Mongo = db
+}
+
+// AddCronJob registers a cron job to the cron table, the schedule is in * * * * * (6 part) format
+// denoting minutes, hours, days, months and day of week respectively.
+func (a *App) AddCronJob(schedule, jobName string, job CronFunc) {
+	if a.cron == nil {
+		a.cron = NewCron(a.container)
+	}
+
+	if err := a.cron.AddJob(schedule, jobName, job); err != nil {
+		a.Logger().Errorf("error adding cron job, err : %v", err)
+	}
 }

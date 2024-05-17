@@ -13,6 +13,7 @@ import (
 	"gofr.dev/pkg/gofr/datasource/redis"
 	"gofr.dev/pkg/gofr/datasource/sql"
 	"gofr.dev/pkg/gofr/logging"
+	"gofr.dev/pkg/gofr/logging/remotelogger"
 	"gofr.dev/pkg/gofr/metrics"
 	"gofr.dev/pkg/gofr/metrics/exporters"
 	"gofr.dev/pkg/gofr/service"
@@ -63,6 +64,10 @@ func (c *Container) Create(conf config.Config) {
 	}
 
 	c.createLogger(conf)
+	if c.Logger == nil {
+		c.Logger = remotelogger.New(logging.GetLevelFromString(conf.Get("LOG_LEVEL")), conf.Get("REMOTE_LOG_URL"),
+			conf.GetOrDefault("REMOTE_LOG_FETCH_INTERVAL", "15"))
+	}
 
 	c.Debug("Container is being created")
 
@@ -129,7 +134,7 @@ func (c *Container) Create(conf config.Config) {
 
 func (c *Container) createLogger(conf config.Config) {
 	if c.Logger == nil {
-		c.Logger = logging.NewRemoteLogger(logging.GetLevelFromString(conf.Get("LOG_LEVEL")), conf.Get("REMOTE_LOG_URL"),
+		c.Logger = remotelogger.New(logging.GetLevelFromString(conf.Get("LOG_LEVEL")), conf.Get("REMOTE_LOG_URL"),
 			conf.GetOrDefault("REMOTE_LOG_FETCH_INTERVAL", "15"))
 
 		maskingFields := conf.GetOrDefault("LOGGER_MASKING_FIELDS", "")
@@ -176,12 +181,27 @@ func (c *Container) registerFrameworkMetrics() {
 		c.Metrics().NewHistogram("app_http_response", "Response time of http requests in seconds.", httpBuckets...)
 		c.Metrics().NewHistogram("app_http_service_response", "Response time of http service requests in seconds.", httpBuckets...)
 	}
+	{ // http metrics
+		httpBuckets := []float64{.001, .003, .005, .01, .02, .03, .05, .1, .2, .3, .5, .75, 1, 2, 3, 5, 10, 30}
+		c.Metrics().NewHistogram("app_http_response", "Response time of http requests in seconds.", httpBuckets...)
+		c.Metrics().NewHistogram("app_http_service_response", "Response time of http service requests in seconds.", httpBuckets...)
+	}
 
 	{ // redis metrics
 		redisBuckets := []float64{.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 1.25, 1.5, 2, 2.5, 3}
 		c.Metrics().NewHistogram("app_redis_stats", "Response time of Redis commands in milliseconds.", redisBuckets...)
 	}
+	{ // redis metrics
+		redisBuckets := []float64{.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 1.25, 1.5, 2, 2.5, 3}
+		c.Metrics().NewHistogram("app_redis_stats", "Response time of Redis commands in milliseconds.", redisBuckets...)
+	}
 
+	{ // sql metrics
+		sqlBuckets := []float64{.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 4, 5, 7.5, 10}
+		c.Metrics().NewHistogram("app_sql_stats", "Response time of SQL queries in milliseconds.", sqlBuckets...)
+		c.Metrics().NewGauge("app_sql_open_connections", "Number of open SQL connections.")
+		c.Metrics().NewGauge("app_sql_inUse_connections", "Number of inUse SQL connections.")
+	}
 	{ // sql metrics
 		sqlBuckets := []float64{.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 4, 5, 7.5, 10}
 		c.Metrics().NewHistogram("app_sql_stats", "Response time of SQL queries in milliseconds.", sqlBuckets...)
