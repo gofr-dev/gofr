@@ -1,12 +1,12 @@
 package container
 
 import (
-	"gofr.dev/pkg/gofr/datasource/file"
 	"strconv"
 	"strings"
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/datasource"
+	"gofr.dev/pkg/gofr/datasource/file"
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 	"gofr.dev/pkg/gofr/datasource/pubsub/google"
 	"gofr.dev/pkg/gofr/datasource/pubsub/kafka"
@@ -38,8 +38,7 @@ type Container struct {
 	Redis Redis
 	SQL   DB
 	Mongo datasource.Mongo
-
-	File datasource.FileStore
+	File  datasource.FileStore
 }
 
 func NewContainer(conf config.Config) *Container {
