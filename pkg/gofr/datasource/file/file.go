@@ -14,7 +14,7 @@ type local struct {
 
 // New accepts an interface and this will be kept consistent accross all different filestores, such that to support
 // different option such as metrics, logger, configs etc if needed without changing the function signature.
-func New(option ...interface{}) datasource.FileStorer {
+func New(option ...interface{}) datasource.FileStore {
 	var l local
 
 	for _, o := range option {
