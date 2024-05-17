@@ -1,14 +1,17 @@
 package file
 
 import (
-	"go.uber.org/mock/gomock"
-	"gofr.dev/pkg/gofr/datasource/sql"
-	"gofr.dev/pkg/gofr/logging"
 	"io/fs"
 	"os"
 	"testing"
 
+	"go.uber.org/mock/gomock"
+
 	"github.com/stretchr/testify/assert"
+
+	"gofr.dev/pkg/gofr/datasource"
+	"gofr.dev/pkg/gofr/datasource/sql"
+	"gofr.dev/pkg/gofr/logging"
 )
 
 func Test_LocalFileSystemDirectoryCreation(t *testing.T) {
@@ -37,7 +40,9 @@ func Test_CreateReadDeleteFile(t *testing.T) {
 	fileStore := New(logger)
 
 	err := fileStore.Create(fileName, []byte("some content"))
-	defer fileStore.Delete(fileName)
+	defer func(fileStore datasource.FileStore, name string, options ...interface{}) {
+		_ = fileStore.Delete(name, options)
+	}(fileStore, fileName)
 
 	assert.Nil(t, err)
 
@@ -55,11 +60,13 @@ func Test_CreateMoveDeleteFile(t *testing.T) {
 	fileStore := New(logger)
 
 	err := fileStore.Create(fileName, []byte("some content"))
-	defer fileStore.Delete("temp.text")
 
 	assert.Nil(t, err)
 
 	err = fileStore.Move("temp.txt", "temp.text")
+	defer func(fileStore datasource.FileStore, name string, options ...interface{}) {
+		_ = fileStore.Delete(name, options)
+	}(fileStore, "temp.text")
 
 	assert.Nil(t, err)
 }
@@ -72,11 +79,13 @@ func Test_CreateUpdateReadFile(t *testing.T) {
 	fileStore := New(logger)
 
 	err := fileStore.Create(fileName, []byte("some content"))
-	defer fileStore.Delete(fileName)
+	defer func(fileStore datasource.FileStore, name string, options ...interface{}) {
+		_ = fileStore.Delete(name, options)
+	}(fileStore, fileName)
 
 	assert.Nil(t, err)
 
-	err = fileStore.Update(fileName, []byte("some new content"))
+	_ = fileStore.Update(fileName, []byte("some new content"))
 
 	data, err := fileStore.Read("temp.txt")
 
@@ -85,9 +94,9 @@ func Test_CreateUpdateReadFile(t *testing.T) {
 }
 
 func Test_NewFileStoreWithoutLogger(t *testing.T) {
-	fs := New(sql.NewMockMetrics(gomock.NewController(t)))
+	fileSystem := New(sql.NewMockMetrics(gomock.NewController(t)))
 
-	assert.NotNil(t, fs)
+	assert.NotNil(t, fileSystem)
 }
 
 func Test_CreateFileInvalidPath(t *testing.T) {
@@ -108,7 +117,9 @@ func Test_CreateFileDuplicateFile(t *testing.T) {
 	fileStore := New(logger)
 
 	_ = fileStore.Create("test", []byte("some content"))
-	defer fileStore.Delete(fileName)
+	defer func(fileStore datasource.FileStore, name string, options ...interface{}) {
+		_ = fileStore.Delete(name, options)
+	}(fileStore, fileName)
 
 	err := fileStore.Create("test", []byte("some content"))
 

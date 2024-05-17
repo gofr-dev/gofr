@@ -8,21 +8,21 @@ import (
 	"gofr.dev/pkg/gofr/datasource"
 )
 
+const readWritePermission = 0666
+
 type local struct {
 	logger datasource.Logger
 }
 
-// New accepts an interface and this will be kept consistent accross all different filestores, such that to support
+// New accepts an interface and this will be kept consistent across all different filestores, such that to support
 // different option such as metrics, logger, configs etc if needed without changing the function signature.
 func New(option ...interface{}) datasource.FileStore {
 	var l local
 
 	for _, o := range option {
-		switch o.(type) {
-		case datasource.Logger:
-			l.logger = o.(datasource.Logger)
-		default:
-			return l
+		logger, ok := o.(datasource.Logger)
+		if ok {
+			l.logger = logger
 		}
 	}
 
@@ -44,7 +44,7 @@ func (c local) Create(name string, data []byte, _ ...interface{}) error {
 	// os.O_WRONLY: Opens the file for writing only.
 	// os.O_CREATE: Creates the file if it doesn't exist.
 	// os.O_EXCL: Fails if the file already exists (exclusive creation).
-	f, err := os.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0666)
+	f, err := os.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_EXCL, readWritePermission)
 	if err != nil {
 		return err
 	}
@@ -85,7 +85,7 @@ func (c local) Read(path string, _ ...interface{}) ([]byte, error) {
 
 func (c local) Update(name string, data []byte, _ ...interface{}) error {
 	// Open the file for writing with truncation
-	f, err := os.OpenFile(name, os.O_WRONLY|os.O_TRUNC, 0666)
+	f, err := os.OpenFile(name, os.O_WRONLY|os.O_TRUNC, readWritePermission)
 	if err != nil {
 		return err
 	}
@@ -105,7 +105,7 @@ func (c local) Delete(path string, _ ...interface{}) error {
 	return os.RemoveAll(path)
 }
 
-func (c local) Move(src string, dest string, _ ...interface{}) error {
+func (c local) Move(src, dest string, _ ...interface{}) error {
 	return os.Rename(src, dest)
 }
 
