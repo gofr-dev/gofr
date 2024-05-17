@@ -8,7 +8,7 @@ import (
 )
 
 type Logger interface {
-	Debug(args ...interface{})
+	Debugf(pattern string, args ...interface{})
 	Logf(pattern string, args ...interface{})
 	Errorf(patter string, args ...interface{})
 }

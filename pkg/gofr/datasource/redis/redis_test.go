@@ -33,10 +33,9 @@ func Test_NewClient_InvalidPort(t *testing.T) {
 
 	mockLogger := logging.NewMockLogger(logging.ERROR)
 	mockMetrics := NewMockMetrics(ctrl)
-	mockConfig := config.NewMockConfig(map[string]string{"REDIS_HOST": "localhost",
-		"REDIS_PORT": "&&^%%^&*"})
+	mockConfig := config.NewMockConfig(map[string]string{"REDIS_HOST": "localhost", "REDIS_PORT": "&&^%%^&*"})
 
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_redis_stats", gomock.Any(), "type", "ping")
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_redis_stats", gomock.Any(), "hostname", gomock.Any(), "type", "ping")
 
 	client := NewClient(mockConfig, mockLogger, mockMetrics)
 	assert.Nil(t, client.Client, "Test_NewClient_InvalidPort Failed! Expected redis client to be nil")
@@ -53,8 +52,8 @@ func TestRedis_QueryLogging(t *testing.T) {
 	defer s.Close()
 
 	mockMetric := NewMockMetrics(ctrl)
-	mockMetric.EXPECT().RecordHistogram(gomock.Any(), "app_redis_stats", gomock.Any(), "type", "ping")
-	mockMetric.EXPECT().RecordHistogram(gomock.Any(), "app_redis_stats", gomock.Any(), "type", "set")
+	mockMetric.EXPECT().RecordHistogram(gomock.Any(), "app_redis_stats", gomock.Any(), "hostname", gomock.Any(), "type", "ping")
+	mockMetric.EXPECT().RecordHistogram(gomock.Any(), "app_redis_stats", gomock.Any(), "hostname", gomock.Any(), "type", "set")
 
 	result := testutil.StdoutOutputForFunc(func() {
 		mockLogger := logging.NewMockLogger(logging.DEBUG)
@@ -87,8 +86,8 @@ func TestRedis_PipelineQueryLogging(t *testing.T) {
 	defer s.Close()
 
 	mockMetric := NewMockMetrics(ctrl)
-	mockMetric.EXPECT().RecordHistogram(gomock.Any(), "app_redis_stats", gomock.Any(), "type", "ping")
-	mockMetric.EXPECT().RecordHistogram(gomock.Any(), "app_redis_stats", gomock.Any(), "type", "pipeline")
+	mockMetric.EXPECT().RecordHistogram(gomock.Any(), "app_redis_stats", gomock.Any(), "hostname", gomock.Any(), "type", "ping")
+	mockMetric.EXPECT().RecordHistogram(gomock.Any(), "app_redis_stats", gomock.Any(), "hostname", gomock.Any(), "type", "pipeline")
 
 	// Execute Redis pipeline
 	result := testutil.StdoutOutputForFunc(func() {

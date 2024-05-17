@@ -23,17 +23,19 @@ func New(conf Config, logger Logger, metrics Metrics) *Client {
 	mongoURI := conf.Get("MONGO_URI")
 	mongoDatabase := conf.Get("MONGO_DATABASE")
 
-	logger.Logf("connecting to mongoDB at %v to database %v", mongoURI, mongoDatabase)
+	logger.Debugf("connecting with mongo database '%v' at '%v'", mongoDatabase, mongoURI)
 
 	m, err := mongo.Connect(context.Background(), options.Client().ApplyURI(conf.Get("MONGO_URI")))
 	if err != nil {
-		logger.Errorf("error connecting to mongoDB, err:%v", err)
+		logger.Errorf("could not connect to mongoDB, error: %v", err)
 
 		return nil
 	}
 
 	mongoBuckets := []float64{.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 4, 5, 7.5, 10}
 	metrics.NewHistogram("app_mongo_stats", "Response time of MONGO queries in milliseconds.", mongoBuckets...)
+
+	logger.Logf("connected with mongo database '%v' at '%v", mongoDatabase, mongoURI)
 
 	return &Client{
 		Database: m.Database(mongoDatabase),
@@ -152,10 +154,10 @@ func (c *Client) postProcess(ql *QueryLog, startTime time.Time) {
 
 	ql.Duration = duration
 
-	c.logger.Debug(ql)
+	c.logger.Debugf("%v", ql)
 
-	c.metrics.RecordHistogram(context.Background(), "app_mongo_stats", float64(duration),
-		"type", ql.Query)
+	c.metrics.RecordHistogram(context.Background(), "app_mongo_stats", float64(duration), "hostname", c.uri,
+		"database", c.database, "type", ql.Query)
 }
 
 type Health struct {
