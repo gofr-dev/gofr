@@ -55,7 +55,7 @@ func NewClient(c config.Config, logger datasource.Logger, metrics Metrics) *Redi
 	redisConfig.Options = options
 
 	rc := redis.NewClient(redisConfig.Options)
-	rc.AddHook(&redisHook{logger: logger, metrics: metrics})
+	rc.AddHook(&redisHook{config: redisConfig, logger: logger, metrics: metrics})
 
 	ctx, cancel := context.WithTimeout(context.TODO(), redisPingTimeout)
 	defer cancel()

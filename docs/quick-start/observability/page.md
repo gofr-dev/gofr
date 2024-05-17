@@ -67,6 +67,12 @@ GoFr publishes metrics to port: _2121_ on _/metrics_ endpoint in prometheus form
 
 ---
 
+- app_info
+- gauge
+- Number of instances running with info of app and framework
+
+---
+
 - app_http_response
 - histogram
 - Response time of http requests in seconds

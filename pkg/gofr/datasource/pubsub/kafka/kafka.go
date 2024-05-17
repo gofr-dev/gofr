@@ -143,7 +143,7 @@ func (k *kafkaClient) Subscribe(ctx context.Context, topic string) (*pubsub.Mess
 	ctx, span := otel.GetTracerProvider().Tracer("gofr").Start(ctx, "kafka-subscribe")
 	defer span.End()
 
-	k.metrics.IncrementCounter(ctx, "app_pubsub_subscribe_total_count", "topic", topic)
+	k.metrics.IncrementCounter(ctx, "app_pubsub_subscribe_total_count", "topic", topic, "consumer_group", k.config.ConsumerGroupID)
 
 	var reader Reader
 	// Lock the reader map to ensure only one subscriber access the reader at a time
@@ -185,7 +185,7 @@ func (k *kafkaClient) Subscribe(ctx context.Context, topic string) (*pubsub.Mess
 		Time:          end.Microseconds(),
 	})
 
-	k.metrics.IncrementCounter(ctx, "app_pubsub_subscribe_success_count", "topic", topic)
+	k.metrics.IncrementCounter(ctx, "app_pubsub_subscribe_success_count", "topic", topic, "consumer_group", k.config.ConsumerGroupID)
 
 	return m, err
 }
