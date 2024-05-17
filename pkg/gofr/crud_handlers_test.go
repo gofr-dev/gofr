@@ -139,7 +139,8 @@ func Test_CreateHandler(t *testing.T) {
 
 			ctx := createTestContext(http.MethodPost, "/users", "", tc.reqBody, c)
 
-			mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats", gomock.Any(), "type", "INSERT").MaxTimes(2)
+			mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats", gomock.Any(),
+				"hostname", gomock.Any(), "database", gomock.Any(), "type", "INSERT").MaxTimes(2)
 
 			if tc.expectedErr == nil {
 				mocks.SQL.EXPECT().Dialect().Return(tc.dialect).Times(1)
@@ -325,7 +326,8 @@ func Test_GetHandler(t *testing.T) {
 
 				ctx := createTestContext(http.MethodGet, "/user", tc.id, nil, c)
 
-				mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats", gomock.Any(), "type", "SELECT")
+				mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats", gomock.Any(),
+					"hostname", gomock.Any(), "database", gomock.Any(), "type", "SELECT")
 				mock.ExpectQuery(dc.expectedQuery).WithArgs(tc.id).WillReturnRows(tc.mockRow).WillReturnError(tc.mockErr)
 
 				resp, err := e.Get(ctx)
@@ -416,7 +418,7 @@ func Test_UpdateHandler(t *testing.T) {
 				ctx := createTestContext(http.MethodPut, "/user", strconv.Itoa(tc.id), tc.reqBody, c)
 
 				mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats", gomock.Any(),
-					"type", "UPDATE").MaxTimes(2)
+					"hostname", gomock.Any(), "database", gomock.Any(), "type", "UPDATE").MaxTimes(2)
 
 				mock.ExpectExec(dc.expectedQuery).WithArgs("goFr", true, tc.id).
 					WillReturnResult(sqlmock.NewResult(1, 1)).WillReturnError(nil)
