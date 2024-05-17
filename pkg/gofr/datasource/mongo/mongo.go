@@ -156,8 +156,8 @@ func (c *Client) postProcess(ql *QueryLog, startTime time.Time) {
 
 	c.logger.Debugf("%v", ql)
 
-	c.metrics.RecordHistogram(context.Background(), "app_mongo_stats", float64(duration),
-		"type", ql.Query)
+	c.metrics.RecordHistogram(context.Background(), "app_mongo_stats", float64(duration), "hostname", c.uri,
+		"database", c.database, "type", ql.Query)
 }
 
 type Health struct {

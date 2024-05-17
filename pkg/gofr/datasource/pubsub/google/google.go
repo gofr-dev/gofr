@@ -118,7 +118,7 @@ func (g *googleClient) Subscribe(ctx context.Context, topic string) (*pubsub.Mes
 	ctx, span := otel.GetTracerProvider().Tracer("gofr").Start(ctx, "gcp-subscribe")
 	defer span.End()
 
-	g.metrics.IncrementCounter(ctx, "app_pubsub_subscribe_total_count", "topic", topic)
+	g.metrics.IncrementCounter(ctx, "app_pubsub_subscribe_total_count", "topic", topic, "subscription_name", g.Config.SubscriptionName)
 
 	var m = pubsub.NewMessage(ctx)
 
@@ -162,7 +162,7 @@ func (g *googleClient) Subscribe(ctx context.Context, topic string) (*pubsub.Mes
 		return nil, err
 	}
 
-	g.metrics.IncrementCounter(ctx, "app_pubsub_subscribe_success_count", "topic", topic)
+	g.metrics.IncrementCounter(ctx, "app_pubsub_subscribe_success_count", "topic", topic, "subscription_name", g.Config.SubscriptionName)
 
 	return m, nil
 }

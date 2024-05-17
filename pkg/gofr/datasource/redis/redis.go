@@ -43,7 +43,7 @@ func NewClient(c config.Config, logger datasource.Logger, metrics Metrics) *Redi
 	logger.Debugf("connecting to redis at '%s:%d'", redisConfig.HostName, redisConfig.Port)
 
 	rc := redis.NewClient(redisConfig.Options)
-	rc.AddHook(&redisHook{logger: logger, metrics: metrics})
+	rc.AddHook(&redisHook{config: redisConfig, logger: logger, metrics: metrics})
 
 	ctx, cancel := context.WithTimeout(context.TODO(), redisPingTimeout)
 	defer cancel()

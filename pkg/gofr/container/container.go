@@ -150,20 +150,23 @@ func (c *Container) registerFrameworkMetrics() {
 	c.Metrics().NewGauge("app_go_numGC", "Number of completed Garbage Collector cycles.")
 	c.Metrics().NewGauge("app_go_sys", "Number of total bytes of memory.")
 
-	// http metrics
-	httpBuckets := []float64{.001, .003, .005, .01, .02, .03, .05, .1, .2, .3, .5, .75, 1, 2, 3, 5, 10, 30}
-	c.Metrics().NewHistogram("app_http_response", "Response time of http requests in seconds.", httpBuckets...)
-	c.Metrics().NewHistogram("app_http_service_response", "Response time of http service requests in seconds.", httpBuckets...)
+	{ // http metrics
+		httpBuckets := []float64{.001, .003, .005, .01, .02, .03, .05, .1, .2, .3, .5, .75, 1, 2, 3, 5, 10, 30}
+		c.Metrics().NewHistogram("app_http_response", "Response time of http requests in seconds.", httpBuckets...)
+		c.Metrics().NewHistogram("app_http_service_response", "Response time of http service requests in seconds.", httpBuckets...)
+	}
 
-	// redis metrics
-	redisBuckets := []float64{.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 1.25, 1.5, 2, 2.5, 3}
-	c.Metrics().NewHistogram("app_redis_stats", "Response time of Redis commands in milliseconds.", redisBuckets...)
+	{ // redis metrics
+		redisBuckets := []float64{.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 1.25, 1.5, 2, 2.5, 3}
+		c.Metrics().NewHistogram("app_redis_stats", "Response time of Redis commands in milliseconds.", redisBuckets...)
+	}
 
-	// sql metrics
-	sqlBuckets := []float64{.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 4, 5, 7.5, 10}
-	c.Metrics().NewHistogram("app_sql_stats", "Response time of SQL queries in milliseconds.", sqlBuckets...)
-	c.Metrics().NewGauge("app_sql_open_connections", "Number of open SQL connections.")
-	c.Metrics().NewGauge("app_sql_inUse_connections", "Number of inUse SQL connections.")
+	{ // sql metrics
+		sqlBuckets := []float64{.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 4, 5, 7.5, 10}
+		c.Metrics().NewHistogram("app_sql_stats", "Response time of SQL queries in milliseconds.", sqlBuckets...)
+		c.Metrics().NewGauge("app_sql_open_connections", "Number of open SQL connections.")
+		c.Metrics().NewGauge("app_sql_inUse_connections", "Number of inUse SQL connections.")
+	}
 
 	// pubsub metrics
 	c.Metrics().NewCounter("app_pubsub_publish_total_count", "Number of total publish operations.")
