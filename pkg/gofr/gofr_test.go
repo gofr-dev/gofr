@@ -387,8 +387,9 @@ func Test_UseMiddleware(t *testing.T) {
 
 	app := &App{
 		httpServer: &httpServer{
-			router: gofrHTTP.NewRouter(c),
-			port:   8001,
+			router:         gofrHTTP.NewRouter(c),
+			port:           8001,
+			requestTimeout: time.Duration(10) * time.Second,
 		},
 		container: c,
 	}

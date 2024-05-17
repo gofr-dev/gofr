@@ -27,8 +27,9 @@ func TestRun_ServerStartsListening(t *testing.T) {
 
 	// Create an instance of httpServer
 	server := &httpServer{
-		router: router,
-		port:   8080,
+		router:         router,
+		port:           8080,
+		requestTimeout: time.Duration(5) * time.Second,
 	}
 
 	// Start the server
