@@ -27,15 +27,78 @@ that are specific for the type of message broker user wants to use.
 ### KAFKA
 
 #### Configs
-| Name                  | Description                                                                                                            | Required     | Default   | Example          | Valid format     |
-|-----------------------|------------------------------------------------------------------------------------------------------------------------|--------------|-----------|------------------|------------------|
-| `PUBSUB_BACKEND`      | Using Apache Kafka as message broker                                                                                   | +            |           | `KAFKA`          | Not empty string |
-| `PUBSUB_BROKER`       | Address to connect to kafka broker                                                                                     | +            |           | `localhost:9092` | Not empty string |
-| `CONSUMER_ID`         | Consumer group id to uniquely identify the consumer group                                                              | if consuming |           | `order-consumer` | Not empty string |
-| `PUBSUB_OFFSET`       | Determines from whence the consumer group should begin consuming when it finds a partition without a committed offset. | -            | `-1`      | `10`             | int              |
-| `KAFKA_BATCH_SIZE`    | Limit on how many messages will be buffered before being sent to a partition.                                          | -            | `100`     | `10`             | Positive int     |
-| `KAFKA_BATCH_BYTES`   | Limit the maximum size of a request in bytes before being sent to a partition.                                         | -            | `1048576` | `65536`          | Positive int     |
-| `KAFKA_BATCH_TIMEOUT` | Time limit on how often incomplete message batches will be flushed to Kafka (in milliseconds).                         | -            | `1000`    | `300`            | Positive int     |
+{% table %}
+- Name
+- Description
+- Required
+- Default
+- Example
+- Valid format
+
+---
+
+- `PUBSUB_BACKEND`
+- Using Apache Kafka as message broker.
+- `+`
+-
+- `KAFKA`
+- Not empty string
+
+---
+
+- `PUBSUB_BROKER`
+- Address to connect to kafka broker.
+- `+`
+-
+- `localhost:9092`
+- Not empty string
+
+---
+
+- `CONSUMER_ID`
+- Consumer group id to uniquely identify the consumer group.
+- if consuming
+-
+- `order-consumer`
+- Not empty string
+
+---
+
+- `PUBSUB_OFFSET`
+- Determines from whence the consumer group should begin consuming when it finds a partition without a committed offset.
+- `-`
+- `-1`
+- `10`
+- int
+
+---
+
+- `KAFKA_BATCH_SIZE`
+- Limit on how many messages will be buffered before being sent to a partition.
+- `-`
+- `100`
+- `10`
+- Positive int
+
+---
+
+- `KAFKA_BATCH_BYTES`
+- Limit the maximum size of a request in bytes before being sent to a partition.
+- `-`
+- `1048576`
+- `65536`
+- Positive int
+
+---
+
+- `KAFKA_BATCH_TIMEOUT`
+- Time limit on how often incomplete message batches will be flushed to Kafka (in milliseconds).
+- `-`
+- `1000`
+- `300`
+- Positive int 
+
+{% /table %}
 
 ```dotenv
 PUBSUB_BACKEND=KAFKA# using apache kafka as message broker

@@ -18,9 +18,15 @@ var (
 	ErrConsumerGroupNotProvided = errors.New("consumer group id not provided")
 	errBrokerNotProvided        = errors.New("kafka broker address not provided")
 	errPublisherNotConfigured   = errors.New("can't publish message. Publisher not configured or topic is empty")
-	errBatchSize                = errors.New("batch size must be greater than 0")
-	errBatchBytes               = errors.New("batch bytes must be greater than 0")
-	errBatchTimeout             = errors.New("batch timeout must be greater than 0")
+	errBatchSize                = errors.New("KAFKA_BATCH_SIZE must be greater than 0")
+	errBatchBytes               = errors.New("KAFKA_BATCH_BYTES must be greater than 0")
+	errBatchTimeout             = errors.New("KAFKA_BATCH_TIMEOUT must be greater than 0")
+)
+
+const (
+	DefaultBatchSize    = 100
+	DefaultBatchBytes   = 1048576
+	DefaultBatchTimeout = 1000
 )
 
 type Config struct {

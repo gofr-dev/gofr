@@ -323,28 +323,66 @@ func TestNewKafkaClient(t *testing.T) {
 	defer ctrl.Finish()
 
 	testCases := []struct {
-		desc   string
-		config Config
+		desc      string
+		config    Config
+		expectNil bool
 	}{
 		{
-			desc: "validation of configs fail",
+			desc: "validation of configs fail (Empty Broker)",
 			config: Config{
-				Broker: "kafka-broker",
+				Broker: "",
 			},
+			expectNil: true,
+		},
+		{
+			desc: "validation of configs fail (Zero Batch Bytes)",
+			config: Config{
+				Broker:     "kafka-broker",
+				BatchBytes: 0,
+			},
+			expectNil: true,
+		},
+		{
+			desc: "validation of configs fail (Zero Batch Size)",
+			config: Config{
+				Broker:     "kafka-broker",
+				BatchBytes: 1,
+				BatchSize:  0,
+			},
+			expectNil: true,
+		},
+		{
+			desc: "validation of configs fail (Zero Batch Timeout)",
+			config: Config{
+				Broker:       "kafka-broker",
+				BatchBytes:   1,
+				BatchSize:    1,
+				BatchTimeout: 0,
+			},
+			expectNil: true,
 		},
 		{
 			desc: "successful initialization",
 			config: Config{
 				Broker:          "kafka-broker",
 				ConsumerGroupID: "consumer",
+				BatchBytes:      1,
+				BatchSize:       1,
+				BatchTimeout:    1,
 			},
+			expectNil: false,
 		},
 	}
 
 	for _, tc := range testCases {
-		k := New(tc.config, logging.NewMockLogger(logging.ERROR), NewMockMetrics(ctrl))
-
-		assert.NotNil(t, k)
+		t.Run(tc.desc, func(t *testing.T) {
+			k := New(tc.config, logging.NewMockLogger(logging.ERROR), NewMockMetrics(ctrl))
+			if tc.expectNil {
+				assert.Nil(t, k)
+			} else {
+				assert.NotNil(t, k)
+			}
+		})
 	}
 }
 
