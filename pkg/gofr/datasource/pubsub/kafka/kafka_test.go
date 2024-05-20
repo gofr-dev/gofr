@@ -183,8 +183,10 @@ func TestKafkaClient_SubscribeSuccess(t *testing.T) {
 
 	mockReader.EXPECT().ReadMessage(gomock.Any()).
 		Return(kafka.Message{Value: []byte(`hello`), Topic: "test"}, nil)
-	mockMetrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_subscribe_total_count", "topic", "test")
-	mockMetrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_subscribe_success_count", "topic", "test")
+	mockMetrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_subscribe_total_count", "topic", "test",
+		"consumer_group", gomock.Any())
+	mockMetrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_subscribe_success_count", "topic", "test",
+		"consumer_group", gomock.Any())
 
 	logs := testutil.StdoutOutputForFunc(func() {
 		logger := logging.NewMockLogger(logging.DEBUG)
@@ -248,7 +250,8 @@ func TestKafkaClient_SubscribeError(t *testing.T) {
 
 	mockReader.EXPECT().ReadMessage(gomock.Any()).
 		Return(kafka.Message{}, errSub)
-	mockMetrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_subscribe_total_count", "topic", "test")
+	mockMetrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_subscribe_total_count",
+		"topic", "test", "consumer_group", k.config.ConsumerGroupID)
 
 	logs := testutil.StderrOutputForFunc(func() {
 		logger := logging.NewMockLogger(logging.DEBUG)
@@ -260,7 +263,7 @@ func TestKafkaClient_SubscribeError(t *testing.T) {
 	assert.NotNil(t, err)
 	assert.Equal(t, errSub, err)
 	assert.Nil(t, msg)
-	assert.Contains(t, logs, "failed to read message from Kafka topic test: error while subscribing")
+	assert.Contains(t, logs, "failed to read message from kafka topic test: error while subscribing")
 }
 
 func TestKafkaClient_Close(t *testing.T) {
@@ -300,7 +303,7 @@ func TestKafkaClient_CloseError(t *testing.T) {
 
 	assert.NotNil(t, err)
 	assert.Equal(t, errClose, err)
-	assert.Contains(t, logs, "failed to close Kafka writer")
+	assert.Contains(t, logs, "failed to close kafka writer")
 }
 
 func TestKafkaClient_getNewReader(t *testing.T) {

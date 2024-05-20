@@ -235,8 +235,9 @@ func (a *App) PATCH(pattern string, handler Handler) {
 func (a *App) add(method, pattern string, h Handler) {
 	a.httpRegistered = true
 	a.httpServer.router.Add(method, pattern, handler{
-		function:  h,
-		container: a.container,
+		function:       h,
+		container:      a.container,
+		requestTimeout: a.Config.GetOrDefault("REQUEST_TIMEOUT", "5"),
 	})
 }
 
