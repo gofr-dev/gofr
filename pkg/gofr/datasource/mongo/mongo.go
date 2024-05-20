@@ -20,28 +20,27 @@ type Client struct {
 	config   Config
 }
 
-func New() *Client {
-	return &Client{}
+type Config struct {
+	URI      string
+	Database string
 }
 
-func (c *Client) Build(opts ...interface{}) {
-	for _, o := range opts {
-		switch v := o.(type) {
-		case Config:
-			c.config = v
-		case Metrics:
-			c.metrics = v
-		case Logger:
-			c.logger = v
-		}
-	}
+func New(c Config) *Client {
+	return &Client{config: c}
+}
 
-	mongoURI := c.config.Get("MONGO_URI")
-	mongoDatabase := c.config.Get("MONGO_DATABASE")
+func (c *Client) UseLogger(logger interface{}) {
+	c.logger = logger.(Logger)
+}
 
-	c.logger.Logf("connecting to mongoDB at %v to database %v", mongoURI, mongoDatabase)
+func (c *Client) UseMetrics(metrics interface{}) {
+	c.metrics = metrics.(Metrics)
+}
 
-	m, err := mongo.Connect(context.Background(), options.Client().ApplyURI(c.config.Get("MONGO_URI")))
+func (c *Client) Connect() {
+	c.logger.Logf("connecting to mongoDB at %v to database %v", c.config.URI, c.config.Database)
+
+	m, err := mongo.Connect(context.Background(), options.Client().ApplyURI(c.config.URI))
 	if err != nil {
 		c.logger.Errorf("error connecting to mongoDB, err:%v", err)
 
@@ -51,7 +50,7 @@ func (c *Client) Build(opts ...interface{}) {
 	mongoBuckets := []float64{.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 4, 5, 7.5, 10}
 	c.metrics.NewHistogram("app_mongo_stats", "Response time of MONGO queries in milliseconds.", mongoBuckets...)
 
-	c.Database = m.Database(mongoDatabase)
+	c.Database = m.Database(c.config.Database)
 }
 
 func (c *Client) InsertOne(ctx context.Context, collection string, document interface{}) (interface{}, error) {

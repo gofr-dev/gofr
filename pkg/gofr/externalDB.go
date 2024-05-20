@@ -8,11 +8,11 @@ type builder interface {
 	Build(o ...interface{})
 }
 
-func (a *App) UseMongo(db datasource.Mongo) {
-	mongo, ok := db.(builder)
-	if ok {
-		mongo.Build(a.Config, a.Logger(), a.Metrics())
-	}
+func (a *App) AddMongo(db datasource.MongoProvider) {
+	db.UseLogger(a.Logger())
+	db.UseMetrics(a.Metrics())
+
+	db.Connect()
 
 	a.container.Mongo = db
 }

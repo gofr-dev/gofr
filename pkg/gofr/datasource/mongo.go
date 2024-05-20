@@ -50,3 +50,12 @@ type Mongo interface {
 	// It returns an error if any.
 	Drop(ctx context.Context, collection string) error
 }
+
+type MongoProvider interface {
+	Mongo
+
+	UseLogger(logger interface{})
+	UseMetrics(metrics interface{})
+
+	Connect()
+}
