@@ -199,7 +199,7 @@ func checkAuthHeaders(r *http.Request, t *testing.T) {
 }
 
 func Test_addAuthorizationHeader_Error(t *testing.T) {
-	ba := &BasicAuthProvider{password: "invalid_password"}
+	ba := &basicAuthProvider{password: "invalid_password"}
 
 	headers := make(map[string]string)
 	err := ba.addAuthorizationHeader(headers)
