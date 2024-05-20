@@ -7,31 +7,31 @@ import (
 	"github.com/pkg/errors"
 )
 
-// errorGoFr represents a generic GoFr error.
-type errorGoFr struct {
+// gofrError represents a generic GoFr error.
+type gofrError struct {
 	error
 	message string
 }
 
 // Error returns the formatted error message.
-func (e *errorGoFr) Error() string {
+func (e *gofrError) Error() string {
 	return e.error.Error()
 }
 
 //nolint:revive // New creates a new GoFr error with provided message.
-func New(message string) *errorGoFr {
-	return &errorGoFr{
+func New(message string) *gofrError {
+	return &gofrError{
 		error:   errors.New(message),
 		message: message,
 	}
 }
 
 //nolint:revive // NewWrapped creates a new GoFr error and wraps the error with the provided message.
-func NewWrapped(err error, message ...string) *errorGoFr {
+func NewWrapped(err error, message ...string) *gofrError {
 	errMsg := strings.Join(message, " ")
 
 	if err != nil && errMsg != "" {
-		return &errorGoFr{
+		return &gofrError{
 			error:   errors.Wrap(err, errMsg),
 			message: errMsg,
 		}
@@ -41,11 +41,11 @@ func NewWrapped(err error, message ...string) *errorGoFr {
 		return New(errMsg)
 	}
 
-	return &errorGoFr{
+	return &gofrError{
 		error: err,
 	}
 }
 
-func (e *errorGoFr) StatusCode() int {
+func (e *gofrError) StatusCode() int {
 	return http.StatusInternalServerError
 }

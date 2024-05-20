@@ -70,10 +70,10 @@ func (r Responder) HTTPStatusFromError(err error) (status int, errObj interface{
 	}
 
 	t := reflect.TypeOf(err)
-	ss := reflect.TypeOf(new(StatusCodeResponder)).Elem()
+	ss := reflect.TypeOf(new(statusCodeResponder)).Elem()
 
 	if t.Implements(ss) {
-		m, _ := reflect.ValueOf(err).Interface().(StatusCodeResponder)
+		m, _ := reflect.ValueOf(err).Interface().(statusCodeResponder)
 
 		return m.StatusCode(), map[string]interface{}{
 			"message": err.Error(),
@@ -91,6 +91,6 @@ type response struct {
 	Data  interface{} `json:"data,omitempty"`
 }
 
-type StatusCodeResponder interface {
+type statusCodeResponder interface {
 	StatusCode() int
 }

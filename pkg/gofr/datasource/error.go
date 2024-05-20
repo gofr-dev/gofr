@@ -7,30 +7,30 @@ import (
 	"github.com/pkg/errors"
 )
 
-// errorDB represents an error specific to database operations.
-type errorDB struct {
+// dbError represents an error specific to database operations.
+type dbError struct {
 	error
 	message string
 }
 
-func (e *errorDB) Error() string {
+func (e *dbError) Error() string {
 	return e.error.Error()
 }
 
 //nolint:revive // Error creates a new DB error with provided message.
-func Error(message string) *errorDB {
-	return &errorDB{
+func Error(message string) *dbError {
+	return &dbError{
 		error:   errors.New(message),
 		message: message,
 	}
 }
 
 //nolint:revive // ErrorWrapped creates a new database error with the provided error and  message.
-func ErrorWrapped(err error, message ...string) *errorDB {
+func ErrorWrapped(err error, message ...string) *dbError {
 	errMsg := strings.Join(message, " ")
 
 	if err != nil && errMsg != "" {
-		return &errorDB{
+		return &dbError{
 			error:   errors.Wrap(err, errMsg),
 			message: errMsg,
 		}
@@ -40,17 +40,17 @@ func ErrorWrapped(err error, message ...string) *errorDB {
 		return Error(errMsg)
 	}
 
-	return &errorDB{
+	return &dbError{
 		error: err,
 	}
 }
 
 // WithStack adds a stack trace to the Error.
-func (e *errorDB) WithStack() *errorDB {
+func (e *dbError) WithStack() *dbError {
 	e.error = errors.WithStack(e.error)
 	return e
 }
 
-func (e *errorDB) StatusCode() int {
+func (e *dbError) StatusCode() int {
 	return http.StatusInternalServerError
 }
