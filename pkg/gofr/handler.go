@@ -1,7 +1,11 @@
 package gofr
 
 import (
+	"context"
+	"errors"
 	"os"
+	"strconv"
+	"time"
 
 	"gofr.dev/pkg/gofr/container"
 	gofrHTTP "gofr.dev/pkg/gofr/http"
@@ -10,6 +14,8 @@ import (
 
 	"net/http"
 )
+
+const defaultRequestTimeout = 5
 
 type Handler func(c *Context) (interface{}, error)
 
@@ -27,14 +33,46 @@ for now. In the future, this can be considered as well if we are writing our own
 */
 
 type handler struct {
-	function  Handler
-	container *container.Container
+	function       Handler
+	container      *container.Container
+	requestTimeout string
 }
 
 func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	c := newContext(gofrHTTP.NewResponder(w, r.Method), gofrHTTP.NewRequest(r), h.container)
-	defer c.Trace("gofr-handler").End()
-	c.responder.Respond(h.function(c))
+
+	reqTimeout := h.setContextTimeout(h.requestTimeout)
+
+	ctx, cancel := context.WithTimeout(r.Context(), time.Duration(reqTimeout)*time.Second)
+	defer cancel()
+
+	c.Context = ctx
+
+	done := make(chan struct{})
+
+	var (
+		result interface{}
+		err    error
+	)
+
+	go func() {
+		// Execute the handler function
+		result, err = h.function(c)
+
+		close(done)
+	}()
+
+	select {
+	case <-ctx.Done():
+		// If the context's deadline has been exceeded, return a timeout error response
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			http.Error(w, "Request timed out", http.StatusRequestTimeout)
+			return
+		}
+	case <-done:
+		// Handler function completed
+		c.responder.Respond(result, err)
+	}
 }
 
 func healthHandler(c *Context) (interface{}, error) {
@@ -61,4 +99,16 @@ func faviconHandler(*Context) (interface{}, error) {
 
 func catchAllHandler(*Context) (interface{}, error) {
 	return nil, http.ErrMissingFile
+}
+
+// Helper function to parse and validate request timeout.
+func (h handler) setContextTimeout(timeout string) int {
+	reqTimeout, err := strconv.Atoi(timeout)
+	if err != nil || reqTimeout < 0 {
+		h.container.Error("invalid value of config REQUEST_TIMEOUT. setting default value to 5 seconds.")
+
+		reqTimeout = defaultRequestTimeout
+	}
+
+	return reqTimeout
 }
