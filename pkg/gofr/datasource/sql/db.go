@@ -54,8 +54,8 @@ func (d *DB) logQuery(start time.Time, queryType, query string, args ...interfac
 		Args:     args,
 	})
 
-	d.metrics.RecordHistogram(context.Background(), "app_sql_stats", float64(duration),
-		"type", getOperationType(query))
+	d.metrics.RecordHistogram(context.Background(), "app_sql_stats", float64(duration), "hostname", d.config.HostName,
+		"database", d.config.Database, "type", getOperationType(query))
 }
 
 func getOperationType(query string) string {
@@ -105,11 +105,12 @@ func (d *DB) Begin() (*Tx, error) {
 		return nil, err
 	}
 
-	return &Tx{Tx: tx, logger: d.logger, metrics: d.metrics}, nil
+	return &Tx{Tx: tx, config: d.config, logger: d.logger, metrics: d.metrics}, nil
 }
 
 type Tx struct {
 	*sql.Tx
+	config  *DBConfig
 	logger  datasource.Logger
 	metrics Metrics
 }
@@ -124,8 +125,8 @@ func (t *Tx) logQuery(start time.Time, queryType, query string, args ...interfac
 		Args:     args,
 	})
 
-	t.metrics.RecordHistogram(context.Background(), "app_sql_stats", float64(duration),
-		"type", getOperationType(query))
+	t.metrics.RecordHistogram(context.Background(), "app_sql_stats", float64(duration), "hostname", t.config.HostName,
+		"database", t.config.Database, "type", getOperationType(query))
 }
 
 func (t *Tx) Query(query string, args ...interface{}) (*sql.Rows, error) {
