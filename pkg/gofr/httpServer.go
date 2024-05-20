@@ -3,7 +3,6 @@ package gofr
 import (
 	"fmt"
 	"net/http"
-	"strconv"
 	"time"
 
 	"gofr.dev/pkg/gofr/container"
@@ -11,27 +10,14 @@ import (
 )
 
 type httpServer struct {
-	router         *gofrHTTP.Router
-	port           int
-	requestTimeout time.Duration
+	router *gofrHTTP.Router
+	port   int
 }
 
-const defaultRequestTimeout = 5
-
-func newHTTPServer(c *container.Container, port int, requestTimeout string) *httpServer {
-	var timeout int
-
-	timeout, err := strconv.Atoi(requestTimeout)
-	if err != nil || timeout < 0 {
-		c.Error("invalid value of config REQUEST_TIMEOUT. setting default value to 5 seconds.")
-
-		timeout = defaultRequestTimeout
-	}
-
+func newHTTPServer(c *container.Container, port int) *httpServer {
 	return &httpServer{
-		router:         gofrHTTP.NewRouter(c),
-		port:           port,
-		requestTimeout: time.Duration(timeout) * time.Second,
+		router: gofrHTTP.NewRouter(c),
+		port:   port,
 	}
 }
 
@@ -42,7 +28,7 @@ func (s *httpServer) Run(c *container.Container) {
 
 	srv = &http.Server{
 		Addr:              fmt.Sprintf(":%d", s.port),
-		Handler:           http.TimeoutHandler(s.router, s.requestTimeout, "Request timed out"),
+		Handler:           s.router,
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

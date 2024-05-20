@@ -27,9 +27,8 @@ func TestRun_ServerStartsListening(t *testing.T) {
 
 	// Create an instance of httpServer
 	server := &httpServer{
-		router:         router,
-		port:           8080,
-		requestTimeout: time.Duration(5) * time.Second,
+		router: router,
+		port:   8080,
 	}
 
 	// Start the server
@@ -51,12 +50,4 @@ func TestRun_ServerStartsListening(t *testing.T) {
 	assert.Equal(t, resp.StatusCode, http.StatusOK, "TEST Failed.\n")
 
 	resp.Body.Close()
-}
-
-func TestNewHTTPServer_InvalidTimeout(t *testing.T) {
-	cntnr, _ := container.NewMockContainer(t)
-
-	server := newHTTPServer(cntnr, 8080, "-1")
-
-	assert.Equal(t, 5*time.Second, server.requestTimeout, "Default timeout should be 5 seconds for invalid value")
 }
