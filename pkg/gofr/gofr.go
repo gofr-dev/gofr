@@ -97,7 +97,7 @@ func New() *App {
 	return app
 }
 
-// NewCMD creates a command line application.
+// NewCMD creates a command-line application.
 func NewCMD() *App {
 	app := &App{}
 	app.readConfig(true)
@@ -112,7 +112,7 @@ func NewCMD() *App {
 	return app
 }
 
-// Run starts the application. If it is a HTTP server, it will start the server.
+// Run starts the application. If it is an HTTP server, it will start the server.
 func (a *App) Run() {
 	if a.cmd != nil {
 		a.cmd.Run(a.container)

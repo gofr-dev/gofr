@@ -17,7 +17,7 @@ framework initially developed by Google.
         $ protoc --version  # Ensure compiler version is 3+  
         ```
 - Install **Go Plugins** for protocol compiler:
-    1. Install prtocol compiler plugins for Go
+    1. Install protocol compiler plugins for Go
        ```shell
        $ go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.28
        $ go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.2

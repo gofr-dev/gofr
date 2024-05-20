@@ -9,7 +9,7 @@
   No PR should ever decrease the overall code coverage.
 * Once your code changes are done along with the testcases, submit a PR to development branch. Please note that all PRs
   are merged from feature branches to development first.
-* All PRs need to be reviewed by at least 2 Gofr developers. They might reach out to you for any clarfication.
+* All PRs need to be reviewed by at least 2 Gofr developers. They might reach out to you for any clarification.
 * Thank you for your contribution. :)
 
 ### GoFr Testing Policy:
@@ -87,7 +87,7 @@ Please note that the recommended local port for the services are different than 
 * Take interfaces and return concrete types.
     - Lean interfaces - take 'exactly' what you need, not more. Onus of interface definition is on the package who is
       using it. so, it should be as lean as possible. This makes it easier to test.
-    - Be careful of type assertions in this context. If you take an interface and type assert to a type - then its
+    - Be careful of type assertions in this context. If you take an interface and type assert to a type - then it's
       similar to taking concrete type.
 * Uses of context:
     - We should use context as a first parameter.
