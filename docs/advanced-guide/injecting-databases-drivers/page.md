@@ -6,9 +6,9 @@ as unnecessary database drivers are not being compiled and added to the build.
 
 > We are planning to provide custom drivers for most common databases, and is in the pipeline for upcoming releases!
 
-## Mongo DB
-Gofr supports injecting Mongo DB that supports the following interface. Any driver that implements the interface can be added
-using `app.UseMongo()` method, and user's can use MongoDB across application with `gofr.Context`. 
+## MongoDB
+GoFr supports injecting MongoDB that supports the following interface. Any driver that implements the interface can be added
+using `app.UseMongo()` method, and user's can use MongoDB across application with `gofr.Context`.
 ```go
 type Mongo interface {
 	Find(ctx context.Context, collection string, filter interface{}, results interface{}) error

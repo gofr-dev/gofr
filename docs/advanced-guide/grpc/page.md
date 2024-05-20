@@ -11,7 +11,7 @@ framework initially developed by Google.
         $ apt install -y protobuf-compiler
         $ protoc --version  # Ensure compiler version is 3+
         ```
-    - MacOS, using homebrew
+    - macOS, using Homebrew
         ```shell
         $ brew install protobuf
         $ protoc --version  # Ensure compiler version is 3+  
@@ -30,7 +30,7 @@ framework initially developed by Google.
 ## Creating protocol buffers
 For a detailed guide, please take a look at the {% new-tab-link title="Tutorial" href="https://grpc.io/docs/languages/go/basics/" /%} at official gRPC docs.
 
-We need to create a `customer.proto` file to define our service and the rpc methods that the service provides.
+We need to create a `customer.proto` file to define our service and the RPC methods that the service provides.
 ```protobuf
 // Indicates the protocol buffer version that is being used
 syntax = "proto3";
@@ -76,7 +76,7 @@ protoc \
 --go-grpc_opt=paths=source_relative \ 
 customer.proto
 ```
-Above command will generate two files `customer.pb.go` and `customer_grpc.pb.go` and these contain necessary code to perform rpc calls.
+Above command will generate two files `customer.pb.go` and `customer_grpc.pb.go` and these contain necessary code to perform RPC calls.
 In `customer.pb.go` you can find `CustomerService` interface-
 ```go
 // CustomerServiceServer is the server API for CustomerService service.
@@ -102,8 +102,8 @@ func (h *Handler) GetCustomer(ctx context.Context, filter *CustomerFilter) (*Cus
 }
 ```
 
-Lastly to register the gRPC service to the gofr server, user can call the `RegisterCustomerServiceServer` in `customer_grpc.pb.go`
-to register the service giving gofr app and the Handler struct.
+Lastly to register the gRPC service to the GoFr server, user can call the `RegisterCustomerServiceServer` in `customer_grpc.pb.go`
+to register the service giving GoFr app and the Handler struct.
 ```go
 package main
 

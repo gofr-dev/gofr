@@ -1,15 +1,15 @@
 ## Contribution Guidelines
-* Minor changes can be done directly by editing code on github. Github automatically creates a temporary branch and
+* Minor changes can be done directly by editing code on GitHub. GitHub automatically creates a temporary branch and
   files a PR. This is only suitable for really small changes like: spelling fixes, variable name changes or error string
   change etc. For larger commits, following steps are recommended.
-* (Optional) If you want to discuss your implementation with the users of Gofr, use the github discussions of this repo.
+* (Optional) If you want to discuss your implementation with the users of GoFr, use the GitHub discussions of this repo.
 * Configure your editor to use goimport and golangci-lint on file changes. Any code which is not formatted using these
   tools, will fail on the pipeline.
 * All code contributions should have associated tests and all new line additions should be covered in those testcases.
   No PR should ever decrease the overall code coverage.
 * Once your code changes are done along with the testcases, submit a PR to development branch. Please note that all PRs
   are merged from feature branches to development first.
-* All PRs need to be reviewed by at least 2 Gofr developers. They might reach out to you for any clarification.
+* All PRs need to be reviewed by at least 2 GoFr developers. They might reach out to you for any clarification.
 * Thank you for your contribution. :)
 
 ### GoFr Testing Policy:
@@ -113,4 +113,4 @@ Please note that the recommended local port for the services are different than 
     - Use trailing white space or the <br> HTML tag at the end of the line.
     - Use "`" sign to add single line code and "```" to add multi-line code block.
     - Use relative references to images (in `public` folder as mentioned above.)
-* The [gofr.dev documentation]([url](https://gofr.dev/docs)) site is updated upon push to `/docs` path in the repo. Verify your changes are live after next gofr version.
+* The [gofr.dev documentation]([url](https://gofr.dev/docs)) site is updated upon push to `/docs` path in the repo. Verify your changes are live after next GoFr version.
