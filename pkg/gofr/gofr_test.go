@@ -391,6 +391,7 @@ func Test_UseMiddleware(t *testing.T) {
 			port:   8001,
 		},
 		container: c,
+		Config:    config.NewMockConfig(map[string]string{"REQUEST_TIMEOUT": "5"}),
 	}
 
 	app.UseMiddleware(testMiddleware)
