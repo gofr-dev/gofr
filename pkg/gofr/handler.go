@@ -49,12 +49,16 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	c.Context = ctx
 
 	done := make(chan struct{})
-	var result interface{}
-	var err error
+
+	var (
+		result interface{}
+		err    error
+	)
 
 	go func() {
 		// Execute the handler function
 		result, err = h.function(c)
+
 		close(done)
 	}()
 
@@ -62,7 +66,8 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case <-ctx.Done():
 		// If the context's deadline has been exceeded, return a timeout error response
 		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-			http.Error(w, "Request timed out", http.StatusGatewayTimeout)
+			http.Error(w, "Request timed out", http.StatusRequestTimeout)
+			return
 		}
 	case <-done:
 		// Handler function completed
@@ -96,7 +101,7 @@ func catchAllHandler(*Context) (interface{}, error) {
 	return nil, http.ErrMissingFile
 }
 
-// Helper function to parse and validate request timeout
+// Helper function to parse and validate request timeout.
 func (h handler) setContextTimeout(timeout string) int {
 	reqTimeout, err := strconv.Atoi(timeout)
 	if err != nil || reqTimeout < 0 {

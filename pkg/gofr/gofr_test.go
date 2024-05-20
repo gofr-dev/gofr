@@ -383,7 +383,7 @@ func Test_UseMiddleware(t *testing.T) {
 		})
 	}
 
-	c := container.NewContainer(config.NewMockConfig(make(map[string]string)))
+	c := container.NewContainer(config.NewMockConfig(nil))
 
 	app := &App{
 		httpServer: &httpServer{
@@ -391,6 +391,7 @@ func Test_UseMiddleware(t *testing.T) {
 			port:   8001,
 		},
 		container: c,
+		Config:    config.NewMockConfig(map[string]string{"REQUEST_TIMEOUT": "5"}),
 	}
 
 	app.UseMiddleware(testMiddleware)
