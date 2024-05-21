@@ -73,7 +73,7 @@ func TestBind_FileSuccess(t *testing.T) {
 	assert.Equal(t, "Hello! This is file A.\n", string(x.Zip.Files["a.txt"].Bytes()))
 	assert.Equal(t, "Hello! This is file B.\n\n", string(x.Zip.Files["b.txt"].Bytes()))
 
-	// Assert zip file bind for pinter
+	// Assert zip file bind for pointer
 	assert.NotNil(t, x.ZipPtr)
 	assert.Equal(t, 2, len(x.ZipPtr.Files))
 	assert.Equal(t, "Hello! This is file A.\n", string(x.ZipPtr.Files["a.txt"].Bytes()))

@@ -4,7 +4,7 @@ Authentication is a crucial aspect of web applications, controlling access to re
 It is the process of verifying a user's identity to grant access to protected resources. It ensures that only authenticated
 users can perform actions or access data within an application.
 
-GoFr offer various approaches to implement authorization.
+GoFr offers various approaches to implement authorization.
 
 ## 1. HTTP Basic Auth
 *Basic Authentication* is a simple HTTP authentication scheme where the user's credentials (username and password) are 

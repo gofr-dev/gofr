@@ -1,6 +1,6 @@
 # Connecting MySQL
 
-Just like Redis gofr also supports connection to SQL(mysql and postgres) databases based on configuration variables.
+Just like Redis GoFr also supports connection to SQL(MySQL and Postgres) databases based on configuration variables.
 
 ## Setup
 

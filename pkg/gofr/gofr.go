@@ -31,7 +31,7 @@ import (
 	"gofr.dev/pkg/gofr/service"
 )
 
-// App is the main application in the gofr framework.
+// App is the main application in the GoFr framework.
 type App struct {
 	// Config can be used by applications to fetch custom configurations from environment or file.
 	Config config.Config // If we directly embed, unnecessary confusion between app.Get and app.GET will happen.
@@ -53,7 +53,7 @@ type App struct {
 	subscriptionManager SubscriptionManager
 }
 
-// RegisterService adds a grpc service to the gofr application.
+// RegisterService adds a gRPC service to the GoFr application.
 func (a *App) RegisterService(desc *grpc.ServiceDesc, impl interface{}) {
 	a.container.Logger.Infof("registering GRPC Server: %s", desc.ServiceName)
 	a.grpcServer.server.RegisterService(desc, impl)
@@ -97,7 +97,7 @@ func New() *App {
 	return app
 }
 
-// NewCMD creates a command line application.
+// NewCMD creates a command-line application.
 func NewCMD() *App {
 	app := &App{}
 	app.readConfig(true)
@@ -112,7 +112,7 @@ func NewCMD() *App {
 	return app
 }
 
-// Run starts the application. If it is a HTTP server, it will start the server.
+// Run starts the application. If it is an HTTP server, it will start the server.
 func (a *App) Run() {
 	if a.cmd != nil {
 		a.cmd.Run(a.container)
@@ -121,7 +121,7 @@ func (a *App) Run() {
 	wg := sync.WaitGroup{}
 
 	// Start Metrics Server
-	// running metrics server before http and grpc
+	// running metrics server before HTTP and gRPC
 	wg.Add(1)
 
 	go func(m *metricServer) {
@@ -207,27 +207,27 @@ func (a *App) AddHTTPService(serviceName, serviceAddress string, options ...serv
 	a.container.Services[serviceName] = service.NewHTTPService(serviceAddress, a.container.Logger, a.container.Metrics(), options...)
 }
 
-// GET adds a Handler for http GET method for a route pattern.
+// GET adds a Handler for HTTP GET method for a route pattern.
 func (a *App) GET(pattern string, handler Handler) {
 	a.add("GET", pattern, handler)
 }
 
-// PUT adds a Handler for http PUT method for a route pattern.
+// PUT adds a Handler for HTTP PUT method for a route pattern.
 func (a *App) PUT(pattern string, handler Handler) {
 	a.add("PUT", pattern, handler)
 }
 
-// POST adds a Handler for http POST method for a route pattern.
+// POST adds a Handler for HTTP POST method for a route pattern.
 func (a *App) POST(pattern string, handler Handler) {
 	a.add("POST", pattern, handler)
 }
 
-// DELETE adds a Handler for http DELETE method for a route pattern.
+// DELETE adds a Handler for HTTP DELETE method for a route pattern.
 func (a *App) DELETE(pattern string, handler Handler) {
 	a.add("DELETE", pattern, handler)
 }
 
-// PATCH adds a Handler for http PATCH method for a route pattern.
+// PATCH adds a Handler for HTTP PATCH method for a route pattern.
 func (a *App) PATCH(pattern string, handler Handler) {
 	a.add("PATCH", pattern, handler)
 }
@@ -300,7 +300,7 @@ func (a *App) initTracer() {
 		case traceExporterGoFr:
 			exporter = NewExporter("https://tracer-api.gofr.dev/api/spans", logging.NewLogger(logging.INFO))
 
-			a.container.Log("Exporting traces to gofr at https://tracer.gofr.dev")
+			a.container.Log("Exporting traces to GoFr at https://tracer.gofr.dev")
 		default:
 			a.container.Error("unsupported trace exporter.")
 		}
