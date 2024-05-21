@@ -52,7 +52,7 @@ type Mongo interface {
 }
 
 // MongoProvider is an interface that extends Mongo with additional methods for logging, metrics, and connection management.
-// Which is used for initialising datasource.
+// Which is used for initializing datasource.
 type MongoProvider interface {
 	Mongo
 
