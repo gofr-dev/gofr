@@ -73,6 +73,5 @@ Therefore, GoFr utilizes a pluggable approach for new datasources by separating 
 | MySQL      | ✅            | ✅    | ✅       | ✅      |           |
 | REDIS      | ✅            | ✅    | ✅       | ✅      |           |
 | PostgreSQL | ✅            | ✅    | ✅       | ✅      |           |
-| MongoDB    |              |      |         |        | ✅         |
+| MongoDB    | ✅            | ✅    | ✅         |         | ✅         |
 
-> Following list has to be update when PR for new Datasource is being created.
