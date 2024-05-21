@@ -1,7 +1,7 @@
 # Middleware in GoFr
 
-Middleware allows you to intercept and manipulate HTTP requests and responses flowing through your application's 
-router. Middlewares can perform tasks such as authentication, authorization, caching etc. before 
+Middleware allows you intercepting and manipulating HTTP requests and responses flowing through your application's
+router. Middlewares can perform tasks such as authentication, authorization, caching etc. before
 or after the request reaches your application's handler.
 
 ## Adding Custom Middleware in GoFr

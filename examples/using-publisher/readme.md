@@ -1,11 +1,11 @@
 # Publisher Example
 
-This GoFr example demonstrates a simple Publisher that publishes to the given topic when an http request is made to it's
+This GoFr example demonstrates a simple Publisher that publishes to the given topic when an HTTP request is made to it's
 matching route.
 
 ### To run the example follow the below steps:
 
-- Run the docker image of kafka and ensure that your provided topics are created before publishing
+- Run the docker image of Kafka and ensure that your provided topics are created before publishing
 ```console
 docker run --name kafka-1 -p 9092:9092 \
  -e KAFKA_ENABLE_KRAFT=yes \

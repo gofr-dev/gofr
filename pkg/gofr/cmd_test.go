@@ -205,7 +205,7 @@ func Test_Run_ErrorNoArgumentGiven(t *testing.T) {
 	assert.Contains(t, logs, "No Command Found!")
 }
 
-func Test_Run_SuccessCallInvalidHypens(t *testing.T) {
+func Test_Run_SuccessCallInvalidHyphens(t *testing.T) {
 	os.Args = []string{"", "log", "-param=value", "-b", "-"}
 
 	c := cmd{}
