@@ -16,25 +16,27 @@ import (
 )
 
 func Test_NewMongoClient(t *testing.T) {
-	cfg := NewMockConfig(map[string]string{"MONGO_URI": "mongodb://localhost:27017", "MONGO_DATABASE": "test"})
-
 	metrics := NewMockMetrics(gomock.NewController(t))
 
 	metrics.EXPECT().NewHistogram("app_mongo_stats", "Response time of MONGO queries in milliseconds.", gomock.Any())
 
-	client := New(cfg, NewMockLogger(DEBUG), metrics)
+	client := New(Config{URI: "mongodb://localhost:27017", Database: "test"})
+	client.UseLogger(NewMockLogger(DEBUG))
+	client.UseMetrics(metrics)
+	client.Connect()
 
 	assert.NotNil(t, client)
 }
 
 func Test_NewMongoClientError(t *testing.T) {
-	cfg := NewMockConfig(map[string]string{"MONGO_URI": "mongo", "MONGO_DATABASE": "test"})
-
 	metrics := NewMockMetrics(gomock.NewController(t))
 
-	client := New(cfg, NewMockLogger(DEBUG), metrics)
+	client := New(Config{URI: "mongo", Database: "test"})
+	client.UseLogger(NewMockLogger(DEBUG))
+	client.UseMetrics(metrics)
+	client.Connect()
 
-	assert.Nil(t, client)
+	assert.Nil(t, client.Database)
 }
 
 func Test_InsertCommands(t *testing.T) {
@@ -431,27 +433,4 @@ func Test_HealthCheck(t *testing.T) {
 
 		assert.Contains(t, fmt.Sprint(resp), "DOWN")
 	})
-}
-
-type mockConfig struct {
-	conf map[string]string
-}
-
-func NewMockConfig(configMap map[string]string) Config {
-	return &mockConfig{
-		conf: configMap,
-	}
-}
-
-func (m *mockConfig) Get(s string) string {
-	return m.conf[s]
-}
-
-func (m *mockConfig) GetOrDefault(s, d string) string {
-	res, ok := m.conf[s]
-	if !ok {
-		res = d
-	}
-
-	return res
 }
