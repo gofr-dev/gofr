@@ -1,20 +1,20 @@
 # Handling Data Migrations
 
 Suppose you manually make changes to your database, and now it's your responsibility to inform other developers to execute them. Additionally, you need to keep track of which changes should be applied to production machines in the next deployment.
-Gofr supports data migrations for MySQL, Postgres and Redis which allows to alter the state of a database, be it adding a new column to existing table or modifying the data type of existing column or adding constraints to an existing table, setting and removing keys etc.
+GoFr supports data migrations for MySQL, Postgres and Redis which allows altering the state of a database, be it adding a new column to existing table or modifying the data type of existing column or adding constraints to an existing table, setting and removing keys etc.
 
 ## Usage
 
 ### Creating Migration Files
 
-It is recommended to maintain a migrations directory in your project root to enhance readability and maintainability.
+It is recommended to maintain a `migrations` directory in your project root to enhance readability and maintainability.
 
 **Migration file names**
 
 It is recommended that each migration file should be numbered in the format of _YYYYMMDDHHMMSS_ when the migration was created.
 This helps prevent numbering conflicts and allows for maintaining the correct sort order by name in different filesystem views.
 
-Create the following file in migrations directory.
+Create the following file in `migrations` directory.
 
 **Filename : 20240226153000_create_employee_table.go**
 

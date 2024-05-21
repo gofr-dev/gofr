@@ -25,7 +25,7 @@ func main() {
 
 	// not running the app to close after we have completed the crons runnning
 	// since this is an example the cron will not be running forever
-	// to run cron forever, users can start the metric server or normal http server
+	// to run cron forever, users can start the metric server or normal HTTP server
 	// app.Run()
 }
 
