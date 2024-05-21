@@ -213,7 +213,7 @@ func (e *entity) Update(c *Context) (interface{}, error) {
 
 	stmt := sql.UpdateByQuery(c.SQL.Dialect(), toSnakeCase(e.name), fieldNames[1:], e.primaryKey)
 
-	_, err = c.SQL.ExecContext(c, stmt, append(fieldValues[1:], fieldValues[0])...)
+	_, err = c.SQL.ExecContext(c, stmt, append(fieldValues[1:], id)...)
 	if err != nil {
 		return nil, err
 	}
