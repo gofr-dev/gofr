@@ -121,12 +121,17 @@ func (e *entity) Create(c *Context) (interface{}, error) {
 
 	stmt := sql.InsertQuery(c.SQL.Dialect(), toSnakeCase(e.name), fieldNames)
 
-	_, err = c.SQL.ExecContext(c, stmt, fieldValues...)
+	res, err := c.SQL.ExecContext(c, stmt, fieldValues...)
 	if err != nil {
 		return nil, err
 	}
 
-	return fmt.Sprintf("%s successfully created with id: %d", e.name, fieldValues[0]), nil
+	id, err := res.LastInsertId()
+	if err != nil {
+		return nil, err
+	}
+
+	return fmt.Sprintf("%s successfully created with id: %d", e.name, id), nil
 }
 
 func (e *entity) GetAll(c *Context) (interface{}, error) {
