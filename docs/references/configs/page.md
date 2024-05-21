@@ -1,5 +1,5 @@
 
-# Gofr Configuration Options
+# GoFr Configuration Options
 
 This document lists all the configuration options supported by the Gofr framework. The configurations are grouped by category for better organization.
 
@@ -74,7 +74,7 @@ This document lists all the configuration options supported by the Gofr framewor
 
 | Config | Description                           | Default Values  |
 |---|---------------------------------------|-----------------|
-| DB_DIALECT | Database dialect. Supported values : mysql, postgres |  |
+| DB_DIALECT | Database dialect. Supported values: mysql, postgres |  |
 | DB_HOST | Hostname of the database server.      |                 |
 | DB_PORT | Port of the database server.          | 3306            |
 | DB_USER | Username for the database.            |                 |
