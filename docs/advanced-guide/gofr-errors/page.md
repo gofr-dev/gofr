@@ -21,34 +21,30 @@ To use the predefined http errors,users can simply call them using gofr's http p
 
 ## Database Errors:
 Database errors in GoFr, represented in the `datasource` package, encapsulate errors related to database operations such
-as database connection, query failure, availability etc. User can use the `Error` and `ErrorWrapped` database error 
-functions in following way:
+as database connection, query failure, availability etc. User can use the `ErrDB` struct to populate `error` as well as 
+any custom message to it:
 
 ```go
 // Creating a custom error wrapped in  underlying error for database operations
-dbErr := datasource.ErrorWrapped(err, "database operation failed")
+dbErr := datasource.ErrDB{Err: err, Message: "error from sql db"}
 
 // Adding stack trace to the error
 dbErr = dbErr.WithStack()
 
 // Creating a custom error only with error message and no underlying error.
-dbErr2 := datasource.Error("database connection timed out!")
+dbErr2 := datasource.ErrDB{Message : "database connection timed out!"}
 ```
 
 ## Custom Errors
 
-Beyond predefined errors, GoFr allows the creation of custom errors using the `New` as well as `NewWrapped` function in 
-the `error` package. Here's the difference:
-- **New(message string)** -  This function takes only custom message to create a new GoFr error.
-- **NewWrapped(err error, message ...string)** - This function takes an underlying error  and a custom message 
-to create a clear and informative error representation.
-
+Beyond predefined errors, GoFr allows the creation of custom errors using the `ErrGoFr` struct in 
+the `error` package. 
 
 #### Usage:
 ```go
 func ValidateDOB(name string, email string) error {
   if name == "" {
-    return gofrerror.New("dob should be greater than 2000.")
+    return errors.ErrGoFr{Message: "dob should be greater than 2000."}
   }
   // ... other validations
   return nil
