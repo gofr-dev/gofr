@@ -42,7 +42,7 @@ compromising the extensibility to use multiple databases.
 package main
 
 import (
-    mongo "github.com/vipul-rawat/gofr-mongo"
+    "gofr.dev/pkg/gofr/datasource/mongo"
     "go.mongodb.org/mongo-driver/bson"
 	
     "gofr.dev/pkg/gofr"
@@ -56,8 +56,7 @@ type Person struct {
 
 func main() {
 	app := gofr.New()
-
-	// using the mongo driver from `vipul-rawat/gofr-mongo`
+	
 	db := mongo.New(Config{URI: "mongodb://localhost:27017", Database: "test"})
 	
 	// inject the mongo into gofr to use mongoDB across the application

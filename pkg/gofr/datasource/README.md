@@ -68,8 +68,6 @@ Therefore, GoFr utilizes a pluggable approach for new datasources by separating 
 
 ## Supported Datasources
 
-> Following list has to be update when PR for new Datasource is being created.
-
 | Datasource | Health-Check | Logs | Metrics | Traces | As Driver |
 |------------|--------------|------|---------|--------|-----------|
 | MySQL      | ✅            | ✅    | ✅       | ✅      |           |

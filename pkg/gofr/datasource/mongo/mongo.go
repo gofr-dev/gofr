@@ -25,9 +25,14 @@ type Config struct {
 	Database string
 }
 
+/*
+Developer Note: We could have accepted logger and metrics as part of the factory function `New`, but when mongo driver is
+initialised in GoFr, We want to ensure that the user need not to provides logger and metrics and then connect to the database,
+i.e. by default observability features gets initialised when used with GoFr.
+*/
+
 // New initializes MongoDB driver with the provided configuration.
 // The Connect method must be called to establish a connection to MongoDB.
-//
 // Usage:
 // client := New(config)
 // client.UseLogger(loggerInstance)
