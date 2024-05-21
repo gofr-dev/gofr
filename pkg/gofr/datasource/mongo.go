@@ -51,11 +51,17 @@ type Mongo interface {
 	Drop(ctx context.Context, collection string) error
 }
 
+// MongoProvider is an interface that extends Mongo with additional methods for logging, metrics, and connection management.
+// Which is used for initialising datasource.
 type MongoProvider interface {
 	Mongo
 
+	// UseLogger sets the logger for the MongoDB client.
 	UseLogger(logger interface{})
+
+	// UseMetrics sets the metrics for the MongoDB client.
 	UseMetrics(metrics interface{})
 
+	// Connect establishes a connection to MongoDB using the provided configuration.
 	Connect()
 }
