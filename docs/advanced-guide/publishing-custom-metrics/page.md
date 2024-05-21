@@ -3,7 +3,7 @@
 GoFr publishes some {% new-tab-link newtab=false title="default metrics" href="/docs/quick-start/observability" /%}.
 
 GoFr can handle multiple different metrics concurrently, each uniquely identified by its name during initialization.
-It supports the following {% new-tab-link title="metrics" href="https://opentelemetry.io/docs/specs/otel/metrics/" /%} types in prometheus format:
+It supports the following {% new-tab-link title="metrics" href="https://opentelemetry.io/docs/specs/otel/metrics/" /%} types in Prometheus format:
 
 1. Counter
 2. UpDownCounter

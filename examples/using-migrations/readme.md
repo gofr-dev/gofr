@@ -1,9 +1,9 @@
 # Migrations Example
 
-This GoFr example demonstrates the use of `migrations` through a simple http server using mysql, redis and kafka.
+This GoFr example demonstrates the use of `migrations` through a simple HTTP server using MySQL, Redis and Kafka.
 
 ### To run the example follow the below steps:
-- Run the docker image of mysql, redis and kafka
+- Run the docker image of MySQL, Redis and Kafka
 
 ```console
 docker run --name gofr-mysql -e MYSQL_ROOT_PASSWORD=password -e MYSQL_DATABASE=test -p 2001:3306 -d mysql:8.0.30

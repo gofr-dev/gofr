@@ -29,7 +29,7 @@ There is another possibility where we write our own Router implementation and le
 use that router which will return a Handler and httpServer will then create the context with
 injecting container and call that Handler with the new context. A similar implementation is
 done in CMD. Since this will require us to write our own router - we are not taking that path
-for now. In the future, this can be considered as well if we are writing our own http router.
+for now. In the future, this can be considered as well if we are writing our own HTTP router.
 */
 
 type handler struct {
