@@ -26,7 +26,7 @@ type Data struct {
 	Compressed file.Zip `file:"upload"`
 
 	// The FileHeader determines the generic file format that we can get
-	// from the multipart form that gets parsed by the incoming http request
+	// from the multipart form that gets parsed by the incoming HTTP request
 	FileHeader *multipart.FileHeader `file:"a"`
 }
 

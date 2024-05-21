@@ -67,7 +67,7 @@ type httpClient interface {
 // It initializes the http.Client, url, Tracer, and Logger fields of the httpService struct with the provided values.
 func NewHTTPService(serviceAddress string, logger Logger, metrics Metrics, options ...Options) HTTP {
 	h := &httpService{
-		// using default http client to do http communication
+		// using default HTTP client to do HTTP communication
 		Client:  &http.Client{},
 		url:     serviceAddress,
 		Tracer:  otel.Tracer("gofr-http-client"),
