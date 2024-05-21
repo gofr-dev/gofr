@@ -153,7 +153,7 @@ func Test_NewMetricsManagerLabelHighCardinality(t *testing.T) {
 
 		metrics.IncrementCounter(context.Background(), "counter-test",
 			"label1", "value1", "label2", "value2", "label3", "value3", "label4", "value4", "label5", "value5", "label6", "value6",
-			"label7", "value7", "label8", "value8", "label9", "value9", "label10", "value10", "label11", "valu11", "label12", "value12")
+			"label7", "value7", "label8", "value8", "label9", "value9", "label10", "value10", "label11", "value11", "label12", "value12")
 	}
 
 	log := testutil.StdoutOutputForFunc(logs)
