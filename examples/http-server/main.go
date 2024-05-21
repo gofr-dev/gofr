@@ -10,6 +10,8 @@ import (
 
 	"gofr.dev/pkg/gofr"
 	"gofr.dev/pkg/gofr/datasource"
+
+	gofrError "gofr.dev/pkg/gofr/errors"
 )
 
 func main() {
@@ -47,7 +49,7 @@ func ErrorHandler(c *gofr.Context) (interface{}, error) {
 func RedisHandler(c *gofr.Context) (interface{}, error) {
 	val, err := c.Redis.Get(c, "test").Result()
 	if err != nil && err != redis.Nil { // If key is not found, we are not considering this an error and returning "".
-		return nil, datasource.ErrorWrapped(err, "error from redis db")
+		return nil, &datasource.ErrDB{err, "error from redis db"}
 	}
 
 	return val, nil
@@ -79,6 +81,8 @@ func TraceHandler(c *gofr.Context) (interface{}, error) {
 		return nil, err
 	}
 
+	gofrError.New("no rows found")
+
 	return resp, nil
 }
 
@@ -86,7 +90,7 @@ func MysqlHandler(c *gofr.Context) (interface{}, error) {
 	var value int
 	err := c.SQL.QueryRowContext(c, "select 2+2").Scan(&value)
 	if err != nil {
-		return nil, datasource.ErrorWrapped(err, "error from sql db")
+		return nil, &datasource.ErrDB{Err: err, Message: "error from sql db"}
 	}
 
 	return value, err

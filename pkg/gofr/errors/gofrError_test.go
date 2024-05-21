@@ -1,16 +1,20 @@
 package error
 
 import (
+	"errors"
 	"net/http"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
 
+var (
+	errTest = errors.New("underlying error")
+)
+
 func Test_ErrorGoFr(t *testing.T) {
 	// with underlying error
-	wrappedErr := New("underlying error")
-	gofrErr := NewWrapped(wrappedErr, "custom message")
+	gofrErr := ErrGoFr{Err: errTest, Message: "custom message"}.WithStack()
 
 	expectedMsg := "custom message: underlying error"
 	if !assert.Equal(t, gofrErr.Error(), expectedMsg) {
@@ -18,7 +22,7 @@ func Test_ErrorGoFr(t *testing.T) {
 	}
 
 	// without underlying error
-	gofrErr = New("custom message")
+	gofrErr = ErrGoFr{Message: "custom message"}
 	expectedMsg = "custom message"
 
 	if !assert.Equal(t, gofrErr.Error(), expectedMsg) {
@@ -26,20 +30,20 @@ func Test_ErrorGoFr(t *testing.T) {
 	}
 
 	// without custom error message
-	gofrErr = NewWrapped(wrappedErr)
+	gofrErr = ErrGoFr{Err: errTest}.WithStack()
 	if !assert.Equal(t, "underlying error", gofrErr.Error()) {
 		t.Errorf("TestNewGofrError Failed")
 	}
 
 	// without underlying error when WrappedError
-	gofrErr = NewWrapped(nil, "custom message")
+	gofrErr = ErrGoFr{Message: "custom message"}
 	if !assert.Equal(t, "custom message", gofrErr.Error()) {
 		t.Errorf("TestNewGofrError Failed")
 	}
 }
 
 func TestErrorGoFr_StatusCode(t *testing.T) {
-	errGoFr := New("custom message")
+	errGoFr := ErrGoFr{Message: "custom message"}
 
 	expectedCode := http.StatusInternalServerError
 	if got := errGoFr.StatusCode(); got != expectedCode {
