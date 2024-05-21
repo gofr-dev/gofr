@@ -62,6 +62,6 @@ type MongoProvider interface {
 	// UseMetrics sets the metrics for the MongoDB client.
 	UseMetrics(metrics interface{})
 
-	// Connect establishes a connection to MongoDB using the provided configuration.
+	// Connect establishes a connection to MongoDB and registers metrics using the provided configuration when the client was Created.
 	Connect()
 }

@@ -32,7 +32,7 @@ type Config struct {
 // client := New(config)
 // client.UseLogger(loggerInstance)
 // client.UseMetrics(metricsInstance)
-// client.Connect(context.Background())
+// client.Connect()
 func New(c Config) *Client {
 	return &Client{config: c}
 }
