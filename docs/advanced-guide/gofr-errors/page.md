@@ -37,14 +37,14 @@ dbErr2 := datasource.ErrorDB{Message : "database connection timed out!"}
 
 ## Custom Errors
 
-Beyond predefined errors, GoFr allows the creation of custom errors using the `ErrorResponse` struct in 
+Beyond predefined errors, GoFr allows the creation of custom errors using the `Response` struct in 
 the `errors` package. 
 
 #### Usage:
 ```go
 func ValidateDOB(name string, email string) error {
   if name == "" {
-    return errors.ErrorResponse{Message: "dob should be greater than 2000.",ResponseCode: http.StatusBadRequest}
+    return errors.Response{Message: "dob should be greater than 2000.",ResponseCode: http.StatusBadRequest}
   }
   // ... other validations
   return nil
