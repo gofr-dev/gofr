@@ -1,19 +1,18 @@
-package error
+package errors
 
 import (
-	"net/http"
-
 	"github.com/pkg/errors"
 )
 
-// ErrGoFr represents a generic GoFr error.
-type ErrGoFr struct {
-	Err     error
-	Message string
+// ErrorResponse represents a generic GoFr error.
+type ErrorResponse struct {
+	Err          error
+	Message      string
+	ResponseCode int
 }
 
 // Error returns the formatted error message.
-func (e ErrGoFr) Error() string {
+func (e ErrorResponse) Error() string {
 	switch {
 	case e.Message == "":
 		return e.Err.Error()
@@ -24,11 +23,11 @@ func (e ErrGoFr) Error() string {
 	}
 }
 
-func (e ErrGoFr) WithStack() ErrGoFr {
+func (e ErrorResponse) WithStack() ErrorResponse {
 	e.Err = errors.WithStack(e.Err)
 	return e
 }
 
-func (e ErrGoFr) StatusCode() int {
-	return http.StatusInternalServerError
+func (e ErrorResponse) StatusCode() int {
+	return e.ResponseCode
 }
