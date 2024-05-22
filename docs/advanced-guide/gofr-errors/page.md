@@ -35,19 +35,6 @@ dbErr = dbErr.WithStack()
 dbErr2 := datasource.ErrorDB{Message : "database connection timed out!"}
 ```
 
-## Custom Errors
+> NOTE: GoFr's error structs implements an interface with `Error() string` and `StatusCode() int` methods, users can override the 
+> status code by implementing it for their custom error.
 
-Beyond predefined errors, GoFr allows the creation of custom errors using the `Response` struct in 
-the `errors` package. 
-
-#### Usage:
-```go
-func ValidateDOB(name string, email string) error {
-  if name == "" {
-    return errors.Response{Message: "dob should be greater than 2000.",ResponseCode: http.StatusBadRequest}
-  }
-  // ... other validations
-  return nil
-}
-
-```
