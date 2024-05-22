@@ -10,7 +10,6 @@ import (
 
 	"gofr.dev/pkg/gofr"
 	"gofr.dev/pkg/gofr/datasource"
-	gofrErr "gofr.dev/pkg/gofr/errors"
 )
 
 func main() {
@@ -80,10 +79,7 @@ func TraceHandler(c *gofr.Context) (interface{}, error) {
 		return nil, err
 	}
 
-	return resp, gofrErr.ErrGoFr{
-		Err:     nil,
-		Message: "",
-	}
+	return resp, nil
 }
 
 func MysqlHandler(c *gofr.Context) (interface{}, error) {
