@@ -81,4 +81,4 @@ GoFr {% new-tab-link  newtab=false title="context" href="/docs/references/contex
 
 3. **Starting the server**
 
-   When `app.Run()` is called, it configures ,initiates and runs the HTTP server, middlewares. It manages essential features such as routes for health check endpoints, metrics server, favicon etc. It starts the server on the default port 8000.
+   When `app.Run()` is called, it configures, initiates and runs the HTTP server, middlewares. It manages essential features such as routes for health check endpoints, metrics server, favicon etc. It starts the server on the default port 8000.

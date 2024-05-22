@@ -75,13 +75,13 @@ GoFr publishes metrics to port: _2121_ on _/metrics_ endpoint in prometheus form
 
 - app_http_response
 - histogram
-- Response time of http requests in seconds
+- Response time of HTTP requests in seconds
 
 ---
 
 - app_http_service_response
 - histogram
-- Response time of http service requests in seconds
+- Response time of HTTP service requests in seconds
 
 ---
 
@@ -196,7 +196,7 @@ LOG_LEVEL=DEBUG
 ```
 
 > **NOTE:** If the value of `TRACER_PORT` is not
-> provided, gofr uses  port `9411` by default. 
+> provided, GoFr uses  port `9411` by default.
 
 Open {% new-tab-link title="zipkin" href="http://localhost:2005/zipkin/" /%} and search by TraceID (correlationID) to see the trace.
 {% figure src="/quick-start-trace.png" alt="Zipkin traces" /%}
@@ -229,8 +229,8 @@ Open {% new-tab-link title="zipkin" href="http://localhost:16686/trace/" /%} and
 
 #### 3. [GoFr Tracer](https://tracer.gofr.dev/)
 
-GoFr tracer is gofr's own custom trace exporter as well as collector. You can search a trace by it's TraceID (correlationID)
-in gofr's own tracer service available anywhere, anytime.
+GoFr tracer is GoFr's own custom trace exporter as well as collector. You can search a trace by its TraceID (correlationID)
+in GoFr's own tracer service available anywhere, anytime.
 
 Add GoFr Tracer configs in `.env` file, your .env will be updated to
 ```dotenv
