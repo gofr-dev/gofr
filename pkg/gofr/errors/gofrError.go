@@ -4,15 +4,16 @@ import (
 	"github.com/pkg/errors"
 )
 
-// ErrorResponse represents a generic GoFr error.
-type ErrorResponse struct {
+// Response represents a generic GoFr error response struct which can be populated with any underlying error, custom message.
+// and status code.
+type Response struct {
 	Err          error
 	Message      string
 	ResponseCode int
 }
 
 // Error returns the formatted error message.
-func (e ErrorResponse) Error() string {
+func (e Response) Error() string {
 	switch {
 	case e.Message == "":
 		return e.Err.Error()
@@ -23,11 +24,11 @@ func (e ErrorResponse) Error() string {
 	}
 }
 
-func (e ErrorResponse) WithStack() ErrorResponse {
+func (e Response) WithStack() Response {
 	e.Err = errors.WithStack(e.Err)
 	return e
 }
 
-func (e ErrorResponse) StatusCode() int {
+func (e Response) StatusCode() int {
 	return e.ResponseCode
 }
