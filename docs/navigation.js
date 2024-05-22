@@ -40,7 +40,7 @@ export const navigation = [
         title: 'References',
         links: [
             { title: 'Context', href: '/docs/references/context' },
-    //         { title: 'Configuration', href: '/docs/references/configs' },
+            { title: 'Configs', href: '/docs/references/configs' },
     //         { title: 'HTTP Service', href: '/docs/references/http-service' },
     //         { title: 'Files', href: '/docs/references/files' },
     //         { title: 'Datastore', href: '/docs/references/datastore' },
