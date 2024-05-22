@@ -1,4 +1,4 @@
-package error
+package errors
 
 import (
 	"errors"
@@ -14,7 +14,7 @@ var (
 
 func Test_ErrorGoFr(t *testing.T) {
 	// with underlying error
-	gofrErr := ErrGoFr{Err: errTest, Message: "custom message"}.WithStack()
+	gofrErr := ErrorResponse{Err: errTest, Message: "custom message"}.WithStack()
 
 	expectedMsg := "custom message: underlying error"
 	if !assert.Equal(t, gofrErr.Error(), expectedMsg) {
@@ -22,7 +22,7 @@ func Test_ErrorGoFr(t *testing.T) {
 	}
 
 	// without underlying error
-	gofrErr = ErrGoFr{Message: "custom message"}
+	gofrErr = ErrorResponse{Message: "custom message"}
 	expectedMsg = "custom message"
 
 	if !assert.Equal(t, gofrErr.Error(), expectedMsg) {
@@ -30,20 +30,20 @@ func Test_ErrorGoFr(t *testing.T) {
 	}
 
 	// without custom error message
-	gofrErr = ErrGoFr{Err: errTest}.WithStack()
+	gofrErr = ErrorResponse{Err: errTest}.WithStack()
 	if !assert.Equal(t, "underlying error", gofrErr.Error()) {
 		t.Errorf("TestNewGofrError Failed")
 	}
 
 	// without underlying error when WrappedError
-	gofrErr = ErrGoFr{Message: "custom message"}
+	gofrErr = ErrorResponse{Message: "custom message"}
 	if !assert.Equal(t, "custom message", gofrErr.Error()) {
 		t.Errorf("TestNewGofrError Failed")
 	}
 }
 
 func TestErrorGoFr_StatusCode(t *testing.T) {
-	errGoFr := ErrGoFr{Message: "custom message"}
+	errGoFr := ErrorResponse{Message: "custom message"}
 
 	expectedCode := http.StatusInternalServerError
 	if got := errGoFr.StatusCode(); got != expectedCode {

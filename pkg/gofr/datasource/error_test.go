@@ -12,7 +12,7 @@ import (
 func Test_ErrorDB(t *testing.T) {
 	// Test with wrapped error
 	wrappedErr := errors.New("underlying error")
-	dbErr := ErrDB{Err: wrappedErr, Message: "custom message"}.WithStack()
+	dbErr := ErrorDB{Err: wrappedErr, Message: "custom message"}.WithStack()
 
 	expectedMsg := "custom message: underlying error"
 	if !assert.Equal(t, dbErr.Error(), expectedMsg) {
@@ -20,7 +20,7 @@ func Test_ErrorDB(t *testing.T) {
 	}
 
 	// Test with no wrapped error
-	dbErr = ErrDB{Message: "custom message"}
+	dbErr = ErrorDB{Message: "custom message"}
 
 	expectedMsg = "custom message"
 	if !assert.Equal(t, dbErr.Error(), expectedMsg) {
@@ -28,20 +28,20 @@ func Test_ErrorDB(t *testing.T) {
 	}
 
 	// Test without custom error message
-	dbErr = ErrDB{Err: wrappedErr}
+	dbErr = ErrorDB{Err: wrappedErr}
 	if !assert.Equal(t, "underlying error", dbErr.Error()) {
 		t.Errorf("Test_ErrorDB without custom error message failed")
 	}
 
 	// without underlying error when WrappedError
-	dbErr = ErrDB{Message: "custom message"}
+	dbErr = ErrorDB{Message: "custom message"}
 	if !assert.Equal(t, "custom message", dbErr.Error()) {
 		t.Errorf("Test_ErrorDB without underlying error Failed")
 	}
 }
 
 func TestErrorDB_StatusCode(t *testing.T) {
-	dbErr := ErrDB{Message: "custom message"}
+	dbErr := ErrorDB{Message: "custom message"}
 
 	expectedCode := http.StatusInternalServerError
 	if got := dbErr.StatusCode(); got != expectedCode {

@@ -16,23 +16,23 @@ automatically handle HTTP status code selection.. These include:
 #### Usage:
 To use the predefined http errors,users can simply call them using gofr's http package:
 ```go
- err := http.MissingParamError{Param: []string{"id"}}
+ err := http.ErrorMissingParam{Param: []string{"id"}}
 ```
 
 ## Database Errors:
 Database errors in GoFr, represented in the `datasource` package, encapsulate errors related to database operations such
-as database connection, query failure, availability etc. User can use the `ErrDB` struct to populate `error` as well as 
+as database connection, query failure, availability etc. User can use the `ErrorDB` struct to populate `error` as well as 
 any custom message to it:
 
 ```go
 // Creating a custom error wrapped in  underlying error for database operations
-dbErr := datasource.ErrDB{Err: err, Message: "error from sql db"}
+dbErr := datasource.ErrorDB{Err: err, Message: "error from sql db"}
 
 // Adding stack trace to the error
 dbErr = dbErr.WithStack()
 
 // Creating a custom error only with error message and no underlying error.
-dbErr2 := datasource.ErrDB{Message : "database connection timed out!"}
+dbErr2 := datasource.ErrorDB{Message : "database connection timed out!"}
 ```
 
 ## Custom Errors

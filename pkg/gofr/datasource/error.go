@@ -6,13 +6,13 @@ import (
 	"github.com/pkg/errors"
 )
 
-// ErrDB represents an error specific to database operations.
-type ErrDB struct {
+// ErrorDB represents an error specific to database operations.
+type ErrorDB struct {
 	Err     error
 	Message string
 }
 
-func (e ErrDB) Error() string {
+func (e ErrorDB) Error() string {
 	switch {
 	case e.Message == "":
 		return e.Err.Error()
@@ -24,11 +24,11 @@ func (e ErrDB) Error() string {
 }
 
 // WithStack adds a stack trace to the Error.
-func (e ErrDB) WithStack() ErrDB {
+func (e ErrorDB) WithStack() ErrorDB {
 	e.Err = errors.WithStack(e.Err)
 	return e
 }
 
-func (e ErrDB) StatusCode() int {
+func (e ErrorDB) StatusCode() int {
 	return http.StatusInternalServerError
 }
