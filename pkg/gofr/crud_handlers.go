@@ -102,34 +102,37 @@ func getRestPath(object any, structName string) string {
 
 // registerCRUDHandlers registers CRUD handlers for an entity.
 func (a *App) registerCRUDHandlers(e *entity, object interface{}) {
+	basePath := fmt.Sprintf("/%s", e.restPath)
+	idPath := fmt.Sprintf("/%s/{%s}", e.restPath, e.primaryKey)
+
 	if fn, ok := object.(Create); ok {
-		a.POST(fmt.Sprintf("/%s", e.restPath), fn.Create)
+		a.POST(basePath, fn.Create)
 	} else {
-		a.POST(fmt.Sprintf("/%s", e.restPath), e.Create)
+		a.POST(basePath, e.Create)
 	}
 
 	if fn, ok := object.(GetAll); ok {
-		a.GET(fmt.Sprintf("/%s", e.restPath), fn.GetAll)
+		a.GET(basePath, fn.GetAll)
 	} else {
-		a.GET(fmt.Sprintf("/%s", e.restPath), e.GetAll)
+		a.GET(basePath, e.GetAll)
 	}
 
 	if fn, ok := object.(Get); ok {
-		a.GET(fmt.Sprintf("/%s/{%s}", e.restPath, e.primaryKey), fn.Get)
+		a.GET(idPath, fn.Get)
 	} else {
-		a.GET(fmt.Sprintf("/%s/{%s}", e.restPath, e.primaryKey), e.Get)
+		a.GET(idPath, e.Get)
 	}
 
 	if fn, ok := object.(Update); ok {
-		a.PUT(fmt.Sprintf("/%s/{%s}", e.restPath, e.primaryKey), fn.Update)
+		a.PUT(idPath, fn.Update)
 	} else {
-		a.PUT(fmt.Sprintf("/%s/{%s}", e.restPath, e.primaryKey), e.Update)
+		a.PUT(idPath, e.Update)
 	}
 
 	if fn, ok := object.(Delete); ok {
-		a.DELETE(fmt.Sprintf("/%s/{%s}", e.restPath, e.primaryKey), fn.Delete)
+		a.DELETE(idPath, fn.Delete)
 	} else {
-		a.DELETE(fmt.Sprintf("/%s/{%s}", e.restPath, e.primaryKey), e.Delete)
+		a.DELETE(idPath, e.Delete)
 	}
 }
 
