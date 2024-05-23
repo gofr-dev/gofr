@@ -18,6 +18,7 @@ import (
 	"gofr.dev/pkg/gofr/metrics/exporters"
 	"gofr.dev/pkg/gofr/service"
 	"gofr.dev/pkg/gofr/version"
+	"gofr.dev/pkg/gofr/websocket"
 
 	_ "github.com/go-sql-driver/mysql" // This is required to be blank import
 )
@@ -34,9 +35,10 @@ type Container struct {
 	metricsManager metrics.Manager
 	PubSub         pubsub.Client
 
-	Redis Redis
-	SQL   DB
-	Mongo datasource.Mongo
+	Redis               Redis
+	SQL                 DB
+	Mongo               datasource.Mongo
+	WebsocketConnection *websocket.Connection
 }
 
 func NewContainer(conf config.Config) *Container {
@@ -186,4 +188,8 @@ func (c *Container) GetPublisher() pubsub.Publisher {
 
 func (c *Container) GetSubscriber() pubsub.Subscriber {
 	return c.PubSub
+}
+
+func (c *Container) GetWebsocketConnection() *websocket.Connection {
+	return c.WebsocketConnection
 }

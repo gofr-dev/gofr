@@ -29,6 +29,7 @@ import (
 	"gofr.dev/pkg/gofr/metrics"
 	"gofr.dev/pkg/gofr/migration"
 	"gofr.dev/pkg/gofr/service"
+	"gofr.dev/pkg/gofr/websocket"
 )
 
 // App is the main application in the gofr framework.
@@ -396,4 +397,8 @@ func (a *App) AddCronJob(schedule, jobName string, job CronFunc) {
 	if err := a.cron.AddJob(schedule, jobName, job); err != nil {
 		a.Logger().Errorf("error adding cron job, err : %v", err)
 	}
+}
+
+func (a *App) OverrideWebsocketUpgrader(wsUpgrader websocket.Upgrader) {
+	a.httpServer.wsUpgrader = wsUpgrader
 }
