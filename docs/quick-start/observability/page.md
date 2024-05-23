@@ -5,7 +5,7 @@ GoFr by default manages observability in different ways once the server starts:
 ## Logs
 
 Logs offer real-time information, providing valuable insights and immediate visibility into the ongoing state and activities of the system.
-It helps in identifying errors, debugging and troubleshooting, monitor performance, analysing application usage, communications etc.
+It helps in identifying errors, debugging and troubleshooting, monitor performance, analyzing application usage, communications etc.
 
 GoFr logger allows to customize log level which provides flexibility to adjust logs based on specific needs.
 
@@ -67,15 +67,21 @@ GoFr publishes metrics to port: _2121_ on _/metrics_ endpoint in prometheus form
 
 ---
 
+- app_info
+- gauge
+- Number of instances running with info of app and framework
+
+---
+
 - app_http_response
 - histogram
-- Response time of http requests in seconds
+- Response time of HTTP requests in seconds
 
 ---
 
 - app_http_service_response
 - histogram
-- Response time of http service requests in seconds
+- Response time of HTTP service requests in seconds
 
 ---
 
@@ -149,17 +155,18 @@ GoFr automatically exports traces for all requests and responses. GoFr uses
 {% new-tab-link title="OpenTelemetry" href="https://opentelemetry.io/docs/concepts/what-is-opentelemetry/" /%} , a popular tracing framework, to
 automatically add traces to all requests and responses.
 
-GoFr has support for both zipkin as well as jaeger trace exporters.
-
 **Automatic Correlation ID Propagation:**
 
 When a request enters your GoFr application, GoFr automatically generates a correlation-ID `X-Correlation-ID` and adds it
 to the response headers. This correlation ID is then propagated to all downstream requests. This means that you can track
 a request as it travels through your distributed system by simply looking at the correlation ID in the request headers.
 
-### Configuration & Usage
+### Configuration & Usage:
 
-To see the traces install zipkin image using the following docker command
+GoFr has support for following trace-exporters:
+#### 1. [Zipkin](https://zipkin.io/): 
+
+To see the traces install zipkin image using the following docker command:
 
 ```bash
   docker run --name gofr-zipkin -p 2005:9411 -d openzipkin/zipkin:latest
@@ -167,7 +174,7 @@ To see the traces install zipkin image using the following docker command
 
 Add Tracer configs in `.env` file, your .env will be updated to
 
-```bash
+```dotenv
 APP_NAME=test-service
 HTTP_PORT=9000
 
@@ -181,7 +188,7 @@ DB_NAME=test_db
 DB_PORT=3306
 
 # tracing configs
-TRACE_EXPORTER=zipkin  // Supported : zipkin,jaeger
+TRACE_EXPORTER=zipkin  
 TRACER_HOST=localhost
 TRACER_PORT=2005
 
@@ -189,7 +196,48 @@ LOG_LEVEL=DEBUG
 ```
 
 > **NOTE:** If the value of `TRACER_PORT` is not
-> provided, gofr uses  port `9411` by default. 
+> provided, GoFr uses  port `9411` by default.
 
 Open {% new-tab-link title="zipkin" href="http://localhost:2005/zipkin/" /%} and search by TraceID (correlationID) to see the trace.
-{% figure src="/quick-start-trace.png" alt="Zapin traces" /%}
+{% figure src="/quick-start-trace.png" alt="Zipkin traces" /%}
+
+#### 2. [Jeager](https://www.jaegertracing.io/):
+
+To see the traces install jaeger image using the following docker command:
+
+```bash
+docker run -d --name jaeger \
+  -e COLLECTOR_OTLP_ENABLED=true \
+  -p 16686:16686 \
+  -p 14317:4317 \
+  -p 14318:4318 \
+  jaegertracing/all-in-one:1.41
+```
+
+Add Jaeger Tracer configs in `.env` file, your .env will be updated to
+```dotenv
+# ... no change in other env variables
+
+# tracing configs
+TRACE_EXPORTER=jaeger
+TRACER_HOST=localhost
+TRACER_PORT=14317
+```
+
+Open {% new-tab-link title="zipkin" href="http://localhost:16686/trace/" /%} and search by TraceID (correlationID) to see the trace.
+{% figure src="/jaeger-tracing.png" alt="Jaeger traces" /%}
+
+#### 3. [GoFr Tracer](https://tracer.gofr.dev/)
+
+GoFr tracer is GoFr's own custom trace exporter as well as collector. You can search a trace by its TraceID (correlationID)
+in GoFr's own tracer service available anywhere, anytime.
+
+Add GoFr Tracer configs in `.env` file, your .env will be updated to
+```dotenv
+# ... no change in other env variables
+
+# tracing configs
+TRACE_EXPORTER=gofr
+```
+
+Open {% new-tab-link title="gofr-tracer" href="https://tracer.gofr.dev/" /%} and search by TraceID (correlationID) to see the trace.

@@ -1,14 +1,14 @@
 # Injecting Database Drivers
 Keeping in mind the size of the framework in the final build, it felt counter-productive to keep all the database drivers within
-the framewrork itself. Keeping only the most used MySQL and Redis within the framework, users can now inject databases
-in the server that staisfies the base interface defined by GoFr. This helps in reducing the build size and in turn build time
+the framework itself. Keeping only the most used MySQL and Redis within the framework, users can now inject databases
+in the server that satisfies the base interface defined by GoFr. This helps in reducing the build size and in turn build time
 as unnecessary database drivers are not being compiled and added to the build.
 
 > We are planning to provide custom drivers for most common databases, and is in the pipeline for upcoming releases!
 
-## Mongo DB
-Gofr supports injecting Mongo DB that supports the following interface. Any driver that implements the interface can be added
-using `app.UseMongo()` method, and user's can use MonogDB across application with `gofr.Context`. 
+## MongoDB
+GoFr supports injecting MongoDB that supports the following interface. Any driver that implements the interface can be added
+using `app.AddMongo()` method, and user's can use MongoDB across application with `gofr.Context`.
 ```go
 type Mongo interface {
 	Find(ctx context.Context, collection string, filter interface{}, results interface{}) error
@@ -36,13 +36,13 @@ type Mongo interface {
 ```
 
 User's can easily inject a driver that supports this interface, this provides usability without
-compromising the extensability to use multiple databases.
+compromising the extensibility to use multiple databases.
 ### Example
 ```go
 package main
 
 import (
-    mongo "github.com/vipul-rawat/gofr-mongo"
+    "gofr.dev/pkg/gofr/datasource/mongo"
     "go.mongodb.org/mongo-driver/bson"
 	
     "gofr.dev/pkg/gofr"
@@ -56,13 +56,12 @@ type Person struct {
 
 func main() {
 	app := gofr.New()
-
-	// using the mongo driver from `vipul-rawat/gofr-mongo`
-	db := mongo.New(app.Config, app.Logger(), app.Metrics())
+	
+	db := mongo.New(Config{URI: "mongodb://localhost:27017", Database: "test"})
 	
 	// inject the mongo into gofr to use mongoDB across the application
 	// using gofr context
-	app.UseMongo(db)
+	app.AddMongo(db)
 
 	app.POST("/mongo", Insert)
 	app.GET("/mongo", Get)

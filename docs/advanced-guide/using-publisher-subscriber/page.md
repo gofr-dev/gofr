@@ -27,32 +27,104 @@ that are specific for the type of message broker user wants to use.
 ### KAFKA
 
 #### Configs
+{% table %}
+- Name
+- Description
+- Required
+- Default
+- Example
+- Valid format
+
+---
+
+- `PUBSUB_BACKEND`
+- Using Apache Kafka as message broker.
+- `+`
+-
+- `KAFKA`
+- Not empty string
+
+---
+
+- `PUBSUB_BROKER`
+- Address to connect to kafka broker.
+- `+`
+-
+- `localhost:9092`
+- Not empty string
+
+---
+
+- `CONSUMER_ID`
+- Consumer group id to uniquely identify the consumer group.
+- if consuming
+-
+- `order-consumer`
+- Not empty string
+
+---
+
+- `PUBSUB_OFFSET`
+- Determines from whence the consumer group should begin consuming when it finds a partition without a committed offset.
+- `-`
+- `-1`
+- `10`
+- int
+
+---
+
+- `KAFKA_BATCH_SIZE`
+- Limit on how many messages will be buffered before being sent to a partition.
+- `-`
+- `100`
+- `10`
+- Positive int
+
+---
+
+- `KAFKA_BATCH_BYTES`
+- Limit the maximum size of a request in bytes before being sent to a partition.
+- `-`
+- `1048576`
+- `65536`
+- Positive int
+
+---
+
+- `KAFKA_BATCH_TIMEOUT`
+- Time limit on how often incomplete message batches will be flushed to Kafka (in milliseconds).
+- `-`
+- `1000`
+- `300`
+- Positive int 
+
+{% /table %}
+
 ```dotenv
-PUBSUB_BACKEND=KAFKA         // using apache kafka as message broker
-PUBSUB_BROKER=localhost:9092 // address to connect to kafka broker
-CONSUMER_ID=order-consumer   // consumer group id to uniquely identify the consumer group
+PUBSUB_BACKEND=KAFKA# using apache kafka as message broker
+PUBSUB_BROKER=localhost:9092
+CONSUMER_ID=order-consumer
+KAFKA_BATCH_SIZE=1000
+KAFKA_BATCH_BYTES=1048576
+KAFKA_BATCH_TIMEOUT=300
 ```
 
 #### Docker setup
 ```shell
-docker run -d \
-  --name zookeeper \
-  -e ZOOKEEPER_CLIENT_PORT=2181 \
-  -e ZOOKEEPER_TICK_TIME=2000 \
-  confluentinc/cp-zookeeper:7.0.1
-  
-docker run -d \
-  --name broker \
-  -p 9092:9092 \
-  --link zookeeper \
-  -e KAFKA_BROKER_ID=1 \
-  -e KAFKA_ZOOKEEPER_CONNECT=zookeeper:2181 \
-  -e KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=PLAINTEXT:PLAINTEXT,PLAINTEXT_INTERNAL:PLAINTEXT \
-  -e KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://localhost:9092,PLAINTEXT_INTERNAL://broker:29092 \
-  -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1 \
-  -e KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1 \
-  -e KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1 \
-  confluentinc/cp-kafka:7.0.1
+docker run --name kafka-1 -p 9092:9092 \
+ -e KAFKA_ENABLE_KRAFT=yes \
+-e KAFKA_CFG_PROCESS_ROLES=broker,controller \
+-e KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER \
+-e KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093 \
+-e KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT \
+-e KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://127.0.0.1:9092 \
+-e KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE=true \
+-e KAFKA_BROKER_ID=1 \
+-e KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=1@127.0.0.1:9093 \
+-e ALLOW_PLAINTEXT_LISTENER=yes \
+-e KAFKA_CFG_NODE_ID=1 \
+-v kafka_data:/bitnami \
+bitnami/kafka:3.4 
 ```
 
 ### GOOGLE
@@ -87,7 +159,7 @@ MQTT_CLIENT_ID_SUFFIX=test     // suffix to a random generated client-id(uuid v4
 
 #some additional configs(optional)
 MQTT_PROTOCOL=tcp              // protocol for connecting to broker can be tcp, tls, ws or wss
-MQTT_MESSAGE_ORDER=true  // config to maintain/retain message publish order, by defualt this is false
+MQTT_MESSAGE_ORDER=true  // config to maintain/retain message publish order, by default this is false
 MQTT_USER=username       // authentication username
 MQTT_PASSWORD=password   // authentication password 
 ```

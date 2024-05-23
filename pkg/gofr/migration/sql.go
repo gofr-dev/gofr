@@ -89,14 +89,8 @@ func (s sqlMigratorObject) apply(m Migrator) Migrator {
 }
 
 func (d sqlMigrator) checkAndCreateMigrationTable(c *container.Container) error {
-	// this can be replaced with having switch case only in the exists variable - but we have chosen to differentiate based
-	// on driver because if new dialect comes will follow the same, also this complete has to be refactored as mentioned in RUN.
-	switch c.SQL.Driver().(type) {
-	case *mysql.MySQLDriver, *pq.Driver, *sqlite.Driver:
-		_, err := c.SQL.Exec(createSQLGoFrMigrationsTable)
-		if err != nil {
-			return err
-		}
+	if _, err := c.SQL.Exec(createSQLGoFrMigrationsTable); err != nil {
+		return err
 	}
 
 	return d.Migrator.checkAndCreateMigrationTable(c)
@@ -122,14 +116,14 @@ func (d sqlMigrator) getLastMigration(c *container.Container) int64 {
 }
 
 func (d sqlMigrator) commitMigration(c *container.Container, data migrationData) error {
-	switch c.SQL.Driver().(type) {
-	case *mysql.MySQLDriver, *sqlite.Driver:
+	switch c.SQL.Dialect() {
+	case "mysql":
 		err := insertMigrationRecord(data.SQLTx, insertGoFrMigrationRowMySQL, data.MigrationNumber, data.StartTime)
 		if err != nil {
 			return err
 		}
 
-	case *pq.Driver:
+	case "postgres":
 		err := insertMigrationRecord(data.SQLTx, insertGoFrMigrationRowPostgres, data.MigrationNumber, data.StartTime)
 		if err != nil {
 			return err

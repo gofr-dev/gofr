@@ -1,6 +1,6 @@
 # Remote Log Level Change
 
-Gofr makes it easy to adjust the details captured in the application's logs, even while it's running!
+GoFr makes it easy to adjust the details captured in the application's logs, even while it's running!
 
 This feature allows users to effortlessly fine-tune logging levels without the need for redeployment, enhancing the monitoring and debugging experience.
 It is facilitated through simple configuration settings.
@@ -17,7 +17,7 @@ It is facilitated through simple configuration settings.
 
 To enable remote log level update, users need to specify the following configuration parameter:
 
-```bash
+```dotenv
 REMOTE_LOG_URL=<URL to user's remote log level endpoint> (e.g., https://log-service.com/log-levels)
 REMOTE_LOG_FETCH_INTERVAL=<Interval in seconds> (default: 15)
 ```

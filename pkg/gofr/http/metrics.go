@@ -6,7 +6,4 @@ import "context"
 // Metrics represents an interface for registering the default metrics in GoFr framework.
 type Metrics interface {
 	IncrementCounter(ctx context.Context, name string, labels ...string)
-	DeltaUpDownCounter(ctx context.Context, name string, value float64, labels ...string)
-	RecordHistogram(ctx context.Context, name string, value float64, labels ...string)
-	SetGauge(name string, value float64)
 }

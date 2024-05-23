@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"strconv"
 	"sync"
+	"time"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/google/uuid"
+	"go.opentelemetry.io/otel"
 
 	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/datasource/pubsub"
@@ -57,20 +59,22 @@ func New(config *Config, logger Logger, metrics Metrics) *MQTT {
 		return getDefaultClient(config, logger, metrics)
 	}
 
-	options := getMQTTClientOptions(config, logger)
+	options := getMQTTClientOptions(config)
+
+	logger.Debugf("connecting to MQTT at '%v:%v' with clientID '%v'", config.Hostname, config.Port, config.ClientID)
 
 	// create the client using the options above
 	client := mqtt.NewClient(options)
 
 	if token := client.Connect(); token.Wait() && token.Error() != nil {
-		logger.Errorf("cannot connect to MQTT, host: %v, port: %v, error: %v", config.Hostname, config.Port, token.Error())
+		logger.Errorf("could not connect to MQTT at '%v:%v', error: %v", config.Hostname, config.Port, token.Error())
 
 		return &MQTT{Client: client, config: config, logger: logger}
 	}
 
 	msg := make(map[string]chan *pubsub.Message)
 
-	logger.Debugf("connected to MQTT, host: %v, port: %v", config.Hostname, config.Port)
+	logger.Infof("connected to MQTT at '%v:%v' with clientID '%v'", config.Hostname, config.Port, options.ClientID)
 
 	return &MQTT{Client: client, config: config, logger: logger, msgChanMap: msg, mu: new(sync.RWMutex), metrics: metrics}
 }
@@ -88,7 +92,7 @@ func getDefaultClient(config *Config, logger Logger, metrics Metrics) *MQTT {
 	client := mqtt.NewClient(opts)
 
 	if token := client.Connect(); token.Wait() && token.Error() != nil {
-		logger.Errorf("cannot connect to MQTT, host: %v, port: %v, error: %v", host, port, token.Error())
+		logger.Errorf("could not connect to MQTT at '%v:%v', error: %v", config.Hostname, config.Port, token.Error())
 
 		return &MQTT{Client: client, config: config, logger: logger}
 	}
@@ -99,20 +103,17 @@ func getDefaultClient(config *Config, logger Logger, metrics Metrics) *MQTT {
 
 	msg := make(map[string]chan *pubsub.Message)
 
-	logger.Debugf("connected to MQTT, HostName: %v, Port: %v", config.Hostname, config.Port)
-	logger.Debugf("using %v clientID for this MQTT session", clientID)
+	logger.Infof("connected to MQTT at '%v:%v' with clientID '%v'", config.Hostname, config.Port, clientID)
 
 	return &MQTT{Client: client, config: config, logger: logger, msgChanMap: msg, mu: new(sync.RWMutex), metrics: metrics}
 }
 
-func getMQTTClientOptions(config *Config, logger Logger) *mqtt.ClientOptions {
+func getMQTTClientOptions(config *Config) *mqtt.ClientOptions {
 	options := mqtt.NewClientOptions()
 	options.AddBroker(fmt.Sprintf("%s://%s:%d", config.Protocol, config.Hostname, config.Port))
 
 	clientID := getClientID(config.ClientID)
 	options.SetClientID(clientID)
-
-	logger.Debugf("using %v clientID for this session", clientID)
 
 	if config.Username != "" {
 		options.SetUsername(config.Username)
@@ -142,6 +143,9 @@ func getClientID(clientID string) string {
 }
 
 func (m *MQTT) Subscribe(ctx context.Context, topic string) (*pubsub.Message, error) {
+	ctx, span := otel.GetTracerProvider().Tracer("gofr").Start(ctx, "mqtt-subscribe")
+	defer span.End()
+
 	m.metrics.IncrementCounter(ctx, "app_pubsub_subscribe_total_count", "topic", topic)
 
 	var messg = pubsub.NewMessage(ctx)
@@ -168,17 +172,24 @@ func (m *MQTT) Subscribe(ctx context.Context, topic string) (*pubsub.Message, er
 
 		// store the message in the channel
 		msgChan <- messg
+
+		m.logger.Debug(&pubsub.Log{
+			Mode:          "SUB",
+			CorrelationID: span.SpanContext().TraceID().String(),
+			MessageValue:  string(msg.Payload()),
+			Topic:         msg.Topic(),
+			Host:          m.config.Hostname,
+			PubSubBackend: "MQTT",
+		})
 	}
 
 	token := m.Client.Subscribe(topic, m.config.QoS, handler)
 
 	if token.Wait() && token.Error() != nil {
-		m.logger.Errorf("error getting a message from MQTT, err: %v", token.Error())
+		m.logger.Errorf("error getting a message from MQTT, error: %v", token.Error())
 
 		return nil, token.Error()
 	}
-
-	m.logger.Debugf("received mqtt message %v on topic %v", string(messg.Value), topic)
 
 	m.metrics.IncrementCounter(ctx, "app_pubsub_subscribe_success_count", "topic", topic)
 
@@ -187,19 +198,34 @@ func (m *MQTT) Subscribe(ctx context.Context, topic string) (*pubsub.Message, er
 }
 
 func (m *MQTT) Publish(ctx context.Context, topic string, message []byte) error {
+	_, span := otel.GetTracerProvider().Tracer("gofr").Start(ctx, "mqtt-publish")
+	defer span.End()
+
 	m.metrics.IncrementCounter(ctx, "app_pubsub_publish_total_count", "topic", topic)
+
+	s := time.Now()
 
 	token := m.Client.Publish(topic, m.config.QoS, m.config.RetrieveRetained, message)
 
 	// Check for errors during publishing (More on error reporting
 	// https://pkg.go.dev/github.com/eclipse/paho.mqtt.golang#readme-error-handling)
 	if token.Wait() && token.Error() != nil {
-		m.logger.Errorf("error while publishing message, err  %v", token.Error())
+		m.logger.Errorf("error while publishing message, error: %v", token.Error())
 
 		return token.Error()
 	}
 
-	m.logger.Debugf("published  message %v on topic %v", string(message), topic)
+	t := time.Since(s)
+
+	m.logger.Debug(&pubsub.Log{
+		Mode:          "PUB",
+		CorrelationID: span.SpanContext().TraceID().String(),
+		MessageValue:  string(message),
+		Topic:         topic,
+		Host:          m.config.Hostname,
+		PubSubBackend: "MQTT",
+		Time:          t.Microseconds(),
+	})
 
 	m.metrics.IncrementCounter(ctx, "app_pubsub_publish_success_count", "topic", topic)
 
@@ -238,7 +264,7 @@ func (m *MQTT) CreateTopic(_ context.Context, topic string) error {
 	token.Wait()
 
 	if token.Error() != nil {
-		m.logger.Errorf("unable to create topic - %s, error: %v", topic, token.Error())
+		m.logger.Errorf("unable to create topic '%s', error: %v", topic, token.Error())
 
 		return token.Error()
 	}
@@ -288,7 +314,7 @@ func (m *MQTT) Unsubscribe(topic string) error {
 	token.Wait()
 
 	if token.Error() != nil {
-		m.logger.Errorf("error while unsubscribing from topic %s, err: %v", topic, token.Error())
+		m.logger.Errorf("error while unsubscribing from topic '%s', error: %v", topic, token.Error())
 
 		return token.Error()
 	}

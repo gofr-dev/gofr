@@ -4,11 +4,14 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc"
 
+	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/testutil"
 )
 
@@ -36,10 +39,11 @@ func TestLoggingInterceptor(t *testing.T) {
 		err            = errors.New("DB error") //nolint:goerr113 // We are testing if a dynamic error would work
 		key contextKey = "id"
 
-		successHandler = func(ctx context.Context, req interface{}) (interface{}, error) {
+		successHandler = func(context.Context, interface{}) (interface{}, error) {
 			return "success", nil
 		}
-		errorHandler = func(ctx context.Context, req interface{}) (interface{}, error) {
+
+		errorHandler = func(context.Context, interface{}) (interface{}, error) {
 			return nil, err
 		}
 	)
@@ -68,7 +72,7 @@ func TestLoggingInterceptor(t *testing.T) {
 
 	for i, tc := range tests {
 		ctx := context.WithValue(context.Background(), key, tc.id)
-		l := testutil.NewMockLogger(testutil.INFOLOG)
+		l := logging.NewMockLogger(logging.INFO)
 
 		resp, err := LoggingInterceptor(l)(ctx, nil, serverInfo, tc.handler)
 
@@ -76,4 +80,47 @@ func TestLoggingInterceptor(t *testing.T) {
 
 		assert.Equal(t, tc.err, err, "TEST[%d], Failed.\n%s", i, tc.desc)
 	}
+}
+
+func Test_colorForGRPCCode(t *testing.T) {
+	testCases := []struct {
+		desc      string
+		code      int32
+		colorCode int
+	}{
+		{"code 0", 0, 34},
+		{"negative code", -1, 202},
+		{"positive code", 1, 202},
+	}
+
+	for i, tc := range testCases {
+		response := colorForGRPCCode(tc.code)
+
+		assert.Equal(t, tc.colorCode, response, "TEST[%d], Failed.\n%s", i, tc.desc)
+	}
+}
+
+func TestRPCLog_PrettyPrint(t *testing.T) {
+	startTime := time.Now().String()
+
+	log := testutil.StdoutOutputForFunc(func() {
+		l := RPCLog{
+			ID:           "1",
+			StartTime:    startTime,
+			ResponseTime: 10,
+			Method:       http.MethodGet,
+			StatusCode:   34,
+		}
+
+		l.PrettyPrint(os.Stdout)
+	})
+
+	// Check if method is coming
+	assert.Contains(t, log, `GET`)
+	// Check if responseTime is coming
+	assert.Contains(t, log, `10`)
+	// Check if statusCode is coming
+	assert.Contains(t, log, `34`)
+	// Check if ID is coming
+	assert.Contains(t, log, `1`)
 }

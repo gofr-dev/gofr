@@ -67,7 +67,7 @@ type httpClient interface {
 // It initializes the http.Client, url, Tracer, and Logger fields of the httpService struct with the provided values.
 func NewHTTPService(serviceAddress string, logger Logger, metrics Metrics, options ...Options) HTTP {
 	h := &httpService{
-		// using default http client to do http communication
+		// using default HTTP client to do HTTP communication
 		Client:  &http.Client{},
 		url:     serviceAddress,
 		Tracer:  otel.Tracer("gofr-http-client"),
@@ -157,7 +157,7 @@ func (h *httpService) createAndSendRequest(ctx context.Context, method string, p
 	// inject the TraceParent header manually in the request headers
 	otel.GetTextMapPropagator().Inject(spanContext, propagation.HeaderCarrier(req.Header))
 
-	log := Log{
+	log := &Log{
 		Timestamp:     time.Now(),
 		CorrelationID: trace.SpanFromContext(ctx).SpanContext().TraceID().String(),
 		HTTPMethod:    method,
@@ -179,7 +179,7 @@ func (h *httpService) createAndSendRequest(ctx context.Context, method string, p
 
 	if err != nil {
 		log.ResponseCode = http.StatusInternalServerError
-		h.Log(ErrorLog{Log: log, ErrorMessage: err.Error()})
+		h.Log(&ErrorLog{Log: log, ErrorMessage: err.Error()})
 
 		return resp, err
 	}

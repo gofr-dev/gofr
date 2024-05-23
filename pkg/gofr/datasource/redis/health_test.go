@@ -5,11 +5,11 @@ import (
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/stretchr/testify/assert"
-
 	"go.uber.org/mock/gomock"
 
+	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/datasource"
-	"gofr.dev/pkg/gofr/testutil"
+	"gofr.dev/pkg/gofr/logging"
 )
 
 func TestRedis_HealthHandlerError(t *testing.T) {
@@ -23,13 +23,15 @@ func TestRedis_HealthHandlerError(t *testing.T) {
 	defer s.Close()
 
 	mockMetric := NewMockMetrics(ctrl)
-	mockMetric.EXPECT().RecordHistogram(gomock.Any(), "app_redis_stats", gomock.Any(), "type", "ping")
-	mockMetric.EXPECT().RecordHistogram(gomock.Any(), "app_redis_stats", gomock.Any(), "type", "info")
+	mockMetric.EXPECT().RecordHistogram(gomock.Any(), "app_redis_stats", gomock.Any(),
+		"hostname", gomock.Any(), "type", "ping")
+	mockMetric.EXPECT().RecordHistogram(gomock.Any(), "app_redis_stats", gomock.Any(),
+		"hostname", gomock.Any(), "type", "info")
 
-	client := NewClient(testutil.NewMockConfig(map[string]string{
+	client := NewClient(config.NewMockConfig(map[string]string{
 		"REDIS_HOST": s.Host(),
 		"REDIS_PORT": s.Port(),
-	}), testutil.NewMockLogger(testutil.DEBUGLOG), mockMetric)
+	}), logging.NewMockLogger(logging.DEBUG), mockMetric)
 
 	assert.Nil(t, err)
 
@@ -44,7 +46,7 @@ func TestRedis_HealthHandlerError(t *testing.T) {
 func TestRedisHealth_WithoutRedis(t *testing.T) {
 	client := Redis{
 		Client: nil,
-		logger: testutil.NewMockLogger(testutil.ERRORLOG),
+		logger: logging.NewMockLogger(logging.ERROR),
 		config: &Config{
 			HostName: "localhost",
 			Port:     2003,

@@ -1,6 +1,6 @@
 # gRPC
 We have already seen how GoFr can help ease the development of HTTP servers, but there are
-cases where performance is primiraliy required sacrificing flexibility. In these types of 
+cases where performance is primarily required sacrificing flexibility. In these types of 
 scenarios gRPC protocol comes into picture. {% new-tab-link title="gRPC" href="https://grpc.io/docs/what-is-grpc/introduction/" /%} is an open-source RPC(Remote Procedure Call)
 framework initially developed by Google. 
 
@@ -11,13 +11,13 @@ framework initially developed by Google.
         $ apt install -y protobuf-compiler
         $ protoc --version  # Ensure compiler version is 3+
         ```
-    - MacOS, using homebrew
+    - macOS, using Homebrew
         ```shell
         $ brew install protobuf
         $ protoc --version  # Ensure compiler version is 3+  
         ```
-- Install **Go Puligins** for protocol compiler:
-    1. Install prtocol compiler plugins for Go
+- Install **Go Plugins** for protocol compiler:
+    1. Install protocol compiler plugins for Go
        ```shell
        $ go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.28
        $ go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.2
@@ -30,7 +30,7 @@ framework initially developed by Google.
 ## Creating protocol buffers
 For a detailed guide, please take a look at the {% new-tab-link title="Tutorial" href="https://grpc.io/docs/languages/go/basics/" /%} at official gRPC docs.
 
-We need to create a `customer.proto` file to define our service and the rpc methods that the service provides.
+We need to create a `customer.proto` file to define our service and the RPC methods that the service provides.
 ```protobuf
 // Indicates the protocol buffer version that is being used
 syntax = "proto3";
@@ -63,7 +63,7 @@ message CustomerData {
   int64 id = 1;
   string name = 2;
   string address = 3;
-  // other customer releated fields
+  // other customer related fields
 }
 ```
 
@@ -76,7 +76,7 @@ protoc \
 --go-grpc_opt=paths=source_relative \ 
 customer.proto
 ```
-Above command will generate two files `customer.pb.go` and `customer_grpc.pb.go` and these contain necessary code to perform rpc calls.
+Above command will generate two files `customer.pb.go` and `customer_grpc.pb.go` and these contain necessary code to perform RPC calls.
 In `customer.pb.go` you can find `CustomerService` interface-
 ```go
 // CustomerServiceServer is the server API for CustomerService service.
@@ -102,8 +102,8 @@ func (h *Handler) GetCustomer(ctx context.Context, filter *CustomerFilter) (*Cus
 }
 ```
 
-Lastly to register the gRPC service to the gofr server, user can call the `RegisterCustomerServiceServer` in `customer_grpc.pb.go`
-to register the service giving gofr app and the Handler struct.
+Lastly to register the gRPC service to the GoFr server, user can call the `RegisterCustomerServiceServer` in `customer_grpc.pb.go`
+to register the service giving GoFr app and the Handler struct.
 ```go
 package main
 

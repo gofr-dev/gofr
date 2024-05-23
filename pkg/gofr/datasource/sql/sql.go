@@ -4,13 +4,11 @@ import (
 	"database/sql"
 	"fmt"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
-	"github.com/DATA-DOG/go-sqlmock"
-	"go.uber.org/mock/gomock"
-	"gofr.dev/pkg/gofr/testutil"
-
+	"github.com/XSAM/otelsql"
 	_ "github.com/lib/pq" // used for concrete implementation of the database driver.
 	_ "modernc.org/sqlite"
 
@@ -36,9 +34,12 @@ func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *D
 	dbConfig := getDBConfig(configs)
 
 	// if Hostname is not provided, we won't try to connect to DB
-	if dbConfig.HostName == "" || dbConfig.Dialect == "" {
+	if dbConfig.Dialect != "sqlite" && dbConfig.HostName == "" {
 		return nil
 	}
+
+	logger.Debugf("connecting with '%s' user to '%s' database at '%s:%s'",
+		dbConfig.User, dbConfig.Database, dbConfig.HostName, dbConfig.Port)
 
 	dbConnectionString, err := getDBConnectionString(dbConfig)
 	if err != nil {
@@ -46,26 +47,69 @@ func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *D
 		return nil
 	}
 
-	db, err := sql.Open(dbConfig.Dialect, dbConnectionString)
+	otelRegisteredDialect, err := otelsql.Register(dbConfig.Dialect)
 	if err != nil {
-		logger.Errorf("could not connect with '%s' user to database '%s:%s'  error: %v",
-			dbConfig.User, dbConfig.HostName, dbConfig.Port, err)
-
-		return &DB{config: dbConfig, metrics: metrics}
+		logger.Errorf("could not register sql dialect '%s' for traces, error: %s", dbConfig.Dialect, err)
+		return nil
 	}
 
-	if err := db.Ping(); err != nil {
-		logger.Errorf("could not connect with '%s' user to database '%s:%s'  error: %v",
-			dbConfig.User, dbConfig.HostName, dbConfig.Port, err)
+	database := &DB{config: dbConfig, logger: logger, metrics: metrics}
 
-		return &DB{config: dbConfig, metrics: metrics, logger: logger}
+	database.DB, err = sql.Open(otelRegisteredDialect, dbConnectionString)
+	if err != nil {
+		database.logger.Errorf("could not open connection with '%s' user to '%s' database at '%s:%s', error: %v",
+			database.config.User, database.config.Database, database.config.HostName, database.config.Port, err)
+
+		return database
 	}
 
-	logger.Logf("connected to '%s' database at %s:%s", dbConfig.Database, dbConfig.HostName, dbConfig.Port)
+	database = pingToTestConnection(database)
 
-	go pushDBMetrics(db, metrics)
+	go retryConnection(database)
 
-	return &DB{DB: db, config: dbConfig, logger: logger, metrics: metrics}
+	go pushDBMetrics(database.DB, metrics)
+
+	return database
+}
+
+func pingToTestConnection(database *DB) *DB {
+	if err := database.DB.Ping(); err != nil {
+		database.logger.Errorf("could not connect with '%s' user to '%s' database at '%s:%s', error: %v",
+			database.config.User, database.config.Database, database.config.HostName, database.config.Port, err)
+
+		return database
+	}
+
+	database.logger.Logf("connected to '%s' database at '%s:%s'", database.config.Database,
+		database.config.HostName, database.config.Port)
+
+	return database
+}
+
+func retryConnection(database *DB) {
+	const connRetryFrequencyInSeconds = 10
+
+	for {
+		if database.DB.Ping() != nil {
+			database.logger.Log("retrying SQL database connection")
+
+			for {
+				if err := database.DB.Ping(); err != nil {
+					database.logger.Debugf("could not connect with '%s' user to database '%s:%s', error: %v",
+						database.config.User, database.config.HostName, database.config.Port, err)
+
+					time.Sleep(connRetryFrequencyInSeconds * time.Second)
+				} else {
+					database.logger.Logf("connected to '%s' database at '%s:%s'", database.config.Database,
+						database.config.HostName, database.config.Port)
+
+					break
+				}
+			}
+		}
+
+		time.Sleep(connRetryFrequencyInSeconds * time.Second)
+	}
 }
 
 func getDBConfig(configs config.Config) *DBConfig {
@@ -93,7 +137,11 @@ func getDBConnectionString(dbConfig *DBConfig) (string, error) {
 		return fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
 			dbConfig.HostName, dbConfig.Port, dbConfig.User, dbConfig.Password, dbConfig.Database), nil
 	case "sqlite":
-		return dbConfig.HostName, nil
+		dbName := strings.TrimSuffix(dbConfig.Database, ".db")
+
+		s := fmt.Sprintf("file:%s.db", dbName)
+
+		return s, nil
 	default:
 		return "", errUnsupportedDialect
 	}
@@ -103,28 +151,13 @@ func pushDBMetrics(db *sql.DB, metrics Metrics) {
 	const frequency = 10
 
 	for {
-		stats := db.Stats()
+		if db != nil {
+			stats := db.Stats()
 
-		metrics.SetGauge("app_sql_open_connections", float64(stats.OpenConnections))
-		metrics.SetGauge("app_sql_inUse_connections", float64(stats.InUse))
+			metrics.SetGauge("app_sql_open_connections", float64(stats.OpenConnections))
+			metrics.SetGauge("app_sql_inUse_connections", float64(stats.InUse))
 
-		time.Sleep(frequency * time.Second)
+			time.Sleep(frequency * time.Second)
+		}
 	}
-}
-
-func NewSQLMocks(t *testing.T) (*DB, sqlmock.Sqlmock, *MockMetrics) {
-	db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherEqual))
-	if err != nil {
-		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
-	}
-
-	ctrl := gomock.NewController(t)
-	mockMetrics := NewMockMetrics(ctrl)
-
-	return &DB{
-		DB:      db,
-		logger:  testutil.NewMockLogger(testutil.DEBUGLOG),
-		config:  nil,
-		metrics: mockMetrics,
-	}, mock, mockMetrics
 }

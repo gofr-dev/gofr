@@ -12,6 +12,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
+	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/testutil"
 )
 
@@ -40,13 +41,13 @@ func TestGoogleClient_New_Error(t *testing.T) {
 	defer ctrl.Finish()
 
 	out := testutil.StderrOutputForFunc(func() {
-		logger := testutil.NewMockLogger(testutil.ERRORLOG)
+		logger := logging.NewMockLogger(logging.ERROR)
 
 		g = New(Config{}, logger, NewMockMetrics(ctrl))
 	})
 
 	assert.Nil(t, g)
-	assert.Contains(t, out, "google pubsub could not be configured")
+	assert.Contains(t, out, "could not configure google pubsub")
 }
 
 func TestGoogleClient_Publish_Success(t *testing.T) {
@@ -60,11 +61,10 @@ func TestGoogleClient_Publish_Success(t *testing.T) {
 
 	topic := "test-topic"
 	message := []byte("test message")
-	expectedLog := "published google message test message on topic test-topic\n"
 
 	out := testutil.StdoutOutputForFunc(func() {
 		g := &googleClient{
-			logger: testutil.NewMockLogger(testutil.DEBUGLOG),
+			logger: logging.NewMockLogger(logging.DEBUG),
 			client: client,
 			Config: Config{
 				ProjectID:        "test",
@@ -73,15 +73,19 @@ func TestGoogleClient_Publish_Success(t *testing.T) {
 			metrics: mockMetrics,
 		}
 
-		mockMetrics.EXPECT().IncrementCounter(context.Background(), "app_pubsub_publish_total_count", "topic", topic)
-		mockMetrics.EXPECT().IncrementCounter(context.Background(), "app_pubsub_publish_success_count", "topic", topic)
+		mockMetrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_publish_total_count", "topic", topic)
+		mockMetrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_publish_success_count", "topic", topic)
 
 		err := g.Publish(context.Background(), topic, message)
 
 		assert.Nil(t, err)
 	})
 
-	assert.Equal(t, expectedLog, out)
+	assert.Contains(t, out, "PUB")
+	assert.Contains(t, out, "test message")
+	assert.Contains(t, out, "test-topic")
+	assert.Contains(t, out, "test")
+	assert.Contains(t, out, "GCP")
 }
 
 func TestGoogleClient_PublishTopic_Error(t *testing.T) {
@@ -93,14 +97,14 @@ func TestGoogleClient_PublishTopic_Error(t *testing.T) {
 	g := &googleClient{client: getGoogleClient(t), Config: Config{
 		ProjectID:        "test",
 		SubscriptionName: "sub",
-	}, metrics: mockMetrics, logger: testutil.NewMockLogger(testutil.DEBUGLOG)}
+	}, metrics: mockMetrics, logger: logging.NewMockLogger(logging.DEBUG)}
 	defer g.client.Close()
 
 	ctx, cancel := context.WithCancel(context.Background())
 
 	cancel()
 
-	mockMetrics.EXPECT().IncrementCounter(ctx, "app_pubsub_publish_total_count", "topic", "test-topic")
+	mockMetrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_publish_total_count", "topic", "test-topic")
 
 	err := g.Publish(ctx, "test-topic", []byte(""))
 	if assert.Error(t, err) {

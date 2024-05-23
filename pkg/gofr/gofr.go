@@ -17,11 +17,12 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
+
 	"google.golang.org/grpc"
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
-	"gofr.dev/pkg/gofr/datasource"
+	gofrHTTP "gofr.dev/pkg/gofr/http"
 	"gofr.dev/pkg/gofr/http/middleware"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/metrics"
@@ -29,7 +30,7 @@ import (
 	"gofr.dev/pkg/gofr/service"
 )
 
-// App is the main application in the gofr framework.
+// App is the main application in the GoFr framework.
 type App struct {
 	// Config can be used by applications to fetch custom configurations from environment or file.
 	Config config.Config // If we directly embed, unnecessary confusion between app.Get and app.GET will happen.
@@ -40,6 +41,8 @@ type App struct {
 
 	cmd *cmd
 
+	cron *Crontab
+
 	// container is unexported because this is an internal implementation and applications are provided access to it via Context
 	container *container.Container
 
@@ -49,7 +52,7 @@ type App struct {
 	subscriptionManager SubscriptionManager
 }
 
-// RegisterService adds a grpc service to the gofr application.
+// RegisterService adds a gRPC service to the GoFr application.
 func (a *App) RegisterService(desc *grpc.ServiceDesc, impl interface{}) {
 	a.container.Logger.Infof("registering GRPC Server: %s", desc.ServiceName)
 	a.grpcServer.server.RegisterService(desc, impl)
@@ -93,7 +96,7 @@ func New() *App {
 	return app
 }
 
-// NewCMD creates a command line application.
+// NewCMD creates a command-line application.
 func NewCMD() *App {
 	app := &App{}
 	app.readConfig(true)
@@ -108,7 +111,7 @@ func NewCMD() *App {
 	return app
 }
 
-// Run starts the application. If it is a HTTP server, it will start the server.
+// Run starts the application. If it is an HTTP server, it will start the server.
 func (a *App) Run() {
 	if a.cmd != nil {
 		a.cmd.Run(a.container)
@@ -117,7 +120,7 @@ func (a *App) Run() {
 	wg := sync.WaitGroup{}
 
 	// Start Metrics Server
-	// running metrics server before http and grpc
+	// running metrics server before HTTP and gRPC
 	wg.Add(1)
 
 	go func(m *metricServer) {
@@ -133,6 +136,13 @@ func (a *App) Run() {
 		a.add(http.MethodGet, "/.well-known/health", healthHandler)
 		a.add(http.MethodGet, "/.well-known/alive", liveHandler)
 		a.add(http.MethodGet, "/favicon.ico", faviconHandler)
+
+		if _, err := os.Stat("./static/openapi.json"); err == nil {
+			a.add(http.MethodGet, "/.well-known/openapi.json", OpenAPIHandler)
+			a.add(http.MethodGet, "/.well-known/swagger", SwaggerUIHandler)
+			a.add(http.MethodGet, "/.well-known/{name}", SwaggerUIHandler)
+		}
+
 		a.httpServer.router.PathPrefix("/").Handler(handler{
 			function:  catchAllHandler,
 			container: a.container,
@@ -196,31 +206,37 @@ func (a *App) AddHTTPService(serviceName, serviceAddress string, options ...serv
 	a.container.Services[serviceName] = service.NewHTTPService(serviceAddress, a.container.Logger, a.container.Metrics(), options...)
 }
 
-// GET adds a Handler for http GET method for a route pattern.
+// GET adds a Handler for HTTP GET method for a route pattern.
 func (a *App) GET(pattern string, handler Handler) {
 	a.add("GET", pattern, handler)
 }
 
-// PUT adds a Handler for http PUT method for a route pattern.
+// PUT adds a Handler for HTTP PUT method for a route pattern.
 func (a *App) PUT(pattern string, handler Handler) {
 	a.add("PUT", pattern, handler)
 }
 
-// POST adds a Handler for http POST method for a route pattern.
+// POST adds a Handler for HTTP POST method for a route pattern.
 func (a *App) POST(pattern string, handler Handler) {
 	a.add("POST", pattern, handler)
 }
 
-// DELETE adds a Handler for http DELETE method for a route pattern.
+// DELETE adds a Handler for HTTP DELETE method for a route pattern.
 func (a *App) DELETE(pattern string, handler Handler) {
 	a.add("DELETE", pattern, handler)
+}
+
+// PATCH adds a Handler for HTTP PATCH method for a route pattern.
+func (a *App) PATCH(pattern string, handler Handler) {
+	a.add("PATCH", pattern, handler)
 }
 
 func (a *App) add(method, pattern string, h Handler) {
 	a.httpRegistered = true
 	a.httpServer.router.Add(method, pattern, handler{
-		function:  h,
-		container: a.container,
+		function:       h,
+		container:      a.container,
+		requestTimeout: a.Config.GetOrDefault("REQUEST_TIMEOUT", "5"),
 	})
 }
 
@@ -239,6 +255,9 @@ func (a *App) SubCommand(pattern string, handler Handler) {
 }
 
 func (a *App) Migrate(migrationsMap map[int64]migration.Migrate) {
+	// TODO : Move panic recovery at central location which will manage for all the different cases.
+	defer panicRecovery(a.container.Logger)
+
 	migration.Run(migrationsMap, a.container)
 }
 
@@ -257,7 +276,9 @@ func (a *App) initTracer() {
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
 	otel.SetErrorHandler(&otelErrorHandler{logger: a.container.Logger})
 
-	if traceExporter != "" && tracerHost != "" {
+	const traceExporterGoFr = "gofr"
+
+	if (traceExporter != "" && tracerHost != "") || traceExporter == traceExporterGoFr {
 		var (
 			exporter sdktrace.SpanExporter
 			err      error
@@ -275,6 +296,10 @@ func (a *App) initTracer() {
 			exporter, err = zipkin.New(
 				fmt.Sprintf("http://%s:%s/api/v2/spans", tracerHost, tracerPort),
 			)
+		case traceExporterGoFr:
+			exporter = NewExporter("https://tracer-api.gofr.dev/api/spans", logging.NewLogger(logging.INFO))
+
+			a.container.Log("Exporting traces to GoFr at https://tracer.gofr.dev")
 		default:
 			a.container.Error("unsupported trace exporter.")
 		}
@@ -357,6 +382,19 @@ func (a *App) AddRESTHandlers(object interface{}) error {
 	return nil
 }
 
-func (a *App) UseMongo(db datasource.Mongo) {
-	a.container.Mongo = db
+// UseMiddleware is a setter method for adding user defined custom middleware to GoFr's router.
+func (a *App) UseMiddleware(middlewares ...gofrHTTP.Middleware) {
+	a.httpServer.router.UseMiddleware(middlewares...)
+}
+
+// AddCronJob registers a cron job to the cron table, the schedule is in * * * * * (6 part) format
+// denoting minutes, hours, days, months and day of week respectively.
+func (a *App) AddCronJob(schedule, jobName string, job CronFunc) {
+	if a.cron == nil {
+		a.cron = NewCron(a.container)
+	}
+
+	if err := a.cron.AddJob(schedule, jobName, job); err != nil {
+		a.Logger().Errorf("error adding cron job, err : %v", err)
+	}
 }

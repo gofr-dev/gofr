@@ -6,6 +6,8 @@ package sql
 import (
 	"context"
 	"database/sql"
+	"fmt"
+	"io"
 	"reflect"
 	"regexp"
 	"strings"
@@ -30,18 +32,30 @@ type Log struct {
 	Args     []interface{} `json:"args,omitempty"`
 }
 
+func (l *Log) PrettyPrint(writer io.Writer) {
+	fmt.Fprintf(writer, "\u001B[38;5;8m%-32s \u001B[38;5;24m%-6s\u001B[0m %8d\u001B[38;5;8mµs\u001B[0m %s\n",
+		l.Type, "SQL", l.Duration, clean(l.Query))
+}
+
+func clean(query string) string {
+	query = regexp.MustCompile(`\s+`).ReplaceAllString(query, " ")
+	query = strings.TrimSpace(query)
+
+	return query
+}
+
 func (d *DB) logQuery(start time.Time, queryType, query string, args ...interface{}) {
 	duration := time.Since(start).Milliseconds()
 
-	d.logger.Debug(Log{
+	d.logger.Debug(&Log{
 		Type:     queryType,
 		Query:    query,
 		Duration: duration,
 		Args:     args,
 	})
 
-	d.metrics.RecordHistogram(context.Background(), "app_sql_stats", float64(duration),
-		"type", getOperationType(query))
+	d.metrics.RecordHistogram(context.Background(), "app_sql_stats", float64(duration), "hostname", d.config.HostName,
+		"database", d.config.Database, "type", getOperationType(query))
 }
 
 func getOperationType(query string) string {
@@ -54,6 +68,10 @@ func getOperationType(query string) string {
 func (d *DB) Query(query string, args ...interface{}) (*sql.Rows, error) {
 	defer d.logQuery(time.Now(), "Query", query, args...)
 	return d.DB.Query(query, args...)
+}
+
+func (d *DB) Dialect() string {
+	return d.config.Dialect
 }
 
 func (d *DB) QueryRow(query string, args ...interface{}) *sql.Row {
@@ -87,11 +105,12 @@ func (d *DB) Begin() (*Tx, error) {
 		return nil, err
 	}
 
-	return &Tx{Tx: tx, logger: d.logger, metrics: d.metrics}, nil
+	return &Tx{Tx: tx, config: d.config, logger: d.logger, metrics: d.metrics}, nil
 }
 
 type Tx struct {
 	*sql.Tx
+	config  *DBConfig
 	logger  datasource.Logger
 	metrics Metrics
 }
@@ -99,15 +118,15 @@ type Tx struct {
 func (t *Tx) logQuery(start time.Time, queryType, query string, args ...interface{}) {
 	duration := time.Since(start).Milliseconds()
 
-	t.logger.Debug(Log{
+	t.logger.Debug(&Log{
 		Type:     queryType,
 		Query:    query,
 		Duration: duration,
 		Args:     args,
 	})
 
-	t.metrics.RecordHistogram(context.Background(), "app_sql_stats", float64(duration),
-		"type", getOperationType(query))
+	t.metrics.RecordHistogram(context.Background(), "app_sql_stats", float64(duration), "hostname", t.config.HostName,
+		"database", t.config.Database, "type", getOperationType(query))
 }
 
 func (t *Tx) Query(query string, args ...interface{}) (*sql.Rows, error) {

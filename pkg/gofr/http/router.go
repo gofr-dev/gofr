@@ -15,6 +15,8 @@ type Router struct {
 	mux.Router
 }
 
+type Middleware func(handler http.Handler) http.Handler
+
 // NewRouter creates a new Router instance.
 func NewRouter(c *container.Container) *Router {
 	muxRouter := mux.NewRouter().StrictSlash(false)
@@ -34,4 +36,14 @@ func NewRouter(c *container.Container) *Router {
 func (rou *Router) Add(method, pattern string, handler http.Handler) {
 	h := otelhttp.NewHandler(handler, "gofr-router")
 	rou.Router.NewRoute().Methods(method).Path(pattern).Handler(h)
+}
+
+// UseMiddleware registers middlewares to the router.
+func (rou *Router) UseMiddleware(mws ...Middleware) {
+	middlewares := make([]mux.MiddlewareFunc, 0, len(mws))
+	for _, m := range mws {
+		middlewares = append(middlewares, mux.MiddlewareFunc(m))
+	}
+
+	rou.Use(middlewares...)
 }

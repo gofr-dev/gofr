@@ -1,30 +1,26 @@
 # Publisher Example
 
-This GoFr example demonstrates a simple Publisher that publishes to the given topic when an http request is made to it's
+This GoFr example demonstrates a simple Publisher that publishes to the given topic when an HTTP request is made to it's
 matching route.
 
 ### To run the example follow the below steps:
 
-- Run the docker image of kafka and zookeeper and ensure that your provided topics are created before publishing
+- Run the docker image of Kafka and ensure that your provided topics are created before publishing
 ```console
-docker run -d \
-  --name zookeeper \
-  -e ZOOKEEPER_CLIENT_PORT=2181 \
-  -e ZOOKEEPER_TICK_TIME=2000 \
-  confluentinc/cp-zookeeper:7.0.1
-  
-docker run -d \
-  --name broker \
-  -p 9092:9092 \
-  --link zookeeper \
-  -e KAFKA_BROKER_ID=1 \
-  -e KAFKA_ZOOKEEPER_CONNECT=zookeeper:2181 \
-  -e KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=PLAINTEXT:PLAINTEXT,PLAINTEXT_INTERNAL:PLAINTEXT \
-  -e KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://localhost:9092,PLAINTEXT_INTERNAL://broker:29092 \
-  -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1 \
-  -e KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1 \
-  -e KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1 \
-  confluentinc/cp-kafka:7.0.1
+docker run --name kafka-1 -p 9092:9092 \
+ -e KAFKA_ENABLE_KRAFT=yes \
+-e KAFKA_CFG_PROCESS_ROLES=broker,controller \
+-e KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER \
+-e KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093 \
+-e KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT \
+-e KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://127.0.0.1:9092 \
+-e KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE=true \
+-e KAFKA_BROKER_ID=1 \
+-e KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=1@127.0.0.1:9093 \
+-e ALLOW_PLAINTEXT_LISTENER=yes \
+-e KAFKA_CFG_NODE_ID=1 \
+-v kafka_data:/bitnami \
+bitnami/kafka:3.4 
 ```
 
 - Now run the example using below command :

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	gcPubSub "cloud.google.com/go/pubsub"
+	"go.opentelemetry.io/otel"
 
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 )
@@ -35,10 +36,12 @@ type googleClient struct {
 func New(conf Config, logger pubsub.Logger, metrics Metrics) *googleClient {
 	err := validateConfigs(&conf)
 	if err != nil {
-		logger.Errorf("google pubsub could not be configured, err: %v", err)
+		logger.Errorf("could not configure google pubsub, error: %v", err)
 
 		return nil
 	}
+
+	logger.Debugf("connecting to google pubsub client with projectID '%s' and subscriptionName '%s", conf.ProjectID, conf.SubscriptionName)
 
 	client, err := gcPubSub.NewClient(context.Background(), conf.ProjectID)
 	if err != nil {
@@ -47,7 +50,7 @@ func New(conf Config, logger pubsub.Logger, metrics Metrics) *googleClient {
 		}
 	}
 
-	logger.Debugf("intialized google pubsub client, projectID: %s", client.Project())
+	logger.Logf("connected to google pubsub client, projectID: %s", client.Project())
 
 	return &googleClient{
 		Config:  conf,
@@ -70,28 +73,41 @@ func validateConfigs(conf *Config) error {
 }
 
 func (g *googleClient) Publish(ctx context.Context, topic string, message []byte) error {
+	ctx, span := otel.GetTracerProvider().Tracer("gofr").Start(ctx, "publish-gcp")
+	defer span.End()
+
 	g.metrics.IncrementCounter(ctx, "app_pubsub_publish_total_count", "topic", topic)
 
 	t, err := g.getTopic(ctx, topic)
 	if err != nil {
-		g.logger.Errorf("error creating %s err: %v", topic, err)
+		g.logger.Errorf("could not create topic '%s', error: %v", topic, err)
 
 		return err
 	}
 
+	start := time.Now()
 	result := t.Publish(ctx, &gcPubSub.Message{
 		Data:        message,
 		PublishTime: time.Now(),
 	})
+	end := time.Since(start)
 
 	_, err = result.Get(ctx)
 	if err != nil {
-		g.logger.Errorf("error publishing to google topic %s err: %v", topic, err)
+		g.logger.Errorf("error publishing to google topic '%s', error: %v", topic, err)
 
 		return err
 	}
 
-	g.logger.Debugf("published google message %v on topic %v", string(message), topic)
+	g.logger.Debug(&pubsub.Log{
+		Mode:          "PUB",
+		CorrelationID: span.SpanContext().TraceID().String(),
+		MessageValue:  string(message),
+		Topic:         topic,
+		Host:          g.ProjectID,
+		PubSubBackend: "GCP",
+		Time:          end.Microseconds(),
+	})
 
 	g.metrics.IncrementCounter(ctx, "app_pubsub_publish_success_count", "topic", topic)
 
@@ -99,7 +115,10 @@ func (g *googleClient) Publish(ctx context.Context, topic string, message []byte
 }
 
 func (g *googleClient) Subscribe(ctx context.Context, topic string) (*pubsub.Message, error) {
-	g.metrics.IncrementCounter(ctx, "app_pubsub_subscribe_total_count", "topic", topic)
+	ctx, span := otel.GetTracerProvider().Tracer("gofr").Start(ctx, "gcp-subscribe")
+	defer span.End()
+
+	g.metrics.IncrementCounter(ctx, "app_pubsub_subscribe_total_count", "topic", topic, "subscription_name", g.Config.SubscriptionName)
 
 	var m = pubsub.NewMessage(ctx)
 
@@ -115,16 +134,26 @@ func (g *googleClient) Subscribe(ctx context.Context, topic string) (*pubsub.Mes
 
 	ctx, cancel := context.WithCancel(ctx)
 
+	start := time.Now()
 	err = subscription.Receive(ctx, func(_ context.Context, msg *gcPubSub.Message) {
+		end := time.Since(start)
+
 		defer cancel()
 
-		m = &pubsub.Message{
-			Topic:    topic,
-			Value:    msg.Data,
-			MetaData: msg.Attributes,
+		m.Topic = topic
+		m.Value = msg.Data
+		m.MetaData = msg.Attributes
+		m.Committer = newGoogleMessage(msg)
 
-			Committer: newGoogleMessage(msg),
-		}
+		g.logger.Debug(&pubsub.Log{
+			Mode:          "SUB",
+			CorrelationID: span.SpanContext().TraceID().String(),
+			MessageValue:  string(m.Value),
+			Topic:         topic,
+			Host:          g.Config.ProjectID,
+			PubSubBackend: "GCP",
+			Time:          end.Microseconds(),
+		})
 	})
 
 	if err != nil {
@@ -133,9 +162,7 @@ func (g *googleClient) Subscribe(ctx context.Context, topic string) (*pubsub.Mes
 		return nil, err
 	}
 
-	g.logger.Debugf("received google message %v on topic %v", string(m.Value), m.Topic)
-
-	g.metrics.IncrementCounter(ctx, "app_pubsub_subscribe_success_count", "topic", topic)
+	g.metrics.IncrementCounter(ctx, "app_pubsub_subscribe_success_count", "topic", topic, "subscription_name", g.Config.SubscriptionName)
 
 	return m, nil
 }
@@ -160,7 +187,7 @@ func (g *googleClient) getSubscription(ctx context.Context, topic *gcPubSub.Topi
 	// check if subscription already exists or not
 	ok, err := subscription.Exists(context.Background())
 	if err != nil {
-		g.logger.Errorf("unable to check the existence of subscription, err: %v ", err.Error())
+		g.logger.Errorf("unable to check the existence of subscription, error: %v", err.Error())
 
 		return nil, err
 	}

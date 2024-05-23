@@ -25,19 +25,19 @@ func TestBasicAuthMiddleware(t *testing.T) {
 	}{
 		{
 			name:               "Valid Authorization",
-			authHeader:         "basic dXNlcjpwYXNzd29yZA==",
+			authHeader:         "Basic dXNlcjpwYXNzd29yZA==",
 			authProvider:       BasicAuthProvider{Users: map[string]string{"user": "password"}},
 			expectedStatusCode: http.StatusOK,
 		},
 		{
 			name:               "Valid Authorization with validation Func",
-			authHeader:         "basic YWJjOnBhc3MxMjM=",
+			authHeader:         "Basic YWJjOnBhc3MxMjM=",
 			authProvider:       BasicAuthProvider{ValidateFunc: validationFunc},
 			expectedStatusCode: http.StatusOK,
 		},
 		{
 			name:               "false from validation Func",
-			authHeader:         "basic dXNlcjpwYXNzd29yZA==",
+			authHeader:         "Basic dXNlcjpwYXNzd29yZA==",
 			authProvider:       BasicAuthProvider{ValidateFunc: validationFunc},
 			expectedStatusCode: http.StatusUnauthorized,
 		},
@@ -55,19 +55,19 @@ func TestBasicAuthMiddleware(t *testing.T) {
 		},
 		{
 			name:               "Invalid encoding",
-			authHeader:         "basic invalidbase64encoding==",
+			authHeader:         "Basic invalidbase64encoding==",
 			authProvider:       BasicAuthProvider{},
 			expectedStatusCode: http.StatusUnauthorized,
 		},
 		{
 			name:               "improper credentials format",
-			authHeader:         "basic dXNlcis=",
+			authHeader:         "Basic dXNlcis=",
 			authProvider:       BasicAuthProvider{},
 			expectedStatusCode: http.StatusUnauthorized,
 		},
 		{
 			name:               "Unauthorized",
-			authHeader:         "basic dXNlcjpwYXNzd29yZA==",
+			authHeader:         "Basic dXNlcjpwYXNzd29yZA==",
 			authProvider:       BasicAuthProvider{},
 			expectedStatusCode: http.StatusUnauthorized,
 		},
@@ -75,18 +75,35 @@ func TestBasicAuthMiddleware(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(http.StatusOK)
 			})
 
 			req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 			req.Header.Set("Authorization", tc.authHeader)
-			rr := httptest.NewRecorder()
 
+			rr := httptest.NewRecorder()
 			authMiddleware := BasicAuthMiddleware(tc.authProvider)
+
 			authMiddleware(handler).ServeHTTP(rr, req)
 
 			assert.Equal(t, tc.expectedStatusCode, rr.Code)
 		})
 	}
+}
+
+func Test_BasicAuthMiddleware_well_known(t *testing.T) {
+	testHandler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("Success"))
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/.well-known/health-check", http.NoBody)
+	rr := httptest.NewRecorder()
+
+	authMiddleware := BasicAuthMiddleware(BasicAuthProvider{})(testHandler)
+	authMiddleware.ServeHTTP(rr, req)
+
+	assert.Equal(t, 200, rr.Code, "TEST Failed.\n")
+
+	assert.Equal(t, "Success", rr.Body.String(), "TEST Failed.\n")
 }

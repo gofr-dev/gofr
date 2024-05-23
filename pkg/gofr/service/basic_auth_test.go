@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 
-	"gofr.dev/pkg/gofr/testutil"
+	"gofr.dev/pkg/gofr/logging"
 )
 
 func TestBasicAuthProvider_Get(t *testing.T) {
@@ -29,6 +29,7 @@ func TestBasicAuthProvider_Get(t *testing.T) {
 		assert.Equal(t, http.MethodGet, r.Method)
 
 		w.WriteHeader(http.StatusOK)
+
 		_, err := w.Write(body)
 		if err != nil {
 			return
@@ -37,7 +38,7 @@ func TestBasicAuthProvider_Get(t *testing.T) {
 	defer server.Close()
 
 	// Create a new HTTP service instance with basic auth
-	httpService := NewHTTPService(server.URL, testutil.NewMockLogger(testutil.INFOLOG), nil,
+	httpService := NewHTTPService(server.URL, logging.NewMockLogger(logging.INFO), nil,
 		&BasicAuthConfig{UserName: "user", Password: "cGFzc3dvcmQ="})
 
 	// Make the GET request
@@ -73,7 +74,7 @@ func TestBasicAuthProvider_Post(t *testing.T) {
 	defer server.Close()
 
 	// Create a new HTTP service instance with basic auth
-	httpService := NewHTTPService(server.URL, testutil.NewMockLogger(testutil.INFOLOG), nil,
+	httpService := NewHTTPService(server.URL, logging.NewMockLogger(logging.INFO), nil,
 		&BasicAuthConfig{UserName: "user", Password: "cGFzc3dvcmQ="})
 
 	// Make the POST request
@@ -105,7 +106,7 @@ func TestBasicAuthProvider_Put(t *testing.T) {
 	defer server.Close()
 
 	// Create a new HTTP service instance with basic auth
-	httpService := NewHTTPService(server.URL, testutil.NewMockLogger(testutil.INFOLOG), nil,
+	httpService := NewHTTPService(server.URL, logging.NewMockLogger(logging.INFO), nil,
 		&BasicAuthConfig{UserName: "user", Password: "cGFzc3dvcmQ="})
 
 	// Make the PUT request
@@ -137,7 +138,7 @@ func TestBasicAuthProvider_Patch(t *testing.T) {
 	defer server.Close()
 
 	// Create a new HTTP service instance with basic auth
-	httpService := NewHTTPService(server.URL, testutil.NewMockLogger(testutil.INFOLOG), nil,
+	httpService := NewHTTPService(server.URL, logging.NewMockLogger(logging.INFO), nil,
 		&BasicAuthConfig{UserName: "user", Password: "cGFzc3dvcmQ="})
 
 	// Make the PATCH request
@@ -168,7 +169,7 @@ func TestBasicAuthProvider_Delete(t *testing.T) {
 	defer server.Close()
 
 	// Create a new HTTP service instance with basic auth
-	httpService := NewHTTPService(server.URL, testutil.NewMockLogger(testutil.INFOLOG), nil,
+	httpService := NewHTTPService(server.URL, logging.NewMockLogger(logging.INFO), nil,
 		&BasicAuthConfig{UserName: "user", Password: "cGFzc3dvcmQ="})
 
 	// Make the DELETE request
@@ -198,7 +199,7 @@ func checkAuthHeaders(r *http.Request, t *testing.T) {
 }
 
 func Test_addAuthorizationHeader_Error(t *testing.T) {
-	ba := &BasicAuthProvider{password: "invalid_password"}
+	ba := &basicAuthProvider{password: "invalid_password"}
 
 	headers := make(map[string]string)
 	err := ba.addAuthorizationHeader(headers)

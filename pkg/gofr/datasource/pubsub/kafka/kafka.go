@@ -9,13 +9,24 @@ import (
 	"time"
 
 	"github.com/segmentio/kafka-go"
+	"go.opentelemetry.io/otel"
+
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 )
 
 var (
+	ErrConsumerGroupNotProvided = errors.New("consumer group id not provided")
 	errBrokerNotProvided        = errors.New("kafka broker address not provided")
-	errConsumerGroupNotProvided = errors.New("consumer group id not provided")
 	errPublisherNotConfigured   = errors.New("can't publish message. Publisher not configured or topic is empty")
+	errBatchSize                = errors.New("KAFKA_BATCH_SIZE must be greater than 0")
+	errBatchBytes               = errors.New("KAFKA_BATCH_BYTES must be greater than 0")
+	errBatchTimeout             = errors.New("KAFKA_BATCH_TIMEOUT must be greater than 0")
+)
+
+const (
+	DefaultBatchSize    = 100
+	DefaultBatchBytes   = 1048576
+	DefaultBatchTimeout = 1000
 )
 
 type Config struct {
@@ -23,6 +34,9 @@ type Config struct {
 	Partition       int
 	ConsumerGroupID string
 	OffSet          int
+	BatchSize       int
+	BatchBytes      int
+	BatchTimeout    int
 }
 
 type kafkaClient struct {
@@ -43,14 +57,22 @@ type kafkaClient struct {
 func New(conf Config, logger pubsub.Logger, metrics Metrics) *kafkaClient {
 	err := validateConfigs(conf)
 	if err != nil {
-		logger.Errorf("could not initialize kafka, err: %v", err)
+		logger.Errorf("could not initialize kafka, error: %v", err)
 
 		return nil
 	}
 
+	logger.Debugf("connecting to kafka broker '%s'", conf.Broker)
+
 	conn, err := kafka.Dial("tcp", conf.Broker)
 	if err != nil {
-		logger.Errorf("failed to connect to KAFKA at %v", conf.Broker)
+		logger.Errorf("failed to connect to kafka at %v, error: %v", conf.Broker, err)
+
+		return &kafkaClient{
+			logger:  logger,
+			config:  Config{},
+			metrics: metrics,
+		}
 	}
 
 	dialer := &kafka.Dialer{
@@ -59,13 +81,16 @@ func New(conf Config, logger pubsub.Logger, metrics Metrics) *kafkaClient {
 	}
 
 	writer := kafka.NewWriter(kafka.WriterConfig{
-		Brokers: []string{conf.Broker},
-		Dialer:  dialer,
+		Brokers:      []string{conf.Broker},
+		Dialer:       dialer,
+		BatchSize:    conf.BatchSize,
+		BatchBytes:   conf.BatchBytes,
+		BatchTimeout: time.Duration(conf.BatchTimeout),
 	})
 
 	reader := make(map[string]Reader)
 
-	logger.Debugf("connected to Kafka, broker: %s", conf.Broker)
+	logger.Logf("connected to kafka broker '%s'", conf.Broker)
 
 	return &kafkaClient{
 		config:  conf,
@@ -84,20 +109,32 @@ func validateConfigs(conf Config) error {
 		return errBrokerNotProvided
 	}
 
-	if conf.ConsumerGroupID == "" {
-		return errConsumerGroupNotProvided
+	if conf.BatchSize <= 0 {
+		return errBatchSize
+	}
+
+	if conf.BatchBytes <= 0 {
+		return errBatchBytes
+	}
+
+	if conf.BatchTimeout <= 0 {
+		return errBatchTimeout
 	}
 
 	return nil
 }
 
 func (k *kafkaClient) Publish(ctx context.Context, topic string, message []byte) error {
+	ctx, span := otel.GetTracerProvider().Tracer("gofr").Start(ctx, "kafka-publish")
+	defer span.End()
+
 	k.metrics.IncrementCounter(ctx, "app_pubsub_publish_total_count", "topic", topic)
 
 	if k.writer == nil || topic == "" {
 		return errPublisherNotConfigured
 	}
 
+	start := time.Now()
 	err := k.writer.WriteMessages(ctx,
 		kafka.Message{
 			Topic: topic,
@@ -105,13 +142,22 @@ func (k *kafkaClient) Publish(ctx context.Context, topic string, message []byte)
 			Time:  time.Now(),
 		},
 	)
+	end := time.Since(start)
 
 	if err != nil {
-		k.logger.Error("failed to publish message to kafka broker")
+		k.logger.Errorf("failed to publish message to kafka broker, error: %v", err)
 		return err
 	}
 
-	k.logger.Debugf("published kafka message %v on topic %v", string(message), topic)
+	k.logger.Debug(&pubsub.Log{
+		Mode:          "PUB",
+		CorrelationID: span.SpanContext().TraceID().String(),
+		MessageValue:  string(message),
+		Topic:         topic,
+		Host:          k.config.Broker,
+		PubSubBackend: "KAFKA",
+		Time:          end.Microseconds(),
+	})
 
 	k.metrics.IncrementCounter(ctx, "app_pubsub_publish_success_count", "topic", topic)
 
@@ -119,7 +165,14 @@ func (k *kafkaClient) Publish(ctx context.Context, topic string, message []byte)
 }
 
 func (k *kafkaClient) Subscribe(ctx context.Context, topic string) (*pubsub.Message, error) {
-	k.metrics.IncrementCounter(ctx, "app_pubsub_subscribe_total_count", "topic", topic)
+	if k.config.ConsumerGroupID == "" {
+		return &pubsub.Message{}, ErrConsumerGroupNotProvided
+	}
+
+	ctx, span := otel.GetTracerProvider().Tracer("gofr").Start(ctx, "kafka-subscribe")
+	defer span.End()
+
+	k.metrics.IncrementCounter(ctx, "app_pubsub_subscribe_total_count", "topic", topic, "consumer_group", k.config.ConsumerGroupID)
 
 	var reader Reader
 	// Lock the reader map to ensure only one subscriber access the reader at a time
@@ -132,26 +185,36 @@ func (k *kafkaClient) Subscribe(ctx context.Context, topic string) (*pubsub.Mess
 	// Release the lock on the reader map after update
 	k.mu.Unlock()
 
+	start := time.Now()
+
 	// Read a single message from the topic
 	reader = k.reader[topic]
 	msg, err := reader.ReadMessage(ctx)
 
 	if err != nil {
-		k.logger.Errorf("failed to read message from Kafka topic %s: %v", topic, err)
+		k.logger.Errorf("failed to read message from kafka topic %s: %v", topic, err)
 
 		return nil, err
 	}
 
-	m := &pubsub.Message{
-		Value: msg.Value,
-		Topic: topic,
+	m := pubsub.NewMessage(ctx)
+	m.Value = msg.Value
+	m.Topic = topic
+	m.Committer = newKafkaMessage(&msg, k.reader[topic], k.logger)
 
-		Committer: newKafkaMessage(&msg, k.reader[topic], k.logger),
-	}
+	end := time.Since(start)
 
-	k.logger.Debugf("received kafka message %v on topic %v", string(msg.Value), msg.Topic)
+	k.logger.Debug(&pubsub.Log{
+		Mode:          "SUB",
+		CorrelationID: span.SpanContext().TraceID().String(),
+		MessageValue:  string(msg.Value),
+		Topic:         topic,
+		Host:          k.config.Broker,
+		PubSubBackend: "KAFKA",
+		Time:          end.Microseconds(),
+	})
 
-	k.metrics.IncrementCounter(ctx, "app_pubsub_subscribe_success_count", "topic", topic)
+	k.metrics.IncrementCounter(ctx, "app_pubsub_subscribe_success_count", "topic", topic, "consumer_group", k.config.ConsumerGroupID)
 
 	return m, err
 }
@@ -159,7 +222,7 @@ func (k *kafkaClient) Subscribe(ctx context.Context, topic string) (*pubsub.Mess
 func (k *kafkaClient) Close() error {
 	err := k.writer.Close()
 	if err != nil {
-		k.logger.Errorf("failed to close Kafka writer: %v", err)
+		k.logger.Errorf("failed to close kafka writer, error: %v", err)
 
 		return err
 	}

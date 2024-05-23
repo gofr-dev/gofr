@@ -2,6 +2,7 @@ package kafka
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"testing"
 
@@ -10,31 +11,51 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"gofr.dev/pkg/gofr/datasource/pubsub"
+	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/testutil"
 )
 
-func Test_validateConfigs(t *testing.T) {
-	config := Config{Broker: "kafkabroker", ConsumerGroupID: "1"}
+func TestValidateConfigs(t *testing.T) {
+	testCases := []struct {
+		name     string
+		config   Config
+		expected error
+	}{
+		{
+			name:     "Valid Config",
+			config:   Config{Broker: "kafkabroker", BatchSize: 1, BatchBytes: 1, BatchTimeout: 1},
+			expected: nil,
+		},
+		{
+			name:     "Empty Broker",
+			config:   Config{BatchSize: 1, BatchBytes: 1, BatchTimeout: 1},
+			expected: errBrokerNotProvided,
+		},
+		{
+			name:     "Zero BatchSize",
+			config:   Config{Broker: "kafkabroker", BatchSize: 0, BatchBytes: 1, BatchTimeout: 1},
+			expected: errBatchSize,
+		},
+		{
+			name:     "Zero BatchBytes",
+			config:   Config{Broker: "kafkabroker", BatchSize: 1, BatchBytes: 0, BatchTimeout: 1},
+			expected: errBatchBytes,
+		},
+		{
+			name:     "Zero BatchTimeout",
+			config:   Config{Broker: "kafkabroker", BatchSize: 1, BatchBytes: 1, BatchTimeout: 0},
+			expected: errBatchTimeout,
+		},
+	}
 
-	err := validateConfigs(config)
-
-	assert.Nil(t, err)
-}
-
-func Test_validateConfigsErrConsumerGroupNotFound(t *testing.T) {
-	config := Config{Broker: "kafkabroker"}
-
-	err := validateConfigs(config)
-
-	assert.Equal(t, errConsumerGroupNotProvided, err)
-}
-
-func Test_validateConfigsErrBrokerNotProvided(t *testing.T) {
-	config := Config{ConsumerGroupID: "1"}
-
-	err := validateConfigs(config)
-
-	assert.Equal(t, err, errBrokerNotProvided)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validateConfigs(tc.config)
+			if !errors.Is(err, tc.expected) {
+				t.Errorf("Expected error %v, but got %v", tc.expected, err)
+			}
+		})
+	}
 }
 
 func TestKafkaClient_PublishError(t *testing.T) {
@@ -75,7 +96,7 @@ func TestKafkaClient_PublishError(t *testing.T) {
 			desc:      "error while publishing message",
 			client:    k,
 			topic:     "test",
-			mockCalls: mockWriter.EXPECT().WriteMessages(ctx, gomock.Any()).Return(errPublish),
+			mockCalls: mockWriter.EXPECT().WriteMessages(gomock.Any(), gomock.Any()).Return(errPublish),
 			expErr:    errPublish,
 			expLog:    "failed to publish message to kafka broker",
 		},
@@ -83,10 +104,10 @@ func TestKafkaClient_PublishError(t *testing.T) {
 
 	for _, tc := range testCases {
 		testFunc := func() {
-			logger := testutil.NewMockLogger(testutil.DEBUGLOG)
+			logger := logging.NewMockLogger(logging.DEBUG)
 			k.logger = logger
 
-			mockMetrics.EXPECT().IncrementCounter(ctx, "app_pubsub_publish_total_count", "topic", tc.topic)
+			mockMetrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_publish_total_count", "topic", tc.topic)
 
 			err = tc.client.Publish(ctx, tc.topic, tc.msg)
 		}
@@ -109,19 +130,22 @@ func TestKafkaClient_Publish(t *testing.T) {
 
 	logs := testutil.StdoutOutputForFunc(func() {
 		ctx := context.TODO()
-		logger := testutil.NewMockLogger(testutil.DEBUGLOG)
+		logger := logging.NewMockLogger(logging.DEBUG)
 		k := &kafkaClient{writer: mockWriter, logger: logger, metrics: mockMetrics}
 
-		mockWriter.EXPECT().WriteMessages(ctx, gomock.Any()).
+		mockWriter.EXPECT().WriteMessages(gomock.Any(), gomock.Any()).
 			Return(nil)
-		mockMetrics.EXPECT().IncrementCounter(ctx, "app_pubsub_publish_total_count", "topic", "test")
-		mockMetrics.EXPECT().IncrementCounter(ctx, "app_pubsub_publish_success_count", "topic", "test")
+		mockMetrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_publish_total_count", "topic", "test")
+		mockMetrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_publish_success_count", "topic", "test")
 
 		err = k.Publish(ctx, "test", []byte(`hello`))
 	})
 
 	assert.Nil(t, err)
-	assert.Contains(t, logs, "published kafka message hello on topic test")
+	assert.Contains(t, logs, "KAFKA")
+	assert.Contains(t, logs, "PUB")
+	assert.Contains(t, logs, "hello")
+	assert.Contains(t, logs, "test")
 }
 
 func TestKafkaClient_SubscribeSuccess(t *testing.T) {
@@ -157,22 +181,42 @@ func TestKafkaClient_SubscribeSuccess(t *testing.T) {
 		Topic: "test",
 	}
 
-	mockReader.EXPECT().ReadMessage(ctx).
+	mockReader.EXPECT().ReadMessage(gomock.Any()).
 		Return(kafka.Message{Value: []byte(`hello`), Topic: "test"}, nil)
-	mockMetrics.EXPECT().IncrementCounter(ctx, "app_pubsub_subscribe_total_count", "topic", "test")
-	mockMetrics.EXPECT().IncrementCounter(ctx, "app_pubsub_subscribe_success_count", "topic", "test")
+	mockMetrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_subscribe_total_count", "topic", "test",
+		"consumer_group", gomock.Any())
+	mockMetrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_subscribe_success_count", "topic", "test",
+		"consumer_group", gomock.Any())
 
 	logs := testutil.StdoutOutputForFunc(func() {
-		logger := testutil.NewMockLogger(testutil.DEBUGLOG)
+		logger := logging.NewMockLogger(logging.DEBUG)
 		k.logger = logger
 
 		msg, err = k.Subscribe(ctx, "test")
 	})
 
 	assert.Nil(t, err)
+	assert.NotNil(t, msg.Context())
 	assert.Equal(t, expMessage.Value, msg.Value)
 	assert.Equal(t, expMessage.Topic, msg.Topic)
-	assert.Contains(t, logs, "received kafka message hello on topic test")
+	assert.Contains(t, logs, "KAFKA")
+	assert.Contains(t, logs, "hello")
+	assert.Contains(t, logs, "kafkabroker")
+	assert.Contains(t, logs, "test")
+}
+
+func TestKafkaClient_Subscribe_ErrConsumerGroupID(t *testing.T) {
+	k := &kafkaClient{
+		dialer: &kafka.Dialer{},
+		config: Config{
+			Broker: "kafkabroker",
+			OffSet: -1,
+		},
+	}
+
+	msg, err := k.Subscribe(context.TODO(), "test")
+	assert.NotNil(t, msg)
+	assert.Equal(t, ErrConsumerGroupNotProvided, err)
 }
 
 func TestKafkaClient_SubscribeError(t *testing.T) {
@@ -204,12 +248,13 @@ func TestKafkaClient_SubscribeError(t *testing.T) {
 		metrics: mockMetrics,
 	}
 
-	mockReader.EXPECT().ReadMessage(ctx).
+	mockReader.EXPECT().ReadMessage(gomock.Any()).
 		Return(kafka.Message{}, errSub)
-	mockMetrics.EXPECT().IncrementCounter(ctx, "app_pubsub_subscribe_total_count", "topic", "test")
+	mockMetrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_subscribe_total_count",
+		"topic", "test", "consumer_group", k.config.ConsumerGroupID)
 
 	logs := testutil.StderrOutputForFunc(func() {
-		logger := testutil.NewMockLogger(testutil.DEBUGLOG)
+		logger := logging.NewMockLogger(logging.DEBUG)
 		k.logger = logger
 
 		msg, err = k.Subscribe(ctx, "test")
@@ -218,7 +263,7 @@ func TestKafkaClient_SubscribeError(t *testing.T) {
 	assert.NotNil(t, err)
 	assert.Equal(t, errSub, err)
 	assert.Nil(t, msg)
-	assert.Contains(t, logs, "failed to read message from Kafka topic test: error while subscribing")
+	assert.Contains(t, logs, "failed to read message from kafka topic test: error while subscribing")
 }
 
 func TestKafkaClient_Close(t *testing.T) {
@@ -250,7 +295,7 @@ func TestKafkaClient_CloseError(t *testing.T) {
 	mockWriter.EXPECT().Close().Return(errClose)
 
 	logs := testutil.StderrOutputForFunc(func() {
-		logger := testutil.NewMockLogger(testutil.ERRORLOG)
+		logger := logging.NewMockLogger(logging.ERROR)
 		k.logger = logger
 
 		err = k.Close()
@@ -258,7 +303,7 @@ func TestKafkaClient_CloseError(t *testing.T) {
 
 	assert.NotNil(t, err)
 	assert.Equal(t, errClose, err)
-	assert.Contains(t, logs, "failed to close Kafka writer")
+	assert.Contains(t, logs, "failed to close kafka writer")
 }
 
 func TestKafkaClient_getNewReader(t *testing.T) {
@@ -281,35 +326,66 @@ func TestNewKafkaClient(t *testing.T) {
 	defer ctrl.Finish()
 
 	testCases := []struct {
-		desc     string
-		config   Config
-		expected bool
+		desc      string
+		config    Config
+		expectNil bool
 	}{
 		{
-			desc: "validation of configs fail",
+			desc: "validation of configs fail (Empty Broker)",
 			config: Config{
-				Broker: "kafka-broker",
+				Broker: "",
 			},
-			expected: false,
+			expectNil: true,
+		},
+		{
+			desc: "validation of configs fail (Zero Batch Bytes)",
+			config: Config{
+				Broker:     "kafka-broker",
+				BatchBytes: 0,
+			},
+			expectNil: true,
+		},
+		{
+			desc: "validation of configs fail (Zero Batch Size)",
+			config: Config{
+				Broker:     "kafka-broker",
+				BatchBytes: 1,
+				BatchSize:  0,
+			},
+			expectNil: true,
+		},
+		{
+			desc: "validation of configs fail (Zero Batch Timeout)",
+			config: Config{
+				Broker:       "kafka-broker",
+				BatchBytes:   1,
+				BatchSize:    1,
+				BatchTimeout: 0,
+			},
+			expectNil: true,
 		},
 		{
 			desc: "successful initialization",
 			config: Config{
 				Broker:          "kafka-broker",
 				ConsumerGroupID: "consumer",
+				BatchBytes:      1,
+				BatchSize:       1,
+				BatchTimeout:    1,
 			},
-			expected: true,
+			expectNil: false,
 		},
 	}
 
 	for _, tc := range testCases {
-		k := New(tc.config, testutil.NewMockLogger(testutil.ERRORLOG), NewMockMetrics(ctrl))
-
-		if tc.expected {
-			assert.NotNil(t, k)
-		} else {
-			assert.Nil(t, k)
-		}
+		t.Run(tc.desc, func(t *testing.T) {
+			k := New(tc.config, logging.NewMockLogger(logging.ERROR), NewMockMetrics(ctrl))
+			if tc.expectNil {
+				assert.Nil(t, k)
+			} else {
+				assert.NotNil(t, k)
+			}
+		})
 	}
 }
 

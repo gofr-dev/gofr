@@ -27,7 +27,7 @@ func (m *mockMetrics) RecordHistogram(ctx context.Context, name string, value fl
 	m.Called(ctx, name, value, labels)
 }
 
-func (m *mockMetrics) SetGauge(name string, value float64) {
+func (m *mockMetrics) SetGauge(name string, value float64, _ ...string) {
 	m.Called(name, value)
 }
 
@@ -38,7 +38,7 @@ func TestMetrics(t *testing.T) {
 		Return(nil)
 
 	router := mux.NewRouter()
-	router.HandleFunc("/test", func(w http.ResponseWriter, r *http.Request) {
+	router.HandleFunc("/test", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}).Methods(http.MethodGet).Name("/test")
 
