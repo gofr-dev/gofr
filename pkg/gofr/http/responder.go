@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 
 	resTypes "gofr.dev/pkg/gofr/http/response"
 )
@@ -23,6 +24,12 @@ type Responder struct {
 // status codes and formatting responses as JSON or raw data as needed.
 func (r Responder) Respond(data interface{}, err error) {
 	statusCode, errorObj := r.HTTPStatusFromError(err)
+	if errorObj != nil && len(errorObj.(map[string]interface{})) != 0 {
+		errorContent := (errorObj.(map[string]interface{}))["message"].(string)
+		if strings.Contains(errorContent, "no rows") || strings.Contains(errorContent, "not found") {
+			statusCode = 404
+		}
+	}
 
 	var resp interface{}
 	switch v := data.(type) {
