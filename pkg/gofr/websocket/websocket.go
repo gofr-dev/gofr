@@ -9,14 +9,14 @@ type Connection websocket.Conn
 type key int
 
 // WebsocketKey used for retrieval of websocket connection from context
-// custom type to avoid collisions
+// custom type to avoid collisions.
 const WebsocketKey key = iota
 
 type wsUpgrader struct {
 	websocket.Upgrader
 }
 
-func NewWsUpgrader(opts ...WebSocketOptions) Upgrader {
+func NewWsUpgrader(opts ...Options) Upgrader {
 	u := &wsUpgrader{
 		Upgrader: websocket.Upgrader{},
 	}

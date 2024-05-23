@@ -51,6 +51,7 @@ func (s *httpServer) wsConnectionCreate() func(inner http.Handler) http.Handler 
 				if err != nil {
 					s.logger.Errorf("Failed to upgrade to WebSocket: %v", err)
 					http.Error(w, "Could not open WebSocket connection", http.StatusBadRequest)
+
 					return
 				}
 
