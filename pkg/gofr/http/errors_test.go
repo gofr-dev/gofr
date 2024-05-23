@@ -13,34 +13,33 @@ func TestErrorEntityNotFound(t *testing.T) {
 	fieldValue := "2"
 
 	err := ErrorEntityNotFound{Name: fieldName, Value: fieldValue}
-	expectedMsg := fmt.Sprintf("No entity found with %s : %s", fieldName, fieldValue)
+	expectedMsg := fmt.Sprintf("No entity found with %s: %s", fieldName, fieldValue)
 
-	assert.Equal(t, err.Error(), expectedMsg, "TestErrorEntityNotFound Failed!")
+	assert.Equal(t, expectedMsg, err.Error(), "TEST Failed.\n")
 }
 
 func TestErrorEntityNotFound_StatusCode(t *testing.T) {
 	err := ErrorEntityNotFound{}
 	expectedCode := http.StatusNotFound
 
-	assert.Equal(t, err.StatusCode(), expectedCode, "TestErrorEntityNotFound_StatusCode Failed!")
+	assert.Equal(t, expectedCode, err.StatusCode(), "TEST Failed.\n")
 }
 
 func TestErrorInvalidParam(t *testing.T) {
 	tests := []struct {
-		desc            string
-		params          []string
-		expectedMessage string
+		desc        string
+		params      []string
+		expectedMsg string
 	}{
-		{"no parameter", make([]string, 0), "This request has invalid parameters"},
-		{"single parameter", []string{"uuid"}, "Parameter 'uuid' is invalid"},
-		{"list of params", []string{"id", "name", "age"}, "Parameters id, name, age are invalid"},
+		{"no parameter", make([]string, 0), "'0' invalid parameter(s): "},
+		{"single parameter", []string{"uuid"}, "'1' invalid parameter(s): uuid"},
+		{"list of params", []string{"id", "name", "age"}, "'3' invalid parameter(s): id, name, age"},
 	}
 
 	for i, tc := range tests {
-		err := ErrorInvalidParam{Param: tc.params}
+		err := ErrorInvalidParam{Params: tc.params}
 
-		assert.Equal(t, err.Error(), tc.expectedMessage, "TestErrorInvalidParam[%d] : %s Failed!", i,
-			tc.desc)
+		assert.Equal(t, tc.expectedMsg, err.Error(), "TEST[%d], Failed.\n%s", i, tc.desc)
 	}
 }
 
@@ -48,27 +47,24 @@ func TestInvalidParameter_StatusCode(t *testing.T) {
 	err := ErrorInvalidParam{}
 	expectedCode := http.StatusBadRequest
 
-	assert.Equal(t, err.StatusCode(), expectedCode, "TestErrorInvalidParam_StatusCode Failed!")
+	assert.Equal(t, expectedCode, err.StatusCode(), "TestErrorInvalidParam_StatusCode Failed!")
 }
 
 func TestErrorMissingParam(t *testing.T) {
 	tests := []struct {
-		desc            string
-		params          []string
-		expectedMessage string
+		desc        string
+		params      []string
+		expectedMsg string
 	}{
-		{"no parameter", make([]string, 0), "This request is missing parameters"},
-		{"single parameter", []string{"uuid"},
-			"1 parameter(s) uuid are missing for this request"},
-		{"list of params", []string{"id", "name", "age"},
-			"3 parameter(s) id, name, age are missing for this request"},
+		{"no parameter", make([]string, 0), "'0' missing parameter(s): "},
+		{"single parameter", []string{"uuid"}, "'1' missing parameter(s): uuid"},
+		{"list of params", []string{"id", "name", "age"}, "'3' missing parameter(s): id, name, age"},
 	}
 
 	for i, tc := range tests {
-		err := ErrorMissingParam{Param: tc.params}
+		err := ErrorMissingParam{Params: tc.params}
 
-		assert.Equal(t, err.Error(), tc.expectedMessage, "TestErrorMissingParam[%d] : %s Failed!", i,
-			tc.desc)
+		assert.Equal(t, tc.expectedMsg, err.Error(), "TEST[%d], Failed.\n%s", i, tc.desc)
 	}
 }
 
@@ -76,5 +72,5 @@ func TestMissingParameter_StatusCode(t *testing.T) {
 	err := ErrorMissingParam{}
 	expectedCode := http.StatusBadRequest
 
-	assert.Equal(t, err.StatusCode(), expectedCode, "TestErrorMissingParam_StatusCode Failed!")
+	assert.Equal(t, expectedCode, err.StatusCode(), "TEST Failed.\n")
 }

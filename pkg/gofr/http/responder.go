@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"reflect"
 
 	resTypes "gofr.dev/pkg/gofr/http/response"
 )
@@ -69,13 +68,9 @@ func (r Responder) HTTPStatusFromError(err error) (status int, errObj interface{
 		}
 	}
 
-	t := reflect.TypeOf(err)
-	ss := reflect.TypeOf(new(statusCodeResponder)).Elem()
-
-	if t.Implements(ss) {
-		m, _ := reflect.ValueOf(err).Interface().(statusCodeResponder)
-
-		return m.StatusCode(), map[string]interface{}{
+	e := err.(statusCodeResponder)
+	if e != nil {
+		return e.StatusCode(), map[string]interface{}{
 			"message": err.Error(),
 		}
 	}

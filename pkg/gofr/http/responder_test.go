@@ -33,7 +33,7 @@ func TestResponder_Respond(t *testing.T) {
 
 func TestResponder_HTTPStatusFromError(t *testing.T) {
 	r := NewResponder(httptest.NewRecorder(), http.MethodGet)
-	errInvalidParam := ErrorInvalidParam{Param: []string{"name"}}
+	errInvalidParam := ErrorInvalidParam{Params: []string{"name"}}
 
 	tests := []struct {
 		desc       string
