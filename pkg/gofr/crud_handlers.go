@@ -34,6 +34,14 @@ type Delete interface {
 	Delete(c *Context) (interface{}, error)
 }
 
+type TableName interface {
+	TableName() string
+}
+
+type RestPath interface {
+	RestPath() string
+}
+
 type CRUD interface {
 	Create
 	GetAll
@@ -47,6 +55,8 @@ type entity struct {
 	name       string
 	entityType reflect.Type
 	primaryKey string
+	tableName  string
+	restPath   string
 }
 
 // scanEntity extracts entity information for CRUD operations.
@@ -62,43 +72,64 @@ func scanEntity(object interface{}) (*entity, error) {
 	primaryKeyField := entityValue.Field(0) // Assume the first field is the primary key
 	primaryKeyFieldName := toSnakeCase(primaryKeyField.Name)
 
+	tableName := getTableName(object, structName)
+	restPath := getRestPath(object, structName)
+
 	return &entity{
 		name:       structName,
 		entityType: entityType,
 		primaryKey: primaryKeyFieldName,
+		tableName:  tableName,
+		restPath:   restPath,
 	}, nil
 }
 
+func getTableName(object any, structName string) string {
+	if v, ok := object.(TableName); ok {
+		return v.TableName()
+	}
+
+	return toSnakeCase(structName)
+}
+
+func getRestPath(object any, structName string) string {
+	if v, ok := object.(RestPath); ok {
+		return v.RestPath()
+	}
+
+	return structName
+}
+
 // registerCRUDHandlers registers CRUD handlers for an entity.
-func (a *App) registerCRUDHandlers(e entity, object interface{}) {
+func (a *App) registerCRUDHandlers(e *entity, object interface{}) {
 	if fn, ok := object.(Create); ok {
-		a.POST(fmt.Sprintf("/%s", e.name), fn.Create)
+		a.POST(fmt.Sprintf("/%s", e.restPath), fn.Create)
 	} else {
-		a.POST(fmt.Sprintf("/%s", e.name), e.Create)
+		a.POST(fmt.Sprintf("/%s", e.restPath), e.Create)
 	}
 
 	if fn, ok := object.(GetAll); ok {
-		a.GET(fmt.Sprintf("/%s", e.name), fn.GetAll)
+		a.GET(fmt.Sprintf("/%s", e.restPath), fn.GetAll)
 	} else {
-		a.GET(fmt.Sprintf("/%s", e.name), e.GetAll)
+		a.GET(fmt.Sprintf("/%s", e.restPath), e.GetAll)
 	}
 
 	if fn, ok := object.(Get); ok {
-		a.GET(fmt.Sprintf("/%s/{%s}", e.name, e.primaryKey), fn.Get)
+		a.GET(fmt.Sprintf("/%s/{%s}", e.restPath, e.primaryKey), fn.Get)
 	} else {
-		a.GET(fmt.Sprintf("/%s/{%s}", e.name, e.primaryKey), e.Get)
+		a.GET(fmt.Sprintf("/%s/{%s}", e.restPath, e.primaryKey), e.Get)
 	}
 
 	if fn, ok := object.(Update); ok {
-		a.PUT(fmt.Sprintf("/%s/{%s}", e.name, e.primaryKey), fn.Update)
+		a.PUT(fmt.Sprintf("/%s/{%s}", e.restPath, e.primaryKey), fn.Update)
 	} else {
-		a.PUT(fmt.Sprintf("/%s/{%s}", e.name, e.primaryKey), e.Update)
+		a.PUT(fmt.Sprintf("/%s/{%s}", e.restPath, e.primaryKey), e.Update)
 	}
 
 	if fn, ok := object.(Delete); ok {
-		a.DELETE(fmt.Sprintf("/%s/{%s}", e.name, e.primaryKey), fn.Delete)
+		a.DELETE(fmt.Sprintf("/%s/{%s}", e.restPath, e.primaryKey), fn.Delete)
 	} else {
-		a.DELETE(fmt.Sprintf("/%s/{%s}", e.name, e.primaryKey), e.Delete)
+		a.DELETE(fmt.Sprintf("/%s/{%s}", e.restPath, e.primaryKey), e.Delete)
 	}
 }
 
@@ -119,7 +150,7 @@ func (e *entity) Create(c *Context) (interface{}, error) {
 		fieldValues = append(fieldValues, reflect.ValueOf(newEntity).Elem().Field(i).Interface())
 	}
 
-	stmt := sql.InsertQuery(c.SQL.Dialect(), toSnakeCase(e.name), fieldNames)
+	stmt := sql.InsertQuery(c.SQL.Dialect(), e.tableName, fieldNames)
 
 	_, err = c.SQL.ExecContext(c, stmt, fieldValues...)
 	if err != nil {
@@ -130,7 +161,7 @@ func (e *entity) Create(c *Context) (interface{}, error) {
 }
 
 func (e *entity) GetAll(c *Context) (interface{}, error) {
-	query := sql.SelectQuery(c.SQL.Dialect(), toSnakeCase(e.name))
+	query := sql.SelectQuery(c.SQL.Dialect(), e.tableName)
 
 	rows, err := c.SQL.QueryContext(c, query)
 	if err != nil || rows.Err() != nil {
@@ -172,7 +203,7 @@ func (e *entity) Get(c *Context) (interface{}, error) {
 	newEntity := reflect.New(e.entityType).Interface()
 	id := c.Request.PathParam("id")
 
-	query := sql.SelectByQuery(c.SQL.Dialect(), toSnakeCase(e.name), e.primaryKey)
+	query := sql.SelectByQuery(c.SQL.Dialect(), e.tableName, e.primaryKey)
 
 	row := c.SQL.QueryRowContext(c, query, id)
 
@@ -211,7 +242,7 @@ func (e *entity) Update(c *Context) (interface{}, error) {
 
 	id := c.PathParam("id")
 
-	stmt := sql.UpdateByQuery(c.SQL.Dialect(), toSnakeCase(e.name), fieldNames[1:], e.primaryKey)
+	stmt := sql.UpdateByQuery(c.SQL.Dialect(), e.tableName, fieldNames[1:], e.primaryKey)
 
 	_, err = c.SQL.ExecContext(c, stmt, append(fieldValues[1:], fieldValues[0])...)
 	if err != nil {
@@ -224,7 +255,7 @@ func (e *entity) Update(c *Context) (interface{}, error) {
 func (e *entity) Delete(c *Context) (interface{}, error) {
 	id := c.PathParam("id")
 
-	query := sql.DeleteByQuery(c.SQL.Dialect(), toSnakeCase(e.name), e.primaryKey)
+	query := sql.DeleteByQuery(c.SQL.Dialect(), e.tableName, e.primaryKey)
 
 	result, err := c.SQL.ExecContext(c, query, id)
 	if err != nil {

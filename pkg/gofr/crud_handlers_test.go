@@ -75,13 +75,85 @@ func Test_scanEntity(t *testing.T) {
 	}
 }
 
-func Test_CreateHandler(t *testing.T) {
-	type userEntity struct {
-		ID         int    `json:"id"`
-		Name       string `json:"name"`
-		IsEmployed bool   `json:"isEmployed"`
-	}
+type mockTableName struct {
+	tableName string
+}
 
+func (m *mockTableName) TableName() string {
+	return m.tableName
+}
+
+func Test_getTableName(t *testing.T) {
+	tests := []struct {
+		name       string
+		object     interface{}
+		structName string
+		want       string
+	}{
+		{
+			name:       "Test with TableName interface",
+			object:     &mockTableName{tableName: "custom_table"},
+			structName: "mockTableName",
+			want:       "custom_table",
+		},
+		{
+			name:       "Test without TableName interface",
+			object:     &struct{}{},
+			structName: "TestStruct",
+			want:       "test_struct",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := getTableName(tt.object, tt.structName)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+type mockRestPath struct {
+	restPath string
+}
+
+func (m *mockRestPath) RestPath() string {
+	return m.restPath
+}
+
+func Test_getRestPath(t *testing.T) {
+	tests := []struct {
+		name       string
+		object     interface{}
+		structName string
+		want       string
+	}{
+		{
+			name:       "Test with RestPath interface",
+			object:     &mockRestPath{restPath: "custom_path"},
+			structName: "mockRestPath",
+			want:       "custom_path",
+		},
+		{
+			name:       "Test without RestPath interface",
+			object:     &struct{}{},
+			structName: "TestStruct",
+			want:       "TestStruct",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := getRestPath(tt.object, tt.structName)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+type userEntity struct {
+	ID         int    `json:"id"`
+	Name       string `json:"name"`
+	IsEmployed bool   `json:"isEmployed"`
+}
+
+func Test_CreateHandler(t *testing.T) {
 	e := entity{
 		name:       "userEntity",
 		entityType: reflect.TypeOf(userEntity{}),
@@ -160,12 +232,6 @@ func Test_CreateHandler(t *testing.T) {
 }
 
 func Test_GetAllHandler(t *testing.T) {
-	type userEntity struct {
-		ID         int    `json:"id"`
-		Name       string `json:"name"`
-		IsEmployed bool   `json:"isEmployed"`
-	}
-
 	e := entity{
 		name:       "userEntity",
 		entityType: reflect.TypeOf(userEntity{}),
@@ -253,12 +319,6 @@ func Test_GetAllHandler(t *testing.T) {
 }
 
 func Test_GetHandler(t *testing.T) {
-	type userEntity struct {
-		ID         int    `json:"id"`
-		Name       string `json:"name"`
-		IsEmployed bool   `json:"isEmployed"`
-	}
-
 	e := entity{
 		name:       "userEntity",
 		entityType: reflect.TypeOf(userEntity{}),
@@ -346,12 +406,6 @@ func Test_GetHandler(t *testing.T) {
 
 func Test_UpdateHandler(t *testing.T) {
 	c := container.NewContainer(nil)
-
-	type userEntity struct {
-		ID         int    `json:"id"`
-		Name       string `json:"name"`
-		IsEmployed bool   `json:"isEmployed"`
-	}
 
 	e := entity{
 		name:       "userEntity",
