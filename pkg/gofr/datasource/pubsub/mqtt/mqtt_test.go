@@ -36,7 +36,7 @@ func TestMQTT_New(t *testing.T) {
 	})
 
 	assert.NotNil(t, client.Client)
-	assert.Contains(t, out, "cannot connect to MQTT")
+	assert.Contains(t, out, "could not connect to MQTT")
 }
 
 // TestMQTT_EmptyConfigs test the scenario where configs are not provided and
@@ -227,25 +227,25 @@ func TestMQTT_SubscribeFailure(t *testing.T) {
 }
 
 func TestMQTT_SubscribeWithFunc(t *testing.T) {
-	subcriptionFunc := func(msg *pubsub.Message) error {
+	subscriptionFunc := func(msg *pubsub.Message) error {
 		assert.NotNil(t, msg)
 		assert.Equal(t, "test/topic", msg.Topic)
 
 		return nil
 	}
 
-	subcriptionFuncErr := func(*pubsub.Message) error {
+	subscriptionFuncErr := func(*pubsub.Message) error {
 		return errTest
 	}
 
 	m := New(&Config{}, logging.NewMockLogger(logging.ERROR), nil)
 
 	// Success case
-	err := m.SubscribeWithFunction("test/topic", subcriptionFunc)
+	err := m.SubscribeWithFunction("test/topic", subscriptionFunc)
 	assert.Nil(t, err)
 
 	// Error case where error is returned from subscription function
-	err = m.SubscribeWithFunction("test/topic", subcriptionFuncErr)
+	err = m.SubscribeWithFunction("test/topic", subscriptionFuncErr)
 	assert.Nil(t, err)
 
 	// Unsubscribe from the topic
@@ -253,7 +253,7 @@ func TestMQTT_SubscribeWithFunc(t *testing.T) {
 
 	// Error case where the client cannot connect
 	m.Disconnect(1)
-	err = m.SubscribeWithFunction("test/topic", subcriptionFunc)
+	err = m.SubscribeWithFunction("test/topic", subscriptionFunc)
 	assert.NotNil(t, err)
 }
 
@@ -272,7 +272,7 @@ func TestMQTT_Unsubscribe(t *testing.T) {
 		assert.NotNil(t, err)
 	})
 
-	assert.Contains(t, out, "error while unsubscribing from topic test/topic")
+	assert.Contains(t, out, "error while unsubscribing from topic 'test/topic'")
 }
 
 func TestMQTT_CreateTopic(t *testing.T) {
@@ -290,7 +290,7 @@ func TestMQTT_CreateTopic(t *testing.T) {
 		assert.NotNil(t, err)
 	})
 
-	assert.Contains(t, out, "unable to create topic - test/topic")
+	assert.Contains(t, out, "unable to create topic 'test/topic'")
 }
 
 func TestMQTT_Health(t *testing.T) {

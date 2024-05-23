@@ -20,7 +20,7 @@ func TestLog_PrettyPrint(t *testing.T) {
 
 	l.PrettyPrint(w)
 
-	assert.Equal(t, "\u001B[38;5;8mabc-test-correlation-id \u001B[38;5;34m200\u001B[0m      100\u001B[38;5;8mµs\u001B[0m GET /api/test \n",
+	assert.Equal(t, "\u001B[38;5;8mabc-test-correlation-id \u001B[38;5;34m200   \u001B[0m      100\u001B[38;5;8mµs\u001B[0m GET /api/test \n",
 		w.String())
 }
 
