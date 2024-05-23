@@ -47,3 +47,14 @@ func (e ErrorMissingParam) Error() string {
 func (e ErrorMissingParam) StatusCode() int {
 	return http.StatusBadRequest
 }
+
+// ErrorInvalidRoute represents an error for invalid route in a request.
+type ErrorInvalidRoute struct{}
+
+func (e ErrorInvalidRoute) Error() string {
+	return "route not registered"
+}
+
+func (e ErrorInvalidRoute) StatusCode() int {
+	return http.StatusNotFound
+}

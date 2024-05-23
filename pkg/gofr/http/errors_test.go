@@ -74,3 +74,11 @@ func TestMissingParameter_StatusCode(t *testing.T) {
 
 	assert.Equal(t, expectedCode, err.StatusCode(), "TEST Failed.\n")
 }
+
+func TestErrorInvalidRoute(t *testing.T) {
+	err := ErrorInvalidRoute{}
+
+	assert.Equal(t, "route not registered", err.Error(), "TEST Failed.\n")
+
+	assert.Equal(t, http.StatusNotFound, err.StatusCode(), "TEST Failed.\n")
+}
