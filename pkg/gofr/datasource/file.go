@@ -43,3 +43,16 @@ type FileStore interface {
 	// name contains the file name along with the path.
 	Stat(name string, options ...interface{}) (fs.FileInfo, error)
 }
+
+type FileStoreProvider interface {
+	FileStore
+
+	// UseLogger sets the logger for the MongoDB client.
+	UseLogger(logger interface{})
+
+	// UseMetrics sets the metrics for the MongoDB client.
+	UseMetrics(metrics interface{})
+
+	// Connect establishes a connection to MongoDB and registers metrics using the provided configuration when the client was Created.
+	Connect()
+}

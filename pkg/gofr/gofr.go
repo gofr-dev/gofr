@@ -391,6 +391,17 @@ func (a *App) UseMongo(db datasource.Mongo) {
 	a.container.Mongo = db
 }
 
+func (a *App) AddFileStore(fs datasource.FileStoreProvider) datasource.FileStore {
+	fs.UseLogger(a.Logger())
+	fs.UseMetrics(a.Metrics())
+
+	fs.Connect()
+
+	a.container.File = fs
+
+	return fs
+}
+
 // AddCronJob registers a cron job to the cron table, the schedule is in * * * * * (6 part) format
 // denoting minutes, hours, days, months and day of week respectively.
 func (a *App) AddCronJob(schedule, jobName string, job CronFunc) {

@@ -1,6 +1,8 @@
 package file
 
 import (
+	"gofr.dev/pkg/gofr/config"
+	"gofr.dev/pkg/gofr/metrics"
 	"io"
 	"io/fs"
 	"os"
@@ -11,20 +13,17 @@ import (
 const readWritePermission = 0666
 
 type local struct {
-	logger datasource.Logger
+	logger  datasource.Logger
+	metrics metrics.Manager
 }
 
 // New accepts an interface and this will be kept consistent across all different filestores, such that to support
 // different option such as metrics, logger, configs etc if needed without changing the function signature.
-func New(option ...interface{}) datasource.FileStore {
+func newLocal(cfg config.Config, logger datasource.Logger, manager metrics.Manager) datasource.FileStore {
 	var l local
 
-	for _, o := range option {
-		logger, ok := o.(datasource.Logger)
-		if ok {
-			l.logger = logger
-		}
-	}
+	l.logger = logger
+	l.metrics = manager
 
 	return l
 }

@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"gofr.dev/pkg/gofr/datasource/file/ftp"
 	"sync"
 	"time"
 
@@ -13,6 +14,15 @@ import (
 func main() {
 	// Create a new application
 	a := gofr.New()
+
+	// can only be injected from app and can also be accessed from container
+	files := a.AddFileStore(ftp.New(ftp.Config{}))
+
+	//// can be used anywhere
+	fx := ftp.New(ftp.Config{})
+	fx.UseLogger(a.Logger())
+	fx.UseMetrics(a.Metrics())
+	fx.Connect()
 
 	//HTTP service with default health check endpoint
 	a.AddHTTPService("anotherService", "http://localhost:9000")
