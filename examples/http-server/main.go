@@ -3,7 +3,6 @@ package main
 import (
 	"errors"
 	"fmt"
-	"net/http"
 	"sync"
 	"time"
 
@@ -90,17 +89,5 @@ func MysqlHandler(c *gofr.Context) (interface{}, error) {
 		return nil, datasource.ErrorDB{Err: err, Message: "error from sql db"}
 	}
 
-	return nil, customError{tmp: "hehe"}
-}
-
-type customError struct {
-	tmp string
-}
-
-func (c customError) Error() string {
-	return fmt.Sprintf("custom error: %s", c.tmp)
-}
-
-func (c customError) StatusCode() int {
-	return http.StatusMethodNotAllowed
+	return value, nil
 }

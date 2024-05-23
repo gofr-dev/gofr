@@ -36,5 +36,21 @@ dbErr = dbErr.WithStack()
 dbErr2 := datasource.ErrorDB{Message : "database connection timed out!"}
 ```
 
-> NOTE: GoFr's error structs implements an interface with `Error() string` and `StatusCode() int` methods, users can override the 
-> status code by implementing it for their custom error.
+## Custom Errors
+GoFr's error structs implements an interface with `Error() string` and `StatusCode() int` methods, users can override the 
+status code by implementing it for their custom error.
+
+#### Usage:
+```go
+type customError struct {
+	error string
+}
+
+func (c customError) Error() string {
+	return fmt.Sprintf("custom error: %s", c.error)
+}
+
+func (c customError) StatusCode() int {
+	return http.StatusMethodNotAllowed
+}
+```

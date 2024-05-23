@@ -68,8 +68,8 @@ func (r Responder) HTTPStatusFromError(err error) (status int, errObj interface{
 		}
 	}
 
-	e := err.(statusCodeResponder)
-	if e != nil {
+	e, ok := err.(statusCodeResponder)
+	if ok {
 		return e.StatusCode(), map[string]interface{}{
 			"message": err.Error(),
 		}
