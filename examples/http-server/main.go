@@ -15,14 +15,25 @@ func main() {
 	// Create a new application
 	a := gofr.New()
 
-	// can only be injected from app and can also be accessed from container
-	files := a.AddFileStore(ftp.New(ftp.Config{}))
+	cfg := ftp.Config{Host: "localhost", Port: "21", Username: "user", Password: "123"}
 
-	//// can be used anywhere
-	fx := ftp.New(ftp.Config{})
-	fx.UseLogger(a.Logger())
-	fx.UseMetrics(a.Metrics())
-	fx.Connect()
+	// can only be injected from app and can also be accessed from container
+	files := a.AddFileStore(ftp.New(cfg))
+
+	err := files.Create("testDir", []byte("Hello World"))
+	if err != nil {
+		a.Logger().Log(err)
+	}
+
+	//files.ReadAsCSV("testDir").Headers("sdd").RowFunc(func(row) {
+
+	})
+
+	////// can be used anywhere
+	//fx := ftp.New(ftp.Config{})
+	//fx.UseLogger(a.Logger())
+	//fx.UseMetrics(a.Metrics())
+	//fx.Connect()
 
 	//HTTP service with default health check endpoint
 	a.AddHTTPService("anotherService", "http://localhost:9000")
