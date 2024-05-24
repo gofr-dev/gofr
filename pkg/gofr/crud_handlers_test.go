@@ -38,10 +38,24 @@ func createTestContext(method, path, id string, body []byte, cont *container.Con
 	return newContext(gofrHTTP.NewResponder(httptest.NewRecorder(), method), gofrReq, cont)
 }
 
+type userEntity struct {
+	ID         int    `json:"id"`
+	Name       string `json:"name"`
+	IsEmployed bool   `json:"isEmployed"`
+}
+
+func (u *userEntity) TableName() string {
+	return "user"
+}
+
+func (u *userEntity) RestPath() string {
+	return "users"
+}
+
 func Test_scanEntity(t *testing.T) {
 	var invalidObject int
 
-	type userEntity struct {
+	type userTestEntity struct {
 		ID   int
 		Name string
 	}
@@ -53,10 +67,28 @@ func Test_scanEntity(t *testing.T) {
 		err   error
 	}{
 		{
-			desc:  "success case",
+			desc:  "success case (default)",
+			input: &userTestEntity{},
+			resp: &entity{
+				name:       "userTestEntity",
+				entityType: reflect.TypeOf(userTestEntity{}),
+				primaryKey: "id",
+				tableName:  "user_test_entity",
+				restPath:   "userTestEntity",
+			},
+			err: nil,
+		},
+		{
+			desc:  "success case (custom)",
 			input: &userEntity{},
-			resp:  &entity{name: "userEntity", entityType: reflect.TypeOf(userEntity{}), primaryKey: "id"},
-			err:   nil,
+			resp: &entity{
+				name:       "userEntity",
+				entityType: reflect.TypeOf(userEntity{}),
+				primaryKey: "id",
+				tableName:  "user",
+				restPath:   "users",
+			},
+			err: nil,
 		},
 		{
 			desc:  "invalid object",
@@ -67,11 +99,13 @@ func Test_scanEntity(t *testing.T) {
 	}
 
 	for i, tc := range tests {
-		resp, err := scanEntity(tc.input)
+		t.Run(tc.desc, func(t *testing.T) {
+			resp, err := scanEntity(tc.input)
 
-		assert.Equal(t, tc.resp, resp, "TEST[%d], Failed.\n%s", i, tc.desc)
+			assert.Equal(t, tc.resp, resp, "TEST[%d], Failed.\n%s", i, tc.desc)
 
-		assert.Equal(t, tc.err, err, "TEST[%d], Failed.\n%s", i, tc.desc)
+			assert.Equal(t, tc.err, err, "TEST[%d], Failed.\n%s", i, tc.desc)
+		})
 	}
 }
 
@@ -147,17 +181,12 @@ func Test_getRestPath(t *testing.T) {
 	}
 }
 
-type userEntity struct {
-	ID         int    `json:"id"`
-	Name       string `json:"name"`
-	IsEmployed bool   `json:"isEmployed"`
-}
-
 func Test_CreateHandler(t *testing.T) {
 	e := entity{
 		name:       "userEntity",
 		entityType: reflect.TypeOf(userEntity{}),
 		primaryKey: "id",
+		tableName:  "user_entity",
 	}
 
 	tests := []struct {
@@ -236,6 +265,7 @@ func Test_GetAllHandler(t *testing.T) {
 		name:       "userEntity",
 		entityType: reflect.TypeOf(userEntity{}),
 		primaryKey: "id",
+		tableName:  "user_entity",
 	}
 
 	dialectCases := []struct {
@@ -323,6 +353,7 @@ func Test_GetHandler(t *testing.T) {
 		name:       "userEntity",
 		entityType: reflect.TypeOf(userEntity{}),
 		primaryKey: "id",
+		tableName:  "user_entity",
 	}
 
 	dialectCases := []struct {
@@ -411,6 +442,7 @@ func Test_UpdateHandler(t *testing.T) {
 		name:       "userEntity",
 		entityType: reflect.TypeOf(userEntity{}),
 		primaryKey: "id",
+		tableName:  "user_entity",
 	}
 
 	dialectCases := []struct {
@@ -498,6 +530,7 @@ func Test_DeleteHandler(t *testing.T) {
 		name:       "userEntity",
 		entityType: nil,
 		primaryKey: "id",
+		tableName:  "user_entity",
 	}
 
 	dialectCases := []struct {
