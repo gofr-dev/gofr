@@ -4,7 +4,9 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-type Connection websocket.Conn
+type Connection struct {
+	*websocket.Conn
+}
 
 type key int
 

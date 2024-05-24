@@ -149,6 +149,8 @@ func (a *App) Run() {
 			container: a.container,
 		})
 
+		a.httpServer.router.Use(a.httpServer.WSConnectionCreate())
+
 		go func(s *httpServer) {
 			defer wg.Done()
 			s.Run(a.container)
@@ -234,11 +236,24 @@ func (a *App) PATCH(pattern string, handler Handler) {
 
 func (a *App) add(method, pattern string, h Handler) {
 	a.httpRegistered = true
-	a.httpServer.router.Add(method, pattern, handler{
-		function:       h,
-		container:      a.container,
-		requestTimeout: a.Config.GetOrDefault("REQUEST_TIMEOUT", "5"),
-	})
+	var finalHandler http.Handler
+
+	if isWebSocketRoute(pattern) {
+		finalHandler = a.httpServer.WSConnectionCreate()(a.httpServer.wrapHandler(h, a.container))
+	} else {
+		finalHandler = handler{
+			function:       h,
+			container:      a.container,
+			requestTimeout: a.Config.GetOrDefault("REQUEST_TIMEOUT", "5"),
+		}
+	}
+
+	a.httpServer.router.Add(method, pattern, finalHandler)
+}
+
+// Helper function to identify WebSocket routes
+func isWebSocketRoute(path string) bool {
+	return strings.Contains(path, "/ws")
 }
 
 func (a *App) Metrics() metrics.Manager {
