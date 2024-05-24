@@ -1,7 +1,5 @@
 package datasource
 
-import "io/fs"
-
 // FileStore interface implements different functionalities to do operations on a file.
 // All the methods accept the last paramater as ...interface{} such that to keep the interface consistent
 // across all the different filesystems such as FTP, SFTP or cloud stores such as S3, so we can implement
@@ -39,9 +37,9 @@ type FileStore interface {
 	// name contains the file name along with the path.
 	Delete(name string, options ...interface{}) error
 
-	// Stat returns stat for the file.
-	// name contains the file name along with the path.
-	Stat(name string, options ...interface{}) (fs.FileInfo, error)
+	//// Stat returns stat for the file.
+	//// name contains the file name along with the path.
+	//Stat(name string, options ...interface{}) (fs.FileInfo, error)
 }
 
 type FileStoreProvider interface {

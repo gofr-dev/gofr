@@ -6,7 +6,6 @@ import (
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/datasource"
-	"gofr.dev/pkg/gofr/datasource/file"
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 	"gofr.dev/pkg/gofr/datasource/pubsub/google"
 	"gofr.dev/pkg/gofr/datasource/pubsub/kafka"
@@ -131,8 +130,6 @@ func (c *Container) Create(conf config.Config) {
 
 		c.PubSub = mqtt.New(configs, c.Logger, c.metricsManager)
 	}
-
-	c.File = file.New(c.Logger)
 }
 
 // GetHTTPService returns registered http services.
