@@ -29,6 +29,7 @@ export const navigation = [
             { title: 'Injecting Databases', href: '/docs/advanced-guide/injecting-databases-drivers' },
             { title: 'Dealing with Datasources', href: '/docs/advanced-guide/dealing-with-datasources' },
             { title: 'Automatic SwaggerUI Rendering', href: '/docs/advanced-guide/swagger-documentation' },
+            {title: 'Error Handling',href: '/docs/advanced-guide/gofr-errors'}
             // { title: 'Dealing with Remote Files', href: '/docs/advanced-guide/remote-files' },
             // { title: 'Supporting OAuth', href: '/docs/advanced-guide/oauth' },
             // { title: 'Creating a Static File Server', href: '/docs/advanced-guide/static-file-server' },
@@ -39,7 +40,7 @@ export const navigation = [
         title: 'References',
         links: [
             { title: 'Context', href: '/docs/references/context' },
-    //         { title: 'Configuration', href: '/docs/references/configs' },
+            { title: 'Configs', href: '/docs/references/configs' },
     //         { title: 'HTTP Service', href: '/docs/references/http-service' },
     //         { title: 'Files', href: '/docs/references/files' },
     //         { title: 'Datastore', href: '/docs/references/datastore' },
