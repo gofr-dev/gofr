@@ -38,7 +38,7 @@ func TestWSConnectionCreate_Error(t *testing.T) {
 	mockUpgrader.EXPECT().Upgrade(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil,
 		errConnection).Times(1)
 
-	handler := WSConnectionCreate(&mockContainer)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := WSConnectionCreate(&mockContainer)(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
 		// Check if connection is in context
 		conn, ok := r.Context().Value(gofrWebSocket.WSKey).(*websocket.Conn)
 		if ok {
