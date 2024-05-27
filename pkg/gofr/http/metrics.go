@@ -1,4 +1,3 @@
-// Package http provides a set of utilities for handling HTTP requests and responses within the GoFr framework.
 package http
 
 import "context"
