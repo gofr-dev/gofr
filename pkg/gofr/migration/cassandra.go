@@ -1,6 +1,7 @@
 package migration
 
 import (
+	"fmt"
 	"time"
 
 	"gofr.dev/pkg/gofr/container"
@@ -9,16 +10,16 @@ import (
 
 const (
 	createCassandraGoFrMigrationsTable = `CREATE TABLE IF NOT EXISTS gofr_migrations (
-    version BIGINT not null ,
-    method VARCHAR(4) not null ,
-    start_time TIMESTAMP not null ,
-    duration BIGINT,
-    constraint primary_key primary key (version, method)
+   version BIGINT,
+   method TEXT,
+   start_time TIMESTAMP,
+   duration BIGINT,
+   PRIMARY KEY ((version, method))
 );`
 
 	getLastGoFrMigrationCassandra = `SELECT MAX(version) as version FROM gofr_migrations;`
 
-	insertGoFrMigrationRowCassandra = `INSERT INTO gofr_migrations (version, method, start_time,duration) VALUES (?, ?, ?, ?) 
+	insertGoFrMigrationRowCassandra = `INSERT INTO gofr_migrations (version, method, start_time,duration) VALUES (?, ?, ?, ?)
 IF NOT EXISTS;`
 )
 
@@ -30,12 +31,12 @@ func newCassandra(c datasource.Cassandra) datasource.Cassandra {
 	return &cassandra{Cassandra: c}
 }
 
-func (c *cassandra) Query(result interface{}, stmt string, values ...interface{}) error {
-	return c.Cassandra.Query(result, stmt, values...)
+func (c *cassandra) Query(dest interface{}, stmt string, values ...interface{}) error {
+	return c.Cassandra.Query(dest, stmt, values...)
 }
 
-func (c *cassandra) QueryRow(result interface{}, stmt string, values ...interface{}) error {
-	return c.Cassandra.QueryRow(result, stmt, values...)
+func (c *cassandra) QueryCAS(dest interface{}, stmt string, values ...interface{}) (bool, error) {
+	return c.Cassandra.QueryCAS(dest, stmt, values...)
 }
 
 func (c *cassandra) Exec(stmt string, values ...interface{}) error {
@@ -68,21 +69,23 @@ func (d cassandraMigrator) checkAndCreateMigrationTable(c *container.Container) 
 }
 
 func (d cassandraMigrator) getLastMigration(c *container.Container) int64 {
-	var lastMigration int64
+	var lastMigration struct {
+		Version int64 `json:"version"`
+	}
 
-	err := d.Cassandra.QueryRow(&lastMigration, getLastGoFrMigrationCassandra)
+	err := d.Cassandra.Query(&lastMigration, getLastGoFrMigrationCassandra)
 	if err != nil {
 		return 0
 	}
 
-	c.Logger.Debugf("Cassandra last migration fetched value is: %v", lastMigration)
+	c.Logger.Debugf("Cassandra last migration fetched value is: %v", lastMigration.Version)
 
 	last := d.Migrator.getLastMigration(c)
-	if last > lastMigration {
+	if last > lastMigration.Version {
 		return last
 	}
 
-	return lastMigration
+	return lastMigration.Version
 }
 
 func (d cassandraMigrator) beginTransaction(c *container.Container) migrationData {
@@ -90,10 +93,16 @@ func (d cassandraMigrator) beginTransaction(c *container.Container) migrationDat
 }
 
 func (d cassandraMigrator) commitMigration(c *container.Container, data migrationData) error {
-	err := d.Cassandra.Exec(insertGoFrMigrationRowCassandra, data.MigrationNumber, "UP", data.StartTime,
+	var resData migrationData
+
+	applied, err := d.Cassandra.QueryCAS(&resData, insertGoFrMigrationRowCassandra, data.MigrationNumber, "UP", data.StartTime,
 		time.Since(data.StartTime).Milliseconds())
 	if err != nil {
 		return err
+	}
+
+	if !applied {
+		return errCassandraMigrationAlreadyExists{migrationNumber: data.MigrationNumber}
 	}
 
 	return d.Migrator.commitMigration(c, data)
@@ -101,4 +110,12 @@ func (d cassandraMigrator) commitMigration(c *container.Container, data migratio
 
 func (d cassandraMigrator) rollback(c *container.Container, data migrationData) {
 	d.Migrator.rollback(c, data)
+}
+
+type errCassandraMigrationAlreadyExists struct {
+	migrationNumber int64
+}
+
+func (e errCassandraMigrationAlreadyExists) Error() string {
+	return fmt.Sprintf("migration %d already exists", e.migrationNumber)
 }
