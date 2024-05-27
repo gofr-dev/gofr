@@ -140,7 +140,7 @@ func TestHandler_catchAllHandler(t *testing.T) {
 
 	assert.Equal(t, data, nil, "TEST Failed.\n")
 
-	assert.Equal(t, http.ErrMissingFile, err, "TEST Failed.\n")
+	assert.Equal(t, gofrHTTP.ErrorInvalidRoute{}, err, "TEST Failed.\n")
 }
 
 func TestHandler_livelinessHandler(t *testing.T) {
