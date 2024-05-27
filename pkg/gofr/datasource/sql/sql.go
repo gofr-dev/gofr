@@ -33,12 +33,19 @@ type DBConfig struct {
 }
 
 func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *DB {
+	logger.Debugf("verifying database configurations from config file")
+
 	dbConfig := getDBConfig(configs)
 
 	// if Hostname is not provided, we won't try to connect to DB
 	if dbConfig.Dialect != sqlite && dbConfig.HostName == "" {
+		logger.Debugf("not connecting to database as database configurations aren't available")
 		return nil
 	}
+
+	logger.Debugf("generating database connection string for '%s'", dbConfig.Dialect)
+
+	logger.Debugf("generating database connection string for '%s'", dbConfig.Dialect)
 
 	logger.Debugf("connecting with '%s' user to '%s' database at '%s:%s'",
 		dbConfig.User, dbConfig.Database, dbConfig.HostName, dbConfig.Port)
@@ -49,6 +56,8 @@ func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *D
 		return nil
 	}
 
+	logger.Debugf("registering sql dialect '%s' for traces", dbConfig.Dialect)
+
 	otelRegisteredDialect, err := otelsql.Register(dbConfig.Dialect)
 	if err != nil {
 		logger.Errorf("could not register sql dialect '%s' for traces, error: %s", dbConfig.Dialect, err)
@@ -56,6 +65,9 @@ func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *D
 	}
 
 	database := &DB{config: dbConfig, logger: logger, metrics: metrics}
+
+	logger.Debugf("connecting to '%s' database with '%s:%s' using '%s' and '%s'",
+		database.config.Dialect, database.config.HostName, database.config.Port, database.config.User, database.config.Password)
 
 	database.DB, err = sql.Open(otelRegisteredDialect, dbConnectionString)
 	if err != nil {
@@ -65,9 +77,15 @@ func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *D
 		return database
 	}
 
+	logger.Debugf("checking database '%s' connection", database.config.Database)
+
 	database = pingToTestConnection(database)
 
+	logger.Debug("enabling retry logic incase of failures/errors")
+
 	go retryConnection(database)
+
+	logger.Debug("pushing DB metrics to opentelemetry")
 
 	go pushDBMetrics(database.DB, metrics)
 
@@ -93,7 +111,7 @@ func retryConnection(database *DB) {
 
 	for {
 		if database.DB.Ping() != nil {
-			database.logger.Log("retrying SQL database connection")
+			database.logger.Warn("retrying SQL database connection")
 
 			for {
 				if err := database.DB.Ping(); err != nil {
