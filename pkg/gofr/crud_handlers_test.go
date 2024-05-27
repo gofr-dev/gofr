@@ -125,13 +125,13 @@ func Test_getTableName(t *testing.T) {
 		want       string
 	}{
 		{
-			name:       "Test with TableName interface",
+			name:       "Test with TableNameOverrider interface",
 			object:     &mockTableName{tableName: "custom_table"},
 			structName: "mockTableName",
 			want:       "custom_table",
 		},
 		{
-			name:       "Test without TableName interface",
+			name:       "Test without TableNameOverrider interface",
 			object:     &struct{}{},
 			structName: "TestStruct",
 			want:       "test_struct",
@@ -161,13 +161,13 @@ func Test_getRestPath(t *testing.T) {
 		want       string
 	}{
 		{
-			name:       "Test with RestPath interface",
+			name:       "Test with RestPathOverrider interface",
 			object:     &mockRestPath{restPath: "custom_path"},
 			structName: "mockRestPath",
 			want:       "custom_path",
 		},
 		{
-			name:       "Test without RestPath interface",
+			name:       "Test without RestPathOverrider interface",
 			object:     &struct{}{},
 			structName: "TestStruct",
 			want:       "TestStruct",

@@ -34,11 +34,11 @@ type Delete interface {
 	Delete(c *Context) (interface{}, error)
 }
 
-type TableName interface {
+type TableNameOverrider interface {
 	TableName() string
 }
 
-type RestPath interface {
+type RestPathOverrider interface {
 	RestPath() string
 }
 
@@ -85,7 +85,7 @@ func scanEntity(object interface{}) (*entity, error) {
 }
 
 func getTableName(object any, structName string) string {
-	if v, ok := object.(TableName); ok {
+	if v, ok := object.(TableNameOverrider); ok {
 		return v.TableName()
 	}
 
@@ -93,7 +93,7 @@ func getTableName(object any, structName string) string {
 }
 
 func getRestPath(object any, structName string) string {
-	if v, ok := object.(RestPath); ok {
+	if v, ok := object.(RestPathOverrider); ok {
 		return v.RestPath()
 	}
 
