@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 
@@ -59,6 +60,61 @@ func TestHandler_ServeHTTP(t *testing.T) {
 	}
 }
 
+func TestHandler_ServeHTTP_Timeout(t *testing.T) {
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+
+	h := handler{requestTimeout: "1"}
+
+	h.container = &container.Container{Logger: logging.NewLogger(logging.FATAL)}
+	h.function = func(*Context) (interface{}, error) {
+		time.Sleep(2 * time.Second)
+
+		return "hey", nil
+	}
+
+	h.ServeHTTP(w, r)
+
+	assert.Equal(t, http.StatusRequestTimeout, w.Code, "TestHandler_ServeHTTP_Timeout Failed")
+	assert.Equal(t, "Request timed out\n", w.Body.String(), "TestHandler_ServeHTTP_Timeout Failed")
+}
+
+func TestHandler_faviconHandlerError(t *testing.T) {
+	c := Context{
+		Context: context.Background(),
+	}
+
+	d, _ := os.ReadFile("static/favicon.ico")
+
+	// renaming the file to produce the error case and rename it back to original after completion of test.
+	_, err := os.Stat("static/favicon.ico")
+	if err != nil {
+		t.Errorf("favicon.ico file not found in static directory")
+		return
+	}
+
+	err = os.Rename("static/favicon.ico", "static/newFavicon.ico")
+	if err != nil {
+		t.Errorf("error in renaming favicon.ico!")
+	}
+
+	defer func() {
+		err = os.Rename("static/newFavicon.ico", "static/favicon.ico")
+		if err != nil {
+			t.Errorf("error in renaming file back to favicon.ico")
+		}
+	}()
+
+	data, err := faviconHandler(&c)
+
+	assert.NoError(t, err, "TEST Failed.\n")
+
+	assert.Equal(t, data, response.File{
+		Content:     d,
+		ContentType: "image/x-icon",
+	}, "TEST Failed.\n")
+}
+
 func TestHandler_faviconHandler(t *testing.T) {
 	c := Context{
 		Context: context.Background(),
@@ -84,7 +140,7 @@ func TestHandler_catchAllHandler(t *testing.T) {
 
 	assert.Equal(t, data, nil, "TEST Failed.\n")
 
-	assert.Equal(t, http.ErrMissingFile, err, "TEST Failed.\n")
+	assert.Equal(t, gofrHTTP.ErrorInvalidRoute{}, err, "TEST Failed.\n")
 }
 
 func TestHandler_livelinessHandler(t *testing.T) {

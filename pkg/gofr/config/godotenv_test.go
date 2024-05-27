@@ -5,9 +5,9 @@ import (
 	"os"
 	"testing"
 
-	"gofr.dev/pkg/gofr/testutil"
-
 	"github.com/stretchr/testify/assert"
+
+	"gofr.dev/pkg/gofr/logging"
 )
 
 func Test_EnvSuccess(t *testing.T) {
@@ -17,7 +17,7 @@ func Test_EnvSuccess(t *testing.T) {
 		"small_case":   "small_case_value",
 	}
 
-	logger := testutil.NewMockLogger(testutil.DEBUGLOG)
+	logger := logging.NewMockLogger(logging.DEBUG)
 
 	err := createConfigsDirectory()
 	if err != nil {
@@ -55,7 +55,7 @@ func Test_EnvSuccess_AppEnv_Override(t *testing.T) {
 	// override database url in '.prod.env' file to test if value if being overridden
 	createEnvFile(t, ".prod.env", map[string]string{"DATABASE_URL": "localhost:2001"})
 
-	logger := testutil.NewMockLogger(testutil.DEBUGLOG)
+	logger := logging.NewMockLogger(logging.DEBUG)
 
 	env := NewEnvFile("configs", logger)
 
@@ -82,7 +82,7 @@ func Test_EnvSuccess_Local_Override(t *testing.T) {
 	// override database url in '.prod.env' file to test if value if being overridden
 	createEnvFile(t, ".local.env", map[string]string{"API_KEY": "overloaded_api_key"})
 
-	logger := testutil.NewMockLogger(testutil.DEBUGLOG)
+	logger := logging.NewMockLogger(logging.DEBUG)
 
 	env := NewEnvFile("configs", logger)
 
@@ -91,13 +91,13 @@ func Test_EnvSuccess_Local_Override(t *testing.T) {
 	assert.Equal(t, "overloaded_api_key", env.Get("API_KEY"), "TEST Failed.\n godotenv success")
 }
 
-func Test_EnvFailureWithHypen(t *testing.T) {
+func Test_EnvFailureWithHyphen(t *testing.T) {
 	envData := map[string]string{
 		"KEY-WITH-HYPHEN": "DASH-VALUE",
 		"UNABLE_TO_LOAD":  "VALUE",
 	}
 
-	logger := testutil.NewMockLogger(testutil.DEBUGLOG)
+	logger := logging.NewMockLogger(logging.DEBUG)
 
 	err := createConfigsDirectory()
 	if err != nil {

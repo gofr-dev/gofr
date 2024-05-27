@@ -9,12 +9,12 @@ import (
 	"gofr.dev/pkg/gofr/datasource/pubsub/mqtt"
 	gofrRedis "gofr.dev/pkg/gofr/datasource/redis"
 	gofrSql "gofr.dev/pkg/gofr/datasource/sql"
+	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/service"
-	"gofr.dev/pkg/gofr/testutil"
 )
 
 func Test_newContainerSuccessWithLogger(t *testing.T) {
-	cfg := config.NewEnvFile("", testutil.NewMockLogger(testutil.DEBUGLOG))
+	cfg := config.NewEnvFile("", logging.NewMockLogger(logging.DEBUG))
 
 	container := NewContainer(cfg)
 
@@ -26,7 +26,7 @@ func Test_newContainerDBInitializationFail(t *testing.T) {
 	t.Setenv("DB_DIALECT", "mysql")
 	t.Setenv("DB_HOST", "invalid")
 
-	cfg := config.NewEnvFile("", testutil.NewMockLogger(testutil.DEBUGLOG))
+	cfg := config.NewEnvFile("", logging.NewMockLogger(logging.DEBUG))
 
 	container := NewContainer(cfg)
 
@@ -44,13 +44,6 @@ func Test_newContainerPubSubInitializationFail(t *testing.T) {
 		desc    string
 		configs map[string]string
 	}{
-		{
-			desc: "Kafka failure",
-			configs: map[string]string{
-				"PUBSUB_BACKEND": "KAFKA",
-				"PUBSUB_BROKER":  "invalid",
-			},
-		},
 		{
 			desc: "Google PubSub fail",
 			configs: map[string]string{

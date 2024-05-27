@@ -28,7 +28,7 @@ Following configuration keys are required for Redis connectivity:
 * `REDIS_HOST`: It specifies the hostname or IP address of your Redis server.
 * `REDIS_PORT`: It specifies the port number on which your Redis server is listening. The default Redis port is 6379.
 
-```bash
+```dotenv
 APP_NAME=test-service
 HTTP_PORT=9000
 
