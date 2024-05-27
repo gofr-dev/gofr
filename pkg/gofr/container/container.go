@@ -39,6 +39,7 @@ type Container struct {
 	SQL                 DB
 	Mongo               datasource.Mongo
 	WebsocketConnection *websocket.Connection
+	WebSocketUpgrader   websocket.WSUpgrader
 }
 
 func NewContainer(conf config.Config) *Container {

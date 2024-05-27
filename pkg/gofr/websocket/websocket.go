@@ -1,6 +1,8 @@
 package websocket
 
 import (
+	"net/http"
+
 	"github.com/gorilla/websocket"
 )
 
@@ -14,12 +16,12 @@ type key int
 // custom type to avoid collisions.
 const WebsocketKey key = iota
 
-type wsUpgrader struct {
-	websocket.Upgrader
+type WSUpgrader struct {
+	Upgrader websocket.Upgrader
 }
 
 func NewWsUpgrader(opts ...Options) Upgrader {
-	u := &wsUpgrader{
+	u := &WSUpgrader{
 		Upgrader: websocket.Upgrader{},
 	}
 
@@ -28,4 +30,8 @@ func NewWsUpgrader(opts ...Options) Upgrader {
 	}
 
 	return u
+}
+
+func (u *WSUpgrader) Upgrade(w http.ResponseWriter, r *http.Request, responseHeader http.Header) (*websocket.Conn, error) {
+	return u.Upgrader.Upgrade(w, r, responseHeader)
 }
