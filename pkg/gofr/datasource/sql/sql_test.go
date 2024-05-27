@@ -132,6 +132,14 @@ func TestSQL_getDBConnectionString(t *testing.T) {
 			expOut: "host=host port=3201 user=user password=password dbname=test sslmode=disable",
 		},
 		{
+			desc: "sqlite dialect",
+			configs: &DBConfig{
+				Dialect:  "sqlite",
+				Database: "test.db",
+			},
+			expOut: "file:test.db",
+		},
+		{
 			desc:    "unsupported dialect",
 			configs: &DBConfig{Dialect: "mssql"},
 			expOut:  "",

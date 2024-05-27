@@ -113,7 +113,7 @@ func (d sqlMigrator) getLastMigration(c *container.Container) int64 {
 
 func (d sqlMigrator) commitMigration(c *container.Container, data migrationData) error {
 	switch c.SQL.Dialect() {
-	case "mysql":
+	case "mysql", "sqlite":
 		err := insertMigrationRecord(data.SQLTx, insertGoFrMigrationRowMySQL, data.MigrationNumber, data.StartTime)
 		if err != nil {
 			return err

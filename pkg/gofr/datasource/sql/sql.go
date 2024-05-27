@@ -4,18 +4,23 @@ import (
 	"database/sql"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/XSAM/otelsql"
 	_ "github.com/lib/pq" // used for concrete implementation of the database driver.
+	_ "modernc.org/sqlite"
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/datasource"
 )
 
-const defaultDBPort = 3306
+const (
+	sqlite        = "sqlite"
+	defaultDBPort = 3306
+)
 
-var errUnsupportedDialect = fmt.Errorf("unsupported db dialect; supported dialects are - mysql, postgres")
+var errUnsupportedDialect = fmt.Errorf("unsupported db dialect; supported dialects are - mysql, postgres, sqlite")
 
 // DBConfig has those members which are necessary variables while connecting to database.
 type DBConfig struct {
@@ -31,7 +36,7 @@ func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *D
 	dbConfig := getDBConfig(configs)
 
 	// if Hostname is not provided, we won't try to connect to DB
-	if dbConfig.HostName == "" || dbConfig.Dialect == "" {
+	if dbConfig.Dialect != sqlite && dbConfig.HostName == "" {
 		return nil
 	}
 
@@ -133,6 +138,10 @@ func getDBConnectionString(dbConfig *DBConfig) (string, error) {
 	case "postgres":
 		return fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
 			dbConfig.HostName, dbConfig.Port, dbConfig.User, dbConfig.Password, dbConfig.Database), nil
+	case sqlite:
+		s := strings.TrimSuffix(dbConfig.Database, ".db")
+
+		return fmt.Sprintf("file:%s.db", s), nil
 	default:
 		return "", errUnsupportedDialect
 	}
