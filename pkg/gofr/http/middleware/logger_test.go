@@ -55,10 +55,30 @@ func Test_LoggingMiddleware(t *testing.T) {
 	assert.Contains(t, logs, "GET    200")
 }
 
+func Test_LoggingMiddlewareError(t *testing.T) {
+	logs := testutil.StderrOutputForFunc(func() {
+		req, _ := http.NewRequestWithContext(context.Background(), "GET", "http://dummy", http.NoBody)
+
+		rr := httptest.NewRecorder()
+
+		handler := Logging(logging.NewMockLogger(logging.ERROR))(http.HandlerFunc(testHandlerError))
+
+		handler.ServeHTTP(rr, req)
+	})
+
+	assert.Contains(t, logs, "GET    500")
+}
+
 // Test handler that uses the middleware.
 func testHandler(w http.ResponseWriter, _ *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte("Test Handler"))
+}
+
+// Test handler for internalServerErrors that uses the middleware.
+func testHandlerError(w http.ResponseWriter, _ *http.Request) {
+	w.WriteHeader(http.StatusInternalServerError)
+	_, _ = w.Write([]byte("error"))
 }
 
 func Test_LoggingMiddlewareStringPanicHandling(t *testing.T) {

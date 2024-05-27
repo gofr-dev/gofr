@@ -33,11 +33,40 @@ type Redis struct {
 // NewClient return a redis client if connection is successful based on Config.
 // In case of error, it returns an error as second parameter.
 func NewClient(c config.Config, logger datasource.Logger, metrics Metrics) *Redis {
-	var redisConfig = &Config{}
+	redisConfig := getRedisConfig(c)
 
-	if redisConfig.HostName = c.Get("REDIS_HOST"); redisConfig.HostName == "" {
+	// if Hostname is not provided, we won't try to connect to Redis
+	if redisConfig.HostName == "" {
 		return nil
 	}
+
+	logger.Debugf("connecting to redis at '%s:%d'", redisConfig.HostName, redisConfig.Port)
+
+	rc := redis.NewClient(redisConfig.Options)
+	rc.AddHook(&redisHook{config: redisConfig, logger: logger, metrics: metrics})
+
+	ctx, cancel := context.WithTimeout(context.TODO(), redisPingTimeout)
+	defer cancel()
+
+	if err := rc.Ping(ctx).Err(); err != nil {
+		logger.Errorf("could not connect to redis at '%s:%d', error: %s", redisConfig.HostName, redisConfig.Port, err)
+
+		return &Redis{Client: nil, config: redisConfig, logger: logger}
+	}
+
+	if err := otel.InstrumentTracing(rc); err != nil {
+		logger.Errorf("could not add tracing instrumentation, error: %s", err)
+	}
+
+	logger.Logf("connected to redis at %s:%d", redisConfig.HostName, redisConfig.Port)
+
+	return &Redis{Client: rc, config: redisConfig, logger: logger}
+}
+
+func getRedisConfig(c config.Config) *Config {
+	var redisConfig = &Config{}
+
+	redisConfig.HostName = c.Get("REDIS_HOST")
 
 	port, err := strconv.Atoi(c.Get("REDIS_PORT"))
 	if err != nil {
@@ -54,25 +83,7 @@ func NewClient(c config.Config, logger datasource.Logger, metrics Metrics) *Redi
 
 	redisConfig.Options = options
 
-	rc := redis.NewClient(redisConfig.Options)
-	rc.AddHook(&redisHook{logger: logger, metrics: metrics})
-
-	ctx, cancel := context.WithTimeout(context.TODO(), redisPingTimeout)
-	defer cancel()
-
-	if err := rc.Ping(ctx).Err(); err != nil {
-		logger.Errorf("could not connect to redis at %s:%d. error: %s", redisConfig.HostName, redisConfig.Port, err)
-
-		return &Redis{Client: nil, config: redisConfig, logger: logger}
-	}
-
-	if err := otel.InstrumentTracing(rc); err != nil {
-		logger.Errorf("could not add tracing instrumentation, error: %s", err)
-	}
-
-	logger.Logf("connected to redis at %s:%d", redisConfig.HostName, redisConfig.Port)
-
-	return &Redis{Client: rc, config: redisConfig, logger: logger}
+	return redisConfig
 }
 
 // TODO - if we make Redis an interface and expose from container we can avoid c.Redis(c, command) using methods on c and still pass c.

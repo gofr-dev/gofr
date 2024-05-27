@@ -17,7 +17,7 @@ import (
 func TestNewSQL_ErrorCase(t *testing.T) {
 	ctrl := gomock.NewController(t)
 
-	expectedLog := fmt.Sprintf("could not register sql dialect '%s' for traces due to error: '%s'", "mysql",
+	expectedLog := fmt.Sprintf("could not register sql dialect '%s' for traces, error: %s", "mysql",
 		"sql: unknown driver \"mysql\" (forgotten import?)")
 
 	mockConfig := config.NewMockConfig(map[string]string{
@@ -130,6 +130,14 @@ func TestSQL_getDBConnectionString(t *testing.T) {
 				Database: "test",
 			},
 			expOut: "host=host port=3201 user=user password=password dbname=test sslmode=disable",
+		},
+		{
+			desc: "sqlite dialect",
+			configs: &DBConfig{
+				Dialect:  "sqlite",
+				Database: "test.db",
+			},
+			expOut: "file:test.db",
 		},
 		{
 			desc:    "unsupported dialect",

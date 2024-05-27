@@ -47,7 +47,7 @@ func TestGoogleClient_New_Error(t *testing.T) {
 	})
 
 	assert.Nil(t, g)
-	assert.Contains(t, out, "google pubsub could not be configured")
+	assert.Contains(t, out, "could not configure google pubsub")
 }
 
 func TestGoogleClient_Publish_Success(t *testing.T) {

@@ -13,7 +13,7 @@ What can users automate with cron?
 Basically, any task that can be expressed as a command or script can be automated with cron.
 
 Writing a cron job!
-On linux like systems cron jobs can be added by adding a line to the crontab file, specifying the schedule and the command
+On Linux like systems cron jobs can be added by adding a line to the crontab file, specifying the schedule and the command
 that needs to be run at that schedule. The cron schedule is expressed in the following format.
 
 `minute hour day_of_month month day_of_week`
@@ -22,8 +22,8 @@ Each field can take a specific value or combination of values to define the sche
 `*` (asterisk) to represent **any** value and `,` (comma) to separate multiple values. It also supports `0-n` to define a
 range of values for which the cron should run and `*/n` to define number of times the cron should run. Here n is an integer.
 
-## Adding cron jobs in gofr applications
-Adding cron jobs to gofr applications is made easy with a simple injection of user's function to the cron table maintained
+## Adding cron jobs in GoFr applications
+Adding cron jobs to GoFr applications is made easy with a simple injection of user's function to the cron table maintained
 by the gofr. The minimum time difference between cron job's two consecutive runs is a minute as it is the least significant
 scheduling time parameter.
 ```go

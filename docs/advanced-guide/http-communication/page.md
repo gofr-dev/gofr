@@ -19,7 +19,7 @@ Registration of multiple dependent services is quite easier, which is a common u
 
 > The services instances are maintained by the container.
 
-Other provided options can be added additionally to coat the basic http client with features like circuit-breaker and
+Other provided options can be added additionally to coat the basic HTTP client with features like circuit-breaker and
 custom health check and add to the functionality of the HTTP service.
 The design choice for this was made such as many options as required can be added and are order agnostic,
 i.e. the order of the options is not important.

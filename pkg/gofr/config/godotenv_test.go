@@ -91,7 +91,7 @@ func Test_EnvSuccess_Local_Override(t *testing.T) {
 	assert.Equal(t, "overloaded_api_key", env.Get("API_KEY"), "TEST Failed.\n godotenv success")
 }
 
-func Test_EnvFailureWithHypen(t *testing.T) {
+func Test_EnvFailureWithHyphen(t *testing.T) {
 	envData := map[string]string{
 		"KEY-WITH-HYPHEN": "DASH-VALUE",
 		"UNABLE_TO_LOAD":  "VALUE",
