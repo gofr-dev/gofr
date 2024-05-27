@@ -8,22 +8,19 @@ import (
 	"gofr.dev/pkg/gofr/container"
 	gofrHTTP "gofr.dev/pkg/gofr/http"
 	"gofr.dev/pkg/gofr/logging"
-	"gofr.dev/pkg/gofr/websocket"
 )
 
 type httpServer struct {
-	router     *gofrHTTP.Router
-	port       int
-	wsUpgrader websocket.Upgrader
-	logger     logging.Logger
+	router *gofrHTTP.Router
+	port   int
+	logger logging.Logger
 }
 
 func newHTTPServer(c *container.Container, port int) *httpServer {
 	return &httpServer{
-		router:     gofrHTTP.NewRouter(c),
-		port:       port,
-		wsUpgrader: websocket.NewWsUpgrader(),
-		logger:     c.Logger,
+		router: gofrHTTP.NewRouter(c),
+		port:   port,
+		logger: c.Logger,
 	}
 }
 

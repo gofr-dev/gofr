@@ -84,6 +84,8 @@ func New() *App {
 
 	app.httpServer = newHTTPServer(app.container, port)
 
+	app.container.WebSocketUpgrader.Upgrader = websocket.NewWSUpgrader()
+
 	// GRPC Server
 	port, err = strconv.Atoi(app.Config.Get("GRPC_PORT"))
 	if err != nil || port <= 0 {
@@ -400,6 +402,7 @@ func (a *App) AddCronJob(schedule, jobName string, job CronFunc) {
 	}
 }
 
-func (a *App) OverrideWebsocketUpgrader(wsUpgrader websocket.Upgrader) {
-	a.httpServer.wsUpgrader = wsUpgrader
-}
+//
+// func (a *App) OverrideWebsocketUpgrader(wsUpgrader websocket.Upgrader) {
+//	a.httpServer.wsUpgrader = wsUpgrader
+//}

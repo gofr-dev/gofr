@@ -17,19 +17,13 @@ type key int
 const WSKey key = iota
 
 type WSUpgrader struct {
-	Upgrader websocket.Upgrader
+	Upgrader Upgrader
 }
 
-func NewWsUpgrader(opts ...Options) Upgrader {
-	u := &WSUpgrader{
-		Upgrader: websocket.Upgrader{},
+func NewWSUpgrader() *WSUpgrader {
+	return &WSUpgrader{
+		Upgrader: &websocket.Upgrader{},
 	}
-
-	for _, opt := range opts {
-		opt(u)
-	}
-
-	return u
 }
 
 func (u *WSUpgrader) Upgrade(w http.ResponseWriter, r *http.Request, responseHeader http.Header) (*websocket.Conn, error) {
