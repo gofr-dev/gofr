@@ -4,18 +4,23 @@ import (
 	"database/sql"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/XSAM/otelsql"
 	_ "github.com/lib/pq" // used for concrete implementation of the database driver.
+	_ "modernc.org/sqlite"
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/datasource"
 )
 
-const defaultDBPort = 3306
+const (
+	sqlite        = "sqlite"
+	defaultDBPort = 3306
+)
 
-var errUnsupportedDialect = fmt.Errorf("unsupported db dialect; supported dialects are - mysql, postgres")
+var errUnsupportedDialect = fmt.Errorf("unsupported db dialect; supported dialects are - mysql, postgres, sqlite")
 
 // DBConfig has those members which are necessary variables while connecting to database.
 type DBConfig struct {
@@ -31,9 +36,12 @@ func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *D
 	dbConfig := getDBConfig(configs)
 
 	// if Hostname is not provided, we won't try to connect to DB
-	if dbConfig.HostName == "" || dbConfig.Dialect == "" {
+	if dbConfig.Dialect != sqlite && dbConfig.HostName == "" {
 		return nil
 	}
+
+	logger.Debugf("connecting with '%s' user to '%s' database at '%s:%s'",
+		dbConfig.User, dbConfig.Database, dbConfig.HostName, dbConfig.Port)
 
 	dbConnectionString, err := getDBConnectionString(dbConfig)
 	if err != nil {
@@ -43,7 +51,7 @@ func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *D
 
 	otelRegisteredDialect, err := otelsql.Register(dbConfig.Dialect)
 	if err != nil {
-		logger.Errorf("could not register sql dialect '%s' for traces due to error: '%s'", dbConfig.Dialect, err)
+		logger.Errorf("could not register sql dialect '%s' for traces, error: %s", dbConfig.Dialect, err)
 		return nil
 	}
 
@@ -51,8 +59,8 @@ func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *D
 
 	database.DB, err = sql.Open(otelRegisteredDialect, dbConnectionString)
 	if err != nil {
-		database.logger.Errorf("could not open connection with '%s' user to database '%s:%s' error: %v",
-			database.config.User, database.config.HostName, database.config.Port, err)
+		database.logger.Errorf("could not open connection with '%s' user to '%s' database at '%s:%s', error: %v",
+			database.config.User, database.config.Database, database.config.HostName, database.config.Port, err)
 
 		return database
 	}
@@ -68,13 +76,13 @@ func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *D
 
 func pingToTestConnection(database *DB) *DB {
 	if err := database.DB.Ping(); err != nil {
-		database.logger.Errorf("could not connect with '%s' user to database '%s:%s' error: %v",
-			database.config.User, database.config.HostName, database.config.Port, err)
+		database.logger.Errorf("could not connect with '%s' user to '%s' database at '%s:%s', error: %v",
+			database.config.User, database.config.Database, database.config.HostName, database.config.Port, err)
 
 		return database
 	}
 
-	database.logger.Logf("connected to '%s' database at %s:%s", database.config.Database,
+	database.logger.Logf("connected to '%s' database at '%s:%s'", database.config.Database,
 		database.config.HostName, database.config.Port)
 
 	return database
@@ -89,12 +97,12 @@ func retryConnection(database *DB) {
 
 			for {
 				if err := database.DB.Ping(); err != nil {
-					database.logger.Debugf("could not connect with '%s' user to database '%s:%s' error: %v",
+					database.logger.Debugf("could not connect with '%s' user to database '%s:%s', error: %v",
 						database.config.User, database.config.HostName, database.config.Port, err)
 
 					time.Sleep(connRetryFrequencyInSeconds * time.Second)
 				} else {
-					database.logger.Logf("connected to '%s' database at %s:%s", database.config.Database,
+					database.logger.Logf("connected to '%s' database at '%s:%s'", database.config.Database,
 						database.config.HostName, database.config.Port)
 
 					break
@@ -130,6 +138,10 @@ func getDBConnectionString(dbConfig *DBConfig) (string, error) {
 	case "postgres":
 		return fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
 			dbConfig.HostName, dbConfig.Port, dbConfig.User, dbConfig.Password, dbConfig.Database), nil
+	case sqlite:
+		s := strings.TrimSuffix(dbConfig.Database, ".db")
+
+		return fmt.Sprintf("file:%s.db", s), nil
 	default:
 		return "", errUnsupportedDialect
 	}
