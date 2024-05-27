@@ -57,7 +57,7 @@ func (c *Context) Bind(i interface{}) error {
 }
 
 func (c *Context) GetWebSocketConnection() *websocket.Conn {
-	return c.Request.Context().Value(gofrWebSocket.WebsocketKey).(*websocket.Conn)
+	return c.Request.Context().Value(gofrWebSocket.WSKey).(*websocket.Conn)
 }
 
 // func (c *Context) reset(w Responder, r Request) {

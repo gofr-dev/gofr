@@ -12,9 +12,9 @@ type Connection struct {
 
 type key int
 
-// WebsocketKey used for retrieval of websocket connection from context
+// WSKey used for retrieval of websocket connection from context
 // custom type to avoid collisions.
-const WebsocketKey key = iota
+const WSKey key = iota
 
 type WSUpgrader struct {
 	Upgrader websocket.Upgrader

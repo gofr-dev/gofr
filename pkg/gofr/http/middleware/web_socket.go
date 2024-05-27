@@ -22,9 +22,11 @@ func WSConnectionCreate(c *container.Container) func(inner http.Handler) http.Ha
 					return
 				}
 
-				ctx := context.WithValue(r.Context(), websocket.WebsocketKey, conn)
+				ctx := context.WithValue(r.Context(), websocket.WSKey, conn)
 				r = r.WithContext(ctx)
 
+				inner.ServeHTTP(w, r)
+			} else {
 				inner.ServeHTTP(w, r)
 			}
 		})
