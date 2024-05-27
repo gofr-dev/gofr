@@ -3,12 +3,10 @@ package gofr
 import (
 	"context"
 
-	"github.com/gorilla/websocket"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 
 	"gofr.dev/pkg/gofr/container"
-	gofrWebSocket "gofr.dev/pkg/gofr/websocket"
 )
 
 type Context struct {
@@ -54,10 +52,6 @@ func (c *Context) Trace(name string) trace.Span {
 
 func (c *Context) Bind(i interface{}) error {
 	return c.Request.Bind(i)
-}
-
-func (c *Context) GetWebSocketConnection() *websocket.Conn {
-	return c.Request.Context().Value(gofrWebSocket.WSKey).(*websocket.Conn)
 }
 
 // func (c *Context) reset(w Responder, r Request) {

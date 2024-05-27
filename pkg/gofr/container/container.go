@@ -75,6 +75,8 @@ func (c *Container) Create(conf config.Config) {
 
 	c.metricsManager = metrics.NewMetricsManager(exporters.Prometheus(c.appName, c.appVersion), c.Logger)
 
+	c.WebsocketConnection = &websocket.Connection{}
+
 	// Register framework metrics
 	c.registerFrameworkMetrics()
 

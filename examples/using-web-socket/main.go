@@ -17,7 +17,7 @@ func main() {
 }
 
 func WSHandler(c *gofr.Context) (interface{}, error) {
-	conn := c.GetWebSocketConnection()
+	conn := c.GetWebsocketConnection().Conn
 	if conn == nil {
 		return nil, fmt.Errorf("websocket connection not found in context")
 	}

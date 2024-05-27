@@ -1,13 +1,11 @@
 package middleware
 
 import (
-	"context"
 	"net/http"
 
 	gorillaWebsocket "github.com/gorilla/websocket"
 
 	"gofr.dev/pkg/gofr/container"
-	"gofr.dev/pkg/gofr/websocket"
 )
 
 func WSConnectionCreate(c *container.Container) func(inner http.Handler) http.Handler {
@@ -22,8 +20,7 @@ func WSConnectionCreate(c *container.Container) func(inner http.Handler) http.Ha
 					return
 				}
 
-				ctx := context.WithValue(r.Context(), websocket.WSKey, conn)
-				r = r.WithContext(ctx)
+				c.WebsocketConnection.Conn = conn
 
 				inner.ServeHTTP(w, r)
 			} else {

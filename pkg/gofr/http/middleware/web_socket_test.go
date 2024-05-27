@@ -29,6 +29,8 @@ func initializeContainerWithUpgrader(t *testing.T) (container.Container, gofrWeb
 		Upgrader: mockUpgrader,
 	}
 
+	mockContainer.WebsocketConnection = &gofrWebSocket.Connection{}
+
 	return *mockContainer, *mockUpgrader
 }
 
@@ -77,8 +79,6 @@ func Test_WSConnectionCreate_Success(t *testing.T) {
 	middleware := WSConnectionCreate(&mockContainer)
 
 	innerHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		conn := r.Context().Value(gofrWebSocket.WSKey).(*websocket.Conn)
-		assert.Equal(t, mockConn.Conn, conn)
 		w.WriteHeader(http.StatusOK)
 	})
 
@@ -92,4 +92,5 @@ func Test_WSConnectionCreate_Success(t *testing.T) {
 	handler.ServeHTTP(rec, req)
 
 	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.NotNil(t, mockContainer.WebsocketConnection.Conn)
 }
