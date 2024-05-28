@@ -398,7 +398,3 @@ func (a *App) AddCronJob(schedule, jobName string, job CronFunc) {
 		a.Logger().Errorf("error adding cron job, err : %v", err)
 	}
 }
-
-func (a *App) UseCassandra(db datasource.Cassandra) {
-	a.container.Cassandra = db
-}

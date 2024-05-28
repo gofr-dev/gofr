@@ -56,7 +56,7 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 		ds.SQL = newMysql(transactionsObjects.SQLTx)
 		ds.Redis = newRedis(transactionsObjects.RedisTx)
 		ds.PubSub = newPubSub(c.PubSub)
-		//ds.Cassandra = newCassandra(c.Cassandra)
+		ds.Cassandra = newCassandra(c.Cassandra)
 
 		transactionsObjects.StartTime = time.Now()
 		transactionsObjects.MigrationNumber = currentMigration
