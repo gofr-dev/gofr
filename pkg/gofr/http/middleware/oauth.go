@@ -53,36 +53,49 @@ type OauthConfigs struct {
 func NewOAuth(config OauthConfigs) PublicKeyProvider {
 	var publicKeys PublicKeys
 
-	publicKeys.keys = make(map[string]*rsa.PublicKey)
-
 	go func() {
-		for {
-			resp, err := config.Provider.GetWithHeaders(context.Background(), "", nil, nil)
-			if err != nil || resp == nil {
+		ticker := time.NewTicker(config.RefreshInterval)
+		defer ticker.Stop()
+
+		for range ticker.C {
+			keys, err := updateKeys(config)
+			if err != nil || keys == nil {
 				continue
 			}
 
-			body, err := io.ReadAll(resp.Body)
-			if err != nil {
-				continue
-			}
-
-			resp.Body.Close()
-
-			var jwks JWKS
-
-			err = json.Unmarshal(body, &jwks)
-			if err != nil {
-				continue
-			}
-
-			publicKeys.keys = publicKeyFromJWKS(jwks)
-
-			time.Sleep(config.RefreshInterval)
+			publicKeys = *keys
 		}
 	}()
 
 	return &publicKeys
+}
+
+func updateKeys(config OauthConfigs) (*PublicKeys, error) {
+	resp, err := config.Provider.GetWithHeaders(context.Background(), "", nil, nil)
+	if err != nil || resp == nil {
+		return nil, err
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	resp.Body.Close()
+
+	var keys JWKS
+
+	err = json.Unmarshal(body, &keys)
+	if err != nil {
+		return nil, err
+	}
+
+	var publicKeys PublicKeys
+	publicKeys.keys = make(map[string]*rsa.PublicKey)
+
+	publicKeys.keys = publicKeyFromJWKS(keys)
+
+	return &publicKeys, nil
 }
 
 // PublicKeyProvider defines an interface for retrieving a public key by its key ID.
