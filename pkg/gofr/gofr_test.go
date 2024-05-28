@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strconv"
 	"testing"
 	"time"
@@ -218,18 +219,24 @@ func Test_otelErrorHandler(t *testing.T) {
 }
 
 func Test_addRoute(t *testing.T) {
+	// Mock the command-line arguments to simulate running the "log" sub-command.
+	os.Args = []string{"", "log"}
+
+	// Capture the standard output to verify the logs.
 	logs := testutil.StdoutOutputForFunc(func() {
 		a := NewCMD()
 
+		// Add the "log" sub-command with its handler and description.
 		a.SubCommand("log", func(c *Context) (interface{}, error) {
 			c.Logger.Info("logging in handler")
-
 			return "handler called", nil
-		})
+		}, "Logs a message")
 
+		// Run the command-line application.
 		a.Run()
 	})
 
+	// Verify that the handler was called and the expected log message was output.
 	assert.Contains(t, logs, "handler called")
 }
 
