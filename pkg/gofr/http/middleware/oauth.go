@@ -57,6 +57,8 @@ func NewOAuth(config OauthConfigs) PublicKeyProvider {
 
 	go func() {
 		for {
+			time.Sleep(config.RefreshInterval)
+
 			resp, err := config.Provider.GetWithHeaders(context.Background(), "", nil, nil)
 			if err != nil || resp == nil {
 				continue
@@ -77,8 +79,6 @@ func NewOAuth(config OauthConfigs) PublicKeyProvider {
 			}
 
 			publicKeys.keys = publicKeyFromJWKS(jwks)
-
-			time.Sleep(config.RefreshInterval)
 		}
 	}()
 
