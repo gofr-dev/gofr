@@ -14,9 +14,9 @@ type httpServer struct {
 	port   int
 }
 
-func newHTTPServer(c *container.Container, port int) *httpServer {
+func newHTTPServer(c *container.Container, port int, middlewareConfigs map[string]string) *httpServer {
 	return &httpServer{
-		router: gofrHTTP.NewRouter(c),
+		router: gofrHTTP.NewRouter(c, middlewareConfigs),
 		port:   port,
 	}
 }

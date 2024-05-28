@@ -81,7 +81,7 @@ func New() *App {
 		port = defaultHTTPPort
 	}
 
-	app.httpServer = newHTTPServer(app.container, port)
+	app.httpServer = newHTTPServer(app.container, port, middleware.GetConfigs(app.Config))
 
 	// GRPC Server
 	port, err = strconv.Atoi(app.Config.Get("GRPC_PORT"))

@@ -18,12 +18,12 @@ type Router struct {
 type Middleware func(handler http.Handler) http.Handler
 
 // NewRouter creates a new Router instance.
-func NewRouter(c *container.Container) *Router {
+func NewRouter(c *container.Container, middlewareConfigs map[string]string) *Router {
 	muxRouter := mux.NewRouter().StrictSlash(false)
 	muxRouter.Use(
 		middleware.Tracer,
 		middleware.Logging(c.Logger),
-		middleware.CORS(),
+		middleware.CORS(middlewareConfigs),
 		middleware.Metrics(c.Metrics()),
 	)
 

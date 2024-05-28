@@ -21,7 +21,7 @@ func TestRouter(t *testing.T) {
 		c.Metrics().NewCounter("test-counter", "test")
 
 		// Create a new router instance using the mock container
-		router := NewRouter(c)
+		router := NewRouter(c, nil)
 
 		// Add a test handler to the router
 		router.Add("GET", "/test", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -51,7 +51,7 @@ func TestRouterWithMiddleware(t *testing.T) {
 		c.Metrics().NewCounter("test-counter", "test")
 
 		// Create a new router instance using the mock container
-		router := NewRouter(c)
+		router := NewRouter(c, nil)
 
 		router.UseMiddleware(func(inner http.Handler) http.Handler {
 			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
