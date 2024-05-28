@@ -6,19 +6,20 @@ import (
 	"regexp"
 	"strings"
 
-	"gofr.dev/pkg/gofr/container"
-
 	cmd2 "gofr.dev/pkg/gofr/cmd"
+	"gofr.dev/pkg/gofr/container"
 )
 
 type cmd struct {
-	routes []route
+	routes      []route
+	defaultHelp string // Default helper documentation
 }
 
 type route struct {
 	pattern     string
 	handler     Handler
 	description string
+	help        string // Custom helper documentation for the sub-command
 }
 
 type ErrCommandNotFound struct{}
@@ -76,17 +77,18 @@ func (cmd *cmd) handler(path string) Handler {
 	return nil
 }
 
-func (cmd *cmd) addRoute(pattern string, handler Handler, description string) {
-	cmd.routes = append(cmd.routes, route{
-		pattern:     pattern,
-		handler:     handler,
-		description: description,
-	})
+func (cmd *cmd) addRoute(r route) {
+	cmd.routes = append(cmd.routes, r)
 }
 
 func (cmd *cmd) printHelp() {
 	fmt.Println("Available commands:")
 	for _, route := range cmd.routes {
-		fmt.Printf("  %s: %s\n", route.pattern, route.description)
+		help := route.help
+		if help == "" {
+			help = route.description // Use description if custom helper documentation is not provided
+		}
+		fmt.Printf("  %s: %s\n", route.pattern, help)
 	}
+	fmt.Println(cmd.defaultHelp) // Print default helper documentation if provided
 }

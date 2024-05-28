@@ -219,8 +219,11 @@ func Test_otelErrorHandler(t *testing.T) {
 }
 
 func Test_addRoute(t *testing.T) {
-	// Mock the command-line arguments to simulate running the "log" sub-command.
+	originalArgs := os.Args // Save the original os.Args
+
+	// Modify os.Args for the duration of this test
 	os.Args = []string{"", "log"}
+	defer func() { os.Args = originalArgs }() // Restore os.Args after the test
 
 	// Capture the standard output to verify the logs.
 	logs := testutil.StdoutOutputForFunc(func() {
