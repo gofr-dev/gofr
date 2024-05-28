@@ -98,7 +98,7 @@ func faviconHandler(*Context) (interface{}, error) {
 }
 
 func catchAllHandler(*Context) (interface{}, error) {
-	return nil, http.ErrMissingFile
+	return nil, gofrHTTP.ErrorInvalidRoute{}
 }
 
 // Helper function to parse and validate request timeout.
