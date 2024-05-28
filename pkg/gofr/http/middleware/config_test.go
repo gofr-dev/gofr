@@ -8,11 +8,11 @@ import (
 
 func TestGetConfigs(t *testing.T) {
 	mockConfig := config.NewMockConfig(map[string]string{
-		"Access-Control-Allow-Origin":       "*",
-		"Access-Control-Allow-Headers":      "Authorization, Content-Type",
-		"Access-Control-Allow-Methods":      "GET, POST",
-		"Access-Control-Allow-Credentials":  "true",
-		"Access-Control-Allow-CustomHeader": "abc",
+		"ACCESS_CONTROL_ALLOW_ORIGIN":       "*",
+		"ACCESS_CONTROL_ALLOW_HEADERS":      "Authorization, Content-Type",
+		"ACCESS_CONTROL_ALLOW_METHODS":      "GET, POST",
+		"ACCESS_CONTROL_ALLOW_CREDENTIALS":  "true",
+		"ACCESS_CONTROL_ALLOW_CUSTOMHEADER": "abc",
 	})
 
 	middlewareConfigs := GetConfigs(mockConfig)
@@ -26,5 +26,4 @@ func TestGetConfigs(t *testing.T) {
 
 	assert.Equal(t, middlewareConfigs, expectedConfigs, "TestGetConfigs Failed!")
 	assert.NotContains(t, middlewareConfigs, "Access-Control-Allow-CustomHeader", "TestGetConfigs Failed!")
-
 }
