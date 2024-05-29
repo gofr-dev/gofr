@@ -10,19 +10,18 @@ type Connection struct {
 	*websocket.Conn
 }
 
-type key int
-
-// WSKey used for retrieval of websocket connection from context
-// custom type to avoid collisions.
-const WSKey key = iota
-
 type WSUpgrader struct {
 	Upgrader Upgrader
 }
 
-func NewWSUpgrader() *WSUpgrader {
+func NewWSUpgrader(opts ...Options) *WSUpgrader {
+	defaultUpgrader := &websocket.Upgrader{}
+	for _, opt := range opts {
+		opt(defaultUpgrader)
+	}
+
 	return &WSUpgrader{
-		Upgrader: &websocket.Upgrader{},
+		Upgrader: defaultUpgrader,
 	}
 }
 

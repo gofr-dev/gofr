@@ -400,7 +400,6 @@ func (a *App) AddCronJob(schedule, jobName string, job CronFunc) {
 	}
 }
 
-//
-// func (a *App) OverrideWebsocketUpgrader(wsUpgrader websocket.Upgrader) {
-//	a.httpServer.wsUpgrader = wsUpgrader
-//}
+func (a *App) OverrideWebsocketUpgrader(wsUpgrader websocket.Upgrader) {
+	a.container.WebSocketUpgrader.Upgrader = wsUpgrader
+}
