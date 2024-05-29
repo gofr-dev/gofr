@@ -1,9 +1,11 @@
 package middleware
 
 import (
-	"github.com/stretchr/testify/assert"
-	"gofr.dev/pkg/gofr/config"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+
+	"gofr.dev/pkg/gofr/config"
 )
 
 func TestGetConfigs(t *testing.T) {
