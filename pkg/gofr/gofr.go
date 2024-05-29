@@ -378,9 +378,7 @@ func (a *App) AddRESTHandlers(object interface{}) error {
 		return err
 	}
 
-	e := entity{cfg.name, cfg.entityType, cfg.primaryKey}
-
-	a.registerCRUDHandlers(e, object)
+	a.registerCRUDHandlers(cfg, object)
 
 	return nil
 }
