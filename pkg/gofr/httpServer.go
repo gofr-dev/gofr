@@ -7,20 +7,17 @@ import (
 
 	"gofr.dev/pkg/gofr/container"
 	gofrHTTP "gofr.dev/pkg/gofr/http"
-	"gofr.dev/pkg/gofr/logging"
 )
 
 type httpServer struct {
 	router *gofrHTTP.Router
 	port   int
-	logger logging.Logger
 }
 
 func newHTTPServer(c *container.Container, port int) *httpServer {
 	return &httpServer{
 		router: gofrHTTP.NewRouter(c),
 		port:   port,
-		logger: c.Logger,
 	}
 }
 
