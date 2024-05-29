@@ -3,6 +3,9 @@ package middleware
 import (
 	"strings"
 
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
+
 	"gofr.dev/pkg/gofr/config"
 )
 
@@ -29,9 +32,10 @@ func GetConfigs(c config.Config) map[string]string {
 
 func convertHeaderNames(header string) string {
 	words := strings.Split(header, "_")
+	titleCaser := cases.Title(language.Und)
 
 	for i, v := range words {
-		words[i] = strings.Title(strings.ToLower(v))
+		words[i] = titleCaser.String(strings.ToLower(v))
 	}
 
 	return strings.Join(words, "-")
