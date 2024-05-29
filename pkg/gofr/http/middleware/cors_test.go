@@ -59,10 +59,9 @@ func TestSetMiddlewareHeaders(t *testing.T) {
 				"Access-Control-Allow-Methods": allowedMethods,
 			},
 		},
-		{map[string]string{
-			"Access-Control-Allow-Headers": "clientid",
-		},
-			map[string]string{
+		{
+			environmentConfig: map[string]string{"Access-Control-Allow-Headers": "clientid"},
+			expectedHeaders: map[string]string{
 				"Access-Control-Allow-Origin":  "*",
 				"Access-Control-Allow-Headers": allowedHeaders + ", clientid",
 				"Access-Control-Allow-Methods": allowedMethods,
