@@ -2,7 +2,6 @@ package pubsub
 
 import (
 	"context"
-	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -17,36 +16,92 @@ func TestMessage_Context(t *testing.T) {
 	assert.Equal(t, ctx, out)
 }
 
-func TestMessage_BindError(t *testing.T) {
-	m := NewMessage(context.TODO())
-
-	// the value is not in json Format
-	m.Value = []byte(``)
-
-	err := m.Bind(struct{}{})
-
-	// check if error is present
-	if assert.Error(t, err) {
-		// the error should be json syntax error
-		assert.IsType(t, &json.SyntaxError{}, err)
+func TestMessage_Bind(t *testing.T) {
+	testCases := []struct {
+		desc     string
+		input    interface{}
+		value    []byte
+		expected interface{}
+		hasError bool
+	}{
+		{
+			desc:     "bind to string",
+			input:    new(string),
+			value:    []byte("test"),
+			expected: "test",
+			hasError: false,
+		},
+		{
+			desc:     "bind to float64",
+			input:    new(float64),
+			value:    []byte("1.23"),
+			expected: 1.23,
+			hasError: false,
+		},
+		{
+			desc:     "bind to int",
+			input:    new(int),
+			value:    []byte("123"),
+			expected: 123,
+			hasError: false,
+		},
+		{
+			desc:     "bind to bool",
+			input:    new(bool),
+			value:    []byte("true"),
+			expected: true,
+			hasError: false,
+		},
+		{
+			desc:     "bind to map[string]interface{}",
+			input:    &map[string]interface{}{},
+			value:    []byte(`{"key":"value"}`),
+			expected: &map[string]interface{}{"key": "value"},
+			hasError: false,
+		},
+		{
+			desc:     "bind to struct",
+			input:    &struct{ Name string }{},
+			value:    []byte(`{"Name":"test"}`),
+			expected: &struct{ Name string }{Name: "test"},
+			hasError: false,
+		},
+		{
+			desc:     "bind to struct with error",
+			input:    &struct{ Name string }{},
+			value:    []byte(`{"Name":}`),
+			expected: &struct{ Name string }{},
+			hasError: true,
+		},
 	}
-}
 
-func TestMessage_BindSuccess(t *testing.T) {
-	type order struct {
-		OrderID int `json:"orderID"`
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			m := NewMessage(context.Background())
+			m.Value = tc.value
+
+			err := m.Bind(tc.input)
+
+			if tc.hasError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+
+				switch v := tc.input.(type) {
+				case *string:
+					assert.Equal(t, tc.expected, *v)
+				case *float64:
+					assert.Equal(t, tc.expected, *v)
+				case *int:
+					assert.Equal(t, tc.expected, *v)
+				case *bool:
+					assert.Equal(t, tc.expected, *v)
+				default:
+					assert.Equal(t, tc.expected, v)
+				}
+			}
+		})
 	}
-
-	m := NewMessage(context.TODO())
-
-	m.Value = []byte(`{"orderID":123}`)
-
-	var data order
-
-	err := m.Bind(&data)
-
-	assert.Nil(t, err)
-	assert.Equal(t, order{OrderID: 123}, data)
 }
 
 func TestMessage_Param(t *testing.T) {

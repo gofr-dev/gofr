@@ -3,6 +3,7 @@ package pubsub
 import (
 	"context"
 	"encoding/json"
+	"strconv"
 )
 
 type Message struct {
@@ -39,10 +40,42 @@ func (m *Message) PathParam(p string) string {
 	return m.Param(p)
 }
 
-func (m *Message) Bind(i interface{}) error {
-	// TODO - implement other binding functionality
-	err := json.Unmarshal(m.Value, i)
-	return err
+func (m *Message) Bind(i any) error {
+	switch v := i.(type) {
+	case *string:
+		*v = string(m.Value)
+		return nil
+	case *float64:
+		f, err := strconv.ParseFloat(string(m.Value), 64)
+		if err != nil {
+			return err
+		}
+
+		*v = f
+
+		return nil
+	case *int:
+		in, err := strconv.Atoi(string(m.Value))
+		if err != nil {
+			return err
+		}
+
+		*v = in
+
+		return nil
+	case *bool:
+		b, err := strconv.ParseBool(string(m.Value))
+		if err != nil {
+			return err
+		}
+
+		*v = b
+
+		return nil
+	default:
+		err := json.Unmarshal(m.Value, i)
+		return err
+	}
 }
 
 func (m *Message) HostName() string {
