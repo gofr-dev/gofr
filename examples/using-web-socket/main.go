@@ -2,7 +2,9 @@ package main
 
 import (
 	"fmt"
+
 	gorillaSocket "github.com/gorilla/websocket"
+
 	"gofr.dev/pkg/gofr"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/websocket"
@@ -41,7 +43,7 @@ func handleWebSocketMessages(conn *websocket.Connection, logger logging.Logger) 
 		logger.Infof("Received message: %s", msg)
 
 		// Echo the message back
-		err = conn.WriteMessage(gorillaSocket.TextMessage, append(msg, []byte("from gofr")...))
+		err = conn.WriteMessage(gorillaSocket.TextMessage, msg)
 		if err != nil {
 			logger.Errorf("Error writing message: %v", err)
 			break
