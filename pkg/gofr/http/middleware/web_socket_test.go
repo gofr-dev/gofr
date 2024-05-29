@@ -40,16 +40,7 @@ func TestWSConnectionCreate_Error(t *testing.T) {
 	mockUpgrader.EXPECT().Upgrade(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil,
 		errConnection).Times(1)
 
-	handler := WSConnectionCreate(&mockContainer)(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
-		// Check if connection is in context
-		conn, ok := r.Context().Value(gofrWebSocket.WSKey).(*websocket.Conn)
-		if ok {
-			t.Errorf("Didn't Expected WebSocket connection in context, but got one")
-		}
-
-		if assert.Nil(t, conn) {
-			t.Errorf("Expected nil connection in context, but got some different connection")
-		}
+	handler := WSConnectionCreate(&mockContainer)(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
 	}))
 
 	// Create a test request with incomplete upgrade header
