@@ -1,8 +1,9 @@
 name: Build and Deploy
-'on':
+on:
   push:
-      branches:
-        - deployment-website
+    tags:
+      - "v*.*.*"
+
 env:
   APP_NAME: gofr-website
   WEBSITE_REGISTRY: ghcr.io
