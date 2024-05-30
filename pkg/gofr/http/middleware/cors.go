@@ -2,18 +2,18 @@ package middleware
 
 import (
 	"net/http"
+	"strings"
 )
 
 const (
 	allowedHeaders = "Authorization, Content-Type, x-requested-with, origin, true-client-ip, X-Correlation-ID"
-	allowedMethods = "PUT, POST, GET, DELETE, OPTIONS, PATCH"
 )
 
 // CORS is a middleware that adds CORS (Cross-Origin Resource Sharing) headers to the response.
-func CORS(middlewareConfigs map[string]string) func(inner http.Handler) http.Handler {
+func CORS(middlewareConfigs map[string]string, routes *[]string) func(inner http.Handler) http.Handler {
 	return func(inner http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			setMiddlewareHeaders(middlewareConfigs, w)
+			setMiddlewareHeaders(middlewareConfigs, *routes, w)
 
 			if r.Method == http.MethodOptions {
 				w.WriteHeader(http.StatusOK)
@@ -25,11 +25,13 @@ func CORS(middlewareConfigs map[string]string) func(inner http.Handler) http.Han
 	}
 }
 
-func setMiddlewareHeaders(middlewareConfigs map[string]string, w http.ResponseWriter) {
+func setMiddlewareHeaders(middlewareConfigs map[string]string, routes []string, w http.ResponseWriter) {
+	routes = append(routes, "OPTIONS")
+
 	// Set default headers
 	defaultHeaders := map[string]string{
 		"Access-Control-Allow-Origin":  "*",
-		"Access-Control-Allow-Methods": allowedMethods,
+		"Access-Control-Allow-Methods": strings.Join(routes, ", "),
 		"Access-Control-Allow-Headers": allowedHeaders,
 	}
 

@@ -13,6 +13,7 @@ import (
 // Router is responsible for routing HTTP request.
 type Router struct {
 	mux.Router
+	RegisteredRoutes *[]string
 }
 
 type Middleware func(handler http.Handler) http.Handler
@@ -20,16 +21,22 @@ type Middleware func(handler http.Handler) http.Handler
 // NewRouter creates a new Router instance.
 func NewRouter(c *container.Container, middlewareConfigs map[string]string) *Router {
 	muxRouter := mux.NewRouter().StrictSlash(false)
+	routes := make([]string, 0)
+	r := &Router{
+		Router:           *muxRouter,
+		RegisteredRoutes: &routes,
+	}
+
 	muxRouter.Use(
 		middleware.Tracer,
 		middleware.Logging(c.Logger),
-		middleware.CORS(middlewareConfigs),
+		middleware.CORS(middlewareConfigs, r.RegisteredRoutes),
 		middleware.Metrics(c.Metrics()),
 	)
 
-	return &Router{
-		Router: *muxRouter,
-	}
+	r.Router = *muxRouter
+
+	return r
 }
 
 // Add adds a new route with the given HTTP method, pattern, and handler, wrapping the handler with OpenTelemetry instrumentation.
