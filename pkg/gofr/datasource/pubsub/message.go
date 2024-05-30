@@ -3,8 +3,12 @@ package pubsub
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"reflect"
 	"strconv"
 )
+
+var errNotPointer = errors.New("input should be a pointer to a variable")
 
 type Message struct {
 	ctx context.Context
@@ -41,6 +45,10 @@ func (m *Message) PathParam(p string) string {
 }
 
 func (m *Message) Bind(i any) error {
+	if reflect.ValueOf(i).Kind() != reflect.Ptr {
+		return errNotPointer
+	}
+
 	switch v := i.(type) {
 	case *string:
 		*v = string(m.Value)

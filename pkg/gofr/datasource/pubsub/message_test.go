@@ -67,6 +67,13 @@ func TestMessage_Bind(t *testing.T) {
 			hasError: false,
 		},
 		{
+			desc:     "bind to not pointer",
+			input:    struct{ Name string }{},
+			value:    []byte(`{"Name":"test"}`),
+			expected: &struct{ Name string }{},
+			hasError: true,
+		},
+		{
 			desc:     "bind to struct with error",
 			input:    &struct{ Name string }{},
 			value:    []byte(`{"Name":}`),
