@@ -111,6 +111,75 @@ func TestMessage_Bind(t *testing.T) {
 	}
 }
 
+func TestBindString(t *testing.T) {
+	m := &Message{Value: []byte("test")}
+
+	var s string
+	err := m.bindString(&s)
+	assert.NoError(t, err)
+	assert.Equal(t, "test", s)
+}
+
+func TestBindFloat64(t *testing.T) {
+	m := &Message{Value: []byte("1.23")}
+
+	var f float64
+	err := m.bindFloat64(&f)
+	assert.NoError(t, err)
+	assert.Equal(t, 1.23, f)
+
+	m = &Message{Value: []byte("not a float")}
+
+	var f2 float64
+	err = m.bindFloat64(&f2)
+	assert.Error(t, err)
+}
+
+func TestBindInt(t *testing.T) {
+	m := &Message{Value: []byte("123")}
+
+	var i int
+	err := m.bindInt(&i)
+	assert.NoError(t, err)
+	assert.Equal(t, 123, i)
+
+	m = &Message{Value: []byte("not an int")}
+
+	var i2 int
+	err = m.bindInt(&i2)
+	assert.Error(t, err)
+}
+
+func TestBindBool(t *testing.T) {
+	m := &Message{Value: []byte("true")}
+
+	var b bool
+	err := m.bindBool(&b)
+	assert.NoError(t, err)
+	assert.Equal(t, true, b)
+
+	m = &Message{Value: []byte("not a bool")}
+
+	var b2 bool
+	err = m.bindBool(&b2)
+	assert.Error(t, err)
+}
+
+func TestBindStruct(t *testing.T) {
+	m := &Message{Value: []byte(`{"key":"value"}`)}
+
+	var i map[string]interface{}
+	err := m.bindStruct(&i)
+	assert.NoError(t, err)
+	assert.Equal(t, map[string]interface{}{"key": "value"}, i)
+
+	m = &Message{Value: []byte(`{"key":}`)}
+
+	var i2 map[string]interface{}
+	err = m.bindStruct(&i2)
+	assert.Error(t, err)
+}
+
 func TestMessage_Param(t *testing.T) {
 	testCases := []struct {
 		desc        string

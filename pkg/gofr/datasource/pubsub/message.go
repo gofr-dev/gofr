@@ -44,6 +44,7 @@ func (m *Message) PathParam(p string) string {
 	return m.Param(p)
 }
 
+// Bind binds the message value to the input variable. The input should be a pointer to a variable.
 func (m *Message) Bind(i any) error {
 	if reflect.ValueOf(i).Kind() != reflect.Ptr {
 		return errNotPointer
@@ -51,39 +52,58 @@ func (m *Message) Bind(i any) error {
 
 	switch v := i.(type) {
 	case *string:
-		*v = string(m.Value)
-		return nil
+		return m.bindString(v)
 	case *float64:
-		f, err := strconv.ParseFloat(string(m.Value), 64)
-		if err != nil {
-			return err
-		}
-
-		*v = f
-
-		return nil
+		return m.bindFloat64(v)
 	case *int:
-		in, err := strconv.Atoi(string(m.Value))
-		if err != nil {
-			return err
-		}
-
-		*v = in
-
-		return nil
+		return m.bindInt(v)
 	case *bool:
-		b, err := strconv.ParseBool(string(m.Value))
-		if err != nil {
-			return err
-		}
-
-		*v = b
-
-		return nil
+		return m.bindBool(v)
 	default:
-		err := json.Unmarshal(m.Value, i)
+		return m.bindStruct(i)
+	}
+}
+
+func (m *Message) bindString(v *string) error {
+	*v = string(m.Value)
+	return nil
+}
+
+func (m *Message) bindFloat64(v *float64) error {
+	f, err := strconv.ParseFloat(string(m.Value), 64)
+	if err != nil {
 		return err
 	}
+
+	*v = f
+
+	return nil
+}
+
+func (m *Message) bindInt(v *int) error {
+	in, err := strconv.Atoi(string(m.Value))
+	if err != nil {
+		return err
+	}
+
+	*v = in
+
+	return nil
+}
+
+func (m *Message) bindBool(v *bool) error {
+	b, err := strconv.ParseBool(string(m.Value))
+	if err != nil {
+		return err
+	}
+
+	*v = b
+
+	return nil
+}
+
+func (m *Message) bindStruct(i any) error {
+	return json.Unmarshal(m.Value, i)
 }
 
 func (m *Message) HostName() string {
