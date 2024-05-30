@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -155,7 +154,7 @@ func (a *App) Run() {
 		_ = a.httpServer.router.Walk(func(route *mux.Route, router *mux.Router, ancestors []*mux.Route) error {
 			met, _ := route.GetMethods()
 			for _, method := range met {
-				if !slices.Contains(registeredMethods, method) { // Check for uniqueness before adding
+				if !contains(registeredMethods, method) { // Check for uniqueness before adding
 					registeredMethods = append(registeredMethods, method)
 				}
 			}
@@ -411,4 +410,15 @@ func (a *App) AddCronJob(schedule, jobName string, job CronFunc) {
 	if err := a.cron.AddJob(schedule, jobName, job); err != nil {
 		a.Logger().Errorf("error adding cron job, err : %v", err)
 	}
+}
+
+// contains is a helper function checking for duplicate entry in a slice.
+func contains(elems []string, v string) bool {
+	for _, s := range elems {
+		if v == s {
+			return true
+		}
+	}
+
+	return false
 }
