@@ -151,7 +151,7 @@ func (a *App) Run() {
 
 		var registeredMethods []string
 
-		_ = a.httpServer.router.Walk(func(route *mux.Route, _ *mux.Router, ancestors []*mux.Route) error {
+		_ = a.httpServer.router.Walk(func(route *mux.Route, _ *mux.Router, _ []*mux.Route) error {
 			met, _ := route.GetMethods()
 			for _, method := range met {
 				if !contains(registeredMethods, method) { // Check for uniqueness before adding
