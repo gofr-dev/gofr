@@ -45,7 +45,7 @@ func New(conf *Config) *Client {
 	return &Client{clusterConfig: clusterConfig}
 }
 
-// Connect establishes a connection to MongoDB and registers metrics using the provided configuration when the client was Created.
+// Connect establishes a connection to Cassandra and registers metrics using the provided configuration when the client was Created.
 func (c *Client) Connect() {
 	hosts := strings.TrimSuffix(strings.Join(c.clusterConfig.Hosts, ", "), ", ")
 	c.logger.Logf("connecting to cassandra at %v on port %v to keyspace %v", c.clusterConfig.Keyspace, hosts, c.clusterConfig.Port)
@@ -84,7 +84,7 @@ func (c *Client) UseMetrics(metrics interface{}) {
 // Can be used to single as well as multiple rows.
 // Accepts struct or slice of struct as dest parameter for single and multiple rows retrieval respectively
 func (c *Client) Query(dest interface{}, stmt string, values ...interface{}) error {
-	defer c.postProcess(&QueryLog{Query: stmt}, time.Now())
+	defer c.postProcess(&QueryLog{Query: stmt, Keyspace: c.clusterConfig.Keyspace}, time.Now())
 
 	rvo := reflect.ValueOf(dest)
 	if rvo.Kind() != reflect.Ptr {
@@ -134,7 +134,7 @@ func (c *Client) Query(dest interface{}, stmt string, values ...interface{}) err
 // Return error if any error occurs while executing the query
 // Can be used to execute UPDATE or INSERT
 func (c *Client) Exec(stmt string, values ...interface{}) error {
-	defer c.postProcess(&QueryLog{Query: stmt}, time.Now())
+	defer c.postProcess(&QueryLog{Query: stmt, Keyspace: c.clusterConfig.Keyspace}, time.Now())
 
 	return c.session.Query(stmt, values...).Exec()
 }
@@ -150,7 +150,7 @@ func (c *Client) QueryCAS(dest interface{}, stmt string, values ...interface{}) 
 		err     error
 	)
 
-	defer c.postProcess(&QueryLog{Query: stmt}, time.Now())
+	defer c.postProcess(&QueryLog{Query: stmt, Keyspace: c.clusterConfig.Keyspace}, time.Now())
 
 	rvo := reflect.ValueOf(dest)
 	if rvo.Kind() != reflect.Ptr {

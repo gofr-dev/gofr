@@ -17,15 +17,14 @@ type Logger interface {
 }
 
 type QueryLog struct {
-	Query      string `json:"query"`
-	Duration   int64  `json:"duration"`
-	Collection string `json:"collection,omitempty"`
+	Query    string `json:"query"`
+	Duration int64  `json:"duration"`
+	Keyspace string `json:"keyspace,omitempty"`
 }
 
 func (ql *QueryLog) PrettyPrint(writer io.Writer) {
 	fmt.Fprintf(writer, "\u001B[38;5;8m%-32s \u001B[38;5;206m%-6s\u001B[0m %8d\u001B[38;5;8mµs\u001B[0m %s\n",
-		clean(ql.Query), "CASS", ql.Duration,
-		clean(strings.Join([]string{ql.Collection}, " ")))
+		clean(ql.Query), "CASS", ql.Duration, clean(ql.Keyspace))
 }
 
 // clean takes a string query as input and performs two operations to clean it up:
