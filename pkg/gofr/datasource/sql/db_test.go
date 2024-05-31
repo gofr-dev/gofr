@@ -339,6 +339,67 @@ func TestDB_QueryError(t *testing.T) {
 	assert.Contains(t, out, "Query SELECT")
 }
 
+func TestDB_QueryContext(t *testing.T) {
+	var (
+		rows *sql.Rows
+		err  error
+	)
+
+	out := testutil.StdoutOutputForFunc(func() {
+		db, mock := getDB(t, logging.DEBUG)
+		defer db.DB.Close()
+
+		ctrl := gomock.NewController(t)
+		mockMetrics := NewMockMetrics(ctrl)
+
+		db.metrics = mockMetrics
+
+		mock.ExpectQuery("SELECT 1").
+			WillReturnRows(sqlmock.NewRows([]string{"1"}).AddRow("1"))
+		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats",
+			gomock.Any(), "hostname", gomock.Any(), "database", gomock.Any(), "type", "SELECT")
+
+		rows, err = db.QueryContext(context.Background(), "SELECT 1")
+		assert.Nil(t, err)
+		assert.Nil(t, rows.Err())
+		assert.NotNil(t, rows)
+	})
+
+	assert.Contains(t, out, "QueryContext SELECT 1")
+}
+
+func TestDB_QueryContextError(t *testing.T) {
+	var (
+		rows *sql.Rows
+		err  error
+	)
+
+	out := testutil.StdoutOutputForFunc(func() {
+		db, mock := getDB(t, logging.DEBUG)
+		defer db.DB.Close()
+
+		ctrl := gomock.NewController(t)
+		mockMetrics := NewMockMetrics(ctrl)
+
+		db.metrics = mockMetrics
+
+		mock.ExpectQuery("SELECT ").
+			WillReturnError(errSyntax)
+		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats",
+			gomock.Any(), "hostname", gomock.Any(), "database", gomock.Any(), "type", "SELECT")
+
+		rows, err = db.QueryContext(context.Background(), "SELECT")
+		if !assert.Nil(t, rows) {
+			assert.Nil(t, rows.Err())
+		}
+
+		assert.NotNil(t, err)
+		assert.Equal(t, errSyntax, err)
+	})
+
+	assert.Contains(t, out, "QueryContext SELECT")
+}
+
 func TestDB_QueryRow(t *testing.T) {
 	var (
 		row *sql.Row
