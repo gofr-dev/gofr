@@ -2,7 +2,6 @@ package http
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 	"strings"
 
@@ -69,8 +68,9 @@ func (r Responder) HTTPStatusFromError(err error) (status int, errObj interface{
 		}
 	}
 
-	if errors.Is(err, http.ErrMissingFile) {
-		return http.StatusNotFound, map[string]interface{}{
+	e, ok := err.(statusCodeResponder)
+	if ok {
+		return e.StatusCode(), map[string]interface{}{
 			"message": err.Error(),
 		}
 	}
@@ -84,4 +84,8 @@ func (r Responder) HTTPStatusFromError(err error) (status int, errObj interface{
 type response struct {
 	Error interface{} `json:"error,omitempty"`
 	Data  interface{} `json:"data,omitempty"`
+}
+
+type statusCodeResponder interface {
+	StatusCode() int
 }
