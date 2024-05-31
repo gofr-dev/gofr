@@ -5,9 +5,6 @@ import (
 
 	"github.com/gorilla/mux"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
-
-	"gofr.dev/pkg/gofr/container"
-	"gofr.dev/pkg/gofr/http/middleware"
 )
 
 // Router is responsible for routing HTTP request.
@@ -19,20 +16,13 @@ type Router struct {
 type Middleware func(handler http.Handler) http.Handler
 
 // NewRouter creates a new Router instance.
-func NewRouter(c *container.Container, middlewareConfigs map[string]string) *Router {
+func NewRouter() *Router {
 	muxRouter := mux.NewRouter().StrictSlash(false)
 	routes := make([]string, 0)
 	r := &Router{
 		Router:           *muxRouter,
 		RegisteredRoutes: &routes,
 	}
-
-	muxRouter.Use(
-		middleware.Tracer,
-		middleware.Logging(c.Logger),
-		middleware.CORS(middlewareConfigs, r.RegisteredRoutes),
-		middleware.Metrics(c.Metrics()),
-	)
 
 	r.Router = *muxRouter
 

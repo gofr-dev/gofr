@@ -12,7 +12,6 @@ func TestGetConfigs(t *testing.T) {
 	mockConfig := config.NewMockConfig(map[string]string{
 		"ACCESS_CONTROL_ALLOW_ORIGIN":       "*",
 		"ACCESS_CONTROL_ALLOW_HEADERS":      "Authorization, Content-Type",
-		"ACCESS_CONTROL_ALLOW_METHODS":      "GET, POST",
 		"ACCESS_CONTROL_ALLOW_CREDENTIALS":  "true",
 		"ACCESS_CONTROL_ALLOW_CUSTOMHEADER": "abc",
 	})
@@ -22,7 +21,6 @@ func TestGetConfigs(t *testing.T) {
 	expectedConfigs := map[string]string{
 		"Access-Control-Allow-Origin":      "*",
 		"Access-Control-Allow-Headers":     "Authorization, Content-Type",
-		"Access-Control-Allow-Methods":     "GET, POST",
 		"Access-Control-Allow-Credentials": "true",
 	}
 

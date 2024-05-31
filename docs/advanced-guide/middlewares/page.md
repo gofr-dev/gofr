@@ -18,7 +18,6 @@ The CORS middleware provides the following overridable configs:
 - `ACCESS_CONTROL_ALLOW_CREDENTIALS`: Set to true to allow credentials (cookies, HTTP authentication) in requests.
 - `ACCESS_CONTROL_EXPOSE_HEADERS`: Specify additional headers exposed to the client.
 - `ACCESS_CONTROL_MAX_AGE`: Set the maximum time (in seconds) for preflight request caching.
-```
 
 ## Adding Custom Middleware in GoFr
 
