@@ -56,7 +56,6 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 		ds.SQL = newMysql(transactionsObjects.SQLTx)
 		ds.Redis = newRedis(transactionsObjects.RedisTx)
 		ds.PubSub = newPubSub(c.PubSub)
-		ds.Cassandra = newCassandra(c.Cassandra)
 
 		transactionsObjects.StartTime = time.Now()
 		transactionsObjects.MigrationNumber = currentMigration
@@ -121,14 +120,6 @@ func getMigrator(c *container.Container) (Datasource, Migrator, bool) {
 
 	if c.PubSub != nil {
 		ok = true
-	}
-
-	if !isNil(c.Cassandra) {
-		ok = true
-
-		ds.Cassandra = c.Cassandra
-
-		mg = cassandraMigratorObject{ds.Cassandra}.apply(mg)
 	}
 
 	return ds, mg, ok
