@@ -69,7 +69,7 @@ func Test_WSConnectionCreate_Success(t *testing.T) {
 
 	middleware := WSConnectionCreate(&mockContainer)
 
-	innerHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	innerHandler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
 

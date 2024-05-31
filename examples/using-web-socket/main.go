@@ -3,8 +3,6 @@ package main
 import (
 	"fmt"
 
-	gorillaSocket "github.com/gorilla/websocket"
-
 	"gofr.dev/pkg/gofr"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/websocket"
@@ -34,16 +32,15 @@ func handleWebSocketMessages(conn *websocket.Connection, logger logging.Logger) 
 	for {
 		_, msg, err := conn.ReadMessage()
 		if err != nil {
-			if gorillaSocket.IsUnexpectedCloseError(err, gorillaSocket.CloseGoingAway, gorillaSocket.CloseAbnormalClosure) {
-				logger.Errorf("Unexpected close error: %v", err)
-			}
+			logger.Errorf("Unexpected close error: %v", err)
+
 			break
 		}
 
 		logger.Infof("Received message: %s", msg)
 
 		// Echo the message back
-		err = conn.WriteMessage(gorillaSocket.TextMessage, msg)
+		err = conn.WriteMessage(websocket.TextMessage, msg)
 		if err != nil {
 			logger.Errorf("Error writing message: %v", err)
 			break
