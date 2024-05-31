@@ -8,19 +8,24 @@ import (
 )
 
 type Logger interface {
+	Debug(args ...interface{})
 	Debugf(pattern string, args ...interface{})
+	Log(args ...interface{})
 	Logf(pattern string, args ...interface{})
+	Error(args ...interface{})
 	Errorf(patter string, args ...interface{})
 }
 
 type QueryLog struct {
-	Query    string `json:"query"`
-	Duration int64  `json:"duration"`
+	Query      string `json:"query"`
+	Duration   int64  `json:"duration"`
+	Collection string `json:"collection,omitempty"`
 }
 
 func (ql *QueryLog) PrettyPrint(writer io.Writer) {
-	fmt.Fprintf(writer, "\u001B[38;5;8m%-32s \u001B[38;5;206m%-6s\u001B[0m %8d\u001B[38;5;8mµs\u001B[0m\n",
-		clean(ql.Query), "CASSANDRA", ql.Duration)
+	fmt.Fprintf(writer, "\u001B[38;5;8m%-32s \u001B[38;5;206m%-6s\u001B[0m %8d\u001B[38;5;8mµs\u001B[0m %s\n",
+		clean(ql.Query), "CASSANDRA", ql.Duration,
+		clean(strings.Join([]string{ql.Collection}, " ")))
 }
 
 // clean takes a string query as input and performs two operations to clean it up:

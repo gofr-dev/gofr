@@ -4,14 +4,22 @@ import (
 	"context"
 	"reflect"
 	"regexp"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/gocql/gocql"
 )
 
+type Config struct {
+	Hosts    string
+	Keyspace string
+	Port     int
+	Username string
+	Password string
+}
+
 type Client struct {
+	config  *Config
 	session *gocql.Session
 
 	clusterConfig *gocql.ClusterConfig
@@ -27,12 +35,12 @@ type Client struct {
 // client.UseLogger(loggerInstance)
 // client.UseMetrics(metricsInstance)
 // client.Connect()
-func New(conf Config) *Client {
-	hosts := strings.Split(conf.Get("CASS_DB_HOST"), ",")
+func New(conf *Config) *Client {
+	hosts := strings.Split(conf.Hosts, ",")
 	clusterConfig := gocql.NewCluster(hosts...)
-	clusterConfig.Keyspace = conf.Get("CASS_DB_KEYSPACE")
-	clusterConfig.Port, _ = strconv.Atoi(conf.Get("CASS_DB_PORT"))
-	clusterConfig.Authenticator = gocql.PasswordAuthenticator{Username: conf.Get("CASS_DB_USER"), Password: conf.Get("CASS_DB_PASS")}
+	clusterConfig.Keyspace = conf.Keyspace
+	clusterConfig.Port = conf.Port
+	clusterConfig.Authenticator = gocql.PasswordAuthenticator{Username: conf.Username, Password: conf.Password}
 
 	return &Client{clusterConfig: clusterConfig}
 }
@@ -44,7 +52,7 @@ func (c *Client) Connect() {
 
 	session, err := c.clusterConfig.CreateSession()
 	if err != nil {
-		c.logger.Errorf("error connecting to cassandra: ", err)
+		c.logger.Error("error connecting to cassandra: ", err)
 
 		return
 	}
@@ -80,7 +88,7 @@ func (c *Client) Query(dest interface{}, stmt string, values ...interface{}) err
 
 	rvo := reflect.ValueOf(dest)
 	if rvo.Kind() != reflect.Ptr {
-		c.logger.Errorf("we did not get a pointer. data is not settable.")
+		c.logger.Error("we did not get a pointer. data is not settable.")
 
 		return DestinationIsNotPointer{}
 	}
@@ -286,7 +294,7 @@ func (c *Client) postProcess(ql *QueryLog, startTime time.Time) {
 
 	ql.Duration = duration
 
-	c.logger.Debugf("%v", ql)
+	c.logger.Debug(ql)
 
 	hosts := strings.TrimSuffix(strings.Join(c.clusterConfig.Hosts, ", "), ", ")
 
