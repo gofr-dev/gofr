@@ -1,15 +1,15 @@
 ## Contribution Guidelines
-* Minor changes can be done directly by editing code on github. Github automatically creates a temporary branch and
+* Minor changes can be done directly by editing code on GitHub. GitHub automatically creates a temporary branch and
   files a PR. This is only suitable for really small changes like: spelling fixes, variable name changes or error string
   change etc. For larger commits, following steps are recommended.
-* (Optional) If you want to discuss your implementation with the users of Gofr, use the github discussions of this repo.
+* (Optional) If you want to discuss your implementation with the users of GoFr, use the GitHub discussions of this repo.
 * Configure your editor to use goimport and golangci-lint on file changes. Any code which is not formatted using these
   tools, will fail on the pipeline.
 * All code contributions should have associated tests and all new line additions should be covered in those testcases.
   No PR should ever decrease the overall code coverage.
 * Once your code changes are done along with the testcases, submit a PR to development branch. Please note that all PRs
   are merged from feature branches to development first.
-* All PRs need to be reviewed by at least 2 Gofr developers. They might reach out to you for any clarfication.
+* All PRs need to be reviewed by at least 2 GoFr developers. They might reach out to you for any clarification.
 * Thank you for your contribution. :)
 
 ### GoFr Testing Policy:
@@ -87,7 +87,7 @@ Please note that the recommended local port for the services are different than 
 * Take interfaces and return concrete types.
     - Lean interfaces - take 'exactly' what you need, not more. Onus of interface definition is on the package who is
       using it. so, it should be as lean as possible. This makes it easier to test.
-    - Be careful of type assertions in this context. If you take an interface and type assert to a type - then its
+    - Be careful of type assertions in this context. If you take an interface and type assert to a type - then it's
       similar to taking concrete type.
 * Uses of context:
     - We should use context as a first parameter.
@@ -101,3 +101,16 @@ Please note that the recommended local port for the services are different than 
     - All dependencies must be abstracted as an interface. This will make it easier to switch libraries at later point
       of time.
 * Version tagging as per Semantic versioning (https://semver.org/)
+
+### Documentation
+* After adding or modifying code existing code, update the documentation too - [development/docs](https://github.com/gofr-dev/gofr/tree/development/docs).
+* When you consider a new documentation page is needed, start by adding a new file and writing your new documentation. Then - add a reference to it in [navigation.js](https://gofr.dev/docs/navigation.js).
+* If needed, update or add proper code examples for your changes.
+* In case images are needed, add it to [docs/public](https://gofr.dev/docs/public) folder.
+* Make sure you don't break existing links and refernces.
+* Maintain Markdown standards, you can read more [here](https://www.markdownguide.org/basic-syntax/), this includes:
+    - Headings (`#`, `##`, etc.) should be placed in order.
+    - Use trailing white space or the <br> HTML tag at the end of the line.
+    - Use "`" sign to add single line code and "```" to add multi-line code block.
+    - Use relative references to images (in `public` folder as mentioned above.)
+* The [gofr.dev documentation]([url](https://gofr.dev/docs)) site is updated upon push to `/docs` path in the repo. Verify your changes are live after next GoFr version.

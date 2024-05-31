@@ -9,13 +9,14 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/metrics/exporters"
 	"gofr.dev/pkg/gofr/testutil"
 )
 
 func Test_NewMetricsManagerSuccess(t *testing.T) {
 	metrics := NewMetricsManager(exporters.Prometheus("testing-app", "v1.0.0"),
-		testutil.NewMockLogger(testutil.INFOLOG))
+		logging.NewMockLogger(logging.INFO))
 
 	metrics.NewGauge("gauge-test", "this is metric to test gauge")
 	metrics.NewCounter("counter-test", "this is metric to test counter")
@@ -68,7 +69,7 @@ func Test_NewMetricsManagerSuccess(t *testing.T) {
 func Test_NewMetricsManagerMetricsNotRegistered(t *testing.T) {
 	logs := func() {
 		metrics := NewMetricsManager(exporters.Prometheus("testing-app", "v1.0.0"),
-			testutil.NewMockLogger(testutil.INFOLOG))
+			logging.NewMockLogger(logging.INFO))
 
 		metrics.SetGauge("gauge-test", 50)
 		metrics.IncrementCounter(context.Background(), "counter-test")
@@ -87,7 +88,7 @@ func Test_NewMetricsManagerMetricsNotRegistered(t *testing.T) {
 func Test_NewMetricsManagerInvalidMetricsName(t *testing.T) {
 	logs := func() {
 		metrics := NewMetricsManager(exporters.Prometheus("testing-app", "v1.0.0"),
-			testutil.NewMockLogger(testutil.INFOLOG))
+			logging.NewMockLogger(logging.INFO))
 
 		metrics.NewCounter("", "counter metric with empty name")
 		metrics.NewUpDownCounter("", "up-down-counter metric with empty name")
@@ -106,7 +107,7 @@ func Test_NewMetricsManagerInvalidMetricsName(t *testing.T) {
 func Test_NewMetricsManagerDuplicateMetricsRegistration(t *testing.T) {
 	logs := func() {
 		metrics := NewMetricsManager(exporters.Prometheus("testing-app", "v1.0.0"),
-			testutil.NewMockLogger(testutil.INFOLOG))
+			logging.NewMockLogger(logging.INFO))
 
 		metrics.NewGauge("gauge-test", "this is metric to test gauge")
 		metrics.NewCounter("counter-test", "this is metric to test counter")
@@ -130,7 +131,7 @@ func Test_NewMetricsManagerDuplicateMetricsRegistration(t *testing.T) {
 func Test_NewMetricsManagerInvalidLabelPairErrors(t *testing.T) {
 	logs := func() {
 		metrics := NewMetricsManager(exporters.Prometheus("testing-app", "v1.0.0"),
-			testutil.NewMockLogger(testutil.INFOLOG))
+			logging.NewMockLogger(logging.INFO))
 
 		metrics.NewCounter("counter-test", "this is metric to test counter")
 
@@ -146,13 +147,13 @@ func Test_NewMetricsManagerInvalidLabelPairErrors(t *testing.T) {
 func Test_NewMetricsManagerLabelHighCardinality(t *testing.T) {
 	logs := func() {
 		metrics := NewMetricsManager(exporters.Prometheus("testing-app", "v1.0.0"),
-			testutil.NewMockLogger(testutil.INFOLOG))
+			logging.NewMockLogger(logging.INFO))
 
 		metrics.NewCounter("counter-test", "this is metric to test counter")
 
 		metrics.IncrementCounter(context.Background(), "counter-test",
 			"label1", "value1", "label2", "value2", "label3", "value3", "label4", "value4", "label5", "value5", "label6", "value6",
-			"label7", "value7", "label8", "value8", "label9", "value9", "label10", "value10", "label11", "valu11", "label12", "value12")
+			"label7", "value7", "label8", "value8", "label9", "value9", "label10", "value10", "label11", "value11", "label12", "value12")
 	}
 
 	log := testutil.StdoutOutputForFunc(logs)

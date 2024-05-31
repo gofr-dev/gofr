@@ -1,6 +1,6 @@
 # Connecting MySQL
 
-Just like Redis gofr also supports connection to SQL(mysql and postgres) databases based on configuration variables.
+Just like Redis GoFr also supports connection to SQL(MySQL and Postgres) databases based on configuration variables.
 
 ## Setup
 
@@ -22,7 +22,7 @@ Now the database with table is ready, we can connect our GoFr server to MySQL
 
 After adding MySQL configs `.env` will be updated to the following.
 
-```bash
+```dotenv
 # configs/.env
 APP_NAME=test-service
 HTTP_PORT=9000

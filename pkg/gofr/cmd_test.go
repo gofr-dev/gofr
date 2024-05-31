@@ -8,6 +8,7 @@ import (
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
+	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/testutil"
 )
 
@@ -30,7 +31,7 @@ func Test_Run_SuccessCallRegisteredArgument(t *testing.T) {
 		})
 
 	logs := testutil.StdoutOutputForFunc(func() {
-		c.Run(container.NewContainer(config.NewEnvFile(".env", testutil.NewMockLogger(testutil.DEBUGLOG))))
+		c.Run(container.NewContainer(config.NewEnvFile(".env", logging.NewMockLogger(logging.DEBUG))))
 	})
 
 	assert.Contains(t, logs, "handler called")
@@ -52,7 +53,7 @@ func Test_Run_SuccessSkipEmptySpaceAndMatchCommandWithSpace(t *testing.T) {
 		})
 
 	logs := testutil.StdoutOutputForFunc(func() {
-		c.Run(container.NewContainer(config.NewEnvFile("", testutil.NewMockLogger(testutil.DEBUGLOG))))
+		c.Run(container.NewContainer(config.NewEnvFile("", logging.NewMockLogger(logging.DEBUG))))
 	})
 
 	assert.Contains(t, logs, "handler called")
@@ -76,7 +77,7 @@ func Test_Run_SuccessCommandWithMultipleParameters(t *testing.T) {
 		})
 
 	logs := testutil.StdoutOutputForFunc(func() {
-		c.Run(container.NewContainer(config.NewEnvFile("", testutil.NewMockLogger(testutil.DEBUGLOG))))
+		c.Run(container.NewContainer(config.NewEnvFile("", logging.NewMockLogger(logging.DEBUG))))
 	})
 
 	assert.Contains(t, logs, "handler called")
@@ -110,7 +111,7 @@ func Test_Run_SuccessRouteWithSpecialCharacters(t *testing.T) {
 			})
 
 		logs := testutil.StdoutOutputForFunc(func() {
-			c.Run(container.NewContainer(config.NewEnvFile("", testutil.NewMockLogger(testutil.DEBUGLOG))))
+			c.Run(container.NewContainer(config.NewEnvFile("", logging.NewMockLogger(logging.DEBUG))))
 		})
 
 		assert.Contains(t, logs, "handler called", "TEST[%d] Failed.\n %s", i, tc.desc)
@@ -142,7 +143,7 @@ func Test_Run_ErrorRouteWithSpecialCharacters(t *testing.T) {
 			})
 
 		logs := testutil.StderrOutputForFunc(func() {
-			c.Run(container.NewContainer(config.NewEnvFile("", testutil.NewMockLogger(testutil.DEBUGLOG))))
+			c.Run(container.NewContainer(config.NewEnvFile("", logging.NewMockLogger(logging.DEBUG))))
 		})
 
 		assert.NotContains(t, logs, "handler called", "TEST[%d] Failed.\n %s", i, tc.desc)
@@ -167,7 +168,7 @@ func Test_Run_ErrorParamNotReadWithoutHyphen(t *testing.T) {
 		})
 
 	logs := testutil.StdoutOutputForFunc(func() {
-		c.Run(container.NewContainer(config.NewEnvFile("", testutil.NewMockLogger(testutil.DEBUGLOG))))
+		c.Run(container.NewContainer(config.NewEnvFile("", logging.NewMockLogger(logging.DEBUG))))
 	})
 
 	assert.Contains(t, logs, "handler called")
@@ -179,7 +180,7 @@ func Test_Run_ErrorNotARegisteredCommand(t *testing.T) {
 	c := cmd{}
 
 	logs := testutil.StderrOutputForFunc(func() {
-		c.Run(container.NewContainer(config.NewEnvFile("", testutil.NewMockLogger(testutil.DEBUGLOG))))
+		c.Run(container.NewContainer(config.NewEnvFile("", logging.NewMockLogger(logging.DEBUG))))
 	})
 
 	assert.Contains(t, logs, "No Command Found!")
@@ -201,7 +202,7 @@ func Test_Run_ErrorWhenOnlyParamAreGiven(t *testing.T) {
 		})
 
 	logs := testutil.StderrOutputForFunc(func() {
-		c.Run(container.NewContainer(config.NewEnvFile("", testutil.NewMockLogger(testutil.DEBUGLOG))))
+		c.Run(container.NewContainer(config.NewEnvFile("", logging.NewMockLogger(logging.DEBUG))))
 	})
 
 	assert.Contains(t, logs, "No Command Found!")
@@ -221,7 +222,7 @@ func Test_Run_ErrorRouteRegisteredButNilHandler(t *testing.T) {
 		})
 
 	logs := testutil.StderrOutputForFunc(func() {
-		c.Run(container.NewContainer(config.NewEnvFile("", testutil.NewMockLogger(testutil.DEBUGLOG))))
+		c.Run(container.NewContainer(config.NewEnvFile("", logging.NewMockLogger(logging.DEBUG))))
 	})
 
 	assert.Contains(t, logs, "No Command Found!")
@@ -233,7 +234,7 @@ func Test_Run_ErrorNoArgumentGiven(t *testing.T) {
 	c := cmd{}
 
 	logs := testutil.StderrOutputForFunc(func() {
-		c.Run(container.NewContainer(config.NewEnvFile("", testutil.NewMockLogger(testutil.DEBUGLOG))))
+		c.Run(container.NewContainer(config.NewEnvFile("", logging.NewMockLogger(logging.DEBUG))))
 	})
 
 	assert.Contains(t, logs, "Available commands:")
@@ -278,7 +279,7 @@ func Test_Run_HelpCommand(t *testing.T) {
 		})
 
 	logs := testutil.StdoutOutputForFunc(func() {
-		c.Run(container.NewContainer(config.NewEnvFile("", testutil.NewMockLogger(testutil.DEBUGLOG))))
+		c.Run(container.NewContainer(config.NewEnvFile("", logging.NewMockLogger(logging.DEBUG))))
 	})
 
 	assert.Contains(t, logs, "Available commands:")

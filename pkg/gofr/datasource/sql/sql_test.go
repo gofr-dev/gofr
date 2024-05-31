@@ -10,13 +10,14 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"gofr.dev/pkg/gofr/config"
+	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/testutil"
 )
 
 func TestNewSQL_ErrorCase(t *testing.T) {
 	ctrl := gomock.NewController(t)
 
-	expectedLog := fmt.Sprintf("could not register sql dialect '%s' for traces due to error: '%s'", "mysql",
+	expectedLog := fmt.Sprintf("could not register sql dialect '%s' for traces, error: %s", "mysql",
 		"sql: unknown driver \"mysql\" (forgotten import?)")
 
 	mockConfig := config.NewMockConfig(map[string]string{
@@ -29,7 +30,7 @@ func TestNewSQL_ErrorCase(t *testing.T) {
 	})
 
 	testLogs := testutil.StderrOutputForFunc(func() {
-		mockLogger := testutil.NewMockLogger(testutil.ERRORLOG)
+		mockLogger := logging.NewMockLogger(logging.ERROR)
 		mockMetrics := NewMockMetrics(ctrl)
 
 		NewSQL(mockConfig, mockLogger, mockMetrics)
@@ -49,7 +50,7 @@ func TestNewSQL_InvalidDialect(t *testing.T) {
 	})
 
 	testLogs := testutil.StderrOutputForFunc(func() {
-		mockLogger := testutil.NewMockLogger(testutil.ERRORLOG)
+		mockLogger := logging.NewMockLogger(logging.ERROR)
 		mockMetrics := NewMockMetrics(ctrl)
 
 		NewSQL(mockConfig, mockLogger, mockMetrics)
@@ -67,7 +68,7 @@ func TestNewSQL_InvalidConfig(t *testing.T) {
 		"DB_DIALECT": "",
 	})
 
-	mockLogger := testutil.NewMockLogger(testutil.ERRORLOG)
+	mockLogger := logging.NewMockLogger(logging.ERROR)
 	mockMetrics := NewMockMetrics(ctrl)
 
 	db := NewSQL(mockConfig, mockLogger, mockMetrics)
@@ -131,6 +132,14 @@ func TestSQL_getDBConnectionString(t *testing.T) {
 			expOut: "host=host port=3201 user=user password=password dbname=test sslmode=disable",
 		},
 		{
+			desc: "sqlite dialect",
+			configs: &DBConfig{
+				Dialect:  "sqlite",
+				Database: "test.db",
+			},
+			expOut: "file:test.db",
+		},
+		{
 			desc:    "unsupported dialect",
 			configs: &DBConfig{Dialect: "mssql"},
 			expOut:  "",
@@ -180,7 +189,7 @@ func Test_SQLRetryConnectionInfoLog(t *testing.T) {
 			"DB_NAME":     "test",
 		})
 
-		mockLogger := testutil.NewMockLogger(testutil.DEBUGLOG)
+		mockLogger := logging.NewMockLogger(logging.DEBUG)
 
 		mockMetrics.EXPECT().SetGauge("app_sql_open_connections", float64(0))
 		mockMetrics.EXPECT().SetGauge("app_sql_inUse_connections", float64(0))

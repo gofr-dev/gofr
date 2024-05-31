@@ -38,10 +38,24 @@ func createTestContext(method, path, id string, body []byte, cont *container.Con
 	return newContext(gofrHTTP.NewResponder(httptest.NewRecorder(), method), gofrReq, cont)
 }
 
+type userEntity struct {
+	ID         int    `json:"id"`
+	Name       string `json:"name"`
+	IsEmployed bool   `json:"isEmployed"`
+}
+
+func (u *userEntity) TableName() string {
+	return "user"
+}
+
+func (u *userEntity) RestPath() string {
+	return "users"
+}
+
 func Test_scanEntity(t *testing.T) {
 	var invalidObject int
 
-	type userEntity struct {
+	type userTestEntity struct {
 		ID   int
 		Name string
 	}
@@ -53,10 +67,28 @@ func Test_scanEntity(t *testing.T) {
 		err   error
 	}{
 		{
-			desc:  "success case",
+			desc:  "success case (default)",
+			input: &userTestEntity{},
+			resp: &entity{
+				name:       "userTestEntity",
+				entityType: reflect.TypeOf(userTestEntity{}),
+				primaryKey: "id",
+				tableName:  "user_test_entity",
+				restPath:   "userTestEntity",
+			},
+			err: nil,
+		},
+		{
+			desc:  "success case (custom)",
 			input: &userEntity{},
-			resp:  &entity{name: "userEntity", entityType: reflect.TypeOf(userEntity{}), primaryKey: "id"},
-			err:   nil,
+			resp: &entity{
+				name:       "userEntity",
+				entityType: reflect.TypeOf(userEntity{}),
+				primaryKey: "id",
+				tableName:  "user",
+				restPath:   "users",
+			},
+			err: nil,
 		},
 		{
 			desc:  "invalid object",
@@ -67,25 +99,94 @@ func Test_scanEntity(t *testing.T) {
 	}
 
 	for i, tc := range tests {
-		resp, err := scanEntity(tc.input)
+		t.Run(tc.desc, func(t *testing.T) {
+			resp, err := scanEntity(tc.input)
 
-		assert.Equal(t, tc.resp, resp, "TEST[%d], Failed.\n%s", i, tc.desc)
+			assert.Equal(t, tc.resp, resp, "TEST[%d], Failed.\n%s", i, tc.desc)
 
-		assert.Equal(t, tc.err, err, "TEST[%d], Failed.\n%s", i, tc.desc)
+			assert.Equal(t, tc.err, err, "TEST[%d], Failed.\n%s", i, tc.desc)
+		})
+	}
+}
+
+type mockTableName struct {
+	tableName string
+}
+
+func (m *mockTableName) TableName() string {
+	return m.tableName
+}
+
+func Test_getTableName(t *testing.T) {
+	tests := []struct {
+		name       string
+		object     interface{}
+		structName string
+		want       string
+	}{
+		{
+			name:       "Test with TableNameOverrider interface",
+			object:     &mockTableName{tableName: "custom_table"},
+			structName: "mockTableName",
+			want:       "custom_table",
+		},
+		{
+			name:       "Test without TableNameOverrider interface",
+			object:     &struct{}{},
+			structName: "TestStruct",
+			want:       "test_struct",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := getTableName(tt.object, tt.structName)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+type mockRestPath struct {
+	restPath string
+}
+
+func (m *mockRestPath) RestPath() string {
+	return m.restPath
+}
+
+func Test_getRestPath(t *testing.T) {
+	tests := []struct {
+		name       string
+		object     interface{}
+		structName string
+		want       string
+	}{
+		{
+			name:       "Test with RestPathOverrider interface",
+			object:     &mockRestPath{restPath: "custom_path"},
+			structName: "mockRestPath",
+			want:       "custom_path",
+		},
+		{
+			name:       "Test without RestPathOverrider interface",
+			object:     &struct{}{},
+			structName: "TestStruct",
+			want:       "TestStruct",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := getRestPath(tt.object, tt.structName)
+			assert.Equal(t, tt.want, got)
+		})
 	}
 }
 
 func Test_CreateHandler(t *testing.T) {
-	type userEntity struct {
-		ID         int    `json:"id"`
-		Name       string `json:"name"`
-		IsEmployed bool   `json:"isEmployed"`
-	}
-
 	e := entity{
 		name:       "userEntity",
 		entityType: reflect.TypeOf(userEntity{}),
 		primaryKey: "id",
+		tableName:  "user_entity",
 	}
 
 	tests := []struct {
@@ -139,7 +240,8 @@ func Test_CreateHandler(t *testing.T) {
 
 			ctx := createTestContext(http.MethodPost, "/users", "", tc.reqBody, c)
 
-			mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats", gomock.Any(), "type", "INSERT").MaxTimes(2)
+			mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats", gomock.Any(),
+				"hostname", gomock.Any(), "database", gomock.Any(), "type", "INSERT").MaxTimes(2)
 
 			if tc.expectedErr == nil {
 				mocks.SQL.EXPECT().Dialect().Return(tc.dialect).Times(1)
@@ -159,16 +261,11 @@ func Test_CreateHandler(t *testing.T) {
 }
 
 func Test_GetAllHandler(t *testing.T) {
-	type userEntity struct {
-		ID         int    `json:"id"`
-		Name       string `json:"name"`
-		IsEmployed bool   `json:"isEmployed"`
-	}
-
 	e := entity{
 		name:       "userEntity",
 		entityType: reflect.TypeOf(userEntity{}),
 		primaryKey: "id",
+		tableName:  "user_entity",
 	}
 
 	dialectCases := []struct {
@@ -228,7 +325,7 @@ func Test_GetAllHandler(t *testing.T) {
 		for i, tc := range tests {
 			t.Run(dc.dialect+" "+tc.desc, func(t *testing.T) {
 				c := container.NewContainer(nil)
-				db, mock, _ := gofrSql.NewSQLMocksWithConfig(t, &gofrSql.DBConfig{Dialect: dc.dialect})
+				db, mock, mockMetrics := gofrSql.NewSQLMocksWithConfig(t, &gofrSql.DBConfig{Dialect: dc.dialect})
 				c.SQL = db
 
 				defer db.Close()
@@ -236,6 +333,8 @@ func Test_GetAllHandler(t *testing.T) {
 				ctx := createTestContext(http.MethodGet, "/users", "", nil, c)
 
 				mock.ExpectQuery(dc.expectedQuery).WillReturnRows(tc.mockResp).WillReturnError(tc.mockErr)
+				mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats", gomock.Any(),
+					"hostname", gomock.Any(), "database", gomock.Any(), "type", "SELECT")
 
 				resp, err := e.GetAll(ctx)
 
@@ -252,16 +351,11 @@ func Test_GetAllHandler(t *testing.T) {
 }
 
 func Test_GetHandler(t *testing.T) {
-	type userEntity struct {
-		ID         int    `json:"id"`
-		Name       string `json:"name"`
-		IsEmployed bool   `json:"isEmployed"`
-	}
-
 	e := entity{
 		name:       "userEntity",
 		entityType: reflect.TypeOf(userEntity{}),
 		primaryKey: "id",
+		tableName:  "user_entity",
 	}
 
 	dialectCases := []struct {
@@ -325,7 +419,8 @@ func Test_GetHandler(t *testing.T) {
 
 				ctx := createTestContext(http.MethodGet, "/user", tc.id, nil, c)
 
-				mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats", gomock.Any(), "type", "SELECT")
+				mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats", gomock.Any(),
+					"hostname", gomock.Any(), "database", gomock.Any(), "type", "SELECT")
 				mock.ExpectQuery(dc.expectedQuery).WithArgs(tc.id).WillReturnRows(tc.mockRow).WillReturnError(tc.mockErr)
 
 				resp, err := e.Get(ctx)
@@ -345,16 +440,11 @@ func Test_GetHandler(t *testing.T) {
 func Test_UpdateHandler(t *testing.T) {
 	c := container.NewContainer(nil)
 
-	type userEntity struct {
-		ID         int    `json:"id"`
-		Name       string `json:"name"`
-		IsEmployed bool   `json:"isEmployed"`
-	}
-
 	e := entity{
 		name:       "userEntity",
 		entityType: reflect.TypeOf(userEntity{}),
 		primaryKey: "id",
+		tableName:  "user_entity",
 	}
 
 	dialectCases := []struct {
@@ -416,7 +506,7 @@ func Test_UpdateHandler(t *testing.T) {
 				ctx := createTestContext(http.MethodPut, "/user", strconv.Itoa(tc.id), tc.reqBody, c)
 
 				mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats", gomock.Any(),
-					"type", "UPDATE").MaxTimes(2)
+					"hostname", gomock.Any(), "database", gomock.Any(), "type", "UPDATE").MaxTimes(2)
 
 				mock.ExpectExec(dc.expectedQuery).WithArgs("goFr", true, tc.id).
 					WillReturnResult(sqlmock.NewResult(1, 1)).WillReturnError(nil)
@@ -442,6 +532,7 @@ func Test_DeleteHandler(t *testing.T) {
 		name:       "userEntity",
 		entityType: nil,
 		primaryKey: "id",
+		tableName:  "user_entity",
 	}
 
 	dialectCases := []struct {
