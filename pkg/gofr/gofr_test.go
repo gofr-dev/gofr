@@ -504,3 +504,18 @@ func Test_AddCronJob_Success(t *testing.T) {
 
 	assert.Truef(t, pass, "unable to add cron job to cron table")
 }
+
+func Test_Shutdown(t *testing.T) {
+	g := New()
+
+	g.GET("/hello", func(*Context) (interface{}, error) {
+		return helloWorld, nil
+	})
+
+	go g.Run()
+	time.Sleep(2 * time.Second)
+
+	err := g.Shutdown(context.Background())
+
+	assert.Nil(t, err, "Test_Shutdown Failed!")
+}

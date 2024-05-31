@@ -1,6 +1,7 @@
 package gofr
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"time"
@@ -12,6 +13,7 @@ import (
 type httpServer struct {
 	router *gofrHTTP.Router
 	port   int
+	srv    *http.Server
 }
 
 func newHTTPServer(c *container.Container, port int) *httpServer {
@@ -22,15 +24,28 @@ func newHTTPServer(c *container.Container, port int) *httpServer {
 }
 
 func (s *httpServer) Run(c *container.Container) {
-	var srv *http.Server
+	if s.srv != nil {
+		c.Logf("Server already running on port: %d", s.port)
+		return
+	}
 
 	c.Logf("Starting server on port: %d", s.port)
 
-	srv = &http.Server{
+	s.srv = &http.Server{
 		Addr:              fmt.Sprintf(":%d", s.port),
 		Handler:           s.router,
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
-	c.Error(srv.ListenAndServe())
+	c.Error(s.srv.ListenAndServe())
+}
+
+func (s *httpServer) Shutdown(ctx context.Context) error {
+	if s.srv == nil {
+		return nil
+	}
+
+	err := s.srv.Shutdown(ctx)
+	s.srv = nil
+	return err
 }

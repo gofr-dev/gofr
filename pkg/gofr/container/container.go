@@ -1,6 +1,7 @@
 package container
 
 import (
+	"errors"
 	"strconv"
 	"strings"
 
@@ -37,6 +38,21 @@ type Container struct {
 	Redis Redis
 	SQL   DB
 	Mongo datasource.Mongo
+}
+
+func (c *Container) Close() (err error) {
+	if c.PubSub != nil {
+		err = errors.Join(c.PubSub.Close())
+	}
+
+	if c.SQL != nil {
+		sqlDB, ok := c.SQL.(*sql.DB)
+		if ok && sqlDB != nil {
+			err = errors.Join(sqlDB.Close())
+		}
+	}
+
+	return
 }
 
 func NewContainer(conf config.Config) *Container {

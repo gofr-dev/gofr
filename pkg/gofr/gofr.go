@@ -2,6 +2,7 @@ package gofr
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -175,6 +176,29 @@ func (a *App) Run() {
 	}
 
 	wg.Wait()
+}
+
+// Shutdown stops the service(s) and close the application.
+func (a *App) Shutdown(ctx context.Context) (err error) {
+
+	if a.httpServer != nil {
+		err = errors.Join(err, a.httpServer.Shutdown(ctx))
+
+	}
+
+	if a.grpcServer != nil {
+		err = errors.Join(err, a.grpcServer.Shutdown(ctx))
+	}
+
+	if a.metricServer != nil {
+		err = errors.Join(err, a.metricServer.Shutdown(ctx))
+	}
+
+	err = errors.Join(err, a.container.Close())
+
+	a.container.Logger.Infof("Application shutdown complete: %v", err)
+
+	return
 }
 
 // readConfig reads the configuration from the default location.

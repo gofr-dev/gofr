@@ -51,3 +51,35 @@ func TestRun_ServerStartsListening(t *testing.T) {
 
 	resp.Body.Close()
 }
+
+func TestShutdown_ServerStopsListening(t *testing.T) {
+	// Create a mock router and add a new route
+	router := &gofrHTTP.Router{}
+	router.Add(http.MethodGet, "/", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	// Create a mock container
+	c := &container.Container{
+		Logger: logging.NewLogger(logging.INFO),
+	}
+
+	// Create an instance of httpServer
+	server := &httpServer{
+		router: router,
+		port:   8080,
+	}
+
+	// Start the server
+	go server.Run(c)
+
+	errChan := make(chan error, 1)
+	go func() {
+		time.Sleep(3 * time.Second)
+		errChan <- server.Shutdown(context.Background())
+	}()
+
+	err := <-errChan
+
+	assert.Nil(t, err, "TEST Failed.\n")
+}

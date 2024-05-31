@@ -46,6 +46,10 @@ func (s mockSubscriber) Publish(_ context.Context, _ string, _ []byte) error {
 	return nil
 }
 
+func (s mockSubscriber) Close() error {
+	return nil
+}
+
 func (mockSubscriber) Subscribe(_ context.Context, topic string) (*pubsub.Message, error) {
 	if topic == "test-topic" {
 		return &pubsub.Message{

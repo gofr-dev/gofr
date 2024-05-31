@@ -227,6 +227,10 @@ func (k *kafkaClient) Close() error {
 		return err
 	}
 
+	if k.conn != nil {
+		return k.conn.Close()
+	}
+
 	return nil
 }
 
