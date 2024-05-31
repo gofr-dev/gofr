@@ -257,7 +257,7 @@ func Test_Run_SuccessCallInvalidHyphens(t *testing.T) {
 		})
 
 	logs := testutil.StdoutOutputForFunc(func() {
-		c.Run(container.NewContainer(config.NewEnvFile("", testutil.NewMockLogger(testutil.DEBUGLOG))))
+		c.Run(container.NewContainer(config.NewEnvFile("", logging.NewMockLogger(logging.DEBUG))))
 	})
 
 	assert.Contains(t, logs, "handler called")
@@ -302,7 +302,7 @@ func Test_Run_HelpCommandLong(t *testing.T) {
 		})
 
 	logs := testutil.StdoutOutputForFunc(func() {
-		c.Run(container.NewContainer(config.NewEnvFile("", testutil.NewMockLogger(testutil.DEBUGLOG))))
+		c.Run(container.NewContainer(config.NewEnvFile("", logging.NewMockLogger(logging.DEBUG))))
 	})
 
 	assert.Contains(t, logs, "Available commands:")
@@ -325,7 +325,7 @@ func Test_Run_UnknownCommandShowsHelp(t *testing.T) {
 		})
 
 	logs := testutil.StderrOutputForFunc(func() {
-		c.Run(container.NewContainer(config.NewEnvFile("", testutil.NewMockLogger(testutil.DEBUGLOG))))
+		c.Run(container.NewContainer(config.NewEnvFile("", logging.NewMockLogger(logging.DEBUG))))
 	})
 
 	assert.Contains(t, logs, "Unknown command: unknown")
