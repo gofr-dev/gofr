@@ -24,7 +24,7 @@ type QueryLog struct {
 
 func (ql *QueryLog) PrettyPrint(writer io.Writer) {
 	fmt.Fprintf(writer, "\u001B[38;5;8m%-32s \u001B[38;5;206m%-6s\u001B[0m %8d\u001B[38;5;8mµs\u001B[0m %s\n",
-		clean(ql.Query), "CASSANDRA", ql.Duration,
+		clean(ql.Query), "CASS", ql.Duration,
 		clean(strings.Join([]string{ql.Collection}, " ")))
 }
 

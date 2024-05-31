@@ -82,7 +82,7 @@ func (c *Client) UseMetrics(metrics interface{}) {
 // Query executes the query and binds the result into dest parameter.
 // Returns error if any error occurs while binding the result.
 // Can be used to single as well as multiple rows.
-// Accepts struct or slice of struct as dest parameter for single and mutliple rows retrieval respectively
+// Accepts struct or slice of struct as dest parameter for single and multiple rows retrieval respectively
 func (c *Client) Query(dest interface{}, stmt string, values ...interface{}) error {
 	defer c.postProcess(&QueryLog{Query: stmt}, time.Now())
 
