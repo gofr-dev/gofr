@@ -88,7 +88,7 @@ func (cmd *cmd) printHelp() {
 		if help == "" {
 			help = route.description // Use description if custom helper documentation is not provided
 		}
-		fmt.Printf("  %s: %s\n", route.pattern, help)
+		fmt.Printf("\n  [%s]\n   Description : %s\n   %s\n   ", route.pattern, route.description, help)
 	}
 	fmt.Println(cmd.defaultHelp) // Print default helper documentation if provided
 }
