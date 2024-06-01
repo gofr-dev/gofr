@@ -253,24 +253,15 @@ func (a *App) Logger() logging.Logger {
 func (a *App) SubCommand(pattern string, handler Handler, description ...string) {
 	var descParts []string
 	help := ""
-
 	// Extract help information from the description and construct the new description
 	for _, d := range description {
-		if strings.HasPrefix(d, "-h") || strings.HasPrefix(d, "--help") {
-			// Strip the prefix
-			if strings.HasPrefix(d, "-h") {
-				help = strings.TrimPrefix(d, "-h ")
-			} else if strings.HasPrefix(d, "--help") {
-				help = strings.TrimPrefix(d, "--help ")
-			}
-			help = strings.TrimSpace(help)
+		if strings.HasPrefix(d, "-h ") || strings.HasPrefix(d, "--help ") {
+			help = strings.TrimSpace(strings.TrimPrefix(d, strings.SplitN(d, " ", 2)[0]))
 		} else {
 			descParts = append(descParts, d)
 		}
 	}
-
 	desc := strings.Join(descParts, "\n")
-
 	if help == "" {
 		help = desc // Default to the full description if no help flag is found
 	}
