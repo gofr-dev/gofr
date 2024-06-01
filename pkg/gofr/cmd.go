@@ -11,8 +11,7 @@ import (
 )
 
 type cmd struct {
-	routes      []route
-	defaultHelp string // Default helper documentation
+	routes []route
 }
 
 type route struct {
@@ -57,7 +56,6 @@ func (cmd *cmd) Run(c *container.Container) {
 	ctx := newContext(&cmd2.Responder{}, cmd2.NewRequest(args), c)
 
 	if h == nil {
-		fmt.Println("Unknown command:", command)
 		cmd.printHelp()
 		ctx.responder.Respond(nil, ErrCommandNotFound{})
 		return
@@ -84,11 +82,6 @@ func (cmd *cmd) addRoute(r route) {
 func (cmd *cmd) printHelp() {
 	fmt.Println("Available commands:")
 	for _, route := range cmd.routes {
-		help := route.help
-		if help == "" {
-			help = route.description // Use description if custom helper documentation is not provided
-		}
-		fmt.Printf("\n  [%s]\n   Description : %s\n   %s\n   ", route.pattern, route.description, help)
+		fmt.Printf("\n  [%s]\n   Description : %s\n   Help : %s\n   ", route.pattern, route.description, route.help)
 	}
-	fmt.Println(cmd.defaultHelp) // Print default helper documentation if provided
 }

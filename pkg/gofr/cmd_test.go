@@ -15,9 +15,7 @@ import (
 func Test_Run_SuccessCallRegisteredArgument(t *testing.T) {
 	os.Args = []string{"", "log"}
 
-	c := cmd{
-		defaultHelp: "Default helper documentation",
-	}
+	c := cmd{}
 
 	c.addRoute(
 		route{

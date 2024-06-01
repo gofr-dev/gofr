@@ -250,15 +250,29 @@ func (a *App) Logger() logging.Logger {
 
 // SubCommand adds a sub-command to the CLI application.
 // Can be used to create commands like "kubectl get" or "kubectl get ingress".
-func (a *App) SubCommand(pattern string, handler Handler, help string, description ...string) {
-	desc := strings.Join(description, "\n")
-	helpUsage := fmt.Sprintf("Usage: %s , %s", pattern, desc)
+func (a *App) SubCommand(pattern string, handler Handler, description ...string) {
+	var descParts []string
+	help := ""
 
-	// If help is provided, use it; otherwise, use the usage message.
+	// Extract help information from the description and construct the new description
+	for _, d := range description {
+		if strings.HasPrefix(d, "-h") || strings.HasPrefix(d, "--help") {
+			// Strip the prefix
+			if strings.HasPrefix(d, "-h") {
+				help = strings.TrimPrefix(d, "-h ")
+			} else if strings.HasPrefix(d, "--help") {
+				help = strings.TrimPrefix(d, "--help ")
+			}
+			help = strings.TrimSpace(help)
+		} else {
+			descParts = append(descParts, d)
+		}
+	}
+
+	desc := strings.Join(descParts, "\n")
+
 	if help == "" {
-		help = helpUsage
-	} else {
-		help = fmt.Sprintf("Help: %s", help)
+		help = desc // Default to the full description if no help flag is found
 	}
 
 	a.cmd.addRoute(route{
