@@ -38,6 +38,11 @@ func (rou *Router) Add(method, pattern string, handler http.Handler) {
 	rou.Router.NewRoute().Methods(method).Path(pattern).Handler(h)
 }
 
+func (rou *Router) AddStaticFiles(endpoint, directory string) {
+	fileServer := http.FileServer(http.Dir(directory))
+	rou.Router.NewRoute().PathPrefix(endpoint + "/").Handler(http.StripPrefix(endpoint, fileServer))
+}
+
 // UseMiddleware registers middlewares to the router.
 func (rou *Router) UseMiddleware(mws ...Middleware) {
 	middlewares := make([]mux.MiddlewareFunc, 0, len(mws))
