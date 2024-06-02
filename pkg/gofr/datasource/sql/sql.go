@@ -33,7 +33,7 @@ type DBConfig struct {
 }
 
 func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *DB {
-	logger.Debugf("verifying database configurations from config file")
+	logger.Debugf("reading database configurations from config file")
 
 	dbConfig := getDBConfig(configs)
 
@@ -44,11 +44,6 @@ func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *D
 	}
 
 	logger.Debugf("generating database connection string for '%s'", dbConfig.Dialect)
-
-	logger.Debugf("generating database connection string for '%s'", dbConfig.Dialect)
-
-	logger.Debugf("connecting with '%s' user to '%s' database at '%s:%s'",
-		dbConfig.User, dbConfig.Database, dbConfig.HostName, dbConfig.Port)
 
 	dbConnectionString, err := getDBConnectionString(dbConfig)
 	if err != nil {
@@ -66,8 +61,8 @@ func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *D
 
 	database := &DB{config: dbConfig, logger: logger, metrics: metrics}
 
-	logger.Debugf("connecting to '%s' database with '%s:%s' using '%s' and '%s'",
-		database.config.Dialect, database.config.HostName, database.config.Port, database.config.User, database.config.Password)
+	logger.Debugf("connecting to '%s' database with '%s:%s' using username as '%s' and '%s'",
+		database.config.Dialect, database.config.HostName, database.config.Port, database.config.User, fmt.Sprintf("%s%s", database.config.Password[0], strings.Repeat("*", len(database.config.Password[1:]))))
 
 	database.DB, err = sql.Open(otelRegisteredDialect, dbConnectionString)
 	if err != nil {
