@@ -72,15 +72,9 @@ func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *D
 		return database
 	}
 
-	logger.Debugf("checking database '%s' connection", database.config.Database)
-
 	database = pingToTestConnection(database)
 
-	logger.Debug("enabling retry logic incase of failures/errors")
-
 	go retryConnection(database)
-
-	logger.Debug("pushing DB metrics to opentelemetry")
 
 	go pushDBMetrics(database.DB, metrics)
 
