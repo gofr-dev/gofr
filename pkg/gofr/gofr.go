@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -103,10 +104,71 @@ func NewCMD() *App {
 
 	app.container = container.NewContainer(nil)
 	app.container.Logger = logging.NewFileLogger(app.Config.Get("CMD_LOGS_FILE"))
-	app.cmd = &cmd{}
+	app.cmd = &cmd{
+		description: app.Config.GetOrDefault("CMD_DESCRIPTION", "a sample command interface"),
+	}
 
 	app.container.Create(app.Config)
 	app.initTracer()
+	app.SubCommand("h", func(_ *Context) (interface{}, error) {
+		resStr := ""
+		allRoutes := ""
+		descriptor := ""
+		patternData := make(map[string]interface{})
+		maxPatternLength := 0
+		maxFullPatternLength := 0
+
+		for _, router := range app.cmd.routes {
+			if maxPatternLength < len(router.pattern) {
+				maxPatternLength = len(router.pattern)
+			}
+
+			if router.fullPattern != "nil" && maxFullPatternLength < len(router.fullPattern) {
+				maxFullPatternLength = len(router.fullPattern)
+			}
+
+			allRoutes += "[-" + router.pattern
+
+			if router.fullPattern != "nil" {
+				allRoutes += "|--" + router.fullPattern
+			}
+
+			allRoutes += "] "
+
+			patternData[router.pattern] = map[string]interface{}{
+				"fullPattern": router.fullPattern,
+				"helperText":  router.help,
+			}
+		}
+
+		// Generate descriptor
+		for key, val := range patternData {
+			fullPatternInfo := fmt.Sprintf("%s", val.(map[string]interface{})["fullPattern"])
+			helperInfo := fmt.Sprintf("%s", val.(map[string]interface{})["helperText"])
+
+			if fullPatternInfo != "nil" {
+				descriptor += fmt.Sprintf("-%s, --%s%s\t%s\n",
+					key,
+					fullPatternInfo,
+					strings.Repeat(" ", maxPatternLength+maxFullPatternLength-len(key)-len(fullPatternInfo)),
+					helperInfo,
+				)
+			} else {
+				descriptor += fmt.Sprintf("-%s%s\t%s\n",
+					key,
+					strings.Repeat(" ", maxFullPatternLength+maxPatternLength-len(key)),
+					helperInfo,
+				)
+			}
+		}
+
+		caller := filepath.Base(os.Args[0])
+		resStr += fmt.Sprintf("usage: %s %s\n\n", caller, allRoutes)
+		resStr += fmt.Sprintf("%s. \n\n", app.cmd.description)
+		resStr += fmt.Sprintf("options:\n\n%s", descriptor)
+
+		return resStr, nil
+	}, AddHelp("show help and exit the command"), AddFullPattern("help"))
 
 	return app
 }
@@ -250,8 +312,8 @@ func (a *App) Logger() logging.Logger {
 
 // SubCommand adds a sub-command to the CLI application.
 // Can be used to create commands like "kubectl get" or "kubectl get ingress".
-func (a *App) SubCommand(pattern string, handler Handler) {
-	a.cmd.addRoute(pattern, handler)
+func (a *App) SubCommand(pattern string, handler Handler, options ...Options) {
+	a.cmd.addRoute(pattern, handler, options...)
 }
 
 func (a *App) Migrate(migrationsMap map[int64]migration.Migrate) {

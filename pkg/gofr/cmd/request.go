@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"reflect"
 	"strconv"
@@ -13,7 +14,7 @@ import (
 // Gofr's http.Request is another such abstraction.
 type Request struct {
 	flags  map[string]bool
-	params map[string]string
+	params map[string]interface{}
 }
 
 const trueString = "true"
@@ -25,13 +26,8 @@ const trueString = "true"
 func NewRequest(args []string) *Request {
 	r := Request{
 		flags:  make(map[string]bool),
-		params: make(map[string]string),
+		params: make(map[string]interface{}),
 	}
-
-	const (
-		argsLen1 = 1
-		argsLen2 = 2
-	)
 
 	for _, arg := range args {
 		if arg == "" {
@@ -53,13 +49,14 @@ func NewRequest(args []string) *Request {
 			a = arg[1:]
 		}
 
-		switch values := strings.Split(a, "="); len(values) {
-		case argsLen1:
-			// Support -t -a etc.
-			r.params[values[0]] = trueString
-		case argsLen2:
-			// Support -a=b
-			r.params[values[0]] = values[1]
+		if !strings.Contains(a, " ") {
+			r.flags[a] = true
+		} else {
+			allVals := strings.Split(a, " ")[1:]
+			for _, vars := range allVals {
+				keyVal := strings.Split(vars, "=")
+				r.params[keyVal[0]] = keyVal[1]
+			}
 		}
 	}
 
@@ -68,12 +65,17 @@ func NewRequest(args []string) *Request {
 
 // Param returns the value of the parameter for key.
 func (r *Request) Param(key string) string {
-	return r.params[key]
+	return fmt.Sprintf("%s", r.params[key])
+}
+
+func (r *Request) CheckFlag(key string) bool {
+	_, ok := r.flags[key]
+	return ok
 }
 
 // PathParam returns the value of the parameter for key. This is equivalent to Param.
 func (r *Request) PathParam(key string) string {
-	return r.params[key]
+	return fmt.Sprintf("%s", r.params[key])
 }
 
 func (r *Request) Context() context.Context {
@@ -99,13 +101,13 @@ func (r *Request) Bind(i interface{}) error {
 				//nolint:exhaustive // no need to add other cases
 				switch f.Kind() {
 				case reflect.String:
-					f.SetString(v)
+					f.SetString(fmt.Sprintf("%s", v))
 				case reflect.Bool:
 					if v == trueString {
 						f.SetBool(true)
 					}
 				case reflect.Int:
-					n, _ := strconv.Atoi(v)
+					n, _ := strconv.Atoi(fmt.Sprintf("%s", v))
 					f.SetInt(int64(n))
 				}
 			}

@@ -20,7 +20,7 @@ func TestCMDRunWithNoArg(t *testing.T) {
 
 func TestCMDRunWithProperArg(t *testing.T) {
 	expResp := "Hello World!"
-	os.Args = []string{"command", "hello"}
+	os.Args = []string{"command", "-hello"}
 
 	output := testutil.StdoutOutputForFunc(main)
 
@@ -31,10 +31,27 @@ func TestCMDRunWithParams(t *testing.T) {
 	expResp := "Hello Vikash!"
 
 	commands := []string{
-		"command params -name=Vikash",
-		"command params   -name=Vikash",
-		"command -name=Vikash params",
-		"command params -name=Vikash -",
+		"command -params name=Vikash",
+		"command -params   name=Vikash",
+		"command -params name=Vikash -",
+	}
+
+	for i, command := range commands {
+		os.Args = strings.Split(command, " ")
+		output := testutil.StdoutOutputForFunc(main)
+
+		assert.Contains(t, output, expResp, "TEST[%d], Failed.\n", i)
+	}
+}
+
+func TestHelperFunction(t *testing.T) {
+	expResp := "usage: command [-h|--help] [-hello|--hello-world] [-params]"
+
+	commands := []string{
+		"command -h",
+		"command --help",
+		"command   --help",
+		"command  -h",
 	}
 
 	for i, command := range commands {

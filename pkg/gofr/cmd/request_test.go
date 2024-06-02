@@ -10,15 +10,14 @@ import (
 
 func TestRequest_Bind(t *testing.T) {
 	// TODO: Only fields starting with Capital letter can be 'bind' right now.
-	r := NewRequest([]string{"command", "-Name=gofr", "-Valid=true", "-Value=12", "-test", "--name=Gofr", ""})
+	r := NewRequest([]string{"command", "-params Name=gofr", "-params Valid=true", "-params Value=12", "-test", "-params name=Gofr", ""})
+	assert.Equal(t, "gofr", r.Param("Name"), "TEST Failed.\n Unable to read param %s from request", "Name")
 
-	assert.Equal(t, "gofr", r.Param("Name"), "TEST Failed.\n Unable to read param from request")
+	assert.Equal(t, true, r.CheckFlag("test"), "TEST Failed.\n Unable to read param %s from request", "test")
 
-	assert.Equal(t, "true", r.Param("test"), "TEST Failed.\n Unable to read param from request")
+	assert.Equal(t, "12", r.PathParam("Value"), "TEST Failed.\n Unable to read param %s from request", "Value")
 
-	assert.Equal(t, "12", r.PathParam("Value"), "TEST Failed.\n Unable to read param from request")
-
-	assert.Equal(t, "Gofr", r.PathParam("name"), "TEST Failed.\n Unable to read param from request")
+	assert.Equal(t, "Gofr", r.PathParam("name"), "TEST Failed.\n Unable to read param %s from request", "name")
 
 	// Testing string, bool, int
 	a := struct {
@@ -49,7 +48,7 @@ func TestRequest_WithOneArg(t *testing.T) {
 
 	req := &Request{
 		flags:  make(map[string]bool),
-		params: make(map[string]string),
+		params: make(map[string]interface{}),
 	}
 
 	assert.Equal(t, req, r, "TEST Failed.\n Hostname did not match.")
