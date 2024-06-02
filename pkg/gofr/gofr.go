@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"runtime"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -77,7 +77,7 @@ func New() *App {
 	app.metricServer = newMetricServer(port)
 
 	// HTTP Server
-	port, err = strconv.Atoi(app.Config.GetOrDefault("HTTP_PORT", "6333"))
+	port, err = strconv.Atoi(app.Config.Get("HTTP_PORT"))
 	if err != nil || port <= 0 {
 		port = defaultHTTPPort
 	}
@@ -96,7 +96,7 @@ func New() *App {
 
 	// static fileserver
 	currentWd, _ := os.Getwd()
-	checkDirectory := fmt.Sprintf("%s%spublic", currentWd, getFilePathSplitter())
+	checkDirectory := filepath.Join(currentWd, "public")
 
 	if _, err := os.Stat(checkDirectory); !os.IsNotExist(err) {
 		app.AddStaticFiles("public", checkDirectory)
@@ -105,28 +105,12 @@ func New() *App {
 	return app
 }
 
-func getFilePathSplitter() string {
-	fileSplitter := ""
-
-	switch runtime.GOOS {
-	case "windows":
-		fileSplitter = "\\"
-	case "linux":
-	case "darwin":
-	case "android":
-	case "ios":
-		fileSplitter = "/"
-	}
-	return fileSplitter
-}
-
 func (a *App) AddStaticFiles(endpoint, filePath string) {
 	a.httpRegistered = true
 	dupFilePath := ""
-	fileSplitter := getFilePathSplitter()
 	if filePath[:2] == "./" {
 		dupFilePath, _ = os.Getwd()
-		dupFilePath += fileSplitter + filePath + fileSplitter
+		dupFilePath = filepath.Join(dupFilePath, filePath)
 	} else {
 		dupFilePath = filePath
 	}
