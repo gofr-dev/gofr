@@ -15,6 +15,8 @@ type Router struct {
 	mux.Router
 }
 
+type Config func(r *Router)
+
 type Middleware func(handler http.Handler) http.Handler
 
 // NewRouter creates a new Router instance.

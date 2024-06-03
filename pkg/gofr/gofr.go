@@ -108,20 +108,20 @@ func New() *App {
 func (a *App) AddStaticFiles(endpoint, filePath string) {
 	a.httpRegistered = true
 	dupFilePath := ""
-	if filePath[:2] == "./" {
+	if strings.HasPrefix(filePath, "./") {
 		dupFilePath, _ = os.Getwd()
 		dupFilePath = filepath.Join(dupFilePath, filePath)
 	} else {
 		dupFilePath = filePath
 	}
-	if endpoint[0] != '/' {
-		endpoint = "/" + endpoint
-	}
-	if _, err := os.Stat(dupFilePath); err == nil {
-		a.httpServer.router.AddStaticFiles(endpoint, dupFilePath)
-	} else {
+
+	endpoint = "/" + strings.TrimPrefix(endpoint, "/")
+
+	if _, err := os.Stat(dupFilePath); err != nil {
 		a.container.Logger.Errorf("Couldn't register %s static endpoint", endpoint)
+		return
 	}
+	a.httpServer.router.AddStaticFiles(endpoint, dupFilePath)
 }
 
 // NewCMD creates a command-line application.
