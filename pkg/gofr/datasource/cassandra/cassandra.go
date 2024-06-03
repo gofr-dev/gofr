@@ -10,6 +10,67 @@ import (
 	"github.com/gocql/gocql"
 )
 
+type cassandraClusterConfig struct {
+	clusterConfig *gocql.ClusterConfig
+}
+
+func newClusterConfg(config *Config) clusterConfig {
+	var c cassandraClusterConfig
+
+	config.Hosts = strings.TrimSuffix(strings.TrimSpace(config.Hosts), ",")
+	hosts := strings.Split(config.Hosts, ",")
+	c.clusterConfig = gocql.NewCluster(hosts...)
+	c.clusterConfig.Keyspace = config.Keyspace
+	c.clusterConfig.Port = config.Port
+	c.clusterConfig.Authenticator = gocql.PasswordAuthenticator{Username: config.Username, Password: config.Password}
+
+	return &c
+}
+
+func (c *cassandraClusterConfig) CreateSession() (*gocql.Session, error) {
+	return c.clusterConfig.CreateSession()
+}
+
+type cassandraSession struct {
+	session *gocql.Session
+}
+
+func (c *cassandraSession) Query(stmt string, values ...interface{}) *gocql.Query {
+	return c.session.Query(stmt, values...)
+}
+
+type cassandraQuery struct {
+	query *gocql.Query
+}
+
+func (c *cassandraQuery) Exec() error {
+	return c.query.Exec()
+}
+
+func (c *cassandraQuery) Iter() *gocql.Iter {
+	return c.query.Iter()
+}
+
+func (c *cassandraQuery) MapScanCAS(dest map[string]interface{}) (applied bool, err error) {
+	return c.query.MapScanCAS(dest)
+}
+
+type cassandraIterator struct {
+	iter *gocql.Iter
+}
+
+func (c *cassandraIterator) Columns() []gocql.ColumnInfo {
+	return c.iter.Columns()
+}
+
+func (c *cassandraIterator) Scan(dest ...interface{}) bool {
+	return c.iter.Scan(dest...)
+}
+
+func (c *cassandraIterator) NumRows() int {
+	return c.iter.NumRows()
+}
+
 type Config struct {
 	Hosts    string
 	Keyspace string
@@ -18,11 +79,17 @@ type Config struct {
 	Password string
 }
 
-type Client struct {
-	config  *Config
-	session *gocql.Session
+type cassandra struct {
+	clusterConfig clusterConfig
+	session       session
+	query         query
+	iter          iterator
+}
 
-	clusterConfig *gocql.ClusterConfig
+type Client struct {
+	config *Config
+
+	cassandra *cassandra
 
 	logger  Logger
 	metrics Metrics
@@ -36,21 +103,17 @@ type Client struct {
 // client.UseMetrics(metricsInstance)
 // client.Connect()
 func New(conf *Config) *Client {
-	hosts := strings.Split(conf.Hosts, ",")
-	clusterConfig := gocql.NewCluster(hosts...)
-	clusterConfig.Keyspace = conf.Keyspace
-	clusterConfig.Port = conf.Port
-	clusterConfig.Authenticator = gocql.PasswordAuthenticator{Username: conf.Username, Password: conf.Password}
+	cass := &cassandra{clusterConfig: newClusterConfg(conf)}
 
-	return &Client{clusterConfig: clusterConfig}
+	return &Client{config: conf, cassandra: cass}
 }
 
 // Connect establishes a connection to Cassandra and registers metrics using the provided configuration when the client was Created.
 func (c *Client) Connect() {
-	hosts := strings.TrimSuffix(strings.Join(c.clusterConfig.Hosts, ", "), ", ")
-	c.logger.Logf("connecting to cassandra at %v on port %v to keyspace %v", c.clusterConfig.Keyspace, hosts, c.clusterConfig.Port)
 
-	session, err := c.clusterConfig.CreateSession()
+	c.logger.Logf("connecting to cassandra at %v on port %v to keyspace %v", c.config.Keyspace, c.config.Hosts, c.config.Port)
+
+	sess, err := c.cassandra.clusterConfig.CreateSession()
 	if err != nil {
 		c.logger.Error("error connecting to cassandra: ", err)
 
@@ -60,9 +123,9 @@ func (c *Client) Connect() {
 	cassandraBucktes := []float64{.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 4, 5, 7.5, 10}
 	c.metrics.NewHistogram("app_cassandra_stats", "Response time of CASSANDRA queries in milliseconds.", cassandraBucktes...)
 
-	c.logger.Logf("connected to '%s' keyspace at host '%s' and port '%s'", c.clusterConfig.Keyspace, hosts, c.clusterConfig.Port)
+	c.logger.Logf("connected to '%s' keyspace at host '%s' and port '%s'", c.config.Keyspace, c.config.Hosts, c.config.Port)
 
-	c.session = session
+	c.cassandra.session = sess
 }
 
 // UseLogger sets the logger for the Cassandra client which asserts the Logger interface.
@@ -84,7 +147,7 @@ func (c *Client) UseMetrics(metrics interface{}) {
 // Can be used to single as well as multiple rows.
 // Accepts struct or slice of struct as dest parameter for single and multiple rows retrieval respectively
 func (c *Client) Query(dest interface{}, stmt string, values ...interface{}) error {
-	defer c.postProcess(&QueryLog{Query: stmt, Keyspace: c.clusterConfig.Keyspace}, time.Now())
+	defer c.postProcess(&QueryLog{Query: stmt, Keyspace: c.config.Keyspace}, time.Now())
 
 	rvo := reflect.ValueOf(dest)
 	if rvo.Kind() != reflect.Ptr {
@@ -94,7 +157,7 @@ func (c *Client) Query(dest interface{}, stmt string, values ...interface{}) err
 	}
 
 	rv := rvo.Elem()
-	iter := c.session.Query(stmt, values...).Iter()
+	iter := c.cassandra.session.Query(stmt, values...).Iter()
 
 	switch rv.Kind() {
 	case reflect.Slice:
@@ -134,9 +197,9 @@ func (c *Client) Query(dest interface{}, stmt string, values ...interface{}) err
 // Return error if any error occurs while executing the query
 // Can be used to execute UPDATE or INSERT
 func (c *Client) Exec(stmt string, values ...interface{}) error {
-	defer c.postProcess(&QueryLog{Query: stmt, Keyspace: c.clusterConfig.Keyspace}, time.Now())
+	defer c.postProcess(&QueryLog{Query: stmt, Keyspace: c.config.Keyspace}, time.Now())
 
-	return c.session.Query(stmt, values...).Exec()
+	return c.cassandra.session.Query(stmt, values...).Exec()
 }
 
 // QueryCAS executes a lightweight transaction (i.e. an UPDATE or INSERT statement containing an IF clause).
@@ -150,7 +213,7 @@ func (c *Client) QueryCAS(dest interface{}, stmt string, values ...interface{}) 
 		err     error
 	)
 
-	defer c.postProcess(&QueryLog{Query: stmt, Keyspace: c.clusterConfig.Keyspace}, time.Now())
+	defer c.postProcess(&QueryLog{Query: stmt, Keyspace: c.config.Keyspace}, time.Now())
 
 	rvo := reflect.ValueOf(dest)
 	if rvo.Kind() != reflect.Ptr {
@@ -160,7 +223,7 @@ func (c *Client) QueryCAS(dest interface{}, stmt string, values ...interface{}) 
 	}
 
 	rv := rvo.Elem()
-	query := c.session.Query(stmt, values...)
+	query := c.cassandra.session.Query(stmt, values...)
 
 	switch rv.Kind() {
 	case reflect.Struct:
@@ -296,10 +359,8 @@ func (c *Client) postProcess(ql *QueryLog, startTime time.Time) {
 
 	c.logger.Debug(ql)
 
-	hosts := strings.TrimSuffix(strings.Join(c.clusterConfig.Hosts, ", "), ", ")
-
-	c.metrics.RecordHistogram(context.Background(), "app_cassandra_stats", float64(duration), "hostname", hosts,
-		"keyspace", c.clusterConfig.Keyspace)
+	c.metrics.RecordHistogram(context.Background(), "app_cassandra_stats", float64(duration), "hostname", c.config.Hosts,
+		"keyspace", c.config.Keyspace)
 }
 
 type Health struct {
@@ -313,19 +374,17 @@ func (c *Client) HealthCheck() interface{} {
 		Details: make(map[string]interface{}),
 	}
 
-	hosts := strings.TrimSuffix(strings.Join(c.clusterConfig.Hosts, ", "), ", ")
+	h.Details["host"] = c.config.Hosts
+	h.Details["keyspace"] = c.config.Keyspace
 
-	h.Details["host"] = hosts
-	h.Details["keyspace"] = c.clusterConfig.Keyspace
-
-	if c.session == nil {
+	if c.cassandra.session == nil {
 		h.Status = "DOWN"
 		h.Details["message"] = "cassandra not connected"
 
 		return &h
 	}
 
-	err := c.session.Query("SELECT now() FROM system.local").Exec()
+	err := c.cassandra.session.Query("SELECT now() FROM system.local").Exec()
 	if err != nil {
 		h.Status = "DOWN"
 		h.Details["message"] = err.Error()
