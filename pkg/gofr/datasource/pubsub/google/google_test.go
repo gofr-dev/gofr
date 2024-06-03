@@ -50,6 +50,24 @@ func TestGoogleClient_New_Error(t *testing.T) {
 	assert.Contains(t, out, "could not configure google pubsub")
 }
 
+func TestGoogleClient_Close(t *testing.T) {
+	var (
+		g *googleClient
+	)
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	logger := logging.NewMockLogger(logging.ERROR)
+	g = New(Config{}, logger, NewMockMetrics(ctrl))
+
+	assert.Nil(t, g)
+
+	err := g.Close()
+
+	assert.Nil(t, err)
+}
+
 func TestGoogleClient_Publish_Success(t *testing.T) {
 	client := getGoogleClient(t)
 	defer client.Close()

@@ -1,9 +1,13 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"os"
+	"os/signal"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -27,7 +31,12 @@ func main() {
 	a.GET("/mysql", MysqlHandler)
 
 	// Run the application
-	a.Run()
+	go a.Run()
+
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+	<-ctx.Done()
+	a.Shutdown(context.Background())
 }
 
 func HelloHandler(c *gofr.Context) (interface{}, error) {

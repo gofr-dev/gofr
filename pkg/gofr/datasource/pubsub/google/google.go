@@ -72,6 +72,10 @@ func validateConfigs(conf *Config) error {
 	return nil
 }
 
+func (g *googleClient) Close() error {
+	return g.client.Close()
+}
+
 func (g *googleClient) Publish(ctx context.Context, topic string, message []byte) error {
 	ctx, span := otel.GetTracerProvider().Tracer("gofr").Start(ctx, "publish-gcp")
 	defer span.End()

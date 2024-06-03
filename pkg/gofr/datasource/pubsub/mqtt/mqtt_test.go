@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
@@ -106,6 +107,29 @@ func TestMQTT_Disconnect(t *testing.T) {
 
 	// Disconnect the broker and then try to publish
 	client.Disconnect(1)
+
+	err := client.Publish(ctx, "test", []byte("hello"))
+	assert.NotNil(t, err)
+	assert.Equal(t, "not Connected", err.Error())
+}
+
+func TestMQTT_Close(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	ctx := context.TODO()
+	mockMetrics := NewMockMetrics(ctrl)
+
+	mockLogger := logging.NewMockLogger(logging.ERROR)
+	client := New(&Config{}, mockLogger, mockMetrics)
+
+	mockMetrics.EXPECT().
+		IncrementCounter(ctx, "app_pubsub_publish_total_count", "topic", "test")
+
+	// Disconnect the broker and then try to publish
+	client.Close()
+
+	time.Sleep(250 * time.Millisecond)
 
 	err := client.Publish(ctx, "test", []byte("hello"))
 	assert.NotNil(t, err)

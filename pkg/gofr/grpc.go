@@ -1,6 +1,7 @@
 package gofr
 
 import (
+	"context"
 	"net"
 	"strconv"
 
@@ -43,4 +44,9 @@ func (g *grpcServer) Run(c *container.Container) {
 		c.Logger.Errorf("error in starting gRPC server at %s: %s", addr, err)
 		return
 	}
+}
+
+func (g *grpcServer) Shutdown(_ context.Context) error {
+	g.server.GracefulStop()
+	return nil
 }

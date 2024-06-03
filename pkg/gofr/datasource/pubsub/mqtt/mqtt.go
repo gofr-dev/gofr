@@ -322,6 +322,11 @@ func (m *MQTT) Unsubscribe(topic string) error {
 	return nil
 }
 
+func (m *MQTT) Close() error {
+	m.Client.Disconnect(250)
+	return nil
+}
+
 func (m *MQTT) Disconnect(waitTime uint) {
 	m.Client.Disconnect(waitTime)
 }

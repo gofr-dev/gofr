@@ -53,3 +53,7 @@ func (m *MockPubSub) Publish(_ context.Context, _ string, _ []byte) error {
 func (m *MockPubSub) Subscribe(_ context.Context, _ string) (*pubsub.Message, error) {
 	return nil, nil
 }
+
+func (m *MockPubSub) Close() error {
+	return nil
+}

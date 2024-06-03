@@ -122,3 +122,34 @@ func TestRedis_PipelineQueryLogging(t *testing.T) {
 	assert.Contains(t, result, "ping")
 	assert.Contains(t, result, "set key1 value1 ex 60: OK")
 }
+
+func TestRedis_Close(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	// Mock Redis server setup
+	s, err := miniredis.Run()
+	assert.Nil(t, err)
+
+	defer s.Close()
+
+	mockMetric := NewMockMetrics(ctrl)
+	mockMetric.EXPECT().RecordHistogram(gomock.Any(), "app_redis_stats", gomock.Any(), "hostname", gomock.Any(), "type", "ping")
+	mockMetric.EXPECT().RecordHistogram(gomock.Any(), "app_redis_stats", gomock.Any(), "hostname", gomock.Any(), "type", "set")
+
+	result := testutil.StdoutOutputForFunc(func() {
+		mockLogger := logging.NewMockLogger(logging.DEBUG)
+		client := NewClient(config.NewMockConfig(map[string]string{
+			"REDIS_HOST": s.Host(),
+			"REDIS_PORT": s.Port(),
+		}), mockLogger, mockMetric)
+
+		assert.NotNil(t, err)
+
+		client.Close()
+	})
+
+	// Assertions
+	assert.Contains(t, result, "ping")
+	assert.Contains(t, result, "set key value ex 60")
+}

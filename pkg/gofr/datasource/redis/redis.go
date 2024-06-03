@@ -63,6 +63,15 @@ func NewClient(c config.Config, logger datasource.Logger, metrics Metrics) *Redi
 	return &Redis{Client: rc, config: redisConfig, logger: logger}
 }
 
+// Close shutdowns and save the state of the redis client.
+// func (r *Redis) Close() error {
+// 	if r.Client != nil {
+// 		return r.Client.ShutdownSave(context.Background()).Err()
+// 	}
+
+// 	return nil
+// }
+
 func getRedisConfig(c config.Config) *Config {
 	var redisConfig = &Config{}
 
