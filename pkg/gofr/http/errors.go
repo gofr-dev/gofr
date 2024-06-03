@@ -7,6 +7,8 @@ import (
 	"strings"
 )
 
+const alreadyExistsMessage = "entity already exists"
+
 // ErrorEntityNotFound represents an error for when an entity is not found in the system.
 type ErrorEntityNotFound struct {
 	Name  string
@@ -20,6 +22,19 @@ func (e ErrorEntityNotFound) Error() string {
 
 func (e ErrorEntityNotFound) StatusCode() int {
 	return http.StatusNotFound
+}
+
+// ErrorEntityAlreadyExist represents an error for when entity is already present in the storage and we are trying to make duplicate entry.
+type ErrorEntityAlreadyExist struct {
+}
+
+func (e ErrorEntityAlreadyExist) Error() string {
+	// For ex: "No entity found with id: 2"
+	return alreadyExistsMessage
+}
+
+func (e ErrorEntityAlreadyExist) StatusCode() int {
+	return http.StatusConflict
 }
 
 // ErrorInvalidParam represents an error for invalid parameter values.
