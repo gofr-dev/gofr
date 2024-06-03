@@ -25,6 +25,19 @@ func TestErrorEntityNotFound_StatusCode(t *testing.T) {
 	assert.Equal(t, expectedCode, err.StatusCode(), "TEST Failed.\n")
 }
 
+func TestErrorEntityAlreadyExist(t *testing.T) {
+	err := ErrorEntityAlreadyExist{}
+
+	assert.Equal(t, alreadyExistsMessage, err.Error(), "TEST Failed.\n")
+}
+
+func TestErrorEntityAlreadyExist_StatusCode(t *testing.T) {
+	err := ErrorEntityAlreadyExist{}
+	expectedCode := http.StatusConflict
+
+	assert.Equal(t, expectedCode, err.StatusCode(), "TEST Failed.\n")
+}
+
 func TestErrorInvalidParam(t *testing.T) {
 	tests := []struct {
 		desc        string
