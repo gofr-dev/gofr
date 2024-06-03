@@ -13,11 +13,13 @@ sent by GoFr by providing the suitable CORS configs.
 The CORS middleware provides the following overridable configs:
 
 - `ACCESS_CONTROL_ALLOW_ORIGIN`: Set the allowed origin(s) for cross-origin requests. By default, it allows all origins (*).
-- `ACCESS_CONTROL_ALLOW_METHODS`: Specify the allowed HTTP methods (e.g., GET, POST, PUT, DELETE).
 - `ACCESS_CONTROL_ALLOW_HEADERS`: Define the allowed request headers (e.g., Authorization, Content-Type).
 - `ACCESS_CONTROL_ALLOW_CREDENTIALS`: Set to true to allow credentials (cookies, HTTP authentication) in requests.
 - `ACCESS_CONTROL_EXPOSE_HEADERS`: Specify additional headers exposed to the client.
 - `ACCESS_CONTROL_MAX_AGE`: Set the maximum time (in seconds) for preflight request caching.
+
+> Note: GoFr automatically interprets the registered route methods and based on that sets the value of `ACCESS_CONTROL_ALLOW_METHODS`
+
 
 ## Adding Custom Middleware in GoFr
 
