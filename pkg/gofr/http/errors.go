@@ -29,7 +29,6 @@ type ErrorEntityAlreadyExist struct {
 }
 
 func (e ErrorEntityAlreadyExist) Error() string {
-	// For ex: "No entity found with id: 2"
 	return alreadyExistsMessage
 }
 
