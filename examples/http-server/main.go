@@ -1,8 +1,10 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"sync"
 	"time"
 
@@ -79,7 +81,20 @@ func TraceHandler(c *gofr.Context) (interface{}, error) {
 		return nil, err
 	}
 
-	return resp, nil
+	defer resp.Body.Close()
+
+	var data = struct {
+		Data interface{} `json:"data"`
+	}{}
+
+	b, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	_ = json.Unmarshal(b, &data)
+
+	return data.Data, nil
 }
 
 func MysqlHandler(c *gofr.Context) (interface{}, error) {
