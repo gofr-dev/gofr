@@ -14,6 +14,7 @@ type query interface {
 	Exec() error
 	Iter() iterator
 	MapScanCAS(dest map[string]interface{}) (applied bool, err error)
+	ScanCAS(dest ...any) (applied bool, err error)
 }
 
 type iterator interface {

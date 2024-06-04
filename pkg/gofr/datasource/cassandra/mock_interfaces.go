@@ -162,6 +162,25 @@ func (mr *MockqueryMockRecorder) MapScanCAS(dest any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MapScanCAS", reflect.TypeOf((*Mockquery)(nil).MapScanCAS), dest)
 }
 
+// ScanCAS mocks base method.
+func (m *Mockquery) ScanCAS(dest ...any) (bool, error) {
+	m.ctrl.T.Helper()
+	varargs := []any{}
+	for _, a := range dest {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "ScanCAS", varargs...)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ScanCAS indicates an expected call of ScanCAS.
+func (mr *MockqueryMockRecorder) ScanCAS(dest ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ScanCAS", reflect.TypeOf((*Mockquery)(nil).ScanCAS), dest...)
+}
+
 // Mockiterator is a mock of iterator interface.
 type Mockiterator struct {
 	ctrl     *gomock.Controller

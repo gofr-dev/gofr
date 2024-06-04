@@ -1,44 +1,284 @@
 package cassandra
 
-//func Test_Connect(t *testing.T) {
-//	ctrl := gomock.NewController(t)
-//	defer ctrl.Finish()
-//
-//	mockLogger := NewMockLogger(INFO)
-//	mockMetrics := NewMockMetrics(ctrl)
-//
-//	testCases := []struct {
-//		desc       string
-//		config     *gocql.ClusterConfig
-//		expected   string
-//		shouldFail bool
-//	}{
-//		{"successful connection", &gocql.ClusterConfig{},
-//			"connected to 'test_keyspace' keyspace at host 'host1, host2' and port '9042'", false},
-//		{"connection failure", &gocql.ClusterConfig{}, "error connecting to cassandra: some error", true},
-//	}
-//
-//	for i, tc := range testCases {
-//		t.Run(tc.desc, func(t *testing.T) {
-//			client := &Client{
-//				clusterConfig: tc.config,
-//				logger:        mockLogger,
-//				metrics:       mockMetrics,
-//			}
-//
-//			if tc.shouldFail {
-//				mockLogger.EXPECT().Error(gomock.Any()).Times(1)
-//			} else {
-//				mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(2)
-//			}
-//
-//			client.Connect()
-//
-//			if tc.shouldFail {
-//				assert.Nil(t, client.session, "TEST[%d], Failed.\n%s", i, tc.desc)
-//			} else {
-//				assert.NotNil(t, client.session, "TEST[%d], Failed.\n%s", i, tc.desc)
-//			}
-//		})
-//	}
-//}
+import (
+	"bytes"
+	"context"
+	"errors"
+	"github.com/gocql/gocql"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"go.uber.org/mock/gomock"
+)
+
+func initTest(t *testing.T) (*Client, *Mocksession, *Mockquery, *Mockiterator) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	b := new(bytes.Buffer)
+	mockLogger := NewMockLogger(INFO, b)
+	mockMetrics := NewMockMetrics(ctrl)
+	mockSession := NewMocksession(ctrl)
+	mockQuery := NewMockquery(ctrl)
+	mockIter := NewMockiterator(ctrl)
+
+	config := &Config{
+		Hosts:    "host1",
+		Port:     9042,
+		Keyspace: "test_keyspace",
+	}
+
+	client := New(config)
+	client.UseLogger(mockLogger)
+	client.UseMetrics(mockMetrics)
+
+	client.cassandra.session = mockSession
+
+	mockMetrics.EXPECT().RecordHistogram(gomock.AssignableToTypeOf(context.Background()), "app_cassandra_stats",
+		gomock.AssignableToTypeOf(float64(0)), "hostname", client.config.Hosts, "keyspace", client.config.Keyspace).AnyTimes()
+
+	return client, mockSession, mockQuery, mockIter
+}
+
+func Test_Connect(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	b := new(bytes.Buffer)
+	mockLogger := NewMockLogger(INFO, b)
+	mockMetrics := NewMockMetrics(ctrl)
+	mockclusterConfig := NewMockclusterConfig(ctrl)
+
+	config := &Config{
+		Hosts:    "host1",
+		Port:     9042,
+		Keyspace: "test_keyspace",
+	}
+
+	cassandraBucktes := []float64{.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 4, 5, 7.5, 10}
+
+	testCases := []struct {
+		desc       string
+		mockCall   func()
+		expLog     string
+		expSession session
+	}{
+		{"successful connection", func() {
+			mockclusterConfig.EXPECT().CreateSession().Return(&cassandraSession{}, nil).Times(1)
+			mockMetrics.EXPECT().NewHistogram("app_cassandra_stats", "Response time of CASSANDRA queries in milliseconds.",
+				cassandraBucktes).Times(1)
+		}, "connected to 'test_keyspace' keyspace at host 'host1' and port '9042'", &cassandraSession{}},
+		{"connection failure", func() {
+			mockclusterConfig.EXPECT().CreateSession().Return(nil, errors.New("connection failure")).Times(1)
+		}, "error connecting to cassandra: connection failure", nil},
+	}
+
+	for i, tc := range testCases {
+		tc.mockCall()
+
+		client := New(config)
+		client.UseLogger(mockLogger)
+		client.UseMetrics(mockMetrics)
+
+		client.cassandra.clusterConfig = mockclusterConfig
+
+		client.Connect()
+
+		assert.Equalf(t, tc.expSession, client.cassandra.session, "TEST[%d], Failed.\n%s", i, tc.desc)
+		assert.Containsf(t, b.String(), tc.expLog, "TEST[%d], Failed.\n%s", i, tc.desc)
+	}
+}
+
+func Test_Query(t *testing.T) {
+	const query = "SELECT id, name FROM users"
+
+	type users struct {
+		ID   int    `json:"id"`
+		Name string `json:"name"`
+	}
+
+	mockStructSlice := make([]users, 0)
+	mockIntSlice := make([]int, 0)
+	mockStruct := users{}
+	mockInt := 0
+
+	client, mockSession, mockQuery, mockIter := initTest(t)
+
+	testCases := []struct {
+		desc     string
+		dest     interface{}
+		mockCall func()
+		expRes   interface{}
+		expErr   error
+	}{
+		{"success case: struct slice", &mockStructSlice, func() {
+			mockSession.EXPECT().Query(query).Return(mockQuery).Times(1)
+			mockQuery.EXPECT().Iter().Return(mockIter).Times(1)
+			mockIter.EXPECT().NumRows().Return(1).Times(1)
+			mockIter.EXPECT().Columns().Return([]gocql.ColumnInfo{{Name: "id"}, {Name: "name"}}).Times(1)
+			mockIter.EXPECT().Scan(gomock.Any()).Times(1)
+		}, &mockStructSlice, nil},
+		{"success case: int slice", &mockIntSlice, func() {
+			mockSession.EXPECT().Query(query).Return(mockQuery).Times(1)
+			mockQuery.EXPECT().Iter().Return(mockIter).Times(1)
+			mockIter.EXPECT().NumRows().Return(1).Times(1)
+			mockIter.EXPECT().Scan(gomock.Any()).Times(1)
+		}, &mockIntSlice, nil},
+		{"success case: struct", &mockStruct, func() {
+			mockSession.EXPECT().Query(query).Return(mockQuery).Times(1)
+			mockQuery.EXPECT().Iter().Return(mockIter).Times(1)
+			mockIter.EXPECT().Columns().Return([]gocql.ColumnInfo{{Name: "id"}, {Name: "name"}}).Times(1)
+			mockIter.EXPECT().Scan(gomock.Any()).Times(1)
+		}, &mockStruct, nil},
+		{"failure case: dest is not pointer", mockStructSlice, func() {}, mockStructSlice,
+			DestinationIsNotPointer{}},
+		{"failure case: dest is int", &mockInt, func() {
+			mockSession.EXPECT().Query(query).Return(mockQuery).Times(1)
+			mockQuery.EXPECT().Iter().Return(mockIter).Times(1)
+		}, &mockInt, UnexpectedPointer{target: "int"}},
+	}
+
+	for i, tc := range testCases {
+		tc.mockCall()
+
+		err := client.Query(tc.dest, query)
+
+		assert.Equalf(t, tc.expRes, tc.dest, "TEST[%d], Failed.\n%s", i, tc.desc)
+		assert.Equalf(t, tc.expErr, err, "TEST[%d], Failed.\n%s", i, tc.desc)
+	}
+}
+
+func Test_Exec(t *testing.T) {
+	const query = "INSERT INTO users (id, name) VALUES(1, 'Test')"
+
+	client, mockSession, mockQuery, _ := initTest(t)
+
+	mockErr := errors.New("test error")
+
+	testCases := []struct {
+		desc     string
+		mockCall func()
+		expErr   error
+	}{
+		{"success case", func() {
+			mockSession.EXPECT().Query(query).Return(mockQuery).Times(1)
+			mockQuery.EXPECT().Exec().Return(nil).Times(1)
+		}, nil},
+		{"failure case", func() {
+			mockSession.EXPECT().Query(query).Return(mockQuery).Times(1)
+			mockQuery.EXPECT().Exec().Return(mockErr).Times(1)
+		}, mockErr},
+	}
+
+	for i, tc := range testCases {
+		tc.mockCall()
+
+		err := client.Exec(query)
+
+		assert.Equalf(t, tc.expErr, err, "TEST[%d], Failed.\n%s", i, tc.desc)
+	}
+}
+
+func Test_QueryCAS(t *testing.T) {
+	const query = "INSERT INTO users (id, name) VALUES(1, 'Test') IF NOT EXISTS"
+
+	type users struct {
+		ID   int    `json:"id"`
+		Name string `json:"name"`
+	}
+
+	mockErr := errors.New("test error")
+	mockStruct := users{}
+	mockInt := 0
+
+	client, mockSession, mockQuery, _ := initTest(t)
+
+	testCases := []struct {
+		desc       string
+		dest       interface{}
+		mockCall   func()
+		expApplied bool
+		expErr     error
+	}{
+		{"success case: struct dest, applied true", &mockStruct, func() {
+			mockSession.EXPECT().Query(query).Return(mockQuery).Times(1)
+			mockQuery.EXPECT().MapScanCAS(gomock.AssignableToTypeOf(map[string]interface{}{})).Return(true, nil).Times(1)
+		}, true, nil},
+		{"success case: int dest, applied true", &mockInt, func() {
+			mockSession.EXPECT().Query(query).Return(mockQuery).Times(1)
+			mockQuery.EXPECT().ScanCAS(gomock.Any()).Return(true, nil).Times(1)
+		}, true, nil},
+		{"failure case: struct dest, error", &mockStruct, func() {
+			mockSession.EXPECT().Query(query).Return(mockQuery).Times(1)
+			mockQuery.EXPECT().MapScanCAS(gomock.AssignableToTypeOf(map[string]interface{}{})).Return(false, mockErr).Times(1)
+		}, false, mockErr},
+		{"failure case: int dest, error", &mockInt, func() {
+			mockSession.EXPECT().Query(query).Return(mockQuery).Times(1)
+			mockQuery.EXPECT().ScanCAS(gomock.Any()).Return(false, mockErr).Times(1)
+		}, false, mockErr},
+		{"failure case: dest is not pointer", mockInt, func() {}, false, DestinationIsNotPointer{}},
+		{"failure case: dest is slice", &[]int{}, func() {
+			mockSession.EXPECT().Query(query).Return(mockQuery).Times(1)
+		}, false, UnexpectedSlice{target: "[]*[]int"}},
+		{"failure case: dest is map", &map[string]interface{}{}, func() {
+			mockSession.EXPECT().Query(query).Return(mockQuery).Times(1)
+		}, false, UnexpectedMap{}},
+	}
+
+	for i, tc := range testCases {
+		tc.mockCall()
+
+		applied, err := client.QueryCAS(tc.dest, query)
+
+		assert.Equalf(t, tc.expApplied, applied, "TEST[%d], Failed.\n%s", i, tc.desc)
+		assert.Equalf(t, tc.expErr, err, "TEST[%d], Failed.\n%s", i, tc.desc)
+	}
+}
+
+func Test_HealthCheck(t *testing.T) {
+	const query = "SELECT now() FROM system.local"
+
+	client, mockSession, mockQuery, _ := initTest(t)
+
+	mockErr := errors.New("test error")
+
+	testCases := []struct {
+		desc      string
+		mockCall  func()
+		expHealth *Health
+	}{
+		{"success case", func() {
+			mockSession.EXPECT().Query(query).Return(mockQuery).Times(1)
+			mockQuery.EXPECT().Exec().Return(nil).Times(1)
+		}, &Health{
+			Status:  "UP",
+			Details: map[string]interface{}{"host": client.config.Hosts, "keyspace": client.config.Keyspace},
+		}},
+		{"failure case: exec error", func() {
+			mockSession.EXPECT().Query(query).Return(mockQuery).Times(1)
+			mockQuery.EXPECT().Exec().Return(mockErr).Times(1)
+		}, &Health{
+			Status: "DOWN",
+			Details: map[string]interface{}{"host": client.config.Hosts, "keyspace": client.config.Keyspace,
+				"message": mockErr.Error()},
+		}},
+		{"failure case: cassandra not initialises", func() {
+			client.cassandra.session = nil
+
+			mockSession.EXPECT().Query(query).Return(mockQuery).Times(1)
+			mockQuery.EXPECT().Exec().Return(nil).Times(1)
+		}, &Health{
+			Status: "DOWN",
+			Details: map[string]interface{}{"host": client.config.Hosts, "keyspace": client.config.Keyspace,
+				"message": "cassandra not connected"},
+		}},
+	}
+
+	for i, tc := range testCases {
+		tc.mockCall()
+
+		health := client.HealthCheck()
+
+		assert.Equalf(t, tc.expHealth, health, "TEST[%d], Failed.\n%s", i, tc.desc)
+	}
+}

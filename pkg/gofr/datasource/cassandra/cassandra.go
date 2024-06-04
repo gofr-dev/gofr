@@ -27,16 +27,23 @@ func newClusterConfg(config *Config) clusterConfig {
 	return &c
 }
 
-func (c *cassandraClusterConfig) CreateSession() (*gocql.Session, error) {
-	return c.clusterConfig.CreateSession()
+func (c *cassandraClusterConfig) CreateSession() (session, error) {
+	sess, err := c.clusterConfig.CreateSession()
+	if err != nil {
+		return nil, err
+	}
+
+	return &cassandraSession{session: sess}, nil
 }
 
 type cassandraSession struct {
 	session *gocql.Session
 }
 
-func (c *cassandraSession) Query(stmt string, values ...interface{}) *gocql.Query {
-	return c.session.Query(stmt, values...)
+func (c *cassandraSession) Query(stmt string, values ...interface{}) query {
+	q := &cassandraQuery{query: c.session.Query(stmt, values...)}
+
+	return q
 }
 
 type cassandraQuery struct {
@@ -47,12 +54,18 @@ func (c *cassandraQuery) Exec() error {
 	return c.query.Exec()
 }
 
-func (c *cassandraQuery) Iter() *gocql.Iter {
-	return c.query.Iter()
+func (c *cassandraQuery) Iter() iterator {
+	iter := cassandraIterator{iter: c.query.Iter()}
+
+	return &iter
 }
 
 func (c *cassandraQuery) MapScanCAS(dest map[string]interface{}) (applied bool, err error) {
 	return c.query.MapScanCAS(dest)
+}
+
+func (c *cassandraQuery) ScanCAS(dest ...any) (applied bool, err error) {
+	return c.query.ScanCAS(dest)
 }
 
 type cassandraIterator struct {
@@ -123,7 +136,7 @@ func (c *Client) Connect() {
 	cassandraBucktes := []float64{.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 4, 5, 7.5, 10}
 	c.metrics.NewHistogram("app_cassandra_stats", "Response time of CASSANDRA queries in milliseconds.", cassandraBucktes...)
 
-	c.logger.Logf("connected to '%s' keyspace at host '%s' and port '%s'", c.config.Keyspace, c.config.Hosts, c.config.Port)
+	c.logger.Logf("connected to '%s' keyspace at host '%s' and port '%d'", c.config.Keyspace, c.config.Hosts, c.config.Port)
 
 	c.cassandra.session = sess
 }
@@ -145,7 +158,7 @@ func (c *Client) UseMetrics(metrics interface{}) {
 // Query executes the query and binds the result into dest parameter.
 // Returns error if any error occurs while binding the result.
 // Can be used to single as well as multiple rows.
-// Accepts struct or slice of struct as dest parameter for single and multiple rows retrieval respectively
+// Accepts pointer to struct or slice as dest parameter for single and multiple rows retrieval respectively
 func (c *Client) Query(dest interface{}, stmt string, values ...interface{}) error {
 	defer c.postProcess(&QueryLog{Query: stmt, Keyspace: c.config.Keyspace}, time.Now())
 
@@ -206,7 +219,7 @@ func (c *Client) Exec(stmt string, values ...interface{}) error {
 // If the transaction fails because the existing values did not match, the previous values will be stored in dest.
 // Returns true if the query is applied otherwise returns false
 // Returns and error if any error occur while executing the query
-// Accepts only struct as the dest parameter.
+// Accepts only pointer to struct as the dest parameter.
 func (c *Client) QueryCAS(dest interface{}, stmt string, values ...interface{}) (bool, error) {
 	var (
 		applied bool
@@ -223,22 +236,30 @@ func (c *Client) QueryCAS(dest interface{}, stmt string, values ...interface{}) 
 	}
 
 	rv := rvo.Elem()
-	query := c.cassandra.session.Query(stmt, values...)
+	q := c.cassandra.session.Query(stmt, values...)
 
 	switch rv.Kind() {
 	case reflect.Struct:
-		applied, err = c.rowsToStructCAS(query, rv)
+		applied, err = c.rowsToStructCAS(q, rv)
+
+	case reflect.Slice:
+		c.logger.Debugf("a slice of %v was not expected.", reflect.SliceOf(reflect.TypeOf(dest)).String())
+
+		return false, UnexpectedSlice{target: reflect.SliceOf(reflect.TypeOf(dest)).String()}
+
+	case reflect.Map:
+		c.logger.Debugf("a map was not expected.")
+
+		return false, UnexpectedMap{}
 
 	default:
-		c.logger.Debugf("a pointer to %v was not expected.", rv.Kind().String())
-
-		return false, UnexpectedPointer{target: rv.Kind().String()}
+		applied, err = q.ScanCAS(rv.Interface())
 	}
 
 	return applied, err
 }
 
-func (c *Client) rowsToStruct(iter *gocql.Iter, vo reflect.Value) {
+func (c *Client) rowsToStruct(iter iterator, vo reflect.Value) {
 	v := vo
 	if vo.Kind() == reflect.Ptr {
 		v = vo.Elem()
@@ -255,7 +276,7 @@ func (c *Client) rowsToStruct(iter *gocql.Iter, vo reflect.Value) {
 	}
 }
 
-func (c *Client) rowsToStructCAS(query *gocql.Query, vo reflect.Value) (bool, error) {
+func (c *Client) rowsToStructCAS(query query, vo reflect.Value) (bool, error) {
 	v := vo
 	if vo.Kind() == reflect.Ptr {
 		v = vo.Elem()
@@ -361,6 +382,8 @@ func (c *Client) postProcess(ql *QueryLog, startTime time.Time) {
 
 	c.metrics.RecordHistogram(context.Background(), "app_cassandra_stats", float64(duration), "hostname", c.config.Hosts,
 		"keyspace", c.config.Keyspace)
+
+	c.cassandra.query = nil
 }
 
 type Health struct {
