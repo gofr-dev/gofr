@@ -88,7 +88,6 @@ func New() *App {
 	if err != nil || port <= 0 {
 		port = defaultGRPCPort
 	}
-
 	app.grpcServer = newGRPCServer(app.container, port)
 
 	app.subscriptionManager = newSubscriptionManager(app.container)
@@ -100,7 +99,6 @@ func New() *App {
 func NewCMD() *App {
 	app := &App{}
 	app.readConfig(true)
-
 	app.container = container.NewContainer(nil)
 	app.container.Logger = logging.NewFileLogger(app.Config.Get("CMD_LOGS_FILE"))
 	app.cmd = &cmd{}
@@ -252,13 +250,11 @@ func (a *App) Logger() logging.Logger {
 // Can be used to create commands like "kubectl get" or "kubectl get ingress".
 func (a *App) SubCommand(pattern string, handler Handler, description ...string) {
 	help := ""
-
 	// Extract help information from the description
 	if len(description) > 1 {
 		help = strings.Join(description[1:], " ")
 	}
 	desc := description[0]
-
 	a.cmd.addRoute(route{
 		pattern:     pattern,
 		handler:     handler,
@@ -338,7 +334,6 @@ func (a *App) EnableBasicAuth(credentials ...string) {
 	if len(credentials)%2 != 0 {
 		a.container.Error("Invalid number of arguments for EnableBasicAuth")
 	}
-
 	users := make(map[string]string)
 	for i := 0; i < len(credentials); i += 2 {
 		users[credentials[i]] = credentials[i+1]
@@ -404,7 +399,6 @@ func (a *App) AddCronJob(schedule, jobName string, job CronFunc) {
 	if a.cron == nil {
 		a.cron = NewCron(a.container)
 	}
-
 	if err := a.cron.AddJob(schedule, jobName, job); err != nil {
 		a.Logger().Errorf("error adding cron job, err : %v", err)
 	}
