@@ -219,7 +219,7 @@ func (c *Client) Exec(stmt string, values ...interface{}) error {
 // If the transaction fails because the existing values did not match, the previous values will be stored in dest.
 // Returns true if the query is applied otherwise returns false
 // Returns and error if any error occur while executing the query
-// Accepts only pointer to struct as the dest parameter.
+// Accepts only pointer to struct and built-in types as the dest parameter.
 func (c *Client) QueryCAS(dest interface{}, stmt string, values ...interface{}) (bool, error) {
 	var (
 		applied bool
