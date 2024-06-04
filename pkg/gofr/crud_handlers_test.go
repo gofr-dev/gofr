@@ -325,7 +325,7 @@ func Test_GetAllHandler(t *testing.T) {
 		for i, tc := range tests {
 			t.Run(dc.dialect+" "+tc.desc, func(t *testing.T) {
 				c := container.NewContainer(nil)
-				db, mock, _ := gofrSql.NewSQLMocksWithConfig(t, &gofrSql.DBConfig{Dialect: dc.dialect})
+				db, mock, mockMetrics := gofrSql.NewSQLMocksWithConfig(t, &gofrSql.DBConfig{Dialect: dc.dialect})
 				c.SQL = db
 
 				defer db.Close()
@@ -333,6 +333,8 @@ func Test_GetAllHandler(t *testing.T) {
 				ctx := createTestContext(http.MethodGet, "/users", "", nil, c)
 
 				mock.ExpectQuery(dc.expectedQuery).WillReturnRows(tc.mockResp).WillReturnError(tc.mockErr)
+				mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats", gomock.Any(),
+					"hostname", gomock.Any(), "database", gomock.Any(), "type", "SELECT")
 
 				resp, err := e.GetAll(ctx)
 
