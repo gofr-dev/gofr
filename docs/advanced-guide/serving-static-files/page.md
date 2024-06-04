@@ -33,7 +33,7 @@ func main(){
 
 ```
 
-Additionally,if we want to serve more static endpoints, we have a dedicated function called `AddStaticFiles()` which takes 2 parameters endpoint and the filepath of the static folder which we want to serve.
+Additionally, if we want to serve more static endpoints, we have a dedicated function called `AddStaticFiles()` which takes 2 parameters endpoint and the filepath of the static folder which we want to serve.
 
 Providing an example below along with File System Example:
 
