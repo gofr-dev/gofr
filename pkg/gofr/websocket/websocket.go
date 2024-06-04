@@ -1,6 +1,8 @@
 package websocket
 
 import (
+	"context"
+	"encoding/json"
 	"net/http"
 
 	"github.com/gorilla/websocket"
@@ -46,6 +48,38 @@ func NewWSUpgrader(opts ...Options) *WSUpgrader {
 	return &WSUpgrader{
 		Upgrader: defaultUpgrader,
 	}
+}
+
+func (w *Connection) Context() context.Context {
+	return context.TODO() // Implement proper context handling if needed
+}
+
+func (w *Connection) Param(_ string) string {
+	return "" // Not applicable for WebSocket, can be implemented if needed
+}
+
+func (w *Connection) PathParam(_ string) string {
+	return "" // Not applicable for WebSocket, can be implemented if needed
+}
+
+func (w *Connection) Bind(v interface{}) error {
+	_, message, err := w.Conn.ReadMessage()
+	if err != nil {
+		return err
+	}
+
+	switch v := v.(type) {
+	case *string:
+		*v = string(message)
+	default:
+		return json.Unmarshal(message, v)
+	}
+
+	return nil
+}
+
+func (w *Connection) HostName() string {
+	return "" // Not applicable for WebSocket, can be implemented if needed
 }
 
 func (u *WSUpgrader) Upgrade(w http.ResponseWriter, r *http.Request, responseHeader http.Header) (*websocket.Conn, error) {

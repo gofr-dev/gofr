@@ -2,48 +2,27 @@ package main
 
 import (
 	"fmt"
-
 	"gofr.dev/pkg/gofr"
-	"gofr.dev/pkg/gofr/logging"
-	"gofr.dev/pkg/gofr/websocket"
 )
 
 func main() {
 	app := gofr.New()
 
-	app.GET("/ws", WSHandler)
+	app.WebSocket("/ws", WSHandler)
 
 	app.Run()
 }
 
-func WSHandler(c *gofr.Context) (interface{}, error) {
-	conn := c.GetWebsocketConnection().Conn
-	if conn == nil {
-		return nil, fmt.Errorf("websocket connection not found in context")
+func WSHandler(ctx *gofr.Context) (interface{}, error) {
+	var message string
+	err := ctx.Bind(&message)
+	if err != nil {
+		ctx.Logger.Errorf("Error binding message: %v", err)
+		return nil, err
 	}
 
-	handleWebSocketMessages(&websocket.Connection{Conn: conn}, c.Logger)
+	ctx.Logger.Infof("Received message: %s", message)
 
-	return nil, nil
-}
-
-func handleWebSocketMessages(conn *websocket.Connection, logger logging.Logger) {
-	defer conn.Close()
-	for {
-		_, msg, err := conn.ReadMessage()
-		if err != nil {
-			logger.Errorf("Unexpected close error: %v", err)
-
-			break
-		}
-
-		logger.Infof("Received message: %s", msg)
-
-		// Echo the message back
-		err = conn.WriteMessage(websocket.TextMessage, msg)
-		if err != nil {
-			logger.Errorf("Error writing message: %v", err)
-			break
-		}
-	}
+	response := fmt.Sprintf("GoFr: %s", message)
+	return response, nil
 }

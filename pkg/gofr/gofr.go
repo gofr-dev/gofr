@@ -2,6 +2,7 @@ package gofr
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -10,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	gWebsocket "github.com/gorilla/websocket"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/exporters/zipkin"
@@ -17,7 +19,6 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
-
 	"google.golang.org/grpc"
 
 	"gofr.dev/pkg/gofr/config"
@@ -398,6 +399,36 @@ func (a *App) AddCronJob(schedule, jobName string, job CronFunc) {
 	if err := a.cron.AddJob(schedule, jobName, job); err != nil {
 		a.Logger().Errorf("error adding cron job, err : %v", err)
 	}
+}
+
+func (a *App) WebSocket(route string, handler Handler) {
+	a.GET(route, func(ctx *Context) (interface{}, error) {
+		conn := ctx.GetWebsocketConnection()
+		if conn.Conn == nil {
+			return nil, errors.New("couldn't establish connection to web socket")
+		}
+
+		ctx.Request = conn
+		defer conn.Close()
+
+		for {
+			response, err := handler(ctx)
+			if err != nil {
+				if gWebsocket.IsCloseError(err, gWebsocket.CloseNormalClosure, gWebsocket.CloseGoingAway) {
+					break
+				}
+
+				ctx.Errorf("Error handling message: %v", err)
+			}
+
+			err = conn.WriteMessage(websocket.TextMessage, []byte(fmt.Sprint(response)))
+			if err != nil {
+				ctx.Errorf("Error writing message: %v", err)
+			}
+		}
+
+		return nil, nil
+	})
 }
 
 func (a *App) OverrideWebsocketUpgrader(wsUpgrader websocket.Upgrader) {
