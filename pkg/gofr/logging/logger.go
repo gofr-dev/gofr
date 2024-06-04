@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sync"
 	"time"
 
 	"golang.org/x/term"
@@ -42,6 +43,7 @@ type logger struct {
 	normalOut  io.Writer
 	errorOut   io.Writer
 	isTerminal bool
+	mu         sync.Mutex
 }
 
 type logEntry struct {
@@ -147,15 +149,19 @@ func (l *logger) prettyPrint(e logEntry, out io.Writer) {
 	// Giving special treatment to framework's request logs in terminal display. This does not add any overhead
 	// in running the server.
 	if fn, ok := e.Message.(PrettyPrint); ok {
+		l.mu.Lock()
 		fmt.Fprintf(out, "\u001B[38;5;%dm%s\u001B[0m [%s] ", e.Level.color(), e.Level.String()[0:4],
 			e.Time.Format("15:04:05"))
 
 		fn.PrettyPrint(out)
+		l.mu.Unlock()
 	} else {
+		l.mu.Lock()
 		fmt.Fprintf(out, "\u001B[38;5;%dm%s\u001B[0m [%s] ", e.Level.color(), e.Level.String()[0:4],
 			e.Time.Format("15:04:05"))
 
 		fmt.Fprintf(out, "%v\n", e.Message)
+		l.mu.Unlock()
 	}
 }
 
@@ -164,6 +170,7 @@ func NewLogger(level Level) Logger {
 	l := &logger{
 		normalOut: os.Stdout,
 		errorOut:  os.Stderr,
+		mu:        sync.Mutex{},
 	}
 
 	l.level = level
