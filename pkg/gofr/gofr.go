@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gorilla/mux"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/exporters/zipkin"
@@ -81,7 +82,7 @@ func New() *App {
 		port = defaultHTTPPort
 	}
 
-	app.httpServer = newHTTPServer(app.container, port)
+	app.httpServer = newHTTPServer(app.container, port, middleware.GetConfigs(app.Config))
 
 	// GRPC Server
 	port, err = strconv.Atoi(app.Config.Get("GRPC_PORT"))
@@ -147,6 +148,21 @@ func (a *App) Run() {
 			function:  catchAllHandler,
 			container: a.container,
 		})
+
+		var registeredMethods []string
+
+		_ = a.httpServer.router.Walk(func(route *mux.Route, _ *mux.Router, _ []*mux.Route) error {
+			met, _ := route.GetMethods()
+			for _, method := range met {
+				if !contains(registeredMethods, method) { // Check for uniqueness before adding
+					registeredMethods = append(registeredMethods, method)
+				}
+			}
+
+			return nil
+		})
+
+		*a.httpServer.router.RegisteredRoutes = registeredMethods
 
 		go func(s *httpServer) {
 			defer wg.Done()
@@ -408,4 +424,15 @@ func (a *App) AddCronJob(schedule, jobName string, job CronFunc) {
 	if err := a.cron.AddJob(schedule, jobName, job); err != nil {
 		a.Logger().Errorf("error adding cron job, err : %v", err)
 	}
+}
+
+// contains is a helper function checking for duplicate entry in a slice.
+func contains(elems []string, v string) bool {
+	for _, s := range elems {
+		if v == s {
+			return true
+		}
+	}
+
+	return false
 }
