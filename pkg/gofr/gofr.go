@@ -34,22 +34,16 @@ import (
 // App is the main application in the GoFr framework.
 type App struct {
 	// Config can be used by applications to fetch custom configurations from environment or file.
-	Config config.Config // If we directly embed, unnecessary confusion between app.Get and app.GET will happen.
-
+	Config       config.Config // If we directly embed, unnecessary confusion between app.Get and app.GET will happen.
 	grpcServer   *grpcServer
 	httpServer   *httpServer
 	metricServer *metricServer
-
-	cmd *cmd
-
-	cron *Crontab
-
+	cmd          *cmd
+	cron         *Crontab
 	// container is unexported because this is an internal implementation and applications are provided access to it via Context
-	container *container.Container
-
-	grpcRegistered bool
-	httpRegistered bool
-
+	container           *container.Container
+	grpcRegistered      bool
+	httpRegistered      bool
 	subscriptionManager SubscriptionManager
 }
 
@@ -103,7 +97,6 @@ func NewCMD() *App {
 	app.container = container.NewContainer(nil)
 	app.container.Logger = logging.NewFileLogger(app.Config.Get("CMD_LOGS_FILE"))
 	app.cmd = &cmd{}
-
 	app.container.Create(app.Config)
 	app.initTracer()
 
@@ -197,7 +190,6 @@ func (a *App) readConfig(isAppCMD bool) {
 	if _, err := os.Stat("./configs"); err == nil {
 		configLocation = "./configs"
 	}
-
 	if isAppCMD {
 		a.Config = config.NewEnvFile(configLocation, logging.NewFileLogger(""))
 
@@ -212,7 +204,6 @@ func (a *App) AddHTTPService(serviceName, serviceAddress string, options ...serv
 	if a.container.Services == nil {
 		a.container.Services = make(map[string]service.HTTP)
 	}
-
 	if _, ok := a.container.Services[serviceName]; ok {
 		a.container.Debugf("Service already registered Name: %v", serviceName)
 	}
