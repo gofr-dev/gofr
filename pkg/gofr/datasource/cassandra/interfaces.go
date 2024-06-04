@@ -3,17 +3,16 @@ package cassandra
 import "github.com/gocql/gocql"
 
 type clusterConfig interface {
-	CreateSession() (*gocql.Session, error)
+	CreateSession() (session, error)
 }
 
 type session interface {
-	Query(stmt string, values ...interface{}) *gocql.Query
+	Query(stmt string, values ...interface{}) query
 }
 
 type query interface {
 	Exec() error
-	Iter() *gocql.Iter
-	Scan(dest ...interface{}) error
+	Iter() iterator
 	MapScanCAS(dest map[string]interface{}) (applied bool, err error)
 }
 

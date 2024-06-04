@@ -1,9 +1,9 @@
 package cassandra
 
 import (
+	"bytes"
 	"fmt"
 	"io"
-	"os"
 )
 
 // Level represents different logging levels.
@@ -21,11 +21,11 @@ type MockLogger struct {
 	errOut io.Writer
 }
 
-func NewMockLogger(level Level) Logger {
+func NewMockLogger(level Level, b *bytes.Buffer) Logger {
 	return &MockLogger{
 		level:  level,
-		out:    os.Stdout,
-		errOut: os.Stderr,
+		out:    b,
+		errOut: b,
 	}
 }
 
