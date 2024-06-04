@@ -1,6 +1,6 @@
 # Serving Static Files using GoFr
 
-Often times we require to serve static content be it a default profile image or a static website. We want to have a mechanism to serve those content without having a hassel of implementing it from scratch.
+Often, we require to serve static content be it a default profile image or a static website. We want to have a mechanism to serve those content without having a hassel of implementing it from scratch.
 
 GoFr provides a default mechanism where if a public folder is available in the directory of the application, it automatically provides an endpoint with `/public/<filename>`, here filename refers to the file we want to get static content to be served. 
 
@@ -33,7 +33,7 @@ func main(){
 
 ```
 
-Additionally if we want to serve additional static endpoints, we have a open function called `AddStaticFiles()` which takes 2 parameters endpoint and the filepath of the static folder which we want to serve.
+Additionally,if we want to serve more static endpoints, we have a dedicated function called `AddStaticFiles()` which takes 2 parameters endpoint and the filepath of the static folder which we want to serve.
 
 Providing an example below along with File System Example:
 
