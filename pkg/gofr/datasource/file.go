@@ -1,49 +1,81 @@
 package datasource
 
-// FileStore interface implements different functionalities to do operations on a file.
-// All the methods accept the last paramater as ...interface{} such that to keep the interface consistent
-// across all the different filesystems such as FTP, SFTP or cloud stores such as S3, so we can implement
-// their specific configs as well.
-type FileStore interface {
-	// CreateDir creates a new directory with the specified named name,
-	// along with any necessary parents with fs.ModeDir FileMode.
-	// If directory already exist it will do nothing and return nil.
-	// name contains the file name along with the path.
-	CreateDir(name string, options ...interface{}) error
+import (
+	"errors"
+	"io"
+	"os"
+)
 
-	// Create creates the file named path along with any necessary parents,
-	// and writes the given data to it.
-	// If file exists, error is returned.
-	// If file does not exist, it is created with mode 0666
-	// Error return are of type *fs.PathError.
-	// name contains the file name along with the path.
-	Create(name string, data []byte, options ...interface{}) error
+// File represents a file in the filesystem.
+type File interface {
+	io.Closer
+	io.Reader
+	io.ReaderAt
+	io.Seeker
+	io.Writer
+	io.WriterAt
 
-	// Read reads the content of file and writes it in data.
-	// If there is an error, it will be of type *fs.PathError.
-	// name contains the file name along with the path.
-	Read(name string, options ...interface{}) ([]byte, error)
-
-	// Move moves the file from src to dest, along with any necessary parents for dest location.
-	// If there is an error, it will be of type *fs.PathError.
-	// src and dest contains the filename along with path
-	Move(src string, dest string, options ...interface{}) error
-
-	// Update rewrites file named path with data, if file doesn't exist, error is returned.
-	// name contains the file name along with the path.
-	Update(name string, data []byte, options ...interface{}) error
-
-	// Delete deletes the file at given path, if no file/directory exist nil is returned.
-	// name contains the file name along with the path.
-	Delete(name string, options ...interface{}) error
-
-	//// Stat returns stat for the file.
-	//// name contains the file name along with the path.
-	//Stat(name string, options ...interface{}) (fs.FileInfo, error)
+	Name() string
+	Stat() (os.FileInfo, error)
+	Readdir(count int) ([]os.FileInfo, error)
+	ReadAll() RowReader
 }
 
-type FileStoreProvider interface {
-	FileStore
+type RowReader interface {
+	Next() bool
+	Scan(...interface{}) error
+}
+
+// FileSystem Any simulated or real filesystem should implement this interface.
+type FileSystem interface {
+	// Create creates a file in the filesystem, returning the file and an
+	// error, if any happens.
+	Create(name string) (File, error)
+
+	// Mkdir creates a directory in the filesystem, return an error if any
+	// happens.
+	Mkdir(name string, perm os.FileMode) error
+
+	// MkdirAll creates a directory path and all parents that does not exist
+	// yet.
+	MkdirAll(path string, perm os.FileMode) error
+
+	// Open opens a file, returning it or an error, if any happens.
+	Open(name string) (File, error)
+
+	// OpenFile opens a file using the given flags and the given mode.
+	OpenFile(name string, flag int, perm os.FileMode) (File, error)
+
+	// Remove removes a file identified by name, returning an error, if any
+	// happens.
+	Remove(name string) error
+
+	// RemoveAll removes a directory path and any children it contains. It
+	// does not fail if the path does not exist (return nil).
+	RemoveAll(path string) error
+
+	// Rename renames a file.
+	Rename(oldname, newname string) error
+
+	// Stat returns a FileInfo describing the named file, or an error, if any
+	// happens.
+	Stat(name string) (os.FileInfo, error)
+
+	// Chmod changes the mode of the named file to mode.
+	Chmod(name string, mode os.FileMode) error
+}
+
+var (
+	ErrFileClosed        = errors.New("File is closed")
+	ErrOutOfRange        = errors.New("out of range")
+	ErrTooLarge          = errors.New("too large")
+	ErrFileNotFound      = os.ErrNotExist
+	ErrFileExists        = os.ErrExist
+	ErrDestinationExists = os.ErrExist
+)
+
+type FileSystemProvider interface {
+	FileSystem
 
 	// UseLogger sets the logger for the MongoDB client.
 	UseLogger(logger interface{})

@@ -3,7 +3,8 @@ package main
 import (
 	"errors"
 	"fmt"
-	"gofr.dev/pkg/gofr/datasource/file/ftp"
+	"gofr.dev/pkg/gofr/datasource/file/sftp"
+	"os"
 	"sync"
 	"time"
 
@@ -15,19 +16,47 @@ func main() {
 	// Create a new application
 	a := gofr.New()
 
-	cfg := ftp.Config{Host: "localhost", Port: "21", Username: "user", Password: "123"}
+	fs := sftp.New(sftp.Config{
+		Username: "myuser",
+		Password: "mypass",
+		Host:     "localhost",
+		Port:     2222,
+	})
+
+	file, err := fs.Open("file.csv")
+	defer file.Close()
+	a.Logger().Log(err)
+
+	err = fs.Mkdir("testDir", os.ModeDir)
+
+	file, err = fs.Create("/testDir/test.csv")
+
+	_, err = file.Write([]byte(`Date,Increment,Total
+6 April,18,739
+13 April,6,745
+22 April,2,747
+28 April,143,890
+6 May,83,973
+13 May,60,1033
+20 May,39,1072
+27 May,25,1097
+3 June,81,1178`))
+
+	file.Close()
+
+	//cfg := sftp.Config{Host: "localhost", Port: "21", Username: "user", Password: "123"}
 
 	// can only be injected from app and can also be accessed from container
-	files := a.AddFileStore(ftp.New(cfg))
+	//files := a.AddFileStore(ftp.New(cfg))
 
-	err := files.Create("testDir", []byte("Hello World"))
-	if err != nil {
-		a.Logger().Log(err)
-	}
-
-	//files.ReadAsCSV("testDir").Headers("sdd").RowFunc(func(row) {
-
-	})
+	//err := files.Create("testDir", []byte("Hello World"))
+	//if err != nil {
+	//	a.Logger().Log(err)
+	//}
+	//
+	////files.ReadAsCSV("testDir").Headers("sdd").RowFunc(func(row) {
+	//
+	//})
 
 	////// can be used anywhere
 	//fx := ftp.New(ftp.Config{})

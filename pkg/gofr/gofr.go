@@ -391,7 +391,7 @@ func (a *App) UseMongo(db datasource.Mongo) {
 	a.container.Mongo = db
 }
 
-func (a *App) AddFileStore(fs datasource.FileStoreProvider) datasource.FileStore {
+func (a *App) AddFileStore(fs datasource.FileSystemProvider) datasource.FileSystem {
 	fs.UseLogger(a.Logger())
 	fs.UseMetrics(a.Metrics())
 

@@ -37,7 +37,7 @@ type Container struct {
 	Redis Redis
 	SQL   DB
 	Mongo datasource.Mongo
-	File  datasource.FileStore
+	File  datasource.FileSystem
 }
 
 func NewContainer(conf config.Config) *Container {
