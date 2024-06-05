@@ -3,6 +3,7 @@ package websocket
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 
 	"github.com/gorilla/websocket"
@@ -11,6 +12,8 @@ import (
 type Connection struct {
 	*websocket.Conn
 }
+
+var ErrorConnection = errors.New("couldn't establish connection to web socket")
 
 // The message types are defined in RFC 6455, section 11.8.
 const (

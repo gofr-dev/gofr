@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/gorilla/websocket"
+
 	"gofr.dev/pkg/gofr/container"
 	gofrHTTP "gofr.dev/pkg/gofr/http"
 	"gofr.dev/pkg/gofr/http/response"
@@ -70,6 +72,11 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	case <-done:
+		if websocket.IsWebSocketUpgrade(r) {
+			// Do not respond with HTTP headers since this is a WebSocket request
+			return
+		}
+
 		// Handler function completed
 		c.responder.Respond(result, err)
 	}

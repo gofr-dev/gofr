@@ -2,7 +2,6 @@ package gofr
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -405,7 +404,7 @@ func (a *App) WebSocket(route string, handler Handler) {
 	a.GET(route, func(ctx *Context) (interface{}, error) {
 		conn := ctx.GetWebsocketConnection()
 		if conn.Conn == nil {
-			return nil, errors.New("couldn't establish connection to web socket")
+			return nil, websocket.ErrorConnection
 		}
 
 		ctx.Request = conn
