@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"sync"
 	"time"
 
 	"golang.org/x/term"
@@ -43,7 +42,7 @@ type logger struct {
 	normalOut  io.Writer
 	errorOut   io.Writer
 	isTerminal bool
-	mu         sync.Mutex
+	lock       chan struct{}
 }
 
 type logEntry struct {
@@ -146,22 +145,23 @@ func (l *logger) Fatalf(format string, args ...interface{}) {
 }
 
 func (l *logger) prettyPrint(e logEntry, out io.Writer) {
-	// Giving special treatment to framework's request logs in terminal display. This does not add any overhead
-	// in running the server.
+	l.lock <- struct{}{} // Acquire the channel's lock
+	defer func() {
+		<-l.lock // Release the channel's token
+	}()
+
+	// Pretty printing if the message interface defines a method PrettyPrint else print the log message
+	// This decouples the logger implementation from its usage
 	if fn, ok := e.Message.(PrettyPrint); ok {
-		l.mu.Lock()
 		fmt.Fprintf(out, "\u001B[38;5;%dm%s\u001B[0m [%s] ", e.Level.color(), e.Level.String()[0:4],
 			e.Time.Format("15:04:05"))
 
 		fn.PrettyPrint(out)
-		l.mu.Unlock()
 	} else {
-		l.mu.Lock()
 		fmt.Fprintf(out, "\u001B[38;5;%dm%s\u001B[0m [%s] ", e.Level.color(), e.Level.String()[0:4],
 			e.Time.Format("15:04:05"))
 
 		fmt.Fprintf(out, "%v\n", e.Message)
-		l.mu.Unlock()
 	}
 }
 
@@ -170,7 +170,7 @@ func NewLogger(level Level) Logger {
 	l := &logger{
 		normalOut: os.Stdout,
 		errorOut:  os.Stderr,
-		mu:        sync.Mutex{},
+		lock:      make(chan struct{}, 1),
 	}
 
 	l.level = level
