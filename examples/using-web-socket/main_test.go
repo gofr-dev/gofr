@@ -17,8 +17,10 @@ func Test_WebSocket_Success(t *testing.T) {
 
 	testMessage := "Hello! GoFr"
 	dialer := &websocket.Dialer{}
+
 	conn, _, err := dialer.Dial(wsURL, nil)
 	assert.Nil(t, err, "Error dialing websocket : %v", err)
+
 	defer conn.Close()
 
 	// writing test message to websocket connection

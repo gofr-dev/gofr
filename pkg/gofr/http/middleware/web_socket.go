@@ -23,8 +23,6 @@ func WSConnectionCreate(c *container.Container) func(inner http.Handler) http.Ha
 				c.WebsocketConnection.Conn = conn
 
 				inner.ServeHTTP(w, r)
-			} else {
-				inner.ServeHTTP(w, r)
 			}
 		})
 	}

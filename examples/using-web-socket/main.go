@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"gofr.dev/pkg/gofr"
 )
 
@@ -15,6 +14,7 @@ func main() {
 
 func WSHandler(ctx *gofr.Context) (interface{}, error) {
 	var message string
+
 	err := ctx.Bind(&message)
 	if err != nil {
 		ctx.Logger.Errorf("Error binding message: %v", err)
@@ -23,6 +23,5 @@ func WSHandler(ctx *gofr.Context) (interface{}, error) {
 
 	ctx.Logger.Infof("Received message: %s", message)
 
-	response := fmt.Sprintf("GoFr: %s", message)
-	return response, nil
+	return message, nil
 }
