@@ -179,7 +179,7 @@ func Test_Exec(t *testing.T) {
 	}
 }
 
-func Test_QueryCAS(t *testing.T) {
+func Test_ExecCAS(t *testing.T) {
 	const query = "INSERT INTO users (id, name) VALUES(1, 'Test') IF NOT EXISTS"
 
 	type users struct {
@@ -228,7 +228,7 @@ func Test_QueryCAS(t *testing.T) {
 	for i, tc := range testCases {
 		tc.mockCall()
 
-		applied, err := client.QueryCAS(tc.dest, query)
+		applied, err := client.ExecCAS(tc.dest, query)
 
 		assert.Equalf(t, tc.expApplied, applied, "TEST[%d], Failed.\n%s", i, tc.desc)
 		assert.Equalf(t, tc.expErr, err, "TEST[%d], Failed.\n%s", i, tc.desc)
@@ -281,4 +281,22 @@ func Test_HealthCheck(t *testing.T) {
 
 		assert.Equalf(t, tc.expHealth, health, "TEST[%d], Failed.\n%s", i, tc.desc)
 	}
+}
+
+func Test_CreateSession_Error(t *testing.T) {
+	c := newClusterConfig(&Config{})
+
+	sess, err := c.CreateSession()
+
+	assert.Nil(t, sess, "Test Failed: should return error without creating session")
+	assert.Error(t, err, "Test Failed: should return error without creating session")
+}
+
+func Test_cassandraSession_Query(t *testing.T) {
+	c := &cassandraSession{session: &gocql.Session{}}
+
+	q := c.Query("sample query")
+
+	assert.NotNil(t, q, "Test Failed")
+	assert.IsType(t, &cassandraQuery{}, q, "Test Failed")
 }
