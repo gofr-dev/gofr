@@ -15,9 +15,6 @@ type File interface {
 	io.Writer
 	io.WriterAt
 
-	Name() string
-	Stat() (os.FileInfo, error)
-	Readdir(count int) ([]os.FileInfo, error)
 	ReadAll() RowReader
 }
 
@@ -56,13 +53,6 @@ type FileSystem interface {
 
 	// Rename renames a file.
 	Rename(oldname, newname string) error
-
-	// Stat returns a FileInfo describing the named file, or an error, if any
-	// happens.
-	Stat(name string) (os.FileInfo, error)
-
-	// Chmod changes the mode of the named file to mode.
-	Chmod(name string, mode os.FileMode) error
 }
 
 var (

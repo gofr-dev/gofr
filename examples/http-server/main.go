@@ -3,8 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
-	"gofr.dev/pkg/gofr/datasource/file/sftp"
-	"os"
+	"gofr.dev/pkg/gofr/datasource/file"
 	"sync"
 	"time"
 
@@ -16,20 +15,10 @@ func main() {
 	// Create a new application
 	a := gofr.New()
 
-	fs := sftp.New(sftp.Config{
-		Username: "myuser",
-		Password: "mypass",
-		Host:     "localhost",
-		Port:     2222,
-	})
+	fs := file.New()
 
-	file, err := fs.Open("file.csv")
-	defer file.Close()
-	a.Logger().Log(err)
-
-	err = fs.Mkdir("testDir", os.ModeDir)
-
-	file, err = fs.Create("/testDir/test.csv")
+	file, err := fs.Create("test.csv")
+	fmt.Println(err)
 
 	_, err = file.Write([]byte(`Date,Increment,Total
 6 April,18,739
@@ -43,6 +32,18 @@ func main() {
 3 June,81,1178`))
 
 	file.Close()
+
+	file, err = fs.Open("test.csv")
+
+	reader := file.ReadAll()
+
+	var x string
+
+	for reader.Next() {
+		reader.Scan(&x)
+
+		fmt.Println(x)
+	}
 
 	//cfg := sftp.Config{Host: "localhost", Port: "21", Username: "user", Password: "123"}
 
