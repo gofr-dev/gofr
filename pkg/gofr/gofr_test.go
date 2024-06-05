@@ -250,7 +250,7 @@ func TestEnableBasicAuthWithFunc(t *testing.T) {
 	// Initialize a new App instance
 	a := &App{
 		httpServer: &httpServer{
-			router: gofrHTTP.NewRouter(c),
+			router: gofrHTTP.NewRouter(),
 		},
 		container: c,
 	}
@@ -387,7 +387,7 @@ func Test_UseMiddleware(t *testing.T) {
 
 	app := &App{
 		httpServer: &httpServer{
-			router: gofrHTTP.NewRouter(c),
+			router: gofrHTTP.NewRouter(),
 			port:   8001,
 		},
 		container: c,
