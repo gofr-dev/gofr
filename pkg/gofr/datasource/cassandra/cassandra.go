@@ -10,11 +10,12 @@ import (
 	"github.com/gocql/gocql"
 )
 
+// cassandraClusterConfig implements clusterConfig interface.
 type cassandraClusterConfig struct {
 	clusterConfig *gocql.ClusterConfig
 }
 
-func newClusterConfg(config *Config) clusterConfig {
+func newClusterConfig(config *Config) clusterConfig {
 	var c cassandraClusterConfig
 
 	config.Hosts = strings.TrimSuffix(strings.TrimSpace(config.Hosts), ",")
@@ -27,6 +28,13 @@ func newClusterConfg(config *Config) clusterConfig {
 	return &c
 }
 
+// CreateSession creates a Cassandra session based on the provided configuration.
+// This method wraps the `CreateSession` method of the underlying `clusterConfig` object.
+// It creates a new Cassandra session using the configuration options specified in `c.clusterConfig`.
+//
+// Returns:
+//   - A `session` object representing the established Cassandra connection, or `nil` if an error occurred.
+//   - An `error` object if there was a problem creating the session, or `nil` if successful.
 func (c *cassandraClusterConfig) CreateSession() (session, error) {
 	sess, err := c.clusterConfig.CreateSession()
 	if err != nil {
@@ -36,50 +44,69 @@ func (c *cassandraClusterConfig) CreateSession() (session, error) {
 	return &cassandraSession{session: sess}, nil
 }
 
+// cassandraSession implements session interface.
 type cassandraSession struct {
 	session *gocql.Session
 }
 
+// Query creates a Cassandra query.
+// This method wraps the `Query` method of the underlying `session` object.
 func (c *cassandraSession) Query(stmt string, values ...interface{}) query {
 	q := &cassandraQuery{query: c.session.Query(stmt, values...)}
 
 	return q
 }
 
+// cassandraQuery implements query interface.
 type cassandraQuery struct {
 	query *gocql.Query
 }
 
+// Exec performs a Cassandra's Query Exec.
+// This method wraps the `Exec` method of the underlying `query` object.
 func (c *cassandraQuery) Exec() error {
 	return c.query.Exec()
 }
 
+// Iter returns a Cassandra iterator.
+// This method wraps the `Iter` method of the underlying `query` object.
 func (c *cassandraQuery) Iter() iterator {
 	iter := cassandraIterator{iter: c.query.Iter()}
 
 	return &iter
 }
 
+// MapScanCAS checks a Cassandra query with an IF clause and scans the existing data into map[string]interface{} (if any).
+// This method wraps the `MapScanCAS` method of the underlying `query` object.
 func (c *cassandraQuery) MapScanCAS(dest map[string]interface{}) (applied bool, err error) {
 	return c.query.MapScanCAS(dest)
 }
 
+// ScanCAS checks a Cassandra query with an IF clause and scans the existing data (if any).
+// This method wraps the `ScanCAS` method of the underlying `query` object.
 func (c *cassandraQuery) ScanCAS(dest ...any) (applied bool, err error) {
 	return c.query.ScanCAS(dest)
 }
 
+// cassandraIterator implements iterator interface
 type cassandraIterator struct {
 	iter *gocql.Iter
 }
 
+// Columns gets the column information.
+// This method wraps the `Columns` method of the underlying `iter` object.
 func (c *cassandraIterator) Columns() []gocql.ColumnInfo {
 	return c.iter.Columns()
 }
 
+// Scan gets the next row from the Cassandra iterator and fills in the provided arguments.
+// This method wraps the `Scan` method of the underlying `iter` object.
 func (c *cassandraIterator) Scan(dest ...interface{}) bool {
 	return c.iter.Scan(dest...)
 }
 
+// NumRows returns a number of rows.
+// This method wraps the `NumRows` method of the underlying `iter` object.
 func (c *cassandraIterator) NumRows() int {
 	return c.iter.NumRows()
 }
@@ -116,7 +143,7 @@ type Client struct {
 // client.UseMetrics(metricsInstance)
 // client.Connect()
 func New(conf *Config) *Client {
-	cass := &cassandra{clusterConfig: newClusterConfg(conf)}
+	cass := &cassandra{clusterConfig: newClusterConfig(conf)}
 
 	return &Client{config: conf, cassandra: cass}
 }
@@ -158,7 +185,29 @@ func (c *Client) UseMetrics(metrics interface{}) {
 // Query executes the query and binds the result into dest parameter.
 // Returns error if any error occurs while binding the result.
 // Can be used to single as well as multiple rows.
-// Accepts pointer to struct or slice as dest parameter for single and multiple rows retrieval respectively
+// Accepts pointer to struct or slice as dest parameter for single and multiple rows retrieval respectively.
+//
+// Example:
+//
+//	// Get multiple rows with only one column
+//	   ids := make([]int, 0)
+//	   err := c.Query(&ids, "SELECT id FROM users")
+//
+//	// Get a single object from database
+//	   type user struct {
+//	   	ID    int
+//	   	Name string
+//	   }
+//	   u := user{}
+//	   err := c.Query(&u, "SELECT * FROM users WHERE id=?", 1)
+//
+//	// Get array of objects from multiple rows
+//	   type user struct {
+//	   	ID    int
+//	   	Name string `db:"name"`
+//	   }
+//	   users := []user{}
+//	   err := c.Query(&users, "SELECT * FROM users")
 func (c *Client) Query(dest interface{}, stmt string, values ...interface{}) error {
 	defer c.postProcess(&QueryLog{Query: stmt, Keyspace: c.config.Keyspace}, time.Now())
 
@@ -207,20 +256,39 @@ func (c *Client) Query(dest interface{}, stmt string, values ...interface{}) err
 }
 
 // Exec executes the query without returning any rows.
-// Return error if any error occurs while executing the query
-// Can be used to execute UPDATE or INSERT
+// Return error if any error occurs while executing the query.
+// Can be used to execute UPDATE or INSERT.
+//
+// Example:
+//
+//	// Without values
+//	   err := c.Exec("INSERT INTO users VALUES(1, 'John Doe')")
+//
+//	// With Values
+//	   id := 1
+//	   name := "John Doe"
+//	   err := c.Exec("INSERT INTO users VALUES(?, ?)", id, name)
 func (c *Client) Exec(stmt string, values ...interface{}) error {
 	defer c.postProcess(&QueryLog{Query: stmt, Keyspace: c.config.Keyspace}, time.Now())
 
 	return c.cassandra.session.Query(stmt, values...).Exec()
 }
 
-// QueryCAS executes a lightweight transaction (i.e. an UPDATE or INSERT statement containing an IF clause).
+// ExecCAS executes a lightweight transaction (i.e. an UPDATE or INSERT statement containing an IF clause).
 // If the transaction fails because the existing values did not match, the previous values will be stored in dest.
-// Returns true if the query is applied otherwise returns false
-// Returns and error if any error occur while executing the query
+// Returns true if the query is applied otherwise false.
+// Returns false and error if any error occur while executing the query.
 // Accepts only pointer to struct and built-in types as the dest parameter.
-func (c *Client) QueryCAS(dest interface{}, stmt string, values ...interface{}) (bool, error) {
+//
+// Example:
+//
+//	type user struct {
+//		ID    int
+//		Name string
+//	}
+//	u := user{}
+//	applied, err := c.ExecCAS(&ids, "INSERT INTO users VALUES(1, 'John Doe') IF NOT EXISTS")
+func (c *Client) ExecCAS(dest interface{}, stmt string, values ...interface{}) (bool, error) {
 	var (
 		applied bool
 		err     error
@@ -348,16 +416,6 @@ func (c *Client) getColumnsFromColumnsInfo(columns []gocql.ColumnInfo) []string 
 
 	for _, column := range columns {
 		cols = append(cols, column.Name)
-	}
-
-	return cols
-}
-
-func (c *Client) getColumnsFromMap(columns map[string]interface{}) []string {
-	cols := make([]string, 0)
-
-	for column := range columns {
-		cols = append(cols, column)
 	}
 
 	return cols
