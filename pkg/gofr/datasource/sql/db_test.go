@@ -43,6 +43,12 @@ func TestDB_SelectSingleColumnFromIntToString(t *testing.T) {
 	mock.ExpectQuery("select id from users").
 		WillReturnRows(rows)
 
+	ctrl := gomock.NewController(t)
+	mockMetrics := NewMockMetrics(ctrl)
+	db.metrics = mockMetrics
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats",
+		gomock.Any(), "hostname", gomock.Any(), "database", gomock.Any(), "type", gomock.Any())
+
 	ids := make([]string, 0)
 	db.Select(context.TODO(), &ids, "select id from users")
 
@@ -58,6 +64,12 @@ func TestDB_SelectSingleColumnFromStringToString(t *testing.T) {
 		AddRow("2")
 	mock.ExpectQuery("select id from users").
 		WillReturnRows(rows)
+
+	ctrl := gomock.NewController(t)
+	mockMetrics := NewMockMetrics(ctrl)
+	db.metrics = mockMetrics
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats",
+		gomock.Any(), "hostname", gomock.Any(), "database", gomock.Any(), "type", gomock.Any())
 
 	ids := make([]string, 0)
 	db.Select(context.TODO(), &ids, "select id from users")
@@ -75,6 +87,12 @@ func TestDB_SelectSingleColumnFromIntToInt(t *testing.T) {
 	mock.ExpectQuery("select id from users").
 		WillReturnRows(rows)
 
+	ctrl := gomock.NewController(t)
+	mockMetrics := NewMockMetrics(ctrl)
+	db.metrics = mockMetrics
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats",
+		gomock.Any(), "hostname", gomock.Any(), "database", gomock.Any(), "type", gomock.Any())
+
 	ids := make([]int, 0)
 	db.Select(context.TODO(), &ids, "select id from users")
 
@@ -90,6 +108,12 @@ func TestDB_SelectSingleColumnFromIntToCustomInt(t *testing.T) {
 		AddRow(2)
 	mock.ExpectQuery("select id from users").
 		WillReturnRows(rows)
+
+	ctrl := gomock.NewController(t)
+	mockMetrics := NewMockMetrics(ctrl)
+	db.metrics = mockMetrics
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats",
+		gomock.Any(), "hostname", gomock.Any(), "database", gomock.Any(), "type", gomock.Any())
 
 	type CustomInt int
 
@@ -109,6 +133,12 @@ func TestDB_SelectSingleColumnFromStringToCustomInt(t *testing.T) {
 		AddRow("2")
 	mock.ExpectQuery("select id from users").
 		WillReturnRows(rows)
+
+	ctrl := gomock.NewController(t)
+	mockMetrics := NewMockMetrics(ctrl)
+	db.metrics = mockMetrics
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats",
+		gomock.Any(), "hostname", gomock.Any(), "database", gomock.Any(), "type", gomock.Any())
 
 	type CustomInt int
 
@@ -153,6 +183,12 @@ func TestDB_SelectSingleColumnFromStringToCustomString(t *testing.T) {
 	mock.ExpectQuery("select id from users").
 		WillReturnRows(rows)
 
+	ctrl := gomock.NewController(t)
+	mockMetrics := NewMockMetrics(ctrl)
+	db.metrics = mockMetrics
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats",
+		gomock.Any(), "hostname", gomock.Any(), "database", gomock.Any(), "type", gomock.Any())
+
 	type CustomStr string
 
 	ids := make([]CustomStr, 0)
@@ -170,6 +206,12 @@ func TestDB_SelectSingleRowMultiColumn(t *testing.T) {
 		AddRow("1", "Vikash", "http://via.placeholder.com/150")
 	mock.ExpectQuery("select 1 user").
 		WillReturnRows(rows)
+
+	ctrl := gomock.NewController(t)
+	mockMetrics := NewMockMetrics(ctrl)
+	db.metrics = mockMetrics
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats",
+		gomock.Any(), "hostname", gomock.Any(), "database", gomock.Any(), "type", gomock.Any())
 
 	type user struct {
 		Name  string
@@ -197,6 +239,12 @@ func TestDB_SelectSingleRowMultiColumnWithTags(t *testing.T) {
 	mock.ExpectQuery("select 1 user").
 		WillReturnRows(rows)
 
+	ctrl := gomock.NewController(t)
+	mockMetrics := NewMockMetrics(ctrl)
+	db.metrics = mockMetrics
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats",
+		gomock.Any(), "hostname", gomock.Any(), "database", gomock.Any(), "type", gomock.Any())
+
 	type user struct {
 		Name  string
 		ID    int
@@ -223,6 +271,12 @@ func TestDB_SelectMultiRowMultiColumnWithTags(t *testing.T) {
 		AddRow("2", "Gofr", "")
 	mock.ExpectQuery("select users").
 		WillReturnRows(rows)
+
+	ctrl := gomock.NewController(t)
+	mockMetrics := NewMockMetrics(ctrl)
+	db.metrics = mockMetrics
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats",
+		gomock.Any(), "hostname", gomock.Any(), "database", gomock.Any(), "type", gomock.Any())
 
 	type user struct {
 		Name  string
@@ -256,6 +310,12 @@ func TestDB_SelectSingleColumnError(t *testing.T) {
 
 		mock.ExpectQuery("select id from users").
 			WillReturnError(errDB)
+
+		ctrl := gomock.NewController(t)
+		mockMetrics := NewMockMetrics(ctrl)
+		db.metrics = mockMetrics
+		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats",
+			gomock.Any(), "hostname", gomock.Any(), "database", gomock.Any(), "type", gomock.Any())
 
 		db.Select(context.TODO(), &ids, "select id from users")
 	})
@@ -337,6 +397,67 @@ func TestDB_QueryError(t *testing.T) {
 	})
 
 	assert.Contains(t, out, "Query SELECT")
+}
+
+func TestDB_QueryContext(t *testing.T) {
+	var (
+		rows *sql.Rows
+		err  error
+	)
+
+	out := testutil.StdoutOutputForFunc(func() {
+		db, mock := getDB(t, logging.DEBUG)
+		defer db.DB.Close()
+
+		ctrl := gomock.NewController(t)
+		mockMetrics := NewMockMetrics(ctrl)
+
+		db.metrics = mockMetrics
+
+		mock.ExpectQuery("SELECT 1").
+			WillReturnRows(sqlmock.NewRows([]string{"1"}).AddRow("1"))
+		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats",
+			gomock.Any(), "hostname", gomock.Any(), "database", gomock.Any(), "type", "SELECT")
+
+		rows, err = db.QueryContext(context.Background(), "SELECT 1")
+		assert.Nil(t, err)
+		assert.Nil(t, rows.Err())
+		assert.NotNil(t, rows)
+	})
+
+	assert.Contains(t, out, "QueryContext SELECT 1")
+}
+
+func TestDB_QueryContextError(t *testing.T) {
+	var (
+		rows *sql.Rows
+		err  error
+	)
+
+	out := testutil.StdoutOutputForFunc(func() {
+		db, mock := getDB(t, logging.DEBUG)
+		defer db.DB.Close()
+
+		ctrl := gomock.NewController(t)
+		mockMetrics := NewMockMetrics(ctrl)
+
+		db.metrics = mockMetrics
+
+		mock.ExpectQuery("SELECT ").
+			WillReturnError(errSyntax)
+		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats",
+			gomock.Any(), "hostname", gomock.Any(), "database", gomock.Any(), "type", "SELECT")
+
+		rows, err = db.QueryContext(context.Background(), "SELECT")
+		if !assert.Nil(t, rows) {
+			assert.Nil(t, rows.Err())
+		}
+
+		assert.NotNil(t, err)
+		assert.Equal(t, errSyntax, err)
+	})
+
+	assert.Contains(t, out, "QueryContext SELECT")
 }
 
 func TestDB_QueryRow(t *testing.T) {
