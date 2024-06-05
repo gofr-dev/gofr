@@ -45,6 +45,10 @@ Developer Note: If you chain methods in a defer statement, everything except the
 func (c *Context) Trace(name string) trace.Span {
 	tr := otel.GetTracerProvider().Tracer("gofr-context")
 	ctx, span := tr.Start(c.Context, name)
+	// TODO: If we don't close the span using `defer` and run the http-server example by hitting `/trace` endpoint, we are
+	// getting incomplete redis spans when viewing the trace using correlationID. If we remove assigning the ctx to GoFr
+	// context then spans are coming correct but then parent-child span relationship is being hindered.
+
 	c.Context = ctx
 
 	return span

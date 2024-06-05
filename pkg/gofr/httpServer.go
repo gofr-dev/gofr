@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"time"
 
+	"gofr.dev/pkg/gofr/http/middleware"
+
 	"gofr.dev/pkg/gofr/container"
 	gofrHTTP "gofr.dev/pkg/gofr/http"
 )
@@ -14,9 +16,18 @@ type httpServer struct {
 	port   int
 }
 
-func newHTTPServer(c *container.Container, port int) *httpServer {
+func newHTTPServer(c *container.Container, port int, middlewareConfigs map[string]string) *httpServer {
+	r := gofrHTTP.NewRouter()
+
+	r.Use(
+		middleware.Tracer,
+		middleware.Logging(c.Logger),
+		middleware.CORS(middlewareConfigs, r.RegisteredRoutes),
+		middleware.Metrics(c.Metrics()),
+	)
+
 	return &httpServer{
-		router: gofrHTTP.NewRouter(c),
+		router: r,
 		port:   port,
 	}
 }

@@ -184,7 +184,7 @@ func (m *mockLog) PrettyPrint(writer io.Writer) {
 func TestPrettyPrint(t *testing.T) {
 	m := &mockLog{msg: "mock test log"}
 	out := &bytes.Buffer{}
-	l := &logger{isTerminal: true}
+	l := &logger{isTerminal: true, lock: make(chan struct{}, 1)}
 
 	// case PrettyPrint is implemented
 	l.prettyPrint(logEntry{

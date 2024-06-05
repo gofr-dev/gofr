@@ -202,10 +202,10 @@ app.Subscribe("order-status", func(ctx *gofr.Context)error{
 })
 ```
 
-The context `ctx` provides user with the following methods :
+The context `ctx` provides user with the following methods:
 
-Bind() - Bind the message value to a given interface.
-Param(p string)/PathParam(p string) - Will return the topic when the same is passed as param.
+* `Bind()` - Binds the message value to a given data type. Message can be converted to `struct`, `map[string]any`, `int`, `bool`, `float64` and `string` types.
+* `Param(p string)/PathParam(p string)` - Returns the topic when the same is passed as param.
 
 
 ### Example

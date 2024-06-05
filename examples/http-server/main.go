@@ -1,8 +1,10 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"sync"
 	"time"
 
@@ -58,7 +60,7 @@ func TraceHandler(c *gofr.Context) (interface{}, error) {
 
 	span2 := c.Trace("some-sample-work")
 	<-time.After(time.Millisecond * 1) //nolint:wsl    // Waiting for 1ms to simulate workload
-	span2.End()
+	defer span2.End()
 
 	// Ping redis 5 times concurrently and wait.
 	count := 5
@@ -79,7 +81,20 @@ func TraceHandler(c *gofr.Context) (interface{}, error) {
 		return nil, err
 	}
 
-	return resp, nil
+	defer resp.Body.Close()
+
+	var data = struct {
+		Data interface{} `json:"data"`
+	}{}
+
+	b, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	_ = json.Unmarshal(b, &data)
+
+	return data.Data, nil
 }
 
 func MysqlHandler(c *gofr.Context) (interface{}, error) {
