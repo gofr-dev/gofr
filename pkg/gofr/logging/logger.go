@@ -42,6 +42,7 @@ type logger struct {
 	normalOut  io.Writer
 	errorOut   io.Writer
 	isTerminal bool
+	lock       chan struct{}
 }
 
 type logEntry struct {
@@ -144,8 +145,16 @@ func (l *logger) Fatalf(format string, args ...interface{}) {
 }
 
 func (l *logger) prettyPrint(e logEntry, out io.Writer) {
-	// Giving special treatment to framework's request logs in terminal display. This does not add any overhead
-	// in running the server.
+	// Note: we need to lock the pretty print as printing to stdandard output not concurency safe
+	// the logs when printed in go routines were getting missaligned since we are achieveing
+	// a single line of log, in 2 separate statements which caused the missalignment.
+	l.lock <- struct{}{} // Acquire the channel's lock
+	defer func() {
+		<-l.lock // Release the channel's token
+	}()
+
+	// Pretty printing if the message interface defines a method PrettyPrint else print the log message
+	// This decouples the logger implementation from its usage
 	if fn, ok := e.Message.(PrettyPrint); ok {
 		fmt.Fprintf(out, "\u001B[38;5;%dm%s\u001B[0m [%s] ", e.Level.color(), e.Level.String()[0:4],
 			e.Time.Format("15:04:05"))
@@ -164,6 +173,7 @@ func NewLogger(level Level) Logger {
 	l := &logger{
 		normalOut: os.Stdout,
 		errorOut:  os.Stderr,
+		lock:      make(chan struct{}, 1),
 	}
 
 	l.level = level
