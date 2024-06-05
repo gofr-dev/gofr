@@ -60,7 +60,7 @@ func TraceHandler(c *gofr.Context) (interface{}, error) {
 
 	span2 := c.Trace("some-sample-work")
 	<-time.After(time.Millisecond * 1) //nolint:wsl    // Waiting for 1ms to simulate workload
-	span2.End()
+	defer span2.End()
 
 	// Ping redis 5 times concurrently and wait.
 	count := 5
