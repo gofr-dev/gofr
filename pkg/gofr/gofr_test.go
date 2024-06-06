@@ -533,12 +533,12 @@ func TestStaticHandler(t *testing.T) {
 	svgFile1ContentSize, _ := file1.Write(svgFileContent1)
 	svgFile2ContentSize, _ := file2.Write(svgFileContent2)
 
-	defer func() {
+	t.Cleanup(func() {
 		errFolder := os.RemoveAll("./public")
 		if errFolder != nil {
 			t.Error("Couldn't remove public folder")
 		}
-	}()
+	})
 
 	// Run the Application and compare the fileType and fileSize
 	app.httpRegistered = true
@@ -598,7 +598,7 @@ func TestStaticHandler(t *testing.T) {
 		bodyBytes, _ := io.ReadAll(resp.Body)
 		defer resp.Body.Close()
 		body := string(bodyBytes)
-		assert.Nil(t, err, "TEST[%d], Failed.\n%s", it, tc.desc)
+		assert.NoError(t, err, "TEST[%d], Failed.\n%s", it, tc.desc)
 		assert.Equal(t, tc.statusCode, resp.StatusCode, "TEST[%d], Failed with Status Body.\n%s", it, tc.desc)
 		if tc.expectedBody != "" {
 			assert.Contains(t, body, tc.expectedBody, "TEST [%d], Failed with Expected Body. \n%s", it, tc.desc)
