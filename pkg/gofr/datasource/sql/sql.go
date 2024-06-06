@@ -61,8 +61,8 @@ func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *D
 
 	database := &DB{config: dbConfig, logger: logger, metrics: metrics}
 
-	logger.Debugf("connecting to '%s' database with '%s:%s' using username as '%s' and '%s'",
-		database.config.Dialect, database.config.HostName, database.config.Port, database.config.User, fmt.Sprintf("%s%s", database.config.Password[0], strings.Repeat("*", len(database.config.Password[1:]))))
+	logger.Debugf("connecting to '%s' user to '%s' database at '%s:%s'", database.config.User,
+		database.config.Database, database.config.HostName, database.config.Port)
 
 	database.DB, err = sql.Open(otelRegisteredDialect, dbConnectionString)
 	if err != nil {
@@ -104,8 +104,8 @@ func retryConnection(database *DB) {
 
 			for {
 				if err := database.DB.Ping(); err != nil {
-					database.logger.Debugf("could not connect with '%s' user to database '%s:%s', error: %v",
-						database.config.User, database.config.HostName, database.config.Port, err)
+					database.logger.Debugf("could not connect with '%s' user to '%s' database at '%s:%s', error: %v",
+						database.config.User, database.config.Database, database.config.HostName, database.config.Port, err)
 
 					time.Sleep(connRetryFrequencyInSeconds * time.Second)
 				} else {
