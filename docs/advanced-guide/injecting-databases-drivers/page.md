@@ -97,3 +97,84 @@ func Get(ctx *gofr.Context) (interface{}, error) {
 	return result, nil
 }
 ```
+
+## Cassandra
+GoFr supports pluggable Cassandra drivers. It defines an interface that specifies the required methods for interacting 
+with Cassandra. Any driver implementation that adheres to this interface can be integrated into GoFr using the 
+`app.AddCassandra()` method. This approach promotes flexibility and allows you to choose the Cassandra driver that best 
+suits your project's needs.
+
+```go
+type Cassandra interface {
+	Query(dest interface{}, stmt string, values ...interface{}) error
+
+	Exec(stmt string, values ...interface{}) error
+	
+	ExecCAS(dest interface{}, stmt string, values ...interface{}) (bool, error)
+}
+```
+
+GoFr simplifies Cassandra integration with a well-defined interface. Users can easily implement any driver that adheres 
+to this interface, fostering a user-friendly experience. This approach also promotes extensibility, allowing GoFr to work 
+seamlessly with various database solutions beyond Cassandra.
+
+### Example
+
+```go
+package main
+
+import (
+	"gofr.dev/pkg/gofr"
+	cassandraPkg "gofr.dev/pkg/gofr/datasource/cassandra"
+)
+
+type Person struct {
+	ID    int    `json:"id,omitempty"`
+	Name  string `json:"name"`
+	Age   int    `json:"age"`
+	State string `json:"state"`
+}
+
+func main() {
+	app := gofr.New()
+
+	config := cassandraPkg.Config{
+		Hosts:    "localhost",
+		Keyspace: "test",
+		Port:     2003,
+		Username: "cassandra",
+		Password: "cassandra",
+	}
+
+	cassandra := cassandraPkg.New(&config)
+
+	app.AddCassandra(cassandra)
+
+	app.POST("/user", func(c *gofr.Context) (interface{}, error) {
+		person := Person{}
+
+		err := c.Bind(&person)
+		if err != nil {
+			return nil, err
+		}
+
+		err = c.Cassandra.Exec(`INSERT INTO persons(id, name, age, state) VALUES(?, ?, ?, ?)`,
+			person.ID, person.Name, person.Age, person.State)
+		if err != nil {
+			return nil, err
+		}
+
+		return "created", nil
+	})
+
+	app.GET("/user", func(c *gofr.Context) (interface{}, error) {
+		persons := make([]Person, 0)
+
+		err := c.Cassandra.Query(&persons, `SELECT id, name, age, state FROM persons`)
+
+		return persons, err
+	})
+
+	app.Run()
+}
+```
