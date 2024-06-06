@@ -3,6 +3,10 @@ on:
   push:
     tags:
       - "v*.*.*"
+  pull_request:
+    branches:
+      - main
+      - development
 
 env:
   APP_NAME: gofr-website
@@ -92,6 +96,7 @@ jobs:
   deployment:
     runs-on: ubuntu-latest
     name: 🚀 Deploy
+    if: ${{ startsWith(github.ref, 'refs/tags/v')}}
     needs: dockerize
     container:
       image: ghcr.io/zopsmart/gha-images:deployments-0.1.3
