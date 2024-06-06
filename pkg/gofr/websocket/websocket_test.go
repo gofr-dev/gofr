@@ -1,6 +1,7 @@
 package websocket
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -57,9 +58,11 @@ func TestConnection_Bind_Success(t *testing.T) {
 
 			url := "ws" + server.URL[len("http"):] + "/ws"
 			dialer := websocket.DefaultDialer
-			conn, _, err := dialer.Dial(url, nil)
+			conn, resp, err := dialer.Dial(url, nil)
 			assert.Nil(t, err)
+
 			defer conn.Close()
+			defer resp.Body.Close()
 
 			err = conn.WriteMessage(websocket.TextMessage, tt.inputMessage)
 			assert.Nil(t, err)
@@ -68,9 +71,9 @@ func TestConnection_Bind_Success(t *testing.T) {
 }
 
 func TestNewWSUpgrader_WithOptions(t *testing.T) {
-	errorHandler := func(w http.ResponseWriter, r *http.Request, status int, reason error) {}
+	errorHandler := func(_ http.ResponseWriter, _ *http.Request, _ int, _ error) {}
 
-	checkOrigin := func(r *http.Request) bool {
+	checkOrigin := func(_ *http.Request) bool {
 		return true
 	}
 
@@ -107,8 +110,9 @@ func Test_Upgrade(t *testing.T) {
 
 	wsUpgrader := WSUpgrader{Upgrader: mockUpgrader}
 
-	req, err := http.NewRequest(http.MethodGet, "/", nil)
+	req, err := http.NewRequestWithContext(context.TODO(), http.MethodGet, "/", http.NoBody)
 	assert.Nil(t, err)
+
 	w := httptest.NewRecorder()
 
 	conn, err := wsUpgrader.Upgrade(w, req, nil)
