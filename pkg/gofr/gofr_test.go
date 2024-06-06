@@ -250,7 +250,7 @@ func TestEnableBasicAuthWithFunc(t *testing.T) {
 	// Initialize a new App instance
 	a := &App{
 		httpServer: &httpServer{
-			router: gofrHTTP.NewRouter(c),
+			router: gofrHTTP.NewRouter(),
 		},
 		container: c,
 	}
@@ -335,7 +335,7 @@ func Test_initTracer(t *testing.T) {
 	}{
 		{"zipkin exporter", mockConfig1, "Exporting traces to zipkin."},
 		{"jaeger exporter", mockConfig2, "Exporting traces to jaeger."},
-		{"gofr exporter", mockConfig3, "Exporting traces to gofr at https://tracer.gofr.dev"},
+		{"gofr exporter", mockConfig3, "Exporting traces to GoFr at https://tracer.gofr.dev"},
 	}
 
 	for _, tc := range tests {
@@ -387,10 +387,11 @@ func Test_UseMiddleware(t *testing.T) {
 
 	app := &App{
 		httpServer: &httpServer{
-			router: gofrHTTP.NewRouter(c),
+			router: gofrHTTP.NewRouter(),
 			port:   8001,
 		},
 		container: c,
+		Config:    config.NewMockConfig(map[string]string{"REQUEST_TIMEOUT": "5"}),
 	}
 
 	app.UseMiddleware(testMiddleware)
@@ -411,7 +412,7 @@ func Test_UseMiddleware(t *testing.T) {
 
 	resp, err := netClient.Do(req)
 	if err != nil {
-		t.Errorf("error while making http request in Test_UseMiddleware. err : %v", err)
+		t.Errorf("error while making HTTP request in Test_UseMiddleware. err : %v", err)
 		return
 	}
 

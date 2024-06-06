@@ -46,7 +46,7 @@ All logs should include:
 
 ## Implementing New Datasources
 
-GoFr offers built-in support for popular datasources like SQL (MySQL, PostgreSQL), Redis, and Pub/Sub (MQTT, Kafka, Google as backend). Including additional functionalities within the core GoFr binary would increase the application size unnecessarily.
+GoFr offers built-in support for popular datasources like SQL (MySQL, PostgreSQL, SQLite), Redis, and Pub/Sub (MQTT, Kafka, Google as backend). Including additional functionalities within the core GoFr binary would increase the application size unnecessarily.
 
 Therefore, GoFr utilizes a pluggable approach for new datasources by separating implementation in the following way:
 
@@ -73,6 +73,6 @@ Therefore, GoFr utilizes a pluggable approach for new datasources by separating 
 | MySQL      | ✅            | ✅    | ✅       | ✅      |           |
 | REDIS      | ✅            | ✅    | ✅       | ✅      |           |
 | PostgreSQL | ✅            | ✅    | ✅       | ✅      |           |
-| MongoDB    |              |      |         |        | ✅         |
+| MongoDB    | ✅            | ✅    | ✅       |        | ✅         |
+| SQLite     | ✅            | ✅    | ✅       | ✅      |           |
 
-> Following list has to be update when PR for new Datasource is being created.

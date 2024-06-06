@@ -1,6 +1,6 @@
 # Remote Log Level Change
 
-Gofr makes it easy to adjust the details captured in the application's logs, even while it's running!
+GoFr makes it easy to adjust the details captured in the application's logs, even while it's running!
 
 This feature allows users to effortlessly fine-tune logging levels without the need for redeployment, enhancing the monitoring and debugging experience.
 It is facilitated through simple configuration settings.

@@ -1,6 +1,6 @@
 # GRPC Server Example
 
-This GoFr example demonstrates a simple grpc server.
+This GoFr example demonstrates a simple gRPC server.
 
 ### To run the example use the command below:
 ```console

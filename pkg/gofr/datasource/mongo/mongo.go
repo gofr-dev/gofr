@@ -17,41 +17,70 @@ type Client struct {
 	database string
 	logger   Logger
 	metrics  Metrics
+	config   Config
 }
 
-func New(conf Config, logger Logger, metrics Metrics) *Client {
-	mongoURI := conf.Get("MONGO_URI")
-	mongoDatabase := conf.Get("MONGO_DATABASE")
+type Config struct {
+	URI      string
+	Database string
+}
 
-	logger.Debugf("connecting with mongo database '%v' at '%v'", mongoDatabase, mongoURI)
+/*
+Developer Note: We could have accepted logger and metrics as part of the factory function `New`, but when mongo driver is
+initialised in GoFr, We want to ensure that the user need not to provides logger and metrics and then connect to the database,
+i.e. by default observability features gets initialised when used with GoFr.
+*/
 
-	m, err := mongo.Connect(context.Background(), options.Client().ApplyURI(conf.Get("MONGO_URI")))
+// New initializes MongoDB driver with the provided configuration.
+// The Connect method must be called to establish a connection to MongoDB.
+// Usage:
+// client := New(config)
+// client.UseLogger(loggerInstance)
+// client.UseMetrics(metricsInstance)
+// client.Connect()
+func New(c Config) *Client {
+	return &Client{config: c}
+}
+
+// UseLogger sets the logger for the MongoDB client which asserts the Logger interface.
+func (c *Client) UseLogger(logger interface{}) {
+	if l, ok := logger.(Logger); ok {
+		c.logger = l
+	}
+}
+
+// UseMetrics sets the metrics for the MongoDB client which asserts the Metrics interface.
+func (c *Client) UseMetrics(metrics interface{}) {
+	if m, ok := metrics.(Metrics); ok {
+		c.metrics = m
+	}
+}
+
+// Connect establishes a connection to MongoDB and registers metrics using the provided configuration when the client was Created.
+func (c *Client) Connect() {
+	c.logger.Logf("connecting to mongoDB at %v to database %v", c.config.URI, c.config.Database)
+
+	m, err := mongo.Connect(context.Background(), options.Client().ApplyURI(c.config.URI))
 	if err != nil {
-		logger.Errorf("could not connect to mongoDB, error: %v", err)
+		c.logger.Errorf("error connecting to mongoDB, err:%v", err)
 
-		return nil
+		return
 	}
 
 	mongoBuckets := []float64{.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 4, 5, 7.5, 10}
-	metrics.NewHistogram("app_mongo_stats", "Response time of MONGO queries in milliseconds.", mongoBuckets...)
+	c.metrics.NewHistogram("app_mongo_stats", "Response time of MONGO queries in milliseconds.", mongoBuckets...)
 
-	logger.Logf("connected with mongo database '%v' at '%v", mongoDatabase, mongoURI)
-
-	return &Client{
-		Database: m.Database(mongoDatabase),
-		logger:   logger,
-		metrics:  metrics,
-		uri:      mongoURI,
-		database: mongoDatabase,
-	}
+	c.Database = m.Database(c.config.Database)
 }
 
+// InsertOne inserts a single document into the specified collection.
 func (c *Client) InsertOne(ctx context.Context, collection string, document interface{}) (interface{}, error) {
 	defer c.postProcess(&QueryLog{Query: "insertOne", Collection: collection, Filter: document}, time.Now())
 
 	return c.Database.Collection(collection).InsertOne(ctx, document)
 }
 
+// InsertMany inserts multiple documents into the specified collection.
 func (c *Client) InsertMany(ctx context.Context, collection string, documents []interface{}) ([]interface{}, error) {
 	defer c.postProcess(&QueryLog{Query: "insertMany", Collection: collection, Filter: documents}, time.Now())
 
@@ -63,6 +92,7 @@ func (c *Client) InsertMany(ctx context.Context, collection string, documents []
 	return res.InsertedIDs, nil
 }
 
+// Find retrieves documents from the specified collection based on the provided filter and binds response to result.
 func (c *Client) Find(ctx context.Context, collection string, filter, results interface{}) error {
 	defer c.postProcess(&QueryLog{Query: "find", Collection: collection, Filter: filter}, time.Now())
 
@@ -80,6 +110,7 @@ func (c *Client) Find(ctx context.Context, collection string, filter, results in
 	return nil
 }
 
+// FindOne retrieves a single document from the specified collection based on the provided filter and binds response to result.
 func (c *Client) FindOne(ctx context.Context, collection string, filter, result interface{}) error {
 	defer c.postProcess(&QueryLog{Query: "findOne", Collection: collection, Filter: filter}, time.Now())
 
@@ -91,6 +122,7 @@ func (c *Client) FindOne(ctx context.Context, collection string, filter, result 
 	return bson.Unmarshal(b, result)
 }
 
+// UpdateByID updates a document in the specified collection by its ID.
 func (c *Client) UpdateByID(ctx context.Context, collection string, id, update interface{}) (int64, error) {
 	defer c.postProcess(&QueryLog{Query: "updateByID", Collection: collection, ID: id, Update: update}, time.Now())
 
@@ -99,6 +131,7 @@ func (c *Client) UpdateByID(ctx context.Context, collection string, id, update i
 	return res.ModifiedCount, err
 }
 
+// UpdateOne updates a single document in the specified collection based on the provided filter.
 func (c *Client) UpdateOne(ctx context.Context, collection string, filter, update interface{}) error {
 	defer c.postProcess(&QueryLog{Query: "updateOne", Collection: collection, Filter: filter, Update: update}, time.Now())
 
@@ -107,6 +140,7 @@ func (c *Client) UpdateOne(ctx context.Context, collection string, filter, updat
 	return err
 }
 
+// UpdateMany updates multiple documents in the specified collection based on the provided filter.
 func (c *Client) UpdateMany(ctx context.Context, collection string, filter, update interface{}) (int64, error) {
 	defer c.postProcess(&QueryLog{Query: "updateMany", Collection: collection, Filter: filter, Update: update}, time.Now())
 
@@ -115,12 +149,14 @@ func (c *Client) UpdateMany(ctx context.Context, collection string, filter, upda
 	return res.ModifiedCount, err
 }
 
+// CountDocuments counts the number of documents in the specified collection based on the provided filter.
 func (c *Client) CountDocuments(ctx context.Context, collection string, filter interface{}) (int64, error) {
 	defer c.postProcess(&QueryLog{Query: "countDocuments", Collection: collection, Filter: filter}, time.Now())
 
 	return c.Database.Collection(collection).CountDocuments(ctx, filter)
 }
 
+// DeleteOne deletes a single document from the specified collection based on the provided filter.
 func (c *Client) DeleteOne(ctx context.Context, collection string, filter interface{}) (int64, error) {
 	defer c.postProcess(&QueryLog{Query: "deleteOne", Collection: collection, Filter: filter}, time.Now())
 
@@ -132,6 +168,7 @@ func (c *Client) DeleteOne(ctx context.Context, collection string, filter interf
 	return res.DeletedCount, nil
 }
 
+// DeleteMany deletes multiple documents from the specified collection based on the provided filter.
 func (c *Client) DeleteMany(ctx context.Context, collection string, filter interface{}) (int64, error) {
 	defer c.postProcess(&QueryLog{Query: "deleteMany", Collection: collection, Filter: filter}, time.Now())
 
@@ -143,6 +180,7 @@ func (c *Client) DeleteMany(ctx context.Context, collection string, filter inter
 	return res.DeletedCount, nil
 }
 
+// Drop drops the specified collection from the database.
 func (c *Client) Drop(ctx context.Context, collection string) error {
 	defer c.postProcess(&QueryLog{Query: "drop", Collection: collection}, time.Now())
 
@@ -165,6 +203,7 @@ type Health struct {
 	Details map[string]interface{} `json:"details,omitempty"`
 }
 
+// HealthCheck checks the health of the MongoDB client by pinging the database.
 func (c *Client) HealthCheck() interface{} {
 	h := Health{
 		Details: make(map[string]interface{}),

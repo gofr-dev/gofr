@@ -1,69 +1,22 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
-	"gofr.dev/pkg/gofr/datasource/file"
+	"io"
 	"sync"
 	"time"
 
 	"github.com/redis/go-redis/v9"
+
 	"gofr.dev/pkg/gofr"
+	"gofr.dev/pkg/gofr/datasource"
 )
 
 func main() {
 	// Create a new application
 	a := gofr.New()
-
-	fs := file.New()
-
-	file, err := fs.Create("test.csv")
-	fmt.Println(err)
-
-	_, err = file.Write([]byte(`Date,Increment,Total
-6 April,18,739
-13 April,6,745
-22 April,2,747
-28 April,143,890
-6 May,83,973
-13 May,60,1033
-20 May,39,1072
-27 May,25,1097
-3 June,81,1178`))
-
-	file.Close()
-
-	file, err = fs.Open("test.csv")
-
-	reader := file.ReadAll()
-
-	var x string
-
-	for reader.Next() {
-		reader.Scan(&x)
-
-		fmt.Println(x)
-	}
-
-	//cfg := sftp.Config{Host: "localhost", Port: "21", Username: "user", Password: "123"}
-
-	// can only be injected from app and can also be accessed from container
-	//files := a.AddFileStore(ftp.New(cfg))
-
-	//err := files.Create("testDir", []byte("Hello World"))
-	//if err != nil {
-	//	a.Logger().Log(err)
-	//}
-	//
-	////files.ReadAsCSV("testDir").Headers("sdd").RowFunc(func(row) {
-	//
-	//})
-
-	////// can be used anywhere
-	//fx := ftp.New(ftp.Config{})
-	//fx.UseLogger(a.Logger())
-	//fx.UseMetrics(a.Metrics())
-	//fx.Connect()
 
 	//HTTP service with default health check endpoint
 	a.AddHTTPService("anotherService", "http://localhost:9000")
@@ -96,7 +49,7 @@ func ErrorHandler(c *gofr.Context) (interface{}, error) {
 func RedisHandler(c *gofr.Context) (interface{}, error) {
 	val, err := c.Redis.Get(c, "test").Result()
 	if err != nil && err != redis.Nil { // If key is not found, we are not considering this an error and returning "".
-		return nil, err
+		return nil, datasource.ErrorDB{Err: err, Message: "error from redis db"}
 	}
 
 	return val, nil
@@ -107,7 +60,7 @@ func TraceHandler(c *gofr.Context) (interface{}, error) {
 
 	span2 := c.Trace("some-sample-work")
 	<-time.After(time.Millisecond * 1) //nolint:wsl    // Waiting for 1ms to simulate workload
-	span2.End()
+	defer span2.End()
 
 	// Ping redis 5 times concurrently and wait.
 	count := 5
@@ -128,12 +81,28 @@ func TraceHandler(c *gofr.Context) (interface{}, error) {
 		return nil, err
 	}
 
-	return resp, nil
+	defer resp.Body.Close()
+
+	var data = struct {
+		Data interface{} `json:"data"`
+	}{}
+
+	b, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	_ = json.Unmarshal(b, &data)
+
+	return data.Data, nil
 }
 
 func MysqlHandler(c *gofr.Context) (interface{}, error) {
 	var value int
 	err := c.SQL.QueryRowContext(c, "select 2+2").Scan(&value)
+	if err != nil {
+		return nil, datasource.ErrorDB{Err: err, Message: "error from sql db"}
+	}
 
-	return value, err
+	return value, nil
 }

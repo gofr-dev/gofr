@@ -22,7 +22,7 @@ type Context struct {
 
 	// responder is private as Handlers do not need to worry about how to respond. But it is still an abstraction over
 	// normal response writer as we want to keep the context independent of http. Will help us in writing CMD application
-	// or grpc servers etc using the same handler signature.
+	// or gRPC servers etc using the same handler signature.
 	responder Responder
 }
 
@@ -45,6 +45,10 @@ Developer Note: If you chain methods in a defer statement, everything except the
 func (c *Context) Trace(name string) trace.Span {
 	tr := otel.GetTracerProvider().Tracer("gofr-context")
 	ctx, span := tr.Start(c.Context, name)
+	// TODO: If we don't close the span using `defer` and run the http-server example by hitting `/trace` endpoint, we are
+	// getting incomplete redis spans when viewing the trace using correlationID. If we remove assigning the ctx to GoFr
+	// context then spans are coming correct but then parent-child span relationship is being hindered.
+
 	c.Context = ctx
 
 	return span

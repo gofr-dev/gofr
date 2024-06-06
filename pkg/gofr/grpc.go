@@ -31,16 +31,16 @@ func newGRPCServer(c *container.Container, port int) *grpcServer {
 func (g *grpcServer) Run(c *container.Container) {
 	addr := ":" + strconv.Itoa(g.port)
 
-	c.Logger.Infof("starting grpc server at %s", addr)
+	c.Logger.Infof("starting gRPC server at %s", addr)
 
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
-		c.Logger.Errorf("error in starting grpc server at %s: %s", addr, err)
+		c.Logger.Errorf("error in starting gRPC server at %s: %s", addr, err)
 		return
 	}
 
 	if err := g.server.Serve(listener); err != nil {
-		c.Logger.Errorf("error in starting grpc server at %s: %s", addr, err)
+		c.Logger.Errorf("error in starting gRPC server at %s: %s", addr, err)
 		return
 	}
 }
