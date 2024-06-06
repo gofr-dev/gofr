@@ -67,6 +67,9 @@ func TestConnection_Bind_Success(t *testing.T) {
 			err = conn.WriteMessage(websocket.TextMessage, tt.inputMessage)
 			assert.Nil(t, err)
 		})
+
+		// waiting for previous connection to close and test for new testcase.
+		time.Sleep(500 * time.Millisecond)
 	}
 }
 
