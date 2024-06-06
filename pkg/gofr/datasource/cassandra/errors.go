@@ -2,10 +2,15 @@ package cassandra
 
 import "fmt"
 
+const (
+	destinationIsNotPointer = "destination is not pointer"
+	unexpectedMap           = "a map was not expected."
+)
+
 type DestinationIsNotPointer struct{}
 
 func (d DestinationIsNotPointer) Error() string {
-	return fmt.Sprintf("destination is not pointer")
+	return destinationIsNotPointer
 }
 
 type UnexpectedPointer struct {
@@ -27,5 +32,5 @@ func (d UnexpectedSlice) Error() string {
 type UnexpectedMap struct{}
 
 func (d UnexpectedMap) Error() string {
-	return fmt.Sprintf("a map was not expected.")
+	return unexpectedMap
 }

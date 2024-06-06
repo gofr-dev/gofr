@@ -15,6 +15,7 @@ func Test_PrettyPrint(t *testing.T) {
 	expected := "sample query"
 
 	var buf bytes.Buffer
+
 	queryLog.PrettyPrint(&buf)
 
 	assert.Contains(t, buf.String(), expected)

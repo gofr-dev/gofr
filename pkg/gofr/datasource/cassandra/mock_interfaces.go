@@ -39,19 +39,19 @@ func (m *MockclusterConfig) EXPECT() *MockclusterConfigMockRecorder {
 	return m.recorder
 }
 
-// CreateSession mocks base method.
-func (m *MockclusterConfig) CreateSession() (session, error) {
+// createSession mocks base method.
+func (m *MockclusterConfig) createSession() (session, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateSession")
+	ret := m.ctrl.Call(m, "createSession")
 	ret0, _ := ret[0].(session)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// CreateSession indicates an expected call of CreateSession.
-func (mr *MockclusterConfigMockRecorder) CreateSession() *gomock.Call {
+// createSession indicates an expected call of createSession.
+func (mr *MockclusterConfigMockRecorder) createSession() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateSession", reflect.TypeOf((*MockclusterConfig)(nil).CreateSession))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "createSession", reflect.TypeOf((*MockclusterConfig)(nil).createSession))
 }
 
 // Mocksession is a mock of session interface.
@@ -77,23 +77,23 @@ func (m *Mocksession) EXPECT() *MocksessionMockRecorder {
 	return m.recorder
 }
 
-// Query mocks base method.
-func (m *Mocksession) Query(stmt string, values ...any) query {
+// query mocks base method.
+func (m *Mocksession) query(stmt string, values ...any) query {
 	m.ctrl.T.Helper()
 	varargs := []any{stmt}
 	for _, a := range values {
 		varargs = append(varargs, a)
 	}
-	ret := m.ctrl.Call(m, "Query", varargs...)
+	ret := m.ctrl.Call(m, "query", varargs...)
 	ret0, _ := ret[0].(query)
 	return ret0
 }
 
-// Query indicates an expected call of Query.
-func (mr *MocksessionMockRecorder) Query(stmt any, values ...any) *gomock.Call {
+// query indicates an expected call of query.
+func (mr *MocksessionMockRecorder) query(stmt any, values ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	varargs := append([]any{stmt}, values...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Query", reflect.TypeOf((*Mocksession)(nil).Query), varargs...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "query", reflect.TypeOf((*Mocksession)(nil).query), varargs...)
 }
 
 // Mockquery is a mock of query interface.
@@ -119,66 +119,66 @@ func (m *Mockquery) EXPECT() *MockqueryMockRecorder {
 	return m.recorder
 }
 
-// Exec mocks base method.
-func (m *Mockquery) Exec() error {
+// exec mocks base method.
+func (m *Mockquery) exec() error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Exec")
+	ret := m.ctrl.Call(m, "exec")
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// Exec indicates an expected call of Exec.
-func (mr *MockqueryMockRecorder) Exec() *gomock.Call {
+// exec indicates an expected call of exec.
+func (mr *MockqueryMockRecorder) exec() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Exec", reflect.TypeOf((*Mockquery)(nil).Exec))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "exec", reflect.TypeOf((*Mockquery)(nil).exec))
 }
 
-// Iter mocks base method.
-func (m *Mockquery) Iter() iterator {
+// iter mocks base method.
+func (m *Mockquery) iter() iterator {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Iter")
+	ret := m.ctrl.Call(m, "iter")
 	ret0, _ := ret[0].(iterator)
 	return ret0
 }
 
-// Iter indicates an expected call of Iter.
-func (mr *MockqueryMockRecorder) Iter() *gomock.Call {
+// iter indicates an expected call of iter.
+func (mr *MockqueryMockRecorder) iter() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Iter", reflect.TypeOf((*Mockquery)(nil).Iter))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "iter", reflect.TypeOf((*Mockquery)(nil).iter))
 }
 
-// MapScanCAS mocks base method.
-func (m *Mockquery) MapScanCAS(dest map[string]any) (bool, error) {
+// mapScanCAS mocks base method.
+func (m *Mockquery) mapScanCAS(dest map[string]any) (bool, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MapScanCAS", dest)
+	ret := m.ctrl.Call(m, "mapScanCAS", dest)
 	ret0, _ := ret[0].(bool)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// MapScanCAS indicates an expected call of MapScanCAS.
-func (mr *MockqueryMockRecorder) MapScanCAS(dest any) *gomock.Call {
+// mapScanCAS indicates an expected call of mapScanCAS.
+func (mr *MockqueryMockRecorder) mapScanCAS(dest any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MapScanCAS", reflect.TypeOf((*Mockquery)(nil).MapScanCAS), dest)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "mapScanCAS", reflect.TypeOf((*Mockquery)(nil).mapScanCAS), dest)
 }
 
-// ScanCAS mocks base method.
-func (m *Mockquery) ScanCAS(dest ...any) (bool, error) {
+// scanCAS mocks base method.
+func (m *Mockquery) scanCAS(dest ...any) (bool, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{}
 	for _, a := range dest {
 		varargs = append(varargs, a)
 	}
-	ret := m.ctrl.Call(m, "ScanCAS", varargs...)
+	ret := m.ctrl.Call(m, "scanCAS", varargs...)
 	ret0, _ := ret[0].(bool)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// ScanCAS indicates an expected call of ScanCAS.
-func (mr *MockqueryMockRecorder) ScanCAS(dest ...any) *gomock.Call {
+// scanCAS indicates an expected call of scanCAS.
+func (mr *MockqueryMockRecorder) scanCAS(dest ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ScanCAS", reflect.TypeOf((*Mockquery)(nil).ScanCAS), dest...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "scanCAS", reflect.TypeOf((*Mockquery)(nil).scanCAS), dest...)
 }
 
 // Mockiterator is a mock of iterator interface.
@@ -204,48 +204,48 @@ func (m *Mockiterator) EXPECT() *MockiteratorMockRecorder {
 	return m.recorder
 }
 
-// Columns mocks base method.
-func (m *Mockiterator) Columns() []gocql.ColumnInfo {
+// columns mocks base method.
+func (m *Mockiterator) columns() []gocql.ColumnInfo {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Columns")
+	ret := m.ctrl.Call(m, "columns")
 	ret0, _ := ret[0].([]gocql.ColumnInfo)
 	return ret0
 }
 
-// Columns indicates an expected call of Columns.
-func (mr *MockiteratorMockRecorder) Columns() *gomock.Call {
+// columns indicates an expected call of columns.
+func (mr *MockiteratorMockRecorder) columns() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Columns", reflect.TypeOf((*Mockiterator)(nil).Columns))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "columns", reflect.TypeOf((*Mockiterator)(nil).columns))
 }
 
-// NumRows mocks base method.
-func (m *Mockiterator) NumRows() int {
+// numRows mocks base method.
+func (m *Mockiterator) numRows() int {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "NumRows")
+	ret := m.ctrl.Call(m, "numRows")
 	ret0, _ := ret[0].(int)
 	return ret0
 }
 
-// NumRows indicates an expected call of NumRows.
-func (mr *MockiteratorMockRecorder) NumRows() *gomock.Call {
+// numRows indicates an expected call of numRows.
+func (mr *MockiteratorMockRecorder) numRows() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NumRows", reflect.TypeOf((*Mockiterator)(nil).NumRows))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "numRows", reflect.TypeOf((*Mockiterator)(nil).numRows))
 }
 
-// Scan mocks base method.
-func (m *Mockiterator) Scan(dest ...any) bool {
+// scan mocks base method.
+func (m *Mockiterator) scan(dest ...any) bool {
 	m.ctrl.T.Helper()
 	varargs := []any{}
 	for _, a := range dest {
 		varargs = append(varargs, a)
 	}
-	ret := m.ctrl.Call(m, "Scan", varargs...)
+	ret := m.ctrl.Call(m, "scan", varargs...)
 	ret0, _ := ret[0].(bool)
 	return ret0
 }
 
-// Scan indicates an expected call of Scan.
-func (mr *MockiteratorMockRecorder) Scan(dest ...any) *gomock.Call {
+// scan indicates an expected call of scan.
+func (mr *MockiteratorMockRecorder) scan(dest ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Scan", reflect.TypeOf((*Mockiterator)(nil).Scan), dest...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "scan", reflect.TypeOf((*Mockiterator)(nil).scan), dest...)
 }

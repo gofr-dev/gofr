@@ -10,120 +10,12 @@ import (
 	"github.com/gocql/gocql"
 )
 
-// cassandraClusterConfig implements clusterConfig interface.
-type cassandraClusterConfig struct {
-	clusterConfig *gocql.ClusterConfig
-}
-
-func newClusterConfig(config *Config) clusterConfig {
-	var c cassandraClusterConfig
-
-	config.Hosts = strings.TrimSuffix(strings.TrimSpace(config.Hosts), ",")
-	hosts := strings.Split(config.Hosts, ",")
-	c.clusterConfig = gocql.NewCluster(hosts...)
-	c.clusterConfig.Keyspace = config.Keyspace
-	c.clusterConfig.Port = config.Port
-	c.clusterConfig.Authenticator = gocql.PasswordAuthenticator{Username: config.Username, Password: config.Password}
-
-	return &c
-}
-
-// CreateSession creates a Cassandra session based on the provided configuration.
-// This method wraps the `CreateSession` method of the underlying `clusterConfig` object.
-// It creates a new Cassandra session using the configuration options specified in `c.clusterConfig`.
-//
-// Returns:
-//   - A `session` object representing the established Cassandra connection, or `nil` if an error occurred.
-//   - An `error` object if there was a problem creating the session, or `nil` if successful.
-func (c *cassandraClusterConfig) CreateSession() (session, error) {
-	sess, err := c.clusterConfig.CreateSession()
-	if err != nil {
-		return nil, err
-	}
-
-	return &cassandraSession{session: sess}, nil
-}
-
-// cassandraSession implements session interface.
-type cassandraSession struct {
-	session *gocql.Session
-}
-
-// Query creates a Cassandra query.
-// This method wraps the `Query` method of the underlying `session` object.
-func (c *cassandraSession) Query(stmt string, values ...interface{}) query {
-	q := &cassandraQuery{query: c.session.Query(stmt, values...)}
-
-	return q
-}
-
-// cassandraQuery implements query interface.
-type cassandraQuery struct {
-	query *gocql.Query
-}
-
-// Exec performs a Cassandra's Query Exec.
-// This method wraps the `Exec` method of the underlying `query` object.
-func (c *cassandraQuery) Exec() error {
-	return c.query.Exec()
-}
-
-// Iter returns a Cassandra iterator.
-// This method wraps the `Iter` method of the underlying `query` object.
-func (c *cassandraQuery) Iter() iterator {
-	iter := cassandraIterator{iter: c.query.Iter()}
-
-	return &iter
-}
-
-// MapScanCAS checks a Cassandra query with an IF clause and scans the existing data into map[string]interface{} (if any).
-// This method wraps the `MapScanCAS` method of the underlying `query` object.
-func (c *cassandraQuery) MapScanCAS(dest map[string]interface{}) (applied bool, err error) {
-	return c.query.MapScanCAS(dest)
-}
-
-// ScanCAS checks a Cassandra query with an IF clause and scans the existing data (if any).
-// This method wraps the `ScanCAS` method of the underlying `query` object.
-func (c *cassandraQuery) ScanCAS(dest ...any) (applied bool, err error) {
-	return c.query.ScanCAS(dest)
-}
-
-// cassandraIterator implements iterator interface
-type cassandraIterator struct {
-	iter *gocql.Iter
-}
-
-// Columns gets the column information.
-// This method wraps the `Columns` method of the underlying `iter` object.
-func (c *cassandraIterator) Columns() []gocql.ColumnInfo {
-	return c.iter.Columns()
-}
-
-// Scan gets the next row from the Cassandra iterator and fills in the provided arguments.
-// This method wraps the `Scan` method of the underlying `iter` object.
-func (c *cassandraIterator) Scan(dest ...interface{}) bool {
-	return c.iter.Scan(dest...)
-}
-
-// NumRows returns a number of rows.
-// This method wraps the `NumRows` method of the underlying `iter` object.
-func (c *cassandraIterator) NumRows() int {
-	return c.iter.NumRows()
-}
-
 type Config struct {
 	Hosts    string
 	Keyspace string
 	Port     int
 	Username string
 	Password string
-}
-
-type cassandra struct {
-	clusterConfig clusterConfig
-	session       session
-	query         query
-	iter          iterator
 }
 
 type Client struct {
@@ -138,10 +30,11 @@ type Client struct {
 // New initializes Cassandra driver with the provided configuration.
 // The Connect method must be called to establish a connection to Cassandra.
 // Usage:
-// client := New(config)
-// client.UseLogger(loggerInstance)
-// client.UseMetrics(metricsInstance)
-// client.Connect()
+//
+//	client := New(config)
+//	client.UseLogger(loggerInstance)
+//	client.UseMetrics(metricsInstance)
+//	client.Connect()
 func New(conf *Config) *Client {
 	cass := &cassandra{clusterConfig: newClusterConfig(conf)}
 
@@ -150,10 +43,9 @@ func New(conf *Config) *Client {
 
 // Connect establishes a connection to Cassandra and registers metrics using the provided configuration when the client was Created.
 func (c *Client) Connect() {
+	c.logger.Logf("connecting to cassandra at %v on port %v to keyspace %v", c.config.Hosts, c.config.Port, c.config.Keyspace)
 
-	c.logger.Logf("connecting to cassandra at %v on port %v to keyspace %v", c.config.Keyspace, c.config.Hosts, c.config.Port)
-
-	sess, err := c.cassandra.clusterConfig.CreateSession()
+	sess, err := c.cassandra.clusterConfig.createSession()
 	if err != nil {
 		c.logger.Error("error connecting to cassandra: ", err)
 
@@ -208,6 +100,8 @@ func (c *Client) UseMetrics(metrics interface{}) {
 //	   }
 //	   users := []user{}
 //	   err := c.Query(&users, "SELECT * FROM users")
+//
+//nolint:exhaustive // We just want to take care of slice and struct in this case.
 func (c *Client) Query(dest interface{}, stmt string, values ...interface{}) error {
 	defer c.postProcess(&QueryLog{Query: stmt, Keyspace: c.config.Keyspace}, time.Now())
 
@@ -219,11 +113,11 @@ func (c *Client) Query(dest interface{}, stmt string, values ...interface{}) err
 	}
 
 	rv := rvo.Elem()
-	iter := c.cassandra.session.Query(stmt, values...).Iter()
+	iter := c.cassandra.session.query(stmt, values...).iter()
 
 	switch rv.Kind() {
 	case reflect.Slice:
-		numRows := iter.NumRows()
+		numRows := iter.numRows()
 
 		for numRows > 0 {
 			val := reflect.New(rv.Type().Elem())
@@ -231,7 +125,7 @@ func (c *Client) Query(dest interface{}, stmt string, values ...interface{}) err
 			if rv.Type().Elem().Kind() == reflect.Struct {
 				c.rowsToStruct(iter, val)
 			} else {
-				_ = iter.Scan(val.Interface())
+				_ = iter.scan(val.Interface())
 			}
 
 			rv = reflect.Append(rv, val.Elem())
@@ -271,7 +165,7 @@ func (c *Client) Query(dest interface{}, stmt string, values ...interface{}) err
 func (c *Client) Exec(stmt string, values ...interface{}) error {
 	defer c.postProcess(&QueryLog{Query: stmt, Keyspace: c.config.Keyspace}, time.Now())
 
-	return c.cassandra.session.Query(stmt, values...).Exec()
+	return c.cassandra.session.query(stmt, values...).exec()
 }
 
 // ExecCAS executes a lightweight transaction (i.e. an UPDATE or INSERT statement containing an IF clause).
@@ -288,6 +182,8 @@ func (c *Client) Exec(stmt string, values ...interface{}) error {
 //	}
 //	u := user{}
 //	applied, err := c.ExecCAS(&ids, "INSERT INTO users VALUES(1, 'John Doe') IF NOT EXISTS")
+//
+//nolint:exhaustive // We just want to take care of slice and struct in this case.
 func (c *Client) ExecCAS(dest interface{}, stmt string, values ...interface{}) (bool, error) {
 	var (
 		applied bool
@@ -304,7 +200,7 @@ func (c *Client) ExecCAS(dest interface{}, stmt string, values ...interface{}) (
 	}
 
 	rv := rvo.Elem()
-	q := c.cassandra.session.Query(stmt, values...)
+	q := c.cassandra.session.query(stmt, values...)
 
 	switch rv.Kind() {
 	case reflect.Struct:
@@ -321,7 +217,7 @@ func (c *Client) ExecCAS(dest interface{}, stmt string, values ...interface{}) (
 		return false, UnexpectedMap{}
 
 	default:
-		applied, err = q.ScanCAS(rv.Interface())
+		applied, err = q.scanCAS(rv.Interface())
 	}
 
 	return applied, err
@@ -333,11 +229,11 @@ func (c *Client) rowsToStruct(iter iterator, vo reflect.Value) {
 		v = vo.Elem()
 	}
 
-	columns := c.getColumnsFromColumnsInfo(iter.Columns())
+	columns := c.getColumnsFromColumnsInfo(iter.columns())
 	fieldNameIndex := c.getFieldNameIndex(v)
 	fields := c.getFields(columns, fieldNameIndex, v)
 
-	_ = iter.Scan(fields...)
+	_ = iter.scan(fields...)
 
 	if vo.CanSet() {
 		vo.Set(v)
@@ -352,7 +248,7 @@ func (c *Client) rowsToStructCAS(query query, vo reflect.Value) (bool, error) {
 
 	row := make(map[string]interface{})
 
-	applied, err := query.MapScanCAS(row)
+	applied, err := query.mapScanCAS(row)
 	if err != nil {
 		return false, err
 	}
@@ -451,6 +347,11 @@ type Health struct {
 
 // HealthCheck checks the health of the Cassandra.
 func (c *Client) HealthCheck() interface{} {
+	const (
+		statusDown = "DOWN"
+		statusUp   = "UP"
+	)
+
 	h := Health{
 		Details: make(map[string]interface{}),
 	}
@@ -459,21 +360,128 @@ func (c *Client) HealthCheck() interface{} {
 	h.Details["keyspace"] = c.config.Keyspace
 
 	if c.cassandra.session == nil {
-		h.Status = "DOWN"
+		h.Status = statusDown
 		h.Details["message"] = "cassandra not connected"
 
 		return &h
 	}
 
-	err := c.cassandra.session.Query("SELECT now() FROM system.local").Exec()
+	err := c.cassandra.session.query("SELECT now() FROM system.local").exec()
 	if err != nil {
-		h.Status = "DOWN"
+		h.Status = statusDown
 		h.Details["message"] = err.Error()
 
 		return &h
 	}
 
-	h.Status = "UP"
+	h.Status = statusUp
 
 	return &h
+}
+
+type cassandra struct {
+	clusterConfig clusterConfig
+	session       session
+	query         query
+}
+
+// cassandraIterator implements iterator interface.
+type cassandraIterator struct {
+	iter *gocql.Iter
+}
+
+// Columns gets the column information.
+// This method wraps the `Columns` method of the underlying `iter` object.
+func (c *cassandraIterator) columns() []gocql.ColumnInfo {
+	return c.iter.Columns()
+}
+
+// Scan gets the next row from the Cassandra iterator and fills in the provided arguments.
+// This method wraps the `Scan` method of the underlying `iter` object.
+func (c *cassandraIterator) scan(dest ...interface{}) bool {
+	return c.iter.Scan(dest...)
+}
+
+// NumRows returns a number of rows.
+// This method wraps the `NumRows` method of the underlying `iter` object.
+func (c *cassandraIterator) numRows() int {
+	return c.iter.NumRows()
+}
+
+// cassandraQuery implements query interface.
+type cassandraQuery struct {
+	query *gocql.Query
+}
+
+// Exec performs a Cassandra's Query Exec.
+// This method wraps the `Exec` method of the underlying `query` object.
+func (c *cassandraQuery) exec() error {
+	return c.query.Exec()
+}
+
+// Iter returns a Cassandra iterator.
+// This method wraps the `Iter` method of the underlying `query` object.
+func (c *cassandraQuery) iter() iterator {
+	iter := cassandraIterator{iter: c.query.Iter()}
+
+	return &iter
+}
+
+// MapScanCAS checks a Cassandra query with an IF clause and scans the existing data into map[string]interface{} (if any).
+// This method wraps the `MapScanCAS` method of the underlying `query` object.
+func (c *cassandraQuery) mapScanCAS(dest map[string]interface{}) (applied bool, err error) {
+	return c.query.MapScanCAS(dest)
+}
+
+// ScanCAS checks a Cassandra query with an IF clause and scans the existing data (if any).
+// This method wraps the `ScanCAS` method of the underlying `query` object.
+func (c *cassandraQuery) scanCAS(dest ...any) (applied bool, err error) {
+	return c.query.ScanCAS(dest)
+}
+
+// cassandraClusterConfig implements clusterConfig interface.
+type cassandraClusterConfig struct {
+	clusterConfig *gocql.ClusterConfig
+}
+
+func newClusterConfig(config *Config) clusterConfig {
+	var c cassandraClusterConfig
+
+	config.Hosts = strings.TrimSuffix(strings.TrimSpace(config.Hosts), ",")
+	hosts := strings.Split(config.Hosts, ",")
+	c.clusterConfig = gocql.NewCluster(hosts...)
+	c.clusterConfig.Keyspace = config.Keyspace
+	c.clusterConfig.Port = config.Port
+	c.clusterConfig.Authenticator = gocql.PasswordAuthenticator{Username: config.Username, Password: config.Password}
+
+	return &c
+}
+
+// CreateSession creates a Cassandra session based on the provided configuration.
+// This method wraps the `CreateSession` method of the underlying `clusterConfig` object.
+// It creates a new Cassandra session using the configuration options specified in `c.clusterConfig`.
+//
+// Returns:
+//   - A `session` object representing the established Cassandra connection, or `nil` if an error occurred.
+//   - An `error` object if there was a problem creating the session, or `nil` if successful.
+func (c *cassandraClusterConfig) createSession() (session, error) {
+	sess, err := c.clusterConfig.CreateSession()
+	if err != nil {
+		return nil, err
+	}
+
+	return &cassandraSession{session: sess}, nil
+}
+
+// cassandraSession implements session interface.
+type cassandraSession struct {
+	session *gocql.Session
+}
+
+// Query creates a Cassandra query.
+// This method wraps the `Query` method of the underlying `session` object.
+func (c *cassandraSession) query(stmt string, values ...interface{}) query {
+	q := &cassandraQuery{query: c.session.Query(stmt, values...)}
+
+	return q
 }
