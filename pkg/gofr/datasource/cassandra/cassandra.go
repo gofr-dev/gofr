@@ -1,7 +1,7 @@
 package cassandra
 
 import (
-	"context"
+	pkgContext "context"
 	"reflect"
 	"regexp"
 	"strings"
@@ -109,7 +109,7 @@ func (c *Client) Query(dest interface{}, stmt string, values ...interface{}) err
 	if rvo.Kind() != reflect.Ptr {
 		c.logger.Error("we did not get a pointer. data is not settable.")
 
-		return DestinationIsNotPointer{}
+		return destinationIsNotPointer{}
 	}
 
 	rv := rvo.Elem()
@@ -143,7 +143,7 @@ func (c *Client) Query(dest interface{}, stmt string, values ...interface{}) err
 	default:
 		c.logger.Debugf("a pointer to %v was not expected.", rv.Kind().String())
 
-		return UnexpectedPointer{target: rv.Kind().String()}
+		return unexpectedPointer{target: rv.Kind().String()}
 	}
 
 	return nil
@@ -196,7 +196,7 @@ func (c *Client) ExecCAS(dest interface{}, stmt string, values ...interface{}) (
 	if rvo.Kind() != reflect.Ptr {
 		c.logger.Debugf("we did not get a pointer. data is not settable.")
 
-		return false, DestinationIsNotPointer{}
+		return false, destinationIsNotPointer{}
 	}
 
 	rv := rvo.Elem()
@@ -209,12 +209,12 @@ func (c *Client) ExecCAS(dest interface{}, stmt string, values ...interface{}) (
 	case reflect.Slice:
 		c.logger.Debugf("a slice of %v was not expected.", reflect.SliceOf(reflect.TypeOf(dest)).String())
 
-		return false, UnexpectedSlice{target: reflect.SliceOf(reflect.TypeOf(dest)).String()}
+		return false, unexpectedSlice{target: reflect.SliceOf(reflect.TypeOf(dest)).String()}
 
 	case reflect.Map:
 		c.logger.Debugf("a map was not expected.")
 
-		return false, UnexpectedMap{}
+		return false, unexpectedMap{}
 
 	default:
 		applied, err = q.scanCAS(rv.Interface())
@@ -334,7 +334,7 @@ func (c *Client) postProcess(ql *QueryLog, startTime time.Time) {
 
 	c.logger.Debug(ql)
 
-	c.metrics.RecordHistogram(context.Background(), "app_cassandra_stats", float64(duration), "hostname", c.config.Hosts,
+	c.metrics.RecordHistogram(pkgContext.Background(), "app_cassandra_stats", float64(duration), "hostname", c.config.Hosts,
 		"keyspace", c.config.Keyspace)
 
 	c.cassandra.query = nil
