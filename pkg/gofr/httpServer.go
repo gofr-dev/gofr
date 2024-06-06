@@ -20,7 +20,7 @@ func newHTTPServer(c *container.Container, port int, middlewareConfigs map[strin
 	r := gofrHTTP.NewRouter()
 
 	r.Use(
-		middleware.WSConnectionCreate(c),
+		middleware.WSHandlerUpgrade(c),
 		middleware.Tracer,
 		middleware.Logging(c.Logger),
 		middleware.CORS(middlewareConfigs, r.RegisteredRoutes),

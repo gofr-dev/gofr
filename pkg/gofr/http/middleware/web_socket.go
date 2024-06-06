@@ -8,7 +8,7 @@ import (
 	"gofr.dev/pkg/gofr/container"
 )
 
-func WSConnectionCreate(c *container.Container) func(inner http.Handler) http.Handler {
+func WSHandlerUpgrade(c *container.Container) func(inner http.Handler) http.Handler {
 	return func(inner http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if gorillaWebsocket.IsWebSocketUpgrade(r) {

@@ -5,8 +5,10 @@ go 1.22.3
 require (
 	github.com/gorilla/websocket v1.5.0
 	github.com/stretchr/testify v1.9.0
-	gofr.dev v1.6.1
+	gofr.dev v1.8.1
 )
+
+replace gofr.dev v1.8.1 => ../../../gofr
 
 require (
 	cloud.google.com/go v0.114.0 // indirect
@@ -101,5 +103,3 @@ require (
 	modernc.org/strutil v1.1.3 // indirect
 	modernc.org/token v1.0.1 // indirect
 )
-
-replace gofr.dev v1.6.1 => ../../../gofr

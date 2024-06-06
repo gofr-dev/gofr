@@ -35,9 +35,10 @@ type Container struct {
 	metricsManager metrics.Manager
 	PubSub         pubsub.Client
 
-	Redis               Redis
-	SQL                 DB
-	Mongo               datasource.Mongo
+	Redis Redis
+	SQL   DB
+	Mongo datasource.Mongo
+
 	WebsocketConnection *websocket.Connection
 	WebSocketUpgrader   websocket.WSUpgrader
 }

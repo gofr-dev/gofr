@@ -40,7 +40,7 @@ func TestWSConnectionCreate_Error(t *testing.T) {
 	mockUpgrader.EXPECT().Upgrade(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil,
 		errConnection).Times(1)
 
-	handler := WSConnectionCreate(&mockContainer)(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
+	handler := WSHandlerUpgrade(&mockContainer)(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
 	}))
 
 	// Create a test request with incomplete upgrade header
@@ -67,7 +67,7 @@ func Test_WSConnectionCreate_Success(t *testing.T) {
 
 	mockUpgrader.EXPECT().Upgrade(gomock.Any(), gomock.Any(), gomock.Any()).Return(mockConn.Conn, nil).Times(1)
 
-	middleware := WSConnectionCreate(&mockContainer)
+	middleware := WSHandlerUpgrade(&mockContainer)
 
 	innerHandler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)

@@ -259,6 +259,7 @@ func (a *App) add(method, pattern string, h Handler) {
 		requestTimeout: a.Config.GetOrDefault("REQUEST_TIMEOUT", "5"),
 	})
 }
+
 func (a *App) Metrics() metrics.Manager {
 	return a.container.Metrics()
 }

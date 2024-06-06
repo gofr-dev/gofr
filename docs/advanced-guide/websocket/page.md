@@ -51,7 +51,7 @@ GoFr allows you to customize the WebSocket upgrader with several options. You ca
 - `CheckOrigin (WithCheckOrigin)`: Sets a custom origin check function.
 - `Compression (WithCompression)`:  Enables compression.
 
-# Example:
+## Example:
 You can configure the Upgrader by creating a chain of option functions provided by GoFr.
 
 ```go
