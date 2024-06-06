@@ -225,7 +225,7 @@ TRACER_PORT=14317
 ```
 
 Open {% new-tab-link title="zipkin" href="http://localhost:16686/trace/" /%} and search by TraceID (correlationID) to see the trace.
-{% figure src="/jaeger-traces.png" alt="Jaeger traces" /%}
+{% figure src="/jaeger-tracing.png" alt="Jaeger traces" /%}
 
 #### 3. [GoFr Tracer](https://tracer.gofr.dev/)
 
