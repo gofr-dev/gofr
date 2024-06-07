@@ -1,7 +1,7 @@
 package cassandra
 
 import (
-	pkgContext "context"
+	"context"
 	"reflect"
 	"regexp"
 	"strings"
@@ -16,6 +16,12 @@ type Config struct {
 	Port     int
 	Username string
 	Password string
+}
+
+type cassandra struct {
+	clusterConfig clusterConfig
+	session       session
+	query         query
 }
 
 type Client struct {
@@ -74,33 +80,6 @@ func (c *Client) UseMetrics(metrics interface{}) {
 	}
 }
 
-// Query executes the query and binds the result into dest parameter.
-// Returns error if any error occurs while binding the result.
-// Can be used to single as well as multiple rows.
-// Accepts pointer to struct or slice as dest parameter for single and multiple rows retrieval respectively.
-//
-// Example:
-//
-//	// Get multiple rows with only one column
-//	   ids := make([]int, 0)
-//	   err := c.Query(&ids, "SELECT id FROM users")
-//
-//	// Get a single object from database
-//	   type user struct {
-//	   	ID    int
-//	   	Name string
-//	   }
-//	   u := user{}
-//	   err := c.Query(&u, "SELECT * FROM users WHERE id=?", 1)
-//
-//	// Get array of objects from multiple rows
-//	   type user struct {
-//	   	ID    int
-//	   	Name string `db:"name"`
-//	   }
-//	   users := []user{}
-//	   err := c.Query(&users, "SELECT * FROM users")
-//
 //nolint:exhaustive // We just want to take care of slice and struct in this case.
 func (c *Client) Query(dest interface{}, stmt string, values ...interface{}) error {
 	defer c.postProcess(&QueryLog{Query: stmt, Keyspace: c.config.Keyspace}, time.Now())
@@ -149,40 +128,12 @@ func (c *Client) Query(dest interface{}, stmt string, values ...interface{}) err
 	return nil
 }
 
-// Exec executes the query without returning any rows.
-// Return error if any error occurs while executing the query.
-// Can be used to execute UPDATE or INSERT.
-//
-// Example:
-//
-//	// Without values
-//	   err := c.Exec("INSERT INTO users VALUES(1, 'John Doe')")
-//
-//	// With Values
-//	   id := 1
-//	   name := "John Doe"
-//	   err := c.Exec("INSERT INTO users VALUES(?, ?)", id, name)
 func (c *Client) Exec(stmt string, values ...interface{}) error {
 	defer c.postProcess(&QueryLog{Query: stmt, Keyspace: c.config.Keyspace}, time.Now())
 
 	return c.cassandra.session.query(stmt, values...).exec()
 }
 
-// ExecCAS executes a lightweight transaction (i.e. an UPDATE or INSERT statement containing an IF clause).
-// If the transaction fails because the existing values did not match, the previous values will be stored in dest.
-// Returns true if the query is applied otherwise false.
-// Returns false and error if any error occur while executing the query.
-// Accepts only pointer to struct and built-in types as the dest parameter.
-//
-// Example:
-//
-//	type user struct {
-//		ID    int
-//		Name string
-//	}
-//	u := user{}
-//	applied, err := c.ExecCAS(&ids, "INSERT INTO users VALUES(1, 'John Doe') IF NOT EXISTS")
-//
 //nolint:exhaustive // We just want to take care of slice and struct in this case.
 func (c *Client) ExecCAS(dest interface{}, stmt string, values ...interface{}) (bool, error) {
 	var (
@@ -334,7 +285,7 @@ func (c *Client) postProcess(ql *QueryLog, startTime time.Time) {
 
 	c.logger.Debug(ql)
 
-	c.metrics.RecordHistogram(pkgContext.Background(), "app_cassandra_stats", float64(duration), "hostname", c.config.Hosts,
+	c.metrics.RecordHistogram(context.Background(), "app_cassandra_stats", float64(duration), "hostname", c.config.Hosts,
 		"keyspace", c.config.Keyspace)
 
 	c.cassandra.query = nil
@@ -377,12 +328,6 @@ func (c *Client) HealthCheck() interface{} {
 	h.Status = statusUp
 
 	return &h
-}
-
-type cassandra struct {
-	clusterConfig clusterConfig
-	session       session
-	query         query
 }
 
 // cassandraIterator implements iterator interface.

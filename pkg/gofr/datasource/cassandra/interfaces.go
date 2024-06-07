@@ -2,23 +2,20 @@ package cassandra
 
 import "github.com/gocql/gocql"
 
-// clusterConfig defines methods for interacting with a Cassandra clusterConfig. This interface
-// is designed to be mockable for unit testing purposes, allowing you to control the behavior
-// of Cassandra interactions during tests.
+// All interfaces is designed to be mockable for unit testing purposes, allowing you to control the behavior of Cassandra
+// interactions during tests.
+
+// clusterConfig defines methods for interacting with a Cassandra clusterConfig.
 type clusterConfig interface {
 	createSession() (session, error)
 }
 
-// session defines methods for interacting with a Cassandra session. This interface
-// is designed to be mockable for unit testing purposes, allowing you to control the behavior
-// of Cassandra interactions during tests.
+// session defines methods for interacting with a Cassandra session.
 type session interface {
 	query(stmt string, values ...interface{}) query
 }
 
-// query defines methods for interacting with a Cassandra query. This interface
-// is designed to be mockable for unit testing purposes, allowing you to control the behavior
-// of Cassandra interactions during tests.
+// query defines methods for interacting with a Cassandra query.
 type query interface {
 	exec() error
 	iter() iterator
@@ -26,9 +23,7 @@ type query interface {
 	scanCAS(dest ...any) (applied bool, err error)
 }
 
-// iterator defines methods for interacting with a Cassandra iterator. This interface
-// is designed to be mockable for unit testing purposes, allowing you to control the behavior
-// of Cassandra interactions during tests.
+// iterator defines methods for interacting with a Cassandra iterator.
 type iterator interface {
 	columns() []gocql.ColumnInfo
 	scan(dest ...interface{}) bool
