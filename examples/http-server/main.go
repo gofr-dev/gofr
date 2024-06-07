@@ -32,31 +32,11 @@ func main() {
 	a.Run()
 }
 
-type A struct {
-	Name string `json:"name"`
-	Age  int    `json:"age"`
-}
-
 func HelloHandler(c *gofr.Context) (interface{}, error) {
 	name := c.Param("name")
 	if name == "" {
 		c.Log("Name came empty")
 		name = "World"
-	}
-
-	fs, err := c.File.Open("data.json")
-	fmt.Println(err)
-
-	reader := fs.ReadAll()
-
-	for reader.Next() {
-
-		var a A
-
-		err := reader.Scan(&a)
-		fmt.Println(err)
-
-		fmt.Println(a)
 	}
 
 	return fmt.Sprintf("Hello %s!", name), nil

@@ -2,13 +2,14 @@ package file
 
 import (
 	"encoding/json"
-	"gofr.dev/pkg/gofr/datasource"
+
 	"io/fs"
 	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 
+	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/logging"
 )
 
@@ -62,9 +63,10 @@ func Test_CreateReadDeleteFile(t *testing.T) {
 	fileStore := New(logger)
 
 	newFile, err := fileStore.Create(fileName)
-	newFile.Write([]byte("some content"))
 
-	defer func(fileStore datasource.FileSystem, name string, options ...interface{}) {
+	_, _ = newFile.Write([]byte("some content"))
+
+	defer func(fileStore datasource.FileSystem, name string) {
 		_ = fileStore.Remove(name)
 	}(fileStore, fileName)
 
@@ -107,7 +109,8 @@ func Test_CreateUpdateReadFile(t *testing.T) {
 	fileStore := New(logger)
 
 	newFile, err := fileStore.Create(fileName)
-	newFile.Write([]byte("some content"))
+
+	_, _ = newFile.Write([]byte("some content"))
 
 	defer func(fileStore datasource.FileSystem, name string) {
 		_ = fileStore.Remove(name)
@@ -115,11 +118,11 @@ func Test_CreateUpdateReadFile(t *testing.T) {
 
 	assert.Nil(t, err)
 
-	openedFile, err := fileStore.OpenFile(fileName, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, os.ModePerm)
-	openedFile.WriteAt([]byte("some new content"), 0)
+	openedFile, _ := fileStore.OpenFile(fileName, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, os.ModePerm)
+	_, _ = openedFile.WriteAt([]byte("some new content"), 0)
 	openedFile.Close()
 
-	openedFile, err = fileStore.Open(fileName)
+	openedFile, _ = fileStore.Open(fileName)
 	reader := make([]byte, 30)
 	_, err = openedFile.Read(reader)
 	openedFile.Close()
@@ -143,21 +146,21 @@ func Test_CreateAndDeleteMultipleDirectories(t *testing.T) {
 
 	fileStore := New(logger)
 
-	err := fileStore.MkdirAll("temp/text/", os.ModePerm)
+	_ = fileStore.MkdirAll("temp/text/", os.ModePerm)
 
-	err = fileStore.RemoveAll("temp")
+	err := fileStore.RemoveAll("temp")
 
 	assert.Nil(t, err)
 }
 
 func Test_ReadFromCSV(t *testing.T) {
-	var csv_content = `Name,Age,Email
+	var csvContent = `Name,Age,Email
 John Doe,30,johndoe@example.com
 Jane Smith,25,janesmith@example.com
 Emily Johnson,35,emilyj@example.com
 Michael Brown,40,michaelb@example.com`
 
-	var csv_value = []string{"Name,Age,Email",
+	var csvValue = []string{"Name,Age,Email",
 		"John Doe,30,johndoe@example.com",
 		"Jane Smith,25,janesmith@example.com",
 		"Emily Johnson,35,emilyj@example.com",
@@ -169,41 +172,48 @@ Michael Brown,40,michaelb@example.com`
 	fileStore := New(logger)
 
 	newCsvFile, _ := fileStore.Create("temp.csv")
-	newCsvFile.Write([]byte(csv_content))
+	_, _ = newCsvFile.Write([]byte(csvContent))
 	newCsvFile.Close()
 
 	newCsvFile, _ = fileStore.Open("temp.csv")
 	reader, _ := newCsvFile.ReadAll()
 
-	defer fileStore.RemoveAll("temp.csv")
+	defer func(fileStore datasource.FileSystem, name string) {
+		_ = fileStore.RemoveAll(name)
+	}(fileStore, "temp.csv")
 
 	var i = 0
 
 	for reader.Next() {
 		var content string
 
-		reader.Scan(&content)
+		err := reader.Scan(&content)
 
-		assert.Equal(t, csv_value[i], content)
+		assert.Equal(t, csvValue[i], content)
+
+		assert.Nil(t, err)
+
 		i++
 	}
 }
 
 func Test_ReadFromCSVScanError(t *testing.T) {
-	var csv_content = `Name,Age,Email`
+	var csvContent = `Name,Age,Email`
 
 	logger := logging.NewMockLogger(logging.DEBUG)
 
 	fileStore := New(logger)
 
 	newCsvFile, _ := fileStore.Create("temp.csv")
-	newCsvFile.Write([]byte(csv_content))
+	_, _ = newCsvFile.Write([]byte(csvContent))
 	newCsvFile.Close()
 
 	newCsvFile, _ = fileStore.Open("temp.csv")
 	reader, _ := newCsvFile.ReadAll()
 
-	defer fileStore.RemoveAll("temp.csv")
+	defer func(fileStore datasource.FileSystem, name string) {
+		_ = fileStore.RemoveAll(name)
+	}(fileStore, "temp.csv")
 
 	for reader.Next() {
 		var content string
@@ -216,44 +226,48 @@ func Test_ReadFromCSVScanError(t *testing.T) {
 }
 
 func Test_ReadFromJSONArray(t *testing.T) {
-	var json_content = `[{"name": "Sam", "age": 123},{"name": "Jane", "age": 456},{"name": "John", "age": 789}]`
+	var jsonContent = `[{"name": "Sam", "age": 123},{"name": "Jane", "age": 456},{"name": "John", "age": 789}]`
 
 	type User struct {
 		Name string `json:"name"`
 		Age  int    `json:"age"`
 	}
 
-	var json_value = []User{{"Sam", 123}, {"Jane", 456}, {"John", 789}}
+	var jsonValue = []User{{"Sam", 123}, {"Jane", 456}, {"John", 789}}
 
 	logger := logging.NewMockLogger(logging.DEBUG)
 
 	fileStore := New(logger)
 
 	newCsvFile, _ := fileStore.Create("temp.json")
-	newCsvFile.Write([]byte(json_content))
+	_, _ = newCsvFile.Write([]byte(jsonContent))
 	newCsvFile.Close()
 
 	newCsvFile, _ = fileStore.Open("temp.json")
 	reader, _ := newCsvFile.ReadAll()
 
-	defer fileStore.RemoveAll("temp.json")
+	defer func(fileStore datasource.FileSystem, name string) {
+		_ = fileStore.RemoveAll(name)
+	}(fileStore, "temp.json")
 
 	var i = 0
 
 	for reader.Next() {
 		var u User
 
-		reader.Scan(&u)
+		err := reader.Scan(&u)
 
-		assert.Equal(t, json_value[i].Name, u.Name)
-		assert.Equal(t, json_value[i].Age, u.Age)
+		assert.Equal(t, jsonValue[i].Name, u.Name)
+		assert.Equal(t, jsonValue[i].Age, u.Age)
+
+		assert.Nil(t, err)
 
 		i++
 	}
 }
 
 func Test_ReadFromJSONObject(t *testing.T) {
-	var json_content = `{"name": "Sam", "age": 123}`
+	var jsonContent = `{"name": "Sam", "age": 123}`
 
 	type User struct {
 		Name string `json:"name"`
@@ -265,40 +279,46 @@ func Test_ReadFromJSONObject(t *testing.T) {
 	fileStore := New(logger)
 
 	newCsvFile, _ := fileStore.Create("temp.json")
-	newCsvFile.Write([]byte(json_content))
+	_, _ = newCsvFile.Write([]byte(jsonContent))
 	newCsvFile.Close()
 
 	newCsvFile, _ = fileStore.Open("temp.json")
 	reader, _ := newCsvFile.ReadAll()
 
-	defer fileStore.RemoveAll("temp.json")
+	defer func(fileStore datasource.FileSystem, name string) {
+		_ = fileStore.RemoveAll(name)
+	}(fileStore, "temp.json")
 
 	for reader.Next() {
 		var u User
 
-		reader.Scan(&u)
+		err := reader.Scan(&u)
 
 		assert.Equal(t, "Sam", u.Name)
 		assert.Equal(t, 123, u.Age)
+
+		assert.Nil(t, err)
 	}
 }
 
 func Test_ReadFromJSONArrayInvalidDelimitter(t *testing.T) {
-	var json_content = `!@#$%^&*`
+	var jsonContent = `!@#$%^&*`
 
 	logger := logging.NewMockLogger(logging.DEBUG)
 
 	fileStore := New(logger)
 
 	newCsvFile, _ := fileStore.Create("temp.json")
-	newCsvFile.Write([]byte(json_content))
+	_, _ = newCsvFile.Write([]byte(jsonContent))
 	newCsvFile.Close()
 
 	newCsvFile, _ = fileStore.Open("temp.json")
 
 	_, err := newCsvFile.ReadAll()
-	defer fileStore.RemoveAll("temp.json")
+
+	defer func(fileStore datasource.FileSystem, name string) {
+		_ = fileStore.RemoveAll(name)
+	}(fileStore, "temp.json")
 
 	assert.IsType(t, &json.SyntaxError{}, err)
-
 }

@@ -4,10 +4,13 @@ import (
 	"bufio"
 	"encoding/json"
 	"errors"
-	"gofr.dev/pkg/gofr/datasource"
 	"os"
 	"strings"
+
+	"gofr.dev/pkg/gofr/datasource"
 )
+
+var errNotPointer = errors.New("input should be a pointer to a string")
 
 type file struct {
 	*os.File
@@ -49,74 +52,92 @@ type jsonReader struct {
 //		}
 func (f file) ReadAll() (datasource.RowReader, error) {
 	if strings.HasSuffix(f.File.Name(), ".json") {
-		decoder := json.NewDecoder(f.File)
-
-		testDecoder := *decoder
-
-		newDecoder := &testDecoder
-
-		var token json.Token
-
-		t, err := newDecoder.Token()
-		if err != nil {
-			f.logger.Errorf("failed to decode JSON token %v", err)
-
-			return nil, err
-		}
-
-		if d, ok := t.(json.Delim); ok {
-			switch d {
-			case '[':
-				token = t
-				decoder = newDecoder
-
-			default:
-				// doing this again as it json file only has an object and it is not an array
-				name := f.Name()
-				err = f.File.Close()
-				if err != nil {
-					f.logger.Errorf("failed to close JSON file for reading as object %v", err)
-
-					return nil, err
-				}
-				newFile, err := os.Open(name)
-				if err != nil {
-					f.logger.Errorf("failed to open JSON file for reading as object %v", err)
-
-					return nil, err
-				}
-
-				decoder = json.NewDecoder(newFile)
-			}
-		}
-
-		jd := jsonReader{decoder: decoder, token: token}
-
-		return &jd, nil
+		return f.createJSONReader()
 	}
 
-	return &textCSVReader{
-		scanner: bufio.NewScanner(f.File)}, nil
+	return f.createTextCSVReader(), nil
 }
 
+// Factory method to create the appropriate JSON reader.
+func (f file) createJSONReader() (datasource.RowReader, error) {
+	decoder := json.NewDecoder(f.File)
+
+	token, err := f.peekJSONToken(decoder)
+	if err != nil {
+		f.logger.Errorf("failed to decode JSON token %v", err)
+		return nil, err
+	}
+
+	if d, ok := token.(json.Delim); ok && d == '[' {
+		// JSON array
+		return &jsonReader{decoder: decoder, token: token}, nil
+	}
+
+	// JSON object
+	return f.createJSONObjectReader()
+}
+
+// Peek the first JSON token to determine its type.
+func (f file) peekJSONToken(decoder *json.Decoder) (json.Token, error) {
+	newDecoder := *decoder
+
+	token, err := newDecoder.Token()
+	if err != nil {
+		return nil, err
+	}
+
+	return token, nil
+}
+
+// Create a JSON reader for a JSON object.
+func (f file) createJSONObjectReader() (datasource.RowReader, error) {
+	name := f.File.Name()
+
+	if err := f.File.Close(); err != nil {
+		f.logger.Errorf("failed to close JSON file for reading as object %v", err)
+		return nil, err
+	}
+
+	newFile, err := os.Open(name)
+	if err != nil {
+		f.logger.Errorf("failed to open JSON file for reading as object %v", err)
+		return nil, err
+	}
+
+	decoder := json.NewDecoder(newFile)
+
+	return &jsonReader{decoder: decoder}, nil
+}
+
+func (f file) createTextCSVReader() datasource.RowReader {
+	return &textCSVReader{
+		scanner: bufio.NewScanner(f.File),
+		logger:  f.logger,
+	}
+}
+
+// Next checks if there is next json object available otherwise returns false.
 func (j jsonReader) Next() bool {
 	return j.decoder.More()
 }
 
+// Scan binds the data to provided struct.
 func (j jsonReader) Scan(i interface{}) error {
 	return j.decoder.Decode(&i)
 }
 
+// Next checks if there is data available in next line otherwise returns false.
 func (f textCSVReader) Next() bool {
 	return f.scanner.Scan()
 }
 
+// Scan binds the line to provided pointer to string.
 func (f textCSVReader) Scan(i interface{}) error {
 	switch target := i.(type) {
 	case *string:
 		*target = f.scanner.Text()
 		return nil
 	default:
-		return errors.New("scan destination must be a string pointer")
+		return errNotPointer
 	}
 }
