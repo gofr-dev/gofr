@@ -1,6 +1,7 @@
 package file
 
 import (
+	"encoding/json"
 	"gofr.dev/pkg/gofr/datasource"
 	"io/fs"
 	"os"
@@ -27,6 +28,30 @@ func Test_LocalFileSystemDirectoryCreation(t *testing.T) {
 
 	assert.Nil(t, err)
 	assert.Equal(t, true, fInfo.IsDir())
+}
+
+func Test_LocalFileOpenError(t *testing.T) {
+	dirName := "temp!@#$%^&*(123"
+
+	logger := logging.NewMockLogger(logging.DEBUG)
+
+	fileStore := New(logger)
+
+	_, err := fileStore.Open(dirName)
+
+	assert.IsType(t, &fs.PathError{}, err)
+}
+
+func Test_LocalFileOpenFileError(t *testing.T) {
+	dirName := "temp!@#$%^&*(123"
+
+	logger := logging.NewMockLogger(logging.DEBUG)
+
+	fileStore := New(logger)
+
+	_, err := fileStore.OpenFile(dirName, 0, os.ModePerm)
+
+	assert.IsType(t, &fs.PathError{}, err)
 }
 
 func Test_CreateReadDeleteFile(t *testing.T) {
@@ -164,6 +189,32 @@ Michael Brown,40,michaelb@example.com`
 	}
 }
 
+func Test_ReadFromCSVScanError(t *testing.T) {
+	var csv_content = `Name,Age,Email`
+
+	logger := logging.NewMockLogger(logging.DEBUG)
+
+	fileStore := New(logger)
+
+	newCsvFile, _ := fileStore.Create("temp.csv")
+	newCsvFile.Write([]byte(csv_content))
+	newCsvFile.Close()
+
+	newCsvFile, _ = fileStore.Open("temp.csv")
+	reader, _ := newCsvFile.ReadAll()
+
+	defer fileStore.RemoveAll("temp.csv")
+
+	for reader.Next() {
+		var content string
+
+		err := reader.Scan(content)
+
+		assert.NotNil(t, err)
+		assert.Equal(t, "", content)
+	}
+}
+
 func Test_ReadFromJSONArray(t *testing.T) {
 	var json_content = `[{"name": "Sam", "age": 123},{"name": "Jane", "age": 456},{"name": "John", "age": 789}]`
 
@@ -230,4 +281,24 @@ func Test_ReadFromJSONObject(t *testing.T) {
 		assert.Equal(t, "Sam", u.Name)
 		assert.Equal(t, 123, u.Age)
 	}
+}
+
+func Test_ReadFromJSONArrayInvalidDelimitter(t *testing.T) {
+	var json_content = `!@#$%^&*`
+
+	logger := logging.NewMockLogger(logging.DEBUG)
+
+	fileStore := New(logger)
+
+	newCsvFile, _ := fileStore.Create("temp.json")
+	newCsvFile.Write([]byte(json_content))
+	newCsvFile.Close()
+
+	newCsvFile, _ = fileStore.Open("temp.json")
+
+	_, err := newCsvFile.ReadAll()
+	defer fileStore.RemoveAll("temp.json")
+
+	assert.IsType(t, &json.SyntaxError{}, err)
+
 }
