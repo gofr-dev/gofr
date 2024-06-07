@@ -590,10 +590,12 @@ func TestStaticHandler(t *testing.T) {
 		if tc.expectedBody != "" {
 			assert.Contains(t, body, tc.expectedBody, "TEST [%d], Failed with Expected Body. \n%s", it, tc.desc)
 		}
+
 		if tc.expectedBodyLength != 0 {
 			contentLength, _ := strconv.Atoi(resp.Header.Get("Content-Length"))
 			assert.Equal(t, tc.expectedBodyLength, contentLength, "TEST [%d], Failed at Content-Length.\n %s", it, tc.desc)
 		}
+
 		if tc.expectedResponseHeaderType != "" {
 			assert.Equal(t,
 				tc.expectedResponseHeaderType,
