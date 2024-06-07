@@ -2,7 +2,6 @@ package file
 
 import (
 	"encoding/json"
-
 	"io/fs"
 	"os"
 	"testing"
@@ -301,7 +300,7 @@ func Test_ReadFromJSONObject(t *testing.T) {
 	}
 }
 
-func Test_ReadFromJSONArrayInvalidDelimitter(t *testing.T) {
+func Test_ReadFromJSONArrayInvalidDelimiter(t *testing.T) {
 	var jsonContent = `!@#$%^&*`
 
 	logger := logging.NewMockLogger(logging.DEBUG)

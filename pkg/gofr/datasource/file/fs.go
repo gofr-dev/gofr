@@ -10,6 +10,7 @@ type fileSystem struct {
 	logger datasource.Logger
 }
 
+// New initialises local filesystem with logger.
 func New(logger datasource.Logger) datasource.FileSystem {
 	return fileSystem{logger: logger}
 }

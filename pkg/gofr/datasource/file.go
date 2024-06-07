@@ -67,12 +67,12 @@ var (
 type FileSystemProvider interface {
 	FileSystem
 
-	// UseLogger sets the logger for the MongoDB client.
+	// UseLogger sets the logger for the FileSystem client.
 	UseLogger(logger interface{})
 
-	// UseMetrics sets the metrics for the MongoDB client.
+	// UseMetrics sets the metrics for the FileSystem client.
 	UseMetrics(metrics interface{})
 
-	// Connect establishes a connection to MongoDB and registers metrics using the provided configuration when the client was Created.
+	// Connect establishes a connection to FileSystem and registers metrics using the provided configuration when the client was Created.
 	Connect()
 }
