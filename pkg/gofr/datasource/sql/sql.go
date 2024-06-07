@@ -100,7 +100,7 @@ func retryConnection(database *DB) {
 
 	for {
 		if database.DB.Ping() != nil {
-			database.logger.Warn("retrying SQL database connection")
+			database.logger.Log("retrying SQL database connection")
 
 			for {
 				if err := database.DB.Ping(); err != nil {
