@@ -549,7 +549,6 @@ func TestStaticHandler(t *testing.T) {
 		desc                       string
 		method                     string
 		path                       string
-		body                       []byte
 		statusCode                 int
 		expectedBody               string
 		expectedBodyLength         int
@@ -573,7 +572,7 @@ func TestStaticHandler(t *testing.T) {
 	}
 
 	for it, tc := range tests {
-		request, _ := http.NewRequest(tc.method, host+tc.path, http.NoBody)
+		request, _ := http.NewRequestWithContext(context.Background(), tc.method, host+tc.path, http.NoBody)
 
 		request.Header.Set("Content-Type", "application/json")
 
@@ -591,21 +590,17 @@ func TestStaticHandler(t *testing.T) {
 		if tc.expectedBody != "" {
 			assert.Contains(t, body, tc.expectedBody, "TEST [%d], Failed with Expected Body. \n%s", it, tc.desc)
 		}
-
 		if tc.expectedBodyLength != 0 {
 			contentLength, _ := strconv.Atoi(resp.Header.Get("Content-Length"))
 			assert.Equal(t, tc.expectedBodyLength, contentLength, "TEST [%d], Failed at Content-Length.\n %s", it, tc.desc)
 		}
-
 		if tc.expectedResponseHeaderType != "" {
-			assert.Equal(
-				t,
+			assert.Equal(t,
 				tc.expectedResponseHeaderType,
 				resp.Header.Get("Content-Type"),
 				"TEST [%d], Failed at Expected Content-Type.\n%s",
 				it,
-				tc.desc,
-			)
+				tc.desc)
 		}
 
 		resp.Body.Close()
