@@ -1,12 +1,12 @@
 # Serving Static Files using GoFr
 
-Often, we require to serve static content be it a default profile image or a static website. We want to have a mechanism to serve those content without having a hassel of implementing it from scratch.
+Often, we are required to serve static content be it a default profile image or a static website. We want to have a mechanism to serve that content without the hassle of implementing it from scratch.
 
 GoFr provides a default mechanism where if a public folder is available in the directory of the application, it automatically provides an endpoint with `/public/<filename>`, here filename refers to the file we want to get static content to be served. 
 
 Example Project folder utilizing public endpoint:
 
-```
+```dotenv
 project_folder
 |
 |---config
@@ -37,7 +37,7 @@ Additionally, if we want to serve more static endpoints, we have a dedicated fun
 
 Providing an example below along with File System Example:
 
-```
+```dotenv
 project_folder
 |
 |---config

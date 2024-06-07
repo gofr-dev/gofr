@@ -22,6 +22,3 @@ vendor/
 # IDE Cache
 .vscode
 .DS_Store
-
-# Public Folder
-pkg/gofr/public
