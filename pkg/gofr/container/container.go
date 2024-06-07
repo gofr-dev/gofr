@@ -1,6 +1,7 @@
 package container
 
 import (
+	"gofr.dev/pkg/gofr/datasource/file"
 	"strconv"
 	"strings"
 
@@ -135,7 +136,10 @@ func (c *Container) Create(conf config.Config) {
 		}
 
 		c.PubSub = mqtt.New(configs, c.Logger, c.metricsManager)
+
 	}
+
+	c.File = file.New(c.Logger)
 }
 
 // GetHTTPService returns registered HTTP services.

@@ -15,12 +15,12 @@ type File interface {
 	io.Writer
 	io.WriterAt
 
-	ReadAll() RowReader
+	ReadAll() (RowReader, error)
 }
 
 type RowReader interface {
 	Next() bool
-	Scan(...interface{}) error
+	Scan(interface{}) error
 }
 
 // FileSystem Any simulated or real filesystem should implement this interface.

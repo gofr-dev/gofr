@@ -6,10 +6,11 @@ import (
 )
 
 type fileSystem struct {
+	logger datasource.Logger
 }
 
-func New() datasource.FileSystem {
-	return fileSystem{}
+func New(logger datasource.Logger) datasource.FileSystem {
+	return fileSystem{logger: logger}
 }
 
 func (f fileSystem) Create(name string) (datasource.File, error) {
@@ -18,7 +19,7 @@ func (f fileSystem) Create(name string) (datasource.File, error) {
 		return nil, err
 	}
 
-	return &file{File: newFile}, nil
+	return &file{File: newFile, logger: f.logger}, nil
 }
 
 func (f fileSystem) Mkdir(name string, perm os.FileMode) error {
@@ -35,7 +36,7 @@ func (f fileSystem) Open(name string) (datasource.File, error) {
 		return nil, err
 	}
 
-	return &file{File: openFile}, nil
+	return &file{File: openFile, logger: f.logger}, nil
 }
 
 func (f fileSystem) OpenFile(name string, flag int, perm os.FileMode) (datasource.File, error) {
@@ -44,7 +45,7 @@ func (f fileSystem) OpenFile(name string, flag int, perm os.FileMode) (datasourc
 		return nil, err
 	}
 
-	return &file{File: openFile}, nil
+	return &file{File: openFile, logger: f.logger}, nil
 }
 
 func (f fileSystem) Remove(name string) error {

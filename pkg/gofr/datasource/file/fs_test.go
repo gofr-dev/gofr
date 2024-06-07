@@ -1,16 +1,13 @@
 package file
 
 import (
+	"gofr.dev/pkg/gofr/datasource"
 	"io/fs"
 	"os"
 	"testing"
 
-	"go.uber.org/mock/gomock"
-
 	"github.com/stretchr/testify/assert"
 
-	"gofr.dev/pkg/gofr/datasource"
-	"gofr.dev/pkg/gofr/datasource/sql"
 	"gofr.dev/pkg/gofr/logging"
 )
 
@@ -21,12 +18,12 @@ func Test_LocalFileSystemDirectoryCreation(t *testing.T) {
 
 	fileStore := New(logger)
 
-	err := fileStore.CreateDir(dirName)
+	err := fileStore.Mkdir(dirName, os.ModePerm)
 	defer os.RemoveAll(dirName)
 
 	assert.Nil(t, err)
 
-	fInfo, err := fileStore.Stat(dirName)
+	fInfo, err := os.Stat(dirName)
 
 	assert.Nil(t, err)
 	assert.Equal(t, true, fInfo.IsDir())
@@ -39,17 +36,23 @@ func Test_CreateReadDeleteFile(t *testing.T) {
 
 	fileStore := New(logger)
 
-	err := fileStore.Create(fileName, []byte("some content"))
-	defer func(fileStore datasource.FileStore, name string, options ...interface{}) {
-		_ = fileStore.Delete(name, options)
+	newFile, err := fileStore.Create(fileName)
+	newFile.Write([]byte("some content"))
+
+	defer func(fileStore datasource.FileSystem, name string, options ...interface{}) {
+		_ = fileStore.Remove(name)
 	}(fileStore, fileName)
 
 	assert.Nil(t, err)
 
-	data, err := fileStore.Read("temp.txt")
+	tempFile, _ := fileStore.Open("temp.txt")
+
+	reader := make([]byte, 30)
+
+	_, err = tempFile.Read(reader)
 
 	assert.Nil(t, err)
-	assert.Equal(t, "some content", string(data))
+	assert.Contains(t, string(reader), "some content")
 }
 
 func Test_CreateMoveDeleteFile(t *testing.T) {
@@ -59,13 +62,13 @@ func Test_CreateMoveDeleteFile(t *testing.T) {
 
 	fileStore := New(logger)
 
-	err := fileStore.Create(fileName, []byte("some content"))
+	_, err := fileStore.Create(fileName)
 
 	assert.Nil(t, err)
 
-	err = fileStore.Move("temp.txt", "temp.text")
-	defer func(fileStore datasource.FileStore, name string, options ...interface{}) {
-		_ = fileStore.Delete(name, options)
+	err = fileStore.Rename("temp.txt", "temp.text")
+	defer func(fileStore datasource.FileSystem, name string) {
+		_ = fileStore.Remove(name)
 	}(fileStore, "temp.text")
 
 	assert.Nil(t, err)
@@ -78,25 +81,26 @@ func Test_CreateUpdateReadFile(t *testing.T) {
 
 	fileStore := New(logger)
 
-	err := fileStore.Create(fileName, []byte("some content"))
-	defer func(fileStore datasource.FileStore, name string, options ...interface{}) {
-		_ = fileStore.Delete(name, options)
+	newFile, err := fileStore.Create(fileName)
+	newFile.Write([]byte("some content"))
+
+	defer func(fileStore datasource.FileSystem, name string) {
+		_ = fileStore.Remove(name)
 	}(fileStore, fileName)
 
 	assert.Nil(t, err)
 
-	_ = fileStore.Update(fileName, []byte("some new content"))
+	openedFile, err := fileStore.OpenFile(fileName, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, os.ModePerm)
+	openedFile.WriteAt([]byte("some new content"), 0)
+	openedFile.Close()
 
-	data, err := fileStore.Read("temp.txt")
+	openedFile, err = fileStore.Open(fileName)
+	reader := make([]byte, 30)
+	_, err = openedFile.Read(reader)
+	openedFile.Close()
 
 	assert.Nil(t, err)
-	assert.Equal(t, "some new content", string(data))
-}
-
-func Test_NewFileStoreWithoutLogger(t *testing.T) {
-	fileSystem := New(sql.NewMockMetrics(gomock.NewController(t)))
-
-	assert.NotNil(t, fileSystem)
+	assert.Contains(t, string(reader), "some new content")
 }
 
 func Test_CreateFileInvalidPath(t *testing.T) {
@@ -104,44 +108,126 @@ func Test_CreateFileInvalidPath(t *testing.T) {
 
 	fileStore := New(logger)
 
-	err := fileStore.Create("", []byte("some content"))
+	_, err := fileStore.Create("")
 
 	assert.IsType(t, &fs.PathError{}, err)
 }
 
-func Test_CreateFileDuplicateFile(t *testing.T) {
-	fileName := "test"
+func Test_CreateAndDeleteMultipleDirectories(t *testing.T) {
+	logger := logging.NewMockLogger(logging.DEBUG)
+
+	fileStore := New(logger)
+
+	err := fileStore.MkdirAll("temp/text/", os.ModePerm)
+
+	err = fileStore.RemoveAll("temp")
+
+	assert.Nil(t, err)
+}
+
+func Test_ReadFromCSV(t *testing.T) {
+	var csv_content = `Name,Age,Email
+John Doe,30,johndoe@example.com
+Jane Smith,25,janesmith@example.com
+Emily Johnson,35,emilyj@example.com
+Michael Brown,40,michaelb@example.com`
+
+	var csv_value = []string{"Name,Age,Email",
+		"John Doe,30,johndoe@example.com",
+		"Jane Smith,25,janesmith@example.com",
+		"Emily Johnson,35,emilyj@example.com",
+		"Michael Brown,40,michaelb@example.com",
+	}
 
 	logger := logging.NewMockLogger(logging.DEBUG)
 
 	fileStore := New(logger)
 
-	_ = fileStore.Create("test", []byte("some content"))
-	defer func(fileStore datasource.FileStore, name string, options ...interface{}) {
-		_ = fileStore.Delete(name, options)
-	}(fileStore, fileName)
+	newCsvFile, _ := fileStore.Create("temp.csv")
+	newCsvFile.Write([]byte(csv_content))
+	newCsvFile.Close()
 
-	err := fileStore.Create("test", []byte("some content"))
+	newCsvFile, _ = fileStore.Open("temp.csv")
+	reader, _ := newCsvFile.ReadAll()
 
-	assert.IsType(t, &fs.PathError{}, err)
+	defer fileStore.RemoveAll("temp.csv")
+
+	var i = 0
+
+	for reader.Next() {
+		var content string
+
+		reader.Scan(&content)
+
+		assert.Equal(t, csv_value[i], content)
+		i++
+	}
 }
 
-func Test_ReadFileNotFoundError(t *testing.T) {
+func Test_ReadFromJSONArray(t *testing.T) {
+	var json_content = `[{"name": "Sam", "age": 123},{"name": "Jane", "age": 456},{"name": "John", "age": 789}]`
+
+	type User struct {
+		Name string `json:"name"`
+		Age  int    `json:"age"`
+	}
+
+	var json_value = []User{{"Sam", 123}, {"Jane", 456}, {"John", 789}}
+
 	logger := logging.NewMockLogger(logging.DEBUG)
 
 	fileStore := New(logger)
 
-	_, err := fileStore.Read("test")
+	newCsvFile, _ := fileStore.Create("temp.json")
+	newCsvFile.Write([]byte(json_content))
+	newCsvFile.Close()
 
-	assert.IsType(t, &fs.PathError{}, err)
+	newCsvFile, _ = fileStore.Open("temp.json")
+	reader, _ := newCsvFile.ReadAll()
+
+	defer fileStore.RemoveAll("temp.json")
+
+	var i = 0
+
+	for reader.Next() {
+		var u User
+
+		reader.Scan(&u)
+
+		assert.Equal(t, json_value[i].Name, u.Name)
+		assert.Equal(t, json_value[i].Age, u.Age)
+
+		i++
+	}
 }
 
-func Test_UpdateFileNotFoundError(t *testing.T) {
+func Test_ReadFromJSONObject(t *testing.T) {
+	var json_content = `{"name": "Sam", "age": 123}`
+
+	type User struct {
+		Name string `json:"name"`
+		Age  int    `json:"age"`
+	}
+
 	logger := logging.NewMockLogger(logging.DEBUG)
 
 	fileStore := New(logger)
 
-	err := fileStore.Update("test", []byte(""))
+	newCsvFile, _ := fileStore.Create("temp.json")
+	newCsvFile.Write([]byte(json_content))
+	newCsvFile.Close()
 
-	assert.IsType(t, &fs.PathError{}, err)
+	newCsvFile, _ = fileStore.Open("temp.json")
+	reader, _ := newCsvFile.ReadAll()
+
+	defer fileStore.RemoveAll("temp.json")
+
+	for reader.Next() {
+		var u User
+
+		reader.Scan(&u)
+
+		assert.Equal(t, "Sam", u.Name)
+		assert.Equal(t, 123, u.Age)
+	}
 }
