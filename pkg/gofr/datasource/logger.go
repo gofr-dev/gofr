@@ -13,4 +13,6 @@ type Logger interface {
 	Logf(format string, args ...interface{})
 	Error(args ...interface{})
 	Errorf(format string, args ...interface{})
+	Warn(args ...interface{})
+	Warnf(format string, args ...interface{})
 }
