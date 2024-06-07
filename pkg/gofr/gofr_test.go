@@ -1,7 +1,6 @@
 package gofr
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -574,7 +573,7 @@ func TestStaticHandler(t *testing.T) {
 	}
 
 	for it, tc := range tests {
-		request, _ := http.NewRequest(tc.method, host+tc.path, bytes.NewBuffer(tc.body))
+		request, _ := http.NewRequest(tc.method, host+tc.path, http.NoBody)
 
 		request.Header.Set("Content-Type", "application/json")
 
@@ -599,7 +598,14 @@ func TestStaticHandler(t *testing.T) {
 		}
 
 		if tc.expectedResponseHeaderType != "" {
-			assert.Equal(t, tc.expectedResponseHeaderType, resp.Header.Get("Content-Type"), "TEST [%d], Failed at Expected Content-Type.\n%s", it, tc.desc)
+			assert.Equal(
+				t,
+				tc.expectedResponseHeaderType,
+				resp.Header.Get("Content-Type"),
+				"TEST [%d], Failed at Expected Content-Type.\n%s",
+				it,
+				tc.desc,
+			)
 		}
 
 		resp.Body.Close()

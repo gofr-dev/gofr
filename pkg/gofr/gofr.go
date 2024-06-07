@@ -108,7 +108,9 @@ func New() *App {
 
 func (a *App) AddStaticFiles(endpoint, filePath string) {
 	a.httpRegistered = true
+
 	dupFilePath := ""
+
 	if strings.HasPrefix(filePath, "./") {
 		dupFilePath, _ = os.Getwd()
 		dupFilePath = filepath.Join(dupFilePath, filePath)
@@ -122,6 +124,7 @@ func (a *App) AddStaticFiles(endpoint, filePath string) {
 		a.container.Logger.Errorf("Couldn't register %s static endpoint", endpoint)
 		return
 	}
+
 	a.httpServer.router.AddStaticFiles(endpoint, dupFilePath)
 }
 
