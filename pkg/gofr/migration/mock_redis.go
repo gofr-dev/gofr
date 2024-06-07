@@ -24,7 +24,6 @@ type Mockcommands struct {
 	recorder *MockcommandsMockRecorder
 }
 
-
 // MockcommandsMockRecorder is the mock recorder for Mockcommands.
 type MockcommandsMockRecorder struct {
 	mock *Mockcommands
