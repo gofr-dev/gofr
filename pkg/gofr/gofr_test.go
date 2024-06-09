@@ -239,7 +239,7 @@ func Test_addRoute(t *testing.T) {
 		a.SubCommand("log", func(c *Context) (interface{}, error) {
 			c.Logger.Info("logging in handler")
 			return "handler called", nil
-		}, "Logs a message")
+		}, AddDescription("Logs a message"))
 
 		// Run the command-line application.
 		a.Run()
