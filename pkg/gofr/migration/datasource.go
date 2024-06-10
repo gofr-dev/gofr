@@ -6,17 +6,15 @@ import (
 	goRedis "github.com/redis/go-redis/v9"
 
 	"gofr.dev/pkg/gofr/container"
-	"gofr.dev/pkg/gofr/datasource"
 	gofrSql "gofr.dev/pkg/gofr/datasource/sql"
 )
 
 type Datasource struct {
 	Logger
 
-	SQL       db
-	Redis     commands
-	PubSub    client
-	Cassandra datasource.Cassandra
+	SQL    db
+	Redis  commands
+	PubSub client
 }
 
 type Migrator interface {
@@ -33,25 +31,25 @@ type Options interface {
 	apply(m Migrator) Migrator
 }
 
-func (d *Datasource) checkAndCreateMigrationTable(*container.Container) error {
+func (d Datasource) checkAndCreateMigrationTable(*container.Container) error {
 	return nil
 }
 
-func (d *Datasource) getLastMigration(*container.Container) int64 {
+func (d Datasource) getLastMigration(*container.Container) int64 {
 	return 0
 }
 
-func (d *Datasource) beginTransaction(*container.Container) migrationData {
+func (d Datasource) beginTransaction(*container.Container) migrationData {
 	return migrationData{}
 }
 
-func (d *Datasource) commitMigration(c *container.Container, data migrationData) error {
+func (d Datasource) commitMigration(c *container.Container, data migrationData) error {
 	c.Infof("Migration %v ran successfully", data.MigrationNumber)
 
 	return nil
 }
 
-func (d *Datasource) rollback(*container.Container, migrationData) {}
+func (d Datasource) rollback(*container.Container, migrationData) {}
 
 type migrationData struct {
 	StartTime       time.Time

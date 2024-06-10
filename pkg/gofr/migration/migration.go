@@ -99,7 +99,7 @@ func getMigrator(c *container.Container) (Datasource, Migrator, bool) {
 	var (
 		ok bool
 		ds Datasource
-		mg Migrator = &ds
+		mg Migrator = ds
 	)
 
 	if !isNil(c.SQL) {
