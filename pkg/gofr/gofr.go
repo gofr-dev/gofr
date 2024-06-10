@@ -430,24 +430,28 @@ func (a *App) WebSocket(route string, handler Handler) {
 		ctx.Request = conn
 		defer conn.Close()
 
-		for {
-			response, err := handler(ctx)
-			if err != nil {
-				if gWebsocket.IsCloseError(err, gWebsocket.CloseNormalClosure, gWebsocket.CloseGoingAway) {
-					break
-				}
-
-				ctx.Errorf("Error handling message: %v", err)
-			}
-
-			err = conn.WriteMessage(websocket.TextMessage, []byte(fmt.Sprint(response)))
-			if err != nil {
-				ctx.Errorf("Error writing message: %v", err)
-			}
-		}
+		handleWebSocketConnection(ctx, conn, handler)
 
 		return nil, nil
 	})
+}
+
+func handleWebSocketConnection(ctx *Context, conn *websocket.Connection, handler Handler) {
+	for {
+		response, err := handler(ctx)
+		if err != nil {
+			if gWebsocket.IsCloseError(err, gWebsocket.CloseNormalClosure, gWebsocket.CloseGoingAway) {
+				break
+			}
+
+			ctx.Errorf("Error handling message: %v", err)
+		}
+
+		err = conn.WriteMessage(websocket.TextMessage, []byte(fmt.Sprint(response)))
+		if err != nil {
+			ctx.Errorf("Error writing message: %v", err)
+		}
+	}
 }
 
 // contains is a helper function checking for duplicate entry in a slice.
