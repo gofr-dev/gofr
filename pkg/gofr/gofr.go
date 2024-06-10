@@ -417,6 +417,10 @@ func (a *App) AddCronJob(schedule, jobName string, job CronFunc) {
 	}
 }
 
+func (a *App) OverrideWebsocketUpgrader(wsUpgrader websocket.Upgrader) {
+	a.container.WebSocketUpgrader.Upgrader = wsUpgrader
+}
+
 // WebSocket registers a handler function for a WebSocket route. This method allows you to define a route handler for
 // WebSocket connections. It internally handles the WebSocket handshake and provides a `websocket.Connection` object
 // within the handler context. User can access the underlying WebSocket connection using `ctx.GetWebsocketConnection()`.
