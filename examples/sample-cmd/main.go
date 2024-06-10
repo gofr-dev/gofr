@@ -13,7 +13,10 @@ func main() {
 	// Add a sub-command "hello" with its handler, help and description
 	app.SubCommand("hello", func(c *gofr.Context) (interface{}, error) {
 		return "Hello World!", nil
-	}, gofr.AddDescription("Print 'Hello World!'"), gofr.AddHelp("hello world option"), gofr.AddFullPattern("hello-world"))
+	},
+		gofr.AddDescription("Print 'Hello World!'"),
+		gofr.AddHelp("hello world option"),
+	)
 
 	// Add a sub-command "params" with its handler, help and description
 	app.SubCommand("params", func(c *gofr.Context) (interface{}, error) {

@@ -229,6 +229,7 @@ func Test_addRoute(t *testing.T) {
 
 	// Modify os.Args for the duration of this test
 	os.Args = []string{"", "log"}
+
 	t.Cleanup(func() { os.Args = originalArgs }) // Restore os.Args after the test
 
 	// Capture the standard output to verify the logs.

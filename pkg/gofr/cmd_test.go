@@ -24,7 +24,6 @@ func Test_Run_SuccessCallRegisteredArgument(t *testing.T) {
 		},
 		AddDescription("Logs a message"),
 		AddHelp("Custom helper documentation for log command"),
-		AddFullPattern("log"),
 	)
 
 	logs := testutil.StdoutOutputForFunc(func() {
@@ -64,6 +63,7 @@ func Test_Run_SuccessCommandWithMultipleParameters(t *testing.T) {
 			assert.Equal(t, c.Request.Param("param"), "value")
 			assert.Equal(t, c.Request.Param("b"), "true")
 			c.Logger.Info("handler called")
+
 			return nil, nil
 		},
 		AddDescription("Logs a message with parameters"),
@@ -149,6 +149,7 @@ func Test_Run_ErrorParamNotReadWithoutHyphen(t *testing.T) {
 		func(c *Context) (interface{}, error) {
 			assert.Equal(t, c.Request.Param("hello"), "")
 			c.Logger.Info("handler called")
+
 			return nil, nil
 		},
 		AddDescription("Logs a message"),
@@ -212,16 +213,19 @@ func Test_Run_ErrorRouteRegisteredButNilHandler(t *testing.T) {
 }
 
 func Test_Run_ErrorNoArgumentGiven(t *testing.T) {
+	errlog := ""
 	os.Args = []string{""}
 
 	c := cmd{}
 
-	logs := testutil.StderrOutputForFunc(func() {
-		c.Run(container.NewContainer(config.NewEnvFile("", logging.NewMockLogger(logging.DEBUG))))
+	out := testutil.StdoutOutputForFunc(func() {
+		errlog = testutil.StderrOutputForFunc(func() {
+			c.Run(container.NewContainer(config.NewEnvFile("", logging.NewMockLogger(logging.DEBUG))))
+		})
 	})
 
-	assert.Contains(t, logs, "Available commands:")
-	assert.Contains(t, logs, "No Command Found!")
+	assert.Contains(t, errlog, "No Command Found!")
+	assert.Contains(t, out, "Available commands:")
 }
 
 func Test_Run_SuccessCallInvalidHyphens(t *testing.T) {
@@ -255,6 +259,7 @@ func Test_Run_HelpCommand(t *testing.T) {
 			return nil, nil
 		},
 		AddDescription("Logs a message"),
+		AddHelp("logging messages to the terminal"),
 	)
 
 	logs := testutil.StdoutOutputForFunc(func() {
@@ -262,7 +267,8 @@ func Test_Run_HelpCommand(t *testing.T) {
 	})
 
 	assert.Contains(t, logs, "Available commands:")
-	assert.Contains(t, logs, "log: Logs a message")
+	assert.Contains(t, logs, "Description: Logs a message")
+	assert.Contains(t, logs, "logging messages to the terminal")
 }
 
 func Test_Run_HelpCommandLong(t *testing.T) {
@@ -276,6 +282,7 @@ func Test_Run_HelpCommandLong(t *testing.T) {
 			return nil, nil
 		},
 		AddDescription("Logs a message"),
+		AddHelp("logging messages to the terminal"),
 	)
 
 	logs := testutil.StdoutOutputForFunc(func() {
@@ -283,10 +290,12 @@ func Test_Run_HelpCommandLong(t *testing.T) {
 	})
 
 	assert.Contains(t, logs, "Available commands:")
-	assert.Contains(t, logs, "log: Logs a message")
+	assert.Contains(t, logs, "Description: Logs a message")
+	assert.Contains(t, logs, "logging messages to the terminal")
 }
 
 func Test_Run_UnknownCommandShowsHelp(t *testing.T) {
+	errLogs := ""
 	os.Args = []string{"", "unknown"}
 
 	c := cmd{}
@@ -297,13 +306,17 @@ func Test_Run_UnknownCommandShowsHelp(t *testing.T) {
 			return nil, nil
 		},
 		AddDescription("Logs a message"),
+		AddHelp("logging messages to the terminal"),
 	)
 
-	logs := testutil.StderrOutputForFunc(func() {
-		c.Run(container.NewContainer(config.NewEnvFile("", logging.NewMockLogger(logging.DEBUG))))
+	logs := testutil.StdoutOutputForFunc(func() {
+		errLogs = testutil.StderrOutputForFunc(func() {
+			c.Run(container.NewContainer(config.NewEnvFile("", logging.NewMockLogger(logging.DEBUG))))
+		})
 	})
 
-	assert.Contains(t, logs, "Unknown command: unknown")
+	assert.Contains(t, errLogs, "No Command Found!")
 	assert.Contains(t, logs, "Available commands:")
-	assert.Contains(t, logs, "log: Logs a message")
+	assert.Contains(t, logs, "Description: Logs a message")
+	assert.Contains(t, logs, "logging messages to the terminal")
 }

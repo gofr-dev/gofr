@@ -19,7 +19,6 @@ type route struct {
 	handler     Handler
 	description string
 	help        string
-	fullPattern string
 }
 
 type Options func(c *route)
@@ -30,22 +29,11 @@ func (e ErrCommandNotFound) Error() string {
 	return "No Command Found!" //nolint:goconst // This error is needed and repetition is in test to check for the exact string.
 }
 
-func (cmd *cmd) Validate(data []string) bool {
-	for _, val := range data {
-		if val != "" {
-			return false
-		}
-	}
-
-	return true
-}
-
 func (cmd *cmd) Run(c *container.Container) {
 	args := os.Args[1:] // First one is command itself
-	command := []string{}
-	tempCommand := ""
-
+	command := ""
 	showHelp := false
+
 	for _, a := range args {
 		if a == "" {
 			continue // This takes care of cases where command has multiple spaces in between.
@@ -53,71 +41,43 @@ func (cmd *cmd) Run(c *container.Container) {
 
 		if a == "-h" || a == "--help" {
 			showHelp = true
+
 			continue
 		}
 
 		if a[0] != '-' {
-			tempCommand = tempCommand + " " + a
-		} else {
-			command = append(command, tempCommand)
-			tempCommand = a
+			command = command + " " + a
 		}
 	}
 
-	if tempCommand != "" {
-		command = append(command, tempCommand)
-	}
-
-	if showHelp || len(command) == 0 {
+	if showHelp {
 		cmd.printHelp()
 		return
 	}
 
-	ctx := newContext(&cmd2.Responder{}, cmd2.NewRequest(command), c)
+	h := cmd.handler(command)
+	ctx := newContext(&cmd2.Responder{}, cmd2.NewRequest(args), c)
 
-	for it, commandVal := range command {
-		if commandVal == "" {
-			continue
-		}
+	if h == nil {
+		ctx.responder.Respond(nil, ErrCommandNotFound{})
+		cmd.printHelp()
 
-		h := cmd.handler(commandVal)
-
-		if h == nil {
-			ctx.responder.Respond(nil, ErrCommandNotFound{})
-			return
-		}
-
-		ctx.responder.Respond(h(ctx))
-
-		if it != len(command)-1 {
-			ctx.responder.Respond("\n", nil)
-		}
+		return
 	}
+
+	ctx.responder.Respond(h(ctx))
 }
 
 func (cmd *cmd) handler(path string) Handler {
 	// Trim leading dashes
 	path = strings.TrimPrefix(strings.TrimPrefix(path, "--"), "-")
 
-	// Extract the first part of the path if it contains spaces
-	if strings.Contains(path, " ") {
-		path = strings.Split(path, " ")[0]
-	}
-
 	// Iterate over the routes to find a matching handler
-	for _, route := range cmd.routes {
-		re := regexp.MustCompile(route.pattern)
+	for _, r := range cmd.routes {
+		re := regexp.MustCompile(r.pattern)
 
-		if cmd.Validate(re.Split(path, -1)) {
-			return route.handler
-		}
-
-		if route.fullPattern != "nil" {
-			reFullPattern := regexp.MustCompile(route.fullPattern)
-
-			if cmd.Validate(reFullPattern.Split(path, -1)) {
-				return route.handler
-			}
+		if re.MatchString(path) {
+			return r.handler
 		}
 	}
 
@@ -137,19 +97,12 @@ func AddHelp(helperString string) Options {
 	}
 }
 
-func AddFullPattern(fullPattern string) Options {
-	return func(r *route) {
-		r.fullPattern = fullPattern
-	}
-}
-
 func (cmd *cmd) addRoute(pattern string, handler Handler, options ...Options) {
 	tempRoute := route{
 		pattern:     pattern,
 		handler:     handler,
 		description: "description message not provided",
 		help:        "help message not provided",
-		fullPattern: "nil",
 	}
 
 	for _, opt := range options {
@@ -161,13 +114,16 @@ func (cmd *cmd) addRoute(pattern string, handler Handler, options ...Options) {
 
 func (cmd *cmd) printHelp() {
 	fmt.Println("Available commands:")
-	for _, route := range cmd.routes {
-		fmt.Printf("\n  %s\n", route.pattern)
-		if route.description != "" {
-			fmt.Printf("    Description: %s\n", route.description)
+
+	for _, r := range cmd.routes {
+		fmt.Printf("\n  %s\n", r.pattern)
+
+		if r.description != "" {
+			fmt.Printf("    Description: %s\n", r.description)
 		}
-		if route.help != "" {
-			fmt.Printf("    Help: %s\n", route.help)
+
+		if r.help != "" {
+			fmt.Printf("    Help: %s\n", r.help)
 		}
 	}
 }
