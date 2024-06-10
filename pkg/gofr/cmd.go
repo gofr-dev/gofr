@@ -85,7 +85,7 @@ func (cmd *cmd) handler(path string) Handler {
 	return nil
 }
 
-// AddDescription adds the description text for a specified subcommand
+// AddDescription adds the description text for a specified subcommand.
 func AddDescription(descString string) Options {
 	return func(r *route) {
 		r.description = descString
@@ -93,7 +93,7 @@ func AddDescription(descString string) Options {
 }
 
 // AddHelp adds the helper text for the given subcommand
-// this is displayed when -h or --help option/flag is provided
+// this is displayed when -h or --help option/flag is provided.
 func AddHelp(helperString string) Options {
 	return func(r *route) {
 		r.help = helperString
