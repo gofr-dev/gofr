@@ -51,7 +51,7 @@ func TestFunctionName(t *testing.T) {
 ```go
 Some services will be required to pass the entire test suite. We recommend using docker for running those services.
 
-docker run --name gofr-mysql -e MYSQL_ROOT_PASSWORD=password -p 2001:3306 -d mysql:8.0.30
+docker run --name gofr-mysql -e MYSQL_ROOT_PASSWORD=password -e MYSQL_DATABASE=test -p 2001:3306 -d mysql:8.0.30
 docker run --name gofr-redis -p 2002:6379 -d redis:7.0.5
 docker run --name gofr-zipkin -d -p 2005:9411 openzipkin/zipkin:2
 docker run --name gofr-pgsql -d -e POSTGRES_DB=customers -e POSTGRES_PASSWORD=root123 -p 2006:5432 postgres:15.1
