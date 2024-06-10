@@ -38,6 +38,7 @@ type handler struct {
 
 func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	c := newContext(gofrHTTP.NewResponder(w, r.Method), gofrHTTP.NewRequest(r), h.container)
+
 	var (
 		ctx    context.Context
 		cancel context.CancelFunc
