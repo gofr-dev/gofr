@@ -35,9 +35,10 @@ type Container struct {
 	metricsManager metrics.Manager
 	PubSub         pubsub.Client
 
+	Redis Redis
+	SQL   DB
+
 	Cassandra datasource.Cassandra
-	Redis     Redis
-	SQL       DB
 	Mongo     datasource.Mongo
 
 	File datasource.FileSystem

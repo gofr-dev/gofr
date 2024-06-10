@@ -30,7 +30,7 @@ export const navigation = [
             { title: 'Dealing with Datasources', href: '/docs/advanced-guide/dealing-with-datasources' },
             { title: 'Automatic SwaggerUI Rendering', href: '/docs/advanced-guide/swagger-documentation' },
             {title: 'Error Handling',href: '/docs/advanced-guide/gofr-errors'},
-            { title: 'Dealing with Files', href: '/docs/advanced-guide/dealing-with-files' },
+            { title: 'Handling File', href: '/docs/advanced-guide/handling-file'},
             // { title: 'Supporting OAuth', href: '/docs/advanced-guide/oauth' },
             // { title: 'Creating a Static File Server', href: '/docs/advanced-guide/static-file-server' },
             // { title: 'WebSockets', href: '/docs/advanced-guide/websockets' },
