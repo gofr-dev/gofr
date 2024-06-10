@@ -41,10 +41,10 @@ type Client struct {
 //	client.UseLogger(loggerInstance)
 //	client.UseMetrics(metricsInstance)
 //	client.Connect()
-func New(conf *Config) *Client {
-	cass := &cassandra{clusterConfig: newClusterConfig(conf)}
+func New(conf Config) *Client {
+	cass := &cassandra{clusterConfig: newClusterConfig(&conf)}
 
-	return &Client{config: conf, cassandra: cass}
+	return &Client{config: &conf, cassandra: cass}
 }
 
 // Connect establishes a connection to Cassandra and registers metrics using the provided configuration when the client was Created.

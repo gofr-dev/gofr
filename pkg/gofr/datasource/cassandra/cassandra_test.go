@@ -27,7 +27,7 @@ func initTest(t *testing.T) (*Client, *Mocksession, *Mockquery, *Mockiterator) {
 	mockQuery := NewMockquery(ctrl)
 	mockIter := NewMockiterator(ctrl)
 
-	config := &Config{
+	config := Config{
 		Hosts:    "host1",
 		Port:     9042,
 		Keyspace: "test_keyspace",
@@ -54,7 +54,7 @@ func Test_Connect(t *testing.T) {
 	mockMetrics := NewMockMetrics(ctrl)
 	mockclusterConfig := NewMockclusterConfig(ctrl)
 
-	config := &Config{
+	config := Config{
 		Hosts:    "host1",
 		Port:     9042,
 		Keyspace: "test_keyspace",

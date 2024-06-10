@@ -145,7 +145,7 @@ func main() {
 		Password: "cassandra",
 	}
 
-	cassandra := cassandraPkg.New(&config)
+	cassandra := cassandraPkg.New(config)
 
 	app.AddCassandra(cassandra)
 
