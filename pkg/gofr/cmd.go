@@ -83,7 +83,6 @@ func (cmd *cmd) Run(c *container.Container) {
 		h := cmd.handler(commandVal)
 
 		if h == nil {
-			cmd.printHelp()
 			ctx.responder.Respond(nil, ErrCommandNotFound{})
 			return
 		}
@@ -97,16 +96,15 @@ func (cmd *cmd) Run(c *container.Container) {
 }
 
 func (cmd *cmd) handler(path string) Handler {
-	if len(path) > 1 && path[:2] == "--" {
-		path = path[2:]
-	} else if path[0] == '-' {
-		path = path[1:]
-	}
+	// Trim leading dashes
+	path = strings.TrimPrefix(strings.TrimPrefix(path, "--"), "-")
 
+	// Extract the first part of the path if it contains spaces
 	if strings.Contains(path, " ") {
 		path = strings.Split(path, " ")[0]
 	}
 
+	// Iterate over the routes to find a matching handler
 	for _, route := range cmd.routes {
 		re := regexp.MustCompile(route.pattern)
 
@@ -123,6 +121,7 @@ func (cmd *cmd) handler(path string) Handler {
 		}
 	}
 
+	// Return nil if no handler matches
 	return nil
 }
 
