@@ -35,11 +35,12 @@ type Container struct {
 	metricsManager metrics.Manager
 	PubSub         pubsub.Client
 
-	Redis Redis
-	SQL   DB
-	Mongo datasource.Mongo
 	Cassandra datasource.Cassandra
-	File  datasource.FileSystem
+	Redis     Redis
+	SQL       DB
+	Mongo     datasource.Mongo
+
+	File datasource.FileSystem
 }
 
 func NewContainer(conf config.Config) *Container {
