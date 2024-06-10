@@ -1,7 +1,6 @@
 # Dealing with Files
 
-Gofr abstracts dealing with different filestores, as such that to deal with either local filesystem, SFTP, FTP, S3 etc
-Users only need to provide configurations for their desired filestore, and Gofr handles the internal interactions by providing a uniform API.
+Gofr simplifies the complexity of working with different filestores by offering a uniform API. This allows developers to interact with different storage systems using the same set of methods, without needing to understand the underlying implementation details of each filestore.
 
 ## USAGE
 
