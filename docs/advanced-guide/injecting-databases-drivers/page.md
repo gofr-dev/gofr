@@ -115,8 +115,7 @@ type Cassandra interface {
 ```
 
 GoFr simplifies Cassandra integration with a well-defined interface. Users can easily implement any driver that adheres 
-to this interface, fostering a user-friendly experience. This approach also promotes extensibility, allowing GoFr to work 
-seamlessly with various database solutions beyond Cassandra.
+to this interface, fostering a user-friendly experience.
 
 ### Example
 
