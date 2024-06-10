@@ -37,19 +37,17 @@ type jsonReader struct {
 //
 // Reading JSON files
 //
-// for reader.Next() {
-//     var u User
-//
-//	   reader.Scan(&u)
-// }
+//	for reader.Next() {
+//		var u User
+//		reader.Scan(&u)
+//	}
 //
 // Reading CSV files
 //
-// for reader.Next() {
-//     var content string
-//
-//     reader.Scan(&u)
-// }
+//	for reader.Next() {
+//		    var content string
+//		    reader.Scan(&u)
+//	}
 func (f file) ReadAll() (datasource.RowReader, error) {
 	if strings.HasSuffix(f.File.Name(), ".json") {
 		return f.createJSONReader()
