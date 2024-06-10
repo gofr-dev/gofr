@@ -598,6 +598,8 @@ func TestStaticHandler(t *testing.T) {
 }
 
 func createPublicDirectory(t *testing.T, htmlContent []byte) error {
+	t.Helper()
+
 	directory := "./" + publicDir
 	if _, err := os.Stat(directory); err != nil {
 		if err := os.Mkdir("./"+publicDir, 0755); err != nil {
@@ -609,14 +611,12 @@ func createPublicDirectory(t *testing.T, htmlContent []byte) error {
 	file1, errFile := os.Create(directory + "/index.html")
 
 	if errFile != nil {
-		t.Error("Couldn't create index.html file")
-		return errFile
+		t.Fatal("Couldn't create index.html file")
 	}
 
 	_, err := file1.Write(htmlContent)
 	if err != nil {
-		t.Error("Couldn't write to index.html file")
-		return err
+		t.Fatal("Couldn't write to index.html file")
 	}
 
 	file1.Close()
