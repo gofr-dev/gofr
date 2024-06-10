@@ -23,7 +23,7 @@ type RowReader interface {
 	Scan(interface{}) error
 }
 
-// FileSystem Any simulated or real filesystem should implement this interface.
+// FileSystem : Any simulated or real filesystem should implement this interface.
 type FileSystem interface {
 	// Create creates a file in the filesystem, returning the file and an
 	// error, if any happens.
