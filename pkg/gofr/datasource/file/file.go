@@ -17,7 +17,7 @@ type file struct {
 	logger datasource.Logger
 }
 
-type textCSVReader struct {
+type textReader struct {
 	scanner *bufio.Scanner
 	logger  datasource.Logger
 }
@@ -108,7 +108,7 @@ func (f file) createJSONObjectReader() (datasource.RowReader, error) {
 }
 
 func (f file) createTextCSVReader() datasource.RowReader {
-	return &textCSVReader{
+	return &textReader{
 		scanner: bufio.NewScanner(f.File),
 		logger:  f.logger,
 	}
@@ -125,12 +125,12 @@ func (j jsonReader) Scan(i interface{}) error {
 }
 
 // Next checks if there is data available in next line otherwise returns false.
-func (f textCSVReader) Next() bool {
+func (f textReader) Next() bool {
 	return f.scanner.Scan()
 }
 
 // Scan binds the line to provided pointer to string.
-func (f textCSVReader) Scan(i interface{}) error {
+func (f textReader) Scan(i interface{}) error {
 	switch target := i.(type) {
 	case *string:
 		*target = f.scanner.Text()
