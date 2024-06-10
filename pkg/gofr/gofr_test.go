@@ -506,35 +506,16 @@ func Test_AddCronJob_Success(t *testing.T) {
 }
 
 func TestStaticHandler(t *testing.T) {
-	// Generate a public directory endpoint
-	directory := "./public"
-
-	if _, err := os.Stat(directory); err != nil {
-		err := os.Mkdir("./public", 0755)
-		if err != nil {
-			t.Errorf("Couldn't create a public directory, error: %s", err)
-		}
-	}
-	// Application Generation
-	app := New()
-
 	// Generate some files for testing
 	htmlContent := []byte("<html><head><title>Test Static File</title></head><body><p>Testing Static File</p></body></html>")
 
-	file1, errFile := os.Create("./public/index.html")
-
-	if errFile != nil {
-		t.Error("Couldn't create index.html file")
+	err := createPublicDirectory(t, htmlContent)
+	if err != nil {
+		return
 	}
 
-	htmlContentSize, _ := file1.Write(htmlContent)
-
-	t.Cleanup(func() {
-		err := os.RemoveAll("./public")
-		if err != nil {
-			t.Log("Couldn't remove public folder")
-		}
-	})
+	// Application Generation
+	app := New()
 
 	// Run the Application and compare the fileType and fileSize
 	app.httpRegistered = true
@@ -557,30 +538,39 @@ func TestStaticHandler(t *testing.T) {
 		{
 			desc:                       "check file content index.html",
 			method:                     http.MethodGet,
-			path:                       "/public/index.html",
+			path:                       "/" + publicDir + "/index.html",
 			statusCode:                 http.StatusOK,
-			expectedBodyLength:         htmlContentSize,
+			expectedBodyLength:         len(htmlContent),
 			expectedResponseHeaderType: "text/html; charset=utf-8",
 			expectedBody:               string(htmlContent),
 		},
 		{
 			desc:       "check public endpoint",
 			method:     http.MethodGet,
-			path:       "/public",
+			path:       "/" + publicDir,
 			statusCode: http.StatusNotFound,
 		},
 	}
 
 	for it, tc := range tests {
-		request, _ := http.NewRequestWithContext(context.Background(), tc.method, host+tc.path, http.NoBody)
+		request, err := http.NewRequestWithContext(context.Background(), tc.method, host+tc.path, http.NoBody)
+		if err != nil {
+			t.Fatalf("TEST[%d], Failed to create request. %s", it, err)
+		}
 
 		request.Header.Set("Content-Type", "application/json")
 
 		client := http.Client{}
 
 		resp, err := client.Do(request)
+		if err != nil {
+			t.Fatalf("TEST[%d], Request failed. %s", it, err)
+		}
 
-		bodyBytes, _ := io.ReadAll(resp.Body)
+		bodyBytes, err := io.ReadAll(resp.Body)
+		if err != nil {
+			t.Fatalf("TEST[%d], Failed to read response body. %s", it, err)
+		}
 
 		body := string(bodyBytes)
 
@@ -592,19 +582,51 @@ func TestStaticHandler(t *testing.T) {
 		}
 
 		if tc.expectedBodyLength != 0 {
-			contentLength, _ := strconv.Atoi(resp.Header.Get("Content-Length"))
-			assert.Equal(t, tc.expectedBodyLength, contentLength, "TEST [%d], Failed at Content-Length.\n %s", it, tc.desc)
+			contentLength := resp.Header.Get("Content-Length")
+			assert.Equal(t, strconv.Itoa(tc.expectedBodyLength), contentLength, "TEST [%d], Failed at Content-Length.\n %s", it, tc.desc)
 		}
 
 		if tc.expectedResponseHeaderType != "" {
 			assert.Equal(t,
 				tc.expectedResponseHeaderType,
 				resp.Header.Get("Content-Type"),
-				"TEST [%d], Failed at Expected Content-Type.\n%s",
-				it,
-				tc.desc)
+				"TEST [%d], Failed at Expected Content-Type.\n%s", it, tc.desc)
 		}
 
 		resp.Body.Close()
 	}
+}
+
+func createPublicDirectory(t *testing.T, htmlContent []byte) error {
+	directory := "./" + publicDir
+	if _, err := os.Stat(directory); err != nil {
+		if err := os.Mkdir("./"+publicDir, 0755); err != nil {
+			t.Errorf("Couldn't create a "+publicDir+" directory, error: %s", err)
+			return err
+		}
+	}
+
+	file1, errFile := os.Create(directory + "/index.html")
+
+	if errFile != nil {
+		t.Error("Couldn't create index.html file")
+		return errFile
+	}
+
+	_, err := file1.Write(htmlContent)
+	if err != nil {
+		t.Error("Couldn't write to index.html file")
+		return err
+	}
+
+	file1.Close()
+
+	t.Cleanup(func() {
+		err := os.RemoveAll(directory)
+		if err != nil {
+			t.Log("Couldn't remove " + publicDir + " folder")
+		}
+	})
+
+	return nil
 }

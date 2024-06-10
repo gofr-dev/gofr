@@ -54,6 +54,8 @@ type App struct {
 	subscriptionManager SubscriptionManager
 }
 
+const publicDir = "public"
+
 // RegisterService adds a gRPC service to the GoFr application.
 func (a *App) RegisterService(desc *grpc.ServiceDesc, impl interface{}) {
 	a.container.Logger.Infof("registering GRPC Server: %s", desc.ServiceName)
@@ -97,10 +99,10 @@ func New() *App {
 
 	// static fileserver
 	currentWd, _ := os.Getwd()
-	checkDirectory := filepath.Join(currentWd, "public")
+	checkDirectory := filepath.Join(currentWd, publicDir)
 
-	if _, err := os.Stat(checkDirectory); !os.IsNotExist(err) {
-		app.AddStaticFiles("public", checkDirectory)
+	if _, err := os.Stat(checkDirectory); err == nil {
+		app.AddStaticFiles(publicDir, checkDirectory)
 	}
 
 	return app
