@@ -249,7 +249,7 @@ func (a *App) add(method, pattern string, h Handler) {
 	a.httpServer.router.Add(method, pattern, handler{
 		function:       h,
 		container:      a.container,
-		requestTimeout: a.Config.GetOrDefault("REQUEST_TIMEOUT", "5"),
+		requestTimeout: a.Config.Get("REQUEST_TIMEOUT"),
 	})
 }
 
