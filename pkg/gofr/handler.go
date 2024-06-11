@@ -49,7 +49,7 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if websocket.IsWebSocketUpgrade(r) {
 		// If the request is a WebSocket upgrade, do not apply the timeout
 		ctx = r.Context()
-	} else if h.requestTimeout != ""{
+	} else if h.requestTimeout != "" {
 		reqTimeout := h.setContextTimeout(h.requestTimeout)
 
 		ctx, cancel = context.WithTimeout(r.Context(), time.Duration(reqTimeout)*time.Second)
@@ -121,7 +121,7 @@ func (h handler) setContextTimeout(timeout string) int {
 	reqTimeout, err := strconv.Atoi(timeout)
 	if err != nil || reqTimeout < 0 {
 		h.container.Error("invalid value of config REQUEST_TIMEOUT. setting default value to 5 seconds.")
-}
+	}
 
 	return reqTimeout
 }
