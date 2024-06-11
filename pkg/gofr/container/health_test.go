@@ -53,9 +53,15 @@ func TestContainer_Health(t *testing.T) {
 				"host": strings.TrimPrefix(srv.URL, "http://"),
 			},
 		},
+		"name":    "test-app",
+		"status":  "UP",
+		"version": "test",
 	}
 
 	c, mocks := NewMockContainer(t)
+
+	c.appName = "test-app"
+	c.appVersion = "test"
 
 	c.Services = make(map[string]service.HTTP)
 	c.Services["test-service"] = service.NewHTTPService(srv.URL, logger, nil)

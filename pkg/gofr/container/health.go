@@ -6,25 +6,33 @@ import (
 )
 
 func (c *Container) Health(ctx context.Context) interface{} {
-	datasources := make(map[string]interface{})
+	healthMap := make(map[string]interface{})
+
+	c.appHealth(healthMap)
 
 	if !isNil(c.SQL) {
-		datasources["sql"] = c.SQL.HealthCheck()
+		healthMap["sql"] = c.SQL.HealthCheck()
 	}
 
 	if !isNil(c.Redis) {
-		datasources["redis"] = c.Redis.HealthCheck()
+		healthMap["redis"] = c.Redis.HealthCheck()
 	}
 
 	if c.PubSub != nil {
-		datasources["pubsub"] = c.PubSub.Health()
+		healthMap["pubsub"] = c.PubSub.Health()
 	}
 
 	for name, svc := range c.Services {
-		datasources[name] = svc.HealthCheck(ctx)
+		healthMap[name] = svc.HealthCheck(ctx)
 	}
 
-	return datasources
+	return healthMap
+}
+
+func (c *Container) appHealth(healthMap map[string]interface{}) {
+	healthMap["status"] = "UP"
+	healthMap["name"] = c.GetAppName()
+	healthMap["version"] = c.GetAppVersion()
 }
 
 func isNil(i interface{}) bool {
