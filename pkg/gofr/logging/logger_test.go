@@ -4,8 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"reflect"
-
 	"io"
 	"os"
 	"strings"
@@ -251,13 +249,10 @@ func TestMaskingFilterMaskingStringFields(t *testing.T) {
 	}
 
 	expected := `{"name":"********","email":"********************","password":"**********"}`
-	if string(maskedMessage) != expected {
-		t.Errorf("Expected %s, but got %s", expected, maskedMessage)
-	}
 
-	if !reflect.DeepEqual(filteredMessage, expectedOutput) {
-		t.Errorf("Expected output %v, but got %v", expectedOutput, filteredMessage)
-	}
+	assert.Equal(t, expected, string(maskedMessage), "TEST Failed.\n")
+
+	assert.Equal(t, expectedOutput, filteredMessage, "TEST Failed.\n")
 }
 
 func TestMaskingFilterMaskingNumericFields(t *testing.T) {
@@ -311,15 +306,12 @@ func TestMaskingFilterMaskingNumericFields(t *testing.T) {
 		t.Errorf("Failed to marshal masked message: %v", err)
 		return
 	}
-	//nolint:golangci-lint  //This is because we need the exact expected value
-	expected := `{"phoneNumber":0,"socialSecurityNumber":0,"creditCardNumber":0,"dateOfBirth":0,"biometricData":0,"ipAddress":"***********"}`
-	if string(maskedMessage) != strings.ReplaceAll(expected, "\t", "") {
-		t.Errorf("Expected %s, but got %s", expected, maskedMessage)
-	}
 
-	if !reflect.DeepEqual(filteredMessage, expectedOutput) {
-		t.Errorf("Expected output %v, but got %v", expectedOutput, filteredMessage)
-	}
+	expected := `{"phoneNumber":0,"socialSecurityNumber":0,"creditCardNumber":0,"dateOfBirth":0,"biometricData":0,"ipAddress":"***********"}`
+
+	assert.Equal(t, expected, string(maskedMessage), "TEST Failed.\n")
+
+	assert.Equal(t, expectedOutput, filteredMessage, "TEST Failed.\n")
 }
 
 func TestMaskingFilterMaskingNestedFields(t *testing.T) {
@@ -404,13 +396,9 @@ func TestMaskingFilterMaskingNestedFields(t *testing.T) {
 	expected := `{"name":"********","email":"********************","address":{"street":"***********",` +
 		`"city":"*******","zip":12345},"creditCard":{"number":"****************","cvv":0}}`
 
-	if string(maskedMessage) != strings.ReplaceAll(expected, "\t", "") {
-		t.Errorf("Expected %s, but got %s", expected, maskedMessage)
-	}
+	assert.Equal(t, expected, string(maskedMessage), "TEST Failed.\n")
 
-	if !reflect.DeepEqual(filteredMessage, expectedOutput) {
-		t.Errorf("Expected output %v, but got %v", expectedOutput, filteredMessage)
-	}
+	assert.Equal(t, expectedOutput, filteredMessage, "TEST Failed.\n")
 }
 
 func TestMaskingFilterMaskingPointerFields(t *testing.T) {
@@ -460,38 +448,24 @@ func TestMaskingFilterMaskingPointerFields(t *testing.T) {
 		return
 	}
 
-	expected := `{"username":"john.doe","password":"**********",` +
-		`"email":"********************","creditCard":"*******************","age":30,` +
-		`"score":7.5}`
-	if string(maskedMessage) != expected {
-		t.Errorf("Expected %s, but got %s", expected, maskedMessage)
-	}
+	expected := `{"username":"john.doe","password":"**********","email":"********************",` +
+		`"creditCard":"*******************","age":30,"score":7.5}`
+
+	assert.Equal(t, expected, string(maskedMessage), "TEST Failed.\n")
 
 	filteredUser := filteredMessage.(*User)
 
-	if *filteredUser.Username != *expectedOutput.Username {
-		t.Errorf("Expected username %s, but got %s", *expectedOutput.Username, *filteredUser.Username)
-	}
+	assert.Equal(t, *expectedOutput.Username, *filteredUser.Username, "TEST Failed.\n")
 
-	if *filteredUser.Password != *expectedOutput.Password {
-		t.Errorf("Expected password %s, but got %s", *expectedOutput.Password, *filteredUser.Password)
-	}
+	assert.Equal(t, *expectedOutput.Password, *filteredUser.Password, "TEST Failed.\n")
 
-	if *filteredUser.Email != *expectedOutput.Email {
-		t.Errorf("Expected email %s, but got %s", *expectedOutput.Email, *filteredUser.Email)
-	}
+	assert.Equal(t, *expectedOutput.Email, *filteredUser.Email, "TEST Failed.\n")
 
-	if *filteredUser.CreditCard != *expectedOutput.CreditCard {
-		t.Errorf("Expected credit card %s, but got %s", *expectedOutput.CreditCard, *filteredUser.CreditCard)
-	}
+	assert.Equal(t, *expectedOutput.CreditCard, *filteredUser.CreditCard, "TEST Failed.\n")
 
-	if *filteredUser.Age != *expectedOutput.Age {
-		t.Errorf("Expected age %d, but got %d", *expectedOutput.Age, *filteredUser.Age)
-	}
+	assert.Equal(t, *expectedOutput.Age, *filteredUser.Age, "TEST Failed.\n")
 
-	if *filteredUser.Score != *expectedOutput.Score {
-		t.Errorf("Expected score %f, but got %f", *expectedOutput.Score, *filteredUser.Score)
-	}
+	assert.Equal(t, *expectedOutput.Score, *filteredUser.Score, "TEST Failed.\n")
 }
 
 func stringPtr(s string) *string {

@@ -4,22 +4,21 @@ Filtered logging is a feature that allows you to mask sensitive data in your log
 
 ## Usage
 
-To use filtered logging, you need to set the masking configuration in your `.env` file. The following configuration options are available:
+To use filtered logging, you need to set the below configuration in `.env` file.
 
-- `LOGGER_MASKING_FIELDS`: A comma-separated list of field names that should be masked in log messages.
+`LOGGER_MASKING_FIELDS`: A comma separated list of field names that should be masked in log messages.
 
 Here's an example of how you can configure the masking options in your `.env` file:
-
 ```
 LOGGER_MASKING_FIELDS=password,email,creditCard
 ```
 
 In this example, masking is enabled, and the fields "password", "email", and "creditCard" will be masked in the log messages.
 
-Once you have configured the masking options in the `.env` file, the logger will automatically apply the masking based on the configuration. You don't need to call any additional functions or make any changes to your code.
+Once you have configured the masking options in the `.env` file, the logger will automatically apply the masking based on the configuration.
+You don't need to call any additional functions or make any changes to your code.
 
 Here's an example of how you can use the logger:
-
 ```go
 package main
 
@@ -41,10 +40,11 @@ func main() {
 }
 ```
 
-In this example, the `New` function is called to create a new instance of the `App`. The logger is then retrieved using `app.Logger()`, and the log message is generated using `logger.Info()`.
+In this example, the `New` function is called to create a new instance of the `App`. The logger is then retrieved using `app.Logger()`,
+and the log message is generated using `logger.Info()`.
 
-When logging a message that contains sensitive data, the specified fields will be masked in the output. The masked fields will be replaced with asterisks (`*`) to protect the sensitive information.
-
+When logging a message that contains sensitive data, the specified fields will be masked in the output.
+The masked fields will be replaced with asterisks (`*`) to protect the sensitive information.
 
 ## How It Works Internally
 

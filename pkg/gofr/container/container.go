@@ -69,13 +69,6 @@ func (c *Container) Create(conf config.Config) {
 
 	c.createLogger(conf)
 
-	if c.Logger == nil {
-		c.Logger = remotelogger.New(logging.GetLevelFromString(conf.Get("LOG_LEVEL")), conf.Get("REMOTE_LOG_URL"),
-			conf.GetOrDefault("REMOTE_LOG_FETCH_INTERVAL", "15"))
-	}
-
-	c.Debug("Container is being created")
-
 	c.metricsManager = metrics.NewMetricsManager(exporters.Prometheus(c.appName, c.appVersion), c.Logger)
 
 	// Register framework metrics
@@ -150,7 +143,7 @@ func (c *Container) createLogger(conf config.Config) {
 		c.Logger = remotelogger.New(logging.GetLevelFromString(conf.Get("LOG_LEVEL")), conf.Get("REMOTE_LOG_URL"),
 			conf.GetOrDefault("REMOTE_LOG_FETCH_INTERVAL", "15"))
 
-		maskingFields := conf.GetOrDefault("LOGGER_MASKING_FIELDS", "")
+		maskingFields := conf.Get("LOGGER_MASKING_FIELDS")
 		if maskingFields != "" {
 			fields := strings.Split(maskingFields, ",")
 

@@ -152,10 +152,8 @@ func TestContainer_newContainerWithNilConfig(t *testing.T) {
 }
 
 func TestLoggerMasking(t *testing.T) {
-	// Test cases
 	testCases := []struct {
 		name           string
-		maskingEnabled string
 		maskingFields  string
 		expectedFields []string
 	}{
@@ -181,34 +179,21 @@ func TestLoggerMasking(t *testing.T) {
 		},
 	}
 
-	// Iterate over test cases
-	for _, tc := range testCases {
+	for i, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			// Create a mock configuration
 			mockConfig := config.NewMockConfig(map[string]string{
 				"LOGGER_MASKING_FIELDS": tc.maskingFields,
 				"LOG_LEVEL":             "INFO",
 			})
 
-			// Create a new container using the mock configuration
 			c := NewContainer(mockConfig)
-
-			// Get the logger from the container
 			logger := c.Logger
-
-			// Get the actual masking fields from the logger
 			actualFields := logger.GetMaskingFilters()
 
-			// Compare the lengths of the actual fields and expected fields
-			if len(actualFields) != len(tc.expectedFields) {
-				t.Errorf("Expected masking fields length: %d, but got: %d", len(tc.expectedFields), len(actualFields))
-			}
+			assert.Equal(t, len(tc.expectedFields), len(actualFields), "TEST[%d], Failed.\n%s", i, tc.name)
 
-			// Compare the actual fields with the expected fields
 			for i := range actualFields {
-				if actualFields[i] != tc.expectedFields[i] {
-					t.Errorf("Expected masking field: %s, but got: %s", tc.expectedFields[i], actualFields[i])
-				}
+				assert.Equal(t, tc.expectedFields[i], actualFields[i], "TEST[%d], Failed.\n%s", i, tc.name)
 			}
 		})
 	}
