@@ -1,6 +1,7 @@
 package remotelogger
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -8,6 +9,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/mock/gomock"
 
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/service"
@@ -49,7 +51,13 @@ func TestDynamicLoggerSuccess(t *testing.T) {
 func Test_fetchAndUpdateLogLevel_ErrorCases(t *testing.T) {
 	logger := logging.NewMockLogger(logging.INFO)
 
-	remoteService := service.NewHTTPService("http://", logger, nil)
+	ctrl := gomock.NewController(t)
+	mockMetrics := service.NewMockMetrics(ctrl)
+
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_http_service_response", gomock.Any(), "path", gomock.Any(),
+		"method", http.MethodGet, "status", fmt.Sprintf("%v", http.StatusInternalServerError))
+
+	remoteService := service.NewHTTPService("http://", logger, mockMetrics)
 
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

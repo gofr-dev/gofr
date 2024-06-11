@@ -3,6 +3,8 @@ package main
 import (
 	"bytes"
 	"context"
+	"fmt"
+	"go.uber.org/mock/gomock"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -74,7 +76,13 @@ func TestHTTPHandlerURLError(t *testing.T) {
 	ctx := &gofr.Context{Context: context.Background(),
 		Request: gofrReq, Container: &container.Container{Logger: logger}}
 
-	ctx.Container.Services = map[string]service.HTTP{"cat-facts": service.NewHTTPService("http://invalid", ctx.Logger, nil)}
+	ctrl := gomock.NewController(t)
+	mockMetrics := service.NewMockMetrics(ctrl)
+
+	mockMetrics.EXPECT().RecordHistogram(ctx, "app_http_service_response", gomock.Any(), "path", gomock.Any(),
+		"method", http.MethodGet, "status", fmt.Sprintf("%v", http.StatusInternalServerError))
+
+	ctx.Container.Services = map[string]service.HTTP{"cat-facts": service.NewHTTPService("http://invalid", ctx.Logger, mockMetrics)}
 
 	resp, err := Handler(ctx)
 
