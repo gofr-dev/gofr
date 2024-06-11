@@ -29,6 +29,7 @@ GoFr supports level-based logging with the PrettyPrint interface.
 New datasources should implement logging with the following levels:
 - DEBUG: Logs connection attempts with critical details.
 - INFO: Logs successful connection establishment.
+- WARN: Logs connection retrying
 
 > Additional logs can be added to enhance debugging and improving user experience.
 
@@ -46,7 +47,7 @@ All logs should include:
 
 ## Implementing New Datasources
 
-GoFr offers built-in support for popular datasources like SQL (MySQL, PostgreSQL), Redis, and Pub/Sub (MQTT, Kafka, Google as backend). Including additional functionalities within the core GoFr binary would increase the application size unnecessarily.
+GoFr offers built-in support for popular datasources like SQL (MySQL, PostgreSQL, SQLite), Redis, and Pub/Sub (MQTT, Kafka, Google as backend). Including additional functionalities within the core GoFr binary would increase the application size unnecessarily.
 
 Therefore, GoFr utilizes a pluggable approach for new datasources by separating implementation in the following way:
 
@@ -73,6 +74,8 @@ Therefore, GoFr utilizes a pluggable approach for new datasources by separating 
 | MySQL      | ✅            | ✅    | ✅       | ✅      |           |
 | REDIS      | ✅            | ✅    | ✅       | ✅      |           |
 | PostgreSQL | ✅            | ✅    | ✅       | ✅      |           |
-| MongoDB    |              |      |         |        | ✅         |
+| MongoDB    | ✅            | ✅    | ✅       |        | ✅         |
+| SQLite     | ✅            | ✅    | ✅       | ✅      |           |
+| Cassandra  | ✅            | ✅    | ✅       |        | ✅         | 
 
-> Following list has to be update when PR for new Datasource is being created.
+

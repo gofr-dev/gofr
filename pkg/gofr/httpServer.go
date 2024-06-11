@@ -7,17 +7,32 @@ import (
 
 	"gofr.dev/pkg/gofr/container"
 	gofrHTTP "gofr.dev/pkg/gofr/http"
+	"gofr.dev/pkg/gofr/http/middleware"
+	"gofr.dev/pkg/gofr/websocket"
 )
 
 type httpServer struct {
 	router *gofrHTTP.Router
 	port   int
+	ws     *websocket.Manager
 }
 
-func newHTTPServer(c *container.Container, port int) *httpServer {
+func newHTTPServer(c *container.Container, port int, middlewareConfigs map[string]string) *httpServer {
+	r := gofrHTTP.NewRouter()
+	wsManager := websocket.New()
+
+	r.Use(
+		middleware.WSHandlerUpgrade(c, wsManager),
+		middleware.Tracer,
+		middleware.Logging(c.Logger),
+		middleware.CORS(middlewareConfigs, r.RegisteredRoutes),
+		middleware.Metrics(c.Metrics()),
+	)
+
 	return &httpServer{
-		router: gofrHTTP.NewRouter(c),
+		router: r,
 		port:   port,
+		ws:     wsManager,
 	}
 }
 

@@ -1,13 +1,17 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"sync"
 	"time"
 
 	"github.com/redis/go-redis/v9"
+
 	"gofr.dev/pkg/gofr"
+	"gofr.dev/pkg/gofr/datasource"
 )
 
 func main() {
@@ -45,7 +49,7 @@ func ErrorHandler(c *gofr.Context) (interface{}, error) {
 func RedisHandler(c *gofr.Context) (interface{}, error) {
 	val, err := c.Redis.Get(c, "test").Result()
 	if err != nil && err != redis.Nil { // If key is not found, we are not considering this an error and returning "".
-		return nil, err
+		return nil, datasource.ErrorDB{Err: err, Message: "error from redis db"}
 	}
 
 	return val, nil
@@ -56,7 +60,7 @@ func TraceHandler(c *gofr.Context) (interface{}, error) {
 
 	span2 := c.Trace("some-sample-work")
 	<-time.After(time.Millisecond * 1) //nolint:wsl    // Waiting for 1ms to simulate workload
-	span2.End()
+	defer span2.End()
 
 	// Ping redis 5 times concurrently and wait.
 	count := 5
@@ -77,12 +81,28 @@ func TraceHandler(c *gofr.Context) (interface{}, error) {
 		return nil, err
 	}
 
-	return resp, nil
+	defer resp.Body.Close()
+
+	var data = struct {
+		Data interface{} `json:"data"`
+	}{}
+
+	b, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	_ = json.Unmarshal(b, &data)
+
+	return data.Data, nil
 }
 
 func MysqlHandler(c *gofr.Context) (interface{}, error) {
 	var value int
 	err := c.SQL.QueryRowContext(c, "select 2+2").Scan(&value)
+	if err != nil {
+		return nil, datasource.ErrorDB{Err: err, Message: "error from sql db"}
+	}
 
-	return value, err
+	return value, nil
 }

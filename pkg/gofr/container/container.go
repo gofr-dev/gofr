@@ -4,8 +4,10 @@ import (
 	"strconv"
 	"strings"
 
+	_ "github.com/go-sql-driver/mysql" // This is required to be blank import
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/datasource"
+	"gofr.dev/pkg/gofr/datasource/file"
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 	"gofr.dev/pkg/gofr/datasource/pubsub/google"
 	"gofr.dev/pkg/gofr/datasource/pubsub/kafka"
@@ -18,8 +20,6 @@ import (
 	"gofr.dev/pkg/gofr/metrics/exporters"
 	"gofr.dev/pkg/gofr/service"
 	"gofr.dev/pkg/gofr/version"
-
-	_ "github.com/go-sql-driver/mysql" // This is required to be blank import
 )
 
 // Container is a collection of all common application level concerns. Things like Logger, Connection Pool for Redis
@@ -36,7 +36,11 @@ type Container struct {
 
 	Redis Redis
 	SQL   DB
-	Mongo datasource.Mongo
+
+	Cassandra datasource.Cassandra
+	Mongo     datasource.Mongo
+
+	File datasource.FileSystem
 }
 
 func NewContainer(conf config.Config) *Container {
@@ -90,12 +94,18 @@ func (c *Container) Create(conf config.Config) {
 		if conf.Get("PUBSUB_BROKER") != "" {
 			partition, _ := strconv.Atoi(conf.GetOrDefault("PARTITION_SIZE", "0"))
 			offSet, _ := strconv.Atoi(conf.GetOrDefault("PUBSUB_OFFSET", "-1"))
+			batchSize, _ := strconv.Atoi(conf.GetOrDefault("KAFKA_BATCH_SIZE", strconv.Itoa(kafka.DefaultBatchSize)))
+			batchBytes, _ := strconv.Atoi(conf.GetOrDefault("KAFKA_BATCH_BYTES", strconv.Itoa(kafka.DefaultBatchBytes)))
+			batchTimeout, _ := strconv.Atoi(conf.GetOrDefault("KAFKA_BATCH_TIMEOUT", strconv.Itoa(kafka.DefaultBatchTimeout)))
 
 			c.PubSub = kafka.New(kafka.Config{
 				Broker:          conf.Get("PUBSUB_BROKER"),
 				Partition:       partition,
 				ConsumerGroupID: conf.Get("CONSUMER_ID"),
 				OffSet:          offSet,
+				BatchSize:       batchSize,
+				BatchBytes:      batchBytes,
+				BatchTimeout:    batchTimeout,
 			}, c.Logger, c.metricsManager)
 		}
 	case "GOOGLE":
@@ -131,6 +141,8 @@ func (c *Container) Create(conf config.Config) {
 
 		c.PubSub = mqtt.New(configs, c.Logger, c.metricsManager)
 	}
+
+	c.File = file.New(c.Logger)
 }
 
 func (c *Container) createLogger(conf config.Config) {
@@ -158,8 +170,8 @@ func (c *Container) createLogger(conf config.Config) {
 	c.Debug("Container is being created")
 }
 
-// GetHTTPService returns registered http services.
-// HTTP services are registered from AddHTTPService method of gofr object.
+// GetHTTPService returns registered HTTP services.
+// HTTP services are registered from AddHTTPService method of GoFr object.
 func (c *Container) GetHTTPService(serviceName string) service.HTTP {
 	return c.Services[serviceName]
 }
@@ -177,18 +189,18 @@ func (c *Container) registerFrameworkMetrics() {
 	c.Metrics().NewGauge("app_go_numGC", "Number of completed Garbage Collector cycles.")
 	c.Metrics().NewGauge("app_go_sys", "Number of total bytes of memory.")
 
-	{ // http metrics
+	{ // HTTP metrics
 		httpBuckets := []float64{.001, .003, .005, .01, .02, .03, .05, .1, .2, .3, .5, .75, 1, 2, 3, 5, 10, 30}
-		c.Metrics().NewHistogram("app_http_response", "Response time of http requests in seconds.", httpBuckets...)
-		c.Metrics().NewHistogram("app_http_service_response", "Response time of http service requests in seconds.", httpBuckets...)
+		c.Metrics().NewHistogram("app_http_response", "Response time of HTTP requests in seconds.", httpBuckets...)
+		c.Metrics().NewHistogram("app_http_service_response", "Response time of HTTP service requests in seconds.", httpBuckets...)
 	}
 
-	{ // redis metrics
+	{ // Redis metrics
 		redisBuckets := []float64{.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 1.25, 1.5, 2, 2.5, 3}
 		c.Metrics().NewHistogram("app_redis_stats", "Response time of Redis commands in milliseconds.", redisBuckets...)
 	}
 
-	{ // sql metrics
+	{ // SQL metrics
 		sqlBuckets := []float64{.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 4, 5, 7.5, 10}
 		c.Metrics().NewHistogram("app_sql_stats", "Response time of SQL queries in milliseconds.", sqlBuckets...)
 		c.Metrics().NewGauge("app_sql_open_connections", "Number of open SQL connections.")

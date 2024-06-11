@@ -1,8 +1,25 @@
 # Middleware in GoFr
 
-Middleware allows you to intercept and manipulate HTTP requests and responses flowing through your application's 
-router. Middlewares can perform tasks such as authentication, authorization, caching etc. before 
+Middleware allows you intercepting and manipulating HTTP requests and responses flowing through your application's
+router. Middlewares can perform tasks such as authentication, authorization, caching etc. before
 or after the request reaches your application's handler.
+
+## CORS Middleware in GoFr
+GoFr includes built-in CORS (Cross-Origin Resource Sharing) middleware to handle CORS-related headers. 
+This middleware allows you to control access to your API from different origins. It automatically adds the necessary
+headers to responses, allowing or restricting cross-origin requests. User can also override the default response headers
+sent by GoFr by providing the suitable CORS configs.
+
+The CORS middleware provides the following overridable configs:
+
+- `ACCESS_CONTROL_ALLOW_ORIGIN`: Set the allowed origin(s) for cross-origin requests. By default, it allows all origins (*).
+- `ACCESS_CONTROL_ALLOW_HEADERS`: Define the allowed request headers (e.g., Authorization, Content-Type).
+- `ACCESS_CONTROL_ALLOW_CREDENTIALS`: Set to true to allow credentials (cookies, HTTP authentication) in requests.
+- `ACCESS_CONTROL_EXPOSE_HEADERS`: Specify additional headers exposed to the client.
+- `ACCESS_CONTROL_MAX_AGE`: Set the maximum time (in seconds) for preflight request caching.
+
+> Note: GoFr automatically interprets the registered route methods and based on that sets the value of `ACCESS_CONTROL_ALLOW_METHODS`
+
 
 ## Adding Custom Middleware in GoFr
 

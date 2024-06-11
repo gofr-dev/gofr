@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gorilla/mux"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/exporters/zipkin"
@@ -17,12 +18,10 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
-
 	"google.golang.org/grpc"
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
-	"gofr.dev/pkg/gofr/datasource"
 	gofrHTTP "gofr.dev/pkg/gofr/http"
 	"gofr.dev/pkg/gofr/http/middleware"
 	"gofr.dev/pkg/gofr/logging"
@@ -31,7 +30,7 @@ import (
 	"gofr.dev/pkg/gofr/service"
 )
 
-// App is the main application in the gofr framework.
+// App is the main application in the GoFr framework.
 type App struct {
 	// Config can be used by applications to fetch custom configurations from environment or file.
 	Config config.Config // If we directly embed, unnecessary confusion between app.Get and app.GET will happen.
@@ -40,8 +39,7 @@ type App struct {
 	httpServer   *httpServer
 	metricServer *metricServer
 
-	cmd *cmd
-
+	cmd  *cmd
 	cron *Crontab
 
 	// container is unexported because this is an internal implementation and applications are provided access to it via Context
@@ -53,7 +51,7 @@ type App struct {
 	subscriptionManager SubscriptionManager
 }
 
-// RegisterService adds a grpc service to the gofr application.
+// RegisterService adds a gRPC service to the GoFr application.
 func (a *App) RegisterService(desc *grpc.ServiceDesc, impl interface{}) {
 	a.container.Logger.Infof("registering GRPC Server: %s", desc.ServiceName)
 	a.grpcServer.server.RegisterService(desc, impl)
@@ -82,7 +80,7 @@ func New() *App {
 		port = defaultHTTPPort
 	}
 
-	app.httpServer = newHTTPServer(app.container, port)
+	app.httpServer = newHTTPServer(app.container, port, middleware.GetConfigs(app.Config))
 
 	// GRPC Server
 	port, err = strconv.Atoi(app.Config.Get("GRPC_PORT"))
@@ -97,22 +95,20 @@ func New() *App {
 	return app
 }
 
-// NewCMD creates a command line application.
+// NewCMD creates a command-line application.
 func NewCMD() *App {
 	app := &App{}
 	app.readConfig(true)
-
 	app.container = container.NewContainer(nil)
 	app.container.Logger = logging.NewFileLogger(app.Config.Get("CMD_LOGS_FILE"))
 	app.cmd = &cmd{}
-
 	app.container.Create(app.Config)
 	app.initTracer()
 
 	return app
 }
 
-// Run starts the application. If it is a HTTP server, it will start the server.
+// Run starts the application. If it is an HTTP server, it will start the server.
 func (a *App) Run() {
 	if a.cmd != nil {
 		a.cmd.Run(a.container)
@@ -121,7 +117,7 @@ func (a *App) Run() {
 	wg := sync.WaitGroup{}
 
 	// Start Metrics Server
-	// running metrics server before http and grpc
+	// running metrics server before HTTP and gRPC
 	wg.Add(1)
 
 	go func(m *metricServer) {
@@ -148,6 +144,21 @@ func (a *App) Run() {
 			function:  catchAllHandler,
 			container: a.container,
 		})
+
+		var registeredMethods []string
+
+		_ = a.httpServer.router.Walk(func(route *mux.Route, _ *mux.Router, _ []*mux.Route) error {
+			met, _ := route.GetMethods()
+			for _, method := range met {
+				if !contains(registeredMethods, method) { // Check for uniqueness before adding
+					registeredMethods = append(registeredMethods, method)
+				}
+			}
+
+			return nil
+		})
+
+		*a.httpServer.router.RegisteredRoutes = registeredMethods
 
 		go func(s *httpServer) {
 			defer wg.Done()
@@ -207,36 +218,38 @@ func (a *App) AddHTTPService(serviceName, serviceAddress string, options ...serv
 	a.container.Services[serviceName] = service.NewHTTPService(serviceAddress, a.container.Logger, a.container.Metrics(), options...)
 }
 
-// GET adds a Handler for http GET method for a route pattern.
+// GET adds a Handler for HTTP GET method for a route pattern.
 func (a *App) GET(pattern string, handler Handler) {
 	a.add("GET", pattern, handler)
 }
 
-// PUT adds a Handler for http PUT method for a route pattern.
+// PUT adds a Handler for HTTP PUT method for a route pattern.
 func (a *App) PUT(pattern string, handler Handler) {
 	a.add("PUT", pattern, handler)
 }
 
-// POST adds a Handler for http POST method for a route pattern.
+// POST adds a Handler for HTTP POST method for a route pattern.
 func (a *App) POST(pattern string, handler Handler) {
 	a.add("POST", pattern, handler)
 }
 
-// DELETE adds a Handler for http DELETE method for a route pattern.
+// DELETE adds a Handler for HTTP DELETE method for a route pattern.
 func (a *App) DELETE(pattern string, handler Handler) {
 	a.add("DELETE", pattern, handler)
 }
 
-// PATCH adds a Handler for http PATCH method for a route pattern.
+// PATCH adds a Handler for HTTP PATCH method for a route pattern.
 func (a *App) PATCH(pattern string, handler Handler) {
 	a.add("PATCH", pattern, handler)
 }
 
 func (a *App) add(method, pattern string, h Handler) {
 	a.httpRegistered = true
+
 	a.httpServer.router.Add(method, pattern, handler{
-		function:  h,
-		container: a.container,
+		function:       h,
+		container:      a.container,
+		requestTimeout: a.Config.Get("REQUEST_TIMEOUT"),
 	})
 }
 
@@ -250,8 +263,8 @@ func (a *App) Logger() logging.Logger {
 
 // SubCommand adds a sub-command to the CLI application.
 // Can be used to create commands like "kubectl get" or "kubectl get ingress".
-func (a *App) SubCommand(pattern string, handler Handler) {
-	a.cmd.addRoute(pattern, handler)
+func (a *App) SubCommand(pattern string, handler Handler, options ...Options) {
+	a.cmd.addRoute(pattern, handler, options...)
 }
 
 func (a *App) Migrate(migrationsMap map[int64]migration.Migrate) {
@@ -299,7 +312,7 @@ func (a *App) initTracer() {
 		case traceExporterGoFr:
 			exporter = NewExporter("https://tracer-api.gofr.dev/api/spans", logging.NewLogger(logging.INFO))
 
-			a.container.Log("Exporting traces to gofr at https://tracer.gofr.dev")
+			a.container.Log("Exporting traces to GoFr at https://tracer.gofr.dev")
 		default:
 			a.container.Error("unsupported trace exporter.")
 		}
@@ -375,9 +388,7 @@ func (a *App) AddRESTHandlers(object interface{}) error {
 		return err
 	}
 
-	e := entity{cfg.name, cfg.entityType, cfg.primaryKey}
-
-	a.registerCRUDHandlers(e, object)
+	a.registerCRUDHandlers(cfg, object)
 
 	return nil
 }
@@ -385,10 +396,6 @@ func (a *App) AddRESTHandlers(object interface{}) error {
 // UseMiddleware is a setter method for adding user defined custom middleware to GoFr's router.
 func (a *App) UseMiddleware(middlewares ...gofrHTTP.Middleware) {
 	a.httpServer.router.UseMiddleware(middlewares...)
-}
-
-func (a *App) UseMongo(db datasource.Mongo) {
-	a.container.Mongo = db
 }
 
 // AddCronJob registers a cron job to the cron table, the schedule is in * * * * * (6 part) format
@@ -401,4 +408,15 @@ func (a *App) AddCronJob(schedule, jobName string, job CronFunc) {
 	if err := a.cron.AddJob(schedule, jobName, job); err != nil {
 		a.Logger().Errorf("error adding cron job, err : %v", err)
 	}
+}
+
+// contains is a helper function checking for duplicate entry in a slice.
+func contains(elems []string, v string) bool {
+	for _, s := range elems {
+		if v == s {
+			return true
+		}
+	}
+
+	return false
 }
