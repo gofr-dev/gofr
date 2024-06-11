@@ -413,7 +413,7 @@ func (a *App) AddCronJob(schedule, jobName string, job CronFunc) {
 }
 
 func (a *App) OverrideWebsocketUpgrader(wsUpgrader websocket.Upgrader) {
-	a.httpServer.WebSocketUpgrader.Upgrader = wsUpgrader
+	a.httpServer.ws.WebSocketUpgrader.Upgrader = wsUpgrader
 }
 
 // WebSocket registers a handler function for a WebSocket route. This method allows you to define a route handler for
@@ -423,13 +423,14 @@ func (a *App) WebSocket(route string, handler Handler) {
 	a.GET(route, func(ctx *Context) (interface{}, error) {
 		connID := ctx.Request.Context().Value(websocket.WSConnectionKey).(string)
 
-		conn := a.httpServer.GetWebsocketConnection(connID)
+		conn := a.httpServer.ws.GetWebsocketConnection(connID)
 		if conn.Conn == nil {
 			return nil, websocket.ErrorConnection
 		}
 
 		ctx.Request = conn
-		defer conn.Close()
+
+		defer a.httpServer.ws.CloseConnection(connID)
 
 		handleWebSocketConnection(ctx, conn, handler)
 

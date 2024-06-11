@@ -14,19 +14,15 @@ import (
 type httpServer struct {
 	router *gofrHTTP.Router
 	port   int
-	websocket.Manager
+	ws     *websocket.Manager
 }
 
 func newHTTPServer(c *container.Container, port int, middlewareConfigs map[string]string) *httpServer {
 	r := gofrHTTP.NewRouter()
-	webSocketUpgrader := *websocket.NewWSUpgrader()
-	websocketConnection := make(map[string]*websocket.Connection)
+	wsManager := websocket.New()
 
 	r.Use(
-		middleware.WSHandlerUpgrade(c, &websocket.Manager{
-			WebSocketUpgrader:    webSocketUpgrader,
-			WebSocketConnections: websocketConnection,
-		}),
+		middleware.WSHandlerUpgrade(c, wsManager),
 		middleware.Tracer,
 		middleware.Logging(c.Logger),
 		middleware.CORS(middlewareConfigs, r.RegisteredRoutes),
@@ -36,10 +32,7 @@ func newHTTPServer(c *container.Container, port int, middlewareConfigs map[strin
 	return &httpServer{
 		router: r,
 		port:   port,
-		Manager: websocket.Manager{
-			WebSocketUpgrader:    webSocketUpgrader,
-			WebSocketConnections: websocketConnection,
-		},
+		ws:     wsManager,
 	}
 }
 

@@ -15,18 +15,14 @@ import (
 
 var errConnection = errors.New("can't create connection")
 
-func initializeWebSocketMocks(t *testing.T) (gofrWebSocket.MockUpgrader, gofrWebSocket.Manager) {
+func initializeWebSocketMocks(t *testing.T) (gofrWebSocket.MockUpgrader, *gofrWebSocket.Manager) {
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()
 
 	mockUpgrader := gofrWebSocket.NewMockUpgrader(mockCtrl)
 
-	wsManager := gofrWebSocket.Manager{
-		WebSocketUpgrader: gofrWebSocket.WSUpgrader{
-			Upgrader: mockUpgrader,
-		},
-		WebSocketConnections: make(map[string]*gofrWebSocket.Connection),
-	}
+	wsManager := gofrWebSocket.New()
+	wsManager.WebSocketUpgrader = &gofrWebSocket.WSUpgrader{Upgrader: mockUpgrader}
 
 	return *mockUpgrader, wsManager
 }
@@ -38,7 +34,7 @@ func TestWSConnectionCreate_Error(t *testing.T) {
 	mockUpgrader.EXPECT().Upgrade(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil,
 		errConnection).Times(1)
 
-	handler := WSHandlerUpgrade(mockContainer, &wsManager)(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
+	handler := WSHandlerUpgrade(mockContainer, wsManager)(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
 	}))
 
 	// Create a test request with incomplete upgrade header
@@ -66,7 +62,7 @@ func Test_WSConnectionCreate_Success(t *testing.T) {
 
 	mockUpgrader.EXPECT().Upgrade(gomock.Any(), gomock.Any(), gomock.Any()).Return(mockConn.Conn, nil).Times(1)
 
-	middleware := WSHandlerUpgrade(mockContainer, &wsManager)
+	middleware := WSHandlerUpgrade(mockContainer, wsManager)
 
 	innerHandler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
