@@ -9,7 +9,7 @@
   No PR should ever decrease the overall code coverage.
 * Once your code changes are done along with the testcases, submit a PR to development branch. Please note that all PRs
   are merged from feature branches to development first.
-* All PRs need to be reviewed by at least 2 Gofr developers. They might reach out to you for any clarfication.
+* All PRs need to be reviewed by at least 2 Gofr developers. They might reach out to you for any clarification.
 * Thank you for your contribution. :)
 
 ### GoFr Testing Policy:
@@ -107,7 +107,7 @@ Please note that the recommended local port for the services are different than 
 * When you consider a new documentation page is needed, start by adding a new file and writing your new documentation. Then - add a reference to it in [navigation.js](https://gofr.dev/docs/navigation.js).
 * If needed, update or add proper code examples for your changes.
 * In case images are needed, add it to [docs/public](https://gofr.dev/docs/public) folder.
-* Make sure you don't break existing links and refernces.
+* Make sure you don't break existing links and references.
 * Maintain Markdown standards, you can read more [here](https://www.markdownguide.org/basic-syntax/), this includes:
     - Headings (`#`, `##`, etc.) should be placed in order.
     - Use trailing white space or the <br> HTML tag at the end of the line.

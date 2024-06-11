@@ -64,24 +64,74 @@ func (f *MaskingFilter) Filter(message interface{}) interface{} {
 		val = val.Elem()
 	}
 
-	// If the message is not a struct, return the original message
-	if val.Kind() != reflect.Struct {
+	// Handle slices and structs differently
+	//nolint:exhaustive // This switch statement is intentionally not exhaustive to handle only the relevant cases
+	switch val.Kind() {
+	case reflect.Slice:
+		// Create a new slice to store the filtered elements
+		newSlice := reflect.MakeSlice(val.Type(), val.Len(), val.Len())
+
+		// Iterate over the slice elements and filter each element
+		for i := 0; i < val.Len(); i++ {
+			elem := val.Index(i)
+			filteredElem := f.filterElement(elem)
+			newSlice.Index(i).Set(reflect.ValueOf(filteredElem))
+		}
+
+		return newSlice.Interface()
+
+	case reflect.Struct:
+		// Create a new copy of the struct value
+		newVal := reflect.New(val.Type()).Elem()
+		newVal.Set(val)
+
+		// Recursively filter the struct fields
+		f.filterFields(newVal)
+
+		// If the original message was a pointer, return a pointer to the new value
+		if message != nil && reflect.TypeOf(message).Kind() == reflect.Ptr {
+			return newVal.Addr().Interface()
+		}
+
+		return newVal.Interface()
+
+	default:
+		// For other types, return the original message
 		return message
 	}
+}
 
-	// Create a new copy of the struct value
-	newVal := reflect.New(val.Type()).Elem()
-	newVal.Set(val)
-
-	// Recursively filter the struct fields
-	f.filterFields(newVal)
-
-	// If the original message was a pointer, return a pointer to the new value
-	if message != nil && reflect.TypeOf(message).Kind() == reflect.Ptr {
-		return newVal.Addr().Interface()
+func (f *MaskingFilter) filterElement(val reflect.Value) interface{} {
+	// If the element is a pointer, get the underlying value
+	if val.Kind() == reflect.Ptr {
+		val = val.Elem()
 	}
 
-	return newVal.Interface()
+	// Handle interfaces, structs, and other types differently
+	//nolint:exhaustive // This switch statement is intentionally not exhaustive to handle only the relevant cases
+	switch val.Kind() {
+	case reflect.Interface:
+		// Get the underlying value of the interface
+		underlyingVal := val.Elem()
+		// Recursively filter the underlying value
+		filteredVal := f.filterElement(underlyingVal)
+
+		return filteredVal
+
+	case reflect.Struct:
+		// Create a new copy of the struct value
+		newVal := reflect.New(val.Type()).Elem()
+		newVal.Set(val)
+
+		// Recursively filter the struct fields
+		f.filterFields(newVal)
+
+		return newVal.Interface()
+
+	default:
+		// For other types, return the original element
+		return val.Interface()
+	}
 }
 
 func (f *MaskingFilter) filterFields(val reflect.Value) {
