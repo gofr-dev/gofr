@@ -4,6 +4,7 @@ import (
 	"strconv"
 	"strings"
 
+	_ "github.com/go-sql-driver/mysql" // This is required to be blank import
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/datasource/file"
@@ -19,9 +20,6 @@ import (
 	"gofr.dev/pkg/gofr/metrics/exporters"
 	"gofr.dev/pkg/gofr/service"
 	"gofr.dev/pkg/gofr/version"
-	"gofr.dev/pkg/gofr/websocket"
-
-	_ "github.com/go-sql-driver/mysql" // This is required to be blank import
 )
 
 // Container is a collection of all common application level concerns. Things like Logger, Connection Pool for Redis
@@ -43,9 +41,6 @@ type Container struct {
 	Mongo     datasource.Mongo
 
 	File datasource.FileSystem
-
-	WebSocketConnections map[string]*websocket.Connection
-	WebSocketUpgrader    websocket.WSUpgrader
 }
 
 func NewContainer(conf config.Config) *Container {
@@ -80,8 +75,6 @@ func (c *Container) Create(conf config.Config) {
 	c.Debug("Container is being created")
 
 	c.metricsManager = metrics.NewMetricsManager(exporters.Prometheus(c.appName, c.appVersion), c.Logger)
-
-	c.WebSocketConnections = make(map[string]*websocket.Connection)
 
 	// Register framework metrics
 	c.registerFrameworkMetrics()
@@ -208,8 +201,4 @@ func (c *Container) GetPublisher() pubsub.Publisher {
 
 func (c *Container) GetSubscriber() pubsub.Subscriber {
 	return c.PubSub
-}
-
-func (c *Container) GetWebsocketConnection(connID string) *websocket.Connection {
-	return c.WebSocketConnections[connID]
 }

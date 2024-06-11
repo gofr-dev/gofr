@@ -17,6 +17,11 @@ type Connection struct {
 	*websocket.Conn
 }
 
+type Manager struct {
+	WebSocketUpgrader    WSUpgrader
+	WebSocketConnections map[string]*Connection
+}
+
 var ErrorConnection = errors.New("couldn't establish connection to web socket")
 
 // The message types are defined in RFC 6455, section 11.8.
@@ -75,4 +80,8 @@ func (w *Connection) HostName() string {
 
 func (u *WSUpgrader) Upgrade(w http.ResponseWriter, r *http.Request, responseHeader http.Header) (*websocket.Conn, error) {
 	return u.Upgrader.Upgrade(w, r, responseHeader)
+}
+
+func (ws *Manager) GetWebsocketConnection(connID string) *Connection {
+	return ws.WebSocketConnections[connID]
 }

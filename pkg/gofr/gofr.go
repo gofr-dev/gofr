@@ -84,8 +84,6 @@ func New() *App {
 
 	app.httpServer = newHTTPServer(app.container, port, middleware.GetConfigs(app.Config))
 
-	app.container.WebSocketUpgrader.Upgrader = websocket.NewWSUpgrader()
-
 	// GRPC Server
 	port, err = strconv.Atoi(app.Config.Get("GRPC_PORT"))
 	if err != nil || port <= 0 {
@@ -415,7 +413,7 @@ func (a *App) AddCronJob(schedule, jobName string, job CronFunc) {
 }
 
 func (a *App) OverrideWebsocketUpgrader(wsUpgrader websocket.Upgrader) {
-	a.container.WebSocketUpgrader.Upgrader = wsUpgrader
+	a.httpServer.WebSocketUpgrader.Upgrader = wsUpgrader
 }
 
 // WebSocket registers a handler function for a WebSocket route. This method allows you to define a route handler for
@@ -425,7 +423,7 @@ func (a *App) WebSocket(route string, handler Handler) {
 	a.GET(route, func(ctx *Context) (interface{}, error) {
 		connID := ctx.Request.Context().Value(websocket.WSConnectionKey).(string)
 
-		conn := ctx.Container.GetWebsocketConnection(connID)
+		conn := a.httpServer.GetWebsocketConnection(connID)
 		if conn.Conn == nil {
 			return nil, websocket.ErrorConnection
 		}

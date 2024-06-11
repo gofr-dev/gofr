@@ -22,7 +22,6 @@ import (
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/migration"
 	"gofr.dev/pkg/gofr/testutil"
-	gofrWebSocket "gofr.dev/pkg/gofr/websocket"
 )
 
 const helloWorld = "Hello World!"
@@ -521,12 +520,6 @@ func Test_WebSocket_Success(t *testing.T) {
 	t.Setenv("HTTP_PORT", "8002")
 
 	app := New()
-
-	mockContainer, _ := container.NewMockContainer(t)
-	mockContainer.WebSocketConnections = make(map[string]*gofrWebSocket.Connection)
-	mockContainer.WebSocketUpgrader = gofrWebSocket.WSUpgrader{
-		Upgrader: &websocket.Upgrader{},
-	}
 
 	server := httptest.NewServer(app.httpServer.router)
 	defer server.Close()
