@@ -426,7 +426,9 @@ func (a *App) OverrideWebsocketUpgrader(wsUpgrader websocket.Upgrader) {
 // within the handler context. User can access the underlying WebSocket connection using `ctx.GetWebsocketConnection()`.
 func (a *App) WebSocket(route string, handler Handler) {
 	a.GET(route, func(ctx *Context) (interface{}, error) {
-		conn := ctx.GetWebsocketConnection()
+		connID := ctx.Request.Context().Value("connID").(string)
+
+		conn := ctx.Container.GetWebsocketConnection(connID)
 		if conn.Conn == nil {
 			return nil, websocket.ErrorConnection
 		}

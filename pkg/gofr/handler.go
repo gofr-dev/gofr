@@ -43,8 +43,10 @@ type handler struct {
 func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	c := newContext(gofrHTTP.NewResponder(w, r.Method), gofrHTTP.NewRequest(r), h.container)
 
-	var ctx context.Context
-	var cancel context.CancelFunc
+	var (
+		ctx    context.Context
+		cancel context.CancelFunc
+	)
 
 	if websocket.IsWebSocketUpgrade(r) {
 		// If the request is a WebSocket upgrade, do not apply the timeout
@@ -52,6 +54,7 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	} else {
 		// Apply the timeout for normal HTTP requests
 		reqTimeout := h.setContextTimeout(h.requestTimeout)
+
 		ctx, cancel = context.WithTimeout(r.Context(), time.Duration(reqTimeout)*time.Second)
 		defer cancel()
 	}

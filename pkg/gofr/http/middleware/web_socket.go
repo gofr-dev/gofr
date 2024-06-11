@@ -1,6 +1,9 @@
 package middleware
 
 import (
+	"context"
+	"github.com/google/uuid"
+	"gofr.dev/pkg/gofr/websocket"
 	"net/http"
 
 	gorillaWebsocket "github.com/gorilla/websocket"
@@ -20,10 +23,20 @@ func WSHandlerUpgrade(c *container.Container) func(inner http.Handler) http.Hand
 					return
 				}
 
-				c.WebsocketConnection.Conn = conn
+				connID := generateConnectionID(r)
+				c.WebSocketConnections[connID] = &websocket.Connection{Conn: conn}
+
+				ctx := context.WithValue(r.Context(), "connID", connID)
+				r = r.WithContext(ctx)
 			}
 
 			inner.ServeHTTP(w, r)
 		})
 	}
+}
+
+func generateConnectionID(r *http.Request) string {
+	// Implement your logic to generate a unique connection ID (e.g., using a UUID or a hash)
+	return uuid.New().String()
+
 }

@@ -40,8 +40,8 @@ type Container struct {
 	Mongo     datasource.Mongo
 	Cassandra datasource.Cassandra
 
-	WebsocketConnection *websocket.Connection
-	WebSocketUpgrader   websocket.WSUpgrader
+	WebSocketConnections map[string]*websocket.Connection
+	WebSocketUpgrader    websocket.WSUpgrader
 }
 
 func NewContainer(conf config.Config) *Container {
@@ -77,7 +77,7 @@ func (c *Container) Create(conf config.Config) {
 
 	c.metricsManager = metrics.NewMetricsManager(exporters.Prometheus(c.appName, c.appVersion), c.Logger)
 
-	c.WebsocketConnection = &websocket.Connection{}
+	c.WebSocketConnections = make(map[string]*websocket.Connection)
 
 	// Register framework metrics
 	c.registerFrameworkMetrics()
@@ -204,6 +204,6 @@ func (c *Container) GetSubscriber() pubsub.Subscriber {
 	return c.PubSub
 }
 
-func (c *Container) GetWebsocketConnection() *websocket.Connection {
-	return c.WebsocketConnection
+func (c *Container) GetWebsocketConnection(connID string) *websocket.Connection {
+	return c.WebSocketConnections[connID]
 }
