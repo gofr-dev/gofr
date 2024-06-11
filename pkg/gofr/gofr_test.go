@@ -506,18 +506,13 @@ func Test_AddCronJob_Success(t *testing.T) {
 }
 
 func TestStaticHandler(t *testing.T) {
-	// Generate some files for testing
+	// Generating some files for testing
 	htmlContent := []byte("<html><head><title>Test Static File</title></head><body><p>Testing Static File</p></body></html>")
 
-	err := createPublicDirectory(t, htmlContent)
-	if err != nil {
-		return
-	}
+	createPublicDirectory(t, htmlContent)
 
-	// Application Generation
 	app := New()
 
-	// Run the Application and compare the fileType and fileSize
 	app.httpRegistered = true
 	app.httpServer.port = 8022
 
@@ -552,10 +547,10 @@ func TestStaticHandler(t *testing.T) {
 		},
 	}
 
-	for it, tc := range tests {
+	for i, tc := range tests {
 		request, err := http.NewRequestWithContext(context.Background(), tc.method, host+tc.path, http.NoBody)
 		if err != nil {
-			t.Fatalf("TEST[%d], Failed to create request. %s", it, err)
+			t.Fatalf("TEST[%d], Failed to create request, error: %s", i, err)
 		}
 
 		request.Header.Set("Content-Type", "application/json")
@@ -564,62 +559,61 @@ func TestStaticHandler(t *testing.T) {
 
 		resp, err := client.Do(request)
 		if err != nil {
-			t.Fatalf("TEST[%d], Request failed. %s", it, err)
+			t.Fatalf("TEST[%d], Request failed, error: %s", i, err)
 		}
 
 		bodyBytes, err := io.ReadAll(resp.Body)
 		if err != nil {
-			t.Fatalf("TEST[%d], Failed to read response body. %s", it, err)
+			t.Fatalf("TEST[%d], Failed to read response body, error: %s", i, err)
 		}
 
 		body := string(bodyBytes)
 
-		assert.NoError(t, err, "TEST[%d], Failed.\n%s", it, tc.desc)
-		assert.Equal(t, tc.statusCode, resp.StatusCode, "TEST[%d], Failed with Status Body.\n%s", it, tc.desc)
+		assert.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
+		assert.Equal(t, tc.statusCode, resp.StatusCode, "TEST[%d], Failed with Status Body.\n%s", i, tc.desc)
 
 		if tc.expectedBody != "" {
-			assert.Contains(t, body, tc.expectedBody, "TEST [%d], Failed with Expected Body. \n%s", it, tc.desc)
+			assert.Contains(t, body, tc.expectedBody, "TEST[%d], Failed with Expected Body.\n%s", i, tc.desc)
 		}
 
 		if tc.expectedBodyLength != 0 {
 			contentLength := resp.Header.Get("Content-Length")
-			assert.Equal(t, strconv.Itoa(tc.expectedBodyLength), contentLength, "TEST [%d], Failed at Content-Length.\n %s", it, tc.desc)
+			assert.Equal(t, strconv.Itoa(tc.expectedBodyLength), contentLength, "TEST[%d], Failed at Content-Length.\n%s", i, tc.desc)
 		}
 
 		if tc.expectedResponseHeaderType != "" {
 			assert.Equal(t,
 				tc.expectedResponseHeaderType,
 				resp.Header.Get("Content-Type"),
-				"TEST [%d], Failed at Expected Content-Type.\n%s", it, tc.desc)
+				"TEST[%d], Failed at Expected Content-Type.\n%s", i, tc.desc)
 		}
 
 		resp.Body.Close()
 	}
 }
 
-func createPublicDirectory(t *testing.T, htmlContent []byte) error {
+func createPublicDirectory(t *testing.T, htmlContent []byte) {
 	t.Helper()
 
 	directory := "./" + publicDir
 	if _, err := os.Stat(directory); err != nil {
-		if err := os.Mkdir("./"+publicDir, 0755); err != nil {
-			t.Errorf("Couldn't create a "+publicDir+" directory, error: %s", err)
-			return err
+		if err = os.Mkdir("./"+publicDir, 0755); err != nil {
+			t.Fatalf("Couldn't create a "+publicDir+" directory, error: %s", err)
 		}
 	}
 
-	file1, errFile := os.Create(directory + "/index.html")
+	file, errFile := os.Create(directory + "/index.html")
 
 	if errFile != nil {
 		t.Fatal("Couldn't create index.html file")
 	}
 
-	_, err := file1.Write(htmlContent)
+	_, err := file.Write(htmlContent)
 	if err != nil {
 		t.Fatal("Couldn't write to index.html file")
 	}
 
-	file1.Close()
+	file.Close()
 
 	t.Cleanup(func() {
 		err := os.RemoveAll(directory)
@@ -627,6 +621,4 @@ func createPublicDirectory(t *testing.T, htmlContent []byte) error {
 			t.Log("Couldn't remove " + publicDir + " folder")
 		}
 	})
-
-	return nil
 }

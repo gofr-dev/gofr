@@ -101,7 +101,7 @@ func New() *App {
 	currentWd, _ := os.Getwd()
 	checkDirectory := filepath.Join(currentWd, publicDir)
 
-	if _, err := os.Stat(checkDirectory); err == nil {
+	if _, err = os.Stat(checkDirectory); err == nil {
 		app.AddStaticFiles(publicDir, checkDirectory)
 	}
 
@@ -111,7 +111,7 @@ func New() *App {
 func (a *App) AddStaticFiles(endpoint, filePath string) {
 	a.httpRegistered = true
 
-	dupFilePath := ""
+	var dupFilePath string
 
 	if strings.HasPrefix(filePath, "./") {
 		dupFilePath, _ = os.Getwd()
@@ -123,7 +123,7 @@ func (a *App) AddStaticFiles(endpoint, filePath string) {
 	endpoint = "/" + strings.TrimPrefix(endpoint, "/")
 
 	if _, err := os.Stat(dupFilePath); err != nil {
-		a.container.Logger.Errorf("Couldn't register %s static endpoint", endpoint)
+		a.container.Logger.Errorf("error in registering '%s' static endpoint, error: %v", endpoint, err)
 		return
 	}
 
