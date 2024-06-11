@@ -6,6 +6,7 @@ import (
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/datasource"
+	"gofr.dev/pkg/gofr/datasource/file"
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 	"gofr.dev/pkg/gofr/datasource/pubsub/google"
 	"gofr.dev/pkg/gofr/datasource/pubsub/kafka"
@@ -35,10 +36,13 @@ type Container struct {
 	metricsManager metrics.Manager
 	PubSub         pubsub.Client
 
-	Redis     Redis
-	SQL       DB
-	Mongo     datasource.Mongo
+	Redis Redis
+	SQL   DB
+
 	Cassandra datasource.Cassandra
+	Mongo     datasource.Mongo
+
+	File datasource.FileSystem
 
 	WebSocketConnections map[string]*websocket.Connection
 	WebSocketUpgrader    websocket.WSUpgrader
@@ -142,6 +146,8 @@ func (c *Container) Create(conf config.Config) {
 
 		c.PubSub = mqtt.New(configs, c.Logger, c.metricsManager)
 	}
+
+	c.File = file.New(c.Logger)
 }
 
 // GetHTTPService returns registered HTTP services.
