@@ -24,7 +24,7 @@ func WSHandlerUpgrade(c *container.Container) func(inner http.Handler) http.Hand
 
 				c.WebSocketConnections[r.Header.Get("Sec-WebSocket-Key")] = &websocket.Connection{Conn: conn}
 
-				ctx := context.WithValue(r.Context(), "connID", r.Header.Get("Sec-WebSocket-Key"))
+				ctx := context.WithValue(r.Context(), websocket.WSConnectionKey, r.Header.Get("Sec-WebSocket-Key"))
 				r = r.WithContext(ctx)
 			}
 
