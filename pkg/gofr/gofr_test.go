@@ -533,12 +533,14 @@ func Test_WebSocket_Success(t *testing.T) {
 
 	app.WebSocket("/ws", func(ctx *Context) (interface{}, error) {
 		var message string
+
 		err := ctx.Bind(&message)
 		if err != nil {
 			return nil, err
 		}
 
 		response := fmt.Sprintf("Received: %s", message)
+
 		return response, nil
 	})
 
@@ -548,9 +550,11 @@ func Test_WebSocket_Success(t *testing.T) {
 	// Create a WebSocket client
 	wsURL := "ws" + server.URL[len("http"):] + "/ws"
 
-	ws, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	ws, resp, err := websocket.DefaultDialer.Dial(wsURL, nil)
 	assert.NoError(t, err)
+
 	defer ws.Close()
+	defer resp.Body.Close()
 
 	// Send a test message
 	testMessage := "Hello, WebSocket!"

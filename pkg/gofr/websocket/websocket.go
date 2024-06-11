@@ -9,7 +9,9 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-const WSConnectionKey = "ws-connection-key"
+type WSKey string
+
+const WSConnectionKey WSKey = "ws-connection-key"
 
 type Connection struct {
 	*websocket.Conn
