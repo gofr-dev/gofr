@@ -3,8 +3,9 @@ package http
 import (
 	"net/http"
 
-	"github.com/gorilla/mux"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+
+	"github.com/gorilla/mux"
 )
 
 // Router is responsible for routing HTTP request.
