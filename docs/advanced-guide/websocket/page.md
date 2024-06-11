@@ -41,7 +41,7 @@ func WSHandler(ctx *gofr.Context) (interface{}, error) {
 
 ## Configuration Options
 GoFr allows you to customize the WebSocket upgrader with several options. You can set these options using the 
-`websocket.NewWSUpgrader` function. Here are the list of options you can apply to your websocket upgrader using GoFr.
+`websocket.NewWSUpgrader` function. Here is the list of options you can apply to your websocket upgrader using GoFr.
 
 - `HandshakeTimeout (WithHandshakeTimeout)`: Sets the handshake timeout.
 - `ReadBufferSize (WithReadBufferSize)`: Sets the size of the read buffer.
