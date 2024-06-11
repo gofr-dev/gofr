@@ -225,18 +225,28 @@ func Test_otelErrorHandler(t *testing.T) {
 }
 
 func Test_addRoute(t *testing.T) {
+	originalArgs := os.Args // Save the original os.Args
+
+	// Modify os.Args for the duration of this test
+	os.Args = []string{"", "log"}
+
+	t.Cleanup(func() { os.Args = originalArgs }) // Restore os.Args after the test
+
+	// Capture the standard output to verify the logs.
 	logs := testutil.StdoutOutputForFunc(func() {
 		a := NewCMD()
 
+		// Add the "log" sub-command with its handler and description.
 		a.SubCommand("log", func(c *Context) (interface{}, error) {
 			c.Logger.Info("logging in handler")
-
 			return "handler called", nil
-		})
+		}, AddDescription("Logs a message"))
 
+		// Run the command-line application.
 		a.Run()
 	})
 
+	// Verify that the handler was called and the expected log message was output.
 	assert.Contains(t, logs, "handler called")
 }
 
