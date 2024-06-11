@@ -200,7 +200,7 @@ type logger struct {
 	normalOut     io.Writer
 	errorOut      io.Writer
 	isTerminal    bool
-	lock       chan struct{}
+	lock          chan struct{}
 	filter        Filterer
 	maskingFields []string
 }
@@ -353,6 +353,8 @@ func NewLogger(level Level) Logger {
 		errorOut:  os.Stderr,
 		lock:      make(chan struct{}, 1),
 	}
+
+	l.level = level
 
 	l.isTerminal = checkIfTerminal(l.normalOut)
 
