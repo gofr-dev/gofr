@@ -541,9 +541,9 @@ func TestStaticHandler(t *testing.T) {
 		expectedResponseHeaderType string
 	}{
 		{
-			desc:                       "check file content index.html",
+			desc:                       "check file content indexNew.html",
 			method:                     http.MethodGet,
-			path:                       "/" + publicDir + "/index.html",
+			path:                       "/" + publicDir + "/indexNew.html",
 			statusCode:                 http.StatusOK,
 			expectedBodyLength:         len(htmlContent),
 			expectedResponseHeaderType: "text/html; charset=utf-8",
@@ -612,15 +612,15 @@ func createPublicDirectory(t *testing.T, htmlContent []byte) {
 		}
 	}
 
-	file, errFile := os.Create(directory + "/index.html")
+	file, errFile := os.Create(directory + "/indexNew.html")
 
 	if errFile != nil {
-		t.Fatal("Couldn't create index.html file")
+		t.Fatal("Couldn't create indexNew.html file")
 	}
 
 	_, err := file.Write(htmlContent)
 	if err != nil {
-		t.Fatal("Couldn't write to index.html file")
+		t.Fatal("Couldn't write to indexNew.html file")
 	}
 
 	file.Close()
