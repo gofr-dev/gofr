@@ -69,7 +69,7 @@ func staticHandler(fileServer http.Handler, config StaticFileConfig) http.Handle
 		const forbiddenBody string = "403 forbidden"
 
 		if config.DirectoryListing {
-			if strings.HasSuffix(url, "/") {
+			if _, err := os.Stat(filepath.Join(config.FileDirectory, "index.html")); err != nil && strings.HasSuffix(url, "/") {
 				http.NotFound(w, r)
 				return
 			}
@@ -94,14 +94,15 @@ func staticHandler(fileServer http.Handler, config StaticFileConfig) http.Handle
 			}
 		}
 
-		if len(config.ExcludeExtensions) != 0 {
+		if len(config.ExcludeExtensions) > 1 {
 
 			if _, err := os.Stat(filepath.Join(config.FileDirectory, url)); err != nil {
 				http.NotFound(w, r)
 				return
 			}
 
-			for _, ext := range config.ExcludeExtensions {
+			extensions := config.ExcludeExtensions[1:]
+			for _, ext := range extensions {
 				if strings.HasSuffix(fileName, ext) {
 					w.WriteHeader(http.StatusForbidden)
 					w.Header().Set("Content-Type", "text/plain;charset=utf-8")
@@ -111,13 +112,14 @@ func staticHandler(fileServer http.Handler, config StaticFileConfig) http.Handle
 			}
 		}
 
-		if len(config.ExcludeFiles) != 0 {
+		if len(config.ExcludeFiles) > 1 {
 			if _, err := os.Stat(filepath.Join(config.FileDirectory, url)); err != nil {
 				http.NotFound(w, r)
 				return
 			}
 
-			for _, file := range config.ExcludeFiles {
+			excludedFiles := config.ExcludeFiles[1:]
+			for _, file := range excludedFiles {
 				if file == fileName {
 					w.WriteHeader(http.StatusForbidden)
 					w.Header().Set("Content-Type", "text/plain;charset=utf-8")
