@@ -10,10 +10,10 @@ type Responder struct{}
 func (r *Responder) Respond(data interface{}, err error) {
 	// TODO - provide proper exit codes here. Using os.Exit directly is a problem for tests.
 	if data != nil {
-		fmt.Fprint(os.Stdout, data)
+		fmt.Fprintln(os.Stdout, data)
 	}
 
 	if err != nil {
-		fmt.Fprint(os.Stderr, err)
+		fmt.Fprintln(os.Stderr, err)
 	}
 }

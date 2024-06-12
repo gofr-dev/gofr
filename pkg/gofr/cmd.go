@@ -26,7 +26,7 @@ type Options func(c *route)
 type ErrCommandNotFound struct{}
 
 func (e ErrCommandNotFound) Error() string {
-	return "No Command Found!" //nolint:goconst // This error is needed and repetition is in test to check for the exact string.
+	return "No Command Found!"
 }
 
 func (cmd *cmd) Run(c *container.Container) {
