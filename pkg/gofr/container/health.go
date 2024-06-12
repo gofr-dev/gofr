@@ -6,25 +6,63 @@ import (
 )
 
 func (c *Container) Health(ctx context.Context) interface{} {
-	datasources := make(map[string]interface{})
+	var (
+		healthMap = make(map[string]interface{})
+		downCount int
+	)
+
+	const statusDown = "DOWN"
 
 	if !isNil(c.SQL) {
-		datasources["sql"] = c.SQL.HealthCheck()
+		health := c.SQL.HealthCheck()
+		if health.Status == statusDown {
+			downCount++
+		}
+
+		healthMap["sql"] = health
 	}
 
 	if !isNil(c.Redis) {
-		datasources["redis"] = c.Redis.HealthCheck()
+		health := c.Redis.HealthCheck()
+		if health.Status == statusDown {
+			downCount++
+		}
+
+		healthMap["redis"] = health
 	}
 
 	if c.PubSub != nil {
-		datasources["pubsub"] = c.PubSub.Health()
+		health := c.PubSub.Health()
+		if health.Status == statusDown {
+			downCount++
+		}
+
+		healthMap["pubsub"] = health
 	}
 
 	for name, svc := range c.Services {
-		datasources[name] = svc.HealthCheck(ctx)
+		health := svc.HealthCheck(ctx)
+		if health.Status == statusDown {
+			downCount++
+		}
+
+		healthMap[name] = health
 	}
 
-	return datasources
+	c.appHealth(healthMap, downCount)
+
+	return healthMap
+}
+
+func (c *Container) appHealth(healthMap map[string]interface{}, downCount int) {
+	healthMap["name"] = c.GetAppName()
+	healthMap["version"] = c.GetAppVersion()
+
+	if downCount == 0 {
+		healthMap["status"] = "UP"
+	} else {
+		healthMap["status"] = "DEGRADED"
+	}
 }
 
 func isNil(i interface{}) bool {
