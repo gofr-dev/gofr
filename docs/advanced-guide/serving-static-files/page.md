@@ -3,8 +3,8 @@
 Often, we are required to serve static content such as a default profile image, a favicon, or a background image for our 
 web application. We want to have a mechanism to serve that static content without the hassle of implementing it from scratch.
 
-GoFr provides a default mechanism where if a public folder is available in the directory of the application,
-it automatically provides an endpoint with `/public/<filename>`, here filename refers to the file we want to get static content to be served. 
+GoFr provides a default mechanism where if a static folder is available in the directory of the application,
+it automatically provides an endpoint with `/static/<filename>`, here filename refers to the file we want to get static content to be served. 
 
 Example project structure:
 
@@ -13,7 +13,7 @@ project_folder
 |
 |---configs
 |       .env
-|---public
+|---static
 |       <img1>.jpeg
 |       <img2>.png
 |       <img3>.jpeg
@@ -44,11 +44,11 @@ project_folder
 |
 |---configs
 |       .env
-|---public
+|---static
 |       <img1>.jpeg
 |       <img2>.png
 |       <img3>.jpeg
-|---static
+|---public
 |       |---css
 |       |       main.css
 |       |---js
@@ -67,7 +67,7 @@ import "gofr.dev/pkg/gofr"
 
 func main(){
     app := gofr.New()
-    app.AddStaticFiles("static", "./static")
+    app.AddStaticFiles("public", "./public")
     app.Run()
 }
 ```

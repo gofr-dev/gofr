@@ -47,90 +47,107 @@ func (rou *Router) Add(method, pattern string, handler http.Handler) {
 	rou.Router.NewRoute().Methods(method).Path(pattern).Handler(h)
 }
 
-func (router *Router) GetDefaultStaticFilesConfig() StaticFileConfig {
-	config := StaticFileConfig{
+func (rou *Router) GetDefaultStaticFilesConfig() StaticFileConfig {
+	staticConfig := StaticFileConfig{
 		DirectoryListing: true,
 		HideDotFiles:     true,
 	}
-	return config
+	return staticConfig
 }
 
-// Static File Handling
-func (rou *Router) AddStaticFiles(endpoint string, config StaticFileConfig) {
-	fileServer := http.FileServer(http.Dir(config.FileDirectory))
-	rou.Router.NewRoute().PathPrefix(endpoint + "/").Handler(http.StripPrefix(endpoint, staticHandler(fileServer, config)))
+// Static File Handling.
+func (rou *Router) AddStaticFiles(endpoint string, staticConfig StaticFileConfig) {
+	fileServer := http.FileServer(http.Dir(staticConfig.FileDirectory))
+	rou.Router.NewRoute().PathPrefix(endpoint + "/").Handler(http.StripPrefix(endpoint, staticHandler(fileServer, staticConfig)))
 }
 
-// Check all the static handling configs
-func staticHandler(fileServer http.Handler, config StaticFileConfig) http.Handler {
+// Check all the static handling configs.
+func staticHandler(fileServer http.Handler, staticConfig StaticFileConfig) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		url := r.URL.Path
 
 		const forbiddenBody string = "403 forbidden"
 
-		if config.DirectoryListing {
-			if _, err := os.Stat(filepath.Join(config.FileDirectory, "index.html")); err != nil && strings.HasSuffix(url, "/") {
-				http.NotFound(w, r)
-				return
-			}
+		if staticConfig.DirectoryListing {
+			checkDirectoryListing(w, r, staticConfig, url)
 		}
 
 		filePath := strings.Split(url, "/")
 
 		fileName := filePath[len(filePath)-1]
 
-		if config.HideDotFiles {
-
-			if _, err := os.Stat(filepath.Join(config.FileDirectory, url)); err != nil {
-				http.NotFound(w, r)
-				return
-			}
-
-			if strings.HasPrefix(fileName, ".") {
-				w.WriteHeader(http.StatusForbidden)
-				w.Header().Set("Content-Type", "text/plain;charset=utf-8")
-				w.Write([]byte(forbiddenBody))
-				return
-			}
+		if staticConfig.HideDotFiles {
+			checkDotFiles(w, r, staticConfig, fileName, url, forbiddenBody)
 		}
 
-		if len(config.ExcludeExtensions) > 1 {
-
-			if _, err := os.Stat(filepath.Join(config.FileDirectory, url)); err != nil {
-				http.NotFound(w, r)
-				return
-			}
-
-			extensions := config.ExcludeExtensions[1:]
-			for _, ext := range extensions {
-				if strings.HasSuffix(fileName, ext) {
-					w.WriteHeader(http.StatusForbidden)
-					w.Header().Set("Content-Type", "text/plain;charset=utf-8")
-					w.Write([]byte(forbiddenBody))
-					return
-				}
-			}
+		if len(staticConfig.ExcludeExtensions) > 1 {
+			checkExcludedExtensions(w, r, staticConfig, fileName, url, forbiddenBody)
 		}
 
-		if len(config.ExcludeFiles) > 1 {
-			if _, err := os.Stat(filepath.Join(config.FileDirectory, url)); err != nil {
-				http.NotFound(w, r)
-				return
-			}
-
-			excludedFiles := config.ExcludeFiles[1:]
-			for _, file := range excludedFiles {
-				if file == fileName {
-					w.WriteHeader(http.StatusForbidden)
-					w.Header().Set("Content-Type", "text/plain;charset=utf-8")
-					w.Write([]byte(forbiddenBody))
-					return
-				}
-			}
+		if len(staticConfig.ExcludeFiles) > 1 {
+			checkExcludedFiles(w, r, staticConfig, fileName, url, forbiddenBody)
 		}
 
 		fileServer.ServeHTTP(w, r)
 	})
+}
+
+func checkDirectoryListing(w http.ResponseWriter, r *http.Request, staticConfig StaticFileConfig, url string) {
+	if _, err := os.Stat(filepath.Join(staticConfig.FileDirectory, "index.html")); err != nil && strings.HasSuffix(url, "/") {
+		http.NotFound(w, r)
+		return
+	}
+}
+
+func checkDotFiles(w http.ResponseWriter, r *http.Request, staticConfig StaticFileConfig, fileName string, url string, forbiddenBody string) {
+	if _, err := os.Stat(filepath.Join(staticConfig.FileDirectory, url)); err != nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	if strings.HasPrefix(fileName, ".") {
+		w.WriteHeader(http.StatusForbidden)
+		w.Header().Set("Content-Type", "text/plain;charset=utf-8")
+		w.Write([]byte(forbiddenBody))
+
+		return
+	}
+}
+
+func checkExcludedExtensions(w http.ResponseWriter, r *http.Request, staticConfig StaticFileConfig, fileName string, url string, forbiddenBody string) {
+	if _, err := os.Stat(filepath.Join(staticConfig.FileDirectory, url)); err != nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	extensions := staticConfig.ExcludeExtensions[1:]
+	for _, ext := range extensions {
+		if strings.HasSuffix(fileName, ext) {
+			w.WriteHeader(http.StatusForbidden)
+			w.Header().Set("Content-Type", "text/plain;charset=utf-8")
+			w.Write([]byte(forbiddenBody))
+
+			return
+		}
+	}
+}
+
+func checkExcludedFiles(w http.ResponseWriter, r *http.Request, staticConfig StaticFileConfig, fileName string, url string, forbiddenBody string) {
+	if _, err := os.Stat(filepath.Join(staticConfig.FileDirectory, url)); err != nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	excludedFiles := staticConfig.ExcludeFiles[1:]
+	for _, file := range excludedFiles {
+		if file == fileName {
+			w.WriteHeader(http.StatusForbidden)
+			w.Header().Set("Content-Type", "text/plain;charset=utf-8")
+			w.Write([]byte(forbiddenBody))
+
+			return
+		}
+	}
 }
 
 // UseMiddleware registers middlewares to the router.
