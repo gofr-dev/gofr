@@ -320,3 +320,27 @@ func Test_Run_UnknownCommandShowsHelp(t *testing.T) {
 	assert.Contains(t, logs, "Description: Logs a message")
 	assert.Contains(t, logs, "logging messages to the terminal")
 }
+
+func Test_Run_handler_help(t *testing.T) {
+	var old []string
+
+	args := []string{"", "hello", "--help"}
+	old, os.Args = os.Args, args
+
+	t.Cleanup(func() {
+		os.Args = old
+	})
+
+	c := cmd{}
+
+	c.addRoute("hello", func(_ *Context) (interface{}, error) {
+		return "Hello", nil
+	}, AddHelp("this a helper string for hello sub command"))
+
+	out := testutil.StdoutOutputForFunc(func() {
+		c.Run(container.NewContainer(config.NewMockConfig(map[string]string{})))
+	})
+
+	// check that only help for the hello subcommand is printed
+	assert.Equal(t, out, "this a helper string for hello sub command\n")
+}
