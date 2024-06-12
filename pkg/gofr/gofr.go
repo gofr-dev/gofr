@@ -52,7 +52,7 @@ type App struct {
 	subscriptionManager SubscriptionManager
 }
 
-const publicDir = "public"
+const publicDir = "static"
 
 // RegisterService adds a gRPC service to the GoFr application.
 func (a *App) RegisterService(desc *grpc.ServiceDesc, impl interface{}) {
@@ -106,10 +106,22 @@ func New() *App {
 	return app
 }
 
+func updateConfigInformation(config *gofrHTTP.StaticFileConfig, envConfig config.Config) {
+	config.DirectoryListing, _ = strconv.ParseBool(envConfig.GetOrDefault("STATIC_DIRECTORY_LISTING", "true"))
+	config.HideDotFiles, _ = strconv.ParseBool(envConfig.GetOrDefault("STATIC_HIDEDOTFILES", "true"))
+	config.ExcludeExtensions = strings.Split(envConfig.Get("STATIC_EXCLUDE_EXTENSIONS"), ",")
+	config.ExcludeFiles = strings.Split(envConfig.Get("STATIC_EXCLUDE_FILES"), ",")
+	config.ExcludeFiles = append(config.ExcludeFiles, "openapi.json")
+}
+
 func (a *App) AddStaticFiles(endpoint, filePath string) {
 	a.httpRegistered = true
 
 	var dupFilePath string
+
+	defaultConfig := a.httpServer.router.GetDefaultStaticFilesConfig()
+
+	updateConfigInformation(&defaultConfig, a.Config)
 
 	if strings.HasPrefix(filePath, "./") {
 		dupFilePath, _ = os.Getwd()
@@ -125,7 +137,9 @@ func (a *App) AddStaticFiles(endpoint, filePath string) {
 		return
 	}
 
-	a.httpServer.router.AddStaticFiles(endpoint, dupFilePath)
+	defaultConfig.FileDirectory = dupFilePath
+
+	a.httpServer.router.AddStaticFiles(endpoint, defaultConfig)
 }
 
 // NewCMD creates a command-line application.

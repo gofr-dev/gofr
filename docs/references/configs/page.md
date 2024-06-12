@@ -78,6 +78,26 @@ This document lists all the configuration options supported by the Gofr framewor
 - Name: CMD_LOGS_FILE
 - Description: File to save the logs in case of a CMD application
 
+---
+
+- Name: STATIC_DIRECTORY_LISTING
+- Description: To enable directory listing of files in folder (default: true)
+
+---
+
+- Name: STATIC_HIDEDOTFILES
+- Description: To stop rendering hidden files (default: true)
+
+---
+
+- Name: STATIC_EXCLUDE_EXTENSIONS
+- Description: To stop rendering files with the given extensions (e.g., png, jpeg, etc.)
+
+---
+
+- Name: STATIC_EXCLUDE_FILES
+- Description: To stop certain files from rendering (added openapi.json by default)
+
 {% endtable %}
 
 ## Datasource Configs

@@ -2,6 +2,9 @@ package http
 
 import (
 	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
 
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 
@@ -12,6 +15,14 @@ import (
 type Router struct {
 	mux.Router
 	RegisteredRoutes *[]string
+}
+
+type StaticFileConfig struct {
+	DirectoryListing  bool
+	HideDotFiles      bool
+	ExcludeExtensions []string
+	ExcludeFiles      []string
+	FileDirectory     string
 }
 
 type Middleware func(handler http.Handler) http.Handler
@@ -36,9 +47,88 @@ func (rou *Router) Add(method, pattern string, handler http.Handler) {
 	rou.Router.NewRoute().Methods(method).Path(pattern).Handler(h)
 }
 
-func (rou *Router) AddStaticFiles(endpoint, directory string) {
-	fileServer := http.FileServer(http.Dir(directory))
-	rou.Router.NewRoute().PathPrefix(endpoint + "/").Handler(http.StripPrefix(endpoint, fileServer))
+func (router *Router) GetDefaultStaticFilesConfig() StaticFileConfig {
+	config := StaticFileConfig{
+		DirectoryListing: true,
+		HideDotFiles:     true,
+	}
+	return config
+}
+
+// Static File Handling
+func (rou *Router) AddStaticFiles(endpoint string, config StaticFileConfig) {
+	fileServer := http.FileServer(http.Dir(config.FileDirectory))
+	rou.Router.NewRoute().PathPrefix(endpoint + "/").Handler(http.StripPrefix(endpoint, staticHandler(fileServer, config)))
+}
+
+// Check all the static handling configs
+func staticHandler(fileServer http.Handler, config StaticFileConfig) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		url := r.URL.Path
+
+		const forbiddenBody string = "403 forbidden"
+
+		if config.DirectoryListing {
+			if strings.HasSuffix(url, "/") {
+				http.NotFound(w, r)
+				return
+			}
+		}
+
+		filePath := strings.Split(url, "/")
+
+		fileName := filePath[len(filePath)-1]
+
+		if config.HideDotFiles {
+
+			if _, err := os.Stat(filepath.Join(config.FileDirectory, url)); err != nil {
+				http.NotFound(w, r)
+				return
+			}
+
+			if strings.HasPrefix(fileName, ".") {
+				w.WriteHeader(http.StatusForbidden)
+				w.Header().Set("Content-Type", "text/plain;charset=utf-8")
+				w.Write([]byte(forbiddenBody))
+				return
+			}
+		}
+
+		if len(config.ExcludeExtensions) != 0 {
+
+			if _, err := os.Stat(filepath.Join(config.FileDirectory, url)); err != nil {
+				http.NotFound(w, r)
+				return
+			}
+
+			for _, ext := range config.ExcludeExtensions {
+				if strings.HasSuffix(fileName, ext) {
+					w.WriteHeader(http.StatusForbidden)
+					w.Header().Set("Content-Type", "text/plain;charset=utf-8")
+					w.Write([]byte(forbiddenBody))
+					return
+				}
+			}
+		}
+
+		if len(config.ExcludeFiles) != 0 {
+			if _, err := os.Stat(filepath.Join(config.FileDirectory, url)); err != nil {
+				http.NotFound(w, r)
+				return
+			}
+
+			for _, file := range config.ExcludeFiles {
+				if file == fileName {
+					w.WriteHeader(http.StatusForbidden)
+					w.Header().Set("Content-Type", "text/plain;charset=utf-8")
+					w.Write([]byte(forbiddenBody))
+					return
+				}
+			}
+		}
+
+		fileServer.ServeHTTP(w, r)
+	})
 }
 
 // UseMiddleware registers middlewares to the router.
