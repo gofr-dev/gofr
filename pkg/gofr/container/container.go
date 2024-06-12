@@ -69,7 +69,7 @@ func (c *Container) Create(conf config.Config) {
 
 	c.createLogger(conf)
 
-	c.metricsManager = metrics.NewMetricsManager(exporters.Prometheus(c.appName, c.appVersion), c.Logger)
+	c.metricsManager = metrics.NewMetricsManager(exporters.Prometheus(c.GetAppName(), c.GetAppVersion()), c.Logger)
 
 	// Register framework metrics
 	c.registerFrameworkMetrics()
