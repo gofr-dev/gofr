@@ -19,7 +19,6 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
-
 	"google.golang.org/grpc"
 
 	"gofr.dev/pkg/gofr/config"
@@ -279,6 +278,7 @@ func (a *App) PATCH(pattern string, handler Handler) {
 
 func (a *App) add(method, pattern string, h Handler) {
 	a.httpRegistered = true
+
 	a.httpServer.router.Add(method, pattern, handler{
 		function:       h,
 		container:      a.container,
