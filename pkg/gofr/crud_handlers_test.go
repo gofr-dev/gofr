@@ -325,7 +325,7 @@ func Test_GetAllHandler(t *testing.T) {
 		for i, tc := range tests {
 			t.Run(dc.dialect+" "+tc.desc, func(t *testing.T) {
 				c := container.NewContainer(nil)
-				db, mock, mockMetrics := gofrSql.NewSQLMocksWithConfig(t, &gofrSql.DBConfig{Dialect: dc.dialect})
+				db, mock, _ := gofrSql.NewSQLMocksWithConfig(t, &gofrSql.DBConfig{Dialect: dc.dialect})
 				c.SQL = db
 
 				defer db.Close()
@@ -333,8 +333,6 @@ func Test_GetAllHandler(t *testing.T) {
 				ctx := createTestContext(http.MethodGet, "/users", "", nil, c)
 
 				mock.ExpectQuery(dc.expectedQuery).WillReturnRows(tc.mockResp).WillReturnError(tc.mockErr)
-				mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats", gomock.Any(),
-					"hostname", gomock.Any(), "database", gomock.Any(), "type", "SELECT")
 
 				resp, err := e.GetAll(ctx)
 
@@ -412,15 +410,13 @@ func Test_GetHandler(t *testing.T) {
 		for _, tc := range testCases {
 			t.Run(dc.dialect+" "+tc.desc, func(t *testing.T) {
 				c := container.NewContainer(nil)
-				db, mock, mockMetrics := gofrSql.NewSQLMocksWithConfig(t, &gofrSql.DBConfig{Dialect: dc.dialect})
+				db, mock, _ := gofrSql.NewSQLMocksWithConfig(t, &gofrSql.DBConfig{Dialect: dc.dialect})
 				c.SQL = db
 
 				defer db.Close()
 
 				ctx := createTestContext(http.MethodGet, "/user", tc.id, nil, c)
 
-				mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats", gomock.Any(),
-					"hostname", gomock.Any(), "database", gomock.Any(), "type", "SELECT")
 				mock.ExpectQuery(dc.expectedQuery).WithArgs(tc.id).WillReturnRows(tc.mockRow).WillReturnError(tc.mockErr)
 
 				resp, err := e.Get(ctx)
@@ -498,15 +494,12 @@ func Test_UpdateHandler(t *testing.T) {
 			},
 		}
 
-		db, mock, mockMetrics := gofrSql.NewSQLMocksWithConfig(t, &gofrSql.DBConfig{Dialect: dc.dialect})
+		db, mock, _ := gofrSql.NewSQLMocksWithConfig(t, &gofrSql.DBConfig{Dialect: dc.dialect})
 		c.SQL = db
 
 		for i, tc := range tests {
 			t.Run(dc.dialect+" "+tc.desc, func(t *testing.T) {
 				ctx := createTestContext(http.MethodPut, "/user", strconv.Itoa(tc.id), tc.reqBody, c)
-
-				mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats", gomock.Any(),
-					"hostname", gomock.Any(), "database", gomock.Any(), "type", "UPDATE").MaxTimes(2)
 
 				mock.ExpectExec(dc.expectedQuery).WithArgs("goFr", true, tc.id).
 					WillReturnResult(sqlmock.NewResult(1, 1)).WillReturnError(nil)
