@@ -58,16 +58,8 @@ func (cmd *cmd) Run(c *container.Container) {
 	r := cmd.handler(subCommand)
 	ctx := newContext(&cmd2.Responder{}, cmd2.NewRequest(args), c)
 
-	if r == nil {
-		ctx.responder.Respond(nil, ErrCommandNotFound{})
-		cmd.printHelp()
-
-		return
-	}
-
-	if r.handler == nil {
-		ctx.responder.Respond(nil, ErrCommandNotFound{})
-
+	// handling if route is not found or the handler is nil
+	if cmd.noCommandResponse(r, ctx) {
 		return
 	}
 
@@ -77,6 +69,24 @@ func (cmd *cmd) Run(c *container.Container) {
 	}
 
 	ctx.responder.Respond(r.handler(ctx))
+}
+
+// noCommandResponse responds with error when no route with the given subcommand is not found or handler is nil.
+func (cmd *cmd) noCommandResponse(r *route, ctx *Context) bool {
+	if r == nil {
+		ctx.responder.Respond(nil, ErrCommandNotFound{})
+		cmd.printHelp()
+
+		return true
+	}
+
+	if r.handler == nil {
+		ctx.responder.Respond(nil, ErrCommandNotFound{})
+
+		return true
+	}
+
+	return false
 }
 
 func (cmd *cmd) handler(path string) *route {
