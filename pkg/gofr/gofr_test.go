@@ -29,9 +29,8 @@ func TestNewCMD(t *testing.T) {
 	a := NewCMD()
 	// Without args we should get error on stderr.
 	outputWithoutArgs := testutil.StderrOutputForFunc(a.Run)
-	if outputWithoutArgs != "No Command Found!" {
-		t.Errorf("Stderr output mismatch. Got: %s ", outputWithoutArgs)
-	}
+
+	assert.Equal(t, "No Command Found!\n", outputWithoutArgs, "TEST Failed.\n%s", "Stderr output mismatch")
 }
 
 func TestGofr_readConfig(t *testing.T) {
@@ -225,18 +224,28 @@ func Test_otelErrorHandler(t *testing.T) {
 }
 
 func Test_addRoute(t *testing.T) {
+	originalArgs := os.Args // Save the original os.Args
+
+	// Modify os.Args for the duration of this test
+	os.Args = []string{"", "log"}
+
+	t.Cleanup(func() { os.Args = originalArgs }) // Restore os.Args after the test
+
+	// Capture the standard output to verify the logs.
 	logs := testutil.StdoutOutputForFunc(func() {
 		a := NewCMD()
 
+		// Add the "log" sub-command with its handler and description.
 		a.SubCommand("log", func(c *Context) (interface{}, error) {
 			c.Logger.Info("logging in handler")
-
 			return "handler called", nil
-		})
+		}, AddDescription("Logs a message"))
 
+		// Run the command-line application.
 		a.Run()
 	})
 
+	// Verify that the handler was called and the expected log message was output.
 	assert.Contains(t, logs, "handler called")
 }
 

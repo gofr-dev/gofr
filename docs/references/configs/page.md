@@ -249,6 +249,5 @@ This document lists all the configuration options supported by the Gofr framewor
 
 - Name: REQUEST_TIMEOUT
 - Description: Set the request timeouts (in seconds) for HTTP server.
-- Default Value: 5
 
 {% endtable %}

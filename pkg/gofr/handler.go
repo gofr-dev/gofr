@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/gorilla/websocket"
+
 	"gofr.dev/pkg/gofr/container"
 	gofrHTTP "gofr.dev/pkg/gofr/http"
 	"gofr.dev/pkg/gofr/http/response"
@@ -14,8 +16,6 @@ import (
 
 	"net/http"
 )
-
-const defaultRequestTimeout = 5
 
 type Handler func(c *Context) (interface{}, error)
 
@@ -41,12 +41,22 @@ type handler struct {
 func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	c := newContext(gofrHTTP.NewResponder(w, r.Method), gofrHTTP.NewRequest(r), h.container)
 
-	reqTimeout := h.setContextTimeout(h.requestTimeout)
+	var (
+		ctx    context.Context
+		cancel context.CancelFunc
+	)
 
-	ctx, cancel := context.WithTimeout(r.Context(), time.Duration(reqTimeout)*time.Second)
-	defer cancel()
+	if websocket.IsWebSocketUpgrade(r) {
+		// If the request is a WebSocket upgrade, do not apply the timeout
+		ctx = r.Context()
+	} else if h.requestTimeout != "" {
+		reqTimeout := h.setContextTimeout(h.requestTimeout)
 
-	c.Context = ctx
+		ctx, cancel = context.WithTimeout(r.Context(), time.Duration(reqTimeout)*time.Second)
+		defer cancel()
+
+		c.Context = ctx
+	}
 
 	done := make(chan struct{})
 
@@ -63,13 +73,18 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	select {
-	case <-ctx.Done():
+	case <-c.Context.Done():
 		// If the context's deadline has been exceeded, return a timeout error response
 		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 			http.Error(w, "Request timed out", http.StatusRequestTimeout)
 			return
 		}
 	case <-done:
+		if websocket.IsWebSocketUpgrade(r) {
+			// Do not respond with HTTP headers since this is a WebSocket request
+			return
+		}
+
 		// Handler function completed
 		c.responder.Respond(result, err)
 	}
@@ -106,8 +121,6 @@ func (h handler) setContextTimeout(timeout string) int {
 	reqTimeout, err := strconv.Atoi(timeout)
 	if err != nil || reqTimeout < 0 {
 		h.container.Error("invalid value of config REQUEST_TIMEOUT. setting default value to 5 seconds.")
-
-		reqTimeout = defaultRequestTimeout
 	}
 
 	return reqTimeout
