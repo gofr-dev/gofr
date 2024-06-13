@@ -110,7 +110,7 @@ func getMigrator(c *container.Container) (Datasource, Migrator, bool) {
 		ds.SQL = c.SQL
 
 		mg = sqlMigratorObject{ds.SQL}.apply(mg)
-		c.Debugf("initialized data source for SQL")
+		c.Debug("initialized data source for SQL")
 	}
 
 	if !isNil(c.Redis) {
@@ -119,7 +119,7 @@ func getMigrator(c *container.Container) (Datasource, Migrator, bool) {
 		ds.Redis = c.Redis
 
 		mg = redisMigratorObject{ds.Redis}.apply(mg)
-		c.Debugf("initialized data source for redis")
+		c.Debug("initialized data source for redis")
 	}
 
 	if c.PubSub != nil {
