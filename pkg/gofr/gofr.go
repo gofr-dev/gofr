@@ -52,7 +52,7 @@ type App struct {
 	subscriptionManager SubscriptionManager
 }
 
-const publicDir = "static"
+const publicDir = "public"
 
 // RegisterService adds a gRPC service to the GoFr application.
 func (a *App) RegisterService(desc *grpc.ServiceDesc, impl interface{}) {
