@@ -52,24 +52,25 @@ func (rou *Router) GetDefaultStaticFilesConfig() StaticFileConfig {
 		DirectoryListing: true,
 		HideDotFiles:     true,
 	}
+
 	return staticConfig
 }
 
 // Static File Handling.
 func (rou *Router) AddStaticFiles(endpoint string, staticConfig StaticFileConfig) {
 	fileServer := http.FileServer(http.Dir(staticConfig.FileDirectory))
-	rou.Router.NewRoute().PathPrefix(endpoint + "/").Handler(http.StripPrefix(endpoint, staticHandler(fileServer, staticConfig)))
+	rou.Router.NewRoute().PathPrefix(endpoint + "/").Handler(http.StripPrefix(endpoint, staticConfig.staticHandler(fileServer)))
 }
 
 // Check all the static handling configs.
-func staticHandler(fileServer http.Handler, staticConfig StaticFileConfig) http.Handler {
+const forbiddenBody string = "403 forbidden"
+
+func (staticConfig StaticFileConfig) staticHandler(fileServer http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		url := r.URL.Path
 
-		const forbiddenBody string = "403 forbidden"
-
 		if staticConfig.DirectoryListing {
-			checkDirectoryListing(w, r, staticConfig, url)
+			staticConfig.checkDirectoryListing(w, r, url)
 		}
 
 		filePath := strings.Split(url, "/")
@@ -77,54 +78,44 @@ func staticHandler(fileServer http.Handler, staticConfig StaticFileConfig) http.
 		fileName := filePath[len(filePath)-1]
 
 		if staticConfig.HideDotFiles {
-			checkDotFiles(w, r, staticConfig, fileName, url, forbiddenBody)
+			staticConfig.checkDotFiles(w, fileName, url)
 		}
 
-		if len(staticConfig.ExcludeExtensions) > 1 {
-			checkExcludedExtensions(w, r, staticConfig, fileName, url, forbiddenBody)
+		if len(staticConfig.ExcludeExtensions) > 0 {
+			staticConfig.checkExcludedExtensions(w, fileName, url)
 		}
 
-		if len(staticConfig.ExcludeFiles) > 1 {
-			checkExcludedFiles(w, r, staticConfig, fileName, url, forbiddenBody)
+		if len(staticConfig.ExcludeFiles) > 0 {
+			staticConfig.checkExcludedFiles(w, fileName, url)
 		}
 
 		fileServer.ServeHTTP(w, r)
 	})
 }
 
-func checkDirectoryListing(w http.ResponseWriter, r *http.Request, staticConfig StaticFileConfig, url string) {
+func (staticConfig StaticFileConfig) checkDirectoryListing(w http.ResponseWriter, r *http.Request, url string) {
 	if _, err := os.Stat(filepath.Join(staticConfig.FileDirectory, "index.html")); err != nil && strings.HasSuffix(url, "/") {
 		http.NotFound(w, r)
 		return
 	}
 }
 
-func checkDotFiles(w http.ResponseWriter, r *http.Request, staticConfig StaticFileConfig, fileName string, url string, forbiddenBody string) {
-	if _, err := os.Stat(filepath.Join(staticConfig.FileDirectory, url)); err != nil {
-		http.NotFound(w, r)
-		return
-	}
-
-	if strings.HasPrefix(fileName, ".") {
+func (staticConfig StaticFileConfig) checkDotFiles(w http.ResponseWriter, fileName, url string) {
+	if _, err := os.Stat(filepath.Join(staticConfig.FileDirectory, url)); err == nil && strings.HasPrefix(fileName, ".") {
 		w.WriteHeader(http.StatusForbidden)
-		w.Header().Set("Content-Type", "text/plain;charset=utf-8")
 		w.Write([]byte(forbiddenBody))
 
 		return
 	}
+
 }
 
-func checkExcludedExtensions(w http.ResponseWriter, r *http.Request, staticConfig StaticFileConfig, fileName string, url string, forbiddenBody string) {
-	if _, err := os.Stat(filepath.Join(staticConfig.FileDirectory, url)); err != nil {
-		http.NotFound(w, r)
-		return
-	}
+func (staticConfig StaticFileConfig) checkExcludedExtensions(w http.ResponseWriter, fileName, url string) {
+	_, err := os.Stat(filepath.Join(staticConfig.FileDirectory, url))
 
-	extensions := staticConfig.ExcludeExtensions[1:]
-	for _, ext := range extensions {
-		if strings.HasSuffix(fileName, ext) {
+	for _, ext := range staticConfig.ExcludeExtensions {
+		if strings.HasSuffix(fileName, ext) && err == nil {
 			w.WriteHeader(http.StatusForbidden)
-			w.Header().Set("Content-Type", "text/plain;charset=utf-8")
 			w.Write([]byte(forbiddenBody))
 
 			return
@@ -132,17 +123,12 @@ func checkExcludedExtensions(w http.ResponseWriter, r *http.Request, staticConfi
 	}
 }
 
-func checkExcludedFiles(w http.ResponseWriter, r *http.Request, staticConfig StaticFileConfig, fileName string, url string, forbiddenBody string) {
-	if _, err := os.Stat(filepath.Join(staticConfig.FileDirectory, url)); err != nil {
-		http.NotFound(w, r)
-		return
-	}
+func (staticConfig StaticFileConfig) checkExcludedFiles(w http.ResponseWriter, fileName, url string) {
+	_, err := os.Stat(filepath.Join(staticConfig.FileDirectory, url))
 
-	excludedFiles := staticConfig.ExcludeFiles[1:]
-	for _, file := range excludedFiles {
-		if file == fileName {
+	for _, file := range staticConfig.ExcludeFiles {
+		if file == fileName && err == nil {
 			w.WriteHeader(http.StatusForbidden)
-			w.Header().Set("Content-Type", "text/plain;charset=utf-8")
 			w.Write([]byte(forbiddenBody))
 
 			return

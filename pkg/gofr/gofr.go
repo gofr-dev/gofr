@@ -106,18 +106,18 @@ func New() *App {
 	return app
 }
 
-func updateConfigInformation(config *gofrHTTP.StaticFileConfig, envConfig config.Config) {
-	config.DirectoryListing, _ = strconv.ParseBool(envConfig.GetOrDefault("STATIC_DIRECTORY_LISTING", "true"))
-	config.HideDotFiles, _ = strconv.ParseBool(envConfig.GetOrDefault("STATIC_HIDEDOTFILES", "true"))
-	config.ExcludeExtensions = strings.Split(envConfig.Get("STATIC_EXCLUDE_EXTENSIONS"), ",")
-	config.ExcludeFiles = strings.Split(envConfig.Get("STATIC_EXCLUDE_FILES"), ",")
-	config.ExcludeFiles = append(config.ExcludeFiles, "openapi.json")
+func updateConfigInformation(staticConfig *gofrHTTP.StaticFileConfig, envConfig config.Config) {
+	staticConfig.DirectoryListing, _ = strconv.ParseBool(envConfig.GetOrDefault("STATIC_DIRECTORY_LISTING", "true"))
+	staticConfig.HideDotFiles, _ = strconv.ParseBool(envConfig.GetOrDefault("STATIC_HIDEDOTFILES", "true"))
+	staticConfig.ExcludeExtensions = SplitEnv(envConfig.Get("STATIC_EXCLUDE_EXTENSIONS"), ",")
+	staticConfig.ExcludeFiles = SplitEnv(envConfig.Get("STATIC_EXCLUDE_FILES"), ",")
+	staticConfig.ExcludeFiles = append(staticConfig.ExcludeFiles, "openapi.json")
 }
 
 func (a *App) AddStaticFiles(endpoint, filePath string) {
 	a.httpRegistered = true
 
-	var dupFilePath string
+	dupFilePath := filePath
 
 	defaultConfig := a.httpServer.router.GetDefaultStaticFilesConfig()
 
@@ -126,8 +126,6 @@ func (a *App) AddStaticFiles(endpoint, filePath string) {
 	if strings.HasPrefix(filePath, "./") {
 		dupFilePath, _ = os.Getwd()
 		dupFilePath = filepath.Join(dupFilePath, filePath)
-	} else {
-		dupFilePath = filePath
 	}
 
 	endpoint = "/" + strings.TrimPrefix(endpoint, "/")

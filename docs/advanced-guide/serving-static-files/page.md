@@ -3,7 +3,7 @@
 Often, we are required to serve static content such as a default profile image, a favicon, or a background image for our 
 web application. We want to have a mechanism to serve that static content without the hassle of implementing it from scratch.
 
-GoFr provides a default mechanism where if a static folder is available in the directory of the application,
+GoFr provides a default mechanism where if a `static` folder is available in the directory of the application,
 it automatically provides an endpoint with `/static/<filename>`, here filename refers to the file we want to get static content to be served. 
 
 Example project structure:
@@ -14,9 +14,9 @@ project_folder
 |---configs
 |       .env
 |---static
-|       <img1>.jpeg
-|       <img2>.png
-|       <img3>.jpeg
+|       img1.jpeg
+|       img2.png
+|       img3.jpeg
 |   main.go
 |   main_test.go
 ```
@@ -45,9 +45,9 @@ project_folder
 |---configs
 |       .env
 |---static
-|       <img1>.jpeg
-|       <img2>.png
-|       <img3>.jpeg
+|       img1.jpeg
+|       img2.png
+|       img3.jpeg
 |---public
 |       |---css
 |       |       main.css
