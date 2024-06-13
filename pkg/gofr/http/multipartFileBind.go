@@ -1,15 +1,18 @@
 package http
 
 import (
+	"fmt"
 	"io"
 	"mime/multipart"
 	"reflect"
+	"strconv"
 
 	"gofr.dev/pkg/gofr/file"
 )
 
 type formData struct {
-	files map[string][]*multipart.FileHeader
+	fields map[string][]string
+	files  map[string][]*multipart.FileHeader
 }
 
 func (uf *formData) mapStruct(val reflect.Value, field *reflect.StructField) (bool, error) {
@@ -87,61 +90,96 @@ func (uf *formData) checkStruct(val reflect.Value) (bool, error) {
 }
 
 func (uf *formData) trySet(value reflect.Value, field *reflect.StructField) (bool, error) {
-	tag, ok := getFileName(field)
+	tag, ok := getFieldName(field)
 	if !ok {
 		return false, nil
 	}
 
-	header, ok := uf.files[tag]
-	if !ok {
-		return false, nil
-	}
-
-	f, err := header[0].Open()
-	if err != nil {
-		return false, err
-	}
-
-	content, err := io.ReadAll(f)
-	if err != nil {
-		return false, err
-	}
-
-	switch value.Interface().(type) {
-	case file.Zip:
-		zip, err := file.NewZip(content)
+	if header, ok := uf.files[tag]; ok {
+		f, err := header[0].Open()
 		if err != nil {
 			return false, err
 		}
 
-		value.Set(reflect.ValueOf(*zip))
-	case multipart.FileHeader:
-		value.Set(reflect.ValueOf(*header[0]))
-	default:
+		content, err := io.ReadAll(f)
+		if err != nil {
+			return false, err
+		}
+
+		switch value.Interface().(type) {
+		case file.Zip:
+			zip, err := file.NewZip(content)
+			if err != nil {
+				return false, err
+			}
+
+			value.Set(reflect.ValueOf(*zip))
+		case multipart.FileHeader:
+			value.Set(reflect.ValueOf(*header[0]))
+		default:
+			return false, nil
+		}
+	} else if values, ok := uf.fields[tag]; ok {
+		// handle non-file fields
+		kind := value.Kind()
+		data := values[0]
+
+		switch kind {
+		case reflect.String:
+			value.SetString(data)
+		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+			i, err := strconv.ParseInt(data, 10, 64)
+			if err != nil {
+				return false, err
+			}
+
+			value.SetInt(i)
+		case reflect.Float32, reflect.Float64:
+			f, err := strconv.ParseFloat(data, 64)
+			if err != nil {
+				return false, err
+			}
+
+			value.SetFloat(f)
+		case reflect.Bool:
+			boolVal, err := strconv.ParseBool(values[0])
+			if err != nil {
+				return false, err
+			}
+
+			value.SetBool(boolVal)
+		default:
+			return false, fmt.Errorf("unsupported type for field %s: %v", field.Name, kind)
+		}
+
+		return true, nil
+	}
+
+	if !ok {
 		return false, nil
 	}
 
 	return true, nil
 }
 
-func getFileName(field *reflect.StructField) (string, bool) {
+func getFieldName(field *reflect.StructField) (string, bool) {
 	var (
-		tag = "file"
-		key string
+		jsonTag = "form"
+		fileTag = "file"
+		key     string
 	)
 
-	if field.Tag.Get(tag) == "-" {
+	if field.Tag.Get(jsonTag) != "" {
+		key = field.Tag.Get(jsonTag)
+	} else if field.Tag.Get(fileTag) != "" {
+		key = field.Tag.Get(fileTag)
+	} else if field.IsExported() {
+		key = field.Name
+	} else {
 		return "", false
 	}
 
-	// we do not want to set unexported field
-	if field.Tag.Get(tag) == "" && field.IsExported() {
-		key = field.Name
-	} else {
-		key = field.Tag.Get(tag)
-	}
-
-	if key == "" {
+	if key == "" || key == "-" {
 		return "", false
 	}
 
