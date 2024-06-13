@@ -119,7 +119,11 @@ func (uf *formData) trySet(value reflect.Value, field *reflect.StructField) (boo
 		default:
 			return false, nil
 		}
-	} else if values, ok := uf.fields[tag]; ok {
+
+		return true, nil
+	}
+
+	if values, ok := uf.fields[tag]; ok {
 		// handle non-file fields
 		kind := value.Kind()
 		data := values[0]
@@ -155,23 +159,19 @@ func (uf *formData) trySet(value reflect.Value, field *reflect.StructField) (boo
 		return true, nil
 	}
 
-	if !ok {
-		return false, nil
-	}
-
-	return true, nil
+	return false, nil
 }
 
 func getFieldName(field *reflect.StructField) (string, bool) {
 	var (
-		jsonTag = "form"
+		formTag = "form"
 		fileTag = "file"
 		key     string
 	)
 
-	if field.Tag.Get(jsonTag) != "" {
-		key = field.Tag.Get(jsonTag)
-	} else if field.Tag.Get(fileTag) != "" {
+	if field.Tag.Get(formTag) != "" && field.IsExported() {
+		key = field.Tag.Get(formTag)
+	} else if field.Tag.Get(fileTag) != "" && field.IsExported() {
 		key = field.Tag.Get(fileTag)
 	} else if field.IsExported() {
 		key = field.Name
