@@ -22,7 +22,7 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 
 		return
 	}
-
+	c.Debug("sorting the migration keys")
 	sortkeys.Int64s(keys)
 
 	ds, mg, ok := getMigrator(c)
@@ -46,6 +46,7 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 
 	for _, currentMigration := range keys {
 		if currentMigration <= lastMigration {
+			c.Debugf("skipping migration %v", currentMigration)
 			continue
 		}
 
@@ -66,6 +67,7 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 
 			return
 		}
+		c.Debugf("successfully executed UP for migration %v", currentMigration)
 
 		err = mg.commitMigration(c, transactionsObjects)
 		if err != nil {
@@ -108,6 +110,7 @@ func getMigrator(c *container.Container) (Datasource, Migrator, bool) {
 		ds.SQL = c.SQL
 
 		mg = sqlMigratorObject{ds.SQL}.apply(mg)
+		c.Debugf("initialized data source for SQL")
 	}
 
 	if !isNil(c.Redis) {
@@ -116,6 +119,7 @@ func getMigrator(c *container.Container) (Datasource, Migrator, bool) {
 		ds.Redis = c.Redis
 
 		mg = redisMigratorObject{ds.Redis}.apply(mg)
+		c.Debugf("initialized data source for redis")
 	}
 
 	if c.PubSub != nil {
