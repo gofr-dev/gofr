@@ -3,6 +3,7 @@ package gofr
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"runtime/debug"
 	"strconv"
@@ -71,17 +72,8 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			re := recover()
 			if re != nil {
 				close(panicked)
-				var e string
-				switch t := re.(type) {
-				case string:
-					e = t
-				case error:
-					e = t.Error()
-				default:
-					e = "Unknown panic type"
-				}
 				h.container.Error(panicLog{
-					Error:      e,
+					Error:      fmt.Sprintln(re),
 					StackTrace: string(debug.Stack()),
 				})
 				return
