@@ -118,6 +118,7 @@ func (d sqlMigrator) commitMigration(c *container.Container, data migrationData)
 		if err != nil {
 			return err
 		}
+
 		c.Debugf("inserted record for migration number %v in gofr_migrations table", data.MigrationNumber)
 
 	case "postgres":
@@ -125,6 +126,7 @@ func (d sqlMigrator) commitMigration(c *container.Container, data migrationData)
 		if err != nil {
 			return err
 		}
+
 		c.Debugf("inserted record for migration number %v in gofr_migrations table", data.MigrationNumber)
 	}
 
