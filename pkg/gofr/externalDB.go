@@ -11,6 +11,15 @@ func (a *App) AddMongo(db datasource.MongoProvider) {
 	a.container.Mongo = db
 }
 
+func (a *App) AddClickhouse(db datasource.ClickhouseProvider) {
+	db.UseLogger(a.Logger())
+	db.UseMetrics(a.Metrics())
+
+	db.Connect()
+
+	a.container.Clickhouse = db
+}
+
 // UseMongo sets the Mongo datasource in the app's container.
 // Deprecated: Use the NewMongo function AddMongo instead.
 func (a *App) UseMongo(db datasource.Mongo) {

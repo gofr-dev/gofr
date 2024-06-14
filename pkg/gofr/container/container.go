@@ -37,8 +37,9 @@ type Container struct {
 	Redis Redis
 	SQL   DB
 
-	Cassandra datasource.Cassandra
-	Mongo     datasource.Mongo
+	Cassandra  datasource.Cassandra
+	Clickhouse datasource.Clickhouse
+	Mongo      datasource.Mongo
 
 	File datasource.FileSystem
 }
