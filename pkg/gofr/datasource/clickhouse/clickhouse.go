@@ -10,8 +10,7 @@ import (
 )
 
 type Config struct {
-	Host     string
-	Port     string
+	Hosts    string
 	Username string
 	Password string
 	Database string
@@ -70,9 +69,11 @@ func (c *client) Connect() {
 	c.metrics.NewGauge("app_clickhouse_open_connections", "Number of open Clickhouse connections.")
 	c.metrics.NewGauge("app_clickhouse_idle_connections", "Number of idle Clickhouse connections.")
 
+	addresses := strings.Split(c.config.Address, ",")
+
 	ctx := context.Background()
 	c.conn, err = clickhouse.Open(&clickhouse.Options{
-		Addr: []string{"%s:%s", c.config.Host, c.config.Port},
+		Addr: addresses,
 		Auth: clickhouse.Auth{
 			Database: c.config.Database,
 			Username: c.config.Username,
@@ -84,14 +85,12 @@ func (c *client) Connect() {
 	})
 
 	if err != nil {
-		c.logger.Errorf("Error while connecting to clickhouse %v", err)
+		c.logger.Errorf("error while connecting to clickhouse %v", err)
 		return
 	}
 
 	if err = c.conn.Ping(ctx); err != nil {
-		if exception, ok := err.(*clickhouse.Exception); ok {
-			c.logger.Errorf("exception [%d] %s \n%s\n", exception.Code, exception.Message, exception.StackTrace)
-		}
+		c.logger.Errorf("ping failed with error %v", err)
 
 		return
 	}
@@ -124,7 +123,7 @@ func (c *client) logQueryAndSendMetrics(start time.Time, methodType, query strin
 		Args:     args,
 	})
 
-	c.metrics.RecordHistogram(context.Background(), "app_clickhouse_stats", float64(duration), "hostname", c.config.Host,
+	c.metrics.RecordHistogram(context.Background(), "app_clickhouse_stats", float64(duration), "address", c.config.Address,
 		"database", c.config.Database, "type", getOperationType(query))
 }
 
