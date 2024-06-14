@@ -83,3 +83,13 @@ func (e ErrorRequestTimeout) Error() string {
 func (e ErrorRequestTimeout) StatusCode() int {
 	return http.StatusRequestTimeout
 }
+
+type ErrPanic struct{}
+
+func (e ErrPanic) Error() string {
+	return http.StatusText(http.StatusInternalServerError)
+}
+
+func (e ErrPanic) StatusCode() int {
+	return http.StatusInternalServerError
+}

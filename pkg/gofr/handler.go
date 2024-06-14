@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"runtime/debug"
 	"strconv"
 	"time"
 
@@ -59,13 +60,33 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	done := make(chan struct{})
-
+	panicked := make(chan struct{})
 	var (
 		result interface{}
 		err    error
 	)
 
 	go func() {
+		defer func() {
+			re := recover()
+			if re != nil {
+				close(panicked)
+				var e string
+				switch t := re.(type) {
+				case string:
+					e = t
+				case error:
+					e = t.Error()
+				default:
+					e = "Unknown panic type"
+				}
+				h.container.Error(panicLog{
+					Error:      e,
+					StackTrace: string(debug.Stack()),
+				})
+				return
+			}
+		}()
 		// Execute the handler function
 		result, err = h.function(c)
 
@@ -83,6 +104,8 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			// Do not respond with HTTP headers since this is a WebSocket request
 			return
 		}
+	case <-panicked:
+		err = gofrHTTP.ErrPanic{}
 	}
 
 	// Handler function completed
