@@ -1,7 +1,6 @@
 package http
 
 import (
-	"fmt"
 	"io"
 	"mime/multipart"
 	"reflect"
@@ -138,6 +137,13 @@ func (uf *formData) trySet(value reflect.Value, field *reflect.StructField) (boo
 			}
 
 			value.SetInt(i)
+		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
+			ui, err := strconv.ParseUint(data, 10, 64)
+			if err != nil {
+				return false, err
+			}
+
+			value.SetUint(ui)
 		case reflect.Float32, reflect.Float64:
 			f, err := strconv.ParseFloat(data, 64)
 			if err != nil {
@@ -152,8 +158,12 @@ func (uf *formData) trySet(value reflect.Value, field *reflect.StructField) (boo
 			}
 
 			value.SetBool(boolVal)
+		case reflect.Invalid, reflect.Complex64, reflect.Complex128, reflect.Array, reflect.Chan, reflect.Func, reflect.Interface,
+			reflect.Map, reflect.Pointer, reflect.Slice, reflect.Struct, reflect.UnsafePointer:
+			// These types are not supported for setting via form data
+			return false, nil
 		default:
-			return false, fmt.Errorf("unsupported type for field %s: %v", field.Name, kind)
+			return false, nil
 		}
 
 		return true, nil
