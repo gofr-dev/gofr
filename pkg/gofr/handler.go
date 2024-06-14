@@ -62,6 +62,7 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	done := make(chan struct{})
 	panicked := make(chan struct{})
+
 	var (
 		result interface{}
 		err    error
@@ -76,7 +77,6 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					Error:      fmt.Sprintln(re),
 					StackTrace: string(debug.Stack()),
 				})
-				return
 			}
 		}()
 		// Execute the handler function
