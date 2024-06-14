@@ -95,3 +95,11 @@ func TestErrorInvalidRoute(t *testing.T) {
 
 	assert.Equal(t, http.StatusNotFound, err.StatusCode(), "TEST Failed.\n")
 }
+
+func Test_ErrorRequestTimeout(t *testing.T) {
+	err := ErrorRequestTimeout{}
+
+	assert.Equal(t, "request timed out", err.Error(), "TEST Failed.\n")
+
+	assert.Equal(t, http.StatusRequestTimeout, err.StatusCode(), "TEST Failed.\n")
+}

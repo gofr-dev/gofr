@@ -76,18 +76,17 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case <-c.Context.Done():
 		// If the context's deadline has been exceeded, return a timeout error response
 		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-			http.Error(w, "Request timed out", http.StatusRequestTimeout)
-			return
+			err = gofrHTTP.ErrorRequestTimeout{}
 		}
 	case <-done:
 		if websocket.IsWebSocketUpgrade(r) {
 			// Do not respond with HTTP headers since this is a WebSocket request
 			return
 		}
-
-		// Handler function completed
-		c.responder.Respond(result, err)
 	}
+
+	// Handler function completed
+	c.responder.Respond(result, err)
 }
 
 func healthHandler(c *Context) (interface{}, error) {

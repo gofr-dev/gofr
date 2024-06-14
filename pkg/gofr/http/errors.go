@@ -72,3 +72,14 @@ func (e ErrorInvalidRoute) Error() string {
 func (e ErrorInvalidRoute) StatusCode() int {
 	return http.StatusNotFound
 }
+
+// ErrorRequestTimeout represents an error for request which timed out.
+type ErrorRequestTimeout struct{}
+
+func (e ErrorRequestTimeout) Error() string {
+	return "request timed out"
+}
+
+func (e ErrorRequestTimeout) StatusCode() int {
+	return http.StatusRequestTimeout
+}
