@@ -22,6 +22,7 @@ import (
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
+	"gofr.dev/pkg/gofr/datasource/sql"
 	gofrHTTP "gofr.dev/pkg/gofr/http"
 	"gofr.dev/pkg/gofr/http/middleware"
 	"gofr.dev/pkg/gofr/logging"
@@ -265,6 +266,30 @@ func (a *App) Logger() logging.Logger {
 // Can be used to create commands like "kubectl get" or "kubectl get ingress".
 func (a *App) SubCommand(pattern string, handler Handler, options ...Options) {
 	a.cmd.addRoute(pattern, handler, options...)
+}
+
+func (a *App) AutoMigrate(structs ...interface{}) {
+	// TODO : Move panic recovery at central location which will manage for all the different cases.
+	defer panicRecovery(a.container.Logger)
+
+	// Get the database type from the container
+	dbType := a.container.SQL.Dialect()
+
+	// Create SQL statement from each struct by calling GenerateCreateTableSQL
+	for _, s := range structs {
+		sql, err := sql.GenerateCreateTableSQL(s, dbType)
+		if err != nil {
+			a.container.Logger.Errorf("error generating SQL: %v", err)
+			return
+		}
+		a.container.Logger.Infof("SQL: %s", sql)
+		result, err := a.container.SQL.Exec(sql)
+		if err != nil {
+			a.container.Logger.Errorf("error executing SQL: %v", err)
+			return
+		}
+		a.container.Logger.Infof("result for %s: %v", s, result)
+	}
 }
 
 func (a *App) Migrate(migrationsMap map[int64]migration.Migrate) {
