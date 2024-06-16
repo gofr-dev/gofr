@@ -18,7 +18,6 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
-
 	"google.golang.org/grpc"
 
 	"gofr.dev/pkg/gofr/config"
@@ -40,8 +39,7 @@ type App struct {
 	httpServer   *httpServer
 	metricServer *metricServer
 
-	cmd *cmd
-
+	cmd  *cmd
 	cron *Crontab
 
 	// container is unexported because this is an internal implementation and applications are provided access to it via Context
@@ -101,11 +99,9 @@ func New() *App {
 func NewCMD() *App {
 	app := &App{}
 	app.readConfig(true)
-
 	app.container = container.NewContainer(nil)
 	app.container.Logger = logging.NewFileLogger(app.Config.Get("CMD_LOGS_FILE"))
 	app.cmd = &cmd{}
-
 	app.container.Create(app.Config)
 	app.initTracer()
 
@@ -249,10 +245,11 @@ func (a *App) PATCH(pattern string, handler Handler) {
 
 func (a *App) add(method, pattern string, h Handler) {
 	a.httpRegistered = true
+
 	a.httpServer.router.Add(method, pattern, handler{
 		function:       h,
 		container:      a.container,
-		requestTimeout: a.Config.GetOrDefault("REQUEST_TIMEOUT", "5"),
+		requestTimeout: a.Config.Get("REQUEST_TIMEOUT"),
 	})
 }
 
@@ -266,8 +263,8 @@ func (a *App) Logger() logging.Logger {
 
 // SubCommand adds a sub-command to the CLI application.
 // Can be used to create commands like "kubectl get" or "kubectl get ingress".
-func (a *App) SubCommand(pattern string, handler Handler) {
-	a.cmd.addRoute(pattern, handler)
+func (a *App) SubCommand(pattern string, handler Handler, options ...Options) {
+	a.cmd.addRoute(pattern, handler, options...)
 }
 
 func (a *App) Migrate(migrationsMap map[int64]migration.Migrate) {
