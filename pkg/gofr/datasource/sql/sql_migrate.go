@@ -77,13 +77,13 @@ func GenerateCreateTableSQL(structType interface{}, dbType string) (string, erro
 				} else if dbType == "PostgreSQL" {
 					sqlType += " SERIAL"
 				}
-			case "not null":
+			case "not_null":
 				sqlType += " NOT NULL"
 			case "unique":
 				sqlType += " UNIQUE"
 			case "index":
 				indexes = append(indexes, fmt.Sprintf("CREATE INDEX idx_%s_%s ON %s (%s);", tableName, columnName, tableName, columnName))
-			case "uniqueIndex":
+			case "unique_index":
 				uniqueIndexes = append(uniqueIndexes, fmt.Sprintf("CREATE UNIQUE INDEX uidx_%s_%s ON %s (%s);", tableName, columnName, tableName, columnName))
 			}
 		}
