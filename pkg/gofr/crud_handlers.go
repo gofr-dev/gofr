@@ -155,17 +155,12 @@ func (e *entity) Create(c *Context) (interface{}, error) {
 
 	stmt := sql.InsertQuery(c.SQL.Dialect(), e.tableName, fieldNames)
 
-	res, err := c.SQL.ExecContext(c, stmt, fieldValues...)
+	_, err = c.SQL.ExecContext(c, stmt, fieldValues...)
 	if err != nil {
 		return nil, err
 	}
 
-	id, err := res.LastInsertId()
-	if err != nil {
-		return nil, err
-	}
-
-	return fmt.Sprintf("%s successfully created with id: %d", e.name, id), nil
+	return fmt.Sprintf("%s successfully created with id: %d", e.name, fieldValues[0]), nil
 }
 
 func (e *entity) GetAll(c *Context) (interface{}, error) {
@@ -252,7 +247,7 @@ func (e *entity) Update(c *Context) (interface{}, error) {
 
 	stmt := sql.UpdateByQuery(c.SQL.Dialect(), e.tableName, fieldNames[1:], e.primaryKey)
 
-	_, err = c.SQL.ExecContext(c, stmt, append(fieldValues[1:], id)...)
+	_, err = c.SQL.ExecContext(c, stmt, append(fieldValues[1:], fieldValues[0])...)
 	if err != nil {
 		return nil, err
 	}
