@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"gofr.dev/pkg/gofr/logging"
 	"os"
 	"runtime/debug"
 	"strconv"
@@ -69,16 +70,7 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	)
 
 	go func() {
-		defer func() {
-			re := recover()
-			if re != nil {
-				close(panicked)
-				h.container.Error(panicLog{
-					Error:      fmt.Sprintln(re),
-					StackTrace: string(debug.Stack()),
-				})
-			}
-		}()
+		defer panicRecoveryHandler(h.container, panicked)
 		// Execute the handler function
 		result, err = h.function(c)
 
@@ -138,4 +130,15 @@ func (h handler) setContextTimeout(timeout string) int {
 	}
 
 	return reqTimeout
+}
+func panicRecoveryHandler(log logging.Logger, panicked chan struct{}) {
+	re := recover()
+	if re != nil {
+		close(panicked)
+		log.Error(panicLog{
+			Error:      fmt.Sprint(re),
+			StackTrace: string(debug.Stack()),
+		})
+	}
+	return
 }
