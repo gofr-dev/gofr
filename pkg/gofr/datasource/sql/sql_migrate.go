@@ -18,6 +18,7 @@ func GenerateCreateTableSQL(structType interface{}, dbType string, dropIfExists 
 	indexes := []string{}
 	uniqueIndexes := []string{}
 	foreignKeys := []string{}
+	triggers := []string{}
 
 	for i := 0; i < t.NumField(); i++ {
 		field := t.Field(i)
@@ -112,7 +113,9 @@ func GenerateCreateTableSQL(structType interface{}, dbType string, dropIfExists 
 			fieldDef += fmt.Sprintf(" COMMENT '%s'", comment)
 		}
 		if checkConstraint != "" {
-			fieldDef += fmt.Sprintf(" CHECK (%s)", checkConstraint)
+			triggerName := fmt.Sprintf("check_%s_before_update", columnName)
+			trigger := fmt.Sprintf("DELIMITER //\nCREATE TRIGGER %s BEFORE UPDATE ON %s\nFOR EACH ROW\nBEGIN\n    IF %s THEN\n        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = '%s';\n    END IF;\nEND//DELIMITER;", triggerName, tableName, checkConstraint, checkConstraint)
+			triggers = append(triggers, trigger)
 		}
 
 		fields = append(fields, fieldDef)
@@ -135,6 +138,7 @@ func GenerateCreateTableSQL(structType interface{}, dbType string, dropIfExists 
 
 	indexStatements := strings.Join(indexes, "\n")
 	uniqueIndexStatements := strings.Join(uniqueIndexes, "\n")
+	triggerStatements := strings.Join(triggers, "\n")
 
-	return fmt.Sprintf("%s\n%s\n%s\n%s", dropTableStatement, createTableStatement, indexStatements, uniqueIndexStatements), nil
+	return fmt.Sprintf("%s\n%s\n%s\n%s\n%s", dropTableStatement, createTableStatement, indexStatements, uniqueIndexStatements, triggerStatements), nil
 }
