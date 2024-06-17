@@ -88,7 +88,7 @@ func TestHandler_ServeHTTP_Panic(t *testing.T) {
 
 	h.container = &container.Container{Logger: logging.NewLogger(logging.FATAL)}
 	h.function = func(*Context) (interface{}, error) {
-		panic(nil)
+		panic("runtime panic")
 	}
 
 	h.ServeHTTP(w, r)
