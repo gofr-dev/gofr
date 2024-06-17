@@ -140,5 +140,4 @@ func panicRecoveryHandler(log logging.Logger, panicked chan struct{}) {
 			StackTrace: string(debug.Stack()),
 		})
 	}
-	return
 }

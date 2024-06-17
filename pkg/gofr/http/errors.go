@@ -87,8 +87,6 @@ func (e ErrorRequestTimeout) StatusCode() int {
 type ErrorPanicRecovery struct{}
 
 func (e ErrorPanicRecovery) Error() string {
-	recover()
-
 	return http.StatusText(http.StatusInternalServerError)
 }
 
