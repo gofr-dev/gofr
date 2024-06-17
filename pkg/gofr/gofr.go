@@ -268,7 +268,7 @@ func (a *App) SubCommand(pattern string, handler Handler, options ...Options) {
 	a.cmd.addRoute(pattern, handler, options...)
 }
 
-func (a *App) AutoMigrate(structs ...interface{}) {
+func (a *App) AutoMigrate(structs ...interface{}) error {
 	// TODO : Move panic recovery at central location which will manage for all the different cases.
 	defer panicRecovery(a.container.Logger)
 
@@ -277,19 +277,26 @@ func (a *App) AutoMigrate(structs ...interface{}) {
 
 	// Create SQL statement from each struct by calling GenerateCreateTableSQL
 	for _, s := range structs {
-		sql, err := sql.GenerateCreateTableSQL(s, dbType)
+		sqlStatements, err := sql.GenerateCreateTableSQL(s, dbType, true)
 		if err != nil {
 			a.container.Logger.Errorf("error generating SQL: %v", err)
-			return
+			return err
 		}
-		a.container.Logger.Infof("SQL: %s", sql)
-		result, err := a.container.SQL.Exec(sql)
-		if err != nil {
-			a.container.Logger.Errorf("error executing SQL: %v", err)
-			return
+		a.container.Logger.Infof("SQL: %s", sqlStatements)
+		for _, sql := range strings.Split(strings.TrimSpace(sqlStatements), ";") {
+			sql = strings.TrimSpace(sql)
+			if sql == "" {
+				continue
+			}
+			result, err := a.container.SQL.Exec(sql)
+			if err != nil {
+				a.container.Logger.Errorf("error executing SQL: %v", err)
+				return err
+			}
+			a.container.Logger.Infof("result for %s: %v", sql, result)
 		}
-		a.container.Logger.Infof("result for %s: %v", s, result)
 	}
+	return nil
 }
 
 func (a *App) Migrate(migrationsMap map[int64]migration.Migrate) {
