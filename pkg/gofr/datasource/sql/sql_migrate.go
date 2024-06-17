@@ -22,20 +22,13 @@ func GenerateCreateTableSQL(structType interface{}, dbType string, dropIfExists 
 		columnName := ToSnakeCase(field.Name)
 
 		sqlType := ""
-		size := ""
 		comment := ""
 		checkConstraint := ""
 		gofrTags := field.Tag.Get("gofr")
 		tagParts := strings.Split(gofrTags, ",")
 		for _, tag := range tagParts {
 			tag = strings.TrimSpace(tag)
-			if strings.HasPrefix(tag, "size(") {
-				sizePattern := regexp.MustCompile(`size\((\d+)\)`)
-				matches := sizePattern.FindStringSubmatch(tag)
-				if len(matches) == 2 {
-					size = matches[1]
-				}
-			} else if strings.HasPrefix(tag, "comment(") {
+			if strings.HasPrefix(tag, "comment(") {
 				commentPattern := regexp.MustCompile(`comment\((.+)\)`)
 				matches := commentPattern.FindStringSubmatch(tag)
 				if len(matches) == 2 {
@@ -60,11 +53,17 @@ func GenerateCreateTableSQL(structType interface{}, dbType string, dropIfExists 
 		case reflect.Bool:
 			sqlType = "BOOLEAN"
 		case reflect.String:
-			if size != "" {
-				sqlType = fmt.Sprintf("VARCHAR(%s)", size)
-			} else {
-				sqlType = "VARCHAR(255)"
+			size := "255" // Default size
+			for _, tag := range tagParts {
+				if strings.HasPrefix(tag, "size(") {
+					sizePattern := regexp.MustCompile(`size\((\d+)\)`)
+					matches := sizePattern.FindStringSubmatch(tag)
+					if len(matches) == 2 {
+						size = matches[1]
+					}
+				}
 			}
+			sqlType = fmt.Sprintf("VARCHAR(%s)", size)
 		case reflect.Struct:
 			if field.Type == reflect.TypeOf(time.Time{}) {
 				sqlType = "DATETIME"
