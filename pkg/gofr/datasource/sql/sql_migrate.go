@@ -9,7 +9,7 @@ import (
 )
 
 // GenerateCreateTableSQL generates a SQL CREATE TABLE statement for the given struct.
-func GenerateCreateTableSQL(structType interface{}, dbType string) (string, error) {
+func GenerateCreateTableSQL(structType interface{}, dbType string, dropIfExists bool) (string, error) {
 	t := reflect.TypeOf(structType)
 	tableName := ToSnakeCase(t.Name())
 
@@ -20,12 +20,14 @@ func GenerateCreateTableSQL(structType interface{}, dbType string) (string, erro
 	for i := 0; i < t.NumField(); i++ {
 		field := t.Field(i)
 		columnName := ToSnakeCase(field.Name)
-		if jsonTag := field.Tag.Get("json"); jsonTag != "" {
+		if jsonTag := field.Tag.Get("json"); jsonTag != "" && jsonTag != "-" {
 			columnName = ToSnakeCase(jsonTag)
 		}
 
 		sqlType := ""
 		size := ""
+		comment := ""
+		checkConstraint := ""
 		gofrTags := field.Tag.Get("gofr")
 		tagParts := strings.Split(gofrTags, ",")
 		for _, tag := range tagParts {
@@ -35,6 +37,18 @@ func GenerateCreateTableSQL(structType interface{}, dbType string) (string, erro
 				matches := sizePattern.FindStringSubmatch(tag)
 				if len(matches) == 2 {
 					size = matches[1]
+				}
+			} else if strings.HasPrefix(tag, "comment(") {
+				commentPattern := regexp.MustCompile(`comment\((.+)\)`)
+				matches := commentPattern.FindStringSubmatch(tag)
+				if len(matches) == 2 {
+					comment = matches[1]
+				}
+			} else if strings.HasPrefix(tag, "check(") {
+				checkPattern := regexp.MustCompile(`check\((.+)\)`)
+				matches := checkPattern.FindStringSubmatch(tag)
+				if len(matches) == 2 {
+					checkConstraint = matches[1]
 				}
 			}
 		}
@@ -88,12 +102,25 @@ func GenerateCreateTableSQL(structType interface{}, dbType string) (string, erro
 			}
 		}
 
-		fields = append(fields, fmt.Sprintf("%s %s", columnName, sqlType))
+		fieldDef := fmt.Sprintf("%s %s", columnName, sqlType)
+		if comment != "" {
+			fieldDef += fmt.Sprintf(" COMMENT '%s'", comment)
+		}
+		if checkConstraint != "" {
+			fieldDef += fmt.Sprintf(" CHECK (%s)", checkConstraint)
+		}
+
+		fields = append(fields, fieldDef)
+	}
+
+	dropTableStatement := ""
+	if dropIfExists {
+		dropTableStatement = fmt.Sprintf("DROP TABLE IF EXISTS %s;", tableName)
 	}
 
 	createTableStatement := fmt.Sprintf("CREATE TABLE %s (\n\t%s\n);", tableName, strings.Join(fields, ",\n\t"))
 	indexStatements := strings.Join(indexes, "\n")
 	uniqueIndexStatements := strings.Join(uniqueIndexes, "\n")
 
-	return fmt.Sprintf("%s\n%s\n%s", createTableStatement, indexStatements, uniqueIndexStatements), nil
+	return fmt.Sprintf("%s\n%s\n%s\n%s", dropTableStatement, createTableStatement, indexStatements, uniqueIndexStatements), nil
 }
