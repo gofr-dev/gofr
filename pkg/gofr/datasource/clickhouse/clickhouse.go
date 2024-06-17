@@ -2,7 +2,6 @@ package clickhouse
 
 import (
 	"context"
-	"crypto/tls"
 	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
 	"strings"
@@ -78,9 +77,6 @@ func (c *client) Connect() {
 			Database: c.config.Database,
 			Username: c.config.Username,
 			Password: c.config.Password,
-		},
-		TLS: &tls.Config{
-			InsecureSkipVerify: true,
 		},
 	})
 
