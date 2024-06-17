@@ -69,7 +69,7 @@ func (c *client) Connect() {
 	c.metrics.NewGauge("app_clickhouse_open_connections", "Number of open Clickhouse connections.")
 	c.metrics.NewGauge("app_clickhouse_idle_connections", "Number of idle Clickhouse connections.")
 
-	addresses := strings.Split(c.config.Address, ",")
+	addresses := strings.Split(c.config.Hosts, ",")
 
 	ctx := context.Background()
 	c.conn, err = clickhouse.Open(&clickhouse.Options{
@@ -123,7 +123,7 @@ func (c *client) logQueryAndSendMetrics(start time.Time, methodType, query strin
 		Args:     args,
 	})
 
-	c.metrics.RecordHistogram(context.Background(), "app_clickhouse_stats", float64(duration), "address", c.config.Address,
+	c.metrics.RecordHistogram(context.Background(), "app_clickhouse_stats", float64(duration), "address", c.config.Hosts,
 		"database", c.config.Database, "type", getOperationType(query))
 }
 
