@@ -283,7 +283,7 @@ func (a *App) AutoMigrate(structs ...interface{}) error {
 			return err
 		}
 		a.container.Logger.Infof("SQL: %s", sqlStatements)
-		for _, sql := range strings.Split(strings.TrimSpace(sqlStatements), ";") {
+		for _, sql := range strings.Split(strings.TrimSpace(sqlStatements), "\n\n\n") {
 			sql = strings.TrimSpace(sql)
 			if sql == "" {
 				continue

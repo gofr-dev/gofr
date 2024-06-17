@@ -48,7 +48,7 @@ func GenerateCreateTableSQL(structType interface{}, dbType string, dropIfExists 
 				fkPattern := regexp.MustCompile(`fk\((.+):(.+)\)`)
 				matches := fkPattern.FindStringSubmatch(tag)
 				if len(matches) == 3 {
-					foreignKey = fmt.Sprintf("FOREIGN KEY (%s) REFERENCES %s(%s)", columnName, matches[1], matches[2])
+					foreignKey = fmt.Sprintf("FOREIGN KEY (%s) REFERENCES %s(%s)", ToSnakeCase(columnName), ToSnakeCase(matches[1]), ToSnakeCase(matches[2]))
 				}
 			}
 		}
@@ -102,9 +102,9 @@ func GenerateCreateTableSQL(structType interface{}, dbType string, dropIfExists 
 			case "unique":
 				sqlType += " UNIQUE"
 			case "index":
-				indexes = append(indexes, fmt.Sprintf("CREATE INDEX idx_%s_%s ON %s (%s);", tableName, columnName, tableName, columnName))
+				indexes = append(indexes, fmt.Sprintf("CREATE INDEX idx_%s_%s ON %s (%s);\n\n\n", tableName, columnName, tableName, columnName))
 			case "unique_index":
-				uniqueIndexes = append(uniqueIndexes, fmt.Sprintf("CREATE UNIQUE INDEX uidx_%s_%s ON %s (%s);", tableName, columnName, tableName, columnName))
+				uniqueIndexes = append(uniqueIndexes, fmt.Sprintf("CREATE UNIQUE INDEX uidx_%s_%s ON %s (%s);\n\n\n", tableName, columnName, tableName, columnName))
 			}
 		}
 
@@ -114,7 +114,7 @@ func GenerateCreateTableSQL(structType interface{}, dbType string, dropIfExists 
 		}
 		if checkConstraint != "" {
 			triggerName := fmt.Sprintf("check_%s_before_update", columnName)
-			trigger := fmt.Sprintf("DELIMITER //\nCREATE TRIGGER %s BEFORE UPDATE ON %s\nFOR EACH ROW\nBEGIN\n    IF %s THEN\n        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = '%s';\n    END IF;\nEND//DELIMITER;", triggerName, tableName, checkConstraint, checkConstraint)
+			trigger := fmt.Sprintf("CREATE TRIGGER %s BEFORE UPDATE ON %s\nFOR EACH ROW\nBEGIN\n    IF %s THEN\n        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = '%s';\n    END IF;\nEND\n\n\n", triggerName, tableName, checkConstraint, checkConstraint)
 			triggers = append(triggers, trigger)
 		}
 
@@ -127,14 +127,14 @@ func GenerateCreateTableSQL(structType interface{}, dbType string, dropIfExists 
 
 	dropTableStatement := ""
 	if dropIfExists {
-		dropTableStatement = fmt.Sprintf("DROP TABLE IF EXISTS %s;", tableName)
+		dropTableStatement = fmt.Sprintf("DROP TABLE IF EXISTS %s;\n\n\n", tableName)
 	}
 
 	createTableStatement := fmt.Sprintf("CREATE TABLE %s (\n\t%s", tableName, strings.Join(fields, ",\n\t"))
 	if len(foreignKeys) > 0 {
 		createTableStatement += fmt.Sprintf(",\n\t%s", strings.Join(foreignKeys, ",\n\t"))
 	}
-	createTableStatement += "\n);"
+	createTableStatement += "\n);\n\n\n"
 
 	indexStatements := strings.Join(indexes, "\n")
 	uniqueIndexStatements := strings.Join(uniqueIndexes, "\n")
