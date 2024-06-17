@@ -17,7 +17,9 @@ func SplitEnv(envString, splitString string) []string {
 		if ele == "" {
 			continue
 		}
+
 		tempArray = append(tempArray, ele)
 	}
+
 	return tempArray
 }

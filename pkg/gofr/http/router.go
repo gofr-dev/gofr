@@ -103,11 +103,11 @@ func (staticConfig StaticFileConfig) checkDirectoryListing(w http.ResponseWriter
 func (staticConfig StaticFileConfig) checkDotFiles(w http.ResponseWriter, fileName, url string) {
 	if _, err := os.Stat(filepath.Join(staticConfig.FileDirectory, url)); err == nil && strings.HasPrefix(fileName, ".") {
 		w.WriteHeader(http.StatusForbidden)
-		w.Write([]byte(forbiddenBody))
+
+		_, _ = w.Write([]byte(forbiddenBody))
 
 		return
 	}
-
 }
 
 func (staticConfig StaticFileConfig) checkExcludedExtensions(w http.ResponseWriter, fileName, url string) {
@@ -116,7 +116,8 @@ func (staticConfig StaticFileConfig) checkExcludedExtensions(w http.ResponseWrit
 	for _, ext := range staticConfig.ExcludeExtensions {
 		if strings.HasSuffix(fileName, ext) && err == nil {
 			w.WriteHeader(http.StatusForbidden)
-			w.Write([]byte(forbiddenBody))
+
+			_, _ = w.Write([]byte(forbiddenBody))
 
 			return
 		}
@@ -129,7 +130,8 @@ func (staticConfig StaticFileConfig) checkExcludedFiles(w http.ResponseWriter, f
 	for _, file := range staticConfig.ExcludeFiles {
 		if file == fileName && err == nil {
 			w.WriteHeader(http.StatusForbidden)
-			w.Write([]byte(forbiddenBody))
+
+			_, _ = w.Write([]byte(forbiddenBody))
 
 			return
 		}
