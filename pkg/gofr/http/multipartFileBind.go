@@ -4,12 +4,14 @@ import (
 	"io"
 	"mime/multipart"
 	"reflect"
+	"strconv"
 
 	"gofr.dev/pkg/gofr/file"
 )
 
 type formData struct {
-	files map[string][]*multipart.FileHeader
+	fields map[string][]string
+	files  map[string][]*multipart.FileHeader
 }
 
 func (uf *formData) mapStruct(val reflect.Value, field *reflect.StructField) (bool, error) {
@@ -87,16 +89,23 @@ func (uf *formData) checkStruct(val reflect.Value) (bool, error) {
 }
 
 func (uf *formData) trySet(value reflect.Value, field *reflect.StructField) (bool, error) {
-	tag, ok := getFileName(field)
+	tag, ok := getFieldName(field)
 	if !ok {
 		return false, nil
 	}
 
-	header, ok := uf.files[tag]
-	if !ok {
-		return false, nil
+	if header, ok := uf.files[tag]; ok {
+		return uf.setFile(value, header)
 	}
 
+	if values, ok := uf.fields[tag]; ok {
+		return uf.setFieldValue(value, values[0])
+	}
+
+	return false, nil
+}
+
+func (uf *formData) setFile(value reflect.Value, header []*multipart.FileHeader) (bool, error) {
 	f, err := header[0].Open()
 	if err != nil {
 		return false, err
@@ -124,24 +133,96 @@ func (uf *formData) trySet(value reflect.Value, field *reflect.StructField) (boo
 	return true, nil
 }
 
-func getFileName(field *reflect.StructField) (string, bool) {
+func (uf *formData) setFieldValue(value reflect.Value, data string) (bool, error) {
+	kind := value.Kind()
+	switch kind {
+	case reflect.String:
+		return uf.setStringValue(value, data)
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return uf.setIntValue(value, data)
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
+		return uf.setUintValue(value, data)
+	case reflect.Float32, reflect.Float64:
+		return uf.setFloatValue(value, data)
+	case reflect.Bool:
+		return uf.setBoolValue(value, data)
+	case reflect.Invalid, reflect.Complex64, reflect.Complex128, reflect.Array, reflect.Chan, reflect.Func, reflect.Interface,
+		reflect.Map, reflect.Pointer, reflect.Slice, reflect.Struct, reflect.UnsafePointer:
+		// These types are not supported for setting via form data
+		return false, nil
+	default:
+		return false, nil
+	}
+}
+
+func (uf *formData) setStringValue(value reflect.Value, data string) (bool, error) {
+	value.SetString(data)
+
+	return true, nil
+}
+
+func (uf *formData) setIntValue(value reflect.Value, data string) (bool, error) {
+	i, err := strconv.ParseInt(data, 10, 64)
+	if err != nil {
+		return false, err
+	}
+
+	value.SetInt(i)
+
+	return true, nil
+}
+
+func (uf *formData) setUintValue(value reflect.Value, data string) (bool, error) {
+	ui, err := strconv.ParseUint(data, 10, 64)
+	if err != nil {
+		return false, err
+	}
+
+	value.SetUint(ui)
+
+	return true, nil
+}
+
+func (uf *formData) setFloatValue(value reflect.Value, data string) (bool, error) {
+	f, err := strconv.ParseFloat(data, 64)
+	if err != nil {
+		return false, err
+	}
+
+	value.SetFloat(f)
+
+	return true, nil
+}
+
+func (uf *formData) setBoolValue(value reflect.Value, data string) (bool, error) {
+	boolVal, err := strconv.ParseBool(data)
+	if err != nil {
+		return false, err
+	}
+
+	value.SetBool(boolVal)
+
+	return true, nil
+}
+
+func getFieldName(field *reflect.StructField) (string, bool) {
 	var (
-		tag = "file"
-		key string
+		formTag = "form"
+		fileTag = "file"
+		key     string
 	)
 
-	if field.Tag.Get(tag) == "-" {
+	if field.Tag.Get(formTag) != "" && field.IsExported() {
+		key = field.Tag.Get(formTag)
+	} else if field.Tag.Get(fileTag) != "" && field.IsExported() {
+		key = field.Tag.Get(fileTag)
+	} else if field.IsExported() {
+		key = field.Name
+	} else {
 		return "", false
 	}
 
-	// we do not want to set unexported field
-	if field.Tag.Get(tag) == "" && field.IsExported() {
-		key = field.Name
-	} else {
-		key = field.Tag.Get(tag)
-	}
-
-	if key == "" {
+	if key == "" || key == "-" {
 		return "", false
 	}
 
