@@ -10,6 +10,7 @@ import (
 
 // GenerateCreateTableSQL generates a SQL CREATE TABLE statement for the given struct.
 func GenerateCreateTableSQL(structType interface{}, dbType string, dropIfExists bool) (string, error) {
+	dbType = strings.ToUpper(strings.TrimSpace(dbType))
 	t := reflect.TypeOf(structType)
 	tableName := ToSnakeCase(t.Name())
 
@@ -78,13 +79,13 @@ func GenerateCreateTableSQL(structType interface{}, dbType string, dropIfExists 
 			switch tag {
 			case "primary_key":
 				sqlType += " PRIMARY KEY"
-				if dbType == "MySQL" && strings.Contains(sqlType, "INTEGER") {
+				if dbType == "MYSQL" && strings.Contains(sqlType, "INTEGER") {
 					sqlType = strings.Replace(sqlType, "INTEGER", "INT", 1)
 				}
 			case "auto_increment":
-				if dbType == "MySQL" {
+				if dbType == "MYSQL" {
 					sqlType += " AUTO_INCREMENT"
-				} else if dbType == "PostgreSQL" {
+				} else if dbType == "POSTGRESQL" {
 					sqlType += " SERIAL"
 				}
 			case "not_null":
