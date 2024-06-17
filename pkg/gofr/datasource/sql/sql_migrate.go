@@ -20,9 +20,6 @@ func GenerateCreateTableSQL(structType interface{}, dbType string, dropIfExists 
 	for i := 0; i < t.NumField(); i++ {
 		field := t.Field(i)
 		columnName := ToSnakeCase(field.Name)
-		if jsonTag := field.Tag.Get("json"); jsonTag != "" && jsonTag != "-" {
-			columnName = ToSnakeCase(jsonTag)
-		}
 
 		sqlType := ""
 		size := ""
