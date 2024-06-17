@@ -17,6 +17,7 @@ func GenerateCreateTableSQL(structType interface{}, dbType string, dropIfExists 
 	fields := []string{}
 	indexes := []string{}
 	uniqueIndexes := []string{}
+	foreignKeys := []string{}
 
 	for i := 0; i < t.NumField(); i++ {
 		field := t.Field(i)
@@ -25,6 +26,7 @@ func GenerateCreateTableSQL(structType interface{}, dbType string, dropIfExists 
 		sqlType := ""
 		comment := ""
 		checkConstraint := ""
+		foreignKey := ""
 		gofrTags := field.Tag.Get("gofr")
 		tagParts := strings.Split(gofrTags, ",")
 		for _, tag := range tagParts {
@@ -40,6 +42,12 @@ func GenerateCreateTableSQL(structType interface{}, dbType string, dropIfExists 
 				matches := checkPattern.FindStringSubmatch(tag)
 				if len(matches) == 2 {
 					checkConstraint = matches[1]
+				}
+			} else if strings.HasPrefix(tag, "fk(") {
+				fkPattern := regexp.MustCompile(`fk\((.+):(.+)\)`)
+				matches := fkPattern.FindStringSubmatch(tag)
+				if len(matches) == 3 {
+					foreignKey = fmt.Sprintf("FOREIGN KEY (%s) REFERENCES %s(%s)", columnName, matches[1], matches[2])
 				}
 			}
 		}
@@ -108,6 +116,10 @@ func GenerateCreateTableSQL(structType interface{}, dbType string, dropIfExists 
 		}
 
 		fields = append(fields, fieldDef)
+
+		if foreignKey != "" {
+			foreignKeys = append(foreignKeys, foreignKey)
+		}
 	}
 
 	dropTableStatement := ""
@@ -115,7 +127,12 @@ func GenerateCreateTableSQL(structType interface{}, dbType string, dropIfExists 
 		dropTableStatement = fmt.Sprintf("DROP TABLE IF EXISTS %s;", tableName)
 	}
 
-	createTableStatement := fmt.Sprintf("CREATE TABLE %s (\n\t%s\n);", tableName, strings.Join(fields, ",\n\t"))
+	createTableStatement := fmt.Sprintf("CREATE TABLE %s (\n\t%s", tableName, strings.Join(fields, ",\n\t"))
+	if len(foreignKeys) > 0 {
+		createTableStatement += fmt.Sprintf(",\n\t%s", strings.Join(foreignKeys, ",\n\t"))
+	}
+	createTableStatement += "\n);"
+
 	indexStatements := strings.Join(indexes, "\n")
 	uniqueIndexStatements := strings.Join(uniqueIndexes, "\n")
 
