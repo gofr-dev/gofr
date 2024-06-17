@@ -23,8 +23,6 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 		return
 	}
 
-	c.Debug("sorting the migration keys")
-
 	sortkeys.Int64s(keys)
 
 	ds, mg, ok := getMigrator(c)
@@ -70,8 +68,6 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 
 			return
 		}
-
-		c.Debugf("successfully executed UP for migration %v", currentMigration)
 
 		err = mg.commitMigration(c, transactionsObjects)
 		if err != nil {

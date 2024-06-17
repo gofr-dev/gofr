@@ -119,7 +119,7 @@ func (d sqlMigrator) commitMigration(c *container.Container, data migrationData)
 			return err
 		}
 
-		c.Debugf("inserted record for migration number %v in gofr_migrations table", data.MigrationNumber)
+		c.Debugf("inserted record for migration %v in gofr_migrations table", data.MigrationNumber)
 
 	case "postgres":
 		err := insertMigrationRecord(data.SQLTx, insertGoFrMigrationRowPostgres, data.MigrationNumber, data.StartTime)
@@ -127,7 +127,7 @@ func (d sqlMigrator) commitMigration(c *container.Container, data migrationData)
 			return err
 		}
 
-		c.Debugf("inserted record for migration number %v in gofr_migrations table", data.MigrationNumber)
+		c.Debugf("inserted record for migration %v in gofr_migrations table", data.MigrationNumber)
 	}
 
 	// Commit transaction
