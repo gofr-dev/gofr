@@ -84,12 +84,14 @@ func (e ErrorRequestTimeout) StatusCode() int {
 	return http.StatusRequestTimeout
 }
 
-type ErrPanic struct{}
+type ErrorPanicRecovery struct{}
 
-func (e ErrPanic) Error() string {
+func (e ErrorPanicRecovery) Error() string {
+	recover()
+
 	return http.StatusText(http.StatusInternalServerError)
 }
 
-func (e ErrPanic) StatusCode() int {
+func (e ErrorPanicRecovery) StatusCode() int {
 	return http.StatusInternalServerError
 }

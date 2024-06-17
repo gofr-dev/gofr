@@ -97,7 +97,7 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	case <-panicked:
-		err = gofrHTTP.ErrPanic{}
+		err = gofrHTTP.ErrorPanicRecovery{}
 	}
 
 	// Handler function completed
