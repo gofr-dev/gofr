@@ -84,6 +84,7 @@ func (e ErrorRequestTimeout) StatusCode() int {
 	return http.StatusRequestTimeout
 }
 
+// ErrorPanicRecovery represents an error for request which panicked.
 type ErrorPanicRecovery struct{}
 
 func (e ErrorPanicRecovery) Error() string {

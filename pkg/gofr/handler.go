@@ -4,19 +4,19 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"runtime/debug"
 	"strconv"
 	"time"
 
 	"github.com/gorilla/websocket"
+
 	"gofr.dev/pkg/gofr/container"
 	gofrHTTP "gofr.dev/pkg/gofr/http"
 	"gofr.dev/pkg/gofr/http/response"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/static"
-
-	"net/http"
 )
 
 type Handler func(c *Context) (interface{}, error)
@@ -130,6 +130,7 @@ func (h handler) setContextTimeout(timeout string) int {
 
 	return reqTimeout
 }
+
 func panicRecoveryHandler(log logging.Logger, panicked chan struct{}) {
 	re := recover()
 	if re != nil {
