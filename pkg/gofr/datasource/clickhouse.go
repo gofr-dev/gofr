@@ -11,12 +11,12 @@ type Clickhouse interface {
 type ClickhouseProvider interface {
 	Clickhouse
 
-	// UseLogger sets the logger for the Cassandra client.
+	// UseLogger sets the logger for the Clickhouse client.
 	UseLogger(logger interface{})
 
-	// UseMetrics sets the metrics for the Cassandra client.
+	// UseMetrics sets the metrics for the Clickhouse client.
 	UseMetrics(metrics interface{})
 
-	// Connect establishes a connection to Cassandra and registers metrics using the provided configuration when the client was Created.
+	// Connect establishes a connection to Clickhouse and registers metrics using the provided configuration when the client was Created.
 	Connect()
 }
