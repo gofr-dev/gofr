@@ -26,17 +26,17 @@ type Options func(c *route)
 type ErrCommandNotFound struct{}
 
 func (e ErrCommandNotFound) Error() string {
-	return "No Command Found!" //nolint:goconst // This error is needed and repetition is in test to check for the exact string.
+	return "No Command Found!"
 }
 
 func (cmd *cmd) Run(c *container.Container) {
 	args := os.Args[1:] // First one is command itself
-	command := ""
+	subCommand := ""
 	showHelp := false
 
 	for _, a := range args {
 		if a == "" {
-			continue // This takes care of cases where command has multiple spaces in between.
+			continue // This takes care of cases where subCommand has multiple spaces in between.
 		}
 
 		if a == "-h" || a == "--help" {
@@ -46,29 +46,50 @@ func (cmd *cmd) Run(c *container.Container) {
 		}
 
 		if a[0] != '-' {
-			command = command + " " + a
+			subCommand = subCommand + " " + a
 		}
 	}
 
-	if showHelp {
+	if showHelp && subCommand == "" {
 		cmd.printHelp()
 		return
 	}
 
-	h := cmd.handler(command)
+	r := cmd.handler(subCommand)
 	ctx := newContext(&cmd2.Responder{}, cmd2.NewRequest(args), c)
 
-	if h == nil {
+	// handling if route is not found or the handler is nil
+	if cmd.noCommandResponse(r, ctx) {
+		return
+	}
+
+	if showHelp {
+		fmt.Println(r.help)
+		return
+	}
+
+	ctx.responder.Respond(r.handler(ctx))
+}
+
+// noCommandResponse responds with error when no route with the given subcommand is not found or handler is nil.
+func (cmd *cmd) noCommandResponse(r *route, ctx *Context) bool {
+	if r == nil {
 		ctx.responder.Respond(nil, ErrCommandNotFound{})
 		cmd.printHelp()
 
-		return
+		return true
 	}
 
-	ctx.responder.Respond(h(ctx))
+	if r.handler == nil {
+		ctx.responder.Respond(nil, ErrCommandNotFound{})
+
+		return true
+	}
+
+	return false
 }
 
-func (cmd *cmd) handler(path string) Handler {
+func (cmd *cmd) handler(path string) *route {
 	// Trim leading dashes
 	path = strings.TrimPrefix(strings.TrimPrefix(path, "--"), "-")
 
@@ -77,7 +98,7 @@ func (cmd *cmd) handler(path string) Handler {
 		re := regexp.MustCompile(r.pattern)
 
 		if re.MatchString(path) {
-			return r.handler
+			return &r
 		}
 	}
 
@@ -102,10 +123,8 @@ func AddHelp(helperString string) Options {
 
 func (cmd *cmd) addRoute(pattern string, handler Handler, options ...Options) {
 	tempRoute := route{
-		pattern:     pattern,
-		handler:     handler,
-		description: "description message not provided",
-		help:        "help message not provided",
+		pattern: pattern,
+		handler: handler,
 	}
 
 	for _, opt := range options {

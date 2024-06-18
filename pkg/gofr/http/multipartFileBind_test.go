@@ -7,34 +7,50 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func Test_getFileName(t *testing.T) {
-	testStruct := struct {
-		A string `file:"A"`
-		B string
-		c string
+func TestGetFieldName(t *testing.T) {
+	tests := []struct {
+		desc   string
+		field  *reflect.StructField
+		key    string
+		wantOk bool
 	}{
-		A: "A",
-		B: "B",
-		c: "c",
+		{
+			desc:   "Field with form tag",
+			field:  &reflect.StructField{Tag: reflect.StructTag("form:\"name\"")},
+			key:    "name",
+			wantOk: true,
+		},
+		{
+			desc:   "Field with file tag",
+			field:  &reflect.StructField{Tag: reflect.StructTag("file:\"avatar\"")},
+			key:    "avatar",
+			wantOk: true,
+		},
+		{
+			desc:   "Field with exported name",
+			field:  &reflect.StructField{Name: "ID"},
+			key:    "ID",
+			wantOk: true,
+		},
+		{
+			desc:   "Unexported field with tag",
+			field:  &reflect.StructField{Name: "unexported", Tag: reflect.StructTag("form:\"data\""), PkgPath: "unexported"},
+			key:    "",
+			wantOk: false,
+		},
+		{
+			desc:   "Field with omitted tag",
+			field:  &reflect.StructField{},
+			key:    "",
+			wantOk: false,
+		},
 	}
 
-	val := reflect.ValueOf(testStruct)
-
-	// Field A
-	f1 := val.Type().Field(0)
-	a, ok := getFileName(&f1)
-	assert.Equal(t, "A", a)
-	assert.True(t, ok)
-
-	// Field B
-	f2 := val.Type().Field(1)
-	b, ok := getFileName(&f2)
-	assert.Equal(t, "B", b)
-	assert.True(t, ok)
-
-	// Field C
-	f3 := val.Type().Field(2)
-	c, ok := getFileName(&f3)
-	assert.Equal(t, "", c)
-	assert.False(t, ok)
+	for i, tt := range tests {
+		t.Run(tt.desc, func(t *testing.T) {
+			result, gotOk := getFieldName(tt.field)
+			assert.Equal(t, tt.key, result, "TestGetFieldName[%d] : %v Failed!", i, tt.desc)
+			assert.Equal(t, tt.wantOk, gotOk, "TestGetFieldName[%d] : %v Failed!", i, tt.desc)
+		})
+	}
 }
