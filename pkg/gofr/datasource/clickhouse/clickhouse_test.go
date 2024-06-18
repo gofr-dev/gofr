@@ -141,13 +141,13 @@ func Test_ClickHouse_AsyncInsert(t *testing.T) {
 	ctx := context.Background()
 
 	mockConn.EXPECT().AsyncInsert(ctx, "INSERT INTO users (id, name, age) VALUES (?, ?, ?)", true,
-		"8f165e2d-feef-416c-95f6-913ce3172e15", "aryan", "10").Return(nil)
+		"8f165e2d-feef-416c-95f6-913ce3172e15", "user", "10").Return(nil)
 
 	mockMetric.EXPECT().RecordHistogram(ctx, "app_clickhouse_stats", float64(0), "hosts", c.config.Hosts,
 		"database", c.config.Database, "type", "INSERT")
 
 	err := c.AsyncInsert(ctx, "INSERT INTO users (id, name, age) VALUES (?, ?, ?)", true,
-		"8f165e2d-feef-416c-95f6-913ce3172e15", "aryan", "10")
+		"8f165e2d-feef-416c-95f6-913ce3172e15", "user", "10")
 
 	assert.Nil(t, err)
 }
