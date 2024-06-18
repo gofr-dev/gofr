@@ -95,3 +95,19 @@ func TestErrorInvalidRoute(t *testing.T) {
 
 	assert.Equal(t, http.StatusNotFound, err.StatusCode(), "TEST Failed.\n")
 }
+
+func Test_ErrorRequestTimeout(t *testing.T) {
+	err := ErrorRequestTimeout{}
+
+	assert.Equal(t, "request timed out", err.Error(), "TEST Failed.\n")
+
+	assert.Equal(t, http.StatusRequestTimeout, err.StatusCode(), "TEST Failed.\n")
+}
+
+func Test_ErrorErrorPanicRecovery(t *testing.T) {
+	err := ErrorPanicRecovery{}
+
+	assert.Equal(t, http.StatusText(http.StatusInternalServerError), err.Error(), "TEST Failed.\n")
+
+	assert.Equal(t, http.StatusInternalServerError, err.StatusCode(), "TEST Failed.\n")
+}

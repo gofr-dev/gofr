@@ -106,7 +106,7 @@ func (r *Request) bindMultipart(ptr any) error {
 		return err
 	}
 
-	fd := formData{files: r.req.MultipartForm.File}
+	fd := formData{files: r.req.MultipartForm.File, fields: r.req.MultipartForm.Value}
 
 	ok, err := fd.mapStruct(ptrVal, &reflect.StructField{})
 	if err != nil {

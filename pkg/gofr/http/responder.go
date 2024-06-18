@@ -21,7 +21,7 @@ type Responder struct {
 // Respond sends a response with the given data and handles potential errors, setting appropriate
 // status codes and formatting responses as JSON or raw data as needed.
 func (r Responder) Respond(data interface{}, err error) {
-	statusCode, errorObj := r.HTTPStatusFromError(err)
+	statusCode, errorObj := getStatusCode(r.method, data, err)
 
 	var resp interface{}
 	switch v := data.(type) {
@@ -48,12 +48,16 @@ func (r Responder) Respond(data interface{}, err error) {
 	_ = json.NewEncoder(r.w).Encode(resp)
 }
 
-// HTTPStatusFromError maps errors to HTTP status codes.
-func (r Responder) HTTPStatusFromError(err error) (status int, errObj interface{}) {
+// getStatusCode returns corresponding HTTP status codes.
+func getStatusCode(method string, data interface{}, err error) (status int, errObj interface{}) {
 	if err == nil {
-		switch r.method {
+		switch method {
 		case http.MethodPost:
-			return http.StatusCreated, nil
+			if data != nil {
+				return http.StatusCreated, nil
+			}
+
+			return http.StatusAccepted, nil
 		case http.MethodDelete:
 			return http.StatusNoContent, nil
 		default:

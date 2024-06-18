@@ -64,12 +64,12 @@ func (e *Exporter) processSpans(ctx context.Context, logger logging.Logger, span
 
 	payload, err := json.Marshal(convertedSpans)
 	if err != nil {
-		return fmt.Errorf("failed to marshal spans: %w", err)
+		return fmt.Errorf("failed to marshal spans, error: %w", err)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, "POST", e.endpoint, bytes.NewBuffer(payload))
 	if err != nil {
-		return fmt.Errorf("failed to create HTTP request: %w", err)
+		return fmt.Errorf("failed to create HTTP request, error: %w", err)
 	}
 
 	req.Header.Set("Content-Type", "application/json")
@@ -78,13 +78,13 @@ func (e *Exporter) processSpans(ctx context.Context, logger logging.Logger, span
 
 	resp, err := client.Do(req)
 	if err != nil {
-		logger.Error(err)
+		logger.Errorf("failed to create spans, error: %v", err)
 		return err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusCreated {
-		return fmt.Errorf("%w: %d", errUnexpectedStatusCode, resp.StatusCode)
+		return fmt.Errorf("failed to post spans on '%v', %w: '%d'", e.endpoint, errUnexpectedStatusCode, resp.StatusCode)
 	}
 
 	return nil

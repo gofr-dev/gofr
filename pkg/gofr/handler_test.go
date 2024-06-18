@@ -76,7 +76,26 @@ func TestHandler_ServeHTTP_Timeout(t *testing.T) {
 	h.ServeHTTP(w, r)
 
 	assert.Equal(t, http.StatusRequestTimeout, w.Code, "TestHandler_ServeHTTP_Timeout Failed")
-	assert.Equal(t, "Request timed out\n", w.Body.String(), "TestHandler_ServeHTTP_Timeout Failed")
+
+	assert.Contains(t, w.Body.String(), "request timed out", "TestHandler_ServeHTTP_Timeout Failed")
+}
+
+func TestHandler_ServeHTTP_Panic(t *testing.T) {
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+
+	h := handler{}
+
+	h.container = &container.Container{Logger: logging.NewLogger(logging.FATAL)}
+	h.function = func(*Context) (interface{}, error) {
+		panic("runtime panic")
+	}
+
+	h.ServeHTTP(w, r)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code, "TestHandler_ServeHTTP_Panic Failed")
+
+	assert.Contains(t, w.Body.String(), http.StatusText(http.StatusInternalServerError), "TestHandler_ServeHTTP_Panic Failed")
 }
 
 func TestHandler_faviconHandlerError(t *testing.T) {
