@@ -11,6 +11,8 @@ func (a *App) AddMongo(db datasource.MongoProvider) {
 	a.container.Mongo = db
 }
 
+// AddClickhouse initializes the clickhouse client.
+// Official implementation is available in the package : gofr.dev/pkg/gofr/datasource/clickhouse .
 func (a *App) AddClickhouse(db datasource.ClickhouseProvider) {
 	db.UseLogger(a.Logger())
 	db.UseMetrics(a.Metrics())

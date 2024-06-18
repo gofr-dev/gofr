@@ -2,6 +2,8 @@ package clickhouse
 
 import (
 	"context"
+	"io"
+	"os"
 	"testing"
 	"time"
 
@@ -28,29 +30,49 @@ func getClickHouseTestConnection(t *testing.T) (*MockConn, *MockMetrics, client)
 	return mockConn, mockMetric, c
 }
 
-func Test_ClickHouse_ConnectAndMetricRegistration(t *testing.T) {
-	_, mockMetric, _ := getClickHouseTestConnection(t)
-	mockLogger := NewMockLogger(DEBUG)
+func Test_ClickHouse_ConnectAndMetricRegistrationAndPingFailure(t *testing.T) {
+	logs := stderrOutputForFunc(func() {
 
-	cl := New(Config{
-		Hosts:    "localhost:8000",
-		Username: "user",
-		Password: "pass",
-		Database: "test",
+		_, mockMetric, _ := getClickHouseTestConnection(t)
+		mockLogger := NewMockLogger(DEBUG)
+
+		cl := New(Config{
+			Hosts:    "localhost:8000",
+			Username: "user",
+			Password: "pass",
+			Database: "test",
+		})
+
+		cl.UseLogger(mockLogger)
+		cl.UseMetrics(mockMetric)
+
+		mockMetric.EXPECT().NewHistogram("app_clickhouse_stats", "Response time of Clickhouse queries in milliseconds.", gomock.Any())
+		mockMetric.EXPECT().NewGauge("app_clickhouse_open_connections", "Number of open Clickhouse connections.")
+		mockMetric.EXPECT().NewGauge("app_clickhouse_idle_connections", "Number of idle Clickhouse connections.")
+		mockMetric.EXPECT().SetGauge("app_clickhouse_open_connections", gomock.Any()).AnyTimes()
+		mockMetric.EXPECT().SetGauge("app_clickhouse_idle_connections", gomock.Any()).AnyTimes()
+
+		cl.Connect()
+
+		time.Sleep(1 * time.Second)
 	})
 
-	cl.UseLogger(mockLogger)
-	cl.UseMetrics(mockMetric)
+	assert.Contains(t, logs, "ping failed with error dial tcp [::1]:8000: connect: connection refused")
+}
 
-	mockMetric.EXPECT().NewHistogram("app_clickhouse_stats", "Response time of Clickhouse queries in milliseconds.", gomock.Any())
-	mockMetric.EXPECT().NewGauge("app_clickhouse_open_connections", "Number of open Clickhouse connections.")
-	mockMetric.EXPECT().NewGauge("app_clickhouse_idle_connections", "Number of idle Clickhouse connections.")
-	mockMetric.EXPECT().SetGauge("app_clickhouse_open_connections", gomock.Any()).AnyTimes()
-	mockMetric.EXPECT().SetGauge("app_clickhouse_idle_connections", gomock.Any()).AnyTimes()
+func stderrOutputForFunc(f func()) string {
+	r, w, _ := os.Pipe()
+	old := os.Stderr
+	os.Stderr = w
 
-	cl.Connect()
+	f()
 
-	time.Sleep(1 * time.Second)
+	_ = w.Close()
+
+	out, _ := io.ReadAll(r)
+	os.Stderr = old
+
+	return string(out)
 }
 
 func Test_ClickHouse_Exec(t *testing.T) {

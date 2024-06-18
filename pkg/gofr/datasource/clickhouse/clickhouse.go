@@ -23,45 +23,17 @@ type client struct {
 }
 
 // New initializes Clickhouse client with the provided configuration.
+// Metrics, Logger has to be initialized before calling the Connect method.
+// Usage:
+//
+//	client.UseLogger(Logger())
+//	client.UseMetrics(Metrics())
+//
+//	client.Connect()
 //
 //nolint:revive // client is unexported as we want the user to implement the Conn interface.
 func New(config Config) *client {
 	return &client{config: config}
-}
-
-// Exec should be used for DDL and simple statements.
-// It should not be used for larger inserts or query iterations.
-func (c *client) Exec(ctx context.Context, query string, args ...any) error {
-	defer c.logQueryAndSendMetrics(time.Now(), "Exec", query, args...)
-
-	return c.conn.Exec(ctx, query, args...)
-}
-
-// Select method allows a set of response rows to be marshaled into a slice of structs with a single invocation..
-// DB column names should be defined in the struct in `ch` tag.
-// Example Usages:
-//
-//	type User struct {
-//		Id   string `ch:"id"`
-//		Name string `ch:"name"`
-//		Age  string `ch:"age"`
-//	}
-//
-// var user []User
-//
-// err = ctx.Clickhouse.Select(ctx, &user, "SELECT * FROM users") .
-func (c *client) Select(ctx context.Context, dest any, query string, args ...any) error {
-	defer c.logQueryAndSendMetrics(time.Now(), "Select", query, args...)
-
-	return c.conn.Select(ctx, dest, query, args...)
-}
-
-// AsyncInsert allows the user to specify whether the client should wait for the server to complete the insert or
-// respond once the data has been received.
-func (c *client) AsyncInsert(ctx context.Context, query string, wait bool, args ...any) error {
-	defer c.logQueryAndSendMetrics(time.Now(), "AsyncInsert", query, args...)
-
-	return c.conn.AsyncInsert(ctx, query, wait, args...)
 }
 
 // UseLogger sets the logger for the Clickhouse client.
@@ -126,6 +98,41 @@ func pushDBMetrics(conn Conn, metrics Metrics) {
 			time.Sleep(frequency * time.Second)
 		}
 	}
+}
+
+// Exec should be used for DDL and simple statements.
+// It should not be used for larger inserts or query iterations.
+func (c *client) Exec(ctx context.Context, query string, args ...any) error {
+	defer c.logQueryAndSendMetrics(time.Now(), "Exec", query, args...)
+
+	return c.conn.Exec(ctx, query, args...)
+}
+
+// Select method allows a set of response rows to be marshaled into a slice of structs with a single invocation..
+// DB column names should be defined in the struct in `ch` tag.
+// Example Usages:
+//
+//	type User struct {
+//		Id   string `ch:"id"`
+//		Name string `ch:"name"`
+//		Age  string `ch:"age"`
+//	}
+//
+// var user []User
+//
+// err = ctx.Clickhouse.Select(ctx, &user, "SELECT * FROM users") .
+func (c *client) Select(ctx context.Context, dest any, query string, args ...any) error {
+	defer c.logQueryAndSendMetrics(time.Now(), "Select", query, args...)
+
+	return c.conn.Select(ctx, dest, query, args...)
+}
+
+// AsyncInsert allows the user to specify whether the client should wait for the server to complete the insert or
+// respond once the data has been received.
+func (c *client) AsyncInsert(ctx context.Context, query string, wait bool, args ...any) error {
+	defer c.logQueryAndSendMetrics(time.Now(), "AsyncInsert", query, args...)
+
+	return c.conn.AsyncInsert(ctx, query, wait, args...)
 }
 
 func (c *client) logQueryAndSendMetrics(start time.Time, methodType, query string, args ...interface{}) {
