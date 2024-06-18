@@ -268,34 +268,59 @@ func (a *App) SubCommand(pattern string, handler Handler, options ...Options) {
 	a.cmd.addRoute(pattern, handler, options...)
 }
 
-func (a *App) AutoMigrate(structs ...interface{}) error {
+func (a *App) AutoMigrate(dropIfExists bool, structs ...interface{}) error {
 	// TODO : Move panic recovery at central location which will manage for all the different cases.
 	defer panicRecovery(a.container.Logger)
 
 	// Get the database type from the container
 	dbType := a.container.SQL.Dialect()
 
+	var dropTableStatementArray []string
+	var createTableStatementArray []string
+	var indexStatementsArray []string
+	var uniqueIndexStatementsArray []string
+	var triggerStatementsArray []string
+
 	// Create SQL statement from each struct by calling GenerateCreateTableSQL
 	for _, s := range structs {
-		sqlStatements, err := sql.GenerateCreateTableSQL(s, dbType, true)
+		dropTableStatement, createTableStatement, indexStatements, uniqueIndexStatements, triggerStatements, err := sql.GenerateCreateTableSQL(s, dbType, true)
 		if err != nil {
 			a.container.Logger.Errorf("error generating SQL: %v", err)
 			return err
 		}
-		a.container.Logger.Infof("SQL: %s", sqlStatements)
-		for _, sql := range strings.Split(strings.TrimSpace(sqlStatements), "\n\n\n") {
-			sql = strings.TrimSpace(sql)
-			if sql == "" {
-				continue
-			}
-			result, err := a.container.SQL.Exec(sql)
-			if err != nil {
-				a.container.Logger.Errorf("error executing SQL: %v", err)
-				return err
-			}
-			a.container.Logger.Infof("result for %s: %v", sql, result)
+		dropTableStatementArray = append(dropTableStatementArray, dropTableStatement)
+		createTableStatementArray = append(createTableStatementArray, createTableStatement)
+		indexStatementsArray = append(indexStatementsArray, indexStatements)
+		uniqueIndexStatementsArray = append(uniqueIndexStatementsArray, uniqueIndexStatements)
+		triggerStatementsArray = append(triggerStatementsArray, triggerStatements)
+	}
+
+	var err error
+	sqlDB := sql.NewSQL(a.Config, a.container.Logger, a.container.Metrics())
+	defer sqlDB.DB.Close()
+
+	if dropIfExists {
+		if sql.ExecuteAutoMigrationStatements(sqlDB.DB, a.container.Logger, sql.ReverseStringArray(dropTableStatementArray)); err != nil {
+			return err
 		}
 	}
+
+	if err := sql.ExecuteAutoMigrationStatements(sqlDB.DB, a.container.Logger, createTableStatementArray); err != nil {
+		return err
+	}
+
+	if err := sql.ExecuteAutoMigrationStatements(sqlDB.DB, a.container.Logger, indexStatementsArray); err != nil {
+		return err
+	}
+
+	if err := sql.ExecuteAutoMigrationStatements(sqlDB.DB, a.container.Logger, uniqueIndexStatementsArray); err != nil {
+		return err
+	}
+
+	if err := sql.ExecuteAutoMigrationStatements(sqlDB.DB, a.container.Logger, triggerStatementsArray); err != nil {
+		return err
+	}
+
 	return nil
 }
 

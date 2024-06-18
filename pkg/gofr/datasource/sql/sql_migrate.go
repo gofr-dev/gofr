@@ -1,15 +1,18 @@
 package sql
 
 import (
+	"database/sql"
 	"fmt"
 	"reflect"
 	"regexp"
 	"strings"
 	"time"
+
+	"gofr.dev/pkg/gofr/logging"
 )
 
 // GenerateCreateTableSQL generates a SQL CREATE TABLE statement for the given struct.
-func GenerateCreateTableSQL(structType interface{}, dbType string, dropIfExists bool) (string, error) {
+func GenerateCreateTableSQL(structType interface{}, dbType string, dropIfExists bool) (string, string, string, string, string, error) {
 	dbType = strings.ToUpper(strings.TrimSpace(dbType))
 	t := reflect.TypeOf(structType)
 	tableName := ToSnakeCase(t.Name())
@@ -140,5 +143,32 @@ func GenerateCreateTableSQL(structType interface{}, dbType string, dropIfExists 
 	uniqueIndexStatements := strings.Join(uniqueIndexes, "\n")
 	triggerStatements := strings.Join(triggers, "\n")
 
-	return fmt.Sprintf("%s\n%s\n%s\n%s\n%s", dropTableStatement, createTableStatement, indexStatements, uniqueIndexStatements, triggerStatements), nil
+	//return fmt.Sprintf("%s\n%s\n%s\n%s\n%s", dropTableStatement, createTableStatement, indexStatements, uniqueIndexStatements, triggerStatements), nil
+	return dropTableStatement, createTableStatement, indexStatements, uniqueIndexStatements, triggerStatements, nil
+}
+
+// ReverseStringArray reverses the content of a string array
+func ReverseStringArray(input []string) []string {
+	reversed := make([]string, len(input))
+	for i, v := range input {
+		reversed[len(input)-1-i] = v
+	}
+	return reversed
+}
+
+// executeSQLStatements executes a series of SQL statements provided as an array
+func ExecuteAutoMigrationStatements(sqlDB *sql.DB, logger logging.Logger, sqlStatements []string) error {
+	for _, sql := range sqlStatements {
+		sql = strings.TrimSpace(sql)
+		if sql == "" {
+			continue
+		}
+		result, err := sqlDB.Exec(sql)
+		if err != nil {
+			logger.Errorf("error executing SQL: %v", err)
+			return err
+		}
+		logger.Infof("result for %s: %v", sql, result)
+	}
+	return nil
 }
