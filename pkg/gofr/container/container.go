@@ -37,6 +37,7 @@ type Container struct {
 	Redis Redis
 	SQL   DB
 
+	// TODO : Move interfaces in container as it is being used by container and not datasources.
 	Cassandra  datasource.Cassandra
 	Clickhouse datasource.Clickhouse
 	Mongo      datasource.Mongo

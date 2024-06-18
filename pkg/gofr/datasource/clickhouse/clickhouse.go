@@ -159,3 +159,36 @@ func getOperationType(query string) string {
 
 	return words[0]
 }
+
+type Health struct {
+	Status  string                 `json:"status,omitempty"`
+	Details map[string]interface{} `json:"details,omitempty"`
+}
+
+func (h *Health) GetStatus() string {
+	return h.Status
+}
+
+// HealthCheck checks the health of the MongoDB client by pinging the database.
+func (c *client) HealthCheck() interface{} {
+	h := Health{
+		Details: make(map[string]interface{}),
+	}
+
+	h.Details["host"] = c.config.Hosts
+	h.Details["database"] = c.config.Database
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	err := c.conn.Ping(ctx)
+	if err != nil {
+		h.Status = "DOWN"
+
+		return &h
+	}
+
+	h.Status = "UP"
+
+	return &h
+}
