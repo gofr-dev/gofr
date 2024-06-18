@@ -2,6 +2,8 @@ package clickhouse
 
 import (
 	"context"
+	"database/sql"
+	"fmt"
 	"io"
 	"os"
 	"testing"
@@ -72,6 +74,26 @@ func stderrOutputForFunc(f func()) string {
 	os.Stderr = old
 
 	return string(out)
+}
+
+func Test_ClickHouse_HealthUP(t *testing.T) {
+	mockConn, _, c := getClickHouseTestConnection(t)
+
+	mockConn.EXPECT().Ping(gomock.Any()).Return(nil)
+
+	resp := c.HealthCheck()
+
+	assert.Contains(t, fmt.Sprint(resp), "UP")
+}
+
+func Test_ClickHouse_HealthDOWN(t *testing.T) {
+	mockConn, _, c := getClickHouseTestConnection(t)
+
+	mockConn.EXPECT().Ping(gomock.Any()).Return(sql.ErrConnDone)
+
+	resp := c.HealthCheck()
+
+	assert.Contains(t, fmt.Sprint(resp), "DOWN")
 }
 
 func Test_ClickHouse_Exec(t *testing.T) {
