@@ -4,17 +4,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"gofr.dev/pkg/gofr/logging"
 	"os"
 	"runtime/debug"
 	"strconv"
 	"time"
 
 	"github.com/gorilla/websocket"
-
 	"gofr.dev/pkg/gofr/container"
 	gofrHTTP "gofr.dev/pkg/gofr/http"
 	"gofr.dev/pkg/gofr/http/response"
+	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/static"
 
 	"net/http"

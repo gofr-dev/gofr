@@ -104,7 +104,6 @@ func Test_ErrorRequestTimeout(t *testing.T) {
 	assert.Equal(t, http.StatusRequestTimeout, err.StatusCode(), "TEST Failed.\n")
 }
 func Test_ErrorErrorPanicRecovery(t *testing.T) {
-
 	err := ErrorPanicRecovery{}
 	assert.Equal(t, http.StatusText(http.StatusInternalServerError), err.Error(), "TEST Failed.\n")
 
