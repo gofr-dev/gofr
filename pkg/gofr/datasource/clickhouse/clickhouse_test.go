@@ -32,7 +32,6 @@ func getClickHouseTestConnection(t *testing.T) (*MockConn, *MockMetrics, client)
 
 func Test_ClickHouse_ConnectAndMetricRegistrationAndPingFailure(t *testing.T) {
 	logs := stderrOutputForFunc(func() {
-
 		_, mockMetric, _ := getClickHouseTestConnection(t)
 		mockLogger := NewMockLogger(DEBUG)
 
