@@ -20,6 +20,9 @@ func main() {
 
 // Data is the struct that we are trying to bind files to
 type Data struct {
+	// Name represents the non-file field in the struct
+	Name string `form:"name"`
+
 	// The Compressed field is of type zip,
 	// the tag `upload` signifies the key for the form where the file is uploaded
 	// if the tag is not present, the field name would be taken as a key.
