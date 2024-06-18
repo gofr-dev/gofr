@@ -4,8 +4,10 @@ import (
 	"strconv"
 	"strings"
 
+	_ "github.com/go-sql-driver/mysql" // This is required to be blank import
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/datasource"
+	"gofr.dev/pkg/gofr/datasource/file"
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 	"gofr.dev/pkg/gofr/datasource/pubsub/google"
 	"gofr.dev/pkg/gofr/datasource/pubsub/kafka"
@@ -18,8 +20,6 @@ import (
 	"gofr.dev/pkg/gofr/metrics/exporters"
 	"gofr.dev/pkg/gofr/service"
 	"gofr.dev/pkg/gofr/version"
-
-	_ "github.com/go-sql-driver/mysql" // This is required to be blank import
 )
 
 // Container is a collection of all common application level concerns. Things like Logger, Connection Pool for Redis
@@ -36,7 +36,13 @@ type Container struct {
 
 	Redis Redis
 	SQL   DB
-	Mongo datasource.Mongo
+
+	// TODO : Move interfaces in container as it is being used by container and not datasources.
+	Cassandra  datasource.Cassandra
+	Clickhouse datasource.Clickhouse
+	Mongo      datasource.Mongo
+
+	File datasource.FileSystem
 }
 
 func NewContainer(conf config.Config) *Container {
@@ -70,7 +76,7 @@ func (c *Container) Create(conf config.Config) {
 
 	c.Debug("Container is being created")
 
-	c.metricsManager = metrics.NewMetricsManager(exporters.Prometheus(c.appName, c.appVersion), c.Logger)
+	c.metricsManager = metrics.NewMetricsManager(exporters.Prometheus(c.GetAppName(), c.GetAppVersion()), c.Logger)
 
 	// Register framework metrics
 	c.registerFrameworkMetrics()
@@ -135,6 +141,8 @@ func (c *Container) Create(conf config.Config) {
 
 		c.PubSub = mqtt.New(configs, c.Logger, c.metricsManager)
 	}
+
+	c.File = file.New(c.Logger)
 }
 
 // GetHTTPService returns registered HTTP services.

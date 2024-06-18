@@ -6,6 +6,73 @@ as unnecessary database drivers are not being compiled and added to the build.
 
 > We are planning to provide custom drivers for most common databases, and is in the pipeline for upcoming releases!
 
+
+## Clickhouse
+GoFr supports injecting Clickhouse that supports the following interface. Any driver that implements the interface can be added
+using `app.AddClickhouse()` method, and user's can use Clickhouse across application with `gofr.Context`.
+```go
+type Clickhouse interface {
+    Exec(ctx context.Context, query string, args ...any) error
+    Select(ctx context.Context, dest any, query string, args ...any) error
+    AsyncInsert(ctx context.Context, query string, wait bool, args ...any) error
+}
+```
+
+User's can easily inject a driver that supports this interface, this provides usability without
+compromising the extensibility to use multiple databases.
+### Example
+```go
+package main
+
+import (
+    "gofr.dev/pkg/gofr"
+
+    "gofr.dev/pkg/gofr/datasource/clickhouse"
+)
+
+type User struct {
+    Id   string `ch:"id"`
+    Name string `ch:"name"`
+    Age  string `ch:"age"`
+}
+
+func main() {
+    app := gofr.New()
+
+    app.AddClickhouse(clickhouse.New(clickhouse.Config{
+        Hosts:    "localhost:9001",
+        Username: "root",
+        Password: "password",
+        Database: "users",
+    }))
+    
+    app.POST("/user", Post)
+    app.GET("/user", Get)
+    
+    app.Run()
+}
+
+func Post(ctx *gofr.Context) (interface{}, error) {
+    err := ctx.Clickhouse.Exec(ctx, "INSERT INTO users (id, name, age) VALUES (?, ?, ?)", "8f165e2d-feef-416c-95f6-913ce3172e15", "aryan", "10")
+    if err != nil {
+        return nil, err
+    }
+
+    return "successful inserted", nil
+}
+
+func Get(ctx *gofr.Context) (interface{}, error) {
+    var user []User
+
+    err := ctx.Clickhouse.Select(ctx, &user, "SELECT * FROM users")
+    if err != nil {
+        return nil, err
+    }
+
+    return user, nil
+}
+```
+
 ## MongoDB
 GoFr supports injecting MongoDB that supports the following interface. Any driver that implements the interface can be added
 using `app.AddMongo()` method, and user's can use MongoDB across application with `gofr.Context`.
@@ -95,5 +162,85 @@ func Get(ctx *gofr.Context) (interface{}, error) {
 	}
 
 	return result, nil
+}
+```
+
+## Cassandra
+GoFr supports pluggable Cassandra drivers. It defines an interface that specifies the required methods for interacting 
+with Cassandra. Any driver implementation that adheres to this interface can be integrated into GoFr using the 
+`app.AddCassandra()` method. This approach promotes flexibility and allows you to choose the Cassandra driver that best 
+suits your project's needs.
+
+```go
+type Cassandra interface {
+	Query(dest interface{}, stmt string, values ...interface{}) error
+
+	Exec(stmt string, values ...interface{}) error
+	
+	ExecCAS(dest interface{}, stmt string, values ...interface{}) (bool, error)
+}
+```
+
+GoFr simplifies Cassandra integration with a well-defined interface. Users can easily implement any driver that adheres 
+to this interface, fostering a user-friendly experience.
+
+### Example
+
+```go
+package main
+
+import (
+	"gofr.dev/pkg/gofr"
+	cassandraPkg "gofr.dev/pkg/gofr/datasource/cassandra"
+)
+
+type Person struct {
+	ID    int    `json:"id,omitempty"`
+	Name  string `json:"name"`
+	Age   int    `json:"age"`
+	State string `json:"state"`
+}
+
+func main() {
+	app := gofr.New()
+
+	config := cassandraPkg.Config{
+		Hosts:    "localhost",
+		Keyspace: "test",
+		Port:     2003,
+		Username: "cassandra",
+		Password: "cassandra",
+	}
+
+	cassandra := cassandraPkg.New(config)
+
+	app.AddCassandra(cassandra)
+
+	app.POST("/user", func(c *gofr.Context) (interface{}, error) {
+		person := Person{}
+
+		err := c.Bind(&person)
+		if err != nil {
+			return nil, err
+		}
+
+		err = c.Cassandra.Exec(`INSERT INTO persons(id, name, age, state) VALUES(?, ?, ?, ?)`,
+			person.ID, person.Name, person.Age, person.State)
+		if err != nil {
+			return nil, err
+		}
+
+		return "created", nil
+	})
+
+	app.GET("/user", func(c *gofr.Context) (interface{}, error) {
+		persons := make([]Person, 0)
+
+		err := c.Cassandra.Query(&persons, `SELECT id, name, age, state FROM persons`)
+
+		return persons, err
+	})
+
+	app.Run()
 }
 ```

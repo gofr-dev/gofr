@@ -29,6 +29,7 @@ GoFr supports level-based logging with the PrettyPrint interface.
 New datasources should implement logging with the following levels:
 - DEBUG: Logs connection attempts with critical details.
 - INFO: Logs successful connection establishment.
+- WARN: Logs connection retrying
 
 > Additional logs can be added to enhance debugging and improving user experience.
 
@@ -69,10 +70,13 @@ Therefore, GoFr utilizes a pluggable approach for new datasources by separating 
 ## Supported Datasources
 
 | Datasource | Health-Check | Logs | Metrics | Traces | As Driver |
-|------------|--------------|------|---------|--------|-----------|
-| MySQL      | ✅            | ✅    | ✅       | ✅      |           |
-| REDIS      | ✅            | ✅    | ✅       | ✅      |           |
-| PostgreSQL | ✅            | ✅    | ✅       | ✅      |           |
-| MongoDB    | ✅            | ✅    | ✅       |        | ✅         |
-| SQLite     | ✅            | ✅    | ✅       | ✅      |           |
+|------------|-----------|------|---------|--------|-----------|
+| MySQL      | ✅         | ✅    | ✅       | ✅      |           |
+| REDIS      | ✅         | ✅    | ✅       | ✅      |           |
+| PostgreSQL | ✅         | ✅    | ✅       | ✅      |           |
+| MongoDB    | ✅         | ✅    | ✅       |        | ✅         |
+| SQLite     | ✅         | ✅    | ✅       | ✅      |           |
+| Cassandra  | ✅         | ✅    | ✅       |        | ✅         |
+| Clickhouse |           | ✅    | ✅       |        | ✅         |
+
 
