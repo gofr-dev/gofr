@@ -3,7 +3,10 @@ package gofr
 import (
 	"context"
 	"errors"
+	"fmt"
+	"net/http"
 	"os"
+	"runtime/debug"
 	"strconv"
 	"time"
 
@@ -12,9 +15,8 @@ import (
 	"gofr.dev/pkg/gofr/container"
 	gofrHTTP "gofr.dev/pkg/gofr/http"
 	"gofr.dev/pkg/gofr/http/response"
+	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/static"
-
-	"net/http"
 )
 
 type Handler func(c *Context) (interface{}, error)
@@ -59,6 +61,7 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	done := make(chan struct{})
+	panicked := make(chan struct{})
 
 	var (
 		result interface{}
@@ -66,6 +69,7 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	)
 
 	go func() {
+		defer panicRecoveryHandler(h.container, panicked)
 		// Execute the handler function
 		result, err = h.function(c)
 
@@ -83,6 +87,8 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			// Do not respond with HTTP headers since this is a WebSocket request
 			return
 		}
+	case <-panicked:
+		err = gofrHTTP.ErrorPanicRecovery{}
 	}
 
 	// Handler function completed
@@ -123,4 +129,15 @@ func (h handler) setContextTimeout(timeout string) int {
 	}
 
 	return reqTimeout
+}
+
+func panicRecoveryHandler(log logging.Logger, panicked chan struct{}) {
+	re := recover()
+	if re != nil {
+		close(panicked)
+		log.Error(panicLog{
+			Error:      fmt.Sprint(re),
+			StackTrace: string(debug.Stack()),
+		})
+	}
 }
