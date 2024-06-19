@@ -43,7 +43,7 @@ Use `EnableBasicAuthWithFunc(validationFunc)` to implement your own validation l
 The `validationFunc` takes the username and password as arguments and returns true if valid, false otherwise.
 
 ```go
-func validateUser(username string, password string) bool {
+func validateUser(c *container.Container, username, password string) bool {
 	// Implement your credential validation logic here 
 	// This example uses hardcoded credentials for illustration only   
 	return username == "john" && password == "doe123" 
