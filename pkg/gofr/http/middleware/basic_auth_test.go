@@ -6,10 +6,11 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"gofr.dev/pkg/gofr/container"
 )
 
 func TestBasicAuthMiddleware(t *testing.T) {
-	validationFunc := func(user, pass string) bool {
+	validationFunc := func(_ *container.Container, user, pass string) bool {
 		if user == "abc" && pass == "pass123" {
 			return true
 		}

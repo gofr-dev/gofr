@@ -347,8 +347,8 @@ func (a *App) EnableBasicAuth(credentials ...string) {
 	a.httpServer.router.Use(middleware.BasicAuthMiddleware(middleware.BasicAuthProvider{Users: users}))
 }
 
-func (a *App) EnableBasicAuthWithFunc(validateFunc func(username, password string) bool) {
-	a.httpServer.router.Use(middleware.BasicAuthMiddleware(middleware.BasicAuthProvider{ValidateFunc: validateFunc}))
+func (a *App) EnableBasicAuthWithFunc(validateFunc func(c *container.Container, username, password string) bool) {
+	a.httpServer.router.Use(middleware.BasicAuthMiddleware(middleware.BasicAuthProvider{ValidateFunc: validateFunc, Container: a.container}))
 }
 
 func (a *App) EnableAPIKeyAuth(apiKeys ...string) {

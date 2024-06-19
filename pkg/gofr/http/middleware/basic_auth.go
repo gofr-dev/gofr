@@ -4,6 +4,8 @@ import (
 	"encoding/base64"
 	"net/http"
 	"strings"
+
+	"gofr.dev/pkg/gofr/container"
 )
 
 const credentialLength = 2
@@ -11,7 +13,8 @@ const credentialLength = 2
 // BasicAuthProvider represents a basic authentication provider.
 type BasicAuthProvider struct {
 	Users        map[string]string
-	ValidateFunc func(username, password string) bool
+	ValidateFunc func(c *container.Container, username, password string) bool
+	Container    *container.Container
 }
 
 // BasicAuthMiddleware creates a middleware function that enforces basic authentication using the provided BasicAuthProvider.
@@ -59,7 +62,7 @@ func BasicAuthMiddleware(basicAuthProvider BasicAuthProvider) func(handler http.
 
 func validateCredentials(provider BasicAuthProvider, credentials []string) bool {
 	if provider.ValidateFunc != nil {
-		if !provider.ValidateFunc(credentials[0], credentials[1]) {
+		if !provider.ValidateFunc(provider.Container, credentials[0], credentials[1]) {
 			return false
 		}
 	} else {
