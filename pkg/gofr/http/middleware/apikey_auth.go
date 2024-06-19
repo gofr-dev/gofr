@@ -4,11 +4,14 @@ package middleware
 
 import (
 	"net/http"
+
+	"gofr.dev/pkg/gofr/container"
 )
 
 // APIKeyAuthMiddleware creates a middleware function that enforces API key authentication based on the provided API
 // keys or a validation function.
-func APIKeyAuthMiddleware(validator func(apiKey string) bool, apiKeys ...string) func(handler http.Handler) http.Handler {
+func APIKeyAuthMiddleware(validator func(c *container.Container, apiKey string) bool,
+	c *container.Container, apiKeys ...string) func(handler http.Handler) http.Handler {
 	return func(handler http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if isWellKnown(r.URL.Path) {
@@ -22,7 +25,7 @@ func APIKeyAuthMiddleware(validator func(apiKey string) bool, apiKeys ...string)
 				return
 			}
 
-			if !validateKey(validator, authKey, apiKeys...) {
+			if !validateKey(validator, c, authKey, apiKeys...) {
 				http.Error(w, "Unauthorized: Invalid Authorization header", http.StatusUnauthorized)
 				return
 			}
@@ -42,9 +45,10 @@ func isPresent(authKey string, apiKeys ...string) bool {
 	return false
 }
 
-func validateKey(validator func(apiKey string) bool, authKey string, apiKeys ...string) bool {
+func validateKey(validator func(c *container.Container, apiKey string) bool, c *container.Container,
+	authKey string, apiKeys ...string) bool {
 	if validator != nil {
-		if !validator(authKey) {
+		if !validator(c, authKey) {
 			return false
 		}
 	} else {

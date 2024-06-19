@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	"gofr.dev/pkg/gofr/container"
 )
 
 func Test_ApiKeyAuthMiddleware(t *testing.T) {
@@ -14,7 +16,7 @@ func Test_ApiKeyAuthMiddleware(t *testing.T) {
 		_, _ = w.Write([]byte("Success"))
 	})
 
-	validator := func(apiKey string) bool {
+	validator := func(_ *container.Container, apiKey string) bool {
 		return apiKey == "valid-key"
 	}
 
@@ -25,7 +27,7 @@ func Test_ApiKeyAuthMiddleware(t *testing.T) {
 
 	testCases := []struct {
 		desc         string
-		validator    func(apiKey string) bool
+		validator    func(c *container.Container, apiKey string) bool
 		apiKey       string
 		responseCode int
 		responseBody string
@@ -43,7 +45,7 @@ func Test_ApiKeyAuthMiddleware(t *testing.T) {
 
 		req.Header.Set("X-API-KEY", tc.apiKey)
 
-		wrappedHandler := APIKeyAuthMiddleware(tc.validator, "valid-key-1", "valid-key-2")(testHandler)
+		wrappedHandler := APIKeyAuthMiddleware(tc.validator, nil, "valid-key-1", "valid-key-2")(testHandler)
 		wrappedHandler.ServeHTTP(rr, req)
 
 		assert.Equal(t, tc.responseCode, rr.Code, "TEST[%d], Failed.\n%s", i, tc.desc)
@@ -60,7 +62,7 @@ func Test_ApiKeyAuthMiddleware_well_known(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/.well-known/health-check", http.NoBody)
 	rr := httptest.NewRecorder()
 
-	wrappedHandler := APIKeyAuthMiddleware(nil)(testHandler)
+	wrappedHandler := APIKeyAuthMiddleware(nil, nil)(testHandler)
 	wrappedHandler.ServeHTTP(rr, req)
 
 	assert.Equal(t, 200, rr.Code, "TEST Failed.\n")

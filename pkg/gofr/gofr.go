@@ -352,11 +352,11 @@ func (a *App) EnableBasicAuthWithFunc(validateFunc func(c *container.Container, 
 }
 
 func (a *App) EnableAPIKeyAuth(apiKeys ...string) {
-	a.httpServer.router.Use(middleware.APIKeyAuthMiddleware(nil, apiKeys...))
+	a.httpServer.router.Use(middleware.APIKeyAuthMiddleware(nil, nil, apiKeys...))
 }
 
-func (a *App) EnableAPIKeyAuthWithFunc(validator func(apiKey string) bool) {
-	a.httpServer.router.Use(middleware.APIKeyAuthMiddleware(validator))
+func (a *App) EnableAPIKeyAuthWithFunc(validateFunc func(c *container.Container, apiKey string) bool) {
+	a.httpServer.router.Use(middleware.APIKeyAuthMiddleware(validateFunc, a.container))
 }
 
 func (a *App) EnableOAuth(jwksEndpoint string, refreshInterval int) {
