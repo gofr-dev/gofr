@@ -33,11 +33,11 @@ User can use the `UseMiddleware` method on your GoFr application instance to reg
 import (
     "net/http"
 
-    "gofr.dev/pkg/gofr"
+    gofrHTTP "gofr.dev/pkg/gofr/http"
 )
 
 // Define your custom middleware function
-func customMiddleware() gofr.Middleware {
+func customMiddleware() gofrHTTP.Middleware {
     return func(inner http.Handler) http.Handler {
         return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
             // Your custom logic here
