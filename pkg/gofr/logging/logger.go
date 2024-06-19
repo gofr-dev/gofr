@@ -221,6 +221,7 @@ func (l *logger) logf(level Level, format string, args ...interface{}) {
 	entry := l.createLogEntry(level, format, args...)
 
 	if l.filter != nil {
+
 		maskedArgs := l.maskArgs(args)
 		entry.Message = fmt.Sprintf(format, maskedArgs...)
 	}
@@ -230,7 +231,9 @@ func (l *logger) logf(level Level, format string, args ...interface{}) {
 
 func (l *logger) maskArgs(args []interface{}) []interface{} {
 	maskedArgs := make([]interface{}, len(args))
+
 	for i, arg := range args {
+
 		maskedArgs[i] = l.filter.Filter(arg)
 	}
 	return maskedArgs
