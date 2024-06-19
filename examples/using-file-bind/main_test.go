@@ -28,6 +28,7 @@ func TestMain_BindError(t *testing.T) {
 	buf, contentType := generateMultiPartBody(t)
 	req, _ = http.NewRequest(http.MethodPost, host+"/upload", buf)
 	req.Header.Set("content-type", contentType)
+	req.ContentLength = int64(buf.Len())
 
 	resp, err = c.Do(req)
 	assert.Equal(t, 201, resp.StatusCode)
@@ -61,6 +62,11 @@ func generateMultiPartBody(t *testing.T) (*bytes.Buffer, string) {
 	_, err = io.Copy(fileHeader, bytes.NewReader([]byte(`Test hello!`)))
 	if err != nil {
 		t.Fatalf("Failed to write file to form: %v", err)
+	}
+
+	err = writer.WriteField("name", "test-name")
+	if err != nil {
+		t.Fatalf("Failed to write name to form: %v", err)
 	}
 
 	// Close the multipart writer
