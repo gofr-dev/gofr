@@ -1,14 +1,14 @@
 package migration
 
 import (
-	goRedis "github.com/redis/go-redis/v9"
-	gofrSql "gofr.dev/pkg/gofr/datasource/sql"
 	"reflect"
 	"time"
 
 	"github.com/gogo/protobuf/sortkeys"
+	goRedis "github.com/redis/go-redis/v9"
 
 	"gofr.dev/pkg/gofr/container"
+	gofrSql "gofr.dev/pkg/gofr/datasource/sql"
 )
 
 type MigrateFunc func(d Datasource) error

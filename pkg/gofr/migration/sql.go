@@ -25,7 +25,7 @@ const (
 	insertGoFrMigrationRowPostgres = `INSERT INTO gofr_migrations (version, method, start_time,duration) VALUES ($1, $2, $3, $4);`
 )
 
-// database/sql is the package imported so named it sqlDB
+// database/sql is the package imported so named it sqlDB.
 type sqlDB struct {
 	SQL
 }

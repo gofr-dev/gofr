@@ -3,8 +3,9 @@ package migration
 import (
 	"context"
 	"database/sql"
-	goRedis "github.com/redis/go-redis/v9"
 	"time"
+
+	goRedis "github.com/redis/go-redis/v9"
 )
 
 type Decorator interface {
