@@ -132,11 +132,16 @@ func retryConnection(database *DB) {
 }
 
 func getDBConfig(configs config.Config) *DBConfig {
+	const (
+		defaultMaxIdleConn = 2
+		defaultMaxOpenConn = 0
+	)
+
 	// if the value of maxIdleConn is negative or 0, no idle connections are retained.
 	maxIdleConn, err := strconv.Atoi(configs.Get("DB_MAX_IDLE_CONNECTION"))
 	if err != nil {
 		// setting the max open connection as the default which is being provided by default package
-		maxIdleConn = 2
+		maxIdleConn = defaultMaxIdleConn
 	}
 
 	// if the value of maxOpenConn is negative, it is treated as 0 by sql package.
@@ -144,7 +149,7 @@ func getDBConfig(configs config.Config) *DBConfig {
 	if err != nil {
 		// setting the max open connection as the default which is being provided by default
 		// in this case there will be no limit for number of max open connections.
-		maxOpenConn = 0
+		maxOpenConn = defaultMaxOpenConn
 	}
 
 	return &DBConfig{
