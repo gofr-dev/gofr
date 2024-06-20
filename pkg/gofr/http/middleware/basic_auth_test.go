@@ -10,7 +10,15 @@ import (
 )
 
 func TestBasicAuthMiddleware(t *testing.T) {
-	validationFunc := func(_ *container.Container, user, pass string) bool {
+	validationFunc := func(user, pass string) bool {
+		if user == "abc" && pass == "pass123" {
+			return true
+		}
+
+		return false
+	}
+
+	validationFuncWithDB := func(_ *container.Container, user, pass string) bool {
 		if user == "abc" && pass == "pass123" {
 			return true
 		}
@@ -33,13 +41,19 @@ func TestBasicAuthMiddleware(t *testing.T) {
 		{
 			name:               "Valid Authorization with validation Func",
 			authHeader:         "Basic YWJjOnBhc3MxMjM=",
-			authProvider:       BasicAuthProvider{ValidateFunc: validationFunc},
+			authProvider:       BasicAuthProvider{Users: map[string]string{"abc": "pass123"}, ValidateFunc: validationFunc},
 			expectedStatusCode: http.StatusOK,
 		},
 		{
 			name:               "false from validation Func",
 			authHeader:         "Basic dXNlcjpwYXNzd29yZA==",
 			authProvider:       BasicAuthProvider{ValidateFunc: validationFunc},
+			expectedStatusCode: http.StatusUnauthorized,
+		},
+		{
+			name:               "false from validation Func with DB",
+			authHeader:         "Basic dXNlcjpwYXNzd29yZA==",
+			authProvider:       BasicAuthProvider{ValidateFuncWithDB: validationFuncWithDB},
 			expectedStatusCode: http.StatusUnauthorized,
 		},
 		{

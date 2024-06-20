@@ -8,10 +8,17 @@ import (
 	"gofr.dev/pkg/gofr/container"
 )
 
+// APIKeyAuthProvider represents a basic authentication provider.
+type APIKeyAuthProvider struct {
+	Keys               []string
+	ValidateFunc       func(apiKey string) bool
+	ValidateFuncWithDB func(c *container.Container, apiKey string) bool
+	Container          *container.Container
+}
+
 // APIKeyAuthMiddleware creates a middleware function that enforces API key authentication based on the provided API
 // keys or a validation function.
-func APIKeyAuthMiddleware(validator func(c *container.Container, apiKey string) bool,
-	c *container.Container, apiKeys ...string) func(handler http.Handler) http.Handler {
+func APIKeyAuthMiddleware(a APIKeyAuthProvider, apiKeys ...string) func(handler http.Handler) http.Handler {
 	return func(handler http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if isWellKnown(r.URL.Path) {
@@ -25,7 +32,7 @@ func APIKeyAuthMiddleware(validator func(c *container.Container, apiKey string) 
 				return
 			}
 
-			if !validateKey(validator, c, authKey, apiKeys...) {
+			if !validateKey(a, authKey, apiKeys...) {
 				http.Error(w, "Unauthorized: Invalid Authorization header", http.StatusUnauthorized)
 				return
 			}
@@ -45,16 +52,17 @@ func isPresent(authKey string, apiKeys ...string) bool {
 	return false
 }
 
-func validateKey(validator func(c *container.Container, apiKey string) bool, c *container.Container,
-	authKey string, apiKeys ...string) bool {
-	if validator != nil {
-		if !validator(c, authKey) {
-			return false
-		}
-	} else {
-		if !isPresent(authKey, apiKeys...) {
-			return false
-		}
+func validateKey(provider APIKeyAuthProvider, authKey string, apiKeys ...string) bool {
+	if provider.ValidateFunc != nil && !provider.ValidateFunc(authKey) {
+		return false
+	}
+
+	if provider.ValidateFuncWithDB != nil && !provider.ValidateFuncWithDB(provider.Container, authKey) {
+		return false
+	}
+
+	if !isPresent(authKey, apiKeys...) {
+		return false
 	}
 
 	return true
