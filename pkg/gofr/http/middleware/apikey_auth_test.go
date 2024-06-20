@@ -56,9 +56,9 @@ func Test_ApiKeyAuthMiddleware(t *testing.T) {
 		req.Header.Set("X-API-KEY", tc.apiKey)
 
 		provider := APIKeyAuthProvider{
-			ValidateFunc:       tc.validatorFunc,
-			ValidateFuncWithDB: tc.validatorFuncWithDB,
-			Container:          nil,
+			ValidateFunc:                tc.validatorFunc,
+			ValidateFuncWithDatasources: tc.validatorFuncWithDB,
+			Container:                   nil,
 		}
 
 		wrappedHandler := APIKeyAuthMiddleware(provider, validKey1, validKey2)(testHandler)

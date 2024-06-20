@@ -12,10 +12,10 @@ const credentialLength = 2
 
 // BasicAuthProvider represents a basic authentication provider.
 type BasicAuthProvider struct {
-	Users              map[string]string
-	ValidateFunc       func(username, password string) bool
-	ValidateFuncWithDB func(c *container.Container, username, password string) bool
-	Container          *container.Container
+	Users                       map[string]string
+	ValidateFunc                func(username, password string) bool
+	ValidateFuncWithDatasources func(c *container.Container, username, password string) bool
+	Container                   *container.Container
 }
 
 // BasicAuthMiddleware creates a middleware function that enforces basic authentication using the provided BasicAuthProvider.
@@ -66,7 +66,8 @@ func validateCredentials(provider BasicAuthProvider, credentials []string) bool 
 		return false
 	}
 
-	if provider.ValidateFuncWithDB != nil && !provider.ValidateFuncWithDB(provider.Container, credentials[0], credentials[1]) {
+	if provider.ValidateFuncWithDatasources != nil && !provider.ValidateFuncWithDatasources(provider.Container,
+		credentials[0], credentials[1]) {
 		return false
 	}
 

@@ -10,10 +10,9 @@ import (
 
 // APIKeyAuthProvider represents a basic authentication provider.
 type APIKeyAuthProvider struct {
-	Keys               []string
-	ValidateFunc       func(apiKey string) bool
-	ValidateFuncWithDB func(c *container.Container, apiKey string) bool
-	Container          *container.Container
+	ValidateFunc                func(apiKey string) bool
+	ValidateFuncWithDatasources func(c *container.Container, apiKey string) bool
+	Container                   *container.Container
 }
 
 // APIKeyAuthMiddleware creates a middleware function that enforces API key authentication based on the provided API
@@ -57,12 +56,12 @@ func validateKey(provider APIKeyAuthProvider, authKey string, apiKeys ...string)
 		return false
 	}
 
-	if provider.ValidateFuncWithDB != nil && !provider.ValidateFuncWithDB(provider.Container, authKey) {
+	if provider.ValidateFuncWithDatasources != nil && !provider.ValidateFuncWithDatasources(provider.Container, authKey) {
 		return false
 	}
 
-	if !isPresent(authKey, apiKeys...) {
-		return false
+	if provider.ValidateFunc == nil && provider.ValidateFuncWithDatasources == nil {
+		return isPresent(authKey, apiKeys...)
 	}
 
 	return true

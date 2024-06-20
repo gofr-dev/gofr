@@ -52,7 +52,7 @@ func validateUser(c *container.Container, username, password string) bool {
 func main() { 
 	app := gofr.New() 
 
-	app.EnableBasicAuthWithFunc(validateUser) 
+	app.EnableBasicAuthWithValidator(validateUser) 
 
 	app.GET("/secure-data", func(c *gofr.Context) (interface{}, error) { 
 		// Handle access to secure data 
@@ -112,7 +112,7 @@ func main() {
 	// initialise gofr object
 	app := gofr.New()
 
-	app.EnableAPIKeyAuthWithFunc(apiKeyValidator)
+	app.EnableAPIKeyAuthWithValidator(apiKeyValidator)
 
 	app.GET("/customer", Customer)
 

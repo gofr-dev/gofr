@@ -355,15 +355,15 @@ func (a *App) EnableBasicAuthWithFunc(validateFunc func(username, password strin
 
 func (a *App) EnableBasicAuthWithValidator(validateFunc func(c *container.Container, username, password string) bool) {
 	a.httpServer.router.Use(middleware.BasicAuthMiddleware(middleware.BasicAuthProvider{
-		ValidateFuncWithDB: validateFunc, Container: a.container}))
+		ValidateFuncWithDatasources: validateFunc, Container: a.container}))
 }
 
 func (a *App) EnableAPIKeyAuth(apiKeys ...string) {
-	a.httpServer.router.Use(middleware.APIKeyAuthMiddleware(middleware.APIKeyAuthProvider{Keys: apiKeys}))
+	a.httpServer.router.Use(middleware.APIKeyAuthMiddleware(middleware.APIKeyAuthProvider{}, apiKeys...))
 }
 
 // Deprecated: EnableAPIKeyAuthWithFunc is deprecated and will be removed in future releases, users must use
-// EnableBasicAuthWithValidator as it has access to application datasources.
+// EnableAPIKeyAuthWithValidator as it has access to application datasources.
 func (a *App) EnableAPIKeyAuthWithFunc(validateFunc func(apiKey string) bool) {
 	a.httpServer.router.Use(middleware.APIKeyAuthMiddleware(middleware.APIKeyAuthProvider{
 		ValidateFunc: validateFunc,
@@ -371,10 +371,10 @@ func (a *App) EnableAPIKeyAuthWithFunc(validateFunc func(apiKey string) bool) {
 	}))
 }
 
-func (a *App) EnableAPIKeyAuthWitValidator(validateFunc func(c *container.Container, apiKey string) bool) {
+func (a *App) EnableAPIKeyAuthWithValidator(validateFunc func(c *container.Container, apiKey string) bool) {
 	a.httpServer.router.Use(middleware.APIKeyAuthMiddleware(middleware.APIKeyAuthProvider{
-		ValidateFuncWithDB: validateFunc,
-		Container:          a.container,
+		ValidateFuncWithDatasources: validateFunc,
+		Container:                   a.container,
 	}))
 }
 

@@ -53,7 +53,7 @@ func TestBasicAuthMiddleware(t *testing.T) {
 		{
 			name:               "false from validation Func with DB",
 			authHeader:         "Basic dXNlcjpwYXNzd29yZA==",
-			authProvider:       BasicAuthProvider{ValidateFuncWithDB: validationFuncWithDB},
+			authProvider:       BasicAuthProvider{ValidateFuncWithDatasources: validationFuncWithDB},
 			expectedStatusCode: http.StatusUnauthorized,
 		},
 		{
