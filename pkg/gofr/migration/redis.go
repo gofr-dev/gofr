@@ -15,12 +15,6 @@ type redis struct {
 	Redis
 }
 
-type redisData struct {
-	Method    string    `json:"method"`
-	StartTime time.Time `json:"startTime"`
-	Duration  int64     `json:"duration"`
-}
-
 func newRedis(r Redis) redis {
 	return redis{
 		Redis: r,
@@ -54,6 +48,12 @@ type redisMigrator struct {
 	Redis
 
 	Manager
+}
+
+type redisData struct {
+	Method    string    `json:"method"`
+	StartTime time.Time `json:"startTime"`
+	Duration  int64     `json:"duration"`
 }
 
 func (m redisMigrator) GetLastMigration(c *container.Container) int64 {
