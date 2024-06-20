@@ -72,11 +72,16 @@ func TestNewSQL_GetDBDialect(t *testing.T) {
 	mockLogger := logging.NewMockLogger(logging.ERROR)
 	mockMetrics := NewMockMetrics(ctrl)
 
+	// using gomock.Any as we are not actually testing any feature related to metrics
+	mockMetrics.EXPECT().SetGauge(gomock.Any(), gomock.Any()).AnyTimes()
+
 	db := NewSQL(mockConfig, mockLogger, mockMetrics)
 
 	dialect := db.Dialect()
 
 	assert.Equal(t, "postgres", dialect)
+
+	time.Sleep(1 * time.Second)
 }
 
 func TestNewSQL_InvalidConfig(t *testing.T) {
@@ -147,23 +152,20 @@ func TestSQL_ConfigCases(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			mockConfig := config.NewMockConfig(map[string]string{
-				"DB_MAX_IDLE_CONNECTION": tc.idleConn,
-				"DB_MAX_OPEN_CONNECTION": tc.openConn,
-			})
-
-			expectedConfig := &DBConfig{
-				Port:        "3306",
-				MaxIdleConn: tc.expectedIdle,
-				MaxOpenConn: tc.expectedOpen,
-			}
-
-			configs := getDBConfig(mockConfig)
-			assert.Equal(t, expectedConfig, configs)
-
-			time.Sleep(1 * time.Second)
+		mockConfig := config.NewMockConfig(map[string]string{
+			"DB_MAX_IDLE_CONNECTION": tc.idleConn,
+			"DB_MAX_OPEN_CONNECTION": tc.openConn,
 		})
+
+		expectedConfig := &DBConfig{
+			Port:        "3306",
+			MaxIdleConn: tc.expectedIdle,
+			MaxOpenConn: tc.expectedOpen,
+		}
+
+		configs := getDBConfig(mockConfig)
+
+		assert.Equal(t, expectedConfig, configs)
 	}
 }
 
