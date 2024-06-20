@@ -28,7 +28,7 @@ type transactionData struct {
 func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 	invalidKeys, keys := getKeys(migrationsMap)
 	if len(invalidKeys) > 0 {
-		c.Errorf("redisData run failed! UP not defined for the following keys: %v", invalidKeys)
+		c.Errorf("migration run failed! UP not defined for the following keys: %v", invalidKeys)
 
 		return
 	}
@@ -37,7 +37,7 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 
 	ds, mg, ok := getMigrator(c)
 
-	// Returning with an error log as redisData would eventually fail as No databases are initialized.
+	// Returning with an error log as migration would eventually fail as No databases are initialized.
 	// Pub/Sub is considered as initialized if its configurations are given.
 	if !ok {
 		c.Errorf("no migrations are running as datasources are not initialized")
@@ -56,12 +56,12 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 
 	for _, currentMigration := range keys {
 		if currentMigration <= lastMigration {
-			c.Debugf("skipping redisData %v", currentMigration)
+			c.Debugf("skipping migration %v", currentMigration)
 
 			continue
 		}
 
-		c.Logger.Debugf("running redisData %v", currentMigration)
+		c.Logger.Debugf("running migration %v", currentMigration)
 
 		transactionsObjects := mg.BeginTransaction(c)
 
@@ -81,7 +81,7 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 
 		err = mg.CommitMigration(c, transactionsObjects)
 		if err != nil {
-			c.Errorf("failed to commit redisData, err: %v", err)
+			c.Errorf("failed to commit migration, err: %v", err)
 
 			mg.Rollback(c, transactionsObjects)
 

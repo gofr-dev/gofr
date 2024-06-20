@@ -6,5 +6,5 @@ type Datasource struct {
 
 	SQL    SQL
 	Redis  Redis
-	PubSub client
+	PubSub Client
 }

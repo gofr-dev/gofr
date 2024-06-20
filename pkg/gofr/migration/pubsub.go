@@ -5,23 +5,23 @@ import "context"
 // MigrationManger interface is not implemented because it is not possible to run transaction for creating and deleting topics,
 // it is open for further development if we can implement it.
 
-type client interface {
+type Client interface {
 	CreateTopic(context context.Context, name string) error
 	DeleteTopic(context context.Context, name string) error
 }
 
 type pubsub struct {
-	client
+	Client
 }
 
-func newPubSub(p client) *pubsub {
-	return &pubsub{client: p}
+func newPubSub(p Client) *pubsub {
+	return &pubsub{Client: p}
 }
 
 func (s *pubsub) CreateTopic(ctx context.Context, name string) error {
-	return s.client.CreateTopic(ctx, name)
+	return s.Client.CreateTopic(ctx, name)
 }
 
 func (s *pubsub) DeleteTopic(ctx context.Context, name string) error {
-	return s.client.DeleteTopic(ctx, name)
+	return s.Client.DeleteTopic(ctx, name)
 }

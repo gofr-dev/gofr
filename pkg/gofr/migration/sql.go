@@ -89,7 +89,7 @@ func (d sqlMigrator) GetLastMigration(c *container.Container) int64 {
 		return 0
 	}
 
-	c.Debugf("SQL last redisData fetched value is: %v", lastMigration)
+	c.Debugf("SQL last migration fetched value is: %v", lastMigration)
 
 	lm2 := d.Manager.GetLastMigration(c)
 
@@ -108,7 +108,7 @@ func (d sqlMigrator) CommitMigration(c *container.Container, data transactionDat
 			return err
 		}
 
-		c.Debugf("inserted record for redisData %v in gofr_migrations table", data.MigrationNumber)
+		c.Debugf("inserted record for migration %v in gofr_migrations table", data.MigrationNumber)
 
 	case "postgres":
 		err := insertMigrationRecord(data.SQLTx, insertGoFrMigrationRowPostgres, data.MigrationNumber, data.StartTime)
@@ -116,7 +116,7 @@ func (d sqlMigrator) CommitMigration(c *container.Container, data transactionDat
 			return err
 		}
 
-		c.Debugf("inserted record for redisData %v in gofr_migrations table", data.MigrationNumber)
+		c.Debugf("inserted record for migration %v in gofr_migrations table", data.MigrationNumber)
 	}
 
 	// Commit transaction

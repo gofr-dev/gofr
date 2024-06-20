@@ -2,6 +2,7 @@ package migration
 
 import "gofr.dev/pkg/gofr/container"
 
+// Manager Exporting the interface such that gofr database drivers can also implement and migration can be implemented for them.
 type Manager interface {
 	CheckAndCreateMigrationTable(c *container.Container) error
 	GetLastMigration(c *container.Container) int64
@@ -12,7 +13,7 @@ type Manager interface {
 	Rollback(c *container.Container, data transactionData)
 }
 
-// It is a base implementation for redisData manger, on this other database drivers have been wrapped.
+// It is a base implementation for migration manger, on this other database drivers have been wrapped.
 // This could have been implemented on Datasource type as well, but then user would have got access to these methods,
 // which was of no use to the users.
 
