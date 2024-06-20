@@ -2,7 +2,6 @@ package migration
 
 import "gofr.dev/pkg/gofr/container"
 
-// Manager Exporting the interface such that gofr database drivers can also implement and migration can be implemented for them.
 type Manager interface {
 	CheckAndCreateMigrationTable(c *container.Container) error
 	GetLastMigration(c *container.Container) int64

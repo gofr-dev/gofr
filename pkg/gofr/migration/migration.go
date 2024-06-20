@@ -140,6 +140,16 @@ func getMigrator(c *container.Container) (Datasource, Manager, bool) {
 		ok = true
 	}
 
+	if c.Clickhouse != nil {
+		ok = true
+
+		ds.Clickhouse = c.Clickhouse
+
+		mg = clickHouse{ds.Clickhouse}.Apply(mg)
+
+		c.Debug("initialized migration data source for clickhouse")
+	}
+
 	return ds, mg, ok
 }
 
