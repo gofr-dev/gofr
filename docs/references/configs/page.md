@@ -2,7 +2,7 @@
 
 This document lists all the configuration options supported by the Gofr framework. The configurations are grouped by category for better organization.
 
-## App Configs
+## App
 
 {% table %}
 
@@ -86,9 +86,105 @@ This document lists all the configuration options supported by the Gofr framewor
 
 {% /table %}
 
-## Datasource Configs
+## HTTP
 
 {% table %}
+
+- Name
+- Description
+
+---
+
+-  REQUEST_TIMEOUT
+-  Set the request timeouts (in seconds) for HTTP server.
+
+{% /table %}
+
+
+## Datasource
+
+### SQL
+
+{% table %}
+
+- Name
+- Description
+- Default Value
+
+---
+
+-  DB_DIALECT
+-  Database dialect. Supported values: mysql, postgres
+
+---
+
+-  DB_HOST
+-  Hostname of the database server.
+
+---
+
+-  DB_PORT
+-  Port of the database server.
+-  3306
+
+---
+
+-  DB_USER
+-  Username for the database.
+
+---
+
+-  DB_PASSWORD
+-  Password for the database.
+
+---
+
+-  DB_NAME
+-  Name of the database to use.
+
+---
+
+-  DB_MAX_IDLE_CONNECTION
+-  Number of maximum idle connection.
+-  2
+
+---
+
+-  DB_MAX_OPEN_CONNECTION
+-  Number of maximum connections which can be used with database.
+-  0 (unlimited)
+
+{% /table %}
+
+### Redis
+
+{% table %}
+
+- Name
+- Description
+
+---
+
+-  REDIS_HOST
+-  Hostname of the Redis server.
+
+---
+
+-  REDIS_PORT
+-  Port of the Redis server.
+
+{% /table %}
+
+### Pub/Sub
+
+{% table %}
+
+
+- Name
+- Description
+- Default Value
+
+---
 
 -  PUBSUB_BACKEND
 -  Pub/Sub message broker backend
@@ -96,9 +192,16 @@ This document lists all the configuration options supported by the Gofr framewor
 
 {% /table %}
 
-**For Kafka:**
+**Kafka**
 
 {% table %}
+
+
+- Name
+- Description
+- Default Value
+
+---
 
 -  PUBSUB_BROKER
 -  Comma-separated list of broker addresses
@@ -124,9 +227,15 @@ This document lists all the configuration options supported by the Gofr framewor
 
 {% /table %}
 
-**For Google:**
+**Google**
 
 {% table %}
+
+
+- Name
+- Description
+
+---
 
 -  GOOGLE_PROJECT_ID
 -  ID of the Google Cloud project. Required for Google Pub/Sub.
@@ -138,9 +247,16 @@ This document lists all the configuration options supported by the Gofr framewor
 
 {% /table %}
 
-**For MQTT:**
+**MQTT**
 
 {% table %}
+
+
+- Name
+- Description
+- Default Value
+
+---
 
 -  MQTT_PORT
 -  Port of the MQTT broker
@@ -186,86 +302,3 @@ This document lists all the configuration options supported by the Gofr framewor
 
 {% /table %}
 
-### Mongo Configs
-
-{% table %}
-
--  MONGO_URI
--  URI for connecting to the MongoDB server.
-
----
-
--  MONGO_DATABASE
--  Name of the MongoDB database to use.
-
-{% /table %}
-
-### Redis Configs
-
-{% table %}
-
--  REDIS_HOST
--  Hostname of the Redis server.
-
----
-
--  REDIS_PORT
--  Port of the Redis server.
-
-{% /table %}
-
-### SQL Configs
-
-{% table %}
-
--  DB_DIALECT
--  Database dialect. Supported values: mysql, postgres
-
----
-
--  DB_HOST
--  Hostname of the database server.
-
----
-
--  DB_PORT
--  Port of the database server.
--  3306
-
----
-
--  DB_USER
--  Username for the database.
-
----
-
--  DB_PASSWORD
--  Password for the database.
-
----
-
--  DB_NAME
--  Name of the database to use.
-
----
-
--  DB_MAX_IDLE_CONNECTION
--  Number of maximum idle connection.
--  2
-
----
-
--  DB_MAX_OPEN_CONNECTION
--  Number of maximum connections which can be used with database.
--  0 (unlimited)
-
-{% /table %}
-
-## HTTP Configs
-
-{% table %}
-
--  REQUEST_TIMEOUT
--  Set the request timeouts (in seconds) for HTTP server.
-
-{% /table %}
