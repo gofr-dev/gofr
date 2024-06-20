@@ -1,0 +1,27 @@
+package migration
+
+import (
+	"context"
+	"database/sql"
+	goRedis "github.com/redis/go-redis/v9"
+	"time"
+)
+
+type Decorator interface {
+	Apply(m Manager) Manager
+}
+
+type Redis interface {
+	Get(ctx context.Context, key string) *goRedis.StringCmd
+	Set(ctx context.Context, key string, value interface{}, expiration time.Duration) *goRedis.StatusCmd
+	Del(ctx context.Context, keys ...string) *goRedis.IntCmd
+	Rename(ctx context.Context, key, newKey string) *goRedis.StatusCmd
+}
+
+type SQL interface {
+	Query(query string, args ...interface{}) (*sql.Rows, error)
+	QueryRow(query string, args ...interface{}) *sql.Row
+	QueryRowContext(ctx context.Context, query string, args ...interface{}) *sql.Row
+	Exec(query string, args ...interface{}) (sql.Result, error)
+	ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
+}

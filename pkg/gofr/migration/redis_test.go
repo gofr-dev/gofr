@@ -16,8 +16,8 @@ func TestNewRedis(t *testing.T) {
 	mockCmd := &Mockcommands{}
 
 	r := newRedis(mockCmd)
-	if r.commands != mockCmd {
-		t.Errorf("Expected newRedis to set commands, but got %v", r.commands)
+	if r.Redis != mockCmd {
+		t.Errorf("Expected newRedis to set Redis, but got %v", r.Redis)
 	}
 }
 
@@ -81,8 +81,8 @@ func TestRedisMigrator_GetLastMigration(t *testing.T) {
 	mockMigrator := NewMockMigrator(ctrl)
 
 	m := redisMigrator{
-		commands: mocks.Redis,
-		Migrator: mockMigrator,
+		Redis:   mocks.Redis,
+		Manager: mockMigrator,
 	}
 
 	tests := []struct {
@@ -132,7 +132,7 @@ func TestRedisMigrator_GetLastMigration(t *testing.T) {
 
 		mockMigrator.EXPECT().getLastMigration(gomock.Any()).Return(tc.migratorLastMigration).MaxTimes(2)
 
-		lastMigration := m.getLastMigration(c)
+		lastMigration := m.GetLastMigration(c)
 
 		assert.Equal(t, tc.expectedLastMigration, lastMigration, "TEST[%d], Failed.\n%s", i, tc.desc)
 	}
@@ -146,14 +146,14 @@ func TestRedisMigrator_beginTransaction(t *testing.T) {
 	mockMigrator := NewMockMigrator(ctrl)
 
 	m := redisMigrator{
-		commands: mocks.Redis,
-		Migrator: mockMigrator,
+		Redis:   mocks.Redis,
+		Manager: mockMigrator,
 	}
 
 	mocks.Redis.EXPECT().TxPipeline()
 	mockMigrator.EXPECT().beginTransaction(c)
 
-	data := m.beginTransaction(c)
+	data := m.BeginTransaction(c)
 
-	assert.Equal(t, migrationData{}, data, "TEST Failed.\n")
+	assert.Equal(t, transactionData{}, data, "TEST Failed.\n")
 }

@@ -2,6 +2,9 @@ package migration
 
 import "context"
 
+// MigrationManger interface is not implemented because it is not possible to run transaction for creating and deleting topics,
+// it is open for further development if we can implement it.
+
 type client interface {
 	CreateTopic(context context.Context, name string) error
 	DeleteTopic(context context.Context, name string) error
