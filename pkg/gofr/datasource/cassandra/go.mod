@@ -1,6 +1,6 @@
 module gofr.dev/pkg/gofr/datasource/cassandra
 
-go 1.21.1
+go 1.22
 
 require (
 	github.com/gocql/gocql v1.6.0
