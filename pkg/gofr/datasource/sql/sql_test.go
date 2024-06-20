@@ -161,6 +161,8 @@ func TestSQL_ConfigCases(t *testing.T) {
 
 			configs := getDBConfig(mockConfig)
 			assert.Equal(t, expectedConfig, configs)
+
+			time.Sleep(1 * time.Second)
 		})
 	}
 }
