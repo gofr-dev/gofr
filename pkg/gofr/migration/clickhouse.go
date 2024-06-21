@@ -36,7 +36,7 @@ const (
 ORDER BY (version, method);
 `
 
-	getLastChGoFrMigration = `SELECT COALESCE(MAX(version), 0) FROM gofr_migrations;`
+	getLastChGoFrMigration = `SELECT COALESCE(MAX(version), 0) as last_migration FROM gofr_migrations;`
 
 	insertChGoFrMigrationRow = `INSERT INTO gofr_migrations (version, method, start_time, duration) VALUES (?, ?, ?, ?);`
 )
@@ -50,10 +50,14 @@ func (ch clickHouseMigrator) CheckAndCreateMigrationTable(c *container.Container
 }
 
 func (ch clickHouseMigrator) GetLastMigration(c *container.Container) int64 {
-	var lastMigrations []int64
+	type LastMigration struct {
+		Timestamp int64 `ch:"last_migration"`
+	}
+
+	var lastMigrations []LastMigration
 	var lastMigration int64
 
-	err := c.Clickhouse.Select(context.Background(), &lastMigration, getLastChGoFrMigration)
+	err := c.Clickhouse.Select(context.Background(), &lastMigrations, getLastChGoFrMigration)
 	if err != nil {
 		return 0
 	}
@@ -61,7 +65,7 @@ func (ch clickHouseMigrator) GetLastMigration(c *container.Container) int64 {
 	c.Debugf("SQL last migration fetched value is: %v", lastMigration)
 
 	if len(lastMigrations) != 0 {
-		lastMigration = lastMigrations[0]
+		lastMigration = lastMigrations[0].Timestamp
 	}
 
 	lm2 := ch.Manager.GetLastMigration(c)

@@ -65,9 +65,9 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 
 		transactionsObjects := mg.BeginTransaction(c)
 
+		// Replacing the objects in datasource object only for those Datasources which support transactions.
 		ds.SQL = newMysql(transactionsObjects.SQLTx)
 		ds.Redis = newRedis(transactionsObjects.RedisTx)
-		ds.PubSub = newPubSub(c.PubSub)
 
 		transactionsObjects.StartTime = time.Now()
 		transactionsObjects.MigrationNumber = currentMigration
@@ -138,6 +138,8 @@ func getMigrator(c *container.Container) (Datasource, Manager, bool) {
 
 	if c.PubSub != nil {
 		ok = true
+
+		ds.PubSub = c.PubSub
 	}
 
 	if c.Clickhouse != nil {
