@@ -2,9 +2,10 @@ package migration
 
 import (
 	"context"
+	"time"
+
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/datasource"
-	"time"
 )
 
 type clickHouse struct {
