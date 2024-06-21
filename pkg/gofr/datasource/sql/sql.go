@@ -24,12 +24,14 @@ var errUnsupportedDialect = fmt.Errorf("unsupported db dialect; supported dialec
 
 // DBConfig has those members which are necessary variables while connecting to database.
 type DBConfig struct {
-	Dialect  string
-	HostName string
-	User     string
-	Password string
-	Port     string
-	Database string
+	Dialect     string
+	HostName    string
+	User        string
+	Password    string
+	Port        string
+	Database    string
+	MaxIdleConn int
+	MaxOpenConn int
 }
 
 func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *DB {
@@ -71,6 +73,14 @@ func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *D
 
 		return database
 	}
+
+	// We are not setting idle connection timeout because we are checking for connection
+	// every 10 seconds which would need a connection, moreover if connection expires it is
+	// automatically closed by the database/sql package.
+	database.DB.SetMaxIdleConns(dbConfig.MaxIdleConn)
+	// We are not setting max open connection because any connection which is expired,
+	// it is closed automatically.
+	database.DB.SetMaxOpenConns(dbConfig.MaxOpenConn)
 
 	database = pingToTestConnection(database)
 
@@ -122,13 +132,35 @@ func retryConnection(database *DB) {
 }
 
 func getDBConfig(configs config.Config) *DBConfig {
+	const (
+		defaultMaxIdleConn = 2
+		defaultMaxOpenConn = 0
+	)
+
+	// if the value of maxIdleConn is negative or 0, no idle connections are retained.
+	maxIdleConn, err := strconv.Atoi(configs.Get("DB_MAX_IDLE_CONNECTION"))
+	if err != nil {
+		// setting the max open connection as the default which is being provided by default package
+		maxIdleConn = defaultMaxIdleConn
+	}
+
+	// if the value of maxOpenConn is negative, it is treated as 0 by sql package.
+	maxOpenConn, err := strconv.Atoi(configs.Get("DB_MAX_OPEN_CONNECTION"))
+	if err != nil {
+		// setting the max open connection as the default which is being provided by default
+		// in this case there will be no limit for number of max open connections.
+		maxOpenConn = defaultMaxOpenConn
+	}
+
 	return &DBConfig{
-		Dialect:  configs.Get("DB_DIALECT"),
-		HostName: configs.Get("DB_HOST"),
-		User:     configs.Get("DB_USER"),
-		Password: configs.Get("DB_PASSWORD"),
-		Port:     configs.GetOrDefault("DB_PORT", strconv.Itoa(defaultDBPort)),
-		Database: configs.Get("DB_NAME"),
+		Dialect:     configs.Get("DB_DIALECT"),
+		HostName:    configs.Get("DB_HOST"),
+		User:        configs.Get("DB_USER"),
+		Password:    configs.Get("DB_PASSWORD"),
+		Port:        configs.GetOrDefault("DB_PORT", strconv.Itoa(defaultDBPort)),
+		Database:    configs.Get("DB_NAME"),
+		MaxOpenConn: maxOpenConn,
+		MaxIdleConn: maxIdleConn,
 	}
 }
 

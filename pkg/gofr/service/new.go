@@ -181,6 +181,9 @@ func (h *httpService) createAndSendRequest(ctx context.Context, method string, p
 		log.ResponseCode = http.StatusInternalServerError
 		h.Log(&ErrorLog{Log: log, ErrorMessage: err.Error()})
 
+		h.RecordHistogram(ctx, "app_http_service_response", respTime.Seconds(), "path", h.url, "method", method,
+			"status", fmt.Sprintf("%v", http.StatusInternalServerError))
+
 		return resp, err
 	}
 
@@ -190,8 +193,6 @@ func (h *httpService) createAndSendRequest(ctx context.Context, method string, p
 
 	return resp, nil
 }
-
-// HealthCheck default healthcheck for HTTP Service.
 
 func encodeQueryParameters(req *http.Request, queryParams map[string]interface{}) {
 	q := req.URL.Query()
