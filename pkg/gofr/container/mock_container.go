@@ -2,6 +2,8 @@ package container
 
 import (
 	"context"
+	"fmt"
+	"net/http"
 	"testing"
 
 	"go.uber.org/mock/gomock"
@@ -27,6 +29,14 @@ func NewMockContainer(t *testing.T) (*Container, Mocks) {
 	container.Redis = redisMock
 
 	mocks := Mocks{Redis: redisMock, SQL: sqlMock}
+
+	ctrl := gomock.NewController(t)
+	mockMetrics := NewMockMetrics(ctrl)
+
+	container.metricsManager = mockMetrics
+
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_http_service_response", gomock.Any(), "path", gomock.Any(),
+		"method", gomock.Any(), "status", fmt.Sprintf("%v", http.StatusInternalServerError)).AnyTimes()
 
 	return container, mocks
 }

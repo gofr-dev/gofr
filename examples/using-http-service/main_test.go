@@ -3,8 +3,6 @@ package main
 import (
 	"bytes"
 	"context"
-	"fmt"
-	"go.uber.org/mock/gomock"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -68,22 +66,15 @@ func Test_main(t *testing.T) {
 }
 
 func TestHTTPHandlerURLError(t *testing.T) {
-	logger := logging.NewLogger(logging.DEBUG)
-
-	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://localhost:5000/handle", bytes.NewBuffer([]byte(`{"key":"value"}`)))
-
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet,
+		"http://localhost:5000/handle", bytes.NewBuffer([]byte(`{"key":"value"}`)))
 	gofrReq := gofrHTTP.NewRequest(req)
 
-	ctx := &gofr.Context{Context: context.Background(),
-		Request: gofrReq, Container: &container.Container{Logger: logger}}
+	mockContainer, _ := container.NewMockContainer(t)
 
-	ctrl := gomock.NewController(t)
-	mockMetrics := service.NewMockMetrics(ctrl)
+	ctx := &gofr.Context{Context: context.Background(), Request: gofrReq, Container: mockContainer}
 
-	mockMetrics.EXPECT().RecordHistogram(ctx, "app_http_service_response", gomock.Any(), "path", gomock.Any(),
-		"method", http.MethodGet, "status", fmt.Sprintf("%v", http.StatusInternalServerError))
-
-	ctx.Container.Services = map[string]service.HTTP{"cat-facts": service.NewHTTPService("http://invalid", ctx.Logger, mockMetrics)}
+	ctx.Container.Services = map[string]service.HTTP{"cat-facts": service.NewHTTPService("http://invalid", ctx.Logger, mockContainer.Metrics())}
 
 	resp, err := Handler(ctx)
 
