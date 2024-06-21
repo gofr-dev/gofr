@@ -37,17 +37,17 @@ func (r redis) Rename(ctx context.Context, key, newKey string) *goRedis.StatusCm
 	return r.Redis.Rename(ctx, key, newKey)
 }
 
-func (r redis) Apply(m Manager) Manager {
+func (r redis) Apply(m migrator) migrator {
 	return redisMigrator{
-		Redis:   r.Redis,
-		Manager: m,
+		Redis:    r.Redis,
+		migrator: m,
 	}
 }
 
 type redisMigrator struct {
 	Redis
 
-	Manager
+	migrator
 }
 
 type redisData struct {
@@ -56,7 +56,7 @@ type redisData struct {
 	Duration  int64     `json:"duration"`
 }
 
-func (m redisMigrator) GetLastMigration(c *container.Container) int64 {
+func (m redisMigrator) getLastMigration(c *container.Container) int64 {
 	var lastMigration int64
 
 	table, err := c.Redis.HGetAll(context.Background(), "gofr_migrations").Result()
@@ -91,7 +91,7 @@ func (m redisMigrator) GetLastMigration(c *container.Container) int64 {
 
 	c.Debugf("Redis last migration fetched value is: %v", lastMigration)
 
-	last := m.Manager.GetLastMigration(c)
+	last := m.migrator.getLastMigration(c)
 	if last > lastMigration {
 		return last
 	}
@@ -99,10 +99,10 @@ func (m redisMigrator) GetLastMigration(c *container.Container) int64 {
 	return lastMigration
 }
 
-func (m redisMigrator) BeginTransaction(c *container.Container) transactionData {
+func (m redisMigrator) beginTransaction(c *container.Container) transactionData {
 	redisTx := c.Redis.TxPipeline()
 
-	cmt := m.Manager.BeginTransaction(c)
+	cmt := m.migrator.beginTransaction(c)
 
 	cmt.RedisTx = redisTx
 
@@ -111,7 +111,7 @@ func (m redisMigrator) BeginTransaction(c *container.Container) transactionData 
 	return cmt
 }
 
-func (m redisMigrator) CommitMigration(c *container.Container, data transactionData) error {
+func (m redisMigrator) commitMigration(c *container.Container, data transactionData) error {
 	migrationVersion := strconv.FormatInt(data.MigrationNumber, 10)
 
 	jsonData, err := json.Marshal(redisData{
@@ -139,12 +139,12 @@ func (m redisMigrator) CommitMigration(c *container.Container, data transactionD
 		return err
 	}
 
-	return m.Manager.CommitMigration(c, data)
+	return m.migrator.commitMigration(c, data)
 }
 
-func (m redisMigrator) Rollback(c *container.Container, data transactionData) {
+func (m redisMigrator) rollback(c *container.Container, data transactionData) {
 	data.RedisTx.Discard()
 
 	c.Errorf("Migration %v for Redis failed and rolled back", data.MigrationNumber)
-	m.Manager.Rollback(c, data)
+	m.migrator.rollback(c, data)
 }

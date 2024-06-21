@@ -9,7 +9,7 @@ import (
 )
 
 type Decorator interface {
-	Apply(m Manager) Manager
+	Apply(m migrator) migrator
 }
 
 type Redis interface {

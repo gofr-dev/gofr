@@ -178,14 +178,14 @@ func TestCheckAndCreateMigrationTableSuccess(t *testing.T) {
 	mocks.SQL.EXPECT().Exec(createSQLGoFrMigrationsTable).Return(nil, nil)
 
 	migrator := sqlMigrator{
-		SQL:     mockDB,
-		Manager: mockMigrator,
+		SQL:      mockDB,
+		migrator: mockMigrator,
 	}
 
-	err := migrator.CheckAndCreateMigrationTable(mockContainer)
+	err := migrator.checkAndCreateMigrationTable(mockContainer)
 
 	if err != nil {
-		t.Errorf("CheckAndCreateMigrationTable should return no error, got: %v", err)
+		t.Errorf("checkAndCreateMigrationTable should return no error, got: %v", err)
 	}
 }
 
@@ -199,18 +199,18 @@ func TestCheckAndCreateMigrationTableExecError(t *testing.T) {
 	mocks.SQL.EXPECT().Exec(createSQLGoFrMigrationsTable).Return(nil, expectedErr)
 
 	migrator := sqlMigrator{
-		SQL:     mockDB,
-		Manager: mockMigrator,
+		SQL:      mockDB,
+		migrator: mockMigrator,
 	}
 
-	err := migrator.CheckAndCreateMigrationTable(mockContainer)
+	err := migrator.checkAndCreateMigrationTable(mockContainer)
 
 	if err == nil {
-		t.Errorf("CheckAndCreateMigrationTable should return an error")
+		t.Errorf("checkAndCreateMigrationTable should return an error")
 	}
 
 	if !errors.Is(err, expectedErr) {
-		t.Errorf("CheckAndCreateMigrationTable should return the expected error, got: %v", err)
+		t.Errorf("checkAndCreateMigrationTable should return the expected error, got: %v", err)
 	}
 }
 
@@ -225,13 +225,13 @@ func TestBeginTransactionSuccess(t *testing.T) {
 	mockMigrator.EXPECT().beginTransaction(mockContainer)
 
 	migrator := sqlMigrator{
-		SQL:     mockDB,
-		Manager: mockMigrator,
+		SQL:      mockDB,
+		migrator: mockMigrator,
 	}
-	data := migrator.BeginTransaction(mockContainer)
+	data := migrator.beginTransaction(mockContainer)
 
 	if data != expectedMigrationData {
-		t.Errorf("BeginTransaction should return data from Manager, got: %v", data)
+		t.Errorf("beginTransaction should return data from migrator, got: %v", data)
 	}
 }
 
@@ -248,13 +248,13 @@ func TestBeginTransactionDBError(t *testing.T) {
 	mocks.SQL.EXPECT().Begin().Return(nil, errBeginTx)
 
 	migrator := sqlMigrator{
-		SQL:     mockDB,
-		Manager: mockMigrator,
+		SQL:      mockDB,
+		migrator: mockMigrator,
 	}
-	data := migrator.BeginTransaction(mockContainer)
+	data := migrator.beginTransaction(mockContainer)
 
 	if data.SQLTx != nil {
-		t.Errorf("BeginTransaction should not return a transaction on DB error")
+		t.Errorf("beginTransaction should not return a transaction on DB error")
 	}
 }
 
@@ -262,5 +262,5 @@ func TestRollbackNoTransaction(t *testing.T) {
 	mockContainer, _ := container.NewMockContainer(t)
 
 	migrator := sqlMigrator{}
-	migrator.Rollback(mockContainer, transactionData{})
+	migrator.rollback(mockContainer, transactionData{})
 }

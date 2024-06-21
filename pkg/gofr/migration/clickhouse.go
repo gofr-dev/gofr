@@ -15,13 +15,13 @@ type clickHouse struct {
 type clickHouseMigrator struct {
 	datasource.Clickhouse
 
-	Manager
+	migrator
 }
 
-func (ch clickHouse) Apply(m Manager) Manager {
+func (ch clickHouse) Apply(m migrator) migrator {
 	return clickHouseMigrator{
 		Clickhouse: ch.Clickhouse,
-		Manager:    m,
+		migrator:   m,
 	}
 }
 
@@ -42,15 +42,15 @@ ORDER BY (version, method);
 	insertChGoFrMigrationRow = `INSERT INTO gofr_migrations (version, method, start_time, duration) VALUES (?, ?, ?, ?);`
 )
 
-func (ch clickHouseMigrator) CheckAndCreateMigrationTable(c *container.Container) error {
+func (ch clickHouseMigrator) checkAndCreateMigrationTable(c *container.Container) error {
 	if err := c.Clickhouse.Exec(context.Background(), CheckAndCreateChMigrationTable); err != nil {
 		return err
 	}
 
-	return ch.Manager.CheckAndCreateMigrationTable(c)
+	return ch.migrator.checkAndCreateMigrationTable(c)
 }
 
-func (ch clickHouseMigrator) GetLastMigration(c *container.Container) int64 {
+func (ch clickHouseMigrator) getLastMigration(c *container.Container) int64 {
 	type LastMigration struct {
 		Timestamp int64 `ch:"last_migration"`
 	}
@@ -69,7 +69,7 @@ func (ch clickHouseMigrator) GetLastMigration(c *container.Container) int64 {
 		lastMigration = lastMigrations[0].Timestamp
 	}
 
-	lm2 := ch.Manager.GetLastMigration(c)
+	lm2 := ch.migrator.getLastMigration(c)
 
 	if lm2 > lastMigration {
 		return lm2
@@ -78,15 +78,15 @@ func (ch clickHouseMigrator) GetLastMigration(c *container.Container) int64 {
 	return lastMigration
 }
 
-func (ch clickHouseMigrator) BeginTransaction(c *container.Container) transactionData {
-	cmt := ch.Manager.BeginTransaction(c)
+func (ch clickHouseMigrator) beginTransaction(c *container.Container) transactionData {
+	cmt := ch.migrator.beginTransaction(c)
 
 	c.Debug("Clickhouse Migrator begin successfully")
 
 	return cmt
 }
 
-func (ch clickHouseMigrator) CommitMigration(c *container.Container, data transactionData) error {
+func (ch clickHouseMigrator) commitMigration(c *container.Container, data transactionData) error {
 	err := ch.Clickhouse.Exec(context.Background(), insertChGoFrMigrationRow, data.MigrationNumber,
 		"UP", data.StartTime, time.Since(data.StartTime).Milliseconds())
 	if err != nil {
@@ -95,11 +95,11 @@ func (ch clickHouseMigrator) CommitMigration(c *container.Container, data transa
 
 	c.Debugf("inserted record for migration %v in clickhouse gofr_migrations table", data.MigrationNumber)
 
-	return ch.Manager.CommitMigration(c, data)
+	return ch.migrator.commitMigration(c, data)
 }
 
-func (ch clickHouseMigrator) Rollback(c *container.Container, data transactionData) {
+func (ch clickHouseMigrator) rollback(c *container.Container, data transactionData) {
 	c.Errorf("Migration %v failed", data.MigrationNumber)
 
-	ch.Manager.Rollback(c, data)
+	ch.migrator.rollback(c, data)
 }

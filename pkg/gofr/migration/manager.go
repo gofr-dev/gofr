@@ -2,14 +2,17 @@ package migration
 
 import "gofr.dev/pkg/gofr/container"
 
-type Manager interface {
-	CheckAndCreateMigrationTable(c *container.Container) error
-	GetLastMigration(c *container.Container) int64
+// keeping the migrator interface unexported as, right now it is not being implemented directly, by the externalDB drivers.
+// keeping the implementations at one place such that if any change in migration logic, we would change directly here.
+// it uses the interface defined in datasource package.
+type migrator interface {
+	checkAndCreateMigrationTable(c *container.Container) error
+	getLastMigration(c *container.Container) int64
 
-	BeginTransaction(c *container.Container) transactionData
+	beginTransaction(c *container.Container) transactionData
 
-	CommitMigration(c *container.Container, data transactionData) error
-	Rollback(c *container.Container, data transactionData)
+	commitMigration(c *container.Container, data transactionData) error
+	rollback(c *container.Container, data transactionData)
 }
 
 // It is a base implementation for migration manger, on this other database drivers have been wrapped.
@@ -19,22 +22,22 @@ type Manager interface {
 type manager struct {
 }
 
-func (d manager) CheckAndCreateMigrationTable(*container.Container) error {
+func (d manager) checkAndCreateMigrationTable(*container.Container) error {
 	return nil
 }
 
-func (d manager) GetLastMigration(*container.Container) int64 {
+func (d manager) getLastMigration(*container.Container) int64 {
 	return 0
 }
 
-func (d manager) BeginTransaction(*container.Container) transactionData {
+func (d manager) beginTransaction(*container.Container) transactionData {
 	return transactionData{}
 }
 
-func (d manager) CommitMigration(c *container.Container, data transactionData) error {
+func (d manager) commitMigration(c *container.Container, data transactionData) error {
 	c.Infof("Migration %v ran successfully", data.MigrationNumber)
 
 	return nil
 }
 
-func (d manager) Rollback(*container.Container, transactionData) {}
+func (d manager) rollback(*container.Container, transactionData) {}

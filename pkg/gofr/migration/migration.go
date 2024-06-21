@@ -45,14 +45,14 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 		return
 	}
 
-	err := mg.CheckAndCreateMigrationTable(c)
+	err := mg.checkAndCreateMigrationTable(c)
 	if err != nil {
 		c.Errorf("failed to create gofr_migration table, err: %v", err)
 
 		return
 	}
 
-	lastMigration := mg.GetLastMigration(c)
+	lastMigration := mg.getLastMigration(c)
 
 	for _, currentMigration := range keys {
 		if currentMigration <= lastMigration {
@@ -63,7 +63,7 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 
 		c.Logger.Debugf("running migration %v", currentMigration)
 
-		transactionsObjects := mg.BeginTransaction(c)
+		transactionsObjects := mg.beginTransaction(c)
 
 		// Replacing the objects in datasource object only for those Datasources which support transactions.
 		ds.SQL = newMysql(transactionsObjects.SQLTx)
@@ -74,16 +74,16 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 
 		err = migrationsMap[currentMigration].UP(ds)
 		if err != nil {
-			mg.Rollback(c, transactionsObjects)
+			mg.rollback(c, transactionsObjects)
 
 			return
 		}
 
-		err = mg.CommitMigration(c, transactionsObjects)
+		err = mg.commitMigration(c, transactionsObjects)
 		if err != nil {
 			c.Errorf("failed to commit migration, err: %v", err)
 
-			mg.Rollback(c, transactionsObjects)
+			mg.rollback(c, transactionsObjects)
 
 			return
 		}
@@ -107,12 +107,12 @@ func getKeys(migrationsMap map[int64]Migrate) (invalidKey, keys []int64) {
 	return invalidKey, keys
 }
 
-func getMigrator(c *container.Container) (Datasource, Manager, bool) {
+func getMigrator(c *container.Container) (Datasource, migrator, bool) {
 	var (
 		ok bool
 		ds Datasource
 		d  manager
-		mg Manager = d
+		mg migrator = d
 	)
 
 	if !isNil(c.SQL) {

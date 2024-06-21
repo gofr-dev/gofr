@@ -81,8 +81,8 @@ func TestRedisMigrator_GetLastMigration(t *testing.T) {
 	mockMigrator := NewMockMigrator(ctrl)
 
 	m := redisMigrator{
-		Redis:   mocks.Redis,
-		Manager: mockMigrator,
+		Redis:    mocks.Redis,
+		migrator: mockMigrator,
 	}
 
 	tests := []struct {
@@ -132,7 +132,7 @@ func TestRedisMigrator_GetLastMigration(t *testing.T) {
 
 		mockMigrator.EXPECT().getLastMigration(gomock.Any()).Return(tc.migratorLastMigration).MaxTimes(2)
 
-		lastMigration := m.GetLastMigration(c)
+		lastMigration := m.getLastMigration(c)
 
 		assert.Equal(t, tc.expectedLastMigration, lastMigration, "TEST[%d], Failed.\n%s", i, tc.desc)
 	}
@@ -146,14 +146,14 @@ func TestRedisMigrator_beginTransaction(t *testing.T) {
 	mockMigrator := NewMockMigrator(ctrl)
 
 	m := redisMigrator{
-		Redis:   mocks.Redis,
-		Manager: mockMigrator,
+		Redis:    mocks.Redis,
+		migrator: mockMigrator,
 	}
 
 	mocks.Redis.EXPECT().TxPipeline()
 	mockMigrator.EXPECT().beginTransaction(c)
 
-	data := m.BeginTransaction(c)
+	data := m.beginTransaction(c)
 
 	assert.Equal(t, transactionData{}, data, "TEST Failed.\n")
 }

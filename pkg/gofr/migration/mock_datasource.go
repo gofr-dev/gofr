@@ -16,7 +16,7 @@ import (
 	container "gofr.dev/pkg/gofr/container"
 )
 
-// MockMigrator is a mock of Manager interface.
+// MockMigrator is a mock of migrator interface.
 type MockMigrator struct {
 	ctrl     *gomock.Controller
 	recorder *MockMigratorMockRecorder
@@ -40,9 +40,9 @@ func (m *MockMigrator) EXPECT() *MockMigratorMockRecorder {
 }
 
 // beginTransaction mocks base method.
-func (m *MockMigrator) BeginTransaction(c *container.Container) transactionData {
+func (m *MockMigrator) beginTransaction(c *container.Container) transactionData {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "BeginTransaction", c)
+	ret := m.ctrl.Call(m, "beginTransaction", c)
 	ret0, _ := ret[0].(transactionData)
 	return ret0
 }
@@ -50,13 +50,13 @@ func (m *MockMigrator) BeginTransaction(c *container.Container) transactionData 
 // beginTransaction indicates an expected call of beginTransaction.
 func (mr *MockMigratorMockRecorder) beginTransaction(c any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BeginTransaction", reflect.TypeOf((*MockMigrator)(nil).BeginTransaction), c)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "beginTransaction", reflect.TypeOf((*MockMigrator)(nil).beginTransaction), c)
 }
 
 // checkAndCreateMigrationTable mocks base method.
-func (m *MockMigrator) CheckAndCreateMigrationTable(c *container.Container) error {
+func (m *MockMigrator) checkAndCreateMigrationTable(c *container.Container) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CheckAndCreateMigrationTable", c)
+	ret := m.ctrl.Call(m, "checkAndCreateMigrationTable", c)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
@@ -64,13 +64,13 @@ func (m *MockMigrator) CheckAndCreateMigrationTable(c *container.Container) erro
 // checkAndCreateMigrationTable indicates an expected call of checkAndCreateMigrationTable.
 func (mr *MockMigratorMockRecorder) checkAndCreateMigrationTable(c any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CheckAndCreateMigrationTable", reflect.TypeOf((*MockMigrator)(nil).CheckAndCreateMigrationTable), c)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "checkAndCreateMigrationTable", reflect.TypeOf((*MockMigrator)(nil).checkAndCreateMigrationTable), c)
 }
 
 // commitMigration mocks base method.
-func (m *MockMigrator) CommitMigration(c *container.Container, data transactionData) error {
+func (m *MockMigrator) commitMigration(c *container.Container, data transactionData) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CommitMigration", c, data)
+	ret := m.ctrl.Call(m, "commitMigration", c, data)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
@@ -78,13 +78,13 @@ func (m *MockMigrator) CommitMigration(c *container.Container, data transactionD
 // commitMigration indicates an expected call of commitMigration.
 func (mr *MockMigratorMockRecorder) commitMigration(c, data any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CommitMigration", reflect.TypeOf((*MockMigrator)(nil).CommitMigration), c, data)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "commitMigration", reflect.TypeOf((*MockMigrator)(nil).commitMigration), c, data)
 }
 
 // getLastMigration mocks base method.
-func (m *MockMigrator) GetLastMigration(c *container.Container) int64 {
+func (m *MockMigrator) getLastMigration(c *container.Container) int64 {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetLastMigration", c)
+	ret := m.ctrl.Call(m, "getLastMigration", c)
 	ret0, _ := ret[0].(int64)
 	return ret0
 }
@@ -92,19 +92,19 @@ func (m *MockMigrator) GetLastMigration(c *container.Container) int64 {
 // getLastMigration indicates an expected call of getLastMigration.
 func (mr *MockMigratorMockRecorder) getLastMigration(c any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLastMigration", reflect.TypeOf((*MockMigrator)(nil).GetLastMigration), c)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "getLastMigration", reflect.TypeOf((*MockMigrator)(nil).getLastMigration), c)
 }
 
 // rollback mocks base method.
-func (m *MockMigrator) Rollback(c *container.Container, data transactionData) {
+func (m *MockMigrator) rollback(c *container.Container, data transactionData) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "Rollback", c, data)
+	m.ctrl.Call(m, "rollback", c, data)
 }
 
 // rollback indicates an expected call of rollback.
 func (mr *MockMigratorMockRecorder) rollback(c, data any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Rollback", reflect.TypeOf((*MockMigrator)(nil).Rollback), c, data)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "rollback", reflect.TypeOf((*MockMigrator)(nil).rollback), c, data)
 }
 
 // MockOptions is a mock of Decorator interface.
@@ -131,10 +131,10 @@ func (m *MockOptions) EXPECT() *MockOptionsMockRecorder {
 }
 
 // apply mocks base method.
-func (m_2 *MockOptions) Apply(m Manager) Manager {
+func (m_2 *MockOptions) Apply(m migrator) migrator {
 	m_2.ctrl.T.Helper()
 	ret := m_2.ctrl.Call(m_2, "Apply", m)
-	ret0, _ := ret[0].(Manager)
+	ret0, _ := ret[0].(migrator)
 	return ret0
 }
 
