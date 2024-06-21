@@ -29,9 +29,8 @@ func TestNewCMD(t *testing.T) {
 	a := NewCMD()
 	// Without args we should get error on stderr.
 	outputWithoutArgs := testutil.StderrOutputForFunc(a.Run)
-	if outputWithoutArgs != "No Command Found!" {
-		t.Errorf("Stderr output mismatch. Got: %s ", outputWithoutArgs)
-	}
+
+	assert.Equal(t, "No Command Found!\n", outputWithoutArgs, "TEST Failed.\n%s", "Stderr output mismatch")
 }
 
 func TestGofr_readConfig(t *testing.T) {
@@ -433,6 +432,54 @@ func Test_UseMiddleware(t *testing.T) {
 	// checking if the testMiddleware has added the required header in the response properly.
 	testHeaderValue := resp.Header.Get("X-Test-Middleware")
 	assert.Equal(t, "applied", testHeaderValue, "Test_UseMiddleware Failed! header value mismatch.")
+}
+
+func Test_APIKeyAuthMiddleware(t *testing.T) {
+	c, _ := container.NewMockContainer(t)
+
+	app := &App{
+		httpServer: &httpServer{
+			router: gofrHTTP.NewRouter(),
+			port:   8001,
+		},
+		container: c,
+		Config:    config.NewMockConfig(map[string]string{"REQUEST_TIMEOUT": "5"}),
+	}
+
+	apiKeys := []string{"test-key"}
+	validateFunc := func(_ *container.Container, apiKey string) bool {
+		return apiKey == "test-key"
+	}
+
+	// Registering APIKey middleware with and without custom validator
+	app.EnableAPIKeyAuth(apiKeys...)
+	app.EnableAPIKeyAuthWithValidator(validateFunc)
+
+	app.GET("/test", func(_ *Context) (interface{}, error) {
+		return "success", nil
+	})
+
+	go app.Run()
+	time.Sleep(1 * time.Second)
+
+	var netClient = &http.Client{
+		Timeout: time.Second * 10,
+	}
+
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet,
+		"http://localhost:8001/test", http.NoBody)
+	req.Header.Set("X-API-Key", "test-key")
+
+	// Send the request and check for successful response
+	resp, err := netClient.Do(req)
+	if err != nil {
+		t.Errorf("error while making HTTP request in Test_APIKeyAuthMiddleware. err: %v", err)
+		return
+	}
+
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode, "Test_APIKeyAuthMiddleware Failed!")
 }
 
 func Test_SwaggerEndpoints(t *testing.T) {

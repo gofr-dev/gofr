@@ -22,6 +22,9 @@ func NewSQLMocksWithConfig(t *testing.T, config *DBConfig) (*DB, sqlmock.Sqlmock
 	ctrl := gomock.NewController(t)
 	mockMetrics := NewMockMetrics(ctrl)
 
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats", gomock.Any(),
+		"hostname", gomock.Any(), "database", gomock.Any(), "type", gomock.Any()).AnyTimes()
+
 	return &DB{
 		DB:      db,
 		logger:  logging.NewMockLogger(logging.DEBUG),
