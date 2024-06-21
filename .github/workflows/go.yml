@@ -150,9 +150,8 @@ jobs:
       - name: Test
         run: |
           export APP_ENV=test
-          go test gofr.dev/pkg/... -tags migration -v -short -coverprofile packageWithMigration.cov -coverpkg=gofr.dev/pkg/...
-          grep -v 'gofr.dev/pkg/gofr/migration' packageWithMigration.cov > packageWithoutMigration.cov
-          grep -v 'gofr.dev/pkg/gofr/migration/mock_datasources.go' packageWithoutMigration.cov > packageWithoutMockMigrationDatasource.cov
+          go test gofr.dev/pkg/... -tags migration -v -short -coverprofile package.cov -coverpkg=gofr.dev/pkg/...
+          grep -v 'gofr.dev/pkg/gofr/migration/mock_datasources.go' package.cov > packageWithoutMockMigrationDatasource.cov
           grep -v 'gofr.dev/pkg/gofr/container/mock_datasources.go' packageWithoutMockMigrationDatasource.cov > packageWithoutMockDatasource.cov
           grep -v 'google/mock_interfaces\.go' packageWithoutMockDatasource.cov > profile.cov
           go tool cover -func profile.cov
