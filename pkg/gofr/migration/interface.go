@@ -26,3 +26,8 @@ type SQL interface {
 	Exec(query string, args ...interface{}) (sql.Result, error)
 	ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
 }
+
+type PubSub interface {
+	CreateTopic(context context.Context, name string) error
+	DeleteTopic(context context.Context, name string) error
+}
