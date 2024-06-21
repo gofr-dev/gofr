@@ -2,7 +2,6 @@ package migration
 
 import (
 	"context"
-	"database/sql"
 	"time"
 
 	"gofr.dev/pkg/gofr/container"
@@ -28,36 +27,6 @@ const (
 // database/sql is the package imported so named it sqlDB.
 type sqlDB struct {
 	SQL
-}
-
-func newMysql(d SQL) *sqlDB {
-	return &sqlDB{SQL: d}
-}
-
-func (s *sqlDB) Query(query string, args ...interface{}) (*sql.Rows, error) {
-	return s.SQL.Query(query, args...)
-}
-
-func (s *sqlDB) QueryRow(query string, args ...interface{}) *sql.Row {
-	return s.SQL.QueryRow(query, args...)
-}
-
-func (s *sqlDB) QueryRowContext(ctx context.Context, query string, args ...interface{}) *sql.Row {
-	return s.SQL.QueryRowContext(ctx, query, args...)
-}
-
-func (s *sqlDB) Exec(query string, args ...interface{}) (sql.Result, error) {
-	return s.SQL.Exec(query, args...)
-}
-
-func (s *sqlDB) ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
-	return s.SQL.ExecContext(ctx, query, args...)
-}
-
-func insertMigrationRecord(tx *gofrSql.Tx, query string, version int64, startTime time.Time) error {
-	_, err := tx.Exec(query, version, "UP", startTime, time.Since(startTime).Milliseconds())
-
-	return err
 }
 
 func (s *sqlDB) Apply(m migrator) migrator {
@@ -125,6 +94,12 @@ func (d sqlMigrator) commitMigration(c *container.Container, data transactionDat
 	}
 
 	return d.migrator.commitMigration(c, data)
+}
+
+func insertMigrationRecord(tx *gofrSql.Tx, query string, version int64, startTime time.Time) error {
+	_, err := tx.Exec(query, version, "UP", startTime, time.Since(startTime).Milliseconds())
+
+	return err
 }
 
 func (d sqlMigrator) beginTransaction(c *container.Container) transactionData {

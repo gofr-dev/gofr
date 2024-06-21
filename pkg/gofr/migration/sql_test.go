@@ -13,17 +13,6 @@ import (
 	"gofr.dev/pkg/gofr/container"
 )
 
-func TestNewMysql(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	mockDB := container.NewMockDB(ctrl)
-
-	sqlDB := newMysql(mockDB)
-
-	if sqlDB.SQL != mockDB {
-		t.Errorf("newMysql should wrap the provided SQL, got: %v", sqlDB.SQL)
-	}
-}
-
 func TestQuery(t *testing.T) {
 	t.Run("successful query", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
@@ -31,9 +20,9 @@ func TestQuery(t *testing.T) {
 		expectedRows := &sql.Rows{}
 
 		mockDB.EXPECT().Query("SELECT * FROM users", []interface{}{}).Return(expectedRows, nil)
-		sqlDB := newMysql(mockDB)
+		sqlMockDB := mockDB
 
-		rows, err := sqlDB.Query("SELECT * FROM users", []interface{}{})
+		rows, err := sqlMockDB.Query("SELECT * FROM users", []interface{}{})
 		if rows.Err() != nil {
 			t.Errorf("unexpected row error: %v", rows.Err())
 		}
@@ -53,9 +42,9 @@ func TestQuery(t *testing.T) {
 		expectedErr := sql.ErrNoRows
 
 		mockDB.EXPECT().Query("SELECT * FROM unknown_table", []interface{}{}).Return(nil, expectedErr)
-		sqlDB := newMysql(mockDB)
+		sqlMockDB := mockDB
 
-		rows, err := sqlDB.Query("SELECT * FROM unknown_table", []interface{}{})
+		rows, err := sqlMockDB.Query("SELECT * FROM unknown_table", []interface{}{})
 		if rows != nil {
 			t.Errorf("unexpected rows error: %v", rows.Err())
 		}
@@ -77,9 +66,9 @@ func TestQueryRow(t *testing.T) {
 		expectedRow := &sql.Row{}
 
 		mockDB.EXPECT().QueryRow("SELECT * FROM users WHERE id = ?", 1).Return(expectedRow)
-		sqlDB := newMysql(mockDB)
+		sqlMockDB := mockDB
 
-		row := sqlDB.QueryRow("SELECT * FROM users WHERE id = ?", 1)
+		row := sqlMockDB.QueryRow("SELECT * FROM users WHERE id = ?", 1)
 
 		if row != expectedRow {
 			t.Errorf("QueryRow should return the expected row, got: %v", row)
@@ -95,9 +84,9 @@ func TestQueryRowContext(t *testing.T) {
 		mockDB := container.NewMockDB(ctrl)
 		expectedRow := &sql.Row{}
 		mockDB.EXPECT().QueryRowContext(ctx, "SELECT * FROM users WHERE id = ?", 1).Return(expectedRow)
-		sqlDB := newMysql(mockDB)
+		sqlMockDB := mockDB
 
-		row := sqlDB.QueryRowContext(ctx, "SELECT * FROM users WHERE id = ?", 1)
+		row := sqlMockDB.QueryRowContext(ctx, "SELECT * FROM users WHERE id = ?", 1)
 
 		if row != expectedRow {
 			t.Errorf("QueryRowContext should return the expected row,  got: %v", row)
@@ -112,7 +101,7 @@ func TestExec(t *testing.T) {
 		expectedResult := sqlmock.NewResult(10, 1)
 
 		mockDB.EXPECT().Exec("DELETE FROM users WHERE id = ?", 1).Return(expectedResult, nil)
-		sqlDB := newMysql(mockDB)
+		sqlDB := mockDB
 
 		result, err := sqlDB.Exec("DELETE FROM users WHERE id = ?", 1)
 
@@ -131,9 +120,9 @@ func TestExec(t *testing.T) {
 
 		expectedErr := sql.ErrNoRows
 		mockDB.EXPECT().Exec("UPDATE unknown_table SET name = ?", "John").Return(nil, expectedErr)
-		sqlDB := newMysql(mockDB)
+		sqlMockDB := mockDB
 
-		_, err := sqlDB.Exec("UPDATE unknown_table SET name = ?", "John")
+		_, err := sqlMockDB.Exec("UPDATE unknown_table SET name = ?", "John")
 
 		if err == nil {
 			t.Errorf("Exec should return an error")
@@ -154,9 +143,9 @@ func TestExecContext(t *testing.T) {
 
 		expectedResult := sqlmock.NewResult(10, 1)
 		mockDB.EXPECT().ExecContext(ctx, "DELETE FROM users WHERE id = ?", 1).Return(expectedResult, nil)
-		sqlDB := newMysql(mockDB)
+		sqlMockDB := mockDB
 
-		result, err := sqlDB.ExecContext(ctx, "DELETE FROM users WHERE id = ?", 1)
+		result, err := sqlMockDB.ExecContext(ctx, "DELETE FROM users WHERE id = ?", 1)
 
 		if err != nil {
 			t.Errorf("ExecContext should return no error, got: %v", err)

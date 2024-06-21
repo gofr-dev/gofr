@@ -12,15 +12,6 @@ import (
 	"gofr.dev/pkg/gofr/container"
 )
 
-func TestNewRedis(t *testing.T) {
-	mockCmd := &Mockcommands{}
-
-	r := newRedis(mockCmd)
-	if r.Redis != mockCmd {
-		t.Errorf("Expected newRedis to set Redis, but got %v", r.Redis)
-	}
-}
-
 func TestRedis_Get(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()

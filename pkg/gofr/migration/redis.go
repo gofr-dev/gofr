@@ -6,35 +6,11 @@ import (
 	"strconv"
 	"time"
 
-	goRedis "github.com/redis/go-redis/v9"
-
 	"gofr.dev/pkg/gofr/container"
 )
 
 type redis struct {
 	Redis
-}
-
-func newRedis(r Redis) redis {
-	return redis{
-		Redis: r,
-	}
-}
-
-func (r redis) Get(ctx context.Context, key string) *goRedis.StringCmd {
-	return r.Redis.Get(ctx, key)
-}
-
-func (r redis) Set(ctx context.Context, key string, value interface{}, expiration time.Duration) *goRedis.StatusCmd {
-	return r.Redis.Set(ctx, key, value, expiration)
-}
-
-func (r redis) Del(ctx context.Context, keys ...string) *goRedis.IntCmd {
-	return r.Redis.Del(ctx, keys...)
-}
-
-func (r redis) Rename(ctx context.Context, key, newKey string) *goRedis.StatusCmd {
-	return r.Redis.Rename(ctx, key, newKey)
 }
 
 func (r redis) Apply(m migrator) migrator {

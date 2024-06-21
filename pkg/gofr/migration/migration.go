@@ -63,27 +63,27 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 
 		c.Logger.Debugf("running migration %v", currentMigration)
 
-		transactionsObjects := mg.beginTransaction(c)
+		migrationInfo := mg.beginTransaction(c)
 
 		// Replacing the objects in datasource object only for those Datasources which support transactions.
-		ds.SQL = newMysql(transactionsObjects.SQLTx)
-		ds.Redis = newRedis(transactionsObjects.RedisTx)
+		ds.SQL = migrationInfo.SQLTx
+		ds.Redis = migrationInfo.RedisTx
 
-		transactionsObjects.StartTime = time.Now()
-		transactionsObjects.MigrationNumber = currentMigration
+		migrationInfo.StartTime = time.Now()
+		migrationInfo.MigrationNumber = currentMigration
 
 		err = migrationsMap[currentMigration].UP(ds)
 		if err != nil {
-			mg.rollback(c, transactionsObjects)
+			mg.rollback(c, migrationInfo)
 
 			return
 		}
 
-		err = mg.commitMigration(c, transactionsObjects)
+		err = mg.commitMigration(c, migrationInfo)
 		if err != nil {
 			c.Errorf("failed to commit migration, err: %v", err)
 
-			mg.rollback(c, transactionsObjects)
+			mg.rollback(c, migrationInfo)
 
 			return
 		}
