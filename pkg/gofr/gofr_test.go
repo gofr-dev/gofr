@@ -434,6 +434,54 @@ func Test_UseMiddleware(t *testing.T) {
 	assert.Equal(t, "applied", testHeaderValue, "Test_UseMiddleware Failed! header value mismatch.")
 }
 
+func Test_APIKeyAuthMiddleware(t *testing.T) {
+	c, _ := container.NewMockContainer(t)
+
+	app := &App{
+		httpServer: &httpServer{
+			router: gofrHTTP.NewRouter(),
+			port:   8001,
+		},
+		container: c,
+		Config:    config.NewMockConfig(map[string]string{"REQUEST_TIMEOUT": "5"}),
+	}
+
+	apiKeys := []string{"test-key"}
+	validateFunc := func(_ *container.Container, apiKey string) bool {
+		return apiKey == "test-key"
+	}
+
+	// Registering APIKey middleware with and without custom validator
+	app.EnableAPIKeyAuth(apiKeys...)
+	app.EnableAPIKeyAuthWithValidator(validateFunc)
+
+	app.GET("/test", func(_ *Context) (interface{}, error) {
+		return "success", nil
+	})
+
+	go app.Run()
+	time.Sleep(1 * time.Second)
+
+	var netClient = &http.Client{
+		Timeout: time.Second * 10,
+	}
+
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet,
+		"http://localhost:8001/test", http.NoBody)
+	req.Header.Set("X-API-Key", "test-key")
+
+	// Send the request and check for successful response
+	resp, err := netClient.Do(req)
+	if err != nil {
+		t.Errorf("error while making HTTP request in Test_APIKeyAuthMiddleware. err: %v", err)
+		return
+	}
+
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode, "Test_APIKeyAuthMiddleware Failed!")
+}
+
 func Test_SwaggerEndpoints(t *testing.T) {
 	// Create the openapi.json file within the static directory
 	openAPIFilePath := filepath.Join("static", OpenAPIJSON)
