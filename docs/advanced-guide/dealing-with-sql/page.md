@@ -26,3 +26,13 @@ DB_NAME=test.db
 
 DB_DIALECT=sqlite
 ```
+
+## Setting Max open and Idle Connections
+
+To set max open and idle connection for any MYSQL, PostgreSQL, sqlite. 
+Add the following configs in `.env` file.
+
+```dotenv
+DB_MAX_IDLE_CONNECTION=5 // Default 2
+DB_MAX_OPEN_CONNECTION=5 // Default unlimited
+```

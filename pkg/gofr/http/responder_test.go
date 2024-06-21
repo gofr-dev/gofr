@@ -31,27 +31,27 @@ func TestResponder_Respond(t *testing.T) {
 	}
 }
 
-func TestResponder_HTTPStatusFromError(t *testing.T) {
-	r := NewResponder(httptest.NewRecorder(), http.MethodGet)
-	errInvalidParam := ErrorInvalidParam{Params: []string{"name"}}
-
+func TestResponder_getStatusCode(t *testing.T) {
 	tests := []struct {
 		desc       string
-		input      error
+		method     string
+		data       interface{}
+		err        error
 		statusCode int
 		errObj     interface{}
 	}{
-		{"success case", nil, http.StatusOK, nil},
-		{"file not found", ErrorInvalidRoute{}, http.StatusNotFound, map[string]interface{}{
-			"message": ErrorInvalidRoute{}.Error()}},
-		{"internal server error", http.ErrHandlerTimeout, http.StatusInternalServerError,
+		{"success case", http.MethodGet, "success response", nil, http.StatusOK, nil},
+		{"post with response body", http.MethodPost, "entity created", nil, http.StatusCreated, nil},
+		{"post with nil response", http.MethodPost, nil, nil, http.StatusAccepted, nil},
+		{"success delete", http.MethodDelete, nil, nil, http.StatusNoContent, nil},
+		{"invalid route error", http.MethodGet, nil, ErrorInvalidRoute{}, http.StatusNotFound,
+			map[string]interface{}{"message": ErrorInvalidRoute{}.Error()}},
+		{"internal server error", http.MethodGet, nil, http.ErrHandlerTimeout, http.StatusInternalServerError,
 			map[string]interface{}{"message": http.ErrHandlerTimeout.Error()}},
-		{"invalid parameters error", &errInvalidParam, http.StatusBadRequest,
-			map[string]interface{}{"message": errInvalidParam.Error()}},
 	}
 
 	for i, tc := range tests {
-		statusCode, errObj := r.HTTPStatusFromError(tc.input)
+		statusCode, errObj := getStatusCode(tc.method, tc.data, tc.err)
 
 		assert.Equal(t, tc.statusCode, statusCode, "TEST[%d], Failed.\n%s", i, tc.desc)
 
