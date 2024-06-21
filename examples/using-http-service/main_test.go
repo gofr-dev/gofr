@@ -66,16 +66,15 @@ func Test_main(t *testing.T) {
 }
 
 func TestHTTPHandlerURLError(t *testing.T) {
-	logger := logging.NewLogger(logging.DEBUG)
-
-	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://localhost:5000/handle", bytes.NewBuffer([]byte(`{"key":"value"}`)))
-
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet,
+		"http://localhost:5000/handle", bytes.NewBuffer([]byte(`{"key":"value"}`)))
 	gofrReq := gofrHTTP.NewRequest(req)
 
-	ctx := &gofr.Context{Context: context.Background(),
-		Request: gofrReq, Container: &container.Container{Logger: logger}}
+	mockContainer, _ := container.NewMockContainer(t)
 
-	ctx.Container.Services = map[string]service.HTTP{"cat-facts": service.NewHTTPService("http://invalid", ctx.Logger, nil)}
+	ctx := &gofr.Context{Context: context.Background(), Request: gofrReq, Container: mockContainer}
+
+	ctx.Container.Services = map[string]service.HTTP{"cat-facts": service.NewHTTPService("http://invalid", ctx.Logger, mockContainer.Metrics())}
 
 	resp, err := Handler(ctx)
 
