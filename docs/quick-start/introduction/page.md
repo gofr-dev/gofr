@@ -1,6 +1,6 @@
 # Prerequisite
 
-- Go 1.20 or above.
+- Go 1.21 or above.
   To check Go version use the following command `go version`.
 
 - Prior familiarity with Golang syntax is essential. {% new-tab-link title="Golang Tour" href="https://tour.golang.org/" /%} is highly recommended as it has an excellent guided tour.
