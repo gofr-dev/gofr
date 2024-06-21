@@ -3,7 +3,6 @@ package service
 import (
 	"bytes"
 	"context"
-
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -12,7 +11,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"go.opentelemetry.io/otel"
-
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/testutil"
 )
@@ -29,13 +27,17 @@ func setupHTTPServiceTestServerForCircuitBreaker() (*httptest.Server, HTTP) {
 	// Start a test HTTP server
 	server := testServer()
 
+	mockMetric := &mockMetrics{}
+	mockMetric.On("RecordHistogram", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+		Return(nil)
+
 	// Initialize HTTP service with custom transport, URL, tracer, logger, and metrics
 	service := httpService{
 		Client:  &http.Client{Transport: &customTransport{}},
 		url:     server.URL,
 		Tracer:  otel.Tracer("gofr-http-client"),
 		Logger:  logging.NewMockLogger(logging.DEBUG),
-		Metrics: nil,
+		Metrics: mockMetric,
 	}
 
 	// Circuit breaker configuration
