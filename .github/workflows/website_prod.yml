@@ -51,6 +51,7 @@ jobs:
         run: echo "image=`echo us-central1-docker.pkg.dev/${{ env.GAR_PROJECT }}/${{ env.GAR_REGISTRY }}/${{ env.APP_NAME }}:${{ github.sha }}`" >> "$GITHUB_OUTPUT"
 
   dockerize:
+    if: ${{ startsWith(github.ref, 'refs/tags/v')}}
     runs-on: ubuntu-latest
     outputs:
       image: ${{ steps.output-image.outputs.image }}
@@ -95,7 +96,6 @@ jobs:
   deployment:
     runs-on: ubuntu-latest
     name: 🚀 Deploy
-    if: ${{ startsWith(github.ref, 'refs/tags/v')}}
     needs: dockerize
     container:
       image: ghcr.io/zopsmart/gha-images:deployments-0.1.3
