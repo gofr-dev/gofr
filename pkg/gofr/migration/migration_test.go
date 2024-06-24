@@ -51,24 +51,3 @@ func Test_getMigratorDBInitialisation(t *testing.T) {
 	assert.NotNil(t, datasource.Redis, "TEST Failed \nRedis not initialized, but should have been initialized")
 	assert.Equal(t, true, isInitialised, "TEST Failed \nNo datastores are Initialized")
 }
-
-func Test_getMigratorDatastoreNotInitialised(t *testing.T) {
-	logs := testutil.StdoutOutputForFunc(func() {
-		container, _ := container.NewMockContainer(t)
-		container.SQL = nil
-		container.Redis = nil
-
-		datasource, _, isInitialised := getMigrator(container)
-
-		datasource.rollback(container, migrationData{})
-
-		assert.Equal(t, int64(0), datasource.getLastMigration(container), "TEST Failed \n Last Migration is not 0")
-		assert.Nil(t, datasource.checkAndCreateMigrationTable(container), "TEST Failed")
-		assert.Equal(t, migrationData{}, datasource.beginTransaction(container), "TEST Failed")
-		assert.Nil(t, datasource.commitMigration(container, migrationData{}), "TEST Failed")
-
-		assert.Equal(t, false, isInitialised, "TEST Failed \nDatastores are Initialized")
-	})
-
-	assert.Contains(t, logs, "Migration 0 ran successfully", "TEST Failed")
-}

@@ -1,35 +1,18 @@
 package migration
 
-import (
-	"time"
-
-	goRedis "github.com/redis/go-redis/v9"
-
-	"gofr.dev/pkg/gofr/container"
-	gofrSql "gofr.dev/pkg/gofr/datasource/sql"
-)
+import "gofr.dev/pkg/gofr/container"
 
 type Datasource struct {
+	// TODO Logger should not be embedded rather it should be a field.
+	// Need to think it through as it will bring breaking changes.
 	Logger
 
-	SQL    db
-	Redis  commands
-	PubSub client
+	SQL    SQL
+	Redis  Redis
+	PubSub PubSub
 }
 
-type Migrator interface {
-	checkAndCreateMigrationTable(c *container.Container) error
-	getLastMigration(c *container.Container) int64
-
-	beginTransaction(c *container.Container) migrationData
-
-	commitMigration(c *container.Container, data migrationData) error
-	rollback(c *container.Container, data migrationData)
-}
-
-type Options interface {
-	apply(m Migrator) Migrator
-}
+// It is a base implementation for migration manger, on this other database drivers have been wrapped.
 
 func (d Datasource) checkAndCreateMigrationTable(*container.Container) error {
 	return nil
@@ -39,22 +22,14 @@ func (d Datasource) getLastMigration(*container.Container) int64 {
 	return 0
 }
 
-func (d Datasource) beginTransaction(*container.Container) migrationData {
-	return migrationData{}
+func (d Datasource) beginTransaction(*container.Container) transactionData {
+	return transactionData{}
 }
 
-func (d Datasource) commitMigration(c *container.Container, data migrationData) error {
+func (d Datasource) commitMigration(c *container.Container, data transactionData) error {
 	c.Infof("Migration %v ran successfully", data.MigrationNumber)
 
 	return nil
 }
 
-func (d Datasource) rollback(*container.Container, migrationData) {}
-
-type migrationData struct {
-	StartTime       time.Time
-	MigrationNumber int64
-
-	SQLTx   *gofrSql.Tx
-	RedisTx goRedis.Pipeliner
-}
+func (d Datasource) rollback(*container.Container, transactionData) {}
