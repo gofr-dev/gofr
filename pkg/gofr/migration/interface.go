@@ -30,8 +30,7 @@ type PubSub interface {
 }
 
 // keeping the migrator interface unexported as, right now it is not being implemented directly, by the externalDB drivers.
-// keeping the implementations at one place such that if any change in migration logic, we would change directly here.
-// it uses the interface defined in datasource package.
+// keeping the implementations for externalDB at one place such that if any change in migration logic, we would change directly here.
 type migrator interface {
 	checkAndCreateMigrationTable(c *container.Container) error
 	getLastMigration(c *container.Container) int64
