@@ -542,7 +542,7 @@ func TestStaticHandler(t *testing.T) {
 		{
 			desc:                       "check file content index.html",
 			method:                     http.MethodGet,
-			path:                       "/" + publicDir + "/index.html",
+			path:                       "/" + publicDir + "/" + indexHTML,
 			statusCode:                 http.StatusOK,
 			expectedBodyLength:         len(htmlContent),
 			expectedResponseHeaderType: "text/html; charset=utf-8",
@@ -611,23 +611,23 @@ func createPublicDirectory(t *testing.T, htmlContent []byte) {
 		}
 	}
 
-	file, errFile := os.Create(directory + "/index.html")
+	file, errFile := os.Create(filepath.Join(directory, indexHTML))
 
 	if errFile != nil {
-		t.Fatal("Couldn't create index.html file")
+		t.Fatalf("Couldn't create %s file", indexHTML)
 	}
 
 	_, err := file.Write(htmlContent)
 	if err != nil {
-		t.Fatal("Couldn't write to index.html file")
+		t.Fatalf("Couldn't write to %s file", indexHTML)
 	}
 
 	file.Close()
 
 	t.Cleanup(func() {
-		err := os.RemoveAll(directory)
+		err := os.Remove(filepath.Join(directory, indexHTML))
 		if err != nil {
-			t.Log("Couldn't remove " + publicDir + " folder")
+			t.Logf("Couldn't remove %s file", indexHTML)
 		}
 	})
 }

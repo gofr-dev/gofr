@@ -52,8 +52,6 @@ type App struct {
 	subscriptionManager SubscriptionManager
 }
 
-const publicDir = "public"
-
 // RegisterService adds a gRPC service to the GoFr application.
 func (a *App) RegisterService(desc *grpc.ServiceDesc, impl interface{}) {
 	a.container.Logger.Infof("registering GRPC Server: %s", desc.ServiceName)
@@ -108,7 +106,6 @@ func New() *App {
 
 func updateConfigInformation(staticConfig *gofrHTTP.StaticFileConfig, envConfig config.Config) {
 	staticConfig.DirectoryListing, _ = strconv.ParseBool(envConfig.GetOrDefault("STATIC_DIRECTORY_LISTING", "true"))
-	staticConfig.HideDotFiles, _ = strconv.ParseBool(envConfig.GetOrDefault("STATIC_HIDEDOTFILES", "true"))
 	staticConfig.ExcludeExtensions = SplitEnv(envConfig.Get("STATIC_EXCLUDE_EXTENSIONS"), ",")
 	staticConfig.ExcludeFiles = SplitEnv(envConfig.Get("STATIC_EXCLUDE_FILES"), ",")
 	staticConfig.ExcludeFiles = append(staticConfig.ExcludeFiles, "openapi.json")

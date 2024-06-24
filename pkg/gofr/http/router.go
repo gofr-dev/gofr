@@ -77,9 +77,7 @@ func (staticConfig StaticFileConfig) staticHandler(fileServer http.Handler) http
 
 		fileName := filePath[len(filePath)-1]
 
-		if staticConfig.HideDotFiles {
-			staticConfig.checkDotFiles(w, fileName, url)
-		}
+		staticConfig.checkDotFiles(w, fileName, url)
 
 		if len(staticConfig.ExcludeExtensions) > 0 {
 			staticConfig.checkExcludedExtensions(w, fileName, url)
