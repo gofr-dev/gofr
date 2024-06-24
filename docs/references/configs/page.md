@@ -83,7 +83,6 @@ This document lists all the configuration options supported by the Gofr framewor
 - Name: STATIC_DIRECTORY_LISTING
 - Description: To enable directory listing of files in folder (default: true)
 
-
 ---
 
 - Name: STATIC_EXCLUDE_EXTENSIONS
