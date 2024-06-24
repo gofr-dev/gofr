@@ -18,8 +18,6 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
-    outputs:
-      image: ${{ steps.output-image.outputs.image }}
     name: 🔧Build
     steps:
       - name: Checkout Code
@@ -39,16 +37,12 @@ jobs:
         run: |
           docker pull ${{ env.WEBSITE_REGISTRY }}/gofr-dev/website:latest
 
-      - name: Build and Push Image Stage
+      - name: Build Image
         uses: docker/build-push-action@v4
         with:
           push: false
           context: ./
           file: ./docs/Dockerfile
-          tags: us-central1-docker.pkg.dev/${{ env.GAR_PROJECT }}/${{ env.GAR_REGISTRY }}/${{ env.APP_NAME }}:${{ github.sha }}
-
-      - id: output-image
-        run: echo "image=`echo us-central1-docker.pkg.dev/${{ env.GAR_PROJECT }}/${{ env.GAR_REGISTRY }}/${{ env.APP_NAME }}:${{ github.sha }}`" >> "$GITHUB_OUTPUT"
 
   dockerize:
     if: ${{ startsWith(github.ref, 'refs/tags/v')}}
