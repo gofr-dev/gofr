@@ -3,7 +3,7 @@ module gofr.dev
 go 1.21
 
 require (
-	cloud.google.com/go/pubsub v1.38.0
+	cloud.google.com/go/pubsub v1.39.0
 	github.com/DATA-DOG/go-sqlmock v1.5.2
 	github.com/XSAM/otelsql v0.29.0
 	github.com/alicebob/miniredis/v2 v2.33.0
@@ -45,7 +45,7 @@ require (
 )
 
 require (
-	cloud.google.com/go v0.114.0 // indirect
+	cloud.google.com/go v0.115.0 // indirect
 	cloud.google.com/go/auth v0.5.1 // indirect
 	cloud.google.com/go/auth/oauth2adapt v0.2.2 // indirect
 	cloud.google.com/go/compute/metadata v0.3.0 // indirect
@@ -95,7 +95,7 @@ require (
 	golang.org/x/time v0.5.0 // indirect
 	golang.org/x/tools v0.21.1-0.20240508182429-e35e4ccd0d2d // indirect
 	google.golang.org/genproto v0.0.0-20240604185151-ef581f913117 // indirect
-	google.golang.org/genproto/googleapis/api v0.0.0-20240528184218-531527333157 // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20240610135401-a8a62080eff3 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240604185151-ef581f913117 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	lukechampine.com/uint128 v1.2.0 // indirect
