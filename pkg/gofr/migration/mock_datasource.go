@@ -107,7 +107,7 @@ func (mr *MockMigratorMockRecorder) rollback(c, data any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "rollback", reflect.TypeOf((*MockMigrator)(nil).rollback), c, data)
 }
 
-// MockOptions is a mock of Decorator interface.
+// MockOptions is a mock of aggregator interface.
 type MockOptions struct {
 	ctrl     *gomock.Controller
 	recorder *MockOptionsMockRecorder
@@ -131,9 +131,9 @@ func (m *MockOptions) EXPECT() *MockOptionsMockRecorder {
 }
 
 // apply mocks base method.
-func (m_2 *MockOptions) Apply(m migrator) migrator {
+func (m_2 *MockOptions) apply(m migrator) migrator {
 	m_2.ctrl.T.Helper()
-	ret := m_2.ctrl.Call(m_2, "Apply", m)
+	ret := m_2.ctrl.Call(m_2, "apply", m)
 	ret0, _ := ret[0].(migrator)
 	return ret0
 }
@@ -141,5 +141,5 @@ func (m_2 *MockOptions) Apply(m migrator) migrator {
 // apply indicates an expected call of apply.
 func (mr *MockOptionsMockRecorder) apply(m any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Apply", reflect.TypeOf((*MockOptions)(nil).Apply), m)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "apply", reflect.TypeOf((*MockOptions)(nil).apply), m)
 }

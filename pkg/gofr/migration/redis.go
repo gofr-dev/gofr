@@ -13,7 +13,7 @@ type redis struct {
 	Redis
 }
 
-func (r redis) Apply(m migrator) migrator {
+func (r redis) apply(m migrator) migrator {
 	return redisMigrator{
 		Redis:    r.Redis,
 		migrator: m,

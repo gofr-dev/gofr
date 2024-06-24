@@ -29,7 +29,7 @@ type sqlDB struct {
 	SQL
 }
 
-func (s *sqlDB) Apply(m migrator) migrator {
+func (s *sqlDB) apply(m migrator) migrator {
 	return sqlMigrator{
 		SQL:      s.SQL,
 		migrator: m,

@@ -8,10 +8,6 @@ import (
 	goRedis "github.com/redis/go-redis/v9"
 )
 
-type Decorator interface {
-	Apply(m migrator) migrator
-}
-
 type Redis interface {
 	Get(ctx context.Context, key string) *goRedis.StringCmd
 	Set(ctx context.Context, key string, value interface{}, expiration time.Duration) *goRedis.StatusCmd
