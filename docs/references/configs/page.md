@@ -2,252 +2,303 @@
 
 This document lists all the configuration options supported by the Gofr framework. The configurations are grouped by category for better organization.
 
-## App Configs
+## App
 
 {% table %}
 
-- Name: APP_NAME
-- Description: Name of the application
-- Default Value: gofr-app
+- Name
+- Description
+- Default Value
 
 ---
 
-- Name: APP_ENV
-- Description: Name of the environment file to use (e.g., stage.env, prod.env, or local.env).
+-  APP_NAME
+-  Name of the application
+-  gofr-app
 
 ---
 
-- Name: APP_VERSION
-- Description: Application version
-- Default Value: dev
+-  APP_ENV
+-  Name of the environment file to use (e.g., stage.env, prod.env, or local.env).
 
 ---
 
-- Name: LOG_LEVEL
-- Description: Level of verbosity for application logs. Supported values are **DEBUG, INFO, NOTICE, WARN, ERROR, FATAL**
-- Default Value: INFO
+-  APP_VERSION
+-  Application version
+-  dev
 
 ---
 
-- Name: REMOTE_LOG_URL
-- Description: URL to remotely change the log level
+-  LOG_LEVEL
+-  Level of verbosity for application logs. Supported values are **DEBUG, INFO, NOTICE, WARN, ERROR, FATAL**
+-  INFO
 
 ---
 
-- Name: REMOTE_LOG_FETCH_INTERVAL
-- Description: Time interval (in seconds) to check for remote log level updates
-- Default Value: 15
+-  REMOTE_LOG_URL
+-  URL to remotely change the log level
 
 ---
 
-- Name: METRICS_PORT
-- Description: Port on which the application exposes metrics
-- Default Value: 2121
+-  REMOTE_LOG_FETCH_INTERVAL
+-  Time interval (in seconds) to check for remote log level updates
+-  15
 
 ---
 
-- Name: HTTP_PORT
-- Description: Port on which the HTTP server listens
-- Default Value: 8000
+-  METRICS_PORT
+-  Port on which the application exposes metrics
+-  2121
 
 ---
 
-- Name: GRPC_PORT
-- Description: Port on which the gRPC server listens
-- Default Value: 9000
+-  HTTP_PORT
+-  Port on which the HTTP server listens
+-  8000
 
 ---
 
-- Name: TRACE_EXPORTER
-- Description: Tracing exporter to use. Supported values: gofr, zipkin, jaeger.
-- Default Value: gofr
+-  GRPC_PORT
+-  Port on which the gRPC server listens
+-  9000
 
 ---
 
-- Name: TRACER_HOST
-- Description: Hostname of the tracing collector. Required if TRACE_EXPORTER is set to zipkin or jaeger.
+-  TRACE_EXPORTER
+-  Tracing exporter to use. Supported values: gofr, zipkin, jaeger.
+-  gofr
 
 ---
 
-- Name: TRACER_PORT
-- Description: Port of the tracing collector. Required if TRACE_EXPORTER is set to zipkin or jaeger.
-- Default Value: 9411
+-  TRACER_HOST
+-  Hostname of the tracing collector. Required if TRACE_EXPORTER is set to zipkin or jaeger.
 
 ---
 
-- Name: CMD_LOGS_FILE
-- Description: File to save the logs in case of a CMD application
+-  TRACER_PORT
+-  Port of the tracing collector. Required if TRACE_EXPORTER is set to zipkin or jaeger.
+-  9411
 
-{% endtable %}
+---
 
-## Datasource Configs
+-  CMD_LOGS_FILE
+-  File to save the logs in case of a CMD application
+
+{% /table %}
+
+## HTTP
 
 {% table %}
 
-- Name: PUBSUB_BACKEND
-- Description: Pub/Sub message broker backend
-- Supported Values: kafka, google, mqtt
+- Name
+- Description
 
-{% endtable %}
+---
 
-**For Kafka:**
+-  REQUEST_TIMEOUT
+-  Set the request timeouts (in seconds) for HTTP server.
+
+{% /table %}
+
+
+## Datasource
+
+### SQL
 
 {% table %}
 
-- Name: PUBSUB_BROKER
-- Description: Comma-separated list of broker addresses
-- Default Value: localhost:9092
+- Name
+- Description
+- Default Value
 
 ---
 
-- Name: PARTITION_SIZE
-- Description: Size of each message partition (in bytes)
-- Default Value: 0
+-  DB_DIALECT
+-  Database dialect. Supported values: mysql, postgres
 
 ---
 
-- Name: PUBSUB_OFFSET
-- Description: Offset to start consuming messages from. -1 for earliest, 0 for latest.
-- Default Value: -1
+-  DB_HOST
+-  Hostname of the database server.
 
 ---
 
-- Name: CONSUMER_ID
-- Description: Unique identifier for this consumer
-- Default Value: gofr-consumer
+-  DB_PORT
+-  Port of the database server.
+-  3306
 
-{% endtable %}
+---
 
-**For Google:**
+-  DB_USER
+-  Username for the database.
+
+---
+
+-  DB_PASSWORD
+-  Password for the database.
+
+---
+
+-  DB_NAME
+-  Name of the database to use.
+
+---
+
+-  DB_MAX_IDLE_CONNECTION
+-  Number of maximum idle connection.
+-  2
+
+---
+
+-  DB_MAX_OPEN_CONNECTION
+-  Number of maximum connections which can be used with database.
+-  0 (unlimited)
+
+{% /table %}
+
+### Redis
 
 {% table %}
 
-- Name: GOOGLE_PROJECT_ID
-- Description: ID of the Google Cloud project. Required for Google Pub/Sub.
+- Name
+- Description
 
 ---
 
-- Name: GOOGLE_SUBSCRIPTION_NAME
-- Description: Name of the Google Pub/Sub subscription. Required for Google Pub/Sub.
+-  REDIS_HOST
+-  Hostname of the Redis server.
 
-{% endtable %}
+---
 
-**For MQTT:**
+-  REDIS_PORT
+-  Port of the Redis server.
+
+{% /table %}
+
+### Pub/Sub
 
 {% table %}
 
-- Name: MQTT_PORT
-- Description: Port of the MQTT broker
-- Default Value: 1883
+
+- Name
+- Description
+- Default Value
 
 ---
 
-- Name: MQTT_MESSAGE_ORDER
-- Description: Enable guaranteed message order
-- Default Value: false
+-  PUBSUB_BACKEND
+-  Pub/Sub message broker backend
+-  kafka, google, mqtt
 
----
+{% /table %}
 
-- Name: MQTT_PROTOCOL
-- Description: Communication protocol. Supported values: tcp, ssl.
-- Default Value: tcp
-
----
-
-- Name: MQTT_HOST
-- Description: Hostname of the MQTT broker
-- Default Value: localhost
-
----
-
-- Name: MQTT_USER
-- Description: Username for the MQTT broker
-
----
-
-- Name: MQTT_PASSWORD
-- Description: Password for the MQTT broker
-
----
-
-- Name: MQTT_CLIENT_ID_SUFFIX
-- Description: Suffix appended to the client ID
-
----
-
-- Name: MQTT_QOS
-- Description: Quality of Service Level
-
-{% endtable %}
-
-### Mongo Configs
+**Kafka**
 
 {% table %}
 
-- Name: MONGO_URI
-- Description: URI for connecting to the MongoDB server.
+
+- Name
+- Description
+- Default Value
 
 ---
 
-- Name: MONGO_DATABASE
-- Description: Name of the MongoDB database to use.
+-  PUBSUB_BROKER
+-  Comma-separated list of broker addresses
+-  localhost:9092
 
-{% endtable %}
+---
 
-### Redis Configs
+-  PARTITION_SIZE
+-  Size of each message partition (in bytes)
+-  0
+
+---
+
+-  PUBSUB_OFFSET
+-  Offset to start consuming messages from. -1 for earliest, 0 for latest.
+-  -1
+
+---
+
+-  CONSUMER_ID
+-  Unique identifier for this consumer
+-  gofr-consumer
+
+{% /table %}
+
+**Google**
 
 {% table %}
 
-- Name: REDIS_HOST
-- Description: Hostname of the Redis server.
+
+- Name
+- Description
 
 ---
 
-- Name: REDIS_PORT
-- Description: Port of the Redis server.
+-  GOOGLE_PROJECT_ID
+-  ID of the Google Cloud project. Required for Google Pub/Sub.
 
-{% endtable %}
+---
 
-### SQL Configs
+-  GOOGLE_SUBSCRIPTION_NAME
+-  Name of the Google Pub/Sub subscription. Required for Google Pub/Sub.
+
+{% /table %}
+
+**MQTT**
 
 {% table %}
 
-- Name: DB_DIALECT
-- Description: Database dialect. Supported values: mysql, postgres
+
+- Name
+- Description
+- Default Value
 
 ---
 
-- Name: DB_HOST
-- Description: Hostname of the database server.
+-  MQTT_PORT
+-  Port of the MQTT broker
+-  1883
 
 ---
 
-- Name: DB_PORT
-- Description: Port of the database server.
-- Default Value: 3306
+-  MQTT_MESSAGE_ORDER
+-  Enable guaranteed message order
+-  false
 
 ---
 
-- Name: DB_USER
-- Description: Username for the database.
+-  MQTT_PROTOCOL
+-  Communication protocol. Supported values: tcp, ssl.
+-  tcp
 
 ---
 
-- Name: DB_PASSWORD
-- Description: Password for the database.
+-  MQTT_HOST
+-  Hostname of the MQTT broker
+-  localhost
 
 ---
 
-- Name: DB_NAME
-- Description: Name of the database to use.
+-  MQTT_USER
+-  Username for the MQTT broker
 
-{% endtable %}
+---
 
-## HTTP Configs
+-  MQTT_PASSWORD
+-  Password for the MQTT broker
 
-{% table %}
+---
 
-- Name: REQUEST_TIMEOUT
-- Description: Set the request timeouts (in seconds) for HTTP server.
+-  MQTT_CLIENT_ID_SUFFIX
+-  Suffix appended to the client ID
 
-{% endtable %}
+---
+
+-  MQTT_QOS
+-  Quality of Service Level
+
+{% /table %}
+

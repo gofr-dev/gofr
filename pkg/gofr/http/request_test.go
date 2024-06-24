@@ -41,7 +41,7 @@ func TestBind(t *testing.T) {
 }
 
 func TestBind_FileSuccess(t *testing.T) {
-	r := NewRequest(generateMultipartrequestZip(t))
+	r := NewRequest(generateMultipartRequestZip(t))
 	x := struct {
 		// Zip file bind for zip struct
 		Zip file.Zip `file:"zip"`
@@ -52,7 +52,7 @@ func TestBind_FileSuccess(t *testing.T) {
 		// FileHeader multipart.FileHeader bind(value)
 		FileHeader multipart.FileHeader `file:"hello"`
 
-		// FileHeaderPtr mulitpart.FileHeader bind for pointer
+		// FileHeaderPtr multipart.FileHeader bind for pointer
 		FileHeaderPtr *multipart.FileHeader `file:"hello"`
 
 		// Skip bind
@@ -63,6 +63,12 @@ func TestBind_FileSuccess(t *testing.T) {
 
 		// File not in multipart form
 		FileNotPresent *multipart.FileHeader `file:"text"`
+
+		// Additional form fields
+		StringField string  `form:"stringField"`
+		IntField    int     `form:"intField"`
+		FloatField  float64 `form:"floatField"`
+		BoolField   bool    `form:"boolField"`
 	}{}
 
 	err := r.Bind(&x)
@@ -110,6 +116,12 @@ func TestBind_FileSuccess(t *testing.T) {
 
 	// Assert file not present
 	assert.Nil(t, x.FileNotPresent)
+
+	// Assert additional form fields
+	assert.Equal(t, "testString", x.StringField)
+	assert.Equal(t, 123, x.IntField)
+	assert.Equal(t, 123.456, x.FloatField)
+	assert.Equal(t, true, x.BoolField)
 }
 
 func TestBind_NoContentType(t *testing.T) {
@@ -136,7 +148,7 @@ func Test_GetContext(t *testing.T) {
 	assert.Equal(t, "hello", r.PathParam("key"))
 }
 
-func generateMultipartrequestZip(t *testing.T) *http.Request {
+func generateMultipartRequestZip(t *testing.T) *http.Request {
 	var buf bytes.Buffer
 	writer := multipart.NewWriter(&buf)
 
@@ -166,6 +178,19 @@ func generateMultipartrequestZip(t *testing.T) *http.Request {
 		t.Fatalf("Failed to write file to form: %v", err)
 	}
 
+	// Add non-file fields
+	err = writer.WriteField("stringField", "testString")
+	assert.Nil(t, err)
+
+	err = writer.WriteField("intField", "123")
+	assert.Nil(t, err)
+
+	err = writer.WriteField("floatField", "123.456")
+	assert.Nil(t, err)
+
+	err = writer.WriteField("boolField", "true")
+	assert.Nil(t, err)
+
 	// Close the multipart writer
 	writer.Close()
 
@@ -178,7 +203,7 @@ func generateMultipartrequestZip(t *testing.T) *http.Request {
 
 func Test_bindMultipart_Fails(t *testing.T) {
 	// Non-pointer bind
-	r := NewRequest(generateMultipartrequestZip(t))
+	r := NewRequest(generateMultipartRequestZip(t))
 	input := struct {
 		file *file.Zip
 	}{}
@@ -194,7 +219,7 @@ func Test_bindMultipart_Fails(t *testing.T) {
 }
 
 func Test_bindMultipart_Fail_ParseMultiPart(t *testing.T) {
-	r := NewRequest(generateMultipartrequestZip(t))
+	r := NewRequest(generateMultipartRequestZip(t))
 	input2 := struct {
 		File *file.Zip `file:"zip"`
 	}{}

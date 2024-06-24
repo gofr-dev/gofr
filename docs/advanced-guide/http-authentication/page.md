@@ -43,7 +43,7 @@ Use `EnableBasicAuthWithFunc(validationFunc)` to implement your own validation l
 The `validationFunc` takes the username and password as arguments and returns true if valid, false otherwise.
 
 ```go
-func validateUser(username string, password string) bool {
+func validateUser(c *container.Container, username, password string) bool {
 	// Implement your credential validation logic here 
 	// This example uses hardcoded credentials for illustration only   
 	return username == "john" && password == "doe123" 
@@ -52,7 +52,7 @@ func validateUser(username string, password string) bool {
 func main() { 
 	app := gofr.New() 
 
-	app.EnableBasicAuthWithFunc(validateUser) 
+	app.EnableBasicAuthWithValidator(validateUser) 
 
 	app.GET("/secure-data", func(c *gofr.Context) (interface{}, error) { 
 		// Handle access to secure data 
@@ -102,7 +102,7 @@ func main() {
 ```go
 package main
 
-func apiKeyValidator(apiKey string) bool {
+func apiKeyValidator(c *container.Container, apiKey string) bool {
 	validKeys := []string{"f0e1dffd-0ff0-4ac8-92a3-22d44a1464e4", "d7e4b46e-5b04-47b2-836c-2c7c91250f40"}
 
 	return slices.Contains(validKeys, apiKey)
@@ -112,7 +112,7 @@ func main() {
 	// initialise gofr object
 	app := gofr.New()
 
-	app.EnableAPIKeyAuthWithFunc(apiKeyValidator)
+	app.EnableAPIKeyAuthWithValidator(apiKeyValidator)
 
 	app.GET("/customer", Customer)
 
