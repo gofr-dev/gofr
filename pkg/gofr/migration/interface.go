@@ -3,6 +3,7 @@ package migration
 import (
 	"context"
 	"database/sql"
+	"gofr.dev/pkg/gofr/container"
 	"time"
 
 	goRedis "github.com/redis/go-redis/v9"
@@ -26,4 +27,17 @@ type SQL interface {
 type PubSub interface {
 	CreateTopic(context context.Context, name string) error
 	DeleteTopic(context context.Context, name string) error
+}
+
+// keeping the migrator interface unexported as, right now it is not being implemented directly, by the externalDB drivers.
+// keeping the implementations at one place such that if any change in migration logic, we would change directly here.
+// it uses the interface defined in datasource package.
+type migrator interface {
+	checkAndCreateMigrationTable(c *container.Container) error
+	getLastMigration(c *container.Container) int64
+
+	beginTransaction(c *container.Container) transactionData
+
+	commitMigration(c *container.Container, data transactionData) error
+	rollback(c *container.Container, data transactionData)
 }
