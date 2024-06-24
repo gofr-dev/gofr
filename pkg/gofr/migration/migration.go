@@ -135,6 +135,16 @@ func getMigrator(c *container.Container) (Datasource, migrator, bool) {
 		c.Debug("initialized data source for redis")
 	}
 
+	if !isNil(c.Clickhouse) {
+		ok = true
+
+		ds.Clickhouse = c.Clickhouse
+
+		mg = clickHouse{ds.Clickhouse}.apply(mg)
+
+		c.Debug("initialized data source for redis")
+	}
+
 	if c.PubSub != nil {
 		ok = true
 
