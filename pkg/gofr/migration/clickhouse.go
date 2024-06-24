@@ -55,6 +55,7 @@ func (ch clickHouseMigrator) getLastMigration(c *container.Container) int64 {
 	}
 
 	var lastMigrations []LastMigration
+
 	var lastMigration int64
 
 	err := c.Clickhouse.Select(context.Background(), &lastMigrations, getLastChGoFrMigration)

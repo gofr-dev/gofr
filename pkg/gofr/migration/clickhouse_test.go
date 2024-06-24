@@ -2,12 +2,14 @@ package migration
 
 import (
 	"database/sql"
-	"github.com/stretchr/testify/assert"
-	"go.uber.org/mock/gomock"
-	"gofr.dev/pkg/gofr/container"
-	"gofr.dev/pkg/gofr/testutil"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"go.uber.org/mock/gomock"
+
+	"gofr.dev/pkg/gofr/container"
+	"gofr.dev/pkg/gofr/testutil"
 )
 
 func clickHouseSetup(t *testing.T) (migrator, *MockClickhouse, *container.Container) {
@@ -97,7 +99,6 @@ func Test_ClickHouseCommitMigration(t *testing.T) {
 }
 
 func Test_ClickHouseBeginTransaction(t *testing.T) {
-
 	logs := testutil.StdoutOutputForFunc(func() {
 		mg, _, mockContainer := clickHouseSetup(t)
 		mg.beginTransaction(mockContainer)
