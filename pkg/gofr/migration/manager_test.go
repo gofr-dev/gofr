@@ -11,18 +11,18 @@ import (
 
 func Test_getMigratorDatastoreNotInitialised(t *testing.T) {
 	logs := testutil.StdoutOutputForFunc(func() {
-		container, _ := container.NewMockContainer(t)
-		container.SQL = nil
-		container.Redis = nil
+		mockContainer, _ := container.NewMockContainer(t)
+		mockContainer.SQL = nil
+		mockContainer.Redis = nil
 
 		mg := manager{}
 
-		mg.rollback(container, transactionData{})
+		mg.rollback(mockContainer, transactionData{})
 
-		assert.Equal(t, int64(0), mg.getLastMigration(container), "TEST Failed \n Last Migration is not 0")
-		assert.Nil(t, mg.checkAndCreateMigrationTable(container), "TEST Failed")
-		assert.Equal(t, transactionData{}, mg.beginTransaction(container), "TEST Failed")
-		assert.Nil(t, mg.commitMigration(container, transactionData{}), "TEST Failed")
+		assert.Equal(t, int64(0), mg.getLastMigration(mockContainer), "TEST Failed \n Last Migration is not 0")
+		assert.Nil(t, mg.checkAndCreateMigrationTable(mockContainer), "TEST Failed")
+		assert.Equal(t, transactionData{}, mg.beginTransaction(mockContainer), "TEST Failed")
+		assert.Nil(t, mg.commitMigration(mockContainer, transactionData{}), "TEST Failed")
 	})
 
 	assert.Contains(t, logs, "Migration 0 ran successfully", "TEST Failed")
