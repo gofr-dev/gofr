@@ -1,10 +1,12 @@
 package migration
 
 import (
+	"testing"
+
 	"github.com/stretchr/testify/assert"
+
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/testutil"
-	"testing"
 )
 
 func Test_getMigratorDatastoreNotInitialised(t *testing.T) {

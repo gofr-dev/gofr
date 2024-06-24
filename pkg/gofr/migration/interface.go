@@ -3,10 +3,10 @@ package migration
 import (
 	"context"
 	"database/sql"
-	"gofr.dev/pkg/gofr/container"
 	"time"
 
 	goRedis "github.com/redis/go-redis/v9"
+	"gofr.dev/pkg/gofr/container"
 )
 
 type Redis interface {
