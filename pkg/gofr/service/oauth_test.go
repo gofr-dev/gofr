@@ -53,7 +53,7 @@ func setupHTTPServiceTestServerForOAuth(server *httptest.Server) HTTP {
 		},
 	}
 
-	// Apply option to the HTTP service
+	// Apply circuit breaker option to the HTTP service
 	httpSvc := oauthConfig.AddOption(&service)
 
 	return httpSvc
