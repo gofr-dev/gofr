@@ -1,11 +1,8 @@
 name: Build and Deploy
 on:
   push:
-    branches:
-      - deployment-website
     tags:
       - "v*.*.*"
-  pull_request:
     branches:
       - main
       - development
@@ -98,7 +95,7 @@ jobs:
   deployment:
     runs-on: ubuntu-latest
     name: 🚀 Deploy
-#    if: ${{ startsWith(github.ref, 'refs/tags/v')}}
+    if: ${{ startsWith(github.ref, 'refs/tags/v')}}
     needs: dockerize
     container:
       image: ghcr.io/zopsmart/gha-images:deployments-0.1.3
