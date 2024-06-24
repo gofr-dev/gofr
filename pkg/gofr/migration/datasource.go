@@ -1,18 +1,15 @@
 package migration
 
-import (
-	"gofr.dev/pkg/gofr/container"
-)
+import "gofr.dev/pkg/gofr/container"
 
 type Datasource struct {
 	// TODO Logger should not be embedded rather it should be a field.
 	// Need to think it through as it will bring breaking changes.
 	Logger
 
-	SQL    SQL
-	Redis  Redis
-	PubSub PubSub
-
+	SQL        SQL
+	Redis      Redis
+	PubSub     PubSub
 	Clickhouse Clickhouse
 }
 

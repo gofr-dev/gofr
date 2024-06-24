@@ -9,11 +9,11 @@ import (
 	"gofr.dev/pkg/gofr/container"
 )
 
-type redis struct {
+type redisDS struct {
 	Redis
 }
 
-func (r redis) apply(m migrator) migrator {
+func (r redisDS) apply(m migrator) migrator {
 	return redisMigrator{
 		Redis:    r.Redis,
 		migrator: m,

@@ -16,10 +16,10 @@ func TestRedis_Get(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockCmd := NewMockcommands(ctrl)
+	mockCmd := NewMockRedis(ctrl)
 	mockCmd.EXPECT().Get(context.Background(), "test_key").Return(&goRedis.StringCmd{})
 
-	r := redis{mockCmd}
+	r := redisDS{mockCmd}
 	_, err := r.Get(context.Background(), "test_key").Result()
 
 	assert.NoError(t, err, "TEST Failed.\n")
@@ -29,10 +29,10 @@ func TestRedis_Set(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockCmd := NewMockcommands(ctrl)
+	mockCmd := NewMockRedis(ctrl)
 	mockCmd.EXPECT().Set(context.Background(), "test_key", "test_value", time.Duration(0)).Return(&goRedis.StatusCmd{})
 
-	r := redis{mockCmd}
+	r := redisDS{mockCmd}
 	_, err := r.Set(context.Background(), "test_key", "test_value", 0).Result()
 
 	assert.NoError(t, err, "TEST Failed.\n")
@@ -42,10 +42,10 @@ func TestRedis_Del(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockCmd := NewMockcommands(ctrl)
+	mockCmd := NewMockRedis(ctrl)
 	mockCmd.EXPECT().Del(context.Background(), "test_key").Return(&goRedis.IntCmd{})
 
-	r := redis{mockCmd}
+	r := redisDS{mockCmd}
 	_, err := r.Del(context.Background(), "test_key").Result()
 
 	assert.NoError(t, err, "TEST Failed.\n")
@@ -55,10 +55,10 @@ func TestRedis_Rename(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockCmd := NewMockcommands(ctrl)
+	mockCmd := NewMockRedis(ctrl)
 	mockCmd.EXPECT().Rename(context.Background(), "test_key", "test_new_key").Return(&goRedis.StatusCmd{})
 
-	r := redis{mockCmd}
+	r := redisDS{mockCmd}
 	_, err := r.Rename(context.Background(), "test_key", "test_new_key").Result()
 
 	assert.NoError(t, err, "TEST Failed.\n")
@@ -69,7 +69,7 @@ func TestRedisMigrator_GetLastMigration(t *testing.T) {
 	defer ctrl.Finish()
 
 	c, mocks := container.NewMockContainer(t)
-	mockMigrator := NewMockMigrator(ctrl)
+	mockMigrator := NewMockmigrator(ctrl)
 
 	m := redisMigrator{
 		Redis:    mocks.Redis,
@@ -134,7 +134,7 @@ func TestRedisMigrator_beginTransaction(t *testing.T) {
 	defer ctrl.Finish()
 
 	c, mocks := container.NewMockContainer(t)
-	mockMigrator := NewMockMigrator(ctrl)
+	mockMigrator := NewMockmigrator(ctrl)
 
 	m := redisMigrator{
 		Redis:    mocks.Redis,

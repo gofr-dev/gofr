@@ -24,12 +24,12 @@ const (
 	insertGoFrMigrationRowPostgres = `INSERT INTO gofr_migrations (version, method, start_time,duration) VALUES ($1, $2, $3, $4);`
 )
 
-// database/sql is the package imported so named it sqlDB.
-type sqlDB struct {
+// database/sql is the package imported so named it sqlDS.
+type sqlDS struct {
 	SQL
 }
 
-func (s *sqlDB) apply(m migrator) migrator {
+func (s *sqlDS) apply(m migrator) migrator {
 	return sqlMigrator{
 		SQL:      s.SQL,
 		migrator: m,

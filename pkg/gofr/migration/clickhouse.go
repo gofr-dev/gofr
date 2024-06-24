@@ -7,7 +7,7 @@ import (
 	"gofr.dev/pkg/gofr/container"
 )
 
-type clickHouse struct {
+type clickHouseDS struct {
 	Clickhouse
 }
 
@@ -17,7 +17,7 @@ type clickHouseMigrator struct {
 	migrator
 }
 
-func (ch clickHouse) apply(m migrator) migrator {
+func (ch clickHouseDS) apply(m migrator) migrator {
 	return clickHouseMigrator{
 		Clickhouse: ch.Clickhouse,
 		migrator:   m,

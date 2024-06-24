@@ -160,7 +160,7 @@ func TestExecContext(t *testing.T) {
 func TestCheckAndCreateMigrationTableSuccess(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockDB := container.NewMockDB(ctrl)
-	mockMigrator := NewMockMigrator(ctrl)
+	mockMigrator := NewMockmigrator(ctrl)
 	mockContainer, mocks := container.NewMockContainer(t)
 
 	mockMigrator.EXPECT().checkAndCreateMigrationTable(mockContainer)
@@ -181,7 +181,7 @@ func TestCheckAndCreateMigrationTableSuccess(t *testing.T) {
 func TestCheckAndCreateMigrationTableExecError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockDB := container.NewMockDB(ctrl)
-	mockMigrator := NewMockMigrator(ctrl)
+	mockMigrator := NewMockmigrator(ctrl)
 	mockContainer, mocks := container.NewMockContainer(t)
 	expectedErr := sql.ErrNoRows
 
@@ -206,7 +206,7 @@ func TestCheckAndCreateMigrationTableExecError(t *testing.T) {
 func TestBeginTransactionSuccess(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockDB := container.NewMockDB(ctrl)
-	mockMigrator := NewMockMigrator(ctrl)
+	mockMigrator := NewMockmigrator(ctrl)
 	mockContainer, mocks := container.NewMockContainer(t)
 	expectedMigrationData := transactionData{}
 
@@ -231,7 +231,7 @@ var (
 func TestBeginTransactionDBError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockDB := container.NewMockDB(ctrl)
-	mockMigrator := NewMockMigrator(ctrl)
+	mockMigrator := NewMockmigrator(ctrl)
 	mockContainer, mocks := container.NewMockContainer(t)
 
 	mocks.SQL.EXPECT().Begin().Return(nil, errBeginTx)

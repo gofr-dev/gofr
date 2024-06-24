@@ -119,7 +119,7 @@ func getMigrator(c *container.Container) (Datasource, migrator, bool) {
 
 		ds.SQL = c.SQL
 
-		s := sqlDB{ds.SQL}
+		s := sqlDS{ds.SQL}
 		mg = s.apply(mg)
 
 		c.Debug("initialized data source for SQL")
@@ -130,7 +130,7 @@ func getMigrator(c *container.Container) (Datasource, migrator, bool) {
 
 		ds.Redis = c.Redis
 
-		mg = redis{ds.Redis}.apply(mg)
+		mg = redisDS{ds.Redis}.apply(mg)
 
 		c.Debug("initialized data source for redis")
 	}
@@ -140,9 +140,9 @@ func getMigrator(c *container.Container) (Datasource, migrator, bool) {
 
 		ds.Clickhouse = c.Clickhouse
 
-		mg = clickHouse{ds.Clickhouse}.apply(mg)
+		mg = clickHouseDS{ds.Clickhouse}.apply(mg)
 
-		c.Debug("initialized data source for redis")
+		c.Debug("initialized data source for Clickhouse")
 	}
 
 	if c.PubSub != nil {
