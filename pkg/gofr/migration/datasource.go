@@ -1,7 +1,8 @@
 package migration
 
 type Datasource struct {
-	// TODO this should not be embedded rather it should be
+	// TODO Logger should not be embedded rather it should be a field.
+	// Need to think it through as it will bring breaking changes.
 	Logger
 
 	SQL    SQL
