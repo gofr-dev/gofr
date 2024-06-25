@@ -91,6 +91,12 @@ type Cassandra interface {
 	ExecCAS(dest interface{}, stmt string, values ...interface{}) (bool, error)
 }
 
+type CassandraProvider interface {
+	Cassandra
+
+	provider
+}
+
 type Clickhouse interface {
 	Exec(ctx context.Context, query string, args ...any) error
 	Select(ctx context.Context, dest any, query string, args ...any) error
@@ -100,11 +106,6 @@ type Clickhouse interface {
 type ClickhouseProvider interface {
 	Clickhouse
 
-	provider
-}
-
-type CassandraProvider interface {
-	Cassandra
 	provider
 }
 
