@@ -459,21 +459,20 @@ func (a *App) AddStaticFiles(endpoint, filePath string) {
 		HideDotFiles:     true,
 	}
 
-	dupFilePath := filePath
-
+	// update file path based on current directory if it starts with ./
 	if strings.HasPrefix(filePath, "./") {
-		dupFilePath, _ = os.Getwd()
-		dupFilePath = filepath.Join(dupFilePath, filePath)
+		currentWorkingDir, _ := os.Getwd()
+		filePath = filepath.Join(currentWorkingDir, filePath)
 	}
 
 	endpoint = "/" + strings.TrimPrefix(endpoint, "/")
 
-	if _, err := os.Stat(dupFilePath); err != nil {
+	if _, err := os.Stat(filePath); err != nil {
 		a.container.Logger.Errorf("error in registering '%s' static endpoint, error: %v", endpoint, err)
 		return
 	}
 
-	defaultConfig.FileDirectory = dupFilePath
+	defaultConfig.FileDirectory = filePath
 
 	a.httpServer.router.AddStaticFiles(endpoint, defaultConfig)
 }

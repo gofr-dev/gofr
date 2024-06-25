@@ -76,7 +76,9 @@ func (staticConfig StaticFileConfig) staticHandler(fileServer http.Handler) http
 			return
 		}
 
-		if _, err := os.Stat(filepath.Join(staticConfig.FileDirectory, url)); "openapi.json" == fileName && err == nil {
+		const defaultSwaggerFileName = "openapi.json"
+
+		if _, err := os.Stat(filepath.Join(staticConfig.FileDirectory, url)); fileName == defaultSwaggerFileName && err == nil {
 			w.WriteHeader(http.StatusForbidden)
 
 			_, _ = w.Write([]byte(forbiddenBody))
