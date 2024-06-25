@@ -18,11 +18,10 @@ type Router struct {
 }
 
 type StaticFileConfig struct {
-	DirectoryListing  bool
-	HideDotFiles      bool
-	ExcludeExtensions []string
-	ExcludeFiles      []string
-	FileDirectory     string
+	DirectoryListing bool
+	HideDotFiles     bool
+	excludeFiles     []string
+	FileDirectory    string
 }
 
 type Middleware func(handler http.Handler) http.Handler
@@ -51,6 +50,7 @@ func (rou *Router) GetDefaultStaticFilesConfig() StaticFileConfig {
 	staticConfig := StaticFileConfig{
 		DirectoryListing: true,
 		HideDotFiles:     true,
+		excludeFiles:     []string{"openapi.json"},
 	}
 
 	return staticConfig
@@ -79,11 +79,7 @@ func (staticConfig StaticFileConfig) staticHandler(fileServer http.Handler) http
 
 		staticConfig.checkDotFiles(w, fileName, url)
 
-		if len(staticConfig.ExcludeExtensions) > 0 {
-			staticConfig.checkExcludedExtensions(w, fileName, url)
-		}
-
-		if len(staticConfig.ExcludeFiles) > 0 {
+		if len(staticConfig.excludeFiles) > 0 {
 			staticConfig.checkExcludedFiles(w, fileName, url)
 		}
 
@@ -108,24 +104,10 @@ func (staticConfig StaticFileConfig) checkDotFiles(w http.ResponseWriter, fileNa
 	}
 }
 
-func (staticConfig StaticFileConfig) checkExcludedExtensions(w http.ResponseWriter, fileName, url string) {
-	_, err := os.Stat(filepath.Join(staticConfig.FileDirectory, url))
-
-	for _, ext := range staticConfig.ExcludeExtensions {
-		if strings.HasSuffix(fileName, ext) && err == nil {
-			w.WriteHeader(http.StatusForbidden)
-
-			_, _ = w.Write([]byte(forbiddenBody))
-
-			return
-		}
-	}
-}
-
 func (staticConfig StaticFileConfig) checkExcludedFiles(w http.ResponseWriter, fileName, url string) {
 	_, err := os.Stat(filepath.Join(staticConfig.FileDirectory, url))
 
-	for _, file := range staticConfig.ExcludeFiles {
+	for _, file := range staticConfig.excludeFiles {
 		if file == fileName && err == nil {
 			w.WriteHeader(http.StatusForbidden)
 

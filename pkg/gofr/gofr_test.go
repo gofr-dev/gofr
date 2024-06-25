@@ -562,6 +562,8 @@ func Test_AddCronJob_Success(t *testing.T) {
 	assert.Truef(t, pass, "unable to add cron job to cron table")
 }
 
+const indexHTML = "indexTest.html"
+
 func TestStaticHandler(t *testing.T) {
 	// Generating some files for testing
 	htmlContent := []byte("<html><head><title>Test Static File</title></head><body><p>Testing Static File</p></body></html>")
@@ -590,7 +592,7 @@ func TestStaticHandler(t *testing.T) {
 		{
 			desc:                       "check file content index.html",
 			method:                     http.MethodGet,
-			path:                       "/" + publicDir + "/" + indexHTML,
+			path:                       "/" + defaultPublicStaticDir + "/" + indexHTML,
 			statusCode:                 http.StatusOK,
 			expectedBodyLength:         len(htmlContent),
 			expectedResponseHeaderType: "text/html; charset=utf-8",
@@ -599,7 +601,7 @@ func TestStaticHandler(t *testing.T) {
 		{
 			desc:       "check public endpoint",
 			method:     http.MethodGet,
-			path:       "/" + publicDir,
+			path:       "/" + defaultPublicStaticDir,
 			statusCode: http.StatusNotFound,
 		},
 	}
@@ -652,10 +654,10 @@ func TestStaticHandler(t *testing.T) {
 func createPublicDirectory(t *testing.T, htmlContent []byte) {
 	t.Helper()
 
-	directory := "./" + publicDir
+	directory := "./" + defaultPublicStaticDir
 	if _, err := os.Stat(directory); err != nil {
-		if err = os.Mkdir("./"+publicDir, 0755); err != nil {
-			t.Fatalf("Couldn't create a "+publicDir+" directory, error: %s", err)
+		if err = os.Mkdir("./"+defaultPublicStaticDir, 0755); err != nil {
+			t.Fatalf("Couldn't create a "+defaultPublicStaticDir+" directory, error: %s", err)
 		}
 	}
 

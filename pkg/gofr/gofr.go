@@ -31,6 +31,8 @@ import (
 	"gofr.dev/pkg/gofr/service"
 )
 
+const defaultPublicStaticDir = "static"
+
 // App is the main application in the GoFr framework.
 type App struct {
 	// Config can be used by applications to fetch custom configurations from environment or file.
@@ -95,46 +97,13 @@ func New() *App {
 
 	// static fileserver
 	currentWd, _ := os.Getwd()
-	checkDirectory := filepath.Join(currentWd, publicDir)
+	checkDirectory := filepath.Join(currentWd, defaultPublicStaticDir)
 
 	if _, err = os.Stat(checkDirectory); err == nil {
-		app.AddStaticFiles(publicDir, checkDirectory)
+		app.AddStaticFiles(defaultPublicStaticDir, checkDirectory)
 	}
 
 	return app
-}
-
-func updateConfigInformation(staticConfig *gofrHTTP.StaticFileConfig, envConfig config.Config) {
-	staticConfig.DirectoryListing, _ = strconv.ParseBool(envConfig.GetOrDefault("STATIC_DIRECTORY_LISTING", "true"))
-	staticConfig.ExcludeExtensions = SplitEnv(envConfig.Get("STATIC_EXCLUDE_EXTENSIONS"), ",")
-	staticConfig.ExcludeFiles = SplitEnv(envConfig.Get("STATIC_EXCLUDE_FILES"), ",")
-	staticConfig.ExcludeFiles = append(staticConfig.ExcludeFiles, "openapi.json")
-}
-
-func (a *App) AddStaticFiles(endpoint, filePath string) {
-	a.httpRegistered = true
-
-	dupFilePath := filePath
-
-	defaultConfig := a.httpServer.router.GetDefaultStaticFilesConfig()
-
-	updateConfigInformation(&defaultConfig, a.Config)
-
-	if strings.HasPrefix(filePath, "./") {
-		dupFilePath, _ = os.Getwd()
-		dupFilePath = filepath.Join(dupFilePath, filePath)
-	}
-
-	endpoint = "/" + strings.TrimPrefix(endpoint, "/")
-
-	if _, err := os.Stat(dupFilePath); err != nil {
-		a.container.Logger.Errorf("error in registering '%s' static endpoint, error: %v", endpoint, err)
-		return
-	}
-
-	defaultConfig.FileDirectory = dupFilePath
-
-	a.httpServer.router.AddStaticFiles(endpoint, defaultConfig)
 }
 
 // NewCMD creates a command-line application.
@@ -480,4 +449,28 @@ func contains(elems []string, v string) bool {
 	}
 
 	return false
+}
+
+func (a *App) AddStaticFiles(endpoint, filePath string) {
+	a.httpRegistered = true
+
+	dupFilePath := filePath
+
+	defaultConfig := a.httpServer.router.GetDefaultStaticFilesConfig()
+
+	if strings.HasPrefix(filePath, "./") {
+		dupFilePath, _ = os.Getwd()
+		dupFilePath = filepath.Join(dupFilePath, filePath)
+	}
+
+	endpoint = "/" + strings.TrimPrefix(endpoint, "/")
+
+	if _, err := os.Stat(dupFilePath); err != nil {
+		a.container.Logger.Errorf("error in registering '%s' static endpoint, error: %v", endpoint, err)
+		return
+	}
+
+	defaultConfig.FileDirectory = dupFilePath
+
+	a.httpServer.router.AddStaticFiles(endpoint, defaultConfig)
 }
