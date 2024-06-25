@@ -6,21 +6,14 @@ import (
 	"path/filepath"
 	"strings"
 
-	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
-
 	"github.com/gorilla/mux"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 // Router is responsible for routing HTTP request.
 type Router struct {
 	mux.Router
 	RegisteredRoutes *[]string
-}
-
-type StaticFileConfig struct {
-	DirectoryListing bool
-	HideDotFiles     bool
-	FileDirectory    string
 }
 
 type Middleware func(handler http.Handler) http.Handler
@@ -45,20 +38,32 @@ func (rou *Router) Add(method, pattern string, handler http.Handler) {
 	rou.Router.NewRoute().Methods(method).Path(pattern).Handler(h)
 }
 
-// Static File Handling.
-func (rou *Router) AddStaticFiles(endpoint string, staticConfig StaticFileConfig) {
-	fileServer := http.FileServer(http.Dir(staticConfig.FileDirectory))
-	rou.Router.NewRoute().PathPrefix(endpoint + "/").Handler(http.StripPrefix(endpoint, staticConfig.staticHandler(fileServer)))
+// UseMiddleware registers middlewares to the router.
+func (rou *Router) UseMiddleware(mws ...Middleware) {
+	middlewares := make([]mux.MiddlewareFunc, 0, len(mws))
+	for _, m := range mws {
+		middlewares = append(middlewares, mux.MiddlewareFunc(m))
+	}
+
+	rou.Use(middlewares...)
 }
 
-// Check all the static handling configs.
-const forbiddenBody string = "403 forbidden"
+type staticFileConfig struct {
+	directoryName string
+}
 
-func (staticConfig StaticFileConfig) staticHandler(fileServer http.Handler) http.Handler {
+func (rou *Router) AddStaticFiles(endpoint, fileName string) {
+	cfg := staticFileConfig{directoryName: fileName}
+
+	fileServer := http.FileServer(http.Dir(cfg.directoryName))
+	rou.Router.NewRoute().PathPrefix(endpoint + "/").Handler(http.StripPrefix(endpoint, cfg.staticHandler(fileServer)))
+}
+
+func (staticConfig staticFileConfig) staticHandler(fileServer http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		url := r.URL.Path
 
-		if _, err := os.Stat(filepath.Join(staticConfig.FileDirectory, "index.html")); err != nil && strings.HasSuffix(url, "/") {
+		if _, err := os.Stat(filepath.Join(staticConfig.directoryName, "index.html")); err != nil && strings.HasSuffix(url, "/") {
 			http.NotFound(w, r)
 
 			return
@@ -68,34 +73,16 @@ func (staticConfig StaticFileConfig) staticHandler(fileServer http.Handler) http
 
 		fileName := filePath[len(filePath)-1]
 
-		if _, err := os.Stat(filepath.Join(staticConfig.FileDirectory, url)); err == nil && strings.HasPrefix(fileName, ".") {
-			w.WriteHeader(http.StatusForbidden)
-
-			_, _ = w.Write([]byte(forbiddenBody))
-
-			return
-		}
-
 		const defaultSwaggerFileName = "openapi.json"
 
-		if _, err := os.Stat(filepath.Join(staticConfig.FileDirectory, url)); fileName == defaultSwaggerFileName && err == nil {
+		if _, err := os.Stat(filepath.Join(staticConfig.directoryName, url)); fileName == defaultSwaggerFileName && err == nil {
 			w.WriteHeader(http.StatusForbidden)
 
-			_, _ = w.Write([]byte(forbiddenBody))
+			_, _ = w.Write([]byte("403 forbidden"))
 
 			return
 		}
 
 		fileServer.ServeHTTP(w, r)
 	})
-}
-
-// UseMiddleware registers middlewares to the router.
-func (rou *Router) UseMiddleware(mws ...Middleware) {
-	middlewares := make([]mux.MiddlewareFunc, 0, len(mws))
-	for _, m := range mws {
-		middlewares = append(middlewares, mux.MiddlewareFunc(m))
-	}
-
-	rou.Use(middlewares...)
 }

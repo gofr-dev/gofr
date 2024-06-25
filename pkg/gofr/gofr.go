@@ -454,11 +454,6 @@ func contains(elems []string, v string) bool {
 func (a *App) AddStaticFiles(endpoint, filePath string) {
 	a.httpRegistered = true
 
-	defaultConfig := gofrHTTP.StaticFileConfig{
-		DirectoryListing: true,
-		HideDotFiles:     true,
-	}
-
 	// update file path based on current directory if it starts with ./
 	if strings.HasPrefix(filePath, "./") {
 		currentWorkingDir, _ := os.Getwd()
@@ -472,7 +467,5 @@ func (a *App) AddStaticFiles(endpoint, filePath string) {
 		return
 	}
 
-	defaultConfig.FileDirectory = filePath
-
-	a.httpServer.router.AddStaticFiles(endpoint, defaultConfig)
+	a.httpServer.router.AddStaticFiles(endpoint, filePath)
 }
