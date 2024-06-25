@@ -20,7 +20,6 @@ type Router struct {
 type StaticFileConfig struct {
 	DirectoryListing bool
 	HideDotFiles     bool
-	excludeFiles     []string
 	FileDirectory    string
 }
 
@@ -50,7 +49,6 @@ func (rou *Router) GetDefaultStaticFilesConfig() StaticFileConfig {
 	staticConfig := StaticFileConfig{
 		DirectoryListing: true,
 		HideDotFiles:     true,
-		excludeFiles:     []string{"openapi.json"},
 	}
 
 	return staticConfig
@@ -69,53 +67,34 @@ func (staticConfig StaticFileConfig) staticHandler(fileServer http.Handler) http
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		url := r.URL.Path
 
-		if staticConfig.DirectoryListing {
-			staticConfig.checkDirectoryListing(w, r, url)
+		if _, err := os.Stat(filepath.Join(staticConfig.FileDirectory, "index.html")); err != nil && strings.HasSuffix(url, "/") {
+			http.NotFound(w, r)
+
+			return
 		}
 
 		filePath := strings.Split(url, "/")
 
 		fileName := filePath[len(filePath)-1]
 
-		staticConfig.checkDotFiles(w, fileName, url)
-
-		if len(staticConfig.excludeFiles) > 0 {
-			staticConfig.checkExcludedFiles(w, fileName, url)
-		}
-
-		fileServer.ServeHTTP(w, r)
-	})
-}
-
-func (staticConfig StaticFileConfig) checkDirectoryListing(w http.ResponseWriter, r *http.Request, url string) {
-	if _, err := os.Stat(filepath.Join(staticConfig.FileDirectory, "index.html")); err != nil && strings.HasSuffix(url, "/") {
-		http.NotFound(w, r)
-		return
-	}
-}
-
-func (staticConfig StaticFileConfig) checkDotFiles(w http.ResponseWriter, fileName, url string) {
-	if _, err := os.Stat(filepath.Join(staticConfig.FileDirectory, url)); err == nil && strings.HasPrefix(fileName, ".") {
-		w.WriteHeader(http.StatusForbidden)
-
-		_, _ = w.Write([]byte(forbiddenBody))
-
-		return
-	}
-}
-
-func (staticConfig StaticFileConfig) checkExcludedFiles(w http.ResponseWriter, fileName, url string) {
-	_, err := os.Stat(filepath.Join(staticConfig.FileDirectory, url))
-
-	for _, file := range staticConfig.excludeFiles {
-		if file == fileName && err == nil {
+		if _, err := os.Stat(filepath.Join(staticConfig.FileDirectory, url)); err == nil && strings.HasPrefix(fileName, ".") {
 			w.WriteHeader(http.StatusForbidden)
 
 			_, _ = w.Write([]byte(forbiddenBody))
 
 			return
 		}
-	}
+
+		if _, err := os.Stat(filepath.Join(staticConfig.FileDirectory, url)); "openapi.json" == fileName && err == nil {
+			w.WriteHeader(http.StatusForbidden)
+
+			_, _ = w.Write([]byte(forbiddenBody))
+
+			return
+		}
+
+		fileServer.ServeHTTP(w, r)
+	})
 }
 
 // UseMiddleware registers middlewares to the router.

@@ -79,7 +79,7 @@ func TestSwaggerHandler(t *testing.T) {
 	}{
 		{"fetch index.html", "", "text/html"},
 		{"fetch favicon image", "favicon-16x16.png", "image/png"},
-		{"fetch js files", "swagger-ui.js", "text/javascript"},
+		{"fetch js files", "swagger-ui.js", "application/javascript"},
 	}
 
 	for _, tc := range tests {
@@ -98,7 +98,7 @@ func TestSwaggerHandler(t *testing.T) {
 		}
 
 		if strings.Split(fileResponse.ContentType, ";")[0] != tc.contentType {
-			t.Errorf("Expected content type 'application/json', got '%s'", fileResponse.ContentType)
+			t.Errorf("Expected content type '%s', got '%s'", tc.contentType, fileResponse.ContentType)
 		}
 	}
 }
