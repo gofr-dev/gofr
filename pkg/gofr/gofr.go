@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/rpc"
 	"os"
 	"strconv"
 	"strings"
@@ -37,6 +38,7 @@ type App struct {
 
 	grpcServer   *grpcServer
 	httpServer   *httpServer
+	rpcServer    *rpcServer
 	metricServer *metricServer
 
 	cmd  *cmd
@@ -47,6 +49,7 @@ type App struct {
 
 	grpcRegistered bool
 	httpRegistered bool
+	rpcRegistered  bool
 
 	subscriptionManager SubscriptionManager
 }
@@ -56,6 +59,12 @@ func (a *App) RegisterService(desc *grpc.ServiceDesc, impl interface{}) {
 	a.container.Logger.Infof("registering GRPC Server: %s", desc.ServiceName)
 	a.grpcServer.server.RegisterService(desc, impl)
 	a.grpcRegistered = true
+}
+
+func (a *App) RegisterRPCService(impl interface{}) {
+	a.container.Logger.Infof("registering RPC Server")
+	a.rpcServer.RegisterRPCService(impl)
+	a.rpcRegistered = true
 }
 
 // New creates an HTTP Server Application and returns that App.
@@ -89,6 +98,13 @@ func New() *App {
 	}
 
 	app.grpcServer = newGRPCServer(app.container, port)
+
+	port, err = strconv.Atoi(app.Config.Get("RPC_PORT"))
+	if err != nil || port <= 0 {
+		port = defaultGRPCPort
+	}
+
+	app.rpcServer = newRPCServer(port)
 
 	app.subscriptionManager = newSubscriptionManager(app.container)
 
@@ -174,6 +190,16 @@ func (a *App) Run() {
 			defer wg.Done()
 			s.Run(a.container)
 		}(a.grpcServer)
+	}
+
+	if a.rpcRegistered {
+		wg.Add(1)
+
+		go func(r *rpcServer) {
+			defer wg.Done()
+			r.Run(a.container)
+		}(a.rpcServer)
+
 	}
 
 	// If subscriber is registered, block main go routine to wait for subscriber to receive messages
@@ -438,4 +464,37 @@ func contains(elems []string, v string) bool {
 	}
 
 	return false
+}
+
+func (a *App) RegisterRPCClient(name string, address string) {
+	if a.container.RPCServices == nil {
+		a.container.RPCServices = make(map[string]interface{})
+	}
+
+	if _, ok := a.container.RPCServices[name]; ok {
+		a.container.Logger.Infof("RPC client already registered: %s", name)
+		return
+	}
+
+	client, err := rpc.Dial("tcp", address)
+	if err != nil {
+		a.container.Logger.Errorf("Error connecting to RPC server: %v", err)
+		return
+	}
+
+	a.container.RPCServices[name] = &rpcClient{client: client}
+	a.container.Logger.Infof("registered RPC client: %s", name)
+}
+
+func (a *App) GetRPCClient(name string) *rpcClient {
+	if a.container.RPCServices == nil {
+		return nil
+	}
+
+	client, ok := a.container.RPCServices[name].(*rpcClient)
+	if !ok {
+		return nil
+	}
+
+	return client
 }
