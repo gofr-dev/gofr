@@ -47,9 +47,14 @@ func TestHTTPService_HealthCheckCustomURL(t *testing.T) {
 }
 
 func TestHTTPService_HealthCheckErrorResponse(t *testing.T) {
-	service := NewHTTPService("http://test", logging.NewMockLogger(logging.INFO), nil)
-
+	ctrl := gomock.NewController(t)
+	metrics := NewMockMetrics(ctrl)
 	ctx := context.Background()
+
+	metrics.EXPECT().RecordHistogram(ctx, "app_http_service_response", gomock.Any(), "path", gomock.Any(),
+		"method", http.MethodGet, "status", fmt.Sprintf("%v", http.StatusInternalServerError))
+
+	service := NewHTTPService("http://test", logging.NewMockLogger(logging.INFO), metrics)
 
 	// when params value is of type []string then last value is sent in request
 	resp := service.HealthCheck(ctx)

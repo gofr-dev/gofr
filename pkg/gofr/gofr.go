@@ -389,16 +389,35 @@ func (a *App) EnableBasicAuth(credentials ...string) {
 	a.httpServer.router.Use(middleware.BasicAuthMiddleware(middleware.BasicAuthProvider{Users: users}))
 }
 
+// Deprecated: EnableBasicAuthWithFunc is deprecated and will be removed in future releases, users must use
+// EnableBasicAuthWithValidator as it has access to application datasources.
 func (a *App) EnableBasicAuthWithFunc(validateFunc func(username, password string) bool) {
-	a.httpServer.router.Use(middleware.BasicAuthMiddleware(middleware.BasicAuthProvider{ValidateFunc: validateFunc}))
+	a.httpServer.router.Use(middleware.BasicAuthMiddleware(middleware.BasicAuthProvider{ValidateFunc: validateFunc, Container: a.container}))
+}
+
+func (a *App) EnableBasicAuthWithValidator(validateFunc func(c *container.Container, username, password string) bool) {
+	a.httpServer.router.Use(middleware.BasicAuthMiddleware(middleware.BasicAuthProvider{
+		ValidateFuncWithDatasources: validateFunc, Container: a.container}))
 }
 
 func (a *App) EnableAPIKeyAuth(apiKeys ...string) {
-	a.httpServer.router.Use(middleware.APIKeyAuthMiddleware(nil, apiKeys...))
+	a.httpServer.router.Use(middleware.APIKeyAuthMiddleware(middleware.APIKeyAuthProvider{}, apiKeys...))
 }
 
-func (a *App) EnableAPIKeyAuthWithFunc(validator func(apiKey string) bool) {
-	a.httpServer.router.Use(middleware.APIKeyAuthMiddleware(validator))
+// Deprecated: EnableAPIKeyAuthWithFunc is deprecated and will be removed in future releases, users must use
+// EnableAPIKeyAuthWithValidator as it has access to application datasources.
+func (a *App) EnableAPIKeyAuthWithFunc(validateFunc func(apiKey string) bool) {
+	a.httpServer.router.Use(middleware.APIKeyAuthMiddleware(middleware.APIKeyAuthProvider{
+		ValidateFunc: validateFunc,
+		Container:    a.container,
+	}))
+}
+
+func (a *App) EnableAPIKeyAuthWithValidator(validateFunc func(c *container.Container, apiKey string) bool) {
+	a.httpServer.router.Use(middleware.APIKeyAuthMiddleware(middleware.APIKeyAuthProvider{
+		ValidateFuncWithDatasources: validateFunc,
+		Container:                   a.container,
+	}))
 }
 
 func (a *App) EnableOAuth(jwksEndpoint string, refreshInterval int) {
