@@ -454,9 +454,12 @@ func contains(elems []string, v string) bool {
 func (a *App) AddStaticFiles(endpoint, filePath string) {
 	a.httpRegistered = true
 
-	dupFilePath := filePath
+	defaultConfig := gofrHTTP.StaticFileConfig{
+		DirectoryListing: true,
+		HideDotFiles:     true,
+	}
 
-	defaultConfig := a.httpServer.router.GetDefaultStaticFilesConfig()
+	dupFilePath := filePath
 
 	if strings.HasPrefix(filePath, "./") {
 		dupFilePath, _ = os.Getwd()

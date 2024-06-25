@@ -45,15 +45,6 @@ func (rou *Router) Add(method, pattern string, handler http.Handler) {
 	rou.Router.NewRoute().Methods(method).Path(pattern).Handler(h)
 }
 
-func (rou *Router) GetDefaultStaticFilesConfig() StaticFileConfig {
-	staticConfig := StaticFileConfig{
-		DirectoryListing: true,
-		HideDotFiles:     true,
-	}
-
-	return staticConfig
-}
-
 // Static File Handling.
 func (rou *Router) AddStaticFiles(endpoint string, staticConfig StaticFileConfig) {
 	fileServer := http.FileServer(http.Dir(staticConfig.FileDirectory))
