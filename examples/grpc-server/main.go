@@ -14,6 +14,15 @@ func main() {
 
 	fmt.Println(parseInterface)
 
+	clientCode, serverCode, err := GenerateCode(parseInterface)
+	if err != nil {
+		return
+	}
+
+	fmt.Println(clientCode)
+
+	fmt.Print(serverCode)
+
 	app := gofr.New()
 
 	grpc.RegisterHelloServer(app, grpc.Server{})
