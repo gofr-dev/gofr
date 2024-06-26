@@ -562,14 +562,18 @@ func Test_AddCronJob_Success(t *testing.T) {
 	assert.Truef(t, pass, "unable to add cron job to cron table")
 }
 
-const indexHTML = "indexTest.html"
-
 func TestStaticHandler(t *testing.T) {
+	const indexHTML = "indexTest.html"
+
 	// Generating some files for testing
 	htmlContent := []byte("<html><head><title>Test Static File</title></head><body><p>Testing Static File</p></body></html>")
 
 	createPublicDirectory(t, defaultPublicStaticDir, htmlContent)
+	defer os.Remove("static/indexTest.html")
+
 	createPublicDirectory(t, "testdir", htmlContent)
+
+	defer os.RemoveAll("testdir")
 
 	app := New()
 
@@ -684,10 +688,11 @@ func TestStaticHandlerInvalidFilePath(t *testing.T) {
 
 func createPublicDirectory(t *testing.T, defaultPublicStaticDir string, htmlContent []byte) {
 	t.Helper()
+	const indexHTML = "indexTest.html"
 
 	directory := "./" + defaultPublicStaticDir
 	if _, err := os.Stat(directory); err != nil {
-		if err = os.Mkdir("./"+defaultPublicStaticDir, 0755); err != nil {
+		if err = os.Mkdir("./"+defaultPublicStaticDir, os.ModePerm); err != nil {
 			t.Fatalf("Couldn't create a "+defaultPublicStaticDir+" directory, error: %s", err)
 		}
 	}
@@ -704,11 +709,4 @@ func createPublicDirectory(t *testing.T, defaultPublicStaticDir string, htmlCont
 	}
 
 	file.Close()
-
-	t.Cleanup(func() {
-		err := os.Remove(filepath.Join(directory, indexHTML))
-		if err != nil {
-			t.Logf("Couldn't remove %s file", indexHTML)
-		}
-	})
 }

@@ -52,8 +52,8 @@ type staticFileConfig struct {
 	directoryName string
 }
 
-func (rou *Router) AddStaticFiles(endpoint, fileName string) {
-	cfg := staticFileConfig{directoryName: fileName}
+func (rou *Router) AddStaticFiles(endpoint, dirName string) {
+	cfg := staticFileConfig{directoryName: dirName}
 
 	fileServer := http.FileServer(http.Dir(cfg.directoryName))
 	rou.Router.NewRoute().PathPrefix(endpoint + "/").Handler(http.StripPrefix(endpoint, cfg.staticHandler(fileServer)))
@@ -62,12 +62,6 @@ func (rou *Router) AddStaticFiles(endpoint, fileName string) {
 func (staticConfig staticFileConfig) staticHandler(fileServer http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		url := r.URL.Path
-
-		if _, err := os.Stat(filepath.Join(staticConfig.directoryName, "index.html")); err != nil && strings.HasSuffix(url, "/") {
-			http.NotFound(w, r)
-
-			return
-		}
 
 		filePath := strings.Split(url, "/")
 
