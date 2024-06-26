@@ -4,7 +4,7 @@ Just like Redis GoFr also supports connection to SQL(MySQL and Postgres) databas
 
 ## Setup
 
-Users can run MySQL and create a database locally using the following docker command:
+Users can run MySQL and create a database locally using the following Docker command:
 
 ```bash
 docker run --name gofr-mysql -e MYSQL_ROOT_PASSWORD=root123 -e MYSQL_DATABASE=test_db -p 3306:3306 -d mysql:8.0.30

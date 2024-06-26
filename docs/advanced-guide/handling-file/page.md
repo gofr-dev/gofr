@@ -1,6 +1,6 @@
 # Handling File
 
-Gofr simplifies the complexity of working with different filestores by offering a uniform API. This allows developers to interact with different storage systems using the same set of methods, without needing to understand the underlying implementation details of each filestore.
+GoFr simplifies the complexity of working with different file stores by offering a uniform API. This allows developers to interact with different storage systems using the same set of methods, without needing to understand the underlying implementation details of each file store.
 
 ## USAGE
 
