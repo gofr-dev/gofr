@@ -79,8 +79,7 @@ func TestSwaggerHandler(t *testing.T) {
 	}{
 		{"fetch index.html", "", "text/html"},
 		{"fetch favicon image", "favicon-16x16.png", "image/png"},
-		{"fetch js files", "swagger-ui.js", "text" +
-			"/javascript"},
+		{"fetch js files", "swagger-ui.js", "text/javascript"},
 	}
 
 	for _, tc := range tests {
