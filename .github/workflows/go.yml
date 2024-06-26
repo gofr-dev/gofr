@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go-version: ['1.21', '1.20']
+        go-version: ['1.22', '1.21']
 
     services:
       kafka:
@@ -81,7 +81,7 @@ jobs:
           go tool cover -func profile.cov
 
       - name: Upload Test Coverage
-        if: ${{ matrix.go-version == '1.21'}}
+        if: ${{ matrix.go-version == '1.22'}}
         uses: actions/upload-artifact@v3
         with:
           name: Example-Test-Report
@@ -92,7 +92,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go-version: ['1.21', '1.20']
+        go-version: ['1.22', '1.21']
 
     steps:
       - name: Checkout code into go module directory
@@ -113,14 +113,12 @@ jobs:
       - name: Test
         run: |
           export APP_ENV=test
-          go test gofr.dev/pkg/... -tags migration -v -short -coverprofile package.cov -coverpkg=gofr.dev/pkg/...
-          grep -v 'gofr.dev/pkg/gofr/migration/mock_datasources.go' package.cov > packageWithoutMockMigrationDatasource.cov
-          grep -v 'gofr.dev/pkg/gofr/container/mock_datasources.go' packageWithoutMockMigrationDatasource.cov > packageWithoutMockDatasource.cov
-          grep -v 'google/mock_interfaces\.go' packageWithoutMockDatasource.cov > profile.cov
+          go test gofr.dev/pkg/... -v -short -coverprofile package.cov -coverpkg=gofr.dev/pkg/...
+          grep -v '/mock_' package.cov > profile.cov
           go tool cover -func profile.cov
 
       - name: Upload Test Coverage
-        if: ${{ matrix.go-version == '1.21'}}
+        if: ${{ matrix.go-version == '1.22'}}
         uses: actions/upload-artifact@v3
         with:
           name: PKG-Coverage-Report

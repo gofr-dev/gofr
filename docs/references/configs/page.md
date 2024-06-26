@@ -1,6 +1,6 @@
 # GoFr Configuration Options
 
-This document lists all the configuration options supported by the Gofr framework. The configurations are grouped by category for better organization.
+This document lists all the configuration options supported by the GoFr framework. The configurations are grouped by category for better organization.
 
 ## App
 
@@ -301,4 +301,3 @@ This document lists all the configuration options supported by the Gofr framewor
 -  Quality of Service Level
 
 {% /table %}
-
