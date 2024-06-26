@@ -63,9 +63,9 @@ The `hello-world` server involves three essential steps:
 
 1. **Creating GoFr Server:**
 
-   When `gofr.New()` is called, it initializes the framework and handles various setup tasks like initialising logger, metrics, datasources etc based on the configs.
+   When `gofr.New()` is called, it initializes the framework and handles various setup tasks like initializing logger, metrics, datasources, etc. based on the configs.
 
-   _This single line is a standard part of all gofr servers._
+   _This single line is a standard part of all GoFr servers._
 
 2. **Attaching a Handler to a Path:**
 

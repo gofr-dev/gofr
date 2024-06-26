@@ -115,7 +115,7 @@ func TestCron_parseSchedule_Error(t *testing.T) {
 		expErrString string
 	}{
 		{
-			desc:         "incorrect numnber of schedule parts: less",
+			desc:         "incorrect number of schedule parts: less",
 			schedules:    []string{"* * * * ", "* * * * * *"},
 			expErrString: "schedule string must have five components like * * * * *",
 		},
