@@ -16,6 +16,43 @@ import (
 	"gofr.dev/pkg/gofr/testutil"
 )
 
+func TestRemoteLogger_UpdateLevel(t *testing.T) {
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		body := `{"data":[{"serviceName":"test-service","logLevel":{"LOG_LEVEL":"DEBUG"}}]}`
+		_, _ = w.Write([]byte(body))
+	}))
+
+	rl := remoteLogger{
+		remoteURL:          mockServer.URL,
+		levelFetchInterval: 1,
+		currentLevel:       2,
+		Logger:             logging.NewMockLogger(logging.INFO),
+	}
+
+	go rl.UpdateLogLevel()
+
+	time.Sleep(2 * time.Second)
+
+	assert.Equal(t, logging.DEBUG, rl.currentLevel)
+}
+
+func TestRemoteLogger_UpdateLevelError(t *testing.T) {
+	rl := remoteLogger{
+		remoteURL:          "invalid url",
+		levelFetchInterval: 1,
+		currentLevel:       2,
+		Logger:             logging.NewMockLogger(logging.INFO),
+	}
+
+	go rl.UpdateLogLevel()
+
+	time.Sleep(2 * time.Second)
+
+	assert.Equal(t, logging.INFO, rl.currentLevel)
+}
+
 func Test_fetchAndUpdateLogLevel_ErrorCases(t *testing.T) {
 	logger := logging.NewMockLogger(logging.INFO)
 
@@ -76,13 +113,13 @@ func TestDynamicLoggerSuccess(t *testing.T) {
 
 	log := testutil.StdoutOutputForFunc(func() {
 		// Create a new remote logger with the mock server URL
-		remoteLogger := New(logging.INFO, mockServer.URL, "1")
+		rl := New(logging.INFO, mockServer.URL, "1")
 
 		// Wait for the remote logger to update the log level
 		time.Sleep(2 * time.Second)
 
 		// Check if the log level has been updated
-		remoteLogger.Debug("Debug log after log level change")
+		rl.Debug("Debug log after log level change")
 	})
 
 	if !strings.Contains(log, "LOG_LEVEL updated from INFO to DEBUG") {
