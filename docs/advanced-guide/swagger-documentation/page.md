@@ -23,7 +23,7 @@ GoFr will automatically render the Swagger documentation at the `/.well-known/sw
 Here are the steps:
 
 - Create an `openapi.json` file that describes your API according to the OpenAPI specification.
-- Place the `openapi.json` file inside the static directory in your project.
+- Place the `openapi.json` file inside the `static` directory in your project.
 - Start your GoFr server.
 - Navigate to `/.well-known/swagger` on your server’s URL.
 
