@@ -75,6 +75,7 @@ func TestRouter_AddStaticFiles(t *testing.T) {
 	_ = container.NewContainer(config.NewMockConfig(cfg))
 
 	createTestFileAndDirectory(t, "testDir")
+
 	defer os.RemoveAll("testDir")
 
 	time.Sleep(1 * time.Second)
@@ -104,11 +105,13 @@ func TestRouter_AddStaticFiles(t *testing.T) {
 
 func createTestFileAndDirectory(t *testing.T, dirName string) {
 	t.Helper()
+
 	htmlContent := []byte("<html><head><title>Test Static File</title></head><body><p>Testing Static File</p></body></html>")
 
 	const indexHTML = "indexTest.html"
 
 	directory := "./" + dirName
+
 	if err := os.Mkdir("./"+dirName, os.ModePerm); err != nil {
 		t.Fatalf("Couldn't create a "+dirName+" directory, error: %s", err)
 	}
@@ -131,5 +134,4 @@ func createTestFileAndDirectory(t *testing.T, dirName string) {
 	}
 
 	file.Close()
-
 }

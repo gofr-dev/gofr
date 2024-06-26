@@ -569,6 +569,7 @@ func TestStaticHandler(t *testing.T) {
 	htmlContent := []byte("<html><head><title>Test Static File</title></head><body><p>Testing Static File</p></body></html>")
 
 	createPublicDirectory(t, defaultPublicStaticDir, htmlContent)
+
 	defer os.Remove("static/indexTest.html")
 
 	createPublicDirectory(t, "testdir", htmlContent)
@@ -577,7 +578,7 @@ func TestStaticHandler(t *testing.T) {
 
 	app := New()
 
-	app.AddStaticFiles("gofr", "./testdir")
+	app.AddStaticFiles("gofrTest", "./testdir")
 
 	app.httpRegistered = true
 	app.httpServer.port = 8022
@@ -597,33 +598,21 @@ func TestStaticHandler(t *testing.T) {
 		expectedResponseHeaderType string
 	}{
 		{
-			desc:                       "check file content index.html",
-			method:                     http.MethodGet,
-			path:                       "/" + defaultPublicStaticDir + "/" + indexHTML,
-			statusCode:                 http.StatusOK,
-			expectedBodyLength:         len(htmlContent),
-			expectedResponseHeaderType: "text/html; charset=utf-8",
-			expectedBody:               string(htmlContent),
+			desc: "check file content index.html", method: http.MethodGet, path: "/" + defaultPublicStaticDir + "/" + indexHTML,
+			statusCode: http.StatusOK, expectedBodyLength: len(htmlContent),
+			expectedResponseHeaderType: "text/html; charset=utf-8", expectedBody: string(htmlContent),
 		},
 		{
-			desc:       "check public endpoint",
-			method:     http.MethodGet,
-			path:       "/" + defaultPublicStaticDir,
-			statusCode: http.StatusNotFound,
+			desc: "check public endpoint", method: http.MethodGet,
+			path: "/" + defaultPublicStaticDir, statusCode: http.StatusNotFound,
 		},
 		{
-			desc:                       "check file content index.html in custom dir",
-			method:                     http.MethodGet,
-			path:                       "/" + "gofr" + "/" + indexHTML,
-			statusCode:                 http.StatusOK,
-			expectedBodyLength:         len(htmlContent),
-			expectedResponseHeaderType: "text/html; charset=utf-8",
-			expectedBody:               string(htmlContent),
+			desc: "check file content index.html in custom dir", method: http.MethodGet, path: "/" + "gofrTest" + "/" + indexHTML,
+			statusCode: http.StatusOK, expectedBodyLength: len(htmlContent),
+			expectedResponseHeaderType: "text/html; charset=utf-8", expectedBody: string(htmlContent),
 		},
 		{
-			desc:       "check public endpoint in custom dir",
-			method:     http.MethodGet,
-			path:       "/" + "gofr",
+			desc: "check public endpoint in custom dir", method: http.MethodGet, path: "/" + "gofrTest",
 			statusCode: http.StatusNotFound,
 		},
 	}
@@ -678,16 +667,16 @@ func TestStaticHandlerInvalidFilePath(t *testing.T) {
 	logs := testutil.StderrOutputForFunc(func() {
 		app := New()
 
-		app.AddStaticFiles("gofr", ".//,.!@#$%^&")
+		app.AddStaticFiles("gofrTest", ".//,.!@#$%^&")
 	})
 
 	assert.Contains(t, logs, "no such file or directory")
-	assert.Contains(t, logs, "error in registering '/gofr' static endpoint")
-
+	assert.Contains(t, logs, "error in registering '/gofrTest' static endpoint")
 }
 
 func createPublicDirectory(t *testing.T, defaultPublicStaticDir string, htmlContent []byte) {
 	t.Helper()
+
 	const indexHTML = "indexTest.html"
 
 	directory := "./" + defaultPublicStaticDir
