@@ -568,9 +568,12 @@ func TestStaticHandler(t *testing.T) {
 	// Generating some files for testing
 	htmlContent := []byte("<html><head><title>Test Static File</title></head><body><p>Testing Static File</p></body></html>")
 
-	createPublicDirectory(t, htmlContent)
+	createPublicDirectory(t, defaultPublicStaticDir, htmlContent)
+	createPublicDirectory(t, "testdir", htmlContent)
 
 	app := New()
+
+	app.AddStaticFiles("gofr", "./testdir")
 
 	app.httpRegistered = true
 	app.httpServer.port = 8022
@@ -602,6 +605,21 @@ func TestStaticHandler(t *testing.T) {
 			desc:       "check public endpoint",
 			method:     http.MethodGet,
 			path:       "/" + defaultPublicStaticDir,
+			statusCode: http.StatusNotFound,
+		},
+		{
+			desc:                       "check file content index.html in custom dir",
+			method:                     http.MethodGet,
+			path:                       "/" + "gofr" + "/" + indexHTML,
+			statusCode:                 http.StatusOK,
+			expectedBodyLength:         len(htmlContent),
+			expectedResponseHeaderType: "text/html; charset=utf-8",
+			expectedBody:               string(htmlContent),
+		},
+		{
+			desc:       "check public endpoint in custom dir",
+			method:     http.MethodGet,
+			path:       "/" + "gofr",
 			statusCode: http.StatusNotFound,
 		},
 	}
@@ -651,7 +669,24 @@ func TestStaticHandler(t *testing.T) {
 	}
 }
 
-func createPublicDirectory(t *testing.T, htmlContent []byte) {
+func TestStaticHandlerInvalidFilePath(t *testing.T) {
+	// Generating some files for testing
+	htmlContent := []byte("<html><head><title>Test Static File</title></head><body><p>Testing Static File</p></body></html>")
+
+	createPublicDirectory(t, "!@#$%^&", htmlContent)
+
+	logs := testutil.StderrOutputForFunc(func() {
+		app := New()
+
+		app.AddStaticFiles("gofr", ".//,.!@#$%^&")
+	})
+
+	assert.Contains(t, logs, "no such file or directory")
+	assert.Contains(t, logs, "error in registering '/gofr' static endpoint")
+
+}
+
+func createPublicDirectory(t *testing.T, defaultPublicStaticDir string, htmlContent []byte) {
 	t.Helper()
 
 	directory := "./" + defaultPublicStaticDir
