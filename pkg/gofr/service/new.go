@@ -170,28 +170,30 @@ func (h *httpService) createAndSendRequest(ctx context.Context, method string, p
 
 	respTime := time.Since(requestStart)
 
-	if h.Metrics != nil && resp != nil {
-		h.RecordHistogram(ctx, "app_http_service_response", respTime.Seconds(), "path", h.url, "method", method,
-			"status", fmt.Sprintf("%v", resp.StatusCode))
-	}
-
 	log.ResponseTime = respTime.Milliseconds()
 
 	if err != nil {
 		log.ResponseCode = http.StatusInternalServerError
 		h.Log(&ErrorLog{Log: log, ErrorMessage: err.Error()})
 
-		h.RecordHistogram(ctx, "app_http_service_response", respTime.Seconds(), "path", h.url, "method", method,
-			"status", fmt.Sprintf("%v", http.StatusInternalServerError))
+		h.updateMetrics(ctx, method, respTime.Seconds(), http.StatusInternalServerError)
 
 		return resp, err
 	}
 
+	h.updateMetrics(ctx, method, respTime.Seconds(), resp.StatusCode)
 	log.ResponseCode = resp.StatusCode
 
 	h.Log(log)
 
 	return resp, nil
+}
+
+func (h *httpService) updateMetrics(ctx context.Context, method string, timeTaken float64, statusCode int) {
+	if h.Metrics != nil {
+		h.RecordHistogram(ctx, "app_http_service_response", timeTaken, "path", h.url, "method", method,
+			"status", fmt.Sprintf("%v", statusCode))
+	}
 }
 
 func encodeQueryParameters(req *http.Request, queryParams map[string]interface{}) {
