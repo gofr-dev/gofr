@@ -686,13 +686,13 @@ func createPublicDirectory(t *testing.T, defaultPublicStaticDir string, htmlCont
 		}
 	}
 
-	file, errFile := os.Create(filepath.Join(directory, indexHTML))
+	file, err := os.Create(filepath.Join(directory, indexHTML))
 
-	if errFile != nil {
+	if err != nil {
 		t.Fatalf("Couldn't create %s file", indexHTML)
 	}
 
-	_, err := file.Write(htmlContent)
+	_, err = file.Write(htmlContent)
 	if err != nil {
 		t.Fatalf("Couldn't write to %s file", indexHTML)
 	}
