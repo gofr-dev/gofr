@@ -671,10 +671,6 @@ func TestStaticHandler(t *testing.T) {
 
 func TestStaticHandlerInvalidFilePath(t *testing.T) {
 	// Generating some files for testing
-	htmlContent := []byte("<html><head><title>Test Static File</title></head><body><p>Testing Static File</p></body></html>")
-
-	createPublicDirectory(t, "!@#$%^&", htmlContent)
-
 	logs := testutil.StderrOutputForFunc(func() {
 		app := New()
 
