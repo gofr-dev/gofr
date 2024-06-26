@@ -14,8 +14,11 @@ import (
 )
 
 type Mocks struct {
-	Redis *MockRedis
-	SQL   *MockDB
+	Redis      *MockRedis
+	SQL        *MockDB
+	Clickhouse *MockClickhouse
+	Cassandra  *MockCassandra
+	Mongo      *MockMongo
 }
 
 func NewMockContainer(t *testing.T) (*Container, Mocks) {
@@ -30,7 +33,22 @@ func NewMockContainer(t *testing.T) (*Container, Mocks) {
 	redisMock := NewMockRedis(ctrl)
 	container.Redis = redisMock
 
-	mocks := Mocks{Redis: redisMock, SQL: sqlMock}
+	cassandraMock := NewMockCassandra(ctrl)
+	container.Cassandra = cassandraMock
+
+	clickhouseMock := NewMockClickhouse(ctrl)
+	container.Clickhouse = clickhouseMock
+
+	mongoMock := NewMockMongo(ctrl)
+	container.Mongo = mongoMock
+
+	mocks := Mocks{
+		Redis:      redisMock,
+		SQL:        sqlMock,
+		Clickhouse: clickhouseMock,
+		Cassandra:  cassandraMock,
+		Mongo:      mongoMock,
+	}
 
 	mockMetrics := NewMockMetrics(ctrl)
 	container.metricsManager = mockMetrics
