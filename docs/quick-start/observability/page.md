@@ -201,7 +201,7 @@ LOG_LEVEL=DEBUG
 Open {% new-tab-link title="zipkin" href="http://localhost:2005/zipkin/" /%} and search by TraceID (correlationID) to see the trace.
 {% figure src="/quick-start-trace.png" alt="Zipkin traces" /%}
 
-#### 2. [Jeager](https://www.jaegertracing.io/):
+#### 2. [Jaeger](https://www.jaegertracing.io/):
 
 To see the traces install jaeger image using the following docker command:
 
