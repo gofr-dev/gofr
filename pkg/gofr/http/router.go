@@ -69,7 +69,7 @@ func (staticConfig staticFileConfig) staticHandler(fileServer http.Handler) http
 
 		const defaultSwaggerFileName = "openapi.json"
 
-		if _, err := os.Stat(filepath.Join(staticConfig.directoryName, url)); fileName == defaultSwaggerFileName && err == nil {
+		if _, err := os.Stat(filepath.Clean(filepath.Join(staticConfig.directoryName, url))); fileName == defaultSwaggerFileName && err == nil {
 			w.WriteHeader(http.StatusForbidden)
 
 			_, _ = w.Write([]byte("403 forbidden"))
