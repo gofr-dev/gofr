@@ -201,6 +201,7 @@ func TestMQTT_SubscribeSuccess(t *testing.T) {
 	_ = m.Publish(ctx, "test/topic", []byte("hello world"))
 
 	wg.Wait()
+	m.Disconnect(1)
 }
 
 func TestMQTT_SubscribeFailure(t *testing.T) {
@@ -211,10 +212,6 @@ func TestMQTT_SubscribeFailure(t *testing.T) {
 	ctx := context.TODO()
 	mockMetrics := NewMockMetrics(ctrl)
 	mockLogger := logging.NewMockLogger(logging.ERROR)
-
-	// expect the subcscibers metric calls
-	mockMetrics.EXPECT().
-		IncrementCounter(gomock.Any(), "app_pubsub_subscribe_total_count", "topic", "test/topic")
 
 	m := New(&Config{QoS: 0}, mockLogger, mockMetrics)
 

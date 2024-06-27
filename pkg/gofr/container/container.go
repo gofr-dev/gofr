@@ -3,6 +3,7 @@ package container
 import (
 	"strconv"
 	"strings"
+	"time"
 
 	_ "github.com/go-sql-driver/mysql" // This is required to be blank import
 	"gofr.dev/pkg/gofr/config"
@@ -117,6 +118,8 @@ func (c *Container) Create(conf config.Config) {
 
 		port, _ := strconv.Atoi(conf.Get("MQTT_PORT"))
 		order, _ := strconv.ParseBool(conf.GetOrDefault("MQTT_MESSAGE_ORDER", "false"))
+		maxReconnectInterval, _ := time.ParseDuration(conf.GetOrDefault("MQTT_MAX_RECONNECT_INTERVAL", "10m"))
+		keepAlive, _ := time.ParseDuration(conf.GetOrDefault("MQTT_KEEP_ALIVE", "30s"))
 
 		switch conf.Get("MQTT_QOS") {
 		case "1":
@@ -128,14 +131,16 @@ func (c *Container) Create(conf config.Config) {
 		}
 
 		configs := &mqtt.Config{
-			Protocol: conf.GetOrDefault("MQTT_PROTOCOL", "tcp"), // using tcp as default method to connect to broker
-			Hostname: conf.Get("MQTT_HOST"),
-			Port:     port,
-			Username: conf.Get("MQTT_USER"),
-			Password: conf.Get("MQTT_PASSWORD"),
-			ClientID: conf.Get("MQTT_CLIENT_ID_SUFFIX"),
-			QoS:      qos,
-			Order:    order,
+			Protocol:             conf.GetOrDefault("MQTT_PROTOCOL", "tcp"), // using tcp as default method to connect to broker
+			Hostname:             conf.Get("MQTT_HOST"),
+			Port:                 port,
+			Username:             conf.Get("MQTT_USER"),
+			Password:             conf.Get("MQTT_PASSWORD"),
+			ClientID:             conf.Get("MQTT_CLIENT_ID_SUFFIX"),
+			QoS:                  qos,
+			Order:                order,
+			MaxReconnectInterval: maxReconnectInterval,
+			KeepAlive:            keepAlive,
 		}
 
 		c.PubSub = mqtt.New(configs, c.Logger, c.metricsManager)
