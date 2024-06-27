@@ -1,6 +1,7 @@
 package container
 
 import (
+	"slices"
 	"strconv"
 	"strings"
 
@@ -68,7 +69,11 @@ func (c *Container) Create(conf config.Config) {
 		c.appVersion = conf.GetOrDefault("APP_VERSION", "dev")
 	}
 
-	c.createLogger(conf)
+	if c.Logger == nil {
+		c.createLogger(conf)
+	}
+
+	c.Debug("Container is being created")
 
 	c.metricsManager = metrics.NewMetricsManager(exporters.Prometheus(c.GetAppName(), c.GetAppVersion()), c.Logger)
 
@@ -140,28 +145,16 @@ func (c *Container) Create(conf config.Config) {
 }
 
 func (c *Container) createLogger(conf config.Config) {
-	if c.Logger == nil {
-		c.Logger = remotelogger.New(logging.GetLevelFromString(conf.Get("LOG_LEVEL")), conf.Get("REMOTE_LOG_URL"),
-			conf.GetOrDefault("REMOTE_LOG_FETCH_INTERVAL", "15"))
+	c.Logger = remotelogger.New(logging.GetLevelFromString(conf.Get("LOG_LEVEL")), conf.Get("REMOTE_LOG_URL"),
+		conf.GetOrDefault("REMOTE_LOG_FETCH_INTERVAL", "15"))
 
-		maskingFields := conf.Get("LOGGER_MASKING_FIELDS")
-		if maskingFields != "" {
-			fields := strings.Split(maskingFields, ",")
+	maskingFields := strings.Split(conf.Get("LOGGER_MASKING_FIELDS"), ",")
 
-			var filteredFields []string
+	maskingFields = slices.DeleteFunc(maskingFields, func(s string) bool {
+		return strings.TrimSpace(s) == ""
+	})
 
-			for _, field := range fields {
-				field = strings.TrimSpace(field)
-				if field != "" {
-					filteredFields = append(filteredFields, field)
-				}
-			}
-
-			c.Logger.SetMaskingFilters(filteredFields)
-		}
-	}
-
-	c.Debug("Container is being created")
+	c.Logger.SetMaskingFilters(maskingFields)
 }
 
 // GetHTTPService returns registered HTTP services.

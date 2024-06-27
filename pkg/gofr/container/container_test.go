@@ -152,49 +152,26 @@ func TestContainer_newContainerWithNilConfig(t *testing.T) {
 }
 
 func TestLoggerMasking(t *testing.T) {
-	testCases := []struct {
-		name           string
-		maskingFields  string
+	tests := []struct {
+		desc           string
+		maskedFields   string
 		expectedFields []string
 	}{
-		{
-			name:           "Masking enabled with multiple fields",
-			maskingFields:  "password,email,creditCard",
-			expectedFields: []string{"password", "email", "creditCard"},
-		},
-		{
-			name:           "Masking enabled with single field",
-			maskingFields:  "password",
-			expectedFields: []string{"password"},
-		},
-		{
-			name:           "Masking disabled",
-			maskingFields:  "",
-			expectedFields: []string{},
-		},
-		{
-			name:           "Masking enabled with empty fields",
-			maskingFields:  "password,,email,  ,creditCard",
-			expectedFields: []string{"password", "email", "creditCard"},
-		},
+		{"masking enabled with multiple fields", "password,email,creditCard", []string{"password", "email", "creditCard"}},
+		{"masking enabled with single field", "password", []string{"password"}},
+		{"masking disabled", "", []string{}},
+		{"masking enabled with empty fields", "password,,email,  ,creditCard", []string{"password", "email", "creditCard"}},
 	}
 
-	for i, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			mockConfig := config.NewMockConfig(map[string]string{
-				"LOGGER_MASKING_FIELDS": tc.maskingFields,
-				"LOG_LEVEL":             "INFO",
-			})
-
-			c := NewContainer(mockConfig)
-			logger := c.Logger
-			actualFields := logger.GetMaskingFilters()
-
-			assert.Equal(t, len(tc.expectedFields), len(actualFields), "TEST[%d], Failed.\n%s", i, tc.name)
-
-			for i := range actualFields {
-				assert.Equal(t, tc.expectedFields[i], actualFields[i], "TEST[%d], Failed.\n%s", i, tc.name)
-			}
+	for i, tc := range tests {
+		mockConfig := config.NewMockConfig(map[string]string{
+			"LOGGER_MASKING_FIELDS": tc.maskedFields,
 		})
+
+		c := NewContainer(mockConfig)
+		logger := c.Logger
+		actualFields := logger.GetMaskingFilters()
+
+		assert.Equal(t, tc.expectedFields, actualFields, "TEST[%d], Failed.\n%s", i, tc.desc)
 	}
 }
