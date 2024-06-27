@@ -63,7 +63,7 @@ func (a *App) RegisterService(desc *grpc.ServiceDesc, impl interface{}) {
 
 func (a *App) RegisterRPCService(impl interface{}) {
 	a.container.Logger.Infof("registering RPC Server")
-	a.rpcServer.RegisterRPCService(impl)
+	a.rpcServer.server.Register(impl)
 	a.rpcRegistered = true
 }
 
