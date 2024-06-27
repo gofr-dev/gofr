@@ -1,7 +1,7 @@
 # Using File Bind Example
 
 This GoFr example demonstrates the use of context Bind where incoming request has multipart-form data and then binds
-it to the fields of the struct. GoFr currently supports zip file type and also binds the more generic multipart.FileHeader
+it to the fields of the struct. GoFr currently supports zip file type and also binds the more generic [`multipart.FileHeader`](https://pkg.go.dev/mime/multipart#FileHeader)
 
 ### Usage
 ```go

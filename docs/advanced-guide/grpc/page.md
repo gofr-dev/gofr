@@ -120,4 +120,4 @@ func main() {
 	app.Run()
 }
 ```
->Note: By default, grpc server will run on port 9000, to customize the port users can set GRPC_PORT config in the .env
+>Note: By default, gRPC server will run on port 9000, to customize the port users can set `GRPC_PORT` config in the .env
