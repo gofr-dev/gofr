@@ -37,7 +37,7 @@ func TestNewSQL_ErrorCase(t *testing.T) {
 	})
 
 	if !strings.Contains(testLogs, expectedLog) {
-		t.Errorf("TestNewSQL_ErrorCase Failed! Expcted error log doesn't match actual.")
+		t.Errorf("TestNewSQL_ErrorCase Failed! Expected error log doesn't match actual.")
 	}
 }
 
@@ -57,7 +57,7 @@ func TestNewSQL_InvalidDialect(t *testing.T) {
 	})
 
 	if !strings.Contains(testLogs, errUnsupportedDialect.Error()) {
-		t.Errorf("TestNewSQL_ErrorCase Failed! Expcted error log doesn't match actual.")
+		t.Errorf("TestNewSQL_ErrorCase Failed! Expected error log doesn't match actual.")
 	}
 }
 
