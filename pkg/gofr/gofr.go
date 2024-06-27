@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -29,6 +30,8 @@ import (
 	"gofr.dev/pkg/gofr/migration"
 	"gofr.dev/pkg/gofr/service"
 )
+
+const defaultPublicStaticDir = "static"
 
 // App is the main application in the GoFr framework.
 type App struct {
@@ -91,6 +94,14 @@ func New() *App {
 	app.grpcServer = newGRPCServer(app.container, port)
 
 	app.subscriptionManager = newSubscriptionManager(app.container)
+
+	// static fileserver
+	currentWd, _ := os.Getwd()
+	checkDirectory := filepath.Join(currentWd, defaultPublicStaticDir)
+
+	if _, err = os.Stat(checkDirectory); err == nil {
+		app.AddStaticFiles(defaultPublicStaticDir, checkDirectory)
+	}
 
 	return app
 }
@@ -347,16 +358,35 @@ func (a *App) EnableBasicAuth(credentials ...string) {
 	a.httpServer.router.Use(middleware.BasicAuthMiddleware(middleware.BasicAuthProvider{Users: users}))
 }
 
+// Deprecated: EnableBasicAuthWithFunc is deprecated and will be removed in future releases, users must use
+// EnableBasicAuthWithValidator as it has access to application datasources.
 func (a *App) EnableBasicAuthWithFunc(validateFunc func(username, password string) bool) {
-	a.httpServer.router.Use(middleware.BasicAuthMiddleware(middleware.BasicAuthProvider{ValidateFunc: validateFunc}))
+	a.httpServer.router.Use(middleware.BasicAuthMiddleware(middleware.BasicAuthProvider{ValidateFunc: validateFunc, Container: a.container}))
+}
+
+func (a *App) EnableBasicAuthWithValidator(validateFunc func(c *container.Container, username, password string) bool) {
+	a.httpServer.router.Use(middleware.BasicAuthMiddleware(middleware.BasicAuthProvider{
+		ValidateFuncWithDatasources: validateFunc, Container: a.container}))
 }
 
 func (a *App) EnableAPIKeyAuth(apiKeys ...string) {
-	a.httpServer.router.Use(middleware.APIKeyAuthMiddleware(nil, apiKeys...))
+	a.httpServer.router.Use(middleware.APIKeyAuthMiddleware(middleware.APIKeyAuthProvider{}, apiKeys...))
 }
 
-func (a *App) EnableAPIKeyAuthWithFunc(validator func(apiKey string) bool) {
-	a.httpServer.router.Use(middleware.APIKeyAuthMiddleware(validator))
+// Deprecated: EnableAPIKeyAuthWithFunc is deprecated and will be removed in future releases, users must use
+// EnableAPIKeyAuthWithValidator as it has access to application datasources.
+func (a *App) EnableAPIKeyAuthWithFunc(validateFunc func(apiKey string) bool) {
+	a.httpServer.router.Use(middleware.APIKeyAuthMiddleware(middleware.APIKeyAuthProvider{
+		ValidateFunc: validateFunc,
+		Container:    a.container,
+	}))
+}
+
+func (a *App) EnableAPIKeyAuthWithValidator(validateFunc func(c *container.Container, apiKey string) bool) {
+	a.httpServer.router.Use(middleware.APIKeyAuthMiddleware(middleware.APIKeyAuthProvider{
+		ValidateFuncWithDatasources: validateFunc,
+		Container:                   a.container,
+	}))
 }
 
 func (a *App) EnableOAuth(jwksEndpoint string, refreshInterval int) {
@@ -419,4 +449,23 @@ func contains(elems []string, v string) bool {
 	}
 
 	return false
+}
+
+func (a *App) AddStaticFiles(endpoint, filePath string) {
+	a.httpRegistered = true
+
+	// update file path based on current directory if it starts with ./
+	if strings.HasPrefix(filePath, "./") {
+		currentWorkingDir, _ := os.Getwd()
+		filePath = filepath.Join(currentWorkingDir, filePath)
+	}
+
+	endpoint = "/" + strings.TrimPrefix(endpoint, "/")
+
+	if _, err := os.Stat(filePath); err != nil {
+		a.container.Logger.Errorf("error in registering '%s' static endpoint, error: %v", endpoint, err)
+		return
+	}
+
+	a.httpServer.router.AddStaticFiles(endpoint, filePath)
 }

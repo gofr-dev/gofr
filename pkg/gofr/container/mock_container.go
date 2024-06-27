@@ -2,6 +2,8 @@ package container
 
 import (
 	"context"
+	"fmt"
+	"net/http"
 	"testing"
 
 	"go.uber.org/mock/gomock"
@@ -12,21 +14,47 @@ import (
 )
 
 type Mocks struct {
-	Redis *MockRedis
-	SQL   *MockDB
+	Redis      *MockRedis
+	SQL        *MockDB
+	Clickhouse *MockClickhouse
+	Cassandra  *MockCassandra
+	Mongo      *MockMongo
 }
 
 func NewMockContainer(t *testing.T) (*Container, Mocks) {
 	container := &Container{}
 	container.Logger = logging.NewLogger(logging.DEBUG)
 
-	sqlMock := NewMockDB(gomock.NewController(t))
+	ctrl := gomock.NewController(t)
+
+	sqlMock := NewMockDB(ctrl)
 	container.SQL = sqlMock
 
-	redisMock := NewMockRedis(gomock.NewController(t))
+	redisMock := NewMockRedis(ctrl)
 	container.Redis = redisMock
 
-	mocks := Mocks{Redis: redisMock, SQL: sqlMock}
+	cassandraMock := NewMockCassandra(ctrl)
+	container.Cassandra = cassandraMock
+
+	clickhouseMock := NewMockClickhouse(ctrl)
+	container.Clickhouse = clickhouseMock
+
+	mongoMock := NewMockMongo(ctrl)
+	container.Mongo = mongoMock
+
+	mocks := Mocks{
+		Redis:      redisMock,
+		SQL:        sqlMock,
+		Clickhouse: clickhouseMock,
+		Cassandra:  cassandraMock,
+		Mongo:      mongoMock,
+	}
+
+	mockMetrics := NewMockMetrics(ctrl)
+	container.metricsManager = mockMetrics
+
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_http_service_response", gomock.Any(), "path", gomock.Any(),
+		"method", gomock.Any(), "status", fmt.Sprintf("%v", http.StatusInternalServerError)).AnyTimes()
 
 	return container, mocks
 }

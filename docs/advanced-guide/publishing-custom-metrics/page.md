@@ -5,10 +5,10 @@ GoFr publishes some {% new-tab-link newtab=false title="default metrics" href="/
 GoFr can handle multiple different metrics concurrently, each uniquely identified by its name during initialization.
 It supports the following {% new-tab-link title="metrics" href="https://opentelemetry.io/docs/specs/otel/metrics/" /%} types in Prometheus format:
 
-1. Counter
-2. UpDownCounter
-3. Histogram
-4. Gauge
+1. `Counter`
+2. `UpDownCounter`
+3. `Histogram`
+4. `Gauge`
 
 If any custom metric is required, it can be created by using custom metrics as shown below:
 
@@ -45,7 +45,7 @@ func main() {
 
 ## 2. UpDown Counter Metrics
 
-UpDownCounter is a {% new-tab-link title="synchronous Instrument" href="https://opentelemetry.io/docs/specs/otel/metrics/api/#synchronous-instrument-api" /%} which supports increments and decrements.
+`UpDownCounter` is a {% new-tab-link title="synchronous Instrument" href="https://opentelemetry.io/docs/specs/otel/metrics/api/#synchronous-instrument-api" /%} which supports increments and decrements.
 Note: If the value is monotonically increasing, use Counter instead.
 
 ### Usage
