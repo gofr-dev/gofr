@@ -95,7 +95,7 @@ func main() {
 }
 ```
 
-In this example, we define a user struct representing a database entity. The GetAll method in the provided code demonstrates how to override the default behavior for retrieving all entities.
+In this example, we define a user struct representing a database entity. The `GetAll` method in the provided code demonstrates how to override the default behavior for retrieving all entities.
 This method can be used to implement custom logic for filtering, sorting, or retrieving additional data along with the entities.
 
 
