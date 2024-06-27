@@ -95,7 +95,7 @@ func fetchAndUpdateLogLevel(remoteService service.HTTP, currentLevel logging.Lev
 		return currentLevel, err
 	}
 
-	if len(response.ServiceName) > 0 {
+	if response.ServiceName != "" {
 		newLevel := logging.GetLevelFromString(response.Level)
 		return newLevel, nil
 	}
