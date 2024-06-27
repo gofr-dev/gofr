@@ -154,6 +154,16 @@ type Mongo interface {
 	// Drop an entire collection from the database.
 	// It returns an error if any.
 	Drop(ctx context.Context, collection string) error
+
+	// StartSession starts a session and provide methods to run commands in a transaction.
+	StartSession() (Transaction, error)
+}
+
+type Transaction interface {
+	StartTransaction() error
+	AbortTransaction(context.Context) error
+	CommitTransaction(context.Context) error
+	EndSession(context.Context)
 }
 
 // MongoProvider is an interface that extends Mongo with additional methods for logging, metrics, and connection management.

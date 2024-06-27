@@ -402,6 +402,53 @@ func Test_Drop(t *testing.T) {
 	})
 }
 
+func TestClient_StartSession(t *testing.T) {
+	// Create a connected client using the mock database
+	mt := mtest.New(t, mtest.NewOptions().ClientType(mtest.Mock))
+
+	metrics := NewMockMetrics(gomock.NewController(t))
+
+	cl := Client{metrics: metrics}
+
+	// Set up the mock expectation for the metrics recording
+	metrics.EXPECT().RecordHistogram(gomock.Any(), "app_mongo_stats", gomock.Any(), "hostname",
+		gomock.Any(), "database", gomock.Any(), "type", gomock.Any()).AnyTimes()
+
+	cl.logger = NewMockLogger(DEBUG)
+
+	mt.Run("StartSessionCommitTransactionSuccess", func(mt *mtest.T) {
+		cl.Database = mt.DB
+
+		// Add mock responses if necessary
+		mt.AddMockResponses(mtest.CreateSuccessResponse())
+
+		// Call the StartSession method
+		sess, err := cl.StartSession()
+		err = sess.StartTransaction()
+
+		assert.Nil(t, err)
+
+		cl.Database = mt.DB
+		mt.AddMockResponses(mtest.CreateSuccessResponse())
+
+		doc := map[string]interface{}{"name": "Aryan"}
+
+		resp, err := cl.InsertOne(context.Background(), mt.Coll.Name(), doc)
+
+		assert.NotNil(t, resp)
+		assert.Nil(t, err)
+
+		err = sess.CommitTransaction(context.Background())
+
+		assert.Nil(t, err)
+
+		sess.EndSession(context.Background())
+
+		// Assert that there was no error
+		assert.Nil(t, err)
+	})
+}
+
 func Test_HealthCheck(t *testing.T) {
 	// Create a connected client using the mock database
 	mt := mtest.New(t, mtest.NewOptions().ClientType(mtest.Mock))

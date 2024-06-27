@@ -226,3 +226,27 @@ func (c *Client) HealthCheck() interface{} {
 
 	return &h
 }
+
+func (c *Client) StartSession() (Transaction, error) {
+	defer c.postProcess(&QueryLog{Query: "startSession"}, time.Now())
+
+	s, err := c.Client().StartSession()
+	ses := &session{s}
+
+	return ses, err
+}
+
+type Transaction interface {
+	StartTransaction() error
+	AbortTransaction(context.Context) error
+	CommitTransaction(context.Context) error
+	EndSession(context.Context)
+}
+
+type session struct {
+	mongo.Session
+}
+
+func (s *session) StartTransaction() error {
+	return s.Session.StartTransaction()
+}
