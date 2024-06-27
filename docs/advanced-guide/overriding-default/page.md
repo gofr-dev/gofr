@@ -4,7 +4,7 @@ GoFr allows overriding default behavior of its features.
 
 ## Raw response format
 
-GoFr by default wraps a handler's return value and assigns it to the "data" field in a response.
+GoFr by default wraps a handler's return value and assigns it to the `data` field in a response.
 
 ### Example
 

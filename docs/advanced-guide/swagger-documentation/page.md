@@ -8,7 +8,7 @@ easily provide interactive API documentation for your users.
 OpenAPI, also known as Swagger, is a specification for building APIs. An OpenAPI file allows you to describe your entire API, including:
 
 - Available endpoints (/users) and operations on each endpoint (GET /users, DELETE /users/{id})
-- Operation parameters, input and output for each operation
+- Operation parameters, input, and output for each operation
 - Authentication methods
 - Contact information, license, terms of use, and other information.
 
@@ -17,7 +17,7 @@ The complete OpenAPI Specification can be found on the official [Swagger website
 
 ## Enabling GoFr to render your openapi.json file
 
-To allow GoFr to render your openapi documentation,simply place your `openapi.json` file inside the `static` directory of your project. 
+To allow GoFr to render your OpenAPI documentation, simply place your `openapi.json` file inside the `static` directory of your project.
 GoFr will automatically render the Swagger documentation at the `/.well-known/swagger` endpoint.
 
 Here are the steps:

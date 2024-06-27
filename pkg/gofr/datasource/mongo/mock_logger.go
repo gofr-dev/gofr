@@ -37,8 +37,8 @@ func (m *MockLogger) Logf(pattern string, args ...interface{}) {
 	m.logf(INFO, pattern, args...)
 }
 
-func (m *MockLogger) Errorf(patter string, args ...interface{}) {
-	m.logf(ERROR, patter, args...)
+func (m *MockLogger) Errorf(pattern string, args ...interface{}) {
+	m.logf(ERROR, pattern, args...)
 }
 
 func (m *MockLogger) logf(level Level, format string, args ...interface{}) {

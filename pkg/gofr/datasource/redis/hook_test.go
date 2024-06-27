@@ -14,7 +14,7 @@ func TestQueryLog_PrettyPrint(t *testing.T) {
 		expOut []string
 	}{
 		{
-			desc: "pipleine",
+			desc: "pipeline",
 			ql: &QueryLog{
 				Query:    "pipeline",
 				Duration: 112,

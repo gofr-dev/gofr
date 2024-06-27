@@ -27,7 +27,7 @@ Metrics play a pivotal role in fault detection and troubleshooting, offering vis
 
 They are instrumental in measuring and meeting service-level agreements (SLAs) to ensure expected performance and reliability.
 
-GoFr publishes metrics to port: _2121_ on _/metrics_ endpoint in prometheus format.
+GoFr publishes metrics to port: _2121_ on _/metrics_ endpoint in Prometheus format.
 
 {% table %}
 
@@ -139,7 +139,7 @@ GoFr also supports creating {% new-tab-link newtab=false title="custom metrics" 
 
 ## Tracing
 
-{% new-tab-link title="Tracing" href="https://opentelemetry.io/docs/concepts/signals/#traces" /%} is a powerful tool for gaining insights into your application's behaviour, identifying bottlenecks, and improving
+{% new-tab-link title="Tracing" href="https://opentelemetry.io/docs/concepts/signals/#traces" /%} is a powerful tool for gaining insights into your application's behavior, identifying bottlenecks, and improving
 system performance. A trace is a tree of spans. It is a collective of observable signals showing the path of work
 through a system. A trace on its own is distinguishable by a `TraceID`.
 
