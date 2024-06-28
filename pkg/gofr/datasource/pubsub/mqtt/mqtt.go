@@ -35,25 +35,24 @@ type MQTT struct {
 	metrics Metrics
 
 	config        *Config
-	subscriptions map[string]subsctiption
+	subscriptions map[string]subscription
 	mu            *sync.RWMutex
 }
 
 type Config struct {
-	Protocol             string
-	Hostname             string
-	Port                 int
-	Username             string
-	Password             string
-	ClientID             string
-	QoS                  byte
-	Order                bool
-	RetrieveRetained     bool
-	MaxReconnectInterval time.Duration
-	KeepAlive            time.Duration
+	Protocol         string
+	Hostname         string
+	Port             int
+	Username         string
+	Password         string
+	ClientID         string
+	QoS              byte
+	Order            bool
+	RetrieveRetained bool
+	KeepAlive        time.Duration
 }
 
-type subsctiption struct {
+type subscription struct {
 	msgs    chan *pubsub.Message
 	handler func(_ mqtt.Client, msg mqtt.Message)
 }
@@ -66,14 +65,14 @@ func New(config *Config, logger Logger, metrics Metrics) *MQTT {
 	}
 
 	options := getMQTTClientOptions(config)
-	msg := make(map[string]subsctiption)
+	subs := make(map[string]subscription)
 	mu := new(sync.RWMutex)
 
 	logger.Debugf("connecting to MQTT at '%v:%v' with clientID '%v'", config.Hostname, config.Port, config.ClientID)
 
 	options.SetOnConnectHandler(func(c mqtt.Client) {
 		mu.RLock()
-		for k, v := range msg {
+		for k, v := range subs {
 			c.Subscribe(k, config.QoS, v.handler)
 		}
 		mu.RUnlock()
@@ -95,7 +94,7 @@ func New(config *Config, logger Logger, metrics Metrics) *MQTT {
 
 	logger.Infof("connected to MQTT at '%v:%v' with clientID '%v'", config.Hostname, config.Port, options.ClientID)
 
-	return &MQTT{Client: client, config: config, logger: logger, subscriptions: msg, mu: mu, metrics: metrics}
+	return &MQTT{Client: client, config: config, logger: logger, subscriptions: subs, mu: mu, metrics: metrics}
 }
 
 func getDefaultClient(config *Config, logger Logger, metrics Metrics) *MQTT {
@@ -109,7 +108,6 @@ func getDefaultClient(config *Config, logger Logger, metrics Metrics) *MQTT {
 	opts.AddBroker(fmt.Sprintf("tcp://%s:%d", host, port))
 	opts.SetClientID(clientID)
 	opts.SetAutoReconnect(true)
-	opts.SetMaxReconnectInterval(config.MaxReconnectInterval)
 	opts.SetKeepAlive(config.KeepAlive)
 	client := mqtt.NewClient(opts)
 
@@ -123,7 +121,7 @@ func getDefaultClient(config *Config, logger Logger, metrics Metrics) *MQTT {
 	config.Port = port
 	config.ClientID = clientID
 
-	msg := make(map[string]subsctiption)
+	msg := make(map[string]subscription)
 
 	logger.Infof("connected to MQTT at '%v:%v' with clientID '%v'", config.Hostname, config.Port, clientID)
 
@@ -148,7 +146,6 @@ func getMQTTClientOptions(config *Config) *mqtt.ClientOptions {
 	options.SetOrderMatters(config.Order)
 	options.SetResumeSubs(config.RetrieveRetained)
 	options.SetAutoReconnect(true)
-	options.SetMaxReconnectInterval(config.MaxReconnectInterval)
 	options.SetKeepAlive(config.KeepAlive)
 
 	return options

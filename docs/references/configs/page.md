@@ -302,10 +302,6 @@ This document lists all the configuration options supported by the GoFr framewor
 
 ---
 
--  MQTT_MAX_RECONNECT_INTERVAL
--  If the reason of connection lost is same as the before one, sleep timer is set before attempting connection is started. Sleep time is exponentially increased as the same situation continues until it reaches this value
-
----
 -  MQTT_KEEP_ALIVE
 -  Sends regular messages to check the link is active. May not work as expected if handling func is blocking execution
 
