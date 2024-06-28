@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"slices"
 	"strconv"
 	"time"
 
@@ -81,9 +82,9 @@ func fetchAndUpdateLogLevel(remoteService service.HTTP, currentLevel logging.Lev
 	defer resp.Body.Close()
 
 	var response struct {
-		Data []struct {
-			ServiceName string            `json:"serviceName"`
-			Level       map[string]string `json:"logLevel"`
+		Data struct {
+			ServiceName string `json:"serviceName"`
+			Level       string `json:"logLevel"`
 		} `json:"data"`
 	}
 
@@ -97,8 +98,10 @@ func fetchAndUpdateLogLevel(remoteService service.HTTP, currentLevel logging.Lev
 		return currentLevel, err
 	}
 
-	if len(response.Data) > 0 {
-		newLevel := logging.GetLevelFromString(response.Data[0].Level["LOG_LEVEL"])
+	logLevels := []string{"DEBUG", "INFO", "NOTICE", "WARN", "ERROR", "FATAL"}
+
+	if slices.Contains(logLevels, response.Data.Level) && response.Data.ServiceName != "" {
+		newLevel := logging.GetLevelFromString(response.Data.Level)
 		return newLevel, nil
 	}
 
