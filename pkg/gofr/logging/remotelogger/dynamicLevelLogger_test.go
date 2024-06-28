@@ -1,7 +1,6 @@
 package remotelogger
 
 import (
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -9,8 +8,6 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"go.uber.org/mock/gomock"
-
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/service"
 	"gofr.dev/pkg/gofr/testutil"
@@ -20,7 +17,7 @@ func TestRemoteLogger_UpdateLevel(t *testing.T) {
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 
-		body := `{"data":[{"serviceName":"test-service","logLevel":{"LOG_LEVEL":"DEBUG"}}]}`
+		body := `{ "data": { "serviceName": "test-service","logLevel":"DEBUG" } }`
 		_, _ = w.Write([]byte(body))
 	}))
 
@@ -53,16 +50,29 @@ func TestRemoteLogger_UpdateLevelError(t *testing.T) {
 	assert.Equal(t, logging.INFO, rl.currentLevel)
 }
 
-func Test_fetchAndUpdateLogLevel_ErrorCases(t *testing.T) {
+func Test_fetchAndUpdateLogLevel_InvalidResponse(t *testing.T) {
 	logger := logging.NewMockLogger(logging.INFO)
 
-	ctrl := gomock.NewController(t)
-	mockMetrics := service.NewMockMetrics(ctrl)
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
 
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_http_service_response", gomock.Any(), "path", gomock.Any(),
-		"method", http.MethodGet, "status", fmt.Sprintf("%v", http.StatusInternalServerError))
+		body := `{ "data": { "serviceName": "test-service","logLevel":"TEST" } }`
 
-	remoteService := service.NewHTTPService("http://", logger, mockMetrics)
+		_, _ = w.Write([]byte(body))
+	}))
+	defer mockServer.Close()
+
+	remoteService := service.NewHTTPService(mockServer.URL, logger, nil)
+
+	level, err := fetchAndUpdateLogLevel(remoteService, logging.DEBUG)
+
+	assert.Equal(t, logging.DEBUG, level, "Test_fetchAndUpdateLogLevel_InvalidResponse, Failed.\n")
+
+	assert.Nil(t, err)
+}
+
+func Test_fetchAndUpdateLogLevel_InvalidLogLevel(t *testing.T) {
+	logger := logging.NewMockLogger(logging.INFO)
 
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -81,22 +91,11 @@ func Test_fetchAndUpdateLogLevel_ErrorCases(t *testing.T) {
 
 	remoteService2 := service.NewHTTPService(mockServer.URL, logger, nil)
 
-	tests := []struct {
-		desc            string
-		remoteService   service.HTTP
-		currentLogLevel logging.Level
-	}{
-		{"invalid URL for remote service", remoteService, logging.INFO},
-		{"invalid response from remote service", remoteService2, logging.DEBUG},
-	}
+	level, err := fetchAndUpdateLogLevel(remoteService2, logging.DEBUG)
 
-	for i, tc := range tests {
-		level, err := fetchAndUpdateLogLevel(tc.remoteService, tc.currentLogLevel)
+	assert.Equal(t, logging.DEBUG, level, "Test_fetchAndUpdateLogLevel_InvalidResponse, Failed.\n")
 
-		assert.Equal(t, tc.currentLogLevel, level, "TEST[%d], Failed.\n%s", i, tc.desc)
-
-		assert.NotNil(t, err)
-	}
+	assert.NotNil(t, err)
 }
 
 func TestDynamicLoggerSuccess(t *testing.T) {
@@ -104,7 +103,7 @@ func TestDynamicLoggerSuccess(t *testing.T) {
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 
-		body := `{"data":[{"serviceName":"test-service","logLevel":{"LOG_LEVEL":"DEBUG"}}]}`
+		body := `{ "data": { "serviceName": "test-service","logLevel":"DEBUG" } }`
 
 		_, _ = w.Write([]byte(body))
 	}))
