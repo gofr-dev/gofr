@@ -155,6 +155,9 @@ type Mongo interface {
 	// It returns an error if any.
 	Drop(ctx context.Context, collection string) error
 
+	// CreateCollection creates a new collection with specified name and default options.
+	CreateCollection(ctx context.Context, name string) error
+
 	// StartSession starts a session and provide methods to run commands in a transaction.
 	StartSession() (Transaction, error)
 }

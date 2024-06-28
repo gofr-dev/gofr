@@ -23,6 +23,7 @@ type transactionData struct {
 
 	SQLTx   *gofrSql.Tx
 	RedisTx goRedis.Pipeliner
+	MongoTx container.Transaction
 }
 
 func Run(migrationsMap map[int64]Migrate, c *container.Container) {

@@ -187,6 +187,13 @@ func (c *Client) Drop(ctx context.Context, collection string) error {
 	return c.Database.Collection(collection).Drop(ctx)
 }
 
+// Drop drops the specified collection from the database.
+func (c *Client) CreateCollection(ctx context.Context, name string) error {
+	defer c.postProcess(&QueryLog{Query: "createCollection", Collection: name}, time.Now())
+
+	return c.Database.CreateCollection(ctx, name)
+}
+
 func (c *Client) postProcess(ql *QueryLog, startTime time.Time) {
 	duration := time.Since(startTime).Milliseconds()
 
@@ -227,20 +234,13 @@ func (c *Client) HealthCheck() interface{} {
 	return &h
 }
 
-func (c *Client) StartSession() (Transaction, error) {
+func (c *Client) StartSession() (*session, error) {
 	defer c.postProcess(&QueryLog{Query: "startSession"}, time.Now())
 
 	s, err := c.Client().StartSession()
 	ses := &session{s}
 
 	return ses, err
-}
-
-type Transaction interface {
-	StartTransaction() error
-	AbortTransaction(context.Context) error
-	CommitTransaction(context.Context) error
-	EndSession(context.Context)
 }
 
 type session struct {
