@@ -81,7 +81,7 @@ Please note that the recommended local port for the services are different than 
 * Use only what is given to you as part of function parameter or receiver. No globals. Inject all dependencies including
   DB, Logger etc.
 * No magic. So, no init. In a large project, it becomes difficult to track which package is doing what at the
-  initialisation step.
+  initialization step.
 * Exported functions must have an associated goDoc.
 * Sensitive data(username, password, keys) should not be pushed. Always use environment variables.
 * Take interfaces and return concrete types.
@@ -107,7 +107,7 @@ Please note that the recommended local port for the services are different than 
 * When you consider a new documentation page is needed, start by adding a new file and writing your new documentation. Then - add a reference to it in [navigation.js](https://gofr.dev/docs/navigation.js).
 * If needed, update or add proper code examples for your changes.
 * In case images are needed, add it to [docs/public](https://gofr.dev/docs/public) folder.
-* Make sure you don't break existing links and refernces.
+* Make sure you don't break existing links and references.
 * Maintain Markdown standards, you can read more [here](https://www.markdownguide.org/basic-syntax/), this includes:
     - Headings (`#`, `##`, etc.) should be placed in order.
     - Use trailing white space or the <br> HTML tag at the end of the line.

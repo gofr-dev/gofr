@@ -15,49 +15,12 @@ on:
       - 'docs/**'
 
 jobs:
-  MIGRATION-Unit-Testing:
-    name: Migration Unit Testing (v${{ matrix.go-version }})🛠
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        go-version: ['1.21', '1.20']
-
-    steps:
-      - name: Checkout code into go module directory
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Set up Go ${{ matrix.go-version }}
-        uses: actions/setup-go@v4
-        with:
-          go-version: ${{ matrix.go-version }}
-        id: Go
-
-      - name: Get dependencies
-        run: |
-          go mod download
-
-      - name: Test
-        run: |
-          export APP_ENV=test
-          go test gofr.dev/pkg/gofr/migration... -v -short -coverprofile profile.cov -coverpkg=gofr.dev/pkg/gofr/migration...
-
-          go tool cover -func profile.cov
-
-      - name: Upload Test Coverage
-        if: ${{ matrix.go-version == '1.21'}}
-        uses: actions/upload-artifact@v3
-        with:
-          name: MIGRATION-Coverage-Report
-          path: profile.cov
-
   Example-Unit-Testing:
     name: Example Unit Testing (v${{ matrix.go-version }})🛠
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go-version: ['1.21', '1.20']
+        go-version: ['1.22', '1.21']
 
     services:
       kafka:
@@ -118,7 +81,7 @@ jobs:
           go tool cover -func profile.cov
 
       - name: Upload Test Coverage
-        if: ${{ matrix.go-version == '1.21'}}
+        if: ${{ matrix.go-version == '1.22'}}
         uses: actions/upload-artifact@v3
         with:
           name: Example-Test-Report
@@ -129,7 +92,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go-version: ['1.21', '1.20']
+        go-version: ['1.22', '1.21']
 
     steps:
       - name: Checkout code into go module directory
@@ -150,15 +113,12 @@ jobs:
       - name: Test
         run: |
           export APP_ENV=test
-          go test gofr.dev/pkg/... -tags migration -v -short -coverprofile packageWithMigration.cov -coverpkg=gofr.dev/pkg/...
-          grep -v 'gofr.dev/pkg/gofr/migration' packageWithMigration.cov > packageWithoutMigration.cov
-          grep -v 'gofr.dev/pkg/gofr/migration/mock_datasources.go' packageWithoutMigration.cov > packageWithoutMockMigrationDatasource.cov
-          grep -v 'gofr.dev/pkg/gofr/container/mock_datasources.go' packageWithoutMockMigrationDatasource.cov > packageWithoutMockDatasource.cov
-          grep -v 'google/mock_interfaces\.go' packageWithoutMockDatasource.cov > profile.cov
+          go test gofr.dev/pkg/... -v -short -coverprofile package.cov -coverpkg=gofr.dev/pkg/...
+          grep -v '/mock_' package.cov > profile.cov
           go tool cover -func profile.cov
 
       - name: Upload Test Coverage
-        if: ${{ matrix.go-version == '1.21'}}
+        if: ${{ matrix.go-version == '1.22'}}
         uses: actions/upload-artifact@v3
         with:
           name: PKG-Coverage-Report
@@ -167,7 +127,7 @@ jobs:
   parse_coverage:
     name: Code Coverage
     runs-on: ubuntu-latest
-    needs: [ Example-Unit-Testing,PKG-Unit-Testing,MIGRATION-Unit-Testing ]
+    needs: [ Example-Unit-Testing,PKG-Unit-Testing]
     steps:
       - name: Check out code into the Go module directory
         uses: actions/checkout@v4
@@ -183,7 +143,6 @@ jobs:
         run: |
           awk '!/^mode: / && FNR==1{print "mode: set"} {print}' ./Example-Test-Report/profile.cov > merged_profile.cov
           tail -n +2 ./PKG-Coverage-Report/profile.cov >> merged_profile.cov
-          tail -n +2 ./MIGRATION-Coverage-Report/profile.cov >> merged_profile.cov
 
       - name: Parse code-coverage value
         working-directory: artifacts
@@ -201,7 +160,7 @@ jobs:
   upload_coverage:
     name: Upload Coverage📊
     runs-on: ubuntu-latest
-    needs: [Example-Unit-Testing,PKG-Unit-Testing,MIGRATION-Unit-Testing]
+    needs: [Example-Unit-Testing,PKG-Unit-Testing]
     if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/development'}}
     steps:
       - name: Check out code into the Go module directory
