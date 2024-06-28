@@ -20,7 +20,7 @@ func TestRemoteLogger_UpdateLevel(t *testing.T) {
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 
-		body := `{"serviceName":"test-service","logLevel":"DEBUG"}`
+		body := `{ "data": { "serviceName": "test-service","logLevel":"DEBUG" } }`
 		_, _ = w.Write([]byte(body))
 	}))
 
@@ -104,7 +104,7 @@ func TestDynamicLoggerSuccess(t *testing.T) {
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 
-		body := `{"serviceName":"test-service","logLevel":"DEBUG"}`
+		body := `{ "data": { "serviceName": "test-service","logLevel":"DEBUG" } }`
 
 		_, _ = w.Write([]byte(body))
 	}))

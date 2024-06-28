@@ -81,8 +81,10 @@ func fetchAndUpdateLogLevel(remoteService service.HTTP, currentLevel logging.Lev
 	defer resp.Body.Close()
 
 	var response struct {
-		ServiceName string `json:"serviceName"`
-		Level       string `json:"logLevel"`
+		Data struct {
+			ServiceName string `json:"serviceName"`
+			Level       string `json:"logLevel"`
+		} `json:"data"`
 	}
 
 	responseBody, err := io.ReadAll(resp.Body)
@@ -95,8 +97,8 @@ func fetchAndUpdateLogLevel(remoteService service.HTTP, currentLevel logging.Lev
 		return currentLevel, err
 	}
 
-	if response.ServiceName != "" {
-		newLevel := logging.GetLevelFromString(response.Level)
+	if response.Data.ServiceName != "" {
+		newLevel := logging.GetLevelFromString(response.Data.Level)
 		return newLevel, nil
 	}
 
