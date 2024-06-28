@@ -5,10 +5,10 @@ GoFr publishes some {% new-tab-link newtab=false title="default metrics" href="/
 GoFr can handle multiple different metrics concurrently, each uniquely identified by its name during initialization.
 It supports the following {% new-tab-link title="metrics" href="https://opentelemetry.io/docs/specs/otel/metrics/" /%} types in Prometheus format:
 
-1. Counter
-2. UpDownCounter
-3. Histogram
-4. Gauge
+1. `Counter`
+2. `UpDownCounter`
+3. `Histogram`
+4. `Gauge`
 
 If any custom metric is required, it can be created by using custom metrics as shown below:
 
@@ -45,7 +45,7 @@ func main() {
 
 ## 2. UpDown Counter Metrics
 
-UpDownCounter is a {% new-tab-link title="synchronous Instrument" href="https://opentelemetry.io/docs/specs/otel/metrics/api/#synchronous-instrument-api" /%} which supports increments and decrements.
+`UpDownCounter` is a {% new-tab-link title="synchronous Instrument" href="https://opentelemetry.io/docs/specs/otel/metrics/api/#synchronous-instrument-api" /%} which supports increments and decrements.
 Note: If the value is monotonically increasing, use Counter instead.
 
 ### Usage
@@ -64,7 +64,7 @@ func main() {
 	app.Metrics().NewUpDownCounter("total_credit_day_sale", "used to track the total credit sales in a day")
 
 	app.POST("/sale", func(ctx *gofr.Context) (interface{}, error) {
-		ctx.Metrics().IncrementCounter(ctx, "total_credit_day_sale")
+		ctx.Metrics().DeltaUpDownCounter(ctx, "total_credit_day_sale", 1000)
 
 		return "Sale Completed", nil
 	})
@@ -136,6 +136,76 @@ func main() {
 	})
 
 	app.Run()
+}
+```
+
+## Adding Labels to Custom Metrics
+
+GoFr leverages metrics support by enabling labels. Labels are a key feature in metrics that allow you to categorize and filter metrics based on relevant information.
+
+### Understanding Labels
+
+Labels are key-value pairs attached to metrics. They provide additional context about the metric data.
+
+Common examples of labels include:
+- environment: (e.g., "production", "staging")
+- service: (e.g., "api-gateway", "database")
+- status: (e.g., "success", "failure")
+
+By adding labels, you can create different time series for the same metric based on the label values.
+This allows for more granular analysis and visualization in Grafana (or any other) dashboards.
+
+### Additional Considerations
+
+- Prefer to keep the number of labels manageable to avoid overwhelming complexity.
+- Choose meaningful label names that clearly describe the data point.
+- Ensure consistency in label naming conventions across your application.
+
+By effectively using labels in GoFr, you can enrich your custom metrics and gain deeper insights into your application's performance and behavior.
+
+### Usage:
+
+Labels are added while populating the data for metrics, by passing them as arguments (comma separated key-value pairs)
+in the GoFr's methods (namely: `IncreamentCounter`, `DeltaUpDownCounter`, `RecordHistogram`, `SetGauge`).
+
+Example: `c.Metrics().IncrementCounter(c, "metric-name", "metric-value", "label-1", "value-1", "label-2", "value-2")`
+
+```go
+package main
+
+import (
+	"gofr.dev/pkg/gofr"
+)
+
+func main() {
+	// Initialise gofr object
+	a := gofr.New()
+
+	// Add custom metrics
+	a.Metrics().NewUpDownCounter("total_credit_day_sale", "used to track the total credit sales in a day")
+
+	// Add all the routes
+	a.POST("/sale", SaleHandler)
+	a.POST("/return", ReturnHandler)
+
+	// Run the application
+	a.Run()
+}
+
+func SaleHandler(c *gofr.Context) (interface{}, error) {
+	// logic to create sales
+
+	c.Metrics().DeltaUpDownCounter(c, "total_credit_day_sale", 10, "sale_type", "credit", "product_type", "beverage") // Here "sale_type" & "product_type" are the labels and "credit" & "beverage" are the values
+
+	return "Sale Successful", nil
+}
+
+func ReturnHandler(c *gofr.Context) (interface{}, error) {
+	// logic to create a sales return
+
+	c.Metrics().DeltaUpDownCounter(c, "total_credit_day_sale", -5, "sale_type", "credit_return", "product_type", "dairy")
+
+	return "Return Successful", nil
 }
 ```
 

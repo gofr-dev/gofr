@@ -23,7 +23,7 @@ func main() {
 	// setting the maximum duration of this application
 	time.Sleep(duration * time.Minute)
 
-	// not running the app to close after we have completed the crons runnning
+	// not running the app to close after we have completed the crons running
 	// since this is an example the cron will not be running forever
 	// to run cron forever, users can start the metric server or normal HTTP server
 	// app.Run()

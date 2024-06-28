@@ -2,7 +2,10 @@ name: Build and Deploy
 on:
   push:
     tags:
-      - "v[0-9]+.[0-9]+.[0-9]"
+      - "v*.*.*"
+    branches:
+      - main
+      - development
 
 env:
   APP_NAME: gofr-website
@@ -15,9 +18,6 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
-    if: (github.ref == 'refs/heads/development' || github.ref == 'refs/heads/main' || github.event_name == 'pull_request' )
-    outputs:
-      image: ${{ steps.output-image.outputs.image }}
     name: 🔧Build
     steps:
       - name: Checkout Code
@@ -37,20 +37,16 @@ jobs:
         run: |
           docker pull ${{ env.WEBSITE_REGISTRY }}/gofr-dev/website:latest
 
-      - name: Build and Push Image Stage
+      - name: Build Image
         uses: docker/build-push-action@v4
         with:
           push: false
           context: ./
           file: ./docs/Dockerfile
-          tags: us-central1-docker.pkg.dev/${{ env.GAR_PROJECT }}/${{ env.GAR_REGISTRY }}/${{ env.APP_NAME }}:${{ github.sha }}
-
-      - id: output-image
-        run: echo "image=`echo us-central1-docker.pkg.dev/${{ env.GAR_PROJECT }}/${{ env.GAR_REGISTRY }}/${{ env.APP_NAME }}:${{ github.sha }}`" >> "$GITHUB_OUTPUT"
 
   dockerize:
-    runs-on: ubuntu-latest
     if: ${{ startsWith(github.ref, 'refs/tags/v')}}
+    runs-on: ubuntu-latest
     outputs:
       image: ${{ steps.output-image.outputs.image }}
     name: 🐳 Dockerize

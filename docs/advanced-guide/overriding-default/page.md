@@ -4,7 +4,7 @@ GoFr allows overriding default behavior of its features.
 
 ## Raw response format
 
-GoFr by default wraps a handler's return value and assigns it to the "data" field in a response.
+GoFr by default wraps a handler's return value and assigns it to the `data` field in a response.
 
 ### Example
 
@@ -74,7 +74,7 @@ Response example:
 
 ## Favicon.ico
 
-By default GoFr load its own `favicon.ico` present in root directory for an application. To override `favicon.ico` user
+By default, GoFr load its own `favicon.ico` present in root directory for an application. To override `favicon.ico` user
 can place its custom icon in the **static** directory of its application.
 
 > NOTE: The custom favicon should also be named as `favicon.ico` in the static directory of application.

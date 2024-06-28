@@ -98,7 +98,7 @@ func TestSwaggerHandler(t *testing.T) {
 		}
 
 		if strings.Split(fileResponse.ContentType, ";")[0] != tc.contentType {
-			t.Errorf("Expected content type 'application/json', got '%s'", fileResponse.ContentType)
+			t.Errorf("Expected content type '%s', got '%s'", tc.contentType, fileResponse.ContentType)
 		}
 	}
 }

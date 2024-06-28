@@ -63,6 +63,6 @@ func UploadHandler(c *gofr.Context) (interface{}, error) {
 		return false, err
 	}
 
-	// return the number of compressed files recieved
+	// return the number of compressed files received
 	return fmt.Sprintf("zipped files: %d, len of file `a`: %d", len(d.Compressed.Files), len(content)), nil
 }

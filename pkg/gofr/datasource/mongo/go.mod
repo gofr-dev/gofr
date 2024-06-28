@@ -2,11 +2,9 @@ module gofr.dev/pkg/gofr/datasource/mongo
 
 go 1.22
 
-toolchain go1.22.3
-
 require (
 	github.com/stretchr/testify v1.9.0
-	go.mongodb.org/mongo-driver v1.15.0
+	go.mongodb.org/mongo-driver v1.15.1
 	go.uber.org/mock v0.4.0
 )
 

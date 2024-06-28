@@ -33,12 +33,10 @@ The remote log level endpoint should return a JSON response in the following for
 
 ```json
 {
-  "data": [
-    {
-      "serviceName": "sample-service",
-      "logLevel": "DEBUG"
-    }
-  ]
+  "data": {
+    "serviceName": "test-service",
+    "logLevel": "DEBUG"
+  }
 }
 ```
 
