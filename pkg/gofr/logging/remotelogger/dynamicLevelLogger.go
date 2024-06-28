@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"slices"
 	"strconv"
 	"time"
 
@@ -97,7 +98,9 @@ func fetchAndUpdateLogLevel(remoteService service.HTTP, currentLevel logging.Lev
 		return currentLevel, err
 	}
 
-	if response.Data.ServiceName != "" {
+	logLevels := []string{"DEBUG", "INFO", "NOTICE", "WARN", "ERROR", "FATAL"}
+
+	if slices.Contains(logLevels, response.Data.Level) && response.Data.ServiceName != "" {
 		newLevel := logging.GetLevelFromString(response.Data.Level)
 		return newLevel, nil
 	}
