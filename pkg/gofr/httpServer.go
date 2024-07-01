@@ -3,6 +3,7 @@ package gofr
 import (
 	"fmt"
 	"net/http"
+	"net/http/pprof"
 	"time"
 
 	"gofr.dev/pkg/gofr/container"
@@ -34,6 +35,14 @@ func newHTTPServer(c *container.Container, port int, middlewareConfigs map[strin
 		port:   port,
 		ws:     wsManager,
 	}
+}
+
+func (s *httpServer) RegisterProfillingRoutes() {
+	s.router.HandleFunc("/debug/pprof/", pprof.Index)
+	s.router.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
+	s.router.HandleFunc("/debug/pprof/profile", pprof.Profile)
+	s.router.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+	s.router.HandleFunc("/debug/pprof/trace", pprof.Trace)
 }
 
 func (s *httpServer) Run(c *container.Container) {

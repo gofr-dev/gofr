@@ -85,6 +85,10 @@ func New() *App {
 
 	app.httpServer = newHTTPServer(app.container, port, middleware.GetConfigs(app.Config))
 
+	if app.Config.Get("APP_ENV") == "DEBUG" {
+		app.httpServer.RegisterProfillingRoutes()
+	}
+
 	// GRPC Server
 	port, err = strconv.Atoi(app.Config.Get("GRPC_PORT"))
 	if err != nil || port <= 0 {
