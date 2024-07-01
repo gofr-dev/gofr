@@ -37,7 +37,7 @@ func newHTTPServer(c *container.Container, port int, middlewareConfigs map[strin
 	}
 }
 
-func (s *httpServer) RegisterProfillingRoutes() {
+func (s *httpServer) RegisterProfilingRoutes() {
 	s.router.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
 	s.router.HandleFunc("/debug/pprof/profile", pprof.Profile)
 	s.router.HandleFunc("/debug/pprof/symbol", pprof.Symbol)

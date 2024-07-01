@@ -64,7 +64,7 @@ func TestRegisterProfillingRoutes(t *testing.T) {
 		port:   8080,
 	}
 
-	server.RegisterProfillingRoutes()
+	server.RegisterProfilingRoutes()
 
 	server.Run(c)
 
