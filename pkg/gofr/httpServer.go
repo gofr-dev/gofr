@@ -38,11 +38,12 @@ func newHTTPServer(c *container.Container, port int, middlewareConfigs map[strin
 }
 
 func (s *httpServer) RegisterProfillingRoutes() {
-	s.router.HandleFunc("/debug/pprof/", pprof.Index)
 	s.router.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
 	s.router.HandleFunc("/debug/pprof/profile", pprof.Profile)
 	s.router.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
 	s.router.HandleFunc("/debug/pprof/trace", pprof.Trace)
+
+	s.router.NewRoute().Methods(http.MethodGet).PathPrefix("/debug/pprof/").HandlerFunc(pprof.Index)
 }
 
 func (s *httpServer) Run(c *container.Container) {
