@@ -234,7 +234,7 @@ func (c *Client) HealthCheck() interface{} {
 	return &h
 }
 
-func (c *Client) StartSession() (*session, error) {
+func (c *Client) StartSession() (interface{}, error) {
 	defer c.postProcess(&QueryLog{Query: "startSession"}, time.Now())
 
 	s, err := c.Client().StartSession()
@@ -249,4 +249,11 @@ type session struct {
 
 func (s *session) StartTransaction() error {
 	return s.Session.StartTransaction()
+}
+
+type Transaction interface {
+	StartTransaction() error
+	AbortTransaction(context.Context) error
+	CommitTransaction(context.Context) error
+	EndSession(context.Context)
 }

@@ -11,6 +11,7 @@ type Datasource struct {
 	Redis      Redis
 	PubSub     PubSub
 	Clickhouse Clickhouse
+	Mongo      Mongo
 }
 
 // It is a base implementation for migration manger, on this other database drivers have been wrapped.

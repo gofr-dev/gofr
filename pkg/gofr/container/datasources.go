@@ -159,7 +159,7 @@ type Mongo interface {
 	CreateCollection(ctx context.Context, name string) error
 
 	// StartSession starts a session and provide methods to run commands in a transaction.
-	StartSession() (Transaction, error)
+	StartSession() (interface{}, error)
 }
 
 type Transaction interface {

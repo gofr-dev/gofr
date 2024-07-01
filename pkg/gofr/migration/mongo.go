@@ -3,6 +3,7 @@ package migration
 import (
 	"context"
 	"gofr.dev/pkg/gofr/container"
+	"time"
 )
 
 type mongoDS struct {
@@ -20,6 +21,13 @@ func (ch mongoDS) apply(m migrator) migrator {
 		Mongo:    ch.Mongo,
 		migrator: m,
 	}
+}
+
+type mongoData struct {
+	Method          string    `json:"method"`
+	Duration        int64     `json:"duration"`
+	StartTime       time.Time `json:"startTime"`
+	MigrationNumber int64     `json:"migrationNumber"`
 }
 
 //const (
@@ -49,33 +57,22 @@ func (m mongoMigrator) checkAndCreateMigrationTable(c *container.Container) erro
 }
 
 func (ch mongoMigrator) getLastMigration(c *container.Container) int64 {
-	type LastMigration struct {
-		Timestamp int64 `ch:"last_migration"`
-	}
-
-	var lastMigrations []LastMigration
-
-	var lastMigration int64
-
-	// TODO replace with Mongo
-	//err := c.Clickhouse.Select(context.Background(), &lastMigrations, getLastChGoFrMigration)
+	//var lastMigrations mongoData
+	//
+	//err := c.Mongo.Find(context.Background(), "gofr_migration", nil, &lastMigrations)
 	//if err != nil {
 	//	return 0
 	//}
+	//
+	//c.Debugf("SQL last migration fetched value is: %v", lastMigrations)
+	//
+	//lm2 := ch.migrator.getLastMigration(c)
+	//
+	//if lm2 > lastMigrations[0] {
+	//	return lm2
+	//}
 
-	c.Debugf("SQL last migration fetched value is: %v", lastMigration)
-
-	if len(lastMigrations) != 0 {
-		lastMigration = lastMigrations[0].Timestamp
-	}
-
-	lm2 := ch.migrator.getLastMigration(c)
-
-	if lm2 > lastMigration {
-		return lm2
-	}
-
-	return lastMigration
+	return 0
 }
 
 func (m mongoMigrator) beginTransaction(c *container.Container) transactionData {
@@ -86,7 +83,12 @@ func (m mongoMigrator) beginTransaction(c *container.Container) transactionData 
 
 	}
 
-	err = sess.StartTransaction()
+	ses, ok := sess.(container.Transaction)
+	if !ok {
+		return cmt
+	}
+
+	err = ses.StartTransaction()
 	if err != nil {
 
 	}
@@ -99,9 +101,16 @@ func (m mongoMigrator) beginTransaction(c *container.Container) transactionData 
 }
 
 func (m mongoMigrator) commitMigration(c *container.Container, data transactionData) error {
-	_, err := m.Mongo.InsertOne(context.Background(), "gofr_migration")
-	//data.MigrationNumber,
-	//	"UP", data.StartTime, time.Since(data.StartTime).Milliseconds()
+	type mongoData struct {
+		Method          string    `json:"method"`
+		Duration        int64     `json:"duration"`
+		StartTime       time.Time `json:"startTime"`
+		MigrationNumber int64     `json:"migrationNumber"`
+	}
+
+	_, err := m.Mongo.InsertOne(context.Background(), "gofr_migration", mongoData{
+		MigrationNumber: data.MigrationNumber, Duration: time.Since(data.StartTime).Milliseconds(),
+		StartTime: data.StartTime, Method: "UP"})
 	if err != nil {
 		return err
 	}
