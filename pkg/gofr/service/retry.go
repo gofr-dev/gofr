@@ -22,13 +22,15 @@ type retryProvider struct {
 	HTTP
 }
 
-func (rp *retryProvider) Get(ctx context.Context, path string, queryParams map[string]interface{}) (*http.Response, error) {
+func (rp *retryProvider) Get(ctx context.Context, path string, queryParams map[string]interface{}) (*http.Response,
+	error) {
 	return rp.doWithRetry(func() (*http.Response, error) {
 		return rp.HTTP.Get(ctx, path, queryParams)
 	})
 }
 
-func (rp *retryProvider) GetWithHeaders(ctx context.Context, path string, queryParams map[string]interface{}, headers map[string]string) (*http.Response, error) {
+func (rp *retryProvider) GetWithHeaders(ctx context.Context, path string, queryParams map[string]interface{},
+	headers map[string]string) (*http.Response, error) {
 	return rp.doWithRetry(func() (*http.Response, error) {
 		return rp.HTTP.GetWithHeaders(ctx, path, queryParams, headers)
 	})
@@ -41,7 +43,8 @@ func (rp *retryProvider) Post(ctx context.Context, path string, queryParams map[
 	})
 }
 
-func (rp *retryProvider) PostWithHeaders(ctx context.Context, path string, queryParams map[string]interface{}, body []byte,
+func (rp *retryProvider) PostWithHeaders(ctx context.Context, path string, queryParams map[string]interface{},
+	body []byte,
 	headers map[string]string) (*http.Response, error) {
 	return rp.doWithRetry(func() (*http.Response, error) {
 		return rp.HTTP.PostWithHeaders(ctx, path, queryParams, body, headers)
@@ -90,8 +93,10 @@ func (rp *retryProvider) DeleteWithHeaders(ctx context.Context, path string, bod
 }
 
 func (rp *retryProvider) doWithRetry(reqFunc func() (*http.Response, error)) (*http.Response, error) {
-	var resp *http.Response
-	var err error
+	var (
+		resp *http.Response
+		err  error
+	)
 
 	for i := 0; i < rp.maxRetries; i++ {
 		resp, err = reqFunc()
