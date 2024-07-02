@@ -165,10 +165,6 @@ func (c *Client) UpdateMany(ctx context.Context, collection string, filter, upda
 func (c *Client) CountDocuments(ctx context.Context, collection string, filter interface{}) (int64, error) {
 	defer c.postProcess(&QueryLog{Query: "countDocuments", Collection: collection, Filter: filter}, time.Now())
 
-	if filter == nil {
-		filter = bson.D{}
-	}
-
 	return c.Database.Collection(collection).CountDocuments(ctx, filter)
 }
 
@@ -203,7 +199,7 @@ func (c *Client) Drop(ctx context.Context, collection string) error {
 	return c.Database.Collection(collection).Drop(ctx)
 }
 
-// Drop drops the specified collection from the database.
+// CreateCollection creates the specified collection in the database.
 func (c *Client) CreateCollection(ctx context.Context, name string) error {
 	defer c.postProcess(&QueryLog{Query: "createCollection", Collection: name}, time.Now())
 
