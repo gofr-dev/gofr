@@ -23,7 +23,6 @@ type transactionData struct {
 
 	SQLTx   *gofrSql.Tx
 	RedisTx goRedis.Pipeliner
-	MongoTx container.Transaction
 }
 
 func Run(migrationsMap map[int64]Migrate, c *container.Container) {
@@ -134,17 +133,6 @@ func getMigrator(c *container.Container) (Datasource, migrator, bool) {
 		mg = redisDS{ds.Redis}.apply(mg)
 
 		c.Debug("initialized data source for redis")
-	}
-
-	if !isNil(c.Mongo) {
-		ok = true
-
-		ds.Mongo = c.Mongo
-
-		s := mongoDS{ds.Mongo}
-		mg = s.apply(mg)
-
-		c.Debug("initialized data source for MongoDB")
 	}
 
 	if !isNil(c.Clickhouse) {
