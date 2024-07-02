@@ -70,20 +70,9 @@ func New(config *Config, logger Logger, metrics Metrics) *MQTT {
 
 	logger.Debugf("connecting to MQTT at '%v:%v' with clientID '%v'", config.Hostname, config.Port, config.ClientID)
 
-	options.SetOnConnectHandler(func(c mqtt.Client) {
-		mu.RLock()
-		for k, v := range subs {
-			c.Subscribe(k, config.QoS, v.handler)
-		}
-		mu.RUnlock()
-	})
-
-	options.SetConnectionLostHandler(func(_ mqtt.Client, err error) {
-		logger.Errorf("mqtt connection lost, error: %v", err.Error())
-	})
-	options.SetReconnectingHandler(func(_ mqtt.Client, _ *mqtt.ClientOptions) {
-		logger.Infof("reconnecting to MQTT at '%v:%v' with clientID '%v'", config.Hostname, config.Port, config.ClientID)
-	})
+	options.SetOnConnectHandler(createReconnectHandler(mu, config, subs))
+	options.SetConnectionLostHandler(createConnectionLostHandler(logger))
+	options.SetReconnectingHandler(createReconnectingHandler(logger, config))
 	// create the client using the options above
 	client := mqtt.NewClient(options)
 	if token := client.Connect(); token.Wait() && token.Error() != nil {
@@ -373,4 +362,26 @@ func (m *MQTT) Ping() error {
 	}
 
 	return nil
+}
+
+func createReconnectHandler(mu *sync.RWMutex, config *Config, subs map[string]subscription) func(c mqtt.Client) {
+	return func(c mqtt.Client) {
+		mu.RLock()
+		for k, v := range subs {
+			c.Subscribe(k, config.QoS, v.handler)
+		}
+		mu.RUnlock()
+	}
+}
+
+func createConnectionLostHandler(logger Logger) func(_ mqtt.Client, err error) {
+	return func(_ mqtt.Client, err error) {
+		logger.Errorf("mqtt connection lost, error: %v", err.Error())
+	}
+}
+
+func createReconnectingHandler(logger Logger, config *Config) func(mqtt.Client, *mqtt.ClientOptions) {
+	return func(_ mqtt.Client, _ *mqtt.ClientOptions) {
+		logger.Infof("reconnecting to MQTT at '%v:%v' with clientID '%v'", config.Hostname, config.Port, config.ClientID)
+	}
 }

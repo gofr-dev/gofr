@@ -7,6 +7,7 @@ import (
 	"sync"
 	"testing"
 
+	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 
@@ -333,4 +334,68 @@ func TestMQTT_Health(t *testing.T) {
 func TestMQTT_DeleteTopic(_ *testing.T) {
 	m := &MQTT{}
 	_ = m.DeleteTopic(context.TODO(), "")
+}
+
+func TestReconnectingHandler(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockLogger := NewMockLogger(ctrl)
+	mockLogger.EXPECT().Infof("reconnecting to MQTT at '%v:%v' with clientID '%v'", "any", 1234, "gopher")
+
+	handler := createReconnectingHandler(mockLogger, &Config{
+		Hostname: "any",
+		Port:     1234,
+		ClientID: "gopher",
+	})
+	assert.NotNil(t, handler)
+
+	handler(NewMockClient(ctrl), &mqtt.ClientOptions{})
+}
+
+func TestConnectionLostHandler(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockLogger := NewMockLogger(ctrl)
+	mockLogger.EXPECT().Errorf("mqtt connection lost, error: %v", gomock.Any()).
+		DoAndReturn(func(_ string, args ...interface{}) {
+			assert.Len(t, args, 1)
+			assert.Error(t, mqtt.ErrNotConnected, args[0])
+		})
+
+	connectionLostHandler := createConnectionLostHandler(mockLogger)
+	connectionLostHandler(NewMockClient(ctrl), mqtt.ErrNotConnected)
+}
+
+func TestReconnectHandler(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	qos := byte(1)
+
+	clientMock := NewMockClient(ctrl)
+	clientMock.EXPECT().Subscribe("topic1", qos, gomock.Any()).Return(nil)
+
+	msgsChan := make(chan *pubsub.Message)
+
+	defer close(msgsChan)
+
+	subs := map[string]subscription{
+		"topic1": {
+			msgs:    msgsChan,
+			handler: func(_ mqtt.Client, _ mqtt.Message) {},
+		},
+	}
+
+	reconnectHandler := createReconnectHandler(&sync.RWMutex{}, &Config{
+		Hostname: "any",
+		Port:     1234,
+		ClientID: "gopher",
+		QoS:      qos,
+	}, subs)
+
+	assert.NotNil(t, reconnectHandler)
+
+	reconnectHandler(clientMock)
 }
