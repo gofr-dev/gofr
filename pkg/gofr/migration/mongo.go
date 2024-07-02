@@ -2,7 +2,9 @@ package migration
 
 import (
 	"context"
+	"fmt"
 	"gofr.dev/pkg/gofr/container"
+	"strings"
 	"time"
 )
 
@@ -48,8 +50,8 @@ type mongoData struct {
 //)
 
 func (m mongoMigrator) checkAndCreateMigrationTable(c *container.Container) error {
-	if err := c.Mongo.CreateCollection(context.Background(), "gofr_migration"); err != nil {
-		// TODO: Handle error properly
+	if err := c.Mongo.CreateCollection(context.Background(), "gofr_migration"); err != nil && !strings.Contains(fmt.Sprint(err), "gofr_migration already exists") {
+		fmt.Println(err)
 		return err
 	}
 
@@ -57,22 +59,30 @@ func (m mongoMigrator) checkAndCreateMigrationTable(c *container.Container) erro
 }
 
 func (ch mongoMigrator) getLastMigration(c *container.Container) int64 {
-	//var lastMigrations mongoData
-	//
-	//err := c.Mongo.Find(context.Background(), "gofr_migration", nil, &lastMigrations)
-	//if err != nil {
-	//	return 0
-	//}
-	//
-	//c.Debugf("SQL last migration fetched value is: %v", lastMigrations)
-	//
-	//lm2 := ch.migrator.getLastMigration(c)
-	//
-	//if lm2 > lastMigrations[0] {
-	//	return lm2
-	//}
+	var lastMigrations []mongoData
 
-	return 0
+	err := c.Mongo.Find(context.Background(), "gofr_migration", nil, &lastMigrations)
+	if err != nil {
+		return 0
+	}
+
+	c.Debugf("Mongo last migration fetched value is: %v", lastMigrations)
+
+	var lm int64
+
+	for _, v := range lastMigrations {
+		if v.MigrationNumber > lm {
+			lm = v.MigrationNumber
+		}
+	}
+
+	fetchedLastMigrations := ch.migrator.getLastMigration(c)
+
+	if fetchedLastMigrations > lm {
+		return fetchedLastMigrations
+	}
+
+	return lm
 }
 
 func (m mongoMigrator) beginTransaction(c *container.Container) transactionData {
@@ -80,22 +90,28 @@ func (m mongoMigrator) beginTransaction(c *container.Container) transactionData 
 
 	sess, err := c.Mongo.StartSession()
 	if err != nil {
+		c.Error("unable to start session for mongoDB: %v", err)
 
+		return cmt
 	}
 
 	ses, ok := sess.(container.Transaction)
 	if !ok {
+		c.Error("unable to start session for mongoDB transaction due to driver error: %v", err)
+
 		return cmt
 	}
 
 	err = ses.StartTransaction()
 	if err != nil {
+		c.Error("unable to start transaction for mongoDB: %v", err)
 
+		return cmt
 	}
 
-	if err == nil {
-		c.Debug("Mongo Transaction begin successfully")
-	}
+	cmt.MongoTx = ses
+
+	c.Debug("Mongo Transaction begin successfully")
 
 	return cmt
 }
@@ -132,10 +148,12 @@ func (m mongoMigrator) rollback(c *container.Container, data transactionData) {
 
 	err := data.MongoTx.AbortTransaction(context.Background())
 	if err != nil {
-		//TODO
+		c.Error("unable to rollback transaction: %v", err)
 	}
 
 	data.MongoTx.EndSession(context.Background())
+
+	c.Errorf("Migration %v failed and rolled back", data.MigrationNumber)
 
 	m.migrator.rollback(c, data)
 }
