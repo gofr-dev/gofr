@@ -21,13 +21,13 @@ func (h *httpService) HealthCheck(ctx context.Context) *Health {
 	return h.getHealthResponseForEndpoint(ctx, ".well-known/alive", defaultTimeout)
 }
 
-func (h *httpService) getHealthResponseForEndpoint(_ context.Context, endpoint string, timeout int) *Health {
+func (h *httpService) getHealthResponseForEndpoint(ctx context.Context, endpoint string, timeout int) *Health {
 	var healthResponse = Health{
 		Details: make(map[string]interface{}),
 	}
 
-	// caeate a new context with 5 second timeout for healthCheck call.
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeout)*time.Second)
+	// create a new context with timeout for healthCheck call.
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Duration(timeout)*time.Second)
 	defer cancel()
 
 	// send a new context as we can have downstream services taking too long

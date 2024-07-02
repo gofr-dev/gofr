@@ -8,7 +8,7 @@ type HealthConfig struct {
 }
 
 func (h *HealthConfig) AddOption(svc HTTP) HTTP {
-	// if timeout is not provided we set the timeout to 5 sec by default.
+	// if timeout is not provided we set a convenient default timeout.
 	if h.Timeout == 0 {
 		h.Timeout = defaultTimeout
 	}

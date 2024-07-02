@@ -79,7 +79,7 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	select {
 	case <-c.Context.Done():
 		// If the context's deadline has been exceeded, return a timeout error response
-		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		if errors.Is(c.Err(), context.DeadlineExceeded) {
 			err = gofrHTTP.ErrorRequestTimeout{}
 		}
 	case <-done:
