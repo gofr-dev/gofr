@@ -2,7 +2,9 @@ package container
 
 import (
 	"context"
+	"fmt"
 	"reflect"
+	"strings"
 )
 
 func (c *Container) Health(ctx context.Context) interface{} {
@@ -29,6 +31,33 @@ func (c *Container) Health(ctx context.Context) interface{} {
 		}
 
 		healthMap["redis"] = health
+	}
+
+	if !isNil(c.Mongo) {
+		health := c.Redis.HealthCheck()
+		if strings.Contains(fmt.Sprint(health), "DOWN") {
+			downCount++
+		}
+
+		healthMap["mongo"] = health
+	}
+
+	if !isNil(c.Cassandra) {
+		health := c.Redis.HealthCheck()
+		if strings.Contains(fmt.Sprint(health), "DOWN") {
+			downCount++
+		}
+
+		healthMap["cassandra"] = health
+	}
+
+	if !isNil(c.Clickhouse) {
+		health := c.Redis.HealthCheck()
+		if strings.Contains(fmt.Sprint(health), "DOWN") {
+			downCount++
+		}
+
+		healthMap["clickHouse"] = health
 	}
 
 	if c.PubSub != nil {
