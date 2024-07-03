@@ -48,13 +48,13 @@ type Container struct {
 
 func (c *Container) Close() (err error) {
 	if c.PubSub != nil {
-		err = errors.Join(c.PubSub.Close())
+		err = c.PubSub.Close()
 	}
 
 	if c.SQL != nil {
 		sqlDB, ok := c.SQL.(*sql.DB)
 		if ok && sqlDB != nil {
-			err = errors.Join(sqlDB.Close())
+			err = errors.Join(err, sqlDB.Close())
 		}
 	}
 

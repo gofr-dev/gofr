@@ -160,37 +160,7 @@ func (a *App) Run() {
 	// Start HTTP Server
 	if a.httpRegistered {
 		wg.Add(1)
-
-		// Add Default routes
-		a.add(http.MethodGet, "/.well-known/health", healthHandler)
-		a.add(http.MethodGet, "/.well-known/alive", liveHandler)
-		a.add(http.MethodGet, "/favicon.ico", faviconHandler)
-
-		if _, err := os.Stat("./static/openapi.json"); err == nil {
-			a.add(http.MethodGet, "/.well-known/openapi.json", OpenAPIHandler)
-			a.add(http.MethodGet, "/.well-known/swagger", SwaggerUIHandler)
-			a.add(http.MethodGet, "/.well-known/{name}", SwaggerUIHandler)
-		}
-
-		a.httpServer.router.PathPrefix("/").Handler(handler{
-			function:  catchAllHandler,
-			container: a.container,
-		})
-
-		var registeredMethods []string
-
-		_ = a.httpServer.router.Walk(func(route *mux.Route, _ *mux.Router, _ []*mux.Route) error {
-			met, _ := route.GetMethods()
-			for _, method := range met {
-				if !contains(registeredMethods, method) { // Check for uniqueness before adding
-					registeredMethods = append(registeredMethods, method)
-				}
-			}
-
-			return nil
-		})
-
-		*a.httpServer.router.RegisteredRoutes = registeredMethods
+		a.setupHTTPServer()
 
 		go func(s *httpServer) {
 			defer wg.Done()
@@ -220,6 +190,38 @@ func (a *App) Run() {
 
 	wg.Wait()
 }
+func (a *App) setupHTTPServer() {
+	// Add Default routes
+	a.add(http.MethodGet, "/.well-known/health", healthHandler)
+	a.add(http.MethodGet, "/.well-known/alive", liveHandler)
+	a.add(http.MethodGet, "/favicon.ico", faviconHandler)
+
+	if _, err := os.Stat("./static/openapi.json"); err == nil {
+		a.add(http.MethodGet, "/.well-known/openapi.json", OpenAPIHandler)
+		a.add(http.MethodGet, "/.well-known/swagger", SwaggerUIHandler)
+		a.add(http.MethodGet, "/.well-known/{name}", SwaggerUIHandler)
+	}
+
+	a.httpServer.router.PathPrefix("/").Handler(handler{
+		function:  catchAllHandler,
+		container: a.container,
+	})
+
+	var registeredMethods []string
+
+	_ = a.httpServer.router.Walk(func(route *mux.Route, _ *mux.Router, _ []*mux.Route) error {
+		met, _ := route.GetMethods()
+		for _, method := range met {
+			if !contains(registeredMethods, method) { // Check for uniqueness before adding
+				registeredMethods = append(registeredMethods, method)
+			}
+		}
+
+		return nil
+	})
+
+	*a.httpServer.router.RegisteredRoutes = registeredMethods
+}
 
 // Shutdown stops the service(s) and close the application.
 func (a *App) Shutdown(ctx context.Context) (err error) {
@@ -236,8 +238,11 @@ func (a *App) Shutdown(ctx context.Context) (err error) {
 	}
 
 	err = errors.Join(err, a.container.Close())
+	if err != nil {
+		a.container.Logger.Errorf("error while shutting down: %v", err)
+	}
 
-	a.container.Logger.Infof("Application shutdown complete: %v", err)
+	a.container.Logger.Infof("Application shutdown complete")
 
 	return
 }
