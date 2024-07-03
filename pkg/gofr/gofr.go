@@ -6,10 +6,12 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -130,6 +132,18 @@ func (a *App) Run() {
 		a.cmd.Run(a.container)
 	}
 
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
+	go func() {
+		<-ctx.Done()
+
+		err := a.Shutdown(context.Background())
+		if err != nil {
+			a.container.Logger.Errorf("error while shutting down: %v", err)
+		}
+	}()
+
 	wg := sync.WaitGroup{}
 
 	// Start Metrics Server
@@ -207,10 +221,8 @@ func (a *App) Run() {
 
 // Shutdown stops the service(s) and close the application.
 func (a *App) Shutdown(ctx context.Context) (err error) {
-
 	if a.httpServer != nil {
 		err = errors.Join(err, a.httpServer.Shutdown(ctx))
-
 	}
 
 	if a.grpcServer != nil {

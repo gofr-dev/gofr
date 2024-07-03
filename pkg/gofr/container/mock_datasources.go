@@ -1421,17 +1421,17 @@ func (mr *MockRedisMockRecorder) ClientUnpause(ctx any) *gomock.Call {
 }
 
 // Close mocks base method.
-func (m *MockRedis) Close() error {
+func (m *MockRedis) Close(arg0 context.Context) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Close")
+	ret := m.ctrl.Call(m, "Close", arg0)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Close indicates an expected call of Close.
-func (mr *MockRedisMockRecorder) Close() *gomock.Call {
+func (mr *MockRedisMockRecorder) Close(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockRedis)(nil).Close))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockRedis)(nil).Close), arg0)
 }
 
 // ClusterAddSlots mocks base method.
@@ -7374,6 +7374,123 @@ func (mr *MockCassandraMockRecorder) Query(dest, stmt any, values ...any) *gomoc
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Query", reflect.TypeOf((*MockCassandra)(nil).Query), varargs...)
 }
 
+// MockCassandraProvider is a mock of CassandraProvider interface.
+type MockCassandraProvider struct {
+	ctrl     *gomock.Controller
+	recorder *MockCassandraProviderMockRecorder
+}
+
+// MockCassandraProviderMockRecorder is the mock recorder for MockCassandraProvider.
+type MockCassandraProviderMockRecorder struct {
+	mock *MockCassandraProvider
+}
+
+// NewMockCassandraProvider creates a new mock instance.
+func NewMockCassandraProvider(ctrl *gomock.Controller) *MockCassandraProvider {
+	mock := &MockCassandraProvider{ctrl: ctrl}
+	mock.recorder = &MockCassandraProviderMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockCassandraProvider) EXPECT() *MockCassandraProviderMockRecorder {
+	return m.recorder
+}
+
+// Connect mocks base method.
+func (m *MockCassandraProvider) Connect() {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "Connect")
+}
+
+// Connect indicates an expected call of Connect.
+func (mr *MockCassandraProviderMockRecorder) Connect() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Connect", reflect.TypeOf((*MockCassandraProvider)(nil).Connect))
+}
+
+// Exec mocks base method.
+func (m *MockCassandraProvider) Exec(stmt string, values ...any) error {
+	m.ctrl.T.Helper()
+	varargs := []any{stmt}
+	for _, a := range values {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "Exec", varargs...)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Exec indicates an expected call of Exec.
+func (mr *MockCassandraProviderMockRecorder) Exec(stmt any, values ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{stmt}, values...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Exec", reflect.TypeOf((*MockCassandraProvider)(nil).Exec), varargs...)
+}
+
+// ExecCAS mocks base method.
+func (m *MockCassandraProvider) ExecCAS(dest any, stmt string, values ...any) (bool, error) {
+	m.ctrl.T.Helper()
+	varargs := []any{dest, stmt}
+	for _, a := range values {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "ExecCAS", varargs...)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ExecCAS indicates an expected call of ExecCAS.
+func (mr *MockCassandraProviderMockRecorder) ExecCAS(dest, stmt any, values ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{dest, stmt}, values...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExecCAS", reflect.TypeOf((*MockCassandraProvider)(nil).ExecCAS), varargs...)
+}
+
+// Query mocks base method.
+func (m *MockCassandraProvider) Query(dest any, stmt string, values ...any) error {
+	m.ctrl.T.Helper()
+	varargs := []any{dest, stmt}
+	for _, a := range values {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "Query", varargs...)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Query indicates an expected call of Query.
+func (mr *MockCassandraProviderMockRecorder) Query(dest, stmt any, values ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{dest, stmt}, values...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Query", reflect.TypeOf((*MockCassandraProvider)(nil).Query), varargs...)
+}
+
+// UseLogger mocks base method.
+func (m *MockCassandraProvider) UseLogger(logger any) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "UseLogger", logger)
+}
+
+// UseLogger indicates an expected call of UseLogger.
+func (mr *MockCassandraProviderMockRecorder) UseLogger(logger any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UseLogger", reflect.TypeOf((*MockCassandraProvider)(nil).UseLogger), logger)
+}
+
+// UseMetrics mocks base method.
+func (m *MockCassandraProvider) UseMetrics(metrics any) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "UseMetrics", metrics)
+}
+
+// UseMetrics indicates an expected call of UseMetrics.
+func (mr *MockCassandraProviderMockRecorder) UseMetrics(metrics any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UseMetrics", reflect.TypeOf((*MockCassandraProvider)(nil).UseMetrics), metrics)
+}
+
 // MockClickhouse is a mock of Clickhouse interface.
 type MockClickhouse struct {
 	ctrl     *gomock.Controller
@@ -7568,123 +7685,6 @@ func (m *MockClickhouseProvider) UseMetrics(metrics any) {
 func (mr *MockClickhouseProviderMockRecorder) UseMetrics(metrics any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UseMetrics", reflect.TypeOf((*MockClickhouseProvider)(nil).UseMetrics), metrics)
-}
-
-// MockCassandraProvider is a mock of CassandraProvider interface.
-type MockCassandraProvider struct {
-	ctrl     *gomock.Controller
-	recorder *MockCassandraProviderMockRecorder
-}
-
-// MockCassandraProviderMockRecorder is the mock recorder for MockCassandraProvider.
-type MockCassandraProviderMockRecorder struct {
-	mock *MockCassandraProvider
-}
-
-// NewMockCassandraProvider creates a new mock instance.
-func NewMockCassandraProvider(ctrl *gomock.Controller) *MockCassandraProvider {
-	mock := &MockCassandraProvider{ctrl: ctrl}
-	mock.recorder = &MockCassandraProviderMockRecorder{mock}
-	return mock
-}
-
-// EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockCassandraProvider) EXPECT() *MockCassandraProviderMockRecorder {
-	return m.recorder
-}
-
-// Connect mocks base method.
-func (m *MockCassandraProvider) Connect() {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "Connect")
-}
-
-// Connect indicates an expected call of Connect.
-func (mr *MockCassandraProviderMockRecorder) Connect() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Connect", reflect.TypeOf((*MockCassandraProvider)(nil).Connect))
-}
-
-// Exec mocks base method.
-func (m *MockCassandraProvider) Exec(stmt string, values ...any) error {
-	m.ctrl.T.Helper()
-	varargs := []any{stmt}
-	for _, a := range values {
-		varargs = append(varargs, a)
-	}
-	ret := m.ctrl.Call(m, "Exec", varargs...)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// Exec indicates an expected call of Exec.
-func (mr *MockCassandraProviderMockRecorder) Exec(stmt any, values ...any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{stmt}, values...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Exec", reflect.TypeOf((*MockCassandraProvider)(nil).Exec), varargs...)
-}
-
-// ExecCAS mocks base method.
-func (m *MockCassandraProvider) ExecCAS(dest any, stmt string, values ...any) (bool, error) {
-	m.ctrl.T.Helper()
-	varargs := []any{dest, stmt}
-	for _, a := range values {
-		varargs = append(varargs, a)
-	}
-	ret := m.ctrl.Call(m, "ExecCAS", varargs...)
-	ret0, _ := ret[0].(bool)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// ExecCAS indicates an expected call of ExecCAS.
-func (mr *MockCassandraProviderMockRecorder) ExecCAS(dest, stmt any, values ...any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{dest, stmt}, values...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExecCAS", reflect.TypeOf((*MockCassandraProvider)(nil).ExecCAS), varargs...)
-}
-
-// Query mocks base method.
-func (m *MockCassandraProvider) Query(dest any, stmt string, values ...any) error {
-	m.ctrl.T.Helper()
-	varargs := []any{dest, stmt}
-	for _, a := range values {
-		varargs = append(varargs, a)
-	}
-	ret := m.ctrl.Call(m, "Query", varargs...)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// Query indicates an expected call of Query.
-func (mr *MockCassandraProviderMockRecorder) Query(dest, stmt any, values ...any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{dest, stmt}, values...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Query", reflect.TypeOf((*MockCassandraProvider)(nil).Query), varargs...)
-}
-
-// UseLogger mocks base method.
-func (m *MockCassandraProvider) UseLogger(logger any) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "UseLogger", logger)
-}
-
-// UseLogger indicates an expected call of UseLogger.
-func (mr *MockCassandraProviderMockRecorder) UseLogger(logger any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UseLogger", reflect.TypeOf((*MockCassandraProvider)(nil).UseLogger), logger)
-}
-
-// UseMetrics mocks base method.
-func (m *MockCassandraProvider) UseMetrics(metrics any) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "UseMetrics", metrics)
-}
-
-// UseMetrics indicates an expected call of UseMetrics.
-func (mr *MockCassandraProviderMockRecorder) UseMetrics(metrics any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UseMetrics", reflect.TypeOf((*MockCassandraProvider)(nil).UseMetrics), metrics)
 }
 
 // MockMongo is a mock of Mongo interface.

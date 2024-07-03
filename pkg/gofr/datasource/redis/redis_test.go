@@ -135,7 +135,7 @@ func TestRedis_Close(t *testing.T) {
 
 	mockMetric := NewMockMetrics(ctrl)
 	mockMetric.EXPECT().RecordHistogram(gomock.Any(), "app_redis_stats", gomock.Any(), "hostname", gomock.Any(), "type", "ping")
-	mockMetric.EXPECT().RecordHistogram(gomock.Any(), "app_redis_stats", gomock.Any(), "hostname", gomock.Any(), "type", "set")
+	mockMetric.EXPECT().RecordHistogram(gomock.Any(), "app_redis_stats", gomock.Any(), "hostname", gomock.Any(), "type", "shutdown")
 
 	result := testutil.StdoutOutputForFunc(func() {
 		mockLogger := logging.NewMockLogger(logging.DEBUG)
@@ -144,12 +144,9 @@ func TestRedis_Close(t *testing.T) {
 			"REDIS_PORT": s.Port(),
 		}), mockLogger, mockMetric)
 
-		assert.NotNil(t, err)
-
-		client.Close()
+		client.Close(context.Background())
 	})
 
 	// Assertions
-	assert.Contains(t, result, "ping")
-	assert.Contains(t, result, "set key value ex 60")
+	assert.Contains(t, result, "shutdown save")
 }

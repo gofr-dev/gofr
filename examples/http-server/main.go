@@ -1,15 +1,11 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
-	"os"
-	"os/signal"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -22,7 +18,7 @@ func main() {
 	// Create a new application
 	a := gofr.New()
 
-	//HTTP service with default health check endpoint
+	// HTTP service with default health check endpoint
 	a.AddHTTPService("anotherService", "http://localhost:9000")
 
 	// Add all the routes
@@ -33,12 +29,7 @@ func main() {
 	a.GET("/mysql", MysqlHandler)
 
 	// Run the application
-	go a.Run()
-
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
-	<-ctx.Done()
-	a.Shutdown(context.Background())
+	a.Run()
 }
 
 func HelloHandler(c *gofr.Context) (interface{}, error) {

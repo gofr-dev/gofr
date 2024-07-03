@@ -64,13 +64,13 @@ func NewClient(c config.Config, logger datasource.Logger, metrics Metrics) *Redi
 }
 
 // Close shutdowns and save the state of the redis client.
-// func (r *Redis) Close() error {
-// 	if r.Client != nil {
-// 		return r.Client.ShutdownSave(context.Background()).Err()
-// 	}
+func (r *Redis) Close(ctx context.Context) error {
+	if r.Client != nil {
+		return r.Client.ShutdownSave(ctx).Err()
+	}
 
-// 	return nil
-// }
+	return nil
+}
 
 func getRedisConfig(c config.Config) *Config {
 	var redisConfig = &Config{}

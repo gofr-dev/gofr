@@ -10,6 +10,8 @@ import (
 	gofrSQL "gofr.dev/pkg/gofr/datasource/sql"
 )
 
+//go:generate go run go.uber.org/mock/mockgen -source=datasources.go -destination=mock_datasources.go -package=container
+
 type DB interface {
 	Query(query string, args ...interface{}) (*sql.Rows, error)
 	QueryRow(query string, args ...interface{}) *sql.Row
@@ -29,7 +31,7 @@ type Redis interface {
 	redis.Cmdable
 	redis.HashCmdable
 	HealthCheck() datasource.Health
-	Close() error
+	Close(context.Context) error
 }
 
 type Cassandra interface {
