@@ -66,9 +66,14 @@ func (c *Client) UseMetrics(metrics interface{}) {
 func (c *Client) Connect() {
 	c.logger.Logf("connecting to mongoDB at %v to database %v", c.config.URI, c.config.Database)
 
-	// TODO handle port for srv
-	m, err := mongo.Connect(context.Background(), options.Client().ApplyURI(fmt.Sprintf("mongodb://%s:%s@%s:%d/%s?authSource=admin",
-		c.config.User, c.config.Password, c.config.Host, c.config.Port, c.config.Database)))
+	uri := c.config.URI
+
+	if uri == "" {
+		uri = fmt.Sprintf("mongodb://%s:%s@%s:%d/%s?authSource=admin",
+			c.config.User, c.config.Password, c.config.Host, c.config.Port, c.config.Database)
+	}
+
+	m, err := mongo.Connect(context.Background(), options.Client().ApplyURI(uri))
 	if err != nil {
 		c.logger.Errorf("error connecting to mongoDB, err:%v", err)
 
