@@ -243,6 +243,7 @@ func (a *App) Shutdown(ctx context.Context) (err error) {
 	err = errors.Join(err, a.container.Close(ctx))
 	if err != nil {
 		a.container.Logger.Errorf("error while shutting down: %v", err)
+		return
 	}
 
 	a.container.Logger.Infof("Application shutdown complete")
