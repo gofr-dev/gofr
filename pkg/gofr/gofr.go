@@ -6,11 +6,13 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/gorilla/mux"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/exporters/zipkin"
@@ -18,7 +20,6 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
-
 	"google.golang.org/grpc"
 
 	"gofr.dev/pkg/gofr/config"
@@ -31,6 +32,8 @@ import (
 	"gofr.dev/pkg/gofr/service"
 )
 
+const defaultPublicStaticDir = "static"
+
 // App is the main application in the GoFr framework.
 type App struct {
 	// Config can be used by applications to fetch custom configurations from environment or file.
@@ -40,8 +43,7 @@ type App struct {
 	httpServer   *httpServer
 	metricServer *metricServer
 
-	cmd *cmd
-
+	cmd  *cmd
 	cron *Crontab
 
 	// container is unexported because this is an internal implementation and applications are provided access to it via Context
@@ -82,9 +84,13 @@ func New() *App {
 		port = defaultHTTPPort
 	}
 
-	app.httpServer = newHTTPServer(app.container, port)
+	app.httpServer = newHTTPServer(app.container, port, middleware.GetConfigs(app.Config))
 
-	// GRPC Server
+	if app.Config.Get("APP_ENV") == "DEBUG" {
+		app.httpServer.RegisterProfilingRoutes()
+	}
+
+	// gRPC Server
 	port, err = strconv.Atoi(app.Config.Get("GRPC_PORT"))
 	if err != nil || port <= 0 {
 		port = defaultGRPCPort
@@ -94,6 +100,14 @@ func New() *App {
 
 	app.subscriptionManager = newSubscriptionManager(app.container)
 
+	// static fileserver
+	currentWd, _ := os.Getwd()
+	checkDirectory := filepath.Join(currentWd, defaultPublicStaticDir)
+
+	if _, err = os.Stat(checkDirectory); err == nil {
+		app.AddStaticFiles(defaultPublicStaticDir, checkDirectory)
+	}
+
 	return app
 }
 
@@ -101,11 +115,9 @@ func New() *App {
 func NewCMD() *App {
 	app := &App{}
 	app.readConfig(true)
-
 	app.container = container.NewContainer(nil)
 	app.container.Logger = logging.NewFileLogger(app.Config.Get("CMD_LOGS_FILE"))
 	app.cmd = &cmd{}
-
 	app.container.Create(app.Config)
 	app.initTracer()
 
@@ -148,6 +160,21 @@ func (a *App) Run() {
 			function:  catchAllHandler,
 			container: a.container,
 		})
+
+		var registeredMethods []string
+
+		_ = a.httpServer.router.Walk(func(route *mux.Route, _ *mux.Router, _ []*mux.Route) error {
+			met, _ := route.GetMethods()
+			for _, method := range met {
+				if !contains(registeredMethods, method) { // Check for uniqueness before adding
+					registeredMethods = append(registeredMethods, method)
+				}
+			}
+
+			return nil
+		})
+
+		*a.httpServer.router.RegisteredRoutes = registeredMethods
 
 		go func(s *httpServer) {
 			defer wg.Done()
@@ -257,10 +284,11 @@ func (a *App) PATCH(pattern string, handler Handler) {
 
 func (a *App) add(method, pattern string, h Handler) {
 	a.httpRegistered = true
+
 	a.httpServer.router.Add(method, pattern, handler{
 		function:       h,
 		container:      a.container,
-		requestTimeout: a.Config.GetOrDefault("REQUEST_TIMEOUT", "5"),
+		requestTimeout: a.Config.Get("REQUEST_TIMEOUT"),
 	})
 }
 
@@ -274,8 +302,8 @@ func (a *App) Logger() logging.Logger {
 
 // SubCommand adds a sub-command to the CLI application.
 // Can be used to create commands like "kubectl get" or "kubectl get ingress".
-func (a *App) SubCommand(pattern string, handler Handler) {
-	a.cmd.addRoute(pattern, handler)
+func (a *App) SubCommand(pattern string, handler Handler, options ...Options) {
+	a.cmd.addRoute(pattern, handler, options...)
 }
 
 func (a *App) Migrate(migrationsMap map[int64]migration.Migrate) {
@@ -358,16 +386,35 @@ func (a *App) EnableBasicAuth(credentials ...string) {
 	a.httpServer.router.Use(middleware.BasicAuthMiddleware(middleware.BasicAuthProvider{Users: users}))
 }
 
+// Deprecated: EnableBasicAuthWithFunc is deprecated and will be removed in future releases, users must use
+// EnableBasicAuthWithValidator as it has access to application datasources.
 func (a *App) EnableBasicAuthWithFunc(validateFunc func(username, password string) bool) {
-	a.httpServer.router.Use(middleware.BasicAuthMiddleware(middleware.BasicAuthProvider{ValidateFunc: validateFunc}))
+	a.httpServer.router.Use(middleware.BasicAuthMiddleware(middleware.BasicAuthProvider{ValidateFunc: validateFunc, Container: a.container}))
+}
+
+func (a *App) EnableBasicAuthWithValidator(validateFunc func(c *container.Container, username, password string) bool) {
+	a.httpServer.router.Use(middleware.BasicAuthMiddleware(middleware.BasicAuthProvider{
+		ValidateFuncWithDatasources: validateFunc, Container: a.container}))
 }
 
 func (a *App) EnableAPIKeyAuth(apiKeys ...string) {
-	a.httpServer.router.Use(middleware.APIKeyAuthMiddleware(nil, apiKeys...))
+	a.httpServer.router.Use(middleware.APIKeyAuthMiddleware(middleware.APIKeyAuthProvider{}, apiKeys...))
 }
 
-func (a *App) EnableAPIKeyAuthWithFunc(validator func(apiKey string) bool) {
-	a.httpServer.router.Use(middleware.APIKeyAuthMiddleware(validator))
+// Deprecated: EnableAPIKeyAuthWithFunc is deprecated and will be removed in future releases, users must use
+// EnableAPIKeyAuthWithValidator as it has access to application datasources.
+func (a *App) EnableAPIKeyAuthWithFunc(validateFunc func(apiKey string) bool) {
+	a.httpServer.router.Use(middleware.APIKeyAuthMiddleware(middleware.APIKeyAuthProvider{
+		ValidateFunc: validateFunc,
+		Container:    a.container,
+	}))
+}
+
+func (a *App) EnableAPIKeyAuthWithValidator(validateFunc func(c *container.Container, apiKey string) bool) {
+	a.httpServer.router.Use(middleware.APIKeyAuthMiddleware(middleware.APIKeyAuthProvider{
+		ValidateFuncWithDatasources: validateFunc,
+		Container:                   a.container,
+	}))
 }
 
 func (a *App) EnableOAuth(jwksEndpoint string, refreshInterval int) {
@@ -419,4 +466,34 @@ func (a *App) AddCronJob(schedule, jobName string, job CronFunc) {
 	if err := a.cron.AddJob(schedule, jobName, job); err != nil {
 		a.Logger().Errorf("error adding cron job, err : %v", err)
 	}
+}
+
+// contains is a helper function checking for duplicate entry in a slice.
+func contains(elems []string, v string) bool {
+	for _, s := range elems {
+		if v == s {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (a *App) AddStaticFiles(endpoint, filePath string) {
+	a.httpRegistered = true
+
+	// update file path based on current directory if it starts with ./
+	if strings.HasPrefix(filePath, "./") {
+		currentWorkingDir, _ := os.Getwd()
+		filePath = filepath.Join(currentWorkingDir, filePath)
+	}
+
+	endpoint = "/" + strings.TrimPrefix(endpoint, "/")
+
+	if _, err := os.Stat(filePath); err != nil {
+		a.container.Logger.Errorf("error in registering '%s' static endpoint, error: %v", endpoint, err)
+		return
+	}
+
+	a.httpServer.router.AddStaticFiles(endpoint, filePath)
 }

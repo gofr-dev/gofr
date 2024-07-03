@@ -4,9 +4,12 @@ import (
 	"errors"
 	"strconv"
 	"strings"
+	"time"
 
+	_ "github.com/go-sql-driver/mysql" // This is required to be blank import
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/datasource"
+	"gofr.dev/pkg/gofr/datasource/file"
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 	"gofr.dev/pkg/gofr/datasource/pubsub/google"
 	"gofr.dev/pkg/gofr/datasource/pubsub/kafka"
@@ -19,8 +22,6 @@ import (
 	"gofr.dev/pkg/gofr/metrics/exporters"
 	"gofr.dev/pkg/gofr/service"
 	"gofr.dev/pkg/gofr/version"
-
-	_ "github.com/go-sql-driver/mysql" // This is required to be blank import
 )
 
 // Container is a collection of all common application level concerns. Things like Logger, Connection Pool for Redis
@@ -37,7 +38,12 @@ type Container struct {
 
 	Redis Redis
 	SQL   DB
-	Mongo datasource.Mongo
+
+	Cassandra  Cassandra
+	Clickhouse Clickhouse
+	Mongo      Mongo
+
+	File datasource.FileSystem
 }
 
 func (c *Container) Close() (err error) {
@@ -86,7 +92,7 @@ func (c *Container) Create(conf config.Config) {
 
 	c.Debug("Container is being created")
 
-	c.metricsManager = metrics.NewMetricsManager(exporters.Prometheus(c.appName, c.appVersion), c.Logger)
+	c.metricsManager = metrics.NewMetricsManager(exporters.Prometheus(c.GetAppName(), c.GetAppVersion()), c.Logger)
 
 	// Register framework metrics
 	c.registerFrameworkMetrics()
@@ -124,33 +130,47 @@ func (c *Container) Create(conf config.Config) {
 			SubscriptionName: conf.Get("GOOGLE_SUBSCRIPTION_NAME"),
 		}, c.Logger, c.metricsManager)
 	case "MQTT":
-		var qos byte
-
-		port, _ := strconv.Atoi(conf.Get("MQTT_PORT"))
-		order, _ := strconv.ParseBool(conf.GetOrDefault("MQTT_MESSAGE_ORDER", "false"))
-
-		switch conf.Get("MQTT_QOS") {
-		case "1":
-			qos = 1
-		case "2":
-			qos = 2
-		default:
-			qos = 0
-		}
-
-		configs := &mqtt.Config{
-			Protocol: conf.GetOrDefault("MQTT_PROTOCOL", "tcp"), // using tcp as default method to connect to broker
-			Hostname: conf.Get("MQTT_HOST"),
-			Port:     port,
-			Username: conf.Get("MQTT_USER"),
-			Password: conf.Get("MQTT_PASSWORD"),
-			ClientID: conf.Get("MQTT_CLIENT_ID_SUFFIX"),
-			QoS:      qos,
-			Order:    order,
-		}
-
-		c.PubSub = mqtt.New(configs, c.Logger, c.metricsManager)
+		c.PubSub = c.createMqttPubSub(conf)
 	}
+
+	c.File = file.New(c.Logger)
+}
+
+func (c *Container) createMqttPubSub(conf config.Config) pubsub.Client {
+	var qos byte
+
+	port, _ := strconv.Atoi(conf.Get("MQTT_PORT"))
+	order, _ := strconv.ParseBool(conf.GetOrDefault("MQTT_MESSAGE_ORDER", "false"))
+
+	keepAlive, err := time.ParseDuration(conf.Get("MQTT_KEEP_ALIVE"))
+	if err != nil {
+		keepAlive = 30 * time.Second
+
+		c.Logger.Debug("MQTT_KEEP_ALIVE is not set or ivalid, setting it to 30 seconds")
+	}
+
+	switch conf.Get("MQTT_QOS") {
+	case "1":
+		qos = 1
+	case "2":
+		qos = 2
+	default:
+		qos = 0
+	}
+
+	configs := &mqtt.Config{
+		Protocol:  conf.GetOrDefault("MQTT_PROTOCOL", "tcp"), // using tcp as default method to connect to broker
+		Hostname:  conf.Get("MQTT_HOST"),
+		Port:      port,
+		Username:  conf.Get("MQTT_USER"),
+		Password:  conf.Get("MQTT_PASSWORD"),
+		ClientID:  conf.Get("MQTT_CLIENT_ID_SUFFIX"),
+		QoS:       qos,
+		Order:     order,
+		KeepAlive: keepAlive,
+	}
+
+	return mqtt.New(configs, c.Logger, c.metricsManager)
 }
 
 // GetHTTPService returns registered HTTP services.

@@ -8,48 +8,71 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/service"
 	"gofr.dev/pkg/gofr/testutil"
 )
 
-func TestDynamicLoggerSuccess(t *testing.T) {
-	// Create a mock server that returns a predefined log level
+func TestRemoteLogger_UpdateLevel(t *testing.T) {
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 
-		body := `{"data":[{"serviceName":"test-service","logLevel":{"LOG_LEVEL":"DEBUG"}}]}`
-
+		body := `{ "data": { "serviceName": "test-service","logLevel":"DEBUG" } }`
 		_, _ = w.Write([]byte(body))
 	}))
 
-	defer mockServer.Close()
-
-	log := testutil.StdoutOutputForFunc(func() {
-		// Create a new remote logger with the mock server URL
-		remoteLogger := New(logging.INFO, mockServer.URL, "1")
-
-		// Wait for the remote logger to update the log level
-		time.Sleep(2 * time.Second)
-
-		// Check if the log level has been updated
-		remoteLogger.Debug("Debug log after log level change")
-	})
-
-	if !strings.Contains(log, "LOG_LEVEL updated from INFO to DEBUG") {
-		t.Errorf("TestDynamicLoggerSuccess failed! Missing log message about level update")
+	rl := remoteLogger{
+		remoteURL:          mockServer.URL,
+		levelFetchInterval: 1,
+		currentLevel:       2,
+		Logger:             logging.NewMockLogger(logging.INFO),
 	}
 
-	if !strings.Contains(log, "Debug log after log level change") {
-		t.Errorf("TestDynamicLoggerSuccess failed! missing debug log")
-	}
+	go rl.UpdateLogLevel()
+
+	time.Sleep(2 * time.Second)
+
+	assert.Equal(t, logging.DEBUG, rl.currentLevel)
 }
 
-func Test_fetchAndUpdateLogLevel_ErrorCases(t *testing.T) {
+func TestRemoteLogger_UpdateLevelError(t *testing.T) {
+	rl := remoteLogger{
+		remoteURL:          "invalid url",
+		levelFetchInterval: 1,
+		currentLevel:       2,
+		Logger:             logging.NewMockLogger(logging.INFO),
+	}
+
+	go rl.UpdateLogLevel()
+
+	time.Sleep(2 * time.Second)
+
+	assert.Equal(t, logging.INFO, rl.currentLevel)
+}
+
+func Test_fetchAndUpdateLogLevel_InvalidResponse(t *testing.T) {
 	logger := logging.NewMockLogger(logging.INFO)
 
-	remoteService := service.NewHTTPService("http://", logger, nil)
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		body := `{ "data": { "serviceName": "test-service","logLevel":"TEST" } }`
+
+		_, _ = w.Write([]byte(body))
+	}))
+	defer mockServer.Close()
+
+	remoteService := service.NewHTTPService(mockServer.URL, logger, nil)
+
+	level, err := fetchAndUpdateLogLevel(remoteService, logging.DEBUG)
+
+	assert.Equal(t, logging.DEBUG, level, "Test_fetchAndUpdateLogLevel_InvalidResponse, Failed.\n")
+
+	assert.Nil(t, err)
+}
+
+func Test_fetchAndUpdateLogLevel_InvalidLogLevel(t *testing.T) {
+	logger := logging.NewMockLogger(logging.INFO)
 
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -68,20 +91,41 @@ func Test_fetchAndUpdateLogLevel_ErrorCases(t *testing.T) {
 
 	remoteService2 := service.NewHTTPService(mockServer.URL, logger, nil)
 
-	tests := []struct {
-		desc            string
-		remoteService   service.HTTP
-		currentLogLevel logging.Level
-	}{
-		{"invalid URL for remote service", remoteService, logging.INFO},
-		{"invalid response from remote service", remoteService2, logging.DEBUG},
+	level, err := fetchAndUpdateLogLevel(remoteService2, logging.DEBUG)
+
+	assert.Equal(t, logging.DEBUG, level, "Test_fetchAndUpdateLogLevel_InvalidResponse, Failed.\n")
+
+	assert.NotNil(t, err)
+}
+
+func TestDynamicLoggerSuccess(t *testing.T) {
+	// Create a mock server that returns a predefined log level
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		body := `{ "data": { "serviceName": "test-service","logLevel":"DEBUG" } }`
+
+		_, _ = w.Write([]byte(body))
+	}))
+
+	defer mockServer.Close()
+
+	log := testutil.StdoutOutputForFunc(func() {
+		// Create a new remote logger with the mock server URL
+		rl := New(logging.INFO, mockServer.URL, "1")
+
+		// Wait for the remote logger to update the log level
+		time.Sleep(2 * time.Second)
+
+		// Check if the log level has been updated
+		rl.Debug("Debug log after log level change")
+	})
+
+	if !strings.Contains(log, "LOG_LEVEL updated from INFO to DEBUG") {
+		t.Errorf("TestDynamicLoggerSuccess failed! Missing log message about level update")
 	}
 
-	for i, tc := range tests {
-		level, err := fetchAndUpdateLogLevel(tc.remoteService, tc.currentLogLevel)
-
-		assert.Equal(t, tc.currentLogLevel, level, "TEST[%d], Failed.\n%s", i, tc.desc)
-
-		assert.NotNil(t, err)
+	if !strings.Contains(log, "Debug log after log level change") {
+		t.Errorf("TestDynamicLoggerSuccess failed! missing debug log")
 	}
 }

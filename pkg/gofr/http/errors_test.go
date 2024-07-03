@@ -25,6 +25,19 @@ func TestErrorEntityNotFound_StatusCode(t *testing.T) {
 	assert.Equal(t, expectedCode, err.StatusCode(), "TEST Failed.\n")
 }
 
+func TestErrorEntityAlreadyExist(t *testing.T) {
+	err := ErrorEntityAlreadyExist{}
+
+	assert.Equal(t, alreadyExistsMessage, err.Error(), "TEST Failed.\n")
+}
+
+func TestErrorEntityAlreadyExist_StatusCode(t *testing.T) {
+	err := ErrorEntityAlreadyExist{}
+	expectedCode := http.StatusConflict
+
+	assert.Equal(t, expectedCode, err.StatusCode(), "TEST Failed.\n")
+}
+
 func TestErrorInvalidParam(t *testing.T) {
 	tests := []struct {
 		desc        string
@@ -81,4 +94,20 @@ func TestErrorInvalidRoute(t *testing.T) {
 	assert.Equal(t, "route not registered", err.Error(), "TEST Failed.\n")
 
 	assert.Equal(t, http.StatusNotFound, err.StatusCode(), "TEST Failed.\n")
+}
+
+func Test_ErrorRequestTimeout(t *testing.T) {
+	err := ErrorRequestTimeout{}
+
+	assert.Equal(t, "request timed out", err.Error(), "TEST Failed.\n")
+
+	assert.Equal(t, http.StatusRequestTimeout, err.StatusCode(), "TEST Failed.\n")
+}
+
+func Test_ErrorErrorPanicRecovery(t *testing.T) {
+	err := ErrorPanicRecovery{}
+
+	assert.Equal(t, http.StatusText(http.StatusInternalServerError), err.Error(), "TEST Failed.\n")
+
+	assert.Equal(t, http.StatusInternalServerError, err.StatusCode(), "TEST Failed.\n")
 }

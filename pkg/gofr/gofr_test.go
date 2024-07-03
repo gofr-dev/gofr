@@ -29,9 +29,8 @@ func TestNewCMD(t *testing.T) {
 	a := NewCMD()
 	// Without args we should get error on stderr.
 	outputWithoutArgs := testutil.StderrOutputForFunc(a.Run)
-	if outputWithoutArgs != "No Command Found!" {
-		t.Errorf("Stderr output mismatch. Got: %s ", outputWithoutArgs)
-	}
+
+	assert.Equal(t, "No Command Found!\n", outputWithoutArgs, "TEST Failed.\n%s", "Stderr output mismatch")
 }
 
 func TestGofr_readConfig(t *testing.T) {
@@ -225,18 +224,28 @@ func Test_otelErrorHandler(t *testing.T) {
 }
 
 func Test_addRoute(t *testing.T) {
+	originalArgs := os.Args // Save the original os.Args
+
+	// Modify os.Args for the duration of this test
+	os.Args = []string{"", "log"}
+
+	t.Cleanup(func() { os.Args = originalArgs }) // Restore os.Args after the test
+
+	// Capture the standard output to verify the logs.
 	logs := testutil.StdoutOutputForFunc(func() {
 		a := NewCMD()
 
+		// Add the "log" sub-command with its handler and description.
 		a.SubCommand("log", func(c *Context) (interface{}, error) {
 			c.Logger.Info("logging in handler")
-
 			return "handler called", nil
-		})
+		}, AddDescription("Logs a message"))
 
+		// Run the command-line application.
 		a.Run()
 	})
 
+	// Verify that the handler was called and the expected log message was output.
 	assert.Contains(t, logs, "handler called")
 }
 
@@ -250,7 +259,7 @@ func TestEnableBasicAuthWithFunc(t *testing.T) {
 	// Initialize a new App instance
 	a := &App{
 		httpServer: &httpServer{
-			router: gofrHTTP.NewRouter(c),
+			router: gofrHTTP.NewRouter(),
 		},
 		container: c,
 	}
@@ -387,7 +396,7 @@ func Test_UseMiddleware(t *testing.T) {
 
 	app := &App{
 		httpServer: &httpServer{
-			router: gofrHTTP.NewRouter(c),
+			router: gofrHTTP.NewRouter(),
 			port:   8001,
 		},
 		container: c,
@@ -423,6 +432,54 @@ func Test_UseMiddleware(t *testing.T) {
 	// checking if the testMiddleware has added the required header in the response properly.
 	testHeaderValue := resp.Header.Get("X-Test-Middleware")
 	assert.Equal(t, "applied", testHeaderValue, "Test_UseMiddleware Failed! header value mismatch.")
+}
+
+func Test_APIKeyAuthMiddleware(t *testing.T) {
+	c, _ := container.NewMockContainer(t)
+
+	app := &App{
+		httpServer: &httpServer{
+			router: gofrHTTP.NewRouter(),
+			port:   8001,
+		},
+		container: c,
+		Config:    config.NewMockConfig(map[string]string{"REQUEST_TIMEOUT": "5"}),
+	}
+
+	apiKeys := []string{"test-key"}
+	validateFunc := func(_ *container.Container, apiKey string) bool {
+		return apiKey == "test-key"
+	}
+
+	// Registering APIKey middleware with and without custom validator
+	app.EnableAPIKeyAuth(apiKeys...)
+	app.EnableAPIKeyAuthWithValidator(validateFunc)
+
+	app.GET("/test", func(_ *Context) (interface{}, error) {
+		return "success", nil
+	})
+
+	go app.Run()
+	time.Sleep(1 * time.Second)
+
+	var netClient = &http.Client{
+		Timeout: time.Second * 10,
+	}
+
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet,
+		"http://localhost:8001/test", http.NoBody)
+	req.Header.Set("X-API-Key", "test-key")
+
+	// Send the request and check for successful response
+	resp, err := netClient.Do(req)
+	if err != nil {
+		t.Errorf("error while making HTTP request in Test_APIKeyAuthMiddleware. err: %v", err)
+		return
+	}
+
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode, "Test_APIKeyAuthMiddleware Failed!")
 }
 
 func Test_SwaggerEndpoints(t *testing.T) {
@@ -518,4 +575,141 @@ func Test_Shutdown(t *testing.T) {
 	err := g.Shutdown(context.Background())
 
 	assert.Nil(t, err, "Test_Shutdown Failed!")
+}
+func TestStaticHandler(t *testing.T) {
+	const indexHTML = "indexTest.html"
+
+	// Generating some files for testing
+	htmlContent := []byte("<html><head><title>Test Static File</title></head><body><p>Testing Static File</p></body></html>")
+
+	createPublicDirectory(t, defaultPublicStaticDir, htmlContent)
+
+	defer os.Remove("static/indexTest.html")
+
+	createPublicDirectory(t, "testdir", htmlContent)
+
+	defer os.RemoveAll("testdir")
+
+	app := New()
+
+	app.AddStaticFiles("gofrTest", "./testdir")
+
+	app.httpRegistered = true
+	app.httpServer.port = 8022
+
+	go app.Run()
+	time.Sleep(1 * time.Second)
+
+	host := "http://localhost:8022"
+
+	tests := []struct {
+		desc                       string
+		method                     string
+		path                       string
+		statusCode                 int
+		expectedBody               string
+		expectedBodyLength         int
+		expectedResponseHeaderType string
+	}{
+		{
+			desc: "check file content index.html", method: http.MethodGet, path: "/" + defaultPublicStaticDir + "/" + indexHTML,
+			statusCode: http.StatusOK, expectedBodyLength: len(htmlContent),
+			expectedResponseHeaderType: "text/html; charset=utf-8", expectedBody: string(htmlContent),
+		},
+		{
+			desc: "check public endpoint", method: http.MethodGet,
+			path: "/" + defaultPublicStaticDir, statusCode: http.StatusNotFound,
+		},
+		{
+			desc: "check file content index.html in custom dir", method: http.MethodGet, path: "/" + "gofrTest" + "/" + indexHTML,
+			statusCode: http.StatusOK, expectedBodyLength: len(htmlContent),
+			expectedResponseHeaderType: "text/html; charset=utf-8", expectedBody: string(htmlContent),
+		},
+		{
+			desc: "check public endpoint in custom dir", method: http.MethodGet, path: "/" + "gofrTest",
+			statusCode: http.StatusNotFound,
+		},
+	}
+
+	for i, tc := range tests {
+		request, err := http.NewRequestWithContext(context.Background(), tc.method, host+tc.path, http.NoBody)
+		if err != nil {
+			t.Fatalf("TEST[%d], Failed to create request, error: %s", i, err)
+		}
+
+		request.Header.Set("Content-Type", "application/json")
+
+		client := http.Client{}
+
+		resp, err := client.Do(request)
+		if err != nil {
+			t.Fatalf("TEST[%d], Request failed, error: %s", i, err)
+		}
+
+		bodyBytes, err := io.ReadAll(resp.Body)
+		if err != nil {
+			t.Fatalf("TEST[%d], Failed to read response body, error: %s", i, err)
+		}
+
+		body := string(bodyBytes)
+
+		assert.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
+		assert.Equal(t, tc.statusCode, resp.StatusCode, "TEST[%d], Failed with Status Body.\n%s", i, tc.desc)
+
+		if tc.expectedBody != "" {
+			assert.Contains(t, body, tc.expectedBody, "TEST[%d], Failed with Expected Body.\n%s", i, tc.desc)
+		}
+
+		if tc.expectedBodyLength != 0 {
+			contentLength := resp.Header.Get("Content-Length")
+			assert.Equal(t, strconv.Itoa(tc.expectedBodyLength), contentLength, "TEST[%d], Failed at Content-Length.\n%s", i, tc.desc)
+		}
+
+		if tc.expectedResponseHeaderType != "" {
+			assert.Equal(t,
+				tc.expectedResponseHeaderType,
+				resp.Header.Get("Content-Type"),
+				"TEST[%d], Failed at Expected Content-Type.\n%s", i, tc.desc)
+		}
+
+		resp.Body.Close()
+	}
+}
+
+func TestStaticHandlerInvalidFilePath(t *testing.T) {
+	// Generating some files for testing
+	logs := testutil.StderrOutputForFunc(func() {
+		app := New()
+
+		app.AddStaticFiles("gofrTest", ".//,.!@#$%^&")
+	})
+
+	assert.Contains(t, logs, "no such file or directory")
+	assert.Contains(t, logs, "error in registering '/gofrTest' static endpoint")
+}
+
+func createPublicDirectory(t *testing.T, defaultPublicStaticDir string, htmlContent []byte) {
+	t.Helper()
+
+	const indexHTML = "indexTest.html"
+
+	directory := "./" + defaultPublicStaticDir
+	if _, err := os.Stat(directory); err != nil {
+		if err = os.Mkdir("./"+defaultPublicStaticDir, os.ModePerm); err != nil {
+			t.Fatalf("Couldn't create a "+defaultPublicStaticDir+" directory, error: %s", err)
+		}
+	}
+
+	file, err := os.Create(filepath.Join(directory, indexHTML))
+
+	if err != nil {
+		t.Fatalf("Couldn't create %s file", indexHTML)
+	}
+
+	_, err = file.Write(htmlContent)
+	if err != nil {
+		t.Fatalf("Couldn't write to %s file", indexHTML)
+	}
+
+	file.Close()
 }

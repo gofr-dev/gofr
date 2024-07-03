@@ -7,6 +7,8 @@ import (
 	"strings"
 )
 
+const alreadyExistsMessage = "entity already exists"
+
 // ErrorEntityNotFound represents an error for when an entity is not found in the system.
 type ErrorEntityNotFound struct {
 	Name  string
@@ -20,6 +22,18 @@ func (e ErrorEntityNotFound) Error() string {
 
 func (e ErrorEntityNotFound) StatusCode() int {
 	return http.StatusNotFound
+}
+
+// ErrorEntityAlreadyExist represents an error for when entity is already present in the storage and we are trying to make duplicate entry.
+type ErrorEntityAlreadyExist struct {
+}
+
+func (e ErrorEntityAlreadyExist) Error() string {
+	return alreadyExistsMessage
+}
+
+func (e ErrorEntityAlreadyExist) StatusCode() int {
+	return http.StatusConflict
 }
 
 // ErrorInvalidParam represents an error for invalid parameter values.
@@ -57,4 +71,26 @@ func (e ErrorInvalidRoute) Error() string {
 
 func (e ErrorInvalidRoute) StatusCode() int {
 	return http.StatusNotFound
+}
+
+// ErrorRequestTimeout represents an error for request which timed out.
+type ErrorRequestTimeout struct{}
+
+func (e ErrorRequestTimeout) Error() string {
+	return "request timed out"
+}
+
+func (e ErrorRequestTimeout) StatusCode() int {
+	return http.StatusRequestTimeout
+}
+
+// ErrorPanicRecovery represents an error for request which panicked.
+type ErrorPanicRecovery struct{}
+
+func (e ErrorPanicRecovery) Error() string {
+	return http.StatusText(http.StatusInternalServerError)
+}
+
+func (e ErrorPanicRecovery) StatusCode() int {
+	return http.StatusInternalServerError
 }

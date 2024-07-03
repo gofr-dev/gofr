@@ -27,13 +27,11 @@ export const navigation = [
             { title: 'Writing gRPC Server', href: '/docs/advanced-guide/grpc' },
             { title: 'Using Pub/Sub', href: '/docs/advanced-guide/using-publisher-subscriber' },
             { title: 'Injecting Databases', href: '/docs/advanced-guide/injecting-databases-drivers' },
-            { title: 'Dealing with Datasources', href: '/docs/advanced-guide/dealing-with-datasources' },
+            { title: 'Dealing with SQL', href: '/docs/advanced-guide/dealing-with-sql' },
             { title: 'Automatic SwaggerUI Rendering', href: '/docs/advanced-guide/swagger-documentation' },
-            {title: 'Error Handling',href: '/docs/advanced-guide/gofr-errors'}
-            // { title: 'Dealing with Remote Files', href: '/docs/advanced-guide/remote-files' },
-            // { title: 'Supporting OAuth', href: '/docs/advanced-guide/oauth' },
-            // { title: 'Creating a Static File Server', href: '/docs/advanced-guide/static-file-server' },
-            // { title: 'WebSockets', href: '/docs/advanced-guide/websockets' },
+            { title: 'Error Handling',href: '/docs/advanced-guide/gofr-errors'},
+            { title: 'Handling File', href: '/docs/advanced-guide/handling-file'},
+            { title: 'WebSockets', href: '/docs/advanced-guide/websocket' },
         ],
     },
     {
