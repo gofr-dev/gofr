@@ -271,7 +271,10 @@ func TestKafkaClient_Close(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockWriter := NewMockWriter(ctrl)
-	k := kafkaClient{writer: mockWriter}
+	mockConnection := NewMockConnection(ctrl)
+	mockConnection.EXPECT().Close().Return(nil)
+
+	k := kafkaClient{writer: mockWriter, conn: mockConnection}
 
 	mockWriter.EXPECT().Close().Return(nil)
 

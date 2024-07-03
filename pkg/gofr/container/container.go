@@ -51,11 +51,8 @@ func (c *Container) Close() (err error) {
 		err = c.PubSub.Close()
 	}
 
-	if c.SQL != nil {
-		sqlDB, ok := c.SQL.(*sql.DB)
-		if ok && sqlDB != nil {
-			err = errors.Join(err, sqlDB.Close())
-		}
+	if !isNil(c.SQL) {
+		err = errors.Join(err, c.SQL.Close())
 	}
 
 	return
