@@ -128,7 +128,7 @@ func TestMQTT_Close(t *testing.T) {
 		IncrementCounter(ctx, "app_pubsub_publish_total_count", "topic", "test")
 
 	// Disconnect the broker and then try to publish
-	client.Close()
+	client.Close(context.Background())
 
 	time.Sleep(250 * time.Millisecond)
 

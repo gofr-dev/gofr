@@ -72,7 +72,7 @@ func validateConfigs(conf *Config) error {
 	return nil
 }
 
-func (g *googleClient) Close() error {
+func (g *googleClient) Close(_ context.Context) error {
 	return g.client.Close()
 }
 

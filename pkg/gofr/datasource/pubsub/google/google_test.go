@@ -60,7 +60,7 @@ func TestGoogleClient_CloseReturnsError(t *testing.T) {
 
 	assert.NotNil(t, g.client)
 
-	err := g.Close()
+	err := g.Close(context.Background())
 
 	assert.NoError(t, err)
 }

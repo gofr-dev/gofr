@@ -1,6 +1,7 @@
 package container
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -168,6 +169,6 @@ func TestContainer_Close(t *testing.T) {
 
 	assert.NotNil(t, c.PubSub)
 
-	err := c.Close()
+	err := c.Close(context.Background())
 	assert.NoError(t, err)
 }

@@ -24,7 +24,7 @@ type Client interface {
 	CreateTopic(context context.Context, name string) error
 	DeleteTopic(context context.Context, name string) error
 
-	Close() error
+	Close(context context.Context) error
 }
 
 type Committer interface {

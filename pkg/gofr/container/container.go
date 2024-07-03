@@ -1,6 +1,7 @@
 package container
 
 import (
+	"context"
 	"errors"
 	"strconv"
 	"strings"
@@ -46,9 +47,9 @@ type Container struct {
 	File datasource.FileSystem
 }
 
-func (c *Container) Close() (err error) {
+func (c *Container) Close(ctx context.Context) (err error) {
 	if c.PubSub != nil {
-		err = c.PubSub.Close()
+		err = c.PubSub.Close(ctx)
 	}
 
 	if !isNil(c.SQL) {

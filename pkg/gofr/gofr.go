@@ -34,7 +34,10 @@ import (
 	"gofr.dev/pkg/gofr/service"
 )
 
-const defaultPublicStaticDir = "static"
+const (
+	defaultPublicStaticDir = "static"
+	shutdownTimeout        = 30 * time.Second
+)
 
 // App is the main application in the GoFr framework.
 type App struct {
@@ -138,10 +141,10 @@ func (a *App) Run() {
 	go func() {
 		<-ctx.Done()
 
-		err := a.Shutdown(context.Background())
-		if err != nil {
-			a.container.Logger.Errorf("error while shutting down: %v", err)
-		}
+		ctx, done := context.WithTimeout(context.Background(), shutdownTimeout)
+		defer done()
+
+		_ = a.Shutdown(ctx)
 	}()
 
 	wg := sync.WaitGroup{}
@@ -237,7 +240,7 @@ func (a *App) Shutdown(ctx context.Context) (err error) {
 		err = errors.Join(err, a.metricServer.Shutdown(ctx))
 	}
 
-	err = errors.Join(err, a.container.Close())
+	err = errors.Join(err, a.container.Close(ctx))
 	if err != nil {
 		a.container.Logger.Errorf("error while shutting down: %v", err)
 	}

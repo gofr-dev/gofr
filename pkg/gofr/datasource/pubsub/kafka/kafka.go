@@ -219,7 +219,7 @@ func (k *kafkaClient) Subscribe(ctx context.Context, topic string) (*pubsub.Mess
 	return m, err
 }
 
-func (k *kafkaClient) Close() error {
+func (k *kafkaClient) Close(_ context.Context) error {
 	err := k.writer.Close()
 	if err != nil {
 		k.logger.Errorf("failed to close kafka writer, error: %v", err)

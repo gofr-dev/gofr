@@ -46,7 +46,7 @@ func (s mockSubscriber) Publish(_ context.Context, _ string, _ []byte) error {
 	return nil
 }
 
-func (s mockSubscriber) Close() error {
+func (s mockSubscriber) Close(_ context.Context) error {
 	return nil
 }
 
