@@ -337,6 +337,20 @@ func (mr *MockClickhouseMockRecorder) Exec(ctx, query any, args ...any) *gomock.
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Exec", reflect.TypeOf((*MockClickhouse)(nil).Exec), varargs...)
 }
 
+// HealthCheck mocks base method.
+func (m *MockClickhouse) HealthCheck() any {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HealthCheck")
+	ret0, _ := ret[0].(any)
+	return ret0
+}
+
+// HealthCheck indicates an expected call of HealthCheck.
+func (mr *MockClickhouseMockRecorder) HealthCheck() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HealthCheck", reflect.TypeOf((*MockClickhouse)(nil).HealthCheck))
+}
+
 // Select mocks base method.
 func (m *MockClickhouse) Select(ctx context.Context, dest any, query string, args ...any) error {
 	m.ctrl.T.Helper()

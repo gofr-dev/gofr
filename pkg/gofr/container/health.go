@@ -33,33 +33,6 @@ func (c *Container) Health(ctx context.Context) interface{} {
 		healthMap["redis"] = health
 	}
 
-	if !isNil(c.Mongo) {
-		health := c.Mongo.HealthCheck()
-		if strings.Contains(fmt.Sprint(health), "DOWN") {
-			downCount++
-		}
-
-		healthMap["mongo"] = health
-	}
-
-	if !isNil(c.Cassandra) {
-		health := c.Cassandra.HealthCheck()
-		if strings.Contains(fmt.Sprint(health), "DOWN") {
-			downCount++
-		}
-
-		healthMap["cassandra"] = health
-	}
-
-	if !isNil(c.Clickhouse) {
-		health := c.Clickhouse.HealthCheck()
-		if strings.Contains(fmt.Sprint(health), "DOWN") {
-			downCount++
-		}
-
-		healthMap["clickHouse"] = health
-	}
-
 	if c.PubSub != nil {
 		health := c.PubSub.Health()
 		if health.Status == statusDown {
@@ -68,6 +41,8 @@ func (c *Container) Health(ctx context.Context) interface{} {
 
 		healthMap["pubsub"] = health
 	}
+
+	downCount, healthMap = checkExternalDBHealth(c, downCount, healthMap)
 
 	for name, svc := range c.Services {
 		health := svc.HealthCheck(ctx)
@@ -81,6 +56,41 @@ func (c *Container) Health(ctx context.Context) interface{} {
 	c.appHealth(healthMap, downCount)
 
 	return healthMap
+}
+
+func checkExternalDBHealth(c *Container, downCount int,
+	healthMap map[string]interface{}) (updatedDownCount int, updatedHealthMap map[string]interface{}) {
+	updatedDownCount = downCount
+	updatedHealthMap = healthMap
+
+	if !isNil(c.Mongo) {
+		health := c.Mongo.HealthCheck()
+		if strings.Contains(fmt.Sprint(health), "DOWN") {
+			updatedDownCount++
+		}
+
+		updatedHealthMap["mongo"] = health
+	}
+
+	if !isNil(c.Cassandra) {
+		health := c.Cassandra.HealthCheck()
+		if strings.Contains(fmt.Sprint(health), "DOWN") {
+			updatedDownCount++
+		}
+
+		updatedHealthMap["cassandra"] = health
+	}
+
+	if !isNil(c.Clickhouse) {
+		health := c.Clickhouse.HealthCheck()
+		if strings.Contains(fmt.Sprint(health), "DOWN") {
+			updatedDownCount++
+		}
+
+		updatedHealthMap["clickHouse"] = health
+	}
+
+	return updatedDownCount, updatedHealthMap
 }
 
 func (c *Container) appHealth(healthMap map[string]interface{}, downCount int) {
