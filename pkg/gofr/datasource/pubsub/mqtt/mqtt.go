@@ -345,7 +345,10 @@ func (m *MQTT) Unsubscribe(topic string) error {
 }
 
 func (m *MQTT) Close() error {
-	m.Client.Disconnect(250)
+	const closeTimeoutMs = 250
+
+	m.Client.Disconnect(closeTimeoutMs)
+
 	return nil
 }
 

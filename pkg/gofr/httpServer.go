@@ -72,5 +72,6 @@ func (s *httpServer) Shutdown(ctx context.Context) error {
 
 	err := s.srv.Shutdown(ctx)
 	s.srv = nil
+
 	return err
 }

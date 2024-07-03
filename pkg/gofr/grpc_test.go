@@ -1,6 +1,7 @@
 package gofr
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -60,10 +61,10 @@ func TestGRPC_ServerShutdown(t *testing.T) {
 
 	g := newGRPCServer(&c, 9999)
 
-	var errChan chan error = make(chan error, 1)
+	var errChan = make(chan error, 1)
 	go func() {
 		time.Sleep(2 * time.Second)
-		errChan <- g.Shutdown(nil)
+		errChan <- g.Shutdown(context.Background())
 	}()
 
 	go g.Run(&c)
