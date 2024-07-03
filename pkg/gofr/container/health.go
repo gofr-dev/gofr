@@ -34,7 +34,7 @@ func (c *Container) Health(ctx context.Context) interface{} {
 	}
 
 	if !isNil(c.Mongo) {
-		health := c.Redis.HealthCheck()
+		health := c.Mongo.HealthCheck()
 		if strings.Contains(fmt.Sprint(health), "DOWN") {
 			downCount++
 		}
@@ -43,7 +43,7 @@ func (c *Container) Health(ctx context.Context) interface{} {
 	}
 
 	if !isNil(c.Cassandra) {
-		health := c.Redis.HealthCheck()
+		health := c.Cassandra.HealthCheck()
 		if strings.Contains(fmt.Sprint(health), "DOWN") {
 			downCount++
 		}
@@ -52,7 +52,7 @@ func (c *Container) Health(ctx context.Context) interface{} {
 	}
 
 	if !isNil(c.Clickhouse) {
-		health := c.Redis.HealthCheck()
+		health := c.Clickhouse.HealthCheck()
 		if strings.Contains(fmt.Sprint(health), "DOWN") {
 			downCount++
 		}

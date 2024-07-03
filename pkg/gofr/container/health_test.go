@@ -2,6 +2,7 @@ package container
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -40,6 +41,28 @@ func TestContainer_Health(t *testing.T) {
 					"error": "redis not connected",
 				},
 			},
+			"mongo": datasource.Health{
+				Status: tc.datasourceHealth,
+				Details: map[string]interface{}{
+					"host":  "localhost:6379",
+					"error": "mongo not connected",
+				},
+			},
+			"clickHouse": datasource.Health{
+				Status: tc.datasourceHealth,
+				Details: map[string]interface{}{
+					"host":  "localhost:6379",
+					"error": "clickhouse not connected",
+				},
+			},
+			"cassandra": datasource.Health{
+				Status: tc.datasourceHealth,
+				Details: map[string]interface{}{
+					"host":  "localhost:6379",
+					"error": "cassandra not connected",
+				},
+			},
+
 			"sql": &datasource.Health{
 				Status: tc.datasourceHealth,
 				Details: map[string]interface{}{
@@ -67,6 +90,8 @@ func TestContainer_Health(t *testing.T) {
 			"status":  tc.appHealth,
 			"version": "test",
 		}
+
+		expectedJSONdata, _ := json.Marshal(expected)
 
 		c, mocks := NewMockContainer(t)
 
@@ -102,8 +127,34 @@ func TestContainer_Health(t *testing.T) {
 			},
 		})
 
+		mocks.Mongo.EXPECT().HealthCheck().Return(datasource.Health{
+			Status: tc.datasourceHealth,
+			Details: map[string]interface{}{
+				"host":  "localhost:6379",
+				"error": "mongo not connected",
+			},
+		})
+
+		mocks.Cassandra.EXPECT().HealthCheck().Return(datasource.Health{
+			Status: tc.datasourceHealth,
+			Details: map[string]interface{}{
+				"host":  "localhost:6379",
+				"error": "cassandra not connected",
+			},
+		})
+
+		mocks.Clickhouse.EXPECT().HealthCheck().Return(datasource.Health{
+			Status: tc.datasourceHealth,
+			Details: map[string]interface{}{
+				"host":  "localhost:6379",
+				"error": "clickhouse not connected",
+			},
+		})
+
 		healthData := c.Health(context.Background())
 
-		assert.Equal(t, expected, healthData, "TEST[%d], Failed.\n%s", i, tc.desc)
+		jsonData, _ := json.Marshal(healthData)
+
+		assert.Equal(t, string(expectedJSONdata), string(jsonData), "TEST[%d], Failed.\n%s", i, tc.desc)
 	}
 }
