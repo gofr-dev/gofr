@@ -85,6 +85,7 @@ func TestShutdown_ServerStopsListening(t *testing.T) {
 
 	assert.Nil(t, err, "TEST Failed.\n")
 }
+
 func TestRegisterProfillingRoutes(t *testing.T) {
 	c := &container.Container{
 		Logger: logging.NewLogger(logging.INFO),
