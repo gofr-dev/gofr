@@ -29,7 +29,7 @@ type HTTP interface {
 
 	// HealthCheck to get the service health and report it to the current application
 	HealthCheck(ctx context.Context) *Health
-	getHealthResponseForEndpoint(ctx context.Context, endpoint string) *Health
+	getHealthResponseForEndpoint(ctx context.Context, endpoint string, timeout int) *Health
 }
 
 type httpClient interface {
