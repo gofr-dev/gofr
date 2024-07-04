@@ -141,7 +141,7 @@ func Test_FindMultipleCommands(t *testing.T) {
 	cl := Client{metrics: metrics}
 
 	metrics.EXPECT().RecordHistogram(context.Background(), "app_mongo_stats", gomock.Any(), "hostname",
-		gomock.Any(), "database", gomock.Any(), "type", gomock.Any()).Times(4)
+		gomock.Any(), "database", gomock.Any(), "type", gomock.Any()).Times(3)
 
 	cl.logger = NewMockLogger(DEBUG)
 
@@ -164,29 +164,6 @@ func Test_FindMultipleCommands(t *testing.T) {
 		mt.AddMockResponses(first)
 
 		err := cl.Find(context.Background(), mt.Coll.Name(), bson.D{{}}, &foundDocuments)
-
-		assert.Nil(t, err, "Unexpected error during Find operation")
-	})
-
-	mt.Run("FindSuccessWithNilFilter", func(mt *mtest.T) {
-		cl.Database = mt.DB
-
-		var foundDocuments []interface{}
-
-		id1 := primitive.NewObjectID()
-
-		first := mtest.CreateCursorResponse(1, "foo.bar", mtest.FirstBatch, bson.D{
-			{Key: "_id", Value: id1},
-			{Key: "name", Value: "john"},
-			{Key: "email", Value: "john.doe@test.com"},
-		})
-
-		killCursors := mtest.CreateCursorResponse(0, "foo.bar", mtest.NextBatch)
-		mt.AddMockResponses(first, killCursors)
-
-		mt.AddMockResponses(first)
-
-		err := cl.Find(context.Background(), mt.Coll.Name(), nil, &foundDocuments)
 
 		assert.Nil(t, err, "Unexpected error during Find operation")
 	})

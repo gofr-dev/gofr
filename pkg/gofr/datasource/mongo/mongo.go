@@ -109,10 +109,6 @@ func (c *Client) InsertMany(ctx context.Context, collection string, documents []
 func (c *Client) Find(ctx context.Context, collection string, filter, results interface{}) error {
 	defer c.postProcess(&QueryLog{Query: "find", Collection: collection, Filter: filter}, time.Now())
 
-	if filter == nil {
-		filter = bson.D{}
-	}
-
 	cur, err := c.Database.Collection(collection).Find(ctx, filter)
 	if err != nil {
 		return err
