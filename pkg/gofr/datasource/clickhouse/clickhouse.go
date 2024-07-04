@@ -169,16 +169,13 @@ type Health struct {
 const errStatusDown = "StatusDown"
 
 // HealthCheck checks the health of the MongoDB client by pinging the database.
-func (c *client) HealthCheck() (any, error) {
+func (c *client) HealthCheck(ctx context.Context) (any, error) {
 	h := Health{
 		Details: make(map[string]interface{}),
 	}
 
 	h.Details["host"] = c.config.Hosts
 	h.Details["database"] = c.config.Database
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
 
 	err := c.conn.Ping(ctx)
 	if err != nil {

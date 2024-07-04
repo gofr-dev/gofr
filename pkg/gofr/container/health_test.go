@@ -118,7 +118,7 @@ func registerMocks(mocks Mocks, health string) {
 		},
 	})
 
-	mocks.Mongo.EXPECT().HealthCheck().Return(datasource.Health{
+	mocks.Mongo.EXPECT().HealthCheck(context.Background()).Return(datasource.Health{
 		Status: health,
 		Details: map[string]interface{}{
 			"host":  "localhost:6379",
@@ -126,7 +126,7 @@ func registerMocks(mocks Mocks, health string) {
 		},
 	})
 
-	mocks.Cassandra.EXPECT().HealthCheck().Return(datasource.Health{
+	mocks.Cassandra.EXPECT().HealthCheck(context.Background()).Return(datasource.Health{
 		Status: health,
 		Details: map[string]interface{}{
 			"host":  "localhost:6379",
@@ -134,7 +134,7 @@ func registerMocks(mocks Mocks, health string) {
 		},
 	})
 
-	mocks.Clickhouse.EXPECT().HealthCheck().Return(datasource.Health{
+	mocks.Clickhouse.EXPECT().HealthCheck(context.Background()).Return(datasource.Health{
 		Status: health,
 		Details: map[string]interface{}{
 			"host":  "localhost:6379",

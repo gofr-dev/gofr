@@ -278,7 +278,7 @@ func Test_HealthCheck(t *testing.T) {
 	for i, tc := range testCases {
 		tc.mockCall()
 
-		health, err := client.HealthCheck()
+		health, err := client.HealthCheck(context.Background())
 
 		assert.Equal(t, tc.err, err)
 		assert.Equalf(t, tc.expHealth, health, "TEST[%d], Failed.\n%s", i, tc.desc)

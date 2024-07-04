@@ -300,7 +300,7 @@ type Health struct {
 const errStatusDown = "StatusDown"
 
 // HealthCheck checks the health of the Cassandra.
-func (c *Client) HealthCheck() (any, error) {
+func (c *Client) HealthCheck(context.Context) (any, error) {
 	const (
 		statusDown = "DOWN"
 		statusUp   = "UP"

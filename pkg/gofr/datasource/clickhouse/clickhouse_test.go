@@ -82,7 +82,7 @@ func Test_ClickHouse_HealthUP(t *testing.T) {
 
 	mockConn.EXPECT().Ping(gomock.Any()).Return(nil)
 
-	resp, _ := c.HealthCheck()
+	resp, _ := c.HealthCheck(context.Background())
 
 	assert.Contains(t, fmt.Sprint(resp), "UP")
 }
@@ -92,7 +92,7 @@ func Test_ClickHouse_HealthDOWN(t *testing.T) {
 
 	mockConn.EXPECT().Ping(gomock.Any()).Return(sql.ErrConnDone)
 
-	resp, err := c.HealthCheck()
+	resp, err := c.HealthCheck(context.Background())
 
 	assert.Equal(t, err, errors.New(errStatusDown))
 	assert.Contains(t, fmt.Sprint(resp), "DOWN")

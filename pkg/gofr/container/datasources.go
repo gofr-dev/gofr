@@ -182,5 +182,5 @@ type provider interface {
 }
 
 type HealthChecker interface {
-	HealthCheck() (any, error)
+	HealthCheck(context.Context) (any, error)
 }
