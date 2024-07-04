@@ -23,7 +23,7 @@ func TestTrace(_ *testing.T) {
 	otel.SetTracerProvider(tp)
 
 	handler := Tracer(&MockHandlerForTracing{})
-	req := httptest.NewRequest("GET", "/dummy", http.NoBody)
+	req := httptest.NewRequest(http.MethodGet, "/dummy", http.NoBody)
 
 	recorder := httptest.NewRecorder()
 

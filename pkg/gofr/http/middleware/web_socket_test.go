@@ -70,7 +70,7 @@ func Test_WSConnectionCreate_Success(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	req := httptest.NewRequest("GET", "/ws", http.NoBody)
+	req := httptest.NewRequest(http.MethodGet, "/ws", http.NoBody)
 	req.Header.Set("Connection", "Upgrade")
 	req.Header.Set("Upgrade", "websocket")
 
