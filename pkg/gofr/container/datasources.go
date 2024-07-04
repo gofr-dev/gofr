@@ -195,5 +195,7 @@ type provider interface {
 }
 
 type HealthChecker interface {
+	// HealthCheck returns and interface rather than a struct as externalDB's are part of different module.
+	// It is done to avoid adding packages which are not being used.
 	HealthCheck(context.Context) (any, error)
 }
