@@ -219,19 +219,20 @@ func (k *kafkaClient) Subscribe(ctx context.Context, topic string) (*pubsub.Mess
 	return m, err
 }
 
-func (k *kafkaClient) Close(_ context.Context) error {
-	err := k.writer.Close()
-	if err != nil {
-		k.logger.Errorf("failed to close kafka writer, error: %v", err)
+func (k *kafkaClient) Close(_ context.Context) (err error) {
+	if k.writer != nil {
+		err = k.writer.Close()
+	}
 
-		return err
+	for _, r := range k.reader {
+		err = errors.Join(err, r.Close())
 	}
 
 	if k.conn != nil {
-		return k.conn.Close()
+		err = errors.Join(k.conn.Close())
 	}
 
-	return nil
+	return err
 }
 
 func (k *kafkaClient) getNewReader(topic string) Reader {

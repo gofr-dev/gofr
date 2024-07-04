@@ -76,7 +76,7 @@ func TestSubscriptionManager_HandlerError(t *testing.T) {
 
 		// Run the subscriber in a goroutine
 		go func() {
-			subscriptionManager.startSubscriber("test-topic",
+			subscriptionManager.startSubscriber(context.Background(), "test-topic",
 				func(*Context) error {
 					return handleError("error in test-topic")
 				})
@@ -106,7 +106,7 @@ func TestSubscriptionManager_SubscribeError(t *testing.T) {
 
 		// Run the subscriber in a goroutine
 		go func() {
-			subscriptionManager.startSubscriber("abc",
+			subscriptionManager.startSubscriber(context.Background(), "abc",
 				func(*Context) error {
 					return handleError("error in abc")
 				})
@@ -136,7 +136,7 @@ func TestSubscriptionManager_PanicRecovery(t *testing.T) {
 
 		// Run the subscriber in a goroutine
 		go func() {
-			subscriptionManager.startSubscriber("abc",
+			subscriptionManager.startSubscriber(context.Background(), "abc",
 				func(*Context) error {
 					panic("test panic")
 				})
@@ -152,4 +152,21 @@ func TestSubscriptionManager_PanicRecovery(t *testing.T) {
 	if !strings.Contains(testLogs, "error while reading from") {
 		t.Error("TestSubscriptionManager_SubscribeError Failed! Missing log message about subscription error")
 	}
+}
+
+func TestSubscriptionManager_ShouldStopOnCtxDone(_ *testing.T) {
+	mockContainer := container.Container{
+		Logger: logging.NewLogger(logging.ERROR),
+		PubSub: mockSubscriber{},
+	}
+	subscriptionManager := newSubscriptionManager(&mockContainer)
+
+	// Run the subscriber in a goroutine
+	ctx, cancel := context.WithCancel(context.Background())
+
+	// should handle one message and quit due to canceled context
+	subscriptionManager.startSubscriber(ctx, "test-topic", func(*Context) error {
+		cancel()
+		return nil
+	})
 }

@@ -60,33 +60,41 @@ type subscription struct {
 // New establishes a connection to MQTT Broker using the configs and return pubsub.MqttPublisherSubscriber
 // with more MQTT focused functionalities related to subscribing(push), unsubscribing and disconnecting from broker.
 func New(config *Config, logger Logger, metrics Metrics) *MQTT {
+	var options *mqtt.ClientOptions
 	if config.Hostname == "" {
-		return getDefaultClient(config, logger, metrics)
+		options = getDefaultClientOpts(config)
+	} else {
+		options = getMQTTClientOptions(config)
 	}
 
-	options := getMQTTClientOptions(config)
 	subs := make(map[string]subscription)
 	mu := new(sync.RWMutex)
 
-	logger.Debugf("connecting to MQTT at '%v:%v' with clientID '%v'", config.Hostname, config.Port, config.ClientID)
+	options.SetOrderMatters(config.Order)
+	options.SetResumeSubs(config.RetrieveRetained)
+	options.SetAutoReconnect(true)
+	options.SetKeepAlive(config.KeepAlive)
 
+	options.SetAutoReconnect(true)
+	options.SetKeepAlive(config.KeepAlive)
 	options.SetOnConnectHandler(createReconnectHandler(mu, config, subs))
 	options.SetConnectionLostHandler(createConnectionLostHandler(logger))
 	options.SetReconnectingHandler(createReconnectingHandler(logger, config))
+
+	logger.Debugf("connecting to MQTT at '%v:%v' with clientID '%v'", config.Hostname, config.Port, config.ClientID)
+
 	// create the client using the options above
 	client := mqtt.NewClient(options)
 	if token := client.Connect(); token.Wait() && token.Error() != nil {
 		logger.Errorf("could not connect to MQTT at '%v:%v', error: %v", config.Hostname, config.Port, token.Error())
-
-		return &MQTT{Client: client, config: config, logger: logger}
+	} else {
+		logger.Infof("connected to MQTT at '%v:%v' with clientID '%v'", config.Hostname, config.Port, options.ClientID)
 	}
-
-	logger.Infof("connected to MQTT at '%v:%v' with clientID '%v'", config.Hostname, config.Port, options.ClientID)
 
 	return &MQTT{Client: client, config: config, logger: logger, subscriptions: subs, mu: mu, metrics: metrics}
 }
 
-func getDefaultClient(config *Config, logger Logger, metrics Metrics) *MQTT {
+func getDefaultClientOpts(config *Config) *mqtt.ClientOptions {
 	var (
 		host     = publicBroker
 		port     = 1883
@@ -96,25 +104,12 @@ func getDefaultClient(config *Config, logger Logger, metrics Metrics) *MQTT {
 	opts := mqtt.NewClientOptions()
 	opts.AddBroker(fmt.Sprintf("tcp://%s:%d", host, port))
 	opts.SetClientID(clientID)
-	opts.SetAutoReconnect(true)
-	opts.SetKeepAlive(config.KeepAlive)
-	client := mqtt.NewClient(opts)
-
-	if token := client.Connect(); token.Wait() && token.Error() != nil {
-		logger.Errorf("could not connect to MQTT at '%v:%v', error: %v", config.Hostname, config.Port, token.Error())
-
-		return &MQTT{Client: client, config: config, logger: logger}
-	}
 
 	config.Hostname = host
 	config.Port = port
 	config.ClientID = clientID
 
-	msg := make(map[string]subscription)
-
-	logger.Infof("connected to MQTT at '%v:%v' with clientID '%v'", config.Hostname, config.Port, clientID)
-
-	return &MQTT{Client: client, config: config, logger: logger, subscriptions: msg, mu: new(sync.RWMutex), metrics: metrics}
+	return opts
 }
 
 func getMQTTClientOptions(config *Config) *mqtt.ClientOptions {
@@ -134,8 +129,6 @@ func getMQTTClientOptions(config *Config) *mqtt.ClientOptions {
 
 	options.SetOrderMatters(config.Order)
 	options.SetResumeSubs(config.RetrieveRetained)
-	options.SetAutoReconnect(true)
-	options.SetKeepAlive(config.KeepAlive)
 
 	return options
 }
@@ -154,28 +147,48 @@ func getClientID(clientID string) string {
 }
 
 func (m *MQTT) Subscribe(ctx context.Context, topic string) (*pubsub.Message, error) {
+	subs, err := m.getSub(ctx, topic)
+	if err != nil {
+		return nil, err
+	}
+
+	if subs == nil {
+		return nil, nil
+	}
+	// blocks if there are no messages in the channel and context not canceled
+	select {
+	case <-ctx.Done():
+		return nil, nil
+	case msg := <-subs.msgs:
+		m.metrics.IncrementCounter(msg.Context(), "app_pubsub_subscribe_success_count", "topic", msg.Topic)
+		return msg, nil
+	}
+}
+
+func (m *MQTT) getSub(ctx context.Context, topic string) (*subscription, error) {
 	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	// get the message channel for the given topic
 	subs, ok := m.subscriptions[topic]
 	if !ok {
 		subs.msgs = make(chan *pubsub.Message, messageBuffer)
 		subs.handler = m.createMqttHandler(ctx, topic, subs.msgs)
 		token := m.Client.Subscribe(topic, m.config.QoS, subs.handler)
+		select {
+		case <-token.Done():
+			if token.Error() != nil {
+				m.logger.Errorf("error getting a message from MQTT, error: %v", token.Error())
+				return &subs, token.Error()
+			}
 
-		if token.Wait() && token.Error() != nil {
-			m.logger.Errorf("error getting a message from MQTT, error: %v", token.Error())
-			return nil, token.Error()
+			m.subscriptions[topic] = subs
+		case <-ctx.Done():
+			return &subs, nil
 		}
-
-		m.subscriptions[topic] = subs
 	}
-	m.mu.Unlock()
 
-	// blocks if there are no messages in the channel
-	msg := <-subs.msgs
-	m.metrics.IncrementCounter(msg.Context(), "app_pubsub_subscribe_success_count", "topic", msg.Topic)
-
-	return msg, nil
+	return &subs, nil
 }
 
 func (m *MQTT) createMqttHandler(_ context.Context, topic string, msgs chan *pubsub.Message) mqtt.MessageHandler {
@@ -325,6 +338,7 @@ func (m *MQTT) SubscribeWithFunction(topic string, subscribeFunc SubscribeFunc) 
 
 func (m *MQTT) Unsubscribe(topic string) error {
 	m.mu.RLock()
+	defer m.mu.RUnlock()
 	token := m.Client.Unsubscribe(topic)
 	token.Wait()
 
@@ -339,7 +353,6 @@ func (m *MQTT) Unsubscribe(topic string) error {
 		close(sub.msgs)
 		delete(m.subscriptions, topic)
 	}
-	m.mu.RUnlock()
 
 	return nil
 }
@@ -354,12 +367,13 @@ func (m *MQTT) Close(_ context.Context) error {
 
 func (m *MQTT) Disconnect(waitTime uint) {
 	m.mu.RLock()
+	defer m.mu.RUnlock()
+
 	for topic := range m.subscriptions {
 		_ = m.Unsubscribe(topic)
 	}
 
 	m.Client.Disconnect(waitTime)
-	m.mu.RUnlock()
 }
 
 func (m *MQTT) Ping() error {
@@ -375,10 +389,11 @@ func (m *MQTT) Ping() error {
 func createReconnectHandler(mu *sync.RWMutex, config *Config, subs map[string]subscription) func(c mqtt.Client) {
 	return func(c mqtt.Client) {
 		mu.RLock()
+		defer mu.RUnlock()
+
 		for k, v := range subs {
 			c.Subscribe(k, config.QoS, v.handler)
 		}
-		mu.RUnlock()
 	}
 }
 

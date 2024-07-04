@@ -141,10 +141,10 @@ func (a *App) Run() {
 	go func() {
 		<-ctx.Done()
 
-		ctx, done := context.WithTimeout(context.Background(), shutdownTimeout)
+		shutdownCtx, done := context.WithTimeout(context.Background(), shutdownTimeout)
 		defer done()
 
-		_ = a.Shutdown(ctx)
+		_ = a.Shutdown(shutdownCtx)
 	}()
 
 	wg := sync.WaitGroup{}
@@ -185,10 +185,13 @@ func (a *App) Run() {
 	if len(a.subscriptionManager.subscriptions) != 0 {
 		// Start subscribers concurrently using go-routines
 		for topic, handler := range a.subscriptionManager.subscriptions {
-			go a.subscriptionManager.startSubscriber(topic, handler)
-		}
+			wg.Add(1)
 
-		wg.Add(1)
+			go func(ctx context.Context, topic string, handler SubscribeFunc) {
+				defer wg.Done()
+				a.subscriptionManager.startSubscriber(ctx, topic, handler)
+			}(ctx, topic, handler)
+		}
 	}
 
 	wg.Wait()

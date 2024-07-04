@@ -297,16 +297,13 @@ func TestKafkaClient_CloseError(t *testing.T) {
 
 	mockWriter.EXPECT().Close().Return(errClose)
 
-	logs := testutil.StderrOutputForFunc(func() {
-		logger := logging.NewMockLogger(logging.ERROR)
-		k.logger = logger
+	logger := logging.NewMockLogger(logging.ERROR)
+	k.logger = logger
 
-		err = k.Close(context.Background())
-	})
+	err = k.Close(context.Background())
 
 	assert.NotNil(t, err)
 	assert.Equal(t, errClose, err)
-	assert.Contains(t, logs, "failed to close kafka writer")
 }
 
 func TestKafkaClient_getNewReader(t *testing.T) {
