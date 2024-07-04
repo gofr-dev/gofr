@@ -20,7 +20,7 @@ func (m *mockHTTP) HealthCheck(_ context.Context) *Health {
 	}
 }
 
-func (m *mockHTTP) getHealthResponseForEndpoint(_ context.Context, _ string) *Health {
+func (m *mockHTTP) getHealthResponseForEndpoint(ctx context.Context, endpoint string, timeout int) *Health {
 	return &Health{
 		Status:  "UP",
 		Details: map[string]interface{}{"host": "http://test.com"},
@@ -77,7 +77,7 @@ func TestRetryProvider_Get(t *testing.T) {
 
 	// Make the GET request
 	resp, err := retryHTTP.Get(context.Background(), "/test", nil)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	defer resp.Body.Close()
 
@@ -92,7 +92,7 @@ func TestRetryProvider_GetWithHeaders(t *testing.T) {
 	// Make the GET request with headers
 	resp, err := retryHTTP.GetWithHeaders(context.Background(), "/test", nil,
 		map[string]string{"Content-Type": "application/json"})
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	defer resp.Body.Close()
 
@@ -106,7 +106,7 @@ func TestRetryProvider_Post(t *testing.T) {
 
 	// Make the POST request
 	resp, err := retryHTTP.Post(context.Background(), "/test", nil, []byte("body"))
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	defer resp.Body.Close()
 
@@ -121,7 +121,7 @@ func TestRetryProvider_PostWithHeaders(t *testing.T) {
 	// Make the POST request with headers
 	resp, err := retryHTTP.PostWithHeaders(context.Background(), "/test", nil, []byte("body"),
 		map[string]string{"Content-Type": "application/json"})
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	defer resp.Body.Close()
 
@@ -135,7 +135,7 @@ func TestRetryProvider_Put(t *testing.T) {
 
 	// Make the PUT request
 	resp, err := retryHTTP.Put(context.Background(), "/test", nil, []byte("body"))
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	defer resp.Body.Close()
 
@@ -150,7 +150,7 @@ func TestRetryProvider_PutWithHeaders(t *testing.T) {
 	// Make the PUT request with headers
 	resp, err := retryHTTP.PutWithHeaders(context.Background(), "/test", nil, []byte("body"),
 		map[string]string{"Content-Type": "application/json"})
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	defer resp.Body.Close()
 
@@ -173,7 +173,7 @@ func TestRetryProvider_Patch_WithError(t *testing.T) {
 
 	// Make the PATCH request
 	resp, err := httpService.Patch(context.Background(), "/test", nil, []byte("body"))
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	defer resp.Body.Close()
 
@@ -188,7 +188,7 @@ func TestRetryProvider_PatchWithHeaders(t *testing.T) {
 	// Make the PATCH request with headers
 	resp, err := retryHTTP.PatchWithHeaders(context.Background(), "/test", nil, []byte("body"),
 		map[string]string{"Content-Type": "application/json"})
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	defer resp.Body.Close()
 
@@ -202,7 +202,7 @@ func TestRetryProvider_Delete(t *testing.T) {
 
 	// Make the DELETE request
 	resp, err := retryHTTP.Delete(context.Background(), "/test", nil)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	defer resp.Body.Close()
 
@@ -216,7 +216,7 @@ func TestRetryProvider_DeleteWithHeaders(t *testing.T) {
 	// Make the DELETE request with headers
 	resp, err := retryHTTP.DeleteWithHeaders(context.Background(), "/test", []byte("body"),
 		map[string]string{"Content-Type": "application/json"})
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	defer resp.Body.Close()
 
