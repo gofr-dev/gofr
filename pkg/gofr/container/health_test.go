@@ -124,7 +124,7 @@ func registerMocks(mocks Mocks, health string) {
 			"host":  "localhost:6379",
 			"error": "mongo not connected",
 		},
-	})
+	}, nil)
 
 	mocks.Cassandra.EXPECT().HealthCheck(context.Background()).Return(datasource.Health{
 		Status: health,
@@ -132,7 +132,7 @@ func registerMocks(mocks Mocks, health string) {
 			"host":  "localhost:6379",
 			"error": "cassandra not connected",
 		},
-	})
+	}, nil)
 
 	mocks.Clickhouse.EXPECT().HealthCheck(context.Background()).Return(datasource.Health{
 		Status: health,
@@ -140,5 +140,5 @@ func registerMocks(mocks Mocks, health string) {
 			"host":  "localhost:6379",
 			"error": "clickhouse not connected",
 		},
-	})
+	}, nil)
 }
