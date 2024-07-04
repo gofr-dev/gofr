@@ -86,6 +86,7 @@ linters:
     - govet
     - ineffassign
     - lll
+    - mirror
     - misspell
     - mnd
     - nakedret
