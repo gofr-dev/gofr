@@ -300,4 +300,9 @@ This document lists all the configuration options supported by the GoFr framewor
 -  MQTT_QOS
 -  Quality of Service Level
 
+---
+
+-  MQTT_KEEP_ALIVE
+-  Sends regular messages to check the link is active. May not work as expected if handling func is blocking execution
+
 {% /table %}
