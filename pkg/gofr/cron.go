@@ -156,15 +156,16 @@ func parseSteps(s, match1, match2 string, minValue, maxValue int) (map[int]struc
 	localMax := maxValue
 
 	if match1 != "" && match1 != "*" {
-		if rng := matchRange.FindStringSubmatch(match1); rng != nil {
-			localMin, _ = strconv.Atoi(rng[1])
-			localMax, _ = strconv.Atoi(rng[2])
-
-			if localMin < minValue || localMax > maxValue {
-				return nil, errOutOfRange{rng[1], s, minValue, maxValue}
-			}
-		} else {
+		rng := matchRange.FindStringSubmatch(match1)
+		if rng == nil {
 			return nil, errParsing{match1, s}
+		}
+
+		localMin, _ = strconv.Atoi(rng[1])
+		localMax, _ = strconv.Atoi(rng[2])
+
+		if localMin < minValue || localMax > maxValue {
+			return nil, errOutOfRange{rng[1], s, minValue, maxValue}
 		}
 	}
 
@@ -178,24 +179,31 @@ func parseRange(s string, minValue, maxValue int) (map[int]struct{}, error) {
 	parts := strings.Split(s, ",")
 
 	for _, x := range parts {
-		if rng := matchRange.FindStringSubmatch(x); rng != nil {
-			localMin, _ := strconv.Atoi(rng[1])
-			localMax, _ := strconv.Atoi(rng[2])
+		rng := matchRange.FindStringSubmatch(x)
 
-			if localMin < minValue || localMax > maxValue {
-				return nil, errOutOfRange{x, s, minValue, maxValue}
+		if rng == nil {
+			i, err := strconv.Atoi(x)
+			if err != nil {
+				return nil, errParsing{x, s}
 			}
 
-			r = getDefaultJobField(localMin, localMax, 1)
-		} else if i, err := strconv.Atoi(x); err == nil {
 			if i < minValue || i > maxValue {
 				return nil, errOutOfRange{i, s, minValue, maxValue}
 			}
 
 			r[i] = struct{}{}
-		} else {
-			return nil, errParsing{x, s}
+
+			continue
 		}
+
+		localMin, _ := strconv.Atoi(rng[1])
+		localMax, _ := strconv.Atoi(rng[2])
+
+		if localMin < minValue || localMax > maxValue {
+			return nil, errOutOfRange{x, s, minValue, maxValue}
+		}
+
+		r = getDefaultJobField(localMin, localMax, 1)
 	}
 
 	if len(r) == 0 {

@@ -84,6 +84,7 @@ linters-settings:
       - name: bare-return
       - name: bool-literal-in-expr
       - name: comment-spacings
+      - name: early-return
 
 linters:
   # please, do not use `enable-all`: it's deprecated and will be removed soon.
