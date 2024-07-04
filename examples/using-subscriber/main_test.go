@@ -1,18 +1,50 @@
 package main
 
 import (
+	"context"
 	"strings"
 	"testing"
 	"time"
 
+	"gofr.dev/pkg/gofr/datasource/pubsub/kafka"
+	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/testutil"
 )
 
+type mock struct {
+}
+
+func (m *mock) IncrementCounter(ctx context.Context, name string, labels ...string) {
+}
+
+func initializeTest(t *testing.T) {
+	c := kafka.New(kafka.Config{
+		Broker:       "localhost:9092",
+		OffSet:       1,
+		BatchSize:    kafka.DefaultBatchSize,
+		BatchBytes:   kafka.DefaultBatchBytes,
+		BatchTimeout: kafka.DefaultBatchTimeout,
+		Partition:    1,
+	}, logging.NewMockLogger(logging.INFO), &mock{})
+
+	err := c.Publish(context.Background(), "order-logs", []byte(`{"data":{"orderId":"123","status":"pending"}}`))
+	if err != nil {
+		t.Errorf("Error while publishing: %v", err)
+	}
+
+	err = c.Publish(context.Background(), "products", []byte(`{"data":{"productId":"123","price":"599"}}`))
+	if err != nil {
+		t.Errorf("Error while publishing: %v", err)
+	}
+}
+
 func TestExampleSubscriber(t *testing.T) {
+	initializeTest(t)
+
 	log := testutil.StdoutOutputForFunc(func() {
 		const host = "http://localhost:8200"
 		go main()
-		time.Sleep(time.Minute * 2)
+		time.Sleep(time.Second * 20)
 	})
 
 	testCases := []struct {
