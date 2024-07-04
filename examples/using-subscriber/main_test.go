@@ -19,7 +19,7 @@ func (m *mock) IncrementCounter(ctx context.Context, name string, labels ...stri
 
 func initializeTest(t *testing.T) {
 	c := kafka.New(kafka.Config{
-		Broker:       "localhost:9092",
+		Broker:       "localhost:456787",
 		OffSet:       1,
 		BatchSize:    kafka.DefaultBatchSize,
 		BatchBytes:   kafka.DefaultBatchBytes,
@@ -44,7 +44,7 @@ func TestExampleSubscriber(t *testing.T) {
 	log := testutil.StdoutOutputForFunc(func() {
 		const host = "http://localhost:8200"
 		go main()
-		time.Sleep(time.Second * 20)
+		time.Sleep(time.Second * 40)
 	})
 
 	testCases := []struct {
@@ -66,4 +66,6 @@ func TestExampleSubscriber(t *testing.T) {
 			t.Errorf("TEST[%d], Failed.\n%s", i, tc.desc)
 		}
 	}
+
+	t.Log(log)
 }
