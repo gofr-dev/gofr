@@ -43,18 +43,13 @@ type handler struct {
 func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	c := newContext(gofrHTTP.NewResponder(w, r.Method), gofrHTTP.NewRequest(r), h.container)
 
-	var (
-		ctx    context.Context
-		cancel context.CancelFunc
-	)
-
 	if websocket.IsWebSocketUpgrade(r) {
 		// If the request is a WebSocket upgrade, do not apply the timeout
-		ctx = r.Context()
+		c.Context = r.Context()
 	} else if h.requestTimeout != "" {
 		reqTimeout := h.setContextTimeout(h.requestTimeout)
 
-		ctx, cancel = context.WithTimeout(r.Context(), time.Duration(reqTimeout)*time.Second)
+		ctx, cancel := context.WithTimeout(r.Context(), time.Duration(reqTimeout)*time.Second)
 		defer cancel()
 
 		c.Context = ctx
@@ -79,7 +74,7 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	select {
 	case <-c.Context.Done():
 		// If the context's deadline has been exceeded, return a timeout error response
-		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		if errors.Is(c.Err(), context.DeadlineExceeded) {
 			err = gofrHTTP.ErrorRequestTimeout{}
 		}
 	case <-done:
