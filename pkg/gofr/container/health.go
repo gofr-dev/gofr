@@ -2,9 +2,7 @@ package container
 
 import (
 	"context"
-	"fmt"
 	"reflect"
-	"strings"
 )
 
 func (c *Container) Health(ctx context.Context) interface{} {
@@ -64,8 +62,8 @@ func checkExternalDBHealth(c *Container, downCount int,
 	updatedHealthMap = healthMap
 
 	if !isNil(c.Mongo) {
-		health := c.Mongo.HealthCheck()
-		if strings.Contains(fmt.Sprint(health), "DOWN") {
+		health, err := c.Mongo.HealthCheck()
+		if err != nil {
 			updatedDownCount++
 		}
 
@@ -73,8 +71,8 @@ func checkExternalDBHealth(c *Container, downCount int,
 	}
 
 	if !isNil(c.Cassandra) {
-		health := c.Cassandra.HealthCheck()
-		if strings.Contains(fmt.Sprint(health), "DOWN") {
+		health, err := c.Cassandra.HealthCheck()
+		if err != nil {
 			updatedDownCount++
 		}
 
@@ -82,8 +80,8 @@ func checkExternalDBHealth(c *Container, downCount int,
 	}
 
 	if !isNil(c.Clickhouse) {
-		health := c.Clickhouse.HealthCheck()
-		if strings.Contains(fmt.Sprint(health), "DOWN") {
+		health, err := c.Clickhouse.HealthCheck()
+		if err != nil {
 			updatedDownCount++
 		}
 

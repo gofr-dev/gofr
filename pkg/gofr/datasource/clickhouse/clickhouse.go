@@ -2,6 +2,7 @@ package clickhouse
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"time"
 
@@ -165,12 +166,10 @@ type Health struct {
 	Details map[string]interface{} `json:"details,omitempty"`
 }
 
-func (h *Health) GetStatus() string {
-	return h.Status
-}
+const errStatusDown = "StatusDown"
 
 // HealthCheck checks the health of the MongoDB client by pinging the database.
-func (c *client) HealthCheck() interface{} {
+func (c *client) HealthCheck() (any, error) {
 	h := Health{
 		Details: make(map[string]interface{}),
 	}
@@ -185,10 +184,10 @@ func (c *client) HealthCheck() interface{} {
 	if err != nil {
 		h.Status = "DOWN"
 
-		return &h
+		return &h, errors.New(errStatusDown)
 	}
 
 	h.Status = "UP"
 
-	return &h
+	return &h, nil
 }

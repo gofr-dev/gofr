@@ -7328,11 +7328,12 @@ func (mr *MockCassandraMockRecorder) ExecCAS(dest, stmt any, values ...any) *gom
 }
 
 // HealthCheck mocks base method.
-func (m *MockCassandra) HealthCheck() any {
+func (m *MockCassandra) HealthCheck() (any, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "HealthCheck")
 	ret0, _ := ret[0].(any)
-	return ret0
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // HealthCheck indicates an expected call of HealthCheck.
@@ -7435,11 +7436,12 @@ func (mr *MockCassandraProviderMockRecorder) ExecCAS(dest, stmt any, values ...a
 }
 
 // HealthCheck mocks base method.
-func (m *MockCassandraProvider) HealthCheck() any {
+func (m *MockCassandraProvider) HealthCheck() (any, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "HealthCheck")
 	ret0, _ := ret[0].(any)
-	return ret0
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // HealthCheck indicates an expected call of HealthCheck.
@@ -7553,11 +7555,12 @@ func (mr *MockClickhouseMockRecorder) Exec(ctx, query any, args ...any) *gomock.
 }
 
 // HealthCheck mocks base method.
-func (m *MockClickhouse) HealthCheck() any {
+func (m *MockClickhouse) HealthCheck() (any, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "HealthCheck")
 	ret0, _ := ret[0].(any)
-	return ret0
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // HealthCheck indicates an expected call of HealthCheck.
@@ -7659,11 +7662,12 @@ func (mr *MockClickhouseProviderMockRecorder) Exec(ctx, query any, args ...any) 
 }
 
 // HealthCheck mocks base method.
-func (m *MockClickhouseProvider) HealthCheck() any {
+func (m *MockClickhouseProvider) HealthCheck() (any, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "HealthCheck")
 	ret0, _ := ret[0].(any)
-	return ret0
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // HealthCheck indicates an expected call of HealthCheck.
@@ -7826,11 +7830,12 @@ func (mr *MockMongoMockRecorder) FindOne(ctx, collection, filter, result any) *g
 }
 
 // HealthCheck mocks base method.
-func (m *MockMongo) HealthCheck() any {
+func (m *MockMongo) HealthCheck() (any, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "HealthCheck")
 	ret0, _ := ret[0].(any)
-	return ret0
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // HealthCheck indicates an expected call of HealthCheck.
@@ -8036,11 +8041,12 @@ func (mr *MockMongoProviderMockRecorder) FindOne(ctx, collection, filter, result
 }
 
 // HealthCheck mocks base method.
-func (m *MockMongoProvider) HealthCheck() any {
+func (m *MockMongoProvider) HealthCheck() (any, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "HealthCheck")
 	ret0, _ := ret[0].(any)
-	return ret0
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // HealthCheck indicates an expected call of HealthCheck.
@@ -8230,11 +8236,12 @@ func (m *MockHealthChecker) EXPECT() *MockHealthCheckerMockRecorder {
 }
 
 // HealthCheck mocks base method.
-func (m *MockHealthChecker) HealthCheck() any {
+func (m *MockHealthChecker) HealthCheck() (any, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "HealthCheck")
 	ret0, _ := ret[0].(any)
-	return ret0
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // HealthCheck indicates an expected call of HealthCheck.

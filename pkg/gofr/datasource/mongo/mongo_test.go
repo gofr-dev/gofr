@@ -2,6 +2,7 @@ package mongo
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"testing"
@@ -416,8 +417,9 @@ func Test_HealthCheck(t *testing.T) {
 		cl.Database = mt.DB
 		mt.AddMockResponses(mtest.CreateSuccessResponse())
 
-		resp := cl.HealthCheck()
+		resp, err := cl.HealthCheck()
 
+		assert.Nil(t, err)
 		assert.Contains(t, fmt.Sprint(resp), "UP")
 	})
 
@@ -429,8 +431,9 @@ func Test_HealthCheck(t *testing.T) {
 			Message: "duplicate key error",
 		}))
 
-		resp := cl.HealthCheck()
+		resp, err := cl.HealthCheck()
 
+		assert.Equal(t, err, errors.New(errStatusDown))
 		assert.Contains(t, fmt.Sprint(resp), "DOWN")
 	})
 }

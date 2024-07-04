@@ -2,6 +2,7 @@ package cassandra
 
 import (
 	"context"
+	"errors"
 	"reflect"
 	"regexp"
 	"strings"
@@ -296,8 +297,10 @@ type Health struct {
 	Details map[string]interface{} `json:"details,omitempty"`
 }
 
+const errStatusDown = "StatusDown"
+
 // HealthCheck checks the health of the Cassandra.
-func (c *Client) HealthCheck() interface{} {
+func (c *Client) HealthCheck() (any, error) {
 	const (
 		statusDown = "DOWN"
 		statusUp   = "UP"
@@ -314,7 +317,7 @@ func (c *Client) HealthCheck() interface{} {
 		h.Status = statusDown
 		h.Details["message"] = "cassandra not connected"
 
-		return &h
+		return &h, errors.New(errStatusDown)
 	}
 
 	err := c.cassandra.session.query("SELECT now() FROM system.local").exec()
@@ -322,12 +325,12 @@ func (c *Client) HealthCheck() interface{} {
 		h.Status = statusDown
 		h.Details["message"] = err.Error()
 
-		return &h
+		return &h, errors.New(errStatusDown)
 	}
 
 	h.Status = statusUp
 
-	return &h
+	return &h, nil
 }
 
 // cassandraIterator implements iterator interface.

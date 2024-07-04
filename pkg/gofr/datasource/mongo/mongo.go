@@ -2,6 +2,7 @@ package mongo
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -203,8 +204,10 @@ type Health struct {
 	Details map[string]interface{} `json:"details,omitempty"`
 }
 
+const errStatusDown = "StatusDown"
+
 // HealthCheck checks the health of the MongoDB client by pinging the database.
-func (c *Client) HealthCheck() interface{} {
+func (c *Client) HealthCheck() (any, error) {
 	h := Health{
 		Details: make(map[string]interface{}),
 	}
@@ -219,10 +222,10 @@ func (c *Client) HealthCheck() interface{} {
 	if err != nil {
 		h.Status = "DOWN"
 
-		return &h
+		return &h, errors.New(errStatusDown)
 	}
 
 	h.Status = "UP"
 
-	return &h
+	return &h, nil
 }

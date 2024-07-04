@@ -182,5 +182,5 @@ type provider interface {
 }
 
 type HealthChecker interface {
-	HealthCheck() interface{}
+	HealthCheck() (any, error)
 }

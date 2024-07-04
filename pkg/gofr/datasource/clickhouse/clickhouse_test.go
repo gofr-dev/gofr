@@ -3,6 +3,7 @@ package clickhouse
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -81,7 +82,7 @@ func Test_ClickHouse_HealthUP(t *testing.T) {
 
 	mockConn.EXPECT().Ping(gomock.Any()).Return(nil)
 
-	resp := c.HealthCheck()
+	resp, _ := c.HealthCheck()
 
 	assert.Contains(t, fmt.Sprint(resp), "UP")
 }
@@ -91,8 +92,9 @@ func Test_ClickHouse_HealthDOWN(t *testing.T) {
 
 	mockConn.EXPECT().Ping(gomock.Any()).Return(sql.ErrConnDone)
 
-	resp := c.HealthCheck()
+	resp, err := c.HealthCheck()
 
+	assert.Equal(t, err, errors.New(errStatusDown))
 	assert.Contains(t, fmt.Sprint(resp), "DOWN")
 }
 
