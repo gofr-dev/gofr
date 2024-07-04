@@ -82,6 +82,7 @@ linters-settings:
       - name: var-naming
     # additional revive rules
       - name: bool-literal-in-expr
+      - name: comment-spacings
 
 linters:
   # please, do not use `enable-all`: it's deprecated and will be removed soon.
