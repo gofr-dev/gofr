@@ -20,7 +20,7 @@ func (m *mockHTTP) HealthCheck(_ context.Context) *Health {
 	}
 }
 
-func (m *mockHTTP) getHealthResponseForEndpoint(ctx context.Context, endpoint string, timeout int) *Health {
+func (m *mockHTTP) getHealthResponseForEndpoint(_ context.Context, _ string, _ int) *Health {
 	return &Health{
 		Status:  "UP",
 		Details: map[string]interface{}{"host": "http://test.com"},
