@@ -81,6 +81,7 @@ linters-settings:
       - name: var-declaration
       - name: var-naming
     # additional revive rules
+      - name: bare-return
       - name: bool-literal-in-expr
       - name: comment-spacings
 
