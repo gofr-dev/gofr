@@ -11,10 +11,10 @@ import (
 	"gofr.dev/pkg/gofr/testutil"
 )
 
-type mock struct {
+type mockMetrics struct {
 }
 
-func (m *mock) IncrementCounter(ctx context.Context, name string, labels ...string) {
+func (m *mockMetrics) IncrementCounter(ctx context.Context, name string, labels ...string) {
 }
 
 func initializeTest(t *testing.T) {
@@ -25,7 +25,7 @@ func initializeTest(t *testing.T) {
 		BatchBytes:   kafka.DefaultBatchBytes,
 		BatchTimeout: kafka.DefaultBatchTimeout,
 		Partition:    1,
-	}, logging.NewMockLogger(logging.INFO), &mock{})
+	}, logging.NewMockLogger(logging.INFO), &mockMetrics{})
 
 	err := c.Publish(context.Background(), "order-logs", []byte(`{"data":{"orderId":"123","status":"pending"}}`))
 	if err != nil {
