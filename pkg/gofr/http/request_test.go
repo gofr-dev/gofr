@@ -149,6 +149,8 @@ func Test_GetContext(t *testing.T) {
 }
 
 func generateMultipartRequestZip(t *testing.T) *http.Request {
+	t.Helper()
+
 	var buf bytes.Buffer
 	writer := multipart.NewWriter(&buf)
 

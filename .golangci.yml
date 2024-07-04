@@ -99,6 +99,7 @@ linters:
     - rowserrcheck
     - staticcheck
     - stylecheck
+    - thelper
     - unconvert
     - unparam
     - unused

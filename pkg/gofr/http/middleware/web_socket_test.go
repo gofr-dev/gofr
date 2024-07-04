@@ -16,6 +16,8 @@ import (
 var errConnection = errors.New("can't create connection")
 
 func initializeWebSocketMocks(t *testing.T) (gofrWebSocket.MockUpgrader, *gofrWebSocket.Manager) {
+	t.Helper()
+
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()
 

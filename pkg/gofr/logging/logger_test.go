@@ -130,6 +130,8 @@ func TestLogger_LevelFatal(t *testing.T) {
 }
 
 func assertMessageInJSONLog(t *testing.T, logLine, expectation string) {
+	t.Helper()
+
 	var l logEntry
 	_ = json.Unmarshal([]byte(logLine), &l)
 
