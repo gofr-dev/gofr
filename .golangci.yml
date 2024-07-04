@@ -1,3 +1,4 @@
+---
 linters-settings:
   dupl:
     threshold: 100
@@ -31,7 +32,7 @@ linters-settings:
     local-prefixes: github.com/golangci/golangci-lint
   golint:
     min-confidence: 0
-  gomnd:
+  mnd:
     checks:
       - argument
       - case
@@ -65,6 +66,7 @@ linters:
     - bodyclose
     - dogsled
     - dupl
+    - err113
     - errcheck
     - exhaustive
     - exportloopref
@@ -76,10 +78,8 @@ linters:
     - gocritic
     - gocyclo
     - godot
-    - goerr113
     - gofmt
     - goimports
-    - gomnd
     - goprintffuncname
     - gosec
     - gosimple
@@ -87,6 +87,7 @@ linters:
     - ineffassign
     - lll
     - misspell
+    - mnd
     - nakedret
     - nestif
     - noctx
@@ -108,7 +109,7 @@ linters:
 
 
 service:
-  golangci-lint-version: 1.57.x
+  golangci-lint-version: 1.59.x
 
 issues:
   # exclude-use-default: false
