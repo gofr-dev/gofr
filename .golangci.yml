@@ -68,6 +68,7 @@ linters:
     - dupl
     - err113
     - errcheck
+    - errorlint
     - exhaustive
     - exportloopref
     - funlen
