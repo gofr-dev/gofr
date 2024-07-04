@@ -66,6 +66,4 @@ func TestExampleSubscriber(t *testing.T) {
 			t.Errorf("TEST[%d], Failed.\n%s", i, tc.desc)
 		}
 	}
-
-	t.Log(log)
 }
