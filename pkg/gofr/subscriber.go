@@ -6,6 +6,7 @@ import (
 	"runtime/debug"
 
 	"gofr.dev/pkg/gofr/container"
+	"gofr.dev/pkg/gofr/datasource/pubsub"
 	"gofr.dev/pkg/gofr/datasource/pubsub/kafka"
 	"gofr.dev/pkg/gofr/logging"
 )
@@ -34,35 +35,39 @@ func (s *SubscriptionManager) startSubscriber(ctx context.Context, topic string,
 			s.container.Logger.Infof("shutting down subscriber for topic %s", topic)
 			return
 		default:
-			if errors.Is(err, kafka.ErrConsumerGroupNotProvided) {
-				s.container.Logger.Errorf("cannot subscribe as consumer_id is not provided in configs")
-				return
-			} else if err != nil {
-				s.container.Logger.Errorf("error while reading from topic %v, err: %v", topic, err.Error())
-				continue
-			}
-
-			if msg == nil {
-				continue
-			}
-
-			msgCtx := newContext(nil, msg, s.container)
-			err = func(ctx *Context) error {
-				// TODO : Move panic recovery at central location which will manage for all the different cases.
-				defer panicRecovery(ctx.Logger)
-				return handler(ctx)
-			}(msgCtx)
-
-			// commit the message if the subscription function does not return error
-			if err != nil {
-				s.container.Logger.Errorf("error in handler for topic %s: %v", topic, err)
-				continue
-			}
-
-			if msg.Committer != nil {
-				msg.Commit()
-			}
+			s.handleSubscription(topic, handler, msg, err)
 		}
+	}
+}
+
+func (s *SubscriptionManager) handleSubscription(topic string, handler SubscribeFunc, msg *pubsub.Message, err error) {
+	if errors.Is(err, kafka.ErrConsumerGroupNotProvided) {
+		s.container.Logger.Errorf("cannot subscribe as consumer_id is not provided in configs")
+		return
+	} else if err != nil {
+		s.container.Logger.Errorf("error while reading from topic %v, err: %v", topic, err.Error())
+		return
+	}
+
+	if msg == nil {
+		return
+	}
+
+	msgCtx := newContext(nil, msg, s.container)
+	err = func(ctx *Context) error {
+		// TODO : Move panic recovery at central location which will manage for all the different cases.
+		defer panicRecovery(ctx.Logger)
+		return handler(ctx)
+	}(msgCtx)
+
+	// commit the message if the subscription function does not return error
+	if err != nil {
+		s.container.Logger.Errorf("error in handler for topic %s: %v", topic, err)
+		return
+	}
+
+	if msg.Committer != nil {
+		msg.Commit()
 	}
 }
 
