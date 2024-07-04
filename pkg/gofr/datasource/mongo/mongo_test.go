@@ -21,7 +21,7 @@ func Test_NewMongoClient(t *testing.T) {
 
 	metrics.EXPECT().NewHistogram("app_mongo_stats", "Response time of MONGO queries in milliseconds.", gomock.Any())
 
-	client := New(Config{URI: "mongodb://localhost:27017", Database: "test"})
+	client := New(Config{Database: "test", Host: "localhost", Port: 27017, User: "admin"})
 	client.UseLogger(NewMockLogger(DEBUG))
 	client.UseMetrics(metrics)
 	client.Connect()
@@ -107,6 +107,29 @@ func Test_InsertCommands(t *testing.T) {
 
 		assert.Nil(t, resp)
 		assert.NotNil(t, err)
+	})
+}
+
+func Test_CreateCollection(t *testing.T) {
+	// Create a connected client using the mock database
+	mt := mtest.New(t, mtest.NewOptions().ClientType(mtest.Mock))
+
+	metrics := NewMockMetrics(gomock.NewController(t))
+
+	cl := Client{metrics: metrics}
+
+	metrics.EXPECT().RecordHistogram(context.Background(), "app_mongo_stats", gomock.Any(), "hostname",
+		gomock.Any(), "database", gomock.Any(), "type", gomock.Any()).Times(1)
+
+	cl.logger = NewMockLogger(DEBUG)
+
+	mt.Run("createCollection", func(mt *mtest.T) {
+		cl.Database = mt.DB
+		mt.AddMockResponses(mtest.CreateSuccessResponse())
+
+		err := cl.CreateCollection(context.Background(), mt.Coll.Name())
+
+		assert.Nil(t, err)
 	})
 }
 
@@ -399,6 +422,56 @@ func Test_Drop(t *testing.T) {
 
 		err := cl.Drop(context.Background(), mt.Coll.Name())
 
+		assert.Nil(t, err)
+	})
+}
+
+func TestClient_StartSession(t *testing.T) {
+	// Create a connected client using the mock database
+	mt := mtest.New(t, mtest.NewOptions().ClientType(mtest.Mock))
+
+	metrics := NewMockMetrics(gomock.NewController(t))
+
+	cl := Client{metrics: metrics}
+
+	// Set up the mock expectation for the metrics recording
+	metrics.EXPECT().RecordHistogram(gomock.Any(), "app_mongo_stats", gomock.Any(), "hostname",
+		gomock.Any(), "database", gomock.Any(), "type", gomock.Any()).AnyTimes()
+
+	cl.logger = NewMockLogger(DEBUG)
+
+	mt.Run("StartSessionCommitTransactionSuccess", func(mt *mtest.T) {
+		cl.Database = mt.DB
+
+		// Add mock responses if necessary
+		mt.AddMockResponses(mtest.CreateSuccessResponse())
+
+		// Call the StartSession method
+		sess, err := cl.StartSession()
+		ses, ok := sess.(Transaction)
+		if ok {
+			err = ses.StartTransaction()
+		}
+
+		assert.Nil(t, err)
+
+		cl.Database = mt.DB
+		mt.AddMockResponses(mtest.CreateSuccessResponse())
+
+		doc := map[string]interface{}{"name": "Aryan"}
+
+		resp, err := cl.InsertOne(context.Background(), mt.Coll.Name(), doc)
+
+		assert.NotNil(t, resp)
+		assert.Nil(t, err)
+
+		err = ses.CommitTransaction(context.Background())
+
+		assert.Nil(t, err)
+
+		ses.EndSession(context.Background())
+
+		// Assert that there was no error
 		assert.Nil(t, err)
 	})
 }

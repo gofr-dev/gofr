@@ -3,6 +3,7 @@ package mongo
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -22,8 +23,13 @@ type Client struct {
 }
 
 type Config struct {
-	URI      string
+	Host     string
+	User     string
+	Password string
+	Port     int
 	Database string
+	// Deprecated Provide Host User Password Port Instead and driver will generate the URI
+	URI string
 }
 
 /*
@@ -61,7 +67,14 @@ func (c *Client) UseMetrics(metrics interface{}) {
 func (c *Client) Connect() {
 	c.logger.Logf("connecting to mongoDB at %v to database %v", c.config.URI, c.config.Database)
 
-	m, err := mongo.Connect(context.Background(), options.Client().ApplyURI(c.config.URI))
+	uri := c.config.URI
+
+	if uri == "" {
+		uri = fmt.Sprintf("mongodb://%s:%s@%s:%d/%s?authSource=admin",
+			c.config.User, c.config.Password, c.config.Host, c.config.Port, c.config.Database)
+	}
+
+	m, err := mongo.Connect(context.Background(), options.Client().ApplyURI(uri))
 	if err != nil {
 		c.logger.Errorf("error connecting to mongoDB, err:%v", err)
 
@@ -188,6 +201,13 @@ func (c *Client) Drop(ctx context.Context, collection string) error {
 	return c.Database.Collection(collection).Drop(ctx)
 }
 
+// CreateCollection creates the specified collection in the database.
+func (c *Client) CreateCollection(ctx context.Context, name string) error {
+	defer c.postProcess(&QueryLog{Query: "createCollection", Collection: name}, time.Now())
+
+	return c.Database.CreateCollection(ctx, name)
+}
+
 func (c *Client) postProcess(ql *QueryLog, startTime time.Time) {
 	duration := time.Since(startTime).Milliseconds()
 
@@ -225,4 +245,28 @@ func (c *Client) HealthCheck(ctx context.Context) (any, error) {
 	h.Status = "UP"
 
 	return &h, nil
+}
+
+func (c *Client) StartSession() (interface{}, error) {
+	defer c.postProcess(&QueryLog{Query: "startSession"}, time.Now())
+
+	s, err := c.Client().StartSession()
+	ses := &session{s}
+
+	return ses, err
+}
+
+type session struct {
+	mongo.Session
+}
+
+func (s *session) StartTransaction() error {
+	return s.Session.StartTransaction()
+}
+
+type Transaction interface {
+	StartTransaction() error
+	AbortTransaction(context.Context) error
+	CommitTransaction(context.Context) error
+	EndSession(context.Context)
 }
