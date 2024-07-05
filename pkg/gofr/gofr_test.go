@@ -570,12 +570,13 @@ func Test_Shutdown(t *testing.T) {
 	})
 
 	go g.Run()
-	time.Sleep(2 * time.Second)
+	time.Sleep(10 * time.Millisecond)
 
 	err := g.Shutdown(context.Background())
 
 	assert.Nil(t, err, "Test_Shutdown Failed!")
 }
+
 func TestStaticHandler(t *testing.T) {
 	const indexHTML = "indexTest.html"
 

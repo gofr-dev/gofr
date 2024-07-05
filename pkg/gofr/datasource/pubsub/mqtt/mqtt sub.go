@@ -35,21 +35,23 @@ func (m *MQTT) getSub(ctx context.Context, topic string) (*subscription, error) 
 
 	// get the message channel for the given topic
 	subs, ok := m.subscriptions[topic]
-	if !ok {
-		subs.msgs = make(chan *pubsub.Message, messageBuffer)
-		subs.handler = m.createMqttHandler(ctx, topic, subs.msgs)
-		token := m.Client.Subscribe(topic, m.config.QoS, subs.handler)
-		select {
-		case <-token.Done():
-			if token.Error() != nil {
-				m.logger.Errorf("error getting a message from MQTT, error: %v", token.Error())
-				return &subs, token.Error()
-			}
+	if ok {
+		return &subs, nil
+	}
 
-			m.subscriptions[topic] = subs
-		case <-ctx.Done():
-			return &subs, nil
+	subs.msgs = make(chan *pubsub.Message, messageBuffer)
+	subs.handler = m.createMqttHandler(ctx, topic, subs.msgs)
+	token := m.Client.Subscribe(topic, m.config.QoS, subs.handler)
+	select {
+	case <-token.Done():
+		if token.Error() != nil {
+			m.logger.Errorf("error getting a message from MQTT, error: %v", token.Error())
+			return &subs, token.Error()
 		}
+
+		m.subscriptions[topic] = subs
+	case <-ctx.Done():
+		return &subs, nil
 	}
 
 	return &subs, nil
