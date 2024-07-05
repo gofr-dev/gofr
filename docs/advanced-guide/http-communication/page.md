@@ -1,4 +1,3 @@
-
 # Inter-Service HTTP Calls
 
 GoFr promotes microservice architecture and to facilitate the same, it provides the support to initialize HTTP services  
@@ -87,16 +86,14 @@ func Customer(ctx *gofr.Context) (interface{}, error) {
 
 ### Additional Configurational Options
 
-GoFr provides it's user with advanced configurational options while registering http service for communication. These are:
+GoFr provides its user with additional configurational options while registering http service for communication. These are:
 
 - **APIKeyConfig** - This option allows the user to set the `API-Key` Based authentication as the default auth for downstream HTTP Service.
-
 - **BasicAuthConfig** - This option allows the user to set basic auth (username and password) as the default auth for downstream HTTP Service.
-
+- **OAuthConfig** - This option allows user to add `OAuth` as default auth for downstream HTTP Service.
 - **CircuitBreakerConfig** - This option allows the user to configure the GoFr Circuit Breaker's `threshold` and `interval` for the failing downstream HTTP Service calls. If the failing calls exceeds the threshold the circuit breaker will automatically be enabled.
 - **DefaultHeaders** - This option allows user to set some default headers that will be propagated to the downstream HTTP Service everytime it is being called.
 - **HealthConfig** - This option allows user to add the `HealthEndpoint` along with `Timeout` to enable and perform the timely health checks for downstream HTTP Service.
-- **OAuthConfig** - This option allows user to add `OAuth` as default auth for downstream HTTP Service.
 - **RetryConfig** - This option allows user to add the maximum number of retry count if before returning error if any downstream HTTP Service fails.
 
 #### Usage:
