@@ -89,8 +89,6 @@ type Cassandra interface {
 	//	u := user{}
 	//	applied, err := c.ExecCAS(&ids, "INSERT INTO users VALUES(1, 'John Doe') IF NOT EXISTS")
 	ExecCAS(dest interface{}, stmt string, values ...interface{}) (bool, error)
-
-	HealthChecker
 }
 
 type CassandraProvider interface {
@@ -103,8 +101,6 @@ type Clickhouse interface {
 	Exec(ctx context.Context, query string, args ...any) error
 	Select(ctx context.Context, dest any, query string, args ...any) error
 	AsyncInsert(ctx context.Context, query string, wait bool, args ...any) error
-
-	HealthChecker
 }
 
 type ClickhouseProvider interface {
@@ -159,7 +155,18 @@ type Mongo interface {
 	// It returns an error if any.
 	Drop(ctx context.Context, collection string) error
 
-	HealthChecker
+	// CreateCollection creates a new collection with specified name and default options.
+	CreateCollection(ctx context.Context, name string) error
+
+	// StartSession starts a session and provide methods to run commands in a transaction.
+	StartSession() (interface{}, error)
+}
+
+type Transaction interface {
+	StartTransaction() error
+	AbortTransaction(context.Context) error
+	CommitTransaction(context.Context) error
+	EndSession(context.Context)
 }
 
 // MongoProvider is an interface that extends Mongo with additional methods for logging, metrics, and connection management.
@@ -179,8 +186,4 @@ type provider interface {
 
 	// Connect establishes a connection to Cassandra and registers metrics using the provided configuration when the client was Created.
 	Connect()
-}
-
-type HealthChecker interface {
-	HealthCheck() interface{}
 }
