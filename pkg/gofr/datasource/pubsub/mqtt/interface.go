@@ -9,6 +9,7 @@ import (
 )
 
 //go:generate go run go.uber.org/mock/mockgen -destination=mock_client.go -package=mqtt github.com/eclipse/paho.mqtt.golang Client
+//go:generate go run go.uber.org/mock/mockgen -destination=mock_token.go -package=mqtt github.com/eclipse/paho.mqtt.golang Token
 //go:generate go run go.uber.org/mock/mockgen -source=interface.go -destination=mock_interfaces.go -package=mqtt
 
 type Logger interface {
