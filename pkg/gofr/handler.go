@@ -43,18 +43,13 @@ type handler struct {
 func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	c := newContext(gofrHTTP.NewResponder(w, r.Method), gofrHTTP.NewRequest(r), h.container)
 
-	var (
-		ctx    context.Context
-		cancel context.CancelFunc
-	)
-
 	if websocket.IsWebSocketUpgrade(r) {
 		// If the request is a WebSocket upgrade, do not apply the timeout
-		ctx = r.Context()
+		c.Context = r.Context()
 	} else if h.requestTimeout != "" {
 		reqTimeout := h.setContextTimeout(h.requestTimeout)
 
-		ctx, cancel = context.WithTimeout(r.Context(), time.Duration(reqTimeout)*time.Second)
+		ctx, cancel := context.WithTimeout(r.Context(), time.Duration(reqTimeout)*time.Second)
 		defer cancel()
 
 		c.Context = ctx
@@ -69,7 +64,9 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	)
 
 	go func() {
-		defer panicRecoveryHandler(h.container, panicked)
+		defer func() {
+			panicRecoveryHandler(recover(), h.container, panicked)
+		}()
 		// Execute the handler function
 		result, err = h.function(c)
 
@@ -79,7 +76,7 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	select {
 	case <-c.Context.Done():
 		// If the context's deadline has been exceeded, return a timeout error response
-		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		if errors.Is(c.Err(), context.DeadlineExceeded) {
 			err = gofrHTTP.ErrorRequestTimeout{}
 		}
 	case <-done:
@@ -131,13 +128,14 @@ func (h handler) setContextTimeout(timeout string) int {
 	return reqTimeout
 }
 
-func panicRecoveryHandler(log logging.Logger, panicked chan struct{}) {
-	re := recover()
-	if re != nil {
-		close(panicked)
-		log.Error(panicLog{
-			Error:      fmt.Sprint(re),
-			StackTrace: string(debug.Stack()),
-		})
+func panicRecoveryHandler(re any, log logging.Logger, panicked chan struct{}) {
+	if re == nil {
+		return
 	}
+
+	close(panicked)
+	log.Error(panicLog{
+		Error:      fmt.Sprint(re),
+		StackTrace: string(debug.Stack()),
+	})
 }

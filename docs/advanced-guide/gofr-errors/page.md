@@ -12,6 +12,10 @@ automatically handle HTTP status code selection. These include:
 - `ErrorInvalidParam`: Represents an error due to an invalid parameter.
 - `ErrorMissingParam`: Represents an error due to a missing parameter.
 - `ErrorEntityNotFound`: Represents an error due to a not found entity.
+- `ErrorEntityAlreadyExist`: Represents an error due to creation of duplicate entity.
+- `ErrorInvalidRoute`: Represents an error for invalid route.
+- `ErrorRequestTimeout`: Represents an error for request which timed out.
+- `ErrorPanicRecovery`: Represents an error for request which panicked.
 
 #### Usage:
 To use the predefined http errors,users can simply call them using GoFr's http package:

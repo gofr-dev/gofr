@@ -5,14 +5,24 @@ import (
 	"time"
 
 	"github.com/gogo/protobuf/sortkeys"
+	goRedis "github.com/redis/go-redis/v9"
 
 	"gofr.dev/pkg/gofr/container"
+	gofrSql "gofr.dev/pkg/gofr/datasource/sql"
 )
 
 type MigrateFunc func(d Datasource) error
 
 type Migrate struct {
 	UP MigrateFunc
+}
+
+type transactionData struct {
+	StartTime       time.Time
+	MigrationNumber int64
+
+	SQLTx   *gofrSql.Tx
+	RedisTx goRedis.Pipeliner
 }
 
 func Run(migrationsMap map[int64]Migrate, c *container.Container) {
@@ -53,27 +63,27 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 
 		c.Logger.Debugf("running migration %v", currentMigration)
 
-		transactionsObjects := mg.beginTransaction(c)
+		migrationInfo := mg.beginTransaction(c)
 
-		ds.SQL = newMysql(transactionsObjects.SQLTx)
-		ds.Redis = newRedis(transactionsObjects.RedisTx)
-		ds.PubSub = newPubSub(c.PubSub)
+		// Replacing the objects in datasource object only for those Datasources which support transactions.
+		ds.SQL = migrationInfo.SQLTx
+		ds.Redis = migrationInfo.RedisTx
 
-		transactionsObjects.StartTime = time.Now()
-		transactionsObjects.MigrationNumber = currentMigration
+		migrationInfo.StartTime = time.Now()
+		migrationInfo.MigrationNumber = currentMigration
 
 		err = migrationsMap[currentMigration].UP(ds)
 		if err != nil {
-			mg.rollback(c, transactionsObjects)
+			mg.rollback(c, migrationInfo)
 
 			return
 		}
 
-		err = mg.commitMigration(c, transactionsObjects)
+		err = mg.commitMigration(c, migrationInfo)
 		if err != nil {
 			c.Errorf("failed to commit migration, err: %v", err)
 
-			mg.rollback(c, transactionsObjects)
+			mg.rollback(c, migrationInfo)
 
 			return
 		}
@@ -97,11 +107,11 @@ func getKeys(migrationsMap map[int64]Migrate) (invalidKey, keys []int64) {
 	return invalidKey, keys
 }
 
-func getMigrator(c *container.Container) (Datasource, Migrator, bool) {
+func getMigrator(c *container.Container) (Datasource, migrator, bool) {
 	var (
 		ok bool
 		ds Datasource
-		mg Migrator = ds
+		mg migrator = ds
 	)
 
 	if !isNil(c.SQL) {
@@ -109,7 +119,8 @@ func getMigrator(c *container.Container) (Datasource, Migrator, bool) {
 
 		ds.SQL = c.SQL
 
-		mg = sqlMigratorObject{ds.SQL}.apply(mg)
+		s := sqlDS{ds.SQL}
+		mg = s.apply(mg)
 
 		c.Debug("initialized data source for SQL")
 	}
@@ -119,13 +130,25 @@ func getMigrator(c *container.Container) (Datasource, Migrator, bool) {
 
 		ds.Redis = c.Redis
 
-		mg = redisMigratorObject{ds.Redis}.apply(mg)
+		mg = redisDS{ds.Redis}.apply(mg)
 
 		c.Debug("initialized data source for redis")
 	}
 
+	if !isNil(c.Clickhouse) {
+		ok = true
+
+		ds.Clickhouse = c.Clickhouse
+
+		mg = clickHouseDS{ds.Clickhouse}.apply(mg)
+
+		c.Debug("initialized data source for Clickhouse")
+	}
+
 	if c.PubSub != nil {
 		ok = true
+
+		ds.PubSub = c.PubSub
 	}
 
 	return ds, mg, ok

@@ -4,11 +4,20 @@ package middleware
 
 import (
 	"net/http"
+
+	"gofr.dev/pkg/gofr/container"
 )
+
+// APIKeyAuthProvider represents a basic authentication provider.
+type APIKeyAuthProvider struct {
+	ValidateFunc                func(apiKey string) bool
+	ValidateFuncWithDatasources func(c *container.Container, apiKey string) bool
+	Container                   *container.Container
+}
 
 // APIKeyAuthMiddleware creates a middleware function that enforces API key authentication based on the provided API
 // keys or a validation function.
-func APIKeyAuthMiddleware(validator func(apiKey string) bool, apiKeys ...string) func(handler http.Handler) http.Handler {
+func APIKeyAuthMiddleware(a APIKeyAuthProvider, apiKeys ...string) func(handler http.Handler) http.Handler {
 	return func(handler http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if isWellKnown(r.URL.Path) {
@@ -22,7 +31,7 @@ func APIKeyAuthMiddleware(validator func(apiKey string) bool, apiKeys ...string)
 				return
 			}
 
-			if !validateKey(validator, authKey, apiKeys...) {
+			if !validateKey(a, authKey, apiKeys...) {
 				http.Error(w, "Unauthorized: Invalid Authorization header", http.StatusUnauthorized)
 				return
 			}
@@ -42,15 +51,17 @@ func isPresent(authKey string, apiKeys ...string) bool {
 	return false
 }
 
-func validateKey(validator func(apiKey string) bool, authKey string, apiKeys ...string) bool {
-	if validator != nil {
-		if !validator(authKey) {
-			return false
-		}
-	} else {
-		if !isPresent(authKey, apiKeys...) {
-			return false
-		}
+func validateKey(provider APIKeyAuthProvider, authKey string, apiKeys ...string) bool {
+	if provider.ValidateFunc != nil && !provider.ValidateFunc(authKey) {
+		return false
+	}
+
+	if provider.ValidateFuncWithDatasources != nil && !provider.ValidateFuncWithDatasources(provider.Container, authKey) {
+		return false
+	}
+
+	if provider.ValidateFunc == nil && provider.ValidateFuncWithDatasources == nil {
+		return isPresent(authKey, apiKeys...)
 	}
 
 	return true
