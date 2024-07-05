@@ -139,6 +139,30 @@ func TestMQTT_Disconnect(t *testing.T) {
 	assert.True(t, errors.Is(err, errToken))
 }
 
+func TestMQTT_DisconnectWithSubscriptions(t *testing.T) {
+	subs := make(map[string]subscription)
+	subs["test/topic"] = subscription{
+		msgs:    make(chan *pubsub.Message),
+		handler: func(_ mqtt.Client, msg mqtt.Message) {},
+	}
+
+	ctrl, client, mockClient, _, mockToken := getMockMQTT(t, mockConfigs)
+	defer ctrl.Finish()
+
+	client.subscriptions = subs
+
+	mockClient.EXPECT().Disconnect(uint(1))
+	mockClient.EXPECT().Unsubscribe("test/topic").Return(mockToken)
+	mockToken.EXPECT().Wait().Return(true)
+	mockToken.EXPECT().Error().Return(nil)
+
+	client.Disconnect(1)
+
+	// we assert that on unsubscribing the subscription gets deleted
+	_, ok := client.subscriptions["test/topic"]
+	assert.False(t, ok)
+}
+
 func TestMQTT_PublishSuccess(t *testing.T) {
 	out := testutil.StdoutOutputForFunc(func() {
 		ctrl, client, mockClient, mockMetrics, mockToken := getMockMQTT(t, mockConfigs)
@@ -286,6 +310,27 @@ func TestMQTT_SubscribeWithFunc(t *testing.T) {
 
 	assert.NotNil(t, err)
 	assert.True(t, errors.Is(err, errToken))
+}
+
+func Test_getHandler(t *testing.T) {
+	subscriptionFunc := func(msg *pubsub.Message) error {
+		assert.Equal(t, []byte("hello from sub func"), msg.Value)
+		assert.Equal(t, map[string]string{"qos": string(byte(1)), "retained": "false", "messageID": "123"}, msg.MetaData)
+		assert.Equal(t, "test/topic", msg.Topic)
+
+		return nil
+	}
+
+	h := getHandler(subscriptionFunc)
+
+	h(nil, mockMessage{
+		duplicate: false,
+		qos:       1,
+		retained:  false,
+		topic:     "test/topic",
+		messageID: 123,
+		pyload:    "hello from sub func",
+	})
 }
 
 func TestMQTT_Unsubscribe(t *testing.T) {
