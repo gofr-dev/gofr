@@ -574,7 +574,7 @@ func Test_Shutdown(t *testing.T) {
 
 	err := g.Shutdown(context.Background())
 
-	assert.Nil(t, err, "Test_Shutdown Failed!")
+	assert.NoError(t, err, "Test_Shutdown Failed!")
 }
 func TestStaticHandler(t *testing.T) {
 	const indexHTML = "indexTest.html"
