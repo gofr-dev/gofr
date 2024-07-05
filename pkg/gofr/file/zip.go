@@ -95,7 +95,7 @@ func copyToBuffer(f io.ReadCloser, size uint64) (*bytes.Buffer, error) {
 	}
 
 	buf := new(bytes.Buffer)
-	if n, err := io.CopyN(buf, f, maxFileSize); err != nil && err != io.EOF && uint64(n) < size {
+	if n, err := io.CopyN(buf, f, maxFileSize); err != nil && !errors.Is(err, io.EOF) && uint64(n) < size {
 		f.Close()
 
 		return nil, err
