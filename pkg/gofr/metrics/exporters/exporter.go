@@ -31,30 +31,30 @@ func Prometheus(appName, appVersion string) metric.Meter {
 // TODO : OTLPStdOut and OTLPMetricHTTP are not being used but has to be modified such that user can decide the exporter.
 
 // func OTLPStdOut(appName, appVersion string) metric.Meter {
-//	exporter, err := stdoutmetric.New()
-//	if err != nil {
-//		return nil
-//	}
+// 	exporter, err := stdoutmetric.New()
+// 	if err != nil {
+// 		return nil
+// 	}
 //
-//	meter := metricSdk.NewMeterProvider(
-//		metricSdk.WithResource(resource.NewSchemaless(semconv.ServiceName(appName))),
-//		metricSdk.WithReader(metricSdk.NewPeriodicReader(exporter,
-//			metricSdk.WithInterval(3*time.Second)))).Meter(appName, metric.WithInstrumentationVersion(appVersion))
+// 	meter := metricSdk.NewMeterProvider(
+// 		metricSdk.WithResource(resource.NewSchemaless(semconv.ServiceName(appName))),
+// 		metricSdk.WithReader(metricSdk.NewPeriodicReader(exporter,
+// 			metricSdk.WithInterval(3*time.Second)))).Meter(appName, metric.WithInstrumentationVersion(appVersion))
 //
-//	return meter
-//}
+// 	return meter
+// }
 //
 // func OTLPMetricHTTP(appName, appVersion string) metric.Meter {
-//	exporter, err := otlpmetrichttp.New(nil,
-//		otlpmetrichttp.WithInsecure(),
-//		otlpmetrichttp.WithURLPath("/metrics"),
-//		otlpmetrichttp.WithEndpoint("localhost:8000"))
-//	if err != nil {
-//		return nil
-//	}
+// 	exporter, err := otlpmetrichttp.New(nil,
+// 		otlpmetrichttp.WithInsecure(),
+// 		otlpmetrichttp.WithURLPath("/metrics"),
+// 		otlpmetrichttp.WithEndpoint("localhost:8000"))
+// 	if err != nil {
+// 		return nil
+// 	}
 //
-//	meter := metricSdk.NewMeterProvider(metricSdk.WithReader(metricSdk.NewPeriodicReader(exporter,
-//		metricSdk.WithInterval(3*time.Second)))).Meter(appName, metric.WithInstrumentationVersion(appVersion))
+// 	meter := metricSdk.NewMeterProvider(metricSdk.WithReader(metricSdk.NewPeriodicReader(exporter,
+// 		metricSdk.WithInterval(3*time.Second)))).Meter(appName, metric.WithInstrumentationVersion(appVersion))
 //
-//	return meter
-//}
+// 	return meter
+// }

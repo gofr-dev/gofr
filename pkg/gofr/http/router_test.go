@@ -24,12 +24,12 @@ func TestRouter(t *testing.T) {
 	router := NewRouter()
 
 	// Add a test handler to the router
-	router.Add("GET", "/test", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	router.Add(http.MethodGet, "/test", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
 	// Send a request to the test handler
-	req := httptest.NewRequest("GET", "/test", http.NoBody)
+	req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 
@@ -54,12 +54,12 @@ func TestRouterWithMiddleware(t *testing.T) {
 	})
 
 	// Add a test handler to the router
-	router.Add("GET", "/test", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	router.Add(http.MethodGet, "/test", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
 	// Send a request to the test handler
-	req := httptest.NewRequest("GET", "/test", http.NoBody)
+	req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 
@@ -87,7 +87,7 @@ func TestRouter_AddStaticFiles(t *testing.T) {
 	router.AddStaticFiles("/gofr", currentWorkingDir+"/testDir")
 
 	// Send a request to the test handler
-	req := httptest.NewRequest("GET", "/gofr/indexTest.html", http.NoBody)
+	req := httptest.NewRequest(http.MethodGet, "/gofr/indexTest.html", http.NoBody)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 
@@ -95,7 +95,7 @@ func TestRouter_AddStaticFiles(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rec.Code)
 
 	// Send a request to the test handler
-	req = httptest.NewRequest("GET", "/gofr/openapi.json", http.NoBody)
+	req = httptest.NewRequest(http.MethodGet, "/gofr/openapi.json", http.NoBody)
 	rec = httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 

@@ -56,6 +56,8 @@ func Test_getMigratorDBInitialisation(t *testing.T) {
 }
 
 func initialiseClickHouseRunMocks(t *testing.T) (*MockClickhouse, *container.Container) {
+	t.Helper()
+
 	mockClickHouse := NewMockClickhouse(gomock.NewController(t))
 
 	mockContainer, _ := container.NewMockContainer(t)
