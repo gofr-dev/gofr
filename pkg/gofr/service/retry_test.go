@@ -160,7 +160,7 @@ func TestRetryProvider_PutWithHeaders(t *testing.T) {
 func TestRetryProvider_Patch_WithError(t *testing.T) {
 	// Create a mock HTTP server
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkAuthHeaders(r, t)
+		checkAuthHeaders(t, r)
 		assert.Equal(t, http.MethodPatch, r.Method)
 
 		w.WriteHeader(http.StatusInternalServerError)

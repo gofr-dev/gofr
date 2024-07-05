@@ -22,6 +22,8 @@ type Mocks struct {
 }
 
 func NewMockContainer(t *testing.T) (*Container, Mocks) {
+	t.Helper()
+
 	container := &Container{}
 	container.Logger = logging.NewLogger(logging.DEBUG)
 
