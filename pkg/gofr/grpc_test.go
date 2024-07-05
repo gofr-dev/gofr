@@ -71,5 +71,5 @@ func TestGRPC_ServerShutdown(t *testing.T) {
 
 	err := <-errChan
 
-	assert.Nil(t, err, "TEST Failed.\n")
+	assert.NoError(t, err, "TEST Failed.\n")
 }
