@@ -489,9 +489,9 @@ func Test_HealthCheck(t *testing.T) {
 		cl.Database = mt.DB
 		mt.AddMockResponses(mtest.CreateSuccessResponse())
 
-		resp, err := cl.HealthCheck()
+		resp, err := cl.HealthCheck(context.Background())
 
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 		assert.Contains(t, fmt.Sprint(resp), "UP")
 	})
 
@@ -503,9 +503,9 @@ func Test_HealthCheck(t *testing.T) {
 			Message: "duplicate key error",
 		}))
 
-		resp, err := cl.HealthCheck()
+		resp, err := cl.HealthCheck(context.Background())
 
-		assert.ErrorIs(t, err, ErrStatusDown))
+		assert.ErrorIs(t, err, errStatusDown)
 
 		assert.Contains(t, fmt.Sprint(resp), "DOWN")
 	})
