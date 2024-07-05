@@ -47,7 +47,8 @@ type Container struct {
 	File datasource.FileSystem
 }
 
-func (c *Container) Close(ctx context.Context) (err error) {
+func (c *Container) Close(ctx context.Context) error {
+	var err error
 	if c.PubSub != nil {
 		err = c.PubSub.Close(ctx)
 	}
@@ -56,7 +57,7 @@ func (c *Container) Close(ctx context.Context) (err error) {
 		err = errors.Join(err, c.SQL.Close())
 	}
 
-	return
+	return err
 }
 
 func NewContainer(conf config.Config) *Container {

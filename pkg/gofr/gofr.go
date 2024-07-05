@@ -230,7 +230,8 @@ func (a *App) setupHTTPServer() {
 }
 
 // Shutdown stops the service(s) and close the application.
-func (a *App) Shutdown(ctx context.Context) (err error) {
+func (a *App) Shutdown(ctx context.Context) error {
+	var err error
 	if a.httpServer != nil {
 		err = errors.Join(err, a.httpServer.Shutdown(ctx))
 	}
@@ -246,12 +247,12 @@ func (a *App) Shutdown(ctx context.Context) (err error) {
 	err = errors.Join(err, a.container.Close(ctx))
 	if err != nil {
 		a.container.Logger.Errorf("error while shutting down: %v", err)
-		return
+		return err
 	}
 
 	a.container.Logger.Infof("Application shutdown complete")
 
-	return
+	return err
 }
 
 // readConfig reads the configuration from the default location.
