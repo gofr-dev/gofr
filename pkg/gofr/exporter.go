@@ -67,7 +67,7 @@ func (e *Exporter) processSpans(ctx context.Context, logger logging.Logger, span
 		return fmt.Errorf("failed to marshal spans, error: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", e.endpoint, bytes.NewBuffer(payload))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, e.endpoint, bytes.NewBuffer(payload))
 	if err != nil {
 		return fmt.Errorf("failed to create HTTP request, error: %w", err)
 	}

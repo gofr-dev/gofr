@@ -43,7 +43,10 @@ func (s *SubscriptionManager) startSubscriber(topic string, handler SubscribeFun
 		ctx := newContext(nil, msg, s.container)
 		err = func(ctx *Context) error {
 			// TODO : Move panic recovery at central location which will manage for all the different cases.
-			defer panicRecovery(ctx.Logger)
+			defer func() {
+				panicRecovery(recover(), ctx.Logger)
+			}()
+
 			return handler(ctx)
 		}(ctx)
 
@@ -61,22 +64,22 @@ type panicLog struct {
 	StackTrace string `json:"stack_trace,omitempty"`
 }
 
-func panicRecovery(log logging.Logger) {
-	re := recover()
-
-	if re != nil {
-		var e string
-		switch t := re.(type) {
-		case string:
-			e = t
-		case error:
-			e = t.Error()
-		default:
-			e = "Unknown panic type"
-		}
-		log.Error(panicLog{
-			Error:      e,
-			StackTrace: string(debug.Stack()),
-		})
+func panicRecovery(re any, log logging.Logger) {
+	if re == nil {
+		return
 	}
+
+	var e string
+	switch t := re.(type) {
+	case string:
+		e = t
+	case error:
+		e = t.Error()
+	default:
+		e = "Unknown panic type"
+	}
+	log.Error(panicLog{
+		Error:      e,
+		StackTrace: string(debug.Stack()),
+	})
 }
