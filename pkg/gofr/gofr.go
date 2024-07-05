@@ -141,7 +141,7 @@ func (a *App) Run() {
 	go func() {
 		<-ctx.Done()
 
-		shutdownCtx, done := context.WithTimeout(context.Background(), shutdownTimeout)
+		shutdownCtx, done := context.WithTimeout(context.WithoutCancel(ctx), shutdownTimeout)
 		defer done()
 
 		_ = a.Shutdown(shutdownCtx)
