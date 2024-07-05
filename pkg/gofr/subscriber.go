@@ -60,7 +60,7 @@ func (s *SubscriptionManager) startSubscriber(topic string, handler SubscribeFun
 }
 
 type panicLog struct {
-	Error      string `json:"error,omitempty"`
+	Error      string `json:"errors,omitempty"`
 	StackTrace string `json:"stack_trace,omitempty"`
 }
 

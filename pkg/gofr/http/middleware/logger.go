@@ -122,7 +122,7 @@ func getIPAddress(r *http.Request) string {
 }
 
 type panicLog struct {
-	Error      string `json:"error,omitempty"`
+	Error      string `json:"errors,omitempty"`
 	StackTrace string `json:"stack_trace,omitempty"`
 }
 
