@@ -347,6 +347,7 @@ func Test_getHandler(t *testing.T) {
 
 	// error while subscribing
 	mockLogger.EXPECT().Errorf("error subscribing to message, err : %v", errTest)
+
 	hErr := m.getHandler(subscriptionFuncErr)
 	hErr(nil, mockMsg)
 }
