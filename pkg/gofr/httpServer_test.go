@@ -83,7 +83,7 @@ func TestShutdown_ServerStopsListening(t *testing.T) {
 
 	err := <-errChan
 
-	assert.Nil(t, err, "TEST Failed.\n")
+	assert.NoError(t, err, "TEST Failed.\n")
 }
 
 func TestRegisterProfillingRoutes(t *testing.T) {
