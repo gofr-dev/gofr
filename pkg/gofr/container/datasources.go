@@ -3,7 +3,6 @@ package container
 import (
 	"context"
 	"database/sql"
-
 	"github.com/redis/go-redis/v9"
 
 	"gofr.dev/pkg/gofr/datasource"
@@ -186,4 +185,12 @@ type provider interface {
 
 	// Connect establishes a connection to Cassandra and registers metrics using the provided configuration when the client was Created.
 	Connect()
+}
+
+type KVStore interface {
+	Get(ctx context.Context, key string) (string, error)
+	Set(ctx context.Context, key string, value string) error
+	Delete(ctx context.Context, key string) error
+
+	HealthCheck(ctx context.Context) (any, error)
 }

@@ -42,6 +42,8 @@ type Container struct {
 	Clickhouse Clickhouse
 	Mongo      Mongo
 
+	KVStore KVStore
+
 	File datasource.FileSystem
 }
 
