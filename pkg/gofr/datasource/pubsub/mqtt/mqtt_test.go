@@ -252,7 +252,9 @@ func TestMQTT_SubscribeSuccess(t *testing.T) {
 
 	mockClient.EXPECT().Subscribe("test/topic", mockConfigs.QoS, gomock.Any()).Return(mockToken)
 
-	mockToken.EXPECT().Wait().Return(true)
+	doneChan := make(chan struct{})
+	close(doneChan)
+	mockToken.EXPECT().Done().Return(doneChan).AnyTimes()
 	mockToken.EXPECT().Error().Return(nil)
 
 	go func() {
@@ -278,7 +280,9 @@ func TestMQTT_SubscribeFailure(t *testing.T) {
 
 	mockClient.EXPECT().Subscribe("test/topic", mockConfigs.QoS, gomock.Any()).Return(mockToken)
 
-	mockToken.EXPECT().Wait().Return(true)
+	doneChan := make(chan struct{})
+	close(doneChan)
+	mockToken.EXPECT().Done().Return(doneChan).AnyTimes()
 	mockToken.EXPECT().Error().Return(errToken).Times(3)
 
 	m, err := client.Subscribe(ctx, "test/topic")

@@ -59,8 +59,10 @@ type subscription struct {
 // New establishes a connection to MQTT Broker using the configs and return pubsub.MqttPublisherSubscriber
 // with more MQTT focused functionalities related to subscribing(push), unsubscribing and disconnecting from broker.
 func New(config *Config, logger Logger, metrics Metrics) *MQTT {
-	options := getDefaultClientOpts(config)
-	if config.Hostname != "" {
+	var options *mqtt.ClientOptions
+	if config.Hostname == "" {
+		options = getDefaultClientOpts(config)
+	} else {
 		options = getMQTTClientOptions(config)
 	}
 
