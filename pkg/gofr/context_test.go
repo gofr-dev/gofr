@@ -16,7 +16,7 @@ import (
 
 func Test_newContextSuccess(t *testing.T) {
 	httpRequest, err := http.NewRequestWithContext(context.Background(),
-		http.MethodPost, "/test", bytes.NewBuffer([]byte(`{"key":"value"}`)))
+		http.MethodPost, "/test", bytes.NewBufferString(`{"key":"value"}`))
 	httpRequest.Header.Set("content-type", "application/json")
 
 	if err != nil {
