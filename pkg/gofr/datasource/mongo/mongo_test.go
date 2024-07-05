@@ -2,7 +2,6 @@ package mongo
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"testing"
@@ -506,7 +505,8 @@ func Test_HealthCheck(t *testing.T) {
 
 		resp, err := cl.HealthCheck()
 
-		assert.Equal(t, err, errors.New(errStatusDown))
+		assert.ErrorIs(t, err, ErrStatusDown))
+
 		assert.Contains(t, fmt.Sprint(resp), "DOWN")
 	})
 }

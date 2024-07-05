@@ -3,7 +3,6 @@ package clickhouse
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -94,7 +93,8 @@ func Test_ClickHouse_HealthDOWN(t *testing.T) {
 
 	resp, err := c.HealthCheck(context.Background())
 
-	assert.Equal(t, err, errors.New(errStatusDown))
+	assert.ErrorIs(t, err, ErrStatusDown))
+
 	assert.Contains(t, fmt.Sprint(resp), "DOWN")
 }
 

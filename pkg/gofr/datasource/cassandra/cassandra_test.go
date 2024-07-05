@@ -262,7 +262,7 @@ func Test_HealthCheck(t *testing.T) {
 			Status: "DOWN",
 			Details: map[string]interface{}{"host": client.config.Hosts, "keyspace": client.config.Keyspace,
 				"message": errMock.Error()},
-		}, errors.New(errStatusDown)},
+		}, errStatusDown},
 		{"failure case: cassandra not initializes", func() {
 			client.cassandra.session = nil
 
@@ -272,7 +272,7 @@ func Test_HealthCheck(t *testing.T) {
 			Status: "DOWN",
 			Details: map[string]interface{}{"host": client.config.Hosts, "keyspace": client.config.Keyspace,
 				"message": "cassandra not connected"},
-		}, errors.New(errStatusDown)},
+		}, errStatusDown},
 	}
 
 	for i, tc := range testCases {

@@ -166,7 +166,7 @@ type Health struct {
 	Details map[string]interface{} `json:"details,omitempty"`
 }
 
-const errStatusDown = "StatusDown"
+var errStatusDown = errors.New("status down")
 
 // HealthCheck checks the health of the MongoDB client by pinging the database.
 func (c *client) HealthCheck(ctx context.Context) (any, error) {
@@ -181,7 +181,7 @@ func (c *client) HealthCheck(ctx context.Context) (any, error) {
 	if err != nil {
 		h.Status = "DOWN"
 
-		return &h, errors.New(errStatusDown)
+		return &h, errStatusDown
 	}
 
 	h.Status = "UP"
