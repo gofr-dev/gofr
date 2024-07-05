@@ -211,6 +211,7 @@ func (m *MQTT) createMqttHandler(_ context.Context, topic string, msgs chan *pub
 		})
 	}
 }
+
 func (m *MQTT) Publish(ctx context.Context, topic string, message []byte) error {
 	_, span := otel.GetTracerProvider().Tracer("gofr").Start(ctx, "mqtt-publish")
 	defer span.End()
@@ -310,8 +311,13 @@ func (m *MQTT) SubscribeWithFunction(topic string, subscribeFunc SubscribeFunc) 
 		// call the user defined function
 		err := subscribeFunc(pubsubMsg)
 		if err != nil {
+			m.logger.Errorf("error subscribing to message, err : %v", err)
+
 			return
 		}
+
+		// acknowledge messge if subscription is successful
+		msg.Ack()
 	}
 
 	token := m.Client.Subscribe(topic, 1, handler)
