@@ -103,6 +103,8 @@ func TestHTTPService_HealthCheckTimeout(t *testing.T) {
 }
 
 func initializeTest(t *testing.T, urlSuffix string, statusCode int) (HTTP, *httptest.Server, *MockMetrics) {
+	t.Helper()
+
 	ctrl := gomock.NewController(t)
 	metrics := NewMockMetrics(ctrl)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

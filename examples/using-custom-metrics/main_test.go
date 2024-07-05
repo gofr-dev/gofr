@@ -16,7 +16,7 @@ func TestIntegration(t *testing.T) {
 
 	c := http.Client{}
 
-	req, _ := http.NewRequest("POST", host+"/transaction", nil)
+	req, _ := http.NewRequest(http.MethodPost, host+"/transaction", nil)
 	req.Header.Set("content-type", "application/json")
 
 	_, err := c.Do(req)
@@ -24,14 +24,14 @@ func TestIntegration(t *testing.T) {
 		t.Fatalf("request to /transaction failed %v", err)
 	}
 
-	req, _ = http.NewRequest("POST", host+"/return", nil)
+	req, _ = http.NewRequest(http.MethodPost, host+"/return", nil)
 
 	_, err = c.Do(req)
 	if err != nil {
 		t.Fatalf("request to /transaction failed %v", err)
 	}
 
-	req, _ = http.NewRequest("GET", "http://localhost:2120/metrics", nil)
+	req, _ = http.NewRequest(http.MethodGet, "http://localhost:2120/metrics", nil)
 
 	resp, err := c.Do(req)
 	if err != nil {

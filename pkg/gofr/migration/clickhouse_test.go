@@ -13,6 +13,8 @@ import (
 )
 
 func clickHouseSetup(t *testing.T) (migrator, *MockClickhouse, *container.Container) {
+	t.Helper()
+
 	ctrl := gomock.NewController(t)
 
 	mockContainer, _ := container.NewMockContainer(t)
