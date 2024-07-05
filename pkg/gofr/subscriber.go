@@ -46,7 +46,7 @@ func (s *SubscriptionManager) handleSubscription(topic string, handler Subscribe
 		return
 	}
 
-if err != nil {
+	if err != nil {
 		s.container.Logger.Errorf("error while reading from topic %v, err: %v", topic, err.Error())
 		return
 	}
