@@ -23,6 +23,7 @@ var (
 )
 
 var (
+	//nolint:gochecknoglobals //used for testing purposes only
 	mockConfigs = &Config{
 		Protocol:         "tcp",
 		Hostname:         "localhost",
@@ -35,6 +36,7 @@ var (
 		RetrieveRetained: false,
 		KeepAlive:        0,
 	}
+	//nolint:gochecknoglobals //used for testing purposes only
 	msg = []byte(`hello world`)
 )
 
@@ -143,7 +145,7 @@ func TestMQTT_DisconnectWithSubscriptions(t *testing.T) {
 	subs := make(map[string]subscription)
 	subs["test/topic"] = subscription{
 		msgs:    make(chan *pubsub.Message),
-		handler: func(_ mqtt.Client, msg mqtt.Message) {},
+		handler: func(_ mqtt.Client, _ mqtt.Message) {},
 	}
 
 	ctrl, client, mockClient, _, mockToken := getMockMQTT(t, mockConfigs)
@@ -306,8 +308,8 @@ func TestMQTT_SubscribeWithFunc(t *testing.T) {
 	mockClient.EXPECT().Subscribe("test/topic", mockConfigs.QoS, gomock.Any()).Return(mockToken)
 	mockToken.EXPECT().Wait().Return(true)
 	mockToken.EXPECT().Error().Return(errToken).Times(2)
-	err = client.SubscribeWithFunction("test/topic", subscriptionFunc)
 
+	err = client.SubscribeWithFunction("test/topic", subscriptionFunc)
 	assert.NotNil(t, err)
 	assert.True(t, errors.Is(err, errToken))
 }
@@ -516,6 +518,7 @@ func TestMQTT_createMqttHandler(t *testing.T) {
 	)
 
 	wg.Add(1)
+
 	go func() {
 		defer wg.Done()
 
