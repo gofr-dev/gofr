@@ -4,6 +4,8 @@ import (
 	"context"
 	"strconv"
 
+	"go.opentelemetry.io/otel/trace"
+
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"go.opentelemetry.io/otel"
 
@@ -33,7 +35,7 @@ func (m *MQTT) getSub(ctx context.Context, topic string) (*subscription, error) 
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	// get the message channel for the given topic
+	// Get the message channel for the given topic
 	subs, ok := m.subscriptions[topic]
 	if ok {
 		return &subs, nil
@@ -42,23 +44,26 @@ func (m *MQTT) getSub(ctx context.Context, topic string) (*subscription, error) 
 	subs.msgs = make(chan *pubsub.Message, messageBuffer)
 	subs.handler = m.createMqttHandler(ctx, topic, subs.msgs)
 	token := m.Client.Subscribe(topic, m.config.QoS, subs.handler)
-	select {
-	case <-token.Done():
-		if token.Error() != nil {
-			m.logger.Errorf("error getting a message from MQTT, error: %v", token.Error())
-			return &subs, token.Error()
-		}
 
-		m.subscriptions[topic] = subs
+	// Wait for the subscription to complete
+	<-token.Done()
+
+	if token.Error() != nil {
+		m.logger.Errorf("error getting a message from MQTT, error: %v", token.Error())
+		return &subs, token.Error()
 	}
+
+	m.subscriptions[topic] = subs
 
 	return &subs, nil
 }
 
 func (m *MQTT) createMqttHandler(ctx context.Context, topic string, msgs chan *pubsub.Message) mqtt.MessageHandler {
 	return func(_ mqtt.Client, msg mqtt.Message) {
-		ctx := context.WithoutCancel(ctx)
-		ctx, span := otel.GetTracerProvider().Tracer("gofr").Start(ctx, "mqtt-subscribe")
+		var span trace.Span
+
+		ctx = context.WithoutCancel(ctx)
+		ctx, span = otel.GetTracerProvider().Tracer("gofr").Start(ctx, "mqtt-subscribe")
 
 		defer span.End()
 
