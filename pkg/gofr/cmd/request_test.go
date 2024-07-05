@@ -29,7 +29,7 @@ func TestRequest_Bind(t *testing.T) {
 
 	_ = r.Bind(&a)
 
-	if a.Name != "gofr" || a.Valid != true || a.Value != 12 {
+	if a.Name != "gofr" || !a.Valid || a.Value != 12 {
 		t.Errorf("TEST Failed.\nGot: %v\n%s", a, "Request Bind error")
 	}
 

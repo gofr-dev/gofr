@@ -28,7 +28,7 @@ type RPCLog struct {
 }
 
 func (l RPCLog) PrettyPrint(writer io.Writer) {
-	/// checking the length of status code to match the spacing that is being done in HTTP logs after status codes
+	// checking the length of status code to match the spacing that is being done in HTTP logs after status codes
 	statusCodeLen := 9 - int(math.Log10(float64(l.StatusCode))) + 1
 
 	fmt.Fprintf(writer, "\u001B[38;5;8m%s \u001B[38;5;%dm%-6d"+
