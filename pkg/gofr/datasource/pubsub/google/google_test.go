@@ -17,6 +17,8 @@ import (
 )
 
 func getGoogleClient(t *testing.T) *gcPubSub.Client {
+	t.Helper()
+
 	srv := pstest.NewServer()
 
 	conn, err := grpc.NewClient(srv.Addr, grpc.WithTransportCredentials(insecure.NewCredentials()))

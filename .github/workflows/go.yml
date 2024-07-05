@@ -1,3 +1,4 @@
+---
 name: Workflow-Pipeline
 
 on:
@@ -188,7 +189,7 @@ jobs:
   code_quality:
     name: Code Quality🎖️
     runs-on: ubuntu-latest
-    container: "golangci/golangci-lint:v1.57.2"
+    container: "golangci/golangci-lint:v1.59.1"
     steps:
       - name: Check out code into the Go module directory
         uses: actions/checkout@v4
