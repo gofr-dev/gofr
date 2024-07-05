@@ -40,7 +40,7 @@ func (c *Container) Health(ctx context.Context) interface{} {
 		healthMap["pubsub"] = health
 	}
 
-	downCount, healthMap = checkExternalDBHealth(ctx, c, downCount, healthMap)
+	downCount = downCount + checkExternalDBHealth(ctx, c, healthMap)
 
 	for name, svc := range c.Services {
 		health := svc.HealthCheck(ctx)
@@ -56,39 +56,35 @@ func (c *Container) Health(ctx context.Context) interface{} {
 	return healthMap
 }
 
-func checkExternalDBHealth(ctx context.Context, c *Container, downCount int,
-	healthMap map[string]interface{}) (updatedDownCount int, updatedHealthMap map[string]interface{}) {
-	updatedDownCount = downCount
-	updatedHealthMap = healthMap
-
+func checkExternalDBHealth(ctx context.Context, c *Container, healthMap map[string]interface{}) (downCount int) {
 	if !isNil(c.Mongo) {
 		health, err := c.Mongo.HealthCheck(ctx)
 		if err != nil {
-			updatedDownCount++
+			downCount++
 		}
 
-		updatedHealthMap["mongo"] = health
+		healthMap["mongo"] = health
 	}
 
 	if !isNil(c.Cassandra) {
 		health, err := c.Cassandra.HealthCheck(ctx)
 		if err != nil {
-			updatedDownCount++
+			downCount++
 		}
 
-		updatedHealthMap["cassandra"] = health
+		healthMap["cassandra"] = health
 	}
 
 	if !isNil(c.Clickhouse) {
 		health, err := c.Clickhouse.HealthCheck(ctx)
 		if err != nil {
-			updatedDownCount++
+			downCount++
 		}
 
-		updatedHealthMap["clickHouse"] = health
+		healthMap["clickHouse"] = health
 	}
 
-	return updatedDownCount, updatedHealthMap
+	return downCount
 }
 
 func (c *Container) appHealth(healthMap map[string]interface{}, downCount int) {
