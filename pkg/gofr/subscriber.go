@@ -44,7 +44,9 @@ func (s *SubscriptionManager) handleSubscription(topic string, handler Subscribe
 	if errors.Is(err, kafka.ErrConsumerGroupNotProvided) {
 		s.container.Logger.Errorf("cannot subscribe as consumer_id is not provided in configs")
 		return
-	} else if err != nil {
+	}
+
+if err != nil {
 		s.container.Logger.Errorf("error while reading from topic %v, err: %v", topic, err.Error())
 		return
 	}
