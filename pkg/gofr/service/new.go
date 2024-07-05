@@ -29,7 +29,7 @@ type HTTP interface {
 
 	// HealthCheck to get the service health and report it to the current application
 	HealthCheck(ctx context.Context) *Health
-	getHealthResponseForEndpoint(ctx context.Context, endpoint string) *Health
+	getHealthResponseForEndpoint(ctx context.Context, endpoint string, timeout int) *Health
 }
 
 type httpClient interface {
@@ -170,20 +170,18 @@ func (h *httpService) createAndSendRequest(ctx context.Context, method string, p
 
 	respTime := time.Since(requestStart)
 
-	if h.Metrics != nil && resp != nil {
-		h.RecordHistogram(ctx, "app_http_service_response", respTime.Seconds(), "path", h.url, "method", method,
-			"status", fmt.Sprintf("%v", resp.StatusCode))
-	}
-
 	log.ResponseTime = respTime.Milliseconds()
 
 	if err != nil {
 		log.ResponseCode = http.StatusInternalServerError
 		h.Log(&ErrorLog{Log: log, ErrorMessage: err.Error()})
 
+		h.updateMetrics(ctx, method, respTime.Seconds(), http.StatusInternalServerError)
+
 		return resp, err
 	}
 
+	h.updateMetrics(ctx, method, respTime.Seconds(), resp.StatusCode)
 	log.ResponseCode = resp.StatusCode
 
 	h.Log(log)
@@ -191,7 +189,12 @@ func (h *httpService) createAndSendRequest(ctx context.Context, method string, p
 	return resp, nil
 }
 
-// HealthCheck default healthcheck for HTTP Service.
+func (h *httpService) updateMetrics(ctx context.Context, method string, timeTaken float64, statusCode int) {
+	if h.Metrics != nil {
+		h.RecordHistogram(ctx, "app_http_service_response", timeTaken, "path", h.url, "method", method,
+			"status", fmt.Sprintf("%v", statusCode))
+	}
+}
 
 func encodeQueryParameters(req *http.Request, queryParams map[string]interface{}) {
 	q := req.URL.Query()
