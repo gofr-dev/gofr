@@ -50,16 +50,14 @@ func (m *MQTT) getSub(ctx context.Context, topic string) (*subscription, error) 
 		}
 
 		m.subscriptions[topic] = subs
-	case <-ctx.Done():
-		return &subs, nil
 	}
 
 	return &subs, nil
 }
 
-func (m *MQTT) createMqttHandler(_ context.Context, topic string, msgs chan *pubsub.Message) mqtt.MessageHandler {
+func (m *MQTT) createMqttHandler(ctx context.Context, topic string, msgs chan *pubsub.Message) mqtt.MessageHandler {
 	return func(_ mqtt.Client, msg mqtt.Message) {
-		ctx := context.Background()
+		ctx := context.WithoutCancel(ctx)
 		ctx, span := otel.GetTracerProvider().Tracer("gofr").Start(ctx, "mqtt-subscribe")
 
 		defer span.End()
