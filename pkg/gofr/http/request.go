@@ -96,11 +96,11 @@ func (r *Request) body() ([]byte, error) {
 
 func (r *Request) bindMultipart(ptr any) error {
 	ptrVal := reflect.ValueOf(ptr)
-	if ptrVal.Kind() == reflect.Ptr {
-		ptrVal = ptrVal.Elem()
-	} else {
+	if ptrVal.Kind() != reflect.Ptr {
 		return errNonPointerBind
 	}
+
+	ptrVal = ptrVal.Elem()
 
 	if err := r.req.ParseMultipartForm(defaultMaxMemory); err != nil {
 		return err

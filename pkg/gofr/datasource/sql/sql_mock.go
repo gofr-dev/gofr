@@ -10,10 +10,14 @@ import (
 )
 
 func NewSQLMocks(t *testing.T) (*DB, sqlmock.Sqlmock, *MockMetrics) {
+	t.Helper()
+
 	return NewSQLMocksWithConfig(t, nil)
 }
 
 func NewSQLMocksWithConfig(t *testing.T, config *DBConfig) (*DB, sqlmock.Sqlmock, *MockMetrics) {
+	t.Helper()
+
 	db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherEqual))
 	if err != nil {
 		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)

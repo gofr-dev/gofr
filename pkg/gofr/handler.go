@@ -64,7 +64,9 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	)
 
 	go func() {
-		defer panicRecoveryHandler(h.container, panicked)
+		defer func() {
+			panicRecoveryHandler(recover(), h.container, panicked)
+		}()
 		// Execute the handler function
 		result, err = h.function(c)
 
@@ -126,13 +128,14 @@ func (h handler) setContextTimeout(timeout string) int {
 	return reqTimeout
 }
 
-func panicRecoveryHandler(log logging.Logger, panicked chan struct{}) {
-	re := recover()
-	if re != nil {
-		close(panicked)
-		log.Error(panicLog{
-			Error:      fmt.Sprint(re),
-			StackTrace: string(debug.Stack()),
-		})
+func panicRecoveryHandler(re any, log logging.Logger, panicked chan struct{}) {
+	if re == nil {
+		return
 	}
+
+	close(panicked)
+	log.Error(panicLog{
+		Error:      fmt.Sprint(re),
+		StackTrace: string(debug.Stack()),
+	})
 }
