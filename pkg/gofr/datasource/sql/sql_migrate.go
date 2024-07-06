@@ -31,8 +31,8 @@ func GenerateCreateTableSQL(structType interface{}, dbType string, dropIfExists 
 		comment := ""
 		checkConstraint := ""
 		foreignKey := ""
-		gofrTags := field.Tag.Get("gofr")
-		tagParts := strings.Split(gofrTags, ",")
+		sqlTags := field.Tag.Get("sql")
+		tagParts := strings.Split(sqlTags, ",")
 		for _, tag := range tagParts {
 			tag = strings.TrimSpace(tag)
 			if strings.HasPrefix(tag, "comment(") {
