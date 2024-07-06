@@ -285,7 +285,7 @@ func (a *App) SubCommand(pattern string, handler Handler, options ...Options) {
 
 func (a *App) AutoMigrate(dropIfExists bool, structs ...interface{}) error {
 	// TODO : Move panic recovery at central location which will manage for all the different cases.
-	defer panicRecovery(a.container.Logger)
+	defer panicRecovery(recover(), a.container.Logger)
 
 	// Get the database type from the container
 	dbType := a.container.SQL.Dialect()
