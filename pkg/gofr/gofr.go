@@ -283,7 +283,7 @@ func (a *App) SubCommand(pattern string, handler Handler, options ...Options) {
 	a.cmd.addRoute(pattern, handler, options...)
 }
 
-func (a *App) AutoMigrate(dropIfExists bool, structs ...interface{}) error {
+func (a *App) AutoMigrate(structs ...interface{}) error {
 	// TODO : Move panic recovery at central location which will manage for all the different cases.
 	defer panicRecovery(recover(), a.container.Logger)
 
@@ -310,15 +310,8 @@ func (a *App) AutoMigrate(dropIfExists bool, structs ...interface{}) error {
 		triggerStatementsArray = append(triggerStatementsArray, triggerStatements)
 	}
 
-	var err error
 	sqlDB := sql.NewSQL(a.Config, a.container.Logger, a.container.Metrics())
 	defer sqlDB.DB.Close()
-
-	if dropIfExists {
-		if sql.ExecuteAutoMigrationStatements(sqlDB.DB, a.container.Logger, sql.ReverseStringArray(dropTableStatementArray)); err != nil {
-			return err
-		}
-	}
 
 	if err := sql.ExecuteAutoMigrationStatements(sqlDB.DB, a.container.Logger, createTableStatementArray); err != nil {
 		return err
