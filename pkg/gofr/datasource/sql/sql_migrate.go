@@ -157,18 +157,16 @@ func ReverseStringArray(input []string) []string {
 }
 
 // executeSQLStatements executes a series of SQL statements provided as an array
-func ExecuteAutoMigrationStatements(sqlDB *sql.DB, logger logging.Logger, sqlStatements []string) error {
-	for _, sql := range sqlStatements {
-		sql = strings.TrimSpace(sql)
-		if sql == "" {
-			continue
-		}
-		result, err := sqlDB.Exec(sql)
-		if err != nil {
-			logger.Errorf("error executing SQL: %v", err)
-			return err
-		}
-		logger.Infof("result for %s: %v", sql, result)
+func ExecuteMigrateJSONtoSQL(sqlDB *sql.DB, logger logging.Logger, sqlStatement string) error {
+	sql := strings.TrimSpace(sqlStatement)
+	if sql == "" {
+		return nil
 	}
+	result, err := sqlDB.Exec(sql)
+	if err != nil {
+		logger.Errorf("error executing SQL: %v", err)
+		return err
+	}
+	logger.Infof("result for %s: %v", sql, result)
 	return nil
 }
