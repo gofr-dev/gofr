@@ -48,15 +48,15 @@ func NewWSUpgrader(opts ...Options) *WSUpgrader {
 	}
 }
 
-func (w *Connection) Context() context.Context {
+func (*Connection) Context() context.Context {
 	return context.TODO() // Implement proper context handling if needed
 }
 
-func (w *Connection) Param(_ string) string {
+func (*Connection) Param(_ string) string {
 	return "" // Not applicable for WebSocket, can be implemented if needed
 }
 
-func (w *Connection) PathParam(_ string) string {
+func (*Connection) PathParam(_ string) string {
 	return "" // Not applicable for WebSocket, can be implemented if needed
 }
 
@@ -76,7 +76,7 @@ func (w *Connection) Bind(v interface{}) error {
 	return nil
 }
 
-func (w *Connection) HostName() string {
+func (*Connection) HostName() string {
 	return "" // Not applicable for WebSocket, can be implemented if needed
 }
 

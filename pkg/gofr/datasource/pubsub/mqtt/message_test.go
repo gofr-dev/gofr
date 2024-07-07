@@ -43,5 +43,5 @@ func (m mockMessage) Payload() []byte {
 	return []byte(m.pyload)
 }
 
-func (m mockMessage) Ack() {
+func (mockMessage) Ack() {
 }

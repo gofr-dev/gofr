@@ -594,7 +594,7 @@ func (m *mockMetrics) RecordHistogram(ctx context.Context, name string, value fl
 type customTransport struct {
 }
 
-func (c *customTransport) RoundTrip(r *http.Request) (*http.Response, error) {
+func (*customTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 	if r.URL.Path == "/.well-known/alive" || r.URL.Path == "/success" {
 		return &http.Response{
 			Body:       io.NopCloser(bytes.NewBufferString("Hello World")),
