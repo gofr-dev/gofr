@@ -32,29 +32,31 @@ func (s *SubscriptionManager) startSubscriber(ctx context.Context, topic string,
 			s.container.Logger.Infof("shutting down subscriber for topic %s", topic)
 			return
 		default:
-			s.handleSubscription(ctx, topic, handler)
+			err := s.handleSubscription(ctx, topic, handler)
+			if err != nil {
+				return
+			}
 		}
 	}
 }
 
-func (s *SubscriptionManager) handleSubscription(parentCtx context.Context, topic string, handler SubscribeFunc) {
-	ctx, done := context.WithCancel(parentCtx)
-	defer done()
+func (s *SubscriptionManager) handleSubscription(parentCtx context.Context, topic string, handler SubscribeFunc) error {
+	ctx := context.WithoutCancel(parentCtx)
 
 	msg, err := s.container.GetSubscriber().Subscribe(ctx, topic)
 
 	if errors.Is(err, kafka.ErrConsumerGroupNotProvided) {
 		s.container.Logger.Error("cannot subscribe as consumer_id is not provided in configs")
-		return
+		return err
 	}
 
 	if err != nil {
 		s.container.Logger.Errorf("error while reading from topic %v, err: %v", topic, err.Error())
-		return
+		return nil
 	}
 
 	if msg == nil {
-		return
+		return nil
 	}
 
 	msgCtx := newContext(nil, msg, s.container)
@@ -70,12 +72,14 @@ func (s *SubscriptionManager) handleSubscription(parentCtx context.Context, topi
 	// commit the message if the subscription function does not return error
 	if err != nil {
 		s.container.Logger.Errorf("error in handler for topic %s: %v", topic, err)
-		return
+		return nil
 	}
 
 	if msg.Committer != nil {
 		msg.Commit()
 	}
+
+	return nil
 }
 
 type panicLog struct {
