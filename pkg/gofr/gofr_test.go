@@ -434,7 +434,7 @@ func Test_UseMiddleware(t *testing.T) {
 	assert.Equal(t, "applied", testHeaderValue, "Test_UseMiddleware Failed! header value mismatch.")
 }
 
-func Test_APIKeyAuthMiddleware(t *testing.T) {
+func Test_APIKeyAuthMiddlewareIntegration(t *testing.T) {
 	c, _ := container.NewMockContainer(t)
 
 	app := &App{
