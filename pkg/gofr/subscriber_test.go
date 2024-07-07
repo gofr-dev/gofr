@@ -50,18 +50,16 @@ func (s mockSubscriber) Close(_ context.Context) error {
 	return nil
 }
 
-func (mockSubscriber) Subscribe(_ context.Context, topic string) (*pubsub.Message, error) {
+func (mockSubscriber) Subscribe(ctx context.Context, topic string) (*pubsub.Message, error) {
+	msg := pubsub.NewMessage(ctx)
+	msg.Topic = "test-topic"
+	msg.Value = []byte(`{"data":{"productId":"123","price":"599"}}`)
+
 	if topic == "test-topic" {
-		return &pubsub.Message{
-			Topic: "test-topic",
-			Value: []byte(`{"data":{"productId":"123","price":"599"}}`),
-		}, nil
+		return msg, nil
 	}
 
-	return &pubsub.Message{
-		Topic: "test-topic",
-		Value: []byte(`{"data":{"productId":"123","price":"599"}}`),
-	}, subscriptionError("subscription error")
+	return msg, subscriptionError("subscription error")
 }
 
 func TestSubscriptionManager_HandlerError(t *testing.T) {

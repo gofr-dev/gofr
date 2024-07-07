@@ -6,7 +6,6 @@ import (
 	"runtime/debug"
 
 	"gofr.dev/pkg/gofr/container"
-	"gofr.dev/pkg/gofr/datasource/pubsub"
 	"gofr.dev/pkg/gofr/datasource/pubsub/kafka"
 	"gofr.dev/pkg/gofr/logging"
 )
@@ -28,26 +27,22 @@ func newSubscriptionManager(c *container.Container) SubscriptionManager {
 func (s *SubscriptionManager) startSubscriber(ctx context.Context, topic string, handler SubscribeFunc) {
 	// continuously subscribe in an infinite loop
 	for {
-		s.processSubscription(ctx, topic, handler)
+		select {
+		case <-ctx.Done():
+			s.container.Logger.Infof("shutting down subscriber for topic %s", topic)
+			return
+		default:
+			s.handleSubscription(ctx, topic, handler)
+		}
 	}
 }
 
-func (s *SubscriptionManager) processSubscription(parentCtx context.Context, topic string, handler SubscribeFunc) {
+func (s *SubscriptionManager) handleSubscription(parentCtx context.Context, topic string, handler SubscribeFunc) {
 	ctx, done := context.WithCancel(parentCtx)
 	defer done()
 
 	msg, err := s.container.GetSubscriber().Subscribe(ctx, topic)
 
-	select {
-	case <-ctx.Done():
-		s.container.Logger.Infof("shutting down subscriber for topic %s", topic)
-		return
-	default:
-		s.handleSubscription(topic, handler, msg, err)
-	}
-}
-
-func (s *SubscriptionManager) handleSubscription(topic string, handler SubscribeFunc, msg *pubsub.Message, err error) {
 	if errors.Is(err, kafka.ErrConsumerGroupNotProvided) {
 		s.container.Logger.Errorf("cannot subscribe as consumer_id is not provided in configs")
 		return
