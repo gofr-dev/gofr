@@ -50,12 +50,16 @@ type Container struct {
 
 func (c *Container) Close(ctx context.Context) error {
 	var err error
-	if c.PubSub != nil {
+	if !isNil(c.PubSub) {
 		err = c.PubSub.Close(ctx)
 	}
 
 	if !isNil(c.SQL) {
 		err = errors.Join(err, c.SQL.Close())
+	}
+
+	if !isNil(c.Redis) {
+		err = errors.Join(err, c.Redis.Close(ctx))
 	}
 
 	return err
