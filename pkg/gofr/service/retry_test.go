@@ -6,9 +6,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"gofr.dev/pkg/gofr/logging"
-
 	"github.com/stretchr/testify/assert"
+
+	"gofr.dev/pkg/gofr/logging"
 )
 
 type mockHTTP struct{}
