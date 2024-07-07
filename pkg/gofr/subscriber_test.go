@@ -8,9 +8,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/datasource/pubsub"
+	"gofr.dev/pkg/gofr/datasource/pubsub/kafka"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/testutil"
 )
@@ -52,11 +54,15 @@ func (s mockSubscriber) Close(_ context.Context) error {
 
 func (mockSubscriber) Subscribe(ctx context.Context, topic string) (*pubsub.Message, error) {
 	msg := pubsub.NewMessage(ctx)
-	msg.Topic = "test-topic"
+	msg.Topic = topic
 	msg.Value = []byte(`{"data":{"productId":"123","price":"599"}}`)
 
 	if topic == "test-topic" {
 		return msg, nil
+	}
+
+	if topic == "critical-err" {
+		return msg, kafka.ErrConsumerGroupNotProvided
 	}
 
 	return msg, subscriptionError("subscription error")
@@ -74,10 +80,11 @@ func TestSubscriptionManager_HandlerError(t *testing.T) {
 
 		// Run the subscriber in a goroutine
 		go func() {
-			subscriptionManager.startSubscriber(context.Background(), "test-topic",
+			err := subscriptionManager.startSubscriber(context.Background(), "test-topic",
 				func(*Context) error {
 					return handleError("error in test-topic")
 				})
+			assert.NoError(t, err)
 		}()
 
 		// this sleep is added to wait for StderrOutputForFunc to collect the logs inside the testLogs
@@ -104,10 +111,11 @@ func TestSubscriptionManager_SubscribeError(t *testing.T) {
 
 		// Run the subscriber in a goroutine
 		go func() {
-			subscriptionManager.startSubscriber(context.Background(), "abc",
+			err := subscriptionManager.startSubscriber(context.Background(), "abc",
 				func(*Context) error {
 					return handleError("error in abc")
 				})
+			assert.NoError(t, err)
 		}()
 
 		// this sleep is added to wait for StderrOutputForFunc to collect the logs inside the testLogs
@@ -134,10 +142,11 @@ func TestSubscriptionManager_PanicRecovery(t *testing.T) {
 
 		// Run the subscriber in a goroutine
 		go func() {
-			subscriptionManager.startSubscriber(context.Background(), "abc",
+			err := subscriptionManager.startSubscriber(context.Background(), "abc",
 				func(*Context) error {
 					panic("test panic")
 				})
+			assert.Nil(t, err)
 		}()
 
 		// this sleep is added to wait for StderrOutputForFunc to collect the logs inside the testLogs
@@ -152,7 +161,7 @@ func TestSubscriptionManager_PanicRecovery(t *testing.T) {
 	}
 }
 
-func TestSubscriptionManager_ShouldStopOnCtxDone(_ *testing.T) {
+func TestSubscriptionManager_ShouldStopOnCtxDone(t *testing.T) {
 	mockContainer := container.Container{
 		Logger: logging.NewLogger(logging.ERROR),
 		PubSub: mockSubscriber{},
@@ -163,8 +172,22 @@ func TestSubscriptionManager_ShouldStopOnCtxDone(_ *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	// should handle one message and quit due to canceled context
-	subscriptionManager.startSubscriber(ctx, "test-topic", func(*Context) error {
+	err := subscriptionManager.startSubscriber(ctx, "test-topic", func(*Context) error {
 		cancel()
 		return nil
 	})
+	assert.NoError(t, err)
+}
+
+func TestSubscriptionManager_ShouldStopOnCriticalError(t *testing.T) {
+	mockContainer := container.Container{
+		Logger: logging.NewLogger(logging.ERROR),
+		PubSub: mockSubscriber{},
+	}
+	subscriptionManager := newSubscriptionManager(&mockContainer)
+
+	err := subscriptionManager.startSubscriber(context.Background(), "critical-err", func(*Context) error {
+		return kafka.ErrConsumerGroupNotProvided
+	})
+	assert.Error(t, err)
 }

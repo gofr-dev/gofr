@@ -22,8 +22,6 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
-	"google.golang.org/grpc"
-
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
 	gofrHTTP "gofr.dev/pkg/gofr/http"
@@ -32,6 +30,8 @@ import (
 	"gofr.dev/pkg/gofr/metrics"
 	"gofr.dev/pkg/gofr/migration"
 	"gofr.dev/pkg/gofr/service"
+	"golang.org/x/sync/errgroup"
+	"google.golang.org/grpc"
 )
 
 const (
@@ -181,21 +181,39 @@ func (a *App) Run() {
 		}(a.grpcServer)
 	}
 
-	// If subscriber is registered, block main go routine to wait for subscriber to receive messages
-	if len(a.subscriptionManager.subscriptions) != 0 {
-		// Start subscribers concurrently using go-routines
-		for topic, handler := range a.subscriptionManager.subscriptions {
-			wg.Add(1)
+	wg.Add(1)
 
-			go func(ctx context.Context, topic string, handler SubscribeFunc) {
-				defer wg.Done()
-				a.subscriptionManager.startSubscriber(ctx, topic, handler)
-			}(ctx, topic, handler)
+	go func() {
+		defer wg.Done()
+
+		err := a.startSubscriptions(ctx)
+		if err != nil {
+			a.Logger().Errorf("shutting down due to critical subsctiption error. reason: %w", err)
+			stop()
 		}
-	}
+	}()
 
 	wg.Wait()
 }
+
+func (a *App) startSubscriptions(ctx context.Context) error {
+	if len(a.subscriptionManager.subscriptions) == 0 {
+		return nil
+	}
+
+	group := errgroup.Group{}
+	// Start subscribers concurrently using go-routines
+	for topic, handler := range a.subscriptionManager.subscriptions {
+		subscriberTopic, subscriberHandler := topic, handler
+
+		group.Go(func() error {
+			return a.subscriptionManager.startSubscriber(ctx, subscriberTopic, subscriberHandler)
+		})
+	}
+
+	return group.Wait()
+}
+
 func (a *App) setupHTTPServer() {
 	// Add Default routes
 	a.add(http.MethodGet, "/.well-known/health", healthHandler)

@@ -24,24 +24,25 @@ func newSubscriptionManager(c *container.Container) SubscriptionManager {
 	}
 }
 
-func (s *SubscriptionManager) startSubscriber(ctx context.Context, topic string, handler SubscribeFunc) {
+func (s *SubscriptionManager) startSubscriber(ctx context.Context, topic string, handler SubscribeFunc) error {
 	// continuously subscribe in an infinite loop
 	for {
 		select {
 		case <-ctx.Done():
 			s.container.Logger.Infof("shutting down subscriber for topic %s", topic)
-			return
+			return nil
 		default:
 			err := s.handleSubscription(ctx, topic, handler)
 			if err != nil {
-				return
+				return err
 			}
 		}
 	}
 }
 
 func (s *SubscriptionManager) handleSubscription(parentCtx context.Context, topic string, handler SubscribeFunc) error {
-	ctx := context.WithoutCancel(parentCtx)
+	ctx, done := context.WithCancel(parentCtx)
+	defer done()
 
 	msg, err := s.container.GetSubscriber().Subscribe(ctx, topic)
 
