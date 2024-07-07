@@ -44,7 +44,7 @@ func (s *SubscriptionManager) handleSubscription(parentCtx context.Context, topi
 	msg, err := s.container.GetSubscriber().Subscribe(ctx, topic)
 
 	if errors.Is(err, kafka.ErrConsumerGroupNotProvided) {
-		s.container.Logger.Errorf("cannot subscribe as consumer_id is not provided in configs")
+		s.container.Logger.Error("cannot subscribe as consumer_id is not provided in configs")
 		return
 	}
 
