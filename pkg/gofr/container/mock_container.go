@@ -58,6 +58,7 @@ func NewMockContainer(t *testing.T) (*Container, Mocks) {
 	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_http_service_response", gomock.Any(), "path", gomock.Any(),
 		"method", gomock.Any(), "status", fmt.Sprintf("%v", http.StatusInternalServerError)).AnyTimes()
 	sqlMock.EXPECT().Close().AnyTimes()
+	redisMock.EXPECT().Close(gomock.Any()).AnyTimes()
 
 	return container, mocks
 }
