@@ -40,7 +40,7 @@ func (c *Container) Health(ctx context.Context) interface{} {
 		healthMap["pubsub"] = health
 	}
 
-	downCount = downCount + checkExternalDBHealth(ctx, c, healthMap)
+	downCount += checkExternalDBHealth(ctx, c, healthMap)
 
 	for name, svc := range c.Services {
 		health := svc.HealthCheck(ctx)

@@ -34,6 +34,8 @@ type Client struct {
 	metrics Metrics
 }
 
+var errStatusDown = errors.New("status down")
+
 // New initializes Cassandra driver with the provided configuration.
 // The Connect method must be called to establish a connection to Cassandra.
 // Usage:
@@ -296,8 +298,6 @@ type Health struct {
 	Status  string                 `json:"status,omitempty"`
 	Details map[string]interface{} `json:"details,omitempty"`
 }
-
-var errStatusDown = errors.New("status down")
 
 // HealthCheck checks the health of the Cassandra.
 func (c *Client) HealthCheck(context.Context) (any, error) {

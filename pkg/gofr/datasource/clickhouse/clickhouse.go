@@ -23,6 +23,8 @@ type client struct {
 	metrics Metrics
 }
 
+var errStatusDown = errors.New("status down")
+
 // New initializes Clickhouse client with the provided configuration.
 // Metrics, Logger has to be initialized before calling the Connect method.
 // Usage:
@@ -165,8 +167,6 @@ type Health struct {
 	Status  string                 `json:"status,omitempty"`
 	Details map[string]interface{} `json:"details,omitempty"`
 }
-
-var errStatusDown = errors.New("status down")
 
 // HealthCheck checks the health of the MongoDB client by pinging the database.
 func (c *client) HealthCheck(ctx context.Context) (any, error) {

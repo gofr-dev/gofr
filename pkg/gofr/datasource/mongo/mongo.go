@@ -32,6 +32,8 @@ type Config struct {
 	URI string
 }
 
+var errStatusDown = errors.New("status down")
+
 /*
 Developer Note: We could have accepted logger and metrics as part of the factory function `New`, but when mongo driver is
 initialised in GoFr, We want to ensure that the user need not to provides logger and metrics and then connect to the database,
@@ -223,8 +225,6 @@ type Health struct {
 	Status  string                 `json:"status,omitempty"`
 	Details map[string]interface{} `json:"details,omitempty"`
 }
-
-var errStatusDown = errors.New("status down")
 
 // HealthCheck checks the health of the MongoDB client by pinging the database.
 func (c *Client) HealthCheck(ctx context.Context) (any, error) {
