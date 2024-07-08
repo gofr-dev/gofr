@@ -7,7 +7,6 @@ import (
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/stretchr/testify/assert"
-
 	"go.uber.org/mock/gomock"
 
 	"gofr.dev/pkg/gofr/config"

@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"gofr.dev/pkg/gofr/datasource"
-
 	"github.com/redis/go-redis/v9"
+
+	"gofr.dev/pkg/gofr/datasource"
 )
 
 // redisHook is a custom Redis hook for logging queries and their durations.

@@ -17,7 +17,7 @@ func Test_getIPAddress(t *testing.T) {
 	{
 		// When RemoteAddr is set
 		addr := "0.0.0.0:8080"
-		req, err := http.NewRequestWithContext(context.Background(), "GET", "http://dummy", http.NoBody)
+		req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://dummy", http.NoBody)
 
 		assert.Nil(t, err, "TEST Failed.\n")
 
@@ -30,7 +30,7 @@ func Test_getIPAddress(t *testing.T) {
 	{
 		// When `X-Forwarded-For` header is set
 		addr := "192.168.0.1:8080"
-		req, err := http.NewRequestWithContext(context.Background(), "GET", "http://dummy", http.NoBody)
+		req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://dummy", http.NoBody)
 
 		assert.Nil(t, err, "TEST Failed.\n")
 
@@ -43,7 +43,7 @@ func Test_getIPAddress(t *testing.T) {
 
 func Test_LoggingMiddleware(t *testing.T) {
 	logs := testutil.StdoutOutputForFunc(func() {
-		req, _ := http.NewRequestWithContext(context.Background(), "GET", "http://dummy", http.NoBody)
+		req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://dummy", http.NoBody)
 
 		rr := httptest.NewRecorder()
 
@@ -57,7 +57,7 @@ func Test_LoggingMiddleware(t *testing.T) {
 
 func Test_LoggingMiddlewareError(t *testing.T) {
 	logs := testutil.StderrOutputForFunc(func() {
-		req, _ := http.NewRequestWithContext(context.Background(), "GET", "http://dummy", http.NoBody)
+		req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://dummy", http.NoBody)
 
 		rr := httptest.NewRecorder()
 
@@ -83,7 +83,7 @@ func testHandlerError(w http.ResponseWriter, _ *http.Request) {
 
 func Test_LoggingMiddlewareStringPanicHandling(t *testing.T) {
 	logs := testutil.StderrOutputForFunc(func() {
-		req, _ := http.NewRequestWithContext(context.Background(), "GET", "http://dummy", http.NoBody)
+		req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://dummy", http.NoBody)
 
 		rr := httptest.NewRecorder()
 
@@ -102,7 +102,7 @@ func testStringPanicHandler(_ http.ResponseWriter, r *http.Request) {
 
 func Test_LoggingMiddlewareErrorPanicHandling(t *testing.T) {
 	logs := testutil.StderrOutputForFunc(func() {
-		req, _ := http.NewRequestWithContext(context.Background(), "GET", "http://dummy", http.NoBody)
+		req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://dummy", http.NoBody)
 
 		rr := httptest.NewRecorder()
 
@@ -121,7 +121,7 @@ func testErrorPanicHandler(http.ResponseWriter, *http.Request) {
 
 func Test_LoggingMiddlewareUnknownPanicHandling(t *testing.T) {
 	logs := testutil.StderrOutputForFunc(func() {
-		req, _ := http.NewRequestWithContext(context.Background(), "GET", "http://dummy", http.NoBody)
+		req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://dummy", http.NoBody)
 
 		rr := httptest.NewRecorder()
 

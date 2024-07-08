@@ -50,6 +50,8 @@ func Test_ExportSpansError(t *testing.T) {
 }
 
 func provideSampleSpan(t *testing.T) []sdktrace.ReadOnlySpan {
+	t.Helper()
+
 	tp := sdktrace.NewTracerProvider()
 
 	defer func(tp *sdktrace.TracerProvider, ctx context.Context) {
