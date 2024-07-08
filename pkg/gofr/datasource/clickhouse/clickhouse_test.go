@@ -9,9 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"go.uber.org/mock/gomock"
-
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/mock/gomock"
 )
 
 func getClickHouseTestConnection(t *testing.T) (*MockConn, *MockMetrics, client) {

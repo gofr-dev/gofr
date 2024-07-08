@@ -9,7 +9,9 @@ linters-settings:
     statements: 50
   gci:
     sections:
-      - prefix(gofr.dev)
+      - standard
+      - default
+      - localmodule
   goconst:
     min-len: 2
     min-occurrences: 2
