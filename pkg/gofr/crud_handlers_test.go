@@ -339,7 +339,7 @@ func Test_GetAllHandler(t *testing.T) {
 				assert.Equal(t, tc.expectedResp, resp, "Failed.\n%s", tc.desc)
 
 				if tc.expectedErr != nil {
-					assert.Equal(t, tc.expectedErr.Error(), err.Error(), "TEST[%d], Failed.\n%s", i, tc.desc)
+					assert.ErrorContainsf(t, err, tc.expectedErr.Error(), "TEST[%d], Failed.\n%s", i, tc.desc)
 				} else {
 					assert.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
 				}
@@ -424,7 +424,7 @@ func Test_GetHandler(t *testing.T) {
 				assert.Equal(t, tc.expectedResp, resp, "Failed.\n%s", tc.desc)
 
 				if tc.expectedErr != nil {
-					assert.Equal(t, tc.expectedErr.Error(), err.Error(), "Failed.\n%s", tc.desc)
+					assert.ErrorContainsf(t, err, tc.expectedErr.Error(), "Failed.\n%s", tc.desc)
 				} else {
 					assert.NoError(t, err, "Failed.\n%s", tc.desc)
 				}

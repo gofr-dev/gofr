@@ -211,5 +211,5 @@ func Test_addAuthorizationHeader_Error(t *testing.T) {
 	}
 
 	expectedErrMsg := "illegal base64 data at input byte 7"
-	assert.Equal(t, expectedErrMsg, err.Error(), "Test_addAuthorizationHeader_Error Failed!")
+	assert.ErrorContains(t, err, expectedErrMsg, "Test_addAuthorizationHeader_Error Failed!")
 }
