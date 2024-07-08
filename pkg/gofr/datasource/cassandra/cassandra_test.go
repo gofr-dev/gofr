@@ -246,6 +246,7 @@ func Test_HealthCheck(t *testing.T) {
 		desc      string
 		mockCall  func()
 		expHealth *Health
+		err       error
 	}{
 		{"success case", func() {
 			mockSession.EXPECT().query(query).Return(mockQuery).Times(1)
@@ -253,7 +254,7 @@ func Test_HealthCheck(t *testing.T) {
 		}, &Health{
 			Status:  "UP",
 			Details: map[string]interface{}{"host": client.config.Hosts, "keyspace": client.config.Keyspace},
-		}},
+		}, nil},
 		{"failure case: exec error", func() {
 			mockSession.EXPECT().query(query).Return(mockQuery).Times(1)
 			mockQuery.EXPECT().exec().Return(errMock).Times(1)
@@ -261,7 +262,7 @@ func Test_HealthCheck(t *testing.T) {
 			Status: "DOWN",
 			Details: map[string]interface{}{"host": client.config.Hosts, "keyspace": client.config.Keyspace,
 				"message": errMock.Error()},
-		}},
+		}, errStatusDown},
 		{"failure case: cassandra not initializes", func() {
 			client.cassandra.session = nil
 
@@ -271,14 +272,15 @@ func Test_HealthCheck(t *testing.T) {
 			Status: "DOWN",
 			Details: map[string]interface{}{"host": client.config.Hosts, "keyspace": client.config.Keyspace,
 				"message": "cassandra not connected"},
-		}},
+		}, errStatusDown},
 	}
 
 	for i, tc := range testCases {
 		tc.mockCall()
 
-		health := client.HealthCheck()
+		health, err := client.HealthCheck(context.Background())
 
+		assert.Equal(t, tc.err, err)
 		assert.Equalf(t, tc.expHealth, health, "TEST[%d], Failed.\n%s", i, tc.desc)
 	}
 }
