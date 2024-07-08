@@ -2,6 +2,7 @@ package mongo
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -30,6 +31,8 @@ type Config struct {
 	// Deprecated Provide Host User Password Port Instead and driver will generate the URI
 	URI string
 }
+
+var errStatusDown = errors.New("status down")
 
 /*
 Developer Note: We could have accepted logger and metrics as part of the factory function `New`, but when mongo driver is
@@ -224,7 +227,7 @@ type Health struct {
 }
 
 // HealthCheck checks the health of the MongoDB client by pinging the database.
-func (c *Client) HealthCheck() interface{} {
+func (c *Client) HealthCheck(ctx context.Context) (any, error) {
 	h := Health{
 		Details: make(map[string]interface{}),
 	}
@@ -232,19 +235,16 @@ func (c *Client) HealthCheck() interface{} {
 	h.Details["host"] = c.uri
 	h.Details["database"] = c.database
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-
 	err := c.Database.Client().Ping(ctx, readpref.Primary())
 	if err != nil {
 		h.Status = "DOWN"
 
-		return &h
+		return &h, errStatusDown
 	}
 
 	h.Status = "UP"
 
-	return &h
+	return &h, nil
 }
 
 func (c *Client) StartSession() (interface{}, error) {
