@@ -341,7 +341,7 @@ func Test_GetAllHandler(t *testing.T) {
 				if tc.expectedErr != nil {
 					assert.Equal(t, tc.expectedErr.Error(), err.Error(), "TEST[%d], Failed.\n%s", i, tc.desc)
 				} else {
-					assert.Nil(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
+					assert.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
 				}
 			})
 		}
@@ -426,7 +426,7 @@ func Test_GetHandler(t *testing.T) {
 				if tc.expectedErr != nil {
 					assert.Equal(t, tc.expectedErr.Error(), err.Error(), "Failed.\n%s", tc.desc)
 				} else {
-					assert.Nil(t, err, "Failed.\n%s", tc.desc)
+					assert.NoError(t, err, "Failed.\n%s", tc.desc)
 				}
 			})
 		}
