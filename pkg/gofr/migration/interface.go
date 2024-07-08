@@ -34,6 +34,8 @@ type Clickhouse interface {
 	Exec(ctx context.Context, query string, args ...any) error
 	Select(ctx context.Context, dest any, query string, args ...any) error
 	AsyncInsert(ctx context.Context, query string, wait bool, args ...any) error
+
+	HealthCheck(ctx context.Context) (any, error)
 }
 
 // keeping the migrator interface unexported as, right now it is not being implemented directly, by the externalDB drivers.
