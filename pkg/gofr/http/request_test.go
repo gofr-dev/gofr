@@ -17,14 +17,14 @@ import (
 )
 
 func TestParam(t *testing.T) {
-	req := NewRequest(httptest.NewRequest("GET", "/abc?a=b", http.NoBody))
+	req := NewRequest(httptest.NewRequest(http.MethodGet, "/abc?a=b", http.NoBody))
 	if req.Param("a") != "b" {
 		t.Error("Can not parse the request params")
 	}
 }
 
 func TestBind(t *testing.T) {
-	r := httptest.NewRequest("POST", "/abc", strings.NewReader(`{"a": "b", "b": 5}`))
+	r := httptest.NewRequest(http.MethodPost, "/abc", strings.NewReader(`{"a": "b", "b": 5}`))
 	r.Header.Set("content-type", "application/json")
 	req := NewRequest(r)
 
@@ -125,7 +125,7 @@ func TestBind_FileSuccess(t *testing.T) {
 }
 
 func TestBind_NoContentType(t *testing.T) {
-	req := NewRequest(httptest.NewRequest("POST", "/abc", strings.NewReader(`{"a": "b", "b": 5}`)))
+	req := NewRequest(httptest.NewRequest(http.MethodPost, "/abc", strings.NewReader(`{"a": "b", "b": 5}`)))
 	x := struct {
 		A string `json:"a"`
 		B int    `json:"b"`
@@ -149,6 +149,8 @@ func Test_GetContext(t *testing.T) {
 }
 
 func generateMultipartRequestZip(t *testing.T) *http.Request {
+	t.Helper()
+
 	var buf bytes.Buffer
 	writer := multipart.NewWriter(&buf)
 
@@ -195,7 +197,7 @@ func generateMultipartRequestZip(t *testing.T) *http.Request {
 	writer.Close()
 
 	// Create a new HTTP request with the multipart data
-	req := httptest.NewRequest("POST", "/upload", &buf)
+	req := httptest.NewRequest(http.MethodPost, "/upload", &buf)
 	req.Header.Set("content-type", writer.FormDataContentType())
 
 	return req

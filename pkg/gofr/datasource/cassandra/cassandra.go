@@ -2,6 +2,7 @@ package cassandra
 
 import (
 	"context"
+	"errors"
 	"reflect"
 	"regexp"
 	"strings"
@@ -32,6 +33,8 @@ type Client struct {
 	logger  Logger
 	metrics Metrics
 }
+
+var errStatusDown = errors.New("status down")
 
 // New initializes Cassandra driver with the provided configuration.
 // The Connect method must be called to establish a connection to Cassandra.
@@ -297,7 +300,7 @@ type Health struct {
 }
 
 // HealthCheck checks the health of the Cassandra.
-func (c *Client) HealthCheck() interface{} {
+func (c *Client) HealthCheck(context.Context) (any, error) {
 	const (
 		statusDown = "DOWN"
 		statusUp   = "UP"
@@ -314,7 +317,7 @@ func (c *Client) HealthCheck() interface{} {
 		h.Status = statusDown
 		h.Details["message"] = "cassandra not connected"
 
-		return &h
+		return &h, errStatusDown
 	}
 
 	err := c.cassandra.session.query("SELECT now() FROM system.local").exec()
@@ -322,12 +325,12 @@ func (c *Client) HealthCheck() interface{} {
 		h.Status = statusDown
 		h.Details["message"] = err.Error()
 
-		return &h
+		return &h, errStatusDown
 	}
 
 	h.Status = statusUp
 
-	return &h
+	return &h, nil
 }
 
 // cassandraIterator implements iterator interface.

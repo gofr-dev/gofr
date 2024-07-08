@@ -2,6 +2,8 @@ package mongo
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -21,9 +23,16 @@ type Client struct {
 }
 
 type Config struct {
-	URI      string
+	Host     string
+	User     string
+	Password string
+	Port     int
 	Database string
+	// Deprecated Provide Host User Password Port Instead and driver will generate the URI
+	URI string
 }
+
+var errStatusDown = errors.New("status down")
 
 /*
 Developer Note: We could have accepted logger and metrics as part of the factory function `New`, but when mongo driver is
@@ -60,7 +69,14 @@ func (c *Client) UseMetrics(metrics interface{}) {
 func (c *Client) Connect() {
 	c.logger.Logf("connecting to mongoDB at %v to database %v", c.config.URI, c.config.Database)
 
-	m, err := mongo.Connect(context.Background(), options.Client().ApplyURI(c.config.URI))
+	uri := c.config.URI
+
+	if uri == "" {
+		uri = fmt.Sprintf("mongodb://%s:%s@%s:%d/%s?authSource=admin",
+			c.config.User, c.config.Password, c.config.Host, c.config.Port, c.config.Database)
+	}
+
+	m, err := mongo.Connect(context.Background(), options.Client().ApplyURI(uri))
 	if err != nil {
 		c.logger.Errorf("error connecting to mongoDB, err:%v", err)
 
@@ -187,6 +203,13 @@ func (c *Client) Drop(ctx context.Context, collection string) error {
 	return c.Database.Collection(collection).Drop(ctx)
 }
 
+// CreateCollection creates the specified collection in the database.
+func (c *Client) CreateCollection(ctx context.Context, name string) error {
+	defer c.postProcess(&QueryLog{Query: "createCollection", Collection: name}, time.Now())
+
+	return c.Database.CreateCollection(ctx, name)
+}
+
 func (c *Client) postProcess(ql *QueryLog, startTime time.Time) {
 	duration := time.Since(startTime).Milliseconds()
 
@@ -204,7 +227,7 @@ type Health struct {
 }
 
 // HealthCheck checks the health of the MongoDB client by pinging the database.
-func (c *Client) HealthCheck() interface{} {
+func (c *Client) HealthCheck(ctx context.Context) (any, error) {
 	h := Health{
 		Details: make(map[string]interface{}),
 	}
@@ -212,17 +235,38 @@ func (c *Client) HealthCheck() interface{} {
 	h.Details["host"] = c.uri
 	h.Details["database"] = c.database
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-
 	err := c.Database.Client().Ping(ctx, readpref.Primary())
 	if err != nil {
 		h.Status = "DOWN"
 
-		return &h
+		return &h, errStatusDown
 	}
 
 	h.Status = "UP"
 
-	return &h
+	return &h, nil
+}
+
+func (c *Client) StartSession() (interface{}, error) {
+	defer c.postProcess(&QueryLog{Query: "startSession"}, time.Now())
+
+	s, err := c.Client().StartSession()
+	ses := &session{s}
+
+	return ses, err
+}
+
+type session struct {
+	mongo.Session
+}
+
+func (s *session) StartTransaction() error {
+	return s.Session.StartTransaction()
+}
+
+type Transaction interface {
+	StartTransaction() error
+	AbortTransaction(context.Context) error
+	CommitTransaction(context.Context) error
+	EndSession(context.Context)
 }

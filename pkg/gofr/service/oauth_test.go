@@ -15,6 +15,8 @@ import (
 )
 
 func oAuthHTTPServer(t *testing.T) *httptest.Server {
+	t.Helper()
+
 	// Start a test HTTP server
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		header := r.Header.Get("Authorization")

@@ -9,6 +9,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
+
 	"gofr.dev/pkg/gofr/container"
 	gofrWebSocket "gofr.dev/pkg/gofr/websocket"
 )
@@ -16,6 +17,8 @@ import (
 var errConnection = errors.New("can't create connection")
 
 func initializeWebSocketMocks(t *testing.T) (gofrWebSocket.MockUpgrader, *gofrWebSocket.Manager) {
+	t.Helper()
+
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()
 
@@ -68,7 +71,7 @@ func Test_WSConnectionCreate_Success(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	req := httptest.NewRequest("GET", "/ws", http.NoBody)
+	req := httptest.NewRequest(http.MethodGet, "/ws", http.NoBody)
 	req.Header.Set("Connection", "Upgrade")
 	req.Header.Set("Upgrade", "websocket")
 

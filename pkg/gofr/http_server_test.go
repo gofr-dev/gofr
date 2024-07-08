@@ -3,6 +3,8 @@ package gofr
 import (
 	"context"
 	"net/http"
+	"net/http/httptest"
+	"strconv"
 	"testing"
 	"time"
 
@@ -50,4 +52,36 @@ func TestRun_ServerStartsListening(t *testing.T) {
 	assert.Equal(t, resp.StatusCode, http.StatusOK, "TEST Failed.\n")
 
 	resp.Body.Close()
+}
+
+func TestRegisterProfillingRoutes(t *testing.T) {
+	c := &container.Container{
+		Logger: logging.NewLogger(logging.INFO),
+	}
+
+	server := &httpServer{
+		router: gofrHTTP.NewRouter(),
+		port:   8080,
+	}
+
+	server.RegisterProfilingRoutes()
+
+	server.Run(c)
+
+	// Test if the expected handlers are registered for the pprof endpoints
+	expectedRoutes := []string{
+		"/debug/pprof/",
+		"/debug/pprof/cmdline",
+		"/debug/pprof/symbol",
+	}
+
+	serverURL := "http://localhost:" + strconv.Itoa(8000)
+
+	for _, route := range expectedRoutes {
+		r := httptest.NewRequest(http.MethodGet, serverURL+route, http.NoBody)
+		rr := httptest.NewRecorder()
+		server.router.ServeHTTP(rr, r)
+
+		assert.Equal(t, http.StatusOK, rr.Code)
+	}
 }

@@ -85,7 +85,11 @@ func New() *App {
 
 	app.httpServer = newHTTPServer(app.container, port, middleware.GetConfigs(app.Config))
 
-	// GRPC Server
+	if app.Config.Get("APP_ENV") == "DEBUG" {
+		app.httpServer.RegisterProfilingRoutes()
+	}
+
+	// gRPC Server
 	port, err = strconv.Atoi(app.Config.Get("GRPC_PORT"))
 	if err != nil || port <= 0 {
 		port = defaultGRPCPort
@@ -280,7 +284,9 @@ func (a *App) SubCommand(pattern string, handler Handler, options ...Options) {
 
 func (a *App) Migrate(migrationsMap map[int64]migration.Migrate) {
 	// TODO : Move panic recovery at central location which will manage for all the different cases.
-	defer panicRecovery(a.container.Logger)
+	defer func() {
+		panicRecovery(recover(), a.container.Logger)
+	}()
 
 	migration.Run(migrationsMap, a.container)
 }

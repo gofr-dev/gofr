@@ -22,6 +22,8 @@ var (
 )
 
 func getDB(t *testing.T, logLevel logging.Level) (*DB, sqlmock.Sqlmock) {
+	t.Helper()
+
 	mockDB, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherEqual), sqlmock.MonitorPingsOption(true))
 	if err != nil {
 		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)

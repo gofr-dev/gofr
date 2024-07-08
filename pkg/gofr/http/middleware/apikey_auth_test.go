@@ -28,7 +28,7 @@ func Test_ApiKeyAuthMiddleware(t *testing.T) {
 		return apiKey == validKey2
 	}
 
-	req, err := http.NewRequestWithContext(context.Background(), "GET", "/", http.NoBody)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "/", http.NoBody)
 	if err != nil {
 		t.Fatal(err)
 	}

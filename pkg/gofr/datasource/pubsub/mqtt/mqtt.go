@@ -34,10 +34,9 @@ type MQTT struct {
 	logger  Logger
 	metrics Metrics
 
-	config     *Config
-	msgChanMap map[string]chan *pubsub.Message
-
-	mu *sync.RWMutex
+	config        *Config
+	subscriptions map[string]subscription
+	mu            *sync.RWMutex
 }
 
 type Config struct {
@@ -50,6 +49,12 @@ type Config struct {
 	QoS              byte
 	Order            bool
 	RetrieveRetained bool
+	KeepAlive        time.Duration
+}
+
+type subscription struct {
+	msgs    chan *pubsub.Message
+	handler func(_ mqtt.Client, msg mqtt.Message)
 }
 
 // New establishes a connection to MQTT Broker using the configs and return pubsub.MqttPublisherSubscriber
@@ -60,23 +65,25 @@ func New(config *Config, logger Logger, metrics Metrics) *MQTT {
 	}
 
 	options := getMQTTClientOptions(config)
+	subs := make(map[string]subscription)
+	mu := new(sync.RWMutex)
 
 	logger.Debugf("connecting to MQTT at '%v:%v' with clientID '%v'", config.Hostname, config.Port, config.ClientID)
 
+	options.SetOnConnectHandler(createReconnectHandler(mu, config, subs))
+	options.SetConnectionLostHandler(createConnectionLostHandler(logger))
+	options.SetReconnectingHandler(createReconnectingHandler(logger, config))
 	// create the client using the options above
 	client := mqtt.NewClient(options)
-
 	if token := client.Connect(); token.Wait() && token.Error() != nil {
 		logger.Errorf("could not connect to MQTT at '%v:%v', error: %v", config.Hostname, config.Port, token.Error())
 
 		return &MQTT{Client: client, config: config, logger: logger}
 	}
 
-	msg := make(map[string]chan *pubsub.Message)
-
 	logger.Infof("connected to MQTT at '%v:%v' with clientID '%v'", config.Hostname, config.Port, options.ClientID)
 
-	return &MQTT{Client: client, config: config, logger: logger, msgChanMap: msg, mu: new(sync.RWMutex), metrics: metrics}
+	return &MQTT{Client: client, config: config, logger: logger, subscriptions: subs, mu: mu, metrics: metrics}
 }
 
 func getDefaultClient(config *Config, logger Logger, metrics Metrics) *MQTT {
@@ -89,6 +96,8 @@ func getDefaultClient(config *Config, logger Logger, metrics Metrics) *MQTT {
 	opts := mqtt.NewClientOptions()
 	opts.AddBroker(fmt.Sprintf("tcp://%s:%d", host, port))
 	opts.SetClientID(clientID)
+	opts.SetAutoReconnect(true)
+	opts.SetKeepAlive(config.KeepAlive)
 	client := mqtt.NewClient(opts)
 
 	if token := client.Connect(); token.Wait() && token.Error() != nil {
@@ -101,11 +110,11 @@ func getDefaultClient(config *Config, logger Logger, metrics Metrics) *MQTT {
 	config.Port = port
 	config.ClientID = clientID
 
-	msg := make(map[string]chan *pubsub.Message)
+	msg := make(map[string]subscription)
 
 	logger.Infof("connected to MQTT at '%v:%v' with clientID '%v'", config.Hostname, config.Port, clientID)
 
-	return &MQTT{Client: client, config: config, logger: logger, msgChanMap: msg, mu: new(sync.RWMutex), metrics: metrics}
+	return &MQTT{Client: client, config: config, logger: logger, subscriptions: msg, mu: new(sync.RWMutex), metrics: metrics}
 }
 
 func getMQTTClientOptions(config *Config) *mqtt.ClientOptions {
@@ -125,6 +134,8 @@ func getMQTTClientOptions(config *Config) *mqtt.ClientOptions {
 
 	options.SetOrderMatters(config.Order)
 	options.SetResumeSubs(config.RetrieveRetained)
+	options.SetAutoReconnect(true)
+	options.SetKeepAlive(config.KeepAlive)
 
 	return options
 }
@@ -143,23 +154,40 @@ func getClientID(clientID string) string {
 }
 
 func (m *MQTT) Subscribe(ctx context.Context, topic string) (*pubsub.Message, error) {
-	ctx, span := otel.GetTracerProvider().Tracer("gofr").Start(ctx, "mqtt-subscribe")
-	defer span.End()
-
-	m.metrics.IncrementCounter(ctx, "app_pubsub_subscribe_total_count", "topic", topic)
-
-	var messg = pubsub.NewMessage(ctx)
-
 	m.mu.Lock()
 	// get the message channel for the given topic
-	msgChan, ok := m.msgChanMap[topic]
+	subs, ok := m.subscriptions[topic]
 	if !ok {
-		msgChan = make(chan *pubsub.Message, messageBuffer)
-		m.msgChanMap[topic] = msgChan
+		subs.msgs = make(chan *pubsub.Message, messageBuffer)
+		subs.handler = m.createMqttHandler(ctx, topic, subs.msgs)
+		token := m.Client.Subscribe(topic, m.config.QoS, subs.handler)
+
+		if token.Wait() && token.Error() != nil {
+			m.logger.Errorf("error getting a message from MQTT, error: %v", token.Error())
+			return nil, token.Error()
+		}
+
+		m.subscriptions[topic] = subs
 	}
 	m.mu.Unlock()
 
-	handler := func(_ mqtt.Client, msg mqtt.Message) {
+	// blocks if there are no messages in the channel
+	msg := <-subs.msgs
+	m.metrics.IncrementCounter(msg.Context(), "app_pubsub_subscribe_success_count", "topic", msg.Topic)
+
+	return msg, nil
+}
+
+func (m *MQTT) createMqttHandler(_ context.Context, topic string, msgs chan *pubsub.Message) mqtt.MessageHandler {
+	return func(_ mqtt.Client, msg mqtt.Message) {
+		ctx := context.Background()
+		ctx, span := otel.GetTracerProvider().Tracer("gofr").Start(ctx, "mqtt-subscribe")
+
+		defer span.End()
+
+		m.metrics.IncrementCounter(ctx, "app_pubsub_subscribe_total_count", "topic", topic)
+
+		var messg = pubsub.NewMessage(context.WithoutCancel(ctx))
 		messg.Topic = msg.Topic()
 		messg.Value = msg.Payload()
 		messg.MetaData = map[string]string{
@@ -171,7 +199,7 @@ func (m *MQTT) Subscribe(ctx context.Context, topic string) (*pubsub.Message, er
 		messg.Committer = &message{msg: msg}
 
 		// store the message in the channel
-		msgChan <- messg
+		msgs <- messg
 
 		m.logger.Debug(&pubsub.Log{
 			Mode:          "SUB",
@@ -182,21 +210,7 @@ func (m *MQTT) Subscribe(ctx context.Context, topic string) (*pubsub.Message, er
 			PubSubBackend: "MQTT",
 		})
 	}
-
-	token := m.Client.Subscribe(topic, m.config.QoS, handler)
-
-	if token.Wait() && token.Error() != nil {
-		m.logger.Errorf("error getting a message from MQTT, error: %v", token.Error())
-
-		return nil, token.Error()
-	}
-
-	m.metrics.IncrementCounter(ctx, "app_pubsub_subscribe_success_count", "topic", topic)
-
-	// blocks if there are no messages in the channel
-	return <-msgChan, nil
 }
-
 func (m *MQTT) Publish(ctx context.Context, topic string, message []byte) error {
 	_, span := otel.GetTracerProvider().Tracer("gofr").Start(ctx, "mqtt-publish")
 	defer span.End()
@@ -282,7 +296,17 @@ func (m *MQTT) DeleteTopic(_ context.Context, _ string) error {
 
 // SubscribeWithFunction subscribe with a subscribing function, called whenever broker publishes a message.
 func (m *MQTT) SubscribeWithFunction(topic string, subscribeFunc SubscribeFunc) error {
-	handler := func(_ mqtt.Client, msg mqtt.Message) {
+	token := m.Client.Subscribe(topic, 1, getHandler(subscribeFunc))
+
+	if token.Wait() && token.Error() != nil {
+		return token.Error()
+	}
+
+	return nil
+}
+
+func getHandler(subscribeFunc SubscribeFunc) func(client mqtt.Client, msg mqtt.Message) {
+	return func(_ mqtt.Client, msg mqtt.Message) {
 		pubsubMsg := &pubsub.Message{
 			Topic: msg.Topic(),
 			Value: msg.Payload(),
@@ -294,22 +318,12 @@ func (m *MQTT) SubscribeWithFunction(topic string, subscribeFunc SubscribeFunc) 
 		}
 
 		// call the user defined function
-		err := subscribeFunc(pubsubMsg)
-		if err != nil {
-			return
-		}
+		_ = subscribeFunc(pubsubMsg)
 	}
-
-	token := m.Client.Subscribe(topic, 1, handler)
-
-	if token.Wait() && token.Error() != nil {
-		return token.Error()
-	}
-
-	return nil
 }
 
 func (m *MQTT) Unsubscribe(topic string) error {
+	m.mu.RLock()
 	token := m.Client.Unsubscribe(topic)
 	token.Wait()
 
@@ -319,11 +333,24 @@ func (m *MQTT) Unsubscribe(topic string) error {
 		return token.Error()
 	}
 
+	sub, ok := m.subscriptions[topic]
+	if ok {
+		close(sub.msgs)
+		delete(m.subscriptions, topic)
+	}
+	m.mu.RUnlock()
+
 	return nil
 }
 
 func (m *MQTT) Disconnect(waitTime uint) {
+	m.mu.RLock()
+	for topic := range m.subscriptions {
+		_ = m.Unsubscribe(topic)
+	}
+
 	m.Client.Disconnect(waitTime)
+	m.mu.RUnlock()
 }
 
 func (m *MQTT) Ping() error {
@@ -334,4 +361,26 @@ func (m *MQTT) Ping() error {
 	}
 
 	return nil
+}
+
+func createReconnectHandler(mu *sync.RWMutex, config *Config, subs map[string]subscription) func(c mqtt.Client) {
+	return func(c mqtt.Client) {
+		mu.RLock()
+		for k, v := range subs {
+			c.Subscribe(k, config.QoS, v.handler)
+		}
+		mu.RUnlock()
+	}
+}
+
+func createConnectionLostHandler(logger Logger) func(_ mqtt.Client, err error) {
+	return func(_ mqtt.Client, err error) {
+		logger.Errorf("mqtt connection lost, error: %v", err.Error())
+	}
+}
+
+func createReconnectingHandler(logger Logger, config *Config) func(mqtt.Client, *mqtt.ClientOptions) {
+	return func(_ mqtt.Client, _ *mqtt.ClientOptions) {
+		logger.Infof("reconnecting to MQTT at '%v:%v' with clientID '%v'", config.Hostname, config.Port, config.ClientID)
+	}
 }
