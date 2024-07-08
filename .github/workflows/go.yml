@@ -198,3 +198,14 @@ jobs:
       - name: GolangCI-Lint
         run: |
           golangci-lint run --timeout 9m0s
+
+  linting_party:
+    name: Linting Party🥳
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+      - name: Check for file names errors
+        uses: ls-lint/action@v2.2.3
+        with:
+          config: .ls-lint.yml
