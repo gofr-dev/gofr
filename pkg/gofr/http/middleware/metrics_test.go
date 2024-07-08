@@ -2,13 +2,12 @@ package middleware
 
 import (
 	"context"
-
-	"github.com/gorilla/mux"
-	"github.com/stretchr/testify/mock"
-
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/gorilla/mux"
+	"github.com/stretchr/testify/mock"
 )
 
 type mockMetrics struct {
