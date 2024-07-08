@@ -62,7 +62,7 @@ jobs:
           fetch-depth: 0
 
       - name: Set up Go ${{ matrix.go-version }}
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.go-version }}
         id: Go
@@ -102,7 +102,7 @@ jobs:
           fetch-depth: 0
 
       - name: Set up Go ${{ matrix.go-version }}
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.go-version }}
         id: Go
@@ -179,7 +179,7 @@ jobs:
           tail -n +2 ./PKG-Coverage-Report/profile.cov >> merged_profile.cov
 
       - name: Upload
-        uses: paambaati/codeclimate-action@v5.0.0
+        uses: paambaati/codeclimate-action@v8.0.0
         env:
           CC_TEST_REPORTER_ID: ${{ secrets.CC_TEST_REPORTER_ID }}
         with:
