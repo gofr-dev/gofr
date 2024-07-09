@@ -105,7 +105,7 @@ func (uf *formData) trySet(value reflect.Value, field *reflect.StructField) (boo
 	return false, nil
 }
 
-func (uf *formData) setFile(value reflect.Value, header []*multipart.FileHeader) (bool, error) {
+func (*formData) setFile(value reflect.Value, header []*multipart.FileHeader) (bool, error) {
 	f, err := header[0].Open()
 	if err != nil {
 		return false, err
@@ -155,13 +155,13 @@ func (uf *formData) setFieldValue(value reflect.Value, data string) (bool, error
 	}
 }
 
-func (uf *formData) setStringValue(value reflect.Value, data string) (bool, error) {
+func (*formData) setStringValue(value reflect.Value, data string) (bool, error) {
 	value.SetString(data)
 
 	return true, nil
 }
 
-func (uf *formData) setIntValue(value reflect.Value, data string) (bool, error) {
+func (*formData) setIntValue(value reflect.Value, data string) (bool, error) {
 	i, err := strconv.ParseInt(data, 10, 64)
 	if err != nil {
 		return false, err
@@ -172,7 +172,7 @@ func (uf *formData) setIntValue(value reflect.Value, data string) (bool, error) 
 	return true, nil
 }
 
-func (uf *formData) setUintValue(value reflect.Value, data string) (bool, error) {
+func (*formData) setUintValue(value reflect.Value, data string) (bool, error) {
 	ui, err := strconv.ParseUint(data, 10, 64)
 	if err != nil {
 		return false, err
@@ -183,7 +183,7 @@ func (uf *formData) setUintValue(value reflect.Value, data string) (bool, error)
 	return true, nil
 }
 
-func (uf *formData) setFloatValue(value reflect.Value, data string) (bool, error) {
+func (*formData) setFloatValue(value reflect.Value, data string) (bool, error) {
 	f, err := strconv.ParseFloat(data, 64)
 	if err != nil {
 		return false, err
@@ -194,7 +194,7 @@ func (uf *formData) setFloatValue(value reflect.Value, data string) (bool, error
 	return true, nil
 }
 
-func (uf *formData) setBoolValue(value reflect.Value, data string) (bool, error) {
+func (*formData) setBoolValue(value reflect.Value, data string) (bool, error) {
 	boolVal, err := strconv.ParseBool(data)
 	if err != nil {
 		return false, err
