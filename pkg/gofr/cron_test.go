@@ -103,7 +103,7 @@ func TestCron_parseSchedule_Success(t *testing.T) {
 	for _, tc := range testCases {
 		j, err := parseSchedule(tc.schedule)
 
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 		assert.Equal(t, *tc.expJob, *j)
 	}
 }
@@ -170,7 +170,7 @@ func TestCron_getDefaultJobField(t *testing.T) {
 	for _, tc := range testCases {
 		out := getDefaultJobField(tc.min, tc.max, tc.incr)
 
-		assert.Equal(t, tc.expOutCount, len(out))
+		assert.Len(t, out, tc.expOutCount)
 	}
 }
 
@@ -311,5 +311,5 @@ func Test_noopRequest(t *testing.T) {
 	assert.Equal(t, "", noop.Param(""))
 	assert.Equal(t, "", noop.PathParam(""))
 	assert.Equal(t, "gofr", noop.HostName())
-	assert.Equal(t, nil, noop.Bind(nil))
+	assert.NoError(t, noop.Bind(nil))
 }

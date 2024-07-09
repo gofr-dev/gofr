@@ -52,7 +52,7 @@ func Test_getMigratorDBInitialisation(t *testing.T) {
 
 	assert.NotNil(t, datasource.SQL, "TEST Failed \nSQL not initialized, but should have been initialized")
 	assert.NotNil(t, datasource.Redis, "TEST Failed \nRedis not initialized, but should have been initialized")
-	assert.Equal(t, true, isInitialised, "TEST Failed \nNo datastores are Initialized")
+	assert.True(t, isInitialised, "TEST Failed \nNo datastores are Initialized")
 }
 
 func initialiseClickHouseRunMocks(t *testing.T) (*MockClickhouse, *container.Container) {

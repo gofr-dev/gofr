@@ -34,7 +34,7 @@ func Test_ExportSpans(t *testing.T) {
 	for i, tc := range tests {
 		err := exporter.ExportSpans(context.Background(), tc.spans)
 
-		assert.Nil(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
+		assert.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
 	}
 }
 
