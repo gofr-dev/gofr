@@ -44,11 +44,11 @@ type userEntity struct {
 	IsEmployed bool   `json:"isEmployed"`
 }
 
-func (u *userEntity) TableName() string {
+func (*userEntity) TableName() string {
 	return "user"
 }
 
-func (u *userEntity) RestPath() string {
+func (*userEntity) RestPath() string {
 	return "users"
 }
 

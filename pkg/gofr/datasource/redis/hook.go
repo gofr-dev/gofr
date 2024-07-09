@@ -78,7 +78,7 @@ func (r *redisHook) logQuery(start time.Time, query string, args ...interface{})
 }
 
 // DialHook implements the redis.DialHook interface.
-func (r *redisHook) DialHook(next redis.DialHook) redis.DialHook {
+func (*redisHook) DialHook(next redis.DialHook) redis.DialHook {
 	return next
 }
 
