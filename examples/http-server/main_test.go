@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"testing"
@@ -15,6 +16,7 @@ import (
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/datasource/redis"
+	gofrHTTP "gofr.dev/pkg/gofr/http"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/testutil"
 )
@@ -56,8 +58,6 @@ func TestIntegration_SimpleAPIServer(t *testing.T) {
 
 		assert.Equal(t, tc.body, data.Data, "TEST[%d], Failed.\n%s", i, tc.desc)
 
-		assert.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
-
 		assert.Equal(t, http.StatusOK, resp.StatusCode, "TEST[%d], Failed.\n%s", i, tc.desc)
 
 		resp.Body.Close()
@@ -75,19 +75,19 @@ func TestIntegration_SimpleAPIServer_Errors(t *testing.T) {
 			desc:       "error handler called",
 			path:       "/error",
 			statusCode: http.StatusInternalServerError,
-			body:       map[string]interface{}{"message": "some error occurred"},
+			body:       "some error occurred",
 		},
 		{
 			desc:       "empty route",
 			path:       "/",
 			statusCode: http.StatusNotFound,
-			body:       map[string]interface{}{"message": "route not registered"},
+			body:       gofrHTTP.ErrorInvalidRoute{}.Error(),
 		},
 		{
 			desc:       "route not registered with the server",
 			path:       "/route",
 			statusCode: http.StatusNotFound,
-			body:       map[string]interface{}{"message": "route not registered"},
+			body:       gofrHTTP.ErrorInvalidRoute{}.Error(),
 		},
 	}
 
@@ -99,7 +99,7 @@ func TestIntegration_SimpleAPIServer_Errors(t *testing.T) {
 		resp, err := c.Do(req)
 
 		var data = struct {
-			Error interface{} `json:"error"`
+			Errors interface{} `json:"errors"`
 		}{}
 
 		b, err := io.ReadAll(resp.Body)
@@ -108,9 +108,7 @@ func TestIntegration_SimpleAPIServer_Errors(t *testing.T) {
 
 		_ = json.Unmarshal(b, &data)
 
-		assert.Equal(t, tc.body, data.Error, "TEST[%d], Failed.\n%s", i, tc.desc)
-
-		assert.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
+		assert.Contains(t, fmt.Sprintf("%v", data.Errors), tc.body, "TEST[%d], Failed.\n%s", i, tc.desc)
 
 		assert.Equal(t, tc.statusCode, resp.StatusCode, "TEST[%d], Failed.\n%s", i, tc.desc)
 

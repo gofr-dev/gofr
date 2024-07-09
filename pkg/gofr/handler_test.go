@@ -34,7 +34,7 @@ func TestHandler_ServeHTTP(t *testing.T) {
 		{"method is get, data is nil and error is nil", http.MethodGet, nil, nil, http.StatusOK,
 			`{}`},
 		{"method is get, data is mil, error is not nil", http.MethodGet, nil, errTest, http.StatusInternalServerError,
-			`{"error":{"message":"some error"}}`},
+			`{"errors":[{"reason":"some error"`},
 		{"method is post, data is nil and error is nil", http.MethodPost, "Created", nil, http.StatusCreated,
 			`{"data":"Created"}`},
 		{"method is delete, data is nil and error is nil", http.MethodDelete, nil, nil, http.StatusNoContent,
@@ -56,6 +56,7 @@ func TestHandler_ServeHTTP(t *testing.T) {
 		}.ServeHTTP(w, r)
 
 		assert.Containsf(t, w.Body.String(), tc.body, "TEST[%d], Failed.\n%s", i, tc.desc)
+
 		assert.Equal(t, tc.statusCode, w.Code, "TEST[%d], Failed.\n%s", i, tc.desc)
 	}
 }

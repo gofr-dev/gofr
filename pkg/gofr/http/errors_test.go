@@ -111,3 +111,19 @@ func Test_ErrorErrorPanicRecovery(t *testing.T) {
 
 	assert.Equal(t, http.StatusInternalServerError, err.StatusCode(), "TEST Failed.\n")
 }
+
+func Test_MultipleErrors(t *testing.T) {
+	err := MultipleErrors{Code: http.StatusNotFound, Errors: []error{ErrorInvalidRoute{}}}
+
+	assert.Equal(t, "route not registered", err.Error(), "TEST Failed.\n")
+
+	assert.Equal(t, http.StatusNotFound, err.StatusCode(), "TEST Failed.\n")
+}
+
+func Test_CustomError(t *testing.T) {
+	err := CustomError{Code: http.StatusUnauthorized, Reason: "request unauthorized"}
+
+	assert.Equal(t, "request unauthorized", err.Error(), "TEST Failed.\n")
+
+	assert.Equal(t, http.StatusUnauthorized, err.StatusCode(), "TEST Failed.\n")
+}

@@ -58,3 +58,17 @@ func (c customError) StatusCode() int {
 	return http.StatusMethodNotAllowed
 }
 ```
+
+GoFr also provides a `CustomError` struct to create a custom error type with specific status code, reason, and details (optional)
+
+#### Usage:
+```go
+customErr := gofrHTTP.CustomError{Code: http.StatusUnauthorized, Reason: "request unauthorized", Details: []string{"invalid credentials"}}
+```
+
+GoFr also provides a `MultipleErrors` struct to pass multiple errors with a same status code.
+
+#### Usage:
+```go
+multipleErr := gofrHTTP.MultipleErrors{Code: http.StatusBadRequest, Errors: []error{gofrHTTP.ErrorInvalidParam{}, gofrHTTP.ErrorMissingParam{}}}
+```
