@@ -100,7 +100,7 @@ func (rp *retryProvider) doWithRetry(reqFunc func() (*http.Response, error)) (*h
 
 	for i := 0; i < rp.maxRetries; i++ {
 		resp, err = reqFunc()
-		if err == nil && resp.StatusCode != 500 {
+		if err == nil && resp.StatusCode != http.StatusInternalServerError {
 			return resp, nil
 		}
 	}

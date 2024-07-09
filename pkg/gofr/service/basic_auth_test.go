@@ -25,7 +25,7 @@ func TestBasicAuthProvider_Get(t *testing.T) {
 
 	// Create a mock HTTP server
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkAuthHeaders(r, t)
+		checkAuthHeaders(t, r)
 		assert.Equal(t, http.MethodGet, r.Method)
 
 		w.WriteHeader(http.StatusOK)
@@ -43,13 +43,13 @@ func TestBasicAuthProvider_Get(t *testing.T) {
 
 	// Make the GET request
 	resp, err := httpService.Get(context.Background(), path, queryParams)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	defer resp.Body.Close()
 
 	// Check response status code and body (if applicable)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	bodyBytes, _ := io.ReadAll(resp.Body)
 
@@ -66,7 +66,7 @@ func TestBasicAuthProvider_Post(t *testing.T) {
 
 	// Create a mock HTTP server (verify POST method)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkAuthHeaders(r, t)
+		checkAuthHeaders(t, r)
 		assert.Equal(t, http.MethodPost, r.Method)
 
 		w.WriteHeader(http.StatusCreated)
@@ -79,13 +79,13 @@ func TestBasicAuthProvider_Post(t *testing.T) {
 
 	// Make the POST request
 	resp, err := httpService.Post(context.Background(), path, queryParams, body)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	defer resp.Body.Close()
 
 	// Check response status code (no body assertion for POST)
 	assert.Equal(t, http.StatusCreated, resp.StatusCode)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 }
 
 func TestBasicAuthProvider_Put(t *testing.T) {
@@ -98,7 +98,7 @@ func TestBasicAuthProvider_Put(t *testing.T) {
 
 	// Create a mock HTTP server (verify PUT method)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkAuthHeaders(r, t)
+		checkAuthHeaders(t, r)
 		assert.Equal(t, http.MethodPut, r.Method)
 
 		w.WriteHeader(http.StatusOK)
@@ -111,13 +111,13 @@ func TestBasicAuthProvider_Put(t *testing.T) {
 
 	// Make the PUT request
 	resp, err := httpService.Put(context.Background(), path, queryParams, body)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	defer resp.Body.Close()
 
 	// Check response status code
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 }
 
 func TestBasicAuthProvider_Patch(t *testing.T) {
@@ -130,7 +130,7 @@ func TestBasicAuthProvider_Patch(t *testing.T) {
 
 	// Create a mock HTTP server (verify PATCH method)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkAuthHeaders(r, t)
+		checkAuthHeaders(t, r)
 		assert.Equal(t, http.MethodPatch, r.Method)
 
 		w.WriteHeader(http.StatusOK)
@@ -143,13 +143,13 @@ func TestBasicAuthProvider_Patch(t *testing.T) {
 
 	// Make the PATCH request
 	resp, err := httpService.Patch(context.Background(), path, queryParams, body)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	defer resp.Body.Close()
 
 	// Check response status code
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 }
 
 func TestBasicAuthProvider_Delete(t *testing.T) {
@@ -161,7 +161,7 @@ func TestBasicAuthProvider_Delete(t *testing.T) {
 
 	// Create a mock HTTP server (verify DELETE method)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkAuthHeaders(r, t)
+		checkAuthHeaders(t, r)
 		assert.Equal(t, http.MethodDelete, r.Method)
 
 		w.WriteHeader(http.StatusNoContent)
@@ -174,16 +174,18 @@ func TestBasicAuthProvider_Delete(t *testing.T) {
 
 	// Make the DELETE request
 	resp, err := httpService.Delete(context.Background(), path, body)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	defer resp.Body.Close()
 
 	// Check response status code (no body assertion for DELETE)
 	assert.Equal(t, http.StatusNoContent, resp.StatusCode)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 }
 
-func checkAuthHeaders(r *http.Request, t *testing.T) {
+func checkAuthHeaders(t *testing.T, r *http.Request) {
+	t.Helper()
+
 	authHeader := r.Header.Get("Authorization")
 
 	if authHeader == "" {

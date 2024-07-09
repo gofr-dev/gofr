@@ -22,6 +22,8 @@ type Mocks struct {
 }
 
 func NewMockContainer(t *testing.T) (*Container, Mocks) {
+	t.Helper()
+
 	container := &Container{}
 	container.Logger = logging.NewLogger(logging.DEBUG)
 
@@ -62,22 +64,22 @@ func NewMockContainer(t *testing.T) (*Container, Mocks) {
 type MockPubSub struct {
 }
 
-func (m *MockPubSub) CreateTopic(_ context.Context, _ string) error {
+func (*MockPubSub) CreateTopic(_ context.Context, _ string) error {
 	return nil
 }
 
-func (m *MockPubSub) DeleteTopic(_ context.Context, _ string) error {
+func (*MockPubSub) DeleteTopic(_ context.Context, _ string) error {
 	return nil
 }
 
-func (m *MockPubSub) Health() datasource.Health {
+func (*MockPubSub) Health() datasource.Health {
 	return datasource.Health{}
 }
 
-func (m *MockPubSub) Publish(_ context.Context, _ string, _ []byte) error {
+func (*MockPubSub) Publish(_ context.Context, _ string, _ []byte) error {
 	return nil
 }
 
-func (m *MockPubSub) Subscribe(_ context.Context, _ string) (*pubsub.Message, error) {
+func (*MockPubSub) Subscribe(_ context.Context, _ string) (*pubsub.Message, error) {
 	return nil, nil
 }

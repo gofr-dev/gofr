@@ -288,7 +288,7 @@ func (m *MQTT) CreateTopic(_ context.Context, topic string) error {
 
 // DeleteTopic is implemented to adhere to the PubSub Client interface
 // Note: there is no concept of deletion.
-func (m *MQTT) DeleteTopic(_ context.Context, _ string) error {
+func (*MQTT) DeleteTopic(_ context.Context, _ string) error {
 	return nil
 }
 
@@ -296,7 +296,17 @@ func (m *MQTT) DeleteTopic(_ context.Context, _ string) error {
 
 // SubscribeWithFunction subscribe with a subscribing function, called whenever broker publishes a message.
 func (m *MQTT) SubscribeWithFunction(topic string, subscribeFunc SubscribeFunc) error {
-	handler := func(_ mqtt.Client, msg mqtt.Message) {
+	token := m.Client.Subscribe(topic, 1, getHandler(subscribeFunc))
+
+	if token.Wait() && token.Error() != nil {
+		return token.Error()
+	}
+
+	return nil
+}
+
+func getHandler(subscribeFunc SubscribeFunc) func(client mqtt.Client, msg mqtt.Message) {
+	return func(_ mqtt.Client, msg mqtt.Message) {
 		pubsubMsg := &pubsub.Message{
 			Topic: msg.Topic(),
 			Value: msg.Payload(),
@@ -308,19 +318,8 @@ func (m *MQTT) SubscribeWithFunction(topic string, subscribeFunc SubscribeFunc) 
 		}
 
 		// call the user defined function
-		err := subscribeFunc(pubsubMsg)
-		if err != nil {
-			return
-		}
+		_ = subscribeFunc(pubsubMsg)
 	}
-
-	token := m.Client.Subscribe(topic, 1, handler)
-
-	if token.Wait() && token.Error() != nil {
-		return token.Error()
-	}
-
-	return nil
 }
 
 func (m *MQTT) Unsubscribe(topic string) error {

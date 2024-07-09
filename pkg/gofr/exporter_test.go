@@ -34,7 +34,7 @@ func Test_ExportSpans(t *testing.T) {
 	for i, tc := range tests {
 		err := exporter.ExportSpans(context.Background(), tc.spans)
 
-		assert.Nil(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
+		assert.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
 	}
 }
 
@@ -50,6 +50,8 @@ func Test_ExportSpansError(t *testing.T) {
 }
 
 func provideSampleSpan(t *testing.T) []sdktrace.ReadOnlySpan {
+	t.Helper()
+
 	tp := sdktrace.NewTracerProvider()
 
 	defer func(tp *sdktrace.TracerProvider, ctx context.Context) {

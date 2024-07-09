@@ -13,7 +13,7 @@ import (
 type MockHandlerForTracing struct{}
 
 // ServeHTTP is used for testing if the request context has traceId.
-func (r *MockHandlerForTracing) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+func (*MockHandlerForTracing) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	traceID := otelTrace.SpanFromContext(req.Context()).SpanContext().TraceID().String()
 	_, _ = w.Write([]byte(traceID))
 }
@@ -23,7 +23,7 @@ func TestTrace(_ *testing.T) {
 	otel.SetTracerProvider(tp)
 
 	handler := Tracer(&MockHandlerForTracing{})
-	req := httptest.NewRequest("GET", "/dummy", http.NoBody)
+	req := httptest.NewRequest(http.MethodGet, "/dummy", http.NoBody)
 
 	recorder := httptest.NewRecorder()
 

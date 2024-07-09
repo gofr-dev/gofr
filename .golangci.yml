@@ -1,3 +1,4 @@
+---
 linters-settings:
   dupl:
     threshold: 100
@@ -8,7 +9,9 @@ linters-settings:
     statements: 50
   gci:
     sections:
-      - prefix(gofr.dev)
+      - standard
+      - default
+      - localmodule
   goconst:
     min-len: 2
     min-occurrences: 2
@@ -31,7 +34,7 @@ linters-settings:
     local-prefixes: github.com/golangci/golangci-lint
   golint:
     min-confidence: 0
-  gomnd:
+  mnd:
     checks:
       - argument
       - case
@@ -55,6 +58,38 @@ linters-settings:
     allow-unused: false # report any unused nolint directives
     require-explanation: true # require an explanation for nolint directives
     require-specific: true # require nolint directives to be specific about which linter is being skipped
+  revive:
+    rules:
+    # default revive rules, they have to be present otherwise they are disabled
+      - name: blank-imports
+      - name: context-as-argument
+      - name: context-keys-type
+      - name: dot-imports
+      - name: empty-block
+      - name: error-naming
+      - name: error-return
+      - name: error-strings
+      - name: errorf
+      - name: increment-decrement
+      - name: indent-error-flow
+      - name: range
+      - name: receiver-naming
+      - name: redefines-builtin-id
+      - name: superfluous-else
+      - name: time-naming
+      - name: unexported-return
+      - name: unreachable-code
+      - name: unused-parameter
+      - name: var-declaration
+      - name: var-naming
+    # additional revive rules
+      - name: bare-return
+      - name: bool-literal-in-expr
+      - name: comment-spacings
+      - name: early-return
+      - name: defer
+      - name: deep-exit
+      - name: unused-receiver
 
 linters:
   # please, do not use `enable-all`: it's deprecated and will be removed soon.
@@ -65,7 +100,9 @@ linters:
     - bodyclose
     - dogsled
     - dupl
+    - err113
     - errcheck
+    - errorlint
     - exhaustive
     - exportloopref
     - funlen
@@ -76,17 +113,17 @@ linters:
     - gocritic
     - gocyclo
     - godot
-    - goerr113
     - gofmt
     - goimports
-    - gomnd
     - goprintffuncname
     - gosec
     - gosimple
     - govet
     - ineffassign
     - lll
+    - mirror
     - misspell
+    - mnd
     - nakedret
     - nestif
     - noctx
@@ -96,9 +133,11 @@ linters:
     - rowserrcheck
     - staticcheck
     - stylecheck
+    - thelper
     - unconvert
     - unparam
     - unused
+    - usestdlibvars
     - whitespace
     - wsl
 
@@ -108,7 +147,7 @@ linters:
 
 
 service:
-  golangci-lint-version: 1.57.x
+  golangci-lint-version: 1.59.x
 
 issues:
   # exclude-use-default: false

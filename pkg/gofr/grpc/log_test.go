@@ -36,7 +36,7 @@ func TestRPCLog_String(t *testing.T) {
 
 func TestLoggingInterceptor(t *testing.T) {
 	var (
-		err            = errors.New("DB error") //nolint:goerr113 // We are testing if a dynamic error would work
+		err            = errors.New("DB error") //nolint:err113 // We are testing if a dynamic error would work
 		key contextKey = "id"
 
 		successHandler = func(context.Context, interface{}) (interface{}, error) {

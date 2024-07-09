@@ -4,10 +4,10 @@ import (
 	"context"
 	"net/http"
 
+	gorillaWebsocket "github.com/gorilla/websocket"
+
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/websocket"
-
-	gorillaWebsocket "github.com/gorilla/websocket"
 )
 
 // WSHandlerUpgrade middleware upgrades the incoming http request to a websocket connection using websocket upgrader.
