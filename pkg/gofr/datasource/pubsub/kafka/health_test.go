@@ -124,6 +124,6 @@ func TestKafkaClint_convertStructToMap(t *testing.T) {
 	for _, v := range testCases {
 		err := convertStructToMap(v.input, v.output)
 
-		assert.Contains(t, "json: unsupported type: chan int", err.Error())
+		assert.ErrorContains(t, err, "json: unsupported type: chan int")
 	}
 }
