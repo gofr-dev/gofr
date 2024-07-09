@@ -288,7 +288,7 @@ func (m *MQTT) CreateTopic(_ context.Context, topic string) error {
 
 // DeleteTopic is implemented to adhere to the PubSub Client interface
 // Note: there is no concept of deletion.
-func (m *MQTT) DeleteTopic(_ context.Context, _ string) error {
+func (*MQTT) DeleteTopic(_ context.Context, _ string) error {
 	return nil
 }
 

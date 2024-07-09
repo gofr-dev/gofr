@@ -47,7 +47,7 @@ func TestHTTPServerUsingRedis(t *testing.T) {
 		c := http.Client{}
 		resp, err := c.Do(req)
 
-		assert.Nil(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
+		assert.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
 
 		assert.Equal(t, tc.statusCode, resp.StatusCode, "TEST[%d], Failed.\n%s", i, tc.desc)
 	}
@@ -73,7 +73,7 @@ func TestRedisSetHandler(t *testing.T) {
 	resp, err := RedisSetHandler(ctx)
 
 	assert.Nil(t, resp)
-	assert.NotNil(t, err)
+	assert.Error(t, err)
 }
 
 func TestRedisPipelineHandler(t *testing.T) {
@@ -98,5 +98,5 @@ func TestRedisPipelineHandler(t *testing.T) {
 	resp, err := RedisPipelineHandler(ctx)
 
 	assert.Nil(t, resp)
-	assert.NotNil(t, err)
+	assert.Error(t, err)
 }

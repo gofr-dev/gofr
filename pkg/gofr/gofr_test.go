@@ -137,7 +137,7 @@ func TestGofr_ServerRun(t *testing.T) {
 
 	assert.NoError(t, err, "TEST Failed.\n")
 
-	assert.Equal(t, resp.StatusCode, http.StatusOK, "TEST Failed.\n")
+	assert.Equal(t, http.StatusOK, resp.StatusCode, "TEST Failed.\n")
 
 	resp.Body.Close()
 }
@@ -521,7 +521,7 @@ func Test_SwaggerEndpoints(t *testing.T) {
 		}
 	}()
 
-	assert.Nil(t, err, "Expected error to be nil, got : %v", err)
+	assert.NoError(t, err, "Expected error to be nil, got : %v", err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	assert.Equal(t, "text/html; charset=utf-8", resp.Header.Get("Content-Type"))
 }
@@ -550,7 +550,7 @@ func Test_AddCronJob_Success(t *testing.T) {
 		ctx.Logger.Info("test-job-success")
 	})
 
-	assert.Equal(t, len(a.cron.jobs), 1)
+	assert.Len(t, a.cron.jobs, 1)
 
 	for _, j := range a.cron.jobs {
 		if j.name == "test-job" {

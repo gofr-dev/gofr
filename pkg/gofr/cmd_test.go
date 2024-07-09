@@ -60,8 +60,8 @@ func Test_Run_SuccessCommandWithMultipleParameters(t *testing.T) {
 
 	c.addRoute("log",
 		func(c *Context) (interface{}, error) {
-			assert.Equal(t, c.Request.Param("param"), "value")
-			assert.Equal(t, c.Request.Param("b"), "true")
+			assert.Equal(t, "value", c.Request.Param("param"))
+			assert.Equal(t, "true", c.Request.Param("b"))
 			c.Logger.Info("handler called")
 
 			return nil, nil
@@ -147,7 +147,7 @@ func Test_Run_ErrorParamNotReadWithoutHyphen(t *testing.T) {
 
 	c.addRoute("log",
 		func(c *Context) (interface{}, error) {
-			assert.Equal(t, c.Request.Param("hello"), "")
+			assert.Equal(t, "", c.Request.Param("hello"))
 			c.Logger.Info("handler called")
 
 			return nil, nil
@@ -342,5 +342,5 @@ func Test_Run_handler_help(t *testing.T) {
 	})
 
 	// check that only help for the hello subcommand is printed
-	assert.Equal(t, out, "this a helper string for hello sub command\n")
+	assert.Equal(t, "this a helper string for hello sub command\n", out)
 }

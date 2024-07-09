@@ -37,12 +37,12 @@ func Test_APIKeyAuthProvider_Get(t *testing.T) {
 		&APIKeyConfig{"valid-key"})
 
 	resp, err := httpService.Get(context.Background(), path, queryParams)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	bodyBytes, _ := io.ReadAll(resp.Body)
 
@@ -68,12 +68,12 @@ func Test_APIKeyAuthProvider_Post(t *testing.T) {
 		&APIKeyConfig{"valid-key"})
 
 	resp, err := httpService.Post(context.Background(), path, queryParams, body)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusCreated, resp.StatusCode)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 }
 
 func TestApiKeyProvider_Put(t *testing.T) {
@@ -95,12 +95,12 @@ func TestApiKeyProvider_Put(t *testing.T) {
 		&APIKeyConfig{"valid-key"})
 
 	resp, err := httpService.Put(context.Background(), path, queryParams, body)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 }
 
 func TestApiKeyAuthProvider_Patch(t *testing.T) {
@@ -122,12 +122,12 @@ func TestApiKeyAuthProvider_Patch(t *testing.T) {
 		&APIKeyConfig{"valid-key"})
 
 	resp, err := httpService.Patch(context.Background(), path, queryParams, body)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 }
 
 func TestApiKeyAuthProvider_Delete(t *testing.T) {
@@ -148,10 +148,10 @@ func TestApiKeyAuthProvider_Delete(t *testing.T) {
 		&APIKeyConfig{"valid-key"})
 
 	resp, err := httpService.Delete(context.Background(), path, body)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusNoContent, resp.StatusCode)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 }
