@@ -490,7 +490,7 @@ func TestHTTPService_createAndSendRequestCreateRequestFailure(t *testing.T) {
 		defer resp.Body.Close()
 	}
 
-	assert.NotNil(t, err)
+	assert.Error(t, err)
 	assert.Nil(t, resp, "TEST[%d], Failed.\n%s")
 }
 
@@ -519,6 +519,6 @@ func TestHTTPService_createAndSendRequestServerError(t *testing.T) {
 		defer resp.Body.Close()
 	}
 
-	assert.NotNil(t, err)
+	assert.Error(t, err)
 	assert.Nil(t, resp, "TEST[%d], Failed.\n%s")
 }

@@ -80,7 +80,7 @@ func TestGoogleClient_Publish_Success(t *testing.T) {
 
 		err := g.Publish(context.Background(), topic, message)
 
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 	})
 
 	assert.Contains(t, out, "PUB")
@@ -123,8 +123,8 @@ func TestGoogleClient_getTopic_Success(t *testing.T) {
 
 	topic, err := g.getTopic(context.Background(), "test-topic")
 
-	assert.Nil(t, err)
-	assert.Equal(t, topic.ID(), "test-topic")
+	assert.NoError(t, err)
+	assert.Equal(t, "test-topic", topic.ID())
 }
 
 func TestGoogleClient_getTopic_Error(t *testing.T) {
@@ -154,7 +154,7 @@ func TestGoogleClient_getSubscription(t *testing.T) {
 
 	sub, err := g.getSubscription(context.Background(), topic)
 
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.NotNil(t, sub)
 }
 

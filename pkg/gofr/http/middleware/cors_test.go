@@ -43,7 +43,7 @@ func Test_CORS(t *testing.T) {
 		assert.Equal(t, "*", w.Header().Get("Access-Control-Allow-Origin"), "TEST[%d], Failed.\n", i)
 		assert.Equal(t, strings.Join(*tc.registeredRoutes, ", ")+", OPTIONS",
 			w.Header().Get("Access-Control-Allow-Methods"), "TEST[%d], Failed.\n", i)
-		assert.Equal(t, tc.expHeaders, len(w.Header()), "TEST[%d], Failed.\n", i)
+		assert.Len(t, w.Header(), tc.expHeaders, "TEST[%d], Failed.\n", i)
 		assert.Equal(t, tc.respCode, w.Code, "TEST[%d], Failed.\n", i)
 		assert.Equal(t, tc.respBody, w.Body.String(), "TEST[%d], Failed.\n", i)
 	}
