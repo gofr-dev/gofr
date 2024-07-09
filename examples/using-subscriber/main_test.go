@@ -44,7 +44,7 @@ func TestExampleSubscriber(t *testing.T) {
 	log := testutil.StdoutOutputForFunc(func() {
 		const host = "http://localhost:8200"
 		go main()
-		time.Sleep(time.Second * 40)
+		time.Sleep(2 * time.Second) // TODO: reduce this time
 	})
 
 	testCases := []struct {

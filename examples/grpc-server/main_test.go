@@ -16,7 +16,7 @@ func TestGRPCServer(t *testing.T) {
 	const host = "localhost:10000"
 
 	go main()
-	time.Sleep(time.Second * 1)
+	time.Sleep(100 * time.Millisecond)
 
 	client, conn := createGRPCClient(t, host)
 	defer conn.Close()
