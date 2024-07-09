@@ -355,7 +355,7 @@ func (a *App) getExporter(name, host, port string) (sdktrace.SpanExporter, error
 
 		a.container.Log("Exporting traces to GoFr at https://tracer.gofr.dev")
 	default:
-		a.container.Error("unsupported trace exporter.")
+		a.container.Errorf("unsupported trace exporter: %s", name)
 	}
 
 	return exporter, err

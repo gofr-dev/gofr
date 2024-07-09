@@ -397,7 +397,7 @@ func Test_initTracer_invalidConfig(t *testing.T) {
 		a.initTracer()
 	})
 
-	assert.Contains(t, errLogMessage, "unsupported trace exporter.")
+	assert.Contains(t, errLogMessage, "unsupported trace exporter: abc", "TEST Failed.\n")
 }
 
 func Test_UseMiddleware(t *testing.T) {
