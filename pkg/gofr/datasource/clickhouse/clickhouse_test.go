@@ -54,7 +54,7 @@ func Test_ClickHouse_ConnectAndMetricRegistrationAndPingFailure(t *testing.T) {
 
 		cl.Connect()
 
-		time.Sleep(1 * time.Second)
+		time.Sleep(100 * time.Millisecond)
 	})
 
 	assert.Contains(t, logs, "ping failed with error dial tcp [::1]:8000: connect: connection refused")

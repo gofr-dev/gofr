@@ -78,7 +78,7 @@ func TestRouter_AddStaticFiles(t *testing.T) {
 
 	defer os.RemoveAll("testDir")
 
-	time.Sleep(1 * time.Second)
+	time.Sleep(100 * time.Millisecond)
 
 	currentWorkingDir, _ := os.Getwd()
 

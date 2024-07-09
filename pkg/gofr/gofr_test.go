@@ -125,10 +125,10 @@ func TestGofr_ServerRun(t *testing.T) {
 	})
 
 	go g.Run()
-	time.Sleep(1 * time.Second)
+	time.Sleep(100 * time.Millisecond)
 
 	var netClient = &http.Client{
-		Timeout: time.Second * 10,
+		Timeout: 200 * time.Millisecond,
 	}
 
 	re, _ := http.NewRequestWithContext(context.Background(), http.MethodGet,
@@ -410,10 +410,10 @@ func Test_UseMiddleware(t *testing.T) {
 	})
 
 	go app.Run()
-	time.Sleep(1 * time.Second)
+	time.Sleep(100 * time.Millisecond)
 
 	var netClient = &http.Client{
-		Timeout: time.Second * 10,
+		Timeout: 200 * time.Millisecond,
 	}
 
 	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet,
@@ -460,10 +460,10 @@ func Test_APIKeyAuthMiddleware(t *testing.T) {
 	})
 
 	go app.Run()
-	time.Sleep(1 * time.Second)
+	time.Sleep(100 * time.Millisecond)
 
 	var netClient = &http.Client{
-		Timeout: time.Second * 10,
+		Timeout: 200 * time.Millisecond,
 	}
 
 	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet,
@@ -504,10 +504,10 @@ func Test_SwaggerEndpoints(t *testing.T) {
 	app.httpServer.port = 8002
 
 	go app.Run()
-	time.Sleep(1 * time.Second)
+	time.Sleep(100 * time.Millisecond)
 
 	var netClient = &http.Client{
-		Timeout: time.Second * 5,
+		Timeout: 200 * time.Millisecond,
 	}
 
 	re, _ := http.NewRequestWithContext(context.Background(), http.MethodGet,
@@ -584,7 +584,7 @@ func TestStaticHandler(t *testing.T) {
 	app.httpServer.port = 8022
 
 	go app.Run()
-	time.Sleep(1 * time.Second)
+	time.Sleep(100 * time.Millisecond)
 
 	host := "http://localhost:8022"
 

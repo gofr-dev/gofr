@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
@@ -97,7 +98,7 @@ func TestOAuthMalformedToken(t *testing.T) {
 	router.HandleFunc("/test", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}).Methods(http.MethodGet).Name("/test")
-	router.Use(OAuth(NewOAuth(OauthConfigs{Provider: &MockProvider{}, RefreshInterval: 10})))
+	router.Use(OAuth(NewOAuth(OauthConfigs{Provider: &MockProvider{}, RefreshInterval: 1 * time.Millisecond})))
 
 	server := httptest.NewServer(router)
 

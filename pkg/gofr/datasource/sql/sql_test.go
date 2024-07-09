@@ -76,7 +76,7 @@ func TestNewSQL_GetDBDialect(t *testing.T) {
 
 	assert.Equal(t, "postgres", dialect)
 
-	time.Sleep(1 * time.Second)
+	time.Sleep(100 * time.Millisecond)
 }
 
 func TestNewSQL_InvalidConfig(t *testing.T) {
@@ -260,7 +260,7 @@ func Test_SQLRetryConnectionInfoLog(t *testing.T) {
 
 		_ = NewSQL(mockConfig, mockLogger, mockMetrics)
 
-		time.Sleep(2 * time.Second)
+		time.Sleep(100 * time.Millisecond)
 	})
 
 	assert.Contains(t, logs, "retrying SQL database connection")

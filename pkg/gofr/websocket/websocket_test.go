@@ -82,7 +82,7 @@ func TestNewWSUpgrader_WithOptions(t *testing.T) {
 	options := []Options{
 		WithReadBufferSize(1024),
 		WithWriteBufferSize(1024),
-		WithHandshakeTimeout(5 * time.Second),
+		WithHandshakeTimeout(500 * time.Millisecond),
 		WithSubprotocols("protocol1", "protocol2"),
 		WithCompression(),
 		WithError(errorHandler),
@@ -94,7 +94,7 @@ func TestNewWSUpgrader_WithOptions(t *testing.T) {
 
 	assert.Equal(t, 1024, actualUpgrader.ReadBufferSize)
 	assert.Equal(t, 1024, actualUpgrader.WriteBufferSize)
-	assert.Equal(t, 5*time.Second, actualUpgrader.HandshakeTimeout)
+	assert.Equal(t, 500*time.Millisecond, actualUpgrader.HandshakeTimeout)
 	assert.Equal(t, []string{"protocol1", "protocol2"}, actualUpgrader.Subprotocols)
 	assert.True(t, actualUpgrader.EnableCompression)
 	assert.NotNil(t, actualUpgrader.Error)
