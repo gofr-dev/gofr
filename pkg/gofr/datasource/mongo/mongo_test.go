@@ -173,7 +173,7 @@ func Test_FindMultipleCommands(t *testing.T) {
 
 		err := cl.Find(context.Background(), mt.Coll.Name(), bson.D{{}}, nil)
 
-		assert.Equal(t, "database response does not contain a cursor", err.Error())
+		assert.ErrorContains(t, err, "database response does not contain a cursor")
 	})
 
 	mt.Run("FindCursorParseError", func(mt *mtest.T) {
@@ -195,7 +195,7 @@ func Test_FindMultipleCommands(t *testing.T) {
 
 		err := cl.Find(context.Background(), mt.Coll.Name(), bson.D{{}}, &foundDocuments)
 
-		assert.Equal(t, "cursor.nextBatch should be an array but is a BSON invalid", err.Error())
+		assert.ErrorContains(t, err, "cursor.nextBatch should be an array but is a BSON invalid")
 	})
 }
 

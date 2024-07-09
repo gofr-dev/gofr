@@ -149,7 +149,7 @@ func TestHttpService_DeleteRequestsOAuthError(t *testing.T) {
 	resp, err := service.Delete(context.Background(), "test", nil)
 
 	assert.Nil(t, resp)
-	assert.Contains(t, err.Error(), `unsupported protocol scheme`)
+	assert.ErrorContains(t, err, `unsupported protocol scheme`)
 
 	if resp != nil {
 		resp.Body.Close()
@@ -162,7 +162,7 @@ func TestHttpService_PutRequestsOAuthError(t *testing.T) {
 	resp, err := service.Put(context.Background(), "test", nil, nil)
 
 	assert.Nil(t, resp)
-	assert.Contains(t, err.Error(), `unsupported protocol scheme`)
+	assert.ErrorContains(t, err, `unsupported protocol scheme`)
 
 	if resp != nil {
 		resp.Body.Close()
@@ -175,7 +175,7 @@ func TestHttpService_PatchRequestsOAuthError(t *testing.T) {
 	resp, err := service.Patch(context.Background(), "test", nil, nil)
 
 	assert.Nil(t, resp)
-	assert.Contains(t, err.Error(), `unsupported protocol scheme`)
+	assert.ErrorContains(t, err, `unsupported protocol scheme`)
 
 	if resp != nil {
 		resp.Body.Close()
@@ -188,7 +188,7 @@ func TestHttpService_PostRequestsOAuthError(t *testing.T) {
 	resp, err := service.Post(context.Background(), "test", nil, nil)
 
 	assert.Nil(t, resp)
-	assert.Contains(t, err.Error(), `unsupported protocol scheme`)
+	assert.ErrorContains(t, err, `unsupported protocol scheme`)
 
 	if resp != nil {
 		resp.Body.Close()
@@ -201,7 +201,7 @@ func TestHttpService_GetRequestsOAuthError(t *testing.T) {
 	resp, err := service.Get(context.Background(), "test", nil)
 
 	assert.Nil(t, resp)
-	assert.Contains(t, err.Error(), `unsupported protocol scheme`)
+	assert.ErrorContains(t, err, `unsupported protocol scheme`)
 
 	if resp != nil {
 		resp.Body.Close()
