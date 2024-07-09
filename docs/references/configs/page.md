@@ -81,6 +81,12 @@ This document lists all the configuration options supported by the GoFr framewor
 
 ---
 
+-  TRACER_AUTH_KEY
+-  Authorization header for trace exporter requests.
+-  Supported for zipkin, jaeger.
+
+---
+
 -  CMD_LOGS_FILE
 -  File to save the logs in case of a CMD application
 
