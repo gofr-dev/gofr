@@ -150,7 +150,7 @@ func TestCron_parseSchedule_Error(t *testing.T) {
 				j, err := parseSchedule(s)
 
 				assert.Nil(t, j)
-				assert.Contains(t, err.Error(), tc.expErrString)
+				assert.ErrorContains(t, err, tc.expErrString)
 			}
 		})
 	}
