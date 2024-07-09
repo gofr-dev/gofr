@@ -8,6 +8,7 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func Test_WebSocket_Success(t *testing.T) {
@@ -38,7 +39,7 @@ func Test_WebSocket_Success(t *testing.T) {
 	wsURL := "ws" + server.URL[len("http"):] + "/ws"
 
 	ws, resp, err := websocket.DefaultDialer.Dial(wsURL, nil)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	defer ws.Close()
 	defer resp.Body.Close()
@@ -46,16 +47,16 @@ func Test_WebSocket_Success(t *testing.T) {
 	// Send a test message
 	testMessage := "Hello, WebSocket!"
 	err = ws.WriteMessage(websocket.TextMessage, []byte(testMessage))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Read the response
 	_, message, err := ws.ReadMessage()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	expectedResponse := fmt.Sprintf("Received: %s", testMessage)
 	assert.Equal(t, expectedResponse, string(message))
 
 	// Close the client connection
 	err = ws.Close()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }

@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
 	"gofr.dev/pkg/gofr/logging"
@@ -43,13 +44,13 @@ func TestBasicAuthProvider_Get(t *testing.T) {
 
 	// Make the GET request
 	resp, err := httpService.Get(context.Background(), path, queryParams)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	defer resp.Body.Close()
 
 	// Check response status code and body (if applicable)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	bodyBytes, _ := io.ReadAll(resp.Body)
 
@@ -79,13 +80,13 @@ func TestBasicAuthProvider_Post(t *testing.T) {
 
 	// Make the POST request
 	resp, err := httpService.Post(context.Background(), path, queryParams, body)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	defer resp.Body.Close()
 
 	// Check response status code (no body assertion for POST)
 	assert.Equal(t, http.StatusCreated, resp.StatusCode)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 func TestBasicAuthProvider_Put(t *testing.T) {
@@ -111,13 +112,13 @@ func TestBasicAuthProvider_Put(t *testing.T) {
 
 	// Make the PUT request
 	resp, err := httpService.Put(context.Background(), path, queryParams, body)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	defer resp.Body.Close()
 
 	// Check response status code
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 func TestBasicAuthProvider_Patch(t *testing.T) {
@@ -143,13 +144,13 @@ func TestBasicAuthProvider_Patch(t *testing.T) {
 
 	// Make the PATCH request
 	resp, err := httpService.Patch(context.Background(), path, queryParams, body)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	defer resp.Body.Close()
 
 	// Check response status code
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 func TestBasicAuthProvider_Delete(t *testing.T) {
@@ -174,13 +175,13 @@ func TestBasicAuthProvider_Delete(t *testing.T) {
 
 	// Make the DELETE request
 	resp, err := httpService.Delete(context.Background(), path, body)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	defer resp.Body.Close()
 
 	// Check response status code (no body assertion for DELETE)
 	assert.Equal(t, http.StatusNoContent, resp.StatusCode)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 func checkAuthHeaders(t *testing.T, r *http.Request) {

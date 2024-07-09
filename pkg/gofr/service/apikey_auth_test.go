@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
 	"gofr.dev/pkg/gofr/logging"
@@ -37,12 +38,12 @@ func Test_APIKeyAuthProvider_Get(t *testing.T) {
 		&APIKeyConfig{"valid-key"})
 
 	resp, err := httpService.Get(context.Background(), path, queryParams)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	bodyBytes, _ := io.ReadAll(resp.Body)
 
@@ -68,12 +69,12 @@ func Test_APIKeyAuthProvider_Post(t *testing.T) {
 		&APIKeyConfig{"valid-key"})
 
 	resp, err := httpService.Post(context.Background(), path, queryParams, body)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusCreated, resp.StatusCode)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 func TestApiKeyProvider_Put(t *testing.T) {
@@ -95,12 +96,12 @@ func TestApiKeyProvider_Put(t *testing.T) {
 		&APIKeyConfig{"valid-key"})
 
 	resp, err := httpService.Put(context.Background(), path, queryParams, body)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 func TestApiKeyAuthProvider_Patch(t *testing.T) {
@@ -122,12 +123,12 @@ func TestApiKeyAuthProvider_Patch(t *testing.T) {
 		&APIKeyConfig{"valid-key"})
 
 	resp, err := httpService.Patch(context.Background(), path, queryParams, body)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 func TestApiKeyAuthProvider_Delete(t *testing.T) {
@@ -148,10 +149,10 @@ func TestApiKeyAuthProvider_Delete(t *testing.T) {
 		&APIKeyConfig{"valid-key"})
 
 	resp, err := httpService.Delete(context.Background(), path, body)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusNoContent, resp.StatusCode)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }

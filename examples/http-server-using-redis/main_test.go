@@ -9,6 +9,7 @@ import (
 
 	"github.com/go-redis/redismock/v9"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"gofr.dev/pkg/gofr"
 	"gofr.dev/pkg/gofr/config"
@@ -47,7 +48,7 @@ func TestHTTPServerUsingRedis(t *testing.T) {
 		c := http.Client{}
 		resp, err := c.Do(req)
 
-		assert.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
+		require.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
 
 		assert.Equal(t, tc.statusCode, resp.StatusCode, "TEST[%d], Failed.\n%s", i, tc.desc)
 	}

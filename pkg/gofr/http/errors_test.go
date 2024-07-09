@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestErrorEntityNotFound(t *testing.T) {
@@ -91,7 +92,7 @@ func TestMissingParameter_StatusCode(t *testing.T) {
 func TestErrorInvalidRoute(t *testing.T) {
 	err := ErrorInvalidRoute{}
 
-	assert.ErrorContainsf(t, err, "route not registered", "TEST Failed.\n")
+	require.ErrorContainsf(t, err, "route not registered", "TEST Failed.\n")
 
 	assert.Equal(t, http.StatusNotFound, err.StatusCode(), "TEST Failed.\n")
 }
@@ -99,7 +100,7 @@ func TestErrorInvalidRoute(t *testing.T) {
 func Test_ErrorRequestTimeout(t *testing.T) {
 	err := ErrorRequestTimeout{}
 
-	assert.ErrorContainsf(t, err, "request timed out", "TEST Failed.\n")
+	require.ErrorContainsf(t, err, "request timed out", "TEST Failed.\n")
 
 	assert.Equal(t, http.StatusRequestTimeout, err.StatusCode(), "TEST Failed.\n")
 }
@@ -107,7 +108,7 @@ func Test_ErrorRequestTimeout(t *testing.T) {
 func Test_ErrorErrorPanicRecovery(t *testing.T) {
 	err := ErrorPanicRecovery{}
 
-	assert.ErrorContainsf(t, err, http.StatusText(http.StatusInternalServerError), "TEST Failed.\n")
+	require.ErrorContainsf(t, err, http.StatusText(http.StatusInternalServerError), "TEST Failed.\n")
 
 	assert.Equal(t, http.StatusInternalServerError, err.StatusCode(), "TEST Failed.\n")
 }

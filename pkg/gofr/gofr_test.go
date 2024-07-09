@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
@@ -135,7 +136,7 @@ func TestGofr_ServerRun(t *testing.T) {
 		"http://localhost:"+strconv.Itoa(defaultHTTPPort)+"/hello", http.NoBody)
 	resp, err := netClient.Do(re)
 
-	assert.NoError(t, err, "TEST Failed.\n")
+	require.NoError(t, err, "TEST Failed.\n")
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode, "TEST Failed.\n")
 
@@ -521,7 +522,7 @@ func Test_SwaggerEndpoints(t *testing.T) {
 		}
 	}()
 
-	assert.NoError(t, err, "Expected error to be nil, got : %v", err)
+	require.NoError(t, err, "Expected error to be nil, got : %v", err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	assert.Equal(t, "text/html; charset=utf-8", resp.Header.Get("Content-Type"))
 }
@@ -639,7 +640,7 @@ func TestStaticHandler(t *testing.T) {
 
 		body := string(bodyBytes)
 
-		assert.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
+		require.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
 		assert.Equal(t, tc.statusCode, resp.StatusCode, "TEST[%d], Failed with Status Body.\n%s", i, tc.desc)
 
 		if tc.expectedBody != "" {

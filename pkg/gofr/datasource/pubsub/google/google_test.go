@@ -7,6 +7,7 @@ import (
 	gcPubSub "cloud.google.com/go/pubsub"
 	"cloud.google.com/go/pubsub/pstest"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"google.golang.org/api/option"
 	"google.golang.org/grpc"
@@ -35,9 +36,7 @@ func getGoogleClient(t *testing.T) *gcPubSub.Client {
 }
 
 func TestGoogleClient_New_Error(t *testing.T) {
-	var (
-		g *googleClient
-	)
+	var g *googleClient
 
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -80,7 +79,7 @@ func TestGoogleClient_Publish_Success(t *testing.T) {
 
 		err := g.Publish(context.Background(), topic, message)
 
-		assert.NoError(t, err)
+		require.NoError(t, err)
 	})
 
 	assert.Contains(t, out, "PUB")
@@ -121,7 +120,7 @@ func TestGoogleClient_getTopic_Success(t *testing.T) {
 
 	topic, err := g.getTopic(context.Background(), "test-topic")
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, "test-topic", topic.ID())
 }
 
@@ -152,7 +151,7 @@ func TestGoogleClient_getSubscription(t *testing.T) {
 
 	sub, err := g.getSubscription(context.Background(), topic)
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, sub)
 }
 
