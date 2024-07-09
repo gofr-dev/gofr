@@ -49,7 +49,7 @@ func TestRun_ServerStartsListening(t *testing.T) {
 
 	assert.NoError(t, err, "TEST Failed.\n")
 
-	assert.Equal(t, resp.StatusCode, http.StatusOK, "TEST Failed.\n")
+	assert.Equal(t, http.StatusOK, resp.StatusCode, "TEST Failed.\n")
 
 	resp.Body.Close()
 }

@@ -37,7 +37,7 @@ func TestOAuthSuccess(t *testing.T) {
 
 	resp, err := client.Do(req)
 
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
 	resp.Body.Close()
@@ -61,7 +61,7 @@ func TestOAuthInvalidTokenFormat(t *testing.T) {
 
 	respBody, _ := io.ReadAll(resp.Body)
 
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 	assert.Contains(t, string(respBody), `Authorization header format must be Bearer {token}`)
 
@@ -85,7 +85,7 @@ func TestOAuthEmptyAuthHeader(t *testing.T) {
 
 	respBody, _ := io.ReadAll(resp.Body)
 
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 	assert.Contains(t, string(respBody), `Authorization header is required`)
 
@@ -110,7 +110,7 @@ func TestOAuthMalformedToken(t *testing.T) {
 
 	respBody, _ := io.ReadAll(resp.Body)
 
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 	assert.Contains(t, string(respBody), `token is malformed: token contains an invalid number of segments`)
 
@@ -143,7 +143,7 @@ func TestOAuthJWKSKeyNotFound(t *testing.T) {
 
 	respBody, _ := io.ReadAll(resp.Body)
 
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 	assert.Contains(t, string(respBody), `token is unverifiable: error while executing keyfunc`)
 
@@ -198,7 +198,7 @@ func TestOAuthHTTPCallFailed(t *testing.T) {
 
 	resp, err := client.Do(req)
 
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 
 	resp.Body.Close()
@@ -228,7 +228,7 @@ func TestOAuthReadError(t *testing.T) {
 
 	resp, err := client.Do(req)
 
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 
 	resp.Body.Close()
@@ -258,7 +258,7 @@ func TestOAuthJSONUnmarshalError(t *testing.T) {
 
 	resp, err := client.Do(req)
 
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 
 	resp.Body.Close()

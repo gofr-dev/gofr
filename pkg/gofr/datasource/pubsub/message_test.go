@@ -156,7 +156,7 @@ func TestBindBool(t *testing.T) {
 	var b bool
 	err := m.bindBool(&b)
 	assert.NoError(t, err)
-	assert.Equal(t, true, b)
+	assert.True(t, b)
 
 	m = &Message{Value: []byte("not a bool")}
 

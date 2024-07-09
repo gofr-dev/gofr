@@ -58,7 +58,7 @@ func TestNewZipError(t *testing.T) {
 	z, err := NewZip(input)
 
 	assert.Nil(t, z)
-	assert.NotNil(t, err)
+	assert.Error(t, err)
 	assert.Equal(t, zip.ErrFormat, err)
 }
 

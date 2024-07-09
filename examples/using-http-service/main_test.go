@@ -51,11 +51,11 @@ func Test_main(t *testing.T) {
 		req, _ := http.NewRequest(http.MethodGet, host+tc.path, nil)
 		resp, err := c.Do(req)
 
-		assert.Nil(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
+		assert.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
 
 		bodyBytes, err := io.ReadAll(resp.Body)
 
-		assert.Nil(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
+		assert.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
 
 		assert.Equal(t, tc.expectedRes, string(bodyBytes), "TEST[%d], Failed.\n%s", i, tc.desc)
 
@@ -79,7 +79,7 @@ func TestHTTPHandlerURLError(t *testing.T) {
 	resp, err := Handler(ctx)
 
 	assert.Nil(t, resp)
-	assert.NotNil(t, err)
+	assert.Error(t, err)
 }
 
 func TestHTTPHandlerResponseUnmarshalError(t *testing.T) {
@@ -104,5 +104,5 @@ func TestHTTPHandlerResponseUnmarshalError(t *testing.T) {
 	resp, err := Handler(ctx)
 
 	assert.Nil(t, resp)
-	assert.NotNil(t, err)
+	assert.Error(t, err)
 }

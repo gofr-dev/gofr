@@ -88,7 +88,7 @@ func Test_InsertCommands(t *testing.T) {
 		resp, err := cl.InsertMany(context.Background(), mt.Coll.Name(), []interface{}{doc, doc})
 
 		assert.NotNil(t, resp)
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 	})
 
 	mt.Run("insertManyError", func(mt *mtest.T) {
@@ -104,7 +104,7 @@ func Test_InsertCommands(t *testing.T) {
 		resp, err := cl.InsertMany(context.Background(), mt.Coll.Name(), []interface{}{doc, doc})
 
 		assert.Nil(t, resp)
-		assert.NotNil(t, err)
+		assert.Error(t, err)
 	})
 }
 
@@ -127,7 +127,7 @@ func Test_CreateCollection(t *testing.T) {
 
 		err := cl.CreateCollection(context.Background(), mt.Coll.Name())
 
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 	})
 }
 
