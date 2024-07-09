@@ -106,6 +106,6 @@ func (m *Message) bindStruct(i any) error {
 	return json.Unmarshal(m.Value, i)
 }
 
-func (m *Message) HostName() string {
+func (*Message) HostName() string {
 	return ""
 }

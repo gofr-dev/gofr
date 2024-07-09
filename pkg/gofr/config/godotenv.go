@@ -68,11 +68,11 @@ func (e *EnvLoader) read(folder string) {
 	}
 }
 
-func (e *EnvLoader) Get(key string) string {
+func (*EnvLoader) Get(key string) string {
 	return os.Getenv(key)
 }
 
-func (e *EnvLoader) GetOrDefault(key, defaultValue string) string {
+func (*EnvLoader) GetOrDefault(key, defaultValue string) string {
 	if val := os.Getenv(key); val != "" {
 		return val
 	}

@@ -140,6 +140,6 @@ func (m *mockReadCloser) Read(p []byte) (int, error) {
 	return m.Buffer.Read(p)
 }
 
-func (m *mockReadCloser) Close() error {
+func (*mockReadCloser) Close() error {
 	return nil
 }
