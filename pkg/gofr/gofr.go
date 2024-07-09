@@ -333,23 +333,23 @@ func (a *App) getExporter(name, host, port string) (sdktrace.SpanExporter, error
 	case "jaeger":
 		a.container.Log("Exporting traces to jaeger.")
 
+		opts := []otlptracegrpc.Option{otlptracegrpc.WithInsecure(),
+			otlptracegrpc.WithEndpoint(fmt.Sprintf("%s:%s", host, port))}
+
 		if authHeader != "" {
-			exporter, err = otlptracegrpc.New(context.Background(), otlptracegrpc.WithInsecure(),
-				otlptracegrpc.WithEndpoint(fmt.Sprintf("%s:%s", host, port)),
-				otlptracegrpc.WithHeaders(map[string]string{"Authorization": authHeader}))
-		} else {
-			exporter, err = otlptracegrpc.New(context.Background(), otlptracegrpc.WithInsecure(),
-				otlptracegrpc.WithEndpoint(fmt.Sprintf("%s:%s", host, port)))
+			opts = append(opts, otlptracegrpc.WithHeaders(map[string]string{"Authorization": authHeader}))
 		}
+
+		exporter, err = otlptracegrpc.New(context.Background(), opts...)
 	case "zipkin":
 		a.container.Log("Exporting traces to zipkin.")
 
+		var opts []zipkin.Option
 		if authHeader != "" {
-			exporter, err = zipkin.New(fmt.Sprintf("http://%s:%s/api/v2/spans", host, port),
-				zipkin.WithHeaders(map[string]string{"Authorization": authHeader}))
-		} else {
-			exporter, err = zipkin.New(fmt.Sprintf("http://%s:%s/api/v2/spans", host, port))
+			opts = append(opts, zipkin.WithHeaders(map[string]string{"Authorization": authHeader}))
 		}
+
+		exporter, err = zipkin.New(fmt.Sprintf("http://%s:%s/api/v2/spans", host, port), opts...)
 	case traceExporterGoFr:
 		exporter = NewExporter("https://tracer-api.gofr.dev/api/spans", logging.NewLogger(logging.INFO))
 
