@@ -52,7 +52,7 @@ func TestIntegration_SimpleAPIServer(t *testing.T) {
 
 		b, err := io.ReadAll(resp.Body)
 
-		assert.Nil(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
+		assert.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
 
 		_ = json.Unmarshal(b, &data)
 
@@ -104,7 +104,7 @@ func TestIntegration_SimpleAPIServer_Errors(t *testing.T) {
 
 		b, err := io.ReadAll(resp.Body)
 
-		assert.Nil(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
+		assert.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
 
 		_ = json.Unmarshal(b, &data)
 
@@ -133,7 +133,7 @@ func TestIntegration_SimpleAPIServer_Health(t *testing.T) {
 		c := http.Client{}
 		resp, err := c.Do(req)
 
-		assert.Nil(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
+		assert.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
 
 		assert.Equal(t, tc.statusCode, resp.StatusCode, "TEST[%d], Failed.\n%s", i, tc.desc)
 	}
@@ -155,5 +155,5 @@ func TestRedisHandler(t *testing.T) {
 	resp, err := RedisHandler(ctx)
 
 	assert.Nil(t, resp)
-	assert.NotNil(t, err)
+	assert.Error(t, err)
 }

@@ -88,7 +88,7 @@ func Test_InsertCommands(t *testing.T) {
 		resp, err := cl.InsertMany(context.Background(), mt.Coll.Name(), []interface{}{doc, doc})
 
 		assert.NotNil(t, resp)
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 	})
 
 	mt.Run("insertManyError", func(mt *mtest.T) {
@@ -104,7 +104,7 @@ func Test_InsertCommands(t *testing.T) {
 		resp, err := cl.InsertMany(context.Background(), mt.Coll.Name(), []interface{}{doc, doc})
 
 		assert.Nil(t, resp)
-		assert.NotNil(t, err)
+		assert.Error(t, err)
 	})
 }
 
@@ -127,7 +127,7 @@ func Test_CreateCollection(t *testing.T) {
 
 		err := cl.CreateCollection(context.Background(), mt.Coll.Name())
 
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 	})
 }
 
@@ -173,7 +173,7 @@ func Test_FindMultipleCommands(t *testing.T) {
 
 		err := cl.Find(context.Background(), mt.Coll.Name(), bson.D{{}}, nil)
 
-		assert.Equal(t, "database response does not contain a cursor", err.Error())
+		assert.ErrorContains(t, err, "database response does not contain a cursor")
 	})
 
 	mt.Run("FindCursorParseError", func(mt *mtest.T) {
@@ -195,7 +195,7 @@ func Test_FindMultipleCommands(t *testing.T) {
 
 		err := cl.Find(context.Background(), mt.Coll.Name(), bson.D{{}}, &foundDocuments)
 
-		assert.Equal(t, "cursor.nextBatch should be an array but is a BSON invalid", err.Error())
+		assert.ErrorContains(t, err, "cursor.nextBatch should be an array but is a BSON invalid")
 	})
 }
 
@@ -488,8 +488,9 @@ func Test_HealthCheck(t *testing.T) {
 		cl.Database = mt.DB
 		mt.AddMockResponses(mtest.CreateSuccessResponse())
 
-		resp := cl.HealthCheck()
+		resp, err := cl.HealthCheck(context.Background())
 
+		assert.NoError(t, err)
 		assert.Contains(t, fmt.Sprint(resp), "UP")
 	})
 
@@ -501,7 +502,9 @@ func Test_HealthCheck(t *testing.T) {
 			Message: "duplicate key error",
 		}))
 
-		resp := cl.HealthCheck()
+		resp, err := cl.HealthCheck(context.Background())
+
+		assert.ErrorIs(t, err, errStatusDown)
 
 		assert.Contains(t, fmt.Sprint(resp), "DOWN")
 	})
