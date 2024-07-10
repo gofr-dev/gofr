@@ -27,7 +27,7 @@ type PublicKeys struct {
 type JWKNotFound struct {
 }
 
-func (i JWKNotFound) Error() string {
+func (JWKNotFound) Error() string {
 	return "JWKS Not Found"
 }
 

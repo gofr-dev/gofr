@@ -9,9 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"go.uber.org/mock/gomock"
-
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/mock/gomock"
 )
 
 func getClickHouseTestConnection(t *testing.T) (*MockConn, *MockMetrics, client) {
@@ -81,7 +80,7 @@ func Test_ClickHouse_HealthUP(t *testing.T) {
 
 	mockConn.EXPECT().Ping(gomock.Any()).Return(nil)
 
-	resp := c.HealthCheck()
+	resp, _ := c.HealthCheck(context.Background())
 
 	assert.Contains(t, fmt.Sprint(resp), "UP")
 }
@@ -91,7 +90,9 @@ func Test_ClickHouse_HealthDOWN(t *testing.T) {
 
 	mockConn.EXPECT().Ping(gomock.Any()).Return(sql.ErrConnDone)
 
-	resp := c.HealthCheck()
+	resp, err := c.HealthCheck(context.Background())
+
+	assert.ErrorIs(t, err, errStatusDown)
 
 	assert.Contains(t, fmt.Sprint(resp), "DOWN")
 }

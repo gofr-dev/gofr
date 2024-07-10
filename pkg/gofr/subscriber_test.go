@@ -30,19 +30,19 @@ func subscriptionError(err string) error {
 type mockSubscriber struct {
 }
 
-func (s mockSubscriber) CreateTopic(_ context.Context, _ string) error {
+func (mockSubscriber) CreateTopic(_ context.Context, _ string) error {
 	return nil
 }
 
-func (s mockSubscriber) DeleteTopic(_ context.Context, _ string) error {
+func (mockSubscriber) DeleteTopic(_ context.Context, _ string) error {
 	return nil
 }
 
-func (s mockSubscriber) Health() datasource.Health {
+func (mockSubscriber) Health() datasource.Health {
 	return datasource.Health{}
 }
 
-func (s mockSubscriber) Publish(_ context.Context, _ string, _ []byte) error {
+func (mockSubscriber) Publish(_ context.Context, _ string, _ []byte) error {
 	return nil
 }
 

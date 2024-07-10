@@ -33,5 +33,5 @@ func Test_newContextSuccess(t *testing.T) {
 	err = ctx.Bind(&body)
 
 	assert.Equal(t, map[string]string{"key": "value"}, body, "TEST Failed \n unable to read body")
-	assert.Nil(t, err, "TEST Failed \n unable to read body")
+	assert.NoError(t, err, "TEST Failed \n unable to read body")
 }

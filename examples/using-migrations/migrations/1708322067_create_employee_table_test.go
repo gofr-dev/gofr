@@ -6,6 +6,7 @@ import (
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/stretchr/testify/assert"
+
 	"gofr.dev/pkg/gofr/migration"
 )
 
@@ -64,7 +65,7 @@ func TestCreateTableEmployee(t *testing.T) {
 		// Execute the migration
 		err = createTableEmployee().UP(datasource)
 
-		assert.Equal(t, err, tc.expectedError, "TEST[%d] failed! Desc : %v", i, tc.name)
+		assert.Equal(t, tc.expectedError, err, "TEST[%d] failed! Desc : %v", i, tc.name)
 
 		assert.NoError(t, mock.ExpectationsWereMet())
 	}

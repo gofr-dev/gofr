@@ -2,13 +2,14 @@ package main
 
 import (
 	"bytes"
-	"github.com/stretchr/testify/assert"
 	"io"
 	"mime/multipart"
 	"net/http"
 	"os"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestMain_BindError(t *testing.T) {

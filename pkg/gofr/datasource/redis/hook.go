@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"gofr.dev/pkg/gofr/datasource"
-
 	"github.com/redis/go-redis/v9"
+
+	"gofr.dev/pkg/gofr/datasource"
 )
 
 // redisHook is a custom Redis hook for logging queries and their durations.
@@ -78,7 +78,7 @@ func (r *redisHook) logQuery(start time.Time, query string, args ...interface{})
 }
 
 // DialHook implements the redis.DialHook interface.
-func (r *redisHook) DialHook(next redis.DialHook) redis.DialHook {
+func (*redisHook) DialHook(next redis.DialHook) redis.DialHook {
 	return next
 }
 

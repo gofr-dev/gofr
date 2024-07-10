@@ -12,6 +12,7 @@ import (
 
 	"go.opentelemetry.io/otel/attribute"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+
 	"gofr.dev/pkg/gofr/logging"
 )
 
@@ -50,7 +51,7 @@ func (e *Exporter) ExportSpans(ctx context.Context, spans []sdktrace.ReadOnlySpa
 }
 
 // Shutdown shuts down the exporter.
-func (e *Exporter) Shutdown(context.Context) error {
+func (*Exporter) Shutdown(context.Context) error {
 	return nil
 }
 

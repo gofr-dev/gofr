@@ -7,7 +7,6 @@ import (
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/stretchr/testify/assert"
-
 	"go.uber.org/mock/gomock"
 
 	"gofr.dev/pkg/gofr/config"
@@ -47,7 +46,7 @@ func TestRedis_QueryLogging(t *testing.T) {
 
 	// Mock Redis server setup
 	s, err := miniredis.Run()
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	defer s.Close()
 
@@ -62,11 +61,11 @@ func TestRedis_QueryLogging(t *testing.T) {
 			"REDIS_PORT": s.Port(),
 		}), mockLogger, mockMetric)
 
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 
 		result, err := client.Set(context.TODO(), "key", "value", 1*time.Minute).Result()
 
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 		assert.Equal(t, "OK", result)
 	})
 
@@ -81,7 +80,7 @@ func TestRedis_PipelineQueryLogging(t *testing.T) {
 
 	// Mock Redis server setup
 	s, err := miniredis.Run()
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	defer s.Close()
 
@@ -97,7 +96,7 @@ func TestRedis_PipelineQueryLogging(t *testing.T) {
 			"REDIS_PORT": s.Port(),
 		}), mockLogger, mockMetric)
 
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 
 		// Pipeline execution
 		pipe := client.Pipeline()
@@ -106,15 +105,15 @@ func TestRedis_PipelineQueryLogging(t *testing.T) {
 
 		// Pipeline Exec should return a non-nil error
 		_, err = pipe.Exec(context.TODO())
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 
 		// Retrieve results
 		setResult, err := setCmd.Result()
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 		assert.Equal(t, "OK", setResult)
 
 		getResult, err := getCmd.Result()
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 		assert.Equal(t, "value1", getResult)
 	})
 

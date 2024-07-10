@@ -38,23 +38,43 @@ func TestResponder_getStatusCode(t *testing.T) {
 		data       interface{}
 		err        error
 		statusCode int
-		errObj     interface{}
 	}{
-		{"success case", http.MethodGet, "success response", nil, http.StatusOK, nil},
-		{"post with response body", http.MethodPost, "entity created", nil, http.StatusCreated, nil},
-		{"post with nil response", http.MethodPost, nil, nil, http.StatusAccepted, nil},
-		{"success delete", http.MethodDelete, nil, nil, http.StatusNoContent, nil},
-		{"invalid route error", http.MethodGet, nil, ErrorInvalidRoute{}, http.StatusNotFound,
-			map[string]interface{}{"message": ErrorInvalidRoute{}.Error()}},
-		{"internal server error", http.MethodGet, nil, http.ErrHandlerTimeout, http.StatusInternalServerError,
-			map[string]interface{}{"message": http.ErrHandlerTimeout.Error()}},
+		{"success case", http.MethodGet, "success response", nil, http.StatusOK},
+		{"post with response body", http.MethodPost, "entity created", nil, http.StatusCreated},
+		{"post with nil response", http.MethodPost, nil, nil, http.StatusAccepted},
+		{"success delete", http.MethodDelete, nil, nil, http.StatusNoContent},
+		{"invalid route error", http.MethodGet, nil, ErrorInvalidRoute{}, http.StatusNotFound},
+		{"internal server error", http.MethodGet, nil, http.ErrHandlerTimeout, http.StatusInternalServerError},
 	}
 
 	for i, tc := range tests {
-		statusCode, errObj := getStatusCode(tc.method, tc.data, tc.err)
+		statusCode := getStatusCode(tc.method, tc.data, tc.err)
 
 		assert.Equal(t, tc.statusCode, statusCode, "TEST[%d], Failed.\n%s", i, tc.desc)
+	}
+}
 
-		assert.Equal(t, tc.errObj, errObj, "TEST[%d], Failed.\n%s", i, tc.desc)
+func TestResponder_getErrResponse(t *testing.T) {
+	tests := []struct {
+		desc    string
+		err     error
+		reason  []string
+		details interface{}
+	}{
+		{"success case", nil, nil, nil},
+		{"invalid param error", ErrorInvalidParam{}, []string{ErrorInvalidParam{}.Error()}, nil},
+		{"multiple errors", MultipleErrors{Errors: []error{ErrorMissingParam{}, CustomError{Reason: ErrorEntityAlreadyExist{}.Error()}}},
+			[]string{ErrorMissingParam{}.Error(), CustomError{Reason: alreadyExistsMessage}.Error()}, nil},
+		{"custom error", CustomError{Reason: ErrorEntityNotFound{}.Error()}, []string{ErrorEntityNotFound{}.Error()}, nil},
+	}
+
+	for i, tc := range tests {
+		errObj := getErrResponse(tc.err)
+
+		for j, err := range errObj {
+			assert.Equal(t, tc.reason[j], err.Reason, "TEST[%d], Failed.\n%s", i, tc.desc)
+
+			assert.Equal(t, tc.details, err.Details, "TEST[%d], Failed.\n%s", i, tc.desc)
+		}
 	}
 }

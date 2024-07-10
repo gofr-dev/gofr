@@ -24,11 +24,11 @@ func (f fileSystem) Create(name string) (datasource.File, error) {
 	return &file{File: newFile, logger: f.logger}, nil
 }
 
-func (f fileSystem) Mkdir(name string, perm os.FileMode) error {
+func (fileSystem) Mkdir(name string, perm os.FileMode) error {
 	return os.Mkdir(name, perm)
 }
 
-func (f fileSystem) MkdirAll(path string, perm os.FileMode) error {
+func (fileSystem) MkdirAll(path string, perm os.FileMode) error {
 	return os.MkdirAll(path, perm)
 }
 
@@ -50,14 +50,14 @@ func (f fileSystem) OpenFile(name string, flag int, perm os.FileMode) (datasourc
 	return &file{File: openFile, logger: f.logger}, nil
 }
 
-func (f fileSystem) Remove(name string) error {
+func (fileSystem) Remove(name string) error {
 	return os.Remove(name)
 }
 
-func (f fileSystem) RemoveAll(path string) error {
+func (fileSystem) RemoveAll(path string) error {
 	return os.RemoveAll(path)
 }
 
-func (f fileSystem) Rename(oldname, newname string) error {
+func (fileSystem) Rename(oldname, newname string) error {
 	return os.Rename(oldname, newname)
 }

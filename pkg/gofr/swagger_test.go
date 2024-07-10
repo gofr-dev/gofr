@@ -66,7 +66,7 @@ func TestOpenAPIHandler_Error(t *testing.T) {
 
 	assert.Nil(t, result, "Expected result to be nil")
 	errors.Is(err, &os.PathError{Path: "/Users/raramuri/Projects/gofr.dev/gofr/pkg/gofr/static/openapi.json"})
-	assert.NotNil(t, err, "Expected error")
+	assert.Error(t, err, "Expected error")
 }
 
 func TestSwaggerHandler(t *testing.T) {
@@ -90,7 +90,7 @@ func TestSwaggerHandler(t *testing.T) {
 		ctx := newContext(gofrHTTP.NewResponder(httptest.NewRecorder(), http.MethodGet), gofrReq, testContainer)
 
 		resp, err := SwaggerUIHandler(ctx)
-		assert.Nil(t, err, "Expected err to be nil")
+		assert.NoError(t, err, "Expected err to be nil")
 
 		fileResponse, ok := resp.(response.File)
 		if !ok {

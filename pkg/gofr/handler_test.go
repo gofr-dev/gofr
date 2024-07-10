@@ -34,7 +34,7 @@ func TestHandler_ServeHTTP(t *testing.T) {
 		{"method is get, data is nil and error is nil", http.MethodGet, nil, nil, http.StatusOK,
 			`{}`},
 		{"method is get, data is mil, error is not nil", http.MethodGet, nil, errTest, http.StatusInternalServerError,
-			`{"error":{"message":"some error"}}`},
+			`{"errors":[{"reason":"some error"`},
 		{"method is post, data is nil and error is nil", http.MethodPost, "Created", nil, http.StatusCreated,
 			`{"data":"Created"}`},
 		{"method is delete, data is nil and error is nil", http.MethodDelete, nil, nil, http.StatusNoContent,
@@ -56,6 +56,7 @@ func TestHandler_ServeHTTP(t *testing.T) {
 		}.ServeHTTP(w, r)
 
 		assert.Containsf(t, w.Body.String(), tc.body, "TEST[%d], Failed.\n%s", i, tc.desc)
+
 		assert.Equal(t, tc.statusCode, w.Code, "TEST[%d], Failed.\n%s", i, tc.desc)
 	}
 }
@@ -128,10 +129,10 @@ func TestHandler_faviconHandlerError(t *testing.T) {
 
 	assert.NoError(t, err, "TEST Failed.\n")
 
-	assert.Equal(t, data, response.File{
+	assert.Equal(t, response.File{
 		Content:     d,
 		ContentType: "image/x-icon",
-	}, "TEST Failed.\n")
+	}, data, "TEST Failed.\n")
 }
 
 func TestHandler_faviconHandler(t *testing.T) {
@@ -144,10 +145,10 @@ func TestHandler_faviconHandler(t *testing.T) {
 
 	assert.NoError(t, err, "TEST Failed.\n")
 
-	assert.Equal(t, data, response.File{
+	assert.Equal(t, response.File{
 		Content:     d,
 		ContentType: "image/x-icon",
-	}, "TEST Failed.\n")
+	}, data, "TEST Failed.\n")
 }
 
 func TestHandler_catchAllHandler(t *testing.T) {
@@ -157,7 +158,7 @@ func TestHandler_catchAllHandler(t *testing.T) {
 
 	data, err := catchAllHandler(&c)
 
-	assert.Equal(t, data, nil, "TEST Failed.\n")
+	assert.Nil(t, data, "TEST Failed.\n")
 
 	assert.Equal(t, gofrHTTP.ErrorInvalidRoute{}, err, "TEST Failed.\n")
 }
@@ -165,7 +166,7 @@ func TestHandler_catchAllHandler(t *testing.T) {
 func TestHandler_livelinessHandler(t *testing.T) {
 	resp, err := liveHandler(&Context{})
 
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Contains(t, fmt.Sprint(resp), "UP")
 }
 
@@ -188,6 +189,6 @@ func TestHandler_healthHandler(t *testing.T) {
 
 	h, err := healthHandler(ctx)
 
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.NotNil(t, h)
 }
