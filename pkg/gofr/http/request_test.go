@@ -72,16 +72,16 @@ func TestBind_FileSuccess(t *testing.T) {
 	}{}
 
 	err := r.Bind(&x)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	// Assert zip file bind
-	assert.Equal(t, 2, len(x.Zip.Files))
+	assert.Len(t, x.Zip.Files, 2)
 	assert.Equal(t, "Hello! This is file A.\n", string(x.Zip.Files["a.txt"].Bytes()))
 	assert.Equal(t, "Hello! This is file B.\n\n", string(x.Zip.Files["b.txt"].Bytes()))
 
 	// Assert zip file bind for pointer
 	assert.NotNil(t, x.ZipPtr)
-	assert.Equal(t, 2, len(x.ZipPtr.Files))
+	assert.Len(t, x.ZipPtr.Files, 2)
 	assert.Equal(t, "Hello! This is file A.\n", string(x.ZipPtr.Files["a.txt"].Bytes()))
 	assert.Equal(t, "Hello! This is file B.\n\n", string(x.ZipPtr.Files["b.txt"].Bytes()))
 
@@ -89,11 +89,11 @@ func TestBind_FileSuccess(t *testing.T) {
 	assert.Equal(t, "hello.txt", x.FileHeader.Filename)
 
 	f, err := x.FileHeader.Open()
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.NotNil(t, f)
 
 	content, err := io.ReadAll(f)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, "Test hello!", string(content))
 
 	// Assert FileHeader pointer type
@@ -101,11 +101,11 @@ func TestBind_FileSuccess(t *testing.T) {
 	assert.Equal(t, "hello.txt", x.FileHeader.Filename)
 
 	f, err = x.FileHeader.Open()
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.NotNil(t, f)
 
 	content, err = io.ReadAll(f)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, "Test hello!", string(content))
 
 	// Assert skipped field
@@ -121,7 +121,7 @@ func TestBind_FileSuccess(t *testing.T) {
 	assert.Equal(t, "testString", x.StringField)
 	assert.Equal(t, 123, x.IntField)
 	assert.Equal(t, 123.456, x.FloatField)
-	assert.Equal(t, true, x.BoolField)
+	assert.True(t, x.BoolField)
 }
 
 func TestBind_NoContentType(t *testing.T) {
@@ -182,16 +182,16 @@ func generateMultipartRequestZip(t *testing.T) *http.Request {
 
 	// Add non-file fields
 	err = writer.WriteField("stringField", "testString")
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	err = writer.WriteField("intField", "123")
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	err = writer.WriteField("floatField", "123.456")
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	err = writer.WriteField("boolField", "true")
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	// Close the multipart writer
 	writer.Close()
@@ -211,12 +211,12 @@ func Test_bindMultipart_Fails(t *testing.T) {
 	}{}
 
 	err := r.bindMultipart(input)
-	assert.NotNil(t, err)
+	assert.Error(t, err)
 	assert.Equal(t, errNonPointerBind, err)
 
 	// unexported field cannot be binded
 	err = r.bindMultipart(&input)
-	assert.NotNil(t, err)
+	assert.Error(t, err)
 	assert.Equal(t, errNoFileFound, err)
 }
 
@@ -231,6 +231,5 @@ func Test_bindMultipart_Fail_ParseMultiPart(t *testing.T) {
 	_, _ = r.req.MultipartReader()
 
 	err := r.bindMultipart(&input2)
-	assert.NotNil(t, err)
-	assert.Equal(t, "http: multipart handled by MultipartReader", err.Error())
+	assert.ErrorContains(t, err, "http: multipart handled by MultipartReader")
 }

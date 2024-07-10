@@ -17,6 +17,7 @@ import (
 
 	redis "github.com/redis/go-redis/v9"
 	gomock "go.uber.org/mock/gomock"
+
 	datasource "gofr.dev/pkg/gofr/datasource"
 	sql0 "gofr.dev/pkg/gofr/datasource/sql"
 )
@@ -7327,6 +7328,21 @@ func (mr *MockCassandraMockRecorder) ExecCAS(dest, stmt any, values ...any) *gom
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExecCAS", reflect.TypeOf((*MockCassandra)(nil).ExecCAS), varargs...)
 }
 
+// HealthCheck mocks base method.
+func (m *MockCassandra) HealthCheck(arg0 context.Context) (any, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HealthCheck", arg0)
+	ret0, _ := ret[0].(any)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// HealthCheck indicates an expected call of HealthCheck.
+func (mr *MockCassandraMockRecorder) HealthCheck(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HealthCheck", reflect.TypeOf((*MockCassandra)(nil).HealthCheck), arg0)
+}
+
 // Query mocks base method.
 func (m *MockCassandra) Query(dest any, stmt string, values ...any) error {
 	m.ctrl.T.Helper()
@@ -7418,6 +7434,21 @@ func (mr *MockCassandraProviderMockRecorder) ExecCAS(dest, stmt any, values ...a
 	mr.mock.ctrl.T.Helper()
 	varargs := append([]any{dest, stmt}, values...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExecCAS", reflect.TypeOf((*MockCassandraProvider)(nil).ExecCAS), varargs...)
+}
+
+// HealthCheck mocks base method.
+func (m *MockCassandraProvider) HealthCheck(arg0 context.Context) (any, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HealthCheck", arg0)
+	ret0, _ := ret[0].(any)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// HealthCheck indicates an expected call of HealthCheck.
+func (mr *MockCassandraProviderMockRecorder) HealthCheck(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HealthCheck", reflect.TypeOf((*MockCassandraProvider)(nil).HealthCheck), arg0)
 }
 
 // Query mocks base method.
@@ -7524,6 +7555,21 @@ func (mr *MockClickhouseMockRecorder) Exec(ctx, query any, args ...any) *gomock.
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Exec", reflect.TypeOf((*MockClickhouse)(nil).Exec), varargs...)
 }
 
+// HealthCheck mocks base method.
+func (m *MockClickhouse) HealthCheck(arg0 context.Context) (any, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HealthCheck", arg0)
+	ret0, _ := ret[0].(any)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// HealthCheck indicates an expected call of HealthCheck.
+func (mr *MockClickhouseMockRecorder) HealthCheck(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HealthCheck", reflect.TypeOf((*MockClickhouse)(nil).HealthCheck), arg0)
+}
+
 // Select mocks base method.
 func (m *MockClickhouse) Select(ctx context.Context, dest any, query string, args ...any) error {
 	m.ctrl.T.Helper()
@@ -7614,6 +7660,21 @@ func (mr *MockClickhouseProviderMockRecorder) Exec(ctx, query any, args ...any) 
 	mr.mock.ctrl.T.Helper()
 	varargs := append([]any{ctx, query}, args...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Exec", reflect.TypeOf((*MockClickhouseProvider)(nil).Exec), varargs...)
+}
+
+// HealthCheck mocks base method.
+func (m *MockClickhouseProvider) HealthCheck(arg0 context.Context) (any, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HealthCheck", arg0)
+	ret0, _ := ret[0].(any)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// HealthCheck indicates an expected call of HealthCheck.
+func (mr *MockClickhouseProviderMockRecorder) HealthCheck(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HealthCheck", reflect.TypeOf((*MockClickhouseProvider)(nil).HealthCheck), arg0)
 }
 
 // Select mocks base method.
@@ -7781,6 +7842,21 @@ func (m *MockMongo) FindOne(ctx context.Context, collection string, filter, resu
 func (mr *MockMongoMockRecorder) FindOne(ctx, collection, filter, result any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindOne", reflect.TypeOf((*MockMongo)(nil).FindOne), ctx, collection, filter, result)
+}
+
+// HealthCheck mocks base method.
+func (m *MockMongo) HealthCheck(arg0 context.Context) (any, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HealthCheck", arg0)
+	ret0, _ := ret[0].(any)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// HealthCheck indicates an expected call of HealthCheck.
+func (mr *MockMongoMockRecorder) HealthCheck(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HealthCheck", reflect.TypeOf((*MockMongo)(nil).HealthCheck), arg0)
 }
 
 // InsertMany mocks base method.
@@ -8085,6 +8161,21 @@ func (mr *MockMongoProviderMockRecorder) FindOne(ctx, collection, filter, result
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindOne", reflect.TypeOf((*MockMongoProvider)(nil).FindOne), ctx, collection, filter, result)
 }
 
+// HealthCheck mocks base method.
+func (m *MockMongoProvider) HealthCheck(arg0 context.Context) (any, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HealthCheck", arg0)
+	ret0, _ := ret[0].(any)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// HealthCheck indicates an expected call of HealthCheck.
+func (mr *MockMongoProviderMockRecorder) HealthCheck(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HealthCheck", reflect.TypeOf((*MockMongoProvider)(nil).HealthCheck), arg0)
+}
+
 // InsertMany mocks base method.
 func (m *MockMongoProvider) InsertMany(ctx context.Context, collection string, documents []any) ([]any, error) {
 	m.ctrl.T.Helper()
@@ -8255,4 +8346,42 @@ func (m *Mockprovider) UseMetrics(metrics any) {
 func (mr *MockproviderMockRecorder) UseMetrics(metrics any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UseMetrics", reflect.TypeOf((*Mockprovider)(nil).UseMetrics), metrics)
+}
+
+// MockHealthChecker is a mock of HealthChecker interface.
+type MockHealthChecker struct {
+	ctrl     *gomock.Controller
+	recorder *MockHealthCheckerMockRecorder
+}
+
+// MockHealthCheckerMockRecorder is the mock recorder for MockHealthChecker.
+type MockHealthCheckerMockRecorder struct {
+	mock *MockHealthChecker
+}
+
+// NewMockHealthChecker creates a new mock instance.
+func NewMockHealthChecker(ctrl *gomock.Controller) *MockHealthChecker {
+	mock := &MockHealthChecker{ctrl: ctrl}
+	mock.recorder = &MockHealthCheckerMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockHealthChecker) EXPECT() *MockHealthCheckerMockRecorder {
+	return m.recorder
+}
+
+// HealthCheck mocks base method.
+func (m *MockHealthChecker) HealthCheck(arg0 context.Context) (any, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HealthCheck", arg0)
+	ret0, _ := ret[0].(any)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// HealthCheck indicates an expected call of HealthCheck.
+func (mr *MockHealthCheckerMockRecorder) HealthCheck(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HealthCheck", reflect.TypeOf((*MockHealthChecker)(nil).HealthCheck), arg0)
 }

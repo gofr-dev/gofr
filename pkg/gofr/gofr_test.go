@@ -137,7 +137,7 @@ func TestGofr_ServerRun(t *testing.T) {
 
 	assert.NoError(t, err, "TEST Failed.\n")
 
-	assert.Equal(t, resp.StatusCode, http.StatusOK, "TEST Failed.\n")
+	assert.Equal(t, http.StatusOK, resp.StatusCode, "TEST Failed.\n")
 
 	resp.Body.Close()
 }
@@ -337,17 +337,33 @@ func Test_initTracer(t *testing.T) {
 		"TRACE_EXPORTER": "gofr",
 	})
 
+	mockConfig4 := config.NewMockConfig(map[string]string{
+		"TRACE_EXPORTER":  "zipkin",
+		"TRACER_HOST":     "localhost",
+		"TRACER_PORT":     "2005",
+		"TRACER_AUTH_KEY": "valid-token",
+	})
+
+	mockConfig5 := config.NewMockConfig(map[string]string{
+		"TRACE_EXPORTER":  "jaeger",
+		"TRACER_HOST":     "localhost",
+		"TRACER_PORT":     "2005",
+		"TRACER_AUTH_KEY": "valid-token",
+	})
+
 	tests := []struct {
 		desc               string
 		config             config.Config
 		expectedLogMessage string
 	}{
 		{"zipkin exporter", mockConfig1, "Exporting traces to zipkin."},
+		{"zipkin exporter with auth", mockConfig4, "Exporting traces to zipkin."},
 		{"jaeger exporter", mockConfig2, "Exporting traces to jaeger."},
+		{"jaeger exporter with auth", mockConfig5, "Exporting traces to jaeger."},
 		{"gofr exporter", mockConfig3, "Exporting traces to GoFr at https://tracer.gofr.dev"},
 	}
 
-	for _, tc := range tests {
+	for i, tc := range tests {
 		logMessage := testutil.StdoutOutputForFunc(func() {
 			mockContainer, _ := container.NewMockContainer(t)
 
@@ -359,7 +375,7 @@ func Test_initTracer(t *testing.T) {
 			a.initTracer()
 		})
 
-		assert.Contains(t, logMessage, tc.expectedLogMessage)
+		assert.Contains(t, logMessage, tc.expectedLogMessage, "TEST[%d], Failed.\n%s", i, tc.desc)
 	}
 }
 
@@ -381,7 +397,7 @@ func Test_initTracer_invalidConfig(t *testing.T) {
 		a.initTracer()
 	})
 
-	assert.Contains(t, errLogMessage, "unsupported trace exporter.")
+	assert.Contains(t, errLogMessage, "unsupported trace exporter: abc", "TEST Failed.\n")
 }
 
 func Test_UseMiddleware(t *testing.T) {
@@ -521,7 +537,7 @@ func Test_SwaggerEndpoints(t *testing.T) {
 		}
 	}()
 
-	assert.Nil(t, err, "Expected error to be nil, got : %v", err)
+	assert.NoError(t, err, "Expected error to be nil, got : %v", err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	assert.Equal(t, "text/html; charset=utf-8", resp.Header.Get("Content-Type"))
 }
@@ -550,7 +566,7 @@ func Test_AddCronJob_Success(t *testing.T) {
 		ctx.Logger.Info("test-job-success")
 	})
 
-	assert.Equal(t, len(a.cron.jobs), 1)
+	assert.Len(t, a.cron.jobs, 1)
 
 	for _, j := range a.cron.jobs {
 		if j.name == "test-job" {

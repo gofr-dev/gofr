@@ -17,6 +17,7 @@ import (
 
 	redis "github.com/redis/go-redis/v9"
 	gomock "go.uber.org/mock/gomock"
+
 	container "gofr.dev/pkg/gofr/container"
 )
 
@@ -335,6 +336,21 @@ func (mr *MockClickhouseMockRecorder) Exec(ctx, query any, args ...any) *gomock.
 	mr.mock.ctrl.T.Helper()
 	varargs := append([]any{ctx, query}, args...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Exec", reflect.TypeOf((*MockClickhouse)(nil).Exec), varargs...)
+}
+
+// HealthCheck mocks base method.
+func (m *MockClickhouse) HealthCheck(ctx context.Context) (any, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HealthCheck", ctx)
+	ret0, _ := ret[0].(any)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// HealthCheck indicates an expected call of HealthCheck.
+func (mr *MockClickhouseMockRecorder) HealthCheck(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HealthCheck", reflect.TypeOf((*MockClickhouse)(nil).HealthCheck), ctx)
 }
 
 // Select mocks base method.
