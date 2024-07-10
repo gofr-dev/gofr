@@ -88,7 +88,7 @@ func Test_InsertCommands(t *testing.T) {
 		resp, err := cl.InsertMany(context.Background(), mt.Coll.Name(), []interface{}{doc, doc})
 
 		assert.NotNil(t, resp)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 	})
 
 	mt.Run("insertManyError", func(mt *mtest.T) {
@@ -127,7 +127,7 @@ func Test_CreateCollection(t *testing.T) {
 
 		err := cl.CreateCollection(context.Background(), mt.Coll.Name())
 
-		assert.NoError(t, err)
+		require.NoError(t, err)
 	})
 }
 
@@ -490,7 +490,7 @@ func Test_HealthCheck(t *testing.T) {
 
 		resp, err := cl.HealthCheck(context.Background())
 
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Contains(t, fmt.Sprint(resp), "UP")
 	})
 
