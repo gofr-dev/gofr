@@ -363,7 +363,7 @@ func (a *App) getExporter(name, host, port, url string) (sdktrace.SpanExporter, 
 		exporter, err = zipkin.New(url, opts...)
 	case gofrTraceExporter:
 		if url == "" {
-			url = gofrTracerURL + "/api/spans"
+			url = "https://tracer-api.gofr.dev/api/spans"
 		}
 
 		a.container.Logf("Exporting traces to GoFr at %s", gofrTracerURL)
