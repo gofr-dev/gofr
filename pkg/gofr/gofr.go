@@ -31,7 +31,10 @@ import (
 	"gofr.dev/pkg/gofr/service"
 )
 
-const defaultPublicStaticDir = "static"
+const (
+	defaultPublicStaticDir = "static"
+	traceExporterGoFr      = "gofr"
+)
 
 // App is the main application in the GoFr framework.
 type App struct {
@@ -306,33 +309,8 @@ func (a *App) initTracer() {
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
 	otel.SetErrorHandler(&otelErrorHandler{logger: a.container.Logger})
 
-	const traceExporterGoFr = "gofr"
-
 	if (traceExporter != "" && tracerHost != "") || traceExporter == traceExporterGoFr {
-		var (
-			exporter sdktrace.SpanExporter
-			err      error
-		)
-
-		switch strings.ToLower(traceExporter) {
-		case "jaeger":
-			a.container.Log("Exporting traces to jaeger.")
-
-			exporter, err = otlptracegrpc.New(context.Background(), otlptracegrpc.WithInsecure(),
-				otlptracegrpc.WithEndpoint(fmt.Sprintf("%s:%s", tracerHost, tracerPort)))
-		case "zipkin":
-			a.container.Log("Exporting traces to zipkin.")
-
-			exporter, err = zipkin.New(
-				fmt.Sprintf("http://%s:%s/api/v2/spans", tracerHost, tracerPort),
-			)
-		case traceExporterGoFr:
-			exporter = NewExporter("https://tracer-api.gofr.dev/api/spans", logging.NewLogger(logging.INFO))
-
-			a.container.Log("Exporting traces to GoFr at https://tracer.gofr.dev")
-		default:
-			a.container.Error("unsupported trace exporter.")
-		}
+		exporter, err := a.getExporter(traceExporter, tracerHost, tracerPort)
 
 		if err != nil {
 			a.container.Error(err)
@@ -341,6 +319,46 @@ func (a *App) initTracer() {
 		batcher := sdktrace.NewBatchSpanProcessor(exporter)
 		tp.RegisterSpanProcessor(batcher)
 	}
+}
+
+func (a *App) getExporter(name, host, port string) (sdktrace.SpanExporter, error) {
+	var (
+		exporter sdktrace.SpanExporter
+		err      error
+	)
+
+	authHeader := strings.TrimSpace(a.Config.Get("TRACER_AUTH_KEY"))
+
+	switch strings.ToLower(name) {
+	case "jaeger":
+		a.container.Log("Exporting traces to jaeger.")
+
+		opts := []otlptracegrpc.Option{otlptracegrpc.WithInsecure(),
+			otlptracegrpc.WithEndpoint(fmt.Sprintf("%s:%s", host, port))}
+
+		if authHeader != "" {
+			opts = append(opts, otlptracegrpc.WithHeaders(map[string]string{"Authorization": authHeader}))
+		}
+
+		exporter, err = otlptracegrpc.New(context.Background(), opts...)
+	case "zipkin":
+		a.container.Log("Exporting traces to zipkin.")
+
+		var opts []zipkin.Option
+		if authHeader != "" {
+			opts = append(opts, zipkin.WithHeaders(map[string]string{"Authorization": authHeader}))
+		}
+
+		exporter, err = zipkin.New(fmt.Sprintf("http://%s:%s/api/v2/spans", host, port), opts...)
+	case traceExporterGoFr:
+		exporter = NewExporter("https://tracer-api.gofr.dev/api/spans", logging.NewLogger(logging.INFO))
+
+		a.container.Log("Exporting traces to GoFr at https://tracer.gofr.dev")
+	default:
+		a.container.Errorf("unsupported trace exporter: %s", name)
+	}
+
+	return exporter, err
 }
 
 type otelErrorHandler struct {
