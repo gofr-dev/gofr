@@ -18,6 +18,9 @@ func main() {
 	// Create a new application
 	a := gofr.New()
 
+	//HTTP service with default health check endpoint
+	a.AddHTTPService("anotherService", "http://localhost:9000")
+
 	// Add all the routes
 	a.GET("/hello", HelloHandler)
 	a.GET("/error", ErrorHandler)
