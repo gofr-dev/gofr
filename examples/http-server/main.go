@@ -33,6 +33,15 @@ func main() {
 }
 
 func HelloHandler(c *gofr.Context) (interface{}, error) {
+	err := c.KVStore.Set(c, "key", "value")
+
+	val, err := c.KVStore.Get(c, "key")
+
+	err = c.KVStore.Delete(c, "key")
+
+	fmt.Println(err)
+	fmt.Println(val)
+
 	name := c.Param("name")
 	if name == "" {
 		c.Log("Name came empty")

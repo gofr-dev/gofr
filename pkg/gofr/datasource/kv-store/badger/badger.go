@@ -77,7 +77,7 @@ func (c *client) Get(_ context.Context, key string) (string, error) {
 }
 
 func (c *client) Set(_ context.Context, key string, value string) error {
-	txn := c.db.NewTransaction(false)
+	txn := c.db.NewTransaction(true)
 	defer txn.Discard()
 
 	err := txn.Set([]byte(key), []byte(value))
@@ -94,7 +94,7 @@ func (c *client) Set(_ context.Context, key string, value string) error {
 }
 
 func (c *client) Delete(_ context.Context, key string) error {
-	txn := c.db.NewTransaction(false)
+	txn := c.db.NewTransaction(true)
 	defer txn.Discard()
 
 	err := txn.Delete([]byte(key))
