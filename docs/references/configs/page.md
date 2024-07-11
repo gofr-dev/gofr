@@ -72,12 +72,19 @@ This document lists all the configuration options supported by the GoFr framewor
 
 -  TRACER_HOST
 -  Hostname of the tracing collector. Required if TRACE_EXPORTER is set to zipkin or jaeger.
+-  **DEPRECATED**
 
 ---
 
 -  TRACER_PORT
 -  Port of the tracing collector. Required if TRACE_EXPORTER is set to zipkin or jaeger.
 -  9411
+-  **DEPRECATED**
+
+---
+
+-  TRACER_URL
+-  URL of the trace collector. Required if TRACE_EXPORTER is set to zipkin or jaeger.
 
 ---
 
