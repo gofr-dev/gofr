@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"gofr.dev/pkg/gofr/datasource/kv-store/badger"
 	"io"
 	"sync"
 	"time"
@@ -19,8 +18,6 @@ func main() {
 	// Create a new application
 	a := gofr.New()
 
-	a.AddKVStore(badger.New(badger.Configs{"gofr-http"}))
-
 	// Add all the routes
 	a.GET("/hello", HelloHandler)
 	a.GET("/error", ErrorHandler)
@@ -33,15 +30,6 @@ func main() {
 }
 
 func HelloHandler(c *gofr.Context) (interface{}, error) {
-	err := c.KVStore.Set(c, "key", "value")
-
-	val, err := c.KVStore.Get(c, "key")
-
-	err = c.KVStore.Delete(c, "key")
-
-	fmt.Println(err)
-	fmt.Println(val)
-
 	name := c.Param("name")
 	if name == "" {
 		c.Log("Name came empty")
