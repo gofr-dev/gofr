@@ -2,10 +2,12 @@ package gofr
 
 import (
 	"context"
-	"github.com/stretchr/testify/assert"
-	"google.golang.org/grpc"
 	"testing"
 	"time"
+
+	"google.golang.org/grpc"
+
+	"github.com/stretchr/testify/assert"
 
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/logging"
