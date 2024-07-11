@@ -3,7 +3,6 @@ package badger
 import (
 	"context"
 	"github.com/dgraph-io/badger/v4"
-	"log"
 )
 
 type Configs struct {
@@ -15,11 +14,6 @@ type client struct {
 	configs Configs
 	logger  Logger
 	metrics Metrics
-}
-
-func (c *client) HealthCheck(ctx context.Context) (any, error) {
-	//TODO implement me
-	panic("implement me")
 }
 
 func New(configs Configs) *client {
@@ -44,7 +38,7 @@ func (c *client) UseMetrics(metrics interface{}) {
 func (c *client) Connect() {
 	db, err := badger.Open(badger.DefaultOptions(c.configs.DirPath))
 	if err != nil {
-		log.Fatal(err)
+		c.logger.Errorf("failed to initialise badgerDB : %v", err)
 	}
 
 	c.db = db
