@@ -1,6 +1,8 @@
 package container
 
 import (
+	"context"
+	"errors"
 	"strconv"
 	"strings"
 	"time"
@@ -119,6 +121,24 @@ func (c *Container) Create(conf config.Config) {
 	}
 
 	c.File = file.New(c.Logger)
+}
+
+func (c *Container) Close(ctx context.Context) error {
+	var err error
+
+	if !isNil(c.SQL) {
+		err = errors.Join(err, c.SQL.Close())
+	}
+
+	if !isNil(c.Redis) {
+		err = errors.Join(err, c.Redis.Close(ctx))
+	}
+
+	if !isNil(c.PubSub) {
+		err = c.PubSub.Close(ctx)
+	}
+
+	return err
 }
 
 func (c *Container) createMqttPubSub(conf config.Config) pubsub.Client {

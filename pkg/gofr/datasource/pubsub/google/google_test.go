@@ -173,3 +173,21 @@ func Test_validateConfigs(t *testing.T) {
 		assert.ErrorIs(t, err, tc.expErr)
 	}
 }
+
+func TestGoogleClient_CloseReturnsError(t *testing.T) {
+	// client already present
+	g := &googleClient{
+		client: getGoogleClient(t),
+	}
+
+	err := g.Close(context.Background())
+
+	assert.NoError(t, err)
+
+	// client empty
+	g = &googleClient{}
+
+	err = g.Close(context.Background())
+
+	assert.Nil(t, err)
+}

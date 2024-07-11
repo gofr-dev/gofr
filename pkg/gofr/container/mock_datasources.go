@@ -17,7 +17,6 @@ import (
 
 	redis "github.com/redis/go-redis/v9"
 	gomock "go.uber.org/mock/gomock"
-
 	datasource "gofr.dev/pkg/gofr/datasource"
 	sql0 "gofr.dev/pkg/gofr/datasource/sql"
 )
@@ -58,6 +57,20 @@ func (m *MockDB) Begin() (*sql0.Tx, error) {
 func (mr *MockDBMockRecorder) Begin() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Begin", reflect.TypeOf((*MockDB)(nil).Begin))
+}
+
+// Close mocks base method.
+func (m *MockDB) Close() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Close")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Close indicates an expected call of Close.
+func (mr *MockDBMockRecorder) Close() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockDB)(nil).Close))
 }
 
 // Dialect mocks base method.
@@ -1405,6 +1418,20 @@ func (m *MockRedis) ClientUnpause(ctx context.Context) *redis.BoolCmd {
 func (mr *MockRedisMockRecorder) ClientUnpause(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ClientUnpause", reflect.TypeOf((*MockRedis)(nil).ClientUnpause), ctx)
+}
+
+// Close mocks base method.
+func (m *MockRedis) Close(arg0 context.Context) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Close", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Close indicates an expected call of Close.
+func (mr *MockRedisMockRecorder) Close(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockRedis)(nil).Close), arg0)
 }
 
 // ClusterAddSlots mocks base method.

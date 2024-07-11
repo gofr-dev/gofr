@@ -1,9 +1,11 @@
 package container
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/mock/gomock"
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/datasource/pubsub/mqtt"
@@ -149,4 +151,27 @@ func TestContainer_newContainerWithNilConfig(t *testing.T) {
 	assert.Nil(t, container.Services, "%s", failureMsg)
 	assert.Nil(t, container.PubSub, "%s", failureMsg)
 	assert.Nil(t, container.Logger, "%s", failureMsg)
+}
+
+func TestContainer_Close(t *testing.T) {
+	controller := gomock.NewController(t)
+	defer controller.Finish()
+
+	mockDB := NewMockDB(controller)
+	mockRedis := NewMockRedis(controller)
+
+	mockDB.EXPECT().Close().Return(nil)
+	mockRedis.EXPECT().Close(gomock.Any()).Return(nil)
+
+	configs := map[string]string{
+		"PUBSUB_BACKEND": "MQTT",
+	}
+	c := NewContainer(config.NewMockConfig(configs))
+	c.SQL = mockDB
+	c.Redis = mockRedis
+
+	assert.NotNil(t, c.PubSub)
+
+	err := c.Close(context.Background())
+	assert.NoError(t, err)
 }

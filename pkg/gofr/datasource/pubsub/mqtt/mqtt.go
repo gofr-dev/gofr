@@ -19,6 +19,7 @@ import (
 const (
 	publicBroker  = "broker.hivemq.com"
 	messageBuffer = 10
+	closeTimeout  = 250
 )
 
 var errClientNotConnected = errors.New("client not connected")
@@ -324,6 +325,8 @@ func getHandler(subscribeFunc SubscribeFunc) func(client mqtt.Client, msg mqtt.M
 
 func (m *MQTT) Unsubscribe(topic string) error {
 	m.mu.RLock()
+	defer m.mu.RUnlock()
+
 	token := m.Client.Unsubscribe(topic)
 	token.Wait()
 
@@ -338,19 +341,25 @@ func (m *MQTT) Unsubscribe(topic string) error {
 		close(sub.msgs)
 		delete(m.subscriptions, topic)
 	}
-	m.mu.RUnlock()
+
+	return nil
+}
+
+func (m *MQTT) Close(_ context.Context) error {
+	m.Client.Disconnect(closeTimeout)
 
 	return nil
 }
 
 func (m *MQTT) Disconnect(waitTime uint) {
 	m.mu.RLock()
+	defer m.mu.RUnlock()
+
 	for topic := range m.subscriptions {
 		_ = m.Unsubscribe(topic)
 	}
 
 	m.Client.Disconnect(waitTime)
-	m.mu.RUnlock()
 }
 
 func (m *MQTT) Ping() error {
@@ -366,10 +375,11 @@ func (m *MQTT) Ping() error {
 func createReconnectHandler(mu *sync.RWMutex, config *Config, subs map[string]subscription) func(c mqtt.Client) {
 	return func(c mqtt.Client) {
 		mu.RLock()
+		defer mu.RUnlock()
+
 		for k, v := range subs {
 			c.Subscribe(k, config.QoS, v.handler)
 		}
-		mu.RUnlock()
 	}
 }
 

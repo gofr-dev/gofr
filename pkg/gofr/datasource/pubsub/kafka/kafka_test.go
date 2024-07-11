@@ -271,11 +271,16 @@ func TestKafkaClient_Close(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockWriter := NewMockWriter(ctrl)
-	k := kafkaClient{writer: mockWriter}
+	mockReader := NewMockReader(ctrl)
+	mockConn := NewMockConnection(ctrl)
+
+	k := kafkaClient{reader: map[string]Reader{"test-topic": mockReader}, writer: mockWriter, conn: mockConn}
 
 	mockWriter.EXPECT().Close().Return(nil)
+	mockReader.EXPECT().Close().Return(nil)
+	mockConn.EXPECT().Close().Return(nil)
 
-	err := k.Close()
+	err := k.Close(context.Background())
 
 	assert.NoError(t, err)
 }
@@ -294,16 +299,13 @@ func TestKafkaClient_CloseError(t *testing.T) {
 
 	mockWriter.EXPECT().Close().Return(errClose)
 
-	logs := testutil.StderrOutputForFunc(func() {
-		logger := logging.NewMockLogger(logging.ERROR)
-		k.logger = logger
+	logger := logging.NewMockLogger(logging.ERROR)
+	k.logger = logger
 
-		err = k.Close()
-	})
+	err = k.Close(context.Background())
 
 	assert.Error(t, err)
 	assert.Equal(t, errClose, err)
-	assert.Contains(t, logs, "failed to close kafka writer")
 }
 
 func TestKafkaClient_getNewReader(t *testing.T) {

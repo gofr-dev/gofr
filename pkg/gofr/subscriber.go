@@ -24,39 +24,63 @@ func newSubscriptionManager(c *container.Container) SubscriptionManager {
 	}
 }
 
-func (s *SubscriptionManager) startSubscriber(topic string, handler SubscribeFunc) {
+func (s *SubscriptionManager) startSubscriber(ctx context.Context, topic string, handler SubscribeFunc) error {
 	// continuously subscribe in an infinite loop
 	for {
-		msg, err := s.container.GetSubscriber().Subscribe(context.Background(), topic)
-		if msg == nil {
-			continue
-		}
-
-		if errors.Is(err, kafka.ErrConsumerGroupNotProvided) {
-			s.container.Logger.Errorf("cannot subscribe as consumer_id is not provided in configs")
-			return
-		} else if err != nil {
-			s.container.Logger.Errorf("error while reading from topic %v, err: %v", topic, err.Error())
-			continue
-		}
-
-		ctx := newContext(nil, msg, s.container)
-		err = func(ctx *Context) error {
-			// TODO : Move panic recovery at central location which will manage for all the different cases.
-			defer func() {
-				panicRecovery(recover(), ctx.Logger)
-			}()
-
-			return handler(ctx)
-		}(ctx)
-
-		// commit the message if the subscription function does not return error
-		if err == nil {
-			msg.Commit()
-		} else {
-			s.container.Logger.Errorf("error in handler for topic %s: %v", topic, err)
+		select {
+		case <-ctx.Done():
+			s.container.Logger.Infof("shutting down subscriber for topic %s", topic)
+			return nil
+		default:
+			err := s.handleSubscription(ctx, topic, handler)
+			if err != nil {
+				return err
+			}
 		}
 	}
+}
+
+func (s *SubscriptionManager) handleSubscription(parentCtx context.Context, topic string, handler SubscribeFunc) error {
+	ctx, done := context.WithCancel(parentCtx)
+	defer done()
+
+	msg, err := s.container.GetSubscriber().Subscribe(ctx, topic)
+
+	if errors.Is(err, kafka.ErrConsumerGroupNotProvided) {
+		s.container.Logger.Error("cannot subscribe as consumer_id is not provided in configs")
+		return err
+	}
+
+	if err != nil {
+		s.container.Logger.Errorf("error while reading from topic %v, err: %v", topic, err.Error())
+		return nil
+	}
+
+	if msg == nil {
+		return nil
+	}
+
+	msgCtx := newContext(nil, msg, s.container)
+	err = func(ctx *Context) error {
+		// TODO : Move panic recovery at central location which will manage for all the different cases.
+		defer func() {
+			panicRecovery(recover(), ctx.Logger)
+		}()
+
+		return handler(ctx)
+	}(msgCtx)
+
+	// commit the message if the subscription function does not return error
+	if err != nil {
+		s.container.Logger.Errorf("error in handler for topic %s: %v", topic, err)
+		return nil
+	}
+
+	if msg.Committer != nil {
+		msg.Commit()
+	}
+
+	return nil
 }
 
 type panicLog struct {

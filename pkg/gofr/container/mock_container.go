@@ -52,6 +52,9 @@ func NewMockContainer(t *testing.T) (*Container, Mocks) {
 		Mongo:      mongoMock,
 	}
 
+	sqlMock.EXPECT().Close().AnyTimes()
+	redisMock.EXPECT().Close(gomock.Any()).AnyTimes()
+
 	mockMetrics := NewMockMetrics(ctrl)
 	container.metricsManager = mockMetrics
 
@@ -83,3 +86,5 @@ func (*MockPubSub) Publish(_ context.Context, _ string, _ []byte) error {
 func (*MockPubSub) Subscribe(_ context.Context, _ string) (*pubsub.Message, error) {
 	return nil, nil
 }
+
+func (*MockPubSub) Close(_ context.Context) error { return nil }
