@@ -1,10 +1,11 @@
 package gofr
 
 import (
-	"testing"
-
+	"context"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc"
+	"testing"
+	"time"
 
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/logging"
@@ -50,4 +51,24 @@ func TestGRPC_ServerRun(t *testing.T) {
 
 		assert.Contains(t, out, tc.expLog, "TEST[%d], Failed.\n", i)
 	}
+}
+
+func TestGRPC_ServerShutdown(t *testing.T) {
+	c := container.Container{
+		Logger: logging.NewLogger(logging.DEBUG),
+	}
+
+	g := newGRPCServer(&c, 9999)
+
+	go g.Run(&c)
+
+	var errChan = make(chan error, 1)
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		errChan <- g.Shutdown(context.Background())
+	}()
+
+	err := <-errChan
+
+	assert.NoError(t, err, "TEST Failed.\n")
 }
