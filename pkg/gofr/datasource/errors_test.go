@@ -22,7 +22,7 @@ func Test_ErrorDB(t *testing.T) {
 	}
 
 	for i, tc := range tests {
-		assert.Equal(t, tc.err.Error(), tc.expectedMsg, "TEST[%d], Failed.\n%s", i, tc.desc)
+		assert.ErrorContains(t, tc.err, tc.expectedMsg, "TEST[%d], Failed.\n%s", i, tc.desc)
 	}
 }
 

@@ -231,6 +231,5 @@ func Test_bindMultipart_Fail_ParseMultiPart(t *testing.T) {
 	_, _ = r.req.MultipartReader()
 
 	err := r.bindMultipart(&input2)
-	assert.NotNil(t, err)
-	assert.Equal(t, "http: multipart handled by MultipartReader", err.Error())
+	assert.ErrorContains(t, err, "http: multipart handled by MultipartReader")
 }
