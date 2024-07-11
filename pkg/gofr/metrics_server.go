@@ -1,6 +1,7 @@
 package gofr
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"time"
@@ -11,6 +12,7 @@ import (
 
 type metricServer struct {
 	port int
+	srvr *http.Server
 }
 
 func newMetricServer(port int) *metricServer {
@@ -18,17 +20,32 @@ func newMetricServer(port int) *metricServer {
 }
 
 func (m *metricServer) Run(c *container.Container) {
-	var srv *http.Server
+	if m.srvr != nil {
+		c.Logf("Server already running on port: %d", m.port)
+
+		return
+	}
 
 	if m != nil {
 		c.Logf("Starting metrics server on port: %d", m.port)
 
-		srv = &http.Server{
+		m.srvr = &http.Server{
 			Addr:              fmt.Sprintf(":%d", m.port),
 			Handler:           metrics.GetHandler(c.Metrics()),
 			ReadHeaderTimeout: 5 * time.Second,
 		}
 
-		c.Error(srv.ListenAndServe())
+		c.Error(m.srvr.ListenAndServe())
 	}
+}
+
+func (m *metricServer) Shutdown(ctx context.Context) error {
+	if m.srvr == nil {
+		return nil
+	}
+
+	err := m.srvr.Shutdown(ctx)
+	m.srvr = nil
+
+	return err
 }
