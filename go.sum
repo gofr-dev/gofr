@@ -266,6 +266,8 @@ go.uber.org/multierr v1.6.0/go.mod h1:cdWPpRnG4AhwMwsgIHip0KRBQjJy5kYEpYjJxpXp9i
 go.uber.org/zap v1.18.1/go.mod h1:xg/QME4nWcxGxrpdeYfq7UvYrLh66cuVKdrbD1XF/NI=
 gofr.dev/pkg/gofr/datasource/kv-store/badger v0.0.0-20240711074215-0555e6b251da h1:ih5vhCTZq94G9iRjRpUxMuJu5KB9ESrAsq1Hn2S6Ruk=
 gofr.dev/pkg/gofr/datasource/kv-store/badger v0.0.0-20240711074215-0555e6b251da/go.mod h1:aDtnh+9p9KpQbGsf3dV38bJXdHeHXN5OZeOJNqM7YfM=
+gofr.dev/pkg/gofr/datasource/kv-store/badger v0.0.0-20240711075531-47bf06cd6e81 h1:VnwZPQAkpEMZfQG7df/8XEnQ0hjNvB0TUzf7rkKMv3A=
+gofr.dev/pkg/gofr/datasource/kv-store/badger v0.0.0-20240711075531-47bf06cd6e81/go.mod h1:aDtnh+9p9KpQbGsf3dV38bJXdHeHXN5OZeOJNqM7YfM=
 golang.org/x/crypto v0.0.0-20190308221718-c2843e01d9a2/go.mod h1:djNgcEr1/C05ACkg1iLfiJU5Ep61QUkGW8qpdssI0+w=
 golang.org/x/crypto v0.0.0-20191011191535-87dc89f01550/go.mod h1:yigFU9vqHzYiE8UmvKecakEJjdnWj3jj499lnFckfCI=
 golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9/go.mod h1:LzIPMQfyMNhhGPhUkYOs5KpL4U8rLKemX1yGLhDgUto=

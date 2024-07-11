@@ -47,8 +47,6 @@ func (c *client) Connect() {
 		log.Fatal(err)
 	}
 
-	defer db.Close()
-
 	c.db = db
 }
 
