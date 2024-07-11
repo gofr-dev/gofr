@@ -35,7 +35,7 @@ require (
 	go.opentelemetry.io/otel/sdk/metric v1.28.0
 	go.opentelemetry.io/otel/trace v1.28.0
 	go.uber.org/mock v0.4.0
-	gofr.dev/pkg/gofr/datasource/kv-store/badger v0.0.0-20240711075531-47bf06cd6e81
+	gofr.dev/pkg/gofr/datasource/kv-store/badger v0.0.0-20240711075951-9aba1e815e9c
 	golang.org/x/oauth2 v0.21.0
 	golang.org/x/term v0.22.0
 	golang.org/x/text v0.16.0

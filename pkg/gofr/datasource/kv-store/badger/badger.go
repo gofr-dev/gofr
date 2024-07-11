@@ -61,7 +61,7 @@ func (c *client) Get(_ context.Context, key string) (string, error) {
 		return "", err
 	}
 
-	_, err = item.ValueCopy(value)
+	value, err = item.ValueCopy(nil)
 	if err != nil {
 		return "", err
 	}
