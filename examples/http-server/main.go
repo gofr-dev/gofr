@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"gofr.dev/pkg/gofr/datasource/kv-store/badger"
 	"io"
 	"sync"
 	"time"
@@ -18,8 +19,7 @@ func main() {
 	// Create a new application
 	a := gofr.New()
 
-	//HTTP service with default health check endpoint
-	a.AddHTTPService("anotherService", "http://localhost:9000")
+	a.AddKVStore(badger.New(badger.Configs{"gofr-http"}))
 
 	// Add all the routes
 	a.GET("/hello", HelloHandler)

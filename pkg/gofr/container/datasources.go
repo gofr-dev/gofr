@@ -205,5 +205,11 @@ type KVStore interface {
 	Set(ctx context.Context, key string, value string) error
 	Delete(ctx context.Context, key string) error
 
-	HealthCheck(ctx context.Context) (any, error)
+	HealthChecker
+}
+
+type KVStoreProvider interface {
+	KVStore
+
+	provider
 }
