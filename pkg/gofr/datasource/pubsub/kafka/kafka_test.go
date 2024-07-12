@@ -141,7 +141,7 @@ func TestKafkaClient_Publish(t *testing.T) {
 		err = k.Publish(ctx, "test", []byte(`hello`))
 	})
 
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Contains(t, logs, "KAFKA")
 	assert.Contains(t, logs, "PUB")
 	assert.Contains(t, logs, "hello")
@@ -195,7 +195,7 @@ func TestKafkaClient_SubscribeSuccess(t *testing.T) {
 		msg, err = k.Subscribe(ctx, "test")
 	})
 
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.NotNil(t, msg.Context())
 	assert.Equal(t, expMessage.Value, msg.Value)
 	assert.Equal(t, expMessage.Topic, msg.Topic)
@@ -260,7 +260,7 @@ func TestKafkaClient_SubscribeError(t *testing.T) {
 		msg, err = k.Subscribe(ctx, "test")
 	})
 
-	assert.NotNil(t, err)
+	assert.Error(t, err)
 	assert.Equal(t, errSub, err)
 	assert.Nil(t, msg)
 	assert.Contains(t, logs, "failed to read message from kafka topic test: error while subscribing")
@@ -277,7 +277,7 @@ func TestKafkaClient_Close(t *testing.T) {
 
 	err := k.Close()
 
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 }
 
 func TestKafkaClient_CloseError(t *testing.T) {
@@ -301,7 +301,7 @@ func TestKafkaClient_CloseError(t *testing.T) {
 		err = k.Close()
 	})
 
-	assert.NotNil(t, err)
+	assert.Error(t, err)
 	assert.Equal(t, errClose, err)
 	assert.Contains(t, logs, "failed to close kafka writer")
 }
@@ -403,7 +403,7 @@ func TestKafkaClient_Controller(t *testing.T) {
 	broker, err := client.Controller()
 
 	assert.NotNil(t, broker)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 }
 
 func TestKafkaClient_DeleteTopic(t *testing.T) {
@@ -419,7 +419,7 @@ func TestKafkaClient_DeleteTopic(t *testing.T) {
 
 	err := client.DeleteTopic(context.Background(), "test")
 
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 }
 
 func TestKafkaClient_CreateTopic(t *testing.T) {

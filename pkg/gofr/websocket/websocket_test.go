@@ -36,7 +36,7 @@ func TestConnection_Bind_Success(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				conn, err := upgrader.Upgrade(w, r, nil)
-				assert.Nil(t, err)
+				assert.NoError(t, err)
 				defer conn.Close()
 
 				wsConn := &Connection{Conn: conn}
@@ -50,7 +50,7 @@ func TestConnection_Bind_Success(t *testing.T) {
 				}
 
 				err = wsConn.Bind(data)
-				assert.Nil(t, err)
+				assert.NoError(t, err)
 				assert.Equal(t, tt.expectedData, dereference(data))
 			}))
 			defer server.Close()
@@ -58,13 +58,13 @@ func TestConnection_Bind_Success(t *testing.T) {
 			url := "ws" + server.URL[len("http"):] + "/ws"
 			dialer := websocket.DefaultDialer
 			conn, resp, err := dialer.Dial(url, nil)
-			assert.Nil(t, err)
+			assert.NoError(t, err)
 
 			defer conn.Close()
 			defer resp.Body.Close()
 
 			err = conn.WriteMessage(websocket.TextMessage, tt.inputMessage)
-			assert.Nil(t, err)
+			assert.NoError(t, err)
 		})
 
 		// waiting for previous connection to close and test for new testcase.
@@ -113,12 +113,12 @@ func Test_Upgrade(t *testing.T) {
 	wsUpgrader := WSUpgrader{Upgrader: mockUpgrader}
 
 	req, err := http.NewRequestWithContext(context.TODO(), http.MethodGet, "/", http.NoBody)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	w := httptest.NewRecorder()
 
 	conn, err := wsUpgrader.Upgrade(w, req, nil)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	assert.Equal(t, expectedConn, conn)
 }

@@ -257,7 +257,7 @@ func (d *DB) Select(ctx context.Context, data interface{}, query string, args ..
 	}
 }
 
-func (d *DB) rowsToStruct(rows *sql.Rows, vo reflect.Value) {
+func (*DB) rowsToStruct(rows *sql.Rows, vo reflect.Value) {
 	v := vo
 	if vo.Kind() == reflect.Ptr {
 		v = vo.Elem()

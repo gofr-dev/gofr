@@ -25,7 +25,7 @@ type Options func(c *route)
 
 type ErrCommandNotFound struct{}
 
-func (e ErrCommandNotFound) Error() string {
+func (ErrCommandNotFound) Error() string {
 	return "No Command Found!"
 }
 

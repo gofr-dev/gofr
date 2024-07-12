@@ -44,13 +44,13 @@ func TestGRPCServer(t *testing.T) {
 	// case of empty request
 	resp, err := client.SayHello(context.Background(), nil)
 	assert.Equal(t, "Hello World!", resp.Message)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	// Test context cancellation
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	_, err = client.SayHello(ctx, &grpcExample.HelloRequest{Name: "Test"})
-	assert.Equal(t, err.Error(), "rpc error: code = Canceled desc = context canceled")
+	assert.Equal(t, "rpc error: code = Canceled desc = context canceled", err.Error())
 
 }
 

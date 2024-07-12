@@ -128,10 +128,10 @@ func TestHandler_faviconHandlerError(t *testing.T) {
 
 	assert.NoError(t, err, "TEST Failed.\n")
 
-	assert.Equal(t, data, response.File{
+	assert.Equal(t, response.File{
 		Content:     d,
 		ContentType: "image/x-icon",
-	}, "TEST Failed.\n")
+	}, data, "TEST Failed.\n")
 }
 
 func TestHandler_faviconHandler(t *testing.T) {
@@ -144,10 +144,10 @@ func TestHandler_faviconHandler(t *testing.T) {
 
 	assert.NoError(t, err, "TEST Failed.\n")
 
-	assert.Equal(t, data, response.File{
+	assert.Equal(t, response.File{
 		Content:     d,
 		ContentType: "image/x-icon",
-	}, "TEST Failed.\n")
+	}, data, "TEST Failed.\n")
 }
 
 func TestHandler_catchAllHandler(t *testing.T) {
@@ -157,7 +157,7 @@ func TestHandler_catchAllHandler(t *testing.T) {
 
 	data, err := catchAllHandler(&c)
 
-	assert.Equal(t, data, nil, "TEST Failed.\n")
+	assert.Nil(t, data, "TEST Failed.\n")
 
 	assert.Equal(t, gofrHTTP.ErrorInvalidRoute{}, err, "TEST Failed.\n")
 }
@@ -165,7 +165,7 @@ func TestHandler_catchAllHandler(t *testing.T) {
 func TestHandler_livelinessHandler(t *testing.T) {
 	resp, err := liveHandler(&Context{})
 
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Contains(t, fmt.Sprint(resp), "UP")
 }
 
@@ -188,6 +188,6 @@ func TestHandler_healthHandler(t *testing.T) {
 
 	h, err := healthHandler(ctx)
 
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.NotNil(t, h)
 }

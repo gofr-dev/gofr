@@ -57,7 +57,7 @@ func Test_MetricsGetHandler_SystemMetricsRegistered(t *testing.T) {
 
 	resp, err := server.Client().Do(req)
 
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	body, _ := io.ReadAll(resp.Body)
 	defer resp.Body.Close()

@@ -157,7 +157,7 @@ func (cb *circuitBreaker) tryCircuitRecovery() bool {
 	return false
 }
 
-func (cb *circuitBreaker) handleCircuitBreakerResult(result interface{}, err error) (*http.Response, error) {
+func (*circuitBreaker) handleCircuitBreakerResult(result interface{}, err error) (*http.Response, error) {
 	if err != nil {
 		return nil, err
 	}

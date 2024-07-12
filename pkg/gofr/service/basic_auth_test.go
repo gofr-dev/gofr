@@ -43,13 +43,13 @@ func TestBasicAuthProvider_Get(t *testing.T) {
 
 	// Make the GET request
 	resp, err := httpService.Get(context.Background(), path, queryParams)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	defer resp.Body.Close()
 
 	// Check response status code and body (if applicable)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	bodyBytes, _ := io.ReadAll(resp.Body)
 
@@ -79,13 +79,13 @@ func TestBasicAuthProvider_Post(t *testing.T) {
 
 	// Make the POST request
 	resp, err := httpService.Post(context.Background(), path, queryParams, body)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	defer resp.Body.Close()
 
 	// Check response status code (no body assertion for POST)
 	assert.Equal(t, http.StatusCreated, resp.StatusCode)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 }
 
 func TestBasicAuthProvider_Put(t *testing.T) {
@@ -111,13 +111,13 @@ func TestBasicAuthProvider_Put(t *testing.T) {
 
 	// Make the PUT request
 	resp, err := httpService.Put(context.Background(), path, queryParams, body)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	defer resp.Body.Close()
 
 	// Check response status code
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 }
 
 func TestBasicAuthProvider_Patch(t *testing.T) {
@@ -143,13 +143,13 @@ func TestBasicAuthProvider_Patch(t *testing.T) {
 
 	// Make the PATCH request
 	resp, err := httpService.Patch(context.Background(), path, queryParams, body)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	defer resp.Body.Close()
 
 	// Check response status code
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 }
 
 func TestBasicAuthProvider_Delete(t *testing.T) {
@@ -174,13 +174,13 @@ func TestBasicAuthProvider_Delete(t *testing.T) {
 
 	// Make the DELETE request
 	resp, err := httpService.Delete(context.Background(), path, body)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	defer resp.Body.Close()
 
 	// Check response status code (no body assertion for DELETE)
 	assert.Equal(t, http.StatusNoContent, resp.StatusCode)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 }
 
 func checkAuthHeaders(t *testing.T, r *http.Request) {
@@ -211,5 +211,5 @@ func Test_addAuthorizationHeader_Error(t *testing.T) {
 	}
 
 	expectedErrMsg := "illegal base64 data at input byte 7"
-	assert.Equal(t, expectedErrMsg, err.Error(), "Test_addAuthorizationHeader_Error Failed!")
+	assert.ErrorContains(t, err, expectedErrMsg, "Test_addAuthorizationHeader_Error Failed!")
 }

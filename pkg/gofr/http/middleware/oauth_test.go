@@ -37,7 +37,7 @@ func TestOAuthSuccess(t *testing.T) {
 
 	resp, err := client.Do(req)
 
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
 	resp.Body.Close()
@@ -61,7 +61,7 @@ func TestOAuthInvalidTokenFormat(t *testing.T) {
 
 	respBody, _ := io.ReadAll(resp.Body)
 
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 	assert.Contains(t, string(respBody), `Authorization header format must be Bearer {token}`)
 
@@ -85,7 +85,7 @@ func TestOAuthEmptyAuthHeader(t *testing.T) {
 
 	respBody, _ := io.ReadAll(resp.Body)
 
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 	assert.Contains(t, string(respBody), `Authorization header is required`)
 
@@ -110,7 +110,7 @@ func TestOAuthMalformedToken(t *testing.T) {
 
 	respBody, _ := io.ReadAll(resp.Body)
 
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 	assert.Contains(t, string(respBody), `token is malformed: token contains an invalid number of segments`)
 
@@ -143,7 +143,7 @@ func TestOAuthJWKSKeyNotFound(t *testing.T) {
 
 	respBody, _ := io.ReadAll(resp.Body)
 
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 	assert.Contains(t, string(respBody), `token is unverifiable: error while executing keyfunc`)
 
@@ -198,7 +198,7 @@ func TestOAuthHTTPCallFailed(t *testing.T) {
 
 	resp, err := client.Do(req)
 
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 
 	resp.Body.Close()
@@ -228,7 +228,7 @@ func TestOAuthReadError(t *testing.T) {
 
 	resp, err := client.Do(req)
 
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 
 	resp.Body.Close()
@@ -258,7 +258,7 @@ func TestOAuthJSONUnmarshalError(t *testing.T) {
 
 	resp, err := client.Do(req)
 
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 
 	resp.Body.Close()
@@ -267,7 +267,7 @@ func TestOAuthJSONUnmarshalError(t *testing.T) {
 type MockProvider struct {
 }
 
-func (m *MockProvider) GetWithHeaders(context.Context, string, map[string]interface{},
+func (*MockProvider) GetWithHeaders(context.Context, string, map[string]interface{},
 	map[string]string) (*http.Response, error) {
 	// Marshal the JSON body
 	responseBody := map[string]interface{}{
@@ -305,7 +305,7 @@ func (m *MockProvider) GetWithHeaders(context.Context, string, map[string]interf
 type MockErrorProvider struct {
 }
 
-func (m *MockErrorProvider) GetWithHeaders(context.Context, string, map[string]interface{},
+func (*MockErrorProvider) GetWithHeaders(context.Context, string, map[string]interface{},
 	map[string]string) (*http.Response, error) {
 	// Marshal the JSON body
 	return nil, oauthError{msg: "response error"}
@@ -322,13 +322,13 @@ func (o oauthError) Error() string {
 // CustomReader simulates an error during the Read operation.
 type CustomReader struct{}
 
-func (r *CustomReader) Read([]byte) (int, error) {
+func (*CustomReader) Read([]byte) (int, error) {
 	return 0, oauthError{msg: "read error"}
 }
 
 type MockReaderErrorProvider struct{}
 
-func (m *MockReaderErrorProvider) GetWithHeaders(context.Context, string, map[string]interface{},
+func (*MockReaderErrorProvider) GetWithHeaders(context.Context, string, map[string]interface{},
 	map[string]string) (*http.Response, error) {
 	// Create a custom reader that returns an error
 	body := &CustomReader{}
@@ -344,7 +344,7 @@ func (m *MockReaderErrorProvider) GetWithHeaders(context.Context, string, map[st
 
 type MockJSONResponseErrorProvider struct{}
 
-func (m *MockJSONResponseErrorProvider) GetWithHeaders(context.Context, string, map[string]interface{},
+func (*MockJSONResponseErrorProvider) GetWithHeaders(context.Context, string, map[string]interface{},
 	map[string]string) (*http.Response, error) {
 	// Create a body with invalid JSON
 	body := strings.NewReader("invalid JSON")
