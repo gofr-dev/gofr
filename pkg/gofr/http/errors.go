@@ -20,7 +20,7 @@ func (e ErrorEntityNotFound) Error() string {
 	return fmt.Sprintf("No entity found with %s: %s", e.Name, e.Value)
 }
 
-func (e ErrorEntityNotFound) StatusCode() int {
+func (ErrorEntityNotFound) StatusCode() int {
 	return http.StatusNotFound
 }
 
@@ -28,11 +28,11 @@ func (e ErrorEntityNotFound) StatusCode() int {
 type ErrorEntityAlreadyExist struct {
 }
 
-func (e ErrorEntityAlreadyExist) Error() string {
+func (ErrorEntityAlreadyExist) Error() string {
 	return alreadyExistsMessage
 }
 
-func (e ErrorEntityAlreadyExist) StatusCode() int {
+func (ErrorEntityAlreadyExist) StatusCode() int {
 	return http.StatusConflict
 }
 
@@ -45,7 +45,7 @@ func (e ErrorInvalidParam) Error() string {
 	return fmt.Sprintf("'%d' invalid parameter(s): %s", len(e.Params), strings.Join(e.Params, ", "))
 }
 
-func (e ErrorInvalidParam) StatusCode() int {
+func (ErrorInvalidParam) StatusCode() int {
 	return http.StatusBadRequest
 }
 
@@ -58,39 +58,39 @@ func (e ErrorMissingParam) Error() string {
 	return fmt.Sprintf("'%d' missing parameter(s): %s", len(e.Params), strings.Join(e.Params, ", "))
 }
 
-func (e ErrorMissingParam) StatusCode() int {
+func (ErrorMissingParam) StatusCode() int {
 	return http.StatusBadRequest
 }
 
 // ErrorInvalidRoute represents an error for invalid route in a request.
 type ErrorInvalidRoute struct{}
 
-func (e ErrorInvalidRoute) Error() string {
+func (ErrorInvalidRoute) Error() string {
 	return "route not registered"
 }
 
-func (e ErrorInvalidRoute) StatusCode() int {
+func (ErrorInvalidRoute) StatusCode() int {
 	return http.StatusNotFound
 }
 
 // ErrorRequestTimeout represents an error for request which timed out.
 type ErrorRequestTimeout struct{}
 
-func (e ErrorRequestTimeout) Error() string {
+func (ErrorRequestTimeout) Error() string {
 	return "request timed out"
 }
 
-func (e ErrorRequestTimeout) StatusCode() int {
+func (ErrorRequestTimeout) StatusCode() int {
 	return http.StatusRequestTimeout
 }
 
 // ErrorPanicRecovery represents an error for request which panicked.
 type ErrorPanicRecovery struct{}
 
-func (e ErrorPanicRecovery) Error() string {
+func (ErrorPanicRecovery) Error() string {
 	return http.StatusText(http.StatusInternalServerError)
 }
 
-func (e ErrorPanicRecovery) StatusCode() int {
+func (ErrorPanicRecovery) StatusCode() int {
 	return http.StatusInternalServerError
 }

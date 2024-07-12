@@ -58,7 +58,7 @@ func TestNewZipError(t *testing.T) {
 	z, err := NewZip(input)
 
 	assert.Nil(t, z)
-	assert.NotNil(t, err)
+	assert.Error(t, err)
 	assert.Equal(t, zip.ErrFormat, err)
 }
 
@@ -140,6 +140,6 @@ func (m *mockReadCloser) Read(p []byte) (int, error) {
 	return m.Buffer.Read(p)
 }
 
-func (m *mockReadCloser) Close() error {
+func (*mockReadCloser) Close() error {
 	return nil
 }

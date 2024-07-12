@@ -13,60 +13,60 @@ import (
 
 type mockHTTP struct{}
 
-func (m *mockHTTP) HealthCheck(_ context.Context) *Health {
+func (*mockHTTP) HealthCheck(_ context.Context) *Health {
 	return &Health{
 		Status:  "UP",
 		Details: map[string]interface{}{"host": "http://test.com"},
 	}
 }
 
-func (m *mockHTTP) getHealthResponseForEndpoint(_ context.Context, _ string, _ int) *Health {
+func (*mockHTTP) getHealthResponseForEndpoint(_ context.Context, _ string, _ int) *Health {
 	return &Health{
 		Status:  "UP",
 		Details: map[string]interface{}{"host": "http://test.com"},
 	}
 }
 
-func (m *mockHTTP) Get(_ context.Context, _ string, _ map[string]interface{}) (*http.Response, error) {
+func (*mockHTTP) Get(_ context.Context, _ string, _ map[string]interface{}) (*http.Response, error) {
 	return &http.Response{StatusCode: http.StatusOK, Body: http.NoBody}, nil
 }
 
-func (m *mockHTTP) GetWithHeaders(_ context.Context, _ string, _ map[string]interface{}, _ map[string]string) (*http.Response, error) {
+func (*mockHTTP) GetWithHeaders(_ context.Context, _ string, _ map[string]interface{}, _ map[string]string) (*http.Response, error) {
 	return &http.Response{StatusCode: http.StatusOK, Body: http.NoBody}, nil
 }
 
-func (m *mockHTTP) Post(_ context.Context, _ string, _ map[string]interface{}, _ []byte) (*http.Response, error) {
+func (*mockHTTP) Post(_ context.Context, _ string, _ map[string]interface{}, _ []byte) (*http.Response, error) {
 	return &http.Response{StatusCode: http.StatusCreated, Body: http.NoBody}, nil
 }
 
-func (m *mockHTTP) PostWithHeaders(_ context.Context, _ string, _ map[string]interface{}, _ []byte,
+func (*mockHTTP) PostWithHeaders(_ context.Context, _ string, _ map[string]interface{}, _ []byte,
 	_ map[string]string) (*http.Response, error) {
 	return &http.Response{StatusCode: http.StatusCreated, Body: http.NoBody}, nil
 }
 
-func (m *mockHTTP) Put(_ context.Context, _ string, _ map[string]interface{}, _ []byte) (*http.Response, error) {
+func (*mockHTTP) Put(_ context.Context, _ string, _ map[string]interface{}, _ []byte) (*http.Response, error) {
 	return &http.Response{StatusCode: http.StatusOK, Body: http.NoBody}, nil
 }
 
-func (m *mockHTTP) PutWithHeaders(_ context.Context, _ string, _ map[string]interface{}, _ []byte,
+func (*mockHTTP) PutWithHeaders(_ context.Context, _ string, _ map[string]interface{}, _ []byte,
 	_ map[string]string) (*http.Response, error) {
 	return &http.Response{StatusCode: http.StatusOK, Body: http.NoBody}, nil
 }
 
-func (m *mockHTTP) Patch(_ context.Context, _ string, _ map[string]interface{}, _ []byte) (*http.Response, error) {
+func (*mockHTTP) Patch(_ context.Context, _ string, _ map[string]interface{}, _ []byte) (*http.Response, error) {
 	return &http.Response{StatusCode: http.StatusOK, Body: http.NoBody}, nil
 }
 
-func (m *mockHTTP) PatchWithHeaders(_ context.Context, _ string, _ map[string]interface{}, _ []byte,
+func (*mockHTTP) PatchWithHeaders(_ context.Context, _ string, _ map[string]interface{}, _ []byte,
 	_ map[string]string) (*http.Response, error) {
 	return &http.Response{StatusCode: http.StatusOK, Body: http.NoBody}, nil
 }
 
-func (m *mockHTTP) Delete(_ context.Context, _ string, _ []byte) (*http.Response, error) {
+func (*mockHTTP) Delete(_ context.Context, _ string, _ []byte) (*http.Response, error) {
 	return &http.Response{StatusCode: http.StatusNoContent, Body: http.NoBody}, nil
 }
 
-func (m *mockHTTP) DeleteWithHeaders(_ context.Context, _ string, _ []byte, _ map[string]string) (*http.Response, error) {
+func (*mockHTTP) DeleteWithHeaders(_ context.Context, _ string, _ []byte, _ map[string]string) (*http.Response, error) {
 	return &http.Response{StatusCode: http.StatusNoContent, Body: http.NoBody}, nil
 }
 

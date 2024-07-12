@@ -31,7 +31,11 @@ import (
 	"gofr.dev/pkg/gofr/service"
 )
 
-const defaultPublicStaticDir = "static"
+const (
+	defaultPublicStaticDir = "static"
+	gofrTraceExporter      = "gofr"
+	gofrTracerURL          = "https://tracer.gofr.dev"
+)
 
 // App is the main application in the GoFr framework.
 type App struct {
@@ -293,8 +297,15 @@ func (a *App) Migrate(migrationsMap map[int64]migration.Migrate) {
 
 func (a *App) initTracer() {
 	traceExporter := a.Config.Get("TRACE_EXPORTER")
+	tracerURL := a.Config.Get("TRACER_URL")
+
+	// deprecated : tracer_host and tracer_port is deprecated and will be removed in upcoming versions
 	tracerHost := a.Config.Get("TRACER_HOST")
 	tracerPort := a.Config.GetOrDefault("TRACER_PORT", "9411")
+
+	if tracerURL == "" && tracerHost != "" && tracerPort != "" {
+		a.Logger().Warn("TRACER_HOST and TRACER_PORT are deprecated, use TRACER_URL instead")
+	}
 
 	tp := sdktrace.NewTracerProvider(
 		sdktrace.WithResource(resource.NewWithAttributes(
@@ -306,33 +317,8 @@ func (a *App) initTracer() {
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
 	otel.SetErrorHandler(&otelErrorHandler{logger: a.container.Logger})
 
-	const traceExporterGoFr = "gofr"
-
-	if (traceExporter != "" && tracerHost != "") || traceExporter == traceExporterGoFr {
-		var (
-			exporter sdktrace.SpanExporter
-			err      error
-		)
-
-		switch strings.ToLower(traceExporter) {
-		case "jaeger":
-			a.container.Log("Exporting traces to jaeger.")
-
-			exporter, err = otlptracegrpc.New(context.Background(), otlptracegrpc.WithInsecure(),
-				otlptracegrpc.WithEndpoint(fmt.Sprintf("%s:%s", tracerHost, tracerPort)))
-		case "zipkin":
-			a.container.Log("Exporting traces to zipkin.")
-
-			exporter, err = zipkin.New(
-				fmt.Sprintf("http://%s:%s/api/v2/spans", tracerHost, tracerPort),
-			)
-		case traceExporterGoFr:
-			exporter = NewExporter("https://tracer-api.gofr.dev/api/spans", logging.NewLogger(logging.INFO))
-
-			a.container.Log("Exporting traces to GoFr at https://tracer.gofr.dev")
-		default:
-			a.container.Error("unsupported trace exporter.")
-		}
+	if (traceExporter != "" && tracerHost != "") || tracerURL != "" || traceExporter == gofrTraceExporter {
+		exporter, err := a.getExporter(traceExporter, tracerHost, tracerPort, tracerURL)
 
 		if err != nil {
 			a.container.Error(err)
@@ -341,6 +327,57 @@ func (a *App) initTracer() {
 		batcher := sdktrace.NewBatchSpanProcessor(exporter)
 		tp.RegisterSpanProcessor(batcher)
 	}
+}
+
+func (a *App) getExporter(name, host, port, url string) (sdktrace.SpanExporter, error) {
+	var (
+		exporter sdktrace.SpanExporter
+		err      error
+	)
+
+	authHeader := a.Config.Get("TRACER_AUTH_KEY")
+
+	switch strings.ToLower(name) {
+	case "jaeger":
+		if url == "" {
+			url = fmt.Sprintf("%s:%s", host, port)
+		}
+
+		a.container.Logf("Exporting traces to jaeger at %s", url)
+
+		opts := []otlptracegrpc.Option{otlptracegrpc.WithInsecure(), otlptracegrpc.WithEndpoint(url)}
+
+		if authHeader != "" {
+			opts = append(opts, otlptracegrpc.WithHeaders(map[string]string{"Authorization": authHeader}))
+		}
+
+		exporter, err = otlptracegrpc.New(context.Background(), opts...)
+	case "zipkin":
+		if url == "" {
+			url = fmt.Sprintf("http://%s:%s/api/v2/spans", host, port)
+		}
+
+		a.container.Logf("Exporting traces to zipkin at %s", url)
+
+		var opts []zipkin.Option
+		if authHeader != "" {
+			opts = append(opts, zipkin.WithHeaders(map[string]string{"Authorization": authHeader}))
+		}
+
+		exporter, err = zipkin.New(url, opts...)
+	case gofrTraceExporter:
+		if url == "" {
+			url = "https://tracer-api.gofr.dev/api/spans"
+		}
+
+		a.container.Logf("Exporting traces to GoFr at %s", gofrTracerURL)
+
+		exporter = NewExporter(url, logging.NewLogger(logging.INFO))
+	default:
+		a.container.Errorf("unsupported trace exporter: %s", name)
+	}
+
+	return exporter, err
 }
 
 type otelErrorHandler struct {

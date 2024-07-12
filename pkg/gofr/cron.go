@@ -334,22 +334,22 @@ func (e errParsing) Error() string {
 type noopRequest struct {
 }
 
-func (b noopRequest) Context() context.Context {
+func (noopRequest) Context() context.Context {
 	return context.Background()
 }
 
-func (b noopRequest) Param(string) string {
+func (noopRequest) Param(string) string {
 	return ""
 }
 
-func (b noopRequest) PathParam(string) string {
+func (noopRequest) PathParam(string) string {
 	return ""
 }
 
-func (b noopRequest) HostName() string {
+func (noopRequest) HostName() string {
 	return "gofr"
 }
 
-func (b noopRequest) Bind(interface{}) error {
+func (noopRequest) Bind(interface{}) error {
 	return nil
 }
