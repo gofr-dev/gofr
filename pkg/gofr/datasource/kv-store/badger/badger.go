@@ -99,15 +99,15 @@ func (c *client) useTransaction(f func(txn *badger.Txn) error) error {
 }
 
 type Health struct {
-	Status  string                 `json:"status,omitempty"`
-	Details map[string]interface{} `json:"details,omitempty"`
+	Status  string         `json:"status,omitempty"`
+	Details map[string]any `json:"details,omitempty"`
 }
 
 var errStatusDown = errors.New("status down")
 
 func (c *client) HealthCheck(context.Context) (any, error) {
 	h := Health{
-		Details: make(map[string]interface{}),
+		Details: make(map[string]any),
 	}
 
 	h.Details["location"] = c.configs.DirPath
