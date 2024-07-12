@@ -2,14 +2,19 @@ package gofr
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
+
+	"golang.org/x/sync/errgroup"
 
 	"github.com/gorilla/mux"
 	"go.opentelemetry.io/otel"
@@ -34,6 +39,7 @@ import (
 const (
 	defaultPublicStaticDir = "static"
 	traceExporterGoFr      = "gofr"
+	shutDownTimeout        = 30 * time.Second
 )
 
 // App is the main application in the GoFr framework.
@@ -132,6 +138,18 @@ func (a *App) Run() {
 		a.cmd.Run(a.container)
 	}
 
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
+	go func() {
+		<-ctx.Done()
+
+		shutdownCtx, done := context.WithTimeout(context.WithoutCancel(ctx), shutDownTimeout)
+		defer done()
+
+		_ = a.Shutdown(shutdownCtx)
+	}()
+
 	wg := sync.WaitGroup{}
 
 	// Start Metrics Server
@@ -146,37 +164,7 @@ func (a *App) Run() {
 	// Start HTTP Server
 	if a.httpRegistered {
 		wg.Add(1)
-
-		// Add Default routes
-		a.add(http.MethodGet, "/.well-known/health", healthHandler)
-		a.add(http.MethodGet, "/.well-known/alive", liveHandler)
-		a.add(http.MethodGet, "/favicon.ico", faviconHandler)
-
-		if _, err := os.Stat("./static/openapi.json"); err == nil {
-			a.add(http.MethodGet, "/.well-known/openapi.json", OpenAPIHandler)
-			a.add(http.MethodGet, "/.well-known/swagger", SwaggerUIHandler)
-			a.add(http.MethodGet, "/.well-known/{name}", SwaggerUIHandler)
-		}
-
-		a.httpServer.router.PathPrefix("/").Handler(handler{
-			function:  catchAllHandler,
-			container: a.container,
-		})
-
-		var registeredMethods []string
-
-		_ = a.httpServer.router.Walk(func(route *mux.Route, _ *mux.Router, _ []*mux.Route) error {
-			met, _ := route.GetMethods()
-			for _, method := range met {
-				if !contains(registeredMethods, method) { // Check for uniqueness before adding
-					registeredMethods = append(registeredMethods, method)
-				}
-			}
-
-			return nil
-		})
-
-		*a.httpServer.router.RegisteredRoutes = registeredMethods
+		a.httpServerSetup()
 
 		go func(s *httpServer) {
 			defer wg.Done()
@@ -194,17 +182,93 @@ func (a *App) Run() {
 		}(a.grpcServer)
 	}
 
-	// If subscriber is registered, block main go routine to wait for subscriber to receive messages
-	if len(a.subscriptionManager.subscriptions) != 0 {
-		// Start subscribers concurrently using go-routines
-		for topic, handler := range a.subscriptionManager.subscriptions {
-			go a.subscriptionManager.startSubscriber(topic, handler)
-		}
+	go func() {
+		defer wg.Done()
 
-		wg.Add(1)
-	}
+		err := a.startSubscriptions(ctx)
+		if err != nil {
+			a.Logger().Errorf("Subscription Error : %v", err)
+		}
+	}()
 
 	wg.Wait()
+}
+
+// Shutdown stops the service(s) and close the application.
+func (a *App) Shutdown(ctx context.Context) error {
+	var err error
+	if a.httpServer != nil {
+		err = errors.Join(err, a.httpServer.Shutdown(ctx))
+	}
+
+	if a.grpcServer != nil {
+		err = errors.Join(err, a.grpcServer.Shutdown(ctx))
+	}
+
+	if a.metricServer != nil {
+		err = errors.Join(err, a.metricServer.Shutdown(ctx))
+	}
+
+	err = errors.Join(err, a.container.Close(ctx))
+	if err != nil {
+		a.container.Logger.Errorf("error while shutting down: %v", err)
+		return err
+	}
+
+	a.container.Logger.Infof("Application shutdown complete")
+
+	return err
+}
+
+func (a *App) httpServerSetup() {
+	// Add Default routes
+	a.add(http.MethodGet, "/.well-known/health", healthHandler)
+	a.add(http.MethodGet, "/.well-known/alive", liveHandler)
+	a.add(http.MethodGet, "/favicon.ico", faviconHandler)
+
+	if _, err := os.Stat("./static/openapi.json"); err == nil {
+		a.add(http.MethodGet, "/.well-known/openapi.json", OpenAPIHandler)
+		a.add(http.MethodGet, "/.well-known/swagger", SwaggerUIHandler)
+		a.add(http.MethodGet, "/.well-known/{name}", SwaggerUIHandler)
+	}
+
+	a.httpServer.router.PathPrefix("/").Handler(handler{
+		function:  catchAllHandler,
+		container: a.container,
+	})
+
+	var registeredMethods []string
+
+	_ = a.httpServer.router.Walk(func(route *mux.Route, _ *mux.Router, _ []*mux.Route) error {
+		met, _ := route.GetMethods()
+		for _, method := range met {
+			if !contains(registeredMethods, method) { // Check for uniqueness before adding
+				registeredMethods = append(registeredMethods, method)
+			}
+		}
+
+		return nil
+	})
+
+	*a.httpServer.router.RegisteredRoutes = registeredMethods
+}
+
+func (a *App) startSubscriptions(ctx context.Context) error {
+	if len(a.subscriptionManager.subscriptions) == 0 {
+		return nil
+	}
+
+	group := errgroup.Group{}
+	// Start subscribers concurrently using go-routines
+	for topic, handler := range a.subscriptionManager.subscriptions {
+		subscriberTopic, subscriberHandler := topic, handler
+
+		group.Go(func() error {
+			return a.subscriptionManager.startSubscriber(ctx, subscriberTopic, subscriberHandler)
+		})
+	}
+
+	return group.Wait()
 }
 
 // readConfig reads the configuration from the default location.
