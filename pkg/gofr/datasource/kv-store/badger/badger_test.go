@@ -21,6 +21,10 @@ func setupDB(t *testing.T) *client {
 	cl.UseMetrics(NewMockMetrics(ctrl))
 	cl.Connect()
 
+	t.Cleanup(func() {
+		os.RemoveAll("test_badger")
+	})
+
 	return cl
 }
 
@@ -52,7 +56,7 @@ func Test_ClientGetError(t *testing.T) {
 	val, err := cl.Get(context.Background(), "lkey")
 
 	assert.EqualError(t, err, "Key not found")
-	assert.Equal(t, "", val)
+	assert.Empty(t, val)
 }
 
 func Test_ClientDeleteSuccessError(t *testing.T) {

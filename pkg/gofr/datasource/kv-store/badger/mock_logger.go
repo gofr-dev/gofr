@@ -59,9 +59,7 @@ func (m *MockLogger) logf(level Level, format string, args ...interface{}) {
 		out = m.errOut
 	}
 
-	message := fmt.Sprintf(format, args...)
-
-	fmt.Fprintf(out, "%v\n", message)
+	fmt.Fprintf(out, format+"\n", args...)
 }
 
 func (m *MockLogger) log(level Level, args ...interface{}) {

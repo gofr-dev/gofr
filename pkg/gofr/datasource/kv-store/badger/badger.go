@@ -2,6 +2,7 @@ package badger
 
 import (
 	"context"
+	"errors"
 	"github.com/dgraph-io/badger/v4"
 )
 
@@ -21,14 +22,14 @@ func New(configs Configs) *client {
 }
 
 // UseLogger sets the logger for the MongoDB client which asserts the Logger interface.
-func (c *client) UseLogger(logger interface{}) {
+func (c *client) UseLogger(logger any) {
 	if l, ok := logger.(Logger); ok {
 		c.logger = l
 	}
 }
 
 // UseMetrics sets the metrics for the MongoDB client which asserts the Metrics interface.
-func (c *client) UseMetrics(metrics interface{}) {
+func (c *client) UseMetrics(metrics any) {
 	if m, ok := metrics.(Metrics); ok {
 		c.metrics = m
 	}
@@ -69,10 +70,22 @@ func (c *client) Get(_ context.Context, key string) (string, error) {
 }
 
 func (c *client) Set(_ context.Context, key string, value string) error {
+	return c.useTransaction(func(txn *badger.Txn) error {
+		return txn.Set([]byte(key), []byte(value))
+	})
+}
+
+func (c *client) Delete(_ context.Context, key string) error {
+	return c.useTransaction(func(txn *badger.Txn) error {
+		return txn.Delete([]byte(key))
+	})
+}
+
+func (c *client) useTransaction(f func(txn *badger.Txn) error) error {
 	txn := c.db.NewTransaction(true)
 	defer txn.Discard()
 
-	err := txn.Set([]byte(key), []byte(value))
+	err := f(txn)
 	if err != nil {
 		return err
 	}
@@ -85,19 +98,28 @@ func (c *client) Set(_ context.Context, key string, value string) error {
 	return nil
 }
 
-func (c *client) Delete(_ context.Context, key string) error {
-	txn := c.db.NewTransaction(true)
-	defer txn.Discard()
+type Health struct {
+	Status  string                 `json:"status,omitempty"`
+	Details map[string]interface{} `json:"details,omitempty"`
+}
 
-	err := txn.Delete([]byte(key))
-	if err != nil {
-		return err
+var errStatusDown = errors.New("status down")
+
+func (c *client) HealthCheck(context.Context) (any, error) {
+	h := Health{
+		Details: make(map[string]interface{}),
 	}
 
-	err = txn.Commit()
-	if err != nil {
-		return err
+	h.Details["location"] = c.configs.DirPath
+
+	closed := c.db.IsClosed()
+	if closed {
+		h.Status = "DOWN"
+
+		return &h, errStatusDown
 	}
 
-	return nil
+	h.Status = "UP"
+
+	return &h, nil
 }
