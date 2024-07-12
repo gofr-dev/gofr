@@ -30,7 +30,6 @@ func setupDB(t *testing.T) *client {
 
 func Test_ClientSet(t *testing.T) {
 	cl := setupDB(t)
-	defer os.RemoveAll("test_badger")
 
 	err := cl.Set(context.Background(), "lkey", "lvalue")
 
@@ -39,7 +38,6 @@ func Test_ClientSet(t *testing.T) {
 
 func Test_ClientGet(t *testing.T) {
 	cl := setupDB(t)
-	defer os.RemoveAll("test_badger")
 
 	err := cl.Set(context.Background(), "lkey", "lvalue")
 
@@ -51,7 +49,6 @@ func Test_ClientGet(t *testing.T) {
 
 func Test_ClientGetError(t *testing.T) {
 	cl := setupDB(t)
-	defer os.RemoveAll("test_badger")
 
 	val, err := cl.Get(context.Background(), "lkey")
 
@@ -61,9 +58,20 @@ func Test_ClientGetError(t *testing.T) {
 
 func Test_ClientDeleteSuccessError(t *testing.T) {
 	cl := setupDB(t)
-	defer os.RemoveAll("test_badger")
 
 	err := cl.Delete(context.Background(), "lkey")
 
 	assert.NoError(t, err)
+}
+
+func Test_ClientHealthCheck(t *testing.T) {
+	cl := setupDB(t)
+
+	val, err := cl.HealthCheck(context.Background())
+
+	assert.NoError(t, err)
+	assert.Equal(t, &Health{
+		Status:  "UP",
+		Details: map[string]interface{}{"location": "test_badger"},
+	}, val)
 }
