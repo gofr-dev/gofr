@@ -32,6 +32,8 @@ type Logger interface {
 	Warnf(format string, args ...interface{})
 	Error(args ...interface{})
 	Errorf(format string, args ...interface{})
+	Fatal(args ...interface{})
+	Fatalf(format string, args ...interface{})
 	ChangeLevel(level Level)
 }
 
@@ -128,6 +130,20 @@ func (l *logger) Error(args ...interface{}) {
 
 func (l *logger) Errorf(format string, args ...interface{}) {
 	l.logf(ERROR, format, args...)
+}
+
+func (l *logger) Fatal(args ...interface{}) {
+	l.logf(FATAL, "", args...)
+
+	//nolint:revive // exit status is 1 as it denotes failure as signified by Fatal log
+	os.Exit(1)
+}
+
+func (l *logger) Fatalf(format string, args ...interface{}) {
+	l.logf(FATAL, format, args...)
+
+	//nolint:revive // exit status is 1 as it denotes failure as signified by Fatal log
+	os.Exit(1)
 }
 
 func (l *logger) prettyPrint(e logEntry, out io.Writer) {
