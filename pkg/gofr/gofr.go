@@ -154,12 +154,14 @@ func (a *App) Run() {
 
 	// Start Metrics Server
 	// running metrics server before HTTP and gRPC
-	wg.Add(1)
+	if a.metricServer != nil {
+		wg.Add(1)
 
-	go func(m *metricServer) {
-		defer wg.Done()
-		m.Run(a.container)
-	}(a.metricServer)
+		go func(m *metricServer) {
+			defer wg.Done()
+			m.Run(a.container)
+		}(a.metricServer)
+	}
 
 	// Start HTTP Server
 	if a.httpRegistered {
@@ -182,6 +184,8 @@ func (a *App) Run() {
 		}(a.grpcServer)
 	}
 
+	wg.Add(1)
+
 	go func() {
 		defer wg.Done()
 
@@ -203,6 +207,10 @@ func (a *App) Shutdown(ctx context.Context) error {
 
 	if a.grpcServer != nil {
 		err = errors.Join(err, a.grpcServer.Shutdown(ctx))
+	}
+
+	if a.container != nil {
+		err = errors.Join(err, a.container.Close(ctx))
 	}
 
 	if a.metricServer != nil {

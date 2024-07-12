@@ -20,12 +20,6 @@ func newMetricServer(port int) *metricServer {
 }
 
 func (m *metricServer) Run(c *container.Container) {
-	if m.srvr != nil {
-		c.Logf("Server already running on port: %d", m.port)
-
-		return
-	}
-
 	if m != nil {
 		c.Logf("Starting metrics server on port: %d", m.port)
 
