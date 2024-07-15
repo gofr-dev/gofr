@@ -135,12 +135,14 @@ func (l *logger) Errorf(format string, args ...interface{}) {
 func (l *logger) Fatal(args ...interface{}) {
 	l.logf(FATAL, "", args...)
 
-	// exit status is 1 as it denotes failure as signified by Fatal log
+	//nolint:revive // exit status is 1 as it denotes failure as signified by Fatal log
 	os.Exit(1)
 }
 
 func (l *logger) Fatalf(format string, args ...interface{}) {
 	l.logf(FATAL, format, args...)
+
+	//nolint:revive // exit status is 1 as it denotes failure as signified by Fatal log
 	os.Exit(1)
 }
 

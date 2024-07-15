@@ -38,7 +38,7 @@ func TestCreateTableUser(t *testing.T) {
 		// Execute the migration
 		err = createTableUser().UP(datasource)
 
-		assert.Equal(t, err, tc.expectedError, "TEST[%d] Failed.\n%s", i, tc.desc)
+		assert.Equal(t, tc.expectedError, err, "TEST[%d] Failed.\n%s", i, tc.desc)
 		assert.NoError(t, mock.ExpectationsWereMet())
 	}
 }

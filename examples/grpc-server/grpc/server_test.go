@@ -23,7 +23,7 @@ func TestServer_SayHello(t *testing.T) {
 		req := &HelloRequest{Name: tc.input}
 		resp, err := s.SayHello(context.Background(), req)
 
-		assert.Nil(t, err, "TEST[%d], Failed.\n", i)
+		assert.NoError(t, err, "TEST[%d], Failed.\n", i)
 
 		assert.Equal(t, tc.resp, resp.Message, "TEST[%d], Failed.\n", i)
 	}

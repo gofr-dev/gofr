@@ -76,11 +76,11 @@ func (r *Request) PathParam(key string) string {
 	return r.params[key]
 }
 
-func (r *Request) Context() context.Context {
+func (*Request) Context() context.Context {
 	return context.Background()
 }
 
-func (r *Request) HostName() (hostname string) {
+func (*Request) HostName() (hostname string) {
 	hostname, _ = os.Hostname()
 
 	return hostname

@@ -18,7 +18,7 @@ func TestRedis_HealthHandlerError(t *testing.T) {
 
 	// Mock Redis server setup
 	s, err := miniredis.Run()
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	defer s.Close()
 
@@ -33,7 +33,7 @@ func TestRedis_HealthHandlerError(t *testing.T) {
 		"REDIS_PORT": s.Port(),
 	}), logging.NewMockLogger(logging.DEBUG), mockMetric)
 
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	health := client.HealthCheck()
 
@@ -55,6 +55,6 @@ func TestRedisHealth_WithoutRedis(t *testing.T) {
 
 	health := client.HealthCheck()
 
-	assert.Equal(t, health.Status, datasource.StatusDown)
-	assert.Equal(t, health.Details["error"], "redis not connected")
+	assert.Equal(t, datasource.StatusDown, health.Status)
+	assert.Equal(t, "redis not connected", health.Details["error"])
 }
