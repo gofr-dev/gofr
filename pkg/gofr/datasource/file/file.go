@@ -76,7 +76,7 @@ func (f file) createJSONReader() (datasource.RowReader, error) {
 }
 
 // Peek the first JSON token to determine its type.
-func (f file) peekJSONToken(decoder *json.Decoder) (json.Token, error) {
+func (file) peekJSONToken(decoder *json.Decoder) (json.Token, error) {
 	newDecoder := *decoder
 
 	token, err := newDecoder.Token()

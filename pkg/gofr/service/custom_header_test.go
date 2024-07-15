@@ -40,12 +40,12 @@ func Test_CustomDomainProvider_Get(t *testing.T) {
 		})
 
 	resp, err := customHeaderService.Get(context.Background(), "/path", queryParams)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	bodyBytes, _ := io.ReadAll(resp.Body)
 
@@ -73,12 +73,12 @@ func Test_CustomDomainProvider_Post(t *testing.T) {
 			}})
 
 	resp, err := customHeaderService.Post(context.Background(), "/path", queryParams, body)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusCreated, resp.StatusCode)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 }
 
 func TestCustomDomainProvider_Put(t *testing.T) {
@@ -102,12 +102,12 @@ func TestCustomDomainProvider_Put(t *testing.T) {
 			}})
 
 	resp, err := customHeaderService.Put(context.Background(), "/path", queryParams, body)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 }
 
 func TestCustomDomainProvider_Patch(t *testing.T) {
@@ -131,12 +131,12 @@ func TestCustomDomainProvider_Patch(t *testing.T) {
 			}})
 
 	resp, err := customHeaderService.Patch(context.Background(), "/path", queryParams, body)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 }
 
 func TestCustomDomainProvider_Delete(t *testing.T) {
@@ -159,10 +159,10 @@ func TestCustomDomainProvider_Delete(t *testing.T) {
 			}})
 
 	resp, err := customHeaderService.Delete(context.Background(), "/path", body)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusNoContent, resp.StatusCode)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 }

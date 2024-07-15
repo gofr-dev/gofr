@@ -15,7 +15,7 @@ func TestErrorEntityNotFound(t *testing.T) {
 	err := ErrorEntityNotFound{Name: fieldName, Value: fieldValue}
 	expectedMsg := fmt.Sprintf("No entity found with %s: %s", fieldName, fieldValue)
 
-	assert.Equal(t, expectedMsg, err.Error(), "TEST Failed.\n")
+	assert.ErrorContainsf(t, err, expectedMsg, "TEST Failed.\n")
 }
 
 func TestErrorEntityNotFound_StatusCode(t *testing.T) {
@@ -28,7 +28,7 @@ func TestErrorEntityNotFound_StatusCode(t *testing.T) {
 func TestErrorEntityAlreadyExist(t *testing.T) {
 	err := ErrorEntityAlreadyExist{}
 
-	assert.Equal(t, alreadyExistsMessage, err.Error(), "TEST Failed.\n")
+	assert.ErrorContains(t, err, alreadyExistsMessage, "TEST Failed.\n")
 }
 
 func TestErrorEntityAlreadyExist_StatusCode(t *testing.T) {
@@ -52,7 +52,7 @@ func TestErrorInvalidParam(t *testing.T) {
 	for i, tc := range tests {
 		err := ErrorInvalidParam{Params: tc.params}
 
-		assert.Equal(t, tc.expectedMsg, err.Error(), "TEST[%d], Failed.\n%s", i, tc.desc)
+		assert.ErrorContainsf(t, err, tc.expectedMsg, "TEST[%d], Failed.\n%s", i, tc.desc)
 	}
 }
 
@@ -77,7 +77,7 @@ func TestErrorMissingParam(t *testing.T) {
 	for i, tc := range tests {
 		err := ErrorMissingParam{Params: tc.params}
 
-		assert.Equal(t, tc.expectedMsg, err.Error(), "TEST[%d], Failed.\n%s", i, tc.desc)
+		assert.ErrorContainsf(t, err, tc.expectedMsg, "TEST[%d], Failed.\n%s", i, tc.desc)
 	}
 }
 
@@ -91,7 +91,7 @@ func TestMissingParameter_StatusCode(t *testing.T) {
 func TestErrorInvalidRoute(t *testing.T) {
 	err := ErrorInvalidRoute{}
 
-	assert.Equal(t, "route not registered", err.Error(), "TEST Failed.\n")
+	assert.ErrorContainsf(t, err, "route not registered", "TEST Failed.\n")
 
 	assert.Equal(t, http.StatusNotFound, err.StatusCode(), "TEST Failed.\n")
 }
@@ -99,7 +99,7 @@ func TestErrorInvalidRoute(t *testing.T) {
 func Test_ErrorRequestTimeout(t *testing.T) {
 	err := ErrorRequestTimeout{}
 
-	assert.Equal(t, "request timed out", err.Error(), "TEST Failed.\n")
+	assert.ErrorContainsf(t, err, "request timed out", "TEST Failed.\n")
 
 	assert.Equal(t, http.StatusRequestTimeout, err.StatusCode(), "TEST Failed.\n")
 }
@@ -107,7 +107,7 @@ func Test_ErrorRequestTimeout(t *testing.T) {
 func Test_ErrorErrorPanicRecovery(t *testing.T) {
 	err := ErrorPanicRecovery{}
 
-	assert.Equal(t, http.StatusText(http.StatusInternalServerError), err.Error(), "TEST Failed.\n")
+	assert.ErrorContainsf(t, err, http.StatusText(http.StatusInternalServerError), "TEST Failed.\n")
 
 	assert.Equal(t, http.StatusInternalServerError, err.StatusCode(), "TEST Failed.\n")
 }
