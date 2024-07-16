@@ -347,14 +347,14 @@ func (m *MQTT) Unsubscribe(topic string) error {
 }
 
 func (m *MQTT) Close() error {
-	if m.config.CloseTimeout != 0 {
-		m.Client.Disconnect(uint(m.config.CloseTimeout.Milliseconds()))
+	timeout := m.config.CloseTimeout
 
-		return nil
+	if timeout == 0 {
+		// setting default value if value is not populated
+		timeout = CloseTimeout
 	}
 
-	// setting default value if value is not populated
-	m.Client.Disconnect(uint(m.config.CloseTimeout.Milliseconds()))
+	m.Client.Disconnect(uint(timeout.Milliseconds()))
 
 	return nil
 }
