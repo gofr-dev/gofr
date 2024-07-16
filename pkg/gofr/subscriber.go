@@ -38,8 +38,8 @@ func (s *SubscriptionManager) startSubscriber(ctx context.Context, topic string,
 	}
 }
 
-func (s *SubscriptionManager) handleSubscription(parentCtx context.Context, topic string, handler SubscribeFunc) error {
-	msg, err := s.container.GetSubscriber().Subscribe(parentCtx, topic)
+func (s *SubscriptionManager) handleSubscription(ctx context.Context, topic string, handler SubscribeFunc) error {
+	msg, err := s.container.GetSubscriber().Subscribe(ctx, topic)
 
 	if err != nil {
 		s.container.Logger.Errorf("error while reading from topic %v, err: %v", topic, err.Error())
@@ -51,6 +51,7 @@ func (s *SubscriptionManager) handleSubscription(parentCtx context.Context, topi
 		return nil
 	}
 
+	// newContext creates a new context from the msg.Context()
 	msgCtx := newContext(nil, msg, s.container)
 	err = func(ctx *Context) error {
 		// TODO : Move panic recovery at central location which will manage for all the different cases.
@@ -61,13 +62,14 @@ func (s *SubscriptionManager) handleSubscription(parentCtx context.Context, topi
 		return handler(ctx)
 	}(msgCtx)
 
-	// commit the message if the subscription function does not return error
 	if err != nil {
 		s.container.Logger.Errorf("error in handler for topic %s: %v", topic, err)
-		return nil
+
+		return err
 	}
 
 	if msg.Committer != nil {
+		// commit the message if the subscription function does not return error
 		msg.Commit()
 	}
 

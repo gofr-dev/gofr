@@ -111,10 +111,12 @@ func TestSubscriptionManager_SubscribeError(t *testing.T) {
 
 		// Run the subscriber in a goroutine
 		go func() {
-			_ = subscriptionManager.startSubscriber(context.Background(), "abc",
+			err := subscriptionManager.startSubscriber(context.Background(), "abc",
 				func(*Context) error {
 					return handleError("error in abc")
 				})
+
+			assert.Contains(t, err.Error(), subscriptionError("subscription error").Error())
 		}()
 
 		// this sleep is added to wait for StderrOutputForFunc to collect the logs inside the testLogs
