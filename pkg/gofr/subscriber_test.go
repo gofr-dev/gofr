@@ -84,7 +84,7 @@ func TestSubscriptionManager_HandlerError(t *testing.T) {
 					return handleError("error in test-topic")
 				})
 
-			assert.NoError(t, err)
+			assert.Contains(t, handleError("error in test-topic").Error(), err.Error())
 		}()
 
 		// this sleep is added to wait for StderrOutputForFunc to collect the logs inside the testLogs
