@@ -109,8 +109,7 @@ func TestLogger_LevelWarn(t *testing.T) {
 	levels := []Level{DEBUG, INFO, NOTICE}
 
 	for i, l := range levels {
-		assert.Equal(t, false, strings.Contains(infoLog, l.String()), "TEST[%d], Failed.\n%s", i,
-			fmt.Sprintf("unexpected %s log", l))
+		assert.NotContainsf(t, infoLog, l.String(), "TEST[%d], Failed.\nunexpected %s log", i, l)
 	}
 
 	assertMessageInJSONLog(t, errLog, "Test Error Log")
@@ -135,11 +134,15 @@ func TestLogger_LevelFatal(t *testing.T) {
 	//nolint:gosec // starting the actual test in a different subprocess
 	cmd := exec.Command(os.Args[0], "-test.run=TestLogger_LevelFatal")
 	cmd.Env = append(os.Environ(), "GOFR_EXITER=1")
-	stdout, _ := cmd.StderrPipe()
+
+	stdout, err := cmd.StderrPipe()
+	require.NoError(t, err)
 
 	require.NoError(t, cmd.Start())
 
-	logBytes, _ := io.ReadAll(stdout)
+	logBytes, err := io.ReadAll(stdout)
+	require.NoError(t, err)
+
 	log := string(logBytes)
 
 	levels := []Level{DEBUG, INFO, NOTICE, WARN, ERROR} // levels which should not be present in case of FATAL log_level
@@ -151,7 +154,7 @@ func TestLogger_LevelFatal(t *testing.T) {
 	assertMessageInJSONLog(t, log, "Test Fatal Log")
 
 	// Check that the program exited
-	err := cmd.Wait()
+	err = cmd.Wait()
 
 	var e *exec.ExitError
 
