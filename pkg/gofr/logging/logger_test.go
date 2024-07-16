@@ -3,7 +3,6 @@ package logging
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -155,9 +154,9 @@ func TestLogger_LevelFatal(t *testing.T) {
 	err := cmd.Wait()
 
 	var e *exec.ExitError
-	if !errors.As(err, &e) || e.Success() {
-		t.Fatalf("Process ran with err %v, want exit status 1", err)
-	}
+
+	require.ErrorAs(t, err, &e)
+	assert.False(t, e.Success())
 }
 
 func assertMessageInJSONLog(t *testing.T, logLine, expectation string) {
