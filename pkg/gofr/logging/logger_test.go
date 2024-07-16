@@ -106,9 +106,11 @@ func TestLogger_LevelWarn(t *testing.T) {
 	infoLog := testutil.StdoutOutputForFunc(printLog)
 	errLog := testutil.StderrOutputForFunc(printLog)
 
-	if strings.ContainsAny(infoLog, "NOTICE|INFO|DEBUG") && !strings.Contains(errLog, "ERROR") {
-		// Warn Log Level will not contain  DEBUG,INFO, NOTICE logs
-		t.Errorf("TestLogger_LevelDebug Failed!")
+	levels := []Level{DEBUG, INFO, NOTICE}
+
+	for i, l := range levels {
+		assert.Equal(t, false, strings.Contains(infoLog, l.String()), "TEST[%d], Failed.\n%s", i,
+			fmt.Sprintf("unexpected %s log", l))
 	}
 
 	assertMessageInJSONLog(t, errLog, "Test Error Log")
@@ -121,6 +123,7 @@ func TestLogger_LevelFatal(t *testing.T) {
 
 		logger.Debugf("%s", "Test Debug Log")
 		logger.Infof("%s", "Test Info Log")
+		logger.Logf("%s", "Test Log")
 		logger.Noticef("%s", "Test Notice Log")
 		logger.Warnf("%s", "Test Warn Log")
 		logger.Errorf("%s", "Test Error Log")
