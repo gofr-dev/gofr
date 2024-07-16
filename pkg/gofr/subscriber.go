@@ -39,10 +39,7 @@ func (s *SubscriptionManager) startSubscriber(ctx context.Context, topic string,
 }
 
 func (s *SubscriptionManager) handleSubscription(parentCtx context.Context, topic string, handler SubscribeFunc) error {
-	ctx, done := context.WithCancel(parentCtx)
-	defer done()
-
-	msg, err := s.container.GetSubscriber().Subscribe(ctx, topic)
+	msg, err := s.container.GetSubscriber().Subscribe(parentCtx, topic)
 
 	if err != nil {
 		s.container.Logger.Errorf("error while reading from topic %v, err: %v", topic, err.Error())
