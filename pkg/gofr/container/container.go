@@ -135,7 +135,7 @@ func (c *Container) Close(ctx context.Context) error {
 	}
 
 	if !isNil(c.PubSub) {
-		err = c.PubSub.Close(ctx)
+		err = errors.Join(err, c.PubSub.Close(ctx))
 	}
 
 	return err
@@ -164,15 +164,16 @@ func (c *Container) createMqttPubSub(conf config.Config) pubsub.Client {
 	}
 
 	configs := &mqtt.Config{
-		Protocol:  conf.GetOrDefault("MQTT_PROTOCOL", "tcp"), // using tcp as default method to connect to broker
-		Hostname:  conf.Get("MQTT_HOST"),
-		Port:      port,
-		Username:  conf.Get("MQTT_USER"),
-		Password:  conf.Get("MQTT_PASSWORD"),
-		ClientID:  conf.Get("MQTT_CLIENT_ID_SUFFIX"),
-		QoS:       qos,
-		Order:     order,
-		KeepAlive: keepAlive,
+		Protocol:     conf.GetOrDefault("MQTT_PROTOCOL", "tcp"), // using tcp as default method to connect to broker
+		Hostname:     conf.Get("MQTT_HOST"),
+		Port:         port,
+		Username:     conf.Get("MQTT_USER"),
+		Password:     conf.Get("MQTT_PASSWORD"),
+		ClientID:     conf.Get("MQTT_CLIENT_ID_SUFFIX"),
+		QoS:          qos,
+		Order:        order,
+		KeepAlive:    keepAlive,
+		CloseTimeout: uint(mqtt.CloseTimeout.Milliseconds()),
 	}
 
 	return mqtt.New(configs, c.Logger, c.metricsManager)

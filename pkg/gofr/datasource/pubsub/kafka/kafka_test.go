@@ -212,6 +212,7 @@ func TestKafkaClient_Subscribe_ErrConsumerGroupID(t *testing.T) {
 			Broker: "kafkabroker",
 			OffSet: -1,
 		},
+		logger: logging.NewMockLogger(logging.INFO),
 	}
 
 	msg, err := k.Subscribe(context.TODO(), "test")
@@ -238,7 +239,7 @@ func TestKafkaClient_SubscribeError(t *testing.T) {
 		reader: map[string]Reader{
 			"test": mockReader,
 		},
-		logger: nil,
+		logger: logging.NewMockLogger(logging.INFO),
 		config: Config{
 			ConsumerGroupID: "consumer",
 			Broker:          "kafkabroker",

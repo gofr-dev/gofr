@@ -166,6 +166,8 @@ func (k *kafkaClient) Publish(ctx context.Context, topic string, message []byte)
 
 func (k *kafkaClient) Subscribe(ctx context.Context, topic string) (*pubsub.Message, error) {
 	if k.config.ConsumerGroupID == "" {
+		k.logger.Error("cannot subscribe as consumer_id is not provided in configs")
+
 		return &pubsub.Message{}, ErrConsumerGroupNotProvided
 	}
 

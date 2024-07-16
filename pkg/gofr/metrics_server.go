@@ -12,7 +12,7 @@ import (
 
 type metricServer struct {
 	port int
-	srvr *http.Server
+	srv  *http.Server
 }
 
 func newMetricServer(port int) *metricServer {
@@ -23,23 +23,23 @@ func (m *metricServer) Run(c *container.Container) {
 	if m != nil {
 		c.Logf("Starting metrics server on port: %d", m.port)
 
-		m.srvr = &http.Server{
+		m.srv = &http.Server{
 			Addr:              fmt.Sprintf(":%d", m.port),
 			Handler:           metrics.GetHandler(c.Metrics()),
 			ReadHeaderTimeout: 5 * time.Second,
 		}
 
-		c.Error(m.srvr.ListenAndServe())
+		c.Error(m.srv.ListenAndServe())
 	}
 }
 
 func (m *metricServer) Shutdown(ctx context.Context) error {
-	if m.srvr == nil {
+	if m.srv == nil {
 		return nil
 	}
 
-	err := m.srvr.Shutdown(ctx)
-	m.srvr = nil
+	err := m.srv.Shutdown(ctx)
+	m.srv = nil
 
 	return err
 }

@@ -111,12 +111,10 @@ func TestSubscriptionManager_SubscribeError(t *testing.T) {
 
 		// Run the subscriber in a goroutine
 		go func() {
-			err := subscriptionManager.startSubscriber(context.Background(), "abc",
+			_ = subscriptionManager.startSubscriber(context.Background(), "abc",
 				func(*Context) error {
 					return handleError("error in abc")
 				})
-
-			assert.NoError(t, err)
 		}()
 
 		// this sleep is added to wait for StderrOutputForFunc to collect the logs inside the testLogs
@@ -143,12 +141,10 @@ func TestSubscriptionManager_PanicRecovery(t *testing.T) {
 
 		// Run the subscriber in a goroutine
 		go func() {
-			err := subscriptionManager.startSubscriber(context.Background(), "abc",
+			_ = subscriptionManager.startSubscriber(context.Background(), "abc",
 				func(*Context) error {
 					panic("test panic")
 				})
-
-			assert.NoError(t, err)
 		}()
 
 		// this sleep is added to wait for StderrOutputForFunc to collect the logs inside the testLogs

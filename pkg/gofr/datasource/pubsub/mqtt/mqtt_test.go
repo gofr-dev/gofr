@@ -110,7 +110,7 @@ func TestMQTT_Ping(t *testing.T) {
 	mockClient.EXPECT().Disconnect(uint(1))
 
 	// Disconnect the client
-	mq.Disconnect(1)
+	_ = mq.Disconnect(1)
 
 	mockClient.EXPECT().IsConnected().Return(false)
 	// Failure Case
@@ -136,7 +136,7 @@ func TestMQTT_Disconnect(t *testing.T) {
 	mockToken.EXPECT().Error().Return(errToken).Times(3)
 
 	// Disconnect the broker and then try to publish
-	client.Disconnect(1)
+	_ = client.Disconnect(1)
 
 	err := client.Publish(ctx, "test", msg)
 	assert.Error(t, err)
@@ -160,7 +160,7 @@ func TestMQTT_DisconnectWithSubscriptions(t *testing.T) {
 	mockToken.EXPECT().Wait().Return(true)
 	mockToken.EXPECT().Error().Return(nil)
 
-	client.Disconnect(1)
+	_ = client.Disconnect(1)
 
 	// we assert that on unsubscribing the subscription gets deleted
 	_, ok := client.subscriptions["test/topic"]
@@ -207,7 +207,7 @@ func TestMQTT_PublishFailure(t *testing.T) {
 
 	mockClient.EXPECT().Disconnect(uint(1))
 	// Disconnect the client
-	client.Disconnect(1)
+	_ = client.Disconnect(1)
 
 	mockClient.EXPECT().Publish("test/topic", mockConfigs.QoS, mockConfigs.RetrieveRetained, msg).Return(mockToken)
 	mockToken.EXPECT().Wait().Return(true)
@@ -305,7 +305,7 @@ func TestMQTT_SubscribeWithFunc(t *testing.T) {
 
 	// Error case where the client cannot connect
 	mockClient.EXPECT().Disconnect(uint(1))
-	client.Disconnect(1)
+	_ = client.Disconnect(1)
 
 	mockClient.EXPECT().Subscribe("test/topic", mockConfigs.QoS, gomock.Any()).Return(mockToken)
 	mockToken.EXPECT().Wait().Return(true)
@@ -352,7 +352,7 @@ func TestMQTT_Unsubscribe(t *testing.T) {
 
 		// Failure case
 		mockClient.EXPECT().Disconnect(uint(1))
-		client.Disconnect(1)
+		_ = client.Disconnect(1)
 
 		mockClient.EXPECT().Unsubscribe("test/topic").Return(mockToken)
 		mockToken.EXPECT().Wait().Return(true)
