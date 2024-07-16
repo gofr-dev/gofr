@@ -108,6 +108,7 @@ func TestMQTT_Ping(t *testing.T) {
 	assert.NoError(t, err)
 
 	mockClient.EXPECT().Disconnect(uint(1))
+
 	// Disconnect the client
 	mq.Disconnect(1)
 
@@ -579,7 +580,7 @@ func TestMQTT_Close(t *testing.T) {
 	client.Close(context.Background())
 
 	// Allow some time for the client to disconnects
-	time.Sleep(closeTimeout * time.Millisecond)
+	time.Sleep(CloseTimeout * time.Millisecond)
 
 	err := client.Publish(ctx, "test", []byte("hello"))
 

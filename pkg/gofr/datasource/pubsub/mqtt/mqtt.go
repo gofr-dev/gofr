@@ -19,7 +19,7 @@ import (
 const (
 	publicBroker  = "broker.hivemq.com"
 	messageBuffer = 10
-	closeTimeout  = 250
+	CloseTimeout  = 250
 )
 
 var errClientNotConnected = errors.New("client not connected")
@@ -51,6 +51,7 @@ type Config struct {
 	Order            bool
 	RetrieveRetained bool
 	KeepAlive        time.Duration
+	CloseTimeout     uint
 }
 
 type subscription struct {
@@ -346,20 +347,34 @@ func (m *MQTT) Unsubscribe(topic string) error {
 }
 
 func (m *MQTT) Close(_ context.Context) error {
-	m.Client.Disconnect(closeTimeout)
+	if m.config.CloseTimeout != 0 {
+		m.Client.Disconnect(m.config.CloseTimeout)
+	}
+
+	// setting default value if value is not populated
+	m.Client.Disconnect(CloseTimeout)
 
 	return nil
 }
 
-func (m *MQTT) Disconnect(waitTime uint) {
+func (m *MQTT) Disconnect(waitTime uint) error {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
+	var err error
+
 	for topic := range m.subscriptions {
-		_ = m.Unsubscribe(topic)
+		unsubscribeErr := m.Unsubscribe(topic)
+		if err != nil {
+			err = errors.Join(err, unsubscribeErr)
+
+			m.logger.Errorf("Error closing Subscription: %v", err)
+		}
 	}
 
 	m.Client.Disconnect(waitTime)
+
+	return err
 }
 
 func (m *MQTT) Ping() error {
