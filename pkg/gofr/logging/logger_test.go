@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/term"
 
 	"gofr.dev/pkg/gofr/testutil"
@@ -118,7 +119,7 @@ func TestLogger_LevelWarn(t *testing.T) {
 
 func TestLogger_LevelFatal(t *testing.T) {
 	// running the failing part only when a specific env variable is set
-	if os.Getenv("EXITER") == "1" {
+	if os.Getenv("GOFR_EXITER") == "1" {
 		logger := NewLogger(FATAL)
 
 		logger.Debugf("%s", "Test Debug Log")
@@ -134,12 +135,10 @@ func TestLogger_LevelFatal(t *testing.T) {
 
 	//nolint:gosec // starting the actual test in a different subprocess
 	cmd := exec.Command(os.Args[0], "-test.run=TestLogger_LevelFatal")
-	cmd.Env = append(os.Environ(), "EXITER=1")
+	cmd.Env = append(os.Environ(), "GOFR_EXITER=1")
 	stdout, _ := cmd.StderrPipe()
 
-	if err := cmd.Start(); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, cmd.Start())
 
 	logBytes, _ := io.ReadAll(stdout)
 	log := string(logBytes)
@@ -147,8 +146,7 @@ func TestLogger_LevelFatal(t *testing.T) {
 	levels := []Level{DEBUG, INFO, NOTICE, WARN, ERROR} // levels which should not be present in case of FATAL log_level
 
 	for i, l := range levels {
-		assert.Equal(t, false, strings.Contains(log, l.String()), "TEST[%d], Failed.\n%s", i,
-			fmt.Sprintf("unexpected %s log", l))
+		assert.NotContainsf(t, log, l.String(), "TEST[%d], Failed.\nunexpected %s log", i, l)
 	}
 
 	assertMessageInJSONLog(t, log, "Test Fatal Log")
