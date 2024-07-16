@@ -180,14 +180,14 @@ func TestGoogleClient_CloseReturnsError(t *testing.T) {
 		client: getGoogleClient(t),
 	}
 
-	err := g.Close(context.Background())
+	err := g.Close()
 
 	assert.NoError(t, err)
 
 	// client empty
 	g = &googleClient{}
 
-	err = g.Close(context.Background())
+	err = g.Close()
 
 	assert.Nil(t, err)
 }

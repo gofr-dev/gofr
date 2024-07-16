@@ -346,7 +346,7 @@ func (m *MQTT) Unsubscribe(topic string) error {
 	return nil
 }
 
-func (m *MQTT) Close(_ context.Context) error {
+func (m *MQTT) Close() error {
 	if m.config.CloseTimeout != 0 {
 		m.Client.Disconnect(m.config.CloseTimeout)
 	}

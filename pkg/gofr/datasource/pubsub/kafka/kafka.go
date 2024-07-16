@@ -221,7 +221,7 @@ func (k *kafkaClient) Subscribe(ctx context.Context, topic string) (*pubsub.Mess
 	return m, err
 }
 
-func (k *kafkaClient) Close(_ context.Context) (err error) {
+func (k *kafkaClient) Close() (err error) {
 	for _, r := range k.reader {
 		err = errors.Join(err, r.Close())
 	}

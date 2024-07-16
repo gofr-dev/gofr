@@ -226,7 +226,7 @@ func (g *googleClient) CreateTopic(ctx context.Context, name string) error {
 	return err
 }
 
-func (g *googleClient) Close(_ context.Context) error {
+func (g *googleClient) Close() error {
 	if g.client != nil {
 		return g.client.Close()
 	}

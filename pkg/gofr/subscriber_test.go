@@ -63,7 +63,7 @@ func (mockSubscriber) Subscribe(ctx context.Context, topic string) (*pubsub.Mess
 	return msg, subscriptionError("subscription error")
 }
 
-func (mockSubscriber) Close(_ context.Context) error {
+func (mockSubscriber) Close() error {
 	return nil
 }
 

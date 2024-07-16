@@ -87,4 +87,4 @@ func (*MockPubSub) Subscribe(_ context.Context, _ string) (*pubsub.Message, erro
 	return nil, nil
 }
 
-func (*MockPubSub) Close(_ context.Context) error { return nil }
+func (*MockPubSub) Close() error { return nil }

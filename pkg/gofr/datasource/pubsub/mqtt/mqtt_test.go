@@ -577,7 +577,7 @@ func TestMQTT_Close(t *testing.T) {
 	mockMetrics.EXPECT().IncrementCounter(ctx, "app_pubsub_publish_total_count", "topic", "test")
 
 	// Close the client
-	client.Close(context.Background())
+	_ = client.Close()
 
 	// Allow some time for the client to disconnects
 	time.Sleep(CloseTimeout * time.Millisecond)

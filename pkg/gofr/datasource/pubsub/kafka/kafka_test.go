@@ -281,7 +281,7 @@ func TestKafkaClient_Close(t *testing.T) {
 	mockReader.EXPECT().Close().Return(nil)
 	mockConn.EXPECT().Close().Return(nil)
 
-	err := k.Close(context.Background())
+	err := k.Close()
 
 	assert.NoError(t, err)
 }
@@ -303,7 +303,7 @@ func TestKafkaClient_CloseError(t *testing.T) {
 	logger := logging.NewMockLogger(logging.ERROR)
 	k.logger = logger
 
-	err = k.Close(context.Background())
+	err = k.Close()
 
 	assert.Error(t, err)
 	assert.Equal(t, errClose, err)

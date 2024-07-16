@@ -135,7 +135,7 @@ func (c *Container) Close(ctx context.Context) error {
 	}
 
 	if !isNil(c.PubSub) {
-		err = errors.Join(err, c.PubSub.Close(ctx))
+		err = errors.Join(err, c.PubSub.Close())
 	}
 
 	return err
