@@ -306,7 +306,7 @@ func TestKafkaClient_CloseError(t *testing.T) {
 	err = k.Close()
 
 	assert.Error(t, err)
-	assert.Equal(t, errClose, err)
+	assert.ErrorIs(t, err, errClose)
 }
 
 func TestKafkaClient_getNewReader(t *testing.T) {

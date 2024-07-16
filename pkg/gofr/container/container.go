@@ -173,7 +173,7 @@ func (c *Container) createMqttPubSub(conf config.Config) pubsub.Client {
 		QoS:          qos,
 		Order:        order,
 		KeepAlive:    keepAlive,
-		CloseTimeout: uint(mqtt.CloseTimeout.Milliseconds()),
+		CloseTimeout: mqtt.CloseTimeout,
 	}
 
 	return mqtt.New(configs, c.Logger, c.metricsManager)

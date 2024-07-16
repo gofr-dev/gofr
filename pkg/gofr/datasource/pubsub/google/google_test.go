@@ -189,5 +189,5 @@ func TestGoogleClient_CloseReturnsError(t *testing.T) {
 
 	err = g.Close()
 
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 }
