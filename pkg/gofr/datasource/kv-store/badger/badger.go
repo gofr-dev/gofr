@@ -39,7 +39,7 @@ func (c *client) UseMetrics(metrics any) {
 func (c *client) Connect() {
 	db, err := badger.Open(badger.DefaultOptions(c.configs.DirPath))
 	if err != nil {
-		c.logger.Errorf("failed to initialise badgerDB : %v", err)
+		c.logger.Errorf("failed to initialize badgerDB : %v", err)
 	}
 
 	c.db = db
@@ -48,6 +48,7 @@ func (c *client) Connect() {
 func (c *client) Get(_ context.Context, key string) (string, error) {
 	var value []byte
 
+	// It is being set to false as we dont want to make any changes to data.
 	txn := c.db.NewTransaction(false)
 	defer txn.Discard()
 

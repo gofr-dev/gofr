@@ -17,7 +17,6 @@ import (
 
 	redis "github.com/redis/go-redis/v9"
 	gomock "go.uber.org/mock/gomock"
-
 	datasource "gofr.dev/pkg/gofr/datasource"
 	sql0 "gofr.dev/pkg/gofr/datasource/sql"
 )
@@ -8384,4 +8383,202 @@ func (m *MockHealthChecker) HealthCheck(arg0 context.Context) (any, error) {
 func (mr *MockHealthCheckerMockRecorder) HealthCheck(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HealthCheck", reflect.TypeOf((*MockHealthChecker)(nil).HealthCheck), arg0)
+}
+
+// MockKVStore is a mock of KVStore interface.
+type MockKVStore struct {
+	ctrl     *gomock.Controller
+	recorder *MockKVStoreMockRecorder
+}
+
+// MockKVStoreMockRecorder is the mock recorder for MockKVStore.
+type MockKVStoreMockRecorder struct {
+	mock *MockKVStore
+}
+
+// NewMockKVStore creates a new mock instance.
+func NewMockKVStore(ctrl *gomock.Controller) *MockKVStore {
+	mock := &MockKVStore{ctrl: ctrl}
+	mock.recorder = &MockKVStoreMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockKVStore) EXPECT() *MockKVStoreMockRecorder {
+	return m.recorder
+}
+
+// Delete mocks base method.
+func (m *MockKVStore) Delete(ctx context.Context, key string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Delete", ctx, key)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Delete indicates an expected call of Delete.
+func (mr *MockKVStoreMockRecorder) Delete(ctx, key any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockKVStore)(nil).Delete), ctx, key)
+}
+
+// Get mocks base method.
+func (m *MockKVStore) Get(ctx context.Context, key string) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Get", ctx, key)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Get indicates an expected call of Get.
+func (mr *MockKVStoreMockRecorder) Get(ctx, key any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockKVStore)(nil).Get), ctx, key)
+}
+
+// HealthCheck mocks base method.
+func (m *MockKVStore) HealthCheck(arg0 context.Context) (any, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HealthCheck", arg0)
+	ret0, _ := ret[0].(any)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// HealthCheck indicates an expected call of HealthCheck.
+func (mr *MockKVStoreMockRecorder) HealthCheck(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HealthCheck", reflect.TypeOf((*MockKVStore)(nil).HealthCheck), arg0)
+}
+
+// Set mocks base method.
+func (m *MockKVStore) Set(ctx context.Context, key, value string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Set", ctx, key, value)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Set indicates an expected call of Set.
+func (mr *MockKVStoreMockRecorder) Set(ctx, key, value any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Set", reflect.TypeOf((*MockKVStore)(nil).Set), ctx, key, value)
+}
+
+// MockKVStoreProvider is a mock of KVStoreProvider interface.
+type MockKVStoreProvider struct {
+	ctrl     *gomock.Controller
+	recorder *MockKVStoreProviderMockRecorder
+}
+
+// MockKVStoreProviderMockRecorder is the mock recorder for MockKVStoreProvider.
+type MockKVStoreProviderMockRecorder struct {
+	mock *MockKVStoreProvider
+}
+
+// NewMockKVStoreProvider creates a new mock instance.
+func NewMockKVStoreProvider(ctrl *gomock.Controller) *MockKVStoreProvider {
+	mock := &MockKVStoreProvider{ctrl: ctrl}
+	mock.recorder = &MockKVStoreProviderMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockKVStoreProvider) EXPECT() *MockKVStoreProviderMockRecorder {
+	return m.recorder
+}
+
+// Connect mocks base method.
+func (m *MockKVStoreProvider) Connect() {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "Connect")
+}
+
+// Connect indicates an expected call of Connect.
+func (mr *MockKVStoreProviderMockRecorder) Connect() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Connect", reflect.TypeOf((*MockKVStoreProvider)(nil).Connect))
+}
+
+// Delete mocks base method.
+func (m *MockKVStoreProvider) Delete(ctx context.Context, key string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Delete", ctx, key)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Delete indicates an expected call of Delete.
+func (mr *MockKVStoreProviderMockRecorder) Delete(ctx, key any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockKVStoreProvider)(nil).Delete), ctx, key)
+}
+
+// Get mocks base method.
+func (m *MockKVStoreProvider) Get(ctx context.Context, key string) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Get", ctx, key)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Get indicates an expected call of Get.
+func (mr *MockKVStoreProviderMockRecorder) Get(ctx, key any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockKVStoreProvider)(nil).Get), ctx, key)
+}
+
+// HealthCheck mocks base method.
+func (m *MockKVStoreProvider) HealthCheck(arg0 context.Context) (any, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HealthCheck", arg0)
+	ret0, _ := ret[0].(any)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// HealthCheck indicates an expected call of HealthCheck.
+func (mr *MockKVStoreProviderMockRecorder) HealthCheck(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HealthCheck", reflect.TypeOf((*MockKVStoreProvider)(nil).HealthCheck), arg0)
+}
+
+// Set mocks base method.
+func (m *MockKVStoreProvider) Set(ctx context.Context, key, value string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Set", ctx, key, value)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Set indicates an expected call of Set.
+func (mr *MockKVStoreProviderMockRecorder) Set(ctx, key, value any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Set", reflect.TypeOf((*MockKVStoreProvider)(nil).Set), ctx, key, value)
+}
+
+// UseLogger mocks base method.
+func (m *MockKVStoreProvider) UseLogger(logger any) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "UseLogger", logger)
+}
+
+// UseLogger indicates an expected call of UseLogger.
+func (mr *MockKVStoreProviderMockRecorder) UseLogger(logger any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UseLogger", reflect.TypeOf((*MockKVStoreProvider)(nil).UseLogger), logger)
+}
+
+// UseMetrics mocks base method.
+func (m *MockKVStoreProvider) UseMetrics(metrics any) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "UseMetrics", metrics)
+}
+
+// UseMetrics indicates an expected call of UseMetrics.
+func (mr *MockKVStoreProviderMockRecorder) UseMetrics(metrics any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UseMetrics", reflect.TypeOf((*MockKVStoreProvider)(nil).UseMetrics), metrics)
 }
