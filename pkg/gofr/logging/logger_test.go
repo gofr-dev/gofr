@@ -3,9 +3,11 @@ package logging
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"strings"
 	"testing"
 
@@ -113,20 +115,48 @@ func TestLogger_LevelWarn(t *testing.T) {
 }
 
 func TestLogger_LevelFatal(t *testing.T) {
-	printLog := func() {
+	// running the failing part only when a specific env variable is set
+	if os.Getenv("EXITER") == "1" {
 		logger := NewLogger(FATAL)
+
 		logger.Debugf("%s", "Test Debug Log")
 		logger.Infof("%s", "Test Info Log")
 		logger.Noticef("%s", "Test Notice Log")
 		logger.Warnf("%s", "Test Warn Log")
 		logger.Errorf("%s", "Test Error Log")
+		logger.Fatalf("%s", "Test Fatal Log")
+
+		return
 	}
 
-	infoLog := testutil.StdoutOutputForFunc(printLog)
-	errLog := testutil.StderrOutputForFunc(printLog)
+	//nolint:gosec // starting the actual test in a different subprocess
+	cmd := exec.Command(os.Args[0], "-test.run=TestLogger_LevelFatal")
+	cmd.Env = append(os.Environ(), "EXITER=1")
+	stdout, _ := cmd.StderrPipe()
 
-	assert.Equal(t, "", infoLog, "TestLogger_LevelFatal Failed!")
-	assert.Equal(t, "", errLog, "TestLogger_LevelFatal Failed")
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+
+	logBytes, _ := io.ReadAll(stdout)
+	log := string(logBytes)
+
+	levels := []Level{DEBUG, INFO, NOTICE, WARN, ERROR} // levels which should not be present in case of FATAL log_level
+
+	for i, l := range levels {
+		assert.Equal(t, false, strings.Contains(log, l.String()), "TEST[%d], Failed.\n%s", i,
+			fmt.Sprintf("unexpected %s log", l))
+	}
+
+	assertMessageInJSONLog(t, log, "Test Fatal Log")
+
+	// Check that the program exited
+	err := cmd.Wait()
+
+	var e *exec.ExitError
+	if !errors.As(err, &e) || e.Success() {
+		t.Fatalf("Process ran with err %v, want exit status 1", err)
+	}
 }
 
 func assertMessageInJSONLog(t *testing.T, logLine, expectation string) {
