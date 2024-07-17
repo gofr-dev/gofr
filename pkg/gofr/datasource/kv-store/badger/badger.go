@@ -48,7 +48,7 @@ func (c *client) Connect() {
 func (c *client) Get(_ context.Context, key string) (string, error) {
 	var value []byte
 
-	// It is being set to false as we dont want to make any changes to data.
+	//  transaction is set to false as we don't want to make any changes to data.
 	txn := c.db.NewTransaction(false)
 	defer txn.Discard()
 
