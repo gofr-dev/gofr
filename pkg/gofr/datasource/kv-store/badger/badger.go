@@ -36,7 +36,7 @@ func (c *client) UseMetrics(metrics any) {
 	}
 }
 
-// Connect establishes a connection to MongoDB and registers metrics using the provided configuration when the client was Created.
+// Connect establishes a connection to badgerDB and registers metrics using the provided configuration when the client was Created.
 func (c *client) Connect() {
 	db, err := badger.Open(badger.DefaultOptions(c.configs.DirPath))
 	if err != nil {
