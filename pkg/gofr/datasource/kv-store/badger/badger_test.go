@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/stretchr/testify/assert"
-	"go.uber.org/mock/gomock"
 	"testing"
+
+	"go.uber.org/mock/gomock"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func setupDB(t *testing.T) *client {
