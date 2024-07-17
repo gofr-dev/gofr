@@ -580,11 +580,11 @@ func TestMQTT_Close(t *testing.T) {
 	_ = client.Close()
 
 	// Allow some time for the client to disconnects
-	time.Sleep(CloseTimeout)
+	time.Sleep(DefaultCloseTimeout)
 
 	err := client.Publish(ctx, "test", []byte("hello"))
 
 	// Assertions
 	assert.Error(t, err)
-	assert.Equal(t, "not Connected", err.Error())
+	assert.ErrorContains(t, err, "not Connected")
 }
