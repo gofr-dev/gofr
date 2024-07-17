@@ -22,7 +22,7 @@ func New(configs Configs) *client {
 	return &client{configs: configs}
 }
 
-// UseLogger sets the logger for the MongoDB client which asserts the Logger interface.
+// UseLogger sets the logger for the badgerDB client which asserts the Logger interface.
 func (c *client) UseLogger(logger any) {
 	if l, ok := logger.(Logger); ok {
 		c.logger = l
