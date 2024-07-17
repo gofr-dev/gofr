@@ -71,7 +71,7 @@ func (c *client) Get(_ context.Context, key string) (string, error) {
 	return string(value), nil
 }
 
-func (c *client) Set(_ context.Context, key string, value string) error {
+func (c *client) Set(_ context.Context, key, value string) error {
 	return c.useTransaction(func(txn *badger.Txn) error {
 		return txn.Set([]byte(key), []byte(value))
 	})

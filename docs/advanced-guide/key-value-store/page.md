@@ -9,13 +9,13 @@ the framework itself. GoFr provide the following functionalities for its key-val
 ```go
 type KVStore interface {
     Get(ctx context.Context, key string) (string, error)
-    Set(ctx context.Context, key string, value string) error
+    Set(ctx context.Context, key, value string) error
     Delete(ctx context.Context, key string) error
 }
 ```
 
 ## BadgerDB
-GoFr supports injecting badgerDB that supports the following interface. Any driver that implements the interface can be added
+GoFr supports injecting BadgerDB that supports the following interface. Any driver that implements the interface can be added
 using `app.AddKVStore()` method, and user's can use BadgerDB across application with `gofr.Context`.
 
 User's can easily inject a driver that supports this interface, this provides usability without
@@ -25,23 +25,22 @@ compromising the extensibility to use multiple databases.
 package main
 
 import (
-	"fmt"
+    "fmt"
 	
     "gofr.dev/pkg/gofr"
-
     "gofr.dev/pkg/gofr/datasource/kv-store/badger"
 )
 
 type User struct {
-    Id   string `ch:"id"`
-    Name string `ch:"name"`
-    Age  string `ch:"age"`
+    Id   string 
+    Name string 
+    Age  string 
 }
 
 func main() {
     app := gofr.New()
-
-	app.AddKVStore(badger.New(badger.Configs{DirPath: "badger-example"}))
+	
+    app.AddKVStore(badger.New(badger.Configs{DirPath: "badger-example"}))
     
     app.POST("/user", Post)
     app.GET("/user", Get)
