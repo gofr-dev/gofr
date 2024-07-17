@@ -16,8 +16,6 @@ GoFr is an opinionated microservice development framework.</b></p>
 
 Listed in [CNCF Landscape](https://landscape.cncf.io/?selected=go-fr).
 
-![banner.gif](.github/banner.gif)
-
 ## 🎯 Goal
 Even though generic applications can be written using GoFr, our main focus is to simplify the development of microservices.
 We will focus on deployment in Kubernetes and aspire to provide out-of-the-box observability.
@@ -39,6 +37,8 @@ We will focus on deployment in Kubernetes and aspire to provide out-of-the-box o
 13. [Swagger Rendering](https://gofr.dev/docs/advanced-guide/swagger-documentation)
 14. [Abstracted File Systems](https://gofr.dev/docs/advanced-guide/handling-file)
 15. [Websockets](https://gofr.dev/docs/advanced-guide/handling-file)
+
+![banner.gif](.github/banner.gif)
 
 ## Getting started
 ### Prerequisites
