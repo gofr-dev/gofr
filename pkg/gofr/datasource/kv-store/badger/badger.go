@@ -3,6 +3,7 @@ package badger
 import (
 	"context"
 	"errors"
+
 	"github.com/dgraph-io/badger/v4"
 )
 
@@ -104,8 +105,6 @@ type Health struct {
 	Details map[string]any `json:"details,omitempty"`
 }
 
-var errStatusDown = errors.New("status down")
-
 func (c *client) HealthCheck(context.Context) (any, error) {
 	h := Health{
 		Details: make(map[string]any),
@@ -117,7 +116,7 @@ func (c *client) HealthCheck(context.Context) (any, error) {
 	if closed {
 		h.Status = "DOWN"
 
-		return &h, errStatusDown
+		return &h, errors.New("status down")
 	}
 
 	h.Status = "UP"
