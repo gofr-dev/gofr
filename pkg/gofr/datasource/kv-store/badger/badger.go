@@ -29,7 +29,7 @@ func (c *client) UseLogger(logger any) {
 	}
 }
 
-// UseMetrics sets the metrics for the MongoDB client which asserts the Metrics interface.
+// UseMetrics sets the metrics for the badgerDB client which asserts the Metrics interface.
 func (c *client) UseMetrics(metrics any) {
 	if m, ok := metrics.(Metrics); ok {
 		c.metrics = m
