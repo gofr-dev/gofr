@@ -3,6 +3,7 @@ package badger
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/dgraph-io/badger/v4"
 )
@@ -38,33 +39,46 @@ func (c *client) UseMetrics(metrics any) {
 
 // Connect establishes a connection to badgerDB and registers metrics using the provided configuration when the client was Created.
 func (c *client) Connect() {
+	c.logger.Infof("connecting to badgerDB at %v", c.configs.DirPath)
+
+	badgerBuckets := []float64{.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 4, 5, 7.5, 10}
+	c.metrics.NewHistogram("app_badger_stats", "Response time of Badger queries in milliseconds.", badgerBuckets...)
+
 	db, err := badger.Open(badger.DefaultOptions(c.configs.DirPath))
 	if err != nil {
-		c.logger.Errorf("failed to initialize badgerDB : %v", err)
+		c.logger.Errorf("error while connecting to badgerDB: %v", err)
 	}
 
 	c.db = db
 }
 
 func (c *client) Get(_ context.Context, key string) (string, error) {
+	defer c.logQueryAndSendMetrics(time.Now(), "GET")
+
 	var value []byte
 
-	//  transaction is set to false as we don't want to make any changes to data.
+	// transaction is set to false as we don't want to make any changes to data.
 	txn := c.db.NewTransaction(false)
 	defer txn.Discard()
 
 	item, err := txn.Get([]byte(key))
 	if err != nil {
+		c.logger.Debugf("error while fetching data for key: %v, error: %v", key, err)
+
 		return "", err
 	}
 
 	value, err = item.ValueCopy(nil)
 	if err != nil {
+		c.logger.Debugf("error while reading value for key: %v, error: %v", key, err)
+
 		return "", err
 	}
 
 	err = txn.Commit()
 	if err != nil {
+		c.logger.Debugf("error while commiting transaction: %v", err)
+
 		return "", err
 	}
 
@@ -72,12 +86,16 @@ func (c *client) Get(_ context.Context, key string) (string, error) {
 }
 
 func (c *client) Set(_ context.Context, key, value string) error {
+	defer c.logQueryAndSendMetrics(time.Now(), "SET")
+
 	return c.useTransaction(func(txn *badger.Txn) error {
 		return txn.Set([]byte(key), []byte(value))
 	})
 }
 
 func (c *client) Delete(_ context.Context, key string) error {
+	defer c.logQueryAndSendMetrics(time.Now(), "DELETE")
+
 	return c.useTransaction(func(txn *badger.Txn) error {
 		return txn.Delete([]byte(key))
 	})
@@ -89,15 +107,31 @@ func (c *client) useTransaction(f func(txn *badger.Txn) error) error {
 
 	err := f(txn)
 	if err != nil {
+		c.logger.Debugf("error while executing transaction: %v", err)
+
 		return err
 	}
 
 	err = txn.Commit()
 	if err != nil {
+		c.logger.Debugf("error while commiting transaction: %v", err)
+
 		return err
 	}
 
 	return nil
+}
+
+func (c *client) logQueryAndSendMetrics(start time.Time, methodType string) {
+	duration := time.Since(start).Milliseconds()
+
+	c.logger.Debug(&Log{
+		Type:     methodType,
+		Duration: duration,
+	})
+
+	c.metrics.RecordHistogram(context.Background(), "app_badger_stats", float64(duration), "database", c.configs.DirPath,
+		"type", methodType)
 }
 
 type Health struct {

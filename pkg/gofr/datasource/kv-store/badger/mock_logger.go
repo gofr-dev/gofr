@@ -37,11 +37,11 @@ func (m *MockLogger) Debug(args ...interface{}) {
 	m.log(DEBUG, args...)
 }
 
-func (m *MockLogger) Logf(pattern string, args ...interface{}) {
+func (m *MockLogger) Infof(pattern string, args ...interface{}) {
 	m.logf(INFO, pattern, args...)
 }
 
-func (m *MockLogger) Log(args ...interface{}) {
+func (m *MockLogger) Info(args ...interface{}) {
 	m.log(INFO, args...)
 }
 
