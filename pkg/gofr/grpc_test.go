@@ -2,16 +2,16 @@ package gofr
 
 import (
 	"context"
+	"sync"
 	"testing"
 	"time"
 
-	"google.golang.org/grpc"
-
 	"github.com/stretchr/testify/assert"
+	"gofr.dev/pkg/gofr/testutil"
+	"google.golang.org/grpc"
 
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/logging"
-	"gofr.dev/pkg/gofr/testutil"
 )
 
 func TestNewGRPCServer(t *testing.T) {
@@ -24,7 +24,7 @@ func TestNewGRPCServer(t *testing.T) {
 	assert.NotNil(t, g, "TEST Failed.\n")
 }
 
-func TestGRPC_ServerRun(t *testing.T) {
+func TestGRPC_ServerRun2(t *testing.T) {
 	testCases := []struct {
 		desc       string
 		grcpServer *grpc.Server
@@ -46,7 +46,17 @@ func TestGRPC_ServerRun(t *testing.T) {
 				port:   tc.port,
 			}
 
-			g.Run(c)
+			wg := &sync.WaitGroup{}
+			wg.Add(1)
+
+			go func() {
+				g.Run(c)
+				wg.Done()
+			}()
+
+			wg.Wait()
+
+			time.Sleep(100 * time.Millisecond)
 		}
 
 		out := testutil.StderrOutputForFunc(f)
@@ -64,13 +74,40 @@ func TestGRPC_ServerShutdown(t *testing.T) {
 
 	go g.Run(&c)
 
-	var errChan = make(chan error, 1)
+	// Wait for the server to start
+	time.Sleep(10 * time.Millisecond)
+
+	// Create a context with a timeout to test the shutdown
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+
+	err := g.Shutdown(ctx)
+	assert.NoError(t, err, "TestGRPC_ServerShutdown Failed.\n")
+}
+
+func TestGRPC_ServerShutdown_ContextCanceled(t *testing.T) {
+	c := container.Container{
+		Logger: logging.NewLogger(logging.DEBUG),
+	}
+
+	g := newGRPCServer(&c, 9999)
+
+	go g.Run(&c)
+
+	// Wait for the server to start
+	time.Sleep(10 * time.Millisecond)
+
+	// Create a context that can be canceled
+	ctx, cancel := context.WithCancel(context.Background())
+
+	errChan := make(chan error, 1)
 	go func() {
-		time.Sleep(100 * time.Millisecond)
-		errChan <- g.Shutdown(context.Background())
+		errChan <- g.Shutdown(ctx)
 	}()
 
-	err := <-errChan
+	// Cancel the context immediately
+	cancel()
 
-	assert.NoError(t, err, "TEST Failed.\n")
+	err := <-errChan
+	assert.ErrorContains(t, err, "context canceled", "Expected error due to context cancellation")
 }

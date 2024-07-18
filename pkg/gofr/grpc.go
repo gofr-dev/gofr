@@ -3,7 +3,10 @@ package gofr
 import (
 	"context"
 	"net"
+	"os"
+	"os/signal"
 	"strconv"
+	"syscall"
 
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	grpc_recovery "github.com/grpc-ecosystem/go-grpc-middleware/recovery"
@@ -40,14 +43,38 @@ func (g *grpcServer) Run(c *container.Container) {
 		return
 	}
 
-	if err := g.server.Serve(listener); err != nil {
-		c.Logger.Errorf("error in starting gRPC server at %s: %s", addr, err)
-		return
-	}
+	go func() {
+		if err := g.server.Serve(listener); err != nil {
+			c.Logger.Errorf("error in starting gRPC server at %s: %s", addr, err)
+		}
+	}()
+
+	// Handle system signals for graceful shutdown
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
+
+	go func() {
+		s := <-sigCh
+		c.Logger.Infof("received signal %v, shutting down gracefully", s)
+
+		if err := g.Shutdown(context.Background()); err != nil {
+			c.Logger.Errorf("error during grpc server shutdown: %v", err)
+		}
+	}()
 }
 
-func (g *grpcServer) Shutdown(_ context.Context) error {
-	g.server.GracefulStop()
+func (g *grpcServer) Shutdown(ctx context.Context) error {
+	stopCh := make(chan struct{})
+	go func() {
+		g.server.GracefulStop()
+		close(stopCh)
+	}()
 
-	return nil
+	select {
+	case <-ctx.Done():
+		g.server.Stop() // Force stop if context is done
+		return ctx.Err()
+	case <-stopCh:
+		return nil
+	}
 }
