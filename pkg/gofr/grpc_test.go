@@ -2,14 +2,13 @@ package gofr
 
 import (
 	"context"
-	"sync"
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	"gofr.dev/pkg/gofr/testutil"
 	"google.golang.org/grpc"
 
+	"github.com/stretchr/testify/assert"
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/logging"
 )
@@ -24,7 +23,7 @@ func TestNewGRPCServer(t *testing.T) {
 	assert.NotNil(t, g, "TEST Failed.\n")
 }
 
-func TestGRPC_ServerRun2(t *testing.T) {
+func TestGRPC_ServerRun(t *testing.T) {
 	testCases := []struct {
 		desc       string
 		grcpServer *grpc.Server
@@ -46,17 +45,7 @@ func TestGRPC_ServerRun2(t *testing.T) {
 				port:   tc.port,
 			}
 
-			wg := &sync.WaitGroup{}
-			wg.Add(1)
-
-			go func() {
-				g.Run(c)
-				wg.Done()
-			}()
-
-			wg.Wait()
-
-			time.Sleep(100 * time.Millisecond)
+			g.Run(c)
 		}
 
 		out := testutil.StderrOutputForFunc(f)

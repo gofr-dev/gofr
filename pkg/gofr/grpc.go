@@ -3,10 +3,7 @@ package gofr
 import (
 	"context"
 	"net"
-	"os"
-	"os/signal"
 	"strconv"
-	"syscall"
 
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	grpc_recovery "github.com/grpc-ecosystem/go-grpc-middleware/recovery"
@@ -43,24 +40,10 @@ func (g *grpcServer) Run(c *container.Container) {
 		return
 	}
 
-	go func() {
-		if err := g.server.Serve(listener); err != nil {
-			c.Logger.Errorf("error in starting gRPC server at %s: %s", addr, err)
-		}
-	}()
-
-	// Handle system signals for graceful shutdown
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
-
-	go func() {
-		s := <-sigCh
-		c.Logger.Infof("received signal %v, shutting down gracefully", s)
-
-		if err := g.Shutdown(context.Background()); err != nil {
-			c.Logger.Errorf("error during grpc server shutdown: %v", err)
-		}
-	}()
+	if err := g.server.Serve(listener); err != nil {
+		c.Logger.Errorf("error in starting gRPC server at %s: %s", addr, err)
+		return
+	}
 }
 
 func (g *grpcServer) Shutdown(ctx context.Context) error {
