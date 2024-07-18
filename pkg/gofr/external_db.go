@@ -40,7 +40,7 @@ func (a *App) AddCassandra(db container.CassandraProvider) {
 	a.container.Cassandra = db
 }
 
-// AddCassandra sets the Cassandra datasource in the app's container.
+// AddKVStore sets the KV-Store datasource in the app's container.
 func (a *App) AddKVStore(db container.KVStoreProvider) {
 	db.UseLogger(a.Logger())
 	db.UseMetrics(a.Metrics())

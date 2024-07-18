@@ -1,10 +1,10 @@
 module gofr.dev/pkg/gofr/datasource/kv-store/badger
 
-go 1.22.3
+go 1.22
 
 require (
 	github.com/dgraph-io/badger/v4 v4.2.0
-	github.com/stretchr/testify v1.4.0
+	github.com/stretchr/testify v1.9.0
 	go.uber.org/mock v0.4.0
 )
 
@@ -27,5 +27,5 @@ require (
 	golang.org/x/net v0.7.0 // indirect
 	golang.org/x/sys v0.5.0 // indirect
 	google.golang.org/protobuf v1.28.1 // indirect
-	gopkg.in/yaml.v2 v2.2.8 // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

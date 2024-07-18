@@ -1,7 +1,9 @@
 # Key Value Store
-A key-value store is a type of NoSQL database that uses a simple data model: each item is stored as a pair consisting of a unique key and a value. This simplicity offers high performance and scalability, making key-value stores ideal for applications requiring fast and efficient data retrieval and storage.
 
-GoFr supports BadgerDB as a key value store. Support for other key-value store will be added in future.
+A key-value store is a type of NoSQL database that uses a simple data model: each item is stored as a pair consisting of a unique key and a value.
+This simplicity offers high performance and scalability, making key-value stores ideal for applications requiring fast and efficient data retrieval and storage.
+
+GoFr supports BadgerDB as a key value store. Support for other key-value store will be added in the future.
 
 Keeping in mind the size of the application in the final build, it felt counter-productive to keep the drivers within
 the framework itself. GoFr provide the following functionalities for its key-value store.
@@ -25,28 +27,28 @@ compromising the extensibility to use multiple databases.
 package main
 
 import (
-    "fmt"
-	
-    "gofr.dev/pkg/gofr"
-    "gofr.dev/pkg/gofr/datasource/kv-store/badger"
+	"fmt"
+
+	"gofr.dev/pkg/gofr"
+	"gofr.dev/pkg/gofr/datasource/kv-store/badger"
 )
 
 type User struct {
-    Id   string 
-    Name string 
-    Age  string 
+	Id   string
+	Name string
+	Age  string
 }
 
 func main() {
-    app := gofr.New()
-	
-    app.AddKVStore(badger.New(badger.Configs{DirPath: "badger-example"}))
-    
-    app.POST("/user", Post)
-    app.GET("/user", Get)
-	app.Delete("/user", Delete)
-    
-    app.Run()
+	app := gofr.New()
+
+	app.AddKVStore(badger.New(badger.Configs{DirPath: "badger-example"}))
+
+	app.POST("/user", Post)
+	app.GET("/user", Get)
+	app.DELETE("/user", Delete)
+
+	app.Run()
 }
 
 func Post(ctx *gofr.Context) (interface{}, error) {
@@ -68,7 +70,7 @@ func Get(ctx *gofr.Context) (interface{}, error) {
 }
 
 func Delete(ctx *gofr.Context) (interface{}, error) {
-	err := ctx.KVStore.Delete(c, "name")
+	err := ctx.KVStore.Delete(ctx, "name")
 	if err != nil {
 		return nil, err
 	}

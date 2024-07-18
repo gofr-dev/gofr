@@ -6,9 +6,8 @@ import (
 	"fmt"
 	"testing"
 
-	"go.uber.org/mock/gomock"
-
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/mock/gomock"
 )
 
 func setupDB(t *testing.T) *client {
@@ -18,9 +17,15 @@ func setupDB(t *testing.T) *client {
 	var logs []byte
 
 	ctrl := gomock.NewController(t)
+	mockMetrics := NewMockMetrics(ctrl)
+
+	mockMetrics.EXPECT().NewHistogram("app_badger_stats", "Response time of Badger queries in milliseconds.", gomock.Any())
+
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_badger_stats", gomock.Any(), "database", cl.configs.DirPath,
+		"type", gomock.Any()).AnyTimes()
 
 	cl.UseLogger(NewMockLogger(DEBUG, bytes.NewBuffer(logs)))
-	cl.UseMetrics(NewMockMetrics(ctrl))
+	cl.UseMetrics(mockMetrics)
 	cl.Connect()
 
 	return cl
