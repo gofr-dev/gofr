@@ -24,30 +24,30 @@ func New(configs Configs) *client {
 	return &client{configs: configs}
 }
 
-// UseLogger sets the logger for the badgerDB client which asserts the Logger interface.
+// UseLogger sets the logger for the BadgerDB client which asserts the Logger interface.
 func (c *client) UseLogger(logger any) {
 	if l, ok := logger.(Logger); ok {
 		c.logger = l
 	}
 }
 
-// UseMetrics sets the metrics for the badgerDB client which asserts the Metrics interface.
+// UseMetrics sets the metrics for the BadgerDB client which asserts the Metrics interface.
 func (c *client) UseMetrics(metrics any) {
 	if m, ok := metrics.(Metrics); ok {
 		c.metrics = m
 	}
 }
 
-// Connect establishes a connection to badgerDB and registers metrics using the provided configuration when the client was Created.
+// Connect establishes a connection to BadgerDB and registers metrics using the provided configuration when the client was Created.
 func (c *client) Connect() {
-	c.logger.Infof("connecting to badgerDB at %v", c.configs.DirPath)
+	c.logger.Infof("connecting to BadgerDB at %v", c.configs.DirPath)
 
 	badgerBuckets := []float64{.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 4, 5, 7.5, 10}
 	c.metrics.NewHistogram("app_badger_stats", "Response time of Badger queries in milliseconds.", badgerBuckets...)
 
 	db, err := badger.Open(badger.DefaultOptions(c.configs.DirPath))
 	if err != nil {
-		c.logger.Errorf("error while connecting to badgerDB: %v", err)
+		c.logger.Errorf("error while connecting to BadgerDB: %v", err)
 	}
 
 	c.db = db
