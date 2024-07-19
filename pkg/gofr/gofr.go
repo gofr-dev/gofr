@@ -3,6 +3,7 @@ package gofr
 import (
 	"context"
 	"fmt"
+
 	"net/http"
 	"os"
 	"path/filepath"
@@ -334,64 +335,64 @@ func (a *App) getExporter(name, host, port, url string) (sdktrace.SpanExporter, 
 		err      error
 	)
 
-	authHeader := a.Config.Get("TRACER_AUTH_KEY")
-
 	switch strings.ToLower(name) {
 	case "otlp":
-		if url == "" {
-			url = fmt.Sprintf("%s:%s", host, port)
-		}
-
-		a.container.Logf("Exporting traces to otlp at %s", url)
-		opts := []otlptracegrpc.Option{otlptracegrpc.WithInsecure(), otlptracegrpc.WithEndpoint(url)}
-
-		if authHeader != "" {
-			opts = append(opts, otlptracegrpc.WithHeaders(map[string]string{"Authorization": authHeader}))
-		}
-
-		exporter, err = otlptracegrpc.New(context.Background(), opts...)
+		return a.buildOtlp(url, host, port)
 	case "jaeger":
-		if url == "" {
-			url = fmt.Sprintf("%s:%s", host, port)
-		}
-
-		a.container.Logf("Exporting traces to jaeger at %s", url)
-
-		opts := []otlptracegrpc.Option{otlptracegrpc.WithInsecure(), otlptracegrpc.WithEndpoint(url)}
-
-		if authHeader != "" {
-			opts = append(opts, otlptracegrpc.WithHeaders(map[string]string{"Authorization": authHeader}))
-		}
-
-		exporter, err = otlptracegrpc.New(context.Background(), opts...)
+		return a.buildOtlp(url, host, port)
 	case "zipkin":
-		if url == "" {
-			url = fmt.Sprintf("http://%s:%s/api/v2/spans", host, port)
-		}
-
-		a.container.Logf("Exporting traces to zipkin at %s", url)
-
-		var opts []zipkin.Option
-		if authHeader != "" {
-			opts = append(opts, zipkin.WithHeaders(map[string]string{"Authorization": authHeader}))
-		}
-
-		exporter, err = zipkin.New(url, opts...)
+		return a.buildZipkin(url, host, port)
 	case gofrTraceExporter:
 		if url == "" {
 			url = "https://tracer-api.gofr.dev/api/spans"
 		}
+
 		a.container.Logf("Exporting traces to GoFr at %s", gofrTracerURL)
 
 		exporter = NewExporter(url, logging.NewLogger(logging.INFO))
 	default:
 		if name == "" {
-			a.Logger().Error("TRACE_EXPORTER env is missing\n")
+			a.Logger().Error("TRACE_EXPORTER env is missing")
+		} else {
+			a.container.Errorf("unsupported trace exporter: %s", name)
 		}
-		a.container.Errorf("unsupported trace exporter: %s", name)
 	}
 
 	return exporter, err
+}
+func (a *App) buildOtlp(url, host, port string) (sdktrace.SpanExporter, error) {
+	if url == "" {
+		url = fmt.Sprintf("%s:%s", host, port)
+	}
+
+	a.container.Logf("Exporting traces to otlp at %s", url)
+
+	opts := []otlptracegrpc.Option{otlptracegrpc.WithInsecure(), otlptracegrpc.WithEndpoint(url)}
+
+	authHeader := a.Config.Get("TRACER_AUTH_KEY")
+
+	if authHeader != "" {
+		opts = append(opts, otlptracegrpc.WithHeaders(map[string]string{"Authorization": authHeader}))
+	}
+
+	return otlptracegrpc.New(context.Background(), opts...)
+}
+func (a *App) buildZipkin(url, host, port string) (sdktrace.SpanExporter, error) {
+	if url == "" {
+		url = fmt.Sprintf("http://%s:%s/api/v2/spans", host, port)
+	}
+
+	a.container.Logf("Exporting traces to zipkin at %s", url)
+
+	var opts []zipkin.Option
+
+	authHeader := a.Config.Get("TRACER_AUTH_KEY")
+
+	if authHeader != "" {
+		opts = append(opts, zipkin.WithHeaders(map[string]string{"Authorization": authHeader}))
+	}
+
+	return zipkin.New(url, opts...)
 }
 
 type otelErrorHandler struct {

@@ -361,6 +361,25 @@ func Test_initTracer(t *testing.T) {
 		"TRACER_URL":     "https://tracer-service.dev",
 	})
 
+	mockConfig8 := config.NewMockConfig(map[string]string{
+		"TRACE_EXPORTER": "otlp",
+		"TRACER_HOST":    "localhost",
+		"TRACER_PORT":    "2005",
+	})
+	mockConfig9 := config.NewMockConfig(map[string]string{
+		"TRACE_EXPORTER":  "otlp",
+		"TRACER_HOST":     "localhost",
+		"TRACER_PORT":     "2005",
+		"TRACER_AUTH_KEY": "valid-token",
+	})
+	mockConfig10 := config.NewMockConfig(map[string]string{
+		"TRACER_HOST": "localhost",
+		"TRACER_PORT": "2005",
+	})
+	mockConfig11 := config.NewMockConfig(map[string]string{
+		"TRACER_HOST": "nothing",
+		"TRACER_PORT": "2005",
+	})
 	tests := []struct {
 		desc               string
 		config             config.Config
@@ -373,6 +392,10 @@ func Test_initTracer(t *testing.T) {
 		{"jaeger exporter with auth", mockConfig5, "Exporting traces to jaeger at localhost:2005"},
 		{"jaeger exporter custom tracer url", mockConfig7, "Exporting traces to jaeger at https://tracer-service.dev"},
 		{"gofr exporter", mockConfig3, "Exporting traces to GoFr at https://tracer.gofr.dev"},
+		{"otlp exporter", mockConfig8, "Exporting traces to otlp at localhost:2005"},
+		{"otlp exporter with auth", mockConfig9, "Exporting traces to otlp at localhost:2005"},
+		{"without exporter", mockConfig10, "TRACE_EXPORTER env is missing"},
+		{"not define exporter", mockConfig11, "unsupported trace exporter: nothing"},
 	}
 
 	for i, tc := range tests {
