@@ -121,15 +121,15 @@ func Test_EnvFailureWithHyphen(t *testing.T) {
 func createEnvFile(t *testing.T, fileName string, envData map[string]string) {
 	t.Helper()
 
-	// Create or open the .env file for writing
+	// Create or open the env file for writing
 	envFile, err := os.Create("configs/" + fileName)
 	if err != nil {
-		t.Fatalf("error creating .env file: %v", err)
+		t.Fatalf("error creating %s file: %v", fileName, err)
 	}
 
 	defer envFile.Close()
 
-	// Write data to the .env file
+	// Write data to the env file
 	for key, value := range envData {
 		_, err := fmt.Fprintf(envFile, "%s=%s\n", key, value)
 		if err != nil {

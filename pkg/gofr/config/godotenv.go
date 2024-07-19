@@ -41,11 +41,11 @@ func (e *EnvLoader) read(folder string) {
 
 	err := godotenv.Load(defaultFile)
 	if err != nil {
-		if errors.Is(err, fs.ErrNotExist) {
-			e.logger.Warnf("Failed to load config from file: %v, Err: %v", defaultFile, err)
-		} else {
+		if !errors.Is(err, fs.ErrNotExist) {
 			e.logger.Fatalf("Failed to load config from file: %v, Err: %v", defaultFile, err)
 		}
+
+		e.logger.Warnf("Failed to load config from file: %v, Err: %v", defaultFile, err)
 	} else {
 		e.logger.Infof("Loaded config from file: %v", defaultFile)
 	}
