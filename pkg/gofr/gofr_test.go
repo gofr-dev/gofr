@@ -373,12 +373,12 @@ func Test_initTracer(t *testing.T) {
 		"TRACER_AUTH_KEY": "valid-token",
 	})
 	mockConfig10 := config.NewMockConfig(map[string]string{
-		"TRACER_HOST": "localhost",
-		"TRACER_PORT": "2005",
+		"TRACER_URL": "https://tracer-service.dev",
 	})
 	mockConfig11 := config.NewMockConfig(map[string]string{
-		"TRACER_HOST": "nothing",
-		"TRACER_PORT": "2005",
+		"TRACE_EXPORTER": "nothing",
+		"TRACER_HOST":    "localhost",
+		"TRACER_PORT":    "2005",
 	})
 	tests := []struct {
 		desc               string
@@ -394,12 +394,32 @@ func Test_initTracer(t *testing.T) {
 		{"gofr exporter", mockConfig3, "Exporting traces to GoFr at https://tracer.gofr.dev"},
 		{"otlp exporter", mockConfig8, "Exporting traces to otlp at localhost:2005"},
 		{"otlp exporter with auth", mockConfig9, "Exporting traces to otlp at localhost:2005"},
-		{"without exporter", mockConfig10, "TRACE_EXPORTER env is missing"},
-		{"not define exporter", mockConfig11, "unsupported trace exporter: nothing"},
 	}
 
 	for i, tc := range tests {
 		logMessage := testutil.StdoutOutputForFunc(func() {
+			mockContainer, _ := container.NewMockContainer(t)
+
+			a := App{
+				Config:    tc.config,
+				container: mockContainer,
+			}
+
+			a.initTracer()
+		})
+
+		assert.Contains(t, logMessage, tc.expectedLogMessage, "TEST[%d], Failed.\n%s", i, tc.desc)
+	}
+	testErr := []struct {
+		desc               string
+		config             config.Config
+		expectedLogMessage string
+	}{
+		{"without exporter", mockConfig10, "TRACE_EXPORTER env is missing"},
+		{"not define exporter", mockConfig11, "unsupported trace exporter: nothing"},
+	}
+	for i, tc := range testErr {
+		logMessage := testutil.StderrOutputForFunc(func() {
 			mockContainer, _ := container.NewMockContainer(t)
 
 			a := App{

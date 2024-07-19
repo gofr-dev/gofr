@@ -339,7 +339,7 @@ func (a *App) getExporter(name, host, port, url string) (sdktrace.SpanExporter, 
 	case "otlp":
 		return a.buildOtlp(url, host, port)
 	case "jaeger":
-		return a.buildOtlp(url, host, port)
+		return a.buildJaeger(url, host, port)
 	case "zipkin":
 		return a.buildZipkin(url, host, port)
 	case gofrTraceExporter:
@@ -352,7 +352,7 @@ func (a *App) getExporter(name, host, port, url string) (sdktrace.SpanExporter, 
 		exporter = NewExporter(url, logging.NewLogger(logging.INFO))
 	default:
 		if name == "" {
-			a.Logger().Error("TRACE_EXPORTER env is missing")
+			a.container.Errorf("TRACE_EXPORTER env is missing")
 		} else {
 			a.container.Errorf("unsupported trace exporter: %s", name)
 		}
@@ -366,6 +366,23 @@ func (a *App) buildOtlp(url, host, port string) (sdktrace.SpanExporter, error) {
 	}
 
 	a.container.Logf("Exporting traces to otlp at %s", url)
+
+	opts := []otlptracegrpc.Option{otlptracegrpc.WithInsecure(), otlptracegrpc.WithEndpoint(url)}
+
+	authHeader := a.Config.Get("TRACER_AUTH_KEY")
+
+	if authHeader != "" {
+		opts = append(opts, otlptracegrpc.WithHeaders(map[string]string{"Authorization": authHeader}))
+	}
+
+	return otlptracegrpc.New(context.Background(), opts...)
+}
+func (a *App) buildJaeger(url, host, port string) (sdktrace.SpanExporter, error) {
+	if url == "" {
+		url = fmt.Sprintf("%s:%s", host, port)
+	}
+
+	a.container.Logf("Exporting traces to jaeger at %s", url)
 
 	opts := []otlptracegrpc.Option{otlptracegrpc.WithInsecure(), otlptracegrpc.WithEndpoint(url)}
 
