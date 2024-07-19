@@ -337,9 +337,9 @@ func (a *App) getExporter(name, host, port, url string) (sdktrace.SpanExporter, 
 
 	switch strings.ToLower(name) {
 	case "otlp":
-		return a.buildOtlp(url, host, port)
+		return a.buildOtlp(url, host, port, strings.ToLower(name))
 	case "jaeger":
-		return a.buildJaeger(url, host, port)
+		return a.buildOtlp(url, host, port, strings.ToLower(name))
 	case "zipkin":
 		return a.buildZipkin(url, host, port)
 	case gofrTraceExporter:
@@ -360,12 +360,12 @@ func (a *App) getExporter(name, host, port, url string) (sdktrace.SpanExporter, 
 
 	return exporter, err
 }
-func (a *App) buildOtlp(url, host, port string) (sdktrace.SpanExporter, error) {
+func (a *App) buildOtlp(url, host, port, exporter string) (sdktrace.SpanExporter, error) {
 	if url == "" {
 		url = fmt.Sprintf("%s:%s", host, port)
 	}
 
-	a.container.Logf("Exporting traces to otlp at %s", url)
+	a.container.Logf("Exporting traces to %s at %s", exporter, url)
 
 	opts := []otlptracegrpc.Option{otlptracegrpc.WithInsecure(), otlptracegrpc.WithEndpoint(url)}
 
@@ -377,23 +377,7 @@ func (a *App) buildOtlp(url, host, port string) (sdktrace.SpanExporter, error) {
 
 	return otlptracegrpc.New(context.Background(), opts...)
 }
-func (a *App) buildJaeger(url, host, port string) (sdktrace.SpanExporter, error) {
-	if url == "" {
-		url = fmt.Sprintf("%s:%s", host, port)
-	}
 
-	a.container.Logf("Exporting traces to jaeger at %s", url)
-
-	opts := []otlptracegrpc.Option{otlptracegrpc.WithInsecure(), otlptracegrpc.WithEndpoint(url)}
-
-	authHeader := a.Config.Get("TRACER_AUTH_KEY")
-
-	if authHeader != "" {
-		opts = append(opts, otlptracegrpc.WithHeaders(map[string]string{"Authorization": authHeader}))
-	}
-
-	return otlptracegrpc.New(context.Background(), opts...)
-}
 func (a *App) buildZipkin(url, host, port string) (sdktrace.SpanExporter, error) {
 	if url == "" {
 		url = fmt.Sprintf("http://%s:%s/api/v2/spans", host, port)
