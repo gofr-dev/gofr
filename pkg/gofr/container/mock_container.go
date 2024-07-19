@@ -19,6 +19,7 @@ type Mocks struct {
 	Clickhouse *MockClickhouse
 	Cassandra  *MockCassandra
 	Mongo      *MockMongo
+	KVStore    *MockKVStore
 }
 
 func NewMockContainer(t *testing.T) (*Container, Mocks) {
@@ -44,12 +45,16 @@ func NewMockContainer(t *testing.T) (*Container, Mocks) {
 	mongoMock := NewMockMongo(ctrl)
 	container.Mongo = mongoMock
 
+	kvStoreMock := NewMockKVStore(ctrl)
+	container.KVStore = kvStoreMock
+
 	mocks := Mocks{
 		Redis:      redisMock,
 		SQL:        sqlMock,
 		Clickhouse: clickhouseMock,
 		Cassandra:  cassandraMock,
 		Mongo:      mongoMock,
+		KVStore:    kvStoreMock,
 	}
 
 	mockMetrics := NewMockMetrics(ctrl)
