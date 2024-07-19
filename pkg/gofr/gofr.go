@@ -296,17 +296,6 @@ func (a *App) Migrate(migrationsMap map[int64]migration.Migrate) {
 }
 
 func (a *App) initTracer() {
-	traceExporter := a.Config.Get("TRACE_EXPORTER")
-	tracerURL := a.Config.Get("TRACER_URL")
-
-	// deprecated : tracer_host and tracer_port is deprecated and will be removed in upcoming versions
-	tracerHost := a.Config.Get("TRACER_HOST")
-	tracerPort := a.Config.GetOrDefault("TRACER_PORT", "9411")
-
-	if tracerURL == "" && tracerHost != "" && tracerPort != "" {
-		a.Logger().Warn("TRACER_HOST and TRACER_PORT are deprecated, use TRACER_URL instead")
-	}
-
 	tp := sdktrace.NewTracerProvider(
 		sdktrace.WithResource(resource.NewWithAttributes(
 			semconv.SchemaURL,
@@ -316,6 +305,27 @@ func (a *App) initTracer() {
 	otel.SetTracerProvider(tp)
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
 	otel.SetErrorHandler(&otelErrorHandler{logger: a.container.Logger})
+
+	traceExporter := a.Config.Get("TRACE_EXPORTER")
+	tracerURL := a.Config.Get("TRACER_URL")
+
+	// deprecated : tracer_host and tracer_port is deprecated and will be removed in upcoming versions
+	tracerHost := a.Config.Get("TRACER_HOST")
+	tracerPort := a.Config.GetOrDefault("TRACER_PORT", "9411")
+
+	if tracerURL != "" && traceExporter == "" {
+		a.Logger().Errorf("missing TRACE_EXPORTER config, should be provided with TRACER_URL to enable tracing")
+		return
+	}
+
+	if tracerURL == "" && traceExporter != "" {
+		a.Logger().Errorf("missing TRACER_URL config, should be provided with TRACE_EXPORTER to enable tracing")
+		return
+	}
+
+	if tracerURL == "" && tracerHost != "" && tracerPort != "" {
+		a.Logger().Warn("TRACER_HOST and TRACER_PORT are deprecated, use TRACER_URL instead")
+	}
 
 	if (traceExporter != "" && tracerHost != "") || tracerURL != "" || traceExporter == gofrTraceExporter {
 		exporter, err := a.getExporter(traceExporter, tracerHost, tracerPort, tracerURL)
