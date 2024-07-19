@@ -8,8 +8,6 @@ import (
 	"gofr.dev/pkg/gofr/datasource"
 )
 
-//go:generate go run go.uber.org/mock/mockgen -source=interface.go -destination=mock_interfaces.go -package=mqtt
-
 type Publisher interface {
 	Publish(ctx context.Context, topic string, message []byte) error
 }

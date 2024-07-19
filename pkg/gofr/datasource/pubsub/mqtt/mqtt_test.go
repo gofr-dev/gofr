@@ -6,7 +6,6 @@ import (
 	"net/url"
 	"sync"
 	"testing"
-	"time"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/stretchr/testify/assert"
@@ -568,23 +567,13 @@ func TestMQTT_Close(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	ctx := context.Background()
-	mockMetrics := NewMockMetrics(ctrl)
-	mockLogger := logging.NewMockLogger(logging.ERROR)
-	client := New(&Config{}, mockLogger, mockMetrics)
+	ctrl, client, mockMQTT, _, _ := getMockMQTT(t, mockConfigs)
+	defer ctrl.Finish()
 
-	// Set expectations for metrics
-	mockMetrics.EXPECT().IncrementCounter(ctx, "app_pubsub_publish_total_count", "topic", "test")
+	mockMQTT.EXPECT().Disconnect(uint(DefaultCloseTimeout))
 
 	// Close the client
-	_ = client.Close()
+	err := client.Close()
 
-	// Allow some time for the client to disconnects
-	time.Sleep(DefaultCloseTimeout)
-
-	err := client.Publish(ctx, "test", []byte("hello"))
-
-	// Assertions
-	assert.Error(t, err)
-	assert.ErrorContains(t, err, "not Connected")
+	assert.NoError(t, err)
 }

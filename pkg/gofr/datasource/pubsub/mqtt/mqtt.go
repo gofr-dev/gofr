@@ -354,9 +354,7 @@ func (m *MQTT) Close() error {
 		timeout = DefaultCloseTimeout
 	}
 
-	m.Client.Disconnect(uint(timeout.Milliseconds()))
-
-	return nil
+	return m.Disconnect(uint(timeout))
 }
 
 func (m *MQTT) Disconnect(waitTime uint) error {
