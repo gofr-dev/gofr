@@ -319,7 +319,6 @@ func (a *App) initTracer() {
 
 	if (traceExporter != "" && tracerHost != "") || tracerURL != "" || traceExporter == gofrTraceExporter {
 		exporter, err := a.getExporter(traceExporter, tracerHost, tracerPort, tracerURL)
-
 		if err != nil {
 			a.container.Error(err)
 		}
@@ -338,6 +337,19 @@ func (a *App) getExporter(name, host, port, url string) (sdktrace.SpanExporter, 
 	authHeader := a.Config.Get("TRACER_AUTH_KEY")
 
 	switch strings.ToLower(name) {
+	case "otlp":
+		if url == "" {
+			url = fmt.Sprintf("%s:%s", host, port)
+		}
+
+		a.container.Logf("Exporting traces to otlp at %s", url)
+		opts := []otlptracegrpc.Option{otlptracegrpc.WithInsecure(), otlptracegrpc.WithEndpoint(url)}
+
+		if authHeader != "" {
+			opts = append(opts, otlptracegrpc.WithHeaders(map[string]string{"Authorization": authHeader}))
+		}
+
+		exporter, err = otlptracegrpc.New(context.Background(), opts...)
 	case "jaeger":
 		if url == "" {
 			url = fmt.Sprintf("%s:%s", host, port)
@@ -369,11 +381,13 @@ func (a *App) getExporter(name, host, port, url string) (sdktrace.SpanExporter, 
 		if url == "" {
 			url = "https://tracer-api.gofr.dev/api/spans"
 		}
-
 		a.container.Logf("Exporting traces to GoFr at %s", gofrTracerURL)
 
 		exporter = NewExporter(url, logging.NewLogger(logging.INFO))
 	default:
+		if name == "" {
+			a.Logger().Error("TRACE_EXPORTER env is missing\n")
+		}
 		a.container.Errorf("unsupported trace exporter: %s", name)
 	}
 
