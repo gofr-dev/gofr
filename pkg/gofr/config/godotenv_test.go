@@ -99,20 +99,23 @@ func Test_EnvFailureWithHyphen(t *testing.T) {
 
 	logger := logging.NewMockLogger(logging.DEBUG)
 
-	err := createConfigsDirectory()
-	if err != nil {
-		t.Error(err)
+	configFiles := []string{".env", ".local.env"}
+
+	for _, file := range configFiles {
+		err := createConfigsDirectory()
+		if err != nil {
+			t.Error(err)
+		}
+
+		createEnvFile(t, file, envData)
+
+		env := NewEnvFile("configs", logger)
+
+		assert.Equal(t, "test", env.GetOrDefault("KEY-WITH-HYPHEN", "test"), "TEST Failed.\n godotenv failure with hyphen")
+		assert.Equal(t, "", env.Get("UNABLE_TO_LOAD"), "TEST Failed.\n godotenv failure with hyphen")
+
+		os.RemoveAll("configs")
 	}
-
-	// Call the function to create the .env file
-	createEnvFile(t, ".env", envData)
-
-	defer os.RemoveAll("configs")
-
-	env := NewEnvFile("configs", logger)
-
-	assert.Equal(t, "test", env.GetOrDefault("KEY-WITH-HYPHEN", "test"), "TEST Failed.\n godotenv failure with hyphen")
-	assert.Equal(t, "", env.Get("UNABLE_TO_LOAD"), "TEST Failed.\n godotenv failure with hyphen")
 }
 
 func createEnvFile(t *testing.T, fileName string, envData map[string]string) {
