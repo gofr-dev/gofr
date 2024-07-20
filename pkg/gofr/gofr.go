@@ -343,6 +343,7 @@ func (a *App) getExporter(name, host, port, url string) (sdktrace.SpanExporter, 
 	case "otlp":
 		return a.buildOpenTelemetryProtocol(ctx, url, host, port, strings.ToLower(name), authHeader)
 	case "jaeger":
+		//jaeger accept OpenTelemetry Protocol (OTLP)
 		return a.buildOpenTelemetryProtocol(ctx, url, host, port, strings.ToLower(name), authHeader)
 	case "zipkin":
 		return a.buildZipkin(url, host, port, authHeader)
@@ -364,6 +365,9 @@ func (a *App) getExporter(name, host, port, url string) (sdktrace.SpanExporter, 
 
 	return exporter, err
 }
+
+// buildOpenTelemetryProtocol using OpenTelemetryProtocol as the trace exporter
+// jaeger accept OpenTelemetry Protocol (OTLP) over gRPC to upload trace data
 func (a *App) buildOpenTelemetryProtocol(ctx context.Context, url, host, port, exporter, authHeader string) (sdktrace.SpanExporter, error) {
 	if url == "" {
 		url = fmt.Sprintf("%s:%s", host, port)
