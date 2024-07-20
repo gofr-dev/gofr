@@ -319,39 +319,7 @@ func Test_AddRESTHandlers(t *testing.T) {
 		assert.Equal(t, tc.err, err, "TEST[%d], Failed.\n%s", i, tc.desc)
 	}
 }
-func Test_initTracerWithErr(t *testing.T) {
-	mockConfig10 := config.NewMockConfig(map[string]string{
-		"TRACER_URL": "https://tracer-service.dev",
-	})
-	mockConfig11 := config.NewMockConfig(map[string]string{
-		"TRACE_EXPORTER": "nothing",
-		"TRACER_HOST":    "localhost",
-		"TRACER_PORT":    "2005",
-	})
-	testErr := []struct {
-		desc               string
-		config             config.Config
-		expectedLogMessage string
-	}{
-		{"without exporter", mockConfig10, "TRACE_EXPORTER env is missing"},
-		{"not define exporter", mockConfig11, "unsupported trace exporter: nothing"},
-	}
 
-	for i, tc := range testErr {
-		logMessage := testutil.StderrOutputForFunc(func() {
-			mockContainer, _ := container.NewMockContainer(t)
-
-			a := App{
-				Config:    tc.config,
-				container: mockContainer,
-			}
-
-			a.initTracer()
-		})
-
-		assert.Contains(t, logMessage, tc.expectedLogMessage, "TEST[%d], Failed.\n%s", i, tc.desc)
-	}
-}
 func Test_initTracer(t *testing.T) {
 	mockConfig1 := config.NewMockConfig(map[string]string{
 		"TRACE_EXPORTER": "zipkin",
@@ -398,6 +366,7 @@ func Test_initTracer(t *testing.T) {
 		"TRACER_HOST":    "localhost",
 		"TRACER_PORT":    "2005",
 	})
+
 	mockConfig9 := config.NewMockConfig(map[string]string{
 		"TRACE_EXPORTER":  "otlp",
 		"TRACER_HOST":     "localhost",
@@ -435,25 +404,52 @@ func Test_initTracer(t *testing.T) {
 		assert.Contains(t, logMessage, tc.expectedLogMessage, "TEST[%d], Failed.\n%s", i, tc.desc)
 	}
 }
+
 func Test_initTracer_invalidConfig(t *testing.T) {
-	mockConfig := config.NewMockConfig(map[string]string{
+	mockConfig1 := config.NewMockConfig(map[string]string{
 		"TRACE_EXPORTER": "abc",
 		"TRACER_HOST":    "localhost",
 		"TRACER_PORT":    "2005",
 	})
 
-	errLogMessage := testutil.StderrOutputForFunc(func() {
-		mockContainer, _ := container.NewMockContainer(t)
-
-		a := App{
-			Config:    mockConfig,
-			container: mockContainer,
-		}
-
-		a.initTracer()
+	mockConfig2 := config.NewMockConfig(map[string]string{
+		"TRACER_URL": "https://tracer-service.dev",
 	})
 
-	assert.Contains(t, errLogMessage, "unsupported trace exporter: abc", "TEST Failed.\n")
+	mockConfig3 := config.NewMockConfig(map[string]string{
+		"TRACER_HOST": "localhost",
+		"TRACER_PORT": "2005",
+	})
+
+	mockConfig4 := config.NewMockConfig(map[string]string{
+		"TRACE_EXPORTER": "otlp",
+	})
+
+	testErr := []struct {
+		desc               string
+		config             config.Config
+		expectedLogMessage string
+	}{
+		{"unsupported trace exporter", mockConfig1, "unsupported TRACE_EXPORTER: abc"},
+		{"missing exporter", mockConfig2, "TRACE_EXPORTER env is missing"},
+		{"missing exporter", mockConfig3, "TRACE_EXPORTER env is missing"},
+		{"set exporter but not provide address", mockConfig4, "TRACE_EXPORTER is set, but TRACER_URL or TRACER_HOST is not set"},
+	}
+
+	for i, tc := range testErr {
+		logMessage := testutil.StderrOutputForFunc(func() {
+			mockContainer, _ := container.NewMockContainer(t)
+
+			a := App{
+				Config:    tc.config,
+				container: mockContainer,
+			}
+
+			a.initTracer()
+		})
+
+		assert.Contains(t, logMessage, tc.expectedLogMessage, "TEST[%d], Failed.\n%s", i, tc.desc)
+	}
 }
 
 func Test_UseMiddleware(t *testing.T) {

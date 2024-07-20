@@ -3,7 +3,6 @@ package gofr
 import (
 	"context"
 	"fmt"
-
 	"net/http"
 	"os"
 	"path/filepath"
@@ -318,30 +317,35 @@ func (a *App) initTracer() {
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
 	otel.SetErrorHandler(&otelErrorHandler{logger: a.container.Logger})
 
-	if (traceExporter != "" && tracerHost != "") || tracerURL != "" || traceExporter == gofrTraceExporter {
-		exporter, err := a.getExporter(traceExporter, tracerHost, tracerPort, tracerURL)
-		if err != nil {
-			a.container.Error(err)
-		}
-
-		batcher := sdktrace.NewBatchSpanProcessor(exporter)
-		tp.RegisterSpanProcessor(batcher)
+	exporter, err := a.getExporter(traceExporter, tracerHost, tracerPort, tracerURL)
+	if err != nil {
+		a.container.Error(err)
 	}
+
+	batcher := sdktrace.NewBatchSpanProcessor(exporter)
+	tp.RegisterSpanProcessor(batcher)
 }
 
 func (a *App) getExporter(name, host, port, url string) (sdktrace.SpanExporter, error) {
+	if (host == "" || url == "") && name != "" {
+		a.Logger().Errorf("TRACE_EXPORTER is set, but TRACER_URL or TRACER_HOST is not set")
+	}
+
 	var (
 		exporter sdktrace.SpanExporter
 		err      error
+		ctx      context.Context
 	)
+
+	authHeader := a.Config.Get("TRACER_AUTH_KEY")
 
 	switch strings.ToLower(name) {
 	case "otlp":
-		return a.buildOtlp(url, host, port, strings.ToLower(name))
+		return a.buildOpenTelemetryProtocol(ctx, url, host, port, strings.ToLower(name), authHeader)
 	case "jaeger":
-		return a.buildOtlp(url, host, port, strings.ToLower(name))
+		return a.buildOpenTelemetryProtocol(ctx, url, host, port, strings.ToLower(name), authHeader)
 	case "zipkin":
-		return a.buildZipkin(url, host, port)
+		return a.buildZipkin(url, host, port, authHeader)
 	case gofrTraceExporter:
 		if url == "" {
 			url = "https://tracer-api.gofr.dev/api/spans"
@@ -354,13 +358,13 @@ func (a *App) getExporter(name, host, port, url string) (sdktrace.SpanExporter, 
 		if name == "" {
 			a.container.Errorf("TRACE_EXPORTER env is missing")
 		} else {
-			a.container.Errorf("unsupported trace exporter: %s", name)
+			a.container.Errorf("unsupported TRACE_EXPORTER: %s", name)
 		}
 	}
 
 	return exporter, err
 }
-func (a *App) buildOtlp(url, host, port, exporter string) (sdktrace.SpanExporter, error) {
+func (a *App) buildOpenTelemetryProtocol(ctx context.Context, url, host, port, exporter, authHeader string) (sdktrace.SpanExporter, error) {
 	if url == "" {
 		url = fmt.Sprintf("%s:%s", host, port)
 	}
@@ -369,16 +373,14 @@ func (a *App) buildOtlp(url, host, port, exporter string) (sdktrace.SpanExporter
 
 	opts := []otlptracegrpc.Option{otlptracegrpc.WithInsecure(), otlptracegrpc.WithEndpoint(url)}
 
-	authHeader := a.Config.Get("TRACER_AUTH_KEY")
-
 	if authHeader != "" {
 		opts = append(opts, otlptracegrpc.WithHeaders(map[string]string{"Authorization": authHeader}))
 	}
 
-	return otlptracegrpc.New(context.Background(), opts...)
+	return otlptracegrpc.New(ctx, opts...)
 }
 
-func (a *App) buildZipkin(url, host, port string) (sdktrace.SpanExporter, error) {
+func (a *App) buildZipkin(url, host, port, authHeader string) (sdktrace.SpanExporter, error) {
 	if url == "" {
 		url = fmt.Sprintf("http://%s:%s/api/v2/spans", host, port)
 	}
@@ -386,8 +388,6 @@ func (a *App) buildZipkin(url, host, port string) (sdktrace.SpanExporter, error)
 	a.container.Logf("Exporting traces to zipkin at %s", url)
 
 	var opts []zipkin.Option
-
-	authHeader := a.Config.Get("TRACER_AUTH_KEY")
 
 	if authHeader != "" {
 		opts = append(opts, zipkin.WithHeaders(map[string]string{"Authorization": authHeader}))
