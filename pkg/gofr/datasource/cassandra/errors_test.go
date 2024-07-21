@@ -7,7 +7,7 @@ import (
 )
 
 func Test_DestinationIsNotPointer_Error(t *testing.T) {
-	err := destinationIsNotPointer{}
+	err := errDestinationIsNotPointer
 
 	assert.ErrorContains(t, err, msgDestinationIsNotPointer)
 }
@@ -27,7 +27,7 @@ func Test_UnexpectedSlice_Error(t *testing.T) {
 }
 
 func Test_UnexpectedMap_Error(t *testing.T) {
-	err := unexpectedMap{}
+	err := errUnexpectedMap
 
 	assert.ErrorContains(t, err, msgUnexpectedMap)
 }

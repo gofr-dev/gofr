@@ -1,17 +1,23 @@
 package cassandra
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+)
 
 const (
 	msgDestinationIsNotPointer = "destination is not pointer"
-	msgUnexpectedMap           = "a map was not expected."
+	msgUnexpectedMap           = "a map was not expected"
+	msgUnsupportedBatchType    = "batch type not supported"
+	msgBatchNotInitialised     = "batch not initialized"
 )
 
-type destinationIsNotPointer struct{}
-
-func (d destinationIsNotPointer) Error() string {
-	return msgDestinationIsNotPointer
-}
+var (
+	errDestinationIsNotPointer = errors.New(msgDestinationIsNotPointer)
+	errUnexpectedMap           = errors.New(msgUnexpectedMap)
+	errUnsupportedBatchType    = errors.New(msgUnsupportedBatchType)
+	errBatchNotInitialised     = errors.New(msgBatchNotInitialised)
+)
 
 type unexpectedPointer struct {
 	target string
@@ -27,10 +33,4 @@ type unexpectedSlice struct {
 
 func (d unexpectedSlice) Error() string {
 	return fmt.Sprintf("a slice of %v was not expected.", d.target)
-}
-
-type unexpectedMap struct{}
-
-func (d unexpectedMap) Error() string {
-	return msgUnexpectedMap
 }

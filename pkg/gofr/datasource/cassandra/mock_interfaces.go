@@ -77,6 +77,34 @@ func (m *Mocksession) EXPECT() *MocksessionMockRecorder {
 	return m.recorder
 }
 
+// executeBatch mocks base method.
+func (m *Mocksession) executeBatch(batch batch) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "executeBatch", batch)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// executeBatch indicates an expected call of executeBatch.
+func (mr *MocksessionMockRecorder) executeBatch(batch any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "executeBatch", reflect.TypeOf((*Mocksession)(nil).executeBatch), batch)
+}
+
+// newBatch mocks base method.
+func (m *Mocksession) newBatch(batchtype gocql.BatchType) batch {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "newBatch", batchtype)
+	ret0, _ := ret[0].(batch)
+	return ret0
+}
+
+// newBatch indicates an expected call of newBatch.
+func (mr *MocksessionMockRecorder) newBatch(batchtype any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "newBatch", reflect.TypeOf((*Mocksession)(nil).newBatch), batchtype)
+}
+
 // query mocks base method.
 func (m *Mocksession) query(stmt string, values ...any) query {
 	m.ctrl.T.Helper()
@@ -179,6 +207,60 @@ func (m *Mockquery) scanCAS(dest ...any) (bool, error) {
 func (mr *MockqueryMockRecorder) scanCAS(dest ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "scanCAS", reflect.TypeOf((*Mockquery)(nil).scanCAS), dest...)
+}
+
+// Mockbatch is a mock of batch interface.
+type Mockbatch struct {
+	ctrl     *gomock.Controller
+	recorder *MockbatchMockRecorder
+}
+
+// MockbatchMockRecorder is the mock recorder for Mockbatch.
+type MockbatchMockRecorder struct {
+	mock *Mockbatch
+}
+
+// NewMockbatch creates a new mock instance.
+func NewMockbatch(ctrl *gomock.Controller) *Mockbatch {
+	mock := &Mockbatch{ctrl: ctrl}
+	mock.recorder = &MockbatchMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *Mockbatch) EXPECT() *MockbatchMockRecorder {
+	return m.recorder
+}
+
+// Query mocks base method.
+func (m *Mockbatch) Query(stmt string, args ...any) {
+	m.ctrl.T.Helper()
+	varargs := []any{stmt}
+	for _, a := range args {
+		varargs = append(varargs, a)
+	}
+	m.ctrl.Call(m, "Query", varargs...)
+}
+
+// Query indicates an expected call of Query.
+func (mr *MockbatchMockRecorder) Query(stmt any, args ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{stmt}, args...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Query", reflect.TypeOf((*Mockbatch)(nil).Query), varargs...)
+}
+
+// getBatch mocks base method.
+func (m *Mockbatch) getBatch() *gocql.Batch {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "getBatch")
+	ret0, _ := ret[0].(*gocql.Batch)
+	return ret0
+}
+
+// getBatch indicates an expected call of getBatch.
+func (mr *MockbatchMockRecorder) getBatch() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "getBatch", reflect.TypeOf((*Mockbatch)(nil).getBatch))
 }
 
 // Mockiterator is a mock of iterator interface.

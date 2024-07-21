@@ -16,7 +16,16 @@ var (
 	errMock     = errors.New("test error")
 )
 
-func initTest(t *testing.T) (*Client, *Mocksession, *Mockquery, *Mockiterator) {
+type mockDependencies struct {
+	mockSession *Mocksession
+	mockQuery   *Mockquery
+	mockBatch   *Mockbatch
+	mockIter    *Mockiterator
+}
+
+func initTest(t *testing.T) (*Client, *mockDependencies) {
+	t.Helper()
+
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -25,6 +34,7 @@ func initTest(t *testing.T) (*Client, *Mocksession, *Mockquery, *Mockiterator) {
 	mockMetrics := NewMockMetrics(ctrl)
 	mockSession := NewMocksession(ctrl)
 	mockQuery := NewMockquery(ctrl)
+	mockBatch := NewMockbatch(ctrl)
 	mockIter := NewMockiterator(ctrl)
 
 	config := Config{
@@ -38,11 +48,12 @@ func initTest(t *testing.T) (*Client, *Mocksession, *Mockquery, *Mockiterator) {
 	client.UseMetrics(mockMetrics)
 
 	client.cassandra.session = mockSession
+	client.cassandra.batch = mockBatch
 
 	mockMetrics.EXPECT().RecordHistogram(gomock.AssignableToTypeOf(context.Background()), "app_cassandra_stats",
 		gomock.AssignableToTypeOf(float64(0)), "hostname", client.config.Hosts, "keyspace", client.config.Keyspace).AnyTimes()
 
-	return client, mockSession, mockQuery, mockIter
+	return client, &mockDependencies{mockSession: mockSession, mockQuery: mockQuery, mockBatch: mockBatch, mockIter: mockIter}
 }
 
 func Test_Connect(t *testing.T) {
@@ -107,7 +118,7 @@ func Test_Query(t *testing.T) {
 	mockStruct := users{}
 	mockInt := 0
 
-	client, mockSession, mockQuery, mockIter := initTest(t)
+	client, mockDeps := initTest(t)
 
 	testCases := []struct {
 		desc     string
@@ -117,29 +128,29 @@ func Test_Query(t *testing.T) {
 		expErr   error
 	}{
 		{"success case: struct slice", &mockStructSlice, func() {
-			mockSession.EXPECT().query(query).Return(mockQuery).Times(1)
-			mockQuery.EXPECT().iter().Return(mockIter).Times(1)
-			mockIter.EXPECT().numRows().Return(1).Times(1)
-			mockIter.EXPECT().columns().Return([]gocql.ColumnInfo{{Name: "id"}, {Name: "name"}}).Times(1)
-			mockIter.EXPECT().scan(gomock.Any()).Times(1)
+			mockDeps.mockSession.EXPECT().query(query).Return(mockDeps.mockQuery).Times(1)
+			mockDeps.mockQuery.EXPECT().iter().Return(mockDeps.mockIter).Times(1)
+			mockDeps.mockIter.EXPECT().numRows().Return(1).Times(1)
+			mockDeps.mockIter.EXPECT().columns().Return([]gocql.ColumnInfo{{Name: "id"}, {Name: "name"}}).Times(1)
+			mockDeps.mockIter.EXPECT().scan(gomock.Any()).Times(1)
 		}, &mockStructSlice, nil},
 		{"success case: int slice", &mockIntSlice, func() {
-			mockSession.EXPECT().query(query).Return(mockQuery).Times(1)
-			mockQuery.EXPECT().iter().Return(mockIter).Times(1)
-			mockIter.EXPECT().numRows().Return(1).Times(1)
-			mockIter.EXPECT().scan(gomock.Any()).Times(1)
+			mockDeps.mockSession.EXPECT().query(query).Return(mockDeps.mockQuery).Times(1)
+			mockDeps.mockQuery.EXPECT().iter().Return(mockDeps.mockIter).Times(1)
+			mockDeps.mockIter.EXPECT().numRows().Return(1).Times(1)
+			mockDeps.mockIter.EXPECT().scan(gomock.Any()).Times(1)
 		}, &mockIntSlice, nil},
 		{"success case: struct", &mockStruct, func() {
-			mockSession.EXPECT().query(query).Return(mockQuery).Times(1)
-			mockQuery.EXPECT().iter().Return(mockIter).Times(1)
-			mockIter.EXPECT().columns().Return([]gocql.ColumnInfo{{Name: "id"}, {Name: "name"}}).Times(1)
-			mockIter.EXPECT().scan(gomock.Any()).Times(1)
+			mockDeps.mockSession.EXPECT().query(query).Return(mockDeps.mockQuery).Times(1)
+			mockDeps.mockQuery.EXPECT().iter().Return(mockDeps.mockIter).Times(1)
+			mockDeps.mockIter.EXPECT().columns().Return([]gocql.ColumnInfo{{Name: "id"}, {Name: "name"}}).Times(1)
+			mockDeps.mockIter.EXPECT().scan(gomock.Any()).Times(1)
 		}, &mockStruct, nil},
 		{"failure case: dest is not pointer", mockStructSlice, func() {}, mockStructSlice,
-			destinationIsNotPointer{}},
+			errDestinationIsNotPointer},
 		{"failure case: dest is int", &mockInt, func() {
-			mockSession.EXPECT().query(query).Return(mockQuery).Times(1)
-			mockQuery.EXPECT().iter().Return(mockIter).Times(1)
+			mockDeps.mockSession.EXPECT().query(query).Return(mockDeps.mockQuery).Times(1)
+			mockDeps.mockQuery.EXPECT().iter().Return(mockDeps.mockIter).Times(1)
 		}, &mockInt, unexpectedPointer{target: "int"}},
 	}
 
@@ -156,7 +167,7 @@ func Test_Query(t *testing.T) {
 func Test_Exec(t *testing.T) {
 	const query = "INSERT INTO users (id, name) VALUES(1, 'Test')"
 
-	client, mockSession, mockQuery, _ := initTest(t)
+	client, mockDeps := initTest(t)
 
 	testCases := []struct {
 		desc     string
@@ -164,12 +175,12 @@ func Test_Exec(t *testing.T) {
 		expErr   error
 	}{
 		{"success case", func() {
-			mockSession.EXPECT().query(query).Return(mockQuery).Times(1)
-			mockQuery.EXPECT().exec().Return(nil).Times(1)
+			mockDeps.mockSession.EXPECT().query(query).Return(mockDeps.mockQuery).Times(1)
+			mockDeps.mockQuery.EXPECT().exec().Return(nil).Times(1)
 		}, nil},
 		{"failure case", func() {
-			mockSession.EXPECT().query(query).Return(mockQuery).Times(1)
-			mockQuery.EXPECT().exec().Return(errMock).Times(1)
+			mockDeps.mockSession.EXPECT().query(query).Return(mockDeps.mockQuery).Times(1)
+			mockDeps.mockQuery.EXPECT().exec().Return(errMock).Times(1)
 		}, errMock},
 	}
 
@@ -193,7 +204,7 @@ func Test_ExecCAS(t *testing.T) {
 	mockStruct := users{}
 	mockInt := 0
 
-	client, mockSession, mockQuery, _ := initTest(t)
+	client, mockDeps := initTest(t)
 
 	testCases := []struct {
 		desc       string
@@ -203,28 +214,28 @@ func Test_ExecCAS(t *testing.T) {
 		expErr     error
 	}{
 		{"success case: struct dest, applied true", &mockStruct, func() {
-			mockSession.EXPECT().query(query).Return(mockQuery).Times(1)
-			mockQuery.EXPECT().mapScanCAS(gomock.AssignableToTypeOf(map[string]interface{}{})).Return(true, nil).Times(1)
+			mockDeps.mockSession.EXPECT().query(query).Return(mockDeps.mockQuery).Times(1)
+			mockDeps.mockQuery.EXPECT().mapScanCAS(gomock.AssignableToTypeOf(map[string]interface{}{})).Return(true, nil).Times(1)
 		}, true, nil},
 		{"success case: int dest, applied true", &mockInt, func() {
-			mockSession.EXPECT().query(query).Return(mockQuery).Times(1)
-			mockQuery.EXPECT().scanCAS(gomock.Any()).Return(true, nil).Times(1)
+			mockDeps.mockSession.EXPECT().query(query).Return(mockDeps.mockQuery).Times(1)
+			mockDeps.mockQuery.EXPECT().scanCAS(gomock.Any()).Return(true, nil).Times(1)
 		}, true, nil},
 		{"failure case: struct dest, error", &mockStruct, func() {
-			mockSession.EXPECT().query(query).Return(mockQuery).Times(1)
-			mockQuery.EXPECT().mapScanCAS(gomock.AssignableToTypeOf(map[string]interface{}{})).Return(false, errMock).Times(1)
+			mockDeps.mockSession.EXPECT().query(query).Return(mockDeps.mockQuery).Times(1)
+			mockDeps.mockQuery.EXPECT().mapScanCAS(gomock.AssignableToTypeOf(map[string]interface{}{})).Return(false, errMock).Times(1)
 		}, false, errMock},
 		{"failure case: int dest, error", &mockInt, func() {
-			mockSession.EXPECT().query(query).Return(mockQuery).Times(1)
-			mockQuery.EXPECT().scanCAS(gomock.Any()).Return(false, errMock).Times(1)
+			mockDeps.mockSession.EXPECT().query(query).Return(mockDeps.mockQuery).Times(1)
+			mockDeps.mockQuery.EXPECT().scanCAS(gomock.Any()).Return(false, errMock).Times(1)
 		}, false, errMock},
-		{"failure case: dest is not pointer", mockInt, func() {}, false, destinationIsNotPointer{}},
+		{"failure case: dest is not pointer", mockInt, func() {}, false, errDestinationIsNotPointer},
 		{"failure case: dest is slice", &[]int{}, func() {
-			mockSession.EXPECT().query(query).Return(mockQuery).Times(1)
+			mockDeps.mockSession.EXPECT().query(query).Return(mockDeps.mockQuery).Times(1)
 		}, false, unexpectedSlice{target: "[]*[]int"}},
 		{"failure case: dest is map", &map[string]interface{}{}, func() {
-			mockSession.EXPECT().query(query).Return(mockQuery).Times(1)
-		}, false, unexpectedMap{}},
+			mockDeps.mockSession.EXPECT().query(query).Return(mockDeps.mockQuery).Times(1)
+		}, false, errUnexpectedMap},
 	}
 
 	for i, tc := range testCases {
@@ -240,7 +251,7 @@ func Test_ExecCAS(t *testing.T) {
 func Test_HealthCheck(t *testing.T) {
 	const query = "SELECT now() FROM system.local"
 
-	client, mockSession, mockQuery, _ := initTest(t)
+	client, mockDeps := initTest(t)
 
 	testCases := []struct {
 		desc      string
@@ -249,15 +260,15 @@ func Test_HealthCheck(t *testing.T) {
 		err       error
 	}{
 		{"success case", func() {
-			mockSession.EXPECT().query(query).Return(mockQuery).Times(1)
-			mockQuery.EXPECT().exec().Return(nil).Times(1)
+			mockDeps.mockSession.EXPECT().query(query).Return(mockDeps.mockQuery).Times(1)
+			mockDeps.mockQuery.EXPECT().exec().Return(nil).Times(1)
 		}, &Health{
 			Status:  "UP",
 			Details: map[string]interface{}{"host": client.config.Hosts, "keyspace": client.config.Keyspace},
 		}, nil},
 		{"failure case: exec error", func() {
-			mockSession.EXPECT().query(query).Return(mockQuery).Times(1)
-			mockQuery.EXPECT().exec().Return(errMock).Times(1)
+			mockDeps.mockSession.EXPECT().query(query).Return(mockDeps.mockQuery).Times(1)
+			mockDeps.mockQuery.EXPECT().exec().Return(errMock).Times(1)
 		}, &Health{
 			Status: "DOWN",
 			Details: map[string]interface{}{"host": client.config.Hosts, "keyspace": client.config.Keyspace,
@@ -266,8 +277,8 @@ func Test_HealthCheck(t *testing.T) {
 		{"failure case: cassandra not initializes", func() {
 			client.cassandra.session = nil
 
-			mockSession.EXPECT().query(query).Return(mockQuery).Times(1)
-			mockQuery.EXPECT().exec().Return(nil).Times(1)
+			mockDeps.mockSession.EXPECT().query(query).Return(mockDeps.mockQuery).Times(1)
+			mockDeps.mockQuery.EXPECT().exec().Return(nil).Times(1)
 		}, &Health{
 			Status: "DOWN",
 			Details: map[string]interface{}{"host": client.config.Hosts, "keyspace": client.config.Keyspace,
@@ -301,4 +312,116 @@ func Test_cassandraSession_Query(t *testing.T) {
 
 	assert.NotNil(t, q, "Test Failed")
 	assert.IsType(t, &cassandraQuery{}, q, "Test Failed")
+}
+
+func Test_NewBatch(t *testing.T) {
+	client, mockDeps := initTest(t)
+
+	testCases := []struct {
+		desc      string
+		batchType int
+		mockCall  func()
+		expErr    error
+	}{
+		{"valid batch type 0", 0, func() {
+			mockDeps.mockSession.EXPECT().newBatch(gocql.BatchType(0)).Return(&cassandraBatch{}).Times(1)
+		}, nil},
+		{"valid batch type 1", 1, func() {
+			mockDeps.mockSession.EXPECT().newBatch(gocql.BatchType(1)).Return(&cassandraBatch{}).Times(1)
+		}, nil},
+		{"valid batch type 2", 2, func() {
+			mockDeps.mockSession.EXPECT().newBatch(gocql.BatchType(2)).Return(&cassandraBatch{}).Times(1)
+		}, nil},
+		{"invalid batch type", 3, func() {}, errUnsupportedBatchType},
+	}
+
+	for i, tc := range testCases {
+		tc.mockCall()
+
+		err := client.NewBatch(tc.batchType)
+
+		assert.Equalf(t, tc.expErr, err, "TEST[%d], Failed.\n%s", i, tc.desc)
+	}
+}
+
+func Test_BatchQuery(t *testing.T) {
+	client, mockDeps := initTest(t)
+
+	const stmt = "INSERT INTO users (id, name) VALUES(?, ?)"
+
+	values := []interface{}{1, "Test"}
+
+	mockDeps.mockBatch.EXPECT().Query(stmt, values...)
+
+	client.BatchQuery(stmt, values...)
+
+	assert.NotNil(t, client.cassandra.batch, "TEST, Failed.\n")
+}
+
+func Test_ExecuteBatch(t *testing.T) {
+	client, mockDeps := initTest(t)
+
+	testCases := []struct {
+		desc     string
+		mockCall func()
+		expErr   error
+	}{
+		{"execute batch success", func() {
+			mockDeps.mockSession.EXPECT().executeBatch(mockDeps.mockBatch).Return(nil).Times(1)
+		}, nil},
+		{"execute batch failure", func() {
+			mockDeps.mockSession.EXPECT().executeBatch(mockDeps.mockBatch).Return(errMock).Times(1)
+		}, errMock},
+	}
+
+	for i, tc := range testCases {
+		tc.mockCall()
+
+		err := client.ExecuteBatch()
+
+		assert.Equalf(t, tc.expErr, err, "TEST[%d], Failed.\n%s", i, tc.desc)
+	}
+}
+
+func Test_ExecuteBatch_NotInitialised(t *testing.T) {
+	client, _ := initTest(t)
+
+	client.cassandra.batch = nil
+
+	err := client.ExecuteBatch()
+
+	assert.Equalf(t, errBatchNotInitialised, err, "TEST, Failed")
+}
+
+func Test_newBatch(t *testing.T) {
+	cassSession := &cassandraSession{session: &gocql.Session{}}
+
+	testCases := []struct {
+		desc      string
+		batchType gocql.BatchType
+	}{
+		{"create logged batch", gocql.LoggedBatch},
+		{"create unlogged batch", gocql.UnloggedBatch},
+		{"create counter batch", gocql.CounterBatch},
+	}
+
+	for i, tc := range testCases {
+		b := cassSession.newBatch(tc.batchType)
+
+		assert.NotNil(t, b, "TEST[%d], Failed.\n%s", i, tc.desc)
+	}
+}
+
+func Test_cassandraBatch_Query(t *testing.T) {
+	c := &cassandraBatch{batch: &gocql.Batch{}}
+
+	c.Query("test query")
+
+	assert.Equalf(t, 1, c.batch.Size(), "Test Failed")
+}
+
+func Test_cassandraBatch_getBatch(t *testing.T) {
+	c := &cassandraBatch{batch: &gocql.Batch{}}
+
+	assert.NotNil(t, c.getBatch(), "Test Failed")
 }

@@ -23,6 +23,7 @@ type cassandra struct {
 	clusterConfig clusterConfig
 	session       session
 	query         query
+	batch         batch
 }
 
 type Client struct {
@@ -91,7 +92,7 @@ func (c *Client) Query(dest interface{}, stmt string, values ...interface{}) err
 	if rvo.Kind() != reflect.Ptr {
 		c.logger.Error("we did not get a pointer. data is not settable.")
 
-		return destinationIsNotPointer{}
+		return errDestinationIsNotPointer
 	}
 
 	rv := rvo.Elem()
@@ -150,7 +151,7 @@ func (c *Client) ExecCAS(dest interface{}, stmt string, values ...interface{}) (
 	if rvo.Kind() != reflect.Ptr {
 		c.logger.Debugf("we did not get a pointer. data is not settable.")
 
-		return false, destinationIsNotPointer{}
+		return false, errDestinationIsNotPointer
 	}
 
 	rv := rvo.Elem()
@@ -168,13 +169,47 @@ func (c *Client) ExecCAS(dest interface{}, stmt string, values ...interface{}) (
 	case reflect.Map:
 		c.logger.Debugf("a map was not expected.")
 
-		return false, unexpectedMap{}
+		return false, errUnexpectedMap
 
 	default:
 		applied, err = q.scanCAS(rv.Interface())
 	}
 
 	return applied, err
+}
+
+func (c *Client) NewBatch(batchType int) error {
+	const (
+		loggedBatch = iota
+		unloggedBatch
+		counterBatch
+	)
+
+	var err error
+
+	switch batchType {
+	case loggedBatch, unloggedBatch, counterBatch:
+		c.cassandra.batch = c.cassandra.session.newBatch(gocql.BatchType(batchType))
+
+	default:
+		err = errUnsupportedBatchType
+	}
+
+	return err
+}
+
+func (c *Client) BatchQuery(stmt string, values ...interface{}) {
+	c.cassandra.batch.Query(stmt, values...)
+}
+
+func (c *Client) ExecuteBatch() error {
+	defer c.postProcess(&QueryLog{Query: "", Keyspace: c.config.Keyspace}, time.Now())
+
+	if c.cassandra.batch == nil {
+		return errBatchNotInitialised
+	}
+
+	return c.cassandra.session.executeBatch(c.cassandra.batch)
 }
 
 func (c *Client) rowsToStruct(iter iterator, vo reflect.Value) {
@@ -225,7 +260,7 @@ func (c *Client) rowsToStructCAS(query query, vo reflect.Value) (bool, error) {
 	return applied, nil
 }
 
-func (c *Client) getFields(columns []string, fieldNameIndex map[string]int, v reflect.Value) []interface{} {
+func (*Client) getFields(columns []string, fieldNameIndex map[string]int, v reflect.Value) []interface{} {
 	fields := make([]interface{}, 0)
 
 	for _, column := range columns {
@@ -240,7 +275,7 @@ func (c *Client) getFields(columns []string, fieldNameIndex map[string]int, v re
 	return fields
 }
 
-func (c *Client) getFieldNameIndex(v reflect.Value) map[string]int {
+func (*Client) getFieldNameIndex(v reflect.Value) map[string]int {
 	fieldNameIndex := map[string]int{}
 
 	for i := 0; i < v.Type().NumField(); i++ {
@@ -261,7 +296,7 @@ func (c *Client) getFieldNameIndex(v reflect.Value) map[string]int {
 	return fieldNameIndex
 }
 
-func (c *Client) getColumnsFromColumnsInfo(columns []gocql.ColumnInfo) []string {
+func (*Client) getColumnsFromColumnsInfo(columns []gocql.ColumnInfo) []string {
 	cols := make([]string, 0)
 
 	for _, column := range columns {
@@ -432,4 +467,32 @@ func (c *cassandraSession) query(stmt string, values ...interface{}) query {
 	q := &cassandraQuery{query: c.session.Query(stmt, values...)}
 
 	return q
+}
+
+func (c *cassandraSession) newBatch(batchType gocql.BatchType) batch {
+	return &cassandraBatch{batch: c.session.NewBatch(batchType)}
+}
+
+// executeBatch executes a batch operation and returns nil if successful otherwise an error is returned describing the failure.
+// This method wraps the `ExecuteBatch` method of the underlying `session` object.
+func (c *cassandraSession) executeBatch(b batch) error {
+	gocqlBatch := b.getBatch()
+
+	return c.session.ExecuteBatch(gocqlBatch)
+}
+
+// cassandraBatch implements batch interface.
+type cassandraBatch struct {
+	batch *gocql.Batch
+}
+
+// Query adds the query to the batch operation.
+// This method wraps the `Query` method of underlying `batch` object.
+func (c *cassandraBatch) Query(stmt string, args ...interface{}) {
+	c.batch.Query(stmt, args...)
+}
+
+// getBatch returns the underlying `gocql.Batch`.
+func (c *cassandraBatch) getBatch() *gocql.Batch {
+	return c.batch
 }
