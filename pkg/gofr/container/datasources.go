@@ -92,6 +92,37 @@ type Cassandra interface {
 	//	applied, err := c.ExecCAS(&ids, "INSERT INTO users VALUES(1, 'John Doe') IF NOT EXISTS")
 	ExecCAS(dest interface{}, stmt string, values ...interface{}) (bool, error)
 
+	// NewBatch creates a new batch operation using defaults defined in the cluster
+	// Supported `batchTypes` are CassandraLoggedBatch, CassandraUnloggedBatch and CassandraCounterBatch
+	//
+	// Example:
+	// batch := c.NewBatch(datasource.CassandraLoggedBatch)
+	NewBatch(batchType int) error
+
+	// BatchQuery adds the query to the batch operation
+	//
+	// Example:
+	//
+	//	// Without values
+	//	   c.BatchQuery("INSERT INTO users VALUES(1, 'John Doe')")
+	//	   c.BatchQuery("INSERT INTO users VALUES(2, 'Jane Smith')")
+	//
+	//	// With Values
+	//	   id1 := 1
+	//	   name1 := "John Doe"
+	//	   id2 := 2
+	//	   name2 := "Jane Smith"
+	//	   c.BatchQuery("INSERT INTO users VALUES(?, ?)", id1, name1)
+	//	   c.BatchQuery("INSERT INTO users VALUES(?, ?)", id2, name2)
+	BatchQuery(stmt string, values ...interface{})
+
+	// ExecuteBatch executes a batch operation and returns nil if successful otherwise an error is returned describing the failure.
+	//
+	// Example:
+	//
+	//	err := c.ExecuteBatch()
+	ExecuteBatch() error
+
 	HealthChecker
 }
 

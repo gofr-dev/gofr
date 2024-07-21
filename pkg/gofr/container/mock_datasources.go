@@ -7975,6 +7975,23 @@ func (m *MockCassandra) EXPECT() *MockCassandraMockRecorder {
 	return m.recorder
 }
 
+// BatchQuery mocks base method.
+func (m *MockCassandra) BatchQuery(stmt string, values ...any) {
+	m.ctrl.T.Helper()
+	varargs := []any{stmt}
+	for _, a := range values {
+		varargs = append(varargs, a)
+	}
+	m.ctrl.Call(m, "BatchQuery", varargs...)
+}
+
+// BatchQuery indicates an expected call of BatchQuery.
+func (mr *MockCassandraMockRecorder) BatchQuery(stmt any, values ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{stmt}, values...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BatchQuery", reflect.TypeOf((*MockCassandra)(nil).BatchQuery), varargs...)
+}
+
 // Exec mocks base method.
 func (m *MockCassandra) Exec(stmt string, values ...any) error {
 	m.ctrl.T.Helper()
@@ -8014,6 +8031,20 @@ func (mr *MockCassandraMockRecorder) ExecCAS(dest, stmt any, values ...any) *gom
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExecCAS", reflect.TypeOf((*MockCassandra)(nil).ExecCAS), varargs...)
 }
 
+// ExecuteBatch mocks base method.
+func (m *MockCassandra) ExecuteBatch() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ExecuteBatch")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// ExecuteBatch indicates an expected call of ExecuteBatch.
+func (mr *MockCassandraMockRecorder) ExecuteBatch() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExecuteBatch", reflect.TypeOf((*MockCassandra)(nil).ExecuteBatch))
+}
+
 // HealthCheck mocks base method.
 func (m *MockCassandra) HealthCheck(arg0 context.Context) (any, error) {
 	m.ctrl.T.Helper()
@@ -8027,6 +8058,20 @@ func (m *MockCassandra) HealthCheck(arg0 context.Context) (any, error) {
 func (mr *MockCassandraMockRecorder) HealthCheck(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HealthCheck", reflect.TypeOf((*MockCassandra)(nil).HealthCheck), arg0)
+}
+
+// NewBatch mocks base method.
+func (m *MockCassandra) NewBatch(batchType int) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "NewBatch", batchType)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// NewBatch indicates an expected call of NewBatch.
+func (mr *MockCassandraMockRecorder) NewBatch(batchType any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NewBatch", reflect.TypeOf((*MockCassandra)(nil).NewBatch), batchType)
 }
 
 // Query mocks base method.
@@ -8069,6 +8114,23 @@ func NewMockCassandraProvider(ctrl *gomock.Controller) *MockCassandraProvider {
 // EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockCassandraProvider) EXPECT() *MockCassandraProviderMockRecorder {
 	return m.recorder
+}
+
+// BatchQuery mocks base method.
+func (m *MockCassandraProvider) BatchQuery(stmt string, values ...any) {
+	m.ctrl.T.Helper()
+	varargs := []any{stmt}
+	for _, a := range values {
+		varargs = append(varargs, a)
+	}
+	m.ctrl.Call(m, "BatchQuery", varargs...)
+}
+
+// BatchQuery indicates an expected call of BatchQuery.
+func (mr *MockCassandraProviderMockRecorder) BatchQuery(stmt any, values ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{stmt}, values...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BatchQuery", reflect.TypeOf((*MockCassandraProvider)(nil).BatchQuery), varargs...)
 }
 
 // Connect mocks base method.
@@ -8122,6 +8184,20 @@ func (mr *MockCassandraProviderMockRecorder) ExecCAS(dest, stmt any, values ...a
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExecCAS", reflect.TypeOf((*MockCassandraProvider)(nil).ExecCAS), varargs...)
 }
 
+// ExecuteBatch mocks base method.
+func (m *MockCassandraProvider) ExecuteBatch() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ExecuteBatch")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// ExecuteBatch indicates an expected call of ExecuteBatch.
+func (mr *MockCassandraProviderMockRecorder) ExecuteBatch() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExecuteBatch", reflect.TypeOf((*MockCassandraProvider)(nil).ExecuteBatch))
+}
+
 // HealthCheck mocks base method.
 func (m *MockCassandraProvider) HealthCheck(arg0 context.Context) (any, error) {
 	m.ctrl.T.Helper()
@@ -8135,6 +8211,20 @@ func (m *MockCassandraProvider) HealthCheck(arg0 context.Context) (any, error) {
 func (mr *MockCassandraProviderMockRecorder) HealthCheck(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HealthCheck", reflect.TypeOf((*MockCassandraProvider)(nil).HealthCheck), arg0)
+}
+
+// NewBatch mocks base method.
+func (m *MockCassandraProvider) NewBatch(batchType int) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "NewBatch", batchType)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// NewBatch indicates an expected call of NewBatch.
+func (mr *MockCassandraProviderMockRecorder) NewBatch(batchType any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NewBatch", reflect.TypeOf((*MockCassandraProvider)(nil).NewBatch), batchType)
 }
 
 // Query mocks base method.
