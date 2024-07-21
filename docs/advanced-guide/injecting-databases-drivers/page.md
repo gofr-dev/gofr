@@ -178,6 +178,12 @@ type Cassandra interface {
 	Exec(stmt string, values ...interface{}) error
 	
 	ExecCAS(dest interface{}, stmt string, values ...interface{}) (bool, error)
+
+	NewBatch(batchType int) error
+
+	BatchQuery(stmt string, values ...interface{})
+
+	ExecuteBatch() error
 }
 ```
 
