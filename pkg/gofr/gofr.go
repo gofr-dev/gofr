@@ -326,6 +326,10 @@ func (a *App) initTracer() {
 		a.container.Error(err)
 	}
 
+	if exporter == nil {
+		return
+	}
+
 	batcher := sdktrace.NewBatchSpanProcessor(exporter)
 	tp.RegisterSpanProcessor(batcher)
 }
