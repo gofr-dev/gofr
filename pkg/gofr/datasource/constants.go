@@ -1,6 +1,6 @@
 package datasource
 
-// Cassandra batch types
+// Cassandra batch types.
 const (
 	CassandraLoggedBatch = iota
 	CassandraUnloggedBatch
