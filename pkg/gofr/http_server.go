@@ -70,8 +70,18 @@ func (s *httpServer) Shutdown(ctx context.Context) error {
 		return nil
 	}
 
-	err := s.srv.Shutdown(ctx)
-	s.srv = nil
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- s.srv.Shutdown(ctx)
+	}()
 
-	return err
+	select {
+	case <-ctx.Done():
+		// Context expired or canceled, force close the server
+		s.srv.Close()
+		return ctx.Err()
+	case err := <-errCh:
+		s.srv = nil
+		return err
+	}
 }
