@@ -339,7 +339,7 @@ func (a *App) getExporter(name, host, port, url, authHeader string) (sdktrace.Sp
 		return exporter, nil
 	}
 
-	if host == "" && url == "" && name != "" && name != gofrTraceExporter {
+	if host == "" && url == "" && name != gofrTraceExporter {
 		a.Logger().Errorf("missing TRACER_URL config, should be provided with TRACE_EXPORTER to enable tracing")
 		return exporter, nil
 	}
