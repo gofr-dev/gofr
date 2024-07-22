@@ -10,6 +10,8 @@ import (
 	gofrSQL "gofr.dev/pkg/gofr/datasource/sql"
 )
 
+//go:generate go run go.uber.org/mock/mockgen -source=datasources.go -destination=mock_datasources.go -package=container
+
 type DB interface {
 	Query(query string, args ...interface{}) (*sql.Rows, error)
 	QueryRow(query string, args ...interface{}) *sql.Row
@@ -198,4 +200,18 @@ type HealthChecker interface {
 	// HealthCheck returns an interface rather than a struct as externalDB's are part of different module.
 	// It is done to avoid adding packages which are not being used.
 	HealthCheck(context.Context) (any, error)
+}
+
+type KVStore interface {
+	Get(ctx context.Context, key string) (string, error)
+	Set(ctx context.Context, key, value string) error
+	Delete(ctx context.Context, key string) error
+
+	HealthChecker
+}
+
+type KVStoreProvider interface {
+	KVStore
+
+	provider
 }

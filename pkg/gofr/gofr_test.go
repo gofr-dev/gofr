@@ -352,15 +352,27 @@ func Test_initTracer(t *testing.T) {
 		"TRACER_AUTH_KEY": "valid-token",
 	})
 
+	mockConfig6 := config.NewMockConfig(map[string]string{
+		"TRACE_EXPORTER": "zipkin",
+		"TRACER_URL":     "https://tracer-service.dev",
+	})
+
+	mockConfig7 := config.NewMockConfig(map[string]string{
+		"TRACE_EXPORTER": "jaeger",
+		"TRACER_URL":     "https://tracer-service.dev",
+	})
+
 	tests := []struct {
 		desc               string
 		config             config.Config
 		expectedLogMessage string
 	}{
-		{"zipkin exporter", mockConfig1, "Exporting traces to zipkin."},
-		{"zipkin exporter with auth", mockConfig4, "Exporting traces to zipkin."},
-		{"jaeger exporter", mockConfig2, "Exporting traces to jaeger."},
-		{"jaeger exporter with auth", mockConfig5, "Exporting traces to jaeger."},
+		{"zipkin exporter", mockConfig1, "Exporting traces to zipkin at http://localhost:2005/api/v2/spans"},
+		{"zipkin exporter with auth", mockConfig4, "Exporting traces to zipkin at http://localhost:2005/api/v2/spans"},
+		{"zipkin exporter with custom tracer url", mockConfig6, "Exporting traces to zipkin at https://tracer-service.dev"},
+		{"jaeger exporter", mockConfig2, "Exporting traces to jaeger at localhost:2005"},
+		{"jaeger exporter with auth", mockConfig5, "Exporting traces to jaeger at localhost:2005"},
+		{"jaeger exporter custom tracer url", mockConfig7, "Exporting traces to jaeger at https://tracer-service.dev"},
 		{"gofr exporter", mockConfig3, "Exporting traces to GoFr at https://tracer.gofr.dev"},
 	}
 

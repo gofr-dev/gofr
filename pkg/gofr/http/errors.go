@@ -7,39 +7,6 @@ import (
 	"strings"
 )
 
-type MultipleErrors struct {
-	Code   int
-	Errors []error
-}
-
-func (m MultipleErrors) Error() string {
-	var result string
-
-	for _, v := range m.Errors {
-		result += fmt.Sprintf("%s\n", v)
-	}
-
-	return strings.TrimSuffix(result, "\n")
-}
-
-func (m MultipleErrors) StatusCode() int {
-	return m.Code
-}
-
-type CustomError struct {
-	Code    int
-	Reason  string
-	Details interface{}
-}
-
-func (c CustomError) Error() string {
-	return c.Reason
-}
-
-func (c CustomError) StatusCode() int {
-	return c.Code
-}
-
 const alreadyExistsMessage = "entity already exists"
 
 // ErrorEntityNotFound represents an error for when an entity is not found in the system.
