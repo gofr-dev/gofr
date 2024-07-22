@@ -321,24 +321,30 @@ func Test_AddRESTHandlers(t *testing.T) {
 }
 
 func Test_initTracer(t *testing.T) {
-	createMockConfig := func(traceExporter, host, port, url, authKey string) config.Config {
+	createMockConfig := func(traceExporter, url, authKey string) config.Config {
 		return config.NewMockConfig(map[string]string{
 			"TRACE_EXPORTER":  traceExporter,
-			"TRACER_HOST":     host,
-			"TRACER_PORT":     port,
 			"TRACER_URL":      url,
 			"TRACER_AUTH_KEY": authKey,
 		})
 	}
-	mockConfig1 := createMockConfig("zipkin", "localhost", "2005", "", "")
-	mockConfig2 := createMockConfig("jaeger", "localhost", "2005", "", "")
-	mockConfig3 := createMockConfig("gofr", "", "", "", "")
-	mockConfig4 := createMockConfig("zipkin", "localhost", "2005", "", "valid-token")
-	mockConfig5 := createMockConfig("jaeger", "localhost", "2005", "", "valid-token")
-	mockConfig6 := createMockConfig("zipkin", "", "", "https://tracer-service.dev", "")
-	mockConfig7 := createMockConfig("jaeger", "", "", "https://tracer-service.dev", "")
-	mockConfig8 := createMockConfig("otlp", "localhost", "2005", "", "")
-	mockConfig9 := createMockConfig("otlp", "localhost", "2005", "", "valid-token")
+	mockConfig1 := createMockConfig("zipkin", "http://localhost:2005/api/v2/spans", "")
+
+	mockConfig2 := createMockConfig("jaeger", "localhost:2005", "")
+
+	mockConfig3 := createMockConfig("gofr", "", "")
+
+	mockConfig4 := createMockConfig("zipkin", "http://localhost:2005/api/v2/spans", "valid-token")
+
+	mockConfig5 := createMockConfig("jaeger", "localhost:2005", "valid-token")
+
+	mockConfig6 := createMockConfig("zipkin", "https://tracer-service.dev", "")
+
+	mockConfig7 := createMockConfig("jaeger", "https://tracer-service.dev", "")
+
+	mockConfig8 := createMockConfig("otlp", "localhost:4317", "")
+
+	mockConfig9 := createMockConfig("otlp", "localhost:4317", "valid-token")
 
 	tests := []struct {
 		desc               string
@@ -346,14 +352,14 @@ func Test_initTracer(t *testing.T) {
 		expectedLogMessage string
 	}{
 		{"zipkin exporter", mockConfig1, "Exporting traces to zipkin at http://localhost:2005/api/v2/spans"},
+		{"jaeger exporter", mockConfig2, "Exporting traces to jaeger at localhost:2005"},
+		{"gofr exporter", mockConfig3, "Exporting traces to GoFr at https://tracer.gofr.dev"},
 		{"zipkin exporter with auth", mockConfig4, "Exporting traces to zipkin at http://localhost:2005/api/v2/spans"},
 		{"zipkin exporter with custom tracer url", mockConfig6, "Exporting traces to zipkin at https://tracer-service.dev"},
-		{"jaeger exporter", mockConfig2, "Exporting traces to jaeger at localhost:2005"},
 		{"jaeger exporter with auth", mockConfig5, "Exporting traces to jaeger at localhost:2005"},
 		{"jaeger exporter custom tracer url", mockConfig7, "Exporting traces to jaeger at https://tracer-service.dev"},
-		{"gofr exporter", mockConfig3, "Exporting traces to GoFr at https://tracer.gofr.dev"},
-		{"otlp exporter", mockConfig8, "Exporting traces to otlp at localhost:2005"},
-		{"otlp exporter with auth", mockConfig9, "Exporting traces to otlp at localhost:2005"},
+		{"jaeger exporter custom tracer url", mockConfig8, "Exporting traces to otlp at localhost:4317"},
+		{"jaeger exporter custom tracer url", mockConfig9, "Exporting traces to otlp at localhost:4317"},
 	}
 
 	for i, tc := range tests {
@@ -372,19 +378,16 @@ func Test_initTracer(t *testing.T) {
 }
 
 func Test_initTracer_invalidConfig(t *testing.T) {
-	createMockConfig := func(traceExporter, host, port, url, authKey string) config.Config {
+	createMockConfig := func(traceExporter, url, authKey string) config.Config {
 		return config.NewMockConfig(map[string]string{
 			"TRACE_EXPORTER":  traceExporter,
-			"TRACER_HOST":     host,
-			"TRACER_PORT":     port,
 			"TRACER_URL":      url,
 			"TRACER_AUTH_KEY": authKey,
 		})
 	}
-	mockConfig1 := createMockConfig("abc", "localhost", "2005", "", "")
-	mockConfig2 := createMockConfig("", "", "", "https://tracer-service.dev", "")
-	mockConfig3 := createMockConfig("", "localhost", "2005", "", "")
-	mockConfig4 := createMockConfig("otlp", "", "", "", "")
+	mockConfig1 := createMockConfig("abc", "https://tracer-service.dev", "")
+	mockConfig2 := createMockConfig("", "https://tracer-service.dev", "")
+	mockConfig3 := createMockConfig("otlp", "", "")
 
 	testErr := []struct {
 		desc               string
@@ -393,8 +396,7 @@ func Test_initTracer_invalidConfig(t *testing.T) {
 	}{
 		{"unsupported trace exporter", mockConfig1, "unsupported TRACE_EXPORTER: abc"},
 		{"missing exporter", mockConfig2, "missing TRACE_EXPORTER config, should be provided with TRACER_URL to enable tracing"},
-		{"missing exporter", mockConfig3, "missing TRACE_EXPORTER config, should be provided with TRACER_URL to enable tracing"},
-		{"set exporter but not provide address", mockConfig4,
+		{"set exporter but not provide address", mockConfig3,
 			"missing TRACER_URL config, should be provided with TRACE_EXPORTER to enable tracing"},
 	}
 
