@@ -189,8 +189,7 @@ DB_PORT=3306
 
 # tracing configs
 TRACE_EXPORTER=zipkin
-TRACER_HOST=localhost
-TRACER_PORT=2005
+TRACER_URL=http://localhost:2005/api/v2/spans
 
 LOG_LEVEL=DEBUG
 ```
@@ -220,8 +219,7 @@ Add Jaeger Tracer configs in `.env` file, your .env will be updated to
 
 # tracing configs
 TRACE_EXPORTER=jaeger
-TRACER_HOST=localhost
-TRACER_PORT=14317
+TRACER_URL=localhost:14317
 ```
 
 Open {% new-tab-link title="zipkin" href="http://localhost:16686/trace/" /%} and search by TraceID (correlationID) to see the trace.
