@@ -392,6 +392,7 @@ func (a *App) buildZipkin(url, host, port, authHeader string) (sdktrace.SpanExpo
 
 	return zipkin.New(url, opts...)
 }
+
 func (a *App) buildGofrTraceExporter(url string) (sdktrace.SpanExporter, error) {
 	if url == "" {
 		url = "https://tracer-api.gofr.dev/api/spans"
