@@ -33,7 +33,7 @@ import (
 
 const (
 	defaultPublicStaticDir = "static"
- 	traceExporterGoFr      = "gofr"
+	traceExporterGoFr      = "gofr"
 	traceExporterZipkin    = "zipkin"
 	traceExporterJaeger    = "jaeger"
 	traceExporterOTLP      = "otlp"
@@ -321,7 +321,7 @@ func (a *App) initTracer() {
 		a.Logger().Warn("TRACER_HOST and TRACER_PORT are deprecated, use TRACER_URL instead")
 	}
 
-	exporter, err := a.getExporter(traceExporter, tracerHost, tracerPort, tracerURL, authHeader)
+	exporter, err := a.getExporter(context.Background(), traceExporter, tracerHost, tracerPort, tracerURL, authHeader)
 	if err != nil {
 		a.container.Error(err)
 	}
@@ -330,31 +330,28 @@ func (a *App) initTracer() {
 	tp.RegisterSpanProcessor(batcher)
 }
 
-func (a *App) getExporter(name, host, port, url, authHeader string) (sdktrace.SpanExporter, error) {
-	var (
-		exporter sdktrace.SpanExporter
-		ctx      context.Context
-	)
+func (a *App) getExporter(ctx context.Context, name, host, port, url, authHeader string) (sdktrace.SpanExporter, error) {
+	var exporter sdktrace.SpanExporter
 
 	if name == "" {
 		a.Logger().Errorf("missing TRACE_EXPORTER config, should be provided with TRACER_URL to enable tracing")
 		return exporter, nil
 	}
 
-	if (host == "" && port == "") && url == "" && name != gofrTraceExporter {
+	if (host == "" && port == "") && url == "" && name != traceExporterGoFr {
 		a.Logger().Errorf("missing TRACER_URL config, should be provided with TRACE_EXPORTER to enable tracing")
 		return exporter, nil
 	}
 
 	switch strings.ToLower(name) {
-	case otlpTraceExporter:
+	case traceExporterOTLP:
 		return a.buildOpenTelemetryProtocol(ctx, url, host, port, strings.ToLower(name), authHeader)
-	case jaegerTraceExporter:
+	case traceExporterJaeger:
 		// jaeger accept OpenTelemetry Protocol (OTLP) .
 		return a.buildOpenTelemetryProtocol(ctx, url, host, port, strings.ToLower(name), authHeader)
-	case zipkinTraceExporter:
+	case traceExporterZipkin:
 		return a.buildZipkin(url, host, port, authHeader)
-	case gofrTraceExporter:
+	case traceExporterGoFr:
 		return a.buildGofrTraceExporter(url)
 	default:
 		a.container.Errorf("unsupported TRACE_EXPORTER: %s", name)
