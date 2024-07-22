@@ -296,17 +296,6 @@ func (a *App) Migrate(migrationsMap map[int64]migration.Migrate) {
 }
 
 func (a *App) initTracer() {
-	traceExporter := a.Config.Get("TRACE_EXPORTER")
-	tracerURL := a.Config.Get("TRACER_URL")
-
-	// deprecated : tracer_host and tracer_port is deprecated and will be removed in upcoming versions
-	tracerHost := a.Config.Get("TRACER_HOST")
-	tracerPort := a.Config.GetOrDefault("TRACER_PORT", "9411")
-
-	if tracerURL == "" && tracerHost != "" && tracerPort != "" {
-		a.Logger().Warn("TRACER_HOST and TRACER_PORT are deprecated, use TRACER_URL instead")
-	}
-
 	tp := sdktrace.NewTracerProvider(
 		sdktrace.WithResource(resource.NewWithAttributes(
 			semconv.SchemaURL,
@@ -317,7 +306,20 @@ func (a *App) initTracer() {
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
 	otel.SetErrorHandler(&otelErrorHandler{logger: a.container.Logger})
 
-	exporter, err := a.getExporter(traceExporter, tracerHost, tracerPort, tracerURL)
+	traceExporter := a.Config.Get("TRACE_EXPORTER")
+	tracerURL := a.Config.Get("TRACER_URL")
+
+	// deprecated : tracer_host and tracer_port is deprecated and will be removed in upcoming versions.
+	tracerHost := a.Config.Get("TRACER_HOST")
+	tracerPort := a.Config.GetOrDefault("TRACER_PORT", "9411")
+	authHeader := a.Config.Get("TRACER_AUTH_KEY")
+
+	if tracerURL == "" && tracerHost != "" && tracerPort != "" {
+		a.Logger().Warn("TRACER_HOST and TRACER_PORT are deprecated, use TRACER_URL instead")
+	}
+
+	exporter, err := a.getExporter(traceExporter, tracerHost, tracerPort, tracerURL, authHeader)
+
 	if err != nil {
 		a.container.Error(err)
 	}
@@ -326,18 +328,21 @@ func (a *App) initTracer() {
 	tp.RegisterSpanProcessor(batcher)
 }
 
-func (a *App) getExporter(name, host, port, url string) (sdktrace.SpanExporter, error) {
-	if (host == "" || url == "") && name != "" {
-		a.Logger().Errorf("TRACE_EXPORTER is set, but TRACER_URL or TRACER_HOST is not set")
-	}
-
+func (a *App) getExporter(name, host, port, url, authHeader string) (sdktrace.SpanExporter, error) {
 	var (
 		exporter sdktrace.SpanExporter
-		err      error
 		ctx      context.Context
 	)
 
-	authHeader := a.Config.Get("TRACER_AUTH_KEY")
+	if name == "" {
+		a.Logger().Errorf("missing TRACE_EXPORTER config, should be provided with TRACER_URL to enable tracing")
+		return exporter, nil
+	}
+
+	if host == "" && url == "" && name != "" && name != gofrTraceExporter {
+		a.Logger().Errorf("missing TRACER_URL config, should be provided with TRACE_EXPORTER to enable tracing")
+		return exporter, nil
+	}
 
 	switch strings.ToLower(name) {
 	case "otlp":
@@ -356,14 +361,11 @@ func (a *App) getExporter(name, host, port, url string) (sdktrace.SpanExporter, 
 
 		exporter = NewExporter(url, logging.NewLogger(logging.INFO))
 	default:
-		if name == "" {
-			a.container.Errorf("TRACE_EXPORTER env is missing")
-		} else {
-			a.container.Errorf("unsupported TRACE_EXPORTER: %s", name)
-		}
+		a.container.Errorf("unsupported TRACE_EXPORTER: %s", name)
+		return exporter, nil
 	}
 
-	return exporter, err
+	return exporter, nil
 }
 
 // buildOpenTelemetryProtocol using OpenTelemetryProtocol as the trace exporter
