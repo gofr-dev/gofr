@@ -311,6 +311,7 @@ func Test_AddRESTHandlers(t *testing.T) {
 	}{
 		{"success case", &user{}, nil},
 		{"invalid object", &invalidObject, errInvalidObject},
+		{"invalid object", user{}, errInvalidObject},
 	}
 
 	for i, tc := range tests {

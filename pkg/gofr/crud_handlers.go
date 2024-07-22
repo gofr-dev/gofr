@@ -61,7 +61,16 @@ type entity struct {
 
 // scanEntity extracts entity information for CRUD operations.
 func scanEntity(object interface{}) (*entity, error) {
-	entityType := reflect.TypeOf(object).Elem()
+	if object == nil {
+		return nil, errInvalidObject
+	}
+
+	objType := reflect.TypeOf(object)
+	if objType.Kind() != reflect.Ptr {
+		return nil, errInvalidObject
+	}
+
+	entityType := objType.Elem()
 	if entityType.Kind() != reflect.Struct {
 		return nil, errInvalidObject
 	}
