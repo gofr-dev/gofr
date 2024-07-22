@@ -27,6 +27,7 @@ export const navigation = [
             { title: 'Writing gRPC Server', href: '/docs/advanced-guide/grpc' },
             { title: 'Using Pub/Sub', href: '/docs/advanced-guide/using-publisher-subscriber' },
             { title: 'Injecting Databases', href: '/docs/advanced-guide/injecting-databases-drivers' },
+            { title: 'Key Value Store', href: '/docs/advanced-guide/key-value-store' },
             { title: 'Dealing with SQL', href: '/docs/advanced-guide/dealing-with-sql' },
             { title: 'Automatic SwaggerUI Rendering', href: '/docs/advanced-guide/swagger-documentation' },
             { title: 'Error Handling',href: '/docs/advanced-guide/gofr-errors'},
