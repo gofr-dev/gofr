@@ -352,19 +352,11 @@ func (a *App) getExporter(name, host, port, url, authHeader string) (sdktrace.Sp
 	case "zipkin":
 		return a.buildZipkin(url, host, port, authHeader)
 	case gofrTraceExporter:
-		if url == "" {
-			url = "https://tracer-api.gofr.dev/api/spans"
-		}
-
-		a.container.Logf("Exporting traces to GoFr at %s", gofrTracerURL)
-
-		exporter = NewExporter(url, logging.NewLogger(logging.INFO))
+		return a.buildGofrTraceExporter(url)
 	default:
 		a.container.Errorf("unsupported TRACE_EXPORTER: %s", name)
 		return exporter, nil
 	}
-
-	return exporter, nil
 }
 
 // buildOpenTelemetryProtocol using OpenTelemetryProtocol as the trace exporter
@@ -399,6 +391,17 @@ func (a *App) buildZipkin(url, host, port, authHeader string) (sdktrace.SpanExpo
 	}
 
 	return zipkin.New(url, opts...)
+}
+func (a *App) buildGofrTraceExporter(url string) (sdktrace.SpanExporter, error) {
+	if url == "" {
+		url = "https://tracer-api.gofr.dev/api/spans"
+	}
+
+	a.container.Logf("Exporting traces to GoFr at %s", gofrTracerURL)
+
+	exporter := NewExporter(url, logging.NewLogger(logging.INFO))
+
+	return exporter, nil
 }
 
 type otelErrorHandler struct {
