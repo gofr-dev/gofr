@@ -84,6 +84,15 @@ func checkExternalDBHealth(ctx context.Context, c *Container, healthMap map[stri
 		healthMap["clickHouse"] = health
 	}
 
+	if !isNil(c.KVStore) {
+		health, err := c.KVStore.HealthCheck(ctx)
+		if err != nil {
+			downCount++
+		}
+
+		healthMap["kv-store"] = health
+	}
+
 	return downCount
 }
 
