@@ -312,9 +312,9 @@ func (a *App) initTracer() {
 
 	// deprecated : tracer_host and tracer_port are deprecated and will be removed in upcoming versions.
 	tracerHost := a.Config.Get("TRACER_HOST")
-	tracerPort := a.Config.GetOrDefault("TRACER_PORT", "9411")
+	tracerPort := a.Config.Get("TRACER_PORT")
 
-	if tracerURL == "" && tracerHost != "" && tracerPort != "" {
+	if tracerURL == "" && (tracerHost != "" || tracerPort != "") {
 		a.Logger().Warn("TRACER_HOST and TRACER_PORT are deprecated, use TRACER_URL instead")
 	}
 
@@ -338,7 +338,7 @@ func (a *App) getExporter(name, host, port, url, authHeader string) (sdktrace.Sp
 		return exporter, nil
 	}
 
-	if host == "" && url == "" && name != gofrTraceExporter {
+	if (host == "" && port == "") && url == "" && name != gofrTraceExporter {
 		a.Logger().Errorf("missing TRACER_URL config, should be provided with TRACE_EXPORTER to enable tracing")
 		return exporter, nil
 	}
