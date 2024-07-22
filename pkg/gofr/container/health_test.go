@@ -34,6 +34,12 @@ func TestContainer_Health(t *testing.T) {
 
 	for i, tc := range tests {
 		expected := map[string]interface{}{
+			"kv-store": datasource.Health{
+				Status: tc.datasourceHealth, Details: map[string]interface{}{
+					"host":  "localhost:1234",
+					"error": "kv-store not connected",
+				},
+			},
 			"redis": datasource.Health{
 				Status: tc.datasourceHealth, Details: map[string]interface{}{
 					"host":  "localhost:6379",
@@ -139,6 +145,14 @@ func registerMocks(mocks Mocks, health string) {
 		Details: map[string]interface{}{
 			"host":  "localhost:6379",
 			"error": "clickhouse not connected",
+		},
+	}, nil)
+
+	mocks.KVStore.EXPECT().HealthCheck(context.Background()).Return(datasource.Health{
+		Status: health,
+		Details: map[string]interface{}{
+			"host":  "localhost:1234",
+			"error": "kv-store not connected",
 		},
 	}, nil)
 }

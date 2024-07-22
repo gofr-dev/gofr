@@ -34,7 +34,8 @@ import (
 
 const (
 	defaultPublicStaticDir = "static"
-	traceExporterGoFr      = "gofr"
+	gofrTraceExporter      = "gofr"
+	gofrTracerURL          = "https://tracer.gofr.dev"
 )
 
 // App is the main application in the GoFr framework.
@@ -330,11 +331,8 @@ func (a *App) Migrate(migrationsMap map[int64]migration.Migrate) {
 	migration.Run(migrationsMap, a.container)
 }
 
+//nolint:gocyclo // once deprecated configs are removed, multiple if conditions will be removed and complexity will decrease
 func (a *App) initTracer() {
-	traceExporter := a.Config.Get("TRACE_EXPORTER")
-	tracerHost := a.Config.Get("TRACER_HOST")
-	tracerPort := a.Config.GetOrDefault("TRACER_PORT", "9411")
-
 	tp := sdktrace.NewTracerProvider(
 		sdktrace.WithResource(resource.NewWithAttributes(
 			semconv.SchemaURL,
@@ -345,8 +343,30 @@ func (a *App) initTracer() {
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
 	otel.SetErrorHandler(&otelErrorHandler{logger: a.container.Logger})
 
-	if (traceExporter != "" && tracerHost != "") || traceExporter == traceExporterGoFr {
-		exporter, err := a.getExporter(traceExporter, tracerHost, tracerPort)
+	traceExporter := a.Config.Get("TRACE_EXPORTER")
+	tracerURL := a.Config.Get("TRACER_URL")
+
+	// deprecated : tracer_host and tracer_port is deprecated and will be removed in upcoming versions
+	tracerHost := a.Config.Get("TRACER_HOST")
+	tracerPort := a.Config.GetOrDefault("TRACER_PORT", "9411")
+
+	if tracerURL != "" && traceExporter == "" {
+		a.Logger().Error("missing TRACE_EXPORTER config, should be provided with TRACER_URL to enable tracing")
+		return
+	}
+
+	//nolint:revive // early-return is not possible here, as below is the intentional logging flow
+	if tracerURL == "" && traceExporter != "" && !strings.EqualFold(traceExporter, "gofr") {
+		if tracerHost != "" && tracerPort != "" {
+			a.Logger().Warn("TRACER_HOST and TRACER_PORT are deprecated, use TRACER_URL instead")
+		} else {
+			a.Logger().Error("missing TRACER_URL config, should be provided with TRACE_EXPORTER to enable tracing")
+			return
+		}
+	}
+
+	if (traceExporter != "" && tracerHost != "") || tracerURL != "" || traceExporter == gofrTraceExporter {
+		exporter, err := a.getExporter(traceExporter, tracerHost, tracerPort, tracerURL)
 
 		if err != nil {
 			a.container.Error(err)
@@ -357,20 +377,23 @@ func (a *App) initTracer() {
 	}
 }
 
-func (a *App) getExporter(name, host, port string) (sdktrace.SpanExporter, error) {
+func (a *App) getExporter(name, host, port, url string) (sdktrace.SpanExporter, error) {
 	var (
 		exporter sdktrace.SpanExporter
 		err      error
 	)
 
-	authHeader := strings.TrimSpace(a.Config.Get("TRACER_AUTH_KEY"))
+	authHeader := a.Config.Get("TRACER_AUTH_KEY")
 
 	switch strings.ToLower(name) {
 	case "jaeger":
-		a.container.Log("Exporting traces to jaeger.")
+		if url == "" {
+			url = fmt.Sprintf("%s:%s", host, port)
+		}
 
-		opts := []otlptracegrpc.Option{otlptracegrpc.WithInsecure(),
-			otlptracegrpc.WithEndpoint(fmt.Sprintf("%s:%s", host, port))}
+		a.container.Logf("Exporting traces to jaeger at %s", url)
+
+		opts := []otlptracegrpc.Option{otlptracegrpc.WithInsecure(), otlptracegrpc.WithEndpoint(url)}
 
 		if authHeader != "" {
 			opts = append(opts, otlptracegrpc.WithHeaders(map[string]string{"Authorization": authHeader}))
@@ -378,18 +401,26 @@ func (a *App) getExporter(name, host, port string) (sdktrace.SpanExporter, error
 
 		exporter, err = otlptracegrpc.New(context.Background(), opts...)
 	case "zipkin":
-		a.container.Log("Exporting traces to zipkin.")
+		if url == "" {
+			url = fmt.Sprintf("http://%s:%s/api/v2/spans", host, port)
+		}
+
+		a.container.Logf("Exporting traces to zipkin at %s", url)
 
 		var opts []zipkin.Option
 		if authHeader != "" {
 			opts = append(opts, zipkin.WithHeaders(map[string]string{"Authorization": authHeader}))
 		}
 
-		exporter, err = zipkin.New(fmt.Sprintf("http://%s:%s/api/v2/spans", host, port), opts...)
-	case traceExporterGoFr:
-		exporter = NewExporter("https://tracer-api.gofr.dev/api/spans", logging.NewLogger(logging.INFO))
+		exporter, err = zipkin.New(url, opts...)
+	case gofrTraceExporter:
+		if url == "" {
+			url = "https://tracer-api.gofr.dev/api/spans"
+		}
 
-		a.container.Log("Exporting traces to GoFr at https://tracer.gofr.dev")
+		a.container.Logf("Exporting traces to GoFr at %s", gofrTracerURL)
+
+		exporter = NewExporter(url, logging.NewLogger(logging.INFO))
 	default:
 		a.container.Errorf("unsupported trace exporter: %s", name)
 	}
