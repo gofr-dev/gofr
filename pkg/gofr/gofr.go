@@ -33,10 +33,10 @@ import (
 
 const (
 	defaultPublicStaticDir = "static"
-	gofrTraceExporter      = "gofr"
-	zipkinTraceExporter    = "zipkin"
-	jaegerTraceExporter    = "jaeger"
-	otlpTraceExporter      = "otlp"
+ 	traceExporterGoFr      = "gofr"
+	traceExporterZipkin    = "zipkin"
+	traceExporterJaeger    = "jaeger"
+	traceExporterOTLP      = "otlp"
 	gofrTracerURL          = "https://tracer.gofr.dev"
 )
 
