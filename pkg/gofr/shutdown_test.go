@@ -26,7 +26,7 @@ func TestShutdownWithTimeout_ContextTimeout(t *testing.T) {
 
 func TestShutdownWithTimeout_SuccessfulShutdown(t *testing.T) {
 	// Mock shutdown function that completes successfully
-	mockShutdownFunc := func(ctx context.Context) error {
+	mockShutdownFunc := func(_ context.Context) error {
 		// Simulate a quick shutdown
 		time.Sleep(50 * time.Millisecond)
 		return nil
