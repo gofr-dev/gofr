@@ -69,7 +69,7 @@ func scanEntity(object interface{}) (*entity, error) {
 
 	objType := reflect.TypeOf(object)
 	if objType.Kind() != reflect.Ptr {
-		return nil, errObjectNotPointer
+		return nil, fmt.Errorf("failed to register routes for %s struct, as it is passed by value should be pointer", objType.Name())
 	}
 
 	entityType := objType.Elem()
