@@ -34,6 +34,9 @@ import (
 const (
 	defaultPublicStaticDir = "static"
 	gofrTraceExporter      = "gofr"
+	zipkinTraceExporter    = "zipkin"
+	jaegerTraceExporter    = "jaeger"
+	otlpTraceExporter      = "otlp"
 	gofrTracerURL          = "https://tracer.gofr.dev"
 )
 
@@ -344,12 +347,12 @@ func (a *App) getExporter(name, host, port, url, authHeader string) (sdktrace.Sp
 	}
 
 	switch strings.ToLower(name) {
-	case "otlp":
+	case otlpTraceExporter:
 		return a.buildOpenTelemetryProtocol(ctx, url, host, port, strings.ToLower(name), authHeader)
-	case "jaeger":
+	case jaegerTraceExporter:
 		// jaeger accept OpenTelemetry Protocol (OTLP) .
 		return a.buildOpenTelemetryProtocol(ctx, url, host, port, strings.ToLower(name), authHeader)
-	case "zipkin":
+	case zipkinTraceExporter:
 		return a.buildZipkin(url, host, port, authHeader)
 	case gofrTraceExporter:
 		return a.buildGofrTraceExporter(url)
