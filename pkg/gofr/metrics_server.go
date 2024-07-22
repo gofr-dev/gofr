@@ -38,8 +38,7 @@ func (m *metricServer) Shutdown(ctx context.Context) error {
 		return nil
 	}
 
-	err := m.srv.Shutdown(ctx)
-	m.srv = nil
-
-	return err
+	return shutdownWithTimeout(ctx, func(ctx context.Context) error {
+		return m.srv.Shutdown(ctx)
+	}, nil)
 }

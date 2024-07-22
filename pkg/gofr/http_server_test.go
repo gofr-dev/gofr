@@ -107,13 +107,54 @@ func TestShutdown_ServerStopsListening(t *testing.T) {
 	// Start the server
 	go server.Run(c)
 
+	// Create a context with a timeout to test the shutdown
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+
 	errChan := make(chan error, 1)
 	go func() {
-		time.Sleep(3 * time.Second)
-		errChan <- server.Shutdown(context.Background())
+		time.Sleep(100 * time.Millisecond)
+		errChan <- server.Shutdown(ctx)
 	}()
 
 	err := <-errChan
 
 	assert.NoError(t, err, "TEST Failed.\n")
+}
+
+func TestShutdown_ServerContextDeadline(t *testing.T) {
+	// Create a mock router and add a new route
+	router := &gofrHTTP.Router{}
+	router.Add(http.MethodGet, "/", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	// Create a mock container
+	c := &container.Container{
+		Logger: logging.NewLogger(logging.INFO),
+	}
+
+	// Create an instance of httpServer
+	server := &httpServer{
+		router: router,
+		port:   8080,
+	}
+
+	// Start the server
+	go server.Run(c)
+
+	// Create a context with a timeout to test the shutdown
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+
+	// Simulate a delay in the shutdown process to trigger context timeout
+	shutdownCh := make(chan error, 1)
+	go func() {
+		time.Sleep(300 * time.Millisecond) // Delay longer than the context timeout
+		shutdownCh <- server.Shutdown(ctx)
+	}()
+
+	err := <-shutdownCh
+
+	assert.Error(t, err, "context deadline exceeded", "Expected context deadline exceeded error")
 }

@@ -19,7 +19,7 @@ import (
 const (
 	publicBroker        = "broker.hivemq.com"
 	messageBuffer       = 10
-	DefaultCloseTimeout = 250 * time.Millisecond
+	DefaultCloseTimeout = 0 * time.Millisecond
 )
 
 var errClientNotConnected = errors.New("client not connected")

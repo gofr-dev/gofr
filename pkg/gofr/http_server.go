@@ -70,8 +70,7 @@ func (s *httpServer) Shutdown(ctx context.Context) error {
 		return nil
 	}
 
-	err := s.srv.Shutdown(ctx)
-	s.srv = nil
-
-	return err
+	return shutdownWithTimeout(ctx, func(ctx context.Context) error {
+		return s.srv.Shutdown(ctx)
+	}, func() { s.srv.Close() })
 }

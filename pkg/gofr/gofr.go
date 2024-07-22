@@ -217,7 +217,6 @@ func (a *App) Shutdown(ctx context.Context) error {
 		err = errors.Join(err, a.metricServer.Shutdown(ctx))
 	}
 
-	err = errors.Join(err, a.container.Close(ctx))
 	if err != nil {
 		a.container.Logger.Errorf("error while shutting down: %v", err)
 		return err
