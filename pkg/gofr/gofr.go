@@ -456,8 +456,7 @@ func (a *App) Subscribe(topic string, handler SubscribeFunc) {
 func (a *App) AddRESTHandlers(object interface{}) error {
 	cfg, err := scanEntity(object)
 	if err != nil {
-		a.container.Logger.Errorf("invalid object for AddRESTHandlers")
-
+		a.container.Logger.Errorf(err.Error())
 		return err
 	}
 

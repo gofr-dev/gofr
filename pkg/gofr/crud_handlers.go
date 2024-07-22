@@ -10,8 +10,10 @@ import (
 )
 
 var (
-	errInvalidObject  = errors.New("unexpected object given for AddRESTHandlers")
-	errEntityNotFound = errors.New("entity not found")
+	errInvalidObject    = errors.New("unexpected object given for AddRESTHandlers")
+	errEntityNotFound   = errors.New("entity not found")
+	errObjectNotPointer = errors.New("pointer object is not given for AddRESTHandlers")
+	errObjectIsNil      = errors.New("object given for AddRESTHandlers is nil")
 )
 
 type Create interface {
@@ -62,12 +64,12 @@ type entity struct {
 // scanEntity extracts entity information for CRUD operations.
 func scanEntity(object interface{}) (*entity, error) {
 	if object == nil {
-		return nil, errInvalidObject
+		return nil, errObjectIsNil
 	}
 
 	objType := reflect.TypeOf(object)
 	if objType.Kind() != reflect.Ptr {
-		return nil, errInvalidObject
+		return nil, errObjectNotPointer
 	}
 
 	entityType := objType.Elem()
