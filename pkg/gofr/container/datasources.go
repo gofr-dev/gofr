@@ -203,3 +203,17 @@ type HealthChecker interface {
 	// It is done to avoid adding packages which are not being used.
 	HealthCheck(context.Context) (any, error)
 }
+
+type KVStore interface {
+	Get(ctx context.Context, key string) (string, error)
+	Set(ctx context.Context, key, value string) error
+	Delete(ctx context.Context, key string) error
+
+	HealthChecker
+}
+
+type KVStoreProvider interface {
+	KVStore
+
+	provider
+}
