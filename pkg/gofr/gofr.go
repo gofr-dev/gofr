@@ -295,6 +295,7 @@ func (a *App) Migrate(migrationsMap map[int64]migration.Migrate) {
 	migration.Run(migrationsMap, a.container)
 }
 
+//nolint:gocyclo // once deprecated configs are removed, multiple if conditions will be removed and complexity will decrease
 func (a *App) initTracer() {
 	tp := sdktrace.NewTracerProvider(
 		sdktrace.WithResource(resource.NewWithAttributes(
@@ -314,17 +315,18 @@ func (a *App) initTracer() {
 	tracerPort := a.Config.GetOrDefault("TRACER_PORT", "9411")
 
 	if tracerURL != "" && traceExporter == "" {
-		a.Logger().Errorf("missing TRACE_EXPORTER config, should be provided with TRACER_URL to enable tracing")
+		a.Logger().Error("missing TRACE_EXPORTER config, should be provided with TRACER_URL to enable tracing")
 		return
 	}
 
-	if tracerURL == "" && traceExporter != "" {
-		a.Logger().Errorf("missing TRACER_URL config, should be provided with TRACE_EXPORTER to enable tracing")
-		return
-	}
-
-	if tracerURL == "" && tracerHost != "" && tracerPort != "" {
-		a.Logger().Warn("TRACER_HOST and TRACER_PORT are deprecated, use TRACER_URL instead")
+	//nolint:revive // early-return is not possible here, as below is the intentional logging flow
+	if tracerURL == "" && traceExporter != "" && !strings.EqualFold(traceExporter, "gofr") {
+		if tracerHost != "" && tracerPort != "" {
+			a.Logger().Warn("TRACER_HOST and TRACER_PORT are deprecated, use TRACER_URL instead")
+		} else {
+			a.Logger().Error("missing TRACER_URL config, should be provided with TRACE_EXPORTER to enable tracing")
+			return
+		}
 	}
 
 	if (traceExporter != "" && tracerHost != "") || tracerURL != "" || traceExporter == gofrTraceExporter {
