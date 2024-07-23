@@ -2,22 +2,24 @@ package gofr
 
 import (
 	"context"
+	"errors"
 )
 
 // shutdownWithTimeout handles the shutdown process with context timeout.
-func shutdownWithTimeout(ctx context.Context, shutdownFunc func(ctx context.Context) error, forceCloseFunc func()) error {
+func shutdownWithTimeout(ctx context.Context, shutdownFunc func(ctx context.Context) error, forceCloseFunc func() error) error {
 	errCh := make(chan error, 1)
 	go func() {
 		errCh <- shutdownFunc(ctx)
 	}()
-
 	select {
 	case <-ctx.Done():
+		err := ctx.Err()
+
 		if forceCloseFunc != nil {
-			forceCloseFunc()
+			err = errors.Join(err, forceCloseFunc())
 		}
 
-		return ctx.Err()
+		return err
 	case err := <-errCh:
 		return err
 	}

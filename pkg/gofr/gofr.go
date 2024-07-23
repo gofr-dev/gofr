@@ -202,7 +202,7 @@ func (a *App) Run() {
 func (a *App) Shutdown(ctx context.Context) error {
 	var err error
 	if a.httpServer != nil {
-		err = errors.Join(err, a.httpServer.Shutdown(ctx, a.Logger()))
+		err = errors.Join(err, a.httpServer.Shutdown(ctx))
 	}
 
 	if a.grpcServer != nil {

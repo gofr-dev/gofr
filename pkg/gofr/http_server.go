@@ -10,7 +10,6 @@ import (
 	"gofr.dev/pkg/gofr/container"
 	gofrHTTP "gofr.dev/pkg/gofr/http"
 	"gofr.dev/pkg/gofr/http/middleware"
-	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/websocket"
 )
 
@@ -66,16 +65,18 @@ func (s *httpServer) Run(c *container.Container) {
 	c.Error(s.srv.ListenAndServe())
 }
 
-func (s *httpServer) Shutdown(ctx context.Context, logger logging.Logger) error {
+func (s *httpServer) Shutdown(ctx context.Context) error {
 	if s.srv == nil {
 		return nil
 	}
 
 	return shutdownWithTimeout(ctx, func(ctx context.Context) error {
 		return s.srv.Shutdown(ctx)
-	}, func() {
+	}, func() error {
 		if err := s.srv.Close(); err != nil {
-			logger.Errorf("Error closing http server: %v", err)
+			return err
 		}
+
+		return nil
 	})
 }
