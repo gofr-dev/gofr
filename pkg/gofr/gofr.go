@@ -317,11 +317,13 @@ func (a *App) initTracer() {
 	tracerHost := a.Config.Get("TRACER_HOST")
 	tracerPort := a.Config.GetOrDefault("TRACER_PORT", "9411")
 
-	if tracerURL == "" && (tracerHost != "" || tracerPort != "") {
+	if tracerURL == "" && tracerHost != "" {
 		a.Logger().Warn("TRACER_HOST and TRACER_PORT are deprecated, use TRACER_URL instead")
+
+		tracerURL = fmt.Sprintf("%s:%s", tracerHost, tracerPort)
 	}
 
-	exporter, err := a.getExporter(context.Background(), traceExporter, tracerHost, tracerPort, tracerURL, authHeader)
+	exporter, err := a.getExporter(context.Background(), traceExporter, tracerURL, authHeader)
 	if err != nil {
 		a.container.Error(err)
 	}
@@ -334,7 +336,7 @@ func (a *App) initTracer() {
 	tp.RegisterSpanProcessor(batcher)
 }
 
-func (a *App) getExporter(ctx context.Context, name, host, port, url, authHeader string) (sdktrace.SpanExporter, error) {
+func (a *App) getExporter(ctx context.Context, name, url, authHeader string) (sdktrace.SpanExporter, error) {
 	var exporter sdktrace.SpanExporter
 
 	if name == "" {
@@ -342,19 +344,19 @@ func (a *App) getExporter(ctx context.Context, name, host, port, url, authHeader
 		return exporter, nil
 	}
 
-	if (host == "" || port == "") && url == "" && name != traceExporterGoFr {
+	if url == "" && name != traceExporterGoFr {
 		a.Logger().Errorf("missing TRACER_URL config, should be provided with TRACE_EXPORTER to enable tracing")
 		return exporter, nil
 	}
 
 	switch strings.ToLower(name) {
 	case traceExporterOTLP:
-		return a.buildOpenTelemetryProtocol(ctx, url, host, port, strings.ToLower(name), authHeader)
+		return a.buildOpenTelemetryProtocol(ctx, url, strings.ToLower(name), authHeader)
 	case traceExporterJaeger:
 		// jaeger accept OpenTelemetry Protocol (OTLP) .
-		return a.buildOpenTelemetryProtocol(ctx, url, host, port, strings.ToLower(name), authHeader)
+		return a.buildOpenTelemetryProtocol(ctx, url, strings.ToLower(name), authHeader)
 	case traceExporterZipkin:
-		return a.buildZipkin(url, host, port, authHeader)
+		return a.buildZipkin(url, authHeader)
 	case traceExporterGoFr:
 		return a.buildGofrTraceExporter(url)
 	default:
@@ -365,11 +367,7 @@ func (a *App) getExporter(ctx context.Context, name, host, port, url, authHeader
 
 // buildOpenTelemetryProtocol using OpenTelemetryProtocol as the trace exporter
 // jaeger accept OpenTelemetry Protocol (OTLP) over gRPC to upload trace data .
-func (a *App) buildOpenTelemetryProtocol(ctx context.Context, url, host, port, exporter, authHeader string) (sdktrace.SpanExporter, error) {
-	if url == "" {
-		url = fmt.Sprintf("%s:%s", host, port)
-	}
-
+func (a *App) buildOpenTelemetryProtocol(ctx context.Context, url, exporter, authHeader string) (sdktrace.SpanExporter, error) {
 	a.container.Logf("Exporting traces to %s at %s", exporter, url)
 
 	opts := []otlptracegrpc.Option{otlptracegrpc.WithInsecure(), otlptracegrpc.WithEndpoint(url)}
@@ -381,9 +379,9 @@ func (a *App) buildOpenTelemetryProtocol(ctx context.Context, url, host, port, e
 	return otlptracegrpc.New(ctx, opts...)
 }
 
-func (a *App) buildZipkin(url, host, port, authHeader string) (sdktrace.SpanExporter, error) {
-	if url == "" {
-		url = fmt.Sprintf("http://%s:%s/api/v2/spans", host, port)
+func (a *App) buildZipkin(url, authHeader string) (sdktrace.SpanExporter, error) {
+	if !strings.HasPrefix(url, "http") {
+		url = fmt.Sprintf("http://%s/api/v2/spans", url)
 	}
 
 	a.container.Logf("Exporting traces to zipkin at %s", url)
