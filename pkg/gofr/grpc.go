@@ -47,7 +47,7 @@ func (g *grpcServer) Run(c *container.Container) {
 }
 
 func (g *grpcServer) Shutdown(ctx context.Context) error {
-	return shutdownWithTimeout(ctx, func(ctx context.Context) error {
+	return shutdownWithContext(ctx, func(ctx context.Context) error {
 		stopCh := make(chan struct{})
 		go func() {
 			g.server.GracefulStop()

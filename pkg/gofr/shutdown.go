@@ -5,8 +5,8 @@ import (
 	"errors"
 )
 
-// shutdownWithTimeout handles the shutdown process with context timeout.
-func shutdownWithTimeout(ctx context.Context, shutdownFunc func(ctx context.Context) error, forceCloseFunc func() error) error {
+// shutdownWithContext handles the shutdown process with context timeout.
+func shutdownWithContext(ctx context.Context, shutdownFunc func(ctx context.Context) error, forceCloseFunc func() error) error {
 	errCh := make(chan error, 1)
 	go func() {
 		errCh <- shutdownFunc(ctx)
