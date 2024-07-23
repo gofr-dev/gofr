@@ -101,7 +101,7 @@ func Test_scanEntity(t *testing.T) {
 			desc:  "invalid object type",
 			input: userEntity{},
 			resp:  nil,
-			err:   fmt.Errorf("failed to register routes for userEntity struct, as it is passed by value should be pointer"),
+			err:   fmt.Errorf("failed to register routes for 'userEntity' struct, passed object is not pointer"),
 		},
 	}
 
