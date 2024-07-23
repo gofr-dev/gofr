@@ -69,7 +69,7 @@ jobs:
 
       - name: Get dependencies
         run: |
-          go mod download
+          go mod vendor
 
       - name: Start Zipkin
         run: docker run -d -p 2005:9411 openzipkin/zipkin:latest
