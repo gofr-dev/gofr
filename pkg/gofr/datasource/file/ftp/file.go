@@ -15,7 +15,7 @@ import (
 // errNotPointer is returned when Read method is called with a non-pointer argument.
 var errNotPointer = errors.New("input should be a pointer to a string")
 
-// ftpResponse interface mimics the behaviour of *ftp.Response returned on retrieval of file.
+// ftpResponse interface mimics the behavior of *ftp.Response returned on retrieval of file.
 type ftpResponse interface {
 	Read(buf []byte) (int, error)
 	Close() error
@@ -55,7 +55,7 @@ func (f *ftpFile) ReadAll() (datasource.RowReader, error) {
 
 // createJSONReader creates a JSON reader for JSON files.
 func (f *ftpFile) createJSONReader() (datasource.RowReader, error) {
-	// Initialising a buffer and reading the response
+	// Initializing a buffer and reading the response
 	emptyBuffer := make([]byte, 1024)
 
 	n, err := f.response.Read(emptyBuffer)
@@ -120,6 +120,7 @@ func (f *ftpFile) createJSONObjectReader() (datasource.RowReader, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	buffer = buffer[:n]
 
 	reader := bytes.NewReader(buffer)

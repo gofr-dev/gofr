@@ -4,8 +4,9 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"go.uber.org/mock/gomock"
 	"testing"
+
+	"go.uber.org/mock/gomock"
 )
 
 // This test file contains test for all the ftpFileSystem functions.
@@ -493,7 +494,7 @@ func TestMkDirAll(t *testing.T) {
 			name:     "Successful mkdir all",
 			basePath: "/ftp/one",
 			dirPath:  "testdir1/testdir2",
-			mockMkdirExpect: func(conn *MockServerConn, dirPath string) {
+			mockMkdirExpect: func(conn *MockServerConn, _ string) {
 				conn.EXPECT().MakeDir("testdir1").Return(nil)
 				conn.EXPECT().MakeDir("testdir1/testdir2").Return(nil)
 			},

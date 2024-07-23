@@ -23,11 +23,6 @@ type ftpFileSystem struct {
 	logger datasource.Logger // Logger interface for logging
 }
 
-// UseLogger sets the logger interface for the FTP file system.
-func (f *ftpFileSystem) UseLogger(logger interface{}) {
-	f.logger = logger.(datasource.Logger)
-}
-
 // Config represents the FTP configuration.
 type Config struct {
 	Host      string // FTP server hostname
@@ -42,9 +37,14 @@ func New(config *Config) datasource.FileSystem {
 	return &ftpFileSystem{config: config}
 }
 
+// UseLogger sets the logger interface for the FTP file system.
+func (f *ftpFileSystem) UseLogger(logger interface{}) {
+	f.logger = logger.(datasource.Logger)
+}
+
 // UseMetrics sets the metrics for the ftpFileSystem client which asserts the Metrics interface.
 // Currently not implemented.
-func (f *ftpFileSystem) UseMetrics(metrics interface{}) {
+func (*ftpFileSystem) UseMetrics(metrics interface{}) {
 
 }
 

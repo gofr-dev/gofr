@@ -6,7 +6,7 @@ import (
 	"github.com/jlaffaye/ftp"
 )
 
-// FTPClient interface defines the methods needed for FTP operations
+// FTPClient interface defines the methods needed for FTP operations.
 type FTPClient interface {
 	Dial(string, ...ftp.DialOption) (Conn, error)
 }

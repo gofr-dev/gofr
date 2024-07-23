@@ -4,12 +4,13 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"github.com/joho/godotenv"
-	"gofr.dev/pkg/gofr/logging"
 	"io"
 	"log"
 	"os"
 	"testing"
+
+	"github.com/joho/godotenv"
+	"gofr.dev/pkg/gofr/logging"
 
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
@@ -516,7 +517,7 @@ func Test_ReadFromJSONArray(t *testing.T) {
 
 		reader, _ := newCsvFile.ReadAll()
 
-		defer func(fileStore datasource.FileSystem, name string) {
+		defer func(fs datasource.FileSystem, name string) {
 			_ = fs.RemoveAll(name)
 		}(fs, "temp.json")
 
@@ -568,7 +569,6 @@ func Test_ReadFromJSONObject(t *testing.T) {
 			assert.NoError(t, err)
 		}
 	})
-
 }
 
 func Test_ReadFromJSONArrayInvalidDelimiter(t *testing.T) {
@@ -591,7 +591,6 @@ func Test_ReadFromJSONArrayInvalidDelimiter(t *testing.T) {
 
 		assert.IsType(t, &json.SyntaxError{}, err)
 	})
-
 }
 
 // Helper function to run FTP tests requiring actual ftp connection.
