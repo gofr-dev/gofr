@@ -342,7 +342,7 @@ func (a *App) getExporter(ctx context.Context, name, host, port, url, authHeader
 		return exporter, nil
 	}
 
-	if (host == "" && port == "") && url == "" && name != traceExporterGoFr {
+	if (host == "" || port == "") && url == "" && name != traceExporterGoFr {
 		a.Logger().Errorf("missing TRACER_URL config, should be provided with TRACE_EXPORTER to enable tracing")
 		return exporter, nil
 	}
