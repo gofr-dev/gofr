@@ -8,7 +8,6 @@ require (
 	github.com/XSAM/otelsql v0.32.0
 	github.com/alicebob/miniredis/v2 v2.33.0
 	github.com/eclipse/paho.mqtt.golang v1.4.3
-	github.com/go-redis/redismock/v9 v9.2.0
 	github.com/go-sql-driver/mysql v1.8.1
 	github.com/gogo/protobuf v1.3.2
 	github.com/golang-jwt/jwt/v5 v5.2.1
@@ -40,7 +39,6 @@ require (
 	golang.org/x/text v0.16.0
 	google.golang.org/api v0.189.0
 	google.golang.org/grpc v1.65.0
-	google.golang.org/protobuf v1.34.2
 	modernc.org/sqlite v1.31.1
 )
 
@@ -96,6 +94,7 @@ require (
 	google.golang.org/genproto v0.0.0-20240722135656-d784300faade // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20240701130421-f6361c86f094 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240722135656-d784300faade // indirect
+	google.golang.org/protobuf v1.34.2 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	modernc.org/gc/v3 v3.0.0-20240107210532-573471604cb6 // indirect
 	modernc.org/libc v1.55.3 // indirect

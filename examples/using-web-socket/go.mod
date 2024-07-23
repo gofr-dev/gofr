@@ -1,4 +1,4 @@
-module github.com/gofr-dev/gofr/examples/using-web-socket
+module gofr.dev/examples/using-web-socket
 
 go 1.22
 
