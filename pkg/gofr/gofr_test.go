@@ -311,7 +311,7 @@ func Test_AddRESTHandlers(t *testing.T) {
 	}{
 		{"success case", &user{}, nil},
 		{"invalid object", &invalidObject, errInvalidObject},
-		{"invalid object", user{}, fmt.Errorf("failed to register routes for 'user' struct, passed object is not pointer")},
+		{"invalid object", user{}, fmt.Errorf("failed to register routes for 'user' struct, %w", errNonPointerObject)},
 		{"invalid object", nil, errObjectIsNil},
 	}
 
