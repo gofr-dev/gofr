@@ -3,14 +3,6 @@ package gofr
 import (
 	"context"
 	"fmt"
-	"net/http"
-	"os"
-	"path/filepath"
-	"strconv"
-	"strings"
-	"sync"
-	"time"
-
 	"github.com/gorilla/mux"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
@@ -20,6 +12,14 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
 	"google.golang.org/grpc"
+	"net/http"
+	"os"
+	"path/filepath"
+	"reflect"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
@@ -62,7 +62,45 @@ type App struct {
 func (a *App) RegisterService(desc *grpc.ServiceDesc, impl interface{}) {
 	a.container.Logger.Infof("registering GRPC Server: %s", desc.ServiceName)
 	a.grpcServer.server.RegisterService(desc, impl)
+
+	injectContainer(impl, a.container)
+
 	a.grpcRegistered = true
+}
+
+func injectContainer(impl any, c *container.Container) {
+	val := reflect.ValueOf(impl)
+
+	if val.Kind() != reflect.Pointer {
+		c.Logger.Debugf("cannot inject container into non-addressable implementation of `%s`, consider using pointer",
+			val.Type().Name())
+		return
+	}
+
+	val = val.Elem()
+	tVal := val.Type()
+	for i := 0; i < val.NumField(); i++ {
+		f := tVal.Field(i)
+		v := val.Field(i)
+
+		if f.Type == reflect.TypeOf(c) {
+			if !v.CanAddr() {
+				c.Logger.Errorf("cannot inject container as it is not exported")
+				continue
+			}
+
+			v.Set(reflect.ValueOf(c))
+		}
+
+		if f.Type == reflect.TypeOf(*c) {
+			if !v.CanAddr() {
+				c.Logger.Errorf("cannot inject container as it is not exported")
+				continue
+			}
+
+			v.Set(reflect.ValueOf(*c))
+		}
+	}
 }
 
 // New creates an HTTP Server Application and returns that App.
