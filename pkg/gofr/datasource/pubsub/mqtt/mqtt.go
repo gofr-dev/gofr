@@ -17,9 +17,8 @@ import (
 )
 
 const (
-	publicBroker        = "broker.hivemq.com"
-	messageBuffer       = 10
-	DefaultCloseTimeout = 0 * time.Millisecond
+	publicBroker  = "broker.hivemq.com"
+	messageBuffer = 10
 )
 
 var errClientNotConnected = errors.New("client not connected")
@@ -348,11 +347,6 @@ func (m *MQTT) Unsubscribe(topic string) error {
 
 func (m *MQTT) Close() error {
 	timeout := m.config.CloseTimeout
-
-	if timeout == 0 {
-		// setting default value if value is not populated
-		timeout = DefaultCloseTimeout
-	}
 
 	return m.Disconnect(uint(timeout))
 }

@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"sync"
 	"testing"
+	"time"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/stretchr/testify/assert"
@@ -570,7 +571,7 @@ func TestMQTT_Close(t *testing.T) {
 	ctrl, client, mockMQTT, _, _ := getMockMQTT(t, mockConfigs)
 	defer ctrl.Finish()
 
-	mockMQTT.EXPECT().Disconnect(uint(DefaultCloseTimeout))
+	mockMQTT.EXPECT().Disconnect(uint(0 * time.Millisecond))
 
 	// Close the client
 	err := client.Close()
