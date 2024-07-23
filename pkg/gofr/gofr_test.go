@@ -330,21 +330,19 @@ func Test_initTracer(t *testing.T) {
 	}
 	mockConfig1 := createMockConfig("zipkin", "http://localhost:2005/api/v2/spans", "")
 
-	mockConfig2 := createMockConfig("jaeger", "localhost:2005", "")
+	mockConfig2 := createMockConfig("zipkin", "http://localhost:2005/api/v2/spans", "valid-token")
 
-	mockConfig3 := createMockConfig("gofr", "", "")
+	mockConfig3 := createMockConfig("jaeger", "localhost:4317", "")
 
-	mockConfig4 := createMockConfig("zipkin", "http://localhost:2005/api/v2/spans", "valid-token")
+	mockConfig4 := createMockConfig("jaeger", "localhost:4317", "valid-token")
 
-	mockConfig5 := createMockConfig("jaeger", "localhost:2005", "valid-token")
+	mockConfig5 := createMockConfig("otlp", "localhost:4317", "")
 
-	mockConfig6 := createMockConfig("zipkin", "https://tracer-service.dev", "")
+	mockConfig6 := createMockConfig("otlp", "localhost:4317", "valid-token")
 
-	mockConfig7 := createMockConfig("jaeger", "https://tracer-service.dev", "")
+	mockConfig7 := createMockConfig("gofr", "", "")
 
-	mockConfig8 := createMockConfig("otlp", "localhost:4317", "")
-
-	mockConfig9 := createMockConfig("otlp", "localhost:4317", "valid-token")
+	mockConfig8 := createMockConfig("gofr", "https://tracer.gofr.dev", "")
 
 	tests := []struct {
 		desc               string
@@ -352,14 +350,13 @@ func Test_initTracer(t *testing.T) {
 		expectedLogMessage string
 	}{
 		{"zipkin exporter", mockConfig1, "Exporting traces to zipkin at http://localhost:2005/api/v2/spans"},
-		{"jaeger exporter", mockConfig2, "Exporting traces to jaeger at localhost:2005"},
-		{"gofr exporter", mockConfig3, "Exporting traces to GoFr at https://tracer.gofr.dev"},
-		{"zipkin exporter with auth", mockConfig4, "Exporting traces to zipkin at http://localhost:2005/api/v2/spans"},
-		{"zipkin exporter with custom tracer url", mockConfig6, "Exporting traces to zipkin at https://tracer-service.dev"},
-		{"jaeger exporter with auth", mockConfig5, "Exporting traces to jaeger at localhost:2005"},
-		{"jaeger exporter custom tracer url", mockConfig7, "Exporting traces to jaeger at https://tracer-service.dev"},
-		{"jaeger exporter custom tracer url", mockConfig8, "Exporting traces to otlp at localhost:4317"},
-		{"jaeger exporter custom tracer url", mockConfig9, "Exporting traces to otlp at localhost:4317"},
+		{"zipkin exporter with authkey", mockConfig2, "Exporting traces to zipkin at http://localhost:2005/api/v2/spans"},
+		{"jaeger exporter", mockConfig3, "Exporting traces to jaeger at localhost:4317"},
+		{"jaeger exporter with auth", mockConfig4, "Exporting traces to jaeger at localhost:4317"},
+		{"otlp exporter", mockConfig5, "Exporting traces to otlp at localhost:4317"},
+		{"otlp exporter with authKey", mockConfig6, "Exporting traces to otlp at localhost:4317"},
+		{"gofr exporter with default url", mockConfig7, "Exporting traces to GoFr at https://tracer.gofr.dev"},
+		{"gofr exporter with url", mockConfig8, "Exporting traces to GoFr at https://tracer.gofr.dev"},
 	}
 
 	for i, tc := range tests {
@@ -370,7 +367,6 @@ func Test_initTracer(t *testing.T) {
 				Config:    tc.config,
 				container: mockContainer,
 			}
-
 			a.initTracer()
 		})
 		assert.Contains(t, logMessage, tc.expectedLogMessage, "TEST[%d], Failed.\n%s", i, tc.desc)
@@ -394,9 +390,9 @@ func Test_initTracer_invalidConfig(t *testing.T) {
 		config             config.Config
 		expectedLogMessage string
 	}{
-		{"unsupported trace exporter", mockConfig1, "unsupported TRACE_EXPORTER: abc"},
-		{"missing exporter", mockConfig2, "missing TRACE_EXPORTER config, should be provided with TRACER_URL to enable tracing"},
-		{"set exporter but not provide address", mockConfig3,
+		{"unsupported trace_exporter", mockConfig1, "unsupported TRACE_EXPORTER: abc"},
+		{"missing trace_exporter", mockConfig2, "missing TRACE_EXPORTER config, should be provided with TRACER_URL to enable tracing"},
+		{"miss tracer_url ", mockConfig3,
 			"missing TRACER_URL config, should be provided with TRACE_EXPORTER to enable tracing"},
 	}
 
@@ -408,7 +404,6 @@ func Test_initTracer_invalidConfig(t *testing.T) {
 				Config:    tc.config,
 				container: mockContainer,
 			}
-
 			a.initTracer()
 		})
 
