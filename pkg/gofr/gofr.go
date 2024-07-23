@@ -315,7 +315,7 @@ func (a *App) initTracer() {
 
 	// deprecated : tracer_host and tracer_port are deprecated and will be removed in upcoming versions.
 	tracerHost := a.Config.Get("TRACER_HOST")
-	tracerPort := a.Config.Get("TRACER_PORT")
+	tracerPort := a.Config.GetOrDefault("TRACER_PORT", "9411")
 
 	if tracerURL == "" && (tracerHost != "" || tracerPort != "") {
 		a.Logger().Warn("TRACER_HOST and TRACER_PORT are deprecated, use TRACER_URL instead")
