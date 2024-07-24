@@ -468,7 +468,7 @@ Michael Brown,40,michaelb@example.com`
 		reader, _ := newCsvFile.ReadAll()
 
 		defer func(fs FileSystem, name string) {
-			_ = fs.RemoveAll(name)
+			_ = fs.Remove(name)
 		}(fs, "temp.csv")
 
 		var i = 0
@@ -499,7 +499,7 @@ func Test_ReadFromCSVScanError(t *testing.T) {
 		reader, _ := newCsvFile.ReadAll()
 
 		defer func(fs FileSystem, name string) {
-			_ = fs.RemoveAll(name)
+			_ = fs.Remove(name)
 		}(fs, "temp.csv")
 
 		for reader.Next() {
@@ -532,7 +532,7 @@ func Test_ReadFromJSONArray(t *testing.T) {
 		reader, _ := newCsvFile.ReadAll()
 
 		defer func(fs FileSystem, name string) {
-			_ = fs.RemoveAll(name)
+			_ = fs.Remove(name)
 		}(fs, "temp.json")
 
 		var i = 0
@@ -568,7 +568,7 @@ func Test_ReadFromJSONObject(t *testing.T) {
 		reader, _ := newCsvFile.ReadAll()
 
 		defer func(fs FileSystem, name string) {
-			_ = fs.RemoveAll(name)
+			_ = fs.Remove(name)
 		}(fs, "temp.json")
 
 		for reader.Next() {
@@ -599,7 +599,7 @@ func Test_ReadFromJSONArrayInvalidDelimiter(t *testing.T) {
 		_, err := newCsvFile.ReadAll()
 
 		defer func(fileStore FileSystem, name string) {
-			_ = fileStore.RemoveAll(name)
+			_ = fileStore.Remove(name)
 		}(fs, "temp.json")
 
 		assert.IsType(t, &json.SyntaxError{}, err)

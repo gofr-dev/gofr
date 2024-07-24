@@ -13,10 +13,6 @@ import (
 // This test file contains test for all the ftpFileSystem functions.
 // The ftp operations are mocked to check for various possible use cases.
 func TestCreateFile(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	// Define test cases
 	var tests = []struct {
 		name           string
 		fileName       string
@@ -51,9 +47,10 @@ func TestCreateFile(t *testing.T) {
 		},
 	}
 
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 	mockFtpConn := NewMockServerConn(ctrl)
 
-	// Create ftpFileSystem instance with mock dependencies
 	fs := &ftpFileSystem{
 		conn: mockFtpConn,
 		config: &Config{
@@ -86,7 +83,6 @@ func TestCreateFile(t *testing.T) {
 				Response.EXPECT().Close().Return(nil)
 			}
 
-			// Call the Create method
 			_, err := fs.Create(tt.fileName)
 
 			assert.Equal(t, tt.expectError, err != nil, tt.name)
@@ -95,7 +91,6 @@ func TestCreateFile(t *testing.T) {
 }
 
 func TestRenameFile(t *testing.T) {
-	// Define test cases
 	var tests = []struct {
 		name         string
 		fromPath     string
@@ -141,10 +136,8 @@ func TestRenameFile(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	// Create mock FTP server connection
 	mockFtpConn := NewMockServerConn(ctrl)
 
-	// Create ftpFileSystem instance with mock dependencies
 	fs := &ftpFileSystem{
 		conn: mockFtpConn,
 		config: &Config{
@@ -158,7 +151,6 @@ func TestRenameFile(t *testing.T) {
 
 	fs.UseLogger(NewMockLogger(INFO))
 
-	// Iterate over test cases
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if tt.expectRename {
@@ -169,7 +161,6 @@ func TestRenameFile(t *testing.T) {
 				}
 			}
 
-			// Call Rename method
 			err := fs.Rename(tt.fromPath, tt.toPath)
 
 			assert.Equal(t, tt.expectError, err != nil, tt.name)
@@ -178,7 +169,6 @@ func TestRenameFile(t *testing.T) {
 }
 
 func TestRemoveFile(t *testing.T) {
-	// Define test cases
 	var tests = []struct {
 		name         string
 		filePath     string
@@ -212,10 +202,8 @@ func TestRemoveFile(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	// Create mock FTP server connection
 	mockFtpConn := NewMockServerConn(ctrl)
 
-	// Create ftpFileSystem instance with mock dependencies
 	fs := &ftpFileSystem{
 		conn: mockFtpConn,
 		config: &Config{
@@ -229,7 +217,6 @@ func TestRemoveFile(t *testing.T) {
 
 	fs.UseLogger(NewMockLogger(INFO))
 
-	// Iterate over test cases
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if tt.expectDelete {
@@ -240,7 +227,6 @@ func TestRemoveFile(t *testing.T) {
 				}
 			}
 
-			// Call Remove method
 			err := fs.Remove(tt.filePath)
 
 			assert.Equal(t, tt.expectError, err != nil, tt.name)
@@ -249,7 +235,6 @@ func TestRemoveFile(t *testing.T) {
 }
 
 func TestOpenFile(t *testing.T) {
-	// Define test cases for Open method
 	var tests = []struct {
 		name           string
 		basePath       string
@@ -279,14 +264,11 @@ func TestOpenFile(t *testing.T) {
 		},
 	}
 
-	// Initialize gomock controller
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	// Create mock FTP server connection
 	mockFtpConn := NewMockServerConn(ctrl)
 
-	// Create ftpFileSystem instance with mock dependencies
 	fs := &ftpFileSystem{
 		conn: mockFtpConn,
 		config: &Config{
@@ -300,15 +282,12 @@ func TestOpenFile(t *testing.T) {
 
 	fs.UseLogger(NewMockLogger(INFO))
 
-	// Iterate over test cases for Open method
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Set mock expectations for Retr method
 			path := fmt.Sprintf("%v/%v", tt.basePath, tt.filePath)
 
 			tt.mockRetrExpect(mockFtpConn, path)
 
-			// Perform Open operation
 			_, err := fs.Open(tt.filePath)
 
 			assert.Equal(t, tt.expectError, err != nil, tt.name)
@@ -317,7 +296,6 @@ func TestOpenFile(t *testing.T) {
 }
 
 func TestOpenWithPerm(t *testing.T) {
-	// Define test cases for OpenFile method
 	var openWithPermTests = []struct {
 		name           string
 		basePath       string
@@ -347,14 +325,11 @@ func TestOpenWithPerm(t *testing.T) {
 		},
 	}
 
-	// Initialize gomock controller
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	// Create mock FTP server connection
 	mockFtpConn := NewMockServerConn(ctrl)
 
-	// Create ftpFileSystem instance with mock dependencies
 	fs := &ftpFileSystem{
 		conn: mockFtpConn,
 		config: &Config{
@@ -368,14 +343,12 @@ func TestOpenWithPerm(t *testing.T) {
 
 	fs.UseLogger(NewMockLogger(INFO))
 
-	// Iterate over test cases for OpenFile method
 	for _, tt := range openWithPermTests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Set mock expectations for Retr method
 			path := fmt.Sprintf("%v/%v", tt.basePath, tt.filePath)
+
 			tt.mockRetrExpect(mockFtpConn, path)
 
-			// Perform OpenFile operation
 			_, err := fs.OpenFile(tt.filePath, 0, 0075)
 
 			assert.Equal(t, tt.expectError, err != nil, tt.name)
@@ -384,7 +357,6 @@ func TestOpenWithPerm(t *testing.T) {
 }
 
 func TestMkDir(t *testing.T) {
-	// Define test cases for Mkdir method
 	var tests = []struct {
 		name            string
 		basePath        string
@@ -412,14 +384,11 @@ func TestMkDir(t *testing.T) {
 		},
 	}
 
-	// Initialize gomock controller
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	// Create mock FTP server connection
 	mockFtpConn := NewMockServerConn(ctrl)
 
-	// Create ftpFileSystem instance with mock dependencies
 	fs := &ftpFileSystem{
 		conn: mockFtpConn,
 		config: &Config{
@@ -433,14 +402,12 @@ func TestMkDir(t *testing.T) {
 
 	fs.UseLogger(NewMockLogger(INFO))
 
-	// Iterate over test cases for Mkdir method
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Set mock expectations for MakeDir method
 			path := fmt.Sprintf("%v/%v", tt.basePath, tt.dirPath)
+
 			tt.mockMkdirExpect(mockFtpConn, path)
 
-			// Perform Mkdir operation
 			err := fs.Mkdir(tt.dirPath, 0)
 
 			assert.Equal(t, tt.expectError, err != nil, tt.name)
@@ -449,7 +416,6 @@ func TestMkDir(t *testing.T) {
 }
 
 func TestMkDirAll(t *testing.T) {
-	// Define test cases for MkdirAll method
 	var tests = []struct {
 		name            string
 		basePath        string
@@ -469,14 +435,11 @@ func TestMkDirAll(t *testing.T) {
 		},
 	}
 
-	// Initialize gomock controller
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	// Create mock FTP server connection
 	mockFtpConn := NewMockServerConn(ctrl)
 
-	// Create ftpFileSystem instance with mock dependencies
 	fs := &ftpFileSystem{
 		conn: mockFtpConn,
 		config: &Config{
@@ -490,13 +453,10 @@ func TestMkDirAll(t *testing.T) {
 
 	fs.UseLogger(NewMockLogger(INFO))
 
-	// Iterate over test cases for MkdirAll method
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Set mock expectations for MakeDir method
 			tt.mockMkdirExpect(mockFtpConn, tt.dirPath)
 
-			// Perform MkdirAll operation
 			err := fs.MkdirAll(tt.dirPath, 0)
 
 			assert.Equal(t, tt.expectError, err != nil, tt.name)
@@ -505,7 +465,6 @@ func TestMkDirAll(t *testing.T) {
 }
 
 func TestRemoveDir(t *testing.T) {
-	// Define test cases for RemoveAll method
 	var tests = []struct {
 		name             string
 		basePath         string
@@ -533,14 +492,11 @@ func TestRemoveDir(t *testing.T) {
 		},
 	}
 
-	// Initialize gomock controller
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	// Create mock FTP server connection
 	mockFtpConn := NewMockServerConn(ctrl)
 
-	// Create ftpFileSystem instance with mock dependencies
 	fs := &ftpFileSystem{
 		conn: mockFtpConn,
 		config: &Config{
@@ -554,14 +510,12 @@ func TestRemoveDir(t *testing.T) {
 
 	fs.UseLogger(NewMockLogger(INFO))
 
-	// Iterate over test cases for RemoveAll method
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Set mock expectations for RemoveDirRecur method
 			path := fmt.Sprintf("%v/%v", tt.basePath, tt.removePath)
+
 			tt.mockRemoveExpect(mockFtpConn, path)
 
-			// Perform RemoveAll operation
 			err := fs.RemoveAll(tt.removePath)
 
 			assert.Equal(t, tt.expectError, err != nil, tt.name)

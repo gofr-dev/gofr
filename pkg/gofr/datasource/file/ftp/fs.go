@@ -15,6 +15,7 @@ type Conn struct {
 	*ftp.ServerConn
 }
 
+// Retr wraps the ftp retrieve method to return a ftpResponse interface type
 func (c *Conn) Retr(path string) (ftpResponse, error) {
 	return c.ServerConn.Retr(path)
 }
@@ -33,10 +34,10 @@ var (
 
 // ftpFileSystem represents a file system interface over FTP.
 type ftpFileSystem struct {
-	file   *ftpFile   // Pointer to a single file object
-	conn   ServerConn // FTP server connection
-	config *Config    // FTP configuration
-	logger Logger     // Logger interface for logging
+	*ftpFile
+	conn   ServerConn
+	config *Config
+	logger Logger
 }
 
 // Config represents the FTP configuration.
@@ -68,10 +69,8 @@ func (*ftpFileSystem) UseMetrics(_ interface{}) {
 
 // Connect establishes a connection to the FTP server and logs in.
 func (f *ftpFileSystem) Connect() {
-	// Construct FTP server address
 	ftpServer := fmt.Sprintf("%v:%v", f.config.Host, f.config.Port)
 
-	// Connect to FTP server
 	const dialTimeout = 5 * time.Second
 
 	conn, err := ftp.Dial(ftpServer, ftp.DialWithTimeout(dialTimeout))
@@ -82,7 +81,6 @@ func (f *ftpFileSystem) Connect() {
 
 	f.conn = &Conn{conn}
 
-	// Login to FTP server
 	err = conn.Login(f.config.User, f.config.Password)
 	if err != nil {
 		f.logger.Errorf("Failed to login: %v", err)
@@ -97,13 +95,10 @@ func (f *ftpFileSystem) Create(name string) (File, error) {
 		return nil, errEmptyFilename
 	}
 
-	// empty io.Reader
 	emptyReader := new(bytes.Buffer)
 
-	// construct the path
 	name = fmt.Sprintf("%s/%s", f.config.RemoteDir, name)
 
-	// Issue STOR command to create the empty file on FTP server
 	err := f.conn.Stor(name, emptyReader)
 	if err != nil {
 		return nil, err
@@ -113,7 +108,6 @@ func (f *ftpFileSystem) Create(name string) (File, error) {
 
 	s := strings.Split(name, "/")
 
-	// Retrieve the file from FTP server and return a file handle
 	res, err := f.conn.Retr(name)
 	if err != nil {
 		return nil, err
@@ -148,13 +142,12 @@ func (f *ftpFileSystem) Mkdir(name string, _ os.FileMode) error {
 
 // MkdirAll creates directories recursively on the FTP server. Here, os.FileMode is unused.
 func (f *ftpFileSystem) MkdirAll(path string, _ os.FileMode) error {
-	// Split path into individual directory names.
 	dirs := strings.Split(path, "/")
 
 	currentDir := dirs[0]
-	// counting number of directories created.
+
 	v := 0
-	// Iterate through dirs
+
 	for i, dir := range dirs {
 		// Ignore empty directory names (can happen if there are double slashes).
 		if dir == "" {
@@ -167,7 +160,6 @@ func (f *ftpFileSystem) MkdirAll(path string, _ os.FileMode) error {
 			currentDir = fmt.Sprintf("%s/%s", currentDir, dir)
 		}
 
-		// Attempt to create the directory.
 		err := f.conn.MakeDir(currentDir)
 		if err != nil {
 			// if error indicates that directory exists continue, else return.
@@ -177,14 +169,14 @@ func (f *ftpFileSystem) MkdirAll(path string, _ os.FileMode) error {
 
 			return err
 		}
-		// counting directories created.
+
 		v++
 	}
-	//if no directory is created.
+
 	if v == 0 {
 		return errors.New("Error Creating Directory")
 	}
-	// all directories created successfully
+
 	return nil
 }
 
@@ -196,7 +188,6 @@ func (f *ftpFileSystem) Open(name string) (File, error) {
 
 	name = fmt.Sprintf("%s/%s", f.config.RemoteDir, name)
 
-	// Retrieve the file from FTP server and return a file handle
 	res, err := f.conn.Retr(name)
 	if err != nil {
 		return nil, err
@@ -206,7 +197,6 @@ func (f *ftpFileSystem) Open(name string) (File, error) {
 
 	f.logger.Logf("Opened file with path %s", name)
 
-	// Return the file handle
 	return &ftpFile{
 		response: res,
 		name:     s[len(s)-1],
@@ -216,7 +206,7 @@ func (f *ftpFileSystem) Open(name string) (File, error) {
 }
 
 // permissions are not clear for Ftp as file commands do not accept an argument and don't store their file permissions.
-// currently, this function just calls the Open function.
+// currently, this function just calls the Open function. Here, os.FileMode is unused.
 func (f *ftpFileSystem) OpenFile(name string, _ int, _ os.FileMode) (File, error) {
 	return f.Open(name)
 }
@@ -256,13 +246,11 @@ func (f *ftpFileSystem) Rename(oldname, newname string) error {
 		return errInvalidArg
 	}
 
-	// No operation executed as oldname is the same as the newname
 	if oldname == newname {
 		f.logger.Logf("File has the same name")
 		return nil
 	}
 
-	// construct the path
 	oldname = fmt.Sprintf("%s/%s", f.config.RemoteDir, oldname)
 	newname = fmt.Sprintf("%s/%s", f.config.RemoteDir, newname)
 
