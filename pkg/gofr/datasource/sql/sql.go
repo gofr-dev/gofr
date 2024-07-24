@@ -30,6 +30,7 @@ type DBConfig struct {
 	Password    string
 	Port        string
 	Database    string
+	SSLMode     string
 	MaxIdleConn int
 	MaxOpenConn int
 }
@@ -160,6 +161,7 @@ func getDBConfig(configs config.Config) *DBConfig {
 		Password:    configs.Get("DB_PASSWORD"),
 		Port:        configs.GetOrDefault("DB_PORT", strconv.Itoa(defaultDBPort)),
 		Database:    configs.Get("DB_NAME"),
+		SSLMode:     configs.Get("DB_SSLMODE"), // optional config for postgres, if not provided disable is used by default.
 		MaxOpenConn: maxOpenConn,
 		MaxIdleConn: maxIdleConn,
 	}
@@ -176,8 +178,12 @@ func getDBConnectionString(dbConfig *DBConfig) (string, error) {
 			dbConfig.Database,
 		), nil
 	case "postgres":
-		return fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
-			dbConfig.HostName, dbConfig.Port, dbConfig.User, dbConfig.Password, dbConfig.Database), nil
+		if strings.TrimSpace(dbConfig.SSLMode) == "" {
+			dbConfig.SSLMode = "disable"
+		}
+
+		return fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
+			dbConfig.HostName, dbConfig.Port, dbConfig.User, dbConfig.Password, dbConfig.Database, dbConfig.SSLMode), nil
 	case sqlite:
 		s := strings.TrimSuffix(dbConfig.Database, ".db")
 
