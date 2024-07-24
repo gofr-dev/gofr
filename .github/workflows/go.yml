@@ -80,7 +80,7 @@ jobs:
           for d in $(find examples -type d); do
             if [ -f "$d/go.mod" ]; then
               pushd "$d" >/dev/null
-              go test . -v -short -coverprofile packageWithpbgo.cov -coverpkg=gofr.dev/examples/...
+              go test . -v -short -coverprofile packageWithpbgo.cov -coverpkg=$d
               popd >/dev/null
             fi
           done
