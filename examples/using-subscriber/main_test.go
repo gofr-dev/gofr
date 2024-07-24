@@ -42,9 +42,8 @@ func TestExampleSubscriber(t *testing.T) {
 	initializeTest(t)
 
 	log := testutil.StdoutOutputForFunc(func() {
-		const host = "http://localhost:8200"
 		go main()
-		time.Sleep(time.Second * 40)
+		time.Sleep(time.Second * 50)
 	})
 
 	testCases := []struct {
@@ -56,7 +55,7 @@ func TestExampleSubscriber(t *testing.T) {
 			expectedLog: "Received order",
 		},
 		{
-			desc:        "valid  product",
+			desc:        "valid product",
 			expectedLog: "Received product",
 		},
 	}
