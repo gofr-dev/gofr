@@ -42,7 +42,7 @@ func initializeTest(t *testing.T) {
 func TestExampleSubscriber(t *testing.T) {
 	log := testutil.StdoutOutputForFunc(func() {
 		go main()
-		time.Sleep(time.Second * 20)
+		time.Sleep(time.Minute*2 + time.Second*30)
 	})
 
 	initializeTest(t)
