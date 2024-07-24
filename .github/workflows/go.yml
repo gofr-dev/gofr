@@ -83,7 +83,7 @@ jobs:
               pushd "$d" >/dev/null
               go test . -v -short -coverprofile coverage.cov -coverpkg=gofr.dev/examples/...
               cat coverage.cov >> profile.cov
-              rm coverage.tmp
+              rm coverage.cov
               popd >/dev/null
             fi
           done
