@@ -138,12 +138,15 @@ func (a *App) Run() {
 		a.cmd.Run(a.container)
 	}
 
+	// Create a context that is canceled on receiving termination signals
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
+	// Goroutine to handle shutdown when context is cancele
 	go func() {
 		<-ctx.Done()
 
+		// Create a shutdown context with a timeout
 		shutdownCtx, done := context.WithTimeout(context.WithoutCancel(ctx), shutDownTimeout)
 		defer done()
 
@@ -199,6 +202,7 @@ func (a *App) Run() {
 }
 
 // Shutdown stops the service(s) and close the application.
+// It shuts down the HTTP, gRPC, Metrics servers and closes the container's active connections to datasources.
 func (a *App) Shutdown(ctx context.Context) error {
 	var err error
 	if a.httpServer != nil {

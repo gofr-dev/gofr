@@ -47,19 +47,13 @@ func (g *grpcServer) Run(c *container.Container) {
 }
 
 func (g *grpcServer) Shutdown(ctx context.Context) error {
-	return shutdownWithContext(ctx, func(ctx context.Context) error {
-		stopCh := make(chan struct{})
-		go func() {
-			g.server.GracefulStop()
-			close(stopCh)
-		}()
+	return shutdownWithContext(ctx, func(_ context.Context) error {
+		g.server.GracefulStop()
 
-		select {
-		case <-ctx.Done():
-			g.server.Stop() // Force stop if context is done
-			return ctx.Err()
-		case <-stopCh:
-			return nil
-		}
-	}, nil)
+		return nil
+	}, func() error {
+		g.server.Stop()
+
+		return nil
+	})
 }
