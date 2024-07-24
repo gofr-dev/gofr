@@ -81,8 +81,8 @@ jobs:
           for d in $(find examples -type d); do
             if [ -f "$d/go.mod" ]; then
               pushd "$d" >/dev/null
-              go test . -v -short -coverprofile=coverage.tmp -coverpkg=gofr.dev/examples/...
-              cat coverage.tmp >> profile.cov
+              go test . -v -short -coverprofile coverage.cov -coverpkg=gofr.dev/examples/...
+              cat coverage.cov >> profile.cov
               rm coverage.tmp
               popd >/dev/null
             fi
