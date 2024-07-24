@@ -158,6 +158,7 @@ func TestSQL_ConfigCases(t *testing.T) {
 			Port:        "3306",
 			MaxIdleConn: tc.expectedIdle,
 			MaxOpenConn: tc.expectedOpen,
+			SSLMode:     "disable",
 		}
 
 		configs := getDBConfig(mockConfig)
@@ -207,6 +208,7 @@ func TestSQL_getDBConnectionString(t *testing.T) {
 				Password: "password",
 				Port:     "3201",
 				Database: "test",
+				SSLMode:  "disable",
 			},
 			expOut: "host=host port=3201 user=user password=password dbname=test sslmode=disable",
 		},
