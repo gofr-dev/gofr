@@ -82,11 +82,13 @@ jobs:
             if [ -f "$d/go.mod" ]; then
               pushd "$d" >/dev/null
               go test . -v -short -coverprofile coverage.cov -coverpkg=gofr.dev/examples/...
+              cat coverage.cov
               cat coverage.cov >> profile.cov
               rm coverage.cov
               popd >/dev/null
             fi
           done
+          cat profile.cov
           go tool cover -func profile.cov
 
       - name: Upload Test Coverage
