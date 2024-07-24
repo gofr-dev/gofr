@@ -82,7 +82,7 @@ jobs:
             if [ -f "$d/go.mod" ]; then
               pushd "$d" >/dev/null
               go test . -v -short -coverprofile=coverage.tmp -coverpkg=gofr.dev/examples/...
-              tail -n +2 coverage.tmp >> profile.cov
+              cat coverage.tmp >> profile.cov
               rm coverage.tmp
               popd >/dev/null
             fi
