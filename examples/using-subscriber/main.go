@@ -1,11 +1,14 @@
 package main
 
 import (
+	"gofr.dev/examples/using-subscriber/migrations"
 	"gofr.dev/pkg/gofr"
 )
 
 func main() {
 	app := gofr.New()
+
+	app.Migrate(migrations.All())
 
 	app.Subscribe("products", func(c *gofr.Context) error {
 		var productInfo struct {
