@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -60,6 +61,8 @@ func TestExampleSubscriber(t *testing.T) {
 			expectedLog: "Received product",
 		},
 	}
+
+	fmt.Println(log)
 
 	for i, tc := range testCases {
 		if !strings.Contains(log, tc.expectedLog) {
