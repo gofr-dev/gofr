@@ -77,17 +77,17 @@ jobs:
       - name: Test
         run: |
           export APP_ENV=test
-          echo 'mode: count' > coverage.all.out
+          echo 'mode: count' > profile.cov
           for d in $(find examples -type d); do
             if [ -f "$d/go.mod" ]; then
               pushd "$d" >/dev/null
               go test . -v -short -coverprofile=coverage.tmp -coverpkg=gofr.dev/examples/...
-              tail -n +2 coverage.tmp >> coverage.all.out
+              tail -n +2 coverage.tmp >> profile.cov
               rm coverage.tmp
               popd >/dev/null
             fi
           done
-          go tool cover -func coverage.all.out
+          go tool cover -func profile.cov
 
       - name: Upload Test Coverage
         if: ${{ matrix.go-version == '1.22'}}
