@@ -225,8 +225,8 @@ TRACER_URL=localhost:14317
 #### 3. [OpenTelemetry Protocol](https://opentelemetry.io/docs/specs/otlp/):
 
 The OpenTelemetry Protocol (OTLP)  underlying gRPC is one of general-purpose telemetry data delivery protocol designed in the scope of the OpenTelemetry project.
-Add OTLP configs in `.env` file, your .env will be updated to
 
+Add OTLP configs in `.env` file, your .env will be updated to
 ```dotenv
 # ... no change in other env variables
 
@@ -238,7 +238,7 @@ TRACER_URL=localhost:4317
 Open {% new-tab-link title="zipkin" href="http://localhost:16686/trace/" /%} and search by TraceID (correlationID) to see the trace.
 {% figure src="/jaeger-traces.png" alt="Jaeger traces" /%}
 
-#### 3. [GoFr Tracer](https://tracer.gofr.dev/):
+#### 4. [GoFr Tracer](https://tracer.gofr.dev/):
 
 GoFr tracer is GoFr's own custom trace exporter as well as collector. You can search a trace by its TraceID (correlationID)
 in GoFr's own tracer service available anywhere, anytime.
