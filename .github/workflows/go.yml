@@ -87,8 +87,7 @@ jobs:
               popd >/dev/null
             fi
           done
-          grep -vE '^gofr\.dev\/.*\.pb\.go' coverage.all.out > profile.cov
-          go tool cover -func profile.cov
+          go tool cover -func coverage.all.out
 
       - name: Upload Test Coverage
         if: ${{ matrix.go-version == '1.22'}}
