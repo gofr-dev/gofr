@@ -77,14 +77,17 @@ jobs:
       - name: Test
         run: |
           export APP_ENV=test
+          echo 'mode: count' > coverage.all.out
           for d in $(find examples -type d); do
             if [ -f "$d/go.mod" ]; then
               pushd "$d" >/dev/null
-              go test . -v -short -coverprofile packageWithpbgo.cov -coverpkg=$d
+              go test . -v -short -coverprofile=coverage.tmp -coverpkg="$d"
+              tail -n +2 coverage.tmp >> coverage.all.out
+              rm coverage.tmp
               popd >/dev/null
             fi
           done
-          grep -vE '^gofr\.dev\/.*\.pb\.go' packageWithpbgo.cov > profile.cov
+          grep -vE '^gofr\.dev\/.*\.pb\.go' coverage.all.out > profile.cov
           go tool cover -func profile.cov
 
       - name: Upload Test Coverage
