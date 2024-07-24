@@ -71,7 +71,7 @@ func main() {
         return "Hello World!", nil
     })
 
-   app.Run() // listen and serve on localhost:8080 
+   app.Run() // listen and serve on localhost:8000 
 }
 ```
 
@@ -81,7 +81,7 @@ To run the code, use the `go run` command, like:
 $ go run main.go
 ```
 
-Then visit [`localhost:8080/greet`](http://localhost:8080/greet) in your browser to see the response!
+Then visit [`localhost:8000/greet`](http://localhost:8000/greet) in your browser to see the response!
 
 ### See more examples
 A number of ready-to-run examples demonstrating various use cases of GoFr are available in the [GoFr examples](https://github.com/gofr-dev/gofr/tree/development/examples) directory.
