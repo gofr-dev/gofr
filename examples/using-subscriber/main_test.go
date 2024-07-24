@@ -43,10 +43,10 @@ func TestExampleSubscriber(t *testing.T) {
 	log := testutil.StdoutOutputForFunc(func() {
 		go main()
 		time.Sleep(time.Second * 3) // Giving some time to start the server
-	})
 
-	initializeTest(t)
-	time.Sleep(time.Second * 40) // Giving some time to publish events
+		initializeTest(t)
+		time.Sleep(time.Second * 20) // Giving some time to publish events
+	})
 
 	testCases := []struct {
 		desc        string
