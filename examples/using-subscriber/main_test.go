@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -42,10 +41,11 @@ func initializeTest(t *testing.T) {
 func TestExampleSubscriber(t *testing.T) {
 	log := testutil.StdoutOutputForFunc(func() {
 		go main()
-		time.Sleep(time.Minute * 5)
+		time.Sleep(time.Second * 3) // Giving some time to start the server
 	})
 
 	initializeTest(t)
+	time.Sleep(time.Second * 40) // Giving some time to publish events
 
 	testCases := []struct {
 		desc        string
@@ -60,8 +60,6 @@ func TestExampleSubscriber(t *testing.T) {
 			expectedLog: "Received product",
 		},
 	}
-
-	fmt.Println("log: ", log)
 
 	for i, tc := range testCases {
 		if !strings.Contains(log, tc.expectedLog) {
