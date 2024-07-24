@@ -81,7 +81,7 @@ jobs:
           for d in $(find examples -type d); do
             if [ -f "$d/go.mod" ]; then
               pushd "$d" >/dev/null
-              go test . -v -short -coverprofile=coverage.tmp -coverpkg=./...
+              go test . -v -short -coverprofile=coverage.tmp -coverpkg=gofr.dev/examples/...
               tail -n +2 coverage.tmp >> coverage.all.out
               rm coverage.tmp
               popd >/dev/null
