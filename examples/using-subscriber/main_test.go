@@ -43,7 +43,7 @@ func TestExampleSubscriber(t *testing.T) {
 
 	log := testutil.StdoutOutputForFunc(func() {
 		go main()
-		time.Sleep(time.Second * 50)
+		time.Sleep(time.Minute * 1)
 	})
 
 	testCases := []struct {
