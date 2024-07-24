@@ -23,7 +23,7 @@ func main() {
 			return nil
 		}
 
-		c.Logger.Info("Received product ", productInfo)
+		c.Logger.Info("Received product", productInfo)
 
 		return nil
 	})
@@ -41,7 +41,7 @@ func main() {
 			return nil
 		}
 
-		c.Logger.Info("Received order ", orderStatus)
+		c.Logger.Info("Received order", orderStatus)
 
 		return nil
 	})
