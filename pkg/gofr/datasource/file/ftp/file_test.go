@@ -5,21 +5,15 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"log"
-	"os"
 	"testing"
-
-	"github.com/joho/godotenv"
-	"gofr.dev/pkg/gofr/logging"
 
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
-	"gofr.dev/pkg/gofr/datasource"
 )
 
 func TestRead(t *testing.T) {
 	// Define test cases for Read method
-	var readTests = []struct {
+	var tests = []struct {
 		name             string
 		filePath         string
 		mockReadResponse func(response *MockftpResponse)
@@ -41,36 +35,50 @@ func TestRead(t *testing.T) {
 			},
 			expectError: true,
 		},
+		{
+			name:     "File does not exist",
+			filePath: "/ftp/one/nonexistent.txt",
+			mockReadResponse: func(_ *MockftpResponse) {
+			},
+			expectError: true,
+		},
 	}
 
 	// Initialize gomock controller
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
+	// Create mock FTP server connection
+	mockFtpConn := NewMockServerConn(ctrl)
+
+	// Create ftpFileSystem instance with mock dependencies
+	fs := &ftpFileSystem{
+		conn: mockFtpConn,
+		config: &Config{
+			Host:      "ftp.example.com",
+			User:      "username",
+			Password:  "password",
+			Port:      21,
+			RemoteDir: "/ftp/one",
+		},
+	}
+
+	fs.UseLogger(NewMockLogger(INFO))
+
 	// Iterate over test cases for Read method
-	for _, tt := range readTests {
+	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create mock FTP server connection
-			mockFtpConn := NewMockServerConn(ctrl)
-
-			// Create ftpFileSystem instance with mock dependencies
-			fs := &ftpFileSystem{
-				conn: mockFtpConn,
-				config: &Config{
-					Host:      "ftp.example.com",
-					User:      "username",
-					Password:  "password",
-					Port:      "21",
-					RemoteDir: "/ftp/one",
-				},
-			}
-
 			// Create mock response
 			response := NewMockftpResponse(ctrl)
-			tt.mockReadResponse(response)
 
 			// Set expectation for Retr method
-			mockFtpConn.EXPECT().Retr(tt.filePath).Return(response, nil)
+			if tt.name != "File does not exist" {
+				mockFtpConn.EXPECT().Retr(tt.filePath).Return(response, nil)
+			} else {
+				mockFtpConn.EXPECT().Retr(tt.filePath).Return(nil, errors.New("file not found error"))
+			}
+
+			tt.mockReadResponse(response)
 
 			// Initialize buffer for reading
 			s := make([]byte, 1024)
@@ -81,15 +89,7 @@ func TestRead(t *testing.T) {
 			// Perform Read operation
 			_, err := file.Read(s)
 
-			// Check for errors
-			if (err != nil) != tt.expectError {
-				t.Errorf("Expected error: %v, but got: %v", tt.expectError, err)
-			}
-
-			// Log successful read
-			if err == nil {
-				t.Logf("Read successfully from %s", tt.filePath)
-			}
+			assert.Equal(t, tt.expectError, err != nil, tt.name)
 		})
 	}
 }
@@ -121,36 +121,51 @@ func TestReadAt(t *testing.T) {
 			},
 			expectError: true,
 		},
+		{
+			name:     "File does not exist",
+			filePath: "/ftp/one/nonexistent.txt",
+			offset:   0,
+			mockReadResponse: func(_ *MockftpResponse) {
+			},
+			expectError: true,
+		},
 	}
 
 	// Initialize gomock controller
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
+	// Create mock FTP server connection
+	mockFtpConn := NewMockServerConn(ctrl)
+
+	// Create ftpFileSystem instance with mock dependencies
+	fs := &ftpFileSystem{
+		conn: mockFtpConn,
+		config: &Config{
+			Host:      "ftp.example.com",
+			User:      "username",
+			Password:  "password",
+			Port:      21,
+			RemoteDir: "/ftp/one",
+		},
+	}
+
+	fs.UseLogger(NewMockLogger(INFO))
+
 	// Iterate over test cases for ReadAt method
 	for _, tt := range readAtTests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create mock FTP server connection
-			mockFtpConn := NewMockServerConn(ctrl)
-
-			// Create ftpFileSystem instance with mock dependencies
-			fs := &ftpFileSystem{
-				conn: mockFtpConn,
-				config: &Config{
-					Host:      "ftp.example.com",
-					User:      "username",
-					Password:  "password",
-					Port:      "21",
-					RemoteDir: "/ftp/one",
-				},
-			}
-
 			// Create mock response
 			response := NewMockftpResponse(ctrl)
-			tt.mockReadResponse(response)
 
 			// Set expectation for RetrFrom method
-			mockFtpConn.EXPECT().RetrFrom(tt.filePath, uint64(tt.offset)).Return(response, nil)
+			if tt.name != "File does not exist" {
+				mockFtpConn.EXPECT().RetrFrom(tt.filePath, uint64(tt.offset)).Return(response, nil)
+			} else {
+				mockFtpConn.EXPECT().RetrFrom(tt.filePath, uint64(tt.offset)).Return(nil, errors.New("file not found error"))
+			}
+
+			tt.mockReadResponse(response)
 
 			// Initialize buffer for reading
 			s := make([]byte, 1024)
@@ -161,15 +176,7 @@ func TestReadAt(t *testing.T) {
 			// Perform ReadAt operation
 			_, err := file.ReadAt(s, tt.offset)
 
-			// Check for errors
-			if (err != nil) != tt.expectError {
-				t.Errorf("Expected error: %v, but got: %v", tt.expectError, err)
-			}
-
-			// Log successful read
-			if err == nil {
-				t.Logf("Read successfully from %s at offset %d", tt.filePath, tt.offset)
-			}
+			assert.Equal(t, tt.expectError, err != nil, tt.name)
 		})
 	}
 }
@@ -186,9 +193,8 @@ func TestWrite(t *testing.T) {
 			name:     "Successful write",
 			filePath: "/ftp/one/testfile.txt",
 			mockWriteExpect: func(conn *MockServerConn, filePath string) {
-				emptyReader := bytes.NewBuffer([]byte("test content"))
-				conn.EXPECT().Delete(filePath).Return(nil)
-				conn.EXPECT().Stor(filePath, emptyReader).Return(nil)
+				emptyReader := bytes.NewReader([]byte("test content"))
+				conn.EXPECT().StorFrom(filePath, emptyReader, uint64(0)).Return(nil)
 			},
 			expectError: false,
 		},
@@ -196,7 +202,17 @@ func TestWrite(t *testing.T) {
 			name:     "Write with error",
 			filePath: "/ftp/one/nonexistent.txt",
 			mockWriteExpect: func(conn *MockServerConn, filePath string) {
-				conn.EXPECT().Delete(filePath).Return(errors.New("file not deleted"))
+				emptyReader := bytes.NewReader([]byte("test content"))
+				conn.EXPECT().StorFrom(filePath, emptyReader, uint64(0)).Return(errors.New("mocked write error"))
+			},
+			expectError: true,
+		},
+		{
+			name:     "File does not exist",
+			filePath: "/ftp/one/nonexistent.txt",
+			mockWriteExpect: func(conn *MockServerConn, filePath string) {
+				emptyReader := bytes.NewReader([]byte("test content"))
+				conn.EXPECT().StorFrom(filePath, emptyReader, uint64(0)).Return(errors.New("file not found error"))
 			},
 			expectError: true,
 		},
@@ -206,24 +222,26 @@ func TestWrite(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
+	// Create mock FTP server connection
+	mockFtpConn := NewMockServerConn(ctrl)
+
+	// Create ftpFileSystem instance with mock dependencies
+	fs := &ftpFileSystem{
+		conn: mockFtpConn,
+		config: &Config{
+			Host:      "ftp.example.com",
+			User:      "username",
+			Password:  "password",
+			Port:      21,
+			RemoteDir: "/ftp/one",
+		},
+	}
+
+	fs.UseLogger(NewMockLogger(INFO))
+
 	// Iterate over test cases for Write method
 	for _, tt := range writeTests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create mock FTP server connection
-			mockFtpConn := NewMockServerConn(ctrl)
-
-			// Create ftpFileSystem instance with mock dependencies
-			fs := &ftpFileSystem{
-				conn: mockFtpConn,
-				config: &Config{
-					Host:      "ftp.example.com",
-					User:      "username",
-					Password:  "password",
-					Port:      "21",
-					RemoteDir: "/ftp/one",
-				},
-			}
-
 			// Set mock expectations for Stor method
 			tt.mockWriteExpect(mockFtpConn, tt.filePath)
 
@@ -233,15 +251,7 @@ func TestWrite(t *testing.T) {
 			// Perform Write operation
 			_, err := file.Write([]byte("test content"))
 
-			// Check for errors
-			if (err != nil) != tt.expectError {
-				t.Errorf("Expected error: %v, but got: %v", tt.expectError, err)
-			}
-
-			// Log successful write
-			if err == nil {
-				t.Logf("Wrote successfully to %s", tt.filePath)
-			}
+			assert.Equal(t, tt.expectError, err != nil, tt.name)
 		})
 	}
 }
@@ -275,30 +285,42 @@ func TestWriteAt(t *testing.T) {
 			},
 			expectError: true,
 		},
+		{
+			name:     "File does not exist",
+			filePath: "/ftp/one/nonexistent.txt",
+			offset:   0,
+			mockWriteExpect: func(conn *MockServerConn, filePath string, offset int64) {
+				emptyReader := bytes.NewReader([]byte("test content"))
+				conn.EXPECT().StorFrom(filePath, emptyReader, uint64(offset)).Return(errors.New("file not found error"))
+			},
+			expectError: true,
+		},
 	}
 
 	// Initialize gomock controller
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
+	// Create mock FTP server connection
+	mockFtpConn := NewMockServerConn(ctrl)
+
+	// Create ftpFileSystem instance with mock dependencies
+	fs := &ftpFileSystem{
+		conn: mockFtpConn,
+		config: &Config{
+			Host:      "ftp.example.com",
+			User:      "username",
+			Password:  "password",
+			Port:      21,
+			RemoteDir: "/ftp/one",
+		},
+	}
+
+	fs.UseLogger(NewMockLogger(INFO))
+
 	// Iterate over test cases for WriteAt method
 	for _, tt := range writeAtTests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create mock FTP server connection
-			mockFtpConn := NewMockServerConn(ctrl)
-
-			// Create ftpFileSystem instance with mock dependencies
-			fs := &ftpFileSystem{
-				conn: mockFtpConn,
-				config: &Config{
-					Host:      "ftp.example.com",
-					User:      "username",
-					Password:  "password",
-					Port:      "21",
-					RemoteDir: "/ftp/one",
-				},
-			}
-
 			// Set mock expectations for StorAt method
 			tt.mockWriteExpect(mockFtpConn, tt.filePath, tt.offset)
 
@@ -308,15 +330,7 @@ func TestWriteAt(t *testing.T) {
 			// Perform WriteAt operation
 			_, err := file.WriteAt([]byte("test content"), tt.offset)
 
-			// Check for errors
-			if (err != nil) != tt.expectError {
-				t.Errorf("Expected error: %v, but got: %v", tt.expectError, err)
-			}
-
-			// Log successful write
-			if err == nil {
-				t.Logf("Wrote successfully to %s at offset %d", tt.filePath, tt.offset)
-			}
+			assert.Equal(t, tt.expectError, err != nil, tt.name)
 		})
 	}
 }
@@ -341,14 +355,14 @@ func TestSeekFile(t *testing.T) {
 			offset:        -3,
 			whence:        io.SeekStart,
 			expectedPos:   0,
-			expectedError: datasource.ErrOutOfRange,
+			expectedError: ErrOutOfRange,
 		},
 		{
 			name:          "Seek from start with out-of-range offset",
 			offset:        15,
 			whence:        io.SeekStart,
 			expectedPos:   0,
-			expectedError: datasource.ErrOutOfRange,
+			expectedError: ErrOutOfRange,
 		},
 		{
 			name:          "Seek from end with valid offset",
@@ -362,7 +376,7 @@ func TestSeekFile(t *testing.T) {
 			offset:        3,
 			whence:        io.SeekEnd,
 			expectedPos:   0,
-			expectedError: datasource.ErrOutOfRange,
+			expectedError: ErrOutOfRange,
 		},
 		{
 			name:          "Seek from current with valid offset",
@@ -383,37 +397,38 @@ func TestSeekFile(t *testing.T) {
 			offset:        10,
 			whence:        io.SeekCurrent,
 			expectedPos:   0,
-			expectedError: datasource.ErrOutOfRange,
+			expectedError: ErrOutOfRange,
 		},
 		{
 			name:          "Invalid whence value",
 			offset:        0,
 			whence:        123, // Invalid whence value
 			expectedPos:   0,
-			expectedError: datasource.ErrOutOfRange,
+			expectedError: ErrOutOfRange,
 		},
+	}
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockFtpConn := NewMockServerConn(ctrl)
+
+	// Mock response for Retr method
+	response := NewMockftpResponse(ctrl)
+
+	// Create ftpFile instance with mock dependencies
+	file := &ftpFile{
+		path:   "/ftp/one/testfile2.txt",
+		conn:   mockFtpConn,
+		offset: 5, // Starting offset for the file
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
-
-			mockFtpConn := NewMockServerConn(ctrl)
-
-			// Mock response for Retr method
-			response := NewMockftpResponse(ctrl)
 			mockFtpConn.EXPECT().Retr("/ftp/one/testfile2.txt").Return(response, nil)
 
 			// Mock ReadAll method of response
 			response.EXPECT().Read(gomock.Any()).Return(10, io.EOF).AnyTimes()
-
-			// Create ftpFile instance with mock dependencies
-			file := &ftpFile{
-				path:   "/ftp/one/testfile2.txt",
-				conn:   mockFtpConn,
-				offset: 5, // Starting offset for the file
-			}
 
 			// Perform Seek operation
 			pos, err := file.Seek(tt.offset, tt.whence)
@@ -428,7 +443,6 @@ func TestSeekFile(t *testing.T) {
 // The test defined below do not use any mocking. They need an actual ftp server connection.
 func Test_ReadFromCSV(t *testing.T) {
 	runFtpTest(t, func(fs *ftpFileSystem) {
-
 		var csvContent = `Name,Age,Email
 John Doe,30,johndoe@example.com
 Jane Smith,25,janesmith@example.com
@@ -453,7 +467,7 @@ Michael Brown,40,michaelb@example.com`
 
 		reader, _ := newCsvFile.ReadAll()
 
-		defer func(fs datasource.FileSystem, name string) {
+		defer func(fs FileSystem, name string) {
 			_ = fs.RemoveAll(name)
 		}(fs, "temp.csv")
 
@@ -484,7 +498,7 @@ func Test_ReadFromCSVScanError(t *testing.T) {
 
 		reader, _ := newCsvFile.ReadAll()
 
-		defer func(fs datasource.FileSystem, name string) {
+		defer func(fs FileSystem, name string) {
 			_ = fs.RemoveAll(name)
 		}(fs, "temp.csv")
 
@@ -517,7 +531,7 @@ func Test_ReadFromJSONArray(t *testing.T) {
 
 		reader, _ := newCsvFile.ReadAll()
 
-		defer func(fs datasource.FileSystem, name string) {
+		defer func(fs FileSystem, name string) {
 			_ = fs.RemoveAll(name)
 		}(fs, "temp.json")
 
@@ -530,7 +544,6 @@ func Test_ReadFromJSONArray(t *testing.T) {
 
 			assert.Equal(t, jsonValue[i].Name, u.Name)
 			assert.Equal(t, jsonValue[i].Age, u.Age)
-
 			assert.NoError(t, err)
 
 			i++
@@ -554,7 +567,7 @@ func Test_ReadFromJSONObject(t *testing.T) {
 
 		reader, _ := newCsvFile.ReadAll()
 
-		defer func(fs datasource.FileSystem, name string) {
+		defer func(fs FileSystem, name string) {
 			_ = fs.RemoveAll(name)
 		}(fs, "temp.json")
 
@@ -585,7 +598,7 @@ func Test_ReadFromJSONArrayInvalidDelimiter(t *testing.T) {
 
 		_, err := newCsvFile.ReadAll()
 
-		defer func(fileStore datasource.FileSystem, name string) {
+		defer func(fileStore FileSystem, name string) {
 			_ = fileStore.RemoveAll(name)
 		}(fs, "temp.json")
 
@@ -593,37 +606,22 @@ func Test_ReadFromJSONArrayInvalidDelimiter(t *testing.T) {
 	})
 }
 
-// Helper function to run FTP tests requiring actual ftp connection.
-// LoadConfig loads FTP configuration from environment variables.
-func LoadConfig() *Config {
-	err := godotenv.Load("./configs/.env")
-	if err != nil {
-		log.Printf("Error loading .env file: %v", err)
-	}
-
-	config := Config{
-		Host:      os.Getenv("FtpHost"),
-		User:      os.Getenv("FtpUser"),
-		Password:  os.Getenv("FtpPassword"),
-		Port:      os.Getenv("FtpPort"),
-		RemoteDir: os.Getenv("FtpRemoteDir"),
-	}
-
-	return &config
-}
-
 func runFtpTest(t *testing.T, testFunc func(fs *ftpFileSystem)) {
 	t.Helper()
 
-	config := LoadConfig()
+	config := &Config{
+		Host:      "127.0.0.1",
+		User:      "one",
+		Password:  "1234",
+		Port:      21,
+		RemoteDir: "/ftp/one",
+	}
 
 	ftpClient := New(config)
 
 	val, ok := ftpClient.(*ftpFileSystem)
 	if ok {
-		logger := logging.NewMockLogger(logging.DEBUG)
-
-		val.UseLogger(logger)
+		val.UseLogger(NewMockLogger(INFO))
 		val.Connect()
 	}
 
