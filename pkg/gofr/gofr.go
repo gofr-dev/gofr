@@ -327,7 +327,7 @@ func (a *App) initTracer() {
 		return
 	}
 
-	if tracerURL == "" && tracerHost != "" {
+	if tracerURL == "" && tracerHost != "" && traceExporter == traceExporterGoFr {
 		a.Logger().Warn("TRACER_HOST and TRACER_PORT are deprecated, use TRACER_URL instead")
 
 		tracerURL = fmt.Sprintf("%s:%s", tracerHost, tracerPort)
