@@ -317,20 +317,25 @@ func (a *App) initTracer() {
 	tracerHost := a.Config.Get("TRACER_HOST")
 	tracerPort := a.Config.GetOrDefault("TRACER_PORT", "9411")
 
-	if traceExporter == "" {
-		a.Logger().Errorf("missing TRACE_EXPORTER config, should be provided with TRACER_URL to enable tracing")
-		return
+	if tracerURL == "" {
+		if traceExporter == "" {
+			return
+		}
+
+		if tracerHost != "" && traceExporter != traceExporterGoFr {
+			a.Logger().Warn("TRACER_HOST and TRACER_PORT are deprecated, use TRACER_URL instead")
+
+			tracerURL = fmt.Sprintf("%s:%s", tracerHost, tracerPort)
+		}
 	}
 
-	if tracerHost == "" && tracerURL == "" && traceExporter != traceExporterGoFr {
+	if traceExporter == "" {
+		a.Logger().Error("missing TRACE_EXPORTER config, should be provided with TRACER_URL to enable tracing")
+	}
+
+	if tracerURL == "" && traceExporter != traceExporterGoFr {
 		a.Logger().Errorf("missing TRACER_URL config, should be provided with TRACE_EXPORTER to enable tracing")
 		return
-	}
-
-	if tracerURL == "" && tracerHost != "" && traceExporter == traceExporterGoFr {
-		a.Logger().Warn("TRACER_HOST and TRACER_PORT are deprecated, use TRACER_URL instead")
-
-		tracerURL = fmt.Sprintf("%s:%s", tracerHost, tracerPort)
 	}
 
 	exporter, err := a.getExporter(context.Background(), traceExporter, tracerURL, authHeader)
@@ -351,10 +356,8 @@ func (a *App) getExporter(ctx context.Context, name, url, authHeader string) (sd
 	var exporter sdktrace.SpanExporter
 
 	switch strings.ToLower(name) {
-	case traceExporterOTLP:
-		return a.buildOpenTelemetryProtocol(ctx, url, strings.ToLower(name), authHeader)
-	case traceExporterJaeger:
-		// jaeger accept OpenTelemetry Protocol (OTLP)
+	// jaeger accept OpenTelemetry Protocol (OTLP)
+	case traceExporterOTLP, traceExporterJaeger:
 		return a.buildOpenTelemetryProtocol(ctx, url, strings.ToLower(name), authHeader)
 	case traceExporterZipkin:
 		return a.buildZipkin(url, authHeader)
@@ -401,7 +404,7 @@ func (a *App) buildGofrTraceExporter(url string) (sdktrace.SpanExporter, error) 
 		url = "https://tracer-api.gofr.dev/api/spans"
 	}
 
-	a.container.Logf("Exporting traces to GoFr at %s", gofrTracerURL)
+	a.container.Logf("Exporting traces to GoFr at %s", url)
 
 	exporter := NewExporter(url, logging.NewLogger(logging.INFO))
 
