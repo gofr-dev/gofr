@@ -319,7 +319,6 @@ func (a *App) initTracer() {
 
 	if traceExporter == "" {
 		a.Logger().Errorf("missing TRACE_EXPORTER config, should be provided with TRACER_URL to enable tracing")
-
 		return
 	}
 
@@ -355,7 +354,7 @@ func (a *App) getExporter(ctx context.Context, name, url, authHeader string) (sd
 	case traceExporterOTLP:
 		return a.buildOpenTelemetryProtocol(ctx, url, strings.ToLower(name), authHeader)
 	case traceExporterJaeger:
-		// jaeger accept OpenTelemetry Protocol (OTLP) .
+		// jaeger accept OpenTelemetry Protocol (OTLP)
 		return a.buildOpenTelemetryProtocol(ctx, url, strings.ToLower(name), authHeader)
 	case traceExporterZipkin:
 		return a.buildZipkin(url, authHeader)
@@ -368,7 +367,7 @@ func (a *App) getExporter(ctx context.Context, name, url, authHeader string) (sd
 }
 
 // buildOpenTelemetryProtocol using OpenTelemetryProtocol as the trace exporter
-// jaeger accept OpenTelemetry Protocol (OTLP) over gRPC to upload trace data .
+// jaeger accept OpenTelemetry Protocol (OTLP) over gRPC to upload trace data
 func (a *App) buildOpenTelemetryProtocol(ctx context.Context, url, exporter, authHeader string) (sdktrace.SpanExporter, error) {
 	a.container.Logf("Exporting traces to %s at %s", exporter, url)
 
