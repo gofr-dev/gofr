@@ -222,7 +222,7 @@ TRACE_EXPORTER=jaeger
 TRACER_URL=localhost:14317
 ```
 
-Open {% new-tab-link title="zipkin" href="http://localhost:16686/trace/" /%} and search by TraceID (correlationID) to see the trace.
+Open {% new-tab-link title="jaeger" href="http://localhost:16686/trace/" /%} and search by TraceID (correlationID) to see the trace.
 {% figure src="/jaeger-traces.png" alt="Jaeger traces" /%}
 
 #### 3. [OpenTelemetry Protocol](https://opentelemetry.io/docs/specs/otlp/):
