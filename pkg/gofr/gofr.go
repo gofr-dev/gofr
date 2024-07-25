@@ -484,11 +484,11 @@ func (a *App) Subscribe(topic string, handler SubscribeFunc) {
 	a.subscriptionManager.subscriptions[topic] = handler
 }
 
+// AddRESTHandlers creates and registers CRUD routes for the given struct, the struct should always be passed by reference.
 func (a *App) AddRESTHandlers(object interface{}) error {
 	cfg, err := scanEntity(object)
 	if err != nil {
-		a.container.Logger.Errorf("invalid object for AddRESTHandlers")
-
+		a.container.Logger.Errorf(err.Error())
 		return err
 	}
 
