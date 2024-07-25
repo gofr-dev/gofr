@@ -317,24 +317,13 @@ func (a *App) initTracer() {
 	tracerHost := a.Config.Get("TRACER_HOST")
 	tracerPort := a.Config.GetOrDefault("TRACER_PORT", "9411")
 
-	if tracerURL == "" {
-		if traceExporter == "" {
-			return
-		}
+	if tracerURL == "" && tracerHost != "" && traceExporter != traceExporterGoFr {
+		a.Logger().Warn("TRACER_HOST and TRACER_PORT are deprecated, use TRACER_URL instead")
 
-		if tracerHost != "" && traceExporter != traceExporterGoFr {
-			a.Logger().Warn("TRACER_HOST and TRACER_PORT are deprecated, use TRACER_URL instead")
-
-			tracerURL = fmt.Sprintf("%s:%s", tracerHost, tracerPort)
-		}
+		tracerURL = fmt.Sprintf("%s:%s", tracerHost, tracerPort)
 	}
 
-	if traceExporter == "" {
-		a.Logger().Error("missing TRACE_EXPORTER config, should be provided with TRACER_URL to enable tracing")
-	}
-
-	if tracerURL == "" && traceExporter != traceExporterGoFr {
-		a.Logger().Errorf("missing TRACER_URL config, should be provided with TRACE_EXPORTER to enable tracing")
+	if !isValidExporterConfig(a.Logger(), tracerURL, traceExporter) {
 		return
 	}
 
@@ -350,6 +339,21 @@ func (a *App) initTracer() {
 
 	batcher := sdktrace.NewBatchSpanProcessor(exporter)
 	tp.RegisterSpanProcessor(batcher)
+}
+
+func isValidExporterConfig(log logging.Logger, tracerURL, traceExporter string) bool {
+	switch {
+	case tracerURL == "" && traceExporter == "":
+		return false
+	case traceExporter == "":
+		log.Error("missing TRACE_EXPORTER config, should be provided with TRACER_URL to enable tracing")
+		return false
+	case tracerURL == "" && !strings.EqualFold(traceExporter, traceExporterGoFr):
+		log.Errorf("missing TRACER_URL config, should be provided with TRACE_EXPORTER to enable tracing")
+		return false
+	}
+
+	return true
 }
 
 func (a *App) getExporter(ctx context.Context, name, url, authHeader string) (sdktrace.SpanExporter, error) {
