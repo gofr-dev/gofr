@@ -10,8 +10,10 @@ import (
 )
 
 var (
-	errInvalidObject  = errors.New("unexpected object given for AddRESTHandlers")
-	errEntityNotFound = errors.New("entity not found")
+	errInvalidObject    = errors.New("unexpected object given for AddRESTHandlers")
+	errEntityNotFound   = errors.New("entity not found")
+	errObjectIsNil      = errors.New("object given for AddRESTHandlers is nil")
+	errNonPointerObject = errors.New("passed object is not pointer")
 )
 
 type Create interface {
@@ -61,7 +63,16 @@ type entity struct {
 
 // scanEntity extracts entity information for CRUD operations.
 func scanEntity(object interface{}) (*entity, error) {
-	entityType := reflect.TypeOf(object).Elem()
+	if object == nil {
+		return nil, errObjectIsNil
+	}
+
+	objType := reflect.TypeOf(object)
+	if objType.Kind() != reflect.Ptr {
+		return nil, fmt.Errorf("failed to register routes for '%s' struct, %w", objType.Name(), errNonPointerObject)
+	}
+
+	entityType := objType.Elem()
 	if entityType.Kind() != reflect.Struct {
 		return nil, errInvalidObject
 	}
