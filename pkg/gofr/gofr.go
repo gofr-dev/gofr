@@ -367,7 +367,7 @@ func (a *App) getExporter(ctx context.Context, name, url, authHeader string) (sd
 }
 
 // buildOpenTelemetryProtocol using OpenTelemetryProtocol as the trace exporter
-// jaeger accept OpenTelemetry Protocol (OTLP) over gRPC to upload trace data
+// jaeger accept OpenTelemetry Protocol (OTLP) over gRPC to upload trace data.
 func (a *App) buildOpenTelemetryProtocol(ctx context.Context, url, exporter, authHeader string) (sdktrace.SpanExporter, error) {
 	a.container.Logf("Exporting traces to %s at %s", exporter, url)
 
