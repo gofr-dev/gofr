@@ -106,7 +106,7 @@ func New() *App {
 
 	app.subscriptionManager = newSubscriptionManager(app.container)
 
-	// static fileserver
+	// static file server
 	currentWd, _ := os.Getwd()
 	checkDirectory := filepath.Join(currentWd, defaultPublicStaticDir)
 
@@ -275,10 +275,12 @@ func (a *App) add(method, pattern string, h Handler) {
 	})
 }
 
+// Metrics returns the metrics manager associated with the App.
 func (a *App) Metrics() metrics.Manager {
 	return a.container.Metrics()
 }
 
+// Logger returns the logger instance associated with the App.
 func (a *App) Logger() logging.Logger {
 	return a.container.Logger
 }
@@ -289,6 +291,10 @@ func (a *App) SubCommand(pattern string, handler Handler, options ...Options) {
 	a.cmd.addRoute(pattern, handler, options...)
 }
 
+// Migrate applies a set of migrations to the application's database.
+//
+// The migrationsMap argument is a map where the key is the version number of the migration
+// and the value is a migration.Migrate instance that implements the migration logic.
 func (a *App) Migrate(migrationsMap map[int64]migration.Migrate) {
 	// TODO : Move panic recovery at central location which will manage for all the different cases.
 	defer func() {
@@ -423,6 +429,10 @@ func (o *otelErrorHandler) Handle(e error) {
 	o.logger.Error(e.Error())
 }
 
+// EnableBasicAuth enables basic authentication for the application.
+//
+// It takes a variable number of credentials as alternating username and password strings.
+// An error is logged if an odd number of arguments is provided.
 func (a *App) EnableBasicAuth(credentials ...string) {
 	if len(credentials)%2 != 0 {
 		a.container.Error("Invalid number of arguments for EnableBasicAuth")
@@ -442,11 +452,18 @@ func (a *App) EnableBasicAuthWithFunc(validateFunc func(username, password strin
 	a.httpServer.router.Use(middleware.BasicAuthMiddleware(middleware.BasicAuthProvider{ValidateFunc: validateFunc, Container: a.container}))
 }
 
+// EnableBasicAuthWithValidator enables basic authentication for the HTTP server with a custom validator.
+//
+// The provided `validateFunc` is invoked for each authentication attempt. It receives a container instance,
+// username, and password. The function should return `true` if the credentials are valid, `false` otherwise.
 func (a *App) EnableBasicAuthWithValidator(validateFunc func(c *container.Container, username, password string) bool) {
 	a.httpServer.router.Use(middleware.BasicAuthMiddleware(middleware.BasicAuthProvider{
 		ValidateFuncWithDatasources: validateFunc, Container: a.container}))
 }
 
+// EnableAPIKeyAuth enables API key authentication for the application.
+//
+// It requires at least one API key to be provided. The provided API keys will be used to authenticate requests.
 func (a *App) EnableAPIKeyAuth(apiKeys ...string) {
 	a.httpServer.router.Use(middleware.APIKeyAuthMiddleware(middleware.APIKeyAuthProvider{}, apiKeys...))
 }
@@ -460,6 +477,10 @@ func (a *App) EnableAPIKeyAuthWithFunc(validateFunc func(apiKey string) bool) {
 	}))
 }
 
+// EnableAPIKeyAuthWithValidator enables API key authentication for the application with a custom validation function.
+//
+// The provided `validateFunc` is used to determine the validity of an API key. It receives the request container
+// and the API key as arguments and should return `true` if the key is valid, `false` otherwise.
 func (a *App) EnableAPIKeyAuthWithValidator(validateFunc func(c *container.Container, apiKey string) bool) {
 	a.httpServer.router.Use(middleware.APIKeyAuthMiddleware(middleware.APIKeyAuthProvider{
 		ValidateFuncWithDatasources: validateFunc,
@@ -467,6 +488,13 @@ func (a *App) EnableAPIKeyAuthWithValidator(validateFunc func(c *container.Conta
 	}))
 }
 
+// EnableOAuth configures OAuth middleware for the application.
+//
+// It registers a new HTTP service for fetching JWKS and sets up OAuth middleware
+// with the given JWKS endpoint and refresh interval.
+//
+// The JWKS endpoint is used to retrieve JSON Web Key Sets for verifying tokens.
+// The refresh interval specifies how often to refresh the token cache.
 func (a *App) EnableOAuth(jwksEndpoint string, refreshInterval int) {
 	a.AddHTTPService("gofr_oauth", jwksEndpoint)
 
@@ -478,6 +506,10 @@ func (a *App) EnableOAuth(jwksEndpoint string, refreshInterval int) {
 	a.httpServer.router.Use(middleware.OAuth(middleware.NewOAuth(oauthOption)))
 }
 
+// Subscribe registers a handler for the given topic.
+//
+// If the subscriber is not initialized in the container, an error is logged and
+// the subscription is not registered.
 func (a *App) Subscribe(topic string, handler SubscribeFunc) {
 	if a.container.GetSubscriber() == nil {
 		a.container.Logger.Errorf("subscriber not initialized in the container")
@@ -506,8 +538,8 @@ func (a *App) UseMiddleware(middlewares ...gofrHTTP.Middleware) {
 	a.httpServer.router.UseMiddleware(middlewares...)
 }
 
-// AddCronJob registers a cron job to the cron table, the schedule is in * * * * * (6 part) format
-// denoting minutes, hours, days, months and day of week respectively.
+// AddCronJob registers a cron job to the cron table, the schedule is in * * * * * (5 part) format
+// denoting minute, hour, day, month and day of week respectively.
 func (a *App) AddCronJob(schedule, jobName string, job CronFunc) {
 	if a.cron == nil {
 		a.cron = NewCron(a.container)
@@ -529,6 +561,12 @@ func contains(elems []string, v string) bool {
 	return false
 }
 
+// AddStaticFiles registers a static file endpoint for the application.
+//
+// The provided `endpoint` will be used as the prefix for the static file
+// server. The `filePath` specifies the directory containing the static files.
+// If `filePath` starts with "./", it will be interpreted as a relative path
+// to the current working directory.
 func (a *App) AddStaticFiles(endpoint, filePath string) {
 	a.httpRegistered = true
 
