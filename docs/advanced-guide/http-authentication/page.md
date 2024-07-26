@@ -39,7 +39,7 @@ func main() {
 
 **2. Custom Validation Function**
 
-Use `EnableBasicAuthWithFunc(validationFunc)` to implement your own validation logic for credentials.
+Use `EnableBasicAuthWithValidator(validationFunc)` to implement your own validation logic for credentials.
 The `validationFunc` takes the username and password as arguments and returns true if valid, false otherwise.
 
 ```go
@@ -97,7 +97,7 @@ func main() {
 ```
 
 **2. Custom Validation Function**
-- GoFr allows a custom validator function `apiKeyValidator(apiKey string) bool` for validating APIKeys and pass the func in **_EnableAPIKeyAuthWithFunc(validator)_**
+- GoFr allows a custom validator function `apiKeyValidator(apiKey string) bool` for validating APIKeys and pass the func in **_EnableAPIKeyAuthWithValidator(validator)_**
 
 ```go
 package main
