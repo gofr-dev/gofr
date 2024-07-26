@@ -248,8 +248,11 @@ func TestOpenFile(t *testing.T) {
 			filePath: "testfile_new.txt",
 			mockRetrExpect: func(conn *MockServerConn, path string) {
 				ctrl := gomock.NewController(t)
+
 				response := NewMockftpResponse(ctrl)
+
 				conn.EXPECT().Retr(path).Return(response, nil)
+				response.EXPECT().Close().Return(nil)
 			},
 			expectError: false,
 		},
@@ -309,8 +312,11 @@ func TestOpenWithPerm(t *testing.T) {
 			filePath: "/ftp/one/testfile_new.txt",
 			mockRetrExpect: func(conn *MockServerConn, path string) {
 				ctrl := gomock.NewController(t)
+
 				response := NewMockftpResponse(ctrl)
+
 				conn.EXPECT().Retr(path).Return(response, nil)
+				response.EXPECT().Close().Return(nil)
 			},
 			expectError: false,
 		},
