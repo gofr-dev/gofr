@@ -108,7 +108,7 @@ func TestShutdown_ServerStopsListening(t *testing.T) {
 	go server.Run(c)
 
 	// Create a context with a timeout to test the shutdown
-	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
 	defer cancel()
 
 	errChan := make(chan error, 1)
@@ -144,13 +144,13 @@ func TestShutdown_ServerContextDeadline(t *testing.T) {
 	go server.Run(c)
 
 	// Create a context with a timeout to test the shutdown
-	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
 
 	// Simulate a delay in the shutdown process to trigger context timeout
 	shutdownCh := make(chan error, 1)
 	go func() {
-		time.Sleep(300 * time.Millisecond) // Delay longer than the context timeout
+		time.Sleep(100 * time.Millisecond) // Delay longer than the context timeout
 		shutdownCh <- server.Shutdown(ctx)
 	}()
 

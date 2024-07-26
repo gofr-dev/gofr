@@ -22,8 +22,8 @@ func newSubscriptionManager(c *container.Container) SubscriptionManager {
 	}
 }
 
+// startSubscriber continuously subscribes to a topic and handles messages using the provided handler.
 func (s *SubscriptionManager) startSubscriber(ctx context.Context, topic string, handler SubscribeFunc) error {
-	// continuously subscribe in an infinite loop
 	for {
 		select {
 		case <-ctx.Done():
@@ -32,7 +32,7 @@ func (s *SubscriptionManager) startSubscriber(ctx context.Context, topic string,
 		default:
 			err := s.handleSubscription(ctx, topic, handler)
 			if err != nil {
-				return err
+				s.container.Logger.Errorf("error in subscription for topic %s: %v", topic, err)
 			}
 		}
 	}
@@ -65,7 +65,7 @@ func (s *SubscriptionManager) handleSubscription(ctx context.Context, topic stri
 	if err != nil {
 		s.container.Logger.Errorf("error in handler for topic %s: %v", topic, err)
 
-		return err
+		return nil
 	}
 
 	if msg.Committer != nil {

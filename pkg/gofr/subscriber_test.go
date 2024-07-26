@@ -179,18 +179,3 @@ func TestSubscriptionManager_ShouldStopOnCtxDone(t *testing.T) {
 
 	assert.NoError(t, err)
 }
-
-func TestSubscriptionManager_ShouldStopOnTestlError(t *testing.T) {
-	mockContainer := container.Container{
-		Logger: logging.NewLogger(logging.ERROR),
-		PubSub: mockSubscriber{},
-	}
-
-	subscriptionManager := newSubscriptionManager(&mockContainer)
-
-	err := subscriptionManager.startSubscriber(context.Background(), "test-err", func(*Context) error {
-		return kafka.ErrConsumerGroupNotProvided
-	})
-
-	assert.Error(t, err)
-}
