@@ -5,14 +5,7 @@ import (
 	"io"
 	"os"
 	"time"
-
-	"github.com/jlaffaye/ftp"
 )
-
-// FTPClient interface defines the methods needed for FTP operations.
-type FTPClient interface {
-	Dial(string, ...ftp.DialOption) (Conn, error)
-}
 
 // ServerConn represents a connection to an FTP server.
 type ServerConn interface {

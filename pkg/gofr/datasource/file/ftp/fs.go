@@ -11,11 +11,12 @@ import (
 	"github.com/jlaffaye/ftp"
 )
 
+// Conn struct embeds the *ftp.ServerConn returned by ftp server on successful connection.
 type Conn struct {
 	*ftp.ServerConn
 }
 
-// Retr wraps the ftp retrieve method to return a ftpResponse interface type
+// Retr wraps the ftp retrieve method to return a ftpResponse interface type.
 func (c *Conn) Retr(path string) (ftpResponse, error) {
 	return c.ServerConn.Retr(path)
 }
@@ -30,6 +31,7 @@ var (
 	errEmptyDirectory          = errors.New("empty directory")
 	errInvalidArg              = errors.New("invalid filename/directory")
 	directoryAlreadyExistError = "550 Create directory operation failed."
+	transferComplete           = "226 Transfer complete."
 )
 
 // ftpFileSystem represents a file system interface over FTP.
@@ -84,9 +86,9 @@ func (f *ftpFileSystem) Connect() {
 	err = conn.Login(f.config.User, f.config.Password)
 	if err != nil {
 		f.logger.Errorf("Failed to login: %v", err)
-	} else {
-		f.logger.Logf("Login Successful")
 	}
+
+	f.logger.Logf("Login Successful")
 }
 
 // Create creates an empty file on the FTP server.
@@ -97,18 +99,18 @@ func (f *ftpFileSystem) Create(name string) (File, error) {
 
 	emptyReader := new(bytes.Buffer)
 
-	name = fmt.Sprintf("%s/%s", f.config.RemoteDir, name)
+	filePath := fmt.Sprintf("%s/%s", f.config.RemoteDir, name)
 
-	err := f.conn.Stor(name, emptyReader)
+	err := f.conn.Stor(filePath, emptyReader)
 	if err != nil {
 		return nil, err
 	}
 
-	f.logger.Logf("Created file with path %s", name)
+	f.logger.Logf("Created %s", name)
 
-	s := strings.Split(name, "/")
+	s := strings.Split(filePath, "/")
 
-	res, err := f.conn.Retr(name)
+	res, err := f.conn.Retr(filePath)
 	if err != nil {
 		return nil, err
 	}
@@ -118,8 +120,9 @@ func (f *ftpFileSystem) Create(name string) (File, error) {
 	return &ftpFile{
 		response: res,
 		name:     s[len(s)-1],
-		path:     name,
+		path:     filePath,
 		conn:     f.conn,
+		logger:   f.logger,
 	}, nil
 }
 
@@ -129,12 +132,12 @@ func (f *ftpFileSystem) Mkdir(name string, _ os.FileMode) error {
 		return errEmptyDirectory
 	}
 
-	name = fmt.Sprintf("%s/%s", f.config.RemoteDir, name)
+	filePath := fmt.Sprintf("%s/%s", f.config.RemoteDir, name)
 
-	err := f.conn.MakeDir(name)
+	err := f.conn.MakeDir(filePath)
 	if err == nil {
-		f.logger.Logf("Created directory with path %s", name)
-		return err
+		f.logger.Logf("Created %s directory", name)
+		return nil
 	}
 
 	return err
@@ -177,6 +180,8 @@ func (f *ftpFileSystem) MkdirAll(path string, _ os.FileMode) error {
 		return errors.New("Error Creating Directory")
 	}
 
+	f.logger.Logf("Created directories with path %s", path)
+
 	return nil
 }
 
@@ -186,22 +191,25 @@ func (f *ftpFileSystem) Open(name string) (File, error) {
 		return nil, errEmptyFilename
 	}
 
-	name = fmt.Sprintf("%s/%s", f.config.RemoteDir, name)
+	filePath := fmt.Sprintf("%s/%s", f.config.RemoteDir, name)
 
-	res, err := f.conn.Retr(name)
+	res, err := f.conn.Retr(filePath)
 	if err != nil {
 		return nil, err
 	}
 
-	s := strings.Split(name, "/")
+	s := strings.Split(filePath, "/")
 
-	f.logger.Logf("Opened file with path %s", name)
+	f.logger.Logf("Opened %s", name)
+
+	defer res.Close()
 
 	return &ftpFile{
 		response: res,
 		name:     s[len(s)-1],
-		path:     name,
+		path:     filePath,
 		conn:     f.conn,
+		logger:   f.logger,
 	}, nil
 }
 
@@ -217,11 +225,16 @@ func (f *ftpFileSystem) Remove(name string) error {
 		return errEmptyFilename
 	}
 
-	name = fmt.Sprintf("%s/%s", f.config.RemoteDir, name)
+	filePath := fmt.Sprintf("%s/%s", f.config.RemoteDir, name)
 
-	f.logger.Logf("file with path %s successfully removed", name)
+	err := f.conn.Delete(filePath)
+	if err == nil || fmt.Sprint(err) == transferComplete {
+		f.logger.Logf("%s successfully removed", name)
 
-	return f.conn.Delete(name)
+		err = nil
+	}
+
+	return err
 }
 
 // RemoveAll removes a directory and its contents recursively from the FTP server.
@@ -230,9 +243,9 @@ func (f *ftpFileSystem) RemoveAll(path string) error {
 		return errEmptyPath
 	}
 
-	path = fmt.Sprintf("%s/%s", f.config.RemoteDir, path)
+	filePath := fmt.Sprintf("%s/%s", f.config.RemoteDir, path)
 
-	err := f.conn.RemoveDirRecur(path)
+	err := f.conn.RemoveDirRecur(filePath)
 	if err == nil {
 		f.logger.Logf("directory with path %s successfully removed.", path)
 	}
@@ -247,14 +260,14 @@ func (f *ftpFileSystem) Rename(oldname, newname string) error {
 	}
 
 	if oldname == newname {
-		f.logger.Logf("File has the same name")
+		f.logger.Logf("file has the same name")
 		return nil
 	}
 
-	oldname = fmt.Sprintf("%s/%s", f.config.RemoteDir, oldname)
-	newname = fmt.Sprintf("%s/%s", f.config.RemoteDir, newname)
+	oldFilePath := fmt.Sprintf("%s/%s", f.config.RemoteDir, oldname)
+	newFilePath := fmt.Sprintf("%s/%s", f.config.RemoteDir, newname)
 
-	err := f.conn.Rename(oldname, newname)
+	err := f.conn.Rename(oldFilePath, newFilePath)
 	if err == nil {
 		f.logger.Logf("Renamed file %s to %s", oldname, newname)
 	}
