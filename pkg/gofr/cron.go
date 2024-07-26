@@ -30,7 +30,6 @@ type CronFunc func(ctx *Context)
 // Crontab maintains the job scheduling and runs the jobs at their scheduled time by
 // going through them at each tick using a ticker.
 type Crontab struct {
-	// contains unexported fields
 	ticker    *time.Ticker
 	jobs      []*job
 	container *container.Container
