@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"testing"
 
@@ -517,25 +516,23 @@ Victoria Nguyen,32,victorian@example.com`
 
 		for {
 			reader, readerError := newCsvFile.ReadAll()
-			if readerError == nil || readerError == io.EOF {
+			if errors.Is(readerError, nil) || errors.Is(readerError, io.EOF) {
 				for reader.Next() {
 					var content string
 
 					err := reader.Scan(&content)
 
 					assert.Equal(t, csvValue[i], content)
-
 					assert.NoError(t, err)
 
 					i++
-					fmt.Println("content:", i, content)
 				}
 			}
+
 			if errors.Is(readerError, io.EOF) {
 				break
 			}
 		}
-
 	})
 }
 
@@ -555,7 +552,6 @@ func Test_ReadFromCSVScanError(t *testing.T) {
 			if err != nil {
 				t.Error(err)
 			}
-
 		}(fs, "temp.csv")
 
 		for reader.Next() {
@@ -673,27 +669,27 @@ func Test_ReadFromJSONArray(t *testing.T) {
 			if err != nil {
 				t.Error(err)
 			}
-
 		}(fs, "temp.json")
 
 		var i = 0
 
 		for {
 			reader, readerError := newCsvFile.ReadAll()
-			if readerError == nil || readerError == io.EOF {
+			if errors.Is(readerError, nil) || errors.Is(readerError, io.EOF) {
 				for reader.Next() {
 					var u User
 
-					err := reader.Scan(u)
+					err := reader.Scan(&u)
 
 					assert.Equal(t, jsonValue[i].Name, u.Name)
 					assert.Equal(t, jsonValue[i].Age, u.Age)
 					assert.NoError(t, err)
-					fmt.Println("content", i, u)
+
 					i++
 				}
 			}
-			if readerError == io.EOF {
+
+			if errors.Is(readerError, io.EOF) {
 				break
 			}
 		}
@@ -721,7 +717,6 @@ func Test_ReadFromJSONObject(t *testing.T) {
 			if err != nil {
 				t.Error(err)
 			}
-
 		}(fs, "temp.json")
 
 		for reader.Next() {
@@ -752,11 +747,10 @@ func Test_ReadFromJSONArrayInvalidDelimiter(t *testing.T) {
 		_, err := newCsvFile.ReadAll()
 
 		defer func(fs FileSystem, name string) {
-			err := fs.Remove(name)
-			if err != nil {
-				t.Error(err)
+			removeErr := fs.Remove(name)
+			if removeErr != nil {
+				t.Error(removeErr)
 			}
-
 		}(fs, "temp.json")
 
 		assert.IsType(t, &json.SyntaxError{}, err)

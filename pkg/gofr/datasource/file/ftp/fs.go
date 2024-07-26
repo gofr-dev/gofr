@@ -11,12 +11,12 @@ import (
 	"github.com/jlaffaye/ftp"
 )
 
-// Conn struct embeds the *ftp.ServerConn returned by ftp server on successful connection
+// Conn struct embeds the *ftp.ServerConn returned by ftp server on successful connection.
 type Conn struct {
 	*ftp.ServerConn
 }
 
-// Retr wraps the ftp retrieve method to return a ftpResponse interface type
+// Retr wraps the ftp retrieve method to return a ftpResponse interface type.
 func (c *Conn) Retr(path string) (ftpResponse, error) {
 	return c.ServerConn.Retr(path)
 }
@@ -86,9 +86,9 @@ func (f *ftpFileSystem) Connect() {
 	err = conn.Login(f.config.User, f.config.Password)
 	if err != nil {
 		f.logger.Errorf("Failed to login: %v", err)
-	} else {
-		f.logger.Logf("Login Successful")
 	}
+
+	f.logger.Logf("Login Successful")
 }
 
 // Create creates an empty file on the FTP server.
@@ -260,7 +260,7 @@ func (f *ftpFileSystem) Rename(oldname, newname string) error {
 	}
 
 	if oldname == newname {
-		f.logger.Logf("File has the same name")
+		f.logger.Logf("file has the same name")
 		return nil
 	}
 

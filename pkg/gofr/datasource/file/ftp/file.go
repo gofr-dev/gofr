@@ -10,13 +10,14 @@ import (
 	"strings"
 )
 
-const BufferLength = 1024
-const JsonBufferLength = 1024
+const (
+	BufferLength     = 1024
+	JSONBufferLength = 512
+)
 
-// errNotPointer is returned when Read method is called with a non-pointer argument.
 var (
-	errNotPointer  = errors.New("input should be a pointer to a string")
-	errReadingFile = errors.New("error reading file")
+	// errNotPointer is returned when Read method is called with a non-pointer argument.
+	errNotPointer = errors.New("input should be a pointer to a string")
 )
 
 // ftpFile represents a file on an FTP server.
@@ -52,22 +53,34 @@ func (f *ftpFile) ReadAll() (RowReader, error) {
 
 // createJSONReader creates a JSON reader for JSON files.
 func (f *ftpFile) createJSONReader() (RowReader, error) {
-	buffer := make([]byte, JsonBufferLength)
+	buffer := make([]byte, JSONBufferLength)
 
-	n, err := f.Read(buffer)
-	if err != nil && err != io.EOF {
-		f.logger.Errorf("failed to read json file: %v", err)
-		return nil, err
+	n, readerError := f.Read(buffer)
+	if !errors.Is(readerError, nil) && !errors.Is(readerError, io.EOF) {
+		f.logger.Errorf("failed to read json file: %v", readerError)
+		return nil, readerError
 	}
 
-	if n == JsonBufferLength && buffer[n-1] != 10 && buffer[n-1] != 93 {
+	// ASCII value of '[': 91 , '{': 123
+	if buffer[0] != 123 && buffer[0] != 91 {
+		return nil, &json.SyntaxError{}
+	}
+
+	// ASCII value of '/n' : 10 , ']' : 93
+	if n == JSONBufferLength && buffer[n-1] != 10 && buffer[n-1] != 93 {
 		m := bytes.LastIndexByte(buffer, byte('\n'))
+
 		buffer = append(buffer[:m-1], byte(']'))
 		f.offset -= int64(n - m - 1)
 		n = m
 	}
 
 	buffer = buffer[:n]
+
+	// ASCII value of '[': 91
+	if buffer[0] != 91 {
+		buffer = append([]byte{'['}, buffer...)
+	}
 
 	reader := bytes.NewReader(buffer)
 
@@ -79,49 +92,7 @@ func (f *ftpFile) createJSONReader() (RowReader, error) {
 		return nil, err
 	}
 
-	// Check if the JSON is an array
-	if d, ok := token.(json.Delim); ok && d == '[' {
-		return &jsonReader{decoder: decoder, token: token}, nil
-	}
-
-	// else reading the json object
-	return f.createJSONObjectReader()
-}
-
-// peekJSONToken peeks the first JSON token without advancing the decoder.
-func (*ftpFile) peekJSONToken(decoder *json.Decoder) (json.Token, error) {
-	newDecoder := *decoder
-
-	return newDecoder.Token()
-}
-
-// createJSONObjectReader creates a JSON reader for a JSON object.
-func (f *ftpFile) createJSONObjectReader() (RowReader, error) {
-	name := f.Name()
-
-	if err := f.Close(); err != nil {
-		return nil, err
-	}
-
-	buffer := make([]byte, BufferLength)
-
-	res, err := f.conn.Retr(name)
-	if err != nil {
-		return nil, err
-	}
-
-	n, err := res.Read(buffer)
-	if err != nil {
-		return nil, err
-	}
-
-	buffer = buffer[:n]
-
-	reader := bytes.NewReader(buffer)
-
-	decoder := json.NewDecoder(reader)
-
-	return &jsonReader{decoder: decoder}, nil
+	return &jsonReader{decoder: decoder, token: token}, readerError
 }
 
 // createTextCSVReader creates a text reader for reading text files.
@@ -129,11 +100,12 @@ func (f *ftpFile) createTextCSVReader() (RowReader, error) {
 	buffer := make([]byte, BufferLength)
 
 	n, err := f.Read(buffer)
-	if err != nil && err != io.EOF {
+	if !errors.Is(err, nil) && !errors.Is(err, io.EOF) {
 		f.logger.Errorf("failed to read text file: %v", err)
 		return nil, err
 	}
 
+	// ASCII value of '/n' : 10
 	if n == BufferLength && buffer[n-1] != 10 {
 		m := bytes.LastIndexByte(buffer, byte('\n'))
 
@@ -187,7 +159,7 @@ func (f *ftpFile) Name() string {
 	return f.name
 }
 
-// Read reads data from the FTP file into the provided byte slice.
+// Read reads data from the FTP file into the provided byte slice and updates the file offset.
 func (f *ftpFile) Read(p []byte) (n int, err error) {
 	r, err := f.conn.RetrFrom(f.path, uint64(f.offset))
 	if err != nil {
@@ -208,6 +180,9 @@ func (f *ftpFile) Read(p []byte) (n int, err error) {
 	if len(b) < len(p) {
 		f.offset += int64(len(b))
 		readbytes = len(b)
+
+		f.logger.Logf("Read %v bytes from %v", readbytes, f.path)
+
 		return len(b), io.EOF
 	}
 
