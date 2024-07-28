@@ -6,6 +6,7 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -44,11 +45,11 @@ type userEntity struct {
 	IsEmployed bool   `json:"isEmployed"`
 }
 
-func (u *userEntity) TableName() string {
+func (*userEntity) TableName() string {
 	return "user"
 }
 
-func (u *userEntity) RestPath() string {
+func (*userEntity) RestPath() string {
 	return "users"
 }
 
@@ -95,6 +96,12 @@ func Test_scanEntity(t *testing.T) {
 			input: &invalidObject,
 			resp:  nil,
 			err:   errInvalidObject,
+		},
+		{
+			desc:  "invalid object type",
+			input: userEntity{},
+			resp:  nil,
+			err:   fmt.Errorf("failed to register routes for 'userEntity' struct, %w", errNonPointerObject),
 		},
 	}
 
@@ -339,9 +346,9 @@ func Test_GetAllHandler(t *testing.T) {
 				assert.Equal(t, tc.expectedResp, resp, "Failed.\n%s", tc.desc)
 
 				if tc.expectedErr != nil {
-					assert.Equal(t, tc.expectedErr.Error(), err.Error(), "TEST[%d], Failed.\n%s", i, tc.desc)
+					assert.ErrorContainsf(t, err, tc.expectedErr.Error(), "TEST[%d], Failed.\n%s", i, tc.desc)
 				} else {
-					assert.Nil(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
+					assert.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
 				}
 			})
 		}
@@ -424,9 +431,9 @@ func Test_GetHandler(t *testing.T) {
 				assert.Equal(t, tc.expectedResp, resp, "Failed.\n%s", tc.desc)
 
 				if tc.expectedErr != nil {
-					assert.Equal(t, tc.expectedErr.Error(), err.Error(), "Failed.\n%s", tc.desc)
+					assert.ErrorContainsf(t, err, tc.expectedErr.Error(), "Failed.\n%s", tc.desc)
 				} else {
-					assert.Nil(t, err, "Failed.\n%s", tc.desc)
+					assert.NoError(t, err, "Failed.\n%s", tc.desc)
 				}
 			})
 		}

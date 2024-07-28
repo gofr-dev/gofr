@@ -12,6 +12,7 @@ import (
 
 	"go.opentelemetry.io/otel/attribute"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+
 	"gofr.dev/pkg/gofr/logging"
 )
 
@@ -50,7 +51,7 @@ func (e *Exporter) ExportSpans(ctx context.Context, spans []sdktrace.ReadOnlySpa
 }
 
 // Shutdown shuts down the exporter.
-func (e *Exporter) Shutdown(context.Context) error {
+func (*Exporter) Shutdown(context.Context) error {
 	return nil
 }
 
@@ -67,7 +68,7 @@ func (e *Exporter) processSpans(ctx context.Context, logger logging.Logger, span
 		return fmt.Errorf("failed to marshal spans, error: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", e.endpoint, bytes.NewBuffer(payload))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, e.endpoint, bytes.NewBuffer(payload))
 	if err != nil {
 		return fmt.Errorf("failed to create HTTP request, error: %w", err)
 	}

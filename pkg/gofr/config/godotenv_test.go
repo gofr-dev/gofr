@@ -104,27 +104,32 @@ func Test_EnvFailureWithHyphen(t *testing.T) {
 		t.Error(err)
 	}
 
-	// Call the function to create the .env file
-	createEnvFile(t, ".env", envData)
-
 	defer os.RemoveAll("configs")
 
-	env := NewEnvFile("configs", logger)
+	configFiles := []string{".env", ".local.env"}
 
-	assert.Equal(t, "test", env.GetOrDefault("KEY-WITH-HYPHEN", "test"), "TEST Failed.\n godotenv failure with hyphen")
-	assert.Equal(t, "", env.Get("UNABLE_TO_LOAD"), "TEST Failed.\n godotenv failure with hyphen")
+	for _, file := range configFiles {
+		createEnvFile(t, file, envData)
+
+		env := NewEnvFile("configs", logger)
+
+		assert.Equal(t, "test", env.GetOrDefault("KEY-WITH-HYPHEN", "test"), "TEST Failed.\n godotenv failure with hyphen")
+		assert.Equal(t, "", env.Get("UNABLE_TO_LOAD"), "TEST Failed.\n godotenv failure with hyphen")
+	}
 }
 
 func createEnvFile(t *testing.T, fileName string, envData map[string]string) {
-	// Create or open the .env file for writing
+	t.Helper()
+
+	// Create or open the env file for writing
 	envFile, err := os.Create("configs/" + fileName)
 	if err != nil {
-		t.Fatalf("error creating .env file: %v", err)
+		t.Fatalf("error creating %s file: %v", fileName, err)
 	}
 
 	defer envFile.Close()
 
-	// Write data to the .env file
+	// Write data to the env file
 	for key, value := range envData {
 		_, err := fmt.Fprintf(envFile, "%s=%s\n", key, value)
 		if err != nil {

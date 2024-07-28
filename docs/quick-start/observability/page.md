@@ -27,7 +27,7 @@ Metrics play a pivotal role in fault detection and troubleshooting, offering vis
 
 They are instrumental in measuring and meeting service-level agreements (SLAs) to ensure expected performance and reliability.
 
-GoFr publishes metrics to port: _2121_ on _/metrics_ endpoint in prometheus format.
+GoFr publishes metrics to port: _2121_ on _/metrics_ endpoint in Prometheus format.
 
 {% table %}
 
@@ -139,7 +139,7 @@ GoFr also supports creating {% new-tab-link newtab=false title="custom metrics" 
 
 ## Tracing
 
-{% new-tab-link title="Tracing" href="https://opentelemetry.io/docs/concepts/signals/#traces" /%} is a powerful tool for gaining insights into your application's behaviour, identifying bottlenecks, and improving
+{% new-tab-link title="Tracing" href="https://opentelemetry.io/docs/concepts/signals/#traces" /%} is a powerful tool for gaining insights into your application's behavior, identifying bottlenecks, and improving
 system performance. A trace is a tree of spans. It is a collective of observable signals showing the path of work
 through a system. A trace on its own is distinguishable by a `TraceID`.
 
@@ -166,7 +166,7 @@ a request as it travels through your distributed system by simply looking at the
 GoFr has support for following trace-exporters:
 #### 1. [Zipkin](https://zipkin.io/): 
 
-To see the traces install zipkin image using the following docker command:
+To see the traces install zipkin image using the following Docker command:
 
 ```bash
   docker run --name gofr-zipkin -p 2005:9411 -d openzipkin/zipkin:latest
@@ -188,9 +188,8 @@ DB_NAME=test_db
 DB_PORT=3306
 
 # tracing configs
-TRACE_EXPORTER=zipkin  
-TRACER_HOST=localhost
-TRACER_PORT=2005
+TRACE_EXPORTER=zipkin
+TRACER_URL=http://localhost:2005/api/v2/spans
 
 LOG_LEVEL=DEBUG
 ```
@@ -201,9 +200,9 @@ LOG_LEVEL=DEBUG
 Open {% new-tab-link title="zipkin" href="http://localhost:2005/zipkin/" /%} and search by TraceID (correlationID) to see the trace.
 {% figure src="/quick-start-trace.png" alt="Zipkin traces" /%}
 
-#### 2. [Jeager](https://www.jaegertracing.io/):
+#### 2. [Jaeger](https://www.jaegertracing.io/):
 
-To see the traces install jaeger image using the following docker command:
+To see the traces install jaeger image using the following Docker command:
 
 ```bash
 docker run -d --name jaeger \
@@ -220,14 +219,13 @@ Add Jaeger Tracer configs in `.env` file, your .env will be updated to
 
 # tracing configs
 TRACE_EXPORTER=jaeger
-TRACER_HOST=localhost
-TRACER_PORT=14317
+TRACER_URL=localhost:14317
 ```
 
 Open {% new-tab-link title="zipkin" href="http://localhost:16686/trace/" /%} and search by TraceID (correlationID) to see the trace.
 {% figure src="/jaeger-traces.png" alt="Jaeger traces" /%}
 
-#### 3. [GoFr Tracer](https://tracer.gofr.dev/)
+#### 3. [GoFr Tracer](https://tracer.gofr.dev/):
 
 GoFr tracer is GoFr's own custom trace exporter as well as collector. You can search a trace by its TraceID (correlationID)
 in GoFr's own tracer service available anywhere, anytime.

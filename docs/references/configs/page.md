@@ -1,6 +1,6 @@
 # GoFr Configuration Options
 
-This document lists all the configuration options supported by the Gofr framework. The configurations are grouped by category for better organization.
+This document lists all the configuration options supported by the GoFr framework. The configurations are grouped by category for better organization.
 
 ## App
 
@@ -72,12 +72,25 @@ This document lists all the configuration options supported by the Gofr framewor
 
 -  TRACER_HOST
 -  Hostname of the tracing collector. Required if TRACE_EXPORTER is set to zipkin or jaeger.
+-  **DEPRECATED**
 
 ---
 
 -  TRACER_PORT
 -  Port of the tracing collector. Required if TRACE_EXPORTER is set to zipkin or jaeger.
 -  9411
+-  **DEPRECATED**
+
+---
+
+-  TRACER_URL
+-  URL of the trace collector. Required if TRACE_EXPORTER is set to zipkin or jaeger.
+
+---
+
+-  TRACER_AUTH_KEY
+-  Authorization header for trace exporter requests.
+-  Supported for zipkin, jaeger.
 
 ---
 
@@ -300,5 +313,9 @@ This document lists all the configuration options supported by the Gofr framewor
 -  MQTT_QOS
 -  Quality of Service Level
 
-{% /table %}
+---
 
+-  MQTT_KEEP_ALIVE
+-  Sends regular messages to check the link is active. May not work as expected if handling func is blocking execution
+
+{% /table %}

@@ -11,4 +11,4 @@ Following versions are being supported for security updates.
 
 ## Reporting a Vulnerability
 
-To report a vulnerability, please file an issue on this repo and add "security" label. Security related issues will be prioritised over others. We strive to triage the issue within a single working day.
+To report a vulnerability, please file an issue on this repo and add "security" label. Security related issues will be prioritized over others. We strive to triage the issue within a single working day.

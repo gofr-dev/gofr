@@ -21,7 +21,7 @@ func (k *kafkaClient) Health() (health datasource.Health) {
 	health.Details["writers"] = k.getWriterStatsAsMap()
 	health.Details["readers"] = k.getReaderStatsAsMap()
 
-	return
+	return health
 }
 
 func (k *kafkaClient) getReaderStatsAsMap() []interface{} {

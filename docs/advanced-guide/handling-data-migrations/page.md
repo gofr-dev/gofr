@@ -46,7 +46,7 @@ func createTableEmployee() migration.Migrate {
 }
 ```
 
-`migration.Datasource` have the datasources whose migrations are supported i.e. Redis and SQL (MySQL and PostgreSQL).
+`migration.Datasource` have the datasources whose migrations are supported i.e., Redis and SQL (MySQL and PostgreSQL).
 All migrations always run in a transaction.
 
 For MySQL it is highly recommended to use `IF EXISTS` and `IF NOT EXIST` in DDL commands as MySQL implicitly commits these commands.
@@ -147,7 +147,7 @@ Value : {"method":"UP","startTime":"2024-02-26T15:03:46.844558+05:30","duration"
 
 Where,
 
-**Version** : Migration version is the number provided in the map, i.e. sequence number.
+**Version** : Migration version is the number provided in the map, i.e., sequence number.
 
 **Start Time** : Time when Migration Started in UTC.
 

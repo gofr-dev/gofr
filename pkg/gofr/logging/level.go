@@ -48,7 +48,7 @@ func (l Level) String() string {
 	}
 }
 
-//nolint:gomnd // Color codes are sent as numbers
+//nolint:mnd // Color codes are sent as numbers
 func (l Level) color() uint {
 	switch l {
 	case ERROR, FATAL:

@@ -136,35 +136,36 @@ func mergeDays(j *job) {
 }
 
 // parsePart parse individual schedule part from schedule string.
-func parsePart(s string, min, max int) (map[int]struct{}, error) {
+func parsePart(s string, minValue, maxValue int) (map[int]struct{}, error) {
 	// wildcard pattern
 	if s == "*" {
-		return getDefaultJobField(min, max, 1), nil
+		return getDefaultJobField(minValue, maxValue, 1), nil
 	}
 
 	// */2 1-59/5 pattern
 	if matches := matchN.FindStringSubmatch(s); matches != nil {
-		return parseSteps(s, matches[1], matches[2], min, max)
+		return parseSteps(s, matches[1], matches[2], minValue, maxValue)
 	}
 
 	// 1,2,4 or 1,2,10-15,20,30-45 pattern
-	return parseRange(s, min, max)
+	return parseRange(s, minValue, maxValue)
 }
 
-func parseSteps(s, match1, match2 string, min, max int) (map[int]struct{}, error) {
-	localMin := min
-	localMax := max
+func parseSteps(s, match1, match2 string, minValue, maxValue int) (map[int]struct{}, error) {
+	localMin := minValue
+	localMax := maxValue
 
 	if match1 != "" && match1 != "*" {
-		if rng := matchRange.FindStringSubmatch(match1); rng != nil {
-			localMin, _ = strconv.Atoi(rng[1])
-			localMax, _ = strconv.Atoi(rng[2])
-
-			if localMin < min || localMax > max {
-				return nil, errOutOfRange{rng[1], s, min, max}
-			}
-		} else {
+		rng := matchRange.FindStringSubmatch(match1)
+		if rng == nil {
 			return nil, errParsing{match1, s}
+		}
+
+		localMin, _ = strconv.Atoi(rng[1])
+		localMax, _ = strconv.Atoi(rng[2])
+
+		if localMin < minValue || localMax > maxValue {
+			return nil, errOutOfRange{rng[1], s, minValue, maxValue}
 		}
 	}
 
@@ -173,29 +174,36 @@ func parseSteps(s, match1, match2 string, min, max int) (map[int]struct{}, error
 	return getDefaultJobField(localMin, localMax, n), nil
 }
 
-func parseRange(s string, min, max int) (map[int]struct{}, error) {
+func parseRange(s string, minValue, maxValue int) (map[int]struct{}, error) {
 	r := make(map[int]struct{})
 	parts := strings.Split(s, ",")
 
 	for _, x := range parts {
-		if rng := matchRange.FindStringSubmatch(x); rng != nil {
-			localMin, _ := strconv.Atoi(rng[1])
-			localMax, _ := strconv.Atoi(rng[2])
+		rng := matchRange.FindStringSubmatch(x)
 
-			if localMin < min || localMax > max {
-				return nil, errOutOfRange{x, s, min, max}
+		if rng == nil {
+			i, err := strconv.Atoi(x)
+			if err != nil {
+				return nil, errParsing{x, s}
 			}
 
-			r = getDefaultJobField(localMin, localMax, 1)
-		} else if i, err := strconv.Atoi(x); err == nil {
-			if i < min || i > max {
-				return nil, errOutOfRange{i, s, min, max}
+			if i < minValue || i > maxValue {
+				return nil, errOutOfRange{i, s, minValue, maxValue}
 			}
 
 			r[i] = struct{}{}
-		} else {
-			return nil, errParsing{x, s}
+
+			continue
 		}
+
+		localMin, _ := strconv.Atoi(rng[1])
+		localMax, _ := strconv.Atoi(rng[2])
+
+		if localMin < minValue || localMax > maxValue {
+			return nil, errOutOfRange{x, s, minValue, maxValue}
+		}
+
+		r = getDefaultJobField(localMin, localMax, 1)
 	}
 
 	if len(r) == 0 {
@@ -205,10 +213,10 @@ func parseRange(s string, min, max int) (map[int]struct{}, error) {
 	return r, nil
 }
 
-func getDefaultJobField(min, max, incr int) map[int]struct{} {
+func getDefaultJobField(minValue, maxValue, incr int) map[int]struct{} {
 	r := make(map[int]struct{})
 
-	for i := min; i <= max; i += incr {
+	for i := minValue; i <= maxValue; i += incr {
 		r[i] = struct{}{}
 	}
 
@@ -326,22 +334,22 @@ func (e errParsing) Error() string {
 type noopRequest struct {
 }
 
-func (b noopRequest) Context() context.Context {
+func (noopRequest) Context() context.Context {
 	return context.Background()
 }
 
-func (b noopRequest) Param(string) string {
+func (noopRequest) Param(string) string {
 	return ""
 }
 
-func (b noopRequest) PathParam(string) string {
+func (noopRequest) PathParam(string) string {
 	return ""
 }
 
-func (b noopRequest) HostName() string {
+func (noopRequest) HostName() string {
 	return "gofr"
 }
 
-func (b noopRequest) Bind(interface{}) error {
+func (noopRequest) Bind(interface{}) error {
 	return nil
 }

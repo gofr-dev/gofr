@@ -17,6 +17,7 @@ import (
 
 	redis "github.com/redis/go-redis/v9"
 	gomock "go.uber.org/mock/gomock"
+
 	container "gofr.dev/pkg/gofr/container"
 )
 
@@ -274,6 +275,101 @@ func (m *MockPubSub) DeleteTopic(context context.Context, name string) error {
 func (mr *MockPubSubMockRecorder) DeleteTopic(context, name any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteTopic", reflect.TypeOf((*MockPubSub)(nil).DeleteTopic), context, name)
+}
+
+// MockClickhouse is a mock of Clickhouse interface.
+type MockClickhouse struct {
+	ctrl     *gomock.Controller
+	recorder *MockClickhouseMockRecorder
+}
+
+// MockClickhouseMockRecorder is the mock recorder for MockClickhouse.
+type MockClickhouseMockRecorder struct {
+	mock *MockClickhouse
+}
+
+// NewMockClickhouse creates a new mock instance.
+func NewMockClickhouse(ctrl *gomock.Controller) *MockClickhouse {
+	mock := &MockClickhouse{ctrl: ctrl}
+	mock.recorder = &MockClickhouseMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockClickhouse) EXPECT() *MockClickhouseMockRecorder {
+	return m.recorder
+}
+
+// AsyncInsert mocks base method.
+func (m *MockClickhouse) AsyncInsert(ctx context.Context, query string, wait bool, args ...any) error {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, query, wait}
+	for _, a := range args {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "AsyncInsert", varargs...)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AsyncInsert indicates an expected call of AsyncInsert.
+func (mr *MockClickhouseMockRecorder) AsyncInsert(ctx, query, wait any, args ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, query, wait}, args...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AsyncInsert", reflect.TypeOf((*MockClickhouse)(nil).AsyncInsert), varargs...)
+}
+
+// Exec mocks base method.
+func (m *MockClickhouse) Exec(ctx context.Context, query string, args ...any) error {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, query}
+	for _, a := range args {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "Exec", varargs...)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Exec indicates an expected call of Exec.
+func (mr *MockClickhouseMockRecorder) Exec(ctx, query any, args ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, query}, args...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Exec", reflect.TypeOf((*MockClickhouse)(nil).Exec), varargs...)
+}
+
+// HealthCheck mocks base method.
+func (m *MockClickhouse) HealthCheck(ctx context.Context) (any, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HealthCheck", ctx)
+	ret0, _ := ret[0].(any)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// HealthCheck indicates an expected call of HealthCheck.
+func (mr *MockClickhouseMockRecorder) HealthCheck(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HealthCheck", reflect.TypeOf((*MockClickhouse)(nil).HealthCheck), ctx)
+}
+
+// Select mocks base method.
+func (m *MockClickhouse) Select(ctx context.Context, dest any, query string, args ...any) error {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, dest, query}
+	for _, a := range args {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "Select", varargs...)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Select indicates an expected call of Select.
+func (mr *MockClickhouseMockRecorder) Select(ctx, dest, query any, args ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, dest, query}, args...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Select", reflect.TypeOf((*MockClickhouse)(nil).Select), varargs...)
 }
 
 // Mockmigrator is a mock of migrator interface.

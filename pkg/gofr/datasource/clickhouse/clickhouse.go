@@ -2,6 +2,7 @@ package clickhouse
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"time"
 
@@ -21,6 +22,8 @@ type client struct {
 	logger  Logger
 	metrics Metrics
 }
+
+var errStatusDown = errors.New("status down")
 
 // New initializes Clickhouse client with the provided configuration.
 // Metrics, Logger has to be initialized before calling the Connect method.
@@ -165,12 +168,8 @@ type Health struct {
 	Details map[string]interface{} `json:"details,omitempty"`
 }
 
-func (h *Health) GetStatus() string {
-	return h.Status
-}
-
 // HealthCheck checks the health of the MongoDB client by pinging the database.
-func (c *client) HealthCheck() interface{} {
+func (c *client) HealthCheck(ctx context.Context) (any, error) {
 	h := Health{
 		Details: make(map[string]interface{}),
 	}
@@ -178,17 +177,14 @@ func (c *client) HealthCheck() interface{} {
 	h.Details["host"] = c.config.Hosts
 	h.Details["database"] = c.config.Database
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-
 	err := c.conn.Ping(ctx)
 	if err != nil {
 		h.Status = "DOWN"
 
-		return &h
+		return &h, errStatusDown
 	}
 
 	h.Status = "UP"
 
-	return &h
+	return &h, nil
 }

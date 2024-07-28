@@ -95,10 +95,11 @@ func main() {
 }
 ```
 
-In this example, we define a user struct representing a database entity. The GetAll method in the provided code demonstrates how to override the default behavior for retrieving all entities.
+In this example, we define a user struct representing a database entity. The `GetAll` method in the provided code demonstrates how to override the default behavior for retrieving all entities.
 This method can be used to implement custom logic for filtering, sorting, or retrieving additional data along with the entities.
 
 
 > Few Points to consider:
-> 1. Field Naming Convention: GoFr assumes the struct fields in snake-case match the database column names. For example, `IsEmployed` field in the struct matches `is_employed` column in the database, `Age` field matches `age` column, etc.
-> 2. Primary Key: The first field of the struct is typically used as the primary key for data operations. However, user can customize this behavior using GoFr's features. 
+> 1. The struct should always be passed by reference in the method `AddRESTHandlers`.
+> 2. Field Naming Convention: GoFr assumes the struct fields in snake-case match the database column names. For example, `IsEmployed` field in the struct matches `is_employed` column in the database, `Age` field matches `age` column, etc.
+> 3. Primary Key: The first field of the struct is typically used as the primary key for data operations. However, user can customize this behavior using GoFr's features. 

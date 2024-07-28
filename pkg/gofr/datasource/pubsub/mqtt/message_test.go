@@ -5,37 +5,43 @@ import (
 )
 
 func TestMessage(_ *testing.T) {
-	msg := message{msg: mockMessage{}}
+	m := message{msg: mockMessage{}}
 
-	msg.Commit()
+	m.Commit()
 }
 
 type mockMessage struct {
+	duplicate bool
+	qos       int
+	retained  bool
+	topic     string
+	messageID int
+	pyload    string
 }
 
 func (m mockMessage) Duplicate() bool {
-	return false
+	return m.duplicate
 }
 
 func (m mockMessage) Qos() byte {
-	return 0
+	return byte(m.qos)
 }
 
 func (m mockMessage) Retained() bool {
-	return false
+	return m.retained
 }
 
 func (m mockMessage) Topic() string {
-	return ""
+	return m.topic
 }
 
 func (m mockMessage) MessageID() uint16 {
-	return 1
+	return uint16(m.messageID)
 }
 
 func (m mockMessage) Payload() []byte {
-	return nil
+	return []byte(m.pyload)
 }
 
-func (m mockMessage) Ack() {
+func (mockMessage) Ack() {
 }

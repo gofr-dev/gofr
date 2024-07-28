@@ -1,3 +1,4 @@
+---
 name: Workflow-Pipeline
 
 on:
@@ -20,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go-version: ['1.21', '1.20']
+        go-version: ['1.22', '1.21']
 
     services:
       kafka:
@@ -61,7 +62,7 @@ jobs:
           fetch-depth: 0
 
       - name: Set up Go ${{ matrix.go-version }}
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.go-version }}
         id: Go
@@ -81,8 +82,8 @@ jobs:
           go tool cover -func profile.cov
 
       - name: Upload Test Coverage
-        if: ${{ matrix.go-version == '1.21'}}
-        uses: actions/upload-artifact@v3
+        if: ${{ matrix.go-version == '1.22'}}
+        uses: actions/upload-artifact@v4
         with:
           name: Example-Test-Report
           path: profile.cov
@@ -92,7 +93,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go-version: ['1.21', '1.20']
+        go-version: ['1.22', '1.21']
 
     steps:
       - name: Checkout code into go module directory
@@ -101,7 +102,7 @@ jobs:
           fetch-depth: 0
 
       - name: Set up Go ${{ matrix.go-version }}
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.go-version }}
         id: Go
@@ -113,15 +114,13 @@ jobs:
       - name: Test
         run: |
           export APP_ENV=test
-          go test gofr.dev/pkg/... -tags migration -v -short -coverprofile package.cov -coverpkg=gofr.dev/pkg/...
-          grep -v 'gofr.dev/pkg/gofr/migration/mock_datasources.go' package.cov > packageWithoutMockMigrationDatasource.cov
-          grep -v 'gofr.dev/pkg/gofr/container/mock_datasources.go' packageWithoutMockMigrationDatasource.cov > packageWithoutMockDatasource.cov
-          grep -v 'google/mock_interfaces\.go' packageWithoutMockDatasource.cov > profile.cov
+          go test gofr.dev/pkg/... -v -short -coverprofile package.cov -coverpkg=gofr.dev/pkg/...
+          grep -v '/mock_' package.cov > profile.cov
           go tool cover -func profile.cov
 
       - name: Upload Test Coverage
-        if: ${{ matrix.go-version == '1.21'}}
-        uses: actions/upload-artifact@v3
+        if: ${{ matrix.go-version == '1.22'}}
+        uses: actions/upload-artifact@v4
         with:
           name: PKG-Coverage-Report
           path: profile.cov
@@ -135,7 +134,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Download Coverage Report
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           path: artifacts
 
@@ -169,7 +168,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Download Coverage Report
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           path: artifacts
 
@@ -180,7 +179,7 @@ jobs:
           tail -n +2 ./PKG-Coverage-Report/profile.cov >> merged_profile.cov
 
       - name: Upload
-        uses: paambaati/codeclimate-action@v5.0.0
+        uses: paambaati/codeclimate-action@v8.0.0
         env:
           CC_TEST_REPORTER_ID: ${{ secrets.CC_TEST_REPORTER_ID }}
         with:
@@ -190,7 +189,7 @@ jobs:
   code_quality:
     name: Code Quality🎖️
     runs-on: ubuntu-latest
-    container: "golangci/golangci-lint:v1.57.2"
+    container: "golangci/golangci-lint:v1.59.1"
     steps:
       - name: Check out code into the Go module directory
         uses: actions/checkout@v4
@@ -199,3 +198,14 @@ jobs:
       - name: GolangCI-Lint
         run: |
           golangci-lint run --timeout 9m0s
+
+  linting_party:
+    name: Linting Party🥳
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+      - name: Check for file names errors
+        uses: ls-lint/action@v2.2.3
+        with:
+          config: .ls-lint.yml

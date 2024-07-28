@@ -2,7 +2,6 @@ package sql
 
 import (
 	"fmt"
-	"strings"
 	"testing"
 	"time"
 
@@ -36,9 +35,7 @@ func TestNewSQL_ErrorCase(t *testing.T) {
 		NewSQL(mockConfig, mockLogger, mockMetrics)
 	})
 
-	if !strings.Contains(testLogs, expectedLog) {
-		t.Errorf("TestNewSQL_ErrorCase Failed! Expcted error log doesn't match actual.")
-	}
+	assert.Containsf(t, testLogs, expectedLog, "TestNewSQL_ErrorCase Failed! Expected error log doesn't match actual.")
 }
 
 func TestNewSQL_InvalidDialect(t *testing.T) {
@@ -56,9 +53,7 @@ func TestNewSQL_InvalidDialect(t *testing.T) {
 		NewSQL(mockConfig, mockLogger, mockMetrics)
 	})
 
-	if !strings.Contains(testLogs, errUnsupportedDialect.Error()) {
-		t.Errorf("TestNewSQL_ErrorCase Failed! Expcted error log doesn't match actual.")
-	}
+	assert.Containsf(t, testLogs, errUnsupportedDialect.Error(), "TestNewSQL_ErrorCase Failed! Expected error log doesn't match actual.")
 }
 
 func TestNewSQL_GetDBDialect(t *testing.T) {

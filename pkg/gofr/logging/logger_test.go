@@ -6,10 +6,12 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/term"
 
 	"gofr.dev/pkg/gofr/testutil"
@@ -104,32 +106,65 @@ func TestLogger_LevelWarn(t *testing.T) {
 	infoLog := testutil.StdoutOutputForFunc(printLog)
 	errLog := testutil.StderrOutputForFunc(printLog)
 
-	if strings.ContainsAny(infoLog, "NOTICE|INFO|DEBUG") && !strings.Contains(errLog, "ERROR") {
-		// Warn Log Level will not contain  DEBUG,INFO, NOTICE logs
-		t.Errorf("TestLogger_LevelDebug Failed!")
+	levels := []Level{DEBUG, INFO, NOTICE}
+
+	for i, l := range levels {
+		assert.NotContainsf(t, infoLog, l.String(), "TEST[%d], Failed.\nunexpected %s log", i, l)
 	}
 
 	assertMessageInJSONLog(t, errLog, "Test Error Log")
 }
 
 func TestLogger_LevelFatal(t *testing.T) {
-	printLog := func() {
+	// running the failing part only when a specific env variable is set
+	if os.Getenv("GOFR_EXITER") == "1" {
 		logger := NewLogger(FATAL)
+
 		logger.Debugf("%s", "Test Debug Log")
 		logger.Infof("%s", "Test Info Log")
+		logger.Logf("%s", "Test Log")
 		logger.Noticef("%s", "Test Notice Log")
 		logger.Warnf("%s", "Test Warn Log")
 		logger.Errorf("%s", "Test Error Log")
+		logger.Fatalf("%s", "Test Fatal Log")
+
+		return
 	}
 
-	infoLog := testutil.StdoutOutputForFunc(printLog)
-	errLog := testutil.StderrOutputForFunc(printLog)
+	//nolint:gosec // starting the actual test in a different subprocess
+	cmd := exec.Command(os.Args[0], "-test.run=TestLogger_LevelFatal")
+	cmd.Env = append(os.Environ(), "GOFR_EXITER=1")
 
-	assert.Equal(t, "", infoLog, "TestLogger_LevelFatal Failed!")
-	assert.Equal(t, "", errLog, "TestLogger_LevelFatal Failed")
+	stdout, err := cmd.StderrPipe()
+	require.NoError(t, err)
+
+	require.NoError(t, cmd.Start())
+
+	logBytes, err := io.ReadAll(stdout)
+	require.NoError(t, err)
+
+	log := string(logBytes)
+
+	levels := []Level{DEBUG, INFO, NOTICE, WARN, ERROR} // levels which should not be present in case of FATAL log_level
+
+	for i, l := range levels {
+		assert.NotContainsf(t, log, l.String(), "TEST[%d], Failed.\nunexpected %s log", i, l)
+	}
+
+	assertMessageInJSONLog(t, log, "Test Fatal Log")
+
+	// Check that the program exited
+	err = cmd.Wait()
+
+	var e *exec.ExitError
+
+	require.ErrorAs(t, err, &e)
+	assert.False(t, e.Success())
 }
 
 func assertMessageInJSONLog(t *testing.T, logLine, expectation string) {
+	t.Helper()
+
 	var l logEntry
 	_ = json.Unmarshal([]byte(logLine), &l)
 

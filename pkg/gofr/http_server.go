@@ -3,6 +3,7 @@ package gofr
 import (
 	"fmt"
 	"net/http"
+	"net/http/pprof"
 	"time"
 
 	"gofr.dev/pkg/gofr/container"
@@ -34,6 +35,28 @@ func newHTTPServer(c *container.Container, port int, middlewareConfigs map[strin
 		port:   port,
 		ws:     wsManager,
 	}
+}
+
+// RegisterProfilingRoutes registers pprof endpoints on the HTTP server.
+//
+// This method adds the following routes to the server's router:
+//
+//   - /debug/pprof/cmdline
+//   - /debug/pprof/profile
+//   - /debug/pprof/symbol
+//   - /debug/pprof/trace
+//   - /debug/pprof/ (index)
+//
+// These endpoints provide various profiling information for the application,
+// such as command-line arguments, memory profiles, symbol information, and
+// execution traces.
+func (s *httpServer) RegisterProfilingRoutes() {
+	s.router.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
+	s.router.HandleFunc("/debug/pprof/profile", pprof.Profile)
+	s.router.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+	s.router.HandleFunc("/debug/pprof/trace", pprof.Trace)
+
+	s.router.NewRoute().Methods(http.MethodGet).PathPrefix("/debug/pprof/").HandlerFunc(pprof.Index)
 }
 
 func (s *httpServer) Run(c *container.Container) {

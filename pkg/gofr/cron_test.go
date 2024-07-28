@@ -103,7 +103,7 @@ func TestCron_parseSchedule_Success(t *testing.T) {
 	for _, tc := range testCases {
 		j, err := parseSchedule(tc.schedule)
 
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 		assert.Equal(t, *tc.expJob, *j)
 	}
 }
@@ -115,7 +115,7 @@ func TestCron_parseSchedule_Error(t *testing.T) {
 		expErrString string
 	}{
 		{
-			desc:         "incorrect numnber of schedule parts: less",
+			desc:         "incorrect number of schedule parts: less",
 			schedules:    []string{"* * * * ", "* * * * * *"},
 			expErrString: "schedule string must have five components like * * * * *",
 		},
@@ -150,7 +150,7 @@ func TestCron_parseSchedule_Error(t *testing.T) {
 				j, err := parseSchedule(s)
 
 				assert.Nil(t, j)
-				assert.Contains(t, err.Error(), tc.expErrString)
+				assert.ErrorContains(t, err, tc.expErrString)
 			}
 		})
 	}
@@ -170,7 +170,7 @@ func TestCron_getDefaultJobField(t *testing.T) {
 	for _, tc := range testCases {
 		out := getDefaultJobField(tc.min, tc.max, tc.incr)
 
-		assert.Equal(t, tc.expOutCount, len(out))
+		assert.Len(t, out, tc.expOutCount)
 	}
 }
 
@@ -311,5 +311,5 @@ func Test_noopRequest(t *testing.T) {
 	assert.Equal(t, "", noop.Param(""))
 	assert.Equal(t, "", noop.PathParam(""))
 	assert.Equal(t, "gofr", noop.HostName())
-	assert.Equal(t, nil, noop.Bind(nil))
+	assert.NoError(t, noop.Bind(nil))
 }

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	goRedis "github.com/redis/go-redis/v9"
+
 	"gofr.dev/pkg/gofr/container"
 )
 
@@ -27,6 +28,14 @@ type SQL interface {
 type PubSub interface {
 	CreateTopic(context context.Context, name string) error
 	DeleteTopic(context context.Context, name string) error
+}
+
+type Clickhouse interface {
+	Exec(ctx context.Context, query string, args ...any) error
+	Select(ctx context.Context, dest any, query string, args ...any) error
+	AsyncInsert(ctx context.Context, query string, wait bool, args ...any) error
+
+	HealthCheck(ctx context.Context) (any, error)
 }
 
 // keeping the migrator interface unexported as, right now it is not being implemented directly, by the externalDB drivers.
