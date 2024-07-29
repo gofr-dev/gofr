@@ -167,7 +167,7 @@ func (f *ftpFile) Read(p []byte) (n int, err error) {
 	}
 
 	n, err = r.Read(p)
-	if err != nil && err != io.EOF {
+	if err != nil && !errors.Is(err, io.EOF) {
 		f.logger.Errorf("Read", "Failed", `Failed to read from "%v" : %v`, f.path, err)
 		return 0, err
 	}
@@ -194,7 +194,7 @@ func (f *ftpFile) ReadAt(p []byte, off int64) (n int, err error) {
 	}
 
 	n, err = resp.Read(p)
-	if err != nil && err != io.EOF {
+	if err != nil && !errors.Is(err, io.EOF) {
 		f.logger.Errorf("ReadAt", "Failed", `Error reading file with path "%v" at %v offset : %v`, f.path, off, err)
 		return 0, err
 	}

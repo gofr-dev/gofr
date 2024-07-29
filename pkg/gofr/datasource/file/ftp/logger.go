@@ -41,6 +41,7 @@ func NewLogger(level Level) Logger {
 func clean(query string) string {
 	query = regexp.MustCompile(`\s+`).ReplaceAllString(query, " ")
 	query = strings.TrimSpace(query)
+
 	return query
 }
 
@@ -60,6 +61,7 @@ func (fl *FileLog) logf(level Level) {
 	message := clean(fl.Message)
 
 	var levelColor string
+
 	switch level {
 	case DEBUG:
 		levelColor = "\u001B[1;36m" // Cyan
@@ -71,7 +73,6 @@ func (fl *FileLog) logf(level Level) {
 
 	fmt.Fprintf(out, "%s%-6s \u001B[1;35mFTP\u001B[0m \u001B[1;34m[%s]\u001B[1;32m %s \u001B[1;33m%s \u001B[0m%s\n",
 		levelColor, levelString(level), timestamp, clean(fl.Operation), clean(fl.Status), message)
-
 }
 
 // levelString returns the string representation of the log level.
@@ -89,7 +90,7 @@ func levelString(level Level) string {
 }
 
 // Debugf logs a debug message with a format string and arguments.
-func (fl *FileLog) Debugf(operation string, status string, format string, args ...interface{}) {
+func (fl *FileLog) Debugf(operation, status, format string, args ...interface{}) {
 	fl.Operation = operation
 	fl.Status = status
 	fl.Message = fmt.Sprintf(format, args...)
@@ -97,7 +98,7 @@ func (fl *FileLog) Debugf(operation string, status string, format string, args .
 }
 
 // Logf logs an info message with a format string and arguments.
-func (fl *FileLog) Logf(operation string, status string, format string, args ...interface{}) {
+func (fl *FileLog) Logf(operation, status, format string, args ...interface{}) {
 	fl.Operation = operation
 	fl.Status = status
 	fl.Message = fmt.Sprintf(format, args...)
@@ -105,7 +106,7 @@ func (fl *FileLog) Logf(operation string, status string, format string, args ...
 }
 
 // Errorf logs an error message with a format string and arguments.
-func (fl *FileLog) Errorf(operation string, status string, format string, args ...interface{}) {
+func (fl *FileLog) Errorf(operation, status, format string, args ...interface{}) {
 	fl.Operation = operation
 	fl.Status = status
 	fl.Message = fmt.Sprintf(format, args...)

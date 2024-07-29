@@ -300,5 +300,6 @@ func (f *ftpFileSystem) Rename(oldname, newname string) error {
 	}
 
 	f.logger.Logf("Rename", "Success", `Renamed file "%s" to "%s"`, oldname, newname)
+
 	return nil
 }

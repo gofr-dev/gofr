@@ -274,7 +274,7 @@ func TestOpenFile(t *testing.T) {
 			name:     "empty path",
 			basePath: "/ftp/one",
 			filePath: "",
-			mockRetrExpect: func(conn *MockServerConn, path string) {
+			mockRetrExpect: func(_ *MockServerConn, path string) {
 			},
 			expectError: true,
 		},
@@ -405,7 +405,7 @@ func TestMkDir(t *testing.T) {
 			name:     "Mkdir with empty directory path",
 			basePath: "/ftp/one",
 			dirPath:  "",
-			mockMkdirExpect: func(conn *MockServerConn, dirPath string) {
+			mockMkdirExpect: func(_ *MockServerConn, dirPath string) {
 			},
 			expectError: true,
 		},
