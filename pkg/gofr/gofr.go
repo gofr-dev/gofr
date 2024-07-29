@@ -272,10 +272,12 @@ func (a *App) add(method, pattern string, h Handler) {
 	})
 }
 
+// Metrics returns the metrics manager associated with the App.
 func (a *App) Metrics() metrics.Manager {
 	return a.container.Metrics()
 }
 
+// Logger returns the logger instance associated with the App.
 func (a *App) Logger() logging.Logger {
 	return a.container.Logger
 }
@@ -321,16 +323,14 @@ func (a *App) initTracer() {
 		return
 	}
 
-	if (traceExporter != "" && tracerHost != "") || tracerURL != "" || traceExporter == gofrTraceExporter {
-		exporter, err := a.getExporter(traceExporter, tracerHost, tracerPort, tracerURL)
+	exporter, err := a.getExporter(traceExporter, tracerHost, tracerPort, tracerURL)
 
-		if err != nil {
-			a.container.Error(err)
-		}
-
-		batcher := sdktrace.NewBatchSpanProcessor(exporter)
-		tp.RegisterSpanProcessor(batcher)
+	if err != nil {
+		a.container.Error(err)
 	}
+
+	batcher := sdktrace.NewBatchSpanProcessor(exporter)
+	tp.RegisterSpanProcessor(batcher)
 }
 
 func isValidConfig(logger logging.Logger, name, url, host, port string) bool {
