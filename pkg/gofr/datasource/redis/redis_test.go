@@ -136,19 +136,14 @@ func TestRedis_Close(t *testing.T) {
 	mockMetric := NewMockMetrics(ctrl)
 	mockMetric.EXPECT().RecordHistogram(gomock.Any(), "app_redis_stats", gomock.Any(), "hostname",
 		gomock.Any(), "type", "ping")
-	mockMetric.EXPECT().RecordHistogram(gomock.Any(), "app_redis_stats", gomock.Any(), "hostname",
-		gomock.Any(), "type", "shutdown")
 
-	// Capture stdout output for the Close method
-	result := testutil.StdoutOutputForFunc(func() {
-		mockLogger := logging.NewMockLogger(logging.DEBUG)
-		client := NewClient(config.NewMockConfig(map[string]string{
-			"REDIS_HOST": s.Host(),
-			"REDIS_PORT": s.Port(),
-		}), mockLogger, mockMetric)
+	mockLogger := logging.NewMockLogger(logging.DEBUG)
+	client := NewClient(config.NewMockConfig(map[string]string{
+		"REDIS_HOST": s.Host(),
+		"REDIS_PORT": s.Port(),
+	}), mockLogger, mockMetric)
 
-		client.Close(context.Background())
-	})
+	err = client.Close(context.Background())
 
-	assert.Contains(t, result, "shutdown save")
+	assert.NoError(t, err)
 }

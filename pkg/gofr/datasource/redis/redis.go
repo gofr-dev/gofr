@@ -64,9 +64,9 @@ func NewClient(c config.Config, logger datasource.Logger, metrics Metrics) *Redi
 }
 
 // Close shuts down the Redis client, ensuring the current dataset is saved before exiting.
-func (r *Redis) Close(ctx context.Context) error {
+func (r *Redis) Close(_ context.Context) error {
 	if r.Client != nil {
-		return r.Client.ShutdownSave(ctx).Err()
+		return r.Client.Close()
 	}
 
 	return nil
