@@ -24,7 +24,7 @@ func (c *cassandraIterator) scan(dest ...interface{}) bool {
 	return c.iter.Scan(dest...)
 }
 
-// NumRows returns a number of rows.
+// numRows returns a number of rows.
 // This method wraps the `NumRows` method of the underlying `iter` object.
 func (c *cassandraIterator) numRows() int {
 	return c.iter.NumRows()
@@ -35,13 +35,13 @@ type cassandraQuery struct {
 	query *gocql.Query
 }
 
-// Exec performs a Cassandra's Query Exec.
+// exec performs a Cassandra's Query Exec.
 // This method wraps the `Exec` method of the underlying `query` object.
 func (c *cassandraQuery) exec() error {
 	return c.query.Exec()
 }
 
-// Iter returns a Cassandra iterator.
+// iter returns a Cassandra iterator.
 // This method wraps the `Iter` method of the underlying `query` object.
 func (c *cassandraQuery) iter() iterator {
 	iter := cassandraIterator{iter: c.query.Iter()}
@@ -49,13 +49,13 @@ func (c *cassandraQuery) iter() iterator {
 	return &iter
 }
 
-// MapScanCAS checks a Cassandra query with an IF clause and scans the existing data into map[string]interface{} (if any).
+// mapScanCAS checks a Cassandra query with an IF clause and scans the existing data into map[string]interface{} (if any).
 // This method wraps the `MapScanCAS` method of the underlying `query` object.
 func (c *cassandraQuery) mapScanCAS(dest map[string]interface{}) (applied bool, err error) {
 	return c.query.MapScanCAS(dest)
 }
 
-// ScanCAS checks a Cassandra query with an IF clause and scans the existing data (if any).
+// scanCAS checks a Cassandra query with an IF clause and scans the existing data (if any).
 // This method wraps the `ScanCAS` method of the underlying `query` object.
 func (c *cassandraQuery) scanCAS(dest ...any) (applied bool, err error) {
 	return c.query.ScanCAS(dest)
@@ -79,7 +79,7 @@ func newClusterConfig(config *Config) clusterConfig {
 	return &c
 }
 
-// CreateSession creates a Cassandra session based on the provided configuration.
+// createSession creates a Cassandra session based on the provided configuration.
 // This method wraps the `CreateSession` method of the underlying `clusterConfig` object.
 // It creates a new Cassandra session using the configuration options specified in `c.clusterConfig`.
 //
@@ -100,7 +100,7 @@ type cassandraSession struct {
 	session *gocql.Session
 }
 
-// Query creates a Cassandra query.
+// query creates a Cassandra query.
 // This method wraps the `Query` method of the underlying `session` object.
 func (c *cassandraSession) query(stmt string, values ...interface{}) query {
 	q := &cassandraQuery{query: c.session.Query(stmt, values...)}

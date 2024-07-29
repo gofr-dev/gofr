@@ -96,7 +96,7 @@ type Cassandra interface {
 	// Supported `batchTypes` are CassandraLoggedBatch, CassandraUnloggedBatch and CassandraCounterBatch
 	//
 	// Example:
-	// batch := c.NewBatch(datasource.CassandraLoggedBatch)
+	// batch := c.NewBatch(cassandra.LoggedBatch) // constant has been defined in the gofr.dev/pkg/gofr/datasource/cassandra
 	NewBatch(batchType int) error
 
 	// BatchQuery adds the query to the batch operation

@@ -5,32 +5,25 @@ import (
 	"fmt"
 )
 
-const (
-	msgDestinationIsNotPointer = "destination is not pointer"
-	msgUnexpectedMap           = "a map was not expected"
-	msgUnsupportedBatchType    = "batch type not supported"
-	msgBatchNotInitialised     = "batch not initialized"
-)
-
 var (
-	errDestinationIsNotPointer = errors.New(msgDestinationIsNotPointer)
-	errUnexpectedMap           = errors.New(msgUnexpectedMap)
-	errUnsupportedBatchType    = errors.New(msgUnsupportedBatchType)
-	errBatchNotInitialised     = errors.New(msgBatchNotInitialised)
+	ErrDestinationIsNotPointer = errors.New("destination is not pointer")
+	ErrUnexpectedMap           = errors.New("a map was not expected")
+	ErrUnsupportedBatchType    = errors.New("batch type not supported")
+	ErrBatchNotInitialised     = errors.New("batch not initialized")
 )
 
-type unexpectedPointer struct {
+type UnexpectedPointer struct {
 	target string
 }
 
-func (d unexpectedPointer) Error() string {
+func (d UnexpectedPointer) Error() string {
 	return fmt.Sprintf("a pointer to %v was not expected.", d.target)
 }
 
-type unexpectedSlice struct {
+type UnexpectedSlice struct {
 	target string
 }
 
-func (d unexpectedSlice) Error() string {
+func (d UnexpectedSlice) Error() string {
 	return fmt.Sprintf("a slice of %v was not expected.", d.target)
 }

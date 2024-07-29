@@ -9,6 +9,12 @@ import (
 	"github.com/gocql/gocql"
 )
 
+const (
+	LoggedBatch = iota
+	UnloggedBatch
+	CounterBatch
+)
+
 type Config struct {
 	Hosts    string
 	Keyspace string
@@ -90,7 +96,7 @@ func (c *Client) Query(dest interface{}, stmt string, values ...interface{}) err
 	if rvo.Kind() != reflect.Ptr {
 		c.logger.Error("we did not get a pointer. data is not settable.")
 
-		return errDestinationIsNotPointer
+		return ErrDestinationIsNotPointer
 	}
 
 	rv := rvo.Elem()
@@ -124,7 +130,7 @@ func (c *Client) Query(dest interface{}, stmt string, values ...interface{}) err
 	default:
 		c.logger.Debugf("a pointer to %v was not expected.", rv.Kind().String())
 
-		return unexpectedPointer{target: rv.Kind().String()}
+		return UnexpectedPointer{target: rv.Kind().String()}
 	}
 
 	return nil
@@ -149,7 +155,7 @@ func (c *Client) ExecCAS(dest interface{}, stmt string, values ...interface{}) (
 	if rvo.Kind() != reflect.Ptr {
 		c.logger.Debugf("we did not get a pointer. data is not settable.")
 
-		return false, errDestinationIsNotPointer
+		return false, ErrDestinationIsNotPointer
 	}
 
 	rv := rvo.Elem()
@@ -162,12 +168,12 @@ func (c *Client) ExecCAS(dest interface{}, stmt string, values ...interface{}) (
 	case reflect.Slice:
 		c.logger.Debugf("a slice of %v was not expected.", reflect.SliceOf(reflect.TypeOf(dest)).String())
 
-		return false, unexpectedSlice{target: reflect.SliceOf(reflect.TypeOf(dest)).String()}
+		return false, UnexpectedSlice{target: reflect.SliceOf(reflect.TypeOf(dest)).String()}
 
 	case reflect.Map:
 		c.logger.Debugf("a map was not expected.")
 
-		return false, errUnexpectedMap
+		return false, ErrUnexpectedMap
 
 	default:
 		applied, err = q.scanCAS(rv.Interface())
@@ -177,23 +183,14 @@ func (c *Client) ExecCAS(dest interface{}, stmt string, values ...interface{}) (
 }
 
 func (c *Client) NewBatch(batchType int) error {
-	const (
-		loggedBatch = iota
-		unloggedBatch
-		counterBatch
-	)
-
-	var err error
-
 	switch batchType {
-	case loggedBatch, unloggedBatch, counterBatch:
+	case LoggedBatch, UnloggedBatch, CounterBatch:
 		c.cassandra.batch = c.cassandra.session.newBatch(gocql.BatchType(batchType))
 
+		return nil
 	default:
-		err = errUnsupportedBatchType
+		return ErrUnsupportedBatchType
 	}
-
-	return err
 }
 
 func (c *Client) BatchQuery(stmt string, values ...interface{}) {
@@ -201,10 +198,10 @@ func (c *Client) BatchQuery(stmt string, values ...interface{}) {
 }
 
 func (c *Client) ExecuteBatch() error {
-	defer c.postProcess(&QueryLog{Query: "", Keyspace: c.config.Keyspace}, time.Now())
+	defer c.postProcess(&QueryLog{Keyspace: c.config.Keyspace}, time.Now())
 
 	if c.cassandra.batch == nil {
-		return errBatchNotInitialised
+		return ErrBatchNotInitialised
 	}
 
 	return c.cassandra.session.executeBatch(c.cassandra.batch)

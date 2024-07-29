@@ -147,11 +147,11 @@ func Test_Query(t *testing.T) {
 			mockDeps.mockIter.EXPECT().scan(gomock.Any()).Times(1)
 		}, &mockStruct, nil},
 		{"failure case: dest is not pointer", mockStructSlice, func() {}, mockStructSlice,
-			errDestinationIsNotPointer},
+			ErrDestinationIsNotPointer},
 		{"failure case: dest is int", &mockInt, func() {
 			mockDeps.mockSession.EXPECT().query(query).Return(mockDeps.mockQuery).Times(1)
 			mockDeps.mockQuery.EXPECT().iter().Return(mockDeps.mockIter).Times(1)
-		}, &mockInt, unexpectedPointer{target: "int"}},
+		}, &mockInt, UnexpectedPointer{target: "int"}},
 	}
 
 	for i, tc := range testCases {
@@ -229,13 +229,13 @@ func Test_ExecCAS(t *testing.T) {
 			mockDeps.mockSession.EXPECT().query(query).Return(mockDeps.mockQuery).Times(1)
 			mockDeps.mockQuery.EXPECT().scanCAS(gomock.Any()).Return(false, errMock).Times(1)
 		}, false, errMock},
-		{"failure case: dest is not pointer", mockInt, func() {}, false, errDestinationIsNotPointer},
+		{"failure case: dest is not pointer", mockInt, func() {}, false, ErrDestinationIsNotPointer},
 		{"failure case: dest is slice", &[]int{}, func() {
 			mockDeps.mockSession.EXPECT().query(query).Return(mockDeps.mockQuery).Times(1)
-		}, false, unexpectedSlice{target: "[]*[]int"}},
+		}, false, UnexpectedSlice{target: "[]*[]int"}},
 		{"failure case: dest is map", &map[string]interface{}{}, func() {
 			mockDeps.mockSession.EXPECT().query(query).Return(mockDeps.mockQuery).Times(1)
-		}, false, errUnexpectedMap},
+		}, false, ErrUnexpectedMap},
 	}
 
 	for i, tc := range testCases {
@@ -332,7 +332,7 @@ func Test_NewBatch(t *testing.T) {
 		{"valid batch type 2", 2, func() {
 			mockDeps.mockSession.EXPECT().newBatch(gocql.BatchType(2)).Return(&cassandraBatch{}).Times(1)
 		}, nil},
-		{"invalid batch type", 3, func() {}, errUnsupportedBatchType},
+		{"invalid batch type", 3, func() {}, ErrUnsupportedBatchType},
 	}
 
 	for i, tc := range testCases {
@@ -390,7 +390,7 @@ func Test_ExecuteBatch_NotInitialised(t *testing.T) {
 
 	err := client.ExecuteBatch()
 
-	assert.Equalf(t, errBatchNotInitialised, err, "TEST, Failed")
+	assert.Equalf(t, ErrBatchNotInitialised, err, "TEST, Failed")
 }
 
 func Test_newBatch(t *testing.T) {
