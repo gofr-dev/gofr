@@ -39,6 +39,10 @@ const (
 	defaultPublicStaticDir = "static"
 	shutDownTimeout        = 30 * time.Second
 	gofrTraceExporter      = "gofr"
+	traceExporterGoFr      = "gofr"
+	traceExporterZipkin    = "zipkin"
+	traceExporterJaeger    = "jaeger"
+	traceExporterOTLP      = "otlp"
 	gofrTracerURL          = "https://tracer.gofr.dev"
 )
 
@@ -108,7 +112,7 @@ func New() *App {
 
 	app.subscriptionManager = newSubscriptionManager(app.container)
 
-	// static fileserver
+	// static file server
 	currentWd, _ := os.Getwd()
 	checkDirectory := filepath.Join(currentWd, defaultPublicStaticDir)
 
@@ -346,10 +350,12 @@ func (a *App) add(method, pattern string, h Handler) {
 	})
 }
 
+// Metrics returns the metrics manager associated with the App.
 func (a *App) Metrics() metrics.Manager {
 	return a.container.Metrics()
 }
 
+// Logger returns the logger instance associated with the App.
 func (a *App) Logger() logging.Logger {
 	return a.container.Logger
 }
@@ -360,6 +366,10 @@ func (a *App) SubCommand(pattern string, handler Handler, options ...Options) {
 	a.cmd.addRoute(pattern, handler, options...)
 }
 
+// Migrate applies a set of migrations to the application's database.
+//
+// The migrationsMap argument is a map where the key is the version number of the migration
+// and the value is a migration.Migrate instance that implements the migration logic.
 func (a *App) Migrate(migrationsMap map[int64]migration.Migrate) {
 	// TODO : Move panic recovery at central location which will manage for all the different cases.
 	defer func() {
@@ -369,7 +379,6 @@ func (a *App) Migrate(migrationsMap map[int64]migration.Migrate) {
 	migration.Run(migrationsMap, a.container)
 }
 
-//nolint:gocyclo // once deprecated configs are removed, multiple if conditions will be removed and complexity will decrease
 func (a *App) initTracer() {
 	tp := sdktrace.NewTracerProvider(
 		sdktrace.WithResource(resource.NewWithAttributes(
@@ -383,87 +392,108 @@ func (a *App) initTracer() {
 
 	traceExporter := a.Config.Get("TRACE_EXPORTER")
 	tracerURL := a.Config.Get("TRACER_URL")
+	authHeader := a.Config.Get("TRACER_AUTH_KEY")
 
-	// deprecated : tracer_host and tracer_port is deprecated and will be removed in upcoming versions
+	// deprecated : tracer_host and tracer_port are deprecated and will be removed in upcoming versions.
 	tracerHost := a.Config.Get("TRACER_HOST")
 	tracerPort := a.Config.GetOrDefault("TRACER_PORT", "9411")
 
-	if tracerURL != "" && traceExporter == "" {
-		a.Logger().Error("missing TRACE_EXPORTER config, should be provided with TRACER_URL to enable tracing")
+	if tracerURL == "" && tracerHost != "" && traceExporter != traceExporterGoFr {
+		a.Logger().Warn("TRACER_HOST and TRACER_PORT are deprecated, use TRACER_URL instead")
+
+		tracerURL = fmt.Sprintf("%s:%s", tracerHost, tracerPort)
+	}
+
+	if !isValidExporterConfig(a.Logger(), tracerURL, traceExporter) {
 		return
 	}
 
-	//nolint:revive // early-return is not possible here, as below is the intentional logging flow
-	if tracerURL == "" && traceExporter != "" && !strings.EqualFold(traceExporter, "gofr") {
-		if tracerHost != "" && tracerPort != "" {
-			a.Logger().Warn("TRACER_HOST and TRACER_PORT are deprecated, use TRACER_URL instead")
-		} else {
-			a.Logger().Error("missing TRACER_URL config, should be provided with TRACE_EXPORTER to enable tracing")
-			return
-		}
+	exporter, err := a.getExporter(context.Background(), traceExporter, tracerURL, authHeader)
+
+	if err != nil {
+		a.container.Error(err)
 	}
 
-	if (traceExporter != "" && tracerHost != "") || tracerURL != "" || traceExporter == gofrTraceExporter {
-		exporter, err := a.getExporter(traceExporter, tracerHost, tracerPort, tracerURL)
+	if exporter == nil {
+		return
+	}
 
-		if err != nil {
-			a.container.Error(err)
-		}
+	batcher := sdktrace.NewBatchSpanProcessor(exporter)
+	tp.RegisterSpanProcessor(batcher)
+}
 
-		batcher := sdktrace.NewBatchSpanProcessor(exporter)
-		tp.RegisterSpanProcessor(batcher)
+func isValidExporterConfig(log logging.Logger, tracerURL, traceExporter string) bool {
+	switch {
+	case tracerURL == "" && traceExporter == "":
+		return false
+	case traceExporter == "":
+		log.Error("missing TRACE_EXPORTER config, should be provided with TRACER_URL to enable tracing")
+		return false
+	case tracerURL == "" && !strings.EqualFold(traceExporter, traceExporterGoFr):
+		log.Errorf("missing TRACER_URL config, should be provided with TRACE_EXPORTER to enable tracing")
+		return false
+	}
+
+	return true
+}
+
+func (a *App) getExporter(ctx context.Context, name, url, authHeader string) (sdktrace.SpanExporter, error) {
+	var exporter sdktrace.SpanExporter
+
+	switch strings.ToLower(name) {
+	// jaeger accept OpenTelemetry Protocol (OTLP)
+	case traceExporterOTLP, traceExporterJaeger:
+		return a.buildOpenTelemetryProtocol(ctx, url, strings.ToLower(name), authHeader)
+	case traceExporterZipkin:
+		return a.buildZipkin(url, authHeader)
+	case traceExporterGoFr:
+		return a.buildGofrTraceExporter(url)
+	default:
+		a.container.Errorf("unsupported TRACE_EXPORTER: %s", name)
+		return exporter, nil
 	}
 }
 
-func (a *App) getExporter(name, host, port, url string) (sdktrace.SpanExporter, error) {
-	var (
-		exporter sdktrace.SpanExporter
-		err      error
-	)
+// buildOpenTelemetryProtocol using OpenTelemetryProtocol as the trace exporter
+// jaeger accept OpenTelemetry Protocol (OTLP) over gRPC to upload trace data.
+func (a *App) buildOpenTelemetryProtocol(ctx context.Context, url, exporter, authHeader string) (sdktrace.SpanExporter, error) {
+	a.container.Logf("Exporting traces to %s at %s", exporter, url)
 
-	authHeader := a.Config.Get("TRACER_AUTH_KEY")
+	opts := []otlptracegrpc.Option{otlptracegrpc.WithInsecure(), otlptracegrpc.WithEndpoint(url)}
 
-	switch strings.ToLower(name) {
-	case "jaeger":
-		if url == "" {
-			url = fmt.Sprintf("%s:%s", host, port)
-		}
-
-		a.container.Logf("Exporting traces to jaeger at %s", url)
-
-		opts := []otlptracegrpc.Option{otlptracegrpc.WithInsecure(), otlptracegrpc.WithEndpoint(url)}
-
-		if authHeader != "" {
-			opts = append(opts, otlptracegrpc.WithHeaders(map[string]string{"Authorization": authHeader}))
-		}
-
-		exporter, err = otlptracegrpc.New(context.Background(), opts...)
-	case "zipkin":
-		if url == "" {
-			url = fmt.Sprintf("http://%s:%s/api/v2/spans", host, port)
-		}
-
-		a.container.Logf("Exporting traces to zipkin at %s", url)
-
-		var opts []zipkin.Option
-		if authHeader != "" {
-			opts = append(opts, zipkin.WithHeaders(map[string]string{"Authorization": authHeader}))
-		}
-
-		exporter, err = zipkin.New(url, opts...)
-	case gofrTraceExporter:
-		if url == "" {
-			url = "https://tracer-api.gofr.dev/api/spans"
-		}
-
-		a.container.Logf("Exporting traces to GoFr at %s", gofrTracerURL)
-
-		exporter = NewExporter(url, logging.NewLogger(logging.INFO))
-	default:
-		a.container.Errorf("unsupported trace exporter: %s", name)
+	if authHeader != "" {
+		opts = append(opts, otlptracegrpc.WithHeaders(map[string]string{"Authorization": authHeader}))
 	}
 
-	return exporter, err
+	return otlptracegrpc.New(ctx, opts...)
+}
+
+func (a *App) buildZipkin(url, authHeader string) (sdktrace.SpanExporter, error) {
+	if !strings.HasPrefix(url, "http") {
+		url = fmt.Sprintf("http://%s/api/v2/spans", url)
+	}
+
+	a.container.Logf("Exporting traces to zipkin at %s", url)
+
+	var opts []zipkin.Option
+
+	if authHeader != "" {
+		opts = append(opts, zipkin.WithHeaders(map[string]string{"Authorization": authHeader}))
+	}
+
+	return zipkin.New(url, opts...)
+}
+
+func (a *App) buildGofrTraceExporter(url string) (sdktrace.SpanExporter, error) {
+	if url == "" {
+		url = "https://tracer-api.gofr.dev/api/spans"
+	}
+
+	a.container.Logf("Exporting traces to GoFr at %s", url)
+
+	exporter := NewExporter(url, logging.NewLogger(logging.INFO))
+
+	return exporter, nil
 }
 
 type otelErrorHandler struct {
@@ -474,6 +504,10 @@ func (o *otelErrorHandler) Handle(e error) {
 	o.logger.Error(e.Error())
 }
 
+// EnableBasicAuth enables basic authentication for the application.
+//
+// It takes a variable number of credentials as alternating username and password strings.
+// An error is logged if an odd number of arguments is provided.
 func (a *App) EnableBasicAuth(credentials ...string) {
 	if len(credentials)%2 != 0 {
 		a.container.Error("Invalid number of arguments for EnableBasicAuth")
@@ -493,11 +527,18 @@ func (a *App) EnableBasicAuthWithFunc(validateFunc func(username, password strin
 	a.httpServer.router.Use(middleware.BasicAuthMiddleware(middleware.BasicAuthProvider{ValidateFunc: validateFunc, Container: a.container}))
 }
 
+// EnableBasicAuthWithValidator enables basic authentication for the HTTP server with a custom validator.
+//
+// The provided `validateFunc` is invoked for each authentication attempt. It receives a container instance,
+// username, and password. The function should return `true` if the credentials are valid, `false` otherwise.
 func (a *App) EnableBasicAuthWithValidator(validateFunc func(c *container.Container, username, password string) bool) {
 	a.httpServer.router.Use(middleware.BasicAuthMiddleware(middleware.BasicAuthProvider{
 		ValidateFuncWithDatasources: validateFunc, Container: a.container}))
 }
 
+// EnableAPIKeyAuth enables API key authentication for the application.
+//
+// It requires at least one API key to be provided. The provided API keys will be used to authenticate requests.
 func (a *App) EnableAPIKeyAuth(apiKeys ...string) {
 	a.httpServer.router.Use(middleware.APIKeyAuthMiddleware(middleware.APIKeyAuthProvider{}, apiKeys...))
 }
@@ -511,6 +552,10 @@ func (a *App) EnableAPIKeyAuthWithFunc(validateFunc func(apiKey string) bool) {
 	}))
 }
 
+// EnableAPIKeyAuthWithValidator enables API key authentication for the application with a custom validation function.
+//
+// The provided `validateFunc` is used to determine the validity of an API key. It receives the request container
+// and the API key as arguments and should return `true` if the key is valid, `false` otherwise.
 func (a *App) EnableAPIKeyAuthWithValidator(validateFunc func(c *container.Container, apiKey string) bool) {
 	a.httpServer.router.Use(middleware.APIKeyAuthMiddleware(middleware.APIKeyAuthProvider{
 		ValidateFuncWithDatasources: validateFunc,
@@ -518,6 +563,13 @@ func (a *App) EnableAPIKeyAuthWithValidator(validateFunc func(c *container.Conta
 	}))
 }
 
+// EnableOAuth configures OAuth middleware for the application.
+//
+// It registers a new HTTP service for fetching JWKS and sets up OAuth middleware
+// with the given JWKS endpoint and refresh interval.
+//
+// The JWKS endpoint is used to retrieve JSON Web Key Sets for verifying tokens.
+// The refresh interval specifies how often to refresh the token cache.
 func (a *App) EnableOAuth(jwksEndpoint string, refreshInterval int) {
 	a.AddHTTPService("gofr_oauth", jwksEndpoint)
 
@@ -529,6 +581,10 @@ func (a *App) EnableOAuth(jwksEndpoint string, refreshInterval int) {
 	a.httpServer.router.Use(middleware.OAuth(middleware.NewOAuth(oauthOption)))
 }
 
+// Subscribe registers a handler for the given topic.
+//
+// If the subscriber is not initialized in the container, an error is logged and
+// the subscription is not registered.
 func (a *App) Subscribe(topic string, handler SubscribeFunc) {
 	if a.container.GetSubscriber() == nil {
 		a.container.Logger.Errorf("subscriber not initialized in the container")
@@ -557,8 +613,8 @@ func (a *App) UseMiddleware(middlewares ...gofrHTTP.Middleware) {
 	a.httpServer.router.UseMiddleware(middlewares...)
 }
 
-// AddCronJob registers a cron job to the cron table, the schedule is in * * * * * (6 part) format
-// denoting minutes, hours, days, months and day of week respectively.
+// AddCronJob registers a cron job to the cron table, the schedule is in * * * * * (5 part) format
+// denoting minute, hour, day, month and day of week respectively.
 func (a *App) AddCronJob(schedule, jobName string, job CronFunc) {
 	if a.cron == nil {
 		a.cron = NewCron(a.container)
@@ -580,6 +636,12 @@ func contains(elems []string, v string) bool {
 	return false
 }
 
+// AddStaticFiles registers a static file endpoint for the application.
+//
+// The provided `endpoint` will be used as the prefix for the static file
+// server. The `filePath` specifies the directory containing the static files.
+// If `filePath` starts with "./", it will be interpreted as a relative path
+// to the current working directory.
 func (a *App) AddStaticFiles(endpoint, filePath string) {
 	a.httpRegistered = true
 
