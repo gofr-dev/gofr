@@ -368,7 +368,7 @@ func (a *App) getExporter(name, host, port, url string) (sdktrace.SpanExporter, 
 	case gofrTraceExporter:
 		exporter = buildGoFrExporter(a.Logger(), url)
 	default:
-		a.container.Errorf("unsupported trace exporter: %s", name)
+		a.container.Errorf("unsupported TRACE_EXPORTER: %s", name)
 	}
 
 	return exporter, err

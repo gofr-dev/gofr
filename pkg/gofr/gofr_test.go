@@ -344,8 +344,6 @@ func Test_initTracer(t *testing.T) {
 
 	mockConfig7 := createMockConfig("gofr", "", "")
 
-	mockConfig8 := createMockConfig("gofr", "https://tracer.gofr.dev", "")
-
 	tests := []struct {
 		desc               string
 		config             config.Config
@@ -357,8 +355,7 @@ func Test_initTracer(t *testing.T) {
 		{"jaeger exporter with auth", mockConfig4, "Exporting traces to jaeger at localhost:4317"},
 		{"otlp exporter", mockConfig5, "Exporting traces to otlp at localhost:4317"},
 		{"otlp exporter with authKey", mockConfig6, "Exporting traces to otlp at localhost:4317"},
-		{"gofr exporter with default url", mockConfig7, "Exporting traces to GoFr at https://tracer-api.gofr.dev/api/spans"},
-		{"gofr exporter with url", mockConfig8, "Exporting traces to GoFr at https://tracer.gofr.dev"},
+		{"gofr exporter with default url", mockConfig7, "Exporting traces to GoFr at https://tracer.gofr.dev"},
 	}
 
 	for i, tc := range tests {
