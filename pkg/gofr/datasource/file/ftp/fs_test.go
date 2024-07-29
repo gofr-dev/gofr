@@ -4,14 +4,13 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 )
 
-// This test file contains test for all the ftpFileSystem functions.
-// The ftp operations are mocked to check for various possible use cases.
 func TestCreateFile(t *testing.T) {
 	var tests = []struct {
 		name           string
@@ -60,15 +59,13 @@ func TestCreateFile(t *testing.T) {
 			Port:      21,
 			RemoteDir: "/ftp/one",
 		},
+		logger: NewLogger(INFO),
 	}
-
-	fs.UseLogger(NewMockLogger(INFO))
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if tt.expectStorCall {
 				emptyReader := new(bytes.Buffer)
-
 				if tt.mockStorError {
 					mockFtpConn.EXPECT().Stor("/ftp/one/"+tt.fileName, emptyReader).Return(errors.New("mocked STOR error"))
 				} else {
@@ -76,11 +73,11 @@ func TestCreateFile(t *testing.T) {
 				}
 			}
 
-			if tt.expectRetrCall {
-				Response := NewMockftpResponse(ctrl)
+			if tt.expectRetrCall && tt.fileName != "" && !tt.mockStorError {
+				mockResponse := NewMockftpResponse(ctrl)
 
-				mockFtpConn.EXPECT().Retr("/ftp/one/"+tt.fileName).Return(Response, nil)
-				Response.EXPECT().Close().Return(nil)
+				mockFtpConn.EXPECT().Retr("/ftp/one/"+tt.fileName).Return(mockResponse, nil)
+				mockResponse.EXPECT().Close().Return(nil)
 			}
 
 			_, err := fs.Create(tt.fileName)
@@ -131,6 +128,14 @@ func TestRenameFile(t *testing.T) {
 			expectError:  true,
 			mockError:    false,
 		},
+		{
+			name:         "Same filename and toPath",
+			fromPath:     "testfile.txt",
+			toPath:       "testfile.txt",
+			expectRename: false,
+			expectError:  false,
+			mockError:    false,
+		},
 	}
 
 	ctrl := gomock.NewController(t)
@@ -149,7 +154,7 @@ func TestRenameFile(t *testing.T) {
 		},
 	}
 
-	fs.UseLogger(NewMockLogger(INFO))
+	fs.UseLogger(NewLogger(INFO))
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -215,7 +220,7 @@ func TestRemoveFile(t *testing.T) {
 		},
 	}
 
-	fs.UseLogger(NewMockLogger(INFO))
+	fs.UseLogger(NewLogger(INFO))
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -265,6 +270,14 @@ func TestOpenFile(t *testing.T) {
 			},
 			expectError: true,
 		},
+		{
+			name:     "empty path",
+			basePath: "/ftp/one",
+			filePath: "",
+			mockRetrExpect: func(_ *MockServerConn, path string) {
+			},
+			expectError: true,
+		},
 	}
 
 	ctrl := gomock.NewController(t)
@@ -283,7 +296,7 @@ func TestOpenFile(t *testing.T) {
 		},
 	}
 
-	fs.UseLogger(NewMockLogger(INFO))
+	fs.UseLogger(NewLogger(INFO))
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -347,7 +360,7 @@ func TestOpenWithPerm(t *testing.T) {
 		},
 	}
 
-	fs.UseLogger(NewMockLogger(INFO))
+	fs.UseLogger(NewLogger(INFO))
 
 	for _, tt := range openWithPermTests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -373,7 +386,7 @@ func TestMkDir(t *testing.T) {
 		{
 			name:     "Successful mkdir",
 			basePath: "/ftp/one",
-			dirPath:  "/ftp/one/directory1",
+			dirPath:  "directory1",
 			mockMkdirExpect: func(conn *MockServerConn, dirPath string) {
 				conn.EXPECT().MakeDir(dirPath).Return(nil)
 			},
@@ -382,9 +395,17 @@ func TestMkDir(t *testing.T) {
 		{
 			name:     "Mkdir with error",
 			basePath: "/ftp/one",
-			dirPath:  "/ftp/one/directory2",
+			dirPath:  "directory2",
 			mockMkdirExpect: func(conn *MockServerConn, dirPath string) {
 				conn.EXPECT().MakeDir(dirPath).Return(errors.New("mocked mkdir error"))
+			},
+			expectError: true,
+		},
+		{
+			name:     "Mkdir with empty directory path",
+			basePath: "/ftp/one",
+			dirPath:  "",
+			mockMkdirExpect: func(_ *MockServerConn, dirPath string) {
 			},
 			expectError: true,
 		},
@@ -406,7 +427,7 @@ func TestMkDir(t *testing.T) {
 		},
 	}
 
-	fs.UseLogger(NewMockLogger(INFO))
+	fs.UseLogger(NewLogger(INFO))
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -419,6 +440,15 @@ func TestMkDir(t *testing.T) {
 			assert.Equal(t, tt.expectError, err != nil, tt.name)
 		})
 	}
+}
+
+type directoryAlreadyExistsError struct {
+	code    int
+	message string
+}
+
+func (e *directoryAlreadyExistsError) Error() string {
+	return fmt.Sprintf("%d %s", e.code, e.message)
 }
 
 func TestMkDirAll(t *testing.T) {
@@ -439,6 +469,34 @@ func TestMkDirAll(t *testing.T) {
 			},
 			expectError: false,
 		},
+		{
+			name:     "empty path",
+			basePath: "/ftp/one",
+			dirPath:  "",
+			mockMkdirExpect: func(conn *MockServerConn, _ string) {
+			},
+			expectError: true,
+		},
+
+		{
+			name:     "one directory in the path exist",
+			basePath: "/ftp/one",
+			dirPath:  "testdir1/testdir2",
+			mockMkdirExpect: func(conn *MockServerConn, _ string) {
+				conn.EXPECT().MakeDir("testdir1").Return(&directoryAlreadyExistsError{550, "Create directory operation failed."})
+				conn.EXPECT().MakeDir("testdir1/testdir2").Return(nil)
+			},
+			expectError: false,
+		},
+		{
+			name:     "Mkdir with error",
+			basePath: "/ftp/one",
+			dirPath:  "testdir1/testdir2",
+			mockMkdirExpect: func(conn *MockServerConn, _ string) {
+				conn.EXPECT().MakeDir("testdir1").Return(errors.New("mocked mkdir error"))
+			},
+			expectError: true,
+		},
 	}
 
 	ctrl := gomock.NewController(t)
@@ -457,7 +515,7 @@ func TestMkDirAll(t *testing.T) {
 		},
 	}
 
-	fs.UseLogger(NewMockLogger(INFO))
+	fs.UseLogger(NewLogger(INFO))
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -481,7 +539,7 @@ func TestRemoveDir(t *testing.T) {
 		{
 			name:       "Successful remove all",
 			basePath:   "/ftp/one",
-			removePath: "/ftp/one/testdir1",
+			removePath: "testdir1",
 			mockRemoveExpect: func(conn *MockServerConn, removePath string) {
 				conn.EXPECT().RemoveDirRecur(removePath).Return(nil)
 			},
@@ -490,9 +548,17 @@ func TestRemoveDir(t *testing.T) {
 		{
 			name:       "Remove all with error",
 			basePath:   "/ftp/one",
-			removePath: "/ftp/one/nonexistentdir",
+			removePath: "nonexistentdir",
 			mockRemoveExpect: func(conn *MockServerConn, removePath string) {
 				conn.EXPECT().RemoveDirRecur(removePath).Return(errors.New("mocked remove error"))
+			},
+			expectError: true,
+		},
+		{
+			name:       "empty path",
+			basePath:   "/ftp/one",
+			removePath: "",
+			mockRemoveExpect: func(conn *MockServerConn, removePath string) {
 			},
 			expectError: true,
 		},
@@ -514,7 +580,7 @@ func TestRemoveDir(t *testing.T) {
 		},
 	}
 
-	fs.UseLogger(NewMockLogger(INFO))
+	fs.UseLogger(NewLogger(INFO))
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

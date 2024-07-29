@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"strings"
 )
@@ -18,6 +17,7 @@ const (
 var (
 	// errNotPointer is returned when Read method is called with a non-pointer argument.
 	errNotPointer = errors.New("input should be a pointer to a string")
+	ErrOutOfRange = errors.New("out of range")
 )
 
 // ftpFile represents a file on an FTP server.
@@ -56,29 +56,28 @@ func (f *ftpFile) createJSONReader() (RowReader, error) {
 	buffer := make([]byte, JSONBufferLength)
 
 	n, readerError := f.Read(buffer)
-	if !errors.Is(readerError, nil) && !errors.Is(readerError, io.EOF) {
-		f.logger.Errorf("failed to read json file: %v", readerError)
+	if readerError != nil && !errors.Is(readerError, io.EOF) {
+		f.logger.Errorf("ReadAll", "Failed", "Failed to read json file: %v", readerError)
 		return nil, readerError
 	}
 
-	// ASCII value of '[': 91 , '{': 123
-	if buffer[0] != 123 && buffer[0] != 91 {
+	if buffer[0] != '{' && buffer[0] != '[' {
 		return nil, &json.SyntaxError{}
 	}
 
-	// ASCII value of '/n' : 10 , ']' : 93
-	if n == JSONBufferLength && buffer[n-1] != 10 && buffer[n-1] != 93 {
-		m := bytes.LastIndexByte(buffer, byte('\n'))
+	if n == JSONBufferLength && buffer[n-1] != '\n' && buffer[n-1] != ']' {
+		m := bytes.LastIndexByte(buffer, '\n')
 
-		buffer = append(buffer[:m-1], byte(']'))
-		f.offset -= int64(n - m - 1)
-		n = m
+		if m != -1 {
+			buffer = append(buffer[:m-1], byte(']'))
+			f.offset -= int64(n - m - 1)
+			n = m
+		}
 	}
 
 	buffer = buffer[:n]
 
-	// ASCII value of '[': 91
-	if buffer[0] != 91 {
+	if buffer[0] != '[' {
 		buffer = append([]byte{'['}, buffer...)
 	}
 
@@ -100,17 +99,17 @@ func (f *ftpFile) createTextCSVReader() (RowReader, error) {
 	buffer := make([]byte, BufferLength)
 
 	n, err := f.Read(buffer)
-	if !errors.Is(err, nil) && !errors.Is(err, io.EOF) {
-		f.logger.Errorf("failed to read text file: %v", err)
+	if err != nil && !errors.Is(err, io.EOF) {
+		f.logger.Errorf("ReadAll", "Failed", "Failed to read text file: %v", err)
 		return nil, err
 	}
 
-	// ASCII value of '/n' : 10
-	if n == BufferLength && buffer[n-1] != 10 {
-		m := bytes.LastIndexByte(buffer, byte('\n'))
-
-		f.offset -= int64(n - m - 1)
-		n = m
+	if n == BufferLength && buffer[n-1] != '\n' {
+		m := bytes.LastIndexByte(buffer, '\n')
+		if m != -1 {
+			f.offset -= int64(n - m - 1)
+			n = m
+		}
 	}
 
 	buffer = buffer[:n]
@@ -163,58 +162,55 @@ func (f *ftpFile) Name() string {
 func (f *ftpFile) Read(p []byte) (n int, err error) {
 	r, err := f.conn.RetrFrom(f.path, uint64(f.offset))
 	if err != nil {
+		f.logger.Errorf("Read", "Failed", `Failed to open file with path "%v" : %v`, f.path, err)
 		return 0, err
 	}
 
-	b, err := io.ReadAll(r)
-	if err != nil {
+	n, err = r.Read(p)
+	if err != nil && !errors.Is(err, io.EOF) {
+		f.logger.Errorf("Read", "Failed", `Failed to read from "%v" : %v`, f.path, err)
 		return 0, err
 	}
 
 	r.Close()
 
-	copy(p, b)
+	f.offset += int64(n)
 
-	readbytes := len(p)
+	f.logger.Logf("Read", "Success", `Read %v bytes from "%v"'`, n, f.path)
 
-	if len(b) < len(p) {
-		f.offset += int64(len(b))
-		readbytes = len(b)
-
-		f.logger.Logf("Read %v bytes from %v", readbytes, f.path)
-
-		return len(b), io.EOF
+	if n < len(p) {
+		return n, io.EOF
 	}
 
-	f.logger.Logf("Read %v bytes from %v", readbytes, f.path)
-
-	f.offset += int64(readbytes)
-
-	return len(p), nil
+	return n, nil
 }
 
 // ReadAt reads data from the FTP file starting at the specified offset.
 func (f *ftpFile) ReadAt(p []byte, off int64) (n int, err error) {
 	resp, err := f.conn.RetrFrom(f.path, uint64(off))
 	if err != nil {
+		f.logger.Errorf("ReadAt", "Failed", `Error opening file with path "%v" at %v offset : %v`, f.path, off, err)
 		return 0, err
 	}
 
-	b, err := io.ReadAll(resp)
-	if err != nil {
+	n, err = resp.Read(p)
+	if err != nil && !errors.Is(err, io.EOF) {
+		f.logger.Errorf("ReadAt", "Failed", `Error reading file with path "%v" at %v offset : %v`, f.path, off, err)
 		return 0, err
 	}
-
-	copy(p, b)
 
 	resp.Close()
 
-	f.logger.Logf("Read %v bytes from %v at offset of %v", len(p), f.path, off)
+	f.logger.Logf("ReadAt", "Success", `Read %v bytes from "%v" at offset of %v`, n, f.path, off)
 
-	return len(b), nil
+	if n < len(p) {
+		return n, io.EOF
+	}
+
+	return n, nil
 }
 
-func (f *ftpFile) Check(whence int, offset, length int64) (int64, error) {
+func (f *ftpFile) check(whence int, offset, length int64) (int64, error) {
 	switch whence {
 	case io.SeekStart:
 		if offset < 0 || offset > length {
@@ -244,29 +240,18 @@ func (f *ftpFile) Check(whence int, offset, length int64) (int64, error) {
 
 // Seek sets the offset for the next Read or ReadAt operation.
 func (f *ftpFile) Seek(offset int64, whence int) (int64, error) {
-	var (
-		err error
-		r   ftpResponse
-	)
-
-	r, err = f.conn.Retr(f.path)
+	n, err := f.conn.FileSize(f.path)
 	if err != nil {
+		f.logger.Errorf("Seek", "Failed", "Error : %v", err)
 		return 0, err
 	}
 
-	p, err := io.ReadAll(r)
+	res, err := f.check(whence, offset, n)
 	if err != nil {
-		return 0, err
+		f.logger.Errorf("Seek", "Failed", "Error : %v", err)
 	}
 
-	err = r.Close()
-	if err != nil {
-		return 0, err
-	}
-
-	n := int64(len(p))
-
-	res, err := f.Check(whence, offset, n)
+	f.logger.Logf("Seek", "Success", "Offset at whence %v : %v", whence, res)
 
 	return res, err
 }
@@ -277,12 +262,13 @@ func (f *ftpFile) Write(p []byte) (n int, err error) {
 
 	err = f.conn.StorFrom(f.path, reader, uint64(f.offset))
 	if err != nil {
-		return 0, errors.New("failed to write file")
+		f.logger.Errorf("Write", "Failed", "Error : %v", err)
+		return 0, err
 	}
 
 	f.offset += int64(len(p))
 
-	f.logger.Logf("Wrote %v bytes to %v", len(p), f.path)
+	f.logger.Logf("Write", "Success", "Wrote %v bytes to %v", len(p), f.path)
 
 	return len(p), nil
 }
@@ -293,10 +279,11 @@ func (f *ftpFile) WriteAt(p []byte, off int64) (n int, err error) {
 
 	err = f.conn.StorFrom(f.path, reader, uint64(off))
 	if err != nil {
-		return 0, fmt.Errorf("failed to write at offset: %v", off)
+		f.logger.Errorf("WriteAt", "Failed", `Error writing in file with path "%v" at %v offset : %v`, f.path, off, err)
+		return 0, err
 	}
 
-	f.logger.Logf("Wrote %v bytes to %v at %v offset", len(p), f.path, off)
+	f.logger.Logf("WriteAt", "Success", `Wrote %v bytes to "%v" at %v offset`, len(p), f.path, off)
 
 	return len(p), nil
 }
