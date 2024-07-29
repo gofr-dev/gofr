@@ -65,8 +65,7 @@ This document lists all the configuration options supported by the GoFr framewor
 ---
 
 -  TRACE_EXPORTER
--  Tracing exporter to use. Supported values: gofr, zipkin, jaeger.
--  gofr
+-  Tracing exporter to use. Supported values: gofr, zipkin, jaeger, otlp.
 
 ---
 
