@@ -1,11 +1,14 @@
 package ftp
 
 import (
-	"errors"
 	"io"
 	"os"
 	"time"
 )
+
+type Ftp interface {
+	Dial(string, ...interface{}) (Conn, error)
+}
 
 // ServerConn represents a connection to an FTP server.
 type ServerConn interface {
@@ -20,6 +23,7 @@ type ServerConn interface {
 	MakeDir(path string) error
 	RemoveDir(path string) error
 	Quit() error
+	FileSize(name string) (int64, error)
 }
 
 // ftpResponse interface mimics the behavior of *ftp.Response returned on retrieval of file.
@@ -78,15 +82,6 @@ type FileSystem interface {
 	Rename(oldname, newname string) error
 }
 
-var (
-	ErrFileClosed        = errors.New("File is closed")
-	ErrOutOfRange        = errors.New("out of range")
-	ErrTooLarge          = errors.New("too large")
-	ErrFileNotFound      = os.ErrNotExist
-	ErrFileExists        = os.ErrExist
-	ErrDestinationExists = os.ErrExist
-)
-
 type FileSystemProvider interface {
 	FileSystem
 
@@ -102,12 +97,8 @@ type FileSystemProvider interface {
 }
 
 // Logger interface is used by ftp package to log information about query execution.
-// Developer Notes: Note that it's a reduced version of logging.Logger interface. We are not using that package to
-// ensure that ftp package is not dependent on logging package. That way logging package should be easily able
-// to import ftp package and provide a different "pretty" version for different log types defined here while
-// avoiding the cyclical import issue. Idiomatically, interfaces should be defined by packages who are using it; unlike
-// other languages. Also - accept interfaces, return concrete types.
 type Logger interface {
-	Logf(format string, args ...interface{})
-	Errorf(format string, args ...interface{})
+	Debugf(string, string, string, ...interface{})
+	Logf(string, string, string, ...interface{})
+	Errorf(string, string, string, ...interface{})
 }

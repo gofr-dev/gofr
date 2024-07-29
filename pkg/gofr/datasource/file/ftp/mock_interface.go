@@ -14,35 +14,34 @@ import (
 	reflect "reflect"
 	time "time"
 
-	ftp "github.com/jlaffaye/ftp"
 	gomock "go.uber.org/mock/gomock"
 )
 
-// MockFTPClient is a mock of FTPClient interface.
-type MockFTPClient struct {
+// MockFtp is a mock of Ftp interface.
+type MockFtp struct {
 	ctrl     *gomock.Controller
-	recorder *MockFTPClientMockRecorder
+	recorder *MockFtpMockRecorder
 }
 
-// MockFTPClientMockRecorder is the mock recorder for MockFTPClient.
-type MockFTPClientMockRecorder struct {
-	mock *MockFTPClient
+// MockFtpMockRecorder is the mock recorder for MockFtp.
+type MockFtpMockRecorder struct {
+	mock *MockFtp
 }
 
-// NewMockFTPClient creates a new mock instance.
-func NewMockFTPClient(ctrl *gomock.Controller) *MockFTPClient {
-	mock := &MockFTPClient{ctrl: ctrl}
-	mock.recorder = &MockFTPClientMockRecorder{mock}
+// NewMockFtp creates a new mock instance.
+func NewMockFtp(ctrl *gomock.Controller) *MockFtp {
+	mock := &MockFtp{ctrl: ctrl}
+	mock.recorder = &MockFtpMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockFTPClient) EXPECT() *MockFTPClientMockRecorder {
+func (m *MockFtp) EXPECT() *MockFtpMockRecorder {
 	return m.recorder
 }
 
 // Dial mocks base method.
-func (m *MockFTPClient) Dial(arg0 string, arg1 ...ftp.DialOption) (Conn, error) {
+func (m *MockFtp) Dial(arg0 string, arg1 ...any) (Conn, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{arg0}
 	for _, a := range arg1 {
@@ -55,10 +54,10 @@ func (m *MockFTPClient) Dial(arg0 string, arg1 ...ftp.DialOption) (Conn, error) 
 }
 
 // Dial indicates an expected call of Dial.
-func (mr *MockFTPClientMockRecorder) Dial(arg0 any, arg1 ...any) *gomock.Call {
+func (mr *MockFtpMockRecorder) Dial(arg0 any, arg1 ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	varargs := append([]any{arg0}, arg1...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Dial", reflect.TypeOf((*MockFTPClient)(nil).Dial), varargs...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Dial", reflect.TypeOf((*MockFtp)(nil).Dial), varargs...)
 }
 
 // MockServerConn is a mock of ServerConn interface.
@@ -96,6 +95,21 @@ func (m *MockServerConn) Delete(arg0 string) error {
 func (mr *MockServerConnMockRecorder) Delete(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockServerConn)(nil).Delete), arg0)
+}
+
+// FileSize mocks base method.
+func (m *MockServerConn) FileSize(name string) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "FileSize", name)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// FileSize indicates an expected call of FileSize.
+func (mr *MockServerConnMockRecorder) FileSize(name any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FileSize", reflect.TypeOf((*MockServerConn)(nil).FileSize), name)
 }
 
 // Login mocks base method.
