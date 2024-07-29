@@ -146,7 +146,7 @@ func (a *App) Run() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	// Goroutine to handle shutdown when context is cancele
+	// Goroutine to handle shutdown when context is canceled
 	go func() {
 		<-ctx.Done()
 
