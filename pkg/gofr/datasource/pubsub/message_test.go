@@ -227,3 +227,9 @@ func TestMessage_HostName(t *testing.T) {
 
 	assert.Equal(t, "", out)
 }
+
+func TestMessage_QueryParam(t *testing.T) {
+	m := &Message{}
+
+	assert.Nil(t, m.QueryParams())
+}

@@ -69,3 +69,27 @@ func TestHostName(t *testing.T) {
 
 	assert.Equal(t, hostname, result, "TestHostName Failed!")
 }
+
+func TestQueryParams_Get(t *testing.T) {
+	args := []string{"--category=books", "--tag=tech"}
+	r := NewRequest(args)
+
+	q := r.QueryParams()
+	assert.Equal(t, "books", q.Get("category"), "expected the value of 'category' to be 'books'")
+	assert.Equal(t, "tech", q.Get("tag"), "expected the value of 'tag' to be 'tech'")
+	assert.Equal(t, "", q.Get("nonexistent"), "expected empty string for nonexistent query param")
+}
+
+func TestQueryParams_GetAll(t *testing.T) {
+	args := []string{"--category=books,electronics", "--tag=tech,science"}
+	r := NewRequest(args)
+
+	q := r.QueryParams()
+
+	expectedCategories := []string{"books", "electronics"}
+	expectedTags := []string{"tech", "science"}
+
+	assert.ElementsMatch(t, expectedCategories, q.GetAll("category"), "expected all values of 'category' to match")
+	assert.ElementsMatch(t, expectedTags, q.GetAll("tag"), "expected all values of 'tag' to match")
+	assert.ElementsMatch(t, []string{}, q.GetAll("nonexistent"), "expected empty slice for none-xistent query param")
+}
