@@ -2,6 +2,8 @@ package gofr
 
 import (
 	"context"
+
+	"gofr.dev/pkg/gofr/queryparam"
 )
 
 // Request is an interface which is written because it allows us
@@ -13,4 +15,5 @@ type Request interface {
 	PathParam(string) string
 	Bind(interface{}) error
 	HostName() string
+	QueryParams() queryparam.QueryParams
 }

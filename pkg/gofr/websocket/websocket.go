@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"sync"
 
+	"gofr.dev/pkg/gofr/queryparam"
+
 	"github.com/gorilla/websocket"
 )
 
@@ -136,4 +138,8 @@ func (ws *Manager) CloseConnection(connID string) {
 
 		delete(ws.WebSocketConnections, connID)
 	}
+}
+
+func (*Connection) QueryParams() queryparam.QueryParams {
+	return nil
 }

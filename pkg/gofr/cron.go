@@ -10,6 +10,8 @@ import (
 	"sync"
 	"time"
 
+	"gofr.dev/pkg/gofr/queryparam"
+
 	"go.opentelemetry.io/otel"
 
 	"gofr.dev/pkg/gofr/container"
@@ -351,5 +353,9 @@ func (noopRequest) HostName() string {
 }
 
 func (noopRequest) Bind(interface{}) error {
+	return nil
+}
+
+func (noopRequest) QueryParams() queryparam.QueryParams {
 	return nil
 }

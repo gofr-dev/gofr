@@ -6,6 +6,8 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+
+	"gofr.dev/pkg/gofr/queryparam"
 )
 
 // Request is an abstraction over the actual command with flags. This abstraction is useful because it allows us
@@ -84,6 +86,29 @@ func (*Request) HostName() (hostname string) {
 	hostname, _ = os.Hostname()
 
 	return hostname
+}
+
+func (r *Request) QueryParams() queryparam.QueryParams {
+	return queryParams{r.params}
+}
+
+type queryParams struct {
+	params map[string]string
+}
+
+// Get retrieves the first value for a given query parameter key.
+func (q queryParams) Get(key string) string {
+	return q.params[key]
+}
+
+// GetAll retrieves all values for a given query parameter key, including comma-separated values.
+func (q queryParams) GetAll(key string) []string {
+	value, exists := q.params[key]
+	if !exists {
+		return []string{}
+	}
+
+	return strings.Split(value, ",")
 }
 
 func (r *Request) Bind(i interface{}) error {

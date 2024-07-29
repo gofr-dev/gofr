@@ -11,6 +11,8 @@ import (
 	"reflect"
 	"strings"
 
+	"gofr.dev/pkg/gofr/queryparam"
+
 	"github.com/gorilla/mux"
 )
 
@@ -81,6 +83,32 @@ func (r *Request) HostName() string {
 	}
 
 	return fmt.Sprintf("%s://%s", proto, r.req.Host)
+}
+
+func (r *Request) QueryParams() queryparam.QueryParams {
+	return queryParams{r.req}
+}
+
+type queryParams struct {
+	req *http.Request
+}
+
+// Get retrieves the first value for a given query parameter key.
+func (q queryParams) Get(key string) string {
+	return q.req.URL.Query().Get(key)
+}
+
+// GetAll retrieves all values for a given query parameter key, including comma-separated values.
+func (q queryParams) GetAll(key string) []string {
+	values := q.req.URL.Query()[key]
+
+	var result []string
+
+	for _, value := range values {
+		result = append(result, strings.Split(value, ",")...)
+	}
+
+	return result
 }
 
 func (r *Request) body() ([]byte, error) {
