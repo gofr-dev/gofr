@@ -168,7 +168,7 @@ This document lists all the configuration options supported by the GoFr framewor
 ---
 
 -  DB_SSLMODE
--  Currently supported only for PostgreSQL
+-  Currently supported only for PostgreSQL, with Default certificate file.
 -  disable
 
 {% /table %}
