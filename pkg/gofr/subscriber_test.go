@@ -8,9 +8,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/datasource/pubsub"
+	"gofr.dev/pkg/gofr/datasource/pubsub/kafka"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/testutil"
 )
@@ -46,18 +49,22 @@ func (mockSubscriber) Publish(_ context.Context, _ string, _ []byte) error {
 	return nil
 }
 
-func (mockSubscriber) Subscribe(_ context.Context, topic string) (*pubsub.Message, error) {
+func (mockSubscriber) Subscribe(ctx context.Context, topic string) (*pubsub.Message, error) {
+	msg := pubsub.NewMessage(ctx)
+	msg.Topic = topic
+	msg.Value = []byte(`{"data":{"productId":"123","price":"599"}}`)
+
 	if topic == "test-topic" {
-		return &pubsub.Message{
-			Topic: "test-topic",
-			Value: []byte(`{"data":{"productId":"123","price":"599"}}`),
-		}, nil
+		return msg, nil
+	} else if topic == "test-err" {
+		return msg, kafka.ErrConsumerGroupNotProvided
 	}
 
-	return &pubsub.Message{
-		Topic: "test-topic",
-		Value: []byte(`{"data":{"productId":"123","price":"599"}}`),
-	}, subscriptionError("subscription error")
+	return msg, subscriptionError("subscription error")
+}
+
+func (mockSubscriber) Close() error {
+	return nil
 }
 
 func TestSubscriptionManager_HandlerError(t *testing.T) {
@@ -72,10 +79,12 @@ func TestSubscriptionManager_HandlerError(t *testing.T) {
 
 		// Run the subscriber in a goroutine
 		go func() {
-			subscriptionManager.startSubscriber("test-topic",
+			err := subscriptionManager.startSubscriber(context.Background(), "test-topic",
 				func(*Context) error {
 					return handleError("error in test-topic")
 				})
+
+			assert.ErrorContains(t, err, "error in test-topic")
 		}()
 
 		// this sleep is added to wait for StderrOutputForFunc to collect the logs inside the testLogs
@@ -102,10 +111,12 @@ func TestSubscriptionManager_SubscribeError(t *testing.T) {
 
 		// Run the subscriber in a goroutine
 		go func() {
-			subscriptionManager.startSubscriber("abc",
+			err := subscriptionManager.startSubscriber(context.Background(), "abc",
 				func(*Context) error {
 					return handleError("error in abc")
 				})
+
+			assert.Contains(t, err.Error(), subscriptionError("subscription error").Error())
 		}()
 
 		// this sleep is added to wait for StderrOutputForFunc to collect the logs inside the testLogs
@@ -132,7 +143,7 @@ func TestSubscriptionManager_PanicRecovery(t *testing.T) {
 
 		// Run the subscriber in a goroutine
 		go func() {
-			subscriptionManager.startSubscriber("abc",
+			_ = subscriptionManager.startSubscriber(context.Background(), "abc",
 				func(*Context) error {
 					panic("test panic")
 				})
@@ -148,4 +159,23 @@ func TestSubscriptionManager_PanicRecovery(t *testing.T) {
 	if !strings.Contains(testLogs, "error while reading from") {
 		t.Error("TestSubscriptionManager_SubscribeError Failed! Missing log message about subscription error")
 	}
+}
+
+func TestSubscriptionManager_ShouldStopOnCtxDone(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+
+	mockContainer := container.Container{
+		Logger: logging.NewLogger(logging.ERROR),
+		PubSub: mockSubscriber{},
+	}
+
+	subscriptionManager := newSubscriptionManager(&mockContainer)
+
+	// should handle one message and quit due to canceled context
+	err := subscriptionManager.startSubscriber(ctx, "test-topic", func(*Context) error {
+		cancel()
+		return nil
+	})
+
+	assert.NoError(t, err)
 }
