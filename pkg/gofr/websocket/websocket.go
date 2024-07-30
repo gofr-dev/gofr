@@ -7,9 +7,9 @@ import (
 	"net/http"
 	"sync"
 
-	"gofr.dev/pkg/gofr/queryparam"
-
 	"github.com/gorilla/websocket"
+
+	"gofr.dev/pkg/gofr/queryparam"
 )
 
 // WSKey defines the key type for WSConnectionKey.

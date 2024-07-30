@@ -10,11 +10,10 @@ import (
 	"sync"
 	"time"
 
-	"gofr.dev/pkg/gofr/queryparam"
-
 	"go.opentelemetry.io/otel"
 
 	"gofr.dev/pkg/gofr/container"
+	"gofr.dev/pkg/gofr/queryparam"
 	"gofr.dev/pkg/gofr/version"
 )
 

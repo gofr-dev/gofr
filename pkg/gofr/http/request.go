@@ -11,9 +11,9 @@ import (
 	"reflect"
 	"strings"
 
-	"gofr.dev/pkg/gofr/queryparam"
-
 	"github.com/gorilla/mux"
+
+	"gofr.dev/pkg/gofr/queryparam"
 )
 
 const (
