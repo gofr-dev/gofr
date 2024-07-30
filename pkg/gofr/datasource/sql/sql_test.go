@@ -102,7 +102,7 @@ func TestSQL_GetDBConfig(t *testing.T) {
 		"DB_PASSWORD":            "password",
 		"DB_PORT":                "3201",
 		"DB_NAME":                "test",
-		"DB_SSLMODE":             "require",
+		"DB_SSL_MODE":            "require",
 		"DB_MAX_IDLE_CONNECTION": "25",
 		"DB_MAX_OPEN_CONNECTION": "50",
 	})

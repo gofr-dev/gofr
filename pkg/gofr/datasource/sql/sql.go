@@ -164,7 +164,7 @@ func getDBConfig(configs config.Config) *DBConfig {
 		MaxOpenConn: maxOpenConn,
 		MaxIdleConn: maxIdleConn,
 		// only for postgres
-		SSLMode: configs.GetOrDefault("DB_SSLMODE", "disable"),
+		SSLMode: configs.GetOrDefault("DB_SSL_MODE", "disable"),
 	}
 }
 
