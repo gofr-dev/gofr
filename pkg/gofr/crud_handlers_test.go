@@ -6,6 +6,7 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -96,6 +97,12 @@ func Test_scanEntity(t *testing.T) {
 			input: &invalidObject,
 			resp:  nil,
 			err:   errInvalidObject,
+		},
+		{
+			desc:  "invalid object type",
+			input: userEntity{},
+			resp:  nil,
+			err:   fmt.Errorf("failed to register routes for 'userEntity' struct, %w", errNonPointerObject),
 		},
 	}
 

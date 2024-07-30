@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"sync"
 	"testing"
+	"time"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/stretchr/testify/assert"
@@ -108,8 +109,9 @@ func TestMQTT_Ping(t *testing.T) {
 	require.NoError(t, err)
 
 	mockClient.EXPECT().Disconnect(uint(1))
+
 	// Disconnect the client
-	mq.Disconnect(1)
+	_ = mq.Disconnect(1)
 
 	mockClient.EXPECT().IsConnected().Return(false)
 	// Failure Case
@@ -122,7 +124,7 @@ func TestMQTT_Disconnect(t *testing.T) {
 	ctrl, client, mockClient, mockMetrics, mockToken := getMockMQTT(t, mockConfigs)
 	defer ctrl.Finish()
 
-	ctx := context.TODO()
+	ctx := context.Background()
 
 	mockMetrics.EXPECT().
 		IncrementCounter(ctx, "app_pubsub_publish_total_count", "topic", "test")
@@ -135,7 +137,7 @@ func TestMQTT_Disconnect(t *testing.T) {
 	mockToken.EXPECT().Error().Return(errToken).Times(3)
 
 	// Disconnect the broker and then try to publish
-	client.Disconnect(1)
+	_ = client.Disconnect(1)
 
 	err := client.Publish(ctx, "test", msg)
 	require.Error(t, err)
@@ -159,7 +161,7 @@ func TestMQTT_DisconnectWithSubscriptions(t *testing.T) {
 	mockToken.EXPECT().Wait().Return(true)
 	mockToken.EXPECT().Error().Return(nil)
 
-	client.Disconnect(1)
+	_ = client.Disconnect(1)
 
 	// we assert that on unsubscribing the subscription gets deleted
 	_, ok := client.subscriptions["test/topic"]
@@ -171,7 +173,7 @@ func TestMQTT_PublishSuccess(t *testing.T) {
 		ctrl, client, mockClient, mockMetrics, mockToken := getMockMQTT(t, mockConfigs)
 		defer ctrl.Finish()
 
-		ctx := context.TODO()
+		ctx := context.Background()
 
 		mockMetrics.EXPECT().
 			IncrementCounter(ctx, "app_pubsub_publish_total_count", "topic", "test/topic")
@@ -199,14 +201,14 @@ func TestMQTT_PublishFailure(t *testing.T) {
 	ctrl, client, mockClient, mockMetrics, mockToken := getMockMQTT(t, mockConfigs)
 	defer ctrl.Finish()
 
-	ctx := context.TODO()
+	ctx := context.Background()
 	// case where the client has been disconnected, resulting in a Publishing failure
 	mockMetrics.EXPECT().
 		IncrementCounter(ctx, "app_pubsub_publish_total_count", "topic", "test/topic")
 
 	mockClient.EXPECT().Disconnect(uint(1))
 	// Disconnect the client
-	client.Disconnect(1)
+	_ = client.Disconnect(1)
 
 	mockClient.EXPECT().Publish("test/topic", mockConfigs.QoS, mockConfigs.RetrieveRetained, msg).Return(mockToken)
 	mockToken.EXPECT().Wait().Return(true)
@@ -222,7 +224,7 @@ func TestMQTT_SubscribeSuccess(t *testing.T) {
 	ctrl, client, mockClient, mockMetrics, mockToken := getMockMQTT(t, mockConfigs)
 	defer ctrl.Finish()
 
-	ctx := context.TODO()
+	ctx := context.Background()
 
 	mockMetrics.EXPECT().
 		IncrementCounter(gomock.Any(), "app_pubsub_subscribe_success_count", "topic", "test/topic")
@@ -251,7 +253,7 @@ func TestMQTT_SubscribeFailure(t *testing.T) {
 	ctrl, client, mockClient, _, mockToken := getMockMQTT(t, mockConfigs)
 	defer ctrl.Finish()
 
-	ctx := context.TODO()
+	ctx := context.Background()
 
 	mockClient.EXPECT().Subscribe("test/topic", mockConfigs.QoS, gomock.Any()).Return(mockToken)
 
@@ -304,7 +306,7 @@ func TestMQTT_SubscribeWithFunc(t *testing.T) {
 
 	// Error case where the client cannot connect
 	mockClient.EXPECT().Disconnect(uint(1))
-	client.Disconnect(1)
+	_ = client.Disconnect(1)
 
 	mockClient.EXPECT().Subscribe("test/topic", mockConfigs.QoS, gomock.Any()).Return(mockToken)
 	mockToken.EXPECT().Wait().Return(true)
@@ -351,7 +353,7 @@ func TestMQTT_Unsubscribe(t *testing.T) {
 
 		// Failure case
 		mockClient.EXPECT().Disconnect(uint(1))
-		client.Disconnect(1)
+		_ = client.Disconnect(1)
 
 		mockClient.EXPECT().Unsubscribe("test/topic").Return(mockToken)
 		mockToken.EXPECT().Wait().Return(true)
@@ -376,7 +378,7 @@ func TestMQTT_CreateTopic(t *testing.T) {
 		mockToken.EXPECT().Wait().Return(true)
 		mockToken.EXPECT().Error().Return(nil)
 
-		err := client.CreateTopic(context.TODO(), "test/topic")
+		err := client.CreateTopic(context.Background(), "test/topic")
 		require.NoError(t, err)
 
 		// Failure case
@@ -389,7 +391,7 @@ func TestMQTT_CreateTopic(t *testing.T) {
 		mockToken.EXPECT().Wait().Return(true)
 		mockToken.EXPECT().Error().Return(errToken).Times(3)
 
-		err = client.CreateTopic(context.TODO(), "test/topic")
+		err = client.CreateTopic(context.Background(), "test/topic")
 		require.Error(t, err)
 	})
 
@@ -443,7 +445,7 @@ func TestMQTT_Health(t *testing.T) {
 func TestMQTT_DeleteTopic(t *testing.T) {
 	m := &MQTT{}
 
-	err := m.DeleteTopic(context.TODO(), "test/topic")
+	err := m.DeleteTopic(context.Background(), "test/topic")
 	require.NoError(t, err)
 }
 
@@ -529,7 +531,7 @@ func TestMQTT_createMqttHandler(t *testing.T) {
 
 			mockMetrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_subscribe_total_count", "topic", "test/topic")
 
-			handler := client.createMqttHandler(context.TODO(), "test/topic", msgs)
+			handler := client.createMqttHandler(context.Background(), "test/topic", msgs)
 
 			handler(nil, mockMessage{false, 1, false, "test/topic", 123, "hello world"})
 		})
@@ -561,4 +563,19 @@ func getMockMQTT(t *testing.T, conf *Config) (*gomock.Controller, *MQTT, *MockCl
 	mq := &MQTT{mockClient, mockLogger, mockMetrics, conf, make(map[string]subscription), &sync.RWMutex{}}
 
 	return ctrl, mq, mockClient, mockMetrics, mockToken
+}
+
+func TestMQTT_Close(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	ctrl, client, mockMQTT, _, _ := getMockMQTT(t, mockConfigs)
+	defer ctrl.Finish()
+
+	mockMQTT.EXPECT().Disconnect(uint(0 * time.Millisecond))
+
+	// Close the client
+	err := client.Close()
+
+	assert.NoError(t, err)
 }
