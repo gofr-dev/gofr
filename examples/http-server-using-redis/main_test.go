@@ -74,7 +74,7 @@ func TestRedisSetHandler(t *testing.T) {
 	resp, err := RedisSetHandler(ctx)
 
 	assert.Nil(t, resp)
-	assert.Error(t, err)
+	require.Error(t, err)
 }
 
 func TestRedisPipelineHandler(t *testing.T) {
@@ -99,5 +99,5 @@ func TestRedisPipelineHandler(t *testing.T) {
 	resp, err := RedisPipelineHandler(ctx)
 
 	assert.Nil(t, resp)
-	assert.Error(t, err)
+	require.Error(t, err)
 }

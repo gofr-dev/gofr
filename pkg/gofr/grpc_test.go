@@ -5,12 +5,13 @@ import (
 	"testing"
 	"time"
 
-	"gofr.dev/pkg/gofr/testutil"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 
-	"github.com/stretchr/testify/assert"
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/logging"
+	"gofr.dev/pkg/gofr/testutil"
 )
 
 func TestNewGRPCServer(t *testing.T) {
@@ -98,5 +99,5 @@ func TestGRPC_ServerShutdown_ContextCanceled(t *testing.T) {
 	cancel()
 
 	err := <-errChan
-	assert.ErrorContains(t, err, "context canceled", "Expected error due to context cancellation")
+	require.ErrorContains(t, err, "context canceled", "Expected error due to context cancellation")
 }

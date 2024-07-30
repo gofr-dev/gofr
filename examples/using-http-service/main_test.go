@@ -80,7 +80,7 @@ func TestHTTPHandlerURLError(t *testing.T) {
 	resp, err := Handler(ctx)
 
 	assert.Nil(t, resp)
-	assert.Error(t, err)
+	require.Error(t, err)
 }
 
 func TestHTTPHandlerResponseUnmarshalError(t *testing.T) {
@@ -105,5 +105,5 @@ func TestHTTPHandlerResponseUnmarshalError(t *testing.T) {
 	resp, err := Handler(ctx)
 
 	assert.Nil(t, resp)
-	assert.Error(t, err)
+	require.Error(t, err)
 }

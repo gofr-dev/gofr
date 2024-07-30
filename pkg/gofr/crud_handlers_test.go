@@ -347,7 +347,7 @@ func Test_GetAllHandler(t *testing.T) {
 				assert.Equal(t, tc.expectedResp, resp, "Failed.\n%s", tc.desc)
 
 				if tc.expectedErr != nil {
-					assert.ErrorContainsf(t, err, tc.expectedErr.Error(), "TEST[%d], Failed.\n%s", i, tc.desc)
+					require.ErrorContainsf(t, err, tc.expectedErr.Error(), "TEST[%d], Failed.\n%s", i, tc.desc)
 				} else {
 					require.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
 				}
@@ -432,7 +432,7 @@ func Test_GetHandler(t *testing.T) {
 				assert.Equal(t, tc.expectedResp, resp, "Failed.\n%s", tc.desc)
 
 				if tc.expectedErr != nil {
-					assert.ErrorContainsf(t, err, tc.expectedErr.Error(), "Failed.\n%s", tc.desc)
+					require.ErrorContainsf(t, err, tc.expectedErr.Error(), "Failed.\n%s", tc.desc)
 				} else {
 					require.NoError(t, err, "Failed.\n%s", tc.desc)
 				}

@@ -47,7 +47,7 @@ func Test_ExportSpansError(t *testing.T) {
 	exporter := NewExporter(server.URL, logging.NewLogger(logging.INFO))
 
 	err := exporter.ExportSpans(context.Background(), provideSampleSpan(t))
-	assert.Error(t, err, "Expected error for failed request")
+	require.Error(t, err, "Expected error for failed request")
 }
 
 func provideSampleSpan(t *testing.T) []sdktrace.ReadOnlySpan {

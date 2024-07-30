@@ -16,7 +16,7 @@ func TestErrorEntityNotFound(t *testing.T) {
 	err := ErrorEntityNotFound{Name: fieldName, Value: fieldValue}
 	expectedMsg := fmt.Sprintf("No entity found with %s: %s", fieldName, fieldValue)
 
-	assert.ErrorContainsf(t, err, expectedMsg, "TEST Failed.\n")
+	require.ErrorContainsf(t, err, expectedMsg, "TEST Failed.\n")
 }
 
 func TestErrorEntityNotFound_StatusCode(t *testing.T) {
@@ -29,7 +29,7 @@ func TestErrorEntityNotFound_StatusCode(t *testing.T) {
 func TestErrorEntityAlreadyExist(t *testing.T) {
 	err := ErrorEntityAlreadyExist{}
 
-	assert.ErrorContains(t, err, alreadyExistsMessage, "TEST Failed.\n")
+	require.ErrorContains(t, err, alreadyExistsMessage, "TEST Failed.\n")
 }
 
 func TestErrorEntityAlreadyExist_StatusCode(t *testing.T) {
@@ -53,7 +53,7 @@ func TestErrorInvalidParam(t *testing.T) {
 	for i, tc := range tests {
 		err := ErrorInvalidParam{Params: tc.params}
 
-		assert.ErrorContainsf(t, err, tc.expectedMsg, "TEST[%d], Failed.\n%s", i, tc.desc)
+		require.ErrorContainsf(t, err, tc.expectedMsg, "TEST[%d], Failed.\n%s", i, tc.desc)
 	}
 }
 
@@ -78,7 +78,7 @@ func TestErrorMissingParam(t *testing.T) {
 	for i, tc := range tests {
 		err := ErrorMissingParam{Params: tc.params}
 
-		assert.ErrorContainsf(t, err, tc.expectedMsg, "TEST[%d], Failed.\n%s", i, tc.desc)
+		require.ErrorContainsf(t, err, tc.expectedMsg, "TEST[%d], Failed.\n%s", i, tc.desc)
 	}
 }
 

@@ -151,7 +151,7 @@ func TestCron_parseSchedule_Error(t *testing.T) {
 				j, err := parseSchedule(s)
 
 				assert.Nil(t, j)
-				assert.ErrorContains(t, err, tc.expErrString)
+				require.ErrorContains(t, err, tc.expErrString)
 			}
 		})
 	}

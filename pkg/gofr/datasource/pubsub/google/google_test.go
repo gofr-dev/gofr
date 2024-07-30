@@ -108,7 +108,7 @@ func TestGoogleClient_PublishTopic_Error(t *testing.T) {
 	mockMetrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_publish_total_count", "topic", "test-topic")
 
 	err := g.Publish(ctx, "test-topic", []byte(""))
-	assert.ErrorContains(t, err, "context canceled")
+	require.ErrorContains(t, err, "context canceled")
 }
 
 func TestGoogleClient_getTopic_Success(t *testing.T) {
@@ -137,7 +137,7 @@ func TestGoogleClient_getTopic_Error(t *testing.T) {
 	topic, err := g.getTopic(ctx, "test-topic")
 
 	assert.Nil(t, topic)
-	assert.ErrorContains(t, err, "context canceled")
+	require.ErrorContains(t, err, "context canceled")
 }
 
 func TestGoogleClient_getSubscription(t *testing.T) {
@@ -169,7 +169,7 @@ func Test_validateConfigs(t *testing.T) {
 	for _, tc := range testCases {
 		err := validateConfigs(tc.input)
 
-		assert.ErrorIs(t, err, tc.expErr)
+		require.ErrorIs(t, err, tc.expErr)
 	}
 }
 

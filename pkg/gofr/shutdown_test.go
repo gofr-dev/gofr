@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestShutdownWithContext_ContextTimeout(t *testing.T) {
@@ -21,7 +22,7 @@ func TestShutdownWithContext_ContextTimeout(t *testing.T) {
 
 	err := ShutdownWithContext(ctx, mockShutdownFunc, nil)
 
-	assert.ErrorIs(t, err, context.DeadlineExceeded, "Expected context deadline exceeded error")
+	require.ErrorIs(t, err, context.DeadlineExceeded, "Expected context deadline exceeded error")
 }
 
 func TestShutdownWithContext_SuccessfulShutdown(t *testing.T) {

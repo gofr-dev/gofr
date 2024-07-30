@@ -157,5 +157,5 @@ func TestShutdown_ServerContextDeadline(t *testing.T) {
 
 	err := <-shutdownCh
 
-	assert.ErrorIs(t, err, context.DeadlineExceeded, "Expected context deadline exceeded error")
+	require.ErrorIs(t, err, context.DeadlineExceeded, "Expected context deadline exceeded error")
 }
