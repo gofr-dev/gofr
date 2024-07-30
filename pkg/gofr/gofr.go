@@ -39,10 +39,6 @@ const (
 	defaultPublicStaticDir = "static"
 	shutDownTimeout        = 30 * time.Second
 	gofrTraceExporter      = "gofr"
-	traceExporterGoFr      = "gofr"
-	traceExporterZipkin    = "zipkin"
-	traceExporterJaeger    = "jaeger"
-	traceExporterOTLP      = "otlp"
 	gofrTracerURL          = "https://tracer.gofr.dev"
 )
 
@@ -392,72 +388,74 @@ func (a *App) initTracer() {
 
 	traceExporter := a.Config.Get("TRACE_EXPORTER")
 	tracerURL := a.Config.Get("TRACER_URL")
-	authHeader := a.Config.Get("TRACER_AUTH_KEY")
 
 	// deprecated : tracer_host and tracer_port are deprecated and will be removed in upcoming versions.
 	tracerHost := a.Config.Get("TRACER_HOST")
 	tracerPort := a.Config.GetOrDefault("TRACER_PORT", "9411")
 
-	if tracerURL == "" && tracerHost != "" && traceExporter != traceExporterGoFr {
-		a.Logger().Warn("TRACER_HOST and TRACER_PORT are deprecated, use TRACER_URL instead")
-
-		tracerURL = fmt.Sprintf("%s:%s", tracerHost, tracerPort)
-	}
-
-	if !isValidExporterConfig(a.Logger(), tracerURL, traceExporter) {
+	if !isValidConfig(a.Logger(), traceExporter, tracerURL, tracerHost, tracerPort) {
 		return
 	}
 
-	exporter, err := a.getExporter(context.Background(), traceExporter, tracerURL, authHeader)
+	exporter, err := a.getExporter(traceExporter, tracerHost, tracerPort, tracerURL)
 
 	if err != nil {
 		a.container.Error(err)
-	}
-
-	if exporter == nil {
-		return
 	}
 
 	batcher := sdktrace.NewBatchSpanProcessor(exporter)
 	tp.RegisterSpanProcessor(batcher)
 }
 
-func isValidExporterConfig(log logging.Logger, tracerURL, traceExporter string) bool {
-	switch {
-	case tracerURL == "" && traceExporter == "":
+func isValidConfig(logger logging.Logger, name, url, host, port string) bool {
+	if url != "" && name == "" {
+		logger.Error("missing TRACE_EXPORTER config, should be provided with TRACER_URL to enable tracing")
 		return false
-	case traceExporter == "":
-		log.Error("missing TRACE_EXPORTER config, should be provided with TRACER_URL to enable tracing")
-		return false
-	case tracerURL == "" && !strings.EqualFold(traceExporter, traceExporterGoFr):
-		log.Errorf("missing TRACER_URL config, should be provided with TRACE_EXPORTER to enable tracing")
-		return false
+	}
+
+	//nolint:revive // early-return is not possible here, as below is the intentional logging flow
+	if url == "" && name != "" && !strings.EqualFold(name, "gofr") {
+		if host != "" && port != "" {
+			logger.Warn("TRACER_HOST and TRACER_PORT are deprecated, use TRACER_URL instead")
+		} else {
+			logger.Error("missing TRACER_URL config, should be provided with TRACE_EXPORTER to enable tracing")
+			return false
+		}
 	}
 
 	return true
 }
 
-func (a *App) getExporter(ctx context.Context, name, url, authHeader string) (sdktrace.SpanExporter, error) {
-	var exporter sdktrace.SpanExporter
+func (a *App) getExporter(name, host, port, url string) (sdktrace.SpanExporter, error) {
+	var (
+		exporter sdktrace.SpanExporter
+		err      error
+	)
+
+	authHeader := a.Config.Get("TRACER_AUTH_KEY")
 
 	switch strings.ToLower(name) {
-	// jaeger accept OpenTelemetry Protocol (OTLP)
-	case traceExporterOTLP, traceExporterJaeger:
-		return a.buildOpenTelemetryProtocol(ctx, url, strings.ToLower(name), authHeader)
-	case traceExporterZipkin:
-		return a.buildZipkin(url, authHeader)
-	case traceExporterGoFr:
-		return a.buildGofrTraceExporter(url)
+	case "otlp", "jaeger":
+		exporter, err = buildOtlpExporter(a.Logger(), name, url, host, port, authHeader)
+	case "zipkin":
+		exporter, err = buildZipkinExporter(a.Logger(), url, host, port, authHeader)
+	case gofrTraceExporter:
+		exporter = buildGoFrExporter(a.Logger(), url)
 	default:
 		a.container.Errorf("unsupported TRACE_EXPORTER: %s", name)
-		return exporter, nil
 	}
+
+	return exporter, err
 }
 
 // buildOpenTelemetryProtocol using OpenTelemetryProtocol as the trace exporter
 // jaeger accept OpenTelemetry Protocol (OTLP) over gRPC to upload trace data.
-func (a *App) buildOpenTelemetryProtocol(ctx context.Context, url, exporter, authHeader string) (sdktrace.SpanExporter, error) {
-	a.container.Logf("Exporting traces to %s at %s", exporter, url)
+func buildOtlpExporter(logger logging.Logger, name, url, host, port, authHeader string) (sdktrace.SpanExporter, error) {
+	if url == "" {
+		url = fmt.Sprintf("%s:%s", host, port)
+	}
+
+	logger.Infof("Exporting traces to %s at %s", strings.ToLower(name), url)
 
 	opts := []otlptracegrpc.Option{otlptracegrpc.WithInsecure(), otlptracegrpc.WithEndpoint(url)}
 
@@ -465,18 +463,17 @@ func (a *App) buildOpenTelemetryProtocol(ctx context.Context, url, exporter, aut
 		opts = append(opts, otlptracegrpc.WithHeaders(map[string]string{"Authorization": authHeader}))
 	}
 
-	return otlptracegrpc.New(ctx, opts...)
+	return otlptracegrpc.New(context.Background(), opts...)
 }
 
-func (a *App) buildZipkin(url, authHeader string) (sdktrace.SpanExporter, error) {
-	if !strings.HasPrefix(url, "http") {
-		url = fmt.Sprintf("http://%s/api/v2/spans", url)
+func buildZipkinExporter(logger logging.Logger, url, host, port, authHeader string) (sdktrace.SpanExporter, error) {
+	if url == "" {
+		url = fmt.Sprintf("http://%s:%s/api/v2/spans", host, port)
 	}
 
-	a.container.Logf("Exporting traces to zipkin at %s", url)
+	logger.Infof("Exporting traces to zipkin at %s", url)
 
 	var opts []zipkin.Option
-
 	if authHeader != "" {
 		opts = append(opts, zipkin.WithHeaders(map[string]string{"Authorization": authHeader}))
 	}
@@ -484,16 +481,14 @@ func (a *App) buildZipkin(url, authHeader string) (sdktrace.SpanExporter, error)
 	return zipkin.New(url, opts...)
 }
 
-func (a *App) buildGofrTraceExporter(url string) (sdktrace.SpanExporter, error) {
+func buildGoFrExporter(logger logging.Logger, url string) sdktrace.SpanExporter {
 	if url == "" {
 		url = "https://tracer-api.gofr.dev/api/spans"
 	}
 
-	a.container.Logf("Exporting traces to GoFr at %s", url)
+	logger.Infof("Exporting traces to GoFr at %s", gofrTracerURL)
 
-	exporter := NewExporter(url, logging.NewLogger(logging.INFO))
-
-	return exporter, nil
+	return NewExporter(url, logging.NewLogger(logging.INFO))
 }
 
 type otelErrorHandler struct {
