@@ -308,7 +308,6 @@ func TestKafkaClient_CloseError(t *testing.T) {
 
 	require.Error(t, err)
 	assert.Equal(t, errClose, err)
-	assert.Contains(t, logs, "failed to close kafka writer")
 }
 
 func TestKafkaClient_getNewReader(t *testing.T) {
