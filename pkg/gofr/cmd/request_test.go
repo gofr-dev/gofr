@@ -77,7 +77,7 @@ func TestQueryParams_Get(t *testing.T) {
 	q := r.QueryParams()
 	assert.Equal(t, "books", q.Get("category"), "expected the value of 'category' to be 'books'")
 	assert.Equal(t, "tech", q.Get("tag"), "expected the value of 'tag' to be 'tech'")
-	assert.Empty(t, "", q.Get("nonexistent"), "expected empty string for nonexistent query param")
+	assert.Empty(t, q.Get("nonexistent"), "expected empty string for nonexistent query param")
 }
 
 func TestQueryParams_GetAll(t *testing.T) {

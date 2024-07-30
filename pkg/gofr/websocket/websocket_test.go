@@ -126,9 +126,9 @@ func Test_Upgrade(t *testing.T) {
 func Test_UnimplementedMethods(t *testing.T) {
 	conn := &Connection{}
 
-	assert.Equal(t, "", conn.Param("test"))
-	assert.Equal(t, "", conn.PathParam("test"))
-	assert.Equal(t, "", conn.HostName())
+	assert.Empty(t, conn.Param("test"))
+	assert.Empty(t, conn.PathParam("test"))
+	assert.Empty(t, conn.HostName())
 	assert.NotNil(t, conn.Context())
 	assert.Nil(t, conn.QueryParams())
 }
