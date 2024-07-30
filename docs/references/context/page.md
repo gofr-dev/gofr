@@ -28,45 +28,45 @@ parts of the request.
   // Consider the path to be /employee/{id}
   id := ctx.Request.PathParam("id")
   ```
-  - `Bind(interface{})` - to access a decoded format of the request body, the body is mapped to the interface provided 
+- `Bind(interface{})` - to access a decoded format of the request body, the body is mapped to the interface provided 
     ```go
-    // incoming request body is 
-    // {
-    //    "name" : "trident",
-    //    "category" : "snacks"
-    // }
+  // incoming request body is 
+  // {
+  //    "name" : "trident",
+  //    "category" : "snacks"
+  // }
   
-    type product struct{
+     type product struct{
         Name string `json:"name"`
         Category string `json:"category"`
-    }
+     }
 
     var p product 
     ctx.Bind(&p)
     // the Bind() method will map the incoming request to variable p
     ```
-    - `HostName()` - to access the host name for the incoming request
-      ```go
+- `HostName()` - to access the host name for the incoming request
+    ```go
       // for example if request is made from xyz.com
       host := ctx.Request.HostName()
       // the host would be http://xyz.com
       // Note: the protocol if not provided in the headers will be set to http by default
-      ``` 
+    ``` 
   
-    - `QueryParams()` - to access query parameters with support for multiple values
+- `QueryParams()` - to access query parameters with support for multiple values
   
-         - `Get(string)` - retrieves the first value for a given query parameter key
-             ```go
-              // Example: Request is /search?category=books&category=electronics
-              value := ctx.Request.QueryParams().Get("category")
-              // value = "books"
-            ```
-         - `GetAll(string)` - retrieves all values for a given query parameter key, including comma-separated values 
-            ```go
-            // Example: Request is /search?category=books,electronics&category=tech
-            values := ctx.Request.QueryParams().GetAll("category")
-            // values = []string{"books", "electronics", "tech"}
-           ```
+    - `Get(string)` - retrieves the first value for a given query parameter key
+        ```go
+         // Example: Request is /search?category=books&category=electronics
+         value := ctx.Request.QueryParams().Get("category")
+         // value = "books"
+       ```
+    - `GetAll(string)` - retrieves all values for a given query parameter key, including comma-separated values 
+       ```go
+       // Example: Request is /search?category=books,electronics&category=tech
+       values := ctx.Request.QueryParams().GetAll("category")
+       // values = []string{"books", "electronics", "tech"}
+      ```
   
 ## Accessing dependencies
 GoFr context embeds the container object which provides access to 
