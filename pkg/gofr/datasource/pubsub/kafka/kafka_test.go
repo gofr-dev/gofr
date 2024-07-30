@@ -212,6 +212,7 @@ func TestKafkaClient_Subscribe_ErrConsumerGroupID(t *testing.T) {
 			Broker: "kafkabroker",
 			OffSet: -1,
 		},
+		logger: logging.NewMockLogger(logging.INFO),
 	}
 
 	msg, err := k.Subscribe(context.TODO(), "test")
@@ -238,7 +239,7 @@ func TestKafkaClient_SubscribeError(t *testing.T) {
 		reader: map[string]Reader{
 			"test": mockReader,
 		},
-		logger: nil,
+		logger: logging.NewMockLogger(logging.INFO),
 		config: Config{
 			ConsumerGroupID: "consumer",
 			Broker:          "kafkabroker",
@@ -271,9 +272,14 @@ func TestKafkaClient_Close(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockWriter := NewMockWriter(ctrl)
-	k := kafkaClient{writer: mockWriter}
+	mockReader := NewMockReader(ctrl)
+	mockConn := NewMockConnection(ctrl)
+
+	k := kafkaClient{reader: map[string]Reader{"test-topic": mockReader}, writer: mockWriter, conn: mockConn}
 
 	mockWriter.EXPECT().Close().Return(nil)
+	mockReader.EXPECT().Close().Return(nil)
+	mockConn.EXPECT().Close().Return(nil)
 
 	err := k.Close()
 
@@ -294,16 +300,13 @@ func TestKafkaClient_CloseError(t *testing.T) {
 
 	mockWriter.EXPECT().Close().Return(errClose)
 
-	logs := testutil.StderrOutputForFunc(func() {
-		logger := logging.NewMockLogger(logging.ERROR)
-		k.logger = logger
+	logger := logging.NewMockLogger(logging.ERROR)
+	k.logger = logger
 
-		err = k.Close()
-	})
+	err = k.Close()
 
 	assert.Error(t, err)
-	assert.Equal(t, errClose, err)
-	assert.Contains(t, logs, "failed to close kafka writer")
+	assert.ErrorIs(t, err, errClose)
 }
 
 func TestKafkaClient_getNewReader(t *testing.T) {

@@ -2,13 +2,16 @@ package gofr
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -19,6 +22,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 
 	"gofr.dev/pkg/gofr/config"
@@ -33,6 +37,7 @@ import (
 
 const (
 	defaultPublicStaticDir = "static"
+	shutDownTimeout        = 30 * time.Second
 	gofrTraceExporter      = "gofr"
 	gofrTracerURL          = "https://tracer.gofr.dev"
 )
@@ -133,51 +138,38 @@ func (a *App) Run() {
 		a.cmd.Run(a.container)
 	}
 
+	// Create a context that is canceled on receiving termination signals
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
+	// Goroutine to handle shutdown when context is canceled
+	go func() {
+		<-ctx.Done()
+
+		// Create a shutdown context with a timeout
+		shutdownCtx, done := context.WithTimeout(context.WithoutCancel(ctx), shutDownTimeout)
+		defer done()
+
+		_ = a.Shutdown(shutdownCtx)
+	}()
+
 	wg := sync.WaitGroup{}
 
 	// Start Metrics Server
 	// running metrics server before HTTP and gRPC
-	wg.Add(1)
+	if a.metricServer != nil {
+		wg.Add(1)
 
-	go func(m *metricServer) {
-		defer wg.Done()
-		m.Run(a.container)
-	}(a.metricServer)
+		go func(m *metricServer) {
+			defer wg.Done()
+			m.Run(a.container)
+		}(a.metricServer)
+	}
 
 	// Start HTTP Server
 	if a.httpRegistered {
 		wg.Add(1)
-
-		// Add Default routes
-		a.add(http.MethodGet, "/.well-known/health", healthHandler)
-		a.add(http.MethodGet, "/.well-known/alive", liveHandler)
-		a.add(http.MethodGet, "/favicon.ico", faviconHandler)
-
-		if _, err := os.Stat("./static/openapi.json"); err == nil {
-			a.add(http.MethodGet, "/.well-known/openapi.json", OpenAPIHandler)
-			a.add(http.MethodGet, "/.well-known/swagger", SwaggerUIHandler)
-			a.add(http.MethodGet, "/.well-known/{name}", SwaggerUIHandler)
-		}
-
-		a.httpServer.router.PathPrefix("/").Handler(handler{
-			function:  catchAllHandler,
-			container: a.container,
-		})
-
-		var registeredMethods []string
-
-		_ = a.httpServer.router.Walk(func(route *mux.Route, _ *mux.Router, _ []*mux.Route) error {
-			met, _ := route.GetMethods()
-			for _, method := range met {
-				if !contains(registeredMethods, method) { // Check for uniqueness before adding
-					registeredMethods = append(registeredMethods, method)
-				}
-			}
-
-			return nil
-		})
-
-		*a.httpServer.router.RegisteredRoutes = registeredMethods
+		a.httpServerSetup()
 
 		go func(s *httpServer) {
 			defer wg.Done()
@@ -195,17 +187,99 @@ func (a *App) Run() {
 		}(a.grpcServer)
 	}
 
-	// If subscriber is registered, block main go routine to wait for subscriber to receive messages
-	if len(a.subscriptionManager.subscriptions) != 0 {
-		// Start subscribers concurrently using go-routines
-		for topic, handler := range a.subscriptionManager.subscriptions {
-			go a.subscriptionManager.startSubscriber(topic, handler)
-		}
+	wg.Add(1)
 
-		wg.Add(1)
-	}
+	go func() {
+		defer wg.Done()
+
+		err := a.startSubscriptions(ctx)
+		if err != nil {
+			a.Logger().Errorf("Subscription Error : %v", err)
+		}
+	}()
 
 	wg.Wait()
+}
+
+// Shutdown stops the service(s) and close the application.
+// It shuts down the HTTP, gRPC, Metrics servers and closes the container's active connections to datasources.
+func (a *App) Shutdown(ctx context.Context) error {
+	var err error
+	if a.httpServer != nil {
+		err = errors.Join(err, a.httpServer.Shutdown(ctx))
+	}
+
+	if a.grpcServer != nil {
+		err = errors.Join(err, a.grpcServer.Shutdown(ctx))
+	}
+
+	if a.container != nil {
+		err = errors.Join(err, a.container.Close())
+	}
+
+	if a.metricServer != nil {
+		err = errors.Join(err, a.metricServer.Shutdown(ctx))
+	}
+
+	if err != nil {
+		a.container.Logger.Errorf("error while shutting down: %v", err)
+		return err
+	}
+
+	a.container.Logger.Info("Application shutdown complete")
+
+	return err
+}
+
+func (a *App) httpServerSetup() {
+	// Add Default routes
+	a.add(http.MethodGet, "/.well-known/health", healthHandler)
+	a.add(http.MethodGet, "/.well-known/alive", liveHandler)
+	a.add(http.MethodGet, "/favicon.ico", faviconHandler)
+
+	if _, err := os.Stat("./static/openapi.json"); err == nil {
+		a.add(http.MethodGet, "/.well-known/openapi.json", OpenAPIHandler)
+		a.add(http.MethodGet, "/.well-known/swagger", SwaggerUIHandler)
+		a.add(http.MethodGet, "/.well-known/{name}", SwaggerUIHandler)
+	}
+
+	a.httpServer.router.PathPrefix("/").Handler(handler{
+		function:  catchAllHandler,
+		container: a.container,
+	})
+
+	var registeredMethods []string
+
+	_ = a.httpServer.router.Walk(func(route *mux.Route, _ *mux.Router, _ []*mux.Route) error {
+		met, _ := route.GetMethods()
+		for _, method := range met {
+			if !contains(registeredMethods, method) { // Check for uniqueness before adding
+				registeredMethods = append(registeredMethods, method)
+			}
+		}
+
+		return nil
+	})
+
+	*a.httpServer.router.RegisteredRoutes = registeredMethods
+}
+
+func (a *App) startSubscriptions(ctx context.Context) error {
+	if len(a.subscriptionManager.subscriptions) == 0 {
+		return nil
+	}
+
+	group := errgroup.Group{}
+	// Start subscribers concurrently using go-routines
+	for topic, handler := range a.subscriptionManager.subscriptions {
+		subscriberTopic, subscriberHandler := topic, handler
+
+		group.Go(func() error {
+			return a.subscriptionManager.startSubscriber(ctx, subscriberTopic, subscriberHandler)
+		})
+	}
+
+	return group.Wait()
 }
 
 // readConfig reads the configuration from the default location.

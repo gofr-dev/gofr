@@ -14,7 +14,6 @@ import (
 	reflect "reflect"
 
 	gomock "go.uber.org/mock/gomock"
-
 	datasource "gofr.dev/pkg/gofr/datasource"
 )
 
@@ -189,9 +188,11 @@ func (m *MockPubSub) EXPECT() *MockPubSubMockRecorder {
 }
 
 // Disconnect mocks base method.
-func (m *MockPubSub) Disconnect(waitTime uint) {
+func (m *MockPubSub) Disconnect(waitTime uint) error {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "Disconnect", waitTime)
+	ret := m.ctrl.Call(m, "Disconnect", waitTime)
+	ret0, _ := ret[0].(error)
+	return ret0
 }
 
 // Disconnect indicates an expected call of Disconnect.

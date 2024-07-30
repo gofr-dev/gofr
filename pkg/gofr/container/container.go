@@ -1,6 +1,7 @@
 package container
 
 import (
+	"errors"
 	"strconv"
 	"strings"
 	"time"
@@ -123,6 +124,24 @@ func (c *Container) Create(conf config.Config) {
 	c.File = file.New(c.Logger)
 }
 
+func (c *Container) Close() error {
+	var err error
+
+	if !isNil(c.SQL) {
+		err = errors.Join(err, c.SQL.Close())
+	}
+
+	if !isNil(c.Redis) {
+		err = errors.Join(err, c.Redis.Close())
+	}
+
+	if !isNil(c.PubSub) {
+		err = errors.Join(err, c.PubSub.Close())
+	}
+
+	return err
+}
+
 func (c *Container) createMqttPubSub(conf config.Config) pubsub.Client {
 	var qos byte
 
@@ -146,15 +165,16 @@ func (c *Container) createMqttPubSub(conf config.Config) pubsub.Client {
 	}
 
 	configs := &mqtt.Config{
-		Protocol:  conf.GetOrDefault("MQTT_PROTOCOL", "tcp"), // using tcp as default method to connect to broker
-		Hostname:  conf.Get("MQTT_HOST"),
-		Port:      port,
-		Username:  conf.Get("MQTT_USER"),
-		Password:  conf.Get("MQTT_PASSWORD"),
-		ClientID:  conf.Get("MQTT_CLIENT_ID_SUFFIX"),
-		QoS:       qos,
-		Order:     order,
-		KeepAlive: keepAlive,
+		Protocol:     conf.GetOrDefault("MQTT_PROTOCOL", "tcp"), // using tcp as default method to connect to broker
+		Hostname:     conf.Get("MQTT_HOST"),
+		Port:         port,
+		Username:     conf.Get("MQTT_USER"),
+		Password:     conf.Get("MQTT_PASSWORD"),
+		ClientID:     conf.Get("MQTT_CLIENT_ID_SUFFIX"),
+		QoS:          qos,
+		Order:        order,
+		KeepAlive:    keepAlive,
+		CloseTimeout: 0 * time.Millisecond,
 	}
 
 	return mqtt.New(configs, c.Logger, c.metricsManager)
