@@ -2,6 +2,8 @@ package cassandra
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func Test_DestinationIsNotPointer_Error(t *testing.T) {
