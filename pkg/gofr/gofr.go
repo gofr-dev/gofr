@@ -2,13 +2,16 @@ package gofr
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -19,6 +22,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 
 	"gofr.dev/pkg/gofr/config"
@@ -33,6 +37,7 @@ import (
 
 const (
 	defaultPublicStaticDir = "static"
+	shutDownTimeout        = 30 * time.Second
 	gofrTraceExporter      = "gofr"
 	gofrTracerURL          = "https://tracer.gofr.dev"
 )
@@ -103,7 +108,7 @@ func New() *App {
 
 	app.subscriptionManager = newSubscriptionManager(app.container)
 
-	// static fileserver
+	// static file server
 	currentWd, _ := os.Getwd()
 	checkDirectory := filepath.Join(currentWd, defaultPublicStaticDir)
 
@@ -133,51 +138,38 @@ func (a *App) Run() {
 		a.cmd.Run(a.container)
 	}
 
+	// Create a context that is canceled on receiving termination signals
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
+	// Goroutine to handle shutdown when context is canceled
+	go func() {
+		<-ctx.Done()
+
+		// Create a shutdown context with a timeout
+		shutdownCtx, done := context.WithTimeout(context.WithoutCancel(ctx), shutDownTimeout)
+		defer done()
+
+		_ = a.Shutdown(shutdownCtx)
+	}()
+
 	wg := sync.WaitGroup{}
 
 	// Start Metrics Server
 	// running metrics server before HTTP and gRPC
-	wg.Add(1)
+	if a.metricServer != nil {
+		wg.Add(1)
 
-	go func(m *metricServer) {
-		defer wg.Done()
-		m.Run(a.container)
-	}(a.metricServer)
+		go func(m *metricServer) {
+			defer wg.Done()
+			m.Run(a.container)
+		}(a.metricServer)
+	}
 
 	// Start HTTP Server
 	if a.httpRegistered {
 		wg.Add(1)
-
-		// Add Default routes
-		a.add(http.MethodGet, "/.well-known/health", healthHandler)
-		a.add(http.MethodGet, "/.well-known/alive", liveHandler)
-		a.add(http.MethodGet, "/favicon.ico", faviconHandler)
-
-		if _, err := os.Stat("./static/openapi.json"); err == nil {
-			a.add(http.MethodGet, "/.well-known/openapi.json", OpenAPIHandler)
-			a.add(http.MethodGet, "/.well-known/swagger", SwaggerUIHandler)
-			a.add(http.MethodGet, "/.well-known/{name}", SwaggerUIHandler)
-		}
-
-		a.httpServer.router.PathPrefix("/").Handler(handler{
-			function:  catchAllHandler,
-			container: a.container,
-		})
-
-		var registeredMethods []string
-
-		_ = a.httpServer.router.Walk(func(route *mux.Route, _ *mux.Router, _ []*mux.Route) error {
-			met, _ := route.GetMethods()
-			for _, method := range met {
-				if !contains(registeredMethods, method) { // Check for uniqueness before adding
-					registeredMethods = append(registeredMethods, method)
-				}
-			}
-
-			return nil
-		})
-
-		*a.httpServer.router.RegisteredRoutes = registeredMethods
+		a.httpServerSetup()
 
 		go func(s *httpServer) {
 			defer wg.Done()
@@ -195,17 +187,99 @@ func (a *App) Run() {
 		}(a.grpcServer)
 	}
 
-	// If subscriber is registered, block main go routine to wait for subscriber to receive messages
-	if len(a.subscriptionManager.subscriptions) != 0 {
-		// Start subscribers concurrently using go-routines
-		for topic, handler := range a.subscriptionManager.subscriptions {
-			go a.subscriptionManager.startSubscriber(topic, handler)
-		}
+	wg.Add(1)
 
-		wg.Add(1)
-	}
+	go func() {
+		defer wg.Done()
+
+		err := a.startSubscriptions(ctx)
+		if err != nil {
+			a.Logger().Errorf("Subscription Error : %v", err)
+		}
+	}()
 
 	wg.Wait()
+}
+
+// Shutdown stops the service(s) and close the application.
+// It shuts down the HTTP, gRPC, Metrics servers and closes the container's active connections to datasources.
+func (a *App) Shutdown(ctx context.Context) error {
+	var err error
+	if a.httpServer != nil {
+		err = errors.Join(err, a.httpServer.Shutdown(ctx))
+	}
+
+	if a.grpcServer != nil {
+		err = errors.Join(err, a.grpcServer.Shutdown(ctx))
+	}
+
+	if a.container != nil {
+		err = errors.Join(err, a.container.Close())
+	}
+
+	if a.metricServer != nil {
+		err = errors.Join(err, a.metricServer.Shutdown(ctx))
+	}
+
+	if err != nil {
+		a.container.Logger.Errorf("error while shutting down: %v", err)
+		return err
+	}
+
+	a.container.Logger.Info("Application shutdown complete")
+
+	return err
+}
+
+func (a *App) httpServerSetup() {
+	// Add Default routes
+	a.add(http.MethodGet, "/.well-known/health", healthHandler)
+	a.add(http.MethodGet, "/.well-known/alive", liveHandler)
+	a.add(http.MethodGet, "/favicon.ico", faviconHandler)
+
+	if _, err := os.Stat("./static/openapi.json"); err == nil {
+		a.add(http.MethodGet, "/.well-known/openapi.json", OpenAPIHandler)
+		a.add(http.MethodGet, "/.well-known/swagger", SwaggerUIHandler)
+		a.add(http.MethodGet, "/.well-known/{name}", SwaggerUIHandler)
+	}
+
+	a.httpServer.router.PathPrefix("/").Handler(handler{
+		function:  catchAllHandler,
+		container: a.container,
+	})
+
+	var registeredMethods []string
+
+	_ = a.httpServer.router.Walk(func(route *mux.Route, _ *mux.Router, _ []*mux.Route) error {
+		met, _ := route.GetMethods()
+		for _, method := range met {
+			if !contains(registeredMethods, method) { // Check for uniqueness before adding
+				registeredMethods = append(registeredMethods, method)
+			}
+		}
+
+		return nil
+	})
+
+	*a.httpServer.router.RegisteredRoutes = registeredMethods
+}
+
+func (a *App) startSubscriptions(ctx context.Context) error {
+	if len(a.subscriptionManager.subscriptions) == 0 {
+		return nil
+	}
+
+	group := errgroup.Group{}
+	// Start subscribers concurrently using go-routines
+	for topic, handler := range a.subscriptionManager.subscriptions {
+		subscriberTopic, subscriberHandler := topic, handler
+
+		group.Go(func() error {
+			return a.subscriptionManager.startSubscriber(ctx, subscriberTopic, subscriberHandler)
+		})
+	}
+
+	return group.Wait()
 }
 
 // readConfig reads the configuration from the default location.
@@ -272,10 +346,12 @@ func (a *App) add(method, pattern string, h Handler) {
 	})
 }
 
+// Metrics returns the metrics manager associated with the App.
 func (a *App) Metrics() metrics.Manager {
 	return a.container.Metrics()
 }
 
+// Logger returns the logger instance associated with the App.
 func (a *App) Logger() logging.Logger {
 	return a.container.Logger
 }
@@ -286,6 +362,10 @@ func (a *App) SubCommand(pattern string, handler Handler, options ...Options) {
 	a.cmd.addRoute(pattern, handler, options...)
 }
 
+// Migrate applies a set of migrations to the application's database.
+//
+// The migrationsMap argument is a map where the key is the version number of the migration
+// and the value is a migration.Migrate instance that implements the migration logic.
 func (a *App) Migrate(migrationsMap map[int64]migration.Migrate) {
 	// TODO : Move panic recovery at central location which will manage for all the different cases.
 	defer func() {
@@ -295,7 +375,6 @@ func (a *App) Migrate(migrationsMap map[int64]migration.Migrate) {
 	migration.Run(migrationsMap, a.container)
 }
 
-//nolint:gocyclo // once deprecated configs are removed, multiple if conditions will be removed and complexity will decrease
 func (a *App) initTracer() {
 	tp := sdktrace.NewTracerProvider(
 		sdktrace.WithResource(resource.NewWithAttributes(
@@ -310,35 +389,41 @@ func (a *App) initTracer() {
 	traceExporter := a.Config.Get("TRACE_EXPORTER")
 	tracerURL := a.Config.Get("TRACER_URL")
 
-	// deprecated : tracer_host and tracer_port is deprecated and will be removed in upcoming versions
+	// deprecated : tracer_host and tracer_port are deprecated and will be removed in upcoming versions.
 	tracerHost := a.Config.Get("TRACER_HOST")
 	tracerPort := a.Config.GetOrDefault("TRACER_PORT", "9411")
 
-	if tracerURL != "" && traceExporter == "" {
-		a.Logger().Error("missing TRACE_EXPORTER config, should be provided with TRACER_URL to enable tracing")
+	if !isValidConfig(a.Logger(), traceExporter, tracerURL, tracerHost, tracerPort) {
 		return
 	}
 
+	exporter, err := a.getExporter(traceExporter, tracerHost, tracerPort, tracerURL)
+
+	if err != nil {
+		a.container.Error(err)
+	}
+
+	batcher := sdktrace.NewBatchSpanProcessor(exporter)
+	tp.RegisterSpanProcessor(batcher)
+}
+
+func isValidConfig(logger logging.Logger, name, url, host, port string) bool {
+	if url != "" && name == "" {
+		logger.Error("missing TRACE_EXPORTER config, should be provided with TRACER_URL to enable tracing")
+		return false
+	}
+
 	//nolint:revive // early-return is not possible here, as below is the intentional logging flow
-	if tracerURL == "" && traceExporter != "" && !strings.EqualFold(traceExporter, "gofr") {
-		if tracerHost != "" && tracerPort != "" {
-			a.Logger().Warn("TRACER_HOST and TRACER_PORT are deprecated, use TRACER_URL instead")
+	if url == "" && name != "" && !strings.EqualFold(name, "gofr") {
+		if host != "" && port != "" {
+			logger.Warn("TRACER_HOST and TRACER_PORT are deprecated, use TRACER_URL instead")
 		} else {
-			a.Logger().Error("missing TRACER_URL config, should be provided with TRACE_EXPORTER to enable tracing")
-			return
+			logger.Error("missing TRACER_URL config, should be provided with TRACE_EXPORTER to enable tracing")
+			return false
 		}
 	}
 
-	if (traceExporter != "" && tracerHost != "") || tracerURL != "" || traceExporter == gofrTraceExporter {
-		exporter, err := a.getExporter(traceExporter, tracerHost, tracerPort, tracerURL)
-
-		if err != nil {
-			a.container.Error(err)
-		}
-
-		batcher := sdktrace.NewBatchSpanProcessor(exporter)
-		tp.RegisterSpanProcessor(batcher)
-	}
+	return true
 }
 
 func (a *App) getExporter(name, host, port, url string) (sdktrace.SpanExporter, error) {
@@ -350,46 +435,60 @@ func (a *App) getExporter(name, host, port, url string) (sdktrace.SpanExporter, 
 	authHeader := a.Config.Get("TRACER_AUTH_KEY")
 
 	switch strings.ToLower(name) {
-	case "jaeger":
-		if url == "" {
-			url = fmt.Sprintf("%s:%s", host, port)
-		}
-
-		a.container.Logf("Exporting traces to jaeger at %s", url)
-
-		opts := []otlptracegrpc.Option{otlptracegrpc.WithInsecure(), otlptracegrpc.WithEndpoint(url)}
-
-		if authHeader != "" {
-			opts = append(opts, otlptracegrpc.WithHeaders(map[string]string{"Authorization": authHeader}))
-		}
-
-		exporter, err = otlptracegrpc.New(context.Background(), opts...)
+	case "otlp", "jaeger":
+		exporter, err = buildOtlpExporter(a.Logger(), name, url, host, port, authHeader)
 	case "zipkin":
-		if url == "" {
-			url = fmt.Sprintf("http://%s:%s/api/v2/spans", host, port)
-		}
-
-		a.container.Logf("Exporting traces to zipkin at %s", url)
-
-		var opts []zipkin.Option
-		if authHeader != "" {
-			opts = append(opts, zipkin.WithHeaders(map[string]string{"Authorization": authHeader}))
-		}
-
-		exporter, err = zipkin.New(url, opts...)
+		exporter, err = buildZipkinExporter(a.Logger(), url, host, port, authHeader)
 	case gofrTraceExporter:
-		if url == "" {
-			url = "https://tracer-api.gofr.dev/api/spans"
-		}
-
-		a.container.Logf("Exporting traces to GoFr at %s", gofrTracerURL)
-
-		exporter = NewExporter(url, logging.NewLogger(logging.INFO))
+		exporter = buildGoFrExporter(a.Logger(), url)
 	default:
-		a.container.Errorf("unsupported trace exporter: %s", name)
+		a.container.Errorf("unsupported TRACE_EXPORTER: %s", name)
 	}
 
 	return exporter, err
+}
+
+// buildOpenTelemetryProtocol using OpenTelemetryProtocol as the trace exporter
+// jaeger accept OpenTelemetry Protocol (OTLP) over gRPC to upload trace data.
+func buildOtlpExporter(logger logging.Logger, name, url, host, port, authHeader string) (sdktrace.SpanExporter, error) {
+	if url == "" {
+		url = fmt.Sprintf("%s:%s", host, port)
+	}
+
+	logger.Infof("Exporting traces to %s at %s", strings.ToLower(name), url)
+
+	opts := []otlptracegrpc.Option{otlptracegrpc.WithInsecure(), otlptracegrpc.WithEndpoint(url)}
+
+	if authHeader != "" {
+		opts = append(opts, otlptracegrpc.WithHeaders(map[string]string{"Authorization": authHeader}))
+	}
+
+	return otlptracegrpc.New(context.Background(), opts...)
+}
+
+func buildZipkinExporter(logger logging.Logger, url, host, port, authHeader string) (sdktrace.SpanExporter, error) {
+	if url == "" {
+		url = fmt.Sprintf("http://%s:%s/api/v2/spans", host, port)
+	}
+
+	logger.Infof("Exporting traces to zipkin at %s", url)
+
+	var opts []zipkin.Option
+	if authHeader != "" {
+		opts = append(opts, zipkin.WithHeaders(map[string]string{"Authorization": authHeader}))
+	}
+
+	return zipkin.New(url, opts...)
+}
+
+func buildGoFrExporter(logger logging.Logger, url string) sdktrace.SpanExporter {
+	if url == "" {
+		url = "https://tracer-api.gofr.dev/api/spans"
+	}
+
+	logger.Infof("Exporting traces to GoFr at %s", gofrTracerURL)
+
+	return NewExporter(url, logging.NewLogger(logging.INFO))
 }
 
 type otelErrorHandler struct {
@@ -400,6 +499,10 @@ func (o *otelErrorHandler) Handle(e error) {
 	o.logger.Error(e.Error())
 }
 
+// EnableBasicAuth enables basic authentication for the application.
+//
+// It takes a variable number of credentials as alternating username and password strings.
+// An error is logged if an odd number of arguments is provided.
 func (a *App) EnableBasicAuth(credentials ...string) {
 	if len(credentials)%2 != 0 {
 		a.container.Error("Invalid number of arguments for EnableBasicAuth")
@@ -419,11 +522,18 @@ func (a *App) EnableBasicAuthWithFunc(validateFunc func(username, password strin
 	a.httpServer.router.Use(middleware.BasicAuthMiddleware(middleware.BasicAuthProvider{ValidateFunc: validateFunc, Container: a.container}))
 }
 
+// EnableBasicAuthWithValidator enables basic authentication for the HTTP server with a custom validator.
+//
+// The provided `validateFunc` is invoked for each authentication attempt. It receives a container instance,
+// username, and password. The function should return `true` if the credentials are valid, `false` otherwise.
 func (a *App) EnableBasicAuthWithValidator(validateFunc func(c *container.Container, username, password string) bool) {
 	a.httpServer.router.Use(middleware.BasicAuthMiddleware(middleware.BasicAuthProvider{
 		ValidateFuncWithDatasources: validateFunc, Container: a.container}))
 }
 
+// EnableAPIKeyAuth enables API key authentication for the application.
+//
+// It requires at least one API key to be provided. The provided API keys will be used to authenticate requests.
 func (a *App) EnableAPIKeyAuth(apiKeys ...string) {
 	a.httpServer.router.Use(middleware.APIKeyAuthMiddleware(middleware.APIKeyAuthProvider{}, apiKeys...))
 }
@@ -437,6 +547,10 @@ func (a *App) EnableAPIKeyAuthWithFunc(validateFunc func(apiKey string) bool) {
 	}))
 }
 
+// EnableAPIKeyAuthWithValidator enables API key authentication for the application with a custom validation function.
+//
+// The provided `validateFunc` is used to determine the validity of an API key. It receives the request container
+// and the API key as arguments and should return `true` if the key is valid, `false` otherwise.
 func (a *App) EnableAPIKeyAuthWithValidator(validateFunc func(c *container.Container, apiKey string) bool) {
 	a.httpServer.router.Use(middleware.APIKeyAuthMiddleware(middleware.APIKeyAuthProvider{
 		ValidateFuncWithDatasources: validateFunc,
@@ -444,6 +558,13 @@ func (a *App) EnableAPIKeyAuthWithValidator(validateFunc func(c *container.Conta
 	}))
 }
 
+// EnableOAuth configures OAuth middleware for the application.
+//
+// It registers a new HTTP service for fetching JWKS and sets up OAuth middleware
+// with the given JWKS endpoint and refresh interval.
+//
+// The JWKS endpoint is used to retrieve JSON Web Key Sets for verifying tokens.
+// The refresh interval specifies how often to refresh the token cache.
 func (a *App) EnableOAuth(jwksEndpoint string, refreshInterval int) {
 	a.AddHTTPService("gofr_oauth", jwksEndpoint)
 
@@ -455,6 +576,10 @@ func (a *App) EnableOAuth(jwksEndpoint string, refreshInterval int) {
 	a.httpServer.router.Use(middleware.OAuth(middleware.NewOAuth(oauthOption)))
 }
 
+// Subscribe registers a handler for the given topic.
+//
+// If the subscriber is not initialized in the container, an error is logged and
+// the subscription is not registered.
 func (a *App) Subscribe(topic string, handler SubscribeFunc) {
 	if a.container.GetSubscriber() == nil {
 		a.container.Logger.Errorf("subscriber not initialized in the container")
@@ -465,11 +590,11 @@ func (a *App) Subscribe(topic string, handler SubscribeFunc) {
 	a.subscriptionManager.subscriptions[topic] = handler
 }
 
+// AddRESTHandlers creates and registers CRUD routes for the given struct, the struct should always be passed by reference.
 func (a *App) AddRESTHandlers(object interface{}) error {
 	cfg, err := scanEntity(object)
 	if err != nil {
-		a.container.Logger.Errorf("invalid object for AddRESTHandlers")
-
+		a.container.Logger.Errorf(err.Error())
 		return err
 	}
 
@@ -483,8 +608,8 @@ func (a *App) UseMiddleware(middlewares ...gofrHTTP.Middleware) {
 	a.httpServer.router.UseMiddleware(middlewares...)
 }
 
-// AddCronJob registers a cron job to the cron table, the schedule is in * * * * * (6 part) format
-// denoting minutes, hours, days, months and day of week respectively.
+// AddCronJob registers a cron job to the cron table, the schedule is in * * * * * (5 part) format
+// denoting minute, hour, day, month and day of week respectively.
 func (a *App) AddCronJob(schedule, jobName string, job CronFunc) {
 	if a.cron == nil {
 		a.cron = NewCron(a.container)
@@ -506,6 +631,12 @@ func contains(elems []string, v string) bool {
 	return false
 }
 
+// AddStaticFiles registers a static file endpoint for the application.
+//
+// The provided `endpoint` will be used as the prefix for the static file
+// server. The `filePath` specifies the directory containing the static files.
+// If `filePath` starts with "./", it will be interpreted as a relative path
+// to the current working directory.
 func (a *App) AddStaticFiles(endpoint, filePath string) {
 	a.httpRegistered = true
 
