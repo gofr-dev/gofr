@@ -31,7 +31,7 @@ type Redis interface {
 	redis.Cmdable
 	redis.HashCmdable
 	HealthCheck() datasource.Health
-	Close(context.Context) error
+	Close() error
 }
 
 type Cassandra interface {

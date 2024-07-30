@@ -38,7 +38,7 @@ func (m *metricServer) Shutdown(ctx context.Context) error {
 		return nil
 	}
 
-	return shutdownWithContext(ctx, func(ctx context.Context) error {
+	return ShutdownWithContext(ctx, func(ctx context.Context) error {
 		return m.srv.Shutdown(ctx)
 	}, nil)
 }

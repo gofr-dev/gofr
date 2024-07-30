@@ -1,7 +1,6 @@
 package container
 
 import (
-	"context"
 	"errors"
 	"strconv"
 	"strings"
@@ -125,7 +124,7 @@ func (c *Container) Create(conf config.Config) {
 	c.File = file.New(c.Logger)
 }
 
-func (c *Container) Close(ctx context.Context) error {
+func (c *Container) Close() error {
 	var err error
 
 	if !isNil(c.SQL) {
@@ -133,7 +132,7 @@ func (c *Container) Close(ctx context.Context) error {
 	}
 
 	if !isNil(c.Redis) {
-		err = errors.Join(err, c.Redis.Close(ctx))
+		err = errors.Join(err, c.Redis.Close())
 	}
 
 	if !isNil(c.PubSub) {

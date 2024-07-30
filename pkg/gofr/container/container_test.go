@@ -1,7 +1,6 @@
 package container
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -161,7 +160,7 @@ func TestContainer_Close(t *testing.T) {
 	mockRedis := NewMockRedis(controller)
 
 	mockDB.EXPECT().Close().Return(nil)
-	mockRedis.EXPECT().Close(gomock.Any()).Return(nil)
+	mockRedis.EXPECT().Close().Return(nil)
 
 	configs := map[string]string{
 		"PUBSUB_BACKEND": "MQTT",
@@ -172,6 +171,6 @@ func TestContainer_Close(t *testing.T) {
 
 	assert.NotNil(t, c.PubSub)
 
-	err := c.Close(context.Background())
+	err := c.Close()
 	assert.NoError(t, err)
 }

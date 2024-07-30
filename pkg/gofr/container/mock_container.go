@@ -58,7 +58,7 @@ func NewMockContainer(t *testing.T) (*Container, Mocks) {
 	}
 
 	sqlMock.EXPECT().Close().AnyTimes()
-	redisMock.EXPECT().Close(gomock.Any()).AnyTimes()
+	redisMock.EXPECT().Close().AnyTimes()
 
 	mockMetrics := NewMockMetrics(ctrl)
 	container.metricsManager = mockMetrics

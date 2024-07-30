@@ -47,7 +47,7 @@ func (g *grpcServer) Run(c *container.Container) {
 }
 
 func (g *grpcServer) Shutdown(ctx context.Context) error {
-	return shutdownWithContext(ctx, func(_ context.Context) error {
+	return ShutdownWithContext(ctx, func(_ context.Context) error {
 		g.server.GracefulStop()
 
 		return nil

@@ -214,7 +214,7 @@ func (a *App) Shutdown(ctx context.Context) error {
 	}
 
 	if a.container != nil {
-		err = errors.Join(err, a.container.Close(ctx))
+		err = errors.Join(err, a.container.Close())
 	}
 
 	if a.metricServer != nil {

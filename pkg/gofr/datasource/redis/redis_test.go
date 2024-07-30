@@ -143,7 +143,7 @@ func TestRedis_Close(t *testing.T) {
 		"REDIS_PORT": s.Port(),
 	}), mockLogger, mockMetric)
 
-	err = client.Close(context.Background())
+	err = client.Close()
 
 	assert.NoError(t, err)
 }

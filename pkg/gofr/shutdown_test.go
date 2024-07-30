@@ -19,7 +19,7 @@ func TestShutdownWithContext_ContextTimeout(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
 
-	err := shutdownWithContext(ctx, mockShutdownFunc, nil)
+	err := ShutdownWithContext(ctx, mockShutdownFunc, nil)
 
 	assert.ErrorIs(t, err, context.DeadlineExceeded, "Expected context deadline exceeded error")
 }
@@ -35,7 +35,7 @@ func TestShutdownWithContext_SuccessfulShutdown(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 
-	err := shutdownWithContext(ctx, mockShutdownFunc, nil)
+	err := ShutdownWithContext(ctx, mockShutdownFunc, nil)
 
 	assert.NoError(t, err, "Expected successful shutdown without error")
 }

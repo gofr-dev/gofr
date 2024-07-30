@@ -5,10 +5,10 @@ import (
 	"errors"
 )
 
-// shutdownWithContext handles the shutdown process with context timeout.
+// ShutdownWithContext handles the shutdown process with context timeout.
 // It takes a shutdown function and a force close function as parameters.
 // If the context times out, the force close function is called.
-func shutdownWithContext(ctx context.Context, shutdownFunc func(ctx context.Context) error, forceCloseFunc func() error) error {
+func ShutdownWithContext(ctx context.Context, shutdownFunc func(ctx context.Context) error, forceCloseFunc func() error) error {
 	errCh := make(chan error, 1) // Channel to receive shutdown error
 
 	go func() {
