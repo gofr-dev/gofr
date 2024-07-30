@@ -57,6 +57,9 @@ func NewMockContainer(t *testing.T) (*Container, Mocks) {
 		KVStore:    kvStoreMock,
 	}
 
+	sqlMock.EXPECT().Close().AnyTimes()
+	redisMock.EXPECT().Close().AnyTimes()
+
 	mockMetrics := NewMockMetrics(ctrl)
 	container.metricsManager = mockMetrics
 
@@ -88,3 +91,5 @@ func (*MockPubSub) Publish(_ context.Context, _ string, _ []byte) error {
 func (*MockPubSub) Subscribe(_ context.Context, _ string) (*pubsub.Message, error) {
 	return nil, nil
 }
+
+func (*MockPubSub) Close() error { return nil }

@@ -166,6 +166,8 @@ func (k *kafkaClient) Publish(ctx context.Context, topic string, message []byte)
 
 func (k *kafkaClient) Subscribe(ctx context.Context, topic string) (*pubsub.Message, error) {
 	if k.config.ConsumerGroupID == "" {
+		k.logger.Error("cannot subscribe as consumer_id is not provided in configs")
+
 		return &pubsub.Message{}, ErrConsumerGroupNotProvided
 	}
 
@@ -219,15 +221,20 @@ func (k *kafkaClient) Subscribe(ctx context.Context, topic string) (*pubsub.Mess
 	return m, err
 }
 
-func (k *kafkaClient) Close() error {
-	err := k.writer.Close()
-	if err != nil {
-		k.logger.Errorf("failed to close kafka writer, error: %v", err)
-
-		return err
+func (k *kafkaClient) Close() (err error) {
+	for _, r := range k.reader {
+		err = errors.Join(err, r.Close())
 	}
 
-	return nil
+	if k.writer != nil {
+		err = k.writer.Close()
+	}
+
+	if k.conn != nil {
+		err = errors.Join(k.conn.Close())
+	}
+
+	return err
 }
 
 func (k *kafkaClient) getNewReader(topic string) Reader {
