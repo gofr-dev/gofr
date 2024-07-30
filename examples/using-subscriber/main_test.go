@@ -39,12 +39,12 @@ func initializeTest(t *testing.T) {
 }
 
 func TestExampleSubscriber(t *testing.T) {
-	initializeTest(t)
+	go initializeTest(t)
 
 	log := testutil.StdoutOutputForFunc(func() {
 		const host = "http://localhost:8200"
 		go main()
-		time.Sleep(40 * time.Second) // TODO: reduce this time
+		time.Sleep(15 * time.Second) // TODO: reduce this time
 	})
 
 	testCases := []struct {
