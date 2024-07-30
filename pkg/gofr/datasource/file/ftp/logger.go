@@ -37,15 +37,12 @@ func NewLogger(level Level) Logger {
 	}
 }
 
-// clean cleans up the query string.
-func clean(query string) string {
-	query = regexp.MustCompile(`\s+`).ReplaceAllString(query, " ")
-	query = strings.TrimSpace(query)
+var regexpSpaces = regexp.MustCompile(`\s+`)
 
-	return query
+func clean(query string) string {
+	return strings.TrimSpace(regexpSpaces.ReplaceAllString(query, " "))
 }
 
-// logf logs a message with the specified level and timestamp.
 func (fl *FileLog) logf(level Level) {
 	if level < fl.Level {
 		return
@@ -90,25 +87,28 @@ func levelString(level Level) string {
 }
 
 // Debugf logs a debug message with a format string and arguments.
-func (fl *FileLog) Debugf(operation, status, format string, args ...interface{}) {
-	fl.Operation = operation
-	fl.Status = status
+func (fl *FileLog) Debugf(pattern string, args ...interface{}) {
+	fl.Operation = strings.Split(pattern, " ")[0]
+	fl.Status = strings.Split(pattern, " ")[1]
+	format := strings.Join(strings.Split(pattern, " ")[2:], " ")
 	fl.Message = fmt.Sprintf(format, args...)
 	fl.logf(DEBUG)
 }
 
 // Logf logs an info message with a format string and arguments.
-func (fl *FileLog) Logf(operation, status, format string, args ...interface{}) {
-	fl.Operation = operation
-	fl.Status = status
+func (fl *FileLog) Logf(pattern string, args ...interface{}) {
+	fl.Operation = strings.Split(pattern, " ")[0]
+	fl.Status = strings.Split(pattern, " ")[1]
+	format := strings.Join(strings.Split(pattern, " ")[2:], " ")
 	fl.Message = fmt.Sprintf(format, args...)
 	fl.logf(INFO)
 }
 
 // Errorf logs an error message with a format string and arguments.
-func (fl *FileLog) Errorf(operation, status, format string, args ...interface{}) {
-	fl.Operation = operation
-	fl.Status = status
+func (fl *FileLog) Errorf(pattern string, args ...interface{}) {
+	fl.Operation = strings.Split(pattern, " ")[0]
+	fl.Status = strings.Split(pattern, " ")[1]
+	format := strings.Join(strings.Split(pattern, " ")[2:], " ")
 	fl.Message = fmt.Sprintf(format, args...)
 	fl.logf(ERROR)
 }

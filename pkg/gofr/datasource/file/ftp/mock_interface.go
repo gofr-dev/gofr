@@ -17,49 +17,6 @@ import (
 	gomock "go.uber.org/mock/gomock"
 )
 
-// MockFtp is a mock of Ftp interface.
-type MockFtp struct {
-	ctrl     *gomock.Controller
-	recorder *MockFtpMockRecorder
-}
-
-// MockFtpMockRecorder is the mock recorder for MockFtp.
-type MockFtpMockRecorder struct {
-	mock *MockFtp
-}
-
-// NewMockFtp creates a new mock instance.
-func NewMockFtp(ctrl *gomock.Controller) *MockFtp {
-	mock := &MockFtp{ctrl: ctrl}
-	mock.recorder = &MockFtpMockRecorder{mock}
-	return mock
-}
-
-// EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockFtp) EXPECT() *MockFtpMockRecorder {
-	return m.recorder
-}
-
-// Dial mocks base method.
-func (m *MockFtp) Dial(arg0 string, arg1 ...any) (Conn, error) {
-	m.ctrl.T.Helper()
-	varargs := []any{arg0}
-	for _, a := range arg1 {
-		varargs = append(varargs, a)
-	}
-	ret := m.ctrl.Call(m, "Dial", varargs...)
-	ret0, _ := ret[0].(Conn)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// Dial indicates an expected call of Dial.
-func (mr *MockFtpMockRecorder) Dial(arg0 any, arg1 ...any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{arg0}, arg1...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Dial", reflect.TypeOf((*MockFtp)(nil).Dial), varargs...)
-}
-
 // MockServerConn is a mock of ServerConn interface.
 type MockServerConn struct {
 	ctrl     *gomock.Controller

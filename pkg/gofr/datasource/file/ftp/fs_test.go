@@ -274,7 +274,7 @@ func TestOpenFile(t *testing.T) {
 			name:     "empty path",
 			basePath: "/ftp/one",
 			filePath: "",
-			mockRetrExpect: func(_ *MockServerConn, path string) {
+			mockRetrExpect: func(_ *MockServerConn, _ string) {
 			},
 			expectError: true,
 		},
@@ -322,7 +322,7 @@ func TestOpenWithPerm(t *testing.T) {
 		{
 			name:     "Successful open with permissions",
 			basePath: "/ftp/one",
-			filePath: "/ftp/one/testfile_new.txt",
+			filePath: "testfile_new.txt",
 			mockRetrExpect: func(conn *MockServerConn, path string) {
 				ctrl := gomock.NewController(t)
 
@@ -336,7 +336,7 @@ func TestOpenWithPerm(t *testing.T) {
 		{
 			name:     "Open with permissions and error",
 			basePath: "/ftp/one",
-			filePath: "/ftp/one/nonexistent.txt",
+			filePath: "nonexistent.txt",
 			mockRetrExpect: func(conn *MockServerConn, path string) {
 				conn.EXPECT().Retr(path).Return(nil, errors.New("mocked open error"))
 			},
@@ -405,7 +405,7 @@ func TestMkDir(t *testing.T) {
 			name:     "Mkdir with empty directory path",
 			basePath: "/ftp/one",
 			dirPath:  "",
-			mockMkdirExpect: func(_ *MockServerConn, dirPath string) {
+			mockMkdirExpect: func(_ *MockServerConn, _ string) {
 			},
 			expectError: true,
 		},
@@ -442,6 +442,7 @@ func TestMkDir(t *testing.T) {
 	}
 }
 
+// directoryAlreadyExistsError is an error created to mock the error returned by mkdir command in the test function.
 type directoryAlreadyExistsError struct {
 	code    int
 	message string
@@ -473,7 +474,7 @@ func TestMkDirAll(t *testing.T) {
 			name:     "empty path",
 			basePath: "/ftp/one",
 			dirPath:  "",
-			mockMkdirExpect: func(conn *MockServerConn, _ string) {
+			mockMkdirExpect: func(_ *MockServerConn, _ string) {
 			},
 			expectError: true,
 		},
@@ -484,9 +485,8 @@ func TestMkDirAll(t *testing.T) {
 			dirPath:  "testdir1/testdir2",
 			mockMkdirExpect: func(conn *MockServerConn, _ string) {
 				conn.EXPECT().MakeDir("testdir1").Return(&directoryAlreadyExistsError{550, "Create directory operation failed."})
-				conn.EXPECT().MakeDir("testdir1/testdir2").Return(nil)
 			},
-			expectError: false,
+			expectError: true,
 		},
 		{
 			name:     "Mkdir with error",
@@ -558,7 +558,7 @@ func TestRemoveDir(t *testing.T) {
 			name:       "empty path",
 			basePath:   "/ftp/one",
 			removePath: "",
-			mockRemoveExpect: func(conn *MockServerConn, removePath string) {
+			mockRemoveExpect: func(_ *MockServerConn, removePath string) {
 			},
 			expectError: true,
 		},

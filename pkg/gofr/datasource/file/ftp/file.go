@@ -9,11 +9,6 @@ import (
 	"strings"
 )
 
-const (
-	BufferLength     = 1024
-	JSONBufferLength = 512
-)
-
 var (
 	// errNotPointer is returned when Read method is called with a non-pointer argument.
 	errNotPointer = errors.New("input should be a pointer to a string")
@@ -53,32 +48,18 @@ func (f *ftpFile) ReadAll() (RowReader, error) {
 
 // createJSONReader creates a JSON reader for JSON files.
 func (f *ftpFile) createJSONReader() (RowReader, error) {
-	buffer := make([]byte, JSONBufferLength)
+	size, err := f.conn.FileSize(f.path)
+	if err != nil {
+		return nil, err
+	}
 
-	n, readerError := f.Read(buffer)
+	buffer := make([]byte, size)
+
+	_, readerError := f.Read(buffer)
+
 	if readerError != nil && !errors.Is(readerError, io.EOF) {
-		f.logger.Errorf("ReadAll", "Failed", "Failed to read json file: %v", readerError)
+		f.logger.Errorf("ReadAll Failed Failed to read json file: %v", readerError)
 		return nil, readerError
-	}
-
-	if buffer[0] != '{' && buffer[0] != '[' {
-		return nil, &json.SyntaxError{}
-	}
-
-	if n == JSONBufferLength && buffer[n-1] != '\n' && buffer[n-1] != ']' {
-		m := bytes.LastIndexByte(buffer, '\n')
-
-		if m != -1 {
-			buffer = append(buffer[:m-1], byte(']'))
-			f.offset -= int64(n - m - 1)
-			n = m
-		}
-	}
-
-	buffer = buffer[:n]
-
-	if buffer[0] != '[' {
-		buffer = append([]byte{'['}, buffer...)
 	}
 
 	reader := bytes.NewReader(buffer)
@@ -91,28 +72,34 @@ func (f *ftpFile) createJSONReader() (RowReader, error) {
 		return nil, err
 	}
 
-	return &jsonReader{decoder: decoder, token: token}, readerError
+	if d, ok := token.(json.Delim); ok && d == '[' {
+		return &jsonReader{decoder: decoder, token: token}, readerError
+	}
+
+	// JSON object
+	return f.createJSONObjectReader(reader)
+}
+
+func (_ *ftpFile) createJSONObjectReader(reader *bytes.Reader) (RowReader, error) {
+	decoder := json.NewDecoder(reader)
+
+	return &jsonReader{decoder: decoder}, nil
 }
 
 // createTextCSVReader creates a text reader for reading text files.
 func (f *ftpFile) createTextCSVReader() (RowReader, error) {
-	buffer := make([]byte, BufferLength)
-
-	n, err := f.Read(buffer)
-	if err != nil && !errors.Is(err, io.EOF) {
-		f.logger.Errorf("ReadAll", "Failed", "Failed to read text file: %v", err)
+	size, err := f.conn.FileSize(f.path)
+	if err != nil {
 		return nil, err
 	}
 
-	if n == BufferLength && buffer[n-1] != '\n' {
-		m := bytes.LastIndexByte(buffer, '\n')
-		if m != -1 {
-			f.offset -= int64(n - m - 1)
-			n = m
-		}
-	}
+	buffer := make([]byte, size)
 
-	buffer = buffer[:n]
+	_, err = f.Read(buffer)
+	if err != nil {
+		f.logger.Errorf("ReadAll Failed Failed to read text file: %v", err)
+		return nil, err
+	}
 
 	reader := bytes.NewReader(buffer)
 
@@ -123,22 +110,22 @@ func (f *ftpFile) createTextCSVReader() (RowReader, error) {
 }
 
 // Next checks if there is another JSON object available.
-func (j jsonReader) Next() bool {
+func (j *jsonReader) Next() bool {
 	return j.decoder.More()
 }
 
 // Scan decodes the next JSON object into the provided structure.
-func (j jsonReader) Scan(i interface{}) error {
+func (j *jsonReader) Scan(i interface{}) error {
 	return j.decoder.Decode(&i)
 }
 
 // Next checks if there is another line available in the text file.
-func (f textReader) Next() bool {
+func (f *textReader) Next() bool {
 	return f.scanner.Scan()
 }
 
 // Scan scans the next line from the text file into the provided pointer to string.
-func (f textReader) Scan(i interface{}) error {
+func (f *textReader) Scan(i interface{}) error {
 	switch target := i.(type) {
 	case *string:
 		*target = f.scanner.Text()
@@ -162,13 +149,13 @@ func (f *ftpFile) Name() string {
 func (f *ftpFile) Read(p []byte) (n int, err error) {
 	r, err := f.conn.RetrFrom(f.path, uint64(f.offset))
 	if err != nil {
-		f.logger.Errorf("Read", "Failed", `Failed to open file with path "%v" : %v`, f.path, err)
+		f.logger.Errorf("Read Failed Failed to open file with path %q : %v", f.path, err)
 		return 0, err
 	}
 
 	n, err = r.Read(p)
 	if err != nil && !errors.Is(err, io.EOF) {
-		f.logger.Errorf("Read", "Failed", `Failed to read from "%v" : %v`, f.path, err)
+		f.logger.Errorf("Read Failed Failed to read from %q : %v", f.path, err)
 		return 0, err
 	}
 
@@ -176,7 +163,7 @@ func (f *ftpFile) Read(p []byte) (n int, err error) {
 
 	f.offset += int64(n)
 
-	f.logger.Logf("Read", "Success", `Read %v bytes from "%v"'`, n, f.path)
+	f.logger.Logf("Read Success Read %v bytes from %q", n, f.path)
 
 	if n < len(p) {
 		return n, io.EOF
@@ -189,19 +176,19 @@ func (f *ftpFile) Read(p []byte) (n int, err error) {
 func (f *ftpFile) ReadAt(p []byte, off int64) (n int, err error) {
 	resp, err := f.conn.RetrFrom(f.path, uint64(off))
 	if err != nil {
-		f.logger.Errorf("ReadAt", "Failed", `Error opening file with path "%v" at %v offset : %v`, f.path, off, err)
+		f.logger.Errorf("ReadAt Failed Error opening file with path %q at %v offset : %v", f.path, off, err)
 		return 0, err
 	}
 
 	n, err = resp.Read(p)
 	if err != nil && !errors.Is(err, io.EOF) {
-		f.logger.Errorf("ReadAt", "Failed", `Error reading file with path "%v" at %v offset : %v`, f.path, off, err)
+		f.logger.Errorf("ReadAt Failed Error reading file with path %q at %v offset : %v", f.path, off, err)
 		return 0, err
 	}
 
 	resp.Close()
 
-	f.logger.Logf("ReadAt", "Success", `Read %v bytes from "%v" at offset of %v`, n, f.path, off)
+	f.logger.Logf("ReadAt Success Read %v bytes from %q at offset of %v", n, f.path, off)
 
 	if n < len(p) {
 		return n, io.EOF
@@ -242,16 +229,17 @@ func (f *ftpFile) check(whence int, offset, length int64) (int64, error) {
 func (f *ftpFile) Seek(offset int64, whence int) (int64, error) {
 	n, err := f.conn.FileSize(f.path)
 	if err != nil {
-		f.logger.Errorf("Seek", "Failed", "Error : %v", err)
+		f.logger.Errorf("Seek Failed Error : %v", err)
 		return 0, err
 	}
 
 	res, err := f.check(whence, offset, n)
 	if err != nil {
-		f.logger.Errorf("Seek", "Failed", "Error : %v", err)
+		f.logger.Errorf("Seek Failed Error : %v", err)
+		return 0, err
 	}
 
-	f.logger.Logf("Seek", "Success", "Offset at whence %v : %v", whence, res)
+	f.logger.Logf("Seek Success Offset at whence %v : %v", whence, res)
 
 	return res, err
 }
@@ -262,13 +250,13 @@ func (f *ftpFile) Write(p []byte) (n int, err error) {
 
 	err = f.conn.StorFrom(f.path, reader, uint64(f.offset))
 	if err != nil {
-		f.logger.Errorf("Write", "Failed", "Error : %v", err)
+		f.logger.Errorf("Write Failed Error : %v", err)
 		return 0, err
 	}
 
 	f.offset += int64(len(p))
 
-	f.logger.Logf("Write", "Success", "Wrote %v bytes to %v", len(p), f.path)
+	f.logger.Logf("Write Success Wrote %v bytes to %v", len(p), f.path)
 
 	return len(p), nil
 }
@@ -279,11 +267,11 @@ func (f *ftpFile) WriteAt(p []byte, off int64) (n int, err error) {
 
 	err = f.conn.StorFrom(f.path, reader, uint64(off))
 	if err != nil {
-		f.logger.Errorf("WriteAt", "Failed", `Error writing in file with path "%v" at %v offset : %v`, f.path, off, err)
+		f.logger.Errorf("WriteAt Failed Error writing in file with path %q at %v offset : %v", f.path, off, err)
 		return 0, err
 	}
 
-	f.logger.Logf("WriteAt", "Success", `Wrote %v bytes to "%v" at %v offset`, len(p), f.path, off)
+	f.logger.Logf("WriteAt Success Wrote %v bytes to %q at %v offset", len(p), f.path, off)
 
 	return len(p), nil
 }

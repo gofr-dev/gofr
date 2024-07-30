@@ -510,24 +510,16 @@ Victoria Nguyen,32,victorian@example.com`
 
 		var i = 0
 
-		for {
-			reader, readerError := newCsvFile.ReadAll()
-			if readerError == nil || errors.Is(readerError, io.EOF) {
-				for reader.Next() {
-					var content string
+		reader, _ := newCsvFile.ReadAll()
+		for reader.Next() {
+			var content string
 
-					err := reader.Scan(&content)
+			err := reader.Scan(&content)
 
-					assert.Equal(t, csvValue[i], content)
-					assert.NoError(t, err)
+			assert.Equal(t, csvValue[i], content)
+			assert.NoError(t, err)
 
-					i++
-				}
-			}
-
-			if errors.Is(readerError, io.EOF) {
-				break
-			}
+			i++
 		}
 	})
 }
@@ -669,24 +661,18 @@ func Test_ReadFromJSONArray(t *testing.T) {
 
 		var i = 0
 
-		for {
-			reader, readerError := newCsvFile.ReadAll()
-			if readerError == nil || errors.Is(readerError, io.EOF) {
-				for reader.Next() {
-					var u User
+		reader, readerError := newCsvFile.ReadAll()
+		if readerError == nil {
+			for reader.Next() {
+				var u User
 
-					err := reader.Scan(&u)
+				err := reader.Scan(&u)
 
-					assert.Equal(t, jsonValue[i].Name, u.Name)
-					assert.Equal(t, jsonValue[i].Age, u.Age)
-					assert.NoError(t, err)
+				assert.Equal(t, jsonValue[i].Name, u.Name)
+				assert.Equal(t, jsonValue[i].Age, u.Age)
+				assert.NoError(t, err)
 
-					i++
-				}
-			}
-
-			if errors.Is(readerError, io.EOF) {
-				break
+				i++
 			}
 		}
 	})

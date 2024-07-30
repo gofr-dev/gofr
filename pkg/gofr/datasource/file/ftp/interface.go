@@ -6,10 +6,6 @@ import (
 	"time"
 )
 
-type Ftp interface {
-	Dial(string, ...interface{}) (Conn, error)
-}
-
 // ServerConn represents a connection to an FTP server.
 type ServerConn interface {
 	Login(string, string) error
@@ -98,7 +94,7 @@ type FileSystemProvider interface {
 
 // Logger interface is used by ftp package to log information about query execution.
 type Logger interface {
-	Debugf(string, string, string, ...interface{})
-	Logf(string, string, string, ...interface{})
-	Errorf(string, string, string, ...interface{})
+	Debugf(pattern string, args ...interface{})
+	Logf(pattern string, args ...interface{})
+	Errorf(pattern string, args ...interface{})
 }
