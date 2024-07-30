@@ -12,7 +12,7 @@ import (
 func TestExampleMigration(t *testing.T) {
 	const host = "http://localhost:9100"
 	go main()
-	time.Sleep(3 * time.Second) // Giving some time to start the server
+	time.Sleep(1 * time.Second) // Giving some time to start the server
 
 	tests := []struct {
 		desc       string
