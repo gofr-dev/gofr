@@ -145,5 +145,5 @@ func TestRedis_Close(t *testing.T) {
 
 	err = client.Close()
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }

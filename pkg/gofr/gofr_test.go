@@ -740,7 +740,7 @@ func Test_Shutdown(t *testing.T) {
 
 		err := g.Shutdown(context.Background())
 
-		assert.NoError(t, err, "Test_Shutdown Failed!")
+		require.NoError(t, err, "Test_Shutdown Failed!")
 	})
 
 	assert.Contains(t, logs, "Application shutdown complete", "Test_Shutdown Failed!")

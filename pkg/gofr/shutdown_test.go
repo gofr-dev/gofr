@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -38,5 +37,5 @@ func TestShutdownWithContext_SuccessfulShutdown(t *testing.T) {
 
 	err := ShutdownWithContext(ctx, mockShutdownFunc, nil)
 
-	assert.NoError(t, err, "Expected successful shutdown without error")
+	require.NoError(t, err, "Expected successful shutdown without error")
 }

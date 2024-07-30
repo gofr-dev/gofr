@@ -577,5 +577,5 @@ func TestMQTT_Close(t *testing.T) {
 	// Close the client
 	err := client.Close()
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }

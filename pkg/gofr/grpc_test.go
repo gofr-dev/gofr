@@ -72,7 +72,7 @@ func TestGRPC_ServerShutdown(t *testing.T) {
 	defer cancel()
 
 	err := g.Shutdown(ctx)
-	assert.NoError(t, err, "TestGRPC_ServerShutdown Failed.\n")
+	require.NoError(t, err, "TestGRPC_ServerShutdown Failed.\n")
 }
 
 func TestGRPC_ServerShutdown_ContextCanceled(t *testing.T) {

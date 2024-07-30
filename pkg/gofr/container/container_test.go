@@ -173,5 +173,5 @@ func TestContainer_Close(t *testing.T) {
 	assert.NotNil(t, c.PubSub)
 
 	err := c.Close()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }

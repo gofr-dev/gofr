@@ -120,7 +120,7 @@ func TestShutdown_ServerStopsListening(t *testing.T) {
 
 	err := <-errChan
 
-	assert.NoError(t, err, "TEST Failed.\n")
+	require.NoError(t, err, "TEST Failed.\n")
 }
 
 func TestShutdown_ServerContextDeadline(t *testing.T) {

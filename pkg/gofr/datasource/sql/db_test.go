@@ -711,7 +711,7 @@ func TestDB_Close(t *testing.T) {
 
 	err := db.Close()
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 func getTransaction(db *DB, mock sqlmock.Sqlmock) *Tx {
