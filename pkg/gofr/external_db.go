@@ -4,6 +4,7 @@ import (
 	"gofr.dev/pkg/gofr/container"
 )
 
+// AddMongo sets the Mongo datasource in the app's container.
 func (a *App) AddMongo(db container.MongoProvider) {
 	db.UseLogger(a.Logger())
 	db.UseMetrics(a.Metrics())
@@ -25,7 +26,7 @@ func (a *App) AddClickhouse(db container.ClickhouseProvider) {
 }
 
 // UseMongo sets the Mongo datasource in the app's container.
-// Deprecated: Use the NewMongo function AddMongo instead.
+// Deprecated: Use the AddMongo method instead.
 func (a *App) UseMongo(db container.Mongo) {
 	a.container.Mongo = db
 }
@@ -38,4 +39,14 @@ func (a *App) AddCassandra(db container.CassandraProvider) {
 	db.Connect()
 
 	a.container.Cassandra = db
+}
+
+// AddKVStore sets the KV-Store datasource in the app's container.
+func (a *App) AddKVStore(db container.KVStoreProvider) {
+	db.UseLogger(a.Logger())
+	db.UseMetrics(a.Metrics())
+
+	db.Connect()
+
+	a.container.KVStore = db
 }
