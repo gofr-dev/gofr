@@ -703,6 +703,16 @@ func TestDB_BeginError(t *testing.T) {
 	assert.Equal(t, errTx, err)
 }
 
+func TestDB_Close(t *testing.T) {
+	db, mock := getDB(t, logging.INFO)
+
+	mock.ExpectClose()
+
+	err := db.Close()
+
+	assert.NoError(t, err)
+}
+
 func getTransaction(db *DB, mock sqlmock.Sqlmock) *Tx {
 	mock.ExpectBegin()
 

@@ -725,3 +725,22 @@ func createPublicDirectory(t *testing.T, defaultPublicStaticDir string, htmlCont
 
 	file.Close()
 }
+
+func Test_Shutdown(t *testing.T) {
+	logs := testutil.StdoutOutputForFunc(func() {
+		g := New()
+
+		g.GET("/hello", func(*Context) (interface{}, error) {
+			return helloWorld, nil
+		})
+
+		go g.Run()
+		time.Sleep(10 * time.Millisecond)
+
+		err := g.Shutdown(context.Background())
+
+		assert.NoError(t, err, "Test_Shutdown Failed!")
+	})
+
+	assert.Contains(t, logs, "Application shutdown complete", "Test_Shutdown Failed!")
+}
