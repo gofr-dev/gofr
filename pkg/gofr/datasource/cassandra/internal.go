@@ -20,7 +20,7 @@ func (c *cassandraIterator) columns() []gocql.ColumnInfo {
 
 // Scan gets the next row from the Cassandra iterator and fills in the provided arguments.
 // This method wraps the `Scan` method of the underlying `iter` object.
-func (c *cassandraIterator) scan(dest ...interface{}) bool {
+func (c *cassandraIterator) scan(dest ...any) bool {
 	return c.iter.Scan(dest...)
 }
 
@@ -49,9 +49,9 @@ func (c *cassandraQuery) iter() iterator {
 	return &iter
 }
 
-// mapScanCAS checks a Cassandra query with an IF clause and scans the existing data into map[string]interface{} (if any).
+// mapScanCAS checks a Cassandra query with an IF clause and scans the existing data into map[string]any (if any).
 // This method wraps the `MapScanCAS` method of the underlying `query` object.
-func (c *cassandraQuery) mapScanCAS(dest map[string]interface{}) (applied bool, err error) {
+func (c *cassandraQuery) mapScanCAS(dest map[string]any) (applied bool, err error) {
 	return c.query.MapScanCAS(dest)
 }
 
@@ -102,7 +102,7 @@ type cassandraSession struct {
 
 // query creates a Cassandra query.
 // This method wraps the `Query` method of the underlying `session` object.
-func (c *cassandraSession) query(stmt string, values ...interface{}) query {
+func (c *cassandraSession) query(stmt string, values ...any) query {
 	q := &cassandraQuery{query: c.session.Query(stmt, values...)}
 
 	return q
@@ -137,7 +137,7 @@ type cassandraBatch struct {
 
 // Query adds the query to the batch operation.
 // This method wraps the `Query` method of underlying `batch` object.
-func (c *cassandraBatch) Query(stmt string, args ...interface{}) {
+func (c *cassandraBatch) Query(stmt string, args ...any) {
 	c.batch.Query(stmt, args...)
 }
 

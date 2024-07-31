@@ -16,7 +16,7 @@ type clusterConfig interface {
 
 // session defines methods for interacting with a Cassandra session.
 type session interface {
-	query(stmt string, values ...interface{}) query
+	query(stmt string, values ...any) query
 	newBatch(batchtype gocql.BatchType) batch
 	executeBatch(batch batch) error
 	executeBatchCAS(b batch, dest ...any) (bool, error)
@@ -26,19 +26,19 @@ type session interface {
 type query interface {
 	exec() error
 	iter() iterator
-	mapScanCAS(dest map[string]interface{}) (applied bool, err error)
+	mapScanCAS(dest map[string]any) (applied bool, err error)
 	scanCAS(dest ...any) (applied bool, err error)
 }
 
 // batch defines methods for interacting with a Cassandra batch.
 type batch interface {
-	Query(stmt string, args ...interface{})
+	Query(stmt string, args ...any)
 	getBatch() *gocql.Batch
 }
 
 // iterator defines methods for interacting with a Cassandra iterator.
 type iterator interface {
 	columns() []gocql.ColumnInfo
-	scan(dest ...interface{}) bool
+	scan(dest ...any) bool
 	numRows() int
 }
