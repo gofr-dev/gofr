@@ -40,6 +40,7 @@ func (b *Batch) ExecuteBatch() error {
 	return b.cassandra.session.executeBatch(b.batch)
 }
 
+//nolint:exhaustive // We just want to take care of slice and struct in this case.
 func (b *Batch) ExecuteBatchCAS(dest any) (bool, error) {
 	applied, iter, err := b.cassandra.session.executeBatchCAS(b.batch)
 	if err != nil {
