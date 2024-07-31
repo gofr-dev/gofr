@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel"
 	"go.uber.org/mock/gomock"
 
@@ -81,7 +82,7 @@ func TestHTTPService_createAndSendRequest(t *testing.T) {
 		}
 	}
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, resp, "TEST[%d], Failed.\n%s")
 }
 
@@ -112,7 +113,7 @@ func TestHTTPService_Get(t *testing.T) {
 		defer resp.Body.Close()
 	}
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, resp, "TEST, Failed.")
 }
 
@@ -145,7 +146,7 @@ func TestHTTPService_GetWithHeaders(t *testing.T) {
 		defer resp.Body.Close()
 	}
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, resp, "TEST, Failed.")
 }
 
@@ -185,7 +186,7 @@ func TestHTTPService_Put(t *testing.T) {
 		defer resp.Body.Close()
 	}
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, resp, "TEST, Failed.")
 }
 
@@ -227,7 +228,7 @@ func TestHTTPService_PutWithHeaders(t *testing.T) {
 		defer resp.Body.Close()
 	}
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, resp, "TEST, Failed.")
 }
 
@@ -267,7 +268,7 @@ func TestHTTPService_Patch(t *testing.T) {
 		defer resp.Body.Close()
 	}
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, resp, "TEST, Failed.")
 }
 
@@ -309,7 +310,7 @@ func TestHTTPService_PatchWithHeaders(t *testing.T) {
 		defer resp.Body.Close()
 	}
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, resp, "TEST, Failed.")
 }
 
@@ -349,7 +350,7 @@ func TestHTTPService_Post(t *testing.T) {
 		defer resp.Body.Close()
 	}
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, resp, "TEST, Failed.")
 }
 
@@ -391,7 +392,7 @@ func TestHTTPService_PostWithHeaders(t *testing.T) {
 		defer resp.Body.Close()
 	}
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, resp, "TEST, Failed.")
 }
 
@@ -429,7 +430,7 @@ func TestHTTPService_Delete(t *testing.T) {
 		defer resp.Body.Close()
 	}
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, resp, "TEST, Failed.")
 }
 
@@ -469,7 +470,7 @@ func TestHTTPService_DeleteWithHeaders(t *testing.T) {
 		defer resp.Body.Close()
 	}
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, resp, "TEST, Failed.")
 }
 
@@ -490,7 +491,7 @@ func TestHTTPService_createAndSendRequestCreateRequestFailure(t *testing.T) {
 		defer resp.Body.Close()
 	}
 
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, resp, "TEST[%d], Failed.\n%s")
 }
 
@@ -519,6 +520,6 @@ func TestHTTPService_createAndSendRequestServerError(t *testing.T) {
 		defer resp.Body.Close()
 	}
 
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, resp, "TEST[%d], Failed.\n%s")
 }
