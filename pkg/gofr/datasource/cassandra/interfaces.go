@@ -19,7 +19,7 @@ type session interface {
 	query(stmt string, values ...interface{}) query
 	newBatch(batchtype gocql.BatchType) batch
 	executeBatch(batch batch) error
-	executeBatchCAS(b batch) (bool, iterator, error)
+	executeBatchCAS(b batch, dest ...any) (bool, error)
 }
 
 // query defines methods for interacting with a Cassandra query.

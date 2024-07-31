@@ -27,6 +27,7 @@ type cassandra struct {
 	clusterConfig clusterConfig
 	session       session
 	query         query
+	batches       map[string]batch
 }
 
 type Client struct {
@@ -179,6 +180,21 @@ func (c *Client) ExecCAS(dest any, stmt string, values ...any) (bool, error) {
 	}
 
 	return applied, err
+}
+
+func (c *Client) NewBatch(name string, batchType int) error {
+	switch batchType {
+	case LoggedBatch, UnloggedBatch, CounterBatch:
+		if len(c.cassandra.batches) == 0 {
+			c.cassandra.batches = make(map[string]batch)
+		}
+
+		c.cassandra.batches[name] = c.cassandra.session.newBatch(gocql.BatchType(batchType))
+
+		return nil
+	default:
+		return ErrUnsupportedBatchType
+	}
 }
 
 func (c *Client) rowsToStruct(iter iterator, vo reflect.Value) {

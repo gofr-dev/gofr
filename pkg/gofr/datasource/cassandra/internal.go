@@ -120,15 +120,14 @@ func (c *cassandraSession) executeBatch(b batch) error {
 	return c.session.ExecuteBatch(gocqlBatch)
 }
 
-// executeBatchCAS executes a batch operation and returns true if successful and an iterator (to scan additional rows
-// if more than one conditional statement) was sent.
+// executeBatchCAS executes a batch operation and returns true if successful.
 // This method wraps the `executeBatchCAS` method of the underlying `session` object.
-func (c *cassandraSession) executeBatchCAS(b batch) (bool, iterator, error) {
+func (c *cassandraSession) executeBatchCAS(b batch, dest ...any) (bool, error) {
 	gocqlBatch := b.getBatch()
 
-	applied, iter, err := c.session.ExecuteBatchCAS(gocqlBatch)
+	applied, _, err := c.session.ExecuteBatchCAS(gocqlBatch, dest...)
 
-	return applied, &cassandraIterator{iter: iter}, err
+	return applied, err
 }
 
 // cassandraBatch implements batch interface.

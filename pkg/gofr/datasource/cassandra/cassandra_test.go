@@ -11,6 +11,8 @@ import (
 	"go.uber.org/mock/gomock"
 )
 
+const mockBatchName = "mockBatch"
+
 var (
 	errConnFail = errors.New("connection failure")
 	errMock     = errors.New("test error")
@@ -23,7 +25,7 @@ type mockDependencies struct {
 	mockIter    *Mockiterator
 }
 
-func initTest(t *testing.T) (*Client, *Batch, *mockDependencies) {
+func initTest(t *testing.T) (*Client, *mockDependencies) {
 	t.Helper()
 
 	ctrl := gomock.NewController(t)
@@ -48,13 +50,12 @@ func initTest(t *testing.T) (*Client, *Batch, *mockDependencies) {
 	client.UseMetrics(mockMetrics)
 
 	client.cassandra.session = mockSession
-
-	batchClient := &Batch{Client: client, batch: mockBatch}
+	client.cassandra.batches = map[string]batch{mockBatchName: mockBatch}
 
 	mockMetrics.EXPECT().RecordHistogram(gomock.AssignableToTypeOf(context.Background()), "app_cassandra_stats",
 		gomock.AssignableToTypeOf(float64(0)), "hostname", client.config.Hosts, "keyspace", client.config.Keyspace).AnyTimes()
 
-	return client, batchClient, &mockDependencies{mockSession: mockSession, mockQuery: mockQuery, mockBatch: mockBatch, mockIter: mockIter}
+	return client, &mockDependencies{mockSession: mockSession, mockQuery: mockQuery, mockBatch: mockBatch, mockIter: mockIter}
 }
 
 func Test_Connect(t *testing.T) {
@@ -119,7 +120,7 @@ func Test_Query(t *testing.T) {
 	mockStruct := users{}
 	mockInt := 0
 
-	client, _, mockDeps := initTest(t)
+	client, mockDeps := initTest(t)
 
 	testCases := []struct {
 		desc     string
@@ -168,7 +169,7 @@ func Test_Query(t *testing.T) {
 func Test_Exec(t *testing.T) {
 	const query = "INSERT INTO users (id, name) VALUES(1, 'Test')"
 
-	client, _, mockDeps := initTest(t)
+	client, mockDeps := initTest(t)
 
 	testCases := []struct {
 		desc     string
@@ -205,7 +206,7 @@ func Test_ExecCAS(t *testing.T) {
 	mockStruct := users{}
 	mockInt := 0
 
-	client, _, mockDeps := initTest(t)
+	client, mockDeps := initTest(t)
 
 	testCases := []struct {
 		desc       string
@@ -249,10 +250,47 @@ func Test_ExecCAS(t *testing.T) {
 	}
 }
 
+func Test_NewBatch(t *testing.T) {
+	const batchName = "testBatch"
+
+	client, mockDeps := initTest(t)
+
+	testCases := []struct {
+		desc      string
+		batchType int
+		mockCall  func()
+		expErr    error
+	}{
+		{"valid log type", LoggedBatch, func() {
+			mockDeps.mockSession.EXPECT().newBatch(gocql.BatchType(LoggedBatch)).Return(&cassandraBatch{}).Times(1)
+		}, nil},
+		{"valid log type, empty batches", LoggedBatch, func() {
+			client.cassandra.batches = nil
+
+			mockDeps.mockSession.EXPECT().newBatch(gocql.BatchType(LoggedBatch)).Return(&cassandraBatch{}).Times(1)
+		}, nil},
+		{"invalid log type", -1, func() {}, ErrUnsupportedBatchType},
+	}
+
+	for i, tc := range testCases {
+		tc.mockCall()
+
+		err := client.NewBatch(batchName, tc.batchType)
+
+		assert.Equalf(t, tc.expErr, err, "TEST[%d], Failed.\n%s", i, tc.desc)
+
+		if tc.expErr != nil {
+			_, ok := client.cassandra.batches[batchName]
+
+			assert.Truef(t, ok, "TEST[%d], Failed.\n%s", i, tc.desc)
+		}
+	}
+}
+
 func Test_HealthCheck(t *testing.T) {
 	const query = "SELECT now() FROM system.local"
 
-	client, _, mockDeps := initTest(t)
+	client, mockDeps := initTest(t)
 
 	testCases := []struct {
 		desc      string
