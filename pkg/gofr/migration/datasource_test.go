@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/testutil"
@@ -20,9 +21,9 @@ func Test_getMigratorDatastoreNotInitialised(t *testing.T) {
 		mg.rollback(mockContainer, transactionData{})
 
 		assert.Equal(t, int64(0), mg.getLastMigration(mockContainer), "TEST Failed \n Last Migration is not 0")
-		assert.NoError(t, mg.checkAndCreateMigrationTable(mockContainer), "TEST Failed")
+		require.NoError(t, mg.checkAndCreateMigrationTable(mockContainer), "TEST Failed")
 		assert.Equal(t, transactionData{}, mg.beginTransaction(mockContainer), "TEST Failed")
-		assert.NoError(t, mg.commitMigration(mockContainer, transactionData{}), "TEST Failed")
+		require.NoError(t, mg.commitMigration(mockContainer, transactionData{}), "TEST Failed")
 	})
 
 	assert.Contains(t, logs, "Migration 0 ran successfully", "TEST Failed")
