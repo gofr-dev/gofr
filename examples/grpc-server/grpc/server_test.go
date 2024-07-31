@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestServer_SayHello(t *testing.T) {
@@ -23,7 +24,7 @@ func TestServer_SayHello(t *testing.T) {
 		req := &HelloRequest{Name: tc.input}
 		resp, err := s.SayHello(context.Background(), req)
 
-		assert.NoError(t, err, "TEST[%d], Failed.\n", i)
+		require.NoError(t, err, "TEST[%d], Failed.\n", i)
 
 		assert.Equal(t, tc.resp, resp.Message, "TEST[%d], Failed.\n", i)
 	}

@@ -12,6 +12,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"gofr.dev/pkg/gofr/container"
 	gofrHTTP "gofr.dev/pkg/gofr/http"
@@ -66,7 +67,7 @@ func TestOpenAPIHandler_Error(t *testing.T) {
 
 	assert.Nil(t, result, "Expected result to be nil")
 	errors.Is(err, &os.PathError{Path: "/Users/raramuri/Projects/gofr.dev/gofr/pkg/gofr/static/openapi.json"})
-	assert.Error(t, err, "Expected error")
+	require.Error(t, err, "Expected error")
 }
 
 func TestSwaggerHandler(t *testing.T) {
@@ -90,7 +91,7 @@ func TestSwaggerHandler(t *testing.T) {
 		ctx := newContext(gofrHTTP.NewResponder(httptest.NewRecorder(), http.MethodGet), gofrReq, testContainer)
 
 		resp, err := SwaggerUIHandler(ctx)
-		assert.NoError(t, err, "Expected err to be nil")
+		require.NoError(t, err, "Expected err to be nil")
 
 		fileResponse, ok := resp.(response.File)
 		if !ok {

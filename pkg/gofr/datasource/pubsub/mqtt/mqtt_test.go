@@ -10,6 +10,7 @@ import (
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
 	"gofr.dev/pkg/gofr/datasource"
@@ -105,7 +106,7 @@ func TestMQTT_Ping(t *testing.T) {
 	mockClient.EXPECT().IsConnected().Return(true)
 	// Success Case
 	err := mq.Ping()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	mockClient.EXPECT().Disconnect(uint(1))
 
@@ -115,7 +116,7 @@ func TestMQTT_Ping(t *testing.T) {
 	mockClient.EXPECT().IsConnected().Return(false)
 	// Failure Case
 	err = mq.Ping()
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Equal(t, errClientNotConnected, err)
 }
 
@@ -139,8 +140,8 @@ func TestMQTT_Disconnect(t *testing.T) {
 	_ = client.Disconnect(1)
 
 	err := client.Publish(ctx, "test", msg)
-	assert.Error(t, err)
-	assert.ErrorIs(t, err, errToken)
+	require.Error(t, err)
+	require.ErrorIs(t, err, errToken)
 }
 
 func TestMQTT_DisconnectWithSubscriptions(t *testing.T) {
@@ -187,7 +188,7 @@ func TestMQTT_PublishSuccess(t *testing.T) {
 
 		err := client.Publish(ctx, "test/topic", msg)
 
-		assert.NoError(t, err)
+		require.NoError(t, err)
 	})
 
 	assert.Contains(t, out, "PUB")
@@ -215,8 +216,8 @@ func TestMQTT_PublishFailure(t *testing.T) {
 
 	err := client.Publish(ctx, "test/topic", []byte(`hello world`))
 
-	assert.Error(t, err)
-	assert.ErrorIs(t, err, errToken)
+	require.Error(t, err)
+	require.ErrorIs(t, err, errToken)
 }
 
 func TestMQTT_SubscribeSuccess(t *testing.T) {
@@ -245,7 +246,7 @@ func TestMQTT_SubscribeSuccess(t *testing.T) {
 	m, err := client.Subscribe(ctx, "test/topic")
 
 	assert.Equal(t, msg, m.Value)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 func TestMQTT_SubscribeFailure(t *testing.T) {
@@ -262,8 +263,8 @@ func TestMQTT_SubscribeFailure(t *testing.T) {
 	m, err := client.Subscribe(ctx, "test/topic")
 
 	assert.Nil(t, m)
-	assert.Error(t, err)
-	assert.ErrorIs(t, err, errToken)
+	require.Error(t, err)
+	require.ErrorIs(t, err, errToken)
 }
 
 func TestMQTT_SubscribeWithFunc(t *testing.T) {
@@ -286,7 +287,7 @@ func TestMQTT_SubscribeWithFunc(t *testing.T) {
 	mockToken.EXPECT().Error().Return(nil)
 
 	err := client.SubscribeWithFunction("test/topic", subscriptionFunc)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Error case where error is returned from subscription function
 	mockClient.EXPECT().Subscribe("test/topic", mockConfigs.QoS, gomock.Any()).Return(mockToken)
@@ -294,7 +295,7 @@ func TestMQTT_SubscribeWithFunc(t *testing.T) {
 	mockToken.EXPECT().Error().Return(nil)
 
 	err = client.SubscribeWithFunction("test/topic", subscriptionFuncErr)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Unsubscribe from the topic
 	mockClient.EXPECT().Unsubscribe("test/topic").Return(mockToken)
@@ -312,8 +313,8 @@ func TestMQTT_SubscribeWithFunc(t *testing.T) {
 	mockToken.EXPECT().Error().Return(errToken).Times(2)
 
 	err = client.SubscribeWithFunction("test/topic", subscriptionFunc)
-	assert.Error(t, err)
-	assert.ErrorIs(t, err, errToken)
+	require.Error(t, err)
+	require.ErrorIs(t, err, errToken)
 }
 
 func Test_getHandler(t *testing.T) {
@@ -348,7 +349,7 @@ func TestMQTT_Unsubscribe(t *testing.T) {
 		mockToken.EXPECT().Error().Return(nil)
 
 		err := client.Unsubscribe("test/topic")
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		// Failure case
 		mockClient.EXPECT().Disconnect(uint(1))
@@ -359,7 +360,7 @@ func TestMQTT_Unsubscribe(t *testing.T) {
 		mockToken.EXPECT().Error().Return(errToken).Times(3)
 
 		err = client.Unsubscribe("test/topic")
-		assert.Error(t, err)
+		require.Error(t, err)
 	})
 
 	assert.Contains(t, out, "error while unsubscribing from topic 'test/topic'")
@@ -378,7 +379,7 @@ func TestMQTT_CreateTopic(t *testing.T) {
 		mockToken.EXPECT().Error().Return(nil)
 
 		err := client.CreateTopic(context.Background(), "test/topic")
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		// Failure case
 		mockClient.EXPECT().Disconnect(uint(1))
@@ -391,7 +392,7 @@ func TestMQTT_CreateTopic(t *testing.T) {
 		mockToken.EXPECT().Error().Return(errToken).Times(3)
 
 		err = client.CreateTopic(context.Background(), "test/topic")
-		assert.Error(t, err)
+		require.Error(t, err)
 	})
 
 	assert.Contains(t, out, "unable to create topic 'test/topic'")
@@ -445,7 +446,7 @@ func TestMQTT_DeleteTopic(t *testing.T) {
 	m := &MQTT{}
 
 	err := m.DeleteTopic(context.Background(), "test/topic")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 func TestReconnectingHandler(t *testing.T) {
@@ -473,7 +474,7 @@ func TestConnectionLostHandler(t *testing.T) {
 	mockLogger.EXPECT().Errorf("mqtt connection lost, error: %v", gomock.Any()).
 		DoAndReturn(func(_ string, args ...interface{}) {
 			assert.Len(t, args, 1)
-			assert.Error(t, mqtt.ErrNotConnected, args[0])
+			require.Error(t, mqtt.ErrNotConnected, args[0])
 		})
 
 	connectionLostHandler := createConnectionLostHandler(mockLogger)
@@ -576,5 +577,5 @@ func TestMQTT_Close(t *testing.T) {
 	// Close the client
 	err := client.Close()
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }

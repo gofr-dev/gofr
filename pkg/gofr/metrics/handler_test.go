@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/metrics/exporters"
@@ -57,7 +58,7 @@ func Test_MetricsGetHandler_SystemMetricsRegistered(t *testing.T) {
 
 	resp, err := server.Client().Do(req)
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	body, _ := io.ReadAll(resp.Body)
 	defer resp.Body.Close()

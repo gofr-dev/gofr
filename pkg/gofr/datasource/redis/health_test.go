@@ -5,6 +5,7 @@ import (
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
 	"gofr.dev/pkg/gofr/config"
@@ -18,7 +19,7 @@ func TestRedis_HealthHandlerError(t *testing.T) {
 
 	// Mock Redis server setup
 	s, err := miniredis.Run()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	defer s.Close()
 
@@ -33,7 +34,7 @@ func TestRedis_HealthHandlerError(t *testing.T) {
 		"REDIS_PORT": s.Port(),
 	}), logging.NewMockLogger(logging.DEBUG), mockMetric)
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	health := client.HealthCheck()
 

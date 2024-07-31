@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
 	"gofr.dev/pkg/gofr/logging"
@@ -40,12 +41,12 @@ func Test_CustomDomainProvider_Get(t *testing.T) {
 		})
 
 	resp, err := customHeaderService.Get(context.Background(), "/path", queryParams)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	bodyBytes, _ := io.ReadAll(resp.Body)
 
@@ -73,12 +74,12 @@ func Test_CustomDomainProvider_Post(t *testing.T) {
 			}})
 
 	resp, err := customHeaderService.Post(context.Background(), "/path", queryParams, body)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusCreated, resp.StatusCode)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 func TestCustomDomainProvider_Put(t *testing.T) {
@@ -102,12 +103,12 @@ func TestCustomDomainProvider_Put(t *testing.T) {
 			}})
 
 	resp, err := customHeaderService.Put(context.Background(), "/path", queryParams, body)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 func TestCustomDomainProvider_Patch(t *testing.T) {
@@ -131,12 +132,12 @@ func TestCustomDomainProvider_Patch(t *testing.T) {
 			}})
 
 	resp, err := customHeaderService.Patch(context.Background(), "/path", queryParams, body)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 func TestCustomDomainProvider_Delete(t *testing.T) {
@@ -159,10 +160,10 @@ func TestCustomDomainProvider_Delete(t *testing.T) {
 			}})
 
 	resp, err := customHeaderService.Delete(context.Background(), "/path", body)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusNoContent, resp.StatusCode)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestExamplePublisher(t *testing.T) {
@@ -53,12 +54,10 @@ func TestExamplePublisher(t *testing.T) {
 		req, _ := http.NewRequest(http.MethodPost, host+tc.path, bytes.NewBuffer(tc.body))
 		req.Header.Set("content-type", "application/json")
 		resp, err := c.Do(req)
-
-		assert.Equal(t, tc.expectedStatusCode, resp.StatusCode, "TEST[%d], Failed.\n%s", i, tc.desc)
-		assert.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
-
 		defer resp.Body.Close()
 
+		assert.Equal(t, tc.expectedStatusCode, resp.StatusCode, "TEST[%d], Failed.\n%s", i, tc.desc)
+		require.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
 	}
 }
 
@@ -99,7 +98,7 @@ func TestExamplePublisherError(t *testing.T) {
 		resp, err := c.Do(req)
 
 		assert.Equal(t, tc.expectedStatusCode, resp.StatusCode, "TEST[%d], Failed.\n%s", i, tc.desc)
-		assert.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
+		require.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
 
 		defer resp.Body.Close()
 	}

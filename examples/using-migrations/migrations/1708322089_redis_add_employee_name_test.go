@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/go-redis/redismock/v9"
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"gofr.dev/pkg/gofr/migration"
 )
@@ -19,7 +19,7 @@ func TestAddEmployeeInRedis(t *testing.T) {
 
 	// Call the UP method of the migration
 	err := addEmployeeInRedis().UP(datasource)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 func TestAddEmployeeInRedis_Error(t *testing.T) {

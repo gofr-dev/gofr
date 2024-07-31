@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/datasource"
@@ -177,5 +178,5 @@ func TestSubscriptionManager_ShouldStopOnCtxDone(t *testing.T) {
 		return nil
 	})
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }

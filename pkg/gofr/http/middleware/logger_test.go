@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/testutil"
@@ -19,7 +20,7 @@ func Test_getIPAddress(t *testing.T) {
 		addr := "0.0.0.0:8080"
 		req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://dummy", http.NoBody)
 
-		assert.NoError(t, err, "TEST Failed.\n")
+		require.NoError(t, err, "TEST Failed.\n")
 
 		req.RemoteAddr = addr
 		ip := getIPAddress(req)
@@ -32,7 +33,7 @@ func Test_getIPAddress(t *testing.T) {
 		addr := "192.168.0.1:8080"
 		req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://dummy", http.NoBody)
 
-		assert.NoError(t, err, "TEST Failed.\n")
+		require.NoError(t, err, "TEST Failed.\n")
 
 		req.Header.Set("X-Forwarded-For", addr)
 		ip := getIPAddress(req)
