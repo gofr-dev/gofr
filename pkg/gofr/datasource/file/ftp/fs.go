@@ -163,19 +163,10 @@ func (f *ftpFileSystem) Mkdir(name string, _ os.FileMode) error {
 	return nil
 }
 
-// MkdirAll creates directories recursively on the FTP server. Here, os.FileMode is unused.
-// The directories are not created if even one directory exist.
-func (f *ftpFileSystem) MkdirAll(name string, _ os.FileMode) error {
-	defer f.processLog(&FileLog{Operation: "MkdirAll", Location: path.Join(f.config.RemoteDir, name)}, time.Now())
-
-	if name == "" {
-		f.logger.Errorf("MkdirAll failed. Provide a valid path : %v", errEmptyPath)
-		return errEmptyPath
-	}
-
+func mkdirAllHelper(filepath string) []string {
 	var dirs []string
 
-	currentdir := name
+	currentdir := filepath
 
 	for {
 		parentDir, dir := path.Split(currentdir)
@@ -186,6 +177,22 @@ func (f *ftpFileSystem) MkdirAll(name string, _ os.FileMode) error {
 		}
 		currentdir = path.Clean(parentDir)
 	}
+
+	return dirs
+}
+
+// MkdirAll creates directories recursively on the FTP server. Here, os.FileMode is unused.
+// The directories are not created if even one directory exist.
+func (f *ftpFileSystem) MkdirAll(name string, _ os.FileMode) error {
+	defer f.processLog(&FileLog{Operation: "MkdirAll", Location: path.Join(f.config.RemoteDir, name)}, time.Now())
+
+	if name == "" {
+		f.logger.Errorf("MkdirAll failed. Provide a valid path : %v", errEmptyPath)
+		return errEmptyPath
+	}
+
+	// returns a slice of all directories in the path
+	dirs := mkdirAllHelper(name)
 
 	currentDir := dirs[0]
 
