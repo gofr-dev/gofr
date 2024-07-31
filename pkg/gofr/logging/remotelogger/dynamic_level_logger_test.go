@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/service"
@@ -69,7 +70,7 @@ func Test_fetchAndUpdateLogLevel_InvalidResponse(t *testing.T) {
 
 	assert.Equal(t, logging.DEBUG, level, "Test_fetchAndUpdateLogLevel_InvalidResponse, Failed.\n")
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 func Test_fetchAndUpdateLogLevel_InvalidLogLevel(t *testing.T) {
@@ -96,7 +97,7 @@ func Test_fetchAndUpdateLogLevel_InvalidLogLevel(t *testing.T) {
 
 	assert.Equal(t, logging.DEBUG, level, "Test_fetchAndUpdateLogLevel_InvalidResponse, Failed.\n")
 
-	assert.Error(t, err)
+	require.Error(t, err)
 }
 
 func TestDynamicLoggerSuccess(t *testing.T) {

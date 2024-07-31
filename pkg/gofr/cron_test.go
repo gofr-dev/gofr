@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"gofr.dev/pkg/gofr/testutil"
 )
@@ -103,7 +104,7 @@ func TestCron_parseSchedule_Success(t *testing.T) {
 	for _, tc := range testCases {
 		j, err := parseSchedule(tc.schedule)
 
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, *tc.expJob, *j)
 	}
 }
@@ -150,7 +151,7 @@ func TestCron_parseSchedule_Error(t *testing.T) {
 				j, err := parseSchedule(s)
 
 				assert.Nil(t, j)
-				assert.ErrorContains(t, err, tc.expErrString)
+				require.ErrorContains(t, err, tc.expErrString)
 			}
 		})
 	}
@@ -311,6 +312,6 @@ func Test_noopRequest(t *testing.T) {
 	assert.Equal(t, "", noop.Param(""))
 	assert.Empty(t, noop.PathParam(""))
 	assert.Equal(t, "gofr", noop.HostName())
-	assert.NoError(t, noop.Bind(nil))
+	require.NoError(t, noop.Bind(nil))
 	assert.Nil(t, noop.Params("test"))
 }
