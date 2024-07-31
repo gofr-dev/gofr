@@ -59,7 +59,7 @@ type Cassandra interface {
 	//	   }
 	//	   users := []user{}
 	//	   err := c.Query(&users, "SELECT * FROM users")
-	Query(dest interface{}, stmt string, values ...interface{}) error
+	Query(dest any, stmt string, values ...any) error
 
 	// Exec executes the query without returning any rows.
 	// Return error if any error occurs while executing the query.
@@ -74,7 +74,7 @@ type Cassandra interface {
 	//	   id := 1
 	//	   name := "John Doe"
 	//	   err := c.Exec("INSERT INTO users VALUES(?, ?)", id, name)
-	Exec(stmt string, values ...interface{}) error
+	Exec(stmt string, values ...any) error
 
 	// ExecCAS executes a lightweight transaction (i.e. an UPDATE or INSERT statement containing an IF clause).
 	// If the transaction fails because the existing values did not match, the previous values will be stored in dest.
@@ -89,15 +89,8 @@ type Cassandra interface {
 	//		Name string
 	//	}
 	//	u := user{}
-	//	applied, err := c.ExecCAS(&ids, "INSERT INTO users VALUES(1, 'John Doe') IF NOT EXISTS")
-	ExecCAS(dest interface{}, stmt string, values ...interface{}) (bool, error)
-
-	// NewBatch creates a new batch operation using defaults defined in the cluster
-	// Supported `batchTypes` are CassandraLoggedBatch, CassandraUnloggedBatch and CassandraCounterBatch
-	//
-	// Example:
-	// batch := c.NewBatch(cassandra.LoggedBatch) // constant has been defined in the gofr.dev/pkg/gofr/datasource/cassandra
-	NewBatch(batchType int) error
+	//	applied, err := c.ExecCAS(&user, "INSERT INTO users VALUES(1, 'John Doe') IF NOT EXISTS")
+	ExecCAS(dest any, stmt string, values ...any) (bool, error)
 
 	// BatchQuery adds the query to the batch operation
 	//
@@ -114,7 +107,7 @@ type Cassandra interface {
 	//	   name2 := "Jane Smith"
 	//	   c.BatchQuery("INSERT INTO users VALUES(?, ?)", id1, name1)
 	//	   c.BatchQuery("INSERT INTO users VALUES(?, ?)", id2, name2)
-	BatchQuery(stmt string, values ...interface{})
+	BatchQuery(stmt string, values ...any)
 
 	// ExecuteBatch executes a batch operation and returns nil if successful otherwise an error is returned describing the failure.
 	//
@@ -122,6 +115,20 @@ type Cassandra interface {
 	//
 	//	err := c.ExecuteBatch()
 	ExecuteBatch() error
+
+	// ExecuteBatchCAS executes a batch operation and returns true if successful.
+	// Returns true if the query is applied otherwise false.
+	// Returns false and error if any error occur while executing the query.
+	// Accepts only pointer to struct and built-in types as the dest parameter.
+	//
+	// Example:
+	//
+	//	id := 1
+	//	name := "John Doe"
+	//	c.BatchQuery("INSERT INTO users VALUES(?, ?) IF NOT EXISTS", id, name)
+	//	c.BatchQuery("UPDATE users SET name=? WHERE id=?", name, id)
+	//  c.Execute;
+	ExecuteBatchCAS(dest ...any) (bool, error)
 
 	HealthChecker
 }
