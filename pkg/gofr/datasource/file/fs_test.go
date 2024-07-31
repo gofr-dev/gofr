@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/logging"
@@ -22,11 +23,11 @@ func Test_LocalFileSystemDirectoryCreation(t *testing.T) {
 	err := fileStore.Mkdir(dirName, os.ModePerm)
 	defer os.RemoveAll(dirName)
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	fInfo, err := os.Stat(dirName)
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.True(t, fInfo.IsDir())
 }
 
@@ -69,7 +70,7 @@ func Test_CreateReadDeleteFile(t *testing.T) {
 		_ = fileStore.Remove(name)
 	}(fileStore, fileName)
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	tempFile, _ := fileStore.Open("temp.txt")
 
@@ -77,7 +78,7 @@ func Test_CreateReadDeleteFile(t *testing.T) {
 
 	_, err = tempFile.Read(reader)
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Contains(t, string(reader), "some content")
 }
 
@@ -90,14 +91,14 @@ func Test_CreateMoveDeleteFile(t *testing.T) {
 
 	_, err := fileStore.Create(fileName)
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	err = fileStore.Rename("temp.txt", "temp.text")
 	defer func(fileStore datasource.FileSystem, name string) {
 		_ = fileStore.Remove(name)
 	}(fileStore, "temp.text")
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 func Test_CreateUpdateReadFile(t *testing.T) {
@@ -115,7 +116,7 @@ func Test_CreateUpdateReadFile(t *testing.T) {
 		_ = fileStore.Remove(name)
 	}(fileStore, fileName)
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	openedFile, _ := fileStore.OpenFile(fileName, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, os.ModePerm)
 	_, _ = openedFile.WriteAt([]byte("some new content"), 0)
@@ -126,7 +127,7 @@ func Test_CreateUpdateReadFile(t *testing.T) {
 	_, err = openedFile.Read(reader)
 	openedFile.Close()
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Contains(t, string(reader), "some new content")
 }
 
@@ -149,7 +150,7 @@ func Test_CreateAndDeleteMultipleDirectories(t *testing.T) {
 
 	err := fileStore.RemoveAll("temp")
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 func Test_ReadFromCSV(t *testing.T) {
@@ -190,7 +191,7 @@ Michael Brown,40,michaelb@example.com`
 
 		assert.Equal(t, csvValue[i], content)
 
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		i++
 	}
@@ -219,7 +220,7 @@ func Test_ReadFromCSVScanError(t *testing.T) {
 
 		err := reader.Scan(content)
 
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Equal(t, "", content)
 	}
 }
@@ -259,7 +260,7 @@ func Test_ReadFromJSONArray(t *testing.T) {
 		assert.Equal(t, jsonValue[i].Name, u.Name)
 		assert.Equal(t, jsonValue[i].Age, u.Age)
 
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		i++
 	}
@@ -296,7 +297,7 @@ func Test_ReadFromJSONObject(t *testing.T) {
 		assert.Equal(t, "Sam", u.Name)
 		assert.Equal(t, 123, u.Age)
 
-		assert.NoError(t, err)
+		require.NoError(t, err)
 	}
 }
 
