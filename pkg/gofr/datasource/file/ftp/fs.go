@@ -197,7 +197,7 @@ func (f *ftpFileSystem) MkdirAll(name string, _ os.FileMode) error {
 		f.logger.Errorf("MkdirAll failed. Provide a valid path : %v", errEmptyPath)
 		return errEmptyPath
 	}
-
+	// returns a slice of those directories that do not exist with the first index being the latest existing parent directory path.
 	dirs := f.mkdirAllHelper(name)
 
 	currentDir := dirs[0]
