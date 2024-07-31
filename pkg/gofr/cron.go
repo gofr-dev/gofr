@@ -13,7 +13,6 @@ import (
 	"go.opentelemetry.io/otel"
 
 	"gofr.dev/pkg/gofr/container"
-	"gofr.dev/pkg/gofr/queryparam"
 	"gofr.dev/pkg/gofr/version"
 )
 
@@ -355,6 +354,6 @@ func (noopRequest) Bind(interface{}) error {
 	return nil
 }
 
-func (noopRequest) QueryParams() queryparam.QueryParams {
+func (noopRequest) Params(string) []string {
 	return nil
 }

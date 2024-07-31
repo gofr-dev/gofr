@@ -6,8 +6,6 @@ import (
 	"errors"
 	"reflect"
 	"strconv"
-
-	"gofr.dev/pkg/gofr/queryparam"
 )
 
 var errNotPointer = errors.New("input should be a pointer to a variable")
@@ -112,6 +110,6 @@ func (*Message) HostName() string {
 	return ""
 }
 
-func (*Message) QueryParams() queryparam.QueryParams {
+func (*Message) Params(string) []string {
 	return nil
 }

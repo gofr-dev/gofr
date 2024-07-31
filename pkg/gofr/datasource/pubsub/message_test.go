@@ -231,5 +231,5 @@ func TestMessage_HostName(t *testing.T) {
 func TestMessage_QueryParam(t *testing.T) {
 	m := &Message{}
 
-	assert.Nil(t, m.QueryParams())
+	assert.Nil(t, m.Params("test"))
 }

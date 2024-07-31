@@ -8,8 +8,6 @@ import (
 	"sync"
 
 	"github.com/gorilla/websocket"
-
-	"gofr.dev/pkg/gofr/queryparam"
 )
 
 // WSKey defines the key type for WSConnectionKey.
@@ -140,6 +138,6 @@ func (ws *Manager) CloseConnection(connID string) {
 	}
 }
 
-func (*Connection) QueryParams() queryparam.QueryParams {
+func (*Connection) Params(string) []string {
 	return nil
 }

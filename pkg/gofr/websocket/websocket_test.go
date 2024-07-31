@@ -130,7 +130,7 @@ func Test_UnimplementedMethods(t *testing.T) {
 	assert.Empty(t, conn.PathParam("test"))
 	assert.Empty(t, conn.HostName())
 	assert.NotNil(t, conn.Context())
-	assert.Nil(t, conn.QueryParams())
+	assert.Nil(t, conn.Params("test"))
 }
 
 func dereference(v interface{}) interface{} {

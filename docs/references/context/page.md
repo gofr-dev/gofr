@@ -58,20 +58,12 @@ parts of the request.
     // the host would be http://xyz.com
     // Note: the protocol if not provided in the headers will be set to http by default
   ```
-- `QueryParams()` - to access query parameters with support for multiple values
-
-    - `Get(string)` - retrieves the first value for a given query parameter key
-      ```go
-       // Example: Request is /search?category=books&category=electronics
-       value := ctx.Request.QueryParams().Get("category")
-       // value = "books"
-      ```
-    - `GetAll(string)` - retrieves all values for a given query parameter key, including comma-separated values
-      ```go
-      // Example: Request is /search?category=books,electronics&category=tech
-      values := ctx.Request.QueryParams().GetAll("category")
-      // values = []string{"books", "electronics", "tech"}
-      ```
+- `Params()` - to access all query parameters for a given key returning comma-separated values
+  ```go
+    // Example: Request is /search?category=books,electronics&category=tech
+    values := ctx.Request.Params("category")
+    // values = []string{"books", "electronics", "tech"}
+  ```
 
 ## Accessing dependencies
 

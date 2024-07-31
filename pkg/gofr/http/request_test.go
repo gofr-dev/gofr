@@ -235,21 +235,7 @@ func Test_bindMultipart_Fail_ParseMultiPart(t *testing.T) {
 	assert.ErrorContains(t, err, "http: multipart handled by MultipartReader")
 }
 
-func TestQueryParams_Get(t *testing.T) {
-	req := &http.Request{
-		URL: &url.URL{
-			RawQuery: "category=books&category=electronics&tag=tech",
-		},
-	}
-	r := NewRequest(req)
-
-	q := r.QueryParams()
-	assert.Equal(t, "books", q.Get("category"), "expected the first value of 'category' to be 'books'")
-	assert.Equal(t, "tech", q.Get("tag"), "expected the value of 'tag' to be 'tech'")
-	assert.Empty(t, q.Get("nonexistent"), "expected empty string for nonexistent query param")
-}
-
-func TestQueryParams_GetAll(t *testing.T) {
+func Test_Params(t *testing.T) {
 	req := &http.Request{
 		URL: &url.URL{
 			RawQuery: "category=books&category=electronics&tag=tech,science",
@@ -257,12 +243,10 @@ func TestQueryParams_GetAll(t *testing.T) {
 	}
 	r := NewRequest(req)
 
-	q := r.QueryParams()
-
 	expectedCategories := []string{"books", "electronics"}
 	expectedTags := []string{"tech", "science"}
 
-	assert.ElementsMatch(t, expectedCategories, q.GetAll("category"), "expected all values of 'category' to match")
-	assert.ElementsMatch(t, expectedTags, q.GetAll("tag"), "expected all values of 'tag' to match")
-	assert.Empty(t, q.GetAll("nonexistent"), "expected empty slice for non-existent query param")
+	assert.ElementsMatch(t, expectedCategories, r.Params("category"), "expected all values of 'category' to match")
+	assert.ElementsMatch(t, expectedTags, r.Params("tag"), "expected all values of 'tag' to match")
+	assert.Empty(t, r.Params("nonexistent"), "expected empty slice for non-existent query param")
 }
