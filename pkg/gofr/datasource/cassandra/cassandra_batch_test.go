@@ -1,11 +1,11 @@
 package cassandra
 
 import (
-	"go.uber.org/mock/gomock"
 	"testing"
 
 	"github.com/gocql/gocql"
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/mock/gomock"
 )
 
 func Test_BatchQuery(t *testing.T) {

@@ -24,7 +24,6 @@ func (c *Client) ExecuteBatch(name string) error {
 	return ErrBatchNotInitialised
 }
 
-//nolint:exhaustive // We just want to take care of slice and struct in this case.
 func (c *Client) ExecuteBatchCAS(name string, dest ...any) (bool, error) {
 	defer c.postProcess(&QueryLog{Query: "batch", Keyspace: c.config.Keyspace}, time.Now())
 
