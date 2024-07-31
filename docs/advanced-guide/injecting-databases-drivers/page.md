@@ -173,17 +173,27 @@ suits your project's needs.
 
 ```go
 type Cassandra interface {
-	Query(dest interface{}, stmt string, values ...interface{}) error
+	Query(dest interface{}, stmt string, values ...any) error
 
-	Exec(stmt string, values ...interface{}) error
+	Exec(stmt string, values ...any) error
 	
-	ExecCAS(dest interface{}, stmt string, values ...interface{}) (bool, error)
+	ExecCAS(dest any, stmt string, values ...any) (bool, error)
 
-	NewBatch(batchType int) error
-
-	BatchQuery(stmt string, values ...interface{})
+	BatchQuery(stmt string, values ...any) error
 
 	ExecuteBatch() error
+
+	NewBatch(name string, batchType int) error
+
+	CassandraBatch
+}
+
+type CassandraBatch interface {
+    BatchQuery(name, stmt string, values ...any)
+	
+    ExecuteBatch(name string) error
+	
+    ExecuteBatchCAS(name string, dest ...any) (bool, error)
 }
 ```
 

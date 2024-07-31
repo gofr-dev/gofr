@@ -92,6 +92,20 @@ type Cassandra interface {
 	//	applied, err := c.ExecCAS(&user, "INSERT INTO users VALUES(1, 'John Doe') IF NOT EXISTS")
 	ExecCAS(dest any, stmt string, values ...any) (bool, error)
 
+	// NewBatch creates a new Cassandra batch with the specified name and batch type.
+	//
+	// This method initializes a new Cassandra batch operation. It sets up the batch
+	// with the given name and type, allowing you to execute multiple queries in
+	// a single batch operation. The `batchType` determines the type of batch operation
+	// and can be one of `LoggedBatch`, `UnloggedBatch`, or `CounterBatch`.
+	// These constants have been defined in gofr.dev/pkg/gofr/datasource/cassandra
+	//
+	// Example:
+	//	err := client.NewBatch("myBatch", cassandra.LoggedBatch)
+	NewBatch(name string, batchType int) error
+
+	CassandraBatch
+
 	HealthChecker
 }
 
@@ -111,14 +125,14 @@ type CassandraBatch interface {
 	//	   name2 := "Jane Smith"
 	//	   c.BatchQuery("INSERT INTO users VALUES(?, ?)", id1, name1)
 	//	   c.BatchQuery("INSERT INTO users VALUES(?, ?)", id2, name2)
-	BatchQuery(stmt string, values ...any)
+	BatchQuery(name, stmt string, values ...any) error
 
 	// ExecuteBatch executes a batch operation and returns nil if successful otherwise an error is returned describing the failure.
 	//
 	// Example:
 	//
-	//	err := c.ExecuteBatch()
-	ExecuteBatch() error
+	//	err := c.ExecuteBatch("myBatch")
+	ExecuteBatch(name string) error
 
 	// ExecuteBatchCAS executes a batch operation and returns true if successful.
 	// Returns true if the query is applied otherwise false.
@@ -127,12 +141,8 @@ type CassandraBatch interface {
 	//
 	// Example:
 	//
-	//	id := 1
-	//	name := "John Doe"
-	//	c.BatchQuery("INSERT INTO users VALUES(?, ?) IF NOT EXISTS", id, name)
-	//	c.BatchQuery("UPDATE users SET name=? WHERE id=?", name, id)
-	//  c.Execute;
-	ExecuteBatchCAS(dest any) (bool, error)
+	//  applied, err := c.ExecuteBatchCAS("myBatch");
+	ExecuteBatchCAS(name string, dest ...any) (bool, error)
 }
 
 type CassandraProvider interface {
