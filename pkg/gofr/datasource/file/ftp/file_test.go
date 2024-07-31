@@ -32,6 +32,7 @@ func TestRead(t *testing.T) {
 			filePath: "/ftp/one/nonexistent.txt",
 			mockReadResponse: func(response *MockftpResponse) {
 				response.EXPECT().Read(gomock.Any()).Return(0, errors.New("mocked read error"))
+				response.EXPECT().Close().Return(nil)
 			},
 			expectError: true,
 		},
@@ -48,6 +49,7 @@ func TestRead(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockFtpConn := NewMockServerConn(ctrl)
+	mockLogger := NewMockLogger(ctrl)
 
 	// Create ftpFileSystem instance
 	fs := &ftpFileSystem{
@@ -59,9 +61,11 @@ func TestRead(t *testing.T) {
 			Port:      21,
 			RemoteDir: "/ftp/one",
 		},
+		logger: mockLogger,
 	}
-
-	fs.UseLogger(NewLogger(INFO))
+	// mocked logs
+	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -110,6 +114,7 @@ func TestReadAt(t *testing.T) {
 			offset:   0,
 			mockReadResponse: func(response *MockftpResponse) {
 				response.EXPECT().Read(gomock.Any()).Return(0, errors.New("mocked read error"))
+				response.EXPECT().Close().Return(nil)
 			},
 			expectError: true,
 		},
@@ -127,6 +132,7 @@ func TestReadAt(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockFtpConn := NewMockServerConn(ctrl)
+	mockLogger := NewMockLogger(ctrl)
 
 	// Create ftpFileSystem instance
 	fs := &ftpFileSystem{
@@ -138,9 +144,11 @@ func TestReadAt(t *testing.T) {
 			Port:      21,
 			RemoteDir: "/ftp/one",
 		},
+		logger: mockLogger,
 	}
-
-	fs.UseLogger(NewLogger(INFO))
+	// mocked logs
+	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	for _, tt := range readAtTests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -206,6 +214,7 @@ func TestWrite(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockFtpConn := NewMockServerConn(ctrl)
+	mockLogger := NewMockLogger(ctrl)
 
 	// Create ftpFileSystem instance
 	fs := &ftpFileSystem{
@@ -217,9 +226,11 @@ func TestWrite(t *testing.T) {
 			Port:      21,
 			RemoteDir: "/ftp/one",
 		},
+		logger: mockLogger,
 	}
-
-	fs.UseLogger(NewLogger(INFO))
+	// mocked logs
+	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 
 	for _, tt := range writeTests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -279,6 +290,7 @@ func TestWriteAt(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockFtpConn := NewMockServerConn(ctrl)
+	mockLogger := NewMockLogger(ctrl)
 
 	// Create ftpFileSystem instance
 	fs := &ftpFileSystem{
@@ -290,9 +302,11 @@ func TestWriteAt(t *testing.T) {
 			Port:      21,
 			RemoteDir: "/ftp/one",
 		},
+		logger: mockLogger,
 	}
-
-	fs.UseLogger(NewLogger(INFO))
+	// mocked logs
+	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	for _, tt := range writeAtTests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -324,32 +338,11 @@ func TestSeek(t *testing.T) {
 			expectedError: nil,
 		},
 		{
-			name:          "Seek from start with negative offset",
-			offset:        -3,
-			whence:        io.SeekStart,
-			expectedPos:   0,
-			expectedError: ErrOutOfRange,
-		},
-		{
-			name:          "Seek from start with out-of-range offset",
-			offset:        15,
-			whence:        io.SeekStart,
-			expectedPos:   0,
-			expectedError: ErrOutOfRange,
-		},
-		{
 			name:          "Seek from end with valid offset",
 			offset:        -3,
 			whence:        io.SeekEnd,
 			expectedPos:   7,
 			expectedError: nil,
-		},
-		{
-			name:          "Seek from end with positive offset",
-			offset:        3,
-			whence:        io.SeekEnd,
-			expectedPos:   0,
-			expectedError: ErrOutOfRange,
 		},
 		{
 			name:          "Seek from current with valid offset",
@@ -364,6 +357,27 @@ func TestSeek(t *testing.T) {
 			whence:        io.SeekCurrent,
 			expectedPos:   0,
 			expectedError: nil,
+		},
+		{
+			name:          "Seek from start with negative offset",
+			offset:        -3,
+			whence:        io.SeekStart,
+			expectedPos:   0,
+			expectedError: ErrOutOfRange,
+		},
+		{
+			name:          "Seek from start with out-of-range offset",
+			offset:        15,
+			whence:        io.SeekStart,
+			expectedPos:   0,
+			expectedError: ErrOutOfRange,
+		},
+		{
+			name:          "Seek from end with positive offset",
+			offset:        3,
+			whence:        io.SeekEnd,
+			expectedPos:   0,
+			expectedError: ErrOutOfRange,
 		},
 		{
 			name:          "Seek from current with out-of-range offset",
@@ -385,13 +399,17 @@ func TestSeek(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockFtpConn := NewMockServerConn(ctrl)
+	mockLogger := NewMockLogger(ctrl)
 
 	file := &ftpFile{
 		path:   "/ftp/one/testfile2.txt",
 		conn:   mockFtpConn,
 		offset: 5, // Starting offset for the file
-		logger: NewLogger(INFO),
+		logger: mockLogger,
 	}
+
+	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any(), gomock.Any()).Times(4)
+	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).Times(5)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -407,7 +425,7 @@ func TestSeek(t *testing.T) {
 
 // The test defined below do not use any mocking. They need an actual ftp server connection.
 func Test_ReadFromCSV(t *testing.T) {
-	runFtpTest(t, func(fs FileSystem) {
+	runFtpTest(t, func(fs FileSystemProvider) {
 		var csvContent = `Name,Age,Email
 John Doe,30,johndoe@example.com
 Jane Smith,25,janesmith@example.com
@@ -494,10 +512,15 @@ Victoria Nguyen,32,victorian@example.com`
 			"Victoria Nguyen,32,victorian@example.com",
 		}
 
+		ctrl := gomock.NewController(t)
+		mockLogger := NewMockLogger(ctrl)
+		fs.UseLogger(mockLogger)
+
+		mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
+
 		newCsvFile, _ := fs.Create("temp.csv")
 
 		_, err := newCsvFile.Write([]byte(csvContent))
-
 		if err != nil {
 			t.Errorf("Write method failed: %v", err)
 		}
@@ -525,8 +548,14 @@ Victoria Nguyen,32,victorian@example.com`
 }
 
 func Test_ReadFromCSVScanError(t *testing.T) {
-	runFtpTest(t, func(fs FileSystem) {
+	runFtpTest(t, func(fs FileSystemProvider) {
 		var csvContent = `Name,Age,Email`
+
+		ctrl := gomock.NewController(t)
+		mockLogger := NewMockLogger(ctrl)
+		fs.UseLogger(mockLogger)
+
+		mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
 
 		newCsvFile, _ := fs.Create("temp.csv")
 
@@ -554,8 +583,9 @@ func Test_ReadFromCSVScanError(t *testing.T) {
 }
 
 func Test_ReadFromJSONArray(t *testing.T) {
-	runFtpTest(t, func(fs FileSystem) {
+	runFtpTest(t, func(fs FileSystemProvider) {
 		var jsonContent = `[{"name": "Sam", "age": 123},
+
 {"name": "Jane", "age": 456},
 {"name": "John", "age": 789},
 {"name": "Sam", "age": 123},
@@ -647,6 +677,12 @@ func Test_ReadFromJSONArray(t *testing.T) {
 			{"John", 789},
 		}
 
+		ctrl := gomock.NewController(t)
+		mockLogger := NewMockLogger(ctrl)
+		fs.UseLogger(mockLogger)
+
+		mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
+
 		newCsvFile, _ := fs.Create("temp.json")
 
 		_, _ = newCsvFile.Write([]byte(jsonContent))
@@ -679,13 +715,19 @@ func Test_ReadFromJSONArray(t *testing.T) {
 }
 
 func Test_ReadFromJSONObject(t *testing.T) {
-	runFtpTest(t, func(fs FileSystem) {
+	runFtpTest(t, func(fs FileSystemProvider) {
 		var jsonContent = `{"name": "Sam", "age": 123}`
 
 		type User struct {
 			Name string `json:"name"`
 			Age  int    `json:"age"`
 		}
+
+		ctrl := gomock.NewController(t)
+		mockLogger := NewMockLogger(ctrl)
+		fs.UseLogger(mockLogger)
+
+		mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
 
 		newCsvFile, _ := fs.Create("temp.json")
 
@@ -715,8 +757,14 @@ func Test_ReadFromJSONObject(t *testing.T) {
 }
 
 func Test_ReadFromJSONArrayInvalidDelimiter(t *testing.T) {
-	runFtpTest(t, func(fs FileSystem) {
+	runFtpTest(t, func(fs FileSystemProvider) {
 		var jsonContent = `!@#$%^&*`
+
+		ctrl := gomock.NewController(t)
+		mockLogger := NewMockLogger(ctrl)
+		fs.UseLogger(mockLogger)
+
+		mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
 
 		newCsvFile, _ := fs.Create("temp.json")
 
@@ -739,20 +787,21 @@ func Test_ReadFromJSONArrayInvalidDelimiter(t *testing.T) {
 	})
 }
 
-func runFtpTest(t *testing.T, testFunc func(fs FileSystem)) {
+func runFtpTest(t *testing.T, testFunc func(fs FileSystemProvider)) {
 	t.Helper()
 
 	config := &Config{
 		Host:      "127.0.0.1",
-		User:      "one",
-		Password:  "1234",
+		User:      "user",
+		Password:  "password",
 		Port:      21,
-		RemoteDir: "/ftp/one",
+		RemoteDir: "/ftp/user",
 	}
 
 	ftpClient := New(config)
-
-	ftpClient.UseLogger(NewLogger(INFO))
+	mockLogger := NewMockLogger(gomock.NewController(t))
+	ftpClient.UseLogger(mockLogger)
+	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
 	ftpClient.Connect()
 
 	// Run the test function with the initialized file system
