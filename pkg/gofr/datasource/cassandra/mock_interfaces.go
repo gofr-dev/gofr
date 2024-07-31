@@ -91,6 +91,22 @@ func (mr *MocksessionMockRecorder) executeBatch(batch any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "executeBatch", reflect.TypeOf((*Mocksession)(nil).executeBatch), batch)
 }
 
+// executeBatchCAS mocks base method.
+func (m *Mocksession) executeBatchCAS(b batch) (bool, iterator, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "executeBatchCAS", b)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(iterator)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
+}
+
+// executeBatchCAS indicates an expected call of executeBatchCAS.
+func (mr *MocksessionMockRecorder) executeBatchCAS(b any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "executeBatchCAS", reflect.TypeOf((*Mocksession)(nil).executeBatchCAS), b)
+}
+
 // newBatch mocks base method.
 func (m *Mocksession) newBatch(batchtype gocql.BatchType) batch {
 	m.ctrl.T.Helper()

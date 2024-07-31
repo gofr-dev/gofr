@@ -1,6 +1,8 @@
 package cassandra
 
-import "github.com/gocql/gocql"
+import (
+	"github.com/gocql/gocql"
+)
 
 //go:generate mockgen -source=interfaces.go -destination=mock_interfaces.go -package=cassandra
 
@@ -17,6 +19,7 @@ type session interface {
 	query(stmt string, values ...interface{}) query
 	newBatch(batchtype gocql.BatchType) batch
 	executeBatch(batch batch) error
+	executeBatchCAS(b batch) (bool, iterator, error)
 }
 
 // query defines methods for interacting with a Cassandra query.

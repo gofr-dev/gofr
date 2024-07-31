@@ -23,7 +23,7 @@ type mockDependencies struct {
 	mockIter    *Mockiterator
 }
 
-func initTest(t *testing.T) (*Client, *mockDependencies) {
+func initTest(t *testing.T) (*Client, *Batch, *mockDependencies) {
 	t.Helper()
 
 	ctrl := gomock.NewController(t)
@@ -48,12 +48,13 @@ func initTest(t *testing.T) (*Client, *mockDependencies) {
 	client.UseMetrics(mockMetrics)
 
 	client.cassandra.session = mockSession
-	client.cassandra.batch = mockBatch
+
+	batchClient := &Batch{Client: client, batch: mockBatch}
 
 	mockMetrics.EXPECT().RecordHistogram(gomock.AssignableToTypeOf(context.Background()), "app_cassandra_stats",
 		gomock.AssignableToTypeOf(float64(0)), "hostname", client.config.Hosts, "keyspace", client.config.Keyspace).AnyTimes()
 
-	return client, &mockDependencies{mockSession: mockSession, mockQuery: mockQuery, mockBatch: mockBatch, mockIter: mockIter}
+	return client, batchClient, &mockDependencies{mockSession: mockSession, mockQuery: mockQuery, mockBatch: mockBatch, mockIter: mockIter}
 }
 
 func Test_Connect(t *testing.T) {
@@ -118,7 +119,7 @@ func Test_Query(t *testing.T) {
 	mockStruct := users{}
 	mockInt := 0
 
-	client, mockDeps := initTest(t)
+	client, _, mockDeps := initTest(t)
 
 	testCases := []struct {
 		desc     string
@@ -167,7 +168,7 @@ func Test_Query(t *testing.T) {
 func Test_Exec(t *testing.T) {
 	const query = "INSERT INTO users (id, name) VALUES(1, 'Test')"
 
-	client, mockDeps := initTest(t)
+	client, _, mockDeps := initTest(t)
 
 	testCases := []struct {
 		desc     string
@@ -204,7 +205,7 @@ func Test_ExecCAS(t *testing.T) {
 	mockStruct := users{}
 	mockInt := 0
 
-	client, mockDeps := initTest(t)
+	client, _, mockDeps := initTest(t)
 
 	testCases := []struct {
 		desc       string
@@ -251,7 +252,7 @@ func Test_ExecCAS(t *testing.T) {
 func Test_HealthCheck(t *testing.T) {
 	const query = "SELECT now() FROM system.local"
 
-	client, mockDeps := initTest(t)
+	client, _, mockDeps := initTest(t)
 
 	testCases := []struct {
 		desc      string
@@ -312,116 +313,4 @@ func Test_cassandraSession_Query(t *testing.T) {
 
 	assert.NotNil(t, q, "Test Failed")
 	assert.IsType(t, &cassandraQuery{}, q, "Test Failed")
-}
-
-func Test_NewBatch(t *testing.T) {
-	client, mockDeps := initTest(t)
-
-	testCases := []struct {
-		desc      string
-		batchType int
-		mockCall  func()
-		expErr    error
-	}{
-		{"valid batch type 0", 0, func() {
-			mockDeps.mockSession.EXPECT().newBatch(gocql.BatchType(0)).Return(&cassandraBatch{}).Times(1)
-		}, nil},
-		{"valid batch type 1", 1, func() {
-			mockDeps.mockSession.EXPECT().newBatch(gocql.BatchType(1)).Return(&cassandraBatch{}).Times(1)
-		}, nil},
-		{"valid batch type 2", 2, func() {
-			mockDeps.mockSession.EXPECT().newBatch(gocql.BatchType(2)).Return(&cassandraBatch{}).Times(1)
-		}, nil},
-		{"invalid batch type", 3, func() {}, ErrUnsupportedBatchType},
-	}
-
-	for i, tc := range testCases {
-		tc.mockCall()
-
-		err := client.NewBatch(tc.batchType)
-
-		assert.Equalf(t, tc.expErr, err, "TEST[%d], Failed.\n%s", i, tc.desc)
-	}
-}
-
-func Test_BatchQuery(t *testing.T) {
-	client, mockDeps := initTest(t)
-
-	const stmt = "INSERT INTO users (id, name) VALUES(?, ?)"
-
-	values := []interface{}{1, "Test"}
-
-	mockDeps.mockBatch.EXPECT().Query(stmt, values...)
-
-	client.BatchQuery(stmt, values...)
-
-	assert.NotNil(t, client.cassandra.batch, "TEST, Failed.\n")
-}
-
-func Test_ExecuteBatch(t *testing.T) {
-	client, mockDeps := initTest(t)
-
-	testCases := []struct {
-		desc     string
-		mockCall func()
-		expErr   error
-	}{
-		{"execute batch success", func() {
-			mockDeps.mockSession.EXPECT().executeBatch(mockDeps.mockBatch).Return(nil).Times(1)
-		}, nil},
-		{"execute batch failure", func() {
-			mockDeps.mockSession.EXPECT().executeBatch(mockDeps.mockBatch).Return(errMock).Times(1)
-		}, errMock},
-	}
-
-	for i, tc := range testCases {
-		tc.mockCall()
-
-		err := client.ExecuteBatch()
-
-		assert.Equalf(t, tc.expErr, err, "TEST[%d], Failed.\n%s", i, tc.desc)
-	}
-}
-
-func Test_ExecuteBatch_NotInitialised(t *testing.T) {
-	client, _ := initTest(t)
-
-	client.cassandra.batch = nil
-
-	err := client.ExecuteBatch()
-
-	assert.Equalf(t, ErrBatchNotInitialised, err, "TEST, Failed")
-}
-
-func Test_newBatch(t *testing.T) {
-	cassSession := &cassandraSession{session: &gocql.Session{}}
-
-	testCases := []struct {
-		desc      string
-		batchType gocql.BatchType
-	}{
-		{"create logged batch", gocql.LoggedBatch},
-		{"create unlogged batch", gocql.UnloggedBatch},
-		{"create counter batch", gocql.CounterBatch},
-	}
-
-	for i, tc := range testCases {
-		b := cassSession.newBatch(tc.batchType)
-
-		assert.NotNil(t, b, "TEST[%d], Failed.\n%s", i, tc.desc)
-	}
-}
-
-func Test_cassandraBatch_Query(t *testing.T) {
-	c := &cassandraBatch{batch: &gocql.Batch{}}
-
-	c.Query("test query")
-
-	assert.Equalf(t, 1, c.batch.Size(), "Test Failed")
-}
-
-func Test_cassandraBatch_getBatch(t *testing.T) {
-	c := &cassandraBatch{batch: &gocql.Batch{}}
-
-	assert.NotNil(t, c.getBatch(), "Test Failed")
 }

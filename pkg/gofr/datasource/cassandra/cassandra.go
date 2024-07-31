@@ -27,7 +27,6 @@ type cassandra struct {
 	clusterConfig clusterConfig
 	session       session
 	query         query
-	batch         batch
 }
 
 type Client struct {
@@ -89,7 +88,7 @@ func (c *Client) UseMetrics(metrics interface{}) {
 }
 
 //nolint:exhaustive // We just want to take care of slice and struct in this case.
-func (c *Client) Query(dest interface{}, stmt string, values ...interface{}) error {
+func (c *Client) Query(dest any, stmt string, values ...any) error {
 	defer c.postProcess(&QueryLog{Query: stmt, Keyspace: c.config.Keyspace}, time.Now())
 
 	rvo := reflect.ValueOf(dest)
@@ -136,14 +135,14 @@ func (c *Client) Query(dest interface{}, stmt string, values ...interface{}) err
 	return nil
 }
 
-func (c *Client) Exec(stmt string, values ...interface{}) error {
+func (c *Client) Exec(stmt string, values ...any) error {
 	defer c.postProcess(&QueryLog{Query: stmt, Keyspace: c.config.Keyspace}, time.Now())
 
 	return c.cassandra.session.query(stmt, values...).exec()
 }
 
 //nolint:exhaustive // We just want to take care of slice and struct in this case.
-func (c *Client) ExecCAS(dest interface{}, stmt string, values ...interface{}) (bool, error) {
+func (c *Client) ExecCAS(dest any, stmt string, values ...any) (bool, error) {
 	var (
 		applied bool
 		err     error
@@ -182,31 +181,6 @@ func (c *Client) ExecCAS(dest interface{}, stmt string, values ...interface{}) (
 	return applied, err
 }
 
-func (c *Client) NewBatch(batchType int) error {
-	switch batchType {
-	case LoggedBatch, UnloggedBatch, CounterBatch:
-		c.cassandra.batch = c.cassandra.session.newBatch(gocql.BatchType(batchType))
-
-		return nil
-	default:
-		return ErrUnsupportedBatchType
-	}
-}
-
-func (c *Client) BatchQuery(stmt string, values ...interface{}) {
-	c.cassandra.batch.Query(stmt, values...)
-}
-
-func (c *Client) ExecuteBatch() error {
-	defer c.postProcess(&QueryLog{Keyspace: c.config.Keyspace}, time.Now())
-
-	if c.cassandra.batch == nil {
-		return ErrBatchNotInitialised
-	}
-
-	return c.cassandra.session.executeBatch(c.cassandra.batch)
-}
-
 func (c *Client) rowsToStruct(iter iterator, vo reflect.Value) {
 	v := vo
 	if vo.Kind() == reflect.Ptr {
@@ -230,7 +204,7 @@ func (c *Client) rowsToStructCAS(query query, vo reflect.Value) (bool, error) {
 		v = vo.Elem()
 	}
 
-	row := make(map[string]interface{})
+	row := make(map[string]any)
 
 	applied, err := query.mapScanCAS(row)
 	if err != nil {
@@ -255,14 +229,14 @@ func (c *Client) rowsToStructCAS(query query, vo reflect.Value) (bool, error) {
 	return applied, nil
 }
 
-func (*Client) getFields(columns []string, fieldNameIndex map[string]int, v reflect.Value) []interface{} {
-	fields := make([]interface{}, 0)
+func (*Client) getFields(columns []string, fieldNameIndex map[string]int, v reflect.Value) []any {
+	fields := make([]any, 0)
 
 	for _, column := range columns {
 		if i, ok := fieldNameIndex[column]; ok {
 			fields = append(fields, v.Field(i).Addr().Interface())
 		} else {
-			var i interface{}
+			var i any
 			fields = append(fields, &i)
 		}
 	}
@@ -315,8 +289,8 @@ func (c *Client) postProcess(ql *QueryLog, startTime time.Time) {
 }
 
 type Health struct {
-	Status  string                 `json:"status,omitempty"`
-	Details map[string]interface{} `json:"details,omitempty"`
+	Status  string         `json:"status,omitempty"`
+	Details map[string]any `json:"details,omitempty"`
 }
 
 // HealthCheck checks the health of the Cassandra.

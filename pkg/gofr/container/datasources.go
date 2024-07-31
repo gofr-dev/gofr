@@ -92,6 +92,10 @@ type Cassandra interface {
 	//	applied, err := c.ExecCAS(&user, "INSERT INTO users VALUES(1, 'John Doe') IF NOT EXISTS")
 	ExecCAS(dest any, stmt string, values ...any) (bool, error)
 
+	HealthChecker
+}
+
+type CassandraBatch interface {
 	// BatchQuery adds the query to the batch operation
 	//
 	// Example:
@@ -128,9 +132,7 @@ type Cassandra interface {
 	//	c.BatchQuery("INSERT INTO users VALUES(?, ?) IF NOT EXISTS", id, name)
 	//	c.BatchQuery("UPDATE users SET name=? WHERE id=?", name, id)
 	//  c.Execute;
-	ExecuteBatchCAS(dest ...any) (bool, error)
-
-	HealthChecker
+	ExecuteBatchCAS(dest any) (bool, error)
 }
 
 type CassandraProvider interface {
