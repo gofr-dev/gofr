@@ -165,6 +165,11 @@ This document lists all the configuration options supported by the GoFr framewor
 -  DB_MAX_OPEN_CONNECTION
 -  Number of maximum connections which can be used with database.
 -  0 (unlimited)
+---
+
+-  DB_SSL_MODE
+-  Currently supported only for PostgreSQL, with Default certificate file.
+-  disable
 
 {% /table %}
 
