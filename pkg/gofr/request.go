@@ -11,6 +11,7 @@ import (
 // In both cmd or server application, this abstraction can be used.
 type Request interface {
 	Context() context.Context
+	// Deprecated: Param is deprecated. User QueryParams instead for fetching a single/multiple params
 	Param(string) string
 	PathParam(string) string
 	Bind(interface{}) error
