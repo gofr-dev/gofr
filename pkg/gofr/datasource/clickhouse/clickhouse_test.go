@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 )
 
@@ -92,7 +93,7 @@ func Test_ClickHouse_HealthDOWN(t *testing.T) {
 
 	resp, err := c.HealthCheck(context.Background())
 
-	assert.ErrorIs(t, err, errStatusDown)
+	require.ErrorIs(t, err, errStatusDown)
 
 	assert.Contains(t, fmt.Sprint(resp), "DOWN")
 }

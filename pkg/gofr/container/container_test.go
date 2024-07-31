@@ -4,6 +4,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/datasource/pubsub/mqtt"
@@ -35,7 +37,7 @@ func Test_newContainerDBInitializationFail(t *testing.T) {
 
 	// container is a pointer, and we need to see if db are not initialized, comparing the container object
 	// will not suffice the purpose of this test
-	assert.Error(t, db.DB.Ping(), "TEST, Failed.\ninvalid db connections")
+	require.Error(t, db.DB.Ping(), "TEST, Failed.\ninvalid db connections")
 	assert.Nil(t, redis.Client, "TEST, Failed.\ninvalid redis connections")
 }
 
@@ -149,4 +151,27 @@ func TestContainer_newContainerWithNilConfig(t *testing.T) {
 	assert.Nil(t, container.Services, "%s", failureMsg)
 	assert.Nil(t, container.PubSub, "%s", failureMsg)
 	assert.Nil(t, container.Logger, "%s", failureMsg)
+}
+
+func TestContainer_Close(t *testing.T) {
+	controller := gomock.NewController(t)
+	defer controller.Finish()
+
+	mockDB := NewMockDB(controller)
+	mockRedis := NewMockRedis(controller)
+
+	mockDB.EXPECT().Close().Return(nil)
+	mockRedis.EXPECT().Close().Return(nil)
+
+	configs := map[string]string{
+		"PUBSUB_BACKEND": "MQTT",
+	}
+	c := NewContainer(config.NewMockConfig(configs))
+	c.SQL = mockDB
+	c.Redis = mockRedis
+
+	assert.NotNil(t, c.PubSub)
+
+	err := c.Close()
+	require.NoError(t, err)
 }
