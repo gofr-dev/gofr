@@ -163,19 +163,26 @@ func (f *ftpFileSystem) Mkdir(name string, _ os.FileMode) error {
 	return nil
 }
 
-func mkdirAllHelper(filepath string) []string {
+func (f *ftpFileSystem) mkdirAllHelper(filepath string) []string {
 	var dirs []string
 
 	currentdir := filepath
 
 	for {
-		parentDir, dir := path.Split(currentdir)
+		err := f.conn.MakeDir(currentdir)
+		if err != nil {
+			parentDir, dir := path.Split(currentdir)
 
-		dirs = append([]string{dir}, dirs...)
-		if parentDir == "" || parentDir == "/" {
+			dirs = append([]string{dir}, dirs...)
+			if parentDir == "" || parentDir == "/" {
+				break
+			}
+			currentdir = path.Clean(parentDir)
+		} else {
+			dirs = append([]string{currentdir}, dirs...)
 			break
 		}
-		currentdir = path.Clean(parentDir)
+
 	}
 
 	return dirs
@@ -191,30 +198,19 @@ func (f *ftpFileSystem) MkdirAll(name string, _ os.FileMode) error {
 		return errEmptyPath
 	}
 
-	// returns a slice of all directories in the path
-	dirs := mkdirAllHelper(name)
+	dirs := f.mkdirAllHelper(name)
 
 	currentDir := dirs[0]
 
 	for i, dir := range dirs {
-		// Ignore empty directory names (can happen if there are double slashes).
-		if dir == "" {
-			continue
-		}
-
 		if i == 0 {
-			currentDir = dir
+			continue
 		} else {
 			currentDir = path.Join(currentDir, dir)
 		}
 
 		err := f.conn.MakeDir(currentDir)
-		var textprotoError *textproto.Error
 		if err != nil {
-			if errors.As(err, &textprotoError) && textprotoError.Msg == directoryAlreadyExistsError.Msg {
-				continue
-			}
-
 			f.logger.Errorf("MkdirAll failed : %v", err)
 
 			return err
