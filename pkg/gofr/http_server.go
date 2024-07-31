@@ -2,6 +2,7 @@ package gofr
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/pprof"
@@ -75,7 +76,11 @@ func (s *httpServer) Run(c *container.Container) {
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
-	c.Error(s.srv.ListenAndServe())
+	err := s.srv.ListenAndServe()
+
+	if !errors.Is(err, http.ErrServerClosed) {
+		c.Errorf("error while listening to http server, err: %v", err)
+	}
 }
 
 func (s *httpServer) Shutdown(ctx context.Context) error {

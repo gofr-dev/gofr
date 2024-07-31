@@ -2,6 +2,7 @@ package gofr
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -29,7 +30,11 @@ func (m *metricServer) Run(c *container.Container) {
 			ReadHeaderTimeout: 5 * time.Second,
 		}
 
-		c.Error(m.srv.ListenAndServe())
+		err := m.srv.ListenAndServe()
+
+		if !errors.Is(err, http.ErrServerClosed) {
+			c.Errorf("error while listening to metrics server, err: %v", err)
+		}
 	}
 }
 
