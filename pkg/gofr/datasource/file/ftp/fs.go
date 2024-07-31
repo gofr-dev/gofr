@@ -2,12 +2,12 @@ package ftp
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"net/textproto"
 	"os"
 	"path"
-	"strings"
 	"time"
 
 	"github.com/jlaffaye/ftp"
@@ -39,9 +39,10 @@ var (
 // ftpFileSystem represents a file system interface over FTP.
 type ftpFileSystem struct {
 	*ftpFile
-	conn   ServerConn
-	config *Config
-	logger Logger
+	conn    ServerConn
+	config  *Config
+	logger  Logger
+	metrics Metrics
 }
 
 // Config represents the FTP configuration.
@@ -66,12 +67,17 @@ func (f *ftpFileSystem) UseLogger(logger interface{}) {
 }
 
 // UseMetrics sets the metrics for the MongoDB client which asserts the Metrics interface.
-func (*ftpFileSystem) UseMetrics(metrics interface{}) {
+func (f *ftpFileSystem) UseMetrics(metrics interface{}) {
+	if m, ok := metrics.(Metrics); ok {
+		f.metrics = m
+	}
 }
 
 // Connect establishes a connection to the FTP server and logs in.
 func (f *ftpFileSystem) Connect() {
 	ftpServer := fmt.Sprintf("%v:%v", f.config.Host, f.config.Port)
+
+	defer f.processLog(&FileLog{Operation: "Connect", Location: ftpServer}, time.Now())
 
 	const dialTimeout = 5 * time.Second
 
@@ -96,14 +102,16 @@ func (f *ftpFileSystem) Connect() {
 
 // Create creates an empty file on the FTP server.
 func (f *ftpFileSystem) Create(name string) (File, error) {
+	filePath := path.Join(f.config.RemoteDir, name)
+
+	defer f.processLog(&FileLog{Operation: "Create", Location: filePath}, time.Now())
+
 	if name == "" {
 		f.logger.Errorf("Create_File failed. Provide a valid filename : %v", errEmptyFilename)
 		return nil, errEmptyFilename
 	}
 
 	emptyReader := new(bytes.Buffer)
-
-	filePath := path.Join(f.config.RemoteDir, name)
 
 	err := f.conn.Stor(filePath, emptyReader)
 	if err != nil {
@@ -129,17 +137,20 @@ func (f *ftpFileSystem) Create(name string) (File, error) {
 		path:     filePath,
 		conn:     f.conn,
 		logger:   f.logger,
+		metrics:  f.metrics,
 	}, nil
 }
 
 // Mkdir creates a directory on the FTP server. Here, os.FileMode is unused.
 func (f *ftpFileSystem) Mkdir(name string, _ os.FileMode) error {
+	filePath := path.Join(f.config.RemoteDir, name)
+
+	defer f.processLog(&FileLog{Operation: "Mkdir", Location: filePath}, time.Now())
+
 	if name == "" {
 		f.logger.Errorf("Mkdir failed. Provide a valid directory : %v", errEmptyDirectory)
 		return errEmptyDirectory
 	}
-
-	filePath := path.Join(f.config.RemoteDir, name)
 
 	err := f.conn.MakeDir(filePath)
 	if err != nil {
@@ -155,12 +166,26 @@ func (f *ftpFileSystem) Mkdir(name string, _ os.FileMode) error {
 // MkdirAll creates directories recursively on the FTP server. Here, os.FileMode is unused.
 // The directories are not created if even one directory exist.
 func (f *ftpFileSystem) MkdirAll(name string, _ os.FileMode) error {
+	defer f.processLog(&FileLog{Operation: "MkdirAll", Location: path.Join(f.config.RemoteDir, name)}, time.Now())
+
 	if name == "" {
 		f.logger.Errorf("MkdirAll failed. Provide a valid path : %v", errEmptyPath)
 		return errEmptyPath
 	}
 
-	dirs := strings.Split(name, "/")
+	var dirs []string
+
+	currentdir := name
+
+	for {
+		parentDir, dir := path.Split(currentdir)
+
+		dirs = append([]string{dir}, dirs...)
+		if parentDir == "" || parentDir == "/" {
+			break
+		}
+		currentdir = path.Clean(parentDir)
+	}
 
 	currentDir := dirs[0]
 
@@ -196,12 +221,14 @@ func (f *ftpFileSystem) MkdirAll(name string, _ os.FileMode) error {
 
 // Open retrieves a file from the FTP server and returns a file handle.
 func (f *ftpFileSystem) Open(name string) (File, error) {
+	filePath := path.Join(f.config.RemoteDir, name)
+
+	defer f.processLog(&FileLog{Operation: "Open", Location: filePath}, time.Now())
+
 	if name == "" {
 		f.logger.Errorf("Open_file failed. Provide a valid filename : %v", errEmptyFilename)
 		return nil, errEmptyFilename
 	}
-
-	filePath := path.Join(f.config.RemoteDir, name)
 
 	res, err := f.conn.Retr(filePath)
 	if err != nil {
@@ -221,6 +248,7 @@ func (f *ftpFileSystem) Open(name string) (File, error) {
 		path:     filePath,
 		conn:     f.conn,
 		logger:   f.logger,
+		metrics:  f.metrics,
 	}, nil
 }
 
@@ -232,17 +260,20 @@ func (f *ftpFileSystem) OpenFile(name string, _ int, _ os.FileMode) (File, error
 
 // Remove deletes a file from the FTP server.
 func (f *ftpFileSystem) Remove(name string) error {
+	filePath := path.Join(f.config.RemoteDir, name)
+
+	defer f.processLog(&FileLog{Operation: "Remove", Location: filePath}, time.Now())
+
 	if name == "" {
 		f.logger.Errorf("Remove_file failed. Provide a valid filename : %v", errEmptyFilename)
 		return errEmptyFilename
 	}
 
-	filePath := path.Join(f.config.RemoteDir, name)
-
 	err := f.conn.Delete(filePath)
 
 	if err != nil {
 		var textprotoError *textproto.Error
+
 		if errors.As(err, &textprotoError) && textprotoError.Msg == transferCompleteError.Msg {
 			f.logger.Logf("Remove_file successful. File with path %q successfully removed", filePath)
 			return nil
@@ -253,18 +284,19 @@ func (f *ftpFileSystem) Remove(name string) error {
 	}
 
 	f.logger.Logf("Remove_file success. File with path %q successfully removed", filePath)
-
 	return nil
 }
 
 // RemoveAll removes a directory and its contents recursively from the FTP server.
 func (f *ftpFileSystem) RemoveAll(name string) error {
+	filePath := path.Join(f.config.RemoteDir, name)
+
+	defer f.processLog(&FileLog{Operation: "RemoveAll", Location: filePath}, time.Now())
+
 	if name == "" {
 		f.logger.Errorf("RemoveAll failed. Provide a valid path : %v", errEmptyPath)
 		return errEmptyPath
 	}
-
-	filePath := path.Join(f.config.RemoteDir, name)
 
 	err := f.conn.RemoveDirRecur(filePath)
 	if err != nil {
@@ -279,6 +311,12 @@ func (f *ftpFileSystem) RemoveAll(name string) error {
 
 // Rename renames a file or directory on the FTP server.
 func (f *ftpFileSystem) Rename(oldname, newname string) error {
+	oldFilePath := path.Join(f.config.RemoteDir, oldname)
+
+	newFilePath := path.Join(f.config.RemoteDir, newname)
+
+	defer f.processLog(&FileLog{Operation: "Rename", Location: oldFilePath}, time.Now())
+
 	if oldname == "" || newname == "" {
 		f.logger.Errorf("Provide valid arguments : %v", errInvalidArg)
 		return errInvalidArg
@@ -289,9 +327,6 @@ func (f *ftpFileSystem) Rename(oldname, newname string) error {
 		return nil
 	}
 
-	oldFilePath := path.Join(f.config.RemoteDir, oldname)
-	newFilePath := path.Join(f.config.RemoteDir, newname)
-
 	err := f.conn.Rename(oldFilePath, newFilePath)
 	if err != nil {
 		f.logger.Errorf("Error while renaming file : %v", err)
@@ -301,4 +336,15 @@ func (f *ftpFileSystem) Rename(oldname, newname string) error {
 	f.logger.Logf("Renamed file %q to %q", oldname, newname)
 
 	return nil
+}
+
+func (f *ftpFileSystem) processLog(fl *FileLog, startTime time.Time) {
+	duration := time.Since(startTime).Milliseconds()
+
+	fl.Duration = duration
+
+	f.logger.Debugf("%v", fl)
+
+	f.metrics.RecordHistogram(context.Background(), "app_ftp_stats", float64(duration), "hostname", fmt.Sprintf("%v:%v", f.config.Host, f.config.Port),
+		"remote directory", f.config.RemoteDir, "type", fl.Operation)
 }

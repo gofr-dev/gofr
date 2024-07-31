@@ -47,8 +47,10 @@ func TestCreateFile(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
+
 	mockFtpConn := NewMockServerConn(ctrl)
 	logger := NewMockLogger(ctrl)
+	metrics := NewMockMetrics(ctrl)
 
 	fs := &ftpFileSystem{
 		conn: mockFtpConn,
@@ -59,13 +61,16 @@ func TestCreateFile(t *testing.T) {
 			Port:      21,
 			RemoteDir: "/ftp/one",
 		},
-		logger: logger,
+		logger:  logger,
+		metrics: metrics,
 	}
 
 	// mocked logs
 	logger.EXPECT().Logf(gomock.Any(), gomock.Any(), gomock.Any())
 	logger.EXPECT().Errorf(gomock.Any(), gomock.Any(), gomock.Any())
 	logger.EXPECT().Errorf(gomock.Any(), gomock.Any())
+	logger.EXPECT().Debugf(gomock.Any(), gomock.Any()).AnyTimes()
+	metrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -148,6 +153,7 @@ func TestRenameFile(t *testing.T) {
 
 	mockFtpConn := NewMockServerConn(ctrl)
 	mockLogger := NewMockLogger(ctrl)
+	mockMetrics := NewMockMetrics(ctrl)
 
 	fs := &ftpFileSystem{
 		conn: mockFtpConn,
@@ -158,13 +164,16 @@ func TestRenameFile(t *testing.T) {
 			Port:      21,
 			RemoteDir: "/ftp/one",
 		},
-		logger: mockLogger,
+		logger:  mockLogger,
+		metrics: mockMetrics,
 	}
 
 	// mocked logs
 	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any(), gomock.Any())
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Logf(gomock.Any())
+	mockLogger.EXPECT().Debugf(gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -219,6 +228,7 @@ func TestRemoveFile(t *testing.T) {
 
 	mockFtpConn := NewMockServerConn(ctrl)
 	mockLogger := NewMockLogger(ctrl)
+	mockMetrics := NewMockMetrics(ctrl)
 
 	fs := &ftpFileSystem{
 		conn: mockFtpConn,
@@ -229,12 +239,15 @@ func TestRemoveFile(t *testing.T) {
 			Port:      21,
 			RemoteDir: "/ftp/one",
 		},
-		logger: mockLogger,
+		logger:  mockLogger,
+		metrics: mockMetrics,
 	}
 
 	// mocked logs
 	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Debugf(gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -299,6 +312,7 @@ func TestOpenFile(t *testing.T) {
 
 	mockFtpConn := NewMockServerConn(ctrl)
 	mockLogger := NewMockLogger(ctrl)
+	mockMetrics := NewMockMetrics(ctrl)
 
 	fs := &ftpFileSystem{
 		conn: mockFtpConn,
@@ -309,11 +323,14 @@ func TestOpenFile(t *testing.T) {
 			Port:      21,
 			RemoteDir: "/ftp/one",
 		},
-		logger: mockLogger,
+		logger:  mockLogger,
+		metrics: mockMetrics,
 	}
 	// mocked logs
 	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any())
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Debugf(gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -369,6 +386,7 @@ func TestMkDir(t *testing.T) {
 
 	mockFtpConn := NewMockServerConn(ctrl)
 	mockLogger := NewMockLogger(ctrl)
+	mockMetrics := NewMockMetrics(ctrl)
 
 	fs := &ftpFileSystem{
 		conn: mockFtpConn,
@@ -379,11 +397,14 @@ func TestMkDir(t *testing.T) {
 			Port:      21,
 			RemoteDir: "/ftp/one",
 		},
-		logger: mockLogger,
+		logger:  mockLogger,
+		metrics: mockMetrics,
 	}
 	// mocked logs
 	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Debugf(gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -451,6 +472,7 @@ func TestMkDirAll(t *testing.T) {
 
 	mockFtpConn := NewMockServerConn(ctrl)
 	mockLogger := NewMockLogger(ctrl)
+	mockMetrics := NewMockMetrics(ctrl)
 
 	fs := &ftpFileSystem{
 		conn: mockFtpConn,
@@ -461,11 +483,14 @@ func TestMkDirAll(t *testing.T) {
 			Port:      21,
 			RemoteDir: "/ftp/one",
 		},
-		logger: mockLogger,
+		logger:  mockLogger,
+		metrics: mockMetrics,
 	}
 	// mocked logs
 	mockLogger.EXPECT().Logf(gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Debugf(gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -519,6 +544,7 @@ func TestRemoveDir(t *testing.T) {
 
 	mockFtpConn := NewMockServerConn(ctrl)
 	mockLogger := NewMockLogger(ctrl)
+	mockMetrics := NewMockMetrics(ctrl)
 
 	fs := &ftpFileSystem{
 		conn: mockFtpConn,
@@ -529,11 +555,14 @@ func TestRemoveDir(t *testing.T) {
 			Port:      21,
 			RemoteDir: "/ftp/one",
 		},
-		logger: mockLogger,
+		logger:  mockLogger,
+		metrics: mockMetrics,
 	}
 	// mocked logs
 	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Debugf(gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

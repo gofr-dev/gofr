@@ -1,6 +1,7 @@
 package ftp
 
 import (
+	"context"
 	"io"
 	"os"
 	"time"
@@ -74,6 +75,11 @@ type Logger interface {
 	Debugf(pattern string, args ...interface{})
 	Logf(pattern string, args ...interface{})
 	Errorf(pattern string, args ...interface{})
+}
+
+type Metrics interface {
+	NewHistogram(name, desc string, buckets ...float64)
+	RecordHistogram(ctx context.Context, name string, value float64, labels ...string)
 }
 
 // ServerConn represents a connection to an FTP server.

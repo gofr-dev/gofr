@@ -50,6 +50,7 @@ func TestRead(t *testing.T) {
 
 	mockFtpConn := NewMockServerConn(ctrl)
 	mockLogger := NewMockLogger(ctrl)
+	mockMetrics := NewMockMetrics(ctrl)
 
 	// Create ftpFileSystem instance
 	fs := &ftpFileSystem{
@@ -61,17 +62,21 @@ func TestRead(t *testing.T) {
 			Port:      21,
 			RemoteDir: "/ftp/one",
 		},
-		logger: mockLogger,
+		logger:  mockLogger,
+		metrics: mockMetrics,
 	}
+
 	// mocked logs
 	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Debugf(gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			response := NewMockftpResponse(ctrl)
 
-			file := ftpFile{path: tt.filePath, conn: fs.conn, logger: fs.logger}
+			file := ftpFile{path: tt.filePath, conn: fs.conn, logger: fs.logger, metrics: fs.metrics}
 
 			if tt.name != "File does not exist" {
 				mockFtpConn.EXPECT().RetrFrom(tt.filePath, uint64(file.offset)).Return(response, nil)
@@ -133,6 +138,7 @@ func TestReadAt(t *testing.T) {
 
 	mockFtpConn := NewMockServerConn(ctrl)
 	mockLogger := NewMockLogger(ctrl)
+	mockMetrics := NewMockMetrics(ctrl)
 
 	// Create ftpFileSystem instance
 	fs := &ftpFileSystem{
@@ -144,11 +150,14 @@ func TestReadAt(t *testing.T) {
 			Port:      21,
 			RemoteDir: "/ftp/one",
 		},
-		logger: mockLogger,
+		logger:  mockLogger,
+		metrics: mockMetrics,
 	}
 	// mocked logs
 	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Debugf(gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	for _, tt := range readAtTests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -165,7 +174,7 @@ func TestReadAt(t *testing.T) {
 			s := make([]byte, 1024)
 
 			// Create ftpFile instance
-			file := ftpFile{path: tt.filePath, conn: fs.conn, logger: fs.logger}
+			file := ftpFile{path: tt.filePath, conn: fs.conn, logger: fs.logger, metrics: fs.metrics}
 
 			_, err := file.ReadAt(s, tt.offset)
 
@@ -215,6 +224,7 @@ func TestWrite(t *testing.T) {
 
 	mockFtpConn := NewMockServerConn(ctrl)
 	mockLogger := NewMockLogger(ctrl)
+	mockMetrics := NewMockMetrics(ctrl)
 
 	// Create ftpFileSystem instance
 	fs := &ftpFileSystem{
@@ -226,18 +236,21 @@ func TestWrite(t *testing.T) {
 			Port:      21,
 			RemoteDir: "/ftp/one",
 		},
-		logger: mockLogger,
+		logger:  mockLogger,
+		metrics: mockMetrics,
 	}
 	// mocked logs
 	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Debugf(gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	for _, tt := range writeTests {
 		t.Run(tt.name, func(t *testing.T) {
 			tt.mockWriteExpect(mockFtpConn, tt.filePath)
 
 			// Create ftpFile instance
-			file := ftpFile{path: tt.filePath, conn: fs.conn, logger: fs.logger}
+			file := ftpFile{path: tt.filePath, conn: fs.conn, logger: fs.logger, metrics: fs.metrics}
 
 			_, err := file.Write([]byte("test content"))
 
@@ -291,6 +304,7 @@ func TestWriteAt(t *testing.T) {
 
 	mockFtpConn := NewMockServerConn(ctrl)
 	mockLogger := NewMockLogger(ctrl)
+	mockMetrics := NewMockMetrics(ctrl)
 
 	// Create ftpFileSystem instance
 	fs := &ftpFileSystem{
@@ -302,18 +316,21 @@ func TestWriteAt(t *testing.T) {
 			Port:      21,
 			RemoteDir: "/ftp/one",
 		},
-		logger: mockLogger,
+		logger:  mockLogger,
+		metrics: mockMetrics,
 	}
 	// mocked logs
 	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Debugf(gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	for _, tt := range writeAtTests {
 		t.Run(tt.name, func(t *testing.T) {
 			tt.mockWriteExpect(mockFtpConn, tt.filePath, tt.offset)
 
 			// Create ftpFile instance
-			file := ftpFile{path: tt.filePath, conn: fs.conn, logger: fs.logger}
+			file := ftpFile{path: tt.filePath, conn: fs.conn, logger: fs.logger, metrics: fs.metrics}
 
 			_, err := file.WriteAt([]byte("test content"), tt.offset)
 
@@ -400,16 +417,20 @@ func TestSeek(t *testing.T) {
 
 	mockFtpConn := NewMockServerConn(ctrl)
 	mockLogger := NewMockLogger(ctrl)
+	mockMetrics := NewMockMetrics(ctrl)
 
 	file := &ftpFile{
-		path:   "/ftp/one/testfile2.txt",
-		conn:   mockFtpConn,
-		offset: 5, // Starting offset for the file
-		logger: mockLogger,
+		path:    "/ftp/one/testfile2.txt",
+		conn:    mockFtpConn,
+		offset:  5, // Starting offset for the file
+		logger:  mockLogger,
+		metrics: mockMetrics,
 	}
 
 	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any(), gomock.Any()).Times(4)
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).Times(5)
+	mockLogger.EXPECT().Debugf(gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -513,10 +534,16 @@ Victoria Nguyen,32,victorian@example.com`
 		}
 
 		ctrl := gomock.NewController(t)
+
 		mockLogger := NewMockLogger(ctrl)
+		mockMetrics := NewMockMetrics(ctrl)
+
 		fs.UseLogger(mockLogger)
+		fs.UseMetrics(mockMetrics)
 
 		mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
+		mockLogger.EXPECT().Debugf(gomock.Any(), gomock.Any()).AnyTimes()
+		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 		newCsvFile, _ := fs.Create("temp.csv")
 
@@ -553,9 +580,14 @@ func Test_ReadFromCSVScanError(t *testing.T) {
 
 		ctrl := gomock.NewController(t)
 		mockLogger := NewMockLogger(ctrl)
+		mockMetrics := NewMockMetrics(ctrl)
+
 		fs.UseLogger(mockLogger)
+		fs.UseMetrics(mockMetrics)
 
 		mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
+		mockLogger.EXPECT().Debugf(gomock.Any(), gomock.Any()).AnyTimes()
+		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 		newCsvFile, _ := fs.Create("temp.csv")
 
@@ -679,9 +711,14 @@ func Test_ReadFromJSONArray(t *testing.T) {
 
 		ctrl := gomock.NewController(t)
 		mockLogger := NewMockLogger(ctrl)
+		mockMetrics := NewMockMetrics(ctrl)
+
 		fs.UseLogger(mockLogger)
+		fs.UseMetrics(mockMetrics)
 
 		mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
+		mockLogger.EXPECT().Debugf(gomock.Any(), gomock.Any()).AnyTimes()
+		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 		newCsvFile, _ := fs.Create("temp.json")
 
@@ -725,9 +762,14 @@ func Test_ReadFromJSONObject(t *testing.T) {
 
 		ctrl := gomock.NewController(t)
 		mockLogger := NewMockLogger(ctrl)
+		mockMetrics := NewMockMetrics(ctrl)
+
 		fs.UseLogger(mockLogger)
+		fs.UseMetrics(mockMetrics)
 
 		mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
+		mockLogger.EXPECT().Debugf(gomock.Any(), gomock.Any()).AnyTimes()
+		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 		newCsvFile, _ := fs.Create("temp.json")
 
@@ -762,9 +804,14 @@ func Test_ReadFromJSONArrayInvalidDelimiter(t *testing.T) {
 
 		ctrl := gomock.NewController(t)
 		mockLogger := NewMockLogger(ctrl)
+		mockMetrics := NewMockMetrics(ctrl)
+
 		fs.UseLogger(mockLogger)
+		fs.UseMetrics(mockMetrics)
 
 		mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
+		mockLogger.EXPECT().Debugf(gomock.Any(), gomock.Any()).AnyTimes()
+		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 		newCsvFile, _ := fs.Create("temp.json")
 
@@ -799,9 +846,17 @@ func runFtpTest(t *testing.T, testFunc func(fs FileSystemProvider)) {
 	}
 
 	ftpClient := New(config)
+
 	mockLogger := NewMockLogger(gomock.NewController(t))
+	mockMetrics := NewMockMetrics(gomock.NewController(t))
+
 	ftpClient.UseLogger(mockLogger)
+	ftpClient.UseMetrics(mockMetrics)
+
 	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Debugf(gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+
 	ftpClient.Connect()
 
 	// Run the test function with the initialized file system

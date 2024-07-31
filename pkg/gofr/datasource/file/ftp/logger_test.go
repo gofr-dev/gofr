@@ -10,8 +10,8 @@ import (
 func TestFileLogPrettyPrint(t *testing.T) {
 	fileLog := FileLog{
 		Operation: "Create file",
-		Duration:  "1234",
-		Status:    "Success",
+		Duration:  1234,
+		Location:  "/ftp/one",
 		Message:   "File Created successfully",
 	}
 	expected := "Create file"
@@ -27,7 +27,7 @@ func TestFileLogPrettyPrint(t *testing.T) {
 func TestFileLogPrettyPrintWhitespaceHandling(t *testing.T) {
 	fileLog := FileLog{
 		Operation: "  Create   file  ",
-		Duration:  "  5678   ",
+		Duration:  5678,
 		Message:   "  File   creation    complete  ",
 	}
 	expected := "Create file"
