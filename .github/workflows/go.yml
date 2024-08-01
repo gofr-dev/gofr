@@ -79,6 +79,7 @@ jobs:
           export APP_ENV=test
           go test gofr.dev/examples/... -v -short -coverprofile packageWithpbgo.cov -coverpkg=gofr.dev/examples/...
           grep -vE '^gofr\.dev\/.*\.pb\.go' packageWithpbgo.cov > profile.cov
+          go tool cover -func profile.cov
 
       - name: Upload Test Coverage
         if: ${{ matrix.go-version == '1.22'}}
