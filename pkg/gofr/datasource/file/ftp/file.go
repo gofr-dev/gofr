@@ -5,10 +5,12 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"gofr.dev/pkg/gofr/container"
 	"io"
+	"os"
 	"strings"
 	"time"
+
+	"gofr.dev/pkg/gofr/container"
 )
 
 var (
@@ -18,7 +20,7 @@ var (
 )
 
 // ftpFile represents a file on an FTP server.
-type ftpFile struct {
+type file struct {
 	response ftpResponse
 	path     string
 	conn     ServerConn
@@ -41,7 +43,7 @@ type jsonReader struct {
 }
 
 // ReadAll reads either JSON or text files based on file extension and returns a corresponding RowReader.
-func (f *ftpFile) ReadAll() (container.RowReader, error) {
+func (f *file) ReadAll() (container.RowReader, error) {
 	defer f.postProcess(&FileLog{Operation: "ReadAll", Location: f.path}, time.Now())
 
 	if strings.HasSuffix(f.Name(), ".json") {
@@ -52,7 +54,7 @@ func (f *ftpFile) ReadAll() (container.RowReader, error) {
 }
 
 // createJSONReader creates a JSON reader for JSON files.
-func (f *ftpFile) createJSONReader() (container.RowReader, error) {
+func (f *file) createJSONReader() (container.RowReader, error) {
 	defer f.postProcess(&FileLog{Operation: "JSON Reader", Location: f.path}, time.Now())
 
 	res, err := f.conn.Retr(f.path)
@@ -61,13 +63,13 @@ func (f *ftpFile) createJSONReader() (container.RowReader, error) {
 		return nil, err
 	}
 
-	buffer, readerError := io.ReadAll(res)
-	if readerError != nil {
-		f.logger.Errorf("ReadAll Failed. Unable to read json file: %v", readerError)
-		return nil, readerError
-	}
+	defer res.Close()
 
-	res.Close()
+	buffer, err := io.ReadAll(res)
+	if err != nil {
+		f.logger.Errorf("ReadAll Failed. Unable to read json file: %v", err)
+		return nil, err
+	}
 
 	reader := bytes.NewReader(buffer)
 
@@ -80,23 +82,17 @@ func (f *ftpFile) createJSONReader() (container.RowReader, error) {
 	}
 
 	if d, ok := token.(json.Delim); ok && d == '[' {
-		return &jsonReader{decoder: decoder, token: token}, readerError
+		return &jsonReader{decoder: decoder, token: token}, err
 	}
 
-	// JSON object
-	return f.createJSONObjectReader(reader)
-}
-
-func (f *ftpFile) createJSONObjectReader(reader *bytes.Reader) (container.RowReader, error) {
-	defer f.postProcess(&FileLog{Operation: "JSON Object Reader", Location: f.path}, time.Now())
-
-	decoder := json.NewDecoder(reader)
+	// Reading JSON object
+	decoder = json.NewDecoder(reader)
 
 	return &jsonReader{decoder: decoder}, nil
 }
 
 // createTextCSVReader creates a text reader for reading text files.
-func (f *ftpFile) createTextCSVReader() (container.RowReader, error) {
+func (f *file) createTextCSVReader() (container.RowReader, error) {
 	defer f.postProcess(&FileLog{Operation: "Text/CSV Reader", Location: f.path}, time.Now())
 
 	res, err := f.conn.Retr(f.path)
@@ -105,13 +101,13 @@ func (f *ftpFile) createTextCSVReader() (container.RowReader, error) {
 		return nil, err
 	}
 
+	defer res.Close()
+
 	buffer, err := io.ReadAll(res)
 	if err != nil {
 		f.logger.Errorf("ReadAll failed. Unable to read text file: %v", err)
 		return nil, err
 	}
-
-	res.Close()
 
 	reader := bytes.NewReader(buffer)
 
@@ -147,21 +143,21 @@ func (f *textReader) Scan(i interface{}) error {
 }
 
 // Close closes the FTP file connection.
-func (f *ftpFile) Close() error {
+func (f *file) Close() error {
 	defer f.postProcess(&FileLog{Operation: "Close", Location: f.path}, time.Now())
 
 	return f.response.Close()
 }
 
 // Name returns the name of the file.
-func (f *ftpFile) Name() string {
+func (f *file) Name() string {
 	defer f.postProcess(&FileLog{Operation: "Get Name", Location: f.path}, time.Now())
 
 	return f.name
 }
 
 // Read reads data from the FTP file into the provided byte slice and updates the file offset.
-func (f *ftpFile) Read(p []byte) (n int, err error) {
+func (f *file) Read(p []byte) (n int, err error) {
 	defer f.postProcess(&FileLog{Operation: "Read", Location: f.path}, time.Now())
 
 	r, err := f.conn.RetrFrom(f.path, uint64(f.offset))
@@ -173,16 +169,17 @@ func (f *ftpFile) Read(p []byte) (n int, err error) {
 	defer r.Close()
 
 	n, err = r.Read(p)
-	if err != nil && !errors.Is(err, io.EOF) {
-		f.logger.Errorf("Read failed : Failed to read from %q : %v", f.path, err)
-		return 0, err
-	}
 
 	f.offset += int64(n)
 
+	if err != nil && !errors.Is(err, io.EOF) {
+		f.logger.Errorf("Read failed : Failed to read from %q : %v", f.path, err)
+		return n, err
+	}
+
 	f.logger.Logf("Read successful : Read %v bytes from %q", n, f.path)
 
-	if n < len(p) {
+	if errors.Is(err, io.EOF) {
 		return n, io.EOF
 	}
 
@@ -190,7 +187,7 @@ func (f *ftpFile) Read(p []byte) (n int, err error) {
 }
 
 // ReadAt reads data from the FTP file starting at the specified offset.
-func (f *ftpFile) ReadAt(p []byte, off int64) (n int, err error) {
+func (f *file) ReadAt(p []byte, off int64) (n int, err error) {
 	defer f.postProcess(&FileLog{Operation: "ReadAt", Location: f.path}, time.Now())
 
 	resp, err := f.conn.RetrFrom(f.path, uint64(off))
@@ -216,36 +213,28 @@ func (f *ftpFile) ReadAt(p []byte, off int64) (n int, err error) {
 	return n, nil
 }
 
-func (f *ftpFile) check(whence int, offset, length int64) (int64, error) {
+func (f *file) check(whence int, offset, length int64) (int64, error) {
 	switch whence {
 	case io.SeekStart:
-		if offset < 0 || offset > length {
-			return 0, ErrOutOfRange
-		}
-
-		return offset, nil
-
 	case io.SeekEnd:
-		if offset > 0 || offset < -length {
-			return 0, ErrOutOfRange
-		}
-
-		return length + offset, nil
-
+		offset += length
 	case io.SeekCurrent:
-		if f.offset+offset >= length || f.offset+offset < 0 {
-			return 0, ErrOutOfRange
-		}
-
-		return f.offset + offset, nil
-
+		offset += f.offset
 	default:
+		return 0, os.ErrInvalid
+	}
+
+	if offset < 0 || offset > length {
 		return 0, ErrOutOfRange
 	}
+
+	f.offset = offset
+
+	return f.offset, nil
 }
 
 // Seek sets the offset for the next Read or ReadAt operation.
-func (f *ftpFile) Seek(offset int64, whence int) (int64, error) {
+func (f *file) Seek(offset int64, whence int) (int64, error) {
 	defer f.postProcess(&FileLog{Operation: "Seek", Location: f.path}, time.Now())
 
 	n, err := f.conn.FileSize(f.path)
@@ -266,7 +255,7 @@ func (f *ftpFile) Seek(offset int64, whence int) (int64, error) {
 }
 
 // Write writes data to the FTP file.
-func (f *ftpFile) Write(p []byte) (n int, err error) {
+func (f *file) Write(p []byte) (n int, err error) {
 	defer f.postProcess(&FileLog{Operation: "Write", Location: f.path}, time.Now())
 
 	reader := bytes.NewReader(p)
@@ -285,7 +274,7 @@ func (f *ftpFile) Write(p []byte) (n int, err error) {
 }
 
 // WriteAt writes data to the FTP file starting at the specified offset.
-func (f *ftpFile) WriteAt(p []byte, off int64) (n int, err error) {
+func (f *file) WriteAt(p []byte, off int64) (n int, err error) {
 	defer f.postProcess(&FileLog{Operation: "WriteAt", Location: f.path}, time.Now())
 
 	reader := bytes.NewReader(p)
@@ -301,14 +290,10 @@ func (f *ftpFile) WriteAt(p []byte, off int64) (n int, err error) {
 	return len(p), nil
 }
 
-func (f *ftpFile) postProcess(fl *FileLog, startTime time.Time) {
+func (f *file) postProcess(fl *FileLog, startTime time.Time) {
 	duration := time.Since(startTime).Milliseconds()
 
 	fl.Duration = duration
 
 	f.logger.Debugf("%v", fl)
-
-	//f.metrics.RecordHistogram(context.Background(), "app_ftpFile_stats", float64(duration), "filename", f.name,
-	//	"filepath", f.path, "type", fl.Operation)
-
 }

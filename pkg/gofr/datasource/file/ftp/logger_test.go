@@ -14,10 +14,13 @@ func TestFileLogPrettyPrint(t *testing.T) {
 		Location:  "/ftp/one",
 		Message:   "File Created successfully",
 	}
+
 	expected := "Create file"
+
 	expectedMsg := "File Created successfully"
 
 	var buf bytes.Buffer
+
 	fileLog.PrettyPrint(&buf)
 
 	assert.Contains(t, buf.String(), expected)

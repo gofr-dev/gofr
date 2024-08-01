@@ -2,10 +2,11 @@ package ftp
 
 import (
 	"context"
-	"gofr.dev/pkg/gofr/container"
 	"io"
 	"os"
 	"time"
+
+	"gofr.dev/pkg/gofr/container"
 )
 
 // FileSystem : Any simulated or real filesystem should implement this interface.

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -53,7 +54,7 @@ func TestRead(t *testing.T) {
 	mockMetrics := NewMockMetrics(ctrl)
 
 	// Create ftpFileSystem instance
-	fs := &ftpFileSystem{
+	fs := &fileSystem{
 		conn: mockFtpConn,
 		config: &Config{
 			Host:      "ftp.example.com",
@@ -76,7 +77,7 @@ func TestRead(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			response := NewMockftpResponse(ctrl)
 
-			file := ftpFile{path: tt.filePath, conn: fs.conn, logger: fs.logger, metrics: fs.metrics}
+			file := file{path: tt.filePath, conn: fs.conn, logger: fs.logger, metrics: fs.metrics}
 
 			if tt.name != "File does not exist" {
 				mockFtpConn.EXPECT().RetrFrom(tt.filePath, uint64(file.offset)).Return(response, nil)
@@ -141,7 +142,7 @@ func TestReadAt(t *testing.T) {
 	mockMetrics := NewMockMetrics(ctrl)
 
 	// Create ftpFileSystem instance
-	fs := &ftpFileSystem{
+	fs := &fileSystem{
 		conn: mockFtpConn,
 		config: &Config{
 			Host:      "ftp.example.com",
@@ -174,7 +175,7 @@ func TestReadAt(t *testing.T) {
 			s := make([]byte, 1024)
 
 			// Create ftpFile instance
-			file := ftpFile{path: tt.filePath, conn: fs.conn, logger: fs.logger, metrics: fs.metrics}
+			file := file{path: tt.filePath, conn: fs.conn, logger: fs.logger, metrics: fs.metrics}
 
 			_, err := file.ReadAt(s, tt.offset)
 
@@ -227,7 +228,7 @@ func TestWrite(t *testing.T) {
 	mockMetrics := NewMockMetrics(ctrl)
 
 	// Create ftpFileSystem instance
-	fs := &ftpFileSystem{
+	fs := &fileSystem{
 		conn: mockFtpConn,
 		config: &Config{
 			Host:      "ftp.example.com",
@@ -250,7 +251,7 @@ func TestWrite(t *testing.T) {
 			tt.mockWriteExpect(mockFtpConn, tt.filePath)
 
 			// Create ftpFile instance
-			file := ftpFile{path: tt.filePath, conn: fs.conn, logger: fs.logger, metrics: fs.metrics}
+			file := file{path: tt.filePath, conn: fs.conn, logger: fs.logger, metrics: fs.metrics}
 
 			_, err := file.Write([]byte("test content"))
 
@@ -307,7 +308,7 @@ func TestWriteAt(t *testing.T) {
 	mockMetrics := NewMockMetrics(ctrl)
 
 	// Create ftpFileSystem instance
-	fs := &ftpFileSystem{
+	fs := &fileSystem{
 		conn: mockFtpConn,
 		config: &Config{
 			Host:      "ftp.example.com",
@@ -330,7 +331,7 @@ func TestWriteAt(t *testing.T) {
 			tt.mockWriteExpect(mockFtpConn, tt.filePath, tt.offset)
 
 			// Create ftpFile instance
-			file := ftpFile{path: tt.filePath, conn: fs.conn, logger: fs.logger, metrics: fs.metrics}
+			file := file{path: tt.filePath, conn: fs.conn, logger: fs.logger, metrics: fs.metrics}
 
 			_, err := file.WriteAt([]byte("test content"), tt.offset)
 
@@ -408,7 +409,7 @@ func TestSeek(t *testing.T) {
 			offset:        0,
 			whence:        123, // Invalid whence value
 			expectedPos:   0,
-			expectedError: ErrOutOfRange,
+			expectedError: os.ErrInvalid,
 		},
 	}
 
@@ -419,7 +420,7 @@ func TestSeek(t *testing.T) {
 	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
 
-	file := &ftpFile{
+	file := &file{
 		path:    "/ftp/one/testfile2.txt",
 		conn:    mockFtpConn,
 		offset:  5, // Starting offset for the file
@@ -437,6 +438,7 @@ func TestSeek(t *testing.T) {
 			mockFtpConn.EXPECT().FileSize("/ftp/one/testfile2.txt").Return(int64(10), nil)
 
 			pos, err := file.Seek(tt.offset, tt.whence)
+			file.offset = 5
 
 			assert.Equal(t, tt.expectedPos, pos)
 			assert.Equal(t, tt.expectedError, err)

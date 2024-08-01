@@ -53,7 +53,7 @@ func TestCreateFile(t *testing.T) {
 	logger := NewMockLogger(ctrl)
 	metrics := NewMockMetrics(ctrl)
 
-	fs := &ftpFileSystem{
+	fs := &fileSystem{
 		conn: mockFtpConn,
 		config: &Config{
 			Host:      "ftp.example.com",
@@ -156,7 +156,7 @@ func TestRenameFile(t *testing.T) {
 	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
 
-	fs := &ftpFileSystem{
+	fs := &fileSystem{
 		conn: mockFtpConn,
 		config: &Config{
 			Host:      "ftp.example.com",
@@ -231,7 +231,7 @@ func TestRemoveFile(t *testing.T) {
 	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
 
-	fs := &ftpFileSystem{
+	fs := &fileSystem{
 		conn: mockFtpConn,
 		config: &Config{
 			Host:      "ftp.example.com",
@@ -315,7 +315,7 @@ func TestOpenFile(t *testing.T) {
 	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
 
-	fs := &ftpFileSystem{
+	fs := &fileSystem{
 		conn: mockFtpConn,
 		config: &Config{
 			Host:      "ftp.example.com",
@@ -389,7 +389,7 @@ func TestMkDir(t *testing.T) {
 	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
 
-	fs := &ftpFileSystem{
+	fs := &fileSystem{
 		conn: mockFtpConn,
 		config: &Config{
 			Host:      "ftp.example.com",
@@ -420,9 +420,9 @@ func TestMkDir(t *testing.T) {
 	}
 }
 
-var directoryError = &textproto.Error{Code: 550, Msg: "Create directory operation failed."}
-
 func TestMkDirAll(t *testing.T) {
+	var directoryError = &textproto.Error{Code: 550, Msg: "Create directory operation failed."}
+
 	var tests = []struct {
 		name            string
 		basePath        string
@@ -481,7 +481,7 @@ func TestMkDirAll(t *testing.T) {
 	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
 
-	fs := &ftpFileSystem{
+	fs := &fileSystem{
 		conn: mockFtpConn,
 		config: &Config{
 			Host:      "ftp.example.com",
@@ -553,7 +553,7 @@ func TestRemoveDir(t *testing.T) {
 	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
 
-	fs := &ftpFileSystem{
+	fs := &fileSystem{
 		conn: mockFtpConn,
 		config: &Config{
 			Host:      "ftp.example.com",

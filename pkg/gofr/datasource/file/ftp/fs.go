@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"gofr.dev/pkg/gofr/container"
 	"net/textproto"
 	"os"
 	"path"
+	"slices"
 	"time"
+
+	"gofr.dev/pkg/gofr/container"
 
 	"github.com/jlaffaye/ftp"
 )
@@ -36,8 +38,8 @@ var (
 )
 
 // ftpFileSystem represents a file system interface over FTP.
-type ftpFileSystem struct {
-	*ftpFile
+type fileSystem struct {
+	*file
 	conn    ServerConn
 	config  *Config
 	logger  Logger
@@ -55,25 +57,25 @@ type Config struct {
 
 // New initializes a new instance of ftpFileSystem with provided configuration.
 func New(config *Config) FileSystemProvider {
-	return &ftpFileSystem{config: config}
+	return &fileSystem{config: config}
 }
 
 // UseLogger sets the logger interface for the FTP file system.
-func (f *ftpFileSystem) UseLogger(logger interface{}) {
+func (f *fileSystem) UseLogger(logger interface{}) {
 	if l, ok := logger.(Logger); ok {
 		f.logger = l
 	}
 }
 
 // UseMetrics sets the metrics for the MongoDB client which asserts the Metrics interface.
-func (f *ftpFileSystem) UseMetrics(metrics interface{}) {
+func (f *fileSystem) UseMetrics(metrics interface{}) {
 	if m, ok := metrics.(Metrics); ok {
 		f.metrics = m
 	}
 }
 
 // Connect establishes a connection to the FTP server and logs in.
-func (f *ftpFileSystem) Connect() {
+func (f *fileSystem) Connect() {
 	ftpServer := fmt.Sprintf("%v:%v", f.config.Host, f.config.Port)
 
 	defer f.processLog(&FileLog{Operation: "Connect", Location: ftpServer}, time.Now())
@@ -100,7 +102,7 @@ func (f *ftpFileSystem) Connect() {
 }
 
 // Create creates an empty file on the FTP server.
-func (f *ftpFileSystem) Create(name string) (container.File, error) {
+func (f *fileSystem) Create(name string) (container.File, error) {
 	filePath := path.Join(f.config.RemoteDir, name)
 
 	defer f.processLog(&FileLog{Operation: "Create", Location: filePath}, time.Now())
@@ -130,7 +132,7 @@ func (f *ftpFileSystem) Create(name string) (container.File, error) {
 
 	defer res.Close()
 
-	return &ftpFile{
+	return &file{
 		response: res,
 		name:     s,
 		path:     filePath,
@@ -142,7 +144,7 @@ func (f *ftpFileSystem) Create(name string) (container.File, error) {
 
 // Mkdir creates a directory on the FTP server.
 // Here, os.FileMode is unused, but is added to comply with FileSystem interface.
-func (f *ftpFileSystem) Mkdir(name string, _ os.FileMode) error {
+func (f *fileSystem) Mkdir(name string, _ os.FileMode) error {
 	filePath := path.Join(f.config.RemoteDir, name)
 
 	defer f.processLog(&FileLog{Operation: "Mkdir", Location: filePath}, time.Now())
@@ -163,34 +165,37 @@ func (f *ftpFileSystem) Mkdir(name string, _ os.FileMode) error {
 	return nil
 }
 
-func (f *ftpFileSystem) mkdirAllHelper(filepath string) []string {
+func (f *fileSystem) mkdirAllHelper(filepath string) []string {
 	var dirs []string
 
 	currentdir := filepath
 
 	for {
 		err := f.conn.MakeDir(currentdir)
-		if err != nil {
-			parentDir, dir := path.Split(currentdir)
-
-			dirs = append([]string{dir}, dirs...)
-			if parentDir == "" || parentDir == "/" {
-				break
-			}
-			currentdir = path.Clean(parentDir)
-		} else {
-			dirs = append([]string{currentdir}, dirs...)
+		if err == nil {
+			dirs = append(dirs, currentdir)
 			break
 		}
 
+		parentDir, dir := path.Split(currentdir)
+
+		dirs = append(dirs, dir)
+
+		if parentDir == "" || parentDir == "/" {
+			break
+		}
+
+		currentdir = path.Clean(parentDir)
 	}
+
+	slices.Reverse(dirs)
 
 	return dirs
 }
 
 // MkdirAll creates directories recursively on the FTP server. Here, os.FileMode is unused.
 // Here, os.FileMode is unused, but is added to comply with FileSystem interface.
-func (f *ftpFileSystem) MkdirAll(name string, _ os.FileMode) error {
+func (f *fileSystem) MkdirAll(name string, _ os.FileMode) error {
 	defer f.processLog(&FileLog{Operation: "MkdirAll", Location: path.Join(f.config.RemoteDir, name)}, time.Now())
 
 	if name == "" {
@@ -223,7 +228,7 @@ func (f *ftpFileSystem) MkdirAll(name string, _ os.FileMode) error {
 }
 
 // Open retrieves a file from the FTP server and returns a file handle.
-func (f *ftpFileSystem) Open(name string) (container.File, error) {
+func (f *fileSystem) Open(name string) (container.File, error) {
 	filePath := path.Join(f.config.RemoteDir, name)
 
 	defer f.processLog(&FileLog{Operation: "Open", Location: filePath}, time.Now())
@@ -239,15 +244,15 @@ func (f *ftpFileSystem) Open(name string) (container.File, error) {
 		return nil, err
 	}
 
-	_, s := path.Split(filePath)
+	defer res.Close()
+
+	filename := path.Base(filePath)
 
 	f.logger.Logf("Open_file successful. Filepath : %q", filePath)
 
-	defer res.Close()
-
-	return &ftpFile{
+	return &file{
 		response: res,
-		name:     s,
+		name:     filename,
 		path:     filePath,
 		conn:     f.conn,
 		logger:   f.logger,
@@ -258,12 +263,12 @@ func (f *ftpFileSystem) Open(name string) (container.File, error) {
 // permissions are not clear for Ftp as file commands do not accept an argument and don't store their file permissions.
 // currently, this function just calls the Open function.
 // Here, os.FileMode is unused, but is added to comply with FileSystem interface.
-func (f *ftpFileSystem) OpenFile(name string, _ int, _ os.FileMode) (container.File, error) {
+func (f *fileSystem) OpenFile(name string, _ int, _ os.FileMode) (container.File, error) {
 	return f.Open(name)
 }
 
 // Remove deletes a file from the FTP server.
-func (f *ftpFileSystem) Remove(name string) error {
+func (f *fileSystem) Remove(name string) error {
 	filePath := path.Join(f.config.RemoteDir, name)
 
 	defer f.processLog(&FileLog{Operation: "Remove", Location: filePath}, time.Now())
@@ -284,15 +289,17 @@ func (f *ftpFileSystem) Remove(name string) error {
 		}
 
 		f.logger.Errorf("Remove_file failed. Error while deleting the file: %v", err)
+
 		return err
 	}
 
 	f.logger.Logf("Remove_file success. File with path %q successfully removed", filePath)
+
 	return nil
 }
 
 // RemoveAll removes a directory and its contents recursively from the FTP server.
-func (f *ftpFileSystem) RemoveAll(name string) error {
+func (f *fileSystem) RemoveAll(name string) error {
 	filePath := path.Join(f.config.RemoteDir, name)
 
 	defer f.processLog(&FileLog{Operation: "RemoveAll", Location: filePath}, time.Now())
@@ -314,7 +321,7 @@ func (f *ftpFileSystem) RemoveAll(name string) error {
 }
 
 // Rename renames a file or directory on the FTP server.
-func (f *ftpFileSystem) Rename(oldname, newname string) error {
+func (f *fileSystem) Rename(oldname, newname string) error {
 	oldFilePath := path.Join(f.config.RemoteDir, oldname)
 
 	newFilePath := path.Join(f.config.RemoteDir, newname)
@@ -342,13 +349,10 @@ func (f *ftpFileSystem) Rename(oldname, newname string) error {
 	return nil
 }
 
-func (f *ftpFileSystem) processLog(fl *FileLog, startTime time.Time) {
+func (f *fileSystem) processLog(fl *FileLog, startTime time.Time) {
 	duration := time.Since(startTime).Milliseconds()
 
 	fl.Duration = duration
 
 	f.logger.Debugf("%v", fl)
-
-	//f.metrics.RecordHistogram(context.Background(), "app_ftp_stats", float64(duration), "hostname", fmt.Sprintf("%v:%v", f.config.Host, f.config.Port),
-	//	"remote directory", f.config.RemoteDir, "type", fl.Operation)
 }
