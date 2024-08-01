@@ -6,6 +6,34 @@ GoFr simplifies the complexity of working with different file stores by offering
 
 By default, local file-store is initialised and user can access it from the context.
 
+Gofr also supports FTP file-store. The file-store can be initialised by FTP as follows:
+
+### FTP file-store
+```go
+package main
+
+import (
+    "gofr.dev/pkg/gofr"
+
+    "gofr.dev/pkg/gofr/datasource/file/ftp"
+)
+
+func main() {
+    app := gofr.New()
+
+	app.AddFTP(ftp.New(&ftp.Config{
+		Host:      "127.0.0.1",
+		User:      "user",
+		Password:  "password",
+		Port:      21,
+		RemoteDir: "/ftp/user",
+	}))
+    
+    app.Run()
+}
+```
+
+
 ### Creating Directory
 
 To create a single directory

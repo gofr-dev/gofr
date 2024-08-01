@@ -9,7 +9,6 @@ import (
 	_ "github.com/go-sql-driver/mysql" // This is required to be blank import
 
 	"gofr.dev/pkg/gofr/config"
-	"gofr.dev/pkg/gofr/datasource/file"
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 	"gofr.dev/pkg/gofr/datasource/pubsub/google"
 	"gofr.dev/pkg/gofr/datasource/pubsub/kafka"
@@ -120,7 +119,7 @@ func (c *Container) Create(conf config.Config) {
 		c.PubSub = c.createMqttPubSub(conf)
 	}
 
-	c.File = file.New(c.Logger)
+	//c.File = file.New(c.Logger)
 }
 
 func (c *Container) Close() error {

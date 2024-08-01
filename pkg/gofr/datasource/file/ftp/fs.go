@@ -2,7 +2,6 @@ package ftp
 
 import (
 	"bytes"
-	"context"
 	"errors"
 	"fmt"
 	"gofr.dev/pkg/gofr/container"
@@ -350,6 +349,6 @@ func (f *ftpFileSystem) processLog(fl *FileLog, startTime time.Time) {
 
 	f.logger.Debugf("%v", fl)
 
-	f.metrics.RecordHistogram(context.Background(), "app_ftp_stats", float64(duration), "hostname", fmt.Sprintf("%v:%v", f.config.Host, f.config.Port),
-		"remote directory", f.config.RemoteDir, "type", fl.Operation)
+	//f.metrics.RecordHistogram(context.Background(), "app_ftp_stats", float64(duration), "hostname", fmt.Sprintf("%v:%v", f.config.Host, f.config.Port),
+	//	"remote directory", f.config.RemoteDir, "type", fl.Operation)
 }

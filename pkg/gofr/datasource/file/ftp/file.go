@@ -3,7 +3,6 @@ package ftp
 import (
 	"bufio"
 	"bytes"
-	"context"
 	"encoding/json"
 	"errors"
 	"gofr.dev/pkg/gofr/container"
@@ -68,6 +67,8 @@ func (f *ftpFile) createJSONReader() (container.RowReader, error) {
 		return nil, readerError
 	}
 
+	res.Close()
+
 	reader := bytes.NewReader(buffer)
 
 	decoder := json.NewDecoder(reader)
@@ -109,6 +110,8 @@ func (f *ftpFile) createTextCSVReader() (container.RowReader, error) {
 		f.logger.Errorf("ReadAll failed. Unable to read text file: %v", err)
 		return nil, err
 	}
+
+	res.Close()
 
 	reader := bytes.NewReader(buffer)
 
@@ -305,7 +308,7 @@ func (f *ftpFile) postProcess(fl *FileLog, startTime time.Time) {
 
 	f.logger.Debugf("%v", fl)
 
-	f.metrics.RecordHistogram(context.Background(), "app_ftpFile_stats", float64(duration), "filename", f.name,
-		"filepath", f.path, "type", fl.Operation)
+	//f.metrics.RecordHistogram(context.Background(), "app_ftpFile_stats", float64(duration), "filename", f.name,
+	//	"filepath", f.path, "type", fl.Operation)
 
 }
