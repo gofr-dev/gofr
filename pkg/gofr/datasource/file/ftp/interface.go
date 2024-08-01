@@ -2,6 +2,7 @@ package ftp
 
 import (
 	"context"
+	"gofr.dev/pkg/gofr/container"
 	"io"
 	"os"
 	"time"
@@ -11,7 +12,7 @@ import (
 type FileSystem interface {
 	// Create creates a file in the filesystem, returning the file and an
 	// error, if any happens.
-	Create(name string) (File, error)
+	Create(name string) (container.File, error)
 
 	// Mkdir creates a directory in the filesystem, return an error if any
 	// happens.
@@ -22,10 +23,10 @@ type FileSystem interface {
 	MkdirAll(path string, perm os.FileMode) error
 
 	// Open opens a file, returning it or an error, if any happens.
-	Open(name string) (File, error)
+	Open(name string) (container.File, error)
 
 	// OpenFile opens a file using the given flags and the given mode.
-	OpenFile(name string, flag int, perm os.FileMode) (File, error)
+	OpenFile(name string, flag int, perm os.FileMode) (container.File, error)
 
 	// Remove removes a file identified by name, returning an error, if any
 	// happens.
@@ -51,23 +52,6 @@ type FileSystemProvider interface {
 	// Connect establishes a connection to FileSystem and registers metrics
 	// using the provided configuration when the client was Created.
 	Connect()
-}
-
-// File represents a file in the filesystem.
-type File interface {
-	io.Closer
-	io.Reader
-	io.ReaderAt
-	io.Seeker
-	io.Writer
-	io.WriterAt
-
-	ReadAll() (RowReader, error)
-}
-
-type RowReader interface {
-	Next() bool
-	Scan(interface{}) error
 }
 
 // Logger interface is used by ftp package to log information about query execution.

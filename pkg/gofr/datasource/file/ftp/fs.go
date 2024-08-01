@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"gofr.dev/pkg/gofr/container"
 	"net/textproto"
 	"os"
 	"path"
@@ -100,7 +101,7 @@ func (f *ftpFileSystem) Connect() {
 }
 
 // Create creates an empty file on the FTP server.
-func (f *ftpFileSystem) Create(name string) (File, error) {
+func (f *ftpFileSystem) Create(name string) (container.File, error) {
 	filePath := path.Join(f.config.RemoteDir, name)
 
 	defer f.processLog(&FileLog{Operation: "Create", Location: filePath}, time.Now())
@@ -223,7 +224,7 @@ func (f *ftpFileSystem) MkdirAll(name string, _ os.FileMode) error {
 }
 
 // Open retrieves a file from the FTP server and returns a file handle.
-func (f *ftpFileSystem) Open(name string) (File, error) {
+func (f *ftpFileSystem) Open(name string) (container.File, error) {
 	filePath := path.Join(f.config.RemoteDir, name)
 
 	defer f.processLog(&FileLog{Operation: "Open", Location: filePath}, time.Now())
@@ -258,7 +259,7 @@ func (f *ftpFileSystem) Open(name string) (File, error) {
 // permissions are not clear for Ftp as file commands do not accept an argument and don't store their file permissions.
 // currently, this function just calls the Open function.
 // Here, os.FileMode is unused, but is added to comply with FileSystem interface.
-func (f *ftpFileSystem) OpenFile(name string, _ int, _ os.FileMode) (File, error) {
+func (f *ftpFileSystem) OpenFile(name string, _ int, _ os.FileMode) (container.File, error) {
 	return f.Open(name)
 }
 

@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"gofr.dev/pkg/gofr/container"
 	"io"
 	"strings"
 	"time"
@@ -41,7 +42,7 @@ type jsonReader struct {
 }
 
 // ReadAll reads either JSON or text files based on file extension and returns a corresponding RowReader.
-func (f *ftpFile) ReadAll() (RowReader, error) {
+func (f *ftpFile) ReadAll() (container.RowReader, error) {
 	defer f.postProcess(&FileLog{Operation: "ReadAll", Location: f.path}, time.Now())
 
 	if strings.HasSuffix(f.Name(), ".json") {
@@ -52,7 +53,7 @@ func (f *ftpFile) ReadAll() (RowReader, error) {
 }
 
 // createJSONReader creates a JSON reader for JSON files.
-func (f *ftpFile) createJSONReader() (RowReader, error) {
+func (f *ftpFile) createJSONReader() (container.RowReader, error) {
 	defer f.postProcess(&FileLog{Operation: "JSON Reader", Location: f.path}, time.Now())
 
 	res, err := f.conn.Retr(f.path)
@@ -85,7 +86,7 @@ func (f *ftpFile) createJSONReader() (RowReader, error) {
 	return f.createJSONObjectReader(reader)
 }
 
-func (f *ftpFile) createJSONObjectReader(reader *bytes.Reader) (RowReader, error) {
+func (f *ftpFile) createJSONObjectReader(reader *bytes.Reader) (container.RowReader, error) {
 	defer f.postProcess(&FileLog{Operation: "JSON Object Reader", Location: f.path}, time.Now())
 
 	decoder := json.NewDecoder(reader)
@@ -94,7 +95,7 @@ func (f *ftpFile) createJSONObjectReader(reader *bytes.Reader) (RowReader, error
 }
 
 // createTextCSVReader creates a text reader for reading text files.
-func (f *ftpFile) createTextCSVReader() (RowReader, error) {
+func (f *ftpFile) createTextCSVReader() (container.RowReader, error) {
 	defer f.postProcess(&FileLog{Operation: "Text/CSV Reader", Location: f.path}, time.Now())
 
 	res, err := f.conn.Retr(f.path)
