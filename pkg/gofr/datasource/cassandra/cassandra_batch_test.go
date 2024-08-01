@@ -133,6 +133,6 @@ func Test_ExecuteBatchCAS(t *testing.T) {
 
 		assert.Equalf(t, tc.expRes, tc.dest, "TEST[%d], Failed.\n%s", i, tc.desc)
 		assert.Equalf(t, tc.expErr, err, "TEST[%d], Failed.\n%s", i, tc.desc)
-		assert.Truef(t, applied == (tc.expErr == nil), "TEST[%d], Failed.\n%s", i, tc.desc)
+		assert.Equalf(t, applied, tc.expErr == nil, "TEST[%d], Failed.\n%s", i, tc.desc)
 	}
 }

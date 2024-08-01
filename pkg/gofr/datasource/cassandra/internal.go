@@ -103,9 +103,7 @@ type cassandraSession struct {
 // query creates a Cassandra query.
 // This method wraps the `Query` method of the underlying `session` object.
 func (c *cassandraSession) query(stmt string, values ...any) query {
-	q := &cassandraQuery{query: c.session.Query(stmt, values...)}
-
-	return q
+	return &cassandraQuery{query: c.session.Query(stmt, values...)}
 }
 
 func (c *cassandraSession) newBatch(batchType gocql.BatchType) batch {

@@ -12,18 +12,18 @@ var (
 	ErrBatchNotInitialised     = errors.New("batch not initialized")
 )
 
-type UnexpectedPointer struct {
+type ErrUnexpectedPointer struct {
 	target string
 }
 
-func (d UnexpectedPointer) Error() string {
+func (d ErrUnexpectedPointer) Error() string {
 	return fmt.Sprintf("a pointer to %v was not expected.", d.target)
 }
 
-type UnexpectedSlice struct {
+type ErrUnexpectedSlice struct {
 	target string
 }
 
-func (d UnexpectedSlice) Error() string {
+func (d ErrUnexpectedSlice) Error() string {
 	return fmt.Sprintf("a slice of %v was not expected.", d.target)
 }

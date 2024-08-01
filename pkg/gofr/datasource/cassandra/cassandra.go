@@ -130,7 +130,7 @@ func (c *Client) Query(dest any, stmt string, values ...any) error {
 	default:
 		c.logger.Debugf("a pointer to %v was not expected.", rv.Kind().String())
 
-		return UnexpectedPointer{target: rv.Kind().String()}
+		return ErrUnexpectedPointer{target: rv.Kind().String()}
 	}
 
 	return nil
@@ -168,7 +168,7 @@ func (c *Client) ExecCAS(dest any, stmt string, values ...any) (bool, error) {
 	case reflect.Slice:
 		c.logger.Debugf("a slice of %v was not expected.", reflect.SliceOf(reflect.TypeOf(dest)).String())
 
-		return false, UnexpectedSlice{target: reflect.SliceOf(reflect.TypeOf(dest)).String()}
+		return false, ErrUnexpectedSlice{target: reflect.SliceOf(reflect.TypeOf(dest)).String()}
 
 	case reflect.Map:
 		c.logger.Debugf("a map was not expected.")

@@ -154,7 +154,7 @@ func Test_Query(t *testing.T) {
 		{"failure case: dest is int", &mockInt, func() {
 			mockDeps.mockSession.EXPECT().query(query).Return(mockDeps.mockQuery).Times(1)
 			mockDeps.mockQuery.EXPECT().iter().Return(mockDeps.mockIter).Times(1)
-		}, &mockInt, UnexpectedPointer{target: "int"}},
+		}, &mockInt, ErrUnexpectedPointer{target: "int"}},
 	}
 
 	for i, tc := range testCases {
@@ -235,7 +235,7 @@ func Test_ExecCAS(t *testing.T) {
 		{"failure case: dest is not pointer", mockInt, func() {}, false, ErrDestinationIsNotPointer},
 		{"failure case: dest is slice", &[]int{}, func() {
 			mockDeps.mockSession.EXPECT().query(query).Return(mockDeps.mockQuery).Times(1)
-		}, false, UnexpectedSlice{target: "[]*[]int"}},
+		}, false, ErrUnexpectedSlice{target: "[]*[]int"}},
 		{"failure case: dest is map", &map[string]interface{}{}, func() {
 			mockDeps.mockSession.EXPECT().query(query).Return(mockDeps.mockQuery).Times(1)
 		}, false, ErrUnexpectedMap},
