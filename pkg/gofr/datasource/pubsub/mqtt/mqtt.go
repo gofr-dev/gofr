@@ -50,6 +50,7 @@ type Config struct {
 	Order            bool
 	RetrieveRetained bool
 	KeepAlive        time.Duration
+	CloseTimeout     time.Duration
 }
 
 type subscription struct {
@@ -324,6 +325,8 @@ func getHandler(subscribeFunc SubscribeFunc) func(client mqtt.Client, msg mqtt.M
 
 func (m *MQTT) Unsubscribe(topic string) error {
 	m.mu.RLock()
+	defer m.mu.RUnlock()
+
 	token := m.Client.Unsubscribe(topic)
 	token.Wait()
 
@@ -338,19 +341,34 @@ func (m *MQTT) Unsubscribe(topic string) error {
 		close(sub.msgs)
 		delete(m.subscriptions, topic)
 	}
-	m.mu.RUnlock()
 
 	return nil
 }
 
-func (m *MQTT) Disconnect(waitTime uint) {
+func (m *MQTT) Close() error {
+	timeout := m.config.CloseTimeout
+
+	return m.Disconnect(uint(timeout))
+}
+
+func (m *MQTT) Disconnect(waitTime uint) error {
 	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	var err error
+
 	for topic := range m.subscriptions {
-		_ = m.Unsubscribe(topic)
+		unsubscribeErr := m.Unsubscribe(topic)
+		if err != nil {
+			err = errors.Join(err, unsubscribeErr)
+
+			m.logger.Errorf("Error closing Subscription: %v", err)
+		}
 	}
 
 	m.Client.Disconnect(waitTime)
-	m.mu.RUnlock()
+
+	return err
 }
 
 func (m *MQTT) Ping() error {
@@ -366,10 +384,11 @@ func (m *MQTT) Ping() error {
 func createReconnectHandler(mu *sync.RWMutex, config *Config, subs map[string]subscription) func(c mqtt.Client) {
 	return func(c mqtt.Client) {
 		mu.RLock()
+		defer mu.RUnlock()
+
 		for k, v := range subs {
 			c.Subscribe(k, config.QoS, v.handler)
 		}
-		mu.RUnlock()
 	}
 }
 

@@ -133,6 +133,7 @@ linters:
     - rowserrcheck
     - staticcheck
     - stylecheck
+    - testifylint
     - thelper
     - unconvert
     - unparam
