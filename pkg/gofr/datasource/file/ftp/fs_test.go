@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"net/textproto"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -419,6 +420,8 @@ func TestMkDir(t *testing.T) {
 	}
 }
 
+var directoryError = &textproto.Error{Code: 550, Msg: "Create directory operation failed."}
+
 func TestMkDirAll(t *testing.T) {
 	var tests = []struct {
 		name            string
@@ -432,6 +435,7 @@ func TestMkDirAll(t *testing.T) {
 			basePath: "/ftp/one",
 			dirPath:  "testdir1/testdir2",
 			mockMkdirExpect: func(conn *MockServerConn, _ string) {
+				conn.EXPECT().MakeDir("testdir1/testdir2").Return(directoryError)
 				conn.EXPECT().MakeDir("testdir1").Return(nil)
 				conn.EXPECT().MakeDir("testdir1/testdir2").Return(nil)
 			},
@@ -451,7 +455,8 @@ func TestMkDirAll(t *testing.T) {
 			basePath: "/ftp/one",
 			dirPath:  "testdir1/testdir2",
 			mockMkdirExpect: func(conn *MockServerConn, _ string) {
-				conn.EXPECT().MakeDir("testdir1").Return(directoryAlreadyExistsError)
+				conn.EXPECT().MakeDir("testdir1/testdir2").Return(directoryError)
+				conn.EXPECT().MakeDir("testdir1").Return(directoryError)
 				conn.EXPECT().MakeDir("testdir1/testdir2").Return(nil)
 			},
 			expectError: false,
@@ -461,7 +466,9 @@ func TestMkDirAll(t *testing.T) {
 			basePath: "/ftp/one",
 			dirPath:  "testdir1/testdir2",
 			mockMkdirExpect: func(conn *MockServerConn, _ string) {
-				conn.EXPECT().MakeDir("testdir1").Return(errors.New("mocked mkdir error"))
+				conn.EXPECT().MakeDir("testdir1/testdir2").Return(directoryError)
+				conn.EXPECT().MakeDir("testdir1").Return(directoryError)
+				conn.EXPECT().MakeDir("testdir1/testdir2").Return(errors.New("mocked mkdir error"))
 			},
 			expectError: true,
 		},

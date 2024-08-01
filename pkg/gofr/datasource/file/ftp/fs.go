@@ -28,12 +28,11 @@ func (c *Conn) RetrFrom(filepath string, offset uint64) (ftpResponse, error) {
 }
 
 var (
-	errEmptyFilename            = errors.New("filename cannot be empty")
-	errEmptyPath                = errors.New("file/directory path cannot be empty")
-	errEmptyDirectory           = errors.New("directory name cannot be empty")
-	errInvalidArg               = errors.New("invalid filename/directory")
-	transferCompleteError       = &textproto.Error{Code: 226, Msg: "Transfer complete."}
-	directoryAlreadyExistsError = &textproto.Error{Code: 550, Msg: "Create directory operation failed."}
+	errEmptyFilename      = errors.New("filename cannot be empty")
+	errEmptyPath          = errors.New("file/directory path cannot be empty")
+	errEmptyDirectory     = errors.New("directory name cannot be empty")
+	errInvalidArg         = errors.New("invalid filename/directory")
+	transferCompleteError = &textproto.Error{Code: 226, Msg: "Transfer complete."}
 )
 
 // ftpFileSystem represents a file system interface over FTP.
@@ -141,7 +140,8 @@ func (f *ftpFileSystem) Create(name string) (File, error) {
 	}, nil
 }
 
-// Mkdir creates a directory on the FTP server. Here, os.FileMode is unused.
+// Mkdir creates a directory on the FTP server.
+// Here, os.FileMode is unused, but is added to comply with FileSystem interface.
 func (f *ftpFileSystem) Mkdir(name string, _ os.FileMode) error {
 	filePath := path.Join(f.config.RemoteDir, name)
 
@@ -189,7 +189,7 @@ func (f *ftpFileSystem) mkdirAllHelper(filepath string) []string {
 }
 
 // MkdirAll creates directories recursively on the FTP server. Here, os.FileMode is unused.
-// The directories are not created if even one directory exist.
+// Here, os.FileMode is unused, but is added to comply with FileSystem interface.
 func (f *ftpFileSystem) MkdirAll(name string, _ os.FileMode) error {
 	defer f.processLog(&FileLog{Operation: "MkdirAll", Location: path.Join(f.config.RemoteDir, name)}, time.Now())
 
@@ -205,9 +205,9 @@ func (f *ftpFileSystem) MkdirAll(name string, _ os.FileMode) error {
 	for i, dir := range dirs {
 		if i == 0 {
 			continue
-		} else {
-			currentDir = path.Join(currentDir, dir)
 		}
+
+		currentDir = path.Join(currentDir, dir)
 
 		err := f.conn.MakeDir(currentDir)
 		if err != nil {
@@ -256,7 +256,8 @@ func (f *ftpFileSystem) Open(name string) (File, error) {
 }
 
 // permissions are not clear for Ftp as file commands do not accept an argument and don't store their file permissions.
-// currently, this function just calls the Open function. Here, os.FileMode is unused.
+// currently, this function just calls the Open function.
+// Here, os.FileMode is unused, but is added to comply with FileSystem interface.
 func (f *ftpFileSystem) OpenFile(name string, _ int, _ os.FileMode) (File, error) {
 	return f.Open(name)
 }

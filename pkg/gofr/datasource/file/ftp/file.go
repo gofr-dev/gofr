@@ -62,13 +62,12 @@ func (f *ftpFile) createJSONReader() (RowReader, error) {
 	}
 
 	buffer, readerError := io.ReadAll(res)
-
-	reader := bytes.NewReader(buffer)
-
 	if readerError != nil {
 		f.logger.Errorf("ReadAll Failed. Unable to read json file: %v", readerError)
 		return nil, readerError
 	}
+
+	reader := bytes.NewReader(buffer)
 
 	decoder := json.NewDecoder(reader)
 
