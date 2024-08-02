@@ -76,6 +76,8 @@ func (f *file) createJSONReader() (f.RowReader, error) {
 	decoder := json.NewDecoder(reader)
 
 	// Peek the first JSON token to determine the type
+	// Note: This results in offset to move ahead, making it necessary to
+	// decode again if we are decoding a json object instead of array
 	token, err := decoder.Token()
 	if err != nil {
 		return nil, err
