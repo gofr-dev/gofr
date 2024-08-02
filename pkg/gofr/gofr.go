@@ -22,6 +22,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
+	"golang.org/x/sync/errgroup"
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
@@ -31,7 +32,6 @@ import (
 	"gofr.dev/pkg/gofr/metrics"
 	"gofr.dev/pkg/gofr/migration"
 	"gofr.dev/pkg/gofr/service"
-	"golang.org/x/sync/errgroup"
 )
 
 const (
