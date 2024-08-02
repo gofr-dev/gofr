@@ -56,11 +56,9 @@ func (f *file) ReadAll() (file_interface.RowReader, error) {
 
 // createJSONReader creates a JSON reader for JSON files.
 func (f *file) createJSONReader() (file_interface.RowReader, error) {
-	var msg string
-
 	status := "ERROR"
 
-	defer f.postProcess(&FileLog{Operation: "JSON Reader", Location: f.path, Status: &status, Message: &msg}, time.Now())
+	defer f.postProcess(&FileLog{Operation: "JSON Reader", Location: f.path, Status: &status}, time.Now())
 
 	res, err := f.conn.Retr(f.path)
 	if err != nil {
@@ -103,11 +101,9 @@ func (f *file) createJSONReader() (file_interface.RowReader, error) {
 
 // createTextCSVReader creates a text reader for reading text files.
 func (f *file) createTextCSVReader() (file_interface.RowReader, error) {
-	var msg string
-
 	status := "ERROR"
 
-	defer f.postProcess(&FileLog{Operation: "Text/CSV Reader", Location: f.path, Status: &status, Message: &msg}, time.Now())
+	defer f.postProcess(&FileLog{Operation: "Text/CSV Reader", Location: f.path, Status: &status}, time.Now())
 
 	res, err := f.conn.Retr(f.path)
 	if err != nil {
@@ -124,6 +120,7 @@ func (f *file) createTextCSVReader() (file_interface.RowReader, error) {
 	}
 
 	reader := bytes.NewReader(buffer)
+	status = "SUCCESS"
 
 	return &textReader{
 		scanner: bufio.NewScanner(reader),
@@ -207,7 +204,7 @@ func (f *file) Read(p []byte) (n int, err error) {
 	}
 
 	status = "SUCCESS"
-	msg = fmt.Sprintf("Read %v bytes from %q", n, f.path)
+	msg = fmt.Sprintf("Read %v bytes from file with path %q", n, f.path)
 
 	return n, err
 }
@@ -235,7 +232,7 @@ func (f *file) ReadAt(p []byte, off int64) (n int, err error) {
 	}
 
 	status = "SUCCESS"
-	msg = fmt.Sprintf("Read %v bytes at offset of %v", n, off)
+	msg = fmt.Sprintf("Read %v bytes from file with path %q at offset of %v", n, f.path, off)
 
 	return n, err
 }
@@ -281,7 +278,7 @@ func (f *file) Seek(offset int64, whence int) (int64, error) {
 	}
 
 	status = "SUCCESS"
-	msg = fmt.Sprintf("Offset at whence %v : %v", whence, res)
+	msg = fmt.Sprintf("Offset set to %v for file at path %q", res, f.path)
 
 	return res, nil
 }
@@ -305,7 +302,7 @@ func (f *file) Write(p []byte) (n int, err error) {
 	f.offset += int64(len(p))
 
 	status = "SUCCESS"
-	msg = fmt.Sprintf("Wrote %v bytes", len(p))
+	msg = fmt.Sprintf("Wrote %v bytes to file at path %q", len(p), f.path)
 
 	return len(p), nil
 }
@@ -326,7 +323,7 @@ func (f *file) WriteAt(p []byte, off int64) (n int, err error) {
 		return 0, err
 	}
 
-	msg = fmt.Sprintf("Wrote %v bytes at %v offset", len(p), off)
+	msg = fmt.Sprintf("Wrote %v bytes to file with path %q at %v offset", len(p), f.path, off)
 	status = "SUCCESS"
 
 	return len(p), nil

@@ -138,7 +138,7 @@ func (f *fileSystem) Create(name string) (file_interface.File, error) {
 	defer res.Close()
 
 	status = "SUCCESS"
-	msg = fmt.Sprintf("Created file %s", name)
+	msg = fmt.Sprintf("Created file %q", name)
 
 	return &file{
 		response: res,
@@ -173,7 +173,7 @@ func (f *fileSystem) Mkdir(name string, _ os.FileMode) error {
 	}
 
 	status = "SUCCESS"
-	msg = fmt.Sprintf("%s successfully created", name)
+	msg = fmt.Sprintf("%q created successfully", name)
 
 	return nil
 }
@@ -239,7 +239,7 @@ func (f *fileSystem) MkdirAll(name string, _ os.FileMode) error {
 	}
 
 	status = "SUCCESS"
-	msg = fmt.Sprintf("Directories creation completed successfully")
+	msg = fmt.Sprintf("Directories %q creation completed successfully", name)
 
 	return nil
 }
@@ -272,6 +272,7 @@ func (f *fileSystem) Open(name string) (file_interface.File, error) {
 	filename := path.Base(filePath)
 
 	status = "SUCCESS"
+	msg = fmt.Sprintf("Opened file %q", name)
 
 	return &file{
 		response: res,
@@ -313,7 +314,7 @@ func (f *fileSystem) Remove(name string) error {
 	}
 
 	status = "SUCCESS"
-	msg = "File successfully removed"
+	msg = fmt.Sprintf("File with path %q removed successfully", filePath)
 
 	return nil
 }
@@ -339,7 +340,7 @@ func (f *fileSystem) RemoveAll(name string) error {
 		return err
 	}
 
-	msg = "Directories successfully deleted"
+	msg = "Directories deleted successfully"
 	status = "SUCCESS"
 
 	return nil
