@@ -8,7 +8,7 @@ import (
 
 // Logger interface is used by ftp package to log information about query execution.
 type Logger interface {
-	Debugf(pattern string, args ...interface{})
+	Debug(args ...interface{})
 	Logf(pattern string, args ...interface{})
 	Errorf(pattern string, args ...interface{})
 }

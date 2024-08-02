@@ -5,12 +5,11 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	f "gofr.dev/pkg/gofr/datasource/file"
 	"io"
 	"os"
 	"strings"
 	"time"
-
-	"gofr.dev/pkg/gofr/container"
 )
 
 var (
@@ -43,7 +42,7 @@ type jsonReader struct {
 }
 
 // ReadAll reads either JSON or text files based on file extension and returns a corresponding RowReader.
-func (f *file) ReadAll() (container.RowReader, error) {
+func (f *file) ReadAll() (f.RowReader, error) {
 	defer f.postProcess(&FileLog{Operation: "ReadAll", Location: f.path}, time.Now())
 
 	if strings.HasSuffix(f.Name(), ".json") {
@@ -54,7 +53,7 @@ func (f *file) ReadAll() (container.RowReader, error) {
 }
 
 // createJSONReader creates a JSON reader for JSON files.
-func (f *file) createJSONReader() (container.RowReader, error) {
+func (f *file) createJSONReader() (f.RowReader, error) {
 	defer f.postProcess(&FileLog{Operation: "JSON Reader", Location: f.path}, time.Now())
 
 	res, err := f.conn.Retr(f.path)
@@ -92,7 +91,7 @@ func (f *file) createJSONReader() (container.RowReader, error) {
 }
 
 // createTextCSVReader creates a text reader for reading text files.
-func (f *file) createTextCSVReader() (container.RowReader, error) {
+func (f *file) createTextCSVReader() (f.RowReader, error) {
 	defer f.postProcess(&FileLog{Operation: "Text/CSV Reader", Location: f.path}, time.Now())
 
 	res, err := f.conn.Retr(f.path)
@@ -287,5 +286,5 @@ func (f *file) postProcess(fl *FileLog, startTime time.Time) {
 
 	fl.Duration = duration
 
-	f.logger.Debugf("%v", fl)
+	f.logger.Debug(fl)
 }

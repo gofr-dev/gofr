@@ -10,7 +10,7 @@ import (
 	"slices"
 	"time"
 
-	"gofr.dev/pkg/gofr/container"
+	f "gofr.dev/pkg/gofr/datasource/file"
 
 	"github.com/jlaffaye/ftp"
 )
@@ -55,7 +55,7 @@ type Config struct {
 }
 
 // New initializes a new instance of ftpFileSystem with provided configuration.
-func New(config *Config) container.FileSystemProvider {
+func New(config *Config) f.FileSystemProvider {
 	return &fileSystem{config: config}
 }
 
@@ -101,7 +101,7 @@ func (f *fileSystem) Connect() {
 }
 
 // Create creates an empty file on the FTP server.
-func (f *fileSystem) Create(name string) (container.File, error) {
+func (f *fileSystem) Create(name string) (f.File, error) {
 	filePath := path.Join(f.config.RemoteDir, name)
 
 	defer f.processLog(&FileLog{Operation: "Create", Location: filePath}, time.Now())
@@ -227,7 +227,7 @@ func (f *fileSystem) MkdirAll(name string, _ os.FileMode) error {
 }
 
 // Open retrieves a file from the FTP server and returns a file handle.
-func (f *fileSystem) Open(name string) (container.File, error) {
+func (f *fileSystem) Open(name string) (f.File, error) {
 	filePath := path.Join(f.config.RemoteDir, name)
 
 	defer f.processLog(&FileLog{Operation: "Open", Location: filePath}, time.Now())
@@ -262,7 +262,7 @@ func (f *fileSystem) Open(name string) (container.File, error) {
 // permissions are not clear for Ftp as file commands do not accept an argument and don't store their file permissions.
 // currently, this function just calls the Open function.
 // Here, os.FileMode is unused, but is added to comply with FileSystem interface.
-func (f *fileSystem) OpenFile(name string, _ int, _ os.FileMode) (container.File, error) {
+func (f *fileSystem) OpenFile(name string, _ int, _ os.FileMode) (f.File, error) {
 	return f.Open(name)
 }
 
@@ -349,5 +349,5 @@ func (f *fileSystem) processLog(fl *FileLog, startTime time.Time) {
 
 	fl.Duration = duration
 
-	f.logger.Debugf("%v", fl)
+	f.logger.Debug(fl)
 }
