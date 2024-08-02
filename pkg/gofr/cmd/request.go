@@ -86,6 +86,16 @@ func (*Request) HostName() (hostname string) {
 	return hostname
 }
 
+// Params retrieves all values for a given query parameter key, including comma-separated values.
+func (r *Request) Params(key string) []string {
+	value, exists := r.params[key]
+	if !exists {
+		return []string{}
+	}
+
+	return strings.Split(value, ",")
+}
+
 func (r *Request) Bind(i interface{}) error {
 	// pointer to struct - addressable
 	ps := reflect.ValueOf(i)
