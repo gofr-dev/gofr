@@ -10,9 +10,9 @@ import (
 	"slices"
 	"time"
 
-	f "gofr.dev/pkg/gofr/datasource/file"
-
 	"github.com/jlaffaye/ftp"
+
+	f "gofr.dev/pkg/gofr/datasource/file"
 )
 
 // Conn struct embeds the *ftp.ServerConn returned by ftp server on successful connection.
@@ -55,7 +55,7 @@ type Config struct {
 	DialTimeout time.Duration // FTP connection timeout
 }
 
-// New initializes a new instance of ftpFileSystem with provided configuration.
+// New initializes a new instance of FTP fileSystem with provided configuration.
 func New(config *Config) f.FileSystemProvider {
 	return &fileSystem{config: config}
 }

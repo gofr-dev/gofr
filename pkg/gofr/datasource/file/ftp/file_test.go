@@ -4,13 +4,14 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	f "gofr.dev/pkg/gofr/datasource/file"
 	"io"
 	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
+
+	f "gofr.dev/pkg/gofr/datasource/file"
 )
 
 func TestRead(t *testing.T) {
