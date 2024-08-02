@@ -1,7 +1,9 @@
 package container
 
 import (
+	"context"
 	"errors"
+	"gofr.dev/pkg/gofr/websocket"
 	"strconv"
 	"strings"
 	"time"
@@ -238,4 +240,13 @@ func (c *Container) GetPublisher() pubsub.Publisher {
 
 func (c *Container) GetSubscriber() pubsub.Subscriber {
 	return c.PubSub
+}
+
+func (c *Container) GetConnectionFromContext(ctx context.Context) *websocket.Connection {
+	conn, ok := ctx.Value(websocket.WSConnectionKey).(*websocket.Connection)
+	if !ok {
+		// Handle error, e.g., return an error or a nil connection
+		return nil
+	}
+	return conn
 }

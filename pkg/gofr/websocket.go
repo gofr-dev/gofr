@@ -1,6 +1,7 @@
 package gofr
 
 import (
+	"context"
 	"fmt"
 
 	gWebsocket "github.com/gorilla/websocket"
@@ -25,6 +26,8 @@ func (a *App) WebSocket(route string, handler Handler) {
 		}
 
 		ctx.Request = conn
+
+		ctx.Context = context.WithValue(ctx, websocket.WSConnectionKey, conn)
 
 		defer a.httpServer.ws.CloseConnection(connID)
 
