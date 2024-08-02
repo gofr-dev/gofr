@@ -8,7 +8,6 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
-	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -33,7 +32,6 @@ import (
 	"gofr.dev/pkg/gofr/migration"
 	"gofr.dev/pkg/gofr/service"
 	"golang.org/x/sync/errgroup"
-	"google.golang.org/grpc"
 )
 
 const (
@@ -62,52 +60,6 @@ type App struct {
 	httpRegistered bool
 
 	subscriptionManager SubscriptionManager
-}
-
-// RegisterService adds a gRPC service to the GoFr application.
-func (a *App) RegisterService(desc *grpc.ServiceDesc, impl interface{}) {
-	a.container.Logger.Infof("registering GRPC Server: %s", desc.ServiceName)
-	a.grpcServer.server.RegisterService(desc, impl)
-
-	injectContainer(impl, a.container)
-
-	a.grpcRegistered = true
-}
-
-func injectContainer(impl any, c *container.Container) {
-	val := reflect.ValueOf(impl)
-
-	if val.Kind() != reflect.Pointer {
-		c.Logger.Debugf("cannot inject container into non-addressable implementation of `%s`, consider using pointer",
-			val.Type().Name())
-		return
-	}
-
-	val = val.Elem()
-	tVal := val.Type()
-
-	for i := 0; i < val.NumField(); i++ {
-		f := tVal.Field(i)
-		v := val.Field(i)
-
-		if f.Type == reflect.TypeOf(c) {
-			if !v.CanAddr() {
-				c.Logger.Errorf("cannot inject container as it is not exported")
-				continue
-			}
-
-			v.Set(reflect.ValueOf(c))
-		}
-
-		if f.Type == reflect.TypeOf(*c) {
-			if !v.CanAddr() {
-				c.Logger.Errorf("cannot inject container as it is not exported")
-				continue
-			}
-
-			v.Set(reflect.ValueOf(*c))
-		}
-	}
 }
 
 // New creates an HTTP Server Application and returns that App.

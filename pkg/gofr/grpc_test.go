@@ -101,3 +101,49 @@ func TestGRPC_ServerShutdown_ContextCanceled(t *testing.T) {
 	err := <-errChan
 	require.ErrorContains(t, err, "context canceled", "Expected error due to context cancellation")
 }
+
+func Test_injectContainer_Fails(t *testing.T) {
+	// Case: container is an unaddressable or unexported field
+	type fail struct {
+		c1 *container.Container
+		c2 container.Container
+	}
+
+	srv1 := &fail{}
+	out := testutil.StderrOutputForFunc(func() {
+		c, _ := container.NewMockContainer(t)
+		injectContainer(srv1, c)
+	})
+
+	assert.Contains(t, out, "cannot inject container as it is not addressable or is fail")
+	require.Nil(t, srv1.c1)
+	require.Empty(t, srv1.c2)
+
+	// Case: server is passed as unadressable(non-pointer)
+	srv3 := fail{}
+	out = testutil.StdoutOutputForFunc(func() {
+		c, _ := container.NewMockContainer(t)
+		injectContainer(srv3, c)
+	})
+
+	assert.Contains(t, out, "cannot inject container into non-addressable implementation of `fail`, consider using pointer")
+}
+
+func Test_injectContainer(t *testing.T) {
+	type success struct {
+		// embedded container
+		*container.Container
+		// pointer field
+		C1 *container.Container
+		// non-pointer field
+		C2 container.Container
+	}
+
+	c, _ := container.NewMockContainer(t)
+	srv := &success{}
+	injectContainer(srv, c)
+
+	require.NotNil(t, srv.C1)
+	require.NotNil(t, srv.Container)
+	require.NotEmpty(t, srv.C2)
+}
