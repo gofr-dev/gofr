@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"net/textproto"
 	"os"
 	"path"
 	"slices"
@@ -283,12 +282,7 @@ func (f *fileSystem) Remove(name string) error {
 	}
 
 	err := f.conn.Delete(filePath)
-
-	var textprotoError *textproto.Error
-	switch {
-	case errors.As(err, &textprotoError) && textprotoError.Code == ftp.StatusClosingDataConnection && textprotoError.Msg == "Transfer complete.":
-
-	case err != nil:
+	if err != nil {
 		f.logger.Errorf("Remove_file failed. Error while deleting the file: %v", err)
 		return err
 	}
