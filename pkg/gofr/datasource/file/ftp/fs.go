@@ -30,14 +30,13 @@ func (c *Conn) RetrFrom(filepath string, offset uint64) (ftpResponse, error) {
 }
 
 var (
-	errEmptyFilename      = errors.New("filename cannot be empty")
-	errEmptyPath          = errors.New("file/directory path cannot be empty")
-	errEmptyDirectory     = errors.New("directory name cannot be empty")
-	errInvalidArg         = errors.New("invalid filename/directory")
-	transferCompleteError = &textproto.Error{Code: 226, Msg: "Transfer complete."}
+	errEmptyFilename  = errors.New("filename cannot be empty")
+	errEmptyPath      = errors.New("file/directory path cannot be empty")
+	errEmptyDirectory = errors.New("directory name cannot be empty")
+	errInvalidArg     = errors.New("invalid filename/directory")
 )
 
-// ftpFileSystem represents a file system interface over FTP.
+// fileSystem represents a file system interface over FTP.
 type fileSystem struct {
 	*file
 	conn    ServerConn
@@ -56,18 +55,18 @@ type Config struct {
 }
 
 // New initializes a new instance of ftpFileSystem with provided configuration.
-func New(config *Config) FileSystemProvider {
+func New(config *Config) container.FileSystemProvider {
 	return &fileSystem{config: config}
 }
 
-// UseLogger sets the logger interface for the FTP file system.
+// UseLogger sets the Logger interface for the FTP file system.
 func (f *fileSystem) UseLogger(logger interface{}) {
 	if l, ok := logger.(Logger); ok {
 		f.logger = l
 	}
 }
 
-// UseMetrics sets the metrics for the MongoDB client which asserts the Metrics interface.
+// UseMetrics sets the Metrics interface.
 func (f *fileSystem) UseMetrics(metrics interface{}) {
 	if m, ok := metrics.(Metrics); ok {
 		f.metrics = m
@@ -120,7 +119,7 @@ func (f *fileSystem) Create(name string) (container.File, error) {
 		return nil, err
 	}
 
-	_, s := path.Split(filePath)
+	filename := path.Base(filePath)
 
 	res, err := f.conn.Retr(filePath)
 	if err != nil {
@@ -134,7 +133,7 @@ func (f *fileSystem) Create(name string) (container.File, error) {
 
 	return &file{
 		response: res,
-		name:     s,
+		name:     filename,
 		path:     filePath,
 		conn:     f.conn,
 		logger:   f.logger,
@@ -280,16 +279,12 @@ func (f *fileSystem) Remove(name string) error {
 
 	err := f.conn.Delete(filePath)
 
-	if err != nil {
-		var textprotoError *textproto.Error
+	var textprotoError *textproto.Error
+	switch {
+	case errors.As(err, &textprotoError) && textprotoError.Code == ftp.StatusClosingDataConnection && textprotoError.Msg == "Transfer complete.":
 
-		if errors.As(err, &textprotoError) && textprotoError.Msg == transferCompleteError.Msg {
-			f.logger.Logf("Remove_file successful. File with path %q successfully removed", filePath)
-			return nil
-		}
-
+	case err != nil:
 		f.logger.Errorf("Remove_file failed. Error while deleting the file: %v", err)
-
 		return err
 	}
 

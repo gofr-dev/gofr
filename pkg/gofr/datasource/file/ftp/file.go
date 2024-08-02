@@ -19,7 +19,7 @@ var (
 	ErrOutOfRange = errors.New("out of range")
 )
 
-// ftpFile represents a file on an FTP server.
+// file represents a file on an FTP server.
 type file struct {
 	response ftpResponse
 	path     string
@@ -179,11 +179,7 @@ func (f *file) Read(p []byte) (n int, err error) {
 
 	f.logger.Logf("Read successful : Read %v bytes from %q", n, f.path)
 
-	if errors.Is(err, io.EOF) {
-		return n, io.EOF
-	}
-
-	return n, nil
+	return n, err
 }
 
 // ReadAt reads data from the FTP file starting at the specified offset.
@@ -206,11 +202,7 @@ func (f *file) ReadAt(p []byte, off int64) (n int, err error) {
 
 	f.logger.Logf("ReadAt successful. Read %v bytes from %q at offset of %v", n, f.path, off)
 
-	if n < len(p) {
-		return n, io.EOF
-	}
-
-	return n, nil
+	return n, err
 }
 
 func (f *file) check(whence int, offset, length int64) (int64, error) {
