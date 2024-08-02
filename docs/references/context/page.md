@@ -58,8 +58,7 @@ parts of the request.
     // the host would be http://xyz.com
     // Note: the protocol if not provided in the headers will be set to http by default
   ```
-- `Params()` - to access all query parameters for a given key returning comma-separated values
-  ```go
+- `Params(string)` - to access all query parameters for a given key returning slice of strings.
     // Example: Request is /search?category=books,electronics&category=tech
     values := ctx.Request.Params("category")
     // values = []string{"books", "electronics", "tech"}

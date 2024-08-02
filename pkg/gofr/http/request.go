@@ -83,7 +83,8 @@ func (r *Request) HostName() string {
 	return fmt.Sprintf("%s://%s", proto, r.req.Host)
 }
 
-// Params retrieves all values for a given query parameter key, including comma-separated values.
+// Params returns a slice of strings containing the values associated with the given query parameter key.
+// If the parameter is not present, an empty slice is returned.
 func (r *Request) Params(key string) []string {
 	values := r.req.URL.Query()[key]
 
