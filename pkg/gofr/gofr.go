@@ -85,6 +85,7 @@ func injectContainer(impl any, c *container.Container) {
 
 	val = val.Elem()
 	tVal := val.Type()
+
 	for i := 0; i < val.NumField(); i++ {
 		f := tVal.Field(i)
 		v := val.Field(i)
