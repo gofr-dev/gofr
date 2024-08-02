@@ -7,6 +7,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"strings"
 	"testing"
@@ -233,4 +234,20 @@ func Test_bindMultipart_Fail_ParseMultiPart(t *testing.T) {
 
 	err := r.bindMultipart(&input2)
 	require.ErrorContains(t, err, "http: multipart handled by MultipartReader")
+}
+
+func Test_Params(t *testing.T) {
+	req := &http.Request{
+		URL: &url.URL{
+			RawQuery: "category=books&category=electronics&tag=tech,science",
+		},
+	}
+	r := NewRequest(req)
+
+	expectedCategories := []string{"books", "electronics"}
+	expectedTags := []string{"tech", "science"}
+
+	assert.ElementsMatch(t, expectedCategories, r.Params("category"), "expected all values of 'category' to match")
+	assert.ElementsMatch(t, expectedTags, r.Params("tag"), "expected all values of 'tag' to match")
+	assert.Empty(t, r.Params("nonexistent"), "expected empty slice for non-existent query param")
 }

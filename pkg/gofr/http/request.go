@@ -83,6 +83,20 @@ func (r *Request) HostName() string {
 	return fmt.Sprintf("%s://%s", proto, r.req.Host)
 }
 
+// Params returns a slice of strings containing the values associated with the given query parameter key.
+// If the parameter is not present, an empty slice is returned.
+func (r *Request) Params(key string) []string {
+	values := r.req.URL.Query()[key]
+
+	var result []string
+
+	for _, value := range values {
+		result = append(result, strings.Split(value, ",")...)
+	}
+
+	return result
+}
+
 func (r *Request) body() ([]byte, error) {
 	bodyBytes, err := io.ReadAll(r.req.Body)
 	if err != nil {

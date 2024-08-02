@@ -109,3 +109,7 @@ func (m *Message) bindStruct(i any) error {
 func (*Message) HostName() string {
 	return ""
 }
+
+func (*Message) Params(string) []string {
+	return nil
+}

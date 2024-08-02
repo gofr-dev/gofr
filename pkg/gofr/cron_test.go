@@ -310,7 +310,8 @@ func Test_noopRequest(t *testing.T) {
 
 	assert.Equal(t, context.Background(), noop.Context())
 	assert.Equal(t, "", noop.Param(""))
-	assert.Equal(t, "", noop.PathParam(""))
+	assert.Empty(t, noop.PathParam(""))
 	assert.Equal(t, "gofr", noop.HostName())
 	require.NoError(t, noop.Bind(nil))
+	assert.Nil(t, noop.Params("test"))
 }
