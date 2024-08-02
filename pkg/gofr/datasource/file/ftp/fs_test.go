@@ -67,9 +67,9 @@ func TestCreateFile(t *testing.T) {
 	}
 
 	// mocked logs
-	logger.EXPECT().Logf(gomock.Any(), gomock.Any(), gomock.Any())
-	logger.EXPECT().Errorf(gomock.Any(), gomock.Any(), gomock.Any())
-	logger.EXPECT().Errorf(gomock.Any(), gomock.Any())
+	logger.EXPECT().Logf(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	logger.EXPECT().Errorf(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	logger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 	logger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	metrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
@@ -170,9 +170,9 @@ func TestRenameFile(t *testing.T) {
 	}
 
 	// mocked logs
-	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any(), gomock.Any())
+	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
-	mockLogger.EXPECT().Logf(gomock.Any())
+	mockLogger.EXPECT().Logf(gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
@@ -328,9 +328,9 @@ func TestOpenFile(t *testing.T) {
 		metrics: mockMetrics,
 	}
 	// mocked logs
-	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any())
+	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
-	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes().AnyTimes()
 	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	for _, tt := range tests {

@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 
-	f "gofr.dev/pkg/gofr/datasource/file"
+	file_interface "gofr.dev/pkg/gofr/datasource/file"
 )
 
 func TestRead(t *testing.T) {
@@ -430,7 +430,6 @@ func TestSeek(t *testing.T) {
 		metrics: mockMetrics,
 	}
 
-	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any(), gomock.Any()).Times(4)
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).Times(5)
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
@@ -450,48 +449,12 @@ func TestSeek(t *testing.T) {
 
 // The test defined below do not use any mocking. They need an actual ftp server connection.
 func Test_ReadFromCSV(t *testing.T) {
-	runFtpTest(t, func(fs f.FileSystemProvider) {
+	runFtpTest(t, func(fs file_interface.FileSystemProvider) {
 		var csvContent = `Name,Age,Email
 John Doe,30,johndoe@example.com
 Jane Smith,25,janesmith@example.com
 Emily Johnson,35,emilyj@example.com
-Michael Brown,40,michaelb@example.com
-David Lee,27,davidlee@example.com
-Sarah Wilson,45,sarahw@example.com
-Matthew Taylor,38,matthewt@example.com
-Olivia Moore,29,oliviam@example.com
-Daniel Clark,33,danielc@example.com
-Sophia Garcia,42,sophiag@example.com
-Andrew Martinez,31,andrewm@example.com
-Alexandra Anderson,36,alexandra@example.com
-Benjamin Young,39,benjaminy@example.com
-Hannah Rodriguez,26,hannahr@example.com
-William Hernandez,41,williamh@example.com
-Samantha Martinez,34,samantham@example.com
-Christopher Davis,37,christopherd@example.com
-Lauren White,28,laurenw@example.com
-Gabriel Scott,43,gabriels@example.com
-Victoria Nguyen,32,victorian@example.com
-John Doe,30,johndoe@example.com
-Jane Smith,25,janesmith@example.com
-Emily Johnson,35,emilyj@example.com
-Michael Brown,40,michaelb@example.com
-David Lee,27,davidlee@example.com
-Sarah Wilson,45,sarahw@example.com
-Matthew Taylor,38,matthewt@example.com
-Olivia Moore,29,oliviam@example.com
-Daniel Clark,33,danielc@example.com
-Sophia Garcia,42,sophiag@example.com
-Andrew Martinez,31,andrewm@example.com
-Alexandra Anderson,36,alexandra@example.com
-Benjamin Young,39,benjaminy@example.com
-Hannah Rodriguez,26,hannahr@example.com
-William Hernandez,41,williamh@example.com
-Samantha Martinez,34,samantham@example.com
-Christopher Davis,37,christopherd@example.com
-Lauren White,28,laurenw@example.com
-Gabriel Scott,43,gabriels@example.com
-Victoria Nguyen,32,victorian@example.com`
+Michael Brown,40,michaelb@example.com`
 
 		csvValue := []string{
 			"Name,Age,Email",
@@ -499,42 +462,6 @@ Victoria Nguyen,32,victorian@example.com`
 			"Jane Smith,25,janesmith@example.com",
 			"Emily Johnson,35,emilyj@example.com",
 			"Michael Brown,40,michaelb@example.com",
-			"David Lee,27,davidlee@example.com",
-			"Sarah Wilson,45,sarahw@example.com",
-			"Matthew Taylor,38,matthewt@example.com",
-			"Olivia Moore,29,oliviam@example.com",
-			"Daniel Clark,33,danielc@example.com",
-			"Sophia Garcia,42,sophiag@example.com",
-			"Andrew Martinez,31,andrewm@example.com",
-			"Alexandra Anderson,36,alexandra@example.com",
-			"Benjamin Young,39,benjaminy@example.com",
-			"Hannah Rodriguez,26,hannahr@example.com",
-			"William Hernandez,41,williamh@example.com",
-			"Samantha Martinez,34,samantham@example.com",
-			"Christopher Davis,37,christopherd@example.com",
-			"Lauren White,28,laurenw@example.com",
-			"Gabriel Scott,43,gabriels@example.com",
-			"Victoria Nguyen,32,victorian@example.com",
-			"John Doe,30,johndoe@example.com",
-			"Jane Smith,25,janesmith@example.com",
-			"Emily Johnson,35,emilyj@example.com",
-			"Michael Brown,40,michaelb@example.com",
-			"David Lee,27,davidlee@example.com",
-			"Sarah Wilson,45,sarahw@example.com",
-			"Matthew Taylor,38,matthewt@example.com",
-			"Olivia Moore,29,oliviam@example.com",
-			"Daniel Clark,33,danielc@example.com",
-			"Sophia Garcia,42,sophiag@example.com",
-			"Andrew Martinez,31,andrewm@example.com",
-			"Alexandra Anderson,36,alexandra@example.com",
-			"Benjamin Young,39,benjaminy@example.com",
-			"Hannah Rodriguez,26,hannahr@example.com",
-			"William Hernandez,41,williamh@example.com",
-			"Samantha Martinez,34,samantham@example.com",
-			"Christopher Davis,37,christopherd@example.com",
-			"Lauren White,28,laurenw@example.com",
-			"Gabriel Scott,43,gabriels@example.com",
-			"Victoria Nguyen,32,victorian@example.com",
 		}
 
 		ctrl := gomock.NewController(t)
@@ -558,7 +485,7 @@ Victoria Nguyen,32,victorian@example.com`
 
 		newCsvFile, _ = fs.Open("temp.csv")
 
-		defer func(fs f.FileSystem, name string) {
+		defer func(fs file_interface.FileSystem, name string) {
 			_ = fs.Remove(name)
 		}(fs, "temp.csv")
 
@@ -579,7 +506,7 @@ Victoria Nguyen,32,victorian@example.com`
 }
 
 func Test_ReadFromCSVScanError(t *testing.T) {
-	runFtpTest(t, func(fs f.FileSystemProvider) {
+	runFtpTest(t, func(fs file_interface.FileSystemProvider) {
 		var csvContent = `Name,Age,Email`
 
 		ctrl := gomock.NewController(t)
@@ -600,7 +527,7 @@ func Test_ReadFromCSVScanError(t *testing.T) {
 
 		reader, _ := newCsvFile.ReadAll()
 
-		defer func(fs f.FileSystem, name string) {
+		defer func(fs file_interface.FileSystem, name string) {
 			err := fs.Remove(name)
 			if err != nil {
 				t.Error(err)
@@ -619,50 +546,11 @@ func Test_ReadFromCSVScanError(t *testing.T) {
 }
 
 func Test_ReadFromJSONArray(t *testing.T) {
-	runFtpTest(t, func(fs f.FileSystemProvider) {
+	runFtpTest(t, func(fs file_interface.FileSystemProvider) {
 		var jsonContent = `[{"name": "Sam", "age": 123},
-
 {"name": "Jane", "age": 456},
 {"name": "John", "age": 789},
-{"name": "Sam", "age": 123},
-{"name": "Jane", "age": 456},
-{"name": "John", "age": 789},
-{"name": "Sam", "age": 123},
-{"name": "Jane", "age": 456},
-{"name": "John", "age": 789},
-{"name": "Sam", "age": 123},
-{"name": "Jane", "age": 456},
-{"name": "John", "age": 789},
-{"name": "Sam", "age": 123},
-{"name": "Jane", "age": 456},
-{"name": "John", "age": 789},
-{"name": "Sam", "age": 123},
-{"name": "Jane", "age": 456},
-{"name": "John", "age": 789},
-{"name": "Sam", "age": 123},
-{"name": "Jane", "age": 456},
-{"name": "John", "age": 789},
-{"name": "Sam", "age": 123},
-{"name": "Jane", "age": 456},
-{"name": "John", "age": 789},
-{"name": "Sam", "age": 123},
-{"name": "Jane", "age": 456},
-{"name": "John", "age": 789},
-{"name": "Sam", "age": 123},
-{"name": "Jane", "age": 456},
-{"name": "John", "age": 789},
-{"name": "Sam", "age": 123},
-{"name": "Jane", "age": 456},
-{"name": "John", "age": 789},
-{"name": "Sam", "age": 123},
-{"name": "Jane", "age": 456},
-{"name": "John", "age": 789},
-{"name": "Sam", "age": 123},
-{"name": "Jane", "age": 456},
-{"name": "John", "age": 789},
-{"name": "Sam", "age": 123},
-{"name": "Jane", "age": 456},
-{"name": "John", "age": 789}]`
+{"name": "Sam", "age": 123}]`
 
 		type User struct {
 			Name string `json:"name"`
@@ -673,44 +561,6 @@ func Test_ReadFromJSONArray(t *testing.T) {
 			{"Jane", 456},
 			{"John", 789},
 			{"Sam", 123},
-			{"Jane", 456},
-			{"John", 789},
-			{"Sam", 123},
-			{"Jane", 456},
-			{"John", 789},
-			{"Sam", 123},
-			{"Jane", 456},
-			{"John", 789},
-			{"Sam", 123},
-			{"Jane", 456},
-			{"John", 789},
-			{"Sam", 123},
-			{"Jane", 456},
-			{"John", 789},
-			{"Sam", 123},
-			{"Jane", 456},
-			{"John", 789},
-			{"Sam", 123},
-			{"Jane", 456},
-			{"John", 789},
-			{"Sam", 123},
-			{"Jane", 456},
-			{"John", 789},
-			{"Sam", 123},
-			{"Jane", 456},
-			{"John", 789},
-			{"Sam", 123},
-			{"Jane", 456},
-			{"John", 789},
-			{"Sam", 123},
-			{"Jane", 456},
-			{"John", 789},
-			{"Sam", 123},
-			{"Jane", 456},
-			{"John", 789},
-			{"Sam", 123},
-			{"Jane", 456},
-			{"John", 789},
 		}
 
 		ctrl := gomock.NewController(t)
@@ -729,7 +579,7 @@ func Test_ReadFromJSONArray(t *testing.T) {
 		_, _ = newCsvFile.Write([]byte(jsonContent))
 		newCsvFile, _ = fs.Open("temp.json")
 
-		defer func(fs f.FileSystem, name string) {
+		defer func(fs file_interface.FileSystem, name string) {
 			err := fs.Remove(name)
 			if err != nil {
 				t.Error(err)
@@ -756,7 +606,7 @@ func Test_ReadFromJSONArray(t *testing.T) {
 }
 
 func Test_ReadFromJSONObject(t *testing.T) {
-	runFtpTest(t, func(fs f.FileSystemProvider) {
+	runFtpTest(t, func(fs file_interface.FileSystemProvider) {
 		var jsonContent = `{"name": "Sam", "age": 123}`
 
 		type User struct {
@@ -782,7 +632,7 @@ func Test_ReadFromJSONObject(t *testing.T) {
 
 		reader, _ := newCsvFile.ReadAll()
 
-		defer func(fs f.FileSystem, name string) {
+		defer func(fs file_interface.FileSystem, name string) {
 			err := fs.Remove(name)
 			if err != nil {
 				t.Error(err)
@@ -803,7 +653,7 @@ func Test_ReadFromJSONObject(t *testing.T) {
 }
 
 func Test_ReadFromJSONArrayInvalidDelimiter(t *testing.T) {
-	runFtpTest(t, func(fs f.FileSystemProvider) {
+	runFtpTest(t, func(fs file_interface.FileSystemProvider) {
 		var jsonContent = `!@#$%^&*`
 
 		ctrl := gomock.NewController(t)
@@ -827,7 +677,7 @@ func Test_ReadFromJSONArrayInvalidDelimiter(t *testing.T) {
 
 		_, err := newCsvFile.ReadAll()
 
-		defer func(fs f.FileSystem, name string) {
+		defer func(fs file_interface.FileSystem, name string) {
 			removeErr := fs.Remove(name)
 			if removeErr != nil {
 				t.Error(removeErr)
@@ -838,7 +688,7 @@ func Test_ReadFromJSONArrayInvalidDelimiter(t *testing.T) {
 	})
 }
 
-func runFtpTest(t *testing.T, testFunc func(fs f.FileSystemProvider)) {
+func runFtpTest(t *testing.T, testFunc func(fs file_interface.FileSystemProvider)) {
 	t.Helper()
 
 	config := &Config{

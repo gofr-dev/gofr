@@ -11,7 +11,7 @@ import (
 
 	"github.com/jlaffaye/ftp"
 
-	f "gofr.dev/pkg/gofr/datasource/file"
+	file_interface "gofr.dev/pkg/gofr/datasource/file"
 )
 
 // Conn struct embeds the *ftp.ServerConn returned by ftp server on successful connection.
@@ -55,7 +55,7 @@ type Config struct {
 }
 
 // New initializes a new instance of FTP fileSystem with provided configuration.
-func New(config *Config) f.FileSystemProvider {
+func New(config *Config) file_interface.FileSystemProvider {
 	return &fileSystem{config: config}
 }
 
@@ -75,9 +75,11 @@ func (f *fileSystem) UseMetrics(metrics interface{}) {
 
 // Connect establishes a connection to the FTP server and logs in.
 func (f *fileSystem) Connect() {
+	var status, msg string
+
 	ftpServer := fmt.Sprintf("%v:%v", f.config.Host, f.config.Port)
 
-	defer f.processLog(&FileLog{Operation: "Connect", Location: ftpServer}, time.Now())
+	defer f.processLog(&FileLog{Operation: "Connect", Location: ftpServer, Status: &status, Message: &msg}, time.Now())
 
 	if f.config.DialTimeout == 0 {
 		f.config.DialTimeout = time.Second * 5
@@ -86,27 +88,31 @@ func (f *fileSystem) Connect() {
 	conn, err := ftp.Dial(ftpServer, ftp.DialWithTimeout(f.config.DialTimeout))
 	if err != nil {
 		f.logger.Errorf("Connection failed : %v", err)
+		status = "CONNECTION ERROR"
 		return
 	}
 
 	f.conn = &Conn{conn}
 
-	f.logger.Logf("Connected to FTP Server : %v", ftpServer)
-
 	err = conn.Login(f.config.User, f.config.Password)
 	if err != nil {
 		f.logger.Errorf("Login failed : %v", err)
+		status = "LOGIN ERROR"
 		return
 	}
 
-	f.logger.Logf("Login Successful. Current remote location : %q", f.config.RemoteDir)
+	status = "LOGIN SUCCESS"
 }
 
 // Create creates an empty file on the FTP server.
-func (f *fileSystem) Create(name string) (f.File, error) {
+func (f *fileSystem) Create(name string) (file_interface.File, error) {
 	filePath := path.Join(f.config.RemoteDir, name)
 
-	defer f.processLog(&FileLog{Operation: "Create", Location: filePath}, time.Now())
+	var msg string
+
+	status := "ERROR"
+
+	defer f.processLog(&FileLog{Operation: "Create", Location: filePath, Status: &status, Message: &msg}, time.Now())
 
 	if name == "" {
 		f.logger.Errorf("Create_File failed. Provide a valid filename : %v", errEmptyFilename)
@@ -131,7 +137,8 @@ func (f *fileSystem) Create(name string) (f.File, error) {
 
 	defer res.Close()
 
-	f.logger.Logf("Create_File successful. Created file %s at %q", name, filePath)
+	status = "SUCCESS"
+	msg = fmt.Sprintf("Created file %s", name)
 
 	return &file{
 		response: res,
@@ -146,9 +153,13 @@ func (f *fileSystem) Create(name string) (f.File, error) {
 // Mkdir creates a directory on the FTP server.
 // Here, os.FileMode is unused, but is added to comply with FileSystem interface.
 func (f *fileSystem) Mkdir(name string, _ os.FileMode) error {
+	var msg string
+
+	status := "ERROR"
+
 	filePath := path.Join(f.config.RemoteDir, name)
 
-	defer f.processLog(&FileLog{Operation: "Mkdir", Location: filePath}, time.Now())
+	defer f.processLog(&FileLog{Operation: "Mkdir", Location: filePath, Status: &status, Message: &msg}, time.Now())
 
 	if name == "" {
 		f.logger.Errorf("Mkdir failed. Provide a valid directory : %v", errEmptyDirectory)
@@ -161,7 +172,8 @@ func (f *fileSystem) Mkdir(name string, _ os.FileMode) error {
 		return err
 	}
 
-	f.logger.Logf("%s successfully created", name)
+	status = "SUCCESS"
+	msg = fmt.Sprintf("%s successfully created", name)
 
 	return nil
 }
@@ -197,7 +209,11 @@ func (f *fileSystem) mkdirAllHelper(filepath string) []string {
 // MkdirAll creates directories recursively on the FTP server. Here, os.FileMode is unused.
 // Here, os.FileMode is unused, but is added to comply with FileSystem interface.
 func (f *fileSystem) MkdirAll(name string, _ os.FileMode) error {
-	defer f.processLog(&FileLog{Operation: "MkdirAll", Location: path.Join(f.config.RemoteDir, name)}, time.Now())
+	var msg string
+
+	status := "ERROR"
+
+	defer f.processLog(&FileLog{Operation: "MkdirAll", Location: path.Join(f.config.RemoteDir, name), Status: &status, Message: &msg}, time.Now())
 
 	if name == "" {
 		f.logger.Errorf("MkdirAll failed. Provide a valid path : %v", errEmptyPath)
@@ -218,12 +234,12 @@ func (f *fileSystem) MkdirAll(name string, _ os.FileMode) error {
 		err := f.conn.MakeDir(currentDir)
 		if err != nil {
 			f.logger.Errorf("MkdirAll failed : %v", err)
-
 			return err
 		}
 	}
 
-	f.logger.Logf("Directories creation completed successfully.")
+	status = "SUCCESS"
+	msg = fmt.Sprintf("Directories creation completed successfully")
 
 	return nil
 }
@@ -231,10 +247,14 @@ func (f *fileSystem) MkdirAll(name string, _ os.FileMode) error {
 // Note: Here Open and OpenFile both methods have been implemented so that the
 // FTP FileSystem comply with the gofr FileSystem interface.
 // Open retrieves a file from the FTP server and returns a file handle.
-func (f *fileSystem) Open(name string) (f.File, error) {
+func (f *fileSystem) Open(name string) (file_interface.File, error) {
+	var msg string
+
+	status := "ERROR"
+
 	filePath := path.Join(f.config.RemoteDir, name)
 
-	defer f.processLog(&FileLog{Operation: "Open", Location: filePath}, time.Now())
+	defer f.processLog(&FileLog{Operation: "Open", Location: filePath, Status: &status, Message: &msg}, time.Now())
 
 	if name == "" {
 		f.logger.Errorf("Open_file failed. Provide a valid filename : %v", errEmptyFilename)
@@ -251,7 +271,7 @@ func (f *fileSystem) Open(name string) (f.File, error) {
 
 	filename := path.Base(filePath)
 
-	f.logger.Logf("Open_file successful. Filepath : %q", filePath)
+	status = "SUCCESS"
 
 	return &file{
 		response: res,
@@ -266,15 +286,20 @@ func (f *fileSystem) Open(name string) (f.File, error) {
 // permissions are not clear for Ftp as file commands do not accept an argument and don't store their file permissions.
 // currently, this function just calls the Open function.
 // Here, os.FileMode is unused, but is added to comply with FileSystem interface.
-func (f *fileSystem) OpenFile(name string, _ int, _ os.FileMode) (f.File, error) {
+func (f *fileSystem) OpenFile(name string, _ int, _ os.FileMode) (file_interface.File, error) {
 	return f.Open(name)
 }
 
 // Remove deletes a file from the FTP server.
+// Note: some server may return an error type even if delete is successful
 func (f *fileSystem) Remove(name string) error {
+	var msg string
+
+	status := "ERROR"
+
 	filePath := path.Join(f.config.RemoteDir, name)
 
-	defer f.processLog(&FileLog{Operation: "Remove", Location: filePath}, time.Now())
+	defer f.processLog(&FileLog{Operation: "Remove", Location: filePath, Status: &status, Message: &msg}, time.Now())
 
 	if name == "" {
 		f.logger.Errorf("Remove_file failed. Provide a valid filename : %v", errEmptyFilename)
@@ -287,16 +312,21 @@ func (f *fileSystem) Remove(name string) error {
 		return err
 	}
 
-	f.logger.Logf("Remove_file success. File with path %q successfully removed", filePath)
+	status = "SUCCESS"
+	msg = "File successfully removed"
 
 	return nil
 }
 
 // RemoveAll removes a directory and its contents recursively from the FTP server.
 func (f *fileSystem) RemoveAll(name string) error {
+	var msg string
+
+	status := "ERROR"
+
 	filePath := path.Join(f.config.RemoteDir, name)
 
-	defer f.processLog(&FileLog{Operation: "RemoveAll", Location: filePath}, time.Now())
+	defer f.processLog(&FileLog{Operation: "RemoveAll", Location: filePath, Status: &status, Message: &msg}, time.Now())
 
 	if name == "" {
 		f.logger.Errorf("RemoveAll failed. Provide a valid path : %v", errEmptyPath)
@@ -309,18 +339,23 @@ func (f *fileSystem) RemoveAll(name string) error {
 		return err
 	}
 
-	f.logger.Logf("Directories on path %q successfully deleted", filePath)
+	msg = "Directories successfully deleted"
+	status = "SUCCESS"
 
 	return nil
 }
 
 // Rename renames a file or directory on the FTP server.
 func (f *fileSystem) Rename(oldname, newname string) error {
+	var msg string
+
+	status := "ERROR"
+
 	oldFilePath := path.Join(f.config.RemoteDir, oldname)
 
 	newFilePath := path.Join(f.config.RemoteDir, newname)
 
-	defer f.processLog(&FileLog{Operation: "Rename", Location: oldFilePath}, time.Now())
+	defer f.processLog(&FileLog{Operation: "Rename", Location: oldFilePath, Status: &status, Message: &msg}, time.Now())
 
 	if oldname == "" || newname == "" {
 		f.logger.Errorf("Provide valid arguments : %v", errInvalidArg)
@@ -328,7 +363,8 @@ func (f *fileSystem) Rename(oldname, newname string) error {
 	}
 
 	if oldname == newname {
-		f.logger.Logf("File has the same name")
+		msg = "File has the same name"
+		status = "NO ACTION"
 		return nil
 	}
 
@@ -338,7 +374,8 @@ func (f *fileSystem) Rename(oldname, newname string) error {
 		return err
 	}
 
-	f.logger.Logf("Renamed file %q to %q", oldname, newname)
+	msg = fmt.Sprintf("Renamed file %q to %q", oldname, newname)
+	status = "SUCCESS"
 
 	return nil
 }
