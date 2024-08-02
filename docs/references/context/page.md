@@ -59,6 +59,7 @@ parts of the request.
     // Note: the protocol if not provided in the headers will be set to http by default
   ```
 - `Params(string)` - to access all query parameters for a given key returning slice of strings.
+  ```go 
     // Example: Request is /search?category=books,electronics&category=tech
     values := ctx.Request.Params("category")
     // values = []string{"books", "electronics", "tech"}
