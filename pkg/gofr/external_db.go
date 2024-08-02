@@ -2,6 +2,7 @@ package gofr
 
 import (
 	"gofr.dev/pkg/gofr/container"
+	"gofr.dev/pkg/gofr/datasource/file"
 )
 
 // AddMongo sets the Mongo datasource in the app's container.
@@ -14,7 +15,7 @@ func (a *App) AddMongo(db container.MongoProvider) {
 	a.container.Mongo = db
 }
 
-func (a *App) AddFTP(fs container.FileSystemProvider) {
+func (a *App) AddFTP(fs file.FileSystemProvider) {
 	fs.UseLogger(a.Logger())
 	fs.UseMetrics(a.Metrics())
 

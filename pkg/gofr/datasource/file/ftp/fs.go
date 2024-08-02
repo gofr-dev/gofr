@@ -47,11 +47,12 @@ type fileSystem struct {
 
 // Config represents the FTP configuration.
 type Config struct {
-	Host      string // FTP server hostname
-	User      string // FTP username
-	Password  string // FTP password
-	Port      int    // FTP port
-	RemoteDir string // Remote directory path. Base Path for all FTP Operations.
+	Host        string        // FTP server hostname
+	User        string        // FTP username
+	Password    string        // FTP password
+	Port        int           // FTP port
+	RemoteDir   string        // Remote directory path. Base Path for all FTP Operations.
+	DialTimeout time.Duration // FTP connection timeout
 }
 
 // New initializes a new instance of ftpFileSystem with provided configuration.
@@ -79,9 +80,11 @@ func (f *fileSystem) Connect() {
 
 	defer f.processLog(&FileLog{Operation: "Connect", Location: ftpServer}, time.Now())
 
-	const dialTimeout = 5 * time.Second
+	if f.config.DialTimeout == 0 {
+		f.config.DialTimeout = time.Second * 5
+	}
 
-	conn, err := ftp.Dial(ftpServer, ftp.DialWithTimeout(dialTimeout))
+	conn, err := ftp.Dial(ftpServer, ftp.DialWithTimeout(f.config.DialTimeout))
 	if err != nil {
 		f.logger.Errorf("Connection failed : %v", err)
 		return
@@ -127,9 +130,9 @@ func (f *fileSystem) Create(name string) (f.File, error) {
 		return nil, err
 	}
 
-	f.logger.Logf("Create_File successful. Created file %s at %q", name, filePath)
-
 	defer res.Close()
+
+	f.logger.Logf("Create_File successful. Created file %s at %q", name, filePath)
 
 	return &file{
 		response: res,
@@ -226,6 +229,8 @@ func (f *fileSystem) MkdirAll(name string, _ os.FileMode) error {
 	return nil
 }
 
+// Note: Here Open and OpenFile both methods have been implemented so that the
+// FTP FileSystem comply with the gofr FileSystem interface.
 // Open retrieves a file from the FTP server and returns a file handle.
 func (f *fileSystem) Open(name string) (f.File, error) {
 	filePath := path.Join(f.config.RemoteDir, name)

@@ -2,6 +2,7 @@ package container
 
 import (
 	"errors"
+	"gofr.dev/pkg/gofr/datasource/file"
 	"strconv"
 	"strings"
 	"time"
@@ -44,7 +45,7 @@ type Container struct {
 
 	KVStore KVStore
 
-	File FileSystem
+	File file.FileSystem
 }
 
 func NewContainer(conf config.Config) *Container {
@@ -119,7 +120,7 @@ func (c *Container) Create(conf config.Config) {
 		c.PubSub = c.createMqttPubSub(conf)
 	}
 
-	//c.File = file.New(c.Logger)
+	c.File = file.New(c.Logger)
 }
 
 func (c *Container) Close() error {

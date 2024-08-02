@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"gofr.dev/pkg/gofr/container"
+	f "gofr.dev/pkg/gofr/datasource/file"
 	"io"
 	"os"
 	"testing"
@@ -449,7 +449,7 @@ func TestSeek(t *testing.T) {
 
 // The test defined below do not use any mocking. They need an actual ftp server connection.
 func Test_ReadFromCSV(t *testing.T) {
-	runFtpTest(t, func(fs container.FileSystemProvider) {
+	runFtpTest(t, func(fs f.FileSystemProvider) {
 		var csvContent = `Name,Age,Email
 John Doe,30,johndoe@example.com
 Jane Smith,25,janesmith@example.com
@@ -557,7 +557,7 @@ Victoria Nguyen,32,victorian@example.com`
 
 		newCsvFile, _ = fs.Open("temp.csv")
 
-		defer func(fs container.FileSystem, name string) {
+		defer func(fs f.FileSystem, name string) {
 			_ = fs.Remove(name)
 		}(fs, "temp.csv")
 
@@ -578,7 +578,7 @@ Victoria Nguyen,32,victorian@example.com`
 }
 
 func Test_ReadFromCSVScanError(t *testing.T) {
-	runFtpTest(t, func(fs container.FileSystemProvider) {
+	runFtpTest(t, func(fs f.FileSystemProvider) {
 		var csvContent = `Name,Age,Email`
 
 		ctrl := gomock.NewController(t)
@@ -599,7 +599,7 @@ func Test_ReadFromCSVScanError(t *testing.T) {
 
 		reader, _ := newCsvFile.ReadAll()
 
-		defer func(fs container.FileSystem, name string) {
+		defer func(fs f.FileSystem, name string) {
 			err := fs.Remove(name)
 			if err != nil {
 				t.Error(err)
@@ -618,7 +618,7 @@ func Test_ReadFromCSVScanError(t *testing.T) {
 }
 
 func Test_ReadFromJSONArray(t *testing.T) {
-	runFtpTest(t, func(fs container.FileSystemProvider) {
+	runFtpTest(t, func(fs f.FileSystemProvider) {
 		var jsonContent = `[{"name": "Sam", "age": 123},
 
 {"name": "Jane", "age": 456},
@@ -728,7 +728,7 @@ func Test_ReadFromJSONArray(t *testing.T) {
 		_, _ = newCsvFile.Write([]byte(jsonContent))
 		newCsvFile, _ = fs.Open("temp.json")
 
-		defer func(fs container.FileSystem, name string) {
+		defer func(fs f.FileSystem, name string) {
 			err := fs.Remove(name)
 			if err != nil {
 				t.Error(err)
@@ -755,7 +755,7 @@ func Test_ReadFromJSONArray(t *testing.T) {
 }
 
 func Test_ReadFromJSONObject(t *testing.T) {
-	runFtpTest(t, func(fs container.FileSystemProvider) {
+	runFtpTest(t, func(fs f.FileSystemProvider) {
 		var jsonContent = `{"name": "Sam", "age": 123}`
 
 		type User struct {
@@ -781,7 +781,7 @@ func Test_ReadFromJSONObject(t *testing.T) {
 
 		reader, _ := newCsvFile.ReadAll()
 
-		defer func(fs container.FileSystem, name string) {
+		defer func(fs f.FileSystem, name string) {
 			err := fs.Remove(name)
 			if err != nil {
 				t.Error(err)
@@ -802,7 +802,7 @@ func Test_ReadFromJSONObject(t *testing.T) {
 }
 
 func Test_ReadFromJSONArrayInvalidDelimiter(t *testing.T) {
-	runFtpTest(t, func(fs container.FileSystemProvider) {
+	runFtpTest(t, func(fs f.FileSystemProvider) {
 		var jsonContent = `!@#$%^&*`
 
 		ctrl := gomock.NewController(t)
@@ -826,7 +826,7 @@ func Test_ReadFromJSONArrayInvalidDelimiter(t *testing.T) {
 
 		_, err := newCsvFile.ReadAll()
 
-		defer func(fs container.FileSystem, name string) {
+		defer func(fs f.FileSystem, name string) {
 			removeErr := fs.Remove(name)
 			if removeErr != nil {
 				t.Error(removeErr)
@@ -837,7 +837,7 @@ func Test_ReadFromJSONArrayInvalidDelimiter(t *testing.T) {
 	})
 }
 
-func runFtpTest(t *testing.T, testFunc func(fs container.FileSystemProvider)) {
+func runFtpTest(t *testing.T, testFunc func(fs f.FileSystemProvider)) {
 	t.Helper()
 
 	config := &Config{
