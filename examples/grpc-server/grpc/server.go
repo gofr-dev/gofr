@@ -8,8 +8,11 @@ import (
 )
 
 type Server struct {
+	// conatiner can be emebed into the server struct
+	// to access the datasource and logger functionalities
+	*container.Container
+
 	UnimplementedHelloServer
-	Cont *container.Container
 }
 
 func (s *Server) SayHello(ctx context.Context, req *HelloRequest) (*HelloResponse, error) {
@@ -18,7 +21,7 @@ func (s *Server) SayHello(ctx context.Context, req *HelloRequest) (*HelloRespons
 		name = "World"
 	}
 
-	s.Cont.Logger.Debug("container injected!")
+	s.Logger.Debug("container injected!")
 
 	return &HelloResponse{
 		Message: fmt.Sprintf("Hello %s!", name),
