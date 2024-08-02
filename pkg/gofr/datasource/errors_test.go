@@ -6,6 +6,7 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func Test_ErrorDB(t *testing.T) {
@@ -22,7 +23,7 @@ func Test_ErrorDB(t *testing.T) {
 	}
 
 	for i, tc := range tests {
-		assert.ErrorContains(t, tc.err, tc.expectedMsg, "TEST[%d], Failed.\n%s", i, tc.desc)
+		require.ErrorContains(t, tc.err, tc.expectedMsg, "TEST[%d], Failed.\n%s", i, tc.desc)
 	}
 }
 

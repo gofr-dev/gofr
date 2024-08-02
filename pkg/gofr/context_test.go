@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
@@ -33,5 +34,5 @@ func Test_newContextSuccess(t *testing.T) {
 	err = ctx.Bind(&body)
 
 	assert.Equal(t, map[string]string{"key": "value"}, body, "TEST Failed \n unable to read body")
-	assert.NoError(t, err, "TEST Failed \n unable to read body")
+	require.NoError(t, err, "TEST Failed \n unable to read body")
 }

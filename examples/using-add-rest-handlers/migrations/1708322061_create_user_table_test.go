@@ -6,6 +6,7 @@ import (
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"gofr.dev/pkg/gofr/migration"
 )
@@ -27,7 +28,7 @@ func TestCreateTableUser(t *testing.T) {
 	for i, tc := range tests {
 		// Create mock database and datasource
 		db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherEqual))
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		defer db.Close()
 
 		datasource := migration.Datasource{SQL: db}
@@ -39,6 +40,6 @@ func TestCreateTableUser(t *testing.T) {
 		err = createTableUser().UP(datasource)
 
 		assert.Equal(t, tc.expectedError, err, "TEST[%d] Failed.\n%s", i, tc.desc)
-		assert.NoError(t, mock.ExpectationsWereMet())
+		require.NoError(t, mock.ExpectationsWereMet())
 	}
 }

@@ -102,6 +102,7 @@ func TestSQL_GetDBConfig(t *testing.T) {
 		"DB_PASSWORD":            "password",
 		"DB_PORT":                "3201",
 		"DB_NAME":                "test",
+		"DB_SSL_MODE":            "require",
 		"DB_MAX_IDLE_CONNECTION": "25",
 		"DB_MAX_OPEN_CONNECTION": "50",
 	})
@@ -113,6 +114,7 @@ func TestSQL_GetDBConfig(t *testing.T) {
 		Password:    "password",
 		Port:        "3201",
 		Database:    "test",
+		SSLMode:     "require",
 		MaxIdleConn: 25,
 		MaxOpenConn: 50,
 	}
@@ -156,6 +158,7 @@ func TestSQL_ConfigCases(t *testing.T) {
 			Port:        "3306",
 			MaxIdleConn: tc.expectedIdle,
 			MaxOpenConn: tc.expectedOpen,
+			SSLMode:     "disable",
 		}
 
 		configs := getDBConfig(mockConfig)
@@ -192,6 +195,20 @@ func TestSQL_getDBConnectionString(t *testing.T) {
 				Password: "password",
 				Port:     "3201",
 				Database: "test",
+				SSLMode:  "require",
+			},
+			expOut: "host=host port=3201 user=user password=password dbname=test sslmode=require",
+		},
+		{
+			desc: "postgresql dialect",
+			configs: &DBConfig{
+				Dialect:  "postgres",
+				HostName: "host",
+				User:     "user",
+				Password: "password",
+				Port:     "3201",
+				Database: "test",
+				SSLMode:  "disable",
 			},
 			expOut: "host=host port=3201 user=user password=password dbname=test sslmode=disable",
 		},

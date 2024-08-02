@@ -17,7 +17,6 @@ import (
 
 	redis "github.com/redis/go-redis/v9"
 	gomock "go.uber.org/mock/gomock"
-
 	datasource "gofr.dev/pkg/gofr/datasource"
 	sql0 "gofr.dev/pkg/gofr/datasource/sql"
 )
@@ -58,6 +57,20 @@ func (m *MockDB) Begin() (*sql0.Tx, error) {
 func (mr *MockDBMockRecorder) Begin() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Begin", reflect.TypeOf((*MockDB)(nil).Begin))
+}
+
+// Close mocks base method.
+func (m *MockDB) Close() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Close")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Close indicates an expected call of Close.
+func (mr *MockDBMockRecorder) Close() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockDB)(nil).Close))
 }
 
 // Dialect mocks base method.
@@ -1426,6 +1439,20 @@ func (mr *MockRedisMockRecorder) ClientUnpause(ctx any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ClientUnpause", reflect.TypeOf((*MockRedis)(nil).ClientUnpause), ctx)
 }
 
+// Close mocks base method.
+func (m *MockRedis) Close() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Close")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Close indicates an expected call of Close.
+func (mr *MockRedisMockRecorder) Close() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockRedis)(nil).Close))
+}
+
 // ClusterAddSlots mocks base method.
 func (m *MockRedis) ClusterAddSlots(ctx context.Context, slots ...int) *redis.StatusCmd {
 	m.ctrl.T.Helper()
@@ -2231,413 +2258,6 @@ func (mr *MockRedisMockRecorder) FCallRo(ctx, function, keys any, args ...any) *
 	mr.mock.ctrl.T.Helper()
 	varargs := append([]any{ctx, function, keys}, args...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FCallRo", reflect.TypeOf((*MockRedis)(nil).FCallRo), varargs...)
-}
-
-// FTAggregate mocks base method.
-func (m *MockRedis) FTAggregate(ctx context.Context, index, query string) *redis.MapStringInterfaceCmd {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "FTAggregate", ctx, index, query)
-	ret0, _ := ret[0].(*redis.MapStringInterfaceCmd)
-	return ret0
-}
-
-// FTAggregate indicates an expected call of FTAggregate.
-func (mr *MockRedisMockRecorder) FTAggregate(ctx, index, query any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FTAggregate", reflect.TypeOf((*MockRedis)(nil).FTAggregate), ctx, index, query)
-}
-
-// FTAggregateWithArgs mocks base method.
-func (m *MockRedis) FTAggregateWithArgs(ctx context.Context, index, query string, options *redis.FTAggregateOptions) *redis.AggregateCmd {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "FTAggregateWithArgs", ctx, index, query, options)
-	ret0, _ := ret[0].(*redis.AggregateCmd)
-	return ret0
-}
-
-// FTAggregateWithArgs indicates an expected call of FTAggregateWithArgs.
-func (mr *MockRedisMockRecorder) FTAggregateWithArgs(ctx, index, query, options any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FTAggregateWithArgs", reflect.TypeOf((*MockRedis)(nil).FTAggregateWithArgs), ctx, index, query, options)
-}
-
-// FTAliasAdd mocks base method.
-func (m *MockRedis) FTAliasAdd(ctx context.Context, index, alias string) *redis.StatusCmd {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "FTAliasAdd", ctx, index, alias)
-	ret0, _ := ret[0].(*redis.StatusCmd)
-	return ret0
-}
-
-// FTAliasAdd indicates an expected call of FTAliasAdd.
-func (mr *MockRedisMockRecorder) FTAliasAdd(ctx, index, alias any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FTAliasAdd", reflect.TypeOf((*MockRedis)(nil).FTAliasAdd), ctx, index, alias)
-}
-
-// FTAliasDel mocks base method.
-func (m *MockRedis) FTAliasDel(ctx context.Context, alias string) *redis.StatusCmd {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "FTAliasDel", ctx, alias)
-	ret0, _ := ret[0].(*redis.StatusCmd)
-	return ret0
-}
-
-// FTAliasDel indicates an expected call of FTAliasDel.
-func (mr *MockRedisMockRecorder) FTAliasDel(ctx, alias any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FTAliasDel", reflect.TypeOf((*MockRedis)(nil).FTAliasDel), ctx, alias)
-}
-
-// FTAliasUpdate mocks base method.
-func (m *MockRedis) FTAliasUpdate(ctx context.Context, index, alias string) *redis.StatusCmd {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "FTAliasUpdate", ctx, index, alias)
-	ret0, _ := ret[0].(*redis.StatusCmd)
-	return ret0
-}
-
-// FTAliasUpdate indicates an expected call of FTAliasUpdate.
-func (mr *MockRedisMockRecorder) FTAliasUpdate(ctx, index, alias any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FTAliasUpdate", reflect.TypeOf((*MockRedis)(nil).FTAliasUpdate), ctx, index, alias)
-}
-
-// FTAlter mocks base method.
-func (m *MockRedis) FTAlter(ctx context.Context, index string, skipInitalScan bool, definition []any) *redis.StatusCmd {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "FTAlter", ctx, index, skipInitalScan, definition)
-	ret0, _ := ret[0].(*redis.StatusCmd)
-	return ret0
-}
-
-// FTAlter indicates an expected call of FTAlter.
-func (mr *MockRedisMockRecorder) FTAlter(ctx, index, skipInitalScan, definition any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FTAlter", reflect.TypeOf((*MockRedis)(nil).FTAlter), ctx, index, skipInitalScan, definition)
-}
-
-// FTConfigGet mocks base method.
-func (m *MockRedis) FTConfigGet(ctx context.Context, option string) *redis.MapMapStringInterfaceCmd {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "FTConfigGet", ctx, option)
-	ret0, _ := ret[0].(*redis.MapMapStringInterfaceCmd)
-	return ret0
-}
-
-// FTConfigGet indicates an expected call of FTConfigGet.
-func (mr *MockRedisMockRecorder) FTConfigGet(ctx, option any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FTConfigGet", reflect.TypeOf((*MockRedis)(nil).FTConfigGet), ctx, option)
-}
-
-// FTConfigSet mocks base method.
-func (m *MockRedis) FTConfigSet(ctx context.Context, option string, value any) *redis.StatusCmd {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "FTConfigSet", ctx, option, value)
-	ret0, _ := ret[0].(*redis.StatusCmd)
-	return ret0
-}
-
-// FTConfigSet indicates an expected call of FTConfigSet.
-func (mr *MockRedisMockRecorder) FTConfigSet(ctx, option, value any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FTConfigSet", reflect.TypeOf((*MockRedis)(nil).FTConfigSet), ctx, option, value)
-}
-
-// FTCreate mocks base method.
-func (m *MockRedis) FTCreate(ctx context.Context, index string, options *redis.FTCreateOptions, schema ...*redis.FieldSchema) *redis.StatusCmd {
-	m.ctrl.T.Helper()
-	varargs := []any{ctx, index, options}
-	for _, a := range schema {
-		varargs = append(varargs, a)
-	}
-	ret := m.ctrl.Call(m, "FTCreate", varargs...)
-	ret0, _ := ret[0].(*redis.StatusCmd)
-	return ret0
-}
-
-// FTCreate indicates an expected call of FTCreate.
-func (mr *MockRedisMockRecorder) FTCreate(ctx, index, options any, schema ...any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{ctx, index, options}, schema...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FTCreate", reflect.TypeOf((*MockRedis)(nil).FTCreate), varargs...)
-}
-
-// FTCursorDel mocks base method.
-func (m *MockRedis) FTCursorDel(ctx context.Context, index string, cursorId int) *redis.StatusCmd {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "FTCursorDel", ctx, index, cursorId)
-	ret0, _ := ret[0].(*redis.StatusCmd)
-	return ret0
-}
-
-// FTCursorDel indicates an expected call of FTCursorDel.
-func (mr *MockRedisMockRecorder) FTCursorDel(ctx, index, cursorId any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FTCursorDel", reflect.TypeOf((*MockRedis)(nil).FTCursorDel), ctx, index, cursorId)
-}
-
-// FTCursorRead mocks base method.
-func (m *MockRedis) FTCursorRead(ctx context.Context, index string, cursorId, count int) *redis.MapStringInterfaceCmd {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "FTCursorRead", ctx, index, cursorId, count)
-	ret0, _ := ret[0].(*redis.MapStringInterfaceCmd)
-	return ret0
-}
-
-// FTCursorRead indicates an expected call of FTCursorRead.
-func (mr *MockRedisMockRecorder) FTCursorRead(ctx, index, cursorId, count any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FTCursorRead", reflect.TypeOf((*MockRedis)(nil).FTCursorRead), ctx, index, cursorId, count)
-}
-
-// FTDictAdd mocks base method.
-func (m *MockRedis) FTDictAdd(ctx context.Context, dict string, term ...any) *redis.IntCmd {
-	m.ctrl.T.Helper()
-	varargs := []any{ctx, dict}
-	for _, a := range term {
-		varargs = append(varargs, a)
-	}
-	ret := m.ctrl.Call(m, "FTDictAdd", varargs...)
-	ret0, _ := ret[0].(*redis.IntCmd)
-	return ret0
-}
-
-// FTDictAdd indicates an expected call of FTDictAdd.
-func (mr *MockRedisMockRecorder) FTDictAdd(ctx, dict any, term ...any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{ctx, dict}, term...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FTDictAdd", reflect.TypeOf((*MockRedis)(nil).FTDictAdd), varargs...)
-}
-
-// FTDictDel mocks base method.
-func (m *MockRedis) FTDictDel(ctx context.Context, dict string, term ...any) *redis.IntCmd {
-	m.ctrl.T.Helper()
-	varargs := []any{ctx, dict}
-	for _, a := range term {
-		varargs = append(varargs, a)
-	}
-	ret := m.ctrl.Call(m, "FTDictDel", varargs...)
-	ret0, _ := ret[0].(*redis.IntCmd)
-	return ret0
-}
-
-// FTDictDel indicates an expected call of FTDictDel.
-func (mr *MockRedisMockRecorder) FTDictDel(ctx, dict any, term ...any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{ctx, dict}, term...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FTDictDel", reflect.TypeOf((*MockRedis)(nil).FTDictDel), varargs...)
-}
-
-// FTDictDump mocks base method.
-func (m *MockRedis) FTDictDump(ctx context.Context, dict string) *redis.StringSliceCmd {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "FTDictDump", ctx, dict)
-	ret0, _ := ret[0].(*redis.StringSliceCmd)
-	return ret0
-}
-
-// FTDictDump indicates an expected call of FTDictDump.
-func (mr *MockRedisMockRecorder) FTDictDump(ctx, dict any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FTDictDump", reflect.TypeOf((*MockRedis)(nil).FTDictDump), ctx, dict)
-}
-
-// FTDropIndex mocks base method.
-func (m *MockRedis) FTDropIndex(ctx context.Context, index string) *redis.StatusCmd {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "FTDropIndex", ctx, index)
-	ret0, _ := ret[0].(*redis.StatusCmd)
-	return ret0
-}
-
-// FTDropIndex indicates an expected call of FTDropIndex.
-func (mr *MockRedisMockRecorder) FTDropIndex(ctx, index any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FTDropIndex", reflect.TypeOf((*MockRedis)(nil).FTDropIndex), ctx, index)
-}
-
-// FTDropIndexWithArgs mocks base method.
-func (m *MockRedis) FTDropIndexWithArgs(ctx context.Context, index string, options *redis.FTDropIndexOptions) *redis.StatusCmd {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "FTDropIndexWithArgs", ctx, index, options)
-	ret0, _ := ret[0].(*redis.StatusCmd)
-	return ret0
-}
-
-// FTDropIndexWithArgs indicates an expected call of FTDropIndexWithArgs.
-func (mr *MockRedisMockRecorder) FTDropIndexWithArgs(ctx, index, options any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FTDropIndexWithArgs", reflect.TypeOf((*MockRedis)(nil).FTDropIndexWithArgs), ctx, index, options)
-}
-
-// FTExplain mocks base method.
-func (m *MockRedis) FTExplain(ctx context.Context, index, query string) *redis.StringCmd {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "FTExplain", ctx, index, query)
-	ret0, _ := ret[0].(*redis.StringCmd)
-	return ret0
-}
-
-// FTExplain indicates an expected call of FTExplain.
-func (mr *MockRedisMockRecorder) FTExplain(ctx, index, query any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FTExplain", reflect.TypeOf((*MockRedis)(nil).FTExplain), ctx, index, query)
-}
-
-// FTExplainWithArgs mocks base method.
-func (m *MockRedis) FTExplainWithArgs(ctx context.Context, index, query string, options *redis.FTExplainOptions) *redis.StringCmd {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "FTExplainWithArgs", ctx, index, query, options)
-	ret0, _ := ret[0].(*redis.StringCmd)
-	return ret0
-}
-
-// FTExplainWithArgs indicates an expected call of FTExplainWithArgs.
-func (mr *MockRedisMockRecorder) FTExplainWithArgs(ctx, index, query, options any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FTExplainWithArgs", reflect.TypeOf((*MockRedis)(nil).FTExplainWithArgs), ctx, index, query, options)
-}
-
-// FTInfo mocks base method.
-func (m *MockRedis) FTInfo(ctx context.Context, index string) *redis.FTInfoCmd {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "FTInfo", ctx, index)
-	ret0, _ := ret[0].(*redis.FTInfoCmd)
-	return ret0
-}
-
-// FTInfo indicates an expected call of FTInfo.
-func (mr *MockRedisMockRecorder) FTInfo(ctx, index any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FTInfo", reflect.TypeOf((*MockRedis)(nil).FTInfo), ctx, index)
-}
-
-// FTSearch mocks base method.
-func (m *MockRedis) FTSearch(ctx context.Context, index, query string) *redis.FTSearchCmd {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "FTSearch", ctx, index, query)
-	ret0, _ := ret[0].(*redis.FTSearchCmd)
-	return ret0
-}
-
-// FTSearch indicates an expected call of FTSearch.
-func (mr *MockRedisMockRecorder) FTSearch(ctx, index, query any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FTSearch", reflect.TypeOf((*MockRedis)(nil).FTSearch), ctx, index, query)
-}
-
-// FTSearchWithArgs mocks base method.
-func (m *MockRedis) FTSearchWithArgs(ctx context.Context, index, query string, options *redis.FTSearchOptions) *redis.FTSearchCmd {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "FTSearchWithArgs", ctx, index, query, options)
-	ret0, _ := ret[0].(*redis.FTSearchCmd)
-	return ret0
-}
-
-// FTSearchWithArgs indicates an expected call of FTSearchWithArgs.
-func (mr *MockRedisMockRecorder) FTSearchWithArgs(ctx, index, query, options any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FTSearchWithArgs", reflect.TypeOf((*MockRedis)(nil).FTSearchWithArgs), ctx, index, query, options)
-}
-
-// FTSpellCheck mocks base method.
-func (m *MockRedis) FTSpellCheck(ctx context.Context, index, query string) *redis.FTSpellCheckCmd {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "FTSpellCheck", ctx, index, query)
-	ret0, _ := ret[0].(*redis.FTSpellCheckCmd)
-	return ret0
-}
-
-// FTSpellCheck indicates an expected call of FTSpellCheck.
-func (mr *MockRedisMockRecorder) FTSpellCheck(ctx, index, query any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FTSpellCheck", reflect.TypeOf((*MockRedis)(nil).FTSpellCheck), ctx, index, query)
-}
-
-// FTSpellCheckWithArgs mocks base method.
-func (m *MockRedis) FTSpellCheckWithArgs(ctx context.Context, index, query string, options *redis.FTSpellCheckOptions) *redis.FTSpellCheckCmd {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "FTSpellCheckWithArgs", ctx, index, query, options)
-	ret0, _ := ret[0].(*redis.FTSpellCheckCmd)
-	return ret0
-}
-
-// FTSpellCheckWithArgs indicates an expected call of FTSpellCheckWithArgs.
-func (mr *MockRedisMockRecorder) FTSpellCheckWithArgs(ctx, index, query, options any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FTSpellCheckWithArgs", reflect.TypeOf((*MockRedis)(nil).FTSpellCheckWithArgs), ctx, index, query, options)
-}
-
-// FTSynDump mocks base method.
-func (m *MockRedis) FTSynDump(ctx context.Context, index string) *redis.FTSynDumpCmd {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "FTSynDump", ctx, index)
-	ret0, _ := ret[0].(*redis.FTSynDumpCmd)
-	return ret0
-}
-
-// FTSynDump indicates an expected call of FTSynDump.
-func (mr *MockRedisMockRecorder) FTSynDump(ctx, index any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FTSynDump", reflect.TypeOf((*MockRedis)(nil).FTSynDump), ctx, index)
-}
-
-// FTSynUpdate mocks base method.
-func (m *MockRedis) FTSynUpdate(ctx context.Context, index string, synGroupId any, terms []any) *redis.StatusCmd {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "FTSynUpdate", ctx, index, synGroupId, terms)
-	ret0, _ := ret[0].(*redis.StatusCmd)
-	return ret0
-}
-
-// FTSynUpdate indicates an expected call of FTSynUpdate.
-func (mr *MockRedisMockRecorder) FTSynUpdate(ctx, index, synGroupId, terms any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FTSynUpdate", reflect.TypeOf((*MockRedis)(nil).FTSynUpdate), ctx, index, synGroupId, terms)
-}
-
-// FTSynUpdateWithArgs mocks base method.
-func (m *MockRedis) FTSynUpdateWithArgs(ctx context.Context, index string, synGroupId any, options *redis.FTSynUpdateOptions, terms []any) *redis.StatusCmd {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "FTSynUpdateWithArgs", ctx, index, synGroupId, options, terms)
-	ret0, _ := ret[0].(*redis.StatusCmd)
-	return ret0
-}
-
-// FTSynUpdateWithArgs indicates an expected call of FTSynUpdateWithArgs.
-func (mr *MockRedisMockRecorder) FTSynUpdateWithArgs(ctx, index, synGroupId, options, terms any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FTSynUpdateWithArgs", reflect.TypeOf((*MockRedis)(nil).FTSynUpdateWithArgs), ctx, index, synGroupId, options, terms)
-}
-
-// FTTagVals mocks base method.
-func (m *MockRedis) FTTagVals(ctx context.Context, index, field string) *redis.StringSliceCmd {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "FTTagVals", ctx, index, field)
-	ret0, _ := ret[0].(*redis.StringSliceCmd)
-	return ret0
-}
-
-// FTTagVals indicates an expected call of FTTagVals.
-func (mr *MockRedisMockRecorder) FTTagVals(ctx, index, field any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FTTagVals", reflect.TypeOf((*MockRedis)(nil).FTTagVals), ctx, index, field)
-}
-
-// FT_List mocks base method.
-func (m *MockRedis) FT_List(ctx context.Context) *redis.StringSliceCmd {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "FT_List", ctx)
-	ret0, _ := ret[0].(*redis.StringSliceCmd)
-	return ret0
-}
-
-// FT_List indicates an expected call of FT_List.
-func (mr *MockRedisMockRecorder) FT_List(ctx any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FT_List", reflect.TypeOf((*MockRedis)(nil).FT_List), ctx)
 }
 
 // FlushAll mocks base method.
@@ -9071,4 +8691,202 @@ func (m *MockHealthChecker) HealthCheck(arg0 context.Context) (any, error) {
 func (mr *MockHealthCheckerMockRecorder) HealthCheck(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HealthCheck", reflect.TypeOf((*MockHealthChecker)(nil).HealthCheck), arg0)
+}
+
+// MockKVStore is a mock of KVStore interface.
+type MockKVStore struct {
+	ctrl     *gomock.Controller
+	recorder *MockKVStoreMockRecorder
+}
+
+// MockKVStoreMockRecorder is the mock recorder for MockKVStore.
+type MockKVStoreMockRecorder struct {
+	mock *MockKVStore
+}
+
+// NewMockKVStore creates a new mock instance.
+func NewMockKVStore(ctrl *gomock.Controller) *MockKVStore {
+	mock := &MockKVStore{ctrl: ctrl}
+	mock.recorder = &MockKVStoreMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockKVStore) EXPECT() *MockKVStoreMockRecorder {
+	return m.recorder
+}
+
+// Delete mocks base method.
+func (m *MockKVStore) Delete(ctx context.Context, key string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Delete", ctx, key)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Delete indicates an expected call of Delete.
+func (mr *MockKVStoreMockRecorder) Delete(ctx, key any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockKVStore)(nil).Delete), ctx, key)
+}
+
+// Get mocks base method.
+func (m *MockKVStore) Get(ctx context.Context, key string) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Get", ctx, key)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Get indicates an expected call of Get.
+func (mr *MockKVStoreMockRecorder) Get(ctx, key any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockKVStore)(nil).Get), ctx, key)
+}
+
+// HealthCheck mocks base method.
+func (m *MockKVStore) HealthCheck(arg0 context.Context) (any, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HealthCheck", arg0)
+	ret0, _ := ret[0].(any)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// HealthCheck indicates an expected call of HealthCheck.
+func (mr *MockKVStoreMockRecorder) HealthCheck(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HealthCheck", reflect.TypeOf((*MockKVStore)(nil).HealthCheck), arg0)
+}
+
+// Set mocks base method.
+func (m *MockKVStore) Set(ctx context.Context, key, value string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Set", ctx, key, value)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Set indicates an expected call of Set.
+func (mr *MockKVStoreMockRecorder) Set(ctx, key, value any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Set", reflect.TypeOf((*MockKVStore)(nil).Set), ctx, key, value)
+}
+
+// MockKVStoreProvider is a mock of KVStoreProvider interface.
+type MockKVStoreProvider struct {
+	ctrl     *gomock.Controller
+	recorder *MockKVStoreProviderMockRecorder
+}
+
+// MockKVStoreProviderMockRecorder is the mock recorder for MockKVStoreProvider.
+type MockKVStoreProviderMockRecorder struct {
+	mock *MockKVStoreProvider
+}
+
+// NewMockKVStoreProvider creates a new mock instance.
+func NewMockKVStoreProvider(ctrl *gomock.Controller) *MockKVStoreProvider {
+	mock := &MockKVStoreProvider{ctrl: ctrl}
+	mock.recorder = &MockKVStoreProviderMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockKVStoreProvider) EXPECT() *MockKVStoreProviderMockRecorder {
+	return m.recorder
+}
+
+// Connect mocks base method.
+func (m *MockKVStoreProvider) Connect() {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "Connect")
+}
+
+// Connect indicates an expected call of Connect.
+func (mr *MockKVStoreProviderMockRecorder) Connect() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Connect", reflect.TypeOf((*MockKVStoreProvider)(nil).Connect))
+}
+
+// Delete mocks base method.
+func (m *MockKVStoreProvider) Delete(ctx context.Context, key string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Delete", ctx, key)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Delete indicates an expected call of Delete.
+func (mr *MockKVStoreProviderMockRecorder) Delete(ctx, key any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockKVStoreProvider)(nil).Delete), ctx, key)
+}
+
+// Get mocks base method.
+func (m *MockKVStoreProvider) Get(ctx context.Context, key string) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Get", ctx, key)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Get indicates an expected call of Get.
+func (mr *MockKVStoreProviderMockRecorder) Get(ctx, key any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockKVStoreProvider)(nil).Get), ctx, key)
+}
+
+// HealthCheck mocks base method.
+func (m *MockKVStoreProvider) HealthCheck(arg0 context.Context) (any, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HealthCheck", arg0)
+	ret0, _ := ret[0].(any)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// HealthCheck indicates an expected call of HealthCheck.
+func (mr *MockKVStoreProviderMockRecorder) HealthCheck(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HealthCheck", reflect.TypeOf((*MockKVStoreProvider)(nil).HealthCheck), arg0)
+}
+
+// Set mocks base method.
+func (m *MockKVStoreProvider) Set(ctx context.Context, key, value string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Set", ctx, key, value)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Set indicates an expected call of Set.
+func (mr *MockKVStoreProviderMockRecorder) Set(ctx, key, value any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Set", reflect.TypeOf((*MockKVStoreProvider)(nil).Set), ctx, key, value)
+}
+
+// UseLogger mocks base method.
+func (m *MockKVStoreProvider) UseLogger(logger any) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "UseLogger", logger)
+}
+
+// UseLogger indicates an expected call of UseLogger.
+func (mr *MockKVStoreProviderMockRecorder) UseLogger(logger any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UseLogger", reflect.TypeOf((*MockKVStoreProvider)(nil).UseLogger), logger)
+}
+
+// UseMetrics mocks base method.
+func (m *MockKVStoreProvider) UseMetrics(metrics any) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "UseMetrics", metrics)
+}
+
+// UseMetrics indicates an expected call of UseMetrics.
+func (mr *MockKVStoreProviderMockRecorder) UseMetrics(metrics any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UseMetrics", reflect.TypeOf((*MockKVStoreProvider)(nil).UseMetrics), metrics)
 }
