@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"github.com/gorilla/websocket"
 	"gofr.dev/pkg/gofr"
 )
 
@@ -17,7 +16,7 @@ func main() {
 func WSHandler(ctx *gofr.Context) (interface{}, error) {
 	var message string
 
-	ctx.WriteMessageToSocket(websocket.TextMessage, []byte(fmt.Sprint("anc")))
+	ctx.WriteMessageToSocket([]byte(fmt.Sprint("anc")))
 
 	err := ctx.Bind(&message)
 	if err != nil {

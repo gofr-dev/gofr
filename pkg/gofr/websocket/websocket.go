@@ -81,7 +81,7 @@ func (*Connection) HostName() string {
 }
 
 // Manager is a websocket manager that handles the upgrader and manages all
-// active connections thorugh ConnectionHub.
+// active connections through ConnectionHub.
 type Manager struct {
 	ConnectionHub
 	WebSocketUpgrader *WSUpgrader

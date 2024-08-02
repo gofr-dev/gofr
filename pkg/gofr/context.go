@@ -2,6 +2,7 @@ package gofr
 
 import (
 	"context"
+	"github.com/gorilla/websocket"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
@@ -58,12 +59,11 @@ func (c *Context) Bind(i interface{}) error {
 	return c.Request.Bind(i)
 }
 
-func (c *Context) WriteMessageToSocket(messageType int, data []byte) error {
-	// Retrieve connection from context or manager based on connection ID
-	conn := c.GetConnectionFromContext(c) // Or getConnectionFromManager(ctx)
+func (c *Context) WriteMessageToSocket(data []byte) error {
+	// Retrieve connection from context based on connectionID
+	conn := c.GetConnectionFromContext(c)
 
-	// Implement locking or other mechanisms to handle concurrent writes
-	return conn.WriteMessage(messageType, data)
+	return conn.WriteMessage(websocket.TextMessage, data)
 }
 
 // func (c *Context) reset(w Responder, r Request) {
