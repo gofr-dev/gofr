@@ -164,7 +164,7 @@ func TestContainer_Close(t *testing.T) {
 	mockDB.EXPECT().Close().Return(nil)
 	mockRedis.EXPECT().Close().Return(nil)
 
-	c := NewContainer(config.NewMockConfig(map[string]string{}))
+	c := NewContainer(config.NewMockConfig(nil))
 	c.SQL = mockDB
 	c.Redis = mockRedis
 	c.PubSub = mockPubSub
