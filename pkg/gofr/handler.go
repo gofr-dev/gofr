@@ -71,7 +71,7 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}()
 		// Execute the handler function
 		result, err = h.function(c)
-		
+
 		// Log the error if any in the format (traceID errorMessage) with the color code 202
 		if err != nil {
 			h.container.Logger.Errorf("\u001B[38;5;8m%s \u001B[38;5;%dm%s\u001B[0m ", traceID, logging.DEBUG, err.Error())
