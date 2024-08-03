@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	publicBroker  = "broker.hivemq.com"
+	publicBroker  = "broker.emqx.io"
 	messageBuffer = 10
 )
 
@@ -79,7 +79,7 @@ func New(config *Config, logger Logger, metrics Metrics) *MQTT {
 	if token := client.Connect(); token.Wait() && token.Error() != nil {
 		logger.Errorf("could not connect to MQTT at '%v:%v', error: %v", config.Hostname, config.Port, token.Error())
 
-		return &MQTT{Client: client, config: config, logger: logger}
+		return &MQTT{Client: client, config: config, logger: logger, mu: mu, metrics: metrics}
 	}
 
 	logger.Infof("connected to MQTT at '%v:%v' with clientID '%v'", config.Hostname, config.Port, options.ClientID)
@@ -104,7 +104,7 @@ func getDefaultClient(config *Config, logger Logger, metrics Metrics) *MQTT {
 	if token := client.Connect(); token.Wait() && token.Error() != nil {
 		logger.Errorf("could not connect to MQTT at '%v:%v', error: %v", config.Hostname, config.Port, token.Error())
 
-		return &MQTT{Client: client, config: config, logger: logger}
+		return &MQTT{Client: client, config: config, logger: logger, mu: new(sync.RWMutex), metrics: metrics}
 	}
 
 	config.Hostname = host

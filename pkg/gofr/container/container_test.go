@@ -159,16 +159,15 @@ func TestContainer_Close(t *testing.T) {
 
 	mockDB := NewMockDB(controller)
 	mockRedis := NewMockRedis(controller)
+	mockPubSub := &MockPubSub{}
 
 	mockDB.EXPECT().Close().Return(nil)
 	mockRedis.EXPECT().Close().Return(nil)
 
-	configs := map[string]string{
-		"PUBSUB_BACKEND": "MQTT",
-	}
-	c := NewContainer(config.NewMockConfig(configs))
+	c := NewContainer(config.NewMockConfig(nil))
 	c.SQL = mockDB
 	c.Redis = mockRedis
+	c.PubSub = mockPubSub
 
 	assert.NotNil(t, c.PubSub)
 
