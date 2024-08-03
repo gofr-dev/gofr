@@ -1,6 +1,8 @@
 package gofr
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/pprof"
@@ -16,6 +18,7 @@ type httpServer struct {
 	router *gofrHTTP.Router
 	port   int
 	ws     *websocket.Manager
+	srv    *http.Server
 }
 
 func newHTTPServer(c *container.Container, port int, middlewareConfigs map[string]string) *httpServer {
@@ -60,15 +63,38 @@ func (s *httpServer) RegisterProfilingRoutes() {
 }
 
 func (s *httpServer) Run(c *container.Container) {
-	var srv *http.Server
+	if s.srv != nil {
+		c.Logf("Server already running on port: %d", s.port)
+		return
+	}
 
 	c.Logf("Starting server on port: %d", s.port)
 
-	srv = &http.Server{
+	s.srv = &http.Server{
 		Addr:              fmt.Sprintf(":%d", s.port),
 		Handler:           s.router,
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
-	c.Error(srv.ListenAndServe())
+	err := s.srv.ListenAndServe()
+
+	if !errors.Is(err, http.ErrServerClosed) {
+		c.Errorf("error while listening to http server, err: %v", err)
+	}
+}
+
+func (s *httpServer) Shutdown(ctx context.Context) error {
+	if s.srv == nil {
+		return nil
+	}
+
+	return ShutdownWithContext(ctx, func(ctx context.Context) error {
+		return s.srv.Shutdown(ctx)
+	}, func() error {
+		if err := s.srv.Close(); err != nil {
+			return err
+		}
+
+		return nil
+	})
 }
