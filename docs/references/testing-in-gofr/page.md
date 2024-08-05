@@ -101,7 +101,7 @@ func TestAdd(t *testing.T) {
 		expectedRes  interface{}
 	}{
 		{
-			name:  "Successful Add",
+			name:  "Successful Insertion",
 			isbn:  12345,
 			mockExpect: func() {
 				mock.SQL.
@@ -115,7 +115,7 @@ func TestAdd(t *testing.T) {
 			},
 		},
 		{
-			name:  "Error on Add",
+			name:  "Error on Insertion",
 			isbn:  12345,
 			mockExpect: func() {
 				mock.SQL.
