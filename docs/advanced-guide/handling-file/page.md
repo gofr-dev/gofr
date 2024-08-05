@@ -43,13 +43,13 @@ err := ctx.File.Mkdir("my_dir",os.ModePerm)
 
 To create subdirectories as well
 ```go
-err := c.File.MkdirAll("my_dir/sub_dir", os.ModePerm)
+err := ctx.File.MkdirAll("my_dir/sub_dir", os.ModePerm)
 ```
 
 ### Creating and Save a File with Content
 
 ```go
-file, _ := c.File.Create("my_file.text")
+file, _ := ctx.File.Create("my_file.text")
 
 _, _ = file.Write([]byte("Hello World!"))
 
@@ -79,7 +79,7 @@ for reader.Next() {
 
 To open file with default options
 ```go
-file, _ := c.File.Open("my_file.text")
+file, _ := ctx.File.Open("my_file.text")
 defer file.Close()
 
 b := make([]byte, 200)
@@ -95,18 +95,18 @@ In case of renaming a file provide current name as source, new_name in destinati
 To move file from one location to another provide current location as source and new location as destination.
 
 ```go
-err := c.File.Rename("old_name.text", "new_name.text")
+err := ctx.File.Rename("old_name.text", "new_name.text")
 ```
 
 ### Deleting Files
 To delete a single file
 ```go
-err := c.File.Remove("my_dir")
+err := ctx.File.Remove("my_dir")
 ```
 
 To delete all sub directories as well
 ```go
-err := c.File.RemoveAll("my_dir/my_text")
+err := ctx.File.RemoveAll("my_dir/my_text")
 ```
 
 
