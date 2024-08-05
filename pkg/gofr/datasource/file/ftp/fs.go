@@ -102,6 +102,8 @@ func (f *fileSystem) Connect() {
 	}
 
 	status = "LOGIN SUCCESS"
+
+	f.logger.Logf("Connected to FTP server at %v", ftpServer)
 }
 
 // Create creates an empty file on the FTP server.
