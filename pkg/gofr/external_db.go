@@ -15,6 +15,7 @@ func (a *App) AddMongo(db container.MongoProvider) {
 	a.container.Mongo = db
 }
 
+// AddFTP sets the FTP datasource in the app's container.
 func (a *App) AddFTP(fs file.FileSystemProvider) {
 	fs.UseLogger(a.Logger())
 	fs.UseMetrics(a.Metrics())
