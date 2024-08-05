@@ -137,3 +137,7 @@ func (ws *Manager) CloseConnection(connID string) {
 		delete(ws.WebSocketConnections, connID)
 	}
 }
+
+func (*Connection) Params(string) []string {
+	return nil
+}

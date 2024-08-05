@@ -24,12 +24,14 @@ type DB interface {
 	Select(ctx context.Context, data interface{}, query string, args ...interface{})
 	HealthCheck() *datasource.Health
 	Dialect() string
+	Close() error
 }
 
 type Redis interface {
 	redis.Cmdable
 	redis.HashCmdable
 	HealthCheck() datasource.Health
+	Close() error
 }
 
 type Cassandra interface {

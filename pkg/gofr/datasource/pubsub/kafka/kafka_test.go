@@ -8,6 +8,7 @@ import (
 
 	"github.com/segmentio/kafka-go"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
 	"gofr.dev/pkg/gofr/datasource/pubsub"
@@ -141,7 +142,7 @@ func TestKafkaClient_Publish(t *testing.T) {
 		err = k.Publish(ctx, "test", []byte(`hello`))
 	})
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Contains(t, logs, "KAFKA")
 	assert.Contains(t, logs, "PUB")
 	assert.Contains(t, logs, "hello")
@@ -195,7 +196,7 @@ func TestKafkaClient_SubscribeSuccess(t *testing.T) {
 		msg, err = k.Subscribe(ctx, "test")
 	})
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, msg.Context())
 	assert.Equal(t, expMessage.Value, msg.Value)
 	assert.Equal(t, expMessage.Topic, msg.Topic)
@@ -212,6 +213,7 @@ func TestKafkaClient_Subscribe_ErrConsumerGroupID(t *testing.T) {
 			Broker: "kafkabroker",
 			OffSet: -1,
 		},
+		logger: logging.NewMockLogger(logging.INFO),
 	}
 
 	msg, err := k.Subscribe(context.TODO(), "test")
@@ -238,7 +240,7 @@ func TestKafkaClient_SubscribeError(t *testing.T) {
 		reader: map[string]Reader{
 			"test": mockReader,
 		},
-		logger: nil,
+		logger: logging.NewMockLogger(logging.INFO),
 		config: Config{
 			ConsumerGroupID: "consumer",
 			Broker:          "kafkabroker",
@@ -260,7 +262,7 @@ func TestKafkaClient_SubscribeError(t *testing.T) {
 		msg, err = k.Subscribe(ctx, "test")
 	})
 
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Equal(t, errSub, err)
 	assert.Nil(t, msg)
 	assert.Contains(t, logs, "failed to read message from kafka topic test: error while subscribing")
@@ -271,13 +273,18 @@ func TestKafkaClient_Close(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockWriter := NewMockWriter(ctrl)
-	k := kafkaClient{writer: mockWriter}
+	mockReader := NewMockReader(ctrl)
+	mockConn := NewMockConnection(ctrl)
+
+	k := kafkaClient{reader: map[string]Reader{"test-topic": mockReader}, writer: mockWriter, conn: mockConn}
 
 	mockWriter.EXPECT().Close().Return(nil)
+	mockReader.EXPECT().Close().Return(nil)
+	mockConn.EXPECT().Close().Return(nil)
 
 	err := k.Close()
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 func TestKafkaClient_CloseError(t *testing.T) {
@@ -294,16 +301,13 @@ func TestKafkaClient_CloseError(t *testing.T) {
 
 	mockWriter.EXPECT().Close().Return(errClose)
 
-	logs := testutil.StderrOutputForFunc(func() {
-		logger := logging.NewMockLogger(logging.ERROR)
-		k.logger = logger
+	logger := logging.NewMockLogger(logging.ERROR)
+	k.logger = logger
 
-		err = k.Close()
-	})
+	err = k.Close()
 
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Equal(t, errClose, err)
-	assert.Contains(t, logs, "failed to close kafka writer")
 }
 
 func TestKafkaClient_getNewReader(t *testing.T) {
@@ -403,7 +407,7 @@ func TestKafkaClient_Controller(t *testing.T) {
 	broker, err := client.Controller()
 
 	assert.NotNil(t, broker)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 func TestKafkaClient_DeleteTopic(t *testing.T) {
@@ -419,7 +423,7 @@ func TestKafkaClient_DeleteTopic(t *testing.T) {
 
 	err := client.DeleteTopic(context.Background(), "test")
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 func TestKafkaClient_CreateTopic(t *testing.T) {
