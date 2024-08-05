@@ -1,7 +1,7 @@
 package grpc
 
 import (
-	context "context"
+	"context"
 	"fmt"
 )
 
