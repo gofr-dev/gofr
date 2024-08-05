@@ -28,7 +28,7 @@ type PubSub interface {
 	SubscribeWithFunction(topic string, subscribeFunc SubscribeFunc) error
 	Publish(ctx context.Context, topic string, message []byte) error
 	Unsubscribe(topic string) error
-	Disconnect(waitTime uint)
+	Disconnect(waitTime uint) error
 	Ping() error
 	Health() datasource.Health
 }

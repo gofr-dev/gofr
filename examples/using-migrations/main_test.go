@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestExampleMigration(t *testing.T) {
@@ -38,7 +39,7 @@ func TestExampleMigration(t *testing.T) {
 		c := http.Client{}
 		resp, err := c.Do(req)
 
-		assert.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
+		require.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
 
 		assert.Equal(t, tc.statusCode, resp.StatusCode, "TEST[%d], Failed.\n%s", i, tc.desc)
 	}

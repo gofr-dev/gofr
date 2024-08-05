@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestMain_BindError(t *testing.T) {
@@ -23,8 +24,8 @@ func TestMain_BindError(t *testing.T) {
 	req.Header.Set("content-type", "multipart/form-data")
 	resp, err := c.Do(req)
 
-	assert.Equal(t, 500, resp.StatusCode)
-	assert.NoError(t, err)
+	assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+	require.NoError(t, err)
 
 	buf, contentType := generateMultiPartBody(t)
 	req, _ = http.NewRequest(http.MethodPost, host+"/upload", buf)
@@ -32,7 +33,7 @@ func TestMain_BindError(t *testing.T) {
 	req.ContentLength = int64(buf.Len())
 
 	resp, err = c.Do(req)
-	assert.Equal(t, 201, resp.StatusCode)
+	require.Equal(t, http.StatusCreated, resp.StatusCode)
 }
 
 func generateMultiPartBody(t *testing.T) (*bytes.Buffer, string) {

@@ -7,6 +7,7 @@ import (
 
 	goRedis "github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
 	"gofr.dev/pkg/gofr/container"
@@ -22,7 +23,7 @@ func TestRedis_Get(t *testing.T) {
 	r := redisDS{mockCmd}
 	_, err := r.Get(context.Background(), "test_key").Result()
 
-	assert.NoError(t, err, "TEST Failed.\n")
+	require.NoError(t, err, "TEST Failed.\n")
 }
 
 func TestRedis_Set(t *testing.T) {
@@ -35,7 +36,7 @@ func TestRedis_Set(t *testing.T) {
 	r := redisDS{mockCmd}
 	_, err := r.Set(context.Background(), "test_key", "test_value", 0).Result()
 
-	assert.NoError(t, err, "TEST Failed.\n")
+	require.NoError(t, err, "TEST Failed.\n")
 }
 
 func TestRedis_Del(t *testing.T) {
@@ -48,7 +49,7 @@ func TestRedis_Del(t *testing.T) {
 	r := redisDS{mockCmd}
 	_, err := r.Del(context.Background(), "test_key").Result()
 
-	assert.NoError(t, err, "TEST Failed.\n")
+	require.NoError(t, err, "TEST Failed.\n")
 }
 
 func TestRedis_Rename(t *testing.T) {
@@ -61,7 +62,7 @@ func TestRedis_Rename(t *testing.T) {
 	r := redisDS{mockCmd}
 	_, err := r.Rename(context.Background(), "test_key", "test_new_key").Result()
 
-	assert.NoError(t, err, "TEST Failed.\n")
+	require.NoError(t, err, "TEST Failed.\n")
 }
 
 func TestRedisMigrator_GetLastMigration(t *testing.T) {

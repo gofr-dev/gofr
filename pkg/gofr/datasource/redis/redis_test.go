@@ -7,6 +7,7 @@ import (
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
 	"gofr.dev/pkg/gofr/config"
@@ -46,7 +47,7 @@ func TestRedis_QueryLogging(t *testing.T) {
 
 	// Mock Redis server setup
 	s, err := miniredis.Run()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	defer s.Close()
 
@@ -61,11 +62,11 @@ func TestRedis_QueryLogging(t *testing.T) {
 			"REDIS_PORT": s.Port(),
 		}), mockLogger, mockMetric)
 
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		result, err := client.Set(context.TODO(), "key", "value", 1*time.Minute).Result()
 
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, "OK", result)
 	})
 
@@ -80,7 +81,7 @@ func TestRedis_PipelineQueryLogging(t *testing.T) {
 
 	// Mock Redis server setup
 	s, err := miniredis.Run()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	defer s.Close()
 
@@ -96,7 +97,7 @@ func TestRedis_PipelineQueryLogging(t *testing.T) {
 			"REDIS_PORT": s.Port(),
 		}), mockLogger, mockMetric)
 
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		// Pipeline execution
 		pipe := client.Pipeline()
@@ -105,19 +106,44 @@ func TestRedis_PipelineQueryLogging(t *testing.T) {
 
 		// Pipeline Exec should return a non-nil error
 		_, err = pipe.Exec(context.TODO())
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		// Retrieve results
 		setResult, err := setCmd.Result()
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, "OK", setResult)
 
 		getResult, err := getCmd.Result()
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, "value1", getResult)
 	})
 
 	// Assertions
 	assert.Contains(t, result, "ping")
 	assert.Contains(t, result, "set key1 value1 ex 60: OK")
+}
+
+func TestRedis_Close(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	// Mock Redis server setup
+	s, err := miniredis.Run()
+	require.NoError(t, err)
+	defer s.Close()
+
+	// Mock metrics setup
+	mockMetric := NewMockMetrics(ctrl)
+	mockMetric.EXPECT().RecordHistogram(gomock.Any(), "app_redis_stats", gomock.Any(), "hostname",
+		gomock.Any(), "type", "ping")
+
+	mockLogger := logging.NewMockLogger(logging.DEBUG)
+	client := NewClient(config.NewMockConfig(map[string]string{
+		"REDIS_HOST": s.Host(),
+		"REDIS_PORT": s.Port(),
+	}), mockLogger, mockMetric)
+
+	err = client.Close()
+
+	require.NoError(t, err)
 }

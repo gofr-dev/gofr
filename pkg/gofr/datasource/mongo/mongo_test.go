@@ -88,7 +88,7 @@ func Test_InsertCommands(t *testing.T) {
 		resp, err := cl.InsertMany(context.Background(), mt.Coll.Name(), []interface{}{doc, doc})
 
 		assert.NotNil(t, resp)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 	})
 
 	mt.Run("insertManyError", func(mt *mtest.T) {
@@ -104,7 +104,7 @@ func Test_InsertCommands(t *testing.T) {
 		resp, err := cl.InsertMany(context.Background(), mt.Coll.Name(), []interface{}{doc, doc})
 
 		assert.Nil(t, resp)
-		assert.Error(t, err)
+		require.Error(t, err)
 	})
 }
 
@@ -127,7 +127,7 @@ func Test_CreateCollection(t *testing.T) {
 
 		err := cl.CreateCollection(context.Background(), mt.Coll.Name())
 
-		assert.NoError(t, err)
+		require.NoError(t, err)
 	})
 }
 
@@ -173,7 +173,7 @@ func Test_FindMultipleCommands(t *testing.T) {
 
 		err := cl.Find(context.Background(), mt.Coll.Name(), bson.D{{}}, nil)
 
-		assert.ErrorContains(t, err, "database response does not contain a cursor")
+		require.ErrorContains(t, err, "database response does not contain a cursor")
 	})
 
 	mt.Run("FindCursorParseError", func(mt *mtest.T) {
@@ -195,7 +195,7 @@ func Test_FindMultipleCommands(t *testing.T) {
 
 		err := cl.Find(context.Background(), mt.Coll.Name(), bson.D{{}}, &foundDocuments)
 
-		assert.ErrorContains(t, err, "cursor.nextBatch should be an array but is a BSON invalid")
+		require.ErrorContains(t, err, "cursor.nextBatch should be an array but is a BSON invalid")
 	})
 }
 
@@ -490,7 +490,7 @@ func Test_HealthCheck(t *testing.T) {
 
 		resp, err := cl.HealthCheck(context.Background())
 
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Contains(t, fmt.Sprint(resp), "UP")
 	})
 
@@ -504,7 +504,7 @@ func Test_HealthCheck(t *testing.T) {
 
 		resp, err := cl.HealthCheck(context.Background())
 
-		assert.ErrorIs(t, err, errStatusDown)
+		require.ErrorIs(t, err, errStatusDown)
 
 		assert.Contains(t, fmt.Sprint(resp), "DOWN")
 	})

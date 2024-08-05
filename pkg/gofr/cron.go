@@ -353,3 +353,7 @@ func (noopRequest) HostName() string {
 func (noopRequest) Bind(interface{}) error {
 	return nil
 }
+
+func (noopRequest) Params(string) []string {
+	return nil
+}

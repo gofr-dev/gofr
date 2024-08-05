@@ -8,6 +8,7 @@ import (
 
 	"github.com/gocql/gocql"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 )
 
@@ -291,7 +292,7 @@ func Test_CreateSession_Error(t *testing.T) {
 	sess, err := c.createSession()
 
 	assert.Nil(t, sess, "Test Failed: should return error without creating session")
-	assert.Error(t, err, "Test Failed: should return error without creating session")
+	require.Error(t, err, "Test Failed: should return error without creating session")
 }
 
 func Test_cassandraSession_Query(t *testing.T) {

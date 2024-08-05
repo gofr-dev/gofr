@@ -40,6 +40,20 @@ func (m *MockReader) EXPECT() *MockReaderMockRecorder {
 	return m.recorder
 }
 
+// Close mocks base method.
+func (m *MockReader) Close() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Close")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Close indicates an expected call of Close.
+func (mr *MockReaderMockRecorder) Close() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockReader)(nil).Close))
+}
+
 // CommitMessages mocks base method.
 func (m *MockReader) CommitMessages(ctx context.Context, msgs ...kafka.Message) error {
 	m.ctrl.T.Helper()
@@ -179,6 +193,20 @@ func NewMockConnection(ctrl *gomock.Controller) *MockConnection {
 // EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockConnection) EXPECT() *MockConnectionMockRecorder {
 	return m.recorder
+}
+
+// Close mocks base method.
+func (m *MockConnection) Close() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Close")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Close indicates an expected call of Close.
+func (mr *MockConnectionMockRecorder) Close() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockConnection)(nil).Close))
 }
 
 // Controller mocks base method.

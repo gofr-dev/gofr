@@ -113,6 +113,14 @@ func (d *DB) Begin() (*Tx, error) {
 	return &Tx{Tx: tx, config: d.config, logger: d.logger, metrics: d.metrics}, nil
 }
 
+func (d *DB) Close() error {
+	if d.DB != nil {
+		return d.DB.Close()
+	}
+
+	return nil
+}
+
 type Tx struct {
 	*sql.Tx
 	config  *DBConfig

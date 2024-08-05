@@ -10,6 +10,7 @@ import (
 
 	"github.com/go-redis/redismock/v9"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"gofr.dev/pkg/gofr"
 	"gofr.dev/pkg/gofr/config"
@@ -50,13 +51,13 @@ func TestIntegration_SimpleAPIServer(t *testing.T) {
 
 		b, err := io.ReadAll(resp.Body)
 
-		assert.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
+		require.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
 
 		_ = json.Unmarshal(b, &data)
 
 		assert.Equal(t, tc.body, data.Data, "TEST[%d], Failed.\n%s", i, tc.desc)
 
-		assert.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
+		require.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode, "TEST[%d], Failed.\n%s", i, tc.desc)
 
@@ -104,13 +105,13 @@ func TestIntegration_SimpleAPIServer_Errors(t *testing.T) {
 
 		b, err := io.ReadAll(resp.Body)
 
-		assert.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
+		require.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
 
 		_ = json.Unmarshal(b, &data)
 
 		assert.Equal(t, tc.body, data.Error, "TEST[%d], Failed.\n%s", i, tc.desc)
 
-		assert.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
+		require.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
 
 		assert.Equal(t, tc.statusCode, resp.StatusCode, "TEST[%d], Failed.\n%s", i, tc.desc)
 
@@ -135,7 +136,7 @@ func TestIntegration_SimpleAPIServer_Health(t *testing.T) {
 		c := http.Client{}
 		resp, err := c.Do(req)
 
-		assert.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
+		require.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
 
 		assert.Equal(t, tc.statusCode, resp.StatusCode, "TEST[%d], Failed.\n%s", i, tc.desc)
 	}
@@ -157,5 +158,5 @@ func TestRedisHandler(t *testing.T) {
 	resp, err := RedisHandler(ctx)
 
 	assert.Nil(t, resp)
-	assert.Error(t, err)
+	require.Error(t, err)
 }

@@ -9,7 +9,8 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
-	"go.uber.org/mock/gomock"
+	"github.com/stretchr/testify/require"
+	gomock "go.uber.org/mock/gomock"
 )
 
 func TestConnection_Bind_Success(t *testing.T) {
@@ -58,13 +59,13 @@ func TestConnection_Bind_Success(t *testing.T) {
 			url := "ws" + server.URL[len("http"):] + "/ws"
 			dialer := websocket.DefaultDialer
 			conn, resp, err := dialer.Dial(url, nil)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			defer conn.Close()
 			defer resp.Body.Close()
 
 			err = conn.WriteMessage(websocket.TextMessage, tt.inputMessage)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 		})
 
 		// waiting for previous connection to close and test for new testcase.
@@ -113,12 +114,12 @@ func Test_Upgrade(t *testing.T) {
 	wsUpgrader := WSUpgrader{Upgrader: mockUpgrader}
 
 	req, err := http.NewRequestWithContext(context.TODO(), http.MethodGet, "/", http.NoBody)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	w := httptest.NewRecorder()
 
 	conn, err := wsUpgrader.Upgrade(w, req, nil)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	assert.Equal(t, expectedConn, conn)
 }
@@ -126,10 +127,11 @@ func Test_Upgrade(t *testing.T) {
 func Test_UnimplementedMethods(t *testing.T) {
 	conn := &Connection{}
 
-	assert.Equal(t, "", conn.Param("test"))
-	assert.Equal(t, "", conn.PathParam("test"))
-	assert.Equal(t, "", conn.HostName())
-	assert.NotNil(t, "", conn.Context())
+	assert.Empty(t, conn.Param("test"))
+	assert.Empty(t, conn.PathParam("test"))
+	assert.Empty(t, conn.HostName())
+	assert.NotNil(t, conn.Context())
+	assert.Nil(t, conn.Params("test"))
 }
 
 func dereference(v interface{}) interface{} {

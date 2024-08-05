@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
@@ -37,21 +38,20 @@ func TestGRPCServer(t *testing.T) {
 
 	for _, tc := range tests {
 		resp, err := client.SayHello(context.Background(), tc.request)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, tc.responseMessage, resp.Message)
 	}
 
 	// case of empty request
 	resp, err := client.SayHello(context.Background(), nil)
 	assert.Equal(t, "Hello World!", resp.Message)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Test context cancellation
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	_, err = client.SayHello(ctx, &grpcExample.HelloRequest{Name: "Test"})
 	assert.Equal(t, "rpc error: code = Canceled desc = context canceled", err.Error())
-
 }
 
 func createGRPCClient(t *testing.T, host string) (grpcExample.HelloClient, *grpc.ClientConn) {
