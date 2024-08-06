@@ -86,7 +86,10 @@ func TestAdd(t *testing.T) {
 		err   error
 	}
 
-	// mock-container
+	// NewMockContainer provides mock implementations for various databases including:
+	// Redis, SQL, ClickHouse, Cassandra, MongoDB, and KVStore.
+	// These mocks can be used to define database expectations in unit tests,
+	// similar to the SQL example demonstrated here.
 	c, mock := container.NewMockContainer(t)
 
 	ctx := &gofr.Context{
