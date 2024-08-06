@@ -29,7 +29,8 @@ func NewMockLogger(level Level) Logger {
 	}
 }
 
-func (m *MockLogger) Debugf(pattern string, args ...interface{}) {
+func (m *MockLogger) Debug(args ...interface{}) {
+	pattern := "%v"
 	m.logf(DEBUG, pattern, args...)
 }
 
