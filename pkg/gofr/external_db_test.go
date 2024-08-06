@@ -1,14 +1,15 @@
 package gofr
 
 import (
+	"testing"
+
 	"go.uber.org/mock/gomock"
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/datasource/file"
-	"testing"
 )
 
 func TestApp_AddKVStore(t *testing.T) {
-	t.Run("Adding KV Store", func(t *testing.T) {
+	t.Run("Adding KV-Store", func(t *testing.T) {
 		app := New()
 
 		ctrl := gomock.NewController(t)
@@ -27,7 +28,7 @@ func TestApp_AddKVStore(t *testing.T) {
 }
 
 func TestApp_AddMongo(t *testing.T) {
-	t.Run("Adding Mongo DB", func(t *testing.T) {
+	t.Run("Adding MongoDB", func(t *testing.T) {
 		app := New()
 
 		ctrl := gomock.NewController(t)
@@ -46,7 +47,7 @@ func TestApp_AddMongo(t *testing.T) {
 }
 
 func TestApp_AddCassandra(t *testing.T) {
-	t.Run("Adding Mongo DB", func(t *testing.T) {
+	t.Run("Adding Cassandra", func(t *testing.T) {
 		app := New()
 
 		ctrl := gomock.NewController(t)
