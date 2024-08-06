@@ -81,6 +81,8 @@ func TestMigrationRunClickhouseSuccess(t *testing.T) {
 					return err
 				}
 
+				d.Logger.Infof("Clickhouse Migration Ran Successfully")
+
 				return nil
 			}},
 		}
@@ -97,6 +99,7 @@ func TestMigrationRunClickhouseSuccess(t *testing.T) {
 	})
 
 	assert.Contains(t, logs, "Migration 1 ran successfully")
+	assert.Contains(t, logs, "Clickhouse Migration Ran Successfully")
 }
 
 func TestMigrationRunClickhouseMigrationFailure(t *testing.T) {
