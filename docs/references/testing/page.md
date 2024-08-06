@@ -4,17 +4,16 @@ Testing REST APIs ensures that your endpoints function correctly under various c
 
 ## Mocking Databases in GoFr
 
-Mocking databases allows for isolated testing by simulating various scenarios. GoFr built-in mock container supports, not only SQL databases, but also extends to other data stores, including Redis, Cassandra, Key-Value stores, MongoDB, and ClickHouse.
+Mocking databases allows for isolated testing by simulating various scenarios. GoFr's built-in mock container supports, not only SQL databases, but also extends to other data stores, including Redis, Cassandra, Key-Value stores, MongoDB, and ClickHouse.
 
 ## Example of Unit Testing a REST API Using GoFr
 
-Below is an example of how to test the `Add` method of a handler that interacts with a SQL database.
-
-`main.go`
+Below is an example of how to test, say the `Add` method of a handler that interacts with a SQL database.
 
 Here’s an `Add` function for adding a book to the database using GoFr:
 
 ```go
+// main.go
 package main
 
 import (
@@ -59,13 +58,13 @@ func main() {
 	// Run the application
 	app.Run()
 }
-```
 
-`main_test.go`
+```
 
 Here’s how to write tests using GoFr:
 
 ```go
+// main_test.go
 package main
 
 import (
@@ -79,12 +78,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"gofr.dev/pkg/gofr"
 	"gofr.dev/pkg/gofr/container"
+	gofrHttp "gofr.dev/pkg/gofr/http"
 )
 
 func TestAdd(t *testing.T) {
 	type res struct {
 		ISBN interface{}
-		err   error
+		err  error
 	}
 
 	// NewMockContainer provides mock implementations for various databases including:
@@ -100,35 +100,29 @@ func TestAdd(t *testing.T) {
 	}
 
 	tests := []struct {
-		name         string
-		title	     string
-		isbn         int
-		mockExpect   func()
-		expectedRes  interface{}
+		name        string
+		mockExpect  func()
+		expectedRes interface{}
 	}{
 		{
-			name:  "Successful Insertion",
-			title: "Book1",
-			isbn:  12345,
+			name: "Successful Insertion",
 			mockExpect: func() {
 				mock.SQL.
 					EXPECT().
-					ExecContext(ctx, `INSERT INTO books (title,isbn) VALUES (?,?)`,"Book1" 12345).
+					ExecContext(ctx, `INSERT INTO books (title, isbn) VALUES (?, ?)`, "Book Title", 12345).
 					Return(sqlmock.NewResult(12, 1), nil)
 			},
 			expectedRes: res{
-				int64(12), 
+				int64(12),
 				nil,
 			},
 		},
 		{
-			name:  "Error on Insertion",
-			title: "Book2"
-			isbn:  12346,
+			name: "Error on Insertion",
 			mockExpect: func() {
 				mock.SQL.
 					EXPECT().
-					ExecContext(ctx, `INSERT INTO books (title,isbn) VALUES (?,?)`, "Book2",12346).
+					ExecContext(ctx, `INSERT INTO books (title, isbn) VALUES (?, ?)`, "Book Title", 12345).
 					Return(nil, sql.ErrConnDone)
 			},
 			expectedRes: res{
@@ -161,6 +155,7 @@ func TestAdd(t *testing.T) {
 		})
 	}
 }
+
 ```
 ### Summary
 
