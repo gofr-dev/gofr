@@ -3,14 +3,16 @@ package main
 import (
 	"encoding/json"
 
+	"gofr.dev/examples/using-publisher/migrations"
 	"gofr.dev/pkg/gofr"
 )
 
 func main() {
 	app := gofr.New()
 
-	app.POST("/publish-order", order)
+	app.Migrate(migrations.All())
 
+	app.POST("/publish-order", order)
 	app.POST("/publish-product", product)
 
 	app.Run()
