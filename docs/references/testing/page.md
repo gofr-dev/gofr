@@ -4,7 +4,7 @@ Testing REST APIs ensures that your endpoints function correctly under various c
 
 ## Mocking Databases in GoFr
 
-Mocking databases allows for isolated testing by simulating various scenarios. GoFr's built-in mock container supports not only SQL databases but also extends to other data stores, including Redis, Cassandra, Key-Value stores, MongoDB, and ClickHouse.
+Mocking databases allows for isolated testing by simulating various scenarios. GoFr built-in mock container supports, not only SQL databases, but also extends to other data stores, including Redis, Cassandra, Key-Value stores, MongoDB, and ClickHouse.
 
 ## Example of Unit Testing a REST API Using GoFr
 
@@ -36,8 +36,8 @@ func Add(ctx *gofr.Context) (interface{}, error) {
 		return nil, http.ErrorInvalidParam{Params: []string{"body"}}
 	}
 
-	// we assume the id in the database is set to auto-increment.
-	res, err := ctx.SQL.ExecContext(ctx, `INSERT INTO books (title,isbn) VALUES (?,?)`, book.Title, book.ISBN)
+	// we assume the `id` column in the database is set to auto-increment.
+	res, err := ctx.SQL.ExecContext(ctx, `INSERT INTO books (title, isbn) VALUES (?, ?)`, book.Title, book.ISBN)
 	if err != nil {
 		return nil, err
 	}
@@ -64,6 +64,7 @@ func main() {
 `main_test.go`
 
 Here’s how to write tests using GoFr:
+
 ```go
 package main
 
@@ -163,9 +164,9 @@ func TestAdd(t *testing.T) {
 ```
 ### Summary
 
-- **Mocking Database Interactions**: Use GoFr's mock container to simulate database interactions.
+- **Mocking Database Interactions**: Use GoFr mock container to simulate database interactions.
 - **Define Test Cases**: Create table-driven tests to handle various scenarios.
-- **Run and Validate**: Ensure that your tests check for expected results and handle errors correctly.
+- **Run and Validate**: Ensure that your tests check for expected results, and handle errors correctly.
 
 This approach guarantees that your database interactions are tested independently, allowing you to simulate different responses and errors hassle-free.
 
