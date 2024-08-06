@@ -100,17 +100,19 @@ func TestAdd(t *testing.T) {
 
 	tests := []struct {
 		name         string
+		title	     string
 		isbn         int
 		mockExpect   func()
 		expectedRes  interface{}
 	}{
 		{
-			name:  "Successful Add",
+			name:  "Successful Insertion",
+			title: "Book1",
 			isbn:  12345,
 			mockExpect: func() {
 				mock.SQL.
 					EXPECT().
-					ExecContext(ctx, `INSERT INTO books (title,isbn) VALUES (?,?)`, 12345).
+					ExecContext(ctx, `INSERT INTO books (title,isbn) VALUES (?,?)`,"Book1" 12345).
 					Return(sqlmock.NewResult(12, 1), nil)
 			},
 			expectedRes: res{
@@ -119,12 +121,13 @@ func TestAdd(t *testing.T) {
 			},
 		},
 		{
-			name:  "Error on Add",
-			isbn:  12345,
+			name:  "Error on Insertion",
+			title: "Book2"
+			isbn:  12346,
 			mockExpect: func() {
 				mock.SQL.
 					EXPECT().
-					ExecContext(ctx, `INSERT INTO books (title,isbn) VALUES (?,?)`, 12345).
+					ExecContext(ctx, `INSERT INTO books (title,isbn) VALUES (?,?)`, "Book2",12346).
 					Return(nil, sql.ErrConnDone)
 			},
 			expectedRes: res{
@@ -151,9 +154,9 @@ func TestAdd(t *testing.T) {
 
 			val, err := Add(ctx)
 
-			res := res{val, err}
+			response := res{val, err}
 
-			assert.Equal(t, tt.expectedRes, res)
+			assert.Equal(t, tt.expectedRes, response)
 		})
 	}
 }
@@ -165,5 +168,4 @@ func TestAdd(t *testing.T) {
 - **Run and Validate**: Ensure that your tests check for expected results and handle errors correctly.
 
 This approach guarantees that your database interactions are tested independently, allowing you to simulate different responses and errors hassle-free.
-Footer
 
