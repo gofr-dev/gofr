@@ -48,7 +48,7 @@ type jsonReader struct {
 //		    var content string
 //		    reader.Scan(&u)
 //	}
-func (f file) ReadAll() (datasource.RowReader, error) {
+func (f file) ReadAll() (RowReader, error) {
 	if strings.HasSuffix(f.File.Name(), ".json") {
 		return f.createJSONReader()
 	}
@@ -57,7 +57,7 @@ func (f file) ReadAll() (datasource.RowReader, error) {
 }
 
 // Factory method to create the appropriate JSON reader.
-func (f file) createJSONReader() (datasource.RowReader, error) {
+func (f file) createJSONReader() (RowReader, error) {
 	decoder := json.NewDecoder(f.File)
 
 	token, err := f.peekJSONToken(decoder)
@@ -88,7 +88,7 @@ func (file) peekJSONToken(decoder *json.Decoder) (json.Token, error) {
 }
 
 // Create a JSON reader for a JSON object.
-func (f file) createJSONObjectReader() (datasource.RowReader, error) {
+func (f file) createJSONObjectReader() (RowReader, error) {
 	name := f.File.Name()
 
 	if err := f.File.Close(); err != nil {
@@ -107,7 +107,7 @@ func (f file) createJSONObjectReader() (datasource.RowReader, error) {
 	return &jsonReader{decoder: decoder}, nil
 }
 
-func (f file) createTextCSVReader() datasource.RowReader {
+func (f file) createTextCSVReader() RowReader {
 	return &textReader{
 		scanner: bufio.NewScanner(f.File),
 		logger:  f.logger,
