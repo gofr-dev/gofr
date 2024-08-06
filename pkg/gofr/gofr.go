@@ -408,6 +408,11 @@ func (a *App) initTracer() {
 }
 
 func isValidConfig(logger logging.Logger, name, url, host, port string) bool {
+	if url == "" && name == "" {
+		logger.Debug("tracing is disabled, as configs are not provided")
+		return false
+	}
+
 	if url != "" && name == "" {
 		logger.Error("missing TRACE_EXPORTER config, should be provided with TRACER_URL to enable tracing")
 		return false
