@@ -31,8 +31,8 @@ func TestGRPC_ServerRun(t *testing.T) {
 		port       int
 		expLog     string
 	}{
-		{"net.Listen() error", nil, 99999, "error in starting GRPC server"},
-		{"server.Serve() error", new(grpc.Server), 10000, "error in starting GRPC server"},
+		{"net.Listen() error", nil, 99999, "error in starting gRPC server"},
+		{"server.Serve() error", new(grpc.Server), 10000, "error in starting gRPC server"},
 	}
 
 	for i, tc := range testCases {

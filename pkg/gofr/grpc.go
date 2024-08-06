@@ -43,7 +43,7 @@ func (g *grpcServer) Run(c *container.Container) {
 	}
 
 	if err := g.server.Serve(listener); err != nil {
-		c.Logger.Errorf("error in starting GRPC server at %s: %s", addr, err)
+		c.Logger.Errorf("error in starting gRPC server at %s: %s", addr, err)
 		return
 	}
 }
@@ -66,7 +66,7 @@ var (
 
 // RegisterService adds a gRPC service to the GoFr application.
 func (a *App) RegisterService(desc *grpc.ServiceDesc, impl any) {
-	a.container.Logger.Infof("registering GRPC Server: %s", desc.ServiceName)
+	a.container.Logger.Infof("registering gRPC Server: %s", desc.ServiceName)
 	a.grpcServer.server.RegisterService(desc, impl)
 
 	err := injectContainer(impl, a.container)
