@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"gofr.dev/pkg/gofr"
 )
 
@@ -16,7 +15,7 @@ func main() {
 func WSHandler(ctx *gofr.Context) (interface{}, error) {
 	var message string
 
-	ctx.WriteMessageToSocket([]byte(fmt.Sprint("anc")))
+	ctx.WriteMessageToSocket("Hello! GoFr")
 
 	err := ctx.Bind(&message)
 	if err != nil {
