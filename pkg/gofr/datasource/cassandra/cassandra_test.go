@@ -150,11 +150,11 @@ func Test_Query(t *testing.T) {
 			mockDeps.mockIter.EXPECT().scan(gomock.Any()).Times(1)
 		}, &mockStruct, nil},
 		{"failure case: dest is not pointer", mockStructSlice, func() {}, mockStructSlice,
-			ErrDestinationIsNotPointer},
+			errDestinationIsNotPointer},
 		{"failure case: dest is int", &mockInt, func() {
 			mockDeps.mockSession.EXPECT().query(query).Return(mockDeps.mockQuery).Times(1)
 			mockDeps.mockQuery.EXPECT().iter().Return(mockDeps.mockIter).Times(1)
-		}, &mockInt, ErrUnexpectedPointer{target: "int"}},
+		}, &mockInt, errUnexpectedPointer{target: "int"}},
 	}
 
 	for i, tc := range testCases {
@@ -232,13 +232,13 @@ func Test_ExecCAS(t *testing.T) {
 			mockDeps.mockSession.EXPECT().query(query).Return(mockDeps.mockQuery).Times(1)
 			mockDeps.mockQuery.EXPECT().scanCAS(gomock.Any()).Return(false, errMock).Times(1)
 		}, false, errMock},
-		{"failure case: dest is not pointer", mockInt, func() {}, false, ErrDestinationIsNotPointer},
+		{"failure case: dest is not pointer", mockInt, func() {}, false, errDestinationIsNotPointer},
 		{"failure case: dest is slice", &[]int{}, func() {
 			mockDeps.mockSession.EXPECT().query(query).Return(mockDeps.mockQuery).Times(1)
-		}, false, ErrUnexpectedSlice{target: "[]*[]int"}},
+		}, false, errUnexpectedSlice{target: "[]*[]int"}},
 		{"failure case: dest is map", &map[string]interface{}{}, func() {
 			mockDeps.mockSession.EXPECT().query(query).Return(mockDeps.mockQuery).Times(1)
-		}, false, ErrUnexpectedMap},
+		}, false, errUnexpectedMap},
 	}
 
 	for i, tc := range testCases {
@@ -270,7 +270,7 @@ func Test_NewBatch(t *testing.T) {
 
 			mockDeps.mockSession.EXPECT().newBatch(gocql.BatchType(LoggedBatch)).Return(&cassandraBatch{}).Times(1)
 		}, nil},
-		{"invalid log type", -1, func() {}, ErrUnsupportedBatchType},
+		{"invalid log type", -1, func() {}, errUnsupportedBatchType},
 	}
 
 	for i, tc := range testCases {

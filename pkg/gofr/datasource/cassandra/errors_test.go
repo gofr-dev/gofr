@@ -7,27 +7,27 @@ import (
 )
 
 func Test_DestinationIsNotPointer_Error(t *testing.T) {
-	err := ErrDestinationIsNotPointer
+	err := errDestinationIsNotPointer
 
-	require.Equal(t, err, ErrDestinationIsNotPointer)
+	require.Equal(t, err, errDestinationIsNotPointer)
 }
 
 func Test_UnexpectedPointer_Error(t *testing.T) {
 	expected := "a pointer to int was not expected."
-	err := ErrUnexpectedPointer{target: "int"}
+	err := errUnexpectedPointer{target: "int"}
 
 	require.ErrorContains(t, err, expected)
 }
 
 func Test_UnexpectedSlice_Error(t *testing.T) {
 	expected := "a slice of int was not expected."
-	err := ErrUnexpectedSlice{target: "int"}
+	err := errUnexpectedSlice{target: "int"}
 
 	require.ErrorContains(t, err, expected)
 }
 
 func Test_UnexpectedMap_Error(t *testing.T) {
-	err := ErrUnexpectedMap
+	err := errUnexpectedMap
 
-	require.ErrorIs(t, err, ErrUnexpectedMap)
+	require.ErrorIs(t, err, errUnexpectedMap)
 }

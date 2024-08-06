@@ -7,7 +7,7 @@ import (
 func (c *Client) BatchQuery(name, stmt string, values ...any) error {
 	b, ok := c.cassandra.batches[name]
 	if !ok {
-		return ErrBatchNotInitialised
+		return errBatchNotInitialised
 	}
 
 	b.Query(stmt, values...)
@@ -20,7 +20,7 @@ func (c *Client) ExecuteBatch(name string) error {
 
 	b, ok := c.cassandra.batches[name]
 	if !ok {
-		return ErrBatchNotInitialised
+		return errBatchNotInitialised
 	}
 
 	return c.cassandra.session.executeBatch(b)
@@ -31,7 +31,7 @@ func (c *Client) ExecuteBatchCAS(name string, dest ...any) (bool, error) {
 
 	b, ok := c.cassandra.batches[name]
 	if !ok {
-		return false, ErrBatchNotInitialised
+		return false, errBatchNotInitialised
 	}
 
 	return c.cassandra.session.executeBatchCAS(b, dest...)

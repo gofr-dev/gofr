@@ -96,7 +96,7 @@ func (c *Client) Query(dest any, stmt string, values ...any) error {
 	if rvo.Kind() != reflect.Ptr {
 		c.logger.Error("we did not get a pointer. data is not settable.")
 
-		return ErrDestinationIsNotPointer
+		return errDestinationIsNotPointer
 	}
 
 	rv := rvo.Elem()
@@ -130,7 +130,7 @@ func (c *Client) Query(dest any, stmt string, values ...any) error {
 	default:
 		c.logger.Debugf("a pointer to %v was not expected.", rv.Kind().String())
 
-		return ErrUnexpectedPointer{target: rv.Kind().String()}
+		return errUnexpectedPointer{target: rv.Kind().String()}
 	}
 
 	return nil
@@ -155,7 +155,7 @@ func (c *Client) ExecCAS(dest any, stmt string, values ...any) (bool, error) {
 	if rvo.Kind() != reflect.Ptr {
 		c.logger.Debugf("we did not get a pointer. data is not settable.")
 
-		return false, ErrDestinationIsNotPointer
+		return false, errDestinationIsNotPointer
 	}
 
 	rv := rvo.Elem()
@@ -168,12 +168,12 @@ func (c *Client) ExecCAS(dest any, stmt string, values ...any) (bool, error) {
 	case reflect.Slice:
 		c.logger.Debugf("a slice of %v was not expected.", reflect.SliceOf(reflect.TypeOf(dest)).String())
 
-		return false, ErrUnexpectedSlice{target: reflect.SliceOf(reflect.TypeOf(dest)).String()}
+		return false, errUnexpectedSlice{target: reflect.SliceOf(reflect.TypeOf(dest)).String()}
 
 	case reflect.Map:
 		c.logger.Debugf("a map was not expected.")
 
-		return false, ErrUnexpectedMap
+		return false, errUnexpectedMap
 
 	default:
 		applied, err = q.scanCAS(rv.Interface())
@@ -193,7 +193,7 @@ func (c *Client) NewBatch(name string, batchType int) error {
 
 		return nil
 	default:
-		return ErrUnsupportedBatchType
+		return errUnsupportedBatchType
 	}
 }
 

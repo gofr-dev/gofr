@@ -25,7 +25,7 @@ func Test_BatchQuery(t *testing.T) {
 		}, nil},
 		{"batch is not initialized", func() {
 			client.cassandra.batches = nil
-		}, ErrBatchNotInitialised},
+		}, errBatchNotInitialised},
 	}
 
 	for i, tc := range testCases {
@@ -53,7 +53,7 @@ func Test_ExecuteBatch(t *testing.T) {
 		}, errMock},
 		{"batch not initialized", func() {
 			client.cassandra.batches = nil
-		}, ErrBatchNotInitialised},
+		}, errBatchNotInitialised},
 	}
 
 	for i, tc := range testCases {
@@ -123,7 +123,7 @@ func Test_ExecuteBatchCAS(t *testing.T) {
 		}, &mockStructSlice, assert.AnError},
 		{"failure case: batch not initialized", &mockStructSlice, func() {
 			client.cassandra.batches = nil
-		}, &mockStructSlice, ErrBatchNotInitialised},
+		}, &mockStructSlice, errBatchNotInitialised},
 	}
 
 	for i, tc := range testCases {
