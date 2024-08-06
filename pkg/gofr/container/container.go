@@ -10,7 +10,6 @@ import (
 	_ "github.com/go-sql-driver/mysql" // This is required to be blank import
 
 	"gofr.dev/pkg/gofr/config"
-	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/datasource/file"
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 	"gofr.dev/pkg/gofr/datasource/pubsub/google"
@@ -48,7 +47,7 @@ type Container struct {
 
 	KVStore KVStore
 
-	File datasource.FileSystem
+	File file.FileSystem
 }
 
 func NewContainer(conf config.Config) *Container {
