@@ -30,8 +30,7 @@ func NewMockLogger(level Level) Logger {
 }
 
 func (m *MockLogger) Debug(args ...interface{}) {
-	pattern := "%v"
-	m.logf(DEBUG, pattern, args...)
+	m.log(DEBUG, args...)
 }
 
 func (m *MockLogger) Logf(pattern string, args ...interface{}) {
@@ -49,6 +48,17 @@ func (m *MockLogger) logf(level Level, format string, args ...interface{}) {
 	}
 
 	message := fmt.Sprintf(format, args...)
+
+	fmt.Fprintf(out, "%v\n", message)
+}
+
+func (m *MockLogger) log(level Level, args ...interface{}) {
+	out := m.out
+	if level == ERROR {
+		out = m.errOut
+	}
+
+	message := fmt.Sprint(args...)
 
 	fmt.Fprintf(out, "%v\n", message)
 }
