@@ -31,8 +31,8 @@ func TestGRPC_ServerRun(t *testing.T) {
 		port       int
 		expLog     string
 	}{
-		{"net.Listen() error", nil, 99999, "error in starting gRPC server"},
-		{"server.Serve() error", new(grpc.Server), 10000, "error in starting gRPC server"},
+		{"net.Listen() error", nil, 99999, "error in starting GRPC server"},
+		{"server.Serve() error", new(grpc.Server), 10000, "error in starting GRPC server"},
 	}
 
 	for i, tc := range testCases {
@@ -112,7 +112,7 @@ func Test_injectContainer_Fails(t *testing.T) {
 	srv1 := &fail{}
 	err := injectContainer(srv1, c)
 
-	assert.ErrorIs(t, err, errNonAddressable)
+	require.ErrorIs(t, err, errNonAddressable)
 	require.Nil(t, srv1.c1)
 
 	// Case: server is passed as unadressable(non-pointer)
@@ -121,7 +121,7 @@ func Test_injectContainer_Fails(t *testing.T) {
 		cont, _ := container.NewMockContainer(t)
 		err = injectContainer(srv3, cont)
 
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 	})
 
 	assert.Contains(t, out, "cannot inject container into non-addressable implementation of `fail`, consider using pointer")
@@ -138,7 +138,7 @@ func Test_injectContainer(t *testing.T) {
 	srv1 := &success1{}
 	err := injectContainer(srv1, c)
 
-	require.Nil(t, err)
+	require.NoError(t, err)
 	require.NotNil(t, srv1.Container)
 
 	// pointer type container
@@ -149,7 +149,7 @@ func Test_injectContainer(t *testing.T) {
 	srv2 := &success2{}
 	err = injectContainer(srv2, c)
 
-	require.Nil(t, err)
+	require.NoError(t, err)
 	require.NotNil(t, srv2.C)
 
 	// non pointer type container
@@ -160,6 +160,6 @@ func Test_injectContainer(t *testing.T) {
 	srv3 := &success3{}
 	err = injectContainer(srv3, c)
 
-	require.Nil(t, err)
+	require.NoError(t, err)
 	require.NotNil(t, srv3.C)
 }
