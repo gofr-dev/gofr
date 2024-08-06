@@ -8,7 +8,7 @@ import (
 )
 
 type Server struct {
-	// conatiner can be emebed into the server struct
+	// container can be embedded into the server struct
 	// to access the datasource and logger functionalities
 	*container.Container
 

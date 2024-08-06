@@ -106,44 +106,60 @@ func Test_injectContainer_Fails(t *testing.T) {
 	// Case: container is an unaddressable or unexported field
 	type fail struct {
 		c1 *container.Container
-		c2 container.Container
 	}
 
+	c, _ := container.NewMockContainer(t)
 	srv1 := &fail{}
-	out := testutil.StderrOutputForFunc(func() {
-		c, _ := container.NewMockContainer(t)
-		injectContainer(srv1, c)
-	})
+	err := injectContainer(srv1, c)
 
-	assert.Contains(t, out, "cannot inject container as it is not addressable or is fail")
+	assert.ErrorIs(t, err, errNonAddressable)
 	require.Nil(t, srv1.c1)
-	require.Empty(t, srv1.c2)
 
 	// Case: server is passed as unadressable(non-pointer)
 	srv3 := fail{}
-	out = testutil.StdoutOutputForFunc(func() {
-		c, _ := container.NewMockContainer(t)
-		injectContainer(srv3, c)
+	out := testutil.StdoutOutputForFunc(func() {
+		cont, _ := container.NewMockContainer(t)
+		err = injectContainer(srv3, cont)
+
+		assert.Nil(t, err)
 	})
 
 	assert.Contains(t, out, "cannot inject container into non-addressable implementation of `fail`, consider using pointer")
 }
 
 func Test_injectContainer(t *testing.T) {
-	type success struct {
-		// embedded container
+	c, _ := container.NewMockContainer(t)
+
+	// embedded container
+	type success1 struct {
 		*container.Container
-		// pointer field
-		C1 *container.Container
-		// non-pointer field
-		C2 container.Container
 	}
 
-	c, _ := container.NewMockContainer(t)
-	srv := &success{}
-	injectContainer(srv, c)
+	srv1 := &success1{}
+	err := injectContainer(srv1, c)
 
-	require.NotNil(t, srv.C1)
-	require.NotNil(t, srv.Container)
-	require.NotEmpty(t, srv.C2)
+	require.Nil(t, err)
+	require.NotNil(t, srv1.Container)
+
+	// pointer type container
+	type success2 struct {
+		C *container.Container
+	}
+
+	srv2 := &success2{}
+	err = injectContainer(srv2, c)
+
+	require.Nil(t, err)
+	require.NotNil(t, srv2.C)
+
+	// non pointer type container
+	type success3 struct {
+		C container.Container
+	}
+
+	srv3 := &success3{}
+	err = injectContainer(srv3, c)
+
+	require.Nil(t, err)
+	require.NotNil(t, srv3.C)
 }

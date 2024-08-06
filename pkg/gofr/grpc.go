@@ -2,6 +2,7 @@ package gofr
 
 import (
 	"context"
+	"errors"
 	"net"
 	"reflect"
 	"strconv"
@@ -42,7 +43,7 @@ func (g *grpcServer) Run(c *container.Container) {
 	}
 
 	if err := g.server.Serve(listener); err != nil {
-		c.Logger.Errorf("error in starting gRPC server at %s: %s", addr, err)
+		c.Logger.Errorf("error in starting GRPC server at %s: %s", addr, err)
 		return
 	}
 }
@@ -59,23 +60,35 @@ func (g *grpcServer) Shutdown(ctx context.Context) error {
 	})
 }
 
+var (
+	errNonAddressable = errors.New("cannot inject container as it is not addressable or is fail")
+)
+
 // RegisterService adds a gRPC service to the GoFr application.
-func (a *App) RegisterService(desc *grpc.ServiceDesc, impl interface{}) {
+func (a *App) RegisterService(desc *grpc.ServiceDesc, impl any) {
 	a.container.Logger.Infof("registering GRPC Server: %s", desc.ServiceName)
 	a.grpcServer.server.RegisterService(desc, impl)
 
-	injectContainer(impl, a.container)
+	err := injectContainer(impl, a.container)
+	if err != nil {
+		return
+	}
 
 	a.grpcRegistered = true
 }
 
-func injectContainer(impl any, c *container.Container) {
+func injectContainer(impl any, c *container.Container) error {
 	val := reflect.ValueOf(impl)
 
+	// Note: returning nil for the cases where user does not want to inject the container altogether and
+	// not to break any existing implementation for the users that are using GRPC server. If users are
+	// expecting the container to be injected and are passing non-addressable server struct, we have the
+	// DEBUG log for the same.
 	if val.Kind() != reflect.Pointer {
 		c.Logger.Debugf("cannot inject container into non-addressable implementation of `%s`, consider using pointer",
 			val.Type().Name())
-		return
+
+		return nil
 	}
 
 	val = val.Elem()
@@ -87,20 +100,28 @@ func injectContainer(impl any, c *container.Container) {
 
 		if f.Type == reflect.TypeOf(c) {
 			if !v.CanSet() {
-				c.Logger.Errorf("cannot inject container as it is not addressable or is fail")
-				continue
+				c.Logger.Error(errNonAddressable)
+				return errNonAddressable
 			}
 
 			v.Set(reflect.ValueOf(c))
+
+			// early return expecting only one container field necessary for one GRPC implementation
+			return nil
 		}
 
 		if f.Type == reflect.TypeOf(*c) {
 			if !v.CanSet() {
-				c.Logger.Errorf("cannot inject container as it is not addressable or is fail")
-				continue
+				c.Logger.Error(errNonAddressable)
+				return errNonAddressable
 			}
 
 			v.Set(reflect.ValueOf(*c))
+
+			// early return expecting only one container field necessary for one GRPC implementation
+			return nil
 		}
 	}
+
+	return nil
 }
