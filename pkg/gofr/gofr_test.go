@@ -350,6 +350,7 @@ func Test_initTracer(t *testing.T) {
 		config             config.Config
 		expectedLogMessage string
 	}{
+		{"tracing disabled", config.NewMockConfig(nil), "tracing is disabled"},
 		{"zipkin exporter", mockConfig1, "Exporting traces to zipkin at http://localhost:2005/api/v2/spans"},
 		{"zipkin exporter with authkey", mockConfig2, "Exporting traces to zipkin at http://localhost:2005/api/v2/spans"},
 		{"jaeger exporter", mockConfig3, "Exporting traces to jaeger at localhost:4317"},
