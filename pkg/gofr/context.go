@@ -3,6 +3,7 @@ package gofr
 import (
 	"context"
 	"encoding/json"
+
 	"github.com/gorilla/websocket"
 
 	"go.opentelemetry.io/otel"
@@ -64,8 +65,10 @@ func (c *Context) WriteMessageToSocket(data interface{}) error {
 	// Retrieve connection from context based on connectionID
 	conn := c.GetConnectionFromContext(c)
 
-	var message []byte
-	var err error
+	var (
+		message []byte
+		err     error
+	)
 
 	switch v := data.(type) {
 	case string:
