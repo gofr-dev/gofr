@@ -215,7 +215,7 @@ func (c *Client) postProcess(ql *QueryLog, startTime time.Time) {
 
 	ql.Duration = duration
 
-	c.logger.Debug("%v", ql)
+	c.logger.Debug(ql)
 
 	c.metrics.RecordHistogram(context.Background(), "app_mongo_stats", float64(duration), "hostname", c.uri,
 		"database", c.database, "type", ql.Query)
