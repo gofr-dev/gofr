@@ -92,6 +92,11 @@ func WSHandler(ctx *gofr.Context) (interface{}, error) {
 
 	ctx.Logger.Infof("Received message: %s", message)
 
+	err = ctx.WriteMessageToSocket("this is new message")
+	if err != nil {
+		return nil, err
+	}
+
 	return message, nil
 }
 ```

@@ -15,8 +15,6 @@ func main() {
 func WSHandler(ctx *gofr.Context) (interface{}, error) {
 	var message string
 
-	ctx.WriteMessageToSocket("Hello! GoFr")
-
 	err := ctx.Bind(&message)
 	if err != nil {
 		ctx.Logger.Errorf("Error binding message: %v", err)
@@ -24,6 +22,11 @@ func WSHandler(ctx *gofr.Context) (interface{}, error) {
 	}
 
 	ctx.Logger.Infof("Received message: %s", message)
+
+	err = ctx.WriteMessageToSocket("Hello! GoFr")
+	if err != nil {
+		return nil, err
+	}
 
 	return message, nil
 }
