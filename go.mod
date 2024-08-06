@@ -3,7 +3,7 @@ module gofr.dev
 go 1.22
 
 require (
-	cloud.google.com/go/pubsub v1.40.0
+	cloud.google.com/go/pubsub v1.41.0
 	github.com/DATA-DOG/go-sqlmock v1.5.2
 	github.com/XSAM/otelsql v0.32.0
 	github.com/alicebob/miniredis/v2 v2.33.0
@@ -36,7 +36,7 @@ require (
 	go.opentelemetry.io/otel/trace v1.28.0
 	go.uber.org/mock v0.4.0
 	golang.org/x/oauth2 v0.22.0
-	golang.org/x/sync v0.7.0
+	golang.org/x/sync v0.8.0
 	golang.org/x/term v0.22.0
 	golang.org/x/text v0.16.0
 	google.golang.org/api v0.190.0
