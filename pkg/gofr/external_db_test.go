@@ -22,9 +22,7 @@ func TestApp_AddKVStore(t *testing.T) {
 		mock.EXPECT().Connect()
 
 		app.AddKVStore(mock)
-
 	})
-
 }
 
 func TestApp_AddMongo(t *testing.T) {
@@ -41,9 +39,7 @@ func TestApp_AddMongo(t *testing.T) {
 		mock.EXPECT().Connect()
 
 		app.AddMongo(mock)
-
 	})
-
 }
 
 func TestApp_AddCassandra(t *testing.T) {
@@ -60,9 +56,7 @@ func TestApp_AddCassandra(t *testing.T) {
 		mock.EXPECT().Connect()
 
 		app.AddCassandra(mock)
-
 	})
-
 }
 
 func TestApp_AddClickhouse(t *testing.T) {
@@ -79,7 +73,6 @@ func TestApp_AddClickhouse(t *testing.T) {
 		mock.EXPECT().Connect()
 
 		app.AddClickhouse(mock)
-
 	})
 }
 
