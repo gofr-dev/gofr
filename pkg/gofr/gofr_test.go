@@ -326,17 +326,16 @@ func Test_EnableBasicAuth(t *testing.T) {
 			"user1:password1",
 			http.StatusOK,
 		},
-		// Note: These below test are not working because of a small bug in gofr.go file line No. 513
-		//{"Odd number of arguments & request with user & password",
-		//	[]string{"user1", "password1", "user2"},
-		//	"user1:password1",
-		//	http.StatusOK,
-		//},
-		//{"Odd number of arguments & request with only user",
-		//	[]string{"user1", "password1", "user2"},
-		//	"user2",
-		//	http.StatusUnauthorized,
-		//},
+		{"Odd number of arguments with no authorization header passed",
+			[]string{"user1", "password1", "user2"},
+			"",
+			http.StatusOK,
+		},
+		{"Odd number of arguments with wrong authorization header passed",
+			[]string{"user1", "password1", "user2"},
+			"user1:password2",
+			http.StatusOK,
+		},
 	}
 
 	for _, tt := range tests {
@@ -381,8 +380,6 @@ func Test_EnableBasicAuth(t *testing.T) {
 		})
 	}
 }
-
-func Test_EnableBasicAuthWithValidator(t *testing.T) {}
 
 func Test_AddRESTHandlers(t *testing.T) {
 	app := New()
