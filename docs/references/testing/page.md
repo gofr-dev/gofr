@@ -103,13 +103,13 @@ func TestAdd(t *testing.T) {
 
 	tests := []struct {
 		name        string
-		isBindError bool
+		requestBody string
 		mockExpect  func()
 		expectedRes interface{}
 	}{
 		{
-			name: "Error while Binding",
-			isBindError: true,
+			name:        "Error while Binding",
+			requestBody: `title":"Book Title","isbn":12345}`,
 			mockExpect: func() {
 			},
 			expectedRes: res{
@@ -117,7 +117,8 @@ func TestAdd(t *testing.T) {
 				gofrHttp.ErrorInvalidParam{Params: []string{"body"}}},
 		},
 		{
-			name: "Successful Insertion",
+			name:        "Successful Insertion",
+			requestBody: `{"title":"Book Title","isbn":12345}`,
 			mockExpect: func() {
 				mock.SQL.
 					EXPECT().
@@ -130,7 +131,8 @@ func TestAdd(t *testing.T) {
 			},
 		},
 		{
-			name: "Error on Insertion",
+			name:        "Error on Insertion",
+			requestBody: `{"title":"Book Title","isbn":12345}`,
 			mockExpect: func() {
 				mock.SQL.
 					EXPECT().
@@ -142,7 +144,8 @@ func TestAdd(t *testing.T) {
 				sql.ErrConnDone},
 		},
 		{
-			name: "Error while fetching LastInsertId",
+			name:        "Error while fetching LastInsertId",
+			requestBody: `{"title":"Book Title","isbn":12345}`,
 			mockExpect: func() {
 				mock.SQL.
 					EXPECT().
@@ -161,19 +164,11 @@ func TestAdd(t *testing.T) {
 
 			var req *http.Request
 
-			if tt.isBindError {
-				req, _ = http.NewRequest(
-					http.MethodPost,
-					"/book",
-					bytes.NewBuffer([]byte(`title":"Book Title","isbn":12345}`)),
-				)
-			} else {
-				req, _ = http.NewRequest(
-					http.MethodPost,
-					"/book",
-					bytes.NewBuffer([]byte(`{"title":"Book Title","isbn":12345}`)),
-				)
-			}
+			req, _ = http.NewRequest(
+				http.MethodPost,
+				"/book",
+				bytes.NewBuffer([]byte(tt.requestBody)),
+			)
 
 			req.Header.Set("Content-Type", "application/json")
 
