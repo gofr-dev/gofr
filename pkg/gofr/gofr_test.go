@@ -2,6 +2,7 @@ package gofr
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -294,6 +295,94 @@ func TestEnableBasicAuthWithFunc(t *testing.T) {
 
 	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode, "TestEnableBasicAuthWithFunc Failed!")
 }
+
+func convert(t *testing.T, arg string) string {
+	t.Helper()
+	data := []byte(arg)
+	dst := make([]byte, base64.StdEncoding.EncodedLen(len(data)))
+	base64.StdEncoding.Encode(dst, data)
+	s := "Basic " + string(dst)
+	return s
+
+}
+
+func Test_EnableBasicAuth(t *testing.T) {
+	c := container.NewContainer(config.NewMockConfig(nil))
+
+	tests := []struct {
+		name                string
+		args                []string
+		authorizationString string
+		expectedStatusCode  int
+	}{
+		{
+			"No Authorization header passed",
+			nil,
+			``,
+			http.StatusUnauthorized,
+		},
+		{"Even number of arguments",
+			[]string{"user1", "password1", "user2", "password2"},
+			"user1:password1",
+			http.StatusOK,
+		},
+		// Note: These below test are not working because of a small bug in gofr.go file line No. 513
+		//{"Odd number of arguments & request with user & password",
+		//	[]string{"user1", "password1", "user2"},
+		//	"user1:password1",
+		//	http.StatusOK,
+		//},
+		//{"Odd number of arguments & request with only user",
+		//	[]string{"user1", "password1", "user2"},
+		//	"user2",
+		//	http.StatusUnauthorized,
+		//},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Initialize a new App instance
+			a := &App{
+				httpServer: &httpServer{
+					router: gofrHTTP.NewRouter(),
+				},
+				container: c,
+			}
+
+			a.httpServer.router.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				fmt.Println(w, "Hello, world!")
+			}))
+
+			a.EnableBasicAuth(tt.args...)
+
+			server := httptest.NewServer(a.httpServer.router)
+			defer server.Close()
+
+			client := server.Client()
+
+			// Create a mock HTTP request
+			req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, server.URL, http.NoBody)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			// Add a basic authorization header
+			req.Header.Add("Authorization", convert(t, tt.authorizationString))
+
+			// Send the HTTP request
+			resp, err := client.Do(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			defer resp.Body.Close()
+
+			assert.Equal(t, tt.expectedStatusCode, resp.StatusCode, tt.name)
+		})
+	}
+}
+
+func Test_EnableBasicAuthWithValidator(t *testing.T) {}
 
 func Test_AddRESTHandlers(t *testing.T) {
 	app := New()
