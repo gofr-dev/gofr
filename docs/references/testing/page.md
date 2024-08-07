@@ -73,6 +73,7 @@ import (
 	"database/sql"
 	"errors"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
@@ -84,7 +85,7 @@ import (
 )
 
 func TestAdd(t *testing.T) {
-	type res struct {
+	type gofrResponse struct {
 		ISBN interface{}
 		err  error
 	}
@@ -93,26 +94,26 @@ func TestAdd(t *testing.T) {
 	// Redis, SQL, ClickHouse, Cassandra, MongoDB, and KVStore.
 	// These mock can be used to define database expectations in unit tests,
 	// similar to the SQL example demonstrated here.
-	c, mock := container.NewMockContainer(t)
+	mockContainer, mock := container.NewMockContainer(t)
 
 	ctx := &gofr.Context{
 		Context:   context.Background(),
 		Request:   nil,
-		Container: c,
+		Container: mockContainer,
 	}
 
 	tests := []struct {
-		name        string
-		requestBody string
-		mockExpect  func()
-		expectedRes interface{}
+		name             string
+		requestBody      string
+		mockExpect       func()
+		expectedResponse interface{}
 	}{
 		{
 			name:        "Error while Binding",
 			requestBody: `title":"Book Title","isbn":12345}`,
 			mockExpect: func() {
 			},
-			expectedRes: res{
+			expectedResponse: gofrResponse{
 				nil,
 				gofrHttp.ErrorInvalidParam{Params: []string{"body"}}},
 		},
@@ -125,7 +126,7 @@ func TestAdd(t *testing.T) {
 					ExecContext(ctx, `INSERT INTO books (title, isbn) VALUES (?, ?)`, "Book Title", 12345).
 					Return(sqlmock.NewResult(12, 1), nil)
 			},
-			expectedRes: res{
+			expectedResponse: gofrResponse{
 				int64(12),
 				nil,
 			},
@@ -139,7 +140,7 @@ func TestAdd(t *testing.T) {
 					ExecContext(ctx, `INSERT INTO books (title, isbn) VALUES (?, ?)`, "Book Title", 12345).
 					Return(nil, sql.ErrConnDone)
 			},
-			expectedRes: res{
+			expectedResponse: gofrResponse{
 				nil,
 				sql.ErrConnDone},
 		},
@@ -152,19 +153,19 @@ func TestAdd(t *testing.T) {
 					ExecContext(ctx, `INSERT INTO books (title, isbn) VALUES (?, ?)`, "Book Title", 12345).
 					Return(sqlmock.NewErrorResult(errors.New("mocked result error")), nil)
 			},
-			expectedRes: res{
+			expectedResponse: gofrResponse{
 				nil,
 				errors.New("mocked result error")},
 		},
 	}
 
-	for _, tt := range tests {
+	for i, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tt.mockExpect()
 
 			var req *http.Request
 
-			req, _ = http.NewRequest(
+			req = httptest.NewRequest(
 				http.MethodPost,
 				"/book",
 				bytes.NewBuffer([]byte(tt.requestBody)),
@@ -178,9 +179,9 @@ func TestAdd(t *testing.T) {
 
 			val, err := Add(ctx)
 
-			response := res{val, err}
+			response := gofrResponse{val, err}
 
-			assert.Equal(t, tt.expectedRes, response)
+			assert.Equal(t, tt.expectedResponse, response, "TEST[%d], Failed.\n%s", i, tt.name)
 		})
 	}
 }
