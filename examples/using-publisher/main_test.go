@@ -13,7 +13,7 @@ import (
 func TestExamplePublisher(t *testing.T) {
 	const host = "http://localhost:8100"
 	go main()
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(200 * time.Millisecond)
 
 	testCases := []struct {
 		desc               string
@@ -67,7 +67,7 @@ func TestExamplePublisherError(t *testing.T) {
 
 	const host = "http://localhost:8200"
 	go main()
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(200 * time.Millisecond)
 
 	testCases := []struct {
 		desc               string
