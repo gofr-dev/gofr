@@ -3,6 +3,7 @@ package http
 import (
 	"encoding/json"
 	"net/http"
+	"reflect"
 
 	resTypes "gofr.dev/pkg/gofr/http/response"
 )
@@ -35,9 +36,11 @@ func (r Responder) Respond(data interface{}, err error) {
 
 		return
 	default:
-		resp = response{
-			Data:  v,
-			Error: errorObj,
+		resp = response{Data: data, Error: errorObj}
+
+		// handling where an interface contains a nullable type with a nil value.
+		if isNil(data) {
+			resp = response{Error: errorObj}
 		}
 	}
 
@@ -85,4 +88,17 @@ type response struct {
 
 type statusCodeResponder interface {
 	StatusCode() int
+}
+
+// isNil checks if the given interface{} value is nil.
+// It returns true if the value is nil or if it is a pointer that points to nil.
+// This function is useful for determining whether a value, including interface or pointer types, is effectively nil.
+func isNil(i any) bool {
+	if i == nil {
+		return true
+	}
+
+	v := reflect.ValueOf(i)
+
+	return v.Kind() == reflect.Ptr && v.IsNil()
 }
