@@ -24,9 +24,8 @@ func TestRemoteLogger_UpdateLevel(t *testing.T) {
 	}))
 
 	rl := remoteLogger{
-		remoteURL: mockServer.URL,
-		// TODO: use a time.Duration for levelFetchInterval
-		levelFetchInterval: 1, // 1 second is the minimum value
+		remoteURL:          mockServer.URL,
+		levelFetchInterval: 1,
 		currentLevel:       2,
 		Logger:             logging.NewMockLogger(logging.INFO),
 	}

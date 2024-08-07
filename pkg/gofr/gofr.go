@@ -339,10 +339,15 @@ func (a *App) PATCH(pattern string, handler Handler) {
 func (a *App) add(method, pattern string, h Handler) {
 	a.httpRegistered = true
 
+	reqTimeout, err := strconv.Atoi(a.Config.Get("REQUEST_TIMEOUT"))
+	if err != nil {
+		a.container.Error("invalid value of config REQUEST_TIMEOUT. setting default value to 5 seconds.")
+	}
+
 	a.httpServer.router.Add(method, pattern, handler{
 		function:       h,
 		container:      a.container,
-		requestTimeout: a.Config.Get("REQUEST_TIMEOUT"),
+		requestTimeout: time.Duration(reqTimeout),
 	})
 }
 

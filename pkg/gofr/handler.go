@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"os"
 	"runtime/debug"
-	"strconv"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -37,7 +36,7 @@ for now. In the future, this can be considered as well if we are writing our own
 type handler struct {
 	function       Handler
 	container      *container.Container
-	requestTimeout string
+	requestTimeout time.Duration
 }
 
 func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -46,10 +45,8 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if websocket.IsWebSocketUpgrade(r) {
 		// If the request is a WebSocket upgrade, do not apply the timeout
 		c.Context = r.Context()
-	} else if h.requestTimeout != "" {
-		reqTimeout := h.setContextTimeout(h.requestTimeout)
-
-		ctx, cancel := context.WithTimeout(r.Context(), time.Duration(reqTimeout)*time.Second)
+	} else if h.requestTimeout != 0 {
+		ctx, cancel := context.WithTimeout(r.Context(), h.requestTimeout*time.Second)
 		defer cancel()
 
 		c.Context = ctx
@@ -116,16 +113,6 @@ func faviconHandler(*Context) (interface{}, error) {
 
 func catchAllHandler(*Context) (interface{}, error) {
 	return nil, gofrHTTP.ErrorInvalidRoute{}
-}
-
-// Helper function to parse and validate request timeout.
-func (h handler) setContextTimeout(timeout string) int {
-	reqTimeout, err := strconv.Atoi(timeout)
-	if err != nil || reqTimeout < 0 {
-		h.container.Error("invalid value of config REQUEST_TIMEOUT. setting default value to 5 seconds.")
-	}
-
-	return reqTimeout
 }
 
 func panicRecoveryHandler(re any, log logging.Logger, panicked chan struct{}) {

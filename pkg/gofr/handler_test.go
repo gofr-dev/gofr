@@ -65,8 +65,7 @@ func TestHandler_ServeHTTP_Timeout(t *testing.T) {
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 
-	// TODO: use a time.Duration for requestTimeout
-	h := handler{requestTimeout: "1"} // the minimum value is 1s
+	h := handler{requestTimeout: time.Duration(1)} // the minimum value is 1s
 
 	h.container = &container.Container{Logger: logging.NewLogger(logging.FATAL)}
 	h.function = func(*Context) (interface{}, error) {

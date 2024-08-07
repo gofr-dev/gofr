@@ -30,7 +30,7 @@ func New(level logging.Level, remoteConfigURL, loggerFetchInterval string) loggi
 	l := remoteLogger{
 		remoteURL:          remoteConfigURL,
 		Logger:             logging.NewLogger(level),
-		levelFetchInterval: interval,
+		levelFetchInterval: time.Duration(interval),
 		currentLevel:       level,
 	}
 
@@ -43,7 +43,7 @@ func New(level logging.Level, remoteConfigURL, loggerFetchInterval string) loggi
 
 type remoteLogger struct {
 	remoteURL          string
-	levelFetchInterval int
+	levelFetchInterval time.Duration
 	currentLevel       logging.Level
 	logging.Logger
 }
@@ -51,7 +51,7 @@ type remoteLogger struct {
 // UpdateLogLevel continuously fetches the log level from the remote configuration URL at the specified interval
 // and updates the underlying log level if it has changed.
 func (r *remoteLogger) UpdateLogLevel() {
-	interval := time.Duration(r.levelFetchInterval) * time.Second
+	interval := r.levelFetchInterval * time.Second
 	ticker := time.NewTicker(interval)
 
 	defer ticker.Stop()
