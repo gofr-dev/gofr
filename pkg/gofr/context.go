@@ -3,6 +3,8 @@ package gofr
 import (
 	"context"
 
+	"github.com/gorilla/websocket"
+
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 
@@ -56,6 +58,21 @@ func (c *Context) Trace(name string) trace.Span {
 
 func (c *Context) Bind(i interface{}) error {
 	return c.Request.Bind(i)
+}
+
+// WriteMessageToSocket writes a message to the WebSocket connection associated with the context.
+// The data parameter can be of type string, []byte, or any struct that can be marshaled to JSON.
+// It retrieves the WebSocket connection from the context and sends the message as a TextMessage.
+func (c *Context) WriteMessageToSocket(data any) error {
+	// Retrieve connection from context based on connectionID
+	conn := c.Container.GetConnectionFromContext(c.Context)
+
+	message, err := serializeMessage(data)
+	if err != nil {
+		return err
+	}
+
+	return conn.WriteMessage(websocket.TextMessage, message)
 }
 
 // func (c *Context) reset(w Responder, r Request) {
