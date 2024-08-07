@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-
 	"go.uber.org/mock/gomock"
 
 	"gofr.dev/pkg/gofr/container"
@@ -77,8 +76,8 @@ func TestApp_AddClickhouse(t *testing.T) {
 
 		mock := container.NewMockClickhouseProvider(ctrl)
 
-		mock.EXPECT().UseLogger(gomock.Any())
-		mock.EXPECT().UseMetrics(gomock.Any())
+		mock.EXPECT().UseLogger(app.Logger())
+		mock.EXPECT().UseMetrics(app.Metrics())
 		mock.EXPECT().Connect()
 
 		app.AddClickhouse(mock)
