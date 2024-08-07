@@ -65,7 +65,7 @@ func handleWebSocketConnection(ctx *Context, conn *websocket.Connection, handler
 	}
 }
 
-func serializeMessage(response interface{}) ([]byte, error) {
+func serializeMessage(response any) ([]byte, error) {
 	var (
 		message []byte
 		err     error
