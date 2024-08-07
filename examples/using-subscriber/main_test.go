@@ -56,7 +56,7 @@ func TestExampleSubscriber(t *testing.T) {
 			expectedLog: "Received order",
 		},
 		{
-			desc:        "valid  product",
+			desc:        "valid product",
 			expectedLog: "Received product",
 		},
 	}

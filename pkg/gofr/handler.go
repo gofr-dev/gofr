@@ -46,7 +46,7 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// If the request is a WebSocket upgrade, do not apply the timeout
 		c.Context = r.Context()
 	} else if h.requestTimeout != 0 {
-		ctx, cancel := context.WithTimeout(r.Context(), h.requestTimeout*time.Second)
+		ctx, cancel := context.WithTimeout(r.Context(), h.requestTimeout)
 		defer cancel()
 
 		c.Context = ctx
