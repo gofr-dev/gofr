@@ -2,7 +2,6 @@ package gofr
 
 import (
 	"context"
-	"encoding/json"
 
 	"github.com/gorilla/websocket"
 
@@ -68,21 +67,9 @@ func (c *Context) WriteMessageToSocket(data interface{}) error {
 	// Retrieve connection from context based on connectionID
 	conn := c.Container.GetConnectionFromContext(c.Context)
 
-	var (
-		message []byte
-		err     error
-	)
-
-	switch v := data.(type) {
-	case string:
-		message = []byte(v)
-	case []byte:
-		message = v
-	default:
-		message, err = json.Marshal(v)
-		if err != nil {
-			return err
-		}
+	message, err := serializeMessage(data)
+	if err != nil {
+		return err
 	}
 
 	return conn.WriteMessage(websocket.TextMessage, message)

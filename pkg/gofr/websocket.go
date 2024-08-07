@@ -2,12 +2,16 @@ package gofr
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 
 	gWebsocket "github.com/gorilla/websocket"
 
 	"gofr.dev/pkg/gofr/websocket"
 )
+
+var ErrMarshalingResponse = errors.New("error marshaling response")
 
 func (a *App) OverrideWebsocketUpgrader(wsUpgrader websocket.Upgrader) {
 	a.httpServer.ws.WebSocketUpgrader.Upgrader = wsUpgrader
@@ -48,9 +52,36 @@ func handleWebSocketConnection(ctx *Context, conn *websocket.Connection, handler
 			ctx.Errorf("Error handling message: %v", err)
 		}
 
-		err = conn.WriteMessage(websocket.TextMessage, []byte(fmt.Sprint(response)))
+		message, err := serializeMessage(response)
+		if err != nil {
+			ctx.Errorf("%v", err)
+			continue
+		}
+
+		err = conn.WriteMessage(websocket.TextMessage, message)
 		if err != nil {
 			ctx.Errorf("Error writing message: %v", err)
 		}
 	}
+}
+
+func serializeMessage(response interface{}) ([]byte, error) {
+	var (
+		message []byte
+		err     error
+	)
+
+	switch v := response.(type) {
+	case string:
+		message = []byte(v)
+	case []byte:
+		message = v
+	default:
+		message, err = json.Marshal(v)
+		if err != nil {
+			return nil, fmt.Errorf("%w: %w", ErrMarshalingResponse, err)
+		}
+	}
+
+	return message, nil
 }
