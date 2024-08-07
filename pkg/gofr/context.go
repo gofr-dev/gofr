@@ -66,7 +66,7 @@ func (c *Context) Bind(i interface{}) error {
 // It retrieves the WebSocket connection from the context and sends the message as a TextMessage.
 func (c *Context) WriteMessageToSocket(data interface{}) error {
 	// Retrieve connection from context based on connectionID
-	conn := c.GetConnectionFromContext(c)
+	conn := c.Container.GetConnectionFromContext(c.Context)
 
 	var (
 		message []byte
