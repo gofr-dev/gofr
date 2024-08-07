@@ -2,8 +2,10 @@ package gofr
 
 import (
 	"gofr.dev/pkg/gofr/container"
+	"gofr.dev/pkg/gofr/datasource/file"
 )
 
+// AddMongo sets the Mongo datasource in the app's container.
 func (a *App) AddMongo(db container.MongoProvider) {
 	db.UseLogger(a.Logger())
 	db.UseMetrics(a.Metrics())
@@ -11,6 +13,16 @@ func (a *App) AddMongo(db container.MongoProvider) {
 	db.Connect()
 
 	a.container.Mongo = db
+}
+
+// AddFTP sets the FTP datasource in the app's container.
+func (a *App) AddFTP(fs file.FileSystemProvider) {
+	fs.UseLogger(a.Logger())
+	fs.UseMetrics(a.Metrics())
+
+	fs.Connect()
+
+	a.container.File = fs
 }
 
 // AddClickhouse initializes the clickhouse client.
@@ -25,7 +37,7 @@ func (a *App) AddClickhouse(db container.ClickhouseProvider) {
 }
 
 // UseMongo sets the Mongo datasource in the app's container.
-// Deprecated: Use the NewMongo function AddMongo instead.
+// Deprecated: Use the AddMongo method instead.
 func (a *App) UseMongo(db container.Mongo) {
 	a.container.Mongo = db
 }

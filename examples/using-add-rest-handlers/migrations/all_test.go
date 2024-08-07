@@ -13,7 +13,7 @@ func TestAll(t *testing.T) {
 	allMigrations := All()
 
 	expected := map[int64]migration.Migrate{
-		1708322061: createTableUser(),
+		1721816030: createTableUser(),
 	}
 
 	// Check if the length of the maps match

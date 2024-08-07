@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 )
 
@@ -36,7 +37,7 @@ func Test_ClientSet(t *testing.T) {
 
 	err := cl.Set(context.Background(), "lkey", "lvalue")
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 func Test_ClientGet(t *testing.T) {
@@ -46,7 +47,7 @@ func Test_ClientGet(t *testing.T) {
 
 	val, err := cl.Get(context.Background(), "lkey")
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, "lvalue", val)
 }
 
@@ -64,7 +65,7 @@ func Test_ClientDeleteSuccessError(t *testing.T) {
 
 	err := cl.Delete(context.Background(), "lkey")
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 func Test_ClientHealthCheck(t *testing.T) {
@@ -72,6 +73,6 @@ func Test_ClientHealthCheck(t *testing.T) {
 
 	val, err := cl.HealthCheck(context.Background())
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Contains(t, fmt.Sprint(val), "UP")
 }

@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
@@ -135,7 +136,7 @@ func TestGofr_ServerRun(t *testing.T) {
 		"http://localhost:"+strconv.Itoa(defaultHTTPPort)+"/hello", http.NoBody)
 	resp, err := netClient.Do(re)
 
-	assert.NoError(t, err, "TEST Failed.\n")
+	require.NoError(t, err, "TEST Failed.\n")
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode, "TEST Failed.\n")
 
@@ -311,6 +312,8 @@ func Test_AddRESTHandlers(t *testing.T) {
 	}{
 		{"success case", &user{}, nil},
 		{"invalid object", &invalidObject, errInvalidObject},
+		{"invalid object", user{}, fmt.Errorf("failed to register routes for 'user' struct, %w", errNonPointerObject)},
+		{"invalid object", nil, errObjectIsNil},
 	}
 
 	for i, tc := range tests {
@@ -321,54 +324,40 @@ func Test_AddRESTHandlers(t *testing.T) {
 }
 
 func Test_initTracer(t *testing.T) {
-	mockConfig1 := config.NewMockConfig(map[string]string{
-		"TRACE_EXPORTER": "zipkin",
-		"TRACER_URL":     "http://localhost:2005/api/v2/spans",
-	})
+	createMockConfig := func(traceExporter, url, authKey string) config.Config {
+		return config.NewMockConfig(map[string]string{
+			"TRACE_EXPORTER":  traceExporter,
+			"TRACER_URL":      url,
+			"TRACER_AUTH_KEY": authKey,
+		})
+	}
+	mockConfig1 := createMockConfig("zipkin", "http://localhost:2005/api/v2/spans", "")
 
-	mockConfig2 := config.NewMockConfig(map[string]string{
-		"TRACE_EXPORTER": "jaeger",
-		"TRACER_URL":     "localhost:2005",
-	})
+	mockConfig2 := createMockConfig("zipkin", "http://localhost:2005/api/v2/spans", "valid-token")
 
-	mockConfig3 := config.NewMockConfig(map[string]string{
-		"TRACE_EXPORTER": "gofr",
-	})
+	mockConfig3 := createMockConfig("jaeger", "localhost:4317", "")
 
-	mockConfig4 := config.NewMockConfig(map[string]string{
-		"TRACE_EXPORTER":  "zipkin",
-		"TRACER_URL":      "http://localhost:2005/api/v2/spans",
-		"TRACER_AUTH_KEY": "valid-token",
-	})
+	mockConfig4 := createMockConfig("jaeger", "localhost:4317", "valid-token")
 
-	mockConfig5 := config.NewMockConfig(map[string]string{
-		"TRACE_EXPORTER":  "jaeger",
-		"TRACER_URL":      "localhost:2005",
-		"TRACER_AUTH_KEY": "valid-token",
-	})
+	mockConfig5 := createMockConfig("otlp", "localhost:4317", "")
 
-	mockConfig6 := config.NewMockConfig(map[string]string{
-		"TRACE_EXPORTER": "zipkin",
-		"TRACER_URL":     "https://tracer-service.dev",
-	})
+	mockConfig6 := createMockConfig("otlp", "localhost:4317", "valid-token")
 
-	mockConfig7 := config.NewMockConfig(map[string]string{
-		"TRACE_EXPORTER": "jaeger",
-		"TRACER_URL":     "https://tracer-service.dev",
-	})
+	mockConfig7 := createMockConfig("gofr", "", "")
 
 	tests := []struct {
 		desc               string
 		config             config.Config
 		expectedLogMessage string
 	}{
+		{"tracing disabled", config.NewMockConfig(nil), "tracing is disabled"},
 		{"zipkin exporter", mockConfig1, "Exporting traces to zipkin at http://localhost:2005/api/v2/spans"},
-		{"zipkin exporter with auth", mockConfig4, "Exporting traces to zipkin at http://localhost:2005/api/v2/spans"},
-		{"zipkin exporter with custom tracer url", mockConfig6, "Exporting traces to zipkin at https://tracer-service.dev"},
-		{"jaeger exporter", mockConfig2, "Exporting traces to jaeger at localhost:2005"},
-		{"jaeger exporter with auth", mockConfig5, "Exporting traces to jaeger at localhost:2005"},
-		{"jaeger exporter custom tracer url", mockConfig7, "Exporting traces to jaeger at https://tracer-service.dev"},
-		{"gofr exporter", mockConfig3, "Exporting traces to GoFr at https://tracer.gofr.dev"},
+		{"zipkin exporter with authkey", mockConfig2, "Exporting traces to zipkin at http://localhost:2005/api/v2/spans"},
+		{"jaeger exporter", mockConfig3, "Exporting traces to jaeger at localhost:4317"},
+		{"jaeger exporter with auth", mockConfig4, "Exporting traces to jaeger at localhost:4317"},
+		{"otlp exporter", mockConfig5, "Exporting traces to otlp at localhost:4317"},
+		{"otlp exporter with authKey", mockConfig6, "Exporting traces to otlp at localhost:4317"},
+		{"gofr exporter with default url", mockConfig7, "Exporting traces to GoFr at https://tracer.gofr.dev"},
 	}
 
 	for i, tc := range tests {
@@ -379,32 +368,48 @@ func Test_initTracer(t *testing.T) {
 				Config:    tc.config,
 				container: mockContainer,
 			}
-
 			a.initTracer()
 		})
-
 		assert.Contains(t, logMessage, tc.expectedLogMessage, "TEST[%d], Failed.\n%s", i, tc.desc)
 	}
 }
 
 func Test_initTracer_invalidConfig(t *testing.T) {
-	mockConfig := config.NewMockConfig(map[string]string{
-		"TRACE_EXPORTER": "abc",
-		"TRACER_URL":     "localhost:2005",
-	})
+	createMockConfig := func(traceExporter, url, authKey string) config.Config {
+		return config.NewMockConfig(map[string]string{
+			"TRACE_EXPORTER":  traceExporter,
+			"TRACER_URL":      url,
+			"TRACER_AUTH_KEY": authKey,
+		})
+	}
+	mockConfig1 := createMockConfig("abc", "https://tracer-service.dev", "")
+	mockConfig2 := createMockConfig("", "https://tracer-service.dev", "")
+	mockConfig3 := createMockConfig("otlp", "", "")
 
-	errLogMessage := testutil.StderrOutputForFunc(func() {
-		mockContainer, _ := container.NewMockContainer(t)
+	testErr := []struct {
+		desc               string
+		config             config.Config
+		expectedLogMessage string
+	}{
+		{"unsupported trace_exporter", mockConfig1, "unsupported TRACE_EXPORTER: abc"},
+		{"missing trace_exporter", mockConfig2, "missing TRACE_EXPORTER config, should be provided with TRACER_URL to enable tracing"},
+		{"miss tracer_url ", mockConfig3,
+			"missing TRACER_URL config, should be provided with TRACE_EXPORTER to enable tracing"},
+	}
 
-		a := App{
-			Config:    mockConfig,
-			container: mockContainer,
-		}
+	for i, tc := range testErr {
+		logMessage := testutil.StderrOutputForFunc(func() {
+			mockContainer, _ := container.NewMockContainer(t)
 
-		a.initTracer()
-	})
+			a := App{
+				Config:    tc.config,
+				container: mockContainer,
+			}
+			a.initTracer()
+		})
 
-	assert.Contains(t, errLogMessage, "unsupported trace exporter: abc", "TEST Failed.\n")
+		assert.Contains(t, logMessage, tc.expectedLogMessage, "TEST[%d], Failed.\n%s", i, tc.desc)
+	}
 }
 
 func Test_UseMiddleware(t *testing.T) {
@@ -544,7 +549,7 @@ func Test_SwaggerEndpoints(t *testing.T) {
 		}
 	}()
 
-	assert.NoError(t, err, "Expected error to be nil, got : %v", err)
+	require.NoError(t, err, "Expected error to be nil, got : %v", err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	assert.Equal(t, "text/html; charset=utf-8", resp.Header.Get("Content-Type"))
 }
@@ -662,7 +667,7 @@ func TestStaticHandler(t *testing.T) {
 
 		body := string(bodyBytes)
 
-		assert.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
+		require.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
 		assert.Equal(t, tc.statusCode, resp.StatusCode, "TEST[%d], Failed with Status Body.\n%s", i, tc.desc)
 
 		if tc.expectedBody != "" {
@@ -721,4 +726,23 @@ func createPublicDirectory(t *testing.T, defaultPublicStaticDir string, htmlCont
 	}
 
 	file.Close()
+}
+
+func Test_Shutdown(t *testing.T) {
+	logs := testutil.StdoutOutputForFunc(func() {
+		g := New()
+
+		g.GET("/hello", func(*Context) (interface{}, error) {
+			return helloWorld, nil
+		})
+
+		go g.Run()
+		time.Sleep(10 * time.Millisecond)
+
+		err := g.Shutdown(context.Background())
+
+		require.NoError(t, err, "Test_Shutdown Failed!")
+	})
+
+	assert.Contains(t, logs, "Application shutdown complete", "Test_Shutdown Failed!")
 }

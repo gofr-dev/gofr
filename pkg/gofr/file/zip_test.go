@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 var (
@@ -42,7 +43,7 @@ func TestNewZip(t *testing.T) {
 
 	// Create a new Zip instance from the ZIP content
 	z, err := NewZip(zipContent.Bytes())
-	assert.NoError(t, err, "Error creating Zip instance")
+	require.NoError(t, err, "Error creating Zip instance")
 
 	// Check if the Zip struct contains the expected files
 	expectedFiles := map[string]file{
@@ -58,7 +59,7 @@ func TestNewZipError(t *testing.T) {
 	z, err := NewZip(input)
 
 	assert.Nil(t, z)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Equal(t, zip.ErrFormat, err)
 }
 
@@ -100,7 +101,7 @@ func TestCopyToBuffer(t *testing.T) {
 		mock := &mockReadCloser{Buffer: buffer}
 
 		buf, err := copyToBuffer(mock, uint64(len(testData)))
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, testData, buf.String())
 	})
 
@@ -111,7 +112,7 @@ func TestCopyToBuffer(t *testing.T) {
 		mock := &mockReadCloser{Buffer: buffer}
 
 		_, err := copyToBuffer(mock, maxFileSize+1)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Equal(t, errMaxFileSize, err)
 	})
 
@@ -121,7 +122,7 @@ func TestCopyToBuffer(t *testing.T) {
 		mock := &mockReadCloser{err: errTest}
 
 		_, err := copyToBuffer(mock, 10)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Equal(t, errTest, err)
 	})
 }

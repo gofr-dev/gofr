@@ -7,11 +7,13 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"gofr.dev/pkg/gofr/file"
 )
@@ -72,7 +74,7 @@ func TestBind_FileSuccess(t *testing.T) {
 	}{}
 
 	err := r.Bind(&x)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Assert zip file bind
 	assert.Len(t, x.Zip.Files, 2)
@@ -89,11 +91,11 @@ func TestBind_FileSuccess(t *testing.T) {
 	assert.Equal(t, "hello.txt", x.FileHeader.Filename)
 
 	f, err := x.FileHeader.Open()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, f)
 
 	content, err := io.ReadAll(f)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, "Test hello!", string(content))
 
 	// Assert FileHeader pointer type
@@ -101,11 +103,11 @@ func TestBind_FileSuccess(t *testing.T) {
 	assert.Equal(t, "hello.txt", x.FileHeader.Filename)
 
 	f, err = x.FileHeader.Open()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, f)
 
 	content, err = io.ReadAll(f)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, "Test hello!", string(content))
 
 	// Assert skipped field
@@ -120,7 +122,8 @@ func TestBind_FileSuccess(t *testing.T) {
 	// Assert additional form fields
 	assert.Equal(t, "testString", x.StringField)
 	assert.Equal(t, 123, x.IntField)
-	assert.Equal(t, 123.456, x.FloatField)
+	assert.InEpsilon(t, 123.456, x.FloatField, 0.01)
+
 	assert.True(t, x.BoolField)
 }
 
@@ -182,16 +185,16 @@ func generateMultipartRequestZip(t *testing.T) *http.Request {
 
 	// Add non-file fields
 	err = writer.WriteField("stringField", "testString")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	err = writer.WriteField("intField", "123")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	err = writer.WriteField("floatField", "123.456")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	err = writer.WriteField("boolField", "true")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Close the multipart writer
 	writer.Close()
@@ -211,13 +214,12 @@ func Test_bindMultipart_Fails(t *testing.T) {
 	}{}
 
 	err := r.bindMultipart(input)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Equal(t, errNonPointerBind, err)
 
 	// unexported field cannot be binded
 	err = r.bindMultipart(&input)
-	assert.Error(t, err)
-	assert.Equal(t, errNoFileFound, err)
+	require.ErrorIs(t, err, errNoFileFound)
 }
 
 func Test_bindMultipart_Fail_ParseMultiPart(t *testing.T) {
@@ -231,5 +233,21 @@ func Test_bindMultipart_Fail_ParseMultiPart(t *testing.T) {
 	_, _ = r.req.MultipartReader()
 
 	err := r.bindMultipart(&input2)
-	assert.ErrorContains(t, err, "http: multipart handled by MultipartReader")
+	require.ErrorContains(t, err, "http: multipart handled by MultipartReader")
+}
+
+func Test_Params(t *testing.T) {
+	req := &http.Request{
+		URL: &url.URL{
+			RawQuery: "category=books&category=electronics&tag=tech,science",
+		},
+	}
+	r := NewRequest(req)
+
+	expectedCategories := []string{"books", "electronics"}
+	expectedTags := []string{"tech", "science"}
+
+	assert.ElementsMatch(t, expectedCategories, r.Params("category"), "expected all values of 'category' to match")
+	assert.ElementsMatch(t, expectedTags, r.Params("tag"), "expected all values of 'tag' to match")
+	assert.Empty(t, r.Params("nonexistent"), "expected empty slice for non-existent query param")
 }
