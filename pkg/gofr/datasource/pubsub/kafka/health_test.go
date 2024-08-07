@@ -5,6 +5,7 @@ import (
 
 	"github.com/segmentio/kafka-go"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
 	"gofr.dev/pkg/gofr/datasource"
@@ -124,6 +125,6 @@ func TestKafkaClint_convertStructToMap(t *testing.T) {
 	for _, v := range testCases {
 		err := convertStructToMap(v.input, v.output)
 
-		assert.ErrorContains(t, err, "json: unsupported type: chan int")
+		require.ErrorContains(t, err, "json: unsupported type: chan int")
 	}
 }

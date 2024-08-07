@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
 	"gofr.dev/pkg/gofr/config"
@@ -36,7 +37,7 @@ func Test_newContainerDBInitializationFail(t *testing.T) {
 
 	// container is a pointer, and we need to see if db are not initialized, comparing the container object
 	// will not suffice the purpose of this test
-	assert.Error(t, db.DB.Ping(), "TEST, Failed.\ninvalid db connections")
+	require.Error(t, db.DB.Ping(), "TEST, Failed.\ninvalid db connections")
 	assert.Nil(t, redis.Client, "TEST, Failed.\ninvalid redis connections")
 }
 
@@ -158,19 +159,18 @@ func TestContainer_Close(t *testing.T) {
 
 	mockDB := NewMockDB(controller)
 	mockRedis := NewMockRedis(controller)
+	mockPubSub := &MockPubSub{}
 
 	mockDB.EXPECT().Close().Return(nil)
 	mockRedis.EXPECT().Close().Return(nil)
 
-	configs := map[string]string{
-		"PUBSUB_BACKEND": "MQTT",
-	}
-	c := NewContainer(config.NewMockConfig(configs))
+	c := NewContainer(config.NewMockConfig(nil))
 	c.SQL = mockDB
 	c.Redis = mockRedis
+	c.PubSub = mockPubSub
 
 	assert.NotNil(t, c.PubSub)
 
 	err := c.Close()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }

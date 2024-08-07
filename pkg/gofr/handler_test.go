@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"gofr.dev/pkg/gofr/container"
 	gofrHTTP "gofr.dev/pkg/gofr/http"
@@ -127,7 +128,7 @@ func TestHandler_faviconHandlerError(t *testing.T) {
 
 	data, err := faviconHandler(&c)
 
-	assert.NoError(t, err, "TEST Failed.\n")
+	require.NoError(t, err, "TEST Failed.\n")
 
 	assert.Equal(t, response.File{
 		Content:     d,
@@ -143,7 +144,7 @@ func TestHandler_faviconHandler(t *testing.T) {
 	d, _ := os.ReadFile("static/favicon.ico")
 	data, err := faviconHandler(&c)
 
-	assert.NoError(t, err, "TEST Failed.\n")
+	require.NoError(t, err, "TEST Failed.\n")
 
 	assert.Equal(t, response.File{
 		Content:     d,
@@ -166,7 +167,7 @@ func TestHandler_catchAllHandler(t *testing.T) {
 func TestHandler_livelinessHandler(t *testing.T) {
 	resp, err := liveHandler(&Context{})
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Contains(t, fmt.Sprint(resp), "UP")
 }
 
@@ -189,6 +190,6 @@ func TestHandler_healthHandler(t *testing.T) {
 
 	h, err := healthHandler(ctx)
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, h)
 }
