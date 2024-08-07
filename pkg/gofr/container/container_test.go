@@ -1,8 +1,10 @@
 package container
 
 import (
+	"context"
 	"testing"
 
+	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -13,6 +15,7 @@ import (
 	gofrSql "gofr.dev/pkg/gofr/datasource/sql"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/service"
+	ws "gofr.dev/pkg/gofr/websocket"
 )
 
 func Test_newContainerSuccessWithLogger(t *testing.T) {
@@ -173,4 +176,36 @@ func TestContainer_Close(t *testing.T) {
 
 	err := c.Close()
 	require.NoError(t, err)
+}
+
+func Test_GetConnectionFromContext(t *testing.T) {
+	tests := []struct {
+		name     string
+		ctx      context.Context
+		expected *ws.Connection
+	}{
+		{
+			name:     "no connection in context",
+			ctx:      context.Background(),
+			expected: nil,
+		},
+		{
+			name:     "connection in context",
+			ctx:      context.WithValue(context.Background(), ws.WSConnectionKey, &ws.Connection{Conn: &websocket.Conn{}}),
+			expected: &ws.Connection{Conn: &websocket.Conn{}},
+		},
+		{
+			name:     "wrong type in context",
+			ctx:      context.WithValue(context.Background(), ws.WSConnectionKey, "wrong-type"),
+			expected: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			conn := (&Container{}).GetConnectionFromContext(tt.ctx)
+
+			assert.Equal(t, tt.expected, conn)
+		})
+	}
 }
