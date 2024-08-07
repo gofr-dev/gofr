@@ -340,7 +340,7 @@ func (a *App) add(method, pattern string, h Handler) {
 	a.httpRegistered = true
 
 	reqTimeout, err := strconv.Atoi(a.Config.Get("REQUEST_TIMEOUT"))
-	if err != nil {
+	if err != nil && a.Config.Get("REQUEST_TIMEOUT") != "" {
 		a.container.Error("invalid value of config REQUEST_TIMEOUT. setting default value to 5 seconds.")
 	}
 
