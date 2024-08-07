@@ -81,7 +81,7 @@ func injectContainer(impl any, c *container.Container) error {
 	val := reflect.ValueOf(impl)
 
 	// Note: returning nil for the cases where user does not want to inject the container altogether and
-	// not to break any existing implementation for the users that are using GRPC server. If users are
+	// not to break any existing implementation for the users that are using gRPC server. If users are
 	// expecting the container to be injected and are passing non-addressable server struct, we have the
 	// DEBUG log for the same.
 	if val.Kind() != reflect.Pointer {
@@ -106,7 +106,7 @@ func injectContainer(impl any, c *container.Container) error {
 
 			v.Set(reflect.ValueOf(c))
 
-			// early return expecting only one container field necessary for one GRPC implementation
+			// early return expecting only one container field necessary for one gRPC implementation
 			return nil
 		}
 
@@ -118,7 +118,7 @@ func injectContainer(impl any, c *container.Container) error {
 
 			v.Set(reflect.ValueOf(*c))
 
-			// early return expecting only one container field necessary for one GRPC implementation
+			// early return expecting only one container field necessary for one gRPC implementation
 			return nil
 		}
 	}

@@ -169,7 +169,7 @@ func (a *App) Run() {
 		}(a.httpServer)
 	}
 
-	// Start GRPC Server only if a service is registered
+	// Start gRPC Server only if a service is registered
 	if a.grpcRegistered {
 		wg.Add(1)
 
