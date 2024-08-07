@@ -114,10 +114,10 @@ func TestDynamicLoggerSuccess(t *testing.T) {
 
 	log := testutil.StdoutOutputForFunc(func() {
 		// Create a new remote logger with the mock server URL
-		rl := New(logging.INFO, mockServer.URL, "1") // 1 second is the minimum value
+		rl := New(logging.INFO, mockServer.URL, 100*time.Millisecond) // 1 second is the minimum value
 
 		// Wait for the remote logger to update the log level
-		time.Sleep(1200 * time.Millisecond)
+		time.Sleep(200 * time.Millisecond)
 
 		// Check if the log level has been updated
 		rl.Debug("Debug log after log level change")

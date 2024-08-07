@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"io"
 	"slices"
-	"strconv"
 	"time"
 
 	"gofr.dev/pkg/gofr/logging"
@@ -21,16 +20,11 @@ New creates a new RemoteLogger instance with the provided level, remote configur
 The remote configuration URL is expected to be a JSON endpoint that returns the desired log level for the service.
 The level fetch interval determines how often the logger checks for updates to the remote configuration.
 */
-func New(level logging.Level, remoteConfigURL, loggerFetchInterval string) logging.Logger {
-	interval, err := strconv.Atoi(loggerFetchInterval)
-	if err != nil {
-		interval = 15
-	}
-
+func New(level logging.Level, remoteConfigURL string, loggerFetchInterval time.Duration) logging.Logger {
 	l := remoteLogger{
 		remoteURL:          remoteConfigURL,
 		Logger:             logging.NewLogger(level),
-		levelFetchInterval: time.Duration(interval),
+		levelFetchInterval: loggerFetchInterval,
 		currentLevel:       level,
 	}
 
@@ -51,7 +45,7 @@ type remoteLogger struct {
 // UpdateLogLevel continuously fetches the log level from the remote configuration URL at the specified interval
 // and updates the underlying log level if it has changed.
 func (r *remoteLogger) UpdateLogLevel() {
-	interval := r.levelFetchInterval * time.Second
+	interval := r.levelFetchInterval
 	ticker := time.NewTicker(interval)
 
 	defer ticker.Stop()
