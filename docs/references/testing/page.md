@@ -86,7 +86,7 @@ import (
 
 func TestAdd(t *testing.T) {
 	type gofrResponse struct {
-		ISBN interface{}
+		result interface{}
 		err  error
 	}
 
