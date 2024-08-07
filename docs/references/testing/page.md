@@ -1,4 +1,4 @@
-# Testing REST APIs in Go with GoFr
+# Testing REST APIs with GoFr
 
 Testing REST APIs ensures that your endpoints function correctly under various conditions. This guide demonstrates how to write tests for GoFr-based REST APIs.
 
@@ -71,11 +71,13 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"errors"
 	"net/http"
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/stretchr/testify/assert"
+
 	"gofr.dev/pkg/gofr"
 	"gofr.dev/pkg/gofr/container"
 	gofrHttp "gofr.dev/pkg/gofr/http"
@@ -89,7 +91,7 @@ func TestAdd(t *testing.T) {
 
 	// NewMockContainer provides mock implementations for various databases including:
 	// Redis, SQL, ClickHouse, Cassandra, MongoDB, and KVStore.
-	// These mocks can be used to define database expectations in unit tests,
+	// These mock can be used to define database expectations in unit tests,
 	// similar to the SQL example demonstrated here.
 	c, mock := container.NewMockContainer(t)
 
@@ -101,9 +103,19 @@ func TestAdd(t *testing.T) {
 
 	tests := []struct {
 		name        string
+		isBindError bool
 		mockExpect  func()
 		expectedRes interface{}
 	}{
+		{
+			name: "Error while Binding",
+			isBindError: true,
+			mockExpect: func() {
+			},
+			expectedRes: res{
+				nil,
+				gofrHttp.ErrorInvalidParam{Params: []string{"body"}}},
+		},
 		{
 			name: "Successful Insertion",
 			mockExpect: func() {
@@ -129,17 +141,39 @@ func TestAdd(t *testing.T) {
 				nil,
 				sql.ErrConnDone},
 		},
+		{
+			name: "Error while fetching LastInsertId",
+			mockExpect: func() {
+				mock.SQL.
+					EXPECT().
+					ExecContext(ctx, `INSERT INTO books (title, isbn) VALUES (?, ?)`, "Book Title", 12345).
+					Return(sqlmock.NewErrorResult(errors.New("mocked result error")), nil)
+			},
+			expectedRes: res{
+				nil,
+				errors.New("mocked result error")},
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tt.mockExpect()
 
-			req, _ := http.NewRequest(
-				http.MethodPost,
-				"/book",
-				bytes.NewBuffer([]byte(`{"title":"Book Title","isbn":12345}`)),
-			)
+			var req *http.Request
+
+			if tt.isBindError {
+				req, _ = http.NewRequest(
+					http.MethodPost,
+					"/book",
+					bytes.NewBuffer([]byte(`title":"Book Title","isbn":12345}`)),
+				)
+			} else {
+				req, _ = http.NewRequest(
+					http.MethodPost,
+					"/book",
+					bytes.NewBuffer([]byte(`{"title":"Book Title","isbn":12345}`)),
+				)
+			}
 
 			req.Header.Set("Content-Type", "application/json")
 
@@ -155,7 +189,6 @@ func TestAdd(t *testing.T) {
 		})
 	}
 }
-
 ```
 ### Summary
 
@@ -164,4 +197,3 @@ func TestAdd(t *testing.T) {
 - **Run and Validate**: Ensure that your tests check for expected results, and handle errors correctly.
 
 This approach guarantees that your database interactions are tested independently, allowing you to simulate different responses and errors hassle-free.
-
