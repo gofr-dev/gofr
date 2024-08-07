@@ -25,14 +25,14 @@ func TestRemoteLogger_UpdateLevel(t *testing.T) {
 
 	rl := remoteLogger{
 		remoteURL:          mockServer.URL,
-		levelFetchInterval: 1,
+		levelFetchInterval: 100 * time.Millisecond,
 		currentLevel:       2,
 		Logger:             logging.NewMockLogger(logging.INFO),
 	}
 
 	go rl.UpdateLogLevel()
 
-	time.Sleep(1200 * time.Millisecond)
+	time.Sleep(200 * time.Millisecond)
 
 	assert.Equal(t, logging.DEBUG, rl.currentLevel)
 }
@@ -114,7 +114,7 @@ func TestDynamicLoggerSuccess(t *testing.T) {
 
 	log := testutil.StdoutOutputForFunc(func() {
 		// Create a new remote logger with the mock server URL
-		rl := New(logging.INFO, mockServer.URL, 100*time.Millisecond) // 1 second is the minimum value
+		rl := New(logging.INFO, mockServer.URL, 100*time.Millisecond)
 
 		// Wait for the remote logger to update the log level
 		time.Sleep(200 * time.Millisecond)
