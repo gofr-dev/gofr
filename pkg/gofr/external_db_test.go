@@ -3,7 +3,10 @@ package gofr
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"go.uber.org/mock/gomock"
+
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/datasource/file"
 )
@@ -22,6 +25,8 @@ func TestApp_AddKVStore(t *testing.T) {
 		mock.EXPECT().Connect()
 
 		app.AddKVStore(mock)
+
+		assert.Equal(t, mock, app.container.KVStore)
 	})
 }
 
@@ -39,6 +44,8 @@ func TestApp_AddMongo(t *testing.T) {
 		mock.EXPECT().Connect()
 
 		app.AddMongo(mock)
+
+		assert.Equal(t, mock, app.container.Mongo)
 	})
 }
 
@@ -56,6 +63,8 @@ func TestApp_AddCassandra(t *testing.T) {
 		mock.EXPECT().Connect()
 
 		app.AddCassandra(mock)
+
+		assert.Equal(t, mock, app.container.Cassandra)
 	})
 }
 
@@ -73,6 +82,8 @@ func TestApp_AddClickhouse(t *testing.T) {
 		mock.EXPECT().Connect()
 
 		app.AddClickhouse(mock)
+
+		assert.Equal(t, mock, app.container.Clickhouse)
 	})
 }
 
@@ -90,5 +101,7 @@ func TestApp_AddFTP(t *testing.T) {
 		mock.EXPECT().Connect()
 
 		app.AddFTP(mock)
+
+		assert.Equal(t, mock, app.container.File)
 	})
 }
