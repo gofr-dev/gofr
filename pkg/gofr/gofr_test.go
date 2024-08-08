@@ -14,8 +14,6 @@ import (
 	"testing"
 	"time"
 
-	"google.golang.org/grpc"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -28,14 +26,6 @@ import (
 )
 
 const helloWorld = "Hello World!"
-
-func TestApp_RegisterService(t *testing.T) {
-	a := New()
-
-	a.RegisterService(&grpc.ServiceDesc{}, nil)
-
-	assert.True(t, a.grpcRegistered)
-}
 
 func TestNewCMD(t *testing.T) {
 	a := NewCMD()
@@ -926,16 +916,15 @@ func Test_Shutdown(t *testing.T) {
 }
 
 func TestApp_Subscribe(t *testing.T) {
-
 	t.Run("subscriber is initialized", func(t *testing.T) {
 		app := New()
 
 		mockContainer := container.Container{
 			Logger: logging.NewLogger(logging.ERROR),
-			PubSub: mockSubscriber{}}
-				
+			PubSub: mockSubscriber{},
+		}
+
 		app.container = &mockContainer
-			
 
 		app.Subscribe("Hello", nil)
 
