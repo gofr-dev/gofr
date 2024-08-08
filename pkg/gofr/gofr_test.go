@@ -5,7 +5,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"google.golang.org/grpc"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -14,6 +13,8 @@ import (
 	"strconv"
 	"testing"
 	"time"
+
+	"google.golang.org/grpc"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -305,7 +306,7 @@ func TestEnableBasicAuthWithFunc(t *testing.T) {
 	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode, "TestEnableBasicAuthWithFunc Failed!")
 }
 
-func encode_BasicAuthorization(t *testing.T, arg string) string {
+func encodeBasicAuthorization(t *testing.T, arg string) string {
 	t.Helper()
 
 	data := []byte(arg)
@@ -354,7 +355,7 @@ func Test_EnableBasicAuth(t *testing.T) {
 		// },
 	}
 
-	for _, tt := range tests {
+	for i, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Initialize a new App instance
 			a := &App{
@@ -382,7 +383,7 @@ func Test_EnableBasicAuth(t *testing.T) {
 			}
 
 			// Add a basic authorization header
-			req.Header.Add("Authorization", encode_BasicAuthorization(t, tt.authorizationString))
+			req.Header.Add("Authorization", encodeBasicAuthorization(t, tt.authorizationString))
 
 			// Send the HTTP request
 			resp, err := client.Do(req)
@@ -392,7 +393,7 @@ func Test_EnableBasicAuth(t *testing.T) {
 
 			defer resp.Body.Close()
 
-			assert.Equal(t, tt.expectedStatusCode, resp.StatusCode, tt.name)
+			assert.Equal(t, tt.expectedStatusCode, resp.StatusCode, "TEST[%d], Failed.\n%s", i, tt.name)
 		})
 	}
 }
@@ -430,7 +431,7 @@ func Test_EnableBasicAuthWithValidator(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
+	for i, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Initialize a new App instance
 			a := &App{
@@ -463,7 +464,7 @@ func Test_EnableBasicAuthWithValidator(t *testing.T) {
 			}
 
 			// Add a basic authorization header
-			req.Header.Add("Authorization", encode_BasicAuthorization(t, tt.authorizationString))
+			req.Header.Add("Authorization", encodeBasicAuthorization(t, tt.authorizationString))
 
 			// Send the HTTP request
 			resp, err := client.Do(req)
@@ -473,7 +474,7 @@ func Test_EnableBasicAuthWithValidator(t *testing.T) {
 
 			defer resp.Body.Close()
 
-			assert.Equal(t, tt.expectedStatusCode, resp.StatusCode, tt.name)
+			assert.Equal(t, tt.expectedStatusCode, resp.StatusCode, "TEST[%d], Failed.\n%s", i, tt.name)
 		})
 	}
 }
@@ -932,24 +933,26 @@ func Test_Shutdown(t *testing.T) {
 
 func TestApp_Subscriber(t *testing.T) {
 	test := []struct {
-		name          string
-		is_registered bool
-		topic         string
-		handler       SubscribeFunc
-		expected      bool
+		name         string
+		isRegistered bool
+		topic        string
+		handler      SubscribeFunc
+		expected     bool
 	}{
-		{"subscriber is registered", true, "Hello", nil, true},
-		{"subscriber is not registered", false, "Hello", nil, false},
+		{"subscriber is initialized", true, "Hello", nil, true},
+		{"subscriber is not initialized", false, "Hello", nil, false},
 	}
 
-	for _, tt := range test {
+	for i, tt := range test {
 		t.Run(tt.name, func(t *testing.T) {
 			app := New()
-			if tt.is_registered {
+
+			if tt.isRegistered {
 				mockContainer := container.Container{
 					Logger: logging.NewLogger(logging.ERROR),
 					PubSub: mockSubscriber{},
 				}
+
 				app.container = &mockContainer
 			}
 
@@ -957,7 +960,7 @@ func TestApp_Subscriber(t *testing.T) {
 
 			_, ok := app.subscriptionManager.subscriptions["Hello"]
 
-			assert.Equal(t, tt.expected, ok)
+			assert.Equal(t, tt.expected, ok, "TEST[%d], Failed.\n%s", i, tt.name)
 		})
 	}
 }

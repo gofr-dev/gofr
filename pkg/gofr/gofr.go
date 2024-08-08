@@ -511,7 +511,6 @@ func (o *otelErrorHandler) Handle(e error) {
 func (a *App) EnableBasicAuth(credentials ...string) {
 	if len(credentials)%2 != 0 {
 		a.container.Error("Invalid number of arguments for EnableBasicAuth")
-		return
 	}
 
 	users := make(map[string]string)
