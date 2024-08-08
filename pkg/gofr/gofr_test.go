@@ -335,7 +335,8 @@ func Test_EnableBasicAuth(t *testing.T) {
 			``,
 			http.StatusUnauthorized,
 		},
-		{"Even number of arguments",
+		{
+			"Even number of arguments",
 			[]string{"user1", "password1", "user2", "password2"},
 			"user1:password1",
 			http.StatusOK,
@@ -934,21 +935,18 @@ func Test_Shutdown(t *testing.T) {
 
 func TestApp_Subscribe(t *testing.T) {
 	test := []struct {
-		name         string
-		isRegistered bool
-		topic        string
-		handler      SubscribeFunc
-		expected     bool
+		name          string
+		isInitialized bool
 	}{
-		{"subscriber is initialized", true, "Hello", nil, true},
-		{"subscriber is not initialized", false, "Hello", nil, false},
+		{"subscriber is initialized", true},
+		{"subscriber is not initialized", false},
 	}
 
 	for i, tt := range test {
 		t.Run(tt.name, func(t *testing.T) {
 			app := New()
 
-			if tt.isRegistered {
+			if tt.isInitialized {
 				mockContainer := container.Container{
 					Logger: logging.NewLogger(logging.ERROR),
 					PubSub: mockSubscriber{},
@@ -961,7 +959,7 @@ func TestApp_Subscribe(t *testing.T) {
 
 			_, ok := app.subscriptionManager.subscriptions["Hello"]
 
-			assert.Equal(t, tt.expected, ok, "TEST[%d], Failed.\n%s", i, tt.name)
+			assert.Equal(t, tt.isInitialized, ok, "TEST[%d], Failed.\n%s", i, tt.name)
 		})
 	}
 }
