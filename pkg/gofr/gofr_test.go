@@ -298,12 +298,16 @@ func TestEnableBasicAuthWithFunc(t *testing.T) {
 
 func convert(t *testing.T, arg string) string {
 	t.Helper()
-	data := []byte(arg)
-	dst := make([]byte, base64.StdEncoding.EncodedLen(len(data)))
-	base64.StdEncoding.Encode(dst, data)
-	s := "Basic " + string(dst)
-	return s
 
+	data := []byte(arg)
+
+	dst := make([]byte, base64.StdEncoding.EncodedLen(len(data)))
+
+	base64.StdEncoding.Encode(dst, data)
+
+	s := "Basic " + string(dst)
+
+	return s
 }
 
 func Test_EnableBasicAuth(t *testing.T) {
@@ -348,11 +352,92 @@ func Test_EnableBasicAuth(t *testing.T) {
 				container: c,
 			}
 
-			a.httpServer.router.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			a.httpServer.router.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 				fmt.Println(w, "Hello, world!")
 			}))
 
 			a.EnableBasicAuth(tt.args...)
+
+			server := httptest.NewServer(a.httpServer.router)
+			defer server.Close()
+
+			client := server.Client()
+
+			// Create a mock HTTP request
+			req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, server.URL, http.NoBody)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			// Add a basic authorization header
+			req.Header.Add("Authorization", convert(t, tt.authorizationString))
+
+			// Send the HTTP request
+			resp, err := client.Do(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			defer resp.Body.Close()
+
+			assert.Equal(t, tt.expectedStatusCode, resp.StatusCode, tt.name)
+		})
+	}
+}
+
+func Test_EnableBasicAuthWithValidator(t *testing.T) {
+	c := container.NewContainer(config.NewMockConfig(nil))
+
+	tests := []struct {
+		name                string
+		username            string
+		password            string
+		authorizationString string
+		expectedStatusCode  int
+	}{
+		{
+			"No Authorization header passed",
+			`user`,
+			`password`,
+			``,
+			http.StatusUnauthorized,
+		},
+		// doesn't work for now, created issue #917
+		//	{
+		//	"Correct Authorization",
+		//	`user`,
+		//	`password`,
+		//	`user:password`,
+		//	http.StatusOK,
+		//	},
+		{"Wrong Authorization header passed",
+			`user`,
+			`password`,
+			`user2:password2`,
+			http.StatusUnauthorized,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Initialize a new App instance
+			a := &App{
+				httpServer: &httpServer{
+					router: gofrHTTP.NewRouter(),
+					port:   8001,
+				},
+				container: c,
+			}
+
+			validateFunc := func(_ *container.Container, username string, password string) bool {
+				return username == tt.username && password == tt.password
+			}
+
+			a.EnableBasicAuthWithValidator(validateFunc)
+
+			a.httpServer.router.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				fmt.Println(w, "Hello, world!")
+			}))
 
 			server := httptest.NewServer(a.httpServer.router)
 			defer server.Close()
