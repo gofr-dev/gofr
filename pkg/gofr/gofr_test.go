@@ -367,7 +367,7 @@ func Test_EnableBasicAuth(t *testing.T) {
 			}
 
 			a.httpServer.router.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				fmt.Println(w, "Hello, world!")
+				fmt.Fprintln(w, "Hello, world!")
 			}))
 
 			a.EnableBasicAuth(tt.args...)
@@ -379,18 +379,14 @@ func Test_EnableBasicAuth(t *testing.T) {
 
 			// Create a mock HTTP request
 			req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, server.URL, http.NoBody)
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
 
 			// Add a basic authorization header
 			req.Header.Add("Authorization", encodeBasicAuthorization(t, tt.authorizationString))
 
 			// Send the HTTP request
 			resp, err := client.Do(req)
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
 
 			defer resp.Body.Close()
 
@@ -451,7 +447,7 @@ func Test_EnableBasicAuthWithValidator(t *testing.T) {
 			a.EnableBasicAuthWithValidator(validateFunc)
 
 			a.httpServer.router.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				fmt.Println(w, "Hello, world!")
+				fmt.Fprintln(w, "Hello, world!")
 			}))
 
 			server := httptest.NewServer(a.httpServer.router)
@@ -461,18 +457,14 @@ func Test_EnableBasicAuthWithValidator(t *testing.T) {
 
 			// Create a mock HTTP request
 			req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, server.URL, http.NoBody)
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
 
 			// Add a basic authorization header
 			req.Header.Add("Authorization", encodeBasicAuthorization(t, tt.authorizationString))
 
 			// Send the HTTP request
 			resp, err := client.Do(req)
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
 
 			defer resp.Body.Close()
 
@@ -934,32 +926,30 @@ func Test_Shutdown(t *testing.T) {
 }
 
 func TestApp_Subscribe(t *testing.T) {
-	test := []struct {
-		name          string
-		isInitialized bool
-	}{
-		{"subscriber is initialized", true},
-		{"subscriber is not initialized", false},
-	}
 
-	for i, tt := range test {
-		t.Run(tt.name, func(t *testing.T) {
-			app := New()
+	t.Run("subscriber is initialized", func(t *testing.T) {
+		app := New()
 
-			if tt.isInitialized {
-				mockContainer := container.Container{
-					Logger: logging.NewLogger(logging.ERROR),
-					PubSub: mockSubscriber{},
-				}
+		mockContainer := container.Container{
+			Logger: logging.NewLogger(logging.ERROR),
+			PubSub: mockSubscriber{}}
+				
+		app.container = &mockContainer
+			
 
-				app.container = &mockContainer
-			}
+		app.Subscribe("Hello", nil)
 
-			app.Subscribe("Hello", nil)
+		_, ok := app.subscriptionManager.subscriptions["Hello"]
 
-			_, ok := app.subscriptionManager.subscriptions["Hello"]
+		assert.True(t, ok)
+	})
 
-			assert.Equal(t, tt.isInitialized, ok, "TEST[%d], Failed.\n%s", i, tt.name)
-		})
-	}
+	t.Run("subscriber is not initialized", func(t *testing.T) {
+		app := New()
+		app.Subscribe("Hello", nil)
+
+		_, ok := app.subscriptionManager.subscriptions["Hello"]
+
+		assert.False(t, ok)
+	})
 }
