@@ -26,6 +26,7 @@ import (
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
+	"gofr.dev/pkg/gofr/datasource/sql"
 	gofrHTTP "gofr.dev/pkg/gofr/http"
 	"gofr.dev/pkg/gofr/http/middleware"
 	"gofr.dev/pkg/gofr/logging"
@@ -352,6 +353,41 @@ func (a *App) Logger() logging.Logger {
 // Can be used to create commands like "kubectl get" or "kubectl get ingress".
 func (a *App) SubCommand(pattern string, handler Handler, options ...Options) {
 	a.cmd.addRoute(pattern, handler, options...)
+}
+
+func (a *App) MigrateJSONtoSQL(structObject interface{}) error {
+	// TODO : Move panic recovery at central location which will manage for all the different cases.
+	defer panicRecovery(recover(), a.container.Logger)
+
+	// Get the database type from the container
+	dbType := a.container.SQL.Dialect()
+
+	_, createTableStatement, indexStatements, uniqueIndexStatements, triggerStatements, err := sql.GenerateCreateTableSQL(structObject, dbType, true)
+	if err != nil {
+		a.container.Logger.Errorf("error generating SQL: %v", err)
+		return err
+	}
+
+	sqlDB := sql.NewSQL(a.Config, a.container.Logger, a.container.Metrics())
+	defer sqlDB.DB.Close()
+
+	if err := sql.ExecuteMigrateJSONtoSQL(sqlDB.DB, a.container.Logger, createTableStatement); err != nil {
+		return err
+	}
+
+	if err := sql.ExecuteMigrateJSONtoSQL(sqlDB.DB, a.container.Logger, indexStatements); err != nil {
+		return err
+	}
+
+	if err := sql.ExecuteMigrateJSONtoSQL(sqlDB.DB, a.container.Logger, uniqueIndexStatements); err != nil {
+		return err
+	}
+
+	if err := sql.ExecuteMigrateJSONtoSQL(sqlDB.DB, a.container.Logger, triggerStatements); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // Migrate applies a set of migrations to the application's database.
