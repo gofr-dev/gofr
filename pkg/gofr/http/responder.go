@@ -36,12 +36,12 @@ func (r Responder) Respond(data interface{}, err error) {
 
 		return
 	default:
-		resp = response{Data: data, Error: errorObj}
-
 		// handling where an interface contains a nullable type with a nil value.
 		if isNil(data) {
-			resp = response{Error: errorObj}
+			data = nil
 		}
+
+		resp = response{Data: data, Error: errorObj}
 	}
 
 	r.w.Header().Set("Content-Type", "application/json")
