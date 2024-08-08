@@ -423,7 +423,8 @@ func Test_EnableBasicAuthWithValidator(t *testing.T) {
 		//	`user:password`,
 		//	http.StatusOK,
 		//	},
-		{"Wrong Authorization header passed",
+		{
+			"Wrong Authorization header passed",
 			`user`,
 			`password`,
 			`user2:password2`,
@@ -931,7 +932,7 @@ func Test_Shutdown(t *testing.T) {
 	assert.Contains(t, logs, "Application shutdown complete", "Test_Shutdown Failed!")
 }
 
-func TestApp_Subscriber(t *testing.T) {
+func TestApp_Subscribe(t *testing.T) {
 	test := []struct {
 		name         string
 		isRegistered bool
