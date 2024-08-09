@@ -3,10 +3,11 @@ package gofr
 import (
 	"bytes"
 	"context"
-	"github.com/gorilla/websocket"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/gorilla/websocket"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -88,5 +89,4 @@ func TestContext_WriteMessageToSocket(t *testing.T) {
 	// Read the response
 	expectedResponse := "Hello! GoFr"
 	assert.Equal(t, expectedResponse, string(message))
-
 }
