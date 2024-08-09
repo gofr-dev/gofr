@@ -62,13 +62,18 @@ func BasicAuthMiddleware(basicAuthProvider BasicAuthProvider) func(handler http.
 }
 
 func validateCredentials(provider BasicAuthProvider, credentials []string) bool {
-	if provider.ValidateFunc != nil && !provider.ValidateFunc(credentials[0], credentials[1]) {
-		return false
+	// If ValidateFunc is provided, use it.
+	if provider.ValidateFunc != nil {
+		if provider.ValidateFunc(credentials[0], credentials[1]) {
+			return true
+		}
 	}
 
-	if provider.ValidateFuncWithDatasources != nil && !provider.ValidateFuncWithDatasources(provider.Container,
-		credentials[0], credentials[1]) {
-		return false
+	// If ValidateFuncWithDatasources is provided, use it.
+	if provider.ValidateFuncWithDatasources != nil {
+		if provider.ValidateFuncWithDatasources(provider.Container, credentials[0], credentials[1]) {
+			return true
+		}
 	}
 
 	storedPass, ok := provider.Users[credentials[0]]

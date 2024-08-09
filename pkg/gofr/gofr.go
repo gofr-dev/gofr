@@ -502,7 +502,9 @@ func (o *otelErrorHandler) Handle(e error) {
 // An error is logged if an odd number of arguments is provided.
 func (a *App) EnableBasicAuth(credentials ...string) {
 	if len(credentials)%2 != 0 {
-		a.container.Error("Invalid number of arguments for EnableBasicAuth")
+		a.container.Error("Invalid number of arguments for EnableBasicAuth. Proceeding without Authentication")
+
+		return
 	}
 
 	users := make(map[string]string)
