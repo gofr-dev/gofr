@@ -501,6 +501,11 @@ func (o *otelErrorHandler) Handle(e error) {
 // It takes a variable number of credentials as alternating username and password strings.
 // An error is logged if an odd number of arguments is provided.
 func (a *App) EnableBasicAuth(credentials ...string) {
+	if len(credentials) == 0 {
+		a.container.Error("No credentials provided for EnableBasicAuth. Proceeding without Authentication")
+		return
+	}
+
 	if len(credentials)%2 != 0 {
 		a.container.Error("Invalid number of arguments for EnableBasicAuth. Proceeding without Authentication")
 
