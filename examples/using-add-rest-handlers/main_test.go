@@ -13,7 +13,7 @@ import (
 func TestIntegration_AddRESTHandlers(t *testing.T) {
 	const host = "http://localhost:9090"
 	go main()
-	time.Sleep(time.Second * 1) // Giving some time to start the server
+	time.Sleep(100 * time.Millisecond) // Giving some time to start the server
 
 	tests := []struct {
 		desc       string

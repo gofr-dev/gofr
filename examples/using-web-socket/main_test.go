@@ -13,7 +13,7 @@ func Test_WebSocket_Success(t *testing.T) {
 	wsURL := fmt.Sprintf("ws://%s/ws", "localhost:8001")
 
 	go main()
-	time.Sleep(time.Second * 2)
+	time.Sleep(100 * time.Millisecond)
 
 	testMessage := "Hello! GoFr"
 	dialer := &websocket.Dialer{}
