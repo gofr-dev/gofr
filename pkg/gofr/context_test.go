@@ -40,15 +40,16 @@ func Test_newContextSuccess(t *testing.T) {
 }
 
 func TestContext_AddTrace(t *testing.T) {
+	ctxBase := context.Background()
 	ctx := Context{
-		Context: context.Background(),
+		Context: ctxBase,
 	}
 
 	span := ctx.Trace("Some Work")
 
 	defer span.End()
 
-	require.NotEqual(t, ctx.Context, context.Background())
+	assert.NotEqual(t, ctxBase, ctx.Context)
 }
 
 func TestContext_WriteMessageToSocket(t *testing.T) {
