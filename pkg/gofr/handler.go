@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"runtime/debug"
@@ -41,6 +42,15 @@ type handler struct {
 	requestTimeout string
 }
 
+type ErrorLogEntry struct {
+	TraceID string `json:"trace_id,omitempty"`
+	Error   string `json:"error,omitempty"`
+}
+
+func (el *ErrorLogEntry) PrettyPrint(writer io.Writer) {
+	fmt.Fprintf(writer, "\u001B[38;5;8m%s \u001B[38;5;%dm%s \n", el.TraceID, 202, el.Error)
+}
+
 func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	c := newContext(gofrHTTP.NewResponder(w, r.Method), gofrHTTP.NewRequest(r), h.container)
 	traceID := trace.SpanFromContext(r.Context()).SpanContext().TraceID().String()
@@ -74,7 +84,11 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 		// Log the error if any in the format (traceID errorMessage) with the color code 202
 		if err != nil {
-			h.container.Logger.Errorf("\u001B[38;5;8m%s \u001B[38;5;%dm%s\u001B[0m ", traceID, logging.DEBUG, err.Error())
+			errorLog := &ErrorLogEntry{
+				TraceID: traceID,
+				Error:   err.Error(),
+			}
+			h.container.Logger.Error(errorLog)
 		}
 
 		close(done)
