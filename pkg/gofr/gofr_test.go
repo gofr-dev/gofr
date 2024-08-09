@@ -311,7 +311,7 @@ func encodeBasicAuthorization(t *testing.T, arg string) string {
 }
 
 func Test_EnableBasicAuth(t *testing.T) {
-	c := container.NewContainer(config.NewMockConfig(nil))
+	c, _ := container.NewMockContainer(t)
 
 	tests := []struct {
 		name                string
@@ -386,14 +386,14 @@ func Test_EnableBasicAuth(t *testing.T) {
 }
 
 func Test_EnableBasicAuthWithValidator(t *testing.T) {
-	c := container.NewContainer(config.NewMockConfig(nil))
+	c, _ := container.NewMockContainer(t)
 
 	tests := []struct {
-		name                string
-		username            string
-		password            string
-		authorizationString string
-		expectedStatusCode  int
+		name               string
+		username           string
+		password           string
+		passedCredentials  string
+		expectedStatusCode int
 	}{
 		{
 			"No Authorization header passed",
@@ -450,7 +450,7 @@ func Test_EnableBasicAuthWithValidator(t *testing.T) {
 			require.NoError(t, err)
 
 			// Add a basic authorization header
-			req.Header.Add("Authorization", encodeBasicAuthorization(t, tt.authorizationString))
+			req.Header.Add("Authorization", encodeBasicAuthorization(t, tt.passedCredentials))
 
 			// Send the HTTP request
 			resp, err := client.Do(req)
@@ -915,7 +915,7 @@ func Test_Shutdown(t *testing.T) {
 	assert.Contains(t, logs, "Application shutdown complete", "Test_Shutdown Failed!")
 }
 
-func TestApp_Subscribe(t *testing.T) {
+func TestApp_SubscriberInitialize(t *testing.T) {
 	t.Run("subscriber is initialized", func(t *testing.T) {
 		app := New()
 
