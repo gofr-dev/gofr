@@ -45,10 +45,11 @@ type handler struct {
 type ErrorLogEntry struct {
 	TraceID string `json:"trace_id,omitempty"`
 	Error   string `json:"error,omitempty"`
+	Color   int    `json:"color,omitempty"`
 }
 
 func (el *ErrorLogEntry) PrettyPrint(writer io.Writer) {
-	fmt.Fprintf(writer, "\u001B[38;5;8m%s \u001B[38;5;%dm%s \n", el.TraceID, 202, el.Error)
+	fmt.Fprintf(writer, "\u001B[38;5;8m%s \u001B[38;5;%dm%s \n", el.TraceID, el.Color, el.Error)
 }
 
 func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -87,6 +88,7 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			errorLog := &ErrorLogEntry{
 				TraceID: traceID,
 				Error:   err.Error(),
+				Color:   202,
 			}
 			h.container.Logger.Error(errorLog)
 		}
