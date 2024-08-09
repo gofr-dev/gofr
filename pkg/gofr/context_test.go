@@ -39,7 +39,7 @@ func Test_newContextSuccess(t *testing.T) {
 	require.NoError(t, err, "TEST Failed \n unable to read body")
 }
 
-func TestContext_Trace(t *testing.T) {
+func TestContextTrace_SpanNotNil(t *testing.T) {
 	ctx := Context{
 		Context: context.Background(),
 	}
@@ -65,8 +65,8 @@ func TestContext_WriteMessageToSocket(t *testing.T) {
 		}
 
 		// returning error here to close the connection to the websocket
-		// as the websocket close error is not caught because we are using no bind function.
-		// this must not be necessary if we put an actual check in handleWebSocketConnection method.
+		// as the websocket close error is not caught because we are using no bind function here.
+		// this must not be necessary. We should put an actual check in handleWebSocketConnection method instead.
 		return nil, &websocket.CloseError{Code: websocket.CloseNormalClosure, Text: "Error closing"}
 	})
 
