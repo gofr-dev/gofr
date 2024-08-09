@@ -39,15 +39,16 @@ func Test_newContextSuccess(t *testing.T) {
 	require.NoError(t, err, "TEST Failed \n unable to read body")
 }
 
-func TestContextTrace_SpanNotNil(t *testing.T) {
+func TestContext_AddTrace(t *testing.T) {
 	ctx := Context{
 		Context: context.Background(),
 	}
 
 	span := ctx.Trace("Some Work")
+
 	defer span.End()
 
-	assert.NotNil(t, span)
+	require.NotEqual(t, ctx.Context, context.Background())
 }
 
 func TestContext_WriteMessageToSocket(t *testing.T) {
@@ -79,9 +80,9 @@ func TestContext_WriteMessageToSocket(t *testing.T) {
 	require.NoError(t, err)
 
 	defer resp.Body.Close()
+	defer ws.Close()
 
 	_, message, err := ws.ReadMessage()
-	ws.Close()
 
 	require.NoError(t, err)
 
