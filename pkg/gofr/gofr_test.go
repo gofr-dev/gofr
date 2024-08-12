@@ -311,18 +311,18 @@ func encodeBasicAuthorization(t *testing.T, arg string) string {
 }
 
 func Test_EnableBasicAuth(t *testing.T) {
-	c, _ := container.NewMockContainer(t)
+	mockContainer, _ := container.NewMockContainer(t)
 
 	tests := []struct {
-		name                string
-		args                []string
-		authorizationString string
-		expectedStatusCode  int
+		name               string
+		args               []string
+		passedCredentials  string
+		expectedStatusCode int
 	}{
 		{
 			"No Authorization header passed",
 			nil,
-			``,
+			"",
 			http.StatusUnauthorized,
 		},
 		{
@@ -331,7 +331,7 @@ func Test_EnableBasicAuth(t *testing.T) {
 			"user1:password1",
 			http.StatusOK,
 		},
-		// doesn't work, created issue #918
+		// TODO: doesn't work, created issue #918
 		// {
 		//	"Odd number of arguments with no authorization header passed",
 		//	[]string{"user1", "password1", "user2"},
@@ -353,7 +353,7 @@ func Test_EnableBasicAuth(t *testing.T) {
 				httpServer: &httpServer{
 					router: gofrHTTP.NewRouter(),
 				},
-				container: c,
+				container: mockContainer,
 			}
 
 			a.httpServer.router.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -372,7 +372,7 @@ func Test_EnableBasicAuth(t *testing.T) {
 			require.NoError(t, err)
 
 			// Add a basic authorization header
-			req.Header.Add("Authorization", encodeBasicAuthorization(t, tt.authorizationString))
+			req.Header.Add("Authorization", encodeBasicAuthorization(t, tt.passedCredentials))
 
 			// Send the HTTP request
 			resp, err := client.Do(req)
@@ -386,23 +386,19 @@ func Test_EnableBasicAuth(t *testing.T) {
 }
 
 func Test_EnableBasicAuthWithValidator(t *testing.T) {
-	c, _ := container.NewMockContainer(t)
+	mockContainer, _ := container.NewMockContainer(t)
 
 	tests := []struct {
 		name               string
-		username           string
-		password           string
 		passedCredentials  string
 		expectedStatusCode int
 	}{
 		{
 			"No Authorization header passed",
-			`user`,
-			`password`,
-			``,
+			"",
 			http.StatusUnauthorized,
 		},
-		// doesn't work for now, created issue #917
+		// TODO: doesn't work for now, created issue #917
 		//	{
 		//	"Correct Authorization",
 		//	`user`,
@@ -412,8 +408,6 @@ func Test_EnableBasicAuthWithValidator(t *testing.T) {
 		//	},
 		{
 			"Wrong Authorization header passed",
-			`user`,
-			`password`,
 			`user2:password2`,
 			http.StatusUnauthorized,
 		},
@@ -427,11 +421,11 @@ func Test_EnableBasicAuthWithValidator(t *testing.T) {
 					router: gofrHTTP.NewRouter(),
 					port:   8001,
 				},
-				container: c,
+				container: mockContainer,
 			}
 
 			validateFunc := func(_ *container.Container, username string, password string) bool {
-				return username == tt.username && password == tt.password
+				return username == "user" && password == "password"
 			}
 
 			a.EnableBasicAuthWithValidator(validateFunc)
