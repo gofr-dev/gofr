@@ -321,7 +321,7 @@ func Test_EnableBasicAuth(t *testing.T) {
 	}{
 		{
 			"No Authorization header passed",
-			nil,
+			[]string{"user1", "password1", "user2", "password2"},
 			"",
 			http.StatusUnauthorized,
 		},
@@ -331,19 +331,18 @@ func Test_EnableBasicAuth(t *testing.T) {
 			"user1:password1",
 			http.StatusOK,
 		},
-		// TODO: doesn't work, created issue #918
-		// {
-		//	"Odd number of arguments with no authorization header passed",
-		//	[]string{"user1", "password1", "user2"},
-		//	"",
-		//	http.StatusOK,
-		// },
-		// {
-		//  "Odd number of arguments with wrong authorization header passed",
-		//	[]string{"user1", "password1", "user2"},
-		//	"user1:password2",
-		//	http.StatusOK,
-		// },
+		{
+			"Odd number of arguments with no authorization header passed",
+			[]string{"user1", "password1", "user2"},
+			"",
+			http.StatusOK,
+		},
+		{
+			"Odd number of arguments with wrong authorization header passed",
+			[]string{"user1", "password1", "user2"},
+			"user1:password2",
+			http.StatusOK,
+		},
 	}
 
 	for i, tt := range tests {
@@ -398,17 +397,14 @@ func Test_EnableBasicAuthWithValidator(t *testing.T) {
 			"",
 			http.StatusUnauthorized,
 		},
-		// TODO: doesn't work for now, created issue #917
-		//	{
-		//	"Correct Authorization",
-		//	`user`,
-		//	`password`,
-		//	`user:password`,
-		//	http.StatusOK,
-		//	},
+		{
+			"Correct Authorization",
+			"user:password",
+			http.StatusOK,
+		},
 		{
 			"Wrong Authorization header passed",
-			`user2:password2`,
+			"user2:password2",
 			http.StatusUnauthorized,
 		},
 	}
