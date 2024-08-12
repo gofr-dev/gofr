@@ -11,11 +11,11 @@ type fileSystem struct {
 }
 
 // New initializes local filesystem with logger.
-func New(logger datasource.Logger) datasource.FileSystem {
+func New(logger datasource.Logger) FileSystem {
 	return fileSystem{logger: logger}
 }
 
-func (f fileSystem) Create(name string) (datasource.File, error) {
+func (f fileSystem) Create(name string) (File, error) {
 	newFile, err := os.Create(name)
 	if err != nil {
 		return nil, err
@@ -32,7 +32,7 @@ func (fileSystem) MkdirAll(path string, perm os.FileMode) error {
 	return os.MkdirAll(path, perm)
 }
 
-func (f fileSystem) Open(name string) (datasource.File, error) {
+func (f fileSystem) Open(name string) (File, error) {
 	openFile, err := os.Open(name)
 	if err != nil {
 		return nil, err
@@ -41,7 +41,7 @@ func (f fileSystem) Open(name string) (datasource.File, error) {
 	return &file{File: openFile, logger: f.logger}, nil
 }
 
-func (f fileSystem) OpenFile(name string, flag int, perm os.FileMode) (datasource.File, error) {
+func (f fileSystem) OpenFile(name string, flag int, perm os.FileMode) (File, error) {
 	openFile, err := os.OpenFile(name, flag, perm)
 	if err != nil {
 		return nil, err

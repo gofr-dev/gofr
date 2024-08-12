@@ -1,6 +1,7 @@
 package container
 
 import (
+	"context"
 	"errors"
 	"strconv"
 	"strings"
@@ -9,7 +10,6 @@ import (
 	_ "github.com/go-sql-driver/mysql" // This is required to be blank import
 
 	"gofr.dev/pkg/gofr/config"
-	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/datasource/file"
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 	"gofr.dev/pkg/gofr/datasource/pubsub/google"
@@ -23,6 +23,7 @@ import (
 	"gofr.dev/pkg/gofr/metrics/exporters"
 	"gofr.dev/pkg/gofr/service"
 	"gofr.dev/pkg/gofr/version"
+	"gofr.dev/pkg/gofr/websocket"
 )
 
 // Container is a collection of all common application level concerns. Things like Logger, Connection Pool for Redis
@@ -46,7 +47,7 @@ type Container struct {
 
 	KVStore KVStore
 
-	File datasource.FileSystem
+	File file.FileSystem
 }
 
 func NewContainer(conf config.Config) *Container {
@@ -238,4 +239,13 @@ func (c *Container) GetPublisher() pubsub.Publisher {
 
 func (c *Container) GetSubscriber() pubsub.Subscriber {
 	return c.PubSub
+}
+
+func (*Container) GetConnectionFromContext(ctx context.Context) *websocket.Connection {
+	conn, ok := ctx.Value(websocket.WSConnectionKey).(*websocket.Connection)
+	if !ok {
+		return nil
+	}
+
+	return conn
 }
