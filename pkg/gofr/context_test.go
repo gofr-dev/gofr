@@ -7,6 +7,10 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/sdk/trace"
+	"gofr.dev/pkg/gofr/version"
+
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -40,16 +44,33 @@ func Test_newContextSuccess(t *testing.T) {
 }
 
 func TestContext_AddTrace(t *testing.T) {
-	ctxBase := context.Background()
+	tp := trace.NewTracerProvider()
+	otel.SetTracerProvider(tp)
+
+	tr := otel.GetTracerProvider().Tracer("gofr-" + version.Framework)
+
+	// Creating a dummy request with trace
+	req := httptest.NewRequest(http.MethodGet, "/dummy", http.NoBody)
+	originalCtx, span := tr.Start(req.Context(), "start")
+
+	traceID := span.SpanContext().TraceID().String()
+	spanID := span.SpanContext().SpanID().String()
+
+	// Creating a new context from original context and adding trace
 	ctx := Context{
-		Context: ctxBase,
+		Context: originalCtx,
 	}
 
-	span := ctx.Trace("Some Work")
+	newSpan := ctx.Trace("Some Work")
+	defer newSpan.End()
 
-	defer span.End()
+	newtraceID := newSpan.SpanContext().TraceID().String()
+	newSpanID := newSpan.SpanContext().SpanID().String()
 
-	assert.NotEqual(t, ctxBase, ctx.Context)
+	// both traceIDs must be same as context is same
+	assert.Equal(t, traceID, newtraceID)
+	// spanIDs must not be same
+	assert.NotEqual(t, spanID, newSpanID)
 }
 
 func TestContext_WriteMessageToSocket(t *testing.T) {
@@ -66,7 +87,7 @@ func TestContext_WriteMessageToSocket(t *testing.T) {
 			return nil, err
 		}
 
-		// returning error here to close the connection to the websocket
+		// TODO: returning error here to close the connection to the websocket
 		// as the websocket close error is not caught because we are using no bind function here.
 		// this must not be necessary. We should put an actual check in handleWebSocketConnection method instead.
 		return nil, &websocket.CloseError{Code: websocket.CloseNormalClosure, Text: "Error closing"}
@@ -84,10 +105,8 @@ func TestContext_WriteMessageToSocket(t *testing.T) {
 	defer ws.Close()
 
 	_, message, err := ws.ReadMessage()
-
 	require.NoError(t, err)
 
-	// Read the response
 	expectedResponse := "Hello! GoFr"
 	assert.Equal(t, expectedResponse, string(message))
 }
