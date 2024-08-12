@@ -7,18 +7,17 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/sdk/trace"
-	"gofr.dev/pkg/gofr/version"
-
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/sdk/trace"
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
 	gofrHTTP "gofr.dev/pkg/gofr/http"
 	"gofr.dev/pkg/gofr/logging"
+	"gofr.dev/pkg/gofr/version"
 )
 
 func Test_newContextSuccess(t *testing.T) {
