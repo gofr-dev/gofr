@@ -61,3 +61,29 @@ func (fileSystem) RemoveAll(path string) error {
 func (fileSystem) Rename(oldname, newname string) error {
 	return os.Rename(oldname, newname)
 }
+
+func (fileSystem) Stat(name string) (FileInfo, error) {
+	return os.Stat(name)
+}
+
+func (fileSystem) CurrentDir() (string, error) {
+	return os.Getwd()
+}
+
+func (fileSystem) ChangeDir(dir string) error {
+	return os.Chdir(dir)
+}
+
+func (fileSystem) ReadDir(dir string) ([]FileInfo, error) {
+	entries, err := os.ReadDir(dir)
+
+	fileInfo := make([]FileInfo, len(entries))
+	for i := range entries {
+		fileInfo[i], err = entries[i].Info()
+		if err != nil {
+			fileInfo[i] = nil
+		}
+	}
+
+	return fileInfo, nil
+}

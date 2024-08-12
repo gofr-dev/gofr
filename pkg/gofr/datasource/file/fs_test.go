@@ -20,7 +20,7 @@ func Test_LocalFileSystemDirectoryCreation(t *testing.T) {
 	fileStore := New(logger)
 
 	err := fileStore.Mkdir(dirName, os.ModePerm)
-	defer os.RemoveAll(dirName)
+	//defer os.RemoveAll(dirName)
 
 	require.NoError(t, err)
 
@@ -320,4 +320,38 @@ func Test_ReadFromJSONArrayInvalidDelimiter(t *testing.T) {
 	}(fileStore, "temp.json")
 
 	assert.IsType(t, &json.SyntaxError{}, err)
+}
+
+func Test_DirectoryOperations(t *testing.T) {
+	logger := logging.NewMockLogger(logging.DEBUG)
+
+	fileStore := New(logger)
+
+	info, err := fileStore.Stat(".")
+	require.NoError(t, err)
+
+	assert.True(t, info.IsDir())
+
+	err = fileStore.Mkdir("Hello_world", os.ModePerm)
+	require.NoError(t, err)
+	defer fileStore.RemoveAll("../Hello_world")
+
+	err = fileStore.ChangeDir("Hello_world")
+	require.NoError(t, err)
+
+	dir, err := fileStore.CurrentDir()
+	require.NoError(t, err)
+
+	// directory changed and successfully fetched.
+	assert.Equal(t, "/Users/raramuri/go/src/awesomeProject2/gofr/pkg/gofr/datasource/file/Hello_world", dir)
+
+	// create a file in the directory.
+	_, err = fileStore.Create("Hello.txt")
+	require.NoError(t, err)
+
+	v, err := fileStore.ReadDir(".")
+	require.NoError(t, err)
+
+	assert.False(t, v[0].IsDir())
+	assert.Equal(t, "Hello.txt", v[0].Name())
 }
