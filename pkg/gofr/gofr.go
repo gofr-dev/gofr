@@ -23,7 +23,6 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
 	"golang.org/x/sync/errgroup"
-	"google.golang.org/grpc"
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
@@ -61,13 +60,6 @@ type App struct {
 	httpRegistered bool
 
 	subscriptionManager SubscriptionManager
-}
-
-// RegisterService adds a gRPC service to the GoFr application.
-func (a *App) RegisterService(desc *grpc.ServiceDesc, impl interface{}) {
-	a.container.Logger.Infof("registering GRPC Server: %s", desc.ServiceName)
-	a.grpcServer.server.RegisterService(desc, impl)
-	a.grpcRegistered = true
 }
 
 // New creates an HTTP Server Application and returns that App.
@@ -177,7 +169,7 @@ func (a *App) Run() {
 		}(a.httpServer)
 	}
 
-	// Start GRPC Server only if a service is registered
+	// Start gRPC Server only if a service is registered
 	if a.grpcRegistered {
 		wg.Add(1)
 
@@ -509,8 +501,15 @@ func (o *otelErrorHandler) Handle(e error) {
 // It takes a variable number of credentials as alternating username and password strings.
 // An error is logged if an odd number of arguments is provided.
 func (a *App) EnableBasicAuth(credentials ...string) {
+	if len(credentials) == 0 {
+		a.container.Error("No credentials provided for EnableBasicAuth. Proceeding without Authentication")
+		return
+	}
+
 	if len(credentials)%2 != 0 {
-		a.container.Error("Invalid number of arguments for EnableBasicAuth")
+		a.container.Error("Invalid number of arguments for EnableBasicAuth. Proceeding without Authentication")
+
+		return
 	}
 
 	users := make(map[string]string)
