@@ -23,6 +23,8 @@ import (
 
 type Handler func(c *Context) (interface{}, error)
 
+const colorCodeError = 202 // 202 is red color code
+
 /*
 Developer Note: There is an implementation where we do not need this internal handler struct
 and directly use Handler. However, in that case the container dependency is not injected and
@@ -83,12 +85,12 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// Execute the handler function
 		result, err = h.function(c)
 
-		// Log the error if any in the format (traceID errorMessage) with the color code 202
+		// Log the error if any in the format (traceID errorMessage) with the color code 202(red)
 		if err != nil {
 			errorLog := &ErrorLogEntry{
 				TraceID: traceID,
 				Error:   err.Error(),
-				Color:   202,
+				Color:   colorCodeError,
 			}
 			h.container.Logger.Error(errorLog)
 		}
