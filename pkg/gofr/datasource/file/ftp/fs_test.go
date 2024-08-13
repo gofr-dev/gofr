@@ -1112,6 +1112,7 @@ func TestChangeDir(t *testing.T) {
 			newPath := path.Join(fs.config.RemoteDir, tt.newDir)
 
 			mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+			mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 			mockFtpConn.EXPECT().ChangeDir(newPath).Return(tt.mockError)
 
 			err := fs.ChangeDir(tt.newDir)
@@ -1209,6 +1210,7 @@ func TestReadDir(t *testing.T) {
 
 			mockFtpConn.EXPECT().List(path).Return(tt.mockEntries, tt.mockError)
 			mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+			mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 
 			files, err := fs.ReadDir(tt.dir)
 
