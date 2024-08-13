@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/jlaffaye/ftp"
 	"io"
 	"os"
 	"strings"
@@ -22,13 +23,15 @@ var (
 
 // file represents a file on an FTP server.
 type file struct {
-	response ftpResponse
-	path     string
-	conn     ServerConn
-	name     string
-	offset   int64
-	logger   Logger
-	metrics  Metrics
+	response  ftpResponse
+	path      string
+	entryType ftp.EntryType
+	modTime   time.Time
+	conn      ServerConn
+	name      string
+	offset    int64
+	logger    Logger
+	metrics   Metrics
 }
 
 // textReader implements RowReader for reading text files.
@@ -176,6 +179,33 @@ func (f *file) Name() string {
 	defer f.postProcess(&FileLog{Operation: "Get Name", Location: f.path}, time.Now())
 
 	return f.name
+}
+
+func (f *file) Size() int64 {
+	var msg string
+
+	status := "ERROR"
+
+	defer f.postProcess(&FileLog{Operation: "Size", Location: f.path, Status: &status, Message: &msg}, time.Now())
+
+	size, err := f.conn.FileSize(f.name)
+	if err == nil && size > 0 {
+		status = "SUCCESS"
+	}
+
+	return size
+}
+
+func (f *file) Mode() os.FileMode {
+	return os.ModePerm
+}
+
+func (f *file) IsDir() bool {
+	return f.entryType == ftp.EntryTypeFolder
+}
+
+func (f *file) ModTime() time.Time {
+	return f.modTime
 }
 
 // Read reads data from the FTP file into the provided byte slice and updates the file offset.

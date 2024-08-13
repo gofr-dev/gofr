@@ -4,8 +4,12 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/jlaffaye/ftp"
 	"net/textproto"
+	"path"
+	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
@@ -580,6 +584,296 @@ func TestRemoveDir(t *testing.T) {
 			err := fs.RemoveAll(tt.removePath)
 
 			assert.Equal(t, tt.expectError, err != nil, tt.name)
+		})
+	}
+}
+
+func TestStat(t *testing.T) {
+	var tests = []struct {
+		name         string
+		fileName     string
+		mockEntry    *ftp.Entry
+		mockError    error
+		expectError  bool
+		expectedName string
+	}{
+		{
+			name:         "Successful stat",
+			fileName:     "testfile.txt",
+			mockEntry:    &ftp.Entry{Name: "testfile.txt", Type: ftp.EntryTypeFile, Time: time.Now()},
+			mockError:    nil,
+			expectError:  false,
+			expectedName: "testfile.txt",
+		},
+		{
+			name:         "GetEntry returns error",
+			fileName:     "errorfile.txt",
+			mockEntry:    nil,
+			mockError:    errors.New("mocked GetEntry error"),
+			expectError:  true,
+			expectedName: "",
+		},
+		{
+			name:        "Empty file name",
+			fileName:    "",
+			mockEntry:   nil,
+			mockError:   errors.New("mocked GetEntry error"),
+			expectError: true,
+		},
+	}
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockFtpConn := NewMockServerConn(ctrl)
+	mockLogger := NewMockLogger(ctrl)
+	mockMetrics := NewMockMetrics(ctrl)
+
+	fs := &fileSystem{
+		conn: mockFtpConn,
+		config: &Config{
+			Host:      "ftp.example.com",
+			User:      "username",
+			Password:  "password",
+			Port:      21,
+			RemoteDir: "/ftp/one",
+		},
+		logger:  mockLogger,
+		metrics: mockMetrics,
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.mockError == nil {
+				mockFtpConn.EXPECT().GetEntry(tt.fileName).Return(tt.mockEntry, nil)
+			} else {
+				mockFtpConn.EXPECT().GetEntry(tt.fileName).Return(nil, tt.mockError)
+			}
+			mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+
+			fileInfo, err := fs.Stat(tt.fileName)
+
+			if tt.expectError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tt.expectedName, fileInfo.Name())
+			}
+		})
+	}
+}
+
+func TestCurrentDir(t *testing.T) {
+	var tests = []struct {
+		name        string
+		mockDir     string
+		mockError   error
+		expectError bool
+	}{
+		{
+			name:        "Successful retrieval of path",
+			mockDir:     "/ftp/one",
+			mockError:   nil,
+			expectError: false,
+		},
+		{
+			name:        "error in retrieving path",
+			mockDir:     "",
+			mockError:   errors.New("mocked current dir error"),
+			expectError: true,
+		},
+	}
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockFtpConn := NewMockServerConn(ctrl)
+	mockLogger := NewMockLogger(ctrl)
+	mockMetrics := NewMockMetrics(ctrl)
+
+	fs := &fileSystem{
+		conn: mockFtpConn,
+		config: &Config{
+			Host:      "ftp.example.com",
+			User:      "username",
+			Password:  "password",
+			Port:      21,
+			RemoteDir: "/ftp/one",
+		},
+		logger:  mockLogger,
+		metrics: mockMetrics,
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockFtpConn.EXPECT().CurrentDir().Return(tt.mockDir, tt.mockError)
+			mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+
+			dir, err := fs.CurrentDir()
+
+			if tt.expectError {
+				assert.Error(t, err)
+				assert.Empty(t, dir)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tt.mockDir, dir)
+			}
+		})
+	}
+}
+
+func TestChangeDir(t *testing.T) {
+	var tests = []struct {
+		name        string
+		newDir      string
+		mockError   error
+		expectError bool
+	}{
+		{
+			name:        "Successful change dir",
+			newDir:      "newdir",
+			mockError:   nil,
+			expectError: false,
+		},
+		{
+			name:        "Change dir with error",
+			newDir:      "errordir",
+			mockError:   errors.New("mocked change dir error"),
+			expectError: true,
+		},
+		{
+			name:        "Empty new directory",
+			newDir:      "",
+			mockError:   errors.New("mocked change dir error"),
+			expectError: true,
+		},
+	}
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockFtpConn := NewMockServerConn(ctrl)
+	mockLogger := NewMockLogger(ctrl)
+	mockMetrics := NewMockMetrics(ctrl)
+
+	fs := &fileSystem{
+		conn: mockFtpConn,
+		config: &Config{
+			Host:      "ftp.example.com",
+			User:      "username",
+			Password:  "password",
+			Port:      21,
+			RemoteDir: "/ftp/one",
+		},
+		logger:  mockLogger,
+		metrics: mockMetrics,
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			newPath := path.Join(fs.config.RemoteDir, tt.newDir)
+			mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+			if tt.mockError == nil {
+				mockFtpConn.EXPECT().ChangeDir(newPath).Return(tt.mockError)
+			} else {
+				mockFtpConn.EXPECT().ChangeDir(newPath).Return(tt.mockError)
+			}
+
+			err := fs.ChangeDir(tt.newDir)
+
+			if tt.expectError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, newPath, fs.config.RemoteDir)
+			}
+		})
+	}
+}
+
+func TestReadDir(t *testing.T) {
+	var tests = []struct {
+		name         string
+		dir          string
+		mockEntries  []*ftp.Entry
+		mockError    error
+		expectError  bool
+		expectedName []string
+	}{
+		{
+			name:        "Successful read dir",
+			dir:         "someDir",
+			mockEntries: []*ftp.Entry{{Name: "file1.txt", Type: ftp.EntryTypeFile, Time: time.Now()}, {Name: "file2.txt", Type: ftp.EntryTypeFile, Time: time.Now()}},
+			mockError:   nil,
+			expectError: false,
+			expectedName: []string{
+				"file1.txt",
+				"file2.txt",
+			},
+		},
+		{
+			name:        "Read dir with error",
+			dir:         "someDir",
+			mockEntries: nil,
+			mockError:   errors.New("mocked read dir error"),
+			expectError: true,
+		},
+		{
+			name:        "Empty directory path",
+			dir:         "",
+			mockEntries: nil,
+			mockError:   errors.New("mocked read dir error"),
+			expectError: true,
+		},
+	}
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockFtpConn := NewMockServerConn(ctrl)
+	mockLogger := NewMockLogger(ctrl)
+	mockMetrics := NewMockMetrics(ctrl)
+
+	fs := &fileSystem{
+		conn: mockFtpConn,
+		config: &Config{
+			Host:      "ftp.example.com",
+			User:      "username",
+			Password:  "password",
+			Port:      21,
+			RemoteDir: "/ftp/one",
+		},
+		logger:  mockLogger,
+		metrics: mockMetrics,
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var path string
+			if tt.dir == "." {
+				path = fs.config.RemoteDir
+			} else {
+				path = filepath.Join(fs.config.RemoteDir, tt.dir)
+			}
+			if tt.mockError == nil {
+				mockFtpConn.EXPECT().List(path).Return(tt.mockEntries, nil)
+			} else {
+				mockFtpConn.EXPECT().List(path).Return(nil, tt.mockError)
+			}
+			mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+
+			files, err := fs.ReadDir(tt.dir)
+
+			if tt.expectError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				var names []string
+				for _, file := range files {
+					names = append(names, file.Name())
+				}
+				assert.ElementsMatch(t, tt.expectedName, names)
+			}
 		})
 	}
 }

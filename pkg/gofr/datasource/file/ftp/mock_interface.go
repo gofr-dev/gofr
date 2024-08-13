@@ -15,6 +15,7 @@ import (
 	reflect "reflect"
 	time "time"
 
+	ftp "github.com/jlaffaye/ftp"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -171,6 +172,35 @@ func (m *MockServerConn) EXPECT() *MockServerConnMockRecorder {
 	return m.recorder
 }
 
+// ChangeDir mocks base method.
+func (m *MockServerConn) ChangeDir(path string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ChangeDir", path)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// ChangeDir indicates an expected call of ChangeDir.
+func (mr *MockServerConnMockRecorder) ChangeDir(path any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ChangeDir", reflect.TypeOf((*MockServerConn)(nil).ChangeDir), path)
+}
+
+// CurrentDir mocks base method.
+func (m *MockServerConn) CurrentDir() (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CurrentDir")
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CurrentDir indicates an expected call of CurrentDir.
+func (mr *MockServerConnMockRecorder) CurrentDir() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CurrentDir", reflect.TypeOf((*MockServerConn)(nil).CurrentDir))
+}
+
 // Delete mocks base method.
 func (m *MockServerConn) Delete(arg0 string) error {
 	m.ctrl.T.Helper()
@@ -198,6 +228,36 @@ func (m *MockServerConn) FileSize(name string) (int64, error) {
 func (mr *MockServerConnMockRecorder) FileSize(name any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FileSize", reflect.TypeOf((*MockServerConn)(nil).FileSize), name)
+}
+
+// GetEntry mocks base method.
+func (m *MockServerConn) GetEntry(name string) (*ftp.Entry, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetEntry", name)
+	ret0, _ := ret[0].(*ftp.Entry)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetEntry indicates an expected call of GetEntry.
+func (mr *MockServerConnMockRecorder) GetEntry(name any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetEntry", reflect.TypeOf((*MockServerConn)(nil).GetEntry), name)
+}
+
+// List mocks base method.
+func (m *MockServerConn) List(path string) ([]*ftp.Entry, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "List", path)
+	ret0, _ := ret[0].([]*ftp.Entry)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// List indicates an expected call of List.
+func (mr *MockServerConnMockRecorder) List(path any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "List", reflect.TypeOf((*MockServerConn)(nil).List), path)
 }
 
 // Login mocks base method.

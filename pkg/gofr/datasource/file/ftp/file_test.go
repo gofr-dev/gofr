@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"github.com/stretchr/testify/require"
 	"io"
 	"os"
 	"testing"
@@ -685,6 +686,43 @@ func Test_ReadFromJSONArrayInvalidDelimiter(t *testing.T) {
 		}(fs, "temp.json")
 
 		assert.IsType(t, &json.SyntaxError{}, err)
+	})
+}
+
+func Test_DirectoryOperations(t *testing.T) {
+	runFtpTest(t, func(fs file_interface.FileSystemProvider) {
+		var dir = "temp"
+
+		ctrl := gomock.NewController(t)
+		mockLogger := NewMockLogger(ctrl)
+		mockMetrics := NewMockMetrics(ctrl)
+
+		fs.UseLogger(mockLogger)
+		fs.UseMetrics(mockMetrics)
+
+		mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
+		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+
+		err := fs.Mkdir(dir, os.ModePerm)
+		require.NoError(t, err)
+		defer func(fs file_interface.FileSystem, name string) {
+			removeErr := fs.RemoveAll(".")
+			if removeErr != nil {
+				t.Error(removeErr)
+			}
+		}(fs, dir)
+
+		err = fs.ChangeDir("temp")
+		require.NoError(t, err)
+
+		currentdir, err := fs.CurrentDir()
+		assert.Equal(t, "/ftp/user/"+dir, currentdir)
+
+		_, _ = fs.Create("temp.csv")
+
+		v, err := fs.ReadDir(".")
+		assert.Equal(t, "temp.csv", v[0].Name())
+		assert.False(t, v[0].IsDir())
 	})
 }
 

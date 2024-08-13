@@ -143,12 +143,13 @@ func (f *fileSystem) Create(name string) (file_interface.File, error) {
 	msg = fmt.Sprintf("Created file %q", name)
 
 	return &file{
-		response: res,
-		name:     filename,
-		path:     filePath,
-		conn:     f.conn,
-		logger:   f.logger,
-		metrics:  f.metrics,
+		response:  res,
+		name:      filename,
+		path:      filePath,
+		entryType: ftp.EntryTypeFile,
+		conn:      f.conn,
+		logger:    f.logger,
+		metrics:   f.metrics,
 	}, nil
 }
 
@@ -327,7 +328,11 @@ func (f *fileSystem) RemoveAll(name string) error {
 
 	status := "ERROR"
 
-	filePath := path.Join(f.config.RemoteDir, name)
+	filePath := f.config.RemoteDir
+
+	if name != "." {
+		filePath = path.Join(f.config.RemoteDir, name)
+	}
 
 	defer f.processLog(&FileLog{Operation: "RemoveAll", Location: filePath, Status: &status, Message: &msg}, time.Now())
 
@@ -389,4 +394,95 @@ func (f *fileSystem) processLog(fl *FileLog, startTime time.Time) {
 	fl.Duration = duration
 
 	f.logger.Debug(fl)
+}
+
+func (f *fileSystem) Stat(name string) (file_interface.FileInfo, error) {
+	status := "ERROR"
+
+	defer f.processLog(&FileLog{Operation: "Stat", Location: f.config.RemoteDir, Status: &status}, time.Now())
+
+	entry, err := f.conn.GetEntry(name)
+	if err != nil {
+		return nil, err
+	}
+
+	filePath := path.Join(f.config.RemoteDir, name)
+
+	status = "SUCCESS"
+
+	return &file{
+		name:      entry.Name,
+		path:      filePath,
+		entryType: entry.Type,
+		modTime:   entry.Time,
+		conn:      f.conn,
+		logger:    f.logger,
+		metrics:   f.metrics,
+	}, nil
+
+}
+
+func (f *fileSystem) CurrentDir() (string, error) {
+	defer f.processLog(&FileLog{Operation: "CurrentDir", Location: f.config.RemoteDir}, time.Now())
+
+	return f.conn.CurrentDir()
+}
+
+func (f *fileSystem) ChangeDir(dir string) error {
+	status := "ERROR"
+
+	var msg string
+
+	defer f.processLog(&FileLog{Operation: "ChangeDir", Location: f.config.RemoteDir, Status: &status, Message: &msg}, time.Now())
+
+	filepath := path.Join(f.config.RemoteDir, dir)
+
+	err := f.conn.ChangeDir(filepath)
+	if err != nil {
+		return err
+	}
+
+	f.config.RemoteDir = filepath
+	status = "SUCCESS"
+	msg = fmt.Sprintf("Changed current directory to %q", filepath)
+
+	return nil
+}
+
+func (f *fileSystem) ReadDir(dir string) ([]file_interface.FileInfo, error) {
+	var msg string
+
+	status := "ERROR"
+
+	defer f.processLog(&FileLog{Operation: "ChangeDir", Location: f.config.RemoteDir, Status: &status, Message: &msg}, time.Now())
+
+	filepath := f.config.RemoteDir
+	if dir != "." {
+		filepath = path.Join(f.config.RemoteDir, dir)
+	}
+
+	entries, err := f.conn.List(filepath)
+	if err != nil {
+		return nil, err
+	}
+
+	var fileInfo []file_interface.FileInfo
+
+	for _, entry := range entries {
+		filePath := path.Join(f.config.RemoteDir, entry.Name)
+
+		fileInfo = append(fileInfo, &file{
+			name:      entry.Name,
+			modTime:   entry.Time,
+			entryType: entry.Type,
+			path:      filePath,
+			conn:      f.conn,
+			logger:    f.logger,
+			metrics:   f.metrics,
+		})
+	}
+
+	status = "SUCCESS"
+	msg = fmt.Sprintf("Found %d entries in %q", len(entries), filepath)
+	return fileInfo, nil
 }
