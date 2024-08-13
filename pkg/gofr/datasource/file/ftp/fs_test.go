@@ -4,13 +4,13 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/jlaffaye/ftp"
 	"net/textproto"
 	"path"
 	"path/filepath"
 	"testing"
 	"time"
 
+	"github.com/jlaffaye/ftp"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 )
@@ -888,10 +888,13 @@ func TestReadDir(t *testing.T) {
 				assert.Error(t, err)
 			} else {
 				assert.NoError(t, err)
+
 				var names []string
+
 				for _, file := range files {
 					names = append(names, file.Name())
 				}
+
 				assert.ElementsMatch(t, tt.expectedName, names)
 			}
 		})

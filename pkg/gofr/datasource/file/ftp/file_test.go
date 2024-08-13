@@ -4,12 +4,12 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"github.com/stretchr/testify/require"
 	"io"
 	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
 	file_interface "gofr.dev/pkg/gofr/datasource/file"
@@ -715,27 +715,33 @@ func Test_DirectoryOperations(t *testing.T) {
 			require.NoError(t, removeErr)
 		}(fs)
 
+		// ChangeDir Operations
 		err = fs.ChangeDir("temp1")
 		require.NoError(t, err)
 
 		err = fs.ChangeDir("../temp2")
 		require.NoError(t, err)
 
+		// Changing Remote Directory
 		currentdir, err := fs.CurrentDir()
+		require.NoError(t, err)
 		assert.Equal(t, "/ftp/user/temp2", currentdir)
 
 		_, _ = fs.Create("temp.csv")
 
 		v, err := fs.ReadDir(".")
+		require.NoError(t, err)
 		assert.Equal(t, "temp.csv", v[0].Name())
 		assert.False(t, v[0].IsDir())
 
 		p, err := fs.Stat("../temp2")
+		require.NoError(t, err)
 		assert.True(t, p.IsDir())
 
 		p, err = fs.Stat("temp.csv")
-		assert.Equal(t, "temp.csv", v[0].Name())
-		assert.False(t, v[0].IsDir())
+		require.NoError(t, err)
+		assert.Equal(t, "temp.csv", p.Name())
+		assert.False(t, p.IsDir())
 	})
 }
 

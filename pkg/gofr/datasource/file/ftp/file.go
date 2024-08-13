@@ -6,11 +6,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/jlaffaye/ftp"
 	"io"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/jlaffaye/ftp"
 
 	file_interface "gofr.dev/pkg/gofr/datasource/file"
 )
@@ -197,7 +198,7 @@ func (f *file) Size() int64 {
 }
 
 func (f *file) Mode() os.FileMode {
-	defer f.postProcess(&FileLog{Operation: "Mode", Location: f.path}, time.Now())
+	f.postProcess(&FileLog{Operation: "Mode", Location: f.path}, time.Now())
 	return os.ModePerm
 }
 

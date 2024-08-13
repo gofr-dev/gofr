@@ -88,7 +88,9 @@ func (f *fileSystem) Connect() {
 	conn, err := ftp.Dial(ftpServer, ftp.DialWithTimeout(f.config.DialTimeout))
 	if err != nil {
 		f.logger.Errorf("Connection failed : %v", err)
+
 		status = "CONNECTION ERROR"
+
 		return
 	}
 
@@ -97,7 +99,9 @@ func (f *fileSystem) Connect() {
 	err = conn.Login(f.config.User, f.config.Password)
 	if err != nil {
 		f.logger.Errorf("Login failed : %v", err)
+
 		status = "LOGIN ERROR"
+
 		return
 	}
 
@@ -295,7 +299,7 @@ func (f *fileSystem) OpenFile(name string, _ int, _ os.FileMode) (file_interface
 }
 
 // Remove deletes a file from the FTP server.
-// Note: some server may return an error type even if delete is successful
+// Note: some server may return an error type even if delete is successful.
 func (f *fileSystem) Remove(name string) error {
 	var msg string
 
@@ -373,6 +377,7 @@ func (f *fileSystem) Rename(oldname, newname string) error {
 	if oldname == newname {
 		msg = "File has the same name"
 		status = "NO ACTION"
+
 		return nil
 	}
 
@@ -432,7 +437,6 @@ func (f *fileSystem) Stat(name string) (file_interface.FileInfo, error) {
 		logger:    f.logger,
 		metrics:   f.metrics,
 	}, nil
-
 }
 
 func (f *fileSystem) CurrentDir() (string, error) {
@@ -507,6 +511,7 @@ func (f *fileSystem) ReadDir(dir string) ([]file_interface.FileInfo, error) {
 
 	status = "SUCCESS"
 	msg = fmt.Sprintf("Found %d entries in %q", len(entries), filepath)
+
 	return fileInfo, nil
 }
 
