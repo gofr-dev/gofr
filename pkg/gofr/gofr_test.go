@@ -2,6 +2,7 @@ package gofr
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -293,6 +294,163 @@ func TestEnableBasicAuthWithFunc(t *testing.T) {
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode, "TestEnableBasicAuthWithFunc Failed!")
+}
+
+func encodeBasicAuthorization(t *testing.T, arg string) string {
+	t.Helper()
+
+	data := []byte(arg)
+
+	dst := make([]byte, base64.StdEncoding.EncodedLen(len(data)))
+
+	base64.StdEncoding.Encode(dst, data)
+
+	s := "Basic " + string(dst)
+
+	return s
+}
+
+func Test_EnableBasicAuth(t *testing.T) {
+	mockContainer, _ := container.NewMockContainer(t)
+
+	tests := []struct {
+		name               string
+		args               []string
+		passedCredentials  string
+		expectedStatusCode int
+	}{
+		{
+			"No Authorization header passed",
+			[]string{"user1", "password1", "user2", "password2"},
+			"",
+			http.StatusUnauthorized,
+		},
+		{
+			"Even number of arguments",
+			[]string{"user1", "password1", "user2", "password2"},
+			"user1:password1",
+			http.StatusOK,
+		},
+		{
+			"Odd number of arguments with no authorization header passed",
+			[]string{"user1", "password1", "user2"},
+			"",
+			http.StatusOK,
+		},
+		{
+			"Odd number of arguments with wrong authorization header passed",
+			[]string{"user1", "password1", "user2"},
+			"user1:password2",
+			http.StatusOK,
+		},
+	}
+
+	for i, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Initialize a new App instance
+			a := &App{
+				httpServer: &httpServer{
+					router: gofrHTTP.NewRouter(),
+				},
+				container: mockContainer,
+			}
+
+			a.httpServer.router.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				fmt.Fprintln(w, "Hello, world!")
+			}))
+
+			a.EnableBasicAuth(tt.args...)
+
+			server := httptest.NewServer(a.httpServer.router)
+			defer server.Close()
+
+			client := server.Client()
+
+			// Create a mock HTTP request
+			req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, server.URL, http.NoBody)
+			require.NoError(t, err)
+
+			// Add a basic authorization header
+			req.Header.Add("Authorization", encodeBasicAuthorization(t, tt.passedCredentials))
+
+			// Send the HTTP request
+			resp, err := client.Do(req)
+			require.NoError(t, err)
+
+			defer resp.Body.Close()
+
+			assert.Equal(t, tt.expectedStatusCode, resp.StatusCode, "TEST[%d], Failed.\n%s", i, tt.name)
+		})
+	}
+}
+
+func Test_EnableBasicAuthWithValidator(t *testing.T) {
+	mockContainer, _ := container.NewMockContainer(t)
+
+	tests := []struct {
+		name               string
+		passedCredentials  string
+		expectedStatusCode int
+	}{
+		{
+			"No Authorization header passed",
+			"",
+			http.StatusUnauthorized,
+		},
+		{
+			"Correct Authorization",
+			"user:password",
+			http.StatusOK,
+		},
+		{
+			"Wrong Authorization header passed",
+			"user2:password2",
+			http.StatusUnauthorized,
+		},
+	}
+
+	for i, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Initialize a new App instance
+			a := &App{
+				httpServer: &httpServer{
+					router: gofrHTTP.NewRouter(),
+					port:   8001,
+				},
+				container: mockContainer,
+			}
+
+			validateFunc := func(_ *container.Container, username string, password string) bool {
+				return username == "user" && password == "password"
+			}
+
+			a.EnableBasicAuthWithValidator(validateFunc)
+
+			a.httpServer.router.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				fmt.Fprintln(w, "Hello, world!")
+			}))
+
+			server := httptest.NewServer(a.httpServer.router)
+			defer server.Close()
+
+			client := server.Client()
+
+			// Create a mock HTTP request
+			req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, server.URL, http.NoBody)
+			require.NoError(t, err)
+
+			// Add a basic authorization header
+			req.Header.Add("Authorization", encodeBasicAuthorization(t, tt.passedCredentials))
+
+			// Send the HTTP request
+			resp, err := client.Do(req)
+			require.NoError(t, err)
+
+			defer resp.Body.Close()
+
+			assert.Equal(t, tt.expectedStatusCode, resp.StatusCode, "TEST[%d], Failed.\n%s", i, tt.name)
+		})
+	}
 }
 
 func Test_AddRESTHandlers(t *testing.T) {
@@ -745,4 +903,32 @@ func Test_Shutdown(t *testing.T) {
 	})
 
 	assert.Contains(t, logs, "Application shutdown complete", "Test_Shutdown Failed!")
+}
+
+func TestApp_SubscriberInitialize(t *testing.T) {
+	t.Run("subscriber is initialized", func(t *testing.T) {
+		app := New()
+
+		mockContainer := container.Container{
+			Logger: logging.NewLogger(logging.ERROR),
+			PubSub: mockSubscriber{},
+		}
+
+		app.container = &mockContainer
+
+		app.Subscribe("Hello", nil)
+
+		_, ok := app.subscriptionManager.subscriptions["Hello"]
+
+		assert.True(t, ok)
+	})
+
+	t.Run("subscriber is not initialized", func(t *testing.T) {
+		app := New()
+		app.Subscribe("Hello", nil)
+
+		_, ok := app.subscriptionManager.subscriptions["Hello"]
+
+		assert.False(t, ok)
+	})
 }
