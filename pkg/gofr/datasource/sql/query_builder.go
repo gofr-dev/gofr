@@ -1,8 +1,17 @@
 package sql
 
 import (
+	"errors"
 	"fmt"
+
+	"reflect"
 	"strings"
+)
+
+var (
+	errFieldCannotBeEmpty = errors.New("field cannot be empty")
+	errFieldCannotBeZero  = errors.New("field cannot be zero")
+	errFieldCannotBeNull  = errors.New("field cannot be null")
 )
 
 type FieldConstraints struct {
@@ -10,9 +19,10 @@ type FieldConstraints struct {
 	NotNull       bool
 }
 
-func InsertQuery(dialect, tableName string, fieldNames []string, values []interface{}, constraints map[string]FieldConstraints) (string, error) {
-	var bindVars []string
-	var columns []string
+func InsertQuery(dialect, tableName string, fieldNames []string, values []interface{},
+	constraints map[string]FieldConstraints) (string, error) {
+	bindVars := make([]string, 0, len(fieldNames))
+	columns := make([]string, 0, len(fieldNames))
 
 	for i, fieldName := range fieldNames {
 		if constraints[fieldName].AutoIncrement {
@@ -83,22 +93,23 @@ func validateNotNull(fieldName string, value interface{}, isNotNull bool) error 
 	if isNotNull {
 		switch v := value.(type) {
 		case string:
-			if len(v) == 0 {
-				return fmt.Errorf("field %s cannot be empty", fieldName)
+			if v == "" {
+				return fmt.Errorf("%w: %s", errFieldCannotBeEmpty, fieldName)
 			}
 		case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
 			if v == 0 {
-				return fmt.Errorf("field %s cannot be zero", fieldName)
+				return fmt.Errorf("%w: %s", errFieldCannotBeZero, fieldName)
 			}
 		case float32, float64:
 			if v == 0.0 {
-				return fmt.Errorf("field %s cannot be zero", fieldName)
+				return fmt.Errorf("%w: %s", errFieldCannotBeZero, fieldName)
 			}
 		default:
-			if v == nil {
-				return fmt.Errorf("field %s cannot be null", fieldName)
+			if reflect.ValueOf(value).IsNil() {
+				return fmt.Errorf("%w: %s", errFieldCannotBeNull, fieldName)
 			}
 		}
 	}
+
 	return nil
 }

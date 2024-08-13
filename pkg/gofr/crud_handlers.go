@@ -10,10 +10,12 @@ import (
 )
 
 var (
-	errInvalidObject    = errors.New("unexpected object given for AddRESTHandlers")
-	errEntityNotFound   = errors.New("entity not found")
-	errObjectIsNil      = errors.New("object given for AddRESTHandlers is nil")
-	errNonPointerObject = errors.New("passed object is not pointer")
+	errInvalidObject     = errors.New("unexpected object given for AddRESTHandlers")
+	errEntityNotFound    = errors.New("entity not found")
+	errObjectIsNil       = errors.New("object given for AddRESTHandlers is nil")
+	errNonPointerObject  = errors.New("passed object is not pointer")
+	errFieldCannotBeNull = errors.New("field cannot be null")
+	errInvalidSQLTag     = errors.New("invalid sql tag")
 )
 
 type Create interface {
@@ -116,6 +118,7 @@ func scanEntity(object interface{}) (*entity, error) {
 
 func parseSQLTag(tag string) (sql.FieldConstraints, error) {
 	var constraints sql.FieldConstraints
+
 	tags := strings.Split(tag, ",")
 
 	for _, t := range tags {
@@ -127,7 +130,7 @@ func parseSQLTag(tag string) (sql.FieldConstraints, error) {
 		case "not_null":
 			constraints.NotNull = true
 		default:
-			return constraints, fmt.Errorf("invalid sql tag: %s", t)
+			return constraints, fmt.Errorf("%w: %s", errInvalidSQLTag, t)
 		}
 	}
 
@@ -207,7 +210,7 @@ func (e *entity) Create(c *Context) (interface{}, error) {
 
 		// Basic not null validation
 		if e.constraints[fieldName].NotNull && reflect.ValueOf(newEntity).Elem().Field(i).Interface() == nil {
-			return nil, fmt.Errorf("field %s cannot be null", fieldName)
+			return nil, fmt.Errorf("%w: %s", errFieldCannotBeNull, fieldName)
 		}
 
 		fieldNames = append(fieldNames, fieldName)
@@ -224,26 +227,27 @@ func (e *entity) Create(c *Context) (interface{}, error) {
 		return nil, err
 	}
 
-	var lastId interface{}
+	var lastID interface{}
 
-	if hasAutoIncrementId(e.constraints) { // Check for auto-increment ID
-		lastId, err = result.LastInsertId()
+	if hasAutoIncrementID(e.constraints) { // Check for auto-increment ID
+		lastID, err = result.LastInsertId()
 		if err != nil {
 			return nil, err
 		}
 	} else {
-		lastId = fieldValues[0]
+		lastID = fieldValues[0]
 	}
 
-	return fmt.Sprintf("%s successfully created with id: %v", e.name, lastId), nil
+	return fmt.Sprintf("%s successfully created with id: %v", e.name, lastID), nil
 }
 
-func hasAutoIncrementId(constraints map[string]sql.FieldConstraints) bool {
+func hasAutoIncrementID(constraints map[string]sql.FieldConstraints) bool {
 	for _, constraint := range constraints {
 		if constraint.AutoIncrement {
 			return true
 		}
 	}
+
 	return false
 }
 
