@@ -39,7 +39,6 @@ const (
 	shutDownTimeout        = 30 * time.Second
 	gofrTraceExporter      = "gofr"
 	gofrTracerURL          = "https://tracer.gofr.dev"
-	defaultRequestTimeout  = 5
 )
 
 // App is the main application in the GoFr framework.
@@ -236,9 +235,11 @@ func (a *App) httpServerSetup() {
 		a.add(http.MethodGet, "/.well-known/{name}", SwaggerUIHandler)
 	}
 
-	_, err := strconv.Atoi(a.Config.Get("REQUEST_TIMEOUT"))
-	if err != nil && a.Config.Get("REQUEST_TIMEOUT") != "" {
-		a.container.Error("invalid value of config REQUEST_TIMEOUT. setting default value to 5 seconds.")
+	requestTimeout := a.Config.Get("REQUEST_TIMEOUT")
+	timeoutVal, err := strconv.Atoi(requestTimeout)
+
+	if (err != nil && requestTimeout != "") || timeoutVal < 0 {
+		a.container.Error("invalid value of config REQUEST_TIMEOUT.")
 	}
 
 	a.httpServer.router.PathPrefix("/").Handler(handler{
@@ -338,8 +339,8 @@ func (a *App) add(method, pattern string, h Handler) {
 	a.httpRegistered = true
 
 	reqTimeout, err := strconv.Atoi(a.Config.Get("REQUEST_TIMEOUT"))
-	if err != nil && a.Config.Get("REQUEST_TIMEOUT") != "" {
-		reqTimeout = defaultRequestTimeout
+	if (err != nil && a.Config.Get("REQUEST_TIMEOUT") != "") || reqTimeout < 0 {
+		reqTimeout = 0
 	}
 
 	a.httpServer.router.Add(method, pattern, handler{

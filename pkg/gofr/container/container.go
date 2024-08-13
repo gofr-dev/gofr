@@ -85,7 +85,7 @@ func (c *Container) Create(conf config.Config) {
 
 		defer func() {
 			if err != nil {
-				c.Logger.Error("Incorrect Value for REMOTE_LOG_FETCH_INTERVAL. Setting Default to 15 sec.")
+				c.Logger.Error("incorrect value for REMOTE_LOG_FETCH_INTERVAL. setting default of 15 sec.")
 			}
 		}()
 	}
