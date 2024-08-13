@@ -149,6 +149,7 @@ func (f *fileSystem) Create(name string) (file_interface.File, error) {
 		response:  res,
 		name:      filename,
 		path:      filePath,
+		modTime:   time.Now(),
 		entryType: ftp.EntryTypeFile,
 		conn:      f.conn,
 		logger:    f.logger,
@@ -261,6 +262,7 @@ func (f *fileSystem) Rename(oldname, newname string) error {
 		return err
 	}
 
+	f.modTime = time.Now()
 	msg = fmt.Sprintf("Renamed file %q to %q", oldname, newname)
 	status = "SUCCESS"
 

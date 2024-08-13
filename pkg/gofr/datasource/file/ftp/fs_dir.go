@@ -33,6 +33,7 @@ func (f *fileSystem) Mkdir(name string, _ os.FileMode) error {
 		return err
 	}
 
+	f.modTime = time.Now()
 	status = "SUCCESS"
 	msg = fmt.Sprintf("%q created successfully", name)
 
@@ -136,6 +137,7 @@ func (f *fileSystem) RemoveAll(name string) error {
 	return nil
 }
 
+// Stat returns the file/directory information in the directory.
 func (f *fileSystem) Stat(name string) (file_interface.FileInfo, error) {
 	status := "ERROR"
 
@@ -182,6 +184,7 @@ func (f *fileSystem) Stat(name string) (file_interface.FileInfo, error) {
 	}, nil
 }
 
+// CurrentDir returns the path of the current directory.
 func (f *fileSystem) CurrentDir() (string, error) {
 	defer f.processLog(&FileLog{
 		Operation: "CurrentDir",
@@ -191,6 +194,7 @@ func (f *fileSystem) CurrentDir() (string, error) {
 	return f.conn.CurrentDir()
 }
 
+// ChangeDir changes the current directory.
 func (f *fileSystem) ChangeDir(dir string) error {
 	var msg string
 
@@ -218,6 +222,7 @@ func (f *fileSystem) ChangeDir(dir string) error {
 	return nil
 }
 
+// ReadDir returns a list of files/directories present in the directory.
 func (f *fileSystem) ReadDir(dir string) ([]file_interface.FileInfo, error) {
 	var msg string
 

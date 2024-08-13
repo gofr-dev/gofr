@@ -182,6 +182,7 @@ func (f *file) Name() string {
 	return f.name
 }
 
+// Size returns the size of the file.
 func (f *file) Size() int64 {
 	var msg string
 
@@ -197,16 +198,20 @@ func (f *file) Size() int64 {
 	return size
 }
 
+// Mode checks the FileMode. FTP server doesn't support file modes.
+// This method is to comply with the generalized FileInfo interface.
 func (f *file) Mode() os.FileMode {
 	f.postProcess(&FileLog{Operation: "Mode", Location: f.path}, time.Now())
 	return os.ModePerm
 }
 
+// IsDir checks, if the file is a directory or not.
 func (f *file) IsDir() bool {
 	defer f.postProcess(&FileLog{Operation: "IsDir", Location: f.path}, time.Now())
 	return f.entryType == ftp.EntryTypeFolder
 }
 
+// ModTime returns the last time the file/directory was modified.
 func (f *file) ModTime() time.Time {
 	defer f.postProcess(&FileLog{Operation: "ModTime", Location: f.path}, time.Now())
 	return f.modTime
@@ -335,6 +340,7 @@ func (f *file) Write(p []byte) (n int, err error) {
 
 	f.offset += int64(len(p))
 
+	f.modTime = time.Now()
 	status = "SUCCESS"
 	msg = fmt.Sprintf("Wrote %v bytes to file at path %q", len(p), f.path)
 
@@ -357,6 +363,7 @@ func (f *file) WriteAt(p []byte, off int64) (n int, err error) {
 		return 0, err
 	}
 
+	f.modTime = time.Now()
 	msg = fmt.Sprintf("Wrote %v bytes to file with path %q at %v offset", len(p), f.path, off)
 	status = "SUCCESS"
 
