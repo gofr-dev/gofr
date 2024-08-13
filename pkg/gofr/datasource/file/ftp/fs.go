@@ -388,14 +388,6 @@ func (f *fileSystem) Rename(oldname, newname string) error {
 	return nil
 }
 
-func (f *fileSystem) processLog(fl *FileLog, startTime time.Time) {
-	duration := time.Since(startTime).Milliseconds()
-
-	fl.Duration = duration
-
-	f.logger.Debug(fl)
-}
-
 func (f *fileSystem) Stat(name string) (file_interface.FileInfo, error) {
 	status := "ERROR"
 
@@ -425,6 +417,7 @@ func (f *fileSystem) Stat(name string) (file_interface.FileInfo, error) {
 
 	entry, err := f.conn.List(filePath)
 	if err != nil {
+		f.logger.Errorf("Stat failed. Error Retrieving file : %v", errEmptyPath)
 		return nil, err
 	}
 
@@ -467,6 +460,7 @@ func (f *fileSystem) ChangeDir(dir string) error {
 
 	err := f.conn.ChangeDir(filepath)
 	if err != nil {
+		f.logger.Errorf("ChangeDir failed : %v", errEmptyPath)
 		return err
 	}
 
@@ -491,6 +485,7 @@ func (f *fileSystem) ReadDir(dir string) ([]file_interface.FileInfo, error) {
 
 	entries, err := f.conn.List(filepath)
 	if err != nil {
+		f.logger.Errorf("ReadDir failed. Error reading directory : %v", errEmptyPath)
 		return nil, err
 	}
 
@@ -513,4 +508,12 @@ func (f *fileSystem) ReadDir(dir string) ([]file_interface.FileInfo, error) {
 	status = "SUCCESS"
 	msg = fmt.Sprintf("Found %d entries in %q", len(entries), filepath)
 	return fileInfo, nil
+}
+
+func (f *fileSystem) processLog(fl *FileLog, startTime time.Time) {
+	duration := time.Since(startTime).Milliseconds()
+
+	fl.Duration = duration
+
+	f.logger.Debug(fl)
 }

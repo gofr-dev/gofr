@@ -189,22 +189,25 @@ func (f *file) Size() int64 {
 	defer f.postProcess(&FileLog{Operation: "Size", Location: f.path, Status: &status, Message: &msg}, time.Now())
 
 	size, err := f.conn.FileSize(f.name)
-	if err == nil && size > 0 {
-		status = "SUCCESS"
+	if err != nil {
+		f.logger.Errorf("Size operation failed : %v", err)
 	}
 
 	return size
 }
 
 func (f *file) Mode() os.FileMode {
+	defer f.postProcess(&FileLog{Operation: "Mode", Location: f.path}, time.Now())
 	return os.ModePerm
 }
 
 func (f *file) IsDir() bool {
+	defer f.postProcess(&FileLog{Operation: "IsDir", Location: f.path}, time.Now())
 	return f.entryType == ftp.EntryTypeFolder
 }
 
 func (f *file) ModTime() time.Time {
+	defer f.postProcess(&FileLog{Operation: "ModTime", Location: f.path}, time.Now())
 	return f.modTime
 }
 

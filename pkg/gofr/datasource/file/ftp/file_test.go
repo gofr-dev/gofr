@@ -698,7 +698,7 @@ func Test_DirectoryOperations(t *testing.T) {
 		fs.UseLogger(mockLogger)
 		fs.UseMetrics(mockMetrics)
 
-		mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
+		mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 
 		err := fs.Mkdir("temp1", os.ModePerm)
