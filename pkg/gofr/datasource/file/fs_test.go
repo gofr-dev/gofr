@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"io/fs"
 	"os"
+	"path"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -340,7 +341,7 @@ func Test_DirectoryOperations(t *testing.T) {
 
 	dir, err := fileStore.CurrentDir()
 	require.NoError(t, err)
-	assert.Equal(t, "/Users/raramuri/go/src/awesomeProject2/gofr/pkg/gofr/datasource/file/Hello_world", dir)
+	assert.Equal(t, "Hello_world", path.Base(dir))
 
 	// create a file in the directory.
 	_, err = fileStore.Create("Hello.txt")
