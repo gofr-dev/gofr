@@ -79,11 +79,8 @@ func (fileSystem) ReadDir(dir string) ([]FileInfo, error) {
 
 	fileInfo := make([]FileInfo, len(entries))
 	for i := range entries {
-		fileInfo[i], err = entries[i].Info()
-		if err != nil {
-			fileInfo[i] = nil
-		}
+		fileInfo[i], _ = entries[i].Info()
 	}
 
-	return fileInfo, nil
+	return fileInfo, err
 }

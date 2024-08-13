@@ -334,7 +334,11 @@ func Test_DirectoryOperations(t *testing.T) {
 
 	err = fileStore.Mkdir("Hello_world", os.ModePerm)
 	require.NoError(t, err)
-	defer fileStore.RemoveAll("../Hello_world")
+
+	defer func() {
+		removeErr := fileStore.RemoveAll("../Hello_world")
+		require.NoError(t, removeErr)
+	}()
 
 	err = fileStore.ChangeDir("Hello_world")
 	require.NoError(t, err)
