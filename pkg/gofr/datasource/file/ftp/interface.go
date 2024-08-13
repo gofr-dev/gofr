@@ -33,7 +33,6 @@ type ServerConn interface {
 	RemoveDir(path string) error
 	Quit() error
 	FileSize(name string) (int64, error)
-	GetEntry(name string) (*ftp.Entry, error)
 	CurrentDir() (string, error)
 	ChangeDir(path string) error
 	List(path string) ([]*ftp.Entry, error)

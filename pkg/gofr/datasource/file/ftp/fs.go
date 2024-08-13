@@ -399,22 +399,42 @@ func (f *fileSystem) processLog(fl *FileLog, startTime time.Time) {
 func (f *fileSystem) Stat(name string) (file_interface.FileInfo, error) {
 	status := "ERROR"
 
-	defer f.processLog(&FileLog{Operation: "Stat", Location: f.config.RemoteDir, Status: &status}, time.Now())
+	defer f.processLog(&FileLog{
+		Operation: "Stat",
+		Location:  f.config.RemoteDir,
+		Status:    &status,
+	}, time.Now())
 
-	entry, err := f.conn.GetEntry(name)
-	if err != nil {
-		return nil, err
+	if name == "" {
+		f.logger.Errorf("Stat failed. Provide a valid path : %v", errEmptyPath)
+		return nil, errEmptyPath
 	}
 
 	filePath := path.Join(f.config.RemoteDir, name)
 
+	if path.Ext(name) == "" {
+		return &file{
+			name:      name,
+			path:      filePath,
+			entryType: ftp.EntryTypeFolder,
+			conn:      f.conn,
+			logger:    f.logger,
+			metrics:   f.metrics,
+		}, nil
+	}
+
+	entry, err := f.conn.List(filePath)
+	if err != nil {
+		return nil, err
+	}
+
 	status = "SUCCESS"
 
 	return &file{
-		name:      entry.Name,
+		name:      entry[0].Name,
 		path:      filePath,
-		entryType: entry.Type,
-		modTime:   entry.Time,
+		entryType: entry[0].Type,
+		modTime:   entry[0].Time,
 		conn:      f.conn,
 		logger:    f.logger,
 		metrics:   f.metrics,
@@ -423,17 +443,25 @@ func (f *fileSystem) Stat(name string) (file_interface.FileInfo, error) {
 }
 
 func (f *fileSystem) CurrentDir() (string, error) {
-	defer f.processLog(&FileLog{Operation: "CurrentDir", Location: f.config.RemoteDir}, time.Now())
+	defer f.processLog(&FileLog{
+		Operation: "CurrentDir",
+		Location:  f.config.RemoteDir,
+	}, time.Now())
 
 	return f.conn.CurrentDir()
 }
 
 func (f *fileSystem) ChangeDir(dir string) error {
-	status := "ERROR"
-
 	var msg string
 
-	defer f.processLog(&FileLog{Operation: "ChangeDir", Location: f.config.RemoteDir, Status: &status, Message: &msg}, time.Now())
+	status := "ERROR"
+
+	defer f.processLog(&FileLog{
+		Operation: "ChangeDir",
+		Location:  f.config.RemoteDir,
+		Status:    &status,
+		Message:   &msg,
+	}, time.Now())
 
 	filepath := path.Join(f.config.RemoteDir, dir)
 
@@ -469,13 +497,13 @@ func (f *fileSystem) ReadDir(dir string) ([]file_interface.FileInfo, error) {
 	var fileInfo []file_interface.FileInfo
 
 	for _, entry := range entries {
-		filePath := path.Join(f.config.RemoteDir, entry.Name)
+		entryPath := path.Join(filepath, entry.Name)
 
 		fileInfo = append(fileInfo, &file{
 			name:      entry.Name,
 			modTime:   entry.Time,
 			entryType: entry.Type,
-			path:      filePath,
+			path:      entryPath,
 			conn:      f.conn,
 			logger:    f.logger,
 			metrics:   f.metrics,

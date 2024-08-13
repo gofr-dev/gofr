@@ -691,8 +691,6 @@ func Test_ReadFromJSONArrayInvalidDelimiter(t *testing.T) {
 
 func Test_DirectoryOperations(t *testing.T) {
 	runFtpTest(t, func(fs file_interface.FileSystemProvider) {
-		var dir = "temp"
-
 		ctrl := gomock.NewController(t)
 		mockLogger := NewMockLogger(ctrl)
 		mockMetrics := NewMockMetrics(ctrl)
@@ -703,24 +701,39 @@ func Test_DirectoryOperations(t *testing.T) {
 		mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
 		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 
-		err := fs.Mkdir(dir, os.ModePerm)
+		err := fs.Mkdir("temp1", os.ModePerm)
 		require.NoError(t, err)
-		defer func(fs file_interface.FileSystem, name string) {
-			removeErr := fs.RemoveAll(".")
-			if removeErr != nil {
-				t.Error(removeErr)
-			}
-		}(fs, dir)
 
-		err = fs.ChangeDir("temp")
+		err = fs.Mkdir("temp2", os.ModePerm)
+		require.NoError(t, err)
+
+		defer func(fs file_interface.FileSystem) {
+			removeErr := fs.RemoveAll("../temp1")
+			require.NoError(t, removeErr)
+
+			removeErr = fs.RemoveAll("../temp2")
+			require.NoError(t, removeErr)
+		}(fs)
+
+		err = fs.ChangeDir("temp1")
+		require.NoError(t, err)
+
+		err = fs.ChangeDir("../temp2")
 		require.NoError(t, err)
 
 		currentdir, err := fs.CurrentDir()
-		assert.Equal(t, "/ftp/user/"+dir, currentdir)
+		assert.Equal(t, "/ftp/user/temp2", currentdir)
 
 		_, _ = fs.Create("temp.csv")
 
 		v, err := fs.ReadDir(".")
+		assert.Equal(t, "temp.csv", v[0].Name())
+		assert.False(t, v[0].IsDir())
+
+		p, err := fs.Stat("../temp2")
+		assert.True(t, p.IsDir())
+
+		p, err = fs.Stat("temp.csv")
 		assert.Equal(t, "temp.csv", v[0].Name())
 		assert.False(t, v[0].IsDir())
 	})

@@ -230,21 +230,6 @@ func (mr *MockServerConnMockRecorder) FileSize(name any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FileSize", reflect.TypeOf((*MockServerConn)(nil).FileSize), name)
 }
 
-// GetEntry mocks base method.
-func (m *MockServerConn) GetEntry(name string) (*ftp.Entry, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetEntry", name)
-	ret0, _ := ret[0].(*ftp.Entry)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetEntry indicates an expected call of GetEntry.
-func (mr *MockServerConnMockRecorder) GetEntry(name any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetEntry", reflect.TypeOf((*MockServerConn)(nil).GetEntry), name)
-}
-
 // List mocks base method.
 func (m *MockServerConn) List(path string) ([]*ftp.Entry, error) {
 	m.ctrl.T.Helper()
