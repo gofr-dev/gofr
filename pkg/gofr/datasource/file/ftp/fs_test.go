@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/jlaffaye/ftp"
 	"net/textproto"
 	"path"
 	"path/filepath"
@@ -1218,10 +1217,13 @@ func TestReadDir(t *testing.T) {
 				assert.Error(t, err)
 			} else {
 				assert.NoError(t, err)
+
 				var names []string
+
 				for _, file := range files {
 					names = append(names, file.Name())
 				}
+
 				assert.ElementsMatch(t, tt.expectedName, names)
 			}
 		})
