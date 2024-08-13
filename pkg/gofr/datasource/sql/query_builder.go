@@ -5,23 +5,37 @@ import (
 	"strings"
 )
 
-func InsertQuery(dialect, tableName string, fieldNames []string) string {
-	fieldNamesLength := len(fieldNames)
+type FieldConstraints struct {
+	AutoIncrement bool
+	NotNull       bool
+}
 
+func InsertQuery(dialect, tableName string, fieldNames []string, values []interface{}, constraints map[string]FieldConstraints) (string, error) {
 	var bindVars []string
-	for i := 1; i <= fieldNamesLength; i++ {
-		bindVars = append(bindVars, bindVar(dialect, i))
+	var columns []string
+
+	for i, fieldName := range fieldNames {
+		if constraints[fieldName].AutoIncrement {
+			continue
+		}
+
+		if err := validateNotNull(fieldName, values[i], constraints[fieldName].NotNull); err != nil {
+			return "", err
+		}
+
+		bindVars = append(bindVars, bindVar(dialect, i+1))
+		columns = append(columns, quotedString(quote(dialect), fieldName))
 	}
 
 	q := quote(dialect)
 
 	stmt := fmt.Sprintf(`INSERT INTO %s (%s) VALUES (%s)`,
 		quotedString(q, tableName),
-		quotedString(q, strings.Join(fieldNames, quotedString(q, ", "))),
+		strings.Join(columns, ", "),
 		strings.Join(bindVars, ", "),
 	)
 
-	return stmt
+	return stmt, nil
 }
 
 func SelectQuery(dialect, tableName string) string {
@@ -63,4 +77,28 @@ func DeleteByQuery(dialect, tableName, field string) string {
 		quotedString(q, tableName),
 		quotedString(q, field),
 		bindVar(dialect, 1))
+}
+
+func validateNotNull(fieldName string, value interface{}, isNotNull bool) error {
+	if isNotNull {
+		switch v := value.(type) {
+		case string:
+			if len(v) == 0 {
+				return fmt.Errorf("field %s cannot be empty", fieldName)
+			}
+		case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
+			if v == 0 {
+				return fmt.Errorf("field %s cannot be zero", fieldName)
+			}
+		case float32, float64:
+			if v == 0.0 {
+				return fmt.Errorf("field %s cannot be zero", fieldName)
+			}
+		default:
+			if v == nil {
+				return fmt.Errorf("field %s cannot be null", fieldName)
+			}
+		}
+	}
+	return nil
 }

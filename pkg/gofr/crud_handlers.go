@@ -54,11 +54,12 @@ type CRUD interface {
 
 // entity stores information about an entity.
 type entity struct {
-	name       string
-	entityType reflect.Type
-	primaryKey string
-	tableName  string
-	restPath   string
+	name        string
+	entityType  reflect.Type
+	primaryKey  string
+	tableName   string
+	restPath    string
+	constraints map[string]sql.FieldConstraints
 }
 
 // scanEntity extracts entity information for CRUD operations.
@@ -86,13 +87,51 @@ func scanEntity(object interface{}) (*entity, error) {
 	tableName := getTableName(object, structName)
 	restPath := getRestPath(object, structName)
 
-	return &entity{
-		name:       structName,
-		entityType: entityType,
-		primaryKey: primaryKeyFieldName,
-		tableName:  tableName,
-		restPath:   restPath,
-	}, nil
+	e := &entity{
+		name:        structName,
+		entityType:  entityType,
+		primaryKey:  primaryKeyFieldName,
+		tableName:   tableName,
+		restPath:    restPath,
+		constraints: make(map[string]sql.FieldConstraints),
+	}
+
+	for i := 0; i < entityType.NumField(); i++ {
+		field := entityType.Field(i)
+		fieldName := toSnakeCase(field.Name)
+
+		sqlTag := field.Tag.Get("sql")
+		if sqlTag != "" {
+			constraints, err := parseSQLTag(sqlTag)
+			if err != nil {
+				return nil, err
+			}
+
+			e.constraints[fieldName] = constraints
+		}
+	}
+
+	return e, nil
+}
+
+func parseSQLTag(tag string) (sql.FieldConstraints, error) {
+	var constraints sql.FieldConstraints
+	tags := strings.Split(tag, ",")
+
+	for _, t := range tags {
+		t = strings.ToLower(t) // Convert to lowercase for case-insensitivity
+
+		switch t {
+		case "auto_increment":
+			constraints.AutoIncrement = true
+		case "not_null":
+			constraints.NotNull = true
+		default:
+			return constraints, fmt.Errorf("invalid sql tag: %s", t)
+		}
+	}
+
+	return constraints, nil
 }
 
 func getTableName(object any, structName string) string {
@@ -160,18 +199,52 @@ func (e *entity) Create(c *Context) (interface{}, error) {
 
 	for i := 0; i < e.entityType.NumField(); i++ {
 		field := e.entityType.Field(i)
-		fieldNames = append(fieldNames, toSnakeCase(field.Name))
+		fieldName := toSnakeCase(field.Name)
+
+		if e.constraints[fieldName].AutoIncrement {
+			continue // Skip auto-increment fields for insertion
+		}
+
+		// Basic not null validation
+		if e.constraints[fieldName].NotNull && reflect.ValueOf(newEntity).Elem().Field(i).Interface() == nil {
+			return nil, fmt.Errorf("field %s cannot be null", fieldName)
+		}
+
+		fieldNames = append(fieldNames, fieldName)
 		fieldValues = append(fieldValues, reflect.ValueOf(newEntity).Elem().Field(i).Interface())
 	}
 
-	stmt := sql.InsertQuery(c.SQL.Dialect(), e.tableName, fieldNames)
-
-	_, err = c.SQL.ExecContext(c, stmt, fieldValues...)
+	stmt, err := sql.InsertQuery(c.SQL.Dialect(), e.tableName, fieldNames, fieldValues, e.constraints)
 	if err != nil {
 		return nil, err
 	}
 
-	return fmt.Sprintf("%s successfully created with id: %d", e.name, fieldValues[0]), nil
+	result, err := c.SQL.ExecContext(c, stmt, fieldValues...)
+	if err != nil {
+		return nil, err
+	}
+
+	var lastId interface{}
+
+	if hasAutoIncrementId(e.constraints) { // Check for auto-increment ID
+		lastId, err = result.LastInsertId()
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		lastId = fieldValues[0]
+	}
+
+	return fmt.Sprintf("%s successfully created with id: %v", e.name, lastId), nil
+}
+
+func hasAutoIncrementId(constraints map[string]sql.FieldConstraints) bool {
+	for _, constraint := range constraints {
+		if constraint.AutoIncrement {
+			return true
+		}
+	}
+	return false
 }
 
 func (e *entity) GetAll(c *Context) (interface{}, error) {
