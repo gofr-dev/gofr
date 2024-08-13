@@ -20,7 +20,7 @@ func Test_LocalFileSystemDirectoryCreation(t *testing.T) {
 	fileStore := New(logger)
 
 	err := fileStore.Mkdir(dirName, os.ModePerm)
-	//defer os.RemoveAll(dirName)
+	defer os.RemoveAll(dirName)
 
 	require.NoError(t, err)
 
@@ -329,7 +329,6 @@ func Test_DirectoryOperations(t *testing.T) {
 
 	info, err := fileStore.Stat(".")
 	require.NoError(t, err)
-
 	assert.True(t, info.IsDir())
 
 	err = fileStore.Mkdir("Hello_world", os.ModePerm)
@@ -341,17 +340,20 @@ func Test_DirectoryOperations(t *testing.T) {
 
 	dir, err := fileStore.CurrentDir()
 	require.NoError(t, err)
-
-	// directory changed and successfully fetched.
 	assert.Equal(t, "/Users/raramuri/go/src/awesomeProject2/gofr/pkg/gofr/datasource/file/Hello_world", dir)
 
 	// create a file in the directory.
 	_, err = fileStore.Create("Hello.txt")
 	require.NoError(t, err)
 
+	// ReadDir Operations
 	v, err := fileStore.ReadDir(".")
 	require.NoError(t, err)
+	assert.False(t, v[0].IsDir())
+	assert.Equal(t, "Hello.txt", v[0].Name())
 
+	v, err = fileStore.ReadDir("../Hello_world")
+	require.NoError(t, err)
 	assert.False(t, v[0].IsDir())
 	assert.Equal(t, "Hello.txt", v[0].Name())
 }
