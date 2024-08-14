@@ -206,13 +206,16 @@ func (f *file) Mode() os.FileMode {
 }
 
 // IsDir checks, if the file is a directory or not.
-// Note: IsDir must be used post fetching file from Stat or ReadDir or Create or Open
+// Note: IsDir must be used post Stat/ReadDir/Open/Create methods of fileSystem only.
+// Results in any other cases can be misleading.
 func (f *file) IsDir() bool {
 	defer f.postProcess(&FileLog{Operation: "IsDir", Location: f.path}, time.Now())
 	return f.entryType == ftp.EntryTypeFolder
 }
 
 // ModTime returns the last time the file/directory was modified.
+// Note: ModTime must be used post Stat/ReadDir/Open/Create methods of fileSystem only.
+// Results in any other cases can be misleading.
 func (f *file) ModTime() time.Time {
 	defer f.postProcess(&FileLog{Operation: "ModTime", Location: f.path}, time.Now())
 
@@ -220,6 +223,7 @@ func (f *file) ModTime() time.Time {
 	if err != nil {
 		return time.Time{}
 	}
+
 	return t
 }
 
@@ -302,7 +306,7 @@ func (f *file) check(whence int, offset, length int64) (int64, error) {
 	return f.offset, nil
 }
 
-// Seek sets the offset for the next Read or ReadAt operation.
+// Seek sets the offset for the next Read/Write operations.
 func (f *file) Seek(offset int64, whence int) (int64, error) {
 	var msg string
 
@@ -347,6 +351,7 @@ func (f *file) Write(p []byte) (n int, err error) {
 	f.offset += int64(len(p))
 
 	t := time.Time{}
+
 	mt := f.ModTime()
 	if mt != t {
 		f.modTime = mt
@@ -375,6 +380,7 @@ func (f *file) WriteAt(p []byte, off int64) (n int, err error) {
 	}
 
 	t := time.Time{}
+
 	mt := f.ModTime()
 	if mt != t {
 		f.modTime = mt

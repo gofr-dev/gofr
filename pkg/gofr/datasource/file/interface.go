@@ -69,11 +69,11 @@ type FileSystem interface {
 	// Stat returns the file/directory information in the directory.
 	Stat(name string) (FileInfo, error)
 
-	// ChangeDir changes the current directory.
-	ChangeDir(dirname string) error
+	// ChDir changes the current directory.
+	ChDir(dirname string) error
 
-	// CurrentDir returns the path of the current directory.
-	CurrentDir() (string, error)
+	// Getwd returns the path of the current directory.
+	Getwd() (string, error)
 }
 
 var (

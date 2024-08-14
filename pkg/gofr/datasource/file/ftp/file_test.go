@@ -4,13 +4,14 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"go.uber.org/mock/gomock"
 	"io"
 	"os"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 
 	file_interface "gofr.dev/pkg/gofr/datasource/file"
 )
@@ -717,14 +718,14 @@ func Test_DirectoryOperations(t *testing.T) {
 		}(fs)
 
 		// ChangeDir Operations
-		err = fs.ChangeDir("temp1")
+		err = fs.ChDir("temp1")
 		require.NoError(t, err)
 
-		err = fs.ChangeDir("../temp2")
+		err = fs.ChDir("../temp2")
 		require.NoError(t, err)
 
 		// Changing Remote Directory
-		currentdir, err := fs.CurrentDir()
+		currentdir, err := fs.Getwd()
 		require.NoError(t, err)
 		assert.Equal(t, "/ftp/user/temp2", currentdir)
 
@@ -746,6 +747,37 @@ func Test_DirectoryOperations(t *testing.T) {
 		require.NotEmpty(t, p)
 		assert.Equal(t, "temp.csv", p.Name())
 		assert.False(t, p.IsDir())
+	})
+}
+
+func Test_GetSize(t *testing.T) {
+	runFtpTest(t, func(fs file_interface.FileSystemProvider) {
+		ctrl := gomock.NewController(t)
+		mockLogger := NewMockLogger(ctrl)
+		mockMetrics := NewMockMetrics(ctrl)
+
+		fs.UseLogger(mockLogger)
+		fs.UseMetrics(mockMetrics)
+
+		mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
+		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+
+		newFile, _ := fs.Create("temp.json")
+		defer func(fs file_interface.FileSystem) {
+			removeErr := fs.Remove("temp.json")
+			if removeErr != nil {
+				t.Error(removeErr)
+			}
+		}(fs)
+
+		p, err := fs.Stat("temp.json")
+		require.NoError(t, err)
+		assert.Equal(t, int64(0), p.Size())
+
+		_, _ = newFile.Write([]byte("Hello_World"))
+		p, err = fs.Stat("temp.json")
+		require.NoError(t, err)
+		assert.NotEqual(t, int64(0), p.Size())
 	})
 }
 
@@ -771,7 +803,7 @@ func Test_GetTime(t *testing.T) {
 
 		p, err := fs.Stat("temp.json")
 		require.NoError(t, err)
-		assert.NotEqual(t, p.ModTime(), time.Time{})
+		assert.NotEqual(t, time.Time{}, p.ModTime())
 	})
 }
 

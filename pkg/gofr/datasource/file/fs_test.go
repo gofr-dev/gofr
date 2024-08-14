@@ -340,10 +340,10 @@ func Test_DirectoryOperations(t *testing.T) {
 		require.NoError(t, removeErr)
 	}()
 
-	err = fileStore.ChangeDir("Hello_world")
+	err = fileStore.ChDir("Hello_world")
 	require.NoError(t, err)
 
-	dir, err := fileStore.CurrentDir()
+	dir, err := fileStore.Getwd()
 	require.NoError(t, err)
 	assert.Equal(t, "Hello_world", path.Base(dir))
 

@@ -62,17 +62,19 @@ func (fileSystem) Rename(oldname, newname string) error {
 	return os.Rename(oldname, newname)
 }
 
+// Stat returns the file/directory info
 func (fileSystem) Stat(name string) (FileInfo, error) {
 	return os.Stat(name)
 }
 
-func (fileSystem) CurrentDir() (string, error) {
+// Getwd returns the full path of the current working directory.
+func (fileSystem) Getwd() (string, error) {
 	return os.Getwd()
 }
 
-// ChangeDir changes the current working directory to the named directory.
+// ChDir changes the current working directory to the named directory.
 // If there is an error, it will be of type *PathError.
-func (fileSystem) ChangeDir(dir string) error {
+func (fileSystem) ChDir(dir string) error {
 	return os.Chdir(dir)
 }
 
@@ -86,7 +88,7 @@ func (fileSystem) ReadDir(dir string) ([]FileInfo, error) {
 	for i := range entries {
 		fileInfo[i], err = entries[i].Info()
 		if err != nil {
-			return nil, err
+			return fileInfo, err
 		}
 	}
 

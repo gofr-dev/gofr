@@ -29,6 +29,17 @@ func (c *Conn) RetrFrom(filepath string, offset uint64) (ftpResponse, error) {
 	return c.ServerConn.RetrFrom(filepath, offset)
 }
 
+func (c *Conn) List(filepath string) ([]Entry, error) {
+	res, err := c.ServerConn.List(filepath)
+
+	var entries []Entry
+	for _, entry := range res {
+		entries = append(entries, entry)
+	}
+
+	return entries, err
+}
+
 var (
 	errEmptyFilename  = errors.New("filename cannot be empty")
 	errEmptyPath      = errors.New("file/directory path cannot be empty")
@@ -80,7 +91,12 @@ func (f *fileSystem) Connect() {
 
 	ftpServer := fmt.Sprintf("%v:%v", f.config.Host, f.config.Port)
 
-	defer f.processLog(&FileLog{Operation: "Connect", Location: ftpServer, Status: &status, Message: &msg}, time.Now())
+	defer f.processLog(&FileLog{
+		Operation: "Connect",
+		Location:  ftpServer,
+		Status:    &status,
+		Message:   &msg,
+	}, time.Now())
 
 	if f.config.DialTimeout == 0 {
 		f.config.DialTimeout = time.Second * 5
@@ -116,11 +132,17 @@ func (f *fileSystem) Create(name string) (file_interface.File, error) {
 	filePath := path.Join(f.config.RemoteDir, name)
 
 	var msg string
+
 	var fl = &file{}
 
 	status := "ERROR"
 
-	defer f.processLog(&FileLog{Operation: "Create", Location: filePath, Status: &status, Message: &msg}, fl.modTime)
+	defer f.processLog(&FileLog{
+		Operation: "Create",
+		Location:  filePath,
+		Status:    &status,
+		Message:   &msg,
+	}, fl.modTime)
 
 	if name == "" {
 		f.logger.Errorf("Create_File failed. Provide a valid filename : %v", errEmptyFilename)
@@ -177,7 +199,12 @@ func (f *fileSystem) Open(name string) (file_interface.File, error) {
 
 	filePath := path.Join(f.config.RemoteDir, name)
 
-	defer f.processLog(&FileLog{Operation: "Open", Location: filePath, Status: &status, Message: &msg}, time.Now())
+	defer f.processLog(&FileLog{
+		Operation: "Open",
+		Location:  filePath,
+		Status:    &status,
+		Message:   &msg,
+	}, time.Now())
 
 	if name == "" {
 		f.logger.Errorf("Open_file failed. Provide a valid filename : %v", errEmptyFilename)
@@ -208,6 +235,7 @@ func (f *fileSystem) Open(name string) (file_interface.File, error) {
 	}
 
 	t := time.Time{}
+
 	mt := fl.ModTime()
 	if mt != t {
 		fl.modTime = mt
@@ -232,7 +260,12 @@ func (f *fileSystem) Remove(name string) error {
 
 	filePath := path.Join(f.config.RemoteDir, name)
 
-	defer f.processLog(&FileLog{Operation: "Remove", Location: filePath, Status: &status, Message: &msg}, time.Now())
+	defer f.processLog(&FileLog{
+		Operation: "Remove",
+		Location:  filePath,
+		Status:    &status,
+		Message:   &msg},
+		time.Now())
 
 	if name == "" {
 		f.logger.Errorf("Remove_file failed. Provide a valid filename : %v", errEmptyFilename)
@@ -251,10 +284,11 @@ func (f *fileSystem) Remove(name string) error {
 	return nil
 }
 
-// Rename renames a file or directory on the FTP server.
+// Rename renames a file/directory on the FTP server.
 func (f *fileSystem) Rename(oldname, newname string) error {
 	var msg string
-	var tempfile = &file{}
+
+	var tempFile = &file{conn: f.conn, logger: f.logger, metrics: f.metrics}
 
 	status := "ERROR"
 
@@ -262,7 +296,12 @@ func (f *fileSystem) Rename(oldname, newname string) error {
 
 	newFilePath := path.Join(f.config.RemoteDir, newname)
 
-	defer f.processLog(&FileLog{Operation: "Rename", Location: oldFilePath, Status: &status, Message: &msg}, tempfile.modTime)
+	defer f.processLog(&FileLog{
+		Operation: "Rename",
+		Location:  oldFilePath,
+		Status:    &status,
+		Message:   &msg,
+	}, tempFile.modTime)
 
 	if oldname == "" || newname == "" {
 		f.logger.Errorf("Provide valid arguments : %v", errInvalidArg)
@@ -284,13 +323,12 @@ func (f *fileSystem) Rename(oldname, newname string) error {
 
 	msg = fmt.Sprintf("Renamed file %q to %q", oldname, newname)
 	status = "SUCCESS"
-
-	tempfile.path = newFilePath
+	tempFile.path = newFilePath
 
 	t := time.Time{}
-	mt := tempfile.ModTime()
+	mt := tempFile.ModTime()
 	if mt != t {
-		tempfile.modTime = mt
+		tempFile.modTime = mt
 	}
 
 	return nil

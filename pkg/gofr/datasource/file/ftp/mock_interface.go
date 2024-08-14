@@ -15,7 +15,6 @@ import (
 	reflect "reflect"
 	time "time"
 
-	ftp "github.com/jlaffaye/ftp"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -246,18 +245,18 @@ func (mr *MockServerConnMockRecorder) GetTime(path any) *gomock.Call {
 }
 
 // List mocks base method.
-func (m *MockServerConn) List(path string) ([]*ftp.Entry, error) {
+func (m *MockServerConn) List(arg0 string) ([]Entry, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "List", path)
-	ret0, _ := ret[0].([]*ftp.Entry)
+	ret := m.ctrl.Call(m, "List", arg0)
+	ret0, _ := ret[0].([]Entry)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // List indicates an expected call of List.
-func (mr *MockServerConnMockRecorder) List(path any) *gomock.Call {
+func (mr *MockServerConnMockRecorder) List(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "List", reflect.TypeOf((*MockServerConn)(nil).List), path)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "List", reflect.TypeOf((*MockServerConn)(nil).List), arg0)
 }
 
 // Login mocks base method.

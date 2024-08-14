@@ -20,7 +20,12 @@ func (f *fileSystem) Mkdir(name string, _ os.FileMode) error {
 
 	filePath := path.Join(f.config.RemoteDir, name)
 
-	defer f.processLog(&FileLog{Operation: "Mkdir", Location: filePath, Status: &status, Message: &msg}, time.Now())
+	defer f.processLog(&FileLog{
+		Operation: "Mkdir",
+		Location:  filePath,
+		Status:    &status,
+		Message:   &msg,
+	}, time.Now())
 
 	if name == "" {
 		f.logger.Errorf("Mkdir failed. Provide a valid directory : %v", errEmptyDirectory)
@@ -67,14 +72,19 @@ func (f *fileSystem) mkdirAllHelper(filepath string) []string {
 	return dirs
 }
 
-// MkdirAll creates directories recursively on the FTP server. Here, os.FileMode is unused.
+// MkdirAll creates directories recursively on the FTP server.
 // Here, os.FileMode is unused, but is added to comply with FileSystem interface.
 func (f *fileSystem) MkdirAll(name string, _ os.FileMode) error {
 	var msg string
 
 	status := "ERROR"
 
-	defer f.processLog(&FileLog{Operation: "MkdirAll", Location: path.Join(f.config.RemoteDir, name), Status: &status, Message: &msg}, time.Now())
+	defer f.processLog(&FileLog{
+		Operation: "MkdirAll",
+		Location:  path.Join(f.config.RemoteDir, name),
+		Status:    &status,
+		Message:   &msg,
+	}, time.Now())
 
 	if name == "" {
 		f.logger.Errorf("MkdirAll failed. Provide a valid path : %v", errEmptyPath)
@@ -111,13 +121,14 @@ func (f *fileSystem) RemoveAll(name string) error {
 
 	status := "ERROR"
 
-	filePath := f.config.RemoteDir
+	filePath := path.Join(f.config.RemoteDir, name)
 
-	if name != "." {
-		filePath = path.Join(f.config.RemoteDir, name)
-	}
-
-	defer f.processLog(&FileLog{Operation: "RemoveAll", Location: filePath, Status: &status, Message: &msg}, time.Now())
+	defer f.processLog(&FileLog{
+		Operation: "RemoveAll",
+		Location:  filePath,
+		Status:    &status,
+		Message:   &msg,
+	}, time.Now())
 
 	if name == "" {
 		f.logger.Errorf("RemoveAll failed. Provide a valid path : %v", errEmptyPath)
@@ -153,6 +164,7 @@ func (f *fileSystem) Stat(name string) (file_interface.FileInfo, error) {
 
 	filePath := path.Join(f.config.RemoteDir, name)
 
+	// if it is a directory
 	if path.Ext(name) == "" {
 		fl := &file{
 			name:      name,
@@ -167,6 +179,7 @@ func (f *fileSystem) Stat(name string) (file_interface.FileInfo, error) {
 		return fl, nil
 	}
 
+	// if it is a file
 	entry, err := f.conn.List(filePath)
 	if err != nil {
 		f.logger.Errorf("Stat failed. Error Retrieving file : %v", errEmptyPath)
@@ -186,8 +199,8 @@ func (f *fileSystem) Stat(name string) (file_interface.FileInfo, error) {
 	}, nil
 }
 
-// CurrentDir returns the path of the current directory.
-func (f *fileSystem) CurrentDir() (string, error) {
+// Getwd returns the full path of the current directory.
+func (f *fileSystem) Getwd() (string, error) {
 	defer f.processLog(&FileLog{
 		Operation: "CurrentDir",
 		Location:  f.config.RemoteDir,
@@ -196,8 +209,8 @@ func (f *fileSystem) CurrentDir() (string, error) {
 	return f.conn.CurrentDir()
 }
 
-// ChangeDir changes the current directory.
-func (f *fileSystem) ChangeDir(dir string) error {
+// ChDir takes the relative path as argument and changes the current directory.
+func (f *fileSystem) ChDir(dir string) error {
 	var msg string
 
 	status := "ERROR"
@@ -224,13 +237,18 @@ func (f *fileSystem) ChangeDir(dir string) error {
 	return nil
 }
 
-// ReadDir returns a list of files/directories present in the directory.
+// ReadDir returns a FileInfo of the files/directories present in the directory.
 func (f *fileSystem) ReadDir(dir string) ([]file_interface.FileInfo, error) {
 	var msg string
 
 	status := "ERROR"
 
-	defer f.processLog(&FileLog{Operation: "ChangeDir", Location: f.config.RemoteDir, Status: &status, Message: &msg}, time.Now())
+	defer f.processLog(&FileLog{
+		Operation: "ChangeDir",
+		Location:  f.config.RemoteDir,
+		Status:    &status,
+		Message:   &msg,
+	}, time.Now())
 
 	filepath := f.config.RemoteDir
 	if dir != "." {
