@@ -921,7 +921,7 @@ func TestStat(t *testing.T) {
 	var tests = []struct {
 		name         string
 		fileName     string
-		mockEntry    []*ftp.Entry
+		mockEntry    []Entry
 		mockError    error
 		expectError  bool
 		expectedName string
@@ -929,7 +929,7 @@ func TestStat(t *testing.T) {
 		{
 			name:     "Getting info of a file",
 			fileName: "testfile.txt",
-			mockEntry: []*ftp.Entry{
+			mockEntry: []Entry{
 				{Name: "testfile.txt", Type: ftp.EntryTypeFile, Time: time.Now()},
 			},
 			mockError:    nil,
@@ -977,7 +977,7 @@ func TestStat(t *testing.T) {
 		metrics: mockMetrics,
 	}
 
-	for _, tt := range tests {
+	for i, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 			mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
@@ -986,6 +986,10 @@ func TestStat(t *testing.T) {
 
 			if tt.mockEntry != nil || tt.mockError != nil {
 				mockFtpConn.EXPECT().List(filePath).Return(tt.mockEntry, tt.mockError)
+			}
+			// if it is the fourth testcase
+			if i == 3 {
+				mockFtpConn.EXPECT().GetTime(filePath).Return(time.Now(), nil)
 			}
 
 			fileInfo, err := fs.Stat(tt.fileName)
@@ -1000,7 +1004,7 @@ func TestStat(t *testing.T) {
 	}
 }
 
-func TestCurrentDir(t *testing.T) {
+func TestGetwd(t *testing.T) {
 	var tests = []struct {
 		name        string
 		mockDir     string
@@ -1046,7 +1050,7 @@ func TestCurrentDir(t *testing.T) {
 			mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 			mockFtpConn.EXPECT().CurrentDir().Return(tt.mockDir, tt.mockError)
 
-			dir, err := fs.CurrentDir()
+			dir, err := fs.Getwd()
 
 			if tt.expectError {
 				assert.Error(t, err)
@@ -1059,7 +1063,7 @@ func TestCurrentDir(t *testing.T) {
 	}
 }
 
-func TestChangeDir(t *testing.T) {
+func TestChDir(t *testing.T) {
 	var tests = []struct {
 		name        string
 		newDir      string
@@ -1114,7 +1118,7 @@ func TestChangeDir(t *testing.T) {
 			mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 			mockFtpConn.EXPECT().ChangeDir(newPath).Return(tt.mockError)
 
-			err := fs.ChangeDir(tt.newDir)
+			err := fs.ChDir(tt.newDir)
 
 			if tt.expectError {
 				assert.Error(t, err)
@@ -1130,7 +1134,7 @@ func TestReadDir(t *testing.T) {
 	var tests = []struct {
 		name         string
 		dir          string
-		mockEntries  []*ftp.Entry
+		mockEntries  []Entry
 		mockError    error
 		expectError  bool
 		expectedName []string
@@ -1138,7 +1142,7 @@ func TestReadDir(t *testing.T) {
 		{
 			name: "Successful read dir",
 			dir:  "someDir",
-			mockEntries: []*ftp.Entry{
+			mockEntries: []Entry{
 				{Name: "file1.txt", Type: ftp.EntryTypeFile, Time: time.Now()},
 				{Name: "file2.txt", Type: ftp.EntryTypeFile, Time: time.Now()},
 			},
@@ -1166,7 +1170,7 @@ func TestReadDir(t *testing.T) {
 		{
 			name: "Read current directory",
 			dir:  ".",
-			mockEntries: []*ftp.Entry{
+			mockEntries: []Entry{
 				{Name: "hello", Type: ftp.EntryTypeFolder, Time: time.Now()},
 				{Name: "file3.txt", Type: ftp.EntryTypeFile, Time: time.Now()},
 			},
