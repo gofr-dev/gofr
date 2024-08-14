@@ -245,6 +245,21 @@ func (mr *MockserverConnMockRecorder) GetTime(path any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTime", reflect.TypeOf((*MockserverConn)(nil).GetTime), path)
 }
 
+// GetTime mocks base method.
+func (m *MockServerConn) GetTime(path string) (time.Time, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetTime", path)
+	ret0, _ := ret[0].(time.Time)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetTime indicates an expected call of GetTime.
+func (mr *MockServerConnMockRecorder) GetTime(path any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTime", reflect.TypeOf((*MockServerConn)(nil).GetTime), path)
+}
+
 // List mocks base method.
 func (m *MockserverConn) List(arg0 string) ([]*ftp.Entry, error) {
 	m.ctrl.T.Helper()
