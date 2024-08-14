@@ -206,16 +206,14 @@ func (f *file) Mode() os.FileMode {
 }
 
 // IsDir checks, if the file is a directory or not.
-// Note: IsDir must be used post Stat/ReadDir/Open/Create methods of fileSystem only.
-// Results in any other cases can be misleading.
+// Note: IsDir must be used post Stat/ReadDir methods of fileSystem only.
 func (f *file) IsDir() bool {
 	defer f.postProcess(&FileLog{Operation: "IsDir", Location: f.path}, time.Now())
 	return f.entryType == ftp.EntryTypeFolder
 }
 
 // ModTime returns the last time the file/directory was modified.
-// Note: ModTime must be used post Stat/ReadDir/Open/Create methods of fileSystem only.
-// Results in any other cases can be misleading.
+// Note: ModTime must be used post Stat/ReadDir methods of fileSystem only.
 func (f *file) ModTime() time.Time {
 	defer f.postProcess(&FileLog{Operation: "ModTime", Location: f.path}, time.Now())
 
