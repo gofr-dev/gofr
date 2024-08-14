@@ -83,11 +83,9 @@ func (c *Container) Create(conf config.Config) {
 		c.Logger = remotelogger.New(logging.GetLevelFromString(conf.Get("LOG_LEVEL")), conf.Get("REMOTE_LOG_URL"),
 			time.Duration(levelFetchConfig)*time.Second)
 
-		defer func() {
-			if err != nil {
-				c.Logger.Error("incorrect value for REMOTE_LOG_FETCH_INTERVAL. setting default of 15 sec.")
-			}
-		}()
+		if err != nil {
+			c.Logger.Error("incorrect value for REMOTE_LOG_FETCH_INTERVAL. setting default of 15 sec.")
+		}
 	}
 
 	c.Debug("Container is being created")

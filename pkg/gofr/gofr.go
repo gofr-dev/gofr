@@ -236,10 +236,11 @@ func (a *App) httpServerSetup() {
 	}
 
 	requestTimeout := a.Config.Get("REQUEST_TIMEOUT")
-	timeoutVal, err := strconv.Atoi(requestTimeout)
-
-	if (err != nil && requestTimeout != "") || timeoutVal < 0 {
-		a.container.Error("invalid value of config REQUEST_TIMEOUT.")
+	if requestTimeout != "" {
+		timeoutVal, err := strconv.Atoi(requestTimeout)
+		if err != nil || timeoutVal < 0 {
+			a.container.Error("invalid value of config REQUEST_TIMEOUT.")
+		}
 	}
 
 	a.httpServer.router.PathPrefix("/").Handler(handler{
