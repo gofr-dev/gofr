@@ -62,7 +62,7 @@ func (fileSystem) Rename(oldname, newname string) error {
 	return os.Rename(oldname, newname)
 }
 
-// Stat returns the file/directory info
+// Stat returns the file/directory info.
 func (fileSystem) Stat(name string) (FileInfo, error) {
 	return os.Stat(name)
 }

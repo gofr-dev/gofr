@@ -39,18 +39,18 @@ func (m *MockFileSystemProvider) EXPECT() *MockFileSystemProviderMockRecorder {
 	return m.recorder
 }
 
-// ChangeDir mocks base method.
-func (m *MockFileSystemProvider) ChangeDir(arg0 string) error {
+// ChDir mocks base method.
+func (m *MockFileSystemProvider) ChDir(arg0 string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ChangeDir", arg0)
+	ret := m.ctrl.Call(m, "ChDir", arg0)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// ChangeDir indicates an expected call of ChangeDir.
-func (mr *MockFileSystemProviderMockRecorder) ChangeDir(arg0 any) *gomock.Call {
+// ChDir indicates an expected call of ChDir.
+func (mr *MockFileSystemProviderMockRecorder) ChDir(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ChangeDir", reflect.TypeOf((*MockFileSystemProvider)(nil).ChangeDir), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ChDir", reflect.TypeOf((*MockFileSystemProvider)(nil).ChDir), arg0)
 }
 
 // Connect mocks base method.
@@ -80,19 +80,19 @@ func (mr *MockFileSystemProviderMockRecorder) Create(arg0 any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Create", reflect.TypeOf((*MockFileSystemProvider)(nil).Create), arg0)
 }
 
-// CurrentDir mocks base method.
-func (m *MockFileSystemProvider) CurrentDir() (string, error) {
+// Getwd mocks base method.
+func (m *MockFileSystemProvider) Getwd() (string, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CurrentDir")
+	ret := m.ctrl.Call(m, "Getwd")
 	ret0, _ := ret[0].(string)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// CurrentDir indicates an expected call of CurrentDir.
-func (mr *MockFileSystemProviderMockRecorder) CurrentDir() *gomock.Call {
+// Getwd indicates an expected call of Getwd.
+func (mr *MockFileSystemProviderMockRecorder) Getwd() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CurrentDir", reflect.TypeOf((*MockFileSystemProvider)(nil).CurrentDir))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Getwd", reflect.TypeOf((*MockFileSystemProvider)(nil).Getwd))
 }
 
 // Mkdir mocks base method.
