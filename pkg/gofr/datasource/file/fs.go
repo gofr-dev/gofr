@@ -70,16 +70,24 @@ func (fileSystem) CurrentDir() (string, error) {
 	return os.Getwd()
 }
 
+// ChangeDir changes the current working directory to the named directory.
+// If there is an error, it will be of type *PathError.
 func (fileSystem) ChangeDir(dir string) error {
 	return os.Chdir(dir)
 }
 
+// ReadDir reads the named directory, returning all its directory entries sorted by filename.
+// If an error occurs reading the directory, ReadDir returns the entries it was able to read before the error, along with the error.
+// It returns the list of files/directories present in the current directory when "." is passed.
 func (fileSystem) ReadDir(dir string) ([]FileInfo, error) {
 	entries, err := os.ReadDir(dir)
 
 	fileInfo := make([]FileInfo, len(entries))
 	for i := range entries {
-		fileInfo[i], _ = entries[i].Info()
+		fileInfo[i], err = entries[i].Info()
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return fileInfo, err

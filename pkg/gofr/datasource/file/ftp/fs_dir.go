@@ -33,7 +33,6 @@ func (f *fileSystem) Mkdir(name string, _ os.FileMode) error {
 		return err
 	}
 
-	f.modTime = time.Now()
 	status = "SUCCESS"
 	msg = fmt.Sprintf("%q created successfully", name)
 
@@ -155,14 +154,17 @@ func (f *fileSystem) Stat(name string) (file_interface.FileInfo, error) {
 	filePath := path.Join(f.config.RemoteDir, name)
 
 	if path.Ext(name) == "" {
-		return &file{
+		fl := &file{
 			name:      name,
 			path:      filePath,
 			entryType: ftp.EntryTypeFolder,
 			conn:      f.conn,
 			logger:    f.logger,
 			metrics:   f.metrics,
-		}, nil
+		}
+		fl.modTime = fl.ModTime()
+
+		return fl, nil
 	}
 
 	entry, err := f.conn.List(filePath)

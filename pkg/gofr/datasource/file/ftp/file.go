@@ -206,6 +206,7 @@ func (f *file) Mode() os.FileMode {
 }
 
 // IsDir checks, if the file is a directory or not.
+// Note: IsDir must be used post fetching file from Stat or ReadDir or Create or Open
 func (f *file) IsDir() bool {
 	defer f.postProcess(&FileLog{Operation: "IsDir", Location: f.path}, time.Now())
 	return f.entryType == ftp.EntryTypeFolder
@@ -214,7 +215,12 @@ func (f *file) IsDir() bool {
 // ModTime returns the last time the file/directory was modified.
 func (f *file) ModTime() time.Time {
 	defer f.postProcess(&FileLog{Operation: "ModTime", Location: f.path}, time.Now())
-	return f.modTime
+
+	t, err := f.conn.GetTime(f.path)
+	if err != nil {
+		return time.Time{}
+	}
+	return t
 }
 
 // Read reads data from the FTP file into the provided byte slice and updates the file offset.
@@ -340,7 +346,12 @@ func (f *file) Write(p []byte) (n int, err error) {
 
 	f.offset += int64(len(p))
 
-	f.modTime = time.Now()
+	t := time.Time{}
+	mt := f.ModTime()
+	if mt != t {
+		f.modTime = mt
+	}
+
 	status = "SUCCESS"
 	msg = fmt.Sprintf("Wrote %v bytes to file at path %q", len(p), f.path)
 
@@ -363,7 +374,12 @@ func (f *file) WriteAt(p []byte, off int64) (n int, err error) {
 		return 0, err
 	}
 
-	f.modTime = time.Now()
+	t := time.Time{}
+	mt := f.ModTime()
+	if mt != t {
+		f.modTime = mt
+	}
+
 	msg = fmt.Sprintf("Wrote %v bytes to file with path %q at %v offset", len(p), f.path, off)
 	status = "SUCCESS"
 

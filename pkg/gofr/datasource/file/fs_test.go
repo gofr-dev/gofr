@@ -354,11 +354,13 @@ func Test_DirectoryOperations(t *testing.T) {
 	// ReadDir Operations
 	v, err := fileStore.ReadDir(".")
 	require.NoError(t, err)
+	require.NotEmpty(t, v)
 	assert.False(t, v[0].IsDir())
 	assert.Equal(t, "Hello.txt", v[0].Name())
 
 	v, err = fileStore.ReadDir("../Hello_world")
 	require.NoError(t, err)
+	require.NotEmpty(t, v)
 	assert.False(t, v[0].IsDir())
 	assert.Equal(t, "Hello.txt", v[0].Name())
 }

@@ -2,10 +2,9 @@ package ftp
 
 import (
 	"context"
+	"github.com/jlaffaye/ftp"
 	"io"
 	"time"
-
-	"github.com/jlaffaye/ftp"
 )
 
 // Logger interface is used by ftp package to log information about query execution.
@@ -37,9 +36,10 @@ type ServerConn interface {
 	CurrentDir() (string, error)
 	ChangeDir(path string) error
 	List(path string) ([]*ftp.Entry, error)
+	GetTime(path string) (time.Time, error)
 }
 
-// ftpResponse interface mimics the behavior of *ftp.Response returned on retrieval of file.
+// ftpResponse interface mimics the behavior of *ftp.Response returned on retrieval of file from FTP.
 type ftpResponse interface {
 	Read(buf []byte) (int, error)
 	Close() error

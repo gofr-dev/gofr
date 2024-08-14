@@ -18,6 +18,8 @@ type Conn struct {
 	*ftp.ServerConn
 }
 
+type Entry *ftp.Entry
+
 // Retr wraps the ftp retrieve method to return a ftpResponse interface type.
 func (c *Conn) Retr(filepath string) (ftpResponse, error) {
 	return c.ServerConn.Retr(filepath)
@@ -114,10 +116,11 @@ func (f *fileSystem) Create(name string) (file_interface.File, error) {
 	filePath := path.Join(f.config.RemoteDir, name)
 
 	var msg string
+	var fl = &file{}
 
 	status := "ERROR"
 
-	defer f.processLog(&FileLog{Operation: "Create", Location: filePath, Status: &status, Message: &msg}, time.Now())
+	defer f.processLog(&FileLog{Operation: "Create", Location: filePath, Status: &status, Message: &msg}, fl.modTime)
 
 	if name == "" {
 		f.logger.Errorf("Create_File failed. Provide a valid filename : %v", errEmptyFilename)
@@ -145,16 +148,23 @@ func (f *fileSystem) Create(name string) (file_interface.File, error) {
 	status = "SUCCESS"
 	msg = fmt.Sprintf("Created file %q", name)
 
-	return &file{
+	fl = &file{
 		response:  res,
 		name:      filename,
 		path:      filePath,
-		modTime:   time.Now(),
 		entryType: ftp.EntryTypeFile,
 		conn:      f.conn,
 		logger:    f.logger,
 		metrics:   f.metrics,
-	}, nil
+	}
+
+	t := time.Time{}
+	mt := fl.ModTime()
+	if mt != t {
+		fl.modTime = mt
+	}
+
+	return fl, nil
 }
 
 // Note: Here Open and OpenFile both methods have been implemented so that the
@@ -187,14 +197,23 @@ func (f *fileSystem) Open(name string) (file_interface.File, error) {
 	status = "SUCCESS"
 	msg = fmt.Sprintf("Opened file %q", name)
 
-	return &file{
-		response: res,
-		name:     filename,
-		path:     filePath,
-		conn:     f.conn,
-		logger:   f.logger,
-		metrics:  f.metrics,
-	}, nil
+	fl := &file{
+		response:  res,
+		name:      filename,
+		path:      filePath,
+		entryType: ftp.EntryTypeFile,
+		conn:      f.conn,
+		logger:    f.logger,
+		metrics:   f.metrics,
+	}
+
+	t := time.Time{}
+	mt := fl.ModTime()
+	if mt != t {
+		fl.modTime = mt
+	}
+
+	return fl, nil
 }
 
 // permissions are not clear for Ftp as file commands do not accept an argument and don't store their file permissions.
@@ -235,6 +254,7 @@ func (f *fileSystem) Remove(name string) error {
 // Rename renames a file or directory on the FTP server.
 func (f *fileSystem) Rename(oldname, newname string) error {
 	var msg string
+	var tempfile = &file{}
 
 	status := "ERROR"
 
@@ -242,7 +262,7 @@ func (f *fileSystem) Rename(oldname, newname string) error {
 
 	newFilePath := path.Join(f.config.RemoteDir, newname)
 
-	defer f.processLog(&FileLog{Operation: "Rename", Location: oldFilePath, Status: &status, Message: &msg}, time.Now())
+	defer f.processLog(&FileLog{Operation: "Rename", Location: oldFilePath, Status: &status, Message: &msg}, tempfile.modTime)
 
 	if oldname == "" || newname == "" {
 		f.logger.Errorf("Provide valid arguments : %v", errInvalidArg)
@@ -262,9 +282,16 @@ func (f *fileSystem) Rename(oldname, newname string) error {
 		return err
 	}
 
-	f.modTime = time.Now()
 	msg = fmt.Sprintf("Renamed file %q to %q", oldname, newname)
 	status = "SUCCESS"
+
+	tempfile.path = newFilePath
+
+	t := time.Time{}
+	mt := tempfile.ModTime()
+	if mt != t {
+		tempfile.modTime = mt
+	}
 
 	return nil
 }

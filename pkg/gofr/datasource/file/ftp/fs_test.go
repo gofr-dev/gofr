@@ -75,7 +75,6 @@ func TestCreateFile(t *testing.T) {
 	logger.EXPECT().Errorf(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	logger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 	logger.EXPECT().Debug(gomock.Any()).AnyTimes()
-	metrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -85,6 +84,7 @@ func TestCreateFile(t *testing.T) {
 					mockFtpConn.EXPECT().Stor("/ftp/one/"+tt.fileName, emptyReader).Return(errors.New("mocked STOR error"))
 				} else {
 					mockFtpConn.EXPECT().Stor("/ftp/one/"+tt.fileName, emptyReader).Return(nil)
+					mockFtpConn.EXPECT().GetTime("/ftp/one/"+tt.fileName).Return(time.Now(), nil)
 				}
 			}
 
@@ -178,7 +178,6 @@ func TestRenameFile(t *testing.T) {
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Logf(gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -187,6 +186,7 @@ func TestRenameFile(t *testing.T) {
 					mockFtpConn.EXPECT().Rename("/ftp/one/"+tt.fromPath, "/ftp/one/"+tt.toPath).Return(errors.New("mocked rename error"))
 				} else {
 					mockFtpConn.EXPECT().Rename("/ftp/one/"+tt.fromPath, "/ftp/one/"+tt.toPath).Return(nil)
+					mockFtpConn.EXPECT().GetTime("/ftp/one/"+tt.toPath).Return(time.Now(), nil)
 				}
 			}
 
@@ -290,6 +290,7 @@ func TestOpenFile(t *testing.T) {
 
 				conn.EXPECT().Retr(path).Return(response, nil)
 				response.EXPECT().Close().Return(nil)
+				conn.EXPECT().GetTime("/ftp/one/testfile_new.txt").Return(time.Now(), nil)
 			},
 			expectError: false,
 		},
