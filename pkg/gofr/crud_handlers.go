@@ -190,32 +190,12 @@ func (a *App) registerCRUDHandlers(e *entity, object interface{}) {
 }
 
 func (e *entity) Create(c *Context) (interface{}, error) {
-	newEntity := reflect.New(e.entityType).Interface()
-	err := c.Bind(newEntity)
-
+	newEntity, err := e.bindAndValidateEntity(c)
 	if err != nil {
 		return nil, err
 	}
 
-	fieldNames := make([]string, 0, e.entityType.NumField())
-	fieldValues := make([]interface{}, 0, e.entityType.NumField())
-
-	for i := 0; i < e.entityType.NumField(); i++ {
-		field := e.entityType.Field(i)
-		fieldName := toSnakeCase(field.Name)
-
-		if e.constraints[fieldName].AutoIncrement {
-			continue // Skip auto-increment fields for insertion
-		}
-
-		// Basic not null validation
-		if e.constraints[fieldName].NotNull && reflect.ValueOf(newEntity).Elem().Field(i).Interface() == nil {
-			return nil, fmt.Errorf("%w: %s", errFieldCannotBeNull, fieldName)
-		}
-
-		fieldNames = append(fieldNames, fieldName)
-		fieldValues = append(fieldValues, reflect.ValueOf(newEntity).Elem().Field(i).Interface())
-	}
+	fieldNames, fieldValues := e.extractFields(newEntity)
 
 	stmt, err := sql.InsertQuery(c.SQL.Dialect(), e.tableName, fieldNames, fieldValues, e.constraints)
 	if err != nil {
@@ -239,6 +219,45 @@ func (e *entity) Create(c *Context) (interface{}, error) {
 	}
 
 	return fmt.Sprintf("%s successfully created with id: %v", e.name, lastID), nil
+}
+
+func (e *entity) bindAndValidateEntity(c *Context) (interface{}, error) {
+	newEntity := reflect.New(e.entityType).Interface()
+
+	err := c.Bind(newEntity)
+	if err != nil {
+		return nil, err
+	}
+
+	for i := 0; i < e.entityType.NumField(); i++ {
+		field := e.entityType.Field(i)
+		fieldName := toSnakeCase(field.Name)
+
+		if e.constraints[fieldName].NotNull && reflect.ValueOf(newEntity).Elem().Field(i).Interface() == nil {
+			return nil, fmt.Errorf("%w: %s", errFieldCannotBeNull, fieldName)
+		}
+	}
+
+	return newEntity, nil
+}
+
+func (e *entity) extractFields(newEntity interface{}) (fieldNames []string, fieldValues []interface{}) {
+	fieldNames = make([]string, 0, e.entityType.NumField())
+	fieldValues = make([]interface{}, 0, e.entityType.NumField())
+
+	for i := 0; i < e.entityType.NumField(); i++ {
+		field := e.entityType.Field(i)
+		fieldName := toSnakeCase(field.Name)
+
+		if e.constraints[fieldName].AutoIncrement {
+			continue // Skip auto-increment fields for insertion
+		}
+
+		fieldNames = append(fieldNames, fieldName)
+		fieldValues = append(fieldValues, reflect.ValueOf(newEntity).Elem().Field(i).Interface())
+	}
+
+	return fieldNames, fieldValues
 }
 
 func hasAutoIncrementID(constraints map[string]sql.FieldConstraints) bool {

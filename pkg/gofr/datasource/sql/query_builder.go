@@ -90,25 +90,49 @@ func DeleteByQuery(dialect, tableName, field string) string {
 }
 
 func validateNotNull(fieldName string, value interface{}, isNotNull bool) error {
-	if isNotNull {
-		switch v := value.(type) {
-		case string:
-			if v == "" {
-				return fmt.Errorf("%w: %s", errFieldCannotBeEmpty, fieldName)
-			}
-		case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
-			if v == 0 {
-				return fmt.Errorf("%w: %s", errFieldCannotBeZero, fieldName)
-			}
-		case float32, float64:
-			if v == 0.0 {
-				return fmt.Errorf("%w: %s", errFieldCannotBeZero, fieldName)
-			}
-		default:
-			if reflect.ValueOf(value).IsNil() {
-				return fmt.Errorf("%w: %s", errFieldCannotBeNull, fieldName)
-			}
-		}
+	if !isNotNull {
+		return nil
+	}
+
+	switch v := value.(type) {
+	case string:
+		return validateStringNotNull(fieldName, v)
+	case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
+		return validateIntNotNull(fieldName, v)
+	case float32, float64:
+		return validateFloatNotNull(fieldName, v)
+	default:
+		return validateDefaultNotNull(fieldName, value)
+	}
+}
+
+func validateStringNotNull(fieldName, value string) error {
+	if value == "" {
+		return fmt.Errorf("%w: %s", errFieldCannotBeEmpty, fieldName)
+	}
+
+	return nil
+}
+
+func validateIntNotNull(fieldName string, value interface{}) error {
+	if reflect.ValueOf(value).Int() == 0 {
+		return fmt.Errorf("%w: %s", errFieldCannotBeZero, fieldName)
+	}
+
+	return nil
+}
+
+func validateFloatNotNull(fieldName string, value interface{}) error {
+	if reflect.ValueOf(value).Float() == 0.0 {
+		return fmt.Errorf("%w: %s", errFieldCannotBeZero, fieldName)
+	}
+
+	return nil
+}
+
+func validateDefaultNotNull(fieldName string, value interface{}) error {
+	if reflect.ValueOf(value).IsNil() {
+		return fmt.Errorf("%w: %s", errFieldCannotBeNull, fieldName)
 	}
 
 	return nil
