@@ -49,7 +49,7 @@ err := ctx.File.MkdirAll("my_dir/sub_dir", os.ModePerm)
 ### Get current Directory
 
 ```go
-currentDir, err := ctx.File.getWd()
+currentDir, err := ctx.File.Getwd()
 ```
 
 ### Change current Directory
