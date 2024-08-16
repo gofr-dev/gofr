@@ -135,6 +135,13 @@ func (f *fileSystem) RemoveAll(name string) error {
 		return errEmptyPath
 	}
 
+	// If user changes the directory at any point of time, the fs.config.RemoteDir gets updated each time.
+	// Hence, in case we remove current working directory, say using "../currentDir"
+	// the fs.config.RemoteDir needs to be reset to its parent directory.
+	if filePath == f.config.RemoteDir {
+		f.config.RemoteDir = path.Join(f.config.RemoteDir, "..")
+	}
+
 	err := f.conn.RemoveDirRecur(filePath)
 	if err != nil {
 		f.logger.Errorf("RemoveAll failed. Error while deleting directories : %v", err)
@@ -147,7 +154,7 @@ func (f *fileSystem) RemoveAll(name string) error {
 	return nil
 }
 
-// Stat returns the file/directory information in the directory.
+// Stat returns information of the files/directories in the specified directory.
 func (f *fileSystem) Stat(name string) (file_interface.FileInfo, error) {
 	status := "ERROR"
 

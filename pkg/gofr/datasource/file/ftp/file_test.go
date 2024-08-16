@@ -828,7 +828,6 @@ func runFtpTest(t *testing.T, testFunc func(fs file_interface.FileSystemProvider
 
 	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	ftpClient.Connect()
 

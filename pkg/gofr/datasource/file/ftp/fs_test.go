@@ -252,7 +252,6 @@ func TestRemoveFile(t *testing.T) {
 	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -520,32 +519,41 @@ func TestRemoveDir(t *testing.T) {
 		name             string
 		basePath         string
 		removePath       string
-		mockRemoveExpect func(conn *MockServerConn, removePath string)
+		mockRemoveExpect func(conn *MockServerConn, basePath, removePath string)
 		expectError      bool
 	}{
 		{
 			name:       "Successful remove all",
 			basePath:   "/ftp/one",
 			removePath: "testdir1",
-			mockRemoveExpect: func(conn *MockServerConn, removePath string) {
-				conn.EXPECT().RemoveDirRecur(removePath).Return(nil)
+			mockRemoveExpect: func(conn *MockServerConn, basePath, removePath string) {
+				conn.EXPECT().RemoveDirRecur(path.Join(basePath, removePath)).Return(nil)
 			},
 			expectError: false,
 		},
 		{
-			name:       "Remove all with error",
+			name:       "Removing current directory",
+			basePath:   "/ftp/one/testdir1",
+			removePath: "../testdir1",
+			mockRemoveExpect: func(conn *MockServerConn, basePath, removePath string) {
+				conn.EXPECT().RemoveDirRecur(path.Join(basePath, removePath)).Return(nil)
+			},
+			expectError: false,
+		},
+		{
+			name:       "RemoveAll with error",
 			basePath:   "/ftp/one",
 			removePath: "nonexistentdir",
-			mockRemoveExpect: func(conn *MockServerConn, removePath string) {
-				conn.EXPECT().RemoveDirRecur(removePath).Return(errors.New("mocked remove error"))
+			mockRemoveExpect: func(conn *MockServerConn, basePath, removePath string) {
+				conn.EXPECT().RemoveDirRecur(path.Join(basePath, removePath)).Return(errors.New("mocked remove error"))
 			},
 			expectError: true,
 		},
 		{
-			name:       "empty path",
+			name:       "Empty path",
 			basePath:   "/ftp/one",
 			removePath: "",
-			mockRemoveExpect: func(_ *MockServerConn, _ string) {
+			mockRemoveExpect: func(_ *MockServerConn, _, _ string) {
 			},
 			expectError: true,
 		},
@@ -561,26 +569,25 @@ func TestRemoveDir(t *testing.T) {
 	fs := &fileSystem{
 		conn: mockFtpConn,
 		config: &Config{
-			Host:      "ftp.example.com",
-			User:      "username",
-			Password:  "password",
-			Port:      21,
-			RemoteDir: "/ftp/one",
+			Host:     "ftp.example.com",
+			User:     "username",
+			Password: "password",
+			Port:     21,
 		},
 		logger:  mockLogger,
 		metrics: mockMetrics,
 	}
+
 	// mocked logs
 	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			path := fmt.Sprintf("%v/%v", tt.basePath, tt.removePath)
+			fs.config.RemoteDir = tt.basePath
 
-			tt.mockRemoveExpect(mockFtpConn, path)
+			tt.mockRemoveExpect(mockFtpConn, tt.basePath, tt.removePath)
 
 			err := fs.RemoveAll(tt.removePath)
 

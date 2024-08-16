@@ -46,6 +46,41 @@ To create subdirectories as well
 err := ctx.File.MkdirAll("my_dir/sub_dir", os.ModePerm)
 ```
 
+### Get current Directory
+
+```go
+currentDir, err := ctx.File.getWd()
+```
+
+### Change current Directory
+
+```go
+currentDir, err := ctx.File.Chdir("..")
+```
+```go
+currentDir, err := ctx.File.Chdir("../my_dir2")
+```
+```go
+currentDir, err := ctx.File.Chdir("sub_dir")
+```
+
+### Read a Directory
+
+To get information about the files/directories in the specified directory
+```go
+entries, err := ctx.File.ReadDir(".")
+
+for _, entry := range entries {
+entryType := "File"
+
+if entry.IsDir() {
+entryType = "Dir"
+} 
+
+fmt.Printf("%v: %v Size: %v Last Modified Time : %v\n" entryType, entry.Name(), entry.Size(), entry.ModTime())
+}
+```
+
 ### Creating and Save a File with Content
 
 ```go
@@ -86,6 +121,21 @@ b := make([]byte, 200)
 
 // Read reads up to len(b) bytes into b
 _, _ = file.Read(b)
+```
+
+### Getting Information of the file/directory
+
+To retrieve details of a file or directory, including its name, size, last modified time, and type (such as whether it is a file or folder)
+```go
+file, _ := ctx.File.Stat("my_file.text")
+entryType := "File"
+
+if entry.IsDir() {
+entryType = "Dir"
+}
+
+fmt.Printf("%v: %v Size: %v Last Modified Time : %v\n" entryType, entry.Name(), entry.Size(), entry.ModTime())
+
 ```
 
 ### Rename/Move a File

@@ -304,7 +304,7 @@ func (f *file) check(whence int, offset, length int64) (int64, error) {
 	return f.offset, nil
 }
 
-// Seek sets the offset for the next Read/Write operations.
+// Seek sets the offset for the next Read/ Write operations.
 func (f *file) Seek(offset int64, whence int) (int64, error) {
 	var msg string
 

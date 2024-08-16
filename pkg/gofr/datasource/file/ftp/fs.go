@@ -29,6 +29,7 @@ func (c *Conn) RetrFrom(filepath string, offset uint64) (ftpResponse, error) {
 	return c.ServerConn.RetrFrom(filepath, offset)
 }
 
+// List wraps the ftp list method to return a locally defined Entry type.
 func (c *Conn) List(filepath string) ([]Entry, error) {
 	res, err := c.ServerConn.List(filepath)
 
@@ -189,9 +190,9 @@ func (f *fileSystem) Create(name string) (file_interface.File, error) {
 	return fl, nil
 }
 
+// Open retrieves a file from the FTP server and returns a file handle.
 // Note: Here Open and OpenFile both methods have been implemented so that the
 // FTP FileSystem comply with the gofr FileSystem interface.
-// Open retrieves a file from the FTP server and returns a file handle.
 func (f *fileSystem) Open(name string) (file_interface.File, error) {
 	var msg string
 
@@ -244,7 +245,8 @@ func (f *fileSystem) Open(name string) (file_interface.File, error) {
 	return fl, nil
 }
 
-// permissions are not clear for Ftp as file commands do not accept an argument and don't store their file permissions.
+// OpenFile retrieves a file from the FTP server and returns a file handle.
+// Permissions are not clear for Ftp as file commands do not accept an argument and don't store their file permissions.
 // currently, this function just calls the Open function.
 // Here, os.FileMode is unused, but is added to comply with FileSystem interface.
 func (f *fileSystem) OpenFile(name string, _ int, _ os.FileMode) (file_interface.File, error) {
