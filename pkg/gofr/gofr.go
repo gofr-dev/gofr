@@ -235,7 +235,7 @@ func (a *App) httpServerSetup() {
 		a.add(http.MethodGet, "/.well-known/{name}", SwaggerUIHandler)
 	}
 
-	//TODO: find a way to read REQUEST_TIMEOUT config only once and log it there. currently doing it twice one for populating
+	// TODO: find a way to read REQUEST_TIMEOUT config only once and log it there. currently doing it twice one for populating
 	// the value and other for logging
 	requestTimeout := a.Config.Get("REQUEST_TIMEOUT")
 	if requestTimeout != "" {
