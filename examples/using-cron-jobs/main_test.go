@@ -8,6 +8,7 @@ import (
 )
 
 func Test_UserPurgeCron(t *testing.T) {
+	// TODO find a way to do not have to wait for more than a minute
 	go main()
 	time.Sleep(1*time.Minute + 30*time.Second)
 

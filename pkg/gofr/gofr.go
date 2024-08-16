@@ -23,7 +23,6 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
 	"golang.org/x/sync/errgroup"
-	"google.golang.org/grpc"
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
@@ -61,13 +60,6 @@ type App struct {
 	httpRegistered bool
 
 	subscriptionManager SubscriptionManager
-}
-
-// RegisterService adds a gRPC service to the GoFr application.
-func (a *App) RegisterService(desc *grpc.ServiceDesc, impl interface{}) {
-	a.container.Logger.Infof("registering GRPC Server: %s", desc.ServiceName)
-	a.grpcServer.server.RegisterService(desc, impl)
-	a.grpcRegistered = true
 }
 
 // New creates an HTTP Server Application and returns that App.
@@ -177,7 +169,7 @@ func (a *App) Run() {
 		}(a.httpServer)
 	}
 
-	// Start GRPC Server only if a service is registered
+	// Start gRPC Server only if a service is registered
 	if a.grpcRegistered {
 		wg.Add(1)
 
@@ -241,6 +233,16 @@ func (a *App) httpServerSetup() {
 		a.add(http.MethodGet, "/.well-known/openapi.json", OpenAPIHandler)
 		a.add(http.MethodGet, "/.well-known/swagger", SwaggerUIHandler)
 		a.add(http.MethodGet, "/.well-known/{name}", SwaggerUIHandler)
+	}
+
+	// TODO: find a way to read REQUEST_TIMEOUT config only once and log it there. currently doing it twice one for populating
+	// the value and other for logging
+	requestTimeout := a.Config.Get("REQUEST_TIMEOUT")
+	if requestTimeout != "" {
+		timeoutVal, err := strconv.Atoi(requestTimeout)
+		if err != nil || timeoutVal < 0 {
+			a.container.Error("invalid value of config REQUEST_TIMEOUT.")
+		}
 	}
 
 	a.httpServer.router.PathPrefix("/").Handler(handler{
@@ -339,10 +341,15 @@ func (a *App) PATCH(pattern string, handler Handler) {
 func (a *App) add(method, pattern string, h Handler) {
 	a.httpRegistered = true
 
+	reqTimeout, err := strconv.Atoi(a.Config.Get("REQUEST_TIMEOUT"))
+	if (err != nil && a.Config.Get("REQUEST_TIMEOUT") != "") || reqTimeout < 0 {
+		reqTimeout = 0
+	}
+
 	a.httpServer.router.Add(method, pattern, handler{
 		function:       h,
 		container:      a.container,
-		requestTimeout: a.Config.Get("REQUEST_TIMEOUT"),
+		requestTimeout: time.Duration(reqTimeout) * time.Second,
 	})
 }
 
@@ -408,6 +415,11 @@ func (a *App) initTracer() {
 }
 
 func isValidConfig(logger logging.Logger, name, url, host, port string) bool {
+	if url == "" && name == "" {
+		logger.Debug("tracing is disabled, as configs are not provided")
+		return false
+	}
+
 	if url != "" && name == "" {
 		logger.Error("missing TRACE_EXPORTER config, should be provided with TRACER_URL to enable tracing")
 		return false
@@ -504,8 +516,15 @@ func (o *otelErrorHandler) Handle(e error) {
 // It takes a variable number of credentials as alternating username and password strings.
 // An error is logged if an odd number of arguments is provided.
 func (a *App) EnableBasicAuth(credentials ...string) {
+	if len(credentials) == 0 {
+		a.container.Error("No credentials provided for EnableBasicAuth. Proceeding without Authentication")
+		return
+	}
+
 	if len(credentials)%2 != 0 {
-		a.container.Error("Invalid number of arguments for EnableBasicAuth")
+		a.container.Error("Invalid number of arguments for EnableBasicAuth. Proceeding without Authentication")
+
+		return
 	}
 
 	users := make(map[string]string)
