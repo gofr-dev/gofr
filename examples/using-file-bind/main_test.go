@@ -16,7 +16,7 @@ import (
 func TestMain_BindError(t *testing.T) {
 	const host = "http://localhost:8300"
 	go main()
-	time.Sleep(time.Second * 1)
+	time.Sleep(100 * time.Millisecond)
 
 	c := http.Client{}
 

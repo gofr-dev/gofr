@@ -235,6 +235,16 @@ func (a *App) httpServerSetup() {
 		a.add(http.MethodGet, "/.well-known/{name}", SwaggerUIHandler)
 	}
 
+	// TODO: find a way to read REQUEST_TIMEOUT config only once and log it there. currently doing it twice one for populating
+	// the value and other for logging
+	requestTimeout := a.Config.Get("REQUEST_TIMEOUT")
+	if requestTimeout != "" {
+		timeoutVal, err := strconv.Atoi(requestTimeout)
+		if err != nil || timeoutVal < 0 {
+			a.container.Error("invalid value of config REQUEST_TIMEOUT.")
+		}
+	}
+
 	a.httpServer.router.PathPrefix("/").Handler(handler{
 		function:  catchAllHandler,
 		container: a.container,
@@ -331,10 +341,15 @@ func (a *App) PATCH(pattern string, handler Handler) {
 func (a *App) add(method, pattern string, h Handler) {
 	a.httpRegistered = true
 
+	reqTimeout, err := strconv.Atoi(a.Config.Get("REQUEST_TIMEOUT"))
+	if (err != nil && a.Config.Get("REQUEST_TIMEOUT") != "") || reqTimeout < 0 {
+		reqTimeout = 0
+	}
+
 	a.httpServer.router.Add(method, pattern, handler{
 		function:       h,
 		container:      a.container,
-		requestTimeout: a.Config.Get("REQUEST_TIMEOUT"),
+		requestTimeout: time.Duration(reqTimeout) * time.Second,
 	})
 }
 
