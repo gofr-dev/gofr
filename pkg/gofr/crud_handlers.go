@@ -102,35 +102,37 @@ func scanEntity(object interface{}) (*entity, error) {
 		field := entityType.Field(i)
 		fieldName := toSnakeCase(field.Name)
 
-		sqlTag := field.Tag.Get("sql")
-		if sqlTag != "" {
-			constraints, err := parseSQLTag(sqlTag)
-			if err != nil {
-				return nil, err
-			}
-
-			e.constraints[fieldName] = constraints
+		constraints, err := parseSQLTag(field.Tag)
+		if err != nil {
+			return nil, err
 		}
+
+		e.constraints[fieldName] = constraints
 	}
 
 	return e, nil
 }
 
-func parseSQLTag(tag string) (sql.FieldConstraints, error) {
+func parseSQLTag(inputTags reflect.StructTag) (sql.FieldConstraints, error) {
 	var constraints sql.FieldConstraints
 
-	tags := strings.Split(tag, ",")
+	sqlTag := inputTags.Get("sql")
+	if sqlTag == "" {
+		return constraints, nil
+	}
 
-	for _, t := range tags {
-		t = strings.ToLower(t) // Convert to lowercase for case-insensitivity
+	tags := strings.Split(sqlTag, ",")
 
-		switch t {
+	for _, tag := range tags {
+		tag = strings.ToLower(tag) // Convert to lowercase for case-insensitivity
+
+		switch tag {
 		case "auto_increment":
 			constraints.AutoIncrement = true
 		case "not_null":
 			constraints.NotNull = true
 		default:
-			return constraints, fmt.Errorf("%w: %s", errInvalidSQLTag, t)
+			return constraints, fmt.Errorf("%w: %s", errInvalidSQLTag, tag)
 		}
 	}
 
@@ -241,9 +243,9 @@ func (e *entity) bindAndValidateEntity(c *Context) (interface{}, error) {
 	return newEntity, nil
 }
 
-func (e *entity) extractFields(newEntity interface{}) (fieldNames []string, fieldValues []interface{}) {
+func (e *entity) extractFields(newEntity any) (fieldNames []string, fieldValues []any) {
 	fieldNames = make([]string, 0, e.entityType.NumField())
-	fieldValues = make([]interface{}, 0, e.entityType.NumField())
+	fieldValues = make([]any, 0, e.entityType.NumField())
 
 	for i := 0; i < e.entityType.NumField(); i++ {
 		field := e.entityType.Field(i)

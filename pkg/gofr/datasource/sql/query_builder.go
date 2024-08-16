@@ -3,7 +3,6 @@ package sql
 import (
 	"errors"
 	"fmt"
-
 	"reflect"
 	"strings"
 )
