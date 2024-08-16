@@ -4,12 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"runtime/debug"
 	"time"
 
 	"github.com/gorilla/websocket"
+	"go.opentelemetry.io/otel/trace"
 
 	"gofr.dev/pkg/gofr/container"
 	gofrHTTP "gofr.dev/pkg/gofr/http"
@@ -17,6 +19,8 @@ import (
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/static"
 )
+
+const colorCodeError = 202 // 202 is red color code
 
 type Handler func(c *Context) (interface{}, error)
 
@@ -39,8 +43,18 @@ type handler struct {
 	requestTimeout time.Duration
 }
 
+type ErrorLogEntry struct {
+	TraceID string `json:"trace_id,omitempty"`
+	Error   string `json:"error,omitempty"`
+}
+
+func (el *ErrorLogEntry) PrettyPrint(writer io.Writer) {
+	fmt.Fprintf(writer, "\u001B[38;5;8m%s \u001B[38;5;%dm%s \n", el.TraceID, colorCodeError, el.Error)
+}
+
 func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	c := newContext(gofrHTTP.NewResponder(w, r.Method), gofrHTTP.NewRequest(r), h.container)
+	traceID := trace.SpanFromContext(r.Context()).SpanContext().TraceID().String()
 
 	if websocket.IsWebSocketUpgrade(r) {
 		// If the request is a WebSocket upgrade, do not apply the timeout
@@ -66,6 +80,16 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}()
 		// Execute the handler function
 		result, err = h.function(c)
+
+		// Log the error(if any) with traceID and errorMessage
+		if err != nil {
+			errorLog := &ErrorLogEntry{
+				TraceID: traceID,
+				Error:   err.Error(),
+			}
+
+			h.container.Logger.Error(errorLog)
+		}
 
 		close(done)
 	}()
