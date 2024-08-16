@@ -121,3 +121,5 @@ func main() {
 }
 ```
 >Note: By default, gRPC server will run on port 9000, to customize the port users can set `GRPC_PORT` config in the .env
+
+> ##### Check out the gRPC server setup example on [GitHub](https://github.com/gofr-dev/gofr/blob/development/examples/grpc-server/main.go).

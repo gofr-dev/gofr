@@ -57,3 +57,4 @@ func main() {
 	app.Run()
 }
 ```
+> #### Check out an example to add cron jobs in GoFr : [Visit GitHub](https://github.com/gofr-dev/gofr/blob/development/examples/using-cron-jobs/main.go)
