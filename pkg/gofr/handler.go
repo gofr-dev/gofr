@@ -21,9 +21,9 @@ import (
 	"gofr.dev/pkg/gofr/static"
 )
 
-type Handler func(c *Context) (interface{}, error)
-
 const colorCodeError = 202 // 202 is red color code
+
+type Handler func(c *Context) (interface{}, error)
 
 /*
 Developer Note: There is an implementation where we do not need this internal handler struct
@@ -47,11 +47,10 @@ type handler struct {
 type ErrorLogEntry struct {
 	TraceID string `json:"trace_id,omitempty"`
 	Error   string `json:"error,omitempty"`
-	Color   int    `json:"color,omitempty"`
 }
 
 func (el *ErrorLogEntry) PrettyPrint(writer io.Writer) {
-	fmt.Fprintf(writer, "\u001B[38;5;8m%s \u001B[38;5;%dm%s \n", el.TraceID, el.Color, el.Error)
+	fmt.Fprintf(writer, "\u001B[38;5;8m%s \u001B[38;5;%dm%s \n", el.TraceID, colorCodeError, el.Error)
 }
 
 func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -85,13 +84,13 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// Execute the handler function
 		result, err = h.function(c)
 
-		// Log the error if any in the format (traceID errorMessage) with the color code 202(red)
+		// Log the error(if any) with traceID and errorMessage
 		if err != nil {
 			errorLog := &ErrorLogEntry{
 				TraceID: traceID,
 				Error:   err.Error(),
-				Color:   colorCodeError,
 			}
+
 			h.container.Logger.Error(errorLog)
 		}
 
