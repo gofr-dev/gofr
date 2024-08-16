@@ -84,7 +84,7 @@ func (c *Container) Create(conf config.Config) {
 			time.Duration(levelFetchConfig)*time.Second)
 
 		if err != nil {
-			c.Logger.Error("incorrect value for REMOTE_LOG_FETCH_INTERVAL. setting default of 15 sec.")
+			c.Logger.Error("invalid value for REMOTE_LOG_FETCH_INTERVAL. setting default of 15 sec.")
 		}
 	}
 
