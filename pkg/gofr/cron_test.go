@@ -231,7 +231,7 @@ func TestCronTab_runScheduled(t *testing.T) {
 		c.runScheduled(time.Date(2024, 1, 1, 1, 1, 1, 1, time.Local))
 
 		// block the main go routine to let the cron run
-		time.Sleep(2 * time.Second)
+		time.Sleep(100 * time.Millisecond)
 	})
 
 	assert.Contains(t, out, "hello from cron")
