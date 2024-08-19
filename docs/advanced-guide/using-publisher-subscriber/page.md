@@ -297,5 +297,5 @@ func order(ctx *gofr.Context) (interface{}, error) {
 }
 ```
 > #### Check out the following examples on how to publish/subscribe to given topics:
-> ##### [Subscribing Topics](https://github.com/gofr-dev/gofr/blob/development/examples/using-subscriber/main.go)
-> ##### [Publishing Topics](https://github.com/gofr-dev/gofr/blob/development/examples/using-publisher/main.go)
+> ##### [Subscribing Topics](https://github.com/gofr-dev/gofr/blob/main/examples/using-subscriber/main.go)
+> ##### [Publishing Topics](https://github.com/gofr-dev/gofr/blob/main/examples/using-publisher/main.go)
