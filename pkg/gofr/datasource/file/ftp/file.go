@@ -348,10 +348,8 @@ func (f *file) Write(p []byte) (n int, err error) {
 
 	f.offset += int64(len(p))
 
-	t := time.Time{}
-
 	mt := f.ModTime()
-	if mt != t {
+	if !mt.IsZero() {
 		f.modTime = mt
 	}
 
@@ -377,10 +375,8 @@ func (f *file) WriteAt(p []byte, off int64) (n int, err error) {
 		return 0, err
 	}
 
-	t := time.Time{}
-
 	mt := f.ModTime()
-	if mt != t {
+	if !mt.IsZero() {
 		f.modTime = mt
 	}
 

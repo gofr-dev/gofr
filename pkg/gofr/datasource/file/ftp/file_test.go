@@ -796,14 +796,12 @@ func Test_GetTime(t *testing.T) {
 		_, _ = fs.Create("temp.json")
 		defer func(fs file_interface.FileSystem) {
 			removeErr := fs.Remove("temp.json")
-			if removeErr != nil {
-				t.Error(removeErr)
-			}
+			require.NoError(t, removeErr)
 		}(fs)
 
 		p, err := fs.Stat("temp.json")
 		require.NoError(t, err)
-		assert.NotEqual(t, time.Time{}, p.ModTime())
+		assert.False(t, p.ModTime().IsZero())
 	})
 }
 

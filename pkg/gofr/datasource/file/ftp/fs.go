@@ -181,9 +181,8 @@ func (f *fileSystem) Create(name string) (file_interface.File, error) {
 		metrics:   f.metrics,
 	}
 
-	t := time.Time{}
 	mt := fl.ModTime()
-	if mt != t {
+	if !mt.IsZero() {
 		fl.modTime = mt
 	}
 
@@ -235,10 +234,8 @@ func (f *fileSystem) Open(name string) (file_interface.File, error) {
 		metrics:   f.metrics,
 	}
 
-	t := time.Time{}
-
 	mt := fl.ModTime()
-	if mt != t {
+	if !mt.IsZero() {
 		fl.modTime = mt
 	}
 
@@ -327,9 +324,8 @@ func (f *fileSystem) Rename(oldname, newname string) error {
 	status = "SUCCESS"
 	tempFile.path = newFilePath
 
-	t := time.Time{}
 	mt := tempFile.ModTime()
-	if mt != t {
+	if !mt.IsZero() {
 		tempFile.modTime = mt
 	}
 

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/jlaffaye/ftp"
+
 	file_interface "gofr.dev/pkg/gofr/datasource/file"
 )
 
@@ -244,7 +245,9 @@ func (f *fileSystem) ChDir(dir string) error {
 	return nil
 }
 
-// ReadDir returns a FileInfo of the files/directories present in the directory.
+// ReadDir reads the named directory, returning all its directory entries sorted by filename.
+// If an error occurs reading the directory, ReadDir returns the entries it was able to read before the error, along with the error.
+// It returns the list of files/directories present in the current directory when "." is passed.
 func (f *fileSystem) ReadDir(dir string) ([]file_interface.FileInfo, error) {
 	var msg string
 
