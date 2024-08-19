@@ -156,4 +156,4 @@ Where,
 **Method** : It contains the method(UP/DOWN) in which migration ran.
 (For now only method UP is supported)
 
-> ##### Check out an example to add and run migrations in GoFr : [Visit GitHub](https://github.com/gofr-dev/gofr/blob/development/examples/using-migrations/main.go)
+> ##### Check out the example to add and run migrations in GoFr: [Visit GitHub](https://github.com/gofr-dev/gofr/blob/development/examples/using-migrations/main.go)

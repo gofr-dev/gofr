@@ -31,4 +31,4 @@ func MyHandler(c context.Context) error {
 In this example, **my-custom-span** is the name of the custom span that is added to the request.
 The defer statement ensures that the span is closed even if an error occurs to ensure that the trace is properly recorded.
 
-> ##### Check out the example of creating a custom span in GoFr : [Visit Github](https://github.com/gofr-dev/gofr/blob/0730b9496b942b318d51139a561f3a5f90c7dbbf/examples/http-server/main.go#L58)
+> ##### Check out the example of creating a custom span in GoFr: [Visit Github](https://github.com/gofr-dev/gofr/blob/0730b9496b942b318d51139a561f3a5f90c7dbbf/examples/http-server/main.go#L58)

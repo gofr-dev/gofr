@@ -36,4 +36,4 @@ Add the following configs in `.env` file.
 DB_MAX_IDLE_CONNECTION=5 // Default 2
 DB_MAX_OPEN_CONNECTION=5 // Default unlimited
 ```
-> ##### Check out the example : [Visit Github](https://github.com/gofr-dev/gofr/blob/development/examples/http-server/configs/.env)
+> ##### Check out the example on how to add configuration for SQL in GoFr: [Visit Github](https://github.com/gofr-dev/gofr/blob/development/examples/http-server/configs/.env)
