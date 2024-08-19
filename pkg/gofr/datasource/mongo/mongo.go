@@ -91,14 +91,14 @@ func (c *Client) Connect() {
 
 // InsertOne inserts a single document into the specified collection.
 func (c *Client) InsertOne(ctx context.Context, collection string, document interface{}) (interface{}, error) {
-	defer c.postProcess(&QueryLog{Query: "insertOne", Collection: collection, Filter: document}, time.Now())
+	defer c.logQueryAndSendMetrics(&QueryLog{Query: "insertOne", Collection: collection, Filter: document}, time.Now())
 
 	return c.Database.Collection(collection).InsertOne(ctx, document)
 }
 
 // InsertMany inserts multiple documents into the specified collection.
 func (c *Client) InsertMany(ctx context.Context, collection string, documents []interface{}) ([]interface{}, error) {
-	defer c.postProcess(&QueryLog{Query: "insertMany", Collection: collection, Filter: documents}, time.Now())
+	defer c.logQueryAndSendMetrics(&QueryLog{Query: "insertMany", Collection: collection, Filter: documents}, time.Now())
 
 	res, err := c.Database.Collection(collection).InsertMany(ctx, documents)
 	if err != nil {
@@ -110,7 +110,7 @@ func (c *Client) InsertMany(ctx context.Context, collection string, documents []
 
 // Find retrieves documents from the specified collection based on the provided filter and binds response to result.
 func (c *Client) Find(ctx context.Context, collection string, filter, results interface{}) error {
-	defer c.postProcess(&QueryLog{Query: "find", Collection: collection, Filter: filter}, time.Now())
+	defer c.logQueryAndSendMetrics(&QueryLog{Query: "find", Collection: collection, Filter: filter}, time.Now())
 
 	cur, err := c.Database.Collection(collection).Find(ctx, filter)
 	if err != nil {
@@ -128,7 +128,7 @@ func (c *Client) Find(ctx context.Context, collection string, filter, results in
 
 // FindOne retrieves a single document from the specified collection based on the provided filter and binds response to result.
 func (c *Client) FindOne(ctx context.Context, collection string, filter, result interface{}) error {
-	defer c.postProcess(&QueryLog{Query: "findOne", Collection: collection, Filter: filter}, time.Now())
+	defer c.logQueryAndSendMetrics(&QueryLog{Query: "findOne", Collection: collection, Filter: filter}, time.Now())
 
 	b, err := c.Database.Collection(collection).FindOne(ctx, filter).Raw()
 	if err != nil {
@@ -140,7 +140,7 @@ func (c *Client) FindOne(ctx context.Context, collection string, filter, result 
 
 // UpdateByID updates a document in the specified collection by its ID.
 func (c *Client) UpdateByID(ctx context.Context, collection string, id, update interface{}) (int64, error) {
-	defer c.postProcess(&QueryLog{Query: "updateByID", Collection: collection, ID: id, Update: update}, time.Now())
+	defer c.logQueryAndSendMetrics(&QueryLog{Query: "updateByID", Collection: collection, ID: id, Update: update}, time.Now())
 
 	res, err := c.Database.Collection(collection).UpdateByID(ctx, id, update)
 
@@ -149,7 +149,7 @@ func (c *Client) UpdateByID(ctx context.Context, collection string, id, update i
 
 // UpdateOne updates a single document in the specified collection based on the provided filter.
 func (c *Client) UpdateOne(ctx context.Context, collection string, filter, update interface{}) error {
-	defer c.postProcess(&QueryLog{Query: "updateOne", Collection: collection, Filter: filter, Update: update}, time.Now())
+	defer c.logQueryAndSendMetrics(&QueryLog{Query: "updateOne", Collection: collection, Filter: filter, Update: update}, time.Now())
 
 	_, err := c.Database.Collection(collection).UpdateOne(ctx, filter, update)
 
@@ -158,7 +158,7 @@ func (c *Client) UpdateOne(ctx context.Context, collection string, filter, updat
 
 // UpdateMany updates multiple documents in the specified collection based on the provided filter.
 func (c *Client) UpdateMany(ctx context.Context, collection string, filter, update interface{}) (int64, error) {
-	defer c.postProcess(&QueryLog{Query: "updateMany", Collection: collection, Filter: filter, Update: update}, time.Now())
+	defer c.logQueryAndSendMetrics(&QueryLog{Query: "updateMany", Collection: collection, Filter: filter, Update: update}, time.Now())
 
 	res, err := c.Database.Collection(collection).UpdateMany(ctx, filter, update)
 
@@ -167,14 +167,14 @@ func (c *Client) UpdateMany(ctx context.Context, collection string, filter, upda
 
 // CountDocuments counts the number of documents in the specified collection based on the provided filter.
 func (c *Client) CountDocuments(ctx context.Context, collection string, filter interface{}) (int64, error) {
-	defer c.postProcess(&QueryLog{Query: "countDocuments", Collection: collection, Filter: filter}, time.Now())
+	defer c.logQueryAndSendMetrics(&QueryLog{Query: "countDocuments", Collection: collection, Filter: filter}, time.Now())
 
 	return c.Database.Collection(collection).CountDocuments(ctx, filter)
 }
 
 // DeleteOne deletes a single document from the specified collection based on the provided filter.
 func (c *Client) DeleteOne(ctx context.Context, collection string, filter interface{}) (int64, error) {
-	defer c.postProcess(&QueryLog{Query: "deleteOne", Collection: collection, Filter: filter}, time.Now())
+	defer c.logQueryAndSendMetrics(&QueryLog{Query: "deleteOne", Collection: collection, Filter: filter}, time.Now())
 
 	res, err := c.Database.Collection(collection).DeleteOne(ctx, filter)
 	if err != nil {
@@ -186,7 +186,7 @@ func (c *Client) DeleteOne(ctx context.Context, collection string, filter interf
 
 // DeleteMany deletes multiple documents from the specified collection based on the provided filter.
 func (c *Client) DeleteMany(ctx context.Context, collection string, filter interface{}) (int64, error) {
-	defer c.postProcess(&QueryLog{Query: "deleteMany", Collection: collection, Filter: filter}, time.Now())
+	defer c.logQueryAndSendMetrics(&QueryLog{Query: "deleteMany", Collection: collection, Filter: filter}, time.Now())
 
 	res, err := c.Database.Collection(collection).DeleteMany(ctx, filter)
 	if err != nil {
@@ -198,19 +198,19 @@ func (c *Client) DeleteMany(ctx context.Context, collection string, filter inter
 
 // Drop drops the specified collection from the database.
 func (c *Client) Drop(ctx context.Context, collection string) error {
-	defer c.postProcess(&QueryLog{Query: "drop", Collection: collection}, time.Now())
+	defer c.logQueryAndSendMetrics(&QueryLog{Query: "drop", Collection: collection}, time.Now())
 
 	return c.Database.Collection(collection).Drop(ctx)
 }
 
 // CreateCollection creates the specified collection in the database.
 func (c *Client) CreateCollection(ctx context.Context, name string) error {
-	defer c.postProcess(&QueryLog{Query: "createCollection", Collection: name}, time.Now())
+	defer c.logQueryAndSendMetrics(&QueryLog{Query: "createCollection", Collection: name}, time.Now())
 
 	return c.Database.CreateCollection(ctx, name)
 }
 
-func (c *Client) postProcess(ql *QueryLog, startTime time.Time) {
+func (c *Client) logQueryAndSendMetrics(ql *QueryLog, startTime time.Time) {
 	duration := time.Since(startTime).Milliseconds()
 
 	ql.Duration = duration
@@ -248,7 +248,7 @@ func (c *Client) HealthCheck(ctx context.Context) (any, error) {
 }
 
 func (c *Client) StartSession() (interface{}, error) {
-	defer c.postProcess(&QueryLog{Query: "startSession"}, time.Now())
+	defer c.logQueryAndSendMetrics(&QueryLog{Query: "startSession"}, time.Now())
 
 	s, err := c.Client().StartSession()
 	ses := &session{s}
