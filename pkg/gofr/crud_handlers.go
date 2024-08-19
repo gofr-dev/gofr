@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
-	"strings"
 
 	"gofr.dev/pkg/gofr/datasource/sql"
 )
@@ -113,48 +112,6 @@ func scanEntity(object interface{}) (*entity, error) {
 	return e, nil
 }
 
-func parseSQLTag(inputTags reflect.StructTag) (sql.FieldConstraints, error) {
-	var constraints sql.FieldConstraints
-
-	sqlTag := inputTags.Get("sql")
-	if sqlTag == "" {
-		return constraints, nil
-	}
-
-	tags := strings.Split(sqlTag, ",")
-
-	for _, tag := range tags {
-		tag = strings.ToLower(tag) // Convert to lowercase for case-insensitivity
-
-		switch tag {
-		case "auto_increment":
-			constraints.AutoIncrement = true
-		case "not_null":
-			constraints.NotNull = true
-		default:
-			return constraints, fmt.Errorf("%w: %s", errInvalidSQLTag, tag)
-		}
-	}
-
-	return constraints, nil
-}
-
-func getTableName(object any, structName string) string {
-	if v, ok := object.(TableNameOverrider); ok {
-		return v.TableName()
-	}
-
-	return toSnakeCase(structName)
-}
-
-func getRestPath(object any, structName string) string {
-	if v, ok := object.(RestPathOverrider); ok {
-		return v.RestPath()
-	}
-
-	return structName
-}
-
 // registerCRUDHandlers registers CRUD handlers for an entity.
 func (a *App) registerCRUDHandlers(e *entity, object interface{}) {
 	basePath := fmt.Sprintf("/%s", e.restPath)
@@ -260,16 +217,6 @@ func (e *entity) extractFields(newEntity any) (fieldNames []string, fieldValues 
 	}
 
 	return fieldNames, fieldValues
-}
-
-func hasAutoIncrementID(constraints map[string]sql.FieldConstraints) bool {
-	for _, constraint := range constraints {
-		if constraint.AutoIncrement {
-			return true
-		}
-	}
-
-	return false
 }
 
 func (e *entity) GetAll(c *Context) (interface{}, error) {
@@ -384,26 +331,4 @@ func (e *entity) Delete(c *Context) (interface{}, error) {
 	}
 
 	return fmt.Sprintf("%s successfully deleted with id: %v", e.name, id), nil
-}
-
-func toSnakeCase(str string) string {
-	diff := 'a' - 'A'
-	length := len(str)
-
-	var builder strings.Builder
-
-	for i, char := range str {
-		if char >= 'a' {
-			builder.WriteRune(char)
-			continue
-		}
-
-		if (i != 0 || i == length-1) && ((i > 0 && rune(str[i-1]) >= 'a') || (i < length-1 && rune(str[i+1]) >= 'a')) {
-			builder.WriteRune('_')
-		}
-
-		builder.WriteRune(char + diff)
-	}
-
-	return builder.String()
 }
