@@ -100,4 +100,4 @@ func WSHandler(ctx *gofr.Context) (interface{}, error) {
 	return message, nil
 }
 ```
-> #### Check out an example on how to read/write through a WebSocket in GoFr : [Visit GitHub](https://github.com/gofr-dev/gofr/blob/development/examples/using-web-socket/main.go)
+> #### Check out the example on how to read/write through a WebSocket in GoFr: [Visit GitHub](https://github.com/gofr-dev/gofr/blob/development/examples/using-web-socket/main.go)
