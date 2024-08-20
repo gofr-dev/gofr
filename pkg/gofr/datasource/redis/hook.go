@@ -64,7 +64,7 @@ func (ql *QueryLog) String() string {
 }
 
 // logQuery logs the Redis query information.
-func (r *redisHook) logQueryAndSendMetrics(start time.Time, query string, args ...interface{}) {
+func (r *redisHook) sendOperationStats(start time.Time, query string, args ...interface{}) {
 	duration := time.Since(start).Milliseconds()
 
 	r.logger.Debug(&QueryLog{
@@ -87,7 +87,7 @@ func (r *redisHook) ProcessHook(next redis.ProcessHook) redis.ProcessHook {
 	return func(ctx context.Context, cmd redis.Cmder) error {
 		start := time.Now()
 		err := next(ctx, cmd)
-		r.logQueryAndSendMetrics(start, cmd.Name(), cmd.Args()...)
+		r.sendOperationStats(start, cmd.Name(), cmd.Args()...)
 
 		return err
 	}
@@ -98,7 +98,7 @@ func (r *redisHook) ProcessPipelineHook(next redis.ProcessPipelineHook) redis.Pr
 	return func(ctx context.Context, cmds []redis.Cmder) error {
 		start := time.Now()
 		err := next(ctx, cmds)
-		r.logQueryAndSendMetrics(start, "pipeline", cmds[:len(cmds)-1])
+		r.sendOperationStats(start, "pipeline", cmds[:len(cmds)-1])
 
 		return err
 	}

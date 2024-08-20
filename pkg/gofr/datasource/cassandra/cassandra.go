@@ -90,7 +90,7 @@ func (c *Client) UseMetrics(metrics interface{}) {
 
 //nolint:exhaustive // We just want to take care of slice and struct in this case.
 func (c *Client) Query(dest any, stmt string, values ...any) error {
-	defer c.logQueryAndSendMetrics(&QueryLog{Query: stmt, Keyspace: c.config.Keyspace}, time.Now())
+	defer c.sendOperationStats(&QueryLog{Query: stmt, Keyspace: c.config.Keyspace}, time.Now())
 
 	rvo := reflect.ValueOf(dest)
 	if rvo.Kind() != reflect.Ptr {
@@ -137,7 +137,7 @@ func (c *Client) Query(dest any, stmt string, values ...any) error {
 }
 
 func (c *Client) Exec(stmt string, values ...any) error {
-	defer c.logQueryAndSendMetrics(&QueryLog{Query: stmt, Keyspace: c.config.Keyspace}, time.Now())
+	defer c.sendOperationStats(&QueryLog{Query: stmt, Keyspace: c.config.Keyspace}, time.Now())
 
 	return c.cassandra.session.query(stmt, values...).exec()
 }
@@ -149,7 +149,7 @@ func (c *Client) ExecCAS(dest any, stmt string, values ...any) (bool, error) {
 		err     error
 	)
 
-	defer c.logQueryAndSendMetrics(&QueryLog{Query: stmt, Keyspace: c.config.Keyspace}, time.Now())
+	defer c.sendOperationStats(&QueryLog{Query: stmt, Keyspace: c.config.Keyspace}, time.Now())
 
 	rvo := reflect.ValueOf(dest)
 	if rvo.Kind() != reflect.Ptr {
@@ -291,7 +291,7 @@ func (*Client) getColumnsFromColumnsInfo(columns []gocql.ColumnInfo) []string {
 	return cols
 }
 
-func (c *Client) logQueryAndSendMetrics(ql *QueryLog, startTime time.Time) {
+func (c *Client) sendOperationStats(ql *QueryLog, startTime time.Time) {
 	duration := time.Since(startTime).Milliseconds()
 
 	ql.Duration = duration
