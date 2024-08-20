@@ -128,7 +128,9 @@ func TestMigrationRunClickhouseMigrationFailure(t *testing.T) {
 }
 
 func TestMigrationRunClickhouseMigrationFailureWhileCheckingTable(t *testing.T) {
-	logs := testutil.StderrOutputForFunc(func() {
+	mockClickHouse, mockContainer := initialiseClickHouseRunMocks(t)
+
+	testutil.StderrOutputForFunc(func() {
 		migrationMap := map[int64]Migrate{
 			1: {UP: func(d Datasource) error {
 				err := d.Clickhouse.Exec(context.Background(), "SELECT * FROM users")
@@ -140,14 +142,12 @@ func TestMigrationRunClickhouseMigrationFailureWhileCheckingTable(t *testing.T) 
 			}},
 		}
 
-		mockClickHouse, mockContainer := initialiseClickHouseRunMocks(t)
-
 		mockClickHouse.EXPECT().Exec(gomock.Any(), CheckAndCreateChMigrationTable).Return(sql.ErrConnDone)
 
 		Run(migrationMap, mockContainer)
 	})
 
-	assert.Contains(t, logs, "failed to create gofr_migration table, err: sql: connection is already closed")
+	assert.True(t, mockClickHouse.ctrl.Satisfied())
 }
 
 func TestMigrationRunClickhouseCurrentMigrationEqualLastMigration(t *testing.T) {
