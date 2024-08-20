@@ -19,7 +19,7 @@ require (
 	github.com/joho/godotenv v1.5.1
 	github.com/lib/pq v1.10.9
 	github.com/pkg/errors v0.9.1
-	github.com/prometheus/client_golang v1.19.1
+	github.com/prometheus/client_golang v1.20.0
 	github.com/redis/go-redis/extra/redisotel/v9 v9.0.5
 	github.com/redis/go-redis/v9 v9.6.1
 	github.com/segmentio/kafka-go v0.4.47
@@ -39,7 +39,7 @@ require (
 	golang.org/x/sync v0.8.0
 	golang.org/x/term v0.23.0
 	golang.org/x/text v0.17.0
-	google.golang.org/api v0.191.0
+	google.golang.org/api v0.192.0
 	google.golang.org/grpc v1.65.0
 	google.golang.org/protobuf v1.34.2
 	modernc.org/sqlite v1.32.0
@@ -47,7 +47,7 @@ require (
 
 require (
 	cloud.google.com/go v0.115.0 // indirect
-	cloud.google.com/go/auth v0.7.3 // indirect
+	cloud.google.com/go/auth v0.8.1 // indirect
 	cloud.google.com/go/auth/oauth2adapt v0.2.3 // indirect
 	cloud.google.com/go/compute/metadata v0.5.0 // indirect
 	cloud.google.com/go/iam v1.1.12 // indirect
@@ -69,7 +69,7 @@ require (
 	github.com/googleapis/gax-go/v2 v2.13.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.20.0 // indirect
 	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
-	github.com/klauspost/compress v1.17.8 // indirect
+	github.com/klauspost/compress v1.17.9 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/ncruces/go-strftime v0.1.9 // indirect
