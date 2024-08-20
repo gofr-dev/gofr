@@ -1,6 +1,7 @@
 package container
 
 import (
+	"context"
 	"errors"
 	"strconv"
 	"strings"
@@ -22,6 +23,7 @@ import (
 	"gofr.dev/pkg/gofr/metrics/exporters"
 	"gofr.dev/pkg/gofr/service"
 	"gofr.dev/pkg/gofr/version"
+	"gofr.dev/pkg/gofr/websocket"
 )
 
 // Container is a collection of all common application level concerns. Things like Logger, Connection Pool for Redis
@@ -73,8 +75,17 @@ func (c *Container) Create(conf config.Config) {
 	}
 
 	if c.Logger == nil {
+		levelFetchConfig, err := strconv.Atoi(conf.GetOrDefault("REMOTE_LOG_FETCH_INTERVAL", "15"))
+		if err != nil {
+			levelFetchConfig = 15
+		}
+
 		c.Logger = remotelogger.New(logging.GetLevelFromString(conf.Get("LOG_LEVEL")), conf.Get("REMOTE_LOG_URL"),
-			conf.GetOrDefault("REMOTE_LOG_FETCH_INTERVAL", "15"))
+			time.Duration(levelFetchConfig)*time.Second)
+
+		if err != nil {
+			c.Logger.Error("invalid value for REMOTE_LOG_FETCH_INTERVAL. setting default of 15 sec.")
+		}
 	}
 
 	c.Debug("Container is being created")
@@ -237,4 +248,13 @@ func (c *Container) GetPublisher() pubsub.Publisher {
 
 func (c *Container) GetSubscriber() pubsub.Subscriber {
 	return c.PubSub
+}
+
+func (*Container) GetConnectionFromContext(ctx context.Context) *websocket.Connection {
+	conn, ok := ctx.Value(websocket.WSConnectionKey).(*websocket.Connection)
+	if !ok {
+		return nil
+	}
+
+	return conn
 }

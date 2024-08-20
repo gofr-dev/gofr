@@ -108,6 +108,62 @@ func TestBasicAuthMiddleware(t *testing.T) {
 	}
 }
 
+func TestBasicAuthMiddleware_ValidationSuccess(t *testing.T) {
+	validationFunc := func(user, pass string) bool {
+		if user == "validUser" && pass == "validPass" {
+			return true
+		}
+
+		return false
+	}
+
+	validationFuncWithDB := func(_ *container.Container, user, pass string) bool {
+		if user == "validUser" && pass == "validPass" {
+			return true
+		}
+
+		return false
+	}
+
+	testCases := []struct {
+		name               string
+		authHeader         string
+		authProvider       BasicAuthProvider
+		expectedStatusCode int
+	}{
+		{
+			name:               "Valid Authorization with validation Func",
+			authHeader:         "Basic dmFsaWRVc2VyOnZhbGlkUGFzcw==",
+			authProvider:       BasicAuthProvider{ValidateFunc: validationFunc},
+			expectedStatusCode: http.StatusOK,
+		},
+		{
+			name:               "Valid Authorization with validation Func with DB",
+			authHeader:         "Basic dmFsaWRVc2VyOnZhbGlkUGFzcw==",
+			authProvider:       BasicAuthProvider{ValidateFuncWithDatasources: validationFuncWithDB},
+			expectedStatusCode: http.StatusOK,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(http.StatusOK)
+			})
+
+			req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+			req.Header.Set("Authorization", tc.authHeader)
+
+			rr := httptest.NewRecorder()
+			authMiddleware := BasicAuthMiddleware(tc.authProvider)
+
+			authMiddleware(handler).ServeHTTP(rr, req)
+
+			assert.Equal(t, tc.expectedStatusCode, rr.Code)
+		})
+	}
+}
+
 func Test_BasicAuthMiddleware_well_known(t *testing.T) {
 	testHandler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte("Success"))
