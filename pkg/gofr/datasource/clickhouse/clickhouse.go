@@ -110,7 +110,7 @@ func pushDBMetrics(conn Conn, metrics Metrics) {
 // Exec should be used for DDL and simple statements.
 // It should not be used for larger inserts or query iterations.
 func (c *client) Exec(ctx context.Context, query string, args ...any) error {
-	defer c.logQueryAndSendMetrics(time.Now(), "Exec", query, args...)
+	defer c.sendOperationStats(time.Now(), "Exec", query, args...)
 
 	return c.conn.Exec(ctx, query, args...)
 }
@@ -129,7 +129,7 @@ func (c *client) Exec(ctx context.Context, query string, args ...any) error {
 //
 // err = ctx.Clickhouse.Select(ctx, &user, "SELECT * FROM users") .
 func (c *client) Select(ctx context.Context, dest any, query string, args ...any) error {
-	defer c.logQueryAndSendMetrics(time.Now(), "Select", query, args...)
+	defer c.sendOperationStats(time.Now(), "Select", query, args...)
 
 	return c.conn.Select(ctx, dest, query, args...)
 }
@@ -137,12 +137,12 @@ func (c *client) Select(ctx context.Context, dest any, query string, args ...any
 // AsyncInsert allows the user to specify whether the client should wait for the server to complete the insert or
 // respond once the data has been received.
 func (c *client) AsyncInsert(ctx context.Context, query string, wait bool, args ...any) error {
-	defer c.logQueryAndSendMetrics(time.Now(), "AsyncInsert", query, args...)
+	defer c.sendOperationStats(time.Now(), "AsyncInsert", query, args...)
 
 	return c.conn.AsyncInsert(ctx, query, wait, args...)
 }
 
-func (c *client) logQueryAndSendMetrics(start time.Time, methodType, query string, args ...interface{}) {
+func (c *client) sendOperationStats(start time.Time, methodType, query string, args ...interface{}) {
 	duration := time.Since(start).Milliseconds()
 
 	c.logger.Debug(&Log{
