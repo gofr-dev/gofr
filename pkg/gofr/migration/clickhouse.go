@@ -101,5 +101,5 @@ func (ch clickHouseMigrator) commitMigration(c *container.Container, data transa
 func (ch clickHouseMigrator) rollback(c *container.Container, data transactionData) {
 	ch.migrator.rollback(c, data)
 
-	c.Fatalf("Migration %v failed", data.MigrationNumber)
+	c.Fatalf("migration %v failed and rolled back", data.MigrationNumber)
 }
