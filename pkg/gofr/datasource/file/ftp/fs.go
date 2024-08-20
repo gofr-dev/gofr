@@ -88,7 +88,7 @@ func (f *fileSystem) UseMetrics(metrics interface{}) {
 
 // Connect establishes a connection to the FTP server and logs in.
 func (f *fileSystem) Connect() {
-	var status, msg string
+	var status string
 
 	ftpServer := fmt.Sprintf("%v:%v", f.config.Host, f.config.Port)
 
@@ -96,7 +96,6 @@ func (f *fileSystem) Connect() {
 		Operation: "Connect",
 		Location:  ftpServer,
 		Status:    &status,
-		Message:   &msg,
 	}, time.Now())
 
 	if f.config.DialTimeout == 0 {

@@ -477,6 +477,7 @@ Michael Brown,40,michaelb@example.com`
 
 		mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
 		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+		mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 		newCsvFile, _ := fs.Create("temp.csv")
@@ -521,6 +522,7 @@ func Test_ReadFromCSVScanError(t *testing.T) {
 
 		mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
 		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+		mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 		newCsvFile, _ := fs.Create("temp.csv")
@@ -575,6 +577,7 @@ func Test_ReadFromJSONArray(t *testing.T) {
 
 		mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
 		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+		mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 		newCsvFile, _ := fs.Create("temp.json")
@@ -626,6 +629,7 @@ func Test_ReadFromJSONObject(t *testing.T) {
 
 		mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
 		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+		mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 		newCsvFile, _ := fs.Create("temp.json")
@@ -668,6 +672,7 @@ func Test_ReadFromJSONArrayInvalidDelimiter(t *testing.T) {
 
 		mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
 		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+		mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 		newCsvFile, _ := fs.Create("temp.json")
@@ -729,7 +734,8 @@ func Test_DirectoryOperations(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, "/ftp/user/temp2", currentdir)
 
-		_, _ = fs.Create("temp.csv")
+		_, err = fs.Create("temp.csv")
+		require.NoError(t, err)
 
 		v, err := fs.ReadDir(".")
 		require.NoError(t, err)
@@ -761,8 +767,11 @@ func Test_GetSize(t *testing.T) {
 
 		mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
 		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+		mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 
-		newFile, _ := fs.Create("temp.json")
+		newFile, err := fs.Create("temp.json")
+		require.NoError(t, err)
+
 		defer func(fs file_interface.FileSystem) {
 			removeErr := fs.Remove("temp.json")
 			if removeErr != nil {
@@ -772,12 +781,14 @@ func Test_GetSize(t *testing.T) {
 
 		p, err := fs.Stat("temp.json")
 		require.NoError(t, err)
-		assert.Equal(t, int64(0), p.Size())
+		assert.Zero(t, p.Size())
 
-		_, _ = newFile.Write([]byte("Hello_World"))
+		_, err = newFile.Write([]byte("Hello_World"))
+		require.NoError(t, err)
+
 		p, err = fs.Stat("temp.json")
 		require.NoError(t, err)
-		assert.NotEqual(t, int64(0), p.Size())
+		assert.NotZero(t, p.Size())
 	})
 }
 
@@ -792,8 +803,11 @@ func Test_GetTime(t *testing.T) {
 
 		mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
 		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+		mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 
-		_, _ = fs.Create("temp.json")
+		_, err := fs.Create("temp.json")
+		require.NoError(t, err)
+
 		defer func(fs file_interface.FileSystem) {
 			removeErr := fs.Remove("temp.json")
 			require.NoError(t, removeErr)

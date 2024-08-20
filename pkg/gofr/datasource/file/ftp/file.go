@@ -219,6 +219,7 @@ func (f *file) ModTime() time.Time {
 
 	t, err := f.conn.GetTime(f.path)
 	if err != nil {
+		f.logger.Errorf("ModTime operation failed : %v", err)
 		return time.Time{}
 	}
 

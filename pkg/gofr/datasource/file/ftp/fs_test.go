@@ -591,7 +591,11 @@ func TestRemoveDir(t *testing.T) {
 
 			err := fs.RemoveAll(tt.removePath)
 
-			assert.Equal(t, tt.expectError, err != nil, tt.name)
+			if tt.expectError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
 		})
 	}
 }
