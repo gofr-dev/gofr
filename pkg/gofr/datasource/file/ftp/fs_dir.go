@@ -21,7 +21,7 @@ func (f *fileSystem) Mkdir(name string, _ os.FileMode) error {
 
 	filePath := path.Join(f.config.RemoteDir, name)
 
-	defer f.processLog(&FileLog{
+	defer f.sendOperationStats(&FileLog{
 		Operation: "Mkdir",
 		Location:  filePath,
 		Status:    &status,
@@ -80,7 +80,7 @@ func (f *fileSystem) MkdirAll(name string, _ os.FileMode) error {
 
 	status := "ERROR"
 
-	defer f.processLog(&FileLog{
+	defer f.sendOperationStats(&FileLog{
 		Operation: "MkdirAll",
 		Location:  path.Join(f.config.RemoteDir, name),
 		Status:    &status,
@@ -124,7 +124,7 @@ func (f *fileSystem) RemoveAll(name string) error {
 
 	filePath := path.Join(f.config.RemoteDir, name)
 
-	defer f.processLog(&FileLog{
+	defer f.sendOperationStats(&FileLog{
 		Operation: "RemoveAll",
 		Location:  filePath,
 		Status:    &status,
@@ -159,7 +159,7 @@ func (f *fileSystem) RemoveAll(name string) error {
 func (f *fileSystem) Stat(name string) (file_interface.FileInfo, error) {
 	status := "ERROR"
 
-	defer f.processLog(&FileLog{
+	defer f.sendOperationStats(&FileLog{
 		Operation: "Stat",
 		Location:  f.config.RemoteDir,
 		Status:    &status,
@@ -209,7 +209,7 @@ func (f *fileSystem) Stat(name string) (file_interface.FileInfo, error) {
 
 // Getwd returns the full path of the current directory.
 func (f *fileSystem) Getwd() (string, error) {
-	defer f.processLog(&FileLog{
+	defer f.sendOperationStats(&FileLog{
 		Operation: "CurrentDir",
 		Location:  f.config.RemoteDir,
 	}, time.Now())
@@ -223,7 +223,7 @@ func (f *fileSystem) ChDir(dir string) error {
 
 	status := "ERROR"
 
-	defer f.processLog(&FileLog{
+	defer f.sendOperationStats(&FileLog{
 		Operation: "ChangeDir",
 		Location:  f.config.RemoteDir,
 		Status:    &status,
@@ -253,7 +253,7 @@ func (f *fileSystem) ReadDir(dir string) ([]file_interface.FileInfo, error) {
 
 	status := "ERROR"
 
-	defer f.processLog(&FileLog{
+	defer f.sendOperationStats(&FileLog{
 		Operation: "ChangeDir",
 		Location:  f.config.RemoteDir,
 		Status:    &status,

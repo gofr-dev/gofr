@@ -92,7 +92,7 @@ func (f *fileSystem) Connect() {
 
 	ftpServer := fmt.Sprintf("%v:%v", f.config.Host, f.config.Port)
 
-	defer f.processLog(&FileLog{
+	defer f.sendOperationStats(&FileLog{
 		Operation: "Connect",
 		Location:  ftpServer,
 		Status:    &status,
@@ -137,7 +137,7 @@ func (f *fileSystem) Create(name string) (file_interface.File, error) {
 
 	status := "ERROR"
 
-	defer f.processLog(&FileLog{
+	defer f.sendOperationStats(&FileLog{
 		Operation: "Create",
 		Location:  filePath,
 		Status:    &status,
@@ -198,7 +198,7 @@ func (f *fileSystem) Open(name string) (file_interface.File, error) {
 
 	filePath := path.Join(f.config.RemoteDir, name)
 
-	defer f.processLog(&FileLog{
+	defer f.sendOperationStats(&FileLog{
 		Operation: "Open",
 		Location:  filePath,
 		Status:    &status,
@@ -258,7 +258,7 @@ func (f *fileSystem) Remove(name string) error {
 
 	filePath := path.Join(f.config.RemoteDir, name)
 
-	defer f.processLog(&FileLog{
+	defer f.sendOperationStats(&FileLog{
 		Operation: "Remove",
 		Location:  filePath,
 		Status:    &status,
@@ -294,7 +294,7 @@ func (f *fileSystem) Rename(oldname, newname string) error {
 
 	newFilePath := path.Join(f.config.RemoteDir, newname)
 
-	defer f.processLog(&FileLog{
+	defer f.sendOperationStats(&FileLog{
 		Operation: "Rename",
 		Location:  oldFilePath,
 		Status:    &status,
@@ -331,7 +331,7 @@ func (f *fileSystem) Rename(oldname, newname string) error {
 	return nil
 }
 
-func (f *fileSystem) processLog(fl *FileLog, startTime time.Time) {
+func (f *fileSystem) sendOperationStats(fl *FileLog, startTime time.Time) {
 	duration := time.Since(startTime).Milliseconds()
 
 	fl.Duration = duration
