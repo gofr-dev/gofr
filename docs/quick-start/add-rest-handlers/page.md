@@ -49,6 +49,21 @@ func (u *userEntity) TableName() string {
 }
 ```
 
+## Adding Database Constraints
+By default, GoFr assumes to have manual insertion of id for a given struct, but to support sql constraints like `auto-increment`,
+`not-null` user can use the `sql` tag while declaring the struct fields.
+
+```go
+type user struct {
+	ID         int    `json:"id"  sql:"auto_increment"`
+	Name       string `json:"name"  sql:"not_null"`
+	Age        int    `json:"age"`
+	IsEmployed bool   `json:"isEmployed"`
+}
+```
+
+Now when posting data for the user struct, the `Id` we be auto-incremented and the `Name` will be a not-null field in table.
+
 ## Benefits of Adding REST Handlers of GoFr
 
 1. Reduced Boilerplate Code: Eliminate repetitive code for CRUD operations, freeing user to focus on core application logic.
