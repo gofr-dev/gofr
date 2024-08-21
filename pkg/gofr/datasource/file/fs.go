@@ -56,14 +56,14 @@ func (fileSystem) Remove(name string) error {
 }
 
 func (fileSystem) RemoveAll(name string) error {
-	err := os.RemoveAll(name)
+	// In case we remove current working directory, say using "../currentDir"
+	// the current directory needs to be reset to its parent directory.
+	curr, err := os.Getwd()
 	if err != nil {
 		return err
 	}
 
-	// In case we remove current working directory, say using "../currentDir"
-	// the current directory needs to be reset to its parent directory.
-	curr, err := os.Getwd()
+	err = os.RemoveAll(name)
 	if err != nil {
 		return err
 	}
