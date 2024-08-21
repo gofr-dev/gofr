@@ -29,8 +29,8 @@ func (fileSystem) Mkdir(name string, perm os.FileMode) error {
 	return os.Mkdir(name, perm)
 }
 
-func (fileSystem) MkdirAll(path string, perm os.FileMode) error {
-	return os.MkdirAll(path, perm)
+func (fileSystem) MkdirAll(name string, perm os.FileMode) error {
+	return os.MkdirAll(name, perm)
 }
 
 func (f fileSystem) Open(name string) (File, error) {
@@ -70,7 +70,10 @@ func (fileSystem) RemoveAll(name string) error {
 
 	removePath := path.Join(curr, name)
 	if curr == removePath {
-		os.Chdir(path.Join(curr, ".."))
+		err = os.Chdir(path.Join(curr, ".."))
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
