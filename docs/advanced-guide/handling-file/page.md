@@ -75,7 +75,7 @@ The ReadDir function reads the specified directory and returns a sorted list of 
 
 If an error occurs during the read operation, ReadDir returns the successfully read entries up to the point of the error along with the error itself. Passing "." as the directory argument returns the entries for the current directory.
 ```go
-entries, err := ctx.File.ReadDir(".")
+entries, err := ctx.File.ReadDir("../testdir")
 
 for _, entry := range entries {
 entryType := "File"
@@ -118,16 +118,26 @@ for reader.Next() {
 
 
 ### Opening and Reading Content from a File
-
-To open file with default options
+To open a file with default settings, use the `Open` command, which provides read and seek permissions only. For write permissions, use `OpenFile` with the appropriate file modes.
+> Note: In FTP, file permissions are not differentiated; both `Open` and `OpenFile` allow full file operations regardless of specified permissions.
 ```go
-file, _ := ctx.File.Open("my_file.text")
-defer file.Close()
+csvFile, _ := ctx.File.Open("my_file.csv")
 
 b := make([]byte, 200)
 
-// Read reads up to len(b) bytes into b
+// Read reads up to len(b) bytes into b.
 _, _ = file.Read(b)
+
+csvFile.Close()
+
+csvFile, err = ctx.File.OpenFile("my_file.csv", os.O_RDWR, os.ModePerm)
+
+// WriteAt writes the buffer content at the specified offset.
+_, err = csvFile.WriteAt([]byte("test content"), 4)
+if err != nil {
+return nil, err
+}
+
 ```
 
 ### Getting Information of the file/directory
@@ -156,15 +166,17 @@ err := ctx.File.Rename("old_name.text", "new_name.text")
 ```
 
 ### Deleting Files
-To delete a single file
+
+Remove deletes a single file
 ```go
 err := ctx.File.Remove("my_dir")
 ```
 
-To delete all sub directories as well
+The `RemoveAll` command deletes all subdirectories as well. If you delete the current working directory, such as "../currentDir", the working directory will be reset to its parent directory.
 ```go
 err := ctx.File.RemoveAll("my_dir/my_text")
 ```
 
+> GoFr supports relative paths i.e. a location relative to the current working directory. The resolution of this path depends on the current directory from which the path is being referenced. 
 
 > Errors have been skipped in the example to focus on the core logic, it is recommended to handle all the errors.

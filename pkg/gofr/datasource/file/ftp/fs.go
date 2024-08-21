@@ -165,7 +165,7 @@ func (f *fileSystem) Create(name string) (file_interface.File, error) {
 		return nil, err
 	}
 
-	defer res.Close()
+	res.Close()
 
 	status = "SUCCESS"
 	msg = fmt.Sprintf("Created file %q", name)
@@ -216,7 +216,7 @@ func (f *fileSystem) Open(name string) (file_interface.File, error) {
 		return nil, err
 	}
 
-	defer res.Close()
+	res.Close()
 
 	filename := path.Base(filePath)
 

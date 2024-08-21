@@ -2,6 +2,7 @@ package file
 
 import (
 	"os"
+	"path"
 
 	"gofr.dev/pkg/gofr/datasource"
 )
@@ -54,8 +55,25 @@ func (fileSystem) Remove(name string) error {
 	return os.Remove(name)
 }
 
-func (fileSystem) RemoveAll(path string) error {
-	return os.RemoveAll(path)
+func (fileSystem) RemoveAll(name string) error {
+	err := os.RemoveAll(name)
+	if err != nil {
+		return err
+	}
+
+	// In case we remove current working directory, say using "../currentDir"
+	// the current directory needs to be reset to its parent directory.
+	curr, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+
+	removePath := path.Join(curr, name)
+	if curr == removePath {
+		os.Chdir(path.Join(curr, ".."))
+	}
+
+	return nil
 }
 
 func (fileSystem) Rename(oldname, newname string) error {
