@@ -64,7 +64,7 @@ To switch to another directory in same parent directory
 currentDir, err := ctx.File.Chdir("../my_dir2")
 ```
 
-To switch to child directory
+To switch to a subfolder of the current directory
 ```go
 currentDir, err := ctx.File.Chdir("sub_dir")
 ```
@@ -78,13 +78,13 @@ If an error occurs during the read operation, ReadDir returns the successfully r
 entries, err := ctx.File.ReadDir("../testdir")
 
 for _, entry := range entries {
-entryType := "File"
+    entryType := "File"
 
-if entry.IsDir() {
-entryType = "Dir"
-} 
+    if entry.IsDir() {
+        entryType = "Dir"
+    } 
 
-fmt.Printf("%v: %v Size: %v Last Modified Time : %v\n" entryType, entry.Name(), entry.Size(), entry.ModTime())
+    fmt.Printf("%v: %v Size: %v Last Modified Time : %v\n" entryType, entry.Name(), entry.Size(), entry.ModTime())
 }
 ```
 
@@ -119,7 +119,7 @@ for reader.Next() {
 
 ### Opening and Reading Content from a File
 To open a file with default settings, use the `Open` command, which provides read and seek permissions only. For write permissions, use `OpenFile` with the appropriate file modes.
-> Note: In FTP, file permissions are not differentiated; both `Open` and `OpenFile` allow full file operations regardless of specified permissions.
+> Note: In FTP, file permissions are not differentiated; both `Open` and `OpenFile` allow all file operations regardless of specified permissions.
 ```go
 csvFile, _ := ctx.File.Open("my_file.csv")
 
@@ -135,7 +135,7 @@ csvFile, err = ctx.File.OpenFile("my_file.csv", os.O_RDWR, os.ModePerm)
 // WriteAt writes the buffer content at the specified offset.
 _, err = csvFile.WriteAt([]byte("test content"), 4)
 if err != nil {
-return nil, err
+     return nil, err
 }
 
 ```
@@ -148,7 +148,7 @@ file, _ := ctx.File.Stat("my_file.text")
 entryType := "File"
 
 if entry.IsDir() {
-entryType = "Dir"
+     entryType = "Dir"
 }
 
 fmt.Printf("%v: %v Size: %v Last Modified Time : %v\n" entryType, entry.Name(), entry.Size(), entry.ModTime())
