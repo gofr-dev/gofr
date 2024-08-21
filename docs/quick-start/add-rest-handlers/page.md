@@ -50,12 +50,12 @@ func (u *userEntity) TableName() string {
 ```
 
 ## Adding Database Constraints
-By default, the GoFr assumes to have manual insertion of id for a given struct, but to support sql constraints like `auto-increment`,
+By default, GoFr assumes to have manual insertion of id for a given struct, but to support sql constraints like `auto-increment`,
 `not-null` user can use the `sql` tag while declaring the struct fields.
 
 ```go
 type user struct {
-	Id         int    `json:"id"  sql:"auto_increment"`
+	ID         int    `json:"id"  sql:"auto_increment"`
 	Name       string `json:"name"  sql:"not_null"`
 	Age        int    `json:"age"`
 	IsEmployed bool   `json:"isEmployed"`
