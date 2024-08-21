@@ -54,19 +54,26 @@ currentDir, err := ctx.File.Getwd()
 
 ### Change current Directory
 
+To switch to parent directory
 ```go
 currentDir, err := ctx.File.Chdir("..")
 ```
+
+To switch to another directory in same parent directory
 ```go
 currentDir, err := ctx.File.Chdir("../my_dir2")
 ```
+
+To switch to child directory
 ```go
 currentDir, err := ctx.File.Chdir("sub_dir")
 ```
 
 ### Read a Directory
 
-To get information about the files/directories in the specified directory
+The ReadDir function reads the specified directory and returns a sorted list of its entries as FileInfo objects. Each FileInfo object provides access to its associated methods, eliminating the need for additional stat calls. 
+
+If an error occurs during the read operation, ReadDir returns the successfully read entries up to the point of the error along with the error itself. Passing "." as the directory argument returns the entries for the current directory.
 ```go
 entries, err := ctx.File.ReadDir(".")
 
@@ -125,7 +132,7 @@ _, _ = file.Read(b)
 
 ### Getting Information of the file/directory
 
-To retrieve details of a file or directory, including its name, size, last modified time, and type (such as whether it is a file or folder)
+Stat retrieves details of a file or directory, including its name, size, last modified time, and type (such as whether it is a file or folder)
 ```go
 file, _ := ctx.File.Stat("my_file.text")
 entryType := "File"
