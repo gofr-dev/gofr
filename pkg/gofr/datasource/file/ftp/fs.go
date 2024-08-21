@@ -389,4 +389,6 @@ func (f *fileSystem) processLog(fl *FileLog, startTime time.Time) {
 	fl.Duration = duration
 
 	f.logger.Debug(fl)
+
+	// TODO : Implement metrics
 }
