@@ -58,8 +58,8 @@ func Test_scanEntity(t *testing.T) {
 	var invalidObject int
 
 	type userTestEntity struct {
-		ID   int
-		Name string
+		ID   int    `sql:"auto_increment"`
+		Name string `sql:"not_null"`
 	}
 
 	tests := []struct {
@@ -77,6 +77,9 @@ func Test_scanEntity(t *testing.T) {
 				primaryKey: "id",
 				tableName:  "user_test_entity",
 				restPath:   "userTestEntity",
+				constraints: map[string]gofrSql.FieldConstraints{"id": {AutoIncrement: true, NotNull: false},
+					"name": {AutoIncrement: false, NotNull: true},
+				},
 			},
 			err: nil,
 		},
@@ -89,6 +92,8 @@ func Test_scanEntity(t *testing.T) {
 				primaryKey: "id",
 				tableName:  "user",
 				restPath:   "users",
+				constraints: map[string]gofrSql.FieldConstraints{"id": {AutoIncrement: false, NotNull: false},
+					"is_employed": {AutoIncrement: false, NotNull: false}, "name": {AutoIncrement: false, NotNull: false}},
 			},
 			err: nil,
 		},

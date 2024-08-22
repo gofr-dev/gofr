@@ -4,13 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"runtime/debug"
-	"strconv"
 	"time"
 
 	"github.com/gorilla/websocket"
+	"go.opentelemetry.io/otel/trace"
 
 	"gofr.dev/pkg/gofr/container"
 	gofrHTTP "gofr.dev/pkg/gofr/http"
@@ -18,6 +19,8 @@ import (
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/static"
 )
+
+const colorCodeError = 202 // 202 is red color code
 
 type Handler func(c *Context) (interface{}, error)
 
@@ -37,19 +40,27 @@ for now. In the future, this can be considered as well if we are writing our own
 type handler struct {
 	function       Handler
 	container      *container.Container
-	requestTimeout string
+	requestTimeout time.Duration
+}
+
+type ErrorLogEntry struct {
+	TraceID string `json:"trace_id,omitempty"`
+	Error   string `json:"error,omitempty"`
+}
+
+func (el *ErrorLogEntry) PrettyPrint(writer io.Writer) {
+	fmt.Fprintf(writer, "\u001B[38;5;8m%s \u001B[38;5;%dm%s \n", el.TraceID, colorCodeError, el.Error)
 }
 
 func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	c := newContext(gofrHTTP.NewResponder(w, r.Method), gofrHTTP.NewRequest(r), h.container)
+	traceID := trace.SpanFromContext(r.Context()).SpanContext().TraceID().String()
 
 	if websocket.IsWebSocketUpgrade(r) {
 		// If the request is a WebSocket upgrade, do not apply the timeout
 		c.Context = r.Context()
-	} else if h.requestTimeout != "" {
-		reqTimeout := h.setContextTimeout(h.requestTimeout)
-
-		ctx, cancel := context.WithTimeout(r.Context(), time.Duration(reqTimeout)*time.Second)
+	} else if h.requestTimeout != 0 {
+		ctx, cancel := context.WithTimeout(r.Context(), h.requestTimeout)
 		defer cancel()
 
 		c.Context = ctx
@@ -69,6 +80,16 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}()
 		// Execute the handler function
 		result, err = h.function(c)
+
+		// Log the error(if any) with traceID and errorMessage
+		if err != nil {
+			errorLog := &ErrorLogEntry{
+				TraceID: traceID,
+				Error:   err.Error(),
+			}
+
+			h.container.Logger.Error(errorLog)
+		}
 
 		close(done)
 	}()
@@ -116,16 +137,6 @@ func faviconHandler(*Context) (interface{}, error) {
 
 func catchAllHandler(*Context) (interface{}, error) {
 	return nil, gofrHTTP.ErrorInvalidRoute{}
-}
-
-// Helper function to parse and validate request timeout.
-func (h handler) setContextTimeout(timeout string) int {
-	reqTimeout, err := strconv.Atoi(timeout)
-	if err != nil || reqTimeout < 0 {
-		h.container.Error("invalid value of config REQUEST_TIMEOUT. setting default value to 5 seconds.")
-	}
-
-	return reqTimeout
 }
 
 func panicRecoveryHandler(re any, log logging.Logger, panicked chan struct{}) {
