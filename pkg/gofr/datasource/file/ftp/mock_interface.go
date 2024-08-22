@@ -15,6 +15,7 @@ import (
 	reflect "reflect"
 	time "time"
 
+	ftp "github.com/jlaffaye/ftp"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -245,10 +246,10 @@ func (mr *MockServerConnMockRecorder) GetTime(path any) *gomock.Call {
 }
 
 // List mocks base method.
-func (m *MockServerConn) List(arg0 string) ([]Entry, error) {
+func (m *MockServerConn) List(arg0 string) ([]*ftp.Entry, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "List", arg0)
-	ret0, _ := ret[0].([]Entry)
+	ret0, _ := ret[0].([]*ftp.Entry)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

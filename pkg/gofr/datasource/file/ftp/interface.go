@@ -2,6 +2,7 @@ package ftp
 
 import (
 	"context"
+	"github.com/jlaffaye/ftp"
 	"io"
 	"time"
 )
@@ -34,7 +35,7 @@ type ServerConn interface {
 	FileSize(name string) (int64, error)
 	CurrentDir() (string, error)
 	ChangeDir(path string) error
-	List(string) ([]Entry, error)
+	List(string) ([]*ftp.Entry, error)
 	GetTime(path string) (time.Time, error)
 }
 

@@ -604,7 +604,7 @@ func TestStat(t *testing.T) {
 	var tests = []struct {
 		name         string
 		fileName     string
-		mockEntry    []Entry
+		mockEntry    []*ftp.Entry
 		mockError    error
 		expectError  bool
 		expectedName string
@@ -612,7 +612,7 @@ func TestStat(t *testing.T) {
 		{
 			name:     "Getting info of a file",
 			fileName: "testfile.txt",
-			mockEntry: []Entry{
+			mockEntry: []*ftp.Entry{
 				{Name: "testfile.txt", Type: ftp.EntryTypeFile, Time: time.Now()},
 			},
 			mockError:    nil,
@@ -817,7 +817,7 @@ func TestReadDir(t *testing.T) {
 	var tests = []struct {
 		name         string
 		dir          string
-		mockEntries  []Entry
+		mockEntries  []*ftp.Entry
 		mockError    error
 		expectError  bool
 		expectedName []string
@@ -825,7 +825,7 @@ func TestReadDir(t *testing.T) {
 		{
 			name: "Successful read dir",
 			dir:  "someDir",
-			mockEntries: []Entry{
+			mockEntries: []*ftp.Entry{
 				{Name: "file1.txt", Type: ftp.EntryTypeFile, Time: time.Now()},
 				{Name: "file2.txt", Type: ftp.EntryTypeFile, Time: time.Now()},
 			},
@@ -853,7 +853,7 @@ func TestReadDir(t *testing.T) {
 		{
 			name: "Read current directory",
 			dir:  ".",
-			mockEntries: []Entry{
+			mockEntries: []*ftp.Entry{
 				{Name: "hello", Type: ftp.EntryTypeFolder, Time: time.Now()},
 				{Name: "file3.txt", Type: ftp.EntryTypeFile, Time: time.Now()},
 			},
