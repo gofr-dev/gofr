@@ -2,6 +2,7 @@ package ftp
 
 import (
 	"context"
+	"github.com/jlaffaye/ftp"
 	"io"
 	"time"
 
