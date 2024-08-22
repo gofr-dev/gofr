@@ -48,7 +48,7 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 
 	err := mg.checkAndCreateMigrationTable(c)
 	if err != nil {
-		c.Errorf("failed to create gofr_migration table, err: %v", err)
+		c.Fatalf("failed to create gofr_migration table, err: %v", err)
 
 		return
 	}

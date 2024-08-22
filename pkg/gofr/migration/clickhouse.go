@@ -99,7 +99,7 @@ func (ch clickHouseMigrator) commitMigration(c *container.Container, data transa
 }
 
 func (ch clickHouseMigrator) rollback(c *container.Container, data transactionData) {
-	c.Errorf("Migration %v failed", data.MigrationNumber)
-
 	ch.migrator.rollback(c, data)
+
+	c.Fatalf("migration %v failed and rolled back", data.MigrationNumber)
 }
