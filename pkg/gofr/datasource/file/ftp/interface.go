@@ -19,7 +19,7 @@ type Metrics interface {
 	RecordHistogram(ctx context.Context, name string, value float64, labels ...string)
 }
 
-// ServerConn represents a connection to an FTP server.
+// serverConn represents a connection to an FTP server.
 type serverConn interface {
 	Login(string, string) error
 	Retr(string) (ftpResponse, error)
