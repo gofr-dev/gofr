@@ -18,8 +18,6 @@ type Conn struct {
 	*ftp.ServerConn
 }
 
-//type Entry *ftp.Entry
-
 // Retr wraps the ftp retrieve method to return a ftpResponse interface type.
 func (c *Conn) Retr(filepath string) (ftpResponse, error) {
 	return c.ServerConn.Retr(filepath)
@@ -28,18 +26,6 @@ func (c *Conn) Retr(filepath string) (ftpResponse, error) {
 func (c *Conn) RetrFrom(filepath string, offset uint64) (ftpResponse, error) {
 	return c.ServerConn.RetrFrom(filepath, offset)
 }
-
-//// List wraps the ftp list method to return a locally defined Entry type.
-//func (c *Conn) List(filepath string) ([]Entry, error) {
-//	res, err := c.ServerConn.List(filepath)
-//
-//	var entries []Entry
-//	for _, entry := range res {
-//		entries = append(entries, entry)
-//	}
-//
-//	return entries, err
-//}
 
 var (
 	errEmptyFilename  = errors.New("filename cannot be empty")
