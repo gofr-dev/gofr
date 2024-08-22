@@ -53,7 +53,7 @@ func TestRead(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockFtpConn := NewMockServerConn(ctrl)
+	mockFtpConn := NewMockserverConn(ctrl)
 	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
 
@@ -141,7 +141,7 @@ func TestReadAt(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockFtpConn := NewMockServerConn(ctrl)
+	mockFtpConn := NewMockserverConn(ctrl)
 	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
 
@@ -192,13 +192,13 @@ func TestWrite(t *testing.T) {
 	var writeTests = []struct {
 		name            string
 		filePath        string
-		mockWriteExpect func(conn *MockServerConn, filePath string)
+		mockWriteExpect func(conn *MockserverConn, filePath string)
 		expectError     bool
 	}{
 		{
 			name:     "Successful write",
 			filePath: "/ftp/one/testfile.txt",
-			mockWriteExpect: func(conn *MockServerConn, filePath string) {
+			mockWriteExpect: func(conn *MockserverConn, filePath string) {
 				emptyReader := bytes.NewReader([]byte("test content"))
 				conn.EXPECT().StorFrom(filePath, emptyReader, uint64(0)).Return(nil)
 				conn.EXPECT().GetTime(filePath).Return(time.Now(), nil)
@@ -208,7 +208,7 @@ func TestWrite(t *testing.T) {
 		{
 			name:     "Write with error",
 			filePath: "/ftp/one/nonexistent.txt",
-			mockWriteExpect: func(conn *MockServerConn, filePath string) {
+			mockWriteExpect: func(conn *MockserverConn, filePath string) {
 				emptyReader := bytes.NewReader([]byte("test content"))
 				conn.EXPECT().StorFrom(filePath, emptyReader, uint64(0)).Return(errors.New("mocked write error"))
 			},
@@ -217,7 +217,7 @@ func TestWrite(t *testing.T) {
 		{
 			name:     "File does not exist",
 			filePath: "/ftp/one/nonexistent.txt",
-			mockWriteExpect: func(conn *MockServerConn, filePath string) {
+			mockWriteExpect: func(conn *MockserverConn, filePath string) {
 				emptyReader := bytes.NewReader([]byte("test content"))
 				conn.EXPECT().StorFrom(filePath, emptyReader, uint64(0)).Return(errors.New("file not found error"))
 			},
@@ -228,7 +228,7 @@ func TestWrite(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockFtpConn := NewMockServerConn(ctrl)
+	mockFtpConn := NewMockserverConn(ctrl)
 	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
 
@@ -270,14 +270,14 @@ func TestWriteAt(t *testing.T) {
 		name            string
 		filePath        string
 		offset          int64
-		mockWriteExpect func(conn *MockServerConn, filePath string, offset int64)
+		mockWriteExpect func(conn *MockserverConn, filePath string, offset int64)
 		expectError     bool
 	}{
 		{
 			name:     "Successful write at offset",
 			filePath: "/ftp/one/testfile.txt",
 			offset:   3,
-			mockWriteExpect: func(conn *MockServerConn, filePath string, offset int64) {
+			mockWriteExpect: func(conn *MockserverConn, filePath string, offset int64) {
 				emptyReader := bytes.NewReader([]byte("test content"))
 				conn.EXPECT().StorFrom(filePath, emptyReader, uint64(offset)).Return(nil)
 				conn.EXPECT().GetTime(filePath).Return(time.Now(), nil)
@@ -288,7 +288,7 @@ func TestWriteAt(t *testing.T) {
 			name:     "WriteAt with error",
 			filePath: "/ftp/one/nonexistent.txt",
 			offset:   0,
-			mockWriteExpect: func(conn *MockServerConn, filePath string, offset int64) {
+			mockWriteExpect: func(conn *MockserverConn, filePath string, offset int64) {
 				emptyReader := bytes.NewReader([]byte("test content"))
 				conn.EXPECT().StorFrom(filePath, emptyReader, uint64(offset)).Return(errors.New("mocked write error"))
 			},
@@ -298,7 +298,7 @@ func TestWriteAt(t *testing.T) {
 			name:     "File does not exist",
 			filePath: "/ftp/one/nonexistent.txt",
 			offset:   0,
-			mockWriteExpect: func(conn *MockServerConn, filePath string, offset int64) {
+			mockWriteExpect: func(conn *MockserverConn, filePath string, offset int64) {
 				emptyReader := bytes.NewReader([]byte("test content"))
 				conn.EXPECT().StorFrom(filePath, emptyReader, uint64(offset)).Return(errors.New("file not found error"))
 			},
@@ -309,7 +309,7 @@ func TestWriteAt(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockFtpConn := NewMockServerConn(ctrl)
+	mockFtpConn := NewMockserverConn(ctrl)
 	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
 
@@ -421,7 +421,7 @@ func TestSeek(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockFtpConn := NewMockServerConn(ctrl)
+	mockFtpConn := NewMockserverConn(ctrl)
 	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
 

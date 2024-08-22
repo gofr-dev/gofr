@@ -37,7 +37,7 @@ var (
 // fileSystem represents a file system interface over FTP.
 type fileSystem struct {
 	*file
-	conn    ServerConn
+	conn    serverConn
 	config  *Config
 	logger  Logger
 	metrics Metrics

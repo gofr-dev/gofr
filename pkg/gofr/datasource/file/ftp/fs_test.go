@@ -53,7 +53,7 @@ func TestCreateFile(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockFtpConn := NewMockServerConn(ctrl)
+	mockFtpConn := NewMockserverConn(ctrl)
 	logger := NewMockLogger(ctrl)
 	metrics := NewMockMetrics(ctrl)
 
@@ -156,7 +156,7 @@ func TestRenameFile(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockFtpConn := NewMockServerConn(ctrl)
+	mockFtpConn := NewMockserverConn(ctrl)
 	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
 
@@ -231,7 +231,7 @@ func TestRemoveFile(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockFtpConn := NewMockServerConn(ctrl)
+	mockFtpConn := NewMockserverConn(ctrl)
 	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
 
@@ -275,14 +275,14 @@ func TestOpenFile(t *testing.T) {
 		name           string
 		basePath       string
 		filePath       string
-		mockRetrExpect func(conn *MockServerConn, filePath string)
+		mockRetrExpect func(conn *MockserverConn, filePath string)
 		expectError    bool
 	}{
 		{
 			name:     "Successful open",
 			basePath: "/ftp/one",
 			filePath: "testfile_new.txt",
-			mockRetrExpect: func(conn *MockServerConn, path string) {
+			mockRetrExpect: func(conn *MockserverConn, path string) {
 				ctrl := gomock.NewController(t)
 
 				response := NewMockftpResponse(ctrl)
@@ -297,7 +297,7 @@ func TestOpenFile(t *testing.T) {
 			name:     "Open with error",
 			basePath: "/ftp/one",
 			filePath: "nonexistent.txt",
-			mockRetrExpect: func(conn *MockServerConn, path string) {
+			mockRetrExpect: func(conn *MockserverConn, path string) {
 				conn.EXPECT().Retr(path).Return(nil, errors.New("mocked open error"))
 			},
 			expectError: true,
@@ -306,7 +306,7 @@ func TestOpenFile(t *testing.T) {
 			name:     "empty path",
 			basePath: "/ftp/one",
 			filePath: "",
-			mockRetrExpect: func(_ *MockServerConn, _ string) {
+			mockRetrExpect: func(_ *MockserverConn, _ string) {
 			},
 			expectError: true,
 		},
@@ -315,7 +315,7 @@ func TestOpenFile(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockFtpConn := NewMockServerConn(ctrl)
+	mockFtpConn := NewMockserverConn(ctrl)
 	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
 
@@ -355,14 +355,14 @@ func TestMkDir(t *testing.T) {
 		name            string
 		basePath        string
 		dirPath         string
-		mockMkdirExpect func(conn *MockServerConn, dirPath string)
+		mockMkdirExpect func(conn *MockserverConn, dirPath string)
 		expectError     bool
 	}{
 		{
 			name:     "Successful mkdir",
 			basePath: "/ftp/one",
 			dirPath:  "directory1",
-			mockMkdirExpect: func(conn *MockServerConn, dirPath string) {
+			mockMkdirExpect: func(conn *MockserverConn, dirPath string) {
 				conn.EXPECT().MakeDir(dirPath).Return(nil)
 			},
 			expectError: false,
@@ -371,7 +371,7 @@ func TestMkDir(t *testing.T) {
 			name:     "Mkdir with error",
 			basePath: "/ftp/one",
 			dirPath:  "directory2",
-			mockMkdirExpect: func(conn *MockServerConn, dirPath string) {
+			mockMkdirExpect: func(conn *MockserverConn, dirPath string) {
 				conn.EXPECT().MakeDir(dirPath).Return(errors.New("mocked mkdir error"))
 			},
 			expectError: true,
@@ -380,7 +380,7 @@ func TestMkDir(t *testing.T) {
 			name:     "Mkdir with empty directory path",
 			basePath: "/ftp/one",
 			dirPath:  "",
-			mockMkdirExpect: func(_ *MockServerConn, _ string) {
+			mockMkdirExpect: func(_ *MockserverConn, _ string) {
 			},
 			expectError: true,
 		},
@@ -389,7 +389,7 @@ func TestMkDir(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockFtpConn := NewMockServerConn(ctrl)
+	mockFtpConn := NewMockserverConn(ctrl)
 	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
 
@@ -431,14 +431,14 @@ func TestMkDirAll(t *testing.T) {
 		name            string
 		basePath        string
 		dirPath         string
-		mockMkdirExpect func(conn *MockServerConn, dirPath string)
+		mockMkdirExpect func(conn *MockserverConn, dirPath string)
 		expectError     bool
 	}{
 		{
 			name:     "Successful mkdir all",
 			basePath: "/ftp/one",
 			dirPath:  "testdir1/testdir2",
-			mockMkdirExpect: func(conn *MockServerConn, _ string) {
+			mockMkdirExpect: func(conn *MockserverConn, _ string) {
 				conn.EXPECT().MakeDir("testdir1/testdir2").Return(directoryError)
 				conn.EXPECT().MakeDir("testdir1").Return(nil)
 				conn.EXPECT().MakeDir("testdir1/testdir2").Return(nil)
@@ -449,7 +449,7 @@ func TestMkDirAll(t *testing.T) {
 			name:     "empty path",
 			basePath: "/ftp/one",
 			dirPath:  "",
-			mockMkdirExpect: func(_ *MockServerConn, _ string) {
+			mockMkdirExpect: func(_ *MockserverConn, _ string) {
 			},
 			expectError: true,
 		},
@@ -458,7 +458,7 @@ func TestMkDirAll(t *testing.T) {
 			name:     "one directory in the path exist",
 			basePath: "/ftp/one",
 			dirPath:  "testdir1/testdir2",
-			mockMkdirExpect: func(conn *MockServerConn, _ string) {
+			mockMkdirExpect: func(conn *MockserverConn, _ string) {
 				conn.EXPECT().MakeDir("testdir1/testdir2").Return(directoryError)
 				conn.EXPECT().MakeDir("testdir1").Return(directoryError)
 				conn.EXPECT().MakeDir("testdir1/testdir2").Return(nil)
@@ -469,7 +469,7 @@ func TestMkDirAll(t *testing.T) {
 			name:     "Mkdir with error",
 			basePath: "/ftp/one",
 			dirPath:  "testdir1/testdir2",
-			mockMkdirExpect: func(conn *MockServerConn, _ string) {
+			mockMkdirExpect: func(conn *MockserverConn, _ string) {
 				conn.EXPECT().MakeDir("testdir1/testdir2").Return(directoryError)
 				conn.EXPECT().MakeDir("testdir1").Return(directoryError)
 				conn.EXPECT().MakeDir("testdir1/testdir2").Return(errors.New("mocked mkdir error"))
@@ -481,7 +481,7 @@ func TestMkDirAll(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockFtpConn := NewMockServerConn(ctrl)
+	mockFtpConn := NewMockserverConn(ctrl)
 	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
 
@@ -519,14 +519,14 @@ func TestRemoveDir(t *testing.T) {
 		name             string
 		basePath         string
 		removePath       string
-		mockRemoveExpect func(conn *MockServerConn, basePath, removePath string)
+		mockRemoveExpect func(conn *MockserverConn, basePath, removePath string)
 		expectError      bool
 	}{
 		{
 			name:       "Successful remove all",
 			basePath:   "/ftp/one",
 			removePath: "testdir1",
-			mockRemoveExpect: func(conn *MockServerConn, basePath, removePath string) {
+			mockRemoveExpect: func(conn *MockserverConn, basePath, removePath string) {
 				conn.EXPECT().RemoveDirRecur(path.Join(basePath, removePath)).Return(nil)
 			},
 			expectError: false,
@@ -535,7 +535,7 @@ func TestRemoveDir(t *testing.T) {
 			name:       "Removing current directory",
 			basePath:   "/ftp/one/testdir1",
 			removePath: "../testdir1",
-			mockRemoveExpect: func(conn *MockServerConn, basePath, removePath string) {
+			mockRemoveExpect: func(conn *MockserverConn, basePath, removePath string) {
 				conn.EXPECT().RemoveDirRecur(path.Join(basePath, removePath)).Return(nil)
 			},
 			expectError: false,
@@ -544,7 +544,7 @@ func TestRemoveDir(t *testing.T) {
 			name:       "RemoveAll with error",
 			basePath:   "/ftp/one",
 			removePath: "nonexistentdir",
-			mockRemoveExpect: func(conn *MockServerConn, basePath, removePath string) {
+			mockRemoveExpect: func(conn *MockserverConn, basePath, removePath string) {
 				conn.EXPECT().RemoveDirRecur(path.Join(basePath, removePath)).Return(errors.New("mocked remove error"))
 			},
 			expectError: true,
@@ -553,7 +553,7 @@ func TestRemoveDir(t *testing.T) {
 			name:       "Empty path",
 			basePath:   "/ftp/one",
 			removePath: "",
-			mockRemoveExpect: func(_ *MockServerConn, _, _ string) {
+			mockRemoveExpect: func(_ *MockserverConn, _, _ string) {
 			},
 			expectError: true,
 		},
@@ -562,7 +562,7 @@ func TestRemoveDir(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockFtpConn := NewMockServerConn(ctrl)
+	mockFtpConn := NewMockserverConn(ctrl)
 	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
 
@@ -643,7 +643,7 @@ func TestStat(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockFtpConn := NewMockServerConn(ctrl)
+	mockFtpConn := NewMockserverConn(ctrl)
 	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
 
@@ -711,7 +711,7 @@ func TestGetwd(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockFtpConn := NewMockServerConn(ctrl)
+	mockFtpConn := NewMockserverConn(ctrl)
 	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
 
@@ -776,7 +776,7 @@ func TestChDir(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockFtpConn := NewMockServerConn(ctrl)
+	mockFtpConn := NewMockserverConn(ctrl)
 	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
 
@@ -869,7 +869,7 @@ func TestReadDir(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockFtpConn := NewMockServerConn(ctrl)
+	mockFtpConn := NewMockserverConn(ctrl)
 	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
 

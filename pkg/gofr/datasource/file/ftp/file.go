@@ -28,7 +28,7 @@ type file struct {
 	path      string
 	entryType ftp.EntryType
 	modTime   time.Time
-	conn      ServerConn
+	conn      serverConn
 	name      string
 	offset    int64
 	logger    Logger

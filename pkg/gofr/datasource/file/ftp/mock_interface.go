@@ -149,31 +149,31 @@ func (mr *MockMetricsMockRecorder) RecordHistogram(ctx, name, value any, labels 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RecordHistogram", reflect.TypeOf((*MockMetrics)(nil).RecordHistogram), varargs...)
 }
 
-// MockServerConn is a mock of ServerConn interface.
-type MockServerConn struct {
+// MockserverConn is a mock of serverConn interface.
+type MockserverConn struct {
 	ctrl     *gomock.Controller
-	recorder *MockServerConnMockRecorder
+	recorder *MockserverConnMockRecorder
 }
 
-// MockServerConnMockRecorder is the mock recorder for MockServerConn.
-type MockServerConnMockRecorder struct {
-	mock *MockServerConn
+// MockserverConnMockRecorder is the mock recorder for MockserverConn.
+type MockserverConnMockRecorder struct {
+	mock *MockserverConn
 }
 
-// NewMockServerConn creates a new mock instance.
-func NewMockServerConn(ctrl *gomock.Controller) *MockServerConn {
-	mock := &MockServerConn{ctrl: ctrl}
-	mock.recorder = &MockServerConnMockRecorder{mock}
+// NewMockserverConn creates a new mock instance.
+func NewMockserverConn(ctrl *gomock.Controller) *MockserverConn {
+	mock := &MockserverConn{ctrl: ctrl}
+	mock.recorder = &MockserverConnMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockServerConn) EXPECT() *MockServerConnMockRecorder {
+func (m *MockserverConn) EXPECT() *MockserverConnMockRecorder {
 	return m.recorder
 }
 
 // ChangeDir mocks base method.
-func (m *MockServerConn) ChangeDir(path string) error {
+func (m *MockserverConn) ChangeDir(path string) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ChangeDir", path)
 	ret0, _ := ret[0].(error)
@@ -181,13 +181,13 @@ func (m *MockServerConn) ChangeDir(path string) error {
 }
 
 // ChangeDir indicates an expected call of ChangeDir.
-func (mr *MockServerConnMockRecorder) ChangeDir(path any) *gomock.Call {
+func (mr *MockserverConnMockRecorder) ChangeDir(path any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ChangeDir", reflect.TypeOf((*MockServerConn)(nil).ChangeDir), path)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ChangeDir", reflect.TypeOf((*MockserverConn)(nil).ChangeDir), path)
 }
 
 // CurrentDir mocks base method.
-func (m *MockServerConn) CurrentDir() (string, error) {
+func (m *MockserverConn) CurrentDir() (string, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "CurrentDir")
 	ret0, _ := ret[0].(string)
@@ -196,13 +196,13 @@ func (m *MockServerConn) CurrentDir() (string, error) {
 }
 
 // CurrentDir indicates an expected call of CurrentDir.
-func (mr *MockServerConnMockRecorder) CurrentDir() *gomock.Call {
+func (mr *MockserverConnMockRecorder) CurrentDir() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CurrentDir", reflect.TypeOf((*MockServerConn)(nil).CurrentDir))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CurrentDir", reflect.TypeOf((*MockserverConn)(nil).CurrentDir))
 }
 
 // Delete mocks base method.
-func (m *MockServerConn) Delete(arg0 string) error {
+func (m *MockserverConn) Delete(arg0 string) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Delete", arg0)
 	ret0, _ := ret[0].(error)
@@ -210,13 +210,13 @@ func (m *MockServerConn) Delete(arg0 string) error {
 }
 
 // Delete indicates an expected call of Delete.
-func (mr *MockServerConnMockRecorder) Delete(arg0 any) *gomock.Call {
+func (mr *MockserverConnMockRecorder) Delete(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockServerConn)(nil).Delete), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockserverConn)(nil).Delete), arg0)
 }
 
 // FileSize mocks base method.
-func (m *MockServerConn) FileSize(name string) (int64, error) {
+func (m *MockserverConn) FileSize(name string) (int64, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "FileSize", name)
 	ret0, _ := ret[0].(int64)
@@ -225,13 +225,13 @@ func (m *MockServerConn) FileSize(name string) (int64, error) {
 }
 
 // FileSize indicates an expected call of FileSize.
-func (mr *MockServerConnMockRecorder) FileSize(name any) *gomock.Call {
+func (mr *MockserverConnMockRecorder) FileSize(name any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FileSize", reflect.TypeOf((*MockServerConn)(nil).FileSize), name)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FileSize", reflect.TypeOf((*MockserverConn)(nil).FileSize), name)
 }
 
 // GetTime mocks base method.
-func (m *MockServerConn) GetTime(path string) (time.Time, error) {
+func (m *MockserverConn) GetTime(path string) (time.Time, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetTime", path)
 	ret0, _ := ret[0].(time.Time)
@@ -240,13 +240,13 @@ func (m *MockServerConn) GetTime(path string) (time.Time, error) {
 }
 
 // GetTime indicates an expected call of GetTime.
-func (mr *MockServerConnMockRecorder) GetTime(path any) *gomock.Call {
+func (mr *MockserverConnMockRecorder) GetTime(path any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTime", reflect.TypeOf((*MockServerConn)(nil).GetTime), path)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTime", reflect.TypeOf((*MockserverConn)(nil).GetTime), path)
 }
 
 // List mocks base method.
-func (m *MockServerConn) List(arg0 string) ([]*ftp.Entry, error) {
+func (m *MockserverConn) List(arg0 string) ([]*ftp.Entry, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "List", arg0)
 	ret0, _ := ret[0].([]*ftp.Entry)
@@ -255,13 +255,13 @@ func (m *MockServerConn) List(arg0 string) ([]*ftp.Entry, error) {
 }
 
 // List indicates an expected call of List.
-func (mr *MockServerConnMockRecorder) List(arg0 any) *gomock.Call {
+func (mr *MockserverConnMockRecorder) List(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "List", reflect.TypeOf((*MockServerConn)(nil).List), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "List", reflect.TypeOf((*MockserverConn)(nil).List), arg0)
 }
 
 // Login mocks base method.
-func (m *MockServerConn) Login(arg0, arg1 string) error {
+func (m *MockserverConn) Login(arg0, arg1 string) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Login", arg0, arg1)
 	ret0, _ := ret[0].(error)
@@ -269,13 +269,13 @@ func (m *MockServerConn) Login(arg0, arg1 string) error {
 }
 
 // Login indicates an expected call of Login.
-func (mr *MockServerConnMockRecorder) Login(arg0, arg1 any) *gomock.Call {
+func (mr *MockserverConnMockRecorder) Login(arg0, arg1 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Login", reflect.TypeOf((*MockServerConn)(nil).Login), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Login", reflect.TypeOf((*MockserverConn)(nil).Login), arg0, arg1)
 }
 
 // MakeDir mocks base method.
-func (m *MockServerConn) MakeDir(path string) error {
+func (m *MockserverConn) MakeDir(path string) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "MakeDir", path)
 	ret0, _ := ret[0].(error)
@@ -283,13 +283,13 @@ func (m *MockServerConn) MakeDir(path string) error {
 }
 
 // MakeDir indicates an expected call of MakeDir.
-func (mr *MockServerConnMockRecorder) MakeDir(path any) *gomock.Call {
+func (mr *MockserverConnMockRecorder) MakeDir(path any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MakeDir", reflect.TypeOf((*MockServerConn)(nil).MakeDir), path)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MakeDir", reflect.TypeOf((*MockserverConn)(nil).MakeDir), path)
 }
 
 // Quit mocks base method.
-func (m *MockServerConn) Quit() error {
+func (m *MockserverConn) Quit() error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Quit")
 	ret0, _ := ret[0].(error)
@@ -297,13 +297,13 @@ func (m *MockServerConn) Quit() error {
 }
 
 // Quit indicates an expected call of Quit.
-func (mr *MockServerConnMockRecorder) Quit() *gomock.Call {
+func (mr *MockserverConnMockRecorder) Quit() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Quit", reflect.TypeOf((*MockServerConn)(nil).Quit))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Quit", reflect.TypeOf((*MockserverConn)(nil).Quit))
 }
 
 // RemoveDir mocks base method.
-func (m *MockServerConn) RemoveDir(path string) error {
+func (m *MockserverConn) RemoveDir(path string) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "RemoveDir", path)
 	ret0, _ := ret[0].(error)
@@ -311,13 +311,13 @@ func (m *MockServerConn) RemoveDir(path string) error {
 }
 
 // RemoveDir indicates an expected call of RemoveDir.
-func (mr *MockServerConnMockRecorder) RemoveDir(path any) *gomock.Call {
+func (mr *MockserverConnMockRecorder) RemoveDir(path any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveDir", reflect.TypeOf((*MockServerConn)(nil).RemoveDir), path)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveDir", reflect.TypeOf((*MockserverConn)(nil).RemoveDir), path)
 }
 
 // RemoveDirRecur mocks base method.
-func (m *MockServerConn) RemoveDirRecur(path string) error {
+func (m *MockserverConn) RemoveDirRecur(path string) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "RemoveDirRecur", path)
 	ret0, _ := ret[0].(error)
@@ -325,13 +325,13 @@ func (m *MockServerConn) RemoveDirRecur(path string) error {
 }
 
 // RemoveDirRecur indicates an expected call of RemoveDirRecur.
-func (mr *MockServerConnMockRecorder) RemoveDirRecur(path any) *gomock.Call {
+func (mr *MockserverConnMockRecorder) RemoveDirRecur(path any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveDirRecur", reflect.TypeOf((*MockServerConn)(nil).RemoveDirRecur), path)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveDirRecur", reflect.TypeOf((*MockserverConn)(nil).RemoveDirRecur), path)
 }
 
 // Rename mocks base method.
-func (m *MockServerConn) Rename(arg0, arg1 string) error {
+func (m *MockserverConn) Rename(arg0, arg1 string) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Rename", arg0, arg1)
 	ret0, _ := ret[0].(error)
@@ -339,13 +339,13 @@ func (m *MockServerConn) Rename(arg0, arg1 string) error {
 }
 
 // Rename indicates an expected call of Rename.
-func (mr *MockServerConnMockRecorder) Rename(arg0, arg1 any) *gomock.Call {
+func (mr *MockserverConnMockRecorder) Rename(arg0, arg1 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Rename", reflect.TypeOf((*MockServerConn)(nil).Rename), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Rename", reflect.TypeOf((*MockserverConn)(nil).Rename), arg0, arg1)
 }
 
 // Retr mocks base method.
-func (m *MockServerConn) Retr(arg0 string) (ftpResponse, error) {
+func (m *MockserverConn) Retr(arg0 string) (ftpResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Retr", arg0)
 	ret0, _ := ret[0].(ftpResponse)
@@ -354,13 +354,13 @@ func (m *MockServerConn) Retr(arg0 string) (ftpResponse, error) {
 }
 
 // Retr indicates an expected call of Retr.
-func (mr *MockServerConnMockRecorder) Retr(arg0 any) *gomock.Call {
+func (mr *MockserverConnMockRecorder) Retr(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Retr", reflect.TypeOf((*MockServerConn)(nil).Retr), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Retr", reflect.TypeOf((*MockserverConn)(nil).Retr), arg0)
 }
 
 // RetrFrom mocks base method.
-func (m *MockServerConn) RetrFrom(arg0 string, arg1 uint64) (ftpResponse, error) {
+func (m *MockserverConn) RetrFrom(arg0 string, arg1 uint64) (ftpResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "RetrFrom", arg0, arg1)
 	ret0, _ := ret[0].(ftpResponse)
@@ -369,13 +369,13 @@ func (m *MockServerConn) RetrFrom(arg0 string, arg1 uint64) (ftpResponse, error)
 }
 
 // RetrFrom indicates an expected call of RetrFrom.
-func (mr *MockServerConnMockRecorder) RetrFrom(arg0, arg1 any) *gomock.Call {
+func (mr *MockserverConnMockRecorder) RetrFrom(arg0, arg1 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RetrFrom", reflect.TypeOf((*MockServerConn)(nil).RetrFrom), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RetrFrom", reflect.TypeOf((*MockserverConn)(nil).RetrFrom), arg0, arg1)
 }
 
 // Stor mocks base method.
-func (m *MockServerConn) Stor(arg0 string, arg1 io.Reader) error {
+func (m *MockserverConn) Stor(arg0 string, arg1 io.Reader) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Stor", arg0, arg1)
 	ret0, _ := ret[0].(error)
@@ -383,13 +383,13 @@ func (m *MockServerConn) Stor(arg0 string, arg1 io.Reader) error {
 }
 
 // Stor indicates an expected call of Stor.
-func (mr *MockServerConnMockRecorder) Stor(arg0, arg1 any) *gomock.Call {
+func (mr *MockserverConnMockRecorder) Stor(arg0, arg1 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Stor", reflect.TypeOf((*MockServerConn)(nil).Stor), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Stor", reflect.TypeOf((*MockserverConn)(nil).Stor), arg0, arg1)
 }
 
 // StorFrom mocks base method.
-func (m *MockServerConn) StorFrom(arg0 string, arg1 io.Reader, arg2 uint64) error {
+func (m *MockserverConn) StorFrom(arg0 string, arg1 io.Reader, arg2 uint64) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "StorFrom", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
@@ -397,9 +397,9 @@ func (m *MockServerConn) StorFrom(arg0 string, arg1 io.Reader, arg2 uint64) erro
 }
 
 // StorFrom indicates an expected call of StorFrom.
-func (mr *MockServerConnMockRecorder) StorFrom(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockserverConnMockRecorder) StorFrom(arg0, arg1, arg2 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StorFrom", reflect.TypeOf((*MockServerConn)(nil).StorFrom), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StorFrom", reflect.TypeOf((*MockserverConn)(nil).StorFrom), arg0, arg1, arg2)
 }
 
 // MockftpResponse is a mock of ftpResponse interface.

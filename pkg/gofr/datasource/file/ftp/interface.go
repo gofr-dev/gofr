@@ -20,7 +20,7 @@ type Metrics interface {
 }
 
 // ServerConn represents a connection to an FTP server.
-type ServerConn interface {
+type serverConn interface {
 	Login(string, string) error
 	Retr(string) (ftpResponse, error)
 	RetrFrom(string, uint64) (ftpResponse, error)
