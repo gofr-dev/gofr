@@ -5,5 +5,8 @@ import (
 )
 
 func TestConnect(t *testing.T) {
-	Connect()
+	err := Connect()
+	if err != nil {
+		t.Error(err)
+	}
 }

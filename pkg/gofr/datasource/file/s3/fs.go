@@ -4,77 +4,52 @@ import (
 	"context"
 	"fmt"
 	"github.com/aws/aws-sdk-go-v2/aws"
-	"log"
-	"strings"
-
 	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
-type Config struct {
-	Region          string
-	Endpoint        string
-	AccessKeyId     string
-	SecretAccessKey string
-}
+func Connect() error {
 
-func Connect() {
-	cfgStruct := Config{
-		Region:          "us-east-1",
-		Endpoint:        "http://localstack:4566",
-		AccessKeyId:     "test",
-		SecretAccessKey: "test",
+	cfg, err := config.LoadDefaultConfig(context.Background())
+	if err != nil {
+		return err
 	}
 
-	cfg, err := config.LoadDefaultConfig(context.TODO(),
-		config.WithRegion(cfgStruct.Region),
-		config.WithCredentialsProvider(credentials.StaticCredentialsProvider{
-			Value: aws.Credentials{
-				AccessKeyID:     cfgStruct.AccessKeyId,
-				SecretAccessKey: cfgStruct.SecretAccessKey,
-			},
-		}),
+	localStackEndpoint := "http://localstack:4566"
+	s3Client := s3.NewFromConfig(
+		cfg,
+		func(o *s3.Options) {
+			o.UsePathStyle = true
+			o.BaseEndpoint = &localStackEndpoint
+		},
 	)
-	if err != nil {
-		log.Fatalf("Failed to load configuration: %v", err)
-	}
+	fmt.Println("s3 client created")
 
-	client := s3.NewFromConfig(cfg, func(o *s3.Options) {
-		o.BaseEndpoint = aws.String(cfgStruct.Endpoint)
-	})
-
-	// Create a bucket (if it doesn't exist)
-	_, err = client.CreateBucket(context.TODO(), &s3.CreateBucketInput{
+	// Create Bucket
+	_, err = s3Client.CreateBucket(context.TODO(), &s3.CreateBucketInput{
 		Bucket: aws.String("my-bucket"),
 	})
 	if err != nil {
-		if err.Error() != "BucketAlreadyOwnedByYou" {
-			log.Fatalf("Failed to create bucket: %v", err)
-		}
+		return err
 	}
+	fmt.Println("s3 bucket created")
 
-	// Create a file in the bucket
-	_, err = client.PutObject(context.TODO(), &s3.PutObjectInput{
-		Bucket:      aws.String("my-bucket"),
-		Key:         aws.String("my-file.txt"),
-		Body:        strings.NewReader("Hello, world!"),
-		ContentType: aws.String("text/plain"),
-	})
-	if err != nil {
-		log.Fatalf("Failed to create file: %v", err)
-	}
-
-	// List objects in the bucket
-	result, err := client.ListObjects(context.TODO(), &s3.ListObjectsInput{
-		Bucket: aws.String("my-bucket"),
-	})
-	if err != nil {
-		log.Fatalf("Failed to list objects: %v", err)
-	}
-
-	// Print the list of objects
-	for _, obj := range result.Contents {
-		fmt.Println(*obj.Key)
-	}
+	//count := 10
+	//fmt.Printf("Let's list up to %v buckets for your account.\n", count)
+	//result, err := s3Client.ListBuckets(context.TODO(), &s3.ListBucketsInput{})
+	//if err != nil {
+	//	fmt.Printf("Couldn't list buckets for your account. Here's why: %v\n", err)
+	//	return err
+	//}
+	//if len(result.Buckets) == 0 {
+	//	fmt.Println("You don't have any buckets!")
+	//} else {
+	//	if count > len(result.Buckets) {
+	//		count = len(result.Buckets)
+	//	}
+	//	for _, bucket := range result.Buckets[:count] {
+	//		fmt.Printf("\t%v\n", *bucket.Name)
+	//	}
+	//}
+	return nil
 }
