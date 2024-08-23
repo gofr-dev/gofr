@@ -243,23 +243,18 @@ func (f *fileSystem) Stat(name string) (file_interface.FileInfo, error) {
 	if path.Ext(filePath) == "" {
 		res, err := f.conn.ListObjectsV2(context.TODO(), &s3.ListObjectsV2Input{
 			Bucket: aws.String(f.config.BucketName),
-			Prefix: aws.String(filePath+"/"),
+			Prefix: aws.String(filePath + "/"),
 		})
 		if err != nil {
 			return nil, err
 		}
-		var lastModified 
-
-		for _, object := range res.Contents {
-			last
-		}
 
 		return &file{
-			conn:   f.conn,
-			logger: f.logger,
-			metrics: f.metrics,
-			size : *res.Contents[0].Size,
-			name: filePath,
+			conn:         f.conn,
+			logger:       f.logger,
+			metrics:      f.metrics,
+			size:         *res.Contents[0].Size,
+			name:         filePath,
 			lastModified: *res.Contents[0].LastModified,
 		}, nil
 
@@ -274,11 +269,11 @@ func (f *fileSystem) Stat(name string) (file_interface.FileInfo, error) {
 	}
 
 	return &file{
-		conn:   f.conn,
-		logger: f.logger,
-		metrics: f.metrics,
-		size : *res.Contents[0].Size,
-		name: *res.Contents[0].Key,
+		conn:         f.conn,
+		logger:       f.logger,
+		metrics:      f.metrics,
+		size:         *res.Contents[0].Size,
+		name:         *res.Contents[0].Key,
 		lastModified: *res.Contents[0].LastModified,
 	}, nil
 
