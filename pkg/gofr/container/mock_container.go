@@ -9,6 +9,7 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"gofr.dev/pkg/gofr/datasource"
+	"gofr.dev/pkg/gofr/datasource/file"
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 	"gofr.dev/pkg/gofr/logging"
 )
@@ -20,6 +21,7 @@ type Mocks struct {
 	Cassandra  *MockCassandra
 	Mongo      *MockMongo
 	KVStore    *MockKVStore
+	File       *file.MockFileSystemProvider
 }
 
 func NewMockContainer(t *testing.T) (*Container, Mocks) {
@@ -48,6 +50,9 @@ func NewMockContainer(t *testing.T) (*Container, Mocks) {
 	kvStoreMock := NewMockKVStore(ctrl)
 	container.KVStore = kvStoreMock
 
+	fileStoreMock := file.NewMockFileSystemProvider(ctrl)
+	container.File = fileStoreMock
+
 	mocks := Mocks{
 		Redis:      redisMock,
 		SQL:        sqlMock,
@@ -55,6 +60,7 @@ func NewMockContainer(t *testing.T) (*Container, Mocks) {
 		Cassandra:  cassandraMock,
 		Mongo:      mongoMock,
 		KVStore:    kvStoreMock,
+		File:       fileStoreMock,
 	}
 
 	sqlMock.EXPECT().Close().AnyTimes()
