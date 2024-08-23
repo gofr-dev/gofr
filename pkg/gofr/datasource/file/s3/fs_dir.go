@@ -61,7 +61,7 @@ func (f *fileSystem) RemoveAll(name string) error {
 
 func (f *fileSystem) ReadDir(name string) ([]file_interface.FileInfo, error) {
 	if path.Ext(name) != "" {
-		f.logger.Errorf("ReadDir supports reading directories and its contents only. Use Read instead.")
+		f.logger.Errorf("ReadDir supports reading directories contents only. Use Read instead.")
 		return nil, errors.New("invalid argument type. Enter a valid directory name")
 	}
 
