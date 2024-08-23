@@ -3,11 +3,14 @@ package s3
 import (
 	"context"
 	"errors"
-	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"os"
 	"path"
 	"time"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+
+	file_interface "gofr.dev/pkg/gofr/datasource/file"
 )
 
 func (f *fileSystem) Mkdir(name string, perm os.FileMode) error {
@@ -56,14 +59,23 @@ func (f *fileSystem) RemoveAll(name string) error {
 	return nil
 }
 
-func (f *fileSystem) ReadDir(name string) error {
-	//filePath := path.Join(f.config.remoteDir, name)
+func (f *fileSystem) ReadDir(name string) ([]file_interface.FileInfo, error) {
+	if path.Ext(name) != "" {
+		f.logger.Errorf("ReadDir supports reading directories and its contents only. Use Read instead.")
+		return nil, errors.New("invalid argument type. Enter a valid directory name")
+	}
 
-	_, _ = f.conn.ListObjectsV2(context.TODO(), &s3.ListObjectsV2Input{
-		Bucket: aws.String("my-bucket"),
+	filePath := path.Join(f.remoteDir, name)
+
+	res, err := f.conn.ListObjectsV2(context.TODO(), &s3.ListObjectsV2Input{
+		Bucket: aws.String(f.config.BucketName),
+		Prefix: aws.String(filePath + "/"),
 	})
-	return nil
+	if err != nil {
+		return nil, err
+	}
 
+	return res, nil
 }
 
 func (f *fileSystem) ChDir(newpath string) error {
@@ -76,10 +88,11 @@ func (f *fileSystem) ChDir(newpath string) error {
 	return nil
 }
 
+// Getwd returns the absolute path of the file on S3.
 func (f *fileSystem) Getwd() string {
 	//status := "SUCCESS"
 	//f.sendOperationStats(&FileLog{Operation: "ChDir", Location: f.remoteDir, Status: &status}, time.Now())
-	return f.remoteDir
+	return "/" + path.Join(f.config.BucketName, f.remoteDir)
 }
 
 func (f *fileSystem) sendOperationStats(fl *FileLog, startTime time.Time) {

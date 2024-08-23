@@ -4,6 +4,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	file_interface "gofr.dev/pkg/gofr/datasource/file"
 	"io"
+	"os"
 	"time"
 )
 
@@ -24,6 +25,22 @@ func (f *file) ReadAll() (file_interface.RowReader, error) {
 
 func (f *file) Name() string {
 	return f.name
+}
+
+func (f *file) Mode() os.FileMode {
+	return os.ModePerm
+}
+
+func (f *file) Size() int64 {
+	return f.size
+}
+
+func (f *file) ModTime() time.Time {
+	return f.lastModified
+}
+
+func (f *file) IsDir() bool {
+
 }
 func (f *file) Close() error {
 	return nil
