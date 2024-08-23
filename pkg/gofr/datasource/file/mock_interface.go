@@ -355,6 +355,20 @@ func (m *MockFileSystemProvider) EXPECT() *MockFileSystemProviderMockRecorder {
 	return m.recorder
 }
 
+// ChDir mocks base method.
+func (m *MockFileSystemProvider) ChDir(arg0 string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ChDir", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// ChDir indicates an expected call of ChDir.
+func (mr *MockFileSystemProviderMockRecorder) ChDir(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ChDir", reflect.TypeOf((*MockFileSystemProvider)(nil).ChDir), arg0)
+}
+
 // Connect mocks base method.
 func (m *MockFileSystemProvider) Connect() {
 	m.ctrl.T.Helper()
@@ -380,6 +394,21 @@ func (m *MockFileSystemProvider) Create(name string) (File, error) {
 func (mr *MockFileSystemProviderMockRecorder) Create(name any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Create", reflect.TypeOf((*MockFileSystemProvider)(nil).Create), name)
+}
+
+// Getwd mocks base method.
+func (m *MockFileSystemProvider) Getwd() (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Getwd")
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Getwd indicates an expected call of Getwd.
+func (mr *MockFileSystemProviderMockRecorder) Getwd() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Getwd", reflect.TypeOf((*MockFileSystemProvider)(nil).Getwd))
 }
 
 // Mkdir mocks base method.
@@ -440,6 +469,21 @@ func (mr *MockFileSystemProviderMockRecorder) OpenFile(name, flag, perm any) *go
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OpenFile", reflect.TypeOf((*MockFileSystemProvider)(nil).OpenFile), name, flag, perm)
 }
 
+// ReadDir mocks base method.
+func (m *MockFileSystemProvider) ReadDir(arg0 string) ([]FileInfo, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ReadDir", arg0)
+	ret0, _ := ret[0].([]FileInfo)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ReadDir indicates an expected call of ReadDir.
+func (mr *MockFileSystemProviderMockRecorder) ReadDir(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReadDir", reflect.TypeOf((*MockFileSystemProvider)(nil).ReadDir), arg0)
+}
+
 // Remove mocks base method.
 func (m *MockFileSystemProvider) Remove(name string) error {
 	m.ctrl.T.Helper()
@@ -480,6 +524,21 @@ func (m *MockFileSystemProvider) Rename(oldname, newname string) error {
 func (mr *MockFileSystemProviderMockRecorder) Rename(oldname, newname any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Rename", reflect.TypeOf((*MockFileSystemProvider)(nil).Rename), oldname, newname)
+}
+
+// Stat mocks base method.
+func (m *MockFileSystemProvider) Stat(arg0 string) (FileInfo, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Stat", arg0)
+	ret0, _ := ret[0].(FileInfo)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Stat indicates an expected call of Stat.
+func (mr *MockFileSystemProviderMockRecorder) Stat(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Stat", reflect.TypeOf((*MockFileSystemProvider)(nil).Stat), arg0)
 }
 
 // UseLogger mocks base method.

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"io/fs"
 	"os"
+	"path"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -320,4 +321,46 @@ func Test_ReadFromJSONArrayInvalidDelimiter(t *testing.T) {
 	}(fileStore, "temp.json")
 
 	assert.IsType(t, &json.SyntaxError{}, err)
+}
+
+func Test_DirectoryOperations(t *testing.T) {
+	logger := logging.NewMockLogger(logging.DEBUG)
+
+	fileStore := New(logger)
+
+	info, err := fileStore.Stat(".")
+	require.NoError(t, err)
+	assert.True(t, info.IsDir())
+
+	err = fileStore.Mkdir("Hello_world", os.ModePerm)
+	require.NoError(t, err)
+
+	defer func() {
+		removeErr := fileStore.RemoveAll("../Hello_world")
+		require.NoError(t, removeErr)
+	}()
+
+	err = fileStore.ChDir("Hello_world")
+	require.NoError(t, err)
+
+	dir, err := fileStore.Getwd()
+	require.NoError(t, err)
+	assert.Equal(t, "Hello_world", path.Base(dir))
+
+	// create a file in the directory.
+	_, err = fileStore.Create("Hello.txt")
+	require.NoError(t, err)
+
+	// ReadDir Operations
+	v, err := fileStore.ReadDir(".")
+	require.NoError(t, err)
+	require.NotEmpty(t, v)
+	assert.False(t, v[0].IsDir())
+	assert.Equal(t, "Hello.txt", v[0].Name())
+
+	v, err = fileStore.ReadDir("../Hello_world")
+	require.NoError(t, err)
+	require.NotEmpty(t, v)
+	assert.False(t, v[0].IsDir())
+	assert.Equal(t, "Hello.txt", v[0].Name())
 }
