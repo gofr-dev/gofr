@@ -141,19 +141,31 @@ func (f *fileSystem) Create(name string) (file_interface.File, error) {
 }
 
 func (f *fileSystem) Open(name string) (file_interface.File, error) {
-	_, err := f.conn.GetObject(context.TODO(), &s3.GetObjectInput{Key: aws.String(name)})
+	filePath := path.Join(f.remoteDir, name)
+
+	res, err := f.conn.GetObject(context.TODO(), &s3.GetObjectInput{
+		Bucket: aws.String(f.config.BucketName),
+		Key:    aws.String(filePath),
+	})
 	if err != nil {
 		return nil, err
 	}
-	return nil, nil
+	return &file{
+		conn:         f.conn,
+		name:         name,
+		logger:       f.logger,
+		metrics:      f.metrics,
+		body:         res.Body,
+		contentType:  *res.ContentType,
+		lastModified: *res.LastModified,
+		size:         *res.ContentLength,
+	}, nil
 }
 
+// OpenFile just calls Open method of the FileSystem.
+// It is added so that s3 complies with the generic Filesystem interface of GoFr.
 func (f *fileSystem) OpenFile(name string, flag int, perm os.FileMode) (file_interface.File, error) {
-	_, err := f.conn.GetObject(context.TODO(), &s3.GetObjectInput{Key: aws.String(name)})
-	if err != nil {
-		return nil, err
-	}
-	return nil, nil
+	return f.Open(name)
 }
 
 // TODO: Remove method must support versioning of files.
@@ -194,13 +206,16 @@ func (f *fileSystem) Rename(oldname, newname string) error {
 		return errors.New("Incorrect file type of newname")
 	}
 
+	oldPath := path.Join(f.remoteDir, oldname)
+	newPath := path.Join(f.remoteDir, newname)
+
 	_, err := f.conn.CopyObject(context.TODO(), &s3.CopyObjectInput{
 		Bucket: aws.String(f.config.BucketName),
 		// The source object can be up to 5 GB. If the source object is an object that was uploaded by using a multipart upload,
 		// the object copy will be a single part object after the source object is copied to the destination bucket.
-		CopySource:         aws.String("abc.json"),
+		CopySource:         aws.String(f.config.BucketName + "/" + oldPath),
 		Key:                aws.String(newname),
-		ContentType:        aws.String(mime.TypeByExtension(path.Ext(newname))),
+		ContentType:        aws.String(mime.TypeByExtension(path.Ext(newPath))),
 		ContentDisposition: aws.String("attachment"),
 	})
 

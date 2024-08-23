@@ -10,13 +10,24 @@ import (
 	"time"
 )
 
-func (*fileSystem) Mkdir(name string, perm os.FileMode) error {
+func (f *fileSystem) Mkdir(name string, perm os.FileMode) error {
+	filePath := path.Join(f.remoteDir, name)
+
+	_, err := f.conn.PutObject(context.TODO(), &s3.PutObjectInput{
+		Bucket: aws.String(f.config.BucketName),
+		Key:    aws.String(filePath + "/"),
+	})
+
+	if err != nil {
+		return err
+	}
+
 	return nil
 
 }
 
-func (*fileSystem) MkdirAll(name string, perm os.FileMode) error {
-	return nil
+func (f *fileSystem) MkdirAll(name string, perm os.FileMode) error {
+	return f.Mkdir(name, perm)
 }
 
 func (f *fileSystem) RemoveAll(name string) error {
@@ -56,17 +67,18 @@ func (f *fileSystem) ReadDir(name string) error {
 }
 
 func (f *fileSystem) ChDir(newpath string) error {
-	status := "ERROR"
-	f.sendOperationStats(&FileLog{Operation: "ChDir", Location: f.remoteDir, Status: &status}, time.Now())
+	//status := "ERROR"
+	//f.sendOperationStats(&FileLog{Operation: "ChDir", Location: f.remoteDir, Status: &status}, time.Now())
 	f.remoteDir = path.Join(f.remoteDir, newpath)
 
-	f.logger.Logf("Current Working Directory : %s", f.remoteDir)
+	//f.logger.Logf("Current Working Directory : %s", f.remoteDir)
+	// status= "SUCCESS"
 	return nil
 }
 
 func (f *fileSystem) Getwd() string {
-	status := "SUCCESS"
-	f.sendOperationStats(&FileLog{Operation: "ChDir", Location: f.remoteDir, Status: &status}, time.Now())
+	//status := "SUCCESS"
+	//f.sendOperationStats(&FileLog{Operation: "ChDir", Location: f.remoteDir, Status: &status}, time.Now())
 	return f.remoteDir
 }
 

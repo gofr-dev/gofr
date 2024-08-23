@@ -3,13 +3,19 @@ package s3
 import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	file_interface "gofr.dev/pkg/gofr/datasource/file"
+	"io"
+	"time"
 )
 
 type file struct {
-	conn    *s3.Client
-	name    string
-	logger  Logger
-	metrics Metrics
+	conn         *s3.Client
+	name         string
+	logger       Logger
+	metrics      Metrics
+	size         int64
+	contentType  string
+	body         io.ReadCloser
+	lastModified time.Time
 }
 
 func (f *file) ReadAll() (file_interface.RowReader, error) {
