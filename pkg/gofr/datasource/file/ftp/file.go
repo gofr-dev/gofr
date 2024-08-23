@@ -381,7 +381,7 @@ func (f *file) WriteAt(p []byte, off int64) (n int, err error) {
 		f.modTime = mt
 	}
 
-	msg = fmt.Sprintf("Wrote %v bytes to file with path %q at %v offset", len(p), f.path, off)
+	msg = fmt.Sprintf("Wrote %v bytes to file with path %q at offset of %v", len(p), f.path, off)
 	status = "SUCCESS"
 
 	return len(p), nil

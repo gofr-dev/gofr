@@ -149,7 +149,7 @@ func (f *fileSystem) RemoveAll(name string) error {
 		return err
 	}
 
-	msg = "Directories deleted successfully"
+	msg = fmt.Sprintf("Directory with path %q deleted successfully", filePath)
 	status = "SUCCESS"
 
 	return nil
@@ -210,7 +210,7 @@ func (f *fileSystem) Stat(name string) (file_interface.FileInfo, error) {
 // Getwd returns the full path of the current directory.
 func (f *fileSystem) Getwd() (string, error) {
 	defer f.sendOperationStats(&FileLog{
-		Operation: "CurrentDir",
+		Operation: "Getwd",
 		Location:  f.config.RemoteDir,
 	}, time.Now())
 
@@ -224,7 +224,7 @@ func (f *fileSystem) ChDir(dir string) error {
 	status := "ERROR"
 
 	defer f.sendOperationStats(&FileLog{
-		Operation: "ChangeDir",
+		Operation: "ChDir",
 		Location:  f.config.RemoteDir,
 		Status:    &status,
 		Message:   &msg,
@@ -238,9 +238,9 @@ func (f *fileSystem) ChDir(dir string) error {
 		return err
 	}
 
+	msg = fmt.Sprintf("Changed current directory from %q to %q", f.config.RemoteDir, filepath)
 	f.config.RemoteDir = filepath
 	status = "SUCCESS"
-	msg = fmt.Sprintf("Changed current directory to %q", filepath)
 
 	return nil
 }
@@ -254,7 +254,7 @@ func (f *fileSystem) ReadDir(dir string) ([]file_interface.FileInfo, error) {
 	status := "ERROR"
 
 	defer f.sendOperationStats(&FileLog{
-		Operation: "ChangeDir",
+		Operation: "ReadDir",
 		Location:  f.config.RemoteDir,
 		Status:    &status,
 		Message:   &msg,
