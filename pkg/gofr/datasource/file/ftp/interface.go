@@ -2,9 +2,10 @@ package ftp
 
 import (
 	"context"
-	"github.com/jlaffaye/ftp"
 	"io"
 	"time"
+
+	"github.com/jlaffaye/ftp"
 )
 
 // Logger interface is used by ftp package to log information about query execution.
