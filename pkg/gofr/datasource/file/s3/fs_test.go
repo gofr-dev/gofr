@@ -34,55 +34,55 @@ func TestDeleteBucket(t *testing.T) {
 }
 
 func Test_CreateFile(t *testing.T) {
-	//runS3Test(t, func(fs file_interface.FileSystemProvider) {
-	//	_, err := fs.Create("abc.txt")
-	//	if err != nil {
-	//		t.Error(err)
-	//	}
-	//
-	//})
-	//runS3Test(t, func(fs file_interface.FileSystemProvider) {
-	//	_, err := fs.Create("abc.png")
-	//	if err != nil {
-	//		t.Error(err)
-	//	}
-	//
-	//})
-	//runS3Test(t, func(fs file_interface.FileSystemProvider) {
-	//	_, err := fs.Create("abc.jpeg")
-	//	if err != nil {
-	//		t.Error(err)
-	//	}
-	//
-	//})
-	//runS3Test(t, func(fs file_interface.FileSystemProvider) {
-	//	_, err := fs.Create("abc.json")
-	//	if err != nil {
-	//		t.Error(err)
-	//	}
-	//
-	//})
-	//runS3Test(t, func(fs file_interface.FileSystemProvider) {
-	//	_, err := fs.Create("abc.html")
-	//	if err != nil {
-	//		t.Error(err)
-	//	}
-	//
-	//})
-	//runS3Test(t, func(fs file_interface.FileSystemProvider) {
-	//	_, err := fs.Create("abc") // octet-stream
-	//	if err != nil {
-	//		t.Error(err)
-	//	}
-	//
-	//})
-	//runS3Test(t, func(fs file_interface.FileSystemProvider) {
-	//	_, err := fs.Create("abc/abc.txt") // octet-stream
-	//	if err != nil {
-	//		t.Error(err)
-	//	}
-	//
-	//})
+	runS3Test(t, func(fs file_interface.FileSystemProvider) {
+		_, err := fs.Create("abc.txt")
+		if err != nil {
+			t.Error(err)
+		}
+
+	})
+	runS3Test(t, func(fs file_interface.FileSystemProvider) {
+		_, err := fs.Create("abc.png")
+		if err != nil {
+			t.Error(err)
+		}
+
+	})
+	runS3Test(t, func(fs file_interface.FileSystemProvider) {
+		_, err := fs.Create("abc.jpeg")
+		if err != nil {
+			t.Error(err)
+		}
+
+	})
+	runS3Test(t, func(fs file_interface.FileSystemProvider) {
+		_, err := fs.Create("abc.json")
+		if err != nil {
+			t.Error(err)
+		}
+
+	})
+	runS3Test(t, func(fs file_interface.FileSystemProvider) {
+		_, err := fs.Create("abc.html")
+		if err != nil {
+			t.Error(err)
+		}
+
+	})
+	runS3Test(t, func(fs file_interface.FileSystemProvider) {
+		_, err := fs.Create("abc") // octet-stream
+		if err != nil {
+			t.Error(err)
+		}
+
+	})
+	runS3Test(t, func(fs file_interface.FileSystemProvider) {
+		_, err := fs.Create("abc/abc.txt") // octet-stream
+		if err != nil {
+			t.Error(err)
+		}
+
+	})
 	runS3Test(t, func(fs file_interface.FileSystemProvider) {
 		_, err := fs.Create("abc/abc.txt") // octet-stream
 		if err != nil {
@@ -94,7 +94,22 @@ func Test_CreateFile(t *testing.T) {
 
 func Test_RemoveFile(t *testing.T) {
 	runS3Test(t, func(fs file_interface.FileSystemProvider) {
-		err := fs.Remove("abc") // octet-stream
+		err := fs.Remove("abc")
+		if err != nil {
+			t.Error(err)
+		}
+
+	})
+	runS3Test(t, func(fs file_interface.FileSystemProvider) {
+		err := fs.Remove("abc/abc.txt")
+		if err != nil {
+			t.Error(err)
+		}
+
+	})
+
+	runS3Test(t, func(fs file_interface.FileSystemProvider) {
+		err := fs.Remove("abc.json")
 		if err != nil {
 			t.Error(err)
 		}
@@ -104,7 +119,7 @@ func Test_RemoveFile(t *testing.T) {
 
 func Test_RemoveAll(t *testing.T) {
 	runS3Test(t, func(fs file_interface.FileSystemProvider) {
-		err := fs.RemoveAll("") // octet-stream
+		err := fs.RemoveAll("abc") // octet-stream
 		if err != nil {
 			t.Error(err)
 		}

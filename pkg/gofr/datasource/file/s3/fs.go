@@ -165,9 +165,11 @@ func (f *fileSystem) Remove(name string) error {
 
 	//defer f.sendOperationStats(&FileLog{Operation: "Remove", Location: f.remoteDir, Status: &st, Message: &msg}, time.Now())
 
+	filePath := path.Join(f.remoteDir, name)
+
 	_, err := f.conn.DeleteObject(context.TODO(), &s3.DeleteObjectInput{
 		Bucket: aws.String(f.config.BucketName),
-		Key:    aws.String(name),
+		Key:    aws.String(filePath),
 	})
 
 	if err != nil {
@@ -177,7 +179,7 @@ func (f *fileSystem) Remove(name string) error {
 
 	//st = "SUCCESS"
 	//msg = "File deletion on S3 successfull."
-	//f.logger.Logf("File %s deleted.", name)
+	//f.logger.Logf("File with path %q deleted.", filePath)
 	return nil
 }
 

@@ -30,8 +30,8 @@ func (f *fileSystem) RemoveAll(name string) error {
 	}
 
 	_, err := f.conn.DeleteObject(context.TODO(), &s3.DeleteObjectInput{
-		Bucket: aws.String(f.config.BucketName + "/"),
-		Key:    aws.String(name),
+		Bucket: aws.String(f.config.BucketName),
+		Key:    aws.String(name + "/"),
 	})
 
 	if err != nil {
