@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jlaffaye/ftp"
+
 	file_interface "gofr.dev/pkg/gofr/datasource/file"
 )
 
@@ -22,13 +24,15 @@ var (
 
 // file represents a file on an FTP server.
 type file struct {
-	response ftpResponse
-	path     string
-	conn     ServerConn
-	name     string
-	offset   int64
-	logger   Logger
-	metrics  Metrics
+	response  ftpResponse
+	path      string
+	entryType ftp.EntryType
+	modTime   time.Time
+	conn      serverConn
+	name      string
+	offset    int64
+	logger    Logger
+	metrics   Metrics
 }
 
 // textReader implements RowReader for reading text files.
@@ -45,7 +49,7 @@ type jsonReader struct {
 
 // ReadAll reads either JSON or text files based on file extension and returns a corresponding RowReader.
 func (f *file) ReadAll() (file_interface.RowReader, error) {
-	defer f.postProcess(&FileLog{Operation: "ReadAll", Location: f.path}, time.Now())
+	defer f.sendOperationStats(&FileLog{Operation: "ReadAll", Location: f.path}, time.Now())
 
 	if strings.HasSuffix(f.Name(), ".json") {
 		return f.createJSONReader()
@@ -58,7 +62,7 @@ func (f *file) ReadAll() (file_interface.RowReader, error) {
 func (f *file) createJSONReader() (file_interface.RowReader, error) {
 	status := "ERROR"
 
-	defer f.postProcess(&FileLog{Operation: "JSON Reader", Location: f.path, Status: &status}, time.Now())
+	defer f.sendOperationStats(&FileLog{Operation: "JSON Reader", Location: f.path, Status: &status}, time.Now())
 
 	res, err := f.conn.Retr(f.path)
 	if err != nil {
@@ -103,7 +107,7 @@ func (f *file) createJSONReader() (file_interface.RowReader, error) {
 func (f *file) createTextCSVReader() (file_interface.RowReader, error) {
 	status := "ERROR"
 
-	defer f.postProcess(&FileLog{Operation: "Text/CSV Reader", Location: f.path, Status: &status}, time.Now())
+	defer f.sendOperationStats(&FileLog{Operation: "Text/CSV Reader", Location: f.path, Status: &status}, time.Now())
 
 	res, err := f.conn.Retr(f.path)
 	if err != nil {
@@ -157,7 +161,7 @@ func (f *textReader) Scan(i interface{}) error {
 func (f *file) Close() error {
 	var status string
 
-	defer f.postProcess(&FileLog{Operation: "Close", Location: f.path, Status: &status}, time.Now())
+	defer f.sendOperationStats(&FileLog{Operation: "Close", Location: f.path, Status: &status}, time.Now())
 
 	err := f.response.Close()
 	if err != nil {
@@ -173,9 +177,53 @@ func (f *file) Close() error {
 
 // Name returns the name of the file.
 func (f *file) Name() string {
-	defer f.postProcess(&FileLog{Operation: "Get Name", Location: f.path}, time.Now())
+	defer f.sendOperationStats(&FileLog{Operation: "Get Name", Location: f.path}, time.Now())
 
 	return f.name
+}
+
+// Size returns the size of the file.
+func (f *file) Size() int64 {
+	var msg string
+
+	status := "ERROR"
+
+	defer f.sendOperationStats(&FileLog{Operation: "Size", Location: f.path, Status: &status, Message: &msg}, time.Now())
+
+	size, err := f.conn.FileSize(f.name)
+	if err != nil {
+		f.logger.Errorf("Size operation failed : %v", err)
+	}
+
+	return size
+}
+
+// Mode checks the FileMode. FTP server doesn't support file modes.
+// This method is to comply with the generalized FileInfo interface.
+func (f *file) Mode() os.FileMode {
+	f.sendOperationStats(&FileLog{Operation: "Mode", Location: f.path}, time.Now())
+	return os.ModePerm
+}
+
+// IsDir checks, if the file is a directory or not.
+// Note: IsDir must be used post Stat/ReadDir methods of fileSystem only.
+func (f *file) IsDir() bool {
+	defer f.sendOperationStats(&FileLog{Operation: "IsDir", Location: f.path}, time.Now())
+	return f.entryType == ftp.EntryTypeFolder
+}
+
+// ModTime returns the last time the file/directory was modified.
+// Note: ModTime must be used post Stat/ReadDir methods of fileSystem only.
+func (f *file) ModTime() time.Time {
+	defer f.sendOperationStats(&FileLog{Operation: "ModTime", Location: f.path}, time.Now())
+
+	t, err := f.conn.GetTime(f.path)
+	if err != nil {
+		f.logger.Errorf("ModTime operation failed : %v", err)
+		return time.Time{}
+	}
+
+	return t
 }
 
 // Read reads data from the FTP file into the provided byte slice and updates the file offset.
@@ -184,7 +232,7 @@ func (f *file) Read(p []byte) (n int, err error) {
 
 	status := "ERROR"
 
-	defer f.postProcess(&FileLog{Operation: "Read", Location: f.path, Status: &status, Message: &msg}, time.Now())
+	defer f.sendOperationStats(&FileLog{Operation: "Read", Location: f.path, Status: &status, Message: &msg}, time.Now())
 
 	r, err := f.conn.RetrFrom(f.path, uint64(f.offset))
 	if err != nil {
@@ -215,7 +263,7 @@ func (f *file) ReadAt(p []byte, off int64) (n int, err error) {
 
 	status := "ERROR"
 
-	defer f.postProcess(&FileLog{Operation: "ReadAt", Location: f.path, Status: &status, Message: &msg}, time.Now())
+	defer f.sendOperationStats(&FileLog{Operation: "ReadAt", Location: f.path, Status: &status, Message: &msg}, time.Now())
 
 	resp, err := f.conn.RetrFrom(f.path, uint64(off))
 	if err != nil {
@@ -257,13 +305,13 @@ func (f *file) check(whence int, offset, length int64) (int64, error) {
 	return f.offset, nil
 }
 
-// Seek sets the offset for the next Read or ReadAt operation.
+// Seek sets the offset for the next Read/ Write operations.
 func (f *file) Seek(offset int64, whence int) (int64, error) {
 	var msg string
 
 	status := "ERROR"
 
-	defer f.postProcess(&FileLog{Operation: "Seek", Location: f.path, Status: &status, Message: &msg}, time.Now())
+	defer f.sendOperationStats(&FileLog{Operation: "Seek", Location: f.path, Status: &status, Message: &msg}, time.Now())
 
 	n, err := f.conn.FileSize(f.path)
 	if err != nil {
@@ -289,7 +337,7 @@ func (f *file) Write(p []byte) (n int, err error) {
 
 	status := "ERROR"
 
-	defer f.postProcess(&FileLog{Operation: "Write", Location: f.path, Status: &status, Message: &msg}, time.Now())
+	defer f.sendOperationStats(&FileLog{Operation: "Write", Location: f.path, Status: &status, Message: &msg}, time.Now())
 
 	reader := bytes.NewReader(p)
 
@@ -300,6 +348,11 @@ func (f *file) Write(p []byte) (n int, err error) {
 	}
 
 	f.offset += int64(len(p))
+
+	mt := f.ModTime()
+	if !mt.IsZero() {
+		f.modTime = mt
+	}
 
 	status = "SUCCESS"
 	msg = fmt.Sprintf("Wrote %v bytes to file at path %q", len(p), f.path)
@@ -313,7 +366,7 @@ func (f *file) WriteAt(p []byte, off int64) (n int, err error) {
 
 	status := "ERROR"
 
-	defer f.postProcess(&FileLog{Operation: "WriteAt", Location: f.path, Status: &status, Message: &msg}, time.Now())
+	defer f.sendOperationStats(&FileLog{Operation: "WriteAt", Location: f.path, Status: &status, Message: &msg}, time.Now())
 
 	reader := bytes.NewReader(p)
 
@@ -323,13 +376,18 @@ func (f *file) WriteAt(p []byte, off int64) (n int, err error) {
 		return 0, err
 	}
 
-	msg = fmt.Sprintf("Wrote %v bytes to file with path %q at %v offset", len(p), f.path, off)
+	mt := f.ModTime()
+	if !mt.IsZero() {
+		f.modTime = mt
+	}
+
+	msg = fmt.Sprintf("Wrote %v bytes to file with path %q at offset of %v", len(p), f.path, off)
 	status = "SUCCESS"
 
 	return len(p), nil
 }
 
-func (f *file) postProcess(fl *FileLog, startTime time.Time) {
+func (f *file) sendOperationStats(fl *FileLog, startTime time.Time) {
 	duration := time.Since(startTime).Milliseconds()
 
 	fl.Duration = duration
