@@ -2,6 +2,7 @@ package s3
 
 import (
 	"context"
+	"errors"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"os"
@@ -18,7 +19,29 @@ func (*fileSystem) MkdirAll(name string, perm os.FileMode) error {
 	return nil
 }
 
-func (*fileSystem) RemoveAll(name string) error {
+func (f *fileSystem) RemoveAll(name string) error {
+	//var msg string
+	//st := "ERROR"
+
+	//defer f.sendOperationStats(&FileLog{Operation: "RemoveAll", Location: f.remoteDir, Status: &st, Message: &msg}, time.Now())
+	if path.Ext(name) != "" {
+		f.logger.Errorf("RemoveAll supports deleting directories and its contents only. Use Remove instead.")
+		return errors.New("invalid argument type. Enter a valid directory name")
+	}
+
+	_, err := f.conn.DeleteObject(context.TODO(), &s3.DeleteObjectInput{
+		Bucket: aws.String(f.config.BucketName + "/"),
+		Key:    aws.String(name),
+	})
+
+	if err != nil {
+		//f.logger.Errorf("Error while deleting directory: %v", err)
+		return err
+	}
+
+	//st = "SUCCESS"
+	//msg = "Directory deletion on S3 successfull."
+	//f.logger.Logf("Directory %s deleted.", name)
 	return nil
 }
 

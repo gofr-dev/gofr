@@ -33,9 +33,58 @@ func TestDeleteBucket(t *testing.T) {
 
 }
 
-func Test_CreateTextFile(t *testing.T) {
+func Test_CreateFile(t *testing.T) {
+	//runS3Test(t, func(fs file_interface.FileSystemProvider) {
+	//	_, err := fs.Create("abc.txt")
+	//	if err != nil {
+	//		t.Error(err)
+	//	}
+	//
+	//})
+	//runS3Test(t, func(fs file_interface.FileSystemProvider) {
+	//	_, err := fs.Create("abc.png")
+	//	if err != nil {
+	//		t.Error(err)
+	//	}
+	//
+	//})
+	//runS3Test(t, func(fs file_interface.FileSystemProvider) {
+	//	_, err := fs.Create("abc.jpeg")
+	//	if err != nil {
+	//		t.Error(err)
+	//	}
+	//
+	//})
+	//runS3Test(t, func(fs file_interface.FileSystemProvider) {
+	//	_, err := fs.Create("abc.json")
+	//	if err != nil {
+	//		t.Error(err)
+	//	}
+	//
+	//})
+	//runS3Test(t, func(fs file_interface.FileSystemProvider) {
+	//	_, err := fs.Create("abc.html")
+	//	if err != nil {
+	//		t.Error(err)
+	//	}
+	//
+	//})
+	//runS3Test(t, func(fs file_interface.FileSystemProvider) {
+	//	_, err := fs.Create("abc") // octet-stream
+	//	if err != nil {
+	//		t.Error(err)
+	//	}
+	//
+	//})
+	//runS3Test(t, func(fs file_interface.FileSystemProvider) {
+	//	_, err := fs.Create("abc/abc.txt") // octet-stream
+	//	if err != nil {
+	//		t.Error(err)
+	//	}
+	//
+	//})
 	runS3Test(t, func(fs file_interface.FileSystemProvider) {
-		_, err := fs.Create("abc.txt")
+		_, err := fs.Create("abc/abc.txt") // octet-stream
 		if err != nil {
 			t.Error(err)
 		}
@@ -43,9 +92,29 @@ func Test_CreateTextFile(t *testing.T) {
 	})
 }
 
-func Test_CreateJSONFile(t *testing.T) {
+func Test_RemoveFile(t *testing.T) {
 	runS3Test(t, func(fs file_interface.FileSystemProvider) {
-		_, err := fs.Create("abc.txt")
+		err := fs.Remove("abc") // octet-stream
+		if err != nil {
+			t.Error(err)
+		}
+
+	})
+}
+
+func Test_RemoveAll(t *testing.T) {
+	runS3Test(t, func(fs file_interface.FileSystemProvider) {
+		err := fs.RemoveAll("") // octet-stream
+		if err != nil {
+			t.Error(err)
+		}
+
+	})
+}
+
+func Test_RenameFile(t *testing.T) {
+	runS3Test(t, func(fs file_interface.FileSystemProvider) {
+		err := fs.Rename("abc.json", "abcd.json")
 		if err != nil {
 			t.Error(err)
 		}

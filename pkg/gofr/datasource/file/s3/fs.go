@@ -3,6 +3,7 @@ package s3
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -11,20 +12,22 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	file_interface "gofr.dev/pkg/gofr/datasource/file"
 	"log"
+	"mime"
 	"os"
+	"path"
 )
 
 type fileSystem struct {
 	file
 	// GoFr currently supports the following files types S3 interactions under its FileSystem interface.
 	// By Default it is text. Before Creating json file ContentType must be Changed to json.
-	ContentType string // Allowed values are : "application/text", "application/json"
-	conn        *s3.Client
-	config      *Config
-	logger      Logger
-	bucketType  types.BucketType
-	metrics     Metrics
-	remoteDir   string // Remote directory path. Base Path for all s3 File Operations.
+	// Allowed values are : "application/text", "application/json"
+	conn       *s3.Client
+	config     *Config
+	logger     Logger
+	bucketType types.BucketType
+	metrics    Metrics
+	remoteDir  string // Remote directory path. Base Path for all s3 File Operations.
 	// It is "/" by default.
 }
 
@@ -64,10 +67,12 @@ func (f *fileSystem) UseMetrics(metrics interface{}) {
 	}
 }
 
-// Connect takes the configurations and creates the bucket using the access_key_id and secret_access_key, region
+// Connect takes the configurations and creates the bucket using the access_key_id and secret_access_key, region.
+// If a bucket already exists then no error is returned.
 func (f *fileSystem) Connect() {
 	// currently the implementation is only for general purpose buckets
 	// TODO : Implement for Directory Buckets also
+
 	// Load the AWS configuration
 	cfg, err := config.LoadDefaultConfig(context.TODO(),
 		config.WithRegion(f.config.Region),
@@ -97,21 +102,35 @@ func (f *fileSystem) Connect() {
 	fmt.Printf("bucket created at %s\n", aws.ToString(resp.Location))
 }
 
+// if no extension is given by default it sets content-type to octet-stream.
+// Upload is more feature-rich and robust, ideal for large files or complex upload scenarios
+// where multipart support and automatic retries are beneficial.
+// PutObject is simpler and suitable for smaller, straightforward uploads without the need for
+// multipart handling or advanced features.
+// Automatically detect which function to use .....
 func (f *fileSystem) Create(name string) (file_interface.File, error) {
-	body2 := []byte(fmt.Sprintf("Hello from localstack 2. This is Golang."))
+	//var msg string
+	//st := "ERROR"
+
+	//defer f.sendOperationStats(&FileLog{Operation: "Create", Location: f.remoteDir, Status: &st, Message: &msg}, time.Now())
+
 	_, err := f.conn.PutObject(context.TODO(), &s3.PutObjectInput{
 		Bucket:      aws.String(f.config.BucketName),
 		Key:         aws.String(name),
-		Body:        bytes.NewReader(body2),
-		ContentType: aws.String("application/text"),
-		// this specifies the file to must be downloaded before being opened
+		Body:        bytes.NewReader(make([]byte, 0)),
+		ContentType: aws.String(mime.TypeByExtension(path.Ext(name))),
+		// this specifies the file must be downloaded before being opened
 		ContentDisposition: aws.String("attachment"),
 	})
 
 	if err != nil {
-
-		return nil, fmt.Errorf("failed to put object: %w", err)
+		//f.logger.Errorf("Failed to create the file: %v", err)
+		return nil, err
 	}
+
+	//st = "SUCCESS"
+	//msg = "File creation on S3 successfull."
+	//f.logger.Logf("File with name %s created.", name)
 
 	return &file{
 		conn:    f.conn,
@@ -137,16 +156,66 @@ func (f *fileSystem) OpenFile(name string, flag int, perm os.FileMode) (file_int
 	return nil, nil
 }
 
+// TODO: Remove method must support versioning of files.
+// TODO: Extend the support for directory buckets also.
+// Remove method currently supports deletion of unversioned files on general purpose buckets only.
 func (f *fileSystem) Remove(name string) error {
-	_, err := f.conn.DeleteObject(context.TODO(), &s3.DeleteObjectInput{})
+	//var msg string
+	//st := "ERROR"
+
+	//defer f.sendOperationStats(&FileLog{Operation: "Remove", Location: f.remoteDir, Status: &st, Message: &msg}, time.Now())
+
+	_, err := f.conn.DeleteObject(context.TODO(), &s3.DeleteObjectInput{
+		Bucket: aws.String(f.config.BucketName),
+		Key:    aws.String(name),
+	})
+
 	if err != nil {
+		//f.logger.Errorf("Error while deleting file: %v", err)
 		return err
 	}
+
+	//st = "SUCCESS"
+	//msg = "File deletion on S3 successfull."
+	//f.logger.Logf("File %s deleted.", name)
 	return nil
 }
 
-func (*fileSystem) Rename(oldname, newname string) error {
+func (f *fileSystem) Rename(oldname, newname string) error {
+	//var msg string
+	//st := "ERROR"
 
+	//defer f.sendOperationStats(&FileLog{Operation: "Remove", Location: f.remoteDir, Status: &st, Message: &msg}, time.Now())
+
+	if path.Ext(oldname) != path.Ext(newname) {
+		//f.logger.Errorf("new file must be same as the old file type")
+		return errors.New("Incorrect file type of newname")
+	}
+
+	_, err := f.conn.CopyObject(context.TODO(), &s3.CopyObjectInput{
+		Bucket: aws.String(f.config.BucketName),
+		// The source object can be up to 5 GB. If the source object is an object that was uploaded by using a multipart upload,
+		// the object copy will be a single part object after the source object is copied to the destination bucket.
+		CopySource:         aws.String("abc.json"),
+		Key:                aws.String(newname),
+		ContentType:        aws.String(mime.TypeByExtension(path.Ext(newname))),
+		ContentDisposition: aws.String("attachment"),
+	})
+
+	if err != nil {
+		//f.logger.Errorf("Error while copying file: %v", err)
+		return err
+	}
+
+	err = f.Remove(oldname)
+	if err != nil {
+		//f.logger.Errorf("failed to remove old file %s", oldname)
+		return err
+	}
+
+	//st = "SUCCESS"
+	//msg = "File rename successfully"
+	//f.logger.Logf("File %s renames to %s.", oldname, newname)
 	return nil
 }
 
