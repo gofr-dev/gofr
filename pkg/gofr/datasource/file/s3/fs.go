@@ -236,41 +236,54 @@ func (f *fileSystem) Rename(oldname, newname string) error {
 	return nil
 }
 
-//// Put Keys i.e. Write
-//s3Key1 := "key1"
-//body1 := []byte(fmt.Sprintf("Hello from localstack 1"))
-//_, err = s3Client.PutObject(context.TODO(), &s3.PutObjectInput{
-//	Bucket:             aws.String("my-bucket"),
-//	Key:                aws.String(s3Key1),
-//	Body:               bytes.NewReader(body1),
-//	ContentType:        aws.String("application/text"),
-//	ContentDisposition: aws.String("attachment"),
-//})
-//if err != nil {
-//	return fmt.Errorf("failed to put object: %w", err)
-//}
-//
-//s3Key2 := "key2"
-//body2 := []byte(fmt.Sprintf("Hello from localstack 2. This is Golang."))
-//_, err = s3Client.PutObject(context.TODO(), &s3.PutObjectInput{
-//	Bucket:             aws.String("my-bucket"),
-//	Key:                aws.String(s3Key2),
-//	Body:               bytes.NewReader(body2),
-//	ContentType:        aws.String("application/text"),
-//	ContentDisposition: aws.String("attachment"),
-//})
-//if err != nil {
-//	return fmt.Errorf("failed to put object: %w", err)
-//}
-//
-//// List Objects i.e. ReadDir
-//output, err := s3Client.ListObjectsV2(context.TODO(), &s3.ListObjectsV2Input{
-//	Bucket: aws.String("my-bucket"),
-//})
-//if err != nil {
-//	log.Fatal(err)
-//}
-//
+func (f *fileSystem) Stat(name string) (file_interface.FileInfo, error) {
+	filePath := path.Join(f.remoteDir, name)
+
+	// it is a directory
+	if path.Ext(filePath) == "" {
+		res, err := f.conn.ListObjectsV2(context.TODO(), &s3.ListObjectsV2Input{
+			Bucket: aws.String(f.config.BucketName),
+			Prefix: aws.String(filePath+"/"),
+		})
+		if err != nil {
+			return nil, err
+		}
+		var lastModified 
+
+		for _, object := range res.Contents {
+			last
+		}
+
+		return &file{
+			conn:   f.conn,
+			logger: f.logger,
+			metrics: f.metrics,
+			size : *res.Contents[0].Size,
+			name: filePath,
+			lastModified: *res.Contents[0].LastModified,
+		}, nil
+
+	}
+	// it is a file
+	res, err := f.conn.ListObjectsV2(context.TODO(), &s3.ListObjectsV2Input{
+		Bucket: aws.String(f.config.BucketName),
+		Prefix: aws.String(filePath),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return &file{
+		conn:   f.conn,
+		logger: f.logger,
+		metrics: f.metrics,
+		size : *res.Contents[0].Size,
+		name: *res.Contents[0].Key,
+		lastModified: *res.Contents[0].LastModified,
+	}, nil
+
+}
+
 //fmt.Printf("List of Objects in %s:\n", "my-bucket")
 //for _, object := range output.Contents {
 //	fmt.Printf("key=%s size=%d\n", aws.ToString(object.Key), object.Size)

@@ -71,6 +71,7 @@ func (f *fileSystem) ReadDir(name string) ([]file_interface.FileInfo, error) {
 		Bucket: aws.String(f.config.BucketName),
 		Prefix: aws.String(filePath + "/"),
 	})
+
 	if err != nil {
 		return nil, err
 	}
