@@ -35,7 +35,7 @@ func Test_WebSocket_Success(t *testing.T) {
 	})
 
 	go app.Run()
-	time.Sleep(1 * time.Second)
+	time.Sleep(100 * time.Millisecond)
 
 	// Create a WebSocket client
 	wsURL := "ws" + server.URL[len("http"):] + "/ws"
