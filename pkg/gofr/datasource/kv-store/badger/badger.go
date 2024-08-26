@@ -54,7 +54,7 @@ func (c *client) Connect() {
 }
 
 func (c *client) Get(_ context.Context, key string) (string, error) {
-	defer c.logQueryAndSendMetrics(time.Now(), "GET", key, "")
+	defer c.sendOperationStats(time.Now(), "GET", key, "")
 
 	var value []byte
 
@@ -87,7 +87,7 @@ func (c *client) Get(_ context.Context, key string) (string, error) {
 }
 
 func (c *client) Set(_ context.Context, key, value string) error {
-	defer c.logQueryAndSendMetrics(time.Now(), "SET", key, value)
+	defer c.sendOperationStats(time.Now(), "SET", key, value)
 
 	return c.useTransaction(func(txn *badger.Txn) error {
 		return txn.Set([]byte(key), []byte(value))
@@ -95,7 +95,7 @@ func (c *client) Set(_ context.Context, key, value string) error {
 }
 
 func (c *client) Delete(_ context.Context, key string) error {
-	defer c.logQueryAndSendMetrics(time.Now(), "DELETE", key, "")
+	defer c.sendOperationStats(time.Now(), "DELETE", key, "")
 
 	return c.useTransaction(func(txn *badger.Txn) error {
 		return txn.Delete([]byte(key))
@@ -123,7 +123,7 @@ func (c *client) useTransaction(f func(txn *badger.Txn) error) error {
 	return nil
 }
 
-func (c *client) logQueryAndSendMetrics(start time.Time, methodType string, kv ...string) {
+func (c *client) sendOperationStats(start time.Time, methodType string, kv ...string) {
 	duration := time.Since(start).Milliseconds()
 
 	c.logger.Debug(&Log{

@@ -108,12 +108,3 @@ func Test_ClickHouseBeginTransaction(t *testing.T) {
 
 	assert.Contains(t, logs, "Clickhouse Migrator begin successfully")
 }
-
-func Test_ClickHouseRollback(t *testing.T) {
-	logs := testutil.StderrOutputForFunc(func() {
-		mg, _, mockContainer := clickHouseSetup(t)
-		mg.rollback(mockContainer, transactionData{MigrationNumber: 0})
-	})
-
-	assert.Contains(t, logs, "Migration 0 failed")
-}

@@ -24,7 +24,7 @@ func Test_main(t *testing.T) {
 	c := &http.Client{}
 
 	go main()
-	time.Sleep(time.Second * 3)
+	time.Sleep(100 * time.Millisecond)
 
 	testCases := []struct {
 		desc        string
