@@ -3,7 +3,7 @@ module gofr.dev
 go 1.22
 
 require (
-	cloud.google.com/go/pubsub v1.41.0
+	cloud.google.com/go/pubsub v1.42.0
 	github.com/DATA-DOG/go-sqlmock v1.5.2
 	github.com/XSAM/otelsql v0.32.0
 	github.com/alicebob/miniredis/v2 v2.33.0
