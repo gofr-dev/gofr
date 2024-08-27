@@ -52,30 +52,39 @@ func (r Responder) Respond(data interface{}, err error) {
 }
 
 // getStatusCode returns corresponding HTTP status codes.
-func getStatusCode(method string, data interface{}, err error) (status int, errObj interface{}) {
+func getStatusCode(method string, data interface{}, err error) (statusCode int, errResp interface{}) {
 	if err == nil {
-		switch method {
-		case http.MethodPost:
-			if data != nil {
-				return http.StatusCreated, nil
-			}
-
-			return http.StatusAccepted, nil
-		case http.MethodDelete:
-			return http.StatusNoContent, nil
-		default:
-			return http.StatusOK, nil
-		}
+		return handleSuccess(method, data)
 	}
 
-	e, ok := err.(statusCodeResponder)
-	if ok {
-		return e.StatusCode(), map[string]interface{}{
-			"message": err.Error(),
-		}
+	if data != nil {
+		return http.StatusPartialContent, createErrorResponse(err)
 	}
 
-	return http.StatusInternalServerError, map[string]interface{}{
+	if e, ok := err.(statusCodeResponder); ok {
+		return e.StatusCode(), createErrorResponse(err)
+	}
+
+	return http.StatusInternalServerError, createErrorResponse(err)
+}
+
+func handleSuccess(method string, data interface{}) (statusCode int, err interface{}) {
+	switch method {
+	case http.MethodPost:
+		if data != nil {
+			return http.StatusCreated, nil
+		}
+
+		return http.StatusAccepted, nil
+	case http.MethodDelete:
+		return http.StatusNoContent, nil
+	default:
+		return http.StatusOK, nil
+	}
+}
+
+func createErrorResponse(err error) map[string]interface{} {
+	return map[string]interface{}{
 		"message": err.Error(),
 	}
 }
