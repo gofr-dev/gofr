@@ -40,7 +40,7 @@ app.AddCronJob("* * * * *", "job-name", func(ctx *gofr.Context) {
 Cron job with optional second in format: 
 ```go
 app.AddCronJob("* * * * * *", "job-name", func(ctx *gofr.Context) {
-// the cron job that needs to be executed at every second
+    // the cron job that needs to be executed at every second
 })
 ```
 The `AddCronJob` methods takes three arguments—a cron schedule, the cron job name(for tracing) and the set of statements 
