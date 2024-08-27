@@ -17,11 +17,11 @@ const duration = 3
 func main() {
 	app := gofr.New()
 
-	// runs every minute
-	app.AddCronJob("* * * * *", "counter", count)
+	// runs every second
+	app.AddCronJob("* * * * * *", "counter", count)
 
 	// setting the maximum duration of this application
-	time.Sleep(duration * time.Minute)
+	time.Sleep(duration * time.Second)
 
 	// not running the app to close after we have completed the crons running
 	// since this is an example the cron will not be running forever
@@ -34,5 +34,6 @@ func count(c *gofr.Context) {
 	defer mu.Unlock()
 
 	n++
-	c.Log("Count: ", n)
+
+	c.Log("Count:", n)
 }

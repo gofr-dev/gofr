@@ -17,12 +17,14 @@ import (
 )
 
 const (
-	minutes       = 59
-	hrs           = 23
-	days          = 31
-	months        = 12
-	dayOfWeek     = 6
-	scheduleParts = 5
+	seconds                 = 59
+	minutes                 = 59
+	hrs                     = 23
+	days                    = 31
+	months                  = 12
+	dayOfWeek               = 6
+	scheduleParts           = 5
+	schedulePartsWithSecond = 6
 )
 
 type CronFunc func(ctx *Context)
@@ -39,6 +41,7 @@ type Crontab struct {
 }
 
 type job struct {
+	sec       map[int]struct{}
 	min       map[int]struct{}
 	hour      map[int]struct{}
 	day       map[int]struct{}
@@ -50,6 +53,7 @@ type job struct {
 }
 
 type tick struct {
+	sec       int
 	min       int
 	hour      int
 	day       int
@@ -60,7 +64,7 @@ type tick struct {
 // NewCron initializes and returns new cron tab.
 func NewCron(cntnr *container.Container) *Crontab {
 	c := &Crontab{
-		ticker:    time.NewTicker(time.Minute),
+		ticker:    time.NewTicker(time.Second),
 		container: cntnr,
 		jobs:      make([]*job, 0),
 	}
@@ -91,31 +95,43 @@ func parseSchedule(s string) (*job, error) {
 	s = strings.Trim(s, " ")
 	parts := strings.Split(s, " ")
 
-	if len(parts) != scheduleParts {
+	var partsItr int
+
+	switch len(parts) {
+	case schedulePartsWithSecond:
+		j.sec, err = parsePart(parts[partsItr], 0, seconds)
+		if err != nil {
+			return nil, err
+		}
+
+		partsItr++
+	case scheduleParts:
+		partsItr = 0
+	default:
 		return nil, errBadScheduleFormat
 	}
 
-	j.min, err = parsePart(parts[0], 0, minutes)
+	j.min, err = parsePart(parts[partsItr], 0, minutes)
 	if err != nil {
 		return nil, err
 	}
 
-	j.hour, err = parsePart(parts[1], 0, hrs)
+	j.hour, err = parsePart(parts[partsItr+1], 0, hrs)
 	if err != nil {
 		return nil, err
 	}
 
-	j.day, err = parsePart(parts[2], 1, days)
+	j.day, err = parsePart(parts[partsItr+2], 1, days)
 	if err != nil {
 		return nil, err
 	}
 
-	j.month, err = parsePart(parts[3], 1, months)
+	j.month, err = parsePart(parts[partsItr+3], 1, months)
 	if err != nil {
 		return nil, err
 	}
 
-	j.dayOfWeek, err = parsePart(parts[4], 0, dayOfWeek)
+	j.dayOfWeek, err = parsePart(parts[partsItr+4], 0, dayOfWeek)
 	if err != nil {
 		return nil, err
 	}
@@ -241,6 +257,7 @@ func (c *Crontab) runScheduled(t time.Time) {
 
 func getTick(t time.Time) *tick {
 	return &tick{
+		sec:       t.Second(),
 		min:       t.Minute(),
 		hour:      t.Hour(),
 		day:       t.Day(),
@@ -280,6 +297,16 @@ func (j *job) tick(t *tick) bool {
 
 	if _, ok := j.month[t.month]; !ok {
 		return false
+	}
+
+	if j.sec != nil {
+		if _, ok := j.sec[t.sec]; !ok {
+			return false
+		}
+	} else {
+		if t.sec != 0 {
+			return false
+		}
 	}
 
 	return true
