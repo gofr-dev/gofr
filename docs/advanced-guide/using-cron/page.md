@@ -14,9 +14,13 @@ Basically, any task that can be expressed as a command or script can be automate
 
 Writing a cron job!
 On Linux like systems cron jobs can be added by adding a line to the crontab file, specifying the schedule and the command
-that needs to be run at that schedule. The cron schedule is expressed in the following format.
+that needs to be run at that schedule. The cron schedule is expressed in the following format:
 
 `minute hour day_of_month month day_of_week`
+
+GoFr also allows an optional field for `second` as first part in the schedule format, like in the following format:
+
+`second minute hour day_of_month month day_of_week`
 
 Each field can take a specific value or combination of values to define the schedule. Users can use special characters like 
 `*` (asterisk) to represent **any** value and `,` (comma) to separate multiple values. It also supports `0-n` to define a
@@ -26,9 +30,17 @@ range of values for which the cron should run and `*/n` to define number of time
 Adding cron jobs to GoFr applications is made easy with a simple injection of user's function to the cron table maintained
 by the GoFr. The minimum time difference between cron job's two consecutive runs is a minute as it is the least significant
 scheduling time parameter.
+
+Cron job with generic format:
 ```go
 app.AddCronJob("* * * * *", "job-name", func(ctx *gofr.Context) {
 	// the cron job that needs to be executed at every minute
+})
+```
+Cron job with optional second in format: 
+```go
+app.AddCronJob("* * * * * *", "job-name", func(ctx *gofr.Context) {
+    // the cron job that needs to be executed at every second
 })
 ```
 The `AddCronJob` methods takes three arguments—a cron schedule, the cron job name(for tracing) and the set of statements 
@@ -52,9 +64,14 @@ func main() {
 	app.AddCronJob("* */5 * * *", "", func(ctx *gofr.Context) {
 		ctx.Logger.Infof("current time is %v", time.Now())
 	})
+	
+	// Run the cron job every 10 seconds(*/10)
+	app.AddCronJob("*/10 * * * * *", "", func(ctx *gofr.Context) {
+		ctx.Logger.Infof("current time is %v", time.Now())
+	})
 
-	// 
 	app.Run()
 }
 ```
+
 > #### Check out the example on how to add cron jobs in GoFr: [Visit GitHub](https://github.com/gofr-dev/gofr/blob/main/examples/using-cron-jobs/main.go)
