@@ -75,6 +75,8 @@ func TestCreateFile(t *testing.T) {
 	logger.EXPECT().Errorf(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	logger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 	logger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	metrics.EXPECT().RecordHistogram(gomock.Any(), "app_ftp_stats", gomock.Any(),
+		"type", gomock.Any(), "status", gomock.Any()).AnyTimes()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -178,6 +180,8 @@ func TestRenameFile(t *testing.T) {
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Logf(gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_ftp_stats", gomock.Any(),
+		"type", gomock.Any(), "status", gomock.Any()).AnyTimes()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -252,6 +256,8 @@ func TestRemoveFile(t *testing.T) {
 	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_ftp_stats", gomock.Any(),
+		"type", gomock.Any(), "status", gomock.Any()).AnyTimes()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -335,7 +341,8 @@ func TestOpenFile(t *testing.T) {
 	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes().AnyTimes()
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_ftp_stats", gomock.Any(),
+		"type", gomock.Any(), "status", gomock.Any()).AnyTimes()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -409,7 +416,8 @@ func TestMkDir(t *testing.T) {
 	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_ftp_stats", gomock.Any(),
+		"type", gomock.Any(), "status", gomock.Any()).AnyTimes()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -501,7 +509,8 @@ func TestMkDirAll(t *testing.T) {
 	mockLogger.EXPECT().Logf(gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_ftp_stats", gomock.Any(),
+		"type", gomock.Any(), "status", gomock.Any()).AnyTimes()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -582,6 +591,8 @@ func TestRemoveDir(t *testing.T) {
 	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_ftp_stats", gomock.Any(),
+		"type", gomock.Any(), "status", gomock.Any()).AnyTimes()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -664,6 +675,8 @@ func TestStat(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 			mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
+			mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_ftp_stats", gomock.Any(),
+				"type", gomock.Any(), "status", gomock.Any()).AnyTimes()
 
 			filePath := path.Join(fs.config.RemoteDir, tt.fileName)
 
@@ -732,6 +745,8 @@ func TestGetwd(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 			mockFtpConn.EXPECT().CurrentDir().Return(tt.mockDir, tt.mockError)
+			mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_ftp_stats", gomock.Any(),
+				"type", gomock.Any(), "status", gomock.Any()).AnyTimes()
 
 			dir, err := fs.Getwd()
 
@@ -800,6 +815,8 @@ func TestChDir(t *testing.T) {
 			mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 			mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 			mockFtpConn.EXPECT().ChangeDir(newPath).Return(tt.mockError)
+			mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_ftp_stats", gomock.Any(),
+				"type", gomock.Any(), "status", gomock.Any()).AnyTimes()
 
 			err := fs.ChDir(tt.newDir)
 
@@ -897,6 +914,8 @@ func TestReadDir(t *testing.T) {
 			mockFtpConn.EXPECT().List(path).Return(tt.mockEntries, tt.mockError)
 			mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 			mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
+			mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_ftp_stats", gomock.Any(),
+				"type", gomock.Any(), "status", gomock.Any()).AnyTimes()
 
 			files, err := fs.ReadDir(tt.dir)
 

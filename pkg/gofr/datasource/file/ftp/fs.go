@@ -329,5 +329,5 @@ func (f *fileSystem) sendOperationStats(fl *FileLog, startTime time.Time) {
 	f.logger.Debug(fl)
 
 	f.metrics.RecordHistogram(context.Background(), "app_ftp_stats", float64(duration),
-		"type", fl.Operation, "status", *fl.Status)
+		"type", fl.Operation, "status", clean(fl.Status))
 }
