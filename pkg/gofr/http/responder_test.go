@@ -50,6 +50,8 @@ func TestResponder_getStatusCode(t *testing.T) {
 			map[string]interface{}{"message": ErrorInvalidRoute{}.Error()}},
 		{"internal server error", http.MethodGet, nil, http.ErrHandlerTimeout, http.StatusInternalServerError,
 			map[string]interface{}{"message": http.ErrHandlerTimeout.Error()}},
+		{"partial content with error", http.MethodGet, "partial response", ErrorInvalidRoute{},
+			http.StatusPartialContent, map[string]interface{}{"message": ErrorInvalidRoute{}.Error()}},
 	}
 
 	for i, tc := range tests {
@@ -88,7 +90,7 @@ func TestRespondWithApplicationJSON(t *testing.T) {
 		{"error response contains a nullable type with a nil value", newNilTemp(), sampleError,
 			http.StatusNotFound, `{"error":{"message":"route not registered"}}`},
 		{"error response with partial response", sampleData, sampleError,
-			http.StatusNotFound,
+			http.StatusPartialContent,
 			`{"error":{"message":"route not registered"},"data":{"message":"Hello World"}}`},
 	}
 
