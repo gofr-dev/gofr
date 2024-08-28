@@ -157,6 +157,8 @@ func (f *fileSystem) ChDir(newpath string) error {
 	status := "ERROR"
 	defer f.sendOperationStats(&FileLog{Operation: "ChDir", Location: f.remoteDir, Status: &status}, time.Now())
 
+	previous := f.remoteDir
+
 	if f.config.BucketName == "" {
 		f.config.BucketName = strings.Split(newpath, string(filepath.Separator))[0]
 		index := strings.Index(newpath, string(filepath.Separator))
@@ -165,6 +167,21 @@ func (f *fileSystem) ChDir(newpath string) error {
 		}
 	} else {
 		f.remoteDir = path.Join(f.remoteDir, newpath)
+	}
+
+	res, err := f.conn.ListObjectsV2(context.TODO(), &s3.ListObjectsV2Input{
+		Bucket: aws.String(f.config.BucketName),
+		Prefix: aws.String(f.remoteDir + "/"),
+	})
+
+	if err != nil {
+		return err
+	}
+
+	if len(res.Contents) == 0 {
+		status = "ERROR"
+		f.remoteDir = previous
+		return errors.New("Path does not exist")
 	}
 
 	f.logger.Logf("Current Working Directory : %s", f.remoteDir)

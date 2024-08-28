@@ -214,6 +214,66 @@ func Test_StatDirectory(t *testing.T) {
 	})
 }
 
+func Test_DirectoryOperations(t *testing.T) {
+	runS3Test(t, func(fs file_interface.FileSystemProvider) {
+		ctrl := gomock.NewController(t)
+		mockLogger := NewMockLogger(ctrl)
+		mockMetrics := NewMockMetrics(ctrl)
+
+		fs.UseLogger(mockLogger)
+		fs.UseMetrics(mockMetrics)
+
+		mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
+		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+
+		err := fs.Mkdir("temp1", os.ModePerm)
+		require.NoError(t, err)
+
+		err = fs.Mkdir("temp2", os.ModePerm)
+		require.NoError(t, err)
+
+		defer func(fs file_interface.FileSystem) {
+			removeErr := fs.RemoveAll("../temp1")
+			require.NoError(t, removeErr)
+
+			removeErr = fs.RemoveAll("../temp2")
+			require.NoError(t, removeErr)
+		}(fs)
+
+		// ChangeDir Operations
+		err = fs.ChDir("temp1")
+		require.NoError(t, err)
+
+		err = fs.ChDir("../temp2")
+		require.NoError(t, err)
+
+		// Changing Remote Directory
+		currentdir, err := fs.Getwd()
+		require.NoError(t, err)
+		assert.Equal(t, "/ftp/user/temp2", currentdir)
+
+		_, err = fs.Create("temp.csv")
+		require.NoError(t, err)
+
+		v, err := fs.ReadDir(".")
+		require.NoError(t, err)
+		require.NotEmpty(t, v)
+		assert.Equal(t, "temp.csv", v[0].Name())
+		assert.False(t, v[0].IsDir())
+
+		p, err := fs.Stat("../temp2")
+		require.NoError(t, err)
+		require.NotEmpty(t, p)
+		assert.True(t, p.IsDir())
+
+		p, err = fs.Stat("temp.csv")
+		require.NoError(t, err)
+		require.NotEmpty(t, p)
+		assert.Equal(t, "temp.csv", p.Name())
+		assert.False(t, p.IsDir())
+	})
+}
+
 func runS3Test(t *testing.T, testFunc func(fs file_interface.FileSystemProvider)) {
 	t.Helper()
 
@@ -223,8 +283,8 @@ func runS3Test(t *testing.T, testFunc func(fs file_interface.FileSystemProvider)
 		"",
 		"us-east-1",
 		"general-purpose",
-		"AKIAYHJANQGSVIE2CX7F",
-		"ZQaoxNLYiIcdHMwGJJwhPp7ksyyjW27q4eLFTYxZ",
+		os.Getenv("ACCESS_KEY"),
+		os.Getenv("SECRET_KEY"),
 	}
 
 	ctrl := gomock.NewController(t)
