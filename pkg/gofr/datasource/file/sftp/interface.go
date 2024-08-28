@@ -2,13 +2,15 @@ package sftp
 
 import (
 	"context"
-	"github.com/pkg/sftp"
 	"os"
+
+	"github.com/pkg/sftp"
 )
 
 // Logger interface is used by ftp package to log information about query execution.
 type Logger interface {
 	Debug(args ...interface{})
+	Debugf(pattern string, args ...interface{})
 	Logf(pattern string, args ...interface{})
 	Errorf(pattern string, args ...interface{})
 }

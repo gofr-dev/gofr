@@ -2,12 +2,13 @@ package sftp
 
 import (
 	"errors"
+	"os"
+	"testing"
+
 	"github.com/pkg/sftp"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	File "gofr.dev/pkg/gofr/datasource/file"
-	"os"
-	"testing"
 )
 
 type mocks struct {

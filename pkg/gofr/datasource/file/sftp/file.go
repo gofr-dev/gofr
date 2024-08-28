@@ -4,10 +4,11 @@ import (
 	"bufio"
 	"encoding/json"
 	"errors"
-	"github.com/pkg/sftp"
-	File "gofr.dev/pkg/gofr/datasource/file"
 	"os"
 	"strings"
+
+	"github.com/pkg/sftp"
+	File "gofr.dev/pkg/gofr/datasource/file"
 )
 
 var errNotPointer = errors.New("input should be a pointer to a string")
