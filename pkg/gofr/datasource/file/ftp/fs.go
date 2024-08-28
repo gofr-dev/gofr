@@ -128,7 +128,7 @@ func (f *fileSystem) Create(name string) (file_interface.File, error) {
 		Location:  filePath,
 		Status:    &status,
 		Message:   &msg,
-	}, fl.modTime)
+	}, tine)
 
 	if name == "" {
 		f.logger.Errorf("Create_File failed. Provide a valid filename : %v", errEmptyFilename)

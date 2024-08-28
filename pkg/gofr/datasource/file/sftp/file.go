@@ -27,22 +27,22 @@ type jsonReader struct {
 	token   json.Token
 }
 
-// ReadAll reads either json, csv or text files, file with multiple rows, objects or single object can be read
+// ReadAll reads either json, csv or text fileSystem, file with multiple rows, objects or single object can be read
 // in the same way.
 // File format is decided based on the extension
-// JSON files are read in struct, while CSV files are read in pointer to string.
+// JSON fileSystem are read in struct, while CSV fileSystem are read in pointer to string.
 //
 // newCsvFile, _ = fileStore.Open("file.csv")
 // reader := newCsvFile.ReadAll()
 //
-// Reading JSON files
+// Reading JSON fileSystem
 //
 //	for reader.Next() {
 //		var u User
 //		reader.Scan(&u)
 //	}
 //
-// Reading CSV files
+// Reading CSV fileSystem
 //
 //	for reader.Next() {
 //		    var content string
