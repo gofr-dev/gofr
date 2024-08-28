@@ -10,267 +10,183 @@ import (
 	"testing"
 )
 
-func TestConnect(t *testing.T) {
-	cfg := Config{
-		"http://localhost:4566",
-		"user",
-		"gofr-bucket-2",
-		"us-east-1",
-		"general-purpose",
-		"AKIAYHJANQGSVIE2CX7F",
-		"ZQaoxNLYiIcdHMwGJJwhPp7ksyyjW27q4eLFTYxZ",
-	}
-	ctrl := gomock.NewController(t)
-	mockLogger := NewMockLogger(ctrl)
-	mockMetrics := NewMockMetrics(ctrl)
-
-	f := fileSystem{
-		logger:  mockLogger,
-		metrics: mockMetrics,
-		config:  &cfg,
-	}
-
-	f.Connect()
-}
-
-func Test_CreateFile(t *testing.T) {
+// Creating different file formats and removing them
+func Test_CreateRemoveFile(t *testing.T) {
 	runS3Test(t, func(fs file_interface.FileSystemProvider) {
 		_, err := fs.Create("abc.txt")
-		if err != nil {
-			t.Error(err)
-		}
+		require.NoError(t, err)
 
+		err = fs.Remove("abc.txt")
+		require.NoError(t, err)
 	})
+
 	runS3Test(t, func(fs file_interface.FileSystemProvider) {
+
 		_, err := fs.Create("abc.png")
-		if err != nil {
-			t.Error(err)
-		}
+		require.NoError(t, err)
+
+		err = fs.Remove("abc.png")
+		require.NoError(t, err)
 
 	})
 	runS3Test(t, func(fs file_interface.FileSystemProvider) {
 		_, err := fs.Create("abc.jpeg")
-		if err != nil {
-			t.Error(err)
-		}
+		require.NoError(t, err)
+
+		err = fs.Remove("abc.jpeg")
+		require.NoError(t, err)
 
 	})
 	runS3Test(t, func(fs file_interface.FileSystemProvider) {
 		_, err := fs.Create("abc.json")
-		if err != nil {
-			t.Error(err)
-		}
+		require.NoError(t, err)
+
+		err = fs.Remove("abc.json")
+		require.NoError(t, err)
 
 	})
+
 	runS3Test(t, func(fs file_interface.FileSystemProvider) {
 		_, err := fs.Create("abc.html")
-		if err != nil {
-			t.Error(err)
-		}
+		require.NoError(t, err)
 
+		err = fs.Remove("abc.html")
+		require.NoError(t, err)
 	})
+
 	runS3Test(t, func(fs file_interface.FileSystemProvider) {
 		_, err := fs.Create("abc") // octet-stream
-		if err != nil {
-			t.Error(err)
-		}
+		require.NoError(t, err)
 
-	})
-	runS3Test(t, func(fs file_interface.FileSystemProvider) {
-		_, err := fs.Create("abc/abc.txt") // octet-stream
-		if err != nil {
-			t.Error(err)
-		}
-
-	})
-	runS3Test(t, func(fs file_interface.FileSystemProvider) {
-		_, err := fs.Create("abc/bcd/abc.txt") // text file
-		if err != nil {
-			t.Error(err)
-		}
-
-	})
-	runS3Test(t, func(fs file_interface.FileSystemProvider) {
-		err := fs.ChDir("abc/bcd")
-		_, err = fs.Create("efg.txt") // text file
-		if err != nil {
-			t.Error(err)
-		}
-
-	})
-
-}
-
-func Test_RemoveFile(t *testing.T) {
-	runS3Test(t, func(fs file_interface.FileSystemProvider) {
-		err := fs.Remove("abc")
-		if err != nil {
-			t.Error(err)
-		}
-
-		currentDir, err := fs.Getwd()
-		if err != nil {
-			t.Error(err)
-		}
-		fmt.Println("current dir:", currentDir)
-
+		// remove considers path with no extension to be of file format "application/octet-stream"
+		err = fs.Remove("abc")
+		require.NoError(t, err)
 	})
 
 	runS3Test(t, func(fs file_interface.FileSystemProvider) {
-		err := fs.Remove("abc/abc.txt")
-		if err != nil {
-			t.Error(err)
-		}
-
+		_, err := fs.Create("abc/abc.txt")
+		require.Error(t, err)
 	})
 
 	runS3Test(t, func(fs file_interface.FileSystemProvider) {
-		err := fs.Remove("abc.json")
-		if err != nil {
-			t.Error(err)
-		}
+		err := fs.Mkdir("abc", os.ModePerm)
+		require.NoError(t, err)
 
-	})
-}
+		_, err = fs.Create("abc/efg.txt") // text file
+		require.NoError(t, err)
 
-func Test_RemoveAll(t *testing.T) {
-	runS3Test(t, func(fs file_interface.FileSystemProvider) {
-		err := fs.RemoveAll("abc") // octet-stream
-		if err != nil {
-			t.Error(err)
-		}
-
-	})
-}
-
-func Test_RenameFile(t *testing.T) {
-	runS3Test(t, func(fs file_interface.FileSystemProvider) {
-		err := fs.Rename("abc.json", "abcd.json")
-		if err != nil {
-			t.Error(err)
-		}
+		err = fs.RemoveAll("abc")
+		require.NoError(t, err)
 	})
 }
 
 func Test_OpenFile(t *testing.T) {
 	runS3Test(t, func(fs file_interface.FileSystemProvider) {
-		_, err := fs.OpenFile("abcd.json", 0, os.ModePerm)
-		if err != nil {
-			t.Error(err)
-		}
+		_, err := fs.Create("abc.json")
+		require.NoError(t, err)
 
+		_, err = fs.OpenFile("abc.json", 0, os.ModePerm)
+		require.NoError(t, err)
+
+		err = fs.Remove("abc.json")
 	})
 }
 
-// TODO: We can add permission only while making bucket and not inside directories....
-func Test_MkDir(t *testing.T) {
-	//runS3Test(t, func(fs file_interface.FileSystemProvider) {
-	//	fs.ChDir("gofr-bucket-2")
-	//	err := fs.Mkdir("abc/cfg", os.ModePerm)
-	//	if err != nil {
-	//		t.Error(err)
-	//	}
-	//})
-
+func Test_MakingAndDeletingDirectories(t *testing.T) {
 	runS3Test(t, func(fs file_interface.FileSystemProvider) {
-		err := fs.Mkdir("abc/cfg", os.ModePerm)
-		if err != nil {
-			t.Error(err)
-		}
+		err := fs.MkdirAll("abc/bcd/cfg", os.ModePerm)
+		require.NoError(t, err, "error creating directory")
+
+		_, err = fs.Create("abc/bcd/cfg/file.txt")
+		require.NoError(t, err, "error creating file")
+
+		err = fs.RemoveAll("abc")
+		require.NoError(t, err, "error removing abc directory")
 	})
 }
 
+func Test_RenameFile(t *testing.T) {
+	runS3Test(t, func(fs file_interface.FileSystemProvider) {
+		_, err := fs.Create("abcd.json")
+		require.NoError(t, err)
+
+		err = fs.Rename("abcd.json", "abc.json")
+		require.NoError(t, err)
+
+		err = fs.Remove("abc.json")
+		require.NoError(t, err)
+	})
+}
+
+func Test_RenameDirectory(t *testing.T) {
+	runS3Test(t, func(fs file_interface.FileSystemProvider) {
+		err := fs.Mkdir("abc/bcd/cfg", os.ModePerm)
+		require.NoError(t, err)
+
+		_, err = fs.Create("abc/bcd/cfg/file.txt")
+		require.NoError(t, err, "error creating file")
+
+		err = fs.Rename("abc", "abcd")
+		require.NoError(t, err)
+
+		err = fs.RemoveAll("abcd")
+		require.NoError(t, err)
+	})
+}
+
+// works
 func Test_ReadDir(t *testing.T) {
 	runS3Test(t, func(fs file_interface.FileSystemProvider) {
 		fs.ChDir("gofr-bucket-2")
-		fs.ChDir("abc")
-		currentDir, _ := fs.Getwd()
-		assert.Equal(t, "/gofr-bucket-2/abc", currentDir)
-
-		res, err := fs.ReadDir("bcd")
+		currentDir, err := fs.Getwd()
 		require.NoError(t, err)
+		assert.Equal(t, "/gofr-bucket-2", currentDir)
+
+		err = fs.Mkdir("abc/efg/hij", os.ModePerm)
+		require.NoError(t, err)
+
+		_, err = fs.Create("abc/efg/file.txt")
+
+		res, err := fs.ReadDir("abc/efg")
+		require.NoError(t, err)
+
 		for i := range res {
 			fmt.Println(res[i].Name(), res[i].Size(), res[i].IsDir())
 		}
+
+		err = fs.RemoveAll("abc")
+		require.NoError(t, err)
 
 	})
 }
 
 func Test_StatFile(t *testing.T) {
 	runS3Test(t, func(fs file_interface.FileSystemProvider) {
-		fs.ChDir("gofr-bucket-2")
-		res, err := fs.Stat("abc/bcd/efg.txt")
+		err := fs.Mkdir("dir1/dir2", os.ModePerm)
+		require.NoError(t, err)
+
+		_, err = fs.Create("dir1/dir2/file.txt")
+
+		res, err := fs.Stat("dir1/dir2/file.txt")
 		require.NoError(t, err)
 		fmt.Println(res.Name(), res.Size(), res.IsDir())
+
+		err = fs.RemoveAll("dir1")
 	})
 }
 
 func Test_StatDirectory(t *testing.T) {
 	runS3Test(t, func(fs file_interface.FileSystemProvider) {
-		fs.ChDir("gofr-bucket-2")
-		res, err := fs.Stat("abc")
+		err := fs.Mkdir("dir1/dir2", os.ModePerm)
+		require.NoError(t, err)
+
+		_, err = fs.Create("dir1/dir2/file.txt")
+
+		res, err := fs.Stat("dir1/dir2")
 		require.NoError(t, err)
 		fmt.Println(res.Name(), res.Size(), res.IsDir())
-	})
-}
 
-func Test_DirectoryOperations(t *testing.T) {
-	runS3Test(t, func(fs file_interface.FileSystemProvider) {
-		ctrl := gomock.NewController(t)
-		mockLogger := NewMockLogger(ctrl)
-		mockMetrics := NewMockMetrics(ctrl)
-
-		fs.UseLogger(mockLogger)
-		fs.UseMetrics(mockMetrics)
-
-		mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
-		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-
-		err := fs.Mkdir("temp1", os.ModePerm)
-		require.NoError(t, err)
-
-		err = fs.Mkdir("temp2", os.ModePerm)
-		require.NoError(t, err)
-
-		defer func(fs file_interface.FileSystem) {
-			removeErr := fs.RemoveAll("../temp1")
-			require.NoError(t, removeErr)
-
-			removeErr = fs.RemoveAll("../temp2")
-			require.NoError(t, removeErr)
-		}(fs)
-
-		// ChangeDir Operations
-		err = fs.ChDir("temp1")
-		require.NoError(t, err)
-
-		err = fs.ChDir("../temp2")
-		require.NoError(t, err)
-
-		// Changing Remote Directory
-		currentdir, err := fs.Getwd()
-		require.NoError(t, err)
-		assert.Equal(t, "/ftp/user/temp2", currentdir)
-
-		_, err = fs.Create("temp.csv")
-		require.NoError(t, err)
-
-		v, err := fs.ReadDir(".")
-		require.NoError(t, err)
-		require.NotEmpty(t, v)
-		assert.Equal(t, "temp.csv", v[0].Name())
-		assert.False(t, v[0].IsDir())
-
-		p, err := fs.Stat("../temp2")
-		require.NoError(t, err)
-		require.NotEmpty(t, p)
-		assert.True(t, p.IsDir())
-
-		p, err = fs.Stat("temp.csv")
-		require.NoError(t, err)
-		require.NotEmpty(t, p)
-		assert.Equal(t, "temp.csv", p.Name())
-		assert.False(t, p.IsDir())
+		err = fs.RemoveAll("dir1")
 	})
 }
 
@@ -278,13 +194,11 @@ func runS3Test(t *testing.T, testFunc func(fs file_interface.FileSystemProvider)
 	t.Helper()
 
 	cfg := Config{
-		"http://localhost:4566",
-		"user",
-		"",
+		"http://localhost:4566", //"https://s3.amazonaws.com" - aws base endpoint
+		"gofr-bucket-2",
 		"us-east-1",
-		"general-purpose",
-		os.Getenv("ACCESS_KEY"),
-		os.Getenv("SECRET_KEY"),
+		"test",
+		"test",
 	}
 
 	ctrl := gomock.NewController(t)

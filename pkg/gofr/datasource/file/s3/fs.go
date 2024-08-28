@@ -9,6 +9,8 @@ import (
 	"mime"
 	"os"
 	"path"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -20,29 +22,17 @@ import (
 
 type fileSystem struct {
 	file
-	conn   *s3.Client
-	config *Config
-	logger Logger
-	// TODO :  If we want to handle different kind of buckets in s3 we can  general-purpose and dorectory buckets by passing bucket-type in configs
-	// currently bucketType types.BucketType
-	metrics   Metrics
-	remoteDir string // Remote directory path. Base Path for all s3 File Operations.
-	// It is "/" by default.
+	conn    *s3.Client
+	config  *Config
+	logger  Logger
+	metrics Metrics
 }
 
 // Config represents the s3 configuration.
 type Config struct {
-	EndPoint   string // AWS S3 endpoint  - not being used in actual aws usecase
-	User       string // AWS IAM username - not being used in actual aws usecase
-	BucketName string // AWS Bucket name
-	Region     string // AWS Region
-
-	BucketType string // Takes two string arguments : "flat" & "directory" depending on what kind of s3 bucket is added.
-	// While accessing a flat bucket it is necessary that the objects have key names
-	// as relative paths, as we are simulating a filesystem. Any existing file with
-	// keys that are not described as path must be considered a file that is directly
-	// present in root folder.
-
+	EndPoint          string // AWS S3 base endpoint
+	BucketName        string // AWS Bucket name
+	Region            string // AWS Region
 	ACCESS_KEY_ID     string // Aws configs
 	SECRET_ACCESS_KEY string // Aws configs
 }
@@ -95,7 +85,12 @@ func (f *fileSystem) Connect() {
 	}
 
 	// Create the S3 client from config
-	s3Client := s3.NewFromConfig(cfg)
+	s3Client := s3.NewFromConfig(cfg,
+		func(o *s3.Options) {
+			o.UsePathStyle = true
+			o.BaseEndpoint = &f.config.EndPoint
+		},
+	)
 
 	f.conn = s3Client
 	st = "SUCCESS"
@@ -112,21 +107,31 @@ func (f *fileSystem) Create(name string) (file_interface.File, error) {
 	var msg string
 	st := "ERROR"
 
-	location := path.Join("/"+f.config.BucketName, f.remoteDir)
+	location := path.Join(string(filepath.Separator), f.config.BucketName)
 
 	defer f.sendOperationStats(&FileLog{Operation: "Create", Location: location, Status: &st, Message: &msg}, time.Now())
 
-	if f.config.BucketName == "" {
-		f.logger.Errorf("No bucket selected. Files can only be created inside buckets.")
-		st = "ERROR"
-		return nil, errors.New("choose/create bucket before creating a file")
-	}
+	parentPath := path.Dir(name)
 
-	filePath := path.Join(f.remoteDir, name)
+	// if parenPath is not empty, we check if it exists or not.
+	if parentPath != "." {
+		res2, err := f.conn.ListObjectsV2(context.TODO(), &s3.ListObjectsV2Input{
+			Bucket: aws.String(f.config.BucketName),
+			Prefix: aws.String(parentPath + "/"),
+		})
+
+		if err != nil {
+			return nil, err
+		}
+
+		if len(res2.Contents) == 0 {
+			return nil, errors.New("create parent path before creating a file")
+		}
+	}
 
 	_, err := f.conn.PutObject(context.TODO(), &s3.PutObjectInput{
 		Bucket:      aws.String(f.config.BucketName),
-		Key:         aws.String(filePath),
+		Key:         aws.String(name),
 		Body:        bytes.NewReader(make([]byte, 0)),
 		ContentType: aws.String(mime.TypeByExtension(path.Ext(name))),
 		// this specifies the file must be downloaded before being opened
@@ -140,11 +145,11 @@ func (f *fileSystem) Create(name string) (file_interface.File, error) {
 
 	res, err := f.conn.GetObject(context.TODO(), &s3.GetObjectInput{
 		Bucket: aws.String(f.config.BucketName),
-		Key:    aws.String(filePath),
+		Key:    aws.String(name),
 	})
 
 	if err != nil {
-		f.logger.Errorf("Failed to retrieve %q: %v", filePath, err)
+		f.logger.Errorf("Failed to retrieve %q: %v", name, err)
 		return nil, err
 	}
 
@@ -154,7 +159,7 @@ func (f *fileSystem) Create(name string) (file_interface.File, error) {
 
 	return &file{
 		conn:         f.conn,
-		name:         path.Join(f.config.BucketName, filePath),
+		name:         path.Join(f.config.BucketName, name),
 		logger:       f.logger,
 		metrics:      f.metrics,
 		body:         res.Body,
@@ -164,30 +169,55 @@ func (f *fileSystem) Create(name string) (file_interface.File, error) {
 	}, nil
 }
 
+// TODO: Remove method must support versioning of files.
+// TODO: Extend the support for directory buckets also.
+// Remove method currently supports deletion of unversioned files on general purpose buckets only.
+func (f *fileSystem) Remove(name string) error {
+	var msg string
+	st := "ERROR"
+
+	location := path.Join(string(filepath.Separator), f.config.BucketName)
+
+	defer f.sendOperationStats(&FileLog{Operation: "Remove", Location: location, Status: &st, Message: &msg}, time.Now())
+
+	_, err := f.conn.DeleteObject(context.TODO(), &s3.DeleteObjectInput{
+		Bucket: aws.String(f.config.BucketName),
+		Key:    aws.String(name),
+	})
+
+	if err != nil {
+		f.logger.Errorf("Error while deleting file: %v", err)
+		return err
+	}
+
+	st = "SUCCESS"
+	msg = "File deletion on S3 successfull."
+	f.logger.Logf("File with path %q deleted.", name)
+	return nil
+}
+
 func (f *fileSystem) Open(name string) (file_interface.File, error) {
 	var msg string
 	st := "ERROR"
 
-	location := path.Join("/"+f.config.BucketName, f.remoteDir)
+	location := path.Join(string(filepath.Separator), f.config.BucketName)
 	f.sendOperationStats(&FileLog{Operation: "Open", Location: location, Status: &st, Message: &msg}, time.Now())
-
-	filePath := path.Join(f.remoteDir, name)
 
 	res, err := f.conn.GetObject(context.TODO(), &s3.GetObjectInput{
 		Bucket: aws.String(f.config.BucketName),
-		Key:    aws.String(filePath),
+		Key:    aws.String(name),
 	})
 
 	if err != nil {
-		f.logger.Errorf("Failed to retrieve %q: %v", filePath, err)
+		f.logger.Errorf("Failed to retrieve %q: %v", name, err)
 		return nil, err
 	}
 	st = "SUCCESS"
-	msg = fmt.Sprintf("File  with path %q retrieved successfully.", filePath)
+	msg = fmt.Sprintf("File  with path %q retrieved successfully.", name)
 
 	return &file{
 		conn:         f.conn,
-		name:         path.Join(f.config.BucketName, filePath),
+		name:         path.Join(f.config.BucketName, name),
 		logger:       f.logger,
 		metrics:      f.metrics,
 		body:         res.Body,
@@ -203,39 +233,7 @@ func (f *fileSystem) OpenFile(name string, flag int, perm os.FileMode) (file_int
 	return f.Open(name)
 }
 
-// TODO: Remove method must support versioning of files.
-// TODO: Extend the support for directory buckets also.
-// Remove method currently supports deletion of unversioned files on general purpose buckets only.
-func (f *fileSystem) Remove(name string) error {
-	var msg string
-	st := "ERROR"
-
-	location := path.Join("/"+f.config.BucketName, f.remoteDir)
-
-	defer f.sendOperationStats(&FileLog{Operation: "Remove", Location: location, Status: &st, Message: &msg}, time.Now())
-
-	filePath := path.Join(f.remoteDir, name)
-
-	_, err := f.conn.DeleteObject(context.TODO(), &s3.DeleteObjectInput{
-		Bucket: aws.String(f.config.BucketName),
-		Key:    aws.String(filePath),
-	})
-
-	if err != nil {
-		f.logger.Errorf("Error while deleting file: %v", err)
-		return err
-	}
-
-	st = "SUCCESS"
-	msg = "File deletion on S3 successfull."
-	f.logger.Logf("File with path %q deleted.", filePath)
-	return nil
-}
-
-func (f *fileSystem) renameDirectory(st *string, oldname, newname string) error {
-	oldPath := path.Join(f.remoteDir, oldname)
-	newPath := path.Join(f.remoteDir, newname)
-
+func (f *fileSystem) renameDirectory(st *string, oldPath, newPath string) error {
 	entries, err := f.conn.ListObjectsV2(context.TODO(), &s3.ListObjectsV2Input{
 		Bucket: aws.String(f.config.BucketName),
 		Prefix: aws.String(oldPath + "/"),
@@ -247,10 +245,11 @@ func (f *fileSystem) renameDirectory(st *string, oldname, newname string) error 
 	}
 
 	for _, obj := range entries.Contents {
+		newFilePath := strings.Replace(*obj.Key, oldPath, newPath, 1)
 		_, err := f.conn.CopyObject(context.TODO(), &s3.CopyObjectInput{
 			Bucket:             aws.String(f.config.BucketName),
-			CopySource:         obj.Key,
-			Key:                aws.String(newPath),
+			CopySource:         aws.String(f.config.BucketName + "/" + *obj.Key),
+			Key:                aws.String(newFilePath),
 			ContentType:        aws.String(mime.TypeByExtension(path.Ext(newPath))),
 			ContentDisposition: aws.String("attachment"),
 		})
@@ -261,11 +260,7 @@ func (f *fileSystem) renameDirectory(st *string, oldname, newname string) error 
 	}
 
 	// deleting objects
-	_, err = f.conn.DeleteObject(context.TODO(), &s3.DeleteObjectInput{
-		Bucket: aws.String(f.config.BucketName),
-		Key:    aws.String(newPath + "/"),
-	})
-
+	err = f.RemoveAll(oldPath)
 	if err != nil {
 		return err
 	}
@@ -278,7 +273,7 @@ func (f *fileSystem) Rename(oldname, newname string) error {
 	var msg string
 	st := "ERROR"
 
-	location := path.Join("/"+f.config.BucketName, f.remoteDir)
+	location := path.Join(string(filepath.Separator), f.config.BucketName)
 
 	defer f.sendOperationStats(&FileLog{Operation: "Remove", Location: location, Status: &st, Message: &msg}, time.Now())
 
@@ -305,16 +300,13 @@ func (f *fileSystem) Rename(oldname, newname string) error {
 		return errors.New("Incorrect file type of newname")
 	}
 
-	oldPath := path.Join(f.remoteDir, oldname)
-	newPath := path.Join(f.remoteDir, newname)
-
 	_, err := f.conn.CopyObject(context.TODO(), &s3.CopyObjectInput{
 		Bucket: aws.String(f.config.BucketName),
 		// The source object can be up to 5 GB. If the source object is an object that was uploaded by using a multipart upload,
 		// the object copy will be a single part object after the source object is copied to the destination bucket.
-		CopySource:         aws.String(f.config.BucketName + "/" + oldPath),
+		CopySource:         aws.String(f.config.BucketName + "/" + oldname),
 		Key:                aws.String(newname),
-		ContentType:        aws.String(mime.TypeByExtension(path.Ext(newPath))),
+		ContentType:        aws.String(mime.TypeByExtension(path.Ext(newname))),
 		ContentDisposition: aws.String("attachment"),
 	})
 
@@ -338,56 +330,56 @@ func (f *fileSystem) Rename(oldname, newname string) error {
 func (f *fileSystem) Stat(name string) (file_interface.FileInfo, error) {
 	var msg string
 	st := "ERROR"
-	location := path.Join("/"+f.config.BucketName, f.remoteDir)
+
+	location := path.Join(string(filepath.Separator), f.config.BucketName)
 
 	defer f.sendOperationStats(&FileLog{Operation: "Stat", Location: location, Status: &st, Message: &msg}, time.Now())
 
-	filePath := path.Join(f.remoteDir, name)
+	filetype := "file"
 
-	// it is a directory and not an octet-stream, file
-	if path.Ext(filePath) == "" && name[0] != 'b' {
-		res, err := f.conn.ListObjectsV2(context.TODO(), &s3.ListObjectsV2Input{
-			Bucket: aws.String(f.config.BucketName),
-			Prefix: aws.String(filePath + "/"),
-		})
-
-		if err != nil {
-			f.logger.Errorf("Error returning directory info: %v", err)
-			return nil, err
+	if path.Ext(name) == "" {
+		if name[0] == 'b' {
+			name = name[1:]
 		}
-		// directory exist and first value gives information about the directory
-		st = "SUCCESS"
-		msg = "Directory info retrieved successfully"
-		if res.Contents != nil {
-			return &file{
-				conn:         f.conn,
-				logger:       f.logger,
-				metrics:      f.metrics,
-				size:         *res.Contents[0].Size,
-				name:         *res.Contents[0].Key,
-				lastModified: *res.Contents[0].LastModified,
-			}, nil
-		}
-		//var size int64
-		//var lastModified time.Time
-		//
-		//for i := range res.Contents {
-		//	size += *res.Contents[i].Size
-		//	if res.Contents[i].LastModified.After(lastModified) {
-		//		lastModified = *res.Contents[i].LastModified
-		//	}
-		//}
+		filetype = "directory"
 	}
 
-	// it is a file
 	res, err := f.conn.ListObjectsV2(context.TODO(), &s3.ListObjectsV2Input{
 		Bucket: aws.String(f.config.BucketName),
-		Prefix: aws.String(filePath),
+		Prefix: aws.String(name),
 	})
 
 	if err != nil {
 		f.logger.Errorf("Error returning file info: %v", err)
 		return nil, err
+	}
+
+	if filetype == "directory" {
+		var size int64
+		var lastModified time.Time
+
+		for i := range res.Contents {
+			size += *res.Contents[i].Size
+			if res.Contents[i].LastModified.After(lastModified) {
+				lastModified = *res.Contents[i].LastModified
+			}
+		}
+
+		// directory exist and first value gives information about the directory
+		st = "SUCCESS"
+		msg = "Directory info retrieved successfully"
+
+		if res.Contents != nil {
+			return &file{
+				conn:         f.conn,
+				logger:       f.logger,
+				metrics:      f.metrics,
+				size:         size,
+				name:         *res.Contents[0].Key,
+				lastModified: lastModified,
+			}, nil
+		}
+		return nil, nil
 	}
 
 	return &file{

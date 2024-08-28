@@ -16,74 +16,38 @@ import (
 	file_interface "gofr.dev/pkg/gofr/datasource/file"
 )
 
-// MkDir At root level creating directory.then creating files.
+// MkDir at root level creating directory.then creating files.
 func (f *fileSystem) Mkdir(name string, perm os.FileMode) error {
 	var msg string
 	st := "ERROR"
-	location := path.Join(f.config.BucketName, f.remoteDir)
+	location := path.Join(string(filepath.Separator), f.config.BucketName)
 
 	defer f.sendOperationStats(&FileLog{
-		Operation: "MkDir",
+		Operation: "MkDirAll",
 		Location:  location,
 		Status:    &st,
 		Message:   &msg,
 	}, time.Now())
 
-	// Currently we are handling the case of general-purpose S3 buckets only.
-	bucketName := strings.Split(name, string(filepath.Separator))[0]
-	pathLength := len(strings.Split(name, string(filepath.Separator)))
-	// checks if the usecase was operated on root directory or not, to reset the
-	// bucketName back after creating the required file on specified path
-	var rootDir bool
+	directories := strings.Split(name, string(filepath.Separator))
+	var currentdir string
 
-	if f.config.BucketName == "" {
-		_, err := f.conn.CreateBucket(context.TODO(), &s3.CreateBucketInput{
-			Bucket: aws.String(bucketName),
-			CreateBucketConfiguration: &types.CreateBucketConfiguration{
-				Location: &types.LocationInfo{
-					Name: aws.String(f.config.Region),
-				},
-			},
+	for _, dir := range directories {
+		currentdir = path.Join(currentdir, dir)
+		_, err := f.conn.PutObject(context.TODO(), &s3.PutObjectInput{
+			Bucket: aws.String(f.config.BucketName),
+			Key:    aws.String(currentdir + "/"),
 		})
 
 		if err != nil {
-			var bne *types.BucketAlreadyExists
-			var boe *types.BucketAlreadyOwnedByYou
-			if errors.As(err, &bne) && pathLength == 1 {
-				f.logger.Logf("Bucket %s already exists", name)
-			} else if errors.As(err, &boe) && pathLength == 1 {
-				f.logger.Logf("Bucket %s already owned by you", name)
-			} else {
-				return err
-			}
+			return err
 		}
-
-		// subdirectories & file need to be created
-		if pathLength != 1 {
-			f.config.BucketName = bucketName
-			rootDir = true
-		}
-	}
-
-	filePath := path.Join(f.remoteDir, name)
-
-	_, err := f.conn.PutObject(context.TODO(), &s3.PutObjectInput{
-		Bucket: aws.String(f.config.BucketName),
-		Key:    aws.String(filePath + "/"),
-	})
-
-	if err != nil {
-		return err
-	}
-	if rootDir {
-		f.config.BucketName = ""
 	}
 
 	st = "SUCCESS"
 	msg = "File created successfully"
 
 	return nil
-
 }
 
 // MkDirAll just calls MkDir as aws s3 buckets do not functional on directory or file levels but have a flat structure.
@@ -95,19 +59,40 @@ func (f *fileSystem) RemoveAll(name string) error {
 	var msg string
 	st := "ERROR"
 
-	defer f.sendOperationStats(&FileLog{Operation: "RemoveAll", Location: f.remoteDir, Status: &st, Message: &msg}, time.Now())
-	if path.Ext(name) != "" || name[0] == 'b' {
-		f.logger.Errorf("RemoveAll supports deleting directories and its contents only. Use Remove instead.")
+	location := path.Join(string(filepath.Separator), f.config.BucketName)
+
+	defer f.sendOperationStats(&FileLog{Operation: "RemoveAll", Location: location, Status: &st, Message: &msg}, time.Now())
+	if path.Ext(name) != "" {
+		f.logger.Errorf("RemoveAll supports deleting directories only. Use Remove instead.")
 		return errors.New("invalid argument type. Enter a valid directory name")
 	}
 
-	_, err := f.conn.DeleteObject(context.TODO(), &s3.DeleteObjectInput{
+	res, err := f.conn.ListObjectsV2(context.TODO(), &s3.ListObjectsV2Input{
 		Bucket: aws.String(f.config.BucketName),
-		Key:    aws.String(name + "/"),
+		Prefix: aws.String(name + "/"),
 	})
 
 	if err != nil {
-		//f.logger.Errorf("Error while deleting directory: %v", err)
+		return err
+	}
+
+	objects := make([]types.ObjectIdentifier, len(res.Contents))
+
+	for i, obj := range res.Contents {
+		objects[i] = types.ObjectIdentifier{
+			Key: obj.Key,
+		}
+	}
+
+	_, err = f.conn.DeleteObjects(context.TODO(), &s3.DeleteObjectsInput{
+		Bucket: aws.String(f.config.BucketName),
+		Delete: &types.Delete{
+			Objects: objects,
+		},
+	})
+
+	if err != nil {
+		f.logger.Errorf("Error while deleting directory: %v", err)
 		return err
 	}
 
@@ -118,16 +103,17 @@ func (f *fileSystem) RemoveAll(name string) error {
 }
 
 func (f *fileSystem) ReadDir(name string) ([]file_interface.FileInfo, error) {
-	if path.Ext(name) != "" || name[0] == '1' {
-		f.logger.Errorf("ReadDir supports reading directories contents only. Use Read instead.")
-		return nil, errors.New("invalid argument type. Enter a valid directory name")
-	}
+	var filePath string
 
-	filePath := path.Join(f.remoteDir, name)
+	if name == "." {
+		filePath = ""
+	} else {
+		filePath = name + string(filepath.Separator)
+	}
 
 	entries, err := f.conn.ListObjectsV2(context.TODO(), &s3.ListObjectsV2Input{
 		Bucket: aws.String(f.config.BucketName),
-		Prefix: aws.String(filePath + "/"),
+		Prefix: aws.String(filePath),
 	})
 
 	if err != nil {
@@ -140,12 +126,28 @@ func (f *fileSystem) ReadDir(name string) ([]file_interface.FileInfo, error) {
 		if i == 0 {
 			continue
 		}
+
+		relativepath := strings.TrimPrefix(*entries.Contents[i].Key, filePath)
+		oneLevelDeepPathIndex := strings.Index(relativepath, string(filepath.Separator))
+
+		if oneLevelDeepPathIndex != -1 {
+			relativepath = relativepath[:oneLevelDeepPathIndex+1]
+		}
+
+		if len(fileInfo) > 0 {
+			temp, ok := fileInfo[len(fileInfo)-1].(*file)
+
+			if ok && relativepath == temp.name {
+				continue
+			}
+		}
+
 		fileInfo = append(fileInfo, &file{
 			conn:         f.conn,
 			logger:       f.logger,
 			metrics:      f.metrics,
 			size:         *entries.Contents[i].Size,
-			name:         *entries.Contents[i].Key,
+			name:         relativepath,
 			lastModified: *entries.Contents[i].LastModified,
 		})
 	}
@@ -153,48 +155,18 @@ func (f *fileSystem) ReadDir(name string) ([]file_interface.FileInfo, error) {
 	return fileInfo, nil
 }
 
-func (f *fileSystem) ChDir(newpath string) error {
-	status := "ERROR"
-	defer f.sendOperationStats(&FileLog{Operation: "ChDir", Location: f.remoteDir, Status: &status}, time.Now())
-
-	previous := f.remoteDir
-
-	if f.config.BucketName == "" {
-		f.config.BucketName = strings.Split(newpath, string(filepath.Separator))[0]
-		index := strings.Index(newpath, string(filepath.Separator))
-		if index != -1 {
-			f.remoteDir = newpath[index+1:]
-		}
-	} else {
-		f.remoteDir = path.Join(f.remoteDir, newpath)
-	}
-
-	res, err := f.conn.ListObjectsV2(context.TODO(), &s3.ListObjectsV2Input{
-		Bucket: aws.String(f.config.BucketName),
-		Prefix: aws.String(f.remoteDir + "/"),
-	})
-
-	if err != nil {
-		return err
-	}
-
-	if len(res.Contents) == 0 {
-		status = "ERROR"
-		f.remoteDir = previous
-		return errors.New("Path does not exist")
-	}
-
-	f.logger.Logf("Current Working Directory : %s", f.remoteDir)
-	status = "SUCCESS"
-	return nil
+func (f *fileSystem) ChDir(_ string) error {
+	return errors.New("ChDir not implemented yet")
 }
 
 // Getwd returns the absolute path of the file on S3.
 func (f *fileSystem) Getwd() (string, error) {
 	status := "SUCCESS"
-	f.sendOperationStats(&FileLog{Operation: "ChDir", Location: f.remoteDir, Status: &status}, time.Now())
 
-	return "/" + path.Join(f.config.BucketName, f.remoteDir), nil
+	location := path.Join(string(filepath.Separator), f.config.BucketName)
+	f.sendOperationStats(&FileLog{Operation: "ChDir", Location: location, Status: &status}, time.Now())
+
+	return location, nil
 }
 
 func (f *fileSystem) sendOperationStats(fl *FileLog, startTime time.Time) {

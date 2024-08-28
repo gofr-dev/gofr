@@ -30,9 +30,6 @@ Michael Brown,40,michaelb@example.com`
 		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 		mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 
-		err := fs.ChDir("gofr-bucket-2")
-		require.NoError(t, err)
-
 		newCsvFile, err := fs.Create("temp.csv")
 		require.NoError(t, err)
 
@@ -81,9 +78,6 @@ func Test_Seek(t *testing.T) {
 		mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
 		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 		mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
-
-		err := fs.ChDir("gofr-bucket-2")
-		require.NoError(t, err)
 
 		newCsvFile, err := fs.Create("temp.json")
 		require.NoError(t, err)
@@ -153,9 +147,6 @@ Michael Brown,40,michaelb@example.com`
 		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 		mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 
-		err := fs.ChDir("gofr-bucket-2")
-		require.NoError(t, err)
-
 		newCsvFile, err := fs.Create("temp.csv")
 		require.NoError(t, err)
 
@@ -201,9 +192,6 @@ func Test_ReadFromCSVScanError(t *testing.T) {
 		mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
 		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 		mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
-
-		err := fs.ChDir("gofr-bucket-2")
-		require.NoError(t, err)
 
 		newCsvFile, err := fs.Create("temp.csv")
 		require.NoError(t, err)
@@ -263,9 +251,6 @@ func Test_ReadFromJSONArray(t *testing.T) {
 		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 		mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 
-		err := fs.ChDir("gofr-bucket-2")
-		require.NoError(t, err)
-
 		newCsvFile, err := fs.Create("temp.json")
 		require.NoError(t, err)
 
@@ -319,12 +304,9 @@ func Test_ReadFromJSONObject(t *testing.T) {
 		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 		mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 
-		err := fs.ChDir("gofr-bucket-2")
-		require.NoError(t, err)
-
 		newCsvFile, _ := fs.Create("temp.json")
 
-		_, err = newCsvFile.Write([]byte(jsonContent))
+		_, err := newCsvFile.Write([]byte(jsonContent))
 		require.NoError(t, err)
 
 		newCsvFile, err = fs.Open("temp.json")
@@ -335,9 +317,7 @@ func Test_ReadFromJSONObject(t *testing.T) {
 
 		defer func(fs file_interface.FileSystem, name string) {
 			err := fs.Remove(name)
-			if err != nil {
-				t.Error(err)
-			}
+			require.NoError(t, err)
 		}(fs, "temp.json")
 
 		for reader.Next() {
@@ -368,9 +348,6 @@ func Test_ReadFromJSONArrayInvalidDelimiter(t *testing.T) {
 		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 		mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 
-		err := fs.ChDir("gofr-bucket-2")
-		require.NoError(t, err)
-
 		newCsvFile, err := fs.Create("temp.json")
 		require.NoError(t, err)
 
@@ -385,9 +362,7 @@ func Test_ReadFromJSONArrayInvalidDelimiter(t *testing.T) {
 
 		defer func(fs file_interface.FileSystem, name string) {
 			removeErr := fs.Remove(name)
-			if removeErr != nil {
-				t.Error(removeErr)
-			}
+			require.NoError(t, removeErr)
 		}(fs, "temp.json")
 
 		assert.IsType(t, &json.SyntaxError{}, err)

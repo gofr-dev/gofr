@@ -398,6 +398,7 @@ func (f *file) Seek(offset int64, whence int) (int64, error) {
 
 	return res, nil
 }
+
 func (f *file) sendOperationStats(fl *FileLog, startTime time.Time) {
 	duration := time.Since(startTime).Milliseconds()
 
