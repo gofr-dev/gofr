@@ -116,7 +116,7 @@ func TestApp_AddFTP(t *testing.T) {
 		mock.EXPECT().UseMetrics(app.Metrics())
 		mock.EXPECT().Connect()
 
-		app.AddFile(git mock)
+		app.AddFileStore(git mock)
 
 		assert.Equal(t, mock, app.container.File)
 	})

@@ -21,7 +21,7 @@ import (
 func main() {
     app := gofr.New()
 
-	app.AddFile(ftp.New(&ftp.Config{
+	app.AddFileStore(ftp.New(&ftp.Config{
 		Host:      "127.0.0.1",
 		User:      "user",
 		Password:  "password",
@@ -46,7 +46,7 @@ import (
 func main() {
     app := gofr.New()
 
-	app.AddFile(sftp.New(&sftp.Config{
+	app.AddFileStore(sftp.New(&sftp.Config{
 		Host:      "127.0.0.1",
 		User:      "user",
 		Password:  "password",
