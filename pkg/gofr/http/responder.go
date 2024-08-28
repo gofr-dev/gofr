@@ -57,7 +57,7 @@ func getStatusCode(method string, data interface{}, err error) (statusCode int, 
 		return handleSuccess(method, data)
 	}
 
-	if data != nil {
+	if !isNil(data) {
 		return http.StatusPartialContent, createErrorResponse(err)
 	}
 

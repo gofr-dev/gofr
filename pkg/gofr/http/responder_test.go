@@ -88,7 +88,7 @@ func TestRespondWithApplicationJSON(t *testing.T) {
 		{"error response", nil, sampleError,
 			http.StatusNotFound, `{"error":{"message":"route not registered"}}`},
 		{"error response contains a nullable type with a nil value", newNilTemp(), sampleError,
-			http.StatusPartialContent, `{"error":{"message":"route not registered"}}`},
+			http.StatusNotFound, `{"error":{"message":"route not registered"}}`},
 		{"error response with partial response", sampleData, sampleError,
 			http.StatusPartialContent,
 			`{"error":{"message":"route not registered"},"data":{"message":"Hello World"}}`},
