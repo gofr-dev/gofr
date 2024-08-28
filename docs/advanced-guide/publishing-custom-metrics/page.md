@@ -224,4 +224,5 @@ When a registered metrics has to be used 3 key pieces of information are require
 A permutation of these key-value values provides the metric cardinality.
 Lower the cardinality, faster the query performance and lower the monitoring resource utilisation.
 ```
-#### Check out the example on how to publish custom metrics in GoFr: [Visit GitHub](https://github.com/gofr-dev/gofr/blob/main/examples/using-custom-metrics/main.go)
+
+> #### Check out the example on how to publish custom metrics in GoFr: [Visit GitHub](https://github.com/gofr-dev/gofr/blob/main/examples/using-custom-metrics/main.go)
