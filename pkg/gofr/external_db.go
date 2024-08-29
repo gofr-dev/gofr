@@ -25,6 +25,18 @@ func (a *App) AddFTP(fs file.FileSystemProvider) {
 	a.container.File = fs
 }
 
+// AddS3 sets the S3 bucket in the app's container.
+// Note: Current implementation of S3 supports general-purpose buckets
+// and do not allow changing the bucket in the configs.
+func (a *App) AddS3(fs file.FileSystemProvider) {
+	fs.UseLogger(a.Logger())
+	fs.UseMetrics(a.Metrics())
+
+	fs.Connect()
+
+	a.container.File = fs
+}
+
 // AddClickhouse initializes the clickhouse client.
 // Official implementation is available in the package : gofr.dev/pkg/gofr/datasource/clickhouse .
 func (a *App) AddClickhouse(db container.ClickhouseProvider) {
