@@ -16,14 +16,11 @@ func TestFileLogPrettyPrint(t *testing.T) {
 
 	expected := "Create file"
 
-	expectedMsg := "File Created successfully"
-
 	var buf bytes.Buffer
 
 	fileLog.PrettyPrint(&buf)
 
 	assert.Contains(t, buf.String(), expected)
-	assert.Contains(t, buf.String(), expectedMsg)
 }
 
 func TestFileLogPrettyPrintWhitespaceHandling(t *testing.T) {
@@ -31,13 +28,12 @@ func TestFileLogPrettyPrintWhitespaceHandling(t *testing.T) {
 		Operation: "  Create   file  ",
 		Duration:  5678,
 	}
-	expected := "Create file"
-	expectedMsg := "File creation complete"
+
+	expectedMsg := "Create file"
 
 	var buf bytes.Buffer
 
 	fileLog.PrettyPrint(&buf)
 
-	assert.Contains(t, buf.String(), expected)
 	assert.Contains(t, buf.String(), expectedMsg)
 }

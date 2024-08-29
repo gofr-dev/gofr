@@ -28,6 +28,8 @@ func getMocks(t *testing.T) (fileSystem, mocks) {
 	mockMetrics := NewMockMetrics(ctrl)
 	mockFile := File.NewMockFile(ctrl)
 
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+
 	client := fileSystem{logger: mockLogger, metrics: mockMetrics, client: mockClient}
 
 	return client, mocks{
@@ -129,12 +131,12 @@ func TestFiles_Rename(t *testing.T) {
 		{"directory rename failed", errors.New("failed to create file")},
 	}
 
-	for _, tc := range testCases {
+	for i, tc := range testCases {
 		mocks.client.EXPECT().Rename("test.csv", "new_test.csv").Return(tc.err)
 
 		err := files.Rename("test.csv", "new_test.csv")
 
-		require.Equal(t, tc.err, err, "TEST[%d] Failed. Desc %v")
+		require.Equal(t, tc.err, err, "TEST[%d] Failed. Desc %v", i, tc.desc)
 	}
 }
 
@@ -160,20 +162,20 @@ func TestFiles_GetWd(t *testing.T) {
 		{"directory rename failed", "", errors.New("failed to create file")},
 	}
 
-	for _, tc := range testCases {
+	for i, tc := range testCases {
 		mocks.client.EXPECT().Getwd().Return(tc.name, tc.err)
 
 		name, err := files.Getwd()
 
-		require.Equal(t, tc.name, name, "TEST[%d] Failed. Desc %v")
-		require.Equal(t, tc.err, err, "TEST[%d] Failed. Desc %v")
+		require.Equal(t, tc.name, name, "TEST[%d] Failed. Desc %v", i, tc.desc)
+		require.Equal(t, tc.err, err, "Test[%d] Failed.\n DESC %v", i, tc.desc)
 	}
 }
 
 func TestFiles_Create(t *testing.T) {
 	client, mocks := getMocks(t)
 
-	sftpFile := sftp.File{}
+	mockSftpFile := sftp.File{}
 
 	testCases := []struct {
 		desc     string
@@ -181,24 +183,24 @@ func TestFiles_Create(t *testing.T) {
 		expFile  File.File
 		expError error
 	}{
-		{"File Created Successfully", "text.csv", file{File: &sftpFile, logger: mocks.logger}, nil},
+		{"File Created Successfully", "text.csv", sftpFile{File: &mockSftpFile, logger: mocks.logger}, nil},
 		{"File Creation Failed", "text.csv", nil, errors.New("File Creation Failed")},
 	}
 
-	for _, tc := range testCases {
-		mocks.client.EXPECT().Create(tc.name).Return(&sftpFile, tc.expError)
+	for i, tc := range testCases {
+		mocks.client.EXPECT().Create(tc.name).Return(&mockSftpFile, tc.expError)
 
 		createdFile, err := client.Create(tc.name)
 
-		require.Equal(t, tc.expFile, createdFile)
-		require.Equal(t, tc.expError, err)
+		require.Equal(t, tc.expFile, createdFile, "Test[%d] Failed.\n DESC %v", i, tc.desc)
+		require.Equal(t, tc.expError, err, "Test[%d] Failed.\n DESC %v", i, tc.desc)
 	}
 }
 
 func TestFiles_Open(t *testing.T) {
 	client, mocks := getMocks(t)
 
-	sftpFile := sftp.File{}
+	mockSftpFile := sftp.File{}
 
 	testCases := []struct {
 		desc     string
@@ -206,24 +208,24 @@ func TestFiles_Open(t *testing.T) {
 		expFile  File.File
 		expError error
 	}{
-		{"File Opened Successfully", "text.csv", file{File: &sftpFile, logger: mocks.logger}, nil},
+		{"File Opened Successfully", "text.csv", sftpFile{File: &mockSftpFile, logger: mocks.logger}, nil},
 		{"File Open Failed", "text.csv", nil, errors.New("File Creation Failed")},
 	}
 
-	for _, tc := range testCases {
-		mocks.client.EXPECT().Open(tc.name).Return(&sftpFile, tc.expError)
+	for i, tc := range testCases {
+		mocks.client.EXPECT().Open(tc.name).Return(&mockSftpFile, tc.expError)
 
-		createdFile, err := client.Open(tc.name)
+		openedFile, err := client.Open(tc.name)
 
-		require.Equal(t, tc.expFile, createdFile)
-		require.Equal(t, tc.expError, err)
+		require.Equal(t, tc.expFile, openedFile, "Test[%d] Failed.\n DESC %v", i, tc.desc)
+		require.Equal(t, tc.expError, err, "Test[%d] Failed.\n DESC %v", i, tc.desc)
 	}
 }
 
 func TestFiles_OpenFile(t *testing.T) {
 	client, mocks := getMocks(t)
 
-	sftpFile := sftp.File{}
+	mockSftpFile := sftp.File{}
 
 	testCases := []struct {
 		desc     string
@@ -231,17 +233,17 @@ func TestFiles_OpenFile(t *testing.T) {
 		expFile  File.File
 		expError error
 	}{
-		{"File Opened Successfully", "text.csv", file{File: &sftpFile, logger: mocks.logger}, nil},
+		{"File Opened Successfully", "text.csv", sftpFile{File: &mockSftpFile, logger: mocks.logger}, nil},
 		{"File Open Failed", "text.csv", nil, errors.New("File Creation Failed")},
 	}
 
-	for _, tc := range testCases {
-		mocks.client.EXPECT().OpenFile(tc.name, 0).Return(&sftpFile, tc.expError)
+	for i, tc := range testCases {
+		mocks.client.EXPECT().OpenFile(tc.name, 0).Return(&mockSftpFile, tc.expError)
 
 		createdFile, err := client.OpenFile(tc.name, 0, 0)
 
-		require.Equal(t, tc.expFile, createdFile)
-		require.Equal(t, tc.expError, err)
+		require.Equal(t, tc.expFile, createdFile, "Test[%d] Failed.\n DESC %v", i, tc.desc)
+		require.Equal(t, tc.expError, err, "Test[%d] Failed.\n DESC %v", i, tc.desc)
 	}
 }
 
@@ -265,13 +267,13 @@ func TestFiles_ReadDir(t *testing.T) {
 		{"Dir Read Failed", "text.csv", nil, errors.New("File Creation Failed")},
 	}
 
-	for _, tc := range testCases {
+	for i, tc := range testCases {
 		mocks.client.EXPECT().ReadDir(tc.name).Return(osFile, tc.expError)
 
 		createdFile, err := client.ReadDir(tc.name)
 
-		require.Equal(t, tc.expFile, createdFile)
-		require.Equal(t, tc.expError, err)
+		require.Equal(t, tc.expFile, createdFile, "Test[%d] Failed.\n DESC %v", i, tc.desc)
+		require.Equal(t, tc.expError, err, "Test[%d] Failed.\n DESC %v", i, tc.desc)
 	}
 }
 
@@ -293,12 +295,12 @@ func TestFiles_Stat(t *testing.T) {
 		{"File Stat Fetch Failed", "text.csv", nil, errors.New("File Creation Failed")},
 	}
 
-	for _, tc := range testCases {
+	for i, tc := range testCases {
 		mocks.client.EXPECT().Stat(tc.name).Return(info, tc.expError)
 
 		createdFile, err := client.Stat(tc.name)
 
-		require.Equal(t, tc.expFile, createdFile)
-		require.Equal(t, tc.expError, err)
+		require.Equal(t, tc.expFile, createdFile, "Test[%d] Failed.\n DESC %v", i, tc.desc)
+		require.Equal(t, tc.expError, err, "Test[%d] Failed.\n DESC %v", i, tc.desc)
 	}
 }

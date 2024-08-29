@@ -8,12 +8,12 @@ import (
 	"strings"
 
 	"github.com/pkg/sftp"
-	File "gofr.dev/pkg/gofr/datasource/file"
+	"gofr.dev/pkg/gofr/datasource/file"
 )
 
-var errNotPointer = errors.New("input should be a pointer to a string")
+var errNotStringPointer = errors.New("input should be a pointer to a string")
 
-type file struct {
+type sftpFile struct {
 	*sftp.File
 	logger Logger
 }
@@ -49,7 +49,7 @@ type jsonReader struct {
 //		    var content string
 //		    reader.Scan(&u)
 //	}
-func (f file) ReadAll() (File.RowReader, error) {
+func (f sftpFile) ReadAll() (file.RowReader, error) {
 	if strings.HasSuffix(f.File.Name(), ".json") {
 		return f.createJSONReader()
 	}
@@ -58,7 +58,7 @@ func (f file) ReadAll() (File.RowReader, error) {
 }
 
 // Factory method to create the appropriate JSON reader.
-func (f file) createJSONReader() (File.RowReader, error) {
+func (f sftpFile) createJSONReader() (file.RowReader, error) {
 	decoder := json.NewDecoder(f.File)
 
 	token, err := f.peekJSONToken(decoder)
@@ -77,7 +77,7 @@ func (f file) createJSONReader() (File.RowReader, error) {
 }
 
 // Peek the first JSON token to determine its type.
-func (file) peekJSONToken(decoder *json.Decoder) (json.Token, error) {
+func (sftpFile) peekJSONToken(decoder *json.Decoder) (json.Token, error) {
 	newDecoder := *decoder
 
 	token, err := newDecoder.Token()
@@ -89,7 +89,7 @@ func (file) peekJSONToken(decoder *json.Decoder) (json.Token, error) {
 }
 
 // Create a JSON reader for a JSON object.
-func (f file) createJSONObjectReader() (File.RowReader, error) {
+func (f sftpFile) createJSONObjectReader() (file.RowReader, error) {
 	name := f.File.Name()
 
 	if err := f.File.Close(); err != nil {
@@ -108,7 +108,7 @@ func (f file) createJSONObjectReader() (File.RowReader, error) {
 	return &jsonReader{decoder: decoder}, nil
 }
 
-func (f file) createTextCSVReader() File.RowReader {
+func (f sftpFile) createTextCSVReader() file.RowReader {
 	return &textReader{
 		scanner: bufio.NewScanner(f.File),
 		logger:  f.logger,
@@ -132,11 +132,14 @@ func (f textReader) Next() bool {
 
 // Scan binds the line to provided pointer to string.
 func (f textReader) Scan(i interface{}) error {
+	// Use a type switch to check if the provided interface is a pointer to a string.
 	switch target := i.(type) {
 	case *string:
+		// If the interface is indeed a pointer to a string, assign the text from the scanner to it.
 		*target = f.scanner.Text()
 		return nil
 	default:
-		return errNotPointer
+		// If the interface is not a pointer to a string, return an error.
+		return errNotStringPointer
 	}
 }

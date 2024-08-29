@@ -20,10 +20,11 @@ type fileSystem struct {
 }
 
 type Config struct {
-	User     string
-	Password string
-	Host     string
-	Port     int
+	User            string
+	Password        string
+	Host            string
+	Port            int
+	HostKeyCallBack ssh.HostKeyCallback
 }
 
 func New(cfg Config) *fileSystem {
@@ -53,7 +54,7 @@ func (f *fileSystem) Connect() {
 	config := &ssh.ClientConfig{
 		User:            f.config.User,
 		Auth:            []ssh.AuthMethod{ssh.Password(f.config.Password)},
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(), //nolint:gosec // using InsecureIgnoreHostKey to accept any host key
+		HostKeyCallback: f.config.HostKeyCallBack,
 	}
 
 	conn, err := ssh.Dial("tcp", addr, config)
@@ -87,7 +88,7 @@ func (f *fileSystem) Create(name string) (File.File, error) {
 
 	status = "SUCCESS"
 
-	return file{
+	return sftpFile{
 		File:   newFile,
 		logger: f.logger,
 	}, nil
@@ -133,7 +134,7 @@ func (f *fileSystem) Open(name string) (File.File, error) {
 		return nil, err
 	}
 
-	return file{
+	return sftpFile{
 		File:   openedFile,
 		logger: f.logger,
 	}, nil
@@ -151,7 +152,7 @@ func (f *fileSystem) OpenFile(name string, flag int, perm os.FileMode) (File.Fil
 		return nil, err
 	}
 
-	return file{
+	return sftpFile{
 		File:   openedFile,
 		logger: f.logger,
 	}, nil
