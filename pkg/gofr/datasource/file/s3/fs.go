@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"mime"
 	"os"
 	"path"
@@ -17,6 +16,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+
 	file_interface "gofr.dev/pkg/gofr/datasource/file"
 )
 
@@ -62,10 +62,11 @@ func (f *fileSystem) UseMetrics(metrics interface{}) {
 func (f *fileSystem) Connect() {
 	var msg string
 	st := "ERROR"
+	location := path.Join(string(filepath.Separator), f.config.BucketName)
 
 	defer f.sendOperationStats(&FileLog{
-		Operation: "Connect",
-		Location:  "/",
+		Operation: "CONNECT",
+		Location:  location,
 		Status:    &st,
 		Message:   &msg,
 	}, time.Now())
@@ -81,7 +82,7 @@ func (f *fileSystem) Connect() {
 	)
 
 	if err != nil {
-		log.Fatal("failed to load configuration", err)
+		f.logger.Errorf("Failed to load configuration", err)
 	}
 
 	// Create the S3 client from config
@@ -95,6 +96,7 @@ func (f *fileSystem) Connect() {
 	f.conn = s3Client
 	st = "SUCCESS"
 	msg = "S3 Client connected."
+	f.logger.Logf("Connected to S3 bucket %s", f.config.BucketName)
 }
 
 // if no extension is given by default it sets content-type to octet-stream.
@@ -109,11 +111,16 @@ func (f *fileSystem) Create(name string) (file_interface.File, error) {
 
 	location := path.Join(string(filepath.Separator), f.config.BucketName)
 
-	defer f.sendOperationStats(&FileLog{Operation: "Create", Location: location, Status: &st, Message: &msg}, time.Now())
+	defer f.sendOperationStats(&FileLog{
+		Operation: "CREATE FILE",
+		Location:  location,
+		Status:    &st,
+		Message:   &msg,
+	}, time.Now())
 
 	parentPath := path.Dir(name)
 
-	// if parenPath is not empty, we check if it exists or not.
+	// if parentPath is not empty, we check if it exists or not.
 	if parentPath != "." {
 		res2, err := f.conn.ListObjectsV2(context.TODO(), &s3.ListObjectsV2Input{
 			Bucket: aws.String(f.config.BucketName),
@@ -125,6 +132,7 @@ func (f *fileSystem) Create(name string) (file_interface.File, error) {
 		}
 
 		if len(res2.Contents) == 0 {
+			f.logger.Errorf("Parentpath %q does not exist", parentPath)
 			return nil, errors.New("create parent path before creating a file")
 		}
 	}
@@ -139,7 +147,7 @@ func (f *fileSystem) Create(name string) (file_interface.File, error) {
 	})
 
 	if err != nil {
-		//f.logger.Errorf("Failed to create the file: %v", err)
+		f.logger.Errorf("Failed to create the file: %v", err)
 		return nil, err
 	}
 
@@ -178,7 +186,12 @@ func (f *fileSystem) Remove(name string) error {
 
 	location := path.Join(string(filepath.Separator), f.config.BucketName)
 
-	defer f.sendOperationStats(&FileLog{Operation: "Remove", Location: location, Status: &st, Message: &msg}, time.Now())
+	defer f.sendOperationStats(&FileLog{
+		Operation: "REMOVE FILE",
+		Location:  location,
+		Status:    &st,
+		Message:   &msg,
+	}, time.Now())
 
 	_, err := f.conn.DeleteObject(context.TODO(), &s3.DeleteObjectInput{
 		Bucket: aws.String(f.config.BucketName),
@@ -201,7 +214,13 @@ func (f *fileSystem) Open(name string) (file_interface.File, error) {
 	st := "ERROR"
 
 	location := path.Join(string(filepath.Separator), f.config.BucketName)
-	f.sendOperationStats(&FileLog{Operation: "Open", Location: location, Status: &st, Message: &msg}, time.Now())
+
+	defer f.sendOperationStats(&FileLog{
+		Operation: "OPEN FILE",
+		Location:  location,
+		Status:    &st,
+		Message:   &msg,
+	}, time.Now())
 
 	res, err := f.conn.GetObject(context.TODO(), &s3.GetObjectInput{
 		Bucket: aws.String(f.config.BucketName),
@@ -212,8 +231,9 @@ func (f *fileSystem) Open(name string) (file_interface.File, error) {
 		f.logger.Errorf("Failed to retrieve %q: %v", name, err)
 		return nil, err
 	}
+
 	st = "SUCCESS"
-	msg = fmt.Sprintf("File  with path %q retrieved successfully.", name)
+	msg = fmt.Sprintf("File with path %q retrieved successfully.", name)
 
 	return &file{
 		conn:         f.conn,
@@ -233,7 +253,7 @@ func (f *fileSystem) OpenFile(name string, flag int, perm os.FileMode) (file_int
 	return f.Open(name)
 }
 
-func (f *fileSystem) renameDirectory(st *string, oldPath, newPath string) error {
+func (f *fileSystem) renameDirectory(st *string, msg *string, oldPath, newPath string) error {
 	entries, err := f.conn.ListObjectsV2(context.TODO(), &s3.ListObjectsV2Input{
 		Bucket: aws.String(f.config.BucketName),
 		Prefix: aws.String(oldPath + "/"),
@@ -255,6 +275,7 @@ func (f *fileSystem) renameDirectory(st *string, oldPath, newPath string) error 
 		})
 
 		if err != nil {
+			*msg = fmt.Sprintf("Failed to copy objects to directory %q", newPath)
 			return err
 		}
 	}
@@ -262,10 +283,13 @@ func (f *fileSystem) renameDirectory(st *string, oldPath, newPath string) error 
 	// deleting objects
 	err = f.RemoveAll(oldPath)
 	if err != nil {
+		*msg = fmt.Sprintf("Failed to remove old objects from the directories %q", oldPath)
 		return err
 	}
 
 	*st = "SUCCESS"
+	*msg = fmt.Sprintf("Directory with path %q successfully renamed to %q", oldPath, newPath)
+
 	return nil
 }
 
@@ -275,16 +299,21 @@ func (f *fileSystem) Rename(oldname, newname string) error {
 
 	location := path.Join(string(filepath.Separator), f.config.BucketName)
 
-	defer f.sendOperationStats(&FileLog{Operation: "Remove", Location: location, Status: &st, Message: &msg}, time.Now())
+	defer f.sendOperationStats(&FileLog{
+		Operation: "RENAME",
+		Location:  location,
+		Status:    &st,
+		Message:   &msg,
+	}, time.Now())
 
 	// check if it is a directory
 	if path.Ext(oldname) == "" {
-		return f.renameDirectory(&st, oldname, newname)
+		return f.renameDirectory(&st, &msg, oldname, newname)
 	}
 
 	// if it is a file , check if both exist at same location or not
 	if path.Dir(oldname) != path.Dir(newname) {
-		f.logger.Errorf("%q & %q are not in same location.", oldname, newname)
+		f.logger.Errorf("%q & %q are not in same location", oldname, newname)
 		return errors.New("renaming as well as moving file to different location is not allowed")
 	}
 
@@ -302,8 +331,9 @@ func (f *fileSystem) Rename(oldname, newname string) error {
 
 	_, err := f.conn.CopyObject(context.TODO(), &s3.CopyObjectInput{
 		Bucket: aws.String(f.config.BucketName),
-		// The source object can be up to 5 GB. If the source object is an object that was uploaded by using a multipart upload,
-		// the object copy will be a single part object after the source object is copied to the destination bucket.
+		// The source object can be up to 5 GB.
+		// If the source object is an object that was uploaded by using a multipart upload, the object copy
+		// will be a single part object after the source object is copied to the destination bucket.
 		CopySource:         aws.String(f.config.BucketName + "/" + oldname),
 		Key:                aws.String(newname),
 		ContentType:        aws.String(mime.TypeByExtension(path.Ext(newname))),
@@ -311,19 +341,20 @@ func (f *fileSystem) Rename(oldname, newname string) error {
 	})
 
 	if err != nil {
-		f.logger.Errorf("Error while copying file: %v", err)
+		msg = fmt.Sprintf("Error while copying file: %v", err)
 		return err
 	}
 
 	err = f.Remove(oldname)
 	if err != nil {
-		f.logger.Errorf("failed to remove old file %s", oldname)
+		msg = fmt.Sprintf("failed to remove old file %s", oldname)
 		return err
 	}
 
 	st = "SUCCESS"
-	msg = "File rename successfully"
-	f.logger.Logf("File %s renames to %s.", oldname, newname)
+	msg = "File renamed successfully"
+
+	f.logger.Logf("File with path %q renamed to %q", oldname, newname)
 	return nil
 }
 
@@ -333,7 +364,12 @@ func (f *fileSystem) Stat(name string) (file_interface.FileInfo, error) {
 
 	location := path.Join(string(filepath.Separator), f.config.BucketName)
 
-	defer f.sendOperationStats(&FileLog{Operation: "Stat", Location: location, Status: &st, Message: &msg}, time.Now())
+	defer f.sendOperationStats(&FileLog{
+		Operation: "STAT",
+		Location:  location,
+		Status:    &st,
+		Message:   &msg,
+	}, time.Now())
 
 	filetype := "file"
 
@@ -367,7 +403,7 @@ func (f *fileSystem) Stat(name string) (file_interface.FileInfo, error) {
 
 		// directory exist and first value gives information about the directory
 		st = "SUCCESS"
-		msg = "Directory info retrieved successfully"
+		msg = fmt.Sprintf("Directory with path %q info retrieved successfully", name)
 
 		if res.Contents != nil {
 			return &file{
@@ -375,7 +411,7 @@ func (f *fileSystem) Stat(name string) (file_interface.FileInfo, error) {
 				logger:       f.logger,
 				metrics:      f.metrics,
 				size:         size,
-				name:         *res.Contents[0].Key,
+				name:         path.Join(f.config.BucketName, *res.Contents[0].Key),
 				lastModified: lastModified,
 			}, nil
 		}
@@ -387,7 +423,7 @@ func (f *fileSystem) Stat(name string) (file_interface.FileInfo, error) {
 		logger:       f.logger,
 		metrics:      f.metrics,
 		size:         *res.Contents[0].Size,
-		name:         *res.Contents[0].Key,
+		name:         path.Join(f.config.BucketName, *res.Contents[0].Key),
 		lastModified: *res.Contents[0].LastModified,
 	}, nil
 

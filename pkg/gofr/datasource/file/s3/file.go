@@ -7,9 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/service/s3"
-	file_interface "gofr.dev/pkg/gofr/datasource/file"
 	"io"
 	"mime"
 	"os"
@@ -17,6 +14,11 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+
+	file_interface "gofr.dev/pkg/gofr/datasource/file"
 )
 
 type file struct {
@@ -52,14 +54,17 @@ type jsonReader struct {
 // ReadAll reads either JSON or text files based on file extension and returns a corresponding RowReader.
 func (f *file) ReadAll() (file_interface.RowReader, error) {
 	bucketName := strings.Split(f.name, string(filepath.Separator))[0]
+
 	var fileName string
+
 	index := strings.Index(f.name, string(filepath.Separator))
 	if index != -1 {
 		fileName = f.name[index+1:]
 	}
 
 	location := path.Join(bucketName, fileName)
-	defer f.sendOperationStats(&FileLog{Operation: "ReadAll", Location: location}, time.Now())
+
+	defer f.sendOperationStats(&FileLog{Operation: "READALL", Location: location}, time.Now())
 
 	if strings.HasSuffix(f.Name(), ".json") {
 		return f.createJSONReader(location)
@@ -72,7 +77,7 @@ func (f *file) ReadAll() (file_interface.RowReader, error) {
 func (f *file) createJSONReader(location string) (file_interface.RowReader, error) {
 	status := "ERROR"
 
-	defer f.sendOperationStats(&FileLog{Operation: "JSON Reader", Location: location, Status: &status}, time.Now())
+	defer f.sendOperationStats(&FileLog{Operation: "JSON READER", Location: location, Status: &status}, time.Now())
 
 	buffer, err := io.ReadAll(f.body)
 	if err != nil {
@@ -89,12 +94,12 @@ func (f *file) createJSONReader(location string) (file_interface.RowReader, erro
 	// decode again if we are decoding a json object instead of array
 	token, err := decoder.Token()
 	if err != nil {
+		f.logger.Errorf("Error decoding token : %v", err)
 		return nil, err
 	}
 
 	if d, ok := token.(json.Delim); ok && d == '[' {
 		status = "SUCCESS"
-
 		return &jsonReader{decoder: decoder, token: token}, err
 	}
 
@@ -109,7 +114,7 @@ func (f *file) createJSONReader(location string) (file_interface.RowReader, erro
 func (f *file) createTextCSVReader(location string) (file_interface.RowReader, error) {
 	status := "ERROR"
 
-	defer f.sendOperationStats(&FileLog{Operation: "Text/CSV Reader", Location: location, Status: &status}, time.Now())
+	defer f.sendOperationStats(&FileLog{Operation: "TEXT/CSV READER", Location: location, Status: &status}, time.Now())
 
 	buffer, err := io.ReadAll(f.body)
 	if err != nil {
@@ -152,22 +157,45 @@ func (f *textReader) Scan(i interface{}) error {
 }
 
 func (f *file) Name() string {
+	bucketName := strings.Split(f.name, string(filepath.Separator))[0]
+	location := path.Join(string(filepath.Separator), bucketName)
+
+	defer f.sendOperationStats(&FileLog{Operation: "GET NAME", Location: location}, time.Now())
+
 	return path.Base(f.name)
 }
 
 func (f *file) Mode() os.FileMode {
+	bucketName := strings.Split(f.name, string(filepath.Separator))[0]
+	location := path.Join(string(filepath.Separator), bucketName)
+
+	defer f.sendOperationStats(&FileLog{Operation: "FILE MODE", Location: location, Message: aws.String("not supported for S3")}, time.Now())
+
 	return os.ModePerm
 }
 
 func (f *file) Size() int64 {
+	bucketName := strings.Split(f.name, string(filepath.Separator))[0]
+	location := path.Join(string(filepath.Separator), bucketName)
+
+	defer f.sendOperationStats(&FileLog{Operation: "FILE/DIR SIZE", Location: location}, time.Now())
 	return f.size
 }
 
 func (f *file) ModTime() time.Time {
+	bucketName := strings.Split(f.name, string(filepath.Separator))[0]
+	location := path.Join(string(filepath.Separator), bucketName)
+
+	defer f.sendOperationStats(&FileLog{Operation: "LAST MODIFIED", Location: location}, time.Now())
 	return f.lastModified
 }
 
 func (f *file) IsDir() bool {
+	bucketName := strings.Split(f.name, string(filepath.Separator))[0]
+	location := path.Join(string(filepath.Separator), bucketName)
+
+	defer f.sendOperationStats(&FileLog{Operation: "IS DIR", Location: location}, time.Now())
+
 	if f.name[len(f.name)-1] == '/' {
 		return true
 	}
@@ -176,6 +204,11 @@ func (f *file) IsDir() bool {
 }
 
 func (f *file) Close() error {
+	bucketName := strings.Split(f.name, string(filepath.Separator))[0]
+	location := path.Join(string(filepath.Separator), bucketName)
+
+	defer f.sendOperationStats(&FileLog{Operation: "CLOSE", Location: location}, time.Now())
+
 	if f.body != nil {
 		return f.body.Close()
 	}
@@ -185,11 +218,18 @@ func (f *file) Close() error {
 
 func (f *file) Read(p []byte) (n int, err error) {
 	bucketName := strings.Split(f.name, string(filepath.Separator))[0]
-	var fileName string
+	location := path.Join(string(filepath.Separator), bucketName)
+
+	var fileName, msg string
+
 	index := strings.Index(f.name, string(filepath.Separator))
 	if index != -1 {
 		fileName = f.name[index+1:]
 	}
+
+	st := "ERROR"
+
+	defer f.sendOperationStats(&FileLog{Operation: "READ", Location: location, Status: &st, Message: &msg}, time.Now())
 
 	res, err := f.conn.GetObject(context.TODO(), &s3.GetObjectInput{
 		Bucket: aws.String(bucketName),
@@ -197,18 +237,21 @@ func (f *file) Read(p []byte) (n int, err error) {
 	})
 
 	if err != nil {
-		f.logger.Errorf("Failed to retrieve %q: %v", fileName, err)
+		msg = fmt.Sprintf("Failed to retrieve %q: %v", fileName, err)
 		return 0, err
 	}
 
 	f.body = res.Body
 	if f.body == nil {
+		msg = fmt.Sprintf("File %q is nil", fileName)
 		return 0, errors.New("S3 body is nil")
 	}
 
 	b := make([]byte, len(p)+int(f.offset))
+
 	n, err = f.body.Read(b)
 	if err != nil && err != io.EOF {
+		f.logger.Errorf("Error reading file %q: %v", fileName, err)
 		return n, err
 	}
 
@@ -217,12 +260,23 @@ func (f *file) Read(p []byte) (n int, err error) {
 
 	f.offset += int64(len(b))
 
+	st = "SUCCESS"
+	msg = fmt.Sprintf("Read %v bytes from file at path %q in bucket %q", n, fileName, bucketName)
+
+	f.logger.Logf("%v bytes read successfully)", len(p))
+
 	return len(p), err
 }
 
 func (f *file) ReadAt(p []byte, offset int64) (n int, err error) {
 	bucketName := strings.Split(f.name, string(filepath.Separator))[0]
-	var fileName string
+	location := path.Join(string(filepath.Separator), bucketName)
+
+	var fileName, msg string
+	st := "ERROR"
+
+	defer f.sendOperationStats(&FileLog{Operation: "READAT", Location: location, Status: &st, Message: &msg}, time.Now())
+
 	index := strings.Index(f.name, string(filepath.Separator))
 	if index != -1 {
 		fileName = f.name[index+1:]
@@ -234,20 +288,23 @@ func (f *file) ReadAt(p []byte, offset int64) (n int, err error) {
 	})
 
 	if err != nil {
-		f.logger.Errorf("Failed to retrieve %q: %v", fileName, err)
+		msg = fmt.Sprintf("Failed to retrieve file %q: %v", fileName, err)
 		return 0, err
 	}
 
 	f.body = res.Body
 	if f.body == nil {
-		return 0, errors.New("S3 body is nil")
+		msg = fmt.Sprintf("File %q is nil", fileName)
+		return 0, io.EOF
 	}
 
 	if int64(len(p))+offset+1 > f.size {
+		msg = fmt.Sprintf("Offset %v out of range", f.offset)
 		return 0, errors.New("reading out of range, fetching from offset. Use Seek to rest offset")
 	}
 
 	b := make([]byte, len(p)+int(offset)+1)
+
 	n, err = f.body.Read(b)
 	if err != nil && err != io.EOF {
 		return n, err
@@ -256,12 +313,22 @@ func (f *file) ReadAt(p []byte, offset int64) (n int, err error) {
 	b = b[offset:]
 	copy(p, b)
 
+	st = "SUCCESS"
+	msg = fmt.Sprintf("Read %v bytes at an offset of %v from file at path %q in bucket %q", n, offset, fileName, bucketName)
+
+	f.logger.Logf("%v bytes read successfully.")
 	return len(p), nil
 }
 
 func (f *file) Write(p []byte) (n int, err error) {
 	bucketName := strings.Split(f.name, string(filepath.Separator))[0]
-	var fileName string
+	location := path.Join(string(filepath.Separator), bucketName)
+
+	var fileName, msg string
+	st := "ERROR"
+
+	defer f.sendOperationStats(&FileLog{Operation: "WRITE", Location: location, Status: &st, Message: &msg}, time.Now())
+
 	index := strings.Index(f.name, string(filepath.Separator))
 	if index != -1 {
 		fileName = f.name[index+1:]
@@ -276,7 +343,7 @@ func (f *file) Write(p []byte) (n int, err error) {
 		})
 
 		if err != nil {
-			f.logger.Errorf("Failed to retrieve %q: %v", fileName, err)
+			msg = fmt.Sprintf("Failed to retrieve file %q: %v", fileName, err)
 			return 0, err
 		}
 
@@ -305,18 +372,29 @@ func (f *file) Write(p []byte) (n int, err error) {
 	})
 
 	if err != nil {
+		msg = fmt.Sprintf("Fsiled to put file %q: %v", fileName, err)
 		return 0, err
 	}
 
 	f.offset += int64(len(p))
 	f.size = int64(len(buffer))
 
+	st = "SUCCESS"
+	msg = fmt.Sprintf("Wrote %v bytes to file at path %q in bucket %q", n, fileName, bucketName)
+
+	f.logger.Logf("%v bytes written successfully", len(p))
 	return len(p), nil
 }
 
 func (f *file) WriteAt(p []byte, offset int64) (n int, err error) {
 	bucketName := strings.Split(f.name, string(filepath.Separator))[0]
-	var fileName string
+	location := path.Join(string(filepath.Separator), bucketName)
+
+	var fileName, msg string
+	st := "ERROR"
+
+	defer f.sendOperationStats(&FileLog{Operation: "WRITEAT", Location: location, Status: &st, Message: &msg}, time.Now())
+
 	index := strings.Index(f.name, string(filepath.Separator))
 	if index != -1 {
 		fileName = f.name[index+1:]
@@ -328,7 +406,7 @@ func (f *file) WriteAt(p []byte, offset int64) (n int, err error) {
 	})
 
 	if err != nil {
-		f.logger.Errorf("Failed to retrieve %q: %v", fileName, err)
+		msg = fmt.Sprintf("Failed to retrieve file %q: %v", fileName, err)
 		return 0, err
 	}
 
@@ -350,15 +428,19 @@ func (f *file) WriteAt(p []byte, offset int64) (n int, err error) {
 	})
 
 	if err != nil {
+		msg = fmt.Sprintf("Failed to put file %q: %v", fileName, err)
 		return 0, err
 	}
 
 	f.size = int64(len(buffer))
 
+	st = "SUCCESS"
+	msg = fmt.Sprintf("Wrote %v bytes at an offset of %v to file at path %q in bucket %q", n, offset, fileName, bucketName)
+
 	return len(p), nil
 }
 
-func (f *file) check(whence int, offset, length int64) (int64, error) {
+func (f *file) check(whence int, offset, length int64, msg *string) (int64, error) {
 	switch whence {
 	case io.SeekStart:
 	case io.SeekEnd:
@@ -370,6 +452,7 @@ func (f *file) check(whence int, offset, length int64) (int64, error) {
 	}
 
 	if offset < 0 || offset > length {
+		*msg = fmt.Sprintf("Offset %v out of bounds %v", offset, length)
 		return 0, ErrOutOfRange
 	}
 
@@ -381,21 +464,21 @@ func (f *file) check(whence int, offset, length int64) (int64, error) {
 // Seek sets the offset for the next Read/ Write operations.
 func (f *file) Seek(offset int64, whence int) (int64, error) {
 	var msg string
-
 	status := "ERROR"
 
-	defer f.sendOperationStats(&FileLog{Operation: "Seek", Location: f.name, Status: &status, Message: &msg}, time.Now())
+	defer f.sendOperationStats(&FileLog{Operation: "SEEK", Location: f.name, Status: &status, Message: &msg}, time.Now())
 
 	n := f.Size()
-	res, err := f.check(whence, offset, n)
+	res, err := f.check(whence, offset, n, &msg)
 	if err != nil {
-		f.logger.Errorf("Seek failed : Error : %v", err)
+		f.logger.Errorf("Seek failed. Error : %v", err)
 		return 0, err
 	}
 
 	status = "SUCCESS"
-	msg = fmt.Sprintf("Offset set to %v for file at path %q", res, f.name)
+	msg = fmt.Sprintf("Offset set to %v for file with path %q", res, f.name)
 
+	f.logger.Logf("Set file offset at %v", f.offset)
 	return res, nil
 }
 

@@ -3,12 +3,14 @@ package s3
 import (
 	"context"
 	"errors"
-	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"fmt"
 	"os"
 	"path"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -23,7 +25,7 @@ func (f *fileSystem) Mkdir(name string, perm os.FileMode) error {
 	location := path.Join(string(filepath.Separator), f.config.BucketName)
 
 	defer f.sendOperationStats(&FileLog{
-		Operation: "MkDirAll",
+		Operation: "MKDIR",
 		Location:  location,
 		Status:    &st,
 		Message:   &msg,
@@ -40,13 +42,15 @@ func (f *fileSystem) Mkdir(name string, perm os.FileMode) error {
 		})
 
 		if err != nil {
+			msg = fmt.Sprintf("failed to create directory %q on s3: %v", currentdir, err)
 			return err
 		}
 	}
 
 	st = "SUCCESS"
-	msg = "File created successfully"
+	msg = fmt.Sprintf("Directories on path %q created successfully", name)
 
+	f.logger.Logf("Created directories on path %q", name)
 	return nil
 }
 
@@ -61,7 +65,13 @@ func (f *fileSystem) RemoveAll(name string) error {
 
 	location := path.Join(string(filepath.Separator), f.config.BucketName)
 
-	defer f.sendOperationStats(&FileLog{Operation: "RemoveAll", Location: location, Status: &st, Message: &msg}, time.Now())
+	defer f.sendOperationStats(&FileLog{
+		Operation: "REMOVEALL",
+		Location:  location,
+		Status:    &st,
+		Message:   &msg,
+	}, time.Now())
+
 	if path.Ext(name) != "" {
 		f.logger.Errorf("RemoveAll supports deleting directories only. Use Remove instead.")
 		return errors.New("invalid argument type. Enter a valid directory name")
@@ -73,6 +83,7 @@ func (f *fileSystem) RemoveAll(name string) error {
 	})
 
 	if err != nil {
+		msg = fmt.Sprintf("Error retrieving objects: %v", err)
 		return err
 	}
 
@@ -97,13 +108,24 @@ func (f *fileSystem) RemoveAll(name string) error {
 	}
 
 	st = "SUCCESS"
-	msg = "Directory deletion on S3 successfull."
+	msg = fmt.Sprintf("Directory with path %q, deleted successfully", name)
+
 	f.logger.Logf("Directory %s deleted.", name)
 	return nil
 }
 
 func (f *fileSystem) ReadDir(name string) ([]file_interface.FileInfo, error) {
-	var filePath string
+	var filePath, msg string
+	st := "ERROR"
+
+	location := path.Join(string(filepath.Separator), f.config.BucketName)
+
+	defer f.sendOperationStats(&FileLog{
+		Operation: "READDIR",
+		Location:  location,
+		Status:    &st,
+		Message:   &msg,
+	}, time.Now())
 
 	if name == "." {
 		filePath = ""
@@ -117,6 +139,7 @@ func (f *fileSystem) ReadDir(name string) ([]file_interface.FileInfo, error) {
 	})
 
 	if err != nil {
+		msg = fmt.Sprintf("Error retrieving objects: %v", err)
 		return nil, err
 	}
 
@@ -147,16 +170,31 @@ func (f *fileSystem) ReadDir(name string) ([]file_interface.FileInfo, error) {
 			logger:       f.logger,
 			metrics:      f.metrics,
 			size:         *entries.Contents[i].Size,
-			name:         relativepath,
+			name:         path.Join(f.config.BucketName, *entries.Contents[i].Key),
 			lastModified: *entries.Contents[i].LastModified,
 		})
 	}
 
+	st = "SUCCESS"
+	msg = fmt.Sprintf("Directory/Files in directory with path %q retrived successfully", name)
+
+	f.logger.Logf("Reading directory/files from S3 at path %q successful.", name)
 	return fileInfo, nil
 }
 
 func (f *fileSystem) ChDir(_ string) error {
-	return errors.New("ChDir not implemented yet")
+	st := "ERROR"
+
+	location := path.Join(string(filepath.Separator), f.config.BucketName)
+
+	defer f.sendOperationStats(&FileLog{
+		Operation: "CHDIR",
+		Location:  location,
+		Status:    &st,
+		Message:   aws.String("Changing directory not supported"),
+	}, time.Now())
+
+	return errors.New("s3 does not support changing directories due to flat file structure")
 }
 
 // Getwd returns the absolute path of the file on S3.
@@ -164,7 +202,7 @@ func (f *fileSystem) Getwd() (string, error) {
 	status := "SUCCESS"
 
 	location := path.Join(string(filepath.Separator), f.config.BucketName)
-	f.sendOperationStats(&FileLog{Operation: "ChDir", Location: location, Status: &status}, time.Now())
+	f.sendOperationStats(&FileLog{Operation: "GETWD", Location: location, Status: &status}, time.Now())
 
 	return location, nil
 }

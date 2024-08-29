@@ -1,13 +1,18 @@
 package s3
 
 import (
+	"context"
 	"fmt"
+	"os"
+	"testing"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+
 	file_interface "gofr.dev/pkg/gofr/datasource/file"
-	"os"
-	"testing"
 )
 
 // Creating different file formats and removing them
@@ -190,13 +195,39 @@ func Test_StatDirectory(t *testing.T) {
 	})
 }
 
+func createBucket(t *testing.T, fs file_interface.FileSystemProvider) {
+	t.Helper()
+	f, ok := fs.(*fileSystem)
+	require.True(t, ok)
+
+	_, err := f.conn.CreateBucket(context.TODO(), &s3.CreateBucketInput{
+		Bucket: aws.String("gofr-bucket-2"),
+	})
+	require.NoError(t, err)
+
+}
+
+func deleteBucket(t *testing.T, fs file_interface.FileSystemProvider) {
+	t.Helper()
+
+	f, ok := fs.(*fileSystem)
+	require.True(t, ok)
+
+	_, err := f.conn.DeleteBucket(context.TODO(), &s3.DeleteBucketInput{
+		Bucket: aws.String("gofr-bucket-2"),
+	})
+	require.NoError(t, err)
+}
+
 func runS3Test(t *testing.T, testFunc func(fs file_interface.FileSystemProvider)) {
 	t.Helper()
 
 	cfg := Config{
-		"http://localhost:4566", //"https://s3.amazonaws.com" - aws base endpoint
+		// currently using localstack in the tests, to use aws change to "https://s3.amazonaws.com" - aws base endpoint
+		"http://localhost:4566",
 		"gofr-bucket-2",
 		"us-east-1",
+		// localstack does not check credentials. However, we need to pass correct access keys in case we are using AWS.
 		"test",
 		"test",
 	}
@@ -217,5 +248,7 @@ func runS3Test(t *testing.T, testFunc func(fs file_interface.FileSystemProvider)
 	s3Client.Connect()
 
 	// Run the test function with the initialized file system
+	createBucket(t, s3Client)
 	testFunc(s3Client)
+	deleteBucket(t, s3Client)
 }

@@ -2,12 +2,14 @@ package s3
 
 import (
 	"encoding/json"
+	"io"
+	"testing"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+
 	file_interface "gofr.dev/pkg/gofr/datasource/file"
-	"io"
-	"testing"
 )
 
 func Test_WriteRead(t *testing.T) {
