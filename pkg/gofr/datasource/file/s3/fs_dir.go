@@ -18,7 +18,11 @@ import (
 	file_interface "gofr.dev/pkg/gofr/datasource/file"
 )
 
-// MkDir at root level creating directory.then creating files.
+// Mkdir creates a directory and any necessary parent directories in the S3 bucket.
+//
+// This method creates a pseudo-directory in the S3 bucket by putting objects with the specified path prefixes.
+// Since S3 uses a flat storage structure, directories are represented by object keys with trailing slashes.
+// The method processes the path segments and ensures that each segment (directory) exists in S3.
 func (f *fileSystem) Mkdir(name string, perm os.FileMode) error {
 	var msg string
 	st := "ERROR"
@@ -54,11 +58,19 @@ func (f *fileSystem) Mkdir(name string, perm os.FileMode) error {
 	return nil
 }
 
-// MkDirAll just calls MkDir as aws s3 buckets do not functional on directory or file levels but have a flat structure.
+// MkDirAll creates directories in the S3 bucket.
+//
+// This method calls `MkDir` because AWS S3 buckets do not support traditional directory or file structures; instead, they use a flat structure.
+// S3 treats paths as part of object keys, so creating a directory is functionally equivalent to creating an object with a specific prefix.
 func (f *fileSystem) MkdirAll(name string, perm os.FileMode) error {
 	return f.Mkdir(name, perm)
 }
 
+// RemoveAll deletes a directory and all its contents from the S3 bucket.
+//
+// This method removes a directory and all objects within it from the S3 bucket. It only supports deleting directories
+// and will return an error if a file path (as indicated by a file extension) is provided. The method lists all objects
+// under the specified directory prefix and deletes them in a single batch operation.
 func (f *fileSystem) RemoveAll(name string) error {
 	var msg string
 	st := "ERROR"
@@ -114,6 +126,15 @@ func (f *fileSystem) RemoveAll(name string) error {
 	return nil
 }
 
+// ReadDir lists the files and directories within the specified directory in the S3 bucket.
+//
+// This method retrieves and returns information about the files and directories located under the specified path
+// within the S3 bucket. It uses the provided directory name to construct the S3 prefix for listing objects.
+// It returns a slice of `file_interface.FileInfo` representing the files and directories found. If the directory name is
+// ".", it lists the contents at the root of the bucket.
+// Note:
+//   - Directories are represented by the prefixes of the file keys in S3, and this method retrieves file entries
+//     only one level deep from the specified directory.
 func (f *fileSystem) ReadDir(name string) ([]file_interface.FileInfo, error) {
 	var filePath, msg string
 	st := "ERROR"
@@ -182,6 +203,10 @@ func (f *fileSystem) ReadDir(name string) ([]file_interface.FileInfo, error) {
 	return fileInfo, nil
 }
 
+// ChDir is not supported in S3 as the bucket is constant and the filesystem requires a full path relative to the selected bucket.
+//
+// This method attempts to change the current directory, but S3 does not support directory changes due to its flat file structure.
+// The bucket is constant and fixed, so directory operations are not applicable.
 func (f *fileSystem) ChDir(_ string) error {
 	st := "ERROR"
 
@@ -197,7 +222,9 @@ func (f *fileSystem) ChDir(_ string) error {
 	return errors.New("s3 does not support changing directories due to flat file structure")
 }
 
-// Getwd returns the absolute path of the file on S3.
+// Getwd returns the currently set bucket on S3.
+//
+// This method retrieves the name of the bucket that is currently set for S3 operations.
 func (f *fileSystem) Getwd() (string, error) {
 	status := "SUCCESS"
 
@@ -207,6 +234,7 @@ func (f *fileSystem) Getwd() (string, error) {
 	return location, nil
 }
 
+// sendOperationStats logs the FileLog of any file operations performed in S3.
 func (f *fileSystem) sendOperationStats(fl *FileLog, startTime time.Time) {
 	duration := time.Since(startTime).Milliseconds()
 

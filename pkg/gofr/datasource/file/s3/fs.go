@@ -56,9 +56,11 @@ func (f *fileSystem) UseMetrics(metrics interface{}) {
 	}
 }
 
-// Connect takes the configurations and validates the connection
-// using the access_key_id and secret_access_key, region and assigns
-// the s3 client in the filesystem struct as the connection.
+// Connect initializes and validates the connection to the S3 service.
+//
+// This method sets up the S3 client using the provided configuration, including access key, secret key, region, and base endpoint.
+// It loads the AWS configuration and creates an S3 client, which is then assigns it to the `fileSystem` struct.
+// This method also logs the outcome of the connection attempt.
 func (f *fileSystem) Connect() {
 	var msg string
 	st := "ERROR"
@@ -99,12 +101,11 @@ func (f *fileSystem) Connect() {
 	f.logger.Logf("Connected to S3 bucket %s", f.config.BucketName)
 }
 
-// if no extension is given by default it sets content-type to octet-stream.
-// Upload is more feature-rich and robust, ideal for large files or complex upload scenarios
-// where multipart support and automatic retries are beneficial.
-// PutObject is simpler and suitable for smaller, straightforward uploads without the need for
-// multipart handling or advanced features.
-// TODO: Automatically detect which function to use .....
+// Create creates a new file in the S3 bucket.
+//
+// This method creates an empty file at the specified path in the S3 bucket. It first checks if the parent directory exists;
+// if the parent directory does not exist, it returns an error. After creating the file, it retrieves the file metadata
+// and returns a `file` object representing the newly created file.
 func (f *fileSystem) Create(name string) (file_interface.File, error) {
 	var msg string
 	st := "ERROR"
@@ -177,9 +178,10 @@ func (f *fileSystem) Create(name string) (file_interface.File, error) {
 	}, nil
 }
 
-// TODO: Remove method must support versioning of files.
-// TODO: Extend the support for directory buckets also.
-// Remove method currently supports deletion of unversioned files on general purpose buckets only.
+// Remove deletes a file from the S3 bucket.
+//
+// This method deletes the specified file from the S3 bucket. Currently, it supports the deletion of unversioned files
+// from general-purpose buckets only. Directory buckets and versioned files are not supported for deletion by this method.
 func (f *fileSystem) Remove(name string) error {
 	var msg string
 	st := "ERROR"
@@ -209,6 +211,10 @@ func (f *fileSystem) Remove(name string) error {
 	return nil
 }
 
+// Open retrieves a file from the S3 bucket and returns a `file` object representing it.
+//
+// This method fetches the specified file from the S3 bucket and returns a `file` object with its content and metadata.
+// If the file cannot be retrieved, it returns an error.
 func (f *fileSystem) Open(name string) (file_interface.File, error) {
 	var msg string
 	st := "ERROR"
@@ -247,12 +253,18 @@ func (f *fileSystem) Open(name string) (file_interface.File, error) {
 	}, nil
 }
 
-// OpenFile just calls Open method of the FileSystem.
-// It is added so that s3 complies with the generic Filesystem interface of GoFr.
+// OpenFile is a wrapper for the Open method to comply with the generic FileSystem interface.
+//
+// This method calls the `Open` method of the `fileSystem` struct to retrieve a file. It is provided to align with the
+// FileSystem interface requirements in the GoFr framework.
 func (f *fileSystem) OpenFile(name string, flag int, perm os.FileMode) (file_interface.File, error) {
 	return f.Open(name)
 }
 
+// renameDirectory renames a directory by copying all its contents to a new path and then deleting the old path.
+//
+// This method handles the process of renaming a directory in an S3 bucket. It first lists all objects under the old
+// directory path, copies each object to the new directory path, and then deletes the old directory and its contents.
 func (f *fileSystem) renameDirectory(st *string, msg *string, oldPath, newPath string) error {
 	entries, err := f.conn.ListObjectsV2(context.TODO(), &s3.ListObjectsV2Input{
 		Bucket: aws.String(f.config.BucketName),
@@ -264,6 +276,7 @@ func (f *fileSystem) renameDirectory(st *string, msg *string, oldPath, newPath s
 		return err
 	}
 
+	// copying objects to new path
 	for _, obj := range entries.Contents {
 		newFilePath := strings.Replace(*obj.Key, oldPath, newPath, 1)
 		_, err := f.conn.CopyObject(context.TODO(), &s3.CopyObjectInput{
@@ -293,6 +306,13 @@ func (f *fileSystem) renameDirectory(st *string, msg *string, oldPath, newPath s
 	return nil
 }
 
+// Rename changes the name of a file or directory within the S3 bucket.
+//
+// This method handles both files and directories. It ensures that:
+// - The new name does not move the file to a different directory.
+// - The file types of the old and new names match.
+//
+// If the old and new names are the same, no operation is performed.
 func (f *fileSystem) Rename(oldname, newname string) error {
 	var msg string
 	st := "ERROR"
@@ -306,21 +326,21 @@ func (f *fileSystem) Rename(oldname, newname string) error {
 		Message:   &msg,
 	}, time.Now())
 
-	// check if it is a directory
-	if path.Ext(oldname) == "" {
-		return f.renameDirectory(&st, &msg, oldname, newname)
+	// check if they have the same name or not
+	if oldname == newname {
+		f.logger.Logf("%q & %q are same.", oldname, newname)
+		return nil
 	}
 
-	// if it is a file , check if both exist at same location or not
+	// check if both exist at same location or not
 	if path.Dir(oldname) != path.Dir(newname) {
 		f.logger.Errorf("%q & %q are not in same location", oldname, newname)
 		return errors.New("renaming as well as moving file to different location is not allowed")
 	}
 
-	// check if they have the same name or not
-	if oldname == newname {
-		f.logger.Logf("%q & %q are same.", oldname, newname)
-		return nil
+	// check if it is a directory
+	if path.Ext(oldname) == "" {
+		return f.renameDirectory(&st, &msg, oldname, newname)
 	}
 
 	// check if they are of the same type or not
@@ -358,6 +378,13 @@ func (f *fileSystem) Rename(oldname, newname string) error {
 	return nil
 }
 
+// Stat retrieves the FileInfo for the specified file or directory in the S3 bucket.
+//
+// If the provided name has no file extension, it is treated as a directory by default. If the name starts with "0",
+// it is interpreted as a binary file rather than a directory, with the "0" prefix removed.
+//
+// For directories, the method aggregates the sizes of all objects within the directory and returns the latest modified
+// time among them. For files, it returns the file's size and last modified time.
 func (f *fileSystem) Stat(name string) (file_interface.FileInfo, error) {
 	var msg string
 	st := "ERROR"
@@ -373,11 +400,13 @@ func (f *fileSystem) Stat(name string) (file_interface.FileInfo, error) {
 
 	filetype := "file"
 
+	// Here we assume the user passes "0filePath" in case it wants to get fileinfo about a binary file instead of a directory
 	if path.Ext(name) == "" {
-		if name[0] == 'b' {
-			name = name[1:]
-		}
 		filetype = "directory"
+		if name[0] == '0' {
+			name = name[1:]
+			filetype = "file"
+		}
 	}
 
 	res, err := f.conn.ListObjectsV2(context.TODO(), &s3.ListObjectsV2Input{
