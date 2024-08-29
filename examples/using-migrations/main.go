@@ -65,7 +65,7 @@ func PostHandler(c *gofr.Context) (interface{}, error) {
 	// Execute the INSERT query
 	_, err := c.SQL.ExecContext(c, queryInsertEmployee, emp.ID, emp.Name, emp.Gender, emp.Phone, emp.DOB)
 	if err != nil {
-		return Employee{}, errors.New(fmt.Sprintf("DB Error: %v", err))
+		return nil, errors.New(fmt.Sprintf("DB Error: %v", err))
 	}
 
 	return fmt.Sprintf("successfully posted entity: %v", emp.Name), nil
