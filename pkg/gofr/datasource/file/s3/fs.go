@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/config"
+	awsConfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 
@@ -29,11 +29,11 @@ type fileSystem struct {
 
 // Config represents the s3 configuration.
 type Config struct {
-	EndPoint          string // AWS S3 base endpoint
-	BucketName        string // AWS Bucket name
-	Region            string // AWS Region
-	ACCESS_KEY_ID     string // Aws configs
-	SECRET_ACCESS_KEY string // Aws configs
+	EndPoint        string // AWS S3 base endpoint
+	BucketName      string // AWS Bucket name
+	Region          string // AWS Region
+	AccessKeyID     string // Aws configs
+	SecretAccessKey string // Aws configs
 }
 
 // New initializes a new instance of FTP fileSystem with provided configuration.
@@ -62,6 +62,7 @@ func (f *fileSystem) UseMetrics(metrics interface{}) {
 // This method also logs the outcome of the connection attempt.
 func (f *fileSystem) Connect() {
 	var msg string
+
 	st := "ERROR"
 	location := path.Join(string(filepath.Separator), f.config.BucketName)
 
@@ -73,12 +74,12 @@ func (f *fileSystem) Connect() {
 	}, time.Now())
 
 	// Load the AWS configuration
-	cfg, err := config.LoadDefaultConfig(context.TODO(),
-		config.WithRegion(f.config.Region),
-		config.WithCredentialsProvider(
+	cfg, err := awsConfig.LoadDefaultConfig(context.TODO(),
+		awsConfig.WithRegion(f.config.Region),
+		awsConfig.WithCredentialsProvider(
 			credentials.NewStaticCredentialsProvider(
-				f.config.ACCESS_KEY_ID,
-				f.config.SECRET_ACCESS_KEY,
+				f.config.AccessKeyID,
+				f.config.SecretAccessKey,
 				"")),
 	)
 
@@ -97,6 +98,7 @@ func (f *fileSystem) Connect() {
 	f.conn = s3Client
 	st = "SUCCESS"
 	msg = "S3 Client connected."
+
 	f.logger.Logf("Connected to S3 bucket %s", f.config.BucketName)
 }
 
@@ -107,8 +109,8 @@ func (f *fileSystem) Connect() {
 // and returns a `file` object representing the newly created file.
 func (f *fileSystem) Create(name string) (file_interface.File, error) {
 	var msg string
-	st := "ERROR"
 
+	st := "ERROR"
 	location := path.Join(string(filepath.Separator), f.config.BucketName)
 
 	defer f.sendOperationStats(&FileLog{
@@ -162,7 +164,8 @@ func (f *fileSystem) Create(name string) (file_interface.File, error) {
 	}
 
 	st = "SUCCESS"
-	msg = "File creation on S3 successfull."
+	msg = "File creation on S3 successful."
+
 	f.logger.Logf("File with name %s created.", name)
 
 	return &file{
@@ -183,8 +186,8 @@ func (f *fileSystem) Create(name string) (file_interface.File, error) {
 // from general-purpose buckets only. Directory buckets and versioned files are not supported for deletion by this method.
 func (f *fileSystem) Remove(name string) error {
 	var msg string
-	st := "ERROR"
 
+	st := "ERROR"
 	location := path.Join(string(filepath.Separator), f.config.BucketName)
 
 	defer f.sendOperationStats(&FileLog{
@@ -205,8 +208,10 @@ func (f *fileSystem) Remove(name string) error {
 	}
 
 	st = "SUCCESS"
-	msg = "File deletion on S3 successfull."
-	f.logger.Logf("File with path %q deleted.", name)
+	msg = "File deletion on S3 successful"
+
+	f.logger.Logf("File with path %q deleted", name)
+
 	return nil
 }
 
@@ -216,8 +221,8 @@ func (f *fileSystem) Remove(name string) error {
 // If the file cannot be retrieved, it returns an error.
 func (f *fileSystem) Open(name string) (file_interface.File, error) {
 	var msg string
-	st := "ERROR"
 
+	st := "ERROR"
 	location := path.Join(string(filepath.Separator), f.config.BucketName)
 
 	defer f.sendOperationStats(&FileLog{
@@ -238,7 +243,7 @@ func (f *fileSystem) Open(name string) (file_interface.File, error) {
 	}
 
 	st = "SUCCESS"
-	msg = fmt.Sprintf("File with path %q retrieved successfully.", name)
+	msg = fmt.Sprintf("File with path %q retrieved successfully", name)
 
 	return &file{
 		conn:         f.conn,
@@ -256,7 +261,7 @@ func (f *fileSystem) Open(name string) (file_interface.File, error) {
 //
 // This method calls the `Open` method of the `fileSystem` struct to retrieve a file. It is provided to align with the
 // FileSystem interface requirements in the GoFr framework.
-func (f *fileSystem) OpenFile(name string, flag int, perm os.FileMode) (file_interface.File, error) {
+func (f *fileSystem) OpenFile(name string, _ int, _ os.FileMode) (file_interface.File, error) {
 	return f.Open(name)
 }
 
@@ -269,8 +274,8 @@ func (f *fileSystem) OpenFile(name string, flag int, perm os.FileMode) (file_int
 // If the old and new names are the same, no operation is performed.
 func (f *fileSystem) Rename(oldname, newname string) error {
 	var msg string
-	st := "ERROR"
 
+	st := "ERROR"
 	location := path.Join(string(filepath.Separator), f.config.BucketName)
 
 	defer f.sendOperationStats(&FileLog{
@@ -282,7 +287,7 @@ func (f *fileSystem) Rename(oldname, newname string) error {
 
 	// check if they have the same name or not
 	if oldname == newname {
-		f.logger.Logf("%q & %q are same.", oldname, newname)
+		f.logger.Logf("%q & %q are same", oldname, newname)
 		return nil
 	}
 
@@ -329,6 +334,7 @@ func (f *fileSystem) Rename(oldname, newname string) error {
 	msg = "File renamed successfully"
 
 	f.logger.Logf("File with path %q renamed to %q", oldname, newname)
+
 	return nil
 }
 
@@ -341,8 +347,8 @@ func (f *fileSystem) Rename(oldname, newname string) error {
 // time among them. For files, it returns the file's size and last modified time.
 func (f *fileSystem) Stat(name string) (file_interface.FileInfo, error) {
 	var msg string
-	st := "ERROR"
 
+	st := "ERROR"
 	location := path.Join(string(filepath.Separator), f.config.BucketName)
 
 	defer f.sendOperationStats(&FileLog{
@@ -357,6 +363,7 @@ func (f *fileSystem) Stat(name string) (file_interface.FileInfo, error) {
 	// Here we assume the user passes "0filePath" in case it wants to get fileinfo about a binary file instead of a directory
 	if path.Ext(name) == "" {
 		filetype = "directory"
+
 		if name[0] == '0' {
 			name = name[1:]
 			filetype = "file"
@@ -375,10 +382,12 @@ func (f *fileSystem) Stat(name string) (file_interface.FileInfo, error) {
 
 	if filetype == "directory" {
 		var size int64
+
 		var lastModified time.Time
 
 		for i := range res.Contents {
 			size += *res.Contents[i].Size
+
 			if res.Contents[i].LastModified.After(lastModified) {
 				lastModified = *res.Contents[i].LastModified
 			}
@@ -398,6 +407,7 @@ func (f *fileSystem) Stat(name string) (file_interface.FileInfo, error) {
 				lastModified: lastModified,
 			}, nil
 		}
+
 		return nil, nil
 	}
 
@@ -409,5 +419,4 @@ func (f *fileSystem) Stat(name string) (file_interface.FileInfo, error) {
 		name:         path.Join(f.config.BucketName, *res.Contents[0].Key),
 		lastModified: *res.Contents[0].LastModified,
 	}, nil
-
 }

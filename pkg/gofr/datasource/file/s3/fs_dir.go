@@ -24,8 +24,9 @@ import (
 // This method creates a pseudo-directory in the S3 bucket by putting objects with the specified path prefixes.
 // Since S3 uses a flat storage structure, directories are represented by object keys with trailing slashes.
 // The method processes the path segments and ensures that each segment (directory) exists in S3.
-func (f *fileSystem) Mkdir(name string, perm os.FileMode) error {
+func (f *fileSystem) Mkdir(name string, _ os.FileMode) error {
 	var msg string
+
 	st := "ERROR"
 	location := path.Join(string(filepath.Separator), f.config.BucketName)
 
@@ -37,6 +38,7 @@ func (f *fileSystem) Mkdir(name string, perm os.FileMode) error {
 	}, time.Now())
 
 	directories := strings.Split(name, string(filepath.Separator))
+
 	var currentdir string
 
 	for _, dir := range directories {
@@ -56,13 +58,16 @@ func (f *fileSystem) Mkdir(name string, perm os.FileMode) error {
 	msg = fmt.Sprintf("Directories on path %q created successfully", name)
 
 	f.logger.Logf("Created directories on path %q", name)
+
 	return nil
 }
 
-// MkDirAll creates directories in the S3 bucket.
+// MkdirAll creates directories in the S3 bucket.
 //
-// This method calls `MkDir` because AWS S3 buckets do not support traditional directory or file structures; instead, they use a flat structure.
-// S3 treats paths as part of object keys, so creating a directory is functionally equivalent to creating an object with a specific prefix.
+// This method calls `MkDir` because AWS S3 buckets do not support traditional directory or file structures.
+// Instead, they use a flat structure.
+// S3 treats paths as part of object keys, so creating a directory is functionally equivalent to creating an
+// object with a specific prefix.
 func (f *fileSystem) MkdirAll(name string, perm os.FileMode) error {
 	return f.Mkdir(name, perm)
 }
@@ -74,6 +79,7 @@ func (f *fileSystem) MkdirAll(name string, perm os.FileMode) error {
 // under the specified directory prefix and deletes them in a single batch operation.
 func (f *fileSystem) RemoveAll(name string) error {
 	var msg string
+
 	st := "ERROR"
 
 	location := path.Join(string(filepath.Separator), f.config.BucketName)
@@ -124,6 +130,7 @@ func (f *fileSystem) RemoveAll(name string) error {
 	msg = fmt.Sprintf("Directory with path %q, deleted successfully", name)
 
 	f.logger.Logf("Directory %s deleted.", name)
+
 	return nil
 }
 
@@ -149,6 +156,7 @@ func getRelativepath(key, filePath string) string {
 //     only one level deep from the specified directory.
 func (f *fileSystem) ReadDir(name string) ([]file_interface.FileInfo, error) {
 	var filePath, msg string
+
 	st := "ERROR"
 
 	location := path.Join(string(filepath.Separator), f.config.BucketName)
@@ -204,9 +212,10 @@ func (f *fileSystem) ReadDir(name string) ([]file_interface.FileInfo, error) {
 	}
 
 	st = "SUCCESS"
-	msg = fmt.Sprintf("Directory/Files in directory with path %q retrived successfully", name)
+	msg = fmt.Sprintf("Directory/Files in directory with path %q retrieved successfully", name)
 
 	f.logger.Logf("Reading directory/files from S3 at path %q successful.", name)
+
 	return fileInfo, nil
 }
 
@@ -245,7 +254,7 @@ func (f *fileSystem) Getwd() (string, error) {
 //
 // This method handles the process of renaming a directory in an S3 bucket. It first lists all objects under the old
 // directory path, copies each object to the new directory path, and then deletes the old directory and its contents.
-func (f *fileSystem) renameDirectory(st *string, msg *string, oldPath, newPath string) error {
+func (f *fileSystem) renameDirectory(st, msg *string, oldPath, newPath string) error {
 	entries, err := f.conn.ListObjectsV2(context.TODO(), &s3.ListObjectsV2Input{
 		Bucket: aws.String(f.config.BucketName),
 		Prefix: aws.String(oldPath + "/"),
@@ -259,7 +268,7 @@ func (f *fileSystem) renameDirectory(st *string, msg *string, oldPath, newPath s
 	// copying objects to new path
 	for _, obj := range entries.Contents {
 		newFilePath := strings.Replace(*obj.Key, oldPath, newPath, 1)
-		_, err := f.conn.CopyObject(context.TODO(), &s3.CopyObjectInput{
+		_, err = f.conn.CopyObject(context.TODO(), &s3.CopyObjectInput{
 			Bucket:             aws.String(f.config.BucketName),
 			CopySource:         aws.String(f.config.BucketName + "/" + *obj.Key),
 			Key:                aws.String(newFilePath),

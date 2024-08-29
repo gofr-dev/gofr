@@ -81,18 +81,15 @@ func (f *file) ModTime() time.Time {
 //
 // Note:
 //   - This method should be called on a FileInfo instance obtained from a Stat or ReadDir operation.
-//   - The FileInfo interface is used to describe file system objects, and IsDir is one of its methods to query whether the object is a directory.
+//   - The FileInfo interface is used to describe file system objects, and IsDir is one of its methods
+//     to query whether the object is a directory.
 func (f *file) IsDir() bool {
 	bucketName := strings.Split(f.name, string(filepath.Separator))[0]
 	location := path.Join(string(filepath.Separator), bucketName)
 
 	defer f.sendOperationStats(&FileLog{Operation: "IS DIR", Location: location}, time.Now())
 
-	if f.name[len(f.name)-1] == '/' {
-		return true
-	}
-
-	return false
+	return f.name[len(f.name)-1] == '/'
 }
 
 // Close closes the response body returned in Open/Create methods if the response body is not nil.
@@ -149,7 +146,7 @@ func (f *file) Read(p []byte) (n int, err error) {
 	b := make([]byte, len(p)+int(f.offset))
 
 	n, err = f.body.Read(b)
-	if err != nil && err != io.EOF {
+	if err != nil && !errors.Is(err, io.EOF) {
 		f.logger.Errorf("Error reading file %q: %v", fileName, err)
 		return n, err
 	}
@@ -176,6 +173,7 @@ func (f *file) ReadAt(p []byte, offset int64) (n int, err error) {
 	location := path.Join(string(filepath.Separator), bucketName)
 
 	var fileName, msg string
+
 	st := "ERROR"
 
 	defer f.sendOperationStats(&FileLog{Operation: "READAT", Location: location, Status: &st, Message: &msg}, time.Now())
@@ -209,7 +207,7 @@ func (f *file) ReadAt(p []byte, offset int64) (n int, err error) {
 	b := make([]byte, len(p)+int(offset)+1)
 
 	n, err = f.body.Read(b)
-	if err != nil && err != io.EOF {
+	if err != nil && !errors.Is(err, io.EOF) {
 		return n, err
 	}
 
@@ -233,6 +231,7 @@ func (f *file) Write(p []byte) (n int, err error) {
 	location := path.Join(string(filepath.Separator), bucketName)
 
 	var fileName, msg string
+
 	st := "ERROR"
 
 	defer f.sendOperationStats(&FileLog{Operation: "WRITE", Location: location, Status: &st, Message: &msg}, time.Now())
@@ -307,6 +306,7 @@ func (f *file) WriteAt(p []byte, offset int64) (n int, err error) {
 	location := path.Join(string(filepath.Separator), bucketName)
 
 	var fileName, msg string
+
 	st := "ERROR"
 
 	defer f.sendOperationStats(&FileLog{Operation: "WRITEAT", Location: location, Status: &st, Message: &msg}, time.Now())
@@ -396,11 +396,13 @@ func (f *file) check(whence int, offset, length int64, msg *string) (int64, erro
 //	  - `io.SeekEnd` (2): Offset is relative to the end of the file.
 func (f *file) Seek(offset int64, whence int) (int64, error) {
 	var msg string
+
 	status := "ERROR"
 
 	defer f.sendOperationStats(&FileLog{Operation: "SEEK", Location: f.name, Status: &status, Message: &msg}, time.Now())
 
 	n := f.Size()
+
 	res, err := f.check(whence, offset, n, &msg)
 	if err != nil {
 		f.logger.Errorf("Seek failed. Error : %v", err)
@@ -411,6 +413,7 @@ func (f *file) Seek(offset int64, whence int) (int64, error) {
 	msg = fmt.Sprintf("Offset set to %v for file with path %q", res, f.name)
 
 	f.logger.Logf("Set file offset at %v", f.offset)
+
 	return res, nil
 }
 

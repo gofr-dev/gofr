@@ -15,7 +15,7 @@ import (
 	file_interface "gofr.dev/pkg/gofr/datasource/file"
 )
 
-// Creating different file formats and removing them
+// Creating different file formats and removing them.
 func Test_CreateRemoveFile(t *testing.T) {
 	runS3Test(t, func(fs file_interface.FileSystemProvider) {
 		_, err := fs.Create("abc.txt")
@@ -26,13 +26,11 @@ func Test_CreateRemoveFile(t *testing.T) {
 	})
 
 	runS3Test(t, func(fs file_interface.FileSystemProvider) {
-
 		_, err := fs.Create("abc.png")
 		require.NoError(t, err)
 
 		err = fs.Remove("abc.png")
 		require.NoError(t, err)
-
 	})
 	runS3Test(t, func(fs file_interface.FileSystemProvider) {
 		_, err := fs.Create("abc.jpeg")
@@ -40,7 +38,6 @@ func Test_CreateRemoveFile(t *testing.T) {
 
 		err = fs.Remove("abc.jpeg")
 		require.NoError(t, err)
-
 	})
 	runS3Test(t, func(fs file_interface.FileSystemProvider) {
 		_, err := fs.Create("abc.json")
@@ -48,7 +45,6 @@ func Test_CreateRemoveFile(t *testing.T) {
 
 		err = fs.Remove("abc.json")
 		require.NoError(t, err)
-
 	})
 
 	runS3Test(t, func(fs file_interface.FileSystemProvider) {
@@ -94,6 +90,7 @@ func Test_OpenFile(t *testing.T) {
 		require.NoError(t, err)
 
 		err = fs.Remove("abc.json")
+		require.NoError(t, err)
 	})
 }
 
@@ -149,6 +146,7 @@ func Test_ReadDir(t *testing.T) {
 		require.NoError(t, err)
 
 		_, err = fs.Create("abc/efg/file.txt")
+		require.NoError(t, err)
 
 		res, err := fs.ReadDir("abc/efg")
 		require.NoError(t, err)
@@ -159,7 +157,6 @@ func Test_ReadDir(t *testing.T) {
 
 		err = fs.RemoveAll("abc")
 		require.NoError(t, err)
-
 	})
 }
 
@@ -169,12 +166,15 @@ func Test_StatFile(t *testing.T) {
 		require.NoError(t, err)
 
 		_, err = fs.Create("dir1/dir2/file.txt")
+		require.NoError(t, err)
 
 		res, err := fs.Stat("dir1/dir2/file.txt")
 		require.NoError(t, err)
+
 		fmt.Println(res.Name(), res.Size(), res.IsDir())
 
 		err = fs.RemoveAll("dir1")
+		require.NoError(t, err)
 	})
 }
 
@@ -184,18 +184,21 @@ func Test_StatDirectory(t *testing.T) {
 		require.NoError(t, err)
 
 		_, err = fs.Create("dir1/dir2/file.txt")
+		require.NoError(t, err)
 
 		res, err := fs.Stat("dir1/dir2")
 		require.NoError(t, err)
 		fmt.Println(res.Name(), res.Size(), res.IsDir())
 
 		err = fs.RemoveAll("dir1")
+		require.NoError(t, err)
 	})
 }
 
-// Helper functions
+// Helper functions.
 func createBucket(t *testing.T, fs file_interface.FileSystemProvider) {
 	t.Helper()
+
 	f, ok := fs.(*fileSystem)
 	require.True(t, ok)
 
@@ -203,7 +206,6 @@ func createBucket(t *testing.T, fs file_interface.FileSystemProvider) {
 		Bucket: aws.String("gofr-bucket-2"),
 	})
 	require.NoError(t, err)
-
 }
 
 func deleteBucket(t *testing.T, fs file_interface.FileSystemProvider) {

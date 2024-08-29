@@ -38,13 +38,13 @@ Michael Brown,40,michaelb@example.com`
 		defer func(fs file_interface.FileSystem, name string) {
 			err = fs.Remove(name)
 			require.NoError(t, err)
-
 		}(fs, "temp.csv")
 
 		_, err = newCsvFile.Write([]byte(csvContent))
 		require.NoError(t, err, "failed to write to csv file")
 
 		buffer := make([]byte, 5)
+
 		_, err = newCsvFile.Seek(0, io.SeekStart)
 		require.NoError(t, err)
 
@@ -54,16 +54,17 @@ Michael Brown,40,michaelb@example.com`
 
 		_, err = newCsvFile.Seek(0, io.SeekStart)
 		require.NoError(t, err)
+
 		_, err = newCsvFile.WriteAt([]byte("Hello World"), 5)
 		require.NoError(t, err, "Write to file at offset failed")
 
 		_, err = newCsvFile.Seek(0, io.SeekStart)
 		require.NoError(t, err)
+
 		_, err = newCsvFile.ReadAt(buffer, 5)
 		require.NoError(t, err, "Read from file at offset failed")
 		assert.Equal(t, "ello ", string(buffer), "Read from file at offset")
 	})
-
 }
 
 func Test_Seek(t *testing.T) {
@@ -111,12 +112,12 @@ func Test_Seek(t *testing.T) {
 		_, err = newCsvFile.Write(buffer)
 		require.NoError(t, err)
 
-		newOffset, err = newCsvFile.Seek(-9, io.SeekEnd)
+		_, err = newCsvFile.Seek(-9, io.SeekEnd)
+		require.NoError(t, err)
 
 		_, err = newCsvFile.Read(buffer)
 		require.NoError(t, err)
 		assert.Equal(t, "3434567", string(buffer))
-
 	})
 }
 
@@ -160,7 +161,6 @@ Michael Brown,40,michaelb@example.com`
 		defer func(fs file_interface.FileSystem, name string) {
 			err = fs.Remove(name)
 			require.NoError(t, err)
-
 		}(fs, "temp.csv")
 
 		var i = 0
@@ -209,7 +209,6 @@ func Test_ReadFromCSVScanError(t *testing.T) {
 		defer func(fs file_interface.FileSystem, name string) {
 			err := fs.Remove(name)
 			require.NoError(t, err)
-
 		}(fs, "temp.csv")
 
 		for reader.Next() {
@@ -217,7 +216,7 @@ func Test_ReadFromCSVScanError(t *testing.T) {
 
 			err := reader.Scan(content)
 
-			assert.Error(t, err)
+			require.Error(t, err)
 			assert.Equal(t, "", content)
 		}
 	})
@@ -313,7 +312,7 @@ func Test_ReadFromJSONObject(t *testing.T) {
 		newCsvFile, err = fs.Open("temp.json")
 		require.NoError(t, err)
 
-		reader, _ := newCsvFile.ReadAll()
+		reader, err := newCsvFile.ReadAll()
 		require.NoError(t, err)
 
 		defer func(fs file_interface.FileSystem, name string) {
@@ -352,19 +351,22 @@ func Test_ReadFromJSONArrayInvalidDelimiter(t *testing.T) {
 		newCsvFile, err := fs.Create("temp.json")
 		require.NoError(t, err)
 
-		_, err = newCsvFile.Write([]byte(jsonContent))
-		require.NoError(t, err)
-
-		newCsvFile.Close()
-
-		newCsvFile, _ = fs.Open("temp.json")
-
-		_, err = newCsvFile.ReadAll()
-
 		defer func(fs file_interface.FileSystem, name string) {
 			removeErr := fs.Remove(name)
 			require.NoError(t, removeErr)
 		}(fs, "temp.json")
+
+		_, err = newCsvFile.Write([]byte(jsonContent))
+		require.NoError(t, err)
+
+		err = newCsvFile.Close()
+		require.NoError(t, err)
+
+		newCsvFile, err = fs.Open("temp.json")
+		require.NoError(t, err)
+
+		_, err = newCsvFile.ReadAll()
+		require.Error(t, err)
 
 		assert.IsType(t, &json.SyntaxError{}, err)
 	})
