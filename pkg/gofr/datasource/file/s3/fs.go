@@ -9,7 +9,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -259,51 +258,6 @@ func (f *fileSystem) Open(name string) (file_interface.File, error) {
 // FileSystem interface requirements in the GoFr framework.
 func (f *fileSystem) OpenFile(name string, flag int, perm os.FileMode) (file_interface.File, error) {
 	return f.Open(name)
-}
-
-// renameDirectory renames a directory by copying all its contents to a new path and then deleting the old path.
-//
-// This method handles the process of renaming a directory in an S3 bucket. It first lists all objects under the old
-// directory path, copies each object to the new directory path, and then deletes the old directory and its contents.
-func (f *fileSystem) renameDirectory(st *string, msg *string, oldPath, newPath string) error {
-	entries, err := f.conn.ListObjectsV2(context.TODO(), &s3.ListObjectsV2Input{
-		Bucket: aws.String(f.config.BucketName),
-		Prefix: aws.String(oldPath + "/"),
-	})
-
-	if err != nil {
-		f.logger.Errorf("Error while listing objects: %v", err)
-		return err
-	}
-
-	// copying objects to new path
-	for _, obj := range entries.Contents {
-		newFilePath := strings.Replace(*obj.Key, oldPath, newPath, 1)
-		_, err := f.conn.CopyObject(context.TODO(), &s3.CopyObjectInput{
-			Bucket:             aws.String(f.config.BucketName),
-			CopySource:         aws.String(f.config.BucketName + "/" + *obj.Key),
-			Key:                aws.String(newFilePath),
-			ContentType:        aws.String(mime.TypeByExtension(path.Ext(newPath))),
-			ContentDisposition: aws.String("attachment"),
-		})
-
-		if err != nil {
-			*msg = fmt.Sprintf("Failed to copy objects to directory %q", newPath)
-			return err
-		}
-	}
-
-	// deleting objects
-	err = f.RemoveAll(oldPath)
-	if err != nil {
-		*msg = fmt.Sprintf("Failed to remove old objects from the directories %q", oldPath)
-		return err
-	}
-
-	*st = "SUCCESS"
-	*msg = fmt.Sprintf("Directory with path %q successfully renamed to %q", oldPath, newPath)
-
-	return nil
 }
 
 // Rename changes the name of a file or directory within the S3 bucket.

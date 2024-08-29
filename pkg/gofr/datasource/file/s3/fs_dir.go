@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"mime"
 	"os"
 	"path"
 	"path/filepath"
@@ -126,6 +127,17 @@ func (f *fileSystem) RemoveAll(name string) error {
 	return nil
 }
 
+func getRelativepath(key, filePath string) string {
+	relativepath := strings.TrimPrefix(key, filePath)
+	oneLevelDeepPathIndex := strings.Index(relativepath, string(filepath.Separator))
+
+	if oneLevelDeepPathIndex != -1 {
+		relativepath = relativepath[:oneLevelDeepPathIndex+1]
+	}
+
+	return relativepath
+}
+
 // ReadDir lists the files and directories within the specified directory in the S3 bucket.
 //
 // This method retrieves and returns information about the files and directories located under the specified path
@@ -148,10 +160,10 @@ func (f *fileSystem) ReadDir(name string) ([]file_interface.FileInfo, error) {
 		Message:   &msg,
 	}, time.Now())
 
+	filePath = name + string(filepath.Separator)
+
 	if name == "." {
 		filePath = ""
-	} else {
-		filePath = name + string(filepath.Separator)
 	}
 
 	entries, err := f.conn.ListObjectsV2(context.TODO(), &s3.ListObjectsV2Input{
@@ -171,12 +183,7 @@ func (f *fileSystem) ReadDir(name string) ([]file_interface.FileInfo, error) {
 			continue
 		}
 
-		relativepath := strings.TrimPrefix(*entries.Contents[i].Key, filePath)
-		oneLevelDeepPathIndex := strings.Index(relativepath, string(filepath.Separator))
-
-		if oneLevelDeepPathIndex != -1 {
-			relativepath = relativepath[:oneLevelDeepPathIndex+1]
-		}
+		relativepath := getRelativepath(*entries.Contents[i].Key, filePath)
 
 		if len(fileInfo) > 0 {
 			temp, ok := fileInfo[len(fileInfo)-1].(*file)
@@ -232,6 +239,51 @@ func (f *fileSystem) Getwd() (string, error) {
 	f.sendOperationStats(&FileLog{Operation: "GETWD", Location: location, Status: &status}, time.Now())
 
 	return location, nil
+}
+
+// renameDirectory renames a directory by copying all its contents to a new path and then deleting the old path.
+//
+// This method handles the process of renaming a directory in an S3 bucket. It first lists all objects under the old
+// directory path, copies each object to the new directory path, and then deletes the old directory and its contents.
+func (f *fileSystem) renameDirectory(st *string, msg *string, oldPath, newPath string) error {
+	entries, err := f.conn.ListObjectsV2(context.TODO(), &s3.ListObjectsV2Input{
+		Bucket: aws.String(f.config.BucketName),
+		Prefix: aws.String(oldPath + "/"),
+	})
+
+	if err != nil {
+		f.logger.Errorf("Error while listing objects: %v", err)
+		return err
+	}
+
+	// copying objects to new path
+	for _, obj := range entries.Contents {
+		newFilePath := strings.Replace(*obj.Key, oldPath, newPath, 1)
+		_, err := f.conn.CopyObject(context.TODO(), &s3.CopyObjectInput{
+			Bucket:             aws.String(f.config.BucketName),
+			CopySource:         aws.String(f.config.BucketName + "/" + *obj.Key),
+			Key:                aws.String(newFilePath),
+			ContentType:        aws.String(mime.TypeByExtension(path.Ext(newPath))),
+			ContentDisposition: aws.String("attachment"),
+		})
+
+		if err != nil {
+			*msg = fmt.Sprintf("Failed to copy objects to directory %q", newPath)
+			return err
+		}
+	}
+
+	// deleting objects
+	err = f.RemoveAll(oldPath)
+	if err != nil {
+		*msg = fmt.Sprintf("Failed to remove old objects from the directories %q", oldPath)
+		return err
+	}
+
+	*st = "SUCCESS"
+	*msg = fmt.Sprintf("Directory with path %q successfully renamed to %q", oldPath, newPath)
+
+	return nil
 }
 
 // sendOperationStats logs the FileLog of any file operations performed in S3.

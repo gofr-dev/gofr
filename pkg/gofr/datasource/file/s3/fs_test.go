@@ -139,10 +139,8 @@ func Test_RenameDirectory(t *testing.T) {
 	})
 }
 
-// works
 func Test_ReadDir(t *testing.T) {
 	runS3Test(t, func(fs file_interface.FileSystemProvider) {
-		fs.ChDir("gofr-bucket-2")
 		currentDir, err := fs.Getwd()
 		require.NoError(t, err)
 		assert.Equal(t, "/gofr-bucket-2", currentDir)
@@ -195,6 +193,7 @@ func Test_StatDirectory(t *testing.T) {
 	})
 }
 
+// Helper functions
 func createBucket(t *testing.T, fs file_interface.FileSystemProvider) {
 	t.Helper()
 	f, ok := fs.(*fileSystem)
