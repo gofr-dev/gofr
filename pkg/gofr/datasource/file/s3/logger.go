@@ -8,6 +8,8 @@ import (
 )
 
 // FileLog handles logging with different levels.
+// In DEBUG MODE, this FileLog can be exported into a file while
+// running the application or can be logged in the terminal.
 type FileLog struct {
 	Operation string  `json:"operation"`
 	Duration  int64   `json:"duration"`

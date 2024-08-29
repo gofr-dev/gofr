@@ -120,7 +120,6 @@ func Test_Seek(t *testing.T) {
 	})
 }
 
-// The test defined below do not use any mocking. They need an actual ftp server connection.
 func Test_ReadFromCSV(t *testing.T) {
 	runS3Test(t, func(fs file_interface.FileSystemProvider) {
 		var csvContent = `Name,Age,Email
