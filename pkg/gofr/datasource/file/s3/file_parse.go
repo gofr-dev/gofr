@@ -70,7 +70,7 @@ func (f *file) ReadAll() (file_interface.RowReader, error) {
 
 // createJSONReader creates a JSON reader for JSON files.
 func (f *file) createJSONReader(location string) (file_interface.RowReader, error) {
-	status := "ERROR"
+	status := statusErr
 
 	defer f.sendOperationStats(&FileLog{Operation: "JSON READER", Location: location, Status: &status}, time.Now())
 
@@ -94,20 +94,20 @@ func (f *file) createJSONReader(location string) (file_interface.RowReader, erro
 	}
 
 	if d, ok := token.(json.Delim); ok && d == '[' {
-		status = "SUCCESS"
+		status = statusSuccess
 		return &jsonReader{decoder: decoder, token: token}, err
 	}
 
 	// Reading JSON object
 	decoder = json.NewDecoder(reader)
-	status = "SUCCESS"
+	status = statusSuccess
 
 	return &jsonReader{decoder: decoder}, nil
 }
 
 // createTextCSVReader creates a text reader for reading text files.
 func (f *file) createTextCSVReader(location string) (file_interface.RowReader, error) {
-	status := "ERROR"
+	status := statusErr
 
 	defer f.sendOperationStats(&FileLog{Operation: "TEXT/CSV READER", Location: location, Status: &status}, time.Now())
 
@@ -118,7 +118,7 @@ func (f *file) createTextCSVReader(location string) (file_interface.RowReader, e
 	}
 
 	reader := bytes.NewReader(buffer)
-	status = "SUCCESS"
+	status = statusSuccess
 
 	return &textReader{
 		scanner: bufio.NewScanner(reader),

@@ -27,12 +27,11 @@ import (
 func (f *fileSystem) Mkdir(name string, _ os.FileMode) error {
 	var msg string
 
-	st := "ERROR"
-	location := path.Join(string(filepath.Separator), f.config.BucketName)
+	st := statusErr
 
 	defer f.sendOperationStats(&FileLog{
 		Operation: "MKDIR",
-		Location:  location,
+		Location:  getLocation(f.config.BucketName),
 		Status:    &st,
 		Message:   &msg,
 	}, time.Now())
@@ -54,7 +53,7 @@ func (f *fileSystem) Mkdir(name string, _ os.FileMode) error {
 		}
 	}
 
-	st = "SUCCESS"
+	st = statusSuccess
 	msg = fmt.Sprintf("Directories on path %q created successfully", name)
 
 	f.logger.Logf("Created directories on path %q", name)
@@ -80,13 +79,11 @@ func (f *fileSystem) MkdirAll(name string, perm os.FileMode) error {
 func (f *fileSystem) RemoveAll(name string) error {
 	var msg string
 
-	st := "ERROR"
-
-	location := path.Join(string(filepath.Separator), f.config.BucketName)
+	st := statusErr
 
 	defer f.sendOperationStats(&FileLog{
 		Operation: "REMOVEALL",
-		Location:  location,
+		Location:  getLocation(f.config.BucketName),
 		Status:    &st,
 		Message:   &msg,
 	}, time.Now())
@@ -126,7 +123,7 @@ func (f *fileSystem) RemoveAll(name string) error {
 		return err
 	}
 
-	st = "SUCCESS"
+	st = statusSuccess
 	msg = fmt.Sprintf("Directory with path %q, deleted successfully", name)
 
 	f.logger.Logf("Directory %s deleted.", name)
@@ -157,13 +154,11 @@ func getRelativepath(key, filePath string) string {
 func (f *fileSystem) ReadDir(name string) ([]file_interface.FileInfo, error) {
 	var filePath, msg string
 
-	st := "ERROR"
-
-	location := path.Join(string(filepath.Separator), f.config.BucketName)
+	st := statusErr
 
 	defer f.sendOperationStats(&FileLog{
 		Operation: "READDIR",
-		Location:  location,
+		Location:  getLocation(f.config.BucketName),
 		Status:    &st,
 		Message:   &msg,
 	}, time.Now())
@@ -211,7 +206,7 @@ func (f *fileSystem) ReadDir(name string) ([]file_interface.FileInfo, error) {
 		})
 	}
 
-	st = "SUCCESS"
+	st = statusSuccess
 	msg = fmt.Sprintf("Directory/Files in directory with path %q retrieved successfully", name)
 
 	f.logger.Logf("Reading directory/files from S3 at path %q successful.", name)
@@ -224,13 +219,11 @@ func (f *fileSystem) ReadDir(name string) ([]file_interface.FileInfo, error) {
 // This method attempts to change the current directory, but S3 does not support directory changes due to its flat file structure.
 // The bucket is constant and fixed, so directory operations are not applicable.
 func (f *fileSystem) ChDir(_ string) error {
-	st := "ERROR"
-
-	location := path.Join(string(filepath.Separator), f.config.BucketName)
+	st := statusErr
 
 	defer f.sendOperationStats(&FileLog{
 		Operation: "CHDIR",
-		Location:  location,
+		Location:  getLocation(f.config.BucketName),
 		Status:    &st,
 		Message:   aws.String("Changing directory not supported"),
 	}, time.Now())
@@ -242,12 +235,11 @@ func (f *fileSystem) ChDir(_ string) error {
 //
 // This method retrieves the name of the bucket that is currently set for S3 operations.
 func (f *fileSystem) Getwd() (string, error) {
-	status := "SUCCESS"
+	status := statusSuccess
 
-	location := path.Join(string(filepath.Separator), f.config.BucketName)
-	f.sendOperationStats(&FileLog{Operation: "GETWD", Location: location, Status: &status}, time.Now())
+	f.sendOperationStats(&FileLog{Operation: "GETWD", Location: getLocation(f.config.BucketName), Status: &status}, time.Now())
 
-	return location, nil
+	return getLocation(f.config.BucketName), nil
 }
 
 // renameDirectory renames a directory by copying all its contents to a new path and then deleting the old path.
@@ -289,7 +281,7 @@ func (f *fileSystem) renameDirectory(st, msg *string, oldPath, newPath string) e
 		return err
 	}
 
-	*st = "SUCCESS"
+	*st = statusSuccess
 	*msg = fmt.Sprintf("Directory with path %q successfully renamed to %q", oldPath, newPath)
 
 	return nil

@@ -8,7 +8,6 @@ import (
 	"mime"
 	"os"
 	"path"
-	"path/filepath"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -63,12 +62,11 @@ func (f *fileSystem) UseMetrics(metrics interface{}) {
 func (f *fileSystem) Connect() {
 	var msg string
 
-	st := "ERROR"
-	location := path.Join(string(filepath.Separator), f.config.BucketName)
+	st := statusErr
 
 	defer f.sendOperationStats(&FileLog{
 		Operation: "CONNECT",
-		Location:  location,
+		Location:  getLocation(f.config.BucketName),
 		Status:    &st,
 		Message:   &msg,
 	}, time.Now())
@@ -96,7 +94,7 @@ func (f *fileSystem) Connect() {
 	)
 
 	f.conn = s3Client
-	st = "SUCCESS"
+	st = statusSuccess
 	msg = "S3 Client connected."
 
 	f.logger.Logf("Connected to S3 bucket %s", f.config.BucketName)
@@ -110,12 +108,11 @@ func (f *fileSystem) Connect() {
 func (f *fileSystem) Create(name string) (file_interface.File, error) {
 	var msg string
 
-	st := "ERROR"
-	location := path.Join(string(filepath.Separator), f.config.BucketName)
+	st := statusErr
 
 	defer f.sendOperationStats(&FileLog{
 		Operation: "CREATE FILE",
-		Location:  location,
+		Location:  getLocation(f.config.BucketName),
 		Status:    &st,
 		Message:   &msg,
 	}, time.Now())
@@ -163,7 +160,7 @@ func (f *fileSystem) Create(name string) (file_interface.File, error) {
 		return nil, err
 	}
 
-	st = "SUCCESS"
+	st = statusSuccess
 	msg = "File creation on S3 successful."
 
 	f.logger.Logf("File with name %s created.", name)
@@ -187,12 +184,11 @@ func (f *fileSystem) Create(name string) (file_interface.File, error) {
 func (f *fileSystem) Remove(name string) error {
 	var msg string
 
-	st := "ERROR"
-	location := path.Join(string(filepath.Separator), f.config.BucketName)
+	st := statusErr
 
 	defer f.sendOperationStats(&FileLog{
 		Operation: "REMOVE FILE",
-		Location:  location,
+		Location:  getLocation(f.config.BucketName),
 		Status:    &st,
 		Message:   &msg,
 	}, time.Now())
@@ -207,7 +203,7 @@ func (f *fileSystem) Remove(name string) error {
 		return err
 	}
 
-	st = "SUCCESS"
+	st = statusSuccess
 	msg = "File deletion on S3 successful"
 
 	f.logger.Logf("File with path %q deleted", name)
@@ -222,12 +218,11 @@ func (f *fileSystem) Remove(name string) error {
 func (f *fileSystem) Open(name string) (file_interface.File, error) {
 	var msg string
 
-	st := "ERROR"
-	location := path.Join(string(filepath.Separator), f.config.BucketName)
+	st := statusErr
 
 	defer f.sendOperationStats(&FileLog{
 		Operation: "OPEN FILE",
-		Location:  location,
+		Location:  getLocation(f.config.BucketName),
 		Status:    &st,
 		Message:   &msg,
 	}, time.Now())
@@ -242,7 +237,7 @@ func (f *fileSystem) Open(name string) (file_interface.File, error) {
 		return nil, err
 	}
 
-	st = "SUCCESS"
+	st = statusSuccess
 	msg = fmt.Sprintf("File with path %q retrieved successfully", name)
 
 	return &file{
@@ -275,12 +270,11 @@ func (f *fileSystem) OpenFile(name string, _ int, _ os.FileMode) (file_interface
 func (f *fileSystem) Rename(oldname, newname string) error {
 	var msg string
 
-	st := "ERROR"
-	location := path.Join(string(filepath.Separator), f.config.BucketName)
+	st := statusErr
 
 	defer f.sendOperationStats(&FileLog{
 		Operation: "RENAME",
-		Location:  location,
+		Location:  getLocation(f.config.BucketName),
 		Status:    &st,
 		Message:   &msg,
 	}, time.Now())
@@ -330,7 +324,7 @@ func (f *fileSystem) Rename(oldname, newname string) error {
 		return err
 	}
 
-	st = "SUCCESS"
+	st = statusSuccess
 	msg = "File renamed successfully"
 
 	f.logger.Logf("File with path %q renamed to %q", oldname, newname)
@@ -348,12 +342,11 @@ func (f *fileSystem) Rename(oldname, newname string) error {
 func (f *fileSystem) Stat(name string) (file_interface.FileInfo, error) {
 	var msg string
 
-	st := "ERROR"
-	location := path.Join(string(filepath.Separator), f.config.BucketName)
+	st := statusErr
 
 	defer f.sendOperationStats(&FileLog{
 		Operation: "STAT",
-		Location:  location,
+		Location:  getLocation(f.config.BucketName),
 		Status:    &st,
 		Message:   &msg,
 	}, time.Now())
@@ -394,7 +387,7 @@ func (f *fileSystem) Stat(name string) (file_interface.FileInfo, error) {
 		}
 
 		// directory exist and first value gives information about the directory
-		st = "SUCCESS"
+		st = statusSuccess
 		msg = fmt.Sprintf("Directory with path %q info retrieved successfully", name)
 
 		if res.Contents != nil {

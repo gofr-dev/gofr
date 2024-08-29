@@ -17,15 +17,23 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
+const (
+	statusErr     = "ERROR"
+	statusSuccess = "SUCCESS"
+)
+
+func getLocation(bucket string) string {
+	return path.Join(string(filepath.Separator), bucket)
+}
+
 // Name returns the base name of the file.
 //
 // For a file, this method returns the name of the file without any directory components.
 // For directories, it returns the name of the directory.
 func (f *file) Name() string {
 	bucketName := strings.Split(f.name, string(filepath.Separator))[0]
-	location := path.Join(string(filepath.Separator), bucketName)
 
-	f.sendOperationStats(&FileLog{Operation: "GET NAME", Location: location}, time.Now())
+	f.sendOperationStats(&FileLog{Operation: "GET NAME", Location: getLocation(bucketName)}, time.Now())
 
 	return path.Base(f.name)
 }
@@ -37,9 +45,8 @@ func (f *file) Name() string {
 // and should be considered a placeholder in this context.
 func (f *file) Mode() os.FileMode {
 	bucketName := strings.Split(f.name, string(filepath.Separator))[0]
-	location := path.Join(string(filepath.Separator), bucketName)
 
-	f.sendOperationStats(&FileLog{Operation: "FILE MODE", Location: location, Message: aws.String("not supported for S3")}, time.Now())
+	f.sendOperationStats(&FileLog{Operation: "FILE MODE", Location: getLocation(bucketName), Message: aws.String("not supported for S3")}, time.Now())
 
 	return os.ModePerm
 }
@@ -53,9 +60,8 @@ func (f *file) Mode() os.FileMode {
 //   - This method should be called on a FileInfo instance obtained from a Stat or ReadDir operation.
 func (f *file) Size() int64 {
 	bucketName := strings.Split(f.name, string(filepath.Separator))[0]
-	location := path.Join(string(filepath.Separator), bucketName)
 
-	f.sendOperationStats(&FileLog{Operation: "FILE/DIR SIZE", Location: location}, time.Now())
+	f.sendOperationStats(&FileLog{Operation: "FILE/DIR SIZE", Location: getLocation(bucketName)}, time.Now())
 
 	return f.size
 }
@@ -67,9 +73,8 @@ func (f *file) Size() int64 {
 // to files within the directory.
 func (f *file) ModTime() time.Time {
 	bucketName := strings.Split(f.name, string(filepath.Separator))[0]
-	location := path.Join(string(filepath.Separator), bucketName)
 
-	f.sendOperationStats(&FileLog{Operation: "LAST MODIFIED", Location: location}, time.Now())
+	f.sendOperationStats(&FileLog{Operation: "LAST MODIFIED", Location: getLocation(bucketName)}, time.Now())
 
 	return f.lastModified
 }
@@ -85,9 +90,8 @@ func (f *file) ModTime() time.Time {
 //     to query whether the object is a directory.
 func (f *file) IsDir() bool {
 	bucketName := strings.Split(f.name, string(filepath.Separator))[0]
-	location := path.Join(string(filepath.Separator), bucketName)
 
-	defer f.sendOperationStats(&FileLog{Operation: "IS DIR", Location: location}, time.Now())
+	defer f.sendOperationStats(&FileLog{Operation: "IS DIR", Location: getLocation(bucketName)}, time.Now())
 
 	return f.name[len(f.name)-1] == '/'
 }
@@ -95,9 +99,8 @@ func (f *file) IsDir() bool {
 // Close closes the response body returned in Open/Create methods if the response body is not nil.
 func (f *file) Close() error {
 	bucketName := strings.Split(f.name, string(filepath.Separator))[0]
-	location := path.Join(string(filepath.Separator), bucketName)
 
-	defer f.sendOperationStats(&FileLog{Operation: "CLOSE", Location: location}, time.Now())
+	defer f.sendOperationStats(&FileLog{Operation: "CLOSE", Location: getLocation(bucketName)}, time.Now())
 
 	if f.body != nil {
 		return f.body.Close()
@@ -114,7 +117,6 @@ func (f *file) Close() error {
 // Additionally, this method updates the file offset to reflect the next position that will be used for subsequent read or write operations.
 func (f *file) Read(p []byte) (n int, err error) {
 	bucketName := strings.Split(f.name, string(filepath.Separator))[0]
-	location := path.Join(string(filepath.Separator), bucketName)
 
 	var fileName, msg string
 
@@ -123,9 +125,9 @@ func (f *file) Read(p []byte) (n int, err error) {
 		fileName = f.name[index+1:]
 	}
 
-	st := "ERROR"
+	st := statusErr
 
-	defer f.sendOperationStats(&FileLog{Operation: "READ", Location: location, Status: &st, Message: &msg}, time.Now())
+	defer f.sendOperationStats(&FileLog{Operation: "READ", Location: getLocation(bucketName), Status: &st, Message: &msg}, time.Now())
 
 	res, err := f.conn.GetObject(context.TODO(), &s3.GetObjectInput{
 		Bucket: aws.String(bucketName),
@@ -140,7 +142,7 @@ func (f *file) Read(p []byte) (n int, err error) {
 	f.body = res.Body
 	if f.body == nil {
 		msg = fmt.Sprintf("File %q is nil", fileName)
-		return 0, errors.New("S3 body is nil")
+		return 0, errors.New("s3 body is nil")
 	}
 
 	b := make([]byte, len(p)+int(f.offset))
@@ -156,7 +158,7 @@ func (f *file) Read(p []byte) (n int, err error) {
 
 	f.offset += int64(len(b))
 
-	st = "SUCCESS"
+	st = statusSuccess
 	msg = fmt.Sprintf("Read %v bytes from file at path %q in bucket %q", n, fileName, bucketName)
 
 	f.logger.Logf("%v bytes read successfully)", len(p))
@@ -170,13 +172,12 @@ func (f *file) Read(p []byte) (n int, err error) {
 // used for other read or write operations. The number of bytes read is returned, along with any error encountered.
 func (f *file) ReadAt(p []byte, offset int64) (n int, err error) {
 	bucketName := strings.Split(f.name, string(filepath.Separator))[0]
-	location := path.Join(string(filepath.Separator), bucketName)
 
 	var fileName, msg string
 
-	st := "ERROR"
+	st := statusErr
 
-	defer f.sendOperationStats(&FileLog{Operation: "READAT", Location: location, Status: &st, Message: &msg}, time.Now())
+	defer f.sendOperationStats(&FileLog{Operation: "READAT", Location: getLocation(bucketName), Status: &st, Message: &msg}, time.Now())
 
 	index := strings.Index(f.name, string(filepath.Separator))
 	if index != -1 {
@@ -214,7 +215,7 @@ func (f *file) ReadAt(p []byte, offset int64) (n int, err error) {
 	b = b[offset:]
 	copy(p, b)
 
-	st = "SUCCESS"
+	st = statusSuccess
 	msg = fmt.Sprintf("Read %v bytes at an offset of %v from file at path %q in bucket %q", n, offset, fileName, bucketName)
 
 	f.logger.Logf("%v bytes read successfully.")
@@ -228,13 +229,12 @@ func (f *file) ReadAt(p []byte, offset int64) (n int, err error) {
 // It updates the file offset after the write operation to reflect the new position for subsequent read or write operations.
 func (f *file) Write(p []byte) (n int, err error) {
 	bucketName := strings.Split(f.name, string(filepath.Separator))[0]
-	location := path.Join(string(filepath.Separator), bucketName)
 
 	var fileName, msg string
 
-	st := "ERROR"
+	st := statusErr
 
-	defer f.sendOperationStats(&FileLog{Operation: "WRITE", Location: location, Status: &st, Message: &msg}, time.Now())
+	defer f.sendOperationStats(&FileLog{Operation: "WRITE", Location: getLocation(bucketName), Status: &st, Message: &msg}, time.Now())
 
 	index := strings.Index(f.name, string(filepath.Separator))
 	if index != -1 {
@@ -288,7 +288,7 @@ func (f *file) Write(p []byte) (n int, err error) {
 	f.offset += int64(len(p))
 	f.size = int64(len(buffer))
 
-	st = "SUCCESS"
+	st = statusSuccess
 	msg = fmt.Sprintf("Wrote %v bytes to file at path %q in bucket %q", n, fileName, bucketName)
 
 	f.logger.Logf("%v bytes written successfully", len(p))
@@ -303,13 +303,12 @@ func (f *file) Write(p []byte) (n int, err error) {
 // The number of bytes written and any error encountered during the operation are returned.
 func (f *file) WriteAt(p []byte, offset int64) (n int, err error) {
 	bucketName := strings.Split(f.name, string(filepath.Separator))[0]
-	location := path.Join(string(filepath.Separator), bucketName)
 
 	var fileName, msg string
 
-	st := "ERROR"
+	st := statusErr
 
-	defer f.sendOperationStats(&FileLog{Operation: "WRITEAT", Location: location, Status: &st, Message: &msg}, time.Now())
+	defer f.sendOperationStats(&FileLog{Operation: "WRITEAT", Location: getLocation(bucketName), Status: &st, Message: &msg}, time.Now())
 
 	index := strings.Index(f.name, string(filepath.Separator))
 	if index != -1 {
@@ -350,7 +349,7 @@ func (f *file) WriteAt(p []byte, offset int64) (n int, err error) {
 
 	f.size = int64(len(buffer))
 
-	st = "SUCCESS"
+	st = statusSuccess
 	msg = fmt.Sprintf("Wrote %v bytes at an offset of %v to file at path %q in bucket %q", n, offset, fileName, bucketName)
 
 	return len(p), nil
@@ -397,7 +396,7 @@ func (f *file) check(whence int, offset, length int64, msg *string) (int64, erro
 func (f *file) Seek(offset int64, whence int) (int64, error) {
 	var msg string
 
-	status := "ERROR"
+	status := statusErr
 
 	defer f.sendOperationStats(&FileLog{Operation: "SEEK", Location: f.name, Status: &status, Message: &msg}, time.Now())
 
@@ -409,7 +408,7 @@ func (f *file) Seek(offset int64, whence int) (int64, error) {
 		return 0, err
 	}
 
-	status = "SUCCESS"
+	status = statusSuccess
 	msg = fmt.Sprintf("Offset set to %v for file with path %q", res, f.name)
 
 	f.logger.Logf("Set file offset at %v", f.offset)
