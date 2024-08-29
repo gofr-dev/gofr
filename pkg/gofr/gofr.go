@@ -627,15 +627,16 @@ func (a *App) UseMiddleware(middlewares ...gofrHTTP.Middleware) {
 	a.httpServer.router.UseMiddleware(middlewares...)
 }
 
-// AddCronJob registers a cron job to the cron table, the schedule is in * * * * * (5 part) format
-// denoting minute, hour, day, month and day of week respectively.
+// AddCronJob registers a cron job to the cron table.
+// The cron expression can be either a 5-part or 6-part format. The 6-part format includes an
+// optional second field (in beginning) and others being minute, hour, day, month and day of week respectively.
 func (a *App) AddCronJob(schedule, jobName string, job CronFunc) {
 	if a.cron == nil {
 		a.cron = NewCron(a.container)
 	}
 
 	if err := a.cron.AddJob(schedule, jobName, job); err != nil {
-		a.Logger().Errorf("error adding cron job, err : %v", err)
+		a.Logger().Errorf("error adding cron job, err: %v", err)
 	}
 }
 
