@@ -240,9 +240,9 @@ func TestFiles_OpenFile(t *testing.T) {
 	for i, tc := range testCases {
 		mocks.client.EXPECT().OpenFile(tc.name, 0).Return(&mockSftpFile, tc.expError)
 
-		createdFile, err := client.OpenFile(tc.name, 0, 0)
+		openedFile, err := client.OpenFile(tc.name, 0, 0)
 
-		require.Equal(t, tc.expFile, createdFile, "Test[%d] Failed.\n DESC %v", i, tc.desc)
+		require.Equal(t, tc.expFile, openedFile, "Test[%d] Failed.\n DESC %v", i, tc.desc)
 		require.Equal(t, tc.expError, err, "Test[%d] Failed.\n DESC %v", i, tc.desc)
 	}
 }
