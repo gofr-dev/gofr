@@ -234,7 +234,7 @@ func TestFiles_OpenFile(t *testing.T) {
 		expError error
 	}{
 		{"File Opened Successfully", "text.csv", sftpFile{File: &mockSftpFile, logger: mocks.logger}, nil},
-		{"File Open Failed", "text.csv", nil, errors.New("File Creation Failed")},
+		{"File Open Failed", "text.csv", nil, errors.New("File Open Failed")},
 	}
 
 	for i, tc := range testCases {
