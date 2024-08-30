@@ -121,30 +121,82 @@ func Test_RenameDirectory(t *testing.T) {
 }
 
 func Test_ReadDir(t *testing.T) {
+	type result struct {
+		name  string
+		size  int64
+		isDir bool
+	}
+
+	tests := []struct {
+		dirPath         string
+		expectedResults []result
+	}{
+		{
+			dirPath: "abc/efg",
+			expectedResults: []result{
+				{"file.txt", 0, false},
+				{"hij", 0, true},
+			},
+		},
+		{
+			dirPath: "abc",
+			expectedResults: []result{
+				{"efg", 0, true},
+			},
+		},
+		{
+			dirPath: ".",
+			expectedResults: []result{
+				{"abc", 0, true},
+			},
+		},
+	}
+
 	runS3Test(t, func(fs file.FileSystemProvider) {
+		// Setup
 		currentDir, err := fs.Getwd()
-		require.NoError(t, err, "TEST[%d] Failed. Desc: %v", 0, "Failed to get current directory")
+		require.NoError(t, err, "Failed to get current directory")
 		assert.Equal(t, "/gofr-bucket-2", currentDir)
 
 		err = fs.Mkdir("abc/efg/hij", os.ModePerm)
-		require.NoError(t, err, "TEST[%d] Failed. Desc: %v", 0, "Error creating directory")
+		require.NoError(t, err, "Error creating directory")
 
 		_, err = fs.Create("abc/efg/file.txt")
-		require.NoError(t, err, "TEST[%d] Failed. Desc: %v", 0, "Error creating file")
+		require.NoError(t, err, "Error creating file")
 
-		res, err := fs.ReadDir("abc/efg")
-		require.NoError(t, err, "TEST[%d] Failed. Desc: %v", 0, "Error reading directory")
+		for i, tt := range tests {
+			t.Run(fmt.Sprintf("TestCase %d", i), func(t *testing.T) {
+				res, err := fs.ReadDir(tt.dirPath)
+				require.NoError(t, err, "Error reading directory")
 
-		for i := range res {
-			fmt.Println(res[i].Name(), res[i].Size(), res[i].IsDir())
+				var results []result
+
+				for _, entry := range res {
+					results = append(results, result{entry.Name(), entry.Size(), entry.IsDir()})
+				}
+
+				assert.Equal(t, tt.expectedResults, results, "Mismatch in results for path: %v", tt.dirPath)
+			})
 		}
 
 		err = fs.RemoveAll("abc")
-		require.NoError(t, err, "TEST[%d] Failed. Desc: %v", 0, "Error removing directory")
+		require.NoError(t, err, "Error removing directory")
 	})
 }
 
 func Test_StatFile(t *testing.T) {
+	type result struct {
+		name  string
+		size  int64
+		isDir bool
+	}
+
+	expectedResponse := result{
+		name:  "file.txt",
+		size:  0,
+		isDir: false,
+	}
+
 	runS3Test(t, func(fs file.FileSystemProvider) {
 		err := fs.Mkdir("dir1/dir2", os.ModePerm)
 		require.NoError(t, err, "TEST[%d] Failed. Desc: %v", 0, "Failed to create directory")
@@ -153,9 +205,11 @@ func Test_StatFile(t *testing.T) {
 		require.NoError(t, err, "TEST[%d] Failed. Desc: %v", 0, "Failed to create file")
 
 		res, err := fs.Stat("dir1/dir2/file.txt")
-		require.NoError(t, err, "TEST[%d] Failed. Desc: %v", 0, "Error getting file info")
 
-		fmt.Println(res.Name(), res.Size(), res.IsDir())
+		response := result{res.Name(), res.Size(), res.IsDir()}
+
+		require.NoError(t, err, "TEST[%d] Failed. Desc: %v", 0, "Error getting file info")
+		assert.Equal(t, expectedResponse, response, "Mismatch in results for path: %v", expectedResponse.name)
 
 		err = fs.RemoveAll("dir1")
 		require.NoError(t, err, "TEST[%d] Failed. Desc: %v", 0, "Error removing directory")
@@ -163,6 +217,18 @@ func Test_StatFile(t *testing.T) {
 }
 
 func Test_StatDirectory(t *testing.T) {
+	type result struct {
+		name  string
+		size  int64
+		isDir bool
+	}
+
+	expectedResponse := result{
+		name:  "dir2",
+		size:  0,
+		isDir: false,
+	}
+
 	runS3Test(t, func(fs file.FileSystemProvider) {
 		err := fs.Mkdir("dir1/dir2", os.ModePerm)
 		require.NoError(t, err, "TEST[%d] Failed. Desc: %v", 0, "Failed to create directory")
@@ -171,8 +237,11 @@ func Test_StatDirectory(t *testing.T) {
 		require.NoError(t, err, "TEST[%d] Failed. Desc: %v", 0, "Error creating file")
 
 		res, err := fs.Stat("dir1/dir2")
+
+		response := result{res.Name(), res.Size(), res.IsDir()}
+
 		require.NoError(t, err, "TEST[%d] Failed. Desc: %v", 0, "Error getting directory stats")
-		fmt.Println(res.Name(), res.Size(), res.IsDir())
+		assert.Equal(t, expectedResponse, response, "Mismatch in results for path: %v", expectedResponse.name)
 
 		err = fs.RemoveAll("dir1")
 		require.NoError(t, err, "TEST[%d] Failed. Desc: %v", 0, "Error removing directory")

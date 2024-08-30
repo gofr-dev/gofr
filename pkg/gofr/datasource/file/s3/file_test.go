@@ -10,7 +10,7 @@ import (
 	file "gofr.dev/pkg/gofr/datasource/file"
 )
 
-func Test_WriteRead(t *testing.T) {
+func Test_Write(t *testing.T) {
 	runS3Test(t, func(fs file.FileSystemProvider) {
 		var csvContent = `Name,Age,Email
 John Doe,30,johndoe@example.com
@@ -19,41 +19,131 @@ Emily Johnson,35,emilyj@example.com
 Michael Brown,40,michaelb@example.com`
 
 		newCsvFile, err := fs.Create("temp.csv")
-		require.NoError(t, err, "TEST WriteRead Failed. Desc: %v", "Failed to create CSV file")
+		require.NoError(t, err, "Failed to create CSV file")
 
 		defer func(fs file.FileSystem, name string) {
 			err = fs.Remove(name)
-			require.NoError(t, err, "TEST WriteRead Failed. Desc: %v", "Error removing file %v", name)
+			require.NoError(t, err, "Error removing file %v", name)
 		}(fs, "temp.csv")
 
-		// Test Write
 		_, err = newCsvFile.Write([]byte(csvContent))
-		require.NoError(t, err, "TEST WriteRead Failed. Desc: %v", "Failed to write to CSV file")
+		require.NoError(t, err, "Failed to write to CSV file")
 
-		buffer := make([]byte, 5)
+		// check if the content is written at the end of the file or not
+		_, err = newCsvFile.Write([]byte(csvContent))
+		require.NoError(t, err, "Failed to write to CSV file")
+
+		// verify file content
+		_, err = newCsvFile.Seek(0, io.SeekStart)
+		require.NoError(t, err, "Failed to seek to CSV file")
+
+		csvContent += csvContent
+
+		buffer := make([]byte, len(csvContent))
+
+		_, err = newCsvFile.Read(buffer)
+		require.Error(t, err, "Expected  EOF error")
+		assert.Equal(t, csvContent, string(buffer))
+	})
+}
+
+func Test_WriteAt(t *testing.T) {
+	runS3Test(t, func(fs file.FileSystemProvider) {
+		var csvContent = `Name,Age,Email
+John Doe,30,johndoe@example.com
+Jane Smith,25,janesmith@example.com
+Emily Johnson,35,emilyj@example.com
+Michael Brown,40,michaelb@example.com`
+
+		newCsvFile, err := fs.Create("temp.csv")
+		require.NoError(t, err, "Failed to create CSV file")
+
+		defer func(fs file.FileSystem, name string) {
+			err = fs.Remove(name)
+			require.NoError(t, err, "Error removing file %v", name)
+		}(fs, "temp.csv")
+
+		_, err = newCsvFile.Write([]byte(csvContent))
+		require.NoError(t, err, "Failed to write to CSV file")
 
 		_, err = newCsvFile.Seek(0, io.SeekStart)
-		require.NoError(t, err, "TEST WriteRead Failed. Desc: %v", "Error seeking to start of file")
+		require.NoError(t, err, "Error seeking to start of file")
+
+		_, err = newCsvFile.WriteAt([]byte("Hello World"), 5)
+		require.NoError(t, err, "Error writing to file at offset")
+
+		// verify written file
+		buffer := make([]byte, 11)
+
+		_, err = newCsvFile.ReadAt(buffer, 5)
+		require.NoError(t, err, "Error reading from file")
+		assert.Equal(t, "Hello World", string(buffer), "TEST Failed. Desc: %s", "File content & csv content are not equal")
+	})
+}
+
+func Test_Read(t *testing.T) {
+	runS3Test(t, func(fs file.FileSystemProvider) {
+		var csvContent = `Name,Age,Email
+John Doe,30,johndoe@example.com
+Jane Smith,25,janesmith@example.com
+Emily Johnson,35,emilyj@example.com
+Michael Brown,40,michaelb@example.com`
+
+		newCsvFile, err := fs.Create("temp.csv")
+		require.NoError(t, err, "TEST Read Failed. Desc: %v", "Failed to create CSV file")
+
+		defer func(fs file.FileSystem, name string) {
+			err = fs.Remove(name)
+			require.NoError(t, err, "TEST Read Failed. Desc: %v", "Error removing file %v", name)
+		}(fs, "temp.csv")
+
+		_, err = newCsvFile.Write([]byte(csvContent))
+		require.NoError(t, err, "TEST Read Failed. Desc: %v", "Failed to write to CSV file")
+
+		buffer := make([]byte, 5)
+		_, err = newCsvFile.Seek(0, io.SeekStart)
+		require.NoError(t, err, "TEST Read Failed. Desc: %v", "Error seeking to start of file")
 
 		// Test Read
 		_, err = newCsvFile.Read(buffer)
-		require.NoError(t, err, "TEST WriteRead Failed. Desc: Error reading from file")
+		require.NoError(t, err, "TEST Read Failed. Desc: %v", "Error reading from file")
 		assert.Equal(t, csvContent[:5], string(buffer), "TEST WriteRead Failed. Desc: %v", "Read content mismatch")
 
-		_, err = newCsvFile.Seek(0, io.SeekStart)
-		require.NoError(t, err, "TEST WriteRead Failed. Desc: %v", "Error seeking to start of file")
+		// check if next read is performed at set offset
+		_, err = newCsvFile.Read(buffer)
+		require.NoError(t, err, "TEST Read Failed. Desc: %v", "Error reading from file")
+		assert.Equal(t, csvContent[5:10], string(buffer), "TEST Read Failed. Desc: %v", "Read content mismatch")
+	})
+}
 
-		// Test WriteAt
-		_, err = newCsvFile.WriteAt([]byte("Hello World"), 5)
-		require.NoError(t, err, "TEST WriteRead Failed. Desc: %v", "Error writing to file at offset")
+func Test_ReadAt(t *testing.T) {
+	runS3Test(t, func(fs file.FileSystemProvider) {
+		var csvContent = `Name,Age,Email
+John Doe,30,johndoe@example.com
+Jane Smith,25,janesmith@example.com
+Emily Johnson,35,emilyj@example.com
+Michael Brown,40,michaelb@example.com`
+
+		newCsvFile, err := fs.Create("temp.csv")
+		require.NoError(t, err, "Failed to create CSV file")
+
+		defer func(fs file.FileSystem, name string) {
+			err = fs.Remove(name)
+			require.NoError(t, err, "Error removing file %v", name)
+		}(fs, "temp.csv")
+
+		_, err = newCsvFile.Write([]byte(csvContent))
+		require.NoError(t, err, "Failed to write to CSV file")
 
 		_, err = newCsvFile.Seek(0, io.SeekStart)
-		require.NoError(t, err, "TEST WriteRead Failed. Desc: %v", "Error seeking to start of file")
+		require.NoError(t, err, "Error seeking to start of file")
+
+		buffer := make([]byte, 4)
 
 		// Test ReadAt
 		_, err = newCsvFile.ReadAt(buffer, 5)
-		require.NoError(t, err, "TEST WriteRead Failed. Desc: %v", "Error reading from file at offset")
-		assert.Equal(t, "ello ", string(buffer), "TEST WriteRead Failed. Desc: %v", "Read content at offset mismatch")
+		require.NoError(t, err, "Error reading from file at offset")
+		assert.Equal(t, "Age,", string(buffer), "Read content at offset mismatch")
 	})
 }
 

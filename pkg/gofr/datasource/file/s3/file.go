@@ -308,12 +308,11 @@ func (f *s3file) Write(p []byte) (n int, err error) {
 		}
 
 		var contentBeforeOffset, contentAfterBufferBytes []byte
-		if f.offset < f.size {
-			contentBeforeOffset = buffer[:f.offset]
-		}
 
-		if f.offset+int64(len(p)-1) < f.size {
-			contentAfterBufferBytes = buffer[f.offset+int64(len(p))-1:]
+		contentBeforeOffset = buffer[:f.offset]
+
+		if f.offset+int64(len(p)) < f.size {
+			contentAfterBufferBytes = buffer[f.offset+int64(len(p)):]
 		}
 
 		buffer = append(contentBeforeOffset, p...)
@@ -376,9 +375,16 @@ func (f *s3file) WriteAt(p []byte, offset int64) (n int, err error) {
 
 	f.body = res.Body
 
+	var contentAfterBufferBytes []byte
+
 	buffer, err := io.ReadAll(f.body)
-	contentBeforeOffset := buffer[:offset-1]
-	contentAfterBufferBytes := buffer[offset+int64(len(p))-1:]
+
+	contentBeforeOffset := buffer[:offset]
+
+	if offset+int64(len(p)) < f.size {
+		contentAfterBufferBytes = buffer[offset+int64(len(p)):]
+	}
+
 	buffer = append(contentBeforeOffset, p...)
 	buffer = append(buffer, contentAfterBufferBytes...)
 

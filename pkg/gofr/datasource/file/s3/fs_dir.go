@@ -184,7 +184,7 @@ func (f *fileSystem) ReadDir(name string) ([]file.FileInfo, error) {
 	var fileInfo []file.FileInfo
 
 	for i := range entries.Contents {
-		if i == 0 {
+		if i == 0 && filePath != "" {
 			continue
 		}
 
@@ -193,7 +193,7 @@ func (f *fileSystem) ReadDir(name string) ([]file.FileInfo, error) {
 		if len(fileInfo) > 0 {
 			temp, ok := fileInfo[len(fileInfo)-1].(*s3file)
 
-			if ok && relativepath == temp.name {
+			if ok && relativepath == path.Base(temp.name)+string(filepath.Separator) {
 				continue
 			}
 		}
@@ -203,7 +203,7 @@ func (f *fileSystem) ReadDir(name string) ([]file.FileInfo, error) {
 			logger:       f.logger,
 			metrics:      f.metrics,
 			size:         *entries.Contents[i].Size,
-			name:         path.Join(f.config.BucketName, *entries.Contents[i].Key),
+			name:         f.config.BucketName + string(filepath.Separator) + *entries.Contents[i].Key,
 			lastModified: *entries.Contents[i].LastModified,
 		})
 	}
