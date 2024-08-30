@@ -34,11 +34,6 @@ const (
 	statusSuccess = "SUCCESS"
 )
 
-// getLocation gives the returns the absolute path of the S3 bucket.
-func getLocation(bucket string) string {
-	return path.Join(string(filepath.Separator), bucket)
-}
-
 // Name returns the base name of the file.
 //
 // For a file, this method returns the name of the file without any directory components.

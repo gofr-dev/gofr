@@ -8,6 +8,7 @@ import (
 	"mime"
 	"os"
 	"path"
+	"path/filepath"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -52,6 +53,11 @@ func (f *fileSystem) UseMetrics(metrics interface{}) {
 	if m, ok := metrics.(Metrics); ok {
 		f.metrics = m
 	}
+}
+
+// getLocation gives the returns the absolute path of the S3 bucket.
+func getLocation(bucket string) string {
+	return path.Join(string(filepath.Separator), bucket)
 }
 
 // Connect initializes and validates the connection to the S3 service.
