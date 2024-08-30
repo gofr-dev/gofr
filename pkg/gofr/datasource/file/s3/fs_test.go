@@ -92,15 +92,57 @@ func Test_MakingAndDeletingDirectories(t *testing.T) {
 }
 
 func Test_RenameFile(t *testing.T) {
+	tests := []struct {
+		name          string
+		initialName   string
+		newName       string
+		expectedError bool
+	}{
+		{
+			name:          "Rename file to new name",
+			initialName:   "abcd.json",
+			newName:       "abc.json",
+			expectedError: false,
+		},
+		{
+			name:          "Rename file with different extension",
+			initialName:   "abcd.json",
+			newName:       "abcd.txt",
+			expectedError: true,
+		},
+		{
+			name:          "Rename file to same name",
+			initialName:   "abcd.json",
+			newName:       "abcd.json",
+			expectedError: false,
+		},
+		{
+			name:          "Rename file to directory path (unsupported)",
+			initialName:   "abcd.json",
+			newName:       "abc/abcd.json",
+			expectedError: true,
+		},
+	}
+
 	runS3Test(t, func(fs file.FileSystemProvider) {
 		_, err := fs.Create("abcd.json")
-		require.NoError(t, err, "TEST[%d] Failed. Desc: %v", 0, "Failed to create file")
+		require.NoError(t, err, "Failed to create initial file")
 
-		err = fs.Rename("abcd.json", "abc.json")
-		require.NoError(t, err, "TEST[%d] Failed. Desc: %v", 0, "Failed to rename file")
+		// Iterate through each test case
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				err = fs.Rename(tt.initialName, tt.newName)
+
+				if tt.expectedError {
+					require.Error(t, err, "Expected error but got none for case: %s", tt.name)
+				} else {
+					require.NoError(t, err, "Unexpected error for case: %s", tt.name)
+				}
+			})
+		}
 
 		err = fs.Remove("abc.json")
-		require.NoError(t, err, "TEST[%d] Failed. Desc: %v", 0, "Failed to remove file")
+		require.NoError(t, err, "Failed to remove file")
 	})
 }
 

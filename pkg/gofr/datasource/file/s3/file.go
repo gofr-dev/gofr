@@ -29,11 +29,6 @@ type s3file struct {
 	lastModified time.Time
 }
 
-const (
-	statusErr     = "ERROR"
-	statusSuccess = "SUCCESS"
-)
-
 // Name returns the base name of the file.
 //
 // For a file, this method returns the name of the file without any directory components.
@@ -117,7 +112,7 @@ func (f *s3file) IsDir() bool {
 		Location:  getLocation(bucketName),
 	}, time.Now())
 
-	return f.name[len(f.name)-1] == '/'
+	return strings.HasSuffix(f.name, "/")
 }
 
 // Close closes the response body returned in Open/Create methods if the response body is not nil.

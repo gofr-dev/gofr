@@ -20,6 +20,11 @@ var (
 	ErrOutOfRange       = errors.New("out of range")
 )
 
+const (
+	statusErr     = "ERROR"
+	statusSuccess = "SUCCESS"
+)
+
 // textReader implements RowReader for reading text files.
 type textReader struct {
 	scanner *bufio.Scanner
