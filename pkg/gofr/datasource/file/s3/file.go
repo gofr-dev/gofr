@@ -34,7 +34,7 @@ type s3file struct {
 // For a file, this method returns the name of the file without any directory components.
 // For directories, it returns the name of the directory.
 func (f *s3file) Name() string {
-	bucketName := strings.Split(f.name, string(filepath.Separator))[0]
+	bucketName := getBucketName(f.name)
 
 	f.sendOperationStats(&FileLog{
 		Operation: "GET NAME",
@@ -50,7 +50,7 @@ func (f *s3file) Name() string {
 // Note: The Mode method does not provide meaningful information for S3 objects
 // and should be considered a placeholder in this context.
 func (f *s3file) Mode() os.FileMode {
-	bucketName := strings.Split(f.name, string(filepath.Separator))[0]
+	bucketName := getBucketName(f.name)
 
 	f.sendOperationStats(&FileLog{
 		Operation: "FILE MODE",
@@ -69,7 +69,7 @@ func (f *s3file) Mode() os.FileMode {
 // Note:
 //   - This method should be called on a FileInfo instance obtained from a Stat or ReadDir operation.
 func (f *s3file) Size() int64 {
-	bucketName := strings.Split(f.name, string(filepath.Separator))[0]
+	bucketName := getBucketName(f.name)
 
 	f.sendOperationStats(&FileLog{
 		Operation: "FILE/DIR SIZE",
@@ -85,7 +85,7 @@ func (f *s3file) Size() int64 {
 // For directories, it returns the timestamp of the most recent change to the directory's contents, including updates
 // to files within the directory.
 func (f *s3file) ModTime() time.Time {
-	bucketName := strings.Split(f.name, string(filepath.Separator))[0]
+	bucketName := getBucketName(f.name)
 
 	f.sendOperationStats(&FileLog{
 		Operation: "LAST MODIFIED",
@@ -105,7 +105,7 @@ func (f *s3file) ModTime() time.Time {
 //   - The FileInfo interface is used to describe file system objects, and IsDir is one of its methods
 //     to query whether the object is a directory.
 func (f *s3file) IsDir() bool {
-	bucketName := strings.Split(f.name, string(filepath.Separator))[0]
+	bucketName := getBucketName(f.name)
 
 	f.sendOperationStats(&FileLog{
 		Operation: "IS DIR",
@@ -117,7 +117,7 @@ func (f *s3file) IsDir() bool {
 
 // Close closes the response body returned in Open/Create methods if the response body is not nil.
 func (f *s3file) Close() error {
-	bucketName := strings.Split(f.name, string(filepath.Separator))[0]
+	bucketName := getBucketName(f.name)
 
 	defer f.sendOperationStats(&FileLog{
 		Operation: "CLOSE",
@@ -139,7 +139,7 @@ func (f *s3file) Close() error {
 func (f *s3file) Read(p []byte) (n int, err error) {
 	var fileName, msg string
 
-	bucketName := strings.Split(f.name, string(filepath.Separator))[0]
+	bucketName := getBucketName(f.name)
 
 	// get path relative to current bucketName
 	index := strings.Index(f.name, string(filepath.Separator))
@@ -198,7 +198,7 @@ func (f *s3file) Read(p []byte) (n int, err error) {
 // This method reads up to len(p) bytes from the file, starting at the given offset. It does not alter the current file offset
 // used for other read or write operations. The number of bytes read is returned, along with any error encountered.
 func (f *s3file) ReadAt(p []byte, offset int64) (n int, err error) {
-	bucketName := strings.Split(f.name, string(filepath.Separator))[0]
+	bucketName := getBucketName(f.name)
 
 	var fileName, msg string
 
@@ -261,7 +261,7 @@ func (f *s3file) ReadAt(p []byte, offset int64) (n int, err error) {
 // This method writes up to len(p) bytes from the provided byte slice to the file, starting at the current offset.
 // It updates the file offset after the write operation to reflect the new position for subsequent read or write operations.
 func (f *s3file) Write(p []byte) (n int, err error) {
-	bucketName := strings.Split(f.name, string(filepath.Separator))[0]
+	bucketName := getBucketName(f.name)
 
 	var fileName, msg string
 
@@ -345,7 +345,7 @@ func (f *s3file) Write(p []byte) (n int, err error) {
 // It does not modify the file's current offset used for other read or write operations.
 // The number of bytes written and any error encountered during the operation are returned.
 func (f *s3file) WriteAt(p []byte, offset int64) (n int, err error) {
-	bucketName := strings.Split(f.name, string(filepath.Separator))[0]
+	bucketName := getBucketName(f.name)
 
 	var fileName, msg string
 
