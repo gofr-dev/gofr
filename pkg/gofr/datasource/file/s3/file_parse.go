@@ -11,27 +11,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aws/aws-sdk-go-v2/service/s3"
-
 	file_interface "gofr.dev/pkg/gofr/datasource/file"
 )
 
-type file struct {
-	conn         *s3.Client
-	name         string
-	offset       int64
-	logger       Logger
-	metrics      Metrics
-	size         int64
-	contentType  string
-	body         io.ReadCloser
-	lastModified time.Time
-}
-
 var (
 	// errNotPointer is returned when Read method is called with a non-pointer argument.
-	errNotPointer = errors.New("input should be a pointer to a string")
-	ErrOutOfRange = errors.New("out of range")
+	errStringNotPointer = errors.New("input should be a pointer to a string")
+	ErrOutOfRange       = errors.New("out of range")
 )
 
 // textReader implements RowReader for reading text files.
@@ -47,7 +33,7 @@ type jsonReader struct {
 }
 
 // ReadAll reads either JSON or text files based on file extension and returns a corresponding RowReader.
-func (f *file) ReadAll() (file_interface.RowReader, error) {
+func (f *s3file) ReadAll() (file_interface.RowReader, error) {
 	bucketName := strings.Split(f.name, string(filepath.Separator))[0]
 
 	var fileName string
@@ -69,14 +55,14 @@ func (f *file) ReadAll() (file_interface.RowReader, error) {
 }
 
 // createJSONReader creates a JSON reader for JSON files.
-func (f *file) createJSONReader(location string) (file_interface.RowReader, error) {
+func (f *s3file) createJSONReader(location string) (file_interface.RowReader, error) {
 	status := statusErr
 
 	defer f.sendOperationStats(&FileLog{Operation: "JSON READER", Location: location, Status: &status}, time.Now())
 
 	buffer, err := io.ReadAll(f.body)
 	if err != nil {
-		f.logger.Errorf("ReadAll Failed : Unable to read json file: %v", err)
+		f.logger.Errorf("ReadAll Failed: Unable to read json file: %v", err)
 		return nil, err
 	}
 
@@ -89,7 +75,7 @@ func (f *file) createJSONReader(location string) (file_interface.RowReader, erro
 	// decode again if we are decoding a json object instead of array
 	token, err := decoder.Token()
 	if err != nil {
-		f.logger.Errorf("Error decoding token : %v", err)
+		f.logger.Errorf("Error decoding token: %v", err)
 		return nil, err
 	}
 
@@ -106,14 +92,14 @@ func (f *file) createJSONReader(location string) (file_interface.RowReader, erro
 }
 
 // createTextCSVReader creates a text reader for reading text files.
-func (f *file) createTextCSVReader(location string) (file_interface.RowReader, error) {
+func (f *s3file) createTextCSVReader(location string) (file_interface.RowReader, error) {
 	status := statusErr
 
 	defer f.sendOperationStats(&FileLog{Operation: "TEXT/CSV READER", Location: location, Status: &status}, time.Now())
 
 	buffer, err := io.ReadAll(f.body)
 	if err != nil {
-		f.logger.Errorf("ReadAll failed : Unable to read text file: %v", err)
+		f.logger.Errorf("ReadAll failed: Unable to read text file: %v", err)
 		return nil, err
 	}
 
@@ -148,5 +134,5 @@ func (f *textReader) Scan(i interface{}) error {
 		return nil
 	}
 
-	return errNotPointer
+	return errStringNotPointer
 }

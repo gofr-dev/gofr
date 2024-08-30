@@ -12,191 +12,175 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
-	file_interface "gofr.dev/pkg/gofr/datasource/file"
+	file "gofr.dev/pkg/gofr/datasource/file"
 )
 
-// Creating different file formats and removing them.
 func Test_CreateRemoveFile(t *testing.T) {
-	runS3Test(t, func(fs file_interface.FileSystemProvider) {
-		_, err := fs.Create("abc.txt")
-		require.NoError(t, err)
+	type testCase struct {
+		name        string
+		createPath  string
+		removePath  string
+		expectError bool
+		removeAll   bool
+	}
 
-		err = fs.Remove("abc.txt")
-		require.NoError(t, err)
-	})
+	tests := []testCase{
+		{name: "Create and remove txt file", createPath: "abc.txt", removePath: "abc.txt", expectError: false, removeAll: false},
+		{name: "Create and remove png file", createPath: "abc.png", removePath: "abc.png", expectError: false, removeAll: false},
+		{name: "Create and remove jpeg file", createPath: "abc.jpeg", removePath: "abc.jpeg", expectError: false, removeAll: false},
+		{name: "Create and remove json file", createPath: "abc.json", removePath: "abc.json", expectError: false, removeAll: false},
+		{name: "Create and remove html file", createPath: "abc.html", removePath: "abc.html", expectError: false, removeAll: false},
+		{name: "Create and remove octet-stream file", createPath: "abc", removePath: "abc", expectError: false, removeAll: false},
+		{name: "Create file with invalid path", createPath: "abc/abc.txt", removePath: "", expectError: true, removeAll: false},
+		{name: "Create and remove file in directory", createPath: "abc/efg.txt", removePath: "abc", expectError: false, removeAll: true},
+	}
 
-	runS3Test(t, func(fs file_interface.FileSystemProvider) {
-		_, err := fs.Create("abc.png")
-		require.NoError(t, err)
+	for i, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			runS3Test(t, func(fs file.FileSystemProvider) {
+				if tt.removeAll {
+					err := fs.Mkdir("abc", os.ModePerm)
+					require.NoError(t, err, "TEST[%d] Failed. Desc %v", i, "Failed to create directory")
+				}
 
-		err = fs.Remove("abc.png")
-		require.NoError(t, err)
-	})
-	runS3Test(t, func(fs file_interface.FileSystemProvider) {
-		_, err := fs.Create("abc.jpeg")
-		require.NoError(t, err)
+				_, err := fs.Create(tt.createPath)
+				if tt.expectError {
+					require.Error(t, err, "TEST[%d] Failed. Desc %v", i, "Expected error during file creation")
+					return
+				}
 
-		err = fs.Remove("abc.jpeg")
-		require.NoError(t, err)
-	})
-	runS3Test(t, func(fs file_interface.FileSystemProvider) {
-		_, err := fs.Create("abc.json")
-		require.NoError(t, err)
+				require.NoError(t, err, "TEST[%d] Failed. Desc %v", i, "Failed to create file")
 
-		err = fs.Remove("abc.json")
-		require.NoError(t, err)
-	})
+				if tt.removePath != "" {
+					err = fs.Remove(tt.removePath)
+					require.NoError(t, err, "TEST[%d] Failed. Desc %v", i, "Failed to remove file")
+				}
 
-	runS3Test(t, func(fs file_interface.FileSystemProvider) {
-		_, err := fs.Create("abc.html")
-		require.NoError(t, err)
-
-		err = fs.Remove("abc.html")
-		require.NoError(t, err)
-	})
-
-	runS3Test(t, func(fs file_interface.FileSystemProvider) {
-		_, err := fs.Create("abc") // octet-stream
-		require.NoError(t, err)
-
-		// remove considers path with no extension to be of file format "application/octet-stream"
-		err = fs.Remove("abc")
-		require.NoError(t, err)
-	})
-
-	runS3Test(t, func(fs file_interface.FileSystemProvider) {
-		_, err := fs.Create("abc/abc.txt")
-		require.Error(t, err)
-	})
-
-	runS3Test(t, func(fs file_interface.FileSystemProvider) {
-		err := fs.Mkdir("abc", os.ModePerm)
-		require.NoError(t, err)
-
-		_, err = fs.Create("abc/efg.txt") // text file
-		require.NoError(t, err)
-
-		err = fs.RemoveAll("abc")
-		require.NoError(t, err)
-	})
+				if tt.removeAll {
+					err = fs.RemoveAll("abc")
+					require.NoError(t, err, "TEST[%d] Failed. Desc: %v", i, "Failed to remove directory")
+				}
+			})
+		})
+	}
 }
 
 func Test_OpenFile(t *testing.T) {
-	runS3Test(t, func(fs file_interface.FileSystemProvider) {
+	runS3Test(t, func(fs file.FileSystemProvider) {
 		_, err := fs.Create("abc.json")
-		require.NoError(t, err)
+		require.NoError(t, err, "TEST[%d] Failed. Desc: %v", 0, "Failed to create file")
 
 		_, err = fs.OpenFile("abc.json", 0, os.ModePerm)
-		require.NoError(t, err)
+		require.NoError(t, err, "TEST[%d] Failed. Desc: %v", 0, "Failed to open file")
 
 		err = fs.Remove("abc.json")
-		require.NoError(t, err)
+		require.NoError(t, err, "TEST[%d] Failed. Desc: %v", 0, "Failed to remove file")
 	})
 }
 
 func Test_MakingAndDeletingDirectories(t *testing.T) {
-	runS3Test(t, func(fs file_interface.FileSystemProvider) {
+	runS3Test(t, func(fs file.FileSystemProvider) {
 		err := fs.MkdirAll("abc/bcd/cfg", os.ModePerm)
-		require.NoError(t, err, "error creating directory")
+		require.NoError(t, err, "TEST[%d] Failed. Desc: %v", 0, "Error creating directory")
 
 		_, err = fs.Create("abc/bcd/cfg/file.txt")
-		require.NoError(t, err, "error creating file")
+		require.NoError(t, err, "TEST[%d] Failed. Desc: %v", 0, "Error creating file")
 
 		err = fs.RemoveAll("abc")
-		require.NoError(t, err, "error removing abc directory")
+		require.NoError(t, err, "TEST[%d] Failed. Desc: %v", 0, "Error removing abc directory")
 	})
 }
 
 func Test_RenameFile(t *testing.T) {
-	runS3Test(t, func(fs file_interface.FileSystemProvider) {
+	runS3Test(t, func(fs file.FileSystemProvider) {
 		_, err := fs.Create("abcd.json")
-		require.NoError(t, err)
+		require.NoError(t, err, "TEST[%d] Failed. Desc: %v", 0, "Failed to create file")
 
 		err = fs.Rename("abcd.json", "abc.json")
-		require.NoError(t, err)
+		require.NoError(t, err, "TEST[%d] Failed. Desc: %v", 0, "Failed to rename file")
 
 		err = fs.Remove("abc.json")
-		require.NoError(t, err)
+		require.NoError(t, err, "TEST[%d] Failed. Desc: %v", 0, "Failed to remove file")
 	})
 }
 
 func Test_RenameDirectory(t *testing.T) {
-	runS3Test(t, func(fs file_interface.FileSystemProvider) {
+	runS3Test(t, func(fs file.FileSystemProvider) {
 		err := fs.Mkdir("abc/bcd/cfg", os.ModePerm)
-		require.NoError(t, err)
+		require.NoError(t, err, "TEST[%d] Failed. Desc: %v:", 0, "Failed to create directory")
 
 		_, err = fs.Create("abc/bcd/cfg/file.txt")
-		require.NoError(t, err, "error creating file")
+		require.NoError(t, err, "TEST[%d] Failed. Desc: %v", 0, "Error creating file")
 
 		err = fs.Rename("abc", "abcd")
-		require.NoError(t, err)
+		require.NoError(t, err, "TEST[%d] Failed. Desc: %v", 0, "Failed to rename directory")
 
 		err = fs.RemoveAll("abcd")
-		require.NoError(t, err)
+		require.NoError(t, err, "TEST[%d] Failed. Desc: %v", 0, "Failed to remove directory")
 	})
 }
 
 func Test_ReadDir(t *testing.T) {
-	runS3Test(t, func(fs file_interface.FileSystemProvider) {
+	runS3Test(t, func(fs file.FileSystemProvider) {
 		currentDir, err := fs.Getwd()
-		require.NoError(t, err)
+		require.NoError(t, err, "TEST[%d] Failed. Desc: %v", 0, "Failed to get current directory")
 		assert.Equal(t, "/gofr-bucket-2", currentDir)
 
 		err = fs.Mkdir("abc/efg/hij", os.ModePerm)
-		require.NoError(t, err)
+		require.NoError(t, err, "TEST[%d] Failed. Desc: %v", 0, "Error creating directory")
 
 		_, err = fs.Create("abc/efg/file.txt")
-		require.NoError(t, err)
+		require.NoError(t, err, "TEST[%d] Failed. Desc: %v", 0, "Error creating file")
 
 		res, err := fs.ReadDir("abc/efg")
-		require.NoError(t, err)
+		require.NoError(t, err, "TEST[%d] Failed. Desc: %v", 0, "Error reading directory")
 
 		for i := range res {
 			fmt.Println(res[i].Name(), res[i].Size(), res[i].IsDir())
 		}
 
 		err = fs.RemoveAll("abc")
-		require.NoError(t, err)
+		require.NoError(t, err, "TEST[%d] Failed. Desc: %v", 0, "Error removing directory")
 	})
 }
 
 func Test_StatFile(t *testing.T) {
-	runS3Test(t, func(fs file_interface.FileSystemProvider) {
+	runS3Test(t, func(fs file.FileSystemProvider) {
 		err := fs.Mkdir("dir1/dir2", os.ModePerm)
-		require.NoError(t, err)
+		require.NoError(t, err, "TEST[%d] Failed. Desc: %v", 0, "Failed to create directory")
 
 		_, err = fs.Create("dir1/dir2/file.txt")
-		require.NoError(t, err)
+		require.NoError(t, err, "TEST[%d] Failed. Desc: %v", 0, "Failed to create file")
 
 		res, err := fs.Stat("dir1/dir2/file.txt")
-		require.NoError(t, err)
+		require.NoError(t, err, "TEST[%d] Failed. Desc: %v", 0, "Error getting file info")
 
 		fmt.Println(res.Name(), res.Size(), res.IsDir())
 
 		err = fs.RemoveAll("dir1")
-		require.NoError(t, err)
+		require.NoError(t, err, "TEST[%d] Failed. Desc: %v", 0, "Error removing directory")
 	})
 }
 
 func Test_StatDirectory(t *testing.T) {
-	runS3Test(t, func(fs file_interface.FileSystemProvider) {
+	runS3Test(t, func(fs file.FileSystemProvider) {
 		err := fs.Mkdir("dir1/dir2", os.ModePerm)
-		require.NoError(t, err)
+		require.NoError(t, err, "TEST[%d] Failed. Desc: %v", 0, "Failed to create directory")
 
 		_, err = fs.Create("dir1/dir2/file.txt")
-		require.NoError(t, err)
+		require.NoError(t, err, "TEST[%d] Failed. Desc: %v", 0, "Error creating file")
 
 		res, err := fs.Stat("dir1/dir2")
-		require.NoError(t, err)
+		require.NoError(t, err, "TEST[%d] Failed. Desc: %v", 0, "Error getting directory stats")
 		fmt.Println(res.Name(), res.Size(), res.IsDir())
 
 		err = fs.RemoveAll("dir1")
-		require.NoError(t, err)
+		require.NoError(t, err, "TEST[%d] Failed. Desc: %v", 0, "Error removing directory")
 	})
 }
 
 // Helper functions.
-func createBucket(t *testing.T, fs file_interface.FileSystemProvider) {
+func createBucket(t *testing.T, fs file.FileSystemProvider) {
 	t.Helper()
 
 	f, ok := fs.(*fileSystem)
@@ -208,7 +192,7 @@ func createBucket(t *testing.T, fs file_interface.FileSystemProvider) {
 	require.NoError(t, err)
 }
 
-func deleteBucket(t *testing.T, fs file_interface.FileSystemProvider) {
+func deleteBucket(t *testing.T, fs file.FileSystemProvider) {
 	t.Helper()
 
 	f, ok := fs.(*fileSystem)
@@ -220,15 +204,13 @@ func deleteBucket(t *testing.T, fs file_interface.FileSystemProvider) {
 	require.NoError(t, err)
 }
 
-func runS3Test(t *testing.T, testFunc func(fs file_interface.FileSystemProvider)) {
+func runS3Test(t *testing.T, testFunc func(fs file.FileSystemProvider)) {
 	t.Helper()
 
 	cfg := Config{
-		// currently using localstack in the tests, to use aws change to "https://s3.amazonaws.com" - aws base endpoint
 		"http://localhost:4566",
 		"gofr-bucket-2",
 		"us-east-1",
-		// localstack does not check credentials. However, we need to pass correct access keys in case we are using AWS.
 		"test",
 		"test",
 	}
@@ -248,7 +230,6 @@ func runS3Test(t *testing.T, testFunc func(fs file_interface.FileSystemProvider)
 
 	s3Client.Connect()
 
-	// Run the test function with the initialized file system
 	createBucket(t, s3Client)
 	testFunc(s3Client)
 	deleteBucket(t, s3Client)

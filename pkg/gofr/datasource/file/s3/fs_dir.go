@@ -16,7 +16,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 
-	file_interface "gofr.dev/pkg/gofr/datasource/file"
+	file "gofr.dev/pkg/gofr/datasource/file"
 )
 
 // Mkdir creates a directory and any necessary parent directories in the S3 bucket.
@@ -77,6 +77,10 @@ func (f *fileSystem) MkdirAll(name string, perm os.FileMode) error {
 // and will return an error if a file path (as indicated by a file extension) is provided. The method lists all objects
 // under the specified directory prefix and deletes them in a single batch operation.
 func (f *fileSystem) RemoveAll(name string) error {
+	if path.Ext(name) != "" {
+		return f.Remove(name)
+	}
+
 	var msg string
 
 	st := statusErr
@@ -87,11 +91,6 @@ func (f *fileSystem) RemoveAll(name string) error {
 		Status:    &st,
 		Message:   &msg,
 	}, time.Now())
-
-	if path.Ext(name) != "" {
-		f.logger.Errorf("RemoveAll supports deleting directories only. Use Remove instead.")
-		return errors.New("invalid argument type. Enter a valid directory name")
-	}
 
 	res, err := f.conn.ListObjectsV2(context.TODO(), &s3.ListObjectsV2Input{
 		Bucket: aws.String(f.config.BucketName),
@@ -151,7 +150,7 @@ func getRelativepath(key, filePath string) string {
 // Note:
 //   - Directories are represented by the prefixes of the file keys in S3, and this method retrieves file entries
 //     only one level deep from the specified directory.
-func (f *fileSystem) ReadDir(name string) ([]file_interface.FileInfo, error) {
+func (f *fileSystem) ReadDir(name string) ([]file.FileInfo, error) {
 	var filePath, msg string
 
 	st := statusErr
@@ -169,6 +168,9 @@ func (f *fileSystem) ReadDir(name string) ([]file_interface.FileInfo, error) {
 		filePath = ""
 	}
 
+	// TODO: Enhance the implementation to fetch only data that is one level deep.
+	// Currently, the system retrieves metadata of all files matching the prefix,
+	// which may include files in nested directories. This takes more memory.
 	entries, err := f.conn.ListObjectsV2(context.TODO(), &s3.ListObjectsV2Input{
 		Bucket: aws.String(f.config.BucketName),
 		Prefix: aws.String(filePath),
@@ -179,7 +181,7 @@ func (f *fileSystem) ReadDir(name string) ([]file_interface.FileInfo, error) {
 		return nil, err
 	}
 
-	var fileInfo []file_interface.FileInfo
+	var fileInfo []file.FileInfo
 
 	for i := range entries.Contents {
 		if i == 0 {
@@ -189,14 +191,14 @@ func (f *fileSystem) ReadDir(name string) ([]file_interface.FileInfo, error) {
 		relativepath := getRelativepath(*entries.Contents[i].Key, filePath)
 
 		if len(fileInfo) > 0 {
-			temp, ok := fileInfo[len(fileInfo)-1].(*file)
+			temp, ok := fileInfo[len(fileInfo)-1].(*s3file)
 
 			if ok && relativepath == temp.name {
 				continue
 			}
 		}
 
-		fileInfo = append(fileInfo, &file{
+		fileInfo = append(fileInfo, &s3file{
 			conn:         f.conn,
 			logger:       f.logger,
 			metrics:      f.metrics,
@@ -218,7 +220,7 @@ func (f *fileSystem) ReadDir(name string) ([]file_interface.FileInfo, error) {
 //
 // This method attempts to change the current directory, but S3 does not support directory changes due to its flat file structure.
 // The bucket is constant and fixed, so directory operations are not applicable.
-func (f *fileSystem) ChDir(_ string) error {
+func (f *fileSystem) ChDir(string) error {
 	st := statusErr
 
 	defer f.sendOperationStats(&FileLog{

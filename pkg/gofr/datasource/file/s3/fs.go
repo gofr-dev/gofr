@@ -15,11 +15,11 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 
-	file_interface "gofr.dev/pkg/gofr/datasource/file"
+	file "gofr.dev/pkg/gofr/datasource/file"
 )
 
 type fileSystem struct {
-	file
+	s3file
 	conn    *s3.Client
 	config  *Config
 	logger  Logger
@@ -36,7 +36,7 @@ type Config struct {
 }
 
 // New initializes a new instance of FTP fileSystem with provided configuration.
-func New(config *Config) file_interface.FileSystemProvider {
+func New(config *Config) file.FileSystemProvider {
 	return &fileSystem{config: config}
 }
 
@@ -78,11 +78,11 @@ func (f *fileSystem) Connect() {
 			credentials.NewStaticCredentialsProvider(
 				f.config.AccessKeyID,
 				f.config.SecretAccessKey,
-				"")),
+				"")), // "" is the session token. Currently, we do not handle connections through session token.
 	)
 
 	if err != nil {
-		f.logger.Errorf("Failed to load configuration", err)
+		f.logger.Errorf("Failed to load configuration: %v", err)
 	}
 
 	// Create the S3 client from config
@@ -105,7 +105,7 @@ func (f *fileSystem) Connect() {
 // This method creates an empty file at the specified path in the S3 bucket. It first checks if the parent directory exists;
 // if the parent directory does not exist, it returns an error. After creating the file, it retrieves the file metadata
 // and returns a `file` object representing the newly created file.
-func (f *fileSystem) Create(name string) (file_interface.File, error) {
+func (f *fileSystem) Create(name string) (file.File, error) {
 	var msg string
 
 	st := statusErr
@@ -165,7 +165,7 @@ func (f *fileSystem) Create(name string) (file_interface.File, error) {
 
 	f.logger.Logf("File with name %s created.", name)
 
-	return &file{
+	return &s3file{
 		conn:         f.conn,
 		name:         path.Join(f.config.BucketName, name),
 		logger:       f.logger,
@@ -215,7 +215,7 @@ func (f *fileSystem) Remove(name string) error {
 //
 // This method fetches the specified file from the S3 bucket and returns a `file` object with its content and metadata.
 // If the file cannot be retrieved, it returns an error.
-func (f *fileSystem) Open(name string) (file_interface.File, error) {
+func (f *fileSystem) Open(name string) (file.File, error) {
 	var msg string
 
 	st := statusErr
@@ -240,7 +240,7 @@ func (f *fileSystem) Open(name string) (file_interface.File, error) {
 	st = statusSuccess
 	msg = fmt.Sprintf("File with path %q retrieved successfully", name)
 
-	return &file{
+	return &s3file{
 		conn:         f.conn,
 		name:         path.Join(f.config.BucketName, name),
 		logger:       f.logger,
@@ -256,7 +256,7 @@ func (f *fileSystem) Open(name string) (file_interface.File, error) {
 //
 // This method calls the `Open` method of the `fileSystem` struct to retrieve a file. It is provided to align with the
 // FileSystem interface requirements in the GoFr framework.
-func (f *fileSystem) OpenFile(name string, _ int, _ os.FileMode) (file_interface.File, error) {
+func (f *fileSystem) OpenFile(name string, _ int, _ os.FileMode) (file.File, error) {
 	return f.Open(name)
 }
 
@@ -299,7 +299,7 @@ func (f *fileSystem) Rename(oldname, newname string) error {
 	// check if they are of the same type or not
 	if path.Ext(oldname) != path.Ext(newname) {
 		f.logger.Errorf("new file must be same as the old file type")
-		return errors.New("Incorrect file type of newname")
+		return errors.New("incorrect file type of newname")
 	}
 
 	_, err := f.conn.CopyObject(context.TODO(), &s3.CopyObjectInput{
@@ -339,7 +339,7 @@ func (f *fileSystem) Rename(oldname, newname string) error {
 //
 // For directories, the method aggregates the sizes of all objects within the directory and returns the latest modified
 // time among them. For files, it returns the file's size and last modified time.
-func (f *fileSystem) Stat(name string) (file_interface.FileInfo, error) {
+func (f *fileSystem) Stat(name string) (file.FileInfo, error) {
 	var msg string
 
 	st := statusErr
@@ -391,7 +391,7 @@ func (f *fileSystem) Stat(name string) (file_interface.FileInfo, error) {
 		msg = fmt.Sprintf("Directory with path %q info retrieved successfully", name)
 
 		if res.Contents != nil {
-			return &file{
+			return &s3file{
 				conn:         f.conn,
 				logger:       f.logger,
 				metrics:      f.metrics,
@@ -404,7 +404,7 @@ func (f *fileSystem) Stat(name string) (file_interface.FileInfo, error) {
 		return nil, nil
 	}
 
-	return &file{
+	return &s3file{
 		conn:         f.conn,
 		logger:       f.logger,
 		metrics:      f.metrics,
