@@ -94,7 +94,7 @@ func Test_EnvFailureWithHyphen(t *testing.T) {
 		env := NewEnvFile(dir, logger)
 
 		assert.Equal(t, "test", env.GetOrDefault("KEY-WITH-HYPHEN", "test"), "TEST Failed.\n godotenv failure with hyphen")
-		assert.Equal(t, "", env.Get("UNABLE_TO_LOAD"), "TEST Failed.\n godotenv failure with hyphen")
+ 		assert.Empty(t, env.Get("UNABLE_TO_LOAD"), "TEST Failed.\n godotenv failure with hyphen")
 	}
 }
 
