@@ -135,7 +135,7 @@ func TestApp_AddS3(t *testing.T) {
 		mock.EXPECT().UseMetrics(app.Metrics())
 		mock.EXPECT().Connect()
 
-		app.AddS3(mock)
+		app.AddFileStore(mock)
 
 		assert.Equal(t, mock, app.container.File)
 	})
