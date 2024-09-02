@@ -833,8 +833,11 @@ func runFtpTest(t *testing.T, testFunc func(fs file_interface.FileSystemProvider
 
 	ftpClient := New(config)
 
-	mockLogger := NewMockLogger(gomock.NewController(t))
-	mockMetrics := NewMockMetrics(gomock.NewController(t))
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockLogger := NewMockLogger(ctrl)
+	mockMetrics := NewMockMetrics(ctrl)
 
 	ftpClient.UseLogger(mockLogger)
 	ftpClient.UseMetrics(mockMetrics)
