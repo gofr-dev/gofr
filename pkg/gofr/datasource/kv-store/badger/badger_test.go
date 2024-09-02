@@ -1,7 +1,6 @@
 package badger
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"testing"
@@ -15,17 +14,20 @@ func setupDB(t *testing.T) *client {
 	t.Helper()
 	cl := New(Configs{DirPath: t.TempDir()})
 
-	var logs []byte
-
 	ctrl := gomock.NewController(t)
 	mockMetrics := NewMockMetrics(ctrl)
+	mockLogger := NewMockLogger(ctrl)
 
 	mockMetrics.EXPECT().NewHistogram("app_badger_stats", "Response time of Badger queries in milliseconds.", gomock.Any())
 
 	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_badger_stats", gomock.Any(), "database", cl.configs.DirPath,
 		"type", gomock.Any()).AnyTimes()
 
-	cl.UseLogger(NewMockLogger(DEBUG, bytes.NewBuffer(logs)))
+	mockLogger.EXPECT().Infof(gomock.Any(), gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Debugf(gomock.Any(), gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+
+	cl.UseLogger(mockLogger)
 	cl.UseMetrics(mockMetrics)
 	cl.Connect()
 
