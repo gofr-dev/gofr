@@ -2,6 +2,7 @@ package ftp
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -12,6 +13,8 @@ import (
 
 	file_interface "gofr.dev/pkg/gofr/datasource/file"
 )
+
+const appFtpStats = "app_ftp_stats"
 
 // Conn struct embeds the *ftp.ServerConn returned by ftp server on successful connection.
 type Conn struct {
@@ -76,6 +79,9 @@ func (f *fileSystem) UseMetrics(metrics interface{}) {
 func (f *fileSystem) Connect() {
 	var status string
 
+	ftpBuckets := []float64{.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 4, 5, 7.5, 10}
+	f.metrics.NewHistogram(appFtpStats, "Response time of File System operations in milliseconds.", ftpBuckets...)
+
 	ftpServer := fmt.Sprintf("%v:%v", f.config.Host, f.config.Port)
 
 	defer f.sendOperationStats(&FileLog{
@@ -90,7 +96,7 @@ func (f *fileSystem) Connect() {
 
 	conn, err := ftp.Dial(ftpServer, ftp.DialWithTimeout(f.config.DialTimeout))
 	if err != nil {
-		f.logger.Errorf("Connection failed : %v", err)
+		f.logger.Errorf("Connection failed: %v", err)
 
 		status = "CONNECTION ERROR"
 
@@ -101,7 +107,7 @@ func (f *fileSystem) Connect() {
 
 	err = conn.Login(f.config.User, f.config.Password)
 	if err != nil {
-		f.logger.Errorf("Login failed : %v", err)
+		f.logger.Errorf("Login failed: %v", err)
 
 		status = "LOGIN ERROR"
 
@@ -110,7 +116,7 @@ func (f *fileSystem) Connect() {
 
 	status = "LOGIN SUCCESS"
 
-	f.logger.Logf("Connected to FTP server at %v", ftpServer)
+	f.logger.Logf("Connected to FTP server at '%v'", ftpServer)
 }
 
 // Create creates an empty file on the FTP server.
@@ -131,7 +137,7 @@ func (f *fileSystem) Create(name string) (file_interface.File, error) {
 	}, fl.modTime)
 
 	if name == "" {
-		f.logger.Errorf("Create_File failed. Provide a valid filename : %v", errEmptyFilename)
+		f.logger.Errorf("Create_File failed. Provide a valid filename: %v", errEmptyFilename)
 		return nil, errEmptyFilename
 	}
 
@@ -139,7 +145,7 @@ func (f *fileSystem) Create(name string) (file_interface.File, error) {
 
 	err := f.conn.Stor(filePath, emptyReader)
 	if err != nil {
-		f.logger.Errorf("Create_File failed. Error creating file with path %q : %v", filePath, err)
+		f.logger.Errorf("Create_File failed. Error creating file with path %q: %v", filePath, err)
 		return nil, err
 	}
 
@@ -147,7 +153,7 @@ func (f *fileSystem) Create(name string) (file_interface.File, error) {
 
 	res, err := f.conn.Retr(filePath)
 	if err != nil {
-		f.logger.Errorf("Create_File failed : %v", err)
+		f.logger.Errorf("Create_File failed: %v", err)
 		return nil, err
 	}
 
@@ -192,13 +198,13 @@ func (f *fileSystem) Open(name string) (file_interface.File, error) {
 	}, time.Now())
 
 	if name == "" {
-		f.logger.Errorf("Open_file failed. Provide a valid filename : %v", errEmptyFilename)
+		f.logger.Errorf("Open_file failed. Provide a valid filename: %v", errEmptyFilename)
 		return nil, errEmptyFilename
 	}
 
 	res, err := f.conn.Retr(filePath)
 	if err != nil {
-		f.logger.Errorf("Open_file failed. Error opening file : %v", err)
+		f.logger.Errorf("Open_file failed. Error opening file: %v", err)
 		return nil, err
 	}
 
@@ -252,7 +258,7 @@ func (f *fileSystem) Remove(name string) error {
 		time.Now())
 
 	if name == "" {
-		f.logger.Errorf("Remove_file failed. Provide a valid filename : %v", errEmptyFilename)
+		f.logger.Errorf("Remove_file failed. Provide a valid filename: %v", errEmptyFilename)
 		return errEmptyFilename
 	}
 
@@ -288,7 +294,7 @@ func (f *fileSystem) Rename(oldname, newname string) error {
 	}, tempFile.modTime)
 
 	if oldname == "" || newname == "" {
-		f.logger.Errorf("Provide valid arguments : %v", errInvalidArg)
+		f.logger.Errorf("Provide valid arguments: %v", errInvalidArg)
 		return errInvalidArg
 	}
 
@@ -301,7 +307,7 @@ func (f *fileSystem) Rename(oldname, newname string) error {
 
 	err := f.conn.Rename(oldFilePath, newFilePath)
 	if err != nil {
-		f.logger.Errorf("Error while renaming file : %v", err)
+		f.logger.Errorf("Error while renaming file: %v", err)
 		return err
 	}
 
@@ -324,5 +330,6 @@ func (f *fileSystem) sendOperationStats(fl *FileLog, startTime time.Time) {
 
 	f.logger.Debug(fl)
 
-	// TODO : Implement metrics
+	f.metrics.RecordHistogram(context.Background(), appFtpStats, float64(duration),
+		"type", fl.Operation, "status", clean(fl.Status))
 }
