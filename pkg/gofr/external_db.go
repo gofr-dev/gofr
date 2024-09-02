@@ -16,6 +16,7 @@ func (a *App) AddMongo(db container.MongoProvider) {
 }
 
 // AddFTP sets the FTP datasource in the app's container.
+// Deprecated: Use the AddFile method instead.
 func (a *App) AddFTP(fs file.FileSystemProvider) {
 	fs.UseLogger(a.Logger())
 	fs.UseMetrics(a.Metrics())
@@ -25,10 +26,8 @@ func (a *App) AddFTP(fs file.FileSystemProvider) {
 	a.container.File = fs
 }
 
-// AddS3 sets the S3 bucket in the app's container.
-// Note: Current implementation of S3 supports general-purpose buckets
-// and do not allow changing the bucket in the configs.
-func (a *App) AddS3(fs file.FileSystemProvider) {
+// AddFile sets the FTP,SFTP datasource in the app's container.
+func (a *App) AddFileStore(fs file.FileSystemProvider) {
 	fs.UseLogger(a.Logger())
 	fs.UseMetrics(a.Metrics())
 

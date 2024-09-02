@@ -103,6 +103,23 @@ func TestApp_AddFTP(t *testing.T) {
 
 		assert.Equal(t, mock, app.container.File)
 	})
+
+	t.Run("Adding FTP", func(t *testing.T) {
+		app := New()
+
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mock := file.NewMockFileSystemProvider(ctrl)
+
+		mock.EXPECT().UseLogger(app.Logger())
+		mock.EXPECT().UseMetrics(app.Metrics())
+		mock.EXPECT().Connect()
+
+		app.AddFileStore(mock)
+
+		assert.Equal(t, mock, app.container.File)
+	})
 }
 
 func TestApp_AddS3(t *testing.T) {
