@@ -75,7 +75,7 @@ func TestRead(t *testing.T) {
 	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_ftp_stats", gomock.Any(),
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), appFtpStats, gomock.Any(),
 		"type", gomock.Any(), "status", gomock.Any()).AnyTimes()
 
 	for _, tt := range tests {
@@ -163,7 +163,7 @@ func TestReadAt(t *testing.T) {
 	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_ftp_stats", gomock.Any(),
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), appFtpStats, gomock.Any(),
 		"type", gomock.Any(), "status", gomock.Any()).AnyTimes()
 
 	for _, tt := range readAtTests {
@@ -251,7 +251,7 @@ func TestWrite(t *testing.T) {
 	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_ftp_stats", gomock.Any(),
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), appFtpStats, gomock.Any(),
 		"type", gomock.Any(), "status", gomock.Any()).AnyTimes()
 
 	for _, tt := range writeTests {
@@ -333,7 +333,7 @@ func TestWriteAt(t *testing.T) {
 	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_ftp_stats", gomock.Any(),
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), appFtpStats, gomock.Any(),
 		"type", gomock.Any(), "status", gomock.Any()).AnyTimes()
 
 	for _, tt := range writeAtTests {
@@ -440,7 +440,7 @@ func TestSeek(t *testing.T) {
 
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).Times(5)
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_ftp_stats", gomock.Any(),
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), appFtpStats, gomock.Any(),
 		"type", gomock.Any(), "status", gomock.Any()).AnyTimes()
 
 	for _, tt := range tests {
@@ -841,8 +841,8 @@ func runFtpTest(t *testing.T, testFunc func(fs file_interface.FileSystemProvider
 
 	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-	mockMetrics.EXPECT().NewHistogram("app_ftp_stats", gomock.Any(), gomock.Any()).AnyTimes()
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_ftp_stats", gomock.Any(),
+	mockMetrics.EXPECT().NewHistogram(appFtpStats, gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), appFtpStats, gomock.Any(),
 		"type", gomock.Any(), "status", gomock.Any()).AnyTimes()
 
 	ftpClient.Connect()
