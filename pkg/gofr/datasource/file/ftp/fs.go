@@ -145,7 +145,7 @@ func (f *fileSystem) Create(name string) (file_interface.File, error) {
 
 	err := f.conn.Stor(filePath, emptyReader)
 	if err != nil {
-		f.logger.Errorf("Create_File failed. Error creating file with path '%q': %v", filePath, err)
+		f.logger.Errorf("Create_File failed. Error creating file with path %q: %v", filePath, err)
 		return nil, err
 	}
 
@@ -160,7 +160,7 @@ func (f *fileSystem) Create(name string) (file_interface.File, error) {
 	res.Close()
 
 	status = "SUCCESS"
-	msg = fmt.Sprintf("Created file '%q'", name)
+	msg = fmt.Sprintf("Created file %q", name)
 
 	fl = &file{
 		response:  res,
@@ -213,7 +213,7 @@ func (f *fileSystem) Open(name string) (file_interface.File, error) {
 	filename := path.Base(filePath)
 
 	status = "SUCCESS"
-	msg = fmt.Sprintf("Opened file '%q'", name)
+	msg = fmt.Sprintf("Opened file %q", name)
 
 	fl := &file{
 		response:  res,
