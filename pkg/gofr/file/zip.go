@@ -61,7 +61,7 @@ func (z *Zip) CreateLocalCopies(dest string) error {
 		destPath := filepath.Join(dest, zf.name)
 
 		if zf.isDir {
-			err := os.MkdirAll(destPath, os.ModeDir)
+			err := os.MkdirAll(destPath, os.ModePerm)
 			if err != nil {
 				return err
 			}
