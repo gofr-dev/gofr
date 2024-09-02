@@ -6,7 +6,7 @@ GoFr simplifies the complexity of working with different file stores by offering
 
 By default, local file-store is initialised and user can access it from the context.
 
-Gofr also supports FTP,SFTP file-store. The file-store can be initialised with FTP as follows:
+GoFr also supports FTP/SFTP file-store. The file-store can be initialised as follows:
 
 ### FTP file-store
 ```go

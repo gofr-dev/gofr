@@ -75,7 +75,8 @@ func TestRead(t *testing.T) {
 	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), appFtpStats, gomock.Any(),
+		"type", gomock.Any(), "status", gomock.Any()).AnyTimes()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -162,7 +163,8 @@ func TestReadAt(t *testing.T) {
 	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), appFtpStats, gomock.Any(),
+		"type", gomock.Any(), "status", gomock.Any()).AnyTimes()
 
 	for _, tt := range readAtTests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -249,7 +251,8 @@ func TestWrite(t *testing.T) {
 	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), appFtpStats, gomock.Any(),
+		"type", gomock.Any(), "status", gomock.Any()).AnyTimes()
 
 	for _, tt := range writeTests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -330,6 +333,8 @@ func TestWriteAt(t *testing.T) {
 	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), appFtpStats, gomock.Any(),
+		"type", gomock.Any(), "status", gomock.Any()).AnyTimes()
 
 	for _, tt := range writeAtTests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -435,7 +440,8 @@ func TestSeek(t *testing.T) {
 
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).Times(5)
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), appFtpStats, gomock.Any(),
+		"type", gomock.Any(), "status", gomock.Any()).AnyTimes()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -478,7 +484,6 @@ Michael Brown,40,michaelb@example.com`
 		mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
 		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 		mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
-		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 		newCsvFile, _ := fs.Create("temp.csv")
 
@@ -523,7 +528,6 @@ func Test_ReadFromCSVScanError(t *testing.T) {
 		mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
 		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 		mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
-		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 		newCsvFile, _ := fs.Create("temp.csv")
 
@@ -578,7 +582,6 @@ func Test_ReadFromJSONArray(t *testing.T) {
 		mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
 		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 		mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
-		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 		newCsvFile, _ := fs.Create("temp.json")
 
@@ -630,7 +633,6 @@ func Test_ReadFromJSONObject(t *testing.T) {
 		mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
 		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 		mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
-		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 		newCsvFile, _ := fs.Create("temp.json")
 
@@ -673,7 +675,6 @@ func Test_ReadFromJSONArrayInvalidDelimiter(t *testing.T) {
 		mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
 		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 		mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
-		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 		newCsvFile, _ := fs.Create("temp.json")
 
@@ -843,6 +844,9 @@ func runFtpTest(t *testing.T, testFunc func(fs file_interface.FileSystemProvider
 
 	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().NewHistogram(appFtpStats, gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), appFtpStats, gomock.Any(),
+		"type", gomock.Any(), "status", gomock.Any()).AnyTimes()
 
 	ftpClient.Connect()
 
