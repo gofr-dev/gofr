@@ -14,8 +14,7 @@ const (
 )
 
 var (
-	errMaxFileSize     = errors.New("uncompressed file is greater than file size limit of 100MBs")
-	errInvalidFileName = errors.New("invalid file name detected in zip files")
+	errMaxFileSize = errors.New("uncompressed file is greater than file size limit of 100MBs")
 )
 
 type Zip struct {
