@@ -20,8 +20,9 @@ func TestCron_parseSchedule_Success(t *testing.T) {
 	}{
 		{
 			desc:     "success case: all wildcard",
-			schedule: "* * * * *",
+			schedule: "* * * * * *",
 			expJob: &job{
+				sec:       getDefaultJobField(0, 59, 1),
 				min:       getDefaultJobField(0, 59, 1),
 				hour:      getDefaultJobField(0, 23, 1),
 				day:       getDefaultJobField(1, 31, 1),
@@ -117,12 +118,13 @@ func TestCron_parseSchedule_Error(t *testing.T) {
 	}{
 		{
 			desc:         "incorrect number of schedule parts: less",
-			schedules:    []string{"* * * * ", "* * * * * *"},
+			schedules:    []string{"* * * * ", "* * * * * * *"},
 			expErrString: "schedule string must have five components like * * * * *",
 		},
 		{
 			desc: "incorrect range",
 			schedules: []string{
+				"1-100 * * * * *",
 				"1-200 * * * *",
 				"* 0-30 * * *",
 				"* * 0-10 * *",
@@ -176,9 +178,9 @@ func TestCron_getDefaultJobField(t *testing.T) {
 }
 
 func TestCron_getTick(t *testing.T) {
-	expTick := &tick{20, 13, 10, 5, 5}
+	expTick := &tick{10, 20, 13, 10, 5, 5}
 
-	tM := time.Date(2024, 5, 10, 13, 20, 1, 1, time.Local)
+	tM := time.Date(2024, 5, 10, 13, 20, 10, 1, time.Local)
 
 	tck := getTick(tM)
 
@@ -212,6 +214,7 @@ func TestCronTab_AddJob(t *testing.T) {
 
 func TestCronTab_runScheduled(t *testing.T) {
 	j := &job{
+		sec:       map[int]struct{}{1: {}},
 		min:       map[int]struct{}{1: {}},
 		hour:      map[int]struct{}{1: {}},
 		day:       map[int]struct{}{1: {}},
@@ -224,7 +227,7 @@ func TestCronTab_runScheduled(t *testing.T) {
 	// dependency function as it is user defined
 	c := NewCron(nil)
 
-	// Populate the job arroy for cron table
+	// Populate the job array for cron table
 	c.jobs = []*job{j}
 
 	out := testutil.StdoutOutputForFunc(func() {
@@ -238,7 +241,7 @@ func TestCronTab_runScheduled(t *testing.T) {
 }
 
 func TestJob_tick(t *testing.T) {
-	tck := &tick{1, 1, 1, 1, 1}
+	tck := &tick{1, 1, 1, 1, 1, 1}
 
 	testCases := []struct {
 		desc string
@@ -247,7 +250,10 @@ func TestJob_tick(t *testing.T) {
 	}{
 		{
 			desc: "min not matching",
-			job:  &job{min: map[int]struct{}{2: {}}},
+			job: &job{
+				sec: map[int]struct{}{1: {}},
+				min: map[int]struct{}{2: {}},
+			},
 		},
 		{
 			desc: "hour not matching",
@@ -284,8 +290,20 @@ func TestJob_tick(t *testing.T) {
 			},
 		},
 		{
+			desc: "sec not matching",
+			job: &job{
+				sec:       map[int]struct{}{2: {}},
+				min:       map[int]struct{}{1: {}},
+				hour:      map[int]struct{}{1: {}},
+				day:       map[int]struct{}{1: {}},
+				month:     map[int]struct{}{1: {}},
+				dayOfWeek: map[int]struct{}{1: {}},
+			},
+		},
+		{
 			desc: "job scheduled on the tick",
 			job: &job{
+				sec:       map[int]struct{}{1: {}},
 				min:       map[int]struct{}{1: {}},
 				hour:      map[int]struct{}{1: {}},
 				day:       map[int]struct{}{1: {}},

@@ -1,7 +1,6 @@
 package cassandra
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"testing"
@@ -32,8 +31,7 @@ func initTest(t *testing.T) (*Client, *mockDependencies) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	b := new(bytes.Buffer)
-	mockLogger := NewMockLogger(INFO, b)
+	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
 	mockSession := NewMocksession(ctrl)
 	mockQuery := NewMockquery(ctrl)
@@ -56,6 +54,10 @@ func initTest(t *testing.T) (*Client, *mockDependencies) {
 	mockMetrics.EXPECT().RecordHistogram(gomock.AssignableToTypeOf(context.Background()), "app_cassandra_stats",
 		gomock.AssignableToTypeOf(float64(0)), "hostname", client.config.Hosts, "keyspace", client.config.Keyspace).AnyTimes()
 
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Error("we did not get a pointer. data is not settable.").AnyTimes()
+	mockLogger.EXPECT().Debugf(gomock.Any(), gomock.Any()).AnyTimes()
+
 	return client, &mockDependencies{mockSession: mockSession, mockQuery: mockQuery, mockBatch: mockBatch, mockIter: mockIter}
 }
 
@@ -63,10 +65,9 @@ func Test_Connect(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	b := new(bytes.Buffer)
-	mockLogger := NewMockLogger(INFO, b)
+	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
-	mockclusterConfig := NewMockclusterConfig(ctrl)
+	mockClusterConfig := NewMockclusterConfig(ctrl)
 
 	config := Config{
 		Hosts:    "host1",
@@ -74,22 +75,26 @@ func Test_Connect(t *testing.T) {
 		Keyspace: "test_keyspace",
 	}
 
-	cassandraBucktes := []float64{.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 4, 5, 7.5, 10}
+	cassandraBuckets := []float64{.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 4, 5, 7.5, 10}
+
+	mockLogger.EXPECT().Logf("connecting to cassandra at %v on port %v to keyspace %v", "host1", 9042, "test_keyspace")
 
 	testCases := []struct {
 		desc       string
 		mockCall   func()
-		expLog     string
 		expSession session
 	}{
 		{"successful connection", func() {
-			mockclusterConfig.EXPECT().createSession().Return(&cassandraSession{}, nil).Times(1)
+			mockClusterConfig.EXPECT().createSession().Return(&cassandraSession{}, nil).Times(1)
 			mockMetrics.EXPECT().NewHistogram("app_cassandra_stats", "Response time of CASSANDRA queries in milliseconds.",
-				cassandraBucktes).Times(1)
-		}, "connected to 'test_keyspace' keyspace at host 'host1' and port '9042'", &cassandraSession{}},
+				cassandraBuckets).Times(1)
+			mockLogger.EXPECT().Logf("connecting to cassandra at %v on port %v to keyspace %v", "host1", 9042, "test_keyspace")
+			mockLogger.EXPECT().Logf("connected to '%s' keyspace at host '%s' and port '%d'", "test_keyspace", "host1", 9042)
+		}, &cassandraSession{}},
 		{"connection failure", func() {
-			mockclusterConfig.EXPECT().createSession().Return(nil, errConnFail).Times(1)
-		}, "error connecting to cassandra: connection failure", nil},
+			mockClusterConfig.EXPECT().createSession().Return(nil, errConnFail).Times(1)
+			mockLogger.EXPECT().Error("error connecting to cassandra: ")
+		}, nil},
 	}
 
 	for i, tc := range testCases {
@@ -99,12 +104,11 @@ func Test_Connect(t *testing.T) {
 		client.UseLogger(mockLogger)
 		client.UseMetrics(mockMetrics)
 
-		client.cassandra.clusterConfig = mockclusterConfig
+		client.cassandra.clusterConfig = mockClusterConfig
 
 		client.Connect()
 
-		assert.Equalf(t, tc.expSession, client.cassandra.session, "TEST[%d], Failed.\n%s", i, tc.desc)
-		assert.Containsf(t, b.String(), tc.expLog, "TEST[%d], Failed.\n%s", i, tc.desc)
+		assert.Equal(t, tc.expSession, client.cassandra.session, "TEST[%d], Failed.\n%s", i, tc.desc)
 	}
 }
 

@@ -3,6 +3,7 @@ package ftp
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -66,7 +67,7 @@ func (f *file) createJSONReader() (file_interface.RowReader, error) {
 
 	res, err := f.conn.Retr(f.path)
 	if err != nil {
-		f.logger.Errorf("ReadAll failed : Unable to retrieve json file: %v", err)
+		f.logger.Errorf("ReadAll failed: Unable to retrieve json file: %v", err)
 		return nil, err
 	}
 
@@ -74,7 +75,7 @@ func (f *file) createJSONReader() (file_interface.RowReader, error) {
 
 	buffer, err := io.ReadAll(res)
 	if err != nil {
-		f.logger.Errorf("ReadAll Failed : Unable to read json file: %v", err)
+		f.logger.Errorf("ReadAll Failed: Unable to read json file: %v", err)
 		return nil, err
 	}
 
@@ -111,7 +112,7 @@ func (f *file) createTextCSVReader() (file_interface.RowReader, error) {
 
 	res, err := f.conn.Retr(f.path)
 	if err != nil {
-		f.logger.Errorf("ReadAll failed : Unable to retrieve text file: %v", err)
+		f.logger.Errorf("ReadAll failed: Unable to retrieve text file: %v", err)
 		return nil, err
 	}
 
@@ -119,7 +120,7 @@ func (f *file) createTextCSVReader() (file_interface.RowReader, error) {
 
 	buffer, err := io.ReadAll(res)
 	if err != nil {
-		f.logger.Errorf("ReadAll failed : Unable to read text file: %v", err)
+		f.logger.Errorf("ReadAll failed: Unable to read text file: %v", err)
 		return nil, err
 	}
 
@@ -192,7 +193,7 @@ func (f *file) Size() int64 {
 
 	size, err := f.conn.FileSize(f.name)
 	if err != nil {
-		f.logger.Errorf("Size operation failed : %v", err)
+		f.logger.Errorf("Size operation failed: %v", err)
 	}
 
 	return size
@@ -219,7 +220,7 @@ func (f *file) ModTime() time.Time {
 
 	t, err := f.conn.GetTime(f.path)
 	if err != nil {
-		f.logger.Errorf("ModTime operation failed : %v", err)
+		f.logger.Errorf("ModTime operation failed: %v", err)
 		return time.Time{}
 	}
 
@@ -236,7 +237,7 @@ func (f *file) Read(p []byte) (n int, err error) {
 
 	r, err := f.conn.RetrFrom(f.path, uint64(f.offset))
 	if err != nil {
-		f.logger.Errorf("Read failed : Failed to open file with path %q : %v", f.path, err)
+		f.logger.Errorf("Read failed: Failed to open file with path %q : %v", f.path, err)
 		return 0, err
 	}
 
@@ -247,7 +248,7 @@ func (f *file) Read(p []byte) (n int, err error) {
 	f.offset += int64(n)
 
 	if err != nil && !errors.Is(err, io.EOF) {
-		f.logger.Errorf("Read failed : Failed to read from %q : %v", f.path, err)
+		f.logger.Errorf("Read failed: Failed to read from %q : %v", f.path, err)
 		return n, err
 	}
 
@@ -267,7 +268,7 @@ func (f *file) ReadAt(p []byte, off int64) (n int, err error) {
 
 	resp, err := f.conn.RetrFrom(f.path, uint64(off))
 	if err != nil {
-		f.logger.Errorf("ReadAt failed : Error opening file with path %q at %v offset : %v", f.path, off, err)
+		f.logger.Errorf("ReadAt failed: Error opening file with path %q at %v offset : %v", f.path, off, err)
 		return 0, err
 	}
 
@@ -275,7 +276,7 @@ func (f *file) ReadAt(p []byte, off int64) (n int, err error) {
 
 	n, err = resp.Read(p)
 	if err != nil && !errors.Is(err, io.EOF) {
-		f.logger.Errorf("ReadAt failed : Error reading file on path %q at %v offset : %v", off, f.path, err)
+		f.logger.Errorf("ReadAt failed: Error reading file on path %q at %v offset : %v", off, f.path, err)
 		return 0, err
 	}
 
@@ -315,13 +316,13 @@ func (f *file) Seek(offset int64, whence int) (int64, error) {
 
 	n, err := f.conn.FileSize(f.path)
 	if err != nil {
-		f.logger.Errorf("Seek failed : Error : %v", err)
+		f.logger.Errorf("Seek failed, error: %v", err)
 		return 0, err
 	}
 
 	res, err := f.check(whence, offset, n)
 	if err != nil {
-		f.logger.Errorf("Seek failed : Error : %v", err)
+		f.logger.Errorf("Seek failed, error: %v", err)
 		return 0, err
 	}
 
@@ -343,7 +344,7 @@ func (f *file) Write(p []byte) (n int, err error) {
 
 	err = f.conn.StorFrom(f.path, reader, uint64(f.offset))
 	if err != nil {
-		f.logger.Errorf("Write failed : Error : %v", err)
+		f.logger.Errorf("Write failed, error: %v", err)
 		return 0, err
 	}
 
@@ -393,4 +394,7 @@ func (f *file) sendOperationStats(fl *FileLog, startTime time.Time) {
 	fl.Duration = duration
 
 	f.logger.Debug(fl)
+
+	f.metrics.RecordHistogram(context.Background(), appFtpStats, float64(duration),
+		"type", fl.Operation, "status", clean(fl.Status))
 }
