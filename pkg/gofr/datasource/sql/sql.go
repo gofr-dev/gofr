@@ -131,28 +131,32 @@ func retryConnection(database *DB) {
 	for {
 		if database.DB.Ping() != nil {
 			database.logger.Log("retrying SQL database connection")
-
-			for {
-				err := database.DB.Ping()
-				if err == nil {
-					connDetails := fmt.Sprintf("connected to '%s' database", database.config.Database)
-					if database.config.Dialect != sqlite {
-						connDetails += fmt.Sprintf(" at '%s:%s'", database.config.HostName, database.config.Port)
-					}
-					database.logger.Log(connDetails)
-					break
-				}
-
-				dbDetails := fmt.Sprintf("could not connect with '%s' user to '%s' database",
-					database.config.User, database.config.Database)
-				if database.config.Dialect != sqlite {
-					dbDetails += fmt.Sprintf(" at '%s:%s'", database.config.HostName, database.config.Port)
-				}
-				database.logger.Debugf("%s, error: %v", dbDetails, err)
-
-				time.Sleep(connRetryFrequencyInSeconds * time.Second)
-			}
+			attemptConnection(database)
 		}
+
+		time.Sleep(connRetryFrequencyInSeconds * time.Second)
+	}
+}
+
+func attemptConnection(database *DB) {
+	const connRetryFrequencyInSeconds = 10
+	for {
+		err := database.DB.Ping()
+		if err == nil {
+			connDetails := fmt.Sprintf("connected to '%s' database", database.config.Database)
+			if database.config.Dialect != sqlite {
+				connDetails += fmt.Sprintf(" at '%s:%s'", database.config.HostName, database.config.Port)
+			}
+			database.logger.Log(connDetails)
+			break
+		}
+
+		dbDetails := fmt.Sprintf("could not connect with '%s' user to '%s' database",
+			database.config.User, database.config.Database)
+		if database.config.Dialect != sqlite {
+			dbDetails += fmt.Sprintf(" at '%s:%s'", database.config.HostName, database.config.Port)
+		}
+		database.logger.Debugf("%s, error: %v", dbDetails, err)
 
 		time.Sleep(connRetryFrequencyInSeconds * time.Second)
 	}
