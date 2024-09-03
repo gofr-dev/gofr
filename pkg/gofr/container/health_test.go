@@ -3,17 +3,14 @@ package container
 import (
 	"context"
 	"encoding/json"
-	"net/http"
-	"net/http/httptest"
-	"strings"
-	"testing"
-
-	"github.com/stretchr/testify/assert"
-
 	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/datasource/sql"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/service"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
 )
 
 func TestContainer_Health(t *testing.T) {
@@ -105,7 +102,7 @@ func TestContainer_Health(t *testing.T) {
 }
 
 func registerMocks(mocks Mocks, health string) {
-	mocks.SQL.EXPECT().HealthCheck().Return(&datasource.Health{
+	mocks.SQL.ExpectHealthCheck().WillReturnHealthCheck(datasource.Health{
 		Status: health,
 		Details: map[string]interface{}{
 			"host": "localhost:3306/test",
