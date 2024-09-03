@@ -135,23 +135,20 @@ func retryConnection(database *DB) {
 			for {
 				err := database.DB.Ping()
 				if err == nil {
-					if database.config.Dialect == sqlite {
-						database.logger.Logf("connected to '%s' database", database.config.Database)
-					} else {
-						database.logger.Logf("connected to '%s' database at '%s:%s'", database.config.Database,
-							database.config.HostName, database.config.Port)
+					connDetails := fmt.Sprintf("connected to '%s' database", database.config.Database)
+					if database.config.Dialect != sqlite {
+						connDetails += fmt.Sprintf(" at '%s:%s'", database.config.HostName, database.config.Port)
 					}
-
+					database.logger.Log(connDetails)
 					break
 				}
 
-				if database.config.Dialect == sqlite {
-					database.logger.Debugf("could not connect with '%s' user to '%s' database, error: %v",
-						database.config.User, database.config.Database, err)
-				} else {
-					database.logger.Debugf("could not connect with '%s' user to '%s' database at '%s:%s', error: %v",
-						database.config.User, database.config.Database, database.config.HostName, database.config.Port, err)
+				dbDetails := fmt.Sprintf("could not connect with '%s' user to '%s' database",
+					database.config.User, database.config.Database)
+				if database.config.Dialect != sqlite {
+					dbDetails += fmt.Sprintf(" at '%s:%s'", database.config.HostName, database.config.Port)
 				}
+				database.logger.Debugf("%s, error: %v", dbDetails, err)
 
 				time.Sleep(connRetryFrequencyInSeconds * time.Second)
 			}
