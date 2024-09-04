@@ -5,9 +5,9 @@ import (
 	"database/sql"
 
 	"github.com/redis/go-redis/v9"
-	gofrSQL "gofr.dev/pkg/gofr/datasource/sql"
 
 	"gofr.dev/pkg/gofr/datasource"
+	gofrSQL "gofr.dev/pkg/gofr/datasource/sql"
 )
 
 //go:generate go run go.uber.org/mock/mockgen -source=datasources.go -destination=mock_datasources.go -package=container

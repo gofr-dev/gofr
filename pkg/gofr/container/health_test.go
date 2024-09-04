@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
 	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/datasource/sql"
 	"gofr.dev/pkg/gofr/logging"
@@ -104,7 +105,7 @@ func TestContainer_Health(t *testing.T) {
 }
 
 func registerMocks(mocks Mocks, health string) {
-	mocks.SQL.ExpectHealthCheck().WillReturnHealthCheck(datasource.Health{
+	mocks.SQL.ExpectHealthCheck().WillReturnHealthCheck(&datasource.Health{
 		Status: health,
 		Details: map[string]interface{}{
 			"host": "localhost:3306/test",

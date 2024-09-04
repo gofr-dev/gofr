@@ -4,11 +4,11 @@ import (
 	"context"
 	"testing"
 
-	"go.uber.org/mock/gomock"
-
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
+
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/datasource/pubsub/mqtt"
 	gofrRedis "gofr.dev/pkg/gofr/datasource/redis"
