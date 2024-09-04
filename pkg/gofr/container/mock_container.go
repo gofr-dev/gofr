@@ -2,6 +2,7 @@ package container
 
 import (
 	"context"
+	gosql "database/sql"
 	"fmt"
 	"github.com/DATA-DOG/go-sqlmock"
 	"gofr.dev/pkg/gofr/datasource/sql"
@@ -18,7 +19,7 @@ import (
 
 type Mocks struct {
 	Redis      *MockRedis
-	SQL        mockSql
+	SQL        *mockSql
 	Clickhouse *MockClickhouse
 	Cassandra  *MockCassandra
 	Mongo      *MockMongo
@@ -65,8 +66,8 @@ func NewMockContainer(t *testing.T) (*Container, Mocks) {
 	// initialisation of expectations
 	e := expectedQuery{}
 
-	sql := mockSql{sqlMock, &e}
-	container.SQL = sqlMockDB{mockDB, &e}
+	sql2 := &mockSql{sqlMock, &e}
+	container.SQL = &sqlMockDB{mockDB, &e}
 
 	redisMock := NewMockRedis(ctrl)
 	container.Redis = redisMock
@@ -88,7 +89,7 @@ func NewMockContainer(t *testing.T) (*Container, Mocks) {
 
 	mocks := Mocks{
 		Redis:      redisMock,
-		SQL:        sql,
+		SQL:        sql2,
 		Clickhouse: clickhouseMock,
 		Cassandra:  cassandraMock,
 		Mongo:      mongoMock,
@@ -132,8 +133,8 @@ func (m sqlMockDB) Dialect() string {
 	return string(m.expectedDialect)
 }
 
-// ExpectSelect is no direct method for select in Select we expect the user to already send the populated data interface
-// argument that can be used further in the process in the handler of functions
+// ExpectSelect is no direct method for select in Select we expect the user to already send the
+// populated data interface argument that can be used further in the process in the handler of functions
 func (m *mockSql) ExpectSelect(ctx context.Context, data interface{}, query string, args ...interface{}) {
 	m.expectedQuery.query = query
 	m.expectedQuery.args = args
@@ -150,6 +151,10 @@ func (d *health) WillReturnHealthCheck(dh datasource.Health) {
 
 func (m *mockSql) ExpectDialect() *dialect {
 	return &m.expectedDialect
+}
+
+func (m *mockSql) NewResult(lastInsertID int64, rowsAffected int64) gosql.Result {
+	return sqlmock.NewResult(lastInsertID, rowsAffected)
 }
 
 func (d *dialect) WillReturnString(s string) {
