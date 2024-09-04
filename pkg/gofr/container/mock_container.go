@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/DATA-DOG/go-sqlmock"
 	"gofr.dev/pkg/gofr/datasource/sql"
+	"log"
 	"net/http"
 	"testing"
 
@@ -33,10 +34,14 @@ type dialect string
 
 // expectedQuery stores the mock expectations till the method call.
 type expectedQuery struct {
-	query               string
-	args                []interface{}
-	expectedDialect     dialect
-	expectedHealthCheck health
+	queryWithArgs       []queryWithArgs
+	expectedDialect     []dialect
+	expectedHealthCheck []health
+}
+
+type queryWithArgs struct {
+	queryText string
+	arguments []interface{}
 }
 
 // mockSql wraps go-mock-sql and expectations
@@ -109,40 +114,84 @@ func NewMockContainer(t *testing.T) (*Container, Mocks) {
 }
 
 func (m sqlMockDB) Select(ctx context.Context, data interface{}, query string, args ...interface{}) {
-	if m.query != query {
-		fmt.Errorf("expected query: %s, actual query: %s", query, m.query)
+	if m.queryWithArgs == nil || len(m.queryWithArgs) == 0 {
+		log.Fatal("Did not expect any calls for Select with query: %s", query)
 	}
 
-	if len(args) != len(m.args) {
-		fmt.Errorf("expected %d args, actual %d", len(m.args), len(args))
+	lastIndex := len(m.queryWithArgs) - 1
+	expectedText := m.queryWithArgs[lastIndex].queryText
+	expectedArgs := m.queryWithArgs[lastIndex].arguments
+
+	if expectedText != query {
+		log.Fatalf("expected query: %s, actual query: %s", query, expectedText)
+	}
+
+	if len(args) != len(expectedArgs) {
+		log.Fatalf("expected %d args, actual %d", len(expectedArgs), len(args))
 	}
 
 	for i := range args {
-		if args[i] != m.args[i] {
-			fmt.Errorf("expected arg %d, actual arg %d", args[i], m.args[i])
+		if args[i] != expectedArgs[i] {
+			log.Fatalf("expected arg %d, actual arg %d", args[i], expectedArgs[i])
 		}
 	}
+	m.queryWithArgs = m.queryWithArgs[:lastIndex]
 }
 
 func (m sqlMockDB) HealthCheck() *datasource.Health {
-	d := datasource.Health(m.expectedHealthCheck)
+	if m.expectedHealthCheck == nil || len(m.expectedHealthCheck) == 0 {
+		log.Fatal("Did not expect any mock calls for HealthCheck")
+	}
+
+	lastIndex := len(m.expectedHealthCheck) - 1
+	expectedString := m.expectedHealthCheck[lastIndex]
+	d := datasource.Health(expectedString)
+
+	m.expectedHealthCheck = m.expectedHealthCheck[:lastIndex]
 	return &d
 }
 
 func (m sqlMockDB) Dialect() string {
-	return string(m.expectedDialect)
+	if m.expectedDialect == nil || len(m.expectedDialect) == 0 {
+		log.Fatal("Did not expect any mock calls for Dialect")
+	}
+	lastIndex := len(m.expectedDialect) - 1
+	expectedString := m.expectedDialect[lastIndex]
+	m.expectedDialect = m.expectedDialect[:lastIndex]
+
+	return string(expectedString)
 }
 
 // ExpectSelect is no direct method for select in Select we expect the user to already send the
 // populated data interface argument that can be used further in the process in the handler of functions
 func (m *mockSql) ExpectSelect(ctx context.Context, data interface{}, query string, args ...interface{}) {
-	m.expectedQuery.query = query
-	m.expectedQuery.args = args
+	emptyQueryWithArgs := make([]queryWithArgs, 0)
+
+	if m.queryWithArgs == nil {
+		m.queryWithArgs = emptyQueryWithArgs
+	}
+
+	qr := queryWithArgs{query, args}
+
+	sliceQueryWithArgs := append(emptyQueryWithArgs, qr)
+	m.queryWithArgs = append(sliceQueryWithArgs, m.queryWithArgs...)
+
 	return
 }
 
 func (m *mockSql) ExpectHealthCheck() *health {
-	return &m.expectedHealthCheck
+	emptyHealthCheckSlice := make([]health, 0)
+
+	if m.expectedHealthCheck == nil {
+		m.expectedHealthCheck = emptyHealthCheckSlice
+	}
+
+	hc := health{}
+
+	healthCheckSlice := append(emptyHealthCheckSlice, hc)
+	m.expectedHealthCheck = append(healthCheckSlice, m.expectedHealthCheck...)
+
+	return &m.expectedHealthCheck[0]
 }
 
 func (d *health) WillReturnHealthCheck(dh datasource.Health) {
@@ -150,7 +199,18 @@ func (d *health) WillReturnHealthCheck(dh datasource.Health) {
 }
 
 func (m *mockSql) ExpectDialect() *dialect {
-	return &m.expectedDialect
+	emptyDialectSlice := make([]dialect, 0)
+
+	if m.expectedDialect == nil {
+		m.expectedDialect = emptyDialectSlice
+	}
+
+	d := dialect("")
+
+	DialectSlice := append(emptyDialectSlice, d)
+	m.expectedDialect = append(DialectSlice, m.expectedDialect...)
+
+	return &m.expectedDialect[0]
 }
 
 func (m *mockSql) NewResult(lastInsertID int64, rowsAffected int64) gosql.Result {
