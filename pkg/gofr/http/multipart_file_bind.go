@@ -171,9 +171,9 @@ func (uf *formData) setFieldValue(value reflect.Value, data string) (bool, error
 	case reflect.Invalid, reflect.Complex64, reflect.Complex128, reflect.Chan, reflect.Func,
 		reflect.Map, reflect.Pointer, reflect.UnsafePointer:
 		return false, nil
-	default:
-		return false, nil
 	}
+
+	return false, nil
 }
 
 func (uf *formData) setInterfaceValue(value reflect.Value, data string) (bool, error) {
