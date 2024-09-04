@@ -21,13 +21,14 @@ func getClickHouseTestConnection(t *testing.T) (*MockConn, *MockMetrics, client)
 
 	mockConn := NewMockConn(ctrl)
 	mockMetric := NewMockMetrics(ctrl)
+	mockLogger := NewMockLogger(ctrl)
 
 	c := client{conn: mockConn, config: Config{
 		Hosts:    "localhost",
 		Username: "user",
 		Password: "pass",
 		Database: "test",
-	}, logger: NewMockLogger(DEBUG), metrics: mockMetric}
+	}, logger: mockLogger, metrics: mockMetric}
 
 	return mockConn, mockMetric, c
 }
@@ -35,7 +36,7 @@ func getClickHouseTestConnection(t *testing.T) (*MockConn, *MockMetrics, client)
 func Test_ClickHouse_ConnectAndMetricRegistrationAndPingFailure(t *testing.T) {
 	logs := stderrOutputForFunc(func() {
 		_, mockMetric, _ := getClickHouseTestConnection(t)
-		mockLogger := NewMockLogger(DEBUG)
+		mockLogger := NewMockLogger(gomock.NewController(t))
 
 		cl := New(Config{
 			Hosts:    "localhost:8000",
