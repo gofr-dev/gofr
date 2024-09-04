@@ -78,5 +78,4 @@ Therefore, GoFr utilizes a pluggable approach for new datasources by separating 
 | SQLite     | ✅         | ✅    | ✅       | ✅      |           |
 | Cassandra  | ✅         | ✅    | ✅       |        | ✅         |
 | Clickhouse |           | ✅    | ✅       |        | ✅         |
-
-
+| Solr       |           |   ✅   |   ✅      |        |      ✅     |
