@@ -137,12 +137,15 @@ func TestSetSliceOrArrayValue(t *testing.T) {
 	data := "a,b,c"
 
 	ok, err := uf.setSliceOrArrayValue(value, data)
-	if !ok || err != nil {
+
+	assert.True(t, ok, "setSliceOrArrayValue failed")
+
+	if err != nil {
 		t.Errorf("setSliceOrArrayValue failed: %v", err)
 	}
 
 	if len(value.Interface().([]string)) != 3 {
-		t.Errorf("slice not set correctly")
+		t.Fatal("slice not set correctly")
 	}
 
 	// Test with an array
@@ -167,7 +170,7 @@ func TestSetStructValue(t *testing.T) {
 	// Test with a valid input string
 	value := reflect.ValueOf(&testStruct{}).Elem()
 
-	data := "{\"Field1\":\"value1\",\"Field2\":123}"
+	data := `{"Field1":"value1","Field2":123}`
 
 	ok, err := uf.setStructValue(value, data)
 	if !ok || err != nil {
@@ -175,6 +178,6 @@ func TestSetStructValue(t *testing.T) {
 	}
 
 	if value.FieldByName("Field1").String() != "value1" || value.FieldByName("Field2").Int() != 123 {
-		t.Errorf("struct fields not set correctly")
+		t.Error("struct fields not set correctly")
 	}
 }

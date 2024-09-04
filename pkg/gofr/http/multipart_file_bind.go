@@ -15,13 +15,14 @@ import (
 
 var (
 	errUnsupportedInterfaceType = errors.New("unsupported interface value type")
-	errDataLengthExceeds        = errors.New("data length exceeds array capacity")
+	errDataLengthExceeded       = errors.New("data length exceeds array capacity")
 	errUnsupportedKind          = errors.New("unsupported kind")
-	errSettingValue             = errors.New("error setting value at index")
+	errSettingValueFailure      = errors.New("error setting value at index")
 	errNotAStruct               = errors.New("provided value is not a struct")
 	errFieldNotFound            = errors.New("field not found in struct")
-	errFieldUnexported          = errors.New("cannot set field; it might be unexported")
+	errUnexportedField          = errors.New("cannot set field; it might be unexported")
 	errUnsupportedFieldType     = errors.New("unsupported type for field")
+	errFieldsNotSet             = errors.New("no fields were set")
 )
 
 type formData struct {
@@ -207,15 +208,22 @@ func (uf *formData) setSliceOrArrayValue(value reflect.Value, data string) (bool
 
 	// Create a new slice/array with appropriate length and capacity
 	var newSlice reflect.Value
-	if value.Kind() == reflect.Slice {
+
+	switch value.Kind() {
+	case reflect.Slice:
 		newSlice = reflect.MakeSlice(value.Type(), len(elements), len(elements))
-	} else if value.Kind() == reflect.Array {
+	case reflect.Array:
 		if len(elements) > value.Len() {
-			return false, errDataLengthExceeds
+			return false, errDataLengthExceeded
 		}
 
-		newSlice = reflect.New(value.Type()).Elem() // Create a new zero-valued array
-	} else {
+		newSlice = reflect.New(value.Type()).Elem()
+	case reflect.Invalid, reflect.Bool, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64, reflect.Uint,
+		reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr, reflect.Float32, reflect.Float64,
+		reflect.Complex64, reflect.Complex128, reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.String,
+		reflect.Struct, reflect.UnsafePointer, reflect.Pointer:
+		return false, fmt.Errorf("%w: %s", errUnsupportedKind, value.Kind())
+	default:
 		return false, fmt.Errorf("%w: %s", errUnsupportedKind, value.Kind())
 	}
 
@@ -226,7 +234,7 @@ func (uf *formData) setSliceOrArrayValue(value reflect.Value, data string) (bool
 	for i, strVal := range elements {
 		// Update the reusable element value
 		if _, err := uf.setFieldValue(elemValue, strVal); err != nil {
-			return false, fmt.Errorf("%w %d: %w", errSettingValue, i, err)
+			return false, fmt.Errorf("%w %d: %w", errSettingValueFailure, i, err)
 		}
 
 		newSlice.Index(i).Set(elemValue)
@@ -247,8 +255,6 @@ func (*formData) setStructValue(value reflect.Value, data string) (bool, error) 
 		return false, err
 	}
 
-	anyFieldSet := false
-
 	for key, val := range dataMap {
 		field, err := getFieldByName(value, key)
 		if err != nil {
@@ -259,10 +265,12 @@ func (*formData) setStructValue(value reflect.Value, data string) (bool, error) 
 			return false, err
 		}
 
-		anyFieldSet = true
+		// Return true and nil error once a field is set
+		return true, nil
 	}
 
-	return anyFieldSet, nil
+	// Return false and an error if no fields were set
+	return false, errFieldsNotSet
 }
 
 // getFieldByName retrieves a field by its name, considering case insensitivity.
@@ -276,7 +284,7 @@ func getFieldByName(value reflect.Value, key string) (reflect.Value, error) {
 	}
 
 	if !field.CanSet() {
-		return reflect.Value{}, fmt.Errorf("%w: %s", errFieldUnexported, key)
+		return reflect.Value{}, fmt.Errorf("%w: %s", errUnexportedField, key)
 	}
 
 	return field, nil
@@ -313,19 +321,17 @@ func (c *customUnmarshaller) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
-	dataMap := make(map[string]interface{}, len(rawData))
+	dataMap := make(map[string]any, len(rawData))
 
 	for key, val := range rawData {
-		switch val := val.(type) {
-		case float64:
-			if val == float64(int(val)) {
-				dataMap[key] = int(val)
-			} else {
-				dataMap[key] = val
+		if valFloat, ok := val.(float64); ok {
+			valInt := int(valFloat)
+			if valFloat == float64(valInt) {
+				val = valInt
 			}
-		default:
-			dataMap[key] = val
 		}
+
+		dataMap[key] = val
 	}
 
 	*c = customUnmarshaller{dataMap}
