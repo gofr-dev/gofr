@@ -60,14 +60,6 @@ type testValue struct {
 	value interface{}
 }
 
-type interfaceValue struct {
-	value interface{}
-}
-
-func (iv interfaceValue) String() string {
-	return "interface value"
-}
-
 func Test_SetFieldValue_Success(t *testing.T) {
 	testCases := []struct {
 		desc      string
