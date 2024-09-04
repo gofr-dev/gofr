@@ -54,3 +54,51 @@ func TestGetFieldName(t *testing.T) {
 		})
 	}
 }
+
+type testValue struct {
+	kind  reflect.Kind
+	value interface{}
+}
+
+type interfaceValue struct {
+	value interface{}
+}
+
+func (iv interfaceValue) String() string {
+	return "interface value"
+}
+
+func Test_SetFieldValue_Success(t *testing.T) {
+	testCases := []struct {
+		desc      string
+		data      string
+		expected  bool
+		valueType testValue
+	}{
+		{"String", "test", true, testValue{reflect.String, "string"}},
+		{"Int", "10", true, testValue{reflect.Int, 0}},
+		{"Uint", "10", true, testValue{reflect.Uint16, uint16(10)}},
+		{"Float64", "3.14", true, testValue{reflect.Float64, 0.0}},
+		{"Bool", "true", true, testValue{reflect.Bool, false}},
+		{"Slice", "1,2,3,4,5", true, testValue{reflect.Slice, []int{}}},
+		{"Array", "1,2,3,4,5", true, testValue{reflect.Array, [5]int{}}},
+		{"Struct", `{"name": "John", "age": 30}`, true, testValue{reflect.Struct, struct {
+			Name string `json:"name"`
+			Age  int    `json:"age"`
+		}{}}},
+	}
+
+	for _, tc := range testCases {
+		f := &formData{}
+		val := reflect.New(reflect.TypeOf(tc.valueType.value)).Elem()
+
+		set, err := f.setFieldValue(val, tc.data)
+		if err != nil {
+			t.Errorf("Unexpected error for value kind %v and data %q: %v", val.Kind(), tc.data, err)
+		}
+
+		if set != tc.expected {
+			t.Errorf("Expected set to be %v for value kind %v and data %q, got %v", tc.expected, val.Kind(), tc.data, set)
+		}
+	}
+}

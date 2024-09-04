@@ -1,10 +1,14 @@
 package http
 
 import (
+	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 	"mime/multipart"
 	"reflect"
 	"strconv"
+	"strings"
 
 	"gofr.dev/pkg/gofr/file"
 )
@@ -146,13 +150,178 @@ func (uf *formData) setFieldValue(value reflect.Value, data string) (bool, error
 		return uf.setFloatValue(value, data)
 	case reflect.Bool:
 		return uf.setBoolValue(value, data)
-	case reflect.Invalid, reflect.Complex64, reflect.Complex128, reflect.Array, reflect.Chan, reflect.Func, reflect.Interface,
-		reflect.Map, reflect.Pointer, reflect.Slice, reflect.Struct, reflect.UnsafePointer:
-		// These types are not supported for setting via form data
+	case reflect.Slice, reflect.Array:
+		return uf.setSliceOrArrayValue(value, data)
+	case reflect.Interface:
+		return uf.setInterfaceValue(value, data)
+	case reflect.Struct:
+		return uf.setStructValue(value, data)
+	case reflect.Invalid, reflect.Complex64, reflect.Complex128, reflect.Chan, reflect.Func,
+		reflect.Map, reflect.Pointer, reflect.UnsafePointer:
 		return false, nil
 	default:
 		return false, nil
 	}
+}
+
+func (uf *formData) setInterfaceValue(value reflect.Value, data string) (bool, error) {
+	// If the interface is not set to a concrete value, we can't modify it directly
+	if value.Kind() == reflect.Interface && value.IsNil() {
+		return false, fmt.Errorf("cannot set value on a nil interface")
+	}
+
+	// If the value is a pointer to an interface, dereference it
+	if value.Kind() == reflect.Ptr && !value.IsNil() && value.Elem().Kind() == reflect.Interface {
+		value = value.Elem()
+	}
+
+	// If the interface holds a value, attempt to set the underlying type's value
+	if value.Kind() == reflect.Interface {
+		// Get the concrete value held by the interface
+		concreteValue := value.Elem()
+
+		// Try to set the concrete value using the underlying type
+		return uf.setFieldValue(concreteValue, data)
+	}
+
+	// If it's not an interface or the concrete value couldn't be set, return false
+	return false, fmt.Errorf("unsupported interface value type: %v", value.Kind())
+}
+
+func (uf *formData) setSliceOrArrayValue(value reflect.Value, data string) (bool, error) {
+	elemType := value.Type().Elem()
+
+	elements := strings.Split(data, ",")
+
+	// Create a new slice/array with appropriate length and capacity
+	var newSlice reflect.Value
+	if value.Kind() == reflect.Slice {
+		newSlice = reflect.MakeSlice(value.Type(), len(elements), len(elements))
+	} else if value.Kind() == reflect.Array {
+		if len(elements) > value.Len() {
+			return false, fmt.Errorf("data length exceeds array capacity")
+		}
+
+		newSlice = reflect.New(value.Type()).Elem() // Create a new zero-valued array
+	} else {
+		return false, fmt.Errorf("unsupported kind: %v", value.Kind())
+	}
+
+	// Create a reusable element value to avoid unnecessary allocations
+	elemValue := reflect.New(elemType).Elem()
+
+	// Set the elements of the slice/array
+	for i, strVal := range elements {
+		// Update the reusable element value
+		if _, err := uf.setFieldValue(elemValue, strVal); err != nil {
+			return false, fmt.Errorf("error setting value at index %d: %v", i, err)
+		}
+		newSlice.Index(i).Set(elemValue)
+	}
+
+	value.Set(newSlice)
+	return true, nil
+}
+
+func (uf *formData) setStructValue(value reflect.Value, data string) (bool, error) {
+	if value.Kind() != reflect.Struct {
+		return false, errors.New("provided value is not a struct")
+	}
+
+	dataMap, err := parseStringToMap(data)
+	if err != nil {
+		return false, err
+	}
+
+	anyFieldSet := false
+
+	for key, val := range dataMap {
+		field := value.FieldByName(key)
+		if !field.IsValid() {
+			// Attempt to find the field by ignoring case (optional)
+			field = findFieldByNameIgnoreCase(value, key)
+			if !field.IsValid() {
+				return false, fmt.Errorf("field '%s' not found in struct", key)
+			}
+		}
+
+		if !field.CanSet() {
+			return false, fmt.Errorf("cannot set field '%s'; it might be unexported", key)
+		}
+
+		// Handle pointer fields by initializing them if necessary
+		if field.Kind() == reflect.Ptr {
+			if field.IsNil() {
+				field.Set(reflect.New(field.Type().Elem()))
+			}
+			field = field.Elem()
+		}
+
+		// Set the field value using the provided data
+		switch val := val.(type) {
+		case string:
+			field.SetString(val)
+		case int:
+			field.SetInt(int64(val))
+		case float64:
+			field.SetFloat(val)
+		case bool:
+			field.SetBool(val)
+		default:
+			return false, fmt.Errorf("unsupported type for field '%s': %T", key, val)
+		}
+
+		anyFieldSet = true
+	}
+
+	return anyFieldSet, nil
+}
+
+type customUnmarshaller struct {
+	dataMap map[string]interface{}
+}
+
+// UnmarshalJSON is a custom unmarshaller because json package in Go unmarshal numbers to float64 by default, even if the number is an integer
+func (c *customUnmarshaller) UnmarshalJSON(data []byte) error {
+	var rawData map[string]interface{}
+	err := json.Unmarshal(data, &rawData)
+	if err != nil {
+		return err
+	}
+
+	dataMap := make(map[string]interface{}, len(rawData))
+	for key, val := range rawData {
+		switch val := val.(type) {
+		case float64:
+			if val == float64(int(val)) {
+				dataMap[key] = int(val)
+			} else {
+				dataMap[key] = val
+			}
+		default:
+			dataMap[key] = val
+		}
+	}
+
+	*c = customUnmarshaller{dataMap}
+	return nil
+}
+
+func parseStringToMap(data string) (map[string]interface{}, error) {
+	var c customUnmarshaller
+	err := json.Unmarshal([]byte(data), &c)
+	return c.dataMap, err
+}
+
+// Helper function to find a struct field by name, ignoring case
+func findFieldByNameIgnoreCase(value reflect.Value, name string) reflect.Value {
+	t := value.Type()
+	for i := 0; i < t.NumField(); i++ {
+		if strings.EqualFold(t.Field(i).Name, name) {
+			return value.Field(i)
+		}
+	}
+	return reflect.Value{}
 }
 
 func (*formData) setStringValue(value reflect.Value, data string) (bool, error) {
