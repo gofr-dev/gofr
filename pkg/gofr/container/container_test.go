@@ -2,8 +2,9 @@ package container
 
 import (
 	"context"
-	"go.uber.org/mock/gomock"
 	"testing"
+
+	"go.uber.org/mock/gomock"
 
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
@@ -159,13 +160,13 @@ func TestContainer_Close(t *testing.T) {
 	controller := gomock.NewController(t)
 	defer controller.Finish()
 
-	mockDB, mockSql, _ := gofrSql.NewSQLMocks(t)
+	mockDB, sqlMock, _ := gofrSql.NewSQLMocks(t)
 	e := expectedQuery{}
 	mockRedis := NewMockRedis(controller)
 	mockPubSub := &MockPubSub{}
 
 	mockRedis.EXPECT().Close().Return(nil)
-	mockSql.ExpectClose()
+	sqlMock.ExpectClose()
 
 	c := NewContainer(config.NewMockConfig(nil))
 	c.SQL = &sqlMockDB{mockDB, &e}

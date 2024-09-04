@@ -4,11 +4,12 @@ import (
 	"context"
 	gosql "database/sql"
 	"fmt"
-	"github.com/DATA-DOG/go-sqlmock"
-	"gofr.dev/pkg/gofr/datasource/sql"
 	"log"
 	"net/http"
 	"testing"
+
+	"github.com/DATA-DOG/go-sqlmock"
+	"gofr.dev/pkg/gofr/datasource/sql"
 
 	"go.uber.org/mock/gomock"
 
@@ -20,7 +21,7 @@ import (
 
 type Mocks struct {
 	Redis      *MockRedis
-	SQL        *mockSql
+	SQL        *mockSQL
 	Clickhouse *MockClickhouse
 	Cassandra  *MockCassandra
 	Mongo      *MockMongo
@@ -44,13 +45,13 @@ type queryWithArgs struct {
 	arguments []interface{}
 }
 
-// mockSql wraps go-mock-sql and expectations
-type mockSql struct {
+// mockSQL wraps go-mock-sql and expectations.
+type mockSQL struct {
 	sqlmock.Sqlmock
 	*expectedQuery
 }
 
-// sqlMockDB wraps the go-mock-sql DB connection and expectations
+// sqlMockDB wraps the go-mock-sql DB connection and expectations.
 type sqlMockDB struct {
 	*sql.DB
 	*expectedQuery
@@ -71,7 +72,7 @@ func NewMockContainer(t *testing.T) (*Container, Mocks) {
 	// initialisation of expectations
 	e := expectedQuery{}
 
-	sql2 := &mockSql{sqlMock, &e}
+	sql2 := &mockSQL{sqlMock, &e}
 	container.SQL = &sqlMockDB{mockDB, &e}
 
 	redisMock := NewMockRedis(ctrl)
@@ -113,9 +114,9 @@ func NewMockContainer(t *testing.T) (*Container, Mocks) {
 	return container, mocks
 }
 
-func (m sqlMockDB) Select(ctx context.Context, data interface{}, query string, args ...interface{}) {
+func (m sqlMockDB) Select(_ context.Context, _ interface{}, query string, args ...interface{}) {
 	if m.queryWithArgs == nil || len(m.queryWithArgs) == 0 {
-		log.Fatal("Did not expect any calls for Select with query: %s", query)
+		log.Fatalf("Did not expect any calls for Select with query: %s", query)
 	}
 
 	lastIndex := len(m.queryWithArgs) - 1
@@ -135,6 +136,7 @@ func (m sqlMockDB) Select(ctx context.Context, data interface{}, query string, a
 			log.Fatalf("expected arg %d, actual arg %d", args[i], expectedArgs[i])
 		}
 	}
+
 	m.queryWithArgs = m.queryWithArgs[:lastIndex]
 }
 
@@ -148,6 +150,7 @@ func (m sqlMockDB) HealthCheck() *datasource.Health {
 	d := datasource.Health(expectedString)
 
 	m.expectedHealthCheck = m.expectedHealthCheck[:lastIndex]
+
 	return &d
 }
 
@@ -155,16 +158,18 @@ func (m sqlMockDB) Dialect() string {
 	if m.expectedDialect == nil || len(m.expectedDialect) == 0 {
 		log.Fatal("Did not expect any mock calls for Dialect")
 	}
+
 	lastIndex := len(m.expectedDialect) - 1
 	expectedString := m.expectedDialect[lastIndex]
+
 	m.expectedDialect = m.expectedDialect[:lastIndex]
 
 	return string(expectedString)
 }
 
 // ExpectSelect is no direct method for select in Select we expect the user to already send the
-// populated data interface argument that can be used further in the process in the handler of functions
-func (m *mockSql) ExpectSelect(ctx context.Context, data interface{}, query string, args ...interface{}) {
+// populated data interface argument that can be used further in the process in the handler of functions.
+func (m *mockSQL) ExpectSelect(_ context.Context, _ interface{}, query string, args ...interface{}) {
 	emptyQueryWithArgs := make([]queryWithArgs, 0)
 
 	if m.queryWithArgs == nil {
@@ -175,11 +180,9 @@ func (m *mockSql) ExpectSelect(ctx context.Context, data interface{}, query stri
 
 	sliceQueryWithArgs := append(emptyQueryWithArgs, qr)
 	m.queryWithArgs = append(sliceQueryWithArgs, m.queryWithArgs...)
-
-	return
 }
 
-func (m *mockSql) ExpectHealthCheck() *health {
+func (m *mockSQL) ExpectHealthCheck() *health {
 	emptyHealthCheckSlice := make([]health, 0)
 
 	if m.expectedHealthCheck == nil {
@@ -198,7 +201,7 @@ func (d *health) WillReturnHealthCheck(dh datasource.Health) {
 	*d = health(dh)
 }
 
-func (m *mockSql) ExpectDialect() *dialect {
+func (m *mockSQL) ExpectDialect() *dialect {
 	emptyDialectSlice := make([]dialect, 0)
 
 	if m.expectedDialect == nil {
@@ -213,7 +216,7 @@ func (m *mockSql) ExpectDialect() *dialect {
 	return &m.expectedDialect[0]
 }
 
-func (m *mockSql) NewResult(lastInsertID int64, rowsAffected int64) gosql.Result {
+func (m *mockSQL) NewResult(lastInsertID int64, rowsAffected int64) gosql.Result {
 	return sqlmock.NewResult(lastInsertID, rowsAffected)
 }
 

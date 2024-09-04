@@ -4,10 +4,11 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"testing"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
-	"testing"
 
 	"gofr.dev/pkg/gofr/container"
 )
@@ -15,6 +16,7 @@ import (
 func TestQuery(t *testing.T) {
 	t.Run("successful query", func(t *testing.T) {
 		var id int
+
 		var name string
 
 		expectedResult := []struct {
@@ -35,21 +37,23 @@ func TestQuery(t *testing.T) {
 
 		rows, err := mockContainer.SQL.Query("SELECT * FROM users")
 		require.NoError(t, err)
+
 		i := 0
+
 		for rows.Next() {
 			err = rows.Scan(&id, &name)
+			require.NoError(t, err)
+			require.NoError(t, rows.Err())
 			assert.Equal(t, expectedResult[i].id, id)
 			assert.Equal(t, expectedResult[i].name, name)
+
 			i++
 		}
-
-		//if rows != expectedRows {
-		//	t.Errorf("Query should return the expected rows, got: %v", rows)
-		//}
 	})
 
 	t.Run("query error", func(t *testing.T) {
 		var id int
+
 		var name string
 
 		mockContainer, mocks := container.NewMockContainer(t)
@@ -64,6 +68,7 @@ func TestQuery(t *testing.T) {
 
 		for rows.Next() {
 			err = rows.Scan(&id, &name)
+			require.NoError(t, rows.Err())
 			require.Error(t, err)
 			assert.Equal(t, expectedErr, err)
 		}
@@ -95,7 +100,9 @@ func TestQueryRowContext(t *testing.T) {
 
 	t.Run("successful query row context", func(t *testing.T) {
 		var id int
+
 		var name string
+
 		mockContainer, mocks := container.NewMockContainer(t)
 
 		expectedRows := mocks.SQL.NewRows([]string{"id", "name"}).AddRow(1, "Alex")
@@ -136,12 +143,6 @@ func TestExec(t *testing.T) {
 
 		assert.Equal(t, expectedLastInserted, resultLastInserted)
 		assert.Equal(t, expectedRowsAffected, resultRowsAffected)
-
-		//if err != nil {
-		//	t.Errorf("Exec should return no error, got: %v", err)
-		//}
-		//
-		//assert.Equal(t, expectedResult, result)
 	})
 
 	t.Run("exec error", func(t *testing.T) {
@@ -173,6 +174,7 @@ func TestExecContext(t *testing.T) {
 		sqlMockDB := mockContainer.SQL
 
 		result, err := sqlMockDB.ExecContext(ctx, "DELETE FROM users WHERE id = ?", 1)
+		require.NoError(t, err)
 
 		expectedLastInserted, err := expectedResult.LastInsertId()
 		require.NoError(t, err)
@@ -188,14 +190,6 @@ func TestExecContext(t *testing.T) {
 
 		assert.Equal(t, expectedLastInserted, resultLastInserted)
 		assert.Equal(t, expectedRowsAffected, resultRowsAffected)
-
-		//if err != nil {
-		//	t.Errorf("ExecContext should return no error, got: %v", err)
-		//}
-		//
-		//if !reflect.DeepEqual(result, expectedResult) {
-		//	t.Errorf("ExecContext should return the expected result, got: %v", result)
-		//}
 	})
 }
 
@@ -248,7 +242,7 @@ func TestBeginTransactionSuccess(t *testing.T) {
 	mockMigrator := NewMockmigrator(ctrl)
 	mockContainer, mocks := container.NewMockContainer(t)
 
-	mocks.SQL.ExpectBegin().String()
+	mocks.SQL.ExpectBegin()
 	mockMigrator.EXPECT().beginTransaction(mockContainer)
 
 	migrator := sqlMigrator{
