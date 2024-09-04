@@ -169,7 +169,7 @@ func TestContainer_Close(t *testing.T) {
 	sqlMock.ExpectClose()
 
 	c := NewContainer(config.NewMockConfig(nil))
-	c.SQL = &sqlMockDB{mockDB, &e}
+	c.SQL = &sqlMockDB{mockDB, &e, logging.NewLogger(logging.DEBUG)}
 	c.Redis = mockRedis
 	c.PubSub = mockPubSub
 
