@@ -14,7 +14,6 @@ import (
 )
 
 var (
-	errNilInterface             = errors.New("cannot set value on a nil interface")
 	errUnsupportedInterfaceType = errors.New("unsupported interface value type")
 	errDataLengthExceeds        = errors.New("data length exceeds array capacity")
 	errUnsupportedKind          = errors.New("unsupported kind")
@@ -150,6 +149,8 @@ func (*formData) setFile(value reflect.Value, header []*multipart.FileHeader) (b
 }
 
 func (uf *formData) setFieldValue(value reflect.Value, data string) (bool, error) {
+	value = dereferencePointerType(value)
+
 	kind := value.Kind()
 	switch kind {
 	case reflect.String:
@@ -176,28 +177,27 @@ func (uf *formData) setFieldValue(value reflect.Value, data string) (bool, error
 	return false, nil
 }
 
-func (uf *formData) setInterfaceValue(value reflect.Value, data string) (bool, error) {
-	// If the interface is not set to a concrete value, we can't modify it directly
-	if value.Kind() == reflect.Interface && value.IsNil() {
-		return false, errNilInterface
+func dereferencePointerType(value reflect.Value) reflect.Value {
+	if value.Kind() == reflect.Ptr {
+		if value.IsNil() {
+			// Initialize the pointer to a new value if it's nil
+			value.Set(reflect.New(value.Type().Elem()))
+		}
+
+		value = value.Elem() // Dereference the pointer
 	}
 
-	// If the value is a pointer to an interface, dereference it
-	if value.Kind() == reflect.Ptr && !value.IsNil() && value.Elem().Kind() == reflect.Interface {
-		value = value.Elem()
+	return value
+}
+
+func (*formData) setInterfaceValue(value reflect.Value, data any) (bool, error) {
+	if !value.CanSet() {
+		return false, fmt.Errorf("%w: %s", errUnsupportedInterfaceType, value.Kind())
 	}
 
-	// If the interface holds a value, attempt to set the underlying type's value
-	if value.Kind() == reflect.Interface {
-		// Get the concrete value held by the interface
-		concreteValue := value.Elem()
+	value.Set(reflect.ValueOf(data))
 
-		// Try to set the concrete value using the underlying type
-		return uf.setFieldValue(concreteValue, data)
-	}
-
-	// If it's not an interface or the concrete value couldn't be set, return false
-	return false, fmt.Errorf("%w: %s", errUnsupportedInterfaceType, value.Kind())
+	return true, nil
 }
 
 func (uf *formData) setSliceOrArrayValue(value reflect.Value, data string) (bool, error) {

@@ -79,6 +79,7 @@ func Test_SetFieldValue_Success(t *testing.T) {
 			Name string `json:"name"`
 			Age  int    `json:"age"`
 		}{}}},
+		{"Interface", "test interface", true, testValue{reflect.Interface, new(any)}},
 	}
 
 	for _, tc := range testCases {
@@ -109,7 +110,6 @@ func TestSetFieldValue_InvalidKinds(t *testing.T) {
 		{reflect.Chan, "baz", reflect.TypeOf(make(chan int))},
 		{reflect.Func, "qux", reflect.TypeOf(func() {})},
 		{reflect.Map, "quux", reflect.TypeOf(map[string]int{})},
-		{reflect.Pointer, "corge", reflect.TypeOf((*int)(nil))},
 		{reflect.UnsafePointer, "grault", reflect.TypeOf(unsafe.Pointer(nil))},
 	}
 
