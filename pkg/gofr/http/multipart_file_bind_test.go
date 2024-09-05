@@ -5,7 +5,7 @@ import (
 	"testing"
 	"unsafe"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestGetFieldName(t *testing.T) {
@@ -50,8 +50,8 @@ func TestGetFieldName(t *testing.T) {
 	for i, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
 			result, gotOk := getFieldName(tt.field)
-			assert.Equal(t, tt.key, result, "TestGetFieldName[%d] : %v Failed!", i, tt.desc)
-			assert.Equal(t, tt.wantOk, gotOk, "TestGetFieldName[%d] : %v Failed!", i, tt.desc)
+			require.Equal(t, tt.key, result, "TestGetFieldName[%d] : %v Failed!", i, tt.desc)
+			require.Equal(t, tt.wantOk, gotOk, "TestGetFieldName[%d] : %v Failed!", i, tt.desc)
 		})
 	}
 }
@@ -87,13 +87,10 @@ func Test_SetFieldValue_Success(t *testing.T) {
 		val := reflect.New(reflect.TypeOf(tc.valueType.value)).Elem()
 
 		set, err := f.setFieldValue(val, tc.data)
-		if err != nil {
-			t.Errorf("Unexpected error for value kind %v and data %q: %v", val.Kind(), tc.data, err)
-		}
 
-		if set != tc.expected {
-			t.Errorf("Expected set to be %v for value kind %v and data %q, got %v", tc.expected, val.Kind(), tc.data, set)
-		}
+		require.NoErrorf(t, err, "Unexpected error for value kind %v and data %q", val.Kind(), tc.data)
+
+		require.Equalf(t, tc.expected, set, "Expected set to be %v for value kind %v and data %q", tc.expected, val.Kind(), tc.data)
 	}
 }
 
@@ -117,9 +114,9 @@ func TestSetFieldValue_InvalidKinds(t *testing.T) {
 		value := reflect.New(tt.typ).Elem()
 		ok, err := uf.setFieldValue(value, tt.data)
 
-		assert.False(t, ok, "expected false, got true for kind %v", tt.kind)
+		require.False(t, ok, "expected false, got true for kind %v", tt.kind)
 
-		assert.NoError(t, err, "expected nil, got %v for kind %v", err, tt.kind)
+		require.NoError(t, err, "expected nil, got %v for kind %v", err, tt.kind)
 	}
 }
 
@@ -138,15 +135,11 @@ func TestSetSliceOrArrayValue(t *testing.T) {
 
 	ok, err := uf.setSliceOrArrayValue(value, data)
 
-	assert.True(t, ok, "setSliceOrArrayValue failed")
+	require.True(t, ok, "setSliceOrArrayValue failed")
 
-	if err != nil {
-		t.Errorf("setSliceOrArrayValue failed: %v", err)
-	}
+	require.NoError(t, err, "setSliceOrArrayValue failed: %v", err)
 
-	if len(value.Interface().([]string)) != 3 {
-		t.Fatal("slice not set correctly")
-	}
+	require.Len(t, value.Interface().([]string), 3, "slice not set correctly")
 
 	// Test with an array
 	value = reflect.ValueOf(&testStruct{Array: [3]string{}}).Elem().FieldByName("Array")
@@ -154,9 +147,10 @@ func TestSetSliceOrArrayValue(t *testing.T) {
 	data = "a,b,c"
 
 	ok, err = uf.setSliceOrArrayValue(value, data)
-	if !ok || err != nil {
-		t.Errorf("setSliceOrArrayValue failed: %v", err)
-	}
+
+	require.True(t, ok, "setSliceOrArrayValue failed")
+
+	require.NoError(t, err, "setSliceOrArrayValue failed: %v", err)
 }
 
 func TestSetStructValue(t *testing.T) {
@@ -173,11 +167,10 @@ func TestSetStructValue(t *testing.T) {
 	data := `{"Field1":"value1","Field2":123}`
 
 	ok, err := uf.setStructValue(value, data)
-	if !ok || err != nil {
-		t.Errorf("setStructValue failed: %v", err)
-	}
 
-	if value.FieldByName("Field1").String() != "value1" {
-		t.Error("struct fields not set correctly")
-	}
+	require.True(t, ok, "setStructValue failed")
+
+	require.NoError(t, err, "setStructValue failed: %v", err)
+
+	require.Equal(t, "value1", value.FieldByName("Field1").String(), "struct fields not set correctly")
 }
