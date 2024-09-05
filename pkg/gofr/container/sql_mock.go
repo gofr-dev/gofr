@@ -3,8 +3,10 @@ package container
 import (
 	"context"
 	gosql "database/sql"
+	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/stretchr/testify/require"
 	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/datasource/sql"
 	"gofr.dev/pkg/gofr/logging"
@@ -90,6 +92,16 @@ func (m sqlMockDB) Dialect() string {
 	m.expectedDialect = m.expectedDialect[:lastIndex]
 
 	return string(expectedString)
+}
+
+func (m sqlMockDB) finish(t *testing.T) {
+	t.Helper()
+
+	t.Cleanup(func() {
+		require.Empty(t, m.queryWithArgs, "Expected mock call to Select")
+		require.Empty(t, m.expectedDialect, "Expected mock call to Dialect")
+		require.Empty(t, m.expectedHealthCheck, "Expected mock call to HealthCheck")
+	})
 }
 
 // ExpectSelect is not a direct method for mocking the Select method of SQL in go-mock-sql.

@@ -25,9 +25,6 @@ type Mocks struct {
 	File       *file.MockFileSystemProvider
 }
 
-type MockPubSub struct {
-}
-
 func NewMockContainer(t *testing.T) (*Container, Mocks) {
 	t.Helper()
 
@@ -41,7 +38,11 @@ func NewMockContainer(t *testing.T) (*Container, Mocks) {
 	e := expectedQuery{}
 
 	sql2 := &mockSQL{sqlMock, &e}
-	container.SQL = &sqlMockDB{mockDB, &e, logging.NewLogger(logging.DEBUG)}
+
+	sqlDB := &sqlMockDB{mockDB, &e, logging.NewLogger(logging.DEBUG)}
+	defer sqlDB.finish(t)
+
+	container.SQL = sqlDB
 
 	redisMock := NewMockRedis(ctrl)
 	container.Redis = redisMock
@@ -80,6 +81,9 @@ func NewMockContainer(t *testing.T) (*Container, Mocks) {
 		"method", gomock.Any(), "status", fmt.Sprintf("%v", http.StatusInternalServerError)).AnyTimes()
 
 	return container, mocks
+}
+
+type MockPubSub struct {
 }
 
 func (*MockPubSub) CreateTopic(_ context.Context, _ string) error {
