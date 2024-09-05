@@ -40,7 +40,7 @@ func NewMockContainer(t *testing.T) (*Container, Mocks) {
 	sql2 := &mockSQL{sqlMock, &e}
 
 	sqlDB := &sqlMockDB{mockDB, &e, logging.NewLogger(logging.DEBUG)}
-	defer sqlDB.finish(t)
+	sqlDB.finish(t)
 
 	container.SQL = sqlDB
 
