@@ -43,7 +43,7 @@ type sqlMockDB struct {
 
 func (m sqlMockDB) Select(_ context.Context, _ interface{}, query string, args ...interface{}) {
 	if m.queryWithArgs == nil || len(m.queryWithArgs) == 0 {
-		m.logger.Fatalf("Did not expect any calls for Select with query: %s", query)
+		m.logger.Fatalf("Did not expect any calls for Select with query: %q", query)
 	}
 
 	lastIndex := len(m.queryWithArgs) - 1
