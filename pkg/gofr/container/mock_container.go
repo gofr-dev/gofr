@@ -35,11 +35,11 @@ func NewMockContainer(t *testing.T) (*Container, Mocks) {
 
 	mockDB, sqlMock, _ := sql.NewSQLMocks(t)
 	// initialisation of expectations
-	e := expectedQuery{}
+	expectation := expectedQuery{}
 
-	sql2 := &mockSQL{sqlMock, &e}
+	sqlMockWrapper := &mockSQL{sqlMock, &expectation}
 
-	sqlDB := &sqlMockDB{mockDB, &e, logging.NewLogger(logging.DEBUG)}
+	sqlDB := &sqlMockDB{mockDB, &expectation, logging.NewLogger(logging.DEBUG)}
 	sqlDB.finish(t)
 
 	container.SQL = sqlDB
@@ -64,7 +64,7 @@ func NewMockContainer(t *testing.T) (*Container, Mocks) {
 
 	mocks := Mocks{
 		Redis:      redisMock,
-		SQL:        sql2,
+		SQL:        sqlMockWrapper,
 		Clickhouse: clickhouseMock,
 		Cassandra:  cassandraMock,
 		Mongo:      mongoMock,

@@ -2,13 +2,13 @@ package container
 
 import (
 	"context"
-	gosql "database/sql"
+	"database/sql"
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/stretchr/testify/require"
 	"gofr.dev/pkg/gofr/datasource"
-	"gofr.dev/pkg/gofr/datasource/sql"
+	gofrSQL "gofr.dev/pkg/gofr/datasource/sql"
 	"gofr.dev/pkg/gofr/logging"
 )
 
@@ -36,7 +36,7 @@ type mockSQL struct {
 
 // sqlMockDB wraps the go-mock-sql DB connection and expectations.
 type sqlMockDB struct {
-	*sql.DB
+	*gofrSQL.DB
 	*expectedQuery
 	logger logging.Logger
 }
@@ -154,7 +154,7 @@ func (m *mockSQL) ExpectDialect() *dialect {
 	return &m.expectedDialect[0]
 }
 
-func (*mockSQL) NewResult(lastInsertID, rowsAffected int64) gosql.Result {
+func (*mockSQL) NewResult(lastInsertID, rowsAffected int64) sql.Result {
 	return sqlmock.NewResult(lastInsertID, rowsAffected)
 }
 

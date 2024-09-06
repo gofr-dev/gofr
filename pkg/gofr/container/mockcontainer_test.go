@@ -10,8 +10,7 @@ import (
 )
 
 func TestMockSQL_Select(t *testing.T) {
-	ids := make([]string, 0)
-	ids = append(ids, "1", "2")
+	ids := []string{"1", "2"}
 
 	mockContainer, mock := NewMockContainer(t)
 

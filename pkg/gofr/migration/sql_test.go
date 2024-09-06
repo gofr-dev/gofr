@@ -6,7 +6,6 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
@@ -36,16 +35,16 @@ func TestQuery(t *testing.T) {
 		mocks.SQL.ExpectQuery("SELECT * FROM users").WithoutArgs().WillReturnRows(expectedRows)
 
 		rows, err := mockContainer.SQL.Query("SELECT * FROM users")
-		require.NoError(t, err)
+		require.NoError(t, err, "TestQuery : error executing mock query")
 
 		i := 0
 
 		for rows.Next() {
-			require.NoError(t, rows.Err())
+			require.NoError(t, rows.Err(), "TestQuery: row error")
 			err = rows.Scan(&id, &name)
-			require.NoError(t, err)
-			assert.Equal(t, expectedResult[i].id, id)
-			assert.Equal(t, expectedResult[i].name, name)
+			require.NoError(t, err, "TestQuery: row scan error")
+			require.Equal(t, expectedResult[i].id, id, "TestQuery: resultant ID & expected ID are not same")
+			require.Equal(t, expectedResult[i].name, name, "TestQuery: resultant name & expected name are not same")
 
 			i++
 		}
@@ -64,13 +63,13 @@ func TestQuery(t *testing.T) {
 		sqlMockDB := mockContainer.SQL
 
 		rows, err := sqlMockDB.Query("SELECT * FROM unknown_table")
-		require.NoError(t, err)
+		require.NoError(t, err, "TestQuery : error executing mock query")
 
 		for rows.Next() {
-			require.NoError(t, rows.Err())
+			require.NoError(t, rows.Err(), "TestQuery: row error")
 			err = rows.Scan(&id, &name)
-			require.Error(t, err)
-			assert.Equal(t, expectedErr, err)
+			require.Error(t, err, "TestQuery: row scan error")
+			require.Equal(t, expectedErr, err, "TestQuery: expected error is not equal to resultant error")
 		}
 	})
 }
@@ -89,9 +88,9 @@ func TestQueryRow(t *testing.T) {
 		sqlMockDB := mockContainer.SQL
 
 		err := sqlMockDB.QueryRow("SELECT * FROM users WHERE id = ?", 1).Scan(&id, &name)
-		require.NoError(t, err, "Error while scanning row")
-		assert.Equal(t, 1, id, "expected id to be equal to 1")
-		assert.Equal(t, "Alex", name, "expected name to be equal to 'Alex'")
+		require.NoError(t, err, "TestQueryRow: row scan error")
+		require.Equal(t, 1, id, "TestQueryRow: expected id to be equal to 1")
+		require.Equal(t, "Alex", name, "TestQueryRow: expected name to be equal to 'Alex'")
 	})
 }
 
@@ -111,9 +110,9 @@ func TestQueryRowContext(t *testing.T) {
 		sqlMockDB := mockContainer.SQL
 
 		err := sqlMockDB.QueryRowContext(ctx, "SELECT * FROM users WHERE id = ?", 1).Scan(&id, &name)
-		require.NoError(t, err, "Error while scanning row")
-		assert.Equal(t, 1, id, "expected id to be equal to 1")
-		assert.Equal(t, "Alex", name, "expected name to be equal to 'Alex'")
+		require.NoError(t, err, "TestQueryRowContext: Error while scanning row")
+		require.Equal(t, 1, id, "TestQueryRowContext: expected id to be equal to 1")
+		require.Equal(t, "Alex", name, "TestQueryRowContext: expected name to be equal to 'Alex'")
 	})
 }
 
@@ -127,22 +126,22 @@ func TestExec(t *testing.T) {
 		sqlDB := mockContainer.SQL
 
 		result, err := sqlDB.Exec("DELETE FROM users WHERE id = ?", 1)
-		require.NoError(t, err)
+		require.NoError(t, err, "TestExec: error while executing mock query")
 
 		expectedLastInserted, err := expectedResult.LastInsertId()
-		require.NoError(t, err)
+		require.NoError(t, err, "TestExec: error while retrieving last inserted id from expected sqlresult")
 
 		resultLastInserted, err := result.LastInsertId()
-		require.NoError(t, err)
+		require.NoError(t, err, "TestExec: error while retrieving last inserted id from mock sqlresult")
 
 		expectedRowsAffected, err := expectedResult.RowsAffected()
-		require.NoError(t, err)
+		require.NoError(t, err, "TestExec: error while retrieving rows affected from expected sqlresult")
 
 		resultRowsAffected, err := result.RowsAffected()
-		require.NoError(t, err)
+		require.NoError(t, err, "TestExec: error while retrieving rows affected from mock sqlresult")
 
-		assert.Equal(t, expectedLastInserted, resultLastInserted)
-		assert.Equal(t, expectedRowsAffected, resultRowsAffected)
+		require.Equal(t, expectedLastInserted, resultLastInserted, "TestExec: expected last inserted id to be equal to 10")
+		require.Equal(t, expectedRowsAffected, resultRowsAffected, "TestExec: expected rows affected to be equal to 1")
 	})
 
 	t.Run("exec error", func(t *testing.T) {
@@ -153,14 +152,8 @@ func TestExec(t *testing.T) {
 		sqlMockDB := mockContainer.SQL
 
 		_, err := sqlMockDB.Exec("UPDATE unknown_table SET name = ?", "John")
-
-		if err == nil {
-			t.Errorf("Exec should return an error")
-		}
-
-		if !errors.Is(err, expectedErr) {
-			t.Errorf("Exec should return the expected error, got: %v", err)
-		}
+		require.Error(t, err, "TestExec: expected error while executing mock query")
+		require.Equal(t, expectedErr, err, "TestExec: Exec should return the expected error, got: %v", err)
 	})
 }
 
@@ -174,22 +167,22 @@ func TestExecContext(t *testing.T) {
 		sqlMockDB := mockContainer.SQL
 
 		result, err := sqlMockDB.ExecContext(ctx, "DELETE FROM users WHERE id = ?", 1)
-		require.NoError(t, err)
+		require.NoError(t, err, "TestExecContext: error while executing mock query")
 
 		expectedLastInserted, err := expectedResult.LastInsertId()
-		require.NoError(t, err)
+		require.NoError(t, err, "TestExecContext: error while retrieving last inserted id from expected sqlresult")
 
 		resultLastInserted, err := result.LastInsertId()
-		require.NoError(t, err)
+		require.NoError(t, err, "TestExecContext: error while retrieving last inserted id from mock sqlresult")
 
 		expectedRowsAffected, err := expectedResult.RowsAffected()
-		require.NoError(t, err)
+		require.NoError(t, err, "TestExecContext: error while retrieving rows affected from expected sqlresult")
 
 		resultRowsAffected, err := result.RowsAffected()
-		require.NoError(t, err)
+		require.NoError(t, err, "TestExecContext: error while retrieving rows affected from mock sqlresult")
 
-		assert.Equal(t, expectedLastInserted, resultLastInserted)
-		assert.Equal(t, expectedRowsAffected, resultRowsAffected)
+		require.Equal(t, expectedLastInserted, resultLastInserted, "TestExecContext: expected last inserted id to be equal to 10")
+		require.Equal(t, expectedRowsAffected, resultRowsAffected, "TestExecContext: expected rows affected to be equal to 1")
 	})
 }
 
@@ -207,10 +200,7 @@ func TestCheckAndCreateMigrationTableSuccess(t *testing.T) {
 	}
 
 	err := migrator.checkAndCreateMigrationTable(mockContainer)
-
-	if err != nil {
-		t.Errorf("checkAndCreateMigrationTable should return no error, got: %v", err)
-	}
+	require.NoError(t, err, "TestCheckAndCreateMigrationTable: error while executing mock query")
 }
 
 func TestCheckAndCreateMigrationTableExecError(t *testing.T) {
@@ -227,14 +217,8 @@ func TestCheckAndCreateMigrationTableExecError(t *testing.T) {
 	}
 
 	err := migrator.checkAndCreateMigrationTable(mockContainer)
-
-	if err == nil {
-		t.Errorf("checkAndCreateMigrationTable should return an error")
-	}
-
-	if !errors.Is(err, expectedErr) {
-		t.Errorf("checkAndCreateMigrationTable should return the expected error, got: %v", err)
-	}
+	require.Error(t, err, "TestCheckAndCreateMigrationTable: expected an error while executing mock query")
+	require.Equal(t, expectedErr, err, "TestCheckAndCreateMigrationTable: resultant error is not eual to expected error")
 }
 
 func TestBeginTransactionSuccess(t *testing.T) {
@@ -251,7 +235,7 @@ func TestBeginTransactionSuccess(t *testing.T) {
 	}
 
 	data := migrator.beginTransaction(mockContainer)
-	assert.NotNil(t, data.SQLTx.Tx)
+	require.NotNil(t, data.SQLTx.Tx, "TestBeginTransaction: SQLTX.tx should not be nil")
 }
 
 var (
@@ -271,10 +255,7 @@ func TestBeginTransactionDBError(t *testing.T) {
 	}
 
 	data := migrator.beginTransaction(mockContainer)
-
-	if data.SQLTx != nil {
-		t.Errorf("beginTransaction should not return a transaction on DB error")
-	}
+	require.Nil(t, data.SQLTx, "TestBeginTransaction: beginTransaction should not return a transaction on DB error")
 }
 
 func TestRollbackNoTransaction(t *testing.T) {
