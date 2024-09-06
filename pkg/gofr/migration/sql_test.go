@@ -41,9 +41,9 @@ func TestQuery(t *testing.T) {
 		i := 0
 
 		for rows.Next() {
+			require.NoError(t, rows.Err())
 			err = rows.Scan(&id, &name)
 			require.NoError(t, err)
-			require.NoError(t, rows.Err())
 			assert.Equal(t, expectedResult[i].id, id)
 			assert.Equal(t, expectedResult[i].name, name)
 
@@ -67,8 +67,8 @@ func TestQuery(t *testing.T) {
 		require.NoError(t, err)
 
 		for rows.Next() {
-			err = rows.Scan(&id, &name)
 			require.NoError(t, rows.Err())
+			err = rows.Scan(&id, &name)
 			require.Error(t, err)
 			assert.Equal(t, expectedErr, err)
 		}
