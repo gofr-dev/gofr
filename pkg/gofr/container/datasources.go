@@ -267,3 +267,63 @@ type KVStoreProvider interface {
 
 	provider
 }
+
+// Dgraph defines the methods for interacting with a Dgraph database.
+type Dgraph interface {
+	// Query executes a read-only query in the Dgraph database and returns the result.
+	// Parameters:
+	// - ctx: The context for the query, used for controlling timeouts, cancellation, etc.
+	// - query: The Dgraph query string in GraphQL+- format.
+	// Returns:
+	// - interface{}: The result of the query, usually of type *api.Response.
+	// - error: An error if the query execution fails.
+	Query(ctx context.Context, query string) (interface{}, error)
+
+	// QueryWithVars executes a read-only query with variables in the Dgraph database.
+	// Parameters:
+	// - ctx: The context for the query.
+	// - query: The Dgraph query string in GraphQL+- format.
+	// - vars: A map of variables to be used within the query.
+	// Returns:
+	// - interface{}: The result of the query with variables, usually of type *api.Response.
+	// - error: An error if the query execution fails.
+	QueryWithVars(ctx context.Context, query string, vars map[string]string) (interface{}, error)
+
+	// Mutate executes a write operation (mutation) in the Dgraph database and returns the result.
+	// Parameters:
+	// - ctx: The context for the mutation.
+	// - mu: The mutation operation, usually of type *api.Mutation.
+	// Returns:
+	// - interface{}: The result of the mutation, usually of type *api.Assigned.
+	// - error: An error if the mutation execution fails.
+	Mutate(ctx context.Context, mu interface{}) (interface{}, error)
+
+	// Alter applies schema or other changes to the Dgraph database.
+	// Parameters:
+	// - ctx: The context for the alter operation.
+	// - op: The alter operation, usually of type *api.Operation.
+	// Returns:
+	// - error: An error if the operation fails.
+	Alter(ctx context.Context, op interface{}) error
+
+	// NewTxn creates a new transaction (read-write) for interacting with the Dgraph database.
+	// Returns:
+	// - interface{}: A new transaction, usually of type *api.Txn.
+	NewTxn() interface{}
+
+	// NewReadOnlyTxn creates a new read-only transaction for querying the Dgraph database.
+	// Returns:
+	// - interface{}: A new read-only transaction, usually of type *api.Txn.
+	NewReadOnlyTxn() interface{}
+
+	// HealthChecker checks the health of the Dgraph instance, ensuring it is up and running.
+	// Returns:
+	// - error: An error if the health check fails.
+	HealthChecker
+}
+
+// DgraphProvider extends Dgraph with connection management capabilities.
+type DgraphProvider interface {
+	Dgraph
+	provider
+}

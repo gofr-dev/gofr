@@ -44,6 +44,7 @@ type Container struct {
 	Cassandra  Cassandra
 	Clickhouse Clickhouse
 	Mongo      Mongo
+	DGraph     Dgraph
 
 	KVStore KVStore
 

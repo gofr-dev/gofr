@@ -1,6 +1,8 @@
 module gofr.dev/pkg/gofr/datasource/file/ftp
 
-go 1.22
+go 1.22.6
+
+toolchain go1.22.7
 
 replace gofr.dev => ../../../../../../gofr
 
