@@ -14,6 +14,7 @@ import (
 	reflect "reflect"
 
 	nats "github.com/nats-io/nats.go"
+	jetstream "github.com/nats-io/nats.go/jetstream"
 	gomock "go.uber.org/mock/gomock"
 	pubsub "gofr.dev/pkg/gofr/datasource/pubsub"
 )
@@ -243,6 +244,21 @@ func (m *MockJetStreamContext) EXPECT() *MockJetStreamContextMockRecorder {
 	return m.recorder
 }
 
+// AccountInfo mocks base method.
+func (m *MockJetStreamContext) AccountInfo(ctx context.Context) (*jetstream.AccountInfo, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AccountInfo", ctx)
+	ret0, _ := ret[0].(*jetstream.AccountInfo)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// AccountInfo indicates an expected call of AccountInfo.
+func (mr *MockJetStreamContextMockRecorder) AccountInfo(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AccountInfo", reflect.TypeOf((*MockJetStreamContext)(nil).AccountInfo), ctx)
+}
+
 // AddStream mocks base method.
 func (m *MockJetStreamContext) AddStream(config *nats.StreamConfig) (*nats.StreamInfo, error) {
 	m.ctrl.T.Helper()
@@ -428,6 +444,20 @@ func (m *MockConnection) JetStream(opts ...nats.JSOpt) (JetStreamContext, error)
 func (mr *MockConnectionMockRecorder) JetStream(opts ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "JetStream", reflect.TypeOf((*MockConnection)(nil).JetStream), opts...)
+}
+
+// Status mocks base method.
+func (m *MockConnection) Status() nats.Status {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Status")
+	ret0, _ := ret[0].(nats.Status)
+	return ret0
+}
+
+// Status indicates an expected call of Status.
+func (mr *MockConnectionMockRecorder) Status() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Status", reflect.TypeOf((*MockConnection)(nil).Status))
 }
 
 // MockClient is a mock of Client interface.
