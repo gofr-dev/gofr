@@ -1,1 +1,1 @@
-package nats_test
+package nats
