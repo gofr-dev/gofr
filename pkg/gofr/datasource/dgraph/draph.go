@@ -47,20 +47,33 @@ func New(config Config) *Client {
 // Connect connects to the Dgraph database using the provided configuration.
 func (c *Client) Connect() error {
 	address := fmt.Sprintf("%s:%s", c.config.Host, c.config.Port)
-	c.logger.Logf("Connecting to Dgraph at %v", address)
+	c.logger.Logf("connecting to Dgraph at %v", address)
 
 	conn, err := grpc.Dial(address, grpc.WithInsecure()) // Use secure connection in production
 	if err != nil {
-		c.logger.Errorf("Error connecting to Dgraph, err: %v", err)
+		c.logger.Errorf("error connecting to Dgraph, err: %v", err)
 		return err
 	}
+
+	c.logger.Logf("connected to dgraph client at %v:%v", c.config.Host, c.config.Host)
+
+	// Register metrics
+	// Register all metrics
+	c.metrics.NewHistogram("dgraph_query_duration", "Response time of Dgraph queries in milliseconds.",
+		0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10)
+	c.metrics.NewHistogram("dgraph_query_with_vars_duration", "Response time of Dgraph queries with variables in milliseconds.",
+		0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10)
+	c.metrics.NewHistogram("dgraph_mutate_duration", "Response time of Dgraph mutations in milliseconds.",
+		0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10)
+	c.metrics.NewHistogram("dgraph_alter_duration", "Response time of Dgraph alter operations in milliseconds.",
+		0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10)
 
 	c.client = dgo.NewDgraphClient(api.NewDgraphClient(conn))
 	c.conn = conn
 
 	// Check connection by performing a basic health check
 	if _, err := c.HealthCheck(context.Background()); err != nil {
-		c.logger.Errorf("Dgraph health check failed: %v", err)
+		c.logger.Errorf("dgraph health check failed: %v", err)
 		return err
 	}
 
@@ -96,15 +109,15 @@ func (d *Client) Query(ctx context.Context, query string) (interface{}, error) {
 		Duration: duration,
 	}
 
-	d.logger.Debug("Executing Dgraph Query")
+	d.logger.Debug("executing dgraph query")
 	ql.PrettyPrint(d.logger)
 
 	if err != nil {
-		d.logger.Error("Dgraph Query failed: ", err)
+		d.logger.Error("dgraph query failed: ", err)
 		return nil, err
 	}
 
-	d.logger.Debugf("Dgraph Query succeeded in %dµs", duration)
+	d.logger.Debugf("dgraph query succeeded in %dµs", duration)
 
 	d.metrics.RecordHistogram(ctx, "dgraph_query_duration", float64(duration))
 
@@ -127,12 +140,12 @@ func (d *Client) QueryWithVars(ctx context.Context, query string, vars map[strin
 	}
 
 	if err != nil {
-		d.logger.Error("Dgraph QueryWithVars failed: ", err)
+		d.logger.Error("dgraph queryWithVars failed: ", err)
 		ql.PrettyPrint(d.logger)
 		return nil, err
 	}
 
-	d.logger.Debugf("Dgraph QueryWithVars succeeded in %dµs", duration)
+	d.logger.Debugf("qgraph queryWithVars succeeded in %dµs", duration)
 	ql.PrettyPrint(d.logger)
 
 	d.metrics.RecordHistogram(ctx, "dgraph_query_with_vars_duration", float64(duration))
@@ -160,15 +173,15 @@ func (d *Client) Mutate(ctx context.Context, mu interface{}) (interface{}, error
 		URL:      mutation.String(),
 		Duration: duration,
 	}
-	d.logger.Debug("Executing Dgraph Mutation")
+	d.logger.Debug("executing dgraph mutation")
 	ql.PrettyPrint(d.logger)
 
 	if err != nil {
-		d.logger.Error("Dgraph Mutation failed: ", err)
+		d.logger.Error("dgraph mutation failed: ", err)
 		return nil, err
 	}
 
-	d.logger.Debugf("Dgraph Mutation succeeded in %dµs", duration)
+	d.logger.Debugf("dgraph mutation succeeded in %dµs", duration)
 
 	d.metrics.RecordHistogram(ctx, "dgraph_mutate_duration", float64(duration))
 
@@ -182,7 +195,7 @@ func (d *Client) Alter(ctx context.Context, op interface{}) error {
 	// Cast to proper operation type
 	operation, ok := op.(*api.Operation)
 	if !ok {
-		d.logger.Error("Invalid operation type provided to Alter")
+		d.logger.Error("invalid operation type provided to alter")
 		return errInvalidOperation
 	}
 
@@ -198,12 +211,12 @@ func (d *Client) Alter(ctx context.Context, op interface{}) error {
 	}
 
 	if err != nil {
-		d.logger.Error("Dgraph Alter failed: ", err)
+		d.logger.Error("dgraph alter failed: ", err)
 		ql.PrettyPrint(d.logger)
 		return err
 	}
 
-	d.logger.Debugf("Dgraph Alter succeeded in %dµs", duration)
+	d.logger.Debugf("dgraph alter succeeded in %dµs", duration)
 
 	ql.PrettyPrint(d.logger)
 
@@ -232,11 +245,10 @@ func (d *Client) HealthCheck(ctx context.Context) (any, error) {
     }`)
 
 	if err != nil || len(healthResponse.Json) == 0 {
-		d.logger.Error("Dgraph health check failed: ", err)
+		d.logger.Error("dgraph health check failed: ", err)
 		return nil, errHealthCheckFailed
 	}
 
-	d.logger.Log("Dgraph health check passed.")
 	return nil, nil
 }
 
