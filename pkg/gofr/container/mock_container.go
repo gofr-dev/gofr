@@ -13,19 +13,34 @@ import (
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 	"gofr.dev/pkg/gofr/datasource/sql"
 	"gofr.dev/pkg/gofr/logging"
+	"gofr.dev/pkg/gofr/service"
 )
 
 type Mocks struct {
-	Redis      *MockRedis
-	SQL        *mockSQL
-	Clickhouse *MockClickhouse
-	Cassandra  *MockCassandra
-	Mongo      *MockMongo
-	KVStore    *MockKVStore
-	File       *file.MockFileSystemProvider
+	Redis       *MockRedis
+	SQL         *mockSQL
+	Clickhouse  *MockClickhouse
+	Cassandra   *MockCassandra
+	Mongo       *MockMongo
+	KVStore     *MockKVStore
+	File        *file.MockFileSystemProvider
+	HTTPService *service.MockHTTP
 }
 
-func NewMockContainer(t *testing.T) (*Container, Mocks) {
+type Options func(c *Container, val any)
+
+func WithMockHTTPService(httpServiceNames ...string) Options {
+	return func(c *Container, val any) {
+		mockservice, ok := val.(*service.MockHTTP)
+		if ok {
+			for i := range httpServiceNames {
+				c.Services[httpServiceNames[i]] = mockservice
+			}
+		}
+	}
+}
+
+func NewMockContainer(t *testing.T, options ...Options) (*Container, Mocks) {
 	t.Helper()
 
 	container := &Container{}
@@ -62,14 +77,22 @@ func NewMockContainer(t *testing.T) (*Container, Mocks) {
 	fileStoreMock := file.NewMockFileSystemProvider(ctrl)
 	container.File = fileStoreMock
 
+	httpMock := service.NewMockHTTP(ctrl)
+	container.Services = make(map[string]service.HTTP)
+
+	for _, option := range options {
+		option(container, httpMock)
+	}
+
 	mocks := Mocks{
-		Redis:      redisMock,
-		SQL:        sqlMockWrapper,
-		Clickhouse: clickhouseMock,
-		Cassandra:  cassandraMock,
-		Mongo:      mongoMock,
-		KVStore:    kvStoreMock,
-		File:       fileStoreMock,
+		Redis:       redisMock,
+		SQL:         sqlMockWrapper,
+		Clickhouse:  clickhouseMock,
+		Cassandra:   cassandraMock,
+		Mongo:       mongoMock,
+		KVStore:     kvStoreMock,
+		File:        fileStoreMock,
+		HTTPService: httpMock,
 	}
 
 	redisMock.EXPECT().Close().AnyTimes()

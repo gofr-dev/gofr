@@ -1,13 +1,60 @@
 package container
 
 import (
+	"bytes"
 	"context"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"gofr.dev/pkg/gofr/datasource"
 )
+
+func Test_HttpServiceMock(t *testing.T) {
+	test := struct {
+		desc        string
+		path        string
+		statusCode  int
+		expectedRes string
+	}{
+
+		desc:        "simple service handler",
+		path:        "/fact",
+		expectedRes: `{"data":{"fact":"Cats have 3 eyelids.","length":20}}` + "\n",
+		statusCode:  200,
+	}
+
+	httpservices := []string{"cat-facts", "cat-facts1", "cat-facts2"}
+
+	mockContainer, mock := NewMockContainer(t, WithMockHTTPService(httpservices...))
+
+	res := httptest.NewRecorder()
+	res.Body = bytes.NewBufferString(`{"fact":"Cats have 3 eyelids.","length":20}` + "\n")
+	res.Code = test.statusCode
+	result := res.Result()
+
+	// Setting mock expectations
+	mock.HTTPService.EXPECT().Get(context.Background(), "fact", map[string]interface{}{
+		"max_length": 20,
+	}).Return(result, nil)
+
+	mockService := mockContainer.GetHTTPService("cat-facts")
+
+	resp, err := mockService.Get(context.Background(), "fact", map[string]interface{}{
+		"max_length": 20,
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, resp, result)
+
+	err = result.Body.Close()
+	require.NoError(t, err)
+
+	err = resp.Body.Close()
+	require.NoError(t, err)
+}
 
 // TestMockSQL_Select tests the successful operation of SQL mocking for SELECT statements.
 // It checks that the mock expectations are correctly set and that the SQL database function
