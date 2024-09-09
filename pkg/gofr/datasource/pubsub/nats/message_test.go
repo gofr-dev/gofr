@@ -10,8 +10,6 @@ import (
 	"gofr.dev/pkg/gofr/testutil"
 )
 
-//go:generate mockgen -destination=mock_jetstream_msg.go -package=nats github.com/nats-io/nats.go/jetstream Msg
-
 func TestNewNATSMessage(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
