@@ -1,14 +1,9 @@
 package nats
 
 import (
-	"context"
-	"time"
-
 	"github.com/nats-io/nats.go"
 	"gofr.dev/pkg/gofr/datasource"
 )
-
-const ctxTimeout = 5 * time.Second
 
 // Health returns the health of the NATS connection.
 func (n *natsClient) Health() datasource.Health {
@@ -28,12 +23,9 @@ func (n *natsClient) Health() datasource.Health {
 	health.Details["connection_status"] = n.conn.Status().String()
 	health.Details["jetstream_enabled"] = n.js != nil
 
-	ctx, cancel := context.WithTimeout(context.Background(), ctxTimeout)
-	defer cancel()
-
 	// Simple JetStream check
 	if n.js != nil {
-		_, err := n.js.AccountInfo(ctx)
+		_, err := n.js.AccountInfo()
 		if err != nil {
 			health.Details["jetstream_status"] = "Error: " + err.Error()
 		} else {

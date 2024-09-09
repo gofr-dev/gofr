@@ -1,6 +1,3 @@
-// Package nats provides a client for interacting with NATS JetStream.
-// This package facilitates interaction with NATS JetStream, allowing publishing and subscribing to streams,
-// managing consumer groups, and handling messages.
 package nats
 
 import (
@@ -11,23 +8,18 @@ import (
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
-	"go.opentelemetry.io/otel"
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 )
 
+// Errors for NATS operations
 var (
 	ErrConsumerNotProvided    = errors.New("consumer name not provided")
 	errServerNotProvided      = errors.New("NATS server address not provided")
-	errPublisherNotConfigured = errors.New("can't publish message. Publisher not configured or stream is empty")
+	errPublisherNotConfigured = errors.New("can't publish message: publisher not configured or stream is empty")
 	errNATSConnectionNotOpen  = errors.New("NATS connection not open")
 )
 
-type StreamConfig struct {
-	Subject       string
-	AckPolicy     nats.AckPolicy
-	DeliverPolicy nats.DeliverPolicy
-}
-
+// Config defines the NATS client configuration.
 type Config struct {
 	Server    string
 	Stream    StreamConfig
@@ -36,168 +28,149 @@ type Config struct {
 	BatchSize int
 }
 
-type natsClient struct {
-	conn     *nats.Conn
-	js       jetstream.JetStream
-	consumer map[string]jetstream.Consumer
-
-	mu *sync.RWMutex
-
-	logger  pubsub.Logger
-	config  Config
-	metrics Metrics
+// StreamConfig holds stream settings for NATS JetStream.
+type StreamConfig struct {
+	Subject       string
+	AckPolicy     nats.AckPolicy
+	DeliverPolicy nats.DeliverPolicy
 }
 
-//nolint:revive // We do not want anyone using the client without initialization steps.
-func New(conf Config, logger pubsub.Logger, metrics Metrics) Client {
-	if err := validateConfigs(conf); err != nil {
-		logger.Errorf("could not initialize NATS JetStream, error: %v", err)
-		return nil
-	}
+// natsClient represents a client for NATS JetStream operations.
+type natsClient struct {
+	conn     Connection
+	js       JetStreamContext
+	consumer map[string]jetstream.Consumer
+	mu       *sync.RWMutex
+	logger   pubsub.Logger
+	config   Config
+	metrics  Metrics
+}
 
-	logger.Debugf("connecting to NATS server '%s'", conf.Server)
+type natsConnection struct {
+	*nats.Conn
+}
+
+func (nc *natsConnection) Status() nats.Status {
+	return nc.Conn.Status()
+}
+
+func (nc *natsConnection) JetStream(opts ...nats.JSOpt) (nats.JetStreamContext, error) {
+	return nc.Conn.JetStream(opts...)
+}
+
+// New initializes a new NATS JetStream client.
+func New(conf Config, logger pubsub.Logger, metrics Metrics) (*natsClient, error) {
+	if err := validateConfigs(conf); err != nil {
+		logger.Errorf("could not initialize NATS JetStream: %v", err)
+		return nil, err
+	}
 
 	nc, err := nats.Connect(conf.Server)
 	if err != nil {
-		logger.Errorf("failed to connect to NATS at %v, error: %v", conf.Server, err)
-		return nil
+		logger.Errorf("failed to connect to NATS server at %v: %v", conf.Server, err)
+		return nil, err
 	}
 
-	js, err := jetstream.New(nc)
+	conn := &natsConnection{Conn: nc}
+
+	natsJS, err := conn.JetStream()
 	if err != nil {
-		logger.Errorf("failed to create JetStream context, error: %v", err)
-		return nil
+		logger.Errorf("failed to create JetStream context: %v", err)
+		return nil, err
 	}
 
-	logger.Logf("connected to NATS server '%s'", conf.Server)
+	// Wrap nats.JetStreamContext with custom wrapper
+	js := newJetStreamContextWrapper(natsJS)
 
 	return &natsClient{
-		config:   conf,
-		conn:     nc,
-		js:       js,
-		consumer: make(map[string]jetstream.Consumer),
-		mu:       &sync.RWMutex{},
-		logger:   logger,
-		metrics:  metrics,
-	}
+		conn:    conn,
+		js:      js,
+		mu:      &sync.RWMutex{},
+		logger:  logger,
+		metrics: metrics,
+	}, nil
 }
 
+// Publish sends a message to the specified NATS JetStream stream.
 func (n *natsClient) Publish(ctx context.Context, stream string, message []byte) error {
-	ctx, span := otel.GetTracerProvider().Tracer("gofr").Start(ctx, "nats-publish")
-	defer span.End()
-
-	n.metrics.IncrementCounter(ctx, "app_pubsub_publish_total_count", "stream", stream)
-
-	if n.js == nil || stream == "" {
+	if stream == "" {
 		return errPublisherNotConfigured
 	}
 
-	start := time.Now()
-	_, err := n.js.Publish(ctx, stream, message)
-	end := time.Since(start)
-
+	_, err := n.js.Publish(stream, message)
 	if err != nil {
-		n.logger.Errorf("failed to publish message to NATS JetStream, error: %v", err)
+		n.logger.Errorf("failed to publish message: %v", err)
 		return err
 	}
-
-	n.logger.Debug(&pubsub.Log{
-		Mode:          "PUB",
-		CorrelationID: span.SpanContext().TraceID().String(),
-		MessageValue:  string(message),
-		Topic:         stream,
-		Host:          n.config.Server,
-		PubSubBackend: "NATS",
-		Time:          end.Microseconds(),
-	})
-
-	n.metrics.IncrementCounter(ctx, "app_pubsub_publish_success_count", "stream", stream)
 
 	return nil
 }
 
+// Subscribe listens for messages on the specified stream and returns the next available message.
 func (n *natsClient) Subscribe(ctx context.Context, stream string) (*pubsub.Message, error) {
 	if n.config.Consumer == "" {
-		n.logger.Error("cannot subscribe as consumer name is not provided in configs")
+		n.logger.Error("consumer name not provided")
 		return nil, ErrConsumerNotProvided
 	}
 
-	ctx, span := otel.GetTracerProvider().Tracer("gofr").Start(ctx, "nats-subscribe")
-	defer span.End()
-
-	n.metrics.IncrementCounter(ctx, "app_pubsub_subscribe_total_count", "stream", stream, "consumer", n.config.Consumer)
-
-	// Lock the consumer map to ensure only one subscriber accesses the consumer at a time
 	n.mu.Lock()
 	defer n.mu.Unlock()
 
-	var cons jetstream.Consumer
-	var ok bool
-	if cons, ok = n.consumer[stream]; !ok {
-		str, err := n.js.Stream(ctx, stream)
-		if err != nil {
-			n.logger.Errorf("failed to get stream %s: %v", stream, err)
-			return nil, err
-		}
-
-		cons, err = str.CreateOrUpdateConsumer(ctx, jetstream.ConsumerConfig{
-			Name:          n.config.Consumer,
-			Durable:       n.config.Consumer,
-			AckPolicy:     jetstream.AckPolicy(n.config.Stream.AckPolicy),
-			DeliverPolicy: jetstream.DeliverPolicy(n.config.Stream.DeliverPolicy),
-		})
-		if err != nil {
-			n.logger.Errorf("failed to create/update consumer for stream %s: %v", stream, err)
-			return nil, err
-		}
-		n.consumer[stream] = cons
+	// Define consumer configuration
+	consCfg := &nats.ConsumerConfig{
+		Durable:       n.config.Consumer,
+		AckPolicy:     n.config.Stream.AckPolicy,
+		DeliverPolicy: n.config.Stream.DeliverPolicy,
 	}
 
-	start := time.Now()
-
-	// Fetch a single message from the stream
-	msg, err := cons.Next(jetstream.FetchMaxWait(n.config.MaxWait))
+	// Ensure the consumer is created if it doesn't exist
+	_, err := n.js.AddConsumer(stream, consCfg)
 	if err != nil {
-		n.logger.Errorf("failed to read message from NATS stream %s: %v", stream, err)
+		n.logger.Errorf("failed to create or attach consumer: %v", err)
 		return nil, err
 	}
 
-	m := pubsub.NewMessage(ctx)
-	m.Value = msg.Data()
-	m.Topic = stream
-	m.Committer = newNATSMessage(msg, n.logger)
+	// Fetch the next message
+	sub, err := n.js.PullSubscribe(stream, n.config.Consumer, nats.PullMaxWaiting(128))
+	if err != nil {
+		return nil, err
+	}
 
-	end := time.Since(start)
+	messages, err := sub.Fetch(1, nats.MaxWait(n.config.MaxWait))
+	if err != nil {
+		return nil, err
+	}
 
-	n.logger.Debug(&pubsub.Log{
-		Mode:          "SUB",
-		CorrelationID: span.SpanContext().TraceID().String(),
-		MessageValue:  string(msg.Data()),
-		Topic:         stream,
-		Host:          n.config.Server,
-		PubSubBackend: "NATS",
-		Time:          end.Microseconds(),
-	})
+	if len(messages) == 0 {
+		return nil, errors.New("no messages received")
+	}
 
-	n.metrics.IncrementCounter(
-		ctx, "app_pubsub_subscribe_success_count", "stream", stream, "consumer", n.config.Consumer)
+	msg := messages[0]
 
-	return m, nil
+	// Acknowledge the message if needed
+	if err := msg.Ack(); err != nil {
+		n.logger.Errorf("failed to acknowledge message: %v", err)
+		return nil, err
+	}
+
+	return &pubsub.Message{
+		Value: msg.Data,
+		Topic: stream,
+	}, nil
 }
 
+// Close gracefully closes the NATS connection.
+func (n *natsClient) Close() error {
+	if n.conn != nil {
+		return n.conn.Drain()
+	}
+	return errNATSConnectionNotOpen
+}
+
+// validateConfigs ensures that the necessary NATS configuration values are provided.
 func validateConfigs(conf Config) error {
 	if conf.Server == "" {
 		return errServerNotProvided
 	}
-	// Add more config validations as needed
 	return nil
-}
-
-func (n *natsClient) Close() error {
-	if n.conn != nil {
-		n.logger.Debug("NATS connection closing, draining messages..")
-		// Drain the connection to ensure all messages are processed
-		return n.conn.Drain()
-	}
-	return errNATSConnectionNotOpen
 }
