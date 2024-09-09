@@ -21,6 +21,7 @@ type Mocks struct {
 	Cassandra  *MockCassandra
 	Mongo      *MockMongo
 	KVStore    *MockKVStore
+	DGraph     *MockDgraph
 	File       *file.MockFileSystemProvider
 }
 
@@ -52,6 +53,9 @@ func NewMockContainer(t *testing.T) (*Container, Mocks) {
 
 	fileStoreMock := file.NewMockFileSystemProvider(ctrl)
 	container.File = fileStoreMock
+
+	dgraphMock := NewMockDgraph(ctrl)
+	container.DGraph = dgraphMock
 
 	mocks := Mocks{
 		Redis:      redisMock,
