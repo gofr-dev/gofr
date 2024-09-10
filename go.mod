@@ -25,7 +25,7 @@ require (
 	github.com/segmentio/kafka-go v0.4.47
 	github.com/stretchr/testify v1.9.0
 	go.opentelemetry.io/contrib/instrumentation/net/http/httptrace/otelhttptrace v0.53.0
-	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.54.0
+	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.53.0
 	go.opentelemetry.io/otel v1.29.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.29.0
 	go.opentelemetry.io/otel/exporters/prometheus v0.51.0
@@ -35,11 +35,11 @@ require (
 	go.opentelemetry.io/otel/sdk/metric v1.29.0
 	go.opentelemetry.io/otel/trace v1.29.0
 	go.uber.org/mock v0.4.0
-	golang.org/x/oauth2 v0.22.0
+	golang.org/x/oauth2 v0.23.0
 	golang.org/x/sync v0.8.0
 	golang.org/x/term v0.24.0
-	golang.org/x/text v0.17.0
-	google.golang.org/api v0.196.0
+	golang.org/x/text v0.18.0
+	google.golang.org/api v0.195.0
 	google.golang.org/grpc v1.66.0
 	google.golang.org/protobuf v1.34.2
 	modernc.org/sqlite v1.33.0
