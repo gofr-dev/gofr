@@ -19,7 +19,7 @@ type Config struct {
 
 // Client represents the Dgraph client with logging and metrics.
 type Client struct {
-	client  *dgo.Dgraph
+	client  DgraphClient
 	conn    *grpc.ClientConn
 	logger  Logger
 	metrics Metrics
@@ -68,8 +68,8 @@ func (c *Client) Connect() error {
 	c.metrics.NewHistogram("dgraph_alter_duration", "Response time of Dgraph alter operations in milliseconds.",
 		0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10)
 
-	c.client = dgo.NewDgraphClient(api.NewDgraphClient(conn))
-	c.conn = conn
+	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
+	c.client = NewDgraphClient(dg)
 
 	// Check connection by performing a basic health check
 	if _, err := c.HealthCheck(context.Background()); err != nil {
@@ -145,7 +145,7 @@ func (d *Client) QueryWithVars(ctx context.Context, query string, vars map[strin
 		return nil, err
 	}
 
-	d.logger.Debugf("qgraph queryWithVars succeeded in %dµs", duration)
+	d.logger.Debugf("dgraph queryWithVars succeeded in %dµs", duration)
 	ql.PrettyPrint(d.logger)
 
 	d.metrics.RecordHistogram(ctx, "dgraph_query_with_vars_duration", float64(duration))
@@ -250,9 +250,4 @@ func (d *Client) HealthCheck(ctx context.Context) (any, error) {
 	}
 
 	return nil, nil
-}
-
-// Close closes the Dgraph client connection.
-func (d *Client) Close() error {
-	return d.conn.Close()
 }
