@@ -2,7 +2,6 @@ package gofr
 
 import (
 	"gofr.dev/pkg/gofr/container"
-	"gofr.dev/pkg/gofr/datasource/dgraph"
 	"gofr.dev/pkg/gofr/datasource/file"
 )
 
@@ -75,25 +74,12 @@ func (a *App) AddKVStore(db container.KVStoreProvider) {
 }
 
 // AddDgraph sets the Dgraph datasource in the app's container.
-func (a *App) AddDgraph(host, port string) {
+func (a *App) AddDgraph(db container.DgraphProvider) {
 	// Create the Dgraph client with the provided configuration
-	config := dgraph.Config{
-		Host: host,
-		Port: port,
-	}
+	db.UseLogger(a.Logger())
+	db.UseMetrics(a.Metrics())
 
-	dgraphClient := dgraph.New(config)
+	db.Connect()
 
-	// Set the logger and metrics for the Dgraph client
-	dgraphClient.UseLogger(a.Logger())
-	dgraphClient.UseMetrics(a.Metrics())
-
-	// Connect to the Dgraph database
-	if err := dgraphClient.Connect(); err != nil {
-		a.Logger().Error("Failed to connect to Dgraph: ", err)
-		return
-	}
-
-	// Add the Dgraph client to the app container
-	a.container.DGraph = dgraphClient
+	a.container.DGraph = db
 }

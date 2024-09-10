@@ -47,14 +47,14 @@ func New(config Config) *Client {
 }
 
 // Connect connects to the Dgraph database using the provided configuration.
-func (c *Client) Connect() error {
+func (c *Client) Connect() {
 	address := fmt.Sprintf("%s:%s", c.config.Host, c.config.Port)
 	c.logger.Logf("connecting to dgraph at %v", address)
 
 	conn, err := grpc.Dial(address, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		c.logger.Errorf("error connecting to Dgraph, err: %v", err)
-		return err
+		return
 	}
 
 	c.logger.Logf("connected to dgraph client at %v:%v", c.config.Host, c.config.Port)
@@ -76,10 +76,8 @@ func (c *Client) Connect() error {
 	// Check connection by performing a basic health check
 	if _, err := c.HealthCheck(context.Background()); err != nil {
 		c.logger.Errorf("dgraph health check failed: %v", err)
-		return err
+		return
 	}
-
-	return nil
 }
 
 // UseLogger sets the logger for the Dgraph client which asserts the Logger interface.

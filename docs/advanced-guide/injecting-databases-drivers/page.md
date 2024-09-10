@@ -301,18 +301,24 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	
+
 	"github.com/dgraph-io/dgo/v210/protos/api"
-	
+
 	"gofr.dev/pkg/gofr"
+	"gofr.dev/pkg/gofr/datasource/dgraph"
 )
 
 func main() {
 	// Create a new application
 	app := gofr.New()
 
+	db := dgraph.New(dgraph.Config{
+		Host: "localhost",
+		Port: "8080",
+	})
+
 	// Connect to Dgraph running on localhost:9080
-	app.AddDgraph("localhost", "9080")
+	app.AddDgraph(db)
 
 	// Add routes for Dgraph operations
 	app.POST("/dgraph", DGraphInsertHandler)
@@ -376,6 +382,7 @@ func DGraphQueryHandler(c *gofr.Context) (interface{}, error) {
 
 	return result, nil
 }
+
 ```
 
 
