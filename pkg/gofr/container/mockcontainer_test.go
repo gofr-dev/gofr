@@ -28,7 +28,7 @@ func Test_HttpServiceMock(t *testing.T) {
 
 	httpservices := []string{"cat-facts", "cat-facts1", "cat-facts2"}
 
-	mockContainer, mock := NewMockContainer(t, WithMockHTTPService(httpservices...))
+	_, mock := NewMockContainer(t, WithMockHTTPService(httpservices...))
 
 	res := httptest.NewRecorder()
 	res.Body = bytes.NewBufferString(`{"fact":"Cats have 3 eyelids.","length":20}` + "\n")
@@ -40,9 +40,7 @@ func Test_HttpServiceMock(t *testing.T) {
 		"max_length": 20,
 	}).Return(result, nil)
 
-	mockService := mockContainer.GetHTTPService("cat-facts")
-
-	resp, err := mockService.Get(context.Background(), "fact", map[string]interface{}{
+	resp, err := mock.HTTPService.Get(context.Background(), "fact", map[string]interface{}{
 		"max_length": 20,
 	})
 

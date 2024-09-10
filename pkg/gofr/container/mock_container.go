@@ -27,20 +27,21 @@ type Mocks struct {
 	HTTPService *service.MockHTTP
 }
 
-type Options func(c *Container, val any)
+type options func(c *Container, ctrl *gomock.Controller) any
 
-func WithMockHTTPService(httpServiceNames ...string) Options {
-	return func(c *Container, val any) {
-		mockservice, ok := val.(*service.MockHTTP)
-		if ok {
-			for i := range httpServiceNames {
-				c.Services[httpServiceNames[i]] = mockservice
-			}
+//nolint:revive //Because user should not access the options, and we might change it to an interface in the future.
+func WithMockHTTPService(httpServiceNames ...string) options {
+	return func(c *Container, ctrl *gomock.Controller) any {
+		mockservice := service.NewMockHTTP(ctrl)
+		for i := range httpServiceNames {
+			c.Services[httpServiceNames[i]] = mockservice
 		}
+
+		return mockservice
 	}
 }
 
-func NewMockContainer(t *testing.T, options ...Options) (*Container, Mocks) {
+func NewMockContainer(t *testing.T, options ...options) (*Container, Mocks) {
 	t.Helper()
 
 	container := &Container{}
@@ -77,11 +78,17 @@ func NewMockContainer(t *testing.T, options ...Options) (*Container, Mocks) {
 	fileStoreMock := file.NewMockFileSystemProvider(ctrl)
 	container.File = fileStoreMock
 
-	httpMock := service.NewMockHTTP(ctrl)
+	var httpMock *service.MockHTTP
+
 	container.Services = make(map[string]service.HTTP)
 
 	for _, option := range options {
-		option(container, httpMock)
+		optionsAdded := option(container, ctrl)
+
+		val, ok := optionsAdded.(*service.MockHTTP)
+		if ok {
+			httpMock = val
+		}
 	}
 
 	mocks := Mocks{
