@@ -260,3 +260,123 @@ func main() {
 	app.Run()
 }
 ```
+## DGraph
+GoFr supports injecting Dgraph with an interface that defines the necessary methods for interacting with the Dgraph 
+database. Any driver that implements the following interface can be added using the app.AddDgraph() method.
+
+```go
+// Dgraph defines the methods for interacting with a Dgraph database.
+type Dgraph interface {
+	// Query executes a read-only query in the Dgraph database and returns the result.
+	Query(ctx context.Context, query string) (interface{}, error)
+
+	// QueryWithVars executes a read-only query with variables in the Dgraph database.
+	QueryWithVars(ctx context.Context, query string, vars map[string]string) (interface{}, error)
+
+	// Mutate executes a write operation (mutation) in the Dgraph database and returns the result.
+	Mutate(ctx context.Context, mu interface{}) (interface{}, error)
+
+	// Alter applies schema or other changes to the Dgraph database.
+	Alter(ctx context.Context, op interface{}) error
+
+	// NewTxn creates a new transaction (read-write) for interacting with the Dgraph database.
+	NewTxn() interface{}
+
+	// NewReadOnlyTxn creates a new read-only transaction for querying the Dgraph database.
+	NewReadOnlyTxn() interface{}
+
+	// HealthChecker checks the health of the Dgraph instance.
+	HealthChecker
+}
+```
+
+Users can easily inject a driver that supports this interface, allowing for flexibility without compromising usability.
+This structure supports both queries and mutations in Dgraph.
+
+### Example
+
+```go
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+	
+	"github.com/dgraph-io/dgo/v210/protos/api"
+	
+	"gofr.dev/pkg/gofr"
+)
+
+func main() {
+	// Create a new application
+	app := gofr.New()
+
+	// Connect to Dgraph running on localhost:9080
+	app.AddDgraph("localhost", "9080")
+
+	// Add routes for Dgraph operations
+	app.POST("/dgraph", DGraphInsertHandler)
+	app.GET("/dgraph", DGraphQueryHandler)
+
+	// Run the application
+	app.Run()
+}
+
+// DGraphInsertHandler handles POST requests to insert data into Dgraph
+func DGraphInsertHandler(c *gofr.Context) (interface{}, error) {
+	// Example mutation data to insert into Dgraph
+	mutationData := `
+		{
+			"set": [
+				{
+					"name": "GoFr Dev"
+				},
+				{
+					"name": "James Doe"
+				}
+			]
+		}
+	`
+
+	// Create an api.Mutation object
+	mutation := &api.Mutation{
+		SetJson:   []byte(mutationData), // Set the JSON payload
+		CommitNow: true,                 // Auto-commit the transaction
+	}
+
+	// Run the mutation in Dgraph
+	response, err := c.DGraph.Mutate(c, mutation)
+	if err != nil {
+		return nil, err
+	}
+
+	return response, nil
+}
+
+// DGraphQueryHandler handles GET requests to fetch data from Dgraph
+func DGraphQueryHandler(c *gofr.Context) (interface{}, error) {
+	// A simple query to fetch all persons with a name in Dgraph
+	response, err := c.DGraph.Query(c, "{ persons(func: has(name)) { uid name } }")
+	if err != nil {
+		return nil, err
+	}
+
+	// Cast response to *api.Response (the correct type returned by Dgraph Query)
+	resp, ok := response.(*api.Response)
+	if !ok {
+		return nil, fmt.Errorf("unexpected response type")
+	}
+
+	// Parse the response JSON
+	var result map[string]interface{}
+	err = json.Unmarshal(resp.Json, &result)
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+```
+
+
+

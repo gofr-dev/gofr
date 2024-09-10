@@ -4,8 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"google.golang.org/grpc/credentials/insecure"
 	"time"
+
+	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/dgraph-io/dgo/v210"
 	"github.com/dgraph-io/dgo/v210/protos/api"
@@ -50,7 +51,7 @@ func (c *Client) Connect() error {
 	address := fmt.Sprintf("%s:%s", c.config.Host, c.config.Port)
 	c.logger.Logf("connecting to dgraph at %v", address)
 
-	conn, err := grpc.NewClient(address, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.Dial(address, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		c.logger.Errorf("error connecting to Dgraph, err: %v", err)
 		return err
