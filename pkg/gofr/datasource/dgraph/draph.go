@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"google.golang.org/grpc/credentials/insecure"
 	"time"
 
 	"github.com/dgraph-io/dgo/v210"
@@ -47,15 +48,15 @@ func New(config Config) *Client {
 // Connect connects to the Dgraph database using the provided configuration.
 func (c *Client) Connect() error {
 	address := fmt.Sprintf("%s:%s", c.config.Host, c.config.Port)
-	c.logger.Logf("connecting to Dgraph at %v", address)
+	c.logger.Logf("connecting to dgraph at %v", address)
 
-	conn, err := grpc.Dial(address, grpc.WithInsecure()) // Use secure connection in production
+	conn, err := grpc.NewClient(address, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		c.logger.Errorf("error connecting to Dgraph, err: %v", err)
 		return err
 	}
 
-	c.logger.Logf("connected to dgraph client at %v:%v", c.config.Host, c.config.Host)
+	c.logger.Logf("connected to dgraph client at %v:%v", c.config.Host, c.config.Port)
 
 	// Register metrics
 	// Register all metrics
@@ -235,7 +236,6 @@ func (d *Client) NewReadOnlyTxn() interface{} {
 	return d.client.NewReadOnlyTxn()
 }
 
-// HealthCheck performs a basic health check by pinging the Dgraph server.
 // HealthCheck performs a basic health check by pinging the Dgraph server.
 func (d *Client) HealthCheck(ctx context.Context) (any, error) {
 	healthResponse, err := d.client.NewTxn().Query(ctx, `{

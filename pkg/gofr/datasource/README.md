@@ -70,16 +70,17 @@ Therefore, GoFr utilizes a pluggable approach for new datasources by separating 
 ## Supported Datasources
 
 | Datasource | Health-Check | Logs | Metrics | Traces | As Driver |
-|------------|-----------|------|-------|--------|-----------|
-| MySQL      | ✅         | ✅    | ✅     | ✅      |           |
-| REDIS      | ✅         | ✅    | ✅     | ✅      |           |
-| PostgreSQL | ✅         | ✅    | ✅     | ✅      |           |
-| MongoDB    | ✅         | ✅    | ✅     |        | ✅         |
-| SQLite     | ✅         | ✅    | ✅     | ✅      |           |
-| BadgerDB   | ✅         | ✅    |       |        | ✅         |
-| Cassandra  | ✅         | ✅    | ✅     |        | ✅         |
-| Clickhouse |           | ✅    | ✅     |        | ✅         |
-| FTP        |           | ✅    |       |        | ✅         |
-| SFTP       |           | ✅    |       |        | ✅         |
+|------------|----------|------|-------|--------|-----------|
+| MySQL      | ✅        | ✅    | ✅     | ✅      |           |
+| REDIS      | ✅        | ✅    | ✅     | ✅      |           |
+| PostgreSQL | ✅        | ✅    | ✅     | ✅      |           |
+| MongoDB    | ✅        | ✅    | ✅     |        | ✅         |
+| SQLite     | ✅        | ✅    | ✅     | ✅      |           |
+| BadgerDB   | ✅        | ✅    |       |        | ✅         |
+| Cassandra  | ✅        | ✅    | ✅     |        | ✅         |
+| Clickhouse |          | ✅    | ✅     |        | ✅         |
+| FTP        |          | ✅    |       |        | ✅         |
+| SFTP       |          | ✅    |       |        | ✅         |
+ | DGraph     | ✅  | ✅ |✅ |||
 
 
