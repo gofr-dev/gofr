@@ -27,7 +27,7 @@ func (a *App) AddFTP(fs file.FileSystemProvider) {
 	a.container.File = fs
 }
 
-// AddFile sets the FTP,SFTP datasource in the app's container.
+// AddFile sets the FTP,SFTP,S3 datasource in the app's container.
 func (a *App) AddFileStore(fs file.FileSystemProvider) {
 	fs.UseLogger(a.Logger())
 	fs.UseMetrics(a.Metrics())

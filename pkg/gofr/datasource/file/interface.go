@@ -38,6 +38,7 @@ type FileSystem interface {
 	// error, if any happens.
 	Create(name string) (File, error)
 
+	// TODO - Lets make bucket constant for MkdirAll as well, we might create buckets from migrations
 	// Mkdir creates a directory in the filesystem, return an error if any
 	// happens.
 	Mkdir(name string, perm os.FileMode) error
