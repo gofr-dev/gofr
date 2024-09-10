@@ -52,7 +52,7 @@ type Subscription interface {
 // Connection represents the NATS connection.
 type Connection interface {
 	Status() nats.Status
-	JetStream(opts ...nats.JSOpt) (nats.JetStreamContext, error) // Use NATS' JetStreamContext
+	JetStream(opts ...nats.JSOpt) (JetStreamContext, error) // Use NATS' JetStreamContext
 	Close()
 	Drain() error
 }

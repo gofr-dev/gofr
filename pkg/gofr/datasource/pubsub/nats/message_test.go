@@ -34,7 +34,6 @@ func TestNATSMessage_Commit(t *testing.T) {
 	mockMsg.EXPECT().Ack().Return(nil)
 
 	n.Commit()
-	// No assertion needed here as we're not expecting any logged output
 }
 
 func TestNATSMessage_CommitError(t *testing.T) {
