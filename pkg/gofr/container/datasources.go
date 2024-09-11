@@ -269,16 +269,16 @@ type KVStoreProvider interface {
 }
 
 type Solr interface {
-	Search(ctx context.Context, collection string, params map[string]interface{}) (interface{}, error)
-	Create(ctx context.Context, collection string, document *bytes.Buffer, params map[string]interface{}) (interface{}, error)
-	Update(ctx context.Context, collection string, document *bytes.Buffer, params map[string]interface{}) (interface{}, error)
-	Delete(ctx context.Context, collection string, document *bytes.Buffer, params map[string]interface{}) (interface{}, error)
+	Search(ctx context.Context, collection string, params map[string]any) (any, error)
+	Create(ctx context.Context, collection string, document *bytes.Buffer, params map[string]any) (any, error)
+	Update(ctx context.Context, collection string, document *bytes.Buffer, params map[string]any) (any, error)
+	Delete(ctx context.Context, collection string, document *bytes.Buffer, params map[string]any) (any, error)
 
-	Retrieve(ctx context.Context, collection string, params map[string]interface{}) (interface{}, error)
-	ListFields(ctx context.Context, collection string, params map[string]interface{}) (interface{}, error)
-	AddField(ctx context.Context, collection string, document *bytes.Buffer) (interface{}, error)
-	UpdateField(ctx context.Context, collection string, document *bytes.Buffer) (interface{}, error)
-	DeleteField(ctx context.Context, collection string, document *bytes.Buffer) (interface{}, error)
+	Retrieve(ctx context.Context, collection string, params map[string]any) (any, error)
+	ListFields(ctx context.Context, collection string, params map[string]any) (any, error)
+	AddField(ctx context.Context, collection string, document *bytes.Buffer) (any, error)
+	UpdateField(ctx context.Context, collection string, document *bytes.Buffer) (any, error)
+	DeleteField(ctx context.Context, collection string, document *bytes.Buffer) (any, error)
 
 	HealthChecker
 }

@@ -29,15 +29,26 @@ func Test_InvalidJSONBody(t *testing.T) {
 	require.Error(t, err, "TEST Failed.\n")
 }
 
-func TestSolr(t *testing.T) {
+func Test_ErrorResponse(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "some error", http.StatusLocked)
+	}))
+	ts.Close()
+
+	_, err := call(context.TODO(), "GET", ts.URL, nil, nil)
+
+	require.Error(t, err, "TEST Failed.\n")
+}
+
+func setupClient(t *testing.T) *Client {
+	t.Helper()
+
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`{
   		"responseHeader": {
     	"rf": 1,
     	"status": 0}}`))
 	}))
-
-	defer ts.Close()
 
 	a := ts.Listener.Addr().String()
 	addr := strings.Split(a, ":")
@@ -46,32 +57,28 @@ func TestSolr(t *testing.T) {
 	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
 
-	mockLogger.EXPECT().Debug(gomock.Any()).Times(9)
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_solr_stats", gomock.Any(), "type", gomock.Any()).Times(9)
+	mockLogger.EXPECT().Debug(gomock.Any())
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_solr_stats", gomock.Any(), "type", gomock.Any())
 
 	s := New(Config{Host: addr[0], Port: addr[1]})
 	s.metrics = mockMetrics
 	s.logger = mockLogger
 
-	testClientSearch(t, s)
-	testClientAddField(t, s)
-	testClientCreate(t, s)
-	testClientDelete(t, s)
-	testClientDeleteField(t, s)
-	testClientListFields(t, s)
-	testClientRetrieve(t, s)
-	testClientUpdate(t, s)
-	testClientUpdateField(t, s)
+	return s
 }
 
-func testClientSearch(t *testing.T, s *Client) {
+func Test_ClientSearch(t *testing.T) {
+	s := setupClient(t)
+
 	resp, err := s.Search(context.TODO(), "test", map[string]interface{}{"id": []string{"1234"}})
 
 	require.NoError(t, err, "TEST Failed.\n")
 	require.NotNil(t, resp, "TEST Failed.\n")
 }
 
-func testClientCreate(t *testing.T, s *Client) {
+func Test_ClientCreate(t *testing.T) {
+	s := setupClient(t)
+
 	body := bytes.NewBuffer([]byte(`{
 		"id": "1234567",
 		"cat": [
@@ -85,7 +92,9 @@ func testClientCreate(t *testing.T, s *Client) {
 	require.NotNil(t, resp, "TEST Failed.\n")
 }
 
-func testClientUpdate(t *testing.T, s *Client) {
+func Test_ClientUpdate(t *testing.T) {
+	s := setupClient(t)
+
 	body := bytes.NewBuffer([]byte(`{
 		"id": "1234567",
 		"cat": [
@@ -97,7 +106,9 @@ func testClientUpdate(t *testing.T, s *Client) {
 	require.NotNil(t, resp, "TEST Failed.\n")
 }
 
-func testClientDelete(t *testing.T, s *Client) {
+func Test_ClientDelete(t *testing.T) {
+	s := setupClient(t)
+
 	body := bytes.NewBuffer([]byte(`{"delete":[
 		"1234",
 		"12345"
@@ -109,32 +120,27 @@ func testClientDelete(t *testing.T, s *Client) {
 	require.NotNil(t, resp, "TEST Failed.\n")
 }
 
-func Test_ErrorResponse(t *testing.T) {
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		http.Error(w, "some error", http.StatusLocked)
-	}))
-	ts.Close()
+func Test_ClientRetrieve(t *testing.T) {
+	s := setupClient(t)
 
-	_, err := call(context.TODO(), "GET", ts.URL, nil, nil)
-
-	require.Error(t, err, "TEST Failed.\n")
-}
-
-func testClientRetrieve(t *testing.T, s *Client) {
 	resp, err := s.Retrieve(context.TODO(), "test", map[string]interface{}{"wt": "xml"})
 
 	require.NoError(t, err, "TEST Failed.\n")
 	require.NotNil(t, resp, "TEST Failed.\n")
 }
 
-func testClientListFields(t *testing.T, s *Client) {
+func Test_ClientListFields(t *testing.T) {
+	s := setupClient(t)
+
 	resp, err := s.ListFields(context.TODO(), "test", map[string]interface{}{"includeDynamic": true})
 
 	require.NoError(t, err, "TEST Failed.\n")
 	require.NotNil(t, resp, "TEST Failed.\n")
 }
 
-func testClientAddField(t *testing.T, s *Client) {
+func Test_ClientAddField(t *testing.T) {
+	s := setupClient(t)
+
 	body := bytes.NewBuffer([]byte(`{"add-field":{
 		"name":"merchant",
 		"type":"string",
@@ -145,7 +151,9 @@ func testClientAddField(t *testing.T, s *Client) {
 	require.NotNil(t, resp, "TEST Failed.\n")
 }
 
-func testClientUpdateField(t *testing.T, s *Client) {
+func Test_ClientUpdateField(t *testing.T) {
+	s := setupClient(t)
+
 	body := bytes.NewBuffer([]byte(`{"replace-field":{
 		"name":"merchant",
 		"type":"text_general"}}`))
@@ -156,7 +164,9 @@ func testClientUpdateField(t *testing.T, s *Client) {
 	require.NotNil(t, resp, "TEST Failed.\n")
 }
 
-func testClientDeleteField(t *testing.T, s *Client) {
+func Test_ClientDeleteField(t *testing.T) {
+	s := setupClient(t)
+
 	body := bytes.NewBuffer([]byte(`{"delete-field":{
 		"name":"merchant",
 		"type":"text_general"}}`))
