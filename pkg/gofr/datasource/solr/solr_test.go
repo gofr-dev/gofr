@@ -8,8 +8,26 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 )
+
+func Test_InvalidRequest(t *testing.T) {
+	_, err := call(context.TODO(), "GET", ":/localhost:", nil, nil)
+
+	require.Error(t, err, "TEST Failed.\n")
+}
+
+func Test_InvalidJSONBody(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`Not a JSON`))
+	}))
+	defer ts.Close()
+
+	_, err := call(context.TODO(), "GET", ts.URL, nil, nil)
+
+	require.Error(t, err, "TEST Failed.\n")
+}
 
 func TestSolr(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -48,33 +66,9 @@ func TestSolr(t *testing.T) {
 
 func testClientSearch(t *testing.T, s *Client) {
 	resp, err := s.Search(context.TODO(), "test", map[string]interface{}{"id": []string{"1234"}})
-	if err != nil {
-		t.Errorf("Expected error as nil but got %v", err)
-	}
 
-	if resp == nil {
-		t.Errorf("Expected non nil response")
-	}
-}
-
-func Test_InvalidRequest(t *testing.T) {
-	_, err := call(context.TODO(), "GET", ":/localhost:", nil, nil)
-
-	if err == nil {
-		t.Errorf("Expected error due to invalid request, Got nil")
-	}
-}
-
-func Test_InvalidJSONBody(t *testing.T) {
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write([]byte(`Not a JSON`))
-	}))
-	defer ts.Close()
-
-	_, err := call(context.TODO(), "GET", ts.URL, nil, nil)
-	if err == nil {
-		t.Errorf("Expected error due to invalid JSON body, Got nil")
-	}
+	require.NoError(t, err, "TEST Failed.\n")
+	require.NotNil(t, resp, "TEST Failed.\n")
 }
 
 func testClientCreate(t *testing.T, s *Client) {
@@ -86,13 +80,9 @@ func testClientCreate(t *testing.T, s *Client) {
 		"genere_s": "Hello There"}`))
 
 	resp, err := s.Create(context.TODO(), "test", body, map[string]interface{}{"commit": "true"})
-	if err != nil {
-		t.Errorf("Expected error as nil but got %v", err)
-	}
 
-	if resp == nil {
-		t.Errorf("Expected non nil response")
-	}
+	require.NoError(t, err, "TEST Failed.\n")
+	require.NotNil(t, resp, "TEST Failed.\n")
 }
 
 func testClientUpdate(t *testing.T, s *Client) {
@@ -103,13 +93,8 @@ func testClientUpdate(t *testing.T, s *Client) {
 		]}`))
 	resp, err := s.Update(context.TODO(), "test", body, map[string]interface{}{"commit": "true"})
 
-	if err != nil {
-		t.Errorf("Expected error as nil but got %v", err)
-	}
-
-	if resp == nil {
-		t.Errorf("Expected non nil response")
-	}
+	require.NoError(t, err, "TEST Failed.\n")
+	require.NotNil(t, resp, "TEST Failed.\n")
 }
 
 func testClientDelete(t *testing.T, s *Client) {
@@ -119,13 +104,9 @@ func testClientDelete(t *testing.T, s *Client) {
 	]}`))
 
 	resp, err := s.Delete(context.TODO(), "test", body, map[string]interface{}{"commit": "true"})
-	if err != nil {
-		t.Errorf("Expected error as nil but got %v", err)
-	}
 
-	if resp == nil {
-		t.Errorf("Expected non nil response")
-	}
+	require.NoError(t, err, "TEST Failed.\n")
+	require.NotNil(t, resp, "TEST Failed.\n")
 }
 
 func Test_ErrorResponse(t *testing.T) {
@@ -135,32 +116,22 @@ func Test_ErrorResponse(t *testing.T) {
 	ts.Close()
 
 	_, err := call(context.TODO(), "GET", ts.URL, nil, nil)
-	if err == nil {
-		t.Errorf("Expected error due to invalid JSON body, Got nil")
-	}
+
+	require.Error(t, err, "TEST Failed.\n")
 }
 
 func testClientRetrieve(t *testing.T, s *Client) {
 	resp, err := s.Retrieve(context.TODO(), "test", map[string]interface{}{"wt": "xml"})
-	if err != nil {
-		t.Errorf("Expected error as nil but got %v", err)
-	}
 
-	if resp == nil {
-		t.Errorf("Expected non nil response")
-	}
+	require.NoError(t, err, "TEST Failed.\n")
+	require.NotNil(t, resp, "TEST Failed.\n")
 }
 
 func testClientListFields(t *testing.T, s *Client) {
 	resp, err := s.ListFields(context.TODO(), "test", map[string]interface{}{"includeDynamic": true})
 
-	if err != nil {
-		t.Errorf("Expected error as nil but got %v", err)
-	}
-
-	if resp == nil {
-		t.Errorf("Expected non nil response")
-	}
+	require.NoError(t, err, "TEST Failed.\n")
+	require.NotNil(t, resp, "TEST Failed.\n")
 }
 
 func testClientAddField(t *testing.T, s *Client) {
@@ -170,13 +141,8 @@ func testClientAddField(t *testing.T, s *Client) {
 		"stored":true }}`))
 	resp, err := s.AddField(context.TODO(), "test", body)
 
-	if err != nil {
-		t.Errorf("Expected error as nil but got %v", err)
-	}
-
-	if resp == nil {
-		t.Errorf("Expected non nil response")
-	}
+	require.NoError(t, err, "TEST Failed.\n")
+	require.NotNil(t, resp, "TEST Failed.\n")
 }
 
 func testClientUpdateField(t *testing.T, s *Client) {
@@ -185,13 +151,9 @@ func testClientUpdateField(t *testing.T, s *Client) {
 		"type":"text_general"}}`))
 
 	resp, err := s.UpdateField(context.TODO(), "test", body)
-	if err != nil {
-		t.Errorf("Expected error as nil but got %v", err)
-	}
 
-	if resp == nil {
-		t.Errorf("Expected non nil response")
-	}
+	require.NoError(t, err, "TEST Failed.\n")
+	require.NotNil(t, resp, "TEST Failed.\n")
 }
 
 func testClientDeleteField(t *testing.T, s *Client) {
@@ -200,11 +162,7 @@ func testClientDeleteField(t *testing.T, s *Client) {
 		"type":"text_general"}}`))
 
 	resp, err := s.DeleteField(context.TODO(), "test", body)
-	if err != nil {
-		t.Errorf("Expected error as nil but got %v", err)
-	}
 
-	if resp == nil {
-		t.Errorf("Expected non nil response")
-	}
+	require.NoError(t, err, "TEST Failed.\n")
+	require.NotNil(t, resp, "TEST Failed.\n")
 }
