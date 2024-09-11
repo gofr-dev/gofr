@@ -3,11 +3,12 @@ package solr
 import (
 	"bytes"
 	"context"
-	"go.uber.org/mock/gomock"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"go.uber.org/mock/gomock"
 )
 
 func TestSolr(t *testing.T) {
