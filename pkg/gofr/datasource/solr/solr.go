@@ -22,19 +22,18 @@ type Client struct {
 	metrics Metrics
 }
 
+// New initializes Solr driver with the provided configuration.
+// The Connect method must be called to establish a connection to Solr.
+// Usage:
+// client := New(config)
+// client.UseLogger(loggerInstance)
+// client.UseMetrics(metricsInstance)
+// client.Connect()
 func New(conf Config) *Client {
 	s := &Client{}
 	s.url = "http://" + conf.Host + ":" + conf.Port + "/solr/"
 
 	return s
-}
-
-func (c *Client) HealthCheck(ctx context.Context) (any, error) {
-	return nil, nil
-}
-
-func (c *Client) Connect() {
-	return
 }
 
 // UseLogger sets the logger for the Cassandra client which asserts the Logger interface.
@@ -49,6 +48,20 @@ func (c *Client) UseMetrics(metrics interface{}) {
 	if m, ok := metrics.(Metrics); ok {
 		c.metrics = m
 	}
+}
+
+// Connect establishes a connection to Solr and registers metrics using the provided configuration when the client was Created.
+func (c *Client) Connect() {
+	c.logger.Infof("connecting to Solr at %v", c.url)
+
+	solrBuckets := []float64{.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 4, 5, 7.5, 10}
+	c.metrics.NewHistogram("app_solr_stats", "Response time of Solr operations in milliseconds.", solrBuckets...)
+
+	return
+}
+
+func (c *Client) HealthCheck(ctx context.Context) (any, error) {
+	return nil, nil
 }
 
 // Search searches documents in the given collections based on the parameters specified.
