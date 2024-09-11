@@ -7,7 +7,6 @@ import (
 
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/stretchr/testify/require"
-
 	"go.uber.org/mock/gomock"
 )
 
@@ -38,9 +37,10 @@ func TestClient_Connect_Success(t *testing.T) {
 	mockMetrics.EXPECT().NewHistogram(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	// Perform the connect operation
-	err := client.Connect()
+	client.Connect()
 
-	require.NoError(t, err, "TestClient_Connect_Success Failed!")
+	require.True(t, mockLogger.ctrl.Satisfied())
+	require.True(t, mockMetrics.ctrl.Satisfied())
 }
 
 func Test_Query_Success1(t *testing.T) {
