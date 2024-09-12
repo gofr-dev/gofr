@@ -34,6 +34,13 @@ func TestValidateConfigs(t *testing.T) {
 			config:   Config{},
 			expected: errServerNotProvided,
 		},
+		{
+			name: "Empty Stream Subject",
+			config: Config{
+				Server: "nats://localhost:4222",
+			},
+			expected: errStreamNotProvided,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -233,8 +240,17 @@ func TestNATSClient_Close(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockConn := NewMockConnection(ctrl)
-	client := &natsClient{conn: mockConn}
+	mockJS := NewMockJetStreamContext(ctrl)
 
+	client := &natsClient{
+		conn: mockConn,
+		js:   mockJS,
+		config: Config{
+			Stream: StreamConfig{Subject: "test-stream"},
+		},
+	}
+
+	mockJS.EXPECT().DeleteStream("test-stream").Return(nil)
 	mockConn.EXPECT().Drain().Return(nil)
 
 	err := client.Close()
@@ -263,7 +279,6 @@ func TestNew(t *testing.T) {
 				Stream: StreamConfig{Subject: "test-stream"},
 			},
 			setupMock: func() {
-				// mockConn := NewMockConnection(ctrl)
 				mockJS := NewMockJetStreamContext(ctrl)
 
 				natsConnect = func(serverURL string, opts ...nats.Option) (*nats.Conn, error) {
@@ -293,4 +308,36 @@ func TestNew(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestNatsClient_DeleteStream(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockJS := NewMockJetStreamContext(ctrl)
+	client := &natsClient{js: mockJS}
+
+	ctx := context.Background()
+	streamName := "test-stream"
+
+	mockJS.EXPECT().DeleteStream(streamName).Return(nil)
+
+	err := client.DeleteStream(ctx, streamName)
+	assert.NoError(t, err)
+}
+
+func TestNatsClient_CreateStream(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockJS := NewMockJetStreamContext(ctrl)
+	client := &natsClient{js: mockJS}
+
+	ctx := context.Background()
+	streamName := "test-stream"
+
+	mockJS.EXPECT().AddStream(gomock.Any()).Return(&nats.StreamInfo{}, nil)
+
+	err := client.CreateStream(ctx, streamName)
+	assert.NoError(t, err)
 }
