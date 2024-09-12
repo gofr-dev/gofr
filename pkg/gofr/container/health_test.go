@@ -105,7 +105,7 @@ func TestContainer_Health(t *testing.T) {
 }
 
 func registerMocks(mocks Mocks, health string) {
-	mocks.SQL.EXPECT().HealthCheck().Return(&datasource.Health{
+	mocks.SQL.ExpectHealthCheck().WillReturnHealthCheck(&datasource.Health{
 		Status: health,
 		Details: map[string]interface{}{
 			"host": "localhost:3306/test",
