@@ -50,6 +50,24 @@ parts of the request.
   ctx.Bind(&p)
   // the Bind() method will map the incoming request to variable p
   ```
+  
+  ### Binding multipart-form data 
+  - To bind multipart-form data, you can use the Bind method similarly. The struct fields should be tagged appropriately 
+    to map the form fields to the struct fields.
+    
+    ```go
+    type Data struct {
+    Name string `form:"name"`
+
+    Compressed file.Zip `file:"upload"`
+
+    FileHeader *multipart.FileHeader `file:"a"`
+    }
+    ```
+
+  - The `form` tag is used to bind non-file fields.
+  - The `file` tag is used to bind file fields. If the tag is not present, the field name is used as the key.
+
 
 - `HostName()` - to access the host name for the incoming request
   ```go
