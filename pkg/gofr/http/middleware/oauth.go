@@ -5,6 +5,7 @@ import (
 	"crypto/rsa"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math/big"
@@ -112,35 +113,15 @@ func OAuth(key PublicKeyProvider) func(inner http.Handler) http.Handler {
 				return
 			}
 
-			authHeader := r.Header.Get("Authorization")
-			if authHeader == "" {
-				http.Error(w, "Authorization header is required", http.StatusUnauthorized)
+			if err := validateAuthorizationHeader(r.Header.Get("Authorization")); err != nil {
+				http.Error(w, err.Error(), http.StatusUnauthorized)
 				return
 			}
 
-			headerParts := strings.Split(authHeader, " ")
-			if len(headerParts) != 2 || headerParts[0] != "Bearer" {
-				http.Error(w, "Authorization header format must be Bearer {token}", http.StatusUnauthorized)
-				return
-			}
-
-			tokenString := headerParts[1]
-
-			token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-				kid := token.Header["kid"]
-
-				jwks := key.Get(fmt.Sprint(kid))
-				if jwks == nil {
-					return nil, JWKNotFound{}
-				}
-
-				return key.Get(fmt.Sprint(kid)), nil
-			})
-
+			tokenString := extractTokenFromHeader(r.Header.Get("Authorization"))
+			token, err := parseToken(tokenString, key)
 			if err != nil {
-				w.WriteHeader(http.StatusUnauthorized)
-				_, _ = w.Write([]byte(err.Error()))
-
+				http.Error(w, err.Error(), http.StatusUnauthorized)
 				return
 			}
 
@@ -151,6 +132,39 @@ func OAuth(key PublicKeyProvider) func(inner http.Handler) http.Handler {
 		})
 	}
 }
+
+// ValidateAuthorizationHeader validates the format and presence of the Authorization header.
+func validateAuthorizationHeader(authHeader string) error {
+	if authHeader == "" {
+		return errors.New("authorization header is required")
+	}
+
+	headerParts := strings.Split(authHeader, " ")
+	if len(headerParts) != 2 || headerParts[0] != "Bearer" {
+		return errors.New("authorization header format must be Bearer {token}")
+	}
+
+	return nil
+}
+
+// ExtractTokenFromHeader extracts the JWT token from the Authorization header.
+func extractTokenFromHeader(authHeader string) string {
+	headerParts := strings.Split(authHeader, " ")
+	return headerParts[1]
+}
+
+// ParseToken parses the JWT token using the provided key provider.
+func parseToken(tokenString string, key PublicKeyProvider) (*jwt.Token, error) {
+	return jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		kid := token.Header["kid"]
+		jwks := key.Get(fmt.Sprint(kid))
+		if jwks == nil {
+			return nil, JWKNotFound{}
+		}
+		return jwks, nil
+	})
+}
+
 
 // JWKS represents a JSON Web Key Set.
 type JWKS struct {
