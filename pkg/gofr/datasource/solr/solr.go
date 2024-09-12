@@ -37,14 +37,14 @@ func New(conf Config) *Client {
 }
 
 // UseLogger sets the logger for the Cassandra client which asserts the Logger interface.
-func (c *Client) UseLogger(logger interface{}) {
+func (c *Client) UseLogger(logger any) {
 	if l, ok := logger.(Logger); ok {
 		c.logger = l
 	}
 }
 
 // UseMetrics sets the metrics for the Cassandra client which asserts the Metrics interface.
-func (c *Client) UseMetrics(metrics interface{}) {
+func (c *Client) UseMetrics(metrics any) {
 	if m, ok := metrics.(Metrics); ok {
 		c.metrics = m
 	}
@@ -66,7 +66,7 @@ func (c *Client) HealthCheck(ctx context.Context) (any, error) {
 
 // Search searches documents in the given collections based on the parameters specified.
 // This can be used for making any queries to SOLR
-func (c *Client) Search(ctx context.Context, collection string, params map[string]interface{}) (interface{}, error) {
+func (c *Client) Search(ctx context.Context, collection string, params map[string]any) (any, error) {
 	url := c.url + collection + "/select"
 
 	defer c.sendOperationStats(&QueryLog{Type: "Search", Url: url}, time.Now())
@@ -76,7 +76,7 @@ func (c *Client) Search(ctx context.Context, collection string, params map[strin
 
 // Create makes documents in the specified collection. params can be used to send parameters like commit=true
 func (c *Client) Create(ctx context.Context, collection string, document *bytes.Buffer,
-	params map[string]interface{}) (interface{}, error) {
+	params map[string]any) (any, error) {
 	url := c.url + collection + "/update"
 
 	defer c.sendOperationStats(&QueryLog{Type: "Create", Url: url}, time.Now())
@@ -86,7 +86,7 @@ func (c *Client) Create(ctx context.Context, collection string, document *bytes.
 
 // Update updates documents in the specified collection. params can be used to send parameters like commit=true
 func (c *Client) Update(ctx context.Context, collection string, document *bytes.Buffer,
-	params map[string]interface{}) (interface{}, error) {
+	params map[string]any) (any, error) {
 	url := c.url + collection + "/update"
 
 	defer c.sendOperationStats(&QueryLog{Type: "Update", Url: url}, time.Now())
@@ -96,7 +96,7 @@ func (c *Client) Update(ctx context.Context, collection string, document *bytes.
 
 // Delete deletes documents in the specified collection. params can be used to send parameters like commit=true
 func (c *Client) Delete(ctx context.Context, collection string, document *bytes.Buffer,
-	params map[string]interface{}) (interface{}, error) {
+	params map[string]any) (any, error) {
 	url := c.url + collection + "/update"
 
 	defer c.sendOperationStats(&QueryLog{Type: "Delete", Url: url}, time.Now())
@@ -106,17 +106,17 @@ func (c *Client) Delete(ctx context.Context, collection string, document *bytes.
 
 // ListFields retrieves all the fields in the schema for the specified collection.
 // params can be used to send query parameters like wt, fl, includeDynamic etc.
-func (c *Client) ListFields(ctx context.Context, collection string, params map[string]interface{}) (interface{}, error) {
+func (c *Client) ListFields(ctx context.Context, collection string, params map[string]any) (any, error) {
 	url := c.url + collection + "/schema/fields"
 
-	defer c.sendOperationStats(&QueryLog{Type: "ListField", Url: url}, time.Now())
+	defer c.sendOperationStats(&QueryLog{Type: "ListFields", Url: url}, time.Now())
 
 	return call(ctx, "GET", url, params, nil)
 }
 
 // Retrieve retrieves the entire schema that includes all the fields,field types,dynamic rules and copy field rules.
 // params can be used to specify the format of response
-func (c *Client) Retrieve(ctx context.Context, collection string, params map[string]interface{}) (interface{}, error) {
+func (c *Client) Retrieve(ctx context.Context, collection string, params map[string]any) (any, error) {
 	url := c.url + collection + "/schema"
 
 	defer c.sendOperationStats(&QueryLog{Type: "Retrieve", Url: url}, time.Now())
@@ -125,7 +125,7 @@ func (c *Client) Retrieve(ctx context.Context, collection string, params map[str
 }
 
 // AddField adds Field in the schema for the specified collection
-func (c *Client) AddField(ctx context.Context, collection string, document *bytes.Buffer) (interface{}, error) {
+func (c *Client) AddField(ctx context.Context, collection string, document *bytes.Buffer) (any, error) {
 	url := c.url + collection + "/schema"
 
 	defer c.sendOperationStats(&QueryLog{Type: "AddField", Url: url}, time.Now())
@@ -134,7 +134,7 @@ func (c *Client) AddField(ctx context.Context, collection string, document *byte
 }
 
 // UpdateField updates the field definitions in the schema for the specified collection
-func (c *Client) UpdateField(ctx context.Context, collection string, document *bytes.Buffer) (interface{}, error) {
+func (c *Client) UpdateField(ctx context.Context, collection string, document *bytes.Buffer) (any, error) {
 	url := c.url + collection + "/schema"
 
 	defer c.sendOperationStats(&QueryLog{Type: "UpdateField", Url: url}, time.Now())
@@ -143,7 +143,7 @@ func (c *Client) UpdateField(ctx context.Context, collection string, document *b
 }
 
 // DeleteField deletes the field definitions in the schema for the specified collection
-func (c *Client) DeleteField(ctx context.Context, collection string, document *bytes.Buffer) (interface{}, error) {
+func (c *Client) DeleteField(ctx context.Context, collection string, document *bytes.Buffer) (any, error) {
 	url := c.url + collection + "/schema"
 
 	defer c.sendOperationStats(&QueryLog{Type: "DeleteField", Url: url}, time.Now())
@@ -154,11 +154,11 @@ func (c *Client) DeleteField(ctx context.Context, collection string, document *b
 // Response stores the response from SOLR
 type Response struct {
 	Code int
-	Data interface{}
+	Data any
 }
 
 // call forms the http request and makes a call to solr and populates the solr response
-func call(ctx context.Context, method, url string, params map[string]interface{}, body io.Reader) (interface{}, error) {
+func call(ctx context.Context, method, url string, params map[string]any, body io.Reader) (any, error) {
 	req, err := http.NewRequest(method, url, body)
 	if err != nil {
 		return nil, err
@@ -177,7 +177,7 @@ func call(ctx context.Context, method, url string, params map[string]interface{}
 				q.Add(k, val)
 			}
 		default:
-			q.Add(k, fmt.Sprintf("%v", val))
+			q.Add(k, fmt.Sprint(val))
 		}
 	}
 
@@ -191,7 +191,7 @@ func call(ctx context.Context, method, url string, params map[string]interface{}
 	}
 	defer resp.Body.Close()
 
-	var respBody interface{}
+	var respBody any
 
 	b, _ := io.ReadAll(resp.Body)
 	err = json.Unmarshal(b, &respBody)

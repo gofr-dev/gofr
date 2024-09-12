@@ -8,12 +8,12 @@ import (
 )
 
 type Logger interface {
-	Debug(args ...interface{})
-	Debugf(pattern string, args ...interface{})
-	Info(args ...interface{})
-	Infof(pattern string, args ...interface{})
-	Error(args ...interface{})
-	Errorf(patter string, args ...interface{})
+	Debug(args ...any)
+	Debugf(pattern string, args ...any)
+	Info(args ...any)
+	Infof(pattern string, args ...any)
+	Error(args ...any)
+	Errorf(patter string, args ...any)
 }
 
 type QueryLog struct {

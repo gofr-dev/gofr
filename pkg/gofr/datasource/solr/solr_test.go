@@ -13,7 +13,7 @@ import (
 )
 
 func Test_InvalidRequest(t *testing.T) {
-	_, err := call(context.TODO(), "GET", ":/localhost:", nil, nil)
+	_, err := call(context.Background(), "GET", ":/localhost:", nil, nil)
 
 	require.Error(t, err, "TEST Failed.\n")
 }
@@ -24,7 +24,7 @@ func Test_InvalidJSONBody(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	_, err := call(context.TODO(), "GET", ts.URL, nil, nil)
+	_, err := call(context.Background(), "GET", ts.URL, nil, nil)
 
 	require.Error(t, err, "TEST Failed.\n")
 }
@@ -35,7 +35,7 @@ func Test_ErrorResponse(t *testing.T) {
 	}))
 	ts.Close()
 
-	_, err := call(context.TODO(), "GET", ts.URL, nil, nil)
+	_, err := call(context.Background(), "GET", ts.URL, nil, nil)
 
 	require.Error(t, err, "TEST Failed.\n")
 }
@@ -49,6 +49,10 @@ func setupClient(t *testing.T) *Client {
     	"rf": 1,
     	"status": 0}}`))
 	}))
+
+	t.Cleanup(func() {
+		ts.Close()
+	})
 
 	a := ts.Listener.Addr().String()
 	addr := strings.Split(a, ":")
@@ -70,7 +74,7 @@ func setupClient(t *testing.T) *Client {
 func Test_ClientSearch(t *testing.T) {
 	s := setupClient(t)
 
-	resp, err := s.Search(context.TODO(), "test", map[string]interface{}{"id": []string{"1234"}})
+	resp, err := s.Search(context.Background(), "test", map[string]any{"id": []string{"1234"}})
 
 	require.NoError(t, err, "TEST Failed.\n")
 	require.NotNil(t, resp, "TEST Failed.\n")
@@ -86,7 +90,7 @@ func Test_ClientCreate(t *testing.T) {
 		],
 		"genere_s": "Hello There"}`))
 
-	resp, err := s.Create(context.TODO(), "test", body, map[string]interface{}{"commit": "true"})
+	resp, err := s.Create(context.Background(), "test", body, map[string]any{"commit": "true"})
 
 	require.NoError(t, err, "TEST Failed.\n")
 	require.NotNil(t, resp, "TEST Failed.\n")
@@ -100,7 +104,7 @@ func Test_ClientUpdate(t *testing.T) {
 		"cat": [
 			"Book"
 		]}`))
-	resp, err := s.Update(context.TODO(), "test", body, map[string]interface{}{"commit": "true"})
+	resp, err := s.Update(context.Background(), "test", body, map[string]any{"commit": "true"})
 
 	require.NoError(t, err, "TEST Failed.\n")
 	require.NotNil(t, resp, "TEST Failed.\n")
@@ -114,7 +118,7 @@ func Test_ClientDelete(t *testing.T) {
 		"12345"
 	]}`))
 
-	resp, err := s.Delete(context.TODO(), "test", body, map[string]interface{}{"commit": "true"})
+	resp, err := s.Delete(context.Background(), "test", body, map[string]any{"commit": "true"})
 
 	require.NoError(t, err, "TEST Failed.\n")
 	require.NotNil(t, resp, "TEST Failed.\n")
@@ -123,7 +127,7 @@ func Test_ClientDelete(t *testing.T) {
 func Test_ClientRetrieve(t *testing.T) {
 	s := setupClient(t)
 
-	resp, err := s.Retrieve(context.TODO(), "test", map[string]interface{}{"wt": "xml"})
+	resp, err := s.Retrieve(context.Background(), "test", map[string]any{"wt": "xml"})
 
 	require.NoError(t, err, "TEST Failed.\n")
 	require.NotNil(t, resp, "TEST Failed.\n")
@@ -132,7 +136,7 @@ func Test_ClientRetrieve(t *testing.T) {
 func Test_ClientListFields(t *testing.T) {
 	s := setupClient(t)
 
-	resp, err := s.ListFields(context.TODO(), "test", map[string]interface{}{"includeDynamic": true})
+	resp, err := s.ListFields(context.Background(), "test", map[string]any{"includeDynamic": true})
 
 	require.NoError(t, err, "TEST Failed.\n")
 	require.NotNil(t, resp, "TEST Failed.\n")
@@ -145,7 +149,7 @@ func Test_ClientAddField(t *testing.T) {
 		"name":"merchant",
 		"type":"string",
 		"stored":true }}`))
-	resp, err := s.AddField(context.TODO(), "test", body)
+	resp, err := s.AddField(context.Background(), "test", body)
 
 	require.NoError(t, err, "TEST Failed.\n")
 	require.NotNil(t, resp, "TEST Failed.\n")
@@ -158,7 +162,7 @@ func Test_ClientUpdateField(t *testing.T) {
 		"name":"merchant",
 		"type":"text_general"}}`))
 
-	resp, err := s.UpdateField(context.TODO(), "test", body)
+	resp, err := s.UpdateField(context.Background(), "test", body)
 
 	require.NoError(t, err, "TEST Failed.\n")
 	require.NotNil(t, resp, "TEST Failed.\n")
@@ -171,7 +175,7 @@ func Test_ClientDeleteField(t *testing.T) {
 		"name":"merchant",
 		"type":"text_general"}}`))
 
-	resp, err := s.DeleteField(context.TODO(), "test", body)
+	resp, err := s.DeleteField(context.Background(), "test", body)
 
 	require.NoError(t, err, "TEST Failed.\n")
 	require.NotNil(t, resp, "TEST Failed.\n")
