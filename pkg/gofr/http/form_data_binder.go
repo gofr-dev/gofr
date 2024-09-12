@@ -71,22 +71,32 @@ func (*formData) setStructValue(value reflect.Value, data string) (bool, error) 
 		return false, err
 	}
 
-	for key, val := range dataMap {
-		field, err := getFieldByName(value, key)
-		if err != nil {
-			return false, err
-		}
-
-		if err := setFieldValueFromData(field, val); err != nil {
-			return false, err
-		}
-
-		// Return true and nil error once a field is set
-		return true, nil
+	if len(dataMap) == 0 {
+		// Return false and an error if no fields were set
+		return false, errFieldsNotSet
 	}
 
-	// Return false and an error if no fields were set
-	return false, errFieldsNotSet
+	var (
+		key string
+		val any
+	)
+
+	for key, val = range dataMap {
+		// we only need to iterate to get one element
+		break
+	}
+
+	field, err := getFieldByName(value, key)
+	if err != nil {
+		return false, err
+	}
+
+	if err := setFieldValueFromData(field, val); err != nil {
+		return false, err
+	}
+
+	// Return true and nil error once a field is set
+	return true, nil
 }
 
 // getFieldByName retrieves a field by its name, considering case insensitivity.
