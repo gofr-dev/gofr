@@ -33,8 +33,8 @@ type options func(c *Container, ctrl *gomock.Controller) any
 func WithMockHTTPService(httpServiceNames ...string) options {
 	return func(c *Container, ctrl *gomock.Controller) any {
 		mockservice := service.NewMockHTTP(ctrl)
-		for i := range httpServiceNames {
-			c.Services[httpServiceNames[i]] = mockservice
+		for _, s := range httpServiceNames {
+			c.Services[s] = mockservice
 		}
 
 		return mockservice
