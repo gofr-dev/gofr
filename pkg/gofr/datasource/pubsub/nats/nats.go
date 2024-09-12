@@ -58,16 +58,13 @@ type natsClient struct {
 	fetchFunc func(*nats.Subscription, int, ...nats.PullOpt) ([]*nats.Msg, error)
 }
 
+// Update the natsConnection struct to use this interface
 type natsConnection struct {
-	*nats.Conn
-}
-
-func (nc *natsConnection) Status() nats.Status {
-	return nc.Conn.Status()
+	NatsConn
 }
 
 func (nc *natsConnection) JetStream(opts ...nats.JSOpt) (JetStreamContext, error) {
-	js, err := nc.Conn.JetStream(opts...)
+	js, err := nc.NatsConn.JetStream(opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -89,7 +86,7 @@ func New(conf Config, logger pubsub.Logger, metrics Metrics) (*natsClient, error
 		return nil, err
 	}
 
-	conn := &natsConnection{Conn: nc}
+	conn := &natsConnection{NatsConn: nc}
 
 	js, err := jetStreamCreate(nc)
 	if err != nil {

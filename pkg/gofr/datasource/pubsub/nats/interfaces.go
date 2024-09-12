@@ -86,3 +86,11 @@ type JetStreamContext interface {
 	ConsumersInfo(stream string, opts ...nats.JSOpt) <-chan *nats.ConsumerInfo
 	AccountInfo(opts ...nats.JSOpt) (*nats.AccountInfo, error)
 }
+
+// NatsConn interface abstracts the necessary methods from nats.Conn
+type NatsConn interface {
+	Status() nats.Status
+	JetStream(opts ...nats.JSOpt) (nats.JetStreamContext, error)
+	Close()
+	Drain() error
+}
