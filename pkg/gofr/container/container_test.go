@@ -160,15 +160,15 @@ func TestContainer_Close(t *testing.T) {
 	controller := gomock.NewController(t)
 	defer controller.Finish()
 
-	mockDB := NewMockDB(controller)
+	mockDB, sqlMock, _ := gofrSql.NewSQLMocks(t)
 	mockRedis := NewMockRedis(controller)
 	mockPubSub := &MockPubSub{}
 
-	mockDB.EXPECT().Close().Return(nil)
 	mockRedis.EXPECT().Close().Return(nil)
+	sqlMock.ExpectClose()
 
 	c := NewContainer(config.NewMockConfig(nil))
-	c.SQL = mockDB
+	c.SQL = &sqlMockDB{mockDB, &expectedQuery{}, logging.NewLogger(logging.DEBUG)}
 	c.Redis = mockRedis
 	c.PubSub = mockPubSub
 
