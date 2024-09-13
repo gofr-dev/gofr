@@ -13,20 +13,36 @@ import (
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 	"gofr.dev/pkg/gofr/datasource/sql"
 	"gofr.dev/pkg/gofr/logging"
+	"gofr.dev/pkg/gofr/service"
 )
 
 type Mocks struct {
-	Redis      *MockRedis
-	SQL        *mockSQL
-	Clickhouse *MockClickhouse
-	Cassandra  *MockCassandra
-	Mongo      *MockMongo
-	KVStore    *MockKVStore
+	Redis       *MockRedis
+	SQL         *mockSQL
+	Clickhouse  *MockClickhouse
+	Cassandra   *MockCassandra
+	Mongo       *MockMongo
+	KVStore     *MockKVStore
 	DGraph     *MockDgraph
-	File       *file.MockFileSystemProvider
+	File        *file.MockFileSystemProvider
+	HTTPService *service.MockHTTP
 }
 
-func NewMockContainer(t *testing.T) (*Container, Mocks) {
+type options func(c *Container, ctrl *gomock.Controller) any
+
+//nolint:revive //Because user should not access the options, and we might change it to an interface in the future.
+func WithMockHTTPService(httpServiceNames ...string) options {
+	return func(c *Container, ctrl *gomock.Controller) any {
+		mockservice := service.NewMockHTTP(ctrl)
+		for _, s := range httpServiceNames {
+			c.Services[s] = mockservice
+		}
+
+		return mockservice
+	}
+}
+
+func NewMockContainer(t *testing.T, options ...options) (*Container, Mocks) {
 	t.Helper()
 
 	container := &Container{}
@@ -66,14 +82,28 @@ func NewMockContainer(t *testing.T) (*Container, Mocks) {
 	dgraphMock := NewMockDgraph(ctrl)
 	container.DGraph = dgraphMock
 
+	var httpMock *service.MockHTTP
+
+	container.Services = make(map[string]service.HTTP)
+
+	for _, option := range options {
+		optionsAdded := option(container, ctrl)
+
+		val, ok := optionsAdded.(*service.MockHTTP)
+		if ok {
+			httpMock = val
+		}
+	}
+
 	mocks := Mocks{
-		Redis:      redisMock,
-		SQL:        sqlMockWrapper,
-		Clickhouse: clickhouseMock,
-		Cassandra:  cassandraMock,
-		Mongo:      mongoMock,
-		KVStore:    kvStoreMock,
-		File:       fileStoreMock,
+		Redis:       redisMock,
+		SQL:         sqlMockWrapper,
+		Clickhouse:  clickhouseMock,
+		Cassandra:   cassandraMock,
+		Mongo:       mongoMock,
+		KVStore:     kvStoreMock,
+		File:        fileStoreMock,
+		HTTPService: httpMock,
 	}
 
 	redisMock.EXPECT().Close().AnyTimes()
