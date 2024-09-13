@@ -47,7 +47,6 @@ type testNATSClient struct {
 	mockJetStream *mockJetStream
 }
 
-// Update the Health method in the testNATSClient struct
 func (c *testNATSClient) Health() datasource.Health {
 	health := datasource.Health{
 		Details: make(map[string]interface{}),
@@ -57,6 +56,9 @@ func (c *testNATSClient) Health() datasource.Health {
 	connectionStatus := c.mockConn.Status()
 
 	switch connectionStatus {
+	case nats.CONNECTING:
+		health.Status = datasource.StatusUp
+		health.Details["connection_status"] = jetstreamConnecting
 	case nats.CONNECTED:
 		health.Details["connection_status"] = jetstreamConnected
 	case nats.CLOSED, nats.DISCONNECTED, nats.RECONNECTING, nats.DRAINING_PUBS, nats.DRAINING_SUBS:
@@ -103,7 +105,6 @@ func TestNATSClient_HealthStatusUP(t *testing.T) {
 	assert.Equal(t, jetstreamStatusOK, health.Details["jetstream_status"])
 }
 
-// Update the TestNATSClient_HealthStatusDown function
 func TestNATSClient_HealthStatusDown(t *testing.T) {
 	client := &testNATSClient{
 		NATSClient: NATSClient{

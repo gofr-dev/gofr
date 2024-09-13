@@ -10,6 +10,7 @@ const (
 	jetstreamStatusOK     = "OK"
 	jetstreamStatusError  = "Error"
 	jetstreamConnected    = "CONNECTED"
+	jetstreamConnecting   = "CONNECTING"
 	jetstreamDisconnected = "DISCONNECTED"
 )
 
@@ -22,6 +23,9 @@ func (n *NATSClient) Health() datasource.Health {
 	connectionStatus := n.conn.Status()
 
 	switch connectionStatus {
+	case nats.CONNECTING:
+		health.Status = datasource.StatusUp
+		health.Details["connection_status"] = jetstreamConnecting
 	case nats.CONNECTED:
 		health.Details["connection_status"] = jetstreamConnected
 	case nats.CLOSED, nats.DISCONNECTED, nats.RECONNECTING, nats.DRAINING_PUBS, nats.DRAINING_SUBS:
@@ -48,5 +52,6 @@ func getJetstreamStatus(js JetStreamContext) string {
 	if err != nil {
 		return jetstreamStatusError + ": " + err.Error()
 	}
+
 	return jetstreamStatusOK
 }
