@@ -270,6 +270,7 @@ func (d *DB) selectStruct(ctx context.Context, query string, args []interface{},
 		d.logger.Errorf("error running query: %v", err)
 		return
 	}
+
 	for rows.Next() {
 		d.rowsToStruct(rows, rv)
 	}
