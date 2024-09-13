@@ -9,8 +9,8 @@ scaled and maintained according to its own requirement.
 
 ## Design choice
 
-In GoFr application if a user wants to use the Publisher-Subscriber design, it supports two message brokers—Apache Kafka
-and Google PubSub.
+In GoFr application if a user wants to use the Publisher-Subscriber design, it supports several message brokers, 
+including Apache Kafka, Google PubSub, MQTT, and NATS JetStream.
 The initialization of the PubSub is done in an IoC container which handles the PubSub client dependency.
 With this, the control lies with the framework and thus promotes modularity, testability, and re-usability.
 Users can do publish and subscribe to multiple topics in a single application, by providing the topic name.
@@ -175,6 +175,25 @@ docker run -d \
   eclipse-mosquitto:latest
 ```
 > **Note**: find the default mosquitto config file {% new-tab-link title="here" href="https://github.com/eclipse/mosquitto/blob/master/mosquitto.conf" /%}
+ 
+### NATS JetStream
+
+#### Configs
+```dotenv
+PUBSUB_BACKEND=NATS
+NATS_SERVER=nats://localhost:4222
+NATS_CREDS_FILE=/path/to/creds.json
+```
+
+#### Docker setup
+```shell
+docker run -d \
+  --name nats \
+  -p 4222:4222 \
+  -p 8222:8222 \
+  -v <path-to>/nats.conf:/nats/config/nats.conf \
+  nats:2.9.16
+``` 
 
 ## Subscribing
 Adding a subscriber is similar to adding an HTTP handler, which makes it easier to develop scalable applications,
