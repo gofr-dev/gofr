@@ -240,7 +240,7 @@ func (d *DB) Select(ctx context.Context, data interface{}, query string, args ..
 	}
 }
 
-func (d *DB) selectSlice(ctx context.Context, query string, args []interface{}, rvo reflect.Value, rv reflect.Value) {
+func (d *DB) selectSlice(ctx context.Context, query string, args []interface{}, rvo, rv reflect.Value) {
 	rows, err := d.QueryContext(ctx, query, args...)
 	if err != nil {
 		d.logger.Errorf("error running query: %v", err)
