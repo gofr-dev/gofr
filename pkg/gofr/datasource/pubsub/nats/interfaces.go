@@ -10,7 +10,7 @@ import (
 )
 
 type MsgMetadata struct {
-	MsgId      string
+	MsgID      string
 	Stream     string
 	Subject    string
 	Sequence   uint64
@@ -19,7 +19,7 @@ type MsgMetadata struct {
 	ReplyChain []string
 }
 
-// Msg represents a NATS message
+// Msg represents a NATS message.
 type Msg interface {
 	Ack() error
 	Data() []byte
@@ -42,6 +42,7 @@ type Client interface {
 	Close() error
 }
 
+// Subscription represents a NATS subscription.
 type Subscription interface {
 	Fetch(batch int, opts ...nats.PullOpt) ([]*nats.Msg, error)
 	Drain() error
@@ -87,7 +88,7 @@ type JetStreamContext interface {
 	AccountInfo(opts ...nats.JSOpt) (*nats.AccountInfo, error)
 }
 
-// NatsConn interface abstracts the necessary methods from nats.Conn
+// NatsConn interface abstracts the necessary methods from nats.Conn.
 type NatsConn interface {
 	Status() nats.Status
 	JetStream(opts ...nats.JSOpt) (nats.JetStreamContext, error)

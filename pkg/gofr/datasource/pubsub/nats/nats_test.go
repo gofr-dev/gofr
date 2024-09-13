@@ -2,7 +2,6 @@ package nats
 
 import (
 	"context"
-	"errors"
 	"sync"
 	"testing"
 	"time"
@@ -24,7 +23,7 @@ func TestValidateConfigs(t *testing.T) {
 		{
 			name: "Valid Config",
 			config: Config{
-				Server: "nats://localhost:4222",
+				Server: natsServer,
 				Stream: StreamConfig{Subject: "test-stream"},
 			},
 			expected: nil,
@@ -37,7 +36,7 @@ func TestValidateConfigs(t *testing.T) {
 		{
 			name: "Empty Stream Subject",
 			config: Config{
-				Server: "nats://localhost:4222",
+				Server: natsServer,
 			},
 			expected: errStreamNotProvided,
 		},
@@ -45,7 +44,7 @@ func TestValidateConfigs(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := validateConfigs(tc.config)
+			err := validateConfigs(&tc.config)
 			assert.Equal(t, tc.expected, err)
 		})
 	}
@@ -60,14 +59,15 @@ func TestNATSClient_Publish(t *testing.T) {
 
 	logs := testutil.StdoutOutputForFunc(func() {
 		logger := logging.NewMockLogger(logging.DEBUG)
-		client := &natsClient{
+		client := &NatsClient{
 			js:      mockJS,
 			logger:  logger,
 			metrics: mockMetrics,
-			config:  Config{Server: "nats://localhost:4222"},
+			config:  &Config{Server: natsServer},
 		}
 
 		ctx := context.TODO()
+
 		mockJS.EXPECT().Publish("test", []byte(`hello`)).Return(&nats.PubAck{}, nil)
 		mockMetrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_publish_total_count", "stream", "test")
 		mockMetrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_publish_success_count", "stream", "test")
@@ -93,7 +93,7 @@ func TestNATSClient_PublishError(t *testing.T) {
 
 	testCases := []struct {
 		desc      string
-		client    *natsClient
+		client    *NatsClient
 		stream    string
 		msg       []byte
 		setupMock func()
@@ -102,7 +102,7 @@ func TestNATSClient_PublishError(t *testing.T) {
 	}{
 		{
 			desc: "error JetStream is nil",
-			client: &natsClient{
+			client: &NatsClient{
 				js:      nil,
 				metrics: mockMetrics,
 			},
@@ -113,7 +113,7 @@ func TestNATSClient_PublishError(t *testing.T) {
 		},
 		{
 			desc: "error stream is not provided",
-			client: &natsClient{
+			client: &NatsClient{
 				js:      mockJS,
 				metrics: mockMetrics,
 			},
@@ -121,15 +121,15 @@ func TestNATSClient_PublishError(t *testing.T) {
 		},
 		{
 			desc: "error while publishing message",
-			client: &natsClient{
+			client: &NatsClient{
 				js:      mockJS,
 				metrics: mockMetrics,
 			},
 			stream: "test",
 			setupMock: func() {
-				mockJS.EXPECT().Publish("test", gomock.Any()).Return(nil, errors.New("publish error"))
+				mockJS.EXPECT().Publish("test", gomock.Any()).Return(nil, errPublish)
 			},
-			expErr: errors.New("publish error"),
+			expErr: errPublish,
 			expLog: "failed to publish message to NATS JetStream",
 		},
 	}
@@ -139,7 +139,10 @@ func TestNATSClient_PublishError(t *testing.T) {
 			if tc.setupMock != nil {
 				tc.setupMock()
 			}
-			mockMetrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_publish_total_count", "stream", tc.stream).AnyTimes()
+
+			mockMetrics.EXPECT().
+				IncrementCounter(gomock.Any(), "app_pubsub_publish_total_count", "stream", tc.stream).
+				AnyTimes()
 
 			logs := testutil.StderrOutputForFunc(func() {
 				logger := logging.NewMockLogger(logging.DEBUG)
@@ -167,19 +170,19 @@ func TestNATSClient_SubscribeSuccess(t *testing.T) {
 
 	logs := testutil.StdoutOutputForFunc(func() {
 		logger := logging.NewMockLogger(logging.DEBUG)
-		client := &natsClient{
+		client := &NatsClient{
 			js:      mockJS,
 			logger:  logger,
 			metrics: mockMetrics,
-			config: Config{
-				Server:   "nats://localhost:4222",
+			config: &Config{
+				Server:   natsServer,
 				Consumer: "test-consumer",
 				MaxWait:  time.Second,
 			},
 			mu: &sync.RWMutex{},
 		}
 
-		client.fetchFunc = func(sub *nats.Subscription, batch int, opts ...nats.PullOpt) ([]*nats.Msg, error) {
+		client.fetchFunc = func(_ *nats.Subscription, _ int, _ ...nats.PullOpt) ([]*nats.Msg, error) {
 			return []*nats.Msg{mockMsg}, nil
 		}
 
@@ -211,11 +214,11 @@ func TestNATSClient_SubscribeError(t *testing.T) {
 
 	logs := testutil.StderrOutputForFunc(func() {
 		logger := logging.NewMockLogger(logging.DEBUG)
-		client := &natsClient{
+		client := &NatsClient{
 			js:      mockJS,
 			logger:  logger,
 			metrics: mockMetrics,
-			config: Config{
+			config: &Config{
 				Server:   "nats://localhost:4222",
 				Consumer: "test-consumer",
 			},
@@ -223,11 +226,12 @@ func TestNATSClient_SubscribeError(t *testing.T) {
 		}
 
 		ctx := context.TODO()
-		mockJS.EXPECT().PullSubscribe("test", "test-consumer", gomock.Any()).Return(nil, errors.New("subscribe error"))
+
+		mockJS.EXPECT().PullSubscribe("test", "test-consumer", gomock.Any()).Return(nil, errSubscribe)
 		mockMetrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_subscribe_total_count", "stream", "test", "consumer", "test-consumer")
 
 		msg, err := client.Subscribe(ctx, "test")
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Nil(t, msg)
 		assert.Contains(t, err.Error(), "failed to create or attach consumer")
 	})
@@ -242,10 +246,10 @@ func TestNATSClient_Close(t *testing.T) {
 	mockConn := NewMockConnection(ctrl)
 	mockJS := NewMockJetStreamContext(ctrl)
 
-	client := &natsClient{
+	client := &NatsClient{
 		conn: mockConn,
 		js:   mockJS,
-		config: Config{
+		config: &Config{
 			Stream: StreamConfig{Subject: "test-stream"},
 		},
 	}
@@ -262,44 +266,72 @@ func TestNew(t *testing.T) {
 	defer ctrl.Finish()
 
 	testCases := []struct {
-		name      string
-		config    Config
-		setupMock func()
-		expectNil bool
+		name                string
+		config              Config
+		natsConnectFunc     func(string, ...nats.Option) (*nats.Conn, error)
+		jetStreamCreateFunc func(*nats.Conn, ...nats.JSOpt) (JetStreamContext, error)
+		expectErr           bool
 	}{
 		{
-			name:      "Empty Server",
-			config:    Config{},
-			expectNil: true,
+			name:   "Empty Server",
+			config: Config{},
+			natsConnectFunc: func(_ string, _ ...nats.Option) (*nats.Conn, error) {
+				return &nats.Conn{}, nil
+			},
+			jetStreamCreateFunc: func(_ *nats.Conn, _ ...nats.JSOpt) (JetStreamContext, error) {
+				return NewMockJetStreamContext(ctrl), nil
+			},
+			expectErr: true, // We expect an error due to empty server
 		},
 		{
 			name: "Valid Config",
 			config: Config{
-				Server: "nats://localhost:4222",
+				Server: natsServer,
 				Stream: StreamConfig{Subject: "test-stream"},
 			},
-			setupMock: func() {
-				mockJS := NewMockJetStreamContext(ctrl)
-
-				natsConnect = func(serverURL string, opts ...nats.Option) (*nats.Conn, error) {
-					return &nats.Conn{}, nil
-				}
-				jetStreamCreate = func(conn *nats.Conn, opts ...nats.JSOpt) (JetStreamContext, error) {
-					return mockJS, nil
-				}
+			natsConnectFunc: func(_ string, _ ...nats.Option) (*nats.Conn, error) {
+				return &nats.Conn{}, nil
 			},
-			expectNil: false,
+			jetStreamCreateFunc: func(_ *nats.Conn, _ ...nats.JSOpt) (JetStreamContext, error) {
+				return NewMockJetStreamContext(ctrl), nil
+			},
+			expectErr: false,
+		},
+		{
+			name: "Error in natsConnectFunc",
+			config: Config{
+				Server: natsServer,
+				Stream: StreamConfig{Subject: "test-stream"},
+			},
+			natsConnectFunc: func(_ string, _ ...nats.Option) (*nats.Conn, error) {
+				return nil, errNATSConnection
+			},
+			jetStreamCreateFunc: func(_ *nats.Conn, _ ...nats.JSOpt) (JetStreamContext, error) {
+				return NewMockJetStreamContext(ctrl), nil
+			},
+			expectErr: true,
+		},
+		{
+			name: "Error in jetStreamCreateFunc",
+			config: Config{
+				Server: natsServer,
+				Stream: StreamConfig{Subject: "test-stream"},
+			},
+			natsConnectFunc: func(_ string, _ ...nats.Option) (*nats.Conn, error) {
+				return &nats.Conn{}, nil
+			},
+			jetStreamCreateFunc: func(_ *nats.Conn, _ ...nats.JSOpt) (JetStreamContext, error) {
+				return nil, errJetStream
+			},
+			expectErr: true,
 		},
 	}
 
 	for _, tc := range testCases {
+		tc := tc // capture range variable
 		t.Run(tc.name, func(t *testing.T) {
-			if tc.setupMock != nil {
-				tc.setupMock()
-			}
-
-			client, err := New(tc.config, logging.NewMockLogger(logging.ERROR), NewMockMetrics(ctrl))
-			if tc.expectNil {
+			client, err := New(&tc.config, logging.NewMockLogger(logging.ERROR), NewMockMetrics(ctrl), tc.natsConnectFunc, tc.jetStreamCreateFunc)
+			if tc.expectErr {
 				assert.Nil(t, client)
 				assert.Error(t, err)
 			} else {
@@ -315,7 +347,7 @@ func TestNatsClient_DeleteStream(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockJS := NewMockJetStreamContext(ctrl)
-	client := &natsClient{js: mockJS}
+	client := &NatsClient{js: mockJS}
 
 	ctx := context.Background()
 	streamName := "test-stream"
@@ -331,7 +363,7 @@ func TestNatsClient_CreateStream(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockJS := NewMockJetStreamContext(ctrl)
-	client := &natsClient{js: mockJS}
+	client := &NatsClient{js: mockJS}
 
 	ctx := context.Background()
 	streamName := "test-stream"
