@@ -1,8 +1,6 @@
 module gofr.dev/pkg/gofr/datasource/file/sftp
 
-go 1.22.6
-
-toolchain go1.22.7
+go 1.22
 
 replace gofr.dev => ../../../../../../gofr
 

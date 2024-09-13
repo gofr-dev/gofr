@@ -1,9 +1,10 @@
 package dgraph
 
 import (
+	"testing"
+
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
-	"testing"
 )
 
 func Test_PrettyPrint(t *testing.T) {

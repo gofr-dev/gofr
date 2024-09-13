@@ -43,7 +43,7 @@ func TestClient_Connect_Success(t *testing.T) {
 	require.True(t, mockMetrics.ctrl.Satisfied())
 }
 
-func Test_Query_Success1(t *testing.T) {
+func Test_Query_Success(t *testing.T) {
 	client, mockDgraphClient, mockLogger, mockMetrics := setupDB(t)
 
 	mockTxn := NewMockTxn(mockDgraphClient.ctrl)
