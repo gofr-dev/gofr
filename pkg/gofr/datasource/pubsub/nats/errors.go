@@ -7,7 +7,7 @@ var (
 	ErrFailedToCreateConsumer = errors.New("failed to create or attach consumer")
 	errPublisherNotConfigured = errors.New("can't publish message: publisher not configured or stream is empty")
 	errPublish                = errors.New("failed to publish message to NATS JetStream")
-	errSubscribe              = errors.New("failed to create or attach consumer")
+	errSubscribe              = errors.New("subscribe error")
 	ErrNoMessagesReceived     = errors.New("no messages received")
 	errServerNotProvided      = errors.New("NATS server address not provided")
 	errNATSConnection         = errors.New("failed to connect to NATS server")

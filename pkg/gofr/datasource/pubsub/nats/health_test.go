@@ -2,7 +2,6 @@ package nats
 
 import (
 	"context"
-	"errors" // Import the errors package
 	"testing"
 
 	"github.com/nats-io/nats.go"
@@ -18,7 +17,6 @@ const (
 )
 
 // Define jetstreamError as an error
-var jetstreamError = errors.New("jetstream error")
 
 // mockConn is a minimal mock implementation of nats.Conn.
 type mockConn struct {
@@ -49,20 +47,28 @@ type testNATSClient struct {
 	mockJetStream *mockJetStream
 }
 
+// Update the Health method in the testNATSClient struct
 func (c *testNATSClient) Health() datasource.Health {
 	health := datasource.Health{
 		Details: make(map[string]interface{}),
 	}
 
 	health.Status = datasource.StatusUp
+	connectionStatus := c.mockConn.Status()
 
-	if c.mockConn != nil && c.mockConn.Status() != nats.CONNECTED {
+	switch connectionStatus {
+	case nats.CONNECTED:
+		health.Details["connection_status"] = jetstreamConnected
+	case nats.CLOSED, nats.DISCONNECTED, nats.RECONNECTING, nats.DRAINING_PUBS, nats.DRAINING_SUBS:
 		health.Status = datasource.StatusDown
+		health.Details["connection_status"] = jetstreamDisconnected
+	default:
+		health.Status = datasource.StatusDown
+		health.Details["connection_status"] = connectionStatus.String()
 	}
 
 	health.Details["host"] = c.config.Server
 	health.Details["backend"] = natsBackend
-	health.Details["connection_status"] = c.mockConn.Status().String()
 	health.Details["jetstream_enabled"] = c.mockJetStream != nil
 
 	if c.mockJetStream != nil {
@@ -97,6 +103,7 @@ func TestNATSClient_HealthStatusUP(t *testing.T) {
 	assert.Equal(t, jetstreamStatusOK, health.Details["jetstream_status"])
 }
 
+// Update the TestNATSClient_HealthStatusDown function
 func TestNATSClient_HealthStatusDown(t *testing.T) {
 	client := &testNATSClient{
 		NATSClient: NATSClient{
@@ -122,7 +129,7 @@ func TestNATSClient_HealthJetStreamError(t *testing.T) {
 			logger: logging.NewMockLogger(logging.DEBUG),
 		},
 		mockConn:      &mockConn{status: nats.CONNECTED},
-		mockJetStream: &mockJetStream{accountInfoErr: jetstreamError},
+		mockJetStream: &mockJetStream{accountInfoErr: errJetStream},
 	}
 
 	health := client.Health()
@@ -132,7 +139,7 @@ func TestNATSClient_HealthJetStreamError(t *testing.T) {
 	assert.Equal(t, natsBackend, health.Details["backend"])
 	assert.Equal(t, jetstreamConnected, health.Details["connection_status"])
 	assert.Equal(t, true, health.Details["jetstream_enabled"])
-	assert.Equal(t, jetstreamStatusError+": "+jetstreamError.Error(), health.Details["jetstream_status"])
+	assert.Equal(t, jetstreamStatusError+": "+errJetStream.Error(), health.Details["jetstream_status"])
 }
 
 func TestNATSClient_Health(t *testing.T) {
@@ -174,7 +181,7 @@ func TestNATSClient_Health(t *testing.T) {
 			name: "JetStreamError",
 			setupMocks: func(mockConn *MockConnection, mockJS *MockJetStreamContext) {
 				mockConn.EXPECT().Status().Return(nats.CONNECTED).AnyTimes()
-				mockJS.EXPECT().AccountInfo(gomock.Any()).Return(nil, jetstreamError)
+				mockJS.EXPECT().AccountInfo(gomock.Any()).Return(nil, errJetStream)
 			},
 			expectedStatus: datasource.StatusUp,
 			expectedDetails: map[string]interface{}{
@@ -182,7 +189,7 @@ func TestNATSClient_Health(t *testing.T) {
 				"backend":           natsBackend,
 				"connection_status": jetstreamConnected,
 				"jetstream_enabled": true,
-				"jetstream_status":  jetstreamStatusError + ": " + jetstreamError.Error(),
+				"jetstream_status":  jetstreamStatusError + ": " + errJetStream.Error(),
 			},
 		},
 		{
