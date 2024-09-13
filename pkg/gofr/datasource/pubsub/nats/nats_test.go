@@ -234,6 +234,7 @@ func TestNATSClient_SubscribeError(t *testing.T) {
 		require.Error(t, err)
 		assert.Nil(t, msg)
 		assert.Contains(t, err.Error(), "failed to create or attach consumer")
+		assert.Contains(t, err.Error(), "subscribe error")
 	})
 
 	assert.Contains(t, logs, "failed to create or attach consumer: subscribe error")

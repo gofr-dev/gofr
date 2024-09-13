@@ -3,6 +3,7 @@ package nats
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -147,8 +148,8 @@ func (n *NATSClient) Subscribe(ctx context.Context, stream string) (*pubsub.Mess
 
 	sub, err := n.js.PullSubscribe(stream, n.config.Consumer, nats.PullMaxWaiting(n.config.MaxPullWait))
 	if err != nil {
-		n.logger.Error(err.Error())
-		return nil, errSubscribe
+		n.logger.Errorf("failed to create or attach consumer: %v", err)
+		return nil, fmt.Errorf("failed to create or attach consumer: %w", err)
 	}
 
 	var msgs []*nats.Msg
@@ -161,6 +162,10 @@ func (n *NATSClient) Subscribe(ctx context.Context, stream string) (*pubsub.Mess
 	if err != nil {
 		n.logger.Errorf("failed to fetch messages: %v", err)
 		return nil, err
+	}
+
+	if len(msgs) == 0 {
+		return nil, ErrNoMessagesReceived
 	}
 
 	if len(msgs) == 0 {
