@@ -59,7 +59,7 @@ func TestNATSClient_Publish(t *testing.T) {
 
 	logs := testutil.StdoutOutputForFunc(func() {
 		logger := logging.NewMockLogger(logging.DEBUG)
-		client := &NatsClient{
+		client := &NATSClient{
 			js:      mockJS,
 			logger:  logger,
 			metrics: mockMetrics,
@@ -93,7 +93,7 @@ func TestNATSClient_PublishError(t *testing.T) {
 
 	testCases := []struct {
 		desc      string
-		client    *NatsClient
+		client    *NATSClient
 		stream    string
 		msg       []byte
 		setupMock func()
@@ -102,7 +102,7 @@ func TestNATSClient_PublishError(t *testing.T) {
 	}{
 		{
 			desc: "error JetStream is nil",
-			client: &NatsClient{
+			client: &NATSClient{
 				js:      nil,
 				metrics: mockMetrics,
 			},
@@ -113,7 +113,7 @@ func TestNATSClient_PublishError(t *testing.T) {
 		},
 		{
 			desc: "error stream is not provided",
-			client: &NatsClient{
+			client: &NATSClient{
 				js:      mockJS,
 				metrics: mockMetrics,
 			},
@@ -121,7 +121,7 @@ func TestNATSClient_PublishError(t *testing.T) {
 		},
 		{
 			desc: "error while publishing message",
-			client: &NatsClient{
+			client: &NATSClient{
 				js:      mockJS,
 				metrics: mockMetrics,
 			},
@@ -170,7 +170,7 @@ func TestNATSClient_SubscribeSuccess(t *testing.T) {
 
 	logs := testutil.StdoutOutputForFunc(func() {
 		logger := logging.NewMockLogger(logging.DEBUG)
-		client := &NatsClient{
+		client := &NATSClient{
 			js:      mockJS,
 			logger:  logger,
 			metrics: mockMetrics,
@@ -214,7 +214,7 @@ func TestNATSClient_SubscribeError(t *testing.T) {
 
 	logs := testutil.StderrOutputForFunc(func() {
 		logger := logging.NewMockLogger(logging.DEBUG)
-		client := &NatsClient{
+		client := &NATSClient{
 			js:      mockJS,
 			logger:  logger,
 			metrics: mockMetrics,
@@ -246,7 +246,7 @@ func TestNATSClient_Close(t *testing.T) {
 	mockConn := NewMockConnection(ctrl)
 	mockJS := NewMockJetStreamContext(ctrl)
 
-	client := &NatsClient{
+	client := &NATSClient{
 		conn: mockConn,
 		js:   mockJS,
 		config: &Config{
@@ -347,7 +347,7 @@ func TestNatsClient_DeleteStream(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockJS := NewMockJetStreamContext(ctrl)
-	client := &NatsClient{js: mockJS}
+	client := &NATSClient{js: mockJS}
 
 	ctx := context.Background()
 	streamName := "test-stream"
@@ -363,7 +363,7 @@ func TestNatsClient_CreateStream(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockJS := NewMockJetStreamContext(ctrl)
-	client := &NatsClient{js: mockJS}
+	client := &NATSClient{js: mockJS}
 
 	ctx := context.Background()
 	streamName := "test-stream"
