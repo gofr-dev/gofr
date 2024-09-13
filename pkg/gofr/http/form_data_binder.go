@@ -120,29 +120,13 @@ func (*formData) setStructValue(value reflect.Value, data string) (bool, error) 
 func setFieldValueFromData(field reflect.Value, data interface{}) error {
 	switch field.Kind() {
 	case reflect.String:
-		if val, ok := data.(string); ok {
-			field.SetString(val)
-		} else {
-			return fmt.Errorf("%w: expected string but got %T", errUnsupportedFieldType, data)
-		}
+		return setStringField(field, data)
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		if val, ok := data.(int); ok {
-			field.SetInt(int64(val))
-		} else {
-			return fmt.Errorf("%w: expected int but got %T", errUnsupportedFieldType, data)
-		}
+		return setIntField(field, data)
 	case reflect.Float32, reflect.Float64:
-		if val, ok := data.(float64); ok {
-			field.SetFloat(val)
-		} else {
-			return fmt.Errorf("%w: expected float64 but got %T", errUnsupportedFieldType, data)
-		}
+		return setFloatField(field, data)
 	case reflect.Bool:
-		if val, ok := data.(bool); ok {
-			field.SetBool(val)
-		} else {
-			return fmt.Errorf("%w: expected bool but got %T", errUnsupportedFieldType, data)
-		}
+		return setBoolField(field, data)
 	case reflect.Invalid, reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr,
 		reflect.Complex64, reflect.Complex128, reflect.Array, reflect.Chan, reflect.Func, reflect.Interface, reflect.Map,
 		reflect.Pointer, reflect.Slice, reflect.Struct, reflect.UnsafePointer:
@@ -150,8 +134,6 @@ func setFieldValueFromData(field reflect.Value, data interface{}) error {
 	default:
 		return fmt.Errorf("%w: %s, %T", errUnsupportedFieldType, field.Type().Name(), data)
 	}
-
-	return nil
 }
 
 type customUnmarshaller struct {
@@ -190,4 +172,40 @@ func parseStringToMap(data string) (map[string]interface{}, error) {
 	err := json.Unmarshal([]byte(data), &c)
 
 	return c.dataMap, err
+}
+
+func setStringField(field reflect.Value, data interface{}) error {
+	if val, ok := data.(string); ok {
+		field.SetString(val)
+		return nil
+	}
+
+	return fmt.Errorf("%w: expected string but got %T", errUnsupportedFieldType, data)
+}
+
+func setIntField(field reflect.Value, data interface{}) error {
+	if val, ok := data.(int); ok {
+		field.SetInt(int64(val))
+		return nil
+	}
+
+	return fmt.Errorf("%w: expected int but got %T", errUnsupportedFieldType, data)
+}
+
+func setFloatField(field reflect.Value, data interface{}) error {
+	if val, ok := data.(float64); ok {
+		field.SetFloat(val)
+		return nil
+	}
+
+	return fmt.Errorf("%w: expected float64 but got %T", errUnsupportedFieldType, data)
+}
+
+func setBoolField(field reflect.Value, data interface{}) error {
+	if val, ok := data.(bool); ok {
+		field.SetBool(val)
+		return nil
+	}
+
+	return fmt.Errorf("%w: expected bool but got %T", errUnsupportedFieldType, data)
 }
