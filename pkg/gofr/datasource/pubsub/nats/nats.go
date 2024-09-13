@@ -28,8 +28,8 @@ type StreamConfig struct {
 	DeliverPolicy nats.DeliverPolicy
 }
 
-// NatsClient represents a client for NATS JetStream operations.
-type NatsClient struct {
+// NATSClient represents a client for NATS JetStream operations.
+type NATSClient struct {
 	conn      Connection
 	js        JetStreamContext
 	mu        *sync.RWMutex
@@ -59,7 +59,7 @@ func New(conf *Config,
 	metrics Metrics,
 	natsConnect func(string, ...nats.Option) (*nats.Conn, error),
 	jetStreamCreate func(conn *nats.Conn, opts ...nats.JSOpt) (JetStreamContext, error),
-) (*NatsClient, error) {
+) (*NATSClient, error) {
 	if err := validateConfigs(conf); err != nil {
 		logger.Errorf("could not initialize NATS JetStream: %v", err)
 		return nil, err
@@ -83,7 +83,7 @@ func New(conf *Config,
 
 	logger.Logf("connected to NATS server '%s'", conf.Server)
 
-	return &NatsClient{
+	return &NATSClient{
 		conn:    conn,
 		js:      js,
 		mu:      &sync.RWMutex{},
@@ -93,7 +93,7 @@ func New(conf *Config,
 	}, nil
 }
 
-func (n *NatsClient) Publish(ctx context.Context, stream string, message []byte) error {
+func (n *NATSClient) Publish(ctx context.Context, stream string, message []byte) error {
 	ctx, span := otel.GetTracerProvider().Tracer("gofr").Start(ctx, "nats-publish")
 	defer span.End()
 
@@ -128,7 +128,7 @@ func (n *NatsClient) Publish(ctx context.Context, stream string, message []byte)
 	return nil
 }
 
-func (n *NatsClient) Subscribe(ctx context.Context, stream string) (*pubsub.Message, error) {
+func (n *NATSClient) Subscribe(ctx context.Context, stream string) (*pubsub.Message, error) {
 	if n.config.Consumer == "" {
 		n.logger.Error("consumer name not provided")
 		return nil, ErrConsumerNotProvided
@@ -191,7 +191,7 @@ func (n *NatsClient) Subscribe(ctx context.Context, stream string) (*pubsub.Mess
 	return m, nil
 }
 
-func (n *NatsClient) Close() error {
+func (n *NATSClient) Close() error {
 	var err error
 
 	if n.js != nil {
@@ -207,11 +207,11 @@ func (n *NatsClient) Close() error {
 	return err
 }
 
-func (n *NatsClient) DeleteStream(_ context.Context, name string) error {
+func (n *NATSClient) DeleteStream(_ context.Context, name string) error {
 	return n.js.DeleteStream(name)
 }
 
-func (n *NatsClient) CreateStream(_ context.Context, name string) error {
+func (n *NATSClient) CreateStream(_ context.Context, name string) error {
 	_, err := n.js.AddStream(&nats.StreamConfig{
 		Name:     name,
 		Subjects: []string{name},
@@ -220,7 +220,7 @@ func (n *NatsClient) CreateStream(_ context.Context, name string) error {
 	return err
 }
 
-func NewNATSClient(conf *Config, logger pubsub.Logger, metrics Metrics) (*NatsClient, error) {
+func NewNATSClient(conf *Config, logger pubsub.Logger, metrics Metrics) (*NATSClient, error) {
 	return New(conf, logger, metrics, nats.Connect, defaultJetStreamCreate)
 }
 

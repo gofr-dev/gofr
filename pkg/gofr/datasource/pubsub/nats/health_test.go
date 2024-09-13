@@ -38,9 +38,9 @@ func (m *mockJetStream) AccountInfo(_ context.Context) (*jetstream.AccountInfo, 
 	return &jetstream.AccountInfo{}, nil
 }
 
-// testNATSClient is a test-specific implementation of NatsClient.
+// testNATSClient is a test-specific implementation of NATSClient.
 type testNATSClient struct {
-	NatsClient
+	NATSClient
 	mockConn      *mockConn
 	mockJetStream *mockJetStream
 }
@@ -75,7 +75,7 @@ func (c *testNATSClient) Health() datasource.Health {
 
 func TestNATSClient_HealthStatusUP(t *testing.T) {
 	client := &testNATSClient{
-		NatsClient: NatsClient{
+		NATSClient: NATSClient{
 			config: &Config{Server: natsServer},
 			logger: logging.NewMockLogger(logging.DEBUG),
 		},
@@ -95,7 +95,7 @@ func TestNATSClient_HealthStatusUP(t *testing.T) {
 
 func TestNATSClient_HealthStatusDown(t *testing.T) {
 	client := &testNATSClient{
-		NatsClient: NatsClient{
+		NATSClient: NATSClient{
 			config: &Config{Server: natsServer},
 			logger: logging.NewMockLogger(logging.DEBUG),
 		},
@@ -113,7 +113,7 @@ func TestNATSClient_HealthStatusDown(t *testing.T) {
 
 func TestNATSClient_HealthJetStreamError(t *testing.T) {
 	client := &testNATSClient{
-		NatsClient: NatsClient{
+		NATSClient: NATSClient{
 			config: &Config{Server: natsServer},
 			logger: logging.NewMockLogger(logging.DEBUG),
 		},
@@ -206,7 +206,7 @@ func TestNATSClient_Health(t *testing.T) {
 
 			tc.setupMocks(mockConn, mockJS)
 
-			client := &NatsClient{
+			client := &NATSClient{
 				conn:   mockConn,
 				js:     mockJS,
 				config: &Config{Server: natsServer},

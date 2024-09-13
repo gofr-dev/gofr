@@ -17,7 +17,7 @@ const (
 	jetstreamError            = "Error: jetstream error"
 )
 
-func (n *NatsClient) Health() datasource.Health {
+func (n *NATSClient) Health() datasource.Health {
 	health := datasource.Health{
 		Details: make(map[string]interface{}),
 	}
