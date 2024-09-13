@@ -108,17 +108,13 @@ func (d *Client) Query(ctx context.Context, query string) (any, error) {
 		Duration: duration,
 	}
 
-	d.logger.Debug("executing dgraph query")
-	ql.PrettyPrint(d.logger)
-
 	if err != nil {
 		d.logger.Error("dgraph query failed: ", err)
+		ql.PrettyPrint(d.logger)
 		return nil, err
 	}
 
-	d.logger.Debugf("dgraph query succeeded in %dµs", duration)
-
-	d.metrics.RecordHistogram(ctx, "dgraph_query_duration", float64(duration))
+	d.sendOperationStats(ctx, ql, "dgraph query succeeded in %dµs", "dgraph_query_duration")
 
 	return resp, nil
 }
@@ -144,10 +140,7 @@ func (d *Client) QueryWithVars(ctx context.Context, query string, vars map[strin
 		return nil, err
 	}
 
-	d.logger.Debugf("dgraph queryWithVars succeeded in %dµs", duration)
-	ql.PrettyPrint(d.logger)
-
-	d.metrics.RecordHistogram(ctx, "dgraph_query_with_vars_duration", float64(duration))
+	d.sendOperationStats(ctx, ql, "dgraph queryWithVars succeeded in %dµs", "dgraph_query_with_vars_duration")
 
 	return resp, nil
 }
@@ -172,17 +165,14 @@ func (d *Client) Mutate(ctx context.Context, mu any) (any, error) {
 		URL:      mutation.String(),
 		Duration: duration,
 	}
-	d.logger.Debug("executing dgraph mutation")
-	ql.PrettyPrint(d.logger)
 
 	if err != nil {
 		d.logger.Error("dgraph mutation failed: ", err)
+		ql.PrettyPrint(d.logger)
 		return nil, err
 	}
 
-	d.logger.Debugf("dgraph mutation succeeded in %dµs", duration)
-
-	d.metrics.RecordHistogram(ctx, "dgraph_mutate_duration", float64(duration))
+	d.sendOperationStats(ctx, ql, "dgraph mutation succeeded in %dµs", "dgraph_mutate_duration")
 
 	return resp, nil
 }
@@ -215,11 +205,7 @@ func (d *Client) Alter(ctx context.Context, op any) error {
 		return err
 	}
 
-	d.logger.Debugf("dgraph alter succeeded in %dµs", duration)
-
-	ql.PrettyPrint(d.logger)
-
-	d.metrics.RecordHistogram(ctx, "dgraph_alter_duration", float64(duration))
+	d.sendOperationStats(ctx, ql, "dgraph alter succeeded in %dµs", "dgraph_alter_duration")
 
 	return nil
 }
@@ -248,4 +234,10 @@ func (d *Client) HealthCheck(ctx context.Context) (any, error) {
 	}
 
 	return nil, nil
+}
+
+func (d *Client) sendOperationStats(ctx context.Context, query *QueryLog, logString, metricName string) {
+	d.logger.Debugf(logString, query.Duration)
+	query.PrettyPrint(d.logger)
+	d.metrics.RecordHistogram(ctx, metricName, float64(query.Duration))
 }

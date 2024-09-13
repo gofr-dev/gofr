@@ -23,7 +23,7 @@ type Mocks struct {
 	Cassandra   *MockCassandra
 	Mongo       *MockMongo
 	KVStore     *MockKVStore
-	DGraph     *MockDgraph
+	DGraph      *MockDgraph
 	File        *file.MockFileSystemProvider
 	HTTPService *service.MockHTTP
 }
