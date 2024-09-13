@@ -113,12 +113,12 @@ func OAuth(key PublicKeyProvider) func(inner http.Handler) http.Handler {
 				return
 			}
 
-			if err := validateAuthorizationHeader(r.Header.Get("Authorization")); err != nil {
+			tokenString, err := extractToken(r.Header.Get("Authorization"))
+			if err != nil {
 				http.Error(w, err.Error(), http.StatusUnauthorized)
 				return
 			}
-
-			tokenString := extractTokenFromHeader(r.Header.Get("Authorization"))
+			
 			token, err := parseToken(tokenString, key)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusUnauthorized)
@@ -133,24 +133,18 @@ func OAuth(key PublicKeyProvider) func(inner http.Handler) http.Handler {
 	}
 }
 
-// ValidateAuthorizationHeader validates the format and presence of the Authorization header.
-func validateAuthorizationHeader(authHeader string) error {
+// ExtractToken validates the Authorization header and extracts the JWT token.
+func extractToken(authHeader string) (string, error) {
 	if authHeader == "" {
-		return errors.New("authorization header is required")
+		return "", errors.New("Authorization header is required")
 	}
 
-	headerParts := strings.Split(authHeader, " ")
-	if len(headerParts) != 2 || headerParts[0] != "Bearer" {
-		return errors.New("authorization header format must be Bearer {token}")
+	const bearerPrefix = "Bearer "
+	token, ok := strings.CutPrefix(authHeader, bearerPrefix)
+	if !ok || token == "" {
+		return "", errors.New("Authorization header format must be Bearer {token}")
 	}
-
-	return nil
-}
-
-// ExtractTokenFromHeader extracts the JWT token from the Authorization header.
-func extractTokenFromHeader(authHeader string) string {
-	headerParts := strings.Split(authHeader, " ")
-	return headerParts[1]
+	return token, nil
 }
 
 // ParseToken parses the JWT token using the provided key provider.
