@@ -72,63 +72,83 @@ func (*formData) setStructValue(value reflect.Value, data string) (bool, error) 
 	}
 
 	if len(dataMap) == 0 {
-		// Return false and an error if no fields were set
 		return false, errFieldsNotSet
 	}
 
-	var (
-		key string
-		val any
-	)
+	numFieldsSet := 0
 
-	for key, val = range dataMap {
-		// we only need to iterate to get one element
-		break
+	var multiErr error
+
+	// Create a map for case-insensitive lookups
+	caseInsensitiveMap := make(map[string]interface{})
+	for key, val := range dataMap {
+		caseInsensitiveMap[strings.ToLower(key)] = val
 	}
 
-	field, err := getFieldByName(value, key)
-	if err != nil {
-		return false, err
-	}
+	for i := 0; i < value.NumField(); i++ {
+		fieldType := value.Type().Field(i)
+		fieldValue := value.Field(i)
+		fieldName := fieldType.Name
 
-	if err := setFieldValueFromData(field, val); err != nil {
-		return false, err
-	}
-
-	// Return true and nil error once a field is set
-	return true, nil
-}
-
-// getFieldByName retrieves a field by its name, considering case insensitivity.
-func getFieldByName(value reflect.Value, key string) (reflect.Value, error) {
-	field := value.FieldByName(key)
-	if !field.IsValid() {
-		field = findFieldByNameIgnoreCase(value, key)
-		if !field.IsValid() {
-			return reflect.Value{}, fmt.Errorf("%w: %s", errFieldNotFound, key)
+		// Perform case-insensitive lookup for the key in dataMap
+		val, exists := caseInsensitiveMap[strings.ToLower(fieldName)]
+		if !exists {
+			continue
 		}
+
+		if !fieldValue.CanSet() {
+			multiErr = fmt.Errorf("%w: %s", errUnexportedField, fieldName)
+			continue
+		}
+
+		if err := setFieldValueFromData(fieldValue, val); err != nil {
+			multiErr = fmt.Errorf("%w; %w", multiErr, err)
+			continue
+		}
+
+		numFieldsSet++
 	}
 
-	if !field.CanSet() {
-		return reflect.Value{}, fmt.Errorf("%w: %s", errUnexportedField, key)
+	if numFieldsSet == 0 {
+		return false, errFieldsNotSet
 	}
 
-	return field, nil
+	return true, multiErr
 }
 
 // setFieldValueFromData sets the field's value based on the provided data.
 func setFieldValueFromData(field reflect.Value, data interface{}) error {
-	switch val := data.(type) {
-	case string:
-		field.SetString(val)
-	case int:
-		field.SetInt(int64(val))
-	case float64:
-		field.SetFloat(val)
-	case bool:
-		field.SetBool(val)
+	switch field.Kind() {
+	case reflect.String:
+		if val, ok := data.(string); ok {
+			field.SetString(val)
+		} else {
+			return fmt.Errorf("%w: expected string but got %T", errUnsupportedFieldType, data)
+		}
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		if val, ok := data.(int); ok {
+			field.SetInt(int64(val))
+		} else {
+			return fmt.Errorf("%w: expected int but got %T", errUnsupportedFieldType, data)
+		}
+	case reflect.Float32, reflect.Float64:
+		if val, ok := data.(float64); ok {
+			field.SetFloat(val)
+		} else {
+			return fmt.Errorf("%w: expected float64 but got %T", errUnsupportedFieldType, data)
+		}
+	case reflect.Bool:
+		if val, ok := data.(bool); ok {
+			field.SetBool(val)
+		} else {
+			return fmt.Errorf("%w: expected bool but got %T", errUnsupportedFieldType, data)
+		}
+	case reflect.Invalid, reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr,
+		reflect.Complex64, reflect.Complex128, reflect.Array, reflect.Chan, reflect.Func, reflect.Interface, reflect.Map,
+		reflect.Pointer, reflect.Slice, reflect.Struct, reflect.UnsafePointer:
+		return fmt.Errorf("%w: %s, %T", errUnsupportedFieldType, field.Type().Name(), data)
 	default:
-		return fmt.Errorf("%w: %s, %T", errUnsupportedFieldType, field.Type().Name(), val)
+		return fmt.Errorf("%w: %s, %T", errUnsupportedFieldType, field.Type().Name(), data)
 	}
 
 	return nil
@@ -170,17 +190,4 @@ func parseStringToMap(data string) (map[string]interface{}, error) {
 	err := json.Unmarshal([]byte(data), &c)
 
 	return c.dataMap, err
-}
-
-// Helper function to find a struct field by name, ignoring case.
-func findFieldByNameIgnoreCase(value reflect.Value, name string) reflect.Value {
-	t := value.Type()
-
-	for i := 0; i < t.NumField(); i++ {
-		if strings.EqualFold(t.Field(i).Name, name) {
-			return value.Field(i)
-		}
-	}
-
-	return reflect.Value{}
 }

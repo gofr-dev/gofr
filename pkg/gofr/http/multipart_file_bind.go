@@ -16,7 +16,6 @@ var (
 	errUnsupportedKind          = errors.New("unsupported kind")
 	errSettingValueFailure      = errors.New("error setting value at index")
 	errNotAStruct               = errors.New("provided value is not a struct")
-	errFieldNotFound            = errors.New("field not found in struct")
 	errUnexportedField          = errors.New("cannot set field; it might be unexported")
 	errUnsupportedFieldType     = errors.New("unsupported type for field")
 	errFieldsNotSet             = errors.New("no fields were set")

@@ -1,11 +1,18 @@
 package http
 
 import (
+	"errors"
+	"fmt"
 	"reflect"
 	"testing"
 	"unsafe"
 
 	"github.com/stretchr/testify/require"
+)
+
+var (
+	errUnsupportedType = errors.New("unsupported type for field: expected float64 but got bool")
+	errJSON            = errors.New("unexpected end of JSON input")
 )
 
 func TestGetFieldName(t *testing.T) {
@@ -153,7 +160,7 @@ func TestSetSliceOrArrayValue(t *testing.T) {
 	require.NoError(t, err, "setSliceOrArrayValue failed: %v", err)
 }
 
-func TestSetStructValue(t *testing.T) {
+func TestSetStructValue_Success(t *testing.T) {
 	type testStruct struct {
 		Field1 string
 		Field2 int
@@ -161,16 +168,98 @@ func TestSetStructValue(t *testing.T) {
 
 	uf := &formData{}
 
-	// Test with a valid input string
-	value := reflect.ValueOf(&testStruct{}).Elem()
+	tests := []struct {
+		name       string
+		data       string
+		wantField1 string
+		wantField2 int
+	}{
+		{
+			name:       "Valid input with correct case",
+			data:       `{"Field1":"value1","Field2":123}`,
+			wantField1: "value1",
+			wantField2: 123,
+		},
+		{
+			name:       "Valid input with case insensitive fields",
+			data:       `{"field1":"value2","FIELD2":456}`,
+			wantField1: "value2",
+			wantField2: 456,
+		},
+		{
+			name:       "Mixed Case and invalid field names",
+			data:       `{"FielD1":"value4", "invalidField":"ignored", "FiEld2":789}`,
+			wantField1: "value4",
+			wantField2: 789,
+		},
+		{
+			name:       "Case-insensitive field name but not in dataMap",
+			data:       `{"fIeLd1":"value5", "not_in_dataMap": 123}`,
+			wantField1: "value5",
+			wantField2: 0, // Field2 should remain unset (default 0)
+		},
+	}
 
-	data := `{"Field1":"value1","Field2":123}`
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			value := reflect.ValueOf(&testStruct{}).Elem()
 
-	ok, err := uf.setStructValue(value, data)
+			ok, err := uf.setStructValue(value, tt.data)
 
-	require.True(t, ok, "setStructValue failed")
+			require.NoError(t, err, "TestSetStructValue_Success Failed.")
+			require.True(t, ok, "TestSetStructValue_Success Failed.")
+			require.Equal(t, tt.wantField1, value.FieldByName("Field1").String(),
+				"TestSetStructValue_Success Failed : Field1 not set correctly")
+			require.Equal(t, tt.wantField2, int(value.FieldByName("Field2").Int()),
+				"TestSetStructValue_Success Failed : Field2 not set correctly")
+		})
+	}
+}
 
-	require.NoError(t, err, "setStructValue failed: %v", err)
+func TestSetStructValue_Errors(t *testing.T) {
+	type testStruct struct {
+		Field1 string
+		Field2 int
+		Field4 float64
+	}
 
-	require.Equal(t, "value1", value.FieldByName("Field1").String(), "struct fields not set correctly")
+	uf := &formData{}
+
+	tests := []struct {
+		name string
+		data string
+		err  error
+	}{
+		{
+			name: "Unexported field",
+			data: `{"field3":"value3"}`,
+			err:  errFieldsNotSet,
+		},
+		{
+			name: "Unsupported field type",
+			data: `{"field2":1,"Field4":true}`,
+			err:  fmt.Errorf("%w; %w", nil, errUnsupportedType),
+		},
+		{
+			name: "Invalid JSON",
+			data: `{"Field1":"value1", "Field2":123,`,
+			err:  errJSON, // JSON parsing error
+		},
+		{
+			name: "Field not settable",
+			data: `{"Field1":"value1", "Field2":123, "Field4": "not a float"}`,
+			err:  errUnsupportedFieldType,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			value := reflect.ValueOf(&testStruct{}).Elem()
+
+			_, err := uf.setStructValue(value, tt.data)
+
+			require.Error(t, err, "TestSetStructValue_Errors Failed.")
+			require.Contains(t, err.Error(), tt.err.Error(), "TestSetStructValue_Errors Failed.")
+		})
+	}
 }
