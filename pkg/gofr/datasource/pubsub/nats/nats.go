@@ -3,7 +3,6 @@ package nats
 import (
 	"context"
 	"errors"
-	"fmt"
 	"sync"
 	"time"
 
@@ -12,32 +11,14 @@ import (
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 )
 
-var natsConnect = nats.Connect
-
-var jetStreamCreate = func(conn *nats.Conn, opts ...nats.JSOpt) (JetStreamContext, error) {
-	js, err := conn.JetStream(opts...)
-	if err != nil {
-		return nil, err
-	}
-	return newJetStreamContextWrapper(js), nil
-}
-
-// Errors for NATS operations
-var (
-	ErrConsumerNotProvided    = errors.New("consumer name not provided")
-	errServerNotProvided      = errors.New("NATS server address not provided")
-	errPublisherNotConfigured = errors.New("can't publish message: publisher not configured or stream is empty")
-	errStreamNotProvided      = errors.New("stream name not provided")
-	errNATSConnectionNotOpen  = errors.New("NATS connection not open")
-)
-
 // Config defines the NATS client configuration.
 type Config struct {
-	Server    string
-	Stream    StreamConfig
-	Consumer  string
-	MaxWait   time.Duration
-	BatchSize int
+	Server      string
+	Stream      StreamConfig
+	Consumer    string
+	MaxWait     time.Duration
+	MaxPullWait int
+	BatchSize   int
 }
 
 // StreamConfig holds stream settings for NATS JetStream.
@@ -47,18 +28,18 @@ type StreamConfig struct {
 	DeliverPolicy nats.DeliverPolicy
 }
 
-// natsClient represents a client for NATS JetStream operations.
-type natsClient struct {
+// NatsClient represents a client for NATS JetStream operations.
+type NatsClient struct {
 	conn      Connection
 	js        JetStreamContext
 	mu        *sync.RWMutex
 	logger    pubsub.Logger
-	config    Config
+	config    *Config
 	metrics   Metrics
 	fetchFunc func(*nats.Subscription, int, ...nats.PullOpt) ([]*nats.Msg, error)
 }
 
-// Update the natsConnection struct to use this interface
+// Update the natsConnection struct to use this interface.
 type natsConnection struct {
 	NatsConn
 }
@@ -68,11 +49,17 @@ func (nc *natsConnection) JetStream(opts ...nats.JSOpt) (JetStreamContext, error
 	if err != nil {
 		return nil, err
 	}
+
 	return newJetStreamContextWrapper(js), nil
 }
 
 // New initializes a new NATS JetStream client.
-func New(conf Config, logger pubsub.Logger, metrics Metrics) (*natsClient, error) {
+func New(conf *Config,
+	logger pubsub.Logger,
+	metrics Metrics,
+	natsConnect func(string, ...nats.Option) (*nats.Conn, error),
+	jetStreamCreate func(conn *nats.Conn, opts ...nats.JSOpt) (JetStreamContext, error),
+) (*NatsClient, error) {
 	if err := validateConfigs(conf); err != nil {
 		logger.Errorf("could not initialize NATS JetStream: %v", err)
 		return nil, err
@@ -96,7 +83,7 @@ func New(conf Config, logger pubsub.Logger, metrics Metrics) (*natsClient, error
 
 	logger.Logf("connected to NATS server '%s'", conf.Server)
 
-	return &natsClient{
+	return &NatsClient{
 		conn:    conn,
 		js:      js,
 		mu:      &sync.RWMutex{},
@@ -106,7 +93,7 @@ func New(conf Config, logger pubsub.Logger, metrics Metrics) (*natsClient, error
 	}, nil
 }
 
-func (n *natsClient) Publish(ctx context.Context, stream string, message []byte) error {
+func (n *NatsClient) Publish(ctx context.Context, stream string, message []byte) error {
 	ctx, span := otel.GetTracerProvider().Tracer("gofr").Start(ctx, "nats-publish")
 	defer span.End()
 
@@ -141,7 +128,7 @@ func (n *natsClient) Publish(ctx context.Context, stream string, message []byte)
 	return nil
 }
 
-func (n *natsClient) Subscribe(ctx context.Context, stream string) (*pubsub.Message, error) {
+func (n *NatsClient) Subscribe(ctx context.Context, stream string) (*pubsub.Message, error) {
 	if n.config.Consumer == "" {
 		n.logger.Error("consumer name not provided")
 		return nil, ErrConsumerNotProvided
@@ -150,18 +137,18 @@ func (n *natsClient) Subscribe(ctx context.Context, stream string) (*pubsub.Mess
 	ctx, span := otel.GetTracerProvider().Tracer("gofr").Start(ctx, "nats-subscribe")
 	defer span.End()
 
-	n.metrics.IncrementCounter(ctx, "app_pubsub_subscribe_total_count", "stream", stream, "consumer", n.config.Consumer)
+	n.metrics.IncrementCounter(ctx,
+		"app_pubsub_subscribe_total_count", "stream", stream, "consumer", n.config.Consumer)
 
 	n.mu.Lock()
 	defer n.mu.Unlock()
 
 	start := time.Now()
 
-	sub, err := n.js.PullSubscribe(stream, n.config.Consumer, nats.PullMaxWaiting(128))
+	sub, err := n.js.PullSubscribe(stream, n.config.Consumer, nats.PullMaxWaiting(n.config.MaxPullWait))
 	if err != nil {
-		errMsg := fmt.Sprintf("failed to create or attach consumer: %v", err)
-		n.logger.Error(errMsg)
-		return nil, errors.New(errMsg)
+		n.logger.Error(err.Error())
+		return nil, errSubscribe
 	}
 
 	var msgs []*nats.Msg
@@ -171,8 +158,13 @@ func (n *natsClient) Subscribe(ctx context.Context, stream string) (*pubsub.Mess
 		msgs, err = sub.Fetch(1, nats.MaxWait(n.config.MaxWait))
 	}
 
+	if err != nil {
+		n.logger.Errorf("failed to fetch messages: %v", err)
+		return nil, err
+	}
+
 	if len(msgs) == 0 {
-		return nil, errors.New("no messages received")
+		return nil, ErrNoMessagesReceived
 	}
 
 	msg := msgs[0]
@@ -199,7 +191,7 @@ func (n *natsClient) Subscribe(ctx context.Context, stream string) (*pubsub.Mess
 	return m, nil
 }
 
-func (n *natsClient) Close() error {
+func (n *NatsClient) Close() error {
 	var err error
 
 	if n.js != nil {
@@ -215,24 +207,42 @@ func (n *natsClient) Close() error {
 	return err
 }
 
-func (n *natsClient) DeleteStream(ctx context.Context, name string) error {
+func (n *NatsClient) DeleteStream(_ context.Context, name string) error {
 	return n.js.DeleteStream(name)
 }
 
-func (n *natsClient) CreateStream(ctx context.Context, name string) error {
+func (n *NatsClient) CreateStream(_ context.Context, name string) error {
 	_, err := n.js.AddStream(&nats.StreamConfig{
 		Name:     name,
 		Subjects: []string{name},
 	})
+
 	return err
 }
 
-func validateConfigs(conf Config) error {
+func NewNATSClient(conf *Config, logger pubsub.Logger, metrics Metrics) (*NatsClient, error) {
+	return New(conf, logger, metrics, nats.Connect, defaultJetStreamCreate)
+}
+
+func defaultJetStreamCreate(conn *nats.Conn, opts ...nats.JSOpt) (JetStreamContext, error) {
+	js, err := conn.JetStream(opts...)
+	if err != nil {
+		return nil, err
+	}
+
+	return newJetStreamContextWrapper(js), nil
+}
+
+func validateConfigs(conf *Config) error {
+	err := error(nil)
+
 	if conf.Server == "" {
-		return errServerNotProvided
+		err = errServerNotProvided
 	}
-	if conf.Stream.Subject == "" {
-		return errStreamNotProvided
+
+	if err == nil && conf.Stream.Subject == "" {
+		err = errStreamNotProvided
 	}
-	return nil
+
+	return err
 }
