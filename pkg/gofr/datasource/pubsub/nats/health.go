@@ -6,15 +6,11 @@ import (
 )
 
 const (
-	natsBackend               = "NATS"
-	jetstreamStatusOK         = "OK"
-	jetstreamStatusError      = "Error"
-	jetstreamConnectionError  = "Error: nats: connection closed"
-	jetstreamConnectionClosed = "CLOSED"
-	jetstreamConnectionOK     = "Connection OK"
-	jetstreamConnected        = "CONNECTED"
-	jetstreamDisconnected     = "DISCONNECTED"
-	jetstreamError            = "Error: jetstream error"
+	natsBackend           = "NATS"
+	jetstreamStatusOK     = "OK"
+	jetstreamStatusError  = "Error"
+	jetstreamConnected    = "CONNECTED"
+	jetstreamDisconnected = "DISCONNECTED"
 )
 
 func (n *NATSClient) Health() datasource.Health {
