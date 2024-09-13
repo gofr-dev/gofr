@@ -265,7 +265,11 @@ func (d *DB) selectSlice(ctx context.Context, query string, args []interface{}, 
 }
 
 func (d *DB) selectStruct(ctx context.Context, query string, args []interface{}, rv reflect.Value) {
-	rows, _ := d.QueryContext(ctx, query, args...)
+	rows, err := d.QueryContext(ctx, query, args...)
+	if err != nil {
+		d.logger.Errorf("error running query: %v", err)
+		return
+	}
 	for rows.Next() {
 		d.rowsToStruct(rows, rv)
 	}
