@@ -6,6 +6,8 @@ import (
 	"github.com/segmentio/kafka-go"
 )
 
+//go:generate go run go.uber.org/mock/mockgen -source=interfaces.go -destination=mock_interfaces.go -package=kafka
+
 type Reader interface {
 	ReadMessage(ctx context.Context) (kafka.Message, error)
 	CommitMessages(ctx context.Context, msgs ...kafka.Message) error
