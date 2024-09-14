@@ -273,6 +273,7 @@ func (n *NATSClient) DeleteStream(ctx context.Context, name string) error {
 }
 
 func (n *NATSClient) CreateStream(ctx context.Context, cfg StreamConfig) error {
+	n.logger.Debugf("Creating stream %s", cfg.Stream)
 	jsCfg := jetstream.StreamConfig{
 		Name:     cfg.Stream,
 		Subjects: []string{cfg.Subject},

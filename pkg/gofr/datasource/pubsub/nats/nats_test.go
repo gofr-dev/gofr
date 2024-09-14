@@ -177,7 +177,7 @@ func TestNATSClient_PublishError(t *testing.T) {
 	metrics.EXPECT().
 		IncrementCounter(ctx, "app_pubsub_publish_total_count", "subject", subject)
 
-	logs := testutil.StdoutOutputForFunc(func() {
+	logs := testutil.StderrOutputForFunc(func() {
 		client.logger = logging.NewMockLogger(logging.DEBUG)
 		err := client.Publish(ctx, subject, message)
 		require.Error(t, err)
@@ -192,7 +192,6 @@ func TestNATSClient_SubscribeSuccess(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockJS := NewMockJetStream(ctrl)
-	mockStream := NewMockStream(ctrl)
 	mockConsumer := NewMockConsumer(ctrl)
 	mockMsgBatch := NewMockMessageBatch(ctrl)
 	mockMsg := NewMockMsg(ctrl)
@@ -216,9 +215,8 @@ func TestNATSClient_SubscribeSuccess(t *testing.T) {
 
 	ctx := context.Background()
 
-	mockJS.EXPECT().Stream(ctx, "test-stream").Return(nil, jetstream.ErrStreamNotFound)
-	mockJS.EXPECT().CreateStream(ctx, gomock.Any()).Return(mockStream, nil)
-	mockStream.EXPECT().CreateOrUpdateConsumer(ctx, gomock.Any()).Return(mockConsumer, nil)
+	mockJS.EXPECT().CreateStream(ctx, gomock.Any()).Return(nil, nil)
+	mockJS.EXPECT().CreateOrUpdateConsumer(ctx, client.config.Stream.Stream, gomock.Any()).Return(mockConsumer, nil)
 	mockConsumer.EXPECT().Fetch(client.config.BatchSize, jetstream.FetchMaxWait(client.config.MaxWait)).Return(mockMsgBatch, nil)
 
 	msgChan := make(chan jetstream.Msg, 1)
@@ -263,7 +261,6 @@ func TestNATSClient_SubscribeError(t *testing.T) {
 
 	ctx := context.TODO()
 
-	mockJS.EXPECT().Stream(ctx, "test-stream").Return(nil, jetstream.ErrStreamNotFound)
 	mockJS.EXPECT().CreateStream(ctx, gomock.Any()).Return(nil, errors.New("failed to create stream"))
 
 	handler := func(ctx *gofr.Context, msg jetstream.Msg) error {
@@ -380,7 +377,7 @@ func TestNatsClient_CreateStream(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockJS := NewMockJetStream(ctrl)
-	mockLogger := logging.NewMockLogger(logging.INFO)
+	mockLogger := logging.NewMockLogger(logging.DEBUG)
 	client := &NATSClient{
 		js:     mockJS,
 		logger: mockLogger,
@@ -401,6 +398,7 @@ func TestNatsClient_CreateStream(t *testing.T) {
 	client.config.Stream.Stream = "test-stream"
 
 	logs := testutil.StdoutOutputForFunc(func() {
+		client.logger = logging.NewMockLogger(logging.DEBUG)
 		err := client.CreateStream(ctx, client.config.Stream)
 		require.NoError(t, err)
 	})
