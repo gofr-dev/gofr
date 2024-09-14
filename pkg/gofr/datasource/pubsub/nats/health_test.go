@@ -10,13 +10,12 @@ import (
 	"go.uber.org/mock/gomock"
 	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/logging"
+	"gofr.dev/pkg/gofr/testutil"
 )
 
 const (
 	natsServer = "nats://localhost:4222"
 )
-
-// Define jetstreamError as an error
 
 // mockConn is a minimal mock implementation of nats.Conn.
 type mockConn struct {
@@ -146,15 +145,16 @@ func TestNATSClient_HealthJetStreamError(t *testing.T) {
 func TestNATSClient_Health(t *testing.T) {
 	testCases := []struct {
 		name            string
-		setupMocks      func(*MockConnection, *MockJetStreamContext)
+		setupMocks      func(*MockConnInterface, *MockJetStream)
 		expectedStatus  string
 		expectedDetails map[string]interface{}
+		expectedLogs    []string
 	}{
 		{
 			name: "HealthyConnection",
-			setupMocks: func(mockConn *MockConnection, mockJS *MockJetStreamContext) {
-				mockConn.EXPECT().Status().Return(nats.CONNECTED).AnyTimes()
-				mockJS.EXPECT().AccountInfo(gomock.Any()).Return(&nats.AccountInfo{}, nil)
+			setupMocks: func(mockConn *MockConnInterface, mockJS *MockJetStream) {
+				mockConn.EXPECT().Status().Return(nats.CONNECTED)
+				mockJS.EXPECT().AccountInfo(gomock.Any()).Return(&jetstream.AccountInfo{}, nil)
 			},
 			expectedStatus: datasource.StatusUp,
 			expectedDetails: map[string]interface{}{
@@ -164,11 +164,12 @@ func TestNATSClient_Health(t *testing.T) {
 				"jetstream_enabled": true,
 				"jetstream_status":  jetstreamStatusOK,
 			},
+			expectedLogs: []string{"NATS health check: Connected"},
 		},
 		{
 			name: "DisconnectedStatus",
-			setupMocks: func(mockConn *MockConnection, _ *MockJetStreamContext) {
-				mockConn.EXPECT().Status().Return(nats.DISCONNECTED).AnyTimes()
+			setupMocks: func(mockConn *MockConnInterface, _ *MockJetStream) {
+				mockConn.EXPECT().Status().Return(nats.DISCONNECTED)
 			},
 			expectedStatus: datasource.StatusDown,
 			expectedDetails: map[string]interface{}{
@@ -177,11 +178,12 @@ func TestNATSClient_Health(t *testing.T) {
 				"connection_status": jetstreamDisconnected,
 				"jetstream_enabled": true,
 			},
+			expectedLogs: []string{"NATS health check: Disconnected"},
 		},
 		{
 			name: "JetStreamError",
-			setupMocks: func(mockConn *MockConnection, mockJS *MockJetStreamContext) {
-				mockConn.EXPECT().Status().Return(nats.CONNECTED).AnyTimes()
+			setupMocks: func(mockConn *MockConnInterface, mockJS *MockJetStream) {
+				mockConn.EXPECT().Status().Return(nats.CONNECTED)
 				mockJS.EXPECT().AccountInfo(gomock.Any()).Return(nil, errJetStream)
 			},
 			expectedStatus: datasource.StatusUp,
@@ -192,11 +194,12 @@ func TestNATSClient_Health(t *testing.T) {
 				"jetstream_enabled": true,
 				"jetstream_status":  jetstreamStatusError + ": " + errJetStream.Error(),
 			},
+			expectedLogs: []string{"NATS health check: JetStream error"},
 		},
 		{
 			name: "NoJetStream",
-			setupMocks: func(mockConn *MockConnection, _ *MockJetStreamContext) {
-				mockConn.EXPECT().Status().Return(nats.CONNECTED).AnyTimes()
+			setupMocks: func(mockConn *MockConnInterface, _ *MockJetStream) {
+				mockConn.EXPECT().Status().Return(nats.CONNECTED)
 			},
 			expectedStatus: datasource.StatusUp,
 			expectedDetails: map[string]interface{}{
@@ -205,6 +208,7 @@ func TestNATSClient_Health(t *testing.T) {
 				"connection_status": jetstreamConnected,
 				"jetstream_enabled": false,
 			},
+			expectedLogs: []string{"NATS health check: JetStream not enabled"},
 		},
 	}
 
@@ -213,8 +217,8 @@ func TestNATSClient_Health(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			mockConn := NewMockConnection(ctrl)
-			mockJS := NewMockJetStreamContext(ctrl)
+			mockConn := NewMockConnInterface(ctrl)
+			mockJS := NewMockJetStream(ctrl)
 
 			tc.setupMocks(mockConn, mockJS)
 
@@ -229,10 +233,16 @@ func TestNATSClient_Health(t *testing.T) {
 				client.js = nil
 			}
 
-			health := client.Health()
+			logs := testutil.StdoutOutputForFunc(func() {
+				health := client.Health()
 
-			assert.Equal(t, tc.expectedStatus, health.Status)
-			assert.Equal(t, tc.expectedDetails, health.Details)
+				assert.Equal(t, tc.expectedStatus, health.Status)
+				assert.Equal(t, tc.expectedDetails, health.Details)
+			})
+
+			for _, expectedLog := range tc.expectedLogs {
+				assert.Contains(t, logs, expectedLog)
+			}
 		})
 	}
 }

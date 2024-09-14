@@ -2,31 +2,35 @@ package nats
 
 import (
 	"context"
-	"time"
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
-	"gofr.dev/pkg/gofr/datasource/pubsub"
+	"gofr.dev/pkg/gofr"
 )
 
-// ConnInterface represents the methods of nats.Conn that we use
 type ConnInterface interface {
-	JetStream(...nats.JSOpt) (jetstream.JetStream, error)
 	Status() nats.Status
-	Drain() error
+	Close()
 }
 
 // Client represents the main NATS JetStream client.
 type Client interface {
-	Publish(ctx context.Context, stream string, message []byte) error
-	Subscribe(ctx context.Context, stream string) (*pubsub.Message, error)
-	Close() error
+	Publish(ctx context.Context, subject string, message []byte) error
+	Subscribe(ctx context.Context, subject string, handler MessageHandler) error
+	Close(ctx context.Context) error
+	DeleteStream(ctx context.Context, name string) error
+	CreateStream(ctx context.Context, cfg StreamConfig) error
+	CreateOrUpdateStream(ctx context.Context, cfg jetstream.StreamConfig) (jetstream.Stream, error)
 }
 
-// Subscription represents a NATS subscription.
-type Subscription interface {
-	Fetch(batch int, opts ...nats.PullOpt) ([]*nats.Msg, error)
-	Drain() error
-	Unsubscribe() error
-	NextMsg(timeout time.Duration) (*nats.Msg, error)
+// MessageHandler represents the function signature for handling messages.
+type MessageHandler func(*gofr.Context, jetstream.Msg) error
+
+// StreamConfig holds stream settings for NATS JetStream.
+type StreamConfig struct {
+	Stream        string
+	Subject       string
+	AckPolicy     nats.AckPolicy
+	DeliverPolicy nats.DeliverPolicy
+	MaxDeliver    int
 }

@@ -23,17 +23,6 @@ type Config struct {
 	BatchSize   int
 }
 
-// StreamConfig holds stream settings for NATS JetStream.
-type StreamConfig struct {
-	Stream        string
-	Subject       string
-	AckPolicy     nats.AckPolicy
-	DeliverPolicy nats.DeliverPolicy
-	MaxDeliver    int
-}
-
-type MessageHandler func(*gofr.Context, jetstream.Msg) error
-
 type subscription struct {
 	sub     *nats.Subscription
 	handler MessageHandler
@@ -78,11 +67,11 @@ func NewNATSClient(conf *Config, logger pubsub.Logger, metrics Metrics) (*NATSCl
 }
 
 // New initializes a new NATS JetStream client.
-func New(conf *Config,
+func New(
+	conf *Config,
 	logger pubsub.Logger,
 	metrics Metrics,
 	natsConnect func(string, ...nats.Option) (*nats.Conn, error),
-	jetStreamCreate func(conn *nats.Conn, opts ...nats.JSOpt) (jetstream.JetStream, error),
 ) (*NATSClient, error) {
 	if err := validateConfigs(conf); err != nil {
 		logger.Errorf("could not initialize NATS JetStream: %v", err)
@@ -97,9 +86,7 @@ func New(conf *Config,
 		return nil, err
 	}
 
-	conn := &natsConnection{NatsConn: nc}
-
-	js, err := jetStreamCreate(nc)
+	js, err := jetstream.New(nc)
 	if err != nil {
 		logger.Errorf("failed to create JetStream context: %v", err)
 		return nil, err
@@ -108,12 +95,13 @@ func New(conf *Config,
 	logger.Logf("connected to NATS server '%s'", conf.Server)
 
 	return &NATSClient{
-		conn:    conn,
-		js:      js,
-		mu:      &sync.RWMutex{},
-		logger:  logger,
-		config:  conf,
-		metrics: metrics,
+		conn:          nc,
+		js:            js,
+		mu:            &sync.RWMutex{},
+		logger:        logger,
+		config:        conf,
+		metrics:       metrics,
+		subscriptions: make(map[string]*subscription),
 	}, nil
 }
 
@@ -268,13 +256,17 @@ func (n *NATSClient) DeleteStream(ctx context.Context, name string) error {
 }
 
 func (n *NATSClient) CreateStream(ctx context.Context, cfg StreamConfig) error {
-	_, err := n.js.CreateStream(ctx, cfg)
+	jsCfg := jetstream.StreamConfig{
+		Name:     cfg.Stream,
+		Subjects: []string{cfg.Subject},
+	}
+	_, err := n.js.CreateStream(ctx, jsCfg)
 	if err != nil {
 		n.logger.Errorf("failed to create stream: %v", err)
 		return err
 	}
 
-	return err
+	return nil
 }
 
 func (n *NATSClient) CreateOrUpdateStream(ctx context.Context, cfg jetstream.StreamConfig) (jetstream.Stream, error) {
