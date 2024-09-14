@@ -1,7 +1,11 @@
 package nats
 
 import (
+	"context"
+	"time"
+
 	"github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go/jetstream"
 	"gofr.dev/pkg/gofr/datasource"
 )
 
@@ -40,15 +44,18 @@ func (n *NATSClient) Health() datasource.Health {
 	health.Details["backend"] = natsBackend
 	health.Details["jetstream_enabled"] = n.js != nil
 
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
 	if n.js != nil && connectionStatus == nats.CONNECTED {
-		health.Details["jetstream_status"] = getJetstreamStatus(n.js)
+		health.Details["jetstream_status"] = getJetstreamStatus(ctx, n.js)
 	}
 
 	return health
 }
 
-func getJetstreamStatus(js JetStreamContext) string {
-	_, err := js.AccountInfo()
+func getJetstreamStatus(ctx context.Context, js jetstream.JetStream) string {
+	_, err := js.AccountInfo(ctx)
 	if err != nil {
 		return jetstreamStatusError + ": " + err.Error()
 	}

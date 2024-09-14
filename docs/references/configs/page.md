@@ -205,7 +205,7 @@ This document lists all the configuration options supported by the GoFr framewor
 
 -  PUBSUB_BACKEND
 -  Pub/Sub message broker backend
--  kafka, google, mqtt
+-  kafka, google, mqtt, nats
 
 {% /table %}
 
@@ -321,5 +321,27 @@ This document lists all the configuration options supported by the GoFr framewor
 
 -  MQTT_KEEP_ALIVE
 -  Sends regular messages to check the link is active. May not work as expected if handling func is blocking execution
+
+{% /table %}
+
+**NATS JetStream**
+
+{% table %}
+
+- Name
+- Description
+- Default Value
+
+---
+
+-  NATS_SERVER
+-  URL of the NATS server
+-  nats://localhost:4222
+
+---
+
+-  NATS_CREDS_FILE
+-  File containing the NATS credentials
+- creds.json
 
 {% /table %}

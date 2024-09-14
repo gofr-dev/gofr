@@ -3,12 +3,13 @@ package nats
 import (
 	"context"
 	"errors"
-	"fmt"
 	"sync"
 	"time"
 
 	"github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go/jetstream"
 	"go.opentelemetry.io/otel"
+	"gofr.dev/pkg/gofr"
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 )
 
@@ -24,34 +25,56 @@ type Config struct {
 
 // StreamConfig holds stream settings for NATS JetStream.
 type StreamConfig struct {
+	Stream        string
 	Subject       string
 	AckPolicy     nats.AckPolicy
 	DeliverPolicy nats.DeliverPolicy
+	MaxDeliver    int
+}
+
+type MessageHandler func(*gofr.Context, jetstream.Msg) error
+
+type subscription struct {
+	sub     *nats.Subscription
+	handler MessageHandler
+	ctx     context.Context
+	cancel  context.CancelFunc
 }
 
 // NATSClient represents a client for NATS JetStream operations.
 type NATSClient struct {
-	conn      Connection
-	js        JetStreamContext
-	mu        *sync.RWMutex
-	logger    pubsub.Logger
-	config    *Config
-	metrics   Metrics
-	fetchFunc func(*nats.Subscription, int, ...nats.PullOpt) ([]*nats.Msg, error)
+	// conn          *nats.Conn
+	conn          ConnInterface
+	js            jetstream.JetStream
+	mu            *sync.RWMutex
+	logger        pubsub.Logger
+	config        *Config
+	metrics       Metrics
+	subscriptions map[string]*subscription
+	subMu         sync.Mutex
 }
 
-// Update the natsConnection struct to use this interface.
-type natsConnection struct {
-	NatsConn
-}
-
-func (nc *natsConnection) JetStream(opts ...nats.JSOpt) (JetStreamContext, error) {
-	js, err := nc.NatsConn.JetStream(opts...)
+func NewNATSClient(conf *Config, logger pubsub.Logger, metrics Metrics) (*NATSClient, error) {
+	nc, err := nats.Connect(conf.Server)
 	if err != nil {
+		logger.Errorf("failed to connect to NATS server at %v: %v", conf.Server, err)
 		return nil, err
 	}
 
-	return newJetStreamContextWrapper(js), nil
+	js, err := jetstream.New(nc)
+	if err != nil {
+		logger.Errorf("failed to create JetStream context: %v", err)
+		return nil, err
+	}
+
+	return &NATSClient{
+		conn:          nc,
+		js:            js,
+		logger:        logger,
+		config:        conf,
+		metrics:       metrics,
+		subscriptions: make(map[string]*subscription),
+	}, nil
 }
 
 // New initializes a new NATS JetStream client.
@@ -59,7 +82,7 @@ func New(conf *Config,
 	logger pubsub.Logger,
 	metrics Metrics,
 	natsConnect func(string, ...nats.Option) (*nats.Conn, error),
-	jetStreamCreate func(conn *nats.Conn, opts ...nats.JSOpt) (JetStreamContext, error),
+	jetStreamCreate func(conn *nats.Conn, opts ...nats.JSOpt) (jetstream.JetStream, error),
 ) (*NATSClient, error) {
 	if err := validateConfigs(conf); err != nil {
 		logger.Errorf("could not initialize NATS JetStream: %v", err)
@@ -94,20 +117,20 @@ func New(conf *Config,
 	}, nil
 }
 
-func (n *NATSClient) Publish(ctx context.Context, stream string, message []byte) error {
+func (n *NATSClient) Publish(ctx context.Context, subject string, message []byte) error {
 	ctx, span := otel.GetTracerProvider().Tracer("gofr").Start(ctx, "nats-publish")
 	defer span.End()
 
-	n.metrics.IncrementCounter(ctx, "app_pubsub_publish_total_count", "stream", stream)
+	n.metrics.IncrementCounter(ctx, "app_pubsub_publish_total_count", "subject", subject)
 
-	if n.js == nil || stream == "" {
-		n.logger.Error(errPublisherNotConfigured.Error())
-		return errPublisherNotConfigured
+	if n.js == nil || subject == "" {
+		n.logger.Error("JetStream is not configured or subject is empty")
+		return errors.New("JetStream is not configured or subject is empty")
 	}
 
 	start := time.Now()
-	_, err := n.js.Publish(stream, message)
-	end := time.Since(start)
+	_, err := n.js.Publish(ctx, subject, message)
+	duration := time.Since(start)
 
 	if err != nil {
 		n.logger.Errorf("failed to publish message to NATS JetStream: %v", err)
@@ -118,124 +141,150 @@ func (n *NATSClient) Publish(ctx context.Context, stream string, message []byte)
 		Mode:          "PUB",
 		CorrelationID: span.SpanContext().TraceID().String(),
 		MessageValue:  string(message),
-		Topic:         stream,
+		Topic:         subject,
 		Host:          n.config.Server,
 		PubSubBackend: "NATS",
-		Time:          end.Microseconds(),
+		Time:          duration.Microseconds(),
 	})
 
-	n.metrics.IncrementCounter(ctx, "app_pubsub_publish_success_count", "stream", stream)
+	n.metrics.IncrementCounter(ctx, "app_pubsub_publish_success_count", "subject", subject)
 
 	return nil
 }
 
-func (n *NATSClient) Subscribe(ctx context.Context, stream string) (*pubsub.Message, error) {
+func (n *NATSClient) Subscribe(ctx context.Context, subject string, handler MessageHandler) error {
 	if n.config.Consumer == "" {
 		n.logger.Error("consumer name not provided")
-		return nil, ErrConsumerNotProvided
+		return errors.New("consumer name not provided")
 	}
 
-	ctx, span := otel.GetTracerProvider().Tracer("gofr").Start(ctx, "nats-subscribe")
-	defer span.End()
-
-	n.metrics.IncrementCounter(ctx,
-		"app_pubsub_subscribe_total_count", "stream", stream, "consumer", n.config.Consumer)
-
-	n.mu.Lock()
-	defer n.mu.Unlock()
-
-	start := time.Now()
-
-	sub, err := n.js.PullSubscribe(stream, n.config.Consumer, nats.PullMaxWaiting(n.config.MaxPullWait))
-	if err != nil {
-		n.logger.Errorf("failed to create or attach consumer: %v", err)
-		return nil, fmt.Errorf("failed to create or attach consumer: %w", err)
-	}
-
-	var msgs []*nats.Msg
-	if n.fetchFunc != nil {
-		msgs, err = n.fetchFunc(sub, 1, nats.MaxWait(n.config.MaxWait))
-	} else {
-		msgs, err = sub.Fetch(1, nats.MaxWait(n.config.MaxWait))
-	}
-
-	if err != nil {
-		n.logger.Errorf("failed to fetch messages: %v", err)
-		return nil, err
-	}
-
-	if len(msgs) == 0 {
-		return nil, ErrNoMessagesReceived
-	}
-
-	if len(msgs) == 0 {
-		return nil, ErrNoMessagesReceived
-	}
-
-	msg := msgs[0]
-
-	m := pubsub.NewMessage(ctx)
-	m.Value = msg.Data
-	m.Topic = stream
-	m.Committer = newNATSMessageWrapper(msg, n.logger)
-
-	end := time.Since(start)
-
-	n.logger.Debug(&pubsub.Log{
-		Mode:          "SUB",
-		CorrelationID: span.SpanContext().TraceID().String(),
-		MessageValue:  string(msg.Data),
-		Topic:         stream,
-		Host:          n.config.Server,
-		PubSubBackend: "NATS",
-		Time:          end.Microseconds(),
+	// Create or update the stream
+	_, err := n.js.CreateStream(ctx, jetstream.StreamConfig{
+		Name:     n.config.Stream.Stream,
+		Subjects: []string{n.config.Stream.Subject},
 	})
+	if err != nil {
+		n.logger.Errorf("failed to create or update stream: %v", err)
+		return err
+	}
 
-	n.metrics.IncrementCounter(ctx, "app_pubsub_subscribe_success_count", "stream", stream, "consumer", n.config.Consumer)
+	// Create or update the consumer
+	cons, err := n.js.CreateOrUpdateConsumer(ctx, n.config.Stream.Stream, jetstream.ConsumerConfig{
+		Durable:       n.config.Consumer,
+		AckPolicy:     jetstream.AckExplicitPolicy,
+		FilterSubject: subject,
+		MaxDeliver:    n.config.Stream.MaxDeliver,
+	})
+	if err != nil {
+		n.logger.Errorf("failed to create or update consumer: %v", err)
+		return err
+	}
 
-	return m, nil
+	// Start fetching messages
+	go n.startConsuming(ctx, cons, handler)
+
+	return nil
 }
 
-func (n *NATSClient) Close() error {
-	var err error
+func (n *NATSClient) startConsuming(ctx context.Context, cons jetstream.Consumer, handler MessageHandler) {
+	for {
+		msgs, err := cons.Fetch(n.config.BatchSize, jetstream.FetchMaxWait(n.config.MaxWait))
+		if err != nil {
+			if errors.Is(err, context.Canceled) {
+				return
+			}
+			n.logger.Errorf("failed to fetch messages: %v", err)
+			time.Sleep(time.Second) // Backoff on error
+			continue
+		}
 
-	if n.js != nil {
-		if e := n.js.DeleteStream(n.config.Stream.Subject); e != nil {
-			err = errors.Join(err, e)
+		for msg := range msgs.Messages() {
+			if err := n.processMessage(ctx, msg, handler); err != nil {
+				n.logger.Errorf("failed to process message: %v", err)
+			}
+			err := msg.Ack()
+			if err != nil {
+				n.logger.Errorf("failed to acknowledge message: %v", err)
+				return
+			}
+		}
+
+		if msgs.Error() != nil {
+			n.logger.Errorf("error fetching messages: %v", msgs.Error())
 		}
 	}
+}
+
+func (n *NATSClient) processMessage(ctx context.Context, msg jetstream.Msg, handler MessageHandler) error {
+	msgCtx := &gofr.Context{Context: ctx}
+
+	if err := handler(msgCtx, msg); err != nil {
+		n.logger.Errorf("failed to process message: %v", err)
+		return n.nakMessage(msg)
+	}
+
+	return n.ackMessage(msg)
+}
+
+func (n *NATSClient) nakMessage(msg jetstream.Msg) error {
+	if err := msg.Nak(); err != nil {
+		n.logger.Errorf("failed to nak message: %v", err)
+		return err
+	}
+	return nil
+}
+
+func (n *NATSClient) ackMessage(msg jetstream.Msg) error {
+	if err := msg.Ack(); err != nil {
+		n.logger.Errorf("failed to ack message: %v", err)
+		return err
+	}
+	return nil
+}
+
+func (n *NATSClient) Close(ctx context.Context) error {
+	n.subMu.Lock()
+	for _, sub := range n.subscriptions {
+		sub.cancel()
+	}
+	n.subscriptions = make(map[string]*subscription)
+	n.subMu.Unlock()
 
 	if n.conn != nil {
-		err = errors.Join(err, n.conn.Drain())
+		n.conn.Close()
+	}
+
+	return nil
+}
+
+func (n *NATSClient) DeleteStream(ctx context.Context, name string) error {
+	err := n.js.DeleteStream(ctx, name)
+	if err != nil {
+		n.logger.Errorf("failed to delete stream: %v", err)
+		return err
+	}
+
+	return nil
+}
+
+func (n *NATSClient) CreateStream(ctx context.Context, cfg StreamConfig) error {
+	_, err := n.js.CreateStream(ctx, cfg)
+	if err != nil {
+		n.logger.Errorf("failed to create stream: %v", err)
+		return err
 	}
 
 	return err
 }
 
-func (n *NATSClient) DeleteStream(_ context.Context, name string) error {
-	return n.js.DeleteStream(name)
-}
-
-func (n *NATSClient) CreateStream(_ context.Context, name string) error {
-	_, err := n.js.AddStream(&nats.StreamConfig{
-		Name:     name,
-		Subjects: []string{name},
-	})
-
-	return err
-}
-
-func NewNATSClient(conf *Config, logger pubsub.Logger, metrics Metrics) (*NATSClient, error) {
-	return New(conf, logger, metrics, nats.Connect, defaultJetStreamCreate)
-}
-
-func defaultJetStreamCreate(conn *nats.Conn, opts ...nats.JSOpt) (JetStreamContext, error) {
-	js, err := conn.JetStream(opts...)
+func (n *NATSClient) CreateOrUpdateStream(ctx context.Context, cfg jetstream.StreamConfig) (jetstream.Stream, error) {
+	stream, err := n.js.CreateOrUpdateStream(ctx, cfg)
 	if err != nil {
+		n.logger.Errorf("failed to create or update stream: %v", err)
 		return nil, err
 	}
 
-	return newJetStreamContextWrapper(js), nil
+	return stream, nil
 }
 
 func validateConfigs(conf *Config) error {
