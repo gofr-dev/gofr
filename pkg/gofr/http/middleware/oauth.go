@@ -16,6 +16,11 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
+var (
+	errAuthorizationHeaderRequired = errors.New("Authorization header is required")
+	errInvalidAuthorizationHeader  = errors.New("Authorization header format must be Bearer {token}")
+)
+
 // JWTClaim represents a custom key used to store JWT claims within the request context.
 type JWTClaim string
 
@@ -118,7 +123,7 @@ func OAuth(key PublicKeyProvider) func(inner http.Handler) http.Handler {
 				http.Error(w, err.Error(), http.StatusUnauthorized)
 				return
 			}
-			
+
 			token, err := parseToken(tokenString, key)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusUnauthorized)
@@ -136,14 +141,16 @@ func OAuth(key PublicKeyProvider) func(inner http.Handler) http.Handler {
 // ExtractToken validates the Authorization header and extracts the JWT token.
 func extractToken(authHeader string) (string, error) {
 	if authHeader == "" {
-		return "", errors.New("Authorization header is required")
+		return "", errAuthorizationHeaderRequired
 	}
 
 	const bearerPrefix = "Bearer "
+
 	token, ok := strings.CutPrefix(authHeader, bearerPrefix)
 	if !ok || token == "" {
-		return "", errors.New("Authorization header format must be Bearer {token}")
+		return "", errInvalidAuthorizationHeader
 	}
+
 	return token, nil
 }
 
@@ -152,13 +159,14 @@ func parseToken(tokenString string, key PublicKeyProvider) (*jwt.Token, error) {
 	return jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 		kid := token.Header["kid"]
 		jwks := key.Get(fmt.Sprint(kid))
+
 		if jwks == nil {
 			return nil, JWKNotFound{}
 		}
+
 		return jwks, nil
 	})
 }
-
 
 // JWKS represents a JSON Web Key Set.
 type JWKS struct {
