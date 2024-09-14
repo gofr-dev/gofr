@@ -3,12 +3,12 @@ package nats
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
-	"go.opentelemetry.io/otel"
 	"gofr.dev/pkg/gofr"
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 )
@@ -30,9 +30,16 @@ type subscription struct {
 	cancel  context.CancelFunc
 }
 
+type natsConnWrapper struct {
+	*nats.Conn
+}
+
+func (w *natsConnWrapper) NatsConn() *nats.Conn {
+	return w.Conn
+}
+
 // NATSClient represents a client for NATS JetStream operations.
 type NATSClient struct {
-	// conn          *nats.Conn
 	conn          ConnInterface
 	js            jetstream.JetStream
 	mu            *sync.RWMutex
@@ -43,18 +50,40 @@ type NATSClient struct {
 	subMu         sync.Mutex
 }
 
-func NewNATSClient(conf *Config, logger pubsub.Logger, metrics Metrics) (*NATSClient, error) {
-	nc, err := nats.Connect(conf.Server)
+func NewNATSClient(
+	conf *Config,
+	logger pubsub.Logger,
+	metrics Metrics,
+	natsConnect func(string, ...nats.Option) (ConnInterface, error),
+	jetstreamNew func(*nats.Conn) (jetstream.JetStream, error),
+) (*NATSClient, error) {
+	if err := validateConfigs(conf); err != nil {
+		logger.Errorf("could not initialize NATS JetStream: %v", err)
+		return nil, err
+	}
+
+	logger.Debugf("connecting to NATS server '%s'", conf.Server)
+
+	nc, err := natsConnect(conf.Server)
 	if err != nil {
 		logger.Errorf("failed to connect to NATS server at %v: %v", conf.Server, err)
 		return nil, err
 	}
 
-	js, err := jetstream.New(nc)
+	// Check connection status
+	status := nc.Status()
+	if status != nats.CONNECTED {
+		logger.Errorf("unexpected NATS connection status: %v", status)
+		return nil, fmt.Errorf("unexpected NATS connection status: %v", status)
+	}
+
+	js, err := jetstreamNew(nc.NatsConn())
 	if err != nil {
 		logger.Errorf("failed to create JetStream context: %v", err)
 		return nil, err
 	}
+
+	logger.Logf("connected to NATS server '%s'", conf.Server)
 
 	return &NATSClient{
 		conn:          nc,
@@ -86,6 +115,9 @@ func New(
 		return nil, err
 	}
 
+	// Wrap the nats.Conn with our wrapper
+	wrappedConn := &natsConnWrapper{Conn: nc}
+
 	js, err := jetstream.New(nc)
 	if err != nil {
 		logger.Errorf("failed to create JetStream context: %v", err)
@@ -95,7 +127,7 @@ func New(
 	logger.Logf("connected to NATS server '%s'", conf.Server)
 
 	return &NATSClient{
-		conn:          nc,
+		conn:          wrappedConn,
 		js:            js,
 		mu:            &sync.RWMutex{},
 		logger:        logger,
@@ -106,34 +138,19 @@ func New(
 }
 
 func (n *NATSClient) Publish(ctx context.Context, subject string, message []byte) error {
-	ctx, span := otel.GetTracerProvider().Tracer("gofr").Start(ctx, "nats-publish")
-	defer span.End()
-
 	n.metrics.IncrementCounter(ctx, "app_pubsub_publish_total_count", "subject", subject)
 
 	if n.js == nil || subject == "" {
-		n.logger.Error("JetStream is not configured or subject is empty")
-		return errors.New("JetStream is not configured or subject is empty")
+		err := errors.New("JetStream is not configured or subject is empty")
+		n.logger.Error(err.Error())
+		return err
 	}
 
-	start := time.Now()
 	_, err := n.js.Publish(ctx, subject, message)
-	duration := time.Since(start)
-
 	if err != nil {
 		n.logger.Errorf("failed to publish message to NATS JetStream: %v", err)
 		return err
 	}
-
-	n.logger.Debug(&pubsub.Log{
-		Mode:          "PUB",
-		CorrelationID: span.SpanContext().TraceID().String(),
-		MessageValue:  string(message),
-		Topic:         subject,
-		Host:          n.config.Server,
-		PubSubBackend: "NATS",
-		Time:          duration.Microseconds(),
-	})
 
 	n.metrics.IncrementCounter(ctx, "app_pubsub_publish_success_count", "subject", subject)
 
