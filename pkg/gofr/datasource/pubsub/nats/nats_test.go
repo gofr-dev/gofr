@@ -335,7 +335,6 @@ func TestNew(t *testing.T) {
 
 	mockLogger := logging.NewMockLogger(logging.DEBUG)
 	mockMetrics := NewMockMetrics(ctrl)
-	// mockJS := NewMockJetStream(ctrl)
 
 	var testCases []struct {
 		name            string
