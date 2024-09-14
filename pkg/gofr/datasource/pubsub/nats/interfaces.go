@@ -11,6 +11,7 @@ import (
 type ConnInterface interface {
 	Status() nats.Status
 	Close()
+	NatsConn() *nats.Conn
 }
 
 // Client represents the main NATS JetStream client.
