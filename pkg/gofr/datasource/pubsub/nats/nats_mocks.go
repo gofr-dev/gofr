@@ -1,7 +1,5 @@
-//go:build !ignore
-// +build !ignore
-
 package nats
 
-//go:generate mockgen -destination=mock_custom_interfaces.go -package=nats -source=./interfaces.go Client,Connection,Subscription,JetStreamContext,Msg
+//go:generate mockgen -destination=mock_client.go -package=nats -source=./interfaces.go Client,Subscription
+//go:generate mockgen -destination=mock_jetstream.go -package=nats github.com/nats-io/nats.go/jetstream JetStream,Consumer,Msg
 //go:generate mockgen -destination=mock_metrics.go -package=nats -source=./metrics.go
