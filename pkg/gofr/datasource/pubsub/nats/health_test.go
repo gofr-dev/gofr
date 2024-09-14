@@ -234,6 +234,7 @@ func TestNATSClient_Health(t *testing.T) {
 			}
 
 			logs := testutil.StdoutOutputForFunc(func() {
+				client.logger = logging.NewMockLogger(logging.DEBUG)
 				health := client.Health()
 
 				assert.Equal(t, tc.expectedStatus, health.Status)
