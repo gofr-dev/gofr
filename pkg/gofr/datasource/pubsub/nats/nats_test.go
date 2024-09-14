@@ -3,6 +3,7 @@ package nats
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -213,11 +214,16 @@ func TestNATSClient_SubscribeSuccess(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	mockJS.EXPECT().CreateStream(ctx, gomock.Any()).Return(nil, nil)
 	mockJS.EXPECT().CreateOrUpdateConsumer(ctx, client.config.Stream.Stream, gomock.Any()).Return(mockConsumer, nil)
-	mockConsumer.EXPECT().Fetch(client.config.BatchSize, jetstream.FetchMaxWait(client.config.MaxWait)).Return(mockMsgBatch, nil)
+
+	// First call to Fetch returns the message batch
+	mockConsumer.EXPECT().Fetch(client.config.BatchSize, gomock.Any()).Return(mockMsgBatch, nil).Times(1)
+	// Subsequent calls to Fetch return context.Canceled error
+	mockConsumer.EXPECT().Fetch(client.config.BatchSize, gomock.Any()).Return(nil, context.Canceled).AnyTimes()
 
 	msgChan := make(chan jetstream.Msg, 1)
 	msgChan <- mockMsg
@@ -225,17 +231,21 @@ func TestNATSClient_SubscribeSuccess(t *testing.T) {
 	mockMsgBatch.EXPECT().Messages().Return(msgChan)
 	mockMsgBatch.EXPECT().Error().Return(nil)
 
-	mockMsg.EXPECT().Ack().Return(nil)
+	mockMsg.EXPECT().Ack().Return(nil).Times(1)
+
+	var wg sync.WaitGroup
+	wg.Add(1)
 
 	handler := func(ctx *gofr.Context, msg jetstream.Msg) error {
+		defer wg.Done()
+		cancel() // Cancel the context to stop the consuming loop
 		return nil
 	}
 
 	err := client.Subscribe(ctx, "test-subject", handler)
 	require.NoError(t, err)
 
-	// Wait for message processing
-	time.Sleep(100 * time.Millisecond)
+	wg.Wait()
 }
 
 func TestNATSClient_SubscribeError(t *testing.T) {

@@ -193,6 +193,12 @@ func (n *NATSClient) Subscribe(ctx context.Context, subject string, handler Mess
 
 func (n *NATSClient) startConsuming(ctx context.Context, cons jetstream.Consumer, handler MessageHandler) {
 	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+
 		msgs, err := cons.Fetch(n.config.BatchSize, jetstream.FetchMaxWait(n.config.MaxWait))
 		if err != nil {
 			if errors.Is(err, context.Canceled) {
@@ -206,11 +212,6 @@ func (n *NATSClient) startConsuming(ctx context.Context, cons jetstream.Consumer
 		for msg := range msgs.Messages() {
 			if err := n.processMessage(ctx, msg, handler); err != nil {
 				n.logger.Errorf("failed to process message: %v", err)
-			}
-			err := msg.Ack()
-			if err != nil {
-				n.logger.Errorf("failed to acknowledge message: %v", err)
-				return
 			}
 		}
 
