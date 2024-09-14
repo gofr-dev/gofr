@@ -2,7 +2,6 @@ package gofr
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/http"
 	"net/http/pprof"
@@ -76,10 +75,14 @@ func (s *httpServer) Run(c *container.Container) {
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
-	err := s.srv.ListenAndServe()
-
-	if !errors.Is(err, http.ErrServerClosed) {
-		c.Errorf("error while listening to http server, err: %v", err)
+	if c.GetKeyFile() != "" && c.GetCertFile() != "" {
+		if err := s.srv.ListenAndServeTLS(c.GetCertFile(), c.GetKeyFile()); err != nil {
+			c.Errorf("error while listening to https server, err: %v", err)
+		}
+	} else {
+		if err := s.srv.ListenAndServe(); err != nil {
+			c.Errorf("error while listening to http server, err: %v", err)
+		}
 	}
 }
 
