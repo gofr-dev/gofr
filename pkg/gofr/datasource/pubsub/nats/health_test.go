@@ -9,12 +9,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 	"gofr.dev/pkg/gofr/datasource"
+	"gofr.dev/pkg/gofr/health"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/testutil"
 )
 
 const (
-	natsServer = "nats://localhost:4222"
+	NatsServer = "nats://localhost:4222"
 )
 
 // mockConn is a minimal mock implementation of nats.Conn.
@@ -46,100 +47,100 @@ type testNATSClient struct {
 	mockJetStream *mockJetStream
 }
 
-func (c *testNATSClient) Health() datasource.Health {
-	health := datasource.Health{
+func (c *testNATSClient) Health() health.Health {
+	h := health.Health{
 		Details: make(map[string]interface{}),
 	}
 
-	health.Status = datasource.StatusUp
+	h.Status = datasource.StatusUp
 	connectionStatus := c.mockConn.Status()
 
 	switch connectionStatus {
 	case nats.CONNECTING:
-		health.Status = datasource.StatusUp
-		health.Details["connection_status"] = jetstreamConnecting
+		h.Status = datasource.StatusUp
+		h.Details["connection_status"] = jetstreamConnecting
 	case nats.CONNECTED:
-		health.Details["connection_status"] = jetstreamConnected
+		h.Details["connection_status"] = jetstreamConnected
 	case nats.CLOSED, nats.DISCONNECTED, nats.RECONNECTING, nats.DRAINING_PUBS, nats.DRAINING_SUBS:
-		health.Status = datasource.StatusDown
-		health.Details["connection_status"] = jetstreamDisconnected
+		h.Status = datasource.StatusDown
+		h.Details["connection_status"] = jetstreamDisconnected
 	default:
-		health.Status = datasource.StatusDown
-		health.Details["connection_status"] = connectionStatus.String()
+		h.Status = datasource.StatusDown
+		h.Details["connection_status"] = connectionStatus.String()
 	}
 
-	health.Details["host"] = c.config.Server
-	health.Details["backend"] = natsBackend
-	health.Details["jetstream_enabled"] = c.mockJetStream != nil
+	h.Details["host"] = c.Config.Server
+	h.Details["backend"] = natsBackend
+	h.Details["jetstream_enabled"] = c.mockJetStream != nil
 
 	if c.mockJetStream != nil {
 		_, err := c.mockJetStream.AccountInfo(context.Background())
 		if err != nil {
-			health.Details["jetstream_status"] = jetstreamStatusError + ": " + err.Error()
+			h.Details["jetstream_status"] = jetstreamStatusError + ": " + err.Error()
 		} else {
-			health.Details["jetstream_status"] = jetstreamStatusOK
+			h.Details["jetstream_status"] = jetstreamStatusOK
 		}
 	}
 
-	return health
+	return h
 }
 
 func TestNATSClient_HealthStatusUP(t *testing.T) {
 	client := &testNATSClient{
 		NATSClient: NATSClient{
-			config: &Config{Server: natsServer},
-			logger: logging.NewMockLogger(logging.DEBUG),
+			Config: &Config{Server: NatsServer},
+			Logger: logging.NewMockLogger(logging.DEBUG),
 		},
 		mockConn:      &mockConn{status: nats.CONNECTED},
 		mockJetStream: &mockJetStream{},
 	}
 
-	health := client.Health()
+	h := client.Health()
 
-	assert.Equal(t, datasource.StatusUp, health.Status)
-	assert.Equal(t, natsServer, health.Details["host"])
-	assert.Equal(t, natsBackend, health.Details["backend"])
-	assert.Equal(t, jetstreamConnected, health.Details["connection_status"])
-	assert.Equal(t, true, health.Details["jetstream_enabled"])
-	assert.Equal(t, jetstreamStatusOK, health.Details["jetstream_status"])
+	assert.Equal(t, datasource.StatusUp, h.Status)
+	assert.Equal(t, NatsServer, h.Details["host"])
+	assert.Equal(t, natsBackend, h.Details["backend"])
+	assert.Equal(t, jetstreamConnected, h.Details["connection_status"])
+	assert.Equal(t, true, h.Details["jetstream_enabled"])
+	assert.Equal(t, jetstreamStatusOK, h.Details["jetstream_status"])
 }
 
 func TestNATSClient_HealthStatusDown(t *testing.T) {
 	client := &testNATSClient{
 		NATSClient: NATSClient{
-			config: &Config{Server: natsServer},
-			logger: logging.NewMockLogger(logging.DEBUG),
+			Config: &Config{Server: NatsServer},
+			Logger: logging.NewMockLogger(logging.DEBUG),
 		},
 		mockConn: &mockConn{status: nats.CLOSED},
 	}
 
-	health := client.Health()
+	h := client.Health()
 
-	assert.Equal(t, datasource.StatusDown, health.Status)
-	assert.Equal(t, natsServer, health.Details["host"])
-	assert.Equal(t, natsBackend, health.Details["backend"])
-	assert.Equal(t, jetstreamDisconnected, health.Details["connection_status"])
-	assert.Equal(t, false, health.Details["jetstream_enabled"])
+	assert.Equal(t, datasource.StatusDown, h.Status)
+	assert.Equal(t, NatsServer, h.Details["host"])
+	assert.Equal(t, natsBackend, h.Details["backend"])
+	assert.Equal(t, jetstreamDisconnected, h.Details["connection_status"])
+	assert.Equal(t, false, h.Details["jetstream_enabled"])
 }
 
 func TestNATSClient_HealthJetStreamError(t *testing.T) {
 	client := &testNATSClient{
 		NATSClient: NATSClient{
-			config: &Config{Server: natsServer},
-			logger: logging.NewMockLogger(logging.DEBUG),
+			Config: &Config{Server: NatsServer},
+			Logger: logging.NewMockLogger(logging.DEBUG),
 		},
 		mockConn:      &mockConn{status: nats.CONNECTED},
 		mockJetStream: &mockJetStream{accountInfoErr: errJetStream},
 	}
 
-	health := client.Health()
+	h := client.Health()
 
-	assert.Equal(t, datasource.StatusUp, health.Status)
-	assert.Equal(t, natsServer, health.Details["host"])
-	assert.Equal(t, natsBackend, health.Details["backend"])
-	assert.Equal(t, jetstreamConnected, health.Details["connection_status"])
-	assert.Equal(t, true, health.Details["jetstream_enabled"])
-	assert.Equal(t, jetstreamStatusError+": "+errJetStream.Error(), health.Details["jetstream_status"])
+	assert.Equal(t, datasource.StatusUp, h.Status)
+	assert.Equal(t, NatsServer, h.Details["host"])
+	assert.Equal(t, natsBackend, h.Details["backend"])
+	assert.Equal(t, jetstreamConnected, h.Details["connection_status"])
+	assert.Equal(t, true, h.Details["jetstream_enabled"])
+	assert.Equal(t, jetstreamStatusError+": "+errJetStream.Error(), h.Details["jetstream_status"])
 }
 
 func TestNATSClient_Health(t *testing.T) {
@@ -158,7 +159,7 @@ func TestNATSClient_Health(t *testing.T) {
 			},
 			expectedStatus: datasource.StatusUp,
 			expectedDetails: map[string]interface{}{
-				"host":              natsServer,
+				"host":              NatsServer,
 				"backend":           natsBackend,
 				"connection_status": jetstreamConnected,
 				"jetstream_enabled": true,
@@ -173,7 +174,7 @@ func TestNATSClient_Health(t *testing.T) {
 			},
 			expectedStatus: datasource.StatusDown,
 			expectedDetails: map[string]interface{}{
-				"host":              natsServer,
+				"host":              NatsServer,
 				"backend":           natsBackend,
 				"connection_status": jetstreamDisconnected,
 				"jetstream_enabled": true,
@@ -188,7 +189,7 @@ func TestNATSClient_Health(t *testing.T) {
 			},
 			expectedStatus: datasource.StatusUp,
 			expectedDetails: map[string]interface{}{
-				"host":              natsServer,
+				"host":              NatsServer,
 				"backend":           natsBackend,
 				"connection_status": jetstreamConnected,
 				"jetstream_enabled": true,
@@ -203,7 +204,7 @@ func TestNATSClient_Health(t *testing.T) {
 			},
 			expectedStatus: datasource.StatusUp,
 			expectedDetails: map[string]interface{}{
-				"host":              natsServer,
+				"host":              NatsServer,
 				"backend":           natsBackend,
 				"connection_status": jetstreamConnected,
 				"jetstream_enabled": false,
@@ -223,31 +224,31 @@ func TestNATSClient_Health(t *testing.T) {
 			tc.setupMocks(mockConn, mockJS)
 
 			client := &NATSClient{
-				conn:   mockConn,
-				js:     mockJS,
-				config: &Config{Server: natsServer},
+				Conn:   mockConn,
+				Js:     mockJS,
+				Config: &Config{Server: NatsServer},
 			}
 
 			if tc.name == "NoJetStream" {
-				client.js = nil
+				client.Js = nil
 			}
 
-			var health datasource.Health
+			var h health.Health
 
 			stdoutLogs := testutil.StdoutOutputForFunc(func() {
-				client.logger = logging.NewMockLogger(logging.DEBUG)
-				health = client.Health()
+				client.Logger = logging.NewMockLogger(logging.DEBUG)
+				h = client.Health()
 			})
 
 			stderrLogs := testutil.StderrOutputForFunc(func() {
-				client.logger = logging.NewMockLogger(logging.DEBUG)
-				health = client.Health()
+				client.Logger = logging.NewMockLogger(logging.DEBUG)
+				h = client.Health()
 			})
 
 			combinedLogs := stdoutLogs + stderrLogs
 
-			assert.Equal(t, tc.expectedStatus, health.Status)
-			assert.Equal(t, tc.expectedDetails, health.Details)
+			assert.Equal(t, tc.expectedStatus, h.Status)
+			assert.Equal(t, tc.expectedDetails, h.Details)
 
 			for _, expectedLog := range tc.expectedLogs {
 				assert.Contains(t, combinedLogs, expectedLog, "Expected log message not found: %s", expectedLog)
