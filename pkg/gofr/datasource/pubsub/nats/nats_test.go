@@ -37,7 +37,6 @@ func TestNewNATSClient(t *testing.T) {
 	mockConn.EXPECT().Status().Return(nats.CONNECTED)
 	mockConn.EXPECT().NatsConn().Return(&nats.Conn{})
 
-	// metrics := NewMockMetrics(ctrl)
 	metrics := natspubsub.NewMockMetrics(ctrl)
 
 	// Create a mock function for nats.Connect
@@ -46,13 +45,13 @@ func TestNewNATSClient(t *testing.T) {
 	}
 
 	// Create a mock function for jetstream.New
-	mockJetstreamNew := func(nc *nats.Conn) (jetstream.JetStream, error) {
+	mockJetStreamNew := func(nc *nats.Conn) (jetstream.JetStream, error) {
 		return mockJS, nil
 	}
 
 	logs := testutil.StdoutOutputForFunc(func() {
 		logger := logging.NewMockLogger(logging.DEBUG)
-		client, err := natspubsub.NewNATSClient(conf, logger, metrics, mockNatsConnect, mockJetstreamNew)
+		client, err := natspubsub.NewNATSClient(conf, logger, metrics, mockNatsConnect, mockJetStreamNew)
 		require.NoError(t, err)
 		require.NotNil(t, client)
 
@@ -98,7 +97,7 @@ func TestValidateConfigs(t *testing.T) {
 					// Subjects is intentionally left empty
 				},
 			},
-			expected: natspubsub.ErrSubjectsNotProvided, // Update this to match the actual error
+			expected: natspubsub.ErrSubjectsNotProvided,
 		},
 	}
 
@@ -297,7 +296,7 @@ func TestNATSClient_SubscribeError(t *testing.T) {
 	assert.Contains(t, logs, "failed to create or update stream: failed to create stream")
 }
 
-// natsClient is a local receiver.
+// natsClient is a local receiver, which is used to test the NATS client.
 type natsClient struct {
 	*natspubsub.NATSClient
 }
