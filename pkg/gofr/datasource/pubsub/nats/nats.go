@@ -10,7 +10,6 @@ import (
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 	"gofr.dev/pkg/gofr/datasource/pubsub"
-	"gofr.dev/pkg/gofr/health"
 )
 
 // Config defines the NATS client configuration.
@@ -164,52 +163,6 @@ func New(conf *Config, logger pubsub.Logger, metrics Metrics) (pubsub.Client, er
 	return &natsPubSubWrapper{client: client}, nil
 }
 
-// natsPubSubWrapper adapts NATSClient to pubsub.Client.
-type natsPubSubWrapper struct {
-	client *NATSClient
-}
-
-// Publish publishes a message to a topic.
-func (w *natsPubSubWrapper) Publish(ctx context.Context, topic string, message []byte) error {
-	return w.client.Publish(ctx, topic, message)
-}
-
-// Subscribe subscribes to a topic.
-func (w *natsPubSubWrapper) Subscribe(ctx context.Context, topic string) (*pubsub.Message, error) {
-	return w.client.Subscribe(ctx, topic)
-}
-
-// CreateTopic creates a new topic (stream) in NATS JetStream.
-func (w *natsPubSubWrapper) CreateTopic(ctx context.Context, name string) error {
-	return w.client.CreateTopic(ctx, name)
-}
-
-// DeleteTopic deletes a topic (stream) in NATS JetStream.
-func (w *natsPubSubWrapper) DeleteTopic(ctx context.Context, name string) error {
-	return w.client.DeleteTopic(ctx, name)
-}
-
-// Close closes the NATS client.
-func (w *natsPubSubWrapper) Close() error {
-	return w.client.Close()
-}
-
-// Health returns the health status of the NATS client.
-func (w *natsPubSubWrapper) Health() health.Health {
-	// Implement health check
-	status := health.StatusUp
-	if w.client.Conn.Status() != nats.CONNECTED {
-		status = health.StatusDown
-	}
-
-	return health.Health{
-		Status: status,
-		Details: map[string]interface{}{
-			"server": w.client.Config.Server,
-		},
-	}
-}
-
 // Publish publishes a message to a topic.
 func (n *NATSClient) Publish(ctx context.Context, subject string, message []byte) error {
 	n.Metrics.IncrementCounter(ctx, "app_pubsub_publish_total_count", "subject", subject)
@@ -264,36 +217,6 @@ func (n *NATSClient) Subscribe(ctx context.Context, topic string) (*pubsub.Messa
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}
-}
-
-// createCommitter returns a Committer for the given NATS message.
-func createCommitter(msg jetstream.Msg) pubsub.Committer {
-	return &natsCommitter{msg: msg}
-}
-
-// natsCommitter implements the pubsub.Committer interface for NATS messages.
-type natsCommitter struct {
-	msg jetstream.Msg
-}
-
-func (c *natsCommitter) Commit() {
-	err := c.msg.Ack()
-	if err != nil {
-		err := c.msg.Nak()
-		if err != nil {
-			log.Println("Error committing message:", err)
-
-			return
-		}
-
-		log.Println("Error committing message:", err)
-
-		return
-	}
-}
-
-func (c *natsCommitter) Rollback() error {
-	return c.msg.Nak()
 }
 
 func (n *NATSClient) subscribeInternal(ctx context.Context, subject string, handler func(jetstream.Msg)) error {

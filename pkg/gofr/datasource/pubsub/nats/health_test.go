@@ -14,6 +14,7 @@ import (
 )
 
 const (
+	// NatsServer is the address of a local NATS server. Used for testing.
 	NatsServer = "nats://localhost:4222"
 )
 
