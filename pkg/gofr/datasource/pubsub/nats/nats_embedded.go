@@ -9,7 +9,8 @@ import (
 
 func RunEmbeddedNATSServer() (*server.Server, error) {
 	opts := &server.Options{
-		Port: -1, // Random available port
+		Port:      -1, // Random available port
+		JetStream: true,
 	}
 	s, err := server.NewServer(opts)
 	if err != nil {

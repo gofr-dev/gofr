@@ -5,12 +5,13 @@ import (
 	"errors"
 	"time"
 
+	"gofr.dev/pkg/gofr/health"
 	"google.golang.org/api/iterator"
 
 	"gofr.dev/pkg/gofr/datasource"
 )
 
-func (g *googleClient) Health() (health datasource.Health) {
+func (g *googleClient) Health() (health health.Health) {
 	health.Details = make(map[string]interface{})
 
 	var writerStatus, readerStatus string

@@ -4,24 +4,25 @@ import (
 	"encoding/json"
 
 	"gofr.dev/pkg/gofr/datasource"
+	"gofr.dev/pkg/gofr/health"
 )
 
-func (k *kafkaClient) Health() (health datasource.Health) {
-	health = datasource.Health{Details: make(map[string]interface{})}
+func (k *kafkaClient) Health() (h health.Health) {
+	clientHealth := health.Health{Details: make(map[string]interface{})}
 
-	health.Status = datasource.StatusUp
+	clientHealth.Status = datasource.StatusUp
 
 	_, err := k.conn.Controller()
 	if err != nil {
-		health.Status = datasource.StatusDown
+		clientHealth.Status = datasource.StatusDown
 	}
 
-	health.Details["host"] = k.config.Broker
-	health.Details["backend"] = "KAFKA"
-	health.Details["writers"] = k.getWriterStatsAsMap()
-	health.Details["readers"] = k.getReaderStatsAsMap()
+	clientHealth.Details["host"] = k.config.Broker
+	clientHealth.Details["backend"] = "KAFKA"
+	clientHealth.Details["writers"] = k.getWriterStatsAsMap()
+	clientHealth.Details["readers"] = k.getReaderStatsAsMap()
 
-	return health
+	return clientHealth
 }
 
 func (k *kafkaClient) getReaderStatsAsMap() []interface{} {
