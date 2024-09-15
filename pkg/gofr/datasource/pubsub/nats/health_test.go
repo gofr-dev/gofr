@@ -143,13 +143,17 @@ func TestNATSClient_HealthJetStreamError(t *testing.T) {
 }
 
 func TestNATSClient_Health(t *testing.T) {
-	testCases := []struct {
-		name            string
-		setupMocks      func(*MockConnInterface, *MockJetStream)
-		expectedStatus  health.Status
-		expectedDetails map[string]interface{}
-		expectedLogs    []string
-	}{
+	testCases := defineHealthTestCases()
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			runHealthTestCase(t, tc)
+		})
+	}
+}
+
+func defineHealthTestCases() []healthTestCase {
+	return []healthTestCase{
 		{
 			name: "HealthyConnection",
 			setupMocks: func(mockConn *MockConnInterface, mockJS *MockJetStream) {
@@ -211,47 +215,55 @@ func TestNATSClient_Health(t *testing.T) {
 			expectedLogs: []string{"NATS health check: Connected", "NATS health check: JetStream not enabled"},
 		},
 	}
+}
 
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
+func runHealthTestCase(t *testing.T, tc healthTestCase) {
+	t.Helper()
 
-			mockConn := NewMockConnInterface(ctrl)
-			mockJS := NewMockJetStream(ctrl)
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
-			tc.setupMocks(mockConn, mockJS)
+	mockConn := NewMockConnInterface(ctrl)
+	mockJS := NewMockJetStream(ctrl)
 
-			client := &NATSClient{
-				Conn:   mockConn,
-				Js:     mockJS,
-				Config: &Config{Server: NatsServer},
-			}
+	tc.setupMocks(mockConn, mockJS)
 
-			if tc.name == "NoJetStream" {
-				client.Js = nil
-			}
-
-			var h health.Health
-
-			stdoutLogs := testutil.StdoutOutputForFunc(func() {
-				client.Logger = logging.NewMockLogger(logging.DEBUG)
-				h = client.Health()
-			})
-
-			stderrLogs := testutil.StderrOutputForFunc(func() {
-				client.Logger = logging.NewMockLogger(logging.DEBUG)
-				h = client.Health()
-			})
-
-			combinedLogs := stdoutLogs + stderrLogs
-
-			assert.Equal(t, tc.expectedStatus, h.Status)
-			assert.Equal(t, tc.expectedDetails, h.Details)
-
-			for _, expectedLog := range tc.expectedLogs {
-				assert.Contains(t, combinedLogs, expectedLog, "Expected log message not found: %s", expectedLog)
-			}
-		})
+	client := &NATSClient{
+		Conn:   mockConn,
+		Js:     mockJS,
+		Config: &Config{Server: NatsServer},
 	}
+
+	if tc.name == "NoJetStream" {
+		client.Js = nil
+	}
+
+	var h health.Health
+
+	combinedLogs := getCombinedLogs(func() {
+		client.Logger = logging.NewMockLogger(logging.DEBUG)
+		h = client.Health()
+	})
+
+	assert.Equal(t, tc.expectedStatus, h.Status)
+	assert.Equal(t, tc.expectedDetails, h.Details)
+
+	for _, expectedLog := range tc.expectedLogs {
+		assert.Contains(t, combinedLogs, expectedLog, "Expected log message not found: %s", expectedLog)
+	}
+}
+
+func getCombinedLogs(f func()) string {
+	stdoutLogs := testutil.StdoutOutputForFunc(f)
+	stderrLogs := testutil.StderrOutputForFunc(f)
+
+	return stdoutLogs + stderrLogs
+}
+
+type healthTestCase struct {
+	name            string
+	setupMocks      func(*MockConnInterface, *MockJetStream)
+	expectedStatus  health.Status
+	expectedDetails map[string]interface{}
+	expectedLogs    []string
 }
