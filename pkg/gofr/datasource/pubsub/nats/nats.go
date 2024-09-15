@@ -31,11 +31,11 @@ type StreamConfig struct {
 	MaxDeliver int
 }
 
-type subscription struct {
-	sub     *nats.Subscription
-	handler MessageHandler
-	ctx     context.Context
-	cancel  context.CancelFunc
+type Subscription struct {
+	Sub     *nats.Subscription
+	Handler MessageHandler
+	Ctx     context.Context
+	Cancel  context.CancelFunc
 }
 
 type natsConnWrapper struct {
@@ -48,37 +48,37 @@ func (w *natsConnWrapper) NatsConn() *nats.Conn {
 
 // NATSClient represents a client for NATS JetStream operations.
 type NATSClient struct {
-	conn          ConnInterface
-	js            jetstream.JetStream
+	Conn          ConnInterface
+	Js            jetstream.JetStream
 	mu            *sync.RWMutex
-	logger        pubsub.Logger
-	config        *Config
-	metrics       Metrics
-	subscriptions map[string]*subscription
+	Logger        pubsub.Logger
+	Config        *Config
+	Metrics       Metrics
+	Subscriptions map[string]*Subscription
 	subMu         sync.Mutex
 }
 
 func (n *NATSClient) CreateTopic(ctx context.Context, name string) error {
 	return n.CreateStream(ctx, StreamConfig{
-		Stream:  name,
-		Subject: name,
+		Stream:   name,
+		Subjects: []string{name},
 	})
 }
 
 func (n *NATSClient) DeleteTopic(ctx context.Context, name string) error {
-	n.logger.Debugf("Deleting topic (stream) %s", name)
+	n.Logger.Debugf("Deleting topic (stream) %s", name)
 
-	err := n.js.DeleteStream(ctx, name)
+	err := n.Js.DeleteStream(ctx, name)
 	if err != nil {
 		if errors.Is(err, jetstream.ErrStreamNotFound) {
-			n.logger.Debugf("Stream %s not found, considering delete successful", name)
+			n.Logger.Debugf("Stream %s not found, considering delete successful", name)
 			return nil // If the stream doesn't exist, we consider it a success
 		}
-		n.logger.Errorf("failed to delete stream (topic) %s: %v", name, err)
+		n.Logger.Errorf("failed to delete stream (topic) %s: %v", name, err)
 		return err
 	}
 
-	n.logger.Debugf("Successfully deleted topic (stream) %s", name)
+	n.Logger.Debugf("Successfully deleted topic (stream) %s", name)
 	return nil
 }
 
@@ -89,7 +89,7 @@ func NewNATSClient(
 	natsConnect func(string, ...nats.Option) (ConnInterface, error),
 	jetstreamNew func(*nats.Conn) (jetstream.JetStream, error),
 ) (*NATSClient, error) {
-	if err := validateConfigs(conf); err != nil {
+	if err := ValidateConfigs(conf); err != nil {
 		logger.Errorf("could not initialize NATS JetStream: %v", err)
 		return nil, err
 	}
@@ -118,12 +118,12 @@ func NewNATSClient(
 	logger.Logf("connected to NATS server '%s'", conf.Server)
 
 	return &NATSClient{
-		conn:          nc,
-		js:            js,
-		logger:        logger,
-		config:        conf,
-		metrics:       metrics,
-		subscriptions: make(map[string]*subscription),
+		Conn:          nc,
+		Js:            js,
+		Logger:        logger,
+		Config:        conf,
+		Metrics:       metrics,
+		Subscriptions: make(map[string]*Subscription),
 	}, nil
 }
 
@@ -179,33 +179,33 @@ func (w *natsPubSubWrapper) Close() error {
 func (w *natsPubSubWrapper) Health() health.Health {
 	// Implement health check
 	status := health.StatusUp
-	if w.client.conn.Status() != nats.CONNECTED {
+	if w.client.Conn.Status() != nats.CONNECTED {
 		status = health.StatusDown
 	}
 	return health.Health{
 		Status: status,
 		Details: map[string]interface{}{
-			"server": w.client.config.Server,
+			"server": w.client.Config.Server,
 		},
 	}
 }
 
 func (n *NATSClient) Publish(ctx context.Context, subject string, message []byte) error {
-	n.metrics.IncrementCounter(ctx, "app_pubsub_publish_total_count", "subject", subject)
+	n.Metrics.IncrementCounter(ctx, "app_pubsub_publish_total_count", "subject", subject)
 
-	if n.js == nil || subject == "" {
+	if n.Js == nil || subject == "" {
 		err := errors.New("JetStream is not configured or subject is empty")
-		n.logger.Error(err.Error())
+		n.Logger.Error(err.Error())
 		return err
 	}
 
-	_, err := n.js.Publish(ctx, subject, message)
+	_, err := n.Js.Publish(ctx, subject, message)
 	if err != nil {
-		n.logger.Errorf("failed to publish message to NATS JetStream: %v", err)
+		n.Logger.Errorf("failed to publish message to NATS JetStream: %v", err)
 		return err
 	}
 
-	n.metrics.IncrementCounter(ctx, "app_pubsub_publish_success_count", "subject", subject)
+	n.Metrics.IncrementCounter(ctx, "app_pubsub_publish_success_count", "subject", subject)
 
 	return nil
 }
@@ -268,32 +268,32 @@ func (c *natsCommitter) Rollback() error {
 }
 
 func (n *NATSClient) subscribeInternal(ctx context.Context, subject string, handler func(jetstream.Msg)) error {
-	if n.config.Consumer == "" {
-		n.logger.Error("consumer name not provided")
+	if n.Config.Consumer == "" {
+		n.Logger.Error("consumer name not provided")
 		return errors.New("consumer name not provided")
 	}
 
 	// Create or update the stream
-	_, err := n.js.CreateStream(ctx, jetstream.StreamConfig{
-		Name:     n.config.Stream.Stream,
-		Subjects: []string{n.config.Stream.Subject},
+	_, err := n.Js.CreateStream(ctx, jetstream.StreamConfig{
+		Name:     n.Config.Stream.Stream,
+		Subjects: n.Config.Stream.Subjects,
 	})
 	if err != nil {
-		n.logger.Errorf("failed to create or update stream: %v", err)
+		n.Logger.Errorf("failed to create or update stream: %v", err)
 		return err
 	}
 
 	log.Println("Filter Subject", subject)
 
 	// Create or update the consumer
-	cons, err := n.js.CreateOrUpdateConsumer(ctx, n.config.Stream.Stream, jetstream.ConsumerConfig{
-		Durable:       n.config.Consumer,
+	cons, err := n.Js.CreateOrUpdateConsumer(ctx, n.Config.Stream.Stream, jetstream.ConsumerConfig{
+		Durable:       n.Config.Consumer,
 		AckPolicy:     jetstream.AckExplicitPolicy,
 		FilterSubject: subject,
-		MaxDeliver:    n.config.Stream.MaxDeliver,
+		MaxDeliver:    n.Config.Stream.MaxDeliver,
 	})
 	if err != nil {
-		n.logger.Errorf("failed to create or update consumer: %v", err)
+		n.Logger.Errorf("failed to create or update consumer: %v", err)
 		return err
 	}
 
@@ -311,12 +311,12 @@ func (n *NATSClient) startConsuming(ctx context.Context, cons jetstream.Consumer
 		default:
 		}
 
-		msgs, err := cons.Fetch(n.config.BatchSize, jetstream.FetchMaxWait(n.config.MaxWait))
+		msgs, err := cons.Fetch(n.Config.BatchSize, jetstream.FetchMaxWait(n.Config.MaxWait))
 		if err != nil {
 			if errors.Is(err, context.Canceled) {
 				return
 			}
-			n.logger.Errorf("failed to fetch messages: %v", err)
+			n.Logger.Errorf("failed to fetch messages: %v", err)
 			time.Sleep(time.Second) // Backoff on error
 			continue
 		}
@@ -326,14 +326,14 @@ func (n *NATSClient) startConsuming(ctx context.Context, cons jetstream.Consumer
 		}
 
 		if msgs.Error() != nil {
-			n.logger.Errorf("error fetching messages: %v", msgs.Error())
+			n.Logger.Errorf("error fetching messages: %v", msgs.Error())
 		}
 	}
 }
 
 func (n *NATSClient) processMessage(ctx context.Context, msg jetstream.Msg, handler MessageHandler) error {
 	if err := handler(ctx, msg); err != nil {
-		n.logger.Errorf("failed to process message: %v", err)
+		n.Logger.Errorf("failed to process message: %v", err)
 		return n.nakMessage(msg)
 	}
 
@@ -342,7 +342,7 @@ func (n *NATSClient) processMessage(ctx context.Context, msg jetstream.Msg, hand
 
 func (n *NATSClient) nakMessage(msg jetstream.Msg) error {
 	if err := msg.Nak(); err != nil {
-		n.logger.Errorf("failed to nak message: %v", err)
+		n.Logger.Errorf("failed to nak message: %v", err)
 		return err
 	}
 	return nil
@@ -350,7 +350,7 @@ func (n *NATSClient) nakMessage(msg jetstream.Msg) error {
 
 func (n *NATSClient) ackMessage(msg jetstream.Msg) error {
 	if err := msg.Ack(); err != nil {
-		n.logger.Errorf("failed to ack message: %v", err)
+		n.Logger.Errorf("failed to ack message: %v", err)
 		return err
 	}
 	return nil
@@ -358,23 +358,23 @@ func (n *NATSClient) ackMessage(msg jetstream.Msg) error {
 
 func (n *NATSClient) Close() error {
 	n.subMu.Lock()
-	for _, sub := range n.subscriptions {
-		sub.cancel()
+	for _, sub := range n.Subscriptions {
+		sub.Cancel()
 	}
-	n.subscriptions = make(map[string]*subscription)
+	n.Subscriptions = make(map[string]*Subscription)
 	n.subMu.Unlock()
 
-	if n.conn != nil {
-		n.conn.Close()
+	if n.Conn != nil {
+		n.Conn.Close()
 	}
 
 	return nil
 }
 
 func (n *NATSClient) DeleteStream(ctx context.Context, name string) error {
-	err := n.js.DeleteStream(ctx, name)
+	err := n.Js.DeleteStream(ctx, name)
 	if err != nil {
-		n.logger.Errorf("failed to delete stream: %v", err)
+		n.Logger.Errorf("failed to delete stream: %v", err)
 		return err
 	}
 
@@ -382,14 +382,14 @@ func (n *NATSClient) DeleteStream(ctx context.Context, name string) error {
 }
 
 func (n *NATSClient) CreateStream(ctx context.Context, cfg StreamConfig) error {
-	n.logger.Debugf("Creating stream %s", cfg.Stream)
+	n.Logger.Debugf("Creating stream %s", cfg.Stream)
 	jsCfg := jetstream.StreamConfig{
 		Name:     cfg.Stream,
-		Subjects: []string{cfg.Subject},
+		Subjects: cfg.Subjects,
 	}
-	_, err := n.js.CreateStream(ctx, jsCfg)
+	_, err := n.Js.CreateStream(ctx, jsCfg)
 	if err != nil {
-		n.logger.Errorf("failed to create stream: %v", err)
+		n.Logger.Errorf("failed to create stream: %v", err)
 		return err
 	}
 
@@ -397,24 +397,25 @@ func (n *NATSClient) CreateStream(ctx context.Context, cfg StreamConfig) error {
 }
 
 func (n *NATSClient) CreateOrUpdateStream(ctx context.Context, cfg jetstream.StreamConfig) (jetstream.Stream, error) {
-	stream, err := n.js.CreateOrUpdateStream(ctx, cfg)
+	stream, err := n.Js.CreateOrUpdateStream(ctx, cfg)
 	if err != nil {
-		n.logger.Errorf("failed to create or update stream: %v", err)
+		n.Logger.Errorf("failed to create or update stream: %v", err)
 		return nil, err
 	}
 
 	return stream, nil
 }
 
-func validateConfigs(conf *Config) error {
+func ValidateConfigs(conf *Config) error {
 	err := error(nil)
 
 	if conf.Server == "" {
-		err = errServerNotProvided
+		err = ErrServerNotProvided
 	}
 
-	if err == nil && conf.Stream.Subject == "" {
-		err = errStreamNotProvided
+	// check if subjects are provided
+	if err == nil && len(conf.Stream.Subjects) == 0 {
+		err = errSubjectsNotProvided
 	}
 
 	return err

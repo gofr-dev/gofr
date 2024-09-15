@@ -133,11 +133,12 @@ func (c *Container) Create(conf config.Config) {
 		c.PubSub = c.createMqttPubSub(conf)
 	case "NATS":
 		log.Println("NATS")
+		subjects := strings.Split(conf.Get("NATS_SUBJECTS"), ",")
 		natsConfig := &nats.Config{
 			Server: conf.Get("PUBSUB_BROKER"),
 			Stream: nats.StreamConfig{
-				Stream:  conf.Get("NATS_STREAM"),
-				Subject: conf.Get("NATS_STREAM"),
+				Stream:   conf.Get("NATS_STREAM"),
+				Subjects: subjects,
 			},
 			Consumer: conf.Get("NATS_CONSUMER"),
 		}

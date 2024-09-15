@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"log"
 	"strings"
 	"testing"
 	"time"
@@ -94,10 +95,13 @@ func initializeTest(t *testing.T, serverURL string) {
 	conf := &natspubsub.Config{
 		Server: serverURL,
 		Stream: natspubsub.StreamConfig{
-			Stream:  "sample-stream",
-			Subject: "order-logs,products",
+			Stream:     "sample-stream",
+			Subjects:   []string{"order-logs", "products"},
+			MaxDeliver: 4,
 		},
-		Consumer: "test-consumer",
+		Consumer:    "test-consumer",
+		MaxWait:     10 * time.Second,
+		MaxPullWait: 10,
 	}
 
 	mockMetrics := &mockMetrics{}
@@ -105,6 +109,11 @@ func initializeTest(t *testing.T, serverURL string) {
 
 	client, err := natspubsub.NewNATSClient(conf, logger, mockMetrics,
 		func(serverURL string, opts ...nats.Option) (natspubsub.ConnInterface, error) {
+			log.Println("** Connecting to NATS server", serverURL)
+			// log opts
+			for _, opt := range opts {
+				logger.Debugf("NATS option: %v", opt)
+			}
 			conn, err := nats.Connect(serverURL, opts...)
 			if err != nil {
 				return nil, err
