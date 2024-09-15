@@ -8,7 +8,6 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
-	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/health"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/testutil"
@@ -52,20 +51,20 @@ func (c *testNATSClient) Health() health.Health {
 		Details: make(map[string]interface{}),
 	}
 
-	h.Status = datasource.StatusUp
+	h.Status = health.StatusUp
 	connectionStatus := c.mockConn.Status()
 
 	switch connectionStatus {
 	case nats.CONNECTING:
-		h.Status = datasource.StatusUp
+		h.Status = health.StatusUp
 		h.Details["connection_status"] = jetstreamConnecting
 	case nats.CONNECTED:
 		h.Details["connection_status"] = jetstreamConnected
 	case nats.CLOSED, nats.DISCONNECTED, nats.RECONNECTING, nats.DRAINING_PUBS, nats.DRAINING_SUBS:
-		h.Status = datasource.StatusDown
+		h.Status = health.StatusDown
 		h.Details["connection_status"] = jetstreamDisconnected
 	default:
-		h.Status = datasource.StatusDown
+		h.Status = health.StatusDown
 		h.Details["connection_status"] = connectionStatus.String()
 	}
 
@@ -97,7 +96,7 @@ func TestNATSClient_HealthStatusUP(t *testing.T) {
 
 	h := client.Health()
 
-	assert.Equal(t, datasource.StatusUp, h.Status)
+	assert.Equal(t, health.StatusUp, h.Status)
 	assert.Equal(t, NatsServer, h.Details["host"])
 	assert.Equal(t, natsBackend, h.Details["backend"])
 	assert.Equal(t, jetstreamConnected, h.Details["connection_status"])
@@ -116,7 +115,7 @@ func TestNATSClient_HealthStatusDown(t *testing.T) {
 
 	h := client.Health()
 
-	assert.Equal(t, datasource.StatusDown, h.Status)
+	assert.Equal(t, health.StatusDown, h.Status)
 	assert.Equal(t, NatsServer, h.Details["host"])
 	assert.Equal(t, natsBackend, h.Details["backend"])
 	assert.Equal(t, jetstreamDisconnected, h.Details["connection_status"])
@@ -135,7 +134,7 @@ func TestNATSClient_HealthJetStreamError(t *testing.T) {
 
 	h := client.Health()
 
-	assert.Equal(t, datasource.StatusUp, h.Status)
+	assert.Equal(t, health.StatusUp, h.Status)
 	assert.Equal(t, NatsServer, h.Details["host"])
 	assert.Equal(t, natsBackend, h.Details["backend"])
 	assert.Equal(t, jetstreamConnected, h.Details["connection_status"])
@@ -147,7 +146,7 @@ func TestNATSClient_Health(t *testing.T) {
 	testCases := []struct {
 		name            string
 		setupMocks      func(*MockConnInterface, *MockJetStream)
-		expectedStatus  string
+		expectedStatus  health.Status
 		expectedDetails map[string]interface{}
 		expectedLogs    []string
 	}{
@@ -157,7 +156,7 @@ func TestNATSClient_Health(t *testing.T) {
 				mockConn.EXPECT().Status().Return(nats.CONNECTED).Times(2)
 				mockJS.EXPECT().AccountInfo(gomock.Any()).Return(&jetstream.AccountInfo{}, nil).Times(2)
 			},
-			expectedStatus: datasource.StatusUp,
+			expectedStatus: health.StatusUp,
 			expectedDetails: map[string]interface{}{
 				"host":              NatsServer,
 				"backend":           natsBackend,
@@ -172,7 +171,7 @@ func TestNATSClient_Health(t *testing.T) {
 			setupMocks: func(mockConn *MockConnInterface, _ *MockJetStream) {
 				mockConn.EXPECT().Status().Return(nats.DISCONNECTED).Times(2)
 			},
-			expectedStatus: datasource.StatusDown,
+			expectedStatus: health.StatusDown,
 			expectedDetails: map[string]interface{}{
 				"host":              NatsServer,
 				"backend":           natsBackend,
@@ -187,7 +186,7 @@ func TestNATSClient_Health(t *testing.T) {
 				mockConn.EXPECT().Status().Return(nats.CONNECTED).Times(2)
 				mockJS.EXPECT().AccountInfo(gomock.Any()).Return(nil, errJetStream).Times(2)
 			},
-			expectedStatus: datasource.StatusUp,
+			expectedStatus: health.StatusUp,
 			expectedDetails: map[string]interface{}{
 				"host":              NatsServer,
 				"backend":           natsBackend,
@@ -202,7 +201,7 @@ func TestNATSClient_Health(t *testing.T) {
 			setupMocks: func(mockConn *MockConnInterface, _ *MockJetStream) {
 				mockConn.EXPECT().Status().Return(nats.CONNECTED).Times(2)
 			},
-			expectedStatus: datasource.StatusUp,
+			expectedStatus: health.StatusUp,
 			expectedDetails: map[string]interface{}{
 				"host":              NatsServer,
 				"backend":           natsBackend,
