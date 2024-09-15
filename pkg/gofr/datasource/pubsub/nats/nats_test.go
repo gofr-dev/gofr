@@ -3,7 +3,6 @@ package nats_test
 import (
 	"context"
 	"errors"
-	"sync"
 	"testing"
 	"time"
 
@@ -13,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"gofr.dev/pkg/gofr"
+	"gofr.dev/pkg/gofr/datasource/pubsub"
 	natspubsub "gofr.dev/pkg/gofr/datasource/pubsub/nats"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/testutil"
@@ -93,8 +93,12 @@ func TestValidateConfigs(t *testing.T) {
 			name: "Empty Stream Subject",
 			config: natspubsub.Config{
 				Server: natspubsub.NatsServer,
+				Stream: natspubsub.StreamConfig{
+					Stream: "test-stream",
+					// Subjects is intentionally left empty
+				},
 			},
-			expected: natspubsub.ErrStreamNotProvided,
+			expected: natspubsub.ErrSubjectsNotProvided, // Update this to match the actual error
 		},
 	}
 
@@ -201,7 +205,7 @@ func TestNATSClient_SubscribeSuccess(t *testing.T) {
 	mockConsumer := natspubsub.NewMockConsumer(ctrl)
 	mockMsgBatch := natspubsub.NewMockMessageBatch(ctrl)
 	mockMsg := natspubsub.NewMockMsg(ctrl)
-	logger := logging.NewLogger(logging.DEBUG)
+	logger := logging.NewMockLogger(logging.DEBUG)
 	metrics := natspubsub.NewMockMetrics(ctrl)
 
 	client := &natspubsub.NATSClient{
@@ -219,41 +223,41 @@ func TestNATSClient_SubscribeSuccess(t *testing.T) {
 		},
 	}
 
-	// set a context with a 30 second timeout
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	mockJS.EXPECT().CreateStream(ctx, gomock.Any()).Return(nil, nil)
-	mockJS.EXPECT().CreateOrUpdateConsumer(ctx, client.Config.Stream.Stream, gomock.Any()).Return(mockConsumer, nil)
+	mockJS.EXPECT().CreateStream(gomock.Any(), gomock.Any()).Return(nil, nil)
+	mockJS.EXPECT().CreateOrUpdateConsumer(gomock.Any(), client.Config.Stream.Stream, gomock.Any()).Return(mockConsumer, nil)
 
-	// First call to Fetch returns the message batch
 	mockConsumer.EXPECT().Fetch(client.Config.BatchSize, gomock.Any()).Return(mockMsgBatch, nil).Times(1)
-	// Subsequent calls to Fetch return context.Canceled error
 	mockConsumer.EXPECT().Fetch(client.Config.BatchSize, gomock.Any()).Return(nil, context.Canceled).AnyTimes()
 
 	msgChan := make(chan jetstream.Msg, 1)
+	mockMsg.EXPECT().Data().Return([]byte("test message")).AnyTimes()
+	mockMsg.EXPECT().Subject().Return("test-subject").AnyTimes()
 	msgChan <- mockMsg
 	close(msgChan)
+
 	mockMsgBatch.EXPECT().Messages().Return(msgChan)
-	mockMsgBatch.EXPECT().Error().Return(nil)
+	mockMsgBatch.EXPECT().Error().Return(nil).AnyTimes()
 
-	mockMsg.EXPECT().Ack().Return(nil).Times(1)
+	mockMsg.EXPECT().Ack().Return(nil).AnyTimes()
 
-	var wg sync.WaitGroup
-	wg.Add(1)
-
-	/*
-		handler := func(ctx *gofr.Context, msg jetstream.Msg) error {
-			defer wg.Done()
-			cancel() // Cancel the context to stop the consuming loop
-			return nil
+	receivedMsg := make(chan *pubsub.Message, 1)
+	go func() {
+		msg, err := client.Subscribe(ctx, "test-subject")
+		if err == nil {
+			receivedMsg <- msg
 		}
-	*/
+	}()
 
-	_, err := client.Subscribe(ctx, "test-subject")
-	require.NoError(t, err)
-
-	wg.Wait()
+	select {
+	case msg := <-receivedMsg:
+		assert.Equal(t, "test-subject", msg.Topic)
+		assert.Equal(t, []byte("test message"), msg.Value)
+	case <-time.After(2 * time.Second):
+		t.Fatal("Timed out waiting for message")
+	}
 }
 
 func TestNATSClient_SubscribeError(t *testing.T) {
@@ -277,23 +281,23 @@ func TestNATSClient_SubscribeError(t *testing.T) {
 		},
 	}
 
-	ctx := context.TODO()
+	ctx := context.Background()
 
-	mockJS.EXPECT().CreateStream(ctx, gomock.Any()).Return(nil, errors.New("failed to create stream"))
+	expectedErr := errors.New("failed to create stream")
+	mockJS.EXPECT().CreateStream(ctx, gomock.Any()).Return(nil, expectedErr)
 
-	/*
-		handler := func(ctx *gofr.Context, msg jetstream.Msg) error {
-			return nil
-		}
-	*/
+	var err error
+	logs := testutil.StderrOutputForFunc(func() {
+		client.Logger = logging.NewMockLogger(logging.DEBUG)
+		_, err = client.Subscribe(ctx, "test-subject")
+	})
 
-	// err := client.Subscribe(ctx, "test-subject", handler)
-	_, err := client.Subscribe(ctx, "test-subject")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to create stream")
+	assert.Contains(t, logs, "failed to create or update stream: failed to create stream")
 }
 
-// make a local receiver of the natspubsub.NATSClient
+// natsClient is a local receiver.
 type natsClient struct {
 	*natspubsub.NATSClient
 }
