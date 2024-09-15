@@ -3,11 +3,14 @@ package container
 import (
 	"context"
 	"errors"
+	"log"
 	"strconv"
 	"strings"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql" // This is required to be blank import
+	"gofr.dev/pkg/gofr/datasource/pubsub/nats"
+	"gofr.dev/pkg/gofr/websocket"
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/datasource/file"
@@ -23,7 +26,6 @@ import (
 	"gofr.dev/pkg/gofr/metrics/exporters"
 	"gofr.dev/pkg/gofr/service"
 	"gofr.dev/pkg/gofr/version"
-	"gofr.dev/pkg/gofr/websocket"
 )
 
 // Container is a collection of all common application level concerns. Things like Logger, Connection Pool for Redis
@@ -66,6 +68,7 @@ func NewContainer(conf config.Config) *Container {
 }
 
 func (c *Container) Create(conf config.Config) {
+	log.Println("***** Creating")
 	if c.appName != "" {
 		c.appName = conf.GetOrDefault("APP_NAME", "gofr-app")
 	}
@@ -129,6 +132,17 @@ func (c *Container) Create(conf config.Config) {
 		}, c.Logger, c.metricsManager)
 	case "MQTT":
 		c.PubSub = c.createMqttPubSub(conf)
+	case "NATS":
+		log.Println("NATS")
+		natsConfig := &nats.Config{
+			Server: conf.Get("PUBSUB_BROKER"),
+			Stream: nats.StreamConfig{
+				Stream:  conf.Get("NATS_STREAM"),
+				Subject: conf.Get("NATS_STREAM"),
+			},
+			Consumer: conf.Get("NATS_CONSUMER"),
+		}
+		c.PubSub, _ = nats.New(natsConfig, c.Logger, c.metricsManager)
 	}
 
 	c.File = file.New(c.Logger)

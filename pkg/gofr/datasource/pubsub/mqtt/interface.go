@@ -5,7 +5,7 @@ package mqtt
 import (
 	"context"
 
-	"gofr.dev/pkg/gofr/datasource"
+	"gofr.dev/pkg/gofr/health"
 )
 
 //go:generate go run go.uber.org/mock/mockgen -destination=mock_client.go -package=mqtt github.com/eclipse/paho.mqtt.golang Client
@@ -30,5 +30,5 @@ type PubSub interface {
 	Unsubscribe(topic string) error
 	Disconnect(waitTime uint) error
 	Ping() error
-	Health() datasource.Health
+	Health() health.Health
 }

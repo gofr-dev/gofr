@@ -5,7 +5,7 @@ package pubsub
 import (
 	"context"
 
-	"gofr.dev/pkg/gofr/datasource"
+	"gofr.dev/pkg/gofr/health"
 )
 
 type Publisher interface {
@@ -19,7 +19,7 @@ type Subscriber interface {
 type Client interface {
 	Publisher
 	Subscriber
-	Health() datasource.Health
+	Health() health.Health
 
 	CreateTopic(context context.Context, name string) error
 	DeleteTopic(context context.Context, name string) error

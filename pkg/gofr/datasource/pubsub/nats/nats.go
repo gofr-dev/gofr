@@ -4,13 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"sync"
 	"time"
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
-	"gofr.dev/pkg/gofr"
 	"gofr.dev/pkg/gofr/datasource/pubsub"
+	"gofr.dev/pkg/gofr/health"
 )
 
 // Config defines the NATS client configuration.
@@ -21,6 +22,13 @@ type Config struct {
 	MaxWait     time.Duration
 	MaxPullWait int
 	BatchSize   int
+}
+
+// StreamConfig holds stream settings for NATS JetStream.
+type StreamConfig struct {
+	Stream     string
+	Subject    string
+	MaxDeliver int
 }
 
 type subscription struct {
@@ -48,6 +56,30 @@ type NATSClient struct {
 	metrics       Metrics
 	subscriptions map[string]*subscription
 	subMu         sync.Mutex
+}
+
+func (n *NATSClient) CreateTopic(ctx context.Context, name string) error {
+	return n.CreateStream(ctx, StreamConfig{
+		Stream:  name,
+		Subject: name,
+	})
+}
+
+func (n *NATSClient) DeleteTopic(ctx context.Context, name string) error {
+	n.logger.Debugf("Deleting topic (stream) %s", name)
+
+	err := n.js.DeleteStream(ctx, name)
+	if err != nil {
+		if errors.Is(err, jetstream.ErrStreamNotFound) {
+			n.logger.Debugf("Stream %s not found, considering delete successful", name)
+			return nil // If the stream doesn't exist, we consider it a success
+		}
+		n.logger.Errorf("failed to delete stream (topic) %s: %v", name, err)
+		return err
+	}
+
+	n.logger.Debugf("Successfully deleted topic (stream) %s", name)
+	return nil
 }
 
 func NewNATSClient(
@@ -95,46 +127,67 @@ func NewNATSClient(
 	}, nil
 }
 
-// New initializes a new NATS JetStream client.
-func New(
-	conf *Config,
-	logger pubsub.Logger,
-	metrics Metrics,
-	natsConnect func(string, ...nats.Option) (*nats.Conn, error),
-) (*NATSClient, error) {
-	if err := validateConfigs(conf); err != nil {
-		logger.Errorf("could not initialize NATS JetStream: %v", err)
-		return nil, err
+func New(conf *Config, logger pubsub.Logger, metrics Metrics) (pubsub.Client, error) {
+	// Wrapper function for nats.Connect
+	natsConnectWrapper := func(url string, options ...nats.Option) (ConnInterface, error) {
+		conn, err := nats.Connect(url, options...)
+		if err != nil {
+			return nil, err
+		}
+		return &natsConnWrapper{Conn: conn}, nil
 	}
 
-	logger.Debugf("connecting to NATS server '%s'", conf.Server)
+	// Wrapper function for jetstream.New
+	jetstreamNewWrapper := func(nc *nats.Conn) (jetstream.JetStream, error) {
+		return jetstream.New(nc)
+	}
 
-	nc, err := natsConnect(conf.Server)
+	// Create the NATSClient using the wrapper functions
+	client, err := NewNATSClient(conf, logger, metrics, natsConnectWrapper, jetstreamNewWrapper)
 	if err != nil {
-		logger.Errorf("failed to connect to NATS server at %v: %v", conf.Server, err)
 		return nil, err
 	}
 
-	// Wrap the nats.Conn with our wrapper
-	wrappedConn := &natsConnWrapper{Conn: nc}
+	return &natsPubSubWrapper{client: client}, nil
+}
 
-	js, err := jetstream.New(nc)
-	if err != nil {
-		logger.Errorf("failed to create JetStream context: %v", err)
-		return nil, err
+// natsPubSubWrapper adapts NATSClient to pubsub.Client
+type natsPubSubWrapper struct {
+	client *NATSClient
+}
+
+func (w *natsPubSubWrapper) Publish(ctx context.Context, topic string, message []byte) error {
+	return w.client.Publish(ctx, topic, message)
+}
+
+func (w *natsPubSubWrapper) Subscribe(ctx context.Context, topic string) (*pubsub.Message, error) {
+	return w.client.Subscribe(ctx, topic)
+}
+
+func (w *natsPubSubWrapper) CreateTopic(ctx context.Context, name string) error {
+	return w.client.CreateTopic(ctx, name)
+}
+
+func (w *natsPubSubWrapper) DeleteTopic(ctx context.Context, name string) error {
+	return w.client.DeleteTopic(ctx, name)
+}
+
+func (w *natsPubSubWrapper) Close() error {
+	return w.client.Close()
+}
+
+func (w *natsPubSubWrapper) Health() health.Health {
+	// Implement health check
+	status := health.StatusUp
+	if w.client.conn.Status() != nats.CONNECTED {
+		status = health.StatusDown
 	}
-
-	logger.Logf("connected to NATS server '%s'", conf.Server)
-
-	return &NATSClient{
-		conn:          wrappedConn,
-		js:            js,
-		mu:            &sync.RWMutex{},
-		logger:        logger,
-		config:        conf,
-		metrics:       metrics,
-		subscriptions: make(map[string]*subscription),
-	}, nil
+	return health.Health{
+		Status: status,
+		Details: map[string]interface{}{
+			"server": w.client.config.Server,
+		},
+	}
 }
 
 func (n *NATSClient) Publish(ctx context.Context, subject string, message []byte) error {
@@ -157,7 +210,64 @@ func (n *NATSClient) Publish(ctx context.Context, subject string, message []byte
 	return nil
 }
 
-func (n *NATSClient) Subscribe(ctx context.Context, subject string, handler MessageHandler) error {
+func (n *NATSClient) Subscribe(ctx context.Context, topic string) (*pubsub.Message, error) {
+	msgChan := make(chan *pubsub.Message)
+	errChan := make(chan error, 1)
+
+	go func() {
+		err := n.subscribeInternal(ctx, topic, func(msg jetstream.Msg) {
+			pubsubMsg := &pubsub.Message{
+				Topic:     topic,
+				Value:     msg.Data(),
+				Committer: n.createCommitter(msg),
+			}
+			select {
+			case msgChan <- pubsubMsg:
+			case <-ctx.Done():
+				return
+			}
+		})
+		if err != nil {
+			errChan <- err
+		}
+	}()
+
+	select {
+	case msg := <-msgChan:
+		return msg, nil
+	case err := <-errChan:
+		return nil, err
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+// createCommitter returns a Committer for the given NATS message
+func (n *NATSClient) createCommitter(msg jetstream.Msg) pubsub.Committer {
+	return &natsCommitter{msg: msg}
+}
+
+// natsCommitter implements the pubsub.Committer interface for NATS messages
+type natsCommitter struct {
+	msg jetstream.Msg
+}
+
+func (c *natsCommitter) Commit() {
+	// return c.msg.Ack()
+	err := c.msg.Ack()
+	if err != nil {
+		c.msg.Nak()
+		log.Println("Error committing message:", err)
+		return
+	}
+	return
+}
+
+func (c *natsCommitter) Rollback() error {
+	return c.msg.Nak()
+}
+
+func (n *NATSClient) subscribeInternal(ctx context.Context, subject string, handler func(jetstream.Msg)) error {
 	if n.config.Consumer == "" {
 		n.logger.Error("consumer name not provided")
 		return errors.New("consumer name not provided")
@@ -191,7 +301,7 @@ func (n *NATSClient) Subscribe(ctx context.Context, subject string, handler Mess
 	return nil
 }
 
-func (n *NATSClient) startConsuming(ctx context.Context, cons jetstream.Consumer, handler MessageHandler) {
+func (n *NATSClient) startConsuming(ctx context.Context, cons jetstream.Consumer, handler func(jetstream.Msg)) {
 	for {
 		select {
 		case <-ctx.Done():
@@ -210,9 +320,7 @@ func (n *NATSClient) startConsuming(ctx context.Context, cons jetstream.Consumer
 		}
 
 		for msg := range msgs.Messages() {
-			if err := n.processMessage(ctx, msg, handler); err != nil {
-				n.logger.Errorf("failed to process message: %v", err)
-			}
+			handler(msg)
 		}
 
 		if msgs.Error() != nil {
@@ -222,9 +330,7 @@ func (n *NATSClient) startConsuming(ctx context.Context, cons jetstream.Consumer
 }
 
 func (n *NATSClient) processMessage(ctx context.Context, msg jetstream.Msg, handler MessageHandler) error {
-	msgCtx := &gofr.Context{Context: ctx}
-
-	if err := handler(msgCtx, msg); err != nil {
+	if err := handler(ctx, msg); err != nil {
 		n.logger.Errorf("failed to process message: %v", err)
 		return n.nakMessage(msg)
 	}
@@ -248,7 +354,7 @@ func (n *NATSClient) ackMessage(msg jetstream.Msg) error {
 	return nil
 }
 
-func (n *NATSClient) Close(ctx context.Context) error {
+func (n *NATSClient) Close() error {
 	n.subMu.Lock()
 	for _, sub := range n.subscriptions {
 		sub.cancel()

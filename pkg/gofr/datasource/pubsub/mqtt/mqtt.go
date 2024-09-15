@@ -11,8 +11,8 @@ import (
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel"
+	"gofr.dev/pkg/gofr/health"
 
-	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 )
 
@@ -247,8 +247,8 @@ func (m *MQTT) Publish(ctx context.Context, topic string, message []byte) error 
 	return nil
 }
 
-func (m *MQTT) Health() datasource.Health {
-	res := datasource.Health{
+func (m *MQTT) Health() health.Health {
+	res := health.Health{
 		Status: "DOWN",
 		Details: map[string]interface{}{
 			"backend": "MQTT",

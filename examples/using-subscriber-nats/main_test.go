@@ -2,13 +2,15 @@ package main
 
 import (
 	"context"
+	"log"
 	"strings"
 	"testing"
 	"time"
 
-	nc "github.com/nats-io/nats.go"
+	"github.com/nats-io/nats-server/v2/server"
+	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
-	"gofr.dev/pkg/gofr/datasource/pubsub/nats"
+	n "gofr.dev/pkg/gofr/datasource/pubsub/nats"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/testutil"
 )
@@ -17,89 +19,54 @@ type mockMetrics struct{}
 
 func (m *mockMetrics) IncrementCounter(ctx context.Context, name string, labels ...string) {}
 
-// Wrapper struct for *nc.Conn that implements nats.ConnInterface
+// Wrapper struct for *nats.Conn that implements n.ConnInterface
 type connWrapper struct {
-	*nc.Conn
+	*nats.Conn
 }
 
 // Implement the NatsConn method for the wrapper
-func (w *connWrapper) NatsConn() *nc.Conn {
+func (w *connWrapper) NatsConn() *nats.Conn {
 	return w.Conn
 }
 
-func initializeTest(t *testing.T, serverURL string) {
-	mockNatsConnect := func(serverURL string, opts ...nc.Option) (nats.ConnInterface, error) {
-		conn, err := nc.Connect(serverURL, opts...)
-		if err != nil {
-			return nil, err
-		}
-		return &connWrapper{conn}, nil
+func runNATSServer() (*server.Server, error) {
+	opts := &server.Options{
+		ConfigFile: "configs/nats-server.conf",
+		JetStream:  true,
+		Port:       -1,
+		Trace:      true,
 	}
-
-	mockJetstreamNew := func(nc *nc.Conn) (jetstream.JetStream, error) {
-		return jetstream.New(nc)
-	}
-
-	client, err := nats.NewNATSClient(&nats.Config{
-		Server: serverURL,
-		Stream: nats.StreamConfig{
-			Stream:  "sample-stream",
-			Subject: "order-logs",
-		},
-	}, logging.NewMockLogger(logging.INFO), &mockMetrics{}, mockNatsConnect, mockJetstreamNew)
-	if err != nil {
-		t.Fatalf("Error initializing NATS client: %v", err)
-	}
-
-	ctx := context.Background()
-
-	orderLogsConfig := jetstream.StreamConfig{
-		Name:     "order-logs",
-		Subjects: []string{"order-logs"},
-	}
-	s, err := client.CreateOrUpdateStream(ctx, orderLogsConfig)
-	if err != nil {
-		t.Fatalf("Error creating stream 'order-logs': %v", err)
-	}
-	t.Logf("Created stream: %v", s)
-
-	productsConfig := nats.StreamConfig{
-		Stream:  "products",
-		Subject: "products",
-	}
-	err = client.CreateStream(context.Background(), productsConfig)
-	if err != nil {
-		t.Fatalf("Error creating stream 'products': %v", err)
-	}
-
-	// Publish messages
-	err = client.Publish(context.Background(), "order-logs", []byte(`{"orderId":"123","status":"pending"}`))
-	if err != nil {
-		t.Errorf("Error while publishing to 'order-logs': %v", err)
-	}
-
-	err = client.Publish(context.Background(), "products", []byte(`{"productId":"123","price":"599"}`))
-	if err != nil {
-		t.Errorf("Error while publishing to 'products': %v", err)
-	}
+	return server.NewServer(opts)
 }
 
 func TestExampleSubscriber(t *testing.T) {
 	// Start the embedded NATS server
-	embeddedServer, err := nats.RunEmbeddedNATSServer()
+	natsServer, err := runNATSServer()
 	if err != nil {
-		t.Fatalf("Failed to start embedded NATS server: %v", err)
+		t.Fatalf("Failed to start NATS server: %v", err)
 	}
-	defer embeddedServer.Shutdown()
+	defer natsServer.Shutdown()
 
-	serverURL := embeddedServer.ClientURL()
+	natsServer.Start()
 
-	log := testutil.StdoutOutputForFunc(func() {
+	if !natsServer.ReadyForConnections(5 * time.Second) {
+		t.Fatal("NATS server failed to start")
+	}
+
+	serverURL := natsServer.ClientURL()
+
+	logs := testutil.StdoutOutputForFunc(func() {
+		// Start the main application
 		go main()
-		time.Sleep(time.Second * 1) // Giving some time to start the server
 
+		// Wait for the application to initialize
+		time.Sleep(2 * time.Second)
+
+		// Initialize test data
 		initializeTest(t, serverURL)
-		time.Sleep(time.Second * 20) // Giving some time to publish events
+
+		// Wait for messages to be processed
+		time.Sleep(5 * time.Second)
 	})
 
 	testCases := []struct {
@@ -117,8 +84,65 @@ func TestExampleSubscriber(t *testing.T) {
 	}
 
 	for i, tc := range testCases {
-		if !strings.Contains(log, tc.expectedLog) {
-			t.Errorf("TEST[%d], Failed.\n%s", i, tc.desc)
+		if !strings.Contains(logs, tc.expectedLog) {
+			t.Errorf("TEST[%d] Failed.\n%s\nExpected log: %s\nActual logs: %s",
+				i, tc.desc, tc.expectedLog, logs)
 		}
+	}
+}
+
+func initializeTest(t *testing.T, serverURL string, opts ...nats.Option) {
+	conf := &n.Config{
+		Server: serverURL,
+		Stream: n.StreamConfig{
+			Stream:  "sample-stream",
+			Subject: "order-logs,products",
+		},
+	}
+
+	mockMetrics := &mockMetrics{}
+	logger := logging.NewMockLogger(logging.DEBUG)
+
+	client, err := n.NewNATSClient(conf, logger, mockMetrics,
+		func(serverURL string, opts ...nats.Option) (n.ConnInterface, error) {
+			conn, err := nats.Connect(serverURL, opts...)
+			if err != nil {
+				return nil, err
+			}
+			return &connWrapper{conn}, nil
+		},
+		func(nc *nats.Conn) (jetstream.JetStream, error) {
+			return jetstream.New(nc)
+		},
+	)
+
+	if err != nil {
+		t.Fatalf("Error initializing NATS client: %v", err)
+	}
+
+	ctx := context.Background()
+
+	// Create or update stream
+	streamConfig := jetstream.StreamConfig{
+		Name: "sample-stream",
+		// Subjects: []string{"order-logs", "products"},
+	}
+
+	log.Printf("Creating stream %s", streamConfig.Name)
+
+	_, err = client.CreateOrUpdateStream(ctx, streamConfig)
+	if err != nil {
+		t.Fatalf("Error creating stream: %v", err)
+	}
+
+	// Publish test messages
+	err = client.Publish(ctx, "order-logs", []byte(`{"orderId":"123","status":"pending"}`))
+	if err != nil {
+		t.Errorf("Error publishing to 'order-logs': %v", err)
+	}
+
+	err = client.Publish(ctx, "products", []byte(`{"productId":"123","price":"599"}`))
+	if err != nil {
+		t.Errorf("Error publishing to 'products': %v", err)
 	}
 }

@@ -5,7 +5,7 @@ import (
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
-	"gofr.dev/pkg/gofr"
+	"gofr.dev/pkg/gofr/health"
 )
 
 type ConnInterface interface {
@@ -22,16 +22,9 @@ type Client interface {
 	DeleteStream(ctx context.Context, name string) error
 	CreateStream(ctx context.Context, cfg StreamConfig) error
 	CreateOrUpdateStream(ctx context.Context, cfg jetstream.StreamConfig) (jetstream.Stream, error)
+	Health() health.Health
 }
 
 // MessageHandler represents the function signature for handling messages.
-type MessageHandler func(*gofr.Context, jetstream.Msg) error
-
-// StreamConfig holds stream settings for NATS JetStream.
-type StreamConfig struct {
-	Stream        string
-	Subject       string
-	AckPolicy     nats.AckPolicy
-	DeliverPolicy nats.DeliverPolicy
-	MaxDeliver    int
-}
+// type MessageHandler func(*gofr.Context, jetstream.Msg) error
+type MessageHandler func(context.Context, jetstream.Msg) error
