@@ -26,5 +26,4 @@ type Client interface {
 }
 
 // MessageHandler represents the function signature for handling messages.
-// type MessageHandler func(*gofr.Context, jetstream.Msg) error
 type MessageHandler func(context.Context, jetstream.Msg) error

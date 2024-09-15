@@ -24,8 +24,8 @@ func TestNewNATSClient(t *testing.T) {
 	conf := &Config{
 		Server: "nats://localhost:4222",
 		Stream: StreamConfig{
-			Stream:  "test-stream",
-			Subject: "test-subject",
+			Stream:   "test-stream",
+			Subjects: []string{"test-subject"},
 		},
 		Consumer: "test-consumer",
 	}
@@ -75,7 +75,10 @@ func TestValidateConfigs(t *testing.T) {
 			name: "Valid Config",
 			config: Config{
 				Server: natsServer,
-				Stream: StreamConfig{Subject: "test-stream"},
+				Stream: StreamConfig{
+					Stream:   "test-stream",
+					Subjects: []string{"test-subject"},
+				},
 			},
 			expected: nil,
 		},
@@ -113,8 +116,8 @@ func TestNATSClient_Publish(t *testing.T) {
 	conf := &Config{
 		Server: "nats://localhost:4222",
 		Stream: StreamConfig{
-			Stream:  "test-stream",
-			Subject: "test-subject",
+			Stream:   "test-stream",
+			Subjects: []string{"test-subject"},
 		},
 		Consumer: "test-consumer",
 	}
@@ -158,8 +161,8 @@ func TestNATSClient_PublishError(t *testing.T) {
 	config := &Config{
 		Server: "nats://localhost:4222",
 		Stream: StreamConfig{
-			Stream:  "test-stream",
-			Subject: "test-subject",
+			Stream:   "test-stream",
+			Subjects: []string{"test-subject"},
 		},
 		Consumer: "test-consumer",
 	}
@@ -205,8 +208,8 @@ func TestNATSClient_SubscribeSuccess(t *testing.T) {
 		metrics: metrics,
 		config: &Config{
 			Stream: StreamConfig{
-				Stream:  "test-stream",
-				Subject: "test-subject",
+				Stream:   "test-stream",
+				Subjects: []string{"test-subject"},
 			},
 			Consumer:  "test-consumer",
 			MaxWait:   time.Second,
@@ -236,13 +239,15 @@ func TestNATSClient_SubscribeSuccess(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 
-	handler := func(ctx *gofr.Context, msg jetstream.Msg) error {
-		defer wg.Done()
-		cancel() // Cancel the context to stop the consuming loop
-		return nil
-	}
+	/*
+		handler := func(ctx *gofr.Context, msg jetstream.Msg) error {
+			defer wg.Done()
+			cancel() // Cancel the context to stop the consuming loop
+			return nil
+		}
+	*/
 
-	err := client.Subscribe(ctx, "test-subject", handler)
+	_, err := client.Subscribe(ctx, "test-subject")
 	require.NoError(t, err)
 
 	wg.Wait()
@@ -262,8 +267,8 @@ func TestNATSClient_SubscribeError(t *testing.T) {
 		metrics: metrics,
 		config: &Config{
 			Stream: StreamConfig{
-				Stream:  "test-stream",
-				Subject: "test-subject",
+				Stream:   "test-stream",
+				Subjects: []string{"test-subject"},
 			},
 			Consumer: "test-consumer",
 		},
@@ -273,11 +278,14 @@ func TestNATSClient_SubscribeError(t *testing.T) {
 
 	mockJS.EXPECT().CreateStream(ctx, gomock.Any()).Return(nil, errors.New("failed to create stream"))
 
-	handler := func(ctx *gofr.Context, msg jetstream.Msg) error {
-		return nil
-	}
+	/*
+		handler := func(ctx *gofr.Context, msg jetstream.Msg) error {
+			return nil
+		}
+	*/
 
-	err := client.Subscribe(ctx, "test-subject", handler)
+	// err := client.Subscribe(ctx, "test-subject", handler)
+	_, err := client.Subscribe(ctx, "test-subject")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to create stream")
 }
@@ -316,11 +324,9 @@ func TestNATSClient_Close(t *testing.T) {
 		},
 	}
 
-	ctx := context.TODO()
-
 	mockConn.EXPECT().Close()
 
-	err := client.Close(ctx)
+	err := client.Close()
 	require.NoError(t, err)
 	assert.Empty(t, client.subscriptions)
 }
@@ -350,7 +356,7 @@ func TestNew(t *testing.T) {
 			tc.config.Server = s.ClientURL() // Use the embedded server's URL
 
 			logs := testutil.StdoutOutputForFunc(func() {
-				client, err := New(&tc.config, mockLogger, mockMetrics, tc.natsConnectFunc)
+				client, err := New(&tc.config, mockLogger, mockMetrics)
 				if tc.expectErr {
 					assert.Nil(t, client)
 					assert.Error(t, err)
