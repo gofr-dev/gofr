@@ -2,7 +2,6 @@ package nats_test
 
 import (
 	"context"
-	"errors"
 	"testing"
 	"time"
 
@@ -11,13 +10,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
-	"gofr.dev/pkg/gofr"
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 	natspubsub "gofr.dev/pkg/gofr/datasource/pubsub/nats"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/testutil"
 )
 
+// TestNewNATSClient tests the NewNATSClient function.
 func TestNewNATSClient(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -40,12 +39,14 @@ func TestNewNATSClient(t *testing.T) {
 	metrics := natspubsub.NewMockMetrics(ctrl)
 
 	// Create a mock function for nats.Connect
-	mockNatsConnect := func(serverURL string, opts ...nats.Option) (natspubsub.ConnInterface, error) {
+	//nolint:unparam // mock function
+	mockNatsConnect := func(_ string, _ ...nats.Option) (natspubsub.ConnInterface, error) {
 		return mockConn, nil
 	}
 
 	// Create a mock function for jetstream.New
-	mockJetStreamNew := func(nc *nats.Conn) (jetstream.JetStream, error) {
+	//nolint:unparam // mock function
+	mockJetStreamNew := func(_ *nats.Conn) (jetstream.JetStream, error) {
 		return mockJS, nil
 	}
 
@@ -58,12 +59,10 @@ func TestNewNATSClient(t *testing.T) {
 		assert.Equal(t, mockConn, client.Conn)
 		assert.Equal(t, mockJS, client.Js)
 		assert.Equal(t, conf, client.Config)
-
 	})
 
 	assert.Contains(t, logs, "connecting to NATS server 'nats://localhost:4222'")
 	assert.Contains(t, logs, "connected to NATS server 'nats://localhost:4222'")
-
 }
 
 func TestValidateConfigs(t *testing.T) {
@@ -232,8 +231,10 @@ func TestNATSClient_SubscribeSuccess(t *testing.T) {
 	mockConsumer.EXPECT().Fetch(client.Config.BatchSize, gomock.Any()).Return(nil, context.Canceled).AnyTimes()
 
 	msgChan := make(chan jetstream.Msg, 1)
+
 	mockMsg.EXPECT().Data().Return([]byte("test message")).AnyTimes()
 	mockMsg.EXPECT().Subject().Return("test-subject").AnyTimes()
+
 	msgChan <- mockMsg
 	close(msgChan)
 
@@ -243,6 +244,7 @@ func TestNATSClient_SubscribeSuccess(t *testing.T) {
 	mockMsg.EXPECT().Ack().Return(nil).AnyTimes()
 
 	receivedMsg := make(chan *pubsub.Message, 1)
+
 	go func() {
 		msg, err := client.Subscribe(ctx, "test-subject")
 		if err == nil {
@@ -282,10 +284,11 @@ func TestNATSClient_SubscribeError(t *testing.T) {
 
 	ctx := context.Background()
 
-	expectedErr := errors.New("failed to create stream")
+	expectedErr := natspubsub.ErrFailedToCreateStream
 	mockJS.EXPECT().CreateStream(ctx, gomock.Any()).Return(nil, expectedErr)
 
 	var err error
+
 	logs := testutil.StderrOutputForFunc(func() {
 		client.Logger = logging.NewMockLogger(logging.DEBUG)
 		_, err = client.Subscribe(ctx, "test-subject")
@@ -297,17 +300,21 @@ func TestNATSClient_SubscribeError(t *testing.T) {
 }
 
 // natsClient is a local receiver, which is used to test the NATS client.
+//
+//nolint:unused // used for testing
 type natsClient struct {
 	*natspubsub.NATSClient
 }
 
 // Mock method to simulate message handling
+/*
 func (n *natsClient) handleMessage(msg jetstream.Msg) {
 	ctx := &gofr.Context{Context: context.Background()}
 	if n.Subscriptions["test-subject"] != nil {
 		_ = n.Subscriptions["test-subject"].Handler(ctx, msg)
 	}
 }
+*/
 
 func TestNATSClient_Close(t *testing.T) {
 	ctrl := gomock.NewController(t)

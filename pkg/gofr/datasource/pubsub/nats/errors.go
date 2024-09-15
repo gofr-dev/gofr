@@ -4,15 +4,12 @@ import "errors"
 
 var (
 	// NATS Errors.
-	ErrFailedToCreateConsumer = errors.New("failed to create or attach consumer")
-	errPublisherNotConfigured = errors.New("can't publish message: publisher not configured or stream is empty")
-	errPublish                = errors.New("failed to publish message to NATS JetStream")
-	errSubscribe              = errors.New("subscribe error")
-	ErrNoMessagesReceived     = errors.New("no messages received")
-	ErrServerNotProvided      = errors.New("NATS server address not provided")
-	errNATSConnection         = errors.New("failed to connect to NATS server")
-	ErrSubjectsNotProvided    = errors.New("subjects not provided")
-	ErrConsumerNotProvided    = errors.New("consumer name not provided")
-	ErrStreamNotProvided      = errors.New("stream name not provided")
-	errJetStream              = errors.New("JetStream error")
+	ErrConnectionStatus           = errors.New("unexpected NATS connection status")
+	ErrServerNotProvided          = errors.New("NATS server address not provided")
+	ErrSubjectsNotProvided        = errors.New("subjects not provided")
+	ErrJetStreamNotConfigured     = errors.New("JetStream is not configured")
+	ErrConsumerNotProvided        = errors.New("consumer name not provided")
+	ErrEmbeddedNATSServerNotReady = errors.New("embedded NATS server not ready")
+	ErrFailedToCreateStream       = errors.New("failed to create stream")
+	errJetStream                  = errors.New("JetStream error")
 )
