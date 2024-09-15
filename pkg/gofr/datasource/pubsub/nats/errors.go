@@ -11,10 +11,8 @@ var (
 	ErrNoMessagesReceived     = errors.New("no messages received")
 	ErrServerNotProvided      = errors.New("NATS server address not provided")
 	errNATSConnection         = errors.New("failed to connect to NATS server")
-
-	// NATS JetStream Errors.
-	ErrConsumerNotProvided = errors.New("consumer name not provided")
-	ErrStreamNotProvided   = errors.New("stream name not provided")
-	errJetStream           = errors.New("JetStream error")
-	errSubjectsNotProvided = errors.New("subjects not provided")
+	ErrSubjectsNotProvided    = errors.New("subjects not provided")
+	ErrConsumerNotProvided    = errors.New("consumer name not provided")
+	ErrStreamNotProvided      = errors.New("stream name not provided")
+	errJetStream              = errors.New("JetStream error")
 )

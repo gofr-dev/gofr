@@ -415,7 +415,7 @@ func ValidateConfigs(conf *Config) error {
 
 	// check if subjects are provided
 	if err == nil && len(conf.Stream.Subjects) == 0 {
-		err = errSubjectsNotProvided
+		err = ErrSubjectsNotProvided
 	}
 
 	return err
