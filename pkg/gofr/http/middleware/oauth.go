@@ -17,8 +17,8 @@ import (
 )
 
 var (
-	errAuthorizationHeaderRequired = errors.New("Authorization header is required")
-	errInvalidAuthorizationHeader  = errors.New("Authorization header format must be Bearer {token}")
+	errAuthorizationHeaderRequired = errors.New("authorization header is required")
+	errInvalidAuthorizationHeader  = errors.New("authorization header format must be Bearer {token}")
 )
 
 // JWTClaim represents a custom key used to store JWT claims within the request context.
