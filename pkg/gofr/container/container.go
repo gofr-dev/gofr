@@ -68,7 +68,6 @@ func NewContainer(conf config.Config) *Container {
 }
 
 func (c *Container) Create(conf config.Config) {
-	log.Println("***** Creating")
 	if c.appName != "" {
 		c.appName = conf.GetOrDefault("APP_NAME", "gofr-app")
 	}

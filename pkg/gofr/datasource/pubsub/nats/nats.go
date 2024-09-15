@@ -27,7 +27,7 @@ type Config struct {
 // StreamConfig holds stream settings for NATS JetStream.
 type StreamConfig struct {
 	Stream     string
-	Subject    string
+	Subjects   []string
 	MaxDeliver int
 }
 
@@ -282,6 +282,8 @@ func (n *NATSClient) subscribeInternal(ctx context.Context, subject string, hand
 		n.logger.Errorf("failed to create or update stream: %v", err)
 		return err
 	}
+
+	log.Println("Filter Subject", subject)
 
 	// Create or update the consumer
 	cons, err := n.js.CreateOrUpdateConsumer(ctx, n.config.Stream.Stream, jetstream.ConsumerConfig{

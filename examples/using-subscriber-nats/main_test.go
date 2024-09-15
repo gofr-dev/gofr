@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"log"
 	"strings"
 	"testing"
 	"time"
@@ -10,7 +9,7 @@ import (
 	"github.com/nats-io/nats-server/v2/server"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
-	n "gofr.dev/pkg/gofr/datasource/pubsub/nats"
+	natspubsub "gofr.dev/pkg/gofr/datasource/pubsub/nats"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/testutil"
 )
@@ -91,20 +90,21 @@ func TestExampleSubscriber(t *testing.T) {
 	}
 }
 
-func initializeTest(t *testing.T, serverURL string, opts ...nats.Option) {
-	conf := &n.Config{
+func initializeTest(t *testing.T, serverURL string) {
+	conf := &natspubsub.Config{
 		Server: serverURL,
-		Stream: n.StreamConfig{
+		Stream: natspubsub.StreamConfig{
 			Stream:  "sample-stream",
 			Subject: "order-logs,products",
 		},
+		Consumer: "test-consumer",
 	}
 
 	mockMetrics := &mockMetrics{}
 	logger := logging.NewMockLogger(logging.DEBUG)
 
-	client, err := n.NewNATSClient(conf, logger, mockMetrics,
-		func(serverURL string, opts ...nats.Option) (n.ConnInterface, error) {
+	client, err := natspubsub.NewNATSClient(conf, logger, mockMetrics,
+		func(serverURL string, opts ...nats.Option) (natspubsub.ConnInterface, error) {
 			conn, err := nats.Connect(serverURL, opts...)
 			if err != nil {
 				return nil, err
@@ -121,19 +121,6 @@ func initializeTest(t *testing.T, serverURL string, opts ...nats.Option) {
 	}
 
 	ctx := context.Background()
-
-	// Create or update stream
-	streamConfig := jetstream.StreamConfig{
-		Name: "sample-stream",
-		// Subjects: []string{"order-logs", "products"},
-	}
-
-	log.Printf("Creating stream %s", streamConfig.Name)
-
-	_, err = client.CreateOrUpdateStream(ctx, streamConfig)
-	if err != nil {
-		t.Fatalf("Error creating stream: %v", err)
-	}
 
 	// Publish test messages
 	err = client.Publish(ctx, "order-logs", []byte(`{"orderId":"123","status":"pending"}`))
