@@ -23,7 +23,7 @@ func TestNewNATSClient(t *testing.T) {
 	defer ctrl.Finish()
 
 	conf := &natspubsub.Config{
-		Server: "nats://localhost:4222",
+		Server: natspubsub.NatsServer,
 		Stream: natspubsub.StreamConfig{
 			Stream:   "test-stream",
 			Subjects: []string{"test-subject"},
@@ -164,7 +164,7 @@ func TestNATSClient_PublishError(t *testing.T) {
 	mockConn := natspubsub.NewMockConnInterface(ctrl)
 
 	config := &natspubsub.Config{
-		Server: "nats://localhost:4222",
+		Server: natspubsub.NatsServer,
 		Stream: natspubsub.StreamConfig{
 			Stream:   "test-stream",
 			Subjects: []string{"test-subject"},
