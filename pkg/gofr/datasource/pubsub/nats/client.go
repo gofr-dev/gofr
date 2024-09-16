@@ -198,9 +198,6 @@ func (n *NATSClient) Subscribe(ctx context.Context, topic string, handler Messag
 	// Create a unique consumer name for each topic
 	consumerName := fmt.Sprintf("%s_%s", n.Config.Consumer, topic)
 
-	// Try to delete existing consumer
-	// _ = n.Js.DeleteConsumer(ctx, n.Config.Stream.Stream, consumerName)
-
 	// Create or update the consumer
 	cons, err := n.Js.CreateOrUpdateConsumer(ctx, n.Config.Stream.Stream, jetstream.ConsumerConfig{
 		Durable:       consumerName,
@@ -223,39 +220,52 @@ func (n *NATSClient) Subscribe(ctx context.Context, topic string, handler Messag
 
 func (n *NATSClient) startConsuming(ctx context.Context, cons jetstream.Consumer, handler MessageHandler) {
 	for {
-		select {
-		case <-ctx.Done():
-			return
-		default:
-		}
-
-		msgs, err := cons.Fetch(n.Config.BatchSize, jetstream.FetchMaxWait(n.Config.MaxWait))
-		if err != nil {
+		if err := n.fetchAndProcessMessages(ctx, cons, handler); err != nil {
 			if errors.Is(err, context.Canceled) {
 				return
 			}
-
-			n.Logger.Errorf("failed to fetch messages: %v", err)
-			time.Sleep(time.Second) // Backoff on error
-
-			continue
-		}
-
-		for msg := range msgs.Messages() {
-			err := handler(ctx, msg)
-			if err != nil {
-				n.Logger.Errorf("Error handling message: %v", err)
-
-				if err := msg.Nak(); err != nil {
-					n.Logger.Errorf("Failed to NAK message: %v", err)
-				}
-			}
-		}
-
-		if err := msgs.Error(); err != nil {
-			n.Logger.Errorf("error fetching messages: %v", err)
+			n.handleFetchError(err)
 		}
 	}
+}
+
+func (n *NATSClient) fetchAndProcessMessages(ctx context.Context, cons jetstream.Consumer, handler MessageHandler) error {
+	msgs, err := cons.Fetch(n.Config.BatchSize, jetstream.FetchMaxWait(n.Config.MaxWait))
+	if err != nil {
+		return err
+	}
+
+	n.processMessages(ctx, msgs, handler)
+
+	return msgs.Error()
+}
+
+func (n *NATSClient) processMessages(ctx context.Context, msgs jetstream.MessageBatch, handler MessageHandler) {
+	for msg := range msgs.Messages() {
+		if err := n.handleMessage(ctx, msg, handler); err != nil {
+			n.Logger.Errorf("Error handling message: %v", err)
+		}
+	}
+}
+
+func (n *NATSClient) handleMessage(ctx context.Context, msg jetstream.Msg, handler MessageHandler) error {
+	if err := handler(ctx, msg); err != nil {
+		return n.nakMessage(msg)
+	}
+	return nil
+}
+
+func (n *NATSClient) nakMessage(msg jetstream.Msg) error {
+	if err := msg.Nak(); err != nil {
+		n.Logger.Errorf("Failed to NAK message: %v", err)
+		return err
+	}
+	return nil
+}
+
+func (n *NATSClient) handleFetchError(err error) {
+	n.Logger.Errorf("failed to fetch messages: %v", err)
+	time.Sleep(time.Second) // Backoff on error
 }
 
 // Close closes the NATS client.
