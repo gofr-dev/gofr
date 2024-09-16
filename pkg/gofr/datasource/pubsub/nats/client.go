@@ -189,96 +189,29 @@ func (n *NATSClient) Publish(ctx context.Context, subject string, message []byte
 	return nil
 }
 
-// Subscribe subscribes to a topic.
-/*
-func (n *NATSClient) Subscribe(ctx context.Context, topic string) (*pubsub.Message, error) {
-	log.Println("Subscribing to topic", topic)
-
-	msgChan := make(chan *pubsub.Message)
-	errChan := make(chan error, 1)
-
-	go func() {
-		err := n.subscribeInternal(ctx, topic, func(msg jetstream.Msg) {
-			n.Logger.Debugf("Received raw message on topic %s: %s", topic, string(msg.Data()))
-			log.Printf("Received raw message on topic %s: %s", topic, string(msg.Data()))
-			pubsubMsg := &pubsub.Message{
-				Topic:     topic,
-				Value:     msg.Data(),
-				Committer: createCommitter(msg),
-			}
-			select {
-			case msgChan <- pubsubMsg:
-			case <-ctx.Done():
-				return
-			}
-		})
-		if err != nil {
-			errChan <- err
-		}
-	}()
-
-	select {
-	case msg := <-msgChan:
-		return msg, nil
-	case err := <-errChan:
-		return nil, err
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	}
-}
-*/
 func (n *NATSClient) Subscribe(ctx context.Context, topic string, handler MessageHandler) error {
-	return n.subscribeInternal(ctx, topic, func(msg jetstream.Msg) {
-		err := handler(ctx, msg)
-		if err != nil {
-			n.Logger.Errorf("Error handling message: %v", err)
-		}
-		/*
-			if err != nil {
-				n.Logger.Errorf("Error handling message: %v", err)
-				if nakErr := msg.Nak(); nakErr != nil {
-					n.Logger.Errorf("Failed to NAK message: %v", nakErr)
-				}
-			} else {
-				if ackErr := msg.Ack(); ackErr != nil {
-					n.Logger.Errorf("Failed to ACK message: %v", ackErr)
-				}
-			}
-		*/
-	})
-}
-
-func (n *NATSClient) subscribeInternal(ctx context.Context, subject string, handler func(jetstream.Msg)) error {
 	if n.Config.Consumer == "" {
 		n.Logger.Error("consumer name not provided")
-
 		return ErrConsumerNotProvided
 	}
 
-	// Create or update the stream
-	_, err := n.Js.CreateStream(ctx, jetstream.StreamConfig{
-		Name:     n.Config.Stream.Stream,
-		Subjects: n.Config.Stream.Subjects,
-	})
-	if err != nil {
-		n.Logger.Errorf("failed to create or update stream: %v", err)
+	// Create a unique consumer name for each topic
+	consumerName := fmt.Sprintf("%s_%s", n.Config.Consumer, topic)
 
-		return err
-	}
-
-	// Create a unique consumer name for each subject
-	consumerName := fmt.Sprintf("%s_%s", n.Config.Consumer, subject)
+	// Try to delete existing consumer
+	// _ = n.Js.DeleteConsumer(ctx, n.Config.Stream.Stream, consumerName)
 
 	// Create or update the consumer
 	cons, err := n.Js.CreateOrUpdateConsumer(ctx, n.Config.Stream.Stream, jetstream.ConsumerConfig{
 		Durable:       consumerName,
 		AckPolicy:     jetstream.AckExplicitPolicy,
-		FilterSubject: subject,
+		FilterSubject: topic,
 		MaxDeliver:    n.Config.Stream.MaxDeliver,
+		DeliverPolicy: jetstream.DeliverNewPolicy,
+		AckWait:       30 * time.Second,
 	})
 	if err != nil {
 		n.Logger.Errorf("failed to create or update consumer: %v", err)
-
 		return err
 	}
 
@@ -288,8 +221,7 @@ func (n *NATSClient) subscribeInternal(ctx context.Context, subject string, hand
 	return nil
 }
 
-// startConsuming starts consuming messages.
-func (n *NATSClient) startConsuming(ctx context.Context, cons jetstream.Consumer, handler func(jetstream.Msg)) {
+func (n *NATSClient) startConsuming(ctx context.Context, cons jetstream.Consumer, handler MessageHandler) {
 	for {
 		select {
 		case <-ctx.Done():
@@ -305,16 +237,21 @@ func (n *NATSClient) startConsuming(ctx context.Context, cons jetstream.Consumer
 
 			n.Logger.Errorf("failed to fetch messages: %v", err)
 			time.Sleep(time.Second) // Backoff on error
-
 			continue
 		}
 
 		for msg := range msgs.Messages() {
-			handler(msg)
+			err := handler(ctx, msg)
+			if err != nil {
+				n.Logger.Errorf("Error handling message: %v", err)
+				if err := msg.Nak(); err != nil {
+					n.Logger.Errorf("Failed to NAK message: %v", err)
+				}
+			}
 		}
 
-		if msgs.Error() != nil {
-			n.Logger.Errorf("error fetching messages: %v", msgs.Error())
+		if err := msgs.Error(); err != nil {
+			n.Logger.Errorf("error fetching messages: %v", err)
 		}
 	}
 }
