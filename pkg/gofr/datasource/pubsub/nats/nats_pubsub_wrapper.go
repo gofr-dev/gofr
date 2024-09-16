@@ -33,6 +33,7 @@ func (w *natsPubSubWrapper) Subscribe(ctx context.Context, topic string) (*pubsu
 		case <-ctx.Done():
 			return ctx.Err()
 		}
+
 		return nil
 	})
 

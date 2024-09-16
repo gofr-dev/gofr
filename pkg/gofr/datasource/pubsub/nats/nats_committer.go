@@ -4,13 +4,7 @@ import (
 	"log"
 
 	"github.com/nats-io/nats.go/jetstream"
-	"gofr.dev/pkg/gofr/datasource/pubsub"
 )
-
-// createCommitter returns a Committer for the given NATS message.
-func createCommitter(msg jetstream.Msg) pubsub.Committer {
-	return &natsCommitter{msg: msg}
-}
 
 // natsCommitter implements the pubsub.Committer interface for NATS messages.
 type natsCommitter struct {
