@@ -317,6 +317,7 @@ func (n *NATSClient) CreateStream(ctx context.Context, cfg StreamConfig) error {
 
 // CreateOrUpdateStream creates or updates a stream in NATS JetStream.
 func (n *NATSClient) CreateOrUpdateStream(ctx context.Context, cfg *jetstream.StreamConfig) (jetstream.Stream, error) {
+	n.Logger.Debugf("Creating or updating stream %s", cfg.Name)
 	stream, err := n.Js.CreateOrUpdateStream(ctx, *cfg)
 	if err != nil {
 		n.Logger.Errorf("failed to create or update stream: %v", err)
