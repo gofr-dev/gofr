@@ -237,6 +237,7 @@ func (n *NATSClient) startConsuming(ctx context.Context, cons jetstream.Consumer
 
 			n.Logger.Errorf("failed to fetch messages: %v", err)
 			time.Sleep(time.Second) // Backoff on error
+
 			continue
 		}
 
@@ -244,6 +245,7 @@ func (n *NATSClient) startConsuming(ctx context.Context, cons jetstream.Consumer
 			err := handler(ctx, msg)
 			if err != nil {
 				n.Logger.Errorf("Error handling message: %v", err)
+
 				if err := msg.Nak(); err != nil {
 					n.Logger.Errorf("Failed to NAK message: %v", err)
 				}

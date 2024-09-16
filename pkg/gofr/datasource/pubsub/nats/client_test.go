@@ -242,10 +242,11 @@ func TestNATSClient_SubscribeSuccess(t *testing.T) {
 
 	messageReceived := make(chan bool)
 
-	err := client.Subscribe(ctx, "test-subject", func(ctx context.Context, msg jetstream.Msg) error {
+	err := client.Subscribe(ctx, "test-subject", func(_ context.Context, msg jetstream.Msg) error {
 		assert.Equal(t, []byte("test message"), msg.Data())
 		assert.Equal(t, "test-subject", msg.Subject())
 		messageReceived <- true
+
 		return nil
 	})
 
@@ -289,7 +290,7 @@ func TestNATSClient_SubscribeError(t *testing.T) {
 
 	logs := testutil.StderrOutputForFunc(func() {
 		client.Logger = logging.NewMockLogger(logging.DEBUG)
-		err = client.Subscribe(ctx, "test-subject", func(ctx context.Context, msg jetstream.Msg) error {
+		err = client.Subscribe(ctx, "test-subject", func(_ context.Context, _ jetstream.Msg) error {
 			return nil // This shouldn't be called in this error case
 		})
 	})
