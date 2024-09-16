@@ -12,4 +12,7 @@ var (
 	ErrEmbeddedNATSServerNotReady = errors.New("embedded NATS server not ready")
 	ErrFailedToCreateStream       = errors.New("failed to create stream")
 	errJetStream                  = errors.New("JetStream error")
+
+	// Message Errors.
+	ErrHandlerError = errors.New("handler error")
 )
