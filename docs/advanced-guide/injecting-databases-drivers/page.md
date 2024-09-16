@@ -289,6 +289,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 
 	"gofr.dev/pkg/gofr"
 	"gofr.dev/pkg/gofr/datasource/solr"
@@ -308,12 +309,13 @@ func main() {
 	app.Run()
 }
 
-func post(c *gofr.Context) (interface{}, error) {
-	p := struct {
-		Name string
-		Age  int
-	}{"Srijan", 24}
+type Person struct {
+	Name string
+	Age  int
+}
 
+func post(c *gofr.Context) (interface{}, error) {
+	p := Person{Name: "Srijan", Age: 24}
 	body, _ := json.Marshal(p)
 
 	resp, err := c.Solr.Create(c, "test", bytes.NewBuffer(body), nil)
@@ -326,6 +328,17 @@ func post(c *gofr.Context) (interface{}, error) {
 
 func get(c *gofr.Context) (interface{}, error) {
 	resp, err := c.Solr.Search(c, "test", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	res, ok := resp.(solr.Response)
+	if !ok {
+		return nil, errors.New("invalid response type")
+	}
+
+	b, _ := json.Marshal(res.Data)
+	err = json.Unmarshal(b, &Person{})
 	if err != nil {
 		return nil, err
 	}
