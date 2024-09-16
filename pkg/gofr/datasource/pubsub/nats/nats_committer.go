@@ -25,6 +25,7 @@ func (c *natsCommitter) Commit() {
 	}
 }
 
+// Nak naks the message.
 func (c *natsCommitter) Nak() error {
 	return c.msg.Nak()
 }
