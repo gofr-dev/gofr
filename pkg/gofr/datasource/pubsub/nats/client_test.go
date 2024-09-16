@@ -223,7 +223,6 @@ func TestNATSClient_SubscribeSuccess(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	mockJS.EXPECT().CreateStream(gomock.Any(), gomock.Any()).Return(nil, nil)
 	mockJS.EXPECT().CreateOrUpdateConsumer(gomock.Any(), client.Config.Stream.Stream, gomock.Any()).Return(mockConsumer, nil)
 
 	mockConsumer.EXPECT().Fetch(client.Config.BatchSize, gomock.Any()).Return(mockMsgBatch, nil).Times(1)
@@ -284,7 +283,7 @@ func TestNATSClient_SubscribeError(t *testing.T) {
 	ctx := context.Background()
 
 	expectedErr := natspubsub.ErrFailedToCreateStream
-	mockJS.EXPECT().CreateStream(ctx, gomock.Any()).Return(nil, expectedErr)
+	mockJS.EXPECT().CreateOrUpdateConsumer(gomock.Any(), client.Config.Stream.Stream, gomock.Any()).Return(nil, expectedErr)
 
 	var err error
 
@@ -297,7 +296,7 @@ func TestNATSClient_SubscribeError(t *testing.T) {
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to create stream")
-	assert.Contains(t, logs, "failed to create or update stream: failed to create stream")
+	assert.Contains(t, logs, "failed to create or update consumer: failed to create stream")
 }
 
 // natsClient is a local receiver, which is used to test the NATS client.
