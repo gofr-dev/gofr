@@ -440,3 +440,48 @@ func TestNatsClient_CreateStream(t *testing.T) {
 	assert.Contains(t, logs, "Creating stream")
 	assert.Contains(t, logs, "test-stream")
 }
+
+func TestNATSClient_CreateOrUpdateStream(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockJS := natspubsub.NewMockJetStream(ctrl)
+	mockLogger := logging.NewMockLogger(logging.DEBUG)
+	mockMetrics := natspubsub.NewMockMetrics(ctrl)
+	mockStream := natspubsub.NewMockStream(ctrl)
+
+	client := &natspubsub.NATSClient{
+		Js:      mockJS,
+		Logger:  mockLogger,
+		Metrics: mockMetrics,
+		Config: &natspubsub.Config{
+			Stream: natspubsub.StreamConfig{
+				Stream: "test-stream",
+			},
+		},
+	}
+
+	ctx := context.Background()
+	cfg := &jetstream.StreamConfig{
+		Name:     "test-stream",
+		Subjects: []string{"test.subject"},
+	}
+
+	// Expect the CreateOrUpdateStream call
+	mockJS.EXPECT().
+		CreateOrUpdateStream(ctx, *cfg).
+		Return(mockStream, nil)
+
+	// Capture log output
+	logs := testutil.StdoutOutputForFunc(func() {
+		client.Logger = logging.NewMockLogger(logging.DEBUG)
+		stream, err := client.CreateOrUpdateStream(ctx, cfg)
+
+		// Assert the results
+		require.NoError(t, err)
+		assert.Equal(t, mockStream, stream)
+	})
+
+	// Check the logs
+	assert.Contains(t, logs, "Creating or updating stream test-stream")
+}
