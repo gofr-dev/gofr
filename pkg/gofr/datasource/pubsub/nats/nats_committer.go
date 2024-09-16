@@ -19,6 +19,7 @@ type natsCommitter struct {
 
 // Commit commits the message.
 func (c *natsCommitter) Commit() {
+	log.Println("Committing message")
 	err := c.msg.Ack()
 	if err != nil {
 		err := c.msg.Nak()
@@ -32,6 +33,10 @@ func (c *natsCommitter) Commit() {
 
 		return
 	}
+}
+
+func (c *natsCommitter) Nak() error {
+	return c.msg.Nak()
 }
 
 // Rollback rolls back the message.

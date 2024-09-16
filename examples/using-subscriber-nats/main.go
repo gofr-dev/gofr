@@ -2,13 +2,10 @@ package main
 
 import (
 	"gofr.dev/pkg/gofr"
-	natspubsub "gofr.dev/pkg/gofr/datasource/pubsub/nats"
 )
 
 func main() {
 	app := gofr.New()
-
-	_ = natspubsub.Config{}
 
 	app.Subscribe("products", func(c *gofr.Context) error {
 		var productInfo struct {

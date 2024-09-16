@@ -10,7 +10,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
-	"gofr.dev/pkg/gofr/datasource/pubsub"
 	natspubsub "gofr.dev/pkg/gofr/datasource/pubsub/nats"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/testutil"
@@ -189,10 +188,10 @@ func TestNATSClient_PublishError(t *testing.T) {
 		client.Logger = logging.NewMockLogger(logging.DEBUG)
 		err := client.Publish(ctx, subject, message)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "JetStream is not configured or subject is empty")
+		assert.Contains(t, err.Error(), "JetStream is not configured")
 	})
 
-	assert.Contains(t, logs, "JetStream is not configured or subject is empty")
+	assert.Contains(t, logs, "JetStream is not configured")
 }
 
 func TestNATSClient_SubscribeSuccess(t *testing.T) {
@@ -234,6 +233,7 @@ func TestNATSClient_SubscribeSuccess(t *testing.T) {
 
 	mockMsg.EXPECT().Data().Return([]byte("test message")).AnyTimes()
 	mockMsg.EXPECT().Subject().Return("test-subject").AnyTimes()
+	mockMsg.EXPECT().Ack().Return(nil).AnyTimes()
 
 	msgChan <- mockMsg
 	close(msgChan)
@@ -241,21 +241,20 @@ func TestNATSClient_SubscribeSuccess(t *testing.T) {
 	mockMsgBatch.EXPECT().Messages().Return(msgChan)
 	mockMsgBatch.EXPECT().Error().Return(nil).AnyTimes()
 
-	mockMsg.EXPECT().Ack().Return(nil).AnyTimes()
+	messageReceived := make(chan bool)
 
-	receivedMsg := make(chan *pubsub.Message, 1)
+	err := client.Subscribe(ctx, "test-subject", func(ctx context.Context, msg jetstream.Msg) error {
+		assert.Equal(t, []byte("test message"), msg.Data())
+		assert.Equal(t, "test-subject", msg.Subject())
+		messageReceived <- true
+		return nil
+	})
 
-	go func() {
-		msg, err := client.Subscribe(ctx, "test-subject")
-		if err == nil {
-			receivedMsg <- msg
-		}
-	}()
+	require.NoError(t, err)
 
 	select {
-	case msg := <-receivedMsg:
-		assert.Equal(t, "test-subject", msg.Topic)
-		assert.Equal(t, []byte("test message"), msg.Value)
+	case <-messageReceived:
+		// Test passed
 	case <-time.After(2 * time.Second):
 		t.Fatal("Timed out waiting for message")
 	}
@@ -291,7 +290,9 @@ func TestNATSClient_SubscribeError(t *testing.T) {
 
 	logs := testutil.StderrOutputForFunc(func() {
 		client.Logger = logging.NewMockLogger(logging.DEBUG)
-		_, err = client.Subscribe(ctx, "test-subject")
+		err = client.Subscribe(ctx, "test-subject", func(ctx context.Context, msg jetstream.Msg) error {
+			return nil // This shouldn't be called in this error case
+		})
 	})
 
 	require.Error(t, err)

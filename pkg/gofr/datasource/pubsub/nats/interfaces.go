@@ -24,6 +24,3 @@ type Client interface {
 	CreateOrUpdateStream(ctx context.Context, cfg jetstream.StreamConfig) (jetstream.Stream, error)
 	Health() health.Health
 }
-
-// MessageHandler represents the function signature for handling messages.
-type MessageHandler func(context.Context, jetstream.Msg) error
