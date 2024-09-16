@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go/jetstream"
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 	"gofr.dev/pkg/gofr/health"
 )
@@ -20,7 +21,31 @@ func (w *natsPubSubWrapper) Publish(ctx context.Context, topic string, message [
 
 // Subscribe subscribes to a topic.
 func (w *natsPubSubWrapper) Subscribe(ctx context.Context, topic string) (*pubsub.Message, error) {
-	return w.client.Subscribe(ctx, topic)
+	msgChan := make(chan *pubsub.Message)
+
+	err := w.client.Subscribe(ctx, topic, func(ctx context.Context, msg jetstream.Msg) error {
+		select {
+		case msgChan <- &pubsub.Message{
+			Topic:     topic,
+			Value:     msg.Data(),
+			Committer: &natsCommitter{msg: msg},
+		}:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	select {
+	case msg := <-msgChan:
+		return msg, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
 }
 
 // CreateTopic creates a new topic (stream) in NATS JetStream.
@@ -40,7 +65,6 @@ func (w *natsPubSubWrapper) Close() error {
 
 // Health returns the health status of the NATS client.
 func (w *natsPubSubWrapper) Health() health.Health {
-	// Implement health check
 	status := health.StatusUp
 	if w.client.Conn.Status() != nats.CONNECTED {
 		status = health.StatusDown

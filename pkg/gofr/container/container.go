@@ -3,7 +3,6 @@ package container
 import (
 	"context"
 	"errors"
-	"log"
 	"strconv"
 	"strings"
 	"time"
@@ -132,17 +131,43 @@ func (c *Container) Create(conf config.Config) {
 	case "MQTT":
 		c.PubSub = c.createMqttPubSub(conf)
 	case "NATS":
-		log.Println("NATS")
 		subjects := strings.Split(conf.Get("NATS_SUBJECTS"), ",")
+
+		natsMaxWait, err := time.ParseDuration(conf.Get("NATS_MAX_WAIT"))
+		if err != nil {
+			c.Logger.Error("invalid NATS_MAX_WAIT: %v", err)
+			return
+		}
+
+		natsBatchSize, err := strconv.Atoi(conf.Get("NATS_BATCH_SIZE"))
+		if err != nil {
+			c.Logger.Error("invalid NATS_BATCH_SIZE: %v", err)
+			return
+		}
+
+		natsMaxPullWait, err := strconv.Atoi(conf.Get("NATS_MAX_PULL_WAIT"))
+		if err != nil {
+			c.Logger.Error("invalid NATS_MAX_PULL_WAIT: %v", err)
+			return
+		}
+
 		natsConfig := &nats.Config{
 			Server: conf.Get("PUBSUB_BROKER"),
 			Stream: nats.StreamConfig{
 				Stream:   conf.Get("NATS_STREAM"),
 				Subjects: subjects,
 			},
-			Consumer: conf.Get("NATS_CONSUMER"),
+			MaxWait:     natsMaxWait,
+			BatchSize:   natsBatchSize,
+			MaxPullWait: natsMaxPullWait,
+			Consumer:    conf.Get("NATS_CONSUMER"),
 		}
-		c.PubSub, _ = nats.New(natsConfig, c.Logger, c.metricsManager)
+
+		c.PubSub, err = nats.New(natsConfig, c.Logger, c.metricsManager)
+		if err != nil {
+			c.Logger.Error("failed to create NATS client: %v", err)
+			return
+		}
 	}
 
 	c.File = file.New(c.Logger)

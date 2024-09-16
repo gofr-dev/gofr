@@ -3,7 +3,7 @@ package nats
 import (
 	"context"
 	"errors"
-	"log"
+	"fmt"
 	"sync"
 	"time"
 
@@ -27,6 +27,7 @@ type StreamConfig struct {
 	Stream     string
 	Subjects   []string
 	MaxDeliver int
+	MaxWait    time.Duration
 }
 
 // Subscription holds subscription information for NATS JetStream.
@@ -36,6 +37,8 @@ type Subscription struct {
 	Ctx     context.Context
 	Cancel  context.CancelFunc
 }
+
+type MessageHandler func(context.Context, jetstream.Msg) error
 
 type natsConnWrapper struct {
 	*nats.Conn
@@ -187,12 +190,17 @@ func (n *NATSClient) Publish(ctx context.Context, subject string, message []byte
 }
 
 // Subscribe subscribes to a topic.
+/*
 func (n *NATSClient) Subscribe(ctx context.Context, topic string) (*pubsub.Message, error) {
+	log.Println("Subscribing to topic", topic)
+
 	msgChan := make(chan *pubsub.Message)
 	errChan := make(chan error, 1)
 
 	go func() {
 		err := n.subscribeInternal(ctx, topic, func(msg jetstream.Msg) {
+			n.Logger.Debugf("Received raw message on topic %s: %s", topic, string(msg.Data()))
+			log.Printf("Received raw message on topic %s: %s", topic, string(msg.Data()))
 			pubsubMsg := &pubsub.Message{
 				Topic:     topic,
 				Value:     msg.Data(),
@@ -218,6 +226,27 @@ func (n *NATSClient) Subscribe(ctx context.Context, topic string) (*pubsub.Messa
 		return nil, ctx.Err()
 	}
 }
+*/
+func (n *NATSClient) Subscribe(ctx context.Context, topic string, handler MessageHandler) error {
+	return n.subscribeInternal(ctx, topic, func(msg jetstream.Msg) {
+		err := handler(ctx, msg)
+		if err != nil {
+			n.Logger.Errorf("Error handling message: %v", err)
+		}
+		/*
+			if err != nil {
+				n.Logger.Errorf("Error handling message: %v", err)
+				if nakErr := msg.Nak(); nakErr != nil {
+					n.Logger.Errorf("Failed to NAK message: %v", nakErr)
+				}
+			} else {
+				if ackErr := msg.Ack(); ackErr != nil {
+					n.Logger.Errorf("Failed to ACK message: %v", ackErr)
+				}
+			}
+		*/
+	})
+}
 
 func (n *NATSClient) subscribeInternal(ctx context.Context, subject string, handler func(jetstream.Msg)) error {
 	if n.Config.Consumer == "" {
@@ -237,11 +266,12 @@ func (n *NATSClient) subscribeInternal(ctx context.Context, subject string, hand
 		return err
 	}
 
-	log.Println("Filter Subject", subject)
+	// Create a unique consumer name for each subject
+	consumerName := fmt.Sprintf("%s_%s", n.Config.Consumer, subject)
 
 	// Create or update the consumer
 	cons, err := n.Js.CreateOrUpdateConsumer(ctx, n.Config.Stream.Stream, jetstream.ConsumerConfig{
-		Durable:       n.Config.Consumer,
+		Durable:       consumerName,
 		AckPolicy:     jetstream.AckExplicitPolicy,
 		FilterSubject: subject,
 		MaxDeliver:    n.Config.Stream.MaxDeliver,
