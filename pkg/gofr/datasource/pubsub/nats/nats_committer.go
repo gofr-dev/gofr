@@ -19,7 +19,6 @@ type natsCommitter struct {
 
 // Commit commits the message.
 func (c *natsCommitter) Commit() {
-	log.Println("Committing message")
 	err := c.msg.Ack()
 	if err != nil {
 		err := c.msg.Nak()
