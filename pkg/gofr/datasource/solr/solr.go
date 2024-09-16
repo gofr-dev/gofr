@@ -31,7 +31,7 @@ type Client struct {
 // client.Connect()
 func New(conf Config) *Client {
 	s := &Client{}
-	s.url = "http://" + conf.Host + ":" + conf.Port + "/solr/"
+	s.url = "http://" + conf.Host + ":" + conf.Port + "/solr"
 
 	return s
 }
@@ -67,11 +67,11 @@ func (c *Client) HealthCheck(ctx context.Context) (any, error) {
 // Search searches documents in the given collections based on the parameters specified.
 // This can be used for making any queries to SOLR
 func (c *Client) Search(ctx context.Context, collection string, params map[string]any) (any, error) {
-	url := c.url + collection + "/select"
+	url := c.url + "/" + collection + "/select"
 
 	defer c.sendOperationStats(&QueryLog{Type: "Search", Url: url}, time.Now())
 
-	return call(ctx, "GET", url, params, nil)
+	return call(ctx, http.MethodGet, url, params, nil)
 }
 
 // Create makes documents in the specified collection. params can be used to send parameters like commit=true
@@ -81,7 +81,7 @@ func (c *Client) Create(ctx context.Context, collection string, document *bytes.
 
 	defer c.sendOperationStats(&QueryLog{Type: "Create", Url: url}, time.Now())
 
-	return call(ctx, "POST", url, params, document)
+	return call(ctx, http.MethodPost, url, params, document)
 }
 
 // Update updates documents in the specified collection. params can be used to send parameters like commit=true
@@ -91,7 +91,7 @@ func (c *Client) Update(ctx context.Context, collection string, document *bytes.
 
 	defer c.sendOperationStats(&QueryLog{Type: "Update", Url: url}, time.Now())
 
-	return call(ctx, "POST", url, params, document)
+	return call(ctx, http.MethodPost, url, params, document)
 }
 
 // Delete deletes documents in the specified collection. params can be used to send parameters like commit=true
@@ -101,7 +101,7 @@ func (c *Client) Delete(ctx context.Context, collection string, document *bytes.
 
 	defer c.sendOperationStats(&QueryLog{Type: "Delete", Url: url}, time.Now())
 
-	return call(ctx, "POST", url, params, document)
+	return call(ctx, http.MethodPost, url, params, document)
 }
 
 // ListFields retrieves all the fields in the schema for the specified collection.
@@ -111,7 +111,7 @@ func (c *Client) ListFields(ctx context.Context, collection string, params map[s
 
 	defer c.sendOperationStats(&QueryLog{Type: "ListFields", Url: url}, time.Now())
 
-	return call(ctx, "GET", url, params, nil)
+	return call(ctx, http.MethodGet, url, params, nil)
 }
 
 // Retrieve retrieves the entire schema that includes all the fields,field types,dynamic rules and copy field rules.
@@ -121,7 +121,7 @@ func (c *Client) Retrieve(ctx context.Context, collection string, params map[str
 
 	defer c.sendOperationStats(&QueryLog{Type: "Retrieve", Url: url}, time.Now())
 
-	return call(ctx, "GET", url, params, nil)
+	return call(ctx, http.MethodGet, url, params, nil)
 }
 
 // AddField adds Field in the schema for the specified collection
@@ -130,7 +130,7 @@ func (c *Client) AddField(ctx context.Context, collection string, document *byte
 
 	defer c.sendOperationStats(&QueryLog{Type: "AddField", Url: url}, time.Now())
 
-	return call(ctx, "POST", url, nil, document)
+	return call(ctx, http.MethodPost, url, nil, document)
 }
 
 // UpdateField updates the field definitions in the schema for the specified collection
@@ -139,7 +139,7 @@ func (c *Client) UpdateField(ctx context.Context, collection string, document *b
 
 	defer c.sendOperationStats(&QueryLog{Type: "UpdateField", Url: url}, time.Now())
 
-	return call(ctx, "POST", url, nil, document)
+	return call(ctx, http.MethodPost, url, nil, document)
 }
 
 // DeleteField deletes the field definitions in the schema for the specified collection
@@ -148,7 +148,7 @@ func (c *Client) DeleteField(ctx context.Context, collection string, document *b
 
 	defer c.sendOperationStats(&QueryLog{Type: "DeleteField", Url: url}, time.Now())
 
-	return call(ctx, "POST", url, nil, document)
+	return call(ctx, http.MethodPost, url, nil, document)
 }
 
 // Response stores the response from SOLR
@@ -164,7 +164,7 @@ func call(ctx context.Context, method, url string, params map[string]any, body i
 		return nil, err
 	}
 
-	if method != "GET" {
+	if method != http.MethodGet {
 		req.Header.Add("content-type", "application/json")
 	}
 
@@ -193,9 +193,12 @@ func call(ctx context.Context, method, url string, params map[string]any, body i
 
 	var respBody any
 
-	b, _ := io.ReadAll(resp.Body)
-	err = json.Unmarshal(b, &respBody)
+	b, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
 
+	err = json.Unmarshal(b, &respBody)
 	if err != nil {
 		return nil, err
 	}
