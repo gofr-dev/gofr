@@ -13,16 +13,13 @@ type natsCommitter struct {
 
 // Commit commits the message.
 func (c *natsCommitter) Commit() {
-	err := c.msg.Ack()
-	if err != nil {
-		err := c.msg.Nak()
-		if err != nil {
-			log.Println("Error committing message:", err)
-
-			return
-		}
-
+	if err := c.msg.Ack(); err != nil {
 		log.Println("Error committing message:", err)
+
+		// nak the message
+		if err := c.msg.Nak(); err != nil {
+			log.Println("Error naking message:", err)
+		}
 
 		return
 	}
