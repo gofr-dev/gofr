@@ -9,7 +9,7 @@ func main() {
 
 	app.Subscribe("products", func(c *gofr.Context) error {
 		var productInfo struct {
-			ProductId string `json:"productId"`
+			ProductID string `json:"productId"`
 			Price     string `json:"price"`
 		}
 
@@ -26,7 +26,7 @@ func main() {
 
 	app.Subscribe("order-logs", func(c *gofr.Context) error {
 		var orderStatus struct {
-			OrderId string `json:"orderId"`
+			OrderID string `json:"orderId"`
 			Status  string `json:"status"`
 		}
 

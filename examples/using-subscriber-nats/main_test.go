@@ -19,14 +19,14 @@ import (
 
 type mockMetrics struct{}
 
-func (m *mockMetrics) IncrementCounter(ctx context.Context, name string, labels ...string) {}
+func (*mockMetrics) IncrementCounter(_ context.Context, _ string, _ ...string) {}
 
-// Wrapper struct for *nats.Conn that implements n.ConnInterface
+// Wrapper struct for *nats.Conn that implements n.ConnInterface.
 type connWrapper struct {
 	*nats.Conn
 }
 
-// Implement the NatsConn method for the wrapper
+// Implement the NatsConn method for the wrapper.
 func (w *connWrapper) NatsConn() *nats.Conn {
 	return w.Conn
 }
@@ -38,6 +38,7 @@ func runNATSServer() (*server.Server, error) {
 		Port:       -1,
 		Trace:      true,
 	}
+
 	return server.NewServer(opts)
 }
 
@@ -116,10 +117,8 @@ func runMain(ctx context.Context) {
 	app := gofr.New()
 
 	app.Subscribe("products", func(c *gofr.Context) error {
-		log.Println("Product subscriber triggered")
-
 		var productInfo struct {
-			ProductId string `json:"productId"`
+			ProductID string `json:"productId"`
 			Price     string `json:"price"`
 		}
 
@@ -127,19 +126,18 @@ func runMain(ctx context.Context) {
 		if err != nil {
 			log.Printf("Error binding product data: %v", err)
 			c.Logger.Error(err)
+
 			return nil
 		}
 
-		log.Printf("Received product: %+v", productInfo)
 		c.Logger.Info("Received product", productInfo)
 
 		return nil
 	})
 
 	app.Subscribe("order-logs", func(c *gofr.Context) error {
-		log.Println("Order subscriber triggered")
 		var orderStatus struct {
-			OrderId string `json:"orderId"`
+			OrderID string `json:"orderId"`
 			Status  string `json:"status"`
 		}
 
@@ -147,18 +145,23 @@ func runMain(ctx context.Context) {
 		if err != nil {
 			log.Printf("Error binding order data: %v", err)
 			c.Logger.Error(err)
+
 			return nil
 		}
 
-		log.Printf("Received order: %+v", orderStatus)
 		c.Logger.Info("Received order", orderStatus)
+
 		return nil
 	})
 
 	go func() {
 		<-ctx.Done()
-		log.Println("Context cancelled, stopping application")
-		err := app.Shutdown(ctx)
+		log.Println("Context canceled, stopping application")
+
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		err := app.Shutdown(shutdownCtx)
 		if err != nil {
 			log.Printf("Error shutting down application: %v", err)
 		}
@@ -170,6 +173,8 @@ func runMain(ctx context.Context) {
 }
 
 func initializeTest(t *testing.T, serverURL string) {
+	t.Helper()
+
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -190,21 +195,21 @@ func initializeTest(t *testing.T, serverURL string) {
 
 	client, err := natspubsub.NewNATSClient(conf, logger, mockMetrics,
 		func(serverURL string, opts ...nats.Option) (natspubsub.ConnInterface, error) {
-			log.Printf("Connecting to NATS server %s", serverURL)
 			conn, err := nats.Connect(serverURL, opts...)
 			if err != nil {
 				return nil, err
 			}
-			log.Println("Connected to NATS server")
+
 			return &connWrapper{conn}, nil
 		},
 		func(nc *nats.Conn) (jetstream.JetStream, error) {
 			js, err := jetstream.New(nc)
 			if err != nil {
 				log.Printf("Error creating JetStream: %v", err)
+
 				return nil, err
 			}
-			log.Println("JetStream created")
+
 			return js, nil
 		},
 	)
@@ -214,28 +219,19 @@ func initializeTest(t *testing.T, serverURL string) {
 	}
 
 	// Ensure stream is created
-	stream, err := client.Js.CreateStream(ctx, jetstream.StreamConfig{
+	_, err = client.Js.CreateStream(ctx, jetstream.StreamConfig{
 		Name:     conf.Stream.Stream,
 		Subjects: conf.Stream.Subjects,
 	})
 	if err != nil {
 		t.Fatalf("Error creating stream: %v", err)
 	}
-	s, err := stream.Info(ctx)
-	if err != nil {
-		t.Fatalf("Error getting stream info: %v", err)
-	}
-	log.Printf("Stream created: %s with subjects %v, state: msgs=%d, bytes=%d, firstSeq=%d, lastSeq=%d",
-		s.Config.Name, s.Config.Subjects, s.State.Msgs, s.State.Bytes, s.State.FirstSeq, s.State.LastSeq)
 
-	// Publish test messages
-	log.Println("Publishing order-logs message")
 	err = client.Publish(ctx, "order-logs", []byte(`{"orderId":"123","status":"pending"}`))
 	if err != nil {
 		t.Errorf("Error publishing to 'order-logs': %v", err)
 	}
 
-	log.Println("Publishing products message")
 	err = client.Publish(ctx, "products", []byte(`{"productId":"123","price":"599"}`))
 	if err != nil {
 		t.Errorf("Error publishing to 'products': %v", err)
