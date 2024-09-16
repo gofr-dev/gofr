@@ -225,6 +225,7 @@ func (n *NATSClient) startConsuming(ctx context.Context, cons jetstream.Consumer
 			if errors.Is(err, context.Canceled) {
 				return
 			}
+
 			n.handleFetchError(err)
 		}
 	}
@@ -253,14 +254,17 @@ func (n *NATSClient) handleMessage(ctx context.Context, msg jetstream.Msg, handl
 	if err := handler(ctx, msg); err != nil {
 		return n.nakMessage(msg)
 	}
+
 	return nil
 }
 
 func (n *NATSClient) nakMessage(msg jetstream.Msg) error {
 	if err := msg.Nak(); err != nil {
 		n.Logger.Errorf("Failed to NAK message: %v", err)
+
 		return err
 	}
+
 	return nil
 }
 
@@ -291,6 +295,7 @@ func (n *NATSClient) DeleteStream(ctx context.Context, name string) error {
 	err := n.Js.DeleteStream(ctx, name)
 	if err != nil {
 		n.Logger.Errorf("failed to delete stream: %v", err)
+
 		return err
 	}
 
@@ -318,6 +323,7 @@ func (n *NATSClient) CreateStream(ctx context.Context, cfg StreamConfig) error {
 // CreateOrUpdateStream creates or updates a stream in NATS JetStream.
 func (n *NATSClient) CreateOrUpdateStream(ctx context.Context, cfg *jetstream.StreamConfig) (jetstream.Stream, error) {
 	n.Logger.Debugf("Creating or updating stream %s", cfg.Name)
+
 	stream, err := n.Js.CreateOrUpdateStream(ctx, *cfg)
 	if err != nil {
 		n.Logger.Errorf("failed to create or update stream: %v", err)
