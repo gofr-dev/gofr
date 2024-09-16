@@ -6,6 +6,11 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 )
 
+// createTestCommitter is a helper function for tests to create a natsCommitter
+func createTestCommitter(msg jetstream.Msg) *natsCommitter {
+	return &natsCommitter{msg: msg}
+}
+
 // natsCommitter implements the pubsub.Committer interface for NATS messages.
 type natsCommitter struct {
 	msg jetstream.Msg
