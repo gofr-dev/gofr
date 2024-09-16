@@ -2,6 +2,7 @@ package nats_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -10,6 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"gofr.dev/pkg/gofr/datasource/pubsub"
 	natspubsub "gofr.dev/pkg/gofr/datasource/pubsub/nats"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/testutil"
@@ -307,16 +309,6 @@ type natsClient struct {
 	*natspubsub.NATSClient
 }
 
-// Mock method to simulate message handling
-/*
-func (n *natsClient) handleMessage(msg jetstream.Msg) {
-	ctx := &gofr.Context{Context: context.Background()}
-	if n.Subscriptions["test-subject"] != nil {
-		_ = n.Subscriptions["test-subject"].Handler(ctx, msg)
-	}
-}
-*/
-
 func TestNATSClient_Close(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -354,38 +346,102 @@ func TestNew(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	s, err := natspubsub.RunEmbeddedNATSServer()
-	require.NoError(t, err)
-	defer s.Shutdown()
-
-	mockLogger := logging.NewMockLogger(logging.DEBUG)
 	mockMetrics := natspubsub.NewMockMetrics(ctrl)
 
-	var testCases []struct {
-		name            string
-		config          natspubsub.Config
-		natsConnectFunc func(string, ...nats.Option) (*nats.Conn, error)
-		expectErr       bool
-		expectedLog     string
+	testCases := []struct {
+		name         string
+		config       *natspubsub.Config
+		expectErr    bool
+		expectedLogs []string
+		setupMocks   func() (natspubsub.ConnInterface, jetstream.JetStream, error)
+	}{
+		{
+			name: "Successful client creation",
+			config: &natspubsub.Config{
+				Server: "nats://localhost:4222",
+				Stream: natspubsub.StreamConfig{
+					Stream:   "test-stream",
+					Subjects: []string{"test-subject"},
+				},
+				Consumer: "test-consumer",
+			},
+			expectErr: false,
+			expectedLogs: []string{
+				"connecting to NATS server 'nats://localhost:4222'",
+				"connected to NATS server 'nats://localhost:4222'",
+			},
+			setupMocks: func() (natspubsub.ConnInterface, jetstream.JetStream, error) {
+				mockConn := natspubsub.NewMockConnInterface(ctrl)
+				mockJS := natspubsub.NewMockJetStream(ctrl)
+				mockConn.EXPECT().Status().Return(nats.CONNECTED).AnyTimes()
+				mockConn.EXPECT().NatsConn().Return(&nats.Conn{}).AnyTimes()
+				return mockConn, mockJS, nil
+			},
+		},
+		// ... other test cases ...
 	}
 
 	for _, tc := range testCases {
-		tc := tc // capture range variable
 		t.Run(tc.name, func(t *testing.T) {
-			tc.config.Server = s.ClientURL() // Use the embedded server's URL
+			mockConn, mockJS, mockErr := tc.setupMocks()
 
-			logs := testutil.StdoutOutputForFunc(func() {
-				client, err := natspubsub.New(&tc.config, mockLogger, mockMetrics)
-				if tc.expectErr {
-					assert.Nil(t, client)
-					assert.Error(t, err)
-				} else {
-					assert.NotNil(t, client)
-					assert.NoError(t, err)
+			natsConnectMock := func(url string, opts ...nats.Option) (natspubsub.ConnInterface, error) {
+				if mockErr != nil {
+					return nil, mockErr
 				}
+				return mockConn, nil
+			}
+
+			jetstreamNewMock := func(nc *nats.Conn) (jetstream.JetStream, error) {
+				if mockJS == nil {
+					return nil, errors.New("failed to create JetStream")
+				}
+				return mockJS, nil
+			}
+
+			var client pubsub.Client
+			var err error
+
+			stdoutLogs := testutil.StdoutOutputForFunc(func() {
+				mockLogger := logging.NewMockLogger(logging.DEBUG)
+				client, err = natspubsub.New(tc.config, mockLogger, mockMetrics, natsConnectMock, jetstreamNewMock)
 			})
 
-			assert.Contains(t, logs, tc.expectedLog)
+			stderrLogs := testutil.StderrOutputForFunc(func() {
+				mockLogger := logging.NewMockLogger(logging.DEBUG)
+				client, err = natspubsub.New(tc.config, mockLogger, mockMetrics, natsConnectMock, jetstreamNewMock)
+			})
+
+			allLogs := stdoutLogs + stderrLogs
+
+			// Print captured logs for debugging
+			t.Logf("Captured logs:\n%s", allLogs)
+
+			if tc.expectErr {
+				assert.Error(t, err)
+				assert.Nil(t, client)
+			} else {
+				assert.NoError(t, err)
+				assert.NotNil(t, client)
+
+				// Check if client implements pubsub.Client interface
+				_, ok := client.(pubsub.Client)
+				assert.True(t, ok, "Returned client does not implement pubsub.Client interface")
+
+				// Additional checks for required methods
+				natsClient, ok := client.(*natspubsub.NatsPubSubWrapper)
+				assert.True(t, ok, "Returned client is not a NatsPubSubWrapper")
+				if ok {
+					assert.NotNil(t, natsClient.Client.DeleteStream)
+					assert.NotNil(t, natsClient.Client.CreateStream)
+					assert.NotNil(t, natsClient.Client.CreateOrUpdateStream)
+				}
+			}
+
+			// Check for expected logs
+			for _, expectedLog := range tc.expectedLogs {
+				assert.Contains(t, allLogs, expectedLog, "Expected log not found: %s", expectedLog)
+			}
 		})
 	}
 }
@@ -484,4 +540,91 @@ func TestNATSClient_CreateOrUpdateStream(t *testing.T) {
 
 	// Check the logs
 	assert.Contains(t, logs, "Creating or updating stream test-stream")
+}
+
+func TestNATSClient_CreateTopic(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockJS := natspubsub.NewMockJetStream(ctrl)
+	mockLogger := logging.NewMockLogger(logging.DEBUG)
+	client := &natspubsub.NATSClient{
+		Js:     mockJS,
+		Logger: mockLogger,
+		Config: &natspubsub.Config{},
+	}
+
+	ctx := context.Background()
+
+	mockJS.EXPECT().
+		CreateStream(ctx, gomock.Any()).
+		Return(nil, nil)
+
+	err := client.CreateTopic(ctx, "test-topic")
+	require.NoError(t, err)
+}
+
+func TestNATSClient_DeleteTopic(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockJS := natspubsub.NewMockJetStream(ctrl)
+	mockLogger := logging.NewMockLogger(logging.DEBUG)
+	client := &natspubsub.NATSClient{
+		Js:     mockJS,
+		Logger: mockLogger,
+		Config: &natspubsub.Config{},
+	}
+
+	ctx := context.Background()
+
+	mockJS.EXPECT().DeleteStream(ctx, "test-topic").Return(nil)
+
+	err := client.DeleteTopic(ctx, "test-topic")
+	require.NoError(t, err)
+}
+
+func TestNATSClient_NakMessage(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockMsg := natspubsub.NewMockMsg(ctrl)
+	mockLogger := logging.NewMockLogger(logging.DEBUG)
+	client := &natspubsub.NATSClient{
+		Logger: mockLogger,
+	}
+
+	// Successful Nak
+	mockMsg.EXPECT().Nak().Return(nil)
+	err := client.NakMessage(mockMsg)
+	assert.NoError(t, err)
+
+	// Failed Nak
+	mockMsg.EXPECT().Nak().Return(assert.AnError)
+	err = client.NakMessage(mockMsg)
+	assert.Error(t, err)
+}
+
+func TestNATSClient_HandleFetchError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockLogger := logging.NewMockLogger(logging.DEBUG)
+	client := &natspubsub.NATSClient{
+		Logger: mockLogger,
+	}
+
+	stdoutLogs := testutil.StdoutOutputForFunc(func() {
+		client.Logger = logging.NewMockLogger(logging.DEBUG)
+		client.HandleFetchError(assert.AnError)
+	})
+
+	stderrLogs := testutil.StderrOutputForFunc(func() {
+		client.Logger = logging.NewMockLogger(logging.DEBUG)
+		client.HandleFetchError(assert.AnError)
+	})
+
+	allLogs := stdoutLogs + stderrLogs
+
+	assert.Contains(t, allLogs, "failed to fetch messages: assert.AnError", "Expected log not found")
 }

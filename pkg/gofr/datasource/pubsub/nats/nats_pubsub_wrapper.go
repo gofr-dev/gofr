@@ -9,21 +9,21 @@ import (
 	"gofr.dev/pkg/gofr/health"
 )
 
-// natsPubSubWrapper adapts NATSClient to pubsub.Client.
-type natsPubSubWrapper struct {
-	client *NATSClient
+// NatsPubSubWrapper adapts NATSClient to pubsub.Client.
+type NatsPubSubWrapper struct {
+	Client *NATSClient
 }
 
 // Publish publishes a message to a topic.
-func (w *natsPubSubWrapper) Publish(ctx context.Context, topic string, message []byte) error {
-	return w.client.Publish(ctx, topic, message)
+func (w *NatsPubSubWrapper) Publish(ctx context.Context, topic string, message []byte) error {
+	return w.Client.Publish(ctx, topic, message)
 }
 
 // Subscribe subscribes to a topic.
-func (w *natsPubSubWrapper) Subscribe(ctx context.Context, topic string) (*pubsub.Message, error) {
+func (w *NatsPubSubWrapper) Subscribe(ctx context.Context, topic string) (*pubsub.Message, error) {
 	msgChan := make(chan *pubsub.Message)
 
-	err := w.client.Subscribe(ctx, topic, func(ctx context.Context, msg jetstream.Msg) error {
+	err := w.Client.Subscribe(ctx, topic, func(ctx context.Context, msg jetstream.Msg) error {
 		select {
 		case msgChan <- &pubsub.Message{
 			Topic:     topic,
@@ -50,31 +50,31 @@ func (w *natsPubSubWrapper) Subscribe(ctx context.Context, topic string) (*pubsu
 }
 
 // CreateTopic creates a new topic (stream) in NATS JetStream.
-func (w *natsPubSubWrapper) CreateTopic(ctx context.Context, name string) error {
-	return w.client.CreateTopic(ctx, name)
+func (w *NatsPubSubWrapper) CreateTopic(ctx context.Context, name string) error {
+	return w.Client.CreateTopic(ctx, name)
 }
 
 // DeleteTopic deletes a topic (stream) in NATS JetStream.
-func (w *natsPubSubWrapper) DeleteTopic(ctx context.Context, name string) error {
-	return w.client.DeleteTopic(ctx, name)
+func (w *NatsPubSubWrapper) DeleteTopic(ctx context.Context, name string) error {
+	return w.Client.DeleteTopic(ctx, name)
 }
 
 // Close closes the NATS client.
-func (w *natsPubSubWrapper) Close() error {
-	return w.client.Close()
+func (w *NatsPubSubWrapper) Close() error {
+	return w.Client.Close()
 }
 
 // Health returns the health status of the NATS client.
-func (w *natsPubSubWrapper) Health() health.Health {
+func (w *NatsPubSubWrapper) Health() health.Health {
 	status := health.StatusUp
-	if w.client.Conn.Status() != nats.CONNECTED {
+	if w.Client.Conn.Status() != nats.CONNECTED {
 		status = health.StatusDown
 	}
 
 	return health.Health{
 		Status: status,
 		Details: map[string]interface{}{
-			"server": w.client.Config.Server,
+			"server": w.Client.Config.Server,
 		},
 	}
 }
