@@ -40,15 +40,6 @@ type Subscription struct {
 
 type MessageHandler func(context.Context, jetstream.Msg) error
 
-type natsConnWrapper struct {
-	*nats.Conn
-}
-
-// NatsConn returns the underlying NATS connection.
-func (w *natsConnWrapper) NatsConn() *nats.Conn {
-	return w.Conn
-}
-
 // NATSClient represents a client for NATS JetStream operations.
 type NATSClient struct {
 	Conn          ConnInterface
@@ -141,29 +132,20 @@ func NewNATSClient(
 }
 
 // New creates a new NATS client.
-func New(conf *Config, logger pubsub.Logger, metrics Metrics) (pubsub.Client, error) {
-	// Wrapper function for nats.Connect
-	natsConnectWrapper := func(url string, options ...nats.Option) (ConnInterface, error) {
-		conn, err := nats.Connect(url, options...)
-		if err != nil {
-			return nil, err
-		}
-
-		return &natsConnWrapper{Conn: conn}, nil
-	}
-
-	// Wrapper function for jetstream.New
-	jetstreamNewWrapper := func(nc *nats.Conn) (jetstream.JetStream, error) {
-		return jetstream.New(nc)
-	}
-
+func New(
+	conf *Config,
+	logger pubsub.Logger,
+	metrics Metrics,
+	natsConnect func(string, ...nats.Option) (ConnInterface, error),
+	jetstreamNew func(*nats.Conn) (jetstream.JetStream, error),
+) (pubsub.Client, error) {
 	// Create the NATSClient using the wrapper functions
-	client, err := NewNATSClient(conf, logger, metrics, natsConnectWrapper, jetstreamNewWrapper)
+	client, err := NewNATSClient(conf, logger, metrics, natsConnect, jetstreamNew)
 	if err != nil {
 		return nil, err
 	}
 
-	return &natsPubSubWrapper{client: client}, nil
+	return &NatsPubSubWrapper{Client: client}, nil
 }
 
 // Publish publishes a message to a topic.
@@ -226,7 +208,7 @@ func (n *NATSClient) startConsuming(ctx context.Context, cons jetstream.Consumer
 				return
 			}
 
-			n.handleFetchError(err)
+			n.HandleFetchError(err)
 		}
 	}
 }
@@ -252,13 +234,13 @@ func (n *NATSClient) processMessages(ctx context.Context, msgs jetstream.Message
 
 func (n *NATSClient) handleMessage(ctx context.Context, msg jetstream.Msg, handler MessageHandler) error {
 	if err := handler(ctx, msg); err != nil {
-		return n.nakMessage(msg)
+		return n.NakMessage(msg)
 	}
 
 	return nil
 }
 
-func (n *NATSClient) nakMessage(msg jetstream.Msg) error {
+func (n *NATSClient) NakMessage(msg jetstream.Msg) error {
 	if err := msg.Nak(); err != nil {
 		n.Logger.Errorf("Failed to NAK message: %v", err)
 
@@ -268,7 +250,7 @@ func (n *NATSClient) nakMessage(msg jetstream.Msg) error {
 	return nil
 }
 
-func (n *NATSClient) handleFetchError(err error) {
+func (n *NATSClient) HandleFetchError(err error) {
 	n.Logger.Errorf("failed to fetch messages: %v", err)
 	time.Sleep(time.Second) // Backoff on error
 }
