@@ -189,6 +189,7 @@ func (n *NATSClient) Publish(ctx context.Context, subject string, message []byte
 	return nil
 }
 
+// Subscribe subscribes to a topic.
 func (n *NATSClient) Subscribe(ctx context.Context, topic string, handler MessageHandler) error {
 	if n.Config.Consumer == "" {
 		n.Logger.Error("consumer name not provided")
