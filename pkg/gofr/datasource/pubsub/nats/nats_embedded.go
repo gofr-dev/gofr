@@ -8,6 +8,7 @@ import (
 
 const embeddedConnTimeout = 10 * time.Second
 
+// RunEmbeddedNATSServer starts a NATS server in embedded mode.
 func RunEmbeddedNATSServer() (*server.Server, error) {
 	opts := &server.Options{
 		Port:      -1, // Random available port
