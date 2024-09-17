@@ -14,27 +14,24 @@ func TestNatsCommitter_Commit(t *testing.T) {
 	mockMsg := NewMockMsg(ctrl)
 	committer := createTestCommitter(mockMsg)
 
-	t.Run("Successful Commit", func(t *testing.T) {
+	t.Run("Successful Commit", func(_ *testing.T) {
 		mockMsg.EXPECT().Ack().Return(nil)
 
 		committer.Commit()
-		// No assertion needed, just checking that it doesn't panic
 	})
 
-	t.Run("Failed Commit with Successful Nak", func(t *testing.T) {
+	t.Run("Failed Commit with Successful Nak", func(_ *testing.T) {
 		mockMsg.EXPECT().Ack().Return(assert.AnError)
 		mockMsg.EXPECT().Nak().Return(nil)
 
 		committer.Commit()
-		// No assertion needed, just checking that it doesn't panic
 	})
 
-	t.Run("Failed Commit with Failed Nak", func(t *testing.T) {
+	t.Run("Failed Commit with Failed Nak", func(_ *testing.T) {
 		mockMsg.EXPECT().Ack().Return(assert.AnError)
 		mockMsg.EXPECT().Nak().Return(assert.AnError)
 
 		committer.Commit()
-		// No assertion needed, just checking that it doesn't panic
 	})
 }
 

@@ -6,7 +6,7 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 )
 
-// createTestCommitter is a helper function for tests to create a natsCommitter
+// createTestCommitter is a helper function for tests to create a natsCommitter.
 func createTestCommitter(msg jetstream.Msg) *natsCommitter {
 	return &natsCommitter{msg: msg}
 }
