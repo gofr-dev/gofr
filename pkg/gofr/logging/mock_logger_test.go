@@ -48,6 +48,7 @@ func Test_NewMockLoggerErrorLogs(t *testing.T) {
 	logs := testutil.StderrOutputForFunc(func() {
 		logger := NewMockLogger(DEBUG)
 
+		logger.Error("ERROR Log")
 		logger.Errorf("error Log with Format Value: %v", "errorf")
 	})
 

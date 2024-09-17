@@ -10,6 +10,7 @@ import (
 
 //go:generate mockgen -destination=mock_client.go -package=nats -source=./interfaces.go Client,Subscription,ConnInterface
 
+// ConnInterface represents the main NATS connection.
 type ConnInterface interface {
 	Status() nats.Status
 	Close()
