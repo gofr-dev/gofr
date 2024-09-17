@@ -8,7 +8,9 @@ import (
 	"time"
 
 	_ "github.com/go-sql-driver/mysql" // This is required to be blank import
-	"gofr.dev/pkg/gofr/datasource/pubsub/nats"
+	"github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go/jetstream"
+	n "gofr.dev/pkg/gofr/datasource/pubsub/nats"
 	"gofr.dev/pkg/gofr/websocket"
 
 	"gofr.dev/pkg/gofr/config"
@@ -163,9 +165,9 @@ func (c *Container) initializeGoogle(conf config.Config) {
 }
 
 func (c *Container) initializeNATS(conf config.Config) {
-	natsConfig := &nats.Config{
+	natsConfig := &n.Config{
 		Server: conf.Get("PUBSUB_BROKER"),
-		Stream: nats.StreamConfig{
+		Stream: n.StreamConfig{
 			Stream:   conf.Get("NATS_STREAM"),
 			Subjects: strings.Split(conf.Get("NATS_SUBJECTS"), ","),
 		},
@@ -175,12 +177,44 @@ func (c *Container) initializeNATS(conf config.Config) {
 		Consumer:    conf.Get("NATS_CONSUMER"),
 	}
 
+	// Define the connection function
+	natsConnect := func(serverURL string, opts ...nats.Option) (n.ConnInterface, error) {
+		conn, err := nats.Connect(serverURL, opts...)
+		if err != nil {
+			return nil, err
+		}
+
+		return &natsConnWrapper{conn}, nil
+	}
+
+	// Define the JetStream creation function
+	jetstreamNew := func(nc *nats.Conn) (jetstream.JetStream, error) {
+		return jetstream.New(nc)
+	}
+
 	var err error
 
-	c.PubSub, err = nats.New(natsConfig, c.Logger, c.metricsManager)
+	c.PubSub, err = n.New(natsConfig, c.Logger, c.metricsManager, natsConnect, jetstreamNew)
 	if err != nil {
 		c.Logger.Error("failed to create NATS client: %v", err)
 	}
+}
+
+// natsConnWrapper wraps a nats.Conn to implement the ConnInterface.
+type natsConnWrapper struct {
+	*nats.Conn
+}
+
+func (w *natsConnWrapper) Status() nats.Status {
+	return w.Conn.Status()
+}
+
+func (w *natsConnWrapper) Close() {
+	w.Conn.Close()
+}
+
+func (w *natsConnWrapper) NatsConn() *nats.Conn {
+	return w.Conn
 }
 
 func (c *Container) initializeFile() {
