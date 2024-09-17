@@ -232,7 +232,7 @@ func initializeTest(t *testing.T, serverURL string) {
 		t.Errorf("Error publishing to 'order-logs': %v", err)
 	}
 
-	err = client.Publish(ctx, "products", []byte(`{"productId":"123","price":"599"}`))
+	err = client.Publish(ctx, "products", []byte(`{"productId":"69","price":"19.99"}`))
 	if err != nil {
 		t.Errorf("Error publishing to 'products': %v", err)
 	}

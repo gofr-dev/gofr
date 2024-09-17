@@ -1,6 +1,8 @@
 package main
 
 import (
+	"fmt"
+
 	"gofr.dev/pkg/gofr"
 )
 
@@ -8,14 +10,16 @@ func main() {
 	app := gofr.New()
 
 	app.Subscribe("products", func(c *gofr.Context) error {
+		c.Logger.Debug("Received message on 'products' subject")
+
 		var productInfo struct {
-			ProductID string `json:"productId"`
-			Price     string `json:"price"`
+			ProductID int     `json:"productId"`
+			Price     float64 `json:"price"`
 		}
 
 		err := c.Bind(&productInfo)
 		if err != nil {
-			c.Logger.Error(err)
+			c.Logger.Error("Error binding product message:", err)
 			return nil
 		}
 
@@ -25,6 +29,8 @@ func main() {
 	})
 
 	app.Subscribe("order-logs", func(c *gofr.Context) error {
+		c.Logger.Debug("Received message on 'order-logs' subject")
+
 		var orderStatus struct {
 			OrderID string `json:"orderId"`
 			Status  string `json:"status"`
@@ -32,7 +38,7 @@ func main() {
 
 		err := c.Bind(&orderStatus)
 		if err != nil {
-			c.Logger.Error(err)
+			c.Logger.Error("Error binding order message:", err)
 			return nil
 		}
 
@@ -41,5 +47,6 @@ func main() {
 		return nil
 	})
 
+	fmt.Println("Subscribing to 'products' and 'order-logs' subjects...")
 	app.Run()
 }
