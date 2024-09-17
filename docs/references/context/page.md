@@ -51,7 +51,7 @@ parts of the request.
   // the Bind() method will map the incoming request to variable p
   ```
   
-  ### Binding multipart-form data 
+- `Binding multipart-form data` 
   - To bind multipart-form data, you can use the Bind method similarly. The struct fields should be tagged appropriately 
     to map the form fields to the struct fields.
     
