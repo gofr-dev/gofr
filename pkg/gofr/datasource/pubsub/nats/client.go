@@ -17,6 +17,7 @@ import (
 // Config defines the NATS client configuration.
 type Config struct {
 	Server      string
+	CredsFile   string
 	Stream      StreamConfig
 	Consumer    string
 	MaxWait     time.Duration
@@ -98,7 +99,15 @@ func NewNATSClient(
 
 	logger.Debugf("connecting to NATS server '%s'", conf.Server)
 
-	nc, err := natsConnect(conf.Server)
+	// Create connection options
+	opts := []nats.Option{nats.Name("GoFr NATS Client")}
+
+	// Add credentials if provided
+	if conf.CredsFile != "" {
+		opts = append(opts, nats.UserCredentials(conf.CredsFile))
+	}
+
+	nc, err := natsConnect(conf.Server, opts...)
 	if err != nil {
 		logger.Errorf("failed to connect to NATS server at %v: %v", conf.Server, err)
 
