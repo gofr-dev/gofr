@@ -175,6 +175,7 @@ func (c *Container) initializeNATS(conf config.Config) {
 		BatchSize:   c.getIntConfig(conf, "NATS_BATCH_SIZE", 0),
 		MaxPullWait: c.getIntConfig(conf, "NATS_MAX_PULL_WAIT", 0),
 		Consumer:    conf.Get("NATS_CONSUMER"),
+		CredsFile:   conf.Get("NATS_CREDS_FILE"),
 	}
 
 	// Define the connection function
