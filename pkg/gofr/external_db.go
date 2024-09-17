@@ -73,6 +73,16 @@ func (a *App) AddKVStore(db container.KVStoreProvider) {
 	a.container.KVStore = db
 }
 
+// AddSolr sets the Solr datasource in the app's container.
+func (a *App) AddSolr(db container.SolrProvider) {
+	db.UseLogger(a.Logger())
+	db.UseMetrics(a.Metrics())
+
+	db.Connect()
+
+	a.container.Solr = db
+}
+
 // AddDgraph sets the Dgraph datasource in the app's container.
 func (a *App) AddDgraph(db container.DgraphProvider) {
 	// Create the Dgraph client with the provided configuration
