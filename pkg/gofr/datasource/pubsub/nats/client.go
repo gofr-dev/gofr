@@ -234,6 +234,7 @@ func (n *NATSClient) fetchAndProcessMessages(ctx context.Context, cons jetstream
 	return msgs.Error()
 }
 
+// ProcessMessages processes messages from a consumer.
 func (n *NATSClient) ProcessMessages(ctx context.Context, msgs jetstream.MessageBatch, handler MessageHandler) {
 	for msg := range msgs.Messages() {
 		if err := n.HandleMessage(ctx, msg, handler); err != nil {
@@ -242,6 +243,7 @@ func (n *NATSClient) ProcessMessages(ctx context.Context, msgs jetstream.Message
 	}
 }
 
+// HandleMessage handles a message from a consumer.
 func (n *NATSClient) HandleMessage(ctx context.Context, msg jetstream.Msg, handler MessageHandler) error {
 	if err := handler(ctx, msg); err != nil {
 		n.Logger.Errorf("Error handling message: %v", err)
@@ -251,6 +253,7 @@ func (n *NATSClient) HandleMessage(ctx context.Context, msg jetstream.Msg, handl
 	return nil
 }
 
+// NakMessage naks a message from a consumer.
 func (n *NATSClient) NakMessage(msg jetstream.Msg) error {
 	if err := msg.Nak(); err != nil {
 		n.Logger.Errorf("Failed to NAK message: %v", err)
@@ -261,6 +264,7 @@ func (n *NATSClient) NakMessage(msg jetstream.Msg) error {
 	return nil
 }
 
+// HandleFetchError handles fetch errors.
 func (n *NATSClient) HandleFetchError(err error) {
 	n.Logger.Errorf("failed to fetch messages: %v", err)
 	time.Sleep(time.Second) // Backoff on error
