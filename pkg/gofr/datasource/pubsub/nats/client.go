@@ -12,6 +12,8 @@ import (
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 )
 
+//go:generate mockgen -destination=mock_jetstream.go -package=nats github.com/nats-io/nats.go/jetstream JetStream,Stream,Consumer,Msg,MessageBatch
+
 // Config defines the NATS client configuration.
 type Config struct {
 	Server      string
