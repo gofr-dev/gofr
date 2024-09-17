@@ -18,6 +18,10 @@ func (*formData) setInterfaceValue(value reflect.Value, data any) (bool, error) 
 }
 
 func (uf *formData) setSliceOrArrayValue(value reflect.Value, data string) (bool, error) {
+	if value.Kind() != reflect.Slice && value.Kind() != reflect.Array {
+		return false, fmt.Errorf("%w: %s", errUnsupportedKind, value.Kind())
+	}
+
 	elemType := value.Type().Elem()
 
 	elements := strings.Split(data, ",")
@@ -25,22 +29,12 @@ func (uf *formData) setSliceOrArrayValue(value reflect.Value, data string) (bool
 	// Create a new slice/array with appropriate length and capacity
 	var newSlice reflect.Value
 
-	switch value.Kind() {
-	case reflect.Slice:
+	if value.Kind() == reflect.Slice {
 		newSlice = reflect.MakeSlice(value.Type(), len(elements), len(elements))
-	case reflect.Array:
-		if len(elements) > value.Len() {
-			return false, errDataLengthExceeded
-		}
-
+	} else if len(elements) > value.Len() {
+		return false, errDataLengthExceeded
+	} else {
 		newSlice = reflect.New(value.Type()).Elem()
-	case reflect.Invalid, reflect.Bool, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64, reflect.Uint,
-		reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr, reflect.Float32, reflect.Float64,
-		reflect.Complex64, reflect.Complex128, reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.String,
-		reflect.Struct, reflect.UnsafePointer, reflect.Pointer:
-		return false, fmt.Errorf("%w: %s", errUnsupportedKind, value.Kind())
-	default:
-		return false, fmt.Errorf("%w: %s", errUnsupportedKind, value.Kind())
 	}
 
 	// Create a reusable element value to avoid unnecessary allocations
