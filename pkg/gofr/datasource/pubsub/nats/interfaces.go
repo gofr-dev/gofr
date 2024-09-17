@@ -8,6 +8,8 @@ import (
 	"gofr.dev/pkg/gofr/health"
 )
 
+//go:generate mockgen -destination=mock_client.go -package=nats -source=./interfaces.go Client,Subscription,ConnInterface
+
 type ConnInterface interface {
 	Status() nats.Status
 	Close()
