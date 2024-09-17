@@ -47,6 +47,7 @@ type Container struct {
 	Cassandra  Cassandra
 	Clickhouse Clickhouse
 	Mongo      Mongo
+	Solr       Solr
 
 	KVStore KVStore
 
