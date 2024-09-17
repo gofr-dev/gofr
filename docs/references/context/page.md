@@ -61,7 +61,7 @@ parts of the request.
 
     Compressed file.Zip `file:"upload"`
 
-    FileHeader *multipart.FileHeader `file:"a"`
+    FileHeader *multipart.FileHeader `file:"file_upload"`
     }
     ```
 
