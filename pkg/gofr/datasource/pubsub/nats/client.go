@@ -32,7 +32,6 @@ type StreamConfig struct {
 
 // Subscription holds subscription information for NATS JetStream.
 type Subscription struct {
-	Sub     *nats.Subscription
 	Handler MessageHandler
 	Ctx     context.Context
 	Cancel  context.CancelFunc
