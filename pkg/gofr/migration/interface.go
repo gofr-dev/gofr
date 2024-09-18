@@ -38,6 +38,14 @@ type Clickhouse interface {
 	HealthCheck(ctx context.Context) (any, error)
 }
 
+type Cassandra interface {
+	Exec(query string, args ...interface{}) error
+	Query(dest any, query string, values ...any) error
+	ExecCAS(dest any, query string, values ...any) (bool, error)
+
+	HealthCheck(ctx context.Context) (any, error)
+}
+
 // keeping the migrator interface unexported as, right now it is not being implemented directly, by the externalDB drivers.
 // keeping the implementations for externalDB at one place such that if any change in migration logic, we would change directly here.
 type migrator interface {

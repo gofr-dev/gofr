@@ -12,27 +12,25 @@ import (
 	"gofr.dev/pkg/gofr/testutil"
 )
 
-func clickHouseSetup(t *testing.T) (migrator, *MockClickhouse, *container.Container) {
+func cassandraSetup(t *testing.T) (migrator, *container.MockCassandra, *container.Container) {
 	t.Helper()
 
-	ctrl := gomock.NewController(t)
+	mockContainer, mocks := container.NewMockContainer(t)
 
-	mockContainer, _ := container.NewMockContainer(t)
+	mockCassandra := mocks.Cassandra
 
-	mockClickhouse := NewMockClickhouse(ctrl)
+	ds := Datasource{Cassandra: mockContainer.Cassandra}
 
-	ds := Datasource{Clickhouse: mockClickhouse}
-
-	ch := clickHouseDS{Clickhouse: mockClickhouse}
+	ch := cassandraDS{Cassandra: mockCassandra}
 	mg := ch.apply(&ds)
 
-	mockContainer.Clickhouse = mockClickhouse
+	mockContainer.Cassandra = mockCassandra
 
-	return mg, mockClickhouse, mockContainer
+	return mg, mockCassandra, mockContainer
 }
 
-func Test_ClickHouseCheckAndCreateMigrationTable(t *testing.T) {
-	mg, mockClickhouse, mockContainer := clickHouseSetup(t)
+func Test_CassandraCheckAndCreateMigrationTable(t *testing.T) {
+	mg, mockCassandra, mockContainer := cassandraSetup(t)
 
 	testCases := []struct {
 		desc string
@@ -43,7 +41,7 @@ func Test_ClickHouseCheckAndCreateMigrationTable(t *testing.T) {
 	}
 
 	for i, tc := range testCases {
-		mockClickhouse.EXPECT().Exec(gomock.Any(), CheckAndCreateChMigrationTable).Return(tc.err)
+		mockCassandra.EXPECT().Exec(CheckAndCreateCassandraMigrationTable).Return(tc.err)
 
 		err := mg.checkAndCreateMigrationTable(mockContainer)
 
@@ -51,8 +49,8 @@ func Test_ClickHouseCheckAndCreateMigrationTable(t *testing.T) {
 	}
 }
 
-func Test_ClickHouseGetLastMigration(t *testing.T) {
-	mg, mockClickhouse, mockContainer := clickHouseSetup(t)
+func Test_CassandraGetLastMigration(t *testing.T) {
+	mg, mockCassandra, mockContainer := cassandraSetup(t)
 
 	testCases := []struct {
 		desc string
@@ -63,8 +61,10 @@ func Test_ClickHouseGetLastMigration(t *testing.T) {
 		{"connection failed", sql.ErrConnDone, 0},
 	}
 
+	var lastMigration []int64
+
 	for i, tc := range testCases {
-		mockClickhouse.EXPECT().Select(gomock.Any(), gomock.Any(), getLastChGoFrMigration).Return(tc.err)
+		mockCassandra.EXPECT().Query(&lastMigration, getLastCassandraGoFrMigration).Return(tc.err)
 
 		resp := mg.getLastMigration(mockContainer)
 
@@ -72,8 +72,8 @@ func Test_ClickHouseGetLastMigration(t *testing.T) {
 	}
 }
 
-func Test_ClickHouseCommitMigration(t *testing.T) {
-	mg, mockClickhouse, mockContainer := clickHouseSetup(t)
+func Test_CassandraCommitMigration(t *testing.T) {
+	mg, mockCassandra, mockContainer := cassandraSetup(t)
 
 	testCases := []struct {
 		desc string
@@ -91,7 +91,7 @@ func Test_ClickHouseCommitMigration(t *testing.T) {
 	}
 
 	for i, tc := range testCases {
-		mockClickhouse.EXPECT().Exec(gomock.Any(), insertChGoFrMigrationRow, td.MigrationNumber,
+		mockCassandra.EXPECT().Exec(insertCassandraGoFrMigrationRow, td.MigrationNumber,
 			"UP", td.StartTime, gomock.Any()).Return(tc.err)
 
 		err := mg.commitMigration(mockContainer, td)
@@ -100,11 +100,11 @@ func Test_ClickHouseCommitMigration(t *testing.T) {
 	}
 }
 
-func Test_ClickHouseBeginTransaction(t *testing.T) {
+func Test_CassandraBeginTransaction(t *testing.T) {
 	logs := testutil.StdoutOutputForFunc(func() {
-		mg, _, mockContainer := clickHouseSetup(t)
+		mg, _, mockContainer := cassandraSetup(t)
 		mg.beginTransaction(mockContainer)
 	})
 
-	assert.Contains(t, logs, "Clickhouse Migrator begin successfully")
+	assert.Contains(t, logs, "Cassandra Migrator begin successfully")
 }
