@@ -28,11 +28,11 @@ func (ql *QueryLog) PrettyPrint(logger Logger) {
 	// Format the log string
 	formattedLog := fmt.Sprintf(
 		"\u001B[38;5;8m%-32s \u001B[38;5;206m%-6s\u001B[0m %8d\u001B[38;5;8mµs\u001B[0m %s",
-		clean(ql.URL), "DGRAPH", ql.Duration, clean(ql.Type),
+		clean(ql.Type), "DGRAPH", ql.Duration, clean(ql.URL),
 	)
 
 	// Log the formatted string using the logger
-	logger.Log(formattedLog)
+	logger.Debug(formattedLog)
 }
 
 // clean replaces multiple consecutive whitespace characters with a single space and trims leading/trailing whitespace
