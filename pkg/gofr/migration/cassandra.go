@@ -46,7 +46,8 @@ func (cs cassandraMigrator) checkAndCreateMigrationTable(c *container.Container)
 }
 
 func (cs cassandraMigrator) getLastMigration(c *container.Container) int64 {
-	var lastMigration int64 = 0 // Default to 0 if no migrations found
+	var lastMigration int64 // Default to 0 if no migrations found
+
 	var lastMigrations []int64
 
 	err := c.Cassandra.Query(&lastMigrations, getLastCassandraGoFrMigration)
