@@ -40,7 +40,6 @@ type Clickhouse interface {
 
 type Cassandra interface {
 	Exec(query string, args ...interface{}) error
-	Query(dest any, query string, values ...any) error
 
 	HealthCheck(ctx context.Context) (any, error)
 }

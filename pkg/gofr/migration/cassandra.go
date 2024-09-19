@@ -75,25 +75,13 @@ func (cs cassandraMigrator) getLastMigration(c *container.Container) int64 {
 func (cs cassandraMigrator) beginTransaction(c *container.Container) transactionData {
 	cmt := cs.migrator.beginTransaction(c)
 
-	err := cs.Cassandra.NewBatch("CassandraTx", 0)
-	if err != nil {
-		return cmt
-	}
-
-	cmt.CassandraTx = &cassandraDS{cs.Cassandra}
-
 	c.Debug("Cassandra Migrator begin successfully")
 
 	return cmt
 }
 
 func (cs cassandraMigrator) commitMigration(c *container.Container, data transactionData) error {
-	err := data.CassandraTx.ExecuteBatch("CassandraTx")
-	if err != nil {
-		return err
-	}
-
-	err = cs.Cassandra.Exec(insertCassandraGoFrMigrationRow, data.MigrationNumber,
+	err := cs.Cassandra.Exec(insertCassandraGoFrMigrationRow, data.MigrationNumber,
 		"UP", data.StartTime, time.Since(data.StartTime).Milliseconds())
 	if err != nil {
 		return err
