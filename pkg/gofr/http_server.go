@@ -25,9 +25,19 @@ func newHTTPServer(c *container.Container, port int, middlewareConfigs map[strin
 	r := gofrHTTP.NewRouter()
 	wsManager := websocket.New()
 
+	if middlewareConfigs != nil {
+		_, validexporter := middlewareConfigs["TRACE_EXPORTER"]
+		_, validurl := middlewareConfigs["TRACE_URL"]
+
+		if validexporter && validurl {
+			r.Use(middleware.Tracer)
+			delete(middlewareConfigs, "TRACE_EXPORTER")
+			delete(middlewareConfigs, "TRACER_URL")
+		}
+	}
+
 	r.Use(
 		middleware.WSHandlerUpgrade(c, wsManager),
-		middleware.Tracer,
 		middleware.Logging(c.Logger),
 		middleware.CORS(middlewareConfigs, r.RegisteredRoutes),
 		middleware.Metrics(c.Metrics()),

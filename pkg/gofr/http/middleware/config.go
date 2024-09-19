@@ -20,7 +20,18 @@ func GetConfigs(c config.Config) map[string]string {
 		"ACCESS_CONTROL_MAX_AGE",
 	}
 
+	allowTracers := []string{
+		"TRACE_EXPORTER",
+		"TRACER_URL",
+	}
+
 	for _, v := range allowedCORSHeaders {
+		if val := c.Get(v); val != "" {
+			middlewareConfigs[convertHeaderNames(v)] = val
+		}
+	}
+
+	for _, v := range allowTracers {
 		if val := c.Get(v); val != "" {
 			middlewareConfigs[convertHeaderNames(v)] = val
 		}
