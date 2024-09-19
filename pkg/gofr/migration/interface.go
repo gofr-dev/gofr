@@ -40,6 +40,9 @@ type Clickhouse interface {
 
 type Cassandra interface {
 	Exec(query string, args ...interface{}) error
+	NewBatch(name string, batchType int) error
+	BatchQuery(name, stmt string, values ...any) error
+	ExecuteBatch(name string) error
 
 	HealthCheck(ctx context.Context) (any, error)
 }
