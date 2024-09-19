@@ -6,6 +6,7 @@ on:
     branches:
       - main
       - development
+      - docs-update
 
 env:
   APP_NAME: gofr-website
@@ -45,7 +46,7 @@ jobs:
           file: ./docs/Dockerfile
 
   dockerize:
-    if: ${{ startsWith(github.ref, 'refs/tags/v')}}
+#    if: ${{ startsWith(github.ref, 'refs/tags/v')}}
     runs-on: ubuntu-latest
     outputs:
       image: ${{ steps.output-image.outputs.image }}
