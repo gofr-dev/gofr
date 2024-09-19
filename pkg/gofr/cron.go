@@ -194,32 +194,10 @@ func parseRange(s string, minValue, maxValue int) (map[int]struct{}, error) {
 	r := make(map[int]struct{})
 	parts := strings.Split(s, ",")
 
-	for _, x := range parts {
-		rng := matchRange.FindStringSubmatch(x)
-
-		if rng == nil {
-			i, err := strconv.Atoi(x)
-			if err != nil {
-				return nil, errParsing{x, s}
-			}
-
-			if i < minValue || i > maxValue {
-				return nil, errOutOfRange{i, s, minValue, maxValue}
-			}
-
-			r[i] = struct{}{}
-
-			continue
+	for _, part := range parts {
+		if err := processPart(part, minValue, maxValue, r); err != nil {
+			return nil, err
 		}
-
-		localMin, _ := strconv.Atoi(rng[1])
-		localMax, _ := strconv.Atoi(rng[2])
-
-		if localMin < minValue || localMax > maxValue {
-			return nil, errOutOfRange{x, s, minValue, maxValue}
-		}
-
-		r = getDefaultJobField(localMin, localMax, 1)
 	}
 
 	if len(r) == 0 {
@@ -227,6 +205,64 @@ func parseRange(s string, minValue, maxValue int) (map[int]struct{}, error) {
 	}
 
 	return r, nil
+}
+
+func processPart(part string, minValue, maxValue int, r map[int]struct{}) error {
+	if rng := matchRange.FindStringSubmatch(part); rng != nil {
+		return handleRange(rng, minValue, maxValue, r)
+	}
+	return handleValue(part, minValue, maxValue, r)
+}
+
+func handleValue(value string, minValue, maxValue int, r map[int]struct{}) error {
+	i, err := strconv.Atoi(value)
+	if err != nil {
+		return errParsing{invalidPart: value}
+	}
+
+	if i < minValue || i > maxValue {
+		return errOutOfRange{
+			rangeVal: i,
+			input:    value,
+			min:      minValue,
+			max:      maxValue,
+		}
+	}
+
+	r[i] = struct{}{}
+	return nil
+}
+
+func handleRange(rng []string, minValue, maxValue int, r map[int]struct{}) error {
+	localMin, errMin := strconv.Atoi(rng[1])
+	localMax, errMax := strconv.Atoi(rng[2])
+
+	if errMin != nil || errMax != nil {
+		return fmt.Errorf("invalid range format: %v", rng)
+	}
+
+	if localMin > localMax {
+		return errOutOfRange{
+			rangeVal: fmt.Sprintf("%d-%d", localMin, localMax),
+			input:    fmt.Sprintf("%d-%d", localMin, localMax),
+			min:      minValue,
+			max:      maxValue,
+		}
+	}
+
+	if localMin < minValue || localMax > maxValue {
+		return errOutOfRange{
+			rangeVal: fmt.Sprintf("%d-%d", localMin, localMax),
+			input:    fmt.Sprintf("%d-%d", localMin, localMax),
+			min:      minValue,
+			max:      maxValue,
+		}
+	}
+
+	for i := localMin; i <= localMax; i++ {
+		r[i] = struct{}{}
+	}
+	return nil
 }
 
 func getDefaultJobField(minValue, maxValue, incr int) map[int]struct{} {
@@ -339,8 +375,8 @@ type errOutOfRange struct {
 }
 
 func (e errOutOfRange) Error() string {
-	return fmt.Sprintf("out of range for %s in %s. %s must be in "+
-		"range %d-%d", e.rangeVal, e.input, e.rangeVal, e.min, e.max)
+	return fmt.Sprintf("out of range for %v in %s. %v must be in range %d-%d",
+		e.rangeVal, e.input, e.rangeVal, e.min, e.max)
 }
 
 type errParsing struct {
@@ -352,7 +388,6 @@ func (e errParsing) Error() string {
 	if e.base != "" {
 		return fmt.Sprintf("unable to parse %s part in %s", e.invalidPart, e.base)
 	}
-
 	return fmt.Sprintf("unable to parse %s", e.invalidPart)
 }
 

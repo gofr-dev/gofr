@@ -333,3 +333,262 @@ func Test_noopRequest(t *testing.T) {
 	require.NoError(t, noop.Bind(nil))
 	assert.Nil(t, noop.Params("test"))
 }
+
+func TestParseRange_Success(t *testing.T) {
+	testCases := []struct {
+		desc     string
+		input    string
+		minValue int
+		maxValue int
+		expOut   map[int]struct{}
+	}{
+		{
+			desc:     "single values",
+			input:    "1,2,3",
+			minValue: 1,
+			maxValue: 5,
+			expOut:   map[int]struct{}{1: {}, 2: {}, 3: {}},
+		},
+		{
+			desc:     "range values",
+			input:    "1-3",
+			minValue: 1,
+			maxValue: 5,
+			expOut:   map[int]struct{}{1: {}, 2: {}, 3: {}},
+		},
+		{
+			desc:     "mixed values and ranges",
+			input:    "1,2,4-6",
+			minValue: 1,
+			maxValue: 6,
+			expOut:   map[int]struct{}{1: {}, 2: {}, 4: {}, 5: {}, 6: {}},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			got, err := parseRange(tc.input, tc.minValue, tc.maxValue)
+			require.NoError(t, err)
+			assert.Equal(t, tc.expOut, got)
+		})
+	}
+}
+
+func TestParseRange_Error(t *testing.T) {
+	testCases := []struct {
+		desc         string
+		input        string
+		minValue     int
+		maxValue     int
+		expErrString string
+	}{
+		{
+			desc:         "out of range value",
+			input:        "15",
+			minValue:     1,
+			maxValue:     10,
+			expErrString: "out of range for 15 in 15. 15 must be in range 1-10",
+		},
+		{
+			desc:         "invalid range format",
+			input:        "5-3",
+			minValue:     1,
+			maxValue:     10,
+			expErrString: "out of range for 5-3 in 5-3. 5-3 must be in range 1-10",
+		},
+		{
+			desc:         "range with invalid values",
+			input:        "1-5,7-3",
+			minValue:     1,
+			maxValue:     10,
+			expErrString: "out of range for 7-3 in 7-3. 7-3 must be in range 1-10",
+		},
+		{
+			desc:         "invalid part",
+			input:        "foo",
+			minValue:     1,
+			maxValue:     10,
+			expErrString: "unable to parse foo",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			got, err := parseRange(tc.input, tc.minValue, tc.maxValue)
+			assert.Nil(t, got)
+			require.ErrorContains(t, err, tc.expErrString)
+		})
+	}
+}
+
+func TestProcessPart(t *testing.T) {
+	tests := []struct {
+		part     string
+		minValue int
+		maxValue int
+		expected map[int]struct{}
+		wantErr  bool
+	}{
+		{
+			part:     "5",
+			minValue: 1,
+			maxValue: 10,
+			expected: map[int]struct{}{5: {}},
+			wantErr:  false,
+		},
+		{
+			part:     "15",
+			minValue: 1,
+			maxValue: 10,
+			expected: nil,
+			wantErr:  true,
+		},
+		{
+			part:     "5-7",
+			minValue: 1,
+			maxValue: 10,
+			expected: map[int]struct{}{5: {}, 6: {}, 7: {}},
+			wantErr:  false,
+		},
+		{
+			part:     "8-5",
+			minValue: 1,
+			maxValue: 10,
+			expected: nil,
+			wantErr:  true,
+		},
+		{
+			part:     "5-12",
+			minValue: 1,
+			maxValue: 10,
+			expected: nil,
+			wantErr:  true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.part, func(t *testing.T) {
+			r := make(map[int]struct{})
+			err := processPart(tt.part, tt.minValue, tt.maxValue, r)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("processPart() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !mapsEqual(r, tt.expected) {
+				t.Errorf("processPart() = %v, want %v", r, tt.expected)
+			}
+		})
+	}
+}
+
+func TestHandleValue(t *testing.T) {
+	tests := []struct {
+		value    string
+		minValue int
+		maxValue int
+		expected map[int]struct{}
+		wantErr  bool
+	}{
+		{
+			value:    "5",
+			minValue: 1,
+			maxValue: 10,
+			expected: map[int]struct{}{5: {}},
+			wantErr:  false,
+		},
+		{
+			value:    "15",
+			minValue: 1,
+			maxValue: 10,
+			expected: nil,
+			wantErr:  true,
+		},
+		{
+			value:    "abc",
+			minValue: 1,
+			maxValue: 10,
+			expected: nil,
+			wantErr:  true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.value, func(t *testing.T) {
+			r := make(map[int]struct{})
+			err := handleValue(tt.value, tt.minValue, tt.maxValue, r)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("handleValue() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !mapsEqual(r, tt.expected) {
+				t.Errorf("handleValue() = %v, want %v", r, tt.expected)
+			}
+		})
+	}
+}
+
+func TestHandleRange(t *testing.T) {
+	tests := []struct {
+		rng      []string
+		minValue int
+		maxValue int
+		expected map[int]struct{}
+		wantErr  bool
+	}{
+		{
+			rng:      []string{"", "5", "7"},
+			minValue: 1,
+			maxValue: 10,
+			expected: map[int]struct{}{5: {}, 6: {}, 7: {}},
+			wantErr:  false,
+		},
+		{
+			rng:      []string{"", "8", "5"},
+			minValue: 1,
+			maxValue: 10,
+			expected: nil,
+			wantErr:  true,
+		},
+		{
+			rng:      []string{"", "5", "12"},
+			minValue: 1,
+			maxValue: 10,
+			expected: nil,
+			wantErr:  true,
+		},
+		{
+			rng:      []string{"", "5", "10"},
+			minValue: 1,
+			maxValue: 10,
+			expected: map[int]struct{}{5: {}, 6: {}, 7: {}, 8: {}, 9: {}, 10: {}},
+			wantErr:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.rng[1]+"-"+tt.rng[2], func(t *testing.T) {
+			r := make(map[int]struct{})
+			err := handleRange(tt.rng, tt.minValue, tt.maxValue, r)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("handleRange() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !mapsEqual(r, tt.expected) {
+				t.Errorf("handleRange() = %v, want %v", r, tt.expected)
+			}
+		})
+	}
+}
+
+// Helper function to compare maps
+func mapsEqual(a, b map[int]struct{}) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for k := range a {
+		if _, ok := b[k]; !ok {
+			return false
+		}
+	}
+	return true
+}
