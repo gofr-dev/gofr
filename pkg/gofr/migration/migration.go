@@ -21,8 +21,9 @@ type transactionData struct {
 	StartTime       time.Time
 	MigrationNumber int64
 
-	SQLTx   *gofrSql.Tx
-	RedisTx goRedis.Pipeliner
+	SQLTx       *gofrSql.Tx
+	RedisTx     goRedis.Pipeliner
+	CassandraTx *cassandraDS
 }
 
 func Run(migrationsMap map[int64]Migrate, c *container.Container) {
@@ -157,7 +158,7 @@ func getMigrator(c *container.Container) (Datasource, migrator, bool) {
 
 		ds.Cassandra = c.Cassandra
 
-		mg = cassandraDS{ds.Cassandra}.apply(mg)
+		mg = cassandraDS{c.Cassandra}.apply(mg)
 
 		c.Debug("initialized data source for Cassandra")
 	}

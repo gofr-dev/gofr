@@ -181,8 +181,6 @@ type Cassandra interface {
 
 	BatchQuery(stmt string, values ...any) error
 
-	ExecuteBatch() error
-
 	NewBatch(name string, batchType int) error
 
 	CassandraBatch
