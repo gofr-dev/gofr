@@ -212,7 +212,7 @@ type Person struct {
 	ID    int    `json:"id,omitempty"`
 	Name  string `json:"name"`
 	Age   int    `json:"age"`
-	State string `json:"state"`
+	State string `json:"state" db:"location"` // db tag specifies the actual column name in the database
 }
 
 func main() {
@@ -238,7 +238,7 @@ func main() {
 			return nil, err
 		}
 
-		err = c.Cassandra.Exec(`INSERT INTO persons(id, name, age, state) VALUES(?, ?, ?, ?)`,
+		err = c.Cassandra.Exec(`INSERT INTO persons(id, name, age, location) VALUES(?, ?, ?, ?)`,
 			person.ID, person.Name, person.Age, person.State)
 		if err != nil {
 			return nil, err
@@ -250,7 +250,7 @@ func main() {
 	app.GET("/user", func(c *gofr.Context) (interface{}, error) {
 		persons := make([]Person, 0)
 
-		err := c.Cassandra.Query(&persons, `SELECT id, name, age, state FROM persons`)
+		err := c.Cassandra.Query(&persons, `SELECT id, name, age, location FROM persons`)
 
 		return persons, err
 	})
