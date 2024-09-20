@@ -17,6 +17,16 @@ type ConnInterface interface {
 	NatsConn() *nats.Conn
 }
 
+// NATSConnector represents the main NATS connection.
+type NATSConnector interface {
+	Connect(string, ...nats.Option) (ConnInterface, error)
+}
+
+// JetStreamCreator represents the main NATS JetStream client.
+type JetStreamCreator interface {
+	New(*nats.Conn) (jetstream.JetStream, error)
+}
+
 // Client represents the main NATS JetStream client.
 type Client interface {
 	Publish(ctx context.Context, subject string, message []byte) error
