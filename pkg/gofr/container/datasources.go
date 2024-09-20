@@ -1,6 +1,7 @@
 package container
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 
@@ -263,6 +264,27 @@ type KVStore interface {
 
 type KVStoreProvider interface {
 	KVStore
+
+	provider
+}
+
+type Solr interface {
+	Search(ctx context.Context, collection string, params map[string]any) (any, error)
+	Create(ctx context.Context, collection string, document *bytes.Buffer, params map[string]any) (any, error)
+	Update(ctx context.Context, collection string, document *bytes.Buffer, params map[string]any) (any, error)
+	Delete(ctx context.Context, collection string, document *bytes.Buffer, params map[string]any) (any, error)
+
+	Retrieve(ctx context.Context, collection string, params map[string]any) (any, error)
+	ListFields(ctx context.Context, collection string, params map[string]any) (any, error)
+	AddField(ctx context.Context, collection string, document *bytes.Buffer) (any, error)
+	UpdateField(ctx context.Context, collection string, document *bytes.Buffer) (any, error)
+	DeleteField(ctx context.Context, collection string, document *bytes.Buffer) (any, error)
+
+	HealthChecker
+}
+
+type SolrProvider interface {
+	Solr
 
 	provider
 }
