@@ -115,6 +115,7 @@ func (c *Container) getLevelFetchConfig(conf config.Config) int {
 
 func (c *Container) initializeMetrics() {
 	c.metricsManager = metrics.NewMetricsManager(exporters.Prometheus(c.GetAppName(), c.GetAppVersion()), c.Logger)
+	// Register framework metrics
 	c.registerFrameworkMetrics()
 	c.Metrics().SetGauge("app_info", 1,
 		"app_name", c.GetAppName(), "app_version", c.GetAppVersion(), "framework_version", version.Framework)
