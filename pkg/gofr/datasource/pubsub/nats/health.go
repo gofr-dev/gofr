@@ -58,7 +58,7 @@ func (n *NATSClient) Health() h.Health {
 	defer cancel()
 
 	if n.JetStream != nil && connectionStatus == nats.CONNECTED {
-		status := getJetstreamStatus(ctx, n.JetStream)
+		status := getJetStreamStatus(ctx, n.JetStream)
 
 		health.Details["jetstream_status"] = status
 
@@ -74,7 +74,7 @@ func (n *NATSClient) Health() h.Health {
 	return health
 }
 
-func getJetstreamStatus(ctx context.Context, js jetstream.JetStream) string {
+func getJetStreamStatus(ctx context.Context, js jetstream.JetStream) string {
 	_, err := js.AccountInfo(ctx)
 	if err != nil {
 		return jetStreamStatusError + ": " + err.Error()
