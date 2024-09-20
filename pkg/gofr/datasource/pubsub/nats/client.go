@@ -45,7 +45,7 @@ type MessageHandler func(context.Context, jetstream.Msg) error
 // NATSClient represents a client for NATS JetStream operations.
 type NATSClient struct {
 	Conn          ConnInterface
-	Js            jetstream.JetStream
+	JetStream     jetstream.JetStream
 	Logger        pubsub.Logger
 	Config        *Config
 	Metrics       Metrics
@@ -65,7 +65,7 @@ func (n *NATSClient) CreateTopic(ctx context.Context, name string) error {
 func (n *NATSClient) DeleteTopic(ctx context.Context, name string) error {
 	n.Logger.Debugf("Deleting topic (stream) %s", name)
 
-	err := n.Js.DeleteStream(ctx, name)
+	err := n.JetStream.DeleteStream(ctx, name)
 	if err != nil {
 		if errors.Is(err, jetstream.ErrStreamNotFound) {
 			n.Logger.Debugf("Stream %s not found, considering delete successful", name)
@@ -133,7 +133,7 @@ func NewNATSClient(
 
 	return &NATSClient{
 		Conn:          nc,
-		Js:            js,
+		JetStream:     js,
 		Logger:        logger,
 		Config:        conf,
 		Metrics:       metrics,
@@ -141,15 +141,84 @@ func NewNATSClient(
 	}, nil
 }
 
+// natsConnWrapper wraps a nats.Conn to implement the ConnInterface.
+type natsConnWrapper struct {
+	*nats.Conn
+}
+
+func (w *natsConnWrapper) Status() nats.Status {
+	return w.Conn.Status()
+}
+
+func (w *natsConnWrapper) Close() {
+	w.Conn.Close()
+}
+
+func (w *natsConnWrapper) NatsConn() *nats.Conn {
+	return w.Conn
+}
+
 // New creates a new NATS client.
+/*
 func New(
+	conf *Config,
+	logger pubsub.Logger,
+	metrics Metrics,
+) (pubsub.Client, error) {
+	natsConnect := func(serverURL string, opts ...nats.Option) (ConnInterface, error) {
+		conn, err := nats.Connect(serverURL, opts...)
+		if err != nil {
+			return nil, err
+		}
+
+		return &natsConnWrapper{conn}, nil
+	}
+
+	jetstreamNew := func(nc *nats.Conn) (jetstream.JetStream, error) {
+		return jetstream.New(nc)
+	}
+
+	// Create the NATSClient using the wrapper functions
+	client, err := NewNATSClient(conf, logger, metrics, natsConnect, jetstreamNew)
+	if err != nil {
+		return nil, err
+	}
+
+	return &NatsPubSubWrapper{Client: client}, nil
+}
+
+*/
+
+func New(
+	conf *Config,
+	logger pubsub.Logger,
+	metrics Metrics,
+) (pubsub.Client, error) {
+	// Use the default connection functions
+	return NewWithMocks(conf, logger, metrics, defaultNatsConnect, defaultJetstreamNew)
+}
+
+func defaultNatsConnect(serverURL string, opts ...nats.Option) (ConnInterface, error) {
+	conn, err := nats.Connect(serverURL, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &natsConnWrapper{conn}, nil
+}
+
+func defaultJetstreamNew(nc *nats.Conn) (jetstream.JetStream, error) {
+	return jetstream.New(nc)
+}
+
+// NewWithMocks creates a new NATS client with custom connection functions.
+// This function is intended for testing purposes.
+func NewWithMocks(
 	conf *Config,
 	logger pubsub.Logger,
 	metrics Metrics,
 	natsConnect func(string, ...nats.Option) (ConnInterface, error),
 	jetstreamNew func(*nats.Conn) (jetstream.JetStream, error),
 ) (pubsub.Client, error) {
-	// Create the NATSClient using the wrapper functions
 	client, err := NewNATSClient(conf, logger, metrics, natsConnect, jetstreamNew)
 	if err != nil {
 		return nil, err
@@ -162,14 +231,14 @@ func New(
 func (n *NATSClient) Publish(ctx context.Context, subject string, message []byte) error {
 	n.Metrics.IncrementCounter(ctx, "app_pubsub_publish_total_count", "subject", subject)
 
-	if n.Js == nil || subject == "" {
+	if n.JetStream == nil || subject == "" {
 		err := ErrJetStreamNotConfigured
 		n.Logger.Error(err.Error())
 
 		return err
 	}
 
-	_, err := n.Js.Publish(ctx, subject, message)
+	_, err := n.JetStream.Publish(ctx, subject, message)
 	if err != nil {
 		n.Logger.Errorf("failed to publish message to NATS JetStream: %v", err)
 
@@ -192,7 +261,7 @@ func (n *NATSClient) Subscribe(ctx context.Context, topic string, handler Messag
 	consumerName := fmt.Sprintf("%s_%s", n.Config.Consumer, topic)
 
 	// Create or update the consumer
-	cons, err := n.Js.CreateOrUpdateConsumer(ctx, n.Config.Stream.Stream, jetstream.ConsumerConfig{
+	cons, err := n.JetStream.CreateOrUpdateConsumer(ctx, n.Config.Stream.Stream, jetstream.ConsumerConfig{
 		Durable:       consumerName,
 		AckPolicy:     jetstream.AckExplicitPolicy,
 		FilterSubject: topic,
@@ -289,7 +358,7 @@ func (n *NATSClient) Close() error {
 
 // DeleteStream deletes a stream in NATS JetStream.
 func (n *NATSClient) DeleteStream(ctx context.Context, name string) error {
-	err := n.Js.DeleteStream(ctx, name)
+	err := n.JetStream.DeleteStream(ctx, name)
 	if err != nil {
 		n.Logger.Errorf("failed to delete stream: %v", err)
 
@@ -307,7 +376,7 @@ func (n *NATSClient) CreateStream(ctx context.Context, cfg StreamConfig) error {
 		Subjects: cfg.Subjects,
 	}
 
-	_, err := n.Js.CreateStream(ctx, jsCfg)
+	_, err := n.JetStream.CreateStream(ctx, jsCfg)
 	if err != nil {
 		n.Logger.Errorf("failed to create stream: %v", err)
 
@@ -321,7 +390,7 @@ func (n *NATSClient) CreateStream(ctx context.Context, cfg StreamConfig) error {
 func (n *NATSClient) CreateOrUpdateStream(ctx context.Context, cfg *jetstream.StreamConfig) (jetstream.Stream, error) {
 	n.Logger.Debugf("Creating or updating stream %s", cfg.Name)
 
-	stream, err := n.Js.CreateOrUpdateStream(ctx, *cfg)
+	stream, err := n.JetStream.CreateOrUpdateStream(ctx, *cfg)
 	if err != nil {
 		n.Logger.Errorf("failed to create or update stream: %v", err)
 

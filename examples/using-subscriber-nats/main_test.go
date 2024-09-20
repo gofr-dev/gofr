@@ -219,7 +219,7 @@ func initializeTest(t *testing.T, serverURL string) {
 	}
 
 	// Ensure stream is created
-	_, err = client.Js.CreateStream(ctx, jetstream.StreamConfig{
+	_, err = client.JetStream.CreateStream(ctx, jetstream.StreamConfig{
 		Name:     conf.Stream.Stream,
 		Subjects: conf.Stream.Subjects,
 	})

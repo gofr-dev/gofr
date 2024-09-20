@@ -8,9 +8,7 @@ import (
 	"time"
 
 	_ "github.com/go-sql-driver/mysql" // This is required to be blank import
-	"github.com/nats-io/nats.go"
-	"github.com/nats-io/nats.go/jetstream"
-	n "gofr.dev/pkg/gofr/datasource/pubsub/nats"
+	"gofr.dev/pkg/gofr/datasource/pubsub/nats"
 	"gofr.dev/pkg/gofr/websocket"
 
 	"gofr.dev/pkg/gofr/config"
@@ -150,12 +148,12 @@ func (c *Container) initializeKafka(conf config.Config) {
 func (c *Container) getKafkaConfig(conf config.Config) kafka.Config {
 	return kafka.Config{
 		Broker:          conf.Get("PUBSUB_BROKER"),
-		Partition:       c.getIntConfig(conf, "PARTITION_SIZE", 0),
+		Partition:       c.validateAndRetrieveIntConfig(conf, "PARTITION_SIZE", 0),
 		ConsumerGroupID: conf.Get("CONSUMER_ID"),
-		OffSet:          c.getIntConfig(conf, "PUBSUB_OFFSET", -1),
-		BatchSize:       c.getIntConfig(conf, "KAFKA_BATCH_SIZE", kafka.DefaultBatchSize),
-		BatchBytes:      c.getIntConfig(conf, "KAFKA_BATCH_BYTES", kafka.DefaultBatchBytes),
-		BatchTimeout:    c.getIntConfig(conf, "KAFKA_BATCH_TIMEOUT", kafka.DefaultBatchTimeout),
+		OffSet:          c.validateAndRetrieveIntConfig(conf, "PUBSUB_OFFSET", -1),
+		BatchSize:       c.validateAndRetrieveIntConfig(conf, "KAFKA_BATCH_SIZE", kafka.DefaultBatchSize),
+		BatchBytes:      c.validateAndRetrieveIntConfig(conf, "KAFKA_BATCH_BYTES", kafka.DefaultBatchBytes),
+		BatchTimeout:    c.validateAndRetrieveIntConfig(conf, "KAFKA_BATCH_TIMEOUT", kafka.DefaultBatchTimeout),
 	}
 }
 
@@ -167,64 +165,32 @@ func (c *Container) initializeGoogle(conf config.Config) {
 }
 
 func (c *Container) initializeNATS(conf config.Config) {
-	natsConfig := &n.Config{
+	natsConfig := &nats.Config{
 		Server: conf.Get("PUBSUB_BROKER"),
-		Stream: n.StreamConfig{
+		Stream: nats.StreamConfig{
 			Stream:   conf.Get("NATS_STREAM"),
 			Subjects: strings.Split(conf.Get("NATS_SUBJECTS"), ","),
 		},
 		MaxWait:     c.getDuration(conf, "NATS_MAX_WAIT"),
-		BatchSize:   c.getIntConfig(conf, "NATS_BATCH_SIZE", 0),
-		MaxPullWait: c.getIntConfig(conf, "NATS_MAX_PULL_WAIT", 0),
+		BatchSize:   c.validateAndRetrieveIntConfig(conf, "NATS_BATCH_SIZE", 0),
+		MaxPullWait: c.validateAndRetrieveIntConfig(conf, "NATS_MAX_PULL_WAIT", 0),
 		Consumer:    conf.Get("NATS_CONSUMER"),
 		CredsFile:   conf.Get("NATS_CREDS_FILE"),
 	}
 
-	// Define the connection function
-	natsConnect := func(serverURL string, opts ...nats.Option) (n.ConnInterface, error) {
-		conn, err := nats.Connect(serverURL, opts...)
-		if err != nil {
-			return nil, err
-		}
-
-		return &natsConnWrapper{conn}, nil
-	}
-
-	// Define the JetStream creation function
-	jetstreamNew := func(nc *nats.Conn) (jetstream.JetStream, error) {
-		return jetstream.New(nc)
-	}
-
 	var err error
 
-	c.PubSub, err = n.New(natsConfig, c.Logger, c.metricsManager, natsConnect, jetstreamNew)
+	c.PubSub, err = nats.New(natsConfig, c.Logger, c.metricsManager)
 	if err != nil {
-		c.Logger.Error("failed to create NATS client: %v", err)
+		c.Logger.Errorf("failed to create NATS client: %v", err)
 	}
-}
-
-// natsConnWrapper wraps a nats.Conn to implement the ConnInterface.
-type natsConnWrapper struct {
-	*nats.Conn
-}
-
-func (w *natsConnWrapper) Status() nats.Status {
-	return w.Conn.Status()
-}
-
-func (w *natsConnWrapper) Close() {
-	w.Conn.Close()
-}
-
-func (w *natsConnWrapper) NatsConn() *nats.Conn {
-	return w.Conn
 }
 
 func (c *Container) initializeFile() {
 	c.File = file.New(c.Logger)
 }
 
-func (c *Container) getIntConfig(conf config.Config, key string, defaultValue int) int {
+func (c *Container) validateAndRetrieveIntConfig(conf config.Config, key string, defaultValue int) int {
 	value, err := strconv.Atoi(conf.GetOrDefault(key, strconv.Itoa(defaultValue)))
 	if err != nil {
 		c.Logger.Errorf("invalid value for %s: %v", key, err)

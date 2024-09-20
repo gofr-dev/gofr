@@ -52,13 +52,13 @@ func (n *NATSClient) Health() h.Health {
 
 	health.Details["host"] = n.Config.Server
 	health.Details["backend"] = natsBackend
-	health.Details["jetstream_enabled"] = n.Js != nil
+	health.Details["jetstream_enabled"] = n.JetStream != nil
 
 	ctx, cancel := context.WithTimeout(context.Background(), natsHealthCheckTimeout)
 	defer cancel()
 
-	if n.Js != nil && connectionStatus == nats.CONNECTED {
-		status := getJetstreamStatus(ctx, n.Js)
+	if n.JetStream != nil && connectionStatus == nats.CONNECTED {
+		status := getJetstreamStatus(ctx, n.JetStream)
 
 		health.Details["jetstream_status"] = status
 
@@ -67,7 +67,7 @@ func (n *NATSClient) Health() h.Health {
 		} else {
 			n.Logger.Debug("NATS health check: JetStream enabled")
 		}
-	} else if n.Js == nil {
+	} else if n.JetStream == nil {
 		n.Logger.Debug("NATS health check: JetStream not enabled")
 	}
 
