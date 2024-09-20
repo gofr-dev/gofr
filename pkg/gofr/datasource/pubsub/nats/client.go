@@ -63,12 +63,12 @@ func (n *NATSClient) CreateTopic(ctx context.Context, name string) error {
 
 // DeleteTopic deletes a topic (stream) in NATS JetStream.
 func (n *NATSClient) DeleteTopic(ctx context.Context, name string) error {
-	n.Logger.Debugf("Deleting topic (stream) %s", name)
+	n.Logger.Debugf("deleting topic (stream) %s", name)
 
 	err := n.JetStream.DeleteStream(ctx, name)
 	if err != nil {
 		if errors.Is(err, jetstream.ErrStreamNotFound) {
-			n.Logger.Debugf("Stream %s not found, considering delete successful", name)
+			n.Logger.Debugf("stream %s not found, considering delete successful", name)
 
 			return nil // If the stream doesn't exist, we consider it a success
 		}
@@ -78,7 +78,7 @@ func (n *NATSClient) DeleteTopic(ctx context.Context, name string) error {
 		return err
 	}
 
-	n.Logger.Debugf("Successfully deleted topic (stream) %s", name)
+	n.Logger.Debugf("successfully deleted topic (stream) %s", name)
 
 	return nil
 }
@@ -157,37 +157,6 @@ func (w *natsConnWrapper) Close() {
 func (w *natsConnWrapper) NatsConn() *nats.Conn {
 	return w.Conn
 }
-
-// New creates a new NATS client.
-/*
-func New(
-	conf *Config,
-	logger pubsub.Logger,
-	metrics Metrics,
-) (pubsub.Client, error) {
-	natsConnect := func(serverURL string, opts ...nats.Option) (ConnInterface, error) {
-		conn, err := nats.Connect(serverURL, opts...)
-		if err != nil {
-			return nil, err
-		}
-
-		return &natsConnWrapper{conn}, nil
-	}
-
-	jetstreamNew := func(nc *nats.Conn) (jetstream.JetStream, error) {
-		return jetstream.New(nc)
-	}
-
-	// Create the NATSClient using the wrapper functions
-	client, err := NewNATSClient(conf, logger, metrics, natsConnect, jetstreamNew)
-	if err != nil {
-		return nil, err
-	}
-
-	return &NatsPubSubWrapper{Client: client}, nil
-}
-
-*/
 
 func New(
 	conf *Config,
@@ -307,7 +276,7 @@ func (n *NATSClient) fetchAndProcessMessages(ctx context.Context, cons jetstream
 func (n *NATSClient) ProcessMessages(ctx context.Context, msgs jetstream.MessageBatch, handler MessageHandler) {
 	for msg := range msgs.Messages() {
 		if err := n.HandleMessage(ctx, msg, handler); err != nil {
-			n.Logger.Errorf("Error handling message: %v", err)
+			n.Logger.Errorf("error handling message: %v", err)
 		}
 	}
 }
@@ -315,7 +284,7 @@ func (n *NATSClient) ProcessMessages(ctx context.Context, msgs jetstream.Message
 // HandleMessage handles a message from a consumer.
 func (n *NATSClient) HandleMessage(ctx context.Context, msg jetstream.Msg, handler MessageHandler) error {
 	if err := handler(ctx, msg); err != nil {
-		n.Logger.Errorf("Error handling message: %v", err)
+		n.Logger.Errorf("error handling message: %v", err)
 		return n.NakMessage(msg)
 	}
 
@@ -370,7 +339,7 @@ func (n *NATSClient) DeleteStream(ctx context.Context, name string) error {
 
 // CreateStream creates a stream in NATS JetStream.
 func (n *NATSClient) CreateStream(ctx context.Context, cfg StreamConfig) error {
-	n.Logger.Debugf("Creating stream %s", cfg.Stream)
+	n.Logger.Debugf("creating stream %s", cfg.Stream)
 	jsCfg := jetstream.StreamConfig{
 		Name:     cfg.Stream,
 		Subjects: cfg.Subjects,
@@ -388,7 +357,7 @@ func (n *NATSClient) CreateStream(ctx context.Context, cfg StreamConfig) error {
 
 // CreateOrUpdateStream creates or updates a stream in NATS JetStream.
 func (n *NATSClient) CreateOrUpdateStream(ctx context.Context, cfg *jetstream.StreamConfig) (jetstream.Stream, error) {
-	n.Logger.Debugf("Creating or updating stream %s", cfg.Name)
+	n.Logger.Debugf("creating or updating stream %s", cfg.Name)
 
 	stream, err := n.JetStream.CreateOrUpdateStream(ctx, *cfg)
 	if err != nil {
