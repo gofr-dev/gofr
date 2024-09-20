@@ -32,7 +32,7 @@ func clickHouseSetup(t *testing.T) (migrator, *MockClickhouse, *container.Contai
 }
 
 func Test_ClickHouseCheckAndCreateMigrationTable(t *testing.T) {
-	mg, mockClickhouse, mockContainer := clickHouseSetup(t)
+	migratorWithClickhouse, mockClickhouse, mockContainer := clickHouseSetup(t)
 
 	testCases := []struct {
 		desc string
@@ -45,14 +45,14 @@ func Test_ClickHouseCheckAndCreateMigrationTable(t *testing.T) {
 	for i, tc := range testCases {
 		mockClickhouse.EXPECT().Exec(gomock.Any(), CheckAndCreateChMigrationTable).Return(tc.err)
 
-		err := mg.checkAndCreateMigrationTable(mockContainer)
+		err := migratorWithClickhouse.checkAndCreateMigrationTable(mockContainer)
 
 		assert.Equal(t, tc.err, err, "TEST[%v]\n %v Failed! ", i, tc.desc)
 	}
 }
 
 func Test_ClickHouseGetLastMigration(t *testing.T) {
-	mg, mockClickhouse, mockContainer := clickHouseSetup(t)
+	migratorWithClickhouse, mockClickhouse, mockContainer := clickHouseSetup(t)
 
 	testCases := []struct {
 		desc string
@@ -66,14 +66,14 @@ func Test_ClickHouseGetLastMigration(t *testing.T) {
 	for i, tc := range testCases {
 		mockClickhouse.EXPECT().Select(gomock.Any(), gomock.Any(), getLastChGoFrMigration).Return(tc.err)
 
-		resp := mg.getLastMigration(mockContainer)
+		resp := migratorWithClickhouse.getLastMigration(mockContainer)
 
 		assert.Equal(t, tc.resp, resp, "TEST[%v]\n %v Failed! ", i, tc.desc)
 	}
 }
 
 func Test_ClickHouseCommitMigration(t *testing.T) {
-	mg, mockClickhouse, mockContainer := clickHouseSetup(t)
+	migratorWithClickhouse, mockClickhouse, mockContainer := clickHouseSetup(t)
 
 	testCases := []struct {
 		desc string
@@ -94,7 +94,7 @@ func Test_ClickHouseCommitMigration(t *testing.T) {
 		mockClickhouse.EXPECT().Exec(gomock.Any(), insertChGoFrMigrationRow, td.MigrationNumber,
 			"UP", td.StartTime, gomock.Any()).Return(tc.err)
 
-		err := mg.commitMigration(mockContainer, td)
+		err := migratorWithClickhouse.commitMigration(mockContainer, td)
 
 		assert.Equal(t, tc.err, err, "TEST[%v]\n %v Failed! ", i, tc.desc)
 	}
@@ -102,8 +102,8 @@ func Test_ClickHouseCommitMigration(t *testing.T) {
 
 func Test_ClickHouseBeginTransaction(t *testing.T) {
 	logs := testutil.StdoutOutputForFunc(func() {
-		mg, _, mockContainer := clickHouseSetup(t)
-		mg.beginTransaction(mockContainer)
+		migratorWithClickhouse, _, mockContainer := clickHouseSetup(t)
+		migratorWithClickhouse.beginTransaction(mockContainer)
 	})
 
 	assert.Contains(t, logs, "Clickhouse Migrator begin successfully")
