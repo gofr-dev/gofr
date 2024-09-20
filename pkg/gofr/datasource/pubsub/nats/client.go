@@ -248,7 +248,7 @@ func (n *NATSClient) HandleMessage(ctx context.Context, msg jetstream.Msg, handl
 // NakMessage naks a message from a consumer.
 func (n *NATSClient) NakMessage(msg jetstream.Msg) error {
 	if err := msg.Nak(); err != nil {
-		n.Logger.Errorf("Failed to NAK message: %v", err)
+		n.Logger.Errorf("failed to NAK message: %v", err)
 
 		return err
 	}
