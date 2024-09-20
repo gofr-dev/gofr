@@ -195,12 +195,12 @@ func createTableEmployeeCassandra() migration.Migrate {
             // Execute the create table statement
             if err := d.Cassandra.Exec(createTableCassandra); err != nil {
                 return err
-            } 
-			
-			// Batch processes can also be executed in Exec as follows:
+            }
+
+            // Batch processes can also be executed in Exec as follows:
 			if err := d.Cassandra.Exec(addCassandraRecords); err != nil {
 				return err
-			}
+			}	
 
             // Create a new batch operation
             batchName := "employeeBatch"
