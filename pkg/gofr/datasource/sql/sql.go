@@ -187,7 +187,13 @@ func getDBConnectionString(dbConfig *DBConfig) (string, error) {
 
 		return fmt.Sprintf("file:%s.db", s), nil
 	case "sqlserver":
-		return fmt.Sprintf("sqlserver://%s:%s@%s:%s?database=%s", dbConfig.User, dbConfig.Password, dbConfig.HostName, dbConfig.Port, dbConfig.Database), nil
+		return fmt.Sprintf("sqlserver://%s:%s@%s:%s?database=%s",
+			dbConfig.User,
+			dbConfig.Password,
+			dbConfig.HostName,
+			dbConfig.Port,
+			dbConfig.Database,
+		), nil
 	default:
 		return "", errUnsupportedDialect
 	}
