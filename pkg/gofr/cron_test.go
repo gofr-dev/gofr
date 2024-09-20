@@ -580,7 +580,7 @@ func TestHandleRange(t *testing.T) {
 	}
 }
 
-// Helper function to compare maps
+// Helper function to compare maps.
 func mapsEqual(a, b map[int]struct{}) bool {
 	if len(a) != len(b) {
 		return false
