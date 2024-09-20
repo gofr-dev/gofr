@@ -39,6 +39,7 @@ const (
 	shutDownTimeout        = 30 * time.Second
 	gofrTraceExporter      = "gofr"
 	gofrTracerURL          = "https://tracer.gofr.dev"
+	traceRatio             = 0.1
 )
 
 // App is the main application in the GoFr framework.
@@ -388,6 +389,7 @@ func (a *App) initTracer() {
 			semconv.SchemaURL,
 			semconv.ServiceNameKey.String(a.container.GetAppName()),
 		)),
+		sdktrace.WithSampler(sdktrace.ParentBased(sdktrace.TraceIDRatioBased(traceRatio))),
 	)
 	otel.SetTracerProvider(tp)
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
