@@ -33,7 +33,7 @@ func GetConfigs(c config.Config) map[string]string {
 
 	for _, v := range allowTracers {
 		if val := c.Get(v); val != "" {
-			middlewareConfigs[convertHeaderNames(v)] = val
+			middlewareConfigs[v] = val
 		}
 	}
 

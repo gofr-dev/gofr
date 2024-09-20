@@ -26,8 +26,13 @@ func newHTTPServer(c *container.Container, port int, middlewareConfigs map[strin
 	wsManager := websocket.New()
 
 	if middlewareConfigs != nil {
-		_, validexporter := middlewareConfigs["TRACE_EXPORTER"]
+		traceExporter, validexporter := middlewareConfigs["TRACE_EXPORTER"]
 		_, validurl := middlewareConfigs["TRACE_URL"]
+		if !validurl {
+			if traceExporter == "gofr" {
+				validurl = true
+			}
+		}
 
 		if validexporter && validurl {
 			r.Use(middleware.Tracer)

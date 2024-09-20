@@ -384,17 +384,6 @@ func (a *App) Migrate(migrationsMap map[int64]migration.Migrate) {
 }
 
 func (a *App) initTracer() {
-	tp := sdktrace.NewTracerProvider(
-		sdktrace.WithResource(resource.NewWithAttributes(
-			semconv.SchemaURL,
-			semconv.ServiceNameKey.String(a.container.GetAppName()),
-		)),
-		sdktrace.WithSampler(sdktrace.ParentBased(sdktrace.TraceIDRatioBased(traceRatio))),
-	)
-	otel.SetTracerProvider(tp)
-	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
-	otel.SetErrorHandler(&otelErrorHandler{logger: a.container.Logger})
-
 	traceExporter := a.Config.Get("TRACE_EXPORTER")
 	tracerURL := a.Config.Get("TRACER_URL")
 
@@ -405,6 +394,17 @@ func (a *App) initTracer() {
 	if !isValidConfig(a.Logger(), traceExporter, tracerURL, tracerHost, tracerPort) {
 		return
 	}
+
+	tp := sdktrace.NewTracerProvider(
+		sdktrace.WithResource(resource.NewWithAttributes(
+			semconv.SchemaURL,
+			semconv.ServiceNameKey.String(a.container.GetAppName()),
+		)),
+		sdktrace.WithSampler(sdktrace.ParentBased(sdktrace.TraceIDRatioBased(traceRatio))),
+	)
+	otel.SetTracerProvider(tp)
+	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
+	otel.SetErrorHandler(&otelErrorHandler{logger: a.container.Logger})
 
 	exporter, err := a.getExporter(traceExporter, tracerHost, tracerPort, tracerURL)
 
