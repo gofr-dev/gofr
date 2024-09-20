@@ -147,7 +147,7 @@ func New(conf *Config, logger pubsub.Logger, metrics Metrics) (pubsub.Client, er
 		Subscriptions: make(map[string]*Subscription),
 	}
 
-	return &NatsPubSubWrapper{Client: client}, nil
+	return &PubSubWrapper{Client: client}, nil
 }
 
 // Publish publishes a message to a topic.

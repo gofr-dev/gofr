@@ -9,18 +9,18 @@ import (
 	"gofr.dev/pkg/gofr/health"
 )
 
-// NatsPubSubWrapper adapts NATSClient to pubsub.Client.
-type NatsPubSubWrapper struct {
+// PubSubWrapper adapts NATSClient to pubsub.Client.
+type PubSubWrapper struct {
 	Client *NATSClient
 }
 
 // Publish publishes a message to a topic.
-func (w *NatsPubSubWrapper) Publish(ctx context.Context, topic string, message []byte) error {
+func (w *PubSubWrapper) Publish(ctx context.Context, topic string, message []byte) error {
 	return w.Client.Publish(ctx, topic, message)
 }
 
 // Subscribe subscribes to a topic.
-func (w *NatsPubSubWrapper) Subscribe(ctx context.Context, topic string) (*pubsub.Message, error) {
+func (w *PubSubWrapper) Subscribe(ctx context.Context, topic string) (*pubsub.Message, error) {
 	msgChan := make(chan *pubsub.Message)
 
 	err := w.Client.Subscribe(ctx, topic, func(ctx context.Context, msg jetstream.Msg) error {
@@ -50,22 +50,22 @@ func (w *NatsPubSubWrapper) Subscribe(ctx context.Context, topic string) (*pubsu
 }
 
 // CreateTopic creates a new topic (stream) in NATS JetStream.
-func (w *NatsPubSubWrapper) CreateTopic(ctx context.Context, name string) error {
+func (w *PubSubWrapper) CreateTopic(ctx context.Context, name string) error {
 	return w.Client.CreateTopic(ctx, name)
 }
 
 // DeleteTopic deletes a topic (stream) in NATS JetStream.
-func (w *NatsPubSubWrapper) DeleteTopic(ctx context.Context, name string) error {
+func (w *PubSubWrapper) DeleteTopic(ctx context.Context, name string) error {
 	return w.Client.DeleteTopic(ctx, name)
 }
 
 // Close closes the NATS client.
-func (w *NatsPubSubWrapper) Close() error {
+func (w *PubSubWrapper) Close() error {
 	return w.Client.Close()
 }
 
 // Health returns the health status of the NATS client.
-func (w *NatsPubSubWrapper) Health() health.Health {
+func (w *PubSubWrapper) Health() health.Health {
 	status := health.StatusUp
 	if w.Client.Conn.Status() != nats.CONNECTED {
 		status = health.StatusDown
