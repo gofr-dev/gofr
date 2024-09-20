@@ -16,6 +16,7 @@ import (
 	nats "github.com/nats-io/nats.go"
 	jetstream "github.com/nats-io/nats.go/jetstream"
 	gomock "go.uber.org/mock/gomock"
+	health "gofr.dev/pkg/gofr/health"
 )
 
 // MockConnInterface is a mock of ConnInterface interface.
@@ -79,6 +80,87 @@ func (m *MockConnInterface) Status() nats.Status {
 func (mr *MockConnInterfaceMockRecorder) Status() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Status", reflect.TypeOf((*MockConnInterface)(nil).Status))
+}
+
+// MockNATSConnector is a mock of NATSConnector interface.
+type MockNATSConnector struct {
+	ctrl     *gomock.Controller
+	recorder *MockNATSConnectorMockRecorder
+}
+
+// MockNATSConnectorMockRecorder is the mock recorder for MockNATSConnector.
+type MockNATSConnectorMockRecorder struct {
+	mock *MockNATSConnector
+}
+
+// NewMockNATSConnector creates a new mock instance.
+func NewMockNATSConnector(ctrl *gomock.Controller) *MockNATSConnector {
+	mock := &MockNATSConnector{ctrl: ctrl}
+	mock.recorder = &MockNATSConnectorMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockNATSConnector) EXPECT() *MockNATSConnectorMockRecorder {
+	return m.recorder
+}
+
+// Connect mocks base method.
+func (m *MockNATSConnector) Connect(arg0 string, arg1 ...nats.Option) (ConnInterface, error) {
+	m.ctrl.T.Helper()
+	varargs := []any{arg0}
+	for _, a := range arg1 {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "Connect", varargs...)
+	ret0, _ := ret[0].(ConnInterface)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Connect indicates an expected call of Connect.
+func (mr *MockNATSConnectorMockRecorder) Connect(arg0 any, arg1 ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{arg0}, arg1...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Connect", reflect.TypeOf((*MockNATSConnector)(nil).Connect), varargs...)
+}
+
+// MockJetStreamCreator is a mock of JetStreamCreator interface.
+type MockJetStreamCreator struct {
+	ctrl     *gomock.Controller
+	recorder *MockJetStreamCreatorMockRecorder
+}
+
+// MockJetStreamCreatorMockRecorder is the mock recorder for MockJetStreamCreator.
+type MockJetStreamCreatorMockRecorder struct {
+	mock *MockJetStreamCreator
+}
+
+// NewMockJetStreamCreator creates a new mock instance.
+func NewMockJetStreamCreator(ctrl *gomock.Controller) *MockJetStreamCreator {
+	mock := &MockJetStreamCreator{ctrl: ctrl}
+	mock.recorder = &MockJetStreamCreatorMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockJetStreamCreator) EXPECT() *MockJetStreamCreatorMockRecorder {
+	return m.recorder
+}
+
+// New mocks base method.
+func (m *MockJetStreamCreator) New(arg0 *nats.Conn) (jetstream.JetStream, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "New", arg0)
+	ret0, _ := ret[0].(jetstream.JetStream)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// New indicates an expected call of New.
+func (mr *MockJetStreamCreatorMockRecorder) New(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "New", reflect.TypeOf((*MockJetStreamCreator)(nil).New), arg0)
 }
 
 // MockClient is a mock of Client interface.
@@ -159,6 +241,20 @@ func (m *MockClient) DeleteStream(ctx context.Context, name string) error {
 func (mr *MockClientMockRecorder) DeleteStream(ctx, name any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteStream", reflect.TypeOf((*MockClient)(nil).DeleteStream), ctx, name)
+}
+
+// Health mocks base method.
+func (m *MockClient) Health() health.Health {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Health")
+	ret0, _ := ret[0].(health.Health)
+	return ret0
+}
+
+// Health indicates an expected call of Health.
+func (mr *MockClientMockRecorder) Health() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Health", reflect.TypeOf((*MockClient)(nil).Health))
 }
 
 // Publish mocks base method.

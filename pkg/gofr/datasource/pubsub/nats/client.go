@@ -83,64 +83,6 @@ func (n *NATSClient) DeleteTopic(ctx context.Context, name string) error {
 	return nil
 }
 
-// NewNATSClient creates a new NATS client.
-func NewNATSClient(
-	conf *Config,
-	logger pubsub.Logger,
-	metrics Metrics,
-	natsConnect func(string, ...nats.Option) (ConnInterface, error),
-	jetstreamNew func(*nats.Conn) (jetstream.JetStream, error),
-) (*NATSClient, error) {
-	if err := ValidateConfigs(conf); err != nil {
-		logger.Errorf("could not initialize NATS JetStream: %v", err)
-
-		return nil, err
-	}
-
-	logger.Debugf("connecting to NATS server '%s'", conf.Server)
-
-	// Create connection options
-	opts := []nats.Option{nats.Name("GoFr NATS Client")}
-
-	// Add credentials if provided
-	if conf.CredsFile != "" {
-		opts = append(opts, nats.UserCredentials(conf.CredsFile))
-	}
-
-	nc, err := natsConnect(conf.Server, opts...)
-	if err != nil {
-		logger.Errorf("failed to connect to NATS server at %v: %v", conf.Server, err)
-
-		return nil, err
-	}
-
-	// Check connection status
-	status := nc.Status()
-	if status != nats.CONNECTED {
-		logger.Errorf("unexpected NATS connection status: %v", status)
-
-		return nil, ErrConnectionStatus
-	}
-
-	js, err := jetstreamNew(nc.NatsConn())
-	if err != nil {
-		logger.Errorf("failed to create JetStream context: %v", err)
-
-		return nil, err
-	}
-
-	logger.Logf("connected to NATS server '%s'", conf.Server)
-
-	return &NATSClient{
-		Conn:          nc,
-		JetStream:     js,
-		Logger:        logger,
-		Config:        conf,
-		Metrics:       metrics,
-		Subscriptions: make(map[string]*Subscription),
-	}, nil
-}
-
 // natsConnWrapper wraps a nats.Conn to implement the ConnInterface.
 type natsConnWrapper struct {
 	*nats.Conn
@@ -158,39 +100,51 @@ func (w *natsConnWrapper) NatsConn() *nats.Conn {
 	return w.Conn
 }
 
-func New(
-	conf *Config,
-	logger pubsub.Logger,
-	metrics Metrics,
-) (pubsub.Client, error) {
-	// Use the default connection functions
-	return NewWithMocks(conf, logger, metrics, defaultNatsConnect, defaultJetstreamNew)
-}
-
-func defaultNatsConnect(serverURL string, opts ...nats.Option) (ConnInterface, error) {
-	conn, err := nats.Connect(serverURL, opts...)
-	if err != nil {
+// New creates and returns a new NATS client.
+func New(conf *Config, logger pubsub.Logger, metrics Metrics) (pubsub.Client, error) {
+	if err := ValidateConfigs(conf); err != nil {
+		logger.Errorf("could not initialize NATS JetStream: %v", err)
 		return nil, err
 	}
-	return &natsConnWrapper{conn}, nil
-}
 
-func defaultJetstreamNew(nc *nats.Conn) (jetstream.JetStream, error) {
-	return jetstream.New(nc)
-}
+	logger.Debugf("connecting to NATS server '%s'", conf.Server)
 
-// NewWithMocks creates a new NATS client with custom connection functions.
-// This function is intended for testing purposes.
-func NewWithMocks(
-	conf *Config,
-	logger pubsub.Logger,
-	metrics Metrics,
-	natsConnect func(string, ...nats.Option) (ConnInterface, error),
-	jetstreamNew func(*nats.Conn) (jetstream.JetStream, error),
-) (pubsub.Client, error) {
-	client, err := NewNATSClient(conf, logger, metrics, natsConnect, jetstreamNew)
+	// Create connection options
+	opts := []nats.Option{nats.Name("GoFr NATS Client")}
+
+	// Add credentials if provided
+	if conf.CredsFile != "" {
+		opts = append(opts, nats.UserCredentials(conf.CredsFile))
+	}
+
+	nc, err := nats.Connect(conf.Server, opts...)
 	if err != nil {
+		logger.Errorf("failed to connect to NATS server at %v: %v", conf.Server, err)
 		return nil, err
+	}
+
+	// Check connection status
+	status := nc.Status()
+	if status != nats.CONNECTED {
+		logger.Errorf("unexpected NATS connection status: %v", status)
+		return nil, ErrConnectionStatus
+	}
+
+	js, err := jetstream.New(nc)
+	if err != nil {
+		logger.Errorf("failed to create JetStream context: %v", err)
+		return nil, err
+	}
+
+	logger.Logf("connected to NATS server '%s'", conf.Server)
+
+	client := &NATSClient{
+		Conn:          &natsConnWrapper{nc},
+		JetStream:     js,
+		Logger:        logger,
+		Config:        conf,
+		Metrics:       metrics,
+		Subscriptions: make(map[string]*Subscription),
 	}
 
 	return &NatsPubSubWrapper{Client: client}, nil
