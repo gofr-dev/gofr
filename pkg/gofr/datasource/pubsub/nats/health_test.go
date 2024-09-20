@@ -230,13 +230,13 @@ func runHealthTestCase(t *testing.T, tc healthTestCase) {
 	tc.setupMocks(mockConn, mockJS)
 
 	client := &NATSClient{
-		Conn:   mockConn,
-		Js:     mockJS,
-		Config: &Config{Server: NatsServer},
+		Conn:      mockConn,
+		JetStream: mockJS,
+		Config:    &Config{Server: NatsServer},
 	}
 
 	if tc.name == "NoJetStream" {
-		client.Js = nil
+		client.JetStream = nil
 	}
 
 	var h health.Health
