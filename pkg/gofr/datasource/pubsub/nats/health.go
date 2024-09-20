@@ -11,11 +11,11 @@ import (
 
 const (
 	natsBackend            = "NATS"
-	jetstreamStatusOK      = "OK"
-	jetstreamStatusError   = "Error"
-	jetstreamConnected     = "CONNECTED"
-	jetstreamConnecting    = "CONNECTING"
-	jetstreamDisconnected  = "DISCONNECTED"
+	jetStreamStatusOK      = "OK"
+	jetStreamStatusError   = "Error"
+	jetStreamConnected     = "CONNECTED"
+	jetStreamConnecting    = "CONNECTING"
+	jetStreamDisconnecting = "DISCONNECTED"
 	natsHealthCheckTimeout = 5 * time.Second
 )
 
@@ -31,16 +31,16 @@ func (n *NATSClient) Health() h.Health {
 	switch connectionStatus {
 	case nats.CONNECTING:
 		health.Status = h.StatusUp
-		health.Details["connection_status"] = jetstreamConnecting
+		health.Details["connection_status"] = jetStreamConnecting
 
 		n.Logger.Debug("NATS health check: Connecting")
 	case nats.CONNECTED:
-		health.Details["connection_status"] = jetstreamConnected
+		health.Details["connection_status"] = jetStreamConnected
 
 		n.Logger.Debug("NATS health check: Connected")
 	case nats.CLOSED, nats.DISCONNECTED, nats.RECONNECTING, nats.DRAINING_PUBS, nats.DRAINING_SUBS:
 		health.Status = h.StatusDown
-		health.Details["connection_status"] = jetstreamDisconnected
+		health.Details["connection_status"] = jetStreamDisconnecting
 
 		n.Logger.Error("NATS health check: Disconnected")
 	default:
@@ -62,7 +62,7 @@ func (n *NATSClient) Health() h.Health {
 
 		health.Details["jetstream_status"] = status
 
-		if status != jetstreamStatusOK {
+		if status != jetStreamStatusOK {
 			n.Logger.Error("NATS health check: JetStream error:", status)
 		} else {
 			n.Logger.Debug("NATS health check: JetStream enabled")
@@ -77,8 +77,8 @@ func (n *NATSClient) Health() h.Health {
 func getJetstreamStatus(ctx context.Context, js jetstream.JetStream) string {
 	_, err := js.AccountInfo(ctx)
 	if err != nil {
-		return jetstreamStatusError + ": " + err.Error()
+		return jetStreamStatusError + ": " + err.Error()
 	}
 
-	return jetstreamStatusOK
+	return jetStreamStatusOK
 }

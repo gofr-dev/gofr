@@ -58,12 +58,12 @@ func (c *testNATSClient) Health() health.Health {
 	switch connectionStatus {
 	case nats.CONNECTING:
 		h.Status = health.StatusUp
-		h.Details["connection_status"] = jetstreamConnecting
+		h.Details["connection_status"] = jetStreamConnecting
 	case nats.CONNECTED:
-		h.Details["connection_status"] = jetstreamConnected
+		h.Details["connection_status"] = jetStreamConnected
 	case nats.CLOSED, nats.DISCONNECTED, nats.RECONNECTING, nats.DRAINING_PUBS, nats.DRAINING_SUBS:
 		h.Status = health.StatusDown
-		h.Details["connection_status"] = jetstreamDisconnected
+		h.Details["connection_status"] = jetStreamDisconnecting
 	default:
 		h.Status = health.StatusDown
 		h.Details["connection_status"] = connectionStatus.String()
@@ -76,9 +76,9 @@ func (c *testNATSClient) Health() health.Health {
 	if c.mockJetStream != nil {
 		_, err := c.mockJetStream.AccountInfo(context.Background())
 		if err != nil {
-			h.Details["jetstream_status"] = jetstreamStatusError + ": " + err.Error()
+			h.Details["jetstream_status"] = jetStreamStatusError + ": " + err.Error()
 		} else {
-			h.Details["jetstream_status"] = jetstreamStatusOK
+			h.Details["jetstream_status"] = jetStreamStatusOK
 		}
 	}
 
@@ -100,9 +100,9 @@ func TestNATSClient_HealthStatusUP(t *testing.T) {
 	assert.Equal(t, health.StatusUp, h.Status)
 	assert.Equal(t, NatsServer, h.Details["host"])
 	assert.Equal(t, natsBackend, h.Details["backend"])
-	assert.Equal(t, jetstreamConnected, h.Details["connection_status"])
+	assert.Equal(t, jetStreamConnected, h.Details["connection_status"])
 	assert.Equal(t, true, h.Details["jetstream_enabled"])
-	assert.Equal(t, jetstreamStatusOK, h.Details["jetstream_status"])
+	assert.Equal(t, jetStreamStatusOK, h.Details["jetstream_status"])
 }
 
 func TestNATSClient_HealthStatusDown(t *testing.T) {
@@ -119,7 +119,7 @@ func TestNATSClient_HealthStatusDown(t *testing.T) {
 	assert.Equal(t, health.StatusDown, h.Status)
 	assert.Equal(t, NatsServer, h.Details["host"])
 	assert.Equal(t, natsBackend, h.Details["backend"])
-	assert.Equal(t, jetstreamDisconnected, h.Details["connection_status"])
+	assert.Equal(t, jetStreamDisconnecting, h.Details["connection_status"])
 	assert.Equal(t, false, h.Details["jetstream_enabled"])
 }
 
@@ -138,9 +138,9 @@ func TestNATSClient_HealthJetStreamError(t *testing.T) {
 	assert.Equal(t, health.StatusUp, h.Status)
 	assert.Equal(t, NatsServer, h.Details["host"])
 	assert.Equal(t, natsBackend, h.Details["backend"])
-	assert.Equal(t, jetstreamConnected, h.Details["connection_status"])
+	assert.Equal(t, jetStreamConnected, h.Details["connection_status"])
 	assert.Equal(t, true, h.Details["jetstream_enabled"])
-	assert.Equal(t, jetstreamStatusError+": "+errJetStream.Error(), h.Details["jetstream_status"])
+	assert.Equal(t, jetStreamStatusError+": "+errJetStream.Error(), h.Details["jetstream_status"])
 }
 
 func TestNATSClient_Health(t *testing.T) {
@@ -165,9 +165,9 @@ func defineHealthTestCases() []healthTestCase {
 			expectedDetails: map[string]interface{}{
 				"host":              NatsServer,
 				"backend":           natsBackend,
-				"connection_status": jetstreamConnected,
+				"connection_status": jetStreamConnected,
 				"jetstream_enabled": true,
-				"jetstream_status":  jetstreamStatusOK,
+				"jetstream_status":  jetStreamStatusOK,
 			},
 			expectedLogs: []string{"NATS health check: Connected", "NATS health check: JetStream enabled"},
 		},
@@ -180,7 +180,7 @@ func defineHealthTestCases() []healthTestCase {
 			expectedDetails: map[string]interface{}{
 				"host":              NatsServer,
 				"backend":           natsBackend,
-				"connection_status": jetstreamDisconnected,
+				"connection_status": jetStreamDisconnecting,
 				"jetstream_enabled": true,
 			},
 			expectedLogs: []string{"NATS health check: Disconnected"},
@@ -195,9 +195,9 @@ func defineHealthTestCases() []healthTestCase {
 			expectedDetails: map[string]interface{}{
 				"host":              NatsServer,
 				"backend":           natsBackend,
-				"connection_status": jetstreamConnected,
+				"connection_status": jetStreamConnected,
 				"jetstream_enabled": true,
-				"jetstream_status":  jetstreamStatusError + ": " + errJetStream.Error(),
+				"jetstream_status":  jetStreamStatusError + ": " + errJetStream.Error(),
 			},
 			expectedLogs: []string{"NATS health check: Connected", "NATS health check: JetStream error"},
 		},
@@ -210,7 +210,7 @@ func defineHealthTestCases() []healthTestCase {
 			expectedDetails: map[string]interface{}{
 				"host":              NatsServer,
 				"backend":           natsBackend,
-				"connection_status": jetstreamConnected,
+				"connection_status": jetStreamConnected,
 				"jetstream_enabled": false,
 			},
 			expectedLogs: []string{"NATS health check: Connected", "NATS health check: JetStream not enabled"},
