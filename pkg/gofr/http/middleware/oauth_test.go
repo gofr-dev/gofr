@@ -65,7 +65,7 @@ func TestOAuthInvalidTokenFormat(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
-	assert.Contains(t, string(respBody), `Authorization header format must be Bearer {token}`)
+	assert.Contains(t, string(respBody), `authorization header format must be Bearer {token}`)
 
 	resp.Body.Close()
 }
@@ -89,7 +89,7 @@ func TestOAuthEmptyAuthHeader(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
-	assert.Contains(t, string(respBody), `Authorization header is required`)
+	assert.Contains(t, string(respBody), `authorization header is required`)
 
 	resp.Body.Close()
 }
