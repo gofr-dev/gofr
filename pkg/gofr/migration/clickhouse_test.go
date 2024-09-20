@@ -24,11 +24,11 @@ func clickHouseSetup(t *testing.T) (migrator, *MockClickhouse, *container.Contai
 	ds := Datasource{Clickhouse: mockClickhouse}
 
 	ch := clickHouseDS{Clickhouse: mockClickhouse}
-	mg := ch.apply(&ds)
+	migratorWithClickhouse := ch.apply(&ds)
 
 	mockContainer.Clickhouse = mockClickhouse
 
-	return mg, mockClickhouse, mockContainer
+	return migratorWithClickhouse, mockClickhouse, mockContainer
 }
 
 func Test_ClickHouseCheckAndCreateMigrationTable(t *testing.T) {

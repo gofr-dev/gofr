@@ -21,16 +21,16 @@ func cassandraSetup(t *testing.T) (migrator, *container.MockCassandra, *containe
 
 	ds := Datasource{Cassandra: mockContainer.Cassandra}
 
-	ch := cassandraDS{Cassandra: mockCassandra}
-	mg := ch.apply(&ds)
+	cassandraDB := cassandraDS{Cassandra: mockCassandra}
+	migratorWithCassandra := cassandraDB.apply(&ds)
 
 	mockContainer.Cassandra = mockCassandra
 
-	return mg, mockCassandra, mockContainer
+	return migratorWithCassandra, mockCassandra, mockContainer
 }
 
 func Test_CassandraCheckAndCreateMigrationTable(t *testing.T) {
-	mg, mockCassandra, mockContainer := cassandraSetup(t)
+	migrator, mockCassandra, mockContainer := cassandraSetup(t)
 
 	testCases := []struct {
 		desc string
@@ -41,16 +41,16 @@ func Test_CassandraCheckAndCreateMigrationTable(t *testing.T) {
 	}
 
 	for i, tc := range testCases {
-		mockCassandra.EXPECT().Exec(CheckAndCreateCassandraMigrationTable).Return(tc.err)
+		mockCassandra.EXPECT().Exec(checkAndCreateCassandraMigrationTable).Return(tc.err)
 
-		err := mg.checkAndCreateMigrationTable(mockContainer)
+		err := migrator.checkAndCreateMigrationTable(mockContainer)
 
 		assert.Equal(t, tc.err, err, "TEST[%v]\n %v Failed! ", i, tc.desc)
 	}
 }
 
 func Test_CassandraGetLastMigration(t *testing.T) {
-	mg, mockCassandra, mockContainer := cassandraSetup(t)
+	migrator, mockCassandra, mockContainer := cassandraSetup(t)
 
 	testCases := []struct {
 		desc string
@@ -66,14 +66,14 @@ func Test_CassandraGetLastMigration(t *testing.T) {
 	for i, tc := range testCases {
 		mockCassandra.EXPECT().Query(&lastMigration, getLastCassandraGoFrMigration).Return(tc.err)
 
-		resp := mg.getLastMigration(mockContainer)
+		resp := migrator.getLastMigration(mockContainer)
 
 		assert.Equal(t, tc.resp, resp, "TEST[%v]\n %v Failed! ", i, tc.desc)
 	}
 }
 
 func Test_CassandraCommitMigration(t *testing.T) {
-	mg, mockCassandra, mockContainer := cassandraSetup(t)
+	migrator, mockCassandra, mockContainer := cassandraSetup(t)
 
 	testCases := []struct {
 		desc string
@@ -94,7 +94,7 @@ func Test_CassandraCommitMigration(t *testing.T) {
 		mockCassandra.EXPECT().Exec(insertCassandraGoFrMigrationRow, td.MigrationNumber,
 			"UP", td.StartTime, gomock.Any()).Return(tc.err)
 
-		err := mg.commitMigration(mockContainer, td)
+		err := migrator.commitMigration(mockContainer, td)
 
 		assert.Equal(t, tc.err, err, "TEST[%v]\n %v Failed! ", i, tc.desc)
 	}
@@ -102,9 +102,9 @@ func Test_CassandraCommitMigration(t *testing.T) {
 
 func Test_CassandraBeginTransaction(t *testing.T) {
 	logs := testutil.StdoutOutputForFunc(func() {
-		mg, _, mockContainer := cassandraSetup(t)
-		mg.beginTransaction(mockContainer)
+		migrator, _, mockContainer := cassandraSetup(t)
+		migrator.beginTransaction(mockContainer)
 	})
 
-	assert.Contains(t, logs, "Cassandra Migrator begin successfully")
+	assert.Contains(t, logs, "cassandra migrator begin successfully")
 }

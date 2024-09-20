@@ -24,13 +24,8 @@ func (cs cassandraDS) apply(m migrator) migrator {
 }
 
 const (
-	CheckAndCreateCassandraMigrationTable = `CREATE TABLE IF NOT EXISTS gofr_migrations (
-version bigint,
-method text,
-start_time timestamp,
-duration bigint,
-PRIMARY KEY (version, method)
-);`
+	checkAndCreateCassandraMigrationTable = `CREATE TABLE IF NOT EXISTS gofr_migrations (version bigint,
+    method text, start_time timestamp, duration bigint, PRIMARY KEY (version, method));`
 
 	getLastCassandraGoFrMigration = `SELECT version FROM gofr_migrations`
 
@@ -38,7 +33,7 @@ PRIMARY KEY (version, method)
 )
 
 func (cs cassandraMigrator) checkAndCreateMigrationTable(c *container.Container) error {
-	if err := c.Cassandra.Exec(CheckAndCreateCassandraMigrationTable); err != nil {
+	if err := c.Cassandra.Exec(checkAndCreateCassandraMigrationTable); err != nil {
 		return err
 	}
 
@@ -61,7 +56,7 @@ func (cs cassandraMigrator) getLastMigration(c *container.Container) int64 {
 		}
 	}
 
-	c.Debugf("Cassandra last migration fetched value is: %v", lastMigration)
+	c.Debugf("cassandra last migration fetched value is: %v", lastMigration)
 
 	lm2 := cs.migrator.getLastMigration(c)
 
@@ -75,7 +70,7 @@ func (cs cassandraMigrator) getLastMigration(c *container.Container) int64 {
 func (cs cassandraMigrator) beginTransaction(c *container.Container) transactionData {
 	cmt := cs.migrator.beginTransaction(c)
 
-	c.Debug("Cassandra Migrator begin successfully")
+	c.Debug("cassandra migrator begin successfully")
 
 	return cmt
 }
