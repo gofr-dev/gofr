@@ -221,13 +221,13 @@ func (n *NATSClient) fetchAndProcessMessages(ctx context.Context, cons jetstream
 		return err
 	}
 
-	n.ProcessMessages(ctx, msgs, handler)
+	n.processMessages(ctx, msgs, handler)
 
 	return msgs.Error()
 }
 
-// ProcessMessages processes messages from a consumer.
-func (n *NATSClient) ProcessMessages(ctx context.Context, msgs jetstream.MessageBatch, handler MessageHandler) {
+// processMessages processes messages from a consumer.
+func (n *NATSClient) processMessages(ctx context.Context, msgs jetstream.MessageBatch, handler MessageHandler) {
 	for msg := range msgs.Messages() {
 		if err := n.HandleMessage(ctx, msg, handler); err != nil {
 			n.Logger.Errorf("error handling message: %v", err)
