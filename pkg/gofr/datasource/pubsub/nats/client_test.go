@@ -2,6 +2,7 @@ package nats_test
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -118,7 +119,7 @@ func TestNATSClient_Publish(t *testing.T) {
 	mockConn := natspubsub.NewMockConnInterface(ctrl)
 
 	conf := &natspubsub.Config{
-		Server: "nats://localhost:4222",
+		Server: natspubsub.NatsServer,
 		Stream: natspubsub.StreamConfig{
 			Stream:   "test-stream",
 			Subjects: []string{"test-subject"},
@@ -365,7 +366,7 @@ func TestNew(t *testing.T) {
 
 func getTestConfig() *natspubsub.Config {
 	return &natspubsub.Config{
-		Server: "nats://localhost:4222",
+		Server: natspubsub.NatsServer,
 		Stream: natspubsub.StreamConfig{
 			Stream:   "test-stream",
 			Subjects: []string{"test-subject"},
@@ -376,8 +377,8 @@ func getTestConfig() *natspubsub.Config {
 
 func getExpectedLogs() []string {
 	return []string{
-		"connecting to NATS server 'nats://localhost:4222'",
-		"connected to NATS server 'nats://localhost:4222'",
+		fmt.Sprintf("connected to NATS server '%s'", natspubsub.NatsServer),
+		fmt.Sprintf("connecting to NATS server '%s'", natspubsub.NatsServer),
 	}
 }
 
@@ -535,7 +536,7 @@ func TestNatsClient_CreateStream(t *testing.T) {
 		require.NoError(t, err)
 	})
 
-	assert.Contains(t, logs, "Creating stream")
+	assert.Contains(t, logs, "creating stream")
 	assert.Contains(t, logs, "test-stream")
 }
 
@@ -581,7 +582,7 @@ func TestNATSClient_CreateOrUpdateStream(t *testing.T) {
 	})
 
 	// Check the logs
-	assert.Contains(t, logs, "Creating or updating stream test-stream")
+	assert.Contains(t, logs, "creating or updating stream test-stream")
 }
 
 func TestNATSClient_CreateTopic(t *testing.T) {
@@ -698,7 +699,7 @@ func TestNewNATSClient_ConnectionFailure(t *testing.T) {
 	defer ctrl.Finish()
 
 	conf := &natspubsub.Config{
-		Server: "nats://localhost:4222",
+		Server: natspubsub.NatsServer,
 		Stream: natspubsub.StreamConfig{
 			Stream:   "test-stream",
 			Subjects: []string{"test-subject"},
@@ -761,7 +762,7 @@ func TestNewNATSClient_JetStreamFailure(t *testing.T) {
 	defer ctrl.Finish()
 
 	conf := &natspubsub.Config{
-		Server: "nats://localhost:4222",
+		Server: natspubsub.NatsServer,
 		Stream: natspubsub.StreamConfig{
 			Stream:   "test-stream",
 			Subjects: []string{"test-subject"},
@@ -797,7 +798,7 @@ func TestNew_NewNATSClientFailure(t *testing.T) {
 	defer ctrl.Finish()
 
 	conf := &natspubsub.Config{
-		Server: "nats://localhost:4222",
+		Server: natspubsub.NatsServer,
 		Stream: natspubsub.StreamConfig{
 			Stream:   "test-stream",
 			Subjects: []string{"test-subject"},
@@ -886,75 +887,8 @@ func TestNATSClient_HandleMessageError(t *testing.T) {
 	})
 
 	// Assert on the captured log output
-	assert.Contains(t, logs, "Error handling message: handler error")
+	assert.Contains(t, logs, "error handling message: handler error")
 }
-
-/*
-func TestNATSClient_SubscribeProcessMessagesError(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockJS := natspubsub.NewMockJetStream(ctrl)
-	mockConsumer := natspubsub.NewMockConsumer(ctrl)
-	mockMsgBatch := natspubsub.NewMockMessageBatch(ctrl)
-	mockMsg := natspubsub.NewMockMsg(ctrl)
-	logger := logging.NewMockLogger(logging.DEBUG)
-	metrics := natspubsub.NewMockMetrics(ctrl)
-
-	client := &natspubsub.NATSClient{
-		JetStream:      mockJS,
-		Logger:  logger,
-		Metrics: metrics,
-		Config: &natspubsub.Config{
-			Stream: natspubsub.StreamConfig{
-				Stream:   "test-stream",
-				Subjects: []string{"test-subject"},
-			},
-			Consumer:  "test-consumer",
-			MaxWait:   time.Second,
-			BatchSize: 1,
-		},
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-
-	mockJS.EXPECT().CreateOrUpdateConsumer(gomock.Any(), client.Config.Stream.Stream, gomock.Any()).Return(mockConsumer, nil)
-
-	mockConsumer.EXPECT().Fetch(client.Config.BatchSize, gomock.Any()).Return(mockMsgBatch, nil).Times(1)
-	mockConsumer.EXPECT().Fetch(client.Config.BatchSize, gomock.Any()).Return(nil, context.Canceled).AnyTimes()
-
-	msgChan := make(chan jetstream.Msg, 1)
-	msgChan <- mockMsg
-	close(msgChan)
-
-	mockMsg.EXPECT().Data().Return([]byte("test message")).AnyTimes()
-	mockMsg.EXPECT().Subject().Return("test-subject").AnyTimes()
-	mockMsg.EXPECT().Nak().Return(nil).AnyTimes()
-
-	mockMsgBatch.EXPECT().Messages().Return(msgChan)
-	mockMsgBatch.EXPECT().Error().Return(nil).AnyTimes()
-
-	handlerErr := errors.New("handler error")
-
-	// Capture log output
-	client.Logger = logging.NewMockLogger(logging.DEBUG)
-	logs := testutil.StderrOutputForFunc(func() {
-		err := client.Subscribe(ctx, "test-subject", func(_ context.Context, _ jetstream.Msg) error {
-			log.Println("handler called", handlerErr)
-			return handlerErr
-		})
-		require.NoError(t, err) // Subscribe itself should not return an error
-	})
-
-	// Wait for the goroutine to process the message
-	time.Sleep(100 * time.Millisecond)
-
-	// Assert on the captured log output
-	assert.Contains(t, logs, "Error handling message: handler error")
-}
-
-*/
 
 func TestNATSClient_DeleteStreamError(t *testing.T) {
 	ctrl := gomock.NewController(t)
