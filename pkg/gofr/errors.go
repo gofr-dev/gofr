@@ -1,6 +1,11 @@
 package gofr
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+)
+
+var errBadScheduleFormat = errors.New("schedule string must have five components like * * * * *")
 
 // errOutOfRange denotes the errors that occur when a range in schedule is out of scope for the particular time unit.
 type errOutOfRange struct {
