@@ -6,7 +6,7 @@ import (
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
-	h "gofr.dev/pkg/gofr/health"
+	"gofr.dev/pkg/gofr/health"
 )
 
 const (
@@ -20,9 +20,9 @@ const (
 )
 
 // Health returns the health status of the NATS client.
-func (n *NATSClient) Health() h.Health {
-	health := h.Health{
-		Status:  h.StatusUp,
+func (n *NATSClient) Health() health.Health {
+	h := health.Health{
+		Status:  health.StatusUp,
 		Details: make(map[string]interface{}),
 	}
 
@@ -30,29 +30,29 @@ func (n *NATSClient) Health() h.Health {
 
 	switch connectionStatus {
 	case nats.CONNECTING:
-		health.Status = h.StatusUp
-		health.Details["connection_status"] = jetStreamConnecting
+		h.Status = health.StatusUp
+		h.Details["connection_status"] = jetStreamConnecting
 
 		n.Logger.Debug("NATS health check: Connecting")
 	case nats.CONNECTED:
-		health.Details["connection_status"] = jetStreamConnected
+		h.Details["connection_status"] = jetStreamConnected
 
 		n.Logger.Debug("NATS health check: Connected")
 	case nats.CLOSED, nats.DISCONNECTED, nats.RECONNECTING, nats.DRAINING_PUBS, nats.DRAINING_SUBS:
-		health.Status = h.StatusDown
-		health.Details["connection_status"] = jetStreamDisconnecting
+		h.Status = health.StatusDown
+		h.Details["connection_status"] = jetStreamDisconnecting
 
 		n.Logger.Error("NATS health check: Disconnected")
 	default:
-		health.Status = h.StatusDown
-		health.Details["connection_status"] = connectionStatus.String()
+		h.Status = health.StatusDown
+		h.Details["connection_status"] = connectionStatus.String()
 
 		n.Logger.Error("NATS health check: Unknown status", connectionStatus)
 	}
 
-	health.Details["host"] = n.Config.Server
-	health.Details["backend"] = natsBackend
-	health.Details["jetstream_enabled"] = n.JetStream != nil
+	h.Details["host"] = n.Config.Server
+	h.Details["backend"] = natsBackend
+	h.Details["jetstream_enabled"] = n.JetStream != nil
 
 	ctx, cancel := context.WithTimeout(context.Background(), natsHealthCheckTimeout)
 	defer cancel()
@@ -60,7 +60,7 @@ func (n *NATSClient) Health() h.Health {
 	if n.JetStream != nil && connectionStatus == nats.CONNECTED {
 		status := getJetStreamStatus(ctx, n.JetStream)
 
-		health.Details["jetstream_status"] = status
+		h.Details["jetstream_status"] = status
 
 		if status != jetStreamStatusOK {
 			n.Logger.Error("NATS health check: JetStream error:", status)
@@ -71,7 +71,7 @@ func (n *NATSClient) Health() h.Health {
 		n.Logger.Debug("NATS health check: JetStream not enabled")
 	}
 
-	return health
+	return h
 }
 
 func getJetStreamStatus(ctx context.Context, js jetstream.JetStream) string {
