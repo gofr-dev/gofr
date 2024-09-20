@@ -212,7 +212,8 @@ type Person struct {
 	ID    int    `json:"id,omitempty"`
 	Name  string `json:"name"`
 	Age   int    `json:"age"`
-	State string `json:"state" db:"location"` // db tag specifies the actual column name in the database
+        // db tag specifies the actual column name in the database
+	State string `json:"state" db:"location"` 
 }
 
 func main() {
