@@ -306,7 +306,7 @@ func TestNew(t *testing.T) {
 		require.NoError(t, err)
 		assert.NotNil(t, client)
 
-		natsClient, ok := client.(*natspubsub.NatsPubSubWrapper)
+		natsClient, ok := client.(*natspubsub.PubSubWrapper)
 		assert.True(t, ok, "Returned client is not a NatsPubSubWrapper")
 
 		if ok {
