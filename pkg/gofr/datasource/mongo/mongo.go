@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -67,8 +68,6 @@ func (c *Client) UseMetrics(metrics interface{}) {
 
 // Connect establishes a connection to MongoDB and registers metrics using the provided configuration when the client was Created.
 func (c *Client) Connect() {
-	c.logger.Logf("connecting to mongoDB at %v to database %v", c.config.URI, c.config.Database)
-
 	uri := c.config.URI
 
 	if uri == "" {
@@ -79,7 +78,11 @@ func (c *Client) Connect() {
 	m, err := mongo.Connect(context.Background(), options.Client().ApplyURI(uri))
 	if err != nil {
 		c.logger.Errorf("error connecting to mongoDB, err:%v", err)
-
+		return
+	}
+	err = m.Ping(context.Background(), nil)
+	if err != nil {
+		c.logger.Errorf("error connecting mongoDB %s, err:%v", hidePass(uri), err)
 		return
 	}
 
@@ -87,6 +90,12 @@ func (c *Client) Connect() {
 	c.metrics.NewHistogram("app_mongo_stats", "Response time of MONGO queries in milliseconds.", mongoBuckets...)
 
 	c.Database = m.Database(c.config.Database)
+	c.logger.Logf("connecting to mongoDB at %v to database %v", hidePass(uri), c.config.Database)
+}
+
+func hidePass(str string) string {
+	reg := regexp.MustCompile(`(^mongodb://.+?:)(.+)(@.+$)`)
+	return reg.ReplaceAllString(str, `${1}xxx${3}`)
 }
 
 // InsertOne inserts a single document into the specified collection.

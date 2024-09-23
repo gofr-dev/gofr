@@ -33,6 +33,11 @@ func Test_NewMongoClient(t *testing.T) {
 	assert.NotNil(t, client)
 }
 
+func Test_HidePass(t *testing.T) {
+	uri := "mongodb://dev:dev@localhost:27017/admin"
+	t.Log(hidePass(uri))
+}
+
 func Test_NewMongoClientError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
