@@ -181,8 +181,6 @@ type Cassandra interface {
 
 	BatchQuery(stmt string, values ...any) error
 
-	ExecuteBatch() error
-
 	NewBatch(name string, batchType int) error
 
 	CassandraBatch
@@ -214,7 +212,8 @@ type Person struct {
 	ID    int    `json:"id,omitempty"`
 	Name  string `json:"name"`
 	Age   int    `json:"age"`
-	State string `json:"state"`
+        // db tag specifies the actual column name in the database
+	State string `json:"state" db:"location"` 
 }
 
 func main() {
@@ -240,7 +239,7 @@ func main() {
 			return nil, err
 		}
 
-		err = c.Cassandra.Exec(`INSERT INTO persons(id, name, age, state) VALUES(?, ?, ?, ?)`,
+		err = c.Cassandra.Exec(`INSERT INTO persons(id, name, age, location) VALUES(?, ?, ?, ?)`,
 			person.ID, person.Name, person.Age, person.State)
 		if err != nil {
 			return nil, err
@@ -252,7 +251,7 @@ func main() {
 	app.GET("/user", func(c *gofr.Context) (interface{}, error) {
 		persons := make([]Person, 0)
 
-		err := c.Cassandra.Query(&persons, `SELECT id, name, age, state FROM persons`)
+		err := c.Cassandra.Query(&persons, `SELECT id, name, age, location FROM persons`)
 
 		return persons, err
 	})
