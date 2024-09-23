@@ -28,6 +28,7 @@ func newHTTPServer(c *container.Container, port int, middlewareConfigs map[strin
 	if middlewareConfigs != nil {
 		traceExporter, validexporter := middlewareConfigs["TRACE_EXPORTER"]
 		_, validurl := middlewareConfigs["TRACE_URL"]
+
 		if !validurl {
 			if traceExporter == "gofr" {
 				validurl = true

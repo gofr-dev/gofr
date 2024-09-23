@@ -141,15 +141,15 @@ func testUnknownPanicHandler(w http.ResponseWriter, _ *http.Request) {
 
 func TestRequestLog_PrettyPrint(t *testing.T) {
 	rl := &RequestLog{
-		TraceID:      "7e5c0e9a58839071d4d006dd1d0f4f3a",
-		SpanID:       "b19d9aa6323b29bb",
-		StartTime:    "2024-04-16T13:34:35.761893+05:30",
-		ResponseTime: 1432,
-		Method:       "GET",
-		UserAgent:    "",
-		IP:           "[::1]:59614",
-		URI:          "/test",
-		Response:     200,
+		CorrelationID: "7e5c0e9a58839071d4d006dd1d0f4f3a",
+		SpanID:        "b19d9aa6323b29bb",
+		StartTime:     "2024-04-16T13:34:35.761893+05:30",
+		ResponseTime:  1432,
+		Method:        "GET",
+		UserAgent:     "",
+		IP:            "[::1]:59614",
+		URI:           "/test",
+		Response:      200,
 	}
 	w := new(bytes.Buffer)
 	rl.PrettyPrint(w)

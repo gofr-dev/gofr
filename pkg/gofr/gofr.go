@@ -39,7 +39,7 @@ const (
 	shutDownTimeout        = 30 * time.Second
 	gofrTraceExporter      = "gofr"
 	gofrTracerURL          = "https://tracer.gofr.dev"
-	traceRatio             = 0.1
+	fullTrace              = 1
 )
 
 // App is the main application in the GoFr framework.
@@ -386,6 +386,11 @@ func (a *App) Migrate(migrationsMap map[int64]migration.Migrate) {
 func (a *App) initTracer() {
 	traceExporter := a.Config.Get("TRACE_EXPORTER")
 	tracerURL := a.Config.Get("TRACER_URL")
+
+	traceRatio, _ := strconv.ParseFloat(a.Config.Get("TRACER_RATIO"), 64)
+	if traceRatio == 0 {
+		traceRatio = fullTrace
+	}
 
 	// deprecated : tracer_host and tracer_port are deprecated and will be removed in upcoming versions.
 	tracerHost := a.Config.Get("TRACER_HOST")

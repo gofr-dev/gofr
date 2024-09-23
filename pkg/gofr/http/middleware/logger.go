@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
+
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -25,20 +27,21 @@ func (w *StatusResponseWriter) WriteHeader(status int) {
 
 // RequestLog represents a log entry for HTTP requests.
 type RequestLog struct {
-	TraceID      string `json:"trace_id,omitempty"`
-	SpanID       string `json:"span_id,omitempty"`
-	StartTime    string `json:"start_time,omitempty"`
-	ResponseTime int64  `json:"response_time,omitempty"`
-	Method       string `json:"method,omitempty"`
-	UserAgent    string `json:"user_agent,omitempty"`
-	IP           string `json:"ip,omitempty"`
-	URI          string `json:"uri,omitempty"`
-	Response     int    `json:"response,omitempty"`
+	IsBeingTraced bool   `json:"is_being_traced"`
+	CorrelationID string `json:"trace_id,omitempty"`
+	SpanID        string `json:"span_id,omitempty"`
+	StartTime     string `json:"start_time,omitempty"`
+	ResponseTime  int64  `json:"response_time,omitempty"`
+	Method        string `json:"method,omitempty"`
+	UserAgent     string `json:"user_agent,omitempty"`
+	IP            string `json:"ip,omitempty"`
+	URI           string `json:"uri,omitempty"`
+	Response      int    `json:"response,omitempty"`
 }
 
 func (rl *RequestLog) PrettyPrint(writer io.Writer) {
 	fmt.Fprintf(writer, "\u001B[38;5;8m%s \u001B[38;5;%dm%-6d\u001B[0m "+
-		"%8d\u001B[38;5;8mµs\u001B[0m %s %s \n", rl.TraceID, colorForStatusCode(rl.Response), rl.Response, rl.ResponseTime, rl.Method, rl.URI)
+		"%8d\u001B[38;5;8mµs\u001B[0m %s %s \n", rl.CorrelationID, colorForStatusCode(rl.Response), rl.Response, rl.ResponseTime, rl.Method, rl.URI)
 }
 
 func colorForStatusCode(status int) int {
@@ -65,28 +68,46 @@ type logger interface {
 	Error(...interface{})
 }
 
+func getCorrelationID() string {
+	return uuid.New().String()
+}
+
 // Logging is a middleware which logs response status and time in milliseconds along with other data.
 func Logging(logger logger) func(inner http.Handler) http.Handler {
 	return func(inner http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			start := time.Now()
 			srw := &StatusResponseWriter{ResponseWriter: w}
-			traceID := trace.SpanFromContext(r.Context()).SpanContext().TraceID().String()
-			spanID := trace.SpanFromContext(r.Context()).SpanContext().SpanID().String()
 
-			srw.Header().Set("X-Correlation-ID", traceID)
+			var correlationID, spanID string
+
+			requestSpan := trace.SpanFromContext(r.Context()).SpanContext()
+			hasTraceID := requestSpan.HasTraceID()
+
+			if hasTraceID {
+				correlationID = requestSpan.TraceID().String()
+				spanID = trace.SpanFromContext(r.Context()).SpanContext().SpanID().String()
+			} else {
+				correlationID = getCorrelationID()
+			}
+
+			srw.Header().Set("X-Correlation-ID", correlationID)
 
 			defer func(res *StatusResponseWriter, req *http.Request) {
 				l := &RequestLog{
-					TraceID:      traceID,
-					SpanID:       spanID,
-					StartTime:    start.Format("2006-01-02T15:04:05.999999999-07:00"),
-					ResponseTime: time.Since(start).Nanoseconds() / 1000,
-					Method:       req.Method,
-					UserAgent:    req.UserAgent(),
-					IP:           getIPAddress(req),
-					URI:          req.RequestURI,
-					Response:     res.status,
+					IsBeingTraced: hasTraceID,
+					CorrelationID: correlationID,
+					StartTime:     start.Format("2006-01-02T15:04:05.999999999-07:00"),
+					ResponseTime:  time.Since(start).Nanoseconds() / 1000,
+					Method:        req.Method,
+					UserAgent:     req.UserAgent(),
+					IP:            getIPAddress(req),
+					URI:           req.RequestURI,
+					Response:      res.status,
+				}
+
+				if hasTraceID {
+					l.SpanID = spanID
 				}
 
 				if logger != nil {

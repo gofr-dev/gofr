@@ -39,11 +39,12 @@ func TestIntegration_SimpleAPIServer(t *testing.T) {
 	}
 
 	for i, tc := range tests {
-		req, _ := http.NewRequest(http.MethodGet, host+tc.path, nil)
+		req, _ := http.NewRequest(http.MethodGet, host+tc.path, http.NoBody)
 		req.Header.Set("content-type", "application/json")
 
 		c := http.Client{}
 		resp, err := c.Do(req)
+		defer resp.Body.Close()
 
 		var data = struct {
 			Data interface{} `json:"data"`
@@ -93,7 +94,7 @@ func TestIntegration_SimpleAPIServer_Errors(t *testing.T) {
 	}
 
 	for i, tc := range tests {
-		req, _ := http.NewRequest(http.MethodGet, host+tc.path, nil)
+		req, _ := http.NewRequest(http.MethodGet, host+tc.path, http.NoBody)
 		req.Header.Set("content-type", "application/json")
 
 		c := http.Client{}
@@ -126,11 +127,11 @@ func TestIntegration_SimpleAPIServer_Health(t *testing.T) {
 		statusCode int
 	}{
 		{"health handler", "/.well-known/health", http.StatusOK}, // Health check should be added by the framework.
-		{"favicon handler", "/favicon.ico", http.StatusOK},       //Favicon should be added by the framework.
+		{"favicon handler", "/favicon.ico", http.StatusOK},       // Favicon should be added by the framework.
 	}
 
 	for i, tc := range tests {
-		req, _ := http.NewRequest(http.MethodGet, host+tc.path, nil)
+		req, _ := http.NewRequest(http.MethodGet, host+tc.path, http.NoBody)
 		req.Header.Set("content-type", "application/json")
 
 		c := http.Client{}
