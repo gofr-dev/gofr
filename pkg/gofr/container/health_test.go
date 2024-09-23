@@ -9,8 +9,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"go.uber.org/mock/gomock"
-
 	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/datasource/sql"
 	"gofr.dev/pkg/gofr/logging"
@@ -163,5 +161,11 @@ func registerMocks(mocks Mocks, health string) {
 		},
 	}, nil)
 
-	mocks.DGraph.EXPECT().HealthCheck(context.Background()).Return(gomock.Any(), gomock.Any())
+	mocks.DGraph.EXPECT().HealthCheck(context.Background()).Return(datasource.Health{
+		Status: health,
+		Details: map[string]interface{}{
+			"host":  "localhost:8000",
+			"error": "dgraph not connected",
+		},
+	}, nil)
 }

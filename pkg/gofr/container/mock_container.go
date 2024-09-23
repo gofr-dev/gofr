@@ -104,6 +104,7 @@ func NewMockContainer(t *testing.T, options ...options) (*Container, Mocks) {
 		KVStore:     kvStoreMock,
 		File:        fileStoreMock,
 		HTTPService: httpMock,
+		DGraph:      dgraphMock,
 	}
 
 	redisMock.EXPECT().Close().AnyTimes()
