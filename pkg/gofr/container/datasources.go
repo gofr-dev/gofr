@@ -13,15 +13,15 @@ import (
 
 //go:generate go run go.uber.org/mock/mockgen -source=datasources.go -destination=mock_datasources.go -package=container
 type DB interface {
-	Query(query string, args ...interface{}) (*sql.Rows, error)
-	QueryRow(query string, args ...interface{}) *sql.Row
+	Query(query string, args ...any) (*sql.Rows, error)
+	QueryRow(query string, args ...any) *sql.Row
 	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
-	QueryRowContext(ctx context.Context, query string, args ...interface{}) *sql.Row
-	Exec(query string, args ...interface{}) (sql.Result, error)
-	ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+	Exec(query string, args ...any) (sql.Result, error)
+	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
 	Prepare(query string) (*sql.Stmt, error)
 	Begin() (*gofrSQL.Tx, error)
-	Select(ctx context.Context, data interface{}, query string, args ...interface{})
+	Select(ctx context.Context, data any, query string, args ...any)
 	HealthCheck() *datasource.Health
 	Dialect() string
 	Close() error
@@ -171,43 +171,43 @@ type ClickhouseProvider interface {
 type Mongo interface {
 	// Find executes a query to find documents in a collection based on a filter and stores the results
 	// into the provided results interface.
-	Find(ctx context.Context, collection string, filter interface{}, results interface{}) error
+	Find(ctx context.Context, collection string, filter any, results any) error
 
 	// FindOne executes a query to find a single document in a collection based on a filter and stores the result
 	// into the provided result interface.
-	FindOne(ctx context.Context, collection string, filter interface{}, result interface{}) error
+	FindOne(ctx context.Context, collection string, filter any, result any) error
 
 	// InsertOne inserts a single document into a collection.
 	// It returns the identifier of the inserted document and an error, if any.
-	InsertOne(ctx context.Context, collection string, document interface{}) (interface{}, error)
+	InsertOne(ctx context.Context, collection string, document any) (any, error)
 
 	// InsertMany inserts multiple documents into a collection.
 	// It returns the identifiers of the inserted documents and an error, if any.
-	InsertMany(ctx context.Context, collection string, documents []interface{}) ([]interface{}, error)
+	InsertMany(ctx context.Context, collection string, documents []any) ([]any, error)
 
 	// DeleteOne deletes a single document from a collection based on a filter.
 	// It returns the number of documents deleted and an error, if any.
-	DeleteOne(ctx context.Context, collection string, filter interface{}) (int64, error)
+	DeleteOne(ctx context.Context, collection string, filter any) (int64, error)
 
 	// DeleteMany deletes multiple documents from a collection based on a filter.
 	// It returns the number of documents deleted and an error, if any.
-	DeleteMany(ctx context.Context, collection string, filter interface{}) (int64, error)
+	DeleteMany(ctx context.Context, collection string, filter any) (int64, error)
 
 	// UpdateByID updates a document in a collection by its ID.
 	// It returns the number of documents updated and an error if any.
-	UpdateByID(ctx context.Context, collection string, id interface{}, update interface{}) (int64, error)
+	UpdateByID(ctx context.Context, collection string, id any, update any) (int64, error)
 
 	// UpdateOne updates a single document in a collection based on a filter.
 	// It returns an error if any.
-	UpdateOne(ctx context.Context, collection string, filter interface{}, update interface{}) error
+	UpdateOne(ctx context.Context, collection string, filter any, update any) error
 
 	// UpdateMany updates multiple documents in a collection based on a filter.
 	// It returns the number of documents updated and an error if any.
-	UpdateMany(ctx context.Context, collection string, filter interface{}, update interface{}) (int64, error)
+	UpdateMany(ctx context.Context, collection string, filter any, update any) (int64, error)
 
 	// CountDocuments counts the number of documents in a collection based on a filter.
 	// It returns the count and an error if any.
-	CountDocuments(ctx context.Context, collection string, filter interface{}) (int64, error)
+	CountDocuments(ctx context.Context, collection string, filter any) (int64, error)
 
 	// Drop an entire collection from the database.
 	// It returns an error if any.
@@ -217,7 +217,7 @@ type Mongo interface {
 	CreateCollection(ctx context.Context, name string) error
 
 	// StartSession starts a session and provide methods to run commands in a transaction.
-	StartSession() (interface{}, error)
+	StartSession() (any, error)
 
 	HealthChecker
 }
@@ -239,10 +239,10 @@ type MongoProvider interface {
 
 type provider interface {
 	// UseLogger sets the logger for the Cassandra client.
-	UseLogger(logger interface{})
+	UseLogger(logger any)
 
 	// UseMetrics sets the metrics for the Cassandra client.
-	UseMetrics(metrics interface{})
+	UseMetrics(metrics any)
 
 	// Connect establishes a connection to Cassandra and registers metrics using the provided configuration when the client was Created.
 	Connect()
@@ -286,5 +286,65 @@ type Solr interface {
 type SolrProvider interface {
 	Solr
 
+	provider
+}
+
+// Dgraph defines the methods for interacting with a Dgraph database.
+type Dgraph interface {
+	// Query executes a read-only query in the Dgraph database and returns the result.
+	// Parameters:
+	// - ctx: The context for the query, used for controlling timeouts, cancellation, etc.
+	// - query: The Dgraph query string in GraphQL+- format.
+	// Returns:
+	// - any: The result of the query, usually of type *api.Response.
+	// - error: An error if the query execution fails.
+	Query(ctx context.Context, query string) (any, error)
+
+	// QueryWithVars executes a read-only query with variables in the Dgraph database.
+	// Parameters:
+	// - ctx: The context for the query.
+	// - query: The Dgraph query string in GraphQL+- format.
+	// - vars: A map of variables to be used within the query.
+	// Returns:
+	// - any: The result of the query with variables, usually of type *api.Response.
+	// - error: An error if the query execution fails.
+	QueryWithVars(ctx context.Context, query string, vars map[string]string) (any, error)
+
+	// Mutate executes a write operation (mutation) in the Dgraph database and returns the result.
+	// Parameters:
+	// - ctx: The context for the mutation.
+	// - mu: The mutation operation, usually of type *api.Mutation.
+	// Returns:
+	// - any: The result of the mutation, usually of type *api.Assigned.
+	// - error: An error if the mutation execution fails.
+	Mutate(ctx context.Context, mu any) (any, error)
+
+	// Alter applies schema or other changes to the Dgraph database.
+	// Parameters:
+	// - ctx: The context for the alter operation.
+	// - op: The alter operation, usually of type *api.Operation.
+	// Returns:
+	// - error: An error if the operation fails.
+	Alter(ctx context.Context, op any) error
+
+	// NewTxn creates a new transaction (read-write) for interacting with the Dgraph database.
+	// Returns:
+	// - any: A new transaction, usually of type *api.Txn.
+	NewTxn() any
+
+	// NewReadOnlyTxn creates a new read-only transaction for querying the Dgraph database.
+	// Returns:
+	// - any: A new read-only transaction, usually of type *api.Txn.
+	NewReadOnlyTxn() any
+
+	// HealthChecker checks the health of the Dgraph instance, ensuring it is up and running.
+	// Returns:
+	// - error: An error if the health check fails.
+	HealthChecker
+}
+
+// DgraphProvider extends Dgraph with connection management capabilities.
+type DgraphProvider interface {
+	Dgraph
 	provider
 }
