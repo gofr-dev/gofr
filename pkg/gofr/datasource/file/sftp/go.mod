@@ -9,7 +9,7 @@ require (
 	github.com/stretchr/testify v1.9.0
 	go.uber.org/mock v0.4.0
 	gofr.dev v0.19.0
-	golang.org/x/crypto v0.26.0
+	golang.org/x/crypto v0.27.0
 )
 
 require (
