@@ -46,6 +46,7 @@ type Container struct {
 	Clickhouse Clickhouse
 	Mongo      Mongo
 	Solr       Solr
+	DGraph     Dgraph
 
 	KVStore KVStore
 

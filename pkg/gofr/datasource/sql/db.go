@@ -221,7 +221,6 @@ func (d *DB) Select(ctx context.Context, data interface{}, query string, args ..
 	rvo := reflect.ValueOf(data)
 	if rvo.Kind() != reflect.Ptr {
 		d.logger.Error("we did not get a pointer. data is not settable.")
-
 		return
 	}
 
@@ -231,37 +230,59 @@ func (d *DB) Select(ctx context.Context, data interface{}, query string, args ..
 
 	switch rv.Kind() {
 	case reflect.Slice:
-		rows, err := d.QueryContext(ctx, query, args...)
-		if err != nil {
-			d.logger.Errorf("error running query: %v", err)
-
-			return
-		}
-
-		for rows.Next() {
-			val := reflect.New(rv.Type().Elem())
-
-			if rv.Type().Elem().Kind() == reflect.Struct {
-				d.rowsToStruct(rows, val)
-			} else {
-				_ = rows.Scan(val.Interface())
-			}
-
-			rv = reflect.Append(rv, val.Elem())
-		}
-
-		if rvo.Elem().CanSet() {
-			rvo.Elem().Set(rv)
-		}
+		d.selectSlice(ctx, query, args, rvo, rv)
 
 	case reflect.Struct:
-		rows, _ := d.QueryContext(ctx, query, args...)
-		for rows.Next() {
-			d.rowsToStruct(rows, rv)
-		}
+		d.selectStruct(ctx, query, args, rv)
 
 	default:
 		d.logger.Debugf("a pointer to %v was not expected.", rv.Kind().String())
+	}
+}
+
+func (d *DB) selectSlice(ctx context.Context, query string, args []interface{}, rvo, rv reflect.Value) {
+	rows, err := d.QueryContext(ctx, query, args...)
+	if err != nil {
+		d.logger.Errorf("error running query: %v", err)
+		return
+	}
+
+	for rows.Next() {
+		val := reflect.New(rv.Type().Elem())
+
+		if rv.Type().Elem().Kind() == reflect.Struct {
+			d.rowsToStruct(rows, val)
+		} else {
+			_ = rows.Scan(val.Interface())
+		}
+
+		rv = reflect.Append(rv, val.Elem())
+	}
+
+	if rows.Err() != nil {
+		d.logger.Errorf("error parsing rows : %v", err)
+		return
+	}
+
+	if rvo.Elem().CanSet() {
+		rvo.Elem().Set(rv)
+	}
+}
+
+func (d *DB) selectStruct(ctx context.Context, query string, args []interface{}, rv reflect.Value) {
+	rows, err := d.QueryContext(ctx, query, args...)
+	if err != nil {
+		d.logger.Errorf("error running query: %v", err)
+		return
+	}
+
+	for rows.Next() {
+		d.rowsToStruct(rows, rv)
+	}
+
+	if rows.Err() != nil {
+		d.logger.Errorf("error parsing rows : %v", err)
+		return
 	}
 }
 

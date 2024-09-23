@@ -112,7 +112,7 @@ func getMigrator(c *container.Container) (Datasource, migrator, bool) {
 	var (
 		ok bool
 		ds Datasource
-		mg migrator = ds
+		mg migrator = &ds
 	)
 
 	if !isNil(c.SQL) {
@@ -150,6 +150,16 @@ func getMigrator(c *container.Container) (Datasource, migrator, bool) {
 		ok = true
 
 		ds.PubSub = c.PubSub
+	}
+
+	if !isNil(c.Cassandra) {
+		ok = true
+
+		ds.Cassandra = cassandraDS{c.Cassandra}
+
+		mg = cassandraDS{c.Cassandra}.apply(mg)
+
+		c.Debug("initialized data source for Cassandra")
 	}
 
 	return ds, mg, ok
