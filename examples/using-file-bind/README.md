@@ -8,7 +8,7 @@ it to the fields of the struct. GoFr currently supports zip file type and also b
 type Data struct {
     Compressed file.Zip `file:"upload"`
 
-    FileHeader *multipart.FileHeader `file:"a"`
+    FileHeader *multipart.FileHeader `file:"file_upload"`
 }
 
 func Handler (c *gofr.Context) (interface{}, error) {
