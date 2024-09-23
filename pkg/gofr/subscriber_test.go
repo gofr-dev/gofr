@@ -10,9 +10,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gofr.dev/pkg/gofr/health"
 
 	"gofr.dev/pkg/gofr/container"
-	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 	"gofr.dev/pkg/gofr/datasource/pubsub/kafka"
 	"gofr.dev/pkg/gofr/logging"
@@ -42,8 +42,8 @@ func (mockSubscriber) DeleteTopic(_ context.Context, _ string) error {
 	return nil
 }
 
-func (mockSubscriber) Health() datasource.Health {
-	return datasource.Health{}
+func (mockSubscriber) Health() health.Health {
+	return health.Health{}
 }
 
 func (mockSubscriber) Publish(_ context.Context, _ string, _ []byte) error {
