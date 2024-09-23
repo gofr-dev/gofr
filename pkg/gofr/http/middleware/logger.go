@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -41,7 +42,8 @@ type RequestLog struct {
 
 func (rl *RequestLog) PrettyPrint(writer io.Writer) {
 	fmt.Fprintf(writer, "\u001B[38;5;8m%s \u001B[38;5;%dm%-6d\u001B[0m "+
-		"%8d\u001B[38;5;8mµs\u001B[0m %s %s \n", rl.CorrelationID, colorForStatusCode(rl.Response), rl.Response, rl.ResponseTime, rl.Method, rl.URI)
+		"%8d\u001B[38;5;8mµs\u001B[0m %s %s \n", rl.CorrelationID,
+		colorForStatusCode(rl.Response), rl.Response, rl.ResponseTime, rl.Method, rl.URI)
 }
 
 func colorForStatusCode(status int) int {
@@ -68,8 +70,19 @@ type logger interface {
 	Error(...interface{})
 }
 
-func getCorrelationID() string {
-	return uuid.New().String()
+func getIDs(requestCtx context.Context) (string, bool, string) {
+	var correlationID, spanID string
+
+	requestSpan := trace.SpanFromContext(requestCtx).SpanContext()
+	hasTraceID := requestSpan.HasTraceID()
+
+	if hasTraceID {
+		correlationID = requestSpan.TraceID().String()
+		spanID = trace.SpanFromContext(requestCtx).SpanContext().SpanID().String()
+	} else {
+		correlationID = uuid.New().String()
+	}
+	return correlationID, hasTraceID, spanID
 }
 
 // Logging is a middleware which logs response status and time in milliseconds along with other data.
@@ -79,17 +92,7 @@ func Logging(logger logger) func(inner http.Handler) http.Handler {
 			start := time.Now()
 			srw := &StatusResponseWriter{ResponseWriter: w}
 
-			var correlationID, spanID string
-
-			requestSpan := trace.SpanFromContext(r.Context()).SpanContext()
-			hasTraceID := requestSpan.HasTraceID()
-
-			if hasTraceID {
-				correlationID = requestSpan.TraceID().String()
-				spanID = trace.SpanFromContext(r.Context()).SpanContext().SpanID().String()
-			} else {
-				correlationID = getCorrelationID()
-			}
+			correlationID, hasTraceID, spanID := getIDs(r.Context())
 
 			srw.Header().Set("X-Correlation-ID", correlationID)
 

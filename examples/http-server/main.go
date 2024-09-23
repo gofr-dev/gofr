@@ -33,8 +33,6 @@ func main() {
 }
 
 func HelloHandler(c *gofr.Context) (interface{}, error) {
-	defer c.Trace("HelloWorld").End()
-
 	name := c.Param("name")
 	if name == "" {
 		c.Log("Name came empty")

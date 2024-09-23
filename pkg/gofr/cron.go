@@ -25,6 +25,7 @@ const (
 	dayOfWeek               = 6
 	scheduleParts           = 5
 	schedulePartsWithSecond = 6
+	hostName                = "gofr"
 )
 
 type CronFunc func(ctx *Context)
@@ -374,7 +375,7 @@ func (noopRequest) PathParam(string) string {
 }
 
 func (noopRequest) HostName() string {
-	return "gofr"
+	return hostName
 }
 
 func (noopRequest) Bind(interface{}) error {

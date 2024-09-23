@@ -96,7 +96,7 @@ func TestIntegration_SimpleAPIServer_Errors(t *testing.T) {
 	}
 
 	for i, tc := range tests {
-		req, err := http.NewRequest(http.MethodGet, host+tc.path, nil)
+		req, _ := http.NewRequest(http.MethodGet, host+tc.path, http.NoBody)
 		req.Header.Set("content-type", "application/json")
 
 		c := http.Client{}
@@ -135,7 +135,7 @@ func TestIntegration_SimpleAPIServer_Health(t *testing.T) {
 	}
 
 	for i, tc := range tests {
-		req, _ := http.NewRequest(http.MethodGet, host+tc.path, nil)
+		req, _ := http.NewRequest(http.MethodGet, host+tc.path, http.NoBody)
 		req.Header.Set("content-type", "application/json")
 
 		c := http.Client{}
