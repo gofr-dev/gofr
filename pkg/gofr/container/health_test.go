@@ -109,7 +109,7 @@ func TestContainer_Health(t *testing.T) {
 	}
 }
 
-func registerMocks(mocks Mocks, health string) {
+func registerMocks(mocks *Mocks, health string) {
 	mocks.SQL.ExpectHealthCheck().WillReturnHealthCheck(&datasource.Health{
 		Status: health,
 		Details: map[string]interface{}{
