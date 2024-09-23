@@ -164,6 +164,8 @@ Alternatively, users can construct their batch queries using the `BEGIN BATCH` a
 
 When using batch operations, consider using a `LoggedBatch` for atomicity or an `UnloggedBatch` for improved performance where atomicity isn't required. This approach provides a way to maintain data consistency during complex migrations.
 
+> Note: The following example assumes that user has already created the `KEYSPACE` in cassandra. A `KEYSPACE` in Cassandra is a container for tables that defines data replication settings across the cluster.
+
 
 ```go
 package migrations
