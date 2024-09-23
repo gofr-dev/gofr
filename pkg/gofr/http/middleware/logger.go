@@ -70,7 +70,7 @@ type logger interface {
 	Error(...interface{})
 }
 
-func getIDs(requestCtx context.Context) (string, bool, string) {
+func getIDs(requestCtx context.Context) (hasTraceID bool, correlation, spanID string) {
 	var correlationID, spanID string
 
 	requestSpan := trace.SpanFromContext(requestCtx).SpanContext()
@@ -82,7 +82,7 @@ func getIDs(requestCtx context.Context) (string, bool, string) {
 	} else {
 		correlationID = uuid.New().String()
 	}
-	return correlationID, hasTraceID, spanID
+	return hasTraceID, correlationID, spanID
 }
 
 // Logging is a middleware which logs response status and time in milliseconds along with other data.
@@ -92,7 +92,7 @@ func Logging(logger logger) func(inner http.Handler) http.Handler {
 			start := time.Now()
 			srw := &StatusResponseWriter{ResponseWriter: w}
 
-			correlationID, hasTraceID, spanID := getIDs(r.Context())
+			hasTraceID, correlationID, spanID := getIDs(r.Context())
 
 			srw.Header().Set("X-Correlation-ID", correlationID)
 
