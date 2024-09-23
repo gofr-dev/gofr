@@ -23,6 +23,7 @@ type Mocks struct {
 	Cassandra   *MockCassandra
 	Mongo       *MockMongo
 	KVStore     *MockKVStore
+	DGraph      *MockDgraph
 	File        *file.MockFileSystemProvider
 	HTTPService *service.MockHTTP
 	Metrics     *MockMetrics
@@ -42,7 +43,7 @@ func WithMockHTTPService(httpServiceNames ...string) options {
 	}
 }
 
-func NewMockContainer(t *testing.T, options ...options) (*Container, Mocks) {
+func NewMockContainer(t *testing.T, options ...options) (*Container, *Mocks) {
 	t.Helper()
 
 	container := &Container{}
@@ -79,6 +80,9 @@ func NewMockContainer(t *testing.T, options ...options) (*Container, Mocks) {
 	fileStoreMock := file.NewMockFileSystemProvider(ctrl)
 	container.File = fileStoreMock
 
+	dgraphMock := NewMockDgraph(ctrl)
+	container.DGraph = dgraphMock
+
 	var httpMock *service.MockHTTP
 
 	container.Services = make(map[string]service.HTTP)
@@ -106,13 +110,14 @@ func NewMockContainer(t *testing.T, options ...options) (*Container, Mocks) {
 		KVStore:     kvStoreMock,
 		File:        fileStoreMock,
 		HTTPService: httpMock,
+		DGraph:      dgraphMock,
 		Metrics:     mockMetrics,
 	}
 
 	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_http_service_response", gomock.Any(), "path", gomock.Any(),
 		"method", gomock.Any(), "status", fmt.Sprintf("%v", http.StatusInternalServerError)).AnyTimes()
 
-	return container, mocks
+	return container, &mocks
 }
 
 type MockPubSub struct {
