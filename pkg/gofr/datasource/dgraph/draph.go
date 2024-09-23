@@ -272,10 +272,10 @@ func (d *Client) HealthCheck(ctx context.Context) (any, error) {
 
 	if err != nil || len(healthResponse.Json) == 0 {
 		d.logger.Error("dgraph health check failed: ", err)
-		return nil, errHealthCheckFailed
+		return "DOWN", errHealthCheckFailed
 	}
 
-	return nil, nil
+	return "UP", nil
 }
 
 func (d *Client) sendOperationStats(ctx context.Context, query *QueryLog, metricName string) {

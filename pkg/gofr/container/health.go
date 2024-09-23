@@ -93,6 +93,15 @@ func checkExternalDBHealth(ctx context.Context, c *Container, healthMap map[stri
 		healthMap["kv-store"] = health
 	}
 
+	if !isNil(c.DGraph) {
+		health, err := c.DGraph.HealthCheck(ctx)
+		if err != nil {
+			downCount++
+		}
+
+		healthMap["dgraph"] = health
+	}
+
 	return downCount
 }
 

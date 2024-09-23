@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/mock/gomock"
 
 	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/datasource/sql"
@@ -72,6 +73,12 @@ func TestContainer_Health(t *testing.T) {
 						MaxOpenConnections: 0, OpenConnections: 1, InUse: 0, Idle: 1, WaitCount: 0,
 						WaitDuration: 0, MaxIdleClosed: 0, MaxIdleTimeClosed: 0, MaxLifetimeClosed: 0,
 					},
+				},
+			},
+			"dgraph": datasource.Health{
+				Status: tc.datasourceHealth, Details: map[string]interface{}{
+					"host":  "localhost:8000",
+					"error": "dgraph not connected",
 				},
 			},
 			"test-service": &service.Health{
@@ -155,4 +162,6 @@ func registerMocks(mocks Mocks, health string) {
 			"error": "kv-store not connected",
 		},
 	}, nil)
+
+	mocks.DGraph.EXPECT().HealthCheck(context.Background()).Return(gomock.Any(), gomock.Any())
 }
