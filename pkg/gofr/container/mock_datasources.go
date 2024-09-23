@@ -8869,3 +8869,289 @@ func (mr *MockKVStoreProviderMockRecorder) UseMetrics(metrics any) *gomock.Call 
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UseMetrics", reflect.TypeOf((*MockKVStoreProvider)(nil).UseMetrics), metrics)
 }
+
+// MockDgraph is a mock of Dgraph interface.
+type MockDgraph struct {
+	ctrl     *gomock.Controller
+	recorder *MockDgraphMockRecorder
+}
+
+// MockDgraphMockRecorder is the mock recorder for MockDgraph.
+type MockDgraphMockRecorder struct {
+	mock *MockDgraph
+}
+
+// NewMockDgraph creates a new mock instance.
+func NewMockDgraph(ctrl *gomock.Controller) *MockDgraph {
+	mock := &MockDgraph{ctrl: ctrl}
+	mock.recorder = &MockDgraphMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockDgraph) EXPECT() *MockDgraphMockRecorder {
+	return m.recorder
+}
+
+// Alter mocks base method.
+func (m *MockDgraph) Alter(ctx context.Context, op any) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Alter", ctx, op)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Alter indicates an expected call of Alter.
+func (mr *MockDgraphMockRecorder) Alter(ctx, op any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Alter", reflect.TypeOf((*MockDgraph)(nil).Alter), ctx, op)
+}
+
+// HealthCheck mocks base method.
+func (m *MockDgraph) HealthCheck(arg0 context.Context) (any, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HealthCheck", arg0)
+	ret0, _ := ret[0].(any)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// HealthCheck indicates an expected call of HealthCheck.
+func (mr *MockDgraphMockRecorder) HealthCheck(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HealthCheck", reflect.TypeOf((*MockDgraph)(nil).HealthCheck), arg0)
+}
+
+// Mutate mocks base method.
+func (m *MockDgraph) Mutate(ctx context.Context, mu any) (any, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Mutate", ctx, mu)
+	ret0, _ := ret[0].(any)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Mutate indicates an expected call of Mutate.
+func (mr *MockDgraphMockRecorder) Mutate(ctx, mu any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Mutate", reflect.TypeOf((*MockDgraph)(nil).Mutate), ctx, mu)
+}
+
+// NewReadOnlyTxn mocks base method.
+func (m *MockDgraph) NewReadOnlyTxn() any {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "NewReadOnlyTxn")
+	ret0, _ := ret[0].(any)
+	return ret0
+}
+
+// NewReadOnlyTxn indicates an expected call of NewReadOnlyTxn.
+func (mr *MockDgraphMockRecorder) NewReadOnlyTxn() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NewReadOnlyTxn", reflect.TypeOf((*MockDgraph)(nil).NewReadOnlyTxn))
+}
+
+// NewTxn mocks base method.
+func (m *MockDgraph) NewTxn() any {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "NewTxn")
+	ret0, _ := ret[0].(any)
+	return ret0
+}
+
+// NewTxn indicates an expected call of NewTxn.
+func (mr *MockDgraphMockRecorder) NewTxn() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NewTxn", reflect.TypeOf((*MockDgraph)(nil).NewTxn))
+}
+
+// Query mocks base method.
+func (m *MockDgraph) Query(ctx context.Context, query string) (any, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Query", ctx, query)
+	ret0, _ := ret[0].(any)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Query indicates an expected call of Query.
+func (mr *MockDgraphMockRecorder) Query(ctx, query any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Query", reflect.TypeOf((*MockDgraph)(nil).Query), ctx, query)
+}
+
+// QueryWithVars mocks base method.
+func (m *MockDgraph) QueryWithVars(ctx context.Context, query string, vars map[string]string) (any, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "QueryWithVars", ctx, query, vars)
+	ret0, _ := ret[0].(any)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// QueryWithVars indicates an expected call of QueryWithVars.
+func (mr *MockDgraphMockRecorder) QueryWithVars(ctx, query, vars any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryWithVars", reflect.TypeOf((*MockDgraph)(nil).QueryWithVars), ctx, query, vars)
+}
+
+// MockDgraphProvider is a mock of DgraphProvider interface.
+type MockDgraphProvider struct {
+	ctrl     *gomock.Controller
+	recorder *MockDgraphProviderMockRecorder
+}
+
+// MockDgraphProviderMockRecorder is the mock recorder for MockDgraphProvider.
+type MockDgraphProviderMockRecorder struct {
+	mock *MockDgraphProvider
+}
+
+// NewMockDgraphProvider creates a new mock instance.
+func NewMockDgraphProvider(ctrl *gomock.Controller) *MockDgraphProvider {
+	mock := &MockDgraphProvider{ctrl: ctrl}
+	mock.recorder = &MockDgraphProviderMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockDgraphProvider) EXPECT() *MockDgraphProviderMockRecorder {
+	return m.recorder
+}
+
+// Alter mocks base method.
+func (m *MockDgraphProvider) Alter(ctx context.Context, op any) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Alter", ctx, op)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Alter indicates an expected call of Alter.
+func (mr *MockDgraphProviderMockRecorder) Alter(ctx, op any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Alter", reflect.TypeOf((*MockDgraphProvider)(nil).Alter), ctx, op)
+}
+
+// Connect mocks base method.
+func (m *MockDgraphProvider) Connect() {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "Connect")
+}
+
+// Connect indicates an expected call of Connect.
+func (mr *MockDgraphProviderMockRecorder) Connect() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Connect", reflect.TypeOf((*MockDgraphProvider)(nil).Connect))
+}
+
+// HealthCheck mocks base method.
+func (m *MockDgraphProvider) HealthCheck(arg0 context.Context) (any, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HealthCheck", arg0)
+	ret0, _ := ret[0].(any)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// HealthCheck indicates an expected call of HealthCheck.
+func (mr *MockDgraphProviderMockRecorder) HealthCheck(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HealthCheck", reflect.TypeOf((*MockDgraphProvider)(nil).HealthCheck), arg0)
+}
+
+// Mutate mocks base method.
+func (m *MockDgraphProvider) Mutate(ctx context.Context, mu any) (any, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Mutate", ctx, mu)
+	ret0, _ := ret[0].(any)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Mutate indicates an expected call of Mutate.
+func (mr *MockDgraphProviderMockRecorder) Mutate(ctx, mu any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Mutate", reflect.TypeOf((*MockDgraphProvider)(nil).Mutate), ctx, mu)
+}
+
+// NewReadOnlyTxn mocks base method.
+func (m *MockDgraphProvider) NewReadOnlyTxn() any {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "NewReadOnlyTxn")
+	ret0, _ := ret[0].(any)
+	return ret0
+}
+
+// NewReadOnlyTxn indicates an expected call of NewReadOnlyTxn.
+func (mr *MockDgraphProviderMockRecorder) NewReadOnlyTxn() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NewReadOnlyTxn", reflect.TypeOf((*MockDgraphProvider)(nil).NewReadOnlyTxn))
+}
+
+// NewTxn mocks base method.
+func (m *MockDgraphProvider) NewTxn() any {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "NewTxn")
+	ret0, _ := ret[0].(any)
+	return ret0
+}
+
+// NewTxn indicates an expected call of NewTxn.
+func (mr *MockDgraphProviderMockRecorder) NewTxn() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NewTxn", reflect.TypeOf((*MockDgraphProvider)(nil).NewTxn))
+}
+
+// Query mocks base method.
+func (m *MockDgraphProvider) Query(ctx context.Context, query string) (any, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Query", ctx, query)
+	ret0, _ := ret[0].(any)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Query indicates an expected call of Query.
+func (mr *MockDgraphProviderMockRecorder) Query(ctx, query any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Query", reflect.TypeOf((*MockDgraphProvider)(nil).Query), ctx, query)
+}
+
+// QueryWithVars mocks base method.
+func (m *MockDgraphProvider) QueryWithVars(ctx context.Context, query string, vars map[string]string) (any, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "QueryWithVars", ctx, query, vars)
+	ret0, _ := ret[0].(any)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// QueryWithVars indicates an expected call of QueryWithVars.
+func (mr *MockDgraphProviderMockRecorder) QueryWithVars(ctx, query, vars any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryWithVars", reflect.TypeOf((*MockDgraphProvider)(nil).QueryWithVars), ctx, query, vars)
+}
+
+// UseLogger mocks base method.
+func (m *MockDgraphProvider) UseLogger(logger any) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "UseLogger", logger)
+}
+
+// UseLogger indicates an expected call of UseLogger.
+func (mr *MockDgraphProviderMockRecorder) UseLogger(logger any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UseLogger", reflect.TypeOf((*MockDgraphProvider)(nil).UseLogger), logger)
+}
+
+// UseMetrics mocks base method.
+func (m *MockDgraphProvider) UseMetrics(metrics any) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "UseMetrics", metrics)
+}
+
+// UseMetrics indicates an expected call of UseMetrics.
+func (mr *MockDgraphProviderMockRecorder) UseMetrics(metrics any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UseMetrics", reflect.TypeOf((*MockDgraphProvider)(nil).UseMetrics), metrics)
+}

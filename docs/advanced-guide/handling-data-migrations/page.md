@@ -1,7 +1,7 @@
 # Handling Data Migrations
 
 Suppose you manually make changes to your database, and now it's your responsibility to inform other developers to execute them. Additionally, you need to keep track of which changes should be applied to production machines in the next deployment.
-GoFr supports data migrations for MySQL, Postgres and Redis which allows altering the state of a database, be it adding a new column to existing table or modifying the data type of existing column or adding constraints to an existing table, setting and removing keys etc.
+GoFr supports data migrations for MySQL, Postgres, Redis, Clickhouse & Cassandra which allows altering the state of a database, be it adding a new column to existing table or modifying the data type of existing column or adding constraints to an existing table, setting and removing keys etc.
 
 ## Usage
 
@@ -155,5 +155,79 @@ Where,
 
 **Method** : It contains the method(UP/DOWN) in which migration ran.
 (For now only method UP is supported)
+
+### Migrations in Cassandra
+
+`GoFr` provides support for migrations in Cassandra but does not guarantee atomicity for individual Data Manipulation Language (DML) commands. To achieve atomicity during migrations, users can leverage batch operations using the `NewBatch`, `BatchQuery`, and `ExecuteBatch` methods. These methods allow multiple queries to be executed as a single atomic operation.
+
+Alternatively, users can construct their batch queries using the `BEGIN BATCH` and `APPLY BATCH` statements to ensure that all the commands within the batch are executed successfully or not at all. This is particularly useful for complex migrations involving multiple inserts, updates, or schema changes in a single transaction-like operation.
+
+When using batch operations, consider using a `LoggedBatch` for atomicity or an `UnloggedBatch` for improved performance where atomicity isn't required. This approach provides a way to maintain data consistency during complex migrations.
+
+> Note: The following example assumes that user has already created the `KEYSPACE` in cassandra. A `KEYSPACE` in Cassandra is a container for tables that defines data replication settings across the cluster.
+
+
+```go
+package migrations
+
+import (
+    "gofr.dev/pkg/gofr/migration"
+)
+
+const (
+	createTableCassandra = `CREATE TABLE IF NOT EXISTS employee (
+                            id int PRIMARY KEY,
+                            name text,
+                            gender text,
+                            number text
+                            );`
+	
+	addCassandraRecords = `BEGIN BATCH
+                           INSERT INTO employee (id, name, gender, number) VALUES (1, 'Alison', 'F', '1234567980');
+                           INSERT INTO employee (id, name, gender, number) VALUES (2, 'Alice', 'F', '9876543210');
+                           APPLY BATCH;
+                           `
+	
+	employeeDataCassandra = `INSERT INTO employee (id, name, gender, number) VALUES (?, ?, ?, ?);`
+)
+
+func createTableEmployeeCassandra() migration.Migrate {
+    return migration.Migrate{
+        UP: func(d migration.Datasource) error {
+            // Execute the create table statement
+            if err := d.Cassandra.Exec(createTableCassandra); err != nil {
+                return err
+            }
+
+            // Batch processes can also be executed in Exec as follows:
+			if err := d.Cassandra.Exec(addCassandraRecords); err != nil {
+				return err
+			}	
+
+            // Create a new batch operation
+            batchName := "employeeBatch"
+            if err := d.Cassandra.NewBatch(batchName, 0); err != nil { // 0 for LoggedBatch
+                return err
+            }
+
+            // Add multiple queries to the batch
+            if err := d.Cassandra.BatchQuery(batchName, employeeDataCassandra, 1, "Harry", "M", "1234567980"); err != nil {
+                return err
+            }
+
+            if err := d.Cassandra.BatchQuery(batchName, employeeDataCassandra, 2, "John", "M", "9876543210"); err != nil {
+                return err
+            }
+
+            // Execute the batch operation
+            if err := d.Cassandra.ExecuteBatch(batchName); err != nil {
+                return err
+            }
+
+            return nil
+        },
+    }
+}
+```
 
 > ##### Check out the example to add and run migrations in GoFr: [Visit GitHub](https://github.com/gofr-dev/gofr/blob/main/examples/using-migrations/main.go)
