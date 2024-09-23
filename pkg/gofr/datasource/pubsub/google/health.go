@@ -11,23 +11,23 @@ import (
 	"gofr.dev/pkg/gofr/datasource"
 )
 
-func (g *googleClient) Health() (health health.Health) {
-	health.Details = make(map[string]interface{})
+func (g *googleClient) Health() (h health.Health) {
+	h.Details = make(map[string]interface{})
 
 	var writerStatus, readerStatus string
 
-	health.Status = datasource.StatusUp
-	health.Details["projectID"] = g.Config.ProjectID
-	health.Details["backend"] = "GOOGLE"
+	h.Status = datasource.StatusUp
+	h.Details["projectID"] = g.Config.ProjectID
+	h.Details["backend"] = "GOOGLE"
 
-	writerStatus, health.Details["writers"] = g.getWriterDetails()
-	readerStatus, health.Details["readers"] = g.getReaderDetails()
+	writerStatus, h.Details["writers"] = g.getWriterDetails()
+	readerStatus, h.Details["readers"] = g.getReaderDetails()
 
 	if readerStatus == datasource.StatusDown || writerStatus == datasource.StatusDown {
-		health.Status = datasource.StatusDown
+		h.Status = datasource.StatusDown
 	}
 
-	return health
+	return h
 }
 
 //nolint:dupl // getWriterDetails provides the publishing details for current google publishers.
