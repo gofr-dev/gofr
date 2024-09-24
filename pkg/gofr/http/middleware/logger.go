@@ -69,9 +69,9 @@ type logger interface {
 	Error(...interface{})
 }
 
-func getIDs(requestCtx context.Context) (hasTraceID bool, ctx context.Context, correlationID, spanID string) {
+func getIDs(requestCtx context.Context) (ctx context.Context, correlationID, spanID string) {
 	requestSpan := trace.SpanFromContext(requestCtx).SpanContext()
-	hasTraceID = requestSpan.HasTraceID()
+	hasTraceID := requestSpan.HasTraceID()
 
 	if hasTraceID {
 		correlationID = requestSpan.TraceID().String()
@@ -85,7 +85,7 @@ func getIDs(requestCtx context.Context) (hasTraceID bool, ctx context.Context, c
 	requestCtx = context.WithValue(requestCtx, "X-Correlation-ID", correlationID)
 	// revive:enable
 
-	return hasTraceID, requestCtx, correlationID, spanID
+	return requestCtx, correlationID, spanID
 }
 
 func Logging(logger logger) func(inner http.Handler) http.Handler {
@@ -94,13 +94,13 @@ func Logging(logger logger) func(inner http.Handler) http.Handler {
 			start := time.Now()
 			srw := &StatusResponseWriter{ResponseWriter: w}
 
-			requestWithContext, hasTraceID, correlationID, spanID := getCorrelationAndTraceIDs(r)
+			requestWithContext, correlationID, spanID := getCorrelationAndTraceIDs(r)
 
 			r = requestWithContext
 
 			srw.Header().Set("X-Correlation-ID", correlationID)
 
-			defer logRequest(srw, r, start, correlationID, hasTraceID, spanID, logger)
+			defer logRequest(srw, r, start, correlationID, spanID, logger)
 
 			defer func() {
 				panicRecovery(recover(), srw, logger)
@@ -111,21 +111,21 @@ func Logging(logger logger) func(inner http.Handler) http.Handler {
 	}
 }
 
-func getCorrelationAndTraceIDs(request *http.Request) (r *http.Request, hasTraceID bool, correlationID, spanID string) {
+func getCorrelationAndTraceIDs(request *http.Request) (r *http.Request, correlationID, spanID string) {
 	correlationID = request.Header.Get("X-Correlation-ID")
 
 	var ctx context.Context
 
 	if correlationID == "" {
-		hasTraceID, ctx, correlationID, spanID = getIDs(request.Context())
+		ctx, correlationID, spanID = getIDs(request.Context())
 		request = request.Clone(ctx)
 	}
 
-	return request, hasTraceID, correlationID, spanID
+	return request, correlationID, spanID
 }
 
 func logRequest(srw *StatusResponseWriter, r *http.Request, start time.Time,
-	correlationID string, hasTraceID bool, spanID string, logger logger) {
+	correlationID string, spanID string, logger logger) {
 	l := &RequestLog{
 		CorrelationID: correlationID,
 		StartTime:     start.Format("2006-01-02T15:04:05.999999999-07:00"),
@@ -137,7 +137,7 @@ func logRequest(srw *StatusResponseWriter, r *http.Request, start time.Time,
 		Response:      srw.status,
 	}
 
-	if hasTraceID {
+	if spanID != "" {
 		l.SpanID = spanID
 	}
 
