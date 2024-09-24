@@ -25,8 +25,8 @@ type httpServer struct {
 }
 
 var (
-	errInvalidCertificateFile = errors.New("certificate file does not exist or is invalid")
-	errInvalidKeyFile         = errors.New("key file does not exist or is invalid")
+	errInvalidCertificateFile = errors.New("invalid certificate file")
+	errInvalidKeyFile         = errors.New("invalid key file")
 )
 
 func newHTTPServer(c *container.Container, port int, middlewareConfigs map[string]string) *httpServer {
@@ -123,11 +123,11 @@ func (s *httpServer) Shutdown(ctx context.Context) error {
 
 func validateCertificateAndKeyFiles(certificateFile, keyFile string) error {
 	if _, err := os.Stat(certificateFile); os.IsNotExist(err) {
-		return fmt.Errorf("%v : %v", errInvalidCertificateFile, certificateFile)
+		return fmt.Errorf("%w : %v", errInvalidCertificateFile, certificateFile)
 	}
 
 	if _, err := os.Stat(keyFile); os.IsNotExist(err) {
-		return fmt.Errorf("%v : %v", errInvalidKeyFile, keyFile)
+		return fmt.Errorf("%w : %v", errInvalidKeyFile, keyFile)
 	}
 
 	return nil
