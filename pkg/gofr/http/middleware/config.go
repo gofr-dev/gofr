@@ -23,6 +23,8 @@ func GetConfigs(c config.Config) map[string]string {
 	allowTracers := []string{
 		"TRACE_EXPORTER",
 		"TRACER_URL",
+		"TRACER_HOST",
+		"TRACER_PORT",
 	}
 
 	for _, v := range allowedCORSHeaders {

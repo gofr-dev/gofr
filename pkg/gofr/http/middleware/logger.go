@@ -15,6 +15,10 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
+type contextKey string
+
+const correlationKey = contextKey("X-Correlation-ID")
+
 // StatusResponseWriter Defines own Response Writer to be used for logging of status - as http.ResponseWriter does not let us read status.
 type StatusResponseWriter struct {
 	http.ResponseWriter
@@ -28,7 +32,6 @@ func (w *StatusResponseWriter) WriteHeader(status int) {
 
 // RequestLog represents a log entry for HTTP requests.
 type RequestLog struct {
-	IsBeingTraced bool   `json:"is_being_traced"`
 	CorrelationID string `json:"trace_id,omitempty"`
 	SpanID        string `json:"span_id,omitempty"`
 	StartTime     string `json:"start_time,omitempty"`
@@ -70,11 +73,9 @@ type logger interface {
 	Error(...interface{})
 }
 
-func getIDs(requestCtx context.Context) (hasTraceID bool, correlation, spanID string) {
-	var correlationID, spanID string
-
+func getIDs(requestCtx context.Context) (hasTraceID bool, ctx context.Context, correlationID, spanID string) {
 	requestSpan := trace.SpanFromContext(requestCtx).SpanContext()
-	hasTraceID := requestSpan.HasTraceID()
+	hasTraceID = requestSpan.HasTraceID()
 
 	if hasTraceID {
 		correlationID = requestSpan.TraceID().String()
@@ -82,7 +83,10 @@ func getIDs(requestCtx context.Context) (hasTraceID bool, correlation, spanID st
 	} else {
 		correlationID = uuid.New().String()
 	}
-	return hasTraceID, correlationID, spanID
+
+	requestCtx = context.WithValue(requestCtx, correlationKey, correlationID)
+
+	return hasTraceID, requestCtx, correlationID, spanID
 }
 
 // Logging is a middleware which logs response status and time in milliseconds along with other data.
@@ -92,13 +96,24 @@ func Logging(logger logger) func(inner http.Handler) http.Handler {
 			start := time.Now()
 			srw := &StatusResponseWriter{ResponseWriter: w}
 
-			hasTraceID, correlationID, spanID := getIDs(r.Context())
+			var spanID string
+
+			var hasTraceID bool
+
+			correlationID := r.Header.Get("X-Correlation-ID")
+
+			if correlationID == "" {
+				hasTrace, ctx, corrID, id := getIDs(r.Context())
+				r = r.Clone(ctx)
+				correlationID = corrID
+				hasTraceID = hasTrace
+				spanID = id
+			}
 
 			srw.Header().Set("X-Correlation-ID", correlationID)
 
 			defer func(res *StatusResponseWriter, req *http.Request) {
 				l := &RequestLog{
-					IsBeingTraced: hasTraceID,
 					CorrelationID: correlationID,
 					StartTime:     start.Format("2006-01-02T15:04:05.999999999-07:00"),
 					ResponseTime:  time.Since(start).Nanoseconds() / 1000,

@@ -142,7 +142,11 @@ func (h *httpService) createAndSendRequest(ctx context.Context, method string, p
 
 	spanContext = httptrace.WithClientTrace(spanContext, otelhttptrace.NewClientTrace(ctx))
 
+	correlationID := ctx.Value("X-Correlation-ID").(string)
+
 	req, err := http.NewRequestWithContext(spanContext, method, uri, bytes.NewBuffer(body))
+	req.Header.Set("X-Correlation-ID", correlationID)
+
 	if err != nil {
 		return nil, err
 	}
@@ -159,7 +163,7 @@ func (h *httpService) createAndSendRequest(ctx context.Context, method string, p
 
 	log := &Log{
 		Timestamp:     time.Now(),
-		CorrelationID: trace.SpanFromContext(ctx).SpanContext().TraceID().String(),
+		CorrelationID: ctx.Value("X-Correlation-ID").(string),
 		HTTPMethod:    method,
 		URI:           uri,
 	}

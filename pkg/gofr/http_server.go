@@ -21,31 +21,44 @@ type httpServer struct {
 	srv    *http.Server
 }
 
+func addTracerMiddleware(r *gofrHTTP.Router, middlewareConfigs map[string]string) {
+	if middlewareConfigs == nil {
+		return
+	}
+
+	traceExporter, validexporter := middlewareConfigs["TRACE_EXPORTER"]
+	_, validurl := middlewareConfigs["TRACE_URL"]
+	_, validhost := middlewareConfigs["TRACER_HOST"]
+	_, validport := middlewareConfigs["TRACER_PORT"]
+
+	if !validurl {
+		if traceExporter == "gofr" {
+			validurl = true
+		}
+	}
+
+	if validhost && !validport {
+		validport = true
+	}
+
+	if validexporter && validurl || validhost && validport {
+		r.Use(middleware.Tracer)
+		delete(middlewareConfigs, "TRACE_EXPORTER")
+		delete(middlewareConfigs, "TRACER_URL")
+		delete(middlewareConfigs, "TRACER_PORT")
+		delete(middlewareConfigs, "TRACER_HOST")
+	}
+}
+
 func newHTTPServer(c *container.Container, port int, middlewareConfigs map[string]string) *httpServer {
 	r := gofrHTTP.NewRouter()
 	wsManager := websocket.New()
 
-	if middlewareConfigs != nil {
-		traceExporter, validexporter := middlewareConfigs["TRACE_EXPORTER"]
-		_, validurl := middlewareConfigs["TRACE_URL"]
-
-		if !validurl {
-			if traceExporter == "gofr" {
-				validurl = true
-			}
-		}
-
-		if validexporter && validurl {
-			r.Use(middleware.Tracer)
-			delete(middlewareConfigs, "TRACE_EXPORTER")
-			delete(middlewareConfigs, "TRACER_URL")
-		}
-	}
-
+	addTracerMiddleware(r, middlewareConfigs)
 	r.Use(
 		middleware.WSHandlerUpgrade(c, wsManager),
-		middleware.Logging(c.Logger),
 		middleware.CORS(middlewareConfigs, r.RegisteredRoutes),
+		middleware.Logging(c.Logger),
 		middleware.Metrics(c.Metrics()),
 	)
 
