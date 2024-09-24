@@ -88,52 +88,19 @@ func getIDs(requestCtx context.Context) (hasTraceID bool, ctx context.Context, c
 	return hasTraceID, requestCtx, correlationID, spanID
 }
 
-// Logging is a middleware which logs response status and time in milliseconds along with other data.
 func Logging(logger logger) func(inner http.Handler) http.Handler {
 	return func(inner http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			start := time.Now()
 			srw := &StatusResponseWriter{ResponseWriter: w}
 
-			var spanID string
+			requestWithContext, hasTraceID, correlationID, spanID := getCorrelationAndTraceIDs(r)
 
-			var hasTraceID bool
-
-			correlationID := r.Header.Get("X-Correlation-ID")
-			if correlationID == "" {
-				hasTrace, ctx, corrID, id := getIDs(r.Context())
-				r = r.Clone(ctx)
-				correlationID = corrID
-				hasTraceID = hasTrace
-				spanID = id
-			}
+			r = requestWithContext
 
 			srw.Header().Set("X-Correlation-ID", correlationID)
 
-			defer func(res *StatusResponseWriter, req *http.Request) {
-				l := &RequestLog{
-					CorrelationID: correlationID,
-					StartTime:     start.Format("2006-01-02T15:04:05.999999999-07:00"),
-					ResponseTime:  time.Since(start).Nanoseconds() / 1000,
-					Method:        req.Method,
-					UserAgent:     req.UserAgent(),
-					IP:            getIPAddress(req),
-					URI:           req.RequestURI,
-					Response:      res.status,
-				}
-
-				if hasTraceID {
-					l.SpanID = spanID
-				}
-
-				if logger != nil {
-					if res.status >= http.StatusInternalServerError {
-						logger.Error(l)
-					} else {
-						logger.Log(l)
-					}
-				}
-			}(srw, r)
+			defer logRequest(srw, r, start, correlationID, hasTraceID, spanID, logger)
 
 			defer func() {
 				panicRecovery(recover(), srw, logger)
@@ -141,6 +108,45 @@ func Logging(logger logger) func(inner http.Handler) http.Handler {
 
 			inner.ServeHTTP(srw, r)
 		})
+	}
+}
+
+func getCorrelationAndTraceIDs(request *http.Request) (r *http.Request, hasTraceID bool, correlationID, spanID string) {
+	correlationID = request.Header.Get("X-Correlation-ID")
+
+	var ctx context.Context
+
+	if correlationID == "" {
+		hasTraceID, ctx, correlationID, spanID = getIDs(request.Context())
+		request = request.Clone(ctx)
+	}
+
+	return request, hasTraceID, correlationID, spanID
+}
+
+func logRequest(srw *StatusResponseWriter, r *http.Request, start time.Time,
+	correlationID string, hasTraceID bool, spanID string, logger logger) {
+	l := &RequestLog{
+		CorrelationID: correlationID,
+		StartTime:     start.Format("2006-01-02T15:04:05.999999999-07:00"),
+		ResponseTime:  time.Since(start).Nanoseconds() / 1000,
+		Method:        r.Method,
+		UserAgent:     r.UserAgent(),
+		IP:            getIPAddress(r),
+		URI:           r.RequestURI,
+		Response:      srw.status,
+	}
+
+	if hasTraceID {
+		l.SpanID = spanID
+	}
+
+	if logger != nil {
+		if srw.status >= http.StatusInternalServerError {
+			logger.Error(l)
+		} else {
+			logger.Log(l)
+		}
 	}
 }
 
