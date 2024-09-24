@@ -15,6 +15,10 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
+type contextKey string
+
+const correlationIDKey contextKey = "correlation-id"
+
 type httpService struct {
 	*http.Client
 	trace.Tracer
@@ -142,14 +146,14 @@ func (h *httpService) createAndSendRequest(ctx context.Context, method string, p
 
 	spanContext = httptrace.WithClientTrace(spanContext, otelhttptrace.NewClientTrace(ctx))
 
-	correlationID := ctx.Value("X-Correlation-ID").(string)
+	correlationID, _ := spanContext.Value(correlationIDKey).(string)
 
 	req, err := http.NewRequestWithContext(spanContext, method, uri, bytes.NewBuffer(body))
-	req.Header.Set("X-Correlation-ID", correlationID)
-
 	if err != nil {
 		return nil, err
 	}
+
+	req.Header.Set("X-Correlation-ID", correlationID)
 
 	for k, v := range headers {
 		req.Header.Set(k, v)
@@ -163,7 +167,7 @@ func (h *httpService) createAndSendRequest(ctx context.Context, method string, p
 
 	log := &Log{
 		Timestamp:     time.Now(),
-		CorrelationID: ctx.Value("X-Correlation-ID").(string),
+		CorrelationID: correlationID,
 		HTTPMethod:    method,
 		URI:           uri,
 	}
