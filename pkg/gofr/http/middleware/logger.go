@@ -100,7 +100,6 @@ func Logging(logger logger) func(inner http.Handler) http.Handler {
 			var hasTraceID bool
 
 			correlationID := r.Header.Get("X-Correlation-ID")
-
 			if correlationID == "" {
 				hasTrace, ctx, corrID, id := getIDs(r.Context())
 				r = r.Clone(ctx)
