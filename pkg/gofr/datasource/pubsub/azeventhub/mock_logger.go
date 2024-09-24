@@ -7,7 +7,7 @@
 //
 
 // Package dgraph is a generated GoMock package.
-package azeventhubs
+package azeventhub
 
 import (
 	reflect "reflect"
