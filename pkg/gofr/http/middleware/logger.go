@@ -15,10 +15,6 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-type contextKey string
-
-const correlationIDKey contextKey = "correlation-id"
-
 // StatusResponseWriter Defines own Response Writer to be used for logging of status - as http.ResponseWriter does not let us read status.
 type StatusResponseWriter struct {
 	http.ResponseWriter
@@ -84,7 +80,10 @@ func getIDs(requestCtx context.Context) (hasTraceID bool, ctx context.Context, c
 		correlationID = uuid.New().String()
 	}
 
-	requestCtx = context.WithValue(requestCtx, correlationIDKey, correlationID)
+	// revive:disable
+	//nolint:staticcheck // Using built in type as retrieving value from context in other package.
+	requestCtx = context.WithValue(requestCtx, "X-Correlation-ID", correlationID)
+	// revive:enable
 
 	return hasTraceID, requestCtx, correlationID, spanID
 }
