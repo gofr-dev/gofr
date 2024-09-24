@@ -33,8 +33,6 @@ type Container struct {
 
 	appName    string
 	appVersion string
-	certFile   string
-	keyFile    string
 
 	Services       map[string]service.HTTP
 	metricsManager metrics.Manager
@@ -61,8 +59,6 @@ func NewContainer(conf config.Config) *Container {
 	c := &Container{
 		appName:    conf.GetOrDefault("APP_NAME", "gofr-app"),
 		appVersion: conf.GetOrDefault("APP_VERSION", "dev"),
-		certFile:   conf.GetOrDefault("CERT_FILE", ""),
-		keyFile:    conf.GetOrDefault("KEY_FILE", ""),
 	}
 
 	c.Create(conf)
@@ -77,14 +73,6 @@ func (c *Container) Create(conf config.Config) {
 
 	if c.appVersion != "" {
 		c.appVersion = conf.GetOrDefault("APP_VERSION", "dev")
-	}
-
-	if c.certFile != "" {
-		c.certFile = conf.GetOrDefault("CERT_FILE", "")
-	}
-
-	if c.keyFile != "" {
-		c.keyFile = conf.GetOrDefault("KEY_FILE", "")
 	}
 
 	if c.Logger == nil {
@@ -245,14 +233,6 @@ func (c *Container) registerFrameworkMetrics() {
 	c.Metrics().NewCounter("app_pubsub_publish_success_count", "Number of successful publish operations.")
 	c.Metrics().NewCounter("app_pubsub_subscribe_total_count", "Number of total subscribe operations.")
 	c.Metrics().NewCounter("app_pubsub_subscribe_success_count", "Number of successful subscribe operations.")
-}
-
-func (c *Container) GetCertFile() string {
-	return c.certFile
-}
-
-func (c *Container) GetKeyFile() string {
-	return c.keyFile
 }
 
 func (c *Container) GetAppName() string {
