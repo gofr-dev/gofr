@@ -16,7 +16,7 @@ func (c *Client) BatchQuery(name, stmt string, values ...any) error {
 }
 
 func (c *Client) ExecuteBatch(name string) error {
-	defer c.logQueryAndSendMetrics(&QueryLog{Query: "batch", Keyspace: c.config.Keyspace}, time.Now())
+	defer c.sendOperationStats(&QueryLog{Query: "batch", Keyspace: c.config.Keyspace}, time.Now())
 
 	b, ok := c.cassandra.batches[name]
 	if !ok {
@@ -27,7 +27,7 @@ func (c *Client) ExecuteBatch(name string) error {
 }
 
 func (c *Client) ExecuteBatchCAS(name string, dest ...any) (bool, error) {
-	defer c.logQueryAndSendMetrics(&QueryLog{Query: "batch", Keyspace: c.config.Keyspace}, time.Now())
+	defer c.sendOperationStats(&QueryLog{Query: "batch", Keyspace: c.config.Keyspace}, time.Now())
 
 	b, ok := c.cassandra.batches[name]
 	if !ok {

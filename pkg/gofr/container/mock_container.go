@@ -11,20 +11,39 @@ import (
 	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/datasource/file"
 	"gofr.dev/pkg/gofr/datasource/pubsub"
+	"gofr.dev/pkg/gofr/datasource/sql"
 	"gofr.dev/pkg/gofr/logging"
+	"gofr.dev/pkg/gofr/service"
 )
 
 type Mocks struct {
-	Redis      *MockRedis
-	SQL        *MockDB
-	Clickhouse *MockClickhouse
-	Cassandra  *MockCassandra
-	Mongo      *MockMongo
-	KVStore    *MockKVStore
-	File       *file.MockFileSystemProvider
+	Redis       *MockRedis
+	SQL         *mockSQL
+	Clickhouse  *MockClickhouse
+	Cassandra   *MockCassandra
+	Mongo       *MockMongo
+	KVStore     *MockKVStore
+	DGraph      *MockDgraph
+	File        *file.MockFileSystemProvider
+	HTTPService *service.MockHTTP
+	Metrics     *MockMetrics
 }
 
-func NewMockContainer(t *testing.T) (*Container, Mocks) {
+type options func(c *Container, ctrl *gomock.Controller) any
+
+//nolint:revive //Because user should not access the options, and we might change it to an interface in the future.
+func WithMockHTTPService(httpServiceNames ...string) options {
+	return func(c *Container, ctrl *gomock.Controller) any {
+		mockservice := service.NewMockHTTP(ctrl)
+		for _, s := range httpServiceNames {
+			c.Services[s] = mockservice
+		}
+
+		return mockservice
+	}
+}
+
+func NewMockContainer(t *testing.T, options ...options) (*Container, *Mocks) {
 	t.Helper()
 
 	container := &Container{}
@@ -32,8 +51,16 @@ func NewMockContainer(t *testing.T) (*Container, Mocks) {
 
 	ctrl := gomock.NewController(t)
 
-	sqlMock := NewMockDB(ctrl)
-	container.SQL = sqlMock
+	mockDB, sqlMock, _ := sql.NewSQLMocks(t)
+	// initialisation of expectations
+	expectation := expectedQuery{}
+
+	sqlMockWrapper := &mockSQL{sqlMock, &expectation}
+
+	sqlDB := &sqlMockDB{mockDB, &expectation, logging.NewLogger(logging.DEBUG)}
+	sqlDB.finish(t)
+
+	container.SQL = sqlDB
 
 	redisMock := NewMockRedis(ctrl)
 	container.Redis = redisMock
@@ -53,26 +80,44 @@ func NewMockContainer(t *testing.T) (*Container, Mocks) {
 	fileStoreMock := file.NewMockFileSystemProvider(ctrl)
 	container.File = fileStoreMock
 
-	mocks := Mocks{
-		Redis:      redisMock,
-		SQL:        sqlMock,
-		Clickhouse: clickhouseMock,
-		Cassandra:  cassandraMock,
-		Mongo:      mongoMock,
-		KVStore:    kvStoreMock,
-		File:       fileStoreMock,
+	dgraphMock := NewMockDgraph(ctrl)
+	container.DGraph = dgraphMock
+
+	var httpMock *service.MockHTTP
+
+	container.Services = make(map[string]service.HTTP)
+
+	for _, option := range options {
+		optionsAdded := option(container, ctrl)
+
+		val, ok := optionsAdded.(*service.MockHTTP)
+		if ok {
+			httpMock = val
+		}
 	}
 
-	sqlMock.EXPECT().Close().AnyTimes()
 	redisMock.EXPECT().Close().AnyTimes()
 
 	mockMetrics := NewMockMetrics(ctrl)
 	container.metricsManager = mockMetrics
 
+	mocks := Mocks{
+		Redis:       redisMock,
+		SQL:         sqlMockWrapper,
+		Clickhouse:  clickhouseMock,
+		Cassandra:   cassandraMock,
+		Mongo:       mongoMock,
+		KVStore:     kvStoreMock,
+		File:        fileStoreMock,
+		HTTPService: httpMock,
+		DGraph:      dgraphMock,
+		Metrics:     mockMetrics,
+	}
+
 	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_http_service_response", gomock.Any(), "path", gomock.Any(),
 		"method", gomock.Any(), "status", fmt.Sprintf("%v", http.StatusInternalServerError)).AnyTimes()
 
-	return container, mocks
+	return container, &mocks
 }
 
 type MockPubSub struct {

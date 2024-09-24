@@ -26,7 +26,7 @@ func (a *App) AddFTP(fs file.FileSystemProvider) {
 	a.container.File = fs
 }
 
-// AddFile sets the FTP,SFTP datasource in the app's container.
+// AddFile sets the FTP,SFTP,S3 datasource in the app's container.
 func (a *App) AddFileStore(fs file.FileSystemProvider) {
 	fs.UseLogger(a.Logger())
 	fs.UseMetrics(a.Metrics())
@@ -71,4 +71,25 @@ func (a *App) AddKVStore(db container.KVStoreProvider) {
 	db.Connect()
 
 	a.container.KVStore = db
+}
+
+// AddSolr sets the Solr datasource in the app's container.
+func (a *App) AddSolr(db container.SolrProvider) {
+	db.UseLogger(a.Logger())
+	db.UseMetrics(a.Metrics())
+
+	db.Connect()
+
+	a.container.Solr = db
+}
+
+// AddDgraph sets the Dgraph datasource in the app's container.
+func (a *App) AddDgraph(db container.DgraphProvider) {
+	// Create the Dgraph client with the provided configuration
+	db.UseLogger(a.Logger())
+	db.UseMetrics(a.Metrics())
+
+	db.Connect()
+
+	a.container.DGraph = db
 }
