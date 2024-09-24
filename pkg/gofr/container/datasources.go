@@ -8,6 +8,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"gofr.dev/pkg/gofr/datasource"
+	"gofr.dev/pkg/gofr/datasource/pubsub"
 	gofrSQL "gofr.dev/pkg/gofr/datasource/sql"
 )
 
@@ -264,6 +265,12 @@ type KVStore interface {
 
 type KVStoreProvider interface {
 	KVStore
+
+	provider
+}
+
+type PubSubProvider interface {
+	pubsub.Client
 
 	provider
 }
