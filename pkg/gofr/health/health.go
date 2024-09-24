@@ -4,8 +4,8 @@ package health
 type Status string
 
 const (
-	StatusUp   Status = "up"
-	StatusDown Status = "down"
+	StatusUp   Status = "UP"
+	StatusDown Status = "DOWN"
 )
 
 // Health represents the health of a service.
