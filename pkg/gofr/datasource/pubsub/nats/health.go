@@ -20,7 +20,7 @@ const (
 )
 
 // Health returns the health status of the NATS client.
-func (n *NATSClient) Health() datasource.Health {
+func (n *NATS) Health() datasource.Health {
 	h := datasource.Health{
 		Status:  datasource.StatusUp,
 		Details: make(map[string]interface{}),

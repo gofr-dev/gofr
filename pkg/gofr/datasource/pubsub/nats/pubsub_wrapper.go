@@ -9,9 +9,9 @@ import (
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 )
 
-// PubSubWrapper adapts NATSClient to pubsub.Client.
+// PubSubWrapper adapts NATS to pubsub.Client.
 type PubSubWrapper struct {
-	Client *NATSClient
+	Client *NATS
 }
 
 // Publish publishes a message to a topic.
