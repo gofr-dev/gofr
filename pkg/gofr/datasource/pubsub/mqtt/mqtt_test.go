@@ -12,8 +12,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
-	"gofr.dev/pkg/gofr/health"
 
+	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/testutil"
@@ -403,7 +403,7 @@ func TestMQTT_Health(t *testing.T) {
 	out := testutil.StderrOutputForFunc(func() {
 		m := &MQTT{config: &Config{}, logger: logging.NewMockLogger(logging.ERROR)}
 		res := m.Health()
-		assert.Equal(t, health.Health{
+		assert.Equal(t, datasource.Health{
 			Status:  "DOWN",
 			Details: map[string]interface{}{"backend": "MQTT", "host": ""},
 		}, res)
@@ -419,7 +419,7 @@ func TestMQTT_Health(t *testing.T) {
 		mockClient.EXPECT().IsConnected().Return(false)
 
 		res := client.Health()
-		assert.Equal(t, health.Health{
+		assert.Equal(t, datasource.Health{
 			Status:  "DOWN",
 			Details: map[string]interface{}{"backend": "MQTT", "host": "localhost"},
 		}, res)
@@ -435,7 +435,7 @@ func TestMQTT_Health(t *testing.T) {
 		mockClient.EXPECT().IsConnected().Return(true)
 
 		res := client.Health()
-		assert.Equal(t, health.Health{
+		assert.Equal(t, datasource.Health{
 			Status:  "UP",
 			Details: map[string]interface{}{"backend": "MQTT", "host": "localhost"},
 		}, res)
