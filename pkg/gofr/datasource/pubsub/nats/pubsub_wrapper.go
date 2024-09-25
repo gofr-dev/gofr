@@ -9,7 +9,7 @@ import (
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 )
 
-// PubSubWrapper adapts client to pubsub.jetStreamClient.
+// PubSubWrapper adapts client to pubsub.JetStreamClient.
 type PubSubWrapper struct {
 	Client *client
 }

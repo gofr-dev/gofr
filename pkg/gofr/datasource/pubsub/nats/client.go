@@ -44,7 +44,7 @@ type messageHandler func(context.Context, jetstream.Msg) error
 
 // client represents a client for client JetStream operations.
 type client struct {
-	Conn          connInterface
+	Conn          ConnInterface
 	JetStream     jetstream.JetStream
 	Logger        pubsub.Logger
 	Config        *Config
@@ -83,7 +83,7 @@ func (n *client) DeleteTopic(ctx context.Context, name string) error {
 	return nil
 }
 
-// natsConnWrapper wraps a nats.Conn to implement the connInterface.
+// natsConnWrapper wraps a nats.Conn to implement the ConnInterface.
 type natsConnWrapper struct {
 	*nats.Conn
 }
@@ -110,7 +110,7 @@ func New(conf *Config, logger pubsub.Logger, metrics Metrics) (pubsub.Client, er
 	logger.Debugf("connecting to client server '%s'", conf.Server)
 
 	// Create connection options
-	opts := []nats.Option{nats.Name("GoFr client jetStreamClient")}
+	opts := []nats.Option{nats.Name("GoFr client JetStreamClient")}
 
 	// Add credentials if provided
 	if conf.CredsFile != "" {
