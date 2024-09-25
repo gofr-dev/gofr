@@ -2,17 +2,20 @@ module gofr.dev/pkg/gofr/datasource/pubsub/azeventhub
 
 go 1.22.3
 
+replace gofr.dev v1.21.0 => ../../../../../../gofr
+
 require (
-	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.14.0
 	github.com/Azure/azure-sdk-for-go/sdk/messaging/azeventhubs v1.2.2
 	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.4.1
 	github.com/prometheus/client_golang v1.20.4
 	github.com/stretchr/testify v1.9.0
 	go.uber.org/mock v0.4.0
 	gofr.dev v1.21.0
+	nhooyr.io/websocket v1.8.11
 )
 
 require (
+	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.14.0 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/internal v1.10.0 // indirect
 	github.com/Azure/go-amqp v1.0.5 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect

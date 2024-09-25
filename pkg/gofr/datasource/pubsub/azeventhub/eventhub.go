@@ -51,6 +51,47 @@ func New(cfg Config) *Client {
 	}
 }
 
+func (c *Client) validConfigs(cfg Config) bool {
+	ok := true
+
+	if cfg.EventhubName == "" {
+		ok = false
+
+		c.logger.Error("EventhubName cannot be an empty")
+	}
+
+	if cfg.ConnectionString == "" {
+		ok = false
+
+		c.logger.Error("ConnectionString cannot be an empty")
+	}
+
+	if cfg.StorageServiceURL == "" {
+		ok = false
+
+		c.logger.Error("StorageServiceURL cannot be an empty")
+	}
+
+	if cfg.StorageContainerName == "" {
+		ok = false
+
+		c.logger.Error("StorageContainerName cannot be an empty")
+	}
+
+	if cfg.ContainerConnectionString == "" {
+		ok = false
+
+		c.logger.Error("ContainerConnectionString cannot be an empty")
+	}
+
+	if cfg.ConsumerGroup == "" {
+		cfg.ConsumerGroup = azeventhubs.DefaultConsumerGroup
+	}
+
+	return ok
+
+}
+
 // UseLogger sets the logger for the Cassandra client.
 func (c *Client) UseLogger(logger any) {
 	if l, ok := logger.(Logger); ok {
@@ -67,22 +108,33 @@ func (c *Client) UseMetrics(metrics any) {
 
 // Connect establishes a connection to Cassandra and registers metrics using the provided configuration when the client was Created.
 func (c *Client) Connect() {
+	if !c.validConfigs(c.cfg) {
+		return
+	}
+
 	producerClient, err := azeventhubs.NewProducerClientFromConnectionString(c.cfg.ConnectionString,
 		c.cfg.EventhubName, c.cfg.ProducerOptions)
 	if err != nil {
-		c.logger.Errorf("error occurred while creating producer client %v", err)
+		fmt.Println(err)
+		c.logger.Error(fmt.Sprintf("error occurred while creating producer client %v", err))
+
+		return
 	}
 
 	containerClient, err := container.NewClientFromConnectionString(c.cfg.ContainerConnectionString, c.cfg.StorageContainerName,
 		c.cfg.StorageOptions)
 	if err != nil {
-		c.logger.Errorf("error occurred while creating container client %v", err)
+		c.logger.Error(fmt.Sprintf("error occurred while creating container client %v", err))
+
+		return
 	}
 
 	// create a checkpoint store that will be used by the event hub
 	checkpointStore, err := checkpoints.NewBlobStore(containerClient, c.cfg.BlobStoreOptions)
 	if err != nil {
 		c.logger.Errorf("error occurred while creating blobstore %v", err)
+
+		return
 	}
 
 	// create a consumer client using a connection string to the namespace and the event hub
@@ -90,12 +142,16 @@ func (c *Client) Connect() {
 		c.cfg.ConsumerGroup, c.cfg.ConsumerOptions)
 	if err != nil {
 		c.logger.Errorf("error occurred while creating consumer client %v", err)
+
+		return
 	}
 
 	// create a processor to receive and process events
 	processor, err := azeventhubs.NewProcessor(consumerClient, checkpointStore, nil)
 	if err != nil {
 		c.logger.Errorf("error occurred while creating processor %v", err)
+
+		return
 	}
 
 	processorCtx, processorCancel := context.WithCancel(context.TODO())
@@ -104,6 +160,8 @@ func (c *Client) Connect() {
 	go func() {
 		if err = processor.Run(processorCtx); err != nil {
 			c.logger.Errorf("error occurred while running processor %v", err)
+
+			return
 		}
 	}()
 
@@ -115,6 +173,10 @@ func (c *Client) Connect() {
 
 // Subscribe checks all partitions for the first available event and returns it.
 func (c *Client) Subscribe(ctx context.Context, topic string) (*pubsub.Message, error) {
+	if topic != c.cfg.EventhubName {
+		return nil, errors.New("topic should be same as eventhub name")
+	}
+
 	var (
 		msg *pubsub.Message
 		err error
@@ -176,6 +238,10 @@ func closePartitionResources(ctx context.Context, partitionClient *azeventhubs.P
 }
 
 func (c *Client) Publish(ctx context.Context, topic string, message []byte) error {
+	if topic != c.cfg.EventhubName {
+		return errors.New("topic should be same as eventhub name")
+	}
+
 	newBatchOptions := &azeventhubs.EventDataBatchOptions{}
 
 	batch, err := c.producer.NewEventDataBatch(ctx, newBatchOptions)
@@ -196,18 +262,21 @@ func (c *Client) Publish(ctx context.Context, topic string, message []byte) erro
 }
 
 func (c *Client) Health() datasource.Health {
-	//TODO implement me
-	panic("implement me")
+	c.logger.Errorf("health-check not implemented for eventhub")
+
+	return datasource.Health{}
 }
 
-func (c *Client) CreateTopic(context context.Context, name string) error {
-	//TODO implement me
-	panic("implement me")
+func (c *Client) CreateTopic(context.Context, string) error {
+	c.logger.Errorf("topic creation is not supported in eventhub")
+
+	return nil
 }
 
 func (c *Client) DeleteTopic(context context.Context, name string) error {
-	//TODO implement me
-	panic("implement me")
+	c.logger.Errorf("topic deletion is not supported in eventhub")
+
+	return nil
 }
 
 func (c *Client) Close() error {
