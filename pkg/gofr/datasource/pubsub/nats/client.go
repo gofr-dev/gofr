@@ -127,7 +127,7 @@ func New(conf *Config, logger pubsub.Logger, metrics Metrics) (pubsub.Client, er
 	status := nc.Status()
 	if status != nats.CONNECTED {
 		logger.Errorf("unexpected NATS connection status: %v", status)
-		return nil, ErrConnectionStatus
+		return nil, errConnectionStatus
 	}
 
 	js, err := jetstream.New(nc)
@@ -155,7 +155,7 @@ func (n *NATS) Publish(ctx context.Context, subject string, message []byte) erro
 	n.Metrics.IncrementCounter(ctx, "app_pubsub_publish_total_count", "subject", subject)
 
 	if n.JetStream == nil || subject == "" {
-		err := ErrJetStreamNotConfigured
+		err := errJetStreamNotConfigured
 		n.Logger.Error(err.Error())
 
 		return err
@@ -177,7 +177,7 @@ func (n *NATS) Publish(ctx context.Context, subject string, message []byte) erro
 func (n *NATS) Subscribe(ctx context.Context, topic string, handler MessageHandler) error {
 	if n.Config.Consumer == "" {
 		n.Logger.Error("consumer name not provided")
-		return ErrConsumerNotProvided
+		return errConsumerNotProvided
 	}
 
 	// Create a unique consumer name for each topic
@@ -328,12 +328,12 @@ func ValidateConfigs(conf *Config) error {
 	err := error(nil)
 
 	if conf.Server == "" {
-		err = ErrServerNotProvided
+		err = errServerNotProvided
 	}
 
 	// check if subjects are provided
 	if err == nil && len(conf.Stream.Subjects) == 0 {
-		err = ErrSubjectsNotProvided
+		err = errSubjectsNotProvided
 	}
 
 	return err

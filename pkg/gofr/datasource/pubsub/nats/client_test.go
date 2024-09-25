@@ -34,7 +34,7 @@ func TestValidateConfigs(t *testing.T) {
 		{
 			name:     "Empty Server",
 			config:   Config{},
-			expected: ErrServerNotProvided,
+			expected: errServerNotProvided,
 		},
 		{
 			name: "Empty Stream Subject",
@@ -45,7 +45,7 @@ func TestValidateConfigs(t *testing.T) {
 					// Subjects is intentionally left empty
 				},
 			},
-			expected: ErrSubjectsNotProvided,
+			expected: errSubjectsNotProvided,
 		},
 	}
 
@@ -233,7 +233,7 @@ func TestNATSClient_SubscribeError(t *testing.T) {
 
 	ctx := context.Background()
 
-	expectedErr := ErrFailedToCreateStream
+	expectedErr := errFailedToCreateStream
 	mockJS.EXPECT().CreateOrUpdateConsumer(gomock.Any(), client.Config.Stream.Stream, gomock.Any()).Return(nil, expectedErr)
 
 	var err error
@@ -336,7 +336,7 @@ func TestNew_Error(t *testing.T) {
 			config: &Config{
 				Server: "", // Invalid: empty server
 			},
-			expectedErr: ErrServerNotProvided,
+			expectedErr: errServerNotProvided,
 		},
 		// Add more test cases for other error scenarios
 	}
@@ -551,7 +551,7 @@ func TestNATSClient_DeleteTopic_Error(t *testing.T) {
 
 	ctx := context.Background()
 
-	expectedErr := ErrFailedToDeleteStream
+	expectedErr := errFailedToDeleteStream
 	mockJS.EXPECT().DeleteStream(ctx, "test-topic").Return(expectedErr)
 
 	err := client.DeleteTopic(ctx, "test-topic")
@@ -580,7 +580,7 @@ func TestNATSClient_Publish_Error(t *testing.T) {
 	subject := "test-subject"
 	message := []byte("test-message")
 
-	expectedErr := ErrPublishError
+	expectedErr := errPublishError
 
 	mockMetrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_publish_total_count", "subject", subject)
 	mockJS.EXPECT().Publish(gomock.Any(), subject, message).Return(nil, expectedErr)
@@ -612,7 +612,7 @@ func TestNATSClient_SubscribeCreateConsumerError(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	expectedErr := ErrFailedToCreateConsumer
+	expectedErr := errFailedToCreateConsumer
 
 	mockJS.EXPECT().CreateOrUpdateConsumer(gomock.Any(), client.Config.Stream.Stream, gomock.Any()).Return(nil, expectedErr)
 
@@ -639,7 +639,7 @@ func TestNATSClient_HandleMessageError(t *testing.T) {
 	// Set up expectations
 	mockMsg.EXPECT().Nak().Return(nil)
 
-	handlerErr := ErrHandlerError
+	handlerErr := errHandlerError
 	handler := func(_ context.Context, _ jetstream.Msg) error {
 		return handlerErr
 	}
@@ -668,7 +668,7 @@ func TestNATSClient_DeleteStreamError(t *testing.T) {
 
 	ctx := context.Background()
 	streamName := "test-stream"
-	expectedErr := ErrFailedToDeleteStream
+	expectedErr := errFailedToDeleteStream
 
 	mockJS.EXPECT().DeleteStream(ctx, streamName).Return(expectedErr)
 
@@ -694,7 +694,7 @@ func TestNATSClient_CreateStreamError(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	expectedErr := ErrFailedToCreateStream
+	expectedErr := errFailedToCreateStream
 
 	mockJS.EXPECT().CreateStream(ctx, gomock.Any()).Return(nil, expectedErr)
 
@@ -719,7 +719,7 @@ func TestNATSClient_CreateOrUpdateStreamError(t *testing.T) {
 		Name:     "test-stream",
 		Subjects: []string{"test.subject"},
 	}
-	expectedErr := ErrFailedCreateOrUpdateStream
+	expectedErr := errFailedCreateOrUpdateStream
 
 	mockJS.EXPECT().CreateOrUpdateStream(ctx, *cfg).Return(nil, expectedErr)
 
