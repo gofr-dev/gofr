@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
-	"gofr.dev/pkg/gofr/health"
+	"gofr.dev/pkg/gofr/datasource"
 
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/testutil"
@@ -27,8 +27,8 @@ func TestKafkaClient_HealthStatusUP(t *testing.T) {
 		writer: writer,
 	}
 
-	expectedHealth := health.Health{
-		Status: health.StatusUp,
+	expectedHealth := datasource.Health{
+		Status: datasource.StatusUp,
 		Details: map[string]interface{}{
 			"host":    "",
 			"backend": "KAFKA",
@@ -65,7 +65,7 @@ func TestKafkaClient_HealthStatusDown(t *testing.T) {
 
 	h := client.Health()
 
-	assert.Equal(t, health.StatusDown, h.Status, "Status should be DOWN")
+	assert.Equal(t, datasource.StatusDown, h.Status, "Status should be DOWN")
 	assert.Equal(t, "KAFKA", h.Details["backend"], "Backend should be KAFKA")
 	assert.Equal(t, "", h.Details["host"], "Host should be empty")
 
