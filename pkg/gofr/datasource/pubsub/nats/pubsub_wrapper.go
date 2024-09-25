@@ -9,9 +9,9 @@ import (
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 )
 
-// PubSubWrapper adapts client to pubsub.JetStreamClient.
+// PubSubWrapper adapts Client to pubsub.JetStreamClient.
 type PubSubWrapper struct {
-	Client *client
+	Client *Client
 }
 
 // Publish publishes a message to a topic.
@@ -49,22 +49,22 @@ func (w *PubSubWrapper) Subscribe(ctx context.Context, topic string) (*pubsub.Me
 	}
 }
 
-// CreateTopic creates a new topic (stream) in client JetStream.
+// CreateTopic creates a new topic (stream) in Client JetStream.
 func (w *PubSubWrapper) CreateTopic(ctx context.Context, name string) error {
 	return w.Client.CreateTopic(ctx, name)
 }
 
-// DeleteTopic deletes a topic (stream) in client JetStream.
+// DeleteTopic deletes a topic (stream) in Client JetStream.
 func (w *PubSubWrapper) DeleteTopic(ctx context.Context, name string) error {
 	return w.Client.DeleteTopic(ctx, name)
 }
 
-// Close closes the client client.
+// Close closes the Client Client.
 func (w *PubSubWrapper) Close() error {
 	return w.Client.Close()
 }
 
-// Health returns the health status of the client client.
+// Health returns the health status of the Client Client.
 func (w *PubSubWrapper) Health() datasource.Health {
 	status := datasource.StatusUp
 	if w.Client.Conn.Status() != nats.CONNECTED {

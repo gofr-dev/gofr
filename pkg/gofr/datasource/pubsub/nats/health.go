@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	natsBackend            = "client"
+	natsBackend            = "Client"
 	jetStreamStatusOK      = "OK"
 	jetStreamStatusError   = "Error"
 	jetStreamConnected     = "CONNECTED"
@@ -19,8 +19,8 @@ const (
 	natsHealthCheckTimeout = 5 * time.Second
 )
 
-// Health returns the health status of the client client.
-func (n *client) Health() datasource.Health {
+// Health returns the health status of the Client Client.
+func (n *Client) Health() datasource.Health {
 	h := datasource.Health{
 		Status:  datasource.StatusUp,
 		Details: make(map[string]interface{}),
@@ -33,21 +33,21 @@ func (n *client) Health() datasource.Health {
 		h.Status = datasource.StatusUp
 		h.Details["connection_status"] = jetStreamConnecting
 
-		n.Logger.Debug("client health check: Connecting")
+		n.Logger.Debug("Client health check: Connecting")
 	case nats.CONNECTED:
 		h.Details["connection_status"] = jetStreamConnected
 
-		n.Logger.Debug("client health check: Connected")
+		n.Logger.Debug("Client health check: Connected")
 	case nats.CLOSED, nats.DISCONNECTED, nats.RECONNECTING, nats.DRAINING_PUBS, nats.DRAINING_SUBS:
 		h.Status = datasource.StatusDown
 		h.Details["connection_status"] = jetStreamDisconnecting
 
-		n.Logger.Error("client health check: Disconnected")
+		n.Logger.Error("Client health check: Disconnected")
 	default:
 		h.Status = datasource.StatusDown
 		h.Details["connection_status"] = connectionStatus.String()
 
-		n.Logger.Error("client health check: Unknown status", connectionStatus)
+		n.Logger.Error("Client health check: Unknown status", connectionStatus)
 	}
 
 	h.Details["host"] = n.Config.Server
@@ -63,12 +63,12 @@ func (n *client) Health() datasource.Health {
 		h.Details["jetstream_status"] = status
 
 		if status != jetStreamStatusOK {
-			n.Logger.Error("client health check: JetStream error:", status)
+			n.Logger.Error("Client health check: JetStream error:", status)
 		} else {
-			n.Logger.Debug("client health check: JetStream enabled")
+			n.Logger.Debug("Client health check: JetStream enabled")
 		}
 	} else if n.JetStream == nil {
-		n.Logger.Debug("client health check: JetStream not enabled")
+		n.Logger.Debug("Client health check: JetStream not enabled")
 	}
 
 	return h

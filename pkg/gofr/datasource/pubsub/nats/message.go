@@ -19,6 +19,6 @@ func newNATSMessage(msg jetstream.Msg, logger pubsub.Logger) *natsMessage {
 
 func (nmsg *natsMessage) Commit() {
 	if err := nmsg.msg.Ack(); err != nil {
-		nmsg.logger.Errorf("unable to acknowledge message on client JetStream: %v", err)
+		nmsg.logger.Errorf("unable to acknowledge message on Client JetStream: %v", err)
 	}
 }
