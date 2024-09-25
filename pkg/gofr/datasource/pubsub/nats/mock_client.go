@@ -19,43 +19,43 @@ import (
 	datasource "gofr.dev/pkg/gofr/datasource"
 )
 
-// MockConnInterface is a mock of ConnInterface interface.
-type MockConnInterface struct {
+// MockconnInterface is a mock of connInterface interface.
+type MockconnInterface struct {
 	ctrl     *gomock.Controller
-	recorder *MockConnInterfaceMockRecorder
+	recorder *MockconnInterfaceMockRecorder
 }
 
-// MockConnInterfaceMockRecorder is the mock recorder for MockConnInterface.
-type MockConnInterfaceMockRecorder struct {
-	mock *MockConnInterface
+// MockconnInterfaceMockRecorder is the mock recorder for MockconnInterface.
+type MockconnInterfaceMockRecorder struct {
+	mock *MockconnInterface
 }
 
-// NewMockConnInterface creates a new mock instance.
-func NewMockConnInterface(ctrl *gomock.Controller) *MockConnInterface {
-	mock := &MockConnInterface{ctrl: ctrl}
-	mock.recorder = &MockConnInterfaceMockRecorder{mock}
+// NewMockconnInterface creates a new mock instance.
+func NewMockconnInterface(ctrl *gomock.Controller) *MockconnInterface {
+	mock := &MockconnInterface{ctrl: ctrl}
+	mock.recorder = &MockconnInterfaceMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockConnInterface) EXPECT() *MockConnInterfaceMockRecorder {
+func (m *MockconnInterface) EXPECT() *MockconnInterfaceMockRecorder {
 	return m.recorder
 }
 
 // Close mocks base method.
-func (m *MockConnInterface) Close() {
+func (m *MockconnInterface) Close() {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "Close")
 }
 
 // Close indicates an expected call of Close.
-func (mr *MockConnInterfaceMockRecorder) Close() *gomock.Call {
+func (mr *MockconnInterfaceMockRecorder) Close() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockConnInterface)(nil).Close))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockconnInterface)(nil).Close))
 }
 
 // NatsConn mocks base method.
-func (m *MockConnInterface) NatsConn() *nats.Conn {
+func (m *MockconnInterface) NatsConn() *nats.Conn {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "NatsConn")
 	ret0, _ := ret[0].(*nats.Conn)
@@ -63,13 +63,13 @@ func (m *MockConnInterface) NatsConn() *nats.Conn {
 }
 
 // NatsConn indicates an expected call of NatsConn.
-func (mr *MockConnInterfaceMockRecorder) NatsConn() *gomock.Call {
+func (mr *MockconnInterfaceMockRecorder) NatsConn() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NatsConn", reflect.TypeOf((*MockConnInterface)(nil).NatsConn))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NatsConn", reflect.TypeOf((*MockconnInterface)(nil).NatsConn))
 }
 
 // Status mocks base method.
-func (m *MockConnInterface) Status() nats.Status {
+func (m *MockconnInterface) Status() nats.Status {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Status")
 	ret0, _ := ret[0].(nats.Status)
@@ -77,79 +77,79 @@ func (m *MockConnInterface) Status() nats.Status {
 }
 
 // Status indicates an expected call of Status.
-func (mr *MockConnInterfaceMockRecorder) Status() *gomock.Call {
+func (mr *MockconnInterfaceMockRecorder) Status() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Status", reflect.TypeOf((*MockConnInterface)(nil).Status))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Status", reflect.TypeOf((*MockconnInterface)(nil).Status))
 }
 
-// MockNATSConnector is a mock of NATSConnector interface.
-type MockNATSConnector struct {
+// MocknatsConnector is a mock of natsConnector interface.
+type MocknatsConnector struct {
 	ctrl     *gomock.Controller
-	recorder *MockNATSConnectorMockRecorder
+	recorder *MocknatsConnectorMockRecorder
 }
 
-// MockNATSConnectorMockRecorder is the mock recorder for MockNATSConnector.
-type MockNATSConnectorMockRecorder struct {
-	mock *MockNATSConnector
+// MocknatsConnectorMockRecorder is the mock recorder for MocknatsConnector.
+type MocknatsConnectorMockRecorder struct {
+	mock *MocknatsConnector
 }
 
-// NewMockNATSConnector creates a new mock instance.
-func NewMockNATSConnector(ctrl *gomock.Controller) *MockNATSConnector {
-	mock := &MockNATSConnector{ctrl: ctrl}
-	mock.recorder = &MockNATSConnectorMockRecorder{mock}
+// NewMocknatsConnector creates a new mock instance.
+func NewMocknatsConnector(ctrl *gomock.Controller) *MocknatsConnector {
+	mock := &MocknatsConnector{ctrl: ctrl}
+	mock.recorder = &MocknatsConnectorMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockNATSConnector) EXPECT() *MockNATSConnectorMockRecorder {
+func (m *MocknatsConnector) EXPECT() *MocknatsConnectorMockRecorder {
 	return m.recorder
 }
 
 // Connect mocks base method.
-func (m *MockNATSConnector) Connect(arg0 string, arg1 ...nats.Option) (ConnInterface, error) {
+func (m *MocknatsConnector) Connect(arg0 string, arg1 ...nats.Option) (connInterface, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{arg0}
 	for _, a := range arg1 {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "Connect", varargs...)
-	ret0, _ := ret[0].(ConnInterface)
+	ret0, _ := ret[0].(connInterface)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Connect indicates an expected call of Connect.
-func (mr *MockNATSConnectorMockRecorder) Connect(arg0 any, arg1 ...any) *gomock.Call {
+func (mr *MocknatsConnectorMockRecorder) Connect(arg0 any, arg1 ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	varargs := append([]any{arg0}, arg1...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Connect", reflect.TypeOf((*MockNATSConnector)(nil).Connect), varargs...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Connect", reflect.TypeOf((*MocknatsConnector)(nil).Connect), varargs...)
 }
 
-// MockJetStreamCreator is a mock of JetStreamCreator interface.
-type MockJetStreamCreator struct {
+// MockjetStreamCreator is a mock of jetStreamCreator interface.
+type MockjetStreamCreator struct {
 	ctrl     *gomock.Controller
-	recorder *MockJetStreamCreatorMockRecorder
+	recorder *MockjetStreamCreatorMockRecorder
 }
 
-// MockJetStreamCreatorMockRecorder is the mock recorder for MockJetStreamCreator.
-type MockJetStreamCreatorMockRecorder struct {
-	mock *MockJetStreamCreator
+// MockjetStreamCreatorMockRecorder is the mock recorder for MockjetStreamCreator.
+type MockjetStreamCreatorMockRecorder struct {
+	mock *MockjetStreamCreator
 }
 
-// NewMockJetStreamCreator creates a new mock instance.
-func NewMockJetStreamCreator(ctrl *gomock.Controller) *MockJetStreamCreator {
-	mock := &MockJetStreamCreator{ctrl: ctrl}
-	mock.recorder = &MockJetStreamCreatorMockRecorder{mock}
+// NewMockjetStreamCreator creates a new mock instance.
+func NewMockjetStreamCreator(ctrl *gomock.Controller) *MockjetStreamCreator {
+	mock := &MockjetStreamCreator{ctrl: ctrl}
+	mock.recorder = &MockjetStreamCreatorMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockJetStreamCreator) EXPECT() *MockJetStreamCreatorMockRecorder {
+func (m *MockjetStreamCreator) EXPECT() *MockjetStreamCreatorMockRecorder {
 	return m.recorder
 }
 
 // New mocks base method.
-func (m *MockJetStreamCreator) New(arg0 *nats.Conn) (jetstream.JetStream, error) {
+func (m *MockjetStreamCreator) New(arg0 *nats.Conn) (jetstream.JetStream, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "New", arg0)
 	ret0, _ := ret[0].(jetstream.JetStream)
@@ -158,36 +158,36 @@ func (m *MockJetStreamCreator) New(arg0 *nats.Conn) (jetstream.JetStream, error)
 }
 
 // New indicates an expected call of New.
-func (mr *MockJetStreamCreatorMockRecorder) New(arg0 any) *gomock.Call {
+func (mr *MockjetStreamCreatorMockRecorder) New(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "New", reflect.TypeOf((*MockJetStreamCreator)(nil).New), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "New", reflect.TypeOf((*MockjetStreamCreator)(nil).New), arg0)
 }
 
-// MockClient is a mock of Client interface.
-type MockClient struct {
+// MockjetStreamClient is a mock of jetStreamClient interface.
+type MockjetStreamClient struct {
 	ctrl     *gomock.Controller
-	recorder *MockClientMockRecorder
+	recorder *MockjetStreamClientMockRecorder
 }
 
-// MockClientMockRecorder is the mock recorder for MockClient.
-type MockClientMockRecorder struct {
-	mock *MockClient
+// MockjetStreamClientMockRecorder is the mock recorder for MockjetStreamClient.
+type MockjetStreamClientMockRecorder struct {
+	mock *MockjetStreamClient
 }
 
-// NewMockClient creates a new mock instance.
-func NewMockClient(ctrl *gomock.Controller) *MockClient {
-	mock := &MockClient{ctrl: ctrl}
-	mock.recorder = &MockClientMockRecorder{mock}
+// NewMockjetStreamClient creates a new mock instance.
+func NewMockjetStreamClient(ctrl *gomock.Controller) *MockjetStreamClient {
+	mock := &MockjetStreamClient{ctrl: ctrl}
+	mock.recorder = &MockjetStreamClientMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockClient) EXPECT() *MockClientMockRecorder {
+func (m *MockjetStreamClient) EXPECT() *MockjetStreamClientMockRecorder {
 	return m.recorder
 }
 
 // Close mocks base method.
-func (m *MockClient) Close(ctx context.Context) error {
+func (m *MockjetStreamClient) Close(ctx context.Context) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Close", ctx)
 	ret0, _ := ret[0].(error)
@@ -195,13 +195,13 @@ func (m *MockClient) Close(ctx context.Context) error {
 }
 
 // Close indicates an expected call of Close.
-func (mr *MockClientMockRecorder) Close(ctx any) *gomock.Call {
+func (mr *MockjetStreamClientMockRecorder) Close(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockClient)(nil).Close), ctx)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockjetStreamClient)(nil).Close), ctx)
 }
 
 // CreateOrUpdateStream mocks base method.
-func (m *MockClient) CreateOrUpdateStream(ctx context.Context, cfg jetstream.StreamConfig) (jetstream.Stream, error) {
+func (m *MockjetStreamClient) CreateOrUpdateStream(ctx context.Context, cfg jetstream.StreamConfig) (jetstream.Stream, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "CreateOrUpdateStream", ctx, cfg)
 	ret0, _ := ret[0].(jetstream.Stream)
@@ -210,13 +210,13 @@ func (m *MockClient) CreateOrUpdateStream(ctx context.Context, cfg jetstream.Str
 }
 
 // CreateOrUpdateStream indicates an expected call of CreateOrUpdateStream.
-func (mr *MockClientMockRecorder) CreateOrUpdateStream(ctx, cfg any) *gomock.Call {
+func (mr *MockjetStreamClientMockRecorder) CreateOrUpdateStream(ctx, cfg any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateOrUpdateStream", reflect.TypeOf((*MockClient)(nil).CreateOrUpdateStream), ctx, cfg)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateOrUpdateStream", reflect.TypeOf((*MockjetStreamClient)(nil).CreateOrUpdateStream), ctx, cfg)
 }
 
 // CreateStream mocks base method.
-func (m *MockClient) CreateStream(ctx context.Context, cfg StreamConfig) error {
+func (m *MockjetStreamClient) CreateStream(ctx context.Context, cfg StreamConfig) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "CreateStream", ctx, cfg)
 	ret0, _ := ret[0].(error)
@@ -224,13 +224,13 @@ func (m *MockClient) CreateStream(ctx context.Context, cfg StreamConfig) error {
 }
 
 // CreateStream indicates an expected call of CreateStream.
-func (mr *MockClientMockRecorder) CreateStream(ctx, cfg any) *gomock.Call {
+func (mr *MockjetStreamClientMockRecorder) CreateStream(ctx, cfg any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateStream", reflect.TypeOf((*MockClient)(nil).CreateStream), ctx, cfg)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateStream", reflect.TypeOf((*MockjetStreamClient)(nil).CreateStream), ctx, cfg)
 }
 
 // DeleteStream mocks base method.
-func (m *MockClient) DeleteStream(ctx context.Context, name string) error {
+func (m *MockjetStreamClient) DeleteStream(ctx context.Context, name string) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "DeleteStream", ctx, name)
 	ret0, _ := ret[0].(error)
@@ -238,13 +238,13 @@ func (m *MockClient) DeleteStream(ctx context.Context, name string) error {
 }
 
 // DeleteStream indicates an expected call of DeleteStream.
-func (mr *MockClientMockRecorder) DeleteStream(ctx, name any) *gomock.Call {
+func (mr *MockjetStreamClientMockRecorder) DeleteStream(ctx, name any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteStream", reflect.TypeOf((*MockClient)(nil).DeleteStream), ctx, name)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteStream", reflect.TypeOf((*MockjetStreamClient)(nil).DeleteStream), ctx, name)
 }
 
 // Health mocks base method.
-func (m *MockClient) Health() datasource.Health {
+func (m *MockjetStreamClient) Health() datasource.Health {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Health")
 	ret0, _ := ret[0].(datasource.Health)
@@ -252,13 +252,13 @@ func (m *MockClient) Health() datasource.Health {
 }
 
 // Health indicates an expected call of Health.
-func (mr *MockClientMockRecorder) Health() *gomock.Call {
+func (mr *MockjetStreamClientMockRecorder) Health() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Health", reflect.TypeOf((*MockClient)(nil).Health))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Health", reflect.TypeOf((*MockjetStreamClient)(nil).Health))
 }
 
 // Publish mocks base method.
-func (m *MockClient) Publish(ctx context.Context, subject string, message []byte) error {
+func (m *MockjetStreamClient) Publish(ctx context.Context, subject string, message []byte) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Publish", ctx, subject, message)
 	ret0, _ := ret[0].(error)
@@ -266,13 +266,13 @@ func (m *MockClient) Publish(ctx context.Context, subject string, message []byte
 }
 
 // Publish indicates an expected call of Publish.
-func (mr *MockClientMockRecorder) Publish(ctx, subject, message any) *gomock.Call {
+func (mr *MockjetStreamClientMockRecorder) Publish(ctx, subject, message any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Publish", reflect.TypeOf((*MockClient)(nil).Publish), ctx, subject, message)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Publish", reflect.TypeOf((*MockjetStreamClient)(nil).Publish), ctx, subject, message)
 }
 
 // Subscribe mocks base method.
-func (m *MockClient) Subscribe(ctx context.Context, subject string, handler MessageHandler) error {
+func (m *MockjetStreamClient) Subscribe(ctx context.Context, subject string, handler messageHandler) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Subscribe", ctx, subject, handler)
 	ret0, _ := ret[0].(error)
@@ -280,7 +280,7 @@ func (m *MockClient) Subscribe(ctx context.Context, subject string, handler Mess
 }
 
 // Subscribe indicates an expected call of Subscribe.
-func (mr *MockClientMockRecorder) Subscribe(ctx, subject, handler any) *gomock.Call {
+func (mr *MockjetStreamClientMockRecorder) Subscribe(ctx, subject, handler any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Subscribe", reflect.TypeOf((*MockClient)(nil).Subscribe), ctx, subject, handler)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Subscribe", reflect.TypeOf((*MockjetStreamClient)(nil).Subscribe), ctx, subject, handler)
 }

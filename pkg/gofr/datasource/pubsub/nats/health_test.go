@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	// NatsServer is the address of a local NATS server. Used for testing.
+	// NatsServer is the address of a local client server. Used for testing.
 	NatsServer = "nats://localhost:4222"
 )
 
@@ -40,9 +40,9 @@ func (m *mockJetStream) AccountInfo(_ context.Context) (*jetstream.AccountInfo, 
 	return &jetstream.AccountInfo{}, nil
 }
 
-// testNATSClient is a test-specific implementation of NATS.
+// testNATSClient is a test-specific implementation of client.
 type testNATSClient struct {
-	NATS
+	client
 	mockConn      *mockConn
 	mockJetStream *mockJetStream
 }
@@ -87,7 +87,7 @@ func (c *testNATSClient) Health() datasource.Health {
 
 func TestNATSClient_HealthStatusUP(t *testing.T) {
 	client := &testNATSClient{
-		NATS: NATS{
+		client: client{
 			Config: &Config{Server: NatsServer},
 			Logger: logging.NewMockLogger(logging.DEBUG),
 		},
@@ -107,7 +107,7 @@ func TestNATSClient_HealthStatusUP(t *testing.T) {
 
 func TestNATSClient_HealthStatusDown(t *testing.T) {
 	client := &testNATSClient{
-		NATS: NATS{
+		client: client{
 			Config: &Config{Server: NatsServer},
 			Logger: logging.NewMockLogger(logging.DEBUG),
 		},
@@ -125,7 +125,7 @@ func TestNATSClient_HealthStatusDown(t *testing.T) {
 
 func TestNATSClient_HealthJetStreamError(t *testing.T) {
 	client := &testNATSClient{
-		NATS: NATS{
+		client: client{
 			Config: &Config{Server: NatsServer},
 			Logger: logging.NewMockLogger(logging.DEBUG),
 		},
@@ -157,7 +157,7 @@ func defineHealthTestCases() []healthTestCase {
 	return []healthTestCase{
 		{
 			name: "HealthyConnection",
-			setupMocks: func(mockConn *MockConnInterface, mockJS *MockJetStream) {
+			setupMocks: func(mockConn *MockconnInterface, mockJS *MockJetStream) {
 				mockConn.EXPECT().Status().Return(nats.CONNECTED).Times(2)
 				mockJS.EXPECT().AccountInfo(gomock.Any()).Return(&jetstream.AccountInfo{}, nil).Times(2)
 			},
@@ -169,11 +169,11 @@ func defineHealthTestCases() []healthTestCase {
 				"jetstream_enabled": true,
 				"jetstream_status":  jetStreamStatusOK,
 			},
-			expectedLogs: []string{"NATS health check: Connected", "NATS health check: JetStream enabled"},
+			expectedLogs: []string{"client health check: Connected", "client health check: JetStream enabled"},
 		},
 		{
 			name: "DisconnectedStatus",
-			setupMocks: func(mockConn *MockConnInterface, _ *MockJetStream) {
+			setupMocks: func(mockConn *MockconnInterface, _ *MockJetStream) {
 				mockConn.EXPECT().Status().Return(nats.DISCONNECTED).Times(2)
 			},
 			expectedStatus: datasource.StatusDown,
@@ -183,11 +183,11 @@ func defineHealthTestCases() []healthTestCase {
 				"connection_status": jetStreamDisconnecting,
 				"jetstream_enabled": true,
 			},
-			expectedLogs: []string{"NATS health check: Disconnected"},
+			expectedLogs: []string{"client health check: Disconnected"},
 		},
 		{
 			name: "JetStreamError",
-			setupMocks: func(mockConn *MockConnInterface, mockJS *MockJetStream) {
+			setupMocks: func(mockConn *MockconnInterface, mockJS *MockJetStream) {
 				mockConn.EXPECT().Status().Return(nats.CONNECTED).Times(2)
 				mockJS.EXPECT().AccountInfo(gomock.Any()).Return(nil, errJetStream).Times(2)
 			},
@@ -199,11 +199,11 @@ func defineHealthTestCases() []healthTestCase {
 				"jetstream_enabled": true,
 				"jetstream_status":  jetStreamStatusError + ": " + errJetStream.Error(),
 			},
-			expectedLogs: []string{"NATS health check: Connected", "NATS health check: JetStream error"},
+			expectedLogs: []string{"client health check: Connected", "client health check: JetStream error"},
 		},
 		{
 			name: "NoJetStream",
-			setupMocks: func(mockConn *MockConnInterface, _ *MockJetStream) {
+			setupMocks: func(mockConn *MockconnInterface, _ *MockJetStream) {
 				mockConn.EXPECT().Status().Return(nats.CONNECTED).Times(2)
 			},
 			expectedStatus: datasource.StatusUp,
@@ -213,7 +213,7 @@ func defineHealthTestCases() []healthTestCase {
 				"connection_status": jetStreamConnected,
 				"jetstream_enabled": false,
 			},
-			expectedLogs: []string{"NATS health check: Connected", "NATS health check: JetStream not enabled"},
+			expectedLogs: []string{"client health check: Connected", "client health check: JetStream not enabled"},
 		},
 	}
 }
@@ -224,12 +224,12 @@ func runHealthTestCase(t *testing.T, tc healthTestCase) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockConn := NewMockConnInterface(ctrl)
+	mockConn := NewMockconnInterface(ctrl)
 	mockJS := NewMockJetStream(ctrl)
 
 	tc.setupMocks(mockConn, mockJS)
 
-	client := &NATS{
+	client := &client{
 		Conn:      mockConn,
 		JetStream: mockJS,
 		Config:    &Config{Server: NatsServer},
@@ -263,7 +263,7 @@ func getCombinedLogs(f func()) string {
 
 type healthTestCase struct {
 	name            string
-	setupMocks      func(*MockConnInterface, *MockJetStream)
+	setupMocks      func(*MockconnInterface, *MockJetStream)
 	expectedStatus  string
 	expectedDetails map[string]interface{}
 	expectedLogs    []string

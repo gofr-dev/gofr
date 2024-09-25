@@ -133,7 +133,7 @@ func (c *Container) initializePubSub(conf config.Config) {
 		c.initializeGoogle(conf)
 	case "MQTT":
 		c.PubSub = c.createMqttPubSub(conf)
-	case "NATS":
+	case "client":
 		c.initializeNATS(conf)
 	}
 }
@@ -183,7 +183,7 @@ func (c *Container) initializeNATS(conf config.Config) {
 
 	c.PubSub, err = nats.New(natsConfig, c.Logger, c.metricsManager)
 	if err != nil {
-		c.Logger.Errorf("failed to create NATS client: %v", err)
+		c.Logger.Errorf("failed to create client client: %v", err)
 	}
 }
 
