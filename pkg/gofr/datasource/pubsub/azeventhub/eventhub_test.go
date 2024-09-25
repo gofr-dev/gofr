@@ -18,7 +18,11 @@ func TestConnect(t *testing.T) {
 	logs := testutil.StderrOutputForFunc(func() {
 		client := New(getTestConfigs())
 
-		client.UseLogger(NewMockLogger(ctrl))
+		mockLogger := NewMockLogger(ctrl)
+
+		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+
+		client.UseLogger(mockLogger)
 		client.UseMetrics(NewMockMetrics(ctrl))
 
 		client.Connect()
@@ -63,6 +67,8 @@ func TestConnect_ProducerError(t *testing.T) {
 		client.UseLogger(mockLogger)
 		client.UseMetrics(NewMockMetrics(ctrl))
 
+		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+
 		mockLogger.EXPECT().Error("error occurred while creating producer client connection string " +
 			"contains an EntityPath. eventHub must be an empty string")
 
@@ -85,6 +91,8 @@ func TestConnect_ContainerError(t *testing.T) {
 
 		client.UseLogger(mockLogger)
 		client.UseMetrics(NewMockMetrics(ctrl))
+
+		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 
 		mockLogger.EXPECT().Error("error occurred while creating container client decode account key:" +
 			" illegal base64 data at input byte 16")

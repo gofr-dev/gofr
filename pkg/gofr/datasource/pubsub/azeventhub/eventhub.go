@@ -112,14 +112,17 @@ func (c *Client) Connect() {
 		return
 	}
 
+	c.logger.Debug("azure eventhub connection started using connection string")
+
 	producerClient, err := azeventhubs.NewProducerClientFromConnectionString(c.cfg.ConnectionString,
 		c.cfg.EventhubName, c.cfg.ProducerOptions)
 	if err != nil {
-		fmt.Println(err)
 		c.logger.Error(fmt.Sprintf("error occurred while creating producer client %v", err))
 
 		return
 	}
+
+	c.logger.Debug("azure eventhub producer client setup success")
 
 	containerClient, err := container.NewClientFromConnectionString(c.cfg.ContainerConnectionString, c.cfg.StorageContainerName,
 		c.cfg.StorageOptions)
@@ -129,6 +132,8 @@ func (c *Client) Connect() {
 		return
 	}
 
+	c.logger.Debug("azure eventhub container client setup success")
+
 	// create a checkpoint store that will be used by the event hub
 	checkpointStore, err := checkpoints.NewBlobStore(containerClient, c.cfg.BlobStoreOptions)
 	if err != nil {
@@ -136,6 +141,8 @@ func (c *Client) Connect() {
 
 		return
 	}
+
+	c.logger.Debug("azure eventhub blobstore client setup success")
 
 	// create a consumer client using a connection string to the namespace and the event hub
 	consumerClient, err := azeventhubs.NewConsumerClientFromConnectionString(c.cfg.ConnectionString, c.cfg.EventhubName,
@@ -146,6 +153,8 @@ func (c *Client) Connect() {
 		return
 	}
 
+	c.logger.Debug("azure eventhub consumer client setup success")
+
 	// create a processor to receive and process events
 	processor, err := azeventhubs.NewProcessor(consumerClient, checkpointStore, nil)
 	if err != nil {
@@ -153,6 +162,8 @@ func (c *Client) Connect() {
 
 		return
 	}
+
+	c.logger.Debug("azure eventhub processor setup success")
 
 	processorCtx, processorCancel := context.WithCancel(context.TODO())
 	c.processorCtx = processorCancel
@@ -163,6 +174,8 @@ func (c *Client) Connect() {
 
 			return
 		}
+
+		c.logger.Debug("azure eventhub processor running successfully")
 	}()
 
 	c.processor = processor
