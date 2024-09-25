@@ -18,7 +18,7 @@ func main() {
 	// Create a new application
 	a := gofr.New()
 
-	// HTTP service with default health check endpoint
+	//HTTP service with default health check endpoint
 	a.AddHTTPService("anotherService", "http://localhost:9000")
 
 	// Add all the routes
@@ -75,7 +75,7 @@ func TraceHandler(c *gofr.Context) (interface{}, error) {
 	}
 	wg.Wait()
 
-	// Call to Another service
+	//Call to Another service
 	resp, err := c.GetHTTPService("anotherService").Get(c, "redis", nil)
 	if err != nil {
 		return nil, err

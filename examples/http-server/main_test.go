@@ -39,7 +39,7 @@ func TestIntegration_SimpleAPIServer(t *testing.T) {
 	}
 
 	for i, tc := range tests {
-		req, _ := http.NewRequest(http.MethodGet, host+tc.path, http.NoBody)
+		req, _ := http.NewRequest(http.MethodGet, host+tc.path, nil)
 		req.Header.Set("content-type", "application/json")
 
 		c := http.Client{}
@@ -66,9 +66,6 @@ func TestIntegration_SimpleAPIServer(t *testing.T) {
 }
 
 func TestIntegration_SimpleAPIServer_Errors(t *testing.T) {
-	go main()
-	time.Sleep(100 * time.Millisecond)
-
 	tests := []struct {
 		desc       string
 		path       string
@@ -96,7 +93,7 @@ func TestIntegration_SimpleAPIServer_Errors(t *testing.T) {
 	}
 
 	for i, tc := range tests {
-		req, _ := http.NewRequest(http.MethodGet, host+tc.path, http.NoBody)
+		req, _ := http.NewRequest(http.MethodGet, host+tc.path, nil)
 		req.Header.Set("content-type", "application/json")
 
 		c := http.Client{}
@@ -123,19 +120,17 @@ func TestIntegration_SimpleAPIServer_Errors(t *testing.T) {
 }
 
 func TestIntegration_SimpleAPIServer_Health(t *testing.T) {
-	go main()
-	time.Sleep(100 * time.Millisecond)
 	tests := []struct {
 		desc       string
 		path       string
 		statusCode int
 	}{
 		{"health handler", "/.well-known/health", http.StatusOK}, // Health check should be added by the framework.
-		{"favicon handler", "/favicon.ico", http.StatusOK},       // Favicon should be added by the framework.
+		{"favicon handler", "/favicon.ico", http.StatusOK},       //Favicon should be added by the framework.
 	}
 
 	for i, tc := range tests {
-		req, _ := http.NewRequest(http.MethodGet, host+tc.path, http.NoBody)
+		req, _ := http.NewRequest(http.MethodGet, host+tc.path, nil)
 		req.Header.Set("content-type", "application/json")
 
 		c := http.Client{}
