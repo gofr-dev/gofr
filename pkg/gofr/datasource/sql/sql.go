@@ -18,6 +18,8 @@ import (
 const (
 	sqlite        = "sqlite"
 	defaultDBPort = 3306
+	success       = 1
+	failed        = 0
 )
 
 var errUnsupportedDialect = fmt.Errorf("unsupported db dialect; supported dialects are - mysql, postgres, sqlite")
@@ -33,6 +35,24 @@ type DBConfig struct {
 	SSLMode     string
 	MaxIdleConn int
 	MaxOpenConn int
+}
+
+func printConnectionSuccessLog(status string, config *DBConfig, logger datasource.Logger) {
+	if config.Dialect == sqlite {
+		logger.Debugf("%s to '%s' database", status, config.Database)
+	} else {
+		logger.Debugf("%s to '%s' user to '%s' database at '%s:%s'", status, config.User,
+			config.Database, config.HostName, config.Port)
+	}
+}
+
+func printConnectionFailiureLog(config *DBConfig, logger datasource.Logger, err error) {
+	if config.Dialect == sqlite {
+		logger.Errorf("could not connect to database '%s', error: %v", config.Database, err)
+	} else {
+		logger.Errorf("could not connect with '%s' user to '%s' database at '%s:%s', error: %v",
+			config.User, config.Database, config.HostName, config.Port, err)
+	}
 }
 
 func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *DB {
@@ -64,13 +84,16 @@ func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *D
 
 	database := &DB{config: dbConfig, logger: logger, metrics: metrics}
 
-	logger.Debugf("connecting to '%s' user to '%s' database at '%s:%s'", database.config.User,
-		database.config.Database, database.config.HostName, database.config.Port)
+	printConnectionSuccessLog("connecting", database.config, logger)
 
 	database.DB, err = sql.Open(otelRegisteredDialect, dbConnectionString)
 	if err != nil {
-		database.logger.Errorf("could not open connection with '%s' user to '%s' database at '%s:%s', error: %v",
-			database.config.User, database.config.Database, database.config.HostName, database.config.Port, err)
+		if database.config.Dialect == sqlite {
+			database.logger.Errorf("could not open connection '%s' database, error: %v", database.config.Database, err)
+		} else {
+			database.logger.Errorf("could not open connection with '%s' user to '%s' database at '%s:%s', error: %v",
+				database.config.User, database.config.Database, database.config.HostName, database.config.Port, err)
+		}
 
 		return database
 	}
@@ -94,14 +117,12 @@ func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *D
 
 func pingToTestConnection(database *DB) *DB {
 	if err := database.DB.Ping(); err != nil {
-		database.logger.Errorf("could not connect with '%s' user to '%s' database at '%s:%s', error: %v",
-			database.config.User, database.config.Database, database.config.HostName, database.config.Port, err)
+		printConnectionFailiureLog(database.config, database.logger, err)
 
 		return database
 	}
 
-	database.logger.Logf("connected to '%s' database at '%s:%s'", database.config.Database,
-		database.config.HostName, database.config.Port)
+	printConnectionSuccessLog("connected", database.config, database.logger)
 
 	return database
 }
@@ -116,14 +137,12 @@ func retryConnection(database *DB) {
 			for {
 				err := database.DB.Ping()
 				if err == nil {
-					database.logger.Logf("connected to '%s' database at '%s:%s'", database.config.Database,
-						database.config.HostName, database.config.Port)
+					printConnectionSuccessLog("connected", database.config, database.logger)
 
 					break
 				}
 
-				database.logger.Debugf("could not connect with '%s' user to '%s' database at '%s:%s', error: %v",
-					database.config.User, database.config.Database, database.config.HostName, database.config.Port, err)
+				printConnectionFailiureLog(database.config, database.logger, err)
 
 				time.Sleep(connRetryFrequencyInSeconds * time.Second)
 			}
