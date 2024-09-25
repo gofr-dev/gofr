@@ -11,6 +11,7 @@ import (
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel"
+
 	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 )
