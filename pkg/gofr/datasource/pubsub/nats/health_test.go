@@ -157,7 +157,7 @@ func defineHealthTestCases() []healthTestCase {
 	return []healthTestCase{
 		{
 			name: "HealthyConnection",
-			setupMocks: func(mockConn *MockconnInterface, mockJS *MockJetStream) {
+			setupMocks: func(mockConn *MockConnInterface, mockJS *MockJetStream) {
 				mockConn.EXPECT().Status().Return(nats.CONNECTED).Times(2)
 				mockJS.EXPECT().AccountInfo(gomock.Any()).Return(&jetstream.AccountInfo{}, nil).Times(2)
 			},
@@ -173,7 +173,7 @@ func defineHealthTestCases() []healthTestCase {
 		},
 		{
 			name: "DisconnectedStatus",
-			setupMocks: func(mockConn *MockconnInterface, _ *MockJetStream) {
+			setupMocks: func(mockConn *MockConnInterface, _ *MockJetStream) {
 				mockConn.EXPECT().Status().Return(nats.DISCONNECTED).Times(2)
 			},
 			expectedStatus: datasource.StatusDown,
@@ -187,7 +187,7 @@ func defineHealthTestCases() []healthTestCase {
 		},
 		{
 			name: "JetStreamError",
-			setupMocks: func(mockConn *MockconnInterface, mockJS *MockJetStream) {
+			setupMocks: func(mockConn *MockConnInterface, mockJS *MockJetStream) {
 				mockConn.EXPECT().Status().Return(nats.CONNECTED).Times(2)
 				mockJS.EXPECT().AccountInfo(gomock.Any()).Return(nil, errJetStream).Times(2)
 			},
@@ -203,7 +203,7 @@ func defineHealthTestCases() []healthTestCase {
 		},
 		{
 			name: "NoJetStream",
-			setupMocks: func(mockConn *MockconnInterface, _ *MockJetStream) {
+			setupMocks: func(mockConn *MockConnInterface, _ *MockJetStream) {
 				mockConn.EXPECT().Status().Return(nats.CONNECTED).Times(2)
 			},
 			expectedStatus: datasource.StatusUp,
@@ -224,7 +224,7 @@ func runHealthTestCase(t *testing.T, tc healthTestCase) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockConn := NewMockconnInterface(ctrl)
+	mockConn := NewMockConnInterface(ctrl)
 	mockJS := NewMockJetStream(ctrl)
 
 	tc.setupMocks(mockConn, mockJS)
@@ -263,7 +263,7 @@ func getCombinedLogs(f func()) string {
 
 type healthTestCase struct {
 	name            string
-	setupMocks      func(*MockconnInterface, *MockJetStream)
+	setupMocks      func(*MockConnInterface, *MockJetStream)
 	expectedStatus  string
 	expectedDetails map[string]interface{}
 	expectedLogs    []string

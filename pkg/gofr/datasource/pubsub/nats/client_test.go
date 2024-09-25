@@ -64,7 +64,7 @@ func TestNATSClient_Publish(t *testing.T) {
 	mockJS := NewMockJetStream(ctrl)
 	mockLogger := logging.NewMockLogger(logging.DEBUG)
 	mockMetrics := NewMockMetrics(ctrl)
-	mockConn := NewMockconnInterface(ctrl)
+	mockConn := NewMockConnInterface(ctrl)
 
 	conf := &Config{
 		Server: NatsServer,
@@ -109,7 +109,7 @@ func TestNATSClient_PublishError(t *testing.T) {
 	defer ctrl.Finish()
 
 	metrics := NewMockMetrics(ctrl)
-	mockConn := NewMockconnInterface(ctrl)
+	mockConn := NewMockConnInterface(ctrl)
 
 	config := &Config{
 		Server: NatsServer,
@@ -257,7 +257,7 @@ func TestNATSClient_Close(t *testing.T) {
 	mockJS := NewMockJetStream(ctrl)
 	mockLogger := logging.NewMockLogger(logging.DEBUG)
 	mockMetrics := NewMockMetrics(ctrl)
-	mockConn := NewMockconnInterface(ctrl)
+	mockConn := NewMockConnInterface(ctrl)
 
 	client := &client{
 		Conn:      mockConn,
@@ -566,7 +566,7 @@ func TestNATSClient_Publish_Error(t *testing.T) {
 	mockJS := NewMockJetStream(ctrl)
 	mockLogger := logging.NewMockLogger(logging.DEBUG)
 	mockMetrics := NewMockMetrics(ctrl)
-	mockConn := NewMockconnInterface(ctrl)
+	mockConn := NewMockConnInterface(ctrl)
 
 	client := &client{
 		Conn:      mockConn,
