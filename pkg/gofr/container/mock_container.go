@@ -7,10 +7,10 @@ import (
 	"testing"
 
 	"go.uber.org/mock/gomock"
+	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/datasource/file"
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 	"gofr.dev/pkg/gofr/datasource/sql"
-	h "gofr.dev/pkg/gofr/health"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/service"
 )
@@ -130,8 +130,8 @@ func (*MockPubSub) DeleteTopic(_ context.Context, _ string) error {
 	return nil
 }
 
-func (*MockPubSub) Health() h.Health {
-	return h.Health{}
+func (*MockPubSub) Health() datasource.Health {
+	return datasource.Health{}
 }
 
 func (*MockPubSub) Publish(_ context.Context, _ string, _ []byte) error {

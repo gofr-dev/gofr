@@ -6,7 +6,7 @@ import (
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
-	"gofr.dev/pkg/gofr/health"
+	"gofr.dev/pkg/gofr/datasource"
 )
 
 const (
@@ -20,9 +20,9 @@ const (
 )
 
 // Health returns the health status of the NATS client.
-func (n *NATSClient) Health() health.Health {
-	h := health.Health{
-		Status:  health.StatusUp,
+func (n *NATSClient) Health() datasource.Health {
+	h := datasource.Health{
+		Status:  datasource.StatusUp,
 		Details: make(map[string]interface{}),
 	}
 
@@ -30,7 +30,7 @@ func (n *NATSClient) Health() health.Health {
 
 	switch connectionStatus {
 	case nats.CONNECTING:
-		h.Status = health.StatusUp
+		h.Status = datasource.StatusUp
 		h.Details["connection_status"] = jetStreamConnecting
 
 		n.Logger.Debug("NATS health check: Connecting")
@@ -39,12 +39,12 @@ func (n *NATSClient) Health() health.Health {
 
 		n.Logger.Debug("NATS health check: Connected")
 	case nats.CLOSED, nats.DISCONNECTED, nats.RECONNECTING, nats.DRAINING_PUBS, nats.DRAINING_SUBS:
-		h.Status = health.StatusDown
+		h.Status = datasource.StatusDown
 		h.Details["connection_status"] = jetStreamDisconnecting
 
 		n.Logger.Error("NATS health check: Disconnected")
 	default:
-		h.Status = health.StatusDown
+		h.Status = datasource.StatusDown
 		h.Details["connection_status"] = connectionStatus.String()
 
 		n.Logger.Error("NATS health check: Unknown status", connectionStatus)

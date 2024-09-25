@@ -16,7 +16,7 @@ import (
 	nats "github.com/nats-io/nats.go"
 	jetstream "github.com/nats-io/nats.go/jetstream"
 	gomock "go.uber.org/mock/gomock"
-	health "gofr.dev/pkg/gofr/health"
+	datasource "gofr.dev/pkg/gofr/datasource"
 )
 
 // MockConnInterface is a mock of ConnInterface interface.
@@ -244,10 +244,10 @@ func (mr *MockClientMockRecorder) DeleteStream(ctx, name any) *gomock.Call {
 }
 
 // Health mocks base method.
-func (m *MockClient) Health() health.Health {
+func (m *MockClient) Health() datasource.Health {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Health")
-	ret0, _ := ret[0].(health.Health)
+	ret0, _ := ret[0].(datasource.Health)
 	return ret0
 }
 
