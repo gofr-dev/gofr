@@ -174,7 +174,7 @@ func (c *Client) Connect() {
 // Subscribe checks all partitions for the first available event and returns it.
 func (c *Client) Subscribe(ctx context.Context, topic string) (*pubsub.Message, error) {
 	if topic != c.cfg.EventhubName {
-		return nil, errors.New("topic should be same as eventhub name")
+		c.logger.Fatal("topic should be same as eventhub name")
 	}
 
 	var (

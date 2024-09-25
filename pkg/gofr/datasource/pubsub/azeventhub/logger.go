@@ -13,6 +13,7 @@ type Logger interface {
 	Log(args ...interface{})
 	Logf(pattern string, args ...interface{})
 	Error(args ...interface{})
+	Fatal(args ...interface{})
 	Errorf(pattern string, args ...interface{})
 }
 
