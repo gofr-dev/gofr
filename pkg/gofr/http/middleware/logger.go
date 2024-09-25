@@ -88,13 +88,14 @@ func getIDs(requestCtx context.Context) (ctx context.Context, correlationID, spa
 	return requestCtx, correlationID, spanID
 }
 
+// Logging is a middleware which logs response status and time in milliseconds along with other data.
 func Logging(logger logger) func(inner http.Handler) http.Handler {
 	return func(inner http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			start := time.Now()
 			srw := &StatusResponseWriter{ResponseWriter: w}
 
-			requestWithContext, correlationID, spanID := getCorrelationAndTraceIDs(r)
+			requestWithContext, correlationID, spanID := getCorrelationAndSpanID(r)
 
 			r = requestWithContext
 
@@ -111,13 +112,14 @@ func Logging(logger logger) func(inner http.Handler) http.Handler {
 	}
 }
 
-func getCorrelationAndTraceIDs(request *http.Request) (r *http.Request, correlationID, spanID string) {
+func getCorrelationAndSpanID(request *http.Request) (r *http.Request, correlationID, spanID string) {
 	correlationID = request.Header.Get("X-Correlation-ID")
 
 	var ctx context.Context
 
 	if correlationID == "" {
 		ctx, correlationID, spanID = getIDs(request.Context())
+		// returning deep copy of request with added context
 		request = request.Clone(ctx)
 	}
 
