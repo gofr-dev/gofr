@@ -10,27 +10,27 @@ import (
 
 //go:generate mockgen -destination=mock_client.go -package=nats -source=./interfaces.go Client,Subscription,ConnInterface
 
-// ConnInterface represents the main NATS connection.
-type ConnInterface interface {
+// connInterface represents the main client connection.
+type connInterface interface {
 	Status() nats.Status
 	Close()
 	NatsConn() *nats.Conn
 }
 
-// NATSConnector represents the main NATS connection.
-type NATSConnector interface {
-	Connect(string, ...nats.Option) (ConnInterface, error)
+// natsConnector represents the main client connection.
+type natsConnector interface {
+	Connect(string, ...nats.Option) (connInterface, error)
 }
 
-// JetStreamCreator represents the main NATS JetStream client.
-type JetStreamCreator interface {
+// jetStreamCreator represents the main client JetStream client.
+type jetStreamCreator interface {
 	New(*nats.Conn) (jetstream.JetStream, error)
 }
 
-// Client represents the main NATS JetStream client.
-type Client interface {
+// jetStreamClient represents the main client JetStream client.
+type jetStreamClient interface {
 	Publish(ctx context.Context, subject string, message []byte) error
-	Subscribe(ctx context.Context, subject string, handler MessageHandler) error
+	Subscribe(ctx context.Context, subject string, handler messageHandler) error
 	Close(ctx context.Context) error
 	DeleteStream(ctx context.Context, name string) error
 	CreateStream(ctx context.Context, cfg StreamConfig) error

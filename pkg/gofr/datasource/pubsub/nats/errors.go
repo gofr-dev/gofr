@@ -3,9 +3,9 @@ package nats
 import "errors"
 
 var (
-	// NATS Errors.
-	errConnectionStatus           = errors.New("unexpected NATS connection status")
-	errServerNotProvided          = errors.New("NATS server address not provided")
+	// client Errors.
+	errConnectionStatus           = errors.New("unexpected client connection status")
+	errServerNotProvided          = errors.New("client server address not provided")
 	errSubjectsNotProvided        = errors.New("subjects not provided")
 	errConsumerNotProvided        = errors.New("consumer name not provided")
 	errFailedToCreateStream       = errors.New("failed to create stream")
