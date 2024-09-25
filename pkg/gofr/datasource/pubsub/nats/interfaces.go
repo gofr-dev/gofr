@@ -5,7 +5,7 @@ import (
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
-	"gofr.dev/pkg/gofr/health"
+	"gofr.dev/pkg/gofr/datasource"
 )
 
 //go:generate mockgen -destination=mock_client.go -package=nats -source=./interfaces.go Client,Subscription,ConnInterface
@@ -35,5 +35,5 @@ type Client interface {
 	DeleteStream(ctx context.Context, name string) error
 	CreateStream(ctx context.Context, cfg StreamConfig) error
 	CreateOrUpdateStream(ctx context.Context, cfg jetstream.StreamConfig) (jetstream.Stream, error)
-	Health() health.Health
+	Health() datasource.Health
 }

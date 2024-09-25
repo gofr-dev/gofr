@@ -8,7 +8,7 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
-	"gofr.dev/pkg/gofr/health"
+	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/testutil"
 )
@@ -47,25 +47,25 @@ type testNATSClient struct {
 	mockJetStream *mockJetStream
 }
 
-func (c *testNATSClient) Health() health.Health {
-	h := health.Health{
+func (c *testNATSClient) Health() datasource.Health {
+	h := datasource.Health{
 		Details: make(map[string]interface{}),
 	}
 
-	h.Status = health.StatusUp
+	h.Status = datasource.StatusUp
 	connectionStatus := c.mockConn.Status()
 
 	switch connectionStatus {
 	case nats.CONNECTING:
-		h.Status = health.StatusUp
+		h.Status = datasource.StatusUp
 		h.Details["connection_status"] = jetStreamConnecting
 	case nats.CONNECTED:
 		h.Details["connection_status"] = jetStreamConnected
 	case nats.CLOSED, nats.DISCONNECTED, nats.RECONNECTING, nats.DRAINING_PUBS, nats.DRAINING_SUBS:
-		h.Status = health.StatusDown
+		h.Status = datasource.StatusDown
 		h.Details["connection_status"] = jetStreamDisconnecting
 	default:
-		h.Status = health.StatusDown
+		h.Status = datasource.StatusDown
 		h.Details["connection_status"] = connectionStatus.String()
 	}
 
@@ -97,7 +97,7 @@ func TestNATSClient_HealthStatusUP(t *testing.T) {
 
 	h := client.Health()
 
-	assert.Equal(t, health.StatusUp, h.Status)
+	assert.Equal(t, datasource.StatusUp, h.Status)
 	assert.Equal(t, NatsServer, h.Details["host"])
 	assert.Equal(t, natsBackend, h.Details["backend"])
 	assert.Equal(t, jetStreamConnected, h.Details["connection_status"])
@@ -116,7 +116,7 @@ func TestNATSClient_HealthStatusDown(t *testing.T) {
 
 	h := client.Health()
 
-	assert.Equal(t, health.StatusDown, h.Status)
+	assert.Equal(t, datasource.StatusDown, h.Status)
 	assert.Equal(t, NatsServer, h.Details["host"])
 	assert.Equal(t, natsBackend, h.Details["backend"])
 	assert.Equal(t, jetStreamDisconnecting, h.Details["connection_status"])
@@ -135,7 +135,7 @@ func TestNATSClient_HealthJetStreamError(t *testing.T) {
 
 	h := client.Health()
 
-	assert.Equal(t, health.StatusUp, h.Status)
+	assert.Equal(t, datasource.StatusUp, h.Status)
 	assert.Equal(t, NatsServer, h.Details["host"])
 	assert.Equal(t, natsBackend, h.Details["backend"])
 	assert.Equal(t, jetStreamConnected, h.Details["connection_status"])
@@ -161,7 +161,7 @@ func defineHealthTestCases() []healthTestCase {
 				mockConn.EXPECT().Status().Return(nats.CONNECTED).Times(2)
 				mockJS.EXPECT().AccountInfo(gomock.Any()).Return(&jetstream.AccountInfo{}, nil).Times(2)
 			},
-			expectedStatus: health.StatusUp,
+			expectedStatus: datasource.StatusUp,
 			expectedDetails: map[string]interface{}{
 				"host":              NatsServer,
 				"backend":           natsBackend,
@@ -176,7 +176,7 @@ func defineHealthTestCases() []healthTestCase {
 			setupMocks: func(mockConn *MockConnInterface, _ *MockJetStream) {
 				mockConn.EXPECT().Status().Return(nats.DISCONNECTED).Times(2)
 			},
-			expectedStatus: health.StatusDown,
+			expectedStatus: datasource.StatusDown,
 			expectedDetails: map[string]interface{}{
 				"host":              NatsServer,
 				"backend":           natsBackend,
@@ -191,7 +191,7 @@ func defineHealthTestCases() []healthTestCase {
 				mockConn.EXPECT().Status().Return(nats.CONNECTED).Times(2)
 				mockJS.EXPECT().AccountInfo(gomock.Any()).Return(nil, errJetStream).Times(2)
 			},
-			expectedStatus: health.StatusUp,
+			expectedStatus: datasource.StatusUp,
 			expectedDetails: map[string]interface{}{
 				"host":              NatsServer,
 				"backend":           natsBackend,
@@ -206,7 +206,7 @@ func defineHealthTestCases() []healthTestCase {
 			setupMocks: func(mockConn *MockConnInterface, _ *MockJetStream) {
 				mockConn.EXPECT().Status().Return(nats.CONNECTED).Times(2)
 			},
-			expectedStatus: health.StatusUp,
+			expectedStatus: datasource.StatusUp,
 			expectedDetails: map[string]interface{}{
 				"host":              NatsServer,
 				"backend":           natsBackend,
@@ -239,7 +239,7 @@ func runHealthTestCase(t *testing.T, tc healthTestCase) {
 		client.JetStream = nil
 	}
 
-	var h health.Health
+	var h datasource.Health
 
 	combinedLogs := getCombinedLogs(func() {
 		client.Logger = logging.NewMockLogger(logging.DEBUG)
@@ -264,7 +264,7 @@ func getCombinedLogs(f func()) string {
 type healthTestCase struct {
 	name            string
 	setupMocks      func(*MockConnInterface, *MockJetStream)
-	expectedStatus  health.Status
+	expectedStatus  string
 	expectedDetails map[string]interface{}
 	expectedLogs    []string
 }

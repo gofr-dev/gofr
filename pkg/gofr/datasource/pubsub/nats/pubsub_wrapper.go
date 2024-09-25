@@ -5,8 +5,8 @@ import (
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
+	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/datasource/pubsub"
-	"gofr.dev/pkg/gofr/health"
 )
 
 // PubSubWrapper adapts NATSClient to pubsub.Client.
@@ -65,13 +65,13 @@ func (w *PubSubWrapper) Close() error {
 }
 
 // Health returns the health status of the NATS client.
-func (w *PubSubWrapper) Health() health.Health {
-	status := health.StatusUp
+func (w *PubSubWrapper) Health() datasource.Health {
+	status := datasource.StatusUp
 	if w.Client.Conn.Status() != nats.CONNECTED {
-		status = health.StatusDown
+		status = datasource.StatusDown
 	}
 
-	return health.Health{
+	return datasource.Health{
 		Status: status,
 		Details: map[string]interface{}{
 			"server": w.Client.Config.Server,

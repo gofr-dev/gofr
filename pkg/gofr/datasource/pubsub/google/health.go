@@ -5,29 +5,28 @@ import (
 	"errors"
 	"time"
 
-	"gofr.dev/pkg/gofr/health"
 	"google.golang.org/api/iterator"
 
 	"gofr.dev/pkg/gofr/datasource"
 )
 
-func (g *googleClient) Health() (h health.Health) {
-	h.Details = make(map[string]interface{})
+func (g *googleClient) Health() (health datasource.Health) {
+	health.Details = make(map[string]interface{})
 
 	var writerStatus, readerStatus string
 
-	h.Status = datasource.StatusUp
-	h.Details["projectID"] = g.Config.ProjectID
-	h.Details["backend"] = "GOOGLE"
+	health.Status = datasource.StatusUp
+	health.Details["projectID"] = g.Config.ProjectID
+	health.Details["backend"] = "GOOGLE"
 
-	writerStatus, h.Details["writers"] = g.getWriterDetails()
-	readerStatus, h.Details["readers"] = g.getReaderDetails()
+	writerStatus, health.Details["writers"] = g.getWriterDetails()
+	readerStatus, health.Details["readers"] = g.getReaderDetails()
 
 	if readerStatus == datasource.StatusDown || writerStatus == datasource.StatusDown {
-		h.Status = datasource.StatusDown
+		health.Status = datasource.StatusDown
 	}
 
-	return h
+	return health
 }
 
 //nolint:dupl // getWriterDetails provides the publishing details for current google publishers.
