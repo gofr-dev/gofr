@@ -190,11 +190,14 @@ func (c *Client) Subscribe(ctx context.Context, topic string) (*pubsub.Message, 
 			break
 		}
 
+		c.metrics.IncrementCounter(ctx, "app_pubsub_subscribe_total_count", "topic", topic, "subscription_name", partitionClient.PartitionID())
+
 		msg, err = c.processEvents(ctx, partitionClient)
 		if err != nil {
-			fmt.Println(err)
 			return nil, err
 		}
+
+		c.metrics.IncrementCounter(ctx, "app_pubsub_subscribe_success_count", "topic", topic, "subscription_name", partitionClient.PartitionID())
 
 		return msg, nil
 	}
@@ -242,6 +245,8 @@ func (c *Client) Publish(ctx context.Context, topic string, message []byte) erro
 		return errors.New("topic should be same as eventhub name")
 	}
 
+	c.metrics.IncrementCounter(ctx, "app_pubsub_publish_total_count", "topic", topic)
+
 	newBatchOptions := &azeventhubs.EventDataBatchOptions{}
 
 	batch, err := c.producer.NewEventDataBatch(ctx, newBatchOptions)
@@ -256,6 +261,8 @@ func (c *Client) Publish(ctx context.Context, topic string, message []byte) erro
 	for i := 0; i < len(data); i++ {
 		err = batch.AddEventData(data[i], nil)
 	}
+
+	c.metrics.IncrementCounter(ctx, "app_pubsub_publish_success_count", "topic", topic)
 
 	// send the batch of events to the event hub
 	return c.producer.SendEventDataBatch(ctx, batch, nil)
