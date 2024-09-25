@@ -9,7 +9,6 @@ import (
 
 	_ "github.com/go-sql-driver/mysql" // This is required to be blank import
 	"gofr.dev/pkg/gofr/datasource/pubsub/nats"
-	"gofr.dev/pkg/gofr/websocket"
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/datasource/file"
@@ -25,6 +24,7 @@ import (
 	"gofr.dev/pkg/gofr/metrics/exporters"
 	"gofr.dev/pkg/gofr/service"
 	"gofr.dev/pkg/gofr/version"
+	"gofr.dev/pkg/gofr/websocket"
 )
 
 // Container is a collection of all common application level concerns. Things like Logger, Connection Pool for Redis
