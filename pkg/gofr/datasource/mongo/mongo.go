@@ -102,29 +102,18 @@ func (c *Client) Connect() {
 
 // InsertOne inserts a single document into the specified collection.
 func (c *Client) InsertOne(ctx context.Context, collection string, document interface{}) (interface{}, error) {
-	defer c.sendOperationStats(&QueryLog{Query: "insertOne", Collection: collection, Filter: document}, time.Now())
-
-	start := time.Now()
-
 	tracedCtx, span := c.addTraces(ctx, "insert", collection)
 
 	result, err := c.Database.Collection(collection).InsertOne(tracedCtx, document)
-	duration := time.Since(start).Microseconds()
 
-	if span != nil {
-		defer span.End()
-		span.SetAttributes(attribute.Int64("mongo.insert.duration", duration))
-	}
+	defer c.sendOperationStats(&QueryLog{Query: "insertOne", Collection: collection, Filter: document}, time.Now(),
+		"insert", span)
 
 	return result, err
 }
 
 // InsertMany inserts multiple documents into the specified collection.
 func (c *Client) InsertMany(ctx context.Context, collection string, documents []interface{}) ([]interface{}, error) {
-	defer c.sendOperationStats(&QueryLog{Query: "insertMany", Collection: collection, Filter: documents}, time.Now())
-
-	start := time.Now()
-
 	tracedCtx, span := c.addTraces(ctx, "insertMany", collection)
 
 	res, err := c.Database.Collection(collection).InsertMany(tracedCtx, documents)
@@ -132,22 +121,14 @@ func (c *Client) InsertMany(ctx context.Context, collection string, documents []
 		return nil, err
 	}
 
-	duration := time.Since(start).Microseconds()
-
-	if span != nil {
-		defer span.End()
-		span.SetAttributes(attribute.Int64("mongo.insertMany.duration", duration))
-	}
+	defer c.sendOperationStats(&QueryLog{Query: "insertMany", Collection: collection, Filter: documents}, time.Now(),
+		"insertMany", span)
 
 	return res.InsertedIDs, nil
 }
 
 // Find retrieves documents from the specified collection based on the provided filter and binds response to result.
 func (c *Client) Find(ctx context.Context, collection string, filter, results interface{}) error {
-	defer c.sendOperationStats(&QueryLog{Query: "find", Collection: collection, Filter: filter}, time.Now())
-
-	start := time.Now()
-
 	tracedCtx, span := c.addTraces(ctx, "find", collection)
 
 	cur, err := c.Database.Collection(collection).Find(tracedCtx, filter)
@@ -161,22 +142,14 @@ func (c *Client) Find(ctx context.Context, collection string, filter, results in
 		return err
 	}
 
-	duration := time.Since(start).Microseconds()
-
-	if span != nil {
-		defer span.End()
-		span.SetAttributes(attribute.Int64("mongo.find.duration", duration))
-	}
+	defer c.sendOperationStats(&QueryLog{Query: "find", Collection: collection, Filter: filter}, time.Now(), "find",
+		span)
 
 	return nil
 }
 
 // FindOne retrieves a single document from the specified collection based on the provided filter and binds response to result.
 func (c *Client) FindOne(ctx context.Context, collection string, filter, result interface{}) error {
-	defer c.sendOperationStats(&QueryLog{Query: "findOne", Collection: collection, Filter: filter}, time.Now())
-
-	start := time.Now()
-
 	tracedCtx, span := c.addTraces(ctx, "findOne", collection)
 
 	b, err := c.Database.Collection(collection).FindOne(tracedCtx, filter).Raw()
@@ -184,102 +157,62 @@ func (c *Client) FindOne(ctx context.Context, collection string, filter, result 
 		return err
 	}
 
-	duration := time.Since(start).Microseconds()
-
-	if span != nil {
-		defer span.End()
-		span.SetAttributes(attribute.Int64("mongo.findOne.duration", duration))
-	}
+	defer c.sendOperationStats(&QueryLog{Query: "findOne", Collection: collection, Filter: filter}, time.Now(),
+		"findOne", span)
 
 	return bson.Unmarshal(b, result)
 }
 
 // UpdateByID updates a document in the specified collection by its ID.
 func (c *Client) UpdateByID(ctx context.Context, collection string, id, update interface{}) (int64, error) {
-	defer c.sendOperationStats(&QueryLog{Query: "updateByID", Collection: collection, ID: id, Update: update}, time.Now())
-
-	start := time.Now()
-
 	tracedCtx, span := c.addTraces(ctx, "updateByID", collection)
 
 	res, err := c.Database.Collection(collection).UpdateByID(tracedCtx, id, update)
 
-	duration := time.Since(start).Microseconds()
-
-	if span != nil {
-		defer span.End()
-		span.SetAttributes(attribute.Int64("mongo.updateByID.duration", duration))
-	}
+	defer c.sendOperationStats(&QueryLog{Query: "updateByID", Collection: collection, ID: id, Update: update}, time.Now(),
+		"updateByID", span)
 
 	return res.ModifiedCount, err
 }
 
 // UpdateOne updates a single document in the specified collection based on the provided filter.
 func (c *Client) UpdateOne(ctx context.Context, collection string, filter, update interface{}) error {
-	defer c.sendOperationStats(&QueryLog{Query: "updateOne", Collection: collection, Filter: filter, Update: update}, time.Now())
-
-	start := time.Now()
-
 	tracedCtx, span := c.addTraces(ctx, "updateOne", collection)
 
 	_, err := c.Database.Collection(collection).UpdateOne(tracedCtx, filter, update)
 
-	duration := time.Since(start).Microseconds()
-
-	if span != nil {
-		defer span.End()
-		span.SetAttributes(attribute.Int64("mongo.updateOne.duration", duration))
-	}
+	defer c.sendOperationStats(&QueryLog{Query: "updateOne", Collection: collection, Filter: filter, Update: update},
+		time.Now(), "updateOne", span)
 
 	return err
 }
 
 // UpdateMany updates multiple documents in the specified collection based on the provided filter.
 func (c *Client) UpdateMany(ctx context.Context, collection string, filter, update interface{}) (int64, error) {
-	defer c.sendOperationStats(&QueryLog{Query: "updateMany", Collection: collection, Filter: filter, Update: update}, time.Now())
-
-	start := time.Now()
-
 	tracedCtx, span := c.addTraces(ctx, "updateMany", collection)
 
 	res, err := c.Database.Collection(collection).UpdateMany(tracedCtx, filter, update)
 
-	duration := time.Since(start).Microseconds()
-
-	if span != nil {
-		defer span.End()
-		span.SetAttributes(attribute.Int64("mongo.updateMany.duration", duration))
-	}
+	defer c.sendOperationStats(&QueryLog{Query: "updateMany", Collection: collection, Filter: filter, Update: update}, time.Now(),
+		"updateMany", span)
 
 	return res.ModifiedCount, err
 }
 
 // CountDocuments counts the number of documents in the specified collection based on the provided filter.
 func (c *Client) CountDocuments(ctx context.Context, collection string, filter interface{}) (int64, error) {
-	defer c.sendOperationStats(&QueryLog{Query: "countDocuments", Collection: collection, Filter: filter}, time.Now())
-
-	start := time.Now()
-
 	tracedCtx, span := c.addTraces(ctx, "countDocuments", collection)
 
 	result, err := c.Database.Collection(collection).CountDocuments(tracedCtx, filter)
 
-	duration := time.Since(start).Microseconds()
-
-	if span != nil {
-		defer span.End()
-		span.SetAttributes(attribute.Int64("mongo.countDocuments.duration", duration))
-	}
+	defer c.sendOperationStats(&QueryLog{Query: "countDocuments", Collection: collection, Filter: filter}, time.Now(),
+		"countDocuments", span)
 
 	return result, err
 }
 
 // DeleteOne deletes a single document from the specified collection based on the provided filter.
 func (c *Client) DeleteOne(ctx context.Context, collection string, filter interface{}) (int64, error) {
-	defer c.sendOperationStats(&QueryLog{Query: "deleteOne", Collection: collection, Filter: filter}, time.Now())
-
-	start := time.Now()
-
 	tracedCtx, span := c.addTraces(ctx, "deleteOne", collection)
 
 	res, err := c.Database.Collection(collection).DeleteOne(tracedCtx, filter)
@@ -287,22 +220,14 @@ func (c *Client) DeleteOne(ctx context.Context, collection string, filter interf
 		return 0, err
 	}
 
-	duration := time.Since(start).Microseconds()
-
-	if span != nil {
-		defer span.End()
-		span.SetAttributes(attribute.Int64("mongo.deleteOne.duration", duration))
-	}
+	defer c.sendOperationStats(&QueryLog{Query: "deleteOne", Collection: collection, Filter: filter}, time.Now(),
+		"deleteOne", span)
 
 	return res.DeletedCount, nil
 }
 
 // DeleteMany deletes multiple documents from the specified collection based on the provided filter.
 func (c *Client) DeleteMany(ctx context.Context, collection string, filter interface{}) (int64, error) {
-	defer c.sendOperationStats(&QueryLog{Query: "deleteMany", Collection: collection, Filter: filter}, time.Now())
-
-	start := time.Now()
-
 	tracedCtx, span := c.addTraces(ctx, "deleteMany", collection)
 
 	res, err := c.Database.Collection(collection).DeleteMany(tracedCtx, filter)
@@ -310,57 +235,36 @@ func (c *Client) DeleteMany(ctx context.Context, collection string, filter inter
 		return 0, err
 	}
 
-	duration := time.Since(start).Microseconds()
-
-	if span != nil {
-		defer span.End()
-		span.SetAttributes(attribute.Int64("mongo.deleteMany.duration", duration))
-	}
+	defer c.sendOperationStats(&QueryLog{Query: "deleteMany", Collection: collection, Filter: filter}, time.Now(),
+		"deleteMany", span)
 
 	return res.DeletedCount, nil
 }
 
 // Drop drops the specified collection from the database.
 func (c *Client) Drop(ctx context.Context, collection string) error {
-	defer c.sendOperationStats(&QueryLog{Query: "drop", Collection: collection}, time.Now())
-
-	start := time.Now()
-
 	tracedCtx, span := c.addTraces(ctx, "drop", collection)
 
 	err := c.Database.Collection(collection).Drop(tracedCtx)
 
-	duration := time.Since(start).Microseconds()
-
-	if span != nil {
-		defer span.End()
-		span.SetAttributes(attribute.Int64("mongo.drop.duration", duration))
-	}
+	defer c.sendOperationStats(&QueryLog{Query: "drop", Collection: collection}, time.Now(), "drop", span)
 
 	return err
 }
 
 // CreateCollection creates the specified collection in the database.
 func (c *Client) CreateCollection(ctx context.Context, name string) error {
-	defer c.sendOperationStats(&QueryLog{Query: "createCollection", Collection: name}, time.Now())
-
-	start := time.Now()
-
 	tracedCtx, span := c.addTraces(ctx, "createCollection", name)
 
 	err := c.Database.CreateCollection(tracedCtx, name)
 
-	duration := time.Since(start).Microseconds()
-
-	if span != nil {
-		defer span.End()
-		span.SetAttributes(attribute.Int64("mongo.createCollection.duration", duration))
-	}
+	defer c.sendOperationStats(&QueryLog{Query: "createCollection", Collection: name}, time.Now(), "createCollection",
+		span)
 
 	return err
 }
 
-func (c *Client) sendOperationStats(ql *QueryLog, startTime time.Time) {
+func (c *Client) sendOperationStats(ql *QueryLog, startTime time.Time, method string, span trace.Span) {
 	duration := time.Since(startTime).Milliseconds()
 
 	ql.Duration = duration
@@ -369,6 +273,11 @@ func (c *Client) sendOperationStats(ql *QueryLog, startTime time.Time) {
 
 	c.metrics.RecordHistogram(context.Background(), "app_mongo_stats", float64(duration), "hostname", c.uri,
 		"database", c.database, "type", ql.Query)
+
+	if span != nil {
+		defer span.End()
+		span.SetAttributes(attribute.Int64(fmt.Sprintf("mongo.%v.duration", method), duration))
+	}
 }
 
 type Health struct {
@@ -398,7 +307,7 @@ func (c *Client) HealthCheck(ctx context.Context) (any, error) {
 }
 
 func (c *Client) StartSession() (interface{}, error) {
-	defer c.sendOperationStats(&QueryLog{Query: "startSession"}, time.Now())
+	defer c.sendOperationStats(&QueryLog{Query: "startSession"}, time.Now(), "", nil)
 
 	s, err := c.Client().StartSession()
 	ses := &session{s}
