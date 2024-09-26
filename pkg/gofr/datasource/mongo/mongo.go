@@ -73,6 +73,13 @@ func (c *Client) UseMetrics(metrics interface{}) {
 	}
 }
 
+// UseTracer sets the tracer for the MongoDB client.
+func (c *Client) UseTracer(tracer any) {
+	if tracer, ok := tracer.(trace.Tracer); ok {
+		c.tracer = tracer
+	}
+}
+
 // Connect establishes a connection to MongoDB and registers metrics using the provided configuration when the client was Created.
 func (c *Client) Connect() {
 	c.logger.Logf("connecting to mongoDB at %v to database %v", c.config.URI, c.config.Database)
