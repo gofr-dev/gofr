@@ -105,10 +105,16 @@ func (c *Client) InsertOne(ctx context.Context, collection string, document inte
 	defer c.sendOperationStats(&QueryLog{Query: "insertOne", Collection: collection, Filter: document}, time.Now())
 
 	start := time.Now()
-	result, err := c.Database.Collection(collection).InsertOne(ctx, document)
+
+	tracedCtx, span := c.addTraces(ctx, "insert", collection)
+
+	result, err := c.Database.Collection(collection).InsertOne(tracedCtx, document)
 	duration := time.Since(start).Microseconds()
 
-	defer c.addTraces(ctx, "insert", collection, duration)
+	if span != nil {
+		defer span.End()
+		span.SetAttributes(attribute.Int64("mongo.insert.duration", duration))
+	}
 
 	return result, err
 }
@@ -119,14 +125,19 @@ func (c *Client) InsertMany(ctx context.Context, collection string, documents []
 
 	start := time.Now()
 
-	res, err := c.Database.Collection(collection).InsertMany(ctx, documents)
+	tracedCtx, span := c.addTraces(ctx, "insertMany", collection)
+
+	res, err := c.Database.Collection(collection).InsertMany(tracedCtx, documents)
 	if err != nil {
 		return nil, err
 	}
 
 	duration := time.Since(start).Microseconds()
 
-	defer c.addTraces(ctx, "insertMany", collection, duration)
+	if span != nil {
+		defer span.End()
+		span.SetAttributes(attribute.Int64("mongo.insertMany.duration", duration))
+	}
 
 	return res.InsertedIDs, nil
 }
@@ -137,7 +148,9 @@ func (c *Client) Find(ctx context.Context, collection string, filter, results in
 
 	start := time.Now()
 
-	cur, err := c.Database.Collection(collection).Find(ctx, filter)
+	tracedCtx, span := c.addTraces(ctx, "find", collection)
+
+	cur, err := c.Database.Collection(collection).Find(tracedCtx, filter)
 	if err != nil {
 		return err
 	}
@@ -150,7 +163,10 @@ func (c *Client) Find(ctx context.Context, collection string, filter, results in
 
 	duration := time.Since(start).Microseconds()
 
-	defer c.addTraces(ctx, "find", collection, duration)
+	if span != nil {
+		defer span.End()
+		span.SetAttributes(attribute.Int64("mongo.find.duration", duration))
+	}
 
 	return nil
 }
@@ -161,14 +177,19 @@ func (c *Client) FindOne(ctx context.Context, collection string, filter, result 
 
 	start := time.Now()
 
-	b, err := c.Database.Collection(collection).FindOne(ctx, filter).Raw()
+	tracedCtx, span := c.addTraces(ctx, "findOne", collection)
+
+	b, err := c.Database.Collection(collection).FindOne(tracedCtx, filter).Raw()
 	if err != nil {
 		return err
 	}
 
 	duration := time.Since(start).Microseconds()
 
-	defer c.addTraces(ctx, "findOne", collection, duration)
+	if span != nil {
+		defer span.End()
+		span.SetAttributes(attribute.Int64("mongo.findOne.duration", duration))
+	}
 
 	return bson.Unmarshal(b, result)
 }
@@ -179,11 +200,16 @@ func (c *Client) UpdateByID(ctx context.Context, collection string, id, update i
 
 	start := time.Now()
 
-	res, err := c.Database.Collection(collection).UpdateByID(ctx, id, update)
+	tracedCtx, span := c.addTraces(ctx, "updateByID", collection)
+
+	res, err := c.Database.Collection(collection).UpdateByID(tracedCtx, id, update)
 
 	duration := time.Since(start).Microseconds()
 
-	defer c.addTraces(ctx, "updateByID", collection, duration)
+	if span != nil {
+		defer span.End()
+		span.SetAttributes(attribute.Int64("mongo.updateByID.duration", duration))
+	}
 
 	return res.ModifiedCount, err
 }
@@ -194,11 +220,16 @@ func (c *Client) UpdateOne(ctx context.Context, collection string, filter, updat
 
 	start := time.Now()
 
-	_, err := c.Database.Collection(collection).UpdateOne(ctx, filter, update)
+	tracedCtx, span := c.addTraces(ctx, "updateOne", collection)
+
+	_, err := c.Database.Collection(collection).UpdateOne(tracedCtx, filter, update)
 
 	duration := time.Since(start).Microseconds()
 
-	defer c.addTraces(ctx, "updateOne", collection, duration)
+	if span != nil {
+		defer span.End()
+		span.SetAttributes(attribute.Int64("mongo.updateOne.duration", duration))
+	}
 
 	return err
 }
@@ -209,11 +240,16 @@ func (c *Client) UpdateMany(ctx context.Context, collection string, filter, upda
 
 	start := time.Now()
 
-	res, err := c.Database.Collection(collection).UpdateMany(ctx, filter, update)
+	tracedCtx, span := c.addTraces(ctx, "updateMany", collection)
+
+	res, err := c.Database.Collection(collection).UpdateMany(tracedCtx, filter, update)
 
 	duration := time.Since(start).Microseconds()
 
-	defer c.addTraces(ctx, "updateMany", collection, duration)
+	if span != nil {
+		defer span.End()
+		span.SetAttributes(attribute.Int64("mongo.updateMany.duration", duration))
+	}
 
 	return res.ModifiedCount, err
 }
@@ -224,11 +260,16 @@ func (c *Client) CountDocuments(ctx context.Context, collection string, filter i
 
 	start := time.Now()
 
-	result, err := c.Database.Collection(collection).CountDocuments(ctx, filter)
+	tracedCtx, span := c.addTraces(ctx, "countDocuments", collection)
+
+	result, err := c.Database.Collection(collection).CountDocuments(tracedCtx, filter)
 
 	duration := time.Since(start).Microseconds()
 
-	defer c.addTraces(ctx, "countDocuments", collection, duration)
+	if span != nil {
+		defer span.End()
+		span.SetAttributes(attribute.Int64("mongo.countDocuments.duration", duration))
+	}
 
 	return result, err
 }
@@ -239,14 +280,19 @@ func (c *Client) DeleteOne(ctx context.Context, collection string, filter interf
 
 	start := time.Now()
 
-	res, err := c.Database.Collection(collection).DeleteOne(ctx, filter)
+	tracedCtx, span := c.addTraces(ctx, "deleteOne", collection)
+
+	res, err := c.Database.Collection(collection).DeleteOne(tracedCtx, filter)
 	if err != nil {
 		return 0, err
 	}
 
 	duration := time.Since(start).Microseconds()
 
-	defer c.addTraces(ctx, "deleteOne", collection, duration)
+	if span != nil {
+		defer span.End()
+		span.SetAttributes(attribute.Int64("mongo.deleteOne.duration", duration))
+	}
 
 	return res.DeletedCount, nil
 }
@@ -257,14 +303,19 @@ func (c *Client) DeleteMany(ctx context.Context, collection string, filter inter
 
 	start := time.Now()
 
-	res, err := c.Database.Collection(collection).DeleteMany(ctx, filter)
+	tracedCtx, span := c.addTraces(ctx, "deleteMany", collection)
+
+	res, err := c.Database.Collection(collection).DeleteMany(tracedCtx, filter)
 	if err != nil {
 		return 0, err
 	}
 
 	duration := time.Since(start).Microseconds()
 
-	defer c.addTraces(ctx, "deleteMany", collection, duration)
+	if span != nil {
+		defer span.End()
+		span.SetAttributes(attribute.Int64("mongo.deleteMany.duration", duration))
+	}
 
 	return res.DeletedCount, nil
 }
@@ -275,11 +326,16 @@ func (c *Client) Drop(ctx context.Context, collection string) error {
 
 	start := time.Now()
 
-	err := c.Database.Collection(collection).Drop(ctx)
+	tracedCtx, span := c.addTraces(ctx, "drop", collection)
+
+	err := c.Database.Collection(collection).Drop(tracedCtx)
 
 	duration := time.Since(start).Microseconds()
 
-	defer c.addTraces(ctx, "drop", collection, duration)
+	if span != nil {
+		defer span.End()
+		span.SetAttributes(attribute.Int64("mongo.drop.duration", duration))
+	}
 
 	return err
 }
@@ -290,11 +346,16 @@ func (c *Client) CreateCollection(ctx context.Context, name string) error {
 
 	start := time.Now()
 
-	err := c.Database.CreateCollection(ctx, name)
+	tracedCtx, span := c.addTraces(ctx, "createCollection", name)
+
+	err := c.Database.CreateCollection(tracedCtx, name)
 
 	duration := time.Since(start).Microseconds()
 
-	defer c.addTraces(ctx, "createCollection", name, duration)
+	if span != nil {
+		defer span.End()
+		span.SetAttributes(attribute.Int64("mongo.createCollection.duration", duration))
+	}
 
 	return err
 }
@@ -360,14 +421,16 @@ type Transaction interface {
 	EndSession(context.Context)
 }
 
-func (c *Client) addTraces(ctx context.Context, method, collection string, duration int64) {
+func (c *Client) addTraces(ctx context.Context, method, collection string) (context.Context, trace.Span) {
 	if c.tracer != nil {
-		_, span := c.tracer.Start(ctx, fmt.Sprintf("mongodb-%v", method))
-		defer span.End()
+		contextWithTrace, span := c.tracer.Start(ctx, fmt.Sprintf("mongodb-%v", method))
 
 		span.SetAttributes(
 			attribute.String("mongo.collection", collection),
-			attribute.Int64(fmt.Sprintf("mongo.%v.duration", method), duration),
 		)
+
+		return contextWithTrace, span
 	}
+
+	return ctx, nil
 }
