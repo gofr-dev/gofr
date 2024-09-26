@@ -40,6 +40,7 @@ func TestApp_AddMongo(t *testing.T) {
 
 		mock.EXPECT().UseLogger(app.Logger())
 		mock.EXPECT().UseMetrics(app.Metrics())
+		mock.EXPECT().UseTracer(gomock.Any())
 		mock.EXPECT().Connect()
 
 		app.AddMongo(mock)
