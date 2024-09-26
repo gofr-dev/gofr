@@ -1,16 +1,37 @@
 package azeventhub
 
-//func Test_PrettyPrint(t *testing.T) {
-//	queryLog := QueryLog{
-//		Type:     "GET",
-//		Duration: 12345,
-//	}
-//
-//	logger := NewMockLogger(gomock.NewController(t))
-//
-//	logger.EXPECT().Log(gomock.Any())
-//
-//	queryLog.PrettyPrint(logger)
-//
-//	require.True(t, logger.ctrl.Satisfied(), "Test_PrettyPrint Failed!")
-//}
+import (
+	"bytes"
+	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
+	"testing"
+)
+
+func Test_PrettyPrint(t *testing.T) {
+	queryLog := Log{
+		Mode:          "PUB",
+		MessageValue:  `{"myorder":"1"}`,
+		Topic:         "test-topic",
+		Host:          "localhost",
+		PubSubBackend: "AZHUB",
+		Time:          10,
+	}
+
+	logger := NewMockLogger(gomock.NewController(t))
+
+	logger.EXPECT().Log(gomock.Any())
+
+	logger.Log(queryLog)
+
+	b := make([]byte, 100)
+
+	writer := bytes.NewBuffer(b)
+
+	queryLog.PrettyPrint(writer)
+
+	require.Contains(t, writer.String(), "test-topic")
+	require.Contains(t, writer.String(), "AZHUB")
+	require.Contains(t, writer.String(), `{"myorder":"1"}`)
+
+	require.True(t, logger.ctrl.Satisfied(), "Test_PrettyPrint Failed!")
+}

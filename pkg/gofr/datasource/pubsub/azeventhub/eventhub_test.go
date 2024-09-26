@@ -2,14 +2,17 @@ package azeventhub
 
 import (
 	"context"
-	"github.com/stretchr/testify/require"
-	"go.uber.org/mock/gomock"
-	"gofr.dev/pkg/gofr/testutil"
 	"net"
 	"testing"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/messaging/azeventhubs"
+	"github.com/stretchr/testify/require"
+
 	"nhooyr.io/websocket"
+
+	"go.uber.org/mock/gomock"
+
+	"gofr.dev/pkg/gofr/testutil"
 )
 
 func TestConnect(t *testing.T) {
