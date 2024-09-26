@@ -80,7 +80,7 @@ func Test_InsertCommands(t *testing.T) {
 		resp, err := cl.InsertOne(context.Background(), mt.Coll.Name(), doc)
 
 		assert.NotNil(t, resp)
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 	})
 
 	mt.Run("insertOneError", func(mt *mtest.T) {
@@ -196,7 +196,7 @@ func Test_FindMultipleCommands(t *testing.T) {
 
 		err := cl.Find(context.Background(), mt.Coll.Name(), bson.D{{}}, &foundDocuments)
 
-		assert.Nil(t, err, "Unexpected error during Find operation")
+		assert.NoError(t, err, "Unexpected error during Find operation")
 	})
 
 	mt.Run("FindCursorError", func(mt *mtest.T) {
@@ -276,7 +276,7 @@ func Test_FindOneCommands(t *testing.T) {
 		err := cl.FindOne(context.Background(), mt.Coll.Name(), bson.D{{}}, &foundDocuments)
 
 		assert.Equal(t, expectedUser.Name, foundDocuments.Name)
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 	})
 
 	mt.Run("FindOneError", func(mt *mtest.T) {
@@ -380,7 +380,8 @@ func Test_CountDocuments(t *testing.T) {
 		_, err := indexView.CreateOne(context.Background(), mongo.IndexModel{
 			Keys: bson.D{{Key: "x", Value: 1}},
 		})
-		require.Nil(mt, err, "CreateOne error for index: %v", err)
+
+		assert.NoError(mt, err, "CreateOne error for index: %v", err)
 
 		resp, err := cl.CountDocuments(context.Background(), mt.Coll.Name(), bson.D{{Key: "name", Value: "test"}})
 
@@ -515,6 +516,7 @@ func TestClient_StartSession(t *testing.T) {
 		// Call the StartSession method
 		sess, err := cl.StartSession()
 		ses, ok := sess.(Transaction)
+
 		if ok {
 			err = ses.StartTransaction()
 		}
