@@ -1,6 +1,7 @@
 package sql
 
 import (
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -254,6 +255,40 @@ func Test_NewSQLMockWithConfig(t *testing.T) {
 	assert.Equal(t, db.config, &dbConfig)
 	assert.NotNil(t, mock)
 	assert.NotNil(t, mockMetric)
+}
+
+func Test_sqliteLogs(t *testing.T) {
+	tests := []struct {
+		desc        string
+		status      string
+		err         error
+		expectedLog string
+	}{
+		{"sqlite connection in process", "connecting", nil, `connecting to "test" database`},
+		{"sqlite connected successfully", "connected", nil, `connected to "test" database`},
+		{"sqlite connection failure", "", errors.New("connection failed"),
+			`could not connect to database "test", error: connection failed`},
+	}
+
+	for _, test := range tests {
+		mockLogger := logging.NewMockLogger(logging.DEBUG)
+		mockConfig := &DBConfig{
+			Dialect:  sqlite,
+			Database: "test",
+		}
+
+		logs := testutil.StdoutOutputForFunc(func() {
+			if test.err == nil {
+				printConnectionSuccessLog(test.status, mockConfig, mockLogger)
+			} else {
+				printConnectionFailureLog(mockConfig, mockLogger, test.err)
+			}
+
+			time.Sleep(100 * time.Millisecond)
+		})
+
+		assert.Contains(t, logs, test.expectedLog)
+	}
 }
 
 func Test_SQLRetryConnectionInfoLog(t *testing.T) {

@@ -46,11 +46,11 @@ func printConnectionSuccessLog(status string, config *DBConfig, logger datasourc
 	}
 }
 
-func printConnectionFailiureLog(config *DBConfig, logger datasource.Logger, err error) {
+func printConnectionFailureLog(config *DBConfig, logger datasource.Logger, err error) {
 	if config.Dialect == sqlite {
 		logger.Errorf("could not connect to database '%s', error: %v", config.Database, err)
 	} else {
-		logger.Errorf("could not connect with '%s' user to '%s' database at '%s:%s', error: %v",
+		logger.Errorf("could not connect '%s' user to '%s' database at '%s:%s', error: %v",
 			config.User, config.Database, config.HostName, config.Port, err)
 	}
 }
@@ -117,7 +117,7 @@ func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *D
 
 func pingToTestConnection(database *DB) *DB {
 	if err := database.DB.Ping(); err != nil {
-		printConnectionFailiureLog(database.config, database.logger, err)
+		printConnectionFailureLog(database.config, database.logger, err)
 
 		return database
 	}
@@ -142,7 +142,7 @@ func retryConnection(database *DB) {
 					break
 				}
 
-				printConnectionFailiureLog(database.config, database.logger, err)
+				printConnectionFailureLog(database.config, database.logger, err)
 
 				time.Sleep(connRetryFrequencyInSeconds * time.Second)
 			}
