@@ -37,10 +37,10 @@ func TestConnect(t *testing.T) {
 func TestConfigValidation(t *testing.T) {
 	ctrl := gomock.NewController(t)
 
-	logs := testutil.StderrOutputForFunc(func() {
-		client := New(Config{})
+	logger := NewMockLogger(ctrl)
 
-		logger := NewMockLogger(ctrl)
+	testutil.StderrOutputForFunc(func() {
+		client := New(Config{})
 
 		client.UseLogger(logger)
 
@@ -53,7 +53,7 @@ func TestConfigValidation(t *testing.T) {
 		client.Connect()
 	})
 
-	require.NotContains(t, logs, "Error")
+	require.True(t, logger.ctrl.Satisfied(), "Config Validation Failed")
 }
 
 func TestConnect_ProducerError(t *testing.T) {

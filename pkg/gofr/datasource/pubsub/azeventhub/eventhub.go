@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"go.opentelemetry.io/otel/trace"
 	"strings"
 	"time"
 
@@ -37,6 +38,7 @@ type Client struct {
 	cfg          Config
 	logger       Logger
 	metrics      Metrics
+	tracer       trace.Tracer
 }
 
 type azMessage struct {
@@ -107,6 +109,13 @@ func (c *Client) UseLogger(logger any) {
 func (c *Client) UseMetrics(metrics any) {
 	if m, ok := metrics.(Metrics); ok {
 		c.metrics = m
+	}
+}
+
+// UseTracer sets the tracer for the MongoDB client.
+func (c *Client) UseTracer(tracer any) {
+	if t, ok := tracer.(trace.Tracer); ok {
+		c.tracer = t
 	}
 }
 
