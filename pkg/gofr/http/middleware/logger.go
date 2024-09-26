@@ -76,7 +76,8 @@ func getIDs(requestCtx context.Context) (ctx context.Context, correlationID, spa
 		correlationID = requestSpan.TraceID().String()
 		spanID = trace.SpanFromContext(requestCtx).SpanContext().SpanID().String()
 	} else {
-		correlationID = uuid.New().String()
+		uuid := uuid.New().String()
+		correlationID = strings.Replace(uuid, "-", "", -1)
 	}
 
 	// revive:disable
