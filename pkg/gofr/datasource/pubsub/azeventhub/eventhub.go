@@ -9,6 +9,8 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/container"
 	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/datasource/pubsub"
+	"strings"
+	"time"
 )
 
 type Config struct {
@@ -203,12 +205,27 @@ func (c *Client) Subscribe(ctx context.Context, topic string) (*pubsub.Message, 
 			break
 		}
 
-		c.metrics.IncrementCounter(ctx, "app_pubsub_subscribe_total_count", "topic", topic, "subscription_name", partitionClient.PartitionID())
+		partitionID := partitionClient.PartitionID()
+
+		c.metrics.IncrementCounter(ctx, "app_pubsub_subscribe_total_count", "topic", topic, "subscription_name", partitionID)
+
+		start := time.Now()
 
 		msg, err = c.processEvents(ctx, partitionClient)
 		if err != nil {
 			return nil, err
 		}
+
+		end := time.Since(start)
+
+		c.logger.Debug(&Log{
+			Mode:          "SUB",
+			MessageValue:  strings.Join(strings.Fields(string(msg.Value)), " "),
+			Topic:         topic,
+			Host:          fmt.Sprint(c.cfg.EventhubName + ":" + c.cfg.ConsumerGroup + ":" + partitionID),
+			PubSubBackend: "AZHUB",
+			Time:          end.Microseconds(),
+		})
 
 		c.metrics.IncrementCounter(ctx, "app_pubsub_subscribe_success_count", "topic", topic, "subscription_name", partitionClient.PartitionID())
 
@@ -275,10 +292,27 @@ func (c *Client) Publish(ctx context.Context, topic string, message []byte) erro
 		err = batch.AddEventData(data[i], nil)
 	}
 
-	c.metrics.IncrementCounter(ctx, "app_pubsub_publish_success_count", "topic", topic)
+	start := time.Now()
 
 	// send the batch of events to the event hub
-	return c.producer.SendEventDataBatch(ctx, batch, nil)
+	if err = c.producer.SendEventDataBatch(ctx, batch, nil); err != nil {
+		return err
+	}
+
+	end := time.Since(start)
+
+	c.logger.Debug(&Log{
+		Mode:          "PUB",
+		MessageValue:  strings.Join(strings.Fields(string(message)), " "),
+		Topic:         topic,
+		Host:          fmt.Sprint(c.cfg.EventhubName),
+		PubSubBackend: "AZHUB",
+		Time:          end.Microseconds(),
+	})
+
+	c.metrics.IncrementCounter(ctx, "app_pubsub_publish_success_count", "topic", topic)
+
+	return nil
 }
 
 func (c *Client) Health() datasource.Health {

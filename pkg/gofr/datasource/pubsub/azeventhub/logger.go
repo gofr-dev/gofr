@@ -2,8 +2,7 @@ package azeventhub
 
 import (
 	"fmt"
-	"regexp"
-	"strings"
+	"io"
 )
 
 // Logger interface with required methods
@@ -17,27 +16,16 @@ type Logger interface {
 	Errorf(pattern string, args ...interface{})
 }
 
-// QueryLog represents the structure for query logging
-type QueryLog struct {
-	Type     string `json:"type"`
-	URL      string `json:"url"`
-	Duration int64  `json:"duration"` // Duration in microseconds
+type Log struct {
+	Mode          string `json:"mode"`
+	MessageValue  string `json:"messageValue"`
+	Topic         string `json:"topic"`
+	Host          string `json:"host"`
+	PubSubBackend string `json:"pubSubBackend"`
+	Time          int64  `json:"time"`
 }
 
-// PrettyPrint logs the QueryLog in a structured format to the given writer
-func (ql *QueryLog) PrettyPrint(logger Logger) {
-	// Format the log string
-	formattedLog := fmt.Sprintf(
-		"\u001B[38;5;8m%-32s \u001B[38;5;206m%-6s\u001B[0m %8d\u001B[38;5;8mµs\u001B[0m %s",
-		clean(ql.Type), "DGRAPH", ql.Duration, clean(ql.URL),
-	)
-
-	// Log the formatted string using the logger
-	logger.Debug(formattedLog)
-}
-
-// clean replaces multiple consecutive whitespace characters with a single space and trims leading/trailing whitespace
-func clean(query string) string {
-	query = regexp.MustCompile(`\s+`).ReplaceAllString(query, " ")
-	return strings.TrimSpace(query)
+func (l *Log) PrettyPrint(writer io.Writer) {
+	fmt.Fprintf(writer, "\u001B[38;5;8m%-32s \u001B[38;5;24m%-6s\u001B[0m %8d\u001B[38;5;8mµs\u001B[0m %-4s%s \u001b[38;5;101m\n",
+		l.Topic, l.PubSubBackend, l.Time, l.Mode, l.MessageValue)
 }
