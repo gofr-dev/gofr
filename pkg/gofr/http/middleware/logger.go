@@ -71,9 +71,8 @@ type logger interface {
 
 func getIDs(requestCtx context.Context) (ctx context.Context, correlationID, spanID string) {
 	requestSpan := trace.SpanFromContext(requestCtx).SpanContext()
-	hasTraceID := requestSpan.HasTraceID()
 
-	if hasTraceID {
+	if requestSpan.HasTraceID() {
 		correlationID = requestSpan.TraceID().String()
 		spanID = trace.SpanFromContext(requestCtx).SpanContext().SpanID().String()
 	} else {
@@ -119,8 +118,7 @@ func getCorrelationAndSpanID(request *http.Request) (r *http.Request, correlatio
 
 	if correlationID == "" {
 		ctx, correlationID, spanID = getIDs(request.Context())
-		// returning deep copy of request with added context
-		request = request.Clone(ctx)
+		request = request.WithContext(ctx)
 	}
 
 	return request, correlationID, spanID
