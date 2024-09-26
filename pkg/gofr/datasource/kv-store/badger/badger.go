@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"go.opentelemetry.io/otel/trace"
+
 	"github.com/dgraph-io/badger/v4"
 )
 
@@ -18,6 +20,7 @@ type client struct {
 	configs Configs
 	logger  Logger
 	metrics Metrics
+	tracer  trace.Tracer
 }
 
 func New(configs Configs) *client {
@@ -35,6 +38,13 @@ func (c *client) UseLogger(logger any) {
 func (c *client) UseMetrics(metrics any) {
 	if m, ok := metrics.(Metrics); ok {
 		c.metrics = m
+	}
+}
+
+// UseTracer sets the tracer for BadgerDB client.
+func (c *client) UseTracer(tracer any) {
+	if tracer, ok := tracer.(trace.Tracer); ok {
+		c.tracer = tracer
 	}
 }
 

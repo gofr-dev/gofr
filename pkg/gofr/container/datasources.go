@@ -244,6 +244,9 @@ type provider interface {
 	// UseMetrics sets the metrics for the Cassandra client.
 	UseMetrics(metrics any)
 
+	// UseTracer sets the tracer for the Cassandra client.
+	UseTracer(tracer any)
+
 	// Connect establishes a connection to Cassandra and registers metrics using the provided configuration when the client was Created.
 	Connect()
 }

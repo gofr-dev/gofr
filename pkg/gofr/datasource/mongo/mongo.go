@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"time"
 
+	"go.opentelemetry.io/otel/trace"
+
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -20,6 +22,7 @@ type Client struct {
 	logger   Logger
 	metrics  Metrics
 	config   Config
+	tracer   trace.Tracer
 }
 
 type Config struct {
@@ -62,6 +65,13 @@ func (c *Client) UseLogger(logger interface{}) {
 func (c *Client) UseMetrics(metrics interface{}) {
 	if m, ok := metrics.(Metrics); ok {
 		c.metrics = m
+	}
+}
+
+// UseTracer sets the tracer for the MongoDB client.
+func (c *Client) UseTracer(tracer any) {
+	if tracer, ok := tracer.(trace.Tracer); ok {
+		c.tracer = tracer
 	}
 }
 
