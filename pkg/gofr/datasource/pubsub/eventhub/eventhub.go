@@ -1,12 +1,13 @@
-package azeventhub
+package eventhub
 
 import (
 	"context"
 	"errors"
 	"fmt"
-	"go.opentelemetry.io/otel/trace"
 	"strings"
 	"time"
+
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/messaging/azeventhubs"
 	"github.com/Azure/azure-sdk-for-go/sdk/messaging/azeventhubs/checkpoints"
@@ -41,16 +42,6 @@ type Client struct {
 	tracer       trace.Tracer
 }
 
-type azMessage struct {
-	event     *azeventhubs.ReceivedEventData
-	processor *azeventhubs.ProcessorPartitionClient
-}
-
-func (a *azMessage) Commit() {
-	// Update the checkpoint with the latest event received
-	a.processor.UpdateCheckpoint(context.Background(), a.event, nil)
-}
-
 func New(cfg Config) *Client {
 	return &Client{
 		cfg: cfg,
@@ -63,31 +54,31 @@ func (c *Client) validConfigs(cfg Config) bool {
 	if cfg.EventhubName == "" {
 		ok = false
 
-		c.logger.Error("EventhubName cannot be an empty")
+		c.logger.Error("eventhubName cannot be an empty")
 	}
 
 	if cfg.ConnectionString == "" {
 		ok = false
 
-		c.logger.Error("ConnectionString cannot be an empty")
+		c.logger.Error("connectionString cannot be an empty")
 	}
 
 	if cfg.StorageServiceURL == "" {
 		ok = false
 
-		c.logger.Error("StorageServiceURL cannot be an empty")
+		c.logger.Error("storageServiceURL cannot be an empty")
 	}
 
 	if cfg.StorageContainerName == "" {
 		ok = false
 
-		c.logger.Error("StorageContainerName cannot be an empty")
+		c.logger.Error("storageContainerName cannot be an empty")
 	}
 
 	if cfg.ContainerConnectionString == "" {
 		ok = false
 
-		c.logger.Error("ContainerConnectionString cannot be an empty")
+		c.logger.Error("containerConnectionString cannot be an empty")
 	}
 
 	if cfg.ConsumerGroup == "" {
@@ -234,7 +225,7 @@ func (c *Client) Subscribe(ctx context.Context, topic string) (*pubsub.Message, 
 			MessageValue:  strings.Join(strings.Fields(string(msg.Value)), " "),
 			Topic:         topic,
 			Host:          fmt.Sprint(c.cfg.EventhubName + ":" + c.cfg.ConsumerGroup + ":" + partitionID),
-			PubSubBackend: "AZHUB",
+			PubSubBackend: "EVHUB",
 			Time:          end.Microseconds(),
 		})
 
@@ -259,7 +250,7 @@ func (c *Client) processEvents(ctx context.Context, partitionClient *azeventhubs
 
 		if len(events) == 1 {
 			msg.Value = events[0].Body
-			msg.Committer = &azMessage{
+			msg.Committer = &Message{
 				event:     events[0],
 				processor: partitionClient,
 			}
@@ -317,7 +308,7 @@ func (c *Client) Publish(ctx context.Context, topic string, message []byte) erro
 		MessageValue:  strings.Join(strings.Fields(string(message)), " "),
 		Topic:         topic,
 		Host:          fmt.Sprint(c.cfg.EventhubName),
-		PubSubBackend: "AZHUB",
+		PubSubBackend: "EVHUB",
 		Time:          end.Microseconds(),
 	})
 

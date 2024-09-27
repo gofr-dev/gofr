@@ -1,4 +1,4 @@
-package azeventhub
+package eventhub
 
 import (
 	"fmt"

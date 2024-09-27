@@ -26,6 +26,7 @@ func (a *App) AddFTP(fs file.FileSystemProvider) {
 	a.container.File = fs
 }
 
+// AddPubSub sets the PubSub client in the app's container.
 func (a *App) AddPubSub(pubsub container.PubSubProvider) {
 	pubsub.UseLogger(a.Logger())
 	pubsub.UseMetrics(a.Metrics())

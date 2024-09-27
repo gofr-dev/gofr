@@ -7,7 +7,7 @@
 //
 
 // Package azeventhub is a generated GoMock package.
-package azeventhub
+package eventhub
 
 import (
 	reflect "reflect"

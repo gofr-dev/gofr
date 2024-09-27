@@ -1,4 +1,4 @@
-package azeventhub
+package eventhub
 
 import (
 	"context"
@@ -14,6 +14,8 @@ import (
 
 	"gofr.dev/pkg/gofr/testutil"
 )
+
+// TODO write tests for error cases
 
 func TestConnect(t *testing.T) {
 	ctrl := gomock.NewController(t)
@@ -31,6 +33,7 @@ func TestConnect(t *testing.T) {
 		client.Connect()
 	})
 
+	// TODO check if mocks are satisfied
 	require.NotContains(t, logs, "Error")
 }
 

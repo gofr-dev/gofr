@@ -1,10 +1,12 @@
-package azeventhub
+package eventhub
 
 import (
 	"bytes"
-	"github.com/stretchr/testify/require"
-	"go.uber.org/mock/gomock"
 	"testing"
+
+	"go.uber.org/mock/gomock"
+
+	"github.com/stretchr/testify/require"
 )
 
 func Test_PrettyPrint(t *testing.T) {
