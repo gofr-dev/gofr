@@ -17,24 +17,31 @@ import (
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 )
 
+// code reference from https://learn.microsoft.com/en-us/azure/event-hubs/event-hubs-go-get-started-send
+
 type Config struct {
 	ConnectionString          string
 	ContainerConnectionString string
 	StorageServiceURL         string
 	StorageContainerName      string
 	EventhubName              string
-	ConsumerGroup             string
-	StorageOptions            *container.ClientOptions
-	BlobStoreOptions          *checkpoints.BlobStoreOptions
-	ConsumerOptions           *azeventhubs.ConsumerClientOptions
-	ProducerOptions           *azeventhubs.ProducerClientOptions
+	// if not provided it will read from the $Default consumergroup.
+	ConsumerGroup string
+	// following configs are for advance setup of the eventhub.
+	StorageOptions   *container.ClientOptions
+	BlobStoreOptions *checkpoints.BlobStoreOptions
+	ConsumerOptions  *azeventhubs.ConsumerClientOptions
+	ProducerOptions  *azeventhubs.ProducerClientOptions
 }
 
 type Client struct {
-	producer     *azeventhubs.ProducerClient
-	consumer     *azeventhubs.ConsumerClient
-	processor    *azeventhubs.Processor
-	checkPoint   *checkpoints.BlobStore
+	producer *azeventhubs.ProducerClient
+	consumer *azeventhubs.ConsumerClient
+	// we are using processor such that to keep consuming the events from all the different partitions.
+	processor *azeventhubs.Processor
+	// checkpoint is being called while committing the event received from the event.
+	checkPoint *checkpoints.BlobStore
+	// processorCtx is being stored such that to gracefully shutting down the application.
 	processorCtx context.CancelFunc
 	cfg          Config
 	logger       Logger
@@ -42,6 +49,7 @@ type Client struct {
 	tracer       trace.Tracer
 }
 
+// New Creates the client for Eventhub
 func New(cfg Config) *Client {
 	return &Client{
 		cfg: cfg,
@@ -172,6 +180,7 @@ func (c *Client) Connect() {
 	processorCtx, processorCancel := context.WithCancel(context.TODO())
 	c.processorCtx = processorCancel
 
+	// it is being run in a go-routine as it is a never ending process and has to be kept running to subscribe to events.
 	go func() {
 		if err = processor.Run(processorCtx); err != nil {
 			c.logger.Errorf("error occurred while running processor %v", err)
