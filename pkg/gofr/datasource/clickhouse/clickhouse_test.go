@@ -14,7 +14,7 @@ import (
 	"go.uber.org/mock/gomock"
 )
 
-func getClickHouseTestConnection(t *testing.T) (*MockConn, *MockMetrics, client) {
+func getClickHouseTestConnection(t *testing.T) (*MockConn, *MockMetrics, *MockLogger, client) {
 	t.Helper()
 
 	ctrl := gomock.NewController(t)
@@ -30,12 +30,12 @@ func getClickHouseTestConnection(t *testing.T) (*MockConn, *MockMetrics, client)
 		Database: "test",
 	}, logger: mockLogger, metrics: mockMetric}
 
-	return mockConn, mockMetric, c
+	return mockConn, mockMetric, mockLogger, c
 }
 
 func Test_ClickHouse_ConnectAndMetricRegistrationAndPingFailure(t *testing.T) {
 	logs := stderrOutputForFunc(func() {
-		_, mockMetric, _ := getClickHouseTestConnection(t)
+		_, mockMetric, _, _ := getClickHouseTestConnection(t)
 		mockLogger := NewMockLogger(gomock.NewController(t))
 
 		cl := New(Config{
@@ -53,6 +53,8 @@ func Test_ClickHouse_ConnectAndMetricRegistrationAndPingFailure(t *testing.T) {
 		mockMetric.EXPECT().NewGauge("app_clickhouse_idle_connections", "Number of idle Clickhouse connections.")
 		mockMetric.EXPECT().SetGauge("app_clickhouse_open_connections", gomock.Any()).AnyTimes()
 		mockMetric.EXPECT().SetGauge("app_clickhouse_idle_connections", gomock.Any()).AnyTimes()
+		mockLogger.EXPECT().Logf("connecting to clickhouse db at %v to database %v", "localhost:8000", "test")
+		mockLogger.EXPECT().Errorf("ping failed with error %v", gomock.Any())
 
 		cl.Connect()
 
@@ -78,7 +80,7 @@ func stderrOutputForFunc(f func()) string {
 }
 
 func Test_ClickHouse_HealthUP(t *testing.T) {
-	mockConn, _, c := getClickHouseTestConnection(t)
+	mockConn, _, _, c := getClickHouseTestConnection(t)
 
 	mockConn.EXPECT().Ping(gomock.Any()).Return(nil)
 
@@ -88,7 +90,7 @@ func Test_ClickHouse_HealthUP(t *testing.T) {
 }
 
 func Test_ClickHouse_HealthDOWN(t *testing.T) {
-	mockConn, _, c := getClickHouseTestConnection(t)
+	mockConn, _, _, c := getClickHouseTestConnection(t)
 
 	mockConn.EXPECT().Ping(gomock.Any()).Return(sql.ErrConnDone)
 
@@ -100,12 +102,14 @@ func Test_ClickHouse_HealthDOWN(t *testing.T) {
 }
 
 func Test_ClickHouse_Exec(t *testing.T) {
-	mockConn, mockMetric, c := getClickHouseTestConnection(t)
+	mockConn, mockMetric, mockLogger, c := getClickHouseTestConnection(t)
 
 	ctx := context.Background()
 
 	mockConn.EXPECT().Exec(ctx, "INSERT INTO users (id, name, age) VALUES (?, ?, ?)",
 		"8f165e2d-feef-416c-95f6-913ce3172e15", "gofr", "10").Return(nil)
+
+	mockLogger.EXPECT().Debug(gomock.Any())
 
 	mockMetric.EXPECT().RecordHistogram(ctx, "app_clickhouse_stats", float64(0), "hosts", c.config.Hosts,
 		"database", c.config.Database, "type", "INSERT")
@@ -116,7 +120,7 @@ func Test_ClickHouse_Exec(t *testing.T) {
 }
 
 func Test_ClickHouse_Select(t *testing.T) {
-	mockConn, mockMetric, c := getClickHouseTestConnection(t)
+	mockConn, mockMetric, mockLogger, c := getClickHouseTestConnection(t)
 
 	type User struct {
 		ID   string `ch:"id"`
@@ -130,6 +134,8 @@ func Test_ClickHouse_Select(t *testing.T) {
 
 	mockConn.EXPECT().Select(ctx, &user, "SELECT * FROM users").Return(nil)
 
+	mockLogger.EXPECT().Debug(gomock.Any())
+
 	mockMetric.EXPECT().RecordHistogram(ctx, "app_clickhouse_stats", float64(0), "hosts", c.config.Hosts,
 		"database", c.config.Database, "type", "SELECT")
 
@@ -139,7 +145,7 @@ func Test_ClickHouse_Select(t *testing.T) {
 }
 
 func Test_ClickHouse_AsyncInsert(t *testing.T) {
-	mockConn, mockMetric, c := getClickHouseTestConnection(t)
+	mockConn, mockMetric, mockLogger, c := getClickHouseTestConnection(t)
 
 	ctx := context.Background()
 
@@ -148,6 +154,8 @@ func Test_ClickHouse_AsyncInsert(t *testing.T) {
 
 	mockMetric.EXPECT().RecordHistogram(ctx, "app_clickhouse_stats", float64(0), "hosts", c.config.Hosts,
 		"database", c.config.Database, "type", "INSERT")
+
+	mockLogger.EXPECT().Debug(gomock.Any())
 
 	err := c.AsyncInsert(ctx, "INSERT INTO users (id, name, age) VALUES (?, ?, ?)", true,
 		"8f165e2d-feef-416c-95f6-913ce3172e15", "user", "10")
