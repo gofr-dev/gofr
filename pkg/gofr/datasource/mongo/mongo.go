@@ -102,11 +102,11 @@ func (c *Client) Connect() {
 
 // InsertOne inserts a single document into the specified collection.
 func (c *Client) InsertOne(ctx context.Context, collection string, document interface{}) (interface{}, error) {
-	tracedCtx, span := c.addTraces(ctx, "insert", collection)
+	tracedCtx, span := c.addTrace(ctx, "insert", collection)
 
 	result, err := c.Database.Collection(collection).InsertOne(tracedCtx, document)
 
-	defer c.sendOperationStats(&QueryLog{Query: "insertOne", Collection: collection, Filter: document}, time.Now(),
+	defer c.pushObservability(&QueryLog{Query: "insertOne", Collection: collection, Filter: document}, time.Now(),
 		"insert", span)
 
 	return result, err
@@ -114,14 +114,14 @@ func (c *Client) InsertOne(ctx context.Context, collection string, document inte
 
 // InsertMany inserts multiple documents into the specified collection.
 func (c *Client) InsertMany(ctx context.Context, collection string, documents []interface{}) ([]interface{}, error) {
-	tracedCtx, span := c.addTraces(ctx, "insertMany", collection)
+	tracedCtx, span := c.addTrace(ctx, "insertMany", collection)
 
 	res, err := c.Database.Collection(collection).InsertMany(tracedCtx, documents)
 	if err != nil {
 		return nil, err
 	}
 
-	defer c.sendOperationStats(&QueryLog{Query: "insertMany", Collection: collection, Filter: documents}, time.Now(),
+	defer c.pushObservability(&QueryLog{Query: "insertMany", Collection: collection, Filter: documents}, time.Now(),
 		"insertMany", span)
 
 	return res.InsertedIDs, nil
@@ -129,7 +129,7 @@ func (c *Client) InsertMany(ctx context.Context, collection string, documents []
 
 // Find retrieves documents from the specified collection based on the provided filter and binds response to result.
 func (c *Client) Find(ctx context.Context, collection string, filter, results interface{}) error {
-	tracedCtx, span := c.addTraces(ctx, "find", collection)
+	tracedCtx, span := c.addTrace(ctx, "find", collection)
 
 	cur, err := c.Database.Collection(collection).Find(tracedCtx, filter)
 	if err != nil {
@@ -142,7 +142,7 @@ func (c *Client) Find(ctx context.Context, collection string, filter, results in
 		return err
 	}
 
-	defer c.sendOperationStats(&QueryLog{Query: "find", Collection: collection, Filter: filter}, time.Now(), "find",
+	defer c.pushObservability(&QueryLog{Query: "find", Collection: collection, Filter: filter}, time.Now(), "find",
 		span)
 
 	return nil
@@ -150,14 +150,14 @@ func (c *Client) Find(ctx context.Context, collection string, filter, results in
 
 // FindOne retrieves a single document from the specified collection based on the provided filter and binds response to result.
 func (c *Client) FindOne(ctx context.Context, collection string, filter, result interface{}) error {
-	tracedCtx, span := c.addTraces(ctx, "findOne", collection)
+	tracedCtx, span := c.addTrace(ctx, "findOne", collection)
 
 	b, err := c.Database.Collection(collection).FindOne(tracedCtx, filter).Raw()
 	if err != nil {
 		return err
 	}
 
-	defer c.sendOperationStats(&QueryLog{Query: "findOne", Collection: collection, Filter: filter}, time.Now(),
+	defer c.pushObservability(&QueryLog{Query: "findOne", Collection: collection, Filter: filter}, time.Now(),
 		"findOne", span)
 
 	return bson.Unmarshal(b, result)
@@ -165,11 +165,11 @@ func (c *Client) FindOne(ctx context.Context, collection string, filter, result 
 
 // UpdateByID updates a document in the specified collection by its ID.
 func (c *Client) UpdateByID(ctx context.Context, collection string, id, update interface{}) (int64, error) {
-	tracedCtx, span := c.addTraces(ctx, "updateByID", collection)
+	tracedCtx, span := c.addTrace(ctx, "updateByID", collection)
 
 	res, err := c.Database.Collection(collection).UpdateByID(tracedCtx, id, update)
 
-	defer c.sendOperationStats(&QueryLog{Query: "updateByID", Collection: collection, ID: id, Update: update}, time.Now(),
+	defer c.pushObservability(&QueryLog{Query: "updateByID", Collection: collection, ID: id, Update: update}, time.Now(),
 		"updateByID", span)
 
 	return res.ModifiedCount, err
@@ -177,11 +177,11 @@ func (c *Client) UpdateByID(ctx context.Context, collection string, id, update i
 
 // UpdateOne updates a single document in the specified collection based on the provided filter.
 func (c *Client) UpdateOne(ctx context.Context, collection string, filter, update interface{}) error {
-	tracedCtx, span := c.addTraces(ctx, "updateOne", collection)
+	tracedCtx, span := c.addTrace(ctx, "updateOne", collection)
 
 	_, err := c.Database.Collection(collection).UpdateOne(tracedCtx, filter, update)
 
-	defer c.sendOperationStats(&QueryLog{Query: "updateOne", Collection: collection, Filter: filter, Update: update},
+	defer c.pushObservability(&QueryLog{Query: "updateOne", Collection: collection, Filter: filter, Update: update},
 		time.Now(), "updateOne", span)
 
 	return err
@@ -189,11 +189,11 @@ func (c *Client) UpdateOne(ctx context.Context, collection string, filter, updat
 
 // UpdateMany updates multiple documents in the specified collection based on the provided filter.
 func (c *Client) UpdateMany(ctx context.Context, collection string, filter, update interface{}) (int64, error) {
-	tracedCtx, span := c.addTraces(ctx, "updateMany", collection)
+	tracedCtx, span := c.addTrace(ctx, "updateMany", collection)
 
 	res, err := c.Database.Collection(collection).UpdateMany(tracedCtx, filter, update)
 
-	defer c.sendOperationStats(&QueryLog{Query: "updateMany", Collection: collection, Filter: filter, Update: update}, time.Now(),
+	defer c.pushObservability(&QueryLog{Query: "updateMany", Collection: collection, Filter: filter, Update: update}, time.Now(),
 		"updateMany", span)
 
 	return res.ModifiedCount, err
@@ -201,11 +201,11 @@ func (c *Client) UpdateMany(ctx context.Context, collection string, filter, upda
 
 // CountDocuments counts the number of documents in the specified collection based on the provided filter.
 func (c *Client) CountDocuments(ctx context.Context, collection string, filter interface{}) (int64, error) {
-	tracedCtx, span := c.addTraces(ctx, "countDocuments", collection)
+	tracedCtx, span := c.addTrace(ctx, "countDocuments", collection)
 
 	result, err := c.Database.Collection(collection).CountDocuments(tracedCtx, filter)
 
-	defer c.sendOperationStats(&QueryLog{Query: "countDocuments", Collection: collection, Filter: filter}, time.Now(),
+	defer c.pushObservability(&QueryLog{Query: "countDocuments", Collection: collection, Filter: filter}, time.Now(),
 		"countDocuments", span)
 
 	return result, err
@@ -213,14 +213,14 @@ func (c *Client) CountDocuments(ctx context.Context, collection string, filter i
 
 // DeleteOne deletes a single document from the specified collection based on the provided filter.
 func (c *Client) DeleteOne(ctx context.Context, collection string, filter interface{}) (int64, error) {
-	tracedCtx, span := c.addTraces(ctx, "deleteOne", collection)
+	tracedCtx, span := c.addTrace(ctx, "deleteOne", collection)
 
 	res, err := c.Database.Collection(collection).DeleteOne(tracedCtx, filter)
 	if err != nil {
 		return 0, err
 	}
 
-	defer c.sendOperationStats(&QueryLog{Query: "deleteOne", Collection: collection, Filter: filter}, time.Now(),
+	defer c.pushObservability(&QueryLog{Query: "deleteOne", Collection: collection, Filter: filter}, time.Now(),
 		"deleteOne", span)
 
 	return res.DeletedCount, nil
@@ -228,14 +228,14 @@ func (c *Client) DeleteOne(ctx context.Context, collection string, filter interf
 
 // DeleteMany deletes multiple documents from the specified collection based on the provided filter.
 func (c *Client) DeleteMany(ctx context.Context, collection string, filter interface{}) (int64, error) {
-	tracedCtx, span := c.addTraces(ctx, "deleteMany", collection)
+	tracedCtx, span := c.addTrace(ctx, "deleteMany", collection)
 
 	res, err := c.Database.Collection(collection).DeleteMany(tracedCtx, filter)
 	if err != nil {
 		return 0, err
 	}
 
-	defer c.sendOperationStats(&QueryLog{Query: "deleteMany", Collection: collection, Filter: filter}, time.Now(),
+	defer c.pushObservability(&QueryLog{Query: "deleteMany", Collection: collection, Filter: filter}, time.Now(),
 		"deleteMany", span)
 
 	return res.DeletedCount, nil
@@ -243,28 +243,28 @@ func (c *Client) DeleteMany(ctx context.Context, collection string, filter inter
 
 // Drop drops the specified collection from the database.
 func (c *Client) Drop(ctx context.Context, collection string) error {
-	tracedCtx, span := c.addTraces(ctx, "drop", collection)
+	tracedCtx, span := c.addTrace(ctx, "drop", collection)
 
 	err := c.Database.Collection(collection).Drop(tracedCtx)
 
-	defer c.sendOperationStats(&QueryLog{Query: "drop", Collection: collection}, time.Now(), "drop", span)
+	defer c.pushObservability(&QueryLog{Query: "drop", Collection: collection}, time.Now(), "drop", span)
 
 	return err
 }
 
 // CreateCollection creates the specified collection in the database.
 func (c *Client) CreateCollection(ctx context.Context, name string) error {
-	tracedCtx, span := c.addTraces(ctx, "createCollection", name)
+	tracedCtx, span := c.addTrace(ctx, "createCollection", name)
 
 	err := c.Database.CreateCollection(tracedCtx, name)
 
-	defer c.sendOperationStats(&QueryLog{Query: "createCollection", Collection: name}, time.Now(), "createCollection",
+	defer c.pushObservability(&QueryLog{Query: "createCollection", Collection: name}, time.Now(), "createCollection",
 		span)
 
 	return err
 }
 
-func (c *Client) sendOperationStats(ql *QueryLog, startTime time.Time, method string, span trace.Span) {
+func (c *Client) pushObservability(ql *QueryLog, startTime time.Time, method string, span trace.Span) {
 	duration := time.Since(startTime).Milliseconds()
 
 	ql.Duration = duration
@@ -307,7 +307,7 @@ func (c *Client) HealthCheck(ctx context.Context) (any, error) {
 }
 
 func (c *Client) StartSession() (interface{}, error) {
-	defer c.sendOperationStats(&QueryLog{Query: "startSession"}, time.Now(), "", nil)
+	defer c.pushObservability(&QueryLog{Query: "startSession"}, time.Now(), "", nil)
 
 	s, err := c.Client().StartSession()
 	ses := &session{s}
@@ -330,7 +330,7 @@ type Transaction interface {
 	EndSession(context.Context)
 }
 
-func (c *Client) addTraces(ctx context.Context, method, collection string) (context.Context, trace.Span) {
+func (c *Client) addTrace(ctx context.Context, method, collection string) (context.Context, trace.Span) {
 	if c.tracer != nil {
 		contextWithTrace, span := c.tracer.Start(ctx, fmt.Sprintf("mongodb-%v", method))
 
