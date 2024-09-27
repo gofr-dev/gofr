@@ -37,21 +37,21 @@ type DBConfig struct {
 	MaxOpenConn int
 }
 
-func printConnectionSuccessLog(status string, config *DBConfig, logger datasource.Logger) {
-	if config.Dialect == sqlite {
-		logger.Debugf("%s to '%s' database", status, config.Database)
+func printConnectionSuccessLog(status string, dbconfig *DBConfig, logger datasource.Logger) {
+	if dbconfig.Dialect == sqlite {
+		logger.Debugf("%s to '%s' database", status, dbconfig.Database)
 	} else {
-		logger.Debugf("%s to '%s' user to '%s' database at '%s:%s'", status, config.User,
-			config.Database, config.HostName, config.Port)
+		logger.Debugf("%s to '%s' user to '%s' database at '%s:%s'", status, dbconfig.User,
+			dbconfig.Database, dbconfig.HostName, dbconfig.Port)
 	}
 }
 
-func printConnectionFailureLog(config *DBConfig, logger datasource.Logger, err error) {
-	if config.Dialect == sqlite {
-		logger.Errorf("could not connect to database '%s', error: %v", config.Database, err)
+func printConnectionFailureLog(dbconfig *DBConfig, logger datasource.Logger, err error) {
+	if dbconfig.Dialect == sqlite {
+		logger.Errorf("could not connect to database '%s', error: %v", dbconfig.Database, err)
 	} else {
 		logger.Errorf("could not connect '%s' user to '%s' database at '%s:%s', error: %v",
-			config.User, config.Database, config.HostName, config.Port, err)
+			dbconfig.User, dbconfig.Database, dbconfig.HostName, dbconfig.Port, err)
 	}
 }
 

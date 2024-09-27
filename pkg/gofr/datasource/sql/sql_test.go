@@ -257,6 +257,8 @@ func Test_NewSQLMockWithConfig(t *testing.T) {
 	assert.NotNil(t, mockMetric)
 }
 
+var errSqliteConnection = errors.New("connection failed")
+
 func Test_sqliteLogs(t *testing.T) {
 	tests := []struct {
 		desc        string
@@ -264,30 +266,38 @@ func Test_sqliteLogs(t *testing.T) {
 		err         error
 		expectedLog string
 	}{
-		{"sqlite connection in process", "connecting", nil, `connecting to "test" database`},
-		{"sqlite connected successfully", "connected", nil, `connected to "test" database`},
-		{"sqlite connection failure", "", errors.New("connection failed"),
-			`could not connect to database "test", error: connection failed`},
+		{"sqlite connection in process", "connecting", nil, `connecting to 'test' database`},
+		{"sqlite connected successfully", "connected", nil, `connected to 'test' database`},
+		{"sqlite connection failure", "", errSqliteConnection,
+			`could not connect to database 'test', error: connection failed`},
 	}
 
 	for _, test := range tests {
-		mockLogger := logging.NewMockLogger(logging.DEBUG)
-		mockConfig := &DBConfig{
-			Dialect:  sqlite,
-			Database: "test",
-		}
+		if test.err == nil {
+			logs := testutil.StdoutOutputForFunc(func() {
+				mockLogger := logging.NewMockLogger(logging.DEBUG)
+				mockConfig := &DBConfig{
+					Dialect:  sqlite,
+					Database: "test",
+				}
 
-		logs := testutil.StdoutOutputForFunc(func() {
-			if test.err == nil {
 				printConnectionSuccessLog(test.status, mockConfig, mockLogger)
-			} else {
+			})
+
+			assert.Contains(t, logs, test.expectedLog)
+		} else {
+			logs := testutil.StderrOutputForFunc(func() {
+				mockLogger := logging.NewMockLogger(logging.DEBUG)
+				mockConfig := &DBConfig{
+					Dialect:  sqlite,
+					Database: "test",
+				}
+
 				printConnectionFailureLog(mockConfig, mockLogger, test.err)
-			}
+			})
 
-			time.Sleep(100 * time.Millisecond)
-		})
-
-		assert.Contains(t, logs, test.expectedLog)
+			assert.Contains(t, logs, test.expectedLog)
+		}
 	}
 }
 
