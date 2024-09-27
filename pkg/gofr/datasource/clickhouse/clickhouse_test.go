@@ -34,34 +34,33 @@ func getClickHouseTestConnection(t *testing.T) (*MockConn, *MockMetrics, *MockLo
 }
 
 func Test_ClickHouse_ConnectAndMetricRegistrationAndPingFailure(t *testing.T) {
-	logs := stderrOutputForFunc(func() {
-		_, mockMetric, _, _ := getClickHouseTestConnection(t)
-		mockLogger := NewMockLogger(gomock.NewController(t))
+	_, mockMetric, _, _ := getClickHouseTestConnection(t)
+	mockLogger := NewMockLogger(gomock.NewController(t))
 
-		cl := New(Config{
-			Hosts:    "localhost:8000",
-			Username: "user",
-			Password: "pass",
-			Database: "test",
-		})
-
-		cl.UseLogger(mockLogger)
-		cl.UseMetrics(mockMetric)
-
-		mockMetric.EXPECT().NewHistogram("app_clickhouse_stats", "Response time of Clickhouse queries in milliseconds.", gomock.Any())
-		mockMetric.EXPECT().NewGauge("app_clickhouse_open_connections", "Number of open Clickhouse connections.")
-		mockMetric.EXPECT().NewGauge("app_clickhouse_idle_connections", "Number of idle Clickhouse connections.")
-		mockMetric.EXPECT().SetGauge("app_clickhouse_open_connections", gomock.Any()).AnyTimes()
-		mockMetric.EXPECT().SetGauge("app_clickhouse_idle_connections", gomock.Any()).AnyTimes()
-		mockLogger.EXPECT().Logf("connecting to clickhouse db at %v to database %v", "localhost:8000", "test")
-		mockLogger.EXPECT().Errorf("ping failed with error %v", gomock.Any())
-
-		cl.Connect()
-
-		time.Sleep(100 * time.Millisecond)
+	cl := New(Config{
+		Hosts:    "localhost:8000",
+		Username: "user",
+		Password: "pass",
+		Database: "test",
 	})
 
-	assert.Contains(t, logs, "ping failed with error dial tcp [::1]:8000: connect: connection refused")
+	cl.UseLogger(mockLogger)
+	cl.UseMetrics(mockMetric)
+
+	mockMetric.EXPECT().NewHistogram("app_clickhouse_stats", "Response time of Clickhouse queries in milliseconds.", gomock.Any())
+	mockMetric.EXPECT().NewGauge("app_clickhouse_open_connections", "Number of open Clickhouse connections.")
+	mockMetric.EXPECT().NewGauge("app_clickhouse_idle_connections", "Number of idle Clickhouse connections.")
+	mockMetric.EXPECT().SetGauge("app_clickhouse_open_connections", gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().SetGauge("app_clickhouse_idle_connections", gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Logf("connecting to clickhouse db at %v to database %v", "localhost:8000", "test")
+	mockLogger.EXPECT().Errorf("ping failed with error %v", gomock.Any())
+
+	cl.Connect()
+
+	time.Sleep(100 * time.Millisecond)
+
+	assert.True(t, mockLogger.ctrl.Satisfied())
+	assert.True(t, mockMetric.ctrl.Satisfied())
 }
 
 func stderrOutputForFunc(f func()) string {
