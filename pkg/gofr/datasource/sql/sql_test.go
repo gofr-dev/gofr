@@ -259,46 +259,52 @@ func Test_NewSQLMockWithConfig(t *testing.T) {
 
 var errSqliteConnection = errors.New("connection failed")
 
-func Test_sqliteLogs(t *testing.T) {
+func Test_sqliteSuccessfulConnLogs(t *testing.T) {
 	tests := []struct {
 		desc        string
 		status      string
-		err         error
 		expectedLog string
 	}{
-		{"sqlite connection in process", "connecting", nil, `connecting to 'test' database`},
-		{"sqlite connected successfully", "connected", nil, `connected to 'test' database`},
-		{"sqlite connection failure", "", errSqliteConnection,
-			`could not connect to database 'test', error: connection failed`},
+		{"sqlite connection in process", "connecting", `connecting to 'test' database`},
+		{"sqlite connected successfully", "connected", `connected to 'test' database`},
 	}
 
 	for _, test := range tests {
-		if test.err == nil {
-			logs := testutil.StdoutOutputForFunc(func() {
-				mockLogger := logging.NewMockLogger(logging.DEBUG)
-				mockConfig := &DBConfig{
-					Dialect:  sqlite,
-					Database: "test",
-				}
+		logs := testutil.StdoutOutputForFunc(func() {
+			mockLogger := logging.NewMockLogger(logging.DEBUG)
+			mockConfig := &DBConfig{
+				Dialect:  sqlite,
+				Database: "test",
+			}
 
-				printConnectionSuccessLog(test.status, mockConfig, mockLogger)
-			})
+			printConnectionSuccessLog(test.status, mockConfig, mockLogger)
+		})
 
-			assert.Contains(t, logs, test.expectedLog)
-		} else {
-			logs := testutil.StderrOutputForFunc(func() {
-				mockLogger := logging.NewMockLogger(logging.DEBUG)
-				mockConfig := &DBConfig{
-					Dialect:  sqlite,
-					Database: "test",
-				}
-
-				printConnectionFailureLog(mockConfig, mockLogger, test.err)
-			})
-
-			assert.Contains(t, logs, test.expectedLog)
-		}
+		assert.Contains(t, logs, test.expectedLog)
 	}
+}
+
+func Test_sqliteErrConnLogs(t *testing.T) {
+	test := struct {
+		desc        string
+		err         error
+		expectedLog string
+	}{
+		"sqlite connection failure", errSqliteConnection,
+		`could not connect to database 'test', error: connection failed`,
+	}
+
+	logs := testutil.StderrOutputForFunc(func() {
+		mockLogger := logging.NewMockLogger(logging.DEBUG)
+		mockConfig := &DBConfig{
+			Dialect:  sqlite,
+			Database: "test",
+		}
+
+		printConnectionFailureLog(mockConfig, mockLogger, test.err)
+	})
+
+	assert.Contains(t, logs, test.expectedLog)
 }
 
 func Test_SQLRetryConnectionInfoLog(t *testing.T) {
