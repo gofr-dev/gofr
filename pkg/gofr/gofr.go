@@ -39,7 +39,6 @@ const (
 	shutDownTimeout        = 30 * time.Second
 	gofrTraceExporter      = "gofr"
 	gofrTracerURL          = "https://tracer.gofr.dev"
-	defaultTraceRatio      = 1
 )
 
 // App is the main application in the GoFr framework.
