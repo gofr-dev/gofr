@@ -18,8 +18,6 @@ import (
 const (
 	sqlite        = "sqlite"
 	defaultDBPort = 3306
-	success       = 1
-	failed        = 0
 )
 
 var errUnsupportedDialect = fmt.Errorf("unsupported db dialect; supported dialects are - mysql, postgres, sqlite")
