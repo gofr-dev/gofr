@@ -15,8 +15,6 @@ import (
 	"gofr.dev/pkg/gofr/testutil"
 )
 
-// TODO write tests for error cases
-
 func TestConnect(t *testing.T) {
 	ctrl := gomock.NewController(t)
 
@@ -112,6 +110,99 @@ func TestConnect_ContainerError(t *testing.T) {
 	require.NotContains(t, logs, "Error")
 }
 
+func TestPublish_FailedBatchCreation(t *testing.T) {
+	ctrl := gomock.NewController(t)
+
+	client := New(getTestConfigs())
+
+	mockLogger := NewMockLogger(ctrl)
+	mockMetrics := NewMockMetrics(ctrl)
+
+	mockLogger.EXPECT().Debug("azure eventhub connection started using connection string")
+	mockLogger.EXPECT().Debug("azure eventhub producer client setup success")
+	mockLogger.EXPECT().Debug("azure eventhub container client setup success")
+	mockLogger.EXPECT().Debug("azure eventhub blobstore client setup success")
+	mockLogger.EXPECT().Debug("azure eventhub consumer client setup success")
+	mockLogger.EXPECT().Debug("azure eventhub processor setup success")
+	mockLogger.EXPECT().Debug("azure eventhub processor running successfully").AnyTimes()
+
+	mockMetrics.EXPECT().IncrementCounter(context.Background(), "app_pubsub_publish_total_count", "topic", client.cfg.EventhubName)
+
+	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any())
+
+	client.UseLogger(mockLogger)
+	client.UseMetrics(mockMetrics)
+
+	client.Connect()
+
+	err := client.Publish(context.Background(), client.cfg.EventhubName, []byte("my-message"))
+
+	require.NotNil(t, err)
+
+	require.True(t, mockLogger.ctrl.Satisfied(), "Eventhub Publish Failed Batch Creation")
+}
+
+func TestPublish_FailedInvalidTopic(t *testing.T) {
+	ctrl := gomock.NewController(t)
+
+	client := New(getTestConfigs())
+
+	mockLogger := NewMockLogger(ctrl)
+	mockMetrics := NewMockMetrics(ctrl)
+
+	mockLogger.EXPECT().Debug("azure eventhub connection started using connection string")
+	mockLogger.EXPECT().Debug("azure eventhub producer client setup success")
+	mockLogger.EXPECT().Debug("azure eventhub container client setup success")
+	mockLogger.EXPECT().Debug("azure eventhub blobstore client setup success")
+	mockLogger.EXPECT().Debug("azure eventhub consumer client setup success")
+	mockLogger.EXPECT().Debug("azure eventhub processor setup success")
+	mockLogger.EXPECT().Debug("azure eventhub processor running successfully").AnyTimes()
+
+	client.UseLogger(mockLogger)
+	client.UseMetrics(mockMetrics)
+
+	client.Connect()
+
+	err := client.Publish(context.Background(), "random topic", []byte("my-message"))
+
+	require.Equal(t, "topic should be same as eventhub name", err.Error(), "Eventhub Publish Failed Invalid Topic")
+
+	require.True(t, mockLogger.ctrl.Satisfied(), "Eventhub Publish Failed Invalid Topic")
+}
+
+func TestSubscribe_FailedInvalidTopic(t *testing.T) {
+	ctrl := gomock.NewController(t)
+
+	client := New(getTestConfigs())
+
+	mockLogger := NewMockLogger(ctrl)
+	mockMetrics := NewMockMetrics(ctrl)
+
+	mockLogger.EXPECT().Debug("azure eventhub connection started using connection string")
+	mockLogger.EXPECT().Debug("azure eventhub producer client setup success")
+	mockLogger.EXPECT().Debug("azure eventhub container client setup success")
+	mockLogger.EXPECT().Debug("azure eventhub blobstore client setup success")
+	mockLogger.EXPECT().Debug("azure eventhub consumer client setup success")
+	mockLogger.EXPECT().Debug("azure eventhub processor setup success")
+	mockLogger.EXPECT().Debug("azure eventhub processor running successfully").AnyTimes()
+
+	mockLogger.EXPECT().Fatal("topic should be same as eventhub name")
+
+	// Mock for processor failing during subscribe
+	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
+
+	client.UseLogger(mockLogger)
+	client.UseMetrics(mockMetrics)
+
+	client.Connect()
+
+	_, err := client.Subscribe(context.Background(), "random topic")
+
+	require.Nil(t, err.Error(), "Eventhub Publish Failed Invalid Topic")
+
+	require.True(t, mockLogger.ctrl.Satisfied(), "Eventhub Publish Failed Invalid Topic")
+}
+
 func getTestConfigs() Config {
 	newWebSocketConnFn := func(ctx context.Context, args azeventhubs.WebSocketConnParams) (net.Conn, error) {
 		opts := &websocket.DialOptions{
@@ -126,6 +217,7 @@ func getTestConfigs() Config {
 		return websocket.NetConn(ctx, wssConn, websocket.MessageBinary), nil
 	}
 
+	// For more details on the configuration refer https://github.com/Azure/azure-sdk-for-go/blob/main/sdk/messaging/azeventhubs/consumer_client_test.go
 	return Config{
 		ConnectionString: "Endpoint=sb://<your-namespace>.servicebus.windows.net/;SharedAccessKeyName=<key-" +
 			"name>;SharedAccessKey=<key>",

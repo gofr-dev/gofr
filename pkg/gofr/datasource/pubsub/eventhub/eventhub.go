@@ -191,6 +191,8 @@ func (c *Client) Connect() {
 // Subscribe checks all partitions for the first available event and returns it.
 func (c *Client) Subscribe(ctx context.Context, topic string) (*pubsub.Message, error) {
 	if topic != c.cfg.EventhubName {
+		// Fatal will stop the application from starting - as subscribe is called when the app is first started.
+		// This is done to ensure that if the user changes to some other pub-sub provider, the code doesn't break.
 		c.logger.Fatal("topic should be same as eventhub name")
 	}
 
@@ -283,7 +285,9 @@ func (c *Client) Publish(ctx context.Context, topic string, message []byte) erro
 
 	batch, err := c.producer.NewEventDataBatch(ctx, newBatchOptions)
 	if err != nil {
-		panic(err)
+		c.logger.Errorf("failed to create event batch %v", err)
+
+		return err
 	}
 
 	data := []*azeventhubs.EventData{{
