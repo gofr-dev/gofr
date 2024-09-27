@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"time"
 
-	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 
@@ -49,7 +48,6 @@ var (
 func New(config Config) *Client {
 	return &Client{
 		config: config,
-		tracer: otel.GetTracerProvider().Tracer("gofr-dgraph"),
 	}
 }
 
@@ -98,6 +96,13 @@ func (d *Client) UseLogger(logger any) {
 func (d *Client) UseMetrics(metrics any) {
 	if m, ok := metrics.(Metrics); ok {
 		d.metrics = m
+	}
+}
+
+// UseTracer sets the tracer for DGraph client.
+func (c *Client) UseTracer(tracer any) {
+	if tracer, ok := tracer.(trace.Tracer); ok {
+		c.tracer = tracer
 	}
 }
 
