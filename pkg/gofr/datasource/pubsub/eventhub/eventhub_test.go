@@ -20,21 +20,24 @@ import (
 func TestConnect(t *testing.T) {
 	ctrl := gomock.NewController(t)
 
-	logs := testutil.StderrOutputForFunc(func() {
-		client := New(getTestConfigs())
+	client := New(getTestConfigs())
 
-		mockLogger := NewMockLogger(ctrl)
+	mockLogger := NewMockLogger(ctrl)
 
-		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Debug("azure eventhub connection started using connection string")
+	mockLogger.EXPECT().Debug("azure eventhub producer client setup success")
+	mockLogger.EXPECT().Debug("azure eventhub container client setup success")
+	mockLogger.EXPECT().Debug("azure eventhub blobstore client setup success")
+	mockLogger.EXPECT().Debug("azure eventhub consumer client setup success")
+	mockLogger.EXPECT().Debug("azure eventhub processor setup success")
+	mockLogger.EXPECT().Debug("azure eventhub processor running successfully").AnyTimes()
 
-		client.UseLogger(mockLogger)
-		client.UseMetrics(NewMockMetrics(ctrl))
+	client.UseLogger(mockLogger)
+	client.UseMetrics(NewMockMetrics(ctrl))
 
-		client.Connect()
-	})
+	client.Connect()
 
-	// TODO check if mocks are satisfied
-	require.NotContains(t, logs, "Error")
+	require.True(t, mockLogger.ctrl.Satisfied(), "Eventhub Connection Failed")
 }
 
 func TestConfigValidation(t *testing.T) {
