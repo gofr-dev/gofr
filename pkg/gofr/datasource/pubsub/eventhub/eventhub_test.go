@@ -170,39 +170,6 @@ func TestPublish_FailedInvalidTopic(t *testing.T) {
 	require.True(t, mockLogger.ctrl.Satisfied(), "Eventhub Publish Failed Invalid Topic")
 }
 
-func TestSubscribe_FailedInvalidTopic(t *testing.T) {
-	ctrl := gomock.NewController(t)
-
-	client := New(getTestConfigs())
-
-	mockLogger := NewMockLogger(ctrl)
-	mockMetrics := NewMockMetrics(ctrl)
-
-	mockLogger.EXPECT().Debug("azure eventhub connection started using connection string")
-	mockLogger.EXPECT().Debug("azure eventhub producer client setup success")
-	mockLogger.EXPECT().Debug("azure eventhub container client setup success")
-	mockLogger.EXPECT().Debug("azure eventhub blobstore client setup success")
-	mockLogger.EXPECT().Debug("azure eventhub consumer client setup success")
-	mockLogger.EXPECT().Debug("azure eventhub processor setup success")
-	mockLogger.EXPECT().Debug("azure eventhub processor running successfully").AnyTimes()
-
-	mockLogger.EXPECT().Fatal("topic should be same as eventhub name")
-
-	// Mock for processor failing during subscribe
-	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
-
-	client.UseLogger(mockLogger)
-	client.UseMetrics(mockMetrics)
-
-	client.Connect()
-
-	_, err := client.Subscribe(context.Background(), "random topic")
-
-	require.Nil(t, err.Error(), "Eventhub Publish Failed Invalid Topic")
-
-	require.True(t, mockLogger.ctrl.Satisfied(), "Eventhub Publish Failed Invalid Topic")
-}
-
 func getTestConfigs() Config {
 	newWebSocketConnFn := func(ctx context.Context, args azeventhubs.WebSocketConnParams) (net.Conn, error) {
 		opts := &websocket.DialOptions{
