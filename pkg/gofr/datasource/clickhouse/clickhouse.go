@@ -123,7 +123,7 @@ func pushDBMetrics(conn Conn, metrics Metrics) {
 // Exec should be used for DDL and simple statements.
 // It should not be used for larger inserts or query iterations.
 func (c *client) Exec(ctx context.Context, query string, args ...any) error {
-	tracedCtx, span := c.addTraces(ctx, "exec", query)
+	tracedCtx, span := c.addTrace(ctx, "exec", query)
 
 	err := c.conn.Exec(tracedCtx, query, args...)
 
@@ -146,7 +146,7 @@ func (c *client) Exec(ctx context.Context, query string, args ...any) error {
 //
 // err = ctx.Clickhouse.Select(ctx, &user, "SELECT * FROM users") .
 func (c *client) Select(ctx context.Context, dest any, query string, args ...any) error {
-	tracedCtx, span := c.addTraces(ctx, "select", query)
+	tracedCtx, span := c.addTrace(ctx, "select", query)
 
 	err := c.conn.Select(tracedCtx, dest, query, args...)
 
@@ -158,7 +158,7 @@ func (c *client) Select(ctx context.Context, dest any, query string, args ...any
 // AsyncInsert allows the user to specify whether the client should wait for the server to complete the insert or
 // respond once the data has been received.
 func (c *client) AsyncInsert(ctx context.Context, query string, wait bool, args ...any) error {
-	tracedCtx, span := c.addTraces(ctx, "async-insert", query)
+	tracedCtx, span := c.addTrace(ctx, "async-insert", query)
 
 	err := c.conn.AsyncInsert(tracedCtx, query, wait, args...)
 
@@ -220,7 +220,7 @@ func (c *client) HealthCheck(ctx context.Context) (any, error) {
 	return &h, nil
 }
 
-func (c *client) addTraces(ctx context.Context, method, query string) (context.Context, trace.Span) {
+func (c *client) addTrace(ctx context.Context, method, query string) (context.Context, trace.Span) {
 	if c.tracer != nil {
 		contextWithTrace, span := c.tracer.Start(ctx, fmt.Sprintf("clickhouse-%v", method))
 
