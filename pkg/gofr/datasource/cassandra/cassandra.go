@@ -6,6 +6,8 @@ import (
 	"reflect"
 	"time"
 
+	"go.opentelemetry.io/otel/trace"
+
 	"github.com/gocql/gocql"
 )
 
@@ -37,6 +39,7 @@ type Client struct {
 
 	logger  Logger
 	metrics Metrics
+	tracer  trace.Tracer
 }
 
 var errStatusDown = errors.New("status down")
@@ -85,6 +88,13 @@ func (c *Client) UseLogger(logger interface{}) {
 func (c *Client) UseMetrics(metrics interface{}) {
 	if m, ok := metrics.(Metrics); ok {
 		c.metrics = m
+	}
+}
+
+// UseTracer sets the tracer for Clickhouse client.
+func (c *Client) UseTracer(tracer any) {
+	if tracer, ok := tracer.(trace.Tracer); ok {
+		c.tracer = tracer
 	}
 }
 

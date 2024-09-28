@@ -82,3 +82,6 @@ Therefore, GoFr utilizes a pluggable approach for new datasources by separating 
 | FTP        |           | ✅    |       |        | ✅         |
 | SFTP       |           | ✅    |       |        | ✅         |
 | Solr       |           |   ✅   |   ✅      |        |      ✅     |
+| DGraph     | ✅  | ✅ |✅ |||
+
+
