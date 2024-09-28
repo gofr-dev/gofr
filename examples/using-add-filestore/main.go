@@ -17,17 +17,17 @@ const (
 	SFTP
 )
 
-// This can be a common function to configure both FTP and SFTP server
+// This can be a common function to configure both FTP and SFTP server.
 func configureFileServer(app *gofr.App) file.FileSystemProvider {
 	port, _ := strconv.Atoi(app.Config.Get("PORT"))
-	fileSystemProvider := ftp.New(&ftp.Config{
+
+	return ftp.New(&ftp.Config{
 		Host:      app.Config.Get("HOST"),
 		User:      app.Config.Get("USER_NAME"),
 		Password:  app.Config.Get("PASSWORD"),
 		Port:      port,
 		RemoteDir: app.Config.Get("REMOTE_DIR_PATH"),
 	})
-	return fileSystemProvider
 }
 
 func printFiles(files []file.FileInfo, err error) {
@@ -53,18 +53,20 @@ func grepFiles(files []file.FileInfo, keyword string, err error) {
 }
 
 func registerPwdCommand(app *gofr.App, fs file.FileSystemProvider) {
-	app.SubCommand("pwd", func(c *gofr.Context) (interface{}, error) {
-		workingDirectory, error := fs.Getwd()
-		return workingDirectory, error
+	app.SubCommand("pwd", func(_ *gofr.Context) (interface{}, error) {
+		workingDirectory, err := fs.Getwd()
+
+		return workingDirectory, err
 	})
 }
 
 func registerLsCommand(app *gofr.App, fs file.FileSystemProvider) {
 	app.SubCommand("ls", func(c *gofr.Context) (interface{}, error) {
 		path := c.Param("path")
-		files, error := fs.ReadDir(path)
-		printFiles(files, error)
-		return "", error
+		files, err := fs.ReadDir(path)
+		printFiles(files, err)
+
+		return "", err
 	})
 }
 
@@ -72,9 +74,10 @@ func registerGrepCommand(app *gofr.App, fs file.FileSystemProvider) {
 	app.SubCommand("grep", func(c *gofr.Context) (interface{}, error) {
 		keyword := c.Param("keyword")
 		path := c.Param("path")
-		files, error := fs.ReadDir(path)
-		grepFiles(files, keyword, error)
-		return "", error
+		files, err := fs.ReadDir(path)
+		grepFiles(files, keyword, err)
+
+		return "", err
 	})
 }
 
@@ -82,11 +85,13 @@ func registerCreateFileCommand(app *gofr.App, fs file.FileSystemProvider) {
 	app.SubCommand("createfile", func(c *gofr.Context) (interface{}, error) {
 		fileName := c.Param("filename")
 		fmt.Printf("Creating file :%s", fileName)
-		_, error := fs.Create(fileName)
-		if error == nil {
-			fmt.Printf("Succesfully created file:%s", fileName)
+		_, err := fs.Create(fileName)
+
+		if err == nil {
+			fmt.Printf("Successfully created file:%s", fileName)
 		}
-		return "", error
+
+		return "", err
 	})
 }
 
@@ -94,11 +99,13 @@ func registerRmCommand(app *gofr.App, fs file.FileSystemProvider) {
 	app.SubCommand("rm", func(c *gofr.Context) (interface{}, error) {
 		fileName := c.Param("filename")
 		fmt.Printf("Removing file :%s", fileName)
-		error := fs.Remove(fileName)
-		if error == nil {
-			fmt.Printf("Succesfully removed file:%s", fileName)
+		err := fs.Remove(fileName)
+
+		if err == nil {
+			fmt.Printf("Successfully removed file:%s", fileName)
 		}
-		return "", error
+
+		return "", err
 	})
 }
 
