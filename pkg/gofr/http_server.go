@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/pprof"
+	"os"
 	"time"
 
 	"gofr.dev/pkg/gofr/container"
@@ -15,11 +16,18 @@ import (
 )
 
 type httpServer struct {
-	router *gofrHTTP.Router
-	port   int
-	ws     *websocket.Manager
-	srv    *http.Server
+	router   *gofrHTTP.Router
+	port     int
+	ws       *websocket.Manager
+	srv      *http.Server
+	certFile string
+	keyFile  string
 }
+
+var (
+	errInvalidCertificateFile = errors.New("invalid certificate file")
+	errInvalidKeyFile         = errors.New("invalid key file")
+)
 
 func newHTTPServer(c *container.Container, port int, middlewareConfigs map[string]string) *httpServer {
 	r := gofrHTTP.NewRouter()
@@ -76,9 +84,23 @@ func (s *httpServer) Run(c *container.Container) {
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
-	err := s.srv.ListenAndServe()
+	// If both certFile and keyFile are provided, validate and run HTTPS server
+	if s.certFile != "" && s.keyFile != "" {
+		if err := validateCertificateAndKeyFiles(s.certFile, s.keyFile); err != nil {
+			c.Error(err)
+			return
+		}
 
-	if !errors.Is(err, http.ErrServerClosed) {
+		// Start HTTPS server with TLS
+		if err := s.srv.ListenAndServeTLS(s.certFile, s.keyFile); err != nil {
+			c.Errorf("error while listening to https server, err: %v", err)
+		}
+
+		return
+	}
+
+	// If no certFile/keyFile is provided, run the HTTP server
+	if err := s.srv.ListenAndServe(); err != nil {
 		c.Errorf("error while listening to http server, err: %v", err)
 	}
 }
@@ -97,4 +119,16 @@ func (s *httpServer) Shutdown(ctx context.Context) error {
 
 		return nil
 	})
+}
+
+func validateCertificateAndKeyFiles(certificateFile, keyFile string) error {
+	if _, err := os.Stat(certificateFile); os.IsNotExist(err) {
+		return fmt.Errorf("%w : %v", errInvalidCertificateFile, certificateFile)
+	}
+
+	if _, err := os.Stat(keyFile); os.IsNotExist(err) {
+		return fmt.Errorf("%w : %v", errInvalidKeyFile, keyFile)
+	}
+
+	return nil
 }
