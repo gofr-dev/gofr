@@ -59,12 +59,12 @@ func (w *PubSubWrapper) DeleteTopic(ctx context.Context, name string) error {
 	return w.Client.DeleteTopic(ctx, name)
 }
 
-// Close closes the Client Client.
+// Close closes the Client.
 func (w *PubSubWrapper) Close() error {
 	return w.Client.Close()
 }
 
-// Health returns the health status of the Client Client.
+// Health returns the health status of the Client.
 func (w *PubSubWrapper) Health() datasource.Health {
 	status := datasource.StatusUp
 	if w.Client.Conn.Status() != nats.CONNECTED {
