@@ -178,11 +178,48 @@ docker run -d \
  
 ### NATS JetStream
 
+NATS JetStream is supported as an external pubsub provider, meaning if you're not using it, it won't be added to your binary.
+
 #### Configs
 ```dotenv
 PUBSUB_BACKEND=NATS
-NATS_SERVER=nats://localhost:4222
+PUBSUB_BROKER=nats://localhost:4222
+NATS_STREAM=mystream
+NATS_SUBJECTS=orders.*,shipments.*
+NATS_MAX_WAIT=5s
+NATS_BATCH_SIZE=100
+NATS_MAX_PULL_WAIT=500ms
+NATS_CONSUMER=my-consumer
 NATS_CREDS_FILE=/path/to/creds.json
+```
+
+#### Setup
+
+To set up NATS JetStream, follow these steps:
+
+1. Import the external driver for NATS JetStream:
+
+```bash
+go get gofr.dev/pkg/gofr/datasources/pubsub/nats
+```
+
+2. Use the `AddPubSub` method to add the NATS JetStream driver to your application:
+
+```go   
+app := gofr.New()
+
+app.AddPubSub(nats.New(nats.Config{
+    Server:     "nats://localhost:4222",
+    Stream: nats.StreamConfig{
+        Stream:   "mystream",
+        Subjects: []string{"orders.*", "shipments.*"},
+    },
+    MaxWait:     5 * time.Second,
+    BatchSize:   100,
+    MaxPullWait: 500 * time.Millisecond,
+    Consumer:    "my-consumer",
+    CredsFile:   "/path/to/creds.json",
+}))
 ```
 
 #### Docker setup
@@ -194,6 +231,25 @@ docker run -d \
   -v <path-to>/nats.conf:/nats/config/nats.conf \
   nats:2.9.16
 ``` 
+
+#### Configuration Options
+
+| Name | Description | Required | Default | Example |
+|------|-------------|----------|---------|---------|
+| `PUBSUB_BACKEND` | Set to "NATS" to use NATS JetStream as the message broker | Yes | - | `NATS` |
+| `PUBSUB_BROKER` | NATS server URL | Yes | - | `nats://localhost:4222` |
+| `NATS_STREAM` | Name of the NATS stream | Yes | - | `mystream` |
+| `NATS_SUBJECTS` | Comma-separated list of subjects to subscribe to | Yes | - | `orders.*,shipments.*` |
+| `NATS_MAX_WAIT` | Maximum wait time for batch requests | No | - | `5s` |
+| `NATS_BATCH_SIZE` | Maximum number of messages to pull in a single request | No | 0 | `100` |
+| `NATS_MAX_PULL_WAIT` | Maximum wait time for individual pull requests | No | 0 | `500ms` |
+| `NATS_CONSUMER` | Name of the NATS consumer | No | - | `my-consumer` |
+| `NATS_CREDS_FILE` | Path to the credentials file for authentication | No | - | `/path/to/creds.json` |
+
+#### Usage
+
+When subscribing or publishing using NATS JetStream, make sure to use the appropriate subject name that matches your stream configuration.
+For more information on setting up and using NATS JetStream, refer to the official NATS documentation.
 
 ## Subscribing
 Adding a subscriber is similar to adding an HTTP handler, which makes it easier to develop scalable applications,
