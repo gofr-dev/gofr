@@ -87,6 +87,11 @@ This document lists all the configuration options supported by the GoFr framewor
 
 ---
 
+-  TRACER_RATIO
+-  Refers to the proportion of traces that are exported through sampling. It is optional configuration. By default, this ratio is set to 1.
+
+---
+
 -  TRACER_AUTH_KEY
 -  Authorization header for trace exporter requests.
 -  Supported for zipkin, jaeger.
