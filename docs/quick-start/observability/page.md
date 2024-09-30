@@ -190,6 +190,7 @@ DB_PORT=3306
 # tracing configs
 TRACE_EXPORTER=zipkin
 TRACER_URL=http://localhost:2005/api/v2/spans
+TRACER_RATIO=0.1
 
 LOG_LEVEL=DEBUG
 ```
@@ -220,6 +221,7 @@ Add Jaeger Tracer configs in `.env` file, your .env will be updated to
 # tracing configs
 TRACE_EXPORTER=jaeger
 TRACER_URL=localhost:14317
+TRACER_RATIO=0.1
 ```
 
 Open {% new-tab-link title="jaeger" href="http://localhost:16686/trace/" /%} and search by TraceID (correlationID) to see the trace.
@@ -236,6 +238,7 @@ Add OTLP configs in `.env` file, your .env will be updated to
 # tracing configs 
 TRACE_EXPORTER=otlp
 TRACER_URL=localhost:4317
+TRACER_RATIO=0.1
 ```
 
 
@@ -251,6 +254,9 @@ Add GoFr Tracer configs in `.env` file, your .env will be updated to
 
 # tracing configs
 TRACE_EXPORTER=gofr
+TRACER_RATIO=0.1
 ```
+
+> NOTE: `TRACER_RATIO` refers to the proportion of traces that are exported through sampling. By default, this ratio is set to 1, meaning all traces are exported.
 
 Open {% new-tab-link title="gofr-tracer" href="https://tracer.gofr.dev/" /%} and search by TraceID (correlationID) to see the trace.
