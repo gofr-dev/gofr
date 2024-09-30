@@ -85,6 +85,8 @@ func New() *App {
 	}
 
 	app.httpServer = newHTTPServer(app.container, port, middleware.GetConfigs(app.Config))
+	app.httpServer.certFile = app.Config.GetOrDefault("CERT_FILE", "")
+	app.httpServer.keyFile = app.Config.GetOrDefault("KEY_FILE", "")
 
 	if app.Config.Get("APP_ENV") == "DEBUG" {
 		app.httpServer.RegisterProfilingRoutes()

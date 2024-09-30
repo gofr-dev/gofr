@@ -2,8 +2,10 @@ package gofr
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strconv"
 	"testing"
 	"time"
@@ -158,4 +160,75 @@ func TestShutdown_ServerContextDeadline(t *testing.T) {
 	err := <-shutdownCh
 
 	require.ErrorIs(t, err, context.DeadlineExceeded, "Expected context deadline exceeded error")
+}
+
+func TestValidateCertificateAndKeyFiles_Success(t *testing.T) {
+	certFile := createTempCertFile(t)
+	defer os.Remove(certFile)
+
+	keyFile := createTempKeyFile(t)
+	defer os.Remove(keyFile)
+
+	err := validateCertificateAndKeyFiles(certFile, keyFile)
+
+	require.NoError(t, err, "TestValidateCertificateAndKeyFiles_Success Failed!")
+}
+
+func TestValidateCertificateAndKeyFiles_Error(t *testing.T) {
+	tests := []struct {
+		name          string
+		certFilePath  string
+		keyFilePath   string
+		expectedError error
+	}{
+		{
+			name:          "Certificate file does not exist",
+			certFilePath:  "non-existent-cert.pem",
+			keyFilePath:   createTempKeyFile(t),
+			expectedError: fmt.Errorf("%w : %v", errInvalidCertificateFile, "non-existent-cert.pem"),
+		},
+		{
+			name:          "Key file does not exist",
+			certFilePath:  createTempCertFile(t),
+			keyFilePath:   "non-existent-key.pem",
+			expectedError: fmt.Errorf("%w : %v", errInvalidKeyFile, "non-existent-key.pem"),
+		},
+	}
+
+	for i, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validateCertificateAndKeyFiles(tc.certFilePath, tc.keyFilePath)
+
+			require.Equal(t, tc.expectedError.Error(), err.Error(),
+				"TestValidateCertificateAndKeyFiles_Error [%d] : %v Failed!", i, tc.name)
+		})
+	}
+}
+
+// Helper function to create a temporary key file.
+func createTempKeyFile(t *testing.T) string {
+	t.Helper()
+
+	f, err := os.CreateTemp("", "key-*.pem")
+	if err != nil {
+		t.Fatalf("could not create temp key file: %v", err)
+	}
+
+	defer f.Close()
+
+	return f.Name()
+}
+
+// Helper function to create a temporary certificate file.
+func createTempCertFile(t *testing.T) string {
+	t.Helper()
+
+	f, err := os.CreateTemp("", "cert-*.pem")
+	if err != nil {
+		t.Fatalf("could not create temp cert file: %v", err)
+	}
+
+	defer f.Close()
+
+	return f.Name()
 }
