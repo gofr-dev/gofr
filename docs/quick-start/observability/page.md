@@ -257,6 +257,6 @@ TRACE_EXPORTER=gofr
 TRACER_RATIO=0.1
 ```
 
-> NOTE: `TRACER_RATIO` refers to the proportion of traces that are exported through sampling. By default, this ratio is set to 1, meaning all traces are exported.
+> NOTE: `TRACER_RATIO` refers to the proportion of traces that are exported through sampling. It ranges between 0 to 1. By default, this ratio is set to 1, meaning all traces are exported.
 
 Open {% new-tab-link title="gofr-tracer" href="https://tracer.gofr.dev/" /%} and search by TraceID (correlationID) to see the trace.
