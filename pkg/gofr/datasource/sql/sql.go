@@ -44,12 +44,12 @@ func printConnectionSuccessLog(status string, dbconfig *DBConfig, logger datasou
 	}
 }
 
-func printConnectionFailureLog(dbconfig *DBConfig, logger datasource.Logger, err error) {
+func printConnectionFailureLog(action string, dbconfig *DBConfig, logger datasource.Logger, err error) {
 	if dbconfig.Dialect == sqlite {
-		logger.Errorf("could not connect to database '%s', error: %v", dbconfig.Database, err)
+		logger.Errorf("could not %s database '%s', error: %v", action, dbconfig.Database, err)
 	} else {
-		logger.Errorf("could not connect '%s' user to '%s' database at '%s:%s', error: %v",
-			dbconfig.User, dbconfig.Database, dbconfig.HostName, dbconfig.Port, err)
+		logger.Errorf("could not %s '%s' user to '%s' database at '%s:%s', error: %v",
+			action, dbconfig.User, dbconfig.Database, dbconfig.HostName, dbconfig.Port, err)
 	}
 }
 
@@ -86,12 +86,7 @@ func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *D
 
 	database.DB, err = sql.Open(otelRegisteredDialect, dbConnectionString)
 	if err != nil {
-		if database.config.Dialect == sqlite {
-			database.logger.Errorf("could not open connection '%s' database, error: %v", database.config.Database, err)
-		} else {
-			database.logger.Errorf("could not open connection with '%s' user to '%s' database at '%s:%s', error: %v",
-				database.config.User, database.config.Database, database.config.HostName, database.config.Port, err)
-		}
+		printConnectionFailureLog("open connection with", database.config, database.logger, err)
 
 		return database
 	}
@@ -115,7 +110,7 @@ func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *D
 
 func pingToTestConnection(database *DB) *DB {
 	if err := database.DB.Ping(); err != nil {
-		printConnectionFailureLog(database.config, database.logger, err)
+		printConnectionFailureLog("connect", database.config, database.logger, err)
 
 		return database
 	}
@@ -140,7 +135,7 @@ func retryConnection(database *DB) {
 					break
 				}
 
-				printConnectionFailureLog(database.config, database.logger, err)
+				printConnectionFailureLog("connect", database.config, database.logger, err)
 
 				time.Sleep(connRetryFrequencyInSeconds * time.Second)
 			}

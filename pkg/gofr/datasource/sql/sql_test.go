@@ -285,26 +285,30 @@ func Test_sqliteSuccessfulConnLogs(t *testing.T) {
 }
 
 func Test_sqliteErrConnLogs(t *testing.T) {
-	test := struct {
+	test := []struct {
 		desc        string
+		action      string
 		err         error
 		expectedLog string
 	}{
-		"sqlite connection failure", errSqliteConnection,
-		`could not connect to database 'test', error: connection failed`,
+		{"sqlite connection failure", "connect", errSqliteConnection,
+			`could not connect database 'test', error: connection failed`},
+		{"sqlite open connection failure", "open connection with", errSqliteConnection,
+			`could not open connection with database 'test', error: connection failed`},
 	}
+	for _, tt := range test {
+		logs := testutil.StderrOutputForFunc(func() {
+			mockLogger := logging.NewMockLogger(logging.DEBUG)
+			mockConfig := &DBConfig{
+				Dialect:  sqlite,
+				Database: "test",
+			}
 
-	logs := testutil.StderrOutputForFunc(func() {
-		mockLogger := logging.NewMockLogger(logging.DEBUG)
-		mockConfig := &DBConfig{
-			Dialect:  sqlite,
-			Database: "test",
-		}
+			printConnectionFailureLog(tt.action, mockConfig, mockLogger, tt.err)
+		})
 
-		printConnectionFailureLog(mockConfig, mockLogger, test.err)
-	})
-
-	assert.Contains(t, logs, test.expectedLog)
+		assert.Contains(t, logs, tt.expectedLog)
+	}
 }
 
 func Test_SQLRetryConnectionInfoLog(t *testing.T) {
