@@ -110,6 +110,16 @@ This document lists all the configuration options supported by the GoFr framewor
 -  REQUEST_TIMEOUT
 -  Set the request timeouts (in seconds) for HTTP server.
 
+---
+
+- CERT_FILE
+- Set the path to your PEM certificate file for the HTTPS server to establish a secure connection.
+
+--- 
+
+- KEY_FILE
+- Set the path to your PEM key file for the HTTPS server to establish a secure connection.
+
 {% /table %}
 
 
