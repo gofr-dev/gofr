@@ -2,7 +2,7 @@ module gofr.dev/pkg/gofr/datasource/pubsub/azeventhub
 
 go 1.22.3
 
-replace gofr.dev v1.21.0 => ../../../../../../gofr
+replace gofr.dev => ../../../../../../gofr
 
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/messaging/azeventhubs v1.2.2

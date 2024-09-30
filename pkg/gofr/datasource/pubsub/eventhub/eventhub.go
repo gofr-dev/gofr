@@ -18,6 +18,8 @@ import (
 )
 
 // code reference from https://learn.microsoft.com/en-us/azure/event-hubs/event-hubs-go-get-started-send
+// metrics are being registered in the container, and we are using the same metrics so we have not re-registered the metrics here.
+// It is different from other datasources.
 
 var errNoMsgReceived = errors.New("no message received")
 
@@ -99,21 +101,21 @@ func (c *Client) validConfigs(cfg Config) bool {
 
 }
 
-// UseLogger sets the logger for the Cassandra client.
+// UseLogger sets the logger for the eventhub client.
 func (c *Client) UseLogger(logger any) {
 	if l, ok := logger.(Logger); ok {
 		c.logger = l
 	}
 }
 
-// UseMetrics sets the metrics for the Cassandra client.
+// UseMetrics sets the metrics for the eventhub client.
 func (c *Client) UseMetrics(metrics any) {
 	if m, ok := metrics.(Metrics); ok {
 		c.metrics = m
 	}
 }
 
-// UseTracer sets the tracer for the MongoDB client.
+// UseTracer sets the tracer for the eventhub client.
 func (c *Client) UseTracer(tracer any) {
 	if t, ok := tracer.(trace.Tracer); ok {
 		c.tracer = t
@@ -131,7 +133,7 @@ func (c *Client) Connect() {
 	producerClient, err := azeventhubs.NewProducerClientFromConnectionString(c.cfg.ConnectionString,
 		c.cfg.EventhubName, c.cfg.ProducerOptions)
 	if err != nil {
-		c.logger.Error(fmt.Sprintf("error occurred while creating producer client %v", err))
+		c.logger.Errorf("error occurred while creating producer client %v", err)
 
 		return
 	}
@@ -141,7 +143,7 @@ func (c *Client) Connect() {
 	containerClient, err := container.NewClientFromConnectionString(c.cfg.ContainerConnectionString, c.cfg.StorageContainerName,
 		c.cfg.StorageOptions)
 	if err != nil {
-		c.logger.Error(fmt.Sprintf("error occurred while creating container client %v", err))
+		c.logger.Errorf("error occurred while creating container client %v", err)
 
 		return
 	}
@@ -329,19 +331,19 @@ func (c *Client) Publish(ctx context.Context, topic string, message []byte) erro
 }
 
 func (c *Client) Health() datasource.Health {
-	c.logger.Errorf("health-check not implemented for eventhub")
+	c.logger.Error("health-check not implemented for eventhub")
 
 	return datasource.Health{}
 }
 
 func (c *Client) CreateTopic(context.Context, string) error {
-	c.logger.Errorf("topic creation is not supported in eventhub")
+	c.logger.Error("topic creation is not supported in eventhub")
 
 	return nil
 }
 
-func (c *Client) DeleteTopic(context context.Context, name string) error {
-	c.logger.Errorf("topic deletion is not supported in eventhub")
+func (c *Client) DeleteTopic(context.Context, string) error {
+	c.logger.Error("topic deletion is not supported in eventhub")
 
 	return nil
 }

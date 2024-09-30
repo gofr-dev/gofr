@@ -74,8 +74,7 @@ func TestConnect_ProducerError(t *testing.T) {
 
 		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 
-		mockLogger.EXPECT().Error("error occurred while creating producer client connection string " +
-			"contains an EntityPath. eventHub must be an empty string")
+		mockLogger.EXPECT().Errorf("error occurred while creating producer client %v", gomock.Any())
 
 		client.Connect()
 	})
@@ -99,8 +98,7 @@ func TestConnect_ContainerError(t *testing.T) {
 
 		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 
-		mockLogger.EXPECT().Error("error occurred while creating container client decode account key:" +
-			" illegal base64 data at input byte 16")
+		mockLogger.EXPECT().Errorf("error occurred while creating container client %v", gomock.Any())
 
 		client.Connect()
 	})
@@ -166,6 +164,91 @@ func TestPublish_FailedInvalidTopic(t *testing.T) {
 	require.Equal(t, "topic should be same as eventhub name", err.Error(), "Eventhub Publish Failed Invalid Topic")
 
 	require.True(t, mockLogger.ctrl.Satisfied(), "Eventhub Publish Failed Invalid Topic")
+}
+
+func Test_CreateTopic(t *testing.T) {
+	ctrl := gomock.NewController(t)
+
+	client := New(getTestConfigs())
+
+	mockLogger := NewMockLogger(ctrl)
+	mockMetrics := NewMockMetrics(ctrl)
+
+	mockLogger.EXPECT().Debug("azure eventhub connection started using connection string")
+	mockLogger.EXPECT().Debug("azure eventhub producer client setup success")
+	mockLogger.EXPECT().Debug("azure eventhub container client setup success")
+	mockLogger.EXPECT().Debug("azure eventhub blobstore client setup success")
+	mockLogger.EXPECT().Debug("azure eventhub consumer client setup success")
+	mockLogger.EXPECT().Debug("azure eventhub processor setup success")
+	mockLogger.EXPECT().Debug("azure eventhub processor running successfully").AnyTimes()
+	mockLogger.EXPECT().Error("topic deletion is not supported in eventhub")
+
+	client.UseLogger(mockLogger)
+	client.UseMetrics(mockMetrics)
+
+	client.Connect()
+
+	err := client.DeleteTopic(context.Background(), "random-topic")
+
+	require.Nil(t, err, "Eventhub Topic Creation not allowed failed")
+
+	require.True(t, mockLogger.ctrl.Satisfied(), "Eventhub Topic Creation not allowed failed")
+}
+
+func Test_DeleteTopic(t *testing.T) {
+	ctrl := gomock.NewController(t)
+
+	client := New(getTestConfigs())
+
+	mockLogger := NewMockLogger(ctrl)
+	mockMetrics := NewMockMetrics(ctrl)
+
+	mockLogger.EXPECT().Debug("azure eventhub connection started using connection string")
+	mockLogger.EXPECT().Debug("azure eventhub producer client setup success")
+	mockLogger.EXPECT().Debug("azure eventhub container client setup success")
+	mockLogger.EXPECT().Debug("azure eventhub blobstore client setup success")
+	mockLogger.EXPECT().Debug("azure eventhub consumer client setup success")
+	mockLogger.EXPECT().Debug("azure eventhub processor setup success")
+	mockLogger.EXPECT().Debug("azure eventhub processor running successfully").AnyTimes()
+	mockLogger.EXPECT().Error("topic creation is not supported in eventhub")
+
+	client.UseLogger(mockLogger)
+	client.UseMetrics(mockMetrics)
+
+	client.Connect()
+
+	err := client.CreateTopic(context.Background(), "random-topic")
+
+	require.Nil(t, err, "Eventhub Topic Deletion not allowed failed")
+
+	require.True(t, mockLogger.ctrl.Satisfied(), "Eventhub Topic Deletion not allowed failed")
+}
+
+func Test_HealthCheck(t *testing.T) {
+	ctrl := gomock.NewController(t)
+
+	client := New(getTestConfigs())
+
+	mockLogger := NewMockLogger(ctrl)
+	mockMetrics := NewMockMetrics(ctrl)
+
+	mockLogger.EXPECT().Debug("azure eventhub connection started using connection string")
+	mockLogger.EXPECT().Debug("azure eventhub producer client setup success")
+	mockLogger.EXPECT().Debug("azure eventhub container client setup success")
+	mockLogger.EXPECT().Debug("azure eventhub blobstore client setup success")
+	mockLogger.EXPECT().Debug("azure eventhub consumer client setup success")
+	mockLogger.EXPECT().Debug("azure eventhub processor setup success")
+	mockLogger.EXPECT().Debug("azure eventhub processor running successfully").AnyTimes()
+	mockLogger.EXPECT().Error("health-check not implemented for eventhub")
+
+	client.UseLogger(mockLogger)
+	client.UseMetrics(mockMetrics)
+
+	client.Connect()
+
+	_ = client.Health()
+
+	require.True(t, mockLogger.ctrl.Satisfied(), "Eventhub Topic Deletion not allowed failed")
 }
 
 func getTestConfigs() Config {
