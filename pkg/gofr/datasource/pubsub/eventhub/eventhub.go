@@ -19,6 +19,8 @@ import (
 
 // code reference from https://learn.microsoft.com/en-us/azure/event-hubs/event-hubs-go-get-started-send
 
+var errNoMsgReceived = errors.New("no message received")
+
 type Config struct {
 	ConnectionString          string
 	ContainerConnectionString string
@@ -212,14 +214,18 @@ func (c *Client) Subscribe(ctx context.Context, topic string) (*pubsub.Message, 
 			break
 		}
 
-		partitionID := partitionClient.PartitionID()
-
-		c.metrics.IncrementCounter(ctx, "app_pubsub_subscribe_total_count", "topic", topic, "subscription_name", partitionID)
+		c.metrics.IncrementCounter(ctx, "app_pubsub_subscribe_total_count", "topic", topic, "subscription_name", partitionClient.PartitionID())
 
 		start := time.Now()
 
 		msg, err = c.processEvents(ctx, partitionClient)
-		if err != nil {
+		switch err {
+		case errNoMsgReceived:
+			// if no message is received, we don't achieve anything by returning error rather check in a different partition.
+			// this logic may change if we remove the timeout while receiving message, but waiting on just one partition
+			//might lead to miss data, so spawning one go-routine or having a worker pool can be an option to do this operation faster.
+			break
+		default:
 			return nil, err
 		}
 
@@ -229,7 +235,7 @@ func (c *Client) Subscribe(ctx context.Context, topic string) (*pubsub.Message, 
 			Mode:          "SUB",
 			MessageValue:  strings.Join(strings.Fields(string(msg.Value)), " "),
 			Topic:         topic,
-			Host:          fmt.Sprint(c.cfg.EventhubName + ":" + c.cfg.ConsumerGroup + ":" + partitionID),
+			Host:          fmt.Sprint(c.cfg.EventhubName + ":" + c.cfg.ConsumerGroup + ":" + partitionClient.PartitionID()),
 			PubSubBackend: "EVHUB",
 			Time:          end.Microseconds(),
 		})
@@ -244,33 +250,31 @@ func (c *Client) Subscribe(ctx context.Context, topic string) (*pubsub.Message, 
 
 func (c *Client) processEvents(ctx context.Context, partitionClient *azeventhubs.ProcessorPartitionClient) (*pubsub.Message, error) {
 	defer closePartitionResources(ctx, partitionClient)
-	for {
-		events, err := partitionClient.ReceiveEvents(ctx, 1, nil)
 
-		if err != nil && !errors.Is(err, context.DeadlineExceeded) {
-			return nil, err
-		}
+	receiveCtx, receiveCtxCancel := context.WithTimeout(ctx, time.Second)
+	events, err := partitionClient.ReceiveEvents(receiveCtx, 1, nil)
+	receiveCtxCancel()
 
-		msg := pubsub.NewMessage(ctx)
-
-		if len(events) == 1 {
-			msg.Value = events[0].Body
-			msg.Committer = &Message{
-				event:     events[0],
-				processor: partitionClient,
-			}
-			msg.Topic = partitionClient.PartitionID()
-			msg.MetaData = events[0]
-
-			return msg, nil
-		}
-
-		if len(events) != 0 {
-			if err = partitionClient.UpdateCheckpoint(ctx, events[len(events)-1], nil); err != nil {
-				return nil, err
-			}
-		}
+	if err != nil && !errors.Is(err, context.DeadlineExceeded) {
+		return nil, err
 	}
+
+	if len(events) == 0 {
+		return nil, errNoMsgReceived
+	}
+
+	msg := pubsub.NewMessage(ctx)
+
+	msg.Value = events[0].Body
+	msg.Committer = &Message{
+		event:     events[0],
+		processor: partitionClient,
+	}
+
+	msg.Topic = partitionClient.PartitionID()
+	msg.MetaData = events[0].EventData
+
+	return msg, nil
 }
 
 func closePartitionResources(ctx context.Context, partitionClient *azeventhubs.ProcessorPartitionClient) {
