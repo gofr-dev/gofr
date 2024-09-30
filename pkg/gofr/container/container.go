@@ -8,7 +8,6 @@ import (
 	"time"
 
 	_ "github.com/go-sql-driver/mysql" // This is required to be blank import
-	"gofr.dev/pkg/gofr/datasource/pubsub/nats"
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/datasource/file"
@@ -45,8 +44,6 @@ type Container struct {
 	Cassandra  Cassandra
 	Clickhouse Clickhouse
 	Mongo      Mongo
-	Solr       Solr
-	DGraph     Dgraph
 
 	KVStore KVStore
 
@@ -69,148 +66,72 @@ func NewContainer(conf config.Config) *Container {
 }
 
 func (c *Container) Create(conf config.Config) {
-	c.initializeAppInfo(conf)
-	c.initializeLogger(conf)
-	c.initializeMetrics()
-	c.initializeRedisAndSQL(conf)
-	c.initializePubSub(conf)
-	c.initializeFile()
-}
-
-func (c *Container) initializeAppInfo(conf config.Config) {
-	if c.appName == "" {
+	if c.appName != "" {
 		c.appName = conf.GetOrDefault("APP_NAME", "gofr-app")
 	}
 
-	if c.appVersion == "" {
+	if c.appVersion != "" {
 		c.appVersion = conf.GetOrDefault("APP_VERSION", "dev")
 	}
-}
 
-func (c *Container) initializeLogger(conf config.Config) {
-	if c.Logger != nil {
-		return
+	if c.Logger == nil {
+		levelFetchConfig, err := strconv.Atoi(conf.GetOrDefault("REMOTE_LOG_FETCH_INTERVAL", "15"))
+		if err != nil {
+			levelFetchConfig = 15
+		}
+
+		c.Logger = remotelogger.New(logging.GetLevelFromString(conf.Get("LOG_LEVEL")), conf.Get("REMOTE_LOG_URL"),
+			time.Duration(levelFetchConfig)*time.Second)
+
+		if err != nil {
+			c.Logger.Error("invalid value for REMOTE_LOG_FETCH_INTERVAL. setting default of 15 sec.")
+		}
 	}
 
-	levelFetchConfig := c.getLevelFetchConfig(conf)
-	c.Logger = remotelogger.New(
-		logging.GetLevelFromString(conf.Get("LOG_LEVEL")),
-		conf.Get("REMOTE_LOG_URL"),
-		time.Duration(levelFetchConfig)*time.Second,
-	)
 	c.Debug("Container is being created")
-}
 
-func (c *Container) getLevelFetchConfig(conf config.Config) int {
-	levelFetchConfig, err := strconv.Atoi(conf.GetOrDefault("REMOTE_LOG_FETCH_INTERVAL", "15"))
-	if err != nil {
-		levelFetchConfig = 15
-
-		c.Logger.Error("invalid value for REMOTE_LOG_FETCH_INTERVAL. setting default of 15 sec.")
-	}
-
-	return levelFetchConfig
-}
-
-func (c *Container) initializeMetrics() {
 	c.metricsManager = metrics.NewMetricsManager(exporters.Prometheus(c.GetAppName(), c.GetAppVersion()), c.Logger)
+
 	// Register framework metrics
 	c.registerFrameworkMetrics()
+
+	// Populating an instance of app_info with the app details, the value is set as 1 to depict the no. of instances
 	c.Metrics().SetGauge("app_info", 1,
 		"app_name", c.GetAppName(), "app_version", c.GetAppVersion(), "framework_version", version.Framework)
-}
 
-func (c *Container) initializeRedisAndSQL(conf config.Config) {
 	c.Redis = redis.NewClient(conf, c.Logger, c.metricsManager)
-	c.SQL = sql.NewSQL(conf, c.Logger, c.metricsManager)
-}
 
-func (c *Container) initializePubSub(conf config.Config) {
+	c.SQL = sql.NewSQL(conf, c.Logger, c.metricsManager)
+
 	switch strings.ToUpper(conf.Get("PUBSUB_BACKEND")) {
 	case "KAFKA":
-		c.initializeKafka(conf)
+		if conf.Get("PUBSUB_BROKER") != "" {
+			partition, _ := strconv.Atoi(conf.GetOrDefault("PARTITION_SIZE", "0"))
+			offSet, _ := strconv.Atoi(conf.GetOrDefault("PUBSUB_OFFSET", "-1"))
+			batchSize, _ := strconv.Atoi(conf.GetOrDefault("KAFKA_BATCH_SIZE", strconv.Itoa(kafka.DefaultBatchSize)))
+			batchBytes, _ := strconv.Atoi(conf.GetOrDefault("KAFKA_BATCH_BYTES", strconv.Itoa(kafka.DefaultBatchBytes)))
+			batchTimeout, _ := strconv.Atoi(conf.GetOrDefault("KAFKA_BATCH_TIMEOUT", strconv.Itoa(kafka.DefaultBatchTimeout)))
+
+			c.PubSub = kafka.New(kafka.Config{
+				Broker:          conf.Get("PUBSUB_BROKER"),
+				Partition:       partition,
+				ConsumerGroupID: conf.Get("CONSUMER_ID"),
+				OffSet:          offSet,
+				BatchSize:       batchSize,
+				BatchBytes:      batchBytes,
+				BatchTimeout:    batchTimeout,
+			}, c.Logger, c.metricsManager)
+		}
 	case "GOOGLE":
-		c.initializeGoogle(conf)
+		c.PubSub = google.New(google.Config{
+			ProjectID:        conf.Get("GOOGLE_PROJECT_ID"),
+			SubscriptionName: conf.Get("GOOGLE_SUBSCRIPTION_NAME"),
+		}, c.Logger, c.metricsManager)
 	case "MQTT":
 		c.PubSub = c.createMqttPubSub(conf)
-	case "client":
-		c.initializeNATS(conf)
-	}
-}
-
-func (c *Container) initializeKafka(conf config.Config) {
-	if conf.Get("PUBSUB_BROKER") == "" {
-		return
 	}
 
-	c.PubSub = kafka.New(c.getKafkaConfig(conf), c.Logger, c.metricsManager)
-}
-
-func (c *Container) getKafkaConfig(conf config.Config) kafka.Config {
-	return kafka.Config{
-		Broker:          conf.Get("PUBSUB_BROKER"),
-		Partition:       c.validateAndRetrieveIntConfig(conf, "PARTITION_SIZE", 0),
-		ConsumerGroupID: conf.Get("CONSUMER_ID"),
-		OffSet:          c.validateAndRetrieveIntConfig(conf, "PUBSUB_OFFSET", -1),
-		BatchSize:       c.validateAndRetrieveIntConfig(conf, "KAFKA_BATCH_SIZE", kafka.DefaultBatchSize),
-		BatchBytes:      c.validateAndRetrieveIntConfig(conf, "KAFKA_BATCH_BYTES", kafka.DefaultBatchBytes),
-		BatchTimeout:    c.validateAndRetrieveIntConfig(conf, "KAFKA_BATCH_TIMEOUT", kafka.DefaultBatchTimeout),
-	}
-}
-
-func (c *Container) initializeGoogle(conf config.Config) {
-	c.PubSub = google.New(google.Config{
-		ProjectID:        conf.Get("GOOGLE_PROJECT_ID"),
-		SubscriptionName: conf.Get("GOOGLE_SUBSCRIPTION_NAME"),
-	}, c.Logger, c.metricsManager)
-}
-
-func (c *Container) initializeNATS(conf config.Config) {
-	natsConfig := &nats.Config{
-		Server: conf.Get("PUBSUB_BROKER"),
-		Stream: nats.StreamConfig{
-			Stream:   conf.Get("NATS_STREAM"),
-			Subjects: strings.Split(conf.Get("NATS_SUBJECTS"), ","),
-		},
-		MaxWait:     c.getDuration(conf, "NATS_MAX_WAIT"),
-		BatchSize:   c.validateAndRetrieveIntConfig(conf, "NATS_BATCH_SIZE", 0),
-		MaxPullWait: c.validateAndRetrieveIntConfig(conf, "NATS_MAX_PULL_WAIT", 0),
-		Consumer:    conf.Get("NATS_CONSUMER"),
-		CredsFile:   conf.Get("NATS_CREDS_FILE"),
-	}
-
-	var err error
-
-	c.PubSub, err = nats.New(natsConfig, c.Logger, c.metricsManager)
-	if err != nil {
-		c.Logger.Errorf("failed to create client client: %v", err)
-	}
-}
-
-func (c *Container) initializeFile() {
 	c.File = file.New(c.Logger)
-}
-
-func (c *Container) validateAndRetrieveIntConfig(conf config.Config, key string, defaultValue int) int {
-	value, err := strconv.Atoi(conf.GetOrDefault(key, strconv.Itoa(defaultValue)))
-	if err != nil {
-		c.Logger.Errorf("invalid value for %s: %v", key, err)
-
-		return defaultValue
-	}
-
-	return value
-}
-
-func (c *Container) getDuration(conf config.Config, key string) time.Duration {
-	value, err := time.ParseDuration(conf.Get(key))
-	if err != nil {
-		c.Logger.Errorf("invalid value for %s: %v", key, err)
-
-		return 0
-	}
-
-	return value
 }
 
 func (c *Container) Close() error {
