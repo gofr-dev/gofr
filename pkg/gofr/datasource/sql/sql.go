@@ -35,24 +35,6 @@ type DBConfig struct {
 	MaxOpenConn int
 }
 
-func printConnectionSuccessLog(status string, dbconfig *DBConfig, logger datasource.Logger) {
-	if dbconfig.Dialect == sqlite {
-		logger.Debugf("%s to '%s' database", status, dbconfig.Database)
-	} else {
-		logger.Debugf("%s to '%s' user to '%s' database at '%s:%s'", status, dbconfig.User,
-			dbconfig.Database, dbconfig.HostName, dbconfig.Port)
-	}
-}
-
-func printConnectionFailureLog(action string, dbconfig *DBConfig, logger datasource.Logger, err error) {
-	if dbconfig.Dialect == sqlite {
-		logger.Errorf("could not %s database '%s', error: %v", action, dbconfig.Database, err)
-	} else {
-		logger.Errorf("could not %s '%s' user to '%s' database at '%s:%s', error: %v",
-			action, dbconfig.User, dbconfig.Database, dbconfig.HostName, dbconfig.Port, err)
-	}
-}
-
 func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *DB {
 	logger.Debugf("reading database configurations from config file")
 
@@ -214,5 +196,23 @@ func pushDBMetrics(db *sql.DB, metrics Metrics) {
 
 			time.Sleep(frequency * time.Second)
 		}
+	}
+}
+
+func printConnectionSuccessLog(status string, dbconfig *DBConfig, logger datasource.Logger) {
+	if dbconfig.Dialect == sqlite {
+		logger.Debugf("%s to '%s' database", status, dbconfig.Database)
+	} else {
+		logger.Debugf("%s to '%s' user to '%s' database at '%s:%s'", status, dbconfig.User,
+			dbconfig.Database, dbconfig.HostName, dbconfig.Port)
+	}
+}
+
+func printConnectionFailureLog(action string, dbconfig *DBConfig, logger datasource.Logger, err error) {
+	if dbconfig.Dialect == sqlite {
+		logger.Errorf("could not %s database '%s', error: %v", action, dbconfig.Database, err)
+	} else {
+		logger.Errorf("could not %s '%s' user to '%s' database at '%s:%s', error: %v",
+			action, dbconfig.User, dbconfig.Database, dbconfig.HostName, dbconfig.Port, err)
 	}
 }
