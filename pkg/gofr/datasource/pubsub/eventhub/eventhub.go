@@ -199,12 +199,6 @@ func (c *Client) Connect() {
 
 // Subscribe checks all partitions for the first available event and returns it.
 func (c *Client) Subscribe(ctx context.Context, topic string) (*pubsub.Message, error) {
-	if topic != c.cfg.EventhubName {
-		// Fatal will stop the application from starting - as subscribe is called when the app is first started.
-		// This is done to ensure that if the user changes to some other pub-sub provider, the code doesn't break.
-		c.logger.Fatal("topic should be same as eventhub name")
-	}
-
 	var (
 		msg *pubsub.Message
 		err error

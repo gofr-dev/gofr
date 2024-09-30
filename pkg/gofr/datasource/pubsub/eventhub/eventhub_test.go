@@ -41,23 +41,21 @@ func TestConnect(t *testing.T) {
 func TestConfigValidation(t *testing.T) {
 	ctrl := gomock.NewController(t)
 
-	logger := NewMockLogger(ctrl)
+	mockLogger := NewMockLogger(ctrl)
 
-	testutil.StderrOutputForFunc(func() {
-		client := New(Config{})
+	client := New(Config{})
 
-		client.UseLogger(logger)
+	client.UseLogger(mockLogger)
 
-		logger.EXPECT().Error("EventhubName cannot be an empty")
-		logger.EXPECT().Error("ConnectionString cannot be an empty")
-		logger.EXPECT().Error("StorageServiceURL cannot be an empty")
-		logger.EXPECT().Error("StorageContainerName cannot be an empty")
-		logger.EXPECT().Error("ContainerConnectionString cannot be an empty")
+	mockLogger.EXPECT().Error("eventhubName cannot be an empty")
+	mockLogger.EXPECT().Error("connectionString cannot be an empty")
+	mockLogger.EXPECT().Error("storageServiceURL cannot be an empty")
+	mockLogger.EXPECT().Error("storageContainerName cannot be an empty")
+	mockLogger.EXPECT().Error("containerConnectionString cannot be an empty")
 
-		client.Connect()
-	})
+	client.Connect()
 
-	require.True(t, logger.ctrl.Satisfied(), "Config Validation Failed")
+	require.True(t, mockLogger.ctrl.Satisfied(), "Config Validation Failed")
 }
 
 func TestConnect_ProducerError(t *testing.T) {
