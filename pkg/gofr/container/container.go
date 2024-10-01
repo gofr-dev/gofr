@@ -1,3 +1,6 @@
+// The container package provides a centralized structure to manage common application-level concerns such as
+// logging, connection pools, and service management. This package is designed to facilitate the sharing and
+// management of these concerns across different parts of an application.
 package container
 
 import (
