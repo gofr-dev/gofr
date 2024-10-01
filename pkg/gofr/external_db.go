@@ -1,6 +1,7 @@
 package gofr
 
 import (
+	"go.opentelemetry.io/otel"
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/datasource/file"
 )
@@ -51,6 +52,10 @@ func (a *App) AddFileStore(fs file.FileSystemProvider) {
 func (a *App) AddClickhouse(db container.ClickhouseProvider) {
 	db.UseLogger(a.Logger())
 	db.UseMetrics(a.Metrics())
+
+	tracer := otel.GetTracerProvider().Tracer("gofr-clickhouse")
+
+	db.UseTracer(tracer)
 
 	db.Connect()
 
