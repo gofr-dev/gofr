@@ -515,8 +515,8 @@ func TestClient_StartSession(t *testing.T) {
 
 		// Call the StartSession method
 		sess, err := cl.StartSession()
-		ses, ok := sess.(Transaction)
 
+		ses, ok := sess.(Transaction)
 		if ok {
 			err = ses.StartTransaction()
 		}
