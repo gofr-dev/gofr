@@ -3,8 +3,11 @@ package clickhouse
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
+
+	"go.opentelemetry.io/otel/attribute"
 
 	"go.opentelemetry.io/otel/trace"
 
@@ -120,9 +123,13 @@ func pushDBMetrics(conn Conn, metrics Metrics) {
 // Exec should be used for DDL and simple statements.
 // It should not be used for larger inserts or query iterations.
 func (c *client) Exec(ctx context.Context, query string, args ...any) error {
-	defer c.sendOperationStats(time.Now(), "Exec", query, args...)
+	tracedCtx, span := c.addTrace(ctx, "exec", query)
 
-	return c.conn.Exec(ctx, query, args...)
+	err := c.conn.Exec(tracedCtx, query, args...)
+
+	defer c.sendOperationStats(time.Now(), "Exec", query, "exec", span, args...)
+
+	return err
 }
 
 // Select method allows a set of response rows to be marshaled into a slice of structs with a single invocation..
@@ -139,20 +146,29 @@ func (c *client) Exec(ctx context.Context, query string, args ...any) error {
 //
 // err = ctx.Clickhouse.Select(ctx, &user, "SELECT * FROM users") .
 func (c *client) Select(ctx context.Context, dest any, query string, args ...any) error {
-	defer c.sendOperationStats(time.Now(), "Select", query, args...)
+	tracedCtx, span := c.addTrace(ctx, "select", query)
 
-	return c.conn.Select(ctx, dest, query, args...)
+	err := c.conn.Select(tracedCtx, dest, query, args...)
+
+	defer c.sendOperationStats(time.Now(), "Select", query, "select", span, args...)
+
+	return err
 }
 
 // AsyncInsert allows the user to specify whether the client should wait for the server to complete the insert or
 // respond once the data has been received.
 func (c *client) AsyncInsert(ctx context.Context, query string, wait bool, args ...any) error {
-	defer c.sendOperationStats(time.Now(), "AsyncInsert", query, args...)
+	tracedCtx, span := c.addTrace(ctx, "async-insert", query)
 
-	return c.conn.AsyncInsert(ctx, query, wait, args...)
+	err := c.conn.AsyncInsert(tracedCtx, query, wait, args...)
+
+	defer c.sendOperationStats(time.Now(), "AsyncInsert", query, "async-insert", span, args...)
+
+	return err
 }
 
-func (c *client) sendOperationStats(start time.Time, methodType, query string, args ...interface{}) {
+func (c *client) sendOperationStats(start time.Time, methodType, query string, method string,
+	span trace.Span, args ...interface{}) {
 	duration := time.Since(start).Milliseconds()
 
 	c.logger.Debug(&Log{
@@ -161,6 +177,11 @@ func (c *client) sendOperationStats(start time.Time, methodType, query string, a
 		Duration: duration,
 		Args:     args,
 	})
+
+	if span != nil {
+		defer span.End()
+		span.SetAttributes(attribute.Int64(fmt.Sprintf("clickhouse.%v.duration", method), duration))
+	}
 
 	c.metrics.RecordHistogram(context.Background(), "app_clickhouse_stats", float64(duration), "hosts", c.config.Hosts,
 		"database", c.config.Database, "type", getOperationType(query))
@@ -197,4 +218,18 @@ func (c *client) HealthCheck(ctx context.Context) (any, error) {
 	h.Status = "UP"
 
 	return &h, nil
+}
+
+func (c *client) addTrace(ctx context.Context, method, query string) (context.Context, trace.Span) {
+	if c.tracer != nil {
+		contextWithTrace, span := c.tracer.Start(ctx, fmt.Sprintf("clickhouse-%v", method))
+
+		span.SetAttributes(
+			attribute.String("clickhouse.query", query),
+		)
+
+		return contextWithTrace, span
+	}
+
+	return ctx, nil
 }
