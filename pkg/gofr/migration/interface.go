@@ -39,10 +39,10 @@ type Clickhouse interface {
 }
 
 type Cassandra interface {
-	Exec(query string, args ...interface{}) error
-	NewBatch(name string, batchType int) error
-	BatchQuery(name, stmt string, values ...any) error
-	ExecuteBatch(name string) error
+	Exec(ctx context.Context, query string, args ...interface{}) error
+	NewBatch(ctx context.Context, name string, batchType int) error
+	BatchQuery(ctx context.Context, name, stmt string, values ...any) error
+	ExecuteBatch(ctx context.Context, name string) error
 
 	HealthCheck(ctx context.Context) (any, error)
 }

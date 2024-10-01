@@ -1,6 +1,7 @@
 package migration
 
 import (
+	"context"
 	"database/sql"
 	"testing"
 	"time"
@@ -41,7 +42,7 @@ func Test_CassandraCheckAndCreateMigrationTable(t *testing.T) {
 	}
 
 	for i, tc := range testCases {
-		mockCassandra.EXPECT().Exec(checkAndCreateCassandraMigrationTable).Return(tc.err)
+		mockCassandra.EXPECT().Exec(context.Background(), checkAndCreateCassandraMigrationTable).Return(tc.err)
 
 		err := migratorWithCassandra.checkAndCreateMigrationTable(mockContainer)
 
@@ -64,7 +65,7 @@ func Test_CassandraGetLastMigration(t *testing.T) {
 	var lastMigration []int64
 
 	for i, tc := range testCases {
-		mockCassandra.EXPECT().Query(&lastMigration, getLastCassandraGoFrMigration).Return(tc.err)
+		mockCassandra.EXPECT().Query(context.Background(), &lastMigration, getLastCassandraGoFrMigration).Return(tc.err)
 
 		resp := migratorWithCassandra.getLastMigration(mockContainer)
 

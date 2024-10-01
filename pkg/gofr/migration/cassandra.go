@@ -1,6 +1,7 @@
 package migration
 
 import (
+	"context"
 	"time"
 
 	"gofr.dev/pkg/gofr/container"
@@ -33,7 +34,7 @@ const (
 )
 
 func (cs cassandraMigrator) checkAndCreateMigrationTable(c *container.Container) error {
-	if err := c.Cassandra.Exec(checkAndCreateCassandraMigrationTable); err != nil {
+	if err := c.Cassandra.Exec(context.Background(), checkAndCreateCassandraMigrationTable); err != nil {
 		return err
 	}
 
@@ -45,7 +46,7 @@ func (cs cassandraMigrator) getLastMigration(c *container.Container) int64 {
 
 	var lastMigrations []int64
 
-	err := c.Cassandra.Query(&lastMigrations, getLastCassandraGoFrMigration)
+	err := c.Cassandra.Query(context.Background(), &lastMigrations, getLastCassandraGoFrMigration)
 	if err != nil {
 		return 0
 	}
@@ -76,7 +77,7 @@ func (cs cassandraMigrator) beginTransaction(c *container.Container) transaction
 }
 
 func (cs cassandraMigrator) commitMigration(c *container.Container, data transactionData) error {
-	err := cs.Cassandra.Exec(insertCassandraGoFrMigrationRow, data.MigrationNumber,
+	err := cs.Cassandra.Exec(context.Background(), insertCassandraGoFrMigrationRow, data.MigrationNumber,
 		"UP", data.StartTime, time.Since(data.StartTime).Milliseconds())
 	if err != nil {
 		return err

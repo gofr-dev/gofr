@@ -201,7 +201,7 @@ func (c *Client) ExecCAS(ctx context.Context, dest any, stmt string, values ...a
 	return applied, err
 }
 
-func (c *Client) NewBatch(name string, batchType int) error {
+func (c *Client) NewBatch(_ context.Context, name string, batchType int) error {
 	switch batchType {
 	case LoggedBatch, UnloggedBatch, CounterBatch:
 		if len(c.cassandra.batches) == 0 {
@@ -369,7 +369,7 @@ func (c *Client) HealthCheck(context.Context) (any, error) {
 
 func (c *Client) addTrace(ctx context.Context, method, query string) (context.Context, trace.Span) {
 	if c.tracer != nil {
-		tracerCtx, span := c.tracer.Start(context.Background(), fmt.Sprintf("clickhouse-%v", method))
+		tracerCtx, span := c.tracer.Start(ctx, fmt.Sprintf("clickhouse-%v", method))
 
 		span.SetAttributes(
 			attribute.String("cassandra.query", query),
