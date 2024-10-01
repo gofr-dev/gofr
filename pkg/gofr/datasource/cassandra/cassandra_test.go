@@ -5,6 +5,8 @@ import (
 	"errors"
 	"testing"
 
+	"go.opentelemetry.io/otel"
+
 	"github.com/gocql/gocql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -47,6 +49,7 @@ func initTest(t *testing.T) (*Client, *mockDependencies) {
 	client := New(config)
 	client.UseLogger(mockLogger)
 	client.UseMetrics(mockMetrics)
+	client.UseTracer(otel.GetTracerProvider().Tracer("gofr-cassandra"))
 
 	client.cassandra.session = mockSession
 	client.cassandra.batches = map[string]batch{mockBatchName: mockBatch}
