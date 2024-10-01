@@ -32,6 +32,16 @@ func (a *App) AddFTP(fs file.FileSystemProvider) {
 	a.container.File = fs
 }
 
+// AddPubSub sets the PubSub client in the app's container.
+func (a *App) AddPubSub(pubsub container.PubSubProvider) {
+	pubsub.UseLogger(a.Logger())
+	pubsub.UseMetrics(a.Metrics())
+
+	pubsub.Connect()
+
+	a.container.PubSub = pubsub
+}
+
 // AddFile sets the FTP,SFTP,S3 datasource in the app's container.
 func (a *App) AddFileStore(fs file.FileSystemProvider) {
 	fs.UseLogger(a.Logger())
@@ -47,6 +57,10 @@ func (a *App) AddFileStore(fs file.FileSystemProvider) {
 func (a *App) AddClickhouse(db container.ClickhouseProvider) {
 	db.UseLogger(a.Logger())
 	db.UseMetrics(a.Metrics())
+
+	tracer := otel.GetTracerProvider().Tracer("gofr-clickhouse")
+
+	db.UseTracer(tracer)
 
 	db.Connect()
 
