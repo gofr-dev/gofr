@@ -8,6 +8,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"gofr.dev/pkg/gofr/datasource"
+	"gofr.dev/pkg/gofr/datasource/pubsub"
 	gofrSQL "gofr.dev/pkg/gofr/datasource/sql"
 )
 
@@ -244,6 +245,9 @@ type provider interface {
 	// UseMetrics sets the metrics for the Cassandra client.
 	UseMetrics(metrics any)
 
+	// UseTracer sets the tracer for the Cassandra client.
+	UseTracer(tracer any)
+
 	// Connect establishes a connection to Cassandra and registers metrics using the provided configuration when the client was Created.
 	Connect()
 }
@@ -264,6 +268,12 @@ type KVStore interface {
 
 type KVStoreProvider interface {
 	KVStore
+
+	provider
+}
+
+type PubSubProvider interface {
+	pubsub.Client
 
 	provider
 }
