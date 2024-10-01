@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"go.opentelemetry.io/otel"
 	"go.uber.org/mock/gomock"
 
 	"gofr.dev/pkg/gofr/container"
@@ -78,6 +79,7 @@ func TestApp_AddClickhouse(t *testing.T) {
 
 		mock.EXPECT().UseLogger(app.Logger())
 		mock.EXPECT().UseMetrics(app.Metrics())
+		mock.EXPECT().UseTracer(otel.GetTracerProvider().Tracer("gofr-clickhouse"))
 		mock.EXPECT().Connect()
 
 		app.AddClickhouse(mock)
