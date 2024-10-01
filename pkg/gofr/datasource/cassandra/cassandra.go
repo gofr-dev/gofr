@@ -102,8 +102,8 @@ func (c *Client) UseTracer(tracer any) {
 }
 
 //nolint:exhaustive // We just want to take care of slice and struct in this case.
-func (c *Client) Query(dest any, stmt string, values ...any) error {
-	span := c.addTrace("query", stmt)
+func (c *Client) Query(ctx context.Context, dest any, stmt string, values ...any) error {
+	_, span := c.addTrace(ctx, "query", stmt)
 
 	defer c.sendOperationStats(&QueryLog{Query: stmt, Keyspace: c.config.Keyspace}, time.Now(), "query", span)
 
@@ -151,8 +151,8 @@ func (c *Client) Query(dest any, stmt string, values ...any) error {
 	return nil
 }
 
-func (c *Client) Exec(stmt string, values ...any) error {
-	span := c.addTrace("exec", stmt)
+func (c *Client) Exec(ctx context.Context, stmt string, values ...any) error {
+	_, span := c.addTrace(ctx, "exec", stmt)
 
 	defer c.sendOperationStats(&QueryLog{Query: stmt, Keyspace: c.config.Keyspace}, time.Now(), "exec", span)
 
@@ -160,13 +160,13 @@ func (c *Client) Exec(stmt string, values ...any) error {
 }
 
 //nolint:exhaustive // We just want to take care of slice and struct in this case.
-func (c *Client) ExecCAS(dest any, stmt string, values ...any) (bool, error) {
+func (c *Client) ExecCAS(ctx context.Context, dest any, stmt string, values ...any) (bool, error) {
 	var (
 		applied bool
 		err     error
 	)
 
-	span := c.addTrace("exec-cas", stmt)
+	_, span := c.addTrace(ctx, "exec-cas", stmt)
 
 	defer c.sendOperationStats(&QueryLog{Query: stmt, Keyspace: c.config.Keyspace}, time.Now(), "exec-cas", span)
 
@@ -367,17 +367,17 @@ func (c *Client) HealthCheck(context.Context) (any, error) {
 	return &h, nil
 }
 
-func (c *Client) addTrace(method, query string) trace.Span {
+func (c *Client) addTrace(ctx context.Context, method, query string) (context.Context, trace.Span) {
 	if c.tracer != nil {
-		_, span := c.tracer.Start(context.Background(), fmt.Sprintf("clickhouse-%v", method))
+		tracerCtx, span := c.tracer.Start(context.Background(), fmt.Sprintf("clickhouse-%v", method))
 
 		span.SetAttributes(
 			attribute.String("cassandra.query", query),
 			attribute.String("cassandra.keyspace", c.config.Keyspace),
 		)
 
-		return span
+		return tracerCtx, span
 	}
 
-	return nil
+	return ctx, nil
 }

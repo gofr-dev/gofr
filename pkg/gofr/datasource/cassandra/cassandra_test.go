@@ -128,6 +128,8 @@ func Test_Query(t *testing.T) {
 	mockStruct := users{}
 	mockInt := 0
 
+	ctx := context.Background()
+
 	client, mockDeps := initTest(t)
 
 	testCases := []struct {
@@ -167,7 +169,7 @@ func Test_Query(t *testing.T) {
 	for i, tc := range testCases {
 		tc.mockCall()
 
-		err := client.Query(tc.dest, query)
+		err := client.Query(ctx, tc.dest, query)
 
 		assert.Equalf(t, tc.expRes, tc.dest, "TEST[%d], Failed.\n%s", i, tc.desc)
 		assert.Equalf(t, tc.expErr, err, "TEST[%d], Failed.\n%s", i, tc.desc)
@@ -178,6 +180,8 @@ func Test_Exec(t *testing.T) {
 	const query = "INSERT INTO users (id, name) VALUES(1, 'Test')"
 
 	client, mockDeps := initTest(t)
+
+	ctx := context.Background()
 
 	testCases := []struct {
 		desc     string
@@ -197,7 +201,7 @@ func Test_Exec(t *testing.T) {
 	for i, tc := range testCases {
 		tc.mockCall()
 
-		err := client.Exec(query)
+		err := client.Exec(ctx, query)
 
 		assert.Equalf(t, tc.expErr, err, "TEST[%d], Failed.\n%s", i, tc.desc)
 	}
@@ -213,6 +217,8 @@ func Test_ExecCAS(t *testing.T) {
 
 	mockStruct := users{}
 	mockInt := 0
+
+	ctx := context.Background()
 
 	client, mockDeps := initTest(t)
 
@@ -251,7 +257,7 @@ func Test_ExecCAS(t *testing.T) {
 	for i, tc := range testCases {
 		tc.mockCall()
 
-		applied, err := client.ExecCAS(tc.dest, query)
+		applied, err := client.ExecCAS(ctx, tc.dest, query)
 
 		assert.Equalf(t, tc.expApplied, applied, "TEST[%d], Failed.\n%s", i, tc.desc)
 		assert.Equalf(t, tc.expErr, err, "TEST[%d], Failed.\n%s", i, tc.desc)

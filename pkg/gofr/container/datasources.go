@@ -62,7 +62,7 @@ type Cassandra interface {
 	//	   }
 	//	   users := []user{}
 	//	   err := c.Query(&users, "SELECT * FROM users")
-	Query(dest any, stmt string, values ...any) error
+	Query(ctx context.Context, dest any, stmt string, values ...any) error
 
 	// Exec executes the query without returning any rows.
 	// Return error if any error occurs while executing the query.
@@ -77,7 +77,7 @@ type Cassandra interface {
 	//	   id := 1
 	//	   name := "John Doe"
 	//	   err := c.Exec("INSERT INTO users VALUES(?, ?)", id, name)
-	Exec(stmt string, values ...any) error
+	Exec(ctx context.Context, stmt string, values ...any) error
 
 	// ExecCAS executes a lightweight transaction (i.e. an UPDATE or INSERT statement containing an IF clause).
 	// If the transaction fails because the existing values did not match, the previous values will be stored in dest.
@@ -93,7 +93,7 @@ type Cassandra interface {
 	//	}
 	//	u := user{}
 	//	applied, err := c.ExecCAS(&user, "INSERT INTO users VALUES(1, 'John Doe') IF NOT EXISTS")
-	ExecCAS(dest any, stmt string, values ...any) (bool, error)
+	ExecCAS(ctx context.Context, dest any, stmt string, values ...any) (bool, error)
 
 	// NewBatch creates a new Cassandra batch with the specified name and batch type.
 	//
@@ -105,7 +105,7 @@ type Cassandra interface {
 	//
 	// Example:
 	//	err := client.NewBatch("myBatch", cassandra.LoggedBatch)
-	NewBatch(name string, batchType int) error
+	NewBatch(ctx context.Context, name string, batchType int) error
 
 	CassandraBatch
 
@@ -128,14 +128,14 @@ type CassandraBatch interface {
 	//	   name2 := "Jane Smith"
 	//	   c.BatchQuery("INSERT INTO users VALUES(?, ?)", id1, name1)
 	//	   c.BatchQuery("INSERT INTO users VALUES(?, ?)", id2, name2)
-	BatchQuery(name, stmt string, values ...any) error
+	BatchQuery(ctx context.Context, name, stmt string, values ...any) error
 
 	// ExecuteBatch executes a batch operation and returns nil if successful otherwise an error is returned describing the failure.
 	//
 	// Example:
 	//
 	//	err := c.ExecuteBatch("myBatch")
-	ExecuteBatch(name string) error
+	ExecuteBatch(ctx context.Context, name string) error
 
 	// ExecuteBatchCAS executes a batch operation and returns true if successful.
 	// Returns true if the query is applied otherwise false.
@@ -145,7 +145,7 @@ type CassandraBatch interface {
 	// Example:
 	//
 	//  applied, err := c.ExecuteBatchCAS("myBatch");
-	ExecuteBatchCAS(name string, dest ...any) (bool, error)
+	ExecuteBatchCAS(ctx context.Context, name string, dest ...any) (bool, error)
 }
 
 type CassandraProvider interface {
