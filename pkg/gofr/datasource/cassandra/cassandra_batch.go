@@ -5,6 +5,10 @@ import (
 )
 
 func (c *Client) BatchQuery(name, stmt string, values ...any) error {
+	span := c.addTrace("batch-query", stmt)
+
+	defer c.sendOperationStats(&QueryLog{Query: stmt, Keyspace: c.config.Keyspace}, time.Now(), "batch-query", span)
+
 	b, ok := c.cassandra.batches[name]
 	if !ok {
 		return errBatchNotInitialised
@@ -16,7 +20,10 @@ func (c *Client) BatchQuery(name, stmt string, values ...any) error {
 }
 
 func (c *Client) ExecuteBatch(name string) error {
-	defer c.sendOperationStats(&QueryLog{Query: "batch", Keyspace: c.config.Keyspace}, time.Now())
+	span := c.addTrace("execute-batch", "batch")
+
+	defer c.sendOperationStats(&QueryLog{Query: "batch", Keyspace: c.config.Keyspace}, time.Now(), "execute-batch",
+		span)
 
 	b, ok := c.cassandra.batches[name]
 	if !ok {
@@ -27,7 +34,10 @@ func (c *Client) ExecuteBatch(name string) error {
 }
 
 func (c *Client) ExecuteBatchCAS(name string, dest ...any) (bool, error) {
-	defer c.sendOperationStats(&QueryLog{Query: "batch", Keyspace: c.config.Keyspace}, time.Now())
+	span := c.addTrace("execute-batch-cas", "batch")
+
+	defer c.sendOperationStats(&QueryLog{Query: "batch", Keyspace: c.config.Keyspace}, time.Now(), "execute-batch-cas",
+		span)
 
 	b, ok := c.cassandra.batches[name]
 	if !ok {

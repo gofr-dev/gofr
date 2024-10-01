@@ -3,8 +3,11 @@ package cassandra
 import (
 	"context"
 	"errors"
+	"fmt"
 	"reflect"
 	"time"
+
+	"go.opentelemetry.io/otel/attribute"
 
 	"go.opentelemetry.io/otel/trace"
 
@@ -100,7 +103,9 @@ func (c *Client) UseTracer(tracer any) {
 
 //nolint:exhaustive // We just want to take care of slice and struct in this case.
 func (c *Client) Query(dest any, stmt string, values ...any) error {
-	defer c.sendOperationStats(&QueryLog{Query: stmt, Keyspace: c.config.Keyspace}, time.Now())
+	span := c.addTrace("query", stmt)
+
+	defer c.sendOperationStats(&QueryLog{Query: stmt, Keyspace: c.config.Keyspace}, time.Now(), "query", span)
 
 	rvo := reflect.ValueOf(dest)
 	if rvo.Kind() != reflect.Ptr {
@@ -147,7 +152,9 @@ func (c *Client) Query(dest any, stmt string, values ...any) error {
 }
 
 func (c *Client) Exec(stmt string, values ...any) error {
-	defer c.sendOperationStats(&QueryLog{Query: stmt, Keyspace: c.config.Keyspace}, time.Now())
+	span := c.addTrace("exec", stmt)
+
+	defer c.sendOperationStats(&QueryLog{Query: stmt, Keyspace: c.config.Keyspace}, time.Now(), "exec", span)
 
 	return c.cassandra.session.query(stmt, values...).exec()
 }
@@ -159,7 +166,9 @@ func (c *Client) ExecCAS(dest any, stmt string, values ...any) (bool, error) {
 		err     error
 	)
 
-	defer c.sendOperationStats(&QueryLog{Query: stmt, Keyspace: c.config.Keyspace}, time.Now())
+	span := c.addTrace("exec-cas", stmt)
+
+	defer c.sendOperationStats(&QueryLog{Query: stmt, Keyspace: c.config.Keyspace}, time.Now(), "exec-cas", span)
 
 	rvo := reflect.ValueOf(dest)
 	if rvo.Kind() != reflect.Ptr {
@@ -301,12 +310,17 @@ func (*Client) getColumnsFromColumnsInfo(columns []gocql.ColumnInfo) []string {
 	return cols
 }
 
-func (c *Client) sendOperationStats(ql *QueryLog, startTime time.Time) {
+func (c *Client) sendOperationStats(ql *QueryLog, startTime time.Time, method string, span trace.Span) {
 	duration := time.Since(startTime).Milliseconds()
 
 	ql.Duration = duration
 
 	c.logger.Debug(ql)
+
+	if span != nil {
+		defer span.End()
+		span.SetAttributes(attribute.Int64(fmt.Sprintf("cassandra.%v.duration", method), duration))
+	}
 
 	c.metrics.RecordHistogram(context.Background(), "app_cassandra_stats", float64(duration), "hostname", c.config.Hosts,
 		"keyspace", c.config.Keyspace)
@@ -351,4 +365,19 @@ func (c *Client) HealthCheck(context.Context) (any, error) {
 	h.Status = statusUp
 
 	return &h, nil
+}
+
+func (c *Client) addTrace(method, query string) trace.Span {
+	if c.tracer != nil {
+		_, span := c.tracer.Start(context.Background(), fmt.Sprintf("clickhouse-%v", method))
+
+		span.SetAttributes(
+			attribute.String("cassandra.query", query),
+			attribute.String("cassandra.keyspace", c.config.Keyspace),
+		)
+
+		return span
+	}
+
+	return nil
 }
