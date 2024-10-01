@@ -85,6 +85,8 @@ func New() *App {
 	}
 
 	app.httpServer = newHTTPServer(app.container, port, middleware.GetConfigs(app.Config))
+	app.httpServer.certFile = app.Config.GetOrDefault("CERT_FILE", "")
+	app.httpServer.keyFile = app.Config.GetOrDefault("KEY_FILE", "")
 
 	if app.Config.Get("APP_ENV") == "DEBUG" {
 		app.httpServer.RegisterProfilingRoutes()
@@ -383,16 +385,6 @@ func (a *App) Migrate(migrationsMap map[int64]migration.Migrate) {
 }
 
 func (a *App) initTracer() {
-	tp := sdktrace.NewTracerProvider(
-		sdktrace.WithResource(resource.NewWithAttributes(
-			semconv.SchemaURL,
-			semconv.ServiceNameKey.String(a.container.GetAppName()),
-		)),
-	)
-	otel.SetTracerProvider(tp)
-	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
-	otel.SetErrorHandler(&otelErrorHandler{logger: a.container.Logger})
-
 	traceExporter := a.Config.Get("TRACE_EXPORTER")
 	tracerURL := a.Config.Get("TRACER_URL")
 
@@ -403,6 +395,22 @@ func (a *App) initTracer() {
 	if !isValidConfig(a.Logger(), traceExporter, tracerURL, tracerHost, tracerPort) {
 		return
 	}
+
+	traceRatio, err := strconv.ParseFloat(a.Config.GetOrDefault("TRACER_RATIO", "1"), 64)
+	if err != nil {
+		a.container.Error(err)
+	}
+
+	tp := sdktrace.NewTracerProvider(
+		sdktrace.WithResource(resource.NewWithAttributes(
+			semconv.SchemaURL,
+			semconv.ServiceNameKey.String(a.container.GetAppName()),
+		)),
+		sdktrace.WithSampler(sdktrace.ParentBased(sdktrace.TraceIDRatioBased(traceRatio))),
+	)
+	otel.SetTracerProvider(tp)
+	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
+	otel.SetErrorHandler(&otelErrorHandler{logger: a.container.Logger})
 
 	exporter, err := a.getExporter(traceExporter, tracerHost, tracerPort, tracerURL)
 
