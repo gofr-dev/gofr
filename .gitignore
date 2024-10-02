@@ -22,3 +22,6 @@ vendor/
 # IDE Cache
 .vscode
 .DS_Store
+
+# Local env files
+.env

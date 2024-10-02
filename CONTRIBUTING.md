@@ -48,37 +48,15 @@ func TestFunctionName(t *testing.T) {
 -   Consider using table-driven tests for testing multiple scenarios.
 
 **NOTE:**
-```go
+```bash
 Some services will be required to pass the entire test suite. We recommend using docker for running those services.
 
-docker run --name mongodb -d -p 27017:27017 -e MONGO_INITDB_ROOT_USERNAME=user -e MONGO_INITDB_ROOT_PASSWORD=password mongodb/mongodb-community-server:latest
-docker run -d -p 21:21 -p 21000-21010:21000-21010 -e USERS='user|password' delfer/alpine-ftp-server
-docker run --name gofr-mysql -e MYSQL_ROOT_PASSWORD=password -e MYSQL_DATABASE=test -p 2001:3306 -d mysql:8.0.30
-docker run --name gofr-redis -p 2002:6379 -d redis:7.0.5
-docker run --name gofr-zipkin -d -p 2005:9411 openzipkin/zipkin:2
-docker run --rm -it -p 4566:4566 -p 4510-4559:4510-4559 localstack/localstack
-docker run --name cassandra-node -d -p 9042:9042 -v cassandra_data:/var/lib/cassandra cassandra:latest
-docker run --name gofr-pgsql -d -e POSTGRES_DB=customers -e POSTGRES_PASSWORD=root123 -p 2006:5432 postgres:15.1
-docker run --name gofr-mssql -d -e 'ACCEPT_EULA=Y' -e 'SA_PASSWORD=reallyStrongPwd123' -p 2007:1433 mcr.microsoft.com/azure-sql-edge
-docker run --name kafka-1 -p 9092:9092 \
- -e KAFKA_ENABLE_KRAFT=yes \
--e KAFKA_CFG_PROCESS_ROLES=broker,controller \
--e KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER \
--e KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093 \
--e KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT \
--e KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://127.0.0.1:9092 \
--e KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE=true \
--e KAFKA_BROKER_ID=1 \
--e KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=1@127.0.0.1:9093 \
--e ALLOW_PLAINTEXT_LISTENER=yes \
--e KAFKA_CFG_NODE_ID=1 \
--v kafka_data:/bitnami \
-bitnami/kafka:3.4 
+`cp .env.example .env && docker-compose up` will start the required services in debug mode
+
+If you want to run services in the background, use `docker-compose up -d`
 
 
-
-
-Please note that the recommended local port for the services are different than the actual ports. This is done to avoid conflict with the local installation on developer machines. This method also allows a developer to work on multiple projects which uses the same services but bound on different ports. One can choose to change the port for these services. Just remember to add the same in configs/.local.env, if you decide to do that.
+Please note that the recommended local port for the services are different than the actual ports. This is done to avoid conflict with the local installation on developer machines. This method also allows a developer to work on multiple projects which uses the same services but bound on different ports. One can choose to change the port for these services. Just remember to add the same in .env, if you decide to do that.
 ```
 
 ### Coding Guidelines

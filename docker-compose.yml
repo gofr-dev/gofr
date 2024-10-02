@@ -1,0 +1,103 @@
+services:
+  mongodb:
+    image: mongodb/mongodb-community-server:latest
+    container_name: mongodb
+    env_file:
+      - .env
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_DB_USER}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_DB_PASSWORD}
+    ports:
+      - "${MONGO_DB_PORT}:27017"
+
+  ftp-server:
+    image: delfer/alpine-ftp-server:latest
+    env_file:
+      - .env
+    environment:
+      USERS: "${FTP_USER}|${FTP_PASSWORD}"
+    ports:
+      - "${FTP_PORT}:21"
+      - "${FTP_PORT_RANGE}:21000-21010"
+
+  gofr-mysql:
+    image: mysql:8.0.33
+    container_name: gofr-mysql
+    env_file:
+      - .env
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DB_NAME}
+    ports:
+      - "${MYSQL_DB_PORT}:3306"
+
+  gofr-redis:
+    image: redis:7.2.0
+    container_name: gofr-redis
+    env_file:
+      - .env
+    ports:
+      - "${REDIS_PORT}:6379"
+
+  gofr-zipkin:
+    image: openzipkin/zipkin:2.24.0
+    container_name: gofr-zipkin
+    env_file:
+      - .env
+    ports:
+      - "${ZIPKIN_PORT}:9411"
+
+  localstack:
+    image: localstack/localstack:latest
+    container_name: localstack
+    env_file:
+      - .env
+    ports:
+      - "${LOCALSTACK_PORT}:4566"
+      - "${LOCALSTACK_PORT_RANGE}:4510-4559"
+
+  cassandra:
+    image: cassandra:4.1
+    container_name: cassandra-node
+    env_file:
+      - .env
+    ports:
+      - "${CASSANDRA_PORT}:9042"
+    volumes:
+      - cassandra_data:/var/lib/cassandra
+
+  gofr-pgsql:
+    image: postgres:15.4
+    container_name: gofr-pgsql
+    env_file:
+      - .env
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB_NAME}
+      POSTGRES_PASSWORD: ${POSTGRES_ROOT_PASSWORD}
+    ports:
+      - "${POSTGRES_DB_PORT}:5432"
+
+  gofr-mssql:
+    image: mcr.microsoft.com/azure-sql-edge:latest
+    container_name: gofr-mssql
+    env_file:
+      - .env
+    environment:
+      ACCEPT_EULA: ${ACCEPT_EULA}
+      SA_PASSWORD: ${MSSQL_SA_PASSWORD}
+    ports:
+      - "${MSSQL_TCP_PORT}:1433"
+
+  kafka:
+    image: bitnami/kafka:3.5.0
+    container_name: kafka-1
+    env_file:
+      - .env
+    ports:
+      - "${KAFKA_PORT}:9092"
+    volumes:
+      - kafka_data:/bitnami
+
+volumes:
+  cassandra_data:
+  kafka_data:
