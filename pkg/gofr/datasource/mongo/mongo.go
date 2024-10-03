@@ -102,11 +102,11 @@ func (c *Client) Connect() {
 
 // InsertOne inserts a single document into the specified collection.
 func (c *Client) InsertOne(ctx context.Context, collection string, document interface{}) (interface{}, error) {
-	tracerCtx, span := c.addTrace(ctx, "insert", collection)
+	tracerCtx, span := c.addTrace(ctx, "insertOne", collection)
 
 	result, err := c.Database.Collection(collection).InsertOne(tracerCtx, document)
 
-	defer c.sendOperationStats(&QueryLog{Query: "insert", Collection: collection, Filter: document}, time.Now(),
+	defer c.sendOperationStats(&QueryLog{Query: "insertOne", Collection: collection, Filter: document}, time.Now(),
 		"insert", span)
 
 	return result, err
