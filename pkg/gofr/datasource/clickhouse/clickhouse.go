@@ -61,8 +61,8 @@ func (c *client) UseMetrics(metrics interface{}) {
 
 // UseTracer sets the tracer for Clickhouse client.
 func (c *client) UseTracer(tracer any) {
-	if tracer, ok := tracer.(trace.Tracer); ok {
-		c.tracer = tracer
+	if t, ok := tracer.(trace.Tracer); ok {
+		c.tracer = t
 	}
 }
 
