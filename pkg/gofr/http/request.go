@@ -124,7 +124,7 @@ func (r *Request) bindMultipart(ptr any) error {
 
 	fd := formData{files: r.req.MultipartForm.File, fields: r.req.MultipartForm.Value}
 
-	ok, err := fd.mapStruct(ptrVal)
+	ok, err := fd.mapStruct(ptrVal, nil)
 	if err != nil {
 		return err
 	}
@@ -150,7 +150,8 @@ func (r *Request) bindFormURLEncoded(ptr any) error {
 	}
 
 	uf := formData{fields: r.req.Form}
-	ok, err := uf.mapStruct(ptrVal)
+
+	ok, err := uf.mapStruct(ptrVal, nil)
 	if err != nil {
 		return err
 	}
