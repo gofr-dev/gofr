@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type Config struct {
@@ -21,6 +22,7 @@ type client struct {
 	config  Config
 	logger  Logger
 	metrics Metrics
+	tracer  trace.Tracer
 }
 
 var errStatusDown = errors.New("status down")
@@ -50,6 +52,13 @@ func (c *client) UseLogger(logger interface{}) {
 func (c *client) UseMetrics(metrics interface{}) {
 	if m, ok := metrics.(Metrics); ok {
 		c.metrics = m
+	}
+}
+
+// UseTracer sets the tracer for the NATS client.
+func (c *client) UseTracer(tracer any) {
+	if t, ok := tracer.(trace.Tracer); ok {
+		c.tracer = t
 	}
 }
 
