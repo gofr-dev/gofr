@@ -14,7 +14,6 @@ GoFr is an opinionated microservice development framework.</b></p>
 <a href="https://discord.gg/wsaSkQTdgq"><img src="https://img.shields.io/badge/discord-join-7289DA.svg?logo=discord&longCache=true&style=flat" /></a>
 </div>
 
-
 Listed in [CNCF Landscape](https://landscape.cncf.io/?selected=go-fr).
 
 ## 🎯 Goal
