@@ -4,15 +4,19 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
+	"go.opentelemetry.io/otel/trace"
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 )
 
 //go:generate mockgen -destination=mock_jetstream.go -package=nats github.com/nats-io/nats.go/jetstream JetStream,Stream,Consumer,Msg,MessageBatch
+
+const consumeMessageDelay = 100 * time.Millisecond
 
 // Config defines the Client Client configuration.
 type Config struct {
@@ -35,9 +39,7 @@ type StreamConfig struct {
 
 // subscription holds subscription information for Client JetStream.
 type subscription struct {
-	handler messageHandler
-	ctx     context.Context
-	cancel  context.CancelFunc
+	cancel context.CancelFunc
 }
 
 type messageHandler func(context.Context, jetstream.Msg) error
@@ -51,6 +53,11 @@ type Client struct {
 	Metrics       Metrics
 	Subscriptions map[string]*subscription
 	subMu         sync.Mutex
+	Tracer        trace.Tracer
+	messageBuffer chan *pubsub.Message
+	bufferSize    int
+	topicBuffers  map[string]chan *pubsub.Message
+	bufferMu      sync.RWMutex
 }
 
 // CreateTopic creates a new topic (stream) in Client JetStream.
@@ -100,54 +107,113 @@ func (w *natsConnWrapper) NatsConn() *nats.Conn {
 	return w.Conn
 }
 
-// New creates and returns a new Client Client.
-func New(conf *Config, logger pubsub.Logger, metrics Metrics) (pubsub.Client, error) {
-	if err := ValidateConfigs(conf); err != nil {
-		logger.Errorf("could not initialize Client JetStream: %v", err)
-		return nil, err
+// New creates a new Client.
+func New(cfg *Config) *PubSubWrapper {
+	if cfg == nil {
+		cfg = &Config{}
 	}
 
-	logger.Debugf("connecting to Client server '%s'", conf.Server)
-
-	// Create connection options
-	opts := []nats.Option{nats.Name("GoFr Client JetStreamClient")}
-
-	// Add credentials if provided
-	if conf.CredsFile != "" {
-		opts = append(opts, nats.UserCredentials(conf.CredsFile))
+	if cfg.BatchSize == 0 {
+		cfg.BatchSize = 100 // Default batch size
 	}
-
-	nc, err := nats.Connect(conf.Server, opts...)
-	if err != nil {
-		logger.Errorf("failed to connect to Client server at %v: %v", conf.Server, err)
-		return nil, err
-	}
-
-	// Check connection status
-	status := nc.Status()
-	if status != nats.CONNECTED {
-		logger.Errorf("unexpected Client connection status: %v", status)
-		return nil, errConnectionStatus
-	}
-
-	js, err := jetstream.New(nc)
-	if err != nil {
-		logger.Errorf("failed to create JetStream context: %v", err)
-		return nil, err
-	}
-
-	logger.Logf("connected to Client server '%s'", conf.Server)
 
 	client := &Client{
-		Conn:          &natsConnWrapper{nc},
-		JetStream:     js,
-		Logger:        logger,
-		Config:        conf,
-		Metrics:       metrics,
+		Config:        cfg,
 		Subscriptions: make(map[string]*subscription),
+		topicBuffers:  make(map[string]chan *pubsub.Message),
+		bufferSize:    cfg.BatchSize,
 	}
 
-	return &PubSubWrapper{Client: client}, nil
+	return &PubSubWrapper{Client: client}
+}
+
+// UseLogger sets the logger for the NATS client.
+func (n *Client) UseLogger(logger any) {
+	if l, ok := logger.(pubsub.Logger); ok {
+		n.Logger = l
+	}
+}
+
+// UseTracer sets the tracer for the NATS client.
+func (n *Client) UseTracer(tracer any) {
+	if t, ok := tracer.(trace.Tracer); ok {
+		n.Tracer = t
+	}
+}
+
+// UseMetrics sets the metrics for the NATS client.
+func (n *Client) UseMetrics(metrics any) {
+	if m, ok := metrics.(Metrics); ok {
+		n.Metrics = m
+	}
+}
+
+// Connect establishes a connection to NATS and sets up JetStream.
+func (n *Client) Connect() {
+	if err := n.validateAndPrepare(); err != nil {
+		return
+	}
+
+	nc, err := n.createNATSConnection()
+	if err != nil {
+		return
+	}
+
+	js, err := n.createJetStreamContext(nc)
+	if err != nil {
+		nc.Close()
+		return
+	}
+
+	n.Conn = &natsConnWrapper{nc}
+	n.JetStream = js
+
+	n.logSuccessfulConnection()
+}
+
+func (n *Client) validateAndPrepare() error {
+	if n.Config == nil {
+		n.Logger.Errorf("NATS configuration is nil")
+		return errNATSConnNil
+	}
+
+	if err := ValidateConfigs(n.Config); err != nil {
+		n.Logger.Errorf("could not initialize NATS JetStream: %v", err)
+		return err
+	}
+
+	return nil
+}
+
+func (n *Client) createNATSConnection() (*nats.Conn, error) {
+	opts := []nats.Option{nats.Name("GoFr NATS JetStreamClient")}
+	if n.Config.CredsFile != "" {
+		opts = append(opts, nats.UserCredentials(n.Config.CredsFile))
+	}
+
+	nc, err := nats.Connect(n.Config.Server, opts...)
+	if err != nil {
+		n.Logger.Errorf("failed to connect to NATS server at %v: %v", n.Config.Server, err)
+		return nil, err
+	}
+
+	return nc, nil
+}
+
+func (n *Client) createJetStreamContext(nc *nats.Conn) (jetstream.JetStream, error) {
+	js, err := jetstream.New(nc)
+	if err != nil {
+		n.Logger.Errorf("failed to create JetStream context: %v", err)
+		return nil, err
+	}
+
+	return js, nil
+}
+
+func (n *Client) logSuccessfulConnection() {
+	if n.Logger != nil {
+		n.Logger.Logf("connected to NATS server '%s'", n.Config.Server)
+	}
 }
 
 // Publish publishes a message to a topic.
@@ -173,17 +239,112 @@ func (n *Client) Publish(ctx context.Context, subject string, message []byte) er
 	return nil
 }
 
-// Subscribe subscribes to a topic.
-func (n *Client) Subscribe(ctx context.Context, topic string, handler messageHandler) error {
+func (n *Client) getOrCreateBuffer(topic string) chan *pubsub.Message {
+	n.bufferMu.Lock()
+	defer n.bufferMu.Unlock()
+
+	if buffer, exists := n.topicBuffers[topic]; exists {
+		return buffer
+	}
+
+	buffer := make(chan *pubsub.Message, n.bufferSize)
+	n.topicBuffers[topic] = buffer
+
+	return buffer
+}
+
+func (n *Client) Subscribe(ctx context.Context, topic string) (*pubsub.Message, error) {
+	n.Metrics.IncrementCounter(ctx, "app_pubsub_subscribe_total_count", "topic", topic)
+
+	if err := n.validateSubscribePrerequisites(); err != nil {
+		return nil, err
+	}
+
+	n.subMu.Lock()
+
+	_, exists := n.Subscriptions[topic]
+	if !exists {
+		cons, err := n.createOrUpdateConsumer(ctx, topic)
+		if err != nil {
+			n.subMu.Unlock()
+			return nil, err
+		}
+
+		subCtx, cancel := context.WithCancel(context.Background())
+		n.Subscriptions[topic] = &subscription{cancel: cancel}
+
+		buffer := n.getOrCreateBuffer(topic)
+		go n.consumeMessages(subCtx, cons, topic, buffer)
+	}
+
+	n.subMu.Unlock()
+
+	buffer := n.getOrCreateBuffer(topic)
+
+	select {
+	case msg := <-buffer:
+		n.Metrics.IncrementCounter(ctx, "app_pubsub_subscribe_success_count", "topic", topic)
+		return msg, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+func (n *Client) consumeMessages(ctx context.Context, cons jetstream.Consumer, topic string, buffer chan *pubsub.Message) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			msgs, err := cons.Fetch(1, jetstream.FetchMaxWait(n.Config.MaxWait))
+			if err != nil {
+				if !errors.Is(err, context.DeadlineExceeded) {
+					n.Logger.Errorf("Error fetching messages for topic %s: %v", topic, err)
+				}
+
+				time.Sleep(consumeMessageDelay) // Add a small delay to avoid tight loop
+
+				continue
+			}
+
+			for msg := range msgs.Messages() {
+				pubsubMsg := pubsub.NewMessage(ctx)
+				pubsubMsg.Topic = topic
+				pubsubMsg.Value = msg.Data()
+				pubsubMsg.MetaData = msg.Headers()
+				pubsubMsg.Committer = &natsCommitter{msg: msg}
+
+				select {
+				case buffer <- pubsubMsg:
+					// Message sent successfully
+				default:
+					// Buffer is full, log a warning
+					// TODO: implement backoff strategy
+					n.Logger.Logf("Message buffer is full for topic %s. Consider increasing buffer size or processing messages faster.", topic)
+				}
+			}
+
+			if err := msgs.Error(); err != nil {
+				n.Logger.Errorf("Error in message batch for topic %s: %v", topic, err)
+			}
+		}
+	}
+}
+
+func (n *Client) validateSubscribePrerequisites() error {
+	if n.JetStream == nil {
+		return errJetStreamNotConfigured
+	}
+
 	if n.Config.Consumer == "" {
-		n.Logger.Error("consumer name not provided")
 		return errConsumerNotProvided
 	}
 
-	// Create a unique consumer name for each topic
-	consumerName := fmt.Sprintf("%s_%s", n.Config.Consumer, topic)
+	return nil
+}
 
-	// Create or update the consumer
+func (n *Client) createOrUpdateConsumer(ctx context.Context, topic string) (jetstream.Consumer, error) {
+	consumerName := fmt.Sprintf("%s_%s", n.Config.Consumer, strings.ReplaceAll(topic, ".", "_"))
 	cons, err := n.JetStream.CreateOrUpdateConsumer(ctx, n.Config.Stream.Stream, jetstream.ConsumerConfig{
 		Durable:       consumerName,
 		AckPolicy:     jetstream.AckExplicitPolicy,
@@ -192,53 +353,21 @@ func (n *Client) Subscribe(ctx context.Context, topic string, handler messageHan
 		DeliverPolicy: jetstream.DeliverNewPolicy,
 		AckWait:       30 * time.Second,
 	})
+
 	if err != nil {
 		n.Logger.Errorf("failed to create or update consumer: %v", err)
-		return err
+
+		return nil, err
 	}
 
-	// Start fetching messages
-	go n.startConsuming(ctx, cons, handler)
-
-	return nil
-}
-
-func (n *Client) startConsuming(ctx context.Context, cons jetstream.Consumer, handler messageHandler) {
-	for {
-		if err := n.fetchAndProcessMessages(ctx, cons, handler); err != nil {
-			if errors.Is(err, context.Canceled) {
-				return
-			}
-
-			n.HandleFetchError(err)
-		}
-	}
-}
-
-func (n *Client) fetchAndProcessMessages(ctx context.Context, cons jetstream.Consumer, handler messageHandler) error {
-	msgs, err := cons.Fetch(n.Config.BatchSize, jetstream.FetchMaxWait(n.Config.MaxWait))
-	if err != nil {
-		return err
-	}
-
-	n.processMessages(ctx, msgs, handler)
-
-	return msgs.Error()
-}
-
-// processMessages processes messages from a consumer.
-func (n *Client) processMessages(ctx context.Context, msgs jetstream.MessageBatch, handler messageHandler) {
-	for msg := range msgs.Messages() {
-		if err := n.HandleMessage(ctx, msg, handler); err != nil {
-			n.Logger.Errorf("error handling message: %v", err)
-		}
-	}
+	return cons, nil
 }
 
 // HandleMessage handles a message from a consumer.
 func (n *Client) HandleMessage(ctx context.Context, msg jetstream.Msg, handler messageHandler) error {
 	if err := handler(ctx, msg); err != nil {
 		n.Logger.Errorf("error handling message: %v", err)
+
 		return n.NakMessage(msg)
 	}
 
@@ -262,7 +391,7 @@ func (n *Client) HandleFetchError(err error) {
 	time.Sleep(time.Second) // Backoff on error
 }
 
-// Close closes the Client Client.
+// Close closes the Client.
 func (n *Client) Close() error {
 	n.subMu.Lock()
 	for _, sub := range n.Subscriptions {
@@ -271,6 +400,14 @@ func (n *Client) Close() error {
 
 	n.Subscriptions = make(map[string]*subscription)
 	n.subMu.Unlock()
+
+	n.bufferMu.Lock()
+	for _, buffer := range n.topicBuffers {
+		close(buffer)
+	}
+
+	n.topicBuffers = make(map[string]chan *pubsub.Message)
+	n.bufferMu.Unlock()
 
 	if n.Conn != nil {
 		n.Conn.Close()
