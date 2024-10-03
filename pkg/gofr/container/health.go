@@ -57,40 +57,25 @@ func (c *Container) Health(ctx context.Context) interface{} {
 }
 
 func checkExternalDBHealth(ctx context.Context, c *Container, healthMap map[string]interface{}) (downCount int) {
-	if !isNil(c.Mongo) {
-		health, err := c.Mongo.HealthCheck(ctx)
-		if err != nil {
-			downCount++
-		}
-
-		healthMap["mongo"] = health
+	services := map[string]interface {
+		HealthCheck(context.Context) (interface{}, error)
+	}{
+		"mongo":      c.Mongo,
+		"cassandra":  c.Cassandra,
+		"clickHouse": c.Clickhouse,
+		"kv-store":   c.KVStore,
+		"dgraph":     c.DGraph,
 	}
 
-	if !isNil(c.Cassandra) {
-		health, err := c.Cassandra.HealthCheck(ctx)
-		if err != nil {
-			downCount++
+	for name, service := range services {
+		if !isNil(service) {
+			health, err := service.HealthCheck(ctx)
+			if err != nil {
+				downCount++
+			}
+
+			healthMap[name] = health
 		}
-
-		healthMap["cassandra"] = health
-	}
-
-	if !isNil(c.Clickhouse) {
-		health, err := c.Clickhouse.HealthCheck(ctx)
-		if err != nil {
-			downCount++
-		}
-
-		healthMap["clickHouse"] = health
-	}
-
-	if !isNil(c.KVStore) {
-		health, err := c.KVStore.HealthCheck(ctx)
-		if err != nil {
-			downCount++
-		}
-
-		healthMap["kv-store"] = health
 	}
 
 	return downCount

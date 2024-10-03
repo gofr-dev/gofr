@@ -56,7 +56,7 @@ func generateMultiPartBody(t *testing.T) (*bytes.Buffer, string) {
 		t.Fatalf("Failed to write file to form: %v", err)
 	}
 
-	fileHeader, err := writer.CreateFormFile("a", "hello.txt")
+	fileHeader, err := writer.CreateFormFile("file_upload", "hello.txt")
 	if err != nil {
 		t.Fatalf("Failed to create form file: %v", err)
 	}

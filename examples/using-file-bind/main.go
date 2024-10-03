@@ -30,7 +30,7 @@ type Data struct {
 
 	// The FileHeader determines the generic file format that we can get
 	// from the multipart form that gets parsed by the incoming HTTP request
-	FileHeader *multipart.FileHeader `file:"a"`
+	FileHeader *multipart.FileHeader `file:"file_upload"`
 }
 
 func UploadHandler(c *gofr.Context) (interface{}, error) {

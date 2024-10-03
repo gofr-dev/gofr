@@ -5,6 +5,7 @@ import (
 	"crypto/rsa"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math/big"
@@ -13,6 +14,11 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+)
+
+var (
+	errAuthorizationHeaderRequired = errors.New("authorization header is required")
+	errInvalidAuthorizationHeader  = errors.New("authorization header format must be Bearer {token}")
 )
 
 // JWTClaim represents a custom key used to store JWT claims within the request context.
@@ -112,35 +118,15 @@ func OAuth(key PublicKeyProvider) func(inner http.Handler) http.Handler {
 				return
 			}
 
-			authHeader := r.Header.Get("Authorization")
-			if authHeader == "" {
-				http.Error(w, "Authorization header is required", http.StatusUnauthorized)
-				return
-			}
-
-			headerParts := strings.Split(authHeader, " ")
-			if len(headerParts) != 2 || headerParts[0] != "Bearer" {
-				http.Error(w, "Authorization header format must be Bearer {token}", http.StatusUnauthorized)
-				return
-			}
-
-			tokenString := headerParts[1]
-
-			token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-				kid := token.Header["kid"]
-
-				jwks := key.Get(fmt.Sprint(kid))
-				if jwks == nil {
-					return nil, JWKNotFound{}
-				}
-
-				return key.Get(fmt.Sprint(kid)), nil
-			})
-
+			tokenString, err := extractToken(r.Header.Get("Authorization"))
 			if err != nil {
-				w.WriteHeader(http.StatusUnauthorized)
-				_, _ = w.Write([]byte(err.Error()))
+				http.Error(w, err.Error(), http.StatusUnauthorized)
+				return
+			}
 
+			token, err := parseToken(tokenString, key)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusUnauthorized)
 				return
 			}
 
@@ -150,6 +136,36 @@ func OAuth(key PublicKeyProvider) func(inner http.Handler) http.Handler {
 			inner.ServeHTTP(w, r)
 		})
 	}
+}
+
+// ExtractToken validates the Authorization header and extracts the JWT token.
+func extractToken(authHeader string) (string, error) {
+	if authHeader == "" {
+		return "", errAuthorizationHeaderRequired
+	}
+
+	const bearerPrefix = "Bearer "
+
+	token, ok := strings.CutPrefix(authHeader, bearerPrefix)
+	if !ok || token == "" {
+		return "", errInvalidAuthorizationHeader
+	}
+
+	return token, nil
+}
+
+// ParseToken parses the JWT token using the provided key provider.
+func parseToken(tokenString string, key PublicKeyProvider) (*jwt.Token, error) {
+	return jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		kid := token.Header["kid"]
+		jwks := key.Get(fmt.Sprint(kid))
+
+		if jwks == nil {
+			return nil, JWKNotFound{}
+		}
+
+		return jwks, nil
+	})
 }
 
 // JWKS represents a JSON Web Key Set.
