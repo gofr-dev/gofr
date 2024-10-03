@@ -68,6 +68,8 @@ func (r *Request) Bind(i interface{}) error {
 		return json.Unmarshal(body, &i)
 	case "multipart/form-data":
 		return r.bindMultipart(i)
+	case "application/x-www-form-urlencoded":
+		return r.bindFormURLEncoded(i)
 	}
 
 	return nil
@@ -122,13 +124,39 @@ func (r *Request) bindMultipart(ptr any) error {
 
 	fd := formData{files: r.req.MultipartForm.File, fields: r.req.MultipartForm.Value}
 
-	ok, err := fd.mapStruct(ptrVal, &reflect.StructField{})
+	ok, err := fd.mapStruct(ptrVal)
 	if err != nil {
 		return err
 	}
 
 	if !ok {
 		return errNoFileFound
+	}
+
+	return nil
+}
+
+func (r *Request) bindFormURLEncoded(ptr any) error {
+	ptrVal := reflect.ValueOf(ptr)
+	if ptrVal.Kind() != reflect.Ptr {
+		return errNonPointerBind
+	}
+
+	ptrVal = ptrVal.Elem()
+
+	// ParseForm populates r.req.Form
+	if err := r.req.ParseForm(); err != nil {
+		return err
+	}
+
+	uf := formData{fields: r.req.Form}
+	ok, err := uf.mapStruct(ptrVal)
+	if err != nil {
+		return err
+	}
+
+	if !ok {
+		return errFieldsNotSet
 	}
 
 	return nil
