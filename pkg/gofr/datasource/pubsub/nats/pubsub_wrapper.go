@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/nats-io/nats.go"
-	"github.com/nats-io/nats.go/jetstream"
 	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 )
@@ -19,42 +18,17 @@ func (w *PubSubWrapper) Publish(ctx context.Context, topic string, message []byt
 	return w.Client.Publish(ctx, topic, message)
 }
 
-// Subscribe subscribes to a topic.
+// Subscribe subscribes to a topic and returns a single message.
 func (w *PubSubWrapper) Subscribe(ctx context.Context, topic string) (*pubsub.Message, error) {
-	msgChan := make(chan *pubsub.Message)
-
-	err := w.Client.Subscribe(ctx, topic, func(ctx context.Context, msg jetstream.Msg) error {
-		select {
-		case msgChan <- &pubsub.Message{
-			Topic:     topic,
-			Value:     msg.Data(),
-			Committer: &natsCommitter{msg: msg},
-		}:
-		case <-ctx.Done():
-			return ctx.Err()
-		}
-
-		return nil
-	})
-
-	if err != nil {
-		return nil, err
-	}
-
-	select {
-	case msg := <-msgChan:
-		return msg, nil
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	}
+	return w.Client.Subscribe(ctx, topic)
 }
 
-// CreateTopic creates a new topic (stream) in Client JetStream.
+// CreateTopic creates a new topic (stream) in NATS JetStream.
 func (w *PubSubWrapper) CreateTopic(ctx context.Context, name string) error {
 	return w.Client.CreateTopic(ctx, name)
 }
 
-// DeleteTopic deletes a topic (stream) in Client JetStream.
+// DeleteTopic deletes a topic (stream) in NATS JetStream.
 func (w *PubSubWrapper) DeleteTopic(ctx context.Context, name string) error {
 	return w.Client.DeleteTopic(ctx, name)
 }
@@ -67,7 +41,7 @@ func (w *PubSubWrapper) Close() error {
 // Health returns the health status of the Client.
 func (w *PubSubWrapper) Health() datasource.Health {
 	status := datasource.StatusUp
-	if w.Client.Conn.Status() != nats.CONNECTED {
+	if w.Client.Conn == nil || w.Client.Conn.Status() != nats.CONNECTED {
 		status = datasource.StatusDown
 	}
 
@@ -77,4 +51,24 @@ func (w *PubSubWrapper) Health() datasource.Health {
 			"server": w.Client.Config.Server,
 		},
 	}
+}
+
+// Connect establishes a connection to NATS.
+func (w *PubSubWrapper) Connect() {
+	w.Client.Connect()
+}
+
+// UseLogger sets the logger for the NATS client.
+func (w *PubSubWrapper) UseLogger(logger any) {
+	w.Client.UseLogger(logger)
+}
+
+// UseMetrics sets the metrics for the NATS client.
+func (w *PubSubWrapper) UseMetrics(metrics any) {
+	w.Client.UseMetrics(metrics)
+}
+
+// UseTracer sets the tracer for the NATS client.
+func (w *PubSubWrapper) UseTracer(tracer any) {
+	w.Client.UseTracer(tracer)
 }
