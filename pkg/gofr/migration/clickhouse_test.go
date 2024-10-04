@@ -24,7 +24,7 @@ func clickHouseSetup(t *testing.T) (migrator, *MockClickhouse, *container.Contai
 	ds := Datasource{Clickhouse: mockClickhouse}
 
 	ch := clickHouseDS{Clickhouse: mockClickhouse}
-	mg := ch.apply(ds)
+	mg := ch.apply(&ds)
 
 	mockContainer.Clickhouse = mockClickhouse
 

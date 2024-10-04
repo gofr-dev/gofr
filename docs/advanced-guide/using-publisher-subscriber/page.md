@@ -176,6 +176,75 @@ docker run -d \
 ```
 > **Note**: find the default mosquitto config file {% new-tab-link title="here" href="https://github.com/eclipse/mosquitto/blob/master/mosquitto.conf" /%}
 
+### Azure Eventhub
+GoFr supports eventhub starting gofr version v1.22.0.
+
+While subscribing gofr reads from all the partitions of the consumer group provided in the configuration reducing hassle to manage them.
+
+#### Configs
+
+Eventhub is supported as an external pubsub provider such that if you are not using it, it doesn't get added in your binary.
+
+Import the external driver for eventhub using the following command.
+
+```bash
+go get gofr.dev/pkg/gofr/datasources/pubsub/eventhub
+```
+
+Use the AddPubSub method of GoFr's app to connect
+
+**Example**
+```go
+    app := gofr.New()
+    
+    app.AddPubSub(eventhub.New(eventhub.Config{
+       ConnectionString:          "Endpoint=sb://gofr-dev.servicebus.windows.net/;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=<key>",
+       ContainerConnectionString: "DefaultEndpointsProtocol=https;AccountName=gofrdev;AccountKey=<key>;EndpointSuffix=core.windows.net",
+       StorageServiceURL:         "https://gofrdev.windows.net/",
+       StorageContainerName:      "test",
+       EventhubName:              "test1",
+    }))
+```
+
+While subscribing/publishing from eventhub make sure to keep the topic-name same as event-hub name. 
+
+#### Setup
+
+1. To setup azure eventhub refer the following [documentation](https://learn.microsoft.com/en-us/azure/event-hubs/event-hubs-create).
+
+2. As GoFr manages reading from all the partitions it needs to store the information about what has been read and what is left for that GoFr uses Azure Container which can be setup from the following [documentation](https://learn.microsoft.com/en-us/azure/storage/blobs/blob-containers-portal).
+
+##### Mandatory Configs Configuration Map
+{% table %}
+- ConnectionString
+- [connection-string-primary-key](https://learn.microsoft.com/en-us/azure/event-hubs/event-hubs-get-connection-string)
+
+---
+
+- ContainerConnectionString
+- [ConnectionString](https://learn.microsoft.com/en-us/azure/storage/common/storage-account-keys-manage?toc=%2Fazure%2Fstorage%2Fblobs%2Ftoc.json&bc=%2Fazure%2Fstorage%2Fblobs%2Fbreadcrumb%2Ftoc.json&tabs=azure-portal#view-account-access-keys)
+
+
+---
+
+- StorageServiceURL
+- [Blob Service URL](https://learn.microsoft.com/en-us/azure/storage/common/storage-account-get-info?tabs=portal#get-service-endpoints-for-the-storage-account)
+
+---
+
+- StorageContainerName
+- [Container Name](https://learn.microsoft.com/en-us/azure/storage/blobs/blob-containers-portal#create-a-container)
+
+---
+
+- EventhubName
+- [Eventhub](https://learn.microsoft.com/en-us/azure/event-hubs/event-hubs-create#create-an-event-hub)
+
+{% /table %}
+
+#### Example
+
+
 ## Subscribing
 Adding a subscriber is similar to adding an HTTP handler, which makes it easier to develop scalable applications,
 as it decoupled from the Sender/Publisher.
