@@ -125,7 +125,7 @@ func AddHelp(helperString string) Options {
 }
 
 // addRoute adds a new route to cmd's list of routes.
-// Optional configuration for the route is passed using functional options like AddHelp and AddDescription
+// Optional configuration for the route is passed using functional options like AddHelp and AddDescription.
 func (cmd *cmd) addRoute(pattern string, handler Handler, options ...Options) {
 	tempRoute := route{
 		pattern: pattern,
