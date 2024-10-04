@@ -1,4 +1,4 @@
-module gofr.dev/pkg/gofr/datasource/pubsub/azeventhub
+module gofr.dev/pkg/gofr/datasource/pubsub/eventhub
 
 go 1.22.3
 
