@@ -2,6 +2,7 @@ package gofr
 
 import (
 	"go.opentelemetry.io/otel"
+
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/datasource/file"
 )
@@ -10,6 +11,10 @@ import (
 func (a *App) AddMongo(db container.MongoProvider) {
 	db.UseLogger(a.Logger())
 	db.UseMetrics(a.Metrics())
+
+	tracer := otel.GetTracerProvider().Tracer("gofr-mongo")
+
+	db.UseTracer(tracer)
 
 	db.Connect()
 
