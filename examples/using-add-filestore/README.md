@@ -10,34 +10,26 @@ Choose a library listed above and follow their respective documentation to confi
 
 ### To run the example use the commands below:
 To print the current working directory of the configured remote file server
-```
+```console
 go run main.go pwd
 ```
 To get the list of all directories or files in the given path of the configured remote file server
 
 ```
-go run main.go ls -path=<path>
-
-Eg:- go run main.go ls -path=/
+ go run main.go ls -path=/
 ```
 To grep the list of all files and directories in the given path that is matching with the keyword provided
 
 ```
-go run main.go grep -keyword=fi -path=<path>
-
-Eg:- go run main.go grep -keyword=fi -path=/
+go run main.go grep -keyword=fi -path=/
 ```
 
 To create a file in the current working directory with the provided filename 
 ```
-go run main.go createfile -filename=<filename>
-
-Eg:- go run main.go createfile -filename=file.txt
+ go run main.go createfile -filename=file.txt
 ```
 
 To remove the file with the provided filename from the current working directory
 ```
-go run main.go rm -filename=<filename>
-
-Eg:- go run main.go rm -filename=file.txt
+ go run main.go rm -filename=file.txt
 ```

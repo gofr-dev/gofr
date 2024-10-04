@@ -31,6 +31,7 @@ func TestPwdCommand(t *testing.T) {
 		defer ctrl.Finish()
 
 		app := gofr.NewCMD()
+		logger = gofr.New().Logger()
 		mock := file.NewMockFileSystemProvider(ctrl)
 
 		mock.EXPECT().UseLogger(app.Logger())
@@ -114,6 +115,7 @@ func TestCreateFileCommand(t *testing.T) {
 		defer ctrl.Finish()
 
 		app := gofr.NewCMD()
+		logger = gofr.New().Logger()
 		mock := file.NewMockFileSystemProvider(ctrl)
 
 		mock.EXPECT().UseLogger(app.Logger())
@@ -126,8 +128,8 @@ func TestCreateFileCommand(t *testing.T) {
 		registerCreateFileCommand(app, mock)
 		app.Run()
 	})
-	assert.Contains(t, logs, "Creating file :file.txt", "Test failed")
-	assert.Contains(t, logs, "Successfully created file:file.txt", "Test failed")
+	assert.Contains(t, logs, "Creating file : \",\"file.txt\"", "Test failed")
+	assert.Contains(t, logs, "Successfully created file: \",\"file.txt\"", "Test failed")
 }
 
 func TestRmCommand(t *testing.T) {
@@ -138,6 +140,7 @@ func TestRmCommand(t *testing.T) {
 		defer ctrl.Finish()
 
 		app := gofr.NewCMD()
+		logger = gofr.New().Logger()
 		mock := file.NewMockFileSystemProvider(ctrl)
 
 		mock.EXPECT().UseLogger(app.Logger())
@@ -150,6 +153,6 @@ func TestRmCommand(t *testing.T) {
 		registerRmCommand(app, mock)
 		app.Run()
 	})
-	assert.Contains(t, logs, "Removing file :file.txt", "Test failed")
-	assert.Contains(t, logs, "Successfully removed file:file.txt", "Test failed")
+	assert.Contains(t, logs, "Removing file : \",\"file.txt\"", "Test failed")
+	assert.Contains(t, logs, "Successfully removed file: \",\"file.txt\"", "Test failed")
 }
