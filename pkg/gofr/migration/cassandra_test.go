@@ -92,7 +92,7 @@ func Test_CassandraCommitMigration(t *testing.T) {
 	}
 
 	for i, tc := range testCases {
-		mockCassandra.EXPECT().Exec(insertCassandraGoFrMigrationRow, td.MigrationNumber,
+		mockCassandra.EXPECT().Exec(gomock.Any(), insertCassandraGoFrMigrationRow, td.MigrationNumber,
 			"UP", td.StartTime, gomock.Any()).Return(tc.err)
 
 		err := migratorWithCassandra.commitMigration(mockContainer, td)
