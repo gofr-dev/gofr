@@ -8,9 +8,12 @@ import (
 	"gofr.dev/pkg/gofr"
 	"gofr.dev/pkg/gofr/datasource/file"
 	"gofr.dev/pkg/gofr/datasource/file/ftp"
+	"gofr.dev/pkg/gofr/logging"
 )
 
 type FileServerType int
+
+var logger logging.Logger
 
 const (
 	FTP FileServerType = iota
@@ -84,11 +87,11 @@ func registerGrepCommand(app *gofr.App, fs file.FileSystemProvider) {
 func registerCreateFileCommand(app *gofr.App, fs file.FileSystemProvider) {
 	app.SubCommand("createfile", func(c *gofr.Context) (interface{}, error) {
 		fileName := c.Param("filename")
-		fmt.Printf("Creating file :%s", fileName)
+		logger.Log("Creating file : ", fileName)
 		_, err := fs.Create(fileName)
 
 		if err == nil {
-			fmt.Printf("Successfully created file:%s", fileName)
+			logger.Log("Successfully created file: ", fileName)
 		}
 
 		return "", err
@@ -98,11 +101,11 @@ func registerCreateFileCommand(app *gofr.App, fs file.FileSystemProvider) {
 func registerRmCommand(app *gofr.App, fs file.FileSystemProvider) {
 	app.SubCommand("rm", func(c *gofr.Context) (interface{}, error) {
 		fileName := c.Param("filename")
-		fmt.Printf("Removing file :%s", fileName)
+		logger.Log("Removing file : ", fileName)
 		err := fs.Remove(fileName)
 
 		if err == nil {
-			fmt.Printf("Successfully removed file:%s", fileName)
+			logger.Log("Successfully removed file: ", fileName)
 		}
 
 		return "", err
@@ -111,6 +114,8 @@ func registerRmCommand(app *gofr.App, fs file.FileSystemProvider) {
 
 func main() {
 	app := gofr.NewCMD()
+
+	logger = gofr.New().Logger()
 
 	fileSystemProvider := configureFileServer(app)
 
