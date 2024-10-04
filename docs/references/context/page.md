@@ -52,8 +52,8 @@ parts of the request.
   ```
   
 - `Binding multipart-form data / urlencoded form data ` 
-  - To bind multipart-form data, you can use the Bind method similarly. The struct fields should be tagged appropriately 
-    to map the form fields to the struct fields.
+  - To bind multipart-form data or url-encoded form, you can use the Bind method similarly. The struct fields should be tagged appropriately 
+    to map the form fields to the struct fields. The supported content types are `multipart/form-data` and `application/x-www-form-urlencoded`
     
     ```go
     type Data struct {
