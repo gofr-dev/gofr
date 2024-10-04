@@ -6,7 +6,6 @@
 //	mockgen -source=metrics.go -destination=mock_metrics.go -package=container
 //
 
-// Package container is a generated GoMock package.
 package container
 
 import (
