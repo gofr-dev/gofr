@@ -57,6 +57,7 @@ docker run --name gofr-mysql -e MYSQL_ROOT_PASSWORD=password -e MYSQL_DATABASE=t
 docker run --name gofr-redis -p 2002:6379 -d redis:7.0.5
 docker run --name gofr-zipkin -d -p 2005:9411 openzipkin/zipkin:2
 docker run --rm -it -p 4566:4566 -p 4510-4559:4510-4559 localstack/localstack
+docker run --name cassandra-node -d -p 9042:9042 -v cassandra_data:/var/lib/cassandra cassandra:latest
 docker run --name gofr-pgsql -d -e POSTGRES_DB=customers -e POSTGRES_PASSWORD=root123 -p 2006:5432 postgres:15.1
 docker run --name gofr-mssql -d -e 'ACCEPT_EULA=Y' -e 'SA_PASSWORD=reallyStrongPwd123' -p 2007:1433 mcr.microsoft.com/azure-sql-edge
 docker run --name kafka-1 -p 9092:9092 \

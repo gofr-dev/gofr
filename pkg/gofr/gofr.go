@@ -85,6 +85,8 @@ func New() *App {
 	}
 
 	app.httpServer = newHTTPServer(app.container, port, middleware.GetConfigs(app.Config))
+	app.httpServer.certFile = app.Config.GetOrDefault("CERT_FILE", "")
+	app.httpServer.keyFile = app.Config.GetOrDefault("KEY_FILE", "")
 
 	if app.Config.Get("APP_ENV") == "DEBUG" {
 		app.httpServer.RegisterProfilingRoutes()
@@ -383,11 +385,17 @@ func (a *App) Migrate(migrationsMap map[int64]migration.Migrate) {
 }
 
 func (a *App) initTracer() {
+	traceRatio, err := strconv.ParseFloat(a.Config.GetOrDefault("TRACER_RATIO", "1"), 64)
+	if err != nil {
+		a.container.Error(err)
+	}
+
 	tp := sdktrace.NewTracerProvider(
 		sdktrace.WithResource(resource.NewWithAttributes(
 			semconv.SchemaURL,
 			semconv.ServiceNameKey.String(a.container.GetAppName()),
 		)),
+		sdktrace.WithSampler(sdktrace.ParentBased(sdktrace.TraceIDRatioBased(traceRatio))),
 	)
 	otel.SetTracerProvider(tp)
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
