@@ -11,6 +11,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/integration/mtest"
+	"go.opentelemetry.io/otel"
 	"go.uber.org/mock/gomock"
 )
 
@@ -61,7 +62,7 @@ func Test_InsertCommands(t *testing.T) {
 	metrics := NewMockMetrics(ctrl)
 	logger := NewMockLogger(ctrl)
 
-	cl := Client{metrics: metrics}
+	cl := Client{metrics: metrics, tracer: otel.GetTracerProvider().Tracer("gofr-mongo")}
 
 	metrics.EXPECT().RecordHistogram(context.Background(), "app_mongo_stats", gomock.Any(), "hostname",
 		gomock.Any(), "database", gomock.Any(), "type", gomock.Any()).Times(4)
@@ -79,7 +80,7 @@ func Test_InsertCommands(t *testing.T) {
 		resp, err := cl.InsertOne(context.Background(), mt.Coll.Name(), doc)
 
 		assert.NotNil(t, resp)
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 	})
 
 	mt.Run("insertOneError", func(mt *mtest.T) {
@@ -137,7 +138,7 @@ func Test_CreateCollection(t *testing.T) {
 	metrics := NewMockMetrics(ctrl)
 	logger := NewMockLogger(ctrl)
 
-	cl := Client{metrics: metrics}
+	cl := Client{metrics: metrics, tracer: otel.GetTracerProvider().Tracer("gofr-mongo")}
 
 	metrics.EXPECT().RecordHistogram(context.Background(), "app_mongo_stats", gomock.Any(), "hostname",
 		gomock.Any(), "database", gomock.Any(), "type", gomock.Any())
@@ -166,7 +167,7 @@ func Test_FindMultipleCommands(t *testing.T) {
 	metrics := NewMockMetrics(ctrl)
 	logger := NewMockLogger(ctrl)
 
-	cl := Client{metrics: metrics}
+	cl := Client{metrics: metrics, tracer: otel.GetTracerProvider().Tracer("gofr-mongo")}
 
 	metrics.EXPECT().RecordHistogram(context.Background(), "app_mongo_stats", gomock.Any(), "hostname",
 		gomock.Any(), "database", gomock.Any(), "type", gomock.Any()).Times(3)
@@ -195,7 +196,7 @@ func Test_FindMultipleCommands(t *testing.T) {
 
 		err := cl.Find(context.Background(), mt.Coll.Name(), bson.D{{}}, &foundDocuments)
 
-		assert.Nil(t, err, "Unexpected error during Find operation")
+		assert.NoError(t, err, "Unexpected error during Find operation")
 	})
 
 	mt.Run("FindCursorError", func(mt *mtest.T) {
@@ -240,7 +241,7 @@ func Test_FindOneCommands(t *testing.T) {
 	metrics := NewMockMetrics(ctrl)
 	logger := NewMockLogger(ctrl)
 
-	cl := Client{metrics: metrics}
+	cl := Client{metrics: metrics, tracer: otel.GetTracerProvider().Tracer("gofr-mongo")}
 
 	metrics.EXPECT().RecordHistogram(context.Background(), "app_mongo_stats", gomock.Any(), "hostname",
 		gomock.Any(), "database", gomock.Any(), "type", gomock.Any()).Times(2)
@@ -275,7 +276,7 @@ func Test_FindOneCommands(t *testing.T) {
 		err := cl.FindOne(context.Background(), mt.Coll.Name(), bson.D{{}}, &foundDocuments)
 
 		assert.Equal(t, expectedUser.Name, foundDocuments.Name)
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 	})
 
 	mt.Run("FindOneError", func(mt *mtest.T) {
@@ -307,7 +308,7 @@ func Test_UpdateCommands(t *testing.T) {
 	metrics := NewMockMetrics(ctrl)
 	logger := NewMockLogger(ctrl)
 
-	cl := Client{metrics: metrics}
+	cl := Client{metrics: metrics, tracer: otel.GetTracerProvider().Tracer("gofr-mongo")}
 
 	metrics.EXPECT().RecordHistogram(context.Background(), "app_mongo_stats", gomock.Any(), "hostname",
 		gomock.Any(), "database", gomock.Any(), "type", gomock.Any()).Times(3)
@@ -358,7 +359,7 @@ func Test_CountDocuments(t *testing.T) {
 	metrics := NewMockMetrics(ctrl)
 	logger := NewMockLogger(ctrl)
 
-	cl := Client{metrics: metrics}
+	cl := Client{metrics: metrics, tracer: otel.GetTracerProvider().Tracer("gofr-mongo")}
 
 	metrics.EXPECT().RecordHistogram(context.Background(), "app_mongo_stats", gomock.Any(), "hostname",
 		gomock.Any(), "database", gomock.Any(), "type", gomock.Any())
@@ -379,7 +380,8 @@ func Test_CountDocuments(t *testing.T) {
 		_, err := indexView.CreateOne(context.Background(), mongo.IndexModel{
 			Keys: bson.D{{Key: "x", Value: 1}},
 		})
-		require.Nil(mt, err, "CreateOne error for index: %v", err)
+
+		assert.NoError(mt, err, "CreateOne error for index: %v", err)
 
 		resp, err := cl.CountDocuments(context.Background(), mt.Coll.Name(), bson.D{{Key: "name", Value: "test"}})
 
@@ -398,7 +400,7 @@ func Test_DeleteCommands(t *testing.T) {
 	metrics := NewMockMetrics(ctrl)
 	logger := NewMockLogger(ctrl)
 
-	cl := Client{metrics: metrics}
+	cl := Client{metrics: metrics, tracer: otel.GetTracerProvider().Tracer("gofr-mongo")}
 
 	metrics.EXPECT().RecordHistogram(context.Background(), "app_mongo_stats", gomock.Any(), "hostname",
 		gomock.Any(), "database", gomock.Any(), "type", gomock.Any()).Times(4)
@@ -466,7 +468,7 @@ func Test_Drop(t *testing.T) {
 	metrics := NewMockMetrics(ctrl)
 	logger := NewMockLogger(ctrl)
 
-	cl := Client{metrics: metrics}
+	cl := Client{metrics: metrics, tracer: otel.GetTracerProvider().Tracer("gofr-mongo")}
 
 	metrics.EXPECT().RecordHistogram(context.Background(), "app_mongo_stats", gomock.Any(), "hostname",
 		gomock.Any(), "database", gomock.Any(), "type", gomock.Any())
@@ -495,7 +497,7 @@ func TestClient_StartSession(t *testing.T) {
 	metrics := NewMockMetrics(ctrl)
 	logger := NewMockLogger(ctrl)
 
-	cl := Client{metrics: metrics}
+	cl := Client{metrics: metrics, tracer: otel.GetTracerProvider().Tracer("gofr-mongo")}
 
 	// Set up the mock expectation for the metrics recording
 	metrics.EXPECT().RecordHistogram(gomock.Any(), "app_mongo_stats", gomock.Any(), "hostname",
@@ -513,6 +515,7 @@ func TestClient_StartSession(t *testing.T) {
 
 		// Call the StartSession method
 		sess, err := cl.StartSession()
+
 		ses, ok := sess.(Transaction)
 		if ok {
 			err = ses.StartTransaction()
