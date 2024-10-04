@@ -108,7 +108,6 @@ func (cmd *cmd) handler(path string) *route {
 	return nil
 }
 
-// Option functions to configure the service
 // AddDescription adds the description text for a specified subcommand.
 func AddDescription(descString string) Options {
 	return func(r *route) {
@@ -125,7 +124,6 @@ func AddHelp(helperString string) Options {
 }
 
 // addRoute adds a new route to cmd's list of routes.
-// Optional configuration for the route is passed using functional options like AddHelp and AddDescription.
 func (cmd *cmd) addRoute(pattern string, handler Handler, options ...Options) {
 	tempRoute := route{
 		pattern: pattern,
