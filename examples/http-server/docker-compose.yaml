@@ -1,0 +1,57 @@
+version: '3.8'
+
+services:
+  gofr-http-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      - TRACE_EXPORTER=jaeger
+      - TRACER_URL=jaeger:4317  
+      - REDIS_HOST=redisdb
+      - REDIS_PORT=6379
+      - DB_HOST=mysqldb
+      - DB_USER=root
+      - DB_PASSWORD=password
+      - DB_NAME=test
+      - DB_PORT=3306
+      - DB_DIALECT=mysql
+    ports:
+      - "9000:9000"
+    depends_on:
+      - redisdb
+      - mysqldb
+      - jaeger
+    networks:
+      - gofr-network
+
+  redisdb:
+    image: redis:7.0.5
+    ports:
+      - "2002:6379"
+    networks:
+      - gofr-network
+
+  mysqldb:
+    image: mysql:8.0.30
+    environment:
+      MYSQL_ROOT_PASSWORD: password
+      MYSQL_DATABASE: test
+    ports:
+      - "2001:3306"
+    networks:
+      - gofr-network
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.41
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "16686:16686"
+      - "4317:4317"
+      - "4318:4318"
+    networks:
+      - gofr-network
+
+networks:
+  gofr-network:
