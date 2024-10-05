@@ -18,9 +18,12 @@ services:
       - DB_DIALECT=mysql
     ports:
       - "9000:9000"
+      - "2121:2121"
+      - "9090:9090"
     depends_on:
       - redisdb
       - mysqldb
+      - grafana
     networks:
       - gofr-network
 
@@ -38,6 +41,16 @@ services:
       MYSQL_DATABASE: test
     ports:
       - "2001:3306"
+    networks:
+      - gofr-network
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=password
     networks:
       - gofr-network
 
