@@ -6,8 +6,8 @@ services:
       context: .
       dockerfile: Dockerfile
     environment:
-      - TRACE_EXPORTER=jaeger
-      - TRACER_URL=jaeger:4317  
+      - TRACE_EXPORTER=gofr
+      - TRACER_RATIO=0.1
       - REDIS_HOST=redisdb
       - REDIS_PORT=6379
       - DB_HOST=mysqldb
@@ -21,7 +21,6 @@ services:
     depends_on:
       - redisdb
       - mysqldb
-      - jaeger
     networks:
       - gofr-network
 
@@ -39,17 +38,6 @@ services:
       MYSQL_DATABASE: test
     ports:
       - "2001:3306"
-    networks:
-      - gofr-network
-
-  jaeger:
-    image: jaegertracing/all-in-one:1.41
-    environment:
-      COLLECTOR_OTLP_ENABLED: "true"
-    ports:
-      - "16686:16686"
-      - "4317:4317"
-      - "4318:4318"
     networks:
       - gofr-network
 
