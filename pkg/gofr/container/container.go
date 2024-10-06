@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"gofr.dev/pkg/gofr/datasource/opentsdb"
+
 	_ "github.com/go-sql-driver/mysql" // This is required to be blank import
 
 	"gofr.dev/pkg/gofr/config"
@@ -46,6 +48,7 @@ type Container struct {
 	Mongo      Mongo
 	Solr       Solr
 	DGraph     Dgraph
+	Opentsdb   opentsdb.OpentsDBClient
 
 	KVStore KVStore
 

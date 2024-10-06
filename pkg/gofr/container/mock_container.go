@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"testing"
 
+	"gofr.dev/pkg/gofr/datasource/opentsdb"
+
 	"go.uber.org/mock/gomock"
 
 	"gofr.dev/pkg/gofr/datasource"
@@ -24,6 +26,7 @@ type Mocks struct {
 	Mongo       *MockMongo
 	KVStore     *MockKVStore
 	DGraph      *MockDgraph
+	Opentsdb    *opentsdb.MockOpentsdbProvider
 	File        *file.MockFileSystemProvider
 	HTTPService *service.MockHTTP
 	Metrics     *MockMetrics
@@ -83,6 +86,9 @@ func NewMockContainer(t *testing.T, options ...options) (*Container, *Mocks) {
 	dgraphMock := NewMockDgraph(ctrl)
 	container.DGraph = dgraphMock
 
+	opentsdbMock := opentsdb.NewMockOpentsdbProvider(ctrl)
+	container.Opentsdb = opentsdbMock
+
 	var httpMock *service.MockHTTP
 
 	container.Services = make(map[string]service.HTTP)
@@ -111,6 +117,7 @@ func NewMockContainer(t *testing.T, options ...options) (*Container, *Mocks) {
 		File:        fileStoreMock,
 		HTTPService: httpMock,
 		DGraph:      dgraphMock,
+		Opentsdb:    opentsdbMock,
 		Metrics:     mockMetrics,
 	}
 
