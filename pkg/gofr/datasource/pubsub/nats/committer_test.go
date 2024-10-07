@@ -7,7 +7,7 @@ import (
 	"go.uber.org/mock/gomock"
 )
 
-func TestNatsCommitter_Commit(t *testing.T) {
+func TestNATSCommitter_Commit(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -35,7 +35,7 @@ func TestNatsCommitter_Commit(t *testing.T) {
 	})
 }
 
-func TestNatsCommitter_Nak(t *testing.T) {
+func TestNATSCommitter_Nak(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -57,7 +57,7 @@ func TestNatsCommitter_Nak(t *testing.T) {
 	})
 }
 
-func TestNatsCommitter_Rollback(t *testing.T) {
+func TestNATSCommitter_Rollback(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 

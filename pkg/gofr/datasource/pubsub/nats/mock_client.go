@@ -56,9 +56,9 @@ func (mr *MockConnInterfaceMockRecorder) Close() *gomock.Call {
 }
 
 // NatsConn mocks base method.
-func (m *MockConnInterface) NatsConn() *nats.Conn {
+func (m *MockConnInterface) NATSConn() *nats.Conn {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "NatsConn")
+	ret := m.ctrl.Call(m, "NATSConn")
 	ret0, _ := ret[0].(*nats.Conn)
 	return ret0
 }
@@ -66,7 +66,7 @@ func (m *MockConnInterface) NatsConn() *nats.Conn {
 // NatsConn indicates an expected call of NatsConn.
 func (mr *MockConnInterfaceMockRecorder) NatsConn() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NatsConn", reflect.TypeOf((*MockConnInterface)(nil).NatsConn))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NATSConn", reflect.TypeOf((*MockConnInterface)(nil).NATSConn))
 }
 
 // Status mocks base method.

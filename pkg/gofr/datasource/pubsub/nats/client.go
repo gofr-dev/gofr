@@ -13,16 +13,30 @@ import (
 
 // Client represents a Client for NATS JetStream operations.
 type Client struct {
-	connManager   ConnectionManagerInterface
-	subManager    SubscriptionManagerInterface
-	streamManager StreamManagerInterface
-	Config        *Config
-	logger        pubsub.Logger
-	metrics       Metrics
-	tracer        trace.Tracer
+	connManager      ConnectionManagerInterface
+	subManager       SubscriptionManagerInterface
+	streamManager    StreamManagerInterface
+	Config           *Config
+	logger           pubsub.Logger
+	metrics          Metrics
+	tracer           trace.Tracer
+	natsConnector    NATSConnector
+	jetStreamCreator JetStreamCreator
 }
 
 type messageHandler func(context.Context, jetstream.Msg) error
+
+// NewClient creates a new NATS JetStream client.
+func NewClient(cfg *Config, logger pubsub.Logger, metrics Metrics, tracer trace.Tracer) *Client {
+	return &Client{
+		Config:           cfg,
+		logger:           logger,
+		metrics:          metrics,
+		tracer:           tracer,
+		natsConnector:    &DefaultNATSConnector{},
+		jetStreamCreator: &DefaultJetStreamCreator{},
+	}
+}
 
 // Connect establishes a connection to NATS and sets up JetStream.
 func (c *Client) Connect() error {
@@ -30,7 +44,7 @@ func (c *Client) Connect() error {
 		return err
 	}
 
-	c.connManager = NewConnectionManager(c.Config, c.logger)
+	c.connManager = NewConnectionManager(c.Config, c.logger, c.natsConnector, c.jetStreamCreator)
 	if err := c.connManager.Connect(); err != nil {
 		return err
 	}

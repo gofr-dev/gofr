@@ -15,7 +15,7 @@ import (
 type ConnInterface interface {
 	Status() nats.Status
 	Close()
-	NatsConn() *nats.Conn
+	NATSConn() *nats.Conn
 }
 
 // NATSConnector represents the main Client connection.
