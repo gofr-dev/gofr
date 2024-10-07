@@ -1,3 +1,15 @@
+/*
+Package container provides a centralized structure to manage common application-level concerns such as
+logging, connection pools, and service management. This package is designed to facilitate the sharing and
+management of these concerns across different parts of an application.
+
+Supported data sources:
+  - Databases (Cassandra, ClickHouse, MongoDB, DGraph, MySQL, PostgreSQL, SQLite)
+  - Key-value storages (Redis, BadgerDB)
+  - Pub/Sub systems (Azure Event Hub, Google as backend, Kafka, MQTT)
+  - Search engines (Solr)
+  - File systems (FTP, SFTP, S3)
+*/
 package container
 
 import (
