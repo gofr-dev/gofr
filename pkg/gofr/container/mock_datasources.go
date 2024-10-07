@@ -6,7 +6,6 @@
 //	mockgen -source=datasources.go -destination=mock_datasources.go -package=container
 //
 
-// Package container is a generated GoMock package.
 package container
 
 import (
