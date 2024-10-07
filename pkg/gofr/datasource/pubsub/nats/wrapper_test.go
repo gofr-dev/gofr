@@ -40,7 +40,7 @@ func TestNATSConnWrapper(t *testing.T) {
 		}
 		defer nc.Close()
 
-		wrapper := &natsConnWrapper{Conn: nc}
+		wrapper := &natsConnWrapper{conn: nc}
 		status := wrapper.Status()
 		expectedStatus := nats.CONNECTED
 
@@ -55,7 +55,7 @@ func TestNATSConnWrapper(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		wrapper := &natsConnWrapper{Conn: nc}
+		wrapper := &natsConnWrapper{conn: nc}
 		wrapper.Close()
 
 		status := wrapper.Status()
@@ -63,6 +63,21 @@ func TestNATSConnWrapper(t *testing.T) {
 
 		if status != expectedStatus {
 			t.Errorf("Expected status %v, got %v", expectedStatus, status)
+		}
+	})
+
+	t.Run("NATSConn", func(t *testing.T) {
+		nc, err := nats.Connect(url)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer nc.Close()
+
+		wrapper := &natsConnWrapper{conn: nc}
+		returnedConn := wrapper.NATSConn()
+
+		if returnedConn != nc {
+			t.Errorf("Expected NATSConn to return the original connection")
 		}
 	})
 }

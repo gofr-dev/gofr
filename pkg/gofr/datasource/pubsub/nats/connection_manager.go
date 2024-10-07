@@ -17,10 +17,12 @@ const (
 )
 
 type ConnectionManager struct {
-	conn      ConnInterface
-	jetStream jetstream.JetStream
-	config    *Config
-	logger    pubsub.Logger
+	conn             ConnInterface
+	jetStream        jetstream.JetStream
+	config           *Config
+	logger           pubsub.Logger
+	natsConnector    NATSConnector
+	jetStreamCreator JetStreamCreator
 }
 
 func (cm *ConnectionManager) JetStream() jetstream.JetStream {
@@ -29,41 +31,48 @@ func (cm *ConnectionManager) JetStream() jetstream.JetStream {
 
 // natsConnWrapper wraps a nats.Conn to implement the ConnInterface.
 type natsConnWrapper struct {
-	*nats.Conn
+	conn *nats.Conn
 }
 
 func (w *natsConnWrapper) Status() nats.Status {
-	return w.Conn.Status()
+	return w.conn.Status()
 }
 
 func (w *natsConnWrapper) Close() {
-	w.Conn.Close()
+	w.conn.Close()
 }
 
-func (w *natsConnWrapper) NatsConn() *nats.Conn {
-	return w.Conn
+func (w *natsConnWrapper) NATSConn() *nats.Conn {
+	return w.conn
 }
 
-func NewConnectionManager(cfg *Config, logger pubsub.Logger) *ConnectionManager {
+// NewConnectionManager creates a new ConnectionManager.
+func NewConnectionManager(cfg *Config, logger pubsub.Logger, natsConnector NATSConnector, jetStreamCreator JetStreamCreator) *ConnectionManager {
 	return &ConnectionManager{
-		config: cfg,
-		logger: logger,
+		config:           cfg,
+		logger:           logger,
+		natsConnector:    natsConnector,
+		jetStreamCreator: jetStreamCreator,
 	}
 }
 
+// Connect establishes a connection to NATS and sets up JetStream.
 func (cm *ConnectionManager) Connect() error {
-	nc, err := cm.createNATSConnection()
+	conn, err := cm.natsConnector.Connect(cm.config.Server, nats.Name("GoFr NATS JetStreamClient"))
 	if err != nil {
+		cm.logger.Errorf("failed to connect to NATS server at %v: %v", cm.config.Server, err)
 		return err
 	}
 
-	js, err := cm.createJetStreamContext(nc)
+	natsConn := conn.NATSConn()
+	js, err := cm.jetStreamCreator.New(natsConn)
 	if err != nil {
-		nc.Close()
+		conn.Close()
+		cm.logger.Errorf("failed to create JetStream context: %v", err)
 		return err
 	}
 
-	cm.conn = &natsConnWrapper{nc}
+	cm.conn = conn
 	cm.jetStream = js
 
 	return nil
