@@ -251,3 +251,24 @@ func Test_Params(t *testing.T) {
 	assert.ElementsMatch(t, expectedTags, r.Params("tag"), "expected all values of 'tag' to match")
 	assert.Empty(t, r.Params("nonexistent"), "expected empty slice for non-existent query param")
 }
+
+func TestBind_FormURLEncoded(t *testing.T) {
+	// Create a new HTTP request with form-encoded data
+	req := NewRequest(httptest.NewRequest(http.MethodPost, "/abc", strings.NewReader("Name=John&Age=30")))
+	req.req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	x := struct {
+		Name string `form:"Name"`
+		Age  int    `form:"Age"`
+	}{}
+
+	err := req.Bind(&x)
+	if err != nil {
+		t.Errorf("Bind error: %v", err)
+	}
+
+	// Check the results
+	if x.Name != "John" || x.Age != 30 {
+		t.Errorf("Bind error. Got: %v", x)
+	}
+}
