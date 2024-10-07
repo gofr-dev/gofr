@@ -55,7 +55,22 @@ func (mr *MockConnInterfaceMockRecorder) Close() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockConnInterface)(nil).Close))
 }
 
-// NatsConn mocks base method.
+// JetStream mocks base method.
+func (m *MockConnInterface) JetStream() (jetstream.JetStream, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "JetStream")
+	ret0, _ := ret[0].(jetstream.JetStream)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// JetStream indicates an expected call of JetStream.
+func (mr *MockConnInterfaceMockRecorder) JetStream() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "JetStream", reflect.TypeOf((*MockConnInterface)(nil).JetStream))
+}
+
+// NATSConn mocks base method.
 func (m *MockConnInterface) NATSConn() *nats.Conn {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "NATSConn")
@@ -63,8 +78,8 @@ func (m *MockConnInterface) NATSConn() *nats.Conn {
 	return ret0
 }
 
-// NatsConn indicates an expected call of NatsConn.
-func (mr *MockConnInterfaceMockRecorder) NatsConn() *gomock.Call {
+// NATSConn indicates an expected call of NATSConn.
+func (mr *MockConnInterfaceMockRecorder) NATSConn() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NATSConn", reflect.TypeOf((*MockConnInterface)(nil).NATSConn))
 }
