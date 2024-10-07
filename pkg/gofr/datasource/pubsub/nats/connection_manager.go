@@ -46,6 +46,10 @@ func (w *natsConnWrapper) NATSConn() *nats.Conn {
 	return w.conn
 }
 
+func (w *natsConnWrapper) JetStream() (jetstream.JetStream, error) {
+	return jetstream.New(w.conn)
+}
+
 // NewConnectionManager creates a new ConnectionManager.
 func NewConnectionManager(cfg *Config, logger pubsub.Logger, natsConnector NATSConnector, jetStreamCreator JetStreamCreator) *ConnectionManager {
 	return &ConnectionManager{

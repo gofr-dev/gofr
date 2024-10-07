@@ -51,7 +51,7 @@ func TestConnectionManager_Connect(t *testing.T) {
 		Return(mockConn, nil)
 
 	mockConn.EXPECT().
-		NatsConn().
+		NATSConn().
 		Return(&nats.Conn{})
 
 	mockJSCreator.EXPECT().

@@ -16,6 +16,7 @@ type ConnInterface interface {
 	Status() nats.Status
 	Close()
 	NATSConn() *nats.Conn
+	JetStream() (jetstream.JetStream, error)
 }
 
 // NATSConnector represents the main Client connection.
