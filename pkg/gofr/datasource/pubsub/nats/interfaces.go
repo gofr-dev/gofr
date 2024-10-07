@@ -6,9 +6,10 @@ import (
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 	"gofr.dev/pkg/gofr/datasource"
+	"gofr.dev/pkg/gofr/datasource/pubsub"
 )
 
-//go:generate mockgen -destination=mock_client.go -package=nats -source=./interfaces.go Client,Subscription,ConnInterface
+//go:generate mockgen -destination=mock_client.go -package=nats -source=./interfaces.go Client,Subscription,ConnInterface,ConnectionManagerInterface,SubscriptionManagerInterface,StreamManagerInterface
 
 // ConnInterface represents the main Client connection.
 type ConnInterface interface {
@@ -36,4 +37,26 @@ type JetStreamClient interface {
 	CreateStream(ctx context.Context, cfg StreamConfig) error
 	CreateOrUpdateStream(ctx context.Context, cfg jetstream.StreamConfig) (jetstream.Stream, error)
 	Health() datasource.Health
+}
+
+// ConnectionManagerInterface represents the main Client connection.
+type ConnectionManagerInterface interface {
+	Connect() error
+	Close(ctx context.Context)
+	Publish(ctx context.Context, subject string, message []byte, metrics Metrics) error
+	Health() datasource.Health
+	JetStream() jetstream.JetStream
+}
+
+// SubscriptionManagerInterface represents the main Subscription Manager.
+type SubscriptionManagerInterface interface {
+	Subscribe(ctx context.Context, topic string, js jetstream.JetStream, cfg *Config, logger pubsub.Logger, metrics Metrics) (*pubsub.Message, error)
+	Close()
+}
+
+// StreamManagerInterface represents the main Stream Manager.
+type StreamManagerInterface interface {
+	CreateStream(ctx context.Context, cfg StreamConfig) error
+	DeleteStream(ctx context.Context, name string) error
+	CreateOrUpdateStream(ctx context.Context, cfg *jetstream.StreamConfig) (jetstream.Stream, error)
 }
