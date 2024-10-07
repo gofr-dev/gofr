@@ -19,11 +19,11 @@ services:
     ports:
       - "9000:9000"
       - "2121:2121"
-      - "9090:9090"
     depends_on:
       - redisdb
       - mysqldb
       - grafana
+      - prometheus
     networks:
       - gofr-network
 
@@ -51,6 +51,17 @@ services:
     environment:
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=password
+    volumes:
+      - ./provisioning:/etc/grafana/provisioning
+    networks:
+      - gofr-network
+
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus:/etc/prometheus
     networks:
       - gofr-network
 
