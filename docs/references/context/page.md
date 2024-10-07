@@ -51,9 +51,9 @@ parts of the request.
   // the Bind() method will map the incoming request to variable p
   ```
   
-- `Binding multipart-form data` 
-  - To bind multipart-form data, you can use the Bind method similarly. The struct fields should be tagged appropriately 
-    to map the form fields to the struct fields.
+- `Binding multipart-form data / urlencoded form data ` 
+  - To bind multipart-form data or url-encoded form, you can use the Bind method similarly. The struct fields should be tagged appropriately 
+    to map the form fields to the struct fields. The supported content types are `multipart/form-data` and `application/x-www-form-urlencoded`
     
     ```go
     type Data struct {
