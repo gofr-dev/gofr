@@ -1,4 +1,4 @@
-module github.com/carverauto/gofr-nats
+module gofr.dev/pkg/gofr/datasource/pubsub/nats
 
 go 1.23.1
 
