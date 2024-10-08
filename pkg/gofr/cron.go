@@ -136,7 +136,7 @@ func parseSchedule(s string) (*job, error) {
 		return nil, err
 	}
 
-		//  day/dayOfWeek combination
+	//  day/dayOfWeek combination
 	mergeDays(j)
 
 	return j, nil
@@ -153,17 +153,17 @@ func mergeDays(j *job) {
 
 // parsePart parse individual schedule part from schedule string.
 func parsePart(s string, minValue, maxValue int) (map[int]struct{}, error) {
-		// wildcard pattern
+	// wildcard pattern
 	if s == "*" {
 		return getDefaultJobField(minValue, maxValue, 1), nil
 	}
 
-		// */2 1-59/5 pattern
+	// */2 1-59/5 pattern
 	if matches := matchN.FindStringSubmatch(s); matches != nil {
 		return parseSteps(s, matches[1], matches[2], minValue, maxValue)
 	}
 
-		// 1,2,4 or 1,2,10-15,20,30-45 pattern
+	// 1,2,4 or 1,2,10-15,20,30-45 pattern
 	return parseRange(s, minValue, maxValue)
 }
 
@@ -338,7 +338,6 @@ func (c *Crontab) AddJob(schedule, jobName string, fn CronFunc) error {
 var errBadScheduleFormat = errors.New("schedule string must have five components like * * * * *")
 
 // errOutOfRange denotes the errors that occur when a range in schedule is out of scope for the particular time unit.
-
 type errOutOfRange struct {
 	rangeVal interface{}
 	input    string
