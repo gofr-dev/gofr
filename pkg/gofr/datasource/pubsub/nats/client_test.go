@@ -538,7 +538,7 @@ func TestClient_CreateOrUpdateStream(t *testing.T) {
 
 	mockStreamManager.EXPECT().CreateOrUpdateStream(gomock.Any(), &cfg).Return(mockStream, nil)
 
-	stream, err := client.CreateOrUpdateStream(context.Background(), cfg)
+	stream, err := client.CreateOrUpdateStream(context.Background(), &cfg)
 	require.NoError(t, err)
 	assert.Equal(t, mockStream, stream)
 }
