@@ -51,7 +51,13 @@ type ConnectionManagerInterface interface {
 
 // SubscriptionManagerInterface represents the main Subscription Manager.
 type SubscriptionManagerInterface interface {
-	Subscribe(ctx context.Context, topic string, js jetstream.JetStream, cfg *Config, logger pubsub.Logger, metrics Metrics) (*pubsub.Message, error)
+	Subscribe(
+		ctx context.Context,
+		topic string,
+		js jetstream.JetStream,
+		cfg *Config,
+		logger pubsub.Logger,
+		metrics Metrics) (*pubsub.Message, error)
 	Close()
 }
 

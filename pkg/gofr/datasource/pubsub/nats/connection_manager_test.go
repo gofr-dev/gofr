@@ -107,7 +107,7 @@ func TestConnectionManager_validateJetStream(t *testing.T) {
 	}
 
 	err := cm.validateJetStream("test.subject")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	cm.jetStream = nil
 	err = cm.validateJetStream("test.subject")
@@ -185,7 +185,10 @@ func TestNatsConnWrapper_Close(t *testing.T) {
 	assert.Equal(t, nats.CLOSED, wrapper.Status(), "Final status should be CLOSED")
 }
 
-func startNATSServer(t *testing.T) (*server.Server, string) {
+// startNATSServer starts a NATS server and returns the server instance and the client URL.
+func startNATSServer(t *testing.T) (s *server.Server, u string) {
+	t.Helper()
+
 	opts := &server.Options{
 		Host: "127.0.0.1",
 		Port: -1, // Random available port
@@ -200,7 +203,9 @@ func startNATSServer(t *testing.T) (*server.Server, string) {
 		t.Fatal("NATS server not ready for connections")
 	}
 
-	return ns, ns.ClientURL()
+	u = ns.ClientURL()
+
+	return ns, u
 }
 
 func TestNatsConnWrapper_NatsConn(t *testing.T) {

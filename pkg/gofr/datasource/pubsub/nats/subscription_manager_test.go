@@ -2,7 +2,6 @@ package nats
 
 import (
 	"context"
-	"errors"
 	"testing"
 	"time"
 
@@ -43,11 +42,12 @@ func TestSubscriptionManager_Subscribe(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
+
 	topic := "test.topic"
 
 	mockJS.EXPECT().CreateOrUpdateConsumer(gomock.Any(), cfg.Stream.Stream, gomock.Any()).Return(mockConsumer, nil)
 	mockMetrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_subscribe_total_count", "topic", topic)
-	mockConsumer.EXPECT().Fetch(gomock.Any(), gomock.Any()).Return(createMockMessageBatch(ctrl, topic), nil).AnyTimes()
+	mockConsumer.EXPECT().Fetch(gomock.Any(), gomock.Any()).Return(createMockMessageBatch(ctrl), nil).AnyTimes()
 	mockMetrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_subscribe_success_count", "topic", topic)
 
 	msg, err := sm.Subscribe(ctx, topic, mockJS, cfg, mockLogger, mockMetrics)
@@ -75,7 +75,7 @@ func TestSubscriptionManager_Subscribe_Error(t *testing.T) {
 	ctx := context.Background()
 	topic := "test.topic"
 
-	expectedErr := errors.New("consumer creation error")
+	expectedErr := errConsumerCreationError
 	mockJS.EXPECT().CreateOrUpdateConsumer(gomock.Any(), cfg.Stream.Stream, gomock.Any()).Return(nil, expectedErr)
 	mockMetrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_subscribe_total_count", "topic", topic)
 
@@ -91,7 +91,7 @@ func TestSubscriptionManager_validateSubscribePrerequisites(t *testing.T) {
 	cfg := &Config{Consumer: "test-consumer"}
 
 	err := sm.validateSubscribePrerequisites(mockJS, cfg)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	err = sm.validateSubscribePrerequisites(nil, cfg)
 	assert.Equal(t, errJetStreamNotConfigured, err)
@@ -106,7 +106,7 @@ func TestSubscriptionManager_getOrCreateBuffer(t *testing.T) {
 
 	buffer := sm.getOrCreateBuffer(topic)
 	assert.NotNil(t, buffer)
-	assert.Len(t, buffer, 0)
+	assert.Empty(t, buffer)
 	assert.Equal(t, 1, cap(buffer))
 
 	// Check that the same buffer is returned for the same topic
@@ -155,7 +155,7 @@ func TestSubscriptionManager_consumeMessages(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	mockBatch := createMockMessageBatch(ctrl, topic)
+	mockBatch := createMockMessageBatch(ctrl)
 	mockConsumer.EXPECT().Fetch(gomock.Any(), gomock.Any()).Return(mockBatch, nil).AnyTimes()
 
 	go sm.consumeMessages(ctx, mockConsumer, topic, buffer, cfg, mockLogger)
@@ -169,7 +169,7 @@ func TestSubscriptionManager_consumeMessages(t *testing.T) {
 	}
 }
 
-func createMockMessageBatch(ctrl *gomock.Controller, topic string) jetstream.MessageBatch {
+func createMockMessageBatch(ctrl *gomock.Controller) jetstream.MessageBatch {
 	mockBatch := NewMockMessageBatch(ctrl)
 	mockMsg := NewMockMsg(ctrl)
 
@@ -200,11 +200,11 @@ func TestSubscriptionManager_Close(t *testing.T) {
 	assert.Empty(t, sm.subscriptions)
 	assert.Empty(t, sm.topicBuffers)
 
-	// Check that the context was cancelled
+	// Check that the context was canceled
 	select {
 	case <-ctx.Done():
 		// Expected behavior
 	default:
-		t.Fatal("Context was not cancelled")
+		t.Fatal("Context was not canceled")
 	}
 }

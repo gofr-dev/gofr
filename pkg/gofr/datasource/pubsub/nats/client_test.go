@@ -2,7 +2,6 @@ package nats
 
 import (
 	"context"
-	"errors"
 	"testing"
 	"time"
 
@@ -16,19 +15,7 @@ import (
 	"gofr.dev/pkg/gofr/testutil"
 )
 
-var (
-	wrapNewConnectionManager = func(cfg *Config, logger pubsub.Logger, natsConnector NATSConnector, jetStreamCreator JetStreamCreator) ConnectionManagerInterface {
-		return NewConnectionManager(cfg, logger, natsConnector, jetStreamCreator)
-	}
-	wrapNewStreamManager = func(js jetstream.JetStream, logger pubsub.Logger) StreamManagerInterface {
-		return NewStreamManager(js, logger)
-	}
-	wrapNewSubscriptionManager = func(bufferSize int) SubscriptionManagerInterface {
-		return NewSubscriptionManager(bufferSize)
-	}
-)
-
-func TestValidateConfigs(t *testing.T) {
+func TestValidateConfigs(*testing.T) {
 	// This test remains unchanged
 }
 
@@ -97,7 +84,7 @@ func TestNATSClient_PublishError(t *testing.T) {
 	subject := "test"
 	message := []byte("test-message")
 
-	expectedErr := errors.New("publish error")
+	expectedErr := errPublishError
 	mockConnManager.EXPECT().
 		Publish(ctx, subject, message, mockMetrics).
 		Return(expectedErr)
@@ -175,7 +162,9 @@ func TestNATSClient_SubscribeError(t *testing.T) {
 	ctx := context.Background()
 
 	expectedErr := errFailedToCreateConsumer
+
 	mockConnManager.EXPECT().JetStream().Return(mockJetStream)
+
 	mockSubManager.EXPECT().
 		Subscribe(ctx, "test-subject", mockJetStream, client.Config, client.logger, client.metrics).
 		Return(nil, expectedErr)
@@ -385,7 +374,7 @@ func TestClient_ValidateAndPrepare(t *testing.T) {
 	}
 
 	err := client.validateAndPrepare()
-	assert.Error(t, err)
+	require.Error(t, err)
 
 	client.Config = &Config{
 		Server: "nats://localhost:4222",
@@ -480,7 +469,7 @@ func TestClient_SubscribeWithHandler(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	handler := func(ctx context.Context, msg jetstream.Msg) error {
+	handler := func(context.Context, jetstream.Msg) error {
 		return nil
 	}
 
@@ -491,7 +480,8 @@ func TestClient_SubscribeWithHandler(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Test error case
-	mockJetStream.EXPECT().CreateOrUpdateConsumer(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, errors.New("consumer creation error"))
+	mockJetStream.EXPECT().CreateOrUpdateConsumer(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, errConsumerCreationError)
+
 	err = client.SubscribeWithHandler(ctx, "test-subject", handler)
 	require.Error(t, err)
 }

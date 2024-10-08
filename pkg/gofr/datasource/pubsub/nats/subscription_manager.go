@@ -36,7 +36,13 @@ func NewSubscriptionManager(bufferSize int) *SubscriptionManager {
 	}
 }
 
-func (sm *SubscriptionManager) Subscribe(ctx context.Context, topic string, js jetstream.JetStream, cfg *Config, logger pubsub.Logger, metrics Metrics) (*pubsub.Message, error) {
+func (sm *SubscriptionManager) Subscribe(
+	ctx context.Context,
+	topic string,
+	js jetstream.JetStream,
+	cfg *Config,
+	logger pubsub.Logger,
+	metrics Metrics) (*pubsub.Message, error) {
 	metrics.IncrementCounter(ctx, "app_pubsub_subscribe_total_count", "topic", topic)
 
 	if err := sm.validateSubscribePrerequisites(js, cfg); err != nil {
@@ -73,13 +79,15 @@ func (sm *SubscriptionManager) Subscribe(ctx context.Context, topic string, js j
 	}
 }
 
-func (sm *SubscriptionManager) validateSubscribePrerequisites(js jetstream.JetStream, cfg *Config) error {
+func (*SubscriptionManager) validateSubscribePrerequisites(js jetstream.JetStream, cfg *Config) error {
 	if js == nil {
 		return errJetStreamNotConfigured
 	}
+
 	if cfg.Consumer == "" {
 		return errConsumerNotProvided
 	}
+
 	return nil
 }
 
@@ -97,7 +105,8 @@ func (sm *SubscriptionManager) getOrCreateBuffer(topic string) chan *pubsub.Mess
 	return buffer
 }
 
-func (sm *SubscriptionManager) createOrUpdateConsumer(ctx context.Context, js jetstream.JetStream, topic string, cfg *Config) (jetstream.Consumer, error) {
+func (*SubscriptionManager) createOrUpdateConsumer(
+	ctx context.Context, js jetstream.JetStream, topic string, cfg *Config) (jetstream.Consumer, error) {
 	consumerName := fmt.Sprintf("%s_%s", cfg.Consumer, strings.ReplaceAll(topic, ".", "_"))
 	cons, err := js.CreateOrUpdateConsumer(ctx, cfg.Stream.Stream, jetstream.ConsumerConfig{
 		Durable:       consumerName,
@@ -111,7 +120,13 @@ func (sm *SubscriptionManager) createOrUpdateConsumer(ctx context.Context, js je
 	return cons, err
 }
 
-func (sm *SubscriptionManager) consumeMessages(ctx context.Context, cons jetstream.Consumer, topic string, buffer chan *pubsub.Message, cfg *Config, logger pubsub.Logger) {
+func (*SubscriptionManager) consumeMessages(
+	ctx context.Context,
+	cons jetstream.Consumer,
+	topic string,
+	buffer chan *pubsub.Message,
+	cfg *Config,
+	logger pubsub.Logger) {
 	for {
 		select {
 		case <-ctx.Done():
@@ -122,7 +137,9 @@ func (sm *SubscriptionManager) consumeMessages(ctx context.Context, cons jetstre
 				if !errors.Is(err, context.DeadlineExceeded) {
 					logger.Errorf("Error fetching messages for topic %s: %v", topic, err)
 				}
+
 				time.Sleep(consumeMessageDelay)
+
 				continue
 			}
 
@@ -153,6 +170,7 @@ func (sm *SubscriptionManager) Close() {
 	for _, sub := range sm.subscriptions {
 		sub.cancel()
 	}
+
 	sm.subscriptions = make(map[string]*subscription)
 	sm.subMu.Unlock()
 
@@ -160,6 +178,8 @@ func (sm *SubscriptionManager) Close() {
 	for _, buffer := range sm.topicBuffers {
 		close(buffer)
 	}
+
 	sm.topicBuffers = make(map[string]chan *pubsub.Message)
+
 	sm.bufferMu.Unlock()
 }
