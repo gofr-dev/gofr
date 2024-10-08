@@ -35,6 +35,8 @@ type Redis interface {
 	Close() error
 }
 
+// Cassandra is an interface representing a cassandra database
+// Deprecated: Cassandra interface is deprecated and will be removed in future releases, users must use CassandraWithContext.
 type Cassandra interface {
 	// Query executes the query and binds the result into dest parameter.
 	// Returns error if any error occurs while binding the result.
@@ -148,8 +150,39 @@ type CassandraBatch interface {
 	ExecuteBatchCAS(ctx context.Context, name string, dest ...any) (bool, error)
 }
 
-type CassandraProvider interface {
+type CassandraWithContext interface {
+	// Query executes the query with a context and binds the result into dest parameter.
+	// Accepts pointer to struct or slice as dest parameter for single and multiple rows retrieval respectively.
+	Query(ctx context.Context, dest any, stmt string, values ...any) error
+
+	// Exec executes the query with a context, without returning any rows.
+	Exec(ctx context.Context, stmt string, values ...any) error
+
+	// ExecCAS executes a lightweight transaction with a context.
+	ExecCAS(ctx context.Context, dest any, stmt string, values ...any) (bool, error)
+
+	// NewBatch creates a new Cassandra batch with context.
+	NewBatch(ctx context.Context, name string, batchType int) error
+
 	Cassandra
+	CassandraBatchWithContext
+}
+
+type CassandraBatchWithContext interface {
+	// BatchQuery adds the query to the batch operation with a context.
+	BatchQuery(ctx context.Context, name, stmt string, values ...any) error
+
+	// ExecuteBatch executes a batch operation with a context.
+	ExecuteBatch(ctx context.Context, name string) error
+
+	// ExecuteBatchCAS executes a batch operation with context and returns the result.
+	ExecuteBatchCAS(ctx context.Context, name string, dest ...any) (bool, error)
+
+	CassandraBatch
+}
+
+type CassandraProvider interface {
+	CassandraWithContext
 
 	provider
 }
