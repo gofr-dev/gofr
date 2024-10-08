@@ -18,4 +18,6 @@ var (
 	errDeleteStream            = errors.New("delete stream error")
 	errGetStream               = errors.New("get stream error")
 	errCreateOrUpdateStream    = errors.New("create or update stream error")
+	errHandlerError            = errors.New("handler error")
+	errConnectionError         = errors.New("connection error")
 )
