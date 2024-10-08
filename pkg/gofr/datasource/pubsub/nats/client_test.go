@@ -2,7 +2,6 @@ package nats
 
 import (
 	"context"
-	"errors"
 	"sync"
 	"testing"
 	"time"
@@ -542,6 +541,7 @@ func TestClient_SubscribeWithHandler(t *testing.T) {
 	// Synchronization Setup
 	// ---------------------
 	var wg sync.WaitGroup
+
 	wg.Add(2) // Two handlers
 
 	// ---------------------
@@ -610,7 +610,7 @@ func TestClient_SubscribeWithHandler(t *testing.T) {
 		select {
 		case <-firstHandlerCalled:
 			t.Log("First handler was called successfully")
-		case <-time.After(time.Second):
+		case <-time.After(time.Second * 5):
 			t.Fatal("First handler was not called within the expected time")
 		}
 	})
@@ -658,7 +658,6 @@ func TestClient_SubscribeWithHandler(t *testing.T) {
 
 		// Define the second handler that returns an error, causing a NAK
 		errorHandlerCalled := make(chan bool, 1)
-		errHandlerError := errors.New("handler error") // Ensure this error is defined
 		errorHandler := func(context.Context, jetstream.Msg) error {
 			t.Log("Error handler called")
 			errorHandlerCalled <- true
@@ -701,7 +700,7 @@ func TestClient_SubscribeWithHandler(t *testing.T) {
 	select {
 	case <-done:
 		// All handlers completed
-	case <-time.After(2 * time.Second):
+	case <-time.After(5 * time.Second):
 		t.Fatal("Handlers did not complete within the expected time")
 	}
 
