@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/nats-io/nats.go/jetstream"
 	"go.opentelemetry.io/otel/trace"
@@ -17,6 +18,8 @@ import (
 type Client struct {
 	connManager      ConnectionManagerInterface
 	subManager       SubscriptionManagerInterface
+	subscriptions    map[string]context.CancelFunc
+	subMutex         sync.Mutex
 	streamManager    StreamManagerInterface
 	Config           *Config
 	logger           pubsub.Logger
@@ -34,11 +37,13 @@ func (c *Client) Connect() error {
 		return err
 	}
 
-	c.connManager = NewConnectionManager(c.Config, c.logger, c.natsConnector, c.jetStreamCreator)
-	if err := c.connManager.Connect(); err != nil {
+	connManager := NewConnectionManager(c.Config, c.logger, c.natsConnector, c.jetStreamCreator)
+	if err := connManager.Connect(); err != nil {
+		c.logger.Errorf("failed to connect to NATS server at %v: %v", c.Config.Server, err)
 		return err
 	}
 
+	c.connManager = connManager
 	c.streamManager = NewStreamManager(c.connManager.JetStream(), c.logger)
 	c.subManager = NewSubscriptionManager(c.Config.BatchSize)
 	c.logSuccessfulConnection()
@@ -93,7 +98,17 @@ func (c *Client) Subscribe(ctx context.Context, topic string) (*pubsub.Message, 
 	return c.subManager.Subscribe(ctx, topic, c.connManager.JetStream(), c.Config, c.logger, c.metrics)
 }
 
+func (c *Client) generateConsumerName(subject string) string {
+	return fmt.Sprintf("%s_%s", c.Config.Consumer, strings.ReplaceAll(subject, ".", "_"))
+}
+
 func (c *Client) SubscribeWithHandler(ctx context.Context, subject string, handler messageHandler) error {
+	c.subMutex.Lock()
+	defer c.subMutex.Unlock()
+
+	// Cancel any existing subscription for this subject
+	c.cancelExistingSubscription(subject)
+
 	js := c.connManager.JetStream()
 	consumerName := c.generateConsumerName(subject)
 
@@ -102,13 +117,23 @@ func (c *Client) SubscribeWithHandler(ctx context.Context, subject string, handl
 		return err
 	}
 
-	go c.processMessages(ctx, cons, subject, handler)
+	// Create a new context for this subscription
+	subCtx, cancel := context.WithCancel(ctx)
+	c.subscriptions[subject] = cancel
+
+	go func() {
+		defer cancel() // Ensure the cancellation is handled properly
+		c.processMessages(subCtx, cons, subject, handler)
+	}()
 
 	return nil
 }
 
-func (c *Client) generateConsumerName(subject string) string {
-	return fmt.Sprintf("%s_%s", c.Config.Consumer, strings.ReplaceAll(subject, ".", "_"))
+func (c *Client) cancelExistingSubscription(subject string) {
+	if cancel, exists := c.subscriptions[subject]; exists {
+		cancel()
+		delete(c.subscriptions, subject)
+	}
 }
 
 func (c *Client) createOrUpdateConsumer(
@@ -134,45 +159,48 @@ func (c *Client) processMessages(ctx context.Context, cons jetstream.Consumer, s
 		case <-ctx.Done():
 			return
 		default:
-			c.fetchAndProcessMessages(ctx, cons, subject, handler)
+			msgs, err := cons.Fetch(1, jetstream.FetchMaxWait(c.Config.MaxWait))
+			if err != nil {
+				if !errors.Is(err, context.DeadlineExceeded) {
+					c.logger.Errorf("Error fetching messages for subject %s: %v", subject, err)
+				}
+
+				continue
+			}
+
+			for msg := range msgs.Messages() {
+				if err := c.handleMessage(ctx, msg, handler); err != nil {
+					c.logger.Errorf("Error processing message: %v", err)
+				}
+			}
+
+			if err := msgs.Error(); err != nil {
+				c.logger.Errorf("Error in message batch for subject %s: %v", subject, err)
+			}
 		}
 	}
 }
 
-func (c *Client) fetchAndProcessMessages(ctx context.Context, cons jetstream.Consumer, subject string, handler messageHandler) {
-	msgs, err := cons.Fetch(1, jetstream.FetchMaxWait(c.Config.MaxWait))
-	if err != nil {
-		if !errors.Is(err, context.DeadlineExceeded) {
-			c.logger.Errorf("Error fetching messages for subject %s: %v", subject, err)
-		}
-
-		return
-	}
-
-	for msg := range msgs.Messages() {
-		c.handleMessage(ctx, msg, handler)
-	}
-
-	if err := msgs.Error(); err != nil {
-		c.logger.Errorf("Error in message batch for subject %s: %v", subject, err)
-	}
-}
-
-func (c *Client) handleMessage(ctx context.Context, msg jetstream.Msg, handler messageHandler) {
+func (c *Client) handleMessage(ctx context.Context, msg jetstream.Msg, handler messageHandler) error {
 	err := handler(ctx, msg)
 	if err == nil {
 		if ackErr := msg.Ack(); ackErr != nil {
 			c.logger.Errorf("Error sending ACK for message: %v", ackErr)
+			return ackErr
 		}
 
-		return
+		return nil
 	}
 
 	c.logger.Errorf("Error handling message: %v", err)
 
 	if nakErr := msg.Nak(); nakErr != nil {
 		c.logger.Errorf("Error sending NAK for message: %v", nakErr)
+
+		return nakErr
 	}
+
+	return err
 }
 
 // Close closes the Client.
