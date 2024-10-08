@@ -42,14 +42,17 @@ func (c *Client) Connect() error {
 	c.streamManager = NewStreamManager(c.connManager.JetStream(), c.logger)
 	c.subManager = NewSubscriptionManager(c.Config.BatchSize)
 	c.logSuccessfulConnection()
+
 	return nil
 }
 
 func (c *Client) validateAndPrepare() error {
 	if err := ValidateConfigs(c.Config); err != nil {
 		c.logger.Errorf("could not initialize NATS JetStream: %v", err)
+
 		return err
 	}
+
 	return nil
 }
 
@@ -122,6 +125,7 @@ func (c *Client) SubscribeWithHandler(ctx context.Context, subject string, handl
 					if !errors.Is(err, context.DeadlineExceeded) {
 						c.logger.Errorf("Error fetching messages for subject %s: %v", subject, err)
 					}
+
 					continue
 				}
 
@@ -129,15 +133,18 @@ func (c *Client) SubscribeWithHandler(ctx context.Context, subject string, handl
 					err := handler(ctx, msg)
 					if err != nil {
 						c.logger.Errorf("Error handling message: %v", err)
+
 						err := msg.Nak()
 						if err != nil {
 							c.logger.Errorf("Error sending NAK for message: %v", err)
+
 							return
 						}
 					} else {
 						err := msg.Ack()
 						if err != nil {
 							c.logger.Errorf("Error sending ACK for message: %v", err)
+
 							return
 						}
 					}
@@ -156,9 +163,11 @@ func (c *Client) SubscribeWithHandler(ctx context.Context, subject string, handl
 // Close closes the Client.
 func (c *Client) Close(ctx context.Context) error {
 	c.subManager.Close()
+
 	if c.connManager != nil {
 		c.connManager.Close(ctx)
 	}
+
 	return nil
 }
 

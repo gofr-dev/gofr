@@ -51,7 +51,11 @@ func (w *natsConnWrapper) JetStream() (jetstream.JetStream, error) {
 }
 
 // NewConnectionManager creates a new ConnectionManager.
-func NewConnectionManager(cfg *Config, logger pubsub.Logger, natsConnector NATSConnector, jetStreamCreator JetStreamCreator) *ConnectionManager {
+func NewConnectionManager(
+	cfg *Config,
+	logger pubsub.Logger,
+	natsConnector NATSConnector,
+	jetStreamCreator JetStreamCreator) *ConnectionManager {
 	return &ConnectionManager{
 		config:           cfg,
 		logger:           logger,
@@ -65,6 +69,7 @@ func (cm *ConnectionManager) Connect() error {
 	connInterface, err := cm.natsConnector.Connect(cm.config.Server, nats.Name("GoFr NATS JetStreamClient"))
 	if err != nil {
 		cm.logger.Errorf("failed to connect to NATS server at %v: %v", cm.config.Server, err)
+
 		return err
 	}
 
@@ -72,6 +77,7 @@ func (cm *ConnectionManager) Connect() error {
 	if err != nil {
 		connInterface.Close()
 		cm.logger.Errorf("failed to create JetStream context: %v", err)
+
 		return err
 	}
 
@@ -81,33 +87,8 @@ func (cm *ConnectionManager) Connect() error {
 	return nil
 }
 
-func (cm *ConnectionManager) createNATSConnection() (*nats.Conn, error) {
-	opts := []nats.Option{nats.Name("GoFr NATS JetStreamClient")}
-	if cm.config.CredsFile != "" {
-		opts = append(opts, nats.UserCredentials(cm.config.CredsFile))
-	}
-
-	nc, err := nats.Connect(cm.config.Server, opts...)
-	if err != nil {
-		cm.logger.Errorf("failed to connect to NATS server at %v: %v", cm.config.Server, err)
-		return nil, err
-	}
-
-	return nc, nil
-}
-
-func (cm *ConnectionManager) createJetStreamContext(nc *nats.Conn) (jetstream.JetStream, error) {
-	js, err := jetstream.New(nc)
-	if err != nil {
-		cm.logger.Errorf("failed to create JetStream context: %v", err)
-		return nil, err
-	}
-
-	return js, nil
-}
-
 func (cm *ConnectionManager) Close(ctx context.Context) {
-	ctx, cancel := context.WithTimeout(ctx, ctxCloseTimeout)
+	_, cancel := context.WithTimeout(ctx, ctxCloseTimeout)
 	defer cancel()
 
 	if cm.conn != nil {
@@ -129,6 +110,7 @@ func (cm *ConnectionManager) Publish(ctx context.Context, subject string, messag
 	}
 
 	metrics.IncrementCounter(ctx, "app_pubsub_publish_success_count", "subject", subject)
+
 	return nil
 }
 
@@ -136,8 +118,10 @@ func (cm *ConnectionManager) validateJetStream(subject string) error {
 	if cm.jetStream == nil || subject == "" {
 		err := errJetStreamNotConfigured
 		cm.logger.Error(err.Error())
+
 		return err
 	}
+
 	return nil
 }
 

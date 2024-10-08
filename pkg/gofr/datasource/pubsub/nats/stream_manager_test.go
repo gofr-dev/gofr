@@ -2,7 +2,6 @@ package nats
 
 import (
 	"context"
-	"errors"
 	"testing"
 
 	"github.com/nats-io/nats.go/jetstream"
@@ -62,7 +61,7 @@ func TestStreamManager_CreateStream_Error(t *testing.T) {
 		Subjects: []string{"test.subject"},
 	}
 
-	expectedErr := errors.New("create stream error")
+	expectedErr := errCreateStream
 	mockJS.EXPECT().CreateStream(ctx, gomock.Any()).Return(nil, expectedErr)
 
 	err := sm.CreateStream(ctx, cfg)
@@ -118,7 +117,7 @@ func TestStreamManager_DeleteStream_Error(t *testing.T) {
 	ctx := context.Background()
 	streamName := "test-stream"
 
-	expectedErr := errors.New("delete stream error")
+	expectedErr := errDeleteStream
 	mockJS.EXPECT().DeleteStream(ctx, streamName).Return(expectedErr)
 
 	err := sm.DeleteStream(ctx, streamName)
@@ -164,7 +163,7 @@ func TestStreamManager_CreateOrUpdateStream_Error(t *testing.T) {
 		Subjects: []string{"test.subject"},
 	}
 
-	expectedErr := errors.New("create or update stream error")
+	expectedErr := errCreateOrUpdateStream
 	mockJS.EXPECT().CreateOrUpdateStream(ctx, *cfg).Return(nil, expectedErr)
 
 	stream, err := sm.CreateOrUpdateStream(ctx, cfg)
@@ -225,7 +224,7 @@ func TestStreamManager_GetStream_Error(t *testing.T) {
 	ctx := context.Background()
 	streamName := "test-stream"
 
-	expectedErr := errors.New("get stream error")
+	expectedErr := errGetStream
 	mockJS.EXPECT().Stream(ctx, streamName).Return(nil, expectedErr)
 
 	stream, err := sm.GetStream(ctx, streamName)

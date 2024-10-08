@@ -1,7 +1,6 @@
 package nats
 
 import (
-	"errors"
 	"testing"
 
 	"github.com/nats-io/nats.go"
@@ -61,14 +60,14 @@ func TestDefaultJetStreamCreator_New(t *testing.T) {
 		mockConn := NewMockConnInterface(ctrl)
 
 		// Mock the JetStream method to return an error
-		expectedError := errors.New("JetStream creation failed")
+		expectedError := errJetStreamCreationFailed
 		mockConn.EXPECT().JetStream().Return(nil, expectedError)
 
 		creator := &DefaultJetStreamCreator{}
 
 		// Test JetStream creation failure
 		js, err := creator.New(mockConn)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Nil(t, js)
 		assert.Equal(t, expectedError, err)
 	})
