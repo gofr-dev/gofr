@@ -385,17 +385,6 @@ func (a *App) Migrate(migrationsMap map[int64]migration.Migrate) {
 }
 
 func (a *App) initTracer() {
-	traceExporter := a.Config.Get("TRACE_EXPORTER")
-	tracerURL := a.Config.Get("TRACER_URL")
-
-	// deprecated : tracer_host and tracer_port are deprecated and will be removed in upcoming versions.
-	tracerHost := a.Config.Get("TRACER_HOST")
-	tracerPort := a.Config.GetOrDefault("TRACER_PORT", "9411")
-
-	if !isValidConfig(a.Logger(), traceExporter, tracerURL, tracerHost, tracerPort) {
-		return
-	}
-
 	traceRatio, err := strconv.ParseFloat(a.Config.GetOrDefault("TRACER_RATIO", "1"), 64)
 	if err != nil {
 		a.container.Error(err)
@@ -411,6 +400,17 @@ func (a *App) initTracer() {
 	otel.SetTracerProvider(tp)
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
 	otel.SetErrorHandler(&otelErrorHandler{logger: a.container.Logger})
+
+	traceExporter := a.Config.Get("TRACE_EXPORTER")
+	tracerURL := a.Config.Get("TRACER_URL")
+
+	// deprecated : tracer_host and tracer_port are deprecated and will be removed in upcoming versions.
+	tracerHost := a.Config.Get("TRACER_HOST")
+	tracerPort := a.Config.GetOrDefault("TRACER_PORT", "9411")
+
+	if !isValidConfig(a.Logger(), traceExporter, tracerURL, tracerHost, tracerPort) {
+		return
+	}
 
 	exporter, err := a.getExporter(traceExporter, tracerHost, tracerPort, tracerURL)
 
