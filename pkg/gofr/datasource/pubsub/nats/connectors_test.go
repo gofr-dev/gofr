@@ -45,10 +45,13 @@ func TestDefaultJetStreamCreator_New(t *testing.T) {
 		require.NoError(t, err)
 		defer nc.Close()
 
+		// Wrap the real connection
+		wrapper := &natsConnWrapper{conn: nc}
+
 		creator := &DefaultJetStreamCreator{}
 
 		// Test successful JetStream creation
-		js, err := creator.New(nc)
+		js, err := creator.New(wrapper)
 		require.NoError(t, err)
 		assert.NotNil(t, js)
 	})
@@ -57,14 +60,16 @@ func TestDefaultJetStreamCreator_New(t *testing.T) {
 		// Create a mock NATS connection
 		mockConn := NewMockConnInterface(ctrl)
 
-		// Make the mock connection return an error when JetStream() is called
-		mockConn.EXPECT().JetStream().Return(nil, errors.New("JetStream creation failed"))
+		// Mock the JetStream method to return an error
+		expectedError := errors.New("JetStream creation failed")
+		mockConn.EXPECT().JetStream().Return(nil, expectedError)
 
 		creator := &DefaultJetStreamCreator{}
 
 		// Test JetStream creation failure
-		_, err := creator.New(mockConn)
+		js, err := creator.New(mockConn)
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "JetStream creation failed")
+		assert.Nil(t, js)
+		assert.Equal(t, expectedError, err)
 	})
 }
