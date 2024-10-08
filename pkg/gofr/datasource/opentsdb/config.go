@@ -2,9 +2,12 @@ package opentsdb
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
+	"go.opentelemetry.io/otel/trace"
 	"net/http"
+	"time"
 )
 
 type OpenTSDBConfig struct {
@@ -40,30 +43,88 @@ type OpenTSDBConfig struct {
 type ConfigResponse struct {
 	StatusCode int
 	Configs    map[string]string `json:"configs"`
+	logger     Logger
+	tracer     trace.Tracer
 }
 
-func (cfgResp *ConfigResponse) SetStatus(code int) {
+func (cfgResp *ConfigResponse) SetStatus(ctx context.Context, code int) {
+	_, span := cfgResp.addTrace(ctx, "SetStatus")
+
+	status := "SUCCESS"
+	var message string
+
+	defer sendOperationStats(cfgResp.logger, time.Now(), "SetStatus-AggregatorResp", &status, &message, span)
+	message = fmt.Sprintf("set response code : %d", code)
+
 	cfgResp.StatusCode = code
 }
 
-func (cfgResp *ConfigResponse) GetCustomParser() func(respCnt []byte) error {
-	return func(respCnt []byte) error {
-		return json.Unmarshal([]byte(fmt.Sprintf("{%s:%s}", `"Configs"`, string(respCnt))), &cfgResp)
+func (cfgResp *ConfigResponse) GetCustomParser(ctx context.Context) func(respCnt []byte) error {
+	_, span := cfgResp.addTrace(ctx, "GetCustomParser")
+
+	status := "FAIL"
+	var message string
+
+	defer sendOperationStats(cfgResp.logger, time.Now(), "GetCustomParser-AggregatorResp", &status, &message, span)
+
+	return func(resp []byte) error {
+		err := json.Unmarshal([]byte(fmt.Sprintf("{%s:%s}", `"aggregators"`, string(resp))), &cfgResp)
+		if err != nil {
+			message = fmt.Sprintf("unmarshal cfgResp response error: %s", err)
+			cfgResp.logger.Errorf(message)
+
+			return err
+		}
+
+		status = "SUCCESS"
+		message = fmt.Sprint("Custom parsing successful")
+
+		return nil
 	}
 }
 
-func (cfgResp *ConfigResponse) String() string {
+func (cfgResp *ConfigResponse) String(ctx context.Context) string {
+	_, span := cfgResp.addTrace(ctx, "ToString")
+
+	status := "FAIL"
+	var message string
+
+	defer sendOperationStats(cfgResp.logger, time.Now(), "ToString-ConfigResp", &status, &message, span)
+
 	buffer := bytes.NewBuffer(nil)
-	content, _ := json.Marshal(cfgResp)
+
+	content, err := json.Marshal(cfgResp)
+	if err != nil {
+		message = fmt.Sprintf("marshal config response error: %s", err.Error())
+		cfgResp.logger.Errorf(message)
+	}
 	buffer.WriteString(fmt.Sprintf("%s\n", string(content)))
+
+	status = "SUCCESS"
+	message = fmt.Sprint("config response converted to string successfully")
+
 	return buffer.String()
 }
 
 func (c *OpentsdbClient) Config() (*ConfigResponse, error) {
+	tracedctx, span := c.addTrace(c.ctx, "Config")
+	c.ctx = tracedctx
+
+	status := "FAIL"
+	var message string
+
+	defer sendOperationStats(c.logger, time.Now(), "Config", &status, &message, span)
+
 	configEndpoint := fmt.Sprintf("%s%s", c.tsdbEndpoint, ConfigPath)
-	cfgResp := ConfigResponse{}
+	cfgResp := ConfigResponse{logger: c.logger, tracer: c.tracer}
 	if err := c.sendRequest(GetMethod, configEndpoint, "", &cfgResp); err != nil {
+
+		message = fmt.Sprintf("error while processing request at url %s: %s", configEndpoint, err)
 		return nil, err
 	}
+
+	status = "SUCCESS"
+	message = fmt.Sprint("config response retrieved successfully")
+
 	return &cfgResp, nil
 }

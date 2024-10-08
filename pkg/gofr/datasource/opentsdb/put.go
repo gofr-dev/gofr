@@ -2,10 +2,13 @@ package opentsdb
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"go.opentelemetry.io/otel/trace"
 	"strings"
+	"time"
 )
 
 // DataPoint is the structure used to hold
@@ -59,30 +62,65 @@ type PutResponse struct {
 	Failed     int64      `json:"failed"`
 	Success    int64      `json:"success"`
 	Errors     []PutError `json:"errors,omitempty"`
+	logger     Logger
+	tracer     trace.Tracer
 }
 
-func (putResp *PutResponse) SetStatus(code int) {
+func (putResp *PutResponse) SetStatus(ctx context.Context, code int) {
+	_, span := putResp.addTrace(ctx, "SetStatus")
+
+	status := "SUCCESS"
+	var message string
+
+	defer sendOperationStats(putResp.logger, time.Now(), "SetStatus-serialResp", &status, &message, span)
+	message = fmt.Sprintf("set response code : %d", code)
+
 	putResp.StatusCode = code
 }
 
-func (putResp *PutResponse) String() string {
+func (putResp *PutResponse) String(ctx context.Context) string {
+	_, span := putResp.addTrace(ctx, "ToString")
+
+	status := "FAIL"
+	var message string
+
+	defer sendOperationStats(putResp.logger, time.Now(), "ToString-PutResp", &status, &message, span)
+
 	buffer := bytes.NewBuffer(nil)
-	content, _ := json.Marshal(putResp)
+
+	content, err := json.Marshal(putResp)
+	if err != nil {
+		message = fmt.Sprintf("marshal PutResp error: %s", err.Error())
+		putResp.logger.Errorf(message)
+	}
 	buffer.WriteString(fmt.Sprintf("%s\n", string(content)))
+
+	status = "SUCCESS"
+	message = fmt.Sprint("PutResp converted to string successfully")
+
 	return buffer.String()
 }
 
-func (putResp *PutResponse) GetCustomParser() func(respCnt []byte) error {
+func (putResp *PutResponse) GetCustomParser(context.Context) func(respCnt []byte) error {
 	return nil
 }
 
 func (c *OpentsdbClient) Put(datas []DataPoint, queryParam string) (*PutResponse, error) {
+	_, span := c.addTrace(c.ctx, "Stats")
+
+	status := "FAIL"
+	var message string
+
+	defer sendOperationStats(c.logger, time.Now(), "Stats", &status, &message, span)
+
 	err := validateDataPoint(datas)
 	if err != nil {
+		message = fmt.Sprintf("invalid data: %s", err)
 		return nil, err
 	}
 	if !isValidPutParam(queryParam) {
-		return nil, errors.New("The given query param is invalid.")
+		message = fmt.Sprint("The given query param is invalid.")
+		return nil, errors.New(message)
 	}
 	var putEndpoint = ""
 	if !isEmptyPutParam(queryParam) {
@@ -93,6 +131,7 @@ func (c *OpentsdbClient) Put(datas []DataPoint, queryParam string) (*PutResponse
 
 	dataGroups, err := c.splitProperGroups(datas)
 	if err != nil {
+		message = fmt.Sprintf("split data point error: %s", err)
 		return nil, err
 	}
 
@@ -100,18 +139,24 @@ func (c *OpentsdbClient) Put(datas []DataPoint, queryParam string) (*PutResponse
 	for _, datapoints := range dataGroups {
 		// The datas have been marshalled successfully in splitProperGroups(),
 		// so now the returned error is always nil.
-		reqBodyCnt, _ := getPutBodyContents(datapoints)
-		putResp := PutResponse{}
+		reqBodyCnt, err := getPutBodyContents(datapoints)
+		if err != nil {
+			message = fmt.Sprintf("getPutBodyContents error: %s", err)
+			c.logger.Errorf(message)
+		}
+		putResp := PutResponse{logger: c.logger, tracer: c.tracer}
 		if err = c.sendRequest(PostMethod, putEndpoint, reqBodyCnt, &putResp); err != nil {
 			// This kind of error only occurs during the process of sending request,
 			// not including the scene of inserting datapoints into opentsdb.
 			// So just return error once it happens.
+
+			message = fmt.Sprintf("error processing put request at url %q: %s", putEndpoint, err)
 			return nil, err
 		}
 		responses = append(responses, putResp)
 	}
 
-	globalResp := PutResponse{}
+	globalResp := PutResponse{logger: c.logger, tracer: c.tracer}
 	globalResp.StatusCode = 200
 	for _, resp := range responses {
 		globalResp.Failed = globalResp.Failed + resp.Failed
@@ -122,6 +167,8 @@ func (c *OpentsdbClient) Put(datas []DataPoint, queryParam string) (*PutResponse
 		}
 	}
 	if globalResp.StatusCode == 200 {
+		status = "SUCCESS"
+		message = fmt.Sprintf("Put request to url %s processed successfully", putEndpoint)
 		return &globalResp, nil
 	}
 	return nil, parsePutErrorMsg(&globalResp)
@@ -133,10 +180,19 @@ func (c *OpentsdbClient) Put(datas []DataPoint, queryParam string) (*PutResponse
 // the given datapoints in a single /api/put request exceeded the value of
 // tsd.http.request.max_chunk in the opentsdb config file.
 func (c *OpentsdbClient) splitProperGroups(datapoints []DataPoint) ([][]DataPoint, error) {
+	_, span := c.addTrace(c.ctx, "splitProperGroups")
+
+	status := "FAIL"
+	var message string
+
+	defer sendOperationStats(c.logger, time.Now(), "splitProperGroups", &status, &message, span)
+
 	datasBytes, err := json.Marshal(&datapoints)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to marshal the datapoints to be put: %v", err)
+		message = fmt.Sprintf("failed to marshal the datapoints to be put: %v", err)
+		return nil, fmt.Errorf(message)
 	}
+
 	datapointGroups := make([][]DataPoint, 0)
 	if len(datasBytes) > c.opentsdbCfg.MaxContentLength {
 		datapointsSize := len(datapoints)
@@ -167,6 +223,8 @@ func (c *OpentsdbClient) splitProperGroups(datapoints []DataPoint) ([][]DataPoin
 	} else {
 		datapointGroups = append(datapointGroups, datapoints)
 	}
+	status = "SUCCESS"
+	message = fmt.Sprintf("spliting into groups successful")
 	return datapointGroups, nil
 }
 

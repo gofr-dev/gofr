@@ -22,9 +22,11 @@ type OpentsdbProviderWithContext interface {
 // the OpenTSDB documentation (http://opentsdb.net/docs/build/html/api_http/index.html#api-endpoints).
 type OpentsDBClient interface {
 
-	// Ping checks if the target OpenTSDB server is reachable.
+	// HealthCheck checks if the target OpenTSDB server is reachable.
 	// It returns an error if the server is unreachable, otherwise returns nil.
-	Ping() error
+	HealthCheck() error
+
+	GetContext() context.Context
 
 	// Put handles the 'POST /api/put' endpoint, allowing the storage of data in OpenTSDB.
 	//
@@ -328,17 +330,17 @@ type Response interface {
 
 	// SetStatus can be used to set the actual http status code of
 	// the related http response for the specific Response instance
-	SetStatus(code int)
+	SetStatus(ctx context.Context, code int)
 
 	// GetCustomParser can be used to retrive a custom-defined parser.
 	// Returning nil means current specific Response instance doesn't
 	// need a custom-defined parse process, and just uses the default
 	// json unmarshal method to parse the contents of the http response.
-	GetCustomParser() func(respCnt []byte) error
+	GetCustomParser(ctx context.Context) func(respCnt []byte) error
 
 	// Return the contents of the specific Response instance with
 	// the string format
-	String() string
+	String(ctx context.Context) string
 }
 
 type Provider interface {

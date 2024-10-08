@@ -2,70 +2,152 @@ package opentsdb
 
 import (
 	"fmt"
+	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel"
+	"go.uber.org/mock/gomock"
 	"math/rand"
 	"testing"
 	"time"
 )
 
-func Test_opentsdb(t *testing.T) {
+// setupOpenTSDBTest initializes an OpentsdbClient for testing.
+func setupOpenTSDBTest(t *testing.T) OpentsDBClient {
+
 	opentsdbCfg := OpenTSDBConfig{
-		OpentsdbHost: "localhost:4242",
+		OpentsdbHost:     "localhost:4242",
+		MaxContentLength: 4096,
+		MaxPutPointsNum:  1000,
+		DetectDeltaNum:   10,
 	}
+
 	tsdbClient := New(&opentsdbCfg)
+
+	tracer := otel.GetTracerProvider().Tracer("gofr-opentsdb")
+
+	tsdbClient.UseTracer(tracer)
+	mocklogger := NewMockLogger(gomock.NewController(t))
+	tsdbClient.UseLogger(mocklogger)
+
+	mocklogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
+	mocklogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mocklogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 
 	tsdbClient.Connect()
 
-	//0. Ping
-	if err := tsdbClient.Ping(); err != nil {
-		fmt.Println(err.Error())
-		return
-	}
+	return tsdbClient
+}
 
+func TestPutSuccess(t *testing.T) {
+	client := setupOpenTSDBTest(t)
+
+	// Define the number of datapoints to be sent
 	PutDataPointNum := 4
-	name := []string{"cpu", "disk", "net", "mem", "bytes"}
-	//1. POST /api/put
-	fmt.Println("Begin to test POST /api/put.")
+	name := []string{"cpu", "disk", "net", "mem"}
 	cpuDatas := make([]DataPoint, 0)
-	st1 := time.Now().Unix()
-	time.Sleep(2 * time.Second)
-	tags := make(map[string]string)
-	tags["host"] = "bluebreezecf-host"
-	tags["try-name"] = "bluebreezecf-sample"
-	tags["demo-name"] = "opentsdb-test"
-	i := 0
-	for {
-		time.Sleep(500 * time.Millisecond)
+
+	// Prepare tags for the datapoints
+	tags := map[string]string{
+		"host":      "gofr-host",
+		"try-name":  "gofr-sample",
+		"demo-name": "opentsdb-test",
+	}
+
+	// Generate random datapoints
+	for i := 0; i < PutDataPointNum; i++ {
 		data := DataPoint{
-			Metric:    name[i],
+			Metric:    name[i%len(name)],
 			Timestamp: time.Now().Unix(),
-			Value:     rand.Float64(),
+			Value:     rand.Float64() * 100,
+			Tags:      tags,
 		}
-		data.Tags = tags
 		cpuDatas = append(cpuDatas, data)
-		fmt.Printf("  %d.Prepare datapoint %s\n", i, data.String())
-		if i < PutDataPointNum {
-			i++
-		} else {
-			break
-		}
+		t.Logf("Prepared datapoint %s\n", data.String())
 	}
 
-	if resp, err := tsdbClient.Put(cpuDatas, "details"); err != nil {
-		fmt.Printf("  Error occurs when putting datapoints: %v", err)
-	} else {
-		fmt.Printf("  %s", resp.String())
-	}
-	fmt.Println("Finish testing POST /api/put.")
+	// Execute the Put operation
+	resp, err := client.Put(cpuDatas, "details")
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	require.Equal(t, 200, resp.StatusCode)
+	require.Equal(t, int64(len(cpuDatas)), resp.Success)
+}
 
-	//2.1 POST /api/query to query
-	fmt.Println("Begin to test POST /api/query.")
-	time.Sleep(2 * time.Second)
-	st2 := time.Now().Unix()
+func TestPutInvalidDataPoint(t *testing.T) {
+	client := setupOpenTSDBTest(t)
+
+	// Prepare an invalid DataPoint
+	dataPoints := []DataPoint{
+		{
+			Metric:    "",
+			Timestamp: 0,
+			Value:     0, // Updated to a valid float value for the sake of type correctness
+			Tags:      map[string]string{},
+		},
+	}
+
+	resp, err := client.Put(dataPoints, "")
+	require.Error(t, err)
+	require.Nil(t, resp)
+	t.Log("Expected error occurred for invalid DataPoint.")
+}
+
+func TestPutInvalidQueryParam(t *testing.T) {
+	client := setupOpenTSDBTest(t)
+
+	dataPoints := []DataPoint{
+		{
+			Metric:    "metric1",
+			Timestamp: time.Now().Unix(),
+			Value:     100,
+			Tags:      map[string]string{"tag1": "value1"},
+		},
+	}
+
+	resp, err := client.Put(dataPoints, "invalid_param")
+	require.Error(t, err)
+	require.Nil(t, resp)
+	t.Log("Expected error occurred for invalid query parameters.")
+}
+
+func TestPutErrorResponse(t *testing.T) {
+	client := setupOpenTSDBTest(t)
+
+	// Create a data point that is guaranteed to fail (e.g., invalid metric)
+	dataPoints := []DataPoint{
+		{
+			Metric:    "invalid_metric_name#$%",
+			Timestamp: time.Now().Unix(),
+			Value:     100,
+			Tags:      map[string]string{"tag1": "value1"},
+		},
+	}
+
+	resp, err := client.Put(dataPoints, "")
+	require.Error(t, err)
+	require.Nil(t, resp)
+}
+
+// Test for successful POST /api/query
+func TestPostQuerySuccess(t *testing.T) {
+	client := setupOpenTSDBTest(t)
+
+	// Prepare query parameters
+	st1 := time.Now().Unix() - 3600 // start time 1 hour ago
+	st2 := time.Now().Unix()        // end time now
 	queryParam := QueryParam{
 		Start: st1,
 		End:   st2,
 	}
+
+	// Prepare subqueries
+	name := []string{"cpu", "disk", "net", "mem"}
 	subqueries := make([]SubQuery, 0)
+	tags := map[string]string{
+		"host":      "gofr-host",
+		"try-name":  "gofr-sample",
+		"demo-name": "opentsdb-test",
+	}
+
 	for _, metric := range name {
 		subQuery := SubQuery{
 			Aggregator: "sum",
@@ -75,17 +157,27 @@ func Test_opentsdb(t *testing.T) {
 		subqueries = append(subqueries, subQuery)
 	}
 	queryParam.Queries = subqueries
-	if queryResp, err := tsdbClient.Query(queryParam); err != nil {
-		fmt.Printf("Error occurs when querying: %v", err)
-	} else {
-		fmt.Printf("%s", queryResp.String())
-	}
-	fmt.Println("Finish testing POST /api/query.")
 
-	//2.2 POST /api/query/last
-	fmt.Println("Begin to test POST /api/query/last.")
-	time.Sleep(1 * time.Second)
+	// Execute the query operation
+	queryResp, err := client.Query(queryParam)
+	require.NoError(t, err)
+	require.NotNil(t, queryResp)
+	require.Equal(t, 200, queryResp.StatusCode)
+}
+
+// Test for successful POST /api/query/last
+func TestPostQueryLastSuccess(t *testing.T) {
+	client := setupOpenTSDBTest(t)
+
+	// Prepare last query parameters
+	name := []string{"cpu", "disk", "net", "mem"}
 	subqueriesLast := make([]SubQueryLast, 0)
+	tags := map[string]string{
+		"host":      "gofr-host",
+		"try-name":  "gofr-sample",
+		"demo-name": "opentsdb-test",
+	}
+
 	for _, metric := range name {
 		subQueryLast := SubQueryLast{
 			Metric: metric,
@@ -98,158 +190,233 @@ func Test_opentsdb(t *testing.T) {
 		ResolveNames: true,
 		BackScan:     24,
 	}
-	if queryLastResp, err := tsdbClient.QueryLast(queryLastParam); err != nil {
-		fmt.Printf("Error occurs when querying last: %v", err)
-	} else {
-		fmt.Printf("%s", queryLastResp.String())
-	}
-	fmt.Println("Finish testing POST /api/query/last.")
 
-	//2.3 POST /api/query to delete
-	fmt.Println("Begin to test POST /api/query to delete.")
-	queryParam.Delete = true
-	if queryResp, err := tsdbClient.Query(queryParam); err != nil {
-		fmt.Printf("Error occurs when deleting: %v", err)
-	} else {
-		fmt.Printf("%s", queryResp.String())
+	// Execute the last query operation
+	queryLastResp, err := client.QueryLast(queryLastParam)
+	require.NoError(t, err)
+	require.NotNil(t, queryLastResp)
+	require.Equal(t, 200, queryLastResp.StatusCode)
+}
+
+// Test for successful DELETE via POST /api/query
+func TestPostQueryDeleteSuccess(t *testing.T) {
+	client := setupOpenTSDBTest(t)
+
+	// Prepare query parameters for deletion
+	st1 := time.Now().Unix() - 3600 // start time 1 hour ago
+	st2 := time.Now().Unix()        // end time now
+	queryParam := QueryParam{
+		Start:  st1,
+		End:    st2,
+		Delete: true,
 	}
 
-	time.Sleep(5 * time.Second)
-	fmt.Println("Query again which shoud return null.")
-	queryParam.Delete = false
-	if queryResp, err := tsdbClient.Query(queryParam); err != nil {
-		fmt.Printf("Error occurs when quering: %v", err)
-	} else {
-		fmt.Printf("%s", queryResp.String())
+	// Prepare subqueries as before
+	name := []string{"cpu", "disk", "net", "mem"}
+	subqueries := make([]SubQuery, 0)
+	tags := map[string]string{
+		"host":      "gofr-host",
+		"try-name":  "gofr-sample",
+		"demo-name": "opentsdb-test",
 	}
-	fmt.Println("Finish testing POST /api/query to delete.")
 
-	//3. GET /api/aggregators
-	fmt.Println("Begin to test GET /api/aggregators.")
-	aggreResp, err := tsdbClient.Aggregators()
-	if err != nil {
-		fmt.Printf("Error occurs when acquiring aggregators: %v", err)
-	} else {
-		fmt.Printf("%s", aggreResp.String())
+	for _, metric := range name {
+		subQuery := SubQuery{
+			Aggregator: "sum",
+			Metric:     metric,
+			Tags:       tags,
+		}
+		subqueries = append(subqueries, subQuery)
 	}
-	fmt.Println("Finish testing GET /api/aggregators.")
+	queryParam.Queries = subqueries
 
-	//4. GET /api/config
-	fmt.Println("Begin to test GET /api/config.")
-	configResp, err := tsdbClient.Config()
-	if err != nil {
-		fmt.Printf("Error occurs when acquiring config info: %v", err)
-	} else {
-		fmt.Printf("%s", configResp.String())
-	}
-	fmt.Println("Finish testing GET /api/config.")
+	// Execute the delete operation
+	deleteResp, err := client.Query(queryParam)
+	require.NoError(t, err)
+	require.NotNil(t, deleteResp)
+	require.Equal(t, 200, deleteResp.StatusCode)
+}
 
-	//5. Get /api/serializers
-	fmt.Println("Begin to test GET /api/serializers.")
-	serilResp, err := tsdbClient.Serializers()
-	if err != nil {
-		fmt.Printf("Error occurs when acquiring serializers info: %v", err)
-	} else {
-		fmt.Printf("%s", serilResp.String())
-	}
-	fmt.Println("Finish testing GET /api/serializers.")
+// Test for successful GET /api/aggregators
+func TestGetAggregatorsSuccess(t *testing.T) {
+	client := setupOpenTSDBTest(t)
 
-	//6. Get /api/stats
-	fmt.Println("Begin to test GET /api/stats.")
-	statsResp, err := tsdbClient.Stats()
-	if err != nil {
-		fmt.Printf("Error occurs when acquiring stats info: %v", err)
-	} else {
-		fmt.Printf("%s", statsResp.String())
-	}
-	fmt.Println("Finish testing GET /api/stats.")
+	// Execute the aggregators operation
+	aggreResp, err := client.Aggregators()
+	require.NoError(t, err)
+	require.NotNil(t, aggreResp)
+	require.Equal(t, 200, aggreResp.StatusCode)
+}
 
-	//7. Get /api/suggest
-	fmt.Println("Begin to test GET /api/suggest.")
+// Test for successful GET /api/config
+func TestGetConfigSuccess(t *testing.T) {
+	client := setupOpenTSDBTest(t)
+
+	// Execute the config operation
+	configResp, err := client.Config()
+	require.NoError(t, err)
+	require.NotNil(t, configResp)
+	require.Equal(t, 200, configResp.StatusCode)
+}
+
+// Test for successful GET /api/stats
+func TestGetStatsSuccess(t *testing.T) {
+	client := setupOpenTSDBTest(t)
+
+	statsResp, err := client.Stats()
+	require.NoError(t, err)
+	require.NotNil(t, statsResp)
+	require.Equal(t, 200, statsResp.StatusCode)
+}
+
+// Test for successful GET /api/suggest
+func TestGetSuggestSuccess(t *testing.T) {
+	client := setupOpenTSDBTest(t)
+
 	typeValues := []string{TypeMetrics, TypeTagk, TypeTagv}
 	for _, typeItem := range typeValues {
 		sugParam := SuggestParam{
 			Type: typeItem,
 		}
-		fmt.Printf("  Send suggest param: %s", sugParam.String())
-		sugResp, err := tsdbClient.Suggest(sugParam)
-		if err != nil {
-			fmt.Printf("  Error occurs when acquiring suggest info: %v\n", err)
-		} else {
-			fmt.Printf("  Recevie response: %s\n", sugResp.String())
-		}
+		sugResp, err := client.Suggest(sugParam)
+		require.NoError(t, err)
+		require.NotNil(t, sugResp)
+		require.Equal(t, 200, sugResp.StatusCode)
 	}
-	fmt.Println("Finish testing GET /api/suggest.")
+}
 
-	//8. Get /api/version
-	fmt.Println("Begin to test GET /api/version.")
-	versionResp, err := tsdbClient.Version()
-	if err != nil {
-		fmt.Printf("Error occurs when acquiring version info: %v", err)
-	} else {
-		fmt.Printf("%s", versionResp.String())
+// Test for successful GET /api/version
+func TestGetVersionSuccess(t *testing.T) {
+	client := setupOpenTSDBTest(t)
+
+	versionResp, err := client.Version()
+	require.NoError(t, err)
+	require.NotNil(t, versionResp)
+	require.Equal(t, 200, versionResp.StatusCode)
+}
+
+// Test for successful GET /api/dropcaches
+func TestGetDropCachesSuccess(t *testing.T) {
+	client := setupOpenTSDBTest(t)
+
+	dropResp, err := client.Dropcaches()
+	require.NoError(t, err)
+	require.NotNil(t, dropResp)
+	require.Equal(t, 200, dropResp.StatusCode)
+}
+
+// Test for successful POST /api/annotation
+func TestUpdateAnnotationSuccess(t *testing.T) {
+	client := setupOpenTSDBTest(t)
+
+	// Prepare data for the annotation
+	custom := map[string]string{
+		"owner": "gofr",
+		"host":  "gofr-host",
 	}
-	fmt.Println("Finish testing GET /api/version.")
-
-	//9. Get /api/dropcaches
-	fmt.Println("Begin to test GET /api/dropcaches.")
-	dropResp, err := tsdbClient.Dropcaches()
-	if err != nil {
-		fmt.Printf("Error occurs when acquiring dropcaches info: %v", err)
-	} else {
-		fmt.Printf("%s", dropResp.String())
-	}
-	fmt.Println("Finish testing GET /api/dropcaches.")
-
-	//10. POST /api/annotation
-	fmt.Println("Begin to test POST /api/annotation.")
-	custom := make(map[string]string, 0)
-	custom["owner"] = "bluebreezecf"
-	custom["host"] = "bluebreezecf-host"
 	addedST := time.Now().Unix()
 	addedTsuid := "000001000001000002"
 	anno := Annotation{
 		StartTime:   addedST,
 		Tsuid:       addedTsuid,
-		Description: "bluebreezecf test annotation",
+		Description: "gofrf test annotation",
 		Notes:       "These would be details about the event, the description is just a summary",
 		Custom:      custom,
 	}
-	if queryAnnoResp, err := tsdbClient.UpdateAnnotation(anno); err != nil {
-		fmt.Printf("Error occurs when posting annotation info: %v", err)
-	} else {
-		fmt.Printf("%s", queryAnnoResp.String())
-	}
-	fmt.Println("Finish testing POST /api/annotation.")
 
-	//11. GET /api/annotation
-	fmt.Println("Begin to test GET /api/annotation.")
+	queryAnnoResp, err := client.UpdateAnnotation(anno)
+
+	require.NoError(t, err)
+
+	require.NotNil(t, queryAnnoResp)
+
+	require.Equal(t, 200, queryAnnoResp.StatusCode)
+
+	require.Equal(t, anno.Tsuid, queryAnnoResp.Tsuid)
+	require.Equal(t, anno.StartTime, queryAnnoResp.StartTime)
+	require.Equal(t, anno.Description, queryAnnoResp.Description)
+	require.Equal(t, anno.Notes, queryAnnoResp.Notes)
+	require.Equal(t, anno.Custom, queryAnnoResp.Custom)
+}
+
+func TestQueryAnnotationSuccess(t *testing.T) {
+	client := setupOpenTSDBTest(t)
+
+	// Prepare data for the annotation
+	custom := map[string]string{
+		"owner": "gofr",
+		"host":  "gofr-host",
+	}
+	addedST := time.Now().Unix()
+	addedTsuid := "000001000001000002"
+	anno := Annotation{
+		StartTime:   addedST,
+		Tsuid:       addedTsuid,
+		Description: "gofr test annotation",
+		Notes:       "These would be details about the event, the description is just a summary",
+		Custom:      custom,
+	}
+
 	queryAnnoMap := make(map[string]interface{}, 0)
 	queryAnnoMap[AnQueryStartTime] = addedST
 	queryAnnoMap[AnQueryTSUid] = addedTsuid
-	if queryAnnoResp, err := tsdbClient.QueryAnnotation(queryAnnoMap); err != nil {
-		fmt.Printf("Error occurs when acquiring annotation info: %v", err)
-	} else {
-		fmt.Printf("%s", queryAnnoResp.String())
-	}
-	fmt.Println("Finish testing GET /api/annotation.")
 
-	//12. GET /api/annotation
-	fmt.Println("Begin to test DELETE /api/annotation.")
-	if queryAnnoResp, err := tsdbClient.DeleteAnnotation(anno); err != nil {
-		fmt.Printf("Error occurs when deleting annotation info: %v", err)
-	} else {
-		fmt.Printf("%s", queryAnnoResp.String())
-	}
-	fmt.Println("Finish testing DELETE /api/annotation.")
+	postResp, err := client.UpdateAnnotation(anno)
 
-	//13. POST /api/annotation/bulk
-	fmt.Println("Begin to test POST /api/annotation/bulk.")
+	require.NoError(t, err)
+	require.NotNil(t, postResp)
+	require.Equal(t, 200, postResp.StatusCode)
+
+	resp, err := client.QueryAnnotation(queryAnnoMap)
+
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	require.Equal(t, 200, resp.StatusCode)
+}
+
+// Test for successful POST and then DELETE /api/annotation
+func TestDeleteAnnotationSuccess(t *testing.T) {
+	client := setupOpenTSDBTest(t)
+
+	custom := map[string]string{
+		"owner": "gofr",
+		"host":  "gofr-host",
+	}
+	addedST := time.Now().Unix()
+	addedTsuid := "000001000001000002"
+	anno := Annotation{
+		StartTime:   addedST,
+		Tsuid:       addedTsuid,
+		Description: "gofr-host test annotation",
+		Notes:       "These would be details about the event, the description is just a summary",
+		Custom:      custom,
+	}
+
+	postResp, err := client.UpdateAnnotation(anno)
+
+	require.NoError(t, err)
+	require.NotNil(t, postResp)
+	require.Equal(t, 200, postResp.StatusCode)
+
+	deleteResp, err := client.DeleteAnnotation(anno)
+
+	require.NoError(t, err)
+	require.NotNil(t, deleteResp)
+	require.Equal(t, 204, deleteResp.StatusCode)
+
+	require.Empty(t, deleteResp.Tsuid)
+	require.Empty(t, deleteResp.StartTime)
+	require.Empty(t, deleteResp.Description)
+}
+
+// Test for successful POST /api/annotation
+func TestBulkUpdateAnnotationsSuccess(t *testing.T) {
+	client := setupOpenTSDBTest(t)
+
 	anns := make([]Annotation, 0)
 	bulkAnnNum := 4
-	i = 0
-	bulkAddBeginST := time.Now().Unix()
-	addedTsuids := make([]string, bulkAnnNum)
+	i := 0
+	addedTsuids := make([]string, 0)
 	for {
 		if i < bulkAnnNum-1 {
 			addedST := time.Now().Unix()
@@ -258,7 +425,7 @@ func Test_opentsdb(t *testing.T) {
 			anno := Annotation{
 				StartTime:   addedST,
 				Tsuid:       addedTsuid,
-				Description: "bluebreezecf test annotation",
+				Description: "gofr test annotation",
 				Notes:       "These would be details about the event, the description is just a summary",
 			}
 			anns = append(anns, anno)
@@ -267,69 +434,74 @@ func Test_opentsdb(t *testing.T) {
 			break
 		}
 	}
-	if bulkAnnoResp, err := tsdbClient.BulkUpdateAnnotations(anns); err != nil {
-		fmt.Printf("Error occurs when posting bulk annotation info: %v", err)
-	} else {
-		fmt.Printf("%s", bulkAnnoResp.String())
-	}
-	fmt.Println("Finish testing POST /api/annotation/bulk.")
 
-	//14. DELETE /api/annotation/bulk
-	fmt.Println("Begin to test DELETE /api/annotation/bulk.")
+	resp, err := client.BulkUpdateAnnotations(anns)
+
+	require.NoError(t, err)
+
+	require.NotNil(t, resp)
+
+	require.Equal(t, 200, resp.StatusCode)
+}
+
+func TestBulkDeleteAnnotationsSuccess(t *testing.T) {
+	client := setupOpenTSDBTest(t)
+
+	anns := make([]Annotation, 0)
+	bulkAnnNum := 4
+	i := 0
+	bulkAddBeginST := time.Now().Unix()
+	addedTsuids := make([]string, 0)
+	for {
+		if i < bulkAnnNum-1 {
+			addedTsuid := fmt.Sprintf("%s%d", "00000100000100000", i)
+			addedTsuids = append(addedTsuids, addedTsuid)
+			anno := Annotation{
+				StartTime:   bulkAddBeginST,
+				Tsuid:       addedTsuid,
+				Description: "gofr test annotation",
+				Notes:       "These would be details about the event, the description is just a summary",
+			}
+			anns = append(anns, anno)
+			i++
+		} else {
+			break
+		}
+	}
+
+	_, err := client.BulkUpdateAnnotations(anns)
+
 	bulkAnnoDelete := BulkAnnoDeleteInfo{
 		StartTime: bulkAddBeginST,
 		Tsuids:    addedTsuids,
 		Global:    false,
 	}
-	if bulkAnnoResp, err := tsdbClient.BulkDeleteAnnotations(bulkAnnoDelete); err != nil {
-		fmt.Printf("Error occurs when deleting bulk annotation info: %v", err)
-	} else {
-		fmt.Printf("%s", bulkAnnoResp.String())
-	}
-	fmt.Println("Finish testing DELETE /api/annotation/bulk.")
 
-	//15. GET /api/uid/uidmeta
-	fmt.Println("Begin to test GET /api/uid/uidmeta.")
+	resp, err := client.BulkDeleteAnnotations(bulkAnnoDelete)
+
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	require.Equal(t, 200, resp.StatusCode)
+}
+
+func TestQueryUIDMetaDataSuccess(t *testing.T) {
+	client := setupOpenTSDBTest(t)
+
 	metaQueryParam := make(map[string]string, 0)
 	metaQueryParam["type"] = TypeMetrics
 	metaQueryParam["uid"] = "00003A"
-	if resp, err := tsdbClient.QueryUIDMetaData(metaQueryParam); err != nil {
-		fmt.Printf("Error occurs when querying uidmetadata info: %v", err)
-	} else {
-		fmt.Printf("%s", resp.String())
-	}
 
-	fmt.Println("Finish testing GET /api/uid/uidmeta.")
+	// returns 404
+	resp, err := client.QueryUIDMetaData(metaQueryParam)
 
-	//16. POST /api/uid/uidmeta
-	fmt.Println("Begin to test POST /api/uid/uidmeta.")
-	uidMetaData := UIDMetaData{
-		Uid:         "00002A",
-		Type:        "metric",
-		DisplayName: "System CPU Time",
-	}
-	if resp, err := tsdbClient.UpdateUIDMetaData(uidMetaData); err != nil {
-		fmt.Printf("Error occurs when posting uidmetadata info: %v", err)
-	} else {
-		fmt.Printf("%s", resp.String())
-	}
-	fmt.Println("Finish testing POST /api/uid/uidmeta.")
+	require.NoError(t, err, "Error occurred while querying uidmetadata info")
+	require.NotNil(t, resp, "Response should not be nil")
+	require.Equal(t, 404, resp.StatusCode)
+}
 
-	//17. DELETE /api/uid/uidmeta
-	fmt.Println("Begin to test DELETE /api/uid/uidmeta.")
-	uidMetaData = UIDMetaData{
-		Uid:  "00003A",
-		Type: "metric",
-	}
-	if resp, err := tsdbClient.DeleteUIDMetaData(uidMetaData); err != nil {
-		fmt.Printf("Error occurs when deleting uidmetadata info: %v", err)
-	} else {
-		fmt.Printf("%s", resp.String())
-	}
-	fmt.Println("Finish testing DELETE /api/uid/uidmeta.")
+func TestAssignUIDSuccess(t *testing.T) {
+	client := setupOpenTSDBTest(t)
 
-	//18. POST /api/uid/assign
-	fmt.Println("Begin to test POST /api/uid/assign.")
 	metrics := []string{"sys.cpu.0", "sys.cpu.1", "illegal!character"}
 	tagk := []string{"host"}
 	tagv := []string{"web01", "web02", "web03"}
@@ -338,48 +510,130 @@ func Test_opentsdb(t *testing.T) {
 		Tagk:   tagk,
 		Tagv:   tagv,
 	}
-	if resp, err := tsdbClient.AssignUID(assignParam); err != nil {
-		fmt.Printf("Error occurs when assgining uid info: %v", err)
-	} else {
-		fmt.Printf("%s", resp.String())
-	}
-	fmt.Println("Finish testing POST /api/uid/assign.")
 
-	//19. GET /api/uid/tsmeta
+	resp, err := client.AssignUID(assignParam)
+
+	require.NoError(t, err, "Error occurred while assigning UID info")
+	require.Empty(t, resp.Metric, "Expected metric to be nil")
+	require.NotEmpty(t, resp.MetricErrors, "Expected metric error to not be nil")
+
+	fmt.Printf("%s", resp.String(client.GetContext()))
+}
+
+func TestUpdateUIDMetaDataSuccess(t *testing.T) {
+	client := setupOpenTSDBTest(t)
+
+	uidMetaData := UIDMetaData{
+		Uid:         "000006",
+		Type:        "metric",
+		DisplayName: "System CPU Time",
+	}
+
+	resp, err := client.UpdateUIDMetaData(uidMetaData)
+
+	require.NoError(t, err, "Error occurred while posting uidmetadata info")
+	require.NotNil(t, resp, "Response should not be nil")
+
+	fmt.Printf("%s", resp.String(client.GetContext()))
+
+}
+
+func TestDeleteUIDMetaData(t *testing.T) {
+	client := setupOpenTSDBTest(t)
+
+	uidMetaData := UIDMetaData{
+		Uid:  "000006",
+		Type: "metric",
+	}
+
+	resp, err := client.DeleteUIDMetaData(uidMetaData)
+
+	require.NoError(t, err, "Error occurred while deleting UID metadata")
+	require.NotNil(t, resp, "Response should not be nil")
+
+	require.Equal(t, 204, resp.StatusCode, "Unexpected status code, expected 204 for successful deletion")
+}
+
+func TestQueryTSMetaData(t *testing.T) {
+	client := setupOpenTSDBTest(t)
+
+	tsuid := "000001000001000001"
+
 	fmt.Println("Begin to test GET /api/uid/tsmeta.")
-	if resp, err := tsdbClient.QueryTSMetaData("000001000001000001"); err != nil {
-		fmt.Printf("Error occurs when querying tsmetadata info: %v", err)
-	} else {
-		fmt.Printf("%s", resp.String())
-	}
-	fmt.Println("Finish testing GET /api/uid/tsmeta.")
 
-	//20. POST /api/uid/tsmeta
-	fmt.Println("Begin to test POST /api/uid/tsmeta.")
-	custom = make(map[string]string, 0)
-	custom["owner"] = "bluebreezecf"
-	custom["department"] = "paas dep"
+	resp, err := client.QueryTSMetaData(tsuid)
+
+	require.NoError(t, err, "Error occurred while querying TS metadata")
+	require.Empty(t, resp.Metric, "Metric should be nil")
+	require.NotEmpty(t, resp.ErrorInfo, "ErrorInfo should be not nil")
+	require.Equal(t, 404, resp.StatusCode, "Unexpected status code, expected 404 for invalid tsuid")
+}
+
+func TestUpdateTSMetaData(t *testing.T) {
+	client := setupOpenTSDBTest(t)
+
+	custom := make(map[string]string, 0)
+	custom["owner"] = "gofr"
+	custom["department"] = "framework"
+
 	tsMetaData := TSMetaData{
-		Tsuid:       "000001000001000001",
+		Tsuid:       "00002A000001000001",
 		DisplayName: "System CPU Time for Webserver 01",
 		Custom:      custom,
 	}
-	if resp, err := tsdbClient.UpdateTSMetaData(tsMetaData); err != nil {
-		fmt.Printf("Error occurs when posting tsmetadata info: %v", err)
-	} else {
-		fmt.Printf("%s", resp.String())
-	}
-	fmt.Println("Finish testing POST /api/uid/tsmeta.")
 
-	//21. DELETE /api/uid/tsmeta
+	resp, err := client.UpdateTSMetaData(tsMetaData)
+
+	require.NoError(t, err, "Error occurred while posting TS metadata")
+	require.NotNil(t, resp, "Response should not be nil")
+
+	require.Equal(t, 500, resp.StatusCode, "Unexpected status code, expected 200 for successful update")
+
+	fmt.Printf("%s", resp.String(client.GetContext()))
+
+	fmt.Println("Finish testing POST /api/uid/tsmeta.")
+}
+
+func TestDeleteTSMetaData(t *testing.T) {
+	// Setup a test client (assuming setupOpenTSDBTest or similar function exists)
+	client := setupOpenTSDBTest(t)
+
+	// Define the TSMetaData for deletion
+	tsMetaData := TSMetaData{
+		Tsuid: "000001000001000001", // TSUID to be deleted
+	}
+
+	// Begin the test output
 	fmt.Println("Begin to test DELETE /api/uid/tsmeta.")
-	tsMetaData = TSMetaData{
-		Tsuid: "000001000001000001",
-	}
-	if resp, err := tsdbClient.DeleteTSMetaData(tsMetaData); err != nil {
-		fmt.Printf("Error occurs when deleting tsmetadata info: %v", err)
-	} else {
-		fmt.Printf("%s", resp.String())
-	}
+
+	// Perform the DELETE API call and check for errors
+	resp, err := client.DeleteTSMetaData(tsMetaData)
+
+	// Assert no error on request level
+	require.NoError(t, err, "Error occurred while deleting TS metadata")
+	require.NotNil(t, resp, "Response should not be nil")
+
+	// Check the response status code for a successful deletion (e.g., 200)
+	require.Equal(t, 204, resp.StatusCode, "Unexpected status code, expected 200 for successful deletion")
+
+	// Optionally, verify the response body content if applicable
+	fmt.Printf("%s", resp.String(client.GetContext()))
+
+	// End the test output
 	fmt.Println("Finish testing DELETE /api/uid/tsmeta.")
+}
+
+func TestGetSerializers(t *testing.T) {
+	client := setupOpenTSDBTest(t)
+
+	fmt.Println("Begin to test GET /api/serializers.")
+
+	serilResp, err := client.Serializers()
+
+	require.NoError(t, err, "Error occurred while acquiring serializers info")
+	require.NotNil(t, serilResp, "Response should not be nil")
+
+	fmt.Printf("%s", serilResp.String(client.GetContext()))
+
+	fmt.Println("Finish testing GET /api/serializers.")
 }

@@ -2,12 +2,15 @@ package opentsdb
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"go.opentelemetry.io/otel/trace"
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // QueryParam is the structure used to hold
@@ -52,10 +55,28 @@ type QueryParam struct {
 	// An optional value is used to show whether or not can be paased to the JSON with a POST to delete any data point
 	// that match the given query.
 	Delete bool `json:"delete,omitempty"`
+
+	logger Logger
+	tracer trace.Tracer
 }
 
-func (query *QueryParam) String() string {
-	content, _ := json.Marshal(query)
+func (query *QueryParam) String(ctx context.Context) string {
+	_, span := query.addTrace(ctx, "ToString")
+
+	status := "FAIL"
+	var message string
+
+	defer sendOperationStats(query.logger, time.Now(), "ToString-QueryResp", &status, &message, span)
+
+	content, err := json.Marshal(query)
+	if err != nil {
+		message = fmt.Sprintf("marshal query response error: %s", err)
+		query.logger.Errorf(message)
+	}
+
+	status = "SUCCESS"
+	message = fmt.Sprint("query response converted to string successfully")
+
 	return string(content)
 }
 
@@ -133,29 +154,75 @@ type QueryResponse struct {
 	StatusCode    int
 	QueryRespCnts []QueryRespItem        `json:"queryRespCnts"`
 	ErrorMsg      map[string]interface{} `json:"error"`
+	logger        Logger
+	tracer        trace.Tracer
 }
 
-func (queryResp *QueryResponse) String() string {
+func (queryResp *QueryResponse) String(ctx context.Context) string {
+	_, span := queryResp.addTrace(ctx, "ToString")
+
+	status := "FAIL"
+	var message string
+
+	defer sendOperationStats(queryResp.logger, time.Now(), "ToString-QueryResp", &status, &message, span)
+
 	buffer := bytes.NewBuffer(nil)
-	content, _ := json.Marshal(queryResp)
+
+	content, err := json.Marshal(queryResp)
+	if err != nil {
+		message = fmt.Sprintf("marshal queryresponse error: %s", err.Error())
+		queryResp.logger.Errorf(message)
+	}
+
 	buffer.WriteString(fmt.Sprintf("%s\n", string(content)))
+
+	status = "SUCCESS"
+	message = fmt.Sprint("queryresponse converted to string successfully")
+
 	return buffer.String()
 }
 
-func (queryResp *QueryResponse) SetStatus(code int) {
+func (queryResp *QueryResponse) SetStatus(ctx context.Context, code int) {
+	_, span := queryResp.addTrace(ctx, "SetStatus")
+
+	status := "SUCCESS"
+	var message string
+
+	defer sendOperationStats(queryResp.logger, time.Now(), "SetStatus-QueryResp", &status, &message, span)
+	message = fmt.Sprintf("set response code : %d", code)
+
 	queryResp.StatusCode = code
 }
 
-func (queryResp *QueryResponse) GetCustomParser() func(respCnt []byte) error {
-	return func(respCnt []byte) error {
-		originRespStr := string(respCnt)
+func (queryResp *QueryResponse) GetCustomParser(ctx context.Context) func(respCnt []byte) error {
+	_, span := queryResp.addTrace(ctx, "GetCustomParser")
+
+	status := "FAIL"
+	var message string
+
+	defer sendOperationStats(queryResp.logger, time.Now(), "GetCustomParser-AggregatorResp", &status, &message, span)
+
+	return func(resp []byte) error {
+		originRespStr := string(resp)
 		var respStr string
 		if queryResp.StatusCode == 200 && strings.Contains(originRespStr, "[") && strings.Contains(originRespStr, "]") {
 			respStr = fmt.Sprintf("{%s:%s}", `"queryRespCnts"`, originRespStr)
 		} else {
 			respStr = originRespStr
 		}
-		return json.Unmarshal([]byte(respStr), &queryResp)
+
+		err := json.Unmarshal([]byte(respStr), &queryResp)
+		if err != nil {
+			message = fmt.Sprintf("unmarshal query response error: %s", err)
+			queryResp.logger.Errorf(message)
+
+			return err
+		}
+
+		status = "SUCCESS"
+		message = fmt.Sprint("query custom parsing successful")
+
+		return nil
 	}
 }
 
@@ -200,14 +267,29 @@ type QueryRespItem struct {
 	// the timespan and the results returned in this group.
 	// The value is optional.
 	GlobalAnnotations []Annotation `json:"globalAnnotations,omitempty"`
+
+	logger Logger
+	tracer trace.Tracer
 }
 
 // GetDataPoints returns the real ascending datapoints from the information of the related QueryRespItem.
-func (qri *QueryRespItem) GetDataPoints() []*DataPoint {
+func (qri *QueryRespItem) GetDataPoints(ctx context.Context) []*DataPoint {
+	_, span := qri.addTrace(ctx, "GetDataPoints")
+
+	status := "FAIL"
+	var message string
+
+	defer sendOperationStats(qri.logger, time.Now(), "GetDataPoints", &status, &message, span)
+
 	datapoints := make([]*DataPoint, 0)
-	timestampStrs := qri.getSortedTimestampStrs()
+	timestampStrs := qri.getSortedTimestampStrs(ctx)
 	for _, timestampStr := range timestampStrs {
-		timestamp, _ := strconv.ParseInt(timestampStr, 10, 64)
+		timestamp, err := strconv.ParseInt(timestampStr, 10, 64)
+		if err != nil {
+			message = fmt.Sprintf("parse timestamp error: %s", err)
+			qri.logger.Errorf(message)
+		}
+
 		datapoint := &DataPoint{
 			Metric:    qri.Metric,
 			Value:     qri.Dps[timestampStr],
@@ -216,50 +298,106 @@ func (qri *QueryRespItem) GetDataPoints() []*DataPoint {
 		}
 		datapoints = append(datapoints, datapoint)
 	}
+
+	status = "SUCCESS"
+	message = fmt.Sprint("DataPoints fetched successfully")
 	return datapoints
 }
 
 // getSortedTimestampStrs returns a slice of the ascending timestamp with
 // string format for the Dps of the related QueryRespItem instance.
-func (qri *QueryRespItem) getSortedTimestampStrs() []string {
+func (qri *QueryRespItem) getSortedTimestampStrs(ctx context.Context) []string {
+	_, span := qri.addTrace(ctx, "GetSortedTimeStamps")
+
+	status := "SUCCESS"
+	var message string
+
+	defer sendOperationStats(qri.logger, time.Now(), "GetSortedTimeStamps", &status, &message, span)
+
 	timestampStrs := make([]string, 0)
 	for timestampStr := range qri.Dps {
 		timestampStrs = append(timestampStrs, timestampStr)
 	}
+
 	sort.Strings(timestampStrs)
 	return timestampStrs
 }
 
 // GetLatestDataPoint returns latest datapoint for the related QueryRespItem instance.
-func (qri *QueryRespItem) GetLatestDataPoint() *DataPoint {
-	timestampStrs := qri.getSortedTimestampStrs()
+func (qri *QueryRespItem) GetLatestDataPoint(ctx context.Context) *DataPoint {
+	_, span := qri.addTrace(ctx, "Query")
+
+	status := "FAIL"
+	var message string
+
+	defer sendOperationStats(qri.logger, time.Now(), "Query", &status, &message, span)
+
+	timestampStrs := qri.getSortedTimestampStrs(ctx)
+
 	size := len(timestampStrs)
 	if size == 0 {
+		message = "No datapoints present"
 		return nil
 	}
-	timestamp, _ := strconv.ParseInt(timestampStrs[size-1], 10, 64)
+
+	timestamp, err := strconv.ParseInt(timestampStrs[size-1], 10, 64)
+	if err != nil {
+		message = fmt.Sprintf("parse timestamp error: %s", err)
+		qri.logger.Errorf(message)
+	}
+
 	datapoint := &DataPoint{
 		Metric:    qri.Metric,
 		Value:     qri.Dps[timestampStrs[size-1]],
 		Tags:      qri.Tags,
 		Timestamp: timestamp,
 	}
+
+	status = "SUCCESS"
+	message = fmt.Sprintf("LatestDataPoints with timestamp %v fetched successfully", timestamp)
+	qri.logger.Logf("LatestDataPoints fetched successfully")
+
 	return datapoint
 }
 
 func (c *OpentsdbClient) Query(param QueryParam) (*QueryResponse, error) {
-	if !isValidQueryParam(&param) {
-		return nil, errors.New("The given query param is invalid.\n")
+	if param.tracer == nil {
+		param.tracer = c.tracer
 	}
+
+	if param.logger == nil {
+		param.logger = c.logger
+	}
+
+	_, span := c.addTrace(c.ctx, "Query")
+
+	status := "FAIL"
+	var message string
+
+	defer sendOperationStats(c.logger, time.Now(), "Query", &status, &message, span)
+
+	if !isValidQueryParam(&param) {
+		message = fmt.Sprint("invalid query parameters")
+		return nil, errors.New(message)
+	}
+
 	queryEndpoint := fmt.Sprintf("%s%s", c.tsdbEndpoint, QueryPath)
 	reqBodyCnt, err := getQueryBodyContents(&param)
 	if err != nil {
+		message = fmt.Sprintf("getQueryBodyContents error: %s", err)
 		return nil, err
 	}
-	queryResp := QueryResponse{}
+
+	queryResp := QueryResponse{logger: c.logger, tracer: c.tracer}
+
 	if err = c.sendRequest(PostMethod, queryEndpoint, reqBodyCnt, &queryResp); err != nil {
+		message = fmt.Sprintf("error while processing request at url %s: %s ", queryEndpoint, err)
 		return nil, err
 	}
+
+	status = "SUCCESS"
+	message = fmt.Sprintf("query request at url %s processed successfully", queryEndpoint)
+
 	return &queryResp, nil
 }
 

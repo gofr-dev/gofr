@@ -8,7 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"go.opentelemetry.io/otel/trace"
-	"io/ioutil"
+	"io"
 	"net"
 	"net/http"
 	"strings"
@@ -63,7 +63,7 @@ const (
 	DefaultMaxContentLength = 40960
 )
 
-// OpentsdbClient is the private implementation of the OpentsDBClient interface,
+// OpentsdbClient is the implementation of the OpentsDBClient interface,
 // which includes context-aware functionality.
 type OpentsdbClient struct {
 	tsdbEndpoint string
@@ -80,21 +80,18 @@ func New(config *OpenTSDBConfig) OpentsdbProvider {
 	return &OpentsdbClient{opentsdbCfg: *config}
 }
 
-// UseLogger sets the Logger interface for the FTP file system.
 func (c *OpentsdbClient) UseLogger(logger interface{}) {
 	if l, ok := logger.(Logger); ok {
 		c.logger = l
 	}
 }
 
-// UseMetrics sets the Metrics interface.
 func (c *OpentsdbClient) UseMetrics(metrics interface{}) {
 	if m, ok := metrics.(Metrics); ok {
 		c.metrics = m
 	}
 }
 
-// UseTracer sets the tracer for Clickhouse client.
 func (c *OpentsdbClient) UseTracer(tracer any) {
 	if tracer, ok := tracer.(trace.Tracer); ok {
 		c.tracer = tracer
@@ -112,8 +109,21 @@ var DefaultTransport = &http.Transport{
 }
 
 // Connect initializes an HTTP client for OpenTSDB using the provided configuration.
-// If the configuration is invalid or the endpoint is unreachable, an error is returned.
+// If the configuration is invalid or the endpoint is unreachable, an error is logged.
 func (c *OpentsdbClient) Connect() {
+	if c.ctx == nil {
+		c.ctx = context.Background()
+	}
+
+	tracedCtx, span := c.addTrace(c.ctx, "Connect")
+
+	c.ctx = tracedCtx
+
+	status := "FAIL"
+	var message string
+
+	defer sendOperationStats(c.logger, time.Now(), "Connect", &status, &message, span)
+
 	c.opentsdbCfg.OpentsdbHost = strings.TrimSpace(c.opentsdbCfg.OpentsdbHost)
 	if len(c.opentsdbCfg.OpentsdbHost) == 0 {
 		c.logger.Errorf("the OpentsdbEndpoint in the given configuration cannot be empty.")
@@ -133,15 +143,21 @@ func (c *OpentsdbClient) Connect() {
 	if c.opentsdbCfg.MaxPutPointsNum <= 0 {
 		c.opentsdbCfg.MaxPutPointsNum = DefaultMaxPutPointsNum
 	}
+
 	if c.opentsdbCfg.DetectDeltaNum <= 0 {
 		c.opentsdbCfg.DetectDeltaNum = DefaultDetectDeltaNum
 	}
+
 	if c.opentsdbCfg.MaxContentLength <= 0 {
 		c.opentsdbCfg.MaxContentLength = DefaultMaxContentLength
 	}
 
 	// Initialize the OpenTSDB client with the given configuration.
 	c.tsdbEndpoint = fmt.Sprintf("http://%s", c.opentsdbCfg.OpentsdbHost)
+
+	c.logger.Logf("Connection Successful")
+	status = "SUCCESS"
+	message = fmt.Sprintf("connected to %s", c.tsdbEndpoint)
 }
 
 // NewClientContext creates a new OpenTSDB client with context support.
@@ -162,16 +178,58 @@ func (c *OpentsdbClient) WithContext(ctx context.Context) OpentsDBClient {
 	}
 }
 
+// HealthCheck checks the availability of the OpenTSDB server by establishing a TCP connection.
+func (c *OpentsdbClient) HealthCheck() error {
+	tracedCtx, span := c.addTrace(c.ctx, "isValidOperateMethod")
+
+	c.ctx = tracedCtx
+
+	status := "FAIL"
+	var message string
+
+	defer sendOperationStats(c.logger, time.Now(), "HealthCheck", &status, &message, span)
+
+	conn, err := net.DialTimeout("tcp", c.opentsdbCfg.OpentsdbHost, DefaultDialTime)
+	if err != nil {
+		errHealthCheck := fmt.Errorf("OpenTSDB is unreachable: %v", err)
+		message = fmt.Sprint(errHealthCheck)
+		return errHealthCheck
+	}
+
+	if conn != nil {
+		defer conn.Close()
+	}
+
+	status = "SUCCESS"
+	message = "connection to OpenTSDB is alive"
+
+	return nil
+}
+
 // sendRequest dispatches an HTTP request to the OpenTSDB server, using the provided
 // method, URL, and body content. It returns the parsed response or an error, if any.
 func (c *OpentsdbClient) sendRequest(method, url, reqBodyCnt string, parsedResp Response) error {
+	tracedCtx, span := c.addTrace(c.ctx, "sendRequest")
+
+	c.ctx = tracedCtx
+
+	status := "FAIL"
+	var message string
+
+	defer sendOperationStats(c.logger, time.Now(), "sendRequest", &status, &message, span)
+
 	// Create the HTTP request, attaching the context if available.
 	req, err := http.NewRequest(method, url, strings.NewReader(reqBodyCnt))
 	if c.ctx != nil {
 		req = req.WithContext(c.ctx)
 	}
+
 	if err != nil {
-		return fmt.Errorf("Failed to create request for %s %s: %v", method, url, err)
+		errRequestCreation := fmt.Errorf("failed to create request for %s %s: %v", method, url, err)
+
+		message = fmt.Sprint(errRequestCreation)
+
+		return errRequestCreation
 	}
 
 	// Set the request headers.
@@ -180,29 +238,46 @@ func (c *OpentsdbClient) sendRequest(method, url, reqBodyCnt string, parsedResp 
 	// Send the request and handle the response.
 	resp, err := c.client.Do(req)
 	if err != nil {
-		return fmt.Errorf("Failed to send request for %s %s: %v", method, url, err)
+		errSendingRequest := fmt.Errorf("failed to send request for %s %s: %v", method, url, err)
+
+		message = fmt.Sprint(errSendingRequest)
+
+		return errSendingRequest
 	}
+
 	defer resp.Body.Close()
 
 	// Read and parse the response.
-	jsonBytes, err := ioutil.ReadAll(resp.Body)
+	jsonBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return fmt.Errorf("Failed to read response for %s %s: %v", method, url, err)
+		errReading := fmt.Errorf("failed to read response body for %s %s: %v", method, url, err)
+
+		message = fmt.Sprint(errReading)
+
+		return errReading
 	}
 
-	parsedResp.SetStatus(resp.StatusCode)
-	parser := parsedResp.GetCustomParser()
+	parsedResp.SetStatus(c.ctx, resp.StatusCode)
+	parser := parsedResp.GetCustomParser(c.ctx)
 	if parser == nil {
 		// Use the default JSON unmarshaller if no custom parser is provided.
 		if err := json.Unmarshal(jsonBytes, parsedResp); err != nil {
-			return fmt.Errorf("Failed to parse response for %s %s: %v", method, url, err)
+			errUnmarshaling := fmt.Errorf("failed to unmarshal response body for %s %s: %v", method, url, err)
+
+			message = fmt.Sprint(errUnmarshaling)
+
+			return errUnmarshaling
 		}
 	} else {
 		// Use the custom parser if available.
 		if err := parser(jsonBytes); err != nil {
+			message = fmt.Sprintf("failed to parse response body through custom parser %s %s: %v", method, url, err)
 			return err
 		}
 	}
+
+	status = "SUCCESS"
+	message = fmt.Sprintf("%s request sent at : %s", method, url)
 
 	return nil
 }
@@ -210,28 +285,30 @@ func (c *OpentsdbClient) sendRequest(method, url, reqBodyCnt string, parsedResp 
 // isValidOperateMethod checks if the provided HTTP method is valid for
 // operations such as POST, PUT, or DELETE.
 func (c *OpentsdbClient) isValidOperateMethod(method string) bool {
+	tracedCtx, span := c.addTrace(c.ctx, "isValidOperateMethod")
+
+	c.ctx = tracedCtx
+
+	status := "SUCCESS"
+	var message string
+
+	defer sendOperationStats(c.logger, time.Now(), "isValidOperateMethod", &status, &message, span)
+
 	method = strings.TrimSpace(strings.ToUpper(method))
 	if len(method) == 0 {
 		return false
 	}
+
 	validMethods := []string{PostMethod, PutMethod, DeleteMethod}
 	for _, validMethod := range validMethods {
 		if method == validMethod {
 			return true
 		}
 	}
+
 	return false
 }
 
-// Ping checks the availability of the OpenTSDB server by establishing a TCP connection.
-func (c *OpentsdbClient) Ping() error {
-	conn, err := net.DialTimeout("tcp", c.opentsdbCfg.OpentsdbHost, DefaultDialTime)
-	if err != nil {
-		return fmt.Errorf("The target OpenTSDB is unreachable: %v", err)
-	}
-
-	if conn != nil {
-		defer conn.Close()
-	}
-	return nil
+func (c *OpentsdbClient) GetContext() context.Context {
+	return c.ctx
 }
