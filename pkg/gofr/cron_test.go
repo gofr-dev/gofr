@@ -333,3 +333,115 @@ func Test_noopRequest(t *testing.T) {
 	require.NoError(t, noop.Bind(nil))
 	assert.Nil(t, noop.Params("test"))
 }
+// New tests for parseRange
+func TestCron_parseRange(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected map[int]struct{}
+		min      int
+		max      int
+		hasError bool
+	}{
+		{
+			name:  "Valid Range",
+			input: "1-5",
+			expected: map[int]struct{}{
+				1: {}, 2: {}, 3: {}, 4: {}, 5: {},
+			},
+			min: 1, max: 10,
+			hasError: false,
+		},
+		{
+			name:     "Out of Range",
+			input:    "1-12",
+			expected: nil,
+			min:      1, max: 10,
+			hasError: true,
+		},
+		{
+			name:     "Invalid Input",
+			input:    "a-b",
+			expected: nil,
+			min:      1, max:      10,
+			hasError: true,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			output, err := parseRange(test.input, test.min, test.max)
+
+			if (err != nil) != test.hasError {
+				t.Errorf("Expected error: %v, got: %v", test.hasError, err)
+			}
+
+			if len(output) != len(test.expected) {
+				t.Errorf("Expected: %v, got: %v", test.expected, output)
+			}
+		})
+	}
+}
+
+// Additional tests for parsePart can be added here...
+func TestCron_parsePart(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected map[int]struct{}
+		min      int
+		max      int
+		hasError bool
+	}{
+		{
+			name:  "Single Value",
+			input: "5",
+			expected: map[int]struct{}{
+				5: {},
+			},
+			min:      1,
+			max:      10,
+			hasError: false,
+		},
+		{
+			name:  "Valid Multiple Values",
+			input: "1,3,5",
+			expected: map[int]struct{}{
+				1: {}, 3: {}, 5: {},
+			},
+			min:      1,
+			max:      10,
+			hasError: false,
+		},
+		{
+			name:     "Invalid Value",
+			input:    "15",
+			expected: nil,
+			min:      1,
+			max:      10,
+			hasError: true,
+		},
+		{
+			name:     "Invalid Format",
+			input:    "1,2,a",
+			expected: nil,
+			min:      1,
+			max:      10,
+			hasError: true,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			output, err := parsePart(test.input, test.min, test.max)
+
+			if (err != nil) != test.hasError {
+				t.Errorf("Expected error: %v, got: %v", test.hasError, err)
+			}
+
+			if len(output) != len(test.expected) {
+				t.Errorf("Expected: %v, got: %v", test.expected, output)
+			}
+		})
+	}
+}

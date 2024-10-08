@@ -136,7 +136,7 @@ func parseSchedule(s string) (*job, error) {
 		return nil, err
 	}
 
-	//  day/dayOfWeek combination
+		//  day/dayOfWeek combination
 	mergeDays(j)
 
 	return j, nil
@@ -153,17 +153,17 @@ func mergeDays(j *job) {
 
 // parsePart parse individual schedule part from schedule string.
 func parsePart(s string, minValue, maxValue int) (map[int]struct{}, error) {
-	// wildcard pattern
+		// wildcard pattern
 	if s == "*" {
 		return getDefaultJobField(minValue, maxValue, 1), nil
 	}
 
-	// */2 1-59/5 pattern
+		// */2 1-59/5 pattern
 	if matches := matchN.FindStringSubmatch(s); matches != nil {
 		return parseSteps(s, matches[1], matches[2], minValue, maxValue)
 	}
 
-	// 1,2,4 or 1,2,10-15,20,30-45 pattern
+		// 1,2,4 or 1,2,10-15,20,30-45 pattern
 	return parseRange(s, minValue, maxValue)
 }
 
@@ -194,32 +194,10 @@ func parseRange(s string, minValue, maxValue int) (map[int]struct{}, error) {
 	r := make(map[int]struct{})
 	parts := strings.Split(s, ",")
 
-	for _, x := range parts {
-		rng := matchRange.FindStringSubmatch(x)
-
-		if rng == nil {
-			i, err := strconv.Atoi(x)
-			if err != nil {
-				return nil, errParsing{x, s}
-			}
-
-			if i < minValue || i > maxValue {
-				return nil, errOutOfRange{i, s, minValue, maxValue}
-			}
-
-			r[i] = struct{}{}
-
-			continue
+	for _, part := range parts {
+		if err := parseSingleOrRange(part, minValue, maxValue, r); err != nil {
+			return nil, err
 		}
-
-		localMin, _ := strconv.Atoi(rng[1])
-		localMax, _ := strconv.Atoi(rng[2])
-
-		if localMin < minValue || localMax > maxValue {
-			return nil, errOutOfRange{x, s, minValue, maxValue}
-		}
-
-		r = getDefaultJobField(localMin, localMax, 1)
 	}
 
 	if len(r) == 0 {
@@ -227,6 +205,34 @@ func parseRange(s string, minValue, maxValue int) (map[int]struct{}, error) {
 	}
 
 	return r, nil
+}
+
+func parseSingleOrRange(part string, minValue, maxValue int, r map[int]struct{}) error {
+	if rng := matchRange.FindStringSubmatch(part); rng != nil {
+		localMin, _ := strconv.Atoi(rng[1])
+		localMax, _ := strconv.Atoi(rng[2])
+
+		if localMin < minValue || localMax > maxValue {
+			return errOutOfRange{part, part, minValue, maxValue}
+		}
+
+		for i := localMin; i <= localMax; i++ {
+			r[i] = struct{}{}
+		}
+	} else {
+		i, err := strconv.Atoi(part)
+		if err != nil {
+			return errParsing{part, part}
+		}
+
+		if i < minValue || i > maxValue {
+			return errOutOfRange{part, part, minValue, maxValue}
+		}
+
+		r[i] = struct{}{}
+	}
+
+	return nil
 }
 
 func getDefaultJobField(minValue, maxValue, incr int) map[int]struct{} {
@@ -332,6 +338,7 @@ func (c *Crontab) AddJob(schedule, jobName string, fn CronFunc) error {
 var errBadScheduleFormat = errors.New("schedule string must have five components like * * * * *")
 
 // errOutOfRange denotes the errors that occur when a range in schedule is out of scope for the particular time unit.
+
 type errOutOfRange struct {
 	rangeVal interface{}
 	input    string
