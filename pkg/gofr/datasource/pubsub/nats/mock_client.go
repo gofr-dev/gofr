@@ -165,18 +165,18 @@ func (m *MockJetStreamCreator) EXPECT() *MockJetStreamCreatorMockRecorder {
 }
 
 // New mocks base method.
-func (m *MockJetStreamCreator) New(arg0 *nats.Conn) (jetstream.JetStream, error) {
+func (m *MockJetStreamCreator) New(conn ConnInterface) (jetstream.JetStream, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "New", arg0)
+	ret := m.ctrl.Call(m, "New", conn)
 	ret0, _ := ret[0].(jetstream.JetStream)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // New indicates an expected call of New.
-func (mr *MockJetStreamCreatorMockRecorder) New(arg0 any) *gomock.Call {
+func (mr *MockJetStreamCreatorMockRecorder) New(conn any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "New", reflect.TypeOf((*MockJetStreamCreator)(nil).New), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "New", reflect.TypeOf((*MockJetStreamCreator)(nil).New), conn)
 }
 
 // MockJetStreamClient is a mock of JetStreamClient interface.

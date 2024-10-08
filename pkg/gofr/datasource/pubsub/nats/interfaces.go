@@ -26,7 +26,7 @@ type NATSConnector interface {
 
 // JetStreamCreator represents the main Client JetStream Client.
 type JetStreamCreator interface {
-	New(*nats.Conn) (jetstream.JetStream, error)
+	New(conn ConnInterface) (jetstream.JetStream, error)
 }
 
 // JetStreamClient represents the main Client JetStream Client.

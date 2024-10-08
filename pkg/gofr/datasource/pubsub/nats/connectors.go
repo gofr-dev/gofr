@@ -17,13 +17,6 @@ func (d *DefaultNATSConnector) Connect(serverURL string, opts ...nats.Option) (C
 
 type DefaultJetStreamCreator struct{}
 
-func (d *DefaultJetStreamCreator) New(nc ConnInterface) (jetstream.JetStream, error) {
-	return nc.JetStream()
+func (d *DefaultJetStreamCreator) New(conn ConnInterface) (jetstream.JetStream, error) {
+	return conn.JetStream()
 }
-
-/*
-func (d *DefaultJetStreamCreator) New(nc *nats.Conn) (jetstream.JetStream, error) {
-	return jetstream.New(nc)
-}
-
-*/

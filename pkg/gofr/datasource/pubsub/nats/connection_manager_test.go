@@ -50,12 +50,9 @@ func TestConnectionManager_Connect(t *testing.T) {
 		Connect(gomock.Any(), gomock.Any()).
 		Return(mockConn, nil)
 
-	mockConn.EXPECT().
-		NATSConn().
-		Return(&nats.Conn{})
-
+	// We don't need to expect NATSConn() call anymore, as we're passing mockConn directly to New()
 	mockJSCreator.EXPECT().
-		New(gomock.Any()).
+		New(mockConn).
 		Return(mockJS, nil)
 
 	err := cm.Connect()

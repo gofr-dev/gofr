@@ -11,6 +11,8 @@ import (
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 )
 
+//go:generate mockgen -destination=mock_tracer.go -package=nats go.opentelemetry.io/otel/trace Tracer
+
 // Client represents a Client for NATS JetStream operations.
 type Client struct {
 	connManager      ConnectionManagerInterface
@@ -25,18 +27,6 @@ type Client struct {
 }
 
 type messageHandler func(context.Context, jetstream.Msg) error
-
-// NewClient creates a new NATS JetStream client.
-func NewClient(cfg *Config, logger pubsub.Logger, metrics Metrics, tracer trace.Tracer) *Client {
-	return &Client{
-		Config:           cfg,
-		logger:           logger,
-		metrics:          metrics,
-		tracer:           tracer,
-		natsConnector:    &DefaultNATSConnector{},
-		jetStreamCreator: &DefaultJetStreamCreator{},
-	}
-}
 
 // Connect establishes a connection to NATS and sets up JetStream.
 func (c *Client) Connect() error {

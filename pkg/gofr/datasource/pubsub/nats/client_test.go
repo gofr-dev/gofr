@@ -6,11 +6,26 @@ import (
 	"testing"
 	"time"
 
+	"github.com/nats-io/nats.go/jetstream"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel/trace/noop"
 	"go.uber.org/mock/gomock"
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 	"gofr.dev/pkg/gofr/logging"
+	"gofr.dev/pkg/gofr/testutil"
+)
+
+var (
+	wrapNewConnectionManager = func(cfg *Config, logger pubsub.Logger, natsConnector NATSConnector, jetStreamCreator JetStreamCreator) ConnectionManagerInterface {
+		return NewConnectionManager(cfg, logger, natsConnector, jetStreamCreator)
+	}
+	wrapNewStreamManager = func(js jetstream.JetStream, logger pubsub.Logger) StreamManagerInterface {
+		return NewStreamManager(js, logger)
+	}
+	wrapNewSubscriptionManager = func(bufferSize int) SubscriptionManagerInterface {
+		return NewSubscriptionManager(bufferSize)
+	}
 )
 
 func TestValidateConfigs(t *testing.T) {
@@ -303,13 +318,237 @@ func TestNATSClient_CreateTopic(t *testing.T) {
 	require.NoError(t, err)
 }
 
-// Additional tests for ConnectionManager, SubscriptionManager, and StreamManager
-// should be added in separate test files for those components.
+func TestClient_Connect(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
-// The following tests have been removed as they are now part of the respective manager components:
-// TestNATSClient_NakMessage
-// TestNATSClient_HandleFetchError
-// TestNATSClient_HandleMessageError
-// TestNATSClient_DeleteStreamError
-// TestNATSClient_CreateStreamError
-// TestNATSClient_CreateOrUpdateStreamError
+	// Create mocks
+	mockLogger := logging.NewMockLogger(logging.DEBUG)
+	mockNATSConnector := NewMockNATSConnector(ctrl)
+	mockJSCreator := NewMockJetStreamCreator(ctrl)
+	mockConn := NewMockConnInterface(ctrl)
+	mockJS := NewMockJetStream(ctrl)
+
+	// Set up client with mocks
+	client := &Client{
+		Config: &Config{
+			Server: "nats://localhost:4222",
+			Stream: StreamConfig{
+				Stream:   "test-stream",
+				Subjects: []string{"test-subject"},
+			},
+			Consumer:  "test-consumer",
+			BatchSize: 100,
+		},
+		logger:           mockLogger,
+		natsConnector:    mockNATSConnector,
+		jetStreamCreator: mockJSCreator,
+	}
+
+	// Set expectations
+	mockNATSConnector.EXPECT().
+		Connect("nats://localhost:4222", gomock.Any()).
+		Return(mockConn, nil).
+		Times(2)
+
+	mockJSCreator.EXPECT().
+		New(mockConn).
+		Return(mockJS, nil).
+		Times(2)
+
+	// Call the Connect method on the client
+	err := client.Connect()
+	require.NoError(t, err)
+
+	// Assert that the connection manager was set
+	assert.NotNil(t, client.connManager)
+
+	// Assert that the stream manager and subscription manager were created
+	assert.NotNil(t, client.streamManager)
+	assert.NotNil(t, client.subManager)
+
+	// Check for log output
+	out := testutil.StdoutOutputForFunc(func() {
+		client.logger = logging.NewMockLogger(logging.DEBUG)
+		err := client.Connect()
+		require.NoError(t, err)
+	})
+
+	// Assert that the expected log message is produced
+	assert.Contains(t, out, "connected to NATS server 'nats://localhost:4222'")
+}
+
+func TestClient_ValidateAndPrepare(t *testing.T) {
+	client := &Client{
+		Config: &Config{},
+		logger: logging.NewMockLogger(logging.DEBUG),
+	}
+
+	err := client.validateAndPrepare()
+	assert.Error(t, err)
+
+	client.Config = &Config{
+		Server: "nats://localhost:4222",
+		Stream: StreamConfig{
+			Stream:   "test-stream",
+			Subjects: []string{"test-subject"},
+		},
+		Consumer: "test-consumer",
+	}
+
+	err = client.validateAndPrepare()
+	assert.NoError(t, err)
+}
+
+func TestClient_LogSuccessfulConnection(t *testing.T) {
+	mockLogger := logging.NewMockLogger(logging.DEBUG)
+	client := &Client{
+		Config: &Config{Server: "nats://localhost:4222"},
+		logger: mockLogger,
+	}
+
+	logs := testutil.StdoutOutputForFunc(func() {
+		client.logger = logging.NewMockLogger(logging.DEBUG)
+		client.logSuccessfulConnection()
+	})
+
+	assert.Contains(t, logs, "connected to NATS server 'nats://localhost:4222'")
+}
+
+func TestClient_UseLogger(t *testing.T) {
+	client := &Client{}
+	mockLogger := logging.NewMockLogger(logging.DEBUG)
+
+	client.UseLogger(mockLogger)
+	assert.Equal(t, mockLogger, client.logger)
+
+	client.UseLogger("not a logger")
+	assert.Equal(t, mockLogger, client.logger) // Should not change
+}
+
+func TestClient_UseTracer(t *testing.T) {
+	client := &Client{}
+	mockTracer := noop.NewTracerProvider().Tracer("test")
+
+	client.UseTracer(mockTracer)
+	assert.Equal(t, mockTracer, client.tracer)
+
+	client.UseTracer("not a tracer")
+	assert.Equal(t, mockTracer, client.tracer) // Should not change
+}
+
+func TestClient_UseMetrics(t *testing.T) {
+	client := &Client{}
+	mockMetrics := NewMockMetrics(gomock.NewController(t))
+
+	client.UseMetrics(mockMetrics)
+	assert.Equal(t, mockMetrics, client.metrics)
+
+	client.UseMetrics("not metrics")
+	assert.Equal(t, mockMetrics, client.metrics) // Should not change
+}
+
+func TestClient_SubscribeWithHandler(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockConnManager := NewMockConnectionManagerInterface(ctrl)
+	mockJetStream := NewMockJetStream(ctrl)
+	mockConsumer := NewMockConsumer(ctrl)
+	mockLogger := logging.NewMockLogger(logging.DEBUG)
+	mockMessageBatch := NewMockMessageBatch(ctrl)
+
+	client := &Client{
+		connManager: mockConnManager,
+		Config: &Config{
+			Consumer: "test-consumer",
+			Stream: StreamConfig{
+				Stream:     "test-stream",
+				MaxDeliver: 3,
+			},
+			MaxWait: time.Second,
+		},
+		logger: mockLogger,
+	}
+
+	mockConnManager.EXPECT().JetStream().Return(mockJetStream).AnyTimes()
+	mockJetStream.EXPECT().CreateOrUpdateConsumer(gomock.Any(), gomock.Any(), gomock.Any()).Return(mockConsumer, nil)
+	mockConsumer.EXPECT().Fetch(gomock.Any(), gomock.Any()).Return(mockMessageBatch, nil).AnyTimes()
+	mockMessageBatch.EXPECT().Messages().Return(make(chan jetstream.Msg)).AnyTimes()
+	mockMessageBatch.EXPECT().Error().Return(nil).AnyTimes()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	handler := func(ctx context.Context, msg jetstream.Msg) error {
+		return nil
+	}
+
+	err := client.SubscribeWithHandler(ctx, "test-subject", handler)
+	require.NoError(t, err)
+
+	// Wait a bit to allow the goroutine to start
+	time.Sleep(100 * time.Millisecond)
+
+	// Test error case
+	mockJetStream.EXPECT().CreateOrUpdateConsumer(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, errors.New("consumer creation error"))
+	err = client.SubscribeWithHandler(ctx, "test-subject", handler)
+	require.Error(t, err)
+}
+
+func TestClient_CreateStream(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockStreamManager := NewMockStreamManagerInterface(ctrl)
+	client := &Client{
+		streamManager: mockStreamManager,
+	}
+
+	cfg := StreamConfig{
+		Stream:   "test-stream",
+		Subjects: []string{"test-subject"},
+	}
+
+	mockStreamManager.EXPECT().CreateStream(gomock.Any(), cfg).Return(nil)
+
+	err := client.CreateStream(context.Background(), cfg)
+	require.NoError(t, err)
+}
+
+func TestClient_DeleteStream(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockStreamManager := NewMockStreamManagerInterface(ctrl)
+	client := &Client{
+		streamManager: mockStreamManager,
+	}
+
+	mockStreamManager.EXPECT().DeleteStream(gomock.Any(), "test-stream").Return(nil)
+
+	err := client.DeleteStream(context.Background(), "test-stream")
+	require.NoError(t, err)
+}
+
+func TestClient_CreateOrUpdateStream(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockStreamManager := NewMockStreamManagerInterface(ctrl)
+	mockStream := NewMockStream(ctrl)
+	client := &Client{
+		streamManager: mockStreamManager,
+	}
+
+	cfg := jetstream.StreamConfig{
+		Name:     "test-stream",
+		Subjects: []string{"test-subject"},
+	}
+
+	mockStreamManager.EXPECT().CreateOrUpdateStream(gomock.Any(), &cfg).Return(mockStream, nil)
+
+	stream, err := client.CreateOrUpdateStream(context.Background(), cfg)
+	require.NoError(t, err)
+	assert.Equal(t, mockStream, stream)
+}
