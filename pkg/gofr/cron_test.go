@@ -333,8 +333,9 @@ func Test_noopRequest(t *testing.T) {
 	require.NoError(t, noop.Bind(nil))
 	assert.Nil(t, noop.Params("test"))
 }
-// New tests for parseRange
+
 func TestCron_parseRange(t *testing.T) {
+	
 	tests := []struct {
 		name     string
 		input    string
@@ -371,19 +372,17 @@ func TestCron_parseRange(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			output, err := parseRange(test.input, test.min, test.max)
-
-			if (err != nil) != test.hasError {
-				t.Errorf("Expected error: %v, got: %v", test.hasError, err)
+			if test.hasError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
 			}
-
-			if len(output) != len(test.expected) {
-				t.Errorf("Expected: %v, got: %v", test.expected, output)
-			}
+			assert.Len(t, output, len(test.expected))
+			assert.Equal(t, test.expected, output)
 		})
 	}
 }
 
-// Additional tests for parsePart can be added here...
 func TestCron_parsePart(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -431,17 +430,18 @@ func TestCron_parsePart(t *testing.T) {
 		},
 	}
 
-	for _, test := range tests {
+	for i, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			output, err := parsePart(test.input, test.min, test.max)
 
-			if (err != nil) != test.hasError {
-				t.Errorf("Expected error: %v, got: %v", test.hasError, err)
+			if test.hasError {
+				assert.Error(t, err, "TEST[%d] - Expected error but got none", i)
+			} else {
+				assert.NoError(t, err, "TEST[%d] - Expected no error but got: %v", i, err)
 			}
 
-			if len(output) != len(test.expected) {
-				t.Errorf("Expected: %v, got: %v", test.expected, output)
-			}
+			assert.Len(t, output, len(test.expected), "TEST[%d] - Expected length: %v, got: %v", i, len(test.expected), len(output))
+			assert.Equal(t, test.expected, output, "TEST[%d] - Expected: %v, got: %v", i, test.expected, output)
 		})
 	}
 }
