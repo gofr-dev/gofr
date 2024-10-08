@@ -93,14 +93,26 @@ func (c *Client) Subscribe(ctx context.Context, topic string) (*pubsub.Message, 
 	return c.subManager.Subscribe(ctx, topic, c.connManager.JetStream(), c.Config, c.logger, c.metrics)
 }
 
-// SubscribeWithHandler subscribes to a topic with a message handler.
 func (c *Client) SubscribeWithHandler(ctx context.Context, subject string, handler messageHandler) error {
 	js := c.connManager.JetStream()
+	consumerName := c.generateConsumerName(subject)
 
-	// Create a unique consumer name
-	consumerName := fmt.Sprintf("%s_%s", c.Config.Consumer, strings.ReplaceAll(subject, ".", "_"))
+	cons, err := c.createOrUpdateConsumer(ctx, js, subject, consumerName)
+	if err != nil {
+		return err
+	}
 
-	// Create or update the consumer
+	go c.processMessages(ctx, cons, subject, handler)
+
+	return nil
+}
+
+func (c *Client) generateConsumerName(subject string) string {
+	return fmt.Sprintf("%s_%s", c.Config.Consumer, strings.ReplaceAll(subject, ".", "_"))
+}
+
+func (c *Client) createOrUpdateConsumer(
+	ctx context.Context, js jetstream.JetStream, subject, consumerName string) (jetstream.Consumer, error) {
 	cons, err := js.CreateOrUpdateConsumer(ctx, c.Config.Stream.Stream, jetstream.ConsumerConfig{
 		Durable:       consumerName,
 		AckPolicy:     jetstream.AckExplicitPolicy,
@@ -110,54 +122,57 @@ func (c *Client) SubscribeWithHandler(ctx context.Context, subject string, handl
 	})
 	if err != nil {
 		c.logger.Errorf("failed to create or update consumer: %v", err)
-		return err
+		return nil, err
 	}
 
-	// Start a goroutine to process messages
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			default:
-				msgs, err := cons.Fetch(1, jetstream.FetchMaxWait(c.Config.MaxWait))
-				if err != nil {
-					if !errors.Is(err, context.DeadlineExceeded) {
-						c.logger.Errorf("Error fetching messages for subject %s: %v", subject, err)
-					}
+	return cons, nil
+}
 
-					continue
-				}
-
-				for msg := range msgs.Messages() {
-					err := handler(ctx, msg)
-					if err != nil {
-						c.logger.Errorf("Error handling message: %v", err)
-
-						err := msg.Nak()
-						if err != nil {
-							c.logger.Errorf("Error sending NAK for message: %v", err)
-
-							return
-						}
-					} else {
-						err := msg.Ack()
-						if err != nil {
-							c.logger.Errorf("Error sending ACK for message: %v", err)
-
-							return
-						}
-					}
-				}
-
-				if err := msgs.Error(); err != nil {
-					c.logger.Errorf("Error in message batch for subject %s: %v", subject, err)
-				}
-			}
+func (c *Client) processMessages(ctx context.Context, cons jetstream.Consumer, subject string, handler messageHandler) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			c.fetchAndProcessMessages(ctx, cons, subject, handler)
 		}
-	}()
+	}
+}
 
-	return nil
+func (c *Client) fetchAndProcessMessages(ctx context.Context, cons jetstream.Consumer, subject string, handler messageHandler) {
+	msgs, err := cons.Fetch(1, jetstream.FetchMaxWait(c.Config.MaxWait))
+	if err != nil {
+		if !errors.Is(err, context.DeadlineExceeded) {
+			c.logger.Errorf("Error fetching messages for subject %s: %v", subject, err)
+		}
+
+		return
+	}
+
+	for msg := range msgs.Messages() {
+		c.handleMessage(ctx, msg, handler)
+	}
+
+	if err := msgs.Error(); err != nil {
+		c.logger.Errorf("Error in message batch for subject %s: %v", subject, err)
+	}
+}
+
+func (c *Client) handleMessage(ctx context.Context, msg jetstream.Msg, handler messageHandler) {
+	err := handler(ctx, msg)
+	if err == nil {
+		if ackErr := msg.Ack(); ackErr != nil {
+			c.logger.Errorf("Error sending ACK for message: %v", ackErr)
+		}
+
+		return
+	}
+
+	c.logger.Errorf("Error handling message: %v", err)
+
+	if nakErr := msg.Nak(); nakErr != nil {
+		c.logger.Errorf("Error sending NAK for message: %v", nakErr)
+	}
 }
 
 // Close closes the Client.
@@ -195,6 +210,6 @@ func (c *Client) DeleteStream(ctx context.Context, name string) error {
 }
 
 // CreateOrUpdateStream creates or updates a stream in NATS JetStream.
-func (c *Client) CreateOrUpdateStream(ctx context.Context, cfg jetstream.StreamConfig) (jetstream.Stream, error) {
-	return c.streamManager.CreateOrUpdateStream(ctx, &cfg)
+func (c *Client) CreateOrUpdateStream(ctx context.Context, cfg *jetstream.StreamConfig) (jetstream.Stream, error) {
+	return c.streamManager.CreateOrUpdateStream(ctx, cfg)
 }
