@@ -14,45 +14,45 @@ type VersionResponse struct {
 	VersionInfo map[string]string `json:"VersionInfo"`
 	logger      Logger
 	tracer      trace.Tracer
+	ctx         context.Context
 }
 
-func (verResp *VersionResponse) SetStatus(ctx context.Context, code int) {
-	setStatus(verResp, ctx, code, "SetStatus-VersionResp", verResp.logger)
+func (verResp *VersionResponse) SetStatus(code int) {
+	setStatus(verResp.ctx, verResp, code, "SetStatus-VersionResp", verResp.logger)
 }
 
 func (verResp *VersionResponse) setStatusCode(code int) {
 	verResp.StatusCode = code
 }
 
-func (verResp *VersionResponse) String(ctx context.Context) string {
-	return toString(verResp, ctx, "ToString-VersionResp", verResp.logger)
+func (verResp *VersionResponse) String() string {
+	return toString(verResp.ctx, verResp, "ToString-VersionResp", verResp.logger)
 }
 
-func (verResp *VersionResponse) GetCustomParser(ctx context.Context) func(respCnt []byte) error {
-	return getCustomParser(verResp, ctx, "GetCustomParser-VersionResp", verResp.logger,
-		func(resp []byte, target interface{}) error {
-			return json.Unmarshal([]byte(fmt.Sprintf("{%s:%s}", `"VersionInfo"`, string(resp))), target)
+func (verResp *VersionResponse) GetCustomParser() func(respCnt []byte) error {
+	return getCustomParser(verResp.ctx, verResp, "GetCustomParser-VersionResp", verResp.logger,
+		func(resp []byte) error {
+			return json.Unmarshal([]byte(fmt.Sprintf("{%s:%s}", `"VersionInfo"`, string(resp))), &verResp)
 		})
 }
 
 func (c *OpentsdbClient) Version() (*VersionResponse, error) {
-	tracedCtx, span := c.addTrace(c.ctx, "Version")
-	c.ctx = tracedCtx
+	span := c.addTrace(c.ctx, "Version")
 
-	status := "FAIL"
+	status := StatusFailed
 	var message string
 
 	defer sendOperationStats(c.logger, time.Now(), "Version", &status, &message, span)
 
 	verEndpoint := fmt.Sprintf("%s%s", c.tsdbEndpoint, VersionPath)
-	verResp := VersionResponse{logger: c.logger, tracer: c.tracer}
+	verResp := VersionResponse{logger: c.logger, tracer: c.tracer, ctx: c.ctx}
 
 	if err := c.sendRequest(GetMethod, verEndpoint, "", &verResp); err != nil {
 		message = fmt.Sprintf("error while processing request at URL %s: %s", verEndpoint, err)
 		return nil, err
 	}
 
-	status = "SUCCESS"
+	status = StatusSuccess
 	message = "version response retrieved successfully."
 
 	return &verResp, nil

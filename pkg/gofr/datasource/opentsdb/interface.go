@@ -26,8 +26,6 @@ type OpentsDBClient interface {
 	// It returns an error if the server is unreachable, otherwise returns nil.
 	HealthCheck() error
 
-	GetContext() context.Context
-
 	Version() (*VersionResponse, error)
 
 	// Put handles the 'POST /api/put' endpoint, allowing the storage of data in OpenTSDB.
@@ -297,17 +295,17 @@ type Response interface {
 
 	// SetStatus can be used to set the actual http status code of
 	// the related http response for the specific Response instance
-	SetStatus(ctx context.Context, code int)
+	SetStatus(code int)
 
 	// GetCustomParser can be used to retrive a custom-defined parser.
 	// Returning nil means current specific Response instance doesn't
 	// need a custom-defined parse process, and just uses the default
 	// json unmarshal method to parse the contents of the http response.
-	GetCustomParser(ctx context.Context) func(respCnt []byte) error
+	GetCustomParser() func(respCnt []byte) error
 
 	// Return the contents of the specific Response instance with
 	// the string format
-	String(ctx context.Context) string
+	String() string
 }
 
 type Provider interface {

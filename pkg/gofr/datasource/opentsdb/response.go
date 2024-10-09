@@ -5,17 +5,18 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"go.opentelemetry.io/otel/trace"
 	"time"
+
+	"go.opentelemetry.io/otel/trace"
 )
 
 type GenericResponse interface {
-	addTrace(ctx context.Context, operation string) (context.Context, trace.Span)
+	addTrace(ctx context.Context, operation string) trace.Span
 	setStatusCode(code int)
 }
 
-func toString(resp GenericResponse, ctx context.Context, operation string, logger Logger) string {
-	_, span := resp.addTrace(ctx, operation)
+func toString(ctx context.Context, resp GenericResponse, operation string, logger Logger) string {
+	span := resp.addTrace(ctx, operation)
 
 	status := StatusFailed
 
@@ -41,8 +42,8 @@ func toString(resp GenericResponse, ctx context.Context, operation string, logge
 	return buffer.String()
 }
 
-func setStatus(resp GenericResponse, ctx context.Context, code int, operation string, logger Logger) {
-	_, span := resp.addTrace(ctx, operation)
+func setStatus(ctx context.Context, resp GenericResponse, code int, operation string, logger Logger) {
+	span := resp.addTrace(ctx, operation)
 
 	status := StatusSuccess
 	var message string
@@ -53,9 +54,8 @@ func setStatus(resp GenericResponse, ctx context.Context, code int, operation st
 	resp.setStatusCode(code)
 }
 
-func getCustomParser(resp GenericResponse, ctx context.Context, operation string, logger Logger,
-	unmarshalFunc func([]byte, interface{}) error) func([]byte) error {
-	_, span := resp.addTrace(ctx, operation)
+func getCustomParser(ctx context.Context, resp GenericResponse, operation string, logger Logger, unmarshalFunc func([]byte) error) func([]byte) error {
+	span := resp.addTrace(ctx, operation)
 
 	status := StatusFailed
 
@@ -64,7 +64,7 @@ func getCustomParser(resp GenericResponse, ctx context.Context, operation string
 	defer sendOperationStats(logger, time.Now(), operation, &status, &message, span)
 
 	return func(result []byte) error {
-		err := unmarshalFunc(result, &resp)
+		err := unmarshalFunc(result)
 		if err != nil {
 			message = fmt.Sprintf("unmarshal %s error: %s", operation, err)
 			logger.Errorf(message)

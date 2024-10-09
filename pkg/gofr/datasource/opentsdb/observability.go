@@ -51,84 +51,84 @@ func sendOperationStats(logger Logger, start time.Time, operation string, status
 	}
 }
 
-func addTracer(ctx context.Context, tracer trace.Tracer, operation, typeName string) (context.Context, trace.Span) {
+func addTracer(ctx context.Context, tracer trace.Tracer, operation, typeName string) trace.Span {
 	if tracer != nil {
-		contextWithTrace, span := tracer.Start(ctx, fmt.Sprintf("opentsdb-%v", operation))
+		_, span := tracer.Start(ctx, fmt.Sprintf("opentsdb-%v", operation))
 
 		span.SetAttributes(
 			attribute.String(fmt.Sprintf("opentsdb-%v.operation", typeName), operation),
 		)
 
-		return contextWithTrace, span
+		return span
 	}
 
-	return ctx, nil
+	return nil
 }
 
-func (c *OpentsdbClient) addTrace(ctx context.Context, operation string) (context.Context, trace.Span) {
+func (c *OpentsdbClient) addTrace(ctx context.Context, operation string) trace.Span {
 	return addTracer(ctx, c.tracer, operation, "Client")
 }
 
-func (aggreResp *AggregatorsResponse) addTrace(ctx context.Context, operation string) (context.Context, trace.Span) {
+func (aggreResp *AggregatorsResponse) addTrace(ctx context.Context, operation string) trace.Span {
 	return addTracer(ctx, aggreResp.tracer, operation, "AggregatorRes")
 }
 
-func (annotResp *AnnotationResponse) addTrace(ctx context.Context, operation string) (context.Context, trace.Span) {
+func (annotResp *AnnotationResponse) addTrace(ctx context.Context, operation string) trace.Span {
 	return addTracer(ctx, annotResp.tracer, operation, "AnnotationRes")
 }
 
-func (bulkAnnotResp *BulkAnnotatResponse) addTrace(ctx context.Context, operation string) (context.Context, trace.Span) {
+func (bulkAnnotResp *BulkAnnotatResponse) addTrace(ctx context.Context, operation string) trace.Span {
 	return addTracer(ctx, bulkAnnotResp.tracer, operation, "BulkAnnotatResponse")
 }
 
-func (d *QueryResponse) addTrace(ctx context.Context, operation string) (context.Context, trace.Span) {
-	return addTracer(ctx, d.tracer, operation, "QueryResponse")
+func (query *QueryResponse) addTrace(ctx context.Context, operation string) trace.Span {
+	return addTracer(ctx, query.tracer, operation, "QueryResponse")
 }
 
-func (d *DropcachesResponse) addTrace(ctx context.Context, operation string) (context.Context, trace.Span) {
-	return addTracer(ctx, d.tracer, operation, "DropcacheResponse")
+func (dropResp *DropcachesResponse) addTrace(ctx context.Context, operation string) trace.Span {
+	return addTracer(ctx, dropResp.tracer, operation, "DropcacheResponse")
 }
 
-func (sugParam *SuggestParam) addTrace(ctx context.Context, operation string) (context.Context, trace.Span) {
+func (sugParam *SuggestParam) addTrace(ctx context.Context, operation string) trace.Span {
 	return addTracer(ctx, sugParam.tracer, operation, "SuggestParam")
 }
 
-func (sugResp *SuggestResponse) addTrace(ctx context.Context, operation string) (context.Context, trace.Span) {
+func (sugResp *SuggestResponse) addTrace(ctx context.Context, operation string) trace.Span {
 	return addTracer(ctx, sugResp.tracer, operation, "SuggestResponse")
 }
 
-func (qri *QueryRespItem) addTrace(ctx context.Context, operation string) (context.Context, trace.Span) {
+func (qri *QueryRespItem) addTrace(ctx context.Context, operation string) trace.Span {
 	return addTracer(ctx, qri.tracer, operation, "QueryRespItem")
 }
 
-func (query *QueryParam) addTrace(ctx context.Context, operation string) (context.Context, trace.Span) {
+func (query *QueryParam) addTrace(ctx context.Context, operation string) trace.Span {
 	return addTracer(ctx, query.tracer, operation, "QueryParam")
 }
 
-func (query *QueryLastParam) addTrace(ctx context.Context, operation string) (context.Context, trace.Span) {
+func (query *QueryLastParam) addTrace(ctx context.Context, operation string) trace.Span {
 	return addTracer(ctx, query.tracer, operation, "QueryLastParam")
 }
 
-func (ql *QueryLastResponse) addTrace(ctx context.Context, operation string) (context.Context, trace.Span) {
+func (ql *QueryLastResponse) addTrace(ctx context.Context, operation string) trace.Span {
 	return addTracer(ctx, ql.tracer, operation, "QueryLastResponse")
 }
 
-func (v *VersionResponse) addTrace(ctx context.Context, operation string) (context.Context, trace.Span) {
-	return addTracer(ctx, v.tracer, operation, "VersionResponse")
+func (verResp *VersionResponse) addTrace(ctx context.Context, operation string) trace.Span {
+	return addTracer(ctx, verResp.tracer, operation, "VersionResponse")
 }
 
-func (v *TSMetaDataResponse) addTrace(ctx context.Context, operation string) (context.Context, trace.Span) {
-	return addTracer(ctx, v.tracer, operation, "TSMetaDataResponse")
+func (tsMetaDataResp *TSMetaDataResponse) addTrace(ctx context.Context, operation string) trace.Span {
+	return addTracer(ctx, tsMetaDataResp.tracer, operation, "TSMetaDataResponse")
 }
 
-func (putResp *PutResponse) addTrace(ctx context.Context, operation string) (context.Context, trace.Span) {
+func (putResp *PutResponse) addTrace(ctx context.Context, operation string) trace.Span {
 	return addTracer(ctx, putResp.tracer, operation, "PutResponse")
 }
 
-func (uidAssignResp *UIDAssignResponse) addTrace(ctx context.Context, operation string) (context.Context, trace.Span) {
+func (uidAssignResp *UIDAssignResponse) addTrace(ctx context.Context, operation string) trace.Span {
 	return addTracer(ctx, uidAssignResp.tracer, operation, "UIDAssignResponse")
 }
 
-func (v *UIDMetaDataResponse) addTrace(ctx context.Context, operation string) (context.Context, trace.Span) {
-	return addTracer(ctx, v.tracer, operation, "UIDMetaDataResponse")
+func (uidMetaDataResp *UIDMetaDataResponse) addTrace(ctx context.Context, operation string) trace.Span {
+	return addTracer(ctx, uidMetaDataResp.tracer, operation, "UIDMetaDataResponse")
 }

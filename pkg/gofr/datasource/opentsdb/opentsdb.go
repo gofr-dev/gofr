@@ -7,12 +7,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"go.opentelemetry.io/otel/trace"
 	"io"
 	"net"
 	"net/http"
 	"strings"
 	"time"
+
+	"go.opentelemetry.io/otel/trace"
 )
 
 const (
@@ -147,11 +148,10 @@ func (c *OpentsdbClient) Connect() {
 		c.ctx = context.Background()
 	}
 
-	tracedCtx, span := c.addTrace(c.ctx, "Connect")
+	span := c.addTrace(c.ctx, "Connect")
 
-	c.ctx = tracedCtx
+	status := StatusFailed
 
-	status := "FAIL"
 	var message string
 
 	defer sendOperationStats(c.logger, time.Now(), "Connect", &status, &message, span)
@@ -213,11 +213,10 @@ func (c *OpentsdbClient) WithContext(ctx context.Context) OpentsDBClient {
 
 // HealthCheck checks the availability of the OpenTSDB server by establishing a TCP connection.
 func (c *OpentsdbClient) HealthCheck() error {
-	tracedCtx, span := c.addTrace(c.ctx, "HealthCheck")
+	span := c.addTrace(c.ctx, "HealthCheck")
 
-	c.ctx = tracedCtx
+	status := StatusFailed
 
-	status := "FAIL"
 	var message string
 
 	defer sendOperationStats(c.logger, time.Now(), "HealthCheck", &status, &message, span)
@@ -226,6 +225,7 @@ func (c *OpentsdbClient) HealthCheck() error {
 	if err != nil {
 		errHealthCheck := fmt.Errorf("OpenTSDB is unreachable: %v", err)
 		message = fmt.Sprint(errHealthCheck)
+
 		return errHealthCheck
 	}
 
@@ -233,7 +233,7 @@ func (c *OpentsdbClient) HealthCheck() error {
 		defer conn.Close()
 	}
 
-	status = "SUCCESS"
+	status = StatusSuccess
 	message = "connection to OpenTSDB is alive"
 
 	return nil
@@ -242,11 +242,9 @@ func (c *OpentsdbClient) HealthCheck() error {
 // sendRequest dispatches an HTTP request to the OpenTSDB server, using the provided
 // method, URL, and body content. It returns the parsed response or an error, if any.
 func (c *OpentsdbClient) sendRequest(method, url, reqBodyCnt string, parsedResp Response) error {
-	tracedCtx, span := c.addTrace(c.ctx, "sendRequest")
+	span := c.addTrace(c.ctx, "sendRequest")
 
-	c.ctx = tracedCtx
-
-	status := "FAIL"
+	status := StatusFailed
 	var message string
 
 	defer sendOperationStats(c.logger, time.Now(), "sendRequest", &status, &message, span)
@@ -290,9 +288,9 @@ func (c *OpentsdbClient) sendRequest(method, url, reqBodyCnt string, parsedResp 
 		return errReading
 	}
 
-	parsedResp.SetStatus(c.ctx, resp.StatusCode)
+	parsedResp.SetStatus(resp.StatusCode)
 
-	parser := parsedResp.GetCustomParser(c.ctx)
+	parser := parsedResp.GetCustomParser()
 	if parser == nil {
 		// Use the default JSON unmarshaller if no custom parser is provided.
 		if err := json.Unmarshal(jsonBytes, parsedResp); err != nil {
@@ -310,7 +308,7 @@ func (c *OpentsdbClient) sendRequest(method, url, reqBodyCnt string, parsedResp 
 		}
 	}
 
-	status = "SUCCESS"
+	status = StatusSuccess
 	message = fmt.Sprintf("%s request sent at : %s", method, url)
 
 	return nil
@@ -319,11 +317,10 @@ func (c *OpentsdbClient) sendRequest(method, url, reqBodyCnt string, parsedResp 
 // isValidOperateMethod checks if the provided HTTP method is valid for
 // operations such as POST, PUT, or DELETE.
 func (c *OpentsdbClient) isValidOperateMethod(method string) bool {
-	tracedCtx, span := c.addTrace(c.ctx, "isValidOperateMethod")
+	span := c.addTrace(c.ctx, "isValidOperateMethod")
 
-	c.ctx = tracedCtx
+	status := StatusSuccess
 
-	status := "SUCCESS"
 	var message string
 
 	defer sendOperationStats(c.logger, time.Now(), "isValidOperateMethod", &status, &message, span)
@@ -341,8 +338,4 @@ func (c *OpentsdbClient) isValidOperateMethod(method string) bool {
 	}
 
 	return false
-}
-
-func (c *OpentsdbClient) GetContext() context.Context {
-	return c.ctx
 }

@@ -59,27 +59,15 @@ type QueryParam struct {
 
 	logger Logger
 	tracer trace.Tracer
+	ctx    context.Context
 }
 
-func (query *QueryParam) String(ctx context.Context) string {
-	_, span := query.addTrace(ctx, "ToString-QueryParam")
+func (query *QueryParam) String() string {
+	return toString(query.ctx, query, "ToString-QueryParam", query.logger)
+}
 
-	status := "FAIL"
-	var message string
-
-	defer sendOperationStats(query.logger, time.Now(), "ToString-QueryParam", &status, &message, span)
-
-	content, err := json.Marshal(query)
-	if err != nil {
-		message = fmt.Sprintf("marshal queryParam response error: %s", err)
-		query.logger.Errorf(message)
-		return ""
-	}
-
-	status = "SUCCESS"
-	message = "queryParam response converted to string successfully"
-
-	return string(content)
+func (*QueryParam) setStatusCode(int) {
+	// method not implemented
 }
 
 // SubQuery is the structure used to hold
@@ -158,23 +146,24 @@ type QueryResponse struct {
 	ErrorMsg      map[string]interface{} `json:"error"`
 	logger        Logger
 	tracer        trace.Tracer
+	ctx           context.Context
 }
 
-func (queryResp *QueryResponse) String(ctx context.Context) string {
-	return toString(queryResp, ctx, "ToString-Query", queryResp.logger)
+func (queryResp *QueryResponse) String() string {
+	return toString(queryResp.ctx, queryResp, "ToString-Query", queryResp.logger)
 }
 
-func (queryResp *QueryResponse) SetStatus(ctx context.Context, code int) {
-	setStatus(queryResp, ctx, code, "SetStatus-Query", queryResp.logger)
+func (queryResp *QueryResponse) SetStatus(code int) {
+	setStatus(queryResp.ctx, queryResp, code, "SetStatus-Query", queryResp.logger)
 }
 
 func (queryResp *QueryResponse) setStatusCode(code int) {
 	queryResp.StatusCode = code
 }
 
-func (queryResp *QueryResponse) GetCustomParser(ctx context.Context) func(respCnt []byte) error {
-	return getCustomParser(queryResp, ctx, "GetCustomParser-Query", queryResp.logger,
-		func(resp []byte, target interface{}) error {
+func (queryResp *QueryResponse) GetCustomParser() func(respCnt []byte) error {
+	return getCustomParser(queryResp.ctx, queryResp, "GetCustomParser-Query", queryResp.logger,
+		func(resp []byte) error {
 			originRespStr := string(resp)
 
 			var respStr string
@@ -233,20 +222,22 @@ type QueryRespItem struct {
 
 	logger Logger
 	tracer trace.Tracer
+	ctx    context.Context
 }
 
 // GetDataPoints returns the real ascending datapoints from the information of the related QueryRespItem.
-func (qri *QueryRespItem) GetDataPoints(ctx context.Context) []*DataPoint {
-	_, span := qri.addTrace(ctx, "GetDataPoints-QueryRespItem")
+func (qri *QueryRespItem) GetDataPoints() []*DataPoint {
+	span := qri.addTrace(qri.ctx, "GetDataPoints-QueryRespItem")
 
-	status := "FAIL"
+	status := StatusFailed
+
 	var message string
 
 	defer sendOperationStats(qri.logger, time.Now(), "GetDataPoints-QueryRespItem", &status, &message, span)
 
 	datapoints := make([]*DataPoint, 0)
 
-	timestampStrs := qri.getSortedTimestampStrs(ctx)
+	timestampStrs := qri.getSortedTimestampStrs()
 	for _, timestampStr := range timestampStrs {
 		timestamp, err := strconv.ParseInt(timestampStr, 10, 64)
 		if err != nil {
@@ -263,17 +254,18 @@ func (qri *QueryRespItem) GetDataPoints(ctx context.Context) []*DataPoint {
 		datapoints = append(datapoints, datapoint)
 	}
 
-	status = "SUCCESS"
+	status = StatusSuccess
 	message = "dataPoints fetched successfully"
+
 	return datapoints
 }
 
 // getSortedTimestampStrs returns a slice of the ascending timestamp with
 // string format for the Dps of the related QueryRespItem instance.
-func (qri *QueryRespItem) getSortedTimestampStrs(ctx context.Context) []string {
-	_, span := qri.addTrace(ctx, "GetSortedTimeStamps-QueryRespItem")
+func (qri *QueryRespItem) getSortedTimestampStrs() []string {
+	span := qri.addTrace(qri.ctx, "GetSortedTimeStamps-QueryRespItem")
 
-	status := "SUCCESS"
+	status := StatusSuccess
 	var message string
 
 	defer sendOperationStats(qri.logger, time.Now(), "GetSortedTimeStamps-QueryRespItem", &status, &message, span)
@@ -288,15 +280,16 @@ func (qri *QueryRespItem) getSortedTimestampStrs(ctx context.Context) []string {
 }
 
 // GetLatestDataPoint returns latest datapoint for the related QueryRespItem instance.
-func (qri *QueryRespItem) GetLatestDataPoint(ctx context.Context) *DataPoint {
-	_, span := qri.addTrace(ctx, "GetLatestDataPoint-QueryRespItem")
+func (qri *QueryRespItem) GetLatestDataPoint() *DataPoint {
+	span := qri.addTrace(qri.ctx, "GetLatestDataPoint-QueryRespItem")
 
-	status := "FAIL"
+	status := StatusFailed
+
 	var message string
 
 	defer sendOperationStats(qri.logger, time.Now(), "GetLatestDataPoint-QueryRespItem", &status, &message, span)
 
-	timestampStrs := qri.getSortedTimestampStrs(ctx)
+	timestampStrs := qri.getSortedTimestampStrs()
 
 	size := len(timestampStrs)
 	if size == 0 {
@@ -317,7 +310,7 @@ func (qri *QueryRespItem) GetLatestDataPoint(ctx context.Context) *DataPoint {
 		Timestamp: timestamp,
 	}
 
-	status = "SUCCESS"
+	status = StatusSuccess
 	message = fmt.Sprintf("LatestDataPoints with timestamp %v fetched successfully", timestamp)
 
 	qri.logger.Logf("LatestDataPoints fetched successfully")
@@ -333,9 +326,9 @@ func (c *OpentsdbClient) Query(param *QueryParam) (*QueryResponse, error) {
 		param.logger = c.logger
 	}
 
-	_, span := c.addTrace(c.ctx, "Query")
+	span := c.addTrace(c.ctx, "Query")
 
-	status := "FAIL"
+	status := StatusFailed
 	var message string
 
 	defer sendOperationStats(c.logger, time.Now(), "Query", &status, &message, span)
@@ -346,6 +339,7 @@ func (c *OpentsdbClient) Query(param *QueryParam) (*QueryResponse, error) {
 	}
 
 	queryEndpoint := fmt.Sprintf("%s%s", c.tsdbEndpoint, QueryPath)
+
 	reqBodyCnt, err := getQueryBodyContents(param)
 	if err != nil {
 		message = fmt.Sprintf("getQueryBodyContents error: %s", err)
@@ -359,7 +353,7 @@ func (c *OpentsdbClient) Query(param *QueryParam) (*QueryResponse, error) {
 		return nil, err
 	}
 
-	status = "SUCCESS"
+	status = StatusSuccess
 	message = fmt.Sprintf("query request at url %q processed successfully", queryEndpoint)
 
 	return &queryResp, nil
@@ -377,6 +371,7 @@ func isValidQueryParam(param *QueryParam) bool {
 	if param.Queries == nil || len(param.Queries) == 0 {
 		return false
 	}
+
 	if !isValidTimePoint(param.Start) {
 		return false
 	}
@@ -385,12 +380,14 @@ func isValidQueryParam(param *QueryParam) bool {
 		if query.Aggregator == "" || query.Metric == "" {
 			return false
 		}
+
 		for k, _ := range query.RateParams {
 			if k != QueryRateOptionCounter && k != QueryRateOptionCounterMax && k != QueryRateOptionResetValue {
 				return false
 			}
 		}
 	}
+
 	return true
 }
 

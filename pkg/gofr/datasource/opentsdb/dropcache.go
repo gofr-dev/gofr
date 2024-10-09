@@ -14,32 +14,33 @@ type DropcachesResponse struct {
 	DropcachesInfo map[string]string `json:"DropcachesInfo"`
 	logger         Logger
 	tracer         trace.Tracer
+	ctx            context.Context
 }
 
-func (dropResp *DropcachesResponse) SetStatus(ctx context.Context, code int) {
-	setStatus(dropResp, ctx, code, "SetStatus-Dropcaches", dropResp.logger)
+func (dropResp *DropcachesResponse) SetStatus(code int) {
+	setStatus(dropResp.ctx, dropResp, code, "SetStatus-Dropcaches", dropResp.logger)
 }
 
 func (dropResp *DropcachesResponse) setStatusCode(code int) {
 	dropResp.StatusCode = code
 }
 
-func (dropResp *DropcachesResponse) GetCustomParser(ctx context.Context) func(respCnt []byte) error {
-	return getCustomParser(dropResp, ctx, "GetCustomParser-Dropcaches", dropResp.logger,
-		func(resp []byte, target interface{}) error {
+func (dropResp *DropcachesResponse) GetCustomParser() func(respCnt []byte) error {
+	return getCustomParser(dropResp.ctx, dropResp, "GetCustomParser-Dropcaches", dropResp.logger,
+		func(resp []byte) error {
 			return json.Unmarshal([]byte(fmt.Sprintf("{%s:%s}", `"DropcachesInfo"`, string(resp))), &dropResp)
 		})
 }
 
-func (dropResp *DropcachesResponse) String(ctx context.Context) string {
-	return toString(dropResp, ctx, "ToString-Dropcache", dropResp.logger)
+func (dropResp *DropcachesResponse) String() string {
+	return toString(dropResp.ctx, dropResp, "ToString-Dropcache", dropResp.logger)
 }
 
 func (c *OpentsdbClient) Dropcaches() (*DropcachesResponse, error) {
-	tracedctx, span := c.addTrace(c.ctx, "Dropcaches")
-	c.ctx = tracedctx
+	span := c.addTrace(c.ctx, "Dropcaches")
 
 	status := StatusFailed
+
 	var message string
 
 	defer sendOperationStats(c.logger, time.Now(), "Dropcaches", &status, &message, span)

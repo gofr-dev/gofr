@@ -17,29 +17,30 @@ type AggregatorsResponse struct {
 	Aggregators []string `json:"aggregators"`
 	logger      Logger
 	tracer      trace.Tracer
+	ctx         context.Context
 }
 
-func (aggreResp *AggregatorsResponse) SetStatus(ctx context.Context, code int) {
-	setStatus(aggreResp, ctx, code, "SetStatus-Aggregator", aggreResp.logger)
+func (aggreResp *AggregatorsResponse) SetStatus(code int) {
+	setStatus(aggreResp.ctx, aggreResp, code, "SetStatus-Aggregator", aggreResp.logger)
 }
 
 func (aggreResp *AggregatorsResponse) setStatusCode(code int) {
 	aggreResp.StatusCode = code
 }
 
-func (aggreResp *AggregatorsResponse) GetCustomParser(ctx context.Context) func(respCnt []byte) error {
-	return getCustomParser(aggreResp, ctx, "GetCustomParser-Aggregator", aggreResp.logger,
-		func(resp []byte, target interface{}) error {
+func (aggreResp *AggregatorsResponse) GetCustomParser() func(respCnt []byte) error {
+	return getCustomParser(aggreResp.ctx, aggreResp, "GetCustomParser-Aggregator", aggreResp.logger,
+		func(resp []byte) error {
 			return json.Unmarshal([]byte(fmt.Sprintf("{%s:%s}", `"aggregators"`, string(resp))), &aggreResp)
 		})
 }
 
-func (aggreResp *AggregatorsResponse) String(ctx context.Context) string {
-	return toString(aggreResp, ctx, "ToString-Aggregators", aggreResp.logger)
+func (aggreResp *AggregatorsResponse) String() string {
+	return toString(aggreResp.ctx, aggreResp, "ToString-Aggregators", aggreResp.logger)
 }
 
 func (c *OpentsdbClient) Aggregators() (*AggregatorsResponse, error) {
-	_, span := c.addTrace(c.ctx, "Aggregators")
+	span := c.addTrace(c.ctx, "Aggregators")
 	status := StatusFailed
 
 	var message string
@@ -49,6 +50,7 @@ func (c *OpentsdbClient) Aggregators() (*AggregatorsResponse, error) {
 	aggregatorsEndpoint := fmt.Sprintf("%s%s", c.tsdbEndpoint, AggregatorPath)
 
 	aggreResp := AggregatorsResponse{logger: c.logger, tracer: c.tracer}
+
 	if err := c.sendRequest(GetMethod, aggregatorsEndpoint, "", &aggreResp); err != nil {
 		message = fmt.Sprintf("error retrieving aggregators from url: %s", aggregatorsEndpoint)
 		return nil, err

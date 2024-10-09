@@ -5,10 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"go.opentelemetry.io/otel/trace"
 	"net/http"
 	"strings"
 	"time"
+
+	"go.opentelemetry.io/otel/trace"
 )
 
 // UIDMetaData is the structure used to hold
@@ -54,6 +55,7 @@ type UIDMetaDataResponse struct {
 
 	logger Logger
 	tracer trace.Tracer
+	ctx    context.Context
 }
 
 func isValidUIDMetaDataQueryParam(metaQueryParam map[string]string) bool {
@@ -83,9 +85,10 @@ func isValidUIDMetaDataQueryParam(metaQueryParam map[string]string) bool {
 }
 
 func (c *OpentsdbClient) QueryUIDMetaData(metaQueryParam map[string]string) (*UIDMetaDataResponse, error) {
-	_, span := c.addTrace(c.ctx, "QueryUIDMetaData")
+	span := c.addTrace(c.ctx, "QueryUIDMetaData")
 
-	status := "FAIL"
+	status := StatusFailed
+
 	var message string
 
 	defer sendOperationStats(c.logger, time.Now(), "QueryUIDMetaData", &status, &message, span)
@@ -106,22 +109,24 @@ func (c *OpentsdbClient) QueryUIDMetaData(metaQueryParam map[string]string) (*UI
 		return nil, err
 	}
 
-	status = "SUCCESS"
+	status = StatusSuccess
 	message = fmt.Sprintf("query-uid-metadata request to url %q processed successfully", queryUIDMetaEndpoint)
 
 	return &uidMetaDataResp, nil
 }
 
 func (c *OpentsdbClient) UpdateUIDMetaData(uidMetaData *UIDMetaData) (*UIDMetaDataResponse, error) {
-	_, span := c.addTrace(c.ctx, "UpdateUIDMetaData")
+	span := c.addTrace(c.ctx, "UpdateUIDMetaData")
 
-	status := "Fail"
+	status := StatusFailed
+
 	var message string
 
 	defer sendOperationStats(c.logger, time.Now(), "UpdateUIDMetaData", &status, &message, span)
+
 	res, err := c.operateUIDMetaData(PostMethod, uidMetaData)
 	if err == nil {
-		status = "SUCCESS"
+		status = StatusSuccess
 		message = "successfully updated UID metadata"
 		return res, nil
 	}
@@ -131,15 +136,17 @@ func (c *OpentsdbClient) UpdateUIDMetaData(uidMetaData *UIDMetaData) (*UIDMetaDa
 }
 
 func (c *OpentsdbClient) DeleteUIDMetaData(uidMetaData *UIDMetaData) (*UIDMetaDataResponse, error) {
-	_, span := c.addTrace(c.ctx, "DeleteUIDMetaData")
+	span := c.addTrace(c.ctx, "DeleteUIDMetaData")
 
-	status := "FAIL"
+	status := StatusFailed
+
 	var message string
 
 	defer sendOperationStats(c.logger, time.Now(), "DeleteUIDMetaData", &status, &message, span)
+
 	res, err := c.operateUIDMetaData(DeleteMethod, uidMetaData)
 	if err == nil {
-		status = "SUCCESS"
+		status = StatusSuccess
 		message = "successfully deleted UID metadata"
 		return res, nil
 	}
@@ -149,9 +156,9 @@ func (c *OpentsdbClient) DeleteUIDMetaData(uidMetaData *UIDMetaData) (*UIDMetaDa
 }
 
 func (c *OpentsdbClient) operateUIDMetaData(method string, uidMetaData *UIDMetaData) (*UIDMetaDataResponse, error) {
-	_, span := c.addTrace(c.ctx, "operateUIDMetaData")
+	span := c.addTrace(c.ctx, "operateUIDMetaData")
 
-	status := "FAIL"
+	status := StatusFailed
 	var message string
 
 	defer sendOperationStats(c.logger, time.Now(), "operateUIDMetaData", &status, &message, span)
@@ -160,6 +167,7 @@ func (c *OpentsdbClient) operateUIDMetaData(method string, uidMetaData *UIDMetaD
 		message = "given method for uid metadata is invalid"
 		return nil, errors.New(message)
 	}
+
 	uidMetaEndpoint := fmt.Sprintf("%s%s", c.tsdbEndpoint, UIDMetaDataPath)
 
 	resultBytes, err := json.Marshal(uidMetaData)
@@ -180,17 +188,17 @@ func (c *OpentsdbClient) operateUIDMetaData(method string, uidMetaData *UIDMetaD
 	return &uidMetaDataResp, nil
 }
 
-func (uidMetaDataResp *UIDMetaDataResponse) SetStatus(ctx context.Context, code int) {
-	setStatus(uidMetaDataResp, ctx, code, "SetStatus-UIDMetaData", uidMetaDataResp.logger)
+func (uidMetaDataResp *UIDMetaDataResponse) SetStatus(code int) {
+	setStatus(uidMetaDataResp.ctx, uidMetaDataResp, code, "SetStatus-UIDMetaData", uidMetaDataResp.logger)
 }
 
 func (uidMetaDataResp *UIDMetaDataResponse) setStatusCode(code int) {
 	uidMetaDataResp.StatusCode = code
 }
 
-func (uidMetaDataResp *UIDMetaDataResponse) GetCustomParser(ctx context.Context) func(respCnt []byte) error {
-	return getCustomParser(uidMetaDataResp, ctx, "GetCustomParser-UIDMetaData", uidMetaDataResp.logger,
-		func(resp []byte, target interface{}) error {
+func (uidMetaDataResp *UIDMetaDataResponse) GetCustomParser() func(respCnt []byte) error {
+	return getCustomParser(uidMetaDataResp.ctx, uidMetaDataResp, "GetCustomParser-UIDMetaData", uidMetaDataResp.logger,
+		func(resp []byte) error {
 			if uidMetaDataResp.StatusCode == http.StatusNoContent || // The OpenTSDB deletes a UIDMetaData successfully, or
 				uidMetaDataResp.StatusCode == http.StatusNotModified { // no changes were present, and with no body content.
 				return nil
@@ -200,8 +208,8 @@ func (uidMetaDataResp *UIDMetaDataResponse) GetCustomParser(ctx context.Context)
 		})
 }
 
-func (uidMetaDataResp *UIDMetaDataResponse) String(ctx context.Context) string {
-	return toString(uidMetaDataResp, ctx, "ToString-UIDMetaData", uidMetaDataResp.logger)
+func (uidMetaDataResp *UIDMetaDataResponse) String() string {
+	return toString(uidMetaDataResp.ctx, uidMetaDataResp, "ToString-UIDMetaData", uidMetaDataResp.logger)
 }
 
 // UIDAssignParam is the structure used to hold
@@ -232,11 +240,14 @@ type UIDAssignResponse struct {
 	TagvErrors   map[string]string `json:"tagv_errors,omitempty"`
 	logger       Logger
 	tracer       trace.Tracer
+	ctx          context.Context
 }
 
 func (c *OpentsdbClient) AssignUID(assignParam *UIDAssignParam) (*UIDAssignResponse, error) {
-	_, span := c.addTrace(c.ctx, "AssignUID")
-	status := "FAIL"
+	span := c.addTrace(c.ctx, "AssignUID")
+
+	status := StatusFailed
+
 	var message string
 
 	defer sendOperationStats(c.logger, time.Now(), "AssignUID", &status, &message, span)
@@ -262,20 +273,20 @@ func (c *OpentsdbClient) AssignUID(assignParam *UIDAssignParam) (*UIDAssignRespo
 	return &uidAssignResp, nil
 }
 
-func (uidAssignResp *UIDAssignResponse) SetStatus(ctx context.Context, code int) {
-	setStatus(uidAssignResp, ctx, code, "SetStatus-UIDAssign", uidAssignResp.logger)
+func (uidAssignResp *UIDAssignResponse) SetStatus(code int) {
+	setStatus(uidAssignResp.ctx, uidAssignResp, code, "SetStatus-UIDAssign", uidAssignResp.logger)
 }
 
 func (uidAssignResp *UIDAssignResponse) setStatusCode(code int) {
 	uidAssignResp.StatusCode = code
 }
 
-func (*UIDAssignResponse) GetCustomParser(context.Context) func(respCnt []byte) error {
+func (*UIDAssignResponse) GetCustomParser() func(respCnt []byte) error {
 	return nil
 }
 
-func (uidAssignResp *UIDAssignResponse) String(ctx context.Context) string {
-	return toString(uidAssignResp, ctx, "ToString-UIDAssign", uidAssignResp.logger)
+func (uidAssignResp *UIDAssignResponse) String() string {
+	return toString(uidAssignResp.ctx, uidAssignResp, "ToString-UIDAssign", uidAssignResp.logger)
 }
 
 // TSMetaData is the structure used to hold
@@ -331,11 +342,13 @@ type TSMetaDataResponse struct {
 	ErrorInfo       map[string]interface{} `json:"error,omitempty"`
 	logger          Logger
 	tracer          trace.Tracer
+	ctx             context.Context
 }
 
 func (c *OpentsdbClient) QueryTSMetaData(tsuid string) (*TSMetaDataResponse, error) {
-	_, span := c.addTrace(c.ctx, "QueryTSMetaData")
-	status := "FAIL"
+	span := c.addTrace(c.ctx, "QueryTSMetaData")
+
+	status := StatusFailed
 	var message string
 
 	defer sendOperationStats(c.logger, time.Now(), "QueryTSMetaData", &status, &message, span)
@@ -354,22 +367,25 @@ func (c *OpentsdbClient) QueryTSMetaData(tsuid string) (*TSMetaDataResponse, err
 		message = fmt.Sprintf("error processing %v request to url %q: %v", GetMethod, queryTSMetaEndpoint, err)
 		return nil, err
 	}
-	status = "SUCCESS"
-	message = fmt.Sprintf("query TSMetaData successful")
+
+	status = StatusSuccess
+	message = "query TSMetaData successful"
+
 	return &tsMetaDataResp, nil
 }
 
 func (c *OpentsdbClient) UpdateTSMetaData(tsMetaData *TSMetaData) (*TSMetaDataResponse, error) {
-	_, span := c.addTrace(c.ctx, "UpdateTSMetaData")
-	status := "FAIL"
+	span := c.addTrace(c.ctx, "UpdateTSMetaData")
+
+	status := StatusFailed
 	var message string
 
 	defer sendOperationStats(c.logger, time.Now(), "UpdateTSMetaData", &status, &message, span)
 
 	res, err := c.operateTSMetaData(PostMethod, tsMetaData)
 	if err == nil {
-		status = "SUCCESS"
-		message = fmt.Sprintf("update TSMetaData successful")
+		status = StatusSuccess
+		message = "update TSMetaData successful"
 		return res, nil
 	}
 
@@ -378,27 +394,31 @@ func (c *OpentsdbClient) UpdateTSMetaData(tsMetaData *TSMetaData) (*TSMetaDataRe
 }
 
 func (c *OpentsdbClient) DeleteTSMetaData(tsMetaData *TSMetaData) (*TSMetaDataResponse, error) {
-	_, span := c.addTrace(c.ctx, "DeleteTSMetaData")
-	status := "FAIL"
+	span := c.addTrace(c.ctx, "DeleteTSMetaData")
+
+	status := StatusFailed
+
 	var message string
 
 	defer sendOperationStats(c.logger, time.Now(), "DeleteTSMetaData", &status, &message, span)
 
 	res, err := c.operateTSMetaData(DeleteMethod, tsMetaData)
 	if err == nil {
-		status = "SUCCESS"
-		message = fmt.Sprintf("delete TSMetaData successful")
+		status = StatusSuccess
+		message = "delete TSMetaData successful"
 		return res, nil
 	}
+
 	message = fmt.Sprintf("delete TSMetaData failed %v", err)
 
 	return nil, err
 }
 
 func (c *OpentsdbClient) operateTSMetaData(method string, tsMetaData *TSMetaData) (*TSMetaDataResponse, error) {
-	_, span := c.addTrace(c.ctx, "operateTSMetaData")
+	span := c.addTrace(c.ctx, "operateTSMetaData")
 
-	status := "FAIL"
+	status := StatusFailed
+
 	var message string
 
 	defer sendOperationStats(c.logger, time.Now(), "operateTSMetaData", &status, &message, span)
@@ -423,23 +443,23 @@ func (c *OpentsdbClient) operateTSMetaData(method string, tsMetaData *TSMetaData
 		return nil, err
 	}
 
-	status = "SUCCESS"
+	status = StatusSuccess
 	message = "operateTSMetaData request processed successfully"
 
 	return &tsMetaDataResp, nil
 }
 
-func (tsMetaDataResp *TSMetaDataResponse) SetStatus(ctx context.Context, code int) {
-	setStatus(tsMetaDataResp, ctx, code, "SetStatus-TSMetaData", tsMetaDataResp.logger)
+func (tsMetaDataResp *TSMetaDataResponse) SetStatus(code int) {
+	setStatus(tsMetaDataResp.ctx, tsMetaDataResp, code, "SetStatus-TSMetaData", tsMetaDataResp.logger)
 }
 
 func (tsMetaDataResp *TSMetaDataResponse) setStatusCode(code int) {
 	tsMetaDataResp.StatusCode = code
 }
 
-func (tsMetaDataResp *TSMetaDataResponse) GetCustomParser(ctx context.Context) func(respCnt []byte) error {
-	return getCustomParser(tsMetaDataResp, ctx, "GetCustomParser-TSMetaData", tsMetaDataResp.logger,
-		func(resp []byte, target interface{}) error {
+func (tsMetaDataResp *TSMetaDataResponse) GetCustomParser() func(respCnt []byte) error {
+	return getCustomParser(tsMetaDataResp.ctx, tsMetaDataResp, "GetCustomParser-TSMetaData", tsMetaDataResp.logger,
+		func(resp []byte) error {
 			if tsMetaDataResp.StatusCode == http.StatusNoContent ||
 				tsMetaDataResp.StatusCode == http.StatusNotModified {
 				return nil
@@ -449,6 +469,6 @@ func (tsMetaDataResp *TSMetaDataResponse) GetCustomParser(ctx context.Context) f
 		})
 }
 
-func (tsMetaDataResp *TSMetaDataResponse) String(ctx context.Context) string {
-	return toString(tsMetaDataResp, ctx, "ToString-TSMetaData", tsMetaDataResp.logger)
+func (tsMetaDataResp *TSMetaDataResponse) String() string {
+	return toString(tsMetaDataResp.ctx, tsMetaDataResp, "ToString-TSMetaData", tsMetaDataResp.logger)
 }

@@ -12,6 +12,8 @@ import (
 
 // setupOpenTSDBTest initializes an OpentsdbClient for testing.
 func setupOpenTSDBTest(t *testing.T) OpentsDBClient {
+	t.Helper()
+
 	opentsdbCfg := OpenTSDBConfig{
 		OpentsdbHost:     "localhost:4242",
 		MaxContentLength: 4096,
@@ -24,7 +26,9 @@ func setupOpenTSDBTest(t *testing.T) OpentsDBClient {
 	tracer := otel.GetTracerProvider().Tracer("gofr-opentsdb")
 
 	tsdbClient.UseTracer(tracer)
+
 	mocklogger := NewMockLogger(gomock.NewController(t))
+
 	tsdbClient.UseLogger(mocklogger)
 
 	mocklogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
@@ -63,7 +67,6 @@ func TestPutSuccess(t *testing.T) {
 		t.Logf("Prepared datapoint %s\n", data.String())
 	}
 
-	// Execute the Put operation
 	resp, err := client.Put(cpuDatas, "details")
 	require.NoError(t, err)
 	require.NotNil(t, resp)
@@ -125,7 +128,6 @@ func TestPutErrorResponse(t *testing.T) {
 	require.Nil(t, resp)
 }
 
-// Test for successful POST /api/query.
 func TestPostQuerySuccess(t *testing.T) {
 	client := setupOpenTSDBTest(t)
 
@@ -154,6 +156,7 @@ func TestPostQuerySuccess(t *testing.T) {
 		}
 		subqueries = append(subqueries, subQuery)
 	}
+
 	queryParam.Queries = subqueries
 
 	// Execute the query operation
@@ -163,7 +166,6 @@ func TestPostQuerySuccess(t *testing.T) {
 	require.Equal(t, 200, queryResp.StatusCode)
 }
 
-// Test for successful POST /api/query/last.
 func TestPostQueryLastSuccess(t *testing.T) {
 	client := setupOpenTSDBTest(t)
 
@@ -196,7 +198,6 @@ func TestPostQueryLastSuccess(t *testing.T) {
 	require.Equal(t, 200, queryLastResp.StatusCode)
 }
 
-// Test for successful DELETE via POST /api/query
 func TestPostQueryDeleteSuccess(t *testing.T) {
 	client := setupOpenTSDBTest(t)
 
@@ -235,18 +236,15 @@ func TestPostQueryDeleteSuccess(t *testing.T) {
 	require.Equal(t, 200, deleteResp.StatusCode)
 }
 
-// Test for successful GET /api/aggregators
 func TestGetAggregatorsSuccess(t *testing.T) {
 	client := setupOpenTSDBTest(t)
 
-	// Execute the aggregators operation
 	aggreResp, err := client.Aggregators()
 	require.NoError(t, err)
 	require.NotNil(t, aggreResp)
 	require.Equal(t, 200, aggreResp.StatusCode)
 }
 
-// Test for successful GET /api/suggest
 func TestGetSuggestSuccess(t *testing.T) {
 	client := setupOpenTSDBTest(t)
 
@@ -262,7 +260,6 @@ func TestGetSuggestSuccess(t *testing.T) {
 	}
 }
 
-// Test for successful GET /api/version
 func TestGetVersionSuccess(t *testing.T) {
 	client := setupOpenTSDBTest(t)
 
@@ -272,7 +269,6 @@ func TestGetVersionSuccess(t *testing.T) {
 	require.Equal(t, 200, versionResp.StatusCode)
 }
 
-// Test for successful GET /api/dropcaches
 func TestGetDropCachesSuccess(t *testing.T) {
 	client := setupOpenTSDBTest(t)
 
@@ -282,7 +278,6 @@ func TestGetDropCachesSuccess(t *testing.T) {
 	require.Equal(t, 200, dropResp.StatusCode)
 }
 
-// Test for successful POST /api/annotation
 func TestUpdateAnnotationSuccess(t *testing.T) {
 	client := setupOpenTSDBTest(t)
 
@@ -351,7 +346,6 @@ func TestQueryAnnotationSuccess(t *testing.T) {
 	require.Equal(t, 200, resp.StatusCode)
 }
 
-// Test for successful POST and then DELETE /api/annotation
 func TestDeleteAnnotationSuccess(t *testing.T) {
 	client := setupOpenTSDBTest(t)
 
@@ -386,7 +380,6 @@ func TestDeleteAnnotationSuccess(t *testing.T) {
 	require.Empty(t, deleteResp.Description)
 }
 
-// Test for successful POST /api/annotation
 func TestBulkUpdateAnnotationsSuccess(t *testing.T) {
 	client := setupOpenTSDBTest(t)
 
@@ -432,6 +425,7 @@ func TestBulkDeleteAnnotationsSuccess(t *testing.T) {
 		if !(i < bulkAnnNum-1) {
 			break
 		}
+
 		addedTsuid := fmt.Sprintf("%s%d", "00000100000100000", i)
 		addedTsuids = append(addedTsuids, addedTsuid)
 		anno := Annotation{
@@ -492,7 +486,7 @@ func TestAssignUIDSuccess(t *testing.T) {
 	require.Empty(t, resp.Metric, "Expected metric to be nil")
 	require.NotEmpty(t, resp.MetricErrors, "Expected metric error to not be nil")
 
-	fmt.Printf("%s", resp.String(client.GetContext()))
+	fmt.Printf("%s", resp.String())
 }
 
 func TestUpdateUIDMetaDataSuccess(t *testing.T) {
@@ -561,7 +555,7 @@ func TestUpdateTSMetaData(t *testing.T) {
 
 	require.Equal(t, 500, resp.StatusCode, "Unexpected status code, expected 200 for successful update")
 
-	fmt.Printf("%s", resp.String(client.GetContext()))
+	fmt.Printf("%s", resp.String())
 
 	fmt.Println("Finish testing POST /api/uid/tsmeta.")
 }
@@ -589,7 +583,7 @@ func TestDeleteTSMetaData(t *testing.T) {
 	require.Equal(t, 204, resp.StatusCode, "Unexpected status code, expected 200 for successful deletion")
 
 	// Optionally, verify the response body content if applicable
-	fmt.Printf("%s", resp.String(client.GetContext()))
+	fmt.Printf("%s", resp.String())
 
 	// End the test output
 	fmt.Println("Finish testing DELETE /api/uid/tsmeta.")

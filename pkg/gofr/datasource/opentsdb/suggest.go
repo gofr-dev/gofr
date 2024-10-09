@@ -5,9 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"go.opentelemetry.io/otel/trace"
 	"strings"
 	"time"
+
+	"go.opentelemetry.io/otel/trace"
 )
 
 // SuggestParam is the structure used to hold
@@ -31,14 +32,15 @@ type SuggestParam struct {
 
 	logger Logger
 	tracer trace.Tracer
+	ctx    context.Context
 }
 
-func (sugParam *SuggestParam) String(ctx context.Context) string {
-	return toString(sugParam, ctx, "ToString-SuggestParam", sugParam.logger)
+func (sugParam *SuggestParam) String() string {
+	return toString(sugParam.ctx, sugParam, "ToString-SuggestParam", sugParam.logger)
 }
 
-func (sugParam *SuggestParam) setStatusCode(int) {
-	sugParam.logger.Errorf("method is not supported yet")
+func (*SuggestParam) setStatusCode(int) {
+	// not implemented
 }
 
 type SuggestResponse struct {
@@ -46,26 +48,26 @@ type SuggestResponse struct {
 	ResultInfo []string `json:"ResultInfo"`
 	logger     Logger
 	tracer     trace.Tracer
+	ctx        context.Context
 }
 
-func (sugResp *SuggestResponse) SetStatus(ctx context.Context, code int) {
-	setStatus(sugResp, ctx, code, "SetStatus-Suggest", sugResp.logger)
+func (sugResp *SuggestResponse) SetStatus(code int) {
+	setStatus(sugResp.ctx, sugResp, code, "SetStatus-Suggest", sugResp.logger)
 }
 
 func (sugResp *SuggestResponse) setStatusCode(code int) {
 	sugResp.StatusCode = code
 }
 
-func (sugResp *SuggestResponse) GetCustomParser(ctx context.Context) func(respCnt []byte) error {
-	return getCustomParser(sugResp, ctx, "GetCustomParser-Suggest", sugResp.logger,
-		func(resp []byte, target interface{}) error {
-
+func (sugResp *SuggestResponse) GetCustomParser() func(respCnt []byte) error {
+	return getCustomParser(sugResp.ctx, sugResp, "GetCustomParser-Suggest", sugResp.logger,
+		func(resp []byte) error {
 			return json.Unmarshal([]byte(fmt.Sprintf("{%s:%s}", `"ResultInfo"`, string(resp))), &sugResp)
 		})
 }
 
-func (sugResp *SuggestResponse) String(ctx context.Context) string {
-	return toString(sugResp, ctx, "ToString-VersionResp", sugResp.logger)
+func (sugResp *SuggestResponse) String() string {
+	return toString(sugResp.ctx, sugResp, "ToString-VersionResp", sugResp.logger)
 }
 
 func (c *OpentsdbClient) Suggest(sugParam *SuggestParam) (*SuggestResponse, error) {
@@ -77,8 +79,7 @@ func (c *OpentsdbClient) Suggest(sugParam *SuggestParam) (*SuggestResponse, erro
 		sugParam.tracer = c.tracer
 	}
 
-	tracedCtx, span := c.addTrace(context.Background(), "Suggest")
-	c.ctx = tracedCtx
+	span := c.addTrace(context.Background(), "Suggest")
 
 	status := StatusFailed
 	var message string
@@ -91,6 +92,7 @@ func (c *OpentsdbClient) Suggest(sugParam *SuggestParam) (*SuggestResponse, erro
 	}
 
 	sugEndpoint := fmt.Sprintf("%s%s", c.tsdbEndpoint, SuggestPath)
+
 	reqBodyCnt, err := getSuggestBodyContents(sugParam)
 	if err != nil {
 		message = fmt.Sprintf("get suggest body content error: %s", err)
