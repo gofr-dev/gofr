@@ -26,12 +26,13 @@ func (mockFileInfo) Sys() interface{}   { return nil }
 
 func TestPwdCommand(t *testing.T) {
 	os.Args = []string{"command", "pwd"}
+
 	logs := testutil.StdoutOutputForFunc(func() {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
 		app := gofr.NewCMD()
-		logger = gofr.New().Logger()
+
 		mock := file.NewMockFileSystemProvider(ctrl)
 
 		mock.EXPECT().UseLogger(app.Logger())
@@ -40,21 +41,27 @@ func TestPwdCommand(t *testing.T) {
 		mock.EXPECT().Getwd().DoAndReturn(func() (string, error) {
 			return "/", nil
 		})
+
 		app.AddFileStore(mock)
+
 		registerPwdCommand(app, mock)
+
 		app.Run()
 	})
+
 	assert.Contains(t, logs, "/", "Test failed")
 }
 
 func TestLSCommand(t *testing.T) {
 	path := "/"
 	os.Args = []string{"command", "ls", fmt.Sprintf("-path=%s", path)}
+
 	logs := testutil.StdoutOutputForFunc(func() {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
 		app := gofr.NewCMD()
+
 		mock := file.NewMockFileSystemProvider(ctrl)
 
 		mock.EXPECT().UseLogger(app.Logger())
@@ -68,10 +75,14 @@ func TestLSCommand(t *testing.T) {
 
 			return files, nil
 		})
+
 		app.AddFileStore(mock)
+
 		registerLsCommand(app, mock)
+
 		app.Run()
 	})
+
 	assert.Contains(t, logs, "file1.txt", "Test failed")
 	assert.Contains(t, logs, "file2.txt", "Test failed")
 	assert.NotContains(t, logs, "file3.txt", "Test failed")
@@ -80,11 +91,13 @@ func TestLSCommand(t *testing.T) {
 func TestGrepCommand(t *testing.T) {
 	path := "/"
 	os.Args = []string{"command", "grep", "-keyword=fi", fmt.Sprintf("-path=%s", path)}
+
 	logs := testutil.StdoutOutputForFunc(func() {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
 		app := gofr.NewCMD()
+
 		mock := file.NewMockFileSystemProvider(ctrl)
 
 		mock.EXPECT().UseLogger(app.Logger())
@@ -98,10 +111,14 @@ func TestGrepCommand(t *testing.T) {
 
 			return files, nil
 		})
+
 		app.AddFileStore(mock)
+
 		registerGrepCommand(app, mock)
+
 		app.Run()
 	})
+
 	assert.Contains(t, logs, "file1.txt", "Test failed")
 	assert.Contains(t, logs, "file2.txt", "Test failed")
 	assert.NotContains(t, logs, "file3.txt", "Test failed")
@@ -110,12 +127,15 @@ func TestGrepCommand(t *testing.T) {
 func TestCreateFileCommand(t *testing.T) {
 	fileName := "file.txt"
 	os.Args = []string{"command", "createfile", fmt.Sprintf("-filename=%s", fileName)}
+
 	logs := testutil.StdoutOutputForFunc(func() {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
 		app := gofr.NewCMD()
-		logger = gofr.New().Logger()
+
+		logger := gofr.New().Logger()
+
 		mock := file.NewMockFileSystemProvider(ctrl)
 
 		mock.EXPECT().UseLogger(app.Logger())
@@ -124,10 +144,14 @@ func TestCreateFileCommand(t *testing.T) {
 		mock.EXPECT().Create(fileName).DoAndReturn(func(_ string) (file.File, error) {
 			return &file.MockFile{}, nil
 		})
+
 		app.AddFileStore(mock)
-		registerCreateFileCommand(app, mock)
+
+		registerCreateFileCommand(app, mock, logger)
+
 		app.Run()
 	})
+
 	assert.Contains(t, logs, "Creating file : \",\"file.txt\"", "Test failed")
 	assert.Contains(t, logs, "Successfully created file: \",\"file.txt\"", "Test failed")
 }
@@ -135,12 +159,15 @@ func TestCreateFileCommand(t *testing.T) {
 func TestRmCommand(t *testing.T) {
 	fileName := "file.txt"
 	os.Args = []string{"command", "rm", fmt.Sprintf("-filename=%s", fileName)}
+
 	logs := testutil.StdoutOutputForFunc(func() {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
 		app := gofr.NewCMD()
-		logger = gofr.New().Logger()
+
+		logger := gofr.New().Logger()
+
 		mock := file.NewMockFileSystemProvider(ctrl)
 
 		mock.EXPECT().UseLogger(app.Logger())
@@ -149,10 +176,14 @@ func TestRmCommand(t *testing.T) {
 		mock.EXPECT().Remove("file.txt").DoAndReturn(func(_ string) error {
 			return nil
 		})
+
 		app.AddFileStore(mock)
-		registerRmCommand(app, mock)
+
+		registerRmCommand(app, mock, logger)
+
 		app.Run()
 	})
+
 	assert.Contains(t, logs, "Removing file : \",\"file.txt\"", "Test failed")
 	assert.Contains(t, logs, "Successfully removed file: \",\"file.txt\"", "Test failed")
 }

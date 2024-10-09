@@ -13,8 +13,6 @@ import (
 
 type FileServerType int
 
-var logger logging.Logger
-
 const (
 	FTP FileServerType = iota
 	SFTP
@@ -84,7 +82,7 @@ func registerGrepCommand(app *gofr.App, fs file.FileSystemProvider) {
 	})
 }
 
-func registerCreateFileCommand(app *gofr.App, fs file.FileSystemProvider) {
+func registerCreateFileCommand(app *gofr.App, fs file.FileSystemProvider, logger logging.Logger) {
 	app.SubCommand("createfile", func(c *gofr.Context) (interface{}, error) {
 		fileName := c.Param("filename")
 		logger.Log("Creating file : ", fileName)
@@ -98,7 +96,7 @@ func registerCreateFileCommand(app *gofr.App, fs file.FileSystemProvider) {
 	})
 }
 
-func registerRmCommand(app *gofr.App, fs file.FileSystemProvider) {
+func registerRmCommand(app *gofr.App, fs file.FileSystemProvider, logger logging.Logger) {
 	app.SubCommand("rm", func(c *gofr.Context) (interface{}, error) {
 		fileName := c.Param("filename")
 		logger.Log("Removing file : ", fileName)
@@ -115,7 +113,7 @@ func registerRmCommand(app *gofr.App, fs file.FileSystemProvider) {
 func main() {
 	app := gofr.NewCMD()
 
-	logger = gofr.New().Logger()
+	logger := gofr.New().Logger()
 
 	fileSystemProvider := configureFileServer(app)
 
@@ -127,9 +125,9 @@ func main() {
 
 	registerGrepCommand(app, fileSystemProvider)
 
-	registerCreateFileCommand(app, fileSystemProvider)
+	registerCreateFileCommand(app, fileSystemProvider, logger)
 
-	registerRmCommand(app, fileSystemProvider)
+	registerRmCommand(app, fileSystemProvider, logger)
 
 	app.Run()
 }
