@@ -49,9 +49,10 @@ func NewClient(c config.Config, logger datasource.Logger, metrics Metrics) *Redi
 	defer cancel()
 
 	if err := rc.Ping(ctx).Err(); err == nil {
-		if err := otel.InstrumentTracing(rc); err != nil {
+		if err = otel.InstrumentTracing(rc); err != nil {
 			logger.Errorf("could not add tracing instrumentation, error: %s", err)
 		}
+
 		logger.Logf("connected to redis at %s:%d", redisConfig.HostName, redisConfig.Port)
 	} else {
 		logger.Errorf("could not connect to redis at '%s:%d', error: %s", redisConfig.HostName, redisConfig.Port, err)
