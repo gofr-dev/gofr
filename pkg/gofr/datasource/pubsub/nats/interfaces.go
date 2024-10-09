@@ -46,7 +46,7 @@ type ConnectionManagerInterface interface {
 	Close(ctx context.Context)
 	Publish(ctx context.Context, subject string, message []byte, metrics Metrics) error
 	Health() datasource.Health
-	JetStream() jetstream.JetStream
+	JetStream() (jetstream.JetStream, error)
 }
 
 // SubscriptionManagerInterface represents the main Subscription Manager.

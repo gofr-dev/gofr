@@ -148,12 +148,28 @@ func TestConnectionManager_Health(t *testing.T) {
 }
 
 func TestConnectionManager_JetStream(t *testing.T) {
-	mockJS := NewMockJetStream(gomock.NewController(t))
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockJS := NewMockJetStream(ctrl)
 	cm := &ConnectionManager{
 		jetStream: mockJS,
 	}
 
-	assert.Equal(t, mockJS, cm.JetStream())
+	js, err := cm.JetStream()
+	require.NoError(t, err)
+	assert.Equal(t, mockJS, js)
+}
+
+func TestConnectionManager_JetStream_Nil(t *testing.T) {
+	cm := &ConnectionManager{
+		jetStream: nil,
+	}
+
+	js, err := cm.JetStream()
+	require.Error(t, err)
+	assert.Nil(t, js)
+	assert.EqualError(t, err, "JetStream is not configured")
 }
 
 func TestNatsConnWrapper_Status(t *testing.T) {

@@ -127,6 +127,7 @@ func (*SubscriptionManager) consumeMessages(
 	buffer chan *pubsub.Message,
 	cfg *Config,
 	logger pubsub.Logger) {
+	// TODO: propagate errors to caller
 	for {
 		select {
 		case <-ctx.Done():

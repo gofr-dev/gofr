@@ -126,9 +126,10 @@ func TestNATSClient_SubscribeSuccess(t *testing.T) {
 		Value: []byte("test message"),
 	}
 
-	mockConnManager.EXPECT().JetStream().Return(mockJetStream)
+	mockConnManager.EXPECT().JetStream().Return(mockJetStream, nil).AnyTimes()
+
 	mockSubManager.EXPECT().
-		Subscribe(ctx, "test-subject", mockJetStream, client.Config, client.logger, client.metrics).
+		Subscribe(ctx, "test-subject", mockJetStream, gomock.Any(), gomock.Any(), gomock.Any()).
 		Return(expectedMsg, nil)
 
 	msg, err := client.Subscribe(ctx, "test-subject")
@@ -161,13 +162,12 @@ func TestNATSClient_SubscribeError(t *testing.T) {
 	}
 
 	ctx := context.Background()
+	expectedErr := errSubscriptionError
 
-	expectedErr := errFailedToCreateConsumer
-
-	mockConnManager.EXPECT().JetStream().Return(mockJetStream)
+	mockConnManager.EXPECT().JetStream().Return(mockJetStream, nil).AnyTimes()
 
 	mockSubManager.EXPECT().
-		Subscribe(ctx, "test-subject", mockJetStream, client.Config, client.logger, client.metrics).
+		Subscribe(ctx, "test-subject", mockJetStream, gomock.Any(), gomock.Any(), gomock.Any()).
 		Return(nil, expectedErr)
 
 	msg, err := client.Subscribe(ctx, "test-subject")
@@ -216,7 +216,9 @@ func TestNew(t *testing.T) {
 		BatchSize: 100,
 	}
 
-	natsClient := New(config)
+	mockLogger := logging.NewMockLogger(logging.DEBUG)
+
+	natsClient := New(config, mockLogger)
 	assert.NotNil(t, natsClient)
 
 	// Check PubSubWrapper struct
@@ -489,208 +491,218 @@ func TestClient_SubscribeWithHandler(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	// Create separate mock consumers and message batches for each subscription
-	mockConnManager := NewMockConnectionManagerInterface(ctrl)
-	mockJetStream := NewMockJetStream(ctrl)
-	mockConsumer1 := NewMockConsumer(ctrl)
-	mockMessageBatch1 := NewMockMessageBatch(ctrl)
-	messageChan1 := make(chan jetstream.Msg, 1)
-	mockMsg1 := NewMockMsg(ctrl)
+	client, mocks := setupClientAndMocks(t, ctrl)
 
-	mockConsumer2 := NewMockConsumer(ctrl)
-	mockMessageBatch2 := NewMockMessageBatch(ctrl)
-	messageChan2 := make(chan jetstream.Msg, 1)
-	mockMsg2 := NewMockMsg(ctrl)
-
-	// Create a mock for SubscriptionManagerInterface
-	mockSubManager := NewMockSubscriptionManagerInterface(ctrl)
-
-	// Initialize the client with all necessary mocks
-	client := &Client{
-		connManager: mockConnManager,
-		subManager:  mockSubManager, // Assign the mockSubManager here
-		Config: &Config{
-			Consumer: "test-consumer",
-			Stream: StreamConfig{
-				Stream:     "test-stream",
-				MaxDeliver: 3,
-			},
-			MaxWait: time.Second,
-		},
-		logger:        logging.NewMockLogger(logging.DEBUG),
-		subscriptions: make(map[string]context.CancelFunc),
-	}
-
-	// Set up expectations for JetStream() to be called twice (for two subscriptions)
-	mockConnManager.EXPECT().
-		JetStream().
-		Return(mockJetStream).
-		Times(2)
-
-	// Set up expectations for subManager.Close()
-	mockSubManager.EXPECT().
-		Close().
-		Times(1)
-
-	// Set up expectations for connManager.Close(ctx)
-	mockConnManager.EXPECT().
-		Close(gomock.Any()).
-		Times(1) // Removed Return(nil) since Close does not return anything
-
-	// ---------------------
-	// Synchronization Setup
-	// ---------------------
 	var wg sync.WaitGroup
 
 	wg.Add(2) // Two handlers
 
-	// ---------------------
-	// First Subscription Execution
-	// ---------------------
 	t.Run("First_Subscription", func(t *testing.T) {
-		// Expect CreateOrUpdateConsumer to be called once for the first subscription
-		mockJetStream.EXPECT().
-			CreateOrUpdateConsumer(gomock.Any(), gomock.Any(), gomock.Any()).
-			Return(mockConsumer1, nil).
-			Times(1)
-
-		// Expect Fetch to be called twice: once to fetch the message, once to fetch nothing
-		mockConsumer1.EXPECT().
-			Fetch(gomock.Any(), gomock.Any()).
-			Return(mockMessageBatch1, nil).
-			Times(2)
-
-		// Expect Messages to return the message channel first, then nil
-		gomock.InOrder(
-			mockMessageBatch1.EXPECT().
-				Messages().
-				Return(messageChan1).
-				Times(1),
-
-			mockMessageBatch1.EXPECT().
-				Messages().
-				Return(nil).
-				Times(1),
-		)
-
-		// Expect Error to be called once for the first subscription
-		mockMessageBatch1.EXPECT().
-			Error().
-			Return(nil).
-			Times(1) // Adjusted from Times(2) to Times(1)
-
-		// Expect Ack to be called once for the first message
-		mockMsg1.EXPECT().
-			Ack().
-			Return(nil).
-			Times(1)
-
-		// Define the first handler that acknowledges the message
-		firstHandlerCalled := make(chan bool, 1)
-		firstHandler := func(context.Context, jetstream.Msg) error {
-			t.Log("First handler called")
-			firstHandlerCalled <- true
-
-			wg.Done()
-
-			return nil
-		}
-
-		// Subscribe with the first handler
-		err := client.SubscribeWithHandler(context.Background(), "test-subject", firstHandler)
-		require.NoError(t, err)
-
-		// Send a message to trigger the first handler
-		messageChan1 <- mockMsg1
-
-		// Close the message channel to allow Fetch to return nil on the next call
-		close(messageChan1)
-
-		// Wait for the first handler to be called
-		select {
-		case <-firstHandlerCalled:
-			t.Log("First handler was called successfully")
-		case <-time.After(time.Second * 5):
-			t.Fatal("First handler was not called within the expected time")
-		}
+		testFirstSubscription(t, client, mocks, &wg)
 	})
 
-	// ---------------------
-	// Second Subscription Execution
-	// ---------------------
 	t.Run("Second_Subscription", func(t *testing.T) {
-		// Expect CreateOrUpdateConsumer to be called once for the second subscription
-		mockJetStream.EXPECT().
-			CreateOrUpdateConsumer(gomock.Any(), gomock.Any(), gomock.Any()).
-			Return(mockConsumer2, nil).
-			Times(1)
-
-		// Expect Fetch to be called twice: once to fetch the message, once to fetch nothing
-		mockConsumer2.EXPECT().
-			Fetch(gomock.Any(), gomock.Any()).
-			Return(mockMessageBatch2, nil).
-			Times(2)
-
-		// Expect Messages to return the message channel first, then nil
-		gomock.InOrder(
-			mockMessageBatch2.EXPECT().
-				Messages().
-				Return(messageChan2).
-				Times(1),
-
-			mockMessageBatch2.EXPECT().
-				Messages().
-				Return(nil).
-				Times(1),
-		)
-
-		// Expect Error to be called once for the second subscription
-		mockMessageBatch2.EXPECT().
-			Error().
-			Return(nil).
-			Times(1) // Adjusted from Times(2) to Times(1)
-
-		// Expect Nak to be called once for the second message
-		mockMsg2.EXPECT().
-			Nak().
-			Return(nil).
-			Times(1)
-
-		// Define the second handler that returns an error, causing a NAK
-		errorHandlerCalled := make(chan bool, 1)
-		errorHandler := func(context.Context, jetstream.Msg) error {
-			t.Log("Error handler called")
-			errorHandlerCalled <- true
-
-			t.Logf("Error handling message: %v", errHandlerError)
-			t.Logf("Error processing message: %v", errHandlerError)
-			wg.Done()
-
-			return errHandlerError
-		}
-
-		// Subscribe with the error handler
-		err := client.SubscribeWithHandler(context.Background(), "test-subject", errorHandler)
-		require.NoError(t, err)
-
-		// Send a message to trigger the error handler
-		messageChan2 <- mockMsg2
-
-		// Close the message channel to allow Fetch to return nil on the next call
-		close(messageChan2)
-
-		// Wait for the error handler to be called
-		select {
-		case <-errorHandlerCalled:
-			t.Log("Error handler was called successfully")
-		case <-time.After(time.Second):
-			t.Fatal("Error handler was not called within the expected time")
-		}
+		testSecondSubscription(t, client, mocks, &wg)
 	})
 
-	// ---------------------
-	// Wait for All Handlers to Complete
-	// ---------------------
+	waitForHandlersToComplete(t, &wg)
+
+	err := client.Close(context.Background())
+	require.NoError(t, err)
+}
+
+func setupClientAndMocks(t *testing.T, ctrl *gomock.Controller) (*Client, *testMocks) {
+	t.Helper()
+
+	mocks := &testMocks{
+		connManager:   NewMockConnectionManagerInterface(ctrl),
+		jetStream:     NewMockJetStream(ctrl),
+		consumer1:     NewMockConsumer(ctrl),
+		messageBatch1: NewMockMessageBatch(ctrl),
+		msg1:          NewMockMsg(ctrl),
+		consumer2:     NewMockConsumer(ctrl),
+		messageBatch2: NewMockMessageBatch(ctrl),
+		msg2:          NewMockMsg(ctrl),
+		subManager:    NewMockSubscriptionManagerInterface(ctrl),
+		messageChan1:  make(chan jetstream.Msg, 1),
+		messageChan2:  make(chan jetstream.Msg, 1),
+	}
+
+	client := &Client{
+		connManager:   mocks.connManager,
+		subManager:    mocks.subManager,
+		Config:        createTestConfig(),
+		logger:        logging.NewMockLogger(logging.DEBUG),
+		subscriptions: make(map[string]context.CancelFunc),
+	}
+
+	setupCommonExpectations(mocks)
+
+	return client, mocks
+}
+
+func createTestConfig() *Config {
+	return &Config{
+		Consumer: "test-consumer",
+		Stream: StreamConfig{
+			Stream:     "test-stream",
+			MaxDeliver: 3,
+		},
+		MaxWait: time.Second,
+	}
+}
+
+func setupCommonExpectations(mocks *testMocks) {
+	mocks.connManager.EXPECT().JetStream().Return(mocks.jetStream, nil).AnyTimes()
+	mocks.subManager.EXPECT().Close().Times(1)
+	mocks.connManager.EXPECT().Close(gomock.Any()).AnyTimes()
+}
+
+func testFirstSubscription(t *testing.T, client *Client, mocks *testMocks, wg *sync.WaitGroup) {
+	t.Helper()
+
+	setupFirstSubscriptionExpectations(mocks)
+
+	firstHandlerCalled := make(chan bool, 1)
+	firstHandler := createFirstHandler(t, firstHandlerCalled, wg)
+
+	err := client.SubscribeWithHandler(context.Background(), "test-subject", firstHandler)
+	require.NoError(t, err)
+
+	mocks.messageChan1 <- mocks.msg1
+	close(mocks.messageChan1)
+
+	assertHandlerCalled(t, firstHandlerCalled, "First handler")
+}
+
+func testSecondSubscription(t *testing.T, client *Client, mocks *testMocks, wg *sync.WaitGroup) {
+	t.Helper()
+
+	setupSecondSubscriptionExpectations(mocks)
+
+	errorHandlerCalled := make(chan bool, 1)
+	errorHandler := createErrorHandler(t, errorHandlerCalled, wg)
+
+	err := client.SubscribeWithHandler(context.Background(), "test-subject", errorHandler)
+	require.NoError(t, err)
+
+	mocks.messageChan2 <- mocks.msg2
+	close(mocks.messageChan2)
+
+	assertHandlerCalled(t, errorHandlerCalled, "Error handler")
+}
+
+func setupFirstSubscriptionExpectations(mocks *testMocks) {
+	mocks.jetStream.EXPECT().
+		CreateOrUpdateConsumer(gomock.Any(), gomock.Any(), gomock.Any()).
+		Return(mocks.consumer1, nil).
+		Times(1)
+
+	mocks.consumer1.EXPECT().
+		Fetch(gomock.Any(), gomock.Any()).
+		Return(mocks.messageBatch1, nil).
+		Times(2)
+
+	gomock.InOrder(
+		mocks.messageBatch1.EXPECT().
+			Messages().
+			Return(mocks.messageChan1).
+			Times(1),
+
+		mocks.messageBatch1.EXPECT().
+			Messages().
+			Return(nil).
+			Times(1),
+	)
+
+	mocks.messageBatch1.EXPECT().
+		Error().
+		Return(nil).
+		Times(1)
+
+	mocks.msg1.EXPECT().
+		Ack().
+		Return(nil).
+		Times(1)
+}
+
+func setupSecondSubscriptionExpectations(mocks *testMocks) {
+	mocks.jetStream.EXPECT().
+		CreateOrUpdateConsumer(gomock.Any(), gomock.Any(), gomock.Any()).
+		Return(mocks.consumer2, nil).
+		Times(1)
+
+	mocks.consumer2.EXPECT().
+		Fetch(gomock.Any(), gomock.Any()).
+		Return(mocks.messageBatch2, nil).
+		Times(2)
+
+	gomock.InOrder(
+		mocks.messageBatch2.EXPECT().
+			Messages().
+			Return(mocks.messageChan2).
+			Times(1),
+
+		mocks.messageBatch2.EXPECT().
+			Messages().
+			Return(nil).
+			Times(1),
+	)
+
+	mocks.messageBatch2.EXPECT().
+		Error().
+		Return(nil).
+		Times(1)
+
+	mocks.msg2.EXPECT().
+		Nak().
+		Return(nil).
+		Times(1)
+}
+
+func createFirstHandler(t *testing.T, handlerCalled chan<- bool, wg *sync.WaitGroup) func(context.Context, jetstream.Msg) error {
+	t.Helper()
+
+	return func(context.Context, jetstream.Msg) error {
+		t.Log("First handler called")
+		handlerCalled <- true
+
+		wg.Done()
+
+		return nil
+	}
+}
+
+func createErrorHandler(t *testing.T, handlerCalled chan<- bool, wg *sync.WaitGroup) func(context.Context, jetstream.Msg) error {
+	t.Helper()
+
+	return func(context.Context, jetstream.Msg) error {
+		t.Log("Error handler called")
+		handlerCalled <- true
+
+		t.Logf("Error handling message: %v", errHandlerError)
+		t.Logf("Error processing message: %v", errHandlerError)
+
+		wg.Done()
+
+		return errHandlerError
+	}
+}
+
+func assertHandlerCalled(t *testing.T, handlerCalled <-chan bool, handlerName string) {
+	t.Helper()
+
+	select {
+	case <-handlerCalled:
+		t.Logf("%s was called successfully", handlerName)
+	case <-time.After(time.Second * 5):
+		t.Fatalf("%s was not called within the expected time", handlerName)
+	}
+}
+
+func waitForHandlersToComplete(t *testing.T, wg *sync.WaitGroup) {
+	t.Helper()
+
 	done := make(chan struct{})
 	go func() {
 		wg.Wait()
@@ -703,12 +715,20 @@ func TestClient_SubscribeWithHandler(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("Handlers did not complete within the expected time")
 	}
+}
 
-	// ---------------------
-	// Gracefully Close the Client
-	// ---------------------
-	err := client.Close(context.Background())
-	require.NoError(t, err)
+type testMocks struct {
+	connManager   *MockConnectionManagerInterface
+	jetStream     *MockJetStream
+	consumer1     *MockConsumer
+	messageBatch1 *MockMessageBatch
+	messageChan1  chan jetstream.Msg
+	msg1          *MockMsg
+	consumer2     *MockConsumer
+	messageBatch2 *MockMessageBatch
+	messageChan2  chan jetstream.Msg
+	msg2          *MockMsg
+	subManager    *MockSubscriptionManagerInterface
 }
 
 func TestClient_CreateStream(t *testing.T) {

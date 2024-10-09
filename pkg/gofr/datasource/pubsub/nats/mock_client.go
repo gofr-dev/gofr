@@ -365,11 +365,12 @@ func (mr *MockConnectionManagerInterfaceMockRecorder) Health() *gomock.Call {
 }
 
 // JetStream mocks base method.
-func (m *MockConnectionManagerInterface) JetStream() jetstream.JetStream {
+func (m *MockConnectionManagerInterface) JetStream() (jetstream.JetStream, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "JetStream")
 	ret0, _ := ret[0].(jetstream.JetStream)
-	return ret0
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // JetStream indicates an expected call of JetStream.
