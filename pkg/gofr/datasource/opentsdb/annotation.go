@@ -13,11 +13,8 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-// Annotation represents the parameters used when querying or managing annotations
-// via the /api/annotation endpoint in OpenTSDB. Annotations are simple objects
-// designed to log notes about events at specific points in time, optionally associated
-// with time series data. They are typically used for graphing purposes or API queries,
-// not for event tracking or monitoring systems.
+// Annotation holds parameters for querying or managing annotations via the /api/annotation endpoint in OpenTSDB.
+// Used for logging notes on events at specific times, often tied to time series data, mainly for graphing or API queries.
 type Annotation struct {
 	// StartTime is the Unix epoch timestamp (in seconds) for when the event occurred. This is required.
 	StartTime int64 `json:"startTime,omitempty"`
@@ -54,7 +51,6 @@ type AnnotationResponse struct {
 	ctx    context.Context
 }
 
-// SetStatus sets the HTTP status code in the AnnotationResponse.
 func (annotResp *AnnotationResponse) SetStatus(code int) {
 	setStatus(annotResp.ctx, annotResp, code, "SetStatus-Annotation", annotResp.logger)
 }
@@ -63,8 +59,6 @@ func (annotResp *AnnotationResponse) setStatusCode(code int) {
 	annotResp.StatusCode = code
 }
 
-// GetCustomParser returns a custom parser function to process the response content
-// from an annotation-related API request.
 func (annotResp *AnnotationResponse) GetCustomParser() func(respCnt []byte) error {
 	return getCustomParser(annotResp.ctx, annotResp, "GetCustomParser-Annotation", annotResp.logger,
 		func(resp []byte) error {
@@ -82,12 +76,10 @@ func (annotResp *AnnotationResponse) GetCustomParser() func(respCnt []byte) erro
 		})
 }
 
-// String returns the JSON representation of the AnnotationResponse as a string.
 func (annotResp *AnnotationResponse) String() string {
 	return toString(annotResp.ctx, annotResp, "ToString-Annotation", annotResp.logger)
 }
 
-// QueryAnnotation sends a GET request to query an annotation based on the provided parameters.
 func (c *OpentsdbClient) QueryAnnotation(queryAnnoParam map[string]interface{}) (*AnnotationResponse, error) {
 	span := c.addTrace(c.ctx, "QueryAnnotation")
 
@@ -134,7 +126,6 @@ func (c *OpentsdbClient) QueryAnnotation(queryAnnoParam map[string]interface{}) 
 	return &annResp, nil
 }
 
-// UpdateAnnotation sends a POST request to update an existing annotation.
 func (c *OpentsdbClient) UpdateAnnotation(annotation *Annotation) (*AnnotationResponse, error) {
 	span := c.addTrace(c.ctx, "UpdateAnnotation")
 
@@ -161,7 +152,6 @@ func (c *OpentsdbClient) UpdateAnnotation(annotation *Annotation) (*AnnotationRe
 	return nil, err
 }
 
-// DeleteAnnotation sends a DELETE request to remove an existing annotation.
 func (c *OpentsdbClient) DeleteAnnotation(annotation *Annotation) (*AnnotationResponse, error) {
 	span := c.addTrace(c.ctx, "DeleteAnnotation")
 
@@ -188,7 +178,6 @@ func (c *OpentsdbClient) DeleteAnnotation(annotation *Annotation) (*AnnotationRe
 	return nil, err
 }
 
-// operateAnnotation is a helper function to handle annotation operations (POST, DELETE).
 func (c *OpentsdbClient) operateAnnotation(method string, annotation *Annotation) (*AnnotationResponse, error) {
 	span := c.addTrace(c.ctx, "operateAnnotation")
 
@@ -280,7 +269,6 @@ type BulkDeleteResp struct {
 	BulkAnnoDeleteInfo
 }
 
-// SetStatus sets the HTTP status code in the BulkAnnotatResponse.
 func (bulkAnnotResp *BulkAnnotatResponse) SetStatus(code int) {
 	setStatus(bulkAnnotResp.ctx, bulkAnnotResp, code, "SetStatus-BulkAnnotation", bulkAnnotResp.logger)
 }
@@ -289,7 +277,6 @@ func (bulkAnnotResp *BulkAnnotatResponse) setStatusCode(code int) {
 	bulkAnnotResp.StatusCode = code
 }
 
-// GetCustomParser returns a custom parser function to handle the response from bulk annotation operations.
 func (bulkAnnotResp *BulkAnnotatResponse) GetCustomParser() func(respCnt []byte) error {
 	return getCustomParser(bulkAnnotResp.ctx, bulkAnnotResp, "GetCustomParser-BulkAnnotation", bulkAnnotResp.logger,
 		func(resp []byte) error {
@@ -309,12 +296,10 @@ func (bulkAnnotResp *BulkAnnotatResponse) GetCustomParser() func(respCnt []byte)
 		})
 }
 
-// String returns the JSON representation of the BulkAnnotatResponse as a string.
 func (bulkAnnotResp *BulkAnnotatResponse) String() string {
 	return toString(bulkAnnotResp.ctx, bulkAnnotResp, "ToString-BulkAnnotation", bulkAnnotResp.logger)
 }
 
-// BulkUpdateAnnotations sends a POST request to update multiple annotations in bulk.
 func (c *OpentsdbClient) BulkUpdateAnnotations(annotations []Annotation) (*BulkAnnotatResponse, error) {
 	span := c.addTrace(c.ctx, "BulkUpdateAnnotations")
 
@@ -351,7 +336,6 @@ func (c *OpentsdbClient) BulkUpdateAnnotations(annotations []Annotation) (*BulkA
 	return &bulkAnnoResp, nil
 }
 
-// BulkDeleteAnnotations sends a DELETE request to remove multiple annotations in bulk.
 func (c *OpentsdbClient) BulkDeleteAnnotations(bulkDelParam *BulkAnnoDeleteInfo) (*BulkAnnotatResponse, error) {
 	span := c.addTrace(c.ctx, "BulkUpdateAnnotation")
 

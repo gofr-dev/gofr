@@ -42,16 +42,15 @@ func (query *QueryLastParam) setStatusCode(int) {
 	query.logger.Errorf("method not supported by opentsdb-client")
 }
 
-// SubQueryLast is the structure used to hold
-// the subquery parameters when calling /api/query/last.
+// SubQueryLast is the structure used to hold the subquery parameters when calling /api/query/last.
 // Each attributes in SubQueryLast matches the definition in
 // (http://opentsdb.net/docs/build/html/api_http/query/last.html).
 type SubQueryLast struct {
 	// The name of a metric stored in the system.
-	// The value is reqiured with non-empty value.
+	// The value is required with non-empty value.
 	Metric string `json:"metric"`
 
-	// An optional value to drill down to specific timeseries or group results by tag,
+	// An optional value to drill down to specific time series or group results by tag,
 	// supply one or more map values in the same format as the query string. Tags are converted to filters in 2.2.
 	// Note that if no tags are specified, all metrics in the system will be aggregated into the results.
 	// It will be deprecated in OpenTSDB 2.2.

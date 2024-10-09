@@ -1,4 +1,3 @@
-// version.go contains the structs and methods for the implementation of /api/version.
 package opentsdb
 
 import (
@@ -9,6 +8,7 @@ import (
 	"time"
 )
 
+// VersionResponse is the struct implementation for /api/version.
 type VersionResponse struct {
 	StatusCode  int
 	VersionInfo map[string]string `json:"VersionInfo"`

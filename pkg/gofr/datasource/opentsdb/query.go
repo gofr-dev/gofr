@@ -14,10 +14,8 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-// QueryParam is the structure used to hold
-// the querying parameters when calling /api/query.
-// Each attributes in QueryParam matches the definition in
-// (http://opentsdb.net/docs/build/html/api_http/query/index.html).
+// QueryParam is the structure used to hold the querying parameters when calling /api/query.
+// Each attributes in QueryParam matches the definition in (http://opentsdb.net/docs/build/html/api_http/query/index.html).
 type QueryParam struct {
 	// The start time for the query. This can be a relative or absolute timestamp.
 	// The data type can only be string, int, or int64.
@@ -35,25 +33,25 @@ type QueryParam struct {
 	// The value is required with at least one element
 	Queries []SubQuery `json:"queries"`
 
-	// An optional value is used to show whether or not to return annotations with a query.
+	// An optional value is used to show whether to return annotations with a query.
 	// The default is to return annotations for the requested timespan but this flag can disable the return.
 	// This affects both local and global notes and overrides globalAnnotations
 	NoAnnotations bool `json:"noAnnotations,omitempty"`
 
-	// An optional value is used to show whether or not the query should retrieve global
+	// An optional value is used to show whether the query should retrieve global
 	// annotations for the requested timespan.
 	GlobalAnnotations bool `json:"globalAnnotations,omitempty"`
 
-	// An optional value is used to show whether or not to output data point timestamps in milliseconds or seconds.
+	// An optional value is used to show whether to output data point timestamps in milliseconds or seconds.
 	// If this flag is not provided and there are multiple data points within a second,
 	// those data points will be down sampled using the query's aggregation function.
 	MsResolution bool `json:"msResolution,omitempty"`
 
-	// An optional value is used to show whether or not to output the TSUIDs associated with timeseries in the results.
+	// An optional value is used to show whether to output the TSUIDs associated with time series in the results.
 	// If multiple time series were aggregated into one set, multiple TSUIDs will be returned in a sorted manner.
 	ShowTSUIDs bool `json:"showTSUIDs,omitempty"`
 
-	// An optional value is used to show whether or not can be paased to the JSON with a POST to delete any data point
+	// An optional value is used to show whether can be passed to the JSON with a POST to delete any data point
 	// that match the given query.
 	Delete bool `json:"delete,omitempty"`
 
@@ -70,10 +68,8 @@ func (*QueryParam) setStatusCode(int) {
 	// method not implemented
 }
 
-// SubQuery is the structure used to hold
-// the subquery parameters when calling /api/query.
-// Each attributes in SubQuery matches the definition in
-// (http://opentsdb.net/docs/build/html/api_http/query/index.html).
+// SubQuery is the structure used to hold the subquery parameters when calling /api/query.
+// Each attributes in SubQuery matches the definition in (http://opentsdb.net/docs/build/html/api_http/query/index.html).
 type SubQuery struct {
 	// The name of an aggregation function to use.
 	// The value is required with non-empty one in the range of
@@ -87,17 +83,17 @@ type SubQuery struct {
 	Aggregator string `json:"aggregator"`
 
 	// The name of a metric stored in the system.
-	// The value is reqiured with non-empty value.
+	// The value is required with non-empty value.
 	Metric string `json:"metric"`
 
-	// An optional value is used to show whether or not the data should be
+	// An optional value is used to show whether the data should be
 	// converted into deltas before returning. This is useful if the metric is a
-	// continuously incrementing counter and you want to view the rate of change between data points.
+	// continuously incrementing counter, and you want to view the rate of change between data points.
 	Rate bool `json:"rate,omitempty"`
 
 	// rateOptions represents monotonically increasing counter handling options.
 	// The value is optional.
-	// Currently there is only three kind of value can be set to this map:
+	// Currently, there is only three kind of value can be set to this map:
 	// Only three keys can be set into the rateOption parameter of the QueryParam is
 	// QueryRateOptionCounter (value type is bool),  QueryRateOptionCounterMax (value type is int,int64)
 	// QueryRateOptionResetValue (value type is int,int64)
@@ -106,7 +102,7 @@ type SubQuery struct {
 	// An optional value downsampling function to reduce the amount of data returned.
 	Downsample string `json:"downsample,omitempty"`
 
-	// An optional value to drill down to specific timeseries or group results by tag,
+	// An optional value to drill down to specific time series or group results by tag,
 	// supply one or more map values in the same format as the query string. Tags are converted to filters in 2.2.
 	// Note that if no tags are specified, all metrics in the system will be aggregated into the results.
 	// It will be deprecated in OpenTSDB 2.2.

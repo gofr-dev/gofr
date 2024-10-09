@@ -13,10 +13,8 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-// DataPoint is the structure used to hold
-// the values of a metric item. Each attributes
-// in DataPoint matches the definition in
-// (http://opentsdb.net/docs/build/html/api_http/put.html).
+// DataPoint is the structure used to hold the values of a metric item. Each attributes
+// in DataPoint matches the definition in (http://opentsdb.net/docs/build/html/api_http/put.html).
 type DataPoint struct {
 	// The name of the metric which is about to be stored, and is required with non-empty value.
 	Metric string `json:"metric"`
@@ -42,9 +40,8 @@ func (data *DataPoint) String() string {
 	return string(content)
 }
 
-// PutError holds the error message for each putting DataPoint instance.
-// Only calling PUT() with "details" query parameter, the response of
-// the failed put data operation can contain an array PutError instance
+// PutError holds the error message for each putting DataPoint instance. Only calling PUT() with "details"
+// query parameter, the response of the failed put data operation can contain an array PutError instance
 // to show the details for each failure.
 type PutError struct {
 	Data     DataPoint `json:"datapoint"`
@@ -55,8 +52,7 @@ func (putErr *PutError) String() string {
 	return fmt.Sprintf("%s:%s", putErr.ErrorMsg, putErr.Data.String())
 }
 
-// PutResponse acts as the implementation of Response
-// in the /api/put scene.
+// PutResponse acts as the implementation of Response in the /api/put scene.
 // It holds the status code and the response values defined in
 // the (http://opentsdb.net/docs/build/html/api_http/put.html).
 type PutResponse struct {
@@ -168,9 +164,8 @@ func (c *OpentsdbClient) getResponses(putEndpoint string, dataGroups [][]DataPoi
 	return responses, nil
 }
 
-// splitProperGroups splits the given datapoints into groups, whose content size is
-// not larger than c.opentsdbCfg.MaxContentLength.
-// This method is an assurement of avoiding Put failure, when the content length of
+// splitProperGroups splits the given datapoints into groups, whose content size is not larger than
+// c.opentsdbCfg.MaxContentLength. This method is to avoid Put failure, when the content length of
 // the given datapoints in a single /api/put request exceeded the value of
 // tsd.http.request.max_chunk in the opentsdb config file.
 func (c *OpentsdbClient) splitProperGroups(datapoints []DataPoint) ([][]DataPoint, error) {
@@ -188,48 +183,60 @@ func (c *OpentsdbClient) splitProperGroups(datapoints []DataPoint) ([][]DataPoin
 	}
 
 	datapointGroups := make([][]DataPoint, 0)
-	datapointGroups = c.appendDatapoints(datasBytes, datapoints, datapointGroups)
+	datapointGroups = c.appendDataPoints(datasBytes, datapoints, datapointGroups)
 	status = StatusSuccess
-	message = "spliting into groups successful"
+	message = "splitting into groups successful"
 
 	return datapointGroups, nil
 }
 
-func (c *OpentsdbClient) appendDatapoints(datasBytes []byte, datapoints []DataPoint, datapointGroups [][]DataPoint) [][]DataPoint {
+func (c *OpentsdbClient) appendDataPoints(datasBytes []byte, datapoints []DataPoint, datapointGroups [][]DataPoint) [][]DataPoint {
 	if len(datasBytes) > c.opentsdbCfg.MaxContentLength {
-		datapointsSize := len(datapoints)
+		return c.splitLargeDataPoints(datapoints, datapointGroups)
+	}
+	return append(datapointGroups, datapoints)
+}
 
-		endIndex := datapointsSize
-		if endIndex > c.opentsdbCfg.MaxPutPointsNum {
-			endIndex = c.opentsdbCfg.MaxPutPointsNum
+func (c *OpentsdbClient) splitLargeDataPoints(datapoints []DataPoint, datapointGroups [][]DataPoint) [][]DataPoint {
+	datapointsSize := len(datapoints)
+	startIndex := 0
+	endIndex := c.calculateEndIndex(datapointsSize)
+
+	for endIndex <= datapointsSize {
+		tempdps := datapoints[startIndex:endIndex]
+		if c.canAppendGroup(tempdps) {
+			datapointGroups = append(datapointGroups, tempdps)
+			startIndex = endIndex
+			endIndex = c.calculateNextEndIndex(startIndex, datapointsSize, len(tempdps))
+		} else {
+			endIndex -= c.opentsdbCfg.DetectDeltaNum
 		}
 
-		startIndex := 0
-		for endIndex <= datapointsSize {
-			tempdps := datapoints[startIndex:endIndex]
-			tempSize := len(tempdps)
-			// After successful unmarshal, the above marshal is definitely without error
-			tempdpsBytes, _ := json.Marshal(&tempdps)
-			if len(tempdpsBytes) <= c.opentsdbCfg.MaxContentLength {
-				datapointGroups = append(datapointGroups, tempdps)
-				startIndex = endIndex
-
-				endIndex = startIndex + tempSize
-				if endIndex > datapointsSize {
-					endIndex = datapointsSize
-				}
-			} else {
-				endIndex -= c.opentsdbCfg.DetectDeltaNum
-			}
-
-			if startIndex >= datapointsSize {
-				break
-			}
+		if startIndex >= datapointsSize {
+			break
 		}
-	} else {
-		datapointGroups = append(datapointGroups, datapoints)
 	}
 	return datapointGroups
+}
+
+func (c *OpentsdbClient) calculateEndIndex(datapointsSize int) int {
+	if datapointsSize > c.opentsdbCfg.MaxPutPointsNum {
+		return c.opentsdbCfg.MaxPutPointsNum
+	}
+	return datapointsSize
+}
+
+func (c *OpentsdbClient) calculateNextEndIndex(startIndex, datapointsSize, tempSize int) int {
+	endIndex := startIndex + tempSize
+	if endIndex > datapointsSize {
+		return datapointsSize
+	}
+	return endIndex
+}
+
+func (c *OpentsdbClient) canAppendGroup(datapoints []DataPoint) bool {
+	tempdpsBytes, _ := json.Marshal(&datapoints)
+	return len(tempdpsBytes) <= c.opentsdbCfg.MaxContentLength
 }
 
 func parsePutErrorMsg(resp *PutResponse) error {

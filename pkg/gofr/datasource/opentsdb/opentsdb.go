@@ -39,11 +39,8 @@ const (
 	QueryRateOptionCounterMax = "counterMax" // The corresponding value type is int,int64
 	QueryRateOptionResetValue = "resetValue" // The corresponding value type is int,int64
 
-	AggregatorPath  = "/api/aggregators"
-	ConfigPath      = "/api/config"
-	SerializersPath = "/api/serializers"
-	StatsPath       = "/api/stats"
-	SuggestPath     = "/api/suggest"
+	AggregatorPath = "/api/aggregators"
+	SuggestPath    = "/api/suggest"
 	// Only the one of the three query type can be used in SuggestParam, UIDMetaData.
 	TypeMetrics = "metrics"
 	TypeTagk    = "tagk"
@@ -85,7 +82,7 @@ type OpenTSDBConfig struct {
 	// in the format of ip:port without http:// prefix or a domain.
 	OpentsdbHost string
 
-	// A pointer of http.Tranport is used by the opentsdb client.
+	// A pointer of http.Transport is used by the opentsdb client.
 	// This value is optional, and if it is not set, client.DefaultTransport, which
 	// enables tcp keepalive mode, will be used in the opentsdb client.
 	Transport *http.Transport
@@ -204,13 +201,11 @@ func (c *OpentsdbClient) WithContext(ctx context.Context) *OpentsdbClient {
 	}
 }
 
-// HealthCheck checks the availability of the OpenTSDB server by establishing a TCP connection.
 type Health struct {
 	Status  string                 `json:"status,omitempty"`
 	Details map[string]interface{} `json:"details,omitempty"`
 }
 
-// HealthCheck checks the health of the opentsdb client by pinging the database.
 func (c *OpentsdbClient) HealthCheck(_ context.Context) (any, error) {
 	span := c.addTrace(c.ctx, "HealthCheck")
 

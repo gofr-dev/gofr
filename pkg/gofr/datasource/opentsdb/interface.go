@@ -3,8 +3,8 @@ package opentsdb
 import "context"
 
 // Response defines the common behaviours all the specific response for
-// different rest-apis shound obey.
-// Currently it is an abstraction used in (*clientImpl).sendRequest()
+// different rest-apis should obey.
+// Currently, it is an abstraction used in OpentsdbClient.sendRequest()
 // to stored the different kinds of response contents for all the rest-apis.
 type Response interface {
 
@@ -12,7 +12,7 @@ type Response interface {
 	// the related http response for the specific Response instance
 	SetStatus(code int)
 
-	// GetCustomParser can be used to retrive a custom-defined parser.
+	// GetCustomParser can be used to retrieve a custom-defined parser.
 	// Returning nil means current specific Response instance doesn't
 	// need a custom-defined parse process, and just uses the default
 	// json unmarshal method to parse the contents of the http response.
