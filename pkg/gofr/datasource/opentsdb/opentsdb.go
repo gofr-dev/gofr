@@ -16,6 +16,8 @@ import (
 )
 
 const (
+	StatusFailed      = "FAIL"
+	StatusSuccess     = "SUCCESS"
 	DefaultDialTime   = 5 * time.Second  // Default time for establishing TCP connections.
 	ConnectionTimeout = 30 * time.Second // Timeout for keeping connections alive.
 	GetMethod         = "GET"            // HTTP GET method.
@@ -30,7 +32,7 @@ const (
 	QueryPath          = "/api/query"
 	QueryLastPath      = "/api/query/last"
 
-	// The three keys in the rateOption parameter of the QueryParam
+	// The three keys in the rateOption parameter of the QueryParam.
 	QueryRateOptionCounter    = "counter"    // The corresponding value type is bool
 	QueryRateOptionCounterMax = "counterMax" // The corresponding value type is int,int64
 	QueryRateOptionResetValue = "resetValue" // The corresponding value type is int,int64
@@ -40,7 +42,7 @@ const (
 	SerializersPath = "/api/serializers"
 	StatsPath       = "/api/stats"
 	SuggestPath     = "/api/suggest"
-	// Only the one of the three query type can be used in SuggestParam, UIDMetaData:
+	// Only the one of the three query type can be used in SuggestParam, UIDMetaData.
 	TypeMetrics = "metrics"
 	TypeTagk    = "tagk"
 	TypeTagv    = "tagv"
@@ -55,11 +57,11 @@ const (
 	UIDAssignPath      = "/api/uid/assign"
 	TSMetaDataPath     = "/api/uid/tsmeta"
 
-	// The above three constants are used in /put
+	// The above three constants are used in /put.
 	DefaultMaxPutPointsNum = 75
 	DefaultDetectDeltaNum  = 3
 	// Unit is bytes, and assumes that config items of 'tsd.http.request.enable_chunked = true'
-	// and 'tsd.http.request.max_chunk = 40960' are all in the opentsdb.conf:
+	// and 'tsd.http.request.max_chunk = 40960' are all in the opentsdb.conf.
 	DefaultMaxContentLength = 40960
 )
 
@@ -73,6 +75,36 @@ type OpentsdbClient struct {
 	logger       Logger
 	metrics      Metrics
 	tracer       trace.Tracer
+}
+
+type OpenTSDBConfig struct {
+
+	// The host of the target opentsdb, is a required non-empty string which is
+	// in the format of ip:port without http:// prefix or a domain.
+	OpentsdbHost string
+
+	// A pointer of http.Tranport is used by the opentsdb client.
+	// This value is optional, and if it is not set, client.DefaultTransport, which
+	// enables tcp keepalive mode, will be used in the opentsdb client.
+	Transport *http.Transport
+
+	// The maximal number of datapoints which will be inserted into the opentsdb
+	// via one calling of /api/put method.
+	// This value is optional, and if it is not set, client.DefaultMaxPutPointsNum
+	// will be used in the opentsdb client.
+	MaxPutPointsNum int
+
+	// The detect delta number of datapoints which will be used in client.Put()
+	// to split a large group of datapoints into small batches.
+	// This value is optional, and if it is not set, client.DefaultDetectDeltaNum
+	// will be used in the opentsdb client.
+	DetectDeltaNum int
+
+	// The maximal body content length per /api/put method to insert datapoints
+	// into opentsdb.
+	// This value is optional, and if it is not set, client.DefaultMaxPutPointsNum
+	// will be used in the opentsdb client.
+	MaxContentLength int
 }
 
 // New initializes a new instance of Opentsdb with provided configuration.
@@ -125,7 +157,7 @@ func (c *OpentsdbClient) Connect() {
 	defer sendOperationStats(c.logger, time.Now(), "Connect", &status, &message, span)
 
 	c.opentsdbCfg.OpentsdbHost = strings.TrimSpace(c.opentsdbCfg.OpentsdbHost)
-	if len(c.opentsdbCfg.OpentsdbHost) == 0 {
+	if c.opentsdbCfg.OpentsdbHost == "" {
 		c.logger.Errorf("the OpentsdbEndpoint in the given configuration cannot be empty.")
 	}
 
@@ -156,7 +188,8 @@ func (c *OpentsdbClient) Connect() {
 	c.tsdbEndpoint = fmt.Sprintf("http://%s", c.opentsdbCfg.OpentsdbHost)
 
 	c.logger.Logf("Connection Successful")
-	status = "SUCCESS"
+
+	status = StatusSuccess
 	message = fmt.Sprintf("connected to %s", c.tsdbEndpoint)
 }
 
@@ -180,7 +213,7 @@ func (c *OpentsdbClient) WithContext(ctx context.Context) OpentsDBClient {
 
 // HealthCheck checks the availability of the OpenTSDB server by establishing a TCP connection.
 func (c *OpentsdbClient) HealthCheck() error {
-	tracedCtx, span := c.addTrace(c.ctx, "isValidOperateMethod")
+	tracedCtx, span := c.addTrace(c.ctx, "HealthCheck")
 
 	c.ctx = tracedCtx
 
@@ -258,6 +291,7 @@ func (c *OpentsdbClient) sendRequest(method, url, reqBodyCnt string, parsedResp 
 	}
 
 	parsedResp.SetStatus(c.ctx, resp.StatusCode)
+
 	parser := parsedResp.GetCustomParser(c.ctx)
 	if parser == nil {
 		// Use the default JSON unmarshaller if no custom parser is provided.
@@ -295,7 +329,7 @@ func (c *OpentsdbClient) isValidOperateMethod(method string) bool {
 	defer sendOperationStats(c.logger, time.Now(), "isValidOperateMethod", &status, &message, span)
 
 	method = strings.TrimSpace(strings.ToUpper(method))
-	if len(method) == 0 {
+	if method == "" {
 		return false
 	}
 

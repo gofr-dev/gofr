@@ -1,12 +1,12 @@
 package opentsdb
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"go.opentelemetry.io/otel/trace"
+	"net/http"
 	"strings"
 	"time"
 )
@@ -17,7 +17,7 @@ import (
 // (http://opentsdb.net/docs/build/html/api_http/uid/uidmeta.html).
 type UIDMetaData struct {
 	// A required hexadecimal representation of the UID
-	Uid string `json:"uid,omitempty"`
+	UID string `json:"uid,omitempty"`
 
 	// A required type of UID, must be metric, tagk or tagv
 	Type string `json:"type,omitempty"`
@@ -102,49 +102,50 @@ func (c *OpentsdbClient) QueryUIDMetaData(metaQueryParam map[string]string) (*UI
 	uidMetaDataResp := UIDMetaDataResponse{logger: c.logger, tracer: c.tracer}
 
 	if err := c.sendRequest(GetMethod, queryUIDMetaEndpoint, "", &uidMetaDataResp); err != nil {
-
-		message = fmt.Sprintf("error processing query uid metadata request to url %q: %v", queryUIDMetaEndpoint, err)
+		message = fmt.Sprintf("error processing query-uid-metadata request to url %q: %v", queryUIDMetaEndpoint, err)
 		return nil, err
 	}
 
 	status = "SUCCESS"
-	message = fmt.Sprintf("query uid metadata request to url %q processed successfully", queryUIDMetaEndpoint)
+	message = fmt.Sprintf("query-uid-metadata request to url %q processed successfully", queryUIDMetaEndpoint)
 
 	return &uidMetaDataResp, nil
 }
 
-func (c *OpentsdbClient) UpdateUIDMetaData(uidMetaData UIDMetaData) (*UIDMetaDataResponse, error) {
+func (c *OpentsdbClient) UpdateUIDMetaData(uidMetaData *UIDMetaData) (*UIDMetaDataResponse, error) {
 	_, span := c.addTrace(c.ctx, "UpdateUIDMetaData")
 
 	status := "Fail"
 	var message string
 
 	defer sendOperationStats(c.logger, time.Now(), "UpdateUIDMetaData", &status, &message, span)
-	res, err := c.operateUIDMetaData(PostMethod, &uidMetaData)
+	res, err := c.operateUIDMetaData(PostMethod, uidMetaData)
 	if err == nil {
 		status = "SUCCESS"
 		message = "successfully updated UID metadata"
+		return res, nil
 	}
 
-	message = fmt.Sprintf("failed to update UID metadata")
-	return res, err
+	message = fmt.Sprintf("failed to update UID metadata: %v", err)
+	return nil, err
 }
 
-func (c *OpentsdbClient) DeleteUIDMetaData(uidMetaData UIDMetaData) (*UIDMetaDataResponse, error) {
+func (c *OpentsdbClient) DeleteUIDMetaData(uidMetaData *UIDMetaData) (*UIDMetaDataResponse, error) {
 	_, span := c.addTrace(c.ctx, "DeleteUIDMetaData")
 
 	status := "FAIL"
 	var message string
 
 	defer sendOperationStats(c.logger, time.Now(), "DeleteUIDMetaData", &status, &message, span)
-	res, err := c.operateUIDMetaData(DeleteMethod, &uidMetaData)
+	res, err := c.operateUIDMetaData(DeleteMethod, uidMetaData)
 	if err == nil {
 		status = "SUCCESS"
 		message = "successfully deleted UID metadata"
+		return res, nil
 	}
 
-	message = fmt.Sprintf("failed to delete UID metadata")
-	return res, err
+	message = "failed to delete UID metadata"
+	return nil, err
 }
 
 func (c *OpentsdbClient) operateUIDMetaData(method string, uidMetaData *UIDMetaData) (*UIDMetaDataResponse, error) {
@@ -154,8 +155,9 @@ func (c *OpentsdbClient) operateUIDMetaData(method string, uidMetaData *UIDMetaD
 	var message string
 
 	defer sendOperationStats(c.logger, time.Now(), "operateUIDMetaData", &status, &message, span)
+
 	if !c.isValidOperateMethod(method) {
-		message = "given method for operating a uid metadata is invalid"
+		message = "given method for uid metadata is invalid"
 		return nil, errors.New(message)
 	}
 	uidMetaEndpoint := fmt.Sprintf("%s%s", c.tsdbEndpoint, UIDMetaDataPath)
@@ -173,74 +175,33 @@ func (c *OpentsdbClient) operateUIDMetaData(method string, uidMetaData *UIDMetaD
 	}
 
 	status = "SUCCESS"
-	message = fmt.Sprintf("%v uidmetadata request to url %q processed successfully", method, uidMetaEndpoint)
+	message = fmt.Sprintf("%v uid-metadata request to url %q processed successfully", method, uidMetaEndpoint)
 
 	return &uidMetaDataResp, nil
 }
 
 func (uidMetaDataResp *UIDMetaDataResponse) SetStatus(ctx context.Context, code int) {
-	_, span := uidMetaDataResp.addTrace(ctx, "SetStatus")
+	setStatus(uidMetaDataResp, ctx, code, "SetStatus-UIDMetaData", uidMetaDataResp.logger)
+}
 
-	status := "SUCCESS"
-	var message string
-
-	defer sendOperationStats(uidMetaDataResp.logger, time.Now(), "SetStatus-serialResp", &status, &message, span)
-	message = fmt.Sprintf("set response code : %d", code)
-
+func (uidMetaDataResp *UIDMetaDataResponse) setStatusCode(code int) {
 	uidMetaDataResp.StatusCode = code
 }
 
 func (uidMetaDataResp *UIDMetaDataResponse) GetCustomParser(ctx context.Context) func(respCnt []byte) error {
-	_, span := uidMetaDataResp.addTrace(ctx, "GetCustomParser")
+	return getCustomParser(uidMetaDataResp, ctx, "GetCustomParser-UIDMetaData", uidMetaDataResp.logger,
+		func(resp []byte, target interface{}) error {
+			if uidMetaDataResp.StatusCode == http.StatusNoContent || // The OpenTSDB deletes a UIDMetaData successfully, or
+				uidMetaDataResp.StatusCode == http.StatusNotModified { // no changes were present, and with no body content.
+				return nil
+			}
 
-	status := "FAIL"
-	var message string
-
-	defer sendOperationStats(uidMetaDataResp.logger, time.Now(), "GetCustomParser-SuggestResp", &status, &message, span)
-
-	return func(respCnt []byte) error {
-		var resultBytes []byte
-		if uidMetaDataResp.StatusCode == 204 || // The OpenTSDB deletes a UIDMetaData successfully, or
-			uidMetaDataResp.StatusCode == 304 { // no changes were present, and with no body content.
-			return nil
-		} else {
-			resultBytes = respCnt
-		}
-
-		err := json.Unmarshal(resultBytes, &uidMetaDataResp)
-		if err != nil {
-			message = fmt.Sprintf("unmarshal TSMetaDataResponse response error: %s", err)
-			return fmt.Errorf(message)
-		}
-
-		status = "SUCCESS"
-		message = fmt.Sprintf("custom parsing successful")
-		return nil
-	}
-
+			return json.Unmarshal(resp, &uidMetaDataResp)
+		})
 }
 
 func (uidMetaDataResp *UIDMetaDataResponse) String(ctx context.Context) string {
-	_, span := uidMetaDataResp.addTrace(ctx, "ToString")
-
-	status := "FAIL"
-	var message string
-
-	defer sendOperationStats(uidMetaDataResp.logger, time.Now(), "ToString-SerialResp", &status, &message, span)
-
-	buffer := bytes.NewBuffer(nil)
-
-	content, err := json.Marshal(uidMetaDataResp)
-	if err != nil {
-		message = fmt.Sprintf("marshal config response error: %s", err.Error())
-		uidMetaDataResp.logger.Errorf(message)
-	}
-	buffer.WriteString(fmt.Sprintf("%s\n", string(content)))
-
-	status = "SUCCESS"
-	message = fmt.Sprint("config response converted to string successfully")
-
-	return buffer.String()
+	return toString(uidMetaDataResp, ctx, "ToString-UIDMetaData", uidMetaDataResp.logger)
 }
 
 // UIDAssignParam is the structure used to hold
@@ -273,18 +234,18 @@ type UIDAssignResponse struct {
 	tracer       trace.Tracer
 }
 
-func (c *OpentsdbClient) AssignUID(assignParam UIDAssignParam) (*UIDAssignResponse, error) {
+func (c *OpentsdbClient) AssignUID(assignParam *UIDAssignParam) (*UIDAssignResponse, error) {
 	_, span := c.addTrace(c.ctx, "AssignUID")
 	status := "FAIL"
 	var message string
+
 	defer sendOperationStats(c.logger, time.Now(), "AssignUID", &status, &message, span)
 
 	assignUIDEndpoint := fmt.Sprintf("%s%s", c.tsdbEndpoint, UIDAssignPath)
 
 	resultBytes, err := json.Marshal(assignParam)
 	if err != nil {
-
-		message = fmt.Sprintf("Failed to marshal UIDAssignParam: %v", err)
+		message = fmt.Sprintf("failed to marshal UIDAssignParam: %v", err)
 		return nil, errors.New(message)
 	}
 
@@ -295,49 +256,26 @@ func (c *OpentsdbClient) AssignUID(assignParam UIDAssignParam) (*UIDAssignRespon
 		return nil, err
 	}
 
-	status = "SUCCESS"
-	message = fmt.Sprintf("assign UID successful")
+	status = StatusSuccess
+	message = "assign UID successful"
 
 	return &uidAssignResp, nil
 }
 
 func (uidAssignResp *UIDAssignResponse) SetStatus(ctx context.Context, code int) {
-	_, span := uidAssignResp.addTrace(ctx, "SetStatus")
+	setStatus(uidAssignResp, ctx, code, "SetStatus-UIDAssign", uidAssignResp.logger)
+}
 
-	status := "SUCCESS"
-	var message string
-
-	defer sendOperationStats(uidAssignResp.logger, time.Now(), "SetStatus-serialResp", &status, &message, span)
-	message = fmt.Sprintf("set response code : %d", code)
-
+func (uidAssignResp *UIDAssignResponse) setStatusCode(code int) {
 	uidAssignResp.StatusCode = code
 }
 
-func (uidAssignResp *UIDAssignResponse) GetCustomParser(ctx context.Context) func(respCnt []byte) error {
+func (*UIDAssignResponse) GetCustomParser(context.Context) func(respCnt []byte) error {
 	return nil
 }
 
 func (uidAssignResp *UIDAssignResponse) String(ctx context.Context) string {
-	_, span := uidAssignResp.addTrace(ctx, "ToString")
-
-	status := "FAIL"
-	var message string
-
-	defer sendOperationStats(uidAssignResp.logger, time.Now(), "ToString-SerialResp", &status, &message, span)
-
-	buffer := bytes.NewBuffer(nil)
-
-	content, err := json.Marshal(uidAssignResp)
-	if err != nil {
-		message = fmt.Sprintf("marshal config response error: %s", err.Error())
-		uidAssignResp.logger.Errorf(message)
-	}
-	buffer.WriteString(fmt.Sprintf("%s\n", string(content)))
-
-	status = "SUCCESS"
-	message = fmt.Sprint("config response converted to string successfully")
-
-	return buffer.String()
+	return toString(uidAssignResp, ctx, "ToString-UIDAssign", uidAssignResp.logger)
 }
 
 // TSMetaData is the structure used to hold
@@ -399,21 +337,20 @@ func (c *OpentsdbClient) QueryTSMetaData(tsuid string) (*TSMetaDataResponse, err
 	_, span := c.addTrace(c.ctx, "QueryTSMetaData")
 	status := "FAIL"
 	var message string
-	defer sendOperationStats(c.logger, time.Now(), "QueryTSMetaData-SerialResp", &status, &message, span)
+
+	defer sendOperationStats(c.logger, time.Now(), "QueryTSMetaData", &status, &message, span)
 
 	tsuid = strings.TrimSpace(tsuid)
 
-	if len(tsuid) == 0 {
-		message = fmt.Sprintf("tsuid is empty")
+	if tsuid == "" {
+		message = "tsuid is empty"
 		return nil, errors.New(message)
 	}
 
 	queryTSMetaEndpoint := fmt.Sprintf("%s%s?tsuid=%s", c.tsdbEndpoint, TSMetaDataPath, tsuid)
-
 	tsMetaDataResp := TSMetaDataResponse{logger: c.logger, tracer: c.tracer}
 
 	if err := c.sendRequest(GetMethod, queryTSMetaEndpoint, "", &tsMetaDataResp); err != nil {
-
 		message = fmt.Sprintf("error processing %v request to url %q: %v", GetMethod, queryTSMetaEndpoint, err)
 		return nil, err
 	}
@@ -422,13 +359,14 @@ func (c *OpentsdbClient) QueryTSMetaData(tsuid string) (*TSMetaDataResponse, err
 	return &tsMetaDataResp, nil
 }
 
-func (c *OpentsdbClient) UpdateTSMetaData(tsMetaData TSMetaData) (*TSMetaDataResponse, error) {
+func (c *OpentsdbClient) UpdateTSMetaData(tsMetaData *TSMetaData) (*TSMetaDataResponse, error) {
 	_, span := c.addTrace(c.ctx, "UpdateTSMetaData")
 	status := "FAIL"
 	var message string
+
 	defer sendOperationStats(c.logger, time.Now(), "UpdateTSMetaData", &status, &message, span)
 
-	res, err := c.operateTSMetaData(PostMethod, &tsMetaData)
+	res, err := c.operateTSMetaData(PostMethod, tsMetaData)
 	if err == nil {
 		status = "SUCCESS"
 		message = fmt.Sprintf("update TSMetaData successful")
@@ -439,13 +377,14 @@ func (c *OpentsdbClient) UpdateTSMetaData(tsMetaData TSMetaData) (*TSMetaDataRes
 	return nil, err
 }
 
-func (c *OpentsdbClient) DeleteTSMetaData(tsMetaData TSMetaData) (*TSMetaDataResponse, error) {
+func (c *OpentsdbClient) DeleteTSMetaData(tsMetaData *TSMetaData) (*TSMetaDataResponse, error) {
 	_, span := c.addTrace(c.ctx, "DeleteTSMetaData")
 	status := "FAIL"
 	var message string
+
 	defer sendOperationStats(c.logger, time.Now(), "DeleteTSMetaData", &status, &message, span)
 
-	res, err := c.operateTSMetaData(DeleteMethod, &tsMetaData)
+	res, err := c.operateTSMetaData(DeleteMethod, tsMetaData)
 	if err == nil {
 		status = "SUCCESS"
 		message = fmt.Sprintf("delete TSMetaData successful")
@@ -473,85 +412,43 @@ func (c *OpentsdbClient) operateTSMetaData(method string, tsMetaData *TSMetaData
 
 	resultBytes, err := json.Marshal(tsMetaData)
 	if err != nil {
-
-		message = fmt.Sprintf("failed to marshal uidMetaData: %v", err)
+		message = fmt.Sprintf("failed to marshal TSMetaData: %v", err)
 		return nil, errors.New(message)
 	}
 
 	tsMetaDataResp := TSMetaDataResponse{logger: c.logger, tracer: c.tracer}
 
 	if err = c.sendRequest(method, tsMetaEndpoint, string(resultBytes), &tsMetaDataResp); err != nil {
-
 		message = fmt.Sprintf("failed to send request at url %q: %v", tsMetaEndpoint, err)
 		return nil, err
 	}
 
 	status = "SUCCESS"
-	message = fmt.Sprint("operateTSMetaData request processed successfully")
+	message = "operateTSMetaData request processed successfully"
 
 	return &tsMetaDataResp, nil
 }
 
 func (tsMetaDataResp *TSMetaDataResponse) SetStatus(ctx context.Context, code int) {
-	_, span := tsMetaDataResp.addTrace(ctx, "SetStatus")
+	setStatus(tsMetaDataResp, ctx, code, "SetStatus-TSMetaData", tsMetaDataResp.logger)
+}
 
-	status := "SUCCESS"
-	var message string
-
-	defer sendOperationStats(tsMetaDataResp.logger, time.Now(), "SetStatus-serialResp", &status, &message, span)
-	message = fmt.Sprintf("set response code : %d", code)
-
+func (tsMetaDataResp *TSMetaDataResponse) setStatusCode(code int) {
 	tsMetaDataResp.StatusCode = code
 }
 
 func (tsMetaDataResp *TSMetaDataResponse) GetCustomParser(ctx context.Context) func(respCnt []byte) error {
-	_, span := tsMetaDataResp.addTrace(ctx, "GetCustomParser")
+	return getCustomParser(tsMetaDataResp, ctx, "GetCustomParser-TSMetaData", tsMetaDataResp.logger,
+		func(resp []byte, target interface{}) error {
+			if tsMetaDataResp.StatusCode == http.StatusNoContent ||
+				tsMetaDataResp.StatusCode == http.StatusNotModified {
+				return nil
+			}
 
-	status := "FAIL"
-	var message string
-
-	defer sendOperationStats(tsMetaDataResp.logger, time.Now(), "GetCustomParser-SuggestResp", &status, &message, span)
-
-	return func(respCnt []byte) error {
-		var resultBytes []byte
-		if tsMetaDataResp.StatusCode == 204 || // The OpenTSDB deletes a TSMetaData successfully, or
-			tsMetaDataResp.StatusCode == 304 { // no changes were present, and with no body content.
-			return nil
-		} else {
-			resultBytes = respCnt
-		}
-
-		err := json.Unmarshal(resultBytes, &tsMetaDataResp)
-		if err != nil {
-			message = fmt.Sprintf("unmarshal TSMetaDataResponse response error: %s", err)
-			return fmt.Errorf(message)
-		}
-
-		status = "SUCCESS"
-		message = fmt.Sprintf("custom parsing successful")
-		return nil
-	}
+			return json.Unmarshal(resp, &tsMetaDataResp)
+		})
 }
 
 func (tsMetaDataResp *TSMetaDataResponse) String(ctx context.Context) string {
-	_, span := tsMetaDataResp.addTrace(ctx, "ToString")
-
-	status := "FAIL"
-	var message string
-
-	defer sendOperationStats(tsMetaDataResp.logger, time.Now(), "ToString-SerialResp", &status, &message, span)
-
-	buffer := bytes.NewBuffer(nil)
-
-	content, err := json.Marshal(tsMetaDataResp)
-	if err != nil {
-		message = fmt.Sprintf("marshal config response error: %s", err.Error())
-		tsMetaDataResp.logger.Errorf(message)
-	}
-	buffer.WriteString(fmt.Sprintf("%s\n", string(content)))
-
-	status = "SUCCESS"
-	message = fmt.Sprint("config response converted to string successfully")
-
-	return buffer.String()
+	return toString(tsMetaDataResp, ctx, "ToString-TSMetaData", tsMetaDataResp.logger)
 }

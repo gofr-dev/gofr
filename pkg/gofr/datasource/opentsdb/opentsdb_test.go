@@ -5,14 +5,13 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel"
 	"go.uber.org/mock/gomock"
-	"math/rand"
+	"math/rand/v2"
 	"testing"
 	"time"
 )
 
 // setupOpenTSDBTest initializes an OpentsdbClient for testing.
 func setupOpenTSDBTest(t *testing.T) OpentsDBClient {
-
 	opentsdbCfg := OpenTSDBConfig{
 		OpentsdbHost:     "localhost:4242",
 		MaxContentLength: 4096,
@@ -106,7 +105,6 @@ func TestPutInvalidQueryParam(t *testing.T) {
 	resp, err := client.Put(dataPoints, "invalid_param")
 	require.Error(t, err)
 	require.Nil(t, resp)
-	t.Log("Expected error occurred for invalid query parameters.")
 }
 
 func TestPutErrorResponse(t *testing.T) {
@@ -127,7 +125,7 @@ func TestPutErrorResponse(t *testing.T) {
 	require.Nil(t, resp)
 }
 
-// Test for successful POST /api/query
+// Test for successful POST /api/query.
 func TestPostQuerySuccess(t *testing.T) {
 	client := setupOpenTSDBTest(t)
 
@@ -159,13 +157,13 @@ func TestPostQuerySuccess(t *testing.T) {
 	queryParam.Queries = subqueries
 
 	// Execute the query operation
-	queryResp, err := client.Query(queryParam)
+	queryResp, err := client.Query(&queryParam)
 	require.NoError(t, err)
 	require.NotNil(t, queryResp)
 	require.Equal(t, 200, queryResp.StatusCode)
 }
 
-// Test for successful POST /api/query/last
+// Test for successful POST /api/query/last.
 func TestPostQueryLastSuccess(t *testing.T) {
 	client := setupOpenTSDBTest(t)
 
@@ -192,7 +190,7 @@ func TestPostQueryLastSuccess(t *testing.T) {
 	}
 
 	// Execute the last query operation
-	queryLastResp, err := client.QueryLast(queryLastParam)
+	queryLastResp, err := client.QueryLast(&queryLastParam)
 	require.NoError(t, err)
 	require.NotNil(t, queryLastResp)
 	require.Equal(t, 200, queryLastResp.StatusCode)
@@ -231,7 +229,7 @@ func TestPostQueryDeleteSuccess(t *testing.T) {
 	queryParam.Queries = subqueries
 
 	// Execute the delete operation
-	deleteResp, err := client.Query(queryParam)
+	deleteResp, err := client.Query(&queryParam)
 	require.NoError(t, err)
 	require.NotNil(t, deleteResp)
 	require.Equal(t, 200, deleteResp.StatusCode)
@@ -248,27 +246,6 @@ func TestGetAggregatorsSuccess(t *testing.T) {
 	require.Equal(t, 200, aggreResp.StatusCode)
 }
 
-// Test for successful GET /api/config
-func TestGetConfigSuccess(t *testing.T) {
-	client := setupOpenTSDBTest(t)
-
-	// Execute the config operation
-	configResp, err := client.Config()
-	require.NoError(t, err)
-	require.NotNil(t, configResp)
-	require.Equal(t, 200, configResp.StatusCode)
-}
-
-// Test for successful GET /api/stats
-func TestGetStatsSuccess(t *testing.T) {
-	client := setupOpenTSDBTest(t)
-
-	statsResp, err := client.Stats()
-	require.NoError(t, err)
-	require.NotNil(t, statsResp)
-	require.Equal(t, 200, statsResp.StatusCode)
-}
-
 // Test for successful GET /api/suggest
 func TestGetSuggestSuccess(t *testing.T) {
 	client := setupOpenTSDBTest(t)
@@ -278,7 +255,7 @@ func TestGetSuggestSuccess(t *testing.T) {
 		sugParam := SuggestParam{
 			Type: typeItem,
 		}
-		sugResp, err := client.Suggest(sugParam)
+		sugResp, err := client.Suggest(&sugParam)
 		require.NoError(t, err)
 		require.NotNil(t, sugResp)
 		require.Equal(t, 200, sugResp.StatusCode)
@@ -324,7 +301,7 @@ func TestUpdateAnnotationSuccess(t *testing.T) {
 		Custom:      custom,
 	}
 
-	queryAnnoResp, err := client.UpdateAnnotation(anno)
+	queryAnnoResp, err := client.UpdateAnnotation(&anno)
 
 	require.NoError(t, err)
 
@@ -361,7 +338,7 @@ func TestQueryAnnotationSuccess(t *testing.T) {
 	queryAnnoMap[AnQueryStartTime] = addedST
 	queryAnnoMap[AnQueryTSUid] = addedTsuid
 
-	postResp, err := client.UpdateAnnotation(anno)
+	postResp, err := client.UpdateAnnotation(&anno)
 
 	require.NoError(t, err)
 	require.NotNil(t, postResp)
@@ -392,13 +369,13 @@ func TestDeleteAnnotationSuccess(t *testing.T) {
 		Custom:      custom,
 	}
 
-	postResp, err := client.UpdateAnnotation(anno)
+	postResp, err := client.UpdateAnnotation(&anno)
 
 	require.NoError(t, err)
 	require.NotNil(t, postResp)
 	require.Equal(t, 200, postResp.StatusCode)
 
-	deleteResp, err := client.DeleteAnnotation(anno)
+	deleteResp, err := client.DeleteAnnotation(&anno)
 
 	require.NoError(t, err)
 	require.NotNil(t, deleteResp)
@@ -416,23 +393,21 @@ func TestBulkUpdateAnnotationsSuccess(t *testing.T) {
 	anns := make([]Annotation, 0)
 	bulkAnnNum := 4
 	i := 0
-	addedTsuids := make([]string, 0)
+
 	for {
-		if i < bulkAnnNum-1 {
-			addedST := time.Now().Unix()
-			addedTsuid := fmt.Sprintf("%s%d", "00000100000100000", i)
-			addedTsuids = append(addedTsuids, addedTsuid)
-			anno := Annotation{
-				StartTime:   addedST,
-				Tsuid:       addedTsuid,
-				Description: "gofr test annotation",
-				Notes:       "These would be details about the event, the description is just a summary",
-			}
-			anns = append(anns, anno)
-			i++
-		} else {
+		if !(i < bulkAnnNum-1) {
 			break
 		}
+		addedST := time.Now().Unix()
+		addedTsuid := fmt.Sprintf("%s%d", "00000100000100000", i)
+		anno := Annotation{
+			StartTime:   addedST,
+			Tsuid:       addedTsuid,
+			Description: "gofr test annotation",
+			Notes:       "These would be details about the event, the description is just a summary",
+		}
+		anns = append(anns, anno)
+		i++
 	}
 
 	resp, err := client.BulkUpdateAnnotations(anns)
@@ -452,24 +427,24 @@ func TestBulkDeleteAnnotationsSuccess(t *testing.T) {
 	i := 0
 	bulkAddBeginST := time.Now().Unix()
 	addedTsuids := make([]string, 0)
+
 	for {
-		if i < bulkAnnNum-1 {
-			addedTsuid := fmt.Sprintf("%s%d", "00000100000100000", i)
-			addedTsuids = append(addedTsuids, addedTsuid)
-			anno := Annotation{
-				StartTime:   bulkAddBeginST,
-				Tsuid:       addedTsuid,
-				Description: "gofr test annotation",
-				Notes:       "These would be details about the event, the description is just a summary",
-			}
-			anns = append(anns, anno)
-			i++
-		} else {
+		if !(i < bulkAnnNum-1) {
 			break
 		}
+		addedTsuid := fmt.Sprintf("%s%d", "00000100000100000", i)
+		addedTsuids = append(addedTsuids, addedTsuid)
+		anno := Annotation{
+			StartTime:   bulkAddBeginST,
+			Tsuid:       addedTsuid,
+			Description: "gofr test annotation",
+			Notes:       "These would be details about the event, the description is just a summary",
+		}
+		anns = append(anns, anno)
+		i++
 	}
 
-	_, err := client.BulkUpdateAnnotations(anns)
+	_, _ = client.BulkUpdateAnnotations(anns)
 
 	bulkAnnoDelete := BulkAnnoDeleteInfo{
 		StartTime: bulkAddBeginST,
@@ -477,7 +452,7 @@ func TestBulkDeleteAnnotationsSuccess(t *testing.T) {
 		Global:    false,
 	}
 
-	resp, err := client.BulkDeleteAnnotations(bulkAnnoDelete)
+	resp, err := client.BulkDeleteAnnotations(&bulkAnnoDelete)
 
 	require.NoError(t, err)
 	require.NotNil(t, resp)
@@ -511,7 +486,7 @@ func TestAssignUIDSuccess(t *testing.T) {
 		Tagv:   tagv,
 	}
 
-	resp, err := client.AssignUID(assignParam)
+	resp, err := client.AssignUID(&assignParam)
 
 	require.NoError(t, err, "Error occurred while assigning UID info")
 	require.Empty(t, resp.Metric, "Expected metric to be nil")
@@ -524,29 +499,26 @@ func TestUpdateUIDMetaDataSuccess(t *testing.T) {
 	client := setupOpenTSDBTest(t)
 
 	uidMetaData := UIDMetaData{
-		Uid:         "000006",
+		UID:         "000006",
 		Type:        "metric",
 		DisplayName: "System CPU Time",
 	}
 
-	resp, err := client.UpdateUIDMetaData(uidMetaData)
+	resp, err := client.UpdateUIDMetaData(&uidMetaData)
 
 	require.NoError(t, err, "Error occurred while posting uidmetadata info")
 	require.NotNil(t, resp, "Response should not be nil")
-
-	fmt.Printf("%s", resp.String(client.GetContext()))
-
 }
 
 func TestDeleteUIDMetaData(t *testing.T) {
 	client := setupOpenTSDBTest(t)
 
 	uidMetaData := UIDMetaData{
-		Uid:  "000006",
+		UID:  "000006",
 		Type: "metric",
 	}
 
-	resp, err := client.DeleteUIDMetaData(uidMetaData)
+	resp, err := client.DeleteUIDMetaData(&uidMetaData)
 
 	require.NoError(t, err, "Error occurred while deleting UID metadata")
 	require.NotNil(t, resp, "Response should not be nil")
@@ -582,7 +554,7 @@ func TestUpdateTSMetaData(t *testing.T) {
 		Custom:      custom,
 	}
 
-	resp, err := client.UpdateTSMetaData(tsMetaData)
+	resp, err := client.UpdateTSMetaData(&tsMetaData)
 
 	require.NoError(t, err, "Error occurred while posting TS metadata")
 	require.NotNil(t, resp, "Response should not be nil")
@@ -607,7 +579,7 @@ func TestDeleteTSMetaData(t *testing.T) {
 	fmt.Println("Begin to test DELETE /api/uid/tsmeta.")
 
 	// Perform the DELETE API call and check for errors
-	resp, err := client.DeleteTSMetaData(tsMetaData)
+	resp, err := client.DeleteTSMetaData(&tsMetaData)
 
 	// Assert no error on request level
 	require.NoError(t, err, "Error occurred while deleting TS metadata")
@@ -621,19 +593,4 @@ func TestDeleteTSMetaData(t *testing.T) {
 
 	// End the test output
 	fmt.Println("Finish testing DELETE /api/uid/tsmeta.")
-}
-
-func TestGetSerializers(t *testing.T) {
-	client := setupOpenTSDBTest(t)
-
-	fmt.Println("Begin to test GET /api/serializers.")
-
-	serilResp, err := client.Serializers()
-
-	require.NoError(t, err, "Error occurred while acquiring serializers info")
-	require.NotNil(t, serilResp, "Response should not be nil")
-
-	fmt.Printf("%s", serilResp.String(client.GetContext()))
-
-	fmt.Println("Finish testing GET /api/serializers.")
 }

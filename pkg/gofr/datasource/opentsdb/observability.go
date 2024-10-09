@@ -3,12 +3,13 @@ package opentsdb
 import (
 	"context"
 	"fmt"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/trace"
 	"io"
 	"regexp"
 	"strings"
 	"time"
+
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // QueryLog handles logging with different levels.
@@ -50,7 +51,7 @@ func sendOperationStats(logger Logger, start time.Time, operation string, status
 	}
 }
 
-func addTracer(ctx context.Context, tracer trace.Tracer, operation string, typeName string) (context.Context, trace.Span) {
+func addTracer(ctx context.Context, tracer trace.Tracer, operation, typeName string) (context.Context, trace.Span) {
 	if tracer != nil {
 		contextWithTrace, span := tracer.Start(ctx, fmt.Sprintf("opentsdb-%v", operation))
 
@@ -60,6 +61,7 @@ func addTracer(ctx context.Context, tracer trace.Tracer, operation string, typeN
 
 		return contextWithTrace, span
 	}
+
 	return ctx, nil
 }
 
@@ -71,16 +73,12 @@ func (aggreResp *AggregatorsResponse) addTrace(ctx context.Context, operation st
 	return addTracer(ctx, aggreResp.tracer, operation, "AggregatorRes")
 }
 
-func (annotRes *AnnotationResponse) addTrace(ctx context.Context, operation string) (context.Context, trace.Span) {
-	return addTracer(ctx, annotRes.tracer, operation, "AnnotationRes")
+func (annotResp *AnnotationResponse) addTrace(ctx context.Context, operation string) (context.Context, trace.Span) {
+	return addTracer(ctx, annotResp.tracer, operation, "AnnotationRes")
 }
 
-func (annotRes *BulkAnnotatResponse) addTrace(ctx context.Context, operation string) (context.Context, trace.Span) {
-	return addTracer(ctx, annotRes.tracer, operation, "BulkAnnotatResponse")
-}
-
-func (cfgRes *ConfigResponse) addTrace(ctx context.Context, operation string) (context.Context, trace.Span) {
-	return addTracer(ctx, cfgRes.tracer, operation, "ConfigResponse")
+func (bulkAnnotResp *BulkAnnotatResponse) addTrace(ctx context.Context, operation string) (context.Context, trace.Span) {
+	return addTracer(ctx, bulkAnnotResp.tracer, operation, "BulkAnnotatResponse")
 }
 
 func (d *QueryResponse) addTrace(ctx context.Context, operation string) (context.Context, trace.Span) {
@@ -91,24 +89,24 @@ func (d *DropcachesResponse) addTrace(ctx context.Context, operation string) (co
 	return addTracer(ctx, d.tracer, operation, "DropcacheResponse")
 }
 
-func (d *SuggestParam) addTrace(ctx context.Context, operation string) (context.Context, trace.Span) {
-	return addTracer(ctx, d.tracer, operation, "SuggestParam")
+func (sugParam *SuggestParam) addTrace(ctx context.Context, operation string) (context.Context, trace.Span) {
+	return addTracer(ctx, sugParam.tracer, operation, "SuggestParam")
 }
 
-func (d *SuggestResponse) addTrace(ctx context.Context, operation string) (context.Context, trace.Span) {
-	return addTracer(ctx, d.tracer, operation, "SuggestResponse")
+func (sugResp *SuggestResponse) addTrace(ctx context.Context, operation string) (context.Context, trace.Span) {
+	return addTracer(ctx, sugResp.tracer, operation, "SuggestResponse")
 }
 
-func (d *QueryRespItem) addTrace(ctx context.Context, operation string) (context.Context, trace.Span) {
-	return addTracer(ctx, d.tracer, operation, "QueryRespItem")
+func (qri *QueryRespItem) addTrace(ctx context.Context, operation string) (context.Context, trace.Span) {
+	return addTracer(ctx, qri.tracer, operation, "QueryRespItem")
 }
 
-func (q *QueryParam) addTrace(ctx context.Context, operation string) (context.Context, trace.Span) {
-	return addTracer(ctx, q.tracer, operation, "QueryParam")
+func (query *QueryParam) addTrace(ctx context.Context, operation string) (context.Context, trace.Span) {
+	return addTracer(ctx, query.tracer, operation, "QueryParam")
 }
 
-func (q *QueryLastParam) addTrace(ctx context.Context, operation string) (context.Context, trace.Span) {
-	return addTracer(ctx, q.tracer, operation, "QueryLastParam")
+func (query *QueryLastParam) addTrace(ctx context.Context, operation string) (context.Context, trace.Span) {
+	return addTracer(ctx, query.tracer, operation, "QueryLastParam")
 }
 
 func (ql *QueryLastResponse) addTrace(ctx context.Context, operation string) (context.Context, trace.Span) {
@@ -119,24 +117,16 @@ func (v *VersionResponse) addTrace(ctx context.Context, operation string) (conte
 	return addTracer(ctx, v.tracer, operation, "VersionResponse")
 }
 
-func (v *StatsResponse) addTrace(ctx context.Context, operation string) (context.Context, trace.Span) {
-	return addTracer(ctx, v.tracer, operation, "StatsResponse")
-}
-
-func (v *SerialResponse) addTrace(ctx context.Context, operation string) (context.Context, trace.Span) {
-	return addTracer(ctx, v.tracer, operation, "SerialResponse")
-}
-
 func (v *TSMetaDataResponse) addTrace(ctx context.Context, operation string) (context.Context, trace.Span) {
 	return addTracer(ctx, v.tracer, operation, "TSMetaDataResponse")
 }
 
-func (v *PutResponse) addTrace(ctx context.Context, operation string) (context.Context, trace.Span) {
-	return addTracer(ctx, v.tracer, operation, "PutResponse")
+func (putResp *PutResponse) addTrace(ctx context.Context, operation string) (context.Context, trace.Span) {
+	return addTracer(ctx, putResp.tracer, operation, "PutResponse")
 }
 
-func (v *UIDAssignResponse) addTrace(ctx context.Context, operation string) (context.Context, trace.Span) {
-	return addTracer(ctx, v.tracer, operation, "UIDAssignResponse")
+func (uidAssignResp *UIDAssignResponse) addTrace(ctx context.Context, operation string) (context.Context, trace.Span) {
+	return addTracer(ctx, uidAssignResp.tracer, operation, "UIDAssignResponse")
 }
 
 func (v *UIDMetaDataResponse) addTrace(ctx context.Context, operation string) (context.Context, trace.Span) {

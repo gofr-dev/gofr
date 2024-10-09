@@ -1,12 +1,12 @@
 package opentsdb
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"go.opentelemetry.io/otel/trace"
+	"net/http"
 	"strings"
 	"time"
 )
@@ -34,23 +34,11 @@ type QueryLastParam struct {
 }
 
 func (query *QueryLastParam) String(ctx context.Context) string {
-	_, span := query.addTrace(ctx, "ToString")
+	return toString(query, ctx, "ToString-QueryLastParam", query.logger)
+}
 
-	status := "FAIL"
-	var message string
-
-	defer sendOperationStats(query.logger, time.Now(), "ToString-QueryLastParam", &status, &message, span)
-
-	content, err := json.Marshal(query)
-	if err != nil {
-		message = fmt.Sprintf("marshal queryLastParam error: %s", err)
-		query.logger.Errorf(message)
-	}
-
-	status = "SUCCESS"
-	message = fmt.Sprint("queryLastParam converted to string successfully")
-
-	return string(content)
+func (query *QueryLastParam) setStatusCode(int) {
+	query.logger.Errorf("method not supported by opentsdb-client")
 }
 
 // SubQueryLast is the structure used to hold
@@ -81,70 +69,32 @@ type QueryLastResponse struct {
 }
 
 func (queryLastResp *QueryLastResponse) String(ctx context.Context) string {
-	_, span := queryLastResp.addTrace(ctx, "ToString")
-
-	status := "FAIL"
-	var message string
-
-	defer sendOperationStats(queryLastResp.logger, time.Now(), "ToString-QueryLastResp", &status, &message, span)
-
-	buffer := bytes.NewBuffer(nil)
-
-	content, err := json.Marshal(queryLastResp)
-	if err != nil {
-		message = fmt.Sprintf("marshal queryLast response error: %s", err.Error())
-		queryLastResp.logger.Errorf(message)
-	}
-	buffer.WriteString(fmt.Sprintf("%s\n", string(content)))
-
-	status = "SUCCESS"
-	message = fmt.Sprint("query response converted to string successfully")
-
-	return buffer.String()
+	return toString(queryLastResp, ctx, "ToString-QueryLast", queryLastResp.logger)
 }
 
 func (queryLastResp *QueryLastResponse) SetStatus(ctx context.Context, code int) {
-	_, span := queryLastResp.addTrace(ctx, "SetStatus")
+	setStatus(queryLastResp, ctx, code, "SetStatus-QueryLast", queryLastResp.logger)
+}
 
-	status := "SUCCESS"
-	var message string
-
-	defer sendOperationStats(queryLastResp.logger, time.Now(), "SetStatus-QueryLastResp", &status, &message, span)
-	message = fmt.Sprintf("set response code : %d", code)
-
+func (queryLastResp *QueryLastResponse) setStatusCode(code int) {
 	queryLastResp.StatusCode = code
 }
 
 func (queryLastResp *QueryLastResponse) GetCustomParser(ctx context.Context) func(respCnt []byte) error {
-	_, span := queryLastResp.addTrace(ctx, "GetCustomParser")
+	return getCustomParser(queryLastResp, ctx, "GetCustomParser-QueryLast", queryLastResp.logger,
+		func(resp []byte, target interface{}) error {
+			originRespStr := string(resp)
 
-	status := "FAIL"
-	var message string
+			var respStr string
 
-	defer sendOperationStats(queryLastResp.logger, time.Now(), "GetCustomParser-QueryLastResp", &status, &message, span)
+			if queryLastResp.StatusCode == http.StatusOK && strings.Contains(originRespStr, "[") && strings.Contains(originRespStr, "]") {
+				respStr = fmt.Sprintf("{%s:%s}", `"queryRespCnts"`, originRespStr)
+			} else {
+				respStr = originRespStr
+			}
 
-	return func(resp []byte) error {
-		originRespStr := string(resp)
-		var respStr string
-		if queryLastResp.StatusCode == 200 && strings.Contains(originRespStr, "[") && strings.Contains(originRespStr, "]") {
-			respStr = fmt.Sprintf("{%s:%s}", `"queryRespCnts"`, originRespStr)
-		} else {
-			respStr = originRespStr
-		}
-
-		err := json.Unmarshal([]byte(respStr), &queryLastResp)
-		if err != nil {
-			message = fmt.Sprintf("unmarshal queryLast response error: %s", err)
-			queryLastResp.logger.Errorf(message)
-
-			return err
-		}
-
-		status = "SUCCESS"
-		message = fmt.Sprint("queryLast custom parsing successful")
-
-		return nil
-	}
+			return json.Unmarshal([]byte(respStr), &queryLastResp)
+		})
 }
 
 // QueryRespLastItem acts as the implementation of Response in the /api/query/last scene.
@@ -170,7 +120,7 @@ type QueryRespLastItem struct {
 	Tsuid string `json:"tsuid"`
 }
 
-func (c *OpentsdbClient) QueryLast(param QueryLastParam) (*QueryLastResponse, error) {
+func (c *OpentsdbClient) QueryLast(param *QueryLastParam) (*QueryLastResponse, error) {
 	tracedctx, span := c.addTrace(c.ctx, "QueryLast")
 	c.ctx = tracedctx
 
@@ -179,13 +129,13 @@ func (c *OpentsdbClient) QueryLast(param QueryLastParam) (*QueryLastResponse, er
 
 	defer sendOperationStats(c.logger, time.Now(), "QueryLast", &status, &message, span)
 
-	if !isValidQueryLastParam(&param) {
-		message = fmt.Sprintf("invalid query last param")
+	if !isValidQueryLastParam(param) {
+		message = "invalid query last param"
 		return nil, errors.New(message)
 	}
 	queryEndpoint := fmt.Sprintf("%s%s", c.tsdbEndpoint, QueryLastPath)
 
-	reqBodyCnt, err := getQueryBodyContents(&param)
+	reqBodyCnt, err := getQueryBodyContents(param)
 	if err != nil {
 		message = fmt.Sprint("error retrieving body contents: ", err)
 		return nil, err
@@ -208,8 +158,9 @@ func isValidQueryLastParam(param *QueryLastParam) bool {
 	if param.Queries == nil || len(param.Queries) == 0 {
 		return false
 	}
+
 	for _, query := range param.Queries {
-		if len(query.Metric) == 0 {
+		if query.Metric == "" {
 			return false
 		}
 	}

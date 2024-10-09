@@ -1,16 +1,17 @@
 package opentsdb
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"go.opentelemetry.io/otel/trace"
+	"net/http"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
+
+	"go.opentelemetry.io/otel/trace"
 )
 
 // QueryParam is the structure used to hold
@@ -61,21 +62,22 @@ type QueryParam struct {
 }
 
 func (query *QueryParam) String(ctx context.Context) string {
-	_, span := query.addTrace(ctx, "ToString")
+	_, span := query.addTrace(ctx, "ToString-QueryParam")
 
 	status := "FAIL"
 	var message string
 
-	defer sendOperationStats(query.logger, time.Now(), "ToString-QueryResp", &status, &message, span)
+	defer sendOperationStats(query.logger, time.Now(), "ToString-QueryParam", &status, &message, span)
 
 	content, err := json.Marshal(query)
 	if err != nil {
-		message = fmt.Sprintf("marshal query response error: %s", err)
+		message = fmt.Sprintf("marshal queryParam response error: %s", err)
 		query.logger.Errorf(message)
+		return ""
 	}
 
 	status = "SUCCESS"
-	message = fmt.Sprint("query response converted to string successfully")
+	message = "queryParam response converted to string successfully"
 
 	return string(content)
 }
@@ -102,7 +104,7 @@ type SubQuery struct {
 
 	// An optional value is used to show whether or not the data should be
 	// converted into deltas before returning. This is useful if the metric is a
-	// continously incrementing counter and you want to view the rate of change between data points.
+	// continuously incrementing counter and you want to view the rate of change between data points.
 	Rate bool `json:"rate,omitempty"`
 
 	// rateOptions represents monotonically increasing counter handling options.
@@ -159,71 +161,32 @@ type QueryResponse struct {
 }
 
 func (queryResp *QueryResponse) String(ctx context.Context) string {
-	_, span := queryResp.addTrace(ctx, "ToString")
-
-	status := "FAIL"
-	var message string
-
-	defer sendOperationStats(queryResp.logger, time.Now(), "ToString-QueryResp", &status, &message, span)
-
-	buffer := bytes.NewBuffer(nil)
-
-	content, err := json.Marshal(queryResp)
-	if err != nil {
-		message = fmt.Sprintf("marshal queryresponse error: %s", err.Error())
-		queryResp.logger.Errorf(message)
-	}
-
-	buffer.WriteString(fmt.Sprintf("%s\n", string(content)))
-
-	status = "SUCCESS"
-	message = fmt.Sprint("queryresponse converted to string successfully")
-
-	return buffer.String()
+	return toString(queryResp, ctx, "ToString-Query", queryResp.logger)
 }
 
 func (queryResp *QueryResponse) SetStatus(ctx context.Context, code int) {
-	_, span := queryResp.addTrace(ctx, "SetStatus")
+	setStatus(queryResp, ctx, code, "SetStatus-Query", queryResp.logger)
+}
 
-	status := "SUCCESS"
-	var message string
-
-	defer sendOperationStats(queryResp.logger, time.Now(), "SetStatus-QueryResp", &status, &message, span)
-	message = fmt.Sprintf("set response code : %d", code)
-
+func (queryResp *QueryResponse) setStatusCode(code int) {
 	queryResp.StatusCode = code
 }
 
 func (queryResp *QueryResponse) GetCustomParser(ctx context.Context) func(respCnt []byte) error {
-	_, span := queryResp.addTrace(ctx, "GetCustomParser")
+	return getCustomParser(queryResp, ctx, "GetCustomParser-Query", queryResp.logger,
+		func(resp []byte, target interface{}) error {
+			originRespStr := string(resp)
 
-	status := "FAIL"
-	var message string
+			var respStr string
 
-	defer sendOperationStats(queryResp.logger, time.Now(), "GetCustomParser-AggregatorResp", &status, &message, span)
+			if queryResp.StatusCode == http.StatusOK && strings.Contains(originRespStr, "[") && strings.Contains(originRespStr, "]") {
+				respStr = fmt.Sprintf("{%s:%s}", `"queryRespCnts"`, originRespStr)
+			} else {
+				respStr = originRespStr
+			}
 
-	return func(resp []byte) error {
-		originRespStr := string(resp)
-		var respStr string
-		if queryResp.StatusCode == 200 && strings.Contains(originRespStr, "[") && strings.Contains(originRespStr, "]") {
-			respStr = fmt.Sprintf("{%s:%s}", `"queryRespCnts"`, originRespStr)
-		} else {
-			respStr = originRespStr
-		}
-
-		err := json.Unmarshal([]byte(respStr), &queryResp)
-		if err != nil {
-			message = fmt.Sprintf("unmarshal query response error: %s", err)
-			queryResp.logger.Errorf(message)
-
-			return err
-		}
-
-		status = "SUCCESS"
-		message = fmt.Sprint("query custom parsing successful")
-
-		return nil
-	}
+			return json.Unmarshal([]byte(respStr), &queryResp)
+		})
 }
 
 // QueryRespItem acts as the implementation of Response in the /api/query scene.
@@ -274,14 +237,15 @@ type QueryRespItem struct {
 
 // GetDataPoints returns the real ascending datapoints from the information of the related QueryRespItem.
 func (qri *QueryRespItem) GetDataPoints(ctx context.Context) []*DataPoint {
-	_, span := qri.addTrace(ctx, "GetDataPoints")
+	_, span := qri.addTrace(ctx, "GetDataPoints-QueryRespItem")
 
 	status := "FAIL"
 	var message string
 
-	defer sendOperationStats(qri.logger, time.Now(), "GetDataPoints", &status, &message, span)
+	defer sendOperationStats(qri.logger, time.Now(), "GetDataPoints-QueryRespItem", &status, &message, span)
 
 	datapoints := make([]*DataPoint, 0)
+
 	timestampStrs := qri.getSortedTimestampStrs(ctx)
 	for _, timestampStr := range timestampStrs {
 		timestamp, err := strconv.ParseInt(timestampStr, 10, 64)
@@ -300,19 +264,19 @@ func (qri *QueryRespItem) GetDataPoints(ctx context.Context) []*DataPoint {
 	}
 
 	status = "SUCCESS"
-	message = fmt.Sprint("DataPoints fetched successfully")
+	message = "dataPoints fetched successfully"
 	return datapoints
 }
 
 // getSortedTimestampStrs returns a slice of the ascending timestamp with
 // string format for the Dps of the related QueryRespItem instance.
 func (qri *QueryRespItem) getSortedTimestampStrs(ctx context.Context) []string {
-	_, span := qri.addTrace(ctx, "GetSortedTimeStamps")
+	_, span := qri.addTrace(ctx, "GetSortedTimeStamps-QueryRespItem")
 
 	status := "SUCCESS"
 	var message string
 
-	defer sendOperationStats(qri.logger, time.Now(), "GetSortedTimeStamps", &status, &message, span)
+	defer sendOperationStats(qri.logger, time.Now(), "GetSortedTimeStamps-QueryRespItem", &status, &message, span)
 
 	timestampStrs := make([]string, 0)
 	for timestampStr := range qri.Dps {
@@ -325,12 +289,12 @@ func (qri *QueryRespItem) getSortedTimestampStrs(ctx context.Context) []string {
 
 // GetLatestDataPoint returns latest datapoint for the related QueryRespItem instance.
 func (qri *QueryRespItem) GetLatestDataPoint(ctx context.Context) *DataPoint {
-	_, span := qri.addTrace(ctx, "Query")
+	_, span := qri.addTrace(ctx, "GetLatestDataPoint-QueryRespItem")
 
 	status := "FAIL"
 	var message string
 
-	defer sendOperationStats(qri.logger, time.Now(), "Query", &status, &message, span)
+	defer sendOperationStats(qri.logger, time.Now(), "GetLatestDataPoint-QueryRespItem", &status, &message, span)
 
 	timestampStrs := qri.getSortedTimestampStrs(ctx)
 
@@ -355,12 +319,12 @@ func (qri *QueryRespItem) GetLatestDataPoint(ctx context.Context) *DataPoint {
 
 	status = "SUCCESS"
 	message = fmt.Sprintf("LatestDataPoints with timestamp %v fetched successfully", timestamp)
-	qri.logger.Logf("LatestDataPoints fetched successfully")
 
+	qri.logger.Logf("LatestDataPoints fetched successfully")
 	return datapoint
 }
 
-func (c *OpentsdbClient) Query(param QueryParam) (*QueryResponse, error) {
+func (c *OpentsdbClient) Query(param *QueryParam) (*QueryResponse, error) {
 	if param.tracer == nil {
 		param.tracer = c.tracer
 	}
@@ -376,13 +340,13 @@ func (c *OpentsdbClient) Query(param QueryParam) (*QueryResponse, error) {
 
 	defer sendOperationStats(c.logger, time.Now(), "Query", &status, &message, span)
 
-	if !isValidQueryParam(&param) {
-		message = fmt.Sprint("invalid query parameters")
+	if !isValidQueryParam(param) {
+		message = "invalid query parameters"
 		return nil, errors.New(message)
 	}
 
 	queryEndpoint := fmt.Sprintf("%s%s", c.tsdbEndpoint, QueryPath)
-	reqBodyCnt, err := getQueryBodyContents(&param)
+	reqBodyCnt, err := getQueryBodyContents(param)
 	if err != nil {
 		message = fmt.Sprintf("getQueryBodyContents error: %s", err)
 		return nil, err
@@ -391,12 +355,12 @@ func (c *OpentsdbClient) Query(param QueryParam) (*QueryResponse, error) {
 	queryResp := QueryResponse{logger: c.logger, tracer: c.tracer}
 
 	if err = c.sendRequest(PostMethod, queryEndpoint, reqBodyCnt, &queryResp); err != nil {
-		message = fmt.Sprintf("error while processing request at url %s: %s ", queryEndpoint, err)
+		message = fmt.Sprintf("error while processing request at url %q: %s ", queryEndpoint, err)
 		return nil, err
 	}
 
 	status = "SUCCESS"
-	message = fmt.Sprintf("query request at url %s processed successfully", queryEndpoint)
+	message = fmt.Sprintf("query request at url %q processed successfully", queryEndpoint)
 
 	return &queryResp, nil
 }
@@ -404,7 +368,7 @@ func (c *OpentsdbClient) Query(param QueryParam) (*QueryResponse, error) {
 func getQueryBodyContents(param interface{}) (string, error) {
 	result, err := json.Marshal(param)
 	if err != nil {
-		return "", errors.New(fmt.Sprintf("Failed to marshal query param: %v\n", err))
+		return "", fmt.Errorf("failed to marshal query param: %v", err)
 	}
 	return string(result), nil
 }
@@ -416,8 +380,9 @@ func isValidQueryParam(param *QueryParam) bool {
 	if !isValidTimePoint(param.Start) {
 		return false
 	}
+
 	for _, query := range param.Queries {
-		if len(query.Aggregator) == 0 || len(query.Metric) == 0 {
+		if query.Aggregator == "" || query.Metric == "" {
 			return false
 		}
 		for k, _ := range query.RateParams {
@@ -433,6 +398,7 @@ func isValidTimePoint(timePoint interface{}) bool {
 	if timePoint == nil {
 		return false
 	}
+
 	switch v := timePoint.(type) {
 	case int:
 		if v <= 0 {

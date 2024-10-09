@@ -28,6 +28,8 @@ type OpentsDBClient interface {
 
 	GetContext() context.Context
 
+	Version() (*VersionResponse, error)
+
 	// Put handles the 'POST /api/put' endpoint, allowing the storage of data in OpenTSDB.
 	//
 	// Parameters:
@@ -55,7 +57,7 @@ type OpentsDBClient interface {
 	// Returns:
 	// - *QueryResponse on success (status code and response info).
 	// - Error on failure (invalid parameters, response parsing failure, or OpenTSDB connection issues).
-	Query(param QueryParam) (*QueryResponse, error)
+	Query(param *QueryParam) (*QueryResponse, error)
 
 	// QueryLast is the implementation of 'GET /api/query/last' endpoint.
 	// It is introduced firstly in v2.1, and fully supported in v2.2. So it should be aware that this api works
@@ -66,7 +68,7 @@ type OpentsDBClient interface {
 	// When query operation is successful, a pointer of QueryLastResponse will be returned with the corresponding
 	// status code and response info. Otherwise, an error instance will be returned, when the given parameter
 	// is invalid, it failed to parse the response, or OpenTSDB is un-connectable right now.
-	QueryLast(param QueryLastParam) (*QueryLastResponse, error)
+	QueryLast(param *QueryLastParam) (*QueryLastResponse, error)
 
 	// Aggregators is the implementation of 'GET /api/aggregators' endpoint.
 	// It simply lists the names of implemented aggregation functions used in time series queries.
@@ -75,33 +77,6 @@ type OpentsDBClient interface {
 	// status code and response info. Otherwise, an error instance will be returned, when it failed to parse the
 	// response, or OpenTSDB is un-connectable right now.
 	Aggregators() (*AggregatorsResponse, error)
-
-	// Config is the implementation of 'GET /api/config' endpoint.
-	// It returns information about the running configuration of the TSD.
-	// It is read only and cannot be used to set configuration options.
-	//
-	// When query operation is successful, a pointer of ConfigResponse will be returned with the corresponding
-	// status code and response info. Otherwise, an error instance will be returned, when it failed to parese the
-	// response, or OpenTSDB is un-connectable right now.
-	Config() (*ConfigResponse, error)
-
-	// Serializers is the implementation of 'GET /api/serializers' endpoint.
-	// It lists the serializer plugins loaded by the running TSD. Information given includes the name,
-	// implemented methods, content types and methods.
-	//
-	// When query operation is successful, a pointer of SerialResponse will be returned with the corresponding
-	// status code and response info. Otherwise, an error instance will be returned, when it failed to parese the
-	// response, or OpenTSDB is un-connectable right now.
-	Serializers() (*SerialResponse, error)
-
-	// Stats is the implementation of 'GET /api/stats' endpoint.
-	// It provides a list of statistics for the running TSD. These statistics are automatically recorded
-	// by a running TSD every 5 minutes but may be accessed via this endpoint. All statistics are read only.
-	//
-	// When query operation is successful, a pointer of StatsResponse will be returned with the corresponding
-	// status code and response info. Otherwise, an error instance will be returned, when it failed to parese the
-	// response, or OpenTSDB is un-connectable right now.
-	Stats() (*StatsResponse, error)
 
 	// Suggest is the implementation of 'GET /api/suggest' endpoint.
 	// It provides a means of implementing an "auto-complete" call that can be accessed repeatedly as a user
@@ -115,15 +90,7 @@ type OpentsDBClient interface {
 	// When query operation is successful, a pointer of SuggestResponse will be returned with the corresponding
 	// status code and response info. Otherwise, an error instance will be returned, if the given parameter is invalid,
 	// or when it failed to parese the response, or OpenTSDB is un-connectable right now.
-	Suggest(sugParm SuggestParam) (*SuggestResponse, error)
-
-	// Version is the implementation of 'GET /api/version' endpoint.
-	// It returns information about the running version of OpenTSDB.
-	//
-	// When query operation is successful, a pointer of VersionResponse will be returned with the corresponding
-	// status code and response info. Otherwise, an error instance will be returned, when it failed to parese the
-	// response, or OpenTSDB is un-connectable right now.
-	Version() (*VersionResponse, error)
+	Suggest(sugParm *SuggestParam) (*SuggestResponse, error)
 
 	// Dropcaches is the implementation of 'GET /api/dropcaches' endpoint.
 	// It purges the in-memory data cached in OpenTSDB. This includes all UID to name
@@ -163,7 +130,7 @@ type OpentsDBClient interface {
 	// or when it failed to parese the response, or OpenTSDB is un-connectable right now.
 	//
 	// Note that: the returned non-nil error instance is only responsed by opentsdb-client, not the OpenTSDB backend.
-	UpdateAnnotation(annotation Annotation) (*AnnotationResponse, error)
+	UpdateAnnotation(annotation *Annotation) (*AnnotationResponse, error)
 
 	// DeleteAnnotation is the implementation of 'DELETE /api/annotation' endpoint.
 	// It deletes an annotation stored in the OpenTSDB backend.
@@ -178,7 +145,7 @@ type OpentsDBClient interface {
 	// or when it failed to parese the response, or OpenTSDB is un-connectable right now.
 	//
 	// Note that: the returned non-nil error instance is only responsed by opentsdb-client, not the OpenTSDB backend.
-	DeleteAnnotation(annotation Annotation) (*AnnotationResponse, error)
+	DeleteAnnotation(annotation *Annotation) (*AnnotationResponse, error)
 
 	// BulkUpdateAnnotations is the implementation of 'POST /api/annotation/bulk' endpoint.
 	// It creates or modifies a list of annotation stored in the OpenTSDB backend.
@@ -208,7 +175,7 @@ type OpentsDBClient interface {
 	// or when it failed to parese the response, or OpenTSDB is un-connectable right now.
 	//
 	// Note that: the returned non-nil error instance is only responsed by opentsdb-client, not the OpenTSDB backend.
-	BulkDeleteAnnotations(bulkDelParam BulkAnnoDeleteInfo) (*BulkAnnotatResponse, error)
+	BulkDeleteAnnotations(bulkDelParam *BulkAnnoDeleteInfo) (*BulkAnnotatResponse, error)
 
 	// QueryUIDMetaData is the implementation of 'GET /api/uid/uidmeta' endpoint.
 	// It retrieves a single UIDMetaData stored in the OpenTSDB backend with the given query parameters.
@@ -240,7 +207,7 @@ type OpentsDBClient interface {
 	// or when it failed to parese the response, or OpenTSDB is un-connectable right now.
 	//
 	// Note that: the returned non-nil error instance is only responsed by opentsdb-client, not the OpenTSDB backend.
-	UpdateUIDMetaData(uidMetaData UIDMetaData) (*UIDMetaDataResponse, error)
+	UpdateUIDMetaData(uidMetaData *UIDMetaData) (*UIDMetaDataResponse, error)
 
 	// DeleteUIDMetaData is the implementation of 'DELETE /api/uid/uidmeta' endpoint.
 	// It deletes a target UIDMetaData.
@@ -256,7 +223,7 @@ type OpentsDBClient interface {
 	// or when it failed to parese the response, or OpenTSDB is un-connectable right now.
 	//
 	// Note that: the returned non-nil error instance is only responsed by opentsdb-client, not the OpenTSDB backend.
-	DeleteUIDMetaData(uidMetaData UIDMetaData) (*UIDMetaDataResponse, error)
+	DeleteUIDMetaData(uidMetaData *UIDMetaData) (*UIDMetaDataResponse, error)
 
 	// AssignUID is the implementation of 'POST /api/uid/assigin' endpoint.
 	// It enables assigning UIDs to new metrics, tag names and tag values. Multiple types and names can be provided
@@ -274,7 +241,7 @@ type OpentsDBClient interface {
 	// or when it failed to parese the response, or OpenTSDB is un-connectable right now.
 	//
 	// Note that: the returned non-nil error instance is only responsed by opentsdb-client, not the OpenTSDB backend.
-	AssignUID(assignParam UIDAssignParam) (*UIDAssignResponse, error)
+	AssignUID(assignParam *UIDAssignParam) (*UIDAssignResponse, error)
 
 	// QueryTSMetaData is the implementation of 'GET /api/uid/tsmeta' endpoint.
 	// It retrieves a single TSMetaData stored in the OpenTSDB backend with the given query parameters.
@@ -304,7 +271,7 @@ type OpentsDBClient interface {
 	// or OpenTSDB is un-connectable right now.
 	//
 	// Note that: the returned non-nil error instance is only responsed by opentsdb-client, not the OpenTSDB backend.
-	UpdateTSMetaData(tsMetaData TSMetaData) (*TSMetaDataResponse, error)
+	UpdateTSMetaData(tsMetaData *TSMetaData) (*TSMetaDataResponse, error)
 
 	// DeleteTSMetaData is the implementation of 'DELETE /api/uid/tsmeta' endpoint.
 	// It deletes a target TSMetaData.
@@ -319,7 +286,7 @@ type OpentsDBClient interface {
 	// or OpenTSDB is un-connectable right now.
 	//
 	// Note that: the returned non-nil error instance is only responsed by opentsdb-client, not the OpenTSDB backend.
-	DeleteTSMetaData(tsMetaData TSMetaData) (*TSMetaDataResponse, error)
+	DeleteTSMetaData(tsMetaData *TSMetaData) (*TSMetaDataResponse, error)
 }
 
 // Response defines the common behaviours all the specific response for

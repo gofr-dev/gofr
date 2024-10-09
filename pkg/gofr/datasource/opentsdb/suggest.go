@@ -1,7 +1,6 @@
 package opentsdb
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -35,23 +34,11 @@ type SuggestParam struct {
 }
 
 func (sugParam *SuggestParam) String(ctx context.Context) string {
-	_, span := sugParam.addTrace(ctx, "ToString")
+	return toString(sugParam, ctx, "ToString-SuggestParam", sugParam.logger)
+}
 
-	status := "FAIL"
-	var message string
-
-	defer sendOperationStats(sugParam.logger, time.Now(), "ToString-SuggestResp", &status, &message, span)
-
-	content, err := json.Marshal(sugParam)
-	if err != nil {
-		message = fmt.Sprintf("marshal config response error: %s", err.Error())
-		sugParam.logger.Errorf(message)
-	}
-
-	status = "SUCCESS"
-	message = fmt.Sprint("suggest response converted to string successfully")
-
-	return string(content)
+func (sugParam *SuggestParam) setStatusCode(int) {
+	sugParam.logger.Errorf("method is not supported yet")
 }
 
 type SuggestResponse struct {
@@ -62,64 +49,26 @@ type SuggestResponse struct {
 }
 
 func (sugResp *SuggestResponse) SetStatus(ctx context.Context, code int) {
-	_, span := sugResp.addTrace(ctx, "SetStatus")
+	setStatus(sugResp, ctx, code, "SetStatus-Suggest", sugResp.logger)
+}
 
-	status := "SUCCESS"
-	var message string
-
-	defer sendOperationStats(sugResp.logger, time.Now(), "SetStatus-suggestResp", &status, &message, span)
-	message = fmt.Sprintf("set response code : %d", code)
-
+func (sugResp *SuggestResponse) setStatusCode(code int) {
 	sugResp.StatusCode = code
 }
 
 func (sugResp *SuggestResponse) GetCustomParser(ctx context.Context) func(respCnt []byte) error {
-	_, span := sugResp.addTrace(ctx, "GetCustomParser")
+	return getCustomParser(sugResp, ctx, "GetCustomParser-Suggest", sugResp.logger,
+		func(resp []byte, target interface{}) error {
 
-	status := "FAIL"
-	var message string
-
-	defer sendOperationStats(sugResp.logger, time.Now(), "GetCustomParser-SuggestResp", &status, &message, span)
-
-	return func(respCnt []byte) error {
-		err := json.Unmarshal([]byte(fmt.Sprintf("{%s:%s}", `"ResultInfo"`, string(respCnt))), &sugResp)
-		if err != nil {
-			message = fmt.Sprintf("unmarshal suggest response error: %s", err)
-			sugResp.logger.Errorf(message)
-		}
-
-		status = "SUCCESS"
-		message = fmt.Sprintf("custom parsing successful")
-
-		return nil
-	}
+			return json.Unmarshal([]byte(fmt.Sprintf("{%s:%s}", `"ResultInfo"`, string(resp))), &sugResp)
+		})
 }
 
 func (sugResp *SuggestResponse) String(ctx context.Context) string {
-	_, span := sugResp.addTrace(ctx, "ToString")
-
-	status := "FAIL"
-	var message string
-
-	defer sendOperationStats(sugResp.logger, time.Now(), "ToString-SuggestResp", &status, &message, span)
-
-	buffer := bytes.NewBuffer(nil)
-
-	content, err := json.Marshal(sugResp)
-	if err != nil {
-		message = fmt.Sprintf("marshal config response error: %s", err.Error())
-		sugResp.logger.Errorf(message)
-	}
-
-	buffer.WriteString(fmt.Sprintf("%s\n", string(content)))
-
-	status = "SUCCESS"
-	message = fmt.Sprint("suggest response converted to string successfully")
-
-	return buffer.String()
+	return toString(sugResp, ctx, "ToString-VersionResp", sugResp.logger)
 }
 
-func (c *OpentsdbClient) Suggest(sugParam SuggestParam) (*SuggestResponse, error) {
+func (c *OpentsdbClient) Suggest(sugParam *SuggestParam) (*SuggestResponse, error) {
 	if sugParam.logger == nil {
 		sugParam.logger = c.logger
 	}
@@ -131,18 +80,18 @@ func (c *OpentsdbClient) Suggest(sugParam SuggestParam) (*SuggestResponse, error
 	tracedCtx, span := c.addTrace(context.Background(), "Suggest")
 	c.ctx = tracedCtx
 
-	status := "FAIL"
+	status := StatusFailed
 	var message string
 
 	defer sendOperationStats(c.logger, time.Now(), "Suggest", &status, &message, span)
 
-	if !isValidSuggestParam(&sugParam) {
+	if !isValidSuggestParam(sugParam) {
 		message = "invalid suggest param"
 		return nil, errors.New(message)
 	}
 
 	sugEndpoint := fmt.Sprintf("%s%s", c.tsdbEndpoint, SuggestPath)
-	reqBodyCnt, err := getSuggestBodyContents(&sugParam)
+	reqBodyCnt, err := getSuggestBodyContents(sugParam)
 	if err != nil {
 		message = fmt.Sprintf("get suggest body content error: %s", err)
 		return nil, err
@@ -150,12 +99,12 @@ func (c *OpentsdbClient) Suggest(sugParam SuggestParam) (*SuggestResponse, error
 
 	sugResp := SuggestResponse{logger: c.logger, tracer: c.tracer}
 	if err := c.sendRequest(PostMethod, sugEndpoint, reqBodyCnt, &sugResp); err != nil {
-		message = fmt.Sprintf("error processing suggest request to url %s: %s", sugEndpoint, err)
+		message = fmt.Sprintf("error processing suggest request to url %q: %s", sugEndpoint, err)
 		return nil, err
 	}
 
-	status = "SUCCESS"
-	message = fmt.Sprintf("")
+	status = StatusSuccess
+	message = fmt.Sprintf("suggest query request to url %q processed successfully", sugEndpoint)
 	return &sugResp, nil
 }
 
@@ -163,20 +112,23 @@ func isValidSuggestParam(sugParam *SuggestParam) bool {
 	if sugParam.Type == "" {
 		return false
 	}
-	types := []string{TypeMetrics, TypeTagk, TypeTagv}
+
 	sugParam.Type = strings.TrimSpace(sugParam.Type)
+
+	types := []string{TypeMetrics, TypeTagk, TypeTagv}
 	for _, typeItem := range types {
 		if sugParam.Type == typeItem {
 			return true
 		}
 	}
+
 	return false
 }
 
 func getSuggestBodyContents(sugParam *SuggestParam) (string, error) {
 	result, err := json.Marshal(sugParam)
 	if err != nil {
-		return "", errors.New(fmt.Sprintf("Failed to marshal suggest param: %v\n", err))
+		return "", fmt.Errorf("failed to marshal suggest param: %v", err)
 	}
 	return string(result), nil
 }

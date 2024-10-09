@@ -55,7 +55,7 @@ func (mr *MockOpentsdbProviderMockRecorder) Aggregators() *gomock.Call {
 }
 
 // AssignUID mocks base method.
-func (m *MockOpentsdbProvider) AssignUID(assignParam UIDAssignParam) (*UIDAssignResponse, error) {
+func (m *MockOpentsdbProvider) AssignUID(assignParam *UIDAssignParam) (*UIDAssignResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "AssignUID", assignParam)
 	ret0, _ := ret[0].(*UIDAssignResponse)
@@ -70,7 +70,7 @@ func (mr *MockOpentsdbProviderMockRecorder) AssignUID(assignParam any) *gomock.C
 }
 
 // BulkDeleteAnnotations mocks base method.
-func (m *MockOpentsdbProvider) BulkDeleteAnnotations(bulkDelParam BulkAnnoDeleteInfo) (*BulkAnnotatResponse, error) {
+func (m *MockOpentsdbProvider) BulkDeleteAnnotations(bulkDelParam *BulkAnnoDeleteInfo) (*BulkAnnotatResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "BulkDeleteAnnotations", bulkDelParam)
 	ret0, _ := ret[0].(*BulkAnnotatResponse)
@@ -99,21 +99,6 @@ func (mr *MockOpentsdbProviderMockRecorder) BulkUpdateAnnotations(annotations an
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BulkUpdateAnnotations", reflect.TypeOf((*MockOpentsdbProvider)(nil).BulkUpdateAnnotations), annotations)
 }
 
-// Config mocks base method.
-func (m *MockOpentsdbProvider) Config() (*ConfigResponse, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Config")
-	ret0, _ := ret[0].(*ConfigResponse)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// Config indicates an expected call of Config.
-func (mr *MockOpentsdbProviderMockRecorder) Config() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Config", reflect.TypeOf((*MockOpentsdbProvider)(nil).Config))
-}
-
 // Connect mocks base method.
 func (m *MockOpentsdbProvider) Connect() {
 	m.ctrl.T.Helper()
@@ -127,7 +112,7 @@ func (mr *MockOpentsdbProviderMockRecorder) Connect() *gomock.Call {
 }
 
 // DeleteAnnotation mocks base method.
-func (m *MockOpentsdbProvider) DeleteAnnotation(annotation Annotation) (*AnnotationResponse, error) {
+func (m *MockOpentsdbProvider) DeleteAnnotation(annotation *Annotation) (*AnnotationResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "DeleteAnnotation", annotation)
 	ret0, _ := ret[0].(*AnnotationResponse)
@@ -142,7 +127,7 @@ func (mr *MockOpentsdbProviderMockRecorder) DeleteAnnotation(annotation any) *go
 }
 
 // DeleteTSMetaData mocks base method.
-func (m *MockOpentsdbProvider) DeleteTSMetaData(tsMetaData TSMetaData) (*TSMetaDataResponse, error) {
+func (m *MockOpentsdbProvider) DeleteTSMetaData(tsMetaData *TSMetaData) (*TSMetaDataResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "DeleteTSMetaData", tsMetaData)
 	ret0, _ := ret[0].(*TSMetaDataResponse)
@@ -157,7 +142,7 @@ func (mr *MockOpentsdbProviderMockRecorder) DeleteTSMetaData(tsMetaData any) *go
 }
 
 // DeleteUIDMetaData mocks base method.
-func (m *MockOpentsdbProvider) DeleteUIDMetaData(uidMetaData UIDMetaData) (*UIDMetaDataResponse, error) {
+func (m *MockOpentsdbProvider) DeleteUIDMetaData(uidMetaData *UIDMetaData) (*UIDMetaDataResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "DeleteUIDMetaData", uidMetaData)
 	ret0, _ := ret[0].(*UIDMetaDataResponse)
@@ -186,18 +171,32 @@ func (mr *MockOpentsdbProviderMockRecorder) Dropcaches() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Dropcaches", reflect.TypeOf((*MockOpentsdbProvider)(nil).Dropcaches))
 }
 
-// Ping mocks base method.
-func (m *MockOpentsdbProvider) Ping() error {
+// GetContext mocks base method.
+func (m *MockOpentsdbProvider) GetContext() context.Context {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Ping")
+	ret := m.ctrl.Call(m, "GetContext")
+	ret0, _ := ret[0].(context.Context)
+	return ret0
+}
+
+// GetContext indicates an expected call of GetContext.
+func (mr *MockOpentsdbProviderMockRecorder) GetContext() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetContext", reflect.TypeOf((*MockOpentsdbProvider)(nil).GetContext))
+}
+
+// HealthCheck mocks base method.
+func (m *MockOpentsdbProvider) HealthCheck() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HealthCheck")
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// Ping indicates an expected call of Ping.
-func (mr *MockOpentsdbProviderMockRecorder) Ping() *gomock.Call {
+// HealthCheck indicates an expected call of HealthCheck.
+func (mr *MockOpentsdbProviderMockRecorder) HealthCheck() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Ping", reflect.TypeOf((*MockOpentsdbProvider)(nil).Ping))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HealthCheck", reflect.TypeOf((*MockOpentsdbProvider)(nil).HealthCheck))
 }
 
 // Put mocks base method.
@@ -216,7 +215,7 @@ func (mr *MockOpentsdbProviderMockRecorder) Put(data, queryParam any) *gomock.Ca
 }
 
 // Query mocks base method.
-func (m *MockOpentsdbProvider) Query(param QueryParam) (*QueryResponse, error) {
+func (m *MockOpentsdbProvider) Query(param *QueryParam) (*QueryResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Query", param)
 	ret0, _ := ret[0].(*QueryResponse)
@@ -246,7 +245,7 @@ func (mr *MockOpentsdbProviderMockRecorder) QueryAnnotation(queryAnnoParam any) 
 }
 
 // QueryLast mocks base method.
-func (m *MockOpentsdbProvider) QueryLast(param QueryLastParam) (*QueryLastResponse, error) {
+func (m *MockOpentsdbProvider) QueryLast(param *QueryLastParam) (*QueryLastResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "QueryLast", param)
 	ret0, _ := ret[0].(*QueryLastResponse)
@@ -290,38 +289,8 @@ func (mr *MockOpentsdbProviderMockRecorder) QueryUIDMetaData(metaQueryParam any)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryUIDMetaData", reflect.TypeOf((*MockOpentsdbProvider)(nil).QueryUIDMetaData), metaQueryParam)
 }
 
-// Serializers mocks base method.
-func (m *MockOpentsdbProvider) Serializers() (*SerialResponse, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Serializers")
-	ret0, _ := ret[0].(*SerialResponse)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// Serializers indicates an expected call of Serializers.
-func (mr *MockOpentsdbProviderMockRecorder) Serializers() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Serializers", reflect.TypeOf((*MockOpentsdbProvider)(nil).Serializers))
-}
-
-// Stats mocks base method.
-func (m *MockOpentsdbProvider) Stats() (*StatsResponse, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Stats")
-	ret0, _ := ret[0].(*StatsResponse)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// Stats indicates an expected call of Stats.
-func (mr *MockOpentsdbProviderMockRecorder) Stats() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Stats", reflect.TypeOf((*MockOpentsdbProvider)(nil).Stats))
-}
-
 // Suggest mocks base method.
-func (m *MockOpentsdbProvider) Suggest(sugParm SuggestParam) (*SuggestResponse, error) {
+func (m *MockOpentsdbProvider) Suggest(sugParm *SuggestParam) (*SuggestResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Suggest", sugParm)
 	ret0, _ := ret[0].(*SuggestResponse)
@@ -336,7 +305,7 @@ func (mr *MockOpentsdbProviderMockRecorder) Suggest(sugParm any) *gomock.Call {
 }
 
 // UpdateAnnotation mocks base method.
-func (m *MockOpentsdbProvider) UpdateAnnotation(annotation Annotation) (*AnnotationResponse, error) {
+func (m *MockOpentsdbProvider) UpdateAnnotation(annotation *Annotation) (*AnnotationResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "UpdateAnnotation", annotation)
 	ret0, _ := ret[0].(*AnnotationResponse)
@@ -351,7 +320,7 @@ func (mr *MockOpentsdbProviderMockRecorder) UpdateAnnotation(annotation any) *go
 }
 
 // UpdateTSMetaData mocks base method.
-func (m *MockOpentsdbProvider) UpdateTSMetaData(tsMetaData TSMetaData) (*TSMetaDataResponse, error) {
+func (m *MockOpentsdbProvider) UpdateTSMetaData(tsMetaData *TSMetaData) (*TSMetaDataResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "UpdateTSMetaData", tsMetaData)
 	ret0, _ := ret[0].(*TSMetaDataResponse)
@@ -366,7 +335,7 @@ func (mr *MockOpentsdbProviderMockRecorder) UpdateTSMetaData(tsMetaData any) *go
 }
 
 // UpdateUIDMetaData mocks base method.
-func (m *MockOpentsdbProvider) UpdateUIDMetaData(uidMetaData UIDMetaData) (*UIDMetaDataResponse, error) {
+func (m *MockOpentsdbProvider) UpdateUIDMetaData(uidMetaData *UIDMetaData) (*UIDMetaDataResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "UpdateUIDMetaData", uidMetaData)
 	ret0, _ := ret[0].(*UIDMetaDataResponse)
@@ -470,7 +439,7 @@ func (mr *MockOpentsdbProviderWithContextMockRecorder) Aggregators() *gomock.Cal
 }
 
 // AssignUID mocks base method.
-func (m *MockOpentsdbProviderWithContext) AssignUID(assignParam UIDAssignParam) (*UIDAssignResponse, error) {
+func (m *MockOpentsdbProviderWithContext) AssignUID(assignParam *UIDAssignParam) (*UIDAssignResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "AssignUID", assignParam)
 	ret0, _ := ret[0].(*UIDAssignResponse)
@@ -485,7 +454,7 @@ func (mr *MockOpentsdbProviderWithContextMockRecorder) AssignUID(assignParam any
 }
 
 // BulkDeleteAnnotations mocks base method.
-func (m *MockOpentsdbProviderWithContext) BulkDeleteAnnotations(bulkDelParam BulkAnnoDeleteInfo) (*BulkAnnotatResponse, error) {
+func (m *MockOpentsdbProviderWithContext) BulkDeleteAnnotations(bulkDelParam *BulkAnnoDeleteInfo) (*BulkAnnotatResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "BulkDeleteAnnotations", bulkDelParam)
 	ret0, _ := ret[0].(*BulkAnnotatResponse)
@@ -514,21 +483,6 @@ func (mr *MockOpentsdbProviderWithContextMockRecorder) BulkUpdateAnnotations(ann
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BulkUpdateAnnotations", reflect.TypeOf((*MockOpentsdbProviderWithContext)(nil).BulkUpdateAnnotations), annotations)
 }
 
-// Config mocks base method.
-func (m *MockOpentsdbProviderWithContext) Config() (*ConfigResponse, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Config")
-	ret0, _ := ret[0].(*ConfigResponse)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// Config indicates an expected call of Config.
-func (mr *MockOpentsdbProviderWithContextMockRecorder) Config() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Config", reflect.TypeOf((*MockOpentsdbProviderWithContext)(nil).Config))
-}
-
 // Connect mocks base method.
 func (m *MockOpentsdbProviderWithContext) Connect() {
 	m.ctrl.T.Helper()
@@ -542,7 +496,7 @@ func (mr *MockOpentsdbProviderWithContextMockRecorder) Connect() *gomock.Call {
 }
 
 // DeleteAnnotation mocks base method.
-func (m *MockOpentsdbProviderWithContext) DeleteAnnotation(annotation Annotation) (*AnnotationResponse, error) {
+func (m *MockOpentsdbProviderWithContext) DeleteAnnotation(annotation *Annotation) (*AnnotationResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "DeleteAnnotation", annotation)
 	ret0, _ := ret[0].(*AnnotationResponse)
@@ -557,7 +511,7 @@ func (mr *MockOpentsdbProviderWithContextMockRecorder) DeleteAnnotation(annotati
 }
 
 // DeleteTSMetaData mocks base method.
-func (m *MockOpentsdbProviderWithContext) DeleteTSMetaData(tsMetaData TSMetaData) (*TSMetaDataResponse, error) {
+func (m *MockOpentsdbProviderWithContext) DeleteTSMetaData(tsMetaData *TSMetaData) (*TSMetaDataResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "DeleteTSMetaData", tsMetaData)
 	ret0, _ := ret[0].(*TSMetaDataResponse)
@@ -572,7 +526,7 @@ func (mr *MockOpentsdbProviderWithContextMockRecorder) DeleteTSMetaData(tsMetaDa
 }
 
 // DeleteUIDMetaData mocks base method.
-func (m *MockOpentsdbProviderWithContext) DeleteUIDMetaData(uidMetaData UIDMetaData) (*UIDMetaDataResponse, error) {
+func (m *MockOpentsdbProviderWithContext) DeleteUIDMetaData(uidMetaData *UIDMetaData) (*UIDMetaDataResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "DeleteUIDMetaData", uidMetaData)
 	ret0, _ := ret[0].(*UIDMetaDataResponse)
@@ -601,18 +555,32 @@ func (mr *MockOpentsdbProviderWithContextMockRecorder) Dropcaches() *gomock.Call
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Dropcaches", reflect.TypeOf((*MockOpentsdbProviderWithContext)(nil).Dropcaches))
 }
 
-// Ping mocks base method.
-func (m *MockOpentsdbProviderWithContext) Ping() error {
+// GetContext mocks base method.
+func (m *MockOpentsdbProviderWithContext) GetContext() context.Context {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Ping")
+	ret := m.ctrl.Call(m, "GetContext")
+	ret0, _ := ret[0].(context.Context)
+	return ret0
+}
+
+// GetContext indicates an expected call of GetContext.
+func (mr *MockOpentsdbProviderWithContextMockRecorder) GetContext() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetContext", reflect.TypeOf((*MockOpentsdbProviderWithContext)(nil).GetContext))
+}
+
+// HealthCheck mocks base method.
+func (m *MockOpentsdbProviderWithContext) HealthCheck() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HealthCheck")
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// Ping indicates an expected call of Ping.
-func (mr *MockOpentsdbProviderWithContextMockRecorder) Ping() *gomock.Call {
+// HealthCheck indicates an expected call of HealthCheck.
+func (mr *MockOpentsdbProviderWithContextMockRecorder) HealthCheck() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Ping", reflect.TypeOf((*MockOpentsdbProviderWithContext)(nil).Ping))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HealthCheck", reflect.TypeOf((*MockOpentsdbProviderWithContext)(nil).HealthCheck))
 }
 
 // Put mocks base method.
@@ -631,7 +599,7 @@ func (mr *MockOpentsdbProviderWithContextMockRecorder) Put(data, queryParam any)
 }
 
 // Query mocks base method.
-func (m *MockOpentsdbProviderWithContext) Query(param QueryParam) (*QueryResponse, error) {
+func (m *MockOpentsdbProviderWithContext) Query(param *QueryParam) (*QueryResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Query", param)
 	ret0, _ := ret[0].(*QueryResponse)
@@ -661,7 +629,7 @@ func (mr *MockOpentsdbProviderWithContextMockRecorder) QueryAnnotation(queryAnno
 }
 
 // QueryLast mocks base method.
-func (m *MockOpentsdbProviderWithContext) QueryLast(param QueryLastParam) (*QueryLastResponse, error) {
+func (m *MockOpentsdbProviderWithContext) QueryLast(param *QueryLastParam) (*QueryLastResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "QueryLast", param)
 	ret0, _ := ret[0].(*QueryLastResponse)
@@ -705,38 +673,8 @@ func (mr *MockOpentsdbProviderWithContextMockRecorder) QueryUIDMetaData(metaQuer
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryUIDMetaData", reflect.TypeOf((*MockOpentsdbProviderWithContext)(nil).QueryUIDMetaData), metaQueryParam)
 }
 
-// Serializers mocks base method.
-func (m *MockOpentsdbProviderWithContext) Serializers() (*SerialResponse, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Serializers")
-	ret0, _ := ret[0].(*SerialResponse)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// Serializers indicates an expected call of Serializers.
-func (mr *MockOpentsdbProviderWithContextMockRecorder) Serializers() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Serializers", reflect.TypeOf((*MockOpentsdbProviderWithContext)(nil).Serializers))
-}
-
-// Stats mocks base method.
-func (m *MockOpentsdbProviderWithContext) Stats() (*StatsResponse, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Stats")
-	ret0, _ := ret[0].(*StatsResponse)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// Stats indicates an expected call of Stats.
-func (mr *MockOpentsdbProviderWithContextMockRecorder) Stats() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Stats", reflect.TypeOf((*MockOpentsdbProviderWithContext)(nil).Stats))
-}
-
 // Suggest mocks base method.
-func (m *MockOpentsdbProviderWithContext) Suggest(sugParm SuggestParam) (*SuggestResponse, error) {
+func (m *MockOpentsdbProviderWithContext) Suggest(sugParm *SuggestParam) (*SuggestResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Suggest", sugParm)
 	ret0, _ := ret[0].(*SuggestResponse)
@@ -751,7 +689,7 @@ func (mr *MockOpentsdbProviderWithContextMockRecorder) Suggest(sugParm any) *gom
 }
 
 // UpdateAnnotation mocks base method.
-func (m *MockOpentsdbProviderWithContext) UpdateAnnotation(annotation Annotation) (*AnnotationResponse, error) {
+func (m *MockOpentsdbProviderWithContext) UpdateAnnotation(annotation *Annotation) (*AnnotationResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "UpdateAnnotation", annotation)
 	ret0, _ := ret[0].(*AnnotationResponse)
@@ -766,7 +704,7 @@ func (mr *MockOpentsdbProviderWithContextMockRecorder) UpdateAnnotation(annotati
 }
 
 // UpdateTSMetaData mocks base method.
-func (m *MockOpentsdbProviderWithContext) UpdateTSMetaData(tsMetaData TSMetaData) (*TSMetaDataResponse, error) {
+func (m *MockOpentsdbProviderWithContext) UpdateTSMetaData(tsMetaData *TSMetaData) (*TSMetaDataResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "UpdateTSMetaData", tsMetaData)
 	ret0, _ := ret[0].(*TSMetaDataResponse)
@@ -781,7 +719,7 @@ func (mr *MockOpentsdbProviderWithContextMockRecorder) UpdateTSMetaData(tsMetaDa
 }
 
 // UpdateUIDMetaData mocks base method.
-func (m *MockOpentsdbProviderWithContext) UpdateUIDMetaData(uidMetaData UIDMetaData) (*UIDMetaDataResponse, error) {
+func (m *MockOpentsdbProviderWithContext) UpdateUIDMetaData(uidMetaData *UIDMetaData) (*UIDMetaDataResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "UpdateUIDMetaData", uidMetaData)
 	ret0, _ := ret[0].(*UIDMetaDataResponse)
@@ -899,7 +837,7 @@ func (mr *MockOpentsDBClientMockRecorder) Aggregators() *gomock.Call {
 }
 
 // AssignUID mocks base method.
-func (m *MockOpentsDBClient) AssignUID(assignParam UIDAssignParam) (*UIDAssignResponse, error) {
+func (m *MockOpentsDBClient) AssignUID(assignParam *UIDAssignParam) (*UIDAssignResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "AssignUID", assignParam)
 	ret0, _ := ret[0].(*UIDAssignResponse)
@@ -914,7 +852,7 @@ func (mr *MockOpentsDBClientMockRecorder) AssignUID(assignParam any) *gomock.Cal
 }
 
 // BulkDeleteAnnotations mocks base method.
-func (m *MockOpentsDBClient) BulkDeleteAnnotations(bulkDelParam BulkAnnoDeleteInfo) (*BulkAnnotatResponse, error) {
+func (m *MockOpentsDBClient) BulkDeleteAnnotations(bulkDelParam *BulkAnnoDeleteInfo) (*BulkAnnotatResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "BulkDeleteAnnotations", bulkDelParam)
 	ret0, _ := ret[0].(*BulkAnnotatResponse)
@@ -943,23 +881,8 @@ func (mr *MockOpentsDBClientMockRecorder) BulkUpdateAnnotations(annotations any)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BulkUpdateAnnotations", reflect.TypeOf((*MockOpentsDBClient)(nil).BulkUpdateAnnotations), annotations)
 }
 
-// Config mocks base method.
-func (m *MockOpentsDBClient) Config() (*ConfigResponse, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Config")
-	ret0, _ := ret[0].(*ConfigResponse)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// Config indicates an expected call of Config.
-func (mr *MockOpentsDBClientMockRecorder) Config() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Config", reflect.TypeOf((*MockOpentsDBClient)(nil).Config))
-}
-
 // DeleteAnnotation mocks base method.
-func (m *MockOpentsDBClient) DeleteAnnotation(annotation Annotation) (*AnnotationResponse, error) {
+func (m *MockOpentsDBClient) DeleteAnnotation(annotation *Annotation) (*AnnotationResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "DeleteAnnotation", annotation)
 	ret0, _ := ret[0].(*AnnotationResponse)
@@ -974,7 +897,7 @@ func (mr *MockOpentsDBClientMockRecorder) DeleteAnnotation(annotation any) *gomo
 }
 
 // DeleteTSMetaData mocks base method.
-func (m *MockOpentsDBClient) DeleteTSMetaData(tsMetaData TSMetaData) (*TSMetaDataResponse, error) {
+func (m *MockOpentsDBClient) DeleteTSMetaData(tsMetaData *TSMetaData) (*TSMetaDataResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "DeleteTSMetaData", tsMetaData)
 	ret0, _ := ret[0].(*TSMetaDataResponse)
@@ -989,7 +912,7 @@ func (mr *MockOpentsDBClientMockRecorder) DeleteTSMetaData(tsMetaData any) *gomo
 }
 
 // DeleteUIDMetaData mocks base method.
-func (m *MockOpentsDBClient) DeleteUIDMetaData(uidMetaData UIDMetaData) (*UIDMetaDataResponse, error) {
+func (m *MockOpentsDBClient) DeleteUIDMetaData(uidMetaData *UIDMetaData) (*UIDMetaDataResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "DeleteUIDMetaData", uidMetaData)
 	ret0, _ := ret[0].(*UIDMetaDataResponse)
@@ -1018,18 +941,32 @@ func (mr *MockOpentsDBClientMockRecorder) Dropcaches() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Dropcaches", reflect.TypeOf((*MockOpentsDBClient)(nil).Dropcaches))
 }
 
-// Ping mocks base method.
-func (m *MockOpentsDBClient) Ping() error {
+// GetContext mocks base method.
+func (m *MockOpentsDBClient) GetContext() context.Context {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Ping")
+	ret := m.ctrl.Call(m, "GetContext")
+	ret0, _ := ret[0].(context.Context)
+	return ret0
+}
+
+// GetContext indicates an expected call of GetContext.
+func (mr *MockOpentsDBClientMockRecorder) GetContext() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetContext", reflect.TypeOf((*MockOpentsDBClient)(nil).GetContext))
+}
+
+// HealthCheck mocks base method.
+func (m *MockOpentsDBClient) HealthCheck() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HealthCheck")
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// Ping indicates an expected call of Ping.
-func (mr *MockOpentsDBClientMockRecorder) Ping() *gomock.Call {
+// HealthCheck indicates an expected call of HealthCheck.
+func (mr *MockOpentsDBClientMockRecorder) HealthCheck() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Ping", reflect.TypeOf((*MockOpentsDBClient)(nil).Ping))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HealthCheck", reflect.TypeOf((*MockOpentsDBClient)(nil).HealthCheck))
 }
 
 // Put mocks base method.
@@ -1048,7 +985,7 @@ func (mr *MockOpentsDBClientMockRecorder) Put(data, queryParam any) *gomock.Call
 }
 
 // Query mocks base method.
-func (m *MockOpentsDBClient) Query(param QueryParam) (*QueryResponse, error) {
+func (m *MockOpentsDBClient) Query(param *QueryParam) (*QueryResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Query", param)
 	ret0, _ := ret[0].(*QueryResponse)
@@ -1078,7 +1015,7 @@ func (mr *MockOpentsDBClientMockRecorder) QueryAnnotation(queryAnnoParam any) *g
 }
 
 // QueryLast mocks base method.
-func (m *MockOpentsDBClient) QueryLast(param QueryLastParam) (*QueryLastResponse, error) {
+func (m *MockOpentsDBClient) QueryLast(param *QueryLastParam) (*QueryLastResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "QueryLast", param)
 	ret0, _ := ret[0].(*QueryLastResponse)
@@ -1122,38 +1059,8 @@ func (mr *MockOpentsDBClientMockRecorder) QueryUIDMetaData(metaQueryParam any) *
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryUIDMetaData", reflect.TypeOf((*MockOpentsDBClient)(nil).QueryUIDMetaData), metaQueryParam)
 }
 
-// Serializers mocks base method.
-func (m *MockOpentsDBClient) Serializers() (*SerialResponse, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Serializers")
-	ret0, _ := ret[0].(*SerialResponse)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// Serializers indicates an expected call of Serializers.
-func (mr *MockOpentsDBClientMockRecorder) Serializers() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Serializers", reflect.TypeOf((*MockOpentsDBClient)(nil).Serializers))
-}
-
-// Stats mocks base method.
-func (m *MockOpentsDBClient) Stats() (*StatsResponse, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Stats")
-	ret0, _ := ret[0].(*StatsResponse)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// Stats indicates an expected call of Stats.
-func (mr *MockOpentsDBClientMockRecorder) Stats() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Stats", reflect.TypeOf((*MockOpentsDBClient)(nil).Stats))
-}
-
 // Suggest mocks base method.
-func (m *MockOpentsDBClient) Suggest(sugParm SuggestParam) (*SuggestResponse, error) {
+func (m *MockOpentsDBClient) Suggest(sugParm *SuggestParam) (*SuggestResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Suggest", sugParm)
 	ret0, _ := ret[0].(*SuggestResponse)
@@ -1168,7 +1075,7 @@ func (mr *MockOpentsDBClientMockRecorder) Suggest(sugParm any) *gomock.Call {
 }
 
 // UpdateAnnotation mocks base method.
-func (m *MockOpentsDBClient) UpdateAnnotation(annotation Annotation) (*AnnotationResponse, error) {
+func (m *MockOpentsDBClient) UpdateAnnotation(annotation *Annotation) (*AnnotationResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "UpdateAnnotation", annotation)
 	ret0, _ := ret[0].(*AnnotationResponse)
@@ -1183,7 +1090,7 @@ func (mr *MockOpentsDBClientMockRecorder) UpdateAnnotation(annotation any) *gomo
 }
 
 // UpdateTSMetaData mocks base method.
-func (m *MockOpentsDBClient) UpdateTSMetaData(tsMetaData TSMetaData) (*TSMetaDataResponse, error) {
+func (m *MockOpentsDBClient) UpdateTSMetaData(tsMetaData *TSMetaData) (*TSMetaDataResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "UpdateTSMetaData", tsMetaData)
 	ret0, _ := ret[0].(*TSMetaDataResponse)
@@ -1198,7 +1105,7 @@ func (mr *MockOpentsDBClientMockRecorder) UpdateTSMetaData(tsMetaData any) *gomo
 }
 
 // UpdateUIDMetaData mocks base method.
-func (m *MockOpentsDBClient) UpdateUIDMetaData(uidMetaData UIDMetaData) (*UIDMetaDataResponse, error) {
+func (m *MockOpentsDBClient) UpdateUIDMetaData(uidMetaData *UIDMetaData) (*UIDMetaDataResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "UpdateUIDMetaData", uidMetaData)
 	ret0, _ := ret[0].(*UIDMetaDataResponse)
@@ -1251,43 +1158,43 @@ func (m *MockResponse) EXPECT() *MockResponseMockRecorder {
 }
 
 // GetCustomParser mocks base method.
-func (m *MockResponse) GetCustomParser() func([]byte) error {
+func (m *MockResponse) GetCustomParser(ctx context.Context) func([]byte) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetCustomParser")
+	ret := m.ctrl.Call(m, "GetCustomParser", ctx)
 	ret0, _ := ret[0].(func([]byte) error)
 	return ret0
 }
 
 // GetCustomParser indicates an expected call of GetCustomParser.
-func (mr *MockResponseMockRecorder) GetCustomParser() *gomock.Call {
+func (mr *MockResponseMockRecorder) GetCustomParser(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCustomParser", reflect.TypeOf((*MockResponse)(nil).GetCustomParser))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCustomParser", reflect.TypeOf((*MockResponse)(nil).GetCustomParser), ctx)
 }
 
 // SetStatus mocks base method.
-func (m *MockResponse) SetStatus(code int) {
+func (m *MockResponse) SetStatus(ctx context.Context, code int) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "SetStatus", code)
+	m.ctrl.Call(m, "SetStatus", ctx, code)
 }
 
 // SetStatus indicates an expected call of SetStatus.
-func (mr *MockResponseMockRecorder) SetStatus(code any) *gomock.Call {
+func (mr *MockResponseMockRecorder) SetStatus(ctx, code any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetStatus", reflect.TypeOf((*MockResponse)(nil).SetStatus), code)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetStatus", reflect.TypeOf((*MockResponse)(nil).SetStatus), ctx, code)
 }
 
 // String mocks base method.
-func (m *MockResponse) String() string {
+func (m *MockResponse) String(ctx context.Context) string {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "String")
+	ret := m.ctrl.Call(m, "String", ctx)
 	ret0, _ := ret[0].(string)
 	return ret0
 }
 
 // String indicates an expected call of String.
-func (mr *MockResponseMockRecorder) String() *gomock.Call {
+func (mr *MockResponseMockRecorder) String(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "String", reflect.TypeOf((*MockResponse)(nil).String))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "String", reflect.TypeOf((*MockResponse)(nil).String), ctx)
 }
 
 // MockProvider is a mock of Provider interface.

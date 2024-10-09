@@ -2,7 +2,6 @@
 package opentsdb
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -18,59 +17,22 @@ type VersionResponse struct {
 }
 
 func (verResp *VersionResponse) SetStatus(ctx context.Context, code int) {
-	_, span := verResp.addTrace(ctx, "SetStatus")
+	setStatus(verResp, ctx, code, "SetStatus-VersionResp", verResp.logger)
+}
 
-	status := "SUCCESS"
-	var message string
-
-	defer sendOperationStats(verResp.logger, time.Now(), "SetStatus-VersionResp", &status, &message, span)
-	message = fmt.Sprintf("set response code : %d", code)
-
+func (verResp *VersionResponse) setStatusCode(code int) {
 	verResp.StatusCode = code
 }
 
-func (verResp *VersionResponse) GetCustomParser(ctx context.Context) func(respCnt []byte) error {
-	_, span := verResp.addTrace(ctx, "GetCustomParser")
-
-	status := "FAIL"
-	var message string
-
-	defer sendOperationStats(verResp.logger, time.Now(), "GetCustomParser-VersionResp", &status, &message, span)
-
-	return func(resp []byte) error {
-		err := json.Unmarshal([]byte(fmt.Sprintf("{%s:%s}", `"VersionInfo"`, string(resp))), &verResp)
-		if err != nil {
-			message = fmt.Sprintf("unmarshal verResp response error: %s", err)
-			verResp.logger.Errorf(message)
-			return err
-		}
-
-		status = "SUCCESS"
-		message = fmt.Sprint("Custom parsing successful")
-		return nil
-	}
+func (verResp *VersionResponse) String(ctx context.Context) string {
+	return toString(verResp, ctx, "ToString-VersionResp", verResp.logger)
 }
 
-func (verResp *VersionResponse) String(ctx context.Context) string {
-	_, span := verResp.addTrace(ctx, "ToString")
-
-	status := "FAIL"
-	var message string
-
-	defer sendOperationStats(verResp.logger, time.Now(), "ToString-VersionResp", &status, &message, span)
-
-	buffer := bytes.NewBuffer(nil)
-
-	content, err := json.Marshal(verResp)
-	if err != nil {
-		message = fmt.Sprintf("marshal version response error: %s", err.Error())
-		verResp.logger.Errorf(message)
-	}
-	buffer.WriteString(fmt.Sprintf("%s\n", string(content)))
-
-	status = "SUCCESS"
-	message = fmt.Sprint("version response converted to string successfully")
-	return buffer.String()
+func (verResp *VersionResponse) GetCustomParser(ctx context.Context) func(respCnt []byte) error {
+	return getCustomParser(verResp, ctx, "GetCustomParser-VersionResp", verResp.logger,
+		func(resp []byte, target interface{}) error {
+			return json.Unmarshal([]byte(fmt.Sprintf("{%s:%s}", `"VersionInfo"`, string(resp))), target)
+		})
 }
 
 func (c *OpentsdbClient) Version() (*VersionResponse, error) {
@@ -86,12 +48,12 @@ func (c *OpentsdbClient) Version() (*VersionResponse, error) {
 	verResp := VersionResponse{logger: c.logger, tracer: c.tracer}
 
 	if err := c.sendRequest(GetMethod, verEndpoint, "", &verResp); err != nil {
-		message = fmt.Sprintf("error while processing request at url %s: %s", verEndpoint, err)
+		message = fmt.Sprintf("error while processing request at URL %s: %s", verEndpoint, err)
 		return nil, err
 	}
 
 	status = "SUCCESS"
-	message = fmt.Sprint("version response retrieved successfully")
+	message = "version response retrieved successfully."
 
 	return &verResp, nil
 }
