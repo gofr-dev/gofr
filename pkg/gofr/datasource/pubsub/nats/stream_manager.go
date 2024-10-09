@@ -25,6 +25,7 @@ func (sm *StreamManager) CreateStream(ctx context.Context, cfg StreamConfig) err
 	jsCfg := jetstream.StreamConfig{
 		Name:     cfg.Stream,
 		Subjects: cfg.Subjects,
+		MaxBytes: cfg.MaxBytes,
 	}
 
 	_, err := sm.js.CreateStream(ctx, jsCfg)

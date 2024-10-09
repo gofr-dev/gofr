@@ -2,6 +2,8 @@ module gofr.dev
 
 go 1.22.3
 
+replace gofr.dev => github.com/carverauto/gofr-nats
+
 require (
 	cloud.google.com/go/pubsub v1.42.0
 	github.com/DATA-DOG/go-sqlmock v1.5.2

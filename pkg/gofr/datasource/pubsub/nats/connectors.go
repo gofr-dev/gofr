@@ -1,3 +1,4 @@
+// Package nats connector.go
 package nats
 
 import (

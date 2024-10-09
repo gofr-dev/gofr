@@ -36,7 +36,7 @@ func defineHealthTestCases() []healthTestCase {
 						"connection_status": jetStreamConnected,
 					},
 				})
-				mockConnManager.EXPECT().JetStream().Return(mockJS)
+				mockConnManager.EXPECT().JetStream().Return(mockJS, nil)
 				mockJS.EXPECT().AccountInfo(gomock.Any()).Return(&jetstream.AccountInfo{}, nil)
 			},
 			expectedStatus: datasource.StatusUp,
@@ -58,7 +58,7 @@ func defineHealthTestCases() []healthTestCase {
 						"connection_status": jetStreamDisconnecting,
 					},
 				})
-				mockConnManager.EXPECT().JetStream().Return(nil)
+				mockConnManager.EXPECT().JetStream().Return(nil, errJetStreamNotConfigured)
 			},
 			expectedStatus: datasource.StatusDown,
 			expectedDetails: map[string]interface{}{
@@ -66,6 +66,7 @@ func defineHealthTestCases() []healthTestCase {
 				"backend":           natsBackend,
 				"connection_status": jetStreamDisconnecting,
 				"jetstream_enabled": false,
+				"jetstream_status":  jetStreamStatusError + ": JetStream is not configured",
 			},
 		},
 		{
@@ -78,7 +79,7 @@ func defineHealthTestCases() []healthTestCase {
 						"connection_status": jetStreamConnected,
 					},
 				})
-				mockConnManager.EXPECT().JetStream().Return(mockJS)
+				mockConnManager.EXPECT().JetStream().Return(mockJS, nil)
 				mockJS.EXPECT().AccountInfo(gomock.Any()).Return(nil, errJetStream)
 			},
 			expectedStatus: datasource.StatusUp,

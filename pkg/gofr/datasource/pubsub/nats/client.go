@@ -44,7 +44,13 @@ func (c *Client) Connect() error {
 	}
 
 	c.connManager = connManager
-	c.streamManager = NewStreamManager(c.connManager.JetStream(), c.logger)
+
+	js, err := c.connManager.JetStream()
+	if err != nil {
+		return err
+	}
+
+	c.streamManager = NewStreamManager(js, c.logger)
 	c.subManager = NewSubscriptionManager(c.Config.BatchSize)
 	c.logSuccessfulConnection()
 
@@ -95,7 +101,12 @@ func (c *Client) Publish(ctx context.Context, subject string, message []byte) er
 
 // Subscribe subscribes to a topic and returns a single message.
 func (c *Client) Subscribe(ctx context.Context, topic string) (*pubsub.Message, error) {
-	return c.subManager.Subscribe(ctx, topic, c.connManager.JetStream(), c.Config, c.logger, c.metrics)
+	js, err := c.connManager.JetStream()
+	if err != nil {
+		return nil, err
+	}
+
+	return c.subManager.Subscribe(ctx, topic, js, c.Config, c.logger, c.metrics)
 }
 
 func (c *Client) generateConsumerName(subject string) string {
@@ -109,7 +120,11 @@ func (c *Client) SubscribeWithHandler(ctx context.Context, subject string, handl
 	// Cancel any existing subscription for this subject
 	c.cancelExistingSubscription(subject)
 
-	js := c.connManager.JetStream()
+	js, err := c.connManager.JetStream()
+	if err != nil {
+		return err
+	}
+
 	consumerName := c.generateConsumerName(subject)
 
 	cons, err := c.createOrUpdateConsumer(ctx, js, subject, consumerName)
@@ -240,4 +255,14 @@ func (c *Client) DeleteStream(ctx context.Context, name string) error {
 // CreateOrUpdateStream creates or updates a stream in NATS JetStream.
 func (c *Client) CreateOrUpdateStream(ctx context.Context, cfg *jetstream.StreamConfig) (jetstream.Stream, error) {
 	return c.streamManager.CreateOrUpdateStream(ctx, cfg)
+}
+
+// GetJetStreamStatus returns the status of the JetStream connection.
+func GetJetStreamStatus(ctx context.Context, js jetstream.JetStream) string {
+	_, err := js.AccountInfo(ctx)
+	if err != nil {
+		return jetStreamStatusError + ": " + err.Error()
+	}
+
+	return jetStreamStatusOK
 }

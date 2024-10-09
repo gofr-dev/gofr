@@ -9,7 +9,6 @@ var (
 	errConsumerNotProvided     = errors.New("consumer name not provided")
 	errConsumerCreationError   = errors.New("consumer creation error")
 	errFailedToDeleteStream    = errors.New("failed to delete stream")
-	errFailedToCreateConsumer  = errors.New("failed to create consumer")
 	errPublishError            = errors.New("publish error")
 	errJetStreamNotConfigured  = errors.New("JetStream is not configured")
 	errJetStreamCreationFailed = errors.New("JetStream creation failed")
@@ -20,4 +19,5 @@ var (
 	errCreateOrUpdateStream    = errors.New("create or update stream error")
 	errHandlerError            = errors.New("handler error")
 	errConnectionError         = errors.New("connection error")
+	errSubscriptionError       = errors.New("subscription error")
 )

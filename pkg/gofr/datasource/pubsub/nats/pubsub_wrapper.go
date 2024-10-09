@@ -33,7 +33,8 @@ func (w *PubSubWrapper) DeleteTopic(ctx context.Context, name string) error {
 }
 
 // Close closes the Client.
-func (w *PubSubWrapper) Close(ctx context.Context) error {
+func (w *PubSubWrapper) Close() error {
+	ctx := context.Background()
 	return w.Client.Close(ctx)
 }
 
@@ -43,13 +44,17 @@ func (w *PubSubWrapper) Health() datasource.Health {
 }
 
 // Connect establishes a connection to NATS.
-func (w *PubSubWrapper) Connect() error {
-	err := w.Client.Connect()
-	if err != nil {
-		return err
+func (w *PubSubWrapper) Connect() {
+	if w.Client.connManager != nil && w.Client.connManager.Health().Status == datasource.StatusUp {
+		w.Client.logger.Log("NATS connection already established")
+
+		return
 	}
 
-	return nil
+	err := w.Client.Connect()
+	if err != nil {
+		w.Client.logger.Errorf("PubSubWrapper: Error connecting to NATS: %v", err)
+	}
 }
 
 // UseLogger sets the logger for the NATS client.
