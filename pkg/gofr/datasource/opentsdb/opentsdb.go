@@ -6,6 +6,7 @@ package opentsdb
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -212,7 +213,13 @@ func (c *OpentsdbClient) WithContext(ctx context.Context) OpentsDBClient {
 }
 
 // HealthCheck checks the availability of the OpenTSDB server by establishing a TCP connection.
-func (c *OpentsdbClient) HealthCheck() error {
+type Health struct {
+	Status  string                 `json:"status,omitempty"`
+	Details map[string]interface{} `json:"details,omitempty"`
+}
+
+// HealthCheck checks the health of the opentsdb client by pinging the database.
+func (c *OpentsdbClient) HealthCheck() (any, error) {
 	span := c.addTrace(c.ctx, "HealthCheck")
 
 	status := StatusFailed
@@ -221,12 +228,27 @@ func (c *OpentsdbClient) HealthCheck() error {
 
 	defer sendOperationStats(c.logger, time.Now(), "HealthCheck", &status, &message, span)
 
+	h := Health{
+		Details: make(map[string]interface{}),
+	}
+
+	h.Details["databaseType"] = "opentsdb"
+	h.Details["endpoint"] = c.tsdbEndpoint
+
+	ver, err := c.version()
+	if err != nil {
+		message = err.Error()
+		return nil, err
+	}
+
+	h.Details["version"] = ver
+
 	conn, err := net.DialTimeout("tcp", c.opentsdbCfg.OpentsdbHost, DefaultDialTime)
 	if err != nil {
-		errHealthCheck := fmt.Errorf("OpenTSDB is unreachable: %v", err)
-		message = fmt.Sprint(errHealthCheck)
+		h.Status = "DOWN"
+		message = fmt.Sprintf("OpenTSDB is unreachable: %v", err)
 
-		return errHealthCheck
+		return nil, errors.New(message)
 	}
 
 	if conn != nil {
@@ -234,9 +256,10 @@ func (c *OpentsdbClient) HealthCheck() error {
 	}
 
 	status = StatusSuccess
+	h.Status = "UP"
 	message = "connection to OpenTSDB is alive"
 
-	return nil
+	return &h, nil
 }
 
 // sendRequest dispatches an HTTP request to the OpenTSDB server, using the provided

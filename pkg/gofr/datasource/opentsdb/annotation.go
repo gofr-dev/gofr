@@ -50,10 +50,8 @@ type AnnotationResponse struct {
 	ErrorInfo map[string]interface{} `json:"error,omitempty"`
 
 	logger Logger
-
 	tracer trace.Tracer
-
-	ctx context.Context
+	ctx    context.Context
 }
 
 // SetStatus sets the HTTP status code in the AnnotationResponse.
@@ -149,14 +147,14 @@ func (c *OpentsdbClient) UpdateAnnotation(annotation *Annotation) (*AnnotationRe
 	annresp, err := c.operateAnnotation(PostMethod, annotation)
 	if err == nil {
 		status = StatusSuccess
-		message = fmt.Sprintf("annotation with tsuid: %s updated successfully", annotation.Tsuid)
+		message = fmt.Sprintf("annotation with tsuid %s updated successfully", annotation.Tsuid)
 
 		c.logger.Logf("annotation updated successfully")
 
 		return annresp, nil
 	}
 
-	message = fmt.Sprintf("error while updating annotation with tsuid: %s", annotation.Tsuid)
+	message = fmt.Sprintf("error while updating annotation with tsuid %s", annotation.Tsuid)
 
 	c.logger.Errorf("error while updating annotation")
 

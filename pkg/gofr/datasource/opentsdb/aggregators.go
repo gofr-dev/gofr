@@ -9,7 +9,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-// AggregatorsResponse acts as the implementation of Response in the /api/aggregators scene.
+// AggregatorsResponse acts as the implementation of Response in the /api/aggregators.
 // It holds the status code and the response values defined in the
 // (http://opentsdb.net/docs/build/html/api_http/aggregators.html).
 type AggregatorsResponse struct {

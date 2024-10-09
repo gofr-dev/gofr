@@ -121,6 +121,10 @@ func (a *App) AddOpentsdb(db opentsdb.OpentsdbProvider) {
 	db.UseLogger(a.Logger())
 	db.UseMetrics(a.Metrics())
 
+	tracer := otel.GetTracerProvider().Tracer("gofr-opentsdb")
+
+	db.UseTracer(tracer)
+
 	db.Connect()
 
 	a.container.Opentsdb = db

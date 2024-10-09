@@ -24,9 +24,7 @@ type OpentsDBClient interface {
 
 	// HealthCheck checks if the target OpenTSDB server is reachable.
 	// It returns an error if the server is unreachable, otherwise returns nil.
-	HealthCheck() error
-
-	Version() (*VersionResponse, error)
+	HealthCheck() (any, error)
 
 	// Put handles the 'POST /api/put' endpoint, allowing the storage of data in OpenTSDB.
 	//
