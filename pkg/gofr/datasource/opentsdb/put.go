@@ -128,7 +128,7 @@ func (c *OpentsdbClient) Put(datas []DataPoint, queryParam string) (*PutResponse
 			c.logger.Errorf(message)
 		}
 
-		putResp := PutResponse{logger: c.logger, tracer: c.tracer}
+		putResp := PutResponse{logger: c.logger, tracer: c.tracer, ctx: c.ctx}
 
 		if err = c.sendRequest(PostMethod, putEndpoint, reqBodyCnt, &putResp); err != nil {
 			// This kind of error only occurs during the process of sending request,
@@ -141,7 +141,7 @@ func (c *OpentsdbClient) Put(datas []DataPoint, queryParam string) (*PutResponse
 		responses = append(responses, putResp)
 	}
 
-	globalResp := PutResponse{logger: c.logger, tracer: c.tracer}
+	globalResp := PutResponse{logger: c.logger, tracer: c.tracer, ctx: c.ctx}
 	globalResp.StatusCode = http.StatusOK
 
 	for _, resp := range responses {

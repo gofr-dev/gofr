@@ -346,7 +346,7 @@ func (c *OpentsdbClient) Query(param *QueryParam) (*QueryResponse, error) {
 		return nil, err
 	}
 
-	queryResp := QueryResponse{logger: c.logger, tracer: c.tracer}
+	queryResp := QueryResponse{logger: c.logger, tracer: c.tracer, ctx: c.ctx}
 
 	if err = c.sendRequest(PostMethod, queryEndpoint, reqBodyCnt, &queryResp); err != nil {
 		message = fmt.Sprintf("error while processing request at url %q: %s ", queryEndpoint, err)

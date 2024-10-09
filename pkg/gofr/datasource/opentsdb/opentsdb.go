@@ -110,7 +110,7 @@ type OpenTSDBConfig struct {
 }
 
 // New initializes a new instance of Opentsdb with provided configuration.
-func New(config *OpenTSDBConfig) OpentsdbProvider {
+func New(config *OpenTSDBConfig) *OpentsdbClient {
 	return &OpentsdbClient{opentsdbCfg: *config}
 }
 
@@ -194,16 +194,8 @@ func (c *OpentsdbClient) Connect() {
 	message = fmt.Sprintf("connected to %s", c.tsdbEndpoint)
 }
 
-// NewClientContext creates a new OpenTSDB client with context support.
-// This allows the use of contexts for managing request timeouts or cancellations.
-func NewClientContext(opentsdbCfg *OpenTSDBConfig) OpentsdbProviderWithContext {
-	client := New(opentsdbCfg)
-
-	return client.(OpentsdbProviderWithContext)
-}
-
 // WithContext creates a new OpenTSDB client that operates with the provided context.
-func (c *OpentsdbClient) WithContext(ctx context.Context) OpentsDBClient {
+func (c *OpentsdbClient) WithContext(ctx context.Context) *OpentsdbClient {
 	return &OpentsdbClient{
 		tsdbEndpoint: c.tsdbEndpoint,
 		client:       c.client,
@@ -219,7 +211,7 @@ type Health struct {
 }
 
 // HealthCheck checks the health of the opentsdb client by pinging the database.
-func (c *OpentsdbClient) HealthCheck() (any, error) {
+func (c *OpentsdbClient) HealthCheck(_ context.Context) (any, error) {
 	span := c.addTrace(c.ctx, "HealthCheck")
 
 	status := StatusFailed

@@ -5,7 +5,6 @@ import (
 
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/datasource/file"
-	"gofr.dev/pkg/gofr/datasource/opentsdb"
 )
 
 // AddMongo sets the Mongo datasource in the app's container.
@@ -115,9 +114,9 @@ func (a *App) AddDgraph(db container.DgraphProvider) {
 	a.container.DGraph = db
 }
 
-// AddOpentsdb sets the Dgraph datasource in the app's container.
-func (a *App) AddOpentsdb(db opentsdb.OpentsdbProvider) {
-	// Create the Dgraph client with the provided configuration
+// AddOpentsdb sets the opentsdb datasource in the app's container.
+func (a *App) AddOpentsdb(db container.OpentsdbProvider) {
+	// Create the Opentsdb client with the provided configuration
 	db.UseLogger(a.Logger())
 	db.UseMetrics(a.Metrics())
 

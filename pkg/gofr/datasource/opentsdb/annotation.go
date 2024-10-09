@@ -211,7 +211,7 @@ func (c *OpentsdbClient) operateAnnotation(method string, annotation *Annotation
 		return nil, errors.New(message)
 	}
 
-	annResp := AnnotationResponse{logger: c.logger, tracer: c.tracer}
+	annResp := AnnotationResponse{logger: c.logger, tracer: c.tracer, ctx: c.ctx}
 
 	if err = c.sendRequest(method, annoEndpoint, string(resultBytes), &annResp); err != nil {
 		message = fmt.Sprintf("error while processing %s annotation request to url %q: %s", method, annoEndpoint, err.Error())
@@ -337,7 +337,7 @@ func (c *OpentsdbClient) BulkUpdateAnnotations(annotations []Annotation) (*BulkA
 		return nil, errors.New(message)
 	}
 
-	bulkAnnoResp := BulkAnnotatResponse{logger: c.logger, tracer: c.tracer}
+	bulkAnnoResp := BulkAnnotatResponse{logger: c.logger, tracer: c.tracer, ctx: c.ctx}
 	if err = c.sendRequest(PostMethod, bulkAnnoEndpoint, reqBodyCnt, &bulkAnnoResp); err != nil {
 		message = fmt.Sprintf("error while processing update bulk annotations request to url %q: %s", bulkAnnoEndpoint, err)
 		return nil, err
@@ -369,7 +369,7 @@ func (c *OpentsdbClient) BulkDeleteAnnotations(bulkDelParam *BulkAnnoDeleteInfo)
 		return nil, errors.New(message)
 	}
 
-	bulkAnnoResp := BulkAnnotatResponse{logger: c.logger, tracer: c.tracer}
+	bulkAnnoResp := BulkAnnotatResponse{logger: c.logger, tracer: c.tracer, ctx: c.ctx}
 	if err = c.sendRequest(DeleteMethod, bulkAnnoEndpoint, string(resultBytes), &bulkAnnoResp); err != nil {
 		message = fmt.Sprintf("Bulk annotation delete request failed at url %q: %v", bulkAnnoEndpoint, err)
 		return nil, err

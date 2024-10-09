@@ -143,7 +143,7 @@ func (c *OpentsdbClient) QueryLast(param *QueryLastParam) (*QueryLastResponse, e
 		return nil, err
 	}
 
-	queryResp := QueryLastResponse{logger: c.logger, tracer: c.tracer}
+	queryResp := QueryLastResponse{logger: c.logger, tracer: c.tracer, ctx: c.ctx}
 	if err = c.sendRequest(PostMethod, queryEndpoint, reqBodyCnt, &queryResp); err != nil {
 		message = fmt.Sprintf("error sending request at url %s : %s ", queryEndpoint, err)
 		return nil, err

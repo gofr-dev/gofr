@@ -102,7 +102,7 @@ func (c *OpentsdbClient) QueryUIDMetaData(metaQueryParam map[string]string) (*UI
 
 	queryUIDMetaEndpoint := fmt.Sprintf("%s%s?%s", c.tsdbEndpoint, UIDMetaDataPath, queryParam)
 
-	uidMetaDataResp := UIDMetaDataResponse{logger: c.logger, tracer: c.tracer}
+	uidMetaDataResp := UIDMetaDataResponse{logger: c.logger, tracer: c.tracer, ctx: c.ctx}
 
 	if err := c.sendRequest(GetMethod, queryUIDMetaEndpoint, "", &uidMetaDataResp); err != nil {
 		message = fmt.Sprintf("error processing query-uid-metadata request to url %q: %v", queryUIDMetaEndpoint, err)
@@ -176,7 +176,7 @@ func (c *OpentsdbClient) operateUIDMetaData(method string, uidMetaData *UIDMetaD
 		return nil, errors.New(message)
 	}
 
-	uidMetaDataResp := UIDMetaDataResponse{logger: c.logger, tracer: c.tracer}
+	uidMetaDataResp := UIDMetaDataResponse{logger: c.logger, tracer: c.tracer, ctx: c.ctx}
 	if err = c.sendRequest(method, uidMetaEndpoint, string(resultBytes), &uidMetaDataResp); err != nil {
 		message = fmt.Sprintf("error processing %v request to url %q: %v", method, uidMetaEndpoint, err)
 		return nil, err
@@ -260,7 +260,7 @@ func (c *OpentsdbClient) AssignUID(assignParam *UIDAssignParam) (*UIDAssignRespo
 		return nil, errors.New(message)
 	}
 
-	uidAssignResp := UIDAssignResponse{logger: c.logger, tracer: c.tracer}
+	uidAssignResp := UIDAssignResponse{logger: c.logger, tracer: c.tracer, ctx: c.ctx}
 
 	if err = c.sendRequest(PostMethod, assignUIDEndpoint, string(resultBytes), &uidAssignResp); err != nil {
 		message = fmt.Sprintf("error processing %v request to url %q: %v", PostMethod, assignUIDEndpoint, err)
@@ -361,7 +361,7 @@ func (c *OpentsdbClient) QueryTSMetaData(tsuid string) (*TSMetaDataResponse, err
 	}
 
 	queryTSMetaEndpoint := fmt.Sprintf("%s%s?tsuid=%s", c.tsdbEndpoint, TSMetaDataPath, tsuid)
-	tsMetaDataResp := TSMetaDataResponse{logger: c.logger, tracer: c.tracer}
+	tsMetaDataResp := TSMetaDataResponse{logger: c.logger, tracer: c.tracer, ctx: c.ctx}
 
 	if err := c.sendRequest(GetMethod, queryTSMetaEndpoint, "", &tsMetaDataResp); err != nil {
 		message = fmt.Sprintf("error processing %v request to url %q: %v", GetMethod, queryTSMetaEndpoint, err)
@@ -436,7 +436,7 @@ func (c *OpentsdbClient) operateTSMetaData(method string, tsMetaData *TSMetaData
 		return nil, errors.New(message)
 	}
 
-	tsMetaDataResp := TSMetaDataResponse{logger: c.logger, tracer: c.tracer}
+	tsMetaDataResp := TSMetaDataResponse{logger: c.logger, tracer: c.tracer, ctx: c.ctx}
 
 	if err = c.sendRequest(method, tsMetaEndpoint, string(resultBytes), &tsMetaDataResp); err != nil {
 		message = fmt.Sprintf("failed to send request at url %q: %v", tsMetaEndpoint, err)

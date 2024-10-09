@@ -11,7 +11,7 @@ import (
 )
 
 // setupOpenTSDBTest initializes an OpentsdbClient for testing.
-func setupOpenTSDBTest(t *testing.T) OpentsDBClient {
+func setupOpenTSDBTest(t *testing.T) *OpentsdbClient {
 	t.Helper()
 
 	opentsdbCfg := OpenTSDBConfig{
@@ -263,7 +263,7 @@ func TestGetSuggestSuccess(t *testing.T) {
 func TestGetVersionSuccess(t *testing.T) {
 	client := setupOpenTSDBTest(t)
 
-	versionResp, err := client.Version()
+	versionResp, err := client.version()
 	require.NoError(t, err)
 	require.NotNil(t, versionResp)
 	require.Equal(t, 200, versionResp.StatusCode)

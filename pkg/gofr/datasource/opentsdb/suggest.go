@@ -99,7 +99,7 @@ func (c *OpentsdbClient) Suggest(sugParam *SuggestParam) (*SuggestResponse, erro
 		return nil, err
 	}
 
-	sugResp := SuggestResponse{logger: c.logger, tracer: c.tracer}
+	sugResp := SuggestResponse{logger: c.logger, tracer: c.tracer, ctx: c.ctx}
 	if err := c.sendRequest(PostMethod, sugEndpoint, reqBodyCnt, &sugResp); err != nil {
 		message = fmt.Sprintf("error processing suggest request to url %q: %s", sugEndpoint, err)
 		return nil, err

@@ -46,7 +46,7 @@ func (c *OpentsdbClient) Dropcaches() (*DropcachesResponse, error) {
 	defer sendOperationStats(c.logger, time.Now(), "Dropcaches", &status, &message, span)
 
 	dropEndpoint := fmt.Sprintf("%s%s", c.tsdbEndpoint, DropcachesPath)
-	dropResp := DropcachesResponse{logger: c.logger, tracer: c.tracer}
+	dropResp := DropcachesResponse{logger: c.logger, tracer: c.tracer, ctx: c.ctx}
 
 	if err := c.sendRequest(GetMethod, dropEndpoint, "", &dropResp); err != nil {
 		message = fmt.Sprintf("error processing drop cache request at url %q: %s", dropEndpoint, err)

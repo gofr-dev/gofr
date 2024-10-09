@@ -49,7 +49,7 @@ func (c *OpentsdbClient) Aggregators() (*AggregatorsResponse, error) {
 
 	aggregatorsEndpoint := fmt.Sprintf("%s%s", c.tsdbEndpoint, AggregatorPath)
 
-	aggreResp := AggregatorsResponse{logger: c.logger, tracer: c.tracer}
+	aggreResp := AggregatorsResponse{logger: c.logger, tracer: c.tracer, ctx: c.ctx}
 
 	if err := c.sendRequest(GetMethod, aggregatorsEndpoint, "", &aggreResp); err != nil {
 		message = fmt.Sprintf("error retrieving aggregators from url: %s", aggregatorsEndpoint)
