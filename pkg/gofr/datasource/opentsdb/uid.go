@@ -116,52 +116,20 @@ func (c *OpentsdbClient) QueryUIDMetaData(metaQueryParam map[string]string) (*UI
 }
 
 func (c *OpentsdbClient) UpdateUIDMetaData(uidMetaData *UIDMetaData) (*UIDMetaDataResponse, error) {
-	span := c.addTrace(c.ctx, "UpdateUIDMetaData")
-
-	status := StatusFailed
-
-	var message string
-
-	defer sendOperationStats(c.logger, time.Now(), "UpdateUIDMetaData", &status, &message, span)
-
-	res, err := c.operateUIDMetaData(PostMethod, uidMetaData)
-	if err == nil {
-		status = StatusSuccess
-		message = "successfully updated UID metadata"
-		return res, nil
-	}
-
-	message = fmt.Sprintf("failed to update UID metadata: %v", err)
-	return nil, err
+	return c.operateUIDMetaData(uidMetaData, PostMethod, "UpdateUIDMetaData")
 }
 
 func (c *OpentsdbClient) DeleteUIDMetaData(uidMetaData *UIDMetaData) (*UIDMetaDataResponse, error) {
-	span := c.addTrace(c.ctx, "DeleteUIDMetaData")
-
-	status := StatusFailed
-
-	var message string
-
-	defer sendOperationStats(c.logger, time.Now(), "DeleteUIDMetaData", &status, &message, span)
-
-	res, err := c.operateUIDMetaData(DeleteMethod, uidMetaData)
-	if err == nil {
-		status = StatusSuccess
-		message = "successfully deleted UID metadata"
-		return res, nil
-	}
-
-	message = "failed to delete UID metadata"
-	return nil, err
+	return c.operateUIDMetaData(uidMetaData, DeleteMethod, "DeleteUIDMetaData")
 }
 
-func (c *OpentsdbClient) operateUIDMetaData(method string, uidMetaData *UIDMetaData) (*UIDMetaDataResponse, error) {
-	span := c.addTrace(c.ctx, "operateUIDMetaData")
+func (c *OpentsdbClient) operateUIDMetaData(uidMetaData *UIDMetaData, method, operation string) (*UIDMetaDataResponse, error) {
+	span := c.addTrace(c.ctx, operation)
 
 	status := StatusFailed
 	var message string
 
-	defer sendOperationStats(c.logger, time.Now(), "operateUIDMetaData", &status, &message, span)
+	defer sendOperationStats(c.logger, time.Now(), operation, &status, &message, span)
 
 	if !c.isValidOperateMethod(method) {
 		message = "given method for uid metadata is invalid"
@@ -375,53 +343,21 @@ func (c *OpentsdbClient) QueryTSMetaData(tsuid string) (*TSMetaDataResponse, err
 }
 
 func (c *OpentsdbClient) UpdateTSMetaData(tsMetaData *TSMetaData) (*TSMetaDataResponse, error) {
-	span := c.addTrace(c.ctx, "UpdateTSMetaData")
-
-	status := StatusFailed
-	var message string
-
-	defer sendOperationStats(c.logger, time.Now(), "UpdateTSMetaData", &status, &message, span)
-
-	res, err := c.operateTSMetaData(PostMethod, tsMetaData)
-	if err == nil {
-		status = StatusSuccess
-		message = "update TSMetaData successful"
-		return res, nil
-	}
-
-	message = fmt.Sprintf("update TSMetaData failed %v", err)
-	return nil, err
+	return c.operateTSMetaData(tsMetaData, PostMethod, "UpdateTSMetaData")
 }
 
 func (c *OpentsdbClient) DeleteTSMetaData(tsMetaData *TSMetaData) (*TSMetaDataResponse, error) {
-	span := c.addTrace(c.ctx, "DeleteTSMetaData")
-
-	status := StatusFailed
-
-	var message string
-
-	defer sendOperationStats(c.logger, time.Now(), "DeleteTSMetaData", &status, &message, span)
-
-	res, err := c.operateTSMetaData(DeleteMethod, tsMetaData)
-	if err == nil {
-		status = StatusSuccess
-		message = "delete TSMetaData successful"
-		return res, nil
-	}
-
-	message = fmt.Sprintf("delete TSMetaData failed %v", err)
-
-	return nil, err
+	return c.operateTSMetaData(tsMetaData, DeleteMethod, "DeleteTSMetaData")
 }
 
-func (c *OpentsdbClient) operateTSMetaData(method string, tsMetaData *TSMetaData) (*TSMetaDataResponse, error) {
-	span := c.addTrace(c.ctx, "operateTSMetaData")
+func (c *OpentsdbClient) operateTSMetaData(tsMetaData *TSMetaData, method, operation string) (*TSMetaDataResponse, error) {
+	span := c.addTrace(c.ctx, operation)
 
 	status := StatusFailed
 
 	var message string
 
-	defer sendOperationStats(c.logger, time.Now(), "operateTSMetaData", &status, &message, span)
+	defer sendOperationStats(c.logger, time.Now(), operation, &status, &message, span)
 
 	if !c.isValidOperateMethod(method) {
 		message = fmt.Sprintf("The %s method for operating a uid metadata is invalid", method)
@@ -432,7 +368,7 @@ func (c *OpentsdbClient) operateTSMetaData(method string, tsMetaData *TSMetaData
 
 	resultBytes, err := json.Marshal(tsMetaData)
 	if err != nil {
-		message = fmt.Sprintf("failed to marshal TSMetaData: %v", err)
+		message = fmt.Sprintf("failed to marshal %s response: %v", operation, err)
 		return nil, errors.New(message)
 	}
 

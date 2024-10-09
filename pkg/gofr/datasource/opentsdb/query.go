@@ -377,14 +377,22 @@ func isValidQueryParam(param *QueryParam) bool {
 	}
 
 	for _, query := range param.Queries {
-		if query.Aggregator == "" || query.Metric == "" {
+		if areValidParams(&query) == false {
 			return false
 		}
+	}
 
-		for k, _ := range query.RateParams {
-			if k != QueryRateOptionCounter && k != QueryRateOptionCounterMax && k != QueryRateOptionResetValue {
-				return false
-			}
+	return true
+}
+
+func areValidParams(query *SubQuery) bool {
+	if query.Aggregator == "" || query.Metric == "" {
+		return false
+	}
+
+	for k, _ := range query.RateParams {
+		if k != QueryRateOptionCounter && k != QueryRateOptionCounterMax && k != QueryRateOptionResetValue {
+			return false
 		}
 	}
 

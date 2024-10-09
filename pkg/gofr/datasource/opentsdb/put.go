@@ -119,26 +119,9 @@ func (c *OpentsdbClient) Put(datas []DataPoint, queryParam string) (*PutResponse
 
 	responses := make([]PutResponse, 0)
 
-	for _, datapoints := range dataGroups {
-		// The datas have been marshaled successfully in splitProperGroups(),
-		// so now the returned error is always nil.
-		reqBodyCnt, err := getPutBodyContents(datapoints)
-		if err != nil {
-			message = fmt.Sprintf("getPutBodyContents error: %s", err)
-			c.logger.Errorf(message)
-		}
-
-		putResp := PutResponse{logger: c.logger, tracer: c.tracer, ctx: c.ctx}
-
-		if err = c.sendRequest(PostMethod, putEndpoint, reqBodyCnt, &putResp); err != nil {
-			// This kind of error only occurs during the process of sending request,
-			// not including the scene of inserting datapoints into opentsdb.
-			// So just return error once it happens.
-			message = fmt.Sprintf("error processing put request at url %q: %s", putEndpoint, err)
-			return nil, err
-		}
-
-		responses = append(responses, putResp)
+	responses, err = c.getResponses(putEndpoint, dataGroups, responses, &message)
+	if err != nil {
+		return nil, err
 	}
 
 	globalResp := PutResponse{logger: c.logger, tracer: c.tracer, ctx: c.ctx}
@@ -164,6 +147,27 @@ func (c *OpentsdbClient) Put(datas []DataPoint, queryParam string) (*PutResponse
 	return nil, parsePutErrorMsg(&globalResp)
 }
 
+func (c *OpentsdbClient) getResponses(putEndpoint string, dataGroups [][]DataPoint, responses []PutResponse, message *string) ([]PutResponse, error) {
+	for _, datapoints := range dataGroups {
+		reqBodyCnt, err := getPutBodyContents(datapoints)
+		if err != nil {
+			*message = fmt.Sprintf("getPutBodyContents error: %s", err)
+			c.logger.Errorf(*message)
+		}
+
+		putResp := PutResponse{logger: c.logger, tracer: c.tracer, ctx: c.ctx}
+
+		if err = c.sendRequest(PostMethod, putEndpoint, reqBodyCnt, &putResp); err != nil {
+			*message = fmt.Sprintf("error processing put request at url %q: %s", putEndpoint, err)
+			return nil, err
+		}
+
+		responses = append(responses, putResp)
+	}
+
+	return responses, nil
+}
+
 // splitProperGroups splits the given datapoints into groups, whose content size is
 // not larger than c.opentsdbCfg.MaxContentLength.
 // This method is an assurement of avoiding Put failure, when the content length of
@@ -184,6 +188,14 @@ func (c *OpentsdbClient) splitProperGroups(datapoints []DataPoint) ([][]DataPoin
 	}
 
 	datapointGroups := make([][]DataPoint, 0)
+	datapointGroups = c.appendDatapoints(datasBytes, datapoints, datapointGroups)
+	status = StatusSuccess
+	message = "spliting into groups successful"
+
+	return datapointGroups, nil
+}
+
+func (c *OpentsdbClient) appendDatapoints(datasBytes []byte, datapoints []DataPoint, datapointGroups [][]DataPoint) [][]DataPoint {
 	if len(datasBytes) > c.opentsdbCfg.MaxContentLength {
 		datapointsSize := len(datapoints)
 
@@ -217,11 +229,7 @@ func (c *OpentsdbClient) splitProperGroups(datapoints []DataPoint) ([][]DataPoin
 	} else {
 		datapointGroups = append(datapointGroups, datapoints)
 	}
-
-	status = StatusSuccess
-	message = "spliting into groups successful"
-
-	return datapointGroups, nil
+	return datapointGroups
 }
 
 func parsePutErrorMsg(resp *PutResponse) error {

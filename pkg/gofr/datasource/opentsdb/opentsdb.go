@@ -224,8 +224,7 @@ func (c *OpentsdbClient) HealthCheck(_ context.Context) (any, error) {
 		Details: make(map[string]interface{}),
 	}
 
-	h.Details["databaseType"] = "opentsdb"
-	h.Details["endpoint"] = c.tsdbEndpoint
+	h.Details["host"] = c.tsdbEndpoint
 
 	ver, err := c.version()
 	if err != nil {
