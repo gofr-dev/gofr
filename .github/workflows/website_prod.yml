@@ -6,7 +6,7 @@ on:
     branches:
       - main
       - development
-      - docs-update
+      - add-meta-tags
 
 env:
   APP_NAME: gofr-website
