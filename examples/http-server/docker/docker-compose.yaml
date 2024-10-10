@@ -3,7 +3,7 @@ version: '3.8'
 services:
   gofr-http-server:
     build:
-      context: .
+      context: ../.
       dockerfile: Dockerfile
     environment:
       - TRACE_EXPORTER=gofr

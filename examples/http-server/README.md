@@ -12,5 +12,6 @@ docker-compose up -d
 To test the example, follow these steps:
 
 1. Open your browser and navigate to `http://localhost:9000/hello`.
-2. To view the trace in Jaeger, open `http://localhost:16686`.
+2. To view the trace Gofr trce, open `https://tracer.gofr.dev` and paste the traceid.
+3. To view the Grafana Dashboard open `http://localhost:3000` 
 
