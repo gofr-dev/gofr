@@ -3,7 +3,8 @@ export const navigation = [
         title: 'Quick Start Guide',
         desc: "Get started with GoFR through our Quick Start Guide. Learn to build scalable applications with easy-to-follow instructions on server setup, database connections, configuration management, and more. Boost your productivity and streamline your development process.",
         links: [
-            { title: 'Hello Server',
+            {
+                title: 'Hello Server',
                 href: '/docs/quick-start/introduction' ,
                 desc: "Getting started with how to write a server using GoFR with basic examples and explanations. Boost your productivity with efficient coding practices and learn to build scalable applications quickly."},
             {
