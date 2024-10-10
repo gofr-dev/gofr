@@ -21,8 +21,12 @@ var (
 	errInvalidAuthorizationHeader  = errors.New("authorization header format must be Bearer {token}")
 )
 
-// JWTClaim represents a custom key used to store JWT claims within the request context.
-type JWTClaim string
+// Claim represents a custom key used to store JWT claims within the request context.
+type Claim int
+
+const (
+	JWTClaim Claim = iota
+)
 
 // PublicKeys stores a map of public keys identified by their key ID (kid).
 type PublicKeys struct {
@@ -130,7 +134,7 @@ func OAuth(key PublicKeyProvider) func(inner http.Handler) http.Handler {
 				return
 			}
 
-			ctx := context.WithValue(r.Context(), JWTClaim("JWTClaims"), token.Claims)
+			ctx := context.WithValue(r.Context(), JWTClaim, token.Claims)
 			*r = *r.Clone(ctx)
 
 			inner.ServeHTTP(w, r)
