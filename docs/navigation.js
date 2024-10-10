@@ -28,7 +28,7 @@ export const navigation = [
             {
                 title: 'Adding REST Handlers',
                 href: '/docs/quick-start/add-rest-handlers',
-                desc: "Fastest way to create CRUD APIs by just providing the entity"
+                desc: "Fastest way to create CRUD APIs by just providing the entity."
             }
 
         ],
@@ -129,26 +129,35 @@ export const navigation = [
             {
                 title: 'Handling File',
                 href: '/docs/advanced-guide/handling-file',
-                desc: "Discover techniques for efficiently handling file uploads and downloads in your GoFR application."
+                desc: "Explore how GoFR enables efficient file handling by abstracting remote and local filestore providers in your Go application. Learn to manage file uploads, downloads, and storage seamlessly, enhancing your application's capability to work with diverse data sources."
             },
             {
                 title: 'WebSockets',
                 href: '/docs/advanced-guide/websocket',
-                desc: "Explore how to implement WebSocket communication in your GoFR application for real-time data exchange."
+                desc: "Explore how gofr eases the process of WebSocket communication in your Golang application for real-time data exchange."
             }
-
         ],
     },
     {
         title: 'References',
         links: [
-            { title: 'Context', href: '/docs/references/context' ,
-                desc:""},
-            { title: 'Configs', href: '/docs/references/configs' ,
-                desc:""},
-            {tile: 'Testing', href:'/docs/references/testing',
-                desc:""},
-    //         { title: 'HTTP Service', href: '/docs/references/http-service' },
+            {
+                title: 'Context',
+                href: '/docs/references/context',
+                desc: "Discover the GoFR context, an injected object that simplifies request-specific data handling for HTTP, gRPC, and Pub/Sub calls. Learn how it extends Go's context, providing easy access to dependencies like databases, loggers, and HTTP clients. Explore features for reading HTTP requests, binding data, and accessing query and path parameters efficiently, all while reducing application complexity."
+            },
+            {
+                title: 'Configs',
+                href: '/docs/references/configs',
+                desc: "Learn how to manage configuration settings in your GoFR applications, including default values for environment variables. This section provides a comprehensive list of all available configurations to streamline your setup."
+            },
+            {
+                title: 'Testing',
+                href: '/docs/references/testing',
+                desc: "GoFR provides a centralized collection of mocks to facilitate writing effective unit tests. Explore testing strategies and tools for GoFR applications, ensuring your code is robust, reliable, and maintainable."
+            }
+
+            //         { title: 'HTTP Service', href: '/docs/references/http-service' },
     //         { title: 'Files', href: '/docs/references/files' },
     //         { title: 'Datastore', href: '/docs/references/datastore' },
     //         { title: 'PubSub', href: '/docs/references/pubsub' },
