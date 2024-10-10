@@ -21,11 +21,11 @@ var (
 	errInvalidAuthorizationHeader  = errors.New("authorization header format must be Bearer {token}")
 )
 
-// Claim represents a custom key used to store JWT claims within the request context.
-type Claim int
+// authMethod represents a custom type to define the different authentication methods supported.
+type authMethod int
 
 const (
-	JWTClaim Claim = iota
+	JWTClaim authMethod = iota // JWTClaim represents the key used to store JWT claims within the request context.
 )
 
 // PublicKeys stores a map of public keys identified by their key ID (kid).
