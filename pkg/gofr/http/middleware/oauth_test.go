@@ -59,7 +59,11 @@ func TestGetJwtClaims(t *testing.T) {
 			return
 		}
 
-		w.Write(result)
+		_, err = w.Write(result)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 
 		w.WriteHeader(http.StatusOK)
 	}).Methods(http.MethodGet).Name("/test")
