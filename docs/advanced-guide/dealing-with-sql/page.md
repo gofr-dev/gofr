@@ -19,7 +19,7 @@ DB_DIALECT=postgres
 ```
 
 ## Usage for SQLite
-To connect with PostgreSQL, set `DB_DIALECT` to `sqlite` and `DB_NAME` to the name of your DB File. If the DB file already exists then it will be used otherwise a new one will be created.
+To connect with SQLite, set `DB_DIALECT` to `sqlite` and `DB_NAME` to the name of your DB File. If the DB file already exists then it will be used otherwise a new one will be created.
 
 ```dotenv
 DB_NAME=test.db
