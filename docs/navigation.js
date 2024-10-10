@@ -1,6 +1,7 @@
 export const navigation = [
     {
         title: 'Quick Start Guide',
+        desc: "Get started with GoFR through our Quick Start Guide. Learn to build scalable applications with easy-to-follow instructions on server setup, database connections, configuration management, and more. Boost your productivity and streamline your development process.",
         links: [
             { title: 'Hello Server',
                 href: '/docs/quick-start/introduction' ,
@@ -30,7 +31,6 @@ export const navigation = [
                 href: '/docs/quick-start/add-rest-handlers',
                 desc: "Fastest way to create CRUD APIs by just providing the entity."
             }
-
         ],
     },
     {
