@@ -6,7 +6,7 @@ import (
 )
 
 func (c *Client) BatchQuery(name, stmt string, values ...any) error {
-	return c.BatchQueryWithCtx(context.Background(), name, stmt, values)
+	return c.BatchQueryWithCtx(context.Background(), name, stmt, values...)
 }
 
 func (c *Client) ExecuteBatch(name string) error {

@@ -185,11 +185,11 @@ func Test_Exec(t *testing.T) {
 		expErr   error
 	}{
 		{"success case", func() {
-			mockDeps.mockSession.EXPECT().query(query).Return(mockDeps.mockQuery).Times(1)
+			mockDeps.mockSession.EXPECT().query(query, nil).Return(mockDeps.mockQuery).Times(1)
 			mockDeps.mockQuery.EXPECT().exec().Return(nil).Times(1)
 		}, nil},
 		{"failure case", func() {
-			mockDeps.mockSession.EXPECT().query(query).Return(mockDeps.mockQuery).Times(1)
+			mockDeps.mockSession.EXPECT().query(query, nil).Return(mockDeps.mockQuery).Times(1)
 			mockDeps.mockQuery.EXPECT().exec().Return(errMock).Times(1)
 		}, errMock},
 	}
@@ -224,27 +224,27 @@ func Test_ExecCAS(t *testing.T) {
 		expErr     error
 	}{
 		{"success case: struct dest, applied true", &mockStruct, func() {
-			mockDeps.mockSession.EXPECT().query(query).Return(mockDeps.mockQuery).Times(1)
+			mockDeps.mockSession.EXPECT().query(query, nil).Return(mockDeps.mockQuery).Times(1)
 			mockDeps.mockQuery.EXPECT().mapScanCAS(gomock.AssignableToTypeOf(map[string]interface{}{})).Return(true, nil).Times(1)
 		}, true, nil},
 		{"success case: int dest, applied true", &mockInt, func() {
-			mockDeps.mockSession.EXPECT().query(query).Return(mockDeps.mockQuery).Times(1)
+			mockDeps.mockSession.EXPECT().query(query, nil).Return(mockDeps.mockQuery).Times(1)
 			mockDeps.mockQuery.EXPECT().scanCAS(gomock.Any()).Return(true, nil).Times(1)
 		}, true, nil},
 		{"failure case: struct dest, error", &mockStruct, func() {
-			mockDeps.mockSession.EXPECT().query(query).Return(mockDeps.mockQuery).Times(1)
+			mockDeps.mockSession.EXPECT().query(query, nil).Return(mockDeps.mockQuery).Times(1)
 			mockDeps.mockQuery.EXPECT().mapScanCAS(gomock.AssignableToTypeOf(map[string]interface{}{})).Return(false, errMock).Times(1)
 		}, false, errMock},
 		{"failure case: int dest, error", &mockInt, func() {
-			mockDeps.mockSession.EXPECT().query(query).Return(mockDeps.mockQuery).Times(1)
+			mockDeps.mockSession.EXPECT().query(query, nil).Return(mockDeps.mockQuery).Times(1)
 			mockDeps.mockQuery.EXPECT().scanCAS(gomock.Any()).Return(false, errMock).Times(1)
 		}, false, errMock},
 		{"failure case: dest is not pointer", mockInt, func() {}, false, errDestinationIsNotPointer},
 		{"failure case: dest is slice", &[]int{}, func() {
-			mockDeps.mockSession.EXPECT().query(query).Return(mockDeps.mockQuery).Times(1)
+			mockDeps.mockSession.EXPECT().query(query, nil).Return(mockDeps.mockQuery).Times(1)
 		}, false, errUnexpectedSlice{target: "[]*[]int"}},
 		{"failure case: dest is map", &map[string]interface{}{}, func() {
-			mockDeps.mockSession.EXPECT().query(query).Return(mockDeps.mockQuery).Times(1)
+			mockDeps.mockSession.EXPECT().query(query, nil).Return(mockDeps.mockQuery).Times(1)
 		}, false, errUnexpectedMap},
 	}
 
