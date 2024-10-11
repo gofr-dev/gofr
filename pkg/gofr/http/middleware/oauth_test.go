@@ -45,6 +45,55 @@ func TestOAuthSuccess(t *testing.T) {
 	resp.Body.Close()
 }
 
+func TestGetJwtClaims(t *testing.T) {
+	claims := []byte(`{"aud":"stage.kops.dev","iat":1257894000,"orig":"GOOGLE",` +
+		`"picture":"https://lh3.googleusercontent.com/a/ACg8ocKJ5DDA4zruzFlsQ9KvL` +
+		`jHDtbOT_hpVz0hEO8jSl2m7Myk=s96-c","sub":"rakshit.singh@zopsmart.com","sub-id"` +
+		`:"a6573e1d-abea-4863-acdb-6cf3626a4414","typ":"refresh_token"}`)
+
+	router := mux.NewRouter()
+	router.HandleFunc("/test", func(w http.ResponseWriter, r *http.Request) {
+		result, err := json.Marshal(r.Context().Value(JWTClaim))
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		_, err = w.Write(result)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+	}).Methods(http.MethodGet).Name("/test")
+	router.Use(OAuth(NewOAuth(OauthConfigs{Provider: &MockProvider{}, RefreshInterval: 10})))
+
+	server := httptest.NewServer(router)
+
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, server.URL+"/test", http.NoBody)
+	req.Header.Set("Authorization", "Bearer eyJhbGciOiJSUzI1NiIsImtpZCI6IjAwVFEwdlRpNVB1UnZscUZGY3dCeUc0WjBM"+
+		"dGREcUtJX0JWUFRrdnpleEUiLCJ0eXAiOiJKV1QifQ.eyJhdWQiOiJzdGFnZS5rb3BzLmRldiIsImlhdCI6MTI1Nzg5NDAwMCwib3JpZyI6IkdP"+
+		"T0dMRSIsInBpY3R1cmUiOiJodHRwczovL2xoMy5nb29nbGV1c2VyY29udGVudC5jb20vYS9BQ2c4b2NLSjVEREE0enJ1ekZsc1E5S3ZMakhEdG"+
+		"JPVF9ocFZ6MGhFTzhqU2wybTdNeWs9czk2LWMiLCJzdWIiOiJyYWtzaGl0LnNpbmdoQHpvcHNtYXJ0LmNvbSIsInN1Yi1pZCI6ImE2NTczZTFkL"+
+		"WFiZWEtNDg2My1hY2RiLTZjZjM2MjZhNDQxNCIsInR5cCI6InJlZnJlc2hfdG9rZW4ifQ.NkYSi6KJtGA3js9dcN3UqJWfeJdB88p7cxclrc6"+
+		"fxJODlCalsbbwIr3QL4AR9i0ucJjmoTIipCwpdM1IYDjCd-ilf2mTp11Wba31XoH--8YLI9Ju0wbpYhtF3wa00NF1Ijt48ze09IJ6QtE-etm"+
+		"AN8T7izsXbPeSrFiN3NVQU87eGxc3bEQhEsV5u3E6j8EdVDv8xbwisETY-N0mDftZp0w8UCkQ7MarOrA5IaXs2MHyCETy5y9QFd4djppH9oFo"+
+		"y5-AtEZqzyHKfGMlerjtJp8uOgFso9FycGuO0TFhR4AaZGVZxB072Hu-71tbx7atXp3zmDdkK_jkg5aVepoU_Q")
+
+	client := http.Client{}
+
+	resp, err := client.Do(req)
+	result := make([]byte, len(claims))
+	_, _ = resp.Body.Read(result)
+
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, claims, result)
+
+	resp.Body.Close()
+}
+
 func TestOAuthInvalidTokenFormat(t *testing.T) {
 	router := mux.NewRouter()
 	router.HandleFunc("/test", func(w http.ResponseWriter, _ *http.Request) {
