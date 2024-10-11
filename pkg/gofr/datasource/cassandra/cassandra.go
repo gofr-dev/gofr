@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"go.opentelemetry.io/otel/attribute"
-
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/gocql/gocql"
@@ -94,15 +93,33 @@ func (c *Client) UseMetrics(metrics interface{}) {
 	}
 }
 
-// UseTracer sets the tracer for Clickhouse client.
+// UseTracer sets the tracer for Cassandra client.
 func (c *Client) UseTracer(tracer any) {
 	if tracer, ok := tracer.(trace.Tracer); ok {
 		c.tracer = tracer
 	}
 }
 
+// Query is the original method without context, preserved for backward compatibility.
+// It internally delegates to QueryWithCtx using context.Background() as the default context.
+func (c *Client) Query(dest any, stmt string, values ...any) error {
+	return c.QueryWithCtx(context.Background(), dest, stmt, values...)
+}
+
+func (c *Client) Exec(stmt string, values ...any) error {
+	return c.ExecWithCtx(context.Background(), stmt, values)
+}
+
+func (c *Client) ExecCAS(dest any, stmt string, values ...any) (bool, error) {
+	return c.ExecCASWithCtx(context.Background(), dest, stmt, values)
+}
+
+func (c *Client) NewBatch(name string, batchType int) error {
+	return c.NewBatchWithCtx(nil, name, batchType)
+}
+
 //nolint:exhaustive // We just want to take care of slice and struct in this case.
-func (c *Client) Query(ctx context.Context, dest any, stmt string, values ...any) error {
+func (c *Client) QueryWithCtx(ctx context.Context, dest any, stmt string, values ...any) error {
 	_, span := c.addTrace(ctx, "query", stmt)
 
 	defer c.sendOperationStats(&QueryLog{Query: stmt, Keyspace: c.config.Keyspace}, time.Now(), "query", span)
@@ -151,7 +168,7 @@ func (c *Client) Query(ctx context.Context, dest any, stmt string, values ...any
 	return nil
 }
 
-func (c *Client) Exec(ctx context.Context, stmt string, values ...any) error {
+func (c *Client) ExecWithCtx(ctx context.Context, stmt string, values ...any) error {
 	_, span := c.addTrace(ctx, "exec", stmt)
 
 	defer c.sendOperationStats(&QueryLog{Query: stmt, Keyspace: c.config.Keyspace}, time.Now(), "exec", span)
@@ -160,7 +177,7 @@ func (c *Client) Exec(ctx context.Context, stmt string, values ...any) error {
 }
 
 //nolint:exhaustive // We just want to take care of slice and struct in this case.
-func (c *Client) ExecCAS(ctx context.Context, dest any, stmt string, values ...any) (bool, error) {
+func (c *Client) ExecCASWithCtx(ctx context.Context, dest any, stmt string, values ...any) (bool, error) {
 	var (
 		applied bool
 		err     error
@@ -201,7 +218,7 @@ func (c *Client) ExecCAS(ctx context.Context, dest any, stmt string, values ...a
 	return applied, err
 }
 
-func (c *Client) NewBatch(_ context.Context, name string, batchType int) error {
+func (c *Client) NewBatchWithCtx(_ context.Context, name string, batchType int) error {
 	switch batchType {
 	case LoggedBatch, UnloggedBatch, CounterBatch:
 		if len(c.cassandra.batches) == 0 {
@@ -369,7 +386,7 @@ func (c *Client) HealthCheck(context.Context) (any, error) {
 
 func (c *Client) addTrace(ctx context.Context, method, query string) (context.Context, trace.Span) {
 	if c.tracer != nil {
-		tracerCtx, span := c.tracer.Start(ctx, fmt.Sprintf("clickhouse-%v", method))
+		tracerCtx, span := c.tracer.Start(ctx, fmt.Sprintf("cassandra-%v", method))
 
 		span.SetAttributes(
 			attribute.String("cassandra.query", query),

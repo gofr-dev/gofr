@@ -1,7 +1,6 @@
 package cassandra
 
 import (
-	"context"
 	"testing"
 
 	"github.com/gocql/gocql"
@@ -15,8 +14,6 @@ func Test_BatchQuery(t *testing.T) {
 	const stmt = "INSERT INTO users (id, name) VALUES(?, ?)"
 
 	values := []interface{}{1, "Test"}
-
-	ctx := context.Background()
 
 	testCases := []struct {
 		desc     string
@@ -34,7 +31,7 @@ func Test_BatchQuery(t *testing.T) {
 	for i, tc := range testCases {
 		tc.mockCall()
 
-		err := client.BatchQuery(ctx, mockBatchName, stmt, values...)
+		err := client.BatchQuery(mockBatchName, stmt, values...)
 
 		assert.Equalf(t, tc.expErr, err, "TEST[%d], Failed.\n%s", i, tc.desc)
 	}
@@ -42,8 +39,6 @@ func Test_BatchQuery(t *testing.T) {
 
 func Test_ExecuteBatch(t *testing.T) {
 	client, mockDeps := initTest(t)
-
-	ctx := context.Background()
 
 	testCases := []struct {
 		desc     string
@@ -64,7 +59,7 @@ func Test_ExecuteBatch(t *testing.T) {
 	for i, tc := range testCases {
 		tc.mockCall()
 
-		err := client.ExecuteBatch(ctx, mockBatchName)
+		err := client.ExecuteBatch(mockBatchName)
 
 		assert.Equalf(t, tc.expErr, err, "TEST[%d], Failed.\n%s", i, tc.desc)
 	}
@@ -111,8 +106,6 @@ func Test_ExecuteBatchCAS(t *testing.T) {
 		Name string `json:"name"`
 	}
 
-	ctx := context.Background()
-
 	mockStructSlice := make([]testStruct, 0)
 
 	testCases := []struct {
@@ -136,7 +129,7 @@ func Test_ExecuteBatchCAS(t *testing.T) {
 	for i, tc := range testCases {
 		tc.mockCall()
 
-		applied, err := client.ExecuteBatchCAS(ctx, mockBatchName, tc.dest)
+		applied, err := client.ExecuteBatchCAS(mockBatchName, tc.dest)
 
 		assert.Equalf(t, tc.expRes, tc.dest, "TEST[%d], Failed.\n%s", i, tc.desc)
 		assert.Equalf(t, tc.expErr, err, "TEST[%d], Failed.\n%s", i, tc.desc)
