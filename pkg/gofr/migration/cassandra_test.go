@@ -1,7 +1,6 @@
 package migration
 
 import (
-	"context"
 	"database/sql"
 	"testing"
 	"time"
@@ -13,7 +12,7 @@ import (
 	"gofr.dev/pkg/gofr/testutil"
 )
 
-func cassandraSetup(t *testing.T) (migrator, *container.MockCassandra, *container.Container) {
+func cassandraSetup(t *testing.T) (migrator, *container.MockCassandraWithContext, *container.Container) {
 	t.Helper()
 
 	mockContainer, mocks := container.NewMockContainer(t)
@@ -22,7 +21,7 @@ func cassandraSetup(t *testing.T) (migrator, *container.MockCassandra, *containe
 
 	ds := Datasource{Cassandra: mockContainer.Cassandra}
 
-	cassandraDB := cassandraDS{Cassandra: mockCassandra}
+	cassandraDB := cassandraDS{CassandraWithContext: mockCassandra}
 	migratorWithCassandra := cassandraDB.apply(&ds)
 
 	mockContainer.Cassandra = mockCassandra
@@ -42,7 +41,7 @@ func Test_CassandraCheckAndCreateMigrationTable(t *testing.T) {
 	}
 
 	for i, tc := range testCases {
-		mockCassandra.EXPECT().Exec(context.Background(), checkAndCreateCassandraMigrationTable).Return(tc.err)
+		mockCassandra.EXPECT().Exec(checkAndCreateCassandraMigrationTable).Return(tc.err)
 
 		err := migratorWithCassandra.checkAndCreateMigrationTable(mockContainer)
 
@@ -65,7 +64,7 @@ func Test_CassandraGetLastMigration(t *testing.T) {
 	var lastMigration []int64
 
 	for i, tc := range testCases {
-		mockCassandra.EXPECT().Query(context.Background(), &lastMigration, getLastCassandraGoFrMigration).Return(tc.err)
+		mockCassandra.EXPECT().Query(&lastMigration, getLastCassandraGoFrMigration).Return(tc.err)
 
 		resp := migratorWithCassandra.getLastMigration(mockContainer)
 
@@ -92,7 +91,7 @@ func Test_CassandraCommitMigration(t *testing.T) {
 	}
 
 	for i, tc := range testCases {
-		mockCassandra.EXPECT().Exec(gomock.Any(), insertCassandraGoFrMigrationRow, td.MigrationNumber,
+		mockCassandra.EXPECT().Exec(insertCassandraGoFrMigrationRow, td.MigrationNumber,
 			"UP", td.StartTime, gomock.Any()).Return(tc.err)
 
 		err := migratorWithCassandra.commitMigration(mockContainer, td)
