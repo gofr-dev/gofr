@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/cyphar/filepath-securejoin"
 	"github.com/gorilla/mux"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
@@ -64,17 +65,24 @@ func (staticConfig staticFileConfig) staticHandler(fileServer http.Handler) http
 		url := r.URL.Path
 
 		filePath := strings.Split(url, "/")
-
 		fileName := filePath[len(filePath)-1]
 
 		const defaultSwaggerFileName = "openapi.json"
 
-		if _, err := os.Stat(filepath.Clean(filepath.Join(staticConfig.directoryName, url))); fileName == defaultSwaggerFileName && err == nil {
-			w.WriteHeader(http.StatusForbidden)
-
-			_, _ = w.Write([]byte("403 forbidden"))
-
+		// Fix for path traversal using SecureJoin
+		secureFilePath, err := securejoin.SecureJoin(staticConfig.directoryName, url)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = w.Write([]byte("500 internal server error"))
 			return
+		}
+
+		if fileName == defaultSwaggerFileName {
+			if _, err := os.Stat(secureFilePath); err == nil {
+				w.WriteHeader(http.StatusForbidden)
+				_, _ = w.Write([]byte("403 forbidden"))
+				return
+			}
 		}
 
 		fileServer.ServeHTTP(w, r)
