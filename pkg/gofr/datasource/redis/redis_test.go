@@ -38,7 +38,7 @@ func Test_NewClient_InvalidPort(t *testing.T) {
 	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_redis_stats", gomock.Any(), "hostname", gomock.Any(), "type", "ping")
 
 	client := NewClient(mockConfig, mockLogger, mockMetrics)
-	assert.Nil(t, client.Client, "Test_NewClient_InvalidPort Failed! Expected redis client to be nil")
+	assert.NotNil(t, client.Client, "Test_NewClient_InvalidPort Failed! Expected redis client not to be nil")
 }
 
 func TestRedis_QueryLogging(t *testing.T) {
