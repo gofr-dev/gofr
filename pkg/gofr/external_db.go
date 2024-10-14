@@ -126,5 +126,5 @@ func (a *App) AddOpentsdb(db container.OpentsdbProvider) {
 
 	db.Connect()
 
-	a.container.Opentsdb = db
+	a.container.OpenTSDB = db
 }

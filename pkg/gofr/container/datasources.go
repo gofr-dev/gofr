@@ -359,24 +359,24 @@ type DgraphProvider interface {
 	provider
 }
 
-type OpentsdbProvider interface {
-	OpentsDBClient
+type OpenTSDBProvider interface {
+	OpenTSDB
 	provider
 }
 
-// OpentsDBClient provides methods for GoFr applications to communicate with OpenTSDB
+// OpentSDB provides methods for GoFr applications to communicate with OpenTSDB
 // through its REST APIs. Each method corresponds to an API endpoint as defined in
 // the OpenTSDB documentation (http://opentsdb.net/docs/build/html/api_http/index.html#api-endpoints).
-type OpentsDBClient interface {
+type OpenTSDB interface {
 
-	// HealthCheck checks if the target OpenTSDB server is reachable.
+	// HealthChecker checks if the target OpenTSDB server is reachable.
 	// It returns an error if the server is unreachable, otherwise returns nil.
-	HealthCheck(ctx context.Context) (any, error)
+	HealthChecker
 
 	// WithContext returns a Client that is associated with the given context.
 	// Use this to pass a context to underlying transport (e.g. to specify a
 	// deadline).
-	WithContext(ctx context.Context) OpentsDBClient
+	WithContext(ctx context.Context) OpenTSDB
 
 	// Put handles the 'POST /api/put' endpoint, allowing the storage of data in OpenTSDB.
 	//

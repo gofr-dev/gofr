@@ -81,8 +81,8 @@ func (bulkAnnotResp *BulkAnnotatResponse) addTrace(ctx context.Context, operatio
 	return addTracer(ctx, bulkAnnotResp.tracer, operation, "BulkAnnotatResponse")
 }
 
-func (query *QueryResponse) addTrace(ctx context.Context, operation string) trace.Span {
-	return addTracer(ctx, query.tracer, operation, "QueryResponse")
+func (queryResp *QueryResponse) addTrace(ctx context.Context, operation string) trace.Span {
+	return addTracer(ctx, queryResp.tracer, operation, "QueryResponse")
 }
 
 func (dropResp *DropcachesResponse) addTrace(ctx context.Context, operation string) trace.Span {
@@ -109,8 +109,8 @@ func (query *QueryLastParam) addTrace(ctx context.Context, operation string) tra
 	return addTracer(ctx, query.tracer, operation, "QueryLastParam")
 }
 
-func (ql *QueryLastResponse) addTrace(ctx context.Context, operation string) trace.Span {
-	return addTracer(ctx, ql.tracer, operation, "QueryLastResponse")
+func (queryLastResp *QueryLastResponse) addTrace(ctx context.Context, operation string) trace.Span {
+	return addTracer(ctx, queryLastResp.tracer, operation, "QueryLastResponse")
 }
 
 func (verResp *VersionResponse) addTrace(ctx context.Context, operation string) trace.Span {

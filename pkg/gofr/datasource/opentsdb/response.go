@@ -5,6 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"strings"
 	"time"
 
 	"go.opentelemetry.io/otel/trace"
@@ -46,6 +48,7 @@ func setStatus(ctx context.Context, resp GenericResponse, code int, operation st
 	span := resp.addTrace(ctx, operation)
 
 	status := StatusSuccess
+
 	var message string
 
 	defer sendOperationStats(logger, time.Now(), operation, &status, &message, span)
@@ -54,7 +57,8 @@ func setStatus(ctx context.Context, resp GenericResponse, code int, operation st
 	resp.setStatusCode(code)
 }
 
-func getCustomParser(ctx context.Context, resp GenericResponse, operation string, logger Logger, unmarshalFunc func([]byte) error) func([]byte) error {
+func getCustomParser(ctx context.Context, resp GenericResponse, operation string, logger Logger,
+	unmarshalFunc func([]byte) error) func([]byte) error {
 	span := resp.addTrace(ctx, operation)
 
 	status := StatusFailed
@@ -74,6 +78,23 @@ func getCustomParser(ctx context.Context, resp GenericResponse, operation string
 
 		status = StatusSuccess
 		message = fmt.Sprintf("%s custom parsing was successful.", operation)
+
 		return nil
 	}
+}
+
+func getQueryParser(ctx context.Context, statusCode int, logger Logger, obj GenericResponse, methodName string) func(respCnt []byte) error {
+	return getCustomParser(ctx, obj, methodName, logger, func(resp []byte) error {
+		originRespStr := string(resp)
+
+		var respStr string
+
+		if statusCode == http.StatusOK && strings.Contains(originRespStr, "[") && strings.Contains(originRespStr, "]") {
+			respStr = fmt.Sprintf("{%s:%s}", `"queryRespCnts"`, originRespStr)
+		} else {
+			respStr = originRespStr
+		}
+
+		return json.Unmarshal([]byte(respStr), obj)
+	})
 }

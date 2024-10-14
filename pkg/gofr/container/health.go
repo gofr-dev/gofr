@@ -65,7 +65,7 @@ func checkExternalDBHealth(ctx context.Context, c *Container, healthMap map[stri
 		"clickHouse": c.Clickhouse,
 		"kv-store":   c.KVStore,
 		"dgraph":     c.DGraph,
-		"opentsdb":   c.Opentsdb,
+		"opentsdb":   c.OpenTSDB,
 	}
 
 	for name, service := range services {

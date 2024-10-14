@@ -82,6 +82,7 @@ func (c *OpentsdbClient) Suggest(sugParam *SuggestParam) (*SuggestResponse, erro
 	span := c.addTrace(context.Background(), "Suggest")
 
 	status := StatusFailed
+
 	var message string
 
 	defer sendOperationStats(c.logger, time.Now(), "Suggest", &status, &message, span)
@@ -107,6 +108,7 @@ func (c *OpentsdbClient) Suggest(sugParam *SuggestParam) (*SuggestResponse, erro
 
 	status = StatusSuccess
 	message = fmt.Sprintf("suggest query request to url %q processed successfully", sugEndpoint)
+
 	return &sugResp, nil
 }
 
@@ -132,5 +134,6 @@ func getSuggestBodyContents(sugParam *SuggestParam) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to marshal suggest param: %v", err)
 	}
+
 	return string(result), nil
 }

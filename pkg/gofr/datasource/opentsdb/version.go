@@ -4,8 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"go.opentelemetry.io/otel/trace"
 	"time"
+
+	"go.opentelemetry.io/otel/trace"
 )
 
 // VersionResponse is the struct implementation for /api/version.
@@ -40,6 +41,7 @@ func (c *OpentsdbClient) version() (*VersionResponse, error) {
 	span := c.addTrace(c.ctx, "Version")
 
 	status := StatusFailed
+
 	var message string
 
 	defer sendOperationStats(c.logger, time.Now(), "Version", &status, &message, span)

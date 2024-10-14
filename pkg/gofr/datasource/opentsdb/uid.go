@@ -127,6 +127,7 @@ func (c *OpentsdbClient) operateUIDMetaData(uidMetaData *UIDMetaData, method, op
 	span := c.addTrace(c.ctx, operation)
 
 	status := StatusFailed
+
 	var message string
 
 	defer sendOperationStats(c.logger, time.Now(), operation, &status, &message, span)
@@ -317,6 +318,7 @@ func (c *OpentsdbClient) QueryTSMetaData(tsuid string) (*TSMetaDataResponse, err
 	span := c.addTrace(c.ctx, "QueryTSMetaData")
 
 	status := StatusFailed
+
 	var message string
 
 	defer sendOperationStats(c.logger, time.Now(), "QueryTSMetaData", &status, &message, span)

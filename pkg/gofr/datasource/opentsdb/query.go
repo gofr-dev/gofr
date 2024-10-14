@@ -5,10 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net/http"
 	"sort"
 	"strconv"
-	"strings"
 	"time"
 
 	"go.opentelemetry.io/otel/trace"
@@ -158,20 +156,7 @@ func (queryResp *QueryResponse) setStatusCode(code int) {
 }
 
 func (queryResp *QueryResponse) GetCustomParser() func(respCnt []byte) error {
-	return getCustomParser(queryResp.ctx, queryResp, "GetCustomParser-Query", queryResp.logger,
-		func(resp []byte) error {
-			originRespStr := string(resp)
-
-			var respStr string
-
-			if queryResp.StatusCode == http.StatusOK && strings.Contains(originRespStr, "[") && strings.Contains(originRespStr, "]") {
-				respStr = fmt.Sprintf("{%s:%s}", `"queryRespCnts"`, originRespStr)
-			} else {
-				respStr = originRespStr
-			}
-
-			return json.Unmarshal([]byte(respStr), &queryResp)
-		})
+	return getQueryParser(queryResp.ctx, queryResp.StatusCode, queryResp.logger, queryResp, "GetCustomParser-Query")
 }
 
 // QueryRespItem acts as the implementation of Response in the /api/query scene.
@@ -262,6 +247,7 @@ func (qri *QueryRespItem) getSortedTimestampStrs() []string {
 	span := qri.addTrace(qri.ctx, "GetSortedTimeStamps-QueryRespItem")
 
 	status := StatusSuccess
+
 	var message string
 
 	defer sendOperationStats(qri.logger, time.Now(), "GetSortedTimeStamps-QueryRespItem", &status, &message, span)
@@ -272,6 +258,7 @@ func (qri *QueryRespItem) getSortedTimestampStrs() []string {
 	}
 
 	sort.Strings(timestampStrs)
+
 	return timestampStrs
 }
 
@@ -310,6 +297,7 @@ func (qri *QueryRespItem) GetLatestDataPoint() *DataPoint {
 	message = fmt.Sprintf("LatestDataPoints with timestamp %v fetched successfully", timestamp)
 
 	qri.logger.Logf("LatestDataPoints fetched successfully")
+
 	return datapoint
 }
 
@@ -325,6 +313,7 @@ func (c *OpentsdbClient) Query(param *QueryParam) (*QueryResponse, error) {
 	span := c.addTrace(c.ctx, "Query")
 
 	status := StatusFailed
+
 	var message string
 
 	defer sendOperationStats(c.logger, time.Now(), "Query", &status, &message, span)
@@ -360,6 +349,7 @@ func getQueryBodyContents(param interface{}) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to marshal query param: %v", err)
 	}
+
 	return string(result), nil
 }
 
@@ -373,7 +363,7 @@ func isValidQueryParam(param *QueryParam) bool {
 	}
 
 	for _, query := range param.Queries {
-		if areValidParams(&query) == false {
+		if !areValidParams(&query) {
 			return false
 		}
 	}
@@ -386,7 +376,7 @@ func areValidParams(query *SubQuery) bool {
 		return false
 	}
 
-	for k, _ := range query.RateParams {
+	for k := range query.RateParams {
 		if k != QueryRateOptionCounter && k != QueryRateOptionCounterMax && k != QueryRateOptionResetValue {
 			return false
 		}
@@ -417,5 +407,6 @@ func isValidTimePoint(timePoint interface{}) bool {
 	default:
 		return false
 	}
+
 	return true
 }

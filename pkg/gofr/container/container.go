@@ -58,7 +58,7 @@ type Container struct {
 	Mongo      Mongo
 	Solr       Solr
 	DGraph     Dgraph
-	Opentsdb   OpentsDBClient
+	OpenTSDB   OpenTSDB
 
 	KVStore KVStore
 

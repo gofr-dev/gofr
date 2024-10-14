@@ -85,6 +85,7 @@ func (c *OpentsdbClient) Put(datas []DataPoint, queryParam string) (*PutResponse
 	span := c.addTrace(c.ctx, "Put")
 
 	status := StatusFailed
+
 	var message string
 
 	defer sendOperationStats(c.logger, time.Now(), "Put", &status, &message, span)
@@ -143,7 +144,8 @@ func (c *OpentsdbClient) Put(datas []DataPoint, queryParam string) (*PutResponse
 	return nil, parsePutErrorMsg(&globalResp)
 }
 
-func (c *OpentsdbClient) getResponses(putEndpoint string, dataGroups [][]DataPoint, responses []PutResponse, message *string) ([]PutResponse, error) {
+func (c *OpentsdbClient) getResponses(putEndpoint string, dataGroups [][]DataPoint,
+	responses []PutResponse, message *string) ([]PutResponse, error) {
 	for _, datapoints := range dataGroups {
 		reqBodyCnt, err := getPutBodyContents(datapoints)
 		if err != nil {
@@ -172,6 +174,7 @@ func (c *OpentsdbClient) splitProperGroups(datapoints []DataPoint) ([][]DataPoin
 	span := c.addTrace(c.ctx, "splitProperGroups-Put")
 
 	status := StatusFailed
+
 	var message string
 
 	defer sendOperationStats(c.logger, time.Now(), "splitProperGroups-Put", &status, &message, span)
@@ -194,6 +197,7 @@ func (c *OpentsdbClient) appendDataPoints(datasBytes []byte, datapoints []DataPo
 	if len(datasBytes) > c.opentsdbCfg.MaxContentLength {
 		return c.splitLargeDataPoints(datapoints, datapointGroups)
 	}
+
 	return append(datapointGroups, datapoints)
 }
 
@@ -216,6 +220,7 @@ func (c *OpentsdbClient) splitLargeDataPoints(datapoints []DataPoint, datapointG
 			break
 		}
 	}
+
 	return datapointGroups
 }
 
@@ -223,14 +228,16 @@ func (c *OpentsdbClient) calculateEndIndex(datapointsSize int) int {
 	if datapointsSize > c.opentsdbCfg.MaxPutPointsNum {
 		return c.opentsdbCfg.MaxPutPointsNum
 	}
+
 	return datapointsSize
 }
 
-func (c *OpentsdbClient) calculateNextEndIndex(startIndex, datapointsSize, tempSize int) int {
+func (*OpentsdbClient) calculateNextEndIndex(startIndex, datapointsSize, tempSize int) int {
 	endIndex := startIndex + tempSize
 	if endIndex > datapointsSize {
 		return datapointsSize
 	}
+
 	return endIndex
 }
 
@@ -248,6 +255,7 @@ func parsePutErrorMsg(resp *PutResponse) error {
 			buf.WriteString(fmt.Sprintf("\t%s\n", putError.String()))
 		}
 	}
+
 	return errors.New(buf.String())
 }
 

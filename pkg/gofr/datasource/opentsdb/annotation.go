@@ -127,65 +127,21 @@ func (c *OpentsdbClient) QueryAnnotation(queryAnnoParam map[string]interface{}) 
 }
 
 func (c *OpentsdbClient) UpdateAnnotation(annotation *Annotation) (*AnnotationResponse, error) {
-	span := c.addTrace(c.ctx, "UpdateAnnotation")
-
-	status := StatusFailed
-
-	var message string
-
-	defer sendOperationStats(c.logger, time.Now(), "UpdateAnnotation", &status, &message, span)
-
-	annresp, err := c.operateAnnotation(PostMethod, annotation)
-	if err == nil {
-		status = StatusSuccess
-		message = fmt.Sprintf("annotation with tsuid %s updated successfully", annotation.Tsuid)
-
-		c.logger.Logf("annotation updated successfully")
-
-		return annresp, nil
-	}
-
-	message = fmt.Sprintf("error while updating annotation with tsuid %s", annotation.Tsuid)
-
-	c.logger.Errorf("error while updating annotation")
-
-	return nil, err
+	return c.operateAnnotation(annotation, PostMethod, "UpdateAnnoation")
 }
 
 func (c *OpentsdbClient) DeleteAnnotation(annotation *Annotation) (*AnnotationResponse, error) {
-	span := c.addTrace(c.ctx, "DeleteAnnotation")
-
-	status := StatusFailed
-
-	var message string
-
-	defer sendOperationStats(c.logger, time.Now(), "DeleteAnnotation", &status, &message, span)
-
-	annresp, err := c.operateAnnotation(DeleteMethod, annotation)
-	if err == nil {
-		status = StatusSuccess
-		message = fmt.Sprintf("annotation with tsuid %s deleted successfully", annotation.Tsuid)
-
-		c.logger.Logf("annotation deleted successfully")
-
-		return annresp, nil
-	}
-
-	message = fmt.Sprintf("error while deleting annotation with tsuid: %s", annotation.Tsuid)
-
-	c.logger.Errorf("error while deleting annotation")
-
-	return nil, err
+	return c.operateAnnotation(annotation, DeleteMethod, "DeleteAnnotation")
 }
 
-func (c *OpentsdbClient) operateAnnotation(method string, annotation *Annotation) (*AnnotationResponse, error) {
-	span := c.addTrace(c.ctx, "operateAnnotation")
+func (c *OpentsdbClient) operateAnnotation(annotation *Annotation, method, operation string) (*AnnotationResponse, error) {
+	span := c.addTrace(c.ctx, operation)
 
 	status := StatusFailed
 
 	var message string
 
-	defer sendOperationStats(c.logger, time.Now(), "operateAnnotation", &status, &message, span)
+	defer sendOperationStats(c.logger, time.Now(), operation, &status, &message, span)
 
 	if !c.isValidOperateMethod(method) {
 		message = fmt.Sprintf("invalid annotation operation method: %s", method)
@@ -203,14 +159,14 @@ func (c *OpentsdbClient) operateAnnotation(method string, annotation *Annotation
 	annResp := AnnotationResponse{logger: c.logger, tracer: c.tracer, ctx: c.ctx}
 
 	if err = c.sendRequest(method, annoEndpoint, string(resultBytes), &annResp); err != nil {
-		message = fmt.Sprintf("error while processing %s annotation request to url %q: %s", method, annoEndpoint, err.Error())
+		message = fmt.Sprintf("%s: error while processing %s annotation request to url %q: %s", operation, method, annoEndpoint, err.Error())
 		return nil, err
 	}
 
 	status = StatusSuccess
-	message = fmt.Sprintf("%s annotation request to url %q processed successfully", method, annoEndpoint)
+	message = fmt.Sprintf("%s: %s annotation request to url %q processed successfully", operation, method, annoEndpoint)
 
-	c.logger.Logf("%s annotation request successful", method)
+	c.logger.Logf("%s request successful", operation)
 
 	return &annResp, nil
 }

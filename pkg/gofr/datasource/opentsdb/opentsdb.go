@@ -64,11 +64,13 @@ const (
 	DefaultMaxContentLength = 40960
 )
 
+var dialTimeout = net.DialTimeout
+
 // OpentsdbClient is the implementation of the OpentsDBClient interface,
 // which includes context-aware functionality.
 type OpentsdbClient struct {
 	tsdbEndpoint string
-	client       *http.Client
+	client       HTTPClient
 	ctx          context.Context
 	opentsdbCfg  OpenTSDBConfig
 	logger       Logger
@@ -219,17 +221,7 @@ func (c *OpentsdbClient) HealthCheck(_ context.Context) (any, error) {
 		Details: make(map[string]interface{}),
 	}
 
-	h.Details["host"] = c.tsdbEndpoint
-
-	ver, err := c.version()
-	if err != nil {
-		message = err.Error()
-		return nil, err
-	}
-
-	h.Details["version"] = ver
-
-	conn, err := net.DialTimeout("tcp", c.opentsdbCfg.OpentsdbHost, DefaultDialTime)
+	conn, err := dialTimeout("tcp", c.opentsdbCfg.OpentsdbHost, DefaultDialTime)
 	if err != nil {
 		h.Status = "DOWN"
 		message = fmt.Sprintf("OpenTSDB is unreachable: %v", err)
@@ -240,6 +232,16 @@ func (c *OpentsdbClient) HealthCheck(_ context.Context) (any, error) {
 	if conn != nil {
 		defer conn.Close()
 	}
+
+	h.Details["host"] = c.tsdbEndpoint
+
+	ver, err := c.version()
+	if err != nil {
+		message = err.Error()
+		return nil, err
+	}
+
+	h.Details["version"] = ver.VersionInfo["version"]
 
 	status = StatusSuccess
 	h.Status = "UP"
@@ -254,6 +256,7 @@ func (c *OpentsdbClient) sendRequest(method, url, reqBodyCnt string, parsedResp 
 	span := c.addTrace(c.ctx, "sendRequest")
 
 	status := StatusFailed
+
 	var message string
 
 	defer sendOperationStats(c.logger, time.Now(), "sendRequest", &status, &message, span)

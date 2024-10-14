@@ -2,11 +2,8 @@ package opentsdb
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"net/http"
-	"strings"
 	"time"
 
 	"go.opentelemetry.io/otel/trace"
@@ -82,19 +79,7 @@ func (queryLastResp *QueryLastResponse) setStatusCode(code int) {
 }
 
 func (queryLastResp *QueryLastResponse) GetCustomParser() func(respCnt []byte) error {
-	return getCustomParser(queryLastResp.ctx, queryLastResp, "GetCustomParser-QueryLast", queryLastResp.logger, func(resp []byte) error {
-		originRespStr := string(resp)
-
-		var respStr string
-
-		if queryLastResp.StatusCode == http.StatusOK && strings.Contains(originRespStr, "[") && strings.Contains(originRespStr, "]") {
-			respStr = fmt.Sprintf("{%s:%s}", `"queryRespCnts"`, originRespStr)
-		} else {
-			respStr = originRespStr
-		}
-
-		return json.Unmarshal([]byte(respStr), &queryLastResp)
-	})
+	return getQueryParser(queryLastResp.ctx, queryLastResp.StatusCode, queryLastResp.logger, queryLastResp, "GetCustomParser-QueryLast")
 }
 
 // QueryRespLastItem acts as the implementation of Response in the /api/query/last scene.
@@ -166,5 +151,6 @@ func isValidQueryLastParam(param *QueryLastParam) bool {
 			return false
 		}
 	}
+
 	return true
 }
