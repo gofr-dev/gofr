@@ -53,7 +53,7 @@ type Container struct {
 	Redis Redis
 	SQL   DB
 
-	Cassandra  Cassandra
+	Cassandra  CassandraWithContext
 	Clickhouse Clickhouse
 	Mongo      Mongo
 	Solr       Solr
