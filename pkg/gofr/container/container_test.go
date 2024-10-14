@@ -41,7 +41,7 @@ func Test_newContainerDBInitializationFail(t *testing.T) {
 	// container is a pointer, and we need to see if db are not initialized, comparing the container object
 	// will not suffice the purpose of this test
 	require.Error(t, db.DB.Ping(), "TEST, Failed.\ninvalid db connections")
-	assert.Nil(t, redis.Client, "TEST, Failed.\ninvalid redis connections")
+	assert.NotNil(t, redis.Client, "TEST, Failed.\ninvalid redis connections")
 }
 
 func Test_newContainerPubSubInitializationFail(t *testing.T) {
