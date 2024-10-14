@@ -333,3 +333,276 @@ func Test_noopRequest(t *testing.T) {
 	require.NoError(t, noop.Bind(nil))
 	assert.Nil(t, noop.Params("test"))
 }
+
+func TestCron_parseRange(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected map[int]struct{}
+		min      int
+		max      int
+		hasError bool
+	}{
+		{
+			name:  "Valid Range",
+			input: "1-5",
+			expected: map[int]struct{}{
+				1: {}, 2: {}, 3: {}, 4: {}, 5: {},
+			},
+			min: 1, max: 10,
+			hasError: false,
+		},
+		{
+			name:     "Out of Range",
+			input:    "1-12",
+			expected: nil,
+			min:      1, max: 10,
+			hasError: true,
+		},
+		{
+			name:     "Invalid Input",
+			input:    "a-b",
+			expected: nil,
+			min:      1, max: 10,
+			hasError: true,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			output, err := parseRange(test.input, test.min, test.max)
+			if test.hasError {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+
+			assert.Len(t, output, len(test.expected))
+
+			assert.Equal(t, test.expected, output)
+		})
+	}
+}
+
+func TestCron_parseRange_BoundaryValues(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected map[int]struct{}
+		min      int
+		max      int
+		hasError bool
+	}{
+		{
+			name:  "Lower Boundary",
+			input: "1-1",
+			expected: map[int]struct{}{
+				1: {},
+			},
+			min:      1,
+			max:      10,
+			hasError: false,
+		},
+		{
+			name:  "Upper Boundary",
+			input: "10-10",
+			expected: map[int]struct{}{
+				10: {},
+			},
+			min:      1,
+			max:      10,
+			hasError: false,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			output, err := parseRange(test.input, test.min, test.max)
+			if test.hasError {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+
+			assert.Equal(t, test.expected, output, "Expected: %v, got: %v", test.expected, output)
+		})
+	}
+}
+
+func TestCron_parsePart_InputFormats(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected map[int]struct{}
+		min      int
+		max      int
+		hasError bool
+	}{
+		{
+			name:  "Valid Input with Multiple Values",
+			input: "1,5,7",
+			expected: map[int]struct{}{
+				1: {}, 5: {}, 7: {},
+			},
+			min:      1,
+			max:      10,
+			hasError: false,
+		},
+		{
+			name:     "Invalid Input Format",
+			input:    "1,a,3",
+			expected: nil,
+			min:      1,
+			max:      10,
+			hasError: true,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			output, err := parsePart(test.input, test.min, test.max)
+			if test.hasError {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+
+			assert.Equal(t, test.expected, output)
+		})
+	}
+}
+
+func TestCron_parseRange_ErrorHandling(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		min      int
+		max      int
+		hasError bool
+	}{
+		{
+			name:     "Empty String Input",
+			input:    "",
+			min:      1,
+			max:      10,
+			hasError: true,
+		},
+		{
+			name:     "Out of Range Input",
+			input:    "15-20",
+			min:      1,
+			max:      10,
+			hasError: true,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := parseRange(test.input, test.min, test.max)
+			if test.hasError {
+				require.Error(t, err, "Expected an error for input: %s", test.input)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestCron_parseRange_SuccessCases(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected map[int]struct{}
+		min      int
+		max      int
+	}{
+		{
+			name:  "Full Range",
+			input: "1-10",
+			expected: map[int]struct{}{
+				1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {}, 8: {}, 9: {}, 10: {},
+			},
+			min: 1, max: 10,
+		},
+		{
+			name:  "Partial Range",
+			input: "5-7",
+			expected: map[int]struct{}{
+				5: {}, 6: {}, 7: {},
+			},
+			min: 1, max: 10,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			output, err := parseRange(test.input, test.min, test.max)
+			require.NoError(t, err)
+
+			assert.Equal(t, test.expected, output)
+		})
+	}
+}
+
+func TestCron_parsePart(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected map[int]struct{}
+		min      int
+		max      int
+		hasError bool
+	}{
+		{
+			name:  "Single Value",
+			input: "5",
+			expected: map[int]struct{}{
+				5: {},
+			},
+			min:      1,
+			max:      10,
+			hasError: false,
+		},
+		{
+			name:  "Valid Multiple Values",
+			input: "1,3,5",
+			expected: map[int]struct{}{
+				1: {}, 3: {}, 5: {},
+			},
+			min:      1,
+			max:      10,
+			hasError: false,
+		},
+		{
+			name:     "Invalid Value",
+			input:    "15",
+			expected: nil,
+			min:      1,
+			max:      10,
+			hasError: true,
+		},
+		{
+			name:     "Invalid Format",
+			input:    "1,2,a",
+			expected: nil,
+			min:      1,
+			max:      10,
+			hasError: true,
+		},
+	}
+
+	for i, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			output, err := parsePart(test.input, test.min, test.max)
+			if test.hasError {
+				require.Error(t, err, "TEST[%d] - Expected error but got none", i)
+			} else {
+				require.NoError(t, err, "TEST[%d] - Expected no error but got: %v", i, err)
+			}
+
+			assert.Len(t, output, len(test.expected), "TEST[%d] - Expected length: %v, got: %v", i, len(test.expected), len(output))
+
+			assert.Equal(t, test.expected, output, "TEST[%d] - Expected: %v, got: %v", i, test.expected, output)
+		})
+	}
+}
