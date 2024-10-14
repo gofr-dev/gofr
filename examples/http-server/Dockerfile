@@ -1,15 +1,16 @@
-FROM golang:1.22
+# Build stage
+FROM golang:1.22 AS build
 
-RUN mkdir /src/
-WORKDIR /src/
+WORKDIR /src
 COPY . .
 RUN go get ./...
-RUN go build -ldflags "-linkmode external -extldflags -static" -a main.go
+RUN go build -ldflags "-linkmode external -extldflags -static" -a -o /app/main main.go
 
-FROM alpine:latest
+# Final stage
+FROM alpine:3.14
 RUN apk add --no-cache tzdata ca-certificates
-COPY --from=0 /src/main /main
-COPY --from=0 /src/configs /configs
+COPY --from=build /app/main /main
+COPY --from=build /src/configs /configs
 EXPOSE 9000
 
 CMD ["/main"]
