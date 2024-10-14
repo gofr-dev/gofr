@@ -155,8 +155,8 @@ type CassandraWithContext interface {
 	// Accepts pointer to struct or slice as dest parameter for single and multiple rows retrieval respectively.
 	QueryWithCtx(ctx context.Context, dest any, stmt string, values ...any) error
 
-	// ExecWitCtx executes the query with a context, without returning any rows.
-	ExecWitCtx(ctx context.Context, stmt string, values ...any) error
+	// ExecWithCtx executes the query with a context, without returning any rows.
+	ExecWithCtx(ctx context.Context, stmt string, values ...any) error
 
 	// ExecCASWithCtx executes a lightweight transaction with a context.
 	ExecCASWithCtx(ctx context.Context, dest any, stmt string, values ...any) (bool, error)
@@ -177,8 +177,6 @@ type CassandraBatchWithContext interface {
 
 	// ExecuteBatchCASWithCtx executes a batch operation with context and returns the result.
 	ExecuteBatchCASWithCtx(ctx context.Context, name string, dest ...any) (bool, error)
-
-	CassandraBatch
 }
 
 type CassandraProvider interface {
