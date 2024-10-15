@@ -172,26 +172,25 @@ with Cassandra. Any driver implementation that adheres to this interface can be 
 suits your project's needs.
 
 ```go
-type Cassandra interface {
-	Query(dest interface{}, stmt string, values ...any) error
+type CassandraWithContext interface {
+	QueryWithCtx(ctx context.Context, dest any, stmt string, values ...any) error
 
-	Exec(stmt string, values ...any) error
-	
-	ExecCAS(dest any, stmt string, values ...any) (bool, error)
+	ExecWithCtx(ctx context.Context, stmt string, values ...any) error
 
-	BatchQuery(stmt string, values ...any) error
+	ExecCASWithCtx(ctx context.Context, dest any, stmt string, values ...any) (bool, error)
 
-	NewBatch(name string, batchType int) error
+	NewBatchWithCtx(ctx context.Context, name string, batchType int) error
 
-	CassandraBatch
+	Cassandra
+	CassandraBatchWithContext
 }
 
-type CassandraBatch interface {
-    BatchQuery(name, stmt string, values ...any)
-	
-    ExecuteBatch(name string) error
-	
-    ExecuteBatchCAS(name string, dest ...any) (bool, error)
+type CassandraBatchWithContext interface {
+	BatchQueryWithCtx(ctx context.Context, name, stmt string, values ...any) error
+
+	ExecuteBatchWithCtx(ctx context.Context, name string) error
+
+	ExecuteBatchCASWithCtx(ctx context.Context, name string, dest ...any) (bool, error)
 }
 ```
 
@@ -239,7 +238,7 @@ func main() {
 			return nil, err
 		}
 
-		err = c.Cassandra.Exec(`INSERT INTO persons(id, name, age, location) VALUES(?, ?, ?, ?)`,
+		err = c.Cassandra.ExecWithCtx(c,`INSERT INTO persons(id, name, age, location) VALUES(?, ?, ?, ?)`,
 			person.ID, person.Name, person.Age, person.State)
 		if err != nil {
 			return nil, err
@@ -251,7 +250,7 @@ func main() {
 	app.GET("/user", func(c *gofr.Context) (interface{}, error) {
 		persons := make([]Person, 0)
 
-		err := c.Cassandra.Query(&persons, `SELECT id, name, age, location FROM persons`)
+		err := c.Cassandra.QueryWithCtx(c, &persons, `SELECT id, name, age, location FROM persons`)
 
 		return persons, err
 	})
