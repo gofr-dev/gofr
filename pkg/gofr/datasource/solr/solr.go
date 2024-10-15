@@ -198,6 +198,7 @@ type Response struct {
 // call forms the http request and makes a call to solr and populates the solr response
 func (c *Client) call(ctx context.Context, method, url string, params map[string]any, body io.Reader) (any, error, trace.Span) {
 	var span trace.Span
+
 	if c.tracer != nil {
 		ctx, span = c.tracer.Start(ctx, fmt.Sprintf("Solr %s", method),
 			trace.WithAttributes(
@@ -206,33 +207,14 @@ func (c *Client) call(ctx context.Context, method, url string, params map[string
 		)
 	}
 
-	req, err := http.NewRequest(method, url, body)
+	req, err := c.createRequest(ctx, method, url, params, body)
 	if err != nil {
 		return nil, err, nil
 	}
 
-	if method != http.MethodGet {
-		req.Header.Add("content-type", "application/json")
-	}
-
-	q := req.URL.Query()
-
-	for k, val := range params {
-		switch v := val.(type) {
-		case []string:
-			for _, val := range v {
-				q.Add(k, val)
-			}
-		default:
-			q.Add(k, fmt.Sprint(val))
-		}
-	}
-
-	req.URL.RawQuery = q.Encode()
-
 	client := &http.Client{}
 
-	resp, err := client.Do(req.WithContext(ctx))
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err, nil
 	}
@@ -257,6 +239,36 @@ func (c *Client) call(ctx context.Context, method, url string, params map[string
 	}
 
 	return Response{resp.StatusCode, respBody}, nil, span
+}
+
+func (c *Client) createRequest(ctx context.Context, method, url string, params map[string]any, body io.Reader) (*http.Request, error) {
+	req, err := http.NewRequest(method, url, body)
+	if err != nil {
+		return nil, err
+	}
+
+	if method != http.MethodGet {
+		req.Header.Add("content-type", "application/json")
+	}
+
+	q := req.URL.Query()
+
+	for k, val := range params {
+		switch v := val.(type) {
+		case []string:
+			for _, val := range v {
+				q.Add(k, val)
+			}
+		default:
+			q.Add(k, fmt.Sprint(val))
+		}
+	}
+
+	req.URL.RawQuery = q.Encode()
+
+	req = req.WithContext(ctx)
+
+	return req, nil
 }
 
 func (c *Client) sendOperationStats(ctx context.Context, ql *QueryLog, startTime time.Time, method string, span trace.Span) {
