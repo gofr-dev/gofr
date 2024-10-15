@@ -16,10 +16,6 @@ import (
 	"gofr.dev/pkg/gofr/testutil"
 )
 
-func TestValidateConfigs(*testing.T) {
-	// This test remains unchanged
-}
-
 func TestNATSClient_Publish(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
