@@ -1,6 +1,8 @@
 package gofr
 
 import (
+	"context"
+
 	"go.opentelemetry.io/otel"
 
 	"gofr.dev/pkg/gofr/container"
@@ -8,7 +10,7 @@ import (
 )
 
 // AddMongo sets the Mongo datasource in the app's container.
-func (a *App) AddMongo(db container.MongoProvider) {
+func (a *App) AddMongo(ctx context.Context, db container.MongoProvider) error {
 	db.UseLogger(a.Logger())
 	db.UseMetrics(a.Metrics())
 
@@ -16,9 +18,13 @@ func (a *App) AddMongo(db container.MongoProvider) {
 
 	db.UseTracer(tracer)
 
-	db.Connect()
+	if err := db.Connect(ctx); err != nil {
+		return err
+	}
 
 	a.container.Mongo = db
+
+	return nil
 }
 
 // AddFTP sets the FTP datasource in the app's container.
@@ -33,16 +39,20 @@ func (a *App) AddFTP(fs file.FileSystemProvider) {
 }
 
 // AddPubSub sets the PubSub client in the app's container.
-func (a *App) AddPubSub(pubsub container.PubSubProvider) {
+func (a *App) AddPubSub(ctx context.Context, pubsub container.PubSubProvider) error {
 	pubsub.UseLogger(a.Logger())
 	pubsub.UseMetrics(a.Metrics())
 
-	pubsub.Connect()
+	if err := pubsub.Connect(ctx); err != nil {
+		return err
+	}
 
 	a.container.PubSub = pubsub
+
+	return nil
 }
 
-// AddFile sets the FTP,SFTP,S3 datasource in the app's container.
+// AddFileStore sets the FTP,SFTP,S3 datasource in the app's container.
 func (a *App) AddFileStore(fs file.FileSystemProvider) {
 	fs.UseLogger(a.Logger())
 	fs.UseMetrics(a.Metrics())
@@ -54,7 +64,7 @@ func (a *App) AddFileStore(fs file.FileSystemProvider) {
 
 // AddClickhouse initializes the clickhouse client.
 // Official implementation is available in the package : gofr.dev/pkg/gofr/datasource/clickhouse .
-func (a *App) AddClickhouse(db container.ClickhouseProvider) {
+func (a *App) AddClickhouse(ctx context.Context, db container.ClickhouseProvider) error {
 	db.UseLogger(a.Logger())
 	db.UseMetrics(a.Metrics())
 
@@ -62,9 +72,14 @@ func (a *App) AddClickhouse(db container.ClickhouseProvider) {
 
 	db.UseTracer(tracer)
 
-	db.Connect()
+	if err := db.Connect(ctx); err != nil {
+		a.Logger().Error("Failed to connect to Clickhouse", err)
+		return err
+	}
 
 	a.container.Clickhouse = db
+
+	return nil
 }
 
 // UseMongo sets the Mongo datasource in the app's container.
@@ -74,7 +89,7 @@ func (a *App) UseMongo(db container.Mongo) {
 }
 
 // AddCassandra sets the Cassandra datasource in the app's container.
-func (a *App) AddCassandra(db container.CassandraProvider) {
+func (a *App) AddCassandra(ctx context.Context, db container.CassandraProvider) error {
 	db.UseLogger(a.Logger())
 	db.UseMetrics(a.Metrics())
 
@@ -82,38 +97,54 @@ func (a *App) AddCassandra(db container.CassandraProvider) {
 
 	db.UseTracer(tracer)
 
-	db.Connect()
+	if err := db.Connect(ctx); err != nil {
+		return err
+	}
 
 	a.container.Cassandra = db
+
+	return nil
 }
 
 // AddKVStore sets the KV-Store datasource in the app's container.
-func (a *App) AddKVStore(db container.KVStoreProvider) {
+func (a *App) AddKVStore(ctx context.Context, db container.KVStoreProvider) error {
 	db.UseLogger(a.Logger())
 	db.UseMetrics(a.Metrics())
 
-	db.Connect()
+	if err := db.Connect(ctx); err != nil {
+		return err
+	}
 
 	a.container.KVStore = db
+
+	return nil
 }
 
 // AddSolr sets the Solr datasource in the app's container.
-func (a *App) AddSolr(db container.SolrProvider) {
+func (a *App) AddSolr(ctx context.Context, db container.SolrProvider) error {
 	db.UseLogger(a.Logger())
 	db.UseMetrics(a.Metrics())
 
-	db.Connect()
+	if err := db.Connect(ctx); err != nil {
+		return err
+	}
 
 	a.container.Solr = db
+
+	return nil
 }
 
 // AddDgraph sets the Dgraph datasource in the app's container.
-func (a *App) AddDgraph(db container.DgraphProvider) {
+func (a *App) AddDgraph(ctx context.Context, db container.DgraphProvider) error {
 	// Create the Dgraph client with the provided configuration
 	db.UseLogger(a.Logger())
 	db.UseMetrics(a.Metrics())
 
-	db.Connect()
+	if err := db.Connect(ctx); err != nil {
+		return err
+	}
 
 	a.container.DGraph = db
+
+	return nil
 }
