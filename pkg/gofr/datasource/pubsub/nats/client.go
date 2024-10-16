@@ -174,7 +174,7 @@ func (c *Client) processMessages(ctx context.Context, cons jetstream.Consumer, s
 		case <-ctx.Done():
 			return
 		default:
-			msgs, err := cons.Fetch(1, jetstream.FetchMaxWait(c.Config.MaxWait))
+			msgs, err := cons.Fetch(c.Config.BatchSize, jetstream.FetchMaxWait(c.Config.MaxWait))
 			if err != nil {
 				if !errors.Is(err, context.DeadlineExceeded) {
 					c.logger.Errorf("Error fetching messages for subject %s: %v", subject, err)
