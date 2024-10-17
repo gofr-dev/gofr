@@ -7,7 +7,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/httptrace"
 	"time"
+
+	"go.opentelemetry.io/contrib/instrumentation/net/http/httptrace/otelhttptrace"
 
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
@@ -19,11 +22,11 @@ type Config struct {
 }
 
 type Client struct {
-	url string
-
+	url     string
 	logger  Logger
 	metrics Metrics
 	tracer  trace.Tracer
+	client  *http.Client
 }
 
 // New initializes Solr driver with the provided configuration.
@@ -36,6 +39,7 @@ type Client struct {
 func New(conf Config) *Client {
 	s := &Client{}
 	s.url = "http://" + conf.Host + ":" + conf.Port + "/solr"
+	s.client = &http.Client{}
 
 	return s
 }
@@ -207,14 +211,14 @@ func (c *Client) call(ctx context.Context, method, url string, params map[string
 		)
 	}
 
+	ctx = httptrace.WithClientTrace(ctx, otelhttptrace.NewClientTrace(ctx))
+
 	req, err := c.createRequest(ctx, method, url, params, body)
 	if err != nil {
 		return nil, err, nil
 	}
 
-	client := &http.Client{}
-
-	resp, err := client.Do(req)
+	resp, err := c.client.Do(req)
 	if err != nil {
 		return nil, err, nil
 	}
@@ -242,7 +246,7 @@ func (c *Client) call(ctx context.Context, method, url string, params map[string
 }
 
 func (c *Client) createRequest(ctx context.Context, method, url string, params map[string]any, body io.Reader) (*http.Request, error) {
-	req, err := http.NewRequest(method, url, body)
+	req, err := http.NewRequestWithContext(ctx, method, url, body)
 	if err != nil {
 		return nil, err
 	}
@@ -265,8 +269,6 @@ func (c *Client) createRequest(ctx context.Context, method, url string, params m
 	}
 
 	req.URL.RawQuery = q.Encode()
-
-	req = req.WithContext(ctx)
 
 	return req, nil
 }
