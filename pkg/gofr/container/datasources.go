@@ -285,8 +285,8 @@ type provider interface {
 	// UseTracer sets the tracer for the Cassandra client.
 	UseTracer(tracer any)
 
-	// Connect establishes a connection to Cassandra and registers metrics using the provided configuration when the client was Created.
-	Connect()
+	// Connect establishes a connection to a DB and registers metrics using the provided configuration when the client was Created.
+	Connect(ctx context.Context) error
 }
 
 type HealthChecker interface {
