@@ -7,8 +7,12 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/httptrace"
 	"time"
 
+	"go.opentelemetry.io/contrib/instrumentation/net/http/httptrace/otelhttptrace"
+
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -18,11 +22,11 @@ type Config struct {
 }
 
 type Client struct {
-	url string
-
+	url     string
 	logger  Logger
 	metrics Metrics
 	tracer  trace.Tracer
+	client  *http.Client
 }
 
 // New initializes Solr driver with the provided configuration.
@@ -35,6 +39,7 @@ type Client struct {
 func New(conf Config) *Client {
 	s := &Client{}
 	s.url = "http://" + conf.Host + ":" + conf.Port + "/solr"
+	s.client = &http.Client{}
 
 	return s
 }
@@ -78,87 +83,114 @@ func (c *Client) HealthCheck(ctx context.Context) (any, error) {
 // This can be used for making any queries to SOLR
 func (c *Client) Search(ctx context.Context, collection string, params map[string]any) (any, error) {
 	url := c.url + "/" + collection + "/select"
+	startTime := time.Now()
 
-	defer c.sendOperationStats(&QueryLog{Type: "Search", Url: url}, time.Now())
+	resp, err, span := c.call(ctx, http.MethodGet, url, params, nil)
 
-	return call(ctx, http.MethodGet, url, params, nil)
+	defer c.sendOperationStats(ctx, &QueryLog{Type: "Search", Url: url}, startTime, "search", span)
+
+	return resp, err
 }
 
 // Create makes documents in the specified collection. params can be used to send parameters like commit=true
 func (c *Client) Create(ctx context.Context, collection string, document *bytes.Buffer,
 	params map[string]any) (any, error) {
-	url := c.url + collection + "/update"
+	url := c.url + "/" + collection + "/update"
+	startTime := time.Now()
 
-	defer c.sendOperationStats(&QueryLog{Type: "Create", Url: url}, time.Now())
+	resp, err, span := c.call(ctx, http.MethodPost, url, params, document)
 
-	return call(ctx, http.MethodPost, url, params, document)
+	defer c.sendOperationStats(ctx, &QueryLog{Type: "Create", Url: url}, startTime, "create", span)
+
+	return resp, err
 }
 
 // Update updates documents in the specified collection. params can be used to send parameters like commit=true
 func (c *Client) Update(ctx context.Context, collection string, document *bytes.Buffer,
 	params map[string]any) (any, error) {
 	url := c.url + collection + "/update"
+	startTime := time.Now()
 
-	defer c.sendOperationStats(&QueryLog{Type: "Update", Url: url}, time.Now())
+	resp, err, span := c.call(ctx, http.MethodPost, url, params, document)
 
-	return call(ctx, http.MethodPost, url, params, document)
+	defer c.sendOperationStats(ctx, &QueryLog{Type: "Update", Url: url}, startTime, "update", span)
+
+	return resp, err
 }
 
 // Delete deletes documents in the specified collection. params can be used to send parameters like commit=true
 func (c *Client) Delete(ctx context.Context, collection string, document *bytes.Buffer,
 	params map[string]any) (any, error) {
 	url := c.url + collection + "/update"
+	startTime := time.Now()
 
-	defer c.sendOperationStats(&QueryLog{Type: "Delete", Url: url}, time.Now())
+	resp, err, span := c.call(ctx, http.MethodPost, url, params, document)
 
-	return call(ctx, http.MethodPost, url, params, document)
+	defer c.sendOperationStats(ctx, &QueryLog{Type: "Delete", Url: url}, startTime, "delete", span)
+
+	return resp, err
 }
 
 // ListFields retrieves all the fields in the schema for the specified collection.
 // params can be used to send query parameters like wt, fl, includeDynamic etc.
 func (c *Client) ListFields(ctx context.Context, collection string, params map[string]any) (any, error) {
 	url := c.url + collection + "/schema/fields"
+	startTime := time.Now()
 
-	defer c.sendOperationStats(&QueryLog{Type: "ListFields", Url: url}, time.Now())
+	resp, err, span := c.call(ctx, http.MethodGet, url, params, nil)
 
-	return call(ctx, http.MethodGet, url, params, nil)
+	defer c.sendOperationStats(ctx, &QueryLog{Type: "ListFields", Url: url}, startTime, "list-fields", span)
+
+	return resp, err
 }
 
 // Retrieve retrieves the entire schema that includes all the fields,field types,dynamic rules and copy field rules.
 // params can be used to specify the format of response
 func (c *Client) Retrieve(ctx context.Context, collection string, params map[string]any) (any, error) {
 	url := c.url + collection + "/schema"
+	startTime := time.Now()
 
-	defer c.sendOperationStats(&QueryLog{Type: "Retrieve", Url: url}, time.Now())
+	resp, err, span := c.call(ctx, http.MethodGet, url, params, nil)
 
-	return call(ctx, http.MethodGet, url, params, nil)
+	defer c.sendOperationStats(ctx, &QueryLog{Type: "Retrieve", Url: url}, startTime, "retrieve", span)
+
+	return resp, err
 }
 
 // AddField adds Field in the schema for the specified collection
 func (c *Client) AddField(ctx context.Context, collection string, document *bytes.Buffer) (any, error) {
 	url := c.url + collection + "/schema"
+	startTime := time.Now()
 
-	defer c.sendOperationStats(&QueryLog{Type: "AddField", Url: url}, time.Now())
+	resp, err, span := c.call(ctx, http.MethodPost, url, nil, document)
 
-	return call(ctx, http.MethodPost, url, nil, document)
+	defer c.sendOperationStats(ctx, &QueryLog{Type: "AddField", Url: url}, startTime, "add-field", span)
+
+	return resp, err
 }
 
 // UpdateField updates the field definitions in the schema for the specified collection
 func (c *Client) UpdateField(ctx context.Context, collection string, document *bytes.Buffer) (any, error) {
 	url := c.url + collection + "/schema"
+	startTime := time.Now()
 
-	defer c.sendOperationStats(&QueryLog{Type: "UpdateField", Url: url}, time.Now())
+	resp, err, span := c.call(ctx, http.MethodPost, url, nil, document)
 
-	return call(ctx, http.MethodPost, url, nil, document)
+	defer c.sendOperationStats(ctx, &QueryLog{Type: "UpdateField", Url: url}, startTime, "update-field", span)
+
+	return resp, err
 }
 
 // DeleteField deletes the field definitions in the schema for the specified collection
 func (c *Client) DeleteField(ctx context.Context, collection string, document *bytes.Buffer) (any, error) {
 	url := c.url + collection + "/schema"
+	startTime := time.Now()
 
-	defer c.sendOperationStats(&QueryLog{Type: "DeleteField", Url: url}, time.Now())
+	resp, err, span := c.call(ctx, http.MethodPost, url, nil, document)
 
-	return call(ctx, http.MethodPost, url, nil, document)
+	defer c.sendOperationStats(ctx, &QueryLog{Type: "DeleteField", Url: url}, startTime, "delete-field", span)
+
+	return resp, err
 }
 
 // Response stores the response from SOLR
@@ -168,8 +200,53 @@ type Response struct {
 }
 
 // call forms the http request and makes a call to solr and populates the solr response
-func call(ctx context.Context, method, url string, params map[string]any, body io.Reader) (any, error) {
-	req, err := http.NewRequest(method, url, body)
+func (c *Client) call(ctx context.Context, method, url string, params map[string]any, body io.Reader) (any, error, trace.Span) {
+	var span trace.Span
+
+	if c.tracer != nil {
+		ctx, span = c.tracer.Start(ctx, fmt.Sprintf("Solr %s", method),
+			trace.WithAttributes(
+				attribute.String("solr.url", url),
+			),
+		)
+	}
+
+	ctx = httptrace.WithClientTrace(ctx, otelhttptrace.NewClientTrace(ctx))
+
+	req, err := c.createRequest(ctx, method, url, params, body)
+	if err != nil {
+		return nil, err, nil
+	}
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return nil, err, nil
+	}
+	defer resp.Body.Close()
+
+	var respBody any
+
+	b, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err, nil
+	}
+
+	err = json.Unmarshal(b, &respBody)
+	if err != nil {
+		return nil, err, nil
+	}
+
+	if span != nil {
+		span.SetAttributes(
+			attribute.Int("http.status_code", resp.StatusCode),
+		)
+	}
+
+	return Response{resp.StatusCode, respBody}, nil, span
+}
+
+func (c *Client) createRequest(ctx context.Context, method, url string, params map[string]any, body io.Reader) (*http.Request, error) {
+	req, err := http.NewRequestWithContext(ctx, method, url, body)
 	if err != nil {
 		return nil, err
 	}
@@ -193,36 +270,23 @@ func call(ctx context.Context, method, url string, params map[string]any, body i
 
 	req.URL.RawQuery = q.Encode()
 
-	client := &http.Client{}
-
-	resp, err := client.Do(req.WithContext(ctx))
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	var respBody any
-
-	b, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	err = json.Unmarshal(b, &respBody)
-	if err != nil {
-		return nil, err
-	}
-
-	return Response{resp.StatusCode, respBody}, nil
+	return req, nil
 }
 
-func (c *Client) sendOperationStats(ql *QueryLog, startTime time.Time) {
+func (c *Client) sendOperationStats(ctx context.Context, ql *QueryLog, startTime time.Time, method string, span trace.Span) {
 	duration := time.Since(startTime).Milliseconds()
 
 	ql.Duration = duration
 
 	c.logger.Debug(ql)
 
-	c.metrics.RecordHistogram(context.Background(), "app_solr_stats", float64(duration),
+	c.metrics.RecordHistogram(ctx, "app_solr_stats", float64(duration),
 		"type", ql.Type)
+
+	if span != nil {
+		defer span.End()
+		span.SetAttributes(
+			attribute.String("solr.type", ql.Type),
+			attribute.Int64(fmt.Sprintf("solr.%v.duration", method), duration))
+	}
 }
