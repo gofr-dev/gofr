@@ -118,6 +118,7 @@ func (g *googleClient) Publish(ctx context.Context, topic string, message []byte
 
 func (g *googleClient) Subscribe(ctx context.Context, topic string) (*pubsub.Message, error) {
 	receiveChan := make(chan *pubsub.Message)
+	defer close(receiveChan)
 
 	ctx, span := otel.GetTracerProvider().Tracer("gofr").Start(ctx, "gcp-subscribe")
 	defer span.End()
