@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"go.opentelemetry.io/otel/attribute"
@@ -40,8 +41,8 @@ var errStatusDown = errors.New("status down")
 
 /*
 Developer Note: We could have accepted logger and metrics as part of the factory function `New`, but when mongo driver is
-initialised in GoFr, We want to ensure that the user need not to provides logger and metrics and then connect to the database,
-i.e. by default observability features gets initialised when used with GoFr.
+initialized in GoFr, We want to ensure that the user need not to provides logger and metrics and then connect to the database,
+i.e. by default observability features gets initialized when used with GoFr.
 */
 
 // New initializes MongoDB driver with the provided configuration.
@@ -51,8 +52,8 @@ i.e. by default observability features gets initialised when used with GoFr.
 // client.UseLogger(loggerInstance)
 // client.UseMetrics(metricsInstance)
 // client.Connect().
-func New(c Config) *Client {
-	return &Client{config: c}
+func New(c *Config) *Client {
+	return &Client{config: *c}
 }
 
 // UseLogger sets the logger for the MongoDB client which asserts the Logger interface.
@@ -80,41 +81,89 @@ func (c *Client) UseTracer(tracer any) {
 func (c *Client) Connect(ctx context.Context) error {
 	c.logger.Logf("connecting to mongoDB at %v to database %v", c.config.URI, c.config.Database)
 
-	uri := c.config.URI
+	uri := c.getURI()
 
-	if uri == "" {
-		uri = fmt.Sprintf("mongodb://%s:%s@%s:%d/%s?authSource=admin",
-			c.config.User, c.config.Password, c.config.Host, c.config.Port, c.config.Database)
-	}
-
-	clientOpts := options.Client().ApplyURI(uri)
-	m, err := mongo.Connect(ctx, clientOpts)
+	client, err := c.createClient(ctx, uri)
 	if err != nil {
-		// The MongoDB Go driver doesn't expose specific error types for connection failures,
-		// so we'll need to do some string matching or use our generic error
-		return fmt.Errorf("%w: %v", ErrGenericConnection, err)
+		return err
 	}
 
-	// Check authentication by pinging the database
-	if err := m.Ping(ctx, nil); err != nil {
-		if mongo.IsTimeout(err) {
-			return fmt.Errorf("%w: connection timeout", ErrGenericConnection)
-		}
-		if errors.Is(err, mongo.ErrClientDisconnected) {
-			return fmt.Errorf("%w: client disconnected", ErrGenericConnection)
-		}
-		// If it's not a timeout or disconnection, it's likely an auth error
-		return fmt.Errorf("%w: %v", ErrAuthentication, err)
+	if err := c.pingDatabase(ctx, client); err != nil {
+		return err
 	}
 
+	c.setupMetrics()
+
+	c.Database = client.Database(c.config.Database)
+
+	return c.verifyDatabaseAccess(ctx)
+}
+
+func (c *Client) getURI() string {
+	if c.config.URI != "" {
+		return c.config.URI
+	}
+
+	return fmt.Sprintf("mongodb://%s:%s@%s:%d/%s?authSource=admin",
+		c.config.User, c.config.Password, c.config.Host, c.config.Port, c.config.Database)
+}
+
+func (c *Client) createClient(ctx context.Context, uri string) (*mongo.Client, error) {
+	clientOpts := options.Client().ApplyURI(uri)
+
+	client, err := mongo.Connect(ctx, clientOpts)
+	if err != nil {
+		return nil, c.handleConnectionError(err)
+	}
+
+	return client, nil
+}
+
+func (c *Client) handleConnectionError(err error) error {
+	if c.isAuthenticationError(err) {
+		return fmt.Errorf("%w: %w", ErrAuthentication, err)
+	}
+
+	return fmt.Errorf("%w: %w", ErrGenericConnection, err)
+}
+
+func (*Client) isAuthenticationError(err error) bool {
+	return strings.Contains(err.Error(), "authentication failed") ||
+		strings.Contains(err.Error(), "AuthenticationFailed")
+}
+
+func (c *Client) pingDatabase(ctx context.Context, client *mongo.Client) error {
+	if err := client.Ping(ctx, nil); err != nil {
+		return c.handlePingError(err)
+	}
+
+	return nil
+}
+
+func (c *Client) handlePingError(err error) error {
+	if mongo.IsTimeout(err) {
+		return fmt.Errorf("%w: connection timeout", ErrGenericConnection)
+	}
+
+	if errors.Is(err, mongo.ErrClientDisconnected) {
+		return fmt.Errorf("%w: client disconnected", ErrGenericConnection)
+	}
+
+	if c.isAuthenticationError(err) {
+		return fmt.Errorf("%w: %w", ErrAuthentication, err)
+	}
+
+	return fmt.Errorf("%w: %w", ErrGenericConnection, err)
+}
+
+func (c *Client) setupMetrics() {
 	mongoBuckets := []float64{.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 4, 5, 7.5, 10}
 	c.metrics.NewHistogram("app_mongo_stats", "Response time of MONGO queries in milliseconds.", mongoBuckets...)
+}
 
-	c.Database = m.Database(c.config.Database)
-
-	// Check if we can actually use the database
-	if err := c.Database.RunCommand(ctx, bson.D{{"ping", 1}}).Err(); err != nil {
-		return fmt.Errorf("%w: %v", ErrDatabaseConnection, err)
+func (c *Client) verifyDatabaseAccess(ctx context.Context) error {
+	if err := c.Database.RunCommand(ctx, bson.D{{Key: "ping", Value: 1}}).Err(); err != nil {
+		return fmt.Errorf("%w: %w", ErrDatabaseConnection, err)
 	}
 
 	return nil
@@ -156,7 +205,12 @@ func (c *Client) Find(ctx context.Context, collection string, filter, results in
 		return err
 	}
 
-	defer cur.Close(ctx)
+	defer func(cur *mongo.Cursor, ctx context.Context) {
+		err := cur.Close(ctx)
+		if err != nil {
+			c.logger.Errorf("error closing cursor: %v", err)
+		}
+	}(cur, ctx)
 
 	if err := cur.All(ctx, results); err != nil {
 		return err
