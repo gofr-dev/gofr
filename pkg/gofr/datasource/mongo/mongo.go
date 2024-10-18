@@ -254,7 +254,11 @@ func (c *Client) UpdateByID(ctx context.Context, collection string, id, update i
 	defer c.sendOperationStats(&QueryLog{Query: "updateByID", Collection: collection, ID: id, Update: update}, time.Now(),
 		"updateByID", span)
 
-	return res.ModifiedCount, err
+	if err != nil {
+		return 0, err
+	}
+
+	return res.ModifiedCount, nil
 }
 
 // UpdateOne updates a single document in the specified collection based on the provided filter.
@@ -278,7 +282,11 @@ func (c *Client) UpdateMany(ctx context.Context, collection string, filter, upda
 	defer c.sendOperationStats(&QueryLog{Query: "updateMany", Collection: collection, Filter: filter, Update: update}, time.Now(),
 		"updateMany", span)
 
-	return res.ModifiedCount, err
+	if err != nil {
+		return 0, err
+	}
+
+	return res.ModifiedCount, nil
 }
 
 // CountDocuments counts the number of documents in the specified collection based on the provided filter.

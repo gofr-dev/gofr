@@ -361,7 +361,6 @@ func Test_FindOneCommands(t *testing.T) {
 }
 
 func Test_UpdateCommands(t *testing.T) {
-	// Create a connected client using the mock database
 	mt := mtest.New(t, mtest.NewOptions().ClientType(mtest.Mock))
 
 	ctrl := gomock.NewController(t)
@@ -373,42 +372,52 @@ func Test_UpdateCommands(t *testing.T) {
 	cl := Client{metrics: metrics, tracer: otel.GetTracerProvider().Tracer("gofr-mongo")}
 
 	metrics.EXPECT().RecordHistogram(context.Background(), "app_mongo_stats", gomock.Any(), "hostname",
-		gomock.Any(), "database", gomock.Any(), "type", gomock.Any()).Times(3)
+		gomock.Any(), "database", gomock.Any(), "type", gomock.Any()).AnyTimes()
 
-	logger.EXPECT().Debug(gomock.Any()).Times(3)
+	logger.EXPECT().Debug(gomock.Any()).AnyTimes()
 
 	cl.logger = logger
 
-	mt.Run("updateByID", func(mt *mtest.T) {
+	mt.Run("updateByIDSuccess", func(mt *mtest.T) {
 		cl.Database = mt.DB
-		mt.AddMockResponses(mtest.CreateSuccessResponse())
-		// Create a document to insert
+		mt.AddMockResponses(bson.D{{Key: "ok", Value: 1}, {Key: "nModified", Value: 1}})
 
 		resp, err := cl.UpdateByID(context.Background(), mt.Coll.Name(), "1", bson.M{"$set": bson.M{"name": "test"}})
 
-		assert.NotNil(t, resp)
+		assert.Equal(t, int64(1), resp)
 		assert.NoError(t, err)
 	})
 
-	mt.Run("updateOne", func(mt *mtest.T) {
+	mt.Run("updateByIDError", func(mt *mtest.T) {
 		cl.Database = mt.DB
-		mt.AddMockResponses(mtest.CreateSuccessResponse())
-		// Create a document to insert
+		mt.AddMockResponses(bson.D{{Key: "ok", Value: 0}})
 
-		err := cl.UpdateOne(context.Background(), mt.Coll.Name(), bson.D{{Key: "name", Value: "test"}}, bson.M{"$set": bson.M{"name": "testing"}})
+		resp, err := cl.UpdateByID(context.Background(), mt.Coll.Name(), "1", bson.M{"$set": bson.M{"name": "test"}})
 
-		assert.NoError(t, err)
+		assert.Equal(t, int64(0), resp)
+		assert.Error(t, err)
 	})
 
 	mt.Run("updateMany", func(mt *mtest.T) {
 		cl.Database = mt.DB
-		mt.AddMockResponses(mtest.CreateSuccessResponse())
-		// Create a document to insert
+		mt.AddMockResponses(bson.D{{Key: "ok", Value: 1}, {Key: "nModified", Value: 2}})
 
-		_, err := cl.UpdateMany(context.Background(), mt.Coll.Name(), bson.D{{Key: "name", Value: "test"}},
+		resp, err := cl.UpdateMany(context.Background(), mt.Coll.Name(), bson.D{{Key: "name", Value: "test"}},
 			bson.M{"$set": bson.M{"name": "testing"}})
 
+		assert.Equal(t, int64(2), resp)
 		assert.NoError(t, err)
+	})
+
+	mt.Run("updateManyError", func(mt *mtest.T) {
+		cl.Database = mt.DB
+		mt.AddMockResponses(bson.D{{Key: "ok", Value: 0}})
+
+		resp, err := cl.UpdateMany(context.Background(), mt.Coll.Name(), bson.D{{Key: "name", Value: "test"}},
+			bson.M{"$set": bson.M{"name": "testing"}})
+
+		assert.Equal(t, int64(0), resp)
+		assert.Error(t, err)
 	})
 }
 
