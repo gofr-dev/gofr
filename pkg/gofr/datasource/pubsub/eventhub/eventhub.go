@@ -29,9 +29,9 @@ type Config struct {
 	StorageServiceURL         string
 	StorageContainerName      string
 	EventhubName              string
-	// if not provided it will read from the $Default consumergroup.
+	// if not provided, it will read from the $Default consumergroup.
 	ConsumerGroup string
-	// following configs are for advance setup of the eventhub.
+	// the following configs are for advance setup of the eventhub.
 	StorageOptions   *container.ClientOptions
 	BlobStoreOptions *checkpoints.BlobStoreOptions
 	ConsumerOptions  *azeventhubs.ConsumerClientOptions
@@ -41,9 +41,9 @@ type Config struct {
 type Client struct {
 	producer *azeventhubs.ProducerClient
 	consumer *azeventhubs.ConsumerClient
-	// we are using processor such that to keep consuming the events from all the different partitions.
+	// we are using a processor such that to keep consuming the events from all the different partitions.
 	processor *azeventhubs.Processor
-	// checkpoint is being called while committing the event received from the event.
+	// a checkpoint is being called while committing the event received from the event.
 	checkPoint *checkpoints.BlobStore
 	// processorCtx is being stored such that to gracefully shutting down the application.
 	processorCtx context.CancelFunc
@@ -221,14 +221,11 @@ func (c *Client) Subscribe(ctx context.Context, topic string) (*pubsub.Message, 
 		start := time.Now()
 
 		msg, err = c.processEvents(ctx, partitionClient)
-		switch err {
-		case errNoMsgReceived:
-			// if no message is received, we don't achieve anything by returning error rather check in a different partition.
-			// this logic may change if we remove the timeout while receiving message, but waiting on just one partition
-			//might lead to miss data, so spawning one go-routine or having a worker pool can be an option to do this operation faster.
-			break
-		default:
-			return nil, err
+		if errors.Is(err, errNoMsgReceived) {
+			// If no message is received, we don't achieve anything by returning error rather check in a different partition.
+			// This logic may change if we remove the timeout while receiving a message. However, waiting on just one partition
+			// might lead to missing data, so spawning one go-routine or having a worker pool can be an option to do this operation faster.
+			continue
 		}
 
 		end := time.Since(start)
