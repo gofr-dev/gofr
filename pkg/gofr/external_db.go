@@ -78,6 +78,10 @@ func (a *App) AddCassandra(db container.CassandraProvider) {
 	db.UseLogger(a.Logger())
 	db.UseMetrics(a.Metrics())
 
+	tracer := otel.GetTracerProvider().Tracer("gofr-cassandra")
+
+	db.UseTracer(tracer)
+
 	db.Connect()
 
 	a.container.Cassandra = db

@@ -3,9 +3,11 @@ package cassandra
 import (
 	"context"
 	"errors"
+	"fmt"
 	"reflect"
 	"time"
 
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/gocql/gocql"
@@ -91,16 +93,36 @@ func (c *Client) UseMetrics(metrics interface{}) {
 	}
 }
 
-// UseTracer sets the tracer for Clickhouse client.
+// UseTracer sets the tracer for Cassandra client.
 func (c *Client) UseTracer(tracer any) {
 	if tracer, ok := tracer.(trace.Tracer); ok {
 		c.tracer = tracer
 	}
 }
 
-//nolint:exhaustive // We just want to take care of slice and struct in this case.
+// Query is the original method without context, preserved for backward compatibility.
+// It internally delegates to QueryWithCtx using context.Background() as the default context.
 func (c *Client) Query(dest any, stmt string, values ...any) error {
-	defer c.sendOperationStats(&QueryLog{Query: stmt, Keyspace: c.config.Keyspace}, time.Now())
+	return c.QueryWithCtx(context.Background(), dest, stmt, values...)
+}
+
+func (c *Client) Exec(stmt string, values ...any) error {
+	return c.ExecWithCtx(context.Background(), stmt, values)
+}
+
+func (c *Client) ExecCAS(dest any, stmt string, values ...any) (bool, error) {
+	return c.ExecCASWithCtx(context.Background(), dest, stmt, values)
+}
+
+func (c *Client) NewBatch(name string, batchType int) error {
+	return c.NewBatchWithCtx(nil, name, batchType)
+}
+
+//nolint:exhaustive // We just want to take care of slice and struct in this case.
+func (c *Client) QueryWithCtx(ctx context.Context, dest any, stmt string, values ...any) error {
+	_, span := c.addTrace(ctx, "query", stmt)
+
+	defer c.sendOperationStats(&QueryLog{Query: stmt, Keyspace: c.config.Keyspace}, time.Now(), "query", span)
 
 	rvo := reflect.ValueOf(dest)
 	if rvo.Kind() != reflect.Ptr {
@@ -146,20 +168,24 @@ func (c *Client) Query(dest any, stmt string, values ...any) error {
 	return nil
 }
 
-func (c *Client) Exec(stmt string, values ...any) error {
-	defer c.sendOperationStats(&QueryLog{Query: stmt, Keyspace: c.config.Keyspace}, time.Now())
+func (c *Client) ExecWithCtx(ctx context.Context, stmt string, values ...any) error {
+	_, span := c.addTrace(ctx, "exec", stmt)
+
+	defer c.sendOperationStats(&QueryLog{Query: stmt, Keyspace: c.config.Keyspace}, time.Now(), "exec", span)
 
 	return c.cassandra.session.query(stmt, values...).exec()
 }
 
 //nolint:exhaustive // We just want to take care of slice and struct in this case.
-func (c *Client) ExecCAS(dest any, stmt string, values ...any) (bool, error) {
+func (c *Client) ExecCASWithCtx(ctx context.Context, dest any, stmt string, values ...any) (bool, error) {
 	var (
 		applied bool
 		err     error
 	)
 
-	defer c.sendOperationStats(&QueryLog{Query: stmt, Keyspace: c.config.Keyspace}, time.Now())
+	_, span := c.addTrace(ctx, "exec-cas", stmt)
+
+	defer c.sendOperationStats(&QueryLog{Query: stmt, Keyspace: c.config.Keyspace}, time.Now(), "exec-cas", span)
 
 	rvo := reflect.ValueOf(dest)
 	if rvo.Kind() != reflect.Ptr {
@@ -192,7 +218,7 @@ func (c *Client) ExecCAS(dest any, stmt string, values ...any) (bool, error) {
 	return applied, err
 }
 
-func (c *Client) NewBatch(name string, batchType int) error {
+func (c *Client) NewBatchWithCtx(_ context.Context, name string, batchType int) error {
 	switch batchType {
 	case LoggedBatch, UnloggedBatch, CounterBatch:
 		if len(c.cassandra.batches) == 0 {
@@ -301,12 +327,17 @@ func (*Client) getColumnsFromColumnsInfo(columns []gocql.ColumnInfo) []string {
 	return cols
 }
 
-func (c *Client) sendOperationStats(ql *QueryLog, startTime time.Time) {
+func (c *Client) sendOperationStats(ql *QueryLog, startTime time.Time, method string, span trace.Span) {
 	duration := time.Since(startTime).Milliseconds()
 
 	ql.Duration = duration
 
 	c.logger.Debug(ql)
+
+	if span != nil {
+		defer span.End()
+		span.SetAttributes(attribute.Int64(fmt.Sprintf("cassandra.%v.duration", method), duration))
+	}
 
 	c.metrics.RecordHistogram(context.Background(), "app_cassandra_stats", float64(duration), "hostname", c.config.Hosts,
 		"keyspace", c.config.Keyspace)
@@ -351,4 +382,19 @@ func (c *Client) HealthCheck(context.Context) (any, error) {
 	h.Status = statusUp
 
 	return &h, nil
+}
+
+func (c *Client) addTrace(ctx context.Context, method, query string) (context.Context, trace.Span) {
+	if c.tracer != nil {
+		tracerCtx, span := c.tracer.Start(ctx, fmt.Sprintf("cassandra-%v", method))
+
+		span.SetAttributes(
+			attribute.String("cassandra.query", query),
+			attribute.String("cassandra.keyspace", c.config.Keyspace),
+		)
+
+		return tracerCtx, span
+	}
+
+	return ctx, nil
 }
