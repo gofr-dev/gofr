@@ -255,7 +255,7 @@ type Mongo interface {
 	CreateCollection(ctx context.Context, name string) error
 
 	// StartSession starts a session and provide methods to run commands in a transaction.
-	StartSession() (any, error)
+	StartSession(ctx context.Context) (any, error)
 
 	HealthChecker
 }

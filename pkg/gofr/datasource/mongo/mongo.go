@@ -183,7 +183,7 @@ func (c *Client) InsertOne(ctx context.Context, collection string, document inte
 
 	result, err := c.Database.Collection(collection).InsertOne(tracerCtx, document)
 
-	defer c.sendOperationStats(&QueryLog{Query: "insertOne", Collection: collection, Filter: document}, time.Now(),
+	defer c.sendOperationStats(ctx, &QueryLog{Query: "insertOne", Collection: collection, Filter: document}, time.Now(),
 		"insert", span)
 
 	return result, err
@@ -198,7 +198,7 @@ func (c *Client) InsertMany(ctx context.Context, collection string, documents []
 		return nil, err
 	}
 
-	defer c.sendOperationStats(&QueryLog{Query: "insertMany", Collection: collection, Filter: documents}, time.Now(),
+	defer c.sendOperationStats(ctx, &QueryLog{Query: "insertMany", Collection: collection, Filter: documents}, time.Now(),
 		"insertMany", span)
 
 	return res.InsertedIDs, nil
@@ -224,7 +224,7 @@ func (c *Client) Find(ctx context.Context, collection string, filter, results in
 		return err
 	}
 
-	defer c.sendOperationStats(&QueryLog{Query: "find", Collection: collection, Filter: filter}, time.Now(), "find",
+	defer c.sendOperationStats(ctx, &QueryLog{Query: "find", Collection: collection, Filter: filter}, time.Now(), "find",
 		span)
 
 	return nil
@@ -239,7 +239,7 @@ func (c *Client) FindOne(ctx context.Context, collection string, filter, result 
 		return err
 	}
 
-	defer c.sendOperationStats(&QueryLog{Query: "findOne", Collection: collection, Filter: filter}, time.Now(),
+	defer c.sendOperationStats(ctx, &QueryLog{Query: "findOne", Collection: collection, Filter: filter}, time.Now(),
 		"findOne", span)
 
 	return bson.Unmarshal(b, result)
@@ -251,7 +251,7 @@ func (c *Client) UpdateByID(ctx context.Context, collection string, id, update i
 
 	res, err := c.Database.Collection(collection).UpdateByID(tracerCtx, id, update)
 
-	defer c.sendOperationStats(&QueryLog{Query: "updateByID", Collection: collection, ID: id, Update: update}, time.Now(),
+	defer c.sendOperationStats(ctx, &QueryLog{Query: "updateByID", Collection: collection, ID: id, Update: update}, time.Now(),
 		"updateByID", span)
 
 	if err != nil {
@@ -267,7 +267,7 @@ func (c *Client) UpdateOne(ctx context.Context, collection string, filter, updat
 
 	_, err := c.Database.Collection(collection).UpdateOne(tracerCtx, filter, update)
 
-	defer c.sendOperationStats(&QueryLog{Query: "updateOne", Collection: collection, Filter: filter, Update: update},
+	defer c.sendOperationStats(ctx, &QueryLog{Query: "updateOne", Collection: collection, Filter: filter, Update: update},
 		time.Now(), "updateOne", span)
 
 	return err
@@ -279,7 +279,7 @@ func (c *Client) UpdateMany(ctx context.Context, collection string, filter, upda
 
 	res, err := c.Database.Collection(collection).UpdateMany(tracerCtx, filter, update)
 
-	defer c.sendOperationStats(&QueryLog{Query: "updateMany", Collection: collection, Filter: filter, Update: update}, time.Now(),
+	defer c.sendOperationStats(ctx, &QueryLog{Query: "updateMany", Collection: collection, Filter: filter, Update: update}, time.Now(),
 		"updateMany", span)
 
 	if err != nil {
@@ -295,7 +295,7 @@ func (c *Client) CountDocuments(ctx context.Context, collection string, filter i
 
 	result, err := c.Database.Collection(collection).CountDocuments(tracerCtx, filter)
 
-	defer c.sendOperationStats(&QueryLog{Query: "countDocuments", Collection: collection, Filter: filter}, time.Now(),
+	defer c.sendOperationStats(ctx, &QueryLog{Query: "countDocuments", Collection: collection, Filter: filter}, time.Now(),
 		"countDocuments", span)
 
 	return result, err
@@ -310,7 +310,7 @@ func (c *Client) DeleteOne(ctx context.Context, collection string, filter interf
 		return 0, err
 	}
 
-	defer c.sendOperationStats(&QueryLog{Query: "deleteOne", Collection: collection, Filter: filter}, time.Now(),
+	defer c.sendOperationStats(ctx, &QueryLog{Query: "deleteOne", Collection: collection, Filter: filter}, time.Now(),
 		"deleteOne", span)
 
 	return res.DeletedCount, nil
@@ -325,7 +325,7 @@ func (c *Client) DeleteMany(ctx context.Context, collection string, filter inter
 		return 0, err
 	}
 
-	defer c.sendOperationStats(&QueryLog{Query: "deleteMany", Collection: collection, Filter: filter}, time.Now(),
+	defer c.sendOperationStats(ctx, &QueryLog{Query: "deleteMany", Collection: collection, Filter: filter}, time.Now(),
 		"deleteMany", span)
 
 	return res.DeletedCount, nil
@@ -337,7 +337,7 @@ func (c *Client) Drop(ctx context.Context, collection string) error {
 
 	err := c.Database.Collection(collection).Drop(tracerCtx)
 
-	defer c.sendOperationStats(&QueryLog{Query: "drop", Collection: collection}, time.Now(), "drop", span)
+	defer c.sendOperationStats(ctx, &QueryLog{Query: "drop", Collection: collection}, time.Now(), "drop", span)
 
 	return err
 }
@@ -348,20 +348,20 @@ func (c *Client) CreateCollection(ctx context.Context, name string) error {
 
 	err := c.Database.CreateCollection(tracerCtx, name)
 
-	defer c.sendOperationStats(&QueryLog{Query: "createCollection", Collection: name}, time.Now(), "createCollection",
+	defer c.sendOperationStats(ctx, &QueryLog{Query: "createCollection", Collection: name}, time.Now(), "createCollection",
 		span)
 
 	return err
 }
 
-func (c *Client) sendOperationStats(ql *QueryLog, startTime time.Time, method string, span trace.Span) {
+func (c *Client) sendOperationStats(ctx context.Context, ql *QueryLog, startTime time.Time, method string, span trace.Span) {
 	duration := time.Since(startTime).Milliseconds()
 
 	ql.Duration = duration
 
 	c.logger.Debug(ql)
 
-	c.metrics.RecordHistogram(context.Background(), "app_mongo_stats", float64(duration), "hostname", c.uri,
+	c.metrics.RecordHistogram(ctx, "app_mongo_stats", float64(duration), "hostname", c.uri,
 		"database", c.database, "type", ql.Query)
 
 	if span != nil {
@@ -396,8 +396,8 @@ func (c *Client) HealthCheck(ctx context.Context) (any, error) {
 	return &h, nil
 }
 
-func (c *Client) StartSession() (interface{}, error) {
-	defer c.sendOperationStats(&QueryLog{Query: "startSession"}, time.Now(), "", nil)
+func (c *Client) StartSession(ctx context.Context) (interface{}, error) {
+	defer c.sendOperationStats(ctx, &QueryLog{Query: "startSession"}, time.Now(), "", nil)
 
 	s, err := c.Client().StartSession()
 	ses := &session{s}

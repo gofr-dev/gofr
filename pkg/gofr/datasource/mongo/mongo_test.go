@@ -585,7 +585,7 @@ func TestClient_StartSession(t *testing.T) {
 		mt.AddMockResponses(mtest.CreateSuccessResponse())
 
 		// Call the StartSession method
-		sess, err := cl.StartSession()
+		sess, err := cl.StartSession(context.Background())
 
 		ses, ok := sess.(Transaction)
 		if ok {
