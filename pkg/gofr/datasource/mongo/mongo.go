@@ -87,17 +87,35 @@ func (c *Client) Connect(ctx context.Context) error {
 			c.config.User, c.config.Password, c.config.Host, c.config.Port, c.config.Database)
 	}
 
-	m, err := mongo.Connect(ctx, options.Client().ApplyURI(uri))
+	clientOpts := options.Client().ApplyURI(uri)
+	m, err := mongo.Connect(ctx, clientOpts)
 	if err != nil {
-		c.logger.Errorf("error connecting to mongoDB, err:%v", err)
+		// The MongoDB Go driver doesn't expose specific error types for connection failures,
+		// so we'll need to do some string matching or use our generic error
+		return fmt.Errorf("%w: %v", ErrGenericConnection, err)
+	}
 
-		return err
+	// Check authentication by pinging the database
+	if err := m.Ping(ctx, nil); err != nil {
+		if mongo.IsTimeout(err) {
+			return fmt.Errorf("%w: connection timeout", ErrGenericConnection)
+		}
+		if errors.Is(err, mongo.ErrClientDisconnected) {
+			return fmt.Errorf("%w: client disconnected", ErrGenericConnection)
+		}
+		// If it's not a timeout or disconnection, it's likely an auth error
+		return fmt.Errorf("%w: %v", ErrAuthentication, err)
 	}
 
 	mongoBuckets := []float64{.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 4, 5, 7.5, 10}
 	c.metrics.NewHistogram("app_mongo_stats", "Response time of MONGO queries in milliseconds.", mongoBuckets...)
 
 	c.Database = m.Database(c.config.Database)
+
+	// Check if we can actually use the database
+	if err := c.Database.RunCommand(ctx, bson.D{{"ping", 1}}).Err(); err != nil {
+		return fmt.Errorf("%w: %v", ErrDatabaseConnection, err)
+	}
 
 	return nil
 }
