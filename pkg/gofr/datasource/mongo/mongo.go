@@ -124,7 +124,15 @@ func (c *Client) handleConnectionError(err error) error {
 		return fmt.Errorf("%w: %w", ErrAuthentication, err)
 	}
 
+	if c.isTimeoutError(err) {
+		return fmt.Errorf("%w: connection timeout", ErrGenericConnection)
+	}
+
 	return fmt.Errorf("%w: %w", ErrGenericConnection, err)
+}
+
+func (*Client) isTimeoutError(err error) bool {
+	return strings.Contains(err.Error(), "connection timeout") || mongo.IsTimeout(err)
 }
 
 func (*Client) isAuthenticationError(err error) bool {
