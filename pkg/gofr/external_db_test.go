@@ -61,6 +61,7 @@ func TestApp_AddCassandra(t *testing.T) {
 
 		mock.EXPECT().UseLogger(app.Logger())
 		mock.EXPECT().UseMetrics(app.Metrics())
+		mock.EXPECT().UseTracer(otel.GetTracerProvider().Tracer("gofr-cassandra"))
 		mock.EXPECT().Connect()
 
 		app.AddCassandra(mock)

@@ -35,7 +35,10 @@ type Redis interface {
 	Close() error
 }
 
+// Cassandra is an interface representing a cassandra database
+// Deprecated: Cassandra interface is deprecated and will be removed in future releases, users must use CassandraWithContext.
 type Cassandra interface {
+	// Deprecated: Query method is deprecated and will be removed in future releases, users must use QueryWithCtx.
 	// Query executes the query and binds the result into dest parameter.
 	// Returns error if any error occurs while binding the result.
 	// Can be used to single as well as multiple rows.
@@ -64,6 +67,7 @@ type Cassandra interface {
 	//	   err := c.Query(&users, "SELECT * FROM users")
 	Query(dest any, stmt string, values ...any) error
 
+	// Deprecated: Exec method is deprecated and will be removed in future releases, users must use ExecWithCtx.
 	// Exec executes the query without returning any rows.
 	// Return error if any error occurs while executing the query.
 	// Can be used to execute UPDATE or INSERT.
@@ -79,6 +83,7 @@ type Cassandra interface {
 	//	   err := c.Exec("INSERT INTO users VALUES(?, ?)", id, name)
 	Exec(stmt string, values ...any) error
 
+	// Deprecated: ExecCAS method is deprecated and will be removed in future releases, users must use ExecCASWithCtx.
 	// ExecCAS executes a lightweight transaction (i.e. an UPDATE or INSERT statement containing an IF clause).
 	// If the transaction fails because the existing values did not match, the previous values will be stored in dest.
 	// Returns true if the query is applied otherwise false.
@@ -95,8 +100,8 @@ type Cassandra interface {
 	//	applied, err := c.ExecCAS(&user, "INSERT INTO users VALUES(1, 'John Doe') IF NOT EXISTS")
 	ExecCAS(dest any, stmt string, values ...any) (bool, error)
 
+	// Deprecated: NewBatch method is deprecated and will be removed in future releases, users must use NewBatchWithCtx.
 	// NewBatch creates a new Cassandra batch with the specified name and batch type.
-	//
 	// This method initializes a new Cassandra batch operation. It sets up the batch
 	// with the given name and type, allowing you to execute multiple queries in
 	// a single batch operation. The `batchType` determines the type of batch operation
@@ -113,6 +118,7 @@ type Cassandra interface {
 }
 
 type CassandraBatch interface {
+	// Deprecated: BatchQuery method is deprecated and will be removed in future releases, users must use BatchQueryWithCtx.
 	// BatchQuery adds the query to the batch operation
 	//
 	// Example:
@@ -130,6 +136,7 @@ type CassandraBatch interface {
 	//	   c.BatchQuery("INSERT INTO users VALUES(?, ?)", id2, name2)
 	BatchQuery(name, stmt string, values ...any) error
 
+	// Deprecated: ExecuteBatch method is deprecated and will be removed in future releases, users must use ExecuteBatchWithCtx.
 	// ExecuteBatch executes a batch operation and returns nil if successful otherwise an error is returned describing the failure.
 	//
 	// Example:
@@ -137,6 +144,7 @@ type CassandraBatch interface {
 	//	err := c.ExecuteBatch("myBatch")
 	ExecuteBatch(name string) error
 
+	// Deprecated: ExecuteBatchCAS method is deprecated and will be removed in future releases, users must use ExecuteBatchCASWithCtx.
 	// ExecuteBatchCAS executes a batch operation and returns true if successful.
 	// Returns true if the query is applied otherwise false.
 	// Returns false and error if any error occur while executing the query.
@@ -148,8 +156,37 @@ type CassandraBatch interface {
 	ExecuteBatchCAS(name string, dest ...any) (bool, error)
 }
 
-type CassandraProvider interface {
+type CassandraWithContext interface {
+	// QueryWithCtx executes the query with a context and binds the result into dest parameter.
+	// Accepts pointer to struct or slice as dest parameter for single and multiple rows retrieval respectively.
+	QueryWithCtx(ctx context.Context, dest any, stmt string, values ...any) error
+
+	// ExecWithCtx executes the query with a context, without returning any rows.
+	ExecWithCtx(ctx context.Context, stmt string, values ...any) error
+
+	// ExecCASWithCtx executes a lightweight transaction with a context.
+	ExecCASWithCtx(ctx context.Context, dest any, stmt string, values ...any) (bool, error)
+
+	// NewBatchWithCtx creates a new Cassandra batch with context.
+	NewBatchWithCtx(ctx context.Context, name string, batchType int) error
+
 	Cassandra
+	CassandraBatchWithContext
+}
+
+type CassandraBatchWithContext interface {
+	// BatchQueryWithCtx adds the query to the batch operation with a context.
+	BatchQueryWithCtx(ctx context.Context, name, stmt string, values ...any) error
+
+	// ExecuteBatchWithCtx executes a batch operation with a context.
+	ExecuteBatchWithCtx(ctx context.Context, name string) error
+
+	// ExecuteBatchCASWithCtx executes a batch operation with context and returns the result.
+	ExecuteBatchCASWithCtx(ctx context.Context, name string, dest ...any) (bool, error)
+}
+
+type CassandraProvider interface {
+	CassandraWithContext
 
 	provider
 }

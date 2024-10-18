@@ -4,17 +4,14 @@ This GoFr example demonstrates a simple HTTP server which supports Redis and MyS
 
 ### To run the example follow the steps below:
 
-- Run the docker image of Redis
+- Run the docker image of the application
 ```console
-docker run --name gofr-redis -p 2002:6379 -d redis:7.0.5
+docker-compose up -d
 ```
 
-- Run the docker image of MySQL
-```console
-docker run --name gofr-mysql -e MYSQL_ROOT_PASSWORD=password -e MYSQL_DATABASE=test -p 2001:3306 -d mysql:8.0.30
-```
+To test the example, follow these steps:
 
-- Now run the example
-```console
-go run main.go
-```
+1. Open your browser and navigate to `http://localhost:9000/hello`.
+2. To view the trace Gofr trce, open `https://tracer.gofr.dev` and paste the traceid.
+3. To view the Grafana Dashboard open `http://localhost:3000` 
+
