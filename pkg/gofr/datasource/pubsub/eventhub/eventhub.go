@@ -220,28 +220,33 @@ func (c *Client) Subscribe(ctx context.Context, topic string) (*pubsub.Message, 
 
 		start := time.Now()
 
-		msg, err = c.processEvents(ctx, partitionClient)
-		if errors.Is(err, errNoMsgReceived) {
-			// If no message is received, we don't achieve anything by returning error rather check in a different partition.
-			// This logic may change if we remove the timeout while receiving a message. However, waiting on just one partition
-			// might lead to missing data, so spawning one go-routine or having a worker pool can be an option to do this operation faster.
-			continue
+		select {
+		case <-ctx.Done():
+			return nil, nil
+		default:
+			msg, err = c.processEvents(ctx, partitionClient)
+			if errors.Is(err, errNoMsgReceived) {
+				// If no message is received, we don't achieve anything by returning error rather check in a different partition.
+				// This logic may change if we remove the timeout while receiving a message. However, waiting on just one partition
+				// might lead to missing data, so spawning one go-routine or having a worker pool can be an option to do this operation faster.
+				continue
+			}
+
+			end := time.Since(start)
+
+			c.logger.Debug(&Log{
+				Mode:          "SUB",
+				MessageValue:  strings.Join(strings.Fields(string(msg.Value)), " "),
+				Topic:         topic,
+				Host:          fmt.Sprint(c.cfg.EventhubName + ":" + c.cfg.ConsumerGroup + ":" + partitionClient.PartitionID()),
+				PubSubBackend: "EVHUB",
+				Time:          end.Microseconds(),
+			})
+
+			c.metrics.IncrementCounter(ctx, "app_pubsub_subscribe_success_count", "topic", topic, "subscription_name", partitionClient.PartitionID())
+
+			return msg, nil
 		}
-
-		end := time.Since(start)
-
-		c.logger.Debug(&Log{
-			Mode:          "SUB",
-			MessageValue:  strings.Join(strings.Fields(string(msg.Value)), " "),
-			Topic:         topic,
-			Host:          fmt.Sprint(c.cfg.EventhubName + ":" + c.cfg.ConsumerGroup + ":" + partitionClient.PartitionID()),
-			PubSubBackend: "EVHUB",
-			Time:          end.Microseconds(),
-		})
-
-		c.metrics.IncrementCounter(ctx, "app_pubsub_subscribe_success_count", "topic", topic, "subscription_name", partitionClient.PartitionID())
-
-		return msg, nil
 	}
 
 	return nil, nil
