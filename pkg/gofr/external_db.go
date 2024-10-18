@@ -125,10 +125,14 @@ func (a *App) AddSolr(ctx context.Context, db container.SolrProvider) error {
 	db.UseLogger(a.Logger())
 	db.UseMetrics(a.Metrics())
 
-	if err := db.Connect(ctx); err != nil {
+	tracer := otel.GetTracerProvider().Tracer("gofr-solr")
+
+	db.UseTracer(tracer)
+
+  if err := db.Connect(ctx); err != nil {
 		return err
 	}
-
+  
 	a.container.Solr = db
 
 	return nil
