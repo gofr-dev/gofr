@@ -8926,18 +8926,18 @@ func (mr *MockMongoMockRecorder) InsertOne(ctx, collection, document any) *gomoc
 }
 
 // StartSession mocks base method.
-func (m *MockMongo) StartSession() (any, error) {
+func (m *MockMongo) StartSession(ctx context.Context) (any, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "StartSession")
+	ret := m.ctrl.Call(m, "StartSession", ctx)
 	ret0, _ := ret[0].(any)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // StartSession indicates an expected call of StartSession.
-func (mr *MockMongoMockRecorder) StartSession() *gomock.Call {
+func (mr *MockMongoMockRecorder) StartSession(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartSession", reflect.TypeOf((*MockMongo)(nil).StartSession))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartSession", reflect.TypeOf((*MockMongo)(nil).StartSession), ctx)
 }
 
 // UpdateByID mocks base method.
@@ -9245,18 +9245,18 @@ func (mr *MockMongoProviderMockRecorder) InsertOne(ctx, collection, document any
 }
 
 // StartSession mocks base method.
-func (m *MockMongoProvider) StartSession() (any, error) {
+func (m *MockMongoProvider) StartSession(ctx context.Context) (any, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "StartSession")
+	ret := m.ctrl.Call(m, "StartSession", ctx)
 	ret0, _ := ret[0].(any)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // StartSession indicates an expected call of StartSession.
-func (mr *MockMongoProviderMockRecorder) StartSession() *gomock.Call {
+func (mr *MockMongoProviderMockRecorder) StartSession(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartSession", reflect.TypeOf((*MockMongoProvider)(nil).StartSession))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartSession", reflect.TypeOf((*MockMongoProvider)(nil).StartSession), ctx)
 }
 
 // UpdateByID mocks base method.

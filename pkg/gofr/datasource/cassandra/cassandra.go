@@ -61,14 +61,14 @@ func New(conf Config) *Client {
 }
 
 // Connect establishes a connection to Cassandra and registers metrics using the provided configuration when the client was Created.
-func (c *Client) Connect() {
+func (c *Client) Connect(_ context.Context) error {
 	c.logger.Logf("connecting to cassandra at %v on port %v to keyspace %v", c.config.Hosts, c.config.Port, c.config.Keyspace)
 
 	sess, err := c.cassandra.clusterConfig.createSession()
 	if err != nil {
 		c.logger.Error("error connecting to cassandra: ", err)
 
-		return
+		return err
 	}
 
 	cassandraBucktes := []float64{.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 4, 5, 7.5, 10}
@@ -77,6 +77,8 @@ func (c *Client) Connect() {
 	c.logger.Logf("connected to '%s' keyspace at host '%s' and port '%d'", c.config.Keyspace, c.config.Hosts, c.config.Port)
 
 	c.cassandra.session = sess
+
+	return nil
 }
 
 // UseLogger sets the logger for the Cassandra client which asserts the Logger interface.

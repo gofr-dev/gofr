@@ -109,7 +109,7 @@ func Test_Connect(t *testing.T) {
 
 		client.cassandra.clusterConfig = mockClusterConfig
 
-		client.Connect()
+		client.Connect(context.Background())
 
 		assert.Equal(t, tc.expSession, client.cassandra.session, "TEST[%d], Failed.\n%s", i, tc.desc)
 	}
