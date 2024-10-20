@@ -1,31 +1,25 @@
-Here's the improved version of your README file, with more visual organization, emphasis on key points, and polished formatting for clarity. I've maintained all original details while enhancing the look and feel:
-
----
+<h1 align="center" style="font-size: 50px;"><b>GoFr</b></h1>
 
 <p align="center">
 <img align="center" width="300" alt="logo" src="https://github.com/gofr-dev/gofr/assets/44036979/916fe7b1-42fb-4af1-9e0b-4a7a064c243c">
 </p>
 
-<h1 align="center"><b>GoFr: An Opinionated Microservice Development Framework</b></h1>
+<h2 align="center" style="font-size: 28px;"><b>GoFr: An Opinionated Microservice Development Framework</b></h2>
 
 <div align="center">
-<a href="https://pkg.go.dev/gofr.dev"><img src="https://img.shields.io/badge/%F0%9F%93%9A%20godoc-pkg-00ACD7.svg?color=00ACD7&style=flat-square" alt="godoc"></a>
-<a href="https://gofr.dev/docs"><img src="https://img.shields.io/badge/%F0%9F%92%A1%20gofr-docs-00ACD7.svg?style=flat-square" alt="gofr-docs"></a>
-<a href="https://codeclimate.com/github/gofr-dev/gofr/maintainability"><img src="https://api.codeclimate.com/v1/badges/58c8d0443a3d08c59c07/maintainability" alt="maintainability" /></a>
-<a href="https://codeclimate.com/github/gofr-dev/gofr/test_coverage"><img src="https://api.codeclimate.com/v1/badges/58c8d0443a3d08c59c07/test_coverage" alt="test-coverage" /></a>
-<a href="https://goreportcard.com/report/gofr.dev"><img src="https://goreportcard.com/badge/gofr.dev" alt="Go report card"></a>
-<a href="https://opensource.org/licenses/Apache-2.0"><img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg" alt="Apache 2.0 License"></a>
-<a href="https://discord.gg/wsaSkQTdgq"><img src="https://img.shields.io/badge/discord-join-7289DA.svg?logo=discord&longCache=true&style=flat" alt="discord" /></a>
+<a href="https://pkg.go.dev/gofr.dev"><img src="https://img.shields.io/badge/GoDoc-Read%20Documentation-blue?style=for-the-badge" alt="godoc"></a>
+<a href="https://gofr.dev/docs"><img src="https://img.shields.io/badge/GoFr-Docs-orange?style=for-the-badge" alt="gofr-docs"></a>
+<a href="https://codeclimate.com/github/gofr-dev/gofr/maintainability"><img src="https://img.shields.io/codeclimate/maintainability/gofr-dev/gofr?style=for-the-badge" alt="maintainability"></a>
+<a href="https://codeclimate.com/github/gofr-dev/gofr/test_coverage"><img src="https://img.shields.io/codeclimate/coverage/gofr-dev/gofr?style=for-the-badge" alt="test-coverage"></a>
+<a href="https://goreportcard.com/report/gofr.dev"><img src="https://goreportcard.com/badge/gofr.dev?style=for-the-badge" alt="Go Report Card"></a>
+<a href="https://opensource.org/licenses/Apache-2.0"><img src="https://img.shields.io/badge/License-Apache_2.0-blue?style=for-the-badge" alt="Apache 2.0 License"></a>
+<a href="https://discord.gg/wsaSkQTdgq"><img src="https://img.shields.io/discord/7289DA?style=for-the-badge&logo=discord&label=Join%20Us%20on%20Discord" alt="discord" /></a>
 </div>
-
----
 
 <h2 align="center">Listed in the <a href="https://landscape.cncf.io/?selected=go-fr">CNCF Landscape</a></h2>
 
----
-
 ## 🎯 **Goal**
-GoFr is built to simplify **microservice development** with a focus on **Kubernetes** deployment and **out-of-the-box observability**. While it can handle generic applications, microservices remain the core focus.
+GoFr is designed to **simplify microservice development**, with key focuses on **Kubernetes deployment** and **out-of-the-box observability**. While capable of building generic applications, **microservices** remain at its core.
 
 ---
 
@@ -35,11 +29,11 @@ GoFr is built to simplify **microservice development** with a focus on **Kuberne
 2. **REST Standards by Default**
 3. **Configuration Management**
 4. **[Observability](https://gofr.dev/docs/quick-start/observability)** (Logs, Traces, Metrics)
-5. **Inbuilt [Auth Middleware](https://gofr.dev/docs/advanced-guide/http-authentication)** & Support for [Custom Middleware](https://gofr.dev/docs/advanced-guide/middlewares)
+5. **Inbuilt [Auth Middleware](https://gofr.dev/docs/advanced-guide/http-authentication)** & Custom Middleware Support
 6. **[gRPC Support](https://gofr.dev/docs/advanced-guide/grpc)**
-7. **[HTTP Service](https://gofr.dev/docs/advanced-guide/http-communication)** with support for [Circuit Breaker](https://gofr.dev/docs/advanced-guide/circuit-breaker)
+7. **[HTTP Service](https://gofr.dev/docs/advanced-guide/http-communication)** with Circuit Breaker Support
 8. **[Pub/Sub](https://gofr.dev/docs/advanced-guide/using-publisher-subscriber)**
-9. **[Health Check](https://gofr.dev/docs/advanced-guide/monitoring-service-health)** for all datasources
+9. **[Health Check](https://gofr.dev/docs/advanced-guide/monitoring-service-health)** for All Datasources
 10. **[Database Migration](https://gofr.dev/docs/advanced-guide/handling-data-migrations)**
 11. **[Cron Jobs](https://gofr.dev/docs/advanced-guide/using-cron)**
 12. **Support for [Changing Log Level](https://gofr.dev/docs/advanced-guide/remote-log-level-change) Without Restarting**
@@ -49,25 +43,19 @@ GoFr is built to simplify **microservice development** with a focus on **Kuberne
 
 ---
 
-![banner.gif](.github/banner.gif)
-
----
-
 ## 🚀 **Getting Started**
 
 ### **Prerequisites**
-
 - GoFr requires **[Go](https://go.dev/)** version **[1.21](https://go.dev/doc/devel/release#go1.21.0)** or above.
 
 ### **Installation**
-
-With Go's module support, the `go [build|run|test]` command will fetch all necessary dependencies automatically when you add the following import to your code:
+To get started with GoFr, add the following import to your code and use Go’s module support to automatically fetch dependencies:
 
 ```go
 import "gofr.dev/pkg/gofr"
 ```
 
-Alternatively, you can use:
+Alternatively, use the command:
 
 ```bash
 go get -u gofr.dev/pkg/gofr
@@ -77,7 +65,7 @@ go get -u gofr.dev/pkg/gofr
 
 ## 🏃 **Running GoFr**
 
-Here’s a basic example of how to run a GoFr application:
+Here's a simple example to get a GoFr application up and running:
 
 ```go
 package main
@@ -91,49 +79,43 @@ func main() {
         return "Hello World!", nil
     })
 
-    app.Run() // listen and serve on localhost:8000 
+    app.Run() // listens and serves on localhost:8000 
 }
 ```
 
-Run the code with:
+To run this code:
 
 ```bash
 $ go run main.go
 ```
 
-Then, visit [`localhost:8000/greet`](http://localhost:8000/greet) in your browser to see the response!
+Visit [`localhost:8000/greet`](http://localhost:8000/greet) to see the result.
 
 ---
 
-## 📂 **See More Examples**
+## 📂 **More Examples**
 
-Explore more ready-to-run examples in the [GoFr examples directory](https://github.com/gofr-dev/gofr/tree/development/examples).
+Explore a variety of ready-to-run examples in the [GoFr examples directory](https://github.com/gofr-dev/gofr/tree/development/examples).
 
 ---
 
 ## 👩‍💻 **Documentation**
 
-- See the **[godocs](https://pkg.go.dev/gofr.dev)** for complete API documentation.
-- For additional resources, visit the official **[GoFr documentation](https://gofr.dev/docs)**.
+- **[GoDoc](https://pkg.go.dev/gofr.dev)**: Official API documentation.
+- **[GoFr Documentation](https://gofr.dev/docs)**: Comprehensive guides and resources.
 
 ---
 
 ## 👍 **Contribute**
 
-There are several ways you can contribute to GoFr and support its development:
+Help us make GoFr even better:
 
-1. **Star** this repository on GitHub! 🌟
-2. Write a review or tutorial on platforms like **[Medium](https://medium.com/)**, **[Dev.to](https://dev.to/)**, or your personal blog.
-3. Visit the **[CONTRIBUTING](CONTRIBUTING.md)** guide to learn about submitting patches and following the contribution workflow.
+1. **Star** this repo on GitHub! 🌟
+2. Write a review or tutorial on **[Medium](https://medium.com/)**, **[Dev.to](https://dev.to/)**, or your blog.
+3. Review the **[CONTRIBUTING.md](CONTRIBUTING.md)** guide to learn how to contribute to the project.
 
 ---
 
 ### 🎁 **Get a GoFr T-Shirt & Stickers!**
 
-If your pull request (PR) is merged or you contribute by writing an article or helping spread the word about GoFr, fill out [this form](https://forms.gle/R1Yz7ZzY3U5WWTgy5) and get a **GoFr T-shirt** and stickers as a token of appreciation!
-
----
-
----
-
-This improved version is now more readable, polished, and contributor-friendly!
+If your PR gets merged or you contribute through articles or spreading the word about GoFr, fill out [this form](https://forms.gle/R1Yz7ZzY3U5WWTgy5) to claim your **GoFr T-shirt** and stickers as a thank-you gift! 
