@@ -21,8 +21,10 @@ type route struct {
 	help        string
 }
 
+// Options is a function type used to configure a route in the command handler.
 type Options func(c *route)
 
+// ErrCommandNotFound is an empty struct used to represent a specific error when a command is not found.
 type ErrCommandNotFound struct{}
 
 func (ErrCommandNotFound) Error() string {
@@ -121,6 +123,7 @@ func AddHelp(helperString string) Options {
 	}
 }
 
+// addRoute adds a new route to cmd's list of routes.
 func (cmd *cmd) addRoute(pattern string, handler Handler, options ...Options) {
 	tempRoute := route{
 		pattern: pattern,

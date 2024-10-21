@@ -1,0 +1,69 @@
+version: '3.8'
+
+services:
+  gofr-http-server:
+    build:
+      context: ../.
+      dockerfile: Dockerfile
+    environment:
+      - TRACE_EXPORTER=gofr
+      - TRACER_RATIO=0.1
+      - REDIS_HOST=redisdb
+      - REDIS_PORT=6379
+      - DB_HOST=mysqldb
+      - DB_USER=root
+      - DB_PASSWORD=password
+      - DB_NAME=test
+      - DB_PORT=3306
+      - DB_DIALECT=mysql
+    ports:
+      - "9000:9000"
+      - "2121:2121"
+    depends_on:
+      - redisdb
+      - mysqldb
+      - grafana
+      - prometheus
+    networks:
+      - gofr-network
+
+  redisdb:
+    image: redis:7.0.5
+    ports:
+      - "2002:6379"
+    networks:
+      - gofr-network
+
+  mysqldb:
+    image: mysql:8.0.30
+    environment:
+      MYSQL_ROOT_PASSWORD: password
+      MYSQL_DATABASE: test
+    ports:
+      - "2001:3306"
+    networks:
+      - gofr-network
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=password
+    volumes:
+      - ./provisioning:/etc/grafana/provisioning
+    networks:
+      - gofr-network
+
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus:/etc/prometheus
+    networks:
+      - gofr-network
+
+networks:
+  gofr-network:

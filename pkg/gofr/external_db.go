@@ -2,6 +2,7 @@ package gofr
 
 import (
 	"go.opentelemetry.io/otel"
+
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/datasource/file"
 )
@@ -10,6 +11,10 @@ import (
 func (a *App) AddMongo(db container.MongoProvider) {
 	db.UseLogger(a.Logger())
 	db.UseMetrics(a.Metrics())
+
+	tracer := otel.GetTracerProvider().Tracer("gofr-mongo")
+
+	db.UseTracer(tracer)
 
 	db.Connect()
 
@@ -73,6 +78,10 @@ func (a *App) AddCassandra(db container.CassandraProvider) {
 	db.UseLogger(a.Logger())
 	db.UseMetrics(a.Metrics())
 
+	tracer := otel.GetTracerProvider().Tracer("gofr-cassandra")
+
+	db.UseTracer(tracer)
+
 	db.Connect()
 
 	a.container.Cassandra = db
@@ -92,6 +101,10 @@ func (a *App) AddKVStore(db container.KVStoreProvider) {
 func (a *App) AddSolr(db container.SolrProvider) {
 	db.UseLogger(a.Logger())
 	db.UseMetrics(a.Metrics())
+
+	tracer := otel.GetTracerProvider().Tracer("gofr-solr")
+
+	db.UseTracer(tracer)
 
 	db.Connect()
 

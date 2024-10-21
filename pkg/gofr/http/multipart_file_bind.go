@@ -29,6 +29,16 @@ type formData struct {
 func (uf *formData) mapStruct(val reflect.Value, field *reflect.StructField) (bool, error) {
 	vKind := val.Kind()
 
+	if field == nil {
+		// Check if val is not a struct
+		if vKind != reflect.Struct {
+			return false, nil // Return false if val is not a struct
+		}
+
+		// If field is nil, iterate through all fields of the struct
+		return uf.iterateStructFields(val)
+	}
+
 	if vKind == reflect.Pointer {
 		return uf.checkPointer(val, field)
 	}
@@ -79,6 +89,10 @@ func (uf *formData) checkPointer(val reflect.Value, field *reflect.StructField) 
 }
 
 func (uf *formData) checkStruct(val reflect.Value) (bool, error) {
+	return uf.iterateStructFields(val)
+}
+
+func (uf *formData) iterateStructFields(val reflect.Value) (bool, error) {
 	var set bool
 
 	tVal := val.Type()
