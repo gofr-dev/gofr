@@ -120,4 +120,4 @@ Help us make GoFr even better:
 
 ### 🎁 **Get a GoFr T-Shirt & Stickers!**
 
-If your PR gets merged or you contribute through articles or spreading the word about GoFr, fill out [this form](https://forms.gle/R1Yz7ZzY3U5WWTgy5) to claim your **GoFr T-shirt** and stickers as a thank-you gift! 
+If your PR is merged, or if you contribute by writing articles or promoting GoFr, we invite you to fill out [this form](https://forms.gle/R1Yz7ZzY3U5WWTgy5) to claim your GoFr merchandise as a token of our appreciation! 
