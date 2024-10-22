@@ -13,7 +13,9 @@ import (
 )
 
 func Test_InvalidRequest(t *testing.T) {
-	_, err := call(context.Background(), "GET", ":/localhost:", nil, nil)
+	client := New(Config{})
+
+	_, err, _ := client.call(context.Background(), "GET", ":/localhost:", nil, nil)
 
 	require.Error(t, err, "TEST Failed.\n")
 }
@@ -24,7 +26,9 @@ func Test_InvalidJSONBody(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	_, err := call(context.Background(), "GET", ts.URL, nil, nil)
+	client := New(Config{})
+
+	_, err, _ := client.call(context.Background(), "GET", ts.URL, nil, nil)
 
 	require.Error(t, err, "TEST Failed.\n")
 }
@@ -35,7 +39,9 @@ func Test_ErrorResponse(t *testing.T) {
 	}))
 	ts.Close()
 
-	_, err := call(context.Background(), "GET", ts.URL, nil, nil)
+	client := New(Config{})
+
+	_, err, _ := client.call(context.Background(), "GET", ts.URL, nil, nil)
 
 	require.Error(t, err, "TEST Failed.\n")
 }

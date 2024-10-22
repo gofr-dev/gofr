@@ -169,12 +169,15 @@ func (g *googleClient) Subscribe(ctx context.Context, topic string) (*pubsub.Mes
 		}
 	}()
 
-	m := <-receiveChan
+	select {
+	case m := <-receiveChan:
+		g.metrics.IncrementCounter(ctx, "app_pubsub_subscribe_success_count", "topic", topic, "subscription_name",
+			g.Config.SubscriptionName)
 
-	g.metrics.IncrementCounter(ctx, "app_pubsub_subscribe_success_count", "topic", topic, "subscription_name",
-		g.Config.SubscriptionName)
-
-	return m, nil
+		return m, nil
+	case <-ctx.Done():
+		return nil, nil
+	}
 }
 
 func (g *googleClient) getTopic(ctx context.Context, topic string) (*gcPubSub.Topic, error) {
