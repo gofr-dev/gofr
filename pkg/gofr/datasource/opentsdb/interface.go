@@ -25,7 +25,7 @@ type HTTPClient interface {
 
 // Response defines the common behaviors all the specific response for
 // different rest-apis should obey.
-// Currently, it is an abstraction used in OpentsdbClient.sendRequest()
+// Currently, it is an abstraction used in Client.sendRequest()
 // to stored the different kinds of response contents for all the rest-apis.
 type Response interface {
 	// SetStatus can be used to set the actual http status code of

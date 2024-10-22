@@ -12,7 +12,7 @@ import (
 // QueryLastParam is the structure used to hold
 // the querying parameters when calling /api/query/last.
 // Each attributes in QueryLastParam matches the definition in
-// (http://opentsdb.net/docs/build/html/api_http/query/last.html).
+// [OpenTSDB Official Docs]: http://opentsdb.net/docs/build/html/api_http/query/last.html.
 type QueryLastParam struct {
 	// One or more sub queries used to select the time series to return.
 	// These may be metric m or TSUID tsuids queries
@@ -41,7 +41,7 @@ func (query *QueryLastParam) setStatusCode(int) {
 
 // SubQueryLast is the structure used to hold the subquery parameters when calling /api/query/last.
 // Each attributes in SubQueryLast matches the definition in
-// (http://opentsdb.net/docs/build/html/api_http/query/last.html).
+// [OpenTSDB Official Docs]: http://opentsdb.net/docs/build/html/api_http/query/last.html.
 type SubQueryLast struct {
 	// The name of a metric stored in the system.
 	// The value is required with non-empty value.
@@ -56,7 +56,7 @@ type SubQueryLast struct {
 
 // QueryLastResponse acts as the implementation of Response in the /api/query/last scene.
 // It holds the status code and the response values defined in the
-// (http://opentsdb.net/docs/build/html/api_http/query/last.html).
+// [OpenTSDB Official Docs]: http://opentsdb.net/docs/build/html/api_http/query/last.html.
 type QueryLastResponse struct {
 	StatusCode    int
 	QueryRespCnts []QueryRespLastItem    `json:"queryRespCnts,omitempty"`
@@ -84,7 +84,7 @@ func (queryLastResp *QueryLastResponse) GetCustomParser() func(respCnt []byte) e
 
 // QueryRespLastItem acts as the implementation of Response in the /api/query/last scene.
 // It holds the response item defined in the
-// (http://opentsdb.net/docs/build/html/api_http/query/last.html).
+// [OpenTSDB Official Docs]: http://opentsdb.net/docs/build/html/api_http/query/last.html.
 type QueryRespLastItem struct {
 	// Name of the metric retreived for the time series.
 	// Only returned if resolve was set to true.
@@ -102,10 +102,10 @@ type QueryRespLastItem struct {
 	Value string `json:"value"`
 
 	// The hexadecimal TSUID for the time series
-	Tsuid string `json:"tsuid"`
+	TsUID string `json:"tsuid"`
 }
 
-func (c *OpentsdbClient) QueryLast(param *QueryLastParam) (*QueryLastResponse, error) {
+func (c *Client) QueryLast(param *QueryLastParam) (*QueryLastResponse, error) {
 	span := c.addTrace(c.ctx, "QueryLast")
 
 	status := StatusFailed

@@ -37,7 +37,7 @@ func (verResp *VersionResponse) GetCustomParser() func(respCnt []byte) error {
 		})
 }
 
-func (c *OpentsdbClient) version() (*VersionResponse, error) {
+func (c *Client) version() (*VersionResponse, error) {
 	span := c.addTrace(c.ctx, "Version")
 
 	status := StatusFailed

@@ -175,7 +175,7 @@ func registerMocks(mocks *Mocks, health string) {
 		},
 	}, nil)
 
-	mocks.Opentsdb.EXPECT().HealthCheck(context.Background()).Return(datasource.Health{
+	mocks.OpenTSDB.EXPECT().HealthCheck(context.Background()).Return(datasource.Health{
 		Status: health,
 		Details: map[string]interface{}{
 			"host":  "localhost:8000",

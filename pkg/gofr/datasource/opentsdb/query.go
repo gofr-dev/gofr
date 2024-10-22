@@ -13,7 +13,7 @@ import (
 )
 
 // QueryParam is the structure used to hold the querying parameters when calling /api/query.
-// Each attributes in QueryParam matches the definition in (http://opentsdb.net/docs/build/html/api_http/query/index.html).
+// Each attributes in QueryParam matches the definition in [OpenTSDB Official Docs]: http://opentsdb.net/docs/build/html/api_http/query/index.html.
 type QueryParam struct {
 	// The start time for the query. This can be a relative or absolute timestamp.
 	// The data type can only be string, int, or int64.
@@ -67,7 +67,7 @@ func (*QueryParam) setStatusCode(int) {
 }
 
 // SubQuery is the structure used to hold the subquery parameters when calling /api/query.
-// Each attributes in SubQuery matches the definition in (http://opentsdb.net/docs/build/html/api_http/query/index.html).
+// Each attributes in SubQuery matches the definition in [OpenTSDB Official Docs]: http://opentsdb.net/docs/build/html/api_http/query/index.html.
 type SubQuery struct {
 	// The name of an aggregation function to use.
 	// The value is required with non-empty one in the range of
@@ -98,7 +98,7 @@ type SubQuery struct {
 	RateParams map[string]interface{} `json:"rateOptions,omitempty"`
 
 	// An optional value downsampling function to reduce the amount of data returned.
-	Downsample string `json:"downsample,omitempty"`
+	DownSample string `json:"downsample,omitempty"`
 
 	// An optional value to drill down to specific time series or group results by tag,
 	// supply one or more map values in the same format as the query string. Tags are converted to filters in 2.2.
@@ -114,7 +114,7 @@ type SubQuery struct {
 
 // Filter is the structure used to hold the filter parameters when calling /api/query.
 // Each attributes in Filter matches the definition in
-// (http://opentsdb.net/docs/build/html/api_http/query/index.html).
+// [OpenTSDB Official Docs]: http://opentsdb.net/docs/build/html/api_http/query/index.html.
 type Filter struct {
 	// The name of the filter to invoke. The value is required with a non-empty
 	// value in the range of calling /api/config/filters.
@@ -126,14 +126,14 @@ type Filter struct {
 	// The filter expression to evaluate and depends on the filter being used, required with a non-empty value
 	FilterExp string `json:"filter"`
 
-	// An optional value to show whether or not to group the results by each value matched by the filter.
-	// By default all values matching the filter will be aggregated into a single series.
+	// An optional value to show whether to group the results by each value matched by the filter.
+	// By default, all values matching the filter will be aggregated into a single series.
 	GroupBy bool `json:"groupBy"`
 }
 
 // QueryResponse acts as the implementation of Response in the /api/query scene.
 // It holds the status code and the response values defined in the
-// (http://opentsdb.net/docs/build/html/api_http/query/index.html).
+// [OpenTSDB Official Docs]: http://opentsdb.net/docs/build/html/api_http/query/index.html.
 type QueryResponse struct {
 	StatusCode    int
 	QueryRespCnts []QueryRespItem        `json:"queryRespCnts"`
@@ -161,36 +161,36 @@ func (queryResp *QueryResponse) GetCustomParser() func(respCnt []byte) error {
 
 // QueryRespItem acts as the implementation of Response in the /api/query scene.
 // It holds the response item defined in the
-// (http://opentsdb.net/docs/build/html/api_http/query/index.html).
+// [OpenTSDB Official Docs]: http://opentsdb.net/docs/build/html/api_http/query/index.html.
 type QueryRespItem struct {
-	// Name of the metric retreived for the time series
+	// Name of the metric retrieved for the time series
 	Metric string `json:"metric"`
 
 	// A list of tags only returned when the results are for a single time series.
 	// If results are aggregated, this value may be null or an empty map
 	Tags map[string]string `json:"tags"`
 
-	// If more than one timeseries were included in the result set, i.e. they were aggregated,
+	// If more than one time series were included in the result set, i.e. they were aggregated,
 	// this will display a list of tag names that were found in common across all time series.
-	// Note that: Api Doc uses 'aggreatedTags', but actual response uses 'aggregateTags'
+	// Note that: Api Doc uses 'aggregatedTags', but actual response uses 'aggregateTags'
 	AggregatedTags []string `json:"aggregateTags"`
 
-	// Retrieved datapoints after being processed by the aggregators. Each data point consists
+	// Retrieved data points after being processed by the aggregators. Each data point consists
 	// of a timestamp and a value, the format determined by the serializer.
 	// For the JSON serializer, the timestamp will always be a Unix epoch style integer followed
 	// by the value as an integer or a floating point.
 	// For example, the default output is "dps"{"<timestamp>":<value>}.
-	// By default the timestamps will be in seconds. If the msResolution flag is set, then the
+	// By default, the timestamps will be in seconds. If the msResolution flag is set, then the
 	// timestamps will be in milliseconds.
 	//
 	// Because the elements of map is out of order, using common way to iterate Dps will not get
-	// datapoints with timestamps out of order.
+	// data points with timestamps out of order.
 	// So be aware that one should use '(qri *QueryRespItem) GetDataPoints() []*DataPoint' to
-	// acquire the real ascending datapoints.
+	// acquire the real ascending data points.
 	Dps map[string]interface{} `json:"dps"`
 
-	// If the query retrieved annotations for timeseries over the requested timespan, they will
-	// be returned in this group. Annotations for every timeseries will be merged into one set
+	// If the query retrieved annotations for time series over the requested timespan, they will
+	// be returned in this group. Annotations for every time series will be merged into one set
 	// and sorted by start_time. Aggregator functions do not affect annotations, all annotations
 	// will be returned for the span.
 	// The value is optional.
@@ -206,7 +206,7 @@ type QueryRespItem struct {
 	ctx    context.Context
 }
 
-// GetDataPoints returns the real ascending datapoints from the information of the related QueryRespItem.
+// GetDataPoints returns the real ascending data points from the information of the related QueryRespItem.
 func (qri *QueryRespItem) GetDataPoints() []*DataPoint {
 	span := qri.addTrace(qri.ctx, "GetDataPoints-QueryRespItem")
 
@@ -301,7 +301,7 @@ func (qri *QueryRespItem) GetLatestDataPoint() *DataPoint {
 	return datapoint
 }
 
-func (c *OpentsdbClient) Query(param *QueryParam) (*QueryResponse, error) {
+func (c *Client) Query(param *QueryParam) (*QueryResponse, error) {
 	if param.tracer == nil {
 		param.tracer = c.tracer
 	}

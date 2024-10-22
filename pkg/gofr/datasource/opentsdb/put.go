@@ -14,7 +14,7 @@ import (
 )
 
 // DataPoint is the structure used to hold the values of a metric item. Each attributes
-// in DataPoint matches the definition in (http://opentsdb.net/docs/build/html/api_http/put.html).
+// in DataPoint matches the definition in [OpenTSDB Official Docs]: http://opentsdb.net/docs/build/html/api_http/put.html.
 type DataPoint struct {
 	// The name of the metric which is about to be stored, and is required with non-empty value.
 	Metric string `json:"metric"`
@@ -54,7 +54,7 @@ func (putErr *PutError) String() string {
 
 // PutResponse acts as the implementation of Response in the /api/put scene.
 // It holds the status code and the response values defined in
-// the (http://opentsdb.net/docs/build/html/api_http/put.html).
+// the [OpenTSDB Official Docs]: http://opentsdb.net/docs/build/html/api_http/put.html.
 type PutResponse struct {
 	StatusCode int
 	Failed     int64      `json:"failed"`
@@ -81,7 +81,7 @@ func (*PutResponse) GetCustomParser() func(respCnt []byte) error {
 	return nil
 }
 
-func (c *OpentsdbClient) Put(datas []DataPoint, queryParam string) (*PutResponse, error) {
+func (c *Client) Put(datas []DataPoint, queryParam string) (*PutResponse, error) {
 	span := c.addTrace(c.ctx, "Put")
 
 	status := StatusFailed
@@ -144,7 +144,7 @@ func (c *OpentsdbClient) Put(datas []DataPoint, queryParam string) (*PutResponse
 	return nil, parsePutErrorMsg(&globalResp)
 }
 
-func (c *OpentsdbClient) getResponses(putEndpoint string, dataGroups [][]DataPoint,
+func (c *Client) getResponses(putEndpoint string, dataGroups [][]DataPoint,
 	responses []PutResponse, message *string) ([]PutResponse, error) {
 	for _, datapoints := range dataGroups {
 		reqBodyCnt, err := getPutBodyContents(datapoints)
@@ -170,7 +170,7 @@ func (c *OpentsdbClient) getResponses(putEndpoint string, dataGroups [][]DataPoi
 // c.opentsdbCfg.MaxContentLength. This method is to avoid Put failure, when the content length of
 // the given datapoints in a single /api/put request exceeded the value of
 // tsd.http.request.max_chunk in the opentsdb config file.
-func (c *OpentsdbClient) splitProperGroups(datapoints []DataPoint) ([][]DataPoint, error) {
+func (c *Client) splitProperGroups(datapoints []DataPoint) ([][]DataPoint, error) {
 	span := c.addTrace(c.ctx, "splitProperGroups-Put")
 
 	status := StatusFailed
@@ -193,7 +193,7 @@ func (c *OpentsdbClient) splitProperGroups(datapoints []DataPoint) ([][]DataPoin
 	return datapointGroups, nil
 }
 
-func (c *OpentsdbClient) appendDataPoints(datasBytes []byte, datapoints []DataPoint, datapointGroups [][]DataPoint) [][]DataPoint {
+func (c *Client) appendDataPoints(datasBytes []byte, datapoints []DataPoint, datapointGroups [][]DataPoint) [][]DataPoint {
 	if len(datasBytes) > c.opentsdbCfg.MaxContentLength {
 		return c.splitLargeDataPoints(datapoints, datapointGroups)
 	}
@@ -201,7 +201,7 @@ func (c *OpentsdbClient) appendDataPoints(datasBytes []byte, datapoints []DataPo
 	return append(datapointGroups, datapoints)
 }
 
-func (c *OpentsdbClient) splitLargeDataPoints(datapoints []DataPoint, datapointGroups [][]DataPoint) [][]DataPoint {
+func (c *Client) splitLargeDataPoints(datapoints []DataPoint, datapointGroups [][]DataPoint) [][]DataPoint {
 	datapointsSize := len(datapoints)
 	startIndex := 0
 	endIndex := c.calculateEndIndex(datapointsSize)
@@ -224,7 +224,7 @@ func (c *OpentsdbClient) splitLargeDataPoints(datapoints []DataPoint, datapointG
 	return datapointGroups
 }
 
-func (c *OpentsdbClient) calculateEndIndex(datapointsSize int) int {
+func (c *Client) calculateEndIndex(datapointsSize int) int {
 	if datapointsSize > c.opentsdbCfg.MaxPutPointsNum {
 		return c.opentsdbCfg.MaxPutPointsNum
 	}
@@ -232,7 +232,7 @@ func (c *OpentsdbClient) calculateEndIndex(datapointsSize int) int {
 	return datapointsSize
 }
 
-func (*OpentsdbClient) calculateNextEndIndex(startIndex, datapointsSize, tempSize int) int {
+func (*Client) calculateNextEndIndex(startIndex, datapointsSize, tempSize int) int {
 	endIndex := startIndex + tempSize
 	if endIndex > datapointsSize {
 		return datapointsSize
@@ -241,7 +241,7 @@ func (*OpentsdbClient) calculateNextEndIndex(startIndex, datapointsSize, tempSiz
 	return endIndex
 }
 
-func (c *OpentsdbClient) canAppendGroup(datapoints []DataPoint) bool {
+func (c *Client) canAppendGroup(datapoints []DataPoint) bool {
 	tempdpsBytes, _ := json.Marshal(&datapoints)
 	return len(tempdpsBytes) <= c.opentsdbCfg.MaxContentLength
 }

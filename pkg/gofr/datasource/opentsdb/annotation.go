@@ -22,8 +22,8 @@ type Annotation struct {
 	// EndTime is the optional Unix epoch timestamp (in seconds) for when the event ended, if applicable.
 	EndTime int64 `json:"endTime,omitempty"`
 
-	// Tsuid is the optional time series identifier if the annotation is linked to a specific time series.
-	Tsuid string `json:"tsuid,omitempty"`
+	// TsUID is the optional time series identifier if the annotation is linked to a specific time series.
+	TsUID string `json:"tsuid,omitempty"`
 
 	// Description is a brief, optional summary of the event (recommended to keep under 25 characters for display purposes).
 	Description string `json:"description,omitempty"`
@@ -44,7 +44,7 @@ type AnnotationResponse struct {
 	Annotation
 
 	// ErrorInfo contains details about any errors that occurred during the request.
-	ErrorInfo map[string]interface{} `json:"error,omitempty"`
+	ErrorInfo map[string]any `json:"error,omitempty"`
 
 	logger Logger
 	tracer trace.Tracer
@@ -62,17 +62,11 @@ func (annotResp *AnnotationResponse) setStatusCode(code int) {
 func (annotResp *AnnotationResponse) GetCustomParser() func(respCnt []byte) error {
 	return getCustomParser(annotResp.ctx, annotResp, "GetCustomParser-Annotation", annotResp.logger,
 		func(resp []byte) error {
-			originContents := string(resp)
-
-			var resultBytes []byte
-
-			if strings.Contains(originContents, "startTime") || strings.Contains(originContents, "error") {
-				resultBytes = resp
-			} else if annotResp.StatusCode == http.StatusNoContent {
+			if annotResp.StatusCode == http.StatusNoContent {
 				return nil
 			}
 
-			return json.Unmarshal(resultBytes, &annotResp)
+			return json.Unmarshal(resp, &annotResp)
 		})
 }
 
@@ -80,7 +74,7 @@ func (annotResp *AnnotationResponse) String() string {
 	return toString(annotResp.ctx, annotResp, "ToString-Annotation", annotResp.logger)
 }
 
-func (c *OpentsdbClient) QueryAnnotation(queryAnnoParam map[string]interface{}) (*AnnotationResponse, error) {
+func (c *Client) QueryAnnotation(queryAnnoParam map[string]interface{}) (*AnnotationResponse, error) {
 	span := c.addTrace(c.ctx, "QueryAnnotation")
 
 	status := StatusFailed
@@ -113,7 +107,7 @@ func (c *OpentsdbClient) QueryAnnotation(queryAnnoParam map[string]interface{}) 
 	annoEndpoint := fmt.Sprintf("%s%s?%s", c.tsdbEndpoint, AnnotationPath, buffer.String())
 	annResp := AnnotationResponse{logger: c.logger, tracer: c.tracer, ctx: c.ctx}
 
-	if err := c.sendRequest(GetMethod, annoEndpoint, "", &annResp); err != nil {
+	if err := c.sendRequest(http.MethodGet, annoEndpoint, "", &annResp); err != nil {
 		message = fmt.Sprintf("error while processing annotation query: %s", err.Error())
 		return nil, err
 	}
@@ -126,15 +120,15 @@ func (c *OpentsdbClient) QueryAnnotation(queryAnnoParam map[string]interface{}) 
 	return &annResp, nil
 }
 
-func (c *OpentsdbClient) UpdateAnnotation(annotation *Annotation) (*AnnotationResponse, error) {
-	return c.operateAnnotation(annotation, PostMethod, "UpdateAnnoation")
+func (c *Client) UpdateAnnotation(annotation *Annotation) (*AnnotationResponse, error) {
+	return c.operateAnnotation(annotation, http.MethodPost, "UpdateAnnoation")
 }
 
-func (c *OpentsdbClient) DeleteAnnotation(annotation *Annotation) (*AnnotationResponse, error) {
-	return c.operateAnnotation(annotation, DeleteMethod, "DeleteAnnotation")
+func (c *Client) DeleteAnnotation(annotation *Annotation) (*AnnotationResponse, error) {
+	return c.operateAnnotation(annotation, http.MethodDelete, "DeleteAnnotation")
 }
 
-func (c *OpentsdbClient) operateAnnotation(annotation *Annotation, method, operation string) (*AnnotationResponse, error) {
+func (c *Client) operateAnnotation(annotation *Annotation, method, operation string) (*AnnotationResponse, error) {
 	span := c.addTrace(c.ctx, operation)
 
 	status := StatusFailed
@@ -171,9 +165,9 @@ func (c *OpentsdbClient) operateAnnotation(annotation *Annotation, method, opera
 	return &annResp, nil
 }
 
-// BulkAnnotatResponse represents the response structure for bulk annotation updates or deletes
+// BulkAnnotationResponse represents the response structure for bulk annotation updates or deletes
 // via the /api/annotation/bulk endpoint.
-type BulkAnnotatResponse struct {
+type BulkAnnotationResponse struct {
 	// StatusCode holds the HTTP status code of the bulk annotation request.
 	StatusCode int
 
@@ -183,9 +177,9 @@ type BulkAnnotatResponse struct {
 	// ErrorInfo contains details about any errors that occurred during the bulk operation.
 	ErrorInfo map[string]interface{} `json:"error,omitempty"`
 
-	// Tsuids holds the list of TSUIDs for annotations that should be deleted.
+	// TsUIDs holds the list of TsUIDs for annotations that should be deleted.
 	// If empty or nil, the global flag is used.
-	Tsuids []string `json:"tsuids,omitempty"`
+	TsUIDs []string `json:"tsuids,omitempty"`
 
 	// StartTime is the Unix epoch timestamp for the start of the deletion request.
 	StartTime int64 `json:"startTime,omitempty"`
@@ -204,11 +198,11 @@ type BulkAnnotatResponse struct {
 	ctx    context.Context
 }
 
-// BulkAnnoDeleteInfo holds the parameters for a bulk annotation delete operation.
-type BulkAnnoDeleteInfo struct {
-	// Tsuids holds the list of TSUIDs for annotations that should be deleted.
+// BulkAnnotationDeleteInfo holds the parameters for a bulk annotation delete operation.
+type BulkAnnotationDeleteInfo struct {
+	// TsUIDs holds the list of TsUIDs for annotations that should be deleted.
 	// If empty or nil, the global flag is used.
-	Tsuids []string `json:"tsuids,omitempty"`
+	TsUIDs []string `json:"tsuids,omitempty"`
 
 	// StartTime is the Unix epoch timestamp for the start of the deletion request.
 	StartTime int64 `json:"startTime,omitempty"`
@@ -222,18 +216,18 @@ type BulkAnnoDeleteInfo struct {
 
 // BulkDeleteResp contains the results of a bulk annotation delete operation.
 type BulkDeleteResp struct {
-	BulkAnnoDeleteInfo
+	BulkAnnotationDeleteInfo
 }
 
-func (bulkAnnotResp *BulkAnnotatResponse) SetStatus(code int) {
+func (bulkAnnotResp *BulkAnnotationResponse) SetStatus(code int) {
 	setStatus(bulkAnnotResp.ctx, bulkAnnotResp, code, "SetStatus-BulkAnnotation", bulkAnnotResp.logger)
 }
 
-func (bulkAnnotResp *BulkAnnotatResponse) setStatusCode(code int) {
+func (bulkAnnotResp *BulkAnnotationResponse) setStatusCode(code int) {
 	bulkAnnotResp.StatusCode = code
 }
 
-func (bulkAnnotResp *BulkAnnotatResponse) GetCustomParser() func(respCnt []byte) error {
+func (bulkAnnotResp *BulkAnnotationResponse) GetCustomParser() func(respCnt []byte) error {
 	return getCustomParser(bulkAnnotResp.ctx, bulkAnnotResp, "GetCustomParser-BulkAnnotation", bulkAnnotResp.logger,
 		func(resp []byte) error {
 			originContents := string(resp)
@@ -243,7 +237,7 @@ func (bulkAnnotResp *BulkAnnotatResponse) GetCustomParser() func(respCnt []byte)
 			if strings.Contains(originContents, "error") || strings.Contains(originContents, "totalDeleted") {
 				resultBytes = resp
 			} else if strings.Contains(originContents, "startTime") {
-				resultBytes = []byte(fmt.Sprintf("{%s:%s}", `"InvolvedAnnotations"`, originContents))
+				resultBytes = []byte(fmt.Sprintf(`{"InvolvedAnnotations":%s}`, originContents))
 			} else {
 				return fmt.Errorf("unrecognized bulk annotation response: %s", originContents)
 			}
@@ -252,11 +246,11 @@ func (bulkAnnotResp *BulkAnnotatResponse) GetCustomParser() func(respCnt []byte)
 		})
 }
 
-func (bulkAnnotResp *BulkAnnotatResponse) String() string {
+func (bulkAnnotResp *BulkAnnotationResponse) String() string {
 	return toString(bulkAnnotResp.ctx, bulkAnnotResp, "ToString-BulkAnnotation", bulkAnnotResp.logger)
 }
 
-func (c *OpentsdbClient) BulkUpdateAnnotations(annotations []Annotation) (*BulkAnnotatResponse, error) {
+func (c *Client) BulkUpdateAnnotations(annotations []Annotation) (*BulkAnnotationResponse, error) {
 	span := c.addTrace(c.ctx, "BulkUpdateAnnotations")
 
 	status := StatusFailed
@@ -278,8 +272,8 @@ func (c *OpentsdbClient) BulkUpdateAnnotations(annotations []Annotation) (*BulkA
 		return nil, errors.New(message)
 	}
 
-	bulkAnnoResp := BulkAnnotatResponse{logger: c.logger, tracer: c.tracer, ctx: c.ctx}
-	if err = c.sendRequest(PostMethod, bulkAnnoEndpoint, reqBodyCnt, &bulkAnnoResp); err != nil {
+	bulkAnnoResp := BulkAnnotationResponse{logger: c.logger, tracer: c.tracer, ctx: c.ctx}
+	if err = c.sendRequest(http.MethodPost, bulkAnnoEndpoint, reqBodyCnt, &bulkAnnoResp); err != nil {
 		message = fmt.Sprintf("error while processing update bulk annotations request to url %q: %s", bulkAnnoEndpoint, err)
 		return nil, err
 	}
@@ -292,7 +286,7 @@ func (c *OpentsdbClient) BulkUpdateAnnotations(annotations []Annotation) (*BulkA
 	return &bulkAnnoResp, nil
 }
 
-func (c *OpentsdbClient) BulkDeleteAnnotations(bulkDelParam *BulkAnnoDeleteInfo) (*BulkAnnotatResponse, error) {
+func (c *Client) BulkDeleteAnnotations(bulkDelParam *BulkAnnotationDeleteInfo) (*BulkAnnotationResponse, error) {
 	span := c.addTrace(c.ctx, "BulkUpdateAnnotation")
 
 	status := StatusFailed
@@ -309,8 +303,8 @@ func (c *OpentsdbClient) BulkDeleteAnnotations(bulkDelParam *BulkAnnoDeleteInfo)
 		return nil, errors.New(message)
 	}
 
-	bulkAnnoResp := BulkAnnotatResponse{logger: c.logger, tracer: c.tracer, ctx: c.ctx}
-	if err = c.sendRequest(DeleteMethod, bulkAnnoEndpoint, string(resultBytes), &bulkAnnoResp); err != nil {
+	bulkAnnoResp := BulkAnnotationResponse{logger: c.logger, tracer: c.tracer, ctx: c.ctx}
+	if err = c.sendRequest(http.MethodDelete, bulkAnnoEndpoint, string(resultBytes), &bulkAnnoResp); err != nil {
 		message = fmt.Sprintf("Bulk annotation delete request failed at url %q: %v", bulkAnnoEndpoint, err)
 		return nil, err
 	}

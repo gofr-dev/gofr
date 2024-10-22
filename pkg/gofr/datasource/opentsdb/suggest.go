@@ -14,7 +14,7 @@ import (
 // SuggestParam is the structure used to hold
 // the querying parameters when calling /api/suggest.
 // Each attributes in SuggestParam matches the definition in
-// (http://opentsdb.net/docs/build/html/api_http/suggest.html).
+// [OpenTSDB Official Docs]: http://opentsdb.net/docs/build/html/api_http/suggest.html.
 type SuggestParam struct {
 	// The type of data to auto complete on.
 	// Must be one of the following: metrics, tagk or tagv.
@@ -70,7 +70,7 @@ func (sugResp *SuggestResponse) String() string {
 	return toString(sugResp.ctx, sugResp, "ToString-VersionResp", sugResp.logger)
 }
 
-func (c *OpentsdbClient) Suggest(sugParam *SuggestParam) (*SuggestResponse, error) {
+func (c *Client) Suggest(sugParam *SuggestParam) (*SuggestResponse, error) {
 	if sugParam.logger == nil {
 		sugParam.logger = c.logger
 	}

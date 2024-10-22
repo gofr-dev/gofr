@@ -12,12 +12,12 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-type GenericResponse interface {
+type genericResponse interface {
 	addTrace(ctx context.Context, operation string) trace.Span
 	setStatusCode(code int)
 }
 
-func toString(ctx context.Context, resp GenericResponse, operation string, logger Logger) string {
+func toString(ctx context.Context, resp genericResponse, operation string, logger Logger) string {
 	span := resp.addTrace(ctx, operation)
 
 	status := StatusFailed
@@ -44,7 +44,7 @@ func toString(ctx context.Context, resp GenericResponse, operation string, logge
 	return buffer.String()
 }
 
-func setStatus(ctx context.Context, resp GenericResponse, code int, operation string, logger Logger) {
+func setStatus(ctx context.Context, resp genericResponse, code int, operation string, logger Logger) {
 	span := resp.addTrace(ctx, operation)
 
 	status := StatusSuccess
@@ -57,7 +57,7 @@ func setStatus(ctx context.Context, resp GenericResponse, code int, operation st
 	resp.setStatusCode(code)
 }
 
-func getCustomParser(ctx context.Context, resp GenericResponse, operation string, logger Logger,
+func getCustomParser(ctx context.Context, resp genericResponse, operation string, logger Logger,
 	unmarshalFunc func([]byte) error) func([]byte) error {
 	span := resp.addTrace(ctx, operation)
 
@@ -83,7 +83,7 @@ func getCustomParser(ctx context.Context, resp GenericResponse, operation string
 	}
 }
 
-func getQueryParser(ctx context.Context, statusCode int, logger Logger, obj GenericResponse, methodName string) func(respCnt []byte) error {
+func getQueryParser(ctx context.Context, statusCode int, logger Logger, obj genericResponse, methodName string) func(respCnt []byte) error {
 	return getCustomParser(ctx, obj, methodName, logger, func(resp []byte) error {
 		originRespStr := string(resp)
 

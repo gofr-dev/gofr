@@ -66,19 +66,19 @@ const (
 
 var dialTimeout = net.DialTimeout
 
-// OpentsdbClient is the implementation of the OpentsDBClient interface,
+// Client is the implementation of the OpentsDBClient interface,
 // which includes context-aware functionality.
-type OpentsdbClient struct {
+type Client struct {
 	tsdbEndpoint string
 	client       HTTPClient
 	ctx          context.Context
-	opentsdbCfg  OpenTSDBConfig
+	opentsdbCfg  Config
 	logger       Logger
 	metrics      Metrics
 	tracer       trace.Tracer
 }
 
-type OpenTSDBConfig struct {
+type Config struct {
 
 	// The host of the target opentsdb, is a required non-empty string which is
 	// in the format of ip:port without http:// prefix or a domain.
@@ -109,23 +109,23 @@ type OpenTSDBConfig struct {
 }
 
 // New initializes a new instance of Opentsdb with provided configuration.
-func New(config *OpenTSDBConfig) *OpentsdbClient {
-	return &OpentsdbClient{opentsdbCfg: *config}
+func New(config *Config) *Client {
+	return &Client{opentsdbCfg: *config}
 }
 
-func (c *OpentsdbClient) UseLogger(logger interface{}) {
+func (c *Client) UseLogger(logger interface{}) {
 	if l, ok := logger.(Logger); ok {
 		c.logger = l
 	}
 }
 
-func (c *OpentsdbClient) UseMetrics(metrics interface{}) {
+func (c *Client) UseMetrics(metrics interface{}) {
 	if m, ok := metrics.(Metrics); ok {
 		c.metrics = m
 	}
 }
 
-func (c *OpentsdbClient) UseTracer(tracer any) {
+func (c *Client) UseTracer(tracer any) {
 	if tracer, ok := tracer.(trace.Tracer); ok {
 		c.tracer = tracer
 	}
@@ -143,7 +143,7 @@ var DefaultTransport = &http.Transport{
 
 // Connect initializes an HTTP client for OpenTSDB using the provided configuration.
 // If the configuration is invalid or the endpoint is unreachable, an error is logged.
-func (c *OpentsdbClient) Connect() {
+func (c *Client) Connect() {
 	if c.ctx == nil {
 		c.ctx = context.Background()
 	}
@@ -194,8 +194,8 @@ func (c *OpentsdbClient) Connect() {
 }
 
 // WithContext creates a new OpenTSDB client that operates with the provided context.
-func (c *OpentsdbClient) WithContext(ctx context.Context) *OpentsdbClient {
-	return &OpentsdbClient{
+func (c *Client) WithContext(ctx context.Context) *Client {
+	return &Client{
 		tsdbEndpoint: c.tsdbEndpoint,
 		client:       c.client,
 		ctx:          ctx,
@@ -208,7 +208,7 @@ type Health struct {
 	Details map[string]interface{} `json:"details,omitempty"`
 }
 
-func (c *OpentsdbClient) HealthCheck(_ context.Context) (any, error) {
+func (c *Client) HealthCheck(_ context.Context) (any, error) {
 	span := c.addTrace(c.ctx, "HealthCheck")
 
 	status := StatusFailed
@@ -252,7 +252,7 @@ func (c *OpentsdbClient) HealthCheck(_ context.Context) (any, error) {
 
 // sendRequest dispatches an HTTP request to the OpenTSDB server, using the provided
 // method, URL, and body content. It returns the parsed response or an error, if any.
-func (c *OpentsdbClient) sendRequest(method, url, reqBodyCnt string, parsedResp Response) error {
+func (c *Client) sendRequest(method, url, reqBodyCnt string, parsedResp Response) error {
 	span := c.addTrace(c.ctx, "sendRequest")
 
 	status := StatusFailed
@@ -328,7 +328,7 @@ func (c *OpentsdbClient) sendRequest(method, url, reqBodyCnt string, parsedResp 
 
 // isValidOperateMethod checks if the provided HTTP method is valid for
 // operations such as POST, PUT, or DELETE.
-func (c *OpentsdbClient) isValidOperateMethod(method string) bool {
+func (c *Client) isValidOperateMethod(method string) bool {
 	span := c.addTrace(c.ctx, "isValidOperateMethod")
 
 	status := StatusSuccess

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"time"
 
 	"go.opentelemetry.io/otel/trace"
@@ -11,7 +12,7 @@ import (
 
 // AggregatorsResponse acts as the implementation of Response in the /api/aggregators.
 // It holds the status code and the response values defined in the
-// (http://opentsdb.net/docs/build/html/api_http/aggregators.html).
+// [OpenTSDB Official Docs]: http://opentsdb.net/docs/build/html/api_http/aggregators.html.
 type AggregatorsResponse struct {
 	StatusCode  int
 	Aggregators []string `json:"aggregators"`
@@ -31,7 +32,7 @@ func (aggreResp *AggregatorsResponse) setStatusCode(code int) {
 func (aggreResp *AggregatorsResponse) GetCustomParser() func(respCnt []byte) error {
 	return getCustomParser(aggreResp.ctx, aggreResp, "GetCustomParser-Aggregator", aggreResp.logger,
 		func(resp []byte) error {
-			return json.Unmarshal([]byte(fmt.Sprintf("{%s:%s}", `"aggregators"`, string(resp))), &aggreResp)
+			return json.Unmarshal([]byte(fmt.Sprintf(`{"aggregators":%s}`, string(resp))), &aggreResp)
 		})
 }
 
@@ -39,7 +40,7 @@ func (aggreResp *AggregatorsResponse) String() string {
 	return toString(aggreResp.ctx, aggreResp, "ToString-Aggregators", aggreResp.logger)
 }
 
-func (c *OpentsdbClient) Aggregators() (*AggregatorsResponse, error) {
+func (c *Client) Aggregators() (*AggregatorsResponse, error) {
 	span := c.addTrace(c.ctx, "Aggregators")
 	status := StatusFailed
 
@@ -51,7 +52,7 @@ func (c *OpentsdbClient) Aggregators() (*AggregatorsResponse, error) {
 
 	aggreResp := AggregatorsResponse{logger: c.logger, tracer: c.tracer, ctx: c.ctx}
 
-	if err := c.sendRequest(GetMethod, aggregatorsEndpoint, "", &aggreResp); err != nil {
+	if err := c.sendRequest(http.MethodGet, aggregatorsEndpoint, "", &aggreResp); err != nil {
 		message = fmt.Sprintf("error retrieving aggregators from url: %s", aggregatorsEndpoint)
 		return nil, err
 	}

@@ -15,7 +15,7 @@ import (
 // UIDMetaData is the structure used to hold
 // the parameters when calling (POST,PUT) on /api/uid/uidmeta.
 // Each attributes in UIDMetaData matches the definition in
-// (http://opentsdb.net/docs/build/html/api_http/uid/uidmeta.html).
+// [OpenTSDB Official Docs]: http://opentsdb.net/docs/build/html/api_http/uid/uidmeta.html.
 type UIDMetaData struct {
 	// A required hexadecimal representation of the UID
 	UID string `json:"uid,omitempty"`
@@ -84,7 +84,7 @@ func isValidUIDMetaDataQueryParam(metaQueryParam map[string]string) bool {
 	return false
 }
 
-func (c *OpentsdbClient) QueryUIDMetaData(metaQueryParam map[string]string) (*UIDMetaDataResponse, error) {
+func (c *Client) QueryUIDMetaData(metaQueryParam map[string]string) (*UIDMetaDataResponse, error) {
 	span := c.addTrace(c.ctx, "QueryUIDMetaData")
 
 	status := StatusFailed
@@ -115,15 +115,15 @@ func (c *OpentsdbClient) QueryUIDMetaData(metaQueryParam map[string]string) (*UI
 	return &uidMetaDataResp, nil
 }
 
-func (c *OpentsdbClient) UpdateUIDMetaData(uidMetaData *UIDMetaData) (*UIDMetaDataResponse, error) {
+func (c *Client) UpdateUIDMetaData(uidMetaData *UIDMetaData) (*UIDMetaDataResponse, error) {
 	return c.operateUIDMetaData(uidMetaData, PostMethod, "UpdateUIDMetaData")
 }
 
-func (c *OpentsdbClient) DeleteUIDMetaData(uidMetaData *UIDMetaData) (*UIDMetaDataResponse, error) {
+func (c *Client) DeleteUIDMetaData(uidMetaData *UIDMetaData) (*UIDMetaDataResponse, error) {
 	return c.operateUIDMetaData(uidMetaData, DeleteMethod, "DeleteUIDMetaData")
 }
 
-func (c *OpentsdbClient) operateUIDMetaData(uidMetaData *UIDMetaData, method, operation string) (*UIDMetaDataResponse, error) {
+func (c *Client) operateUIDMetaData(uidMetaData *UIDMetaData, method, operation string) (*UIDMetaDataResponse, error) {
 	span := c.addTrace(c.ctx, operation)
 
 	status := StatusFailed
@@ -184,7 +184,7 @@ func (uidMetaDataResp *UIDMetaDataResponse) String() string {
 // UIDAssignParam is the structure used to hold
 // the parameters when calling POST /api/uid/assign.
 // Each attributes in UIDAssignParam matches the definition in
-// (http://opentsdb.net/docs/build/html/api_http/uid/assign.html).
+// [OpenTSDB Official Docs]: http://opentsdb.net/docs/build/html/api_http/uid/assign.html.
 type UIDAssignParam struct {
 	// An optional list of metric names for assignment
 	Metric []string `json:"metric,omitempty"`
@@ -198,7 +198,7 @@ type UIDAssignParam struct {
 
 // UIDAssignResponse acts as the implementation of Response in the POST /api/uid/assign scene.
 // It holds the status code and the response values defined in the
-// (http://opentsdb.net/docs/build/html/api_http/uid/assign.html).
+// [OpenTSDB Official Docs]: http://opentsdb.net/docs/build/html/api_http/uid/assign.html.
 type UIDAssignResponse struct {
 	StatusCode   int
 	Metric       map[string]string `json:"metric"`
@@ -212,7 +212,7 @@ type UIDAssignResponse struct {
 	ctx          context.Context
 }
 
-func (c *OpentsdbClient) AssignUID(assignParam *UIDAssignParam) (*UIDAssignResponse, error) {
+func (c *Client) AssignUID(assignParam *UIDAssignParam) (*UIDAssignResponse, error) {
 	span := c.addTrace(c.ctx, "AssignUID")
 
 	status := StatusFailed
@@ -261,10 +261,10 @@ func (uidAssignResp *UIDAssignResponse) String() string {
 // TSMetaData is the structure used to hold
 // the parameters when calling (POST,PUT,DELETE) /api/uid/tsmeta.
 // Each attributes in TSMetaData matches the definition in
-// (http://opentsdb.net/docs/build/html/api_http/uid/tsmeta.html).
+// [OpenTSDB Official Docs]: http://opentsdb.net/docs/build/html/api_http/uid/tsmeta.html.
 type TSMetaData struct {
 	// A required hexadecimal representation of the timeseries UID
-	Tsuid string `json:"tsuid,omitempty"`
+	TsUID string `json:"tsuid,omitempty"`
 
 	// An optional brief description of what the UID represents
 	Description string `json:"description,omitempty"`
@@ -282,7 +282,7 @@ type TSMetaData struct {
 	Units string `json:"units,omitempty"`
 
 	// The kind of data stored in the timeseries such as counter, gauge, absolute, etc.
-	// These may be defined later but they should be similar to Data Source Types in an RRD.
+	// These may be defined later, but they should be similar to Data Source Types in an RRD.
 	// Its value is optional
 	DataType string `json:"dataType,omitempty"`
 
@@ -314,7 +314,7 @@ type TSMetaDataResponse struct {
 	ctx             context.Context
 }
 
-func (c *OpentsdbClient) QueryTSMetaData(tsuid string) (*TSMetaDataResponse, error) {
+func (c *Client) QueryTSMetaData(tsuid string) (*TSMetaDataResponse, error) {
 	span := c.addTrace(c.ctx, "QueryTSMetaData")
 
 	status := StatusFailed
@@ -333,8 +333,8 @@ func (c *OpentsdbClient) QueryTSMetaData(tsuid string) (*TSMetaDataResponse, err
 	queryTSMetaEndpoint := fmt.Sprintf("%s%s?tsuid=%s", c.tsdbEndpoint, TSMetaDataPath, tsuid)
 	tsMetaDataResp := TSMetaDataResponse{logger: c.logger, tracer: c.tracer, ctx: c.ctx}
 
-	if err := c.sendRequest(GetMethod, queryTSMetaEndpoint, "", &tsMetaDataResp); err != nil {
-		message = fmt.Sprintf("error processing %v request to url %q: %v", GetMethod, queryTSMetaEndpoint, err)
+	if err := c.sendRequest(http.MethodGet, queryTSMetaEndpoint, "", &tsMetaDataResp); err != nil {
+		message = fmt.Sprintf("error processing %v request to url %q: %v", http.MethodGet, queryTSMetaEndpoint, err)
 		return nil, err
 	}
 
@@ -344,15 +344,15 @@ func (c *OpentsdbClient) QueryTSMetaData(tsuid string) (*TSMetaDataResponse, err
 	return &tsMetaDataResp, nil
 }
 
-func (c *OpentsdbClient) UpdateTSMetaData(tsMetaData *TSMetaData) (*TSMetaDataResponse, error) {
+func (c *Client) UpdateTSMetaData(tsMetaData *TSMetaData) (*TSMetaDataResponse, error) {
 	return c.operateTSMetaData(tsMetaData, PostMethod, "UpdateTSMetaData")
 }
 
-func (c *OpentsdbClient) DeleteTSMetaData(tsMetaData *TSMetaData) (*TSMetaDataResponse, error) {
+func (c *Client) DeleteTSMetaData(tsMetaData *TSMetaData) (*TSMetaDataResponse, error) {
 	return c.operateTSMetaData(tsMetaData, DeleteMethod, "DeleteTSMetaData")
 }
 
-func (c *OpentsdbClient) operateTSMetaData(tsMetaData *TSMetaData, method, operation string) (*TSMetaDataResponse, error) {
+func (c *Client) operateTSMetaData(tsMetaData *TSMetaData, method, operation string) (*TSMetaDataResponse, error) {
 	span := c.addTrace(c.ctx, operation)
 
 	status := StatusFailed

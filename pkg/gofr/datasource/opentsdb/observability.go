@@ -53,10 +53,10 @@ func sendOperationStats(logger Logger, start time.Time, operation string, status
 
 func addTracer(ctx context.Context, tracer trace.Tracer, operation, typeName string) trace.Span {
 	if tracer != nil {
-		_, span := tracer.Start(ctx, fmt.Sprintf("opentsdb-%v", operation))
+		_, span := tracer.Start(ctx, fmt.Sprintf("opentsdb-%s", operation))
 
 		span.SetAttributes(
-			attribute.String(fmt.Sprintf("opentsdb-%v.operation", typeName), operation),
+			attribute.String(fmt.Sprintf("opentsdb-%s.operation", typeName), operation),
 		)
 
 		return span
@@ -65,7 +65,7 @@ func addTracer(ctx context.Context, tracer trace.Tracer, operation, typeName str
 	return nil
 }
 
-func (c *OpentsdbClient) addTrace(ctx context.Context, operation string) trace.Span {
+func (c *Client) addTrace(ctx context.Context, operation string) trace.Span {
 	return addTracer(ctx, c.tracer, operation, "Client")
 }
 
@@ -77,7 +77,7 @@ func (annotResp *AnnotationResponse) addTrace(ctx context.Context, operation str
 	return addTracer(ctx, annotResp.tracer, operation, "AnnotationRes")
 }
 
-func (bulkAnnotResp *BulkAnnotatResponse) addTrace(ctx context.Context, operation string) trace.Span {
+func (bulkAnnotResp *BulkAnnotationResponse) addTrace(ctx context.Context, operation string) trace.Span {
 	return addTracer(ctx, bulkAnnotResp.tracer, operation, "BulkAnnotatResponse")
 }
 
@@ -85,7 +85,7 @@ func (queryResp *QueryResponse) addTrace(ctx context.Context, operation string) 
 	return addTracer(ctx, queryResp.tracer, operation, "QueryResponse")
 }
 
-func (dropResp *DropcachesResponse) addTrace(ctx context.Context, operation string) trace.Span {
+func (dropResp *DropCachesResponse) addTrace(ctx context.Context, operation string) trace.Span {
 	return addTracer(ctx, dropResp.tracer, operation, "DropcacheResponse")
 }
 
