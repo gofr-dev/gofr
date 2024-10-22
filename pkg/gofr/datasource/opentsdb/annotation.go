@@ -22,8 +22,8 @@ type Annotation struct {
 	// EndTime is the optional Unix epoch timestamp (in seconds) for when the event ended, if applicable.
 	EndTime int64 `json:"endTime,omitempty"`
 
-	// TsUID is the optional time series identifier if the annotation is linked to a specific time series.
-	TsUID string `json:"tsuid,omitempty"`
+	// TSUID is the optional time series identifier if the annotation is linked to a specific time series.
+	TSUID string `json:"tsuid,omitempty"`
 
 	// Description is a brief, optional summary of the event (recommended to keep under 25 characters for display purposes).
 	Description string `json:"description,omitempty"`
@@ -177,9 +177,9 @@ type BulkAnnotationResponse struct {
 	// ErrorInfo contains details about any errors that occurred during the bulk operation.
 	ErrorInfo map[string]interface{} `json:"error,omitempty"`
 
-	// TsUIDs holds the list of TsUIDs for annotations that should be deleted.
+	// TSUIDs holds the list of TsUIDs for annotations that should be deleted.
 	// If empty or nil, the global flag is used.
-	TsUIDs []string `json:"tsuids,omitempty"`
+	TSUIDs []string `json:"tsuids,omitempty"`
 
 	// StartTime is the Unix epoch timestamp for the start of the deletion request.
 	StartTime int64 `json:"startTime,omitempty"`
@@ -200,9 +200,9 @@ type BulkAnnotationResponse struct {
 
 // BulkAnnotationDeleteInfo holds the parameters for a bulk annotation delete operation.
 type BulkAnnotationDeleteInfo struct {
-	// TsUIDs holds the list of TsUIDs for annotations that should be deleted.
+	// TsUIDs holds the list of TSUIDs for annotations that should be deleted.
 	// If empty or nil, the global flag is used.
-	TsUIDs []string `json:"tsuids,omitempty"`
+	TSUIDs []string `json:"tsuids,omitempty"`
 
 	// StartTime is the Unix epoch timestamp for the start of the deletion request.
 	StartTime int64 `json:"startTime,omitempty"`
@@ -231,12 +231,13 @@ func (bulkAnnotResp *BulkAnnotationResponse) GetCustomParser() func(respCnt []by
 	return getCustomParser(bulkAnnotResp.ctx, bulkAnnotResp, "GetCustomParser-BulkAnnotation", bulkAnnotResp.logger,
 		func(resp []byte) error {
 			originContents := string(resp)
+			tag := strings.Split(originContents, " ")[0]
 
 			var resultBytes []byte
 
-			if strings.Contains(originContents, "error") || strings.Contains(originContents, "totalDeleted") {
+			if strings.Contains(tag, "error") || strings.Contains(tag, "totalDeleted") {
 				resultBytes = resp
-			} else if strings.Contains(originContents, "startTime") {
+			} else if strings.Contains(tag, "tsuid") {
 				resultBytes = []byte(fmt.Sprintf(`{"InvolvedAnnotations":%s}`, originContents))
 			} else {
 				return fmt.Errorf("unrecognized bulk annotation response: %s", originContents)

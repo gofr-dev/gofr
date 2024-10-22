@@ -502,7 +502,7 @@ func TestUpdateAnnotationSuccess(t *testing.T) {
 	addedTsuid := "000001000001000002"
 	anno := Annotation{
 		StartTime:   addedST,
-		TsUID:       addedTsuid,
+		TSUID:       addedTsuid,
 		Description: "gofrf test annotation",
 		Notes:       "These would be details about the event, the description is just a summary",
 		Custom:      custom,
@@ -525,7 +525,7 @@ func TestUpdateAnnotationSuccess(t *testing.T) {
 	require.NotNil(t, queryAnnoResp)
 	require.Equal(t, 200, queryAnnoResp.StatusCode)
 
-	require.Equal(t, anno.TsUID, queryAnnoResp.TsUID)
+	require.Equal(t, anno.TSUID, queryAnnoResp.TSUID)
 	require.Equal(t, anno.StartTime, queryAnnoResp.StartTime)
 	require.Equal(t, anno.Description, queryAnnoResp.Description)
 	require.Equal(t, anno.Notes, queryAnnoResp.Notes)
@@ -543,7 +543,7 @@ func TestQueryAnnotationSuccess(t *testing.T) {
 	addedTsuid := "000001000001000002"
 	anno := Annotation{
 		StartTime:   addedST,
-		TsUID:       addedTsuid,
+		TSUID:       addedTsuid,
 		Description: "gofr test annotation",
 		Notes:       "These would be details about the event, the description is just a summary",
 		Custom:      custom,
@@ -589,7 +589,7 @@ func TestDeleteAnnotationSuccess(t *testing.T) {
 	addedTsuid := "000001000001000002"
 	anno := Annotation{
 		StartTime:   addedST,
-		TsUID:       addedTsuid,
+		TSUID:       addedTsuid,
 		Description: "gofr-host test annotation",
 		Notes:       "These would be details about the event, the description is just a summary",
 		Custom:      custom,
@@ -626,7 +626,7 @@ func TestDeleteAnnotationSuccess(t *testing.T) {
 	require.NotNil(t, deleteResp)
 	require.Equal(t, 204, deleteResp.StatusCode)
 
-	require.Empty(t, deleteResp.TsUID)
+	require.Empty(t, deleteResp.TSUID)
 	require.Empty(t, deleteResp.StartTime)
 	require.Empty(t, deleteResp.Description)
 }
@@ -648,7 +648,7 @@ func TestBulkUpdateAnnotationsSuccess(t *testing.T) {
 
 		anno := Annotation{
 			StartTime:   addedST,
-			TsUID:       addedTsuid,
+			TSUID:       addedTsuid,
 			Description: "gofr test annotation",
 			Notes:       "These would be details about the event, the description is just a summary",
 		}
@@ -713,7 +713,7 @@ func TestBulkDeleteAnnotationsSuccess(t *testing.T) {
 
 		anno := Annotation{
 			StartTime:   bulkAddBeginST,
-			TsUID:       addedTsuid,
+			TSUID:       addedTsuid,
 			Description: "gofr test annotation",
 			Notes:       "These would be details about the event, the description is just a summary",
 		}
@@ -753,7 +753,7 @@ func TestBulkDeleteAnnotationsSuccess(t *testing.T) {
 
 	bulkAnnoDelete := BulkAnnotationDeleteInfo{
 		StartTime: bulkAddBeginST,
-		TsUIDs:    addedTsuids,
+		TSUIDs:    addedTsuids,
 		Global:    false,
 	}
 
@@ -780,7 +780,7 @@ func TestBulkDeleteAnnotationsSuccess(t *testing.T) {
 	require.Equal(t, 200, resp.StatusCode)
 
 	require.Equal(t, int64(3), resp.TotalDeleted)
-	require.ElementsMatch(t, addedTsuids, resp.TsUIDs)
+	require.ElementsMatch(t, addedTsuids, resp.TSUIDs)
 	require.False(t, resp.Global)
 }
 
@@ -912,7 +912,7 @@ func TestUpdateTSMetaData(t *testing.T) {
 	custom["department"] = "framework"
 
 	tsMetaData := TSMetaData{
-		TsUID:       "00002A000001000001",
+		TSUID:       "00002A000001000001",
 		Description: "This timeseries represents the system CPU time for webserver 01.",
 		DisplayName: "Webserver 01 CPU Time",
 		Notes:       "Monitored for performance analysis and resource allocation.",
@@ -964,7 +964,7 @@ func TestDeleteTSMetaData(t *testing.T) {
 	client, mockHTTP := setOpenTSDBTest(t)
 
 	tsMetaData := TSMetaData{
-		TsUID: "000001000001000001",
+		TSUID: "000001000001000001",
 	}
 
 	mockHTTP.EXPECT().

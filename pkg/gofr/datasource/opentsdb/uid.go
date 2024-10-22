@@ -264,7 +264,7 @@ func (uidAssignResp *UIDAssignResponse) String() string {
 // [OpenTSDB Official Docs]: http://opentsdb.net/docs/build/html/api_http/uid/tsmeta.html.
 type TSMetaData struct {
 	// A required hexadecimal representation of the timeseries UID
-	TsUID string `json:"tsuid,omitempty"`
+	TSUID string `json:"tsuid,omitempty"`
 
 	// An optional brief description of what the UID represents
 	Description string `json:"description,omitempty"`

@@ -13,7 +13,8 @@ import (
 )
 
 // QueryParam is the structure used to hold the querying parameters when calling /api/query.
-// Each attributes in QueryParam matches the definition in [OpenTSDB Official Docs]: http://opentsdb.net/docs/build/html/api_http/query/index.html.
+// Each attributes in QueryParam matches the definition in
+// [OpenTSDB Official Docs]: http://opentsdb.net/docs/build/html/api_http/query/index.html.
 type QueryParam struct {
 	// The start time for the query. This can be a relative or absolute timestamp.
 	// The data type can only be string, int, or int64.
@@ -67,7 +68,8 @@ func (*QueryParam) setStatusCode(int) {
 }
 
 // SubQuery is the structure used to hold the subquery parameters when calling /api/query.
-// Each attributes in SubQuery matches the definition in [OpenTSDB Official Docs]: http://opentsdb.net/docs/build/html/api_http/query/index.html.
+// Each attributes in SubQuery matches the definition in
+// [OpenTSDB Official Docs]: http://opentsdb.net/docs/build/html/api_http/query/index.html.
 type SubQuery struct {
 	// The name of an aggregation function to use.
 	// The value is required with non-empty one in the range of

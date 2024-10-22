@@ -102,7 +102,7 @@ type QueryRespLastItem struct {
 	Value string `json:"value"`
 
 	// The hexadecimal TSUID for the time series
-	TsUID string `json:"tsuid"`
+	TSUID string `json:"tsuid"`
 }
 
 func (c *Client) QueryLast(param *QueryLastParam) (*QueryLastResponse, error) {
