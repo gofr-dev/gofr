@@ -20,7 +20,7 @@ type Mocks struct {
 	Redis       *MockRedis
 	SQL         *mockSQL
 	Clickhouse  *MockClickhouse
-	Cassandra   *MockCassandra
+	Cassandra   *MockCassandraWithContext
 	Mongo       *MockMongo
 	KVStore     *MockKVStore
 	DGraph      *MockDgraph
@@ -66,7 +66,7 @@ func NewMockContainer(t *testing.T, options ...options) (*Container, *Mocks) {
 	redisMock := NewMockRedis(ctrl)
 	container.Redis = redisMock
 
-	cassandraMock := NewMockCassandra(ctrl)
+	cassandraMock := NewMockCassandraWithContext(ctrl)
 	container.Cassandra = cassandraMock
 
 	clickhouseMock := NewMockClickhouse(ctrl)
