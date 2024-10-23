@@ -20,7 +20,7 @@ const (
 
 type Config struct {
 	HostName string
-	UserName string
+	Username string
 	Password string
 	Port     int
 	Options  *redis.Options
@@ -77,7 +77,7 @@ func getRedisConfig(c config.Config) *Config {
 
 	redisConfig.HostName = c.Get("REDIS_HOST")
 
-	redisConfig.UserName = c.Get("REDIS_USER")
+	redisConfig.Username = c.Get("REDIS_USER")
 
 	redisConfig.Password = c.Get("REDIS_PASSWORD")
 
@@ -95,7 +95,7 @@ func getRedisConfig(c config.Config) *Config {
 	}
 
 	if options.Username == "" {
-		options.Username = redisConfig.UserName
+		options.Username = redisConfig.Username
 	}
 
 	if options.Password == "" {
