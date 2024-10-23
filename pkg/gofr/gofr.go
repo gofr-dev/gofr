@@ -88,6 +88,17 @@ func New() *App {
 	app.httpServer.certFile = app.Config.GetOrDefault("CERT_FILE", "")
 	app.httpServer.keyFile = app.Config.GetOrDefault("KEY_FILE", "")
 
+	// Add Default routes
+	app.add(http.MethodGet, "/.well-known/health", healthHandler)
+	app.add(http.MethodGet, "/.well-known/alive", liveHandler)
+	app.add(http.MethodGet, "/favicon.ico", faviconHandler)
+
+	if _, err := os.Stat("./static/openapi.json"); err == nil {
+		app.add(http.MethodGet, "/.well-known/openapi.json", OpenAPIHandler)
+		app.add(http.MethodGet, "/.well-known/swagger", SwaggerUIHandler)
+		app.add(http.MethodGet, "/.well-known/{name}", SwaggerUIHandler)
+	}
+
 	if app.Config.Get("APP_ENV") == "DEBUG" {
 		app.httpServer.RegisterProfilingRoutes()
 	}
@@ -226,17 +237,6 @@ func (a *App) Shutdown(ctx context.Context) error {
 }
 
 func (a *App) httpServerSetup() {
-	// Add Default routes
-	a.add(http.MethodGet, "/.well-known/health", healthHandler)
-	a.add(http.MethodGet, "/.well-known/alive", liveHandler)
-	a.add(http.MethodGet, "/favicon.ico", faviconHandler)
-
-	if _, err := os.Stat("./static/openapi.json"); err == nil {
-		a.add(http.MethodGet, "/.well-known/openapi.json", OpenAPIHandler)
-		a.add(http.MethodGet, "/.well-known/swagger", SwaggerUIHandler)
-		a.add(http.MethodGet, "/.well-known/{name}", SwaggerUIHandler)
-	}
-
 	// TODO: find a way to read REQUEST_TIMEOUT config only once and log it there. currently doing it twice one for populating
 	// the value and other for logging
 	requestTimeout := a.Config.Get("REQUEST_TIMEOUT")
