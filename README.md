@@ -12,6 +12,7 @@ GoFr is an opinionated microservice development framework.</b></p>
 <a href="https://goreportcard.com/report/gofr.dev"><img src="https://goreportcard.com/badge/gofr.dev"></a>
 <a href="https://opensource.org/licenses/Apache-2.0"><img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg"></a>
 <a href="https://discord.gg/wsaSkQTdgq"><img src="https://img.shields.io/badge/discord-join-7289DA.svg?logo=discord&longCache=true&style=flat" /></a>
+<a href="https://gurubase.io/g/gofr"><img src="https://img.shields.io/badge/Gurubase-Ask%20GoFr%20Guru-006BFF" /></a>
 </div>
 
 Listed in [CNCF Landscape](https://landscape.cncf.io/?selected=go-fr).
