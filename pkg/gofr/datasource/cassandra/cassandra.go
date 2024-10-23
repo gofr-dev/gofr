@@ -124,7 +124,7 @@ func (c *Client) NewBatch(name string, batchType int) error {
 func (c *Client) QueryWithCtx(ctx context.Context, dest any, stmt string, values ...any) error {
 	_, span := c.addTrace(ctx, "query", stmt)
 
-	defer c.sendOperationStats(&QueryLog{Query: stmt, Keyspace: c.config.Keyspace}, time.Now(), "query", span)
+	defer c.sendOperationStats(&QueryLog{Operation: "QueryWithCtx", Query: stmt, Keyspace: c.config.Keyspace}, time.Now(), "query", span)
 
 	rvo := reflect.ValueOf(dest)
 	if rvo.Kind() != reflect.Ptr {
@@ -173,7 +173,7 @@ func (c *Client) QueryWithCtx(ctx context.Context, dest any, stmt string, values
 func (c *Client) ExecWithCtx(ctx context.Context, stmt string, values ...any) error {
 	_, span := c.addTrace(ctx, "exec", stmt)
 
-	defer c.sendOperationStats(&QueryLog{Query: stmt, Keyspace: c.config.Keyspace}, time.Now(), "exec", span)
+	defer c.sendOperationStats(&QueryLog{Operation: "ExecWithCtx", Query: stmt, Keyspace: c.config.Keyspace}, time.Now(), "exec", span)
 
 	return c.cassandra.session.query(stmt, values...).exec()
 }
@@ -187,7 +187,7 @@ func (c *Client) ExecCASWithCtx(ctx context.Context, dest any, stmt string, valu
 
 	_, span := c.addTrace(ctx, "exec-cas", stmt)
 
-	defer c.sendOperationStats(&QueryLog{Query: stmt, Keyspace: c.config.Keyspace}, time.Now(), "exec-cas", span)
+	defer c.sendOperationStats(&QueryLog{Operation: "ExecCASWithCtx", Query: stmt, Keyspace: c.config.Keyspace}, time.Now(), "exec-cas", span)
 
 	rvo := reflect.ValueOf(dest)
 	if rvo.Kind() != reflect.Ptr {
