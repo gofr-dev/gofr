@@ -76,7 +76,8 @@ func (staticConfig staticFileConfig) staticHandler(fileServer http.Handler) http
 		fileName := filePath[len(filePath)-1]
 
 		// Prevent direct access to the openapi.json file via static file routes.
-		// The file should only be accessible through the explicitly defined /.well-known/swagger or /.well-known/openapi.json for controlled access.
+		// The file should only be accessible through the explicitly defined /.well-known/swagger or
+		// /.well-known/openapi.json for controlled access.
 		if _, err := os.Stat(filepath.Clean(filepath.Join(staticConfig.directoryName, url))); fileName == defaultSwaggerFileName && err == nil {
 			w.WriteHeader(http.StatusForbidden)
 

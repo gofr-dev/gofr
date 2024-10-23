@@ -93,7 +93,7 @@ func New() *App {
 	app.add(http.MethodGet, "/.well-known/alive", liveHandler)
 	app.add(http.MethodGet, "/favicon.ico", faviconHandler)
 
-	if _, err := os.Stat("./static/openapi.json"); err == nil {
+	if _, err = os.Stat("./static/openapi.json"); err == nil {
 		app.add(http.MethodGet, "/.well-known/openapi.json", OpenAPIHandler)
 		app.add(http.MethodGet, "/.well-known/swagger", SwaggerUIHandler)
 		app.add(http.MethodGet, "/.well-known/{name}", SwaggerUIHandler)
