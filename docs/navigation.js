@@ -31,6 +31,11 @@ export const navigation = [
                 title: 'Adding REST Handlers',
                 href: '/docs/quick-start/add-rest-handlers',
                 desc: "Fastest way to create CRUD APIs by just providing the entity."
+            },
+            {
+                title: 'Zop CLI Tool',
+                href: '/docs/quick-start/zop-cli',
+                desc: "Streamlined solution to deploy gofr applications to cloud platform."
             }
         ],
     },
