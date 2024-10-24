@@ -3,9 +3,11 @@ package badger
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/dgraph-io/badger/v4"
@@ -63,8 +65,10 @@ func (c *client) Connect() {
 	c.db = db
 }
 
-func (c *client) Get(_ context.Context, key string) (string, error) {
-	defer c.sendOperationStats(time.Now(), "GET", key, "")
+func (c *client) Get(ctx context.Context, key string) (string, error) {
+	span := c.addTrace(ctx, "get", key)
+
+	defer c.sendOperationStats(time.Now(), "GET", "get", span, key)
 
 	var value []byte
 
@@ -96,16 +100,20 @@ func (c *client) Get(_ context.Context, key string) (string, error) {
 	return string(value), nil
 }
 
-func (c *client) Set(_ context.Context, key, value string) error {
-	defer c.sendOperationStats(time.Now(), "SET", key, value)
+func (c *client) Set(ctx context.Context, key, value string) error {
+	span := c.addTrace(ctx, "set", key)
+
+	defer c.sendOperationStats(time.Now(), "SET", "set", span, key, value)
 
 	return c.useTransaction(func(txn *badger.Txn) error {
 		return txn.Set([]byte(key), []byte(value))
 	})
 }
 
-func (c *client) Delete(_ context.Context, key string) error {
-	defer c.sendOperationStats(time.Now(), "DELETE", key, "")
+func (c *client) Delete(ctx context.Context, key string) error {
+	span := c.addTrace(ctx, "delete", key)
+
+	defer c.sendOperationStats(time.Now(), "DELETE", "delete", span, key, "")
 
 	return c.useTransaction(func(txn *badger.Txn) error {
 		return txn.Delete([]byte(key))
@@ -133,7 +141,8 @@ func (c *client) useTransaction(f func(txn *badger.Txn) error) error {
 	return nil
 }
 
-func (c *client) sendOperationStats(start time.Time, methodType string, kv ...string) {
+func (c *client) sendOperationStats(start time.Time, methodType string, method string,
+	span trace.Span, kv ...string) {
 	duration := time.Since(start).Milliseconds()
 
 	c.logger.Debug(&Log{
@@ -141,6 +150,11 @@ func (c *client) sendOperationStats(start time.Time, methodType string, kv ...st
 		Duration: duration,
 		Key:      strings.Join(kv, " "),
 	})
+
+	if span != nil {
+		defer span.End()
+		span.SetAttributes(attribute.Int64(fmt.Sprintf("badger.%v.duration", method), duration))
+	}
 
 	c.metrics.RecordHistogram(context.Background(), "app_badger_stats", float64(duration), "database", c.configs.DirPath,
 		"type", methodType)
@@ -168,4 +182,18 @@ func (c *client) HealthCheck(context.Context) (any, error) {
 	h.Status = "UP"
 
 	return &h, nil
+}
+
+func (c *client) addTrace(ctx context.Context, method, key string) trace.Span {
+	if c.tracer != nil {
+		_, span := c.tracer.Start(ctx, fmt.Sprintf("badger-%v", method))
+
+		span.SetAttributes(
+			attribute.String("badger.key", key),
+		)
+
+		return span
+	}
+
+	return nil
 }
