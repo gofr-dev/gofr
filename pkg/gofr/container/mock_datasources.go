@@ -8647,15 +8647,17 @@ func (mr *MockCassandraProviderMockRecorder) BatchQueryWithCtx(ctx, name, stmt a
 }
 
 // Connect mocks base method.
-func (m *MockCassandraProvider) Connect() {
+func (m *MockCassandraProvider) Connect(ctx context.Context) error {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "Connect")
+	ret := m.ctrl.Call(m, "Connect", ctx)
+	ret0, _ := ret[0].(error)
+	return ret0
 }
 
 // Connect indicates an expected call of Connect.
-func (mr *MockCassandraProviderMockRecorder) Connect() *gomock.Call {
+func (mr *MockCassandraProviderMockRecorder) Connect(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Connect", reflect.TypeOf((*MockCassandraProvider)(nil).Connect))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Connect", reflect.TypeOf((*MockCassandraProvider)(nil).Connect), ctx)
 }
 
 // Exec mocks base method.
@@ -9059,15 +9061,17 @@ func (mr *MockClickhouseProviderMockRecorder) AsyncInsert(ctx, query, wait any, 
 }
 
 // Connect mocks base method.
-func (m *MockClickhouseProvider) Connect() {
+func (m *MockClickhouseProvider) Connect(ctx context.Context) error {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "Connect")
+	ret := m.ctrl.Call(m, "Connect", ctx)
+	ret0, _ := ret[0].(error)
+	return ret0
 }
 
 // Connect indicates an expected call of Connect.
-func (mr *MockClickhouseProviderMockRecorder) Connect() *gomock.Call {
+func (mr *MockClickhouseProviderMockRecorder) Connect(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Connect", reflect.TypeOf((*MockClickhouseProvider)(nil).Connect))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Connect", reflect.TypeOf((*MockClickhouseProvider)(nil).Connect), ctx)
 }
 
 // Exec mocks base method.
@@ -9329,18 +9333,18 @@ func (mr *MockMongoMockRecorder) InsertOne(ctx, collection, document any) *gomoc
 }
 
 // StartSession mocks base method.
-func (m *MockMongo) StartSession() (any, error) {
+func (m *MockMongo) StartSession(ctx context.Context) (any, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "StartSession")
+	ret := m.ctrl.Call(m, "StartSession", ctx)
 	ret0, _ := ret[0].(any)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // StartSession indicates an expected call of StartSession.
-func (mr *MockMongoMockRecorder) StartSession() *gomock.Call {
+func (mr *MockMongoMockRecorder) StartSession(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartSession", reflect.TypeOf((*MockMongo)(nil).StartSession))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartSession", reflect.TypeOf((*MockMongo)(nil).StartSession), ctx)
 }
 
 // UpdateByID mocks base method.
@@ -9488,15 +9492,17 @@ func (m *MockMongoProvider) EXPECT() *MockMongoProviderMockRecorder {
 }
 
 // Connect mocks base method.
-func (m *MockMongoProvider) Connect() {
+func (m *MockMongoProvider) Connect(ctx context.Context) error {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "Connect")
+	ret := m.ctrl.Call(m, "Connect", ctx)
+	ret0, _ := ret[0].(error)
+	return ret0
 }
 
 // Connect indicates an expected call of Connect.
-func (mr *MockMongoProviderMockRecorder) Connect() *gomock.Call {
+func (mr *MockMongoProviderMockRecorder) Connect(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Connect", reflect.TypeOf((*MockMongoProvider)(nil).Connect))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Connect", reflect.TypeOf((*MockMongoProvider)(nil).Connect), ctx)
 }
 
 // CountDocuments mocks base method.
@@ -9646,18 +9652,18 @@ func (mr *MockMongoProviderMockRecorder) InsertOne(ctx, collection, document any
 }
 
 // StartSession mocks base method.
-func (m *MockMongoProvider) StartSession() (any, error) {
+func (m *MockMongoProvider) StartSession(ctx context.Context) (any, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "StartSession")
+	ret := m.ctrl.Call(m, "StartSession", ctx)
 	ret0, _ := ret[0].(any)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // StartSession indicates an expected call of StartSession.
-func (mr *MockMongoProviderMockRecorder) StartSession() *gomock.Call {
+func (mr *MockMongoProviderMockRecorder) StartSession(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartSession", reflect.TypeOf((*MockMongoProvider)(nil).StartSession))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartSession", reflect.TypeOf((*MockMongoProvider)(nil).StartSession), ctx)
 }
 
 // UpdateByID mocks base method.
@@ -9764,15 +9770,17 @@ func (m *Mockprovider) EXPECT() *MockproviderMockRecorder {
 }
 
 // Connect mocks base method.
-func (m *Mockprovider) Connect() {
+func (m *Mockprovider) Connect(ctx context.Context) error {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "Connect")
+	ret := m.ctrl.Call(m, "Connect", ctx)
+	ret0, _ := ret[0].(error)
+	return ret0
 }
 
 // Connect indicates an expected call of Connect.
-func (mr *MockproviderMockRecorder) Connect() *gomock.Call {
+func (mr *MockproviderMockRecorder) Connect(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Connect", reflect.TypeOf((*Mockprovider)(nil).Connect))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Connect", reflect.TypeOf((*Mockprovider)(nil).Connect), ctx)
 }
 
 // UseLogger mocks base method.
@@ -9954,15 +9962,17 @@ func (m *MockKVStoreProvider) EXPECT() *MockKVStoreProviderMockRecorder {
 }
 
 // Connect mocks base method.
-func (m *MockKVStoreProvider) Connect() {
+func (m *MockKVStoreProvider) Connect(ctx context.Context) error {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "Connect")
+	ret := m.ctrl.Call(m, "Connect", ctx)
+	ret0, _ := ret[0].(error)
+	return ret0
 }
 
 // Connect indicates an expected call of Connect.
-func (mr *MockKVStoreProviderMockRecorder) Connect() *gomock.Call {
+func (mr *MockKVStoreProviderMockRecorder) Connect(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Connect", reflect.TypeOf((*MockKVStoreProvider)(nil).Connect))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Connect", reflect.TypeOf((*MockKVStoreProvider)(nil).Connect), ctx)
 }
 
 // Delete mocks base method.
@@ -10097,15 +10107,17 @@ func (mr *MockPubSubProviderMockRecorder) Close() *gomock.Call {
 }
 
 // Connect mocks base method.
-func (m *MockPubSubProvider) Connect() {
+func (m *MockPubSubProvider) Connect(ctx context.Context) error {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "Connect")
+	ret := m.ctrl.Call(m, "Connect", ctx)
+	ret0, _ := ret[0].(error)
+	return ret0
 }
 
 // Connect indicates an expected call of Connect.
-func (mr *MockPubSubProviderMockRecorder) Connect() *gomock.Call {
+func (mr *MockPubSubProviderMockRecorder) Connect(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Connect", reflect.TypeOf((*MockPubSubProvider)(nil).Connect))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Connect", reflect.TypeOf((*MockPubSubProvider)(nil).Connect), ctx)
 }
 
 // CreateTopic mocks base method.
@@ -10427,15 +10439,17 @@ func (mr *MockSolrProviderMockRecorder) AddField(ctx, collection, document any) 
 }
 
 // Connect mocks base method.
-func (m *MockSolrProvider) Connect() {
+func (m *MockSolrProvider) Connect(ctx context.Context) error {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "Connect")
+	ret := m.ctrl.Call(m, "Connect", ctx)
+	ret0, _ := ret[0].(error)
+	return ret0
 }
 
 // Connect indicates an expected call of Connect.
-func (mr *MockSolrProviderMockRecorder) Connect() *gomock.Call {
+func (mr *MockSolrProviderMockRecorder) Connect(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Connect", reflect.TypeOf((*MockSolrProvider)(nil).Connect))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Connect", reflect.TypeOf((*MockSolrProvider)(nil).Connect), ctx)
 }
 
 // Create mocks base method.
@@ -10772,15 +10786,17 @@ func (mr *MockDgraphProviderMockRecorder) Alter(ctx, op any) *gomock.Call {
 }
 
 // Connect mocks base method.
-func (m *MockDgraphProvider) Connect() {
+func (m *MockDgraphProvider) Connect(ctx context.Context) error {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "Connect")
+	ret := m.ctrl.Call(m, "Connect", ctx)
+	ret0, _ := ret[0].(error)
+	return ret0
 }
 
 // Connect indicates an expected call of Connect.
-func (mr *MockDgraphProviderMockRecorder) Connect() *gomock.Call {
+func (mr *MockDgraphProviderMockRecorder) Connect(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Connect", reflect.TypeOf((*MockDgraphProvider)(nil).Connect))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Connect", reflect.TypeOf((*MockDgraphProvider)(nil).Connect), ctx)
 }
 
 // HealthCheck mocks base method.
