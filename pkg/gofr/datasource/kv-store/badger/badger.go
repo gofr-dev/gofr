@@ -13,6 +13,8 @@ import (
 	"github.com/dgraph-io/badger/v4"
 )
 
+var errStatusDown = errors.New("status down")
+
 type Configs struct {
 	DirPath string
 }
@@ -92,7 +94,7 @@ func (c *client) Get(ctx context.Context, key string) (string, error) {
 
 	err = txn.Commit()
 	if err != nil {
-		c.logger.Debugf("error while commiting transaction: %v", err)
+		c.logger.Debugf("error while committing transaction: %v", err)
 
 		return "", err
 	}
@@ -133,7 +135,7 @@ func (c *client) useTransaction(f func(txn *badger.Txn) error) error {
 
 	err = txn.Commit()
 	if err != nil {
-		c.logger.Debugf("error while commiting transaction: %v", err)
+		c.logger.Debugf("error while committing transaction: %v", err)
 
 		return err
 	}
@@ -153,7 +155,7 @@ func (c *client) sendOperationStats(start time.Time, methodType string, method s
 
 	if span != nil {
 		defer span.End()
-		span.SetAttributes(attribute.Int64(fmt.Sprintf("badger.%v.duration", method), duration))
+		span.SetAttributes(attribute.Int64(fmt.Sprintf("badger.%v.duration(μs)", method), time.Since(start).Microseconds()))
 	}
 
 	c.metrics.RecordHistogram(context.Background(), "app_badger_stats", float64(duration), "database", c.configs.DirPath,
@@ -176,7 +178,7 @@ func (c *client) HealthCheck(context.Context) (any, error) {
 	if closed {
 		h.Status = "DOWN"
 
-		return &h, errors.New("status down")
+		return &h, errStatusDown
 	}
 
 	h.Status = "UP"
