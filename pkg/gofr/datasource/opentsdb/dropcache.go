@@ -1,0 +1,60 @@
+package opentsdb
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"time"
+
+	"go.opentelemetry.io/otel/trace"
+)
+
+type DropCachesResponse struct {
+	StatusCode     int
+	DropCachesInfo map[string]string `json:"DropcachesInfo"`
+	logger         Logger
+	tracer         trace.Tracer
+	ctx            context.Context
+}
+
+func (dropResp *DropCachesResponse) SetStatus(code int) {
+	setStatus(dropResp.ctx, dropResp, code, "SetStatus-DropCaches", dropResp.logger)
+}
+
+func (dropResp *DropCachesResponse) setStatusCode(code int) {
+	dropResp.StatusCode = code
+}
+
+func (dropResp *DropCachesResponse) GetCustomParser() func(respCnt []byte) error {
+	return getCustomParser(dropResp.ctx, dropResp, "GetCustomParser-DropCaches", dropResp.logger,
+		func(resp []byte) error {
+			return json.Unmarshal([]byte(fmt.Sprintf(`{"DropcachesInfo":%s}`, string(resp))), &dropResp)
+		})
+}
+
+func (dropResp *DropCachesResponse) String() string {
+	return toString(dropResp.ctx, dropResp, "ToString-DropCache", dropResp.logger)
+}
+
+func (c *Client) Dropcaches() (*DropCachesResponse, error) {
+	span := c.addTrace(c.ctx, "DropCaches")
+
+	status := StatusFailed
+
+	var message string
+
+	defer sendOperationStats(c.logger, time.Now(), "DropCaches", &status, &message, span)
+
+	dropEndpoint := fmt.Sprintf("%s%s", c.tsdbEndpoint, DropcachesPath)
+	dropResp := DropCachesResponse{logger: c.logger, tracer: c.tracer, ctx: c.ctx}
+
+	if err := c.sendRequest(GetMethod, dropEndpoint, "", &dropResp); err != nil {
+		message = fmt.Sprintf("error processing drop cache request at url %q: %s", dropEndpoint, err)
+		return nil, err
+	}
+
+	status = StatusSuccess
+	message = fmt.Sprintf("drop cache processed successfully at url %q", dropEndpoint)
+
+	return &dropResp, nil
+}
