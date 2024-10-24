@@ -5,6 +5,7 @@ go 1.22
 require (
 	github.com/dgraph-io/badger/v4 v4.2.0
 	github.com/stretchr/testify v1.9.0
+	go.opentelemetry.io/otel v1.30.0
 	go.opentelemetry.io/otel/trace v1.30.0
 	go.uber.org/mock v0.4.0
 )
@@ -25,7 +26,6 @@ require (
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	go.opencensus.io v0.22.5 // indirect
-	go.opentelemetry.io/otel v1.30.0 // indirect
 	golang.org/x/net v0.23.0 // indirect
 	golang.org/x/sys v0.18.0 // indirect
 	google.golang.org/protobuf v1.33.0 // indirect
