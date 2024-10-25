@@ -1,9 +1,11 @@
 package gofr
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel"
 	"go.uber.org/mock/gomock"
 
@@ -18,13 +20,16 @@ func TestApp_AddKVStore(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
+		ctx := context.Background()
+
 		mock := container.NewMockKVStoreProvider(ctrl)
 
 		mock.EXPECT().UseLogger(app.Logger())
 		mock.EXPECT().UseMetrics(app.Metrics())
-		mock.EXPECT().Connect()
+		mock.EXPECT().Connect(ctx)
 
-		app.AddKVStore(mock)
+		err := app.AddKVStore(ctx, mock)
+		require.NoError(t, err)
 
 		assert.Equal(t, mock, app.container.KVStore)
 	})
@@ -34,6 +39,8 @@ func TestApp_AddMongo(t *testing.T) {
 	t.Run("Adding MongoDB", func(t *testing.T) {
 		app := New()
 
+		ctx := context.Background()
+
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
@@ -42,9 +49,10 @@ func TestApp_AddMongo(t *testing.T) {
 		mock.EXPECT().UseLogger(app.Logger())
 		mock.EXPECT().UseMetrics(app.Metrics())
 		mock.EXPECT().UseTracer(gomock.Any())
-		mock.EXPECT().Connect()
+		mock.EXPECT().Connect(ctx)
 
-		app.AddMongo(mock)
+		err := app.AddMongo(ctx, mock)
+		require.NoError(t, err)
 
 		assert.Equal(t, mock, app.container.Mongo)
 	})
@@ -54,6 +62,8 @@ func TestApp_AddCassandra(t *testing.T) {
 	t.Run("Adding Cassandra", func(t *testing.T) {
 		app := New()
 
+		ctx := context.Background()
+
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
@@ -62,9 +72,10 @@ func TestApp_AddCassandra(t *testing.T) {
 		mock.EXPECT().UseLogger(app.Logger())
 		mock.EXPECT().UseMetrics(app.Metrics())
 		mock.EXPECT().UseTracer(otel.GetTracerProvider().Tracer("gofr-cassandra"))
-		mock.EXPECT().Connect()
+		mock.EXPECT().Connect(ctx)
 
-		app.AddCassandra(mock)
+		err := app.AddCassandra(ctx, mock)
+		require.NoError(t, err)
 
 		assert.Equal(t, mock, app.container.Cassandra)
 	})
@@ -74,6 +85,8 @@ func TestApp_AddClickhouse(t *testing.T) {
 	t.Run("Adding Clickhouse", func(t *testing.T) {
 		app := New()
 
+		ctx := context.Background()
+
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
@@ -82,9 +95,10 @@ func TestApp_AddClickhouse(t *testing.T) {
 		mock.EXPECT().UseLogger(app.Logger())
 		mock.EXPECT().UseMetrics(app.Metrics())
 		mock.EXPECT().UseTracer(otel.GetTracerProvider().Tracer("gofr-clickhouse"))
-		mock.EXPECT().Connect()
+		mock.EXPECT().Connect(ctx)
 
-		app.AddClickhouse(mock)
+		err := app.AddClickhouse(ctx, mock)
+		require.NoError(t, err)
 
 		assert.Equal(t, mock, app.container.Clickhouse)
 	})

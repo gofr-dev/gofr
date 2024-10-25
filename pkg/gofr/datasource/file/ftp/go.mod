@@ -7,7 +7,7 @@ replace gofr.dev => ../../../../../../gofr
 require (
 	github.com/jlaffaye/ftp v0.2.0
 	github.com/stretchr/testify v1.9.0
-	go.uber.org/mock v0.4.0
+	go.uber.org/mock v0.5.0
 	gofr.dev v1.15.0
 )
 
