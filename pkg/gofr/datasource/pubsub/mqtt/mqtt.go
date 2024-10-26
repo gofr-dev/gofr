@@ -172,11 +172,15 @@ func (m *MQTT) Subscribe(ctx context.Context, topic string) (*pubsub.Message, er
 	}
 	m.mu.Unlock()
 
+	select {
 	// blocks if there are no messages in the channel
-	msg := <-subs.msgs
-	m.metrics.IncrementCounter(msg.Context(), "app_pubsub_subscribe_success_count", "topic", msg.Topic)
+	case msg := <-subs.msgs:
+		m.metrics.IncrementCounter(msg.Context(), "app_pubsub_subscribe_success_count", "topic", msg.Topic)
 
-	return msg, nil
+		return msg, nil
+	case <-ctx.Done():
+		return nil, nil
+	}
 }
 
 func (m *MQTT) createMqttHandler(_ context.Context, topic string, msgs chan *pubsub.Message) mqtt.MessageHandler {

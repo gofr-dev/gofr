@@ -102,6 +102,10 @@ func (a *App) AddSolr(db container.SolrProvider) {
 	db.UseLogger(a.Logger())
 	db.UseMetrics(a.Metrics())
 
+	tracer := otel.GetTracerProvider().Tracer("gofr-solr")
+
+	db.UseTracer(tracer)
+
 	db.Connect()
 
 	a.container.Solr = db
