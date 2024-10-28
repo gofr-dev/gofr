@@ -8,7 +8,6 @@ import (
 	"gofr.dev/pkg/gofr"
 	"gofr.dev/pkg/gofr/datasource/file"
 	"gofr.dev/pkg/gofr/datasource/file/ftp"
-	"gofr.dev/pkg/gofr/logging"
 )
 
 type FileServerType int
@@ -17,6 +16,76 @@ const (
 	FTP FileServerType = iota
 	SFTP
 )
+
+func main() {
+	app := gofr.NewCMD()
+
+	fileSystemProvider := configureFileServer(app)
+
+	app.AddFileStore(fileSystemProvider)
+
+	app.SubCommand("pwd", pwdCommandHandler)
+	app.SubCommand("ls", lsCommandHandler)
+	app.SubCommand("grep", grepCommandHandler)
+	app.SubCommand("createfile", createFileCommandHandler)
+	app.SubCommand("rm", rmCommandHandler)
+
+	app.Run()
+}
+
+func pwdCommandHandler(c *gofr.Context) (interface{}, error) {
+	workingDirectory, err := c.File.Getwd()
+
+	return workingDirectory, err
+}
+
+func lsCommandHandler(c *gofr.Context) (interface{}, error) {
+	path := c.Param("path")
+	files, err := c.File.ReadDir(path)
+	if err != nil {
+		fmt.Println(err)
+	} else {
+		printFiles(files)
+	}
+
+	return "", err
+}
+
+func grepCommandHandler(c *gofr.Context) (interface{}, error) {
+	keyword := c.Param("keyword")
+	path := c.Param("path")
+	files, err := c.File.ReadDir(path)
+	if err != nil {
+		fmt.Println(err)
+	} else {
+		grepFiles(files, keyword)
+
+	}
+
+	return "", err
+}
+
+func createFileCommandHandler(c *gofr.Context) (interface{}, error) {
+	fileName := c.Param("filename")
+	_, err := c.File.Create(fileName)
+
+	if err == nil {
+		return fmt.Sprintln("Successfully created file:", fileName), nil
+	}
+
+	return fmt.Sprintln("File Creation error"), err
+}
+
+func rmCommandHandler(c *gofr.Context) (interface{}, error) {
+	fileName := c.Param("filename")
+	err := c.File.Remove(fileName)
+
+	if err == nil {
+		return fmt.Sprintln("Successfully removed file:", fileName), nil
+	}
+
+	return fmt.Sprintln("File removal error"), err
+}
 
 // This can be a common function to configure both FTP and SFTP server.
 func configureFileServer(app *gofr.App) file.FileSystemProvider {
@@ -31,103 +100,16 @@ func configureFileServer(app *gofr.App) file.FileSystemProvider {
 	})
 }
 
-func printFiles(files []file.FileInfo, err error) {
-	if err != nil {
-		fmt.Println(err)
-	} else {
-		for _, f := range files {
+func printFiles(files []file.FileInfo) {
+	for _, f := range files {
+		fmt.Println(f.Name())
+	}
+}
+
+func grepFiles(files []file.FileInfo, keyword string) {
+	for _, f := range files {
+		if strings.HasPrefix(f.Name(), keyword) {
 			fmt.Println(f.Name())
 		}
 	}
-}
-
-func grepFiles(files []file.FileInfo, keyword string, err error) {
-	if err != nil {
-		fmt.Println(err)
-	} else {
-		for _, f := range files {
-			if strings.HasPrefix(f.Name(), keyword) {
-				fmt.Println(f.Name())
-			}
-		}
-	}
-}
-
-func registerPwdCommand(app *gofr.App, fs file.FileSystemProvider) {
-	app.SubCommand("pwd", func(_ *gofr.Context) (interface{}, error) {
-		workingDirectory, err := fs.Getwd()
-
-		return workingDirectory, err
-	})
-}
-
-func registerLsCommand(app *gofr.App, fs file.FileSystemProvider) {
-	app.SubCommand("ls", func(c *gofr.Context) (interface{}, error) {
-		path := c.Param("path")
-		files, err := fs.ReadDir(path)
-		printFiles(files, err)
-
-		return "", err
-	})
-}
-
-func registerGrepCommand(app *gofr.App, fs file.FileSystemProvider) {
-	app.SubCommand("grep", func(c *gofr.Context) (interface{}, error) {
-		keyword := c.Param("keyword")
-		path := c.Param("path")
-		files, err := fs.ReadDir(path)
-		grepFiles(files, keyword, err)
-
-		return "", err
-	})
-}
-
-func registerCreateFileCommand(app *gofr.App, fs file.FileSystemProvider, logger logging.Logger) {
-	app.SubCommand("createfile", func(c *gofr.Context) (interface{}, error) {
-		fileName := c.Param("filename")
-		logger.Log("Creating file : ", fileName)
-		_, err := fs.Create(fileName)
-
-		if err == nil {
-			logger.Log("Successfully created file: ", fileName)
-		}
-
-		return "", err
-	})
-}
-
-func registerRmCommand(app *gofr.App, fs file.FileSystemProvider, logger logging.Logger) {
-	app.SubCommand("rm", func(c *gofr.Context) (interface{}, error) {
-		fileName := c.Param("filename")
-		logger.Log("Removing file : ", fileName)
-		err := fs.Remove(fileName)
-
-		if err == nil {
-			logger.Log("Successfully removed file: ", fileName)
-		}
-
-		return "", err
-	})
-}
-
-func main() {
-	app := gofr.NewCMD()
-
-	logger := gofr.New().Logger()
-
-	fileSystemProvider := configureFileServer(app)
-
-	app.AddFileStore(fileSystemProvider)
-
-	registerPwdCommand(app, fileSystemProvider)
-
-	registerLsCommand(app, fileSystemProvider)
-
-	registerGrepCommand(app, fileSystemProvider)
-
-	registerCreateFileCommand(app, fileSystemProvider, logger)
-
-	registerRmCommand(app, fileSystemProvider, logger)
-
-	app.Run()
 }
