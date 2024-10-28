@@ -27,9 +27,10 @@ type Config struct {
 type googleClient struct {
 	Config
 
-	client  Client
-	logger  pubsub.Logger
-	metrics Metrics
+	client      Client
+	logger      pubsub.Logger
+	metrics     Metrics
+	recieveChan chan *pubsub.Message
 }
 
 //nolint:revive // We do not want anyone using the client without initialization steps.
@@ -53,10 +54,11 @@ func New(conf Config, logger pubsub.Logger, metrics Metrics) *googleClient {
 	logger.Logf("connected to google pubsub client, projectID: %s", client.Project())
 
 	return &googleClient{
-		Config:  conf,
-		client:  client,
-		logger:  logger,
-		metrics: metrics,
+		Config:      conf,
+		client:      client,
+		logger:      logger,
+		metrics:     metrics,
+		recieveChan: make(chan *pubsub.Message),
 	}
 }
 
@@ -115,12 +117,13 @@ func (g *googleClient) Publish(ctx context.Context, topic string, message []byte
 }
 
 func (g *googleClient) Subscribe(ctx context.Context, topic string) (*pubsub.Message, error) {
+	receiveChan := make(chan *pubsub.Message)
+	defer close(receiveChan)
+
 	ctx, span := otel.GetTracerProvider().Tracer("gofr").Start(ctx, "gcp-subscribe")
 	defer span.End()
 
 	g.metrics.IncrementCounter(ctx, "app_pubsub_subscribe_total_count", "topic", topic, "subscription_name", g.Config.SubscriptionName)
-
-	var m = pubsub.NewMessage(ctx)
 
 	t, err := g.getTopic(ctx, topic)
 	if err != nil {
@@ -132,39 +135,49 @@ func (g *googleClient) Subscribe(ctx context.Context, topic string) (*pubsub.Mes
 		return nil, err
 	}
 
-	ctx, cancel := context.WithCancel(ctx)
-
 	start := time.Now()
-	err = subscription.Receive(ctx, func(_ context.Context, msg *gcPubSub.Message) {
-		end := time.Since(start)
+	cctx, cancel := context.WithCancel(ctx)
 
-		defer cancel()
+	go func() {
+		processMessage := func(ctx context.Context, msg *gcPubSub.Message) {
+			m := pubsub.NewMessage(ctx)
+			end := time.Since(start)
 
-		m.Topic = topic
-		m.Value = msg.Data
-		m.MetaData = msg.Attributes
-		m.Committer = newGoogleMessage(msg)
+			m.Topic = topic
+			m.Value = msg.Data
+			m.MetaData = msg.Attributes
+			m.Committer = newGoogleMessage(msg)
 
-		g.logger.Debug(&pubsub.Log{
-			Mode:          "SUB",
-			CorrelationID: span.SpanContext().TraceID().String(),
-			MessageValue:  string(m.Value),
-			Topic:         topic,
-			Host:          g.Config.ProjectID,
-			PubSubBackend: "GCP",
-			Time:          end.Microseconds(),
-		})
-	})
+			g.logger.Debug(&pubsub.Log{
+				Mode:          "SUB",
+				CorrelationID: span.SpanContext().TraceID().String(),
+				MessageValue:  string(m.Value),
+				Topic:         topic,
+				Host:          g.Config.ProjectID,
+				PubSubBackend: "GCP",
+				Time:          end.Microseconds(),
+			})
 
-	if err != nil {
-		g.logger.Errorf("error getting a message from google: %s", err.Error())
+			receiveChan <- m
 
-		return nil, err
+			cancel()
+		}
+
+		err = subscription.Receive(cctx, processMessage)
+		if err != nil {
+			g.logger.Errorf("error getting a message from google: %s", err.Error())
+		}
+	}()
+
+	select {
+	case m := <-receiveChan:
+		g.metrics.IncrementCounter(ctx, "app_pubsub_subscribe_success_count", "topic", topic, "subscription_name",
+			g.Config.SubscriptionName)
+
+		return m, nil
+	case <-ctx.Done():
+		return nil, nil
 	}
-
-	g.metrics.IncrementCounter(ctx, "app_pubsub_subscribe_success_count", "topic", topic, "subscription_name", g.Config.SubscriptionName)
-
-	return m, nil
 }
 
 func (g *googleClient) getTopic(ctx context.Context, topic string) (*gcPubSub.Topic, error) {

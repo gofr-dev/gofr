@@ -20,7 +20,7 @@ func (c *Client) ExecuteBatchCAS(name string, dest ...any) (bool, error) {
 func (c *Client) BatchQueryWithCtx(ctx context.Context, name, stmt string, values ...any) error {
 	_, span := c.addTrace(ctx, "batch-query", stmt)
 
-	defer c.sendOperationStats(&QueryLog{Query: stmt, Keyspace: c.config.Keyspace}, time.Now(), "batch-query", span)
+	defer c.sendOperationStats(&QueryLog{Operation: "BatchQueryWithCtx", Query: stmt, Keyspace: c.config.Keyspace}, time.Now(), "batch-query", span)
 
 	b, ok := c.cassandra.batches[name]
 	if !ok {
@@ -35,7 +35,7 @@ func (c *Client) BatchQueryWithCtx(ctx context.Context, name, stmt string, value
 func (c *Client) ExecuteBatchWithCtx(ctx context.Context, name string) error {
 	_, span := c.addTrace(ctx, "execute-batch", "batch")
 
-	defer c.sendOperationStats(&QueryLog{Query: "batch", Keyspace: c.config.Keyspace}, time.Now(), "execute-batch",
+	defer c.sendOperationStats(&QueryLog{Operation: "ExecuteBatchWithCtx", Query: "batch", Keyspace: c.config.Keyspace}, time.Now(), "execute-batch",
 		span)
 
 	b, ok := c.cassandra.batches[name]
@@ -49,7 +49,7 @@ func (c *Client) ExecuteBatchWithCtx(ctx context.Context, name string) error {
 func (c *Client) ExecuteBatchCASWithCtx(ctx context.Context, name string, dest ...any) (bool, error) {
 	_, span := c.addTrace(ctx, "execute-batch-cas", "batch")
 
-	defer c.sendOperationStats(&QueryLog{Query: "batch", Keyspace: c.config.Keyspace}, time.Now(), "execute-batch-cas",
+	defer c.sendOperationStats(&QueryLog{Operation: "ExecuteBatchCASWithCtx", Query: "batch", Keyspace: c.config.Keyspace}, time.Now(), "execute-batch-cas",
 		span)
 
 	b, ok := c.cassandra.batches[name]
