@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"time"
 
 	"go.opentelemetry.io/otel/trace"
@@ -33,7 +34,7 @@ func (verResp *VersionResponse) String() string {
 func (verResp *VersionResponse) GetCustomParser() func(respCnt []byte) error {
 	return getCustomParser(verResp.ctx, verResp, "GetCustomParser-VersionResp", verResp.logger,
 		func(resp []byte) error {
-			return json.Unmarshal([]byte(fmt.Sprintf("{%s:%s}", `"VersionInfo"`, string(resp))), &verResp)
+			return json.Unmarshal([]byte(fmt.Sprintf(`{"VersionInfo":%s}`, string(resp))), &verResp)
 		})
 }
 
@@ -46,10 +47,10 @@ func (c *Client) version() (*VersionResponse, error) {
 
 	defer sendOperationStats(c.logger, time.Now(), "Version", &status, &message, span)
 
-	verEndpoint := fmt.Sprintf("%s%s", c.tsdbEndpoint, VersionPath)
+	verEndpoint := fmt.Sprintf("%s%s", c.endpoint, VersionPath)
 	verResp := VersionResponse{logger: c.logger, tracer: c.tracer, ctx: c.ctx}
 
-	if err := c.sendRequest(GetMethod, verEndpoint, "", &verResp); err != nil {
+	if err := c.sendRequest(http.MethodGet, verEndpoint, "", &verResp); err != nil {
 		message = fmt.Sprintf("error while processing request at URL %s: %s", verEndpoint, err)
 		return nil, err
 	}

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"sort"
 	"strconv"
 	"time"
@@ -19,13 +20,13 @@ type QueryParam struct {
 	// The start time for the query. This can be a relative or absolute timestamp.
 	// The data type can only be string, int, or int64.
 	// The value is required with non-zero value of the target type.
-	Start interface{} `json:"start"`
+	Start any `json:"start"`
 
 	// An end time for the query. If not supplied, the TSD will assume the local
 	// system time on the server. This may be a relative or absolute timestamp.
 	// The data type can only be string, or int64.
 	// The value is optional.
-	End interface{} `json:"end,omitempty"`
+	End any `json:"end,omitempty"`
 
 	// One or more sub queries used to select the time series to return.
 	// These may be metric m or TSUID tsuids queries
@@ -97,7 +98,7 @@ type SubQuery struct {
 	// Only three keys can be set into the rateOption parameter of the QueryParam is
 	// QueryRateOptionCounter (value type is bool),  QueryRateOptionCounterMax (value type is int,int64)
 	// QueryRateOptionResetValue (value type is int,int64)
-	RateParams map[string]interface{} `json:"rateOptions,omitempty"`
+	RateParams map[string]any `json:"rateOptions,omitempty"`
 
 	// An optional value downsampling function to reduce the amount of data returned.
 	DownSample string `json:"downsample,omitempty"`
@@ -138,8 +139,8 @@ type Filter struct {
 // [OpenTSDB Official Docs]: http://opentsdb.net/docs/build/html/api_http/query/index.html.
 type QueryResponse struct {
 	StatusCode    int
-	QueryRespCnts []QueryRespItem        `json:"queryRespCnts"`
-	ErrorMsg      map[string]interface{} `json:"error"`
+	QueryRespCnts []QueryRespItem `json:"queryRespCnts"`
+	ErrorMsg      map[string]any  `json:"error"`
 	logger        Logger
 	tracer        trace.Tracer
 	ctx           context.Context
@@ -189,7 +190,7 @@ type QueryRespItem struct {
 	// data points with timestamps out of order.
 	// So be aware that one should use '(qri *QueryRespItem) GetDataPoints() []*DataPoint' to
 	// acquire the real ascending data points.
-	Dps map[string]interface{} `json:"dps"`
+	Dps map[string]any `json:"dps"`
 
 	// If the query retrieved annotations for time series over the requested timespan, they will
 	// be returned in this group. Annotations for every time series will be merged into one set
@@ -298,7 +299,7 @@ func (qri *QueryRespItem) GetLatestDataPoint() *DataPoint {
 	status = StatusSuccess
 	message = fmt.Sprintf("LatestDataPoints with timestamp %v fetched successfully", timestamp)
 
-	qri.logger.Logf("LatestDataPoints fetched successfully")
+	qri.logger.Log("LatestDataPoints fetched successfully")
 
 	return datapoint
 }
@@ -325,7 +326,7 @@ func (c *Client) Query(param *QueryParam) (*QueryResponse, error) {
 		return nil, errors.New(message)
 	}
 
-	queryEndpoint := fmt.Sprintf("%s%s", c.tsdbEndpoint, QueryPath)
+	queryEndpoint := fmt.Sprintf("%s%s", c.endpoint, QueryPath)
 
 	reqBodyCnt, err := getQueryBodyContents(param)
 	if err != nil {
@@ -335,7 +336,7 @@ func (c *Client) Query(param *QueryParam) (*QueryResponse, error) {
 
 	queryResp := QueryResponse{logger: c.logger, tracer: c.tracer, ctx: c.ctx}
 
-	if err = c.sendRequest(PostMethod, queryEndpoint, reqBodyCnt, &queryResp); err != nil {
+	if err = c.sendRequest(http.MethodPost, queryEndpoint, reqBodyCnt, &queryResp); err != nil {
 		message = fmt.Sprintf("error while processing request at url %q: %s ", queryEndpoint, err)
 		return nil, err
 	}
@@ -346,7 +347,7 @@ func (c *Client) Query(param *QueryParam) (*QueryResponse, error) {
 	return &queryResp, nil
 }
 
-func getQueryBodyContents(param interface{}) (string, error) {
+func getQueryBodyContents(param any) (string, error) {
 	result, err := json.Marshal(param)
 	if err != nil {
 		return "", fmt.Errorf("failed to marshal query param: %v", err)

@@ -22,10 +22,6 @@ const (
 	StatusSuccess     = "SUCCESS"
 	DefaultDialTime   = 5 * time.Second  // Default time for establishing TCP connections.
 	ConnectionTimeout = 30 * time.Second // Timeout for keeping connections alive.
-	GetMethod         = "GET"            // HTTP GET method.
-	PostMethod        = "POST"           // HTTP POST method.
-	PutMethod         = "PUT"            // HTTP PUT method.
-	DeleteMethod      = "DELETE"         // HTTP DELETE method.
 
 	// API paths for OpenTSDB endpoints.
 	PutPath            = "/api/put"
@@ -69,20 +65,20 @@ var dialTimeout = net.DialTimeout
 // Client is the implementation of the OpentsDBClient interface,
 // which includes context-aware functionality.
 type Client struct {
-	tsdbEndpoint string
-	client       HTTPClient
-	ctx          context.Context
-	opentsdbCfg  Config
-	logger       Logger
-	metrics      Metrics
-	tracer       trace.Tracer
+	endpoint string
+	client   HTTPClient
+	ctx      context.Context
+	config   Config
+	logger   Logger
+	metrics  Metrics
+	tracer   trace.Tracer
 }
 
 type Config struct {
 
 	// The host of the target opentsdb, is a required non-empty string which is
 	// in the format of ip:port without http:// prefix or a domain.
-	OpentsdbHost string
+	Host string
 
 	// A pointer of http.Transport is used by the opentsdb client.
 	// This value is optional, and if it is not set, client.DefaultTransport, which
@@ -110,7 +106,7 @@ type Config struct {
 
 // New initializes a new instance of Opentsdb with provided configuration.
 func New(config *Config) *Client {
-	return &Client{opentsdbCfg: *config}
+	return &Client{config: *config}
 }
 
 func (c *Client) UseLogger(logger interface{}) {
@@ -156,13 +152,13 @@ func (c *Client) Connect() {
 
 	defer sendOperationStats(c.logger, time.Now(), "Connect", &status, &message, span)
 
-	c.opentsdbCfg.OpentsdbHost = strings.TrimSpace(c.opentsdbCfg.OpentsdbHost)
-	if c.opentsdbCfg.OpentsdbHost == "" {
+	c.config.Host = strings.TrimSpace(c.config.Host)
+	if c.config.Host == "" {
 		c.logger.Errorf("the OpentsdbEndpoint in the given configuration cannot be empty.")
 	}
 
 	// Use custom transport settings if provided, otherwise, use the default transport.
-	transport := c.opentsdbCfg.Transport
+	transport := c.config.Transport
 	if transport == nil {
 		transport = DefaultTransport
 	}
@@ -172,40 +168,40 @@ func (c *Client) Connect() {
 	}
 
 	// Set default values for optional configuration fields.
-	if c.opentsdbCfg.MaxPutPointsNum <= 0 {
-		c.opentsdbCfg.MaxPutPointsNum = DefaultMaxPutPointsNum
+	if c.config.MaxPutPointsNum <= 0 {
+		c.config.MaxPutPointsNum = DefaultMaxPutPointsNum
 	}
 
-	if c.opentsdbCfg.DetectDeltaNum <= 0 {
-		c.opentsdbCfg.DetectDeltaNum = DefaultDetectDeltaNum
+	if c.config.DetectDeltaNum <= 0 {
+		c.config.DetectDeltaNum = DefaultDetectDeltaNum
 	}
 
-	if c.opentsdbCfg.MaxContentLength <= 0 {
-		c.opentsdbCfg.MaxContentLength = DefaultMaxContentLength
+	if c.config.MaxContentLength <= 0 {
+		c.config.MaxContentLength = DefaultMaxContentLength
 	}
 
 	// Initialize the OpenTSDB client with the given configuration.
-	c.tsdbEndpoint = fmt.Sprintf("http://%s", c.opentsdbCfg.OpentsdbHost)
+	c.endpoint = fmt.Sprintf("http://%s", c.config.Host)
 
 	c.logger.Logf("Connection Successful")
 
 	status = StatusSuccess
-	message = fmt.Sprintf("connected to %s", c.tsdbEndpoint)
+	message = fmt.Sprintf("connected to %s", c.endpoint)
 }
 
 // WithContext creates a new OpenTSDB client that operates with the provided context.
 func (c *Client) WithContext(ctx context.Context) *Client {
 	return &Client{
-		tsdbEndpoint: c.tsdbEndpoint,
-		client:       c.client,
-		ctx:          ctx,
-		opentsdbCfg:  c.opentsdbCfg,
+		endpoint: c.endpoint,
+		client:   c.client,
+		ctx:      ctx,
+		config:   c.config,
 	}
 }
 
 type Health struct {
-	Status  string                 `json:"status,omitempty"`
-	Details map[string]interface{} `json:"details,omitempty"`
+	Status  string         `json:"status,omitempty"`
+	Details map[string]any `json:"details,omitempty"`
 }
 
 func (c *Client) HealthCheck(_ context.Context) (any, error) {
@@ -218,10 +214,10 @@ func (c *Client) HealthCheck(_ context.Context) (any, error) {
 	defer sendOperationStats(c.logger, time.Now(), "HealthCheck", &status, &message, span)
 
 	h := Health{
-		Details: make(map[string]interface{}),
+		Details: make(map[string]any),
 	}
 
-	conn, err := dialTimeout("tcp", c.opentsdbCfg.OpentsdbHost, DefaultDialTime)
+	conn, err := dialTimeout("tcp", c.config.Host, DefaultDialTime)
 	if err != nil {
 		h.Status = "DOWN"
 		message = fmt.Sprintf("OpenTSDB is unreachable: %v", err)
@@ -233,7 +229,7 @@ func (c *Client) HealthCheck(_ context.Context) (any, error) {
 		defer conn.Close()
 	}
 
-	h.Details["host"] = c.tsdbEndpoint
+	h.Details["host"] = c.endpoint
 
 	ver, err := c.version()
 	if err != nil {
@@ -268,7 +264,7 @@ func (c *Client) sendRequest(method, url, reqBodyCnt string, parsedResp Response
 	}
 
 	if err != nil {
-		errRequestCreation := fmt.Errorf("failed to create request for %s %s: %v", method, url, err)
+		errRequestCreation := fmt.Errorf("failed to create request for %s %s: %w", method, url, err)
 
 		message = fmt.Sprint(errRequestCreation)
 
@@ -281,7 +277,7 @@ func (c *Client) sendRequest(method, url, reqBodyCnt string, parsedResp Response
 	// Send the request and handle the response.
 	resp, err := c.client.Do(req)
 	if err != nil {
-		errSendingRequest := fmt.Errorf("failed to send request for %s %s: %v", method, url, err)
+		errSendingRequest := fmt.Errorf("failed to send request for %s %s: %w", method, url, err)
 
 		message = fmt.Sprint(errSendingRequest)
 
@@ -293,7 +289,7 @@ func (c *Client) sendRequest(method, url, reqBodyCnt string, parsedResp Response
 	// Read and parse the response.
 	jsonBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
-		errReading := fmt.Errorf("failed to read response body for %s %s: %v", method, url, err)
+		errReading := fmt.Errorf("failed to read response body for %s %s: %w", method, url, err)
 
 		message = fmt.Sprint(errReading)
 
@@ -306,7 +302,7 @@ func (c *Client) sendRequest(method, url, reqBodyCnt string, parsedResp Response
 	if parser == nil {
 		// Use the default JSON unmarshaller if no custom parser is provided.
 		if err := json.Unmarshal(jsonBytes, parsedResp); err != nil {
-			errUnmarshaling := fmt.Errorf("failed to unmarshal response body for %s %s: %v", method, url, err)
+			errUnmarshaling := fmt.Errorf("failed to unmarshal response body for %s %s: %w", method, url, err)
 
 			message = fmt.Sprint(errUnmarshaling)
 
@@ -342,7 +338,7 @@ func (c *Client) isValidOperateMethod(method string) bool {
 		return false
 	}
 
-	validMethods := []string{PostMethod, PutMethod, DeleteMethod}
+	validMethods := []string{http.MethodPost, http.MethodPut, http.MethodDelete}
 	for _, validMethod := range validMethods {
 		if method == validMethod {
 			return true

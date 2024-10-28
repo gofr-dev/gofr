@@ -93,7 +93,7 @@ func setOpenTSDBTest(t *testing.T) (*Client, *MockHTTPClient) {
 	t.Helper()
 
 	opentsdbCfg := Config{
-		OpentsdbHost:     "localhost:4242",
+		Host:             "localhost:4242",
 		MaxContentLength: 4096,
 		MaxPutPointsNum:  1000,
 		DetectDeltaNum:   10,
@@ -112,13 +112,14 @@ func setOpenTSDBTest(t *testing.T) (*Client, *MockHTTPClient) {
 	mocklogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
 	mocklogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mocklogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
+	mocklogger.EXPECT().Log(gomock.Any()).AnyTimes()
 
 	if tsdbClient.ctx == nil {
 		tsdbClient.ctx = context.Background()
 	}
 
-	tsdbClient.opentsdbCfg.OpentsdbHost = strings.TrimSpace(tsdbClient.opentsdbCfg.OpentsdbHost)
-	if tsdbClient.opentsdbCfg.OpentsdbHost == "" {
+	tsdbClient.config.Host = strings.TrimSpace(tsdbClient.config.Host)
+	if tsdbClient.config.Host == "" {
 		tsdbClient.logger.Errorf("the OpentsdbEndpoint in the given configuration cannot be empty.")
 	}
 
@@ -127,20 +128,20 @@ func setOpenTSDBTest(t *testing.T) (*Client, *MockHTTPClient) {
 	tsdbClient.client = mockhttp
 
 	// Set default values for optional configuration fields.
-	if tsdbClient.opentsdbCfg.MaxPutPointsNum <= 0 {
-		tsdbClient.opentsdbCfg.MaxPutPointsNum = DefaultMaxPutPointsNum
+	if tsdbClient.config.MaxPutPointsNum <= 0 {
+		tsdbClient.config.MaxPutPointsNum = DefaultMaxPutPointsNum
 	}
 
-	if tsdbClient.opentsdbCfg.DetectDeltaNum <= 0 {
-		tsdbClient.opentsdbCfg.DetectDeltaNum = DefaultDetectDeltaNum
+	if tsdbClient.config.DetectDeltaNum <= 0 {
+		tsdbClient.config.DetectDeltaNum = DefaultDetectDeltaNum
 	}
 
-	if tsdbClient.opentsdbCfg.MaxContentLength <= 0 {
-		tsdbClient.opentsdbCfg.MaxContentLength = DefaultMaxContentLength
+	if tsdbClient.config.MaxContentLength <= 0 {
+		tsdbClient.config.MaxContentLength = DefaultMaxContentLength
 	}
 
 	// Initialize the OpenTSDB client with the given configuration.
-	tsdbClient.tsdbEndpoint = fmt.Sprintf("http://%s", tsdbClient.opentsdbCfg.OpentsdbHost)
+	tsdbClient.endpoint = fmt.Sprintf("http://%s", tsdbClient.config.Host)
 
 	return tsdbClient, mockhttp
 }

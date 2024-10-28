@@ -26,7 +26,7 @@ type DataPoint struct {
 	Timestamp int64 `json:"timestamp"`
 
 	// The real type of Value only could be int, int64, float64, or string, and is required.
-	Value interface{} `json:"value"`
+	Value any `json:"value"`
 
 	// A map of tag name/tag value pairs. At least one pair must be supplied.
 	// Don't use too many tags, keep it to a fairly small number, usually up to 4 or 5 tags
@@ -103,9 +103,9 @@ func (c *Client) Put(datas []DataPoint, queryParam string) (*PutResponse, error)
 
 	var putEndpoint string
 	if !isEmptyPutParam(queryParam) {
-		putEndpoint = fmt.Sprintf("%s%s?%s", c.tsdbEndpoint, PutPath, queryParam)
+		putEndpoint = fmt.Sprintf("%s%s?%s", c.endpoint, PutPath, queryParam)
 	} else {
-		putEndpoint = fmt.Sprintf("%s%s", c.tsdbEndpoint, PutPath)
+		putEndpoint = fmt.Sprintf("%s%s", c.endpoint, PutPath)
 	}
 
 	dataGroups, err := c.splitProperGroups(datas)
@@ -155,7 +155,7 @@ func (c *Client) getResponses(putEndpoint string, dataGroups [][]DataPoint,
 
 		putResp := PutResponse{logger: c.logger, tracer: c.tracer, ctx: c.ctx}
 
-		if err = c.sendRequest(PostMethod, putEndpoint, reqBodyCnt, &putResp); err != nil {
+		if err = c.sendRequest(http.MethodPost, putEndpoint, reqBodyCnt, &putResp); err != nil {
 			*message = fmt.Sprintf("error processing put request at url %q: %s", putEndpoint, err)
 			return nil, err
 		}
@@ -194,7 +194,7 @@ func (c *Client) splitProperGroups(datapoints []DataPoint) ([][]DataPoint, error
 }
 
 func (c *Client) appendDataPoints(datasBytes []byte, datapoints []DataPoint, datapointGroups [][]DataPoint) [][]DataPoint {
-	if len(datasBytes) > c.opentsdbCfg.MaxContentLength {
+	if len(datasBytes) > c.config.MaxContentLength {
 		return c.splitLargeDataPoints(datapoints, datapointGroups)
 	}
 
@@ -213,7 +213,7 @@ func (c *Client) splitLargeDataPoints(datapoints []DataPoint, datapointGroups []
 			startIndex = endIndex
 			endIndex = c.calculateNextEndIndex(startIndex, datapointsSize, len(tempdps))
 		} else {
-			endIndex -= c.opentsdbCfg.DetectDeltaNum
+			endIndex -= c.config.DetectDeltaNum
 		}
 
 		if startIndex >= datapointsSize {
@@ -225,8 +225,8 @@ func (c *Client) splitLargeDataPoints(datapoints []DataPoint, datapointGroups []
 }
 
 func (c *Client) calculateEndIndex(datapointsSize int) int {
-	if datapointsSize > c.opentsdbCfg.MaxPutPointsNum {
-		return c.opentsdbCfg.MaxPutPointsNum
+	if datapointsSize > c.config.MaxPutPointsNum {
+		return c.config.MaxPutPointsNum
 	}
 
 	return datapointsSize
@@ -243,7 +243,7 @@ func (*Client) calculateNextEndIndex(startIndex, datapointsSize, tempSize int) i
 
 func (c *Client) canAppendGroup(datapoints []DataPoint) bool {
 	tempdpsBytes, _ := json.Marshal(&datapoints)
-	return len(tempdpsBytes) <= c.opentsdbCfg.MaxContentLength
+	return len(tempdpsBytes) <= c.config.MaxContentLength
 }
 
 func parsePutErrorMsg(resp *PutResponse) error {
@@ -279,24 +279,13 @@ func getPutBodyContents(datas []DataPoint) (string, error) {
 
 func marshalDataPoints(datas []DataPoint) (string, error) {
 	buffer := bytes.NewBuffer(nil)
-	size := len(datas)
 
-	buffer.WriteString("[")
-
-	for index, item := range datas {
-		result, err := json.Marshal(item)
-		if err != nil {
-			return "", err
-		}
-
-		buffer.Write(result)
-
-		if index < size-1 {
-			buffer.WriteString(",")
-		}
+	result, err := json.Marshal(datas)
+	if err != nil {
+		return "", err
 	}
 
-	buffer.WriteString("]")
+	buffer.Write(result)
 
 	return buffer.String(), nil
 }

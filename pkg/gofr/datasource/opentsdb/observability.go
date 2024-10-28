@@ -78,7 +78,7 @@ func (annotResp *AnnotationResponse) addTrace(ctx context.Context, operation str
 }
 
 func (bulkAnnotResp *BulkAnnotationResponse) addTrace(ctx context.Context, operation string) trace.Span {
-	return addTracer(ctx, bulkAnnotResp.tracer, operation, "BulkAnnotatResponse")
+	return addTracer(ctx, bulkAnnotResp.tracer, operation, "BulkAnnotationResponse")
 }
 
 func (queryResp *QueryResponse) addTrace(ctx context.Context, operation string) trace.Span {
@@ -86,7 +86,7 @@ func (queryResp *QueryResponse) addTrace(ctx context.Context, operation string) 
 }
 
 func (dropResp *DropCachesResponse) addTrace(ctx context.Context, operation string) trace.Span {
-	return addTracer(ctx, dropResp.tracer, operation, "DropcacheResponse")
+	return addTracer(ctx, dropResp.tracer, operation, "DropCacheResponse")
 }
 
 func (sugParam *SuggestParam) addTrace(ctx context.Context, operation string) trace.Span {

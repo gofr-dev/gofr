@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"time"
 
 	"go.opentelemetry.io/otel/trace"
@@ -59,8 +60,8 @@ type SubQueryLast struct {
 // [OpenTSDB Official Docs]: http://opentsdb.net/docs/build/html/api_http/query/last.html.
 type QueryLastResponse struct {
 	StatusCode    int
-	QueryRespCnts []QueryRespLastItem    `json:"queryRespCnts,omitempty"`
-	ErrorMsg      map[string]interface{} `json:"error"`
+	QueryRespCnts []QueryRespLastItem `json:"queryRespCnts,omitempty"`
+	ErrorMsg      map[string]any      `json:"error"`
 	logger        Logger
 	tracer        trace.Tracer
 	ctx           context.Context
@@ -119,7 +120,7 @@ func (c *Client) QueryLast(param *QueryLastParam) (*QueryLastResponse, error) {
 		return nil, errors.New(message)
 	}
 
-	queryEndpoint := fmt.Sprintf("%s%s", c.tsdbEndpoint, QueryLastPath)
+	queryEndpoint := fmt.Sprintf("%s%s", c.endpoint, QueryLastPath)
 
 	reqBodyCnt, err := getQueryBodyContents(param)
 	if err != nil {
@@ -128,7 +129,7 @@ func (c *Client) QueryLast(param *QueryLastParam) (*QueryLastResponse, error) {
 	}
 
 	queryResp := QueryLastResponse{logger: c.logger, tracer: c.tracer, ctx: c.ctx}
-	if err = c.sendRequest(PostMethod, queryEndpoint, reqBodyCnt, &queryResp); err != nil {
+	if err = c.sendRequest(http.MethodPost, queryEndpoint, reqBodyCnt, &queryResp); err != nil {
 		message = fmt.Sprintf("error sending request at url %s : %s ", queryEndpoint, err)
 		return nil, err
 	}

@@ -7,7 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"strings"
+	"net/url"
 	"time"
 
 	"go.opentelemetry.io/otel/trace"
@@ -90,21 +90,18 @@ func (c *Client) QueryAnnotation(queryAnnoParam map[string]interface{}) (*Annota
 
 	buffer := bytes.NewBuffer(nil)
 
-	size := len(queryAnnoParam)
-
-	i := 0
+	queryURL := url.Values{}
 
 	for k, v := range queryAnnoParam {
-		fmt.Fprintf(buffer, "%s=%v", k, v)
-
-		if i < size-1 {
-			buffer.WriteString("&")
+		value, ok := v.(string)
+		if ok {
+			queryURL.Add(k, value)
 		}
-
-		i++
 	}
 
-	annoEndpoint := fmt.Sprintf("%s%s?%s", c.tsdbEndpoint, AnnotationPath, buffer.String())
+	buffer.WriteString(queryURL.Encode())
+
+	annoEndpoint := fmt.Sprintf("%s%s?%s", c.endpoint, AnnotationPath, buffer.String())
 	annResp := AnnotationResponse{logger: c.logger, tracer: c.tracer, ctx: c.ctx}
 
 	if err := c.sendRequest(http.MethodGet, annoEndpoint, "", &annResp); err != nil {
@@ -115,13 +112,13 @@ func (c *Client) QueryAnnotation(queryAnnoParam map[string]interface{}) (*Annota
 	status = StatusSuccess
 	message = fmt.Sprintf("Annotation query sent to url: %s", annoEndpoint)
 
-	c.logger.Logf("Annotation query processed successfully")
+	c.logger.Log("Annotation query processed successfully")
 
 	return &annResp, nil
 }
 
 func (c *Client) UpdateAnnotation(annotation *Annotation) (*AnnotationResponse, error) {
-	return c.operateAnnotation(annotation, http.MethodPost, "UpdateAnnoation")
+	return c.operateAnnotation(annotation, http.MethodPost, "UpdateAnnotation")
 }
 
 func (c *Client) DeleteAnnotation(annotation *Annotation) (*AnnotationResponse, error) {
@@ -142,7 +139,7 @@ func (c *Client) operateAnnotation(annotation *Annotation, method, operation str
 		return nil, errors.New(message)
 	}
 
-	annoEndpoint := fmt.Sprintf("%s%s", c.tsdbEndpoint, AnnotationPath)
+	annoEndpoint := fmt.Sprintf("%s%s", c.endpoint, AnnotationPath)
 
 	resultBytes, err := json.Marshal(annotation)
 	if err != nil {
@@ -160,7 +157,7 @@ func (c *Client) operateAnnotation(annotation *Annotation, method, operation str
 	status = StatusSuccess
 	message = fmt.Sprintf("%s: %s annotation request to url %q processed successfully", operation, method, annoEndpoint)
 
-	c.logger.Logf("%s request successful", operation)
+	c.logger.Log("%s request successful", operation)
 
 	return &annResp, nil
 }
@@ -230,20 +227,20 @@ func (bulkAnnotResp *BulkAnnotationResponse) setStatusCode(code int) {
 func (bulkAnnotResp *BulkAnnotationResponse) GetCustomParser() func(respCnt []byte) error {
 	return getCustomParser(bulkAnnotResp.ctx, bulkAnnotResp, "GetCustomParser-BulkAnnotation", bulkAnnotResp.logger,
 		func(resp []byte) error {
-			originContents := string(resp)
-			tag := strings.Split(originContents, " ")[0]
+			var m []Annotation
 
-			var resultBytes []byte
-
-			if strings.Contains(tag, "error") || strings.Contains(tag, "totalDeleted") {
-				resultBytes = resp
-			} else if strings.Contains(tag, "tsuid") {
-				resultBytes = []byte(fmt.Sprintf(`{"InvolvedAnnotations":%s}`, originContents))
-			} else {
-				return fmt.Errorf("unrecognized bulk annotation response: %s", originContents)
+			err := json.Unmarshal(resp, &m)
+			if err == nil {
+				bulkAnnotResp.UpdateAnnotations = m
+				return nil
 			}
 
-			return json.Unmarshal(resultBytes, &bulkAnnotResp)
+			err = json.Unmarshal(resp, &bulkAnnotResp)
+			if err != nil {
+				return fmt.Errorf("unrecognized bulk annotation response: %s", string(resp))
+			}
+
+			return nil
 		})
 }
 
@@ -265,7 +262,7 @@ func (c *Client) BulkUpdateAnnotations(annotations []Annotation) (*BulkAnnotatio
 		return nil, errors.New(message)
 	}
 
-	bulkAnnoEndpoint := fmt.Sprintf("%s%s", c.tsdbEndpoint, BulkAnnotationPath)
+	bulkAnnoEndpoint := fmt.Sprintf("%s%s", c.endpoint, BulkAnnotationPath)
 
 	reqBodyCnt, err := marshalAnnotations(annotations)
 	if err != nil {
@@ -282,7 +279,7 @@ func (c *Client) BulkUpdateAnnotations(annotations []Annotation) (*BulkAnnotatio
 	status = StatusSuccess
 	message = fmt.Sprintf("Bulk annotation updation processed successfully at url %q", bulkAnnoEndpoint)
 
-	c.logger.Logf("Bulk annotation updated successfully")
+	c.logger.Log("Bulk annotation updated successfully")
 
 	return &bulkAnnoResp, nil
 }
@@ -296,7 +293,7 @@ func (c *Client) BulkDeleteAnnotations(bulkDelParam *BulkAnnotationDeleteInfo) (
 
 	defer sendOperationStats(c.logger, time.Now(), "BulkUpdateAnnotations", &status, &message, span)
 
-	bulkAnnoEndpoint := fmt.Sprintf("%s%s", c.tsdbEndpoint, BulkAnnotationPath)
+	bulkAnnoEndpoint := fmt.Sprintf("%s%s", c.endpoint, BulkAnnotationPath)
 	resultBytes, err := json.Marshal(bulkDelParam)
 
 	if err != nil {
@@ -313,7 +310,7 @@ func (c *Client) BulkDeleteAnnotations(bulkDelParam *BulkAnnotationDeleteInfo) (
 	status = StatusSuccess
 	message = fmt.Sprintf("Bulk annotations deleted successfully at url %q", bulkAnnoEndpoint)
 
-	c.logger.Logf("Bulk annotation deleted successfully")
+	c.logger.Log("Bulk annotation deleted successfully")
 
 	return &bulkAnnoResp, nil
 }
@@ -322,7 +319,7 @@ func (c *Client) BulkDeleteAnnotations(bulkDelParam *BulkAnnotationDeleteInfo) (
 func marshalAnnotations(annotations []Annotation) (string, error) {
 	resultBytes, err := json.Marshal(annotations)
 	if err != nil {
-		return "", fmt.Errorf("failed to marshal annotations: %v", err)
+		return "", fmt.Errorf("failed to marshal annotations: %w", err)
 	}
 
 	return string(resultBytes), nil

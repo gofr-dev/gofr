@@ -90,7 +90,7 @@ func getQueryParser(ctx context.Context, statusCode int, logger Logger, obj gene
 		var respStr string
 
 		if statusCode == http.StatusOK && strings.Contains(originRespStr, "[") && strings.Contains(originRespStr, "]") {
-			respStr = fmt.Sprintf("{%s:%s}", `"queryRespCnts"`, originRespStr)
+			respStr = fmt.Sprintf(`{"queryRespCnts":%s}`, originRespStr)
 		} else {
 			respStr = originRespStr
 		}

@@ -313,6 +313,22 @@ func (mr *MockLoggerMockRecorder) Errorf(pattern any, args ...any) *gomock.Call 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Errorf", reflect.TypeOf((*MockLogger)(nil).Errorf), varargs...)
 }
 
+// Log mocks base method.
+func (m *MockLogger) Log(args ...any) {
+	m.ctrl.T.Helper()
+	varargs := []any{}
+	for _, a := range args {
+		varargs = append(varargs, a)
+	}
+	m.ctrl.Call(m, "Log", varargs...)
+}
+
+// Log indicates an expected call of Log.
+func (mr *MockLoggerMockRecorder) Log(args ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Log", reflect.TypeOf((*MockLogger)(nil).Log), args...)
+}
+
 // Logf mocks base method.
 func (m *MockLogger) Logf(pattern string, args ...any) {
 	m.ctrl.T.Helper()

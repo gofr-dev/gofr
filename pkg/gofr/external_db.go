@@ -123,7 +123,7 @@ func (a *App) AddDgraph(db container.DgraphProvider) {
 }
 
 // AddOpentsdb sets the opentsdb datasource in the app's container.
-func (a *App) AddOpentsdb(db container.OpenTSDBProvider) {
+func (a *App) AddOpenTSDB(db container.OpenTSDBProvider) {
 	// Create the Opentsdb client with the provided configuration
 	db.UseLogger(a.Logger())
 	db.UseMetrics(a.Metrics())

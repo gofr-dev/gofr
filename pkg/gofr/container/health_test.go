@@ -80,13 +80,13 @@ func TestContainer_Health(t *testing.T) {
 				},
 			},
 			"opentsdb": datasource.Health{
-				Status: tc.datasourceHealth, Details: map[string]interface{}{
+				Status: tc.datasourceHealth, Details: map[string]any{
 					"host":  "localhost:8000",
 					"error": "opentsdb not connected",
 				},
 			},
 			"test-service": &service.Health{
-				Status: "UP", Details: map[string]interface{}{
+				Status: "UP", Details: map[string]any{
 					"host": strings.TrimPrefix(srv.URL, "http://"),
 				},
 			},
@@ -177,7 +177,7 @@ func registerMocks(mocks *Mocks, health string) {
 
 	mocks.OpenTSDB.EXPECT().HealthCheck(context.Background()).Return(datasource.Health{
 		Status: health,
-		Details: map[string]interface{}{
+		Details: map[string]any{
 			"host":  "localhost:8000",
 			"error": "opentsdb not connected",
 		},

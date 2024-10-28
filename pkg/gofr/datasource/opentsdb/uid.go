@@ -51,7 +51,7 @@ type UIDMetaDataResponse struct {
 	// If the meta data was not stored when the UID was assigned, this value may be 0.
 	Created int64 `json:"created,omitempty"`
 
-	ErrorInfo map[string]interface{} `json:"error,omitempty"`
+	ErrorInfo map[string]any `json:"error,omitempty"`
 
 	logger Logger
 	tracer trace.Tracer
@@ -100,11 +100,11 @@ func (c *Client) QueryUIDMetaData(metaQueryParam map[string]string) (*UIDMetaDat
 
 	queryParam := fmt.Sprintf("%s=%v&%s=%v", "uid", metaQueryParam["uid"], "type", metaQueryParam["type"])
 
-	queryUIDMetaEndpoint := fmt.Sprintf("%s%s?%s", c.tsdbEndpoint, UIDMetaDataPath, queryParam)
+	queryUIDMetaEndpoint := fmt.Sprintf("%s%s?%s", c.endpoint, UIDMetaDataPath, queryParam)
 
 	uidMetaDataResp := UIDMetaDataResponse{logger: c.logger, tracer: c.tracer, ctx: c.ctx}
 
-	if err := c.sendRequest(GetMethod, queryUIDMetaEndpoint, "", &uidMetaDataResp); err != nil {
+	if err := c.sendRequest(http.MethodGet, queryUIDMetaEndpoint, "", &uidMetaDataResp); err != nil {
 		message = fmt.Sprintf("error processing query-uid-metadata request to url %q: %v", queryUIDMetaEndpoint, err)
 		return nil, err
 	}
@@ -116,11 +116,11 @@ func (c *Client) QueryUIDMetaData(metaQueryParam map[string]string) (*UIDMetaDat
 }
 
 func (c *Client) UpdateUIDMetaData(uidMetaData *UIDMetaData) (*UIDMetaDataResponse, error) {
-	return c.operateUIDMetaData(uidMetaData, PostMethod, "UpdateUIDMetaData")
+	return c.operateUIDMetaData(uidMetaData, http.MethodPost, "UpdateUIDMetaData")
 }
 
 func (c *Client) DeleteUIDMetaData(uidMetaData *UIDMetaData) (*UIDMetaDataResponse, error) {
-	return c.operateUIDMetaData(uidMetaData, DeleteMethod, "DeleteUIDMetaData")
+	return c.operateUIDMetaData(uidMetaData, http.MethodDelete, "DeleteUIDMetaData")
 }
 
 func (c *Client) operateUIDMetaData(uidMetaData *UIDMetaData, method, operation string) (*UIDMetaDataResponse, error) {
@@ -137,7 +137,7 @@ func (c *Client) operateUIDMetaData(uidMetaData *UIDMetaData, method, operation 
 		return nil, errors.New(message)
 	}
 
-	uidMetaEndpoint := fmt.Sprintf("%s%s", c.tsdbEndpoint, UIDMetaDataPath)
+	uidMetaEndpoint := fmt.Sprintf("%s%s", c.endpoint, UIDMetaDataPath)
 
 	resultBytes, err := json.Marshal(uidMetaData)
 	if err != nil {
@@ -221,7 +221,7 @@ func (c *Client) AssignUID(assignParam *UIDAssignParam) (*UIDAssignResponse, err
 
 	defer sendOperationStats(c.logger, time.Now(), "AssignUID", &status, &message, span)
 
-	assignUIDEndpoint := fmt.Sprintf("%s%s", c.tsdbEndpoint, UIDAssignPath)
+	assignUIDEndpoint := fmt.Sprintf("%s%s", c.endpoint, UIDAssignPath)
 
 	resultBytes, err := json.Marshal(assignParam)
 	if err != nil {
@@ -231,8 +231,8 @@ func (c *Client) AssignUID(assignParam *UIDAssignParam) (*UIDAssignResponse, err
 
 	uidAssignResp := UIDAssignResponse{logger: c.logger, tracer: c.tracer, ctx: c.ctx}
 
-	if err = c.sendRequest(PostMethod, assignUIDEndpoint, string(resultBytes), &uidAssignResp); err != nil {
-		message = fmt.Sprintf("error processing %v request to url %q: %v", PostMethod, assignUIDEndpoint, err)
+	if err = c.sendRequest(http.MethodPost, assignUIDEndpoint, string(resultBytes), &uidAssignResp); err != nil {
+		message = fmt.Sprintf("error processing %v request to url %q: %v", http.MethodPost, assignUIDEndpoint, err)
 		return nil, err
 	}
 
@@ -303,12 +303,12 @@ type TSMetaData struct {
 type TSMetaDataResponse struct {
 	StatusCode int
 	TSMetaData
-	Metric          UIDMetaData            `json:"metric,omitempty"`
-	Tags            []UIDMetaData          `json:"tags,omitempty"`
-	Created         int64                  `json:"created,omitempty"`
-	LastReceived    int64                  `json:"lastReceived,omitempty"`
-	TotalDatapoints int64                  `json:"totalDatapoints,omitempty"`
-	ErrorInfo       map[string]interface{} `json:"error,omitempty"`
+	Metric          UIDMetaData    `json:"metric,omitempty"`
+	Tags            []UIDMetaData  `json:"tags,omitempty"`
+	Created         int64          `json:"created,omitempty"`
+	LastReceived    int64          `json:"lastReceived,omitempty"`
+	TotalDatapoints int64          `json:"totalDatapoints,omitempty"`
+	ErrorInfo       map[string]any `json:"error,omitempty"`
 	logger          Logger
 	tracer          trace.Tracer
 	ctx             context.Context
@@ -330,7 +330,7 @@ func (c *Client) QueryTSMetaData(tsuid string) (*TSMetaDataResponse, error) {
 		return nil, errors.New(message)
 	}
 
-	queryTSMetaEndpoint := fmt.Sprintf("%s%s?tsuid=%s", c.tsdbEndpoint, TSMetaDataPath, tsuid)
+	queryTSMetaEndpoint := fmt.Sprintf("%s%s?tsuid=%s", c.endpoint, TSMetaDataPath, tsuid)
 	tsMetaDataResp := TSMetaDataResponse{logger: c.logger, tracer: c.tracer, ctx: c.ctx}
 
 	if err := c.sendRequest(http.MethodGet, queryTSMetaEndpoint, "", &tsMetaDataResp); err != nil {
@@ -345,11 +345,11 @@ func (c *Client) QueryTSMetaData(tsuid string) (*TSMetaDataResponse, error) {
 }
 
 func (c *Client) UpdateTSMetaData(tsMetaData *TSMetaData) (*TSMetaDataResponse, error) {
-	return c.operateTSMetaData(tsMetaData, PostMethod, "UpdateTSMetaData")
+	return c.operateTSMetaData(tsMetaData, http.MethodPost, "UpdateTSMetaData")
 }
 
 func (c *Client) DeleteTSMetaData(tsMetaData *TSMetaData) (*TSMetaDataResponse, error) {
-	return c.operateTSMetaData(tsMetaData, DeleteMethod, "DeleteTSMetaData")
+	return c.operateTSMetaData(tsMetaData, http.MethodDelete, "DeleteTSMetaData")
 }
 
 func (c *Client) operateTSMetaData(tsMetaData *TSMetaData, method, operation string) (*TSMetaDataResponse, error) {
@@ -366,7 +366,7 @@ func (c *Client) operateTSMetaData(tsMetaData *TSMetaData, method, operation str
 		return nil, errors.New(message)
 	}
 
-	tsMetaEndpoint := fmt.Sprintf("%s%s", c.tsdbEndpoint, TSMetaDataPath)
+	tsMetaEndpoint := fmt.Sprintf("%s%s", c.endpoint, TSMetaDataPath)
 
 	resultBytes, err := json.Marshal(tsMetaData)
 	if err != nil {

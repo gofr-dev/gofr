@@ -32,7 +32,16 @@ func (aggreResp *AggregatorsResponse) setStatusCode(code int) {
 func (aggreResp *AggregatorsResponse) GetCustomParser() func(respCnt []byte) error {
 	return getCustomParser(aggreResp.ctx, aggreResp, "GetCustomParser-Aggregator", aggreResp.logger,
 		func(resp []byte) error {
-			return json.Unmarshal([]byte(fmt.Sprintf(`{"aggregators":%s}`, string(resp))), &aggreResp)
+			j := make([]string, 0)
+
+			err := json.Unmarshal(resp, &j)
+			if err != nil {
+				return err
+			}
+
+			aggreResp.Aggregators = j
+
+			return nil
 		})
 }
 
@@ -48,7 +57,7 @@ func (c *Client) Aggregators() (*AggregatorsResponse, error) {
 
 	defer sendOperationStats(c.logger, time.Now(), "Aggregators", &status, &message, span)
 
-	aggregatorsEndpoint := fmt.Sprintf("%s%s", c.tsdbEndpoint, AggregatorPath)
+	aggregatorsEndpoint := fmt.Sprintf("%s%s", c.endpoint, AggregatorPath)
 
 	aggreResp := AggregatorsResponse{logger: c.logger, tracer: c.tracer, ctx: c.ctx}
 
@@ -60,7 +69,7 @@ func (c *Client) Aggregators() (*AggregatorsResponse, error) {
 	status = StatusSuccess
 	message = fmt.Sprintf("aggregators retrieved from url: %s", aggregatorsEndpoint)
 
-	c.logger.Logf("aggregators fetched successfully")
+	c.logger.Log("aggregators fetched successfully")
 
 	return &aggreResp, nil
 }

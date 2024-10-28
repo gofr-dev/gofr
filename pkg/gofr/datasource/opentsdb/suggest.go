@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 
@@ -92,7 +93,7 @@ func (c *Client) Suggest(sugParam *SuggestParam) (*SuggestResponse, error) {
 		return nil, errors.New(message)
 	}
 
-	sugEndpoint := fmt.Sprintf("%s%s", c.tsdbEndpoint, SuggestPath)
+	sugEndpoint := fmt.Sprintf("%s%s", c.endpoint, SuggestPath)
 
 	reqBodyCnt, err := getSuggestBodyContents(sugParam)
 	if err != nil {
@@ -101,7 +102,7 @@ func (c *Client) Suggest(sugParam *SuggestParam) (*SuggestResponse, error) {
 	}
 
 	sugResp := SuggestResponse{logger: c.logger, tracer: c.tracer, ctx: c.ctx}
-	if err := c.sendRequest(PostMethod, sugEndpoint, reqBodyCnt, &sugResp); err != nil {
+	if err := c.sendRequest(http.MethodPost, sugEndpoint, reqBodyCnt, &sugResp); err != nil {
 		message = fmt.Sprintf("error processing suggest request to url %q: %s", sugEndpoint, err)
 		return nil, err
 	}

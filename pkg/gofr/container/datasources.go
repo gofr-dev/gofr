@@ -500,7 +500,7 @@ type OpenTSDB interface {
 	// or when it failed to parse the response, or OpenTSDB is un-connectable right now.
 	//
 	// Note that: the returned non-nil error instance is only response by opentsdb-client, not the OpenTSDB backend.
-	QueryAnnotation(queryAnnoParam map[string]interface{}) (any, error)
+	QueryAnnotation(queryAnnoParam map[string]any) (any, error)
 
 	// UpdateAnnotation is the implementation of 'POST /api/annotation' endpoint.
 	// It creates or modifies an annotation stored in the OpenTSDB backend.
