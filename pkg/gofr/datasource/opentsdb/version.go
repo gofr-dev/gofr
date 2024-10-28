@@ -13,7 +13,7 @@ import (
 // VersionResponse is the struct implementation for /api/version.
 type VersionResponse struct {
 	StatusCode  int
-	VersionInfo map[string]string `json:"VersionInfo"`
+	VersionInfo map[string]any
 	logger      Logger
 	tracer      trace.Tracer
 	ctx         context.Context
@@ -34,7 +34,16 @@ func (verResp *VersionResponse) String() string {
 func (verResp *VersionResponse) GetCustomParser() func(respCnt []byte) error {
 	return getCustomParser(verResp.ctx, verResp, "GetCustomParser-VersionResp", verResp.logger,
 		func(resp []byte) error {
-			return json.Unmarshal([]byte(fmt.Sprintf(`{"VersionInfo":%s}`, string(resp))), &verResp)
+			v := make(map[string]any, 0)
+
+			err := json.Unmarshal(resp, &v)
+			if err != nil {
+				return err
+			}
+
+			verResp.VersionInfo = v
+
+			return nil
 		})
 }
 

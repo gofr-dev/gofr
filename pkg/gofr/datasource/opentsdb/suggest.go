@@ -46,7 +46,7 @@ func (*SuggestParam) setStatusCode(int) {
 
 type SuggestResponse struct {
 	StatusCode int
-	ResultInfo []string `json:"ResultInfo"`
+	ResultInfo []string
 	logger     Logger
 	tracer     trace.Tracer
 	ctx        context.Context
@@ -63,7 +63,16 @@ func (sugResp *SuggestResponse) setStatusCode(code int) {
 func (sugResp *SuggestResponse) GetCustomParser() func(respCnt []byte) error {
 	return getCustomParser(sugResp.ctx, sugResp, "GetCustomParser-Suggest", sugResp.logger,
 		func(resp []byte) error {
-			return json.Unmarshal([]byte(fmt.Sprintf("{%s:%s}", `"ResultInfo"`, string(resp))), &sugResp)
+			j := make([]string, 0)
+
+			err := json.Unmarshal(resp, &j)
+			if err != nil {
+				return err
+			}
+
+			sugResp.ResultInfo = j
+
+			return nil
 		})
 }
 

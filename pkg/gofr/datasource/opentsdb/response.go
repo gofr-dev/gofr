@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strings"
 	"time"
 
 	"go.opentelemetry.io/otel/trace"
@@ -89,7 +88,7 @@ func getQueryParser(ctx context.Context, statusCode int, logger Logger, obj gene
 
 		var respStr string
 
-		if statusCode == http.StatusOK && strings.Contains(originRespStr, "[") && strings.Contains(originRespStr, "]") {
+		if statusCode == http.StatusOK && resp[0] == '[' && resp[len(resp)-1] == ']' {
 			respStr = fmt.Sprintf(`{"queryRespCnts":%s}`, originRespStr)
 		} else {
 			respStr = originRespStr
