@@ -46,6 +46,7 @@ func Test_ClientGet(t *testing.T) {
 	cl := setupDB(t)
 
 	err := cl.Set(context.Background(), "lkey", "lvalue")
+	require.NoError(t, err)
 
 	val, err := cl.Get(context.Background(), "lkey")
 
@@ -58,7 +59,7 @@ func Test_ClientGetError(t *testing.T) {
 
 	val, err := cl.Get(context.Background(), "lkey")
 
-	assert.EqualError(t, err, "Key not found")
+	require.EqualError(t, err, "Key not found")
 	assert.Empty(t, val)
 }
 
