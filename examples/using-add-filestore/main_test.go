@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"testing"
@@ -9,6 +10,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 	"gofr.dev/pkg/gofr"
+	"gofr.dev/pkg/gofr/cmd"
+	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/datasource/file"
 	"gofr.dev/pkg/gofr/testutil"
 )
@@ -24,63 +27,50 @@ func (mockFileInfo) ModTime() time.Time { return time.Now() }
 func (mockFileInfo) IsDir() bool        { return false }
 func (mockFileInfo) Sys() interface{}   { return nil }
 
-func TestPwdCommand(t *testing.T) {
-	os.Args = []string{"command", "pwd"}
-
-	logs := testutil.StdoutOutputForFunc(func() {
-		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
-
-		app := gofr.NewCMD()
-
-		mock := file.NewMockFileSystemProvider(ctrl)
-
-		mock.EXPECT().UseLogger(app.Logger())
-		mock.EXPECT().UseMetrics(app.Metrics())
-		mock.EXPECT().Connect()
-		mock.EXPECT().Getwd().DoAndReturn(func() (string, error) {
-			return "/", nil
-		})
-
-		app.AddFileStore(mock)
-
-		registerPwdCommand(app, mock)
-
-		app.Run()
-	})
-
-	assert.Contains(t, logs, "/", "Test failed")
+func getContext(request gofr.Request, fileMock file.FileSystem) *gofr.Context {
+	return &gofr.Context{Context: context.Background(), Request: request, Container: &container.Container{File: fileMock}}
 }
 
-func TestLSCommand(t *testing.T) {
+func TestPwdCommandHandler(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mock := file.NewMockFileSystemProvider(ctrl)
+
+	mock.EXPECT().Getwd().DoAndReturn(func() (string, error) {
+		return "/", nil
+	})
+
+	ctx := getContext(nil, mock)
+
+	workingDirectory, _ := pwdCommandHandler(ctx)
+
+	assert.Contains(t, workingDirectory, "/", "Test failed")
+}
+
+func TestLSCommandHandler(t *testing.T) {
 	path := "/"
-	os.Args = []string{"command", "ls", fmt.Sprintf("-path=%s", path)}
 
 	logs := testutil.StdoutOutputForFunc(func() {
+
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
-		app := gofr.NewCMD()
-
 		mock := file.NewMockFileSystemProvider(ctrl)
 
-		mock.EXPECT().UseLogger(app.Logger())
-		mock.EXPECT().UseMetrics(app.Metrics())
-		mock.EXPECT().Connect()
 		mock.EXPECT().ReadDir(path).DoAndReturn(func(_ string) ([]file.FileInfo, error) {
 			files := []file.FileInfo{
 				mockFileInfo{name: "file1.txt"},
 				mockFileInfo{name: "file2.txt"},
 			}
-
 			return files, nil
 		})
 
-		app.AddFileStore(mock)
+		r := cmd.NewRequest([]string{"command", "ls", "-path=/"})
 
-		registerLsCommand(app, mock)
+		ctx := getContext(r, mock)
 
-		app.Run()
+		lsCommandHandler(ctx)
 	})
 
 	assert.Contains(t, logs, "file1.txt", "Test failed")
@@ -88,35 +78,27 @@ func TestLSCommand(t *testing.T) {
 	assert.NotContains(t, logs, "file3.txt", "Test failed")
 }
 
-func TestGrepCommand(t *testing.T) {
+func TestGrepCommandHandler(t *testing.T) {
 	path := "/"
-	os.Args = []string{"command", "grep", "-keyword=fi", fmt.Sprintf("-path=%s", path)}
 
 	logs := testutil.StdoutOutputForFunc(func() {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
-		app := gofr.NewCMD()
-
 		mock := file.NewMockFileSystemProvider(ctrl)
 
-		mock.EXPECT().UseLogger(app.Logger())
-		mock.EXPECT().UseMetrics(app.Metrics())
-		mock.EXPECT().Connect()
 		mock.EXPECT().ReadDir("/").DoAndReturn(func(_ string) ([]file.FileInfo, error) {
 			files := []file.FileInfo{
 				mockFileInfo{name: "file1.txt"},
 				mockFileInfo{name: "file2.txt"},
 			}
-
 			return files, nil
 		})
 
-		app.AddFileStore(mock)
+		r := cmd.NewRequest([]string{"command", "grep", "-keyword=fi", fmt.Sprintf("-path=%s", path)})
+		ctx := getContext(r, mock)
 
-		registerGrepCommand(app, mock)
-
-		app.Run()
+		grepCommandHandler(ctx)
 	})
 
 	assert.Contains(t, logs, "file1.txt", "Test failed")
@@ -126,64 +108,42 @@ func TestGrepCommand(t *testing.T) {
 
 func TestCreateFileCommand(t *testing.T) {
 	fileName := "file.txt"
-	os.Args = []string{"command", "createfile", fmt.Sprintf("-filename=%s", fileName)}
 
-	logs := testutil.StdoutOutputForFunc(func() {
-		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
-		app := gofr.NewCMD()
+	mock := file.NewMockFileSystemProvider(ctrl)
 
-		logger := gofr.New().Logger()
-
-		mock := file.NewMockFileSystemProvider(ctrl)
-
-		mock.EXPECT().UseLogger(app.Logger())
-		mock.EXPECT().UseMetrics(app.Metrics())
-		mock.EXPECT().Connect()
-		mock.EXPECT().Create(fileName).DoAndReturn(func(_ string) (file.File, error) {
-			return &file.MockFile{}, nil
-		})
-
-		app.AddFileStore(mock)
-
-		registerCreateFileCommand(app, mock, logger)
-
-		app.Run()
+	mock.EXPECT().Create(fileName).DoAndReturn(func(_ string) (file.File, error) {
+		return &file.MockFile{}, nil
 	})
 
-	assert.Contains(t, logs, "Creating file : \",\"file.txt\"", "Test failed")
-	assert.Contains(t, logs, "Successfully created file: \",\"file.txt\"", "Test failed")
+	r := cmd.NewRequest([]string{"command", "createfile", fmt.Sprintf("-filename=%s", fileName)})
+	ctx := getContext(r, mock)
+
+	output, _ := createFileCommandHandler(ctx)
+
+	assert.Contains(t, output, "Successfully created file: file.txt", "Test failed")
 }
 
 func TestRmCommand(t *testing.T) {
 	fileName := "file.txt"
 	os.Args = []string{"command", "rm", fmt.Sprintf("-filename=%s", fileName)}
 
-	logs := testutil.StdoutOutputForFunc(func() {
-		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
-		app := gofr.NewCMD()
+	mock := file.NewMockFileSystemProvider(ctrl)
 
-		logger := gofr.New().Logger()
-
-		mock := file.NewMockFileSystemProvider(ctrl)
-
-		mock.EXPECT().UseLogger(app.Logger())
-		mock.EXPECT().UseMetrics(app.Metrics())
-		mock.EXPECT().Connect()
-		mock.EXPECT().Remove("file.txt").DoAndReturn(func(_ string) error {
-			return nil
-		})
-
-		app.AddFileStore(mock)
-
-		registerRmCommand(app, mock, logger)
-
-		app.Run()
+	mock.EXPECT().Remove("file.txt").DoAndReturn(func(_ string) error {
+		return nil
 	})
 
-	assert.Contains(t, logs, "Removing file : \",\"file.txt\"", "Test failed")
-	assert.Contains(t, logs, "Successfully removed file: \",\"file.txt\"", "Test failed")
+	r := cmd.NewRequest([]string{"command", "rm", fmt.Sprintf("-filename=%s", fileName)})
+
+	ctx := getContext(r, mock)
+
+	output, _ := rmCommandHandler(ctx)
+
+	assert.Contains(t, output, "Successfully removed file: file.txt", "Test failed")
 }
