@@ -401,7 +401,7 @@ type OpenTSDBProvider interface {
 	provider
 }
 
-// OpentSDB provides methods for GoFr applications to communicate with OpenTSDB
+// OpenTSDB provides methods for GoFr applications to communicate with OpenTSDB
 // through its REST APIs. Each method corresponds to an API endpoint as defined in
 // the OpenTSDB documentation (http://opentsdb.net/docs/build/html/api_http/index.html#api-endpoints).
 type OpenTSDB interface {

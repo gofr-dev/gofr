@@ -145,7 +145,7 @@ func TestApp_AddS3(t *testing.T) {
 	})
 }
 
-func TestApp_AddOpentsdb(t *testing.T) {
+func TestApp_AddOpenTSDB(t *testing.T) {
 	t.Run("Adding OpenTSDB", func(t *testing.T) {
 		app := New()
 
@@ -159,7 +159,7 @@ func TestApp_AddOpentsdb(t *testing.T) {
 		mock.EXPECT().UseTracer(gomock.Any())
 		mock.EXPECT().Connect()
 
-		app.AddOpentsdb(mock)
+		app.AddOpenTSDB(mock)
 
 		assert.Equal(t, mock, app.container.OpenTSDB)
 	})
