@@ -76,7 +76,7 @@ Therefore, GoFr utilizes a pluggable approach for new datasources by separating 
 | PostgreSQL     | ✅         | ✅    | ✅     | ✅      |           |
 | MongoDB        | ✅         | ✅    | ✅     |  ✅      | ✅         |
 | SQLite         | ✅         | ✅    | ✅     | ✅      |           |
-| BadgerDB       | ✅         | ✅    |       |        | ✅         |
+| BadgerDB       | ✅         | ✅    | ✅      |    ✅    | ✅         |
 | Cassandra      | ✅         | ✅    | ✅     |  ✅      | ✅         |
 | Clickhouse     |           | ✅    | ✅     |   ✅     | ✅         |
 | FTP            |           | ✅    |       |        | ✅         |
