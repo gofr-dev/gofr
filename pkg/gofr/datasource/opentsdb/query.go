@@ -304,7 +304,7 @@ func (qri *QueryRespItem) GetLatestDataPoint() *DataPoint {
 	return datapoint
 }
 
-func (c *Client) Query(param *QueryParam) (*QueryResponse, error) {
+func (c *Client) Query(ctx context.Context, param *QueryParam) (*QueryResponse, error) {
 	if param.tracer == nil {
 		param.tracer = c.tracer
 	}
@@ -313,7 +313,7 @@ func (c *Client) Query(param *QueryParam) (*QueryResponse, error) {
 		param.logger = c.logger
 	}
 
-	span := c.addTrace(c.ctx, "Query")
+	span := c.addTrace(ctx, "Query")
 
 	status := StatusFailed
 
@@ -334,9 +334,9 @@ func (c *Client) Query(param *QueryParam) (*QueryResponse, error) {
 		return nil, err
 	}
 
-	queryResp := QueryResponse{logger: c.logger, tracer: c.tracer, ctx: c.ctx}
+	queryResp := QueryResponse{logger: c.logger, tracer: c.tracer, ctx: ctx}
 
-	if err = c.sendRequest(http.MethodPost, queryEndpoint, reqBodyCnt, &queryResp); err != nil {
+	if err = c.sendRequest(ctx, http.MethodPost, queryEndpoint, reqBodyCnt, &queryResp); err != nil {
 		message = fmt.Sprintf("error while processing request at url %q: %s ", queryEndpoint, err)
 		return nil, err
 	}

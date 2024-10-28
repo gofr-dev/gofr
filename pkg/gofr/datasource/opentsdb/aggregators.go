@@ -49,8 +49,8 @@ func (aggreResp *AggregatorsResponse) String() string {
 	return toString(aggreResp.ctx, aggreResp, "ToString-Aggregators", aggreResp.logger)
 }
 
-func (c *Client) Aggregators() (*AggregatorsResponse, error) {
-	span := c.addTrace(c.ctx, "Aggregators")
+func (c *Client) Aggregators(ctx context.Context) (*AggregatorsResponse, error) {
+	span := c.addTrace(ctx, "Aggregators")
 	status := StatusFailed
 
 	var message string
@@ -59,9 +59,9 @@ func (c *Client) Aggregators() (*AggregatorsResponse, error) {
 
 	aggregatorsEndpoint := fmt.Sprintf("%s%s", c.endpoint, AggregatorPath)
 
-	aggreResp := AggregatorsResponse{logger: c.logger, tracer: c.tracer, ctx: c.ctx}
+	aggreResp := AggregatorsResponse{logger: c.logger, tracer: c.tracer, ctx: ctx}
 
-	if err := c.sendRequest(http.MethodGet, aggregatorsEndpoint, "", &aggreResp); err != nil {
+	if err := c.sendRequest(ctx, http.MethodGet, aggregatorsEndpoint, "", &aggreResp); err != nil {
 		message = fmt.Sprintf("error retrieving aggregators from url: %s", aggregatorsEndpoint)
 		return nil, err
 	}

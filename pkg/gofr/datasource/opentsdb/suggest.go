@@ -80,7 +80,7 @@ func (sugResp *SuggestResponse) String() string {
 	return toString(sugResp.ctx, sugResp, "ToString-VersionResp", sugResp.logger)
 }
 
-func (c *Client) Suggest(sugParam *SuggestParam) (*SuggestResponse, error) {
+func (c *Client) Suggest(ctx context.Context, sugParam *SuggestParam) (*SuggestResponse, error) {
 	if sugParam.logger == nil {
 		sugParam.logger = c.logger
 	}
@@ -110,8 +110,8 @@ func (c *Client) Suggest(sugParam *SuggestParam) (*SuggestResponse, error) {
 		return nil, err
 	}
 
-	sugResp := SuggestResponse{logger: c.logger, tracer: c.tracer, ctx: c.ctx}
-	if err := c.sendRequest(http.MethodPost, sugEndpoint, reqBodyCnt, &sugResp); err != nil {
+	sugResp := SuggestResponse{logger: c.logger, tracer: c.tracer, ctx: ctx}
+	if err := c.sendRequest(ctx, http.MethodPost, sugEndpoint, reqBodyCnt, &sugResp); err != nil {
 		message = fmt.Sprintf("error processing suggest request to url %q: %s", sugEndpoint, err)
 		return nil, err
 	}

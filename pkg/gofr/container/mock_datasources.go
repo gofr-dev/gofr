@@ -10931,63 +10931,63 @@ func (m *MockOpenTSDBProvider) EXPECT() *MockOpenTSDBProviderMockRecorder {
 }
 
 // Aggregators mocks base method.
-func (m *MockOpenTSDBProvider) Aggregators() (any, error) {
+func (m *MockOpenTSDBProvider) Aggregators(ctx context.Context) (any, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Aggregators")
+	ret := m.ctrl.Call(m, "Aggregators", ctx)
 	ret0, _ := ret[0].(any)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Aggregators indicates an expected call of Aggregators.
-func (mr *MockOpenTSDBProviderMockRecorder) Aggregators() *gomock.Call {
+func (mr *MockOpenTSDBProviderMockRecorder) Aggregators(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Aggregators", reflect.TypeOf((*MockOpenTSDBProvider)(nil).Aggregators))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Aggregators", reflect.TypeOf((*MockOpenTSDBProvider)(nil).Aggregators), ctx)
 }
 
 // AssignUID mocks base method.
-func (m *MockOpenTSDBProvider) AssignUID(assignParam any) (any, error) {
+func (m *MockOpenTSDBProvider) AssignUID(ctx context.Context, assignParam any) (any, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AssignUID", assignParam)
+	ret := m.ctrl.Call(m, "AssignUID", ctx, assignParam)
 	ret0, _ := ret[0].(any)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // AssignUID indicates an expected call of AssignUID.
-func (mr *MockOpenTSDBProviderMockRecorder) AssignUID(assignParam any) *gomock.Call {
+func (mr *MockOpenTSDBProviderMockRecorder) AssignUID(ctx, assignParam any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AssignUID", reflect.TypeOf((*MockOpenTSDBProvider)(nil).AssignUID), assignParam)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AssignUID", reflect.TypeOf((*MockOpenTSDBProvider)(nil).AssignUID), ctx, assignParam)
 }
 
 // BulkDeleteAnnotations mocks base method.
-func (m *MockOpenTSDBProvider) BulkDeleteAnnotations(bulkDelParam any) (any, error) {
+func (m *MockOpenTSDBProvider) BulkDeleteAnnotations(ctx context.Context, bulkDelParam any) (any, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "BulkDeleteAnnotations", bulkDelParam)
+	ret := m.ctrl.Call(m, "BulkDeleteAnnotations", ctx, bulkDelParam)
 	ret0, _ := ret[0].(any)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // BulkDeleteAnnotations indicates an expected call of BulkDeleteAnnotations.
-func (mr *MockOpenTSDBProviderMockRecorder) BulkDeleteAnnotations(bulkDelParam any) *gomock.Call {
+func (mr *MockOpenTSDBProviderMockRecorder) BulkDeleteAnnotations(ctx, bulkDelParam any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BulkDeleteAnnotations", reflect.TypeOf((*MockOpenTSDBProvider)(nil).BulkDeleteAnnotations), bulkDelParam)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BulkDeleteAnnotations", reflect.TypeOf((*MockOpenTSDBProvider)(nil).BulkDeleteAnnotations), ctx, bulkDelParam)
 }
 
 // BulkUpdateAnnotations mocks base method.
-func (m *MockOpenTSDBProvider) BulkUpdateAnnotations(annotations any) (any, error) {
+func (m *MockOpenTSDBProvider) BulkUpdateAnnotations(ctx context.Context, annotations any) (any, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "BulkUpdateAnnotations", annotations)
+	ret := m.ctrl.Call(m, "BulkUpdateAnnotations", ctx, annotations)
 	ret0, _ := ret[0].(any)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // BulkUpdateAnnotations indicates an expected call of BulkUpdateAnnotations.
-func (mr *MockOpenTSDBProviderMockRecorder) BulkUpdateAnnotations(annotations any) *gomock.Call {
+func (mr *MockOpenTSDBProviderMockRecorder) BulkUpdateAnnotations(ctx, annotations any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BulkUpdateAnnotations", reflect.TypeOf((*MockOpenTSDBProvider)(nil).BulkUpdateAnnotations), annotations)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BulkUpdateAnnotations", reflect.TypeOf((*MockOpenTSDBProvider)(nil).BulkUpdateAnnotations), ctx, annotations)
 }
 
 // Connect mocks base method.
@@ -11003,63 +11003,63 @@ func (mr *MockOpenTSDBProviderMockRecorder) Connect() *gomock.Call {
 }
 
 // DeleteAnnotation mocks base method.
-func (m *MockOpenTSDBProvider) DeleteAnnotation(annotation any) (any, error) {
+func (m *MockOpenTSDBProvider) DeleteAnnotation(ctx context.Context, annotation any) (any, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteAnnotation", annotation)
+	ret := m.ctrl.Call(m, "DeleteAnnotation", ctx, annotation)
 	ret0, _ := ret[0].(any)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // DeleteAnnotation indicates an expected call of DeleteAnnotation.
-func (mr *MockOpenTSDBProviderMockRecorder) DeleteAnnotation(annotation any) *gomock.Call {
+func (mr *MockOpenTSDBProviderMockRecorder) DeleteAnnotation(ctx, annotation any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteAnnotation", reflect.TypeOf((*MockOpenTSDBProvider)(nil).DeleteAnnotation), annotation)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteAnnotation", reflect.TypeOf((*MockOpenTSDBProvider)(nil).DeleteAnnotation), ctx, annotation)
 }
 
 // DeleteTSMetaData mocks base method.
-func (m *MockOpenTSDBProvider) DeleteTSMetaData(tsMetaData any) (any, error) {
+func (m *MockOpenTSDBProvider) DeleteTSMetaData(ctx context.Context, tsMetaData any) (any, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteTSMetaData", tsMetaData)
+	ret := m.ctrl.Call(m, "DeleteTSMetaData", ctx, tsMetaData)
 	ret0, _ := ret[0].(any)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // DeleteTSMetaData indicates an expected call of DeleteTSMetaData.
-func (mr *MockOpenTSDBProviderMockRecorder) DeleteTSMetaData(tsMetaData any) *gomock.Call {
+func (mr *MockOpenTSDBProviderMockRecorder) DeleteTSMetaData(ctx, tsMetaData any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteTSMetaData", reflect.TypeOf((*MockOpenTSDBProvider)(nil).DeleteTSMetaData), tsMetaData)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteTSMetaData", reflect.TypeOf((*MockOpenTSDBProvider)(nil).DeleteTSMetaData), ctx, tsMetaData)
 }
 
 // DeleteUIDMetaData mocks base method.
-func (m *MockOpenTSDBProvider) DeleteUIDMetaData(uidMetaData any) (any, error) {
+func (m *MockOpenTSDBProvider) DeleteUIDMetaData(ctx context.Context, uidMetaData any) (any, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteUIDMetaData", uidMetaData)
+	ret := m.ctrl.Call(m, "DeleteUIDMetaData", ctx, uidMetaData)
 	ret0, _ := ret[0].(any)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // DeleteUIDMetaData indicates an expected call of DeleteUIDMetaData.
-func (mr *MockOpenTSDBProviderMockRecorder) DeleteUIDMetaData(uidMetaData any) *gomock.Call {
+func (mr *MockOpenTSDBProviderMockRecorder) DeleteUIDMetaData(ctx, uidMetaData any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteUIDMetaData", reflect.TypeOf((*MockOpenTSDBProvider)(nil).DeleteUIDMetaData), uidMetaData)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteUIDMetaData", reflect.TypeOf((*MockOpenTSDBProvider)(nil).DeleteUIDMetaData), ctx, uidMetaData)
 }
 
 // Dropcaches mocks base method.
-func (m *MockOpenTSDBProvider) Dropcaches() (any, error) {
+func (m *MockOpenTSDBProvider) Dropcaches(ctx context.Context) (any, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Dropcaches")
+	ret := m.ctrl.Call(m, "Dropcaches", ctx)
 	ret0, _ := ret[0].(any)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Dropcaches indicates an expected call of Dropcaches.
-func (mr *MockOpenTSDBProviderMockRecorder) Dropcaches() *gomock.Call {
+func (mr *MockOpenTSDBProviderMockRecorder) Dropcaches(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Dropcaches", reflect.TypeOf((*MockOpenTSDBProvider)(nil).Dropcaches))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Dropcaches", reflect.TypeOf((*MockOpenTSDBProvider)(nil).Dropcaches), ctx)
 }
 
 // HealthCheck mocks base method.
@@ -11078,153 +11078,153 @@ func (mr *MockOpenTSDBProviderMockRecorder) HealthCheck(arg0 any) *gomock.Call {
 }
 
 // Put mocks base method.
-func (m *MockOpenTSDBProvider) Put(data any, queryParam string) (any, error) {
+func (m *MockOpenTSDBProvider) Put(ctx context.Context, data any, queryParam string) (any, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Put", data, queryParam)
+	ret := m.ctrl.Call(m, "Put", ctx, data, queryParam)
 	ret0, _ := ret[0].(any)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Put indicates an expected call of Put.
-func (mr *MockOpenTSDBProviderMockRecorder) Put(data, queryParam any) *gomock.Call {
+func (mr *MockOpenTSDBProviderMockRecorder) Put(ctx, data, queryParam any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Put", reflect.TypeOf((*MockOpenTSDBProvider)(nil).Put), data, queryParam)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Put", reflect.TypeOf((*MockOpenTSDBProvider)(nil).Put), ctx, data, queryParam)
 }
 
 // Query mocks base method.
-func (m *MockOpenTSDBProvider) Query(param any) (any, error) {
+func (m *MockOpenTSDBProvider) Query(ctx context.Context, param any) (any, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Query", param)
+	ret := m.ctrl.Call(m, "Query", ctx, param)
 	ret0, _ := ret[0].(any)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Query indicates an expected call of Query.
-func (mr *MockOpenTSDBProviderMockRecorder) Query(param any) *gomock.Call {
+func (mr *MockOpenTSDBProviderMockRecorder) Query(ctx, param any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Query", reflect.TypeOf((*MockOpenTSDBProvider)(nil).Query), param)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Query", reflect.TypeOf((*MockOpenTSDBProvider)(nil).Query), ctx, param)
 }
 
 // QueryAnnotation mocks base method.
-func (m *MockOpenTSDBProvider) QueryAnnotation(queryAnnoParam map[string]any) (any, error) {
+func (m *MockOpenTSDBProvider) QueryAnnotation(ctx context.Context, queryAnnoParam map[string]any) (any, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "QueryAnnotation", queryAnnoParam)
+	ret := m.ctrl.Call(m, "QueryAnnotation", ctx, queryAnnoParam)
 	ret0, _ := ret[0].(any)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // QueryAnnotation indicates an expected call of QueryAnnotation.
-func (mr *MockOpenTSDBProviderMockRecorder) QueryAnnotation(queryAnnoParam any) *gomock.Call {
+func (mr *MockOpenTSDBProviderMockRecorder) QueryAnnotation(ctx, queryAnnoParam any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryAnnotation", reflect.TypeOf((*MockOpenTSDBProvider)(nil).QueryAnnotation), queryAnnoParam)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryAnnotation", reflect.TypeOf((*MockOpenTSDBProvider)(nil).QueryAnnotation), ctx, queryAnnoParam)
 }
 
 // QueryLast mocks base method.
-func (m *MockOpenTSDBProvider) QueryLast(param any) (any, error) {
+func (m *MockOpenTSDBProvider) QueryLast(ctx context.Context, param any) (any, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "QueryLast", param)
+	ret := m.ctrl.Call(m, "QueryLast", ctx, param)
 	ret0, _ := ret[0].(any)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // QueryLast indicates an expected call of QueryLast.
-func (mr *MockOpenTSDBProviderMockRecorder) QueryLast(param any) *gomock.Call {
+func (mr *MockOpenTSDBProviderMockRecorder) QueryLast(ctx, param any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryLast", reflect.TypeOf((*MockOpenTSDBProvider)(nil).QueryLast), param)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryLast", reflect.TypeOf((*MockOpenTSDBProvider)(nil).QueryLast), ctx, param)
 }
 
 // QueryTSMetaData mocks base method.
-func (m *MockOpenTSDBProvider) QueryTSMetaData(tsuid string) (any, error) {
+func (m *MockOpenTSDBProvider) QueryTSMetaData(ctx context.Context, tsuid string) (any, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "QueryTSMetaData", tsuid)
+	ret := m.ctrl.Call(m, "QueryTSMetaData", ctx, tsuid)
 	ret0, _ := ret[0].(any)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // QueryTSMetaData indicates an expected call of QueryTSMetaData.
-func (mr *MockOpenTSDBProviderMockRecorder) QueryTSMetaData(tsuid any) *gomock.Call {
+func (mr *MockOpenTSDBProviderMockRecorder) QueryTSMetaData(ctx, tsuid any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryTSMetaData", reflect.TypeOf((*MockOpenTSDBProvider)(nil).QueryTSMetaData), tsuid)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryTSMetaData", reflect.TypeOf((*MockOpenTSDBProvider)(nil).QueryTSMetaData), ctx, tsuid)
 }
 
 // QueryUIDMetaData mocks base method.
-func (m *MockOpenTSDBProvider) QueryUIDMetaData(metaQueryParam map[string]string) (any, error) {
+func (m *MockOpenTSDBProvider) QueryUIDMetaData(ctx context.Context, metaQueryParam map[string]string) (any, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "QueryUIDMetaData", metaQueryParam)
+	ret := m.ctrl.Call(m, "QueryUIDMetaData", ctx, metaQueryParam)
 	ret0, _ := ret[0].(any)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // QueryUIDMetaData indicates an expected call of QueryUIDMetaData.
-func (mr *MockOpenTSDBProviderMockRecorder) QueryUIDMetaData(metaQueryParam any) *gomock.Call {
+func (mr *MockOpenTSDBProviderMockRecorder) QueryUIDMetaData(ctx, metaQueryParam any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryUIDMetaData", reflect.TypeOf((*MockOpenTSDBProvider)(nil).QueryUIDMetaData), metaQueryParam)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryUIDMetaData", reflect.TypeOf((*MockOpenTSDBProvider)(nil).QueryUIDMetaData), ctx, metaQueryParam)
 }
 
 // Suggest mocks base method.
-func (m *MockOpenTSDBProvider) Suggest(sugParm any) (any, error) {
+func (m *MockOpenTSDBProvider) Suggest(ctx context.Context, sugParm any) (any, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Suggest", sugParm)
+	ret := m.ctrl.Call(m, "Suggest", ctx, sugParm)
 	ret0, _ := ret[0].(any)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Suggest indicates an expected call of Suggest.
-func (mr *MockOpenTSDBProviderMockRecorder) Suggest(sugParm any) *gomock.Call {
+func (mr *MockOpenTSDBProviderMockRecorder) Suggest(ctx, sugParm any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Suggest", reflect.TypeOf((*MockOpenTSDBProvider)(nil).Suggest), sugParm)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Suggest", reflect.TypeOf((*MockOpenTSDBProvider)(nil).Suggest), ctx, sugParm)
 }
 
 // UpdateAnnotation mocks base method.
-func (m *MockOpenTSDBProvider) UpdateAnnotation(annotation any) (any, error) {
+func (m *MockOpenTSDBProvider) UpdateAnnotation(ctx context.Context, annotation any) (any, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UpdateAnnotation", annotation)
+	ret := m.ctrl.Call(m, "UpdateAnnotation", ctx, annotation)
 	ret0, _ := ret[0].(any)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // UpdateAnnotation indicates an expected call of UpdateAnnotation.
-func (mr *MockOpenTSDBProviderMockRecorder) UpdateAnnotation(annotation any) *gomock.Call {
+func (mr *MockOpenTSDBProviderMockRecorder) UpdateAnnotation(ctx, annotation any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateAnnotation", reflect.TypeOf((*MockOpenTSDBProvider)(nil).UpdateAnnotation), annotation)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateAnnotation", reflect.TypeOf((*MockOpenTSDBProvider)(nil).UpdateAnnotation), ctx, annotation)
 }
 
 // UpdateTSMetaData mocks base method.
-func (m *MockOpenTSDBProvider) UpdateTSMetaData(tsMetaData any) (any, error) {
+func (m *MockOpenTSDBProvider) UpdateTSMetaData(ctx context.Context, tsMetaData any) (any, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UpdateTSMetaData", tsMetaData)
+	ret := m.ctrl.Call(m, "UpdateTSMetaData", ctx, tsMetaData)
 	ret0, _ := ret[0].(any)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // UpdateTSMetaData indicates an expected call of UpdateTSMetaData.
-func (mr *MockOpenTSDBProviderMockRecorder) UpdateTSMetaData(tsMetaData any) *gomock.Call {
+func (mr *MockOpenTSDBProviderMockRecorder) UpdateTSMetaData(ctx, tsMetaData any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateTSMetaData", reflect.TypeOf((*MockOpenTSDBProvider)(nil).UpdateTSMetaData), tsMetaData)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateTSMetaData", reflect.TypeOf((*MockOpenTSDBProvider)(nil).UpdateTSMetaData), ctx, tsMetaData)
 }
 
 // UpdateUIDMetaData mocks base method.
-func (m *MockOpenTSDBProvider) UpdateUIDMetaData(uidMetaData any) (any, error) {
+func (m *MockOpenTSDBProvider) UpdateUIDMetaData(ctx context.Context, uidMetaData any) (any, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UpdateUIDMetaData", uidMetaData)
+	ret := m.ctrl.Call(m, "UpdateUIDMetaData", ctx, uidMetaData)
 	ret0, _ := ret[0].(any)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // UpdateUIDMetaData indicates an expected call of UpdateUIDMetaData.
-func (mr *MockOpenTSDBProviderMockRecorder) UpdateUIDMetaData(uidMetaData any) *gomock.Call {
+func (mr *MockOpenTSDBProviderMockRecorder) UpdateUIDMetaData(ctx, uidMetaData any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateUIDMetaData", reflect.TypeOf((*MockOpenTSDBProvider)(nil).UpdateUIDMetaData), uidMetaData)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateUIDMetaData", reflect.TypeOf((*MockOpenTSDBProvider)(nil).UpdateUIDMetaData), ctx, uidMetaData)
 }
 
 // UseLogger mocks base method.
@@ -11263,20 +11263,6 @@ func (mr *MockOpenTSDBProviderMockRecorder) UseTracer(tracer any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UseTracer", reflect.TypeOf((*MockOpenTSDBProvider)(nil).UseTracer), tracer)
 }
 
-// WithContext mocks base method.
-func (m *MockOpenTSDBProvider) WithContext(ctx context.Context) OpenTSDB {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "WithContext", ctx)
-	ret0, _ := ret[0].(OpenTSDB)
-	return ret0
-}
-
-// WithContext indicates an expected call of WithContext.
-func (mr *MockOpenTSDBProviderMockRecorder) WithContext(ctx any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WithContext", reflect.TypeOf((*MockOpenTSDBProvider)(nil).WithContext), ctx)
-}
-
 // MockOpenTSDB is a mock of OpenTSDB interface.
 type MockOpenTSDB struct {
 	ctrl     *gomock.Controller
@@ -11301,123 +11287,123 @@ func (m *MockOpenTSDB) EXPECT() *MockOpenTSDBMockRecorder {
 }
 
 // Aggregators mocks base method.
-func (m *MockOpenTSDB) Aggregators() (any, error) {
+func (m *MockOpenTSDB) Aggregators(ctx context.Context) (any, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Aggregators")
+	ret := m.ctrl.Call(m, "Aggregators", ctx)
 	ret0, _ := ret[0].(any)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Aggregators indicates an expected call of Aggregators.
-func (mr *MockOpenTSDBMockRecorder) Aggregators() *gomock.Call {
+func (mr *MockOpenTSDBMockRecorder) Aggregators(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Aggregators", reflect.TypeOf((*MockOpenTSDB)(nil).Aggregators))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Aggregators", reflect.TypeOf((*MockOpenTSDB)(nil).Aggregators), ctx)
 }
 
 // AssignUID mocks base method.
-func (m *MockOpenTSDB) AssignUID(assignParam any) (any, error) {
+func (m *MockOpenTSDB) AssignUID(ctx context.Context, assignParam any) (any, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AssignUID", assignParam)
+	ret := m.ctrl.Call(m, "AssignUID", ctx, assignParam)
 	ret0, _ := ret[0].(any)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // AssignUID indicates an expected call of AssignUID.
-func (mr *MockOpenTSDBMockRecorder) AssignUID(assignParam any) *gomock.Call {
+func (mr *MockOpenTSDBMockRecorder) AssignUID(ctx, assignParam any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AssignUID", reflect.TypeOf((*MockOpenTSDB)(nil).AssignUID), assignParam)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AssignUID", reflect.TypeOf((*MockOpenTSDB)(nil).AssignUID), ctx, assignParam)
 }
 
 // BulkDeleteAnnotations mocks base method.
-func (m *MockOpenTSDB) BulkDeleteAnnotations(bulkDelParam any) (any, error) {
+func (m *MockOpenTSDB) BulkDeleteAnnotations(ctx context.Context, bulkDelParam any) (any, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "BulkDeleteAnnotations", bulkDelParam)
+	ret := m.ctrl.Call(m, "BulkDeleteAnnotations", ctx, bulkDelParam)
 	ret0, _ := ret[0].(any)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // BulkDeleteAnnotations indicates an expected call of BulkDeleteAnnotations.
-func (mr *MockOpenTSDBMockRecorder) BulkDeleteAnnotations(bulkDelParam any) *gomock.Call {
+func (mr *MockOpenTSDBMockRecorder) BulkDeleteAnnotations(ctx, bulkDelParam any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BulkDeleteAnnotations", reflect.TypeOf((*MockOpenTSDB)(nil).BulkDeleteAnnotations), bulkDelParam)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BulkDeleteAnnotations", reflect.TypeOf((*MockOpenTSDB)(nil).BulkDeleteAnnotations), ctx, bulkDelParam)
 }
 
 // BulkUpdateAnnotations mocks base method.
-func (m *MockOpenTSDB) BulkUpdateAnnotations(annotations any) (any, error) {
+func (m *MockOpenTSDB) BulkUpdateAnnotations(ctx context.Context, annotations any) (any, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "BulkUpdateAnnotations", annotations)
+	ret := m.ctrl.Call(m, "BulkUpdateAnnotations", ctx, annotations)
 	ret0, _ := ret[0].(any)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // BulkUpdateAnnotations indicates an expected call of BulkUpdateAnnotations.
-func (mr *MockOpenTSDBMockRecorder) BulkUpdateAnnotations(annotations any) *gomock.Call {
+func (mr *MockOpenTSDBMockRecorder) BulkUpdateAnnotations(ctx, annotations any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BulkUpdateAnnotations", reflect.TypeOf((*MockOpenTSDB)(nil).BulkUpdateAnnotations), annotations)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BulkUpdateAnnotations", reflect.TypeOf((*MockOpenTSDB)(nil).BulkUpdateAnnotations), ctx, annotations)
 }
 
 // DeleteAnnotation mocks base method.
-func (m *MockOpenTSDB) DeleteAnnotation(annotation any) (any, error) {
+func (m *MockOpenTSDB) DeleteAnnotation(ctx context.Context, annotation any) (any, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteAnnotation", annotation)
+	ret := m.ctrl.Call(m, "DeleteAnnotation", ctx, annotation)
 	ret0, _ := ret[0].(any)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // DeleteAnnotation indicates an expected call of DeleteAnnotation.
-func (mr *MockOpenTSDBMockRecorder) DeleteAnnotation(annotation any) *gomock.Call {
+func (mr *MockOpenTSDBMockRecorder) DeleteAnnotation(ctx, annotation any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteAnnotation", reflect.TypeOf((*MockOpenTSDB)(nil).DeleteAnnotation), annotation)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteAnnotation", reflect.TypeOf((*MockOpenTSDB)(nil).DeleteAnnotation), ctx, annotation)
 }
 
 // DeleteTSMetaData mocks base method.
-func (m *MockOpenTSDB) DeleteTSMetaData(tsMetaData any) (any, error) {
+func (m *MockOpenTSDB) DeleteTSMetaData(ctx context.Context, tsMetaData any) (any, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteTSMetaData", tsMetaData)
+	ret := m.ctrl.Call(m, "DeleteTSMetaData", ctx, tsMetaData)
 	ret0, _ := ret[0].(any)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // DeleteTSMetaData indicates an expected call of DeleteTSMetaData.
-func (mr *MockOpenTSDBMockRecorder) DeleteTSMetaData(tsMetaData any) *gomock.Call {
+func (mr *MockOpenTSDBMockRecorder) DeleteTSMetaData(ctx, tsMetaData any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteTSMetaData", reflect.TypeOf((*MockOpenTSDB)(nil).DeleteTSMetaData), tsMetaData)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteTSMetaData", reflect.TypeOf((*MockOpenTSDB)(nil).DeleteTSMetaData), ctx, tsMetaData)
 }
 
 // DeleteUIDMetaData mocks base method.
-func (m *MockOpenTSDB) DeleteUIDMetaData(uidMetaData any) (any, error) {
+func (m *MockOpenTSDB) DeleteUIDMetaData(ctx context.Context, uidMetaData any) (any, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteUIDMetaData", uidMetaData)
+	ret := m.ctrl.Call(m, "DeleteUIDMetaData", ctx, uidMetaData)
 	ret0, _ := ret[0].(any)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // DeleteUIDMetaData indicates an expected call of DeleteUIDMetaData.
-func (mr *MockOpenTSDBMockRecorder) DeleteUIDMetaData(uidMetaData any) *gomock.Call {
+func (mr *MockOpenTSDBMockRecorder) DeleteUIDMetaData(ctx, uidMetaData any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteUIDMetaData", reflect.TypeOf((*MockOpenTSDB)(nil).DeleteUIDMetaData), uidMetaData)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteUIDMetaData", reflect.TypeOf((*MockOpenTSDB)(nil).DeleteUIDMetaData), ctx, uidMetaData)
 }
 
 // Dropcaches mocks base method.
-func (m *MockOpenTSDB) Dropcaches() (any, error) {
+func (m *MockOpenTSDB) Dropcaches(ctx context.Context) (any, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Dropcaches")
+	ret := m.ctrl.Call(m, "Dropcaches", ctx)
 	ret0, _ := ret[0].(any)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Dropcaches indicates an expected call of Dropcaches.
-func (mr *MockOpenTSDBMockRecorder) Dropcaches() *gomock.Call {
+func (mr *MockOpenTSDBMockRecorder) Dropcaches(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Dropcaches", reflect.TypeOf((*MockOpenTSDB)(nil).Dropcaches))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Dropcaches", reflect.TypeOf((*MockOpenTSDB)(nil).Dropcaches), ctx)
 }
 
 // HealthCheck mocks base method.
@@ -11436,165 +11422,151 @@ func (mr *MockOpenTSDBMockRecorder) HealthCheck(arg0 any) *gomock.Call {
 }
 
 // Put mocks base method.
-func (m *MockOpenTSDB) Put(data any, queryParam string) (any, error) {
+func (m *MockOpenTSDB) Put(ctx context.Context, data any, queryParam string) (any, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Put", data, queryParam)
+	ret := m.ctrl.Call(m, "Put", ctx, data, queryParam)
 	ret0, _ := ret[0].(any)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Put indicates an expected call of Put.
-func (mr *MockOpenTSDBMockRecorder) Put(data, queryParam any) *gomock.Call {
+func (mr *MockOpenTSDBMockRecorder) Put(ctx, data, queryParam any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Put", reflect.TypeOf((*MockOpenTSDB)(nil).Put), data, queryParam)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Put", reflect.TypeOf((*MockOpenTSDB)(nil).Put), ctx, data, queryParam)
 }
 
 // Query mocks base method.
-func (m *MockOpenTSDB) Query(param any) (any, error) {
+func (m *MockOpenTSDB) Query(ctx context.Context, param any) (any, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Query", param)
+	ret := m.ctrl.Call(m, "Query", ctx, param)
 	ret0, _ := ret[0].(any)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Query indicates an expected call of Query.
-func (mr *MockOpenTSDBMockRecorder) Query(param any) *gomock.Call {
+func (mr *MockOpenTSDBMockRecorder) Query(ctx, param any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Query", reflect.TypeOf((*MockOpenTSDB)(nil).Query), param)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Query", reflect.TypeOf((*MockOpenTSDB)(nil).Query), ctx, param)
 }
 
 // QueryAnnotation mocks base method.
-func (m *MockOpenTSDB) QueryAnnotation(queryAnnoParam map[string]any) (any, error) {
+func (m *MockOpenTSDB) QueryAnnotation(ctx context.Context, queryAnnoParam map[string]any) (any, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "QueryAnnotation", queryAnnoParam)
+	ret := m.ctrl.Call(m, "QueryAnnotation", ctx, queryAnnoParam)
 	ret0, _ := ret[0].(any)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // QueryAnnotation indicates an expected call of QueryAnnotation.
-func (mr *MockOpenTSDBMockRecorder) QueryAnnotation(queryAnnoParam any) *gomock.Call {
+func (mr *MockOpenTSDBMockRecorder) QueryAnnotation(ctx, queryAnnoParam any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryAnnotation", reflect.TypeOf((*MockOpenTSDB)(nil).QueryAnnotation), queryAnnoParam)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryAnnotation", reflect.TypeOf((*MockOpenTSDB)(nil).QueryAnnotation), ctx, queryAnnoParam)
 }
 
 // QueryLast mocks base method.
-func (m *MockOpenTSDB) QueryLast(param any) (any, error) {
+func (m *MockOpenTSDB) QueryLast(ctx context.Context, param any) (any, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "QueryLast", param)
+	ret := m.ctrl.Call(m, "QueryLast", ctx, param)
 	ret0, _ := ret[0].(any)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // QueryLast indicates an expected call of QueryLast.
-func (mr *MockOpenTSDBMockRecorder) QueryLast(param any) *gomock.Call {
+func (mr *MockOpenTSDBMockRecorder) QueryLast(ctx, param any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryLast", reflect.TypeOf((*MockOpenTSDB)(nil).QueryLast), param)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryLast", reflect.TypeOf((*MockOpenTSDB)(nil).QueryLast), ctx, param)
 }
 
 // QueryTSMetaData mocks base method.
-func (m *MockOpenTSDB) QueryTSMetaData(tsuid string) (any, error) {
+func (m *MockOpenTSDB) QueryTSMetaData(ctx context.Context, tsuid string) (any, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "QueryTSMetaData", tsuid)
+	ret := m.ctrl.Call(m, "QueryTSMetaData", ctx, tsuid)
 	ret0, _ := ret[0].(any)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // QueryTSMetaData indicates an expected call of QueryTSMetaData.
-func (mr *MockOpenTSDBMockRecorder) QueryTSMetaData(tsuid any) *gomock.Call {
+func (mr *MockOpenTSDBMockRecorder) QueryTSMetaData(ctx, tsuid any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryTSMetaData", reflect.TypeOf((*MockOpenTSDB)(nil).QueryTSMetaData), tsuid)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryTSMetaData", reflect.TypeOf((*MockOpenTSDB)(nil).QueryTSMetaData), ctx, tsuid)
 }
 
 // QueryUIDMetaData mocks base method.
-func (m *MockOpenTSDB) QueryUIDMetaData(metaQueryParam map[string]string) (any, error) {
+func (m *MockOpenTSDB) QueryUIDMetaData(ctx context.Context, metaQueryParam map[string]string) (any, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "QueryUIDMetaData", metaQueryParam)
+	ret := m.ctrl.Call(m, "QueryUIDMetaData", ctx, metaQueryParam)
 	ret0, _ := ret[0].(any)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // QueryUIDMetaData indicates an expected call of QueryUIDMetaData.
-func (mr *MockOpenTSDBMockRecorder) QueryUIDMetaData(metaQueryParam any) *gomock.Call {
+func (mr *MockOpenTSDBMockRecorder) QueryUIDMetaData(ctx, metaQueryParam any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryUIDMetaData", reflect.TypeOf((*MockOpenTSDB)(nil).QueryUIDMetaData), metaQueryParam)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryUIDMetaData", reflect.TypeOf((*MockOpenTSDB)(nil).QueryUIDMetaData), ctx, metaQueryParam)
 }
 
 // Suggest mocks base method.
-func (m *MockOpenTSDB) Suggest(sugParm any) (any, error) {
+func (m *MockOpenTSDB) Suggest(ctx context.Context, sugParm any) (any, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Suggest", sugParm)
+	ret := m.ctrl.Call(m, "Suggest", ctx, sugParm)
 	ret0, _ := ret[0].(any)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Suggest indicates an expected call of Suggest.
-func (mr *MockOpenTSDBMockRecorder) Suggest(sugParm any) *gomock.Call {
+func (mr *MockOpenTSDBMockRecorder) Suggest(ctx, sugParm any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Suggest", reflect.TypeOf((*MockOpenTSDB)(nil).Suggest), sugParm)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Suggest", reflect.TypeOf((*MockOpenTSDB)(nil).Suggest), ctx, sugParm)
 }
 
 // UpdateAnnotation mocks base method.
-func (m *MockOpenTSDB) UpdateAnnotation(annotation any) (any, error) {
+func (m *MockOpenTSDB) UpdateAnnotation(ctx context.Context, annotation any) (any, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UpdateAnnotation", annotation)
+	ret := m.ctrl.Call(m, "UpdateAnnotation", ctx, annotation)
 	ret0, _ := ret[0].(any)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // UpdateAnnotation indicates an expected call of UpdateAnnotation.
-func (mr *MockOpenTSDBMockRecorder) UpdateAnnotation(annotation any) *gomock.Call {
+func (mr *MockOpenTSDBMockRecorder) UpdateAnnotation(ctx, annotation any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateAnnotation", reflect.TypeOf((*MockOpenTSDB)(nil).UpdateAnnotation), annotation)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateAnnotation", reflect.TypeOf((*MockOpenTSDB)(nil).UpdateAnnotation), ctx, annotation)
 }
 
 // UpdateTSMetaData mocks base method.
-func (m *MockOpenTSDB) UpdateTSMetaData(tsMetaData any) (any, error) {
+func (m *MockOpenTSDB) UpdateTSMetaData(ctx context.Context, tsMetaData any) (any, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UpdateTSMetaData", tsMetaData)
+	ret := m.ctrl.Call(m, "UpdateTSMetaData", ctx, tsMetaData)
 	ret0, _ := ret[0].(any)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // UpdateTSMetaData indicates an expected call of UpdateTSMetaData.
-func (mr *MockOpenTSDBMockRecorder) UpdateTSMetaData(tsMetaData any) *gomock.Call {
+func (mr *MockOpenTSDBMockRecorder) UpdateTSMetaData(ctx, tsMetaData any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateTSMetaData", reflect.TypeOf((*MockOpenTSDB)(nil).UpdateTSMetaData), tsMetaData)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateTSMetaData", reflect.TypeOf((*MockOpenTSDB)(nil).UpdateTSMetaData), ctx, tsMetaData)
 }
 
 // UpdateUIDMetaData mocks base method.
-func (m *MockOpenTSDB) UpdateUIDMetaData(uidMetaData any) (any, error) {
+func (m *MockOpenTSDB) UpdateUIDMetaData(ctx context.Context, uidMetaData any) (any, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UpdateUIDMetaData", uidMetaData)
+	ret := m.ctrl.Call(m, "UpdateUIDMetaData", ctx, uidMetaData)
 	ret0, _ := ret[0].(any)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // UpdateUIDMetaData indicates an expected call of UpdateUIDMetaData.
-func (mr *MockOpenTSDBMockRecorder) UpdateUIDMetaData(uidMetaData any) *gomock.Call {
+func (mr *MockOpenTSDBMockRecorder) UpdateUIDMetaData(ctx, uidMetaData any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateUIDMetaData", reflect.TypeOf((*MockOpenTSDB)(nil).UpdateUIDMetaData), uidMetaData)
-}
-
-// WithContext mocks base method.
-func (m *MockOpenTSDB) WithContext(ctx context.Context) OpenTSDB {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "WithContext", ctx)
-	ret0, _ := ret[0].(OpenTSDB)
-	return ret0
-}
-
-// WithContext indicates an expected call of WithContext.
-func (mr *MockOpenTSDBMockRecorder) WithContext(ctx any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WithContext", reflect.TypeOf((*MockOpenTSDB)(nil).WithContext), ctx)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateUIDMetaData", reflect.TypeOf((*MockOpenTSDB)(nil).UpdateUIDMetaData), ctx, uidMetaData)
 }

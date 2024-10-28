@@ -46,8 +46,8 @@ func (dropResp *DropCachesResponse) String() string {
 	return toString(dropResp.ctx, dropResp, "ToString-DropCache", dropResp.logger)
 }
 
-func (c *Client) Dropcaches() (*DropCachesResponse, error) {
-	span := c.addTrace(c.ctx, "DropCaches")
+func (c *Client) Dropcaches(ctx context.Context) (*DropCachesResponse, error) {
+	span := c.addTrace(ctx, "DropCaches")
 
 	status := StatusFailed
 
@@ -56,9 +56,9 @@ func (c *Client) Dropcaches() (*DropCachesResponse, error) {
 	defer sendOperationStats(c.logger, time.Now(), "DropCaches", &status, &message, span)
 
 	dropEndpoint := fmt.Sprintf("%s%s", c.endpoint, DropcachesPath)
-	dropResp := DropCachesResponse{logger: c.logger, tracer: c.tracer, ctx: c.ctx}
+	dropResp := DropCachesResponse{logger: c.logger, tracer: c.tracer, ctx: ctx}
 
-	if err := c.sendRequest(http.MethodGet, dropEndpoint, "", &dropResp); err != nil {
+	if err := c.sendRequest(ctx, http.MethodGet, dropEndpoint, "", &dropResp); err != nil {
 		message = fmt.Sprintf("error processing drop cache request at url %q: %s", dropEndpoint, err)
 		return nil, err
 	}

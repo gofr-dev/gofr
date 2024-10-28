@@ -47,8 +47,8 @@ func (verResp *VersionResponse) GetCustomParser() func(respCnt []byte) error {
 		})
 }
 
-func (c *Client) version() (*VersionResponse, error) {
-	span := c.addTrace(c.ctx, "Version")
+func (c *Client) version(ctx context.Context) (*VersionResponse, error) {
+	span := c.addTrace(ctx, "Version")
 
 	status := StatusFailed
 
@@ -57,9 +57,9 @@ func (c *Client) version() (*VersionResponse, error) {
 	defer sendOperationStats(c.logger, time.Now(), "Version", &status, &message, span)
 
 	verEndpoint := fmt.Sprintf("%s%s", c.endpoint, VersionPath)
-	verResp := VersionResponse{logger: c.logger, tracer: c.tracer, ctx: c.ctx}
+	verResp := VersionResponse{logger: c.logger, tracer: c.tracer, ctx: ctx}
 
-	if err := c.sendRequest(http.MethodGet, verEndpoint, "", &verResp); err != nil {
+	if err := c.sendRequest(ctx, http.MethodGet, verEndpoint, "", &verResp); err != nil {
 		message = fmt.Sprintf("error while processing request at URL %s: %s", verEndpoint, err)
 		return nil, err
 	}

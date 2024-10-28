@@ -84,8 +84,8 @@ func isValidUIDMetaDataQueryParam(metaQueryParam map[string]string) bool {
 	return false
 }
 
-func (c *Client) QueryUIDMetaData(metaQueryParam map[string]string) (*UIDMetaDataResponse, error) {
-	span := c.addTrace(c.ctx, "QueryUIDMetaData")
+func (c *Client) QueryUIDMetaData(ctx context.Context, metaQueryParam map[string]string) (*UIDMetaDataResponse, error) {
+	span := c.addTrace(ctx, "QueryUIDMetaData")
 
 	status := StatusFailed
 
@@ -102,9 +102,9 @@ func (c *Client) QueryUIDMetaData(metaQueryParam map[string]string) (*UIDMetaDat
 
 	queryUIDMetaEndpoint := fmt.Sprintf("%s%s?%s", c.endpoint, UIDMetaDataPath, queryParam)
 
-	uidMetaDataResp := UIDMetaDataResponse{logger: c.logger, tracer: c.tracer, ctx: c.ctx}
+	uidMetaDataResp := UIDMetaDataResponse{logger: c.logger, tracer: c.tracer, ctx: ctx}
 
-	if err := c.sendRequest(http.MethodGet, queryUIDMetaEndpoint, "", &uidMetaDataResp); err != nil {
+	if err := c.sendRequest(ctx, http.MethodGet, queryUIDMetaEndpoint, "", &uidMetaDataResp); err != nil {
 		message = fmt.Sprintf("error processing query-uid-metadata request to url %q: %v", queryUIDMetaEndpoint, err)
 		return nil, err
 	}
@@ -115,16 +115,16 @@ func (c *Client) QueryUIDMetaData(metaQueryParam map[string]string) (*UIDMetaDat
 	return &uidMetaDataResp, nil
 }
 
-func (c *Client) UpdateUIDMetaData(uidMetaData *UIDMetaData) (*UIDMetaDataResponse, error) {
-	return c.operateUIDMetaData(uidMetaData, http.MethodPost, "UpdateUIDMetaData")
+func (c *Client) UpdateUIDMetaData(ctx context.Context, uidMetaData *UIDMetaData) (*UIDMetaDataResponse, error) {
+	return c.operateUIDMetaData(ctx, uidMetaData, http.MethodPost, "UpdateUIDMetaData")
 }
 
-func (c *Client) DeleteUIDMetaData(uidMetaData *UIDMetaData) (*UIDMetaDataResponse, error) {
-	return c.operateUIDMetaData(uidMetaData, http.MethodDelete, "DeleteUIDMetaData")
+func (c *Client) DeleteUIDMetaData(ctx context.Context, uidMetaData *UIDMetaData) (*UIDMetaDataResponse, error) {
+	return c.operateUIDMetaData(ctx, uidMetaData, http.MethodDelete, "DeleteUIDMetaData")
 }
 
-func (c *Client) operateUIDMetaData(uidMetaData *UIDMetaData, method, operation string) (*UIDMetaDataResponse, error) {
-	span := c.addTrace(c.ctx, operation)
+func (c *Client) operateUIDMetaData(ctx context.Context, uidMetaData *UIDMetaData, method, operation string) (*UIDMetaDataResponse, error) {
+	span := c.addTrace(ctx, operation)
 
 	status := StatusFailed
 
@@ -132,7 +132,7 @@ func (c *Client) operateUIDMetaData(uidMetaData *UIDMetaData, method, operation 
 
 	defer sendOperationStats(c.logger, time.Now(), operation, &status, &message, span)
 
-	if !c.isValidOperateMethod(method) {
+	if !c.isValidOperateMethod(ctx, method) {
 		message = "given method for uid metadata is invalid"
 		return nil, errors.New(message)
 	}
@@ -145,8 +145,8 @@ func (c *Client) operateUIDMetaData(uidMetaData *UIDMetaData, method, operation 
 		return nil, errors.New(message)
 	}
 
-	uidMetaDataResp := UIDMetaDataResponse{logger: c.logger, tracer: c.tracer, ctx: c.ctx}
-	if err = c.sendRequest(method, uidMetaEndpoint, string(resultBytes), &uidMetaDataResp); err != nil {
+	uidMetaDataResp := UIDMetaDataResponse{logger: c.logger, tracer: c.tracer, ctx: ctx}
+	if err = c.sendRequest(ctx, method, uidMetaEndpoint, string(resultBytes), &uidMetaDataResp); err != nil {
 		message = fmt.Sprintf("error processing %v request to url %q: %v", method, uidMetaEndpoint, err)
 		return nil, err
 	}
@@ -212,8 +212,8 @@ type UIDAssignResponse struct {
 	ctx          context.Context
 }
 
-func (c *Client) AssignUID(assignParam *UIDAssignParam) (*UIDAssignResponse, error) {
-	span := c.addTrace(c.ctx, "AssignUID")
+func (c *Client) AssignUID(ctx context.Context, assignParam *UIDAssignParam) (*UIDAssignResponse, error) {
+	span := c.addTrace(ctx, "AssignUID")
 
 	status := StatusFailed
 
@@ -229,9 +229,9 @@ func (c *Client) AssignUID(assignParam *UIDAssignParam) (*UIDAssignResponse, err
 		return nil, errors.New(message)
 	}
 
-	uidAssignResp := UIDAssignResponse{logger: c.logger, tracer: c.tracer, ctx: c.ctx}
+	uidAssignResp := UIDAssignResponse{logger: c.logger, tracer: c.tracer, ctx: ctx}
 
-	if err = c.sendRequest(http.MethodPost, assignUIDEndpoint, string(resultBytes), &uidAssignResp); err != nil {
+	if err = c.sendRequest(ctx, http.MethodPost, assignUIDEndpoint, string(resultBytes), &uidAssignResp); err != nil {
 		message = fmt.Sprintf("error processing %v request to url %q: %v", http.MethodPost, assignUIDEndpoint, err)
 		return nil, err
 	}
@@ -314,8 +314,8 @@ type TSMetaDataResponse struct {
 	ctx             context.Context
 }
 
-func (c *Client) QueryTSMetaData(tsuid string) (*TSMetaDataResponse, error) {
-	span := c.addTrace(c.ctx, "QueryTSMetaData")
+func (c *Client) QueryTSMetaData(ctx context.Context, tsuid string) (*TSMetaDataResponse, error) {
+	span := c.addTrace(ctx, "QueryTSMetaData")
 
 	status := StatusFailed
 
@@ -331,9 +331,9 @@ func (c *Client) QueryTSMetaData(tsuid string) (*TSMetaDataResponse, error) {
 	}
 
 	queryTSMetaEndpoint := fmt.Sprintf("%s%s?tsuid=%s", c.endpoint, TSMetaDataPath, tsuid)
-	tsMetaDataResp := TSMetaDataResponse{logger: c.logger, tracer: c.tracer, ctx: c.ctx}
+	tsMetaDataResp := TSMetaDataResponse{logger: c.logger, tracer: c.tracer, ctx: ctx}
 
-	if err := c.sendRequest(http.MethodGet, queryTSMetaEndpoint, "", &tsMetaDataResp); err != nil {
+	if err := c.sendRequest(ctx, http.MethodGet, queryTSMetaEndpoint, "", &tsMetaDataResp); err != nil {
 		message = fmt.Sprintf("error processing %v request to url %q: %v", http.MethodGet, queryTSMetaEndpoint, err)
 		return nil, err
 	}
@@ -344,16 +344,16 @@ func (c *Client) QueryTSMetaData(tsuid string) (*TSMetaDataResponse, error) {
 	return &tsMetaDataResp, nil
 }
 
-func (c *Client) UpdateTSMetaData(tsMetaData *TSMetaData) (*TSMetaDataResponse, error) {
-	return c.operateTSMetaData(tsMetaData, http.MethodPost, "UpdateTSMetaData")
+func (c *Client) UpdateTSMetaData(ctx context.Context, tsMetaData *TSMetaData) (*TSMetaDataResponse, error) {
+	return c.operateTSMetaData(ctx, tsMetaData, http.MethodPost, "UpdateTSMetaData")
 }
 
-func (c *Client) DeleteTSMetaData(tsMetaData *TSMetaData) (*TSMetaDataResponse, error) {
-	return c.operateTSMetaData(tsMetaData, http.MethodDelete, "DeleteTSMetaData")
+func (c *Client) DeleteTSMetaData(ctx context.Context, tsMetaData *TSMetaData) (*TSMetaDataResponse, error) {
+	return c.operateTSMetaData(ctx, tsMetaData, http.MethodDelete, "DeleteTSMetaData")
 }
 
-func (c *Client) operateTSMetaData(tsMetaData *TSMetaData, method, operation string) (*TSMetaDataResponse, error) {
-	span := c.addTrace(c.ctx, operation)
+func (c *Client) operateTSMetaData(ctx context.Context, tsMetaData *TSMetaData, method, operation string) (*TSMetaDataResponse, error) {
+	span := c.addTrace(ctx, operation)
 
 	status := StatusFailed
 
@@ -361,7 +361,7 @@ func (c *Client) operateTSMetaData(tsMetaData *TSMetaData, method, operation str
 
 	defer sendOperationStats(c.logger, time.Now(), operation, &status, &message, span)
 
-	if !c.isValidOperateMethod(method) {
+	if !c.isValidOperateMethod(ctx, method) {
 		message = fmt.Sprintf("The %s method for operating a uid metadata is invalid", method)
 		return nil, errors.New(message)
 	}
@@ -374,9 +374,9 @@ func (c *Client) operateTSMetaData(tsMetaData *TSMetaData, method, operation str
 		return nil, errors.New(message)
 	}
 
-	tsMetaDataResp := TSMetaDataResponse{logger: c.logger, tracer: c.tracer, ctx: c.ctx}
+	tsMetaDataResp := TSMetaDataResponse{logger: c.logger, tracer: c.tracer, ctx: ctx}
 
-	if err = c.sendRequest(method, tsMetaEndpoint, string(resultBytes), &tsMetaDataResp); err != nil {
+	if err = c.sendRequest(ctx, method, tsMetaEndpoint, string(resultBytes), &tsMetaDataResp); err != nil {
 		message = fmt.Sprintf("failed to send request at url %q: %v", tsMetaEndpoint, err)
 		return nil, err
 	}

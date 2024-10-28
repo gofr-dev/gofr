@@ -106,8 +106,8 @@ type QueryRespLastItem struct {
 	TSUID string `json:"tsuid"`
 }
 
-func (c *Client) QueryLast(param *QueryLastParam) (*QueryLastResponse, error) {
-	span := c.addTrace(c.ctx, "QueryLast")
+func (c *Client) QueryLast(ctx context.Context, param *QueryLastParam) (*QueryLastResponse, error) {
+	span := c.addTrace(ctx, "QueryLast")
 
 	status := StatusFailed
 
@@ -128,8 +128,8 @@ func (c *Client) QueryLast(param *QueryLastParam) (*QueryLastResponse, error) {
 		return nil, err
 	}
 
-	queryResp := QueryLastResponse{logger: c.logger, tracer: c.tracer, ctx: c.ctx}
-	if err = c.sendRequest(http.MethodPost, queryEndpoint, reqBodyCnt, &queryResp); err != nil {
+	queryResp := QueryLastResponse{logger: c.logger, tracer: c.tracer, ctx: ctx}
+	if err = c.sendRequest(ctx, http.MethodPost, queryEndpoint, reqBodyCnt, &queryResp); err != nil {
 		message = fmt.Sprintf("error sending request at url %s : %s ", queryEndpoint, err)
 		return nil, err
 	}

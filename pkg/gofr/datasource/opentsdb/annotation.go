@@ -74,8 +74,8 @@ func (annotResp *AnnotationResponse) String() string {
 	return toString(annotResp.ctx, annotResp, "ToString-Annotation", annotResp.logger)
 }
 
-func (c *Client) QueryAnnotation(queryAnnoParam map[string]interface{}) (*AnnotationResponse, error) {
-	span := c.addTrace(c.ctx, "QueryAnnotation")
+func (c *Client) QueryAnnotation(ctx context.Context, queryAnnoParam map[string]interface{}) (*AnnotationResponse, error) {
+	span := c.addTrace(ctx, "QueryAnnotation")
 
 	status := StatusFailed
 
@@ -102,9 +102,9 @@ func (c *Client) QueryAnnotation(queryAnnoParam map[string]interface{}) (*Annota
 	buffer.WriteString(queryURL.Encode())
 
 	annoEndpoint := fmt.Sprintf("%s%s?%s", c.endpoint, AnnotationPath, buffer.String())
-	annResp := AnnotationResponse{logger: c.logger, tracer: c.tracer, ctx: c.ctx}
+	annResp := AnnotationResponse{logger: c.logger, tracer: c.tracer, ctx: ctx}
 
-	if err := c.sendRequest(http.MethodGet, annoEndpoint, "", &annResp); err != nil {
+	if err := c.sendRequest(ctx, http.MethodGet, annoEndpoint, "", &annResp); err != nil {
 		message = fmt.Sprintf("error while processing annotation query: %s", err.Error())
 		return nil, err
 	}
@@ -117,16 +117,16 @@ func (c *Client) QueryAnnotation(queryAnnoParam map[string]interface{}) (*Annota
 	return &annResp, nil
 }
 
-func (c *Client) UpdateAnnotation(annotation *Annotation) (*AnnotationResponse, error) {
-	return c.operateAnnotation(annotation, http.MethodPost, "UpdateAnnotation")
+func (c *Client) UpdateAnnotation(ctx context.Context, annotation *Annotation) (*AnnotationResponse, error) {
+	return c.operateAnnotation(ctx, annotation, http.MethodPost, "UpdateAnnotation")
 }
 
-func (c *Client) DeleteAnnotation(annotation *Annotation) (*AnnotationResponse, error) {
-	return c.operateAnnotation(annotation, http.MethodDelete, "DeleteAnnotation")
+func (c *Client) DeleteAnnotation(ctx context.Context, annotation *Annotation) (*AnnotationResponse, error) {
+	return c.operateAnnotation(ctx, annotation, http.MethodDelete, "DeleteAnnotation")
 }
 
-func (c *Client) operateAnnotation(annotation *Annotation, method, operation string) (*AnnotationResponse, error) {
-	span := c.addTrace(c.ctx, operation)
+func (c *Client) operateAnnotation(ctx context.Context, annotation *Annotation, method, operation string) (*AnnotationResponse, error) {
+	span := c.addTrace(ctx, operation)
 
 	status := StatusFailed
 
@@ -134,7 +134,7 @@ func (c *Client) operateAnnotation(annotation *Annotation, method, operation str
 
 	defer sendOperationStats(c.logger, time.Now(), operation, &status, &message, span)
 
-	if !c.isValidOperateMethod(method) {
+	if !c.isValidOperateMethod(ctx, method) {
 		message = fmt.Sprintf("invalid annotation operation method: %s", method)
 		return nil, errors.New(message)
 	}
@@ -147,9 +147,9 @@ func (c *Client) operateAnnotation(annotation *Annotation, method, operation str
 		return nil, errors.New(message)
 	}
 
-	annResp := AnnotationResponse{logger: c.logger, tracer: c.tracer, ctx: c.ctx}
+	annResp := AnnotationResponse{logger: c.logger, tracer: c.tracer, ctx: ctx}
 
-	if err = c.sendRequest(method, annoEndpoint, string(resultBytes), &annResp); err != nil {
+	if err = c.sendRequest(ctx, method, annoEndpoint, string(resultBytes), &annResp); err != nil {
 		message = fmt.Sprintf("%s: error while processing %s annotation request to url %q: %s", operation, method, annoEndpoint, err.Error())
 		return nil, err
 	}
@@ -248,8 +248,8 @@ func (bulkAnnotResp *BulkAnnotationResponse) String() string {
 	return toString(bulkAnnotResp.ctx, bulkAnnotResp, "ToString-BulkAnnotation", bulkAnnotResp.logger)
 }
 
-func (c *Client) BulkUpdateAnnotations(annotations []Annotation) (*BulkAnnotationResponse, error) {
-	span := c.addTrace(c.ctx, "BulkUpdateAnnotations")
+func (c *Client) BulkUpdateAnnotations(ctx context.Context, annotations []Annotation) (*BulkAnnotationResponse, error) {
+	span := c.addTrace(ctx, "BulkUpdateAnnotations")
 
 	status := StatusFailed
 
@@ -270,8 +270,8 @@ func (c *Client) BulkUpdateAnnotations(annotations []Annotation) (*BulkAnnotatio
 		return nil, errors.New(message)
 	}
 
-	bulkAnnoResp := BulkAnnotationResponse{logger: c.logger, tracer: c.tracer, ctx: c.ctx}
-	if err = c.sendRequest(http.MethodPost, bulkAnnoEndpoint, reqBodyCnt, &bulkAnnoResp); err != nil {
+	bulkAnnoResp := BulkAnnotationResponse{logger: c.logger, tracer: c.tracer, ctx: ctx}
+	if err = c.sendRequest(ctx, http.MethodPost, bulkAnnoEndpoint, reqBodyCnt, &bulkAnnoResp); err != nil {
 		message = fmt.Sprintf("error while processing update bulk annotations request to url %q: %s", bulkAnnoEndpoint, err)
 		return nil, err
 	}
@@ -284,8 +284,8 @@ func (c *Client) BulkUpdateAnnotations(annotations []Annotation) (*BulkAnnotatio
 	return &bulkAnnoResp, nil
 }
 
-func (c *Client) BulkDeleteAnnotations(bulkDelParam *BulkAnnotationDeleteInfo) (*BulkAnnotationResponse, error) {
-	span := c.addTrace(c.ctx, "BulkUpdateAnnotation")
+func (c *Client) BulkDeleteAnnotations(ctx context.Context, bulkDelParam *BulkAnnotationDeleteInfo) (*BulkAnnotationResponse, error) {
+	span := c.addTrace(ctx, "BulkUpdateAnnotation")
 
 	status := StatusFailed
 
@@ -301,8 +301,8 @@ func (c *Client) BulkDeleteAnnotations(bulkDelParam *BulkAnnotationDeleteInfo) (
 		return nil, errors.New(message)
 	}
 
-	bulkAnnoResp := BulkAnnotationResponse{logger: c.logger, tracer: c.tracer, ctx: c.ctx}
-	if err = c.sendRequest(http.MethodDelete, bulkAnnoEndpoint, string(resultBytes), &bulkAnnoResp); err != nil {
+	bulkAnnoResp := BulkAnnotationResponse{logger: c.logger, tracer: c.tracer, ctx: ctx}
+	if err = c.sendRequest(ctx, http.MethodDelete, bulkAnnoEndpoint, string(resultBytes), &bulkAnnoResp); err != nil {
 		message = fmt.Sprintf("Bulk annotation delete request failed at url %q: %v", bulkAnnoEndpoint, err)
 		return nil, err
 	}

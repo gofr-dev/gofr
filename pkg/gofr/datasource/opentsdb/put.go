@@ -81,8 +81,8 @@ func (*PutResponse) GetCustomParser() func(respCnt []byte) error {
 	return nil
 }
 
-func (c *Client) Put(datas []DataPoint, queryParam string) (*PutResponse, error) {
-	span := c.addTrace(c.ctx, "Put")
+func (c *Client) Put(ctx context.Context, datas []DataPoint, queryParam string) (*PutResponse, error) {
+	span := c.addTrace(ctx, "Put")
 
 	status := StatusFailed
 
@@ -108,7 +108,7 @@ func (c *Client) Put(datas []DataPoint, queryParam string) (*PutResponse, error)
 		putEndpoint = fmt.Sprintf("%s%s", c.endpoint, PutPath)
 	}
 
-	dataGroups, err := c.splitProperGroups(datas)
+	dataGroups, err := c.splitProperGroups(ctx, datas)
 	if err != nil {
 		message = fmt.Sprintf("split data point error: %s", err)
 		return nil, err
@@ -116,12 +116,12 @@ func (c *Client) Put(datas []DataPoint, queryParam string) (*PutResponse, error)
 
 	responses := make([]PutResponse, 0)
 
-	responses, err = c.getResponses(putEndpoint, dataGroups, responses, &message)
+	responses, err = c.getResponses(ctx, putEndpoint, dataGroups, responses, &message)
 	if err != nil {
 		return nil, err
 	}
 
-	globalResp := PutResponse{logger: c.logger, tracer: c.tracer, ctx: c.ctx}
+	globalResp := PutResponse{logger: c.logger, tracer: c.tracer, ctx: ctx}
 	globalResp.StatusCode = http.StatusOK
 
 	for _, resp := range responses {
@@ -144,7 +144,7 @@ func (c *Client) Put(datas []DataPoint, queryParam string) (*PutResponse, error)
 	return nil, parsePutErrorMsg(&globalResp)
 }
 
-func (c *Client) getResponses(putEndpoint string, dataGroups [][]DataPoint,
+func (c *Client) getResponses(ctx context.Context, putEndpoint string, dataGroups [][]DataPoint,
 	responses []PutResponse, message *string) ([]PutResponse, error) {
 	for _, datapoints := range dataGroups {
 		reqBodyCnt, err := getPutBodyContents(datapoints)
@@ -153,9 +153,9 @@ func (c *Client) getResponses(putEndpoint string, dataGroups [][]DataPoint,
 			c.logger.Errorf(*message)
 		}
 
-		putResp := PutResponse{logger: c.logger, tracer: c.tracer, ctx: c.ctx}
+		putResp := PutResponse{logger: c.logger, tracer: c.tracer, ctx: ctx}
 
-		if err = c.sendRequest(http.MethodPost, putEndpoint, reqBodyCnt, &putResp); err != nil {
+		if err = c.sendRequest(ctx, http.MethodPost, putEndpoint, reqBodyCnt, &putResp); err != nil {
 			*message = fmt.Sprintf("error processing put request at url %q: %s", putEndpoint, err)
 			return nil, err
 		}
@@ -170,8 +170,8 @@ func (c *Client) getResponses(putEndpoint string, dataGroups [][]DataPoint,
 // c.opentsdbCfg.MaxContentLength. This method is to avoid Put failure, when the content length of
 // the given datapoints in a single /api/put request exceeded the value of
 // tsd.http.request.max_chunk in the opentsdb config file.
-func (c *Client) splitProperGroups(datapoints []DataPoint) ([][]DataPoint, error) {
-	span := c.addTrace(c.ctx, "splitProperGroups-Put")
+func (c *Client) splitProperGroups(ctx context.Context, datapoints []DataPoint) ([][]DataPoint, error) {
+	span := c.addTrace(ctx, "splitProperGroups-Put")
 
 	status := StatusFailed
 

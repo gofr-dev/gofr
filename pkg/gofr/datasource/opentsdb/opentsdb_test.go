@@ -32,9 +32,9 @@ func TestSendRequestSuccess(t *testing.T) {
 		Return(&mockResponse, nil).
 		Times(1)
 
-	parsedResp := AggregatorsResponse{logger: client.logger, tracer: client.tracer, ctx: client.ctx}
+	parsedResp := AggregatorsResponse{logger: client.logger, tracer: client.tracer, ctx: context.Background()}
 
-	err := client.sendRequest("GET", "http://localhost:4242/aggregators", "", &parsedResp)
+	err := client.sendRequest(context.Background(), "GET", "http://localhost:4242/aggregators", "", &parsedResp)
 
 	require.NoError(t, err)
 	assert.Equal(t, 200, parsedResp.StatusCode)
@@ -49,9 +49,9 @@ func TestSendRequestFailure(t *testing.T) {
 		Return(nil, errors.New("request failed")).
 		Times(1)
 
-	parsedResp := AggregatorsResponse{logger: client.logger, tracer: client.tracer, ctx: client.ctx}
+	parsedResp := AggregatorsResponse{logger: client.logger, tracer: client.tracer, ctx: context.Background()}
 
-	err := client.sendRequest("GET", "http://localhost:4242/aggregators", "", &parsedResp)
+	err := client.sendRequest(context.Background(), "GET", "http://localhost:4242/aggregators", "", &parsedResp)
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "request failed")
@@ -63,7 +63,7 @@ func TestSetStatus(t *testing.T) {
 	resp := &AggregatorsResponse{
 		logger: client.logger,
 		tracer: client.tracer,
-		ctx:    client.ctx,
+		ctx:    context.Background(),
 	}
 
 	resp.SetStatus(200)
@@ -77,7 +77,7 @@ func TestGetCustomParser(t *testing.T) {
 	resp := &AggregatorsResponse{
 		logger: client.logger,
 		tracer: client.tracer,
-		ctx:    client.ctx,
+		ctx:    context.Background(),
 	}
 
 	parser := resp.GetCustomParser()
@@ -113,10 +113,6 @@ func setOpenTSDBTest(t *testing.T) (*Client, *MockHTTPClient) {
 	mocklogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mocklogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 	mocklogger.EXPECT().Log(gomock.Any()).AnyTimes()
-
-	if tsdbClient.ctx == nil {
-		tsdbClient.ctx = context.Background()
-	}
 
 	tsdbClient.config.Host = strings.TrimSpace(tsdbClient.config.Host)
 	if tsdbClient.config.Host == "" {
@@ -177,7 +173,7 @@ func TestPutSuccess(t *testing.T) {
 			Body:       io.NopCloser(strings.NewReader(`{"StatusCode":200,"failed":0,"success":4}`)),
 		}, nil).Times(1)
 
-	resp, err := client.Put(cpuDatas, "details")
+	resp, err := client.Put(context.Background(), cpuDatas, "details")
 	require.NoError(t, err)
 	require.NotNil(t, resp)
 	require.Equal(t, 200, resp.StatusCode)
@@ -196,7 +192,7 @@ func TestPutInvalidDataPoint(t *testing.T) {
 		},
 	}
 
-	resp, err := client.Put(dataPoints, "")
+	resp, err := client.Put(context.Background(), dataPoints, "")
 	require.Error(t, err)
 	require.Equal(t, "the value of the given datapoint is invalid", err.Error())
 	require.Nil(t, resp)
@@ -214,7 +210,7 @@ func TestPutInvalidQueryParam(t *testing.T) {
 		},
 	}
 
-	resp, err := client.Put(dataPoints, "invalid_param")
+	resp, err := client.Put(context.Background(), dataPoints, "invalid_param")
 	require.Error(t, err)
 	require.Equal(t, "The given query param is invalid.", err.Error())
 	require.Nil(t, resp)
@@ -239,7 +235,7 @@ func TestPutErrorResponse(t *testing.T) {
 			Body:       io.NopCloser(strings.NewReader(`{"StatusCode":400,"error":"Invalid metric name"}`)),
 		}, nil).Times(1)
 
-	resp, err := client.Put(dataPoints, "")
+	resp, err := client.Put(context.Background(), dataPoints, "")
 	require.Error(t, err)
 	require.Equal(t, "Failed to put 0 datapoint(s) into opentsdb, statuscode 400:\n", err.Error())
 	require.Nil(t, resp)
@@ -289,7 +285,7 @@ func TestPostQuerySuccess(t *testing.T) {
 				`"host":"gofr-host","try-name":"gofr-sample"},"tsuid":"000004000001000001000002000007000003000008"}]`)),
 		}, nil).Times(1)
 
-	queryResp, err := client.Query(&queryParam)
+	queryResp, err := client.Query(context.Background(), &queryParam)
 	require.NoError(t, err)
 	require.NotNil(t, queryResp)
 	require.Equal(t, 200, queryResp.StatusCode)
@@ -337,7 +333,7 @@ func TestPostQueryLastSuccess(t *testing.T) {
 				`"host":"gofr-host","try-name":"gofr-sample"},"tsuid":"000004000001000001000002000007000003000008"}]`)),
 		}, nil).Times(1)
 
-	queryLastResp, err := client.QueryLast(&queryLastParam)
+	queryLastResp, err := client.QueryLast(context.Background(), &queryLastParam)
 	require.NoError(t, err)
 	require.NotNil(t, queryLastResp)
 	require.Equal(t, 200, queryLastResp.StatusCode)
@@ -382,7 +378,7 @@ func TestPostQueryDeleteSuccess(t *testing.T) {
 			Body:       io.NopCloser(strings.NewReader(`[]`)),
 		}, nil).Times(1)
 
-	deleteResp, err := client.Query(&queryParam)
+	deleteResp, err := client.Query(context.Background(), &queryParam)
 	require.NoError(t, err)
 	require.NotNil(t, deleteResp)
 	require.Equal(t, 200, deleteResp.StatusCode)
@@ -400,7 +396,7 @@ func TestGetAggregatorsSuccess(t *testing.T) {
 			Body:       io.NopCloser(strings.NewReader(expectedResponse)), // Response body with aggregators
 		}, nil).Times(1)
 
-	aggreResp, err := client.Aggregators()
+	aggreResp, err := client.Aggregators(context.Background())
 	require.NoError(t, err)
 	require.NotNil(t, aggreResp)
 	require.Equal(t, 200, aggreResp.StatusCode)
@@ -432,7 +428,7 @@ func TestGetSuggestSuccess(t *testing.T) {
 				Body:       io.NopCloser(strings.NewReader(expectedResponse)),
 			}, nil).Times(1)
 
-		sugResp, err := client.Suggest(&sugParam)
+		sugResp, err := client.Suggest(context.Background(), &sugParam)
 		require.NoError(t, err)
 		require.NotNil(t, sugResp)
 		require.Equal(t, 200, sugResp.StatusCode)
@@ -458,7 +454,7 @@ func TestGetVersionSuccess(t *testing.T) {
 			Body:       io.NopCloser(strings.NewReader(expectedResponse)), // Response body for version
 		}, nil).Times(1)
 
-	versionResp, err := client.version()
+	versionResp, err := client.version(context.Background())
 	require.NoError(t, err)
 	require.NotNil(t, versionResp)
 	require.Equal(t, 200, versionResp.StatusCode)
@@ -485,7 +481,7 @@ func TestGetDropCachesSuccess(t *testing.T) {
 			Body:       io.NopCloser(strings.NewReader(expectedResponse)), // Response body with message
 		}, nil).Times(1)
 
-	dropResp, err := client.Dropcaches()
+	dropResp, err := client.Dropcaches(context.Background())
 	require.NoError(t, err)
 	require.NotNil(t, dropResp)
 	require.Equal(t, "Caches dropped", dropResp.DropCachesInfo["message"])
@@ -520,7 +516,7 @@ func TestUpdateAnnotationSuccess(t *testing.T) {
 			Body:       io.NopCloser(strings.NewReader(expectedResponse)), // Response body for the annotation
 		}, nil).Times(1)
 
-	queryAnnoResp, err := client.UpdateAnnotation(&anno)
+	queryAnnoResp, err := client.UpdateAnnotation(context.Background(), &anno)
 
 	require.NoError(t, err)
 	require.NotNil(t, queryAnnoResp)
@@ -563,7 +559,7 @@ func TestQueryAnnotationSuccess(t *testing.T) {
 			}, nil
 		}).Times(2)
 
-	postResp, err := client.UpdateAnnotation(&anno)
+	postResp, err := client.UpdateAnnotation(context.Background(), &anno)
 	require.NoError(t, err)
 	require.NotNil(t, postResp)
 	require.Equal(t, 200, postResp.StatusCode)
@@ -573,7 +569,7 @@ func TestQueryAnnotationSuccess(t *testing.T) {
 		AnQueryTSUid:     addedTsuid,
 	}
 
-	resp, err := client.QueryAnnotation(queryAnnoMap)
+	resp, err := client.QueryAnnotation(context.Background(), queryAnnoMap)
 	require.NoError(t, err)
 	require.NotNil(t, resp)
 	require.Equal(t, 200, resp.StatusCode)
@@ -610,7 +606,7 @@ func TestDeleteAnnotationSuccess(t *testing.T) {
 			}`)),
 		}, nil).Times(1)
 
-	postResp, err := client.UpdateAnnotation(&anno)
+	postResp, err := client.UpdateAnnotation(context.Background(), &anno)
 	require.NoError(t, err)
 	require.NotNil(t, postResp)
 	require.Equal(t, 200, postResp.StatusCode)
@@ -622,7 +618,7 @@ func TestDeleteAnnotationSuccess(t *testing.T) {
 			Body:       http.NoBody,
 		}, nil).Times(1)
 
-	deleteResp, err := client.DeleteAnnotation(&anno)
+	deleteResp, err := client.DeleteAnnotation(context.Background(), &anno)
 	require.NoError(t, err)
 	require.NotNil(t, deleteResp)
 	require.Equal(t, 204, deleteResp.StatusCode)
@@ -684,7 +680,7 @@ func TestBulkUpdateAnnotationsSuccess(t *testing.T) {
 			Body:       io.NopCloser(strings.NewReader(expectedResponse)),
 		}, nil).Times(1)
 
-	resp, err := client.BulkUpdateAnnotations(anns)
+	resp, err := client.BulkUpdateAnnotations(context.Background(), anns)
 
 	require.NoError(t, err)
 	require.NotNil(t, resp)
@@ -749,7 +745,7 @@ func TestBulkDeleteAnnotationsSuccess(t *testing.T) {
 			}]`)),
 		}, nil).Times(1)
 
-	_, err := client.BulkUpdateAnnotations(anns)
+	_, err := client.BulkUpdateAnnotations(context.Background(), anns)
 	require.NoError(t, err)
 
 	bulkAnnoDelete := BulkAnnotationDeleteInfo{
@@ -775,7 +771,7 @@ func TestBulkDeleteAnnotationsSuccess(t *testing.T) {
 			}`)),
 		}, nil).Times(1)
 
-	resp, err := client.BulkDeleteAnnotations(&bulkAnnoDelete)
+	resp, err := client.BulkDeleteAnnotations(context.Background(), &bulkAnnoDelete)
 	require.NoError(t, err)
 	require.NotNil(t, resp)
 	require.Equal(t, 200, resp.StatusCode)
@@ -806,7 +802,7 @@ func TestAssignUIDSuccess(t *testing.T) {
 			Body:       io.NopCloser(strings.NewReader(expectedResponse)), // Response body with UIDs
 		}, nil).Times(1)
 
-	resp, err := client.AssignUID(&assignParam)
+	resp, err := client.AssignUID(context.Background(), &assignParam)
 
 	require.NoError(t, err, "Error occurred while assigning UID info")
 	require.NotEmpty(t, resp.Metric, "Expected metric to be nil") // This may need adjustment based on your response structure
@@ -841,7 +837,7 @@ func TestUpdateUIDMetaDataSuccess(t *testing.T) {
 			Body:       io.NopCloser(strings.NewReader(expectedResponse)), // Mock response body
 		}, nil).Times(1)
 
-	resp, err := client.UpdateUIDMetaData(&uidMetaData)
+	resp, err := client.UpdateUIDMetaData(context.Background(), &uidMetaData)
 
 	require.NoError(t, err, "Error occurred while posting UID metadata info")
 	require.NotNil(t, resp, "Response should not be nil")
@@ -870,7 +866,7 @@ func TestQueryUIDMetaDataSuccess(t *testing.T) {
 			Body:       io.NopCloser(strings.NewReader(expectedResponse)),
 		}, nil).Times(1)
 
-	resp, err := client.QueryUIDMetaData(metaQueryParam)
+	resp, err := client.QueryUIDMetaData(context.Background(), metaQueryParam)
 
 	require.NoError(t, err, "Error occurred while querying uidmetadata info")
 	require.NotNil(t, resp, "Response should not be nil")
@@ -898,7 +894,7 @@ func TestDeleteUIDMetaData(t *testing.T) {
 			Body:       io.NopCloser(strings.NewReader("[]")),
 		}, nil).Times(1)
 
-	resp, err := client.DeleteUIDMetaData(&uidMetaData)
+	resp, err := client.DeleteUIDMetaData(context.Background(), &uidMetaData)
 
 	require.NoError(t, err, "Error occurred while deleting UID metadata")
 	require.NotNil(t, resp, "Response should not be nil")
@@ -930,7 +926,7 @@ func TestUpdateTSMetaData(t *testing.T) {
 		}, nil).
 		Times(1)
 
-	resp, err := client.UpdateTSMetaData(&tsMetaData)
+	resp, err := client.UpdateTSMetaData(context.Background(), &tsMetaData)
 
 	require.NoError(t, err, "Error occurred while posting TS metadata")
 	require.NotNil(t, resp, "Response should not be nil")
@@ -953,7 +949,7 @@ func TestQueryTSMetaData(t *testing.T) {
 			Body:       io.NopCloser(strings.NewReader(expectedResponse)),
 		}, nil).Times(1)
 
-	resp, err := client.QueryTSMetaData(tsuid)
+	resp, err := client.QueryTSMetaData(context.Background(), tsuid)
 
 	require.NoError(t, err, "Error occurred while querying TS metadata")
 	require.Empty(t, resp.Metric, "Metric should be nil")
@@ -975,7 +971,7 @@ func TestDeleteTSMetaData(t *testing.T) {
 			Body:       io.NopCloser(strings.NewReader("")),
 		}, nil).Times(1)
 
-	resp, err := client.DeleteTSMetaData(&tsMetaData)
+	resp, err := client.DeleteTSMetaData(context.Background(), &tsMetaData)
 
 	require.NoError(t, err, "Error occurred while deleting TS metadata")
 	require.NotNil(t, resp, "Response should not be nil")
@@ -996,7 +992,7 @@ func TestGetDataPoints(t *testing.T) {
 		},
 		logger: client.logger,
 		tracer: client.tracer,
-		ctx:    client.ctx,
+		ctx:    context.Background(),
 	}
 
 	dataPoints := qri.GetDataPoints()
@@ -1018,7 +1014,7 @@ func TestGetSortedTimestampStrs(t *testing.T) {
 		},
 		logger: client.logger,
 		tracer: client.tracer,
-		ctx:    client.ctx,
+		ctx:    context.Background(),
 	}
 
 	timestampStrs := qri.getSortedTimestampStrs()
@@ -1036,7 +1032,7 @@ func TestGetLatestDataPoint(t *testing.T) {
 		Dps:    map[string]interface{}{},
 		logger: client.logger,
 		tracer: client.tracer,
-		ctx:    client.ctx,
+		ctx:    context.Background(),
 	}
 
 	latestDataPoint := qri.GetLatestDataPoint()

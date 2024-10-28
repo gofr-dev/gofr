@@ -67,7 +67,6 @@ var dialTimeout = net.DialTimeout
 type Client struct {
 	endpoint string
 	client   HTTPClient
-	ctx      context.Context
 	config   Config
 	logger   Logger
 	metrics  Metrics
@@ -140,11 +139,7 @@ var DefaultTransport = &http.Transport{
 // Connect initializes an HTTP client for OpenTSDB using the provided configuration.
 // If the configuration is invalid or the endpoint is unreachable, an error is logged.
 func (c *Client) Connect() {
-	if c.ctx == nil {
-		c.ctx = context.Background()
-	}
-
-	span := c.addTrace(c.ctx, "Connect")
+	span := c.addTrace(context.Background(), "Connect")
 
 	status := StatusFailed
 
@@ -189,23 +184,13 @@ func (c *Client) Connect() {
 	message = fmt.Sprintf("connected to %s", c.endpoint)
 }
 
-// WithContext creates a new OpenTSDB client that operates with the provided context.
-func (c *Client) WithContext(ctx context.Context) *Client {
-	return &Client{
-		endpoint: c.endpoint,
-		client:   c.client,
-		ctx:      ctx,
-		config:   c.config,
-	}
-}
-
 type Health struct {
 	Status  string         `json:"status,omitempty"`
 	Details map[string]any `json:"details,omitempty"`
 }
 
-func (c *Client) HealthCheck(_ context.Context) (any, error) {
-	span := c.addTrace(c.ctx, "HealthCheck")
+func (c *Client) HealthCheck(ctx context.Context) (any, error) {
+	span := c.addTrace(ctx, "HealthCheck")
 
 	status := StatusFailed
 
@@ -231,7 +216,7 @@ func (c *Client) HealthCheck(_ context.Context) (any, error) {
 
 	h.Details["host"] = c.endpoint
 
-	ver, err := c.version()
+	ver, err := c.version(context.Background())
 	if err != nil {
 		message = err.Error()
 		return nil, err
@@ -248,8 +233,8 @@ func (c *Client) HealthCheck(_ context.Context) (any, error) {
 
 // sendRequest dispatches an HTTP request to the OpenTSDB server, using the provided
 // method, URL, and body content. It returns the parsed response or an error, if any.
-func (c *Client) sendRequest(method, url, reqBodyCnt string, parsedResp Response) error {
-	span := c.addTrace(c.ctx, "sendRequest")
+func (c *Client) sendRequest(ctx context.Context, method, url, reqBodyCnt string, parsedResp Response) error {
+	span := c.addTrace(ctx, "sendRequest")
 
 	status := StatusFailed
 
@@ -259,8 +244,8 @@ func (c *Client) sendRequest(method, url, reqBodyCnt string, parsedResp Response
 
 	// Create the HTTP request, attaching the context if available.
 	req, err := http.NewRequest(method, url, strings.NewReader(reqBodyCnt))
-	if c.ctx != nil {
-		req = req.WithContext(c.ctx)
+	if ctx != nil {
+		req = req.WithContext(ctx)
 	}
 
 	if err != nil {
@@ -324,8 +309,8 @@ func (c *Client) sendRequest(method, url, reqBodyCnt string, parsedResp Response
 
 // isValidOperateMethod checks if the provided HTTP method is valid for
 // operations such as POST, PUT, or DELETE.
-func (c *Client) isValidOperateMethod(method string) bool {
-	span := c.addTrace(c.ctx, "isValidOperateMethod")
+func (c *Client) isValidOperateMethod(ctx context.Context, method string) bool {
+	span := c.addTrace(ctx, "isValidOperateMethod")
 
 	status := StatusSuccess
 
