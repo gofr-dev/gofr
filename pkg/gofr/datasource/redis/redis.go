@@ -20,6 +20,8 @@ const (
 
 type Config struct {
 	HostName string
+	Username string
+	Password string
 	Port     int
 	Options  *redis.Options
 }
@@ -48,17 +50,15 @@ func NewClient(c config.Config, logger datasource.Logger, metrics Metrics) *Redi
 	ctx, cancel := context.WithTimeout(context.TODO(), redisPingTimeout)
 	defer cancel()
 
-	if err := rc.Ping(ctx).Err(); err != nil {
+	if err := rc.Ping(ctx).Err(); err == nil {
+		if err = otel.InstrumentTracing(rc); err != nil {
+			logger.Errorf("could not add tracing instrumentation, error: %s", err)
+		}
+
+		logger.Logf("connected to redis at %s:%d", redisConfig.HostName, redisConfig.Port)
+	} else {
 		logger.Errorf("could not connect to redis at '%s:%d', error: %s", redisConfig.HostName, redisConfig.Port, err)
-
-		return &Redis{Client: nil, config: redisConfig, logger: logger}
 	}
-
-	if err := otel.InstrumentTracing(rc); err != nil {
-		logger.Errorf("could not add tracing instrumentation, error: %s", err)
-	}
-
-	logger.Logf("connected to redis at %s:%d", redisConfig.HostName, redisConfig.Port)
 
 	return &Redis{Client: rc, config: redisConfig, logger: logger}
 }
@@ -77,6 +77,10 @@ func getRedisConfig(c config.Config) *Config {
 
 	redisConfig.HostName = c.Get("REDIS_HOST")
 
+	redisConfig.Username = c.Get("REDIS_USER")
+
+	redisConfig.Password = c.Get("REDIS_PASSWORD")
+
 	port, err := strconv.Atoi(c.Get("REDIS_PORT"))
 	if err != nil {
 		port = defaultRedisPort
@@ -88,6 +92,14 @@ func getRedisConfig(c config.Config) *Config {
 
 	if options.Addr == "" {
 		options.Addr = fmt.Sprintf("%s:%d", redisConfig.HostName, redisConfig.Port)
+	}
+
+	if options.Username == "" {
+		options.Username = redisConfig.Username
+	}
+
+	if options.Password == "" {
+		options.Password = redisConfig.Password
 	}
 
 	redisConfig.Options = options
