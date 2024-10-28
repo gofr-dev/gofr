@@ -41,7 +41,9 @@ func pwdCommandHandler(c *gofr.Context) (interface{}, error) {
 
 func lsCommandHandler(c *gofr.Context) (interface{}, error) {
 	path := c.Param("path")
+
 	files, err := c.File.ReadDir(path)
+
 	if err != nil {
 		fmt.Println(err)
 	} else {
@@ -54,7 +56,9 @@ func lsCommandHandler(c *gofr.Context) (interface{}, error) {
 func grepCommandHandler(c *gofr.Context) (interface{}, error) {
 	keyword := c.Param("keyword")
 	path := c.Param("path")
+
 	files, err := c.File.ReadDir(path)
+
 	if err != nil {
 		fmt.Println(err)
 	} else {
@@ -67,6 +71,7 @@ func grepCommandHandler(c *gofr.Context) (interface{}, error) {
 
 func createFileCommandHandler(c *gofr.Context) (interface{}, error) {
 	fileName := c.Param("filename")
+
 	_, err := c.File.Create(fileName)
 
 	if err == nil {
@@ -78,6 +83,7 @@ func createFileCommandHandler(c *gofr.Context) (interface{}, error) {
 
 func rmCommandHandler(c *gofr.Context) (interface{}, error) {
 	fileName := c.Param("filename")
+
 	err := c.File.Remove(fileName)
 
 	if err == nil {
