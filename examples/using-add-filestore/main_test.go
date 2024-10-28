@@ -52,7 +52,6 @@ func TestLSCommandHandler(t *testing.T) {
 	path := "/"
 
 	logs := testutil.StdoutOutputForFunc(func() {
-
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
