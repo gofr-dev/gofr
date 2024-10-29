@@ -14,4 +14,5 @@ type Request interface {
 	Bind(interface{}) error
 	HostName() string
 	Params(string) []string
+	GetAuthInfo() map[string]any
 }

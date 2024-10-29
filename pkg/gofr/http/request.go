@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/golang-jwt/jwt/v5"
+	"gofr.dev/pkg/gofr/http/middleware"
 	"io"
 	"net/http"
 	"reflect"
@@ -156,4 +158,22 @@ func (r *Request) bindForm(ptr any, isMultipart bool) error {
 	}
 
 	return nil
+}
+
+func (r *Request) GetAuthInfo() map[string]any {
+	m := make(map[string]any, 0)
+
+	if r.Context().Value(middleware.JWTClaim) != nil {
+		m["JWTClaims"] = r.Context().Value(middleware.JWTClaim).(jwt.MapClaims)
+	}
+
+	if r.Context().Value(middleware.Username) != nil {
+		m["Username"] = r.Context().Value(middleware.Username).(string)
+	}
+
+	if r.Context().Value(middleware.APIKey) != nil {
+		m["ApiKey"] = r.Context().Value(middleware.APIKey).(string)
+	}
+
+	return m
 }
