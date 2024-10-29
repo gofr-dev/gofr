@@ -20,6 +20,10 @@ type Message struct {
 	Committer
 }
 
+func (m *Message) GetAuthInfo() map[string]any {
+	return nil
+}
+
 func NewMessage(ctx context.Context) *Message {
 	if ctx == nil {
 		return &Message{ctx: context.Background()}

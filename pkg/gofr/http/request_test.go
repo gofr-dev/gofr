@@ -3,6 +3,8 @@ package http
 import (
 	"bytes"
 	"context"
+	"github.com/golang-jwt/jwt/v5"
+	"gofr.dev/pkg/gofr/http/middleware"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -271,4 +273,46 @@ func TestBind_FormURLEncoded(t *testing.T) {
 	if x.Name != "John" || x.Age != 30 {
 		t.Errorf("Bind error. Got: %v", x)
 	}
+}
+
+func TestGetAuthInfo_BasicAuth(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+
+	ctx := context.WithValue(req.Context(), middleware.Username, "validUser")
+	*req = *req.Clone(ctx)
+	gofrRq := NewRequest(req)
+
+	u := gofrRq.GetAuthInfo()
+
+	assert.Equal(t, "validUser", u["Username"])
+}
+
+func TestGetAuthInfo_ApiKey(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+
+	ctx := context.WithValue(req.Context(), middleware.APIKey, "9221e451-451f-4cd6-a23d-2b2d3adea9cf")
+	*req = *req.Clone(ctx)
+	gofrRq := NewRequest(req)
+
+	u := gofrRq.GetAuthInfo()
+
+	assert.Equal(t, "9221e451-451f-4cd6-a23d-2b2d3adea9cf", u["ApiKey"])
+}
+
+func TestGetAuthInfo_JWTClaims(t *testing.T) {
+	claims := jwt.MapClaims{
+		"sub":   "1234567890",
+		"name":  "John Doe",
+		"admin": true,
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+
+	ctx := context.WithValue(req.Context(), middleware.JWTClaim, claims)
+	*req = *req.Clone(ctx)
+	gofrRq := NewRequest(req)
+
+	u := gofrRq.GetAuthInfo()
+
+	assert.Equal(t, claims, u["JWTClaims"])
 }
