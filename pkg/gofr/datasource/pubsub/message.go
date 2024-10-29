@@ -20,7 +20,7 @@ type Message struct {
 	Committer
 }
 
-func (m *Message) GetAuthInfo() map[string]any {
+func (*Message) GetAuthInfo() map[string]any {
 	return nil
 }
 

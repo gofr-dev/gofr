@@ -16,7 +16,7 @@ type Request struct {
 	params map[string]string
 }
 
-func (r *Request) GetAuthInfo() map[string]any {
+func (*Request) GetAuthInfo() map[string]any {
 	return nil
 }
 

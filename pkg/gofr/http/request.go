@@ -6,12 +6,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/golang-jwt/jwt/v5"
-	"gofr.dev/pkg/gofr/http/middleware"
 	"io"
 	"net/http"
 	"reflect"
 	"strings"
+
+	"github.com/golang-jwt/jwt/v5"
+	"gofr.dev/pkg/gofr/http/middleware"
 
 	"github.com/gorilla/mux"
 )

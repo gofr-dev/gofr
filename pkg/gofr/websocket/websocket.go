@@ -21,7 +21,7 @@ type Connection struct {
 	*websocket.Conn
 }
 
-func (w *Connection) GetAuthInfo() map[string]any {
+func (*Connection) GetAuthInfo() map[string]any {
 	return nil
 }
 

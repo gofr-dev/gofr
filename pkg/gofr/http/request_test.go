@@ -3,8 +3,6 @@ package http
 import (
 	"bytes"
 	"context"
-	"github.com/golang-jwt/jwt/v5"
-	"gofr.dev/pkg/gofr/http/middleware"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -13,6 +11,9 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/golang-jwt/jwt/v5"
+	"gofr.dev/pkg/gofr/http/middleware"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
