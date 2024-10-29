@@ -3,6 +3,7 @@
 package middleware
 
 import (
+	"context"
 	"net/http"
 
 	"gofr.dev/pkg/gofr/container"
@@ -35,6 +36,9 @@ func APIKeyAuthMiddleware(a APIKeyAuthProvider, apiKeys ...string) func(handler 
 				http.Error(w, "Unauthorized: Invalid Authorization header", http.StatusUnauthorized)
 				return
 			}
+
+			ctx := context.WithValue(r.Context(), APIKey, authKey)
+			*r = *r.Clone(ctx)
 
 			handler.ServeHTTP(w, r)
 		})

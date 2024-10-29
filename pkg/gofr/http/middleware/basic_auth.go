@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"encoding/base64"
 	"net/http"
 	"strings"
@@ -53,6 +54,9 @@ func BasicAuthMiddleware(basicAuthProvider BasicAuthProvider) func(handler http.
 				http.Error(w, "Unauthorized: Invalid username or password", http.StatusUnauthorized)
 				return
 			}
+
+			ctx := context.WithValue(r.Context(), Username, username)
+			*r = *r.Clone(ctx)
 
 			handler.ServeHTTP(w, r)
 		})
