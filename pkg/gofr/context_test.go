@@ -3,11 +3,12 @@ package gofr
 import (
 	"bytes"
 	"context"
-	"github.com/golang-jwt/jwt/v5"
-	"gofr.dev/pkg/gofr/http/middleware"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/golang-jwt/jwt/v5"
+	"gofr.dev/pkg/gofr/http/middleware"
 
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
