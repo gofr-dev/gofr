@@ -7,11 +7,13 @@ import (
 	"strings"
 
 	cmd2 "gofr.dev/pkg/gofr/cmd"
+	"gofr.dev/pkg/gofr/cmd/terminal"
 	"gofr.dev/pkg/gofr/container"
 )
 
 type cmd struct {
 	routes []route
+	out    terminal.Out
 }
 
 type route struct {
@@ -58,7 +60,7 @@ func (cmd *cmd) Run(c *container.Container) {
 	}
 
 	r := cmd.handler(subCommand)
-	ctx := newContext(&cmd2.Responder{}, cmd2.NewRequest(args), c)
+	ctx := newCMDContext(&cmd2.Responder{}, cmd2.NewRequest(args), c, cmd.out)
 
 	// handling if route is not found or the handler is nil
 	if cmd.noCommandResponse(r, ctx) {
@@ -66,7 +68,7 @@ func (cmd *cmd) Run(c *container.Container) {
 	}
 
 	if showHelp {
-		fmt.Println(r.help)
+		cmd.out.Print(r.help)
 		return
 	}
 

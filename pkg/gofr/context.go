@@ -8,6 +8,7 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 
+	"gofr.dev/pkg/gofr/cmd/terminal"
 	"gofr.dev/pkg/gofr/container"
 )
 
@@ -26,6 +27,9 @@ type Context struct {
 	// normal response writer as we want to keep the context independent of http. Will help us in writing CMD application
 	// or gRPC servers etc using the same handler signature.
 	responder Responder
+
+	// Terminal needs to be public as CMD applications need to access various terminal user interface(TUI) features.
+	Out terminal.Out
 }
 
 /*
@@ -88,5 +92,15 @@ func newContext(w Responder, r Request, c *container.Container) *Context {
 		Request:   r,
 		responder: w,
 		Container: c,
+	}
+}
+
+func newCMDContext(w Responder, r Request, c *container.Container, out terminal.Out) *Context {
+	return &Context{
+		Context:   r.Context(),
+		responder: w,
+		Request:   r,
+		Container: c,
+		Out:       out,
 	}
 }
