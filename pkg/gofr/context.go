@@ -91,7 +91,6 @@ func (c *Context) GetAuthInfo() AuthInfo {
 func (c *Context) GetClaims() jwt.MapClaims {
 	claims, ok := c.Request.Context().Value(middleware.JWTClaim).(jwt.MapClaims)
 	if !ok {
-		c.Warn("failed to get claims from context")
 		return nil
 	}
 
@@ -101,7 +100,6 @@ func (c *Context) GetClaims() jwt.MapClaims {
 func (c *Context) GetUsername() string {
 	claims, ok := c.Request.Context().Value(middleware.Username).(string)
 	if !ok {
-		c.Warn("failed to get username from context")
 		return ""
 	}
 
@@ -111,7 +109,6 @@ func (c *Context) GetUsername() string {
 func (c *Context) GetAPIKey() string {
 	claims, ok := c.Request.Context().Value(middleware.APIKey).(string)
 	if !ok {
-		c.Warn("failed to get api key from context")
 		return ""
 	}
 
