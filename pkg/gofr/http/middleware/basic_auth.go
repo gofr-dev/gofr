@@ -17,6 +17,8 @@ type BasicAuthProvider struct {
 	Container                   *container.Container
 }
 
+const Username authMethod = 1
+
 // BasicAuthMiddleware creates a middleware function that enforces basic authentication using the provided BasicAuthProvider.
 func BasicAuthMiddleware(basicAuthProvider BasicAuthProvider) func(handler http.Handler) http.Handler {
 	return func(handler http.Handler) http.Handler {

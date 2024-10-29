@@ -16,6 +16,8 @@ type APIKeyAuthProvider struct {
 	Container                   *container.Container
 }
 
+const APIKey authMethod = 2
+
 // APIKeyAuthMiddleware creates a middleware function that enforces API key authentication based on the provided API
 // keys or a validation function.
 func APIKeyAuthMiddleware(a APIKeyAuthProvider, apiKeys ...string) func(handler http.Handler) http.Handler {

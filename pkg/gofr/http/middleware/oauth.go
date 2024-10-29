@@ -26,8 +26,6 @@ type authMethod int
 
 const (
 	JWTClaim authMethod = iota // JWTClaim represents the key used to store JWT claims within the request context.
-	Username authMethod = 1
-	APIKey   authMethod = 2
 )
 
 // PublicKeys stores a map of public keys identified by their key ID (kid).
