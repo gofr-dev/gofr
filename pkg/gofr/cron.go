@@ -390,3 +390,7 @@ func (noopRequest) Bind(interface{}) error {
 func (noopRequest) Params(string) []string {
 	return nil
 }
+
+func (noopRequest) GetAuthInfo() map[string]any {
+	return nil
+}

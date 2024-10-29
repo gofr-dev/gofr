@@ -21,6 +21,10 @@ type Connection struct {
 	*websocket.Conn
 }
 
+func (w *Connection) GetAuthInfo() map[string]any {
+	return nil
+}
+
 // ErrorConnection is the connection error that occurs when webscoket connection cannot be established.
 var ErrorConnection = errors.New("couldn't establish connection to web socket")
 

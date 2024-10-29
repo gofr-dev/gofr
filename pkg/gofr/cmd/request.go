@@ -16,6 +16,10 @@ type Request struct {
 	params map[string]string
 }
 
+func (r *Request) GetAuthInfo() map[string]any {
+	return nil
+}
+
 const trueString = "true"
 
 // TODO - use statement to parse the request to populate the flags and params.
