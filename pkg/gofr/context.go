@@ -2,6 +2,8 @@ package gofr
 
 import (
 	"context"
+	"github.com/golang-jwt/jwt/v5"
+	"gofr.dev/pkg/gofr/http/middleware"
 
 	"github.com/gorilla/websocket"
 
@@ -26,6 +28,12 @@ type Context struct {
 	// normal response writer as we want to keep the context independent of http. Will help us in writing CMD application
 	// or gRPC servers etc using the same handler signature.
 	responder Responder
+}
+
+type AuthInfo interface {
+	GetClaims() jwt.MapClaims
+	GetUsername() string
+	GetAPIKey() string
 }
 
 /*
@@ -73,6 +81,37 @@ func (c *Context) WriteMessageToSocket(data any) error {
 	}
 
 	return conn.WriteMessage(websocket.TextMessage, message)
+}
+
+func (c *Context) GetAuthInfo() AuthInfo {
+	return c
+}
+
+func (c *Context) GetClaims() jwt.MapClaims {
+	claims, ok := c.Request.Context().Value(middleware.JWTClaim).(jwt.MapClaims)
+	if !ok {
+		return nil
+	}
+
+	return claims
+}
+
+func (c *Context) GetUsername() string {
+	claims, ok := c.Request.Context().Value(middleware.Username).(string)
+	if !ok {
+		return ""
+	}
+
+	return claims
+}
+
+func (c *Context) GetAPIKey() string {
+	claims, ok := c.Request.Context().Value(middleware.APIKey).(string)
+	if !ok {
+		return ""
+	}
+
+	return claims
 }
 
 // func (c *Context) reset(w Responder, r Request) {
