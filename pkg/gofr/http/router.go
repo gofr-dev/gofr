@@ -2,7 +2,6 @@ package http
 
 import (
 	"net/http"
-	"os"
 	"path/filepath"
 	"strings"
 
