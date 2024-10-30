@@ -74,15 +74,15 @@ Therefore, GoFr utilizes a pluggable approach for new datasources by separating 
 | MySQL          | ✅         | ✅    | ✅     | ✅      |           |
 | REDIS          | ✅         | ✅    | ✅     | ✅      |           |
 | PostgreSQL     | ✅         | ✅    | ✅     | ✅      |           |
-| MongoDB        | ✅         | ✅    | ✅     |        | ✅         |
+| MongoDB        | ✅         | ✅    | ✅     |  ✅      | ✅         |
 | SQLite         | ✅         | ✅    | ✅     | ✅      |           |
-| BadgerDB       | ✅         | ✅    |       |        | ✅         |
-| Cassandra      | ✅         | ✅    | ✅     |        | ✅         |
-| Clickhouse     |           | ✅    | ✅     |        | ✅         |
+| BadgerDB       | ✅         | ✅    | ✅      |    ✅    | ✅         |
+| Cassandra      | ✅         | ✅    | ✅     |  ✅      | ✅         |
+| Clickhouse     |           | ✅    | ✅     |   ✅     | ✅         |
 | FTP            |           | ✅    |       |        | ✅         |
 | SFTP           |           | ✅    |       |        | ✅         |
-| Solr           |           |   ✅   |   ✅      |        |      ✅     |
-| DGraph         | ✅  | ✅ |✅ |        ||
+| Solr           |           |   ✅   |   ✅      |   ✅     |      ✅     |
+| DGraph         | ✅  | ✅ |✅ |   ✅     ||
 | Azure Eventhub |   | ✅ |✅ |        |✅|
 
 
