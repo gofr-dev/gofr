@@ -109,6 +109,13 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		err = gofrHTTP.ErrorPanicRecovery{}
 	}
 
+	if resp, ok := result.(response.Response); ok {
+		for key, value := range resp.Headers {
+			w.Header().Set(key, value) // Set custom headers
+		}
+		result = resp.Data // Extract the actual data
+	}
+
 	// Handler function completed
 	c.responder.Respond(result, err)
 }
