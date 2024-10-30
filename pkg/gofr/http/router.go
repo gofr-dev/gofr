@@ -11,7 +11,7 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
-const defaultSwaggerFileName = "openapi.json"
+const DefaultSwaggerFileName = "openapi.json"
 
 // Router is responsible for routing HTTP request.
 type Router struct {
@@ -62,9 +62,11 @@ func (rou *Router) AddStaticFiles(endpoint, dirName string) {
 
 	if endpoint == "/" {
 		rou.Router.NewRoute().PathPrefix("/").Handler(cfg.staticHandler(fileServer))
-	} else {
-		rou.Router.NewRoute().PathPrefix(endpoint + "/").Handler(http.StripPrefix(endpoint, cfg.staticHandler(fileServer)))
+
+		return
 	}
+
+	rou.Router.NewRoute().PathPrefix(endpoint + "/").Handler(http.StripPrefix(endpoint, cfg.staticHandler(fileServer)))
 }
 
 func (staticConfig staticFileConfig) staticHandler(fileServer http.Handler) http.Handler {
@@ -78,7 +80,7 @@ func (staticConfig staticFileConfig) staticHandler(fileServer http.Handler) http
 		// Prevent direct access to the openapi.json file via static file routes.
 		// The file should only be accessible through the explicitly defined /.well-known/swagger or
 		// /.well-known/openapi.json for controlled access.
-		if _, err := os.Stat(filepath.Clean(filepath.Join(staticConfig.directoryName, url))); fileName == defaultSwaggerFileName && err == nil {
+		if _, err := os.Stat(filepath.Clean(filepath.Join(staticConfig.directoryName, url))); fileName == DefaultSwaggerFileName && err == nil {
 			w.WriteHeader(http.StatusForbidden)
 
 			_, _ = w.Write([]byte("403 forbidden"))

@@ -93,9 +93,14 @@ func New() *App {
 	app.add(http.MethodGet, "/.well-known/alive", liveHandler)
 	app.add(http.MethodGet, "/favicon.ico", faviconHandler)
 
-	if _, err = os.Stat("./static/openapi.json"); err == nil {
-		app.add(http.MethodGet, "/.well-known/openapi.json", OpenAPIHandler)
+	// If the openapi.json file exists in the static directory, set up routes for OpenAPI and Swagger documentation.
+	if _, err = os.Stat("./static/" + gofrHTTP.DefaultSwaggerFileName); err == nil {
+		// Route to serve the OpenAPI JSON specification file.
+		app.add(http.MethodGet, "/.well-known/"+gofrHTTP.DefaultSwaggerFileName, OpenAPIHandler)
+		// Route to serve the Swagger UI, providing a user interface for the API documentation.
 		app.add(http.MethodGet, "/.well-known/swagger", SwaggerUIHandler)
+		// Catchall route: any request to /.well-known/{name} (e.g., /.well-known/other)
+		// will be handled by the SwaggerUIHandler, serving the Swagger UI.
 		app.add(http.MethodGet, "/.well-known/{name}", SwaggerUIHandler)
 	}
 
