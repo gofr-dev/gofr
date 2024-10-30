@@ -51,6 +51,8 @@ type Out interface {
 	SetColor(colorCode int)
 	SetWindowTitle(title string)
 	ShowCursor()
+
+	getSize() (int, int, error)
 }
 
 // NewOutput intialises the output type with output stream as standard out
@@ -69,4 +71,13 @@ func getTerminalInfo(in io.Writer) (inFd uintptr, isTerminalIn bool) {
 	}
 
 	return inFd, isTerminalIn
+}
+
+func (o *Output) getSize() (int, int, error) {
+	width, height, err := term.GetSize(int(o.fd))
+	if err != nil {
+		return 0, 0, err
+	}
+
+	return width, height, nil
 }
