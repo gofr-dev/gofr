@@ -2,9 +2,10 @@ package terminal
 
 import (
 	"bytes"
+	"testing"
+
 	"github.com/stretchr/testify/assert"
 	"gofr.dev/pkg/gofr/testutil"
-	"testing"
 )
 
 func TestProgressBar_SuccessCases(t *testing.T) {

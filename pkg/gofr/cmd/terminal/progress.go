@@ -4,12 +4,10 @@ import (
 	"fmt"
 	"strings"
 	"sync"
-
-	"golang.org/x/term"
 )
 
 type ProgressBar struct {
-	stream  *Output
+	stream  Out
 	current int64
 	total   int64
 	tWidth  int
@@ -21,8 +19,8 @@ type Term interface {
 	GetSize(fd int) (width, height int, err error)
 }
 
-func NewProgressBar(out *Output, total int64) *ProgressBar {
-	w, _, err := term.GetSize(int(out.fd))
+func NewProgressBar(out Out, total int64) *ProgressBar {
+	w, _, err := out.getSize()
 	if err != nil {
 		fmt.Printf("error getting terminal size, err : %v, could not initialize progress bar\n", err)
 	}
