@@ -10,7 +10,7 @@ import (
 
 func TestOutput_Printf(t *testing.T) {
 	var buf bytes.Buffer
-	output := output{out: &buf}
+	output := Out{out: &buf}
 
 	format := "Hello, %s!"
 	args := "world"
@@ -22,7 +22,7 @@ func TestOutput_Printf(t *testing.T) {
 
 func TestOutput_Print(t *testing.T) {
 	var buf bytes.Buffer
-	output := output{out: &buf}
+	output := Out{out: &buf}
 
 	message := "Hello, world!"
 	output.Print(message)
@@ -32,7 +32,7 @@ func TestOutput_Print(t *testing.T) {
 
 func TestOutput_Println(t *testing.T) {
 	var buf bytes.Buffer
-	output := output{out: &buf}
+	output := Out{out: &buf}
 
 	message := "Hello, world!"
 	output.Println(message)

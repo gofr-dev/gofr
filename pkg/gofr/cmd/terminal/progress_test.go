@@ -13,7 +13,7 @@ func TestProgressBar_SuccessCases(t *testing.T) {
 	total := int64(100)
 
 	var out bytes.Buffer
-	stream := &output{terminal{isTerminal: true, fd: 1}, &out}
+	stream := &Out{terminal{isTerminal: true, fd: 1}, &out}
 	bar := NewProgressBar(stream, total)
 
 	// Mock terminal size
@@ -38,10 +38,10 @@ func TestProgressBar_SuccessCases(t *testing.T) {
 func TestProgressBar_Fail(t *testing.T) {
 	out := testutil.StdoutOutputForFunc(func() {
 		var out bytes.Buffer
-		stream := &output{terminal{isTerminal: true, fd: 1}, &out}
+		stream := &Out{terminal{isTerminal: true, fd: 1}, &out}
 		bar := NewProgressBar(stream, int64(-1))
 
-		assert.Equal(t, bar.total, int64(0))
+		assert.Equal(t, int64(0), bar.total)
 	})
 
 	assert.Contains(t, out, "error initializing progress bar, total should be > 0")
@@ -49,7 +49,7 @@ func TestProgressBar_Fail(t *testing.T) {
 
 func TestProgressBar_Incr(t *testing.T) {
 	var out bytes.Buffer
-	stream := &output{terminal{isTerminal: true, fd: 1}, &out}
+	stream := &Out{terminal{isTerminal: true, fd: 1}, &out}
 	bar := NewProgressBar(stream, 100)
 	// doing this as while calculating terminal size the code will not
 	// be able to determine it's width since we are not attacting an actual
@@ -58,16 +58,20 @@ func TestProgressBar_Incr(t *testing.T) {
 
 	// Increment the progress by 20
 	b := bar.Incr(int64(20))
+	expectedOut := "\r[█████████░                                        ] 20.000%"
+
 	assert.True(t, b)
 	assert.Equal(t, int64(20), bar.current)
-
-	expectedOut := "\r[█████████░                                        ] 20.000%"
 	assert.Equal(t, expectedOut, out.String())
 
-	bar.Incr(int64(100))
+	// increment the progress by 100 units.
+	b = bar.Incr(int64(100))
 	expectedOut = "\r[█████████░                                        ] 20.000%\r" +
 		"[██████████████████████████████████████████████████] 100.000%\n"
+
+	assert.False(t, b)
 	assert.Equal(t, expectedOut, out.String())
+	assert.Equal(t, int64(100), bar.current)
 }
 
 func TestProgressBar_getString(t *testing.T) {
