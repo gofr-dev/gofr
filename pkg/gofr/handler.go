@@ -112,7 +112,9 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// **Handle Custom Headers** if `result` is a `Response`.
 	if resp, ok := result.(response.Response); ok {
 		for key, value := range resp.Headers {
-			w.Header().Set(key, value)
+			if w.Header().Get(key) == "" {
+				w.Header().Set(key, value)
+			}
 		}
 		result = resp.Data
 	}
