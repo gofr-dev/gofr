@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestSpinner(t *testing.T) {
@@ -12,7 +14,7 @@ func TestSpinner(t *testing.T) {
 
 	// Testing Dot spinner
 	b := &bytes.Buffer{}
-	out := &output{out: b}
+	out := &Out{out: b}
 	spinner := NewDotSpinner(out)
 
 	// Start the spinner
@@ -26,13 +28,11 @@ func TestSpinner(t *testing.T) {
 
 	// Check if output contains spinner frames
 	outputStr := b.String()
-	if len(outputStr) == 0 {
-		t.Error("No output received from spinner")
-	}
+	assert.NotZero(t, outputStr)
 
 	// Testing Globe Spinner
 	b = &bytes.Buffer{}
-	out = &output{out: b}
+	out = &Out{out: b}
 	spinner = NewGlobeSpinner(out)
 
 	// Start the spinner
@@ -46,13 +46,11 @@ func TestSpinner(t *testing.T) {
 
 	// Check if output contains spinner frames
 	outputStr = b.String()
-	if len(outputStr) == 0 {
-		t.Error("No output received from spinner")
-	}
+	assert.NotZero(t, outputStr)
 
 	// Testing Pulse Spinner
 	b = &bytes.Buffer{}
-	out = &output{out: b}
+	out = &Out{out: b}
 	spinner = NewPulseSpinner(out)
 
 	// Start the spinner
@@ -67,7 +65,5 @@ func TestSpinner(t *testing.T) {
 	// Check if output contains spinner frames
 	outputStr = b.String()
 	fmt.Println(outputStr)
-	if len(outputStr) == 0 {
-		t.Error("No output received from spinner")
-	}
+	assert.NotZero(t, outputStr)
 }

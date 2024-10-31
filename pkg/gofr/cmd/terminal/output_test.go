@@ -10,26 +10,27 @@ import (
 )
 
 func TestNewOutput(t *testing.T) {
-	// intialize a new standard output stream
+	// initialize a new standard output stream.
 	o := New()
 
 	assert.Equal(t, os.Stdout, o.out)
 	assert.Equal(t, uintptr(1), o.fd)
 
-	// for tests, the os.Stdout do not directly outputs to the terminal
+	// for tests, the os.Stdout do not directly outputs to the terminal.
 	assert.False(t, o.isTerminal)
 }
 
-func tempOutput(t *testing.T) *output {
+func tempOutput(t *testing.T) *Out {
 	t.Helper()
 
 	var b bytes.Buffer
 
-	return &output{out: &b}
+	return &Out{out: &b}
 }
 
-func validate(t *testing.T, o *output, exp string) {
+func validate(t *testing.T, o *Out, exp string) {
 	t.Helper()
+
 	out := o.out.(*bytes.Buffer)
 	b := out.Bytes()
 

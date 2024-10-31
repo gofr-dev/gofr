@@ -19,10 +19,10 @@ const (
 	BrightWhite
 )
 
-func (o *output) SetColor(colorCode int) {
+func (o *Out) SetColor(colorCode int) {
 	o.Printf(csi+"38;5;%d"+"m", colorCode)
 }
 
-func (o *output) ResetColor() {
+func (o *Out) ResetColor() {
 	o.Print(csi + "0m")
 }
