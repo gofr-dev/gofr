@@ -8,18 +8,18 @@ import (
 )
 
 func TestSpinner(t *testing.T) {
-	var waitTime = 3
+	var waitTime = 3 * time.Second
 
 	// Testing Dot spinner
 	b := &bytes.Buffer{}
-	output := &Output{out: b}
-	spinner := NewDotSpinner(output)
+	out := &output{out: b}
+	spinner := NewDotSpinner(out)
 
 	// Start the spinner
 	spinner.Spin()
 
 	// Let it run for a bit
-	time.Sleep(time.Duration(waitTime) * time.Second)
+	time.Sleep(waitTime)
 
 	// Stop the spinner
 	spinner.Stop()
@@ -32,14 +32,14 @@ func TestSpinner(t *testing.T) {
 
 	// Testing Globe Spinner
 	b = &bytes.Buffer{}
-	output = &Output{out: b}
-	spinner = NewGlobeSpinner(output)
+	out = &output{out: b}
+	spinner = NewGlobeSpinner(out)
 
 	// Start the spinner
 	spinner.Spin()
 
 	// Let it run for a bit
-	time.Sleep(time.Duration(waitTime) * time.Second)
+	time.Sleep(waitTime)
 
 	// Stop the spinner
 	spinner.Stop()
@@ -52,14 +52,14 @@ func TestSpinner(t *testing.T) {
 
 	// Testing Pulse Spinner
 	b = &bytes.Buffer{}
-	output = &Output{out: b}
-	spinner = NewPulseSpinner(output)
+	out = &output{out: b}
+	spinner = NewPulseSpinner(out)
 
 	// Start the spinner
 	spinner.Spin()
 
 	// Let it run for a bit
-	time.Sleep(time.Duration(waitTime) * time.Second)
+	time.Sleep(waitTime)
 
 	// Stop the spinner
 	spinner.Stop()
