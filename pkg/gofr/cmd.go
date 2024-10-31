@@ -13,7 +13,7 @@ import (
 
 type cmd struct {
 	routes []route
-	out    terminal.Out
+	out    terminal.Output
 }
 
 type route struct {

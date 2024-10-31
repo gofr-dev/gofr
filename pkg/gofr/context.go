@@ -29,7 +29,7 @@ type Context struct {
 	responder Responder
 
 	// Terminal needs to be public as CMD applications need to access various terminal user interface(TUI) features.
-	Out terminal.Out
+	Out terminal.Output
 }
 
 /*
@@ -95,7 +95,7 @@ func newContext(w Responder, r Request, c *container.Container) *Context {
 	}
 }
 
-func newCMDContext(w Responder, r Request, c *container.Container, out terminal.Out) *Context {
+func newCMDContext(w Responder, r Request, c *container.Container, out terminal.Output) *Context {
 	return &Context{
 		Context:   r.Context(),
 		responder: w,

@@ -26,10 +26,10 @@ func main() {
 	})
 
 	app.SubCommand("spinner", func(ctx *gofr.Context) (interface{}, error) {
-		// intialize the spinner and defer stop it
+		// initialize the spinner and defer stop it
 		defer terminal.NewDotSpinner(ctx.Out).Spin().Stop()
 
-		// stimulate a time taking process
+		// stimulate a time-taking process
 		time.Sleep(2 * time.Second)
 
 		return "Process Complete", nil
@@ -39,12 +39,17 @@ func main() {
 		p := terminal.NewProgressBar(ctx.Out, 100)
 
 		for i := 1; i <= 100; i++ {
-			// do a time taking process or compute a small subset of a bigger problem,
-			// this could be processing batches of a data set.
-			time.Sleep(50 * time.Millisecond)
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			default:
+				// do a time taking process or compute a small subset of a bigger problem,
+				// this could be processing batches of a data set.
+				time.Sleep(50 * time.Millisecond)
 
-			// increment the progress to display on the progress bar.
-			p.Incr(int64(1))
+				// increment the progress to display on the progress bar.
+				p.Incr(int64(1))
+			}
 		}
 
 		return "Process Complete", nil

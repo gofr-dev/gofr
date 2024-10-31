@@ -1,7 +1,5 @@
 package terminal
 
-import "strconv"
-
 const (
 	Black = iota
 	Red
@@ -21,10 +19,10 @@ const (
 	BrightWhite
 )
 
-func (o *Output) SetColor(colorCode int) {
-	o.Printf(csi + "38;5;" + strconv.Itoa(colorCode) + "m")
+func (o *output) SetColor(colorCode int) {
+	o.Printf(csi+"38;5;%d"+"m", colorCode)
 }
 
-func (o *Output) ResetColor() {
-	o.Printf(csi + "0m")
+func (o *output) ResetColor() {
+	o.Print(csi + "0m")
 }

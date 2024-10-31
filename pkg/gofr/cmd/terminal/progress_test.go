@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
 	"gofr.dev/pkg/gofr/testutil"
 )
 
@@ -12,7 +13,7 @@ func TestProgressBar_SuccessCases(t *testing.T) {
 	total := int64(100)
 
 	var out bytes.Buffer
-	stream := &Output{terminal{isTerminal: true, fd: 1}, &out}
+	stream := &output{terminal{isTerminal: true, fd: 1}, &out}
 	bar := NewProgressBar(stream, total)
 
 	// Mock terminal size
@@ -23,9 +24,7 @@ func TestProgressBar_SuccessCases(t *testing.T) {
 
 	// Verify the output
 	expectedOutput := "\r[████░                                             ] 10.000%"
-	if out.String() != expectedOutput {
-		t.Errorf("Unexpected progress bar output: got %q, want %q", out.String(), expectedOutput)
-	}
+	assert.Equal(t, expectedOutput, out.String())
 
 	// Increment the progress bar to completion
 	bar.Incr(total - 10)
@@ -33,15 +32,13 @@ func TestProgressBar_SuccessCases(t *testing.T) {
 	// Verify the completion output
 	expectedCompletion := "\r[████░                                             ] 10.000%\r" +
 		"[██████████████████████████████████████████████████] 100.000%\n"
-	if out.String() != expectedCompletion {
-		t.Errorf("Unexpected completion output: got %q, want %q", out.String(), expectedCompletion)
-	}
+	assert.Equal(t, expectedCompletion, out.String())
 }
 
 func TestProgressBar_Fail(t *testing.T) {
 	out := testutil.StdoutOutputForFunc(func() {
 		var out bytes.Buffer
-		stream := &Output{terminal{isTerminal: true, fd: 1}, &out}
+		stream := &output{terminal{isTerminal: true, fd: 1}, &out}
 		bar := NewProgressBar(stream, int64(-1))
 
 		assert.Equal(t, bar.total, int64(0))
@@ -52,7 +49,7 @@ func TestProgressBar_Fail(t *testing.T) {
 
 func TestProgressBar_Incr(t *testing.T) {
 	var out bytes.Buffer
-	stream := &Output{terminal{isTerminal: true, fd: 1}, &out}
+	stream := &output{terminal{isTerminal: true, fd: 1}, &out}
 	bar := NewProgressBar(stream, 100)
 	// doing this as while calculating terminal size the code will not
 	// be able to determine it's width since we are not attacting an actual
@@ -61,21 +58,16 @@ func TestProgressBar_Incr(t *testing.T) {
 
 	// Increment the progress by 20
 	b := bar.Incr(int64(20))
-	if !b && bar.current != 20 {
-		t.Errorf("fail: bar incremented value not correct current: %v should be 20", bar.current)
-	}
+	assert.True(t, b)
+	assert.Equal(t, int64(20), bar.current)
 
 	expectedOut := "\r[█████████░                                        ] 20.000%"
-	if out.String() != expectedOut {
-		t.Errorf("Unexpected progress bar output: got %q, want %q", out.String(), expectedOut)
-	}
+	assert.Equal(t, expectedOut, out.String())
 
 	bar.Incr(int64(100))
 	expectedOut = "\r[█████████░                                        ] 20.000%\r" +
 		"[██████████████████████████████████████████████████] 100.000%\n"
-	if out.String() != expectedOut {
-		t.Errorf("Unexpected progress bar output: got %q, want %q", out.String(), expectedOut)
-	}
+	assert.Equal(t, expectedOut, out.String())
 }
 
 func TestProgressBar_getString(t *testing.T) {

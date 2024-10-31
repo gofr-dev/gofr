@@ -1,26 +1,15 @@
 package terminal
 
 import (
+	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"golang.org/x/term"
 )
 
-// terminal stores the UNIX file descriptor and isTerminal check for the tty
-type terminal struct {
-	fd         uintptr
-	isTerminal bool
-}
-
-// Output manages the cli output that is user facing with many functionalites
-// to manage and control the TUI (Terminal User Interface)
-type Output struct {
-	terminal
-	out io.Writer
-}
-
-type Out interface {
+type Output interface {
 	AltScreen()
 	ChangeScrollingRegion(top int, bottom int)
 	ClearLine()
@@ -39,9 +28,9 @@ type Out interface {
 	HideCursor()
 	InsertLines(n int)
 	MoveCursor(row int, column int)
-	Print(messages ...interface{})
-	Printf(format string, args ...interface{})
-	Println(messages ...interface{})
+	Print(messages ...any)
+	Printf(format string, args ...any)
+	Println(messages ...any)
 	Reset()
 	ResetColor()
 	RestoreCursorPosition()
@@ -55,10 +44,21 @@ type Out interface {
 	getSize() (int, int, error)
 }
 
-// NewOutput intialises the output type with output stream as standard out
-// and the output stream properties like file descriptor and the output is a terminal
-func New() *Output {
-	o := &Output{out: os.Stdout}
+// terminal stores the UNIX file descriptor and isTerminal check for the tty
+type terminal struct {
+	fd         uintptr
+	isTerminal bool
+}
+
+// outputs manages the cli outputs that is user facing with many functionalites
+// to manage and control the TUI (Terminal User Interface)
+type output struct {
+	terminal
+	out io.Writer
+}
+
+func New() *output {
+	o := &output{out: os.Stdout}
 	o.fd, o.isTerminal = getTerminalInfo(o.out)
 
 	return o
@@ -73,11 +73,191 @@ func getTerminalInfo(in io.Writer) (inFd uintptr, isTerminalIn bool) {
 	return inFd, isTerminalIn
 }
 
-func (o *Output) getSize() (int, int, error) {
+func (o *output) getSize() (int, int, error) {
 	width, height, err := term.GetSize(int(o.fd))
 	if err != nil {
 		return 0, 0, err
 	}
 
 	return width, height, nil
+}
+
+const (
+	// escape character to start any control or escape sequence.
+	escape = string('\x1b')
+	// csi Control Sequence Introducer.
+	csi = escape + "["
+	// osc Operating System Command.
+	osc = escape + "]"
+)
+
+// Sequence definitions.
+const (
+	moveCursorUp = iota + 1
+	clearScreen
+
+	// Cursor positioning
+	cursorUpSeq              = "%dA"
+	cursorDownSeq            = "%dB"
+	cursorForwardSeq         = "%dC"
+	cursorBackSeq            = "%dD"
+	cursorNextLineSeq        = "%dE"
+	cursorPreviousLineSeq    = "%dF"
+	cursorPositionSeq        = "%d;%dH"
+	eraseDisplaySeq          = "%dJ"
+	eraseLineSeq             = "%dK"
+	saveCursorPositionSeq    = "s"
+	restoreCursorPositionSeq = "u"
+	changeScrollingRegionSeq = "%d;%dr"
+	insertLineSeq            = "%dL"
+	deleteLineSeq            = "%dM"
+
+	// Explicit values erasing lines
+	eraseLineRightSeq  = "0K"
+	eraseLineLeftSeq   = "1K"
+	eraseEntireLineSeq = "2K"
+
+	// Screen
+	restoreScreenSeq  = "?47l"
+	saveScreenSeq     = "?47h"
+	altScreenSeq      = "?1049h"
+	exitAltScreenSeq  = "?1049l"
+	setWindowTitleSeq = "2;%s"
+	showCursorSeq     = "?25h"
+	hideCursorSeq     = "?25l"
+)
+
+// Reset the terminal to its default style, removing any active styles.
+func (o *output) Reset() {
+	fmt.Fprint(o.out, csi+"0"+"m")
+}
+
+// RestoreScreen restores a previously saved screen state.
+func (o *output) RestoreScreen() {
+	fmt.Fprint(o.out, csi+restoreScreenSeq)
+}
+
+// SaveScreen saves the screen state.
+func (o *output) SaveScreen() {
+	fmt.Fprint(o.out, csi+saveScreenSeq)
+}
+
+// AltScreen switches to the alternate screen buffer. The former view can be
+// restored with ExitAltScreen().
+func (o *output) AltScreen() {
+	fmt.Fprint(o.out, csi+altScreenSeq)
+}
+
+// ExitAltScreen exits the alternate screen buffer and returns to the former
+// terminal view.
+func (o *output) ExitAltScreen() {
+	fmt.Fprint(o.out, csi+exitAltScreenSeq)
+}
+
+// ClearScreen clears the visible portion of the terminal.
+func (o *output) ClearScreen() {
+	fmt.Fprintf(o.out, csi+eraseDisplaySeq, clearScreen)
+	o.MoveCursor(1, 1)
+}
+
+// MoveCursor moves the cursor to a given position.
+func (o *output) MoveCursor(row, column int) {
+	fmt.Fprintf(o.out, csi+cursorPositionSeq, row, column)
+}
+
+// HideCursor hides the cursor.
+func (o *output) HideCursor() {
+	fmt.Fprint(o.out, csi+hideCursorSeq)
+}
+
+// ShowCursor shows the cursor.
+func (o *output) ShowCursor() {
+	fmt.Fprint(o.out, csi+showCursorSeq)
+}
+
+// SaveCursorPosition saves the cursor position.
+func (o *output) SaveCursorPosition() {
+	fmt.Fprint(o.out, csi+saveCursorPositionSeq)
+}
+
+// RestoreCursorPosition restores a saved cursor position.
+func (o *output) RestoreCursorPosition() {
+	fmt.Fprint(o.out, csi+restoreCursorPositionSeq)
+}
+
+// CursorUp moves the cursor up a given number of lines.
+func (o *output) CursorUp(n int) {
+	fmt.Fprintf(o.out, csi+cursorUpSeq, n)
+}
+
+// CursorDown moves the cursor down a given number of lines.
+func (o *output) CursorDown(n int) {
+	fmt.Fprintf(o.out, csi+cursorDownSeq, n)
+}
+
+// CursorForward moves the cursor up a given number of lines.
+func (o *output) CursorForward(n int) {
+	fmt.Fprintf(o.out, csi+cursorForwardSeq, n)
+}
+
+// CursorBack moves the cursor backwards a given number of cells.
+func (o *output) CursorBack(n int) {
+	fmt.Fprintf(o.out, csi+cursorBackSeq, n)
+}
+
+// CursorNextLine moves the cursor down a given number of lines and places it at
+// the beginning of the line.
+func (o *output) CursorNextLine(n int) {
+	fmt.Fprintf(o.out, csi+cursorNextLineSeq, n)
+}
+
+// CursorPrevLine moves the cursor up a given number of lines and places it at
+// the beginning of the line.
+func (o *output) CursorPrevLine(n int) {
+	fmt.Fprintf(o.out, csi+cursorPreviousLineSeq, n)
+}
+
+// ClearLine clears the current line.
+func (o *output) ClearLine() {
+	fmt.Fprint(o.out, csi+eraseEntireLineSeq)
+}
+
+// ClearLineLeft clears the line to the left of the cursor.
+func (o *output) ClearLineLeft() {
+	fmt.Fprint(o.out, csi+eraseLineLeftSeq)
+}
+
+// ClearLineRight clears the line to the right of the cursor.
+func (o *output) ClearLineRight() {
+	fmt.Fprint(o.out, csi+eraseLineRightSeq)
+}
+
+// ClearLines clears a given number of lines.
+func (o *output) ClearLines(n int) {
+	clearLine := fmt.Sprintf(csi+eraseLineSeq, clearScreen)
+	cursorUp := fmt.Sprintf(csi+cursorUpSeq, moveCursorUp)
+
+	fmt.Fprint(o.out, clearLine+strings.Repeat(cursorUp+clearLine, n))
+}
+
+// ChangeScrollingRegion sets the scrolling region of the terminal.
+func (o *output) ChangeScrollingRegion(top, bottom int) {
+	fmt.Fprintf(o.out, csi+changeScrollingRegionSeq, top, bottom)
+}
+
+// InsertLines inserts the given number of lines at the top of the scrollable
+// region, pushing lines below down.
+func (o *output) InsertLines(n int) {
+	fmt.Fprintf(o.out, csi+insertLineSeq, n)
+}
+
+// DeleteLines deletes the given number of lines, pulling any lines in
+// the scrollable region below up.
+func (o *output) DeleteLines(n int) {
+	fmt.Fprintf(o.out, csi+deleteLineSeq, n)
+}
+
+// SetWindowTitle sets the terminal window title.
+func (o *output) SetWindowTitle(title string) {
+	fmt.Fprintf(o.out, osc+setWindowTitleSeq, title)
 }

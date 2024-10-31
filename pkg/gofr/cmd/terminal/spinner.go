@@ -7,66 +7,65 @@ import (
 // Spinner is a TUI component that displays a loading spinner which can be used to
 // denote a running background process.
 type Spinner struct {
-	// Frames denote the farmes of the spinner that displays in continiuation
-	Frames []string
-	// FPS is the speed at which the spinner Frames are displayed
-	FPS time.Duration
-	// Stream is the Output stream to which the spinner Frames are printed onto
-	Stream Out
+	// frames denote the frames of the spinner that displays in continiuation
+	frames []string
+	// fps is the speed at which the spinner frames are displayed
+	fps time.Duration
+	// outStream is the Output stream to which the spinner frames are printed onto
+	outStream Output
 
-	// unexported started denotes whether the spinner has started spinning and ticker
-	// is the time.Ticker for the continious time update for the spinner.
+	// started denotes whether the spinner has started spinning and ticker
+	// is the time.Ticker for the continuous time update for the spinner.
 	started bool
 	ticker  *time.Ticker
 }
 
-func NewDotSpinner(o Out) *Spinner {
+func NewDotSpinner(o Output) *Spinner {
 	return &Spinner{
-		Frames: []string{"⣾ ", "⣽ ", "⣻ ", "⢿ ", "⡿ ", "⣟ ", "⣯ ", "⣷ "},
-		FPS:    time.Second / 10,
-		Stream: o,
+		frames:    []string{"⣾ ", "⣽ ", "⣻ ", "⢿ ", "⡿ ", "⣟ ", "⣯ ", "⣷ "},
+		fps:       time.Second / 10,
+		outStream: o,
 	}
 }
 
-func NewPulseSpinner(o Out) *Spinner {
+func NewPulseSpinner(o Output) *Spinner {
 	return &Spinner{
-		Frames: []string{"█", "▓", "▒", "░"},
-		FPS:    time.Second / 4,
-		Stream: o,
+		frames:    []string{"█", "▓", "▒", "░"},
+		fps:       time.Second / 4,
+		outStream: o,
 	}
 }
 
-func NewGlobeSpinner(o Out) *Spinner {
+func NewGlobeSpinner(o Output) *Spinner {
 	return &Spinner{
-		Frames: []string{"🌍", "🌎", "🌏"},
-		FPS:    time.Second / 4,
-		Stream: o,
+		frames:    []string{"🌍", "🌎", "🌏"},
+		fps:       time.Second / 4,
+		outStream: o,
 	}
 }
 
 func (s *Spinner) Spin() *Spinner {
-	t := time.NewTicker(s.FPS)
+	t := time.NewTicker(s.fps)
 	s.ticker = t
 	s.started = true
 	i := 0
 
-	s.Stream.HideCursor()
+	s.outStream.HideCursor()
 
 	go func() {
 		for range t.C {
-			if s.started {
-				s.Stream.Print("\r")
-			} else {
+			if !s.started {
 				break
 			}
 
-			s.Stream.Printf("%s"+"", s.Frames[i%len(s.Frames)])
+			s.outStream.Print("\r")
+			s.outStream.Printf("%s", s.frames[i%len(s.frames)])
 
 			i++
 		}
 	}()
 
-	s.Stream.ClearLine()
+	s.outStream.ClearLine()
 
 	return s
 }
@@ -75,7 +74,7 @@ func (s *Spinner) Stop() {
 	s.started = false
 	s.ticker.Stop()
 
-	s.Stream.ClearLine()
-	s.Stream.ShowCursor()
-	s.Stream.CursorBack(1)
+	s.outStream.ClearLine()
+	s.outStream.ShowCursor()
+	s.outStream.CursorBack(1)
 }

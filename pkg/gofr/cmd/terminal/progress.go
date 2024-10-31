@@ -7,7 +7,7 @@ import (
 )
 
 type ProgressBar struct {
-	stream  Out
+	stream  Output
 	current int64
 	total   int64
 	tWidth  int
@@ -19,7 +19,7 @@ type Term interface {
 	GetSize(fd int) (width, height int, err error)
 }
 
-func NewProgressBar(out Out, total int64) *ProgressBar {
+func NewProgressBar(out Output, total int64) *ProgressBar {
 	w, _, err := out.getSize()
 	if err != nil {
 		fmt.Printf("error getting terminal size, err : %v, could not initialize progress bar\n", err)
@@ -45,9 +45,7 @@ func (p *ProgressBar) Incr(i int64) bool {
 
 	if p.current < p.total {
 		p.current += i
-		if p.current > p.total {
-			p.current = p.total
-		}
+		p.current = min(p.current, p.total)
 
 		p.updateProgressBar()
 	}
@@ -60,7 +58,7 @@ func (p *ProgressBar) updateProgressBar() {
 	p.stream.Print("\r")
 
 	pString := p.getString()
-	p.stream.Printf("%s", pString)
+	p.stream.Print(pString)
 
 	if p.current >= p.total {
 		p.stream.Print("\n")
