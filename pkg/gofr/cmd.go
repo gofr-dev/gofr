@@ -68,7 +68,7 @@ func (cmd *cmd) Run(c *container.Container) {
 	}
 
 	if showHelp {
-		cmd.out.Print(r.help)
+		cmd.out.Println(r.help)
 		return
 	}
 
