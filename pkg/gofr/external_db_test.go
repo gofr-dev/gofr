@@ -27,6 +27,7 @@ func TestApp_AddKVStore(t *testing.T) {
 		mock.EXPECT().UseLogger(app.Logger())
 		mock.EXPECT().UseMetrics(app.Metrics())
 		mock.EXPECT().Connect(ctx)
+		mock.EXPECT().UseTracer(otel.GetTracerProvider().Tracer("gofr-badger"))
 
 		err := app.AddKVStore(ctx, mock)
 		require.NoError(t, err)

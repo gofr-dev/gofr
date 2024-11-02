@@ -115,6 +115,10 @@ func (a *App) AddKVStore(ctx context.Context, db container.KVStoreProvider) erro
 		return err
 	}
 
+	tracer := otel.GetTracerProvider().Tracer("gofr-badger")
+
+	db.UseTracer(tracer)
+
 	a.container.KVStore = db
 
 	return nil
