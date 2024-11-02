@@ -28,7 +28,7 @@ type subscription struct {
 	cancel context.CancelFunc
 }
 
-func NewSubscriptionManager(bufferSize int) *SubscriptionManager {
+func newSubscriptionManager(bufferSize int) *SubscriptionManager {
 	return &SubscriptionManager{
 		subscriptions: make(map[string]*subscription),
 		topicBuffers:  make(map[string]chan *pubsub.Message),

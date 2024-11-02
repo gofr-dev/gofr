@@ -24,6 +24,7 @@ import (
 type MockConnInterface struct {
 	ctrl     *gomock.Controller
 	recorder *MockConnInterfaceMockRecorder
+	isgomock struct{}
 }
 
 // MockConnInterfaceMockRecorder is the mock recorder for MockConnInterface.
@@ -102,6 +103,7 @@ func (mr *MockConnInterfaceMockRecorder) Status() *gomock.Call {
 type MockNATSConnector struct {
 	ctrl     *gomock.Controller
 	recorder *MockNATSConnectorMockRecorder
+	isgomock struct{}
 }
 
 // MockNATSConnectorMockRecorder is the mock recorder for MockNATSConnector.
@@ -145,6 +147,7 @@ func (mr *MockNATSConnectorMockRecorder) Connect(arg0 any, arg1 ...any) *gomock.
 type MockJetStreamCreator struct {
 	ctrl     *gomock.Controller
 	recorder *MockJetStreamCreatorMockRecorder
+	isgomock struct{}
 }
 
 // MockJetStreamCreatorMockRecorder is the mock recorder for MockJetStreamCreator.
@@ -183,6 +186,7 @@ func (mr *MockJetStreamCreatorMockRecorder) New(conn any) *gomock.Call {
 type MockJetStreamClient struct {
 	ctrl     *gomock.Controller
 	recorder *MockJetStreamClientMockRecorder
+	isgomock struct{}
 }
 
 // MockJetStreamClientMockRecorder is the mock recorder for MockJetStreamClient.
@@ -305,6 +309,7 @@ func (mr *MockJetStreamClientMockRecorder) Subscribe(ctx, subject, handler any) 
 type MockConnectionManagerInterface struct {
 	ctrl     *gomock.Controller
 	recorder *MockConnectionManagerInterfaceMockRecorder
+	isgomock struct{}
 }
 
 // MockConnectionManagerInterfaceMockRecorder is the mock recorder for MockConnectionManagerInterface.
@@ -337,17 +342,17 @@ func (mr *MockConnectionManagerInterfaceMockRecorder) Close(ctx any) *gomock.Cal
 }
 
 // Connect mocks base method.
-func (m *MockConnectionManagerInterface) Connect() error {
+func (m *MockConnectionManagerInterface) Connect(ctx context.Context) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Connect")
+	ret := m.ctrl.Call(m, "Connect", ctx)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Connect indicates an expected call of Connect.
-func (mr *MockConnectionManagerInterfaceMockRecorder) Connect() *gomock.Call {
+func (mr *MockConnectionManagerInterfaceMockRecorder) Connect(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Connect", reflect.TypeOf((*MockConnectionManagerInterface)(nil).Connect))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Connect", reflect.TypeOf((*MockConnectionManagerInterface)(nil).Connect), ctx)
 }
 
 // Health mocks base method.
@@ -397,6 +402,7 @@ func (mr *MockConnectionManagerInterfaceMockRecorder) Publish(ctx, subject, mess
 type MockSubscriptionManagerInterface struct {
 	ctrl     *gomock.Controller
 	recorder *MockSubscriptionManagerInterfaceMockRecorder
+	isgomock struct{}
 }
 
 // MockSubscriptionManagerInterfaceMockRecorder is the mock recorder for MockSubscriptionManagerInterface.
@@ -447,6 +453,7 @@ func (mr *MockSubscriptionManagerInterfaceMockRecorder) Subscribe(ctx, topic, js
 type MockStreamManagerInterface struct {
 	ctrl     *gomock.Controller
 	recorder *MockStreamManagerInterfaceMockRecorder
+	isgomock struct{}
 }
 
 // MockStreamManagerInterfaceMockRecorder is the mock recorder for MockStreamManagerInterface.

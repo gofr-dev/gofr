@@ -23,6 +23,7 @@ import (
 type MockJetStream struct {
 	ctrl     *gomock.Controller
 	recorder *MockJetStreamMockRecorder
+	isgomock struct{}
 }
 
 // MockJetStreamMockRecorder is the mock recorder for MockJetStream.
@@ -43,18 +44,18 @@ func (m *MockJetStream) EXPECT() *MockJetStreamMockRecorder {
 }
 
 // AccountInfo mocks base method.
-func (m *MockJetStream) AccountInfo(arg0 context.Context) (*jetstream.AccountInfo, error) {
+func (m *MockJetStream) AccountInfo(ctx context.Context) (*jetstream.AccountInfo, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AccountInfo", arg0)
+	ret := m.ctrl.Call(m, "AccountInfo", ctx)
 	ret0, _ := ret[0].(*jetstream.AccountInfo)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // AccountInfo indicates an expected call of AccountInfo.
-func (mr *MockJetStreamMockRecorder) AccountInfo(arg0 any) *gomock.Call {
+func (mr *MockJetStreamMockRecorder) AccountInfo(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AccountInfo", reflect.TypeOf((*MockJetStream)(nil).AccountInfo), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AccountInfo", reflect.TypeOf((*MockJetStream)(nil).AccountInfo), ctx)
 }
 
 // CleanupPublisher mocks base method.
@@ -70,237 +71,237 @@ func (mr *MockJetStreamMockRecorder) CleanupPublisher() *gomock.Call {
 }
 
 // Consumer mocks base method.
-func (m *MockJetStream) Consumer(arg0 context.Context, arg1, arg2 string) (jetstream.Consumer, error) {
+func (m *MockJetStream) Consumer(ctx context.Context, stream, consumer string) (jetstream.Consumer, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Consumer", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "Consumer", ctx, stream, consumer)
 	ret0, _ := ret[0].(jetstream.Consumer)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Consumer indicates an expected call of Consumer.
-func (mr *MockJetStreamMockRecorder) Consumer(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockJetStreamMockRecorder) Consumer(ctx, stream, consumer any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Consumer", reflect.TypeOf((*MockJetStream)(nil).Consumer), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Consumer", reflect.TypeOf((*MockJetStream)(nil).Consumer), ctx, stream, consumer)
 }
 
 // CreateConsumer mocks base method.
-func (m *MockJetStream) CreateConsumer(arg0 context.Context, arg1 string, arg2 jetstream.ConsumerConfig) (jetstream.Consumer, error) {
+func (m *MockJetStream) CreateConsumer(ctx context.Context, stream string, cfg jetstream.ConsumerConfig) (jetstream.Consumer, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateConsumer", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "CreateConsumer", ctx, stream, cfg)
 	ret0, _ := ret[0].(jetstream.Consumer)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // CreateConsumer indicates an expected call of CreateConsumer.
-func (mr *MockJetStreamMockRecorder) CreateConsumer(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockJetStreamMockRecorder) CreateConsumer(ctx, stream, cfg any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateConsumer", reflect.TypeOf((*MockJetStream)(nil).CreateConsumer), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateConsumer", reflect.TypeOf((*MockJetStream)(nil).CreateConsumer), ctx, stream, cfg)
 }
 
 // CreateKeyValue mocks base method.
-func (m *MockJetStream) CreateKeyValue(arg0 context.Context, arg1 jetstream.KeyValueConfig) (jetstream.KeyValue, error) {
+func (m *MockJetStream) CreateKeyValue(ctx context.Context, cfg jetstream.KeyValueConfig) (jetstream.KeyValue, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateKeyValue", arg0, arg1)
+	ret := m.ctrl.Call(m, "CreateKeyValue", ctx, cfg)
 	ret0, _ := ret[0].(jetstream.KeyValue)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // CreateKeyValue indicates an expected call of CreateKeyValue.
-func (mr *MockJetStreamMockRecorder) CreateKeyValue(arg0, arg1 any) *gomock.Call {
+func (mr *MockJetStreamMockRecorder) CreateKeyValue(ctx, cfg any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateKeyValue", reflect.TypeOf((*MockJetStream)(nil).CreateKeyValue), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateKeyValue", reflect.TypeOf((*MockJetStream)(nil).CreateKeyValue), ctx, cfg)
 }
 
 // CreateObjectStore mocks base method.
-func (m *MockJetStream) CreateObjectStore(arg0 context.Context, arg1 jetstream.ObjectStoreConfig) (jetstream.ObjectStore, error) {
+func (m *MockJetStream) CreateObjectStore(ctx context.Context, cfg jetstream.ObjectStoreConfig) (jetstream.ObjectStore, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateObjectStore", arg0, arg1)
+	ret := m.ctrl.Call(m, "CreateObjectStore", ctx, cfg)
 	ret0, _ := ret[0].(jetstream.ObjectStore)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // CreateObjectStore indicates an expected call of CreateObjectStore.
-func (mr *MockJetStreamMockRecorder) CreateObjectStore(arg0, arg1 any) *gomock.Call {
+func (mr *MockJetStreamMockRecorder) CreateObjectStore(ctx, cfg any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateObjectStore", reflect.TypeOf((*MockJetStream)(nil).CreateObjectStore), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateObjectStore", reflect.TypeOf((*MockJetStream)(nil).CreateObjectStore), ctx, cfg)
 }
 
 // CreateOrUpdateConsumer mocks base method.
-func (m *MockJetStream) CreateOrUpdateConsumer(arg0 context.Context, arg1 string, arg2 jetstream.ConsumerConfig) (jetstream.Consumer, error) {
+func (m *MockJetStream) CreateOrUpdateConsumer(ctx context.Context, stream string, cfg jetstream.ConsumerConfig) (jetstream.Consumer, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateOrUpdateConsumer", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "CreateOrUpdateConsumer", ctx, stream, cfg)
 	ret0, _ := ret[0].(jetstream.Consumer)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // CreateOrUpdateConsumer indicates an expected call of CreateOrUpdateConsumer.
-func (mr *MockJetStreamMockRecorder) CreateOrUpdateConsumer(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockJetStreamMockRecorder) CreateOrUpdateConsumer(ctx, stream, cfg any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateOrUpdateConsumer", reflect.TypeOf((*MockJetStream)(nil).CreateOrUpdateConsumer), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateOrUpdateConsumer", reflect.TypeOf((*MockJetStream)(nil).CreateOrUpdateConsumer), ctx, stream, cfg)
 }
 
 // CreateOrUpdateKeyValue mocks base method.
-func (m *MockJetStream) CreateOrUpdateKeyValue(arg0 context.Context, arg1 jetstream.KeyValueConfig) (jetstream.KeyValue, error) {
+func (m *MockJetStream) CreateOrUpdateKeyValue(ctx context.Context, cfg jetstream.KeyValueConfig) (jetstream.KeyValue, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateOrUpdateKeyValue", arg0, arg1)
+	ret := m.ctrl.Call(m, "CreateOrUpdateKeyValue", ctx, cfg)
 	ret0, _ := ret[0].(jetstream.KeyValue)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // CreateOrUpdateKeyValue indicates an expected call of CreateOrUpdateKeyValue.
-func (mr *MockJetStreamMockRecorder) CreateOrUpdateKeyValue(arg0, arg1 any) *gomock.Call {
+func (mr *MockJetStreamMockRecorder) CreateOrUpdateKeyValue(ctx, cfg any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateOrUpdateKeyValue", reflect.TypeOf((*MockJetStream)(nil).CreateOrUpdateKeyValue), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateOrUpdateKeyValue", reflect.TypeOf((*MockJetStream)(nil).CreateOrUpdateKeyValue), ctx, cfg)
 }
 
 // CreateOrUpdateObjectStore mocks base method.
-func (m *MockJetStream) CreateOrUpdateObjectStore(arg0 context.Context, arg1 jetstream.ObjectStoreConfig) (jetstream.ObjectStore, error) {
+func (m *MockJetStream) CreateOrUpdateObjectStore(ctx context.Context, cfg jetstream.ObjectStoreConfig) (jetstream.ObjectStore, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateOrUpdateObjectStore", arg0, arg1)
+	ret := m.ctrl.Call(m, "CreateOrUpdateObjectStore", ctx, cfg)
 	ret0, _ := ret[0].(jetstream.ObjectStore)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // CreateOrUpdateObjectStore indicates an expected call of CreateOrUpdateObjectStore.
-func (mr *MockJetStreamMockRecorder) CreateOrUpdateObjectStore(arg0, arg1 any) *gomock.Call {
+func (mr *MockJetStreamMockRecorder) CreateOrUpdateObjectStore(ctx, cfg any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateOrUpdateObjectStore", reflect.TypeOf((*MockJetStream)(nil).CreateOrUpdateObjectStore), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateOrUpdateObjectStore", reflect.TypeOf((*MockJetStream)(nil).CreateOrUpdateObjectStore), ctx, cfg)
 }
 
 // CreateOrUpdateStream mocks base method.
-func (m *MockJetStream) CreateOrUpdateStream(arg0 context.Context, arg1 jetstream.StreamConfig) (jetstream.Stream, error) {
+func (m *MockJetStream) CreateOrUpdateStream(ctx context.Context, cfg jetstream.StreamConfig) (jetstream.Stream, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateOrUpdateStream", arg0, arg1)
+	ret := m.ctrl.Call(m, "CreateOrUpdateStream", ctx, cfg)
 	ret0, _ := ret[0].(jetstream.Stream)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // CreateOrUpdateStream indicates an expected call of CreateOrUpdateStream.
-func (mr *MockJetStreamMockRecorder) CreateOrUpdateStream(arg0, arg1 any) *gomock.Call {
+func (mr *MockJetStreamMockRecorder) CreateOrUpdateStream(ctx, cfg any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateOrUpdateStream", reflect.TypeOf((*MockJetStream)(nil).CreateOrUpdateStream), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateOrUpdateStream", reflect.TypeOf((*MockJetStream)(nil).CreateOrUpdateStream), ctx, cfg)
 }
 
 // CreateStream mocks base method.
-func (m *MockJetStream) CreateStream(arg0 context.Context, arg1 jetstream.StreamConfig) (jetstream.Stream, error) {
+func (m *MockJetStream) CreateStream(ctx context.Context, cfg jetstream.StreamConfig) (jetstream.Stream, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateStream", arg0, arg1)
+	ret := m.ctrl.Call(m, "CreateStream", ctx, cfg)
 	ret0, _ := ret[0].(jetstream.Stream)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // CreateStream indicates an expected call of CreateStream.
-func (mr *MockJetStreamMockRecorder) CreateStream(arg0, arg1 any) *gomock.Call {
+func (mr *MockJetStreamMockRecorder) CreateStream(ctx, cfg any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateStream", reflect.TypeOf((*MockJetStream)(nil).CreateStream), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateStream", reflect.TypeOf((*MockJetStream)(nil).CreateStream), ctx, cfg)
 }
 
 // DeleteConsumer mocks base method.
-func (m *MockJetStream) DeleteConsumer(arg0 context.Context, arg1, arg2 string) error {
+func (m *MockJetStream) DeleteConsumer(ctx context.Context, stream, consumer string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteConsumer", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "DeleteConsumer", ctx, stream, consumer)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // DeleteConsumer indicates an expected call of DeleteConsumer.
-func (mr *MockJetStreamMockRecorder) DeleteConsumer(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockJetStreamMockRecorder) DeleteConsumer(ctx, stream, consumer any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteConsumer", reflect.TypeOf((*MockJetStream)(nil).DeleteConsumer), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteConsumer", reflect.TypeOf((*MockJetStream)(nil).DeleteConsumer), ctx, stream, consumer)
 }
 
 // DeleteKeyValue mocks base method.
-func (m *MockJetStream) DeleteKeyValue(arg0 context.Context, arg1 string) error {
+func (m *MockJetStream) DeleteKeyValue(ctx context.Context, bucket string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteKeyValue", arg0, arg1)
+	ret := m.ctrl.Call(m, "DeleteKeyValue", ctx, bucket)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // DeleteKeyValue indicates an expected call of DeleteKeyValue.
-func (mr *MockJetStreamMockRecorder) DeleteKeyValue(arg0, arg1 any) *gomock.Call {
+func (mr *MockJetStreamMockRecorder) DeleteKeyValue(ctx, bucket any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteKeyValue", reflect.TypeOf((*MockJetStream)(nil).DeleteKeyValue), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteKeyValue", reflect.TypeOf((*MockJetStream)(nil).DeleteKeyValue), ctx, bucket)
 }
 
 // DeleteObjectStore mocks base method.
-func (m *MockJetStream) DeleteObjectStore(arg0 context.Context, arg1 string) error {
+func (m *MockJetStream) DeleteObjectStore(ctx context.Context, bucket string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteObjectStore", arg0, arg1)
+	ret := m.ctrl.Call(m, "DeleteObjectStore", ctx, bucket)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // DeleteObjectStore indicates an expected call of DeleteObjectStore.
-func (mr *MockJetStreamMockRecorder) DeleteObjectStore(arg0, arg1 any) *gomock.Call {
+func (mr *MockJetStreamMockRecorder) DeleteObjectStore(ctx, bucket any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteObjectStore", reflect.TypeOf((*MockJetStream)(nil).DeleteObjectStore), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteObjectStore", reflect.TypeOf((*MockJetStream)(nil).DeleteObjectStore), ctx, bucket)
 }
 
 // DeleteStream mocks base method.
-func (m *MockJetStream) DeleteStream(arg0 context.Context, arg1 string) error {
+func (m *MockJetStream) DeleteStream(ctx context.Context, stream string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteStream", arg0, arg1)
+	ret := m.ctrl.Call(m, "DeleteStream", ctx, stream)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // DeleteStream indicates an expected call of DeleteStream.
-func (mr *MockJetStreamMockRecorder) DeleteStream(arg0, arg1 any) *gomock.Call {
+func (mr *MockJetStreamMockRecorder) DeleteStream(ctx, stream any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteStream", reflect.TypeOf((*MockJetStream)(nil).DeleteStream), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteStream", reflect.TypeOf((*MockJetStream)(nil).DeleteStream), ctx, stream)
 }
 
 // KeyValue mocks base method.
-func (m *MockJetStream) KeyValue(arg0 context.Context, arg1 string) (jetstream.KeyValue, error) {
+func (m *MockJetStream) KeyValue(ctx context.Context, bucket string) (jetstream.KeyValue, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "KeyValue", arg0, arg1)
+	ret := m.ctrl.Call(m, "KeyValue", ctx, bucket)
 	ret0, _ := ret[0].(jetstream.KeyValue)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // KeyValue indicates an expected call of KeyValue.
-func (mr *MockJetStreamMockRecorder) KeyValue(arg0, arg1 any) *gomock.Call {
+func (mr *MockJetStreamMockRecorder) KeyValue(ctx, bucket any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "KeyValue", reflect.TypeOf((*MockJetStream)(nil).KeyValue), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "KeyValue", reflect.TypeOf((*MockJetStream)(nil).KeyValue), ctx, bucket)
 }
 
 // KeyValueStoreNames mocks base method.
-func (m *MockJetStream) KeyValueStoreNames(arg0 context.Context) jetstream.KeyValueNamesLister {
+func (m *MockJetStream) KeyValueStoreNames(ctx context.Context) jetstream.KeyValueNamesLister {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "KeyValueStoreNames", arg0)
+	ret := m.ctrl.Call(m, "KeyValueStoreNames", ctx)
 	ret0, _ := ret[0].(jetstream.KeyValueNamesLister)
 	return ret0
 }
 
 // KeyValueStoreNames indicates an expected call of KeyValueStoreNames.
-func (mr *MockJetStreamMockRecorder) KeyValueStoreNames(arg0 any) *gomock.Call {
+func (mr *MockJetStreamMockRecorder) KeyValueStoreNames(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "KeyValueStoreNames", reflect.TypeOf((*MockJetStream)(nil).KeyValueStoreNames), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "KeyValueStoreNames", reflect.TypeOf((*MockJetStream)(nil).KeyValueStoreNames), ctx)
 }
 
 // KeyValueStores mocks base method.
-func (m *MockJetStream) KeyValueStores(arg0 context.Context) jetstream.KeyValueLister {
+func (m *MockJetStream) KeyValueStores(ctx context.Context) jetstream.KeyValueLister {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "KeyValueStores", arg0)
+	ret := m.ctrl.Call(m, "KeyValueStores", ctx)
 	ret0, _ := ret[0].(jetstream.KeyValueLister)
 	return ret0
 }
 
 // KeyValueStores indicates an expected call of KeyValueStores.
-func (mr *MockJetStreamMockRecorder) KeyValueStores(arg0 any) *gomock.Call {
+func (mr *MockJetStreamMockRecorder) KeyValueStores(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "KeyValueStores", reflect.TypeOf((*MockJetStream)(nil).KeyValueStores), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "KeyValueStores", reflect.TypeOf((*MockJetStream)(nil).KeyValueStores), ctx)
 }
 
 // ListStreams mocks base method.
@@ -323,68 +324,68 @@ func (mr *MockJetStreamMockRecorder) ListStreams(arg0 any, arg1 ...any) *gomock.
 }
 
 // ObjectStore mocks base method.
-func (m *MockJetStream) ObjectStore(arg0 context.Context, arg1 string) (jetstream.ObjectStore, error) {
+func (m *MockJetStream) ObjectStore(ctx context.Context, bucket string) (jetstream.ObjectStore, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ObjectStore", arg0, arg1)
+	ret := m.ctrl.Call(m, "ObjectStore", ctx, bucket)
 	ret0, _ := ret[0].(jetstream.ObjectStore)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // ObjectStore indicates an expected call of ObjectStore.
-func (mr *MockJetStreamMockRecorder) ObjectStore(arg0, arg1 any) *gomock.Call {
+func (mr *MockJetStreamMockRecorder) ObjectStore(ctx, bucket any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ObjectStore", reflect.TypeOf((*MockJetStream)(nil).ObjectStore), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ObjectStore", reflect.TypeOf((*MockJetStream)(nil).ObjectStore), ctx, bucket)
 }
 
 // ObjectStoreNames mocks base method.
-func (m *MockJetStream) ObjectStoreNames(arg0 context.Context) jetstream.ObjectStoreNamesLister {
+func (m *MockJetStream) ObjectStoreNames(ctx context.Context) jetstream.ObjectStoreNamesLister {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ObjectStoreNames", arg0)
+	ret := m.ctrl.Call(m, "ObjectStoreNames", ctx)
 	ret0, _ := ret[0].(jetstream.ObjectStoreNamesLister)
 	return ret0
 }
 
 // ObjectStoreNames indicates an expected call of ObjectStoreNames.
-func (mr *MockJetStreamMockRecorder) ObjectStoreNames(arg0 any) *gomock.Call {
+func (mr *MockJetStreamMockRecorder) ObjectStoreNames(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ObjectStoreNames", reflect.TypeOf((*MockJetStream)(nil).ObjectStoreNames), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ObjectStoreNames", reflect.TypeOf((*MockJetStream)(nil).ObjectStoreNames), ctx)
 }
 
 // ObjectStores mocks base method.
-func (m *MockJetStream) ObjectStores(arg0 context.Context) jetstream.ObjectStoresLister {
+func (m *MockJetStream) ObjectStores(ctx context.Context) jetstream.ObjectStoresLister {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ObjectStores", arg0)
+	ret := m.ctrl.Call(m, "ObjectStores", ctx)
 	ret0, _ := ret[0].(jetstream.ObjectStoresLister)
 	return ret0
 }
 
 // ObjectStores indicates an expected call of ObjectStores.
-func (mr *MockJetStreamMockRecorder) ObjectStores(arg0 any) *gomock.Call {
+func (mr *MockJetStreamMockRecorder) ObjectStores(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ObjectStores", reflect.TypeOf((*MockJetStream)(nil).ObjectStores), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ObjectStores", reflect.TypeOf((*MockJetStream)(nil).ObjectStores), ctx)
 }
 
 // OrderedConsumer mocks base method.
-func (m *MockJetStream) OrderedConsumer(arg0 context.Context, arg1 string, arg2 jetstream.OrderedConsumerConfig) (jetstream.Consumer, error) {
+func (m *MockJetStream) OrderedConsumer(ctx context.Context, stream string, cfg jetstream.OrderedConsumerConfig) (jetstream.Consumer, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "OrderedConsumer", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "OrderedConsumer", ctx, stream, cfg)
 	ret0, _ := ret[0].(jetstream.Consumer)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // OrderedConsumer indicates an expected call of OrderedConsumer.
-func (mr *MockJetStreamMockRecorder) OrderedConsumer(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockJetStreamMockRecorder) OrderedConsumer(ctx, stream, cfg any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OrderedConsumer", reflect.TypeOf((*MockJetStream)(nil).OrderedConsumer), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OrderedConsumer", reflect.TypeOf((*MockJetStream)(nil).OrderedConsumer), ctx, stream, cfg)
 }
 
 // Publish mocks base method.
-func (m *MockJetStream) Publish(arg0 context.Context, arg1 string, arg2 []byte, arg3 ...jetstream.PublishOpt) (*jetstream.PubAck, error) {
+func (m *MockJetStream) Publish(ctx context.Context, subject string, payload []byte, opts ...jetstream.PublishOpt) (*jetstream.PubAck, error) {
 	m.ctrl.T.Helper()
-	varargs := []any{arg0, arg1, arg2}
-	for _, a := range arg3 {
+	varargs := []any{ctx, subject, payload}
+	for _, a := range opts {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "Publish", varargs...)
@@ -394,17 +395,17 @@ func (m *MockJetStream) Publish(arg0 context.Context, arg1 string, arg2 []byte, 
 }
 
 // Publish indicates an expected call of Publish.
-func (mr *MockJetStreamMockRecorder) Publish(arg0, arg1, arg2 any, arg3 ...any) *gomock.Call {
+func (mr *MockJetStreamMockRecorder) Publish(ctx, subject, payload any, opts ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{arg0, arg1, arg2}, arg3...)
+	varargs := append([]any{ctx, subject, payload}, opts...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Publish", reflect.TypeOf((*MockJetStream)(nil).Publish), varargs...)
 }
 
 // PublishAsync mocks base method.
-func (m *MockJetStream) PublishAsync(arg0 string, arg1 []byte, arg2 ...jetstream.PublishOpt) (jetstream.PubAckFuture, error) {
+func (m *MockJetStream) PublishAsync(subject string, payload []byte, opts ...jetstream.PublishOpt) (jetstream.PubAckFuture, error) {
 	m.ctrl.T.Helper()
-	varargs := []any{arg0, arg1}
-	for _, a := range arg2 {
+	varargs := []any{subject, payload}
+	for _, a := range opts {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "PublishAsync", varargs...)
@@ -414,9 +415,9 @@ func (m *MockJetStream) PublishAsync(arg0 string, arg1 []byte, arg2 ...jetstream
 }
 
 // PublishAsync indicates an expected call of PublishAsync.
-func (mr *MockJetStreamMockRecorder) PublishAsync(arg0, arg1 any, arg2 ...any) *gomock.Call {
+func (mr *MockJetStreamMockRecorder) PublishAsync(subject, payload any, opts ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{arg0, arg1}, arg2...)
+	varargs := append([]any{subject, payload}, opts...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PublishAsync", reflect.TypeOf((*MockJetStream)(nil).PublishAsync), varargs...)
 }
 
@@ -449,10 +450,10 @@ func (mr *MockJetStreamMockRecorder) PublishAsyncPending() *gomock.Call {
 }
 
 // PublishMsg mocks base method.
-func (m *MockJetStream) PublishMsg(arg0 context.Context, arg1 *nats.Msg, arg2 ...jetstream.PublishOpt) (*jetstream.PubAck, error) {
+func (m *MockJetStream) PublishMsg(ctx context.Context, msg *nats.Msg, opts ...jetstream.PublishOpt) (*jetstream.PubAck, error) {
 	m.ctrl.T.Helper()
-	varargs := []any{arg0, arg1}
-	for _, a := range arg2 {
+	varargs := []any{ctx, msg}
+	for _, a := range opts {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "PublishMsg", varargs...)
@@ -462,17 +463,17 @@ func (m *MockJetStream) PublishMsg(arg0 context.Context, arg1 *nats.Msg, arg2 ..
 }
 
 // PublishMsg indicates an expected call of PublishMsg.
-func (mr *MockJetStreamMockRecorder) PublishMsg(arg0, arg1 any, arg2 ...any) *gomock.Call {
+func (mr *MockJetStreamMockRecorder) PublishMsg(ctx, msg any, opts ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{arg0, arg1}, arg2...)
+	varargs := append([]any{ctx, msg}, opts...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PublishMsg", reflect.TypeOf((*MockJetStream)(nil).PublishMsg), varargs...)
 }
 
 // PublishMsgAsync mocks base method.
-func (m *MockJetStream) PublishMsgAsync(arg0 *nats.Msg, arg1 ...jetstream.PublishOpt) (jetstream.PubAckFuture, error) {
+func (m *MockJetStream) PublishMsgAsync(msg *nats.Msg, opts ...jetstream.PublishOpt) (jetstream.PubAckFuture, error) {
 	m.ctrl.T.Helper()
-	varargs := []any{arg0}
-	for _, a := range arg1 {
+	varargs := []any{msg}
+	for _, a := range opts {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "PublishMsgAsync", varargs...)
@@ -482,40 +483,40 @@ func (m *MockJetStream) PublishMsgAsync(arg0 *nats.Msg, arg1 ...jetstream.Publis
 }
 
 // PublishMsgAsync indicates an expected call of PublishMsgAsync.
-func (mr *MockJetStreamMockRecorder) PublishMsgAsync(arg0 any, arg1 ...any) *gomock.Call {
+func (mr *MockJetStreamMockRecorder) PublishMsgAsync(msg any, opts ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{arg0}, arg1...)
+	varargs := append([]any{msg}, opts...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PublishMsgAsync", reflect.TypeOf((*MockJetStream)(nil).PublishMsgAsync), varargs...)
 }
 
 // Stream mocks base method.
-func (m *MockJetStream) Stream(arg0 context.Context, arg1 string) (jetstream.Stream, error) {
+func (m *MockJetStream) Stream(ctx context.Context, stream string) (jetstream.Stream, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Stream", arg0, arg1)
+	ret := m.ctrl.Call(m, "Stream", ctx, stream)
 	ret0, _ := ret[0].(jetstream.Stream)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Stream indicates an expected call of Stream.
-func (mr *MockJetStreamMockRecorder) Stream(arg0, arg1 any) *gomock.Call {
+func (mr *MockJetStreamMockRecorder) Stream(ctx, stream any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Stream", reflect.TypeOf((*MockJetStream)(nil).Stream), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Stream", reflect.TypeOf((*MockJetStream)(nil).Stream), ctx, stream)
 }
 
 // StreamNameBySubject mocks base method.
-func (m *MockJetStream) StreamNameBySubject(arg0 context.Context, arg1 string) (string, error) {
+func (m *MockJetStream) StreamNameBySubject(ctx context.Context, subject string) (string, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "StreamNameBySubject", arg0, arg1)
+	ret := m.ctrl.Call(m, "StreamNameBySubject", ctx, subject)
 	ret0, _ := ret[0].(string)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // StreamNameBySubject indicates an expected call of StreamNameBySubject.
-func (mr *MockJetStreamMockRecorder) StreamNameBySubject(arg0, arg1 any) *gomock.Call {
+func (mr *MockJetStreamMockRecorder) StreamNameBySubject(ctx, subject any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StreamNameBySubject", reflect.TypeOf((*MockJetStream)(nil).StreamNameBySubject), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StreamNameBySubject", reflect.TypeOf((*MockJetStream)(nil).StreamNameBySubject), ctx, subject)
 }
 
 // StreamNames mocks base method.
@@ -538,69 +539,70 @@ func (mr *MockJetStreamMockRecorder) StreamNames(arg0 any, arg1 ...any) *gomock.
 }
 
 // UpdateConsumer mocks base method.
-func (m *MockJetStream) UpdateConsumer(arg0 context.Context, arg1 string, arg2 jetstream.ConsumerConfig) (jetstream.Consumer, error) {
+func (m *MockJetStream) UpdateConsumer(ctx context.Context, stream string, cfg jetstream.ConsumerConfig) (jetstream.Consumer, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UpdateConsumer", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "UpdateConsumer", ctx, stream, cfg)
 	ret0, _ := ret[0].(jetstream.Consumer)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // UpdateConsumer indicates an expected call of UpdateConsumer.
-func (mr *MockJetStreamMockRecorder) UpdateConsumer(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockJetStreamMockRecorder) UpdateConsumer(ctx, stream, cfg any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateConsumer", reflect.TypeOf((*MockJetStream)(nil).UpdateConsumer), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateConsumer", reflect.TypeOf((*MockJetStream)(nil).UpdateConsumer), ctx, stream, cfg)
 }
 
 // UpdateKeyValue mocks base method.
-func (m *MockJetStream) UpdateKeyValue(arg0 context.Context, arg1 jetstream.KeyValueConfig) (jetstream.KeyValue, error) {
+func (m *MockJetStream) UpdateKeyValue(ctx context.Context, cfg jetstream.KeyValueConfig) (jetstream.KeyValue, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UpdateKeyValue", arg0, arg1)
+	ret := m.ctrl.Call(m, "UpdateKeyValue", ctx, cfg)
 	ret0, _ := ret[0].(jetstream.KeyValue)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // UpdateKeyValue indicates an expected call of UpdateKeyValue.
-func (mr *MockJetStreamMockRecorder) UpdateKeyValue(arg0, arg1 any) *gomock.Call {
+func (mr *MockJetStreamMockRecorder) UpdateKeyValue(ctx, cfg any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateKeyValue", reflect.TypeOf((*MockJetStream)(nil).UpdateKeyValue), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateKeyValue", reflect.TypeOf((*MockJetStream)(nil).UpdateKeyValue), ctx, cfg)
 }
 
 // UpdateObjectStore mocks base method.
-func (m *MockJetStream) UpdateObjectStore(arg0 context.Context, arg1 jetstream.ObjectStoreConfig) (jetstream.ObjectStore, error) {
+func (m *MockJetStream) UpdateObjectStore(ctx context.Context, cfg jetstream.ObjectStoreConfig) (jetstream.ObjectStore, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UpdateObjectStore", arg0, arg1)
+	ret := m.ctrl.Call(m, "UpdateObjectStore", ctx, cfg)
 	ret0, _ := ret[0].(jetstream.ObjectStore)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // UpdateObjectStore indicates an expected call of UpdateObjectStore.
-func (mr *MockJetStreamMockRecorder) UpdateObjectStore(arg0, arg1 any) *gomock.Call {
+func (mr *MockJetStreamMockRecorder) UpdateObjectStore(ctx, cfg any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateObjectStore", reflect.TypeOf((*MockJetStream)(nil).UpdateObjectStore), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateObjectStore", reflect.TypeOf((*MockJetStream)(nil).UpdateObjectStore), ctx, cfg)
 }
 
 // UpdateStream mocks base method.
-func (m *MockJetStream) UpdateStream(arg0 context.Context, arg1 jetstream.StreamConfig) (jetstream.Stream, error) {
+func (m *MockJetStream) UpdateStream(ctx context.Context, cfg jetstream.StreamConfig) (jetstream.Stream, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UpdateStream", arg0, arg1)
+	ret := m.ctrl.Call(m, "UpdateStream", ctx, cfg)
 	ret0, _ := ret[0].(jetstream.Stream)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // UpdateStream indicates an expected call of UpdateStream.
-func (mr *MockJetStreamMockRecorder) UpdateStream(arg0, arg1 any) *gomock.Call {
+func (mr *MockJetStreamMockRecorder) UpdateStream(ctx, cfg any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateStream", reflect.TypeOf((*MockJetStream)(nil).UpdateStream), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateStream", reflect.TypeOf((*MockJetStream)(nil).UpdateStream), ctx, cfg)
 }
 
 // MockStream is a mock of Stream interface.
 type MockStream struct {
 	ctrl     *gomock.Controller
 	recorder *MockStreamMockRecorder
+	isgomock struct{}
 }
 
 // MockStreamMockRecorder is the mock recorder for MockStream.
@@ -635,18 +637,18 @@ func (mr *MockStreamMockRecorder) CachedInfo() *gomock.Call {
 }
 
 // Consumer mocks base method.
-func (m *MockStream) Consumer(arg0 context.Context, arg1 string) (jetstream.Consumer, error) {
+func (m *MockStream) Consumer(ctx context.Context, consumer string) (jetstream.Consumer, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Consumer", arg0, arg1)
+	ret := m.ctrl.Call(m, "Consumer", ctx, consumer)
 	ret0, _ := ret[0].(jetstream.Consumer)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Consumer indicates an expected call of Consumer.
-func (mr *MockStreamMockRecorder) Consumer(arg0, arg1 any) *gomock.Call {
+func (mr *MockStreamMockRecorder) Consumer(ctx, consumer any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Consumer", reflect.TypeOf((*MockStream)(nil).Consumer), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Consumer", reflect.TypeOf((*MockStream)(nil).Consumer), ctx, consumer)
 }
 
 // ConsumerNames mocks base method.
@@ -664,83 +666,83 @@ func (mr *MockStreamMockRecorder) ConsumerNames(arg0 any) *gomock.Call {
 }
 
 // CreateConsumer mocks base method.
-func (m *MockStream) CreateConsumer(arg0 context.Context, arg1 jetstream.ConsumerConfig) (jetstream.Consumer, error) {
+func (m *MockStream) CreateConsumer(ctx context.Context, cfg jetstream.ConsumerConfig) (jetstream.Consumer, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateConsumer", arg0, arg1)
+	ret := m.ctrl.Call(m, "CreateConsumer", ctx, cfg)
 	ret0, _ := ret[0].(jetstream.Consumer)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // CreateConsumer indicates an expected call of CreateConsumer.
-func (mr *MockStreamMockRecorder) CreateConsumer(arg0, arg1 any) *gomock.Call {
+func (mr *MockStreamMockRecorder) CreateConsumer(ctx, cfg any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateConsumer", reflect.TypeOf((*MockStream)(nil).CreateConsumer), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateConsumer", reflect.TypeOf((*MockStream)(nil).CreateConsumer), ctx, cfg)
 }
 
 // CreateOrUpdateConsumer mocks base method.
-func (m *MockStream) CreateOrUpdateConsumer(arg0 context.Context, arg1 jetstream.ConsumerConfig) (jetstream.Consumer, error) {
+func (m *MockStream) CreateOrUpdateConsumer(ctx context.Context, cfg jetstream.ConsumerConfig) (jetstream.Consumer, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateOrUpdateConsumer", arg0, arg1)
+	ret := m.ctrl.Call(m, "CreateOrUpdateConsumer", ctx, cfg)
 	ret0, _ := ret[0].(jetstream.Consumer)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // CreateOrUpdateConsumer indicates an expected call of CreateOrUpdateConsumer.
-func (mr *MockStreamMockRecorder) CreateOrUpdateConsumer(arg0, arg1 any) *gomock.Call {
+func (mr *MockStreamMockRecorder) CreateOrUpdateConsumer(ctx, cfg any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateOrUpdateConsumer", reflect.TypeOf((*MockStream)(nil).CreateOrUpdateConsumer), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateOrUpdateConsumer", reflect.TypeOf((*MockStream)(nil).CreateOrUpdateConsumer), ctx, cfg)
 }
 
 // DeleteConsumer mocks base method.
-func (m *MockStream) DeleteConsumer(arg0 context.Context, arg1 string) error {
+func (m *MockStream) DeleteConsumer(ctx context.Context, consumer string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteConsumer", arg0, arg1)
+	ret := m.ctrl.Call(m, "DeleteConsumer", ctx, consumer)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // DeleteConsumer indicates an expected call of DeleteConsumer.
-func (mr *MockStreamMockRecorder) DeleteConsumer(arg0, arg1 any) *gomock.Call {
+func (mr *MockStreamMockRecorder) DeleteConsumer(ctx, consumer any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteConsumer", reflect.TypeOf((*MockStream)(nil).DeleteConsumer), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteConsumer", reflect.TypeOf((*MockStream)(nil).DeleteConsumer), ctx, consumer)
 }
 
 // DeleteMsg mocks base method.
-func (m *MockStream) DeleteMsg(arg0 context.Context, arg1 uint64) error {
+func (m *MockStream) DeleteMsg(ctx context.Context, seq uint64) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteMsg", arg0, arg1)
+	ret := m.ctrl.Call(m, "DeleteMsg", ctx, seq)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // DeleteMsg indicates an expected call of DeleteMsg.
-func (mr *MockStreamMockRecorder) DeleteMsg(arg0, arg1 any) *gomock.Call {
+func (mr *MockStreamMockRecorder) DeleteMsg(ctx, seq any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteMsg", reflect.TypeOf((*MockStream)(nil).DeleteMsg), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteMsg", reflect.TypeOf((*MockStream)(nil).DeleteMsg), ctx, seq)
 }
 
 // GetLastMsgForSubject mocks base method.
-func (m *MockStream) GetLastMsgForSubject(arg0 context.Context, arg1 string) (*jetstream.RawStreamMsg, error) {
+func (m *MockStream) GetLastMsgForSubject(ctx context.Context, subject string) (*jetstream.RawStreamMsg, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetLastMsgForSubject", arg0, arg1)
+	ret := m.ctrl.Call(m, "GetLastMsgForSubject", ctx, subject)
 	ret0, _ := ret[0].(*jetstream.RawStreamMsg)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetLastMsgForSubject indicates an expected call of GetLastMsgForSubject.
-func (mr *MockStreamMockRecorder) GetLastMsgForSubject(arg0, arg1 any) *gomock.Call {
+func (mr *MockStreamMockRecorder) GetLastMsgForSubject(ctx, subject any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLastMsgForSubject", reflect.TypeOf((*MockStream)(nil).GetLastMsgForSubject), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLastMsgForSubject", reflect.TypeOf((*MockStream)(nil).GetLastMsgForSubject), ctx, subject)
 }
 
 // GetMsg mocks base method.
-func (m *MockStream) GetMsg(arg0 context.Context, arg1 uint64, arg2 ...jetstream.GetMsgOpt) (*jetstream.RawStreamMsg, error) {
+func (m *MockStream) GetMsg(ctx context.Context, seq uint64, opts ...jetstream.GetMsgOpt) (*jetstream.RawStreamMsg, error) {
 	m.ctrl.T.Helper()
-	varargs := []any{arg0, arg1}
-	for _, a := range arg2 {
+	varargs := []any{ctx, seq}
+	for _, a := range opts {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "GetMsg", varargs...)
@@ -750,17 +752,17 @@ func (m *MockStream) GetMsg(arg0 context.Context, arg1 uint64, arg2 ...jetstream
 }
 
 // GetMsg indicates an expected call of GetMsg.
-func (mr *MockStreamMockRecorder) GetMsg(arg0, arg1 any, arg2 ...any) *gomock.Call {
+func (mr *MockStreamMockRecorder) GetMsg(ctx, seq any, opts ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{arg0, arg1}, arg2...)
+	varargs := append([]any{ctx, seq}, opts...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMsg", reflect.TypeOf((*MockStream)(nil).GetMsg), varargs...)
 }
 
 // Info mocks base method.
-func (m *MockStream) Info(arg0 context.Context, arg1 ...jetstream.StreamInfoOpt) (*jetstream.StreamInfo, error) {
+func (m *MockStream) Info(ctx context.Context, opts ...jetstream.StreamInfoOpt) (*jetstream.StreamInfo, error) {
 	m.ctrl.T.Helper()
-	varargs := []any{arg0}
-	for _, a := range arg1 {
+	varargs := []any{ctx}
+	for _, a := range opts {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "Info", varargs...)
@@ -770,9 +772,9 @@ func (m *MockStream) Info(arg0 context.Context, arg1 ...jetstream.StreamInfoOpt)
 }
 
 // Info indicates an expected call of Info.
-func (mr *MockStreamMockRecorder) Info(arg0 any, arg1 ...any) *gomock.Call {
+func (mr *MockStreamMockRecorder) Info(ctx any, opts ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{arg0}, arg1...)
+	varargs := append([]any{ctx}, opts...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Info", reflect.TypeOf((*MockStream)(nil).Info), varargs...)
 }
 
@@ -791,25 +793,25 @@ func (mr *MockStreamMockRecorder) ListConsumers(arg0 any) *gomock.Call {
 }
 
 // OrderedConsumer mocks base method.
-func (m *MockStream) OrderedConsumer(arg0 context.Context, arg1 jetstream.OrderedConsumerConfig) (jetstream.Consumer, error) {
+func (m *MockStream) OrderedConsumer(ctx context.Context, cfg jetstream.OrderedConsumerConfig) (jetstream.Consumer, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "OrderedConsumer", arg0, arg1)
+	ret := m.ctrl.Call(m, "OrderedConsumer", ctx, cfg)
 	ret0, _ := ret[0].(jetstream.Consumer)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // OrderedConsumer indicates an expected call of OrderedConsumer.
-func (mr *MockStreamMockRecorder) OrderedConsumer(arg0, arg1 any) *gomock.Call {
+func (mr *MockStreamMockRecorder) OrderedConsumer(ctx, cfg any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OrderedConsumer", reflect.TypeOf((*MockStream)(nil).OrderedConsumer), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OrderedConsumer", reflect.TypeOf((*MockStream)(nil).OrderedConsumer), ctx, cfg)
 }
 
 // Purge mocks base method.
-func (m *MockStream) Purge(arg0 context.Context, arg1 ...jetstream.StreamPurgeOpt) error {
+func (m *MockStream) Purge(ctx context.Context, opts ...jetstream.StreamPurgeOpt) error {
 	m.ctrl.T.Helper()
-	varargs := []any{arg0}
-	for _, a := range arg1 {
+	varargs := []any{ctx}
+	for _, a := range opts {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "Purge", varargs...)
@@ -818,45 +820,46 @@ func (m *MockStream) Purge(arg0 context.Context, arg1 ...jetstream.StreamPurgeOp
 }
 
 // Purge indicates an expected call of Purge.
-func (mr *MockStreamMockRecorder) Purge(arg0 any, arg1 ...any) *gomock.Call {
+func (mr *MockStreamMockRecorder) Purge(ctx any, opts ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{arg0}, arg1...)
+	varargs := append([]any{ctx}, opts...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Purge", reflect.TypeOf((*MockStream)(nil).Purge), varargs...)
 }
 
 // SecureDeleteMsg mocks base method.
-func (m *MockStream) SecureDeleteMsg(arg0 context.Context, arg1 uint64) error {
+func (m *MockStream) SecureDeleteMsg(ctx context.Context, seq uint64) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SecureDeleteMsg", arg0, arg1)
+	ret := m.ctrl.Call(m, "SecureDeleteMsg", ctx, seq)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // SecureDeleteMsg indicates an expected call of SecureDeleteMsg.
-func (mr *MockStreamMockRecorder) SecureDeleteMsg(arg0, arg1 any) *gomock.Call {
+func (mr *MockStreamMockRecorder) SecureDeleteMsg(ctx, seq any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SecureDeleteMsg", reflect.TypeOf((*MockStream)(nil).SecureDeleteMsg), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SecureDeleteMsg", reflect.TypeOf((*MockStream)(nil).SecureDeleteMsg), ctx, seq)
 }
 
 // UpdateConsumer mocks base method.
-func (m *MockStream) UpdateConsumer(arg0 context.Context, arg1 jetstream.ConsumerConfig) (jetstream.Consumer, error) {
+func (m *MockStream) UpdateConsumer(ctx context.Context, cfg jetstream.ConsumerConfig) (jetstream.Consumer, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UpdateConsumer", arg0, arg1)
+	ret := m.ctrl.Call(m, "UpdateConsumer", ctx, cfg)
 	ret0, _ := ret[0].(jetstream.Consumer)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // UpdateConsumer indicates an expected call of UpdateConsumer.
-func (mr *MockStreamMockRecorder) UpdateConsumer(arg0, arg1 any) *gomock.Call {
+func (mr *MockStreamMockRecorder) UpdateConsumer(ctx, cfg any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateConsumer", reflect.TypeOf((*MockStream)(nil).UpdateConsumer), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateConsumer", reflect.TypeOf((*MockStream)(nil).UpdateConsumer), ctx, cfg)
 }
 
 // MockConsumer is a mock of Consumer interface.
 type MockConsumer struct {
 	ctrl     *gomock.Controller
 	recorder *MockConsumerMockRecorder
+	isgomock struct{}
 }
 
 // MockConsumerMockRecorder is the mock recorder for MockConsumer.
@@ -891,10 +894,10 @@ func (mr *MockConsumerMockRecorder) CachedInfo() *gomock.Call {
 }
 
 // Consume mocks base method.
-func (m *MockConsumer) Consume(arg0 jetstream.MessageHandler, arg1 ...jetstream.PullConsumeOpt) (jetstream.ConsumeContext, error) {
+func (m *MockConsumer) Consume(handler jetstream.MessageHandler, opts ...jetstream.PullConsumeOpt) (jetstream.ConsumeContext, error) {
 	m.ctrl.T.Helper()
-	varargs := []any{arg0}
-	for _, a := range arg1 {
+	varargs := []any{handler}
+	for _, a := range opts {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "Consume", varargs...)
@@ -904,17 +907,17 @@ func (m *MockConsumer) Consume(arg0 jetstream.MessageHandler, arg1 ...jetstream.
 }
 
 // Consume indicates an expected call of Consume.
-func (mr *MockConsumerMockRecorder) Consume(arg0 any, arg1 ...any) *gomock.Call {
+func (mr *MockConsumerMockRecorder) Consume(handler any, opts ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{arg0}, arg1...)
+	varargs := append([]any{handler}, opts...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Consume", reflect.TypeOf((*MockConsumer)(nil).Consume), varargs...)
 }
 
 // Fetch mocks base method.
-func (m *MockConsumer) Fetch(arg0 int, arg1 ...jetstream.FetchOpt) (jetstream.MessageBatch, error) {
+func (m *MockConsumer) Fetch(batch int, opts ...jetstream.FetchOpt) (jetstream.MessageBatch, error) {
 	m.ctrl.T.Helper()
-	varargs := []any{arg0}
-	for _, a := range arg1 {
+	varargs := []any{batch}
+	for _, a := range opts {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "Fetch", varargs...)
@@ -924,17 +927,17 @@ func (m *MockConsumer) Fetch(arg0 int, arg1 ...jetstream.FetchOpt) (jetstream.Me
 }
 
 // Fetch indicates an expected call of Fetch.
-func (mr *MockConsumerMockRecorder) Fetch(arg0 any, arg1 ...any) *gomock.Call {
+func (mr *MockConsumerMockRecorder) Fetch(batch any, opts ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{arg0}, arg1...)
+	varargs := append([]any{batch}, opts...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Fetch", reflect.TypeOf((*MockConsumer)(nil).Fetch), varargs...)
 }
 
 // FetchBytes mocks base method.
-func (m *MockConsumer) FetchBytes(arg0 int, arg1 ...jetstream.FetchOpt) (jetstream.MessageBatch, error) {
+func (m *MockConsumer) FetchBytes(maxBytes int, opts ...jetstream.FetchOpt) (jetstream.MessageBatch, error) {
 	m.ctrl.T.Helper()
-	varargs := []any{arg0}
-	for _, a := range arg1 {
+	varargs := []any{maxBytes}
+	for _, a := range opts {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "FetchBytes", varargs...)
@@ -944,25 +947,25 @@ func (m *MockConsumer) FetchBytes(arg0 int, arg1 ...jetstream.FetchOpt) (jetstre
 }
 
 // FetchBytes indicates an expected call of FetchBytes.
-func (mr *MockConsumerMockRecorder) FetchBytes(arg0 any, arg1 ...any) *gomock.Call {
+func (mr *MockConsumerMockRecorder) FetchBytes(maxBytes any, opts ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{arg0}, arg1...)
+	varargs := append([]any{maxBytes}, opts...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FetchBytes", reflect.TypeOf((*MockConsumer)(nil).FetchBytes), varargs...)
 }
 
 // FetchNoWait mocks base method.
-func (m *MockConsumer) FetchNoWait(arg0 int) (jetstream.MessageBatch, error) {
+func (m *MockConsumer) FetchNoWait(batch int) (jetstream.MessageBatch, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "FetchNoWait", arg0)
+	ret := m.ctrl.Call(m, "FetchNoWait", batch)
 	ret0, _ := ret[0].(jetstream.MessageBatch)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // FetchNoWait indicates an expected call of FetchNoWait.
-func (mr *MockConsumerMockRecorder) FetchNoWait(arg0 any) *gomock.Call {
+func (mr *MockConsumerMockRecorder) FetchNoWait(batch any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FetchNoWait", reflect.TypeOf((*MockConsumer)(nil).FetchNoWait), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FetchNoWait", reflect.TypeOf((*MockConsumer)(nil).FetchNoWait), batch)
 }
 
 // Info mocks base method.
@@ -981,10 +984,10 @@ func (mr *MockConsumerMockRecorder) Info(arg0 any) *gomock.Call {
 }
 
 // Messages mocks base method.
-func (m *MockConsumer) Messages(arg0 ...jetstream.PullMessagesOpt) (jetstream.MessagesContext, error) {
+func (m *MockConsumer) Messages(opts ...jetstream.PullMessagesOpt) (jetstream.MessagesContext, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{}
-	for _, a := range arg0 {
+	for _, a := range opts {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "Messages", varargs...)
@@ -994,16 +997,16 @@ func (m *MockConsumer) Messages(arg0 ...jetstream.PullMessagesOpt) (jetstream.Me
 }
 
 // Messages indicates an expected call of Messages.
-func (mr *MockConsumerMockRecorder) Messages(arg0 ...any) *gomock.Call {
+func (mr *MockConsumerMockRecorder) Messages(opts ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Messages", reflect.TypeOf((*MockConsumer)(nil).Messages), arg0...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Messages", reflect.TypeOf((*MockConsumer)(nil).Messages), opts...)
 }
 
 // Next mocks base method.
-func (m *MockConsumer) Next(arg0 ...jetstream.FetchOpt) (jetstream.Msg, error) {
+func (m *MockConsumer) Next(opts ...jetstream.FetchOpt) (jetstream.Msg, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{}
-	for _, a := range arg0 {
+	for _, a := range opts {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "Next", varargs...)
@@ -1013,15 +1016,16 @@ func (m *MockConsumer) Next(arg0 ...jetstream.FetchOpt) (jetstream.Msg, error) {
 }
 
 // Next indicates an expected call of Next.
-func (mr *MockConsumerMockRecorder) Next(arg0 ...any) *gomock.Call {
+func (mr *MockConsumerMockRecorder) Next(opts ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Next", reflect.TypeOf((*MockConsumer)(nil).Next), arg0...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Next", reflect.TypeOf((*MockConsumer)(nil).Next), opts...)
 }
 
 // MockMsg is a mock of Msg interface.
 type MockMsg struct {
 	ctrl     *gomock.Controller
 	recorder *MockMsgMockRecorder
+	isgomock struct{}
 }
 
 // MockMsgMockRecorder is the mock recorder for MockMsg.
@@ -1141,17 +1145,17 @@ func (mr *MockMsgMockRecorder) Nak() *gomock.Call {
 }
 
 // NakWithDelay mocks base method.
-func (m *MockMsg) NakWithDelay(arg0 time.Duration) error {
+func (m *MockMsg) NakWithDelay(delay time.Duration) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "NakWithDelay", arg0)
+	ret := m.ctrl.Call(m, "NakWithDelay", delay)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // NakWithDelay indicates an expected call of NakWithDelay.
-func (mr *MockMsgMockRecorder) NakWithDelay(arg0 any) *gomock.Call {
+func (mr *MockMsgMockRecorder) NakWithDelay(delay any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NakWithDelay", reflect.TypeOf((*MockMsg)(nil).NakWithDelay), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NakWithDelay", reflect.TypeOf((*MockMsg)(nil).NakWithDelay), delay)
 }
 
 // Reply mocks base method.
@@ -1197,23 +1201,24 @@ func (mr *MockMsgMockRecorder) Term() *gomock.Call {
 }
 
 // TermWithReason mocks base method.
-func (m *MockMsg) TermWithReason(arg0 string) error {
+func (m *MockMsg) TermWithReason(reason string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "TermWithReason", arg0)
+	ret := m.ctrl.Call(m, "TermWithReason", reason)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // TermWithReason indicates an expected call of TermWithReason.
-func (mr *MockMsgMockRecorder) TermWithReason(arg0 any) *gomock.Call {
+func (mr *MockMsgMockRecorder) TermWithReason(reason any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TermWithReason", reflect.TypeOf((*MockMsg)(nil).TermWithReason), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TermWithReason", reflect.TypeOf((*MockMsg)(nil).TermWithReason), reason)
 }
 
 // MockMessageBatch is a mock of MessageBatch interface.
 type MockMessageBatch struct {
 	ctrl     *gomock.Controller
 	recorder *MockMessageBatchMockRecorder
+	isgomock struct{}
 }
 
 // MockMessageBatchMockRecorder is the mock recorder for MockMessageBatch.

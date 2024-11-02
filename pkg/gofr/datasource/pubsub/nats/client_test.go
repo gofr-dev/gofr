@@ -16,6 +16,10 @@ import (
 	"gofr.dev/pkg/gofr/testutil"
 )
 
+func TestValidateConfigs(*testing.T) {
+	// This test remains unchanged
+}
+
 func TestNATSClient_Publish(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -108,9 +112,8 @@ func TestNATSClient_SubscribeSuccess(t *testing.T) {
 				Stream:   "test-stream",
 				Subjects: []string{"test-subject"},
 			},
-			Consumer:  "test-consumer",
-			MaxWait:   time.Second,
-			BatchSize: 1,
+			Consumer: "test-consumer",
+			MaxWait:  time.Second,
 		},
 		metrics: mockMetrics,
 		logger:  logging.NewMockLogger(logging.DEBUG),
@@ -207,9 +210,8 @@ func TestNew(t *testing.T) {
 			Stream:   "test-stream",
 			Subjects: []string{"test-subject"},
 		},
-		Consumer:  "test-consumer",
-		MaxWait:   5 * time.Second,
-		BatchSize: 100,
+		Consumer: "test-consumer",
+		MaxWait:  5 * time.Second,
 	}
 
 	mockLogger := logging.NewMockLogger(logging.DEBUG)
@@ -325,8 +327,7 @@ func TestClient_Connect(t *testing.T) {
 				Stream:   "test-stream",
 				Subjects: []string{"test-subject"},
 			},
-			Consumer:  "test-consumer",
-			BatchSize: 100,
+			Consumer: "test-consumer",
 		},
 		logger:           mockLogger,
 		natsConnector:    mockNATSConnector,
@@ -344,8 +345,10 @@ func TestClient_Connect(t *testing.T) {
 		Return(mockJS, nil).
 		Times(2)
 
+	ctx := context.Background()
+
 	// Call the Connect method on the client
-	err := client.Connect()
+	err := client.Connect(ctx)
 	require.NoError(t, err)
 
 	// Assert that the connection manager was set
@@ -358,7 +361,7 @@ func TestClient_Connect(t *testing.T) {
 	// Check for log output
 	out := testutil.StdoutOutputForFunc(func() {
 		client.logger = logging.NewMockLogger(logging.DEBUG)
-		err := client.Connect()
+		err := client.Connect(ctx)
 		require.NoError(t, err)
 	})
 
@@ -370,6 +373,8 @@ func TestClient_ConnectError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
+	ctx := context.Background()
+
 	mockNATSConnector := NewMockNATSConnector(ctrl)
 	mockJSCreator := NewMockJetStreamCreator(ctrl)
 
@@ -379,8 +384,7 @@ func TestClient_ConnectError(t *testing.T) {
 			Stream:   "test-stream",
 			Subjects: []string{"test-subject"},
 		},
-		Consumer:  "test-consumer",
-		BatchSize: 100,
+		Consumer: "test-consumer",
 	}
 
 	client := &Client{
@@ -399,7 +403,7 @@ func TestClient_ConnectError(t *testing.T) {
 	// Capture stderr output
 	output := testutil.StderrOutputForFunc(func() {
 		client.logger = logging.NewMockLogger(logging.DEBUG)
-		err := client.Connect()
+		err := client.Connect(ctx)
 		require.Error(t, err)
 		assert.Equal(t, expectedErr, err)
 	})

@@ -42,7 +42,7 @@ type JetStreamClient interface {
 
 // ConnectionManagerInterface represents the main Client connection.
 type ConnectionManagerInterface interface {
-	Connect() error
+	Connect(ctx context.Context) error
 	Close(ctx context.Context)
 	Publish(ctx context.Context, subject string, message []byte, metrics Metrics) error
 	Health() datasource.Health
