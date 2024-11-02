@@ -59,7 +59,7 @@ func (sm *SubscriptionManager) Subscribe(
 			return nil, err
 		}
 
-		subCtx, cancel := context.WithCancel(context.Background())
+		subCtx, cancel := context.WithCancel(ctx)
 		sm.subscriptions[topic] = &subscription{cancel: cancel}
 
 		buffer := sm.getOrCreateBuffer(topic)
