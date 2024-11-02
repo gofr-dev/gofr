@@ -21,6 +21,7 @@ import (
 type MockTracer struct {
 	ctrl     *gomock.Controller
 	recorder *MockTracerMockRecorder
+	isgomock struct{}
 }
 
 // MockTracerMockRecorder is the mock recorder for MockTracer.
@@ -41,10 +42,10 @@ func (m *MockTracer) EXPECT() *MockTracerMockRecorder {
 }
 
 // Start mocks base method.
-func (m *MockTracer) Start(arg0 context.Context, arg1 string, arg2 ...trace.SpanStartOption) (context.Context, trace.Span) {
+func (m *MockTracer) Start(ctx context.Context, spanName string, opts ...trace.SpanStartOption) (context.Context, trace.Span) {
 	m.ctrl.T.Helper()
-	varargs := []any{arg0, arg1}
-	for _, a := range arg2 {
+	varargs := []any{ctx, spanName}
+	for _, a := range opts {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "Start", varargs...)
@@ -54,9 +55,9 @@ func (m *MockTracer) Start(arg0 context.Context, arg1 string, arg2 ...trace.Span
 }
 
 // Start indicates an expected call of Start.
-func (mr *MockTracerMockRecorder) Start(arg0, arg1 any, arg2 ...any) *gomock.Call {
+func (mr *MockTracerMockRecorder) Start(ctx, spanName any, opts ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{arg0, arg1}, arg2...)
+	varargs := append([]any{ctx, spanName}, opts...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Start", reflect.TypeOf((*MockTracer)(nil).Start), varargs...)
 }
 

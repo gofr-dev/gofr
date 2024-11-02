@@ -3,9 +3,15 @@ package nats
 import (
 	"testing"
 
+	"github.com/nats-io/nats.go/jetstream"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 )
+
+// createTestCommitter is a helper function for tests to create a natsCommitter.
+func createTestCommitter(msg jetstream.Msg) *natsCommitter {
+	return &natsCommitter{msg: msg}
+}
 
 func TestNATSCommitter_Commit(t *testing.T) {
 	ctrl := gomock.NewController(t)

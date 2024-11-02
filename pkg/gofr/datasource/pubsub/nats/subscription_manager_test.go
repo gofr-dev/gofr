@@ -14,7 +14,7 @@ import (
 )
 
 func TestNewSubscriptionManager(t *testing.T) {
-	sm := NewSubscriptionManager(100)
+	sm := newSubscriptionManager(100)
 	assert.NotNil(t, sm)
 	assert.Equal(t, 100, sm.bufferSize)
 	assert.NotNil(t, sm.subscriptions)
@@ -30,7 +30,7 @@ func TestSubscriptionManager_Subscribe(t *testing.T) {
 	mockMetrics := NewMockMetrics(ctrl)
 	mockLogger := logging.NewMockLogger(logging.DEBUG)
 
-	sm := NewSubscriptionManager(1)
+	sm := newSubscriptionManager(1)
 	cfg := &Config{
 		Consumer: "test-consumer",
 		Stream: StreamConfig{
@@ -64,7 +64,7 @@ func TestSubscriptionManager_Subscribe_Error(t *testing.T) {
 	mockMetrics := NewMockMetrics(ctrl)
 	mockLogger := logging.NewMockLogger(logging.DEBUG)
 
-	sm := NewSubscriptionManager(1)
+	sm := newSubscriptionManager(1)
 	cfg := &Config{
 		Consumer: "test-consumer",
 		Stream: StreamConfig{
@@ -86,7 +86,7 @@ func TestSubscriptionManager_Subscribe_Error(t *testing.T) {
 }
 
 func TestSubscriptionManager_validateSubscribePrerequisites(t *testing.T) {
-	sm := NewSubscriptionManager(1)
+	sm := newSubscriptionManager(1)
 	mockJS := NewMockJetStream(gomock.NewController(t))
 	cfg := &Config{Consumer: "test-consumer"}
 
@@ -101,7 +101,7 @@ func TestSubscriptionManager_validateSubscribePrerequisites(t *testing.T) {
 }
 
 func TestSubscriptionManager_getOrCreateBuffer(t *testing.T) {
-	sm := NewSubscriptionManager(1)
+	sm := newSubscriptionManager(1)
 	topic := "test.topic"
 
 	buffer := sm.getOrCreateBuffer(topic)
@@ -121,7 +121,7 @@ func TestSubscriptionManager_createOrUpdateConsumer(t *testing.T) {
 	mockJS := NewMockJetStream(ctrl)
 	mockConsumer := NewMockConsumer(ctrl)
 
-	sm := NewSubscriptionManager(1)
+	sm := newSubscriptionManager(1)
 	cfg := &Config{
 		Consumer: "test-consumer",
 		Stream: StreamConfig{
@@ -147,7 +147,7 @@ func TestSubscriptionManager_consumeMessages(t *testing.T) {
 	mockConsumer := NewMockConsumer(ctrl)
 	mockLogger := logging.NewMockLogger(logging.DEBUG)
 
-	sm := NewSubscriptionManager(1)
+	sm := newSubscriptionManager(1)
 	cfg := &Config{MaxWait: time.Second}
 	topic := "test.topic"
 	buffer := make(chan *pubsub.Message, 1)
@@ -187,7 +187,7 @@ func createMockMessageBatch(ctrl *gomock.Controller) jetstream.MessageBatch {
 }
 
 func TestSubscriptionManager_Close(t *testing.T) {
-	sm := NewSubscriptionManager(1)
+	sm := newSubscriptionManager(1)
 	topic := "test.topic"
 
 	// Create a subscription and buffer

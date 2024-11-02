@@ -18,7 +18,7 @@ func TestNewStreamManager(t *testing.T) {
 	mockJS := NewMockJetStream(ctrl)
 	logger := logging.NewMockLogger(logging.DEBUG)
 
-	sm := NewStreamManager(mockJS, logger)
+	sm := newStreamManager(mockJS, logger)
 
 	assert.NotNil(t, sm)
 	assert.Equal(t, mockJS, sm.js)
@@ -32,7 +32,7 @@ func TestStreamManager_CreateStream(t *testing.T) {
 	mockJS := NewMockJetStream(ctrl)
 	logger := logging.NewMockLogger(logging.DEBUG)
 
-	sm := NewStreamManager(mockJS, logger)
+	sm := newStreamManager(mockJS, logger)
 
 	ctx := context.Background()
 	cfg := StreamConfig{
@@ -53,7 +53,7 @@ func TestStreamManager_CreateStream_Error(t *testing.T) {
 	mockJS := NewMockJetStream(ctrl)
 	logger := logging.NewMockLogger(logging.DEBUG)
 
-	sm := NewStreamManager(mockJS, logger)
+	sm := newStreamManager(mockJS, logger)
 
 	ctx := context.Background()
 	cfg := StreamConfig{
@@ -76,7 +76,7 @@ func TestStreamManager_DeleteStream(t *testing.T) {
 	mockJS := NewMockJetStream(ctrl)
 	logger := logging.NewMockLogger(logging.DEBUG)
 
-	sm := NewStreamManager(mockJS, logger)
+	sm := newStreamManager(mockJS, logger)
 
 	ctx := context.Background()
 	streamName := "test-stream"
@@ -94,7 +94,7 @@ func TestStreamManager_DeleteStream_NotFound(t *testing.T) {
 	mockJS := NewMockJetStream(ctrl)
 	logger := logging.NewMockLogger(logging.DEBUG)
 
-	sm := NewStreamManager(mockJS, logger)
+	sm := newStreamManager(mockJS, logger)
 
 	ctx := context.Background()
 	streamName := "test-stream"
@@ -112,7 +112,7 @@ func TestStreamManager_DeleteStream_Error(t *testing.T) {
 	mockJS := NewMockJetStream(ctrl)
 	logger := logging.NewMockLogger(logging.DEBUG)
 
-	sm := NewStreamManager(mockJS, logger)
+	sm := newStreamManager(mockJS, logger)
 
 	ctx := context.Background()
 	streamName := "test-stream"
@@ -132,7 +132,7 @@ func TestStreamManager_CreateOrUpdateStream(t *testing.T) {
 	mockJS := NewMockJetStream(ctrl)
 	logger := logging.NewMockLogger(logging.DEBUG)
 
-	sm := NewStreamManager(mockJS, logger)
+	sm := newStreamManager(mockJS, logger)
 
 	ctx := context.Background()
 	cfg := &jetstream.StreamConfig{
@@ -155,7 +155,7 @@ func TestStreamManager_CreateOrUpdateStream_Error(t *testing.T) {
 	mockJS := NewMockJetStream(ctrl)
 	logger := logging.NewMockLogger(logging.DEBUG)
 
-	sm := NewStreamManager(mockJS, logger)
+	sm := newStreamManager(mockJS, logger)
 
 	ctx := context.Background()
 	cfg := &jetstream.StreamConfig{
@@ -179,7 +179,7 @@ func TestStreamManager_GetStream(t *testing.T) {
 	mockJS := NewMockJetStream(ctrl)
 	logger := logging.NewMockLogger(logging.DEBUG)
 
-	sm := NewStreamManager(mockJS, logger)
+	sm := newStreamManager(mockJS, logger)
 
 	ctx := context.Background()
 	streamName := "test-stream"
@@ -199,7 +199,7 @@ func TestStreamManager_GetStream_NotFound(t *testing.T) {
 	mockJS := NewMockJetStream(ctrl)
 	logger := logging.NewMockLogger(logging.DEBUG)
 
-	sm := NewStreamManager(mockJS, logger)
+	sm := newStreamManager(mockJS, logger)
 
 	ctx := context.Background()
 	streamName := "test-stream"
@@ -219,7 +219,7 @@ func TestStreamManager_GetStream_Error(t *testing.T) {
 	mockJS := NewMockJetStream(ctrl)
 	logger := logging.NewMockLogger(logging.DEBUG)
 
-	sm := NewStreamManager(mockJS, logger)
+	sm := newStreamManager(mockJS, logger)
 
 	ctx := context.Background()
 	streamName := "test-stream"

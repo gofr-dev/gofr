@@ -180,6 +180,12 @@ docker run -d \
 
 NATS JetStream is supported as an external pubsub provider, meaning if you're not using it, it won't be added to your binary.
 
+**References**
+
+https://docs.nats.io/
+https://docs.nats.io/nats-concepts/jetstream
+https://docs.nats.io/using-nats/developer/connecting/creds
+
 #### Configs
 ```dotenv
 PUBSUB_BACKEND=NATS
@@ -187,7 +193,6 @@ PUBSUB_BROKER=nats://localhost:4222
 NATS_STREAM=mystream
 NATS_SUBJECTS=orders.*,shipments.*
 NATS_MAX_WAIT=5s
-NATS_BATCH_SIZE=100
 NATS_MAX_PULL_WAIT=500ms
 NATS_CONSUMER=my-consumer
 NATS_CREDS_FILE=/path/to/creds.json
@@ -215,7 +220,6 @@ app.AddPubSub(nats.New(nats.Config{
         Subjects: []string{"orders.*", "shipments.*"},
     },
     MaxWait:     5 * time.Second,
-    BatchSize:   100,
     MaxPullWait: 500 * time.Millisecond,
     Consumer:    "my-consumer",
     CredsFile:   "/path/to/creds.json",
@@ -241,7 +245,6 @@ docker run -d \
 | `NATS_STREAM` | Name of the NATS stream | Yes | - | `mystream` |
 | `NATS_SUBJECTS` | Comma-separated list of subjects to subscribe to | Yes | - | `orders.*,shipments.*` |
 | `NATS_MAX_WAIT` | Maximum wait time for batch requests | No | - | `5s` |
-| `NATS_BATCH_SIZE` | Maximum number of messages to pull in a single request | No | 0 | `100` |
 | `NATS_MAX_PULL_WAIT` | Maximum wait time for individual pull requests | No | 0 | `500ms` |
 | `NATS_CONSUMER` | Name of the NATS consumer | No | - | `my-consumer` |
 | `NATS_CREDS_FILE` | Path to the credentials file for authentication | No | - | `/path/to/creds.json` |
