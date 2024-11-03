@@ -77,24 +77,8 @@ func (annotResp *AnnotationResponse) addTrace(ctx context.Context, operation str
 	return addTracer(ctx, annotResp.tracer, operation, "AnnotationRes")
 }
 
-func (bulkAnnotResp *BulkAnnotationResponse) addTrace(ctx context.Context, operation string) trace.Span {
-	return addTracer(ctx, bulkAnnotResp.tracer, operation, "BulkAnnotationResponse")
-}
-
 func (queryResp *QueryResponse) addTrace(ctx context.Context, operation string) trace.Span {
 	return addTracer(ctx, queryResp.tracer, operation, "QueryResponse")
-}
-
-func (dropResp *DropCachesResponse) addTrace(ctx context.Context, operation string) trace.Span {
-	return addTracer(ctx, dropResp.tracer, operation, "DropCacheResponse")
-}
-
-func (sugParam *SuggestParam) addTrace(ctx context.Context, operation string) trace.Span {
-	return addTracer(ctx, sugParam.tracer, operation, "SuggestParam")
-}
-
-func (sugResp *SuggestResponse) addTrace(ctx context.Context, operation string) trace.Span {
-	return addTracer(ctx, sugResp.tracer, operation, "SuggestResponse")
 }
 
 func (qri *QueryRespItem) addTrace(ctx context.Context, operation string) trace.Span {
@@ -117,18 +101,6 @@ func (verResp *VersionResponse) addTrace(ctx context.Context, operation string) 
 	return addTracer(ctx, verResp.tracer, operation, "VersionResponse")
 }
 
-func (tsMetaDataResp *TSMetaDataResponse) addTrace(ctx context.Context, operation string) trace.Span {
-	return addTracer(ctx, tsMetaDataResp.tracer, operation, "TSMetaDataResponse")
-}
-
 func (putResp *PutResponse) addTrace(ctx context.Context, operation string) trace.Span {
 	return addTracer(ctx, putResp.tracer, operation, "PutResponse")
-}
-
-func (uidAssignResp *UIDAssignResponse) addTrace(ctx context.Context, operation string) trace.Span {
-	return addTracer(ctx, uidAssignResp.tracer, operation, "UIDAssignResponse")
-}
-
-func (uidMetaDataResp *UIDMetaDataResponse) addTrace(ctx context.Context, operation string) trace.Span {
-	return addTracer(ctx, uidMetaDataResp.tracer, operation, "UIDMetaDataResponse")
 }

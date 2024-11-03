@@ -1,17 +1,51 @@
 package opentsdb
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net/http"
-	"sort"
-	"strconv"
-	"time"
-
 	"go.opentelemetry.io/otel/trace"
+	"net/http"
+	"strings"
 )
+
+// Annotation holds parameters for querying or managing annotations via the /api/annotation endpoint in OpenTSDB.
+// Used for logging notes on events at specific times, often tied to time series data, mainly for graphing or API queries.
+type Annotation struct {
+	// StartTime is the Unix epoch timestamp (in seconds) for when the event occurred. This is required.
+	StartTime int64 `json:"startTime,omitempty"`
+
+	// EndTime is the optional Unix epoch timestamp (in seconds) for when the event ended, if applicable.
+	EndTime int64 `json:"endTime,omitempty"`
+
+	// TSUID is the optional time series identifier if the annotation is linked to a specific time series.
+	TSUID string `json:"tsuid,omitempty"`
+
+	// Description is a brief, optional summary of the event (recommended to keep under 25 characters for display purposes).
+	Description string `json:"description,omitempty"`
+
+	// Notes is an optional, detailed description of the event.
+	Notes string `json:"notes,omitempty"`
+
+	// Custom is an optional key/value map to store any additional fields and their values.
+	Custom map[string]string `json:"custom,omitempty"`
+}
+
+// AnnotationResponse encapsulates the response data and status when interacting with the /api/annotation endpoint.
+type AnnotationResponse struct {
+
+	// Annotation holds the associated annotation object.
+	Annotation
+
+	// ErrorInfo contains details about any errors that occurred during the request.
+	ErrorInfo map[string]any `json:"error,omitempty"`
+
+	logger Logger
+	tracer trace.Tracer
+	ctx    context.Context
+}
 
 // QueryParam is the structure used to hold the querying parameters when calling /api/query.
 // Each attributes in QueryParam matches the definition in
@@ -58,14 +92,6 @@ type QueryParam struct {
 	logger Logger
 	tracer trace.Tracer
 	ctx    context.Context
-}
-
-func (query *QueryParam) String() string {
-	return toString(query.ctx, query, "ToString-QueryParam", query.logger)
-}
-
-func (*QueryParam) setStatusCode(int) {
-	// method not implemented
 }
 
 // SubQuery is the structure used to hold the subquery parameters when calling /api/query.
@@ -134,32 +160,142 @@ type Filter struct {
 	GroupBy bool `json:"groupBy"`
 }
 
+// DataPoint is the structure used to hold the values of a metric item. Each attributes
+// in DataPoint matches the definition in [OpenTSDB Official Docs]: http://opentsdb.net/docs/build/html/api_http/put.html.
+type DataPoint struct {
+	// The name of the metric which is about to be stored, and is required with non-empty value.
+	Metric string `json:"metric"`
+
+	// A Unix epoch style timestamp in seconds or milliseconds.
+	// The timestamp must not contain non-numeric characters.
+	// One can use time.Now().Unix() to set this attribute.
+	// This attribute is also required with non-zero value.
+	Timestamp int64 `json:"timestamp"`
+
+	// The real type of Value only could be int, int64, float64, or string, and is required.
+	Value any `json:"value"`
+
+	// A map of tag name/tag value pairs. At least one pair must be supplied.
+	// Don't use too many tags, keep it to a fairly small number, usually up to 4 or 5 tags
+	// (By default, OpenTSDB supports a maximum of 8 tags, which can be modified by add
+	// configuration item 'tsd.storage.max_tags' in opentsdb.conf).
+	Tags map[string]string `json:"tags"`
+}
+
+// PutError holds the error message for each putting DataPoint instance. Only calling PUT() with "details"
+// query parameter, the response of the failed put data operation can contain an array PutError instance
+// to show the details for each failure.
+type PutError struct {
+	Data     DataPoint `json:"datapoint"`
+	ErrorMsg string    `json:"error"`
+}
+
+// PutResponse acts as the implementation of Response in the /api/put scene.
+// It holds the status code and the response values defined in
+// the [OpenTSDB Official Docs]: http://opentsdb.net/docs/build/html/api_http/put.html.
+type PutResponse struct {
+	Failed  int64      `json:"failed"`
+	Success int64      `json:"success"`
+	Errors  []PutError `json:"errors,omitempty"`
+	logger  Logger
+	tracer  trace.Tracer
+	ctx     context.Context
+}
+
+func (c *Client) getResponse(ctx context.Context, putEndpoint string, datapoints []DataPoint,
+	message *string) (*PutResponse, error) {
+	marshalled, err := json.Marshal(datapoints)
+	if err != nil {
+		*message = fmt.Sprintf("getPutBodyContents error: %s", err)
+		c.logger.Errorf(*message)
+	}
+	reqBodyCnt := string(marshalled)
+
+	putResp := PutResponse{logger: c.logger, tracer: c.tracer, ctx: ctx}
+
+	if err = c.sendRequest(ctx, http.MethodPost, putEndpoint, reqBodyCnt, &putResp); err != nil {
+		*message = fmt.Sprintf("error processing put request at url %q: %s", putEndpoint, err)
+		return nil, err
+	}
+
+	return &putResp, nil
+}
+
+func parsePutErrorMsg(resp *PutResponse) error {
+	buf := bytes.Buffer{}
+	buf.WriteString(fmt.Sprintf("Failed to put %d datapoint(s) into opentsdb \n", resp.Failed))
+
+	if len(resp.Errors) > 0 {
+		for _, putError := range resp.Errors {
+			str, _ := json.Marshal(putError)
+			buf.WriteString(fmt.Sprintf("\t%s\n", str))
+		}
+	}
+
+	return errors.New(buf.String())
+}
+
+func validateDataPoint(datas []DataPoint) error {
+	if len(datas) == 0 {
+		return errors.New("the given datapoint is empty")
+	}
+
+	for _, data := range datas {
+		if !isValidDataPoint(&data) {
+			return errors.New("the value of the given datapoint is invalid")
+		}
+	}
+
+	return nil
+}
+
+func isValidDataPoint(data *DataPoint) bool {
+	if data.Metric == "" || data.Timestamp == 0 || len(data.Tags) < 1 || data.Value == nil {
+		return false
+	}
+
+	switch data.Value.(type) {
+	case int64:
+		return true
+	case int:
+		return true
+	case float64:
+		return true
+	case float32:
+		return true
+	case string:
+		return true
+	default:
+		return false
+	}
+}
+
+func isValidPutParam(param string) bool {
+	if isEmptyPutParam(param) {
+		return true
+	}
+
+	param = strings.TrimSpace(param)
+	if param != PutRespWithSummary && param != PutRespWithDetails {
+		return false
+	}
+
+	return true
+}
+
+func isEmptyPutParam(param string) bool {
+	return strings.TrimSpace(param) == ""
+}
+
 // QueryResponse acts as the implementation of Response in the /api/query scene.
 // It holds the status code and the response values defined in the
 // [OpenTSDB Official Docs]: http://opentsdb.net/docs/build/html/api_http/query/index.html.
 type QueryResponse struct {
-	StatusCode    int
 	QueryRespCnts []QueryRespItem `json:"queryRespCnts"`
 	ErrorMsg      map[string]any  `json:"error"`
 	logger        Logger
 	tracer        trace.Tracer
 	ctx           context.Context
-}
-
-func (queryResp *QueryResponse) String() string {
-	return toString(queryResp.ctx, queryResp, "ToString-Query", queryResp.logger)
-}
-
-func (queryResp *QueryResponse) SetStatus(code int) {
-	setStatus(queryResp.ctx, queryResp, code, "SetStatus-Query", queryResp.logger)
-}
-
-func (queryResp *QueryResponse) setStatusCode(code int) {
-	queryResp.StatusCode = code
-}
-
-func (queryResp *QueryResponse) GetCustomParser() func(respCnt []byte) error {
-	return getQueryParser(queryResp.ctx, queryResp.StatusCode, queryResp.logger, queryResp, "GetCustomParser-Query")
 }
 
 // QueryRespItem acts as the implementation of Response in the /api/query scene.
@@ -209,142 +345,75 @@ type QueryRespItem struct {
 	ctx    context.Context
 }
 
-// GetDataPoints returns the real ascending data points from the information of the related QueryRespItem.
-func (qri *QueryRespItem) GetDataPoints() []*DataPoint {
-	span := qri.addTrace(qri.ctx, "GetDataPoints-QueryRespItem")
+// QueryLastParam is the structure used to hold
+// the querying parameters when calling /api/query/last.
+// Each attributes in QueryLastParam matches the definition in
+// [OpenTSDB Official Docs]: http://opentsdb.net/docs/build/html/api_http/query/last.html.
+type QueryLastParam struct {
+	// One or more sub queries used to select the time series to return.
+	// These may be metric m or TSUID tsuids queries
+	// The value is required with at least one element
+	Queries []SubQueryLast `json:"queries"`
 
-	status := StatusFailed
+	// An optional flag is used to determine whether or not to resolve the TSUIDs of results to
+	// their metric and tag names. The default value is false.
+	ResolveNames bool `json:"resolveNames"`
 
-	var message string
+	// An optional number of hours is used to search in the past for data. If set to 0 then the
+	// timestamp of the meta data counter for the time series is used.
+	BackScan int `json:"backScan"`
 
-	defer sendOperationStats(qri.logger, time.Now(), "GetDataPoints-QueryRespItem", &status, &message, span)
-
-	datapoints := make([]*DataPoint, 0)
-
-	timestampStrs := qri.getSortedTimestampStrs()
-	for _, timestampStr := range timestampStrs {
-		timestamp, err := strconv.ParseInt(timestampStr, 10, 64)
-		if err != nil {
-			message = fmt.Sprintf("parse timestamp error: %s", err)
-			qri.logger.Errorf(message)
-		}
-
-		datapoint := &DataPoint{
-			Metric:    qri.Metric,
-			Value:     qri.Dps[timestampStr],
-			Tags:      qri.Tags,
-			Timestamp: timestamp,
-		}
-		datapoints = append(datapoints, datapoint)
-	}
-
-	status = StatusSuccess
-	message = "dataPoints fetched successfully"
-
-	return datapoints
+	logger Logger
+	tracer trace.Tracer
 }
 
-// getSortedTimestampStrs returns a slice of the ascending timestamp with
-// string format for the Dps of the related QueryRespItem instance.
-func (qri *QueryRespItem) getSortedTimestampStrs() []string {
-	span := qri.addTrace(qri.ctx, "GetSortedTimeStamps-QueryRespItem")
+// SubQueryLast is the structure used to hold the subquery parameters when calling /api/query/last.
+// Each attributes in SubQueryLast matches the definition in
+// [OpenTSDB Official Docs]: http://opentsdb.net/docs/build/html/api_http/query/last.html.
+type SubQueryLast struct {
+	// The name of a metric stored in the system.
+	// The value is required with non-empty value.
+	Metric string `json:"metric"`
 
-	status := StatusSuccess
-
-	var message string
-
-	defer sendOperationStats(qri.logger, time.Now(), "GetSortedTimeStamps-QueryRespItem", &status, &message, span)
-
-	timestampStrs := make([]string, 0)
-	for timestampStr := range qri.Dps {
-		timestampStrs = append(timestampStrs, timestampStr)
-	}
-
-	sort.Strings(timestampStrs)
-
-	return timestampStrs
+	// An optional value to drill down to specific time series or group results by tag,
+	// supply one or more map values in the same format as the query string. Tags are converted to filters in 2.2.
+	// Note that if no tags are specified, all metrics in the system will be aggregated into the results.
+	// It will be deprecated in OpenTSDB 2.2.
+	Tags map[string]string `json:"tags,omitempty"`
 }
 
-// GetLatestDataPoint returns latest datapoint for the related QueryRespItem instance.
-func (qri *QueryRespItem) GetLatestDataPoint() *DataPoint {
-	span := qri.addTrace(qri.ctx, "GetLatestDataPoint-QueryRespItem")
-
-	status := StatusFailed
-
-	var message string
-
-	defer sendOperationStats(qri.logger, time.Now(), "GetLatestDataPoint-QueryRespItem", &status, &message, span)
-
-	timestampStrs := qri.getSortedTimestampStrs()
-
-	size := len(timestampStrs)
-	if size == 0 {
-		message = "No datapoints present"
-		return nil
-	}
-
-	timestamp, err := strconv.ParseInt(timestampStrs[size-1], 10, 64)
-	if err != nil {
-		message = fmt.Sprintf("parse timestamp error: %s", err)
-		qri.logger.Errorf(message)
-	}
-
-	datapoint := &DataPoint{
-		Metric:    qri.Metric,
-		Value:     qri.Dps[timestampStrs[size-1]],
-		Tags:      qri.Tags,
-		Timestamp: timestamp,
-	}
-
-	status = StatusSuccess
-	message = fmt.Sprintf("LatestDataPoints with timestamp %v fetched successfully", timestamp)
-
-	qri.logger.Log("LatestDataPoints fetched successfully")
-
-	return datapoint
+// QueryLastResponse acts as the implementation of Response in the /api/query/last scene.
+// It holds the status code and the response values defined in the
+// [OpenTSDB Official Docs]: http://opentsdb.net/docs/build/html/api_http/query/last.html.
+type QueryLastResponse struct {
+	QueryRespCnts []QueryRespLastItem `json:"queryRespCnts,omitempty"`
+	ErrorMsg      map[string]any      `json:"error"`
+	logger        Logger
+	tracer        trace.Tracer
+	ctx           context.Context
 }
 
-func (c *Client) Query(ctx context.Context, param *QueryParam) (*QueryResponse, error) {
-	if param.tracer == nil {
-		param.tracer = c.tracer
-	}
+// QueryRespLastItem acts as the implementation of Response in the /api/query/last scene.
+// It holds the response item defined in the
+// [OpenTSDB Official Docs]: http://opentsdb.net/docs/build/html/api_http/query/last.html.
+type QueryRespLastItem struct {
+	// Name of the metric retreived for the time series.
+	// Only returned if resolve was set to true.
+	Metric string `json:"metric"`
 
-	if param.logger == nil {
-		param.logger = c.logger
-	}
+	// A list of tags only returned when the results are for a single time series.
+	// If results are aggregated, this value may be null or an empty map.
+	// Only returned if resolve was set to true.
+	Tags map[string]string `json:"tags"`
 
-	span := c.addTrace(ctx, "Query")
+	// A Unix epoch timestamp, in milliseconds, when the data point was written.
+	Timestamp int64 `json:"timestamp"`
 
-	status := StatusFailed
+	// The value of the data point enclosed in quotation marks as a string
+	Value string `json:"value"`
 
-	var message string
-
-	defer sendOperationStats(c.logger, time.Now(), "Query", &status, &message, span)
-
-	if !isValidQueryParam(param) {
-		message = "invalid query parameters"
-		return nil, errors.New(message)
-	}
-
-	queryEndpoint := fmt.Sprintf("%s%s", c.endpoint, QueryPath)
-
-	reqBodyCnt, err := getQueryBodyContents(param)
-	if err != nil {
-		message = fmt.Sprintf("getQueryBodyContents error: %s", err)
-		return nil, err
-	}
-
-	queryResp := QueryResponse{logger: c.logger, tracer: c.tracer, ctx: ctx}
-
-	if err = c.sendRequest(ctx, http.MethodPost, queryEndpoint, reqBodyCnt, &queryResp); err != nil {
-		message = fmt.Sprintf("error while processing request at url %q: %s ", queryEndpoint, err)
-		return nil, err
-	}
-
-	status = StatusSuccess
-	message = fmt.Sprintf("query request at url %q processed successfully", queryEndpoint)
-
-	return &queryResp, nil
+	// The hexadecimal TSUID for the time series
+	TSUID string `json:"tsuid"`
 }
 
 func getQueryBodyContents(param any) (string, error) {
@@ -409,6 +478,20 @@ func isValidTimePoint(timePoint interface{}) bool {
 
 	default:
 		return false
+	}
+
+	return true
+}
+
+func isValidQueryLastParam(param *QueryLastParam) bool {
+	if param.Queries == nil || len(param.Queries) == 0 {
+		return false
+	}
+
+	for _, query := range param.Queries {
+		if query.Metric == "" {
+			return false
+		}
 	}
 
 	return true

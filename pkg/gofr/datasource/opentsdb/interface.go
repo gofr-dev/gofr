@@ -28,19 +28,11 @@ type HTTPClient interface {
 // Currently, it is an abstraction used in Client.sendRequest()
 // to stored the different kinds of response contents for all the rest-apis.
 type Response interface {
-	// SetStatus can be used to set the actual http status code of
-	// the related http response for the specific Response instance
-	SetStatus(code int)
-
 	// GetCustomParser can be used to retrieve a custom-defined parser.
 	// Returning nil means current specific Response instance doesn't
 	// need a custom-defined parse process, and just uses the default
 	// json unmarshal method to parse the contents of the http response.
-	GetCustomParser() func(respCnt []byte) error
-
-	// String returns the contents of the specific Response instance with
-	// the string format
-	String() string
+	getCustomParser() func(respCnt []byte) error
 }
 
 // Logger interface is used by opentsdb package to log information about request execution.

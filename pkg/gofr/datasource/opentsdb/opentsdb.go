@@ -1,16 +1,16 @@
 // Package opentsdb provides a client implementation for interacting with OpenTSDB
-// via its REST API. The core client functionality is defined in opentsdb.go,
-// while specific API methods are handled in separate files (e.g., put.go, query.go).
+// via its REST API.
 package opentsdb
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -24,35 +24,24 @@ const (
 	ConnectionTimeout = 30 * time.Second // Timeout for keeping connections alive.
 
 	// API paths for OpenTSDB endpoints.
-	PutPath            = "/api/put"
+	PutPath        = "/api/put"
+	AggregatorPath = "/api/aggregators"
+	VersionPath    = "/api/version"
+	AnnotationPath = "/api/annotation"
+	QueryPath      = "/api/query"
+	QueryLastPath  = "/api/query/last"
+
 	PutRespWithSummary = "summary" // Summary response for PUT operations.
 	PutRespWithDetails = "details" // Detailed response for PUT operations.
-	QueryPath          = "/api/query"
-	QueryLastPath      = "/api/query/last"
-
 	// The three keys in the rateOption parameter of the QueryParam.
 	QueryRateOptionCounter    = "counter"    // The corresponding value type is bool
 	QueryRateOptionCounterMax = "counterMax" // The corresponding value type is int,int64
 	QueryRateOptionResetValue = "resetValue" // The corresponding value type is int,int64
 
-	AggregatorPath = "/api/aggregators"
-	SuggestPath    = "/api/suggest"
-	// Only the one of the three query type can be used in SuggestParam, UIDMetaData.
-	TypeMetrics = "metrics"
-	TypeTagk    = "tagk"
-	TypeTagv    = "tagv"
+	AnQueryStartTime = "start_time"
+	AnQueryTSUid     = "tsuid"
 
-	VersionPath        = "/api/version"
-	DropcachesPath     = "/api/dropcaches"
-	AnnotationPath     = "/api/annotation"
-	AnQueryStartTime   = "start_time"
-	AnQueryTSUid       = "tsuid"
-	BulkAnnotationPath = "/api/annotation/bulk"
-	UIDMetaDataPath    = "/api/uid/uidmeta"
-	UIDAssignPath      = "/api/uid/assign"
-	TSMetaDataPath     = "/api/uid/tsmeta"
-
-	// The above three constants are used in /put.
+	// The below three constants are used in /put.
 	DefaultMaxPutPointsNum = 75
 	DefaultDetectDeltaNum  = 3
 	// Unit is bytes, and assumes that config items of 'tsd.http.request.enable_chunked = true'
@@ -62,7 +51,7 @@ const (
 
 var dialTimeout = net.DialTimeout
 
-// Client is the implementation of the OpentsDBClient interface,
+// Client is the implementation of the OpenTSDBClient interface,
 // which includes context-aware functionality.
 type Client struct {
 	endpoint string
@@ -101,6 +90,11 @@ type Config struct {
 	// This value is optional, and if it is not set, client.DefaultMaxPutPointsNum
 	// will be used in the opentsdb client.
 	MaxContentLength int
+}
+
+type Health struct {
+	Status  string         `json:"status,omitempty"`
+	Details map[string]any `json:"details,omitempty"`
 }
 
 // New initializes a new instance of Opentsdb with provided configuration.
@@ -184,9 +178,261 @@ func (c *Client) Connect() {
 	message = fmt.Sprintf("connected to %s", c.endpoint)
 }
 
-type Health struct {
-	Status  string         `json:"status,omitempty"`
-	Details map[string]any `json:"details,omitempty"`
+func (c *Client) PutDataPoints(ctx context.Context, datas any, queryParam string, resp any) error {
+	span := c.addTrace(ctx, "Put")
+
+	status := StatusFailed
+
+	var message string
+
+	defer sendOperationStats(c.logger, time.Now(), "Put", &status, &message, span)
+
+	putResp, ok := resp.(*PutResponse)
+	if !ok {
+		return errors.New("invalid response type. Must be *PutResponse")
+	}
+
+	datapoints, ok := datas.([]DataPoint)
+	if !ok {
+		return errors.New("invalid response type. Must be []DataPoint")
+	}
+
+	err := validateDataPoint(datapoints)
+	if err != nil {
+		message = fmt.Sprintf("invalid data: %s", err)
+		return err
+	}
+
+	if !isValidPutParam(queryParam) {
+		message = "The given query param is invalid."
+		return errors.New(message)
+	}
+
+	var putEndpoint string
+	if !isEmptyPutParam(queryParam) {
+		putEndpoint = fmt.Sprintf("%s%s?%s", c.endpoint, PutPath, queryParam)
+	} else {
+		putEndpoint = fmt.Sprintf("%s%s", c.endpoint, PutPath)
+	}
+
+	response, err := c.getResponse(ctx, putEndpoint, datapoints, &message)
+	if err != nil {
+		return err
+	}
+
+	putResp.logger = c.logger
+	putResp.tracer = c.tracer
+	putResp.ctx = ctx
+	putResp.Failed += response.Failed
+	putResp.Success += response.Success
+	putResp.Errors = response.Errors
+
+	if len(putResp.Errors) == 0 {
+		status = StatusSuccess
+		message = fmt.Sprintf("Put request to url %q processed successfully", putEndpoint)
+
+		return nil
+	}
+
+	return parsePutErrorMsg(putResp)
+}
+
+func (c *Client) QueryDataPoints(ctx context.Context, parameters any, resp any) error {
+	span := c.addTrace(ctx, "Query")
+
+	status := StatusFailed
+
+	var message string
+
+	defer sendOperationStats(c.logger, time.Now(), "Query", &status, &message, span)
+
+	param, ok := parameters.(*QueryParam)
+	if !ok {
+		return errors.New("invalid parameter type")
+	}
+
+	queryResp, ok := resp.(*QueryResponse)
+	if !ok {
+		return errors.New("invalid response type")
+	}
+
+	if param.tracer == nil {
+		param.tracer = c.tracer
+	}
+
+	if param.logger == nil {
+		param.logger = c.logger
+	}
+
+	if !isValidQueryParam(param) {
+		message = "invalid query parameters"
+		return errors.New(message)
+	}
+
+	queryEndpoint := fmt.Sprintf("%s%s", c.endpoint, QueryPath)
+
+	reqBodyCnt, err := getQueryBodyContents(param)
+	if err != nil {
+		message = fmt.Sprintf("getQueryBodyContents error: %s", err)
+		return err
+	}
+
+	queryResp.logger = c.logger
+	queryResp.tracer = c.tracer
+	queryResp.ctx = ctx
+
+	if err = c.sendRequest(ctx, http.MethodPost, queryEndpoint, reqBodyCnt, queryResp); err != nil {
+		message = fmt.Sprintf("error while processing request at url %q: %s ", queryEndpoint, err)
+		return err
+	}
+
+	status = StatusSuccess
+	message = fmt.Sprintf("query request at url %q processed successfully", queryEndpoint)
+
+	return nil
+}
+
+func (c *Client) QueryLatestDataPoints(ctx context.Context, parameters any, resp any) error {
+	param, ok := parameters.(*QueryLastParam)
+	if !ok {
+		return errors.New("invalid parameter type. Must be a *QueryLastParam type")
+	}
+
+	queryResp, ok := resp.(*QueryLastResponse)
+	if !ok {
+		return errors.New("invalid response type. Must be a *QueryLastResponse type")
+	}
+
+	span := c.addTrace(ctx, "QueryLast")
+
+	status := StatusFailed
+
+	var message string
+
+	defer sendOperationStats(c.logger, time.Now(), "QueryLast", &status, &message, span)
+
+	if !isValidQueryLastParam(param) {
+		message = "invalid query last param"
+		return errors.New(message)
+	}
+
+	queryEndpoint := fmt.Sprintf("%s%s", c.endpoint, QueryLastPath)
+
+	reqBodyCnt, err := getQueryBodyContents(param)
+	if err != nil {
+		message = fmt.Sprint("error retrieving body contents: ", err)
+		return err
+	}
+
+	queryResp.logger = c.logger
+	queryResp.tracer = c.tracer
+	queryResp.ctx = ctx
+
+	if err = c.sendRequest(ctx, http.MethodPost, queryEndpoint, reqBodyCnt, queryResp); err != nil {
+		message = fmt.Sprintf("error sending request at url %s : %s ", queryEndpoint, err)
+		return err
+	}
+
+	status = StatusSuccess
+	message = fmt.Sprintf("querylast request to url %q processed successfully", queryEndpoint)
+
+	c.logger.Logf("querylast request processed successfully")
+
+	return nil
+}
+
+func (c *Client) QueryAnnotation(ctx context.Context, queryAnnoParam map[string]any, resp any) error {
+	span := c.addTrace(ctx, "QueryAnnotation")
+
+	status := StatusFailed
+
+	var message string
+
+	defer sendOperationStats(c.logger, time.Now(), "QueryAnnotation", &status, &message, span)
+
+	annResp, ok := resp.(*AnnotationResponse)
+	if !ok {
+		return errors.New("invalid response type. Must be *AnnotationResponse")
+	}
+
+	if len(queryAnnoParam) == 0 {
+		message = "annotation query parameter is empty"
+		return errors.New(message)
+	}
+
+	buffer := bytes.NewBuffer(nil)
+
+	queryURL := url.Values{}
+
+	for k, v := range queryAnnoParam {
+		value, ok := v.(string)
+		if ok {
+			queryURL.Add(k, value)
+		}
+	}
+
+	buffer.WriteString(queryURL.Encode())
+
+	annoEndpoint := fmt.Sprintf("%s%s?%s", c.endpoint, AnnotationPath, buffer.String())
+	annResp.logger = c.logger
+	annResp.tracer = c.tracer
+	annResp.ctx = ctx
+
+	if err := c.sendRequest(ctx, http.MethodGet, annoEndpoint, "", annResp); err != nil {
+		message = fmt.Sprintf("error while processing annotation query: %s", err.Error())
+		return err
+	}
+
+	status = StatusSuccess
+	message = fmt.Sprintf("Annotation query sent to url: %s", annoEndpoint)
+
+	c.logger.Log("Annotation query processed successfully")
+
+	return nil
+}
+
+func (c *Client) PostAnnotation(ctx context.Context, annotation any, resp any) error {
+	return c.operateAnnotation(ctx, annotation, resp, http.MethodPost, "PostAnnotation")
+}
+
+func (c *Client) PutAnnotation(ctx context.Context, annotation any, resp any) error {
+	return c.operateAnnotation(ctx, annotation, resp, http.MethodPut, "PutAnnotation")
+}
+
+func (c *Client) DeleteAnnotation(ctx context.Context, annotation any, resp any) error {
+	return c.operateAnnotation(ctx, annotation, resp, http.MethodDelete, "DeleteAnnotation")
+}
+
+func (c *Client) GetAggregators(ctx context.Context, resp any) error {
+	span := c.addTrace(ctx, "Aggregators")
+	status := StatusFailed
+
+	var message string
+
+	defer sendOperationStats(c.logger, time.Now(), "Aggregators", &status, &message, span)
+
+	aggreResp, ok := resp.(*AggregatorsResponse)
+	if !ok {
+		return errors.New("invalid response type. Must be a *AggregatorsResponse")
+	}
+
+	aggregatorsEndpoint := fmt.Sprintf("%s%s", c.endpoint, AggregatorPath)
+
+	aggreResp.logger = c.logger
+	aggreResp.tracer = c.tracer
+	aggreResp.ctx = ctx
+
+	if err := c.sendRequest(ctx, http.MethodGet, aggregatorsEndpoint, "", aggreResp); err != nil {
+		message = fmt.Sprintf("error retrieving aggregators from url: %s", aggregatorsEndpoint)
+		return err
+	}
+
+	status = StatusSuccess
+	message = fmt.Sprintf("aggregators retrieved from url: %s", aggregatorsEndpoint)
+
+	c.logger.Log("aggregators fetched successfully")
+
+	return nil
 }
 
 func (c *Client) HealthCheck(ctx context.Context) (any, error) {
@@ -216,7 +462,9 @@ func (c *Client) HealthCheck(ctx context.Context) (any, error) {
 
 	h.Details["host"] = c.endpoint
 
-	ver, err := c.version(context.Background())
+	ver := &VersionResponse{}
+
+	err = c.version(ctx, ver)
 	if err != nil {
 		message = err.Error()
 		return nil, err
@@ -231,104 +479,51 @@ func (c *Client) HealthCheck(ctx context.Context) (any, error) {
 	return &h, nil
 }
 
-// sendRequest dispatches an HTTP request to the OpenTSDB server, using the provided
-// method, URL, and body content. It returns the parsed response or an error, if any.
-func (c *Client) sendRequest(ctx context.Context, method, url, reqBodyCnt string, parsedResp Response) error {
-	span := c.addTrace(ctx, "sendRequest")
+func (c *Client) operateAnnotation(ctx context.Context, queryAnnotation any, resp any, method, operation string) error {
+	span := c.addTrace(ctx, operation)
 
 	status := StatusFailed
 
 	var message string
 
-	defer sendOperationStats(c.logger, time.Now(), "sendRequest", &status, &message, span)
+	defer sendOperationStats(c.logger, time.Now(), operation, &status, &message, span)
 
-	// Create the HTTP request, attaching the context if available.
-	req, err := http.NewRequest(method, url, strings.NewReader(reqBodyCnt))
-	if ctx != nil {
-		req = req.WithContext(ctx)
+	annotation, ok := queryAnnotation.(*Annotation)
+	if !ok {
+		return errors.New("invalid annotation type. Must be *Annotation")
 	}
 
+	annResp, ok := resp.(*AnnotationResponse)
+	if !ok {
+		return errors.New("invalid response type. Must be *AnnotationResponse")
+	}
+
+	if !c.isValidOperateMethod(ctx, method) {
+		message = fmt.Sprintf("invalid annotation operation method: %s", method)
+		return errors.New(message)
+	}
+
+	annoEndpoint := fmt.Sprintf("%s%s", c.endpoint, AnnotationPath)
+
+	resultBytes, err := json.Marshal(annotation)
 	if err != nil {
-		errRequestCreation := fmt.Errorf("failed to create request for %s %s: %w", method, url, err)
-
-		message = fmt.Sprint(errRequestCreation)
-
-		return errRequestCreation
+		message = fmt.Sprintf("marshal annotation response error: %s", err)
+		return errors.New(message)
 	}
 
-	// Set the request headers.
-	req.Header.Set("Content-Type", "application/json; charset=UTF-8")
+	annResp.logger = c.logger
+	annResp.tracer = c.tracer
+	annResp.ctx = ctx
 
-	// Send the request and handle the response.
-	resp, err := c.client.Do(req)
-	if err != nil {
-		errSendingRequest := fmt.Errorf("failed to send request for %s %s: %w", method, url, err)
-
-		message = fmt.Sprint(errSendingRequest)
-
-		return errSendingRequest
-	}
-
-	defer resp.Body.Close()
-
-	// Read and parse the response.
-	jsonBytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		errReading := fmt.Errorf("failed to read response body for %s %s: %w", method, url, err)
-
-		message = fmt.Sprint(errReading)
-
-		return errReading
-	}
-
-	parsedResp.SetStatus(resp.StatusCode)
-
-	parser := parsedResp.GetCustomParser()
-	if parser == nil {
-		// Use the default JSON unmarshaller if no custom parser is provided.
-		if err := json.Unmarshal(jsonBytes, parsedResp); err != nil {
-			errUnmarshaling := fmt.Errorf("failed to unmarshal response body for %s %s: %w", method, url, err)
-
-			message = fmt.Sprint(errUnmarshaling)
-
-			return errUnmarshaling
-		}
-	} else {
-		// Use the custom parser if available.
-		if err := parser(jsonBytes); err != nil {
-			message = fmt.Sprintf("failed to parse response body through custom parser %s %s: %v", method, url, err)
-			return err
-		}
+	if err = c.sendRequest(ctx, method, annoEndpoint, string(resultBytes), annResp); err != nil {
+		message = fmt.Sprintf("%s: error while processing %s annotation request to url %q: %s", operation, method, annoEndpoint, err.Error())
+		return err
 	}
 
 	status = StatusSuccess
-	message = fmt.Sprintf("%s request sent at : %s", method, url)
+	message = fmt.Sprintf("%s: %s annotation request to url %q processed successfully", operation, method, annoEndpoint)
+
+	c.logger.Log("%s request successful", operation)
 
 	return nil
-}
-
-// isValidOperateMethod checks if the provided HTTP method is valid for
-// operations such as POST, PUT, or DELETE.
-func (c *Client) isValidOperateMethod(ctx context.Context, method string) bool {
-	span := c.addTrace(ctx, "isValidOperateMethod")
-
-	status := StatusSuccess
-
-	var message string
-
-	defer sendOperationStats(c.logger, time.Now(), "isValidOperateMethod", &status, &message, span)
-
-	method = strings.TrimSpace(strings.ToUpper(method))
-	if method == "" {
-		return false
-	}
-
-	validMethods := []string{http.MethodPost, http.MethodPut, http.MethodDelete}
-	for _, validMethod := range validMethods {
-		if method == validMethod {
-			return true
-		}
-	}
-
-	return false
 }

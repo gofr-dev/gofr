@@ -410,7 +410,7 @@ type OpenTSDB interface {
 	// It returns an error if the server is unreachable, otherwise returns nil.
 	HealthChecker
 
-	// Put handles the 'POST /api/put' endpoint, allowing the storage of data in OpenTSDB.
+	// PutDataPoints handles the 'POST /api/put' endpoint, allowing the storage of data in OpenTSDB.
 	//
 	// Parameters:
 	// - data: A slice of DataPoint objects, which must contain at least one instance.
@@ -426,9 +426,9 @@ type OpenTSDB interface {
 	// Notes:
 	// - Use 'PutRespWithSummary' to receive summarized information about the data that was stored.
 	// - Use 'PutRespWithDetails' for a more comprehensive breakdown of the put operation.
-	Put(ctx context.Context, data any, queryParam string) (any, error)
+	PutDataPoints(ctx context.Context, data any, queryParam string, res any) error
 
-	// Query implements the 'GET /api/query' endpoint for extracting data
+	// QueryDataPoints implements the 'GET /api/query' endpoint for extracting data
 	// in various formats based on the selected serializer.
 	//
 	// Parameters:
@@ -437,9 +437,9 @@ type OpenTSDB interface {
 	// Returns:
 	// - *QueryResponse on success (status code and response info).
 	// - Error on failure (invalid parameters, response parsing failure, or OpenTSDB connection issues).
-	Query(ctx context.Context, param any) (any, error)
+	QueryDataPoints(ctx context.Context, param any, res any) error
 
-	// QueryLast is the implementation of 'GET /api/query/last' endpoint.
+	// QueryLatestDataPoints is the implementation of 'GET /api/query/last' endpoint.
 	// It is introduced firstly in v2.1, and fully supported in v2.2. So it should be aware that this api works
 	// well since v2.2 of opentsdb.
 	//
@@ -448,38 +448,15 @@ type OpenTSDB interface {
 	// When query operation is successful, a pointer of QueryLastResponse will be returned with the corresponding
 	// status code and response info. Otherwise, an error instance will be returned, when the given parameter
 	// is invalid, it failed to parse the response, or OpenTSDB is un-connectable right now.
-	QueryLast(ctx context.Context, param any) (any, error)
+	QueryLatestDataPoints(ctx context.Context, param any, res any) error
 
-	// Aggregators is the implementation of 'GET /api/aggregators' endpoint.
+	// GetAggregators is the implementation of 'GET /api/aggregators' endpoint.
 	// It simply lists the names of implemented aggregation functions used in time series queries.
 	//
 	// When query operation is successful, a pointer of AggregatorsResponse will be returned with the corresponding
 	// status code and response info. Otherwise, an error instance will be returned, when it failed to parse the
 	// response, or OpenTSDB is un-connectable right now.
-	Aggregators(ctx context.Context) (any, error)
-
-	// Suggest is the implementation of 'GET /api/suggest' endpoint.
-	// It provides a means of implementing an "auto-complete" call that can be accessed repeatedly as a user
-	// types a request in a GUI. It does not offer full text searching or wildcards, rather it simply matches
-	// the entire string passed in the query on the first characters of the stored data.
-	// For example, passing a query of type=metrics&q=sys will return the top 25 metrics in the system that start with sys.
-	// Matching is case-sensitive, so sys will not match System.CPU. Results are sorted alphabetically.
-	//
-	// sugParam is an instance of SuggestParam storing parameters by invoking /api/suggest.
-	//
-	// When query operation is successful, a pointer of SuggestResponse will be returned with the corresponding
-	// status code and response info. Otherwise, an error instance will be returned, if the given parameter is invalid,
-	// or when it failed to parse the response, or OpenTSDB is un-connectable right now.
-	Suggest(ctx context.Context, sugParm any) (any, error)
-
-	// Dropcaches is the implementation of 'GET /api/dropcaches' endpoint.
-	// It purges the in-memory data cached in OpenTSDB. This includes all UID to name
-	// and name to UID maps for metrics, tag names and tag values.
-	//
-	// When query operation is successful, a pointer of DropcachesResponse will be returned with the corresponding
-	// status code and response info. Otherwise, an error instance will be returned, when it failed to parese the
-	// response, or OpenTSDB is un-connectable right now.
-	Dropcaches(ctx context.Context) (any, error)
+	GetAggregators(ctx context.Context, res any) error
 
 	// QueryAnnotation is the implementation of 'GET /api/annotation' endpoint.
 	// It retrieves a single annotation stored in the OpenTSDB backend.
@@ -495,9 +472,9 @@ type OpenTSDB interface {
 	// or when it failed to parse the response, or OpenTSDB is un-connectable right now.
 	//
 	// Note that: the returned non-nil error instance is only response by opentsdb-client, not the OpenTSDB backend.
-	QueryAnnotation(ctx context.Context, queryAnnoParam map[string]any) (any, error)
+	QueryAnnotation(ctx context.Context, queryAnnoParam map[string]any, res any) error
 
-	// UpdateAnnotation is the implementation of 'POST /api/annotation' endpoint.
+	// PostAnnotation is the implementation of 'POST /api/annotation' endpoint.
 	// It creates or modifies an annotation stored in the OpenTSDB backend.
 	//
 	// annotation is an annotation to be processed in the OpenTSDB backend.
@@ -510,7 +487,22 @@ type OpenTSDB interface {
 	// or when it failed to parse the response, or OpenTSDB is un-connectable right now.
 	//
 	// Note that: the returned non-nil error instance is only response by opentsdb-client, not the OpenTSDB backend.
-	UpdateAnnotation(ctx context.Context, annotation any) (any, error)
+	PostAnnotation(ctx context.Context, annotation any, res any) error
+
+	// PutAnnotation is the implementation of 'PUT /api/annotation' endpoint.
+	// It creates or modifies an annotation stored in the OpenTSDB backend.
+	//
+	// annotation is an annotation to be processed in the OpenTSDB backend.
+	//
+	// When modification operation is handling properly by the OpenTSDB backend, a pointer of AnnotationResponse
+	// will be returned with the corresponding status code and response info (including the potential error
+	// messages replied by OpenTSDB).
+	//
+	// Otherwise, an error instance will be returned, if the given parameter is invalid,
+	// or when it failed to parse the response, or OpenTSDB is un-connectable right now.
+	//
+	// Note that: the returned non-nil error instance is only response by opentsdb-client, not the OpenTSDB backend.
+	PutAnnotation(ctx context.Context, annotation any, res any) error
 
 	// DeleteAnnotation is the implementation of 'DELETE /api/annotation' endpoint.
 	// It deletes an annotation stored in the OpenTSDB backend.
@@ -525,146 +517,5 @@ type OpenTSDB interface {
 	// or when it failed to parse the response, or OpenTSDB is un-connectable right now.
 	//
 	// Note that: the returned non-nil error instance is only response by opentsdb-client, not the OpenTSDB backend.
-	DeleteAnnotation(ctx context.Context, annotation any) (any, error)
-
-	// BulkUpdateAnnotations is the implementation of 'POST /api/annotation/bulk' endpoint.
-	// It creates or modifies a list of annotation stored in the OpenTSDB backend.
-	//
-	// annotations is a list of annotations to be processed (to be created or modified) in the OpenTSDB backend.
-	//
-	// When bulk modification operation is handling properly by the OpenTSDB backend, a pointer of BulkAnnotatResponse
-	// will be returned with the corresponding status code and response info (including the potential error
-	// messages replied by OpenTSDB).
-	//
-	// Otherwise, an error instance will be returned, if the given parameter is invalid,
-	// or when it failed to parse the response, or OpenTSDB is un-connectable right now.
-	//
-	// Note that: the returned non-nil error instance is only response by opentsdb-client, not the OpenTSDB backend.
-	BulkUpdateAnnotations(ctx context.Context, annotations any) (any, error)
-
-	// BulkDeleteAnnotations is the implementation of 'DELETE /api/annotation/bulk' endpoint.
-	// It deletes a list of annotation stored in the OpenTSDB backend.
-	//
-	// bulkDelParam contains the bulk deleting info in current invoking 'DELETE /api/annotation/bulk'.
-	//
-	// When bulk deleting operation is handling properly by the OpenTSDB backend, a pointer of BulkAnnotatResponse
-	// will be returned with the corresponding status code and response info (including the potential error
-	// messages replied by OpenTSDB).
-	//
-	// Otherwise, an error instance will be returned, if the given parameter is invalid,
-	// or when it failed to parse the response, or OpenTSDB is un-connectable right now.
-	//
-	// Note that: the returned non-nil error instance is only response by opentsdb-client, not the OpenTSDB backend.
-	BulkDeleteAnnotations(ctx context.Context, bulkDelParam any) (any, error)
-
-	// QueryUIDMetaData is the implementation of 'GET /api/uid/uidmeta' endpoint.
-	// It retrieves a single UIDMetaData stored in the OpenTSDB backend with the given query parameters.
-	//
-	// metaQueryParam is a map storing parameters of a target queried UIDMetaData.
-	// It must contain two key/value pairs with the key "uid" and "type".
-	// "type" should be one of client.TypeMetrics ("metric"), client.TypeTagk ("tagk"), and client.TypeTagv ("tagv")
-	//
-	// When query operation is handling properly by the OpenTSDB backend, a pointer of UIDMetaDataResponse
-	// will be returned with the corresponding status code and response info (including the potential error
-	// messages replied by OpenTSDB).
-	//
-	// Otherwise, an error instance will be returned, if the given parameter is invalid,
-	// or when it failed to parse the response, or OpenTSDB is un-connectable right now.
-	//
-	// Note that: the returned non-nil error instance is only response by opentsdb-client, not the OpenTSDB backend.
-	QueryUIDMetaData(ctx context.Context, metaQueryParam map[string]string) (any, error)
-
-	// UpdateUIDMetaData is the implementation of 'POST /api/uid/uidmeta' endpoint.
-	// It modifies a UIDMetaData.
-	//
-	// uidMetaData is an instance of UIDMetaData to be modified
-	//
-	// When update operation is handling properly by the OpenTSDB backend, a pointer of UIDMetaDataResponse
-	// will be returned with the corresponding status code and response info (including the potential error
-	// messages replied by OpenTSDB).
-	//
-	// Otherwise, an error instance will be returned, if the given parameter is invalid,
-	// or when it failed to parse the response, or OpenTSDB is un-connectable right now.
-	//
-	// Note that: the returned non-nil error instance is only response by opentsdb-client, not the OpenTSDB backend.
-	UpdateUIDMetaData(ctx context.Context, uidMetaData any) (any, error)
-
-	// DeleteUIDMetaData is the implementation of 'DELETE /api/uid/uidmeta' endpoint.
-	// It deletes a target UIDMetaData.
-	//
-	// uidMetaData is an instance of UIDMetaData whose correspondence is to be deleted.
-	// The values of uid and type in uidMetaData is required.
-	//
-	// When delete operation is handling properly by the OpenTSDB backend, a pointer of UIDMetaDataResponse
-	// will be returned with the corresponding status code and response info (including the potential error
-	// messages replied by OpenTSDB).
-	//
-	// Otherwise, an error instance will be returned, if the given parameter is invalid,
-	// or when it failed to parse the response, or OpenTSDB is un-connectable right now.
-	//
-	// Note that: the returned non-nil error instance is only response by opentsdb-client, not the OpenTSDB backend.
-	DeleteUIDMetaData(ctx context.Context, uidMetaData any) (any, error)
-
-	// AssignUID is the implementation of 'POST /api/uid/assign' endpoint.
-	// It enables assigning UIDs to new metrics, tag names and tag values. Multiple types and names can be provided
-	// in a single call and the API will process each name individually, reporting which names were assigned UIDs
-	// successfully, along with the UID assigned, and which failed due to invalid characters or had already been assigned.
-	// Assignment can be performed via query string or content data.
-	//
-	// assignParam is an instance of UIDAssignParam holding the parameters to invoke 'POST /api/uid/assign'.
-	//
-	// When assign operation is handling properly by the OpenTSDB backend, a pointer of UIDAssignResponse
-	// will be returned with the corresponding status code and response info (including the potential error
-	// messages replied by OpenTSDB).
-	//
-	// Otherwise, an error instance will be returned, if the given parameter is invalid,
-	// or when it failed to parse the response, or OpenTSDB is un-connectable right now.
-	//
-	// Note that: the returned non-nil error instance is only response by opentsdb-client, not the OpenTSDB backend.
-	AssignUID(ctx context.Context, assignParam any) (any, error)
-
-	// QueryTSMetaData is the implementation of 'GET /api/uid/tsmeta' endpoint.
-	// It retrieves a single TSMetaData stored in the OpenTSDB backend with the given query parameters.
-	//
-	// tsuid is a tsuid of a target queried TSMetaData.
-	//
-	// When query operation is handling properly by the OpenTSDB backend, a pointer of TSMetaDataResponse
-	// will be returned with the corresponding status code and response info (including the potential error
-	// messages replied by OpenTSDB).
-	//
-	// Otherwise, an error instance will be returned, if the given parameter is invalid,
-	// or when it failed to parse the response, or OpenTSDB is un-connectable right now.
-	//
-	// Note that: the returned non-nil error instance is only response by opentsdb-client, not the OpenTSDB backend.
-	QueryTSMetaData(ctx context.Context, tsuid string) (any, error)
-
-	// UpdateTSMetaData is the implementation of 'POST /api/uid/tsmeta' endpoint.
-	// It modifies a target TSMetaData with the given fields.
-	//
-	// tsMetaData is an instance of UIDMetaData whose correspondence is to be modified
-	//
-	// When update operation is handling properly by the OpenTSDB backend, a pointer of TSMetaDataResponse
-	// will be returned with the corresponding status code and response info (including the potential error
-	// messages replied by OpenTSDB).
-	//
-	// Otherwise, an error instance will be returned, when it failed to parse the response,
-	// or OpenTSDB is un-connectable right now.
-	//
-	// Note that: the returned non-nil error instance is only response by opentsdb-client, not the OpenTSDB backend.
-	UpdateTSMetaData(ctx context.Context, tsMetaData any) (any, error)
-
-	// DeleteTSMetaData is the implementation of 'DELETE /api/uid/tsmeta' endpoint.
-	// It deletes a target TSMetaData.
-	//
-	// tsMetaData is an instance of UIDMetaData whose correspondence is to be deleted
-	//
-	// When delete operation is handling properly by the OpenTSDB backend, a pointer of TSMetaDataResponse
-	// will be returned with the corresponding status code and response info (including the potential error
-	// messages replied by OpenTSDB).
-	//
-	// Otherwise, an error instance will be returned, when it failed to parse the response,
-	// or OpenTSDB is un-connectable right now.
-	//
-	// Note that: the returned non-nil error instance is only response by opentsdb-client, not the OpenTSDB backend.
-	DeleteTSMetaData(ctx context.Context, tsMetaData any) (any, error)
+	DeleteAnnotation(ctx context.Context, annotation any, res any) error
 }
