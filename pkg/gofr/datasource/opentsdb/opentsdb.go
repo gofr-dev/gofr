@@ -33,6 +33,7 @@ const (
 
 	PutRespWithSummary = "summary" // Summary response for PUT operations.
 	PutRespWithDetails = "details" // Detailed response for PUT operations.
+
 	// The three keys in the rateOption parameter of the QueryParam.
 	QueryRateOptionCounter    = "counter"    // The corresponding value type is bool
 	QueryRateOptionCounterMax = "counterMax" // The corresponding value type is int,int64
@@ -215,19 +216,22 @@ func (c *Client) PutDataPoints(ctx context.Context, datas any, queryParam string
 		putEndpoint = fmt.Sprintf("%s%s", c.endpoint, PutPath)
 	}
 
-	putResp, err = c.getResponse(ctx, putEndpoint, datapoints, &message)
+	tempResp, err := c.getResponse(ctx, putEndpoint, datapoints, &message)
 	if err != nil {
 		return err
 	}
 
-	if len(putResp.Errors) == 0 {
+	if len(tempResp.Errors) == 0 {
 		status = StatusSuccess
 		message = fmt.Sprintf("Put request to url %q processed successfully", putEndpoint)
+		putResp.Success = tempResp.Success
+		putResp.Failed = tempResp.Failed
+		putResp.Errors = tempResp.Errors
 
 		return nil
 	}
 
-	return parsePutErrorMsg(putResp)
+	return parsePutErrorMsg(tempResp)
 }
 
 func (c *Client) QueryDataPoints(ctx context.Context, parameters any, resp any) error {
