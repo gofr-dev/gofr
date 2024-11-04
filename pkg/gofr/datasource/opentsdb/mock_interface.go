@@ -217,44 +217,18 @@ func (m *MockResponse) EXPECT() *MockResponseMockRecorder {
 	return m.recorder
 }
 
-// GetCustomParser mocks base method.
-func (m *MockResponse) GetCustomParser() func([]byte) error {
+// getCustomParser mocks base method.
+func (m *MockResponse) getCustomParser() func([]byte) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetCustomParser")
+	ret := m.ctrl.Call(m, "getCustomParser")
 	ret0, _ := ret[0].(func([]byte) error)
 	return ret0
 }
 
-// GetCustomParser indicates an expected call of GetCustomParser.
-func (mr *MockResponseMockRecorder) GetCustomParser() *gomock.Call {
+// getCustomParser indicates an expected call of getCustomParser.
+func (mr *MockResponseMockRecorder) getCustomParser() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCustomParser", reflect.TypeOf((*MockResponse)(nil).GetCustomParser))
-}
-
-// SetStatus mocks base method.
-func (m *MockResponse) SetStatus(code int) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "SetStatus", code)
-}
-
-// SetStatus indicates an expected call of SetStatus.
-func (mr *MockResponseMockRecorder) SetStatus(code any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetStatus", reflect.TypeOf((*MockResponse)(nil).SetStatus), code)
-}
-
-// String mocks base method.
-func (m *MockResponse) String() string {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "String")
-	ret0, _ := ret[0].(string)
-	return ret0
-}
-
-// String indicates an expected call of String.
-func (mr *MockResponseMockRecorder) String() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "String", reflect.TypeOf((*MockResponse)(nil).String))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "getCustomParser", reflect.TypeOf((*MockResponse)(nil).getCustomParser))
 }
 
 // MockLogger is a mock of Logger interface.

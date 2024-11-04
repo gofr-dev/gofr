@@ -490,7 +490,7 @@ type OpenTSDB interface {
 	PostAnnotation(ctx context.Context, annotation any, res any) error
 
 	// PutAnnotation is the implementation of 'PUT /api/annotation' endpoint.
-	// It creates or modifies an annotation stored in the OpenTSDB backend.
+	// It creates or replaces an annotation stored in the OpenTSDB backend.
 	//
 	// annotation is an annotation to be processed in the OpenTSDB backend.
 	//
@@ -498,10 +498,8 @@ type OpenTSDB interface {
 	// will be returned with the corresponding status code and response info (including the potential error
 	// messages replied by OpenTSDB).
 	//
-	// Otherwise, an error instance will be returned, if the given parameter is invalid,
-	// or when it failed to parse the response, or OpenTSDB is un-connectable right now.
-	//
-	// Note that: the returned non-nil error instance is only response by opentsdb-client, not the OpenTSDB backend.
+	// Any fields that you do not supply with the request will be overwritten with their default values.
+	// For example, the description field will be set to an empty string and the custom field will be reset to null.
 	PutAnnotation(ctx context.Context, annotation any, res any) error
 
 	// DeleteAnnotation is the implementation of 'DELETE /api/annotation' endpoint.

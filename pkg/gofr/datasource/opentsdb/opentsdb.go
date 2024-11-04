@@ -215,17 +215,10 @@ func (c *Client) PutDataPoints(ctx context.Context, datas any, queryParam string
 		putEndpoint = fmt.Sprintf("%s%s", c.endpoint, PutPath)
 	}
 
-	response, err := c.getResponse(ctx, putEndpoint, datapoints, &message)
+	putResp, err = c.getResponse(ctx, putEndpoint, datapoints, &message)
 	if err != nil {
 		return err
 	}
-
-	putResp.logger = c.logger
-	putResp.tracer = c.tracer
-	putResp.ctx = ctx
-	putResp.Failed += response.Failed
-	putResp.Success += response.Success
-	putResp.Errors = response.Errors
 
 	if len(putResp.Errors) == 0 {
 		status = StatusSuccess
