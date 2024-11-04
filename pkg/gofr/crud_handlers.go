@@ -41,6 +41,7 @@ type TableNameOverrider interface {
 	TableName() string
 }
 
+// RestPathOverrider interface allows overriding of the REST path.
 type RestPathOverrider interface {
 	RestPath() string
 }
