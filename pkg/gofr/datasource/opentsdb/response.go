@@ -5,11 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"go.opentelemetry.io/otel/trace"
 	"io"
 	"net/http"
 	"strings"
 	"time"
+
+	"go.opentelemetry.io/otel/trace"
 )
 
 // AggregatorsResponse acts as the implementation of Response in the /api/aggregators.
@@ -121,9 +122,7 @@ type QueryRespItem struct {
 	// The value is optional.
 	GlobalAnnotations []Annotation `json:"globalAnnotations,omitempty"`
 
-	logger Logger
 	tracer trace.Tracer
-	ctx    context.Context
 }
 
 // QueryLastResponse acts as the implementation of Response in the /api/query/last scene.
@@ -390,7 +389,7 @@ func queryParserHelper(ctx context.Context, logger Logger, obj genericResponse, 
 	})
 }
 
-func (c *Client) operateAnnotation(ctx context.Context, queryAnnotation any, resp any, method, operation string) error {
+func (c *Client) operateAnnotation(ctx context.Context, queryAnnotation, resp any, method, operation string) error {
 	span := c.addTrace(ctx, operation)
 
 	status := StatusFailed

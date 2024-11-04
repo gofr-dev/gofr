@@ -6,10 +6,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"go.opentelemetry.io/otel/trace"
 	"net"
 	"net/http"
 	"strings"
+
+	"go.opentelemetry.io/otel/trace"
 )
 
 // DefaultTransport defines the default HTTP transport settings,
@@ -64,9 +65,7 @@ type QueryParam struct {
 	// that match the given query.
 	Delete bool `json:"delete,omitempty"`
 
-	logger Logger
 	tracer trace.Tracer
-	ctx    context.Context
 }
 
 // SubQuery is the structure used to hold the subquery parameters when calling /api/query.
@@ -179,12 +178,12 @@ type PutResponse struct {
 
 func (c *Client) getResponse(ctx context.Context, putEndpoint string, datapoints []DataPoint,
 	message *string) (*PutResponse, error) {
-	marshalled, err := json.Marshal(datapoints)
+	marshaled, err := json.Marshal(datapoints)
 	if err != nil {
 		*message = fmt.Sprintf("getPutBodyContents error: %s", err)
 		c.logger.Errorf(*message)
 	}
-	reqBodyCnt := string(marshalled)
+	reqBodyCnt := string(marshaled)
 
 	putResp := PutResponse{logger: c.logger, tracer: c.tracer, ctx: ctx}
 
@@ -280,7 +279,6 @@ type QueryLastParam struct {
 	// timestamp of the meta data counter for the time series is used.
 	BackScan int `json:"backScan"`
 
-	logger Logger
 	tracer trace.Tracer
 }
 
@@ -399,9 +397,11 @@ func (c *Client) initializeClient() {
 	if c.config.MaxPutPointsNum <= 0 {
 		c.config.MaxPutPointsNum = DefaultMaxPutPointsNum
 	}
+
 	if c.config.DetectDeltaNum <= 0 {
 		c.config.DetectDeltaNum = DefaultDetectDeltaNum
 	}
+
 	if c.config.MaxContentLength <= 0 {
 		c.config.MaxContentLength = DefaultMaxContentLength
 	}

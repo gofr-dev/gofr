@@ -197,7 +197,7 @@ func (c *Client) PutDataPoints(ctx context.Context, datas any, queryParam string
 	return parsePutErrorMsg(tempResp)
 }
 
-func (c *Client) QueryDataPoints(ctx context.Context, parameters any, resp any) error {
+func (c *Client) QueryDataPoints(ctx context.Context, parameters, resp any) error {
 	span := c.addTrace(ctx, "Query")
 
 	status := StatusFailed
@@ -244,7 +244,7 @@ func (c *Client) QueryDataPoints(ctx context.Context, parameters any, resp any) 
 	return nil
 }
 
-func (c *Client) QueryLatestDataPoints(ctx context.Context, parameters any, resp any) error {
+func (c *Client) QueryLatestDataPoints(ctx context.Context, parameters, resp any) error {
 	span := c.addTrace(ctx, "QueryLast")
 
 	status := StatusFailed
@@ -343,15 +343,15 @@ func (c *Client) QueryAnnotation(ctx context.Context, queryAnnoParam map[string]
 	return nil
 }
 
-func (c *Client) PostAnnotation(ctx context.Context, annotation any, resp any) error {
+func (c *Client) PostAnnotation(ctx context.Context, annotation, resp any) error {
 	return c.operateAnnotation(ctx, annotation, resp, http.MethodPost, "PostAnnotation")
 }
 
-func (c *Client) PutAnnotation(ctx context.Context, annotation any, resp any) error {
+func (c *Client) PutAnnotation(ctx context.Context, annotation, resp any) error {
 	return c.operateAnnotation(ctx, annotation, resp, http.MethodPut, "PutAnnotation")
 }
 
-func (c *Client) DeleteAnnotation(ctx context.Context, annotation any, resp any) error {
+func (c *Client) DeleteAnnotation(ctx context.Context, annotation, resp any) error {
 	return c.operateAnnotation(ctx, annotation, resp, http.MethodDelete, "DeleteAnnotation")
 }
 
