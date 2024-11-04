@@ -10,7 +10,6 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"strings"
 	"time"
 
 	"go.opentelemetry.io/otel/trace"
@@ -131,23 +130,8 @@ func (c *Client) Connect() {
 
 	defer sendOperationStats(c.logger, time.Now(), "Connect", &status, &message, span)
 
-	c.config.Host = strings.TrimSpace(c.config.Host)
-	if c.config.Host == "" {
-		c.logger.Errorf("the OpentsdbEndpoint in the given configuration cannot be empty.")
-	}
-
-	// Use custom transport settings if provided, otherwise, use the default transport.
-	transport := c.config.Transport
-	if transport == nil {
-		transport = DefaultTransport
-	}
-
-	c.client = &http.Client{
-		Transport: transport,
-	}
-
 	// Set default values for optional configuration fields.
-	c.setDefaultConfig()
+	c.initializeClient()
 
 	// Initialize the OpenTSDB client with the given configuration.
 	c.endpoint = fmt.Sprintf("http://%s", c.config.Host)
@@ -230,14 +214,6 @@ func (c *Client) QueryDataPoints(ctx context.Context, parameters any, resp any) 
 	queryResp, ok := resp.(*QueryResponse)
 	if !ok {
 		return errors.New("invalid response type. Must be *QueryResponse")
-	}
-
-	if param.tracer == nil {
-		param.tracer = c.tracer
-	}
-
-	if param.logger == nil {
-		param.logger = c.logger
 	}
 
 	if !isValidQueryParam(param) {
@@ -381,6 +357,7 @@ func (c *Client) DeleteAnnotation(ctx context.Context, annotation any, resp any)
 
 func (c *Client) GetAggregators(ctx context.Context, resp any) error {
 	span := c.addTrace(ctx, "Aggregators")
+
 	status := StatusFailed
 
 	var message string

@@ -41,6 +41,7 @@ type Logger interface {
 	Logf(pattern string, args ...any)
 	Log(args ...any)
 	Errorf(pattern string, args ...any)
+	Fatal(args ...any)
 }
 
 type Metrics interface {

@@ -287,6 +287,22 @@ func (mr *MockLoggerMockRecorder) Errorf(pattern any, args ...any) *gomock.Call 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Errorf", reflect.TypeOf((*MockLogger)(nil).Errorf), varargs...)
 }
 
+// Fatal mocks base method.
+func (m *MockLogger) Fatal(args ...any) {
+	m.ctrl.T.Helper()
+	varargs := []any{}
+	for _, a := range args {
+		varargs = append(varargs, a)
+	}
+	m.ctrl.Call(m, "Fatal", varargs...)
+}
+
+// Fatal indicates an expected call of Fatal.
+func (mr *MockLoggerMockRecorder) Fatal(args ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Fatal", reflect.TypeOf((*MockLogger)(nil).Fatal), args...)
+}
+
 // Log mocks base method.
 func (m *MockLogger) Log(args ...any) {
 	m.ctrl.T.Helper()

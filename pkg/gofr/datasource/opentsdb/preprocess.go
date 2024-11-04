@@ -380,7 +380,22 @@ func isValidQueryLastParam(param *QueryLastParam) bool {
 	return true
 }
 
-func (c *Client) setDefaultConfig() {
+func (c *Client) initializeClient() {
+	c.config.Host = strings.TrimSpace(c.config.Host)
+	if c.config.Host == "" {
+		c.logger.Fatal("the OpentsdbEndpoint in the given configuration cannot be empty.")
+	}
+
+	// Use custom transport settings if provided, otherwise, use the default transport.
+	transport := c.config.Transport
+	if transport == nil {
+		transport = DefaultTransport
+	}
+
+	c.client = &http.Client{
+		Transport: transport,
+	}
+
 	if c.config.MaxPutPointsNum <= 0 {
 		c.config.MaxPutPointsNum = DefaultMaxPutPointsNum
 	}
