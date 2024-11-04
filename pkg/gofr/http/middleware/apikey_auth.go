@@ -3,6 +3,7 @@
 package middleware
 
 import (
+	"context"
 	"net/http"
 
 	"gofr.dev/pkg/gofr/container"
@@ -14,6 +15,8 @@ type APIKeyAuthProvider struct {
 	ValidateFuncWithDatasources func(c *container.Container, apiKey string) bool
 	Container                   *container.Container
 }
+
+const APIKey authMethod = 2
 
 // APIKeyAuthMiddleware creates a middleware function that enforces API key authentication based on the provided API
 // keys or a validation function.
@@ -35,6 +38,9 @@ func APIKeyAuthMiddleware(a APIKeyAuthProvider, apiKeys ...string) func(handler 
 				http.Error(w, "Unauthorized: Invalid Authorization header", http.StatusUnauthorized)
 				return
 			}
+
+			ctx := context.WithValue(r.Context(), APIKey, authKey)
+			*r = *r.Clone(ctx)
 
 			handler.ServeHTTP(w, r)
 		})
