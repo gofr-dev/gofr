@@ -42,10 +42,9 @@ func main() {
 			select {
 			case <-ctx.Done():
 				return nil, ctx.Err()
-			default:
+			case <-time.After(50 * time.Millisecond):
 				// do a time taking process or compute a small subset of a bigger problem,
 				// this could be processing batches of a data set.
-				time.Sleep(50 * time.Millisecond)
 
 				// increment the progress to display on the progress bar.
 				p.Incr(int64(1))
