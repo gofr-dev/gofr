@@ -3,6 +3,7 @@ package opentsdb
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"go.opentelemetry.io/otel/trace"
 	"io"
@@ -387,4 +388,53 @@ func queryParserHelper(ctx context.Context, logger Logger, obj genericResponse, 
 
 		return json.Unmarshal([]byte(respStr), obj)
 	})
+}
+
+func (c *Client) operateAnnotation(ctx context.Context, queryAnnotation any, resp any, method, operation string) error {
+	span := c.addTrace(ctx, operation)
+
+	status := StatusFailed
+
+	var message string
+
+	defer sendOperationStats(c.logger, time.Now(), operation, &status, &message, span)
+
+	annotation, ok := queryAnnotation.(*Annotation)
+	if !ok {
+		return errors.New("invalid annotation type. Must be *Annotation")
+	}
+
+	annResp, ok := resp.(*AnnotationResponse)
+	if !ok {
+		return errors.New("invalid response type. Must be *AnnotationResponse")
+	}
+
+	if !c.isValidOperateMethod(ctx, method) {
+		message = fmt.Sprintf("invalid annotation operation method: %s", method)
+		return errors.New(message)
+	}
+
+	annoEndpoint := fmt.Sprintf("%s%s", c.endpoint, AnnotationPath)
+
+	resultBytes, err := json.Marshal(annotation)
+	if err != nil {
+		message = fmt.Sprintf("marshal annotation response error: %s", err)
+		return errors.New(message)
+	}
+
+	annResp.logger = c.logger
+	annResp.tracer = c.tracer
+	annResp.ctx = ctx
+
+	if err = c.sendRequest(ctx, method, annoEndpoint, string(resultBytes), annResp); err != nil {
+		message = fmt.Sprintf("%s: error while processing %s annotation request to url %q: %s", operation, method, annoEndpoint, err.Error())
+		return err
+	}
+
+	status = StatusSuccess
+	message = fmt.Sprintf("%s: %s annotation request to url %q processed successfully", operation, method, annoEndpoint)
+
+	c.logger.Log("%s request successful", operation)
+
+	return nil
 }

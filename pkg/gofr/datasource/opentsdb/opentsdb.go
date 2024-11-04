@@ -120,16 +120,6 @@ func (c *Client) UseTracer(tracer any) {
 	}
 }
 
-// DefaultTransport defines the default HTTP transport settings,
-// including connection timeouts and idle connections.
-var DefaultTransport = &http.Transport{
-	MaxIdleConnsPerHost: 10,
-	DialContext: (&net.Dialer{
-		Timeout:   DefaultDialTime,
-		KeepAlive: ConnectionTimeout,
-	}).DialContext,
-}
-
 // Connect initializes an HTTP client for OpenTSDB using the provided configuration.
 // If the configuration is invalid or the endpoint is unreachable, an error is logged.
 func (c *Client) Connect() {
@@ -157,17 +147,7 @@ func (c *Client) Connect() {
 	}
 
 	// Set default values for optional configuration fields.
-	if c.config.MaxPutPointsNum <= 0 {
-		c.config.MaxPutPointsNum = DefaultMaxPutPointsNum
-	}
-
-	if c.config.DetectDeltaNum <= 0 {
-		c.config.DetectDeltaNum = DefaultDetectDeltaNum
-	}
-
-	if c.config.MaxContentLength <= 0 {
-		c.config.MaxContentLength = DefaultMaxContentLength
-	}
+	c.setDefaultConfig()
 
 	// Initialize the OpenTSDB client with the given configuration.
 	c.endpoint = fmt.Sprintf("http://%s", c.config.Host)
@@ -244,12 +224,12 @@ func (c *Client) QueryDataPoints(ctx context.Context, parameters any, resp any) 
 
 	param, ok := parameters.(*QueryParam)
 	if !ok {
-		return errors.New("invalid parameter type")
+		return errors.New("invalid parameter type. Must be *QueryParam")
 	}
 
 	queryResp, ok := resp.(*QueryResponse)
 	if !ok {
-		return errors.New("invalid response type")
+		return errors.New("invalid response type. Must be *QueryResponse")
 	}
 
 	if param.tracer == nil {
@@ -289,6 +269,14 @@ func (c *Client) QueryDataPoints(ctx context.Context, parameters any, resp any) 
 }
 
 func (c *Client) QueryLatestDataPoints(ctx context.Context, parameters any, resp any) error {
+	span := c.addTrace(ctx, "QueryLast")
+
+	status := StatusFailed
+
+	var message string
+
+	defer sendOperationStats(c.logger, time.Now(), "QueryLast", &status, &message, span)
+
 	param, ok := parameters.(*QueryLastParam)
 	if !ok {
 		return errors.New("invalid parameter type. Must be a *QueryLastParam type")
@@ -298,14 +286,6 @@ func (c *Client) QueryLatestDataPoints(ctx context.Context, parameters any, resp
 	if !ok {
 		return errors.New("invalid response type. Must be a *QueryLastResponse type")
 	}
-
-	span := c.addTrace(ctx, "QueryLast")
-
-	status := StatusFailed
-
-	var message string
-
-	defer sendOperationStats(c.logger, time.Now(), "QueryLast", &status, &message, span)
 
 	if !isValidQueryLastParam(param) {
 		message = "invalid query last param"
