@@ -3,8 +3,6 @@ package gofr
 import (
 	"context"
 
-	"gofr.dev/pkg/gofr/http/middleware"
-
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/websocket"
 
@@ -12,6 +10,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	"gofr.dev/pkg/gofr/container"
+	"gofr.dev/pkg/gofr/http/middleware"
 )
 
 type Context struct {
