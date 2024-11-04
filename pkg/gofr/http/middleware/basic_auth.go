@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"encoding/base64"
 	"net/http"
 	"strings"
@@ -15,6 +16,8 @@ type BasicAuthProvider struct {
 	ValidateFuncWithDatasources func(c *container.Container, username, password string) bool
 	Container                   *container.Container
 }
+
+const Username authMethod = 1
 
 // BasicAuthMiddleware creates a middleware function that enforces basic authentication using the provided BasicAuthProvider.
 func BasicAuthMiddleware(basicAuthProvider BasicAuthProvider) func(handler http.Handler) http.Handler {
@@ -53,6 +56,9 @@ func BasicAuthMiddleware(basicAuthProvider BasicAuthProvider) func(handler http.
 				http.Error(w, "Unauthorized: Invalid username or password", http.StatusUnauthorized)
 				return
 			}
+
+			ctx := context.WithValue(r.Context(), Username, username)
+			*r = *r.Clone(ctx)
 
 			handler.ServeHTTP(w, r)
 		})
