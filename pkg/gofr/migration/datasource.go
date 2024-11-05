@@ -12,6 +12,7 @@ type Datasource struct {
 	PubSub     PubSub
 	Clickhouse Clickhouse
 	Cassandra  Cassandra
+	Mongo      Mongo
 }
 
 // It is a base implementation for migration manager, on this other database drivers have been wrapped.

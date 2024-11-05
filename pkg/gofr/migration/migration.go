@@ -162,6 +162,16 @@ func getMigrator(c *container.Container) (Datasource, migrator, bool) {
 		c.Debug("initialized data source for Cassandra")
 	}
 
+	if !isNil(c.Mongo) {
+		ok = true
+
+		ds.Mongo = mongoDS{c.Mongo}
+
+		mg = mongoDS{c.Mongo}.apply(mg)
+
+		c.Debug("initialized data source for Mongo")
+	}
+
 	return ds, mg, ok
 }
 
