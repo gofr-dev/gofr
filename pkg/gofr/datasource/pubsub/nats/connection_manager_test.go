@@ -34,8 +34,6 @@ func TestConnectionManager_Connect(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	ctx := context.Background()
-
 	mockConn := NewMockConnInterface(ctrl)
 	mockJS := NewMockJetStream(ctrl)
 	mockNATSConnector := NewMockNATSConnector(ctrl)
@@ -57,7 +55,7 @@ func TestConnectionManager_Connect(t *testing.T) {
 		New(mockConn).
 		Return(mockJS, nil)
 
-	err := cm.Connect(ctx)
+	err := cm.Connect()
 	require.NoError(t, err)
 	assert.Equal(t, mockConn, cm.conn)
 	assert.Equal(t, mockJS, cm.jetStream)

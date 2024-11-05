@@ -32,13 +32,13 @@ type Client struct {
 type messageHandler func(context.Context, jetstream.Msg) error
 
 // Connect establishes a connection to NATS and sets up JetStream.
-func (c *Client) Connect(ctx context.Context) error {
+func (c *Client) Connect() error {
 	if err := c.validateAndPrepare(); err != nil {
 		return err
 	}
 
 	connManager := NewConnectionManager(c.Config, c.logger, c.natsConnector, c.jetStreamCreator)
-	if err := connManager.Connect(ctx); err != nil {
+	if err := connManager.Connect(); err != nil {
 		c.logger.Errorf("failed to connect to NATS server at %v: %v", c.Config.Server, err)
 		return err
 	}
@@ -174,26 +174,39 @@ func (c *Client) processMessages(ctx context.Context, cons jetstream.Consumer, s
 		case <-ctx.Done():
 			return
 		default:
-			msgs, err := cons.Fetch(1, jetstream.FetchMaxWait(c.Config.MaxWait))
-			if err != nil {
-				if !errors.Is(err, context.DeadlineExceeded) {
-					c.logger.Errorf("Error fetching messages for subject %s: %v", subject, err)
-				}
-
-				continue
-			}
-
-			for msg := range msgs.Messages() {
-				if err := c.handleMessage(ctx, msg, handler); err != nil {
-					c.logger.Errorf("Error processing message: %v", err)
-				}
-			}
-
-			if err := msgs.Error(); err != nil {
-				c.logger.Errorf("Error in message batch for subject %s: %v", subject, err)
+			if err := c.fetchAndProcessMessages(ctx, cons, subject, handler); err != nil {
+				c.logger.Errorf("Error in message processing loop for subject %s: %v", subject, err)
 			}
 		}
 	}
+}
+
+func (c *Client) fetchAndProcessMessages(ctx context.Context, cons jetstream.Consumer, subject string, handler messageHandler) error {
+	msgs, err := cons.Fetch(1, jetstream.FetchMaxWait(c.Config.MaxWait))
+	if err != nil {
+		if !errors.Is(err, context.DeadlineExceeded) {
+			c.logger.Errorf("Error fetching messages for subject %s: %v", subject, err)
+		}
+
+		return err
+	}
+
+	return c.processFetchedMessages(ctx, msgs, handler, subject)
+}
+
+func (c *Client) processFetchedMessages(ctx context.Context, msgs jetstream.MessageBatch, handler messageHandler, subject string) error {
+	for msg := range msgs.Messages() {
+		if err := c.handleMessage(ctx, msg, handler); err != nil {
+			c.logger.Errorf("Error processing message: %v", err)
+		}
+	}
+
+	if err := msgs.Error(); err != nil {
+		c.logger.Errorf("Error in message batch for subject %s: %v", subject, err)
+		return err
+	}
+
+	return nil
 }
 
 func (c *Client) handleMessage(ctx context.Context, msg jetstream.Msg, handler messageHandler) error {
