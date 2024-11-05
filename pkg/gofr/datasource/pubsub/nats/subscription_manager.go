@@ -18,9 +18,9 @@ const (
 
 type SubscriptionManager struct {
 	subscriptions map[string]*subscription
-	subMu         sync.Mutex
+	subMutex      sync.Mutex
 	topicBuffers  map[string]chan *pubsub.Message
-	bufferMu      sync.RWMutex
+	bufferMutex   sync.RWMutex
 	bufferSize    int
 }
 
@@ -49,13 +49,13 @@ func (sm *SubscriptionManager) Subscribe(
 		return nil, err
 	}
 
-	sm.subMu.Lock()
+	sm.subMutex.Lock()
 
 	_, exists := sm.subscriptions[topic]
 	if !exists {
 		cons, err := sm.createOrUpdateConsumer(ctx, js, topic, cfg)
 		if err != nil {
-			sm.subMu.Unlock()
+			sm.subMutex.Unlock()
 			return nil, err
 		}
 
@@ -66,7 +66,7 @@ func (sm *SubscriptionManager) Subscribe(
 		go sm.consumeMessages(subCtx, cons, topic, buffer, cfg, logger)
 	}
 
-	sm.subMu.Unlock()
+	sm.subMutex.Unlock()
 
 	buffer := sm.getOrCreateBuffer(topic)
 
@@ -92,8 +92,8 @@ func (*SubscriptionManager) validateSubscribePrerequisites(js jetstream.JetStrea
 }
 
 func (sm *SubscriptionManager) getOrCreateBuffer(topic string) chan *pubsub.Message {
-	sm.bufferMu.Lock()
-	defer sm.bufferMu.Unlock()
+	sm.bufferMutex.Lock()
+	defer sm.bufferMutex.Unlock()
 
 	if buffer, exists := sm.topicBuffers[topic]; exists {
 		return buffer
@@ -210,20 +210,20 @@ func (sm *SubscriptionManager) checkBatchError(msgs jetstream.MessageBatch, topi
 }
 
 func (sm *SubscriptionManager) Close() {
-	sm.subMu.Lock()
+	sm.subMutex.Lock()
 	for _, sub := range sm.subscriptions {
 		sub.cancel()
 	}
 
 	sm.subscriptions = make(map[string]*subscription)
-	sm.subMu.Unlock()
+	sm.subMutex.Unlock()
 
-	sm.bufferMu.Lock()
+	sm.bufferMutex.Lock()
 	for _, buffer := range sm.topicBuffers {
 		close(buffer)
 	}
 
 	sm.topicBuffers = make(map[string]chan *pubsub.Message)
 
-	sm.bufferMu.Unlock()
+	sm.bufferMutex.Unlock()
 }
