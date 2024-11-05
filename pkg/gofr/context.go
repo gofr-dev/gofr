@@ -3,12 +3,14 @@ package gofr
 import (
 	"context"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/websocket"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 
 	"gofr.dev/pkg/gofr/container"
+	"gofr.dev/pkg/gofr/http/middleware"
 )
 
 type Context struct {
@@ -26,6 +28,12 @@ type Context struct {
 	// normal response writer as we want to keep the context independent of http. Will help us in writing CMD application
 	// or gRPC servers etc using the same handler signature.
 	responder Responder
+}
+
+type AuthInfo interface {
+	GetClaims() jwt.MapClaims
+	GetUsername() string
+	GetAPIKey() string
 }
 
 /*
@@ -73,6 +81,49 @@ func (c *Context) WriteMessageToSocket(data any) error {
 	}
 
 	return conn.WriteMessage(websocket.TextMessage, message)
+}
+
+type authInfo struct {
+	claims   jwt.MapClaims
+	username string
+	apiKey   string
+}
+
+// GetAuthInfo is a method on context, to access different methods to retrieve authentication info.
+//
+// GetAuthInfo().GetClaims() : retrieves the jwt claims.
+// GetAuthInfo().GetUsername() : retrieves the username while basic authentication.
+// GetAuthInfo().GetAPIKey() : retrieves the APIKey being used for authentication.
+func (c *Context) GetAuthInfo() AuthInfo {
+	claims, _ := c.Request.Context().Value(middleware.JWTClaim).(jwt.MapClaims)
+
+	APIKey, _ := c.Request.Context().Value(middleware.APIKey).(string)
+
+	username, _ := c.Request.Context().Value(middleware.Username).(string)
+
+	return &authInfo{
+		claims:   claims,
+		username: username,
+		apiKey:   APIKey,
+	}
+}
+
+// GetClaims returns a response of jwt.MapClaims type when OAuth is enabled.
+// It returns nil if called, when OAuth is not enabled.
+func (a *authInfo) GetClaims() jwt.MapClaims {
+	return a.claims
+}
+
+// GetUsername returns the username when basic auth is enabled.
+// It returns an empty string if called, when basic auth is not enabled.
+func (a *authInfo) GetUsername() string {
+	return a.username
+}
+
+// GetAPIKey returns the APIKey when APIKey auth is enabled.
+// It returns an empty strung if called, when APIKey auth is not enabled.
+func (a *authInfo) GetAPIKey() string {
+	return a.apiKey
 }
 
 // func (c *Context) reset(w Responder, r Request) {
