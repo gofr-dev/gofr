@@ -120,7 +120,7 @@ func (*SubscriptionManager) createOrUpdateConsumer(
 	return cons, err
 }
 
-func (*SubscriptionManager) consumeMessages(
+func (sm *SubscriptionManager) consumeMessages(
 	ctx context.Context,
 	cons jetstream.Consumer,
 	topic string,
@@ -133,37 +133,80 @@ func (*SubscriptionManager) consumeMessages(
 		case <-ctx.Done():
 			return
 		default:
-			msgs, err := cons.Fetch(1, jetstream.FetchMaxWait(cfg.MaxWait))
-			if err != nil {
-				if !errors.Is(err, context.DeadlineExceeded) {
-					logger.Errorf("Error fetching messages for topic %s: %v", topic, err)
-				}
-
-				time.Sleep(consumeMessageDelay)
-
-				continue
-			}
-
-			for msg := range msgs.Messages() {
-				pubsubMsg := pubsub.NewMessage(ctx)
-				pubsubMsg.Topic = topic
-				pubsubMsg.Value = msg.Data()
-				pubsubMsg.MetaData = msg.Headers()
-				pubsubMsg.Committer = &natsCommitter{msg: msg}
-
-				select {
-				case buffer <- pubsubMsg:
-					// Message sent successfully
-				default:
-					logger.Logf("Message buffer is full for topic %s. Consider increasing buffer size or processing messages faster.", topic)
-				}
-			}
-
-			if err := msgs.Error(); err != nil {
-				logger.Errorf("Error in message batch for topic %s: %v", topic, err)
+			if err := sm.fetchAndProcessMessages(ctx, cons, topic, buffer, cfg, logger); err != nil {
+				logger.Errorf("Error fetching messages for topic %s: %v", topic, err)
 			}
 		}
 	}
+}
+
+func (sm *SubscriptionManager) fetchAndProcessMessages(
+	ctx context.Context,
+	cons jetstream.Consumer,
+	topic string,
+	buffer chan *pubsub.Message,
+	cfg *Config,
+	logger pubsub.Logger) error {
+	msgs, err := cons.Fetch(1, jetstream.FetchMaxWait(cfg.MaxWait))
+	if err != nil {
+		return sm.handleFetchError(err, topic, logger)
+	}
+
+	return sm.processFetchedMessages(msgs, topic, buffer, logger)
+}
+
+func (sm *SubscriptionManager) handleFetchError(err error, topic string, logger pubsub.Logger) error {
+	if !errors.Is(err, context.DeadlineExceeded) {
+		logger.Errorf("Error fetching messages for topic %s: %v", topic, err)
+	}
+
+	time.Sleep(consumeMessageDelay)
+
+	return nil
+}
+
+func (sm *SubscriptionManager) processFetchedMessages(
+	msgs jetstream.MessageBatch,
+	topic string,
+	buffer chan *pubsub.Message,
+	logger pubsub.Logger) error {
+	for msg := range msgs.Messages() {
+		pubsubMsg := sm.createPubSubMessage(msg, topic)
+
+		if !sm.sendToBuffer(pubsubMsg, buffer, topic, logger) {
+			logger.Logf("Message buffer is full for topic %s. Consider increasing buffer size or processing messages faster.", topic)
+		}
+	}
+
+	return sm.checkBatchError(msgs, topic, logger)
+}
+
+func (sm *SubscriptionManager) createPubSubMessage(msg jetstream.Msg, topic string) *pubsub.Message {
+	pubsubMsg := pubsub.NewMessage(context.Background()) // Pass a context if needed
+	pubsubMsg.Topic = topic
+	pubsubMsg.Value = msg.Data()
+	pubsubMsg.MetaData = msg.Headers()
+	pubsubMsg.Committer = &natsCommitter{msg: msg}
+	return pubsubMsg
+}
+
+func (sm *SubscriptionManager) sendToBuffer(msg *pubsub.Message, buffer chan *pubsub.Message, topic string, logger pubsub.Logger) bool {
+	select {
+	case buffer <- msg:
+		return true
+	default:
+		return false
+	}
+}
+
+func (sm *SubscriptionManager) checkBatchError(msgs jetstream.MessageBatch, topic string, logger pubsub.Logger) error {
+	if err := msgs.Error(); err != nil {
+		logger.Errorf("Error in message batch for topic %s: %v", topic, err)
+
+		return err
+	}
+
+	return nil
 }
 
 func (sm *SubscriptionManager) Close() {
