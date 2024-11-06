@@ -201,10 +201,7 @@ func TestSubscriptionManager_Close(t *testing.T) {
 	assert.Empty(t, sm.topicBuffers)
 
 	// Check that the context was canceled
-	select {
-	case <-ctx.Done():
-		// Expected behavior
-	default:
+	if ctx.Err() == nil {
 		t.Fatal("Context was not canceled")
 	}
 }

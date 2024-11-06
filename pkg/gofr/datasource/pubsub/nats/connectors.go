@@ -6,9 +6,9 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 )
 
-type DefaultNATSConnector struct{}
+type defaultConnector struct{}
 
-func (*DefaultNATSConnector) Connect(serverURL string, opts ...nats.Option) (ConnInterface, error) {
+func (*defaultConnector) Connect(serverURL string, opts ...nats.Option) (ConnInterface, error) {
 	nc, err := nats.Connect(serverURL, opts...)
 	if err != nil {
 		return nil, err

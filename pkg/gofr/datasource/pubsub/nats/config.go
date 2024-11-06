@@ -18,7 +18,7 @@ type Config struct {
 	MaxPullWait int
 }
 
-// StreamConfig holds stream settings for NATS JetStream.
+// StreamConfig holds stream settings for NATS jetStream.
 type StreamConfig struct {
 	Stream     string
 	Subjects   []string
@@ -42,8 +42,8 @@ func New(cfg *Config, logger pubsub.Logger) *PubSubWrapper {
 	return &PubSubWrapper{Client: client}
 }
 
-// ValidateConfigs validates the configuration for NATS JetStream.
-func ValidateConfigs(conf *Config) error {
+// validateConfigs validates the configuration for NATS jetStream.
+func validateConfigs(conf *Config) error {
 	if conf.Server == "" {
 		return errServerNotProvided
 	}
@@ -57,16 +57,4 @@ func ValidateConfigs(conf *Config) error {
 	}
 
 	return nil
-}
-
-// DefaultConfig returns a Config with default values.
-func DefaultConfig() *Config {
-	return &Config{
-		MaxWait:     5 * time.Second,
-		MaxPullWait: 10,
-		Stream: StreamConfig{
-			MaxDeliver: 3,
-			MaxWait:    30 * time.Second,
-		},
-	}
 }

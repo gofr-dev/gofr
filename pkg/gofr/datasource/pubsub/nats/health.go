@@ -33,8 +33,12 @@ func (c *Client) Health() datasource.Health {
 		return health
 	}
 
-	// Call AccountInfo() to get JetStream status
-	jetStreamStatus := GetJetStreamStatus(context.Background(), js)
+	// Call AccountInfo() to get jetStream status
+	jetStreamStatus, err := GetJetStreamStatus(context.Background(), js)
+	if err != nil {
+		jetStreamStatus = jetStreamStatusError + ": " + err.Error()
+	}
+
 	health.Details["jetstream_enabled"] = true
 	health.Details["jetstream_status"] = jetStreamStatus
 

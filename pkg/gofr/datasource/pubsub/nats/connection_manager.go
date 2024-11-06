@@ -6,11 +6,12 @@ import (
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
+
 	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 )
 
-//go:generate mockgen -destination=mock_jetstream.go -package=nats github.com/nats-io/nats.go/jetstream JetStream,Stream,Consumer,Msg,MessageBatch
+//go:generate mockgen -destination=mock_jetstream.go -package=nats github.com/nats-io/nats.go/jetstream jetStream,Stream,Consumer,Msg,MessageBatch
 
 const (
 	ctxCloseTimeout = 5 * time.Second
@@ -21,7 +22,7 @@ type ConnectionManager struct {
 	jetStream        jetstream.JetStream
 	config           *Config
 	logger           pubsub.Logger
-	natsConnector    NATSConnector
+	natsConnector    Connector
 	jetStreamCreator JetStreamCreator
 }
 
@@ -58,7 +59,7 @@ func (w *natsConnWrapper) JetStream() (jetstream.JetStream, error) {
 func NewConnectionManager(
 	cfg *Config,
 	logger pubsub.Logger,
-	natsConnector NATSConnector,
+	natsConnector Connector,
 	jetStreamCreator JetStreamCreator) *ConnectionManager {
 	// if logger is nil panic
 	if logger == nil {
@@ -66,7 +67,7 @@ func NewConnectionManager(
 	}
 
 	if natsConnector == nil {
-		natsConnector = &DefaultNATSConnector{}
+		natsConnector = &defaultConnector{}
 	}
 
 	if jetStreamCreator == nil {
@@ -83,7 +84,7 @@ func NewConnectionManager(
 
 // Connect establishes a connection to NATS and sets up JetStream.
 func (cm *ConnectionManager) Connect() error {
-	cm.logger.Logf("Connecting to NATS server at %v", cm.config.Server)
+	cm.logger.Debugf("Connecting to NATS server at %v", cm.config.Server)
 
 	opts := []nats.Option{nats.Name("GoFr NATS JetStreamClient")}
 
@@ -101,7 +102,7 @@ func (cm *ConnectionManager) Connect() error {
 	js, err := cm.jetStreamCreator.New(connInterface)
 	if err != nil {
 		connInterface.Close()
-		cm.logger.Errorf("failed to create JetStream context: %v", err)
+		cm.logger.Debugf("failed to create jetStream context: %v", err)
 
 		return err
 	}
@@ -130,7 +131,7 @@ func (cm *ConnectionManager) Publish(ctx context.Context, subject string, messag
 
 	_, err := cm.jetStream.Publish(ctx, subject, message)
 	if err != nil {
-		cm.logger.Errorf("failed to publish message to NATS JetStream: %v", err)
+		cm.logger.Errorf("failed to publish message to NATS jetStream: %v", err)
 		return err
 	}
 
