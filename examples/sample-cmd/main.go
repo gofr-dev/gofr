@@ -26,7 +26,7 @@ func main() {
 	})
 
 	app.SubCommand("spinner", func(ctx *gofr.Context) (interface{}, error) {
-		// initialize the spinner and defer stop it
+		// initialize the spinner
 		spinner := terminal.NewDotSpinner(ctx.Out).Spin(ctx).Spin(ctx)
 
 		select {
