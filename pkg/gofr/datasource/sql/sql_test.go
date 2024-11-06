@@ -105,6 +105,7 @@ func TestSQL_GetDBConfig(t *testing.T) {
 		"DB_SSL_MODE":            "require",
 		"DB_MAX_IDLE_CONNECTION": "25",
 		"DB_MAX_OPEN_CONNECTION": "50",
+		"DB_CHARSET":             "utf8mb4",
 	})
 
 	expectedComfigs := &DBConfig{
@@ -117,6 +118,7 @@ func TestSQL_GetDBConfig(t *testing.T) {
 		SSLMode:     "require",
 		MaxIdleConn: 25,
 		MaxOpenConn: 50,
+		Charset:     "utf8mb4",
 	}
 
 	configs := getDBConfig(mockConfig)
@@ -185,6 +187,19 @@ func TestSQL_getDBConnectionString(t *testing.T) {
 				Database: "test",
 			},
 			expOut: "user:password@tcp(host:3201)/test?charset=utf8&parseTime=True&loc=Local&interpolateParams=true",
+		},
+		{
+			desc: "mysql dialect with Configurable charset",
+			configs: &DBConfig{
+				Dialect:  "mysql",
+				HostName: "host",
+				User:     "user",
+				Password: "password",
+				Port:     "3201",
+				Database: "test",
+				Charset:  "utf8mb4",
+			},
+			expOut: "user:password@tcp(host:3201)/test?charset=utf8mb4&parseTime=True&loc=Local&interpolateParams=true",
 		},
 		{
 			desc: "postgresql dialect",

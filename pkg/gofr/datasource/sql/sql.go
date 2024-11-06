@@ -33,6 +33,7 @@ type DBConfig struct {
 	SSLMode     string
 	MaxIdleConn int
 	MaxOpenConn int
+	Charset     string
 }
 
 func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *DB {
@@ -165,18 +166,24 @@ func getDBConfig(configs config.Config) *DBConfig {
 		MaxIdleConn: maxIdleConn,
 		// only for postgres
 		SSLMode: configs.GetOrDefault("DB_SSL_MODE", "disable"),
+		Charset: configs.Get("DB_CHARSET"),
 	}
 }
 
 func getDBConnectionString(dbConfig *DBConfig) (string, error) {
 	switch dbConfig.Dialect {
 	case "mysql":
-		return fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8&parseTime=True&loc=Local&interpolateParams=true",
+		if dbConfig.Charset == "" {
+			dbConfig.Charset = "utf8"
+		}
+
+		return fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=%s&parseTime=True&loc=Local&interpolateParams=true",
 			dbConfig.User,
 			dbConfig.Password,
 			dbConfig.HostName,
 			dbConfig.Port,
 			dbConfig.Database,
+			dbConfig.Charset,
 		), nil
 	case "postgres":
 		return fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
