@@ -10,7 +10,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/credentials v1.17.28
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.60.0
 	github.com/stretchr/testify v1.9.0
-	go.uber.org/mock v0.5.0
+	go.uber.org/mock v0.4.0
 	gofr.dev v1.17.0
 )
 
