@@ -114,9 +114,6 @@ func (cm *ConnectionManager) Connect() error {
 }
 
 func (cm *ConnectionManager) Close(ctx context.Context) {
-	_, cancel := context.WithTimeout(ctx, ctxCloseTimeout)
-	defer cancel()
-
 	if cm.conn != nil {
 		cm.conn.Close()
 	}
