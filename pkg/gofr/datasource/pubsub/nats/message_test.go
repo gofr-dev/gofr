@@ -51,5 +51,5 @@ func TestNATSMessage_CommitError(t *testing.T) {
 		n.Commit()
 	})
 
-	assert.Contains(t, out, "unable to acknowledge message on Client jetStream")
+	assert.Contains(t, out, "unable to acknowledge message on Client jStream")
 }

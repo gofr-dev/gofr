@@ -25,12 +25,12 @@ type Connector interface {
 	Connect(string, ...nats.Option) (ConnInterface, error)
 }
 
-// JetStreamCreator represents the main Client jetStream Client.
+// JetStreamCreator represents the main Client jStream Client.
 type JetStreamCreator interface {
 	New(conn ConnInterface) (jetstream.JetStream, error)
 }
 
-// JetStreamClient represents the main Client jetStream Client.
+// JetStreamClient represents the main Client jStream Client.
 type JetStreamClient interface {
 	Publish(ctx context.Context, subject string, message []byte) error
 	Subscribe(ctx context.Context, subject string, handler messageHandler) error
@@ -47,7 +47,7 @@ type ConnectionManagerInterface interface {
 	Close(ctx context.Context)
 	Publish(ctx context.Context, subject string, message []byte, metrics Metrics) error
 	Health() datasource.Health
-	JetStream() (jetstream.JetStream, error)
+	jetStream() (jetstream.JetStream, error)
 }
 
 // SubscriptionManagerInterface represents the main Subscription Manager.

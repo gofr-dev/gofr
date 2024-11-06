@@ -14,7 +14,7 @@ import (
 
 //go:generate mockgen -destination=mock_tracer.go -package=nats go.opentelemetry.io/otel/trace Tracer
 
-// Client represents a Client for NATS jetStream operations.
+// Client represents a Client for NATS jStream operations.
 type Client struct {
 	connManager      ConnectionManagerInterface
 	subManager       SubscriptionManagerInterface
@@ -31,7 +31,7 @@ type Client struct {
 
 type messageHandler func(context.Context, jetstream.Msg) error
 
-// Connect establishes a connection to NATS and sets up jetStream.
+// Connect establishes a connection to NATS and sets up jStream.
 func (c *Client) Connect() error {
 	if err := c.validateAndPrepare(); err != nil {
 		return err
@@ -45,7 +45,7 @@ func (c *Client) Connect() error {
 
 	c.connManager = connManager
 
-	js, err := c.connManager.JetStream()
+	js, err := c.connManager.jetStream()
 	if err != nil {
 		return err
 	}
@@ -59,7 +59,7 @@ func (c *Client) Connect() error {
 
 func (c *Client) validateAndPrepare() error {
 	if err := validateConfigs(c.Config); err != nil {
-		c.logger.Errorf("could not initialize NATS jetStream: %v", err)
+		c.logger.Errorf("could not initialize NATS jStream: %v", err)
 
 		return err
 	}
@@ -101,7 +101,7 @@ func (c *Client) Publish(ctx context.Context, subject string, message []byte) er
 
 // Subscribe subscribes to a topic and returns a single message.
 func (c *Client) Subscribe(ctx context.Context, topic string) (*pubsub.Message, error) {
-	js, err := c.connManager.JetStream()
+	js, err := c.connManager.jetStream()
 	if err != nil {
 		return nil, err
 	}
@@ -120,7 +120,7 @@ func (c *Client) SubscribeWithHandler(ctx context.Context, subject string, handl
 	// Cancel any existing subscription for this subject
 	c.cancelExistingSubscription(subject)
 
-	js, err := c.connManager.JetStream()
+	js, err := c.connManager.jetStream()
 	if err != nil {
 		return err
 	}
@@ -237,7 +237,7 @@ func (c *Client) Close(ctx context.Context) error {
 	return nil
 }
 
-// CreateTopic creates a new topic (stream) in NATS jetStream.
+// CreateTopic creates a new topic (stream) in NATS jStream.
 func (c *Client) CreateTopic(ctx context.Context, name string) error {
 	return c.streamManager.CreateStream(ctx, StreamConfig{
 		Stream:   name,
@@ -245,27 +245,27 @@ func (c *Client) CreateTopic(ctx context.Context, name string) error {
 	})
 }
 
-// DeleteTopic deletes a topic (stream) in NATS jetStream.
+// DeleteTopic deletes a topic (stream) in NATS jStream.
 func (c *Client) DeleteTopic(ctx context.Context, name string) error {
 	return c.streamManager.DeleteStream(ctx, name)
 }
 
-// CreateStream creates a new stream in NATS jetStream.
+// CreateStream creates a new stream in NATS jStream.
 func (c *Client) CreateStream(ctx context.Context, cfg StreamConfig) error {
 	return c.streamManager.CreateStream(ctx, cfg)
 }
 
-// DeleteStream deletes a stream in NATS jetStream.
+// DeleteStream deletes a stream in NATS jStream.
 func (c *Client) DeleteStream(ctx context.Context, name string) error {
 	return c.streamManager.DeleteStream(ctx, name)
 }
 
-// CreateOrUpdateStream creates or updates a stream in NATS jetStream.
+// CreateOrUpdateStream creates or updates a stream in NATS jStream.
 func (c *Client) CreateOrUpdateStream(ctx context.Context, cfg *jetstream.StreamConfig) (jetstream.Stream, error) {
 	return c.streamManager.CreateOrUpdateStream(ctx, cfg)
 }
 
-// GetJetStreamStatus returns the status of the jetStream connection.
+// GetJetStreamStatus returns the status of the jStream connection.
 func GetJetStreamStatus(ctx context.Context, js jetstream.JetStream) (string, error) {
 	_, err := js.AccountInfo(ctx)
 	if err != nil {

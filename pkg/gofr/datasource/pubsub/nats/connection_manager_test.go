@@ -58,7 +58,7 @@ func TestConnectionManager_Connect(t *testing.T) {
 	err := cm.Connect()
 	require.NoError(t, err)
 	assert.Equal(t, mockConn, cm.conn)
-	assert.Equal(t, mockJS, cm.jetStream)
+	assert.Equal(t, mockJS, cm.jStream)
 }
 
 func TestConnectionManager_Close(t *testing.T) {
@@ -84,8 +84,8 @@ func TestConnectionManager_Publish(t *testing.T) {
 	mockMetrics := NewMockMetrics(ctrl)
 
 	cm := &ConnectionManager{
-		jetStream: mockJS,
-		logger:    logging.NewMockLogger(logging.DEBUG),
+		jStream: mockJS,
+		logger:  logging.NewMockLogger(logging.DEBUG),
 	}
 
 	ctx := context.Background()
@@ -102,18 +102,18 @@ func TestConnectionManager_Publish(t *testing.T) {
 
 func TestConnectionManager_validateJetStream(t *testing.T) {
 	cm := &ConnectionManager{
-		jetStream: NewMockJetStream(gomock.NewController(t)),
-		logger:    logging.NewMockLogger(logging.DEBUG),
+		jStream: NewMockJetStream(gomock.NewController(t)),
+		logger:  logging.NewMockLogger(logging.DEBUG),
 	}
 
 	err := cm.validateJetStream("test.subject")
 	require.NoError(t, err)
 
-	cm.jetStream = nil
+	cm.jStream = nil
 	err = cm.validateJetStream("test.subject")
 	assert.Equal(t, errJetStreamNotConfigured, err)
 
-	cm.jetStream = NewMockJetStream(gomock.NewController(t))
+	cm.jStream = NewMockJetStream(gomock.NewController(t))
 	err = cm.validateJetStream("")
 	assert.Equal(t, errJetStreamNotConfigured, err)
 }
@@ -153,23 +153,23 @@ func TestConnectionManager_JetStream(t *testing.T) {
 
 	mockJS := NewMockJetStream(ctrl)
 	cm := &ConnectionManager{
-		jetStream: mockJS,
+		jStream: mockJS,
 	}
 
-	js, err := cm.JetStream()
+	js, err := cm.jetStream()
 	require.NoError(t, err)
 	assert.Equal(t, mockJS, js)
 }
 
 func TestConnectionManager_JetStream_Nil(t *testing.T) {
 	cm := &ConnectionManager{
-		jetStream: nil,
+		jStream: nil,
 	}
 
-	js, err := cm.JetStream()
+	js, err := cm.jetStream()
 	require.Error(t, err)
 	assert.Nil(t, js)
-	assert.EqualError(t, err, "jetStream is not configured")
+	assert.EqualError(t, err, "jStream is not configured")
 }
 
 func TestNatsConnWrapper_Status(t *testing.T) {

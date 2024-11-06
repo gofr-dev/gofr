@@ -25,7 +25,7 @@ func (c *Client) Health() datasource.Health {
 	health := c.connManager.Health()
 	health.Details["backend"] = natsBackend
 
-	js, err := c.connManager.JetStream()
+	js, err := c.connManager.jetStream()
 	if err != nil {
 		health.Details["jetstream_enabled"] = false
 		health.Details["jetstream_status"] = jetStreamStatusError + ": " + err.Error()
@@ -33,7 +33,7 @@ func (c *Client) Health() datasource.Health {
 		return health
 	}
 
-	// Call AccountInfo() to get jetStream status
+	// Call AccountInfo() to get jStream status
 	jetStreamStatus, err := GetJetStreamStatus(context.Background(), js)
 	if err != nil {
 		jetStreamStatus = jetStreamStatusError + ": " + err.Error()

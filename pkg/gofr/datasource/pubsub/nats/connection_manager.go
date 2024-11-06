@@ -11,7 +11,7 @@ import (
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 )
 
-//go:generate mockgen -destination=mock_jetstream.go -package=nats github.com/nats-io/nats.go/jetstream jetStream,Stream,Consumer,Msg,MessageBatch
+//go:generate mockgen -destination=mock_jetstream.go -package=nats github.com/nats-io/nats.go/jetstream jStream,Stream,Consumer,Msg,MessageBatch
 
 const (
 	ctxCloseTimeout = 5 * time.Second
@@ -19,19 +19,19 @@ const (
 
 type ConnectionManager struct {
 	conn             ConnInterface
-	jetStream        jetstream.JetStream
+	jStream          jetstream.JetStream
 	config           *Config
 	logger           pubsub.Logger
 	natsConnector    Connector
 	jetStreamCreator JetStreamCreator
 }
 
-func (cm *ConnectionManager) JetStream() (jetstream.JetStream, error) {
-	if cm.jetStream == nil {
+func (cm *ConnectionManager) jetStream() (jetstream.JetStream, error) {
+	if cm.jStream == nil {
 		return nil, errJetStreamNotConfigured
 	}
 
-	return cm.jetStream, nil
+	return cm.jStream, nil
 }
 
 // natsConnWrapper wraps a nats.Conn to implement the ConnInterface.
@@ -102,13 +102,13 @@ func (cm *ConnectionManager) Connect() error {
 	js, err := cm.jetStreamCreator.New(connInterface)
 	if err != nil {
 		connInterface.Close()
-		cm.logger.Debugf("failed to create jetStream context: %v", err)
+		cm.logger.Debugf("failed to create jStream context: %v", err)
 
 		return err
 	}
 
 	cm.conn = connInterface
-	cm.jetStream = js
+	cm.jStream = js
 
 	return nil
 }
@@ -129,9 +129,9 @@ func (cm *ConnectionManager) Publish(ctx context.Context, subject string, messag
 		return err
 	}
 
-	_, err := cm.jetStream.Publish(ctx, subject, message)
+	_, err := cm.jStream.Publish(ctx, subject, message)
 	if err != nil {
-		cm.logger.Errorf("failed to publish message to NATS jetStream: %v", err)
+		cm.logger.Errorf("failed to publish message to NATS jStream: %v", err)
 		return err
 	}
 
@@ -141,7 +141,7 @@ func (cm *ConnectionManager) Publish(ctx context.Context, subject string, messag
 }
 
 func (cm *ConnectionManager) validateJetStream(subject string) error {
-	if cm.jetStream == nil || subject == "" {
+	if cm.jStream == nil || subject == "" {
 		err := errJetStreamNotConfigured
 		cm.logger.Error(err.Error())
 

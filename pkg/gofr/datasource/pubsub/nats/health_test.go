@@ -66,7 +66,7 @@ func defineHealthTestCases() []healthTestCase {
 				"backend":           natsBackend,
 				"connection_status": jetStreamDisconnecting,
 				"jetstream_enabled": false,
-				"jetstream_status":  jetStreamStatusError + ": jetStream is not configured",
+				"jetstream_status":  jetStreamStatusError + ": jStream is not configured",
 			},
 		},
 		{
