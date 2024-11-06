@@ -41,7 +41,10 @@ func main() {
 	})
 
 	app.SubCommand("progress", func(ctx *gofr.Context) (interface{}, error) {
-		p := terminal.NewProgressBar(ctx.Out, 100)
+		p, err := terminal.NewProgressBar(ctx.Out, 100)
+		if err != nil {
+			return nil, err
+		}
 
 		for i := 1; i <= 100; i++ {
 			select {

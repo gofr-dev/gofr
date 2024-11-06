@@ -1,9 +1,15 @@
 package terminal
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
+)
+
+var (
+	errTermSize     = errors.New("error getting terminal size, could not initialize progress bar")
+	errInvalidTotal = errors.New("error initializing progress bar, total should be > 0")
 )
 
 type ProgressBar struct {
@@ -19,16 +25,14 @@ type Term interface {
 	GetSize(fd int) (width, height int, err error)
 }
 
-func NewProgressBar(out Output, total int64) *ProgressBar {
+func NewProgressBar(out Output, total int64) (*ProgressBar, error) {
 	w, _, err := out.getSize()
 	if err != nil {
-		fmt.Printf("error getting terminal size, err : %v, could not initialize progress bar\n", err)
+		return nil, errTermSize
 	}
 
 	if total < 0 {
-		fmt.Println("error initializing progress bar, total should be > 0")
-
-		total = 0
+		return nil, errInvalidTotal
 	}
 
 	return &ProgressBar{
@@ -36,7 +40,7 @@ func NewProgressBar(out Output, total int64) *ProgressBar {
 		total:   total,
 		tWidth:  w,
 		current: 0,
-	}
+	}, nil
 }
 
 func (p *ProgressBar) Incr(i int64) bool {
@@ -66,9 +70,9 @@ func (p *ProgressBar) updateProgressBar() {
 }
 
 const (
-	// max rounded percentage
+	// max rounded percentage.
 	maxRP = 50
-	// minimum terminal width required to render a progress bar
+	// minimum terminal width required to render a progress bar.
 	minTermWidth = 110
 )
 
