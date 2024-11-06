@@ -2,11 +2,11 @@ package terminal
 
 import (
 	"bytes"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-
-	"gofr.dev/pkg/gofr/testutil"
+	"github.com/stretchr/testify/require"
 )
 
 func TestProgressBar_SuccessCases(t *testing.T) {
@@ -14,7 +14,12 @@ func TestProgressBar_SuccessCases(t *testing.T) {
 
 	var out bytes.Buffer
 	stream := &Out{terminal{isTerminal: true, fd: 1}, &out}
-	bar := NewProgressBar(stream, total)
+	bar := ProgressBar{
+		stream:  stream,
+		current: 0,
+		total:   100,
+		mu:      sync.Mutex{},
+	}
 
 	// Mock terminal size
 	bar.tWidth = 120
@@ -36,23 +41,21 @@ func TestProgressBar_SuccessCases(t *testing.T) {
 }
 
 func TestProgressBar_Fail(t *testing.T) {
-	out := testutil.StdoutOutputForFunc(func() {
-		var out bytes.Buffer
-		stream := &Out{terminal{isTerminal: true, fd: 1}, &out}
-		bar := NewProgressBar(stream, int64(-1))
+	var out bytes.Buffer
+	stream := &Out{terminal{isTerminal: true, fd: 1}, &out}
+	bar, err := NewProgressBar(stream, int64(-1))
 
-		assert.Zero(t, bar.total)
-	})
-
-	assert.Contains(t, out, "error initializing progress bar, total should be > 0")
+	require.Error(t, err)
+	require.ErrorIs(t, err, errTermSize)
+	assert.Nil(t, bar)
 }
 
 func TestProgressBar_Incr(t *testing.T) {
 	var out bytes.Buffer
 	stream := &Out{terminal{isTerminal: true, fd: 1}, &out}
-	bar := NewProgressBar(stream, 100)
-	// doing this as while calculating terminal size the code will not
-	// be able to determine it's width since we are not attacting an actual
+	bar := ProgressBar{stream: stream, current: 0, total: 100, mu: sync.Mutex{}}
+	// doing this as while calculating terminal size, the code will not
+	// be able to determine its width since we are not attaching an actual
 	// terminal for testing
 	bar.tWidth = 120
 

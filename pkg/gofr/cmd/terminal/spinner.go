@@ -55,21 +55,21 @@ func (s *Spinner) Spin(ctx context.Context) *Spinner {
 
 	go func() {
 		for range t.C {
-			if !s.started {
-				break
+			select {
+			case <-ctx.Done():
+				t.Stop()
+			default:
+				if !s.started {
+					break
+				}
+
+				s.outStream.Print("\r")
+				s.outStream.Printf("%s", s.frames[i%len(s.frames)])
+
+				i++
 			}
-
-			s.outStream.Print("\r")
-			s.outStream.Printf("%s", s.frames[i%len(s.frames)])
-
-			i++
 		}
 	}()
-
-	select {
-	case <-ctx.Done():
-		s.ticker.Stop()
-	}
 
 	return s
 }

@@ -2,6 +2,7 @@ package terminal
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -10,7 +11,10 @@ import (
 )
 
 func TestSpinner(t *testing.T) {
-	var waitTime = 3 * time.Second
+	var (
+		waitTime = 1 * time.Second
+		ctx      = context.TODO()
+	)
 
 	// Testing Dot spinner
 	b := &bytes.Buffer{}
@@ -18,7 +22,7 @@ func TestSpinner(t *testing.T) {
 	spinner := NewDotSpinner(out)
 
 	// Start the spinner
-	spinner.Spin()
+	spinner.Spin(ctx)
 
 	// Let it run for a bit
 	time.Sleep(waitTime)
@@ -36,7 +40,7 @@ func TestSpinner(t *testing.T) {
 	spinner = NewGlobeSpinner(out)
 
 	// Start the spinner
-	spinner.Spin()
+	spinner.Spin(ctx)
 
 	// Let it run for a bit
 	time.Sleep(waitTime)
@@ -54,7 +58,7 @@ func TestSpinner(t *testing.T) {
 	spinner = NewPulseSpinner(out)
 
 	// Start the spinner
-	spinner.Spin()
+	spinner.Spin(ctx)
 
 	// Let it run for a bit
 	time.Sleep(waitTime)
@@ -66,4 +70,26 @@ func TestSpinner(t *testing.T) {
 	outputStr = b.String()
 	fmt.Println(outputStr)
 	assert.NotZero(t, outputStr)
+}
+
+func TestSpinner_contextDone(t *testing.T) {
+	b := &bytes.Buffer{}
+	out := &Out{out: b}
+	spinner := NewDotSpinner(out)
+	ctx, cancel := context.WithCancel(context.Background())
+
+	// start the spinner
+	spinner.Spin(ctx)
+
+	// let the spinner start spinning
+	time.Sleep(100 * time.Millisecond)
+	cancel()
+
+	select {
+	case <-spinner.ticker.C:
+		t.Error("ticker should have been stopped after cancel")
+	case <-time.After(1 * time.Second):
+		// successful case as ticker did not send a tick
+		return
+	}
 }
