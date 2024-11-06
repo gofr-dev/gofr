@@ -173,7 +173,7 @@ func (sm *SubscriptionManager) processFetchedMessages(
 	for msg := range msgs.Messages() {
 		pubsubMsg := sm.createPubSubMessage(msg, topic)
 
-		if !sm.sendToBuffer(pubsubMsg, buffer, topic, logger) {
+		if !sm.sendToBuffer(pubsubMsg, buffer) {
 			logger.Logf("Message buffer is full for topic %s. Consider increasing buffer size or processing messages faster.", topic)
 		}
 	}
@@ -190,7 +190,7 @@ func (sm *SubscriptionManager) createPubSubMessage(msg jetstream.Msg, topic stri
 	return pubsubMsg
 }
 
-func (sm *SubscriptionManager) sendToBuffer(msg *pubsub.Message, buffer chan *pubsub.Message, topic string, logger pubsub.Logger) bool {
+func (sm *SubscriptionManager) sendToBuffer(msg *pubsub.Message, buffer chan *pubsub.Message) bool {
 	select {
 	case buffer <- msg:
 		return true

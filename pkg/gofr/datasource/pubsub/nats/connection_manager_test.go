@@ -169,7 +169,7 @@ func TestConnectionManager_JetStream_Nil(t *testing.T) {
 	js, err := cm.JetStream()
 	require.Error(t, err)
 	assert.Nil(t, js)
-	assert.EqualError(t, err, "JetStream is not configured")
+	assert.EqualError(t, err, "jetStream is not configured")
 }
 
 func TestNatsConnWrapper_Status(t *testing.T) {

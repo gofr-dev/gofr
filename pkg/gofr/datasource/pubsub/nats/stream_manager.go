@@ -8,7 +8,7 @@ import (
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 )
 
-// StreamManager is a manager for JetStream streams.
+// StreamManager is a manager for jetStream streams.
 type StreamManager struct {
 	js     jetstream.JetStream
 	logger pubsub.Logger
@@ -22,7 +22,7 @@ func newStreamManager(js jetstream.JetStream, logger pubsub.Logger) *StreamManag
 	}
 }
 
-// CreateStream creates a new JetStream stream.
+// CreateStream creates a new jetStream stream.
 func (sm *StreamManager) CreateStream(ctx context.Context, cfg StreamConfig) error {
 	sm.logger.Debugf("creating stream %s", cfg.Stream)
 	jsCfg := jetstream.StreamConfig{
@@ -40,7 +40,7 @@ func (sm *StreamManager) CreateStream(ctx context.Context, cfg StreamConfig) err
 	return nil
 }
 
-// DeleteStream deletes a JetStream stream.
+// DeleteStream deletes a jetStream stream.
 func (sm *StreamManager) DeleteStream(ctx context.Context, name string) error {
 	sm.logger.Debugf("deleting stream %s", name)
 
@@ -62,7 +62,7 @@ func (sm *StreamManager) DeleteStream(ctx context.Context, name string) error {
 	return nil
 }
 
-// CreateOrUpdateStream creates or updates a JetStream stream.
+// CreateOrUpdateStream creates or updates a jetStream stream.
 func (sm *StreamManager) CreateOrUpdateStream(ctx context.Context, cfg *jetstream.StreamConfig) (jetstream.Stream, error) {
 	sm.logger.Debugf("creating or updating stream %s", cfg.Name)
 
@@ -76,7 +76,7 @@ func (sm *StreamManager) CreateOrUpdateStream(ctx context.Context, cfg *jetstrea
 	return stream, nil
 }
 
-// GetStream gets a JetStream stream.
+// GetStream gets a jetStream stream.
 func (sm *StreamManager) GetStream(ctx context.Context, name string) (jetstream.Stream, error) {
 	sm.logger.Debugf("getting stream %s", name)
 
