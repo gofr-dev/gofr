@@ -34,7 +34,7 @@ func TestDefaultJetStreamCreator_New(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	t.Run("Successful jetStream creation", func(t *testing.T) {
+	t.Run("Successful jStream creation", func(t *testing.T) {
 		// Start a NATS server
 		ns, url := startNATSServer(t)
 		defer ns.Shutdown()
@@ -49,23 +49,23 @@ func TestDefaultJetStreamCreator_New(t *testing.T) {
 
 		creator := &DefaultJetStreamCreator{}
 
-		// Test successful jetStream creation
+		// Test successful jStream creation
 		js, err := creator.New(wrapper)
 		require.NoError(t, err)
 		assert.NotNil(t, js)
 	})
 
-	t.Run("jetStream creation failure", func(t *testing.T) {
+	t.Run("jStream creation failure", func(t *testing.T) {
 		// Create a mock NATS connection
 		mockConn := NewMockConnInterface(ctrl)
 
-		// Mock the jetStream method to return an error
+		// Mock the jStream method to return an error
 		expectedError := errJetStreamCreationFailed
 		mockConn.EXPECT().JetStream().Return(nil, expectedError)
 
 		creator := &DefaultJetStreamCreator{}
 
-		// Test jetStream creation failure
+		// Test jStream creation failure
 		js, err := creator.New(mockConn)
 		require.Error(t, err)
 		assert.Nil(t, js)

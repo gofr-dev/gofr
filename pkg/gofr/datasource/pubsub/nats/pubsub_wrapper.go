@@ -22,12 +22,12 @@ func (w *PubSubWrapper) Subscribe(ctx context.Context, topic string) (*pubsub.Me
 	return w.Client.Subscribe(ctx, topic)
 }
 
-// CreateTopic creates a new topic (stream) in NATS jetStream.
+// CreateTopic creates a new topic (stream) in NATS jStream.
 func (w *PubSubWrapper) CreateTopic(ctx context.Context, name string) error {
 	return w.Client.CreateTopic(ctx, name)
 }
 
-// DeleteTopic deletes a topic (stream) in NATS jetStream.
+// DeleteTopic deletes a topic (stream) in NATS jStream.
 func (w *PubSubWrapper) DeleteTopic(ctx context.Context, name string) error {
 	return w.Client.DeleteTopic(ctx, name)
 }
