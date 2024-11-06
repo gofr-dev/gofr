@@ -47,7 +47,7 @@ func TestProgressBar_Fail(t *testing.T) {
 
 	require.Error(t, err)
 	require.ErrorIs(t, err, errTermSize)
-	assert.Nil(t, bar)
+	assert.NotNil(t, bar)
 }
 
 func TestProgressBar_Incr(t *testing.T) {

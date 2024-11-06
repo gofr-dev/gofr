@@ -43,7 +43,7 @@ func main() {
 	app.SubCommand("progress", func(ctx *gofr.Context) (interface{}, error) {
 		p, err := terminal.NewProgressBar(ctx.Out, 100)
 		if err != nil {
-			return nil, err
+			ctx.Warn("error initializing progress bar, err : %v", err)
 		}
 
 		for i := 1; i <= 100; i++ {

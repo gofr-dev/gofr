@@ -26,21 +26,27 @@ type Term interface {
 }
 
 func NewProgressBar(out Output, total int64) (*ProgressBar, error) {
+	p := &ProgressBar{
+		stream:  out,
+		total:   total,
+		tWidth:  0,
+		current: 0,
+	}
+
 	w, _, err := out.getSize()
 	if err != nil {
-		return nil, errTermSize
+		return p, errTermSize
 	}
 
 	if total < 0 {
-		return nil, errInvalidTotal
+		p.total = 0
+
+		return p, errInvalidTotal
 	}
 
-	return &ProgressBar{
-		stream:  out,
-		total:   total,
-		tWidth:  w,
-		current: 0,
-	}, nil
+	p.tWidth = w
+
+	return p, nil
 }
 
 func (p *ProgressBar) Incr(i int64) bool {
