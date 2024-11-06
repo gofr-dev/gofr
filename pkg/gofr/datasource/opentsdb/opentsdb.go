@@ -147,7 +147,7 @@ func (c *Client) PutDataPoints(ctx context.Context, datas any, queryParam string
 
 	status := statusFailed
 
-	var message string
+	message := "Put request failed"
 
 	defer sendOperationStats(c.logger, time.Now(), "Put", &status, &message, span)
 
