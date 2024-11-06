@@ -41,7 +41,7 @@ func TestProgressBar_Fail(t *testing.T) {
 		stream := &Out{terminal{isTerminal: true, fd: 1}, &out}
 		bar := NewProgressBar(stream, int64(-1))
 
-		assert.Equal(t, int64(0), bar.total)
+		assert.Zero(t, bar.total)
 	})
 
 	assert.Contains(t, out, "error initializing progress bar, total should be > 0")
