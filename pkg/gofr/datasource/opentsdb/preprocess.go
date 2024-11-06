@@ -13,13 +13,13 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-// DefaultTransport defines the default HTTP transport settings,
+// defaultTransport defines the default HTTP transport settings,
 // including connection timeouts and idle connections.
-var DefaultTransport = &http.Transport{
+var defaultTransport = &http.Transport{
 	MaxIdleConnsPerHost: 10,
 	DialContext: (&net.Dialer{
-		Timeout:   DefaultDialTime,
-		KeepAlive: ConnectionTimeout,
+		Timeout:   defaultDialTime,
+		KeepAlive: connectionTimeout,
 	}).DialContext,
 }
 
@@ -96,8 +96,8 @@ type SubQuery struct {
 	// The value is optional.
 	// Currently, there is only three kind of value can be set to this map:
 	// Only three keys can be set into the rateOption parameter of the QueryParam is
-	// QueryRateOptionCounter (value type is bool),  QueryRateOptionCounterMax (value type is int,int64)
-	// QueryRateOptionResetValue (value type is int,int64)
+	// queryRateOptionCounter (value type is bool),  queryRateOptionCounterMax (value type is int,int64)
+	// queryRateOptionResetValue (value type is int,int64)
 	RateParams map[string]any `json:"rateOptions,omitempty"`
 
 	// An optional value downsampling function to reduce the amount of data returned.
@@ -183,6 +183,7 @@ func (c *Client) getResponse(ctx context.Context, putEndpoint string, datapoints
 		*message = fmt.Sprintf("getPutBodyContents error: %s", err)
 		c.logger.Errorf(*message)
 	}
+
 	reqBodyCnt := string(marshaled)
 
 	putResp := PutResponse{logger: c.logger, tracer: c.tracer, ctx: ctx}
@@ -201,7 +202,11 @@ func parsePutErrorMsg(resp *PutResponse) error {
 
 	if len(resp.Errors) > 0 {
 		for _, putError := range resp.Errors {
-			str, _ := json.Marshal(putError)
+			str, err := json.Marshal(putError)
+			if err != nil {
+				return err
+			}
+
 			buf.WriteString(fmt.Sprintf("\t%s\n", str))
 		}
 	}
@@ -250,7 +255,7 @@ func isValidPutParam(param string) bool {
 	}
 
 	param = strings.TrimSpace(param)
-	if param != PutRespWithSummary && param != PutRespWithDetails {
+	if param != putRespWithSummary && param != putRespWithDetails {
 		return false
 	}
 
@@ -330,7 +335,7 @@ func areValidParams(query *SubQuery) bool {
 	}
 
 	for k := range query.RateParams {
-		if k != QueryRateOptionCounter && k != QueryRateOptionCounterMax && k != QueryRateOptionResetValue {
+		if k != queryRateOptionCounter && k != queryRateOptionCounterMax && k != queryRateOptionResetValue {
 			return false
 		}
 	}
@@ -345,23 +350,14 @@ func isValidTimePoint(timePoint interface{}) bool {
 
 	switch v := timePoint.(type) {
 	case int:
-		if v <= 0 {
-			return false
-		}
+		return v > 0
 	case int64:
-		if v <= 0 {
-			return false
-		}
+		return v > 0
 	case string:
-		if v == "" {
-			return false
-		}
-
-	default:
-		return false
+		return v != ""
 	}
 
-	return true
+	return false
 }
 
 func isValidQueryLastParam(param *QueryLastParam) bool {
@@ -387,7 +383,7 @@ func (c *Client) initializeClient() {
 	// Use custom transport settings if provided, otherwise, use the default transport.
 	transport := c.config.Transport
 	if transport == nil {
-		transport = DefaultTransport
+		transport = defaultTransport
 	}
 
 	c.client = &http.Client{
@@ -395,14 +391,14 @@ func (c *Client) initializeClient() {
 	}
 
 	if c.config.MaxPutPointsNum <= 0 {
-		c.config.MaxPutPointsNum = DefaultMaxPutPointsNum
+		c.config.MaxPutPointsNum = defaultMaxPutPointsNum
 	}
 
 	if c.config.DetectDeltaNum <= 0 {
-		c.config.DetectDeltaNum = DefaultDetectDeltaNum
+		c.config.DetectDeltaNum = defaultDetectDeltaNum
 	}
 
 	if c.config.MaxContentLength <= 0 {
-		c.config.MaxContentLength = DefaultMaxContentLength
+		c.config.MaxContentLength = defaultMaxContentLength
 	}
 }

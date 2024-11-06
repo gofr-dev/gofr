@@ -16,36 +16,36 @@ import (
 )
 
 const (
-	StatusFailed      = "FAIL"
-	StatusSuccess     = "SUCCESS"
-	DefaultDialTime   = 5 * time.Second  // Default time for establishing TCP connections.
-	ConnectionTimeout = 30 * time.Second // Timeout for keeping connections alive.
+	statusFailed      = "FAIL"
+	statusSuccess     = "SUCCESS"
+	defaultDialTime   = 5 * time.Second  // Default time for establishing TCP connections.
+	connectionTimeout = 30 * time.Second // Timeout for keeping connections alive.
 
 	// API paths for OpenTSDB endpoints.
-	PutPath        = "/api/put"
-	AggregatorPath = "/api/aggregators"
-	VersionPath    = "/api/version"
-	AnnotationPath = "/api/annotation"
-	QueryPath      = "/api/query"
-	QueryLastPath  = "/api/query/last"
+	putPath        = "/api/put"
+	aggregatorPath = "/api/aggregators"
+	versionPath    = "/api/version"
+	annotationPath = "/api/annotation"
+	queryPath      = "/api/query"
+	queryLastPath  = "/api/query/last"
 
-	PutRespWithSummary = "summary" // Summary response for PUT operations.
-	PutRespWithDetails = "details" // Detailed response for PUT operations.
+	putRespWithSummary = "summary" // Summary response for PUT operations.
+	putRespWithDetails = "details" // Detailed response for PUT operations.
 
 	// The three keys in the rateOption parameter of the QueryParam.
-	QueryRateOptionCounter    = "counter"    // The corresponding value type is bool
-	QueryRateOptionCounterMax = "counterMax" // The corresponding value type is int,int64
-	QueryRateOptionResetValue = "resetValue" // The corresponding value type is int,int64
+	queryRateOptionCounter    = "counter"    // The corresponding value type is bool
+	queryRateOptionCounterMax = "counterMax" // The corresponding value type is int,int64
+	queryRateOptionResetValue = "resetValue" // The corresponding value type is int,int64
 
-	AnQueryStartTime = "start_time"
-	AnQueryTSUid     = "tsuid"
+	anQueryStartTime = "start_time"
+	anQueryTSUid     = "tsuid"
 
 	// The below three constants are used in /put.
-	DefaultMaxPutPointsNum = 75
-	DefaultDetectDeltaNum  = 3
+	defaultMaxPutPointsNum = 75
+	defaultDetectDeltaNum  = 3
 	// Unit is bytes, and assumes that config items of 'tsd.http.request.enable_chunked = true'
 	// and 'tsd.http.request.max_chunk = 40960' are all in the opentsdb.conf.
-	DefaultMaxContentLength = 40960
+	defaultMaxContentLength = 40960
 )
 
 var dialTimeout = net.DialTimeout
@@ -68,25 +68,25 @@ type Config struct {
 	Host string
 
 	// A pointer of http.Transport is used by the opentsdb client.
-	// This value is optional, and if it is not set, client.DefaultTransport, which
+	// This value is optional, and if it is not set, client.defaultTransport, which
 	// enables tcp keepalive mode, will be used in the opentsdb client.
 	Transport *http.Transport
 
 	// The maximal number of datapoints which will be inserted into the opentsdb
 	// via one calling of /api/put method.
-	// This value is optional, and if it is not set, client.DefaultMaxPutPointsNum
+	// This value is optional, and if it is not set, client.defaultMaxPutPointsNum
 	// will be used in the opentsdb client.
 	MaxPutPointsNum int
 
 	// The detect delta number of datapoints which will be used in client.Put()
 	// to split a large group of datapoints into small batches.
-	// This value is optional, and if it is not set, client.DefaultDetectDeltaNum
+	// This value is optional, and if it is not set, client.defaultDetectDeltaNum
 	// will be used in the opentsdb client.
 	DetectDeltaNum int
 
 	// The maximal body content length per /api/put method to insert datapoints
 	// into opentsdb.
-	// This value is optional, and if it is not set, client.DefaultMaxPutPointsNum
+	// This value is optional, and if it is not set, client.defaultMaxPutPointsNum
 	// will be used in the opentsdb client.
 	MaxContentLength int
 }
@@ -124,7 +124,7 @@ func (c *Client) UseTracer(tracer any) {
 func (c *Client) Connect() {
 	span := c.addTrace(context.Background(), "Connect")
 
-	status := StatusFailed
+	status := statusFailed
 
 	var message string
 
@@ -138,14 +138,14 @@ func (c *Client) Connect() {
 
 	c.logger.Logf("Connection Successful")
 
-	status = StatusSuccess
+	status = statusSuccess
 	message = fmt.Sprintf("connected to %s", c.endpoint)
 }
 
 func (c *Client) PutDataPoints(ctx context.Context, datas any, queryParam string, resp any) error {
 	span := c.addTrace(ctx, "Put")
 
-	status := StatusFailed
+	status := statusFailed
 
 	var message string
 
@@ -174,9 +174,9 @@ func (c *Client) PutDataPoints(ctx context.Context, datas any, queryParam string
 
 	var putEndpoint string
 	if !isEmptyPutParam(queryParam) {
-		putEndpoint = fmt.Sprintf("%s%s?%s", c.endpoint, PutPath, queryParam)
+		putEndpoint = fmt.Sprintf("%s%s?%s", c.endpoint, putPath, queryParam)
 	} else {
-		putEndpoint = fmt.Sprintf("%s%s", c.endpoint, PutPath)
+		putEndpoint = fmt.Sprintf("%s%s", c.endpoint, putPath)
 	}
 
 	tempResp, err := c.getResponse(ctx, putEndpoint, datapoints, &message)
@@ -185,7 +185,7 @@ func (c *Client) PutDataPoints(ctx context.Context, datas any, queryParam string
 	}
 
 	if len(tempResp.Errors) == 0 {
-		status = StatusSuccess
+		status = statusSuccess
 		message = fmt.Sprintf("Put request to url %q processed successfully", putEndpoint)
 		putResp.Success = tempResp.Success
 		putResp.Failed = tempResp.Failed
@@ -200,7 +200,7 @@ func (c *Client) PutDataPoints(ctx context.Context, datas any, queryParam string
 func (c *Client) QueryDataPoints(ctx context.Context, parameters, resp any) error {
 	span := c.addTrace(ctx, "Query")
 
-	status := StatusFailed
+	status := statusFailed
 
 	var message string
 
@@ -221,7 +221,7 @@ func (c *Client) QueryDataPoints(ctx context.Context, parameters, resp any) erro
 		return errors.New(message)
 	}
 
-	queryEndpoint := fmt.Sprintf("%s%s", c.endpoint, QueryPath)
+	queryEndpoint := fmt.Sprintf("%s%s", c.endpoint, queryPath)
 
 	reqBodyCnt, err := getQueryBodyContents(param)
 	if err != nil {
@@ -238,7 +238,7 @@ func (c *Client) QueryDataPoints(ctx context.Context, parameters, resp any) erro
 		return err
 	}
 
-	status = StatusSuccess
+	status = statusSuccess
 	message = fmt.Sprintf("query request at url %q processed successfully", queryEndpoint)
 
 	return nil
@@ -247,7 +247,7 @@ func (c *Client) QueryDataPoints(ctx context.Context, parameters, resp any) erro
 func (c *Client) QueryLatestDataPoints(ctx context.Context, parameters, resp any) error {
 	span := c.addTrace(ctx, "QueryLast")
 
-	status := StatusFailed
+	status := statusFailed
 
 	var message string
 
@@ -268,7 +268,7 @@ func (c *Client) QueryLatestDataPoints(ctx context.Context, parameters, resp any
 		return errors.New(message)
 	}
 
-	queryEndpoint := fmt.Sprintf("%s%s", c.endpoint, QueryLastPath)
+	queryEndpoint := fmt.Sprintf("%s%s", c.endpoint, queryLastPath)
 
 	reqBodyCnt, err := getQueryBodyContents(param)
 	if err != nil {
@@ -285,7 +285,7 @@ func (c *Client) QueryLatestDataPoints(ctx context.Context, parameters, resp any
 		return err
 	}
 
-	status = StatusSuccess
+	status = statusSuccess
 	message = fmt.Sprintf("querylast request to url %q processed successfully", queryEndpoint)
 
 	c.logger.Logf("querylast request processed successfully")
@@ -296,7 +296,7 @@ func (c *Client) QueryLatestDataPoints(ctx context.Context, parameters, resp any
 func (c *Client) QueryAnnotation(ctx context.Context, queryAnnoParam map[string]any, resp any) error {
 	span := c.addTrace(ctx, "QueryAnnotation")
 
-	status := StatusFailed
+	status := statusFailed
 
 	var message string
 
@@ -325,7 +325,7 @@ func (c *Client) QueryAnnotation(ctx context.Context, queryAnnoParam map[string]
 
 	buffer.WriteString(queryURL.Encode())
 
-	annoEndpoint := fmt.Sprintf("%s%s?%s", c.endpoint, AnnotationPath, buffer.String())
+	annoEndpoint := fmt.Sprintf("%s%s?%s", c.endpoint, annotationPath, buffer.String())
 	annResp.logger = c.logger
 	annResp.tracer = c.tracer
 	annResp.ctx = ctx
@@ -335,7 +335,7 @@ func (c *Client) QueryAnnotation(ctx context.Context, queryAnnoParam map[string]
 		return err
 	}
 
-	status = StatusSuccess
+	status = statusSuccess
 	message = fmt.Sprintf("Annotation query sent to url: %s", annoEndpoint)
 
 	c.logger.Log("Annotation query processed successfully")
@@ -358,7 +358,7 @@ func (c *Client) DeleteAnnotation(ctx context.Context, annotation, resp any) err
 func (c *Client) GetAggregators(ctx context.Context, resp any) error {
 	span := c.addTrace(ctx, "Aggregators")
 
-	status := StatusFailed
+	status := statusFailed
 
 	var message string
 
@@ -369,7 +369,7 @@ func (c *Client) GetAggregators(ctx context.Context, resp any) error {
 		return errors.New("invalid response type. Must be a *AggregatorsResponse")
 	}
 
-	aggregatorsEndpoint := fmt.Sprintf("%s%s", c.endpoint, AggregatorPath)
+	aggregatorsEndpoint := fmt.Sprintf("%s%s", c.endpoint, aggregatorPath)
 
 	aggreResp.logger = c.logger
 	aggreResp.tracer = c.tracer
@@ -380,7 +380,7 @@ func (c *Client) GetAggregators(ctx context.Context, resp any) error {
 		return err
 	}
 
-	status = StatusSuccess
+	status = statusSuccess
 	message = fmt.Sprintf("aggregators retrieved from url: %s", aggregatorsEndpoint)
 
 	c.logger.Log("aggregators fetched successfully")
@@ -391,7 +391,7 @@ func (c *Client) GetAggregators(ctx context.Context, resp any) error {
 func (c *Client) HealthCheck(ctx context.Context) (any, error) {
 	span := c.addTrace(ctx, "HealthCheck")
 
-	status := StatusFailed
+	status := statusFailed
 
 	var message string
 
@@ -401,7 +401,7 @@ func (c *Client) HealthCheck(ctx context.Context) (any, error) {
 		Details: make(map[string]any),
 	}
 
-	conn, err := dialTimeout("tcp", c.config.Host, DefaultDialTime)
+	conn, err := dialTimeout("tcp", c.config.Host, defaultDialTime)
 	if err != nil {
 		h.Status = "DOWN"
 		message = fmt.Sprintf("OpenTSDB is unreachable: %v", err)
@@ -425,7 +425,7 @@ func (c *Client) HealthCheck(ctx context.Context) (any, error) {
 
 	h.Details["version"] = ver.VersionInfo["version"]
 
-	status = StatusSuccess
+	status = statusSuccess
 	h.Status = "UP"
 	message = "connection to OpenTSDB is alive"
 

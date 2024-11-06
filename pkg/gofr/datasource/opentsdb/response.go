@@ -223,7 +223,7 @@ type genericResponse interface {
 func (c *Client) sendRequest(ctx context.Context, method, url, reqBodyCnt string, parsedResp Response) error {
 	span := c.addTrace(ctx, "sendRequest")
 
-	status := StatusFailed
+	status := statusFailed
 
 	var message string
 
@@ -290,7 +290,7 @@ func (c *Client) sendRequest(ctx context.Context, method, url, reqBodyCnt string
 		}
 	}
 
-	status = StatusSuccess
+	status = statusSuccess
 	message = fmt.Sprintf("%s request sent at : %s", method, url)
 
 	return nil
@@ -299,13 +299,13 @@ func (c *Client) sendRequest(ctx context.Context, method, url, reqBodyCnt string
 func (c *Client) version(ctx context.Context, verResp *VersionResponse) error {
 	span := c.addTrace(ctx, "Version")
 
-	status := StatusFailed
+	status := statusFailed
 
 	var message string
 
 	defer sendOperationStats(c.logger, time.Now(), "Version", &status, &message, span)
 
-	verEndpoint := fmt.Sprintf("%s%s", c.endpoint, VersionPath)
+	verEndpoint := fmt.Sprintf("%s%s", c.endpoint, versionPath)
 	verResp.logger = c.logger
 	verResp.tracer = c.tracer
 	verResp.ctx = ctx
@@ -315,7 +315,7 @@ func (c *Client) version(ctx context.Context, verResp *VersionResponse) error {
 		return err
 	}
 
-	status = StatusSuccess
+	status = statusSuccess
 	message = "version response retrieved successfully."
 
 	return nil
@@ -326,7 +326,7 @@ func (c *Client) version(ctx context.Context, verResp *VersionResponse) error {
 func (c *Client) isValidOperateMethod(ctx context.Context, method string) bool {
 	span := c.addTrace(ctx, "isValidOperateMethod")
 
-	status := StatusSuccess
+	status := statusSuccess
 
 	var message string
 
@@ -351,7 +351,7 @@ func customParserHelper(ctx context.Context, resp genericResponse, operation str
 	unmarshalFunc func([]byte) error) func([]byte) error {
 	span := resp.addTrace(ctx, operation)
 
-	status := StatusFailed
+	status := statusFailed
 
 	var message string
 
@@ -366,7 +366,7 @@ func customParserHelper(ctx context.Context, resp genericResponse, operation str
 			return err
 		}
 
-		status = StatusSuccess
+		status = statusSuccess
 		message = fmt.Sprintf("%s custom parsing was successful.", operation)
 
 		return nil
@@ -379,7 +379,7 @@ func queryParserHelper(ctx context.Context, logger Logger, obj genericResponse, 
 
 		var respStr string
 
-		if len(resp) != 0 && resp[0] == '[' && resp[len(resp)-1] == ']' {
+		if strings.HasPrefix(string(resp), "[") && strings.HasSuffix(string(resp), "]") {
 			respStr = fmt.Sprintf(`{"queryRespCnts":%s}`, originRespStr)
 		} else {
 			respStr = originRespStr
@@ -392,7 +392,7 @@ func queryParserHelper(ctx context.Context, logger Logger, obj genericResponse, 
 func (c *Client) operateAnnotation(ctx context.Context, queryAnnotation, resp any, method, operation string) error {
 	span := c.addTrace(ctx, operation)
 
-	status := StatusFailed
+	status := statusFailed
 
 	var message string
 
@@ -413,7 +413,7 @@ func (c *Client) operateAnnotation(ctx context.Context, queryAnnotation, resp an
 		return errors.New(message)
 	}
 
-	annoEndpoint := fmt.Sprintf("%s%s", c.endpoint, AnnotationPath)
+	annoEndpoint := fmt.Sprintf("%s%s", c.endpoint, annotationPath)
 
 	resultBytes, err := json.Marshal(annotation)
 	if err != nil {
@@ -430,7 +430,7 @@ func (c *Client) operateAnnotation(ctx context.Context, queryAnnotation, resp an
 		return err
 	}
 
-	status = StatusSuccess
+	status = statusSuccess
 	message = fmt.Sprintf("%s: %s annotation request to url %q processed successfully", operation, method, annoEndpoint)
 
 	c.logger.Log("%s request successful", operation)

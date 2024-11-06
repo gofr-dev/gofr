@@ -19,6 +19,11 @@ import (
 	"go.uber.org/mock/gomock"
 )
 
+var (
+	errConnection    = errors.New("connection error")
+	errRequestFailed = errors.New("request failed")
+)
+
 func TestSendRequestSuccess(t *testing.T) {
 	client, mockHTTP := setOpenTSDBTest(t)
 
@@ -45,7 +50,7 @@ func TestSendRequestFailure(t *testing.T) {
 
 	mockHTTP.EXPECT().
 		Do(gomock.Any()).
-		Return(nil, errors.New("request failed")).
+		Return(nil, errRequestFailed).
 		Times(1)
 
 	parsedResp := AggregatorsResponse{logger: client.logger, tracer: client.tracer, ctx: context.Background()}
@@ -110,15 +115,15 @@ func setOpenTSDBTest(t *testing.T) (*Client, *MockHTTPClient) {
 
 	// Set default values for optional configuration fields.
 	if tsdbClient.config.MaxPutPointsNum <= 0 {
-		tsdbClient.config.MaxPutPointsNum = DefaultMaxPutPointsNum
+		tsdbClient.config.MaxPutPointsNum = defaultMaxPutPointsNum
 	}
 
 	if tsdbClient.config.DetectDeltaNum <= 0 {
-		tsdbClient.config.DetectDeltaNum = DefaultDetectDeltaNum
+		tsdbClient.config.DetectDeltaNum = defaultDetectDeltaNum
 	}
 
 	if tsdbClient.config.MaxContentLength <= 0 {
-		tsdbClient.config.MaxContentLength = DefaultMaxContentLength
+		tsdbClient.config.MaxContentLength = defaultMaxContentLength
 	}
 
 	// Initialize the OpenTSDB client with the given configuration.
@@ -507,8 +512,8 @@ func TestQueryAnnotationSuccess(t *testing.T) {
 	require.NotNil(t, postResp)
 
 	queryAnnoMap := map[string]interface{}{
-		AnQueryStartTime: addedST,
-		AnQueryTSUid:     addedTsuid,
+		anQueryStartTime: addedST,
+		anQueryTSUid:     addedTsuid,
 	}
 
 	queryResp := &AnnotationResponse{}
@@ -604,7 +609,7 @@ func TestHealthCheck_Failure(t *testing.T) {
 	client, _ := setOpenTSDBTest(t)
 
 	dialTimeout = func(_, _ string, _ time.Duration) (net.Conn, error) {
-		return nil, errors.New("connection error")
+		return nil, errConnection
 	}
 
 	resp, err := client.HealthCheck(context.Background())

@@ -52,17 +52,17 @@ func sendOperationStats(logger Logger, start time.Time, operation string, status
 }
 
 func addTracer(ctx context.Context, tracer trace.Tracer, operation, typeName string) trace.Span {
-	if tracer != nil {
-		_, span := tracer.Start(ctx, fmt.Sprintf("opentsdb-%s", operation))
-
-		span.SetAttributes(
-			attribute.String(fmt.Sprintf("opentsdb-%s.operation", typeName), operation),
-		)
-
-		return span
+	if tracer == nil {
+		return nil
 	}
 
-	return nil
+	_, span := tracer.Start(ctx, fmt.Sprintf("opentsdb-%s", operation))
+
+	span.SetAttributes(
+		attribute.String(fmt.Sprintf("opentsdb-%s.operation", typeName), operation),
+	)
+
+	return span
 }
 
 func (c *Client) addTrace(ctx context.Context, operation string) trace.Span {
