@@ -121,6 +121,7 @@ func (m redisMigrator) commitMigration(c *container.Container, data transactionD
 func (m redisMigrator) rollback(c *container.Container, data transactionData) {
 	data.RedisTx.Discard()
 
-	c.Errorf("Migration %v for Redis failed and rolled back", data.MigrationNumber)
 	m.migrator.rollback(c, data)
+
+	c.Fatalf("Migration %v for Redis failed and rolled back", data.MigrationNumber)
 }

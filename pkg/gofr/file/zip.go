@@ -58,10 +58,10 @@ func NewZip(content []byte) (*Zip, error) {
 func (z *Zip) CreateLocalCopies(dest string) error {
 	dest = filepath.Clean(dest)
 	for _, zf := range z.Files {
-		destPath := filepath.Join(dest, zf.name)
+		destPath := filepath.Clean(filepath.Join(dest, zf.name))
 
 		if zf.isDir {
-			err := os.MkdirAll(destPath, os.ModeDir)
+			err := os.MkdirAll(destPath, os.ModePerm)
 			if err != nil {
 				return err
 			}

@@ -5,6 +5,8 @@ go 1.22
 require (
 	github.com/dgraph-io/badger/v4 v4.2.0
 	github.com/stretchr/testify v1.9.0
+	go.opentelemetry.io/otel v1.30.0
+	go.opentelemetry.io/otel/trace v1.30.0
 	go.uber.org/mock v0.4.0
 )
 

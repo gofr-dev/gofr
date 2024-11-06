@@ -87,6 +87,11 @@ This document lists all the configuration options supported by the GoFr framewor
 
 ---
 
+-  TRACER_RATIO
+-  Refers to the proportion of traces that are exported through sampling. It is optional configuration. By default, this ratio is set to 1.
+
+---
+
 -  TRACER_AUTH_KEY
 -  Authorization header for trace exporter requests.
 -  Supported for zipkin, jaeger.
@@ -109,6 +114,16 @@ This document lists all the configuration options supported by the GoFr framewor
 
 -  REQUEST_TIMEOUT
 -  Set the request timeouts (in seconds) for HTTP server.
+
+---
+
+- CERT_FILE
+- Set the path to your PEM certificate file for the HTTPS server to establish a secure connection.
+
+--- 
+
+- KEY_FILE
+- Set the path to your PEM key file for the HTTPS server to establish a secure connection.
 
 {% /table %}
 

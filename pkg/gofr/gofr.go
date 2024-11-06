@@ -23,7 +23,6 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
 	"golang.org/x/sync/errgroup"
-	"google.golang.org/grpc"
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
@@ -63,13 +62,6 @@ type App struct {
 	subscriptionManager SubscriptionManager
 }
 
-// RegisterService adds a gRPC service to the GoFr application.
-func (a *App) RegisterService(desc *grpc.ServiceDesc, impl interface{}) {
-	a.container.Logger.Infof("registering GRPC Server: %s", desc.ServiceName)
-	a.grpcServer.server.RegisterService(desc, impl)
-	a.grpcRegistered = true
-}
-
 // New creates an HTTP Server Application and returns that App.
 func New() *App {
 	app := &App{}
@@ -93,6 +85,24 @@ func New() *App {
 	}
 
 	app.httpServer = newHTTPServer(app.container, port, middleware.GetConfigs(app.Config))
+	app.httpServer.certFile = app.Config.GetOrDefault("CERT_FILE", "")
+	app.httpServer.keyFile = app.Config.GetOrDefault("KEY_FILE", "")
+
+	// Add Default routes
+	app.add(http.MethodGet, "/.well-known/health", healthHandler)
+	app.add(http.MethodGet, "/.well-known/alive", liveHandler)
+	app.add(http.MethodGet, "/favicon.ico", faviconHandler)
+
+	// If the openapi.json file exists in the static directory, set up routes for OpenAPI and Swagger documentation.
+	if _, err = os.Stat("./static/" + gofrHTTP.DefaultSwaggerFileName); err == nil {
+		// Route to serve the OpenAPI JSON specification file.
+		app.add(http.MethodGet, "/.well-known/"+gofrHTTP.DefaultSwaggerFileName, OpenAPIHandler)
+		// Route to serve the Swagger UI, providing a user interface for the API documentation.
+		app.add(http.MethodGet, "/.well-known/swagger", SwaggerUIHandler)
+		// Catchall route: any request to /.well-known/{name} (e.g., /.well-known/other)
+		// will be handled by the SwaggerUIHandler, serving the Swagger UI.
+		app.add(http.MethodGet, "/.well-known/{name}", SwaggerUIHandler)
+	}
 
 	if app.Config.Get("APP_ENV") == "DEBUG" {
 		app.httpServer.RegisterProfilingRoutes()
@@ -177,7 +187,7 @@ func (a *App) Run() {
 		}(a.httpServer)
 	}
 
-	// Start GRPC Server only if a service is registered
+	// Start gRPC Server only if a service is registered
 	if a.grpcRegistered {
 		wg.Add(1)
 
@@ -232,15 +242,14 @@ func (a *App) Shutdown(ctx context.Context) error {
 }
 
 func (a *App) httpServerSetup() {
-	// Add Default routes
-	a.add(http.MethodGet, "/.well-known/health", healthHandler)
-	a.add(http.MethodGet, "/.well-known/alive", liveHandler)
-	a.add(http.MethodGet, "/favicon.ico", faviconHandler)
-
-	if _, err := os.Stat("./static/openapi.json"); err == nil {
-		a.add(http.MethodGet, "/.well-known/openapi.json", OpenAPIHandler)
-		a.add(http.MethodGet, "/.well-known/swagger", SwaggerUIHandler)
-		a.add(http.MethodGet, "/.well-known/{name}", SwaggerUIHandler)
+	// TODO: find a way to read REQUEST_TIMEOUT config only once and log it there. currently doing it twice one for populating
+	// the value and other for logging
+	requestTimeout := a.Config.Get("REQUEST_TIMEOUT")
+	if requestTimeout != "" {
+		timeoutVal, err := strconv.Atoi(requestTimeout)
+		if err != nil || timeoutVal < 0 {
+			a.container.Error("invalid value of config REQUEST_TIMEOUT.")
+		}
 	}
 
 	a.httpServer.router.PathPrefix("/").Handler(handler{
@@ -339,10 +348,15 @@ func (a *App) PATCH(pattern string, handler Handler) {
 func (a *App) add(method, pattern string, h Handler) {
 	a.httpRegistered = true
 
+	reqTimeout, err := strconv.Atoi(a.Config.Get("REQUEST_TIMEOUT"))
+	if (err != nil && a.Config.Get("REQUEST_TIMEOUT") != "") || reqTimeout < 0 {
+		reqTimeout = 0
+	}
+
 	a.httpServer.router.Add(method, pattern, handler{
 		function:       h,
 		container:      a.container,
-		requestTimeout: a.Config.Get("REQUEST_TIMEOUT"),
+		requestTimeout: time.Duration(reqTimeout) * time.Second,
 	})
 }
 
@@ -376,11 +390,17 @@ func (a *App) Migrate(migrationsMap map[int64]migration.Migrate) {
 }
 
 func (a *App) initTracer() {
+	traceRatio, err := strconv.ParseFloat(a.Config.GetOrDefault("TRACER_RATIO", "1"), 64)
+	if err != nil {
+		a.container.Error(err)
+	}
+
 	tp := sdktrace.NewTracerProvider(
 		sdktrace.WithResource(resource.NewWithAttributes(
 			semconv.SchemaURL,
 			semconv.ServiceNameKey.String(a.container.GetAppName()),
 		)),
+		sdktrace.WithSampler(sdktrace.ParentBased(sdktrace.TraceIDRatioBased(traceRatio))),
 	)
 	otel.SetTracerProvider(tp)
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
@@ -509,8 +529,15 @@ func (o *otelErrorHandler) Handle(e error) {
 // It takes a variable number of credentials as alternating username and password strings.
 // An error is logged if an odd number of arguments is provided.
 func (a *App) EnableBasicAuth(credentials ...string) {
+	if len(credentials) == 0 {
+		a.container.Error("No credentials provided for EnableBasicAuth. Proceeding without Authentication")
+		return
+	}
+
 	if len(credentials)%2 != 0 {
-		a.container.Error("Invalid number of arguments for EnableBasicAuth")
+		a.container.Error("Invalid number of arguments for EnableBasicAuth. Proceeding without Authentication")
+
+		return
 	}
 
 	users := make(map[string]string)
@@ -613,15 +640,16 @@ func (a *App) UseMiddleware(middlewares ...gofrHTTP.Middleware) {
 	a.httpServer.router.UseMiddleware(middlewares...)
 }
 
-// AddCronJob registers a cron job to the cron table, the schedule is in * * * * * (5 part) format
-// denoting minute, hour, day, month and day of week respectively.
+// AddCronJob registers a cron job to the cron table.
+// The cron expression can be either a 5-part or 6-part format. The 6-part format includes an
+// optional second field (in beginning) and others being minute, hour, day, month and day of week respectively.
 func (a *App) AddCronJob(schedule, jobName string, job CronFunc) {
 	if a.cron == nil {
 		a.cron = NewCron(a.container)
 	}
 
 	if err := a.cron.AddJob(schedule, jobName, job); err != nil {
-		a.Logger().Errorf("error adding cron job, err : %v", err)
+		a.Logger().Errorf("error adding cron job, err: %v", err)
 	}
 }
 

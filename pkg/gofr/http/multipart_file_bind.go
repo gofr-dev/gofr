@@ -1,12 +1,24 @@
 package http
 
 import (
+	"errors"
 	"io"
 	"mime/multipart"
 	"reflect"
 	"strconv"
 
 	"gofr.dev/pkg/gofr/file"
+)
+
+var (
+	errUnsupportedInterfaceType = errors.New("unsupported interface value type")
+	errDataLengthExceeded       = errors.New("data length exceeds array capacity")
+	errUnsupportedKind          = errors.New("unsupported kind")
+	errSettingValueFailure      = errors.New("error setting value at index")
+	errNotAStruct               = errors.New("provided value is not a struct")
+	errUnexportedField          = errors.New("cannot set field; it might be unexported")
+	errUnsupportedFieldType     = errors.New("unsupported type for field")
+	errFieldsNotSet             = errors.New("no fields were set")
 )
 
 type formData struct {
@@ -16,6 +28,16 @@ type formData struct {
 
 func (uf *formData) mapStruct(val reflect.Value, field *reflect.StructField) (bool, error) {
 	vKind := val.Kind()
+
+	if field == nil {
+		// Check if val is not a struct
+		if vKind != reflect.Struct {
+			return false, nil // Return false if val is not a struct
+		}
+
+		// If field is nil, iterate through all fields of the struct
+		return uf.iterateStructFields(val)
+	}
 
 	if vKind == reflect.Pointer {
 		return uf.checkPointer(val, field)
@@ -67,6 +89,10 @@ func (uf *formData) checkPointer(val reflect.Value, field *reflect.StructField) 
 }
 
 func (uf *formData) checkStruct(val reflect.Value) (bool, error) {
+	return uf.iterateStructFields(val)
+}
+
+func (uf *formData) iterateStructFields(val reflect.Value) (bool, error) {
 	var set bool
 
 	tVal := val.Type()
@@ -134,6 +160,8 @@ func (*formData) setFile(value reflect.Value, header []*multipart.FileHeader) (b
 }
 
 func (uf *formData) setFieldValue(value reflect.Value, data string) (bool, error) {
+	value = dereferencePointerType(value)
+
 	kind := value.Kind()
 	switch kind {
 	case reflect.String:
@@ -146,13 +174,31 @@ func (uf *formData) setFieldValue(value reflect.Value, data string) (bool, error
 		return uf.setFloatValue(value, data)
 	case reflect.Bool:
 		return uf.setBoolValue(value, data)
-	case reflect.Invalid, reflect.Complex64, reflect.Complex128, reflect.Array, reflect.Chan, reflect.Func, reflect.Interface,
-		reflect.Map, reflect.Pointer, reflect.Slice, reflect.Struct, reflect.UnsafePointer:
-		// These types are not supported for setting via form data
-		return false, nil
-	default:
+	case reflect.Slice, reflect.Array:
+		return uf.setSliceOrArrayValue(value, data)
+	case reflect.Interface:
+		return uf.setInterfaceValue(value, data)
+	case reflect.Struct:
+		return uf.setStructValue(value, data)
+	case reflect.Invalid, reflect.Complex64, reflect.Complex128, reflect.Chan, reflect.Func,
+		reflect.Map, reflect.Pointer, reflect.UnsafePointer:
 		return false, nil
 	}
+
+	return false, nil
+}
+
+func dereferencePointerType(value reflect.Value) reflect.Value {
+	if value.Kind() == reflect.Ptr {
+		if value.IsNil() {
+			// Initialize the pointer to a new value if it's nil
+			value.Set(reflect.New(value.Type().Elem()))
+		}
+
+		value = value.Elem() // Dereference the pointer
+	}
+
+	return value
 }
 
 func (*formData) setStringValue(value reflect.Value, data string) (bool, error) {

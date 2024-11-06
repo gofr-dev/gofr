@@ -3,12 +3,20 @@ package cassandra
 import (
 	"context"
 	"errors"
+	"fmt"
 	"reflect"
-	"regexp"
-	"strings"
 	"time"
 
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
+
 	"github.com/gocql/gocql"
+)
+
+const (
+	LoggedBatch = iota
+	UnloggedBatch
+	CounterBatch
 )
 
 type Config struct {
@@ -23,6 +31,7 @@ type cassandra struct {
 	clusterConfig clusterConfig
 	session       session
 	query         query
+	batches       map[string]batch
 }
 
 type Client struct {
@@ -32,6 +41,7 @@ type Client struct {
 
 	logger  Logger
 	metrics Metrics
+	tracer  trace.Tracer
 }
 
 var errStatusDown = errors.New("status down")
@@ -83,15 +93,42 @@ func (c *Client) UseMetrics(metrics interface{}) {
 	}
 }
 
+// UseTracer sets the tracer for Cassandra client.
+func (c *Client) UseTracer(tracer any) {
+	if tracer, ok := tracer.(trace.Tracer); ok {
+		c.tracer = tracer
+	}
+}
+
+// Query is the original method without context, preserved for backward compatibility.
+// It internally delegates to QueryWithCtx using context.Background() as the default context.
+func (c *Client) Query(dest any, stmt string, values ...any) error {
+	return c.QueryWithCtx(context.Background(), dest, stmt, values...)
+}
+
+func (c *Client) Exec(stmt string, values ...any) error {
+	return c.ExecWithCtx(context.Background(), stmt, values)
+}
+
+func (c *Client) ExecCAS(dest any, stmt string, values ...any) (bool, error) {
+	return c.ExecCASWithCtx(context.Background(), dest, stmt, values)
+}
+
+func (c *Client) NewBatch(name string, batchType int) error {
+	return c.NewBatchWithCtx(nil, name, batchType)
+}
+
 //nolint:exhaustive // We just want to take care of slice and struct in this case.
-func (c *Client) Query(dest interface{}, stmt string, values ...interface{}) error {
-	defer c.postProcess(&QueryLog{Query: stmt, Keyspace: c.config.Keyspace}, time.Now())
+func (c *Client) QueryWithCtx(ctx context.Context, dest any, stmt string, values ...any) error {
+	_, span := c.addTrace(ctx, "query", stmt)
+
+	defer c.sendOperationStats(&QueryLog{Operation: "QueryWithCtx", Query: stmt, Keyspace: c.config.Keyspace}, time.Now(), "query", span)
 
 	rvo := reflect.ValueOf(dest)
 	if rvo.Kind() != reflect.Ptr {
 		c.logger.Error("we did not get a pointer. data is not settable.")
 
-		return destinationIsNotPointer{}
+		return errDestinationIsNotPointer
 	}
 
 	rv := rvo.Elem()
@@ -125,32 +162,36 @@ func (c *Client) Query(dest interface{}, stmt string, values ...interface{}) err
 	default:
 		c.logger.Debugf("a pointer to %v was not expected.", rv.Kind().String())
 
-		return unexpectedPointer{target: rv.Kind().String()}
+		return errUnexpectedPointer{target: rv.Kind().String()}
 	}
 
 	return nil
 }
 
-func (c *Client) Exec(stmt string, values ...interface{}) error {
-	defer c.postProcess(&QueryLog{Query: stmt, Keyspace: c.config.Keyspace}, time.Now())
+func (c *Client) ExecWithCtx(ctx context.Context, stmt string, values ...any) error {
+	_, span := c.addTrace(ctx, "exec", stmt)
+
+	defer c.sendOperationStats(&QueryLog{Operation: "ExecWithCtx", Query: stmt, Keyspace: c.config.Keyspace}, time.Now(), "exec", span)
 
 	return c.cassandra.session.query(stmt, values...).exec()
 }
 
 //nolint:exhaustive // We just want to take care of slice and struct in this case.
-func (c *Client) ExecCAS(dest interface{}, stmt string, values ...interface{}) (bool, error) {
+func (c *Client) ExecCASWithCtx(ctx context.Context, dest any, stmt string, values ...any) (bool, error) {
 	var (
 		applied bool
 		err     error
 	)
 
-	defer c.postProcess(&QueryLog{Query: stmt, Keyspace: c.config.Keyspace}, time.Now())
+	_, span := c.addTrace(ctx, "exec-cas", stmt)
+
+	defer c.sendOperationStats(&QueryLog{Operation: "ExecCASWithCtx", Query: stmt, Keyspace: c.config.Keyspace}, time.Now(), "exec-cas", span)
 
 	rvo := reflect.ValueOf(dest)
 	if rvo.Kind() != reflect.Ptr {
 		c.logger.Debugf("we did not get a pointer. data is not settable.")
 
-		return false, destinationIsNotPointer{}
+		return false, errDestinationIsNotPointer
 	}
 
 	rv := rvo.Elem()
@@ -163,18 +204,33 @@ func (c *Client) ExecCAS(dest interface{}, stmt string, values ...interface{}) (
 	case reflect.Slice:
 		c.logger.Debugf("a slice of %v was not expected.", reflect.SliceOf(reflect.TypeOf(dest)).String())
 
-		return false, unexpectedSlice{target: reflect.SliceOf(reflect.TypeOf(dest)).String()}
+		return false, errUnexpectedSlice{target: reflect.SliceOf(reflect.TypeOf(dest)).String()}
 
 	case reflect.Map:
 		c.logger.Debugf("a map was not expected.")
 
-		return false, unexpectedMap{}
+		return false, errUnexpectedMap
 
 	default:
 		applied, err = q.scanCAS(rv.Interface())
 	}
 
 	return applied, err
+}
+
+func (c *Client) NewBatchWithCtx(_ context.Context, name string, batchType int) error {
+	switch batchType {
+	case LoggedBatch, UnloggedBatch, CounterBatch:
+		if len(c.cassandra.batches) == 0 {
+			c.cassandra.batches = make(map[string]batch)
+		}
+
+		c.cassandra.batches[name] = c.cassandra.session.newBatch(gocql.BatchType(batchType))
+
+		return nil
+	default:
+		return errUnsupportedBatchType
+	}
 }
 
 func (c *Client) rowsToStruct(iter iterator, vo reflect.Value) {
@@ -200,7 +256,7 @@ func (c *Client) rowsToStructCAS(query query, vo reflect.Value) (bool, error) {
 		v = vo.Elem()
 	}
 
-	row := make(map[string]interface{})
+	row := make(map[string]any)
 
 	applied, err := query.mapScanCAS(row)
 	if err != nil {
@@ -225,14 +281,14 @@ func (c *Client) rowsToStructCAS(query query, vo reflect.Value) (bool, error) {
 	return applied, nil
 }
 
-func (c *Client) getFields(columns []string, fieldNameIndex map[string]int, v reflect.Value) []interface{} {
-	fields := make([]interface{}, 0)
+func (*Client) getFields(columns []string, fieldNameIndex map[string]int, v reflect.Value) []any {
+	fields := make([]any, 0)
 
 	for _, column := range columns {
 		if i, ok := fieldNameIndex[column]; ok {
 			fields = append(fields, v.Field(i).Addr().Interface())
 		} else {
-			var i interface{}
+			var i any
 			fields = append(fields, &i)
 		}
 	}
@@ -240,7 +296,7 @@ func (c *Client) getFields(columns []string, fieldNameIndex map[string]int, v re
 	return fields
 }
 
-func (c *Client) getFieldNameIndex(v reflect.Value) map[string]int {
+func (*Client) getFieldNameIndex(v reflect.Value) map[string]int {
 	fieldNameIndex := map[string]int{}
 
 	for i := 0; i < v.Type().NumField(); i++ {
@@ -261,7 +317,7 @@ func (c *Client) getFieldNameIndex(v reflect.Value) map[string]int {
 	return fieldNameIndex
 }
 
-func (c *Client) getColumnsFromColumnsInfo(columns []gocql.ColumnInfo) []string {
+func (*Client) getColumnsFromColumnsInfo(columns []gocql.ColumnInfo) []string {
 	cols := make([]string, 0)
 
 	for _, column := range columns {
@@ -271,22 +327,17 @@ func (c *Client) getColumnsFromColumnsInfo(columns []gocql.ColumnInfo) []string 
 	return cols
 }
 
-var matchFirstCap = regexp.MustCompile("(.)([A-Z][a-z]+)")
-var matchAllCap = regexp.MustCompile("([a-z0-9])([A-Z])")
-
-func toSnakeCase(str string) string {
-	snake := matchFirstCap.ReplaceAllString(str, "${1}_${2}")
-	snake = matchAllCap.ReplaceAllString(snake, "${1}_${2}")
-
-	return strings.ToLower(snake)
-}
-
-func (c *Client) postProcess(ql *QueryLog, startTime time.Time) {
+func (c *Client) sendOperationStats(ql *QueryLog, startTime time.Time, method string, span trace.Span) {
 	duration := time.Since(startTime).Milliseconds()
 
 	ql.Duration = duration
 
 	c.logger.Debug(ql)
+
+	if span != nil {
+		defer span.End()
+		span.SetAttributes(attribute.Int64(fmt.Sprintf("cassandra.%v.duration", method), duration))
+	}
 
 	c.metrics.RecordHistogram(context.Background(), "app_cassandra_stats", float64(duration), "hostname", c.config.Hosts,
 		"keyspace", c.config.Keyspace)
@@ -295,8 +346,8 @@ func (c *Client) postProcess(ql *QueryLog, startTime time.Time) {
 }
 
 type Health struct {
-	Status  string                 `json:"status,omitempty"`
-	Details map[string]interface{} `json:"details,omitempty"`
+	Status  string         `json:"status,omitempty"`
+	Details map[string]any `json:"details,omitempty"`
 }
 
 // HealthCheck checks the health of the Cassandra.
@@ -333,103 +384,17 @@ func (c *Client) HealthCheck(context.Context) (any, error) {
 	return &h, nil
 }
 
-// cassandraIterator implements iterator interface.
-type cassandraIterator struct {
-	iter *gocql.Iter
-}
+func (c *Client) addTrace(ctx context.Context, method, query string) (context.Context, trace.Span) {
+	if c.tracer != nil {
+		tracerCtx, span := c.tracer.Start(ctx, fmt.Sprintf("cassandra-%v", method))
 
-// Columns gets the column information.
-// This method wraps the `Columns` method of the underlying `iter` object.
-func (c *cassandraIterator) columns() []gocql.ColumnInfo {
-	return c.iter.Columns()
-}
+		span.SetAttributes(
+			attribute.String("cassandra.query", query),
+			attribute.String("cassandra.keyspace", c.config.Keyspace),
+		)
 
-// Scan gets the next row from the Cassandra iterator and fills in the provided arguments.
-// This method wraps the `Scan` method of the underlying `iter` object.
-func (c *cassandraIterator) scan(dest ...interface{}) bool {
-	return c.iter.Scan(dest...)
-}
-
-// NumRows returns a number of rows.
-// This method wraps the `NumRows` method of the underlying `iter` object.
-func (c *cassandraIterator) numRows() int {
-	return c.iter.NumRows()
-}
-
-// cassandraQuery implements query interface.
-type cassandraQuery struct {
-	query *gocql.Query
-}
-
-// Exec performs a Cassandra's Query Exec.
-// This method wraps the `Exec` method of the underlying `query` object.
-func (c *cassandraQuery) exec() error {
-	return c.query.Exec()
-}
-
-// Iter returns a Cassandra iterator.
-// This method wraps the `Iter` method of the underlying `query` object.
-func (c *cassandraQuery) iter() iterator {
-	iter := cassandraIterator{iter: c.query.Iter()}
-
-	return &iter
-}
-
-// MapScanCAS checks a Cassandra query with an IF clause and scans the existing data into map[string]interface{} (if any).
-// This method wraps the `MapScanCAS` method of the underlying `query` object.
-func (c *cassandraQuery) mapScanCAS(dest map[string]interface{}) (applied bool, err error) {
-	return c.query.MapScanCAS(dest)
-}
-
-// ScanCAS checks a Cassandra query with an IF clause and scans the existing data (if any).
-// This method wraps the `ScanCAS` method of the underlying `query` object.
-func (c *cassandraQuery) scanCAS(dest ...any) (applied bool, err error) {
-	return c.query.ScanCAS(dest)
-}
-
-// cassandraClusterConfig implements clusterConfig interface.
-type cassandraClusterConfig struct {
-	clusterConfig *gocql.ClusterConfig
-}
-
-func newClusterConfig(config *Config) clusterConfig {
-	var c cassandraClusterConfig
-
-	config.Hosts = strings.TrimSuffix(strings.TrimSpace(config.Hosts), ",")
-	hosts := strings.Split(config.Hosts, ",")
-	c.clusterConfig = gocql.NewCluster(hosts...)
-	c.clusterConfig.Keyspace = config.Keyspace
-	c.clusterConfig.Port = config.Port
-	c.clusterConfig.Authenticator = gocql.PasswordAuthenticator{Username: config.Username, Password: config.Password}
-
-	return &c
-}
-
-// CreateSession creates a Cassandra session based on the provided configuration.
-// This method wraps the `CreateSession` method of the underlying `clusterConfig` object.
-// It creates a new Cassandra session using the configuration options specified in `c.clusterConfig`.
-//
-// Returns:
-//   - A `session` object representing the established Cassandra connection, or `nil` if an error occurred.
-//   - An `error` object if there was a problem creating the session, or `nil` if successful.
-func (c *cassandraClusterConfig) createSession() (session, error) {
-	sess, err := c.clusterConfig.CreateSession()
-	if err != nil {
-		return nil, err
+		return tracerCtx, span
 	}
 
-	return &cassandraSession{session: sess}, nil
-}
-
-// cassandraSession implements session interface.
-type cassandraSession struct {
-	session *gocql.Session
-}
-
-// Query creates a Cassandra query.
-// This method wraps the `Query` method of the underlying `session` object.
-func (c *cassandraSession) query(stmt string, values ...interface{}) query {
-	q := &cassandraQuery{query: c.session.Query(stmt, values...)}
-
-	return q
+	return ctx, nil
 }

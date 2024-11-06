@@ -92,7 +92,12 @@ func WSHandler(ctx *gofr.Context) (interface{}, error) {
 
 	ctx.Logger.Infof("Received message: %s", message)
 
+	err = ctx.WriteMessageToSocket("Hello! GoFr")
+	if err != nil {
+		return nil, err
+	}
+
 	return message, nil
 }
 ```
-
+> #### Check out the example on how to read/write through a WebSocket in GoFr: [Visit GitHub](https://github.com/gofr-dev/gofr/blob/main/examples/using-web-socket/main.go)

@@ -16,7 +16,7 @@ import (
 func TestMain_BindError(t *testing.T) {
 	const host = "http://localhost:8300"
 	go main()
-	time.Sleep(time.Second * 1)
+	time.Sleep(100 * time.Millisecond)
 
 	c := http.Client{}
 
@@ -56,7 +56,7 @@ func generateMultiPartBody(t *testing.T) (*bytes.Buffer, string) {
 		t.Fatalf("Failed to write file to form: %v", err)
 	}
 
-	fileHeader, err := writer.CreateFormFile("a", "hello.txt")
+	fileHeader, err := writer.CreateFormFile("file_upload", "hello.txt")
 	if err != nil {
 		t.Fatalf("Failed to create form file: %v", err)
 	}

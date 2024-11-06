@@ -128,7 +128,7 @@ func (d sqlMigrator) rollback(c *container.Container, data transactionData) {
 		c.Error("unable to rollback transaction: %v", err)
 	}
 
-	c.Errorf("Migration %v failed and rolled back", data.MigrationNumber)
-
 	d.migrator.rollback(c, data)
+
+	c.Fatalf("Migration %v failed and rolled back", data.MigrationNumber)
 }

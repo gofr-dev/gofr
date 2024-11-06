@@ -1,8 +1,10 @@
 package gofr
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http/httptest"
+	"reflect"
 	"testing"
 	"time"
 
@@ -33,7 +35,7 @@ func Test_WebSocket_Success(t *testing.T) {
 	})
 
 	go app.Run()
-	time.Sleep(1 * time.Second)
+	time.Sleep(100 * time.Millisecond)
 
 	// Create a WebSocket client
 	wsURL := "ws" + server.URL[len("http"):] + "/ws"
@@ -59,4 +61,59 @@ func Test_WebSocket_Success(t *testing.T) {
 	// Close the client connection
 	err = ws.Close()
 	require.NoError(t, err)
+}
+
+func TestSerializeMessage(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    interface{}
+		expected []byte
+	}{
+		{
+			name:     "String input",
+			input:    "hello",
+			expected: []byte("hello"),
+		},
+		{
+			name:     "Byte slice input",
+			input:    []byte("hello"),
+			expected: []byte("hello"),
+		},
+		{
+			name: "Struct input",
+			input: struct {
+				Data string `json:"data"`
+			}{
+				Data: "hello",
+			},
+			expected: []byte(`{"data":"hello"}`),
+		},
+		{
+			name:     "Integer input",
+			input:    42,
+			expected: []byte(`42`),
+		},
+		{
+			name:     "Map input",
+			input:    map[string]interface{}{"key": "value"},
+			expected: []byte(`{"key":"value"}`),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			actual, err := serializeMessage(tt.input)
+			require.NoError(t, err, "TestSerializeMessage Failed!")
+
+			var expectedFormatted, actualFormatted interface{}
+
+			_ = json.Unmarshal(tt.expected, &expectedFormatted)
+
+			_ = json.Unmarshal(actual, &actualFormatted)
+
+			if !reflect.DeepEqual(expectedFormatted, actualFormatted) {
+				t.Errorf("serializeMessage() = %s, want %s", string(actual), string(tt.expected))
+			}
+		})
+	}
 }

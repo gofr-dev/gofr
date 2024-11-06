@@ -4,6 +4,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"time"
 )
 
 // File represents a file in the filesystem.
@@ -18,6 +19,14 @@ type File interface {
 	ReadAll() (RowReader, error)
 }
 
+type FileInfo interface {
+	Name() string       // base name of the file
+	Size() int64        // length in bytes for regular files; system-dependent for others
+	ModTime() time.Time // modification time
+	Mode() os.FileMode  // file mode bits
+	IsDir() bool        // abbreviation for Mode().IsDir()
+}
+
 type RowReader interface {
 	Next() bool
 	Scan(interface{}) error
@@ -29,6 +38,7 @@ type FileSystem interface {
 	// error, if any happens.
 	Create(name string) (File, error)
 
+	// TODO - Lets make bucket constant for MkdirAll as well, we might create buckets from migrations
 	// Mkdir creates a directory in the filesystem, return an error if any
 	// happens.
 	Mkdir(name string, perm os.FileMode) error
@@ -53,6 +63,18 @@ type FileSystem interface {
 
 	// Rename renames a file.
 	Rename(oldname, newname string) error
+
+	// ReadDir returns a list of files/directories present in the directory.
+	ReadDir(dir string) ([]FileInfo, error)
+
+	// Stat returns the file/directory information in the directory.
+	Stat(name string) (FileInfo, error)
+
+	// ChDir changes the current directory.
+	ChDir(dirname string) error
+
+	// Getwd returns the path of the current directory.
+	Getwd() (string, error)
 }
 
 var (

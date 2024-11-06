@@ -9,7 +9,7 @@ import (
 
 func Test_UserPurgeCron(t *testing.T) {
 	go main()
-	time.Sleep(1*time.Minute + 30*time.Second)
+	time.Sleep(1100 * time.Millisecond)
 
 	expected := 1
 

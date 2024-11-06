@@ -58,8 +58,8 @@ func Test_scanEntity(t *testing.T) {
 	var invalidObject int
 
 	type userTestEntity struct {
-		ID   int
-		Name string
+		ID   int    `sql:"auto_increment"`
+		Name string `sql:"not_null"`
 	}
 
 	tests := []struct {
@@ -77,6 +77,9 @@ func Test_scanEntity(t *testing.T) {
 				primaryKey: "id",
 				tableName:  "user_test_entity",
 				restPath:   "userTestEntity",
+				constraints: map[string]gofrSql.FieldConstraints{"id": {AutoIncrement: true, NotNull: false},
+					"name": {AutoIncrement: false, NotNull: true},
+				},
 			},
 			err: nil,
 		},
@@ -89,6 +92,8 @@ func Test_scanEntity(t *testing.T) {
 				primaryKey: "id",
 				tableName:  "user",
 				restPath:   "users",
+				constraints: map[string]gofrSql.FieldConstraints{"id": {AutoIncrement: false, NotNull: false},
+					"is_employed": {AutoIncrement: false, NotNull: false}, "name": {AutoIncrement: false, NotNull: false}},
 			},
 			err: nil,
 		},
@@ -252,11 +257,11 @@ func Test_CreateHandler(t *testing.T) {
 				"hostname", gomock.Any(), "database", gomock.Any(), "type", "INSERT").MaxTimes(2)
 
 			if tc.expectedErr == nil {
-				mocks.SQL.EXPECT().Dialect().Return(tc.dialect).Times(1)
+				mocks.SQL.ExpectDialect().WillReturnString(tc.dialect)
 			}
 
 			if tc.expectedQuery != "" {
-				mocks.SQL.EXPECT().ExecContext(ctx, tc.expectedQuery, tc.id, "goFr", true).Times(1)
+				mocks.SQL.ExpectExec(tc.expectedQuery).WithArgs(tc.id, "goFr", true).WillReturnResult(mocks.SQL.NewResult(10, 1))
 			}
 
 			resp, err := e.Create(ctx)
@@ -590,8 +595,8 @@ func Test_DeleteHandler(t *testing.T) {
 			t.Run(dc.dialect+" "+tc.desc, func(t *testing.T) {
 				ctx := createTestContext(http.MethodDelete, "/user", tc.id, nil, c)
 
-				mocks.SQL.EXPECT().Dialect().Return(dc.dialect)
-				mocks.SQL.EXPECT().ExecContext(ctx, dc.expectedQuery, tc.id).Return(tc.mockResp, tc.mockErr)
+				mocks.SQL.ExpectDialect().WillReturnString(dc.dialect)
+				mocks.SQL.ExpectExec(dc.expectedQuery).WithArgs(tc.id).WillReturnResult(tc.mockResp).WillReturnError(tc.mockErr)
 
 				resp, err := e.Delete(ctx)
 

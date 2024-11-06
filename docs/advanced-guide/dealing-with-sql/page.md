@@ -19,7 +19,7 @@ DB_DIALECT=postgres
 ```
 
 ## Usage for SQLite
-To connect with PostgreSQL, set `DB_DIALECT` to `sqlite` and `DB_NAME` to the name of your DB File. If the DB file already exists then it will be used otherwise a new one will be created.
+To connect with SQLite, set `DB_DIALECT` to `sqlite` and `DB_NAME` to the name of your DB File. If the DB file already exists then it will be used otherwise a new one will be created.
 
 ```dotenv
 DB_NAME=test.db
@@ -36,3 +36,4 @@ Add the following configs in `.env` file.
 DB_MAX_IDLE_CONNECTION=5 // Default 2
 DB_MAX_OPEN_CONNECTION=5 // Default unlimited
 ```
+> ##### Check out the example on how to add configuration for SQL in GoFr: [Visit Github](https://github.com/gofr-dev/gofr/blob/main/examples/http-server/configs/.env)

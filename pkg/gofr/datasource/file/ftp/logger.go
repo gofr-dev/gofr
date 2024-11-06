@@ -22,8 +22,8 @@ func clean(query *string) string {
 	if query == nil {
 		return ""
 	}
-	return strings.TrimSpace(regexpSpaces.ReplaceAllString(*query, " "))
 
+	return strings.TrimSpace(regexpSpaces.ReplaceAllString(*query, " "))
 }
 
 func (fl *FileLog) PrettyPrint(writer io.Writer) {

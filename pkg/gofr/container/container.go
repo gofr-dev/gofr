@@ -1,6 +1,19 @@
+/*
+Package container provides a centralized structure to manage common application-level concerns such as
+logging, connection pools, and service management. This package is designed to facilitate the sharing and
+management of these concerns across different parts of an application.
+
+Supported data sources:
+  - Databases (Cassandra, ClickHouse, MongoDB, DGraph, MySQL, PostgreSQL, SQLite)
+  - Key-value storages (Redis, BadgerDB)
+  - Pub/Sub systems (Azure Event Hub, Google as backend, Kafka, MQTT)
+  - Search engines (Solr)
+  - File systems (FTP, SFTP, S3)
+*/
 package container
 
 import (
+	"context"
 	"errors"
 	"strconv"
 	"strings"
@@ -22,6 +35,7 @@ import (
 	"gofr.dev/pkg/gofr/metrics/exporters"
 	"gofr.dev/pkg/gofr/service"
 	"gofr.dev/pkg/gofr/version"
+	"gofr.dev/pkg/gofr/websocket"
 )
 
 // Container is a collection of all common application level concerns. Things like Logger, Connection Pool for Redis
@@ -39,9 +53,11 @@ type Container struct {
 	Redis Redis
 	SQL   DB
 
-	Cassandra  Cassandra
+	Cassandra  CassandraWithContext
 	Clickhouse Clickhouse
 	Mongo      Mongo
+	Solr       Solr
+	DGraph     Dgraph
 
 	KVStore KVStore
 
@@ -73,8 +89,17 @@ func (c *Container) Create(conf config.Config) {
 	}
 
 	if c.Logger == nil {
+		levelFetchConfig, err := strconv.Atoi(conf.GetOrDefault("REMOTE_LOG_FETCH_INTERVAL", "15"))
+		if err != nil {
+			levelFetchConfig = 15
+		}
+
 		c.Logger = remotelogger.New(logging.GetLevelFromString(conf.Get("LOG_LEVEL")), conf.Get("REMOTE_LOG_URL"),
-			conf.GetOrDefault("REMOTE_LOG_FETCH_INTERVAL", "15"))
+			time.Duration(levelFetchConfig)*time.Second)
+
+		if err != nil {
+			c.Logger.Error("invalid value for REMOTE_LOG_FETCH_INTERVAL. setting default of 15 sec.")
+		}
 	}
 
 	c.Debug("Container is being created")
@@ -237,4 +262,13 @@ func (c *Container) GetPublisher() pubsub.Publisher {
 
 func (c *Container) GetSubscriber() pubsub.Subscriber {
 	return c.PubSub
+}
+
+func (*Container) GetConnectionFromContext(ctx context.Context) *websocket.Connection {
+	conn, ok := ctx.Value(websocket.WSConnectionKey).(*websocket.Connection)
+	if !ok {
+		return nil
+	}
+
+	return conn
 }

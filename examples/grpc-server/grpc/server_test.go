@@ -6,10 +6,16 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"gofr.dev/pkg/gofr/container"
 )
 
 func TestServer_SayHello(t *testing.T) {
-	s := Server{}
+	c, _ := container.NewMockContainer(t)
+
+	s := Server{
+		Container: c,
+	}
 
 	tests := []struct {
 		input string

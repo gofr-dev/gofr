@@ -12,7 +12,7 @@ import (
 func TestIntegration(t *testing.T) {
 	const host = "http://localhost:9011"
 	go main()
-	time.Sleep(time.Second * 1) // Giving some time to start the server
+	time.Sleep(100 * time.Millisecond) // Giving some time to start the server
 
 	c := http.Client{}
 
