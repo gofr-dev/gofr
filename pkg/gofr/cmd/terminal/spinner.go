@@ -1,6 +1,7 @@
 package terminal
 
 import (
+	"context"
 	"time"
 )
 
@@ -44,7 +45,7 @@ func NewGlobeSpinner(o Output) *Spinner {
 	}
 }
 
-func (s *Spinner) Spin() *Spinner {
+func (s *Spinner) Spin(ctx context.Context) *Spinner {
 	t := time.NewTicker(s.fps)
 	s.ticker = t
 	s.started = true
@@ -65,7 +66,10 @@ func (s *Spinner) Spin() *Spinner {
 		}
 	}()
 
-	s.outStream.ClearLine()
+	select {
+	case <-ctx.Done():
+		s.ticker.Stop()
+	}
 
 	return s
 }

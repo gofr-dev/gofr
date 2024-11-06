@@ -65,41 +65,46 @@ func (p *ProgressBar) updateProgressBar() {
 	}
 }
 
+const (
+	// max rounded percentage
+	maxRP = 50
+	// minimum terminal width required to render a progress bar
+	minTermWidth = 110
+)
+
 func (p *ProgressBar) getString() string {
-	const (
-		maxRP        = 50
-		minTermWidth = 110
-	)
-
-	var (
-		pbBox      string
-		numbersBox string
-	)
-
 	if p.current <= 0 && p.total <= 0 {
 		return ""
 	}
 
 	percentage := float64(p.current) / float64(p.total) * 100
-	roundedPercent := int(percentage) / 2
 
-	if p.tWidth > minTermWidth {
-		// this number can't be negative
-		numSpaces := 0
-		if maxRP-roundedPercent > 0 {
-			numSpaces = maxRP - roundedPercent
-		}
+	numbersBox := fmt.Sprintf("%.3f%c", percentage, '%')
 
-		if roundedPercent > 0 && roundedPercent < 50 {
-			pbBox = fmt.Sprintf("[%s%s%s] ", strings.Repeat("█", roundedPercent-1), "░", strings.Repeat(" ", numSpaces))
-		} else if roundedPercent <= 0 {
-			pbBox = fmt.Sprintf("[%s] ", strings.Repeat(" ", numSpaces))
-		} else {
-			pbBox = fmt.Sprintf("[%s%s] ", strings.Repeat("█", roundedPercent), strings.Repeat(" ", numSpaces))
-		}
+	if p.tWidth < minTermWidth {
+		return numbersBox
 	}
 
-	numbersBox = fmt.Sprintf("%.3f%c", percentage, '%')
+	return getProgressBox(percentage) + numbersBox
+}
 
-	return pbBox + numbersBox
+func getProgressBox(percentage float64) string {
+	var pbBox string
+
+	roundedPercent := int(percentage) / 2
+	numSpaces := 0
+
+	if maxRP-roundedPercent > 0 {
+		numSpaces = maxRP - roundedPercent
+	}
+
+	if roundedPercent > 0 && roundedPercent < 50 {
+		pbBox = fmt.Sprintf("[%s%s%s] ", strings.Repeat("█", roundedPercent-1), "░", strings.Repeat(" ", numSpaces))
+	} else if roundedPercent <= 0 {
+		pbBox = fmt.Sprintf("[%s] ", strings.Repeat(" ", numSpaces))
+	} else {
+		pbBox = fmt.Sprintf("[%s%s] ", strings.Repeat("█", roundedPercent), strings.Repeat(" ", numSpaces))
+	}
+
+	return pbBox
 }
