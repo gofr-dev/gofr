@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -16,6 +17,7 @@ import (
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
 	gofrHTTP "gofr.dev/pkg/gofr/http"
+	"gofr.dev/pkg/gofr/http/middleware"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/version"
 )
@@ -108,4 +110,72 @@ func TestContext_WriteMessageToSocket(t *testing.T) {
 
 	expectedResponse := "Hello! GoFr"
 	assert.Equal(t, expectedResponse, string(message))
+}
+
+func TestGetAuthInfo_BasicAuth(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+
+	ctx := context.WithValue(req.Context(), middleware.Username, "validUser")
+	*req = *req.Clone(ctx)
+
+	mockContainer, _ := container.NewMockContainer(t)
+	gofrRq := gofrHTTP.NewRequest(req)
+
+	c := &Context{
+		Context:   ctx,
+		Request:   gofrRq,
+		Container: mockContainer,
+	}
+
+	res := c.GetAuthInfo().GetUsername()
+
+	assert.Equal(t, "validUser", res)
+}
+
+func TestGetAuthInfo_ApiKey(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+
+	ctx := context.WithValue(req.Context(), middleware.APIKey, "9221e451-451f-4cd6-a23d-2b2d3adea9cf")
+
+	*req = *req.Clone(ctx)
+	gofrRq := gofrHTTP.NewRequest(req)
+
+	mockContainer, _ := container.NewMockContainer(t)
+
+	c := &Context{
+		Context:   ctx,
+		Request:   gofrRq,
+		Container: mockContainer,
+	}
+
+	res := c.GetAuthInfo().GetAPIKey()
+
+	assert.Equal(t, "9221e451-451f-4cd6-a23d-2b2d3adea9cf", res)
+}
+
+func TestGetAuthInfo_JWTClaims(t *testing.T) {
+	claims := jwt.MapClaims{
+		"sub":   "1234567890",
+		"name":  "John Doe",
+		"admin": true,
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+
+	ctx := context.WithValue(req.Context(), middleware.JWTClaim, claims)
+
+	*req = *req.Clone(ctx)
+	gofrRq := gofrHTTP.NewRequest(req)
+
+	mockContainer, _ := container.NewMockContainer(t)
+
+	c := &Context{
+		Context:   ctx,
+		Request:   gofrRq,
+		Container: mockContainer,
+	}
+
+	res := c.GetAuthInfo().GetClaims()
+
+	assert.Equal(t, claims, res)
 }
