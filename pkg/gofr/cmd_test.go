@@ -6,6 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"gofr.dev/pkg/gofr/cmd/terminal"
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/logging"
@@ -331,13 +332,15 @@ func Test_Run_handler_help(t *testing.T) {
 		os.Args = old
 	})
 
-	c := cmd{}
-
-	c.addRoute("hello", func(_ *Context) (interface{}, error) {
-		return "Hello", nil
-	}, AddHelp("this a helper string for hello sub command"))
-
 	out := testutil.StdoutOutputForFunc(func() {
+		c := cmd{
+			out: terminal.New(),
+		}
+
+		c.addRoute("hello", func(_ *Context) (interface{}, error) {
+			return "Hello", nil
+		}, AddHelp("this a helper string for hello sub command"))
+
 		c.Run(container.NewContainer(config.NewMockConfig(map[string]string{})))
 	})
 
