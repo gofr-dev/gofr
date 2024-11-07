@@ -36,6 +36,11 @@ DB_PASSWORD=root123
 DB_NAME=test_db
 DB_PORT=3306
 DB_DIALECT=mysql
+DB_CHARSET=
+
+# DB_CHARSET: The character set for database connection (default: utf8).
+# The `DB_CHARSET` defaults to utf8, but setting it to utf8mb4 is recommended if you need full Unicode support,
+# including emojis and special characters.
 ```
 
 Now in the following example, we'll store customer data using **POST** `/customer` and then use **GET** `/customer` to retrieve the same.
@@ -50,7 +55,7 @@ import (
 	"errors"
 
 	"github.com/redis/go-redis/v9"
-	
+
 	"gofr.dev/pkg/gofr"
 )
 
@@ -105,7 +110,7 @@ func main() {
 		// return the customer
 		return customers, nil
 	})
-	
+
 	app.Run()
 }
 ```
