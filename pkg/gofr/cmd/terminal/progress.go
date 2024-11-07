@@ -50,6 +50,8 @@ func NewProgressBar(out Output, total int64) (*ProgressBar, error) {
 }
 
 func (p *ProgressBar) Incr(i int64) bool {
+	// acquiring locks to synchronize the painting of the progress bar
+	// and incrementing the current progress by the increment value.
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
