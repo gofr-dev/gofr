@@ -620,15 +620,15 @@ func Test_UseMiddleware(t *testing.T) {
 	assert.Equal(t, "applied", testHeaderValue, "Test_UseMiddleware Failed! header value mismatch.")
 }
 
-// Test the UseMiddlewareWithContainer function
+// Test the UseMiddlewareWithContainer function.
 func TestUseMiddlewareWithContainer(t *testing.T) {
 	// Initialize the mock container
 	mockContainer := container.NewContainer(config.NewMockConfig(nil))
 
 	// Create a simple handler to test middleware functionality
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("Hello, world!"))
+		_, _ = w.Write([]byte("Hello, world!"))
 	})
 
 	// Middleware to modify response and test container access
@@ -659,7 +659,7 @@ func TestUseMiddlewareWithContainer(t *testing.T) {
 	app.httpServer.router.Handle("/test", handler)
 
 	// Create a test request
-	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
 	// Create a test response recorder
 	rr := httptest.NewRecorder()
 

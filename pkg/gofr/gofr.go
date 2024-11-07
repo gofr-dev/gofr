@@ -645,10 +645,10 @@ func (a *App) UseMiddleware(middlewares ...gofrHTTP.Middleware) {
 //
 // The `middleware` function receives the container and the handler, allowing
 // the middleware to modify the request processing flow.
-func (a *App) UseMiddlewareWithContainer(middleware func(c *container.Container, handler http.Handler) http.Handler) {
+func (a *App) UseMiddlewareWithContainer(middlewareHandler func(c *container.Container, handler http.Handler) http.Handler) {
 	a.httpServer.router.Use(func(h http.Handler) http.Handler {
-		// Wrap the provided handler `h` with the middleware function `middleware`
-		return middleware(a.container, h)
+		// Wrap the provided handler `h` with the middleware function `middlewareHandler`
+		return middlewareHandler(a.container, h)
 	})
 }
 
