@@ -620,6 +620,57 @@ func Test_UseMiddleware(t *testing.T) {
 	assert.Equal(t, "applied", testHeaderValue, "Test_UseMiddleware Failed! header value mismatch.")
 }
 
+// Test the UseMiddlewareWithContainer function
+func TestUseMiddlewareWithContainer(t *testing.T) {
+	// Initialize the mock container
+	mockContainer := container.NewContainer(config.NewMockConfig(nil))
+
+	// Create a simple handler to test middleware functionality
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("Hello, world!"))
+	})
+
+	// Middleware to modify response and test container access
+	middleware := func(c *container.Container, handler http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Ensure the container is passed correctly (for this test, we are just logging)
+			assert.NotNil(t, c, "Container should not be nil in the middleware")
+
+			// Continue with the handler execution
+			handler.ServeHTTP(w, r)
+		})
+	}
+
+	// Create a new App with a mock server
+	app := &App{
+		httpServer: &httpServer{
+			router: gofrHTTP.NewRouter(),
+			port:   8001,
+		},
+		container: mockContainer,
+		Config:    config.NewMockConfig(map[string]string{"REQUEST_TIMEOUT": "5"}),
+	}
+
+	// Use the middleware with the container
+	app.UseMiddlewareWithContainer(middleware)
+
+	// Register the handler to a route for testing
+	app.httpServer.router.Handle("/test", handler)
+
+	// Create a test request
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	// Create a test response recorder
+	rr := httptest.NewRecorder()
+
+	// Call the handler with the request and recorder
+	app.httpServer.router.ServeHTTP(rr, req)
+
+	// Assert the status code and response body
+	assert.Equal(t, http.StatusOK, rr.Code)
+	assert.Equal(t, "Hello, world!", rr.Body.String())
+}
+
 func Test_APIKeyAuthMiddleware(t *testing.T) {
 	c, _ := container.NewMockContainer(t)
 
