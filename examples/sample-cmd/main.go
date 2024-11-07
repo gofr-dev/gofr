@@ -27,14 +27,15 @@ func main() {
 
 	app.SubCommand("spinner", func(ctx *gofr.Context) (interface{}, error) {
 		// initialize the spinner
-		spinner := terminal.NewDotSpinner(ctx.Out).Spin(ctx).Spin(ctx)
+		spinner := terminal.NewDotSpinner(ctx.Out)
+		spinner.Spin(ctx)
+
+		defer spinner.Stop()
 
 		select {
 		case <-ctx.Done():
-			spinner.Stop()
 			return nil, ctx.Err()
 		case <-time.After(2 * time.Second):
-			spinner.Stop()
 		}
 
 		return "Process Complete", nil
