@@ -8,7 +8,9 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+
 	"gofr.dev/pkg/gofr"
 	"gofr.dev/pkg/gofr/cmd"
 	"gofr.dev/pkg/gofr/container"
@@ -28,7 +30,11 @@ func (mockFileInfo) IsDir() bool        { return false }
 func (mockFileInfo) Sys() interface{}   { return nil }
 
 func getContext(request gofr.Request, fileMock file.FileSystem) *gofr.Context {
-	return &gofr.Context{Context: context.Background(), Request: request, Container: &container.Container{File: fileMock}}
+	return &gofr.Context{
+		Context:   context.Background(),
+		Request:   request,
+		Container: &container.Container{File: fileMock},
+	}
 }
 
 func TestPwdCommandHandler(t *testing.T) {
@@ -49,6 +55,11 @@ func TestPwdCommandHandler(t *testing.T) {
 }
 
 func TestLSCommandHandler(t *testing.T) {
+	var (
+		res any
+		err error
+	)
+
 	path := "/"
 
 	logs := testutil.StdoutOutputForFunc(func() {
@@ -62,6 +73,7 @@ func TestLSCommandHandler(t *testing.T) {
 				mockFileInfo{name: "file1.txt"},
 				mockFileInfo{name: "file2.txt"},
 			}
+
 			return files, nil
 		})
 
@@ -69,15 +81,22 @@ func TestLSCommandHandler(t *testing.T) {
 
 		ctx := getContext(r, mock)
 
-		lsCommandHandler(ctx)
+		res, err = lsCommandHandler(ctx)
 	})
 
+	require.NoError(t, err)
+	assert.Equal(t, "", res)
 	assert.Contains(t, logs, "file1.txt", "Test failed")
 	assert.Contains(t, logs, "file2.txt", "Test failed")
 	assert.NotContains(t, logs, "file3.txt", "Test failed")
 }
 
 func TestGrepCommandHandler(t *testing.T) {
+	var (
+		res any
+		err error
+	)
+
 	path := "/"
 
 	logs := testutil.StdoutOutputForFunc(func() {
@@ -91,15 +110,18 @@ func TestGrepCommandHandler(t *testing.T) {
 				mockFileInfo{name: "file1.txt"},
 				mockFileInfo{name: "file2.txt"},
 			}
+
 			return files, nil
 		})
 
 		r := cmd.NewRequest([]string{"command", "grep", "-keyword=fi", fmt.Sprintf("-path=%s", path)})
 		ctx := getContext(r, mock)
 
-		grepCommandHandler(ctx)
+		res, err = grepCommandHandler(ctx)
 	})
 
+	require.NoError(t, err)
+	assert.Equal(t, "", res)
 	assert.Contains(t, logs, "file1.txt", "Test failed")
 	assert.Contains(t, logs, "file2.txt", "Test failed")
 	assert.NotContains(t, logs, "file3.txt", "Test failed")

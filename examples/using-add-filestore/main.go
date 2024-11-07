@@ -43,12 +43,11 @@ func lsCommandHandler(c *gofr.Context) (interface{}, error) {
 	path := c.Param("path")
 
 	files, err := c.File.ReadDir(path)
-
 	if err != nil {
-		fmt.Println(err)
-	} else {
-		printFiles(files)
+		return nil, err
 	}
+
+	printFiles(files)
 
 	return "", err
 }
@@ -60,11 +59,10 @@ func grepCommandHandler(c *gofr.Context) (interface{}, error) {
 	files, err := c.File.ReadDir(path)
 
 	if err != nil {
-		fmt.Println(err)
-	} else {
-		grepFiles(files, keyword)
-
+		return nil, err
 	}
+
+	grepFiles(files, keyword)
 
 	return "", err
 }
@@ -73,24 +71,22 @@ func createFileCommandHandler(c *gofr.Context) (interface{}, error) {
 	fileName := c.Param("filename")
 
 	_, err := c.File.Create(fileName)
-
-	if err == nil {
-		return fmt.Sprintln("Successfully created file:", fileName), nil
+	if err != nil {
+		return fmt.Sprintln("File Creation error"), err
 	}
 
-	return fmt.Sprintln("File Creation error"), err
+	return fmt.Sprintln("Successfully created file:", fileName), nil
 }
 
 func rmCommandHandler(c *gofr.Context) (interface{}, error) {
 	fileName := c.Param("filename")
 
 	err := c.File.Remove(fileName)
-
-	if err == nil {
-		return fmt.Sprintln("Successfully removed file:", fileName), nil
+	if err != nil {
+		return fmt.Sprintln("File removal error"), err
 	}
 
-	return fmt.Sprintln("File removal error"), err
+	return fmt.Sprintln("Successfully removed file:", fileName), nil
 }
 
 // This can be a common function to configure both FTP and SFTP server.
