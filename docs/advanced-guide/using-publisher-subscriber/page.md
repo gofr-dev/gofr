@@ -9,8 +9,8 @@ scaled and maintained according to its own requirement.
 
 ## Design choice
 
-In GoFr application if a user wants to use the Publisher-Subscriber design, it supports two message brokers—Apache Kafka
-and Google PubSub.
+In GoFr application if a user wants to use the Publisher-Subscriber design, it supports several message brokers, 
+including Apache Kafka, Google PubSub, MQTT, and NATS JetStream.
 The initialization of the PubSub is done in an IoC container which handles the PubSub client dependency.
 With this, the control lies with the framework and thus promotes modularity, testability, and re-usability.
 Users can do publish and subscribe to multiple topics in a single application, by providing the topic name.
@@ -175,6 +175,84 @@ docker run -d \
   eclipse-mosquitto:latest
 ```
 > **Note**: find the default mosquitto config file {% new-tab-link title="here" href="https://github.com/eclipse/mosquitto/blob/master/mosquitto.conf" /%}
+ 
+### NATS JetStream
+
+NATS JetStream is supported as an external pubsub provider, meaning if you're not using it, it won't be added to your binary.
+
+**References**
+
+https://docs.nats.io/
+https://docs.nats.io/nats-concepts/jetstream
+https://docs.nats.io/using-nats/developer/connecting/creds
+
+#### Configs
+```dotenv
+PUBSUB_BACKEND=NATS
+PUBSUB_BROKER=nats://localhost:4222
+NATS_STREAM=mystream
+NATS_SUBJECTS=orders.*,shipments.*
+NATS_MAX_WAIT=5s
+NATS_MAX_PULL_WAIT=500ms
+NATS_CONSUMER=my-consumer
+NATS_CREDS_FILE=/path/to/creds.json
+```
+
+#### Setup
+
+To set up NATS JetStream, follow these steps:
+
+1. Import the external driver for NATS JetStream:
+
+```bash
+go get gofr.dev/pkg/gofr/datasources/pubsub/nats
+```
+
+2. Use the `AddPubSub` method to add the NATS JetStream driver to your application:
+
+```go   
+app := gofr.New()
+
+app.AddPubSub(nats.New(nats.Config{
+    Server:     "nats://localhost:4222",
+    Stream: nats.StreamConfig{
+        Stream:   "mystream",
+        Subjects: []string{"orders.*", "shipments.*"},
+    },
+    MaxWait:     5 * time.Second,
+    MaxPullWait: 500 * time.Millisecond,
+    Consumer:    "my-consumer",
+    CredsFile:   "/path/to/creds.json",
+}))
+```
+
+#### Docker setup
+```shell
+docker run -d \
+  --name nats \
+  -p 4222:4222 \
+  -p 8222:8222 \
+  -v <path-to>/nats.conf:/nats/config/nats.conf \
+  nats:2.9.16
+``` 
+
+#### Configuration Options
+
+| Name | Description | Required | Default | Example |
+|------|-------------|----------|---------|---------|
+| `PUBSUB_BACKEND` | Set to "NATS" to use NATS JetStream as the message broker | Yes | - | `NATS` |
+| `PUBSUB_BROKER` | NATS server URL | Yes | - | `nats://localhost:4222` |
+| `NATS_STREAM` | Name of the NATS stream | Yes | - | `mystream` |
+| `NATS_SUBJECTS` | Comma-separated list of subjects to subscribe to | Yes | - | `orders.*,shipments.*` |
+| `NATS_MAX_WAIT` | Maximum wait time for batch requests | No | - | `5s` |
+| `NATS_MAX_PULL_WAIT` | Maximum wait time for individual pull requests | No | 0 | `500ms` |
+| `NATS_CONSUMER` | Name of the NATS consumer | No | - | `my-consumer` |
+| `NATS_CREDS_FILE` | Path to the credentials file for authentication | No | - | `/path/to/creds.json` |
+
+#### Usage
+
+When subscribing or publishing using NATS JetStream, make sure to use the appropriate subject name that matches your stream configuration.
+For more information on setting up and using NATS JetStream, refer to the official NATS documentation.
 
 ### Azure Eventhub
 GoFr supports eventhub starting gofr version v1.22.0.
