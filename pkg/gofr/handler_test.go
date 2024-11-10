@@ -113,7 +113,7 @@ func TestHandler_ServeHTTP_WithHeaders(t *testing.T) {
 			desc:   "Response with headers, method is GET, no error",
 			method: http.MethodGet,
 			data: response.Response{
-				Headers: map[string]string{
+				CustomHeaders: map[string]string{
 					"X-Custom-Header": "custom-value",
 					"Content-Type":    "application/json",
 				},
