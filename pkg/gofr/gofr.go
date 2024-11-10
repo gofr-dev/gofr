@@ -24,6 +24,7 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
 	"golang.org/x/sync/errgroup"
 
+	"gofr.dev/pkg/gofr/cmd/terminal"
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
 	gofrHTTP "gofr.dev/pkg/gofr/http"
@@ -88,6 +89,22 @@ func New() *App {
 	app.httpServer.certFile = app.Config.GetOrDefault("CERT_FILE", "")
 	app.httpServer.keyFile = app.Config.GetOrDefault("KEY_FILE", "")
 
+	// Add Default routes
+	app.add(http.MethodGet, "/.well-known/health", healthHandler)
+	app.add(http.MethodGet, "/.well-known/alive", liveHandler)
+	app.add(http.MethodGet, "/favicon.ico", faviconHandler)
+
+	// If the openapi.json file exists in the static directory, set up routes for OpenAPI and Swagger documentation.
+	if _, err = os.Stat("./static/" + gofrHTTP.DefaultSwaggerFileName); err == nil {
+		// Route to serve the OpenAPI JSON specification file.
+		app.add(http.MethodGet, "/.well-known/"+gofrHTTP.DefaultSwaggerFileName, OpenAPIHandler)
+		// Route to serve the Swagger UI, providing a user interface for the API documentation.
+		app.add(http.MethodGet, "/.well-known/swagger", SwaggerUIHandler)
+		// Catchall route: any request to /.well-known/{name} (e.g., /.well-known/other)
+		// will be handled by the SwaggerUIHandler, serving the Swagger UI.
+		app.add(http.MethodGet, "/.well-known/{name}", SwaggerUIHandler)
+	}
+
 	if app.Config.Get("APP_ENV") == "DEBUG" {
 		app.httpServer.RegisterProfilingRoutes()
 	}
@@ -119,7 +136,9 @@ func NewCMD() *App {
 	app.readConfig(true)
 	app.container = container.NewContainer(nil)
 	app.container.Logger = logging.NewFileLogger(app.Config.Get("CMD_LOGS_FILE"))
-	app.cmd = &cmd{}
+	app.cmd = &cmd{
+		out: terminal.New(),
+	}
 	app.container.Create(app.Config)
 	app.initTracer()
 
@@ -226,17 +245,6 @@ func (a *App) Shutdown(ctx context.Context) error {
 }
 
 func (a *App) httpServerSetup() {
-	// Add Default routes
-	a.add(http.MethodGet, "/.well-known/health", healthHandler)
-	a.add(http.MethodGet, "/.well-known/alive", liveHandler)
-	a.add(http.MethodGet, "/favicon.ico", faviconHandler)
-
-	if _, err := os.Stat("./static/openapi.json"); err == nil {
-		a.add(http.MethodGet, "/.well-known/openapi.json", OpenAPIHandler)
-		a.add(http.MethodGet, "/.well-known/swagger", SwaggerUIHandler)
-		a.add(http.MethodGet, "/.well-known/{name}", SwaggerUIHandler)
-	}
-
 	// TODO: find a way to read REQUEST_TIMEOUT config only once and log it there. currently doing it twice one for populating
 	// the value and other for logging
 	requestTimeout := a.Config.Get("REQUEST_TIMEOUT")
