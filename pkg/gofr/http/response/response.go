@@ -15,6 +15,7 @@ func (resp Response) SetCustomHeaders(w http.ResponseWriter) {
 			// do not overwrite existing header
 			continue
 		}
+
 		w.Header().Set(key, value)
 	}
 }
