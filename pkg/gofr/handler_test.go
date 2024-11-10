@@ -145,7 +145,7 @@ func TestHandler_ServeHTTP_WithHeaders(t *testing.T) {
 		}
 
 		handler{
-			function: func(*Context) (interface{}, error) {
+			function: func(*Context) (any, error) {
 				return tc.data, tc.err
 			},
 			container: c,
