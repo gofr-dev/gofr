@@ -103,7 +103,7 @@ func TestHandler_ServeHTTP_WithHeaders(t *testing.T) {
 	testCases := []struct {
 		desc       string
 		method     string
-		data       interface{}
+		data       any
 		headers    map[string]string
 		err        error
 		statusCode int
