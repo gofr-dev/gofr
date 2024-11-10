@@ -96,13 +96,9 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		err = gofrHTTP.ErrorPanicRecovery{}
 	}
 
-	// **Handle Custom Headers** if `result` is a `Response`.
+	// Handle custom headers if 'result' is a 'Response'.
 	if resp, ok := result.(response.Response); ok {
-		for key, value := range resp.Headers {
-			if w.Header().Get(key) == "" {
-				w.Header().Set(key, value)
-			}
-		}
+		resp.SetCustomHeaders(w)
 		result = resp.Data
 	}
 
