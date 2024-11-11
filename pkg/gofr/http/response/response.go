@@ -11,11 +11,6 @@ type Response struct {
 
 func (resp Response) SetCustomHeaders(w http.ResponseWriter) {
 	for key, value := range resp.Headers {
-		if w.Header().Get(key) != "" {
-			// do not overwrite existing header
-			continue
-		}
-
 		w.Header().Set(key, value)
 	}
 }
