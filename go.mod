@@ -1,6 +1,7 @@
 module gofr.dev
 
 go 1.22
+toolchain go1.22.9
 
 require (
 	cloud.google.com/go/pubsub v1.45.1
@@ -40,7 +41,7 @@ require (
 	golang.org/x/term v0.25.0
 	golang.org/x/text v0.19.0
 	google.golang.org/api v0.203.0
-	google.golang.org/grpc v1.67.1
+	google.golang.org/grpc v1.68.0
 	google.golang.org/protobuf v1.35.1
 	modernc.org/sqlite v1.33.1
 )
