@@ -133,10 +133,10 @@ func (a *App) AddSolr(ctx context.Context, db container.SolrProvider) error {
 
 	db.UseTracer(tracer)
 
-  if err := db.Connect(ctx); err != nil {
+	if err := db.Connect(ctx); err != nil {
 		return err
 	}
-  
+
 	a.container.Solr = db
 
 	return nil
