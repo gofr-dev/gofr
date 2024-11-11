@@ -643,6 +643,18 @@ func (a *App) UseMiddleware(middlewares ...gofrHTTP.Middleware) {
 	a.httpServer.router.UseMiddleware(middlewares...)
 }
 
+// UseMiddlewareWithContainer adds a middleware that has access to the container
+// and wraps the provided handler with the middleware logic.
+//
+// The `middleware` function receives the container and the handler, allowing
+// the middleware to modify the request processing flow.
+func (a *App) UseMiddlewareWithContainer(middlewareHandler func(c *container.Container, handler http.Handler) http.Handler) {
+	a.httpServer.router.Use(func(h http.Handler) http.Handler {
+		// Wrap the provided handler `h` with the middleware function `middlewareHandler`
+		return middlewareHandler(a.container, h)
+	})
+}
+
 // AddCronJob registers a cron job to the cron table.
 // The cron expression can be either a 5-part or 6-part format. The 6-part format includes an
 // optional second field (in beginning) and others being minute, hour, day, month and day of week respectively.
