@@ -24,6 +24,7 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
 	"golang.org/x/sync/errgroup"
 
+	"gofr.dev/pkg/gofr/cmd/terminal"
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
 	gofrHTTP "gofr.dev/pkg/gofr/http"
@@ -135,7 +136,9 @@ func NewCMD() *App {
 	app.readConfig(true)
 	app.container = container.NewContainer(nil)
 	app.container.Logger = logging.NewFileLogger(app.Config.Get("CMD_LOGS_FILE"))
-	app.cmd = &cmd{}
+	app.cmd = &cmd{
+		out: terminal.New(),
+	}
 	app.container.Create(app.Config)
 	app.initTracer()
 
@@ -638,6 +641,18 @@ func (a *App) AddRESTHandlers(object interface{}) error {
 // UseMiddleware is a setter method for adding user defined custom middleware to GoFr's router.
 func (a *App) UseMiddleware(middlewares ...gofrHTTP.Middleware) {
 	a.httpServer.router.UseMiddleware(middlewares...)
+}
+
+// UseMiddlewareWithContainer adds a middleware that has access to the container
+// and wraps the provided handler with the middleware logic.
+//
+// The `middleware` function receives the container and the handler, allowing
+// the middleware to modify the request processing flow.
+func (a *App) UseMiddlewareWithContainer(middlewareHandler func(c *container.Container, handler http.Handler) http.Handler) {
+	a.httpServer.router.Use(func(h http.Handler) http.Handler {
+		// Wrap the provided handler `h` with the middleware function `middlewareHandler`
+		return middlewareHandler(a.container, h)
+	})
 }
 
 // AddCronJob registers a cron job to the cron table.
