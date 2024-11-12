@@ -64,7 +64,7 @@ func Test_MongoGetLastMigration(t *testing.T) {
 		Version int64 `bson:"version"`
 	}
 
-	filter := map[string]interface{}{}
+	filter := make(map[string]any)
 
 	for i, tc := range testCases {
 		mockMongo.EXPECT().Find(context.Background(), mongoMigrationCollection, filter, &migrations).Return(tc.err)
