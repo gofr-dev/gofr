@@ -46,7 +46,7 @@ func (mg mongoMigrator) getLastMigration(c *container.Container) int64 {
 		Version int64 `bson:"version"`
 	}
 
-	filter := map[string]interface{}{}
+	filter := make(map[string]any)
 
 	err := mg.Mongo.Find(context.Background(), mongoMigrationCollection, filter, &migrations)
 	if err != nil {
@@ -56,28 +56,22 @@ func (mg mongoMigrator) getLastMigration(c *container.Container) int64 {
 
 	// Identify the highest migration version.
 	for _, migration := range migrations {
-		if migration.Version > lastMigration {
-			lastMigration = migration.Version
-		}
+		lastMigration = max(lastMigration, migration.Version)
 	}
 
 	c.Debugf("MongoDB last migration fetched value is: %v", lastMigration)
 
 	lm2 := mg.migrator.getLastMigration(c)
-	if lm2 > lastMigration {
-		return lm2
-	}
 
-	return lastMigration
+	return max(lm2, lastMigration)
 }
 
 func (mg mongoMigrator) beginTransaction(c *container.Container) transactionData {
-	cmt := mg.migrator.beginTransaction(c)
-	return cmt
+	return mg.migrator.beginTransaction(c)
 }
 
 func (mg mongoMigrator) commitMigration(c *container.Container, data transactionData) error {
-	migrationDoc := map[string]interface{}{
+	migrationDoc := map[string]any{
 		"version":    data.MigrationNumber,
 		"method":     "UP",
 		"start_time": data.StartTime,
