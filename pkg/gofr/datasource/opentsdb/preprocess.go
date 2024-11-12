@@ -9,8 +9,6 @@ import (
 	"net"
 	"net/http"
 	"strings"
-
-	"go.opentelemetry.io/otel/trace"
 )
 
 // defaultTransport defines the default HTTP transport settings,
@@ -64,8 +62,6 @@ type QueryParam struct {
 	// An optional value is used to show whether can be passed to the JSON with a POST to delete any data point
 	// that match the given query.
 	Delete bool `json:"delete,omitempty"`
-
-	tracer trace.Tracer
 }
 
 // SubQuery is the structure used to hold the subquery parameters when calling /api/query.
@@ -171,9 +167,6 @@ type PutResponse struct {
 	Failed  int64      `json:"failed"`
 	Success int64      `json:"success"`
 	Errors  []PutError `json:"errors,omitempty"`
-	logger  Logger
-	tracer  trace.Tracer
-	ctx     context.Context
 }
 
 func (c *Client) getResponse(ctx context.Context, putEndpoint string, datapoints []DataPoint,
@@ -186,7 +179,7 @@ func (c *Client) getResponse(ctx context.Context, putEndpoint string, datapoints
 
 	reqBodyCnt := string(marshaled)
 
-	putResp := PutResponse{logger: c.logger, tracer: c.tracer, ctx: ctx}
+	putResp := PutResponse{}
 
 	if err = c.sendRequest(ctx, http.MethodPost, putEndpoint, reqBodyCnt, &putResp); err != nil {
 		*message = fmt.Sprintf("error processing put request at url %q: %s", putEndpoint, err)
@@ -283,8 +276,6 @@ type QueryLastParam struct {
 	// An optional number of hours is used to search in the past for data. If set to 0 then the
 	// timestamp of the meta data counter for the time series is used.
 	BackScan int `json:"backScan"`
-
-	tracer trace.Tracer
 }
 
 // SubQueryLast is the structure used to hold the subquery parameters when calling /api/query/last.

@@ -229,10 +229,6 @@ func (c *Client) QueryDataPoints(ctx context.Context, parameters, resp any) erro
 		return err
 	}
 
-	queryResp.logger = c.logger
-	queryResp.tracer = c.tracer
-	queryResp.ctx = ctx
-
 	if err = c.sendRequest(ctx, http.MethodPost, queryEndpoint, reqBodyCnt, queryResp); err != nil {
 		message = fmt.Sprintf("error while processing request at url %q: %s ", queryEndpoint, err)
 		return err
@@ -275,10 +271,6 @@ func (c *Client) QueryLatestDataPoints(ctx context.Context, parameters, resp any
 		message = fmt.Sprint("error retrieving body contents: ", err)
 		return err
 	}
-
-	queryResp.logger = c.logger
-	queryResp.tracer = c.tracer
-	queryResp.ctx = ctx
 
 	if err = c.sendRequest(ctx, http.MethodPost, queryEndpoint, reqBodyCnt, queryResp); err != nil {
 		message = fmt.Sprintf("error sending request at url %s : %s ", queryEndpoint, err)
@@ -326,9 +318,6 @@ func (c *Client) QueryAnnotation(ctx context.Context, queryAnnoParam map[string]
 	buffer.WriteString(queryURL.Encode())
 
 	annoEndpoint := fmt.Sprintf("%s%s?%s", c.endpoint, annotationPath, buffer.String())
-	annResp.logger = c.logger
-	annResp.tracer = c.tracer
-	annResp.ctx = ctx
 
 	if err := c.sendRequest(ctx, http.MethodGet, annoEndpoint, "", annResp); err != nil {
 		message = fmt.Sprintf("error while processing annotation query: %s", err.Error())
@@ -370,10 +359,6 @@ func (c *Client) GetAggregators(ctx context.Context, resp any) error {
 	}
 
 	aggregatorsEndpoint := fmt.Sprintf("%s%s", c.endpoint, aggregatorPath)
-
-	aggreResp.logger = c.logger
-	aggreResp.tracer = c.tracer
-	aggreResp.ctx = ctx
 
 	if err := c.sendRequest(ctx, http.MethodGet, aggregatorsEndpoint, "", aggreResp); err != nil {
 		message = fmt.Sprintf("error retrieving aggregators from url: %s", aggregatorsEndpoint)

@@ -5,6 +5,8 @@ import (
 	"net"
 	"net/http"
 	"time"
+
+	"go.opentelemetry.io/otel/trace"
 )
 
 type Conn interface {
@@ -32,7 +34,7 @@ type Response interface {
 	// Returning nil means current specific Response instance doesn't
 	// need a custom-defined parse process, and just uses the default
 	// json unmarshal method to parse the contents of the http response.
-	getCustomParser() func(respCnt []byte) error
+	getCustomParser(context.Context, Logger, trace.Tracer) func(respCnt []byte) error
 }
 
 // Logger interface is used by opentsdb package to log information about request execution.

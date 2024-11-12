@@ -37,7 +37,7 @@ func TestSendRequestSuccess(t *testing.T) {
 		Return(&mockResponse, nil).
 		Times(1)
 
-	parsedResp := AggregatorsResponse{logger: client.logger, tracer: client.tracer, ctx: context.Background()}
+	parsedResp := AggregatorsResponse{}
 
 	err := client.sendRequest(context.Background(), "GET", "http://localhost:4242/aggregators", "", &parsedResp)
 
@@ -53,7 +53,7 @@ func TestSendRequestFailure(t *testing.T) {
 		Return(nil, errRequestFailed).
 		Times(1)
 
-	parsedResp := AggregatorsResponse{logger: client.logger, tracer: client.tracer, ctx: context.Background()}
+	parsedResp := AggregatorsResponse{}
 
 	err := client.sendRequest(context.Background(), "GET", "http://localhost:4242/aggregators", "", &parsedResp)
 
@@ -64,13 +64,9 @@ func TestSendRequestFailure(t *testing.T) {
 func TestGetCustomParser(t *testing.T) {
 	client, _ := setOpenTSDBTest(t)
 
-	resp := &AggregatorsResponse{
-		logger: client.logger,
-		tracer: client.tracer,
-		ctx:    context.Background(),
-	}
+	resp := &AggregatorsResponse{}
 
-	parser := resp.getCustomParser()
+	parser := resp.getCustomParser(context.Background(), client.logger, client.tracer)
 
 	err := parser([]byte(`["sum","avg"]`))
 

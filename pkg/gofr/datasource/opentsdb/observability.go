@@ -69,38 +69,38 @@ func (c *Client) addTrace(ctx context.Context, operation string) trace.Span {
 	return addTracer(ctx, c.tracer, operation, "Client")
 }
 
-func (aggreResp *AggregatorsResponse) addTrace(ctx context.Context, operation string) trace.Span {
-	return addTracer(ctx, aggreResp.tracer, operation, "AggregatorRes")
+func (*AggregatorsResponse) addTrace(ctx context.Context, tracer trace.Tracer, operation string) trace.Span {
+	return addTracer(ctx, tracer, operation, "AggregatorRes")
 }
 
-func (annotResp *AnnotationResponse) addTrace(ctx context.Context, operation string) trace.Span {
-	return addTracer(ctx, annotResp.tracer, operation, "AnnotationRes")
+func (*AnnotationResponse) addTrace(ctx context.Context, tracer trace.Tracer, operation string) trace.Span {
+	return addTracer(ctx, tracer, operation, "AnnotationRes")
 }
 
-func (queryResp *QueryResponse) addTrace(ctx context.Context, operation string) trace.Span {
-	return addTracer(ctx, queryResp.tracer, operation, "QueryResponse")
+func (*QueryResponse) addTrace(ctx context.Context, tracer trace.Tracer, operation string) trace.Span {
+	return addTracer(ctx, tracer, operation, "QueryResponse")
 }
 
-func (qri *QueryRespItem) addTrace(ctx context.Context, operation string) trace.Span {
-	return addTracer(ctx, qri.tracer, operation, "QueryRespItem")
+func (*QueryRespItem) addTrace(ctx context.Context, tracer trace.Tracer, operation string) trace.Span {
+	return addTracer(ctx, tracer, operation, "QueryRespItem")
 }
 
-func (query *QueryParam) addTrace(ctx context.Context, operation string) trace.Span {
-	return addTracer(ctx, query.tracer, operation, "QueryParam")
+func (*QueryParam) addTrace(ctx context.Context, tracer trace.Tracer, operation string) trace.Span {
+	return addTracer(ctx, tracer, operation, "QueryParam")
 }
 
-func (query *QueryLastParam) addTrace(ctx context.Context, operation string) trace.Span {
-	return addTracer(ctx, query.tracer, operation, "QueryLastParam")
+func (*QueryLastParam) addTrace(ctx context.Context, tracer trace.Tracer, operation string) trace.Span {
+	return addTracer(ctx, tracer, operation, "QueryLastParam")
 }
 
-func (queryLastResp *QueryLastResponse) addTrace(ctx context.Context, operation string) trace.Span {
-	return addTracer(ctx, queryLastResp.tracer, operation, "QueryLastResponse")
+func (*QueryLastResponse) addTrace(ctx context.Context, tracer trace.Tracer, operation string) trace.Span {
+	return addTracer(ctx, tracer, operation, "QueryLastResponse")
 }
 
-func (verResp *VersionResponse) addTrace(ctx context.Context, operation string) trace.Span {
-	return addTracer(ctx, verResp.tracer, operation, "VersionResponse")
+func (*VersionResponse) addTrace(ctx context.Context, tracer trace.Tracer, operation string) trace.Span {
+	return addTracer(ctx, tracer, operation, "VersionResponse")
 }
 
-func (putResp *PutResponse) addTrace(ctx context.Context, operation string) trace.Span {
-	return addTracer(ctx, putResp.tracer, operation, "PutResponse")
+func (*PutResponse) addTrace(ctx context.Context, tracer trace.Tracer, operation string) trace.Span {
+	return addTracer(ctx, tracer, operation, "PutResponse")
 }
