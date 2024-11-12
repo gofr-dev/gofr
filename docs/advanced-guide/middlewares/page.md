@@ -25,9 +25,12 @@ The CORS middleware provides the following overridable configs:
 
 By adding custom middleware to your GoFr application, user can easily extend its functionality and implement 
 cross-cutting concerns in a modular and reusable way.
-User can use the `UseMiddleware` method on your GoFr application instance to register your custom middleware.
+User can use the `UseMiddleware` or `UseMiddlewareWithContainer` method on your GoFr application instance to register your custom middleware.
 
-### Example:
+### Using UseMiddleware method for Custom Middleware
+The UseMiddleware method is ideal for simple middleware that doesn't need direct access to the application's container.
+
+#### Example:
 
 ```go
 import (
@@ -61,6 +64,59 @@ func main() {
 
     // Run your GoFr application
     app.Run()
+}
+```
+
+### Using UseMiddlewareWithContainer for Custom Middleware with Container Access
+
+The UseMiddlewareWithContainer method allows middleware to access the application's container, providing access to
+services like logging, configuration, and databases. This method is especially useful for middleware that needs access 
+to resources in the container to modify request processing flow.
+
+#### Example:
+
+```go
+import (
+    "fmt"
+    "net/http"
+    
+    "gofr.dev/pkg/gofr"
+    "gofr.dev/pkg/gofr/container"
+)
+
+func main() {
+    // Create a new GoFr application instance
+    a := gofr.New()
+
+    // Add custom middleware with container access
+    a.UseMiddlewareWithContainer(customMiddleware)
+
+    // Define the application's routes
+    a.GET("/hello", HelloHandler)
+
+    // Run the application
+    a.Run()
+}
+
+// Define middleware with container access
+func customMiddleware(c *container.Container, handler http.Handler) http.Handler {
+    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        c.Logger.Log("Hey! Welcome to GoFr")
+        
+        // Continue with the request processing
+        handler.ServeHTTP(w, r)
+    })
+}
+
+// Sample handler function
+func HelloHandler(c *gofr.Context) (interface{}, error) {
+    name := c.Param("name")
+    if name == "" {
+        c.Log("Name came empty")
+        name = "World"
+    }
+
+    return fmt.Sprintf("Hello %s!", name), nil
 }
 ```
 
