@@ -75,7 +75,7 @@ func TestGetCustomParser(t *testing.T) {
 }
 
 // setOpenTSDBTest initializes an Client for testing.
-func setOpenTSDBTest(t *testing.T) (*Client, *MockHTTPClient) {
+func setOpenTSDBTest(t *testing.T) (*Client, *MockhttpClient) {
 	t.Helper()
 
 	opentsdbCfg := Config{
@@ -105,7 +105,7 @@ func setOpenTSDBTest(t *testing.T) (*Client, *MockHTTPClient) {
 		tsdbClient.logger.Errorf("the OpentsdbEndpoint in the given configuration cannot be empty.")
 	}
 
-	mockhttp := NewMockHTTPClient(gomock.NewController(t))
+	mockhttp := NewMockhttpClient(gomock.NewController(t))
 
 	tsdbClient.client = mockhttp
 
@@ -585,7 +585,7 @@ func TestHealthCheck_Success(t *testing.T) {
 		}, nil).
 		Times(1)
 
-	mockConn := NewMockConn(gomock.NewController(t))
+	mockConn := NewMockconnection(gomock.NewController(t))
 
 	mockConn.EXPECT().Close()
 

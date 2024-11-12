@@ -203,7 +203,7 @@ type genericResponse interface {
 
 // sendRequest dispatches an HTTP request to the OpenTSDB server, using the provided
 // method, URL, and body content. It returns the parsed response or an error, if any.
-func (c *Client) sendRequest(ctx context.Context, method, url, reqBodyCnt string, parsedResp Response) error {
+func (c *Client) sendRequest(ctx context.Context, method, url, reqBodyCnt string, parsedResp response) error {
 	span := c.addTrace(ctx, "sendRequest")
 
 	status := statusFailed

@@ -54,7 +54,7 @@ var dialTimeout = net.DialTimeout
 // which includes context-aware functionality.
 type Client struct {
 	endpoint string
-	client   HTTPClient
+	client   httpClient
 	config   Config
 	logger   Logger
 	metrics  Metrics

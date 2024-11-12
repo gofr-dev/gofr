@@ -9,7 +9,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-type Conn interface {
+type connection interface {
 	Read(b []byte) (n int, err error)
 	Write(b []byte) (n int, err error)
 	Close() error
@@ -21,7 +21,7 @@ type Conn interface {
 }
 
 // HTTPClient is an interface that wraps the http.Client's Do method.
-type HTTPClient interface {
+type httpClient interface {
 	Do(req *http.Request) (*http.Response, error)
 }
 
@@ -29,7 +29,7 @@ type HTTPClient interface {
 // different rest-apis should obey.
 // Currently, it is an abstraction used in Client.sendRequest()
 // to stored the different kinds of response contents for all the rest-apis.
-type Response interface {
+type response interface {
 	// getCustomParser can be used to retrieve a custom-defined parser.
 	// Returning nil means current specific Response instance doesn't
 	// need a custom-defined parse process, and just uses the default
