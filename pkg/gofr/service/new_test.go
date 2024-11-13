@@ -68,7 +68,7 @@ func TestHTTPService_createAndSendRequest(t *testing.T) {
 
 	ctx := context.Background()
 
-	metrics.EXPECT().RecordHistogram(ctx, "app_http_service_response", gomock.Any(), "path", server.URL,
+	metrics.EXPECT().RecordHistogram(gomock.Any(), "app_http_service_response", gomock.Any(), "path", server.URL,
 		"method", http.MethodPost, "status", fmt.Sprintf("%v", http.StatusOK))
 
 	// when params value is of type []string then last value is sent in request
@@ -508,7 +508,7 @@ func TestHTTPService_createAndSendRequestServerError(t *testing.T) {
 
 	ctx := context.Background()
 
-	metrics.EXPECT().RecordHistogram(ctx, "app_http_service_response", gomock.Any(), "path", gomock.Any(),
+	metrics.EXPECT().RecordHistogram(gomock.Any(), "app_http_service_response", gomock.Any(), "path", gomock.Any(),
 		"method", http.MethodPost, "status", fmt.Sprintf("%v", http.StatusInternalServerError))
 
 	// when params value is of type []string then last value is sent in request
