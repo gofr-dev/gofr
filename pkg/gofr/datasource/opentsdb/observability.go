@@ -46,8 +46,8 @@ func sendOperationStats(logger Logger, start time.Time, operation string, status
 	})
 
 	if span != nil {
-		defer span.End()
 		span.SetAttributes(attribute.Int64(fmt.Sprintf("opentsdb.%v.duration", operation), duration))
+		span.End()
 	}
 }
 

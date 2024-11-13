@@ -172,11 +172,9 @@ func (c *Client) PutDataPoints(ctx context.Context, datas any, queryParam string
 		return errors.New(message)
 	}
 
-	var putEndpoint string
+	putEndpoint := fmt.Sprintf("%s%s", c.endpoint, putPath)
 	if !isEmptyPutParam(queryParam) {
-		putEndpoint = fmt.Sprintf("%s%s?%s", c.endpoint, putPath, queryParam)
-	} else {
-		putEndpoint = fmt.Sprintf("%s%s", c.endpoint, putPath)
+		putEndpoint = fmt.Sprintf("%s?%s", putEndpoint, queryParam)
 	}
 
 	tempResp, err := c.getResponse(ctx, putEndpoint, datapoints, &message)
@@ -184,17 +182,15 @@ func (c *Client) PutDataPoints(ctx context.Context, datas any, queryParam string
 		return err
 	}
 
-	if len(tempResp.Errors) == 0 {
-		status = statusSuccess
-		message = fmt.Sprintf("Put request to url %q processed successfully", putEndpoint)
-		putResp.Success = tempResp.Success
-		putResp.Failed = tempResp.Failed
-		putResp.Errors = tempResp.Errors
-
-		return nil
+	if len(tempResp.Errors) > 0 {
+		return parsePutErrorMsg(tempResp)
 	}
 
-	return parsePutErrorMsg(tempResp)
+	status = statusSuccess
+	message = fmt.Sprintf("Put request to url %q processed successfully", putEndpoint)
+	*putResp = *tempResp
+
+	return nil
 }
 
 func (c *Client) QueryDataPoints(ctx context.Context, parameters, resp any) error {

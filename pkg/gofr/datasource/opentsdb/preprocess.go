@@ -228,18 +228,15 @@ func isValidDataPoint(data *DataPoint) bool {
 
 	switch data.Value.(type) {
 	case int64:
-		return true
 	case int:
-		return true
 	case float64:
-		return true
 	case float32:
-		return true
 	case string:
-		return true
 	default:
 		return false
 	}
+
+	return true
 }
 
 func isValidPutParam(param string) bool {

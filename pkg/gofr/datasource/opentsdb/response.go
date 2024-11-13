@@ -239,11 +239,11 @@ func (c *Client) sendRequest(ctx context.Context, method, url, reqBodyCnt string
 		return errSendingRequest
 	}
 
+	defer resp.Body.Close()
+
 	if resp.StatusCode >= 400 && resp.StatusCode < 500 {
 		return fmt.Errorf("client error: %d", resp.StatusCode)
 	}
-
-	defer resp.Body.Close()
 
 	// Read and parse the response.
 	jsonBytes, err := io.ReadAll(resp.Body)
@@ -347,7 +347,7 @@ func customParserHelper(ctx context.Context, resp genericResponse, operation str
 		}
 
 		status = statusSuccess
-		message = fmt.Sprintf("%s custom parsing was successful.", operation)
+		message = fmt.Sprintf("%s custom parsing was successful", operation)
 
 		return nil
 	}
