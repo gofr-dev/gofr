@@ -559,6 +559,12 @@ DeleteAnnotation(ctx context.Context, annotation any, res any) error
 }
 ```
 
+Import the gofr's external driver for OpenTSDB:
+
+```go
+go get gofr.dev/pkg/gofr/datasource/opentsdb
+```
+
 The following example demonstrates injecting an OpenTSDB instance into a GoFr application 
 and using it to perform a health check on the OpenTSDB server.
 ```go
