@@ -30,12 +30,12 @@ func BasicAuthMiddleware(basicAuthProvider BasicAuthProvider) func(handler http.
 
 			username, password, ok := parseBasicAuth(r)
 			if !ok {
-				respondUnauthorized(w, "Invalid or missing Authorization header")
+				http.Error(w, "Unauthorized: Invalid or missing Authorization header", http.StatusUnauthorized)
 				return
 			}
 
 			if !validateCredentials(basicAuthProvider, username, password) {
-				respondUnauthorized(w, "Invalid username or password")
+				http.Error(w, "Unauthorized: Invalid username or password", http.StatusUnauthorized)
 				return
 			}
 
@@ -46,7 +46,7 @@ func BasicAuthMiddleware(basicAuthProvider BasicAuthProvider) func(handler http.
 }
 
 // parseBasicAuth extracts and decodes the username and password from the Authorization header.
-func parseBasicAuth(r *http.Request) (string, string, bool) {
+func parseBasicAuth(r *http.Request) (username, password string, ok bool) {
 	authHeader := r.Header.Get("Authorization")
 	if authHeader == "" {
 		return "", "", false
@@ -62,18 +62,12 @@ func parseBasicAuth(r *http.Request) (string, string, bool) {
 		return "", "", false
 	}
 
-	username, password, found := strings.Cut(string(payload), ":")
-	if !found {  // Ensure both username and password are returned as empty if colon separator is missing
+	username, password, found = strings.Cut(string(payload), ":")
+	if !found { // Ensure both username and password are returned as empty if colon separator is missing
 		return "", "", false
 	}
 
 	return username, password, true
-}
-
-
-// respondUnauthorized sends a 401 Unauthorized response with a given message.
-func respondUnauthorized(w http.ResponseWriter, message string) {
-	http.Error(w, "Unauthorized: "+message, http.StatusUnauthorized)
 }
 
 // validateCredentials checks the provided username and password against the BasicAuthProvider.
@@ -87,5 +81,6 @@ func validateCredentials(provider BasicAuthProvider, username, password string) 
 	}
 
 	storedPass, ok := provider.Users[username]
+
 	return ok && storedPass == password
 }
