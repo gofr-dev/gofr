@@ -141,21 +141,20 @@ type QueryRespLastItem struct {
 	TSUID string `json:"tsuid"`
 }
 
-func (*PutResponse) getCustomParser(context.Context, Logger, trace.Tracer) func(respCnt []byte) error {
+func (*PutResponse) getCustomParser(Logger) func(respCnt []byte) error {
 	return nil
 }
 
-func (queryResp *QueryResponse) getCustomParser(ctx context.Context, logger Logger, tracer trace.Tracer) func(respCnt []byte) error {
-	return queryParserHelper(ctx, logger, tracer, queryResp, "GetCustomParser-Query")
+func (queryResp *QueryResponse) getCustomParser(logger Logger) func(respCnt []byte) error {
+	return queryParserHelper(logger, queryResp, "GetCustomParser-Query")
 }
 
-func (queryLastResp *QueryLastResponse) getCustomParser(ctx context.Context, logger Logger,
-	tracer trace.Tracer) func(respCnt []byte) error {
-	return queryParserHelper(ctx, logger, tracer, queryLastResp, "GetCustomParser-QueryLast")
+func (queryLastResp *QueryLastResponse) getCustomParser(logger Logger) func(respCnt []byte) error {
+	return queryParserHelper(logger, queryLastResp, "GetCustomParser-QueryLast")
 }
 
-func (verResp *VersionResponse) getCustomParser(ctx context.Context, logger Logger, tracer trace.Tracer) func(respCnt []byte) error {
-	return customParserHelper(ctx, verResp, "GetCustomParser-VersionResp", logger, tracer,
+func (verResp *VersionResponse) getCustomParser(logger Logger) func(respCnt []byte) error {
+	return customParserHelper("GetCustomParser-VersionResp", logger,
 		func(resp []byte) error {
 			v := make(map[string]any, 0)
 
@@ -170,8 +169,8 @@ func (verResp *VersionResponse) getCustomParser(ctx context.Context, logger Logg
 		})
 }
 
-func (annotResp *AnnotationResponse) getCustomParser(ctx context.Context, logger Logger, tracer trace.Tracer) func(respCnt []byte) error {
-	return customParserHelper(ctx, annotResp, "getCustomParser-Annotation", logger, tracer,
+func (annotResp *AnnotationResponse) getCustomParser(logger Logger) func(respCnt []byte) error {
+	return customParserHelper("getCustomParser-Annotation", logger,
 		func(resp []byte) error {
 			if len(resp) == 0 {
 				return nil
@@ -181,8 +180,8 @@ func (annotResp *AnnotationResponse) getCustomParser(ctx context.Context, logger
 		})
 }
 
-func (aggreResp *AggregatorsResponse) getCustomParser(ctx context.Context, logger Logger, tracer trace.Tracer) func(respCnt []byte) error {
-	return customParserHelper(ctx, aggreResp, "GetCustomParser-Aggregator", logger, tracer,
+func (aggreResp *AggregatorsResponse) getCustomParser(logger Logger) func(respCnt []byte) error {
+	return customParserHelper("GetCustomParser-Aggregator", logger,
 		func(resp []byte) error {
 			j := make([]string, 0)
 
@@ -204,14 +203,6 @@ type genericResponse interface {
 // sendRequest dispatches an HTTP request to the OpenTSDB server, using the provided
 // method, URL, and body content. It returns the parsed response or an error, if any.
 func (c *Client) sendRequest(ctx context.Context, method, url, reqBodyCnt string, parsedResp response) error {
-	span := c.addTrace(ctx, "sendRequest")
-
-	status := statusFailed
-
-	var message string
-
-	defer sendOperationStats(c.logger, time.Now(), "sendRequest", &status, &message, span)
-
 	// Create the HTTP request, attaching the context if available.
 	req, err := http.NewRequest(method, url, strings.NewReader(reqBodyCnt))
 	if ctx != nil {
@@ -220,8 +211,6 @@ func (c *Client) sendRequest(ctx context.Context, method, url, reqBodyCnt string
 
 	if err != nil {
 		errRequestCreation := fmt.Errorf("failed to create request for %s %s: %w", method, url, err)
-
-		message = fmt.Sprint(errRequestCreation)
 
 		return errRequestCreation
 	}
@@ -234,8 +223,6 @@ func (c *Client) sendRequest(ctx context.Context, method, url, reqBodyCnt string
 	if err != nil {
 		errSendingRequest := fmt.Errorf("failed to send request for %s %s: %w", method, url, err)
 
-		message = fmt.Sprint(errSendingRequest)
-
 		return errSendingRequest
 	}
 
@@ -246,35 +233,27 @@ func (c *Client) sendRequest(ctx context.Context, method, url, reqBodyCnt string
 	if err != nil {
 		errReading := fmt.Errorf("failed to read response body for %s %s: %w", method, url, err)
 
-		message = fmt.Sprint(errReading)
-
 		return errReading
 	}
 
-	parser := parsedResp.getCustomParser(ctx, c.logger, c.tracer)
+	parser := parsedResp.getCustomParser(c.logger)
 	if parser == nil {
 		// Use the default JSON unmarshaller if no custom parser is provided.
 		if err = json.Unmarshal(jsonBytes, parsedResp); err != nil {
 			errUnmarshaling := fmt.Errorf("failed to unmarshal response body for %s %s: %w", method, url, err)
-
-			message = fmt.Sprint(errUnmarshaling)
 
 			return errUnmarshaling
 		}
 	} else {
 		// Use the custom parser if available.
 		if err := parser(jsonBytes); err != nil {
-			message = fmt.Sprintf("failed to parse response body through custom parser %s %s: %v", method, url, err)
-			return err
+			return fmt.Errorf("failed to parse response body through custom parser %s %s: %v", method, url, err)
 		}
 	}
 
 	if resp.StatusCode >= 400 && resp.StatusCode < 500 {
 		return fmt.Errorf("client error: %d", resp.StatusCode)
 	}
-
-	status = statusSuccess
-	message = fmt.Sprintf("%s request sent at : %s", method, url)
 
 	return nil
 }
@@ -296,22 +275,14 @@ func (c *Client) version(ctx context.Context, verResp *VersionResponse) error {
 	}
 
 	status = statusSuccess
-	message = "version response retrieved successfully."
+	message = fmt.Sprintf("OpenTSDB version %v", verResp.VersionInfo["version"])
 
 	return nil
 }
 
 // isValidOperateMethod checks if the provided HTTP method is valid for
 // operations such as POST, PUT, or DELETE.
-func (c *Client) isValidOperateMethod(ctx context.Context, method string) bool {
-	span := c.addTrace(ctx, "isValidOperateMethod")
-
-	status := statusSuccess
-
-	var message string
-
-	defer sendOperationStats(c.logger, time.Now(), "isValidOperateMethod", &status, &message, span)
-
+func (c *Client) isValidOperateMethod(method string) bool {
 	method = strings.TrimSpace(strings.ToUpper(method))
 	if method == "" {
 		return false
@@ -327,35 +298,22 @@ func (c *Client) isValidOperateMethod(ctx context.Context, method string) bool {
 	return false
 }
 
-func customParserHelper(ctx context.Context, resp genericResponse, operation string, logger Logger, tracer trace.Tracer,
-	unmarshalFunc func([]byte) error) func([]byte) error {
-	span := resp.addTrace(ctx, tracer, operation)
-
-	status := statusFailed
-
-	var message string
-
+func customParserHelper(operation string, logger Logger, unmarshalFunc func([]byte) error) func([]byte) error {
 	return func(result []byte) error {
-		defer sendOperationStats(logger, time.Now(), operation, &status, &message, span)
-
 		err := unmarshalFunc(result)
 		if err != nil {
-			message = fmt.Sprintf("unmarshal %s error: %s", operation, err)
-			logger.Errorf(message)
+			logger.Errorf("unmarshal %s error: %s", operation, err)
 
 			return err
 		}
-
-		status = statusSuccess
-		message = fmt.Sprintf("%s custom parsing was successful", operation)
 
 		return nil
 	}
 }
 
-func queryParserHelper(ctx context.Context, logger Logger, tracer trace.Tracer, obj genericResponse,
+func queryParserHelper(logger Logger, obj genericResponse,
 	methodName string) func(respCnt []byte) error {
-	return customParserHelper(ctx, obj, methodName, logger, tracer, func(resp []byte) error {
+	return customParserHelper(methodName, logger, func(resp []byte) error {
 		originRespStr := string(resp)
 
 		var respStr string
@@ -389,7 +347,7 @@ func (c *Client) operateAnnotation(ctx context.Context, queryAnnotation, resp an
 		return errors.New("invalid response type. Must be *AnnotationResponse")
 	}
 
-	if !c.isValidOperateMethod(ctx, method) {
+	if !c.isValidOperateMethod(method) {
 		message = fmt.Sprintf("invalid annotation operation method: %s", method)
 		return errors.New(message)
 	}

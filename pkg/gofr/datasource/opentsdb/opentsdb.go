@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"go.opentelemetry.io/otel/attribute"
 	"net"
 	"net/http"
 	"net/url"
@@ -124,11 +125,10 @@ func (c *Client) UseTracer(tracer any) {
 func (c *Client) Connect() {
 	span := c.addTrace(context.Background(), "Connect")
 
-	status := statusFailed
-
-	var message string
-
-	defer sendOperationStats(c.logger, time.Now(), "Connect", &status, &message, span)
+	if span != nil {
+		span.SetAttributes(attribute.Int64(fmt.Sprintf("opentsdb.%v", "Connect"), 0))
+		span.End()
+	}
 
 	// Set default values for optional configuration fields.
 	c.initializeClient()
@@ -139,25 +139,21 @@ func (c *Client) Connect() {
 	res := VersionResponse{}
 	err := c.version(context.Background(), &res)
 	if err != nil {
-		status = statusFailed
-		message = err.Error()
+		c.logger.Errorf("error while connection to OpenTSDB: %v", err)
 		return
 	}
 
-	c.logger.Logf("Connection Successful")
-
-	status = statusSuccess
-	message = fmt.Sprintf("connected to %s", c.endpoint)
+	c.logger.Logf("connected to OpenTSDB at %s", c.endpoint)
 }
 
 func (c *Client) PutDataPoints(ctx context.Context, datas any, queryParam string, resp any) error {
-	span := c.addTrace(ctx, "Put")
+	span := c.addTrace(ctx, "PutDataPoints")
 
 	status := statusFailed
 
-	message := "Put request failed"
+	message := "put request failed"
 
-	defer sendOperationStats(c.logger, time.Now(), "Put", &status, &message, span)
+	defer sendOperationStats(c.logger, time.Now(), "PutDataPoints", &status, &message, span)
 
 	putResp, ok := resp.(*PutResponse)
 	if !ok {
@@ -176,7 +172,7 @@ func (c *Client) PutDataPoints(ctx context.Context, datas any, queryParam string
 	}
 
 	if !isValidPutParam(queryParam) {
-		message = "The given query param is invalid."
+		message = "the given query param is invalid."
 		return errors.New(message)
 	}
 
@@ -195,14 +191,14 @@ func (c *Client) PutDataPoints(ctx context.Context, datas any, queryParam string
 	}
 
 	status = statusSuccess
-	message = fmt.Sprintf("Put request to url %q processed successfully", putEndpoint)
+	message = fmt.Sprintf("put request to url %q processed successfully", putEndpoint)
 	*putResp = *tempResp
 
 	return nil
 }
 
 func (c *Client) QueryDataPoints(ctx context.Context, parameters, resp any) error {
-	span := c.addTrace(ctx, "Query")
+	span := c.addTrace(ctx, "QueryDataPoints")
 
 	status := statusFailed
 
@@ -245,13 +241,13 @@ func (c *Client) QueryDataPoints(ctx context.Context, parameters, resp any) erro
 }
 
 func (c *Client) QueryLatestDataPoints(ctx context.Context, parameters, resp any) error {
-	span := c.addTrace(ctx, "QueryLast")
+	span := c.addTrace(ctx, "QueryLastDataPoints")
 
 	status := statusFailed
 
 	var message string
 
-	defer sendOperationStats(c.logger, time.Now(), "QueryLast", &status, &message, span)
+	defer sendOperationStats(c.logger, time.Now(), "QueryLastDataPoints", &status, &message, span)
 
 	param, ok := parameters.(*QueryLastParam)
 	if !ok {
@@ -349,13 +345,13 @@ func (c *Client) DeleteAnnotation(ctx context.Context, annotation, resp any) err
 }
 
 func (c *Client) GetAggregators(ctx context.Context, resp any) error {
-	span := c.addTrace(ctx, "Aggregators")
+	span := c.addTrace(ctx, "GetAggregators")
 
 	status := statusFailed
 
 	var message string
 
-	defer sendOperationStats(c.logger, time.Now(), "Aggregators", &status, &message, span)
+	defer sendOperationStats(c.logger, time.Now(), "GetAggregators", &status, &message, span)
 
 	aggreResp, ok := resp.(*AggregatorsResponse)
 	if !ok {

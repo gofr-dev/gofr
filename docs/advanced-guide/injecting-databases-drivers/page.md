@@ -667,7 +667,7 @@ func queryDataPoints(c *gofr.Context) (any, error) {
 
 	err := c.OpenTSDB.QueryDataPoints(c, &queryParam, queryResp)
 	if err != nil {
-		return queryResp.ErrorMsg, err
+		return nil, err
 	}
 	return queryResp.QueryRespCnts, nil
 }

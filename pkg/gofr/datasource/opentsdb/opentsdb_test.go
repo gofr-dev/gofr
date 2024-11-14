@@ -66,7 +66,7 @@ func TestGetCustomParser(t *testing.T) {
 
 	resp := &AggregatorsResponse{}
 
-	parser := resp.getCustomParser(context.Background(), client.logger, client.tracer)
+	parser := resp.getCustomParser(client.logger)
 
 	err := parser([]byte(`["sum","avg"]`))
 
@@ -201,7 +201,7 @@ func TestPutInvalidQueryParam(t *testing.T) {
 
 	err := client.PutDataPoints(context.Background(), dataPoints, "invalid_param", resp)
 	require.Error(t, err)
-	require.Equal(t, "The given query param is invalid.", err.Error())
+	require.Equal(t, "the given query param is invalid.", err.Error())
 }
 
 func TestPutErrorResponse(t *testing.T) {

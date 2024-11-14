@@ -16,7 +16,6 @@ import (
 	reflect "reflect"
 	time "time"
 
-	trace "go.opentelemetry.io/otel/trace"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -219,17 +218,17 @@ func (m *Mockresponse) EXPECT() *MockresponseMockRecorder {
 }
 
 // getCustomParser mocks base method.
-func (m *Mockresponse) getCustomParser(arg0 context.Context, arg1 Logger, arg2 trace.Tracer) func([]byte) error {
+func (m *Mockresponse) getCustomParser(arg0 Logger) func([]byte) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "getCustomParser", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "getCustomParser", arg0)
 	ret0, _ := ret[0].(func([]byte) error)
 	return ret0
 }
 
 // getCustomParser indicates an expected call of getCustomParser.
-func (mr *MockresponseMockRecorder) getCustomParser(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockresponseMockRecorder) getCustomParser(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "getCustomParser", reflect.TypeOf((*Mockresponse)(nil).getCustomParser), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "getCustomParser", reflect.TypeOf((*Mockresponse)(nil).getCustomParser), arg0)
 }
 
 // MockLogger is a mock of Logger interface.
