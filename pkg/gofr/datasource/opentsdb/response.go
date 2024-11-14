@@ -241,10 +241,6 @@ func (c *Client) sendRequest(ctx context.Context, method, url, reqBodyCnt string
 
 	defer resp.Body.Close()
 
-	if resp.StatusCode >= 400 && resp.StatusCode < 500 {
-		return fmt.Errorf("client error: %d", resp.StatusCode)
-	}
-
 	// Read and parse the response.
 	jsonBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -271,6 +267,10 @@ func (c *Client) sendRequest(ctx context.Context, method, url, reqBodyCnt string
 			message = fmt.Sprintf("failed to parse response body through custom parser %s %s: %v", method, url, err)
 			return err
 		}
+	}
+
+	if resp.StatusCode >= 400 && resp.StatusCode < 500 {
+		return fmt.Errorf("client error: %d", resp.StatusCode)
 	}
 
 	status = statusSuccess
