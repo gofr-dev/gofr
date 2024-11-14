@@ -335,9 +335,9 @@ func customParserHelper(ctx context.Context, resp genericResponse, operation str
 
 	var message string
 
-	defer sendOperationStats(logger, time.Now(), operation, &status, &message, span)
-
 	return func(result []byte) error {
+		defer sendOperationStats(logger, time.Now(), operation, &status, &message, span)
+
 		err := unmarshalFunc(result)
 		if err != nil {
 			message = fmt.Sprintf("unmarshal %s error: %s", operation, err)

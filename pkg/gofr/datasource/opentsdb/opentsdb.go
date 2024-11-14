@@ -136,6 +136,14 @@ func (c *Client) Connect() {
 	// Initialize the OpenTSDB client with the given configuration.
 	c.endpoint = fmt.Sprintf("http://%s", c.config.Host)
 
+	res := VersionResponse{}
+	err := c.version(context.Background(), &res)
+	if err != nil {
+		status = statusFailed
+		message = err.Error()
+		return
+	}
+
 	c.logger.Logf("Connection Successful")
 
 	status = statusSuccess
