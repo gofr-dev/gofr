@@ -183,52 +183,52 @@ func Test_BasicAuthMiddleware_well_known(t *testing.T) {
 
 func TestParseBasicAuth(t *testing.T) {
 	testCases := []struct {
-		name       string
-		authHeader string
+		name         string
+		authHeader   string
 		expectedUser string
 		expectedPass string
-		expectedOk  bool
+		expectedOk   bool
 	}{
 		{
-			name:       "Valid Basic Auth",
-			authHeader: "Basic " + base64.StdEncoding.EncodeToString([]byte("user:password")),
+			name:         "Valid Basic Auth",
+			authHeader:   "Basic " + base64.StdEncoding.EncodeToString([]byte("user:password")),
 			expectedUser: "user",
 			expectedPass: "password",
-			expectedOk:  true,
+			expectedOk:   true,
 		},
 		{
-			name:       "Invalid Scheme",
-			authHeader: "Bearer token",
+			name:         "Invalid Scheme",
+			authHeader:   "Bearer token",
 			expectedUser: "",
 			expectedPass: "",
-			expectedOk:  false,
+			expectedOk:   false,
 		},
 		{
-			name:       "Invalid Encoding",
-			authHeader: "Basic invalid_base64",
+			name:         "Invalid Encoding",
+			authHeader:   "Basic invalid_base64",
 			expectedUser: "",
 			expectedPass: "",
-			expectedOk:  false,
+			expectedOk:   false,
 		},
 		{
-			name:       "Missing Colon Separator",
-			authHeader: "Basic " + base64.StdEncoding.EncodeToString([]byte("user")),
+			name:         "Missing Colon Separator",
+			authHeader:   "Basic " + base64.StdEncoding.EncodeToString([]byte("user")),
 			expectedUser: "",
 			expectedPass: "",
-			expectedOk:  false,
+			expectedOk:   false,
 		},
 		{
-			name:       "Empty Authorization Header",
-			authHeader: "",
+			name:         "Empty Authorization Header",
+			authHeader:   "",
 			expectedUser: "",
 			expectedPass: "",
-			expectedOk:  false,
+			expectedOk:   false,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodGet, "/", nil)
+			req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 			req.Header.Set("Authorization", tc.authHeader)
 
 			username, password, ok := parseBasicAuth(req)
@@ -238,14 +238,6 @@ func TestParseBasicAuth(t *testing.T) {
 			assert.Equal(t, tc.expectedPass, password)
 		})
 	}
-}
-
-func TestRespondUnauthorized(t *testing.T) {
-	rr := httptest.NewRecorder()
-	respondUnauthorized(rr, "Test unauthorized message")
-
-	assert.Equal(t, http.StatusUnauthorized, rr.Code)
-	assert.Equal(t, "Unauthorized: Test unauthorized message\n", rr.Body.String())
 }
 
 func TestValidateCredentials(t *testing.T) {
@@ -310,14 +302,14 @@ func TestBasicAuthMiddleware_NoAuthHeader(t *testing.T) {
 	}
 
 	middleware := BasicAuthMiddleware(authProvider)
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 	rr := httptest.NewRecorder()
 	middleware(handler).ServeHTTP(rr, req)
 
 	assert.Equal(t, http.StatusUnauthorized, rr.Code)
-	assert.Contains(t, rr.Body.String(), "Unauthorized: Authorization header missing")
+	assert.Contains(t, rr.Body.String(), "Unauthorized: Invalid or missing Authorization header")
 }
