@@ -20,6 +20,13 @@ type Clickhouse interface {
 
 User's can easily inject a driver that supports this interface, this provides usability without
 compromising the extensibility to use multiple databases.
+
+Import the gofr's external driver for ClickHouse:
+
+```go
+go get gofr.dev/pkg/gofr/datasource/clickhouse
+```
+
 ### Example
 ```go
 package main
@@ -104,6 +111,13 @@ type Mongo interface {
 
 User's can easily inject a driver that supports this interface, this provides usability without
 compromising the extensibility to use multiple databases.
+
+Import the gofr's external driver for MongoDB:
+
+```go
+go get gofr.dev/pkg/gofr/datasource/mongo
+```
+
 ### Example
 ```go
 package main
@@ -196,6 +210,12 @@ type CassandraBatchWithContext interface {
 
 GoFr simplifies Cassandra integration with a well-defined interface. Users can easily implement any driver that adheres 
 to this interface, fostering a user-friendly experience.
+
+Import the gofr's external driver for Cassandra:
+
+```go
+go get gofr.dev/pkg/gofr/datasource/cassandra
+```
 
 ### Example
 
@@ -290,6 +310,12 @@ type Dgraph interface {
 
 Users can easily inject a driver that supports this interface, allowing for flexibility without compromising usability.
 This structure supports both queries and mutations in Dgraph.
+
+Import the gofr's external driver for DGraph:
+
+```go
+go get gofr.dev/pkg/gofr/datasource/dgraph
+```
 
 ### Example
 
@@ -407,6 +433,12 @@ type Solr interface {
 
 User's can easily inject a driver that supports this interface, this provides usability
 without compromising the extensibility to use multiple databases.
+
+Import the gofr's external driver for Solr:
+
+```go
+go get gofr.dev/pkg/gofr/datasource/solr
+```
 
 ```go
 package main
