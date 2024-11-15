@@ -98,6 +98,8 @@ func (c *Client) Connect() {
 	c.metrics.NewHistogram("app_mongo_stats", "Response time of MONGO queries in milliseconds.", mongoBuckets...)
 
 	c.Database = m.Database(c.config.Database)
+
+	c.logger.Logf("connected to mongoDB at %v to database %v", c.config.URI, c.config.Database)
 }
 
 // InsertOne inserts a single document into the specified collection.

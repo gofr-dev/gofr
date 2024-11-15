@@ -84,6 +84,8 @@ func (f *fileSystem) Connect() {
 
 	ftpServer := fmt.Sprintf("%v:%v", f.config.Host, f.config.Port)
 
+	f.logger.Logf("Connecting to FTP server at '%v'", ftpServer)
+
 	defer f.sendOperationStats(&FileLog{
 		Operation: "Connect",
 		Location:  ftpServer,

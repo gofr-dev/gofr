@@ -65,6 +65,7 @@ func (c *client) Connect() {
 	}
 
 	c.db = db
+	c.logger.Infof("connected to BadgerDB at %v", c.configs.DirPath)
 }
 
 func (c *client) Get(ctx context.Context, key string) (string, error) {
