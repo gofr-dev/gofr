@@ -91,6 +91,23 @@ func (mr *MockLoggerMockRecorder) Errorf(pattern any, args ...any) *gomock.Call 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Errorf", reflect.TypeOf((*MockLogger)(nil).Errorf), varargs...)
 }
 
+// Infof mocks base method.
+func (m *MockLogger) Infof(pattern string, args ...any) {
+	m.ctrl.T.Helper()
+	varargs := []any{pattern}
+	for _, a := range args {
+		varargs = append(varargs, a)
+	}
+	m.ctrl.Call(m, "Infof", varargs...)
+}
+
+// Infof indicates an expected call of Infof.
+func (mr *MockLoggerMockRecorder) Infof(pattern any, args ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{pattern}, args...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Infof", reflect.TypeOf((*MockLogger)(nil).Infof), varargs...)
+}
+
 // Logf mocks base method.
 func (m *MockLogger) Logf(pattern string, args ...any) {
 	m.ctrl.T.Helper()

@@ -47,7 +47,7 @@ func (f *fileSystem) UseMetrics(metrics interface{}) {
 
 // Connect establishes a connection to FileSystem and registers metrics using the provided configuration when the client was Created.
 func (f *fileSystem) Connect() {
-	f.logger.Debugf("connecting to SFTP server with host `%v` and port `%v`", f.config.Host, f.config.Port)
+	f.logger.Infof("connecting to SFTP server with host `%v` and port `%v`", f.config.Host, f.config.Port)
 
 	addr := fmt.Sprintf("%s:%d", f.config.Host, f.config.Port)
 
@@ -69,7 +69,7 @@ func (f *fileSystem) Connect() {
 
 	f.client = client
 
-	f.logger.Logf("connected to SFTP client successfully")
+	f.logger.Infof("connected to SFTP client successfully")
 }
 
 func (f *fileSystem) Create(name string) (File.File, error) {

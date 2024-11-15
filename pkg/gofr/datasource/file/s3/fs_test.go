@@ -331,6 +331,7 @@ func runS3Test(t *testing.T, testFunc func(fs file.FileSystemProvider)) {
 	mockMetrics := NewMockMetrics(ctrl)
 
 	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Infof(gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 
