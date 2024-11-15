@@ -83,6 +83,8 @@ func (f *fileSystem) Connect() {
 		Message:   &msg,
 	}, time.Now())
 
+	f.logger.Logf("Connecting to S3 bucket %s", f.config.BucketName)
+
 	// Load the AWS configuration
 	cfg, err := awsConfig.LoadDefaultConfig(context.TODO(),
 		awsConfig.WithRegion(f.config.Region),
