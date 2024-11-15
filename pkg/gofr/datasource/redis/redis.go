@@ -55,7 +55,7 @@ func NewClient(c config.Config, logger datasource.Logger, metrics Metrics) *Redi
 			logger.Errorf("could not add tracing instrumentation, error: %s", err)
 		}
 
-		logger.Logf("connected to redis at %s:%d", redisConfig.HostName, redisConfig.Port)
+		logger.Infof("connected to redis at %s:%d", redisConfig.HostName, redisConfig.Port)
 	} else {
 		logger.Errorf("could not connect to redis at '%s:%d', error: %s", redisConfig.HostName, redisConfig.Port, err)
 	}
