@@ -58,7 +58,7 @@ func (r *remoteLogger) UpdateLogLevel() {
 			r.ChangeLevel(newLevel)
 
 			if r.currentLevel != newLevel {
-				r.Infof("LOG_LEVEL updated from %v to %v", r.currentLevel, newLevel)
+				r.Debugf("LOG_LEVEL updated from %v to %v", r.currentLevel, newLevel)
 				r.currentLevel = newLevel
 			}
 		}
