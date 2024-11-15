@@ -47,6 +47,22 @@ type Cassandra interface {
 	HealthCheck(ctx context.Context) (any, error)
 }
 
+// Mongo is an interface representing a MongoDB database client with common CRUD operations.
+type Mongo interface {
+	Find(ctx context.Context, collection string, filter any, results any) error
+	FindOne(ctx context.Context, collection string, filter any, result any) error
+	InsertOne(ctx context.Context, collection string, document any) (any, error)
+	InsertMany(ctx context.Context, collection string, documents []any) ([]any, error)
+	DeleteOne(ctx context.Context, collection string, filter any) (int64, error)
+	DeleteMany(ctx context.Context, collection string, filter any) (int64, error)
+	UpdateByID(ctx context.Context, collection string, id any, update any) (int64, error)
+	UpdateOne(ctx context.Context, collection string, filter any, update any) error
+	UpdateMany(ctx context.Context, collection string, filter any, update any) (int64, error)
+	Drop(ctx context.Context, collection string) error
+	CreateCollection(ctx context.Context, name string) error
+	StartSession() (any, error)
+}
+
 // keeping the migrator interface unexported as, right now it is not being implemented directly, by the externalDB drivers.
 // keeping the implementations for externalDB at one place such that if any change in migration logic, we would change directly here.
 type migrator interface {
