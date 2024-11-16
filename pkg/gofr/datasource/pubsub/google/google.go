@@ -155,7 +155,6 @@ func (g *googleClient) Subscribe(ctx context.Context, topic string) (*pubsub.Mes
 			defer g.mu.Unlock()
 
 			g.receiveChan[topic] <- m
-
 		}
 
 		// initialize the channel before we can start receiving on it
