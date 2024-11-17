@@ -13,6 +13,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
+	"gofr.dev/pkg/gofr/datasource/pubsub"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/testutil"
 )
@@ -174,9 +175,9 @@ func Test_validateConfigs(t *testing.T) {
 }
 
 func TestGoogleClient_CloseReturnsError(t *testing.T) {
-	// client already present
 	g := &googleClient{
-		client: getGoogleClient(t),
+		client:      getGoogleClient(t),
+		receiveChan: make(map[string]chan *pubsub.Message),
 	}
 
 	err := g.Close()
@@ -184,7 +185,7 @@ func TestGoogleClient_CloseReturnsError(t *testing.T) {
 	require.NoError(t, err)
 
 	// client empty
-	g = &googleClient{}
+	g = &googleClient{receiveChan: make(map[string]chan *pubsub.Message)}
 
 	err = g.Close()
 

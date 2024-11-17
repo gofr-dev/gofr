@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync"
 	"time"
 
 	gcPubSub "cloud.google.com/go/pubsub"
@@ -30,7 +31,9 @@ type googleClient struct {
 	client      Client
 	logger      pubsub.Logger
 	metrics     Metrics
-	recieveChan chan *pubsub.Message
+	receiveChan map[string]chan *pubsub.Message
+	subStarted  map[string]struct{}
+	mu          sync.RWMutex
 }
 
 //nolint:revive // We do not want anyone using the client without initialization steps.
@@ -58,7 +61,9 @@ func New(conf Config, logger pubsub.Logger, metrics Metrics) *googleClient {
 		client:      client,
 		logger:      logger,
 		metrics:     metrics,
-		recieveChan: make(chan *pubsub.Message),
+		receiveChan: make(map[string]chan *pubsub.Message),
+		subStarted:  make(map[string]struct{}),
+		mu:          sync.RWMutex{},
 	}
 }
 
@@ -117,62 +122,70 @@ func (g *googleClient) Publish(ctx context.Context, topic string, message []byte
 }
 
 func (g *googleClient) Subscribe(ctx context.Context, topic string) (*pubsub.Message, error) {
-	receiveChan := make(chan *pubsub.Message)
-	defer close(receiveChan)
+	var end time.Duration
 
-	ctx, span := otel.GetTracerProvider().Tracer("gofr").Start(ctx, "gcp-subscribe")
+	spanCtx, span := otel.GetTracerProvider().Tracer("gofr").Start(ctx, "gcp-subscribe")
 	defer span.End()
 
-	g.metrics.IncrementCounter(ctx, "app_pubsub_subscribe_total_count", "topic", topic, "subscription_name", g.Config.SubscriptionName)
+	g.metrics.IncrementCounter(spanCtx, "app_pubsub_subscribe_total_count", "topic", topic, "subscription_name", g.Config.SubscriptionName)
 
-	t, err := g.getTopic(ctx, topic)
-	if err != nil {
-		return nil, err
-	}
+	if _, ok := g.subStarted[topic]; !ok {
+		t, err := g.getTopic(spanCtx, topic)
+		if err != nil {
+			return nil, err
+		}
 
-	subscription, err := g.getSubscription(ctx, t)
-	if err != nil {
-		return nil, err
-	}
+		subscription, err := g.getSubscription(spanCtx, t)
+		if err != nil {
+			return nil, err
+		}
 
-	start := time.Now()
-	cctx, cancel := context.WithCancel(ctx)
+		start := time.Now()
 
-	go func() {
 		processMessage := func(ctx context.Context, msg *gcPubSub.Message) {
 			m := pubsub.NewMessage(ctx)
-			end := time.Since(start)
+			end = time.Since(start)
 
 			m.Topic = topic
 			m.Value = msg.Data
 			m.MetaData = msg.Attributes
 			m.Committer = newGoogleMessage(msg)
 
-			g.logger.Debug(&pubsub.Log{
-				Mode:          "SUB",
-				CorrelationID: span.SpanContext().TraceID().String(),
-				MessageValue:  string(m.Value),
-				Topic:         topic,
-				Host:          g.Config.ProjectID,
-				PubSubBackend: "GCP",
-				Time:          end.Microseconds(),
-			})
+			g.mu.Lock()
+			defer g.mu.Unlock()
 
-			receiveChan <- m
-
-			cancel()
+			g.receiveChan[topic] <- m
 		}
 
-		err = subscription.Receive(cctx, processMessage)
-		if err != nil {
-			g.logger.Errorf("error getting a message from google: %s", err.Error())
-		}
-	}()
+		// initialize the channel before we can start receiving on it
+		g.mu.Lock()
+		g.receiveChan[topic] = make(chan *pubsub.Message)
+		g.mu.Unlock()
+
+		go func() {
+			err = subscription.Receive(ctx, processMessage)
+			if err != nil {
+				g.logger.Errorf("error getting a message from google: %s", err.Error())
+			}
+		}()
+
+		g.subStarted[topic] = struct{}{}
+	}
 
 	select {
-	case m := <-receiveChan:
-		g.metrics.IncrementCounter(ctx, "app_pubsub_subscribe_success_count", "topic", topic, "subscription_name",
+	case m := <-g.receiveChan[topic]:
+		g.metrics.IncrementCounter(spanCtx, "app_pubsub_subscribe_success_count", "topic", topic, "subscription_name",
 			g.Config.SubscriptionName)
+
+		g.logger.Debug(&pubsub.Log{
+			Mode:          "SUB",
+			CorrelationID: span.SpanContext().TraceID().String(),
+			MessageValue:  string(m.Value),
+			Topic:         topic,
+			Host:          g.Config.ProjectID,
+			PubSubBackend: "GCP",
+			Time:          end.Microseconds(),
+		})
 
 		return m, nil
 	case <-ctx.Done():
@@ -242,6 +255,10 @@ func (g *googleClient) CreateTopic(ctx context.Context, name string) error {
 func (g *googleClient) Close() error {
 	if g.client != nil {
 		return g.client.Close()
+	}
+
+	for _, c := range g.receiveChan {
+		close(c)
 	}
 
 	return nil
