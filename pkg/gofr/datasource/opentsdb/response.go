@@ -247,7 +247,7 @@ func (c *Client) sendRequest(ctx context.Context, method, url, reqBodyCnt string
 	} else {
 		// Use the custom parser if available.
 		if err := parser(jsonBytes); err != nil {
-			return fmt.Errorf("failed to parse response body through custom parser %s %s: %v", method, url, err)
+			return fmt.Errorf("failed to parse response body through custom parser %s %s: %w", method, url, err)
 		}
 	}
 
@@ -263,7 +263,7 @@ func (c *Client) version(ctx context.Context, verResp *VersionResponse) error {
 
 	status := statusFailed
 
-	var message string
+	message := "version request failed"
 
 	defer sendOperationStats(c.logger, time.Now(), "Version", &status, &message, span)
 
@@ -333,7 +333,7 @@ func (c *Client) operateAnnotation(ctx context.Context, queryAnnotation, resp an
 
 	status := statusFailed
 
-	var message string
+	message := fmt.Sprintf("%v request failed", operation)
 
 	defer sendOperationStats(c.logger, time.Now(), operation, &status, &message, span)
 

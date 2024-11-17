@@ -7,12 +7,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"go.opentelemetry.io/otel/attribute"
 	"net"
 	"net/http"
 	"net/url"
 	"time"
 
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -151,7 +151,7 @@ func (c *Client) PutDataPoints(ctx context.Context, datas any, queryParam string
 
 	status := statusFailed
 
-	message := "put request failed"
+	message := "Put request failed"
 
 	defer sendOperationStats(c.logger, time.Now(), "PutDataPoints", &status, &message, span)
 
@@ -202,7 +202,7 @@ func (c *Client) QueryDataPoints(ctx context.Context, parameters, resp any) erro
 
 	status := statusFailed
 
-	var message string
+	message := "QueryDatapoints request failed"
 
 	defer sendOperationStats(c.logger, time.Now(), "Query", &status, &message, span)
 
@@ -245,7 +245,7 @@ func (c *Client) QueryLatestDataPoints(ctx context.Context, parameters, resp any
 
 	status := statusFailed
 
-	var message string
+	message := "QueryLatestDataPoints request failed"
 
 	defer sendOperationStats(c.logger, time.Now(), "QueryLastDataPoints", &status, &message, span)
 
@@ -290,7 +290,7 @@ func (c *Client) QueryAnnotation(ctx context.Context, queryAnnoParam map[string]
 
 	status := statusFailed
 
-	var message string
+	message := "QueryAnnotation request failed"
 
 	defer sendOperationStats(c.logger, time.Now(), "QueryAnnotation", &status, &message, span)
 
@@ -349,7 +349,7 @@ func (c *Client) GetAggregators(ctx context.Context, resp any) error {
 
 	status := statusFailed
 
-	var message string
+	message := "GetAggregators request failed"
 
 	defer sendOperationStats(c.logger, time.Now(), "GetAggregators", &status, &message, span)
 
@@ -378,7 +378,7 @@ func (c *Client) HealthCheck(ctx context.Context) (any, error) {
 
 	status := statusFailed
 
-	var message string
+	message := "HealthCheck request failed"
 
 	defer sendOperationStats(c.logger, time.Now(), "HealthCheck", &status, &message, span)
 

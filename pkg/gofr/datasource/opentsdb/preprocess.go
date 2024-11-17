@@ -293,7 +293,7 @@ type SubQueryLast struct {
 func getQueryBodyContents(param any) (string, error) {
 	result, err := json.Marshal(param)
 	if err != nil {
-		return "", fmt.Errorf("failed to marshal query param: %v", err)
+		return "", fmt.Errorf("failed to marshal query param: %w", err)
 	}
 
 	return string(result), nil
