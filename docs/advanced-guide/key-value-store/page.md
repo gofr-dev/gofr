@@ -22,6 +22,13 @@ using `app.AddKVStore()` method, and user's can use BadgerDB across application 
 
 User's can easily inject a driver that supports this interface, this provides usability without
 compromising the extensibility to use multiple databases.
+
+Import the gofr's external driver for BadgerDB:
+
+```go
+go get gofr.dev/pkg/gofr/datasource/kv-store/badger
+```
+
 ### Example
 ```go
 package main
