@@ -114,9 +114,31 @@ In this example, we define a user struct representing a database entity. The `Ge
 This method can be used to implement custom logic for filtering, sorting, or retrieving additional data along with the entities.
 
 
-> Few Points to consider:
-> 1. The struct should always be passed by reference in the method `AddRESTHandlers`.
-> 2. Field Naming Convention: GoFr assumes the struct fields in snake-case match the database column names. For example, `IsEmployed` field in the struct matches `is_employed` column in the database, `Age` field matches `age` column, etc.
-> 3. Primary Key: The first field of the struct is typically used as the primary key for data operations. However, user can customize this behavior using GoFr's features. 
+## Few Points to Consider:
 
+**1. Passing Struct by Reference**
+
+The struct should always be passed by reference in the method `AddRESTHandlers`.
+
+**2. Field Naming Convention**
+
+GoFr assumes that struct fields in snake_case match the database column names.
+
+* For example, the `IsEmployed` field in the struct matches the `is_employed` column in the database.
+* Similarly, the `Age` field matches the `age` column.
+
+**3. Primary Key**
+
+The first field of the struct is typically used as the primary key for data operations. However, this behavior can be customized using GoFr's features.
+
+**4. Datatype Conversions**
+
+| Go Type | SQL Type | Description |
+|---|---|---|
+| `uuid.UUID` (from `github.com/google/uuid` or `github.com/satori/go.uuid`) | `CHAR(36)` or `VARCHAR(36)` | UUIDs are typically stored as 36-character strings in SQL databases. |
+| `string` | `VARCHAR(n)` or `TEXT` | Use `VARCHAR(n)` for fixed-length strings, while `TEXT` is for longer, variable-length strings. |
+| `int`, `int32`, `int64`, `uint`, `uint32`, `uint64` | `INT`, `BIGINT`, `SMALLINT`, `TINYINT`, `INTEGER` | Use `INT` for general integer values, `BIGINT` for large values, and `SMALLINT` or `TINYINT` for smaller ranges. |
+| `bool` | `BOOLEAN` or `TINYINT(1)` | Use `BOOLEAN` (supported by most SQL databases like PostgreSQL, MySQL) or `TINYINT(1)` in MySQL (where `0` is false, and `1` is true). |
+| `float32`, `float64` | `FLOAT`, `DOUBLE`, `DECIMAL` | Use `DECIMAL` for precise decimal numbers (e.g., financial data), `FLOAT` or `DOUBLE` for approximate floating-point numbers. |
+| `time.Time` | `DATE`, `TIME`, `DATETIME`, `TIMESTAMP` | Use `DATE` for just the date, `TIME` for the time of day, and `DATETIME` or `TIMESTAMP` for both date and time. |
 > #### Check out the example on how to add REST Handlers in GoFr: [Visit Github](https://github.com/gofr-dev/gofr/tree/main/examples/using-add-rest-handlers)

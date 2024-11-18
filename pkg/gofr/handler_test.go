@@ -99,6 +99,68 @@ func TestHandler_ServeHTTP_Panic(t *testing.T) {
 	assert.Contains(t, w.Body.String(), http.StatusText(http.StatusInternalServerError), "TestHandler_ServeHTTP_Panic Failed")
 }
 
+func TestHandler_ServeHTTP_WithHeaders(t *testing.T) {
+	testCases := []struct {
+		desc       string
+		method     string
+		data       any
+		headers    map[string]string
+		err        error
+		statusCode int
+		body       string
+	}{
+		{
+			desc:   "Response with headers, method is GET, no error",
+			method: http.MethodGet,
+			data: response.Response{
+				Headers: map[string]string{
+					"X-Custom-Header": "custom-value",
+					"Content-Type":    "application/json",
+				},
+				Data: map[string]string{
+					"message": "Hello, World!",
+				},
+			},
+			headers: map[string]string{
+				"X-Custom-Header": "custom-value",
+				"Content-Type":    "application/json",
+			},
+			statusCode: http.StatusOK,
+			body:       `{"message":"Hello, World!"}`,
+		},
+		{
+			desc:       "No headers, method is GET, data is simple string, no error",
+			method:     http.MethodGet,
+			data:       "simple string",
+			statusCode: http.StatusOK,
+			body:       `"simple string"`,
+		},
+	}
+
+	for i, tc := range testCases {
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest(tc.method, "/", http.NoBody)
+		c := &container.Container{
+			Logger: logging.NewLogger(logging.FATAL),
+		}
+
+		handler{
+			function: func(*Context) (any, error) {
+				return tc.data, tc.err
+			},
+			container: c,
+		}.ServeHTTP(w, r)
+
+		assert.Containsf(t, w.Body.String(), tc.body, "TEST[%d], Failed.\n%s", i, tc.desc)
+
+		assert.Equal(t, tc.statusCode, w.Code, "TEST[%d], Failed.\n%s", i, tc.desc)
+
+		for key, expectedValue := range tc.headers {
+			assert.Equal(t, expectedValue, w.Header().Get(key), "TEST[%d], Failed. Header mismatch: %s", i, key)
+		}
+	}
+}
+
 func TestHandler_faviconHandlerError(t *testing.T) {
 	c := Context{
 		Context: context.Background(),
