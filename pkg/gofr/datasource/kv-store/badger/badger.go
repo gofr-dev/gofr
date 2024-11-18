@@ -145,7 +145,7 @@ func (c *client) useTransaction(f func(txn *badger.Txn) error) error {
 
 func (c *client) sendOperationStats(start time.Time, methodType string, method string,
 	span trace.Span, kv ...string) {
-	duration := time.Since(start).Milliseconds()
+	duration := time.Since(start).Microseconds()
 
 	c.logger.Debug(&Log{
 		Type:     methodType,

@@ -265,7 +265,7 @@ func (c *Client) CreateCollection(ctx context.Context, name string) error {
 }
 
 func (c *Client) sendOperationStats(ql *QueryLog, startTime time.Time, method string, span trace.Span) {
-	duration := time.Since(startTime).Milliseconds()
+	duration := time.Since(startTime).Microseconds()
 
 	ql.Duration = duration
 
