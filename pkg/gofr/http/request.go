@@ -70,6 +70,8 @@ func (r *Request) Bind(i interface{}) error {
 		return r.bindMultipart(i)
 	case "application/x-www-form-urlencoded":
 		return r.bindFormURLEncoded(i)
+	case "binary/octet-stream":
+		return r.bindBinary(i)
 	}
 
 	return nil
@@ -154,6 +156,25 @@ func (r *Request) bindForm(ptr any, isMultipart bool) error {
 
 		return errFieldsNotSet
 	}
+
+	return nil
+}
+
+// bindBinary handles binding for binary/octet-stream content type.
+func (r *Request) bindBinary(i interface{}) error {
+	// Ensure i is a pointer to a byte slice
+	byteSlicePtr, ok := i.(*[]byte)
+	if !ok {
+		return fmt.Errorf("bind error, expected *[]byte but got %T", i)
+	}
+
+	body, err := r.body()
+	if err != nil {
+		return fmt.Errorf("failed to read request body: %w", err)
+	}
+
+	// Assign the body to the provided slice
+	*byteSlicePtr = body
 
 	return nil
 }
