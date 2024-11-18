@@ -274,7 +274,7 @@ func (c *Client) createRequest(ctx context.Context, method, url string, params m
 }
 
 func (c *Client) sendOperationStats(ctx context.Context, ql *QueryLog, startTime time.Time, method string, span trace.Span) {
-	duration := time.Since(startTime).Milliseconds()
+	duration := time.Since(startTime).Microseconds()
 
 	ql.Duration = duration
 

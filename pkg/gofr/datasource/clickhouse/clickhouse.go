@@ -169,7 +169,7 @@ func (c *client) AsyncInsert(ctx context.Context, query string, wait bool, args 
 
 func (c *client) sendOperationStats(start time.Time, methodType, query string, method string,
 	span trace.Span, args ...interface{}) {
-	duration := time.Since(start).Milliseconds()
+	duration := time.Since(start).Microseconds()
 
 	c.logger.Debug(&Log{
 		Type:     methodType,

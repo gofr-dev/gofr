@@ -45,7 +45,7 @@ func clean(query string) string {
 }
 
 func (d *DB) sendOperationStats(start time.Time, queryType, query string, args ...interface{}) {
-	duration := time.Since(start).Milliseconds()
+	duration := time.Since(start).Microseconds()
 
 	d.logger.Debug(&Log{
 		Type:     queryType,
