@@ -21,6 +21,7 @@ const (
 var (
 	errNoFileFound    = errors.New("no files were bounded")
 	errNonPointerBind = errors.New("bind error, cannot bind to a non pointer type")
+	errNonSliceBind   = errors.New("bind error: input is not a pointer to a byte slice")
 )
 
 // Request is an abstraction over the underlying http.Request. This abstraction is useful because it allows us
@@ -165,7 +166,7 @@ func (r *Request) bindBinary(i interface{}) error {
 	// Ensure i is a pointer to a byte slice
 	byteSlicePtr, ok := i.(*[]byte)
 	if !ok {
-		return fmt.Errorf("bind error, expected *[]byte but got %T", i)
+		return fmt.Errorf("%w: %v", errNonSliceBind, i)
 	}
 
 	body, err := r.body()
