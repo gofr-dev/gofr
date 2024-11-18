@@ -3,6 +3,7 @@ package http
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -288,6 +289,7 @@ func TestBind_BinaryOctetStream(t *testing.T) {
 			req.req.Header.Set("Content-Type", "binary/octet-stream")
 
 			var result []byte
+
 			err := req.Bind(&result)
 			if err != nil {
 				t.Errorf("Bind error: %v", err)
@@ -297,5 +299,18 @@ func TestBind_BinaryOctetStream(t *testing.T) {
 				t.Errorf("Bind error. Expected: %v, Got: %v", tc.data, result)
 			}
 		})
+	}
+}
+func TestBind_BinaryOctetStream_NotPointerToByteSlice(t *testing.T) {
+	req := &Request{
+		req: httptest.NewRequest(http.MethodPost, "/binary", http.NoBody),
+	}
+	req.req.Header.Set("Content-Type", "binary/octet-stream")
+
+	err := req.Bind("invalid input")
+	expectedErr := fmt.Errorf("%w: %v", errNonSliceBind, "invalid input")
+
+	if err == nil || !strings.Contains(err.Error(), expectedErr.Error()) {
+		t.Errorf("Expected error: %v, got: %v", expectedErr, err)
 	}
 }
