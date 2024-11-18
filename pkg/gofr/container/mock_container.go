@@ -23,6 +23,7 @@ type Mocks struct {
 	Mongo       *MockMongo
 	KVStore     *MockKVStore
 	DGraph      *MockDgraph
+	OpenTSDB    *MockOpenTSDBProvider
 	File        *file.MockFileSystemProvider
 	HTTPService *service.MockHTTP
 	Metrics     *MockMetrics
@@ -82,6 +83,9 @@ func NewMockContainer(t *testing.T, options ...options) (*Container, *Mocks) {
 	dgraphMock := NewMockDgraph(ctrl)
 	container.DGraph = dgraphMock
 
+	opentsdbMock := NewMockOpenTSDBProvider(ctrl)
+	container.OpenTSDB = opentsdbMock
+
 	var httpMock *service.MockHTTP
 
 	container.Services = make(map[string]service.HTTP)
@@ -110,6 +114,7 @@ func NewMockContainer(t *testing.T, options ...options) (*Container, *Mocks) {
 		File:        fileStoreMock,
 		HTTPService: httpMock,
 		DGraph:      dgraphMock,
+		OpenTSDB:    opentsdbMock,
 		Metrics:     mockMetrics,
 	}
 
