@@ -23,8 +23,8 @@ compromising the extensibility to use multiple databases.
 
 Import the gofr's external driver for ClickHouse:
 
-```go
-go get gofr.dev/pkg/gofr/datasource/clickhouse
+```shell
+go get gofr.dev/pkg/gofr/datasource/clickhouse@latest
 ```
 
 ### Example
@@ -114,8 +114,8 @@ compromising the extensibility to use multiple databases.
 
 Import the gofr's external driver for MongoDB:
 
-```go
-go get gofr.dev/pkg/gofr/datasource/mongo
+```shell
+go get gofr.dev/pkg/gofr/datasource/mongo@latest
 ```
 
 ### Example
@@ -213,8 +213,8 @@ to this interface, fostering a user-friendly experience.
 
 Import the gofr's external driver for Cassandra:
 
-```go
-go get gofr.dev/pkg/gofr/datasource/cassandra
+```shell
+go get gofr.dev/pkg/gofr/datasource/cassandra@latest
 ```
 
 ### Example
@@ -313,8 +313,8 @@ This structure supports both queries and mutations in Dgraph.
 
 Import the gofr's external driver for DGraph:
 
-```go
-go get gofr.dev/pkg/gofr/datasource/dgraph
+```shell
+go get gofr.dev/pkg/gofr/datasource/dgraph@latest
 ```
 
 ### Example
@@ -436,8 +436,8 @@ without compromising the extensibility to use multiple databases.
 
 Import the gofr's external driver for Solr:
 
-```go
-go get gofr.dev/pkg/gofr/datasource/solr
+```shell
+go get gofr.dev/pkg/gofr/datasource/solr@latest
 ```
 
 ```go
