@@ -2,6 +2,7 @@ package dgraph
 
 import (
 	"context"
+
 	"github.com/prometheus/client_golang/prometheus"
 )
 
