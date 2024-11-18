@@ -58,6 +58,11 @@ export const navigation = [
                 desc: "Explore methods for publishing custom metrics to monitor your application's performance and gain valuable insights."
             },
             {
+                title: 'Custom Headers in Response',
+                href: '/docs/advanced-guide/setting-custom-response-headers',
+                desc: "Learn how to include custom headers in HTTP responses to provide additional context and control to your API clients."
+            },
+            {
                 title: 'Custom Spans in Tracing',
                 href: '/docs/advanced-guide/custom-spans-in-tracing',
                 desc: "Learn to create custom spans for tracing to enhance observability and analyze the performance of your services."
