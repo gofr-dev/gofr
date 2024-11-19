@@ -53,6 +53,11 @@ func (r *Request) PathParam(key string) string {
 	return r.pathParams[key]
 }
 
+// Header returns the value associated with the `key`, from the request headers.
+func (r *Request) Header(key string) string {
+	return r.req.Header.Get(strings.ToLower(key))
+}
+
 // Bind parses the request body and binds it to the provided interface.
 func (r *Request) Bind(i interface{}) error {
 	v := r.req.Header.Get("content-type")

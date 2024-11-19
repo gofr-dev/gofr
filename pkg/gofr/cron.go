@@ -390,3 +390,5 @@ func (noopRequest) Bind(interface{}) error {
 func (noopRequest) Params(string) []string {
 	return nil
 }
+
+func (noopRequest) Header(string) string { return "" }

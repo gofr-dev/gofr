@@ -113,3 +113,5 @@ func (*Message) HostName() string {
 func (*Message) Params(string) []string {
 	return nil
 }
+
+func (*Message) Header(string) string { return "" }

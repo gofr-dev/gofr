@@ -272,3 +272,21 @@ func TestBind_FormURLEncoded(t *testing.T) {
 		t.Errorf("Bind error. Got: %v", x)
 	}
 }
+
+func TestHeader(t *testing.T) {
+	// Create a new HTTP request with headers
+	httpReq := httptest.NewRequest(http.MethodGet, "/abc", http.NoBody)
+	httpReq.Header.Set("random-header", "abc123")
+
+	// Create a GoFr Request from the HTTP request
+	req := NewRequest(httpReq)
+
+	if req.Header("random-header") != "abc123" {
+		t.Error("Failed to retrieve the random-header")
+	}
+
+	// Test a header that doesn't exist
+	if req.Header("Non-Existent-Header") != "" {
+		t.Error("Expected an empty string for a non-existent header")
+	}
+}
