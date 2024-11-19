@@ -82,6 +82,13 @@ parts of the request.
     values := ctx.Request.Params("category")
     // values = []string{"books", "electronics", "tech"}
   ```
+  
+- `Header(string)` - to access the value of a specific request header.
+  ```go
+    // Example: Request contains the header: Content-Type: application/json
+   contentType := ctx.Request.Header("Content-Type")
+   // contentType = "application/json"
+  ```
 
 ## Accessing dependencies
 
