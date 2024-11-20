@@ -648,6 +648,8 @@ func (a *App) UseMiddleware(middlewares ...gofrHTTP.Middleware) {
 //
 // The `middleware` function receives the container and the handler, allowing
 // the middleware to modify the request processing flow.
+// Deprecated: UseMiddlewareWithContainer will be removed in a future release.
+// Please use the UseMiddleware method that does not depend on the container.
 func (a *App) UseMiddlewareWithContainer(middlewareHandler func(c *container.Container, handler http.Handler) http.Handler) {
 	a.httpServer.router.Use(func(h http.Handler) http.Handler {
 		// Wrap the provided handler `h` with the middleware function `middlewareHandler`
