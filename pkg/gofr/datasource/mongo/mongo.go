@@ -78,7 +78,7 @@ func (c *Client) UseTracer(tracer any) {
 
 // Connect establishes a connection to MongoDB and registers metrics using the provided configuration when the client was Created.
 func (c *Client) Connect() {
-	c.logger.Infof("connecting to MongoDB at %v to database %v", c.config.URI, c.config.Database)
+	c.logger.Debug(fmt.Sprintf("connecting to mongoDB at %v to database %v", c.config.URI, c.config.Database))
 
 	uri := c.config.URI
 
@@ -99,7 +99,7 @@ func (c *Client) Connect() {
 
 	c.Database = m.Database(c.config.Database)
 
-	c.logger.Infof("connected to MongoDB at %v to database %v", c.config.URI, c.config.Database)
+	c.logger.Logf("connected to mongoDB at %v to database %v", uri, c.Database)
 }
 
 // InsertOne inserts a single document into the specified collection.

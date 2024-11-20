@@ -62,7 +62,7 @@ func New(conf Config) *Client {
 
 // Connect establishes a connection to Cassandra and registers metrics using the provided configuration when the client was Created.
 func (c *Client) Connect() {
-	c.logger.Logf("connecting to cassandra at %v on port %v to keyspace %v", c.config.Hosts, c.config.Port, c.config.Keyspace)
+	c.logger.Debugf("connecting to cassandra at %v on port %v to keyspace %v", c.config.Hosts, c.config.Port, c.config.Keyspace)
 
 	sess, err := c.cassandra.clusterConfig.createSession()
 	if err != nil {

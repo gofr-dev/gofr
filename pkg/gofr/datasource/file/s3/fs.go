@@ -83,7 +83,7 @@ func (f *fileSystem) Connect() {
 		Message:   &msg,
 	}, time.Now())
 
-	f.logger.Infof("connecting to S3 bucket %s", f.config.BucketName)
+	f.logger.Debug(fmt.Sprintf("connecting to S3 bucket: %s", f.config.BucketName))
 
 	// Load the AWS configuration
 	cfg, err := awsConfig.LoadDefaultConfig(context.TODO(),
@@ -111,7 +111,7 @@ func (f *fileSystem) Connect() {
 	st = statusSuccess
 	msg = "S3 Client connected."
 
-	f.logger.Infof("connected to S3 bucket %s", f.config.BucketName)
+	f.logger.Logf("connected to S3 bucket %s", f.config.BucketName)
 }
 
 // Create creates a new file in the S3 bucket.

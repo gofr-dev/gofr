@@ -54,7 +54,7 @@ func New(config Config) *Client {
 // Connect connects to the Dgraph database using the provided configuration.
 func (d *Client) Connect() {
 	address := fmt.Sprintf("%s:%s", d.config.Host, d.config.Port)
-	d.logger.Logf("connecting to dgraph at %v", address)
+	d.logger.Debugf("connecting to dgraph at %v", address)
 
 	conn, err := grpc.Dial(address, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {

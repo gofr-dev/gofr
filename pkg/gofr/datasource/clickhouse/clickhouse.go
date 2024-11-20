@@ -70,7 +70,7 @@ func (c *client) UseTracer(tracer any) {
 func (c *client) Connect() {
 	var err error
 
-	c.logger.Logf("connecting to clickhouse db at %v to database %v", c.config.Hosts, c.config.Database)
+	c.logger.Debugf("connecting to clickhouse db at %v to database %v", c.config.Hosts, c.config.Database)
 
 	clickHouseBuckets := []float64{.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 4, 5, 7.5, 10}
 	c.metrics.NewHistogram("app_clickhouse_stats", "Response time of Clickhouse queries in milliseconds.", clickHouseBuckets...)
