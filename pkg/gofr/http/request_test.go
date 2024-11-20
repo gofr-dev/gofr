@@ -3,7 +3,7 @@ package http
 import (
 	"bytes"
 	"context"
-	"fmt"
+	"errors"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -308,9 +308,12 @@ func TestBind_BinaryOctetStream_NotPointerToByteSlice(t *testing.T) {
 	req.req.Header.Set("Content-Type", "binary/octet-stream")
 
 	err := req.Bind("invalid input")
-	expectedErr := fmt.Errorf("%w: %v", errNonSliceBind, "invalid input")
 
-	if err == nil || !strings.Contains(err.Error(), expectedErr.Error()) {
-		t.Errorf("Expected error: %v, got: %v", expectedErr, err)
+	if !errors.Is(err, errNonSliceBind) {
+		t.Fatalf("Expected error: %v, got: %v", errNonSliceBind, err)
+	}
+
+	if !strings.Contains(err.Error(), "input is not a pointer to a byte slice: invalid input") {
+		t.Errorf("Expected error to contain: input is not a pointer to a byte slice: invalid input, got: %v", err)
 	}
 }
