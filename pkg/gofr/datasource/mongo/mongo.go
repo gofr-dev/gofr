@@ -37,7 +37,7 @@ type Config struct {
 	ConnectionTimeout time.Duration
 }
 
-const defaultTimeout = 10 * time.Second
+const defaultTimeout = 5 * time.Second
 
 var errStatusDown = errors.New("status down")
 
