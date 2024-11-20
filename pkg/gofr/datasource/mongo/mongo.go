@@ -33,8 +33,11 @@ type Config struct {
 	Port     int
 	Database string
 	// Deprecated Provide Host User Password Port Instead and driver will generate the URI
-	URI string
+	URI               string
+	ConnectionTimeout time.Duration
 }
+
+const defaultTimeout = 10 * time.Second
 
 var errStatusDown = errors.New("status down")
 
@@ -87,12 +90,27 @@ func (c *Client) Connect() {
 			c.config.User, c.config.Password, c.config.Host, c.config.Port, c.config.Database)
 	}
 
-	m, err := mongo.Connect(context.Background(), options.Client().ApplyURI(uri))
+	timeout := c.config.ConnectionTimeout
+	if timeout == 0 {
+		timeout = defaultTimeout
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	m, err := mongo.Connect(ctx, options.Client().ApplyURI(uri))
 	if err != nil {
 		c.logger.Errorf("error connecting to mongoDB, err:%v", err)
 
 		return
 	}
+
+	if err = m.Ping(ctx, nil); err != nil {
+		c.logger.Errorf("could not connect to mongoDB at %v due to err: %v", c.config.URI, err)
+		return
+	}
+
+	c.logger.Logf("connected to mongoDB successfully at %v to database %v", c.config.URI, c.config.Database)
 
 	mongoBuckets := []float64{.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 4, 5, 7.5, 10}
 	c.metrics.NewHistogram("app_mongo_stats", "Response time of MONGO queries in milliseconds.", mongoBuckets...)
