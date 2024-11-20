@@ -163,7 +163,7 @@ func (r *Request) bindForm(ptr any, isMultipart bool) error {
 
 // bindBinary handles binding for binary/octet-stream content type.
 func (r *Request) bindBinary(raw interface{}) error {
-	// Ensure i is a pointer to a byte slice
+	// Ensure raw is a pointer to a byte slice
 	byteSlicePtr, ok := raw.(*[]byte)
 	if !ok {
 		return fmt.Errorf("%w: %v", errNonSliceBind, raw)
