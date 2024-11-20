@@ -45,7 +45,7 @@ func New(conf Config, logger pubsub.Logger, metrics Metrics) *googleClient {
 		return nil
 	}
 
-	logger.Infof("connecting to google pubsub client with projectID '%s' and subscriptionName '%s", conf.ProjectID, conf.SubscriptionName)
+	logger.Debugf("connecting to google pubsub client with projectID '%s' and subscriptionName '%s", conf.ProjectID, conf.SubscriptionName)
 
 	client, err := gcPubSub.NewClient(context.Background(), conf.ProjectID)
 	if err != nil {
@@ -54,7 +54,7 @@ func New(conf Config, logger pubsub.Logger, metrics Metrics) *googleClient {
 		}
 	}
 
-	logger.Infof("connected to google pubsub client, projectID: %s", client.Project())
+	logger.Logf("connected to google pubsub client, projectID: %s", client.Project())
 
 	return &googleClient{
 		Config:      conf,

@@ -69,7 +69,7 @@ func New(config *Config, logger Logger, metrics Metrics) *MQTT {
 	subs := make(map[string]subscription)
 	mu := new(sync.RWMutex)
 
-	logger.Infof("connecting to MQTT at '%v:%v' with clientID '%v'", config.Hostname, config.Port, config.ClientID)
+	logger.Debugf("connecting to MQTT at '%v:%v' with clientID '%v'", config.Hostname, config.Port, config.ClientID)
 
 	options.SetOnConnectHandler(createReconnectHandler(mu, config, subs))
 	options.SetConnectionLostHandler(createConnectionLostHandler(logger))
