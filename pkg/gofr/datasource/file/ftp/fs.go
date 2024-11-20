@@ -84,13 +84,13 @@ func (f *fileSystem) Connect() {
 
 	ftpServer := fmt.Sprintf("%v:%v", f.config.Host, f.config.Port)
 
-	f.logger.Infof("connecting to FTP server at '%v'", ftpServer)
-
 	defer f.sendOperationStats(&FileLog{
 		Operation: "Connect",
 		Location:  ftpServer,
 		Status:    &status,
 	}, time.Now())
+
+	f.logger.Debug(fmt.Sprintf("connecting to FTP Server at %v", ftpServer))
 
 	if f.config.DialTimeout == 0 {
 		f.config.DialTimeout = time.Second * 5
@@ -118,7 +118,7 @@ func (f *fileSystem) Connect() {
 
 	status = "LOGIN SUCCESS"
 
-	f.logger.Infof("connected to FTP server at '%v'", ftpServer)
+	f.logger.Logf("connected to FTP server at '%v'", ftpServer)
 }
 
 // Create creates an empty file on the FTP server.

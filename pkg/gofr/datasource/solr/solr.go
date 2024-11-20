@@ -67,13 +67,12 @@ func (c *Client) UseTracer(tracer any) {
 
 // Connect establishes a connection to Solr and registers metrics using the provided configuration when the client was Created.
 func (c *Client) Connect() {
-	c.logger.Infof("connecting to Solr at %v", c.url)
+	c.logger.Debugf("connecting to Solr at %v", c.url)
 
 	solrBuckets := []float64{.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 4, 5, 7.5, 10}
 	c.metrics.NewHistogram("app_solr_stats", "Response time of Solr operations in milliseconds.", solrBuckets...)
 
 	c.logger.Infof("connected to Solr at %v", c.url)
-
 	return
 }
 
