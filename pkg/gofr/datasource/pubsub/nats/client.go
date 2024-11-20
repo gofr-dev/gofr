@@ -39,8 +39,6 @@ func (c *Client) Connect() error {
 		return err
 	}
 
-	c.logger.Log("connecting to NATS server at %v", c.Config.Server)
-
 	connManager := NewConnectionManager(c.Config, c.logger, c.natsConnector, c.jetStreamCreator)
 	if err := connManager.Connect(); err != nil {
 		c.logger.Errorf("failed to connect to NATS server at %v: %v", c.Config.Server, err)

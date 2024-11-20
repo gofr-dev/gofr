@@ -120,22 +120,6 @@ func (mr *MockLoggerMockRecorder) Fatal(args ...any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Fatal", reflect.TypeOf((*MockLogger)(nil).Fatal), args...)
 }
 
-// Info mocks base method.
-func (m *MockLogger) Info(args ...any) {
-	m.ctrl.T.Helper()
-	varargs := []any{}
-	for _, a := range args {
-		varargs = append(varargs, a)
-	}
-	m.ctrl.Call(m, "Info", varargs...)
-}
-
-// Info indicates an expected call of Info.
-func (mr *MockLoggerMockRecorder) Info(args ...any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Info", reflect.TypeOf((*MockLogger)(nil).Info), args...)
-}
-
 // Log mocks base method.
 func (m *MockLogger) Log(args ...any) {
 	m.ctrl.T.Helper()
