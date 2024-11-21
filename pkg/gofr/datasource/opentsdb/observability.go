@@ -36,7 +36,7 @@ func (ql *QueryLog) PrettyPrint(writer io.Writer) {
 }
 
 func sendOperationStats(logger Logger, start time.Time, operation string, status, message *string, span trace.Span) {
-	duration := time.Since(start).Milliseconds()
+	duration := time.Since(start).Microseconds()
 
 	logger.Debug(&QueryLog{
 		Operation: operation,
