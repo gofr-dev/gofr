@@ -130,7 +130,7 @@ func (c *Client) Connect() {
 		span.End()
 	}
 
-	c.logger.Debug(fmt.Sprintf("connecting to OpenTSDB at host %s", c.config.Host))
+	c.logger.Debugf("connecting to OpenTSDB at host %s", c.config.Host)
 
 	// Set default values for optional configuration fields.
 	c.initializeClient()

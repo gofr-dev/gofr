@@ -90,7 +90,7 @@ func (f *fileSystem) Connect() {
 		Status:    &status,
 	}, time.Now())
 
-	f.logger.Debug(fmt.Sprintf("connecting to FTP Server at %v", ftpServer))
+	f.logger.Debugf("connecting to FTP Server at %v", ftpServer)
 
 	if f.config.DialTimeout == 0 {
 		f.config.DialTimeout = time.Second * 5
