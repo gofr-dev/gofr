@@ -235,7 +235,7 @@ err := ctx.File.Rename("old_name.text", "new_name.text")
 
 ### Deleting Files
 
-Remove deletes a single file
+`Remove` deletes a single file
 > Note: Currently, the S3 package supports the deletion of unversioned files from general-purpose buckets only. Directory buckets and versioned files are not supported for deletion by this method.
 ```go
 err := ctx.File.Remove("my_dir")
