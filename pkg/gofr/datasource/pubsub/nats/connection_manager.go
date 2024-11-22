@@ -84,8 +84,6 @@ func NewConnectionManager(
 
 // Connect establishes a connection to NATS and sets up JetStream.
 func (cm *ConnectionManager) Connect() error {
-	cm.logger.Debugf("connecting to NATS server at %v", cm.config.Server)
-
 	opts := []nats.Option{nats.Name("GoFr NATS JetStreamClient")}
 
 	if cm.config.CredsFile != "" {

@@ -97,6 +97,7 @@ func (f *fileSystem) Connect() {
 
 	if err != nil {
 		f.logger.Errorf("Failed to load configuration: %v", err)
+		return
 	}
 
 	// Create the S3 client from config
