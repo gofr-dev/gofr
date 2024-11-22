@@ -98,7 +98,7 @@ func (f *fileSystem) Connect() {
 
 	conn, err := ftp.Dial(ftpServer, ftp.DialWithTimeout(f.config.DialTimeout))
 	if err != nil {
-		f.logger.Errorf("Connection failed: %v", err)
+		f.logger.Errorf("error while connecting to FTP: %v", err)
 
 		status = "CONNECTION ERROR"
 
@@ -109,7 +109,7 @@ func (f *fileSystem) Connect() {
 
 	err = conn.Login(f.config.User, f.config.Password)
 	if err != nil {
-		f.logger.Errorf("Login failed: %v", err)
+		f.logger.Errorf("login failed: %v", err)
 
 		status = "LOGIN ERROR"
 

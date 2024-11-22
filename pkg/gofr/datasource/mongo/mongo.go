@@ -89,7 +89,7 @@ func (c *Client) Connect() {
 
 	m, err := mongo.Connect(context.Background(), options.Client().ApplyURI(uri))
 	if err != nil {
-		c.logger.Errorf("error connecting to MongoDB, err:%v", err)
+		c.logger.Errorf("error while connecting to MongoDB, err:%v", err)
 
 		return
 	}

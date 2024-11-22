@@ -62,6 +62,7 @@ func (c *client) Connect() {
 	db, err := badger.Open(badger.DefaultOptions(c.configs.DirPath))
 	if err != nil {
 		c.logger.Errorf("error while connecting to BadgerDB: %v", err)
+		return
 	}
 
 	c.db = db
