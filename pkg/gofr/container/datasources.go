@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 
+	"github.com/bsm/redislock"
 	"github.com/redis/go-redis/v9"
 
 	"gofr.dev/pkg/gofr/datasource"
@@ -33,6 +34,7 @@ type Redis interface {
 	redis.HashCmdable
 	HealthCheck() datasource.Health
 	Close() error
+	Locker() *redislock.Client
 }
 
 // Cassandra is an interface representing a cassandra database

@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/bsm/redislock"
 	otel "github.com/redis/go-redis/extra/redisotel/v9"
 	"github.com/redis/go-redis/v9"
 
@@ -30,6 +31,7 @@ type Redis struct {
 	*redis.Client
 	logger datasource.Logger
 	config *Config
+	locker *redislock.Client
 }
 
 // NewClient return a redis client if connection is successful based on Config.
@@ -60,7 +62,9 @@ func NewClient(c config.Config, logger datasource.Logger, metrics Metrics) *Redi
 		logger.Errorf("could not connect to redis at '%s:%d', error: %s", redisConfig.HostName, redisConfig.Port, err)
 	}
 
-	return &Redis{Client: rc, config: redisConfig, logger: logger}
+	locker := redislock.New(rc)
+
+	return &Redis{Client: rc, config: redisConfig, logger: logger, locker: locker}
 }
 
 // Close shuts down the Redis client, ensuring the current dataset is saved before exiting.
@@ -70,6 +74,11 @@ func (r *Redis) Close() error {
 	}
 
 	return nil
+}
+
+// Locker returns the redis lock client for distributed locking.
+func (r *Redis) Locker() *redislock.Client {
+	return r.locker
 }
 
 func getRedisConfig(c config.Config) *Config {
