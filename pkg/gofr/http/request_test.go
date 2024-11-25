@@ -3,6 +3,7 @@ package http
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -270,5 +271,49 @@ func TestBind_FormURLEncoded(t *testing.T) {
 	// Check the results
 	if x.Name != "John" || x.Age != 30 {
 		t.Errorf("Bind error. Got: %v", x)
+	}
+}
+
+func TestBind_BinaryOctetStream(t *testing.T) {
+	testCases := []struct {
+		name string
+		data []byte
+	}{
+		{"Raw Binary Data", []byte{0x42, 0x65, 0x6c, 0x6c, 0x61}},
+		{"Text-Based Binary Data", []byte("This is some binary data")},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := NewRequest(httptest.NewRequest(http.MethodPost, "/binary", bytes.NewReader(tc.data)))
+			req.req.Header.Set("Content-Type", "binary/octet-stream")
+
+			var result []byte
+
+			err := req.Bind(&result)
+			if err != nil {
+				t.Errorf("Bind error: %v", err)
+			}
+
+			if !bytes.Equal(result, tc.data) {
+				t.Errorf("Bind error. Expected: %v, Got: %v", tc.data, result)
+			}
+		})
+	}
+}
+func TestBind_BinaryOctetStream_NotPointerToByteSlice(t *testing.T) {
+	req := &Request{
+		req: httptest.NewRequest(http.MethodPost, "/binary", http.NoBody),
+	}
+	req.req.Header.Set("Content-Type", "binary/octet-stream")
+
+	err := req.Bind("invalid input")
+
+	if !errors.Is(err, errNonSliceBind) {
+		t.Fatalf("Expected error: %v, got: %v", errNonSliceBind, err)
+	}
+
+	if !strings.Contains(err.Error(), "input is not a pointer to a byte slice: invalid input") {
+		t.Errorf("Expected error to contain: input is not a pointer to a byte slice: invalid input, got: %v", err)
 	}
 }
