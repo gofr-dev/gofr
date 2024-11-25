@@ -690,6 +690,10 @@ func contains(elems []string, v string) bool {
 func (a *App) AddStaticFiles(endpoint, filePath string) {
 	a.httpRegistered = true
 
+	if !strings.HasPrefix(filePath, "./") && !filepath.IsAbs(filePath) {
+		filePath = "./" + filePath
+	}
+
 	// update file path based on current directory if it starts with ./
 	if strings.HasPrefix(filePath, "./") {
 		currentWorkingDir, _ := os.Getwd()
@@ -702,6 +706,8 @@ func (a *App) AddStaticFiles(endpoint, filePath string) {
 		a.container.Logger.Errorf("error in registering '%s' static endpoint, error: %v", endpoint, err)
 		return
 	}
+
+	a.container.Logger.Infof("registered static files at endpoint '%s' from directory '%s'", endpoint, filePath)
 
 	a.httpServer.router.AddStaticFiles(endpoint, filePath)
 }

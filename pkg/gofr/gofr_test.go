@@ -815,7 +815,7 @@ func TestStaticHandler(t *testing.T) {
 
 	app := New()
 
-	app.AddStaticFiles("gofrTest", "./testdir")
+	app.AddStaticFiles("gofrTest", "testdir")
 
 	app.httpRegistered = true
 	app.httpServer.port = 8022
