@@ -13,6 +13,8 @@ import (
 )
 
 func setupDB(t *testing.T) (*Client, *MockDgraphClient, *MockLogger, *MockMetrics) {
+	t.Helper()
+
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -63,7 +65,7 @@ func Test_Query_Success(t *testing.T) {
 
 	require.NoError(t, err, "Test_Query_Success Failed!")
 	require.NotNil(t, resp, "Test_Query_Success Failed!")
-	require.Equal(t, resp, &api.Response{Json: []byte(`{"result": "success"}`)}, "Test_Query_Success Failed!")
+	require.Equal(t, &api.Response{Json: []byte(`{"result": "success"}`)}, resp, "Test_Query_Success Failed!")
 }
 
 func Test_Query_Error(t *testing.T) {
@@ -108,7 +110,7 @@ func Test_QueryWithVars_Success(t *testing.T) {
 
 	require.NoError(t, err, "Test_QueryWithVars_Success Failed!")
 	require.NotNil(t, resp, "Test_QueryWithVars_Success Failed!")
-	require.Equal(t, resp, &api.Response{Json: []byte(`{"result": "success"}`)}, "Test_QueryWithVars_Success Failed!")
+	require.Equal(t, &api.Response{Json: []byte(`{"result": "success"}`)}, resp, "Test_QueryWithVars_Success Failed!")
 }
 
 func Test_QueryWithVars_Error(t *testing.T) {
@@ -154,7 +156,7 @@ func Test_Mutate_Success(t *testing.T) {
 
 	require.NoError(t, err, "Test_Mutate_Success Failed!")
 	require.NotNil(t, resp, "Test_Mutate_Success Failed!")
-	require.Equal(t, resp, &api.Response{Json: []byte(`{"result": "mutation success"}`)}, "Test_Mutate_Success Failed!")
+	require.Equal(t, &api.Response{Json: []byte(`{"result": "mutation success"}`)}, resp, "Test_Mutate_Success Failed!")
 }
 
 func Test_Mutate_InvalidMutation(t *testing.T) {
@@ -223,6 +225,7 @@ func Test_Alter_InvalidOperation(t *testing.T) {
 	client, _, mockLogger, _ := setupDB(t)
 
 	op := "invalid operation"
+
 	mockLogger.EXPECT().Error("invalid operation type provided to alter")
 
 	err := client.Alter(context.Background(), op)
