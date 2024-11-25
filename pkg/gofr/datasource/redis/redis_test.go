@@ -147,3 +147,44 @@ func TestRedis_Close(t *testing.T) {
 
 	require.NoError(t, err)
 }
+
+func TestRedis_Lock(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	// Mock Redis server setup
+	s, err := miniredis.Run()
+	require.NoError(t, err)
+	defer s.Close()
+
+	// Mock metrics and logger
+	mockMetric := NewMockMetrics(ctrl)
+	mockLogger := logging.NewMockLogger(logging.DEBUG)
+
+	mockMetric.EXPECT().RecordHistogram(gomock.Any(), "app_redis_stats", gomock.Any(), "hostname",
+		gomock.Any(), "type", gomock.Any()).Times(5)
+
+	// Create a Redis client with miniRedis server
+	client := NewClient(config.NewMockConfig(map[string]string{
+		"REDIS_HOST": s.Host(),
+		"REDIS_PORT": s.Port(),
+	}), mockLogger, mockMetric)
+
+	require.NotNil(t, client)
+	defer client.Close()
+
+	lock, err := client.Locker().Obtain(context.Background(), "test-lock", 100*time.Millisecond, nil)
+	require.NoError(t, err)
+	require.NotNil(t, lock, "Lock should not be nil")
+
+	// Check if the key for the lock exists in Redis
+	lockedKey := "test-lock"
+	require.True(t, s.Exists(lockedKey), "Lock key should exist in Redis")
+
+	// Release the lock
+	err = lock.Release(context.Background())
+	require.NoError(t, err)
+
+	// Verify the key is removed after releasing the lock
+	require.False(t, s.Exists(lockedKey), "Lock key should not exist in Redis after release")
+}
