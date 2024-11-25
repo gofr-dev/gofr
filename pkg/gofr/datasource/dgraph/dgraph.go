@@ -26,7 +26,6 @@ type Config struct {
 // Client represents the Dgraph client with logging and metrics.
 type Client struct {
 	client  DgraphClient
-	conn    *grpc.ClientConn
 	logger  Logger
 	metrics Metrics
 	config  Config
@@ -100,9 +99,9 @@ func (d *Client) UseMetrics(metrics any) {
 }
 
 // UseTracer sets the tracer for DGraph client.
-func (c *Client) UseTracer(tracer any) {
+func (d *Client) UseTracer(tracer any) {
 	if tracer, ok := tracer.(trace.Tracer); ok {
-		c.tracer = tracer
+		d.tracer = tracer
 	}
 }
 
@@ -126,10 +125,11 @@ func (d *Client) Query(ctx context.Context, query string) (any, error) {
 	if err != nil {
 		d.logger.Error("dgraph query failed: ", err)
 		ql.PrettyPrint(d.logger)
+
 		return nil, err
 	}
 
-	defer d.sendOperationStats(start, query, "query", ctx, span, ql, "dgraph_query_duration")
+	defer d.sendOperationStats(tracedCtx, start, query, "query", span, ql, "dgraph_query_duration")
 
 	return resp, nil
 }
@@ -159,10 +159,11 @@ func (d *Client) QueryWithVars(ctx context.Context, query string, vars map[strin
 	if err != nil {
 		d.logger.Error("dgraph queryWithVars failed: ", err)
 		ql.PrettyPrint(d.logger)
+
 		return nil, err
 	}
 
-	defer d.sendOperationStats(start, query, "query-with-vars", ctx, span, ql, "dgraph_query_with_vars_duration")
+	defer d.sendOperationStats(tracedCtx, start, query, "query-with-vars", span, ql, "dgraph_query_with_vars_duration")
 
 	return resp, nil
 }
@@ -193,10 +194,11 @@ func (d *Client) Mutate(ctx context.Context, mu any) (any, error) {
 	if err != nil {
 		d.logger.Error("dgraph mutation failed: ", err)
 		ql.PrettyPrint(d.logger)
+
 		return nil, err
 	}
 
-	defer d.sendOperationStats(start, mutationToString(mutation), "mutate", ctx, span, ql, "dgraph_mutate_duration")
+	defer d.sendOperationStats(tracedCtx, start, mutationToString(mutation), "mutate", span, ql, "dgraph_mutate_duration")
 
 	return resp, nil
 }
@@ -232,10 +234,11 @@ func (d *Client) Alter(ctx context.Context, op any) error {
 	if err != nil {
 		d.logger.Error("dgraph alter failed: ", err)
 		ql.PrettyPrint(d.logger)
+
 		return err
 	}
 
-	defer d.sendOperationStats(start, operation.String(), "alter", ctx, span, ql, "dgraph_alter_duration")
+	defer d.sendOperationStats(tracedCtx, start, operation.String(), "alter", span, ql, "dgraph_alter_duration")
 
 	return nil
 }
@@ -276,7 +279,7 @@ func (d *Client) addTrace(ctx context.Context, method string) (context.Context, 
 	return ctx, nil
 }
 
-func (d *Client) sendOperationStats(start time.Time, query, method string, ctx context.Context,
+func (d *Client) sendOperationStats(ctx context.Context, start time.Time, query, method string,
 	span trace.Span, queryLog *QueryLog, metricName string) {
 	duration := time.Since(start).Milliseconds()
 
@@ -298,5 +301,4 @@ func mutationToString(mutation *api.Mutation) string {
 	}
 
 	return compacted.String()
-
 }
