@@ -40,6 +40,7 @@ func TestHTTPServerUsingRedis(t *testing.T) {
 		{"get handler invalid key", http.MethodGet, nil, "/redis/key2",
 			http.StatusInternalServerError},
 		{"pipeline handler", http.MethodGet, nil, "/redis-pipeline", http.StatusOK},
+		{"redis-lock handler", http.MethodGet, nil, "/redis-lock", http.StatusOK},
 	}
 
 	for i, tc := range tests {
