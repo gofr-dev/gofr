@@ -110,11 +110,10 @@ func (c *Client) UseTracer(tracer any) {
 func (d *Client) Query(ctx context.Context, query string) (any, error) {
 	start := time.Now()
 
-	ctx, span := d.tracer.Start(ctx, "dgraph-query")
-	defer span.End()
+	tracedCtx, span := d.addTrace(ctx, "query")
 
 	// Execute query
-	resp, err := d.client.NewTxn().Query(ctx, query)
+	resp, err := d.client.NewTxn().Query(tracedCtx, query)
 	duration := time.Since(start).Microseconds()
 
 	// Create and log the query details
@@ -124,18 +123,13 @@ func (d *Client) Query(ctx context.Context, query string) (any, error) {
 		Duration: duration,
 	}
 
-	span.SetAttributes(
-		attribute.String("dgraph.query.query", query),
-		attribute.Int64("dgraph.query.duration", duration),
-	)
-
 	if err != nil {
 		d.logger.Error("dgraph query failed: ", err)
 		ql.PrettyPrint(d.logger)
 		return nil, err
 	}
 
-	d.sendOperationStats(ctx, ql, "dgraph_query_duration")
+	defer d.sendOperationStats(start, query, "query", ctx, span, ql, "dgraph_query_duration")
 
 	return resp, nil
 }
@@ -145,11 +139,10 @@ func (d *Client) Query(ctx context.Context, query string) (any, error) {
 func (d *Client) QueryWithVars(ctx context.Context, query string, vars map[string]string) (any, error) {
 	start := time.Now()
 
-	ctx, span := d.tracer.Start(ctx, "dgraph-query-with-vars")
-	defer span.End()
+	tracedCtx, span := d.addTrace(ctx, "query-with-vars")
 
 	// Execute the query with variables
-	resp, err := d.client.NewTxn().QueryWithVars(ctx, query, vars)
+	resp, err := d.client.NewTxn().QueryWithVars(tracedCtx, query, vars)
 	duration := time.Since(start).Microseconds()
 
 	// Create and log the query details
@@ -159,11 +152,9 @@ func (d *Client) QueryWithVars(ctx context.Context, query string, vars map[strin
 		Duration: duration,
 	}
 
-	span.SetAttributes(
-		attribute.String("dgraph.query.query", query),
-		attribute.String("dgraph.query.vars", fmt.Sprintf("%v", vars)),
-		attribute.Int64("dgraph.query.duration", duration),
-	)
+	if span != nil {
+		span.SetAttributes(attribute.String("dgraph.query.vars", fmt.Sprintf("%v", vars)))
+	}
 
 	if err != nil {
 		d.logger.Error("dgraph queryWithVars failed: ", err)
@@ -171,7 +162,7 @@ func (d *Client) QueryWithVars(ctx context.Context, query string, vars map[strin
 		return nil, err
 	}
 
-	d.sendOperationStats(ctx, ql, "dgraph_query_with_vars_duration")
+	defer d.sendOperationStats(start, query, "query-with-vars", ctx, span, ql, "dgraph_query_with_vars_duration")
 
 	return resp, nil
 }
@@ -180,8 +171,7 @@ func (d *Client) QueryWithVars(ctx context.Context, query string, vars map[strin
 func (d *Client) Mutate(ctx context.Context, mu any) (any, error) {
 	start := time.Now()
 
-	ctx, span := d.tracer.Start(ctx, "dgraph-mutate")
-	defer span.End()
+	tracedCtx, span := d.addTrace(ctx, "mutate")
 
 	// Cast to proper mutation type
 	mutation, ok := mu.(*api.Mutation)
@@ -190,7 +180,7 @@ func (d *Client) Mutate(ctx context.Context, mu any) (any, error) {
 	}
 
 	// Execute mutation
-	resp, err := d.client.NewTxn().Mutate(ctx, mutation)
+	resp, err := d.client.NewTxn().Mutate(tracedCtx, mutation)
 	duration := time.Since(start).Microseconds()
 
 	// Create and log the mutation details
@@ -200,18 +190,13 @@ func (d *Client) Mutate(ctx context.Context, mu any) (any, error) {
 		Duration: duration,
 	}
 
-	span.SetAttributes(
-		attribute.String("dgraph.mutation.query", mutationToString(mutation)),
-		attribute.Int64("dgraph.mutation.duration", duration),
-	)
-
 	if err != nil {
 		d.logger.Error("dgraph mutation failed: ", err)
 		ql.PrettyPrint(d.logger)
 		return nil, err
 	}
 
-	d.sendOperationStats(ctx, ql, "dgraph_mutate_duration")
+	defer d.sendOperationStats(start, mutationToString(mutation), "mutate", ctx, span, ql, "dgraph_mutate_duration")
 
 	return resp, nil
 }
@@ -220,8 +205,7 @@ func (d *Client) Mutate(ctx context.Context, mu any) (any, error) {
 func (d *Client) Alter(ctx context.Context, op any) error {
 	start := time.Now()
 
-	ctx, span := d.tracer.Start(ctx, "dgraph-alter")
-	defer span.End()
+	tracedCtx, span := d.addTrace(ctx, "alter")
 
 	// Cast to proper operation type
 	operation, ok := op.(*api.Operation)
@@ -231,7 +215,7 @@ func (d *Client) Alter(ctx context.Context, op any) error {
 	}
 
 	// Apply the schema changes
-	err := d.client.Alter(ctx, operation)
+	err := d.client.Alter(tracedCtx, operation)
 	duration := time.Since(start).Microseconds()
 
 	// Create and log the operation details
@@ -241,10 +225,9 @@ func (d *Client) Alter(ctx context.Context, op any) error {
 		Duration: duration,
 	}
 
-	span.SetAttributes(
-		attribute.String("dgraph.alter.operation", operation.String()),
-		attribute.Int64("dgraph.alter.duration", duration),
-	)
+	if span != nil {
+		span.SetAttributes(attribute.String("dgraph.alter.operation", operation.String()))
+	}
 
 	if err != nil {
 		d.logger.Error("dgraph alter failed: ", err)
@@ -252,7 +235,7 @@ func (d *Client) Alter(ctx context.Context, op any) error {
 		return err
 	}
 
-	d.sendOperationStats(ctx, ql, "dgraph_alter_duration")
+	defer d.sendOperationStats(start, operation.String(), "alter", ctx, span, ql, "dgraph_alter_duration")
 
 	return nil
 }
@@ -283,9 +266,29 @@ func (d *Client) HealthCheck(ctx context.Context) (any, error) {
 	return "UP", nil
 }
 
-func (d *Client) sendOperationStats(ctx context.Context, query *QueryLog, metricName string) {
-	query.PrettyPrint(d.logger)
-	d.metrics.RecordHistogram(ctx, metricName, float64(query.Duration))
+func (d *Client) addTrace(ctx context.Context, method string) (context.Context, trace.Span) {
+	if d.tracer != nil {
+		tracedCtx, span := d.tracer.Start(ctx, fmt.Sprintf("dgraph-%v", method))
+
+		return tracedCtx, span
+	}
+
+	return ctx, nil
+}
+
+func (d *Client) sendOperationStats(start time.Time, query, method string, ctx context.Context,
+	span trace.Span, queryLog *QueryLog, metricName string) {
+	duration := time.Since(start).Milliseconds()
+
+	if span != nil {
+		defer span.End()
+
+		span.SetAttributes(attribute.String(fmt.Sprintf("dgraph.%v.query", method), query))
+		span.SetAttributes(attribute.Int64(fmt.Sprintf("dgraph.%v.duration", method), duration))
+	}
+
+	queryLog.PrettyPrint(d.logger)
+	d.metrics.RecordHistogram(ctx, metricName, float64(queryLog.Duration))
 }
 
 func mutationToString(mutation *api.Mutation) string {
