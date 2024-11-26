@@ -103,7 +103,7 @@ func (c *Client) Search(ctx context.Context, collection string, params map[strin
 
 	resp, err, span := c.call(ctx, http.MethodGet, url, params, nil)
 
-	defer c.sendOperationStats(ctx, &QueryLog{Type: "Search", Url: url}, startTime, "search", span)
+	c.sendOperationStats(ctx, &QueryLog{Type: "Search", Url: url}, startTime, "search", span)
 
 	return resp, err
 }
@@ -116,7 +116,7 @@ func (c *Client) Create(ctx context.Context, collection string, document *bytes.
 
 	resp, err, span := c.call(ctx, http.MethodPost, url, params, document)
 
-	defer c.sendOperationStats(ctx, &QueryLog{Type: "Create", Url: url}, startTime, "create", span)
+	c.sendOperationStats(ctx, &QueryLog{Type: "Create", Url: url}, startTime, "create", span)
 
 	return resp, err
 }
@@ -129,7 +129,7 @@ func (c *Client) Update(ctx context.Context, collection string, document *bytes.
 
 	resp, err, span := c.call(ctx, http.MethodPost, url, params, document)
 
-	defer c.sendOperationStats(ctx, &QueryLog{Type: "Update", Url: url}, startTime, "update", span)
+	c.sendOperationStats(ctx, &QueryLog{Type: "Update", Url: url}, startTime, "update", span)
 
 	return resp, err
 }
@@ -142,7 +142,7 @@ func (c *Client) Delete(ctx context.Context, collection string, document *bytes.
 
 	resp, err, span := c.call(ctx, http.MethodPost, url, params, document)
 
-	defer c.sendOperationStats(ctx, &QueryLog{Type: "Delete", Url: url}, startTime, "delete", span)
+	c.sendOperationStats(ctx, &QueryLog{Type: "Delete", Url: url}, startTime, "delete", span)
 
 	return resp, err
 }
@@ -155,7 +155,7 @@ func (c *Client) ListFields(ctx context.Context, collection string, params map[s
 
 	resp, err, span := c.call(ctx, http.MethodGet, url, params, nil)
 
-	defer c.sendOperationStats(ctx, &QueryLog{Type: "ListFields", Url: url}, startTime, "list-fields", span)
+	c.sendOperationStats(ctx, &QueryLog{Type: "ListFields", Url: url}, startTime, "list-fields", span)
 
 	return resp, err
 }
@@ -168,7 +168,7 @@ func (c *Client) Retrieve(ctx context.Context, collection string, params map[str
 
 	resp, err, span := c.call(ctx, http.MethodGet, url, params, nil)
 
-	defer c.sendOperationStats(ctx, &QueryLog{Type: "Retrieve", Url: url}, startTime, "retrieve", span)
+	c.sendOperationStats(ctx, &QueryLog{Type: "Retrieve", Url: url}, startTime, "retrieve", span)
 
 	return resp, err
 }
@@ -180,7 +180,7 @@ func (c *Client) AddField(ctx context.Context, collection string, document *byte
 
 	resp, err, span := c.call(ctx, http.MethodPost, url, nil, document)
 
-	defer c.sendOperationStats(ctx, &QueryLog{Type: "AddField", Url: url}, startTime, "add-field", span)
+	c.sendOperationStats(ctx, &QueryLog{Type: "AddField", Url: url}, startTime, "add-field", span)
 
 	return resp, err
 }
@@ -192,7 +192,7 @@ func (c *Client) UpdateField(ctx context.Context, collection string, document *b
 
 	resp, err, span := c.call(ctx, http.MethodPost, url, nil, document)
 
-	defer c.sendOperationStats(ctx, &QueryLog{Type: "UpdateField", Url: url}, startTime, "update-field", span)
+	c.sendOperationStats(ctx, &QueryLog{Type: "UpdateField", Url: url}, startTime, "update-field", span)
 
 	return resp, err
 }
@@ -204,7 +204,7 @@ func (c *Client) DeleteField(ctx context.Context, collection string, document *b
 
 	resp, err, span := c.call(ctx, http.MethodPost, url, nil, document)
 
-	defer c.sendOperationStats(ctx, &QueryLog{Type: "DeleteField", Url: url}, startTime, "delete-field", span)
+	c.sendOperationStats(ctx, &QueryLog{Type: "DeleteField", Url: url}, startTime, "delete-field", span)
 
 	return resp, err
 }
