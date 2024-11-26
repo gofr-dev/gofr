@@ -43,7 +43,7 @@ func Test_NewMongoClientError(t *testing.T) {
 	logger := NewMockLogger(ctrl)
 
 	logger.EXPECT().Debugf("connecting to MongoDB at %v to database %v", "mongo", "test")
-	logger.EXPECT().Errorf("error connecting to MongoDB, err:%v", gomock.Any())
+	logger.EXPECT().Errorf("error while connecting to MongoDB, err:%v", gomock.Any())
 
 	client := New(Config{URI: "mongo", Database: "test"})
 	client.UseLogger(logger)
@@ -171,9 +171,9 @@ func Test_FindMultipleCommands(t *testing.T) {
 	cl := Client{metrics: metrics, tracer: otel.GetTracerProvider().Tracer("gofr-mongo")}
 
 	metrics.EXPECT().RecordHistogram(context.Background(), "app_mongo_stats", gomock.Any(), "hostname",
-		gomock.Any(), "database", gomock.Any(), "type", gomock.Any()).AnyTimes()
+		gomock.Any(), "database", gomock.Any(), "type", gomock.Any())
 
-	logger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	logger.EXPECT().Debug(gomock.Any())
 
 	cl.logger = logger
 
@@ -245,9 +245,9 @@ func Test_FindOneCommands(t *testing.T) {
 	cl := Client{metrics: metrics, tracer: otel.GetTracerProvider().Tracer("gofr-mongo")}
 
 	metrics.EXPECT().RecordHistogram(context.Background(), "app_mongo_stats", gomock.Any(), "hostname",
-		gomock.Any(), "database", gomock.Any(), "type", gomock.Any()).AnyTimes()
+		gomock.Any(), "database", gomock.Any(), "type", gomock.Any())
 
-	logger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	logger.EXPECT().Debug(gomock.Any())
 
 	cl.logger = logger
 
@@ -404,9 +404,9 @@ func Test_DeleteCommands(t *testing.T) {
 	cl := Client{metrics: metrics, tracer: otel.GetTracerProvider().Tracer("gofr-mongo")}
 
 	metrics.EXPECT().RecordHistogram(context.Background(), "app_mongo_stats", gomock.Any(), "hostname",
-		gomock.Any(), "database", gomock.Any(), "type", gomock.Any()).AnyTimes()
+		gomock.Any(), "database", gomock.Any(), "type", gomock.Any()).Times(2)
 
-	logger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	logger.EXPECT().Debug(gomock.Any()).Times(2)
 
 	cl.logger = logger
 
