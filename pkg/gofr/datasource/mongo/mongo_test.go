@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -27,7 +28,10 @@ func Test_NewMongoClient(t *testing.T) {
 	logger.EXPECT().Debugf(gomock.Any(), gomock.Any())
 	logger.EXPECT().Logf(gomock.Any(), gomock.Any(), gomock.Any())
 
-	client := New(Config{Database: "test", Host: "localhost", Port: 27017, User: "admin"})
+	logger.EXPECT().Errorf(gomock.Any(), gomock.Any(), gomock.Any())
+
+	client := New(Config{Database: "test", Host: "localhost", Port: 27017, User: "admin", ConnectionTimeout: 1 * time.Second})
+	client.Database = &mongo.Database{}
 	client.UseLogger(logger)
 	client.UseMetrics(metrics)
 	client.Connect()
