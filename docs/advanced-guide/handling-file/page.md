@@ -75,6 +75,8 @@ import (
 func main() {
     app := gofr.New()
 	
+	
+	
 	// Note that currently we do not handle connections through session token.
 	// BaseEndpoint is not necessary while connecting to AWS as it automatically resolves it on the basis of region.
 	// However, in case we are using any other AWS compatible service, such like running or testing locally, then this needs to be set.
@@ -83,8 +85,8 @@ func main() {
 		EndPoint:        "http://localhost:4566",
 		BucketName:      "gofr-bucket-2",
 		Region:          "us-east-1",
-		AccessKeyID:     "test",
-		SecretAccessKey: "test",
+		AccessKeyID:     app.Config.Get("AWS_ACCESS_KEY_ID"),
+		SecretAccessKey: app.Config.Get("AWS_SECRET_ACCESS_KEY"),
 	}))
     
     app.Run()
