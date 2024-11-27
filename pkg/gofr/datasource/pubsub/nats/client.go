@@ -33,6 +33,8 @@ type messageHandler func(context.Context, jetstream.Msg) error
 
 // Connect establishes a connection to NATS and sets up jStream.
 func (c *Client) Connect() error {
+	c.logger.Debugf("connecting to NATS server at %v", c.Config.Server)
+
 	if err := c.validateAndPrepare(); err != nil {
 		return err
 	}
