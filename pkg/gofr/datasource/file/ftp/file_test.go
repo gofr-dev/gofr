@@ -1,5 +1,3 @@
-//go:build exclude
-
 package ftp
 
 import (
@@ -845,7 +843,7 @@ func runFtpTest(t *testing.T, testFunc func(fs file_interface.FileSystemProvider
 	ftpClient.UseMetrics(mockMetrics)
 
 	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
-	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Debugf(gomock.Any(), gomock.Any()).AnyTimes()
 	mockMetrics.EXPECT().NewHistogram(appFtpStats, gomock.Any(), gomock.Any()).AnyTimes()
 	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), appFtpStats, gomock.Any(),
 		"type", gomock.Any(), "status", gomock.Any()).AnyTimes()
