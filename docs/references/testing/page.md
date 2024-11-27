@@ -87,7 +87,7 @@ import (
 func TestAdd(t *testing.T) {
 	type gofrResponse struct {
 		result interface{}
-		err  error
+		err    error
 	}
 
 	// NewMockContainer provides mock implementations for various databases including:
@@ -122,9 +122,9 @@ func TestAdd(t *testing.T) {
 			requestBody: `{"title":"Book Title","isbn":12345}`,
 			mockExpect: func() {
 				mock.SQL.
-					EXPECT().
-					ExecContext(ctx, `INSERT INTO books (title, isbn) VALUES (?, ?)`, "Book Title", 12345).
-					Return(sqlmock.NewResult(12, 1), nil)
+					ExpectExec(`INSERT INTO books (title, isbn) VALUES (?, ?)`).
+					WithArgs("Book Title", 12345).
+					WillReturnResult(sqlmock.NewResult(12, 1))
 			},
 			expectedResponse: gofrResponse{
 				int64(12),
@@ -136,9 +136,9 @@ func TestAdd(t *testing.T) {
 			requestBody: `{"title":"Book Title","isbn":12345}`,
 			mockExpect: func() {
 				mock.SQL.
-					EXPECT().
-					ExecContext(ctx, `INSERT INTO books (title, isbn) VALUES (?, ?)`, "Book Title", 12345).
-					Return(nil, sql.ErrConnDone)
+					ExpectExec(`INSERT INTO books (title, isbn) VALUES (?, ?)`).
+					WithArgs("Book Title", 12345).
+					WillReturnError(sql.ErrConnDone)
 			},
 			expectedResponse: gofrResponse{
 				nil,
@@ -149,9 +149,9 @@ func TestAdd(t *testing.T) {
 			requestBody: `{"title":"Book Title","isbn":12345}`,
 			mockExpect: func() {
 				mock.SQL.
-					EXPECT().
-					ExecContext(ctx, `INSERT INTO books (title, isbn) VALUES (?, ?)`, "Book Title", 12345).
-					Return(sqlmock.NewErrorResult(errors.New("mocked result error")), nil)
+					ExpectExec(`INSERT INTO books (title, isbn) VALUES (?, ?)`).
+					WithArgs("Book Title", 12345).
+					WillReturnError(errors.New("mocked result error"))
 			},
 			expectedResponse: gofrResponse{
 				nil,
@@ -185,6 +185,7 @@ func TestAdd(t *testing.T) {
 		})
 	}
 }
+
 ```
 ### Summary
 
