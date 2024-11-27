@@ -458,7 +458,7 @@ import (
 func main() {
 	app := gofr.New()
 
-	app.AddSolr(solr.New(solr.Config{
+	app.AddSolr(solr.New(&solr.Config{
 		Host: "localhost",
 		Port: "2020",
 	}))
