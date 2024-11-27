@@ -1,5 +1,3 @@
-//go:build exclude
-
 package cassandra
 
 import (
@@ -82,7 +80,7 @@ func Test_Connect(t *testing.T) {
 
 	cassandraBuckets := []float64{.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 4, 5, 7.5, 10}
 
-	mockLogger.EXPECT().Logf("connecting to cassandra at %v on port %v to keyspace %v", "host1", 9042, "test_keyspace")
+	mockLogger.EXPECT().Debugf("connecting to Cassandra at %v on port %v to keyspace %v", "host1", 9042, "test_keyspace")
 
 	testCases := []struct {
 		desc       string
@@ -93,12 +91,12 @@ func Test_Connect(t *testing.T) {
 			mockClusterConfig.EXPECT().createSession().Return(&cassandraSession{}, nil).Times(1)
 			mockMetrics.EXPECT().NewHistogram("app_cassandra_stats", "Response time of CASSANDRA queries in milliseconds.",
 				cassandraBuckets).Times(1)
-			mockLogger.EXPECT().Logf("connecting to cassandra at %v on port %v to keyspace %v", "host1", 9042, "test_keyspace")
+			mockLogger.EXPECT().Debugf("connecting to Cassandra at %v on port %v to keyspace %v", "host1", 9042, "test_keyspace")
 			mockLogger.EXPECT().Logf("connected to '%s' keyspace at host '%s' and port '%d'", "test_keyspace", "host1", 9042)
 		}, &cassandraSession{}},
 		{"connection failure", func() {
 			mockClusterConfig.EXPECT().createSession().Return(nil, errConnFail).Times(1)
-			mockLogger.EXPECT().Error("error connecting to cassandra: ")
+			mockLogger.EXPECT().Error("error connecting to Cassandra: ")
 		}, nil},
 	}
 
