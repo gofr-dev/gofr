@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-// Logger interface with required methods
+// Logger interface with required methods.
 type Logger interface {
 	Debug(args ...interface{})
 	Debugf(pattern string, args ...interface{})
@@ -16,14 +16,14 @@ type Logger interface {
 	Errorf(pattern string, args ...interface{})
 }
 
-// QueryLog represents the structure for query logging
+// QueryLog represents the structure for query logging.
 type QueryLog struct {
 	Type     string `json:"type"`
 	URL      string `json:"url"`
 	Duration int64  `json:"duration"` // Duration in microseconds
 }
 
-// PrettyPrint logs the QueryLog in a structured format to the given writer
+// PrettyPrint logs the QueryLog in a structured format to the given writer.
 func (ql *QueryLog) PrettyPrint(logger Logger) {
 	// Format the log string
 	formattedLog := fmt.Sprintf(
