@@ -270,13 +270,13 @@ func (d *Client) HealthCheck(ctx context.Context) (any, error) {
 }
 
 func (d *Client) addTrace(ctx context.Context, method string) (context.Context, trace.Span) {
-	if d.tracer != nil {
-		tracedCtx, span := d.tracer.Start(ctx, fmt.Sprintf("dgraph-%v", method))
-
-		return tracedCtx, span
+	if d.tracer == nil {
+		return ctx, nil
 	}
 
-	return ctx, nil
+	tracedCtx, span := d.tracer.Start(ctx, fmt.Sprintf("dgraph-%v", method))
+
+	return tracedCtx, span
 }
 
 func (d *Client) sendOperationStats(ctx context.Context, start time.Time, query, method string,
