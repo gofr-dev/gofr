@@ -9,22 +9,19 @@ COPY  docs/references /app/src/app/docs/references
 COPY  docs/page.md /app/src/app/docs
 COPY  docs/navigation.js /app/src/lib
 
-
 ENV NODE_ENV production
 
 RUN npm install
 RUN npm run build
 
-
-# Stage 2: Serve with NGINX
-FROM nginx:stable-alpine
+# Stage 2: Serve with Static Server
+FROM zopdev/static-server:latest
 
 # Copy static files from the builder stage
-COPY --from=builder /app/out /usr/share/nginx/html
-COPY --from=builder /app/nginix.conf /etc/nginx/conf.d/default.conf
+COPY --from=builder /app/out website
 
-# Expose the port NGINX is running on
-EXPOSE 3000
+# Expose the port server is running on
+EXPOSE 8000
 
-# Start NGINX server
-CMD ["nginx", "-g", "daemon off;"]
+# Start go server
+CMD ["/main"]
