@@ -94,7 +94,7 @@ func (c *Client) HealthCheck(ctx context.Context) (any, error) {
 }
 
 // Search searches documents in the given collections based on the parameters specified.
-// This can be used for making any queries to SOLR.
+// This can be used for making any queries to Solr.
 func (c *Client) Search(ctx context.Context, collection string, params map[string]any) (any, error) {
 	url := c.url + "/" + collection + "/select"
 	startTime := time.Now()
@@ -207,7 +207,7 @@ func (c *Client) DeleteField(ctx context.Context, collection string, document *b
 	return resp, err
 }
 
-// Response stores the response from SOLR.
+// Response stores the response from Solr.
 type Response struct {
 	Code int
 	Data any
