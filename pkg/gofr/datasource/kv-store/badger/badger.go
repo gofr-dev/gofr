@@ -21,13 +21,13 @@ type Configs struct {
 
 type Client struct {
 	db      *badger.DB
-	configs Configs
+	configs *Configs
 	logger  Logger
 	metrics Metrics
 	tracer  trace.Tracer
 }
 
-func New(configs Configs) *Client {
+func New(configs *Configs) *Client {
 	return &Client{configs: configs}
 }
 

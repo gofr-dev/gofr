@@ -12,7 +12,7 @@ import (
 
 func setupDB(t *testing.T) *Client {
 	t.Helper()
-	cl := New(Configs{DirPath: t.TempDir()})
+	cl := New(&Configs{DirPath: t.TempDir()})
 
 	ctrl := gomock.NewController(t)
 	mockMetrics := NewMockMetrics(ctrl)
