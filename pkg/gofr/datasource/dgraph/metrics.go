@@ -31,7 +31,7 @@ func (p *PrometheusMetrics) NewHistogram(name, desc string, buckets ...float64) 
 }
 
 // RecordHistogram records a value to the specified histogram metric with optional labels.
-func (p *PrometheusMetrics) RecordHistogram(ctx context.Context, name string, value float64, labels ...string) {
+func (p *PrometheusMetrics) RecordHistogram(_ context.Context, name string, value float64, labels ...string) {
 	histogram, exists := p.histograms[name]
 	if !exists {
 		// Handle error: histogram not found
