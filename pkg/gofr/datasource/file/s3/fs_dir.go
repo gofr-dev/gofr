@@ -291,7 +291,7 @@ func (f *fileSystem) renameDirectory(st, msg *string, oldPath, newPath string) e
 
 // sendOperationStats logs the FileLog of any file operations performed in S3.
 func (f *fileSystem) sendOperationStats(fl *FileLog, startTime time.Time) {
-	duration := time.Since(startTime).Milliseconds()
+	duration := time.Since(startTime).Microseconds()
 
 	fl.Duration = duration
 
