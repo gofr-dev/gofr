@@ -648,6 +648,8 @@ func (a *App) UseMiddleware(middlewares ...gofrHTTP.Middleware) {
 //
 // The `middleware` function receives the container and the handler, allowing
 // the middleware to modify the request processing flow.
+// Deprecated: UseMiddlewareWithContainer will be removed in a future release.
+// Please use the [*App.UseMiddleware] method that does not depend on the container.
 func (a *App) UseMiddlewareWithContainer(middlewareHandler func(c *container.Container, handler http.Handler) http.Handler) {
 	a.httpServer.router.Use(func(h http.Handler) http.Handler {
 		// Wrap the provided handler `h` with the middleware function `middlewareHandler`
@@ -688,6 +690,10 @@ func contains(elems []string, v string) bool {
 func (a *App) AddStaticFiles(endpoint, filePath string) {
 	a.httpRegistered = true
 
+	if !strings.HasPrefix(filePath, "./") && !filepath.IsAbs(filePath) {
+		filePath = "./" + filePath
+	}
+
 	// update file path based on current directory if it starts with ./
 	if strings.HasPrefix(filePath, "./") {
 		currentWorkingDir, _ := os.Getwd()
@@ -700,6 +706,8 @@ func (a *App) AddStaticFiles(endpoint, filePath string) {
 		a.container.Logger.Errorf("error in registering '%s' static endpoint, error: %v", endpoint, err)
 		return
 	}
+
+	a.container.Logger.Infof("registered static files at endpoint '%s' from directory '%s'", endpoint, filePath)
 
 	a.httpServer.router.AddStaticFiles(endpoint, filePath)
 }
