@@ -38,6 +38,7 @@ type response interface {
 // Logger interface is used by opentsdb package to log information about request execution.
 type Logger interface {
 	Debug(args ...any)
+	Debugf(pattern string, args ...any)
 	Logf(pattern string, args ...any)
 	Log(args ...any)
 	Errorf(pattern string, args ...any)
