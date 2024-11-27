@@ -1,6 +1,6 @@
-# Connecting MySQL
+# Connecting MySQL/MariaDB
 
-Just like Redis GoFr also supports connection to SQL(MySQL and Postgres) databases based on configuration variables.
+Just like Redis GoFr also supports connection to SQL(MySQL, MariaDB and Postgres) databases based on configuration variables.
 
 ## Setup
 
@@ -10,17 +10,24 @@ Users can run MySQL and create a database locally using the following Docker com
 docker run --name gofr-mysql -e MYSQL_ROOT_PASSWORD=root123 -e MYSQL_DATABASE=test_db -p 3306:3306 -d mysql:8.0.30
 ```
 
-Access `test_db` database and create table customer with columns `id` and `name`
+For MariaDB you would run: 
+
+```bash
+docker run --name gofr-mariadb -e MYSQL_ROOT_PASSWORD=root123 -e MYSQL_DATABASE=test_db -p 3306:3306 -d mariadb:latest
+```
+
+
+Access `test_db` database and create table customer with columns `id` and `name`. Change mysql to mariadb as needed: 
 
 ```bash
 docker exec -it gofr-mysql mysql -uroot -proot123 test_db -e "CREATE TABLE customers (id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(255) NOT NULL);"
 ```
 
-Now the database with table is ready, we can connect our GoFr server to MySQL
+Now the database with table is ready, we can connect our GoFr server to MySQL/MariaDB. 
 
 ## Configuration & Usage
 
-After adding MySQL configs `.env` will be updated to the following.
+After adding MySQL/MariaDB configs `.env` will be updated to the following. Use ```DB_DIALECT=mysql``` for both MySQL and MariaDB.
 
 ```dotenv
 # configs/.env
@@ -46,7 +53,7 @@ DB_CHARSET=
 Now in the following example, we'll store customer data using **POST** `/customer` and then use **GET** `/customer` to retrieve the same.
 We will be storing the customer data with `id` and `name`.
 
-After adding code to add and retrieve data from MySQL datastore, `main.go` will be updated to the following.
+After adding code to add and retrieve data from MySQL/MariaDB datastore, `main.go` will be updated to the following.
 
 ```go
 package main
