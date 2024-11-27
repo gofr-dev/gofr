@@ -54,7 +54,7 @@ func (c *client) UseTracer(tracer any) {
 
 // Connect establishes a connection to BadgerDB and registers metrics using the provided configuration when the client was Created.
 func (c *client) Connect() {
-	c.logger.Infof("connecting to BadgerDB at %v", c.configs.DirPath)
+	c.logger.Debugf("connecting to BadgerDB at %v", c.configs.DirPath)
 
 	badgerBuckets := []float64{.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 4, 5, 7.5, 10}
 	c.metrics.NewHistogram("app_badger_stats", "Response time of Badger queries in milliseconds.", badgerBuckets...)
@@ -62,9 +62,12 @@ func (c *client) Connect() {
 	db, err := badger.Open(badger.DefaultOptions(c.configs.DirPath))
 	if err != nil {
 		c.logger.Errorf("error while connecting to BadgerDB: %v", err)
+		return
 	}
 
 	c.db = db
+
+	c.logger.Infof("connected to BadgerDB at %v", c.configs.DirPath)
 }
 
 func (c *client) Get(ctx context.Context, key string) (string, error) {
