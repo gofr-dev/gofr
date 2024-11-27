@@ -395,3 +395,111 @@ type DgraphProvider interface {
 	Dgraph
 	provider
 }
+
+type OpenTSDBProvider interface {
+	OpenTSDB
+	provider
+}
+
+// OpenTSDB provides methods for GoFr applications to communicate with OpenTSDB
+// through its REST APIs. Each method corresponds to an API endpoint defined in the
+// OpenTSDB documentation (http://opentsdb.net/docs/build/html/api_http/index.html#api-endpoints).
+type OpenTSDB interface {
+
+	// HealthChecker verifies if the OpenTSDB server is reachable.
+	// Returns an error if the server is unreachable, otherwise nil.
+	HealthChecker
+
+	// PutDataPoints sends data to the 'POST /api/put' endpoint to store metrics in OpenTSDB.
+	//
+	// Parameters:
+	// - ctx: Context for managing request lifetime.
+	// - data: A slice of DataPoint objects; must contain at least one entry.
+	// - queryParam: Specifies the response format:
+	//   - client.PutRespWithSummary: Requests a summary response.
+	//   - client.PutRespWithDetails: Requests detailed response information.
+	//   - Empty string (""): No additional response details.
+	// - res: A pointer to PutResponse, where the server's response will be stored.
+	//
+	// Returns:
+	// - Error if parameters are invalid, response parsing fails, or if connectivity issues occur.
+	PutDataPoints(ctx context.Context, data any, queryParam string, res any) error
+
+	// QueryDataPoints retrieves data using the 'GET /api/query' endpoint based on the specified parameters.
+	//
+	// Parameters:
+	// - ctx: Context for managing request lifetime.
+	// - param: An instance of QueryParam with query parameters for filtering data.
+	// - res: A pointer to QueryResponse, where the server's response will be stored.
+	//
+	// Returns:
+	// - Error if parameters are invalid, response parsing fails, or if connectivity issues occur.
+	QueryDataPoints(ctx context.Context, param any, res any) error
+
+	// QueryLatestDataPoints fetches the latest data point(s) using the 'GET /api/query/last' endpoint,
+	// supported in OpenTSDB v2.2 and later.
+	//
+	// Parameters:
+	// - ctx: Context for managing request lifetime.
+	// - param: An instance of QueryLastParam with query parameters for the latest data point.
+	// - res: A pointer to QueryLastResponse, where the server's response will be stored.
+	//
+	// Returns:
+	// - Error if parameters are invalid, response parsing fails, or if connectivity issues occur.
+	QueryLatestDataPoints(ctx context.Context, param any, res any) error
+
+	// GetAggregators retrieves available aggregation functions using the 'GET /api/aggregators' endpoint.
+	//
+	// Parameters:
+	// - ctx: Context for managing request lifetime.
+	// - res: A pointer to AggregatorsResponse, where the server's response will be stored.
+	//
+	// Returns:
+	// - Error if response parsing fails or if connectivity issues occur.
+	GetAggregators(ctx context.Context, res any) error
+
+	// QueryAnnotation retrieves a single annotation from OpenTSDB using the 'GET /api/annotation' endpoint.
+	//
+	// Parameters:
+	// - ctx: Context for managing request lifetime.
+	// - queryAnnoParam: A map of parameters for the annotation query, such as client.AnQueryStartTime, client.AnQueryTSUid.
+	// - res: A pointer to AnnotationResponse, where the server's response will be stored.
+	//
+	// Returns:
+	// - Error if parameters are invalid, response parsing fails, or if connectivity issues occur.
+	QueryAnnotation(ctx context.Context, queryAnnoParam map[string]any, res any) error
+
+	// PostAnnotation creates or updates an annotation in OpenTSDB using the 'POST /api/annotation' endpoint.
+	//
+	// Parameters:
+	// - ctx: Context for managing request lifetime.
+	// - annotation: The annotation to be created or updated.
+	// - res: A pointer to AnnotationResponse, where the server's response will be stored.
+	//
+	// Returns:
+	// - Error if parameters are invalid, response parsing fails, or if connectivity issues occur.
+	PostAnnotation(ctx context.Context, annotation any, res any) error
+
+	// PutAnnotation creates or replaces an annotation in OpenTSDB using the 'PUT /api/annotation' endpoint.
+	// Fields not included in the request will be reset to default values.
+	//
+	// Parameters:
+	// - ctx: Context for managing request lifetime.
+	// - annotation: The annotation to be created or replaced.
+	// - res: A pointer to AnnotationResponse, where the server's response will be stored.
+	//
+	// Returns:
+	// - Error if parameters are invalid, response parsing fails, or if connectivity issues occur.
+	PutAnnotation(ctx context.Context, annotation any, res any) error
+
+	// DeleteAnnotation removes an annotation from OpenTSDB using the 'DELETE /api/annotation' endpoint.
+	//
+	// Parameters:
+	// - ctx: Context for managing request lifetime.
+	// - annotation: The annotation to be deleted.
+	// - res: A pointer to AnnotationResponse, where the server's response will be stored.
+	//
+	// Returns:
+	// - Error if parameters are invalid, response parsing fails, or if connectivity issues occur.
+	DeleteAnnotation(ctx context.Context, annotation any, res any) error
+}

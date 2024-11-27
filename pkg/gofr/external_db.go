@@ -121,7 +121,26 @@ func (a *App) AddDgraph(db container.DgraphProvider) {
 	db.UseLogger(a.Logger())
 	db.UseMetrics(a.Metrics())
 
+	tracer := otel.GetTracerProvider().Tracer("gofr-dgraph")
+
+	db.UseTracer(tracer)
+
 	db.Connect()
 
 	a.container.DGraph = db
+}
+
+// AddOpentsdb sets the opentsdb datasource in the app's container.
+func (a *App) AddOpenTSDB(db container.OpenTSDBProvider) {
+	// Create the Opentsdb client with the provided configuration
+	db.UseLogger(a.Logger())
+	db.UseMetrics(a.Metrics())
+
+	tracer := otel.GetTracerProvider().Tracer("gofr-opentsdb")
+
+	db.UseTracer(tracer)
+
+	db.Connect()
+
+	a.container.OpenTSDB = db
 }

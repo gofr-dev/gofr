@@ -80,17 +80,7 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}()
 		// Execute the handler function
 		result, err = h.function(c)
-
-		// Log the error(if any) with traceID and errorMessage
-		if err != nil {
-			errorLog := &ErrorLogEntry{
-				TraceID: traceID,
-				Error:   err.Error(),
-			}
-
-			h.container.Logger.Error(errorLog)
-		}
-
+		h.logError(traceID, err)
 		close(done)
 	}()
 
@@ -101,12 +91,16 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			err = gofrHTTP.ErrorRequestTimeout{}
 		}
 	case <-done:
-		if websocket.IsWebSocketUpgrade(r) {
-			// Do not respond with HTTP headers since this is a WebSocket request
-			return
-		}
+		handleWebSocketUpgrade(r)
 	case <-panicked:
 		err = gofrHTTP.ErrorPanicRecovery{}
+	}
+
+	// Handle custom headers if 'result' is a 'Response'.
+	if resp, ok := result.(response.Response); ok {
+		resp.SetCustomHeaders(w)
+
+		result = resp.Data
 	}
 
 	// Handler function completed
@@ -149,4 +143,19 @@ func panicRecoveryHandler(re any, log logging.Logger, panicked chan struct{}) {
 		Error:      fmt.Sprint(re),
 		StackTrace: string(debug.Stack()),
 	})
+}
+
+// Log the error(if any) with traceID and errorMessage.
+func (h handler) logError(traceID string, err error) {
+	if err != nil {
+		errorLog := &ErrorLogEntry{TraceID: traceID, Error: err.Error()}
+		h.container.Logger.Error(errorLog)
+	}
+}
+
+func handleWebSocketUpgrade(r *http.Request) {
+	if websocket.IsWebSocketUpgrade(r) {
+		// Do not respond with HTTP headers since this is a WebSocket request
+		return
+	}
 }

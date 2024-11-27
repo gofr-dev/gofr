@@ -145,3 +145,23 @@ func TestApp_AddS3(t *testing.T) {
 		assert.Equal(t, mock, app.container.File)
 	})
 }
+
+func TestApp_AddOpenTSDB(t *testing.T) {
+	t.Run("Adding OpenTSDB", func(t *testing.T) {
+		app := New()
+
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mock := container.NewMockOpenTSDBProvider(ctrl)
+
+		mock.EXPECT().UseLogger(app.Logger())
+		mock.EXPECT().UseMetrics(app.Metrics())
+		mock.EXPECT().UseTracer(gomock.Any())
+		mock.EXPECT().Connect()
+
+		app.AddOpenTSDB(mock)
+
+		assert.Equal(t, mock, app.container.OpenTSDB)
+	})
+}

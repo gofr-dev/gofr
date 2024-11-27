@@ -33,8 +33,11 @@ type Config struct {
 	Port     int
 	Database string
 	// Deprecated Provide Host User Password Port Instead and driver will generate the URI
-	URI string
+	URI               string
+	ConnectionTimeout time.Duration
 }
+
+const defaultTimeout = 5 * time.Second
 
 var errStatusDown = errors.New("status down")
 
@@ -78,7 +81,7 @@ func (c *Client) UseTracer(tracer any) {
 
 // Connect establishes a connection to MongoDB and registers metrics using the provided configuration when the client was Created.
 func (c *Client) Connect() {
-	c.logger.Logf("connecting to mongoDB at %v to database %v", c.config.URI, c.config.Database)
+	c.logger.Debugf("connecting to MongoDB at %v to database %v", c.config.URI, c.config.Database)
 
 	uri := c.config.URI
 
@@ -87,17 +90,34 @@ func (c *Client) Connect() {
 			c.config.User, c.config.Password, c.config.Host, c.config.Port, c.config.Database)
 	}
 
-	m, err := mongo.Connect(context.Background(), options.Client().ApplyURI(uri))
+	timeout := c.config.ConnectionTimeout
+	if timeout == 0 {
+		timeout = defaultTimeout
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	m, err := mongo.Connect(ctx, options.Client().ApplyURI(uri))
 	if err != nil {
-		c.logger.Errorf("error connecting to mongoDB, err:%v", err)
+		c.logger.Errorf("error while connecting to MongoDB, err:%v", err)
 
 		return
 	}
+
+	if err = m.Ping(ctx, nil); err != nil {
+		c.logger.Errorf("could not connect to mongoDB at %v due to err: %v", c.config.URI, err)
+		return
+	}
+
+	c.logger.Logf("connected to mongoDB successfully at %v to database %v", c.config.URI, c.config.Database)
 
 	mongoBuckets := []float64{.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 4, 5, 7.5, 10}
 	c.metrics.NewHistogram("app_mongo_stats", "Response time of MONGO queries in milliseconds.", mongoBuckets...)
 
 	c.Database = m.Database(c.config.Database)
+
+	c.logger.Logf("connected to MongoDB at %v to database %v", uri, c.Database)
 }
 
 // InsertOne inserts a single document into the specified collection.
@@ -265,7 +285,7 @@ func (c *Client) CreateCollection(ctx context.Context, name string) error {
 }
 
 func (c *Client) sendOperationStats(ql *QueryLog, startTime time.Time, method string, span trace.Span) {
-	duration := time.Since(startTime).Milliseconds()
+	duration := time.Since(startTime).Microseconds()
 
 	ql.Duration = duration
 
