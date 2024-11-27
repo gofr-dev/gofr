@@ -19,7 +19,7 @@ type Configs struct {
 	DirPath string
 }
 
-type client struct {
+type Client struct {
 	db      *badger.DB
 	configs Configs
 	logger  Logger
@@ -27,33 +27,33 @@ type client struct {
 	tracer  trace.Tracer
 }
 
-func New(configs Configs) *client {
-	return &client{configs: configs}
+func New(configs Configs) *Client {
+	return &Client{configs: configs}
 }
 
 // UseLogger sets the logger for the BadgerDB client which asserts the Logger interface.
-func (c *client) UseLogger(logger any) {
+func (c *Client) UseLogger(logger any) {
 	if l, ok := logger.(Logger); ok {
 		c.logger = l
 	}
 }
 
 // UseMetrics sets the metrics for the BadgerDB client which asserts the Metrics interface.
-func (c *client) UseMetrics(metrics any) {
+func (c *Client) UseMetrics(metrics any) {
 	if m, ok := metrics.(Metrics); ok {
 		c.metrics = m
 	}
 }
 
 // UseTracer sets the tracer for BadgerDB client.
-func (c *client) UseTracer(tracer any) {
+func (c *Client) UseTracer(tracer any) {
 	if tracer, ok := tracer.(trace.Tracer); ok {
 		c.tracer = tracer
 	}
 }
 
 // Connect establishes a connection to BadgerDB and registers metrics using the provided configuration when the client was Created.
-func (c *client) Connect() {
+func (c *Client) Connect() {
 	c.logger.Infof("connecting to BadgerDB at %v", c.configs.DirPath)
 
 	badgerBuckets := []float64{.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 4, 5, 7.5, 10}
@@ -67,7 +67,7 @@ func (c *client) Connect() {
 	c.db = db
 }
 
-func (c *client) Get(ctx context.Context, key string) (string, error) {
+func (c *Client) Get(ctx context.Context, key string) (string, error) {
 	span := c.addTrace(ctx, "get", key)
 
 	defer c.sendOperationStats(time.Now(), "GET", "get", span, key)
@@ -102,7 +102,7 @@ func (c *client) Get(ctx context.Context, key string) (string, error) {
 	return string(value), nil
 }
 
-func (c *client) Set(ctx context.Context, key, value string) error {
+func (c *Client) Set(ctx context.Context, key, value string) error {
 	span := c.addTrace(ctx, "set", key)
 
 	defer c.sendOperationStats(time.Now(), "SET", "set", span, key, value)
@@ -112,7 +112,7 @@ func (c *client) Set(ctx context.Context, key, value string) error {
 	})
 }
 
-func (c *client) Delete(ctx context.Context, key string) error {
+func (c *Client) Delete(ctx context.Context, key string) error {
 	span := c.addTrace(ctx, "delete", key)
 
 	defer c.sendOperationStats(time.Now(), "DELETE", "delete", span, key, "")
@@ -122,7 +122,7 @@ func (c *client) Delete(ctx context.Context, key string) error {
 	})
 }
 
-func (c *client) useTransaction(f func(txn *badger.Txn) error) error {
+func (c *Client) useTransaction(f func(txn *badger.Txn) error) error {
 	txn := c.db.NewTransaction(true)
 	defer txn.Discard()
 
@@ -143,7 +143,7 @@ func (c *client) useTransaction(f func(txn *badger.Txn) error) error {
 	return nil
 }
 
-func (c *client) sendOperationStats(start time.Time, methodType string, method string,
+func (c *Client) sendOperationStats(start time.Time, methodType string, method string,
 	span trace.Span, kv ...string) {
 	duration := time.Since(start).Milliseconds()
 
@@ -167,7 +167,7 @@ type Health struct {
 	Details map[string]any `json:"details,omitempty"`
 }
 
-func (c *client) HealthCheck(context.Context) (any, error) {
+func (c *Client) HealthCheck(context.Context) (any, error) {
 	h := Health{
 		Details: make(map[string]any),
 	}
@@ -186,7 +186,7 @@ func (c *client) HealthCheck(context.Context) (any, error) {
 	return &h, nil
 }
 
-func (c *client) addTrace(ctx context.Context, method, key string) trace.Span {
+func (c *Client) addTrace(ctx context.Context, method, key string) trace.Span {
 	if c.tracer != nil {
 		_, span := c.tracer.Start(ctx, fmt.Sprintf("badger-%v", method))
 

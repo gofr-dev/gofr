@@ -27,7 +27,7 @@ func Test_NewMongoClient(t *testing.T) {
 
 	logger.EXPECT().Errorf(gomock.Any(), gomock.Any(), gomock.Any())
 
-	client := New(Config{Database: "test", Host: "localhost", Port: 27017, User: "admin", ConnectionTimeout: 1 * time.Second})
+	client := New(&Config{Database: "test", Host: "localhost", Port: 27017, User: "admin", ConnectionTimeout: 1 * time.Second})
 	client.Database = &mongo.Database{}
 	client.UseLogger(logger)
 	client.UseMetrics(metrics)
@@ -46,7 +46,7 @@ func Test_NewMongoClientError(t *testing.T) {
 	logger.EXPECT().Logf("connecting to mongoDB at %v to database %v", "mongo", "test")
 	logger.EXPECT().Errorf("error connecting to mongoDB, err:%v", gomock.Any())
 
-	client := New(Config{URI: "mongo", Database: "test"})
+	client := New(&Config{URI: "mongo", Database: "test"})
 	client.UseLogger(logger)
 	client.UseMetrics(metrics)
 	client.Connect()
@@ -98,7 +98,7 @@ func Test_InsertCommands(t *testing.T) {
 		resp, err := cl.InsertOne(context.Background(), mt.Coll.Name(), doc)
 
 		assert.Nil(t, resp)
-		assert.NotNil(t, err)
+		assert.Error(t, err)
 	})
 
 	mt.Run("insertManySuccess", func(mt *mtest.T) {
@@ -296,7 +296,7 @@ func Test_FindOneCommands(t *testing.T) {
 
 		err := cl.FindOne(context.Background(), mt.Coll.Name(), bson.D{{}}, &foundDocuments)
 
-		assert.NotNil(t, err)
+		assert.Error(t, err)
 	})
 }
 
@@ -327,7 +327,7 @@ func Test_UpdateCommands(t *testing.T) {
 		resp, err := cl.UpdateByID(context.Background(), mt.Coll.Name(), "1", bson.M{"$set": bson.M{"name": "test"}})
 
 		assert.NotNil(t, resp)
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 	})
 
 	mt.Run("updateOne", func(mt *mtest.T) {
@@ -337,7 +337,7 @@ func Test_UpdateCommands(t *testing.T) {
 
 		err := cl.UpdateOne(context.Background(), mt.Coll.Name(), bson.D{{Key: "name", Value: "test"}}, bson.M{"$set": bson.M{"name": "testing"}})
 
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 	})
 
 	mt.Run("updateMany", func(mt *mtest.T) {
@@ -348,7 +348,7 @@ func Test_UpdateCommands(t *testing.T) {
 		_, err := cl.UpdateMany(context.Background(), mt.Coll.Name(), bson.D{{Key: "name", Value: "test"}},
 			bson.M{"$set": bson.M{"name": "testing"}})
 
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 	})
 }
 
@@ -383,12 +383,12 @@ func Test_CountDocuments(t *testing.T) {
 			Keys: bson.D{{Key: "x", Value: 1}},
 		})
 
-		assert.NoError(mt, err, "CreateOne error for index: %v", err)
+		require.NoError(mt, err, "CreateOne error for index: %v", err)
 
 		resp, err := cl.CountDocuments(context.Background(), mt.Coll.Name(), bson.D{{Key: "name", Value: "test"}})
 
 		assert.Equal(t, int64(1), resp)
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 	})
 }
 
@@ -418,7 +418,7 @@ func Test_DeleteCommands(t *testing.T) {
 		resp, err := cl.DeleteOne(context.Background(), mt.Coll.Name(), bson.D{{}})
 
 		assert.Equal(t, int64(0), resp)
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 	})
 
 	mt.Run("DeleteOneError", func(mt *mtest.T) {
@@ -432,7 +432,7 @@ func Test_DeleteCommands(t *testing.T) {
 		resp, err := cl.DeleteOne(context.Background(), mt.Coll.Name(), bson.D{{}})
 
 		assert.Equal(t, int64(0), resp)
-		assert.NotNil(t, err)
+		assert.Error(t, err)
 	})
 
 	mt.Run("DeleteMany", func(mt *mtest.T) {
@@ -442,7 +442,7 @@ func Test_DeleteCommands(t *testing.T) {
 		resp, err := cl.DeleteMany(context.Background(), mt.Coll.Name(), bson.D{{}})
 
 		assert.Equal(t, int64(0), resp)
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 	})
 
 	mt.Run("DeleteManyError", func(mt *mtest.T) {
@@ -456,7 +456,7 @@ func Test_DeleteCommands(t *testing.T) {
 		resp, err := cl.DeleteMany(context.Background(), mt.Coll.Name(), bson.D{{}})
 
 		assert.Equal(t, int64(0), resp)
-		assert.NotNil(t, err)
+		assert.Error(t, err)
 	})
 }
 
@@ -485,7 +485,7 @@ func Test_Drop(t *testing.T) {
 
 		err := cl.Drop(context.Background(), mt.Coll.Name())
 
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 	})
 }
 
@@ -523,7 +523,7 @@ func TestClient_StartSession(t *testing.T) {
 			err = ses.StartTransaction()
 		}
 
-		assert.Nil(t, err)
+		require.NoError(t, err)
 
 		cl.Database = mt.DB
 		mt.AddMockResponses(mtest.CreateSuccessResponse())
@@ -533,16 +533,16 @@ func TestClient_StartSession(t *testing.T) {
 		resp, err := cl.InsertOne(context.Background(), mt.Coll.Name(), doc)
 
 		assert.NotNil(t, resp)
-		assert.Nil(t, err)
+		require.NoError(t, err)
 
 		err = ses.CommitTransaction(context.Background())
 
-		assert.Nil(t, err)
+		require.NoError(t, err)
 
 		ses.EndSession(context.Background())
 
 		// Assert that there was no error
-		assert.Nil(t, err)
+		require.NoError(t, err)
 	})
 }
 
