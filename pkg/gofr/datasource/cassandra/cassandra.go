@@ -62,11 +62,11 @@ func New(conf Config) *Client {
 
 // Connect establishes a connection to Cassandra and registers metrics using the provided configuration when the client was Created.
 func (c *Client) Connect() {
-	c.logger.Logf("connecting to cassandra at %v on port %v to keyspace %v", c.config.Hosts, c.config.Port, c.config.Keyspace)
+	c.logger.Debugf("connecting to Cassandra at %v on port %v to keyspace %v", c.config.Hosts, c.config.Port, c.config.Keyspace)
 
 	sess, err := c.cassandra.clusterConfig.createSession()
 	if err != nil {
-		c.logger.Error("error connecting to cassandra: ", err)
+		c.logger.Error("error connecting to Cassandra: ", err)
 
 		return
 	}
@@ -328,7 +328,7 @@ func (*Client) getColumnsFromColumnsInfo(columns []gocql.ColumnInfo) []string {
 }
 
 func (c *Client) sendOperationStats(ql *QueryLog, startTime time.Time, method string, span trace.Span) {
-	duration := time.Since(startTime).Milliseconds()
+	duration := time.Since(startTime).Microseconds()
 
 	ql.Duration = duration
 
