@@ -138,7 +138,7 @@ type Person struct {
 func main() {
 	app := gofr.New()
 	
-	db := mongo.New(Config{URI: "mongodb://localhost:27017", Database: "test"})
+	db := mongo.New(Config{URI: "mongodb://localhost:27017", Database: "test",ConnectionTimeout: 4*time.Second})
 	
 	// inject the mongo into gofr to use mongoDB across the application
 	// using gofr context
@@ -439,6 +439,9 @@ Import the gofr's external driver for Solr:
 ```shell
 go get gofr.dev/pkg/gofr/datasource/solr@latest
 ```
+Note : This datasource package requires the user to create the collection before performing any operations.
+While testing the below code create a collection using :
+`curl --location 'http://localhost:2020/solr/admin/collections?action=CREATE&name=test&numShards=2&replicationFactor=1&wt=xml'`
 
 ```go
 package main
@@ -472,7 +475,7 @@ type Person struct {
 }
 
 func post(c *gofr.Context) (interface{}, error) {
-	p := Person{Name: "Srijan", Age: 24}
+	p := []Person{{Name: "Srijan", Age: 24}}
 	body, _ := json.Marshal(p)
 
 	resp, err := c.Solr.Create(c, "test", bytes.NewBuffer(body), nil)
