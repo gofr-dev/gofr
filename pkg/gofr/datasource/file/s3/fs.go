@@ -83,6 +83,8 @@ func (f *fileSystem) Connect() {
 		Message:   &msg,
 	}, time.Now())
 
+	f.logger.Debugf("connecting to S3 bucket: %s", f.config.BucketName)
+
 	// Load the AWS configuration
 	cfg, err := awsConfig.LoadDefaultConfig(context.TODO(),
 		awsConfig.WithRegion(f.config.Region),
@@ -95,6 +97,7 @@ func (f *fileSystem) Connect() {
 
 	if err != nil {
 		f.logger.Errorf("Failed to load configuration: %v", err)
+		return
 	}
 
 	// Create the S3 client from config
@@ -109,7 +112,7 @@ func (f *fileSystem) Connect() {
 	st = statusSuccess
 	msg = "S3 Client connected."
 
-	f.logger.Logf("Connected to S3 bucket %s", f.config.BucketName)
+	f.logger.Logf("connected to S3 bucket %s", f.config.BucketName)
 }
 
 // Create creates a new file in the S3 bucket.
