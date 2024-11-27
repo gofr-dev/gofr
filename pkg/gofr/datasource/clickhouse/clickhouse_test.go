@@ -1,13 +1,9 @@
-//go:build exclude
-
 package clickhouse
 
 import (
 	"context"
 	"database/sql"
 	"fmt"
-	"io"
-	"os"
 	"testing"
 	"time"
 
@@ -16,7 +12,7 @@ import (
 	"go.uber.org/mock/gomock"
 )
 
-func getClickHouseTestConnection(t *testing.T) (*MockConn, *MockMetrics, *MockLogger, client) {
+func getClickHouseTestConnection(t *testing.T) (*MockConn, *MockMetrics, *MockLogger, Client) {
 	t.Helper()
 
 	ctrl := gomock.NewController(t)
@@ -25,7 +21,7 @@ func getClickHouseTestConnection(t *testing.T) (*MockConn, *MockMetrics, *MockLo
 	mockMetric := NewMockMetrics(ctrl)
 	mockLogger := NewMockLogger(ctrl)
 
-	c := client{conn: mockConn, config: Config{
+	c := Client{conn: mockConn, config: Config{
 		Hosts:    "localhost",
 		Username: "user",
 		Password: "pass",
@@ -36,8 +32,7 @@ func getClickHouseTestConnection(t *testing.T) (*MockConn, *MockMetrics, *MockLo
 }
 
 func Test_ClickHouse_ConnectAndMetricRegistrationAndPingFailure(t *testing.T) {
-	_, mockMetric, _, _ := getClickHouseTestConnection(t)
-	mockLogger := NewMockLogger(gomock.NewController(t))
+	_, mockMetric, mockLogger, _ := getClickHouseTestConnection(t)
 
 	cl := New(Config{
 		Hosts:    "localhost:8000",
@@ -63,21 +58,6 @@ func Test_ClickHouse_ConnectAndMetricRegistrationAndPingFailure(t *testing.T) {
 
 	assert.True(t, mockLogger.ctrl.Satisfied())
 	assert.True(t, mockMetric.ctrl.Satisfied())
-}
-
-func stderrOutputForFunc(f func()) string {
-	r, w, _ := os.Pipe()
-	old := os.Stderr
-	os.Stderr = w
-
-	f()
-
-	_ = w.Close()
-
-	out, _ := io.ReadAll(r)
-	os.Stderr = old
-
-	return string(out)
 }
 
 func Test_ClickHouse_HealthUP(t *testing.T) {
@@ -117,7 +97,7 @@ func Test_ClickHouse_Exec(t *testing.T) {
 
 	err := c.Exec(ctx, "INSERT INTO users (id, name, age) VALUES (?, ?, ?)", "8f165e2d-feef-416c-95f6-913ce3172e15", "gofr", "10")
 
-	assert.Nil(t, err)
+	require.NoError(t, err)
 }
 
 func Test_ClickHouse_Select(t *testing.T) {
@@ -142,7 +122,7 @@ func Test_ClickHouse_Select(t *testing.T) {
 
 	err := c.Select(ctx, &user, "SELECT * FROM users")
 
-	assert.Nil(t, err)
+	require.NoError(t, err)
 }
 
 func Test_ClickHouse_AsyncInsert(t *testing.T) {
@@ -161,5 +141,5 @@ func Test_ClickHouse_AsyncInsert(t *testing.T) {
 	err := c.AsyncInsert(ctx, "INSERT INTO users (id, name, age) VALUES (?, ?, ?)", true,
 		"8f165e2d-feef-416c-95f6-913ce3172e15", "user", "10")
 
-	assert.Nil(t, err)
+	require.NoError(t, err)
 }
