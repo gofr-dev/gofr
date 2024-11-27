@@ -1,5 +1,3 @@
-//go:build exclude
-
 package clickhouse
 
 import (
@@ -54,7 +52,7 @@ func Test_ClickHouse_ConnectAndMetricRegistrationAndPingFailure(t *testing.T) {
 	mockMetric.EXPECT().NewGauge("app_clickhouse_idle_connections", "Number of idle Clickhouse connections.")
 	mockMetric.EXPECT().SetGauge("app_clickhouse_open_connections", gomock.Any()).AnyTimes()
 	mockMetric.EXPECT().SetGauge("app_clickhouse_idle_connections", gomock.Any()).AnyTimes()
-	mockLogger.EXPECT().Logf("connecting to clickhouse db at %v to database %v", "localhost:8000", "test")
+	mockLogger.EXPECT().Debugf("connecting to Clickhouse db at %v to database %v", "localhost:8000", "test")
 	mockLogger.EXPECT().Errorf("ping failed with error %v", gomock.Any())
 
 	cl.Connect()
