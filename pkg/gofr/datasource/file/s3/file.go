@@ -468,7 +468,7 @@ func (f *s3file) Seek(offset int64, whence int) (int64, error) {
 
 // sendOperationStats logs the FileLog of any file operations performed in S3.
 func (f *s3file) sendOperationStats(fl *FileLog, startTime time.Time) {
-	duration := time.Since(startTime).Milliseconds()
+	duration := time.Since(startTime).Microseconds()
 
 	fl.Duration = duration
 
