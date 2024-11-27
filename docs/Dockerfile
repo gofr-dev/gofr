@@ -1,4 +1,4 @@
-FROM ghcr.io/gofr-dev/website:latest
+FROM ghcr.io/gofr-dev/website:latest AS builder
 
 WORKDIR /app
 
@@ -15,14 +15,16 @@ ENV NODE_ENV production
 RUN npm install
 RUN npm run build
 
-RUN addgroup -g 1001 -S nodejs
-RUN adduser -S nextjs -u 1001
 
-USER nextjs
+# Stage 2: Serve with NGINX
+FROM nginx:stable-alpine
 
+# Copy static files from the builder stage
+COPY --from=builder /app/out /usr/share/nginx/html
+COPY --from=builder /app/nginix.conf /etc/nginx/conf.d/default.conf
+
+# Expose the port NGINX is running on
 EXPOSE 3000
-ENV PORT 3000
 
-ENV NEXT_TELEMETRY_DISABLED 1
-
-CMD ["node_modules/.bin/next", "start"]
+# Start NGINX server
+CMD ["nginx", "-g", "daemon off;"]
