@@ -326,7 +326,7 @@ func (f *fileSystem) Rename(oldname, newname string) error {
 }
 
 func (f *fileSystem) sendOperationStats(fl *FileLog, startTime time.Time) {
-	duration := time.Since(startTime).Milliseconds()
+	duration := time.Since(startTime).Microseconds()
 
 	fl.Duration = duration
 
