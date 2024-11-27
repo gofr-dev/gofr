@@ -6,6 +6,7 @@ on:
     branches:
       - main
       - development
+      - docs-build
 
 env:
   APP_NAME: gofr-website
@@ -45,7 +46,6 @@ jobs:
           file: ./docs/Dockerfile
 
   dockerize:
-    if: ${{ startsWith(github.ref, 'refs/tags/v')}}
     runs-on: ubuntu-latest
     outputs:
       image: ${{ steps.output-image.outputs.image }}
@@ -87,27 +87,27 @@ jobs:
       - id: output-image
         run: echo "image=`echo us-central1-docker.pkg.dev/${{ env.GAR_PROJECT }}/${{ env.GAR_REGISTRY }}/${{ env.APP_NAME }}:${{ github.sha }}`" >> "$GITHUB_OUTPUT"
 
-  deployment:
-    runs-on: ubuntu-latest
-    name: 🚀 Deploy
-    needs: dockerize
-    container:
-      image: ghcr.io/zopsmart/gha-images:deployments-0.1.3
-      options: --rm
-    env:
-      image: ${{needs.dockerize.outputs.image}}
-
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Authorize to GCP service account
-        uses: google-github-actions/auth@v2
-        with:
-          credentials_json: ${{ secrets.deploy_key }}
-
-      - name: Set GCloud Project and Fetch Cluster Credentials
-        run: gcloud container clusters get-credentials ${{ env.CLUSTER_NAME }} --region=us-central1 --project=${{ env.CLUSTER_PROJECT }}
-
-      - name: Update Deployment Image
-        run: kubectl set image deployment/${{ env.APP_NAME }} ${{ env.APP_NAME }}=${{ env.image }} --namespace ${{ env.NAMESPACE }}
+#  deployment:
+#    runs-on: ubuntu-latest
+#    name: 🚀 Deploy
+#    needs: dockerize
+#    container:
+#      image: ghcr.io/zopsmart/gha-images:deployments-0.1.3
+#      options: --rm
+#    env:
+#      image: ${{needs.dockerize.outputs.image}}
+#
+#    steps:
+#      - name: Checkout Code
+#        uses: actions/checkout@v4
+#
+#      - name: Authorize to GCP service account
+#        uses: google-github-actions/auth@v2
+#        with:
+#          credentials_json: ${{ secrets.deploy_key }}
+#
+#      - name: Set GCloud Project and Fetch Cluster Credentials
+#        run: gcloud container clusters get-credentials ${{ env.CLUSTER_NAME }} --region=us-central1 --project=${{ env.CLUSTER_PROJECT }}
+#
+#      - name: Update Deployment Image
+#        run: kubectl set image deployment/${{ env.APP_NAME }} ${{ env.APP_NAME }}=${{ env.image }} --namespace ${{ env.NAMESPACE }}
