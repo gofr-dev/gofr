@@ -15,7 +15,7 @@ func Test_PrettyPrint(t *testing.T) {
 
 	logger := NewMockLogger(gomock.NewController(t))
 
-	logger.EXPECT().Log(gomock.Any())
+	logger.EXPECT().Debug(gomock.Any())
 
 	queryLog.PrettyPrint(logger)
 
