@@ -122,3 +122,7 @@ Help us make GoFr even better:
 ### 🎁 **Get a GoFr T-Shirt & Stickers!**
 
 If your PR is merged, or if you contribute by writing articles or promoting GoFr, we invite you to fill out [this form](https://forms.gle/R1Yz7ZzY3U5WWTgy5) to claim your GoFr merchandise as a token of our appreciation! 
+
+### Partners
+
+![JetBrains logo](https://resources.jetbrains.com/storage/products/company/brand/logos/jetbrains.png)
