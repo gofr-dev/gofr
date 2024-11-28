@@ -18,12 +18,9 @@ import (
 
 // Predefined static errors.
 var (
-	ErrInvalidResponseType       = errors.New("invalid response type")
-	ErrInvalidQueryParam         = errors.New("invalid query parameters")
-	ErrInvalidParam              = errors.New("invalid parameter type")
-	ErrEmptyQueryAnnotationParam = errors.New("annotation query parameter is empty")
-	ErrRequestProcessing         = errors.New("error while processing request")
-	ErrConnectionFailed          = errors.New("error while connection to OpenTSDB")
+	ErrInvalidResponseType = errors.New("invalid response type")
+	ErrInvalidQueryParam   = errors.New("invalid query parameters")
+	ErrInvalidParam        = errors.New("invalid parameter type")
 )
 
 const (
