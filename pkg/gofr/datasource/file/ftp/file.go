@@ -389,7 +389,7 @@ func (f *file) WriteAt(p []byte, off int64) (n int, err error) {
 }
 
 func (f *file) sendOperationStats(fl *FileLog, startTime time.Time) {
-	duration := time.Since(startTime).Milliseconds()
+	duration := time.Since(startTime).Microseconds()
 
 	fl.Duration = duration
 
