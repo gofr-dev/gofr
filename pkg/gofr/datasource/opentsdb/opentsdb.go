@@ -138,6 +138,8 @@ func (c *Client) Connect() {
 		span.End()
 	}
 
+	c.logger.Debugf("connecting to OpenTSDB at host %s", c.config.Host)
+
 	// Set default values for optional configuration fields.
 	c.initializeClient()
 
@@ -148,7 +150,7 @@ func (c *Client) Connect() {
 
 	err := c.version(context.Background(), &res)
 	if err != nil {
-		c.logger.Errorf("error while connection to OpenTSDB: %v", err)
+		c.logger.Errorf("error while connecting to OpenTSDB: %v", err)
 		return
 	}
 

@@ -68,7 +68,7 @@ func (c *Client) UseTracer(tracer any) {
 func (c *Client) Connect() {
 	var err error
 
-	c.logger.Logf("connecting to clickhouse db at %v to database %v", c.config.Hosts, c.config.Database)
+	c.logger.Debugf("connecting to Clickhouse db at %v to database %v", c.config.Hosts, c.config.Database)
 
 	clickHouseBuckets := []float64{.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 4, 5, 7.5, 10}
 	c.metrics.NewHistogram("app_clickhouse_stats", "Response time of Clickhouse queries in milliseconds.", clickHouseBuckets...)
@@ -89,7 +89,7 @@ func (c *Client) Connect() {
 	})
 
 	if err != nil {
-		c.logger.Errorf("error while connecting to clickhouse %v", err)
+		c.logger.Errorf("error while connecting to Clickhouse %v", err)
 
 		return
 	}
@@ -97,7 +97,7 @@ func (c *Client) Connect() {
 	if err = c.conn.Ping(ctx); err != nil {
 		c.logger.Errorf("ping failed with error %v", err)
 	} else {
-		c.logger.Logf("successfully connected to clickhouseDB")
+		c.logger.Logf("successfully connected to ClickhouseDB")
 	}
 
 	go pushDBMetrics(c.conn, c.metrics)
@@ -167,7 +167,7 @@ func (c *Client) AsyncInsert(ctx context.Context, query string, wait bool, args 
 
 func (c *Client) sendOperationStats(start time.Time, methodType, query string, method string,
 	span trace.Span, args ...interface{}) {
-	duration := time.Since(start).Milliseconds()
+	duration := time.Since(start).Microseconds()
 
 	c.logger.Debug(&Log{
 		Type:     methodType,
