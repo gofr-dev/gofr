@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"strings"
 	"time"
@@ -61,7 +62,7 @@ func (f *file) ReadAll() (file_interface.RowReader, error) {
 
 // createJSONReader creates a JSON reader for JSON files.
 func (f *file) createJSONReader() (file_interface.RowReader, error) {
-	status := "ERROR"
+	status := statusError
 
 	defer f.sendOperationStats(&FileLog{Operation: "JSON Reader", Location: f.path, Status: &status}, time.Now())
 
@@ -92,21 +93,21 @@ func (f *file) createJSONReader() (file_interface.RowReader, error) {
 	}
 
 	if d, ok := token.(json.Delim); ok && d == '[' {
-		status = "SUCCESS"
+		status = statusSuccess
 
 		return &jsonReader{decoder: decoder, token: token}, err
 	}
 
 	// Reading JSON object
 	decoder = json.NewDecoder(reader)
-	status = "SUCCESS"
+	status = statusSuccess
 
 	return &jsonReader{decoder: decoder}, nil
 }
 
 // createTextCSVReader creates a text reader for reading text files.
 func (f *file) createTextCSVReader() (file_interface.RowReader, error) {
-	status := "ERROR"
+	status := statusError
 
 	defer f.sendOperationStats(&FileLog{Operation: "Text/CSV Reader", Location: f.path, Status: &status}, time.Now())
 
@@ -125,7 +126,7 @@ func (f *file) createTextCSVReader() (file_interface.RowReader, error) {
 	}
 
 	reader := bytes.NewReader(buffer)
-	status = "SUCCESS"
+	status = statusSuccess
 
 	return &textReader{
 		scanner: bufio.NewScanner(reader),
@@ -166,12 +167,12 @@ func (f *file) Close() error {
 
 	err := f.response.Close()
 	if err != nil {
-		status = "ERROR"
+		status = statusError
 
 		return err
 	}
 
-	status = "SUCCESS"
+	status = statusSuccess
 
 	return nil
 }
@@ -187,7 +188,7 @@ func (f *file) Name() string {
 func (f *file) Size() int64 {
 	var msg string
 
-	status := "ERROR"
+	status := statusError
 
 	defer f.sendOperationStats(&FileLog{Operation: "Size", Location: f.path, Status: &status, Message: &msg}, time.Now())
 
@@ -231,11 +232,11 @@ func (f *file) ModTime() time.Time {
 func (f *file) Read(p []byte) (n int, err error) {
 	var msg string
 
-	status := "ERROR"
+	status := statusError
 
 	defer f.sendOperationStats(&FileLog{Operation: "Read", Location: f.path, Status: &status, Message: &msg}, time.Now())
 
-	r, err := f.conn.RetrFrom(f.path, uint64(f.offset))
+	r, err := f.conn.RetrFrom(f.path, uint64(math.Abs(float64(f.offset))))
 	if err != nil {
 		f.logger.Errorf("Read failed: Failed to open file with path %q : %v", f.path, err)
 		return 0, err
@@ -252,7 +253,7 @@ func (f *file) Read(p []byte) (n int, err error) {
 		return n, err
 	}
 
-	status = "SUCCESS"
+	status = statusSuccess
 	msg = fmt.Sprintf("Read %v bytes from file with path %q", n, f.path)
 
 	return n, err
@@ -262,11 +263,11 @@ func (f *file) Read(p []byte) (n int, err error) {
 func (f *file) ReadAt(p []byte, off int64) (n int, err error) {
 	var msg string
 
-	status := "ERROR"
+	status := statusError
 
 	defer f.sendOperationStats(&FileLog{Operation: "ReadAt", Location: f.path, Status: &status, Message: &msg}, time.Now())
 
-	resp, err := f.conn.RetrFrom(f.path, uint64(off))
+	resp, err := f.conn.RetrFrom(f.path, uint64(math.Abs(float64(f.offset))))
 	if err != nil {
 		f.logger.Errorf("ReadAt failed: Error opening file with path %q at %v offset : %v", f.path, off, err)
 		return 0, err
@@ -280,7 +281,7 @@ func (f *file) ReadAt(p []byte, off int64) (n int, err error) {
 		return 0, err
 	}
 
-	status = "SUCCESS"
+	status = statusSuccess
 	msg = fmt.Sprintf("Read %v bytes from file with path %q at offset of %v", n, f.path, off)
 
 	return n, err
@@ -310,7 +311,7 @@ func (f *file) check(whence int, offset, length int64) (int64, error) {
 func (f *file) Seek(offset int64, whence int) (int64, error) {
 	var msg string
 
-	status := "ERROR"
+	status := statusError
 
 	defer f.sendOperationStats(&FileLog{Operation: "Seek", Location: f.path, Status: &status, Message: &msg}, time.Now())
 
@@ -326,7 +327,7 @@ func (f *file) Seek(offset int64, whence int) (int64, error) {
 		return 0, err
 	}
 
-	status = "SUCCESS"
+	status = statusSuccess
 	msg = fmt.Sprintf("Offset set to %v for file at path %q", res, f.path)
 
 	return res, nil
@@ -336,13 +337,13 @@ func (f *file) Seek(offset int64, whence int) (int64, error) {
 func (f *file) Write(p []byte) (n int, err error) {
 	var msg string
 
-	status := "ERROR"
+	status := statusError
 
 	defer f.sendOperationStats(&FileLog{Operation: "Write", Location: f.path, Status: &status, Message: &msg}, time.Now())
 
 	reader := bytes.NewReader(p)
 
-	err = f.conn.StorFrom(f.path, reader, uint64(f.offset))
+	err = f.conn.StorFrom(f.path, reader, uint64(math.Abs(float64(f.offset))))
 	if err != nil {
 		f.logger.Errorf("Write failed, error: %v", err)
 		return 0, err
@@ -355,7 +356,7 @@ func (f *file) Write(p []byte) (n int, err error) {
 		f.modTime = mt
 	}
 
-	status = "SUCCESS"
+	status = statusSuccess
 	msg = fmt.Sprintf("Wrote %v bytes to file at path %q", len(p), f.path)
 
 	return len(p), nil
@@ -365,13 +366,13 @@ func (f *file) Write(p []byte) (n int, err error) {
 func (f *file) WriteAt(p []byte, off int64) (n int, err error) {
 	var msg string
 
-	status := "ERROR"
+	status := statusError
 
 	defer f.sendOperationStats(&FileLog{Operation: "WriteAt", Location: f.path, Status: &status, Message: &msg}, time.Now())
 
 	reader := bytes.NewReader(p)
 
-	err = f.conn.StorFrom(f.path, reader, uint64(off))
+	err = f.conn.StorFrom(f.path, reader, uint64(math.Abs(float64(f.offset))))
 	if err != nil {
 		f.logger.Errorf("WriteAt failed. Error writing in file with path %q at %v offset : %v", f.path, off, err)
 		return 0, err
@@ -383,7 +384,7 @@ func (f *file) WriteAt(p []byte, off int64) (n int, err error) {
 	}
 
 	msg = fmt.Sprintf("Wrote %v bytes to file with path %q at offset of %v", len(p), f.path, off)
-	status = "SUCCESS"
+	status = statusSuccess
 
 	return len(p), nil
 }

@@ -14,7 +14,11 @@ import (
 	file_interface "gofr.dev/pkg/gofr/datasource/file"
 )
 
-const appFtpStats = "app_ftp_stats"
+const (
+	appFtpStats   = "app_ftp_stats"
+	statusSuccess = "SUCCESS"
+	statusError   = "ERROR"
+)
 
 // Conn struct embeds the *ftp.ServerConn returned by ftp server on successful connection.
 type Conn struct {
@@ -127,7 +131,7 @@ func (f *fileSystem) Create(name string) (file_interface.File, error) {
 
 	var fl = &file{}
 
-	status := "ERROR"
+	status := statusSuccess
 
 	defer f.sendOperationStats(&FileLog{
 		Operation: "Create",
@@ -159,7 +163,7 @@ func (f *fileSystem) Create(name string) (file_interface.File, error) {
 
 	res.Close()
 
-	status = "SUCCESS"
+	status = statusSuccess
 	msg = fmt.Sprintf("Created file %q", name)
 
 	fl = &file{
@@ -186,7 +190,7 @@ func (f *fileSystem) Create(name string) (file_interface.File, error) {
 func (f *fileSystem) Open(name string) (file_interface.File, error) {
 	var msg string
 
-	status := "ERROR"
+	status := statusError
 
 	filePath := path.Join(f.config.RemoteDir, name)
 
@@ -212,7 +216,7 @@ func (f *fileSystem) Open(name string) (file_interface.File, error) {
 
 	filename := path.Base(filePath)
 
-	status = "SUCCESS"
+	status = statusSuccess
 	msg = fmt.Sprintf("Opened file %q", name)
 
 	fl := &file{
@@ -246,7 +250,7 @@ func (f *fileSystem) OpenFile(name string, _ int, _ os.FileMode) (file_interface
 func (f *fileSystem) Remove(name string) error {
 	var msg string
 
-	status := "ERROR"
+	status := statusError
 
 	filePath := path.Join(f.config.RemoteDir, name)
 
@@ -268,7 +272,7 @@ func (f *fileSystem) Remove(name string) error {
 		return err
 	}
 
-	status = "SUCCESS"
+	status = statusSuccess
 	msg = fmt.Sprintf("File with path %q removed successfully", filePath)
 
 	return nil
@@ -280,7 +284,7 @@ func (f *fileSystem) Rename(oldname, newname string) error {
 
 	var tempFile = &file{conn: f.conn, logger: f.logger, metrics: f.metrics}
 
-	status := "ERROR"
+	status := statusError
 
 	oldFilePath := path.Join(f.config.RemoteDir, oldname)
 
@@ -312,7 +316,7 @@ func (f *fileSystem) Rename(oldname, newname string) error {
 	}
 
 	msg = fmt.Sprintf("Renamed file %q to %q", oldname, newname)
-	status = "SUCCESS"
+	status = statusSuccess
 	tempFile.path = newFilePath
 
 	mt := tempFile.ModTime()
