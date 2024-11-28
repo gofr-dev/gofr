@@ -275,7 +275,7 @@ Use the AddPubSub method of GoFr's app to connect
 ```go
     app := gofr.New()
     
-    app.AddPubSub(eventhub.New(eventhub.Config{
+    app.AddPubSub(eventhub.New(&eventhub.Config{
        ConnectionString:          "Endpoint=sb://gofr-dev.servicebus.windows.net/;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=<key>",
        ContainerConnectionString: "DefaultEndpointsProtocol=https;AccountName=gofrdev;AccountKey=<key>;EndpointSuffix=core.windows.net",
        StorageServiceURL:         "https://gofrdev.windows.net/",
