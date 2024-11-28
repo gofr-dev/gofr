@@ -2,6 +2,7 @@ package google
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	gcPubSub "cloud.google.com/go/pubsub"
@@ -16,6 +17,11 @@ import (
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/testutil"
+)
+
+var (
+	errTopicExists = errors.New("Topic already exists")
+	errTestError   = errors.New("test-error")
 )
 
 func getGoogleClient(t *testing.T) *gcPubSub.Client {
@@ -218,4 +224,83 @@ func TestGoogleClient_CloseReturnsError(t *testing.T) {
 	err = g.Close()
 
 	require.NoError(t, err)
+}
+
+func TestGoogleClient_CreateTopic_Success(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockClient := NewMockClient(ctrl)
+	g := &googleClient{client: mockClient, Config: Config{ProjectID: "test", SubscriptionName: "sub"}}
+
+	tests := []struct {
+		name         string
+		topicName    string
+		mockBehavior func()
+	}{
+		{
+			name:      "CreateTopic_Success",
+			topicName: "test-topic",
+			mockBehavior: func() {
+				mockClient.EXPECT().CreateTopic(context.Background(), "test-topic").Return(&gcPubSub.Topic{}, nil)
+			},
+		},
+		{
+			name:      "CreateTopic_AlreadyExists",
+			topicName: "test-topic",
+			mockBehavior: func() {
+				mockClient.EXPECT().CreateTopic(context.Background(), "test-topic").Return(&gcPubSub.Topic{}, errTopicExists)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.mockBehavior()
+
+			err := g.CreateTopic(context.Background(), tt.topicName)
+
+			require.NoError(t, err, "expected no error, but got one")
+		})
+	}
+}
+
+func TestGoogleClient_CreateTopic_Error(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockClient := NewMockClient(ctrl)
+	g := &googleClient{client: mockClient, Config: Config{ProjectID: "test", SubscriptionName: "sub"}}
+
+	mockClient.EXPECT().CreateTopic(context.Background(), "test-topic").
+		Return(&gcPubSub.Topic{}, errTestError)
+
+	err := g.CreateTopic(context.Background(), "test-topic")
+
+	require.ErrorContains(t, err, "test-error", "expected test-error but got different error")
+}
+
+func TestGoogleClient_DeleteTopic(t *testing.T) {
+	ctx := context.Background()
+
+	client := getGoogleClient(t)
+	defer client.Close()
+
+	g := &googleClient{client: client, Config: Config{ProjectID: "test", SubscriptionName: "sub"}}
+
+	//  Test successful topic creation
+	t.Run("DeleteTopic_Success", func(t *testing.T) {
+		err := g.CreateTopic(ctx, "test-topic")
+		require.NoError(t, err)
+
+		err = g.DeleteTopic(ctx, "test-topic")
+		require.NoError(t, err, "expected topic deletion to succeed, but got error")
+	})
+
+	// Test topic deletion with topic not found
+	t.Run("DeleteTopic_NotFound", func(t *testing.T) {
+		err := g.DeleteTopic(ctx, "test-topic")
+
+		require.ErrorContains(t, err, "NotFound", "expected NotFound error for non existing topic deletion")
+	})
 }
