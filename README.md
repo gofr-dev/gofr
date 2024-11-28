@@ -125,4 +125,4 @@ If your PR is merged, or if you contribute by writing articles or promoting GoFr
 
 ### Partners
 
-![JetBrains logo](https://resources.jetbrains.com/storage/products/company/brand/logos/jetbrains.png)
+<img src="https://resources.jetbrains.com/storage/products/company/brand/logos/jetbrains.png" alt="JetBrains logo" width="200">
