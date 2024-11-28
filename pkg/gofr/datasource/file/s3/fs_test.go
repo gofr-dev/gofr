@@ -208,8 +208,8 @@ func Test_ReadDir(t *testing.T) {
 
 		for i, tt := range tests {
 			t.Run(fmt.Sprintf("TestCase %d", i), func(t *testing.T) {
-				res, err := fs.ReadDir(tt.dirPath)
-				require.NoError(t, err, "Error reading directory")
+				res, readErr := fs.ReadDir(tt.dirPath)
+				require.NoError(t, readErr, "Error reading directory")
 
 				var results []result
 

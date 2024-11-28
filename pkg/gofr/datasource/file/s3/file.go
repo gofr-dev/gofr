@@ -29,6 +29,10 @@ type s3file struct {
 	lastModified time.Time
 }
 
+var (
+	ErrNilResponse = errors.New("response retrieved is nil ")
+)
+
 // Name returns the base name of the file.
 //
 // For a file, this method returns the name of the file without any directory components.
@@ -169,7 +173,7 @@ func (f *s3file) Read(p []byte) (n int, err error) {
 	f.body = res.Body
 	if f.body == nil {
 		msg = fmt.Sprintf("File %q is nil", fileName)
-		return 0, errors.New("s3 body is nil")
+		return 0, fmt.Errorf("%w: S3 file is empty", ErrNilResponse)
 	}
 
 	buffer := make([]byte, len(p)+int(f.offset))
@@ -217,12 +221,12 @@ func (f *s3file) ReadAt(p []byte, offset int64) (n int, err error) {
 		fileName = f.name[index+1:]
 	}
 
-	res, err := f.conn.GetObject(context.TODO(), &s3.GetObjectInput{
+	res, objectErr := f.conn.GetObject(context.TODO(), &s3.GetObjectInput{
 		Bucket: aws.String(bucketName),
 		Key:    aws.String(fileName),
 	})
 
-	if err != nil {
+	if objectErr != nil {
 		msg = fmt.Sprintf("Failed to retrieve file %q: %v", fileName, err)
 		return 0, err
 	}
@@ -235,7 +239,7 @@ func (f *s3file) ReadAt(p []byte, offset int64) (n int, err error) {
 
 	if int64(len(p))+offset+1 > f.size {
 		msg = fmt.Sprintf("Offset %v out of range", f.offset)
-		return 0, errors.New("reading out of range, fetching from the offset. Use Seek to reset offset")
+		return 0, fmt.Errorf("%w: reading out of range, fetching from the offset. Use Seek to reset offset", ErrOutOfRange)
 	}
 
 	buffer := make([]byte, len(p)+int(offset)+1)
@@ -284,14 +288,14 @@ func (f *s3file) Write(p []byte) (n int, err error) {
 
 	// if f.offset is not 0, we need to fetch the contents of the file till the offset and then write into the file
 	if f.offset != 0 {
-		res, err := f.conn.GetObject(context.TODO(), &s3.GetObjectInput{
+		res, objectErr := f.conn.GetObject(context.TODO(), &s3.GetObjectInput{
 			Bucket: aws.String(bucketName),
 			Key:    aws.String(fileName),
 		})
 
-		if err != nil {
-			msg = fmt.Sprintf("Failed to retrieve file %q: %v", fileName, err)
-			return 0, err
+		if objectErr != nil {
+			msg = fmt.Sprintf("Failed to retrieve file %q: %v", fileName, objectErr)
+			return 0, objectErr
 		}
 
 		f.body = res.Body
@@ -310,7 +314,8 @@ func (f *s3file) Write(p []byte) (n int, err error) {
 			contentAfterBufferBytes = buffer[f.offset+int64(len(p)):]
 		}
 
-		buffer = append(contentBeforeOffset, p...)
+		contentBeforeOffset = append(contentBeforeOffset, p...)
+		buffer = append(buffer, contentBeforeOffset...)
 		buffer = append(buffer, contentAfterBufferBytes...)
 	}
 
@@ -380,7 +385,8 @@ func (f *s3file) WriteAt(p []byte, offset int64) (n int, err error) {
 		contentAfterBufferBytes = buffer[offset+int64(len(p)):]
 	}
 
-	buffer = append(contentBeforeOffset, p...)
+	contentBeforeOffset = append(contentBeforeOffset, p...)
+	buffer = append(buffer, contentBeforeOffset...)
 	buffer = append(buffer, contentAfterBufferBytes...)
 
 	_, err = f.conn.PutObject(context.TODO(), &s3.PutObjectInput{

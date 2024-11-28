@@ -19,6 +19,10 @@ import (
 	file "gofr.dev/pkg/gofr/datasource/file"
 )
 
+var (
+	ErrOperationNotPermitted = errors.New("operation not permitted")
+)
+
 // Mkdir creates a directory and any necessary parent directories in the S3 bucket.
 //
 // This method creates a pseudo-directory in the S3 bucket by putting objects with the specified path prefixes.
@@ -181,7 +185,7 @@ func (f *fileSystem) ReadDir(name string) ([]file.FileInfo, error) {
 		return nil, err
 	}
 
-	var fileInfo []file.FileInfo
+	fileInfo := make([]file.FileInfo, 0)
 
 	for i := range entries.Contents {
 		if i == 0 && filePath != "" {
@@ -230,7 +234,7 @@ func (f *fileSystem) ChDir(string) error {
 		Message:   aws.String("Changing directory not supported"),
 	}, time.Now())
 
-	return errors.New("s3 does not support changing directories due to flat file structure")
+	return fmt.Errorf("%w: s3 has a flat file structure", ErrOperationNotPermitted)
 }
 
 // Getwd returns the currently set bucket on S3.

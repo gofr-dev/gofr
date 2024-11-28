@@ -20,6 +20,15 @@ import (
 	file "gofr.dev/pkg/gofr/datasource/file"
 )
 
+const (
+	TypeFile      = "file"
+	TypeDirectory = "directory"
+)
+
+var (
+	ErrIncorrectFileType = errors.New("incorrect file type")
+)
+
 type fileSystem struct {
 	s3file
 	conn    *s3.Client
@@ -94,7 +103,7 @@ func (f *fileSystem) Connect() {
 	)
 
 	if err != nil {
-		f.logger.Errorf("Failed to load configuration: %v", err)
+		f.logger.Errorf("failed to load configuration: %v", err)
 	}
 
 	// Create the S3 client from config
@@ -144,7 +153,7 @@ func (f *fileSystem) Create(name string) (file.File, error) {
 
 		if len(res2.Contents) == 0 {
 			f.logger.Errorf("Parentpath %q does not exist", parentPath)
-			return nil, errors.New("create parent path before creating a file")
+			return nil, fmt.Errorf("%w: create parent path before creating a file", ErrOperationNotPermitted)
 		}
 	}
 
@@ -245,7 +254,7 @@ func (f *fileSystem) Open(name string) (file.File, error) {
 	})
 
 	if err != nil {
-		f.logger.Errorf("Failed to retrieve %q: %v", name, err)
+		f.logger.Errorf("failed to retrieve %q: %v", name, err)
 		return nil, err
 	}
 
@@ -300,7 +309,7 @@ func (f *fileSystem) Rename(oldname, newname string) error {
 	// check if both exist at same location or not
 	if path.Dir(oldname) != path.Dir(newname) {
 		f.logger.Errorf("%q & %q are not in same location", oldname, newname)
-		return errors.New("renaming as well as moving file to different location is not allowed")
+		return fmt.Errorf("%w: renaming as well as moving file to different location is not allowed", ErrOperationNotPermitted)
 	}
 
 	// check if it is a directory
@@ -311,7 +320,7 @@ func (f *fileSystem) Rename(oldname, newname string) error {
 	// check if they are of the same type or not
 	if path.Ext(oldname) != path.Ext(newname) {
 		f.logger.Errorf("new file must be same as the old file type")
-		return errors.New("incorrect file type of newname")
+		return fmt.Errorf("%w: new filename must match the old file's type", ErrIncorrectFileType)
 	}
 
 	_, err := f.conn.CopyObject(context.TODO(), &s3.CopyObjectInput{
@@ -363,15 +372,15 @@ func (f *fileSystem) Stat(name string) (file.FileInfo, error) {
 		Message:   &msg,
 	}, time.Now())
 
-	filetype := "file"
+	filetype := TypeFile
 
 	// Here we assume the user passes "0filePath" in case it wants to get fileinfo about a binary file instead of a directory
 	if path.Ext(name) == "" {
-		filetype = "directory"
+		filetype = TypeDirectory
 
 		if name[0] == '0' {
 			name = name[1:]
-			filetype = "file"
+			filetype = TypeFile
 		}
 	}
 
@@ -385,7 +394,7 @@ func (f *fileSystem) Stat(name string) (file.FileInfo, error) {
 		return nil, err
 	}
 
-	if filetype == "directory" {
+	if filetype == TypeDirectory {
 		var size int64
 
 		var lastModified time.Time
