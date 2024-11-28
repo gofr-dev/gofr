@@ -13,6 +13,12 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
+var (
+	ErrSendingRequest  = errors.New("opentsdb client error")
+	ErrInvalidArgument = errors.New("invalid argument type")
+	ErrUnexpected      = errors.New("unexpected error")
+)
+
 // AggregatorsResponse acts as the implementation of Response in the /api/aggregators.
 // It holds the status code and the response values defined in the
 // [OpenTSDB Official Docs]: http://opentsdb.net/docs/build/html/api_http/aggregators.html.
@@ -252,7 +258,7 @@ func (c *Client) sendRequest(ctx context.Context, method, url, reqBodyCnt string
 	}
 
 	if resp.StatusCode >= 400 && resp.StatusCode < 500 {
-		return fmt.Errorf("client error: %d", resp.StatusCode)
+		return fmt.Errorf("%w, status code: %d", ErrSendingRequest, resp.StatusCode)
 	}
 
 	return nil
@@ -282,7 +288,7 @@ func (c *Client) version(ctx context.Context, verResp *VersionResponse) error {
 
 // isValidOperateMethod checks if the provided HTTP method is valid for
 // operations such as POST, PUT, or DELETE.
-func (c *Client) isValidOperateMethod(method string) bool {
+func (*Client) isValidOperateMethod(method string) bool {
 	method = strings.TrimSpace(strings.ToUpper(method))
 	if method == "" {
 		return false
@@ -339,17 +345,17 @@ func (c *Client) operateAnnotation(ctx context.Context, queryAnnotation, resp an
 
 	annotation, ok := queryAnnotation.(*Annotation)
 	if !ok {
-		return errors.New("invalid annotation type. Must be *Annotation")
+		return fmt.Errorf("%w: Must be *Annotation", ErrInvalidArgument)
 	}
 
 	annResp, ok := resp.(*AnnotationResponse)
 	if !ok {
-		return errors.New("invalid response type. Must be *AnnotationResponse")
+		return fmt.Errorf("%w: Must be *AnnotationResponse", ErrInvalidResponseType)
 	}
 
 	if !c.isValidOperateMethod(method) {
 		message = fmt.Sprintf("invalid annotation operation method: %s", method)
-		return errors.New(message)
+		return fmt.Errorf("%w: %s", ErrUnexpected, message)
 	}
 
 	annoEndpoint := fmt.Sprintf("%s%s", c.endpoint, annotationPath)
@@ -357,7 +363,7 @@ func (c *Client) operateAnnotation(ctx context.Context, queryAnnotation, resp an
 	resultBytes, err := json.Marshal(annotation)
 	if err != nil {
 		message = fmt.Sprintf("marshal annotation response error: %s", err)
-		return errors.New(message)
+		return fmt.Errorf("%w: %s", ErrUnexpected, message)
 	}
 
 	if err = c.sendRequest(ctx, method, annoEndpoint, string(resultBytes), annResp); err != nil {

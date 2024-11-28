@@ -2,11 +2,12 @@ package opentsdb
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
-	"math/rand/v2"
+	"math/big"
 	"net"
 	"net/http"
 	"strings"
@@ -142,10 +143,11 @@ func TestPutSuccess(t *testing.T) {
 	}
 
 	for i := 0; i < PutDataPointNum; i++ {
+		val, _ := rand.Int(rand.Reader, big.NewInt(100))
 		data := DataPoint{
 			Metric:    name[i%len(name)],
 			Timestamp: time.Now().Unix(),
-			Value:     rand.Float64() * 100,
+			Value:     val.Int64(),
 			Tags:      tags,
 		}
 		cpuDatas = append(cpuDatas, data)
@@ -182,7 +184,7 @@ func TestPutInvalidDataPoint(t *testing.T) {
 
 	err := client.PutDataPoints(context.Background(), dataPoints, "", resp)
 	require.Error(t, err)
-	require.Equal(t, "the value of the given datapoint is invalid", err.Error())
+	require.Equal(t, "invalid data points: please give a valid value", err.Error())
 }
 
 func TestPutInvalidQueryParam(t *testing.T) {
@@ -201,7 +203,7 @@ func TestPutInvalidQueryParam(t *testing.T) {
 
 	err := client.PutDataPoints(context.Background(), dataPoints, "invalid_param", resp)
 	require.Error(t, err)
-	require.Equal(t, "the given query param is invalid.", err.Error())
+	require.Equal(t, "invalid query parameters", err.Error())
 }
 
 func TestPutErrorResponse(t *testing.T) {
@@ -227,7 +229,7 @@ func TestPutErrorResponse(t *testing.T) {
 
 	err := client.PutDataPoints(context.Background(), dataPoints, "", resp)
 	require.Error(t, err)
-	require.Equal(t, "client error: 400", err.Error())
+	require.Equal(t, "opentsdb client error, status code: 400", err.Error())
 }
 
 func TestPostQuerySuccess(t *testing.T) {
@@ -612,5 +614,5 @@ func TestHealthCheck_Failure(t *testing.T) {
 
 	require.Error(t, err, "Expected error during health check")
 	require.Nil(t, resp, "Expected response to be nil")
-	require.Equal(t, "OpenTSDB is unreachable: connection error", err.Error(), "Expected specific error message")
+	require.Equal(t, "connection error", err.Error(), "Expected specific error message")
 }

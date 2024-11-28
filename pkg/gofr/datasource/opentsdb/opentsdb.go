@@ -16,6 +16,16 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
+// Predefined static errors.
+var (
+	ErrInvalidResponseType       = errors.New("invalid response type")
+	ErrInvalidQueryParam         = errors.New("invalid query parameters")
+	ErrInvalidParam              = errors.New("invalid parameter type")
+	ErrEmptyQueryAnnotationParam = errors.New("annotation query parameter is empty")
+	ErrRequestProcessing         = errors.New("error while processing request")
+	ErrConnectionFailed          = errors.New("error while connection to OpenTSDB")
+)
+
 const (
 	statusFailed      = "FAIL"
 	statusSuccess     = "SUCCESS"
@@ -49,6 +59,7 @@ const (
 	defaultMaxContentLength = 40960
 )
 
+//nolint:gochecknoglobals // this variable is being set again with a mockserver response for testing HealthCheck endpoint.
 var dialTimeout = net.DialTimeout
 
 // Client is the implementation of the OpenTSDBClient interface,
@@ -137,6 +148,7 @@ func (c *Client) Connect() {
 	c.endpoint = fmt.Sprintf("http://%s", c.config.Host)
 
 	res := VersionResponse{}
+
 	err := c.version(context.Background(), &res)
 	if err != nil {
 		c.logger.Errorf("error while connection to OpenTSDB: %v", err)
@@ -157,23 +169,23 @@ func (c *Client) PutDataPoints(ctx context.Context, datas any, queryParam string
 
 	putResp, ok := resp.(*PutResponse)
 	if !ok {
-		return errors.New("invalid response type. Must be *PutResponse")
+		return fmt.Errorf("%w: Must be *PutResponse", ErrInvalidResponseType)
 	}
 
 	datapoints, ok := datas.([]DataPoint)
 	if !ok {
-		return errors.New("invalid response type. Must be []DataPoint")
+		return fmt.Errorf("%w: Must be []DataPoint", ErrInvalidResponseType)
 	}
 
 	err := validateDataPoint(datapoints)
 	if err != nil {
-		message = fmt.Sprintf("invalid data: %s", err)
+		message = err.Error()
 		return err
 	}
 
 	if !isValidPutParam(queryParam) {
 		message = "the given query param is invalid."
-		return errors.New(message)
+		return fmt.Errorf("%w", ErrInvalidQueryParam)
 	}
 
 	putEndpoint := fmt.Sprintf("%s%s", c.endpoint, putPath)
@@ -208,17 +220,17 @@ func (c *Client) QueryDataPoints(ctx context.Context, parameters, resp any) erro
 
 	param, ok := parameters.(*QueryParam)
 	if !ok {
-		return errors.New("invalid parameter type. Must be *QueryParam")
+		return fmt.Errorf("%w: Must be *QueryParam", ErrInvalidQueryParam)
 	}
 
 	queryResp, ok := resp.(*QueryResponse)
 	if !ok {
-		return errors.New("invalid response type. Must be *QueryResponse")
+		return fmt.Errorf("%w: Must be *QueryResponse", ErrInvalidResponseType)
 	}
 
 	if !isValidQueryParam(param) {
 		message = "invalid query parameters"
-		return errors.New(message)
+		return fmt.Errorf("%w", ErrInvalidQueryParam)
 	}
 
 	queryEndpoint := fmt.Sprintf("%s%s", c.endpoint, queryPath)
@@ -251,17 +263,17 @@ func (c *Client) QueryLatestDataPoints(ctx context.Context, parameters, resp any
 
 	param, ok := parameters.(*QueryLastParam)
 	if !ok {
-		return errors.New("invalid parameter type. Must be a *QueryLastParam type")
+		return fmt.Errorf("%w: Must be a *QueryLastParam type", ErrInvalidParam)
 	}
 
 	queryResp, ok := resp.(*QueryLastResponse)
 	if !ok {
-		return errors.New("invalid response type. Must be a *QueryLastResponse type")
+		return fmt.Errorf("%w: Must be a *QueryLastResponse type", ErrInvalidResponseType)
 	}
 
 	if !isValidQueryLastParam(param) {
 		message = "invalid query last param"
-		return errors.New(message)
+		return fmt.Errorf("%w", ErrInvalidQueryParam)
 	}
 
 	queryEndpoint := fmt.Sprintf("%s%s", c.endpoint, queryLastPath)
@@ -296,12 +308,12 @@ func (c *Client) QueryAnnotation(ctx context.Context, queryAnnoParam map[string]
 
 	annResp, ok := resp.(*AnnotationResponse)
 	if !ok {
-		return errors.New("invalid response type. Must be *AnnotationResponse")
+		return fmt.Errorf("%w: Must be *AnnotationResponse", ErrInvalidResponseType)
 	}
 
 	if len(queryAnnoParam) == 0 {
 		message = "annotation query parameter is empty"
-		return errors.New(message)
+		return fmt.Errorf("%w: %s", ErrInvalidQueryParam, message)
 	}
 
 	buffer := bytes.NewBuffer(nil)
@@ -355,7 +367,7 @@ func (c *Client) GetAggregators(ctx context.Context, resp any) error {
 
 	aggreResp, ok := resp.(*AggregatorsResponse)
 	if !ok {
-		return errors.New("invalid response type. Must be a *AggregatorsResponse")
+		return fmt.Errorf("%w: Must be a *AggregatorsResponse", ErrInvalidResponseType)
 	}
 
 	aggregatorsEndpoint := fmt.Sprintf("%s%s", c.endpoint, aggregatorPath)
@@ -391,7 +403,7 @@ func (c *Client) HealthCheck(ctx context.Context) (any, error) {
 		h.Status = "DOWN"
 		message = fmt.Sprintf("OpenTSDB is unreachable: %v", err)
 
-		return nil, errors.New(message)
+		return nil, err
 	}
 
 	if conn != nil {
