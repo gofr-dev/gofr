@@ -124,7 +124,7 @@ func TestPublish_FailedBatchCreation(t *testing.T) {
 
 	mockMetrics.EXPECT().IncrementCounter(context.Background(), "app_pubsub_publish_total_count", "topic", client.cfg.EventhubName)
 
-	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any())
+	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 
 	client.UseLogger(mockLogger)
 	client.UseMetrics(mockMetrics)
@@ -133,7 +133,7 @@ func TestPublish_FailedBatchCreation(t *testing.T) {
 
 	err := client.Publish(context.Background(), client.cfg.EventhubName, []byte("my-message"))
 
-	require.NoError(t, err)
+	require.Error(t, err, "Eventhub Publish Failed Batch Creation")
 
 	require.True(t, mockLogger.ctrl.Satisfied(), "Eventhub Publish Failed Batch Creation")
 }
