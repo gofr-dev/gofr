@@ -3,7 +3,6 @@ package eventhub
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 	"time"
 
@@ -21,7 +20,10 @@ import (
 // metrics are being registered in the container, and we are using the same metrics so we have not re-registered the metrics here.
 // It is different from other datasources.
 
-var errNoMsgReceived = errors.New("no message received")
+var (
+	errNoMsgReceived = errors.New("no message received")
+	errTopicMismatch = errors.New("topic should be same as eventhub name")
+)
 
 type Config struct {
 	ConnectionString          string
@@ -47,20 +49,20 @@ type Client struct {
 	checkPoint *checkpoints.BlobStore
 	// processorCtx is being stored such that to gracefully shutting down the application.
 	processorCtx context.CancelFunc
-	cfg          Config
+	cfg          *Config
 	logger       Logger
 	metrics      Metrics
 	tracer       trace.Tracer
 }
 
-// New Creates the client for Eventhub
-func New(cfg Config) *Client {
+// New Creates the client for Eventhub.
+func New(cfg *Config) *Client {
 	return &Client{
 		cfg: cfg,
 	}
 }
 
-func (c *Client) validConfigs(cfg Config) bool {
+func (c *Client) validConfigs(cfg *Config) bool {
 	ok := true
 
 	if cfg.EventhubName == "" {
@@ -98,7 +100,6 @@ func (c *Client) validConfigs(cfg Config) bool {
 	}
 
 	return ok
-
 }
 
 // UseLogger sets the logger for the eventhub client.
@@ -238,7 +239,7 @@ func (c *Client) Subscribe(ctx context.Context, topic string) (*pubsub.Message, 
 				Mode:          "SUB",
 				MessageValue:  strings.Join(strings.Fields(string(msg.Value)), " "),
 				Topic:         topic,
-				Host:          fmt.Sprint(c.cfg.EventhubName + ":" + c.cfg.ConsumerGroup + ":" + partitionClient.PartitionID()),
+				Host:          c.cfg.EventhubName + ":" + c.cfg.ConsumerGroup + ":" + partitionClient.PartitionID(),
 				PubSubBackend: "EVHUB",
 				Time:          end.Microseconds(),
 			})
@@ -252,11 +253,12 @@ func (c *Client) Subscribe(ctx context.Context, topic string) (*pubsub.Message, 
 	return nil, nil
 }
 
-func (c *Client) processEvents(ctx context.Context, partitionClient *azeventhubs.ProcessorPartitionClient) (*pubsub.Message, error) {
+func (*Client) processEvents(ctx context.Context, partitionClient *azeventhubs.ProcessorPartitionClient) (*pubsub.Message, error) {
 	defer closePartitionResources(ctx, partitionClient)
 
 	receiveCtx, receiveCtxCancel := context.WithTimeout(ctx, time.Second)
 	events, err := partitionClient.ReceiveEvents(receiveCtx, 1, nil)
+
 	receiveCtxCancel()
 
 	if err != nil && !errors.Is(err, context.DeadlineExceeded) {
@@ -282,12 +284,12 @@ func (c *Client) processEvents(ctx context.Context, partitionClient *azeventhubs
 }
 
 func closePartitionResources(ctx context.Context, partitionClient *azeventhubs.ProcessorPartitionClient) {
-	defer partitionClient.Close(ctx)
+	partitionClient.Close(ctx)
 }
 
 func (c *Client) Publish(ctx context.Context, topic string, message []byte) error {
 	if topic != c.cfg.EventhubName {
-		return errors.New("topic should be same as eventhub name")
+		return errTopicMismatch
 	}
 
 	c.metrics.IncrementCounter(ctx, "app_pubsub_publish_total_count", "topic", topic)
@@ -307,12 +309,15 @@ func (c *Client) Publish(ctx context.Context, topic string, message []byte) erro
 
 	for i := 0; i < len(data); i++ {
 		err = batch.AddEventData(data[i], nil)
+		if err != nil {
+			c.logger.Debugf("failed to add event data to batch %v", err)
+		}
 	}
 
 	start := time.Now()
 
 	// send the batch of events to the event hub
-	if err = c.producer.SendEventDataBatch(ctx, batch, nil); err != nil {
+	if err := c.producer.SendEventDataBatch(ctx, batch, nil); err != nil {
 		return err
 	}
 
@@ -322,7 +327,7 @@ func (c *Client) Publish(ctx context.Context, topic string, message []byte) erro
 		Mode:          "PUB",
 		MessageValue:  strings.Join(strings.Fields(string(message)), " "),
 		Topic:         topic,
-		Host:          fmt.Sprint(c.cfg.EventhubName),
+		Host:          c.cfg.EventhubName,
 		PubSubBackend: "EVHUB",
 		Time:          end.Microseconds(),
 	})

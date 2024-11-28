@@ -41,7 +41,9 @@ func setupDB(t *testing.T) (*Client, *MockDgraphClient, *MockLogger, *MockMetric
 func TestClient_Connect_Success(t *testing.T) {
 	client, _, mockLogger, mockMetrics := setupDB(t)
 
-	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).Times(2)
+	mockLogger.EXPECT().Debugf(gomock.Any(), gomock.Any())
+
+	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any())
 
 	// Mock Metric behavior
 	mockMetrics.EXPECT().NewHistogram(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
@@ -166,7 +168,19 @@ func Test_Mutate_Success(t *testing.T) {
 }
 
 func Test_Mutate_InvalidMutation(t *testing.T) {
-	client, _, _, _ := setupDB(t)
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockLogger := NewMockLogger(ctrl)
+	mockMetrics := NewMockMetrics(ctrl)
+
+	config := Config{Host: "localhost", Port: "9080"}
+	client := New(config)
+	client.UseLogger(mockLogger)
+	client.UseMetrics(mockMetrics)
+
+	mockDgraphClient := NewMockDgraphClient(ctrl)
+	client.client = mockDgraphClient
 
 	// Call the Mutate method with an invalid type
 	resp, err := client.Mutate(context.Background(), "invalid mutation")

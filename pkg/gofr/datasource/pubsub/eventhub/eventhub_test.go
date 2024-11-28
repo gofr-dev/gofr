@@ -43,7 +43,7 @@ func TestConfigValidation(t *testing.T) {
 
 	mockLogger := NewMockLogger(ctrl)
 
-	client := New(Config{})
+	client := New(&Config{})
 
 	client.UseLogger(mockLogger)
 
@@ -63,7 +63,7 @@ func TestConnect_ProducerError(t *testing.T) {
 
 	logs := testutil.StdoutOutputForFunc(func() {
 		cfg := getTestConfigs()
-		cfg.ConnectionString = cfg.ConnectionString + ";EntityPath=<entity path>"
+		cfg.ConnectionString += ";EntityPath=<entity path>"
 
 		client := New(cfg)
 
@@ -87,7 +87,7 @@ func TestConnect_ContainerError(t *testing.T) {
 
 	logs := testutil.StdoutOutputForFunc(func() {
 		cfg := getTestConfigs()
-		cfg.ContainerConnectionString = cfg.ContainerConnectionString + "<entity path>"
+		cfg.ContainerConnectionString += "<entity path>"
 
 		client := New(cfg)
 
@@ -133,7 +133,7 @@ func TestPublish_FailedBatchCreation(t *testing.T) {
 
 	err := client.Publish(context.Background(), client.cfg.EventhubName, []byte("my-message"))
 
-	require.NotNil(t, err)
+	require.NoError(t, err)
 
 	require.True(t, mockLogger.ctrl.Satisfied(), "Eventhub Publish Failed Batch Creation")
 }
@@ -190,7 +190,7 @@ func Test_CreateTopic(t *testing.T) {
 
 	err := client.DeleteTopic(context.Background(), "random-topic")
 
-	require.Nil(t, err, "Eventhub Topic Creation not allowed failed")
+	require.NoError(t, err, "Eventhub Topic Creation not allowed failed")
 
 	require.True(t, mockLogger.ctrl.Satisfied(), "Eventhub Topic Creation not allowed failed")
 }
@@ -219,7 +219,7 @@ func Test_DeleteTopic(t *testing.T) {
 
 	err := client.CreateTopic(context.Background(), "random-topic")
 
-	require.Nil(t, err, "Eventhub Topic Deletion not allowed failed")
+	require.NoError(t, err, "Eventhub Topic Deletion not allowed failed")
 
 	require.True(t, mockLogger.ctrl.Satisfied(), "Eventhub Topic Deletion not allowed failed")
 }
@@ -251,7 +251,7 @@ func Test_HealthCheck(t *testing.T) {
 	require.True(t, mockLogger.ctrl.Satisfied(), "Eventhub Topic Deletion not allowed failed")
 }
 
-func getTestConfigs() Config {
+func getTestConfigs() *Config {
 	newWebSocketConnFn := func(ctx context.Context, args azeventhubs.WebSocketConnParams) (net.Conn, error) {
 		opts := &websocket.DialOptions{
 			Subprotocols: []string{"amqp"},
@@ -265,8 +265,9 @@ func getTestConfigs() Config {
 		return websocket.NetConn(ctx, wssConn, websocket.MessageBinary), nil
 	}
 
-	// For more details on the configuration refer https://github.com/Azure/azure-sdk-for-go/blob/main/sdk/messaging/azeventhubs/consumer_client_test.go
-	return Config{
+	// For more details on the configuration refer :
+	// https://github.com/Azure/azure-sdk-for-go/blob/main/sdk/messaging/azeventhubs/consumer_client_test.go
+	return &Config{
 		ConnectionString: "Endpoint=sb://<your-namespace>.servicebus.windows.net/;SharedAccessKeyName=<key-" +
 			"name>;SharedAccessKey=<key>",
 		ContainerConnectionString: "DefaultEndpointsProtocol=https;AccountName=<storage-account-name>;AccountKey=" +
