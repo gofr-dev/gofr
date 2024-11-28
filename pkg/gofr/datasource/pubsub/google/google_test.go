@@ -36,7 +36,21 @@ func getGoogleClient(t *testing.T) *gcPubSub.Client {
 	return client
 }
 
-func TestGoogleClient_New_Error(t *testing.T) {
+func TestGoogleClient_New(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	t.Setenv("PUBSUB_EMULATOR_HOST", "localhost:8085")
+
+	mockMetrics := NewMockMetrics(ctrl)
+	logger := logging.NewMockLogger(logging.DEBUG)
+
+	client := New(Config{ProjectID: "test", SubscriptionName: "test"}, logger, mockMetrics)
+
+	require.NotNil(t, client.client, "TestGoogleClient_New Failed!")
+}
+
+func TestGoogleClient_New_InvalidConfig(t *testing.T) {
 	var g *googleClient
 
 	ctrl := gomock.NewController(t)
@@ -50,6 +64,20 @@ func TestGoogleClient_New_Error(t *testing.T) {
 
 	assert.Nil(t, g)
 	assert.Contains(t, out, "could not configure google pubsub")
+}
+
+func TestGoogleClient_New_EmptyClient(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockMetrics := NewMockMetrics(ctrl)
+	logger := logging.NewMockLogger(logging.DEBUG)
+	config := Config{ProjectID: "test", SubscriptionName: "test"}
+
+	client := New(config, logger, mockMetrics)
+
+	require.Nil(t, client.client, "TestGoogleClient_New_EmptyClient Failed!")
+	require.Equal(t, config, client.Config, "TestGoogleClient_New_EmptyClient Failed!")
 }
 
 func TestGoogleClient_Publish_Success(t *testing.T) {
