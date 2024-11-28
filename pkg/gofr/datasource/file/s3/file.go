@@ -315,7 +315,7 @@ func (f *s3file) Write(p []byte) (n int, err error) {
 		}
 
 		contentBeforeOffset = append(contentBeforeOffset, p...)
-		buffer = append(buffer, contentBeforeOffset...)
+		buffer = contentBeforeOffset
 		buffer = append(buffer, contentAfterBufferBytes...)
 	}
 
@@ -386,7 +386,7 @@ func (f *s3file) WriteAt(p []byte, offset int64) (n int, err error) {
 	}
 
 	contentBeforeOffset = append(contentBeforeOffset, p...)
-	buffer = append(buffer, contentBeforeOffset...)
+	buffer = contentBeforeOffset
 	buffer = append(buffer, contentAfterBufferBytes...)
 
 	_, err = f.conn.PutObject(context.TODO(), &s3.PutObjectInput{
