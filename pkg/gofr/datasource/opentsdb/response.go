@@ -14,9 +14,9 @@ import (
 )
 
 var (
-	ErrSendingRequest  = errors.New("opentsdb client error")
-	ErrInvalidArgument = errors.New("invalid argument type")
-	ErrUnexpected      = errors.New("unexpected error")
+	errSendingRequest  = errors.New("opentsdb client error")
+	errInvalidArgument = errors.New("invalid argument type")
+	errUnexpected      = errors.New("unexpected error")
 )
 
 // AggregatorsResponse acts as the implementation of Response in the /api/aggregators.
@@ -258,7 +258,7 @@ func (c *Client) sendRequest(ctx context.Context, method, url, reqBodyCnt string
 	}
 
 	if resp.StatusCode >= 400 && resp.StatusCode < 500 {
-		return fmt.Errorf("%w, status code: %d", ErrSendingRequest, resp.StatusCode)
+		return fmt.Errorf("%w, status code: %d", errSendingRequest, resp.StatusCode)
 	}
 
 	return nil
@@ -345,17 +345,17 @@ func (c *Client) operateAnnotation(ctx context.Context, queryAnnotation, resp an
 
 	annotation, ok := queryAnnotation.(*Annotation)
 	if !ok {
-		return fmt.Errorf("%w: Must be *Annotation", ErrInvalidArgument)
+		return fmt.Errorf("%w: Must be *Annotation", errInvalidArgument)
 	}
 
 	annResp, ok := resp.(*AnnotationResponse)
 	if !ok {
-		return fmt.Errorf("%w: Must be *AnnotationResponse", ErrInvalidResponseType)
+		return fmt.Errorf("%w: Must be *AnnotationResponse", errInvalidResponseType)
 	}
 
 	if !c.isValidOperateMethod(method) {
 		message = fmt.Sprintf("invalid annotation operation method: %s", method)
-		return fmt.Errorf("%w: %s", ErrUnexpected, message)
+		return fmt.Errorf("%w: %s", errUnexpected, message)
 	}
 
 	annoEndpoint := fmt.Sprintf("%s%s", c.endpoint, annotationPath)
@@ -363,7 +363,7 @@ func (c *Client) operateAnnotation(ctx context.Context, queryAnnotation, resp an
 	resultBytes, err := json.Marshal(annotation)
 	if err != nil {
 		message = fmt.Sprintf("marshal annotation response error: %s", err)
-		return fmt.Errorf("%w: %s", ErrUnexpected, message)
+		return fmt.Errorf("%w: %s", errUnexpected, message)
 	}
 
 	if err = c.sendRequest(ctx, method, annoEndpoint, string(resultBytes), annResp); err != nil {

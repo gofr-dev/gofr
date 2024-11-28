@@ -18,9 +18,9 @@ import (
 
 // Predefined static errors.
 var (
-	ErrInvalidResponseType = errors.New("invalid response type")
-	ErrInvalidQueryParam   = errors.New("invalid query parameters")
-	ErrInvalidParam        = errors.New("invalid parameter type")
+	errInvalidResponseType = errors.New("invalid response type")
+	errInvalidQueryParam   = errors.New("invalid query parameters")
+	errInvalidParam        = errors.New("invalid parameter type")
 )
 
 const (
@@ -166,12 +166,12 @@ func (c *Client) PutDataPoints(ctx context.Context, datas any, queryParam string
 
 	putResp, ok := resp.(*PutResponse)
 	if !ok {
-		return fmt.Errorf("%w: Must be *PutResponse", ErrInvalidResponseType)
+		return fmt.Errorf("%w: Must be *PutResponse", errInvalidResponseType)
 	}
 
 	datapoints, ok := datas.([]DataPoint)
 	if !ok {
-		return fmt.Errorf("%w: Must be []DataPoint", ErrInvalidResponseType)
+		return fmt.Errorf("%w: Must be []DataPoint", errInvalidResponseType)
 	}
 
 	err := validateDataPoint(datapoints)
@@ -182,7 +182,7 @@ func (c *Client) PutDataPoints(ctx context.Context, datas any, queryParam string
 
 	if !isValidPutParam(queryParam) {
 		message = "the given query param is invalid."
-		return fmt.Errorf("%w", ErrInvalidQueryParam)
+		return fmt.Errorf("%w", errInvalidQueryParam)
 	}
 
 	putEndpoint := fmt.Sprintf("%s%s", c.endpoint, putPath)
@@ -217,17 +217,17 @@ func (c *Client) QueryDataPoints(ctx context.Context, parameters, resp any) erro
 
 	param, ok := parameters.(*QueryParam)
 	if !ok {
-		return fmt.Errorf("%w: Must be *QueryParam", ErrInvalidQueryParam)
+		return fmt.Errorf("%w: Must be *QueryParam", errInvalidQueryParam)
 	}
 
 	queryResp, ok := resp.(*QueryResponse)
 	if !ok {
-		return fmt.Errorf("%w: Must be *QueryResponse", ErrInvalidResponseType)
+		return fmt.Errorf("%w: Must be *QueryResponse", errInvalidResponseType)
 	}
 
 	if !isValidQueryParam(param) {
 		message = "invalid query parameters"
-		return fmt.Errorf("%w", ErrInvalidQueryParam)
+		return fmt.Errorf("%w", errInvalidQueryParam)
 	}
 
 	queryEndpoint := fmt.Sprintf("%s%s", c.endpoint, queryPath)
@@ -260,17 +260,17 @@ func (c *Client) QueryLatestDataPoints(ctx context.Context, parameters, resp any
 
 	param, ok := parameters.(*QueryLastParam)
 	if !ok {
-		return fmt.Errorf("%w: Must be a *QueryLastParam type", ErrInvalidParam)
+		return fmt.Errorf("%w: Must be a *QueryLastParam type", errInvalidParam)
 	}
 
 	queryResp, ok := resp.(*QueryLastResponse)
 	if !ok {
-		return fmt.Errorf("%w: Must be a *QueryLastResponse type", ErrInvalidResponseType)
+		return fmt.Errorf("%w: Must be a *QueryLastResponse type", errInvalidResponseType)
 	}
 
 	if !isValidQueryLastParam(param) {
 		message = "invalid query last param"
-		return fmt.Errorf("%w", ErrInvalidQueryParam)
+		return fmt.Errorf("%w", errInvalidQueryParam)
 	}
 
 	queryEndpoint := fmt.Sprintf("%s%s", c.endpoint, queryLastPath)
@@ -305,12 +305,12 @@ func (c *Client) QueryAnnotation(ctx context.Context, queryAnnoParam map[string]
 
 	annResp, ok := resp.(*AnnotationResponse)
 	if !ok {
-		return fmt.Errorf("%w: Must be *AnnotationResponse", ErrInvalidResponseType)
+		return fmt.Errorf("%w: Must be *AnnotationResponse", errInvalidResponseType)
 	}
 
 	if len(queryAnnoParam) == 0 {
 		message = "annotation query parameter is empty"
-		return fmt.Errorf("%w: %s", ErrInvalidQueryParam, message)
+		return fmt.Errorf("%w: %s", errInvalidQueryParam, message)
 	}
 
 	buffer := bytes.NewBuffer(nil)
@@ -364,7 +364,7 @@ func (c *Client) GetAggregators(ctx context.Context, resp any) error {
 
 	aggreResp, ok := resp.(*AggregatorsResponse)
 	if !ok {
-		return fmt.Errorf("%w: Must be a *AggregatorsResponse", ErrInvalidResponseType)
+		return fmt.Errorf("%w: Must be a *AggregatorsResponse", errInvalidResponseType)
 	}
 
 	aggregatorsEndpoint := fmt.Sprintf("%s%s", c.endpoint, aggregatorPath)

@@ -11,9 +11,7 @@ import (
 	"strings"
 )
 
-var (
-	ErrInvalidDataPoint = errors.New("invalid data points")
-)
+var errInvalidDataPoint = errors.New("invalid data points")
 
 // QueryParam is the structure used to hold the querying parameters when calling /api/query.
 // Each attributes in QueryParam matches the definition in
@@ -198,17 +196,17 @@ func parsePutErrorMsg(resp *PutResponse) error {
 		}
 	}
 
-	return fmt.Errorf("%w: %s", ErrUnexpected, buf.String())
+	return fmt.Errorf("%w: %s", errUnexpected, buf.String())
 }
 
 func validateDataPoint(datas []DataPoint) error {
 	if len(datas) == 0 {
-		return fmt.Errorf("%w: datapoints are empty", ErrInvalidDataPoint)
+		return fmt.Errorf("%w: datapoints are empty", errInvalidDataPoint)
 	}
 
 	for _, data := range datas {
 		if !isValidDataPoint(&data) {
-			return fmt.Errorf("%w: please give a valid value", ErrInvalidDataPoint)
+			return fmt.Errorf("%w: please give a valid value", errInvalidDataPoint)
 		}
 	}
 
