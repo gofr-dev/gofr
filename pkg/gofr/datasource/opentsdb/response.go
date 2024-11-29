@@ -227,9 +227,9 @@ func (c *Client) sendRequest(ctx context.Context, method, url, reqBodyCnt string
 	// Send the request and handle the response.
 	resp, err := c.client.Do(req)
 	if err != nil {
-		errSendingRequest := fmt.Errorf("failed to send request for %s %s: %w", method, url, err)
+		sendRequestErr := fmt.Errorf("failed to send request for %s %s: %w", method, url, err)
 
-		return errSendingRequest
+		return sendRequestErr
 	}
 
 	defer resp.Body.Close()

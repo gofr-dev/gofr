@@ -2,11 +2,12 @@ package opentsdb
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
-	"math/rand/v2"
+	"math/big"
 	"net"
 	"net/http"
 	"strings"
@@ -142,11 +143,11 @@ func TestPutSuccess(t *testing.T) {
 	}
 
 	for i := 0; i < PutDataPointNum; i++ {
-		val := rand.Int()
+		val, _ := rand.Int(rand.Reader, big.NewInt(100))
 		data := DataPoint{
 			Metric:    name[i%len(name)],
 			Timestamp: time.Now().Unix(),
-			Value:     val,
+			Value:     val.Int64(),
 			Tags:      tags,
 		}
 		cpuDatas = append(cpuDatas, data)
