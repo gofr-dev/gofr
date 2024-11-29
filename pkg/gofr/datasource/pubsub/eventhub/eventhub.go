@@ -49,20 +49,23 @@ type Client struct {
 	checkPoint *checkpoints.BlobStore
 	// processorCtx is being stored such that to gracefully shutting down the application.
 	processorCtx context.CancelFunc
-	cfg          *Config
+	cfg          Config
 	logger       Logger
 	metrics      Metrics
 	tracer       trace.Tracer
 }
 
 // New Creates the client for Eventhub.
-func New(cfg *Config) *Client {
+//
+//nolint:gocritic // cfg is a configuration struct.
+func New(cfg Config) *Client {
 	return &Client{
 		cfg: cfg,
 	}
 }
 
-func (c *Client) validConfigs(cfg *Config) bool {
+//nolint:gocritic // cfg is a configuration struct.
+func (c *Client) validConfigs(cfg Config) bool {
 	ok := true
 
 	if cfg.EventhubName == "" {

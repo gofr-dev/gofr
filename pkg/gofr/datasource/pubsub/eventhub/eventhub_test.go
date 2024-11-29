@@ -43,7 +43,7 @@ func TestConfigValidation(t *testing.T) {
 
 	mockLogger := NewMockLogger(ctrl)
 
-	client := New(&Config{})
+	client := New(Config{})
 
 	client.UseLogger(mockLogger)
 
@@ -251,7 +251,7 @@ func Test_HealthCheck(t *testing.T) {
 	require.True(t, mockLogger.ctrl.Satisfied(), "Eventhub Topic Deletion not allowed failed")
 }
 
-func getTestConfigs() *Config {
+func getTestConfigs() Config {
 	newWebSocketConnFn := func(ctx context.Context, args azeventhubs.WebSocketConnParams) (net.Conn, error) {
 		opts := &websocket.DialOptions{
 			Subprotocols: []string{"amqp"},
@@ -267,7 +267,7 @@ func getTestConfigs() *Config {
 
 	// For more details on the configuration refer :
 	// https://github.com/Azure/azure-sdk-for-go/blob/main/sdk/messaging/azeventhubs/consumer_client_test.go
-	return &Config{
+	return Config{
 		ConnectionString: "Endpoint=sb://<your-namespace>.servicebus.windows.net/;SharedAccessKeyName=<key-" +
 			"name>;SharedAccessKey=<key>",
 		ContainerConnectionString: "DefaultEndpointsProtocol=https;AccountName=<storage-account-name>;AccountKey=" +
