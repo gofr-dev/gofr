@@ -2,12 +2,26 @@ package opentsdb
 
 import (
 	"context"
+	"net"
 	"net/http"
+	"time"
 )
 
 // HTTPClient is an interface that wraps the http.Client's Do method.
 type httpClient interface {
 	Do(req *http.Request) (*http.Response, error)
+}
+
+//nolint:unused // connection interface defines all the methods that needs to be mocked for testing purposes.
+type connection interface {
+	Read(b []byte) (n int, err error)
+	Write(b []byte) (n int, err error)
+	Close() error
+	LocalAddr() net.Addr
+	RemoteAddr() net.Addr
+	SetDeadline(t time.Time) error
+	SetReadDeadline(t time.Time) error
+	SetWriteDeadline(t time.Time) error
 }
 
 // Response defines the common behaviors all the specific response for
