@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
@@ -21,11 +22,19 @@ type metrics interface {
 func Metrics(metrics metrics) func(inner http.Handler) http.Handler {
 	return func(inner http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Compile regex for common file extensions
+			staticFileRegex := regexp.MustCompile(`\.(css|js|png|jpg|jpeg|gif|ico|svg|txt|html|json|woff|woff2|ttf|eot|pdf)$`)
+
 			start := time.Now()
 
 			srw := &StatusResponseWriter{ResponseWriter: w}
 
 			path, _ := mux.CurrentRoute(r).GetPathTemplate()
+
+			if path == "/" || strings.HasPrefix(path, "/static") || staticFileRegex.MatchString(r.URL.Path) {
+				path = r.URL.Path
+			}
+
 			path = strings.TrimSuffix(path, "/")
 
 			// this has to be called in the end so that status code is populated
