@@ -21,8 +21,8 @@ import (
 )
 
 var (
-	errTopicExists = errors.New("Topic already exists")
-	errTestError   = errors.New("test-error")
+	errTopicExists  = errors.New("Topic already exists")
+	errTestSentinel = errors.New("test-error")
 )
 
 func getGoogleClient(t *testing.T) *gcPubSub.Client {
@@ -308,11 +308,11 @@ func TestGoogleClient_CreateTopic_Error(t *testing.T) {
 	g := &googleClient{client: mockClient, Config: Config{ProjectID: "test", SubscriptionName: "sub"}}
 
 	mockClient.EXPECT().CreateTopic(context.Background(), "test-topic").
-		Return(&gcPubSub.Topic{}, errTestError)
+		Return(&gcPubSub.Topic{}, errTestSentinel)
 
 	err := g.CreateTopic(context.Background(), "test-topic")
 
-	require.ErrorContains(t, err, "test-error", "expected test-error but got different error")
+	require.ErrorIs(t, err, errTestSentinel, "expected test-error but got different error")
 }
 
 func TestGoogleClient_DeleteTopic(t *testing.T) {

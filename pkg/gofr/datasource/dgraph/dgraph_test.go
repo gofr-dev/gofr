@@ -139,7 +139,7 @@ func Test_QueryWithVars_Error(t *testing.T) {
 	// Call the QueryWithVars method
 	resp, err := client.QueryWithVars(context.Background(), query, vars)
 
-	require.EqualError(t, err, errQueryFailed.Error(), "Test_QueryWithVars_Error Failed!")
+	require.ErrorIs(t, err, errQueryFailed, "Test_QueryWithVars_Error Failed!")
 	require.Nil(t, resp, "Test_QueryWithVars_Error Failed!")
 }
 
@@ -238,7 +238,7 @@ func Test_Alter_Error(t *testing.T) {
 
 	err := client.Alter(context.Background(), op)
 
-	require.EqualError(t, err, errAlterFailed.Error(), "Test_Alter_Error Failed!")
+	require.ErrorIs(t, err, errAlterFailed, "Test_Alter_Error Failed!")
 }
 
 func Test_Alter_InvalidOperation(t *testing.T) {
