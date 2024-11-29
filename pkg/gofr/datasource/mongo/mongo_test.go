@@ -30,7 +30,7 @@ func Test_NewMongoClient(t *testing.T) {
 
 	logger.EXPECT().Errorf(gomock.Any(), gomock.Any(), gomock.Any())
 
-	client := New(&Config{Database: "test", Host: "localhost", Port: 27017, User: "admin", ConnectionTimeout: 1 * time.Second})
+	client := New(Config{Database: "test", Host: "localhost", Port: 27017, User: "admin", ConnectionTimeout: 1 * time.Second})
 	client.Database = &mongo.Database{}
 	client.UseLogger(logger)
 	client.UseMetrics(metrics)
@@ -49,7 +49,7 @@ func Test_NewMongoClientError(t *testing.T) {
 	logger.EXPECT().Debugf("connecting to MongoDB at %v to database %v", "mongo", "test")
 	logger.EXPECT().Errorf("error while connecting to MongoDB, err:%v", gomock.Any())
 
-	client := New(&Config{URI: "mongo", Database: "test"})
+	client := New(Config{URI: "mongo", Database: "test"})
 	client.UseLogger(logger)
 	client.UseMetrics(metrics)
 	client.Connect()

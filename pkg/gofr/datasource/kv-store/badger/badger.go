@@ -27,8 +27,8 @@ type Client struct {
 	tracer  trace.Tracer
 }
 
-func New(configs *Configs) *Client {
-	return &Client{configs: configs}
+func New(configs Configs) *Client {
+	return &Client{configs: &configs}
 }
 
 // UseLogger sets the logger for the BadgerDB client which asserts the Logger interface.
@@ -53,7 +53,7 @@ func (c *Client) UseTracer(tracer any) {
 }
 
 // Connect establishes a connection to BadgerDB and registers metrics using the provided configuration when the client was Created.
-func (c *client) Connect() {
+func (c *Client) Connect() {
 	c.logger.Debugf("connecting to BadgerDB at %v", c.configs.DirPath)
 
 	badgerBuckets := []float64{.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 4, 5, 7.5, 10}

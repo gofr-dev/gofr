@@ -138,7 +138,7 @@ type Person struct {
 func main() {
 	app := gofr.New()
 	
-	db := mongo.New(&mongo.Config{URI: "mongodb://localhost:27017", Database: "test",ConnectionTimeout: 4*time.Second})
+	db := mongo.New(mongo.Config{URI: "mongodb://localhost:27017", Database: "test",ConnectionTimeout: 4*time.Second})
 	
 	// inject the mongo into gofr to use mongoDB across the application
 	// using gofr context
@@ -458,7 +458,7 @@ import (
 func main() {
 	app := gofr.New()
 
-	app.AddSolr(solr.New(&solr.Config{
+	app.AddSolr(solr.New(solr.Config{
 		Host: "localhost",
 		Port: "2020",
 	}))
