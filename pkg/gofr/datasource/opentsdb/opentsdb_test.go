@@ -86,7 +86,7 @@ func setOpenTSDBTest(t *testing.T) (*Client, *MockhttpClient) {
 		DetectDeltaNum:   10,
 	}
 
-	tsdbClient := New(&opentsdbCfg)
+	tsdbClient := New(opentsdbCfg)
 
 	tracer := otel.GetTracerProvider().Tracer("gofr-opentsdb")
 

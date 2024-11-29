@@ -106,8 +106,8 @@ type Health struct {
 }
 
 // New initializes a new instance of Opentsdb with provided configuration.
-func New(config *Config) *Client {
-	return &Client{config: *config}
+func New(config Config) *Client {
+	return &Client{config: config}
 }
 
 func (c *Client) UseLogger(logger interface{}) {
