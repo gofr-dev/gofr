@@ -367,7 +367,7 @@ func (c *Client) initializeClient() {
 
 	c.config.Host = strings.TrimSpace(c.config.Host)
 	if c.config.Host == "" {
-		c.logger.Fatal("the OpentsdbEndpoint in the given configuration cannot be empty.")
+		c.logger.Fatal("the OpenTSDB Endpoint in the given configuration cannot be empty.")
 	}
 
 	// Use custom transport settings if provided, otherwise, use the default transport.

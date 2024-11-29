@@ -2,12 +2,11 @@ package opentsdb
 
 import (
 	"context"
-	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
-	"math/big"
+	"math/rand/v2"
 	"net"
 	"net/http"
 	"strings"
@@ -143,11 +142,11 @@ func TestPutSuccess(t *testing.T) {
 	}
 
 	for i := 0; i < PutDataPointNum; i++ {
-		val, _ := rand.Int(rand.Reader, big.NewInt(100))
+		val := rand.Int()
 		data := DataPoint{
 			Metric:    name[i%len(name)],
 			Timestamp: time.Now().Unix(),
-			Value:     val.Int64(),
+			Value:     val,
 			Tags:      tags,
 		}
 		cpuDatas = append(cpuDatas, data)
@@ -184,7 +183,7 @@ func TestPutInvalidDataPoint(t *testing.T) {
 
 	err := client.PutDataPoints(context.Background(), dataPoints, "", resp)
 	require.Error(t, err)
-	require.Equal(t, "invalid data points: please give a valid value", err.Error())
+	require.EqualError(t, err, "invalid data points: please give a valid value")
 }
 
 func TestPutInvalidQueryParam(t *testing.T) {
