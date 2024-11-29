@@ -54,8 +54,8 @@ i.e. by default observability features gets initialized when used with GoFr.
 // client.UseLogger(loggerInstance)
 // client.UseMetrics(metricsInstance)
 // client.Connect().
-func New(c *Config) *Client {
-	return &Client{config: c}
+func New(c Config) *Client {
+	return &Client{config: &c}
 }
 
 // UseLogger sets the logger for the MongoDB client which asserts the Logger interface.

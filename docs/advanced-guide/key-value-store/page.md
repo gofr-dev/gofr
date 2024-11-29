@@ -49,7 +49,7 @@ type User struct {
 func main() {
 	app := gofr.New()
 
-	app.AddKVStore(badger.New(&badger.Configs{DirPath: "badger-example"}))
+	app.AddKVStore(badger.New(badger.Configs{DirPath: "badger-example"}))
 
 	app.POST("/user", Post)
 	app.GET("/user", Get)

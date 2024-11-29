@@ -36,7 +36,7 @@ type Client struct {
 // client.UseLogger(loggerInstance)
 // client.UseMetrics(metricsInstance)
 // client.Connect().
-func New(conf *Config) *Client {
+func New(conf Config) *Client {
 	s := &Client{}
 	s.url = "http://" + conf.Host + ":" + conf.Port + "/solr"
 	s.client = &http.Client{}
