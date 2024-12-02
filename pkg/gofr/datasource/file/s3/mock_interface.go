@@ -13,6 +13,7 @@ import (
 	context "context"
 	reflect "reflect"
 
+	s3 "github.com/aws/aws-sdk-go-v2/service/s3"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -87,6 +88,149 @@ func (mr *MockLoggerMockRecorder) Logf(pattern any, args ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	varargs := append([]any{pattern}, args...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Logf", reflect.TypeOf((*MockLogger)(nil).Logf), varargs...)
+}
+
+// Mocks3conn is a mock of s3conn interface.
+type Mocks3conn struct {
+	ctrl     *gomock.Controller
+	recorder *Mocks3connMockRecorder
+}
+
+// Mocks3connMockRecorder is the mock recorder for Mocks3conn.
+type Mocks3connMockRecorder struct {
+	mock *Mocks3conn
+}
+
+// NewMocks3conn creates a new mock instance.
+func NewMocks3conn(ctrl *gomock.Controller) *Mocks3conn {
+	mock := &Mocks3conn{ctrl: ctrl}
+	mock.recorder = &Mocks3connMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *Mocks3conn) EXPECT() *Mocks3connMockRecorder {
+	return m.recorder
+}
+
+// CopyObject mocks base method.
+func (m *Mocks3conn) CopyObject(ctx context.Context, params *s3.CopyObjectInput, optFns ...func(*s3.Options)) (*s3.CopyObjectOutput, error) {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, params}
+	for _, a := range optFns {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "CopyObject", varargs...)
+	ret0, _ := ret[0].(*s3.CopyObjectOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CopyObject indicates an expected call of CopyObject.
+func (mr *Mocks3connMockRecorder) CopyObject(ctx, params any, optFns ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, params}, optFns...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CopyObject", reflect.TypeOf((*Mocks3conn)(nil).CopyObject), varargs...)
+}
+
+// DeleteObject mocks base method.
+func (m *Mocks3conn) DeleteObject(ctx context.Context, params *s3.DeleteObjectInput, optFns ...func(*s3.Options)) (*s3.DeleteObjectOutput, error) {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, params}
+	for _, a := range optFns {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "DeleteObject", varargs...)
+	ret0, _ := ret[0].(*s3.DeleteObjectOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// DeleteObject indicates an expected call of DeleteObject.
+func (mr *Mocks3connMockRecorder) DeleteObject(ctx, params any, optFns ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, params}, optFns...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteObject", reflect.TypeOf((*Mocks3conn)(nil).DeleteObject), varargs...)
+}
+
+// DeleteObjects mocks base method.
+func (m *Mocks3conn) DeleteObjects(ctx context.Context, params *s3.DeleteObjectsInput, optFns ...func(*s3.Options)) (*s3.DeleteObjectsOutput, error) {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, params}
+	for _, a := range optFns {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "DeleteObjects", varargs...)
+	ret0, _ := ret[0].(*s3.DeleteObjectsOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// DeleteObjects indicates an expected call of DeleteObjects.
+func (mr *Mocks3connMockRecorder) DeleteObjects(ctx, params any, optFns ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, params}, optFns...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteObjects", reflect.TypeOf((*Mocks3conn)(nil).DeleteObjects), varargs...)
+}
+
+// GetObject mocks base method.
+func (m *Mocks3conn) GetObject(ctx context.Context, params *s3.GetObjectInput, optFns ...func(*s3.Options)) (*s3.GetObjectOutput, error) {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, params}
+	for _, a := range optFns {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "GetObject", varargs...)
+	ret0, _ := ret[0].(*s3.GetObjectOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetObject indicates an expected call of GetObject.
+func (mr *Mocks3connMockRecorder) GetObject(ctx, params any, optFns ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, params}, optFns...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetObject", reflect.TypeOf((*Mocks3conn)(nil).GetObject), varargs...)
+}
+
+// ListObjectsV2 mocks base method.
+func (m *Mocks3conn) ListObjectsV2(ctx context.Context, params *s3.ListObjectsV2Input, optFns ...func(*s3.Options)) (*s3.ListObjectsV2Output, error) {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, params}
+	for _, a := range optFns {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "ListObjectsV2", varargs...)
+	ret0, _ := ret[0].(*s3.ListObjectsV2Output)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListObjectsV2 indicates an expected call of ListObjectsV2.
+func (mr *Mocks3connMockRecorder) ListObjectsV2(ctx, params any, optFns ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, params}, optFns...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListObjectsV2", reflect.TypeOf((*Mocks3conn)(nil).ListObjectsV2), varargs...)
+}
+
+// PutObject mocks base method.
+func (m *Mocks3conn) PutObject(ctx context.Context, params *s3.PutObjectInput, optFns ...func(*s3.Options)) (*s3.PutObjectOutput, error) {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, params}
+	for _, a := range optFns {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "PutObject", varargs...)
+	ret0, _ := ret[0].(*s3.PutObjectOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// PutObject indicates an expected call of PutObject.
+func (mr *Mocks3connMockRecorder) PutObject(ctx, params any, optFns ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, params}, optFns...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PutObject", reflect.TypeOf((*Mocks3conn)(nil).PutObject), varargs...)
 }
 
 // MockMetrics is a mock of Metrics interface.

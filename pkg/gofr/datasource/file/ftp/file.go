@@ -267,7 +267,7 @@ func (f *file) ReadAt(p []byte, off int64) (n int, err error) {
 
 	defer f.sendOperationStats(&FileLog{Operation: "ReadAt", Location: f.path, Status: &status, Message: &msg}, time.Now())
 
-	resp, err := f.conn.RetrFrom(f.path, uint64(math.Abs(float64(f.offset))))
+	resp, err := f.conn.RetrFrom(f.path, uint64(math.Abs(float64(off))))
 	if err != nil {
 		f.logger.Errorf("ReadAt failed: Error opening file with path %q at %v offset : %v", f.path, off, err)
 		return 0, err
@@ -372,7 +372,7 @@ func (f *file) WriteAt(p []byte, off int64) (n int, err error) {
 
 	reader := bytes.NewReader(p)
 
-	err = f.conn.StorFrom(f.path, reader, uint64(math.Abs(float64(f.offset))))
+	err = f.conn.StorFrom(f.path, reader, uint64(math.Abs(float64(off))))
 	if err != nil {
 		f.logger.Errorf("WriteAt failed. Error writing in file with path %q at %v offset : %v", f.path, off, err)
 		return 0, err

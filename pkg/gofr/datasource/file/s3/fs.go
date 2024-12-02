@@ -29,9 +29,14 @@ var (
 	ErrIncorrectFileType = errors.New("incorrect file type")
 )
 
+// Conn struct embeds the *ftp.ServerConn returned by ftp server on successful connection.
+type conn struct {
+	*s3.Client
+}
+
 type fileSystem struct {
 	s3file
-	conn    *s3.Client
+	conn    s3conn
 	config  *Config
 	logger  Logger
 	metrics Metrics
@@ -114,7 +119,7 @@ func (f *fileSystem) Connect() {
 		},
 	)
 
-	f.conn = s3Client
+	f.conn = conn{s3Client}
 	st = statusSuccess
 	msg = "S3 Client connected."
 
@@ -417,7 +422,8 @@ func (f *fileSystem) Stat(name string) (file.FileInfo, error) {
 				logger:       f.logger,
 				metrics:      f.metrics,
 				size:         size,
-				name:         path.Join(f.config.BucketName, *res.Contents[0].Key),
+				contentType:  filetype,
+				name:         f.config.BucketName + string(filepath.Separator) + *res.Contents[0].Key,
 				lastModified: lastModified,
 			}, nil
 		}
@@ -430,7 +436,8 @@ func (f *fileSystem) Stat(name string) (file.FileInfo, error) {
 		logger:       f.logger,
 		metrics:      f.metrics,
 		size:         *res.Contents[0].Size,
-		name:         path.Join(f.config.BucketName, *res.Contents[0].Key),
+		name:         f.config.BucketName + string(filepath.Separator) + *res.Contents[0].Key,
+		contentType:  filetype,
 		lastModified: *res.Contents[0].LastModified,
 	}, nil
 }

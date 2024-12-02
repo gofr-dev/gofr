@@ -18,7 +18,7 @@ import (
 )
 
 type s3file struct {
-	conn         *s3.Client
+	conn         s3conn
 	name         string
 	offset       int64
 	logger       Logger
