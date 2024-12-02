@@ -1,6 +1,7 @@
 package migration
 
 import (
+	"context"
 	"reflect"
 	"time"
 
@@ -27,6 +28,7 @@ type transactionData struct {
 
 func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 	invalidKeys, keys := getKeys(migrationsMap)
+	ctx := context.Background()
 	if len(invalidKeys) > 0 {
 		c.Errorf("migration run failed! UP not defined for the following keys: %v", invalidKeys)
 
@@ -46,14 +48,14 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 		return
 	}
 
-	err := mg.checkAndCreateMigrationTable(c)
+	err := mg.checkAndCreateMigrationTable(ctx, c)
 	if err != nil {
 		c.Fatalf("failed to create gofr_migration table, err: %v", err)
 
 		return
 	}
 
-	lastMigration := mg.getLastMigration(c)
+	lastMigration := mg.getLastMigration(ctx, c)
 
 	for _, currentMigration := range keys {
 		if currentMigration <= lastMigration {
@@ -64,7 +66,7 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 
 		c.Logger.Debugf("running migration %v", currentMigration)
 
-		migrationInfo := mg.beginTransaction(c)
+		migrationInfo := mg.beginTransaction(ctx, c)
 
 		// Replacing the objects in datasource object only for those Datasources which support transactions.
 		ds.SQL = migrationInfo.SQLTx
@@ -75,16 +77,16 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 
 		err = migrationsMap[currentMigration].UP(ds)
 		if err != nil {
-			mg.rollback(c, migrationInfo)
+			mg.rollback(ctx, c, migrationInfo)
 
 			return
 		}
 
-		err = mg.commitMigration(c, migrationInfo)
+		err = mg.commitMigration(ctx, c, migrationInfo)
 		if err != nil {
 			c.Errorf("failed to commit migration, err: %v", err)
 
-			mg.rollback(c, migrationInfo)
+			mg.rollback(ctx, c, migrationInfo)
 
 			return
 		}

@@ -42,15 +42,15 @@ type sqlMigrator struct {
 	migrator
 }
 
-func (d sqlMigrator) checkAndCreateMigrationTable(c *container.Container) error {
+func (d sqlMigrator) checkAndCreateMigrationTable(ctx context.Context, c *container.Container) error {
 	if _, err := c.SQL.Exec(createSQLGoFrMigrationsTable); err != nil {
 		return err
 	}
 
-	return d.migrator.checkAndCreateMigrationTable(c)
+	return d.migrator.checkAndCreateMigrationTable(ctx, c)
 }
 
-func (d sqlMigrator) getLastMigration(c *container.Container) int64 {
+func (d sqlMigrator) getLastMigration(ctx context.Context, c *container.Container) int64 {
 	var lastMigration int64
 
 	err := c.SQL.QueryRowContext(context.Background(), getLastSQLGoFrMigration).Scan(&lastMigration)
@@ -60,7 +60,7 @@ func (d sqlMigrator) getLastMigration(c *container.Container) int64 {
 
 	c.Debugf("SQL last migration fetched value is: %v", lastMigration)
 
-	lm2 := d.migrator.getLastMigration(c)
+	lm2 := d.migrator.getLastMigration(ctx, c)
 
 	if lm2 > lastMigration {
 		return lm2
@@ -69,7 +69,7 @@ func (d sqlMigrator) getLastMigration(c *container.Container) int64 {
 	return lastMigration
 }
 
-func (d sqlMigrator) commitMigration(c *container.Container, data transactionData) error {
+func (d sqlMigrator) commitMigration(ctx context.Context, c *container.Container, data transactionData) error {
 	switch c.SQL.Dialect() {
 	case "mysql", "sqlite":
 		err := insertMigrationRecord(data.SQLTx, insertGoFrMigrationRowMySQL, data.MigrationNumber, data.StartTime)
@@ -93,7 +93,7 @@ func (d sqlMigrator) commitMigration(c *container.Container, data transactionDat
 		return err
 	}
 
-	return d.migrator.commitMigration(c, data)
+	return d.migrator.commitMigration(ctx, c, data)
 }
 
 func insertMigrationRecord(tx *gofrSql.Tx, query string, version int64, startTime time.Time) error {
@@ -102,7 +102,7 @@ func insertMigrationRecord(tx *gofrSql.Tx, query string, version int64, startTim
 	return err
 }
 
-func (d sqlMigrator) beginTransaction(c *container.Container) transactionData {
+func (d sqlMigrator) beginTransaction(ctx context.Context, c *container.Container) transactionData {
 	sqlTx, err := c.SQL.Begin()
 	if err != nil {
 		c.Errorf("unable to begin transaction: %v", err)
@@ -110,7 +110,7 @@ func (d sqlMigrator) beginTransaction(c *container.Container) transactionData {
 		return transactionData{}
 	}
 
-	cmt := d.migrator.beginTransaction(c)
+	cmt := d.migrator.beginTransaction(ctx, c)
 
 	cmt.SQLTx = sqlTx
 
@@ -119,7 +119,7 @@ func (d sqlMigrator) beginTransaction(c *container.Container) transactionData {
 	return cmt
 }
 
-func (d sqlMigrator) rollback(c *container.Container, data transactionData) {
+func (d sqlMigrator) rollback(ctx context.Context, c *container.Container, data transactionData) {
 	if data.SQLTx == nil {
 		return
 	}
@@ -128,7 +128,7 @@ func (d sqlMigrator) rollback(c *container.Container, data transactionData) {
 		c.Error("unable to rollback transaction: %v", err)
 	}
 
-	d.migrator.rollback(c, data)
+	d.migrator.rollback(ctx, c, data)
 
 	c.Fatalf("Migration %v failed and rolled back", data.MigrationNumber)
 }

@@ -1,6 +1,10 @@
 package migration
 
-import "gofr.dev/pkg/gofr/container"
+import (
+	"context"
+
+	"gofr.dev/pkg/gofr/container"
+)
 
 type Datasource struct {
 	// TODO Logger should not be embedded rather it should be a field.
@@ -17,22 +21,22 @@ type Datasource struct {
 
 // It is a base implementation for migration manager, on this other database drivers have been wrapped.
 
-func (*Datasource) checkAndCreateMigrationTable(*container.Container) error {
+func (*Datasource) checkAndCreateMigrationTable(context.Context, *container.Container) error {
 	return nil
 }
 
-func (*Datasource) getLastMigration(*container.Container) int64 {
+func (*Datasource) getLastMigration(context.Context, *container.Container) int64 {
 	return 0
 }
 
-func (*Datasource) beginTransaction(*container.Container) transactionData {
+func (*Datasource) beginTransaction(context.Context, *container.Container) transactionData {
 	return transactionData{}
 }
 
-func (*Datasource) commitMigration(c *container.Container, data transactionData) error {
+func (*Datasource) commitMigration(ctx context.Context, c *container.Container, data transactionData) error {
 	c.Infof("Migration %v ran successfully", data.MigrationNumber)
 
 	return nil
 }
 
-func (*Datasource) rollback(*container.Container, transactionData) {}
+func (*Datasource) rollback(context.Context, *container.Container, transactionData) {}

@@ -66,11 +66,11 @@ type Mongo interface {
 // keeping the migrator interface unexported as, right now it is not being implemented directly, by the externalDB drivers.
 // keeping the implementations for externalDB at one place such that if any change in migration logic, we would change directly here.
 type migrator interface {
-	checkAndCreateMigrationTable(c *container.Container) error
-	getLastMigration(c *container.Container) int64
+	checkAndCreateMigrationTable(ctx context.Context, c *container.Container) error
+	getLastMigration(ctx context.Context, c *container.Container) int64
 
-	beginTransaction(c *container.Container) transactionData
+	beginTransaction(ctx context.Context, c *container.Container) transactionData
 
-	commitMigration(c *container.Container, data transactionData) error
-	rollback(c *container.Container, data transactionData)
+	commitMigration(ctx context.Context, c *container.Container, data transactionData) error
+	rollback(ctx context.Context, c *container.Container, data transactionData)
 }
