@@ -17,17 +17,6 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
-const (
-	bucket1 = 0.05
-	bucket2 = 0.1
-	bucket3 = 0.2
-	bucket4 = 0.5
-	bucket5 = 1.0
-	bucket6 = 2.0
-	bucket7 = 5.0
-	bucket8 = 10.0
-)
-
 // Config holds the configuration for connecting to Dgraph.
 type Config struct {
 	Host string
@@ -72,13 +61,14 @@ func (d *Client) Connect() {
 		return
 	}
 
-	buckets := []float64{bucket1, bucket2, bucket3, bucket4, bucket5, bucket6, bucket7, bucket8}
+	var responseTimeBuckets = []float64{0.05, 0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0}
 
 	// Register metrics
-	d.metrics.NewHistogram("dgraph_query_duration", "Response time of Dgraph queries in milliseconds.", buckets...)
-	d.metrics.NewHistogram("dgraph_query_with_vars_duration", "Response time of Dgraph queries with variables in milliseconds.", buckets...)
-	d.metrics.NewHistogram("dgraph_mutate_duration", "Response time of Dgraph mutations in milliseconds.", buckets...)
-	d.metrics.NewHistogram("dgraph_alter_duration", "Response time of Dgraph alter operations in milliseconds.", buckets...)
+	d.metrics.NewHistogram("dgraph_query_duration", "Response time of Dgraph queries in milliseconds.", responseTimeBuckets...)
+	d.metrics.NewHistogram("dgraph_query_with_vars_duration", "Response time of Dgraph "+
+		"queries with variables in milliseconds.", responseTimeBuckets...)
+	d.metrics.NewHistogram("dgraph_mutate_duration", "Response time of Dgraph mutations in milliseconds.", responseTimeBuckets...)
+	d.metrics.NewHistogram("dgraph_alter_duration", "Response time of Dgraph alter operations in milliseconds.", responseTimeBuckets...)
 
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
 	d.client = NewDgraphClient(dg)
