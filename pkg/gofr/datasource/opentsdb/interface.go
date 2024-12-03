@@ -12,7 +12,8 @@ type httpClient interface {
 	Do(req *http.Request) (*http.Response, error)
 }
 
-//nolint:unused // connection interface defines all the methods that needs to be mocked for testing purposes.
+//nolint:unused // connection interface defines all the methods to mock the connection
+// returned while testing healthcheck implementation .
 type connection interface {
 	Read(b []byte) (n int, err error)
 	Write(b []byte) (n int, err error)
