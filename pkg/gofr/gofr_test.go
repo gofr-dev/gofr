@@ -967,7 +967,10 @@ func TestApp_SubscriberInitialize(t *testing.T) {
 
 		app.container = &mockContainer
 
-		app.Subscribe("Hello", nil)
+		app.Subscribe("Hello", func(*Context) error {
+			// this is a test subscriber
+			return nil
+		})
 
 		_, ok := app.subscriptionManager.subscriptions["Hello"]
 
@@ -976,6 +979,45 @@ func TestApp_SubscriberInitialize(t *testing.T) {
 
 	t.Run("subscriber is not initialized", func(t *testing.T) {
 		app := New()
+		app.Subscribe("Hello", func(*Context) error {
+			// this is a test subscriber
+			return nil
+		})
+
+		_, ok := app.subscriptionManager.subscriptions["Hello"]
+
+		assert.False(t, ok)
+	})
+}
+
+func TestApp_Subscribe(t *testing.T) {
+	t.Run("topic is empty", func(t *testing.T) {
+		app := New()
+
+		mockContainer := container.Container{
+			Logger: logging.NewLogger(logging.ERROR),
+			PubSub: mockSubscriber{},
+		}
+
+		app.container = &mockContainer
+
+		app.Subscribe("", func(*Context) error { return nil })
+
+		_, ok := app.subscriptionManager.subscriptions[""]
+
+		assert.False(t, ok)
+	})
+
+	t.Run("handler is nil", func(t *testing.T) {
+		app := New()
+
+		mockContainer := container.Container{
+			Logger: logging.NewLogger(logging.ERROR),
+			PubSub: mockSubscriber{},
+		}
+
+		app.container = &mockContainer
+
 		app.Subscribe("Hello", nil)
 
 		_, ok := app.subscriptionManager.subscriptions["Hello"]
