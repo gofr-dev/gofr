@@ -95,6 +95,7 @@ func panicRecovery(re any, log logging.Logger) {
 	default:
 		e = "Unknown panic type"
 	}
+
 	log.Error(panicLog{
 		Error:      e,
 		StackTrace: string(debug.Stack()),
