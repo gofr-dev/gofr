@@ -389,6 +389,90 @@ func (f *fileSystem) renameDirectory(st, msg *string, oldPath, newPath string) e
 	return nil
 }
 
+// Stat retrieves the FileInfo for the specified file or directory in the S3 bucket.
+//
+// If the provided name has no file extension, it is treated as a directory by default. If the name starts with "0",
+// it is interpreted as a binary file rather than a directory, with the "0" prefix removed.
+//
+// For directories, the method aggregates the sizes of all objects within the directory and returns the latest modified
+// time among them. For files, it returns the file's size and last modified time.
+func (f *fileSystem) Stat(name string) (file.FileInfo, error) {
+	var msg string
+
+	st := statusErr
+
+	defer f.sendOperationStats(&FileLog{
+		Operation: "STAT",
+		Location:  getLocation(f.config.BucketName),
+		Status:    &st,
+		Message:   &msg,
+	}, time.Now())
+
+	filetype := TypeFile
+
+	// Here we assume the user passes "0filePath" in case it wants to get fileinfo about a binary file instead of a directory
+	if path.Ext(name) == "" {
+		filetype = TypeDirectory
+
+		if name[0] == '0' {
+			name = name[1:]
+			filetype = TypeFile
+		}
+	}
+
+	res, err := f.conn.ListObjectsV2(context.TODO(), &s3.ListObjectsV2Input{
+		Bucket: aws.String(f.config.BucketName),
+		Prefix: aws.String(name),
+	})
+
+	if err != nil {
+		f.logger.Errorf("Error returning file info: %v", err)
+		return nil, err
+	}
+
+	if filetype == TypeDirectory {
+		var size int64
+
+		var lastModified time.Time
+
+		for i := range res.Contents {
+			size += *res.Contents[i].Size
+
+			if res.Contents[i].LastModified.After(lastModified) {
+				lastModified = *res.Contents[i].LastModified
+			}
+		}
+
+		// directory exist and first value gives information about the directory
+		st = statusSuccess
+		msg = fmt.Sprintf("Directory with path %q info retrieved successfully", name)
+
+		if res.Contents != nil {
+			return &s3file{
+				conn:         f.conn,
+				logger:       f.logger,
+				metrics:      f.metrics,
+				size:         size,
+				contentType:  filetype,
+				name:         f.config.BucketName + string(filepath.Separator) + *res.Contents[0].Key,
+				lastModified: lastModified,
+			}, nil
+		}
+
+		return nil, nil
+	}
+
+	return &s3file{
+		conn:         f.conn,
+		logger:       f.logger,
+		metrics:      f.metrics,
+		size:         *res.Contents[0].Size,
+		name:         f.config.BucketName + string(filepath.Separator) + *res.Contents[0].Key,
+		contentType:  filetype,
+		lastModified: *res.Contents[0].LastModified,
+	}, nil
+}
+
 // sendOperationStats logs the FileLog of any file operations performed in S3.
 func (f *fileSystem) sendOperationStats(fl *FileLog, startTime time.Time) {
 	duration := time.Since(startTime).Microseconds()
