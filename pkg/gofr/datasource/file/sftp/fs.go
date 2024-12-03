@@ -262,9 +262,9 @@ func (f *FileSystem) Getwd() (string, error) {
 }
 
 // TODO : Implement metrics.
-func (f *fileSystem) sendOperationStats(fl *FileLog, startTime time.Time) {
+func (f *FileSystem) sendOperationStats(fl *FileLog, startTime time.Time) {
 	duration := time.Since(startTime).Microseconds()
-  
+
 	fl.Duration = duration
 
 	f.logger.Debug(fl)
