@@ -22,20 +22,20 @@ func TestConnect(t *testing.T) {
 
 	mockLogger := NewMockLogger(ctrl)
 
-	mockLogger.EXPECT().Debug("azure eventhub connection started using connection string")
-	mockLogger.EXPECT().Debug("azure eventhub producer client setup success")
-	mockLogger.EXPECT().Debug("azure eventhub container client setup success")
-	mockLogger.EXPECT().Debug("azure eventhub blobstore client setup success")
-	mockLogger.EXPECT().Debug("azure eventhub consumer client setup success")
-	mockLogger.EXPECT().Debug("azure eventhub processor setup success")
-	mockLogger.EXPECT().Debug("azure eventhub processor running successfully").AnyTimes()
+	mockLogger.EXPECT().Debug("azure Event Hub connection started using connection string")
+	mockLogger.EXPECT().Debug("azure Event Hub producer client setup success")
+	mockLogger.EXPECT().Debug("azure Event Hub container client setup success")
+	mockLogger.EXPECT().Debug("azure Event Hub blobstore client setup success")
+	mockLogger.EXPECT().Debug("azure Event Hub consumer client setup success")
+	mockLogger.EXPECT().Debug("azure Event Hub processor setup success")
+	mockLogger.EXPECT().Debug("azure Event Hub processor running successfully").AnyTimes()
 
 	client.UseLogger(mockLogger)
 	client.UseMetrics(NewMockMetrics(ctrl))
 
 	client.Connect()
 
-	require.True(t, mockLogger.ctrl.Satisfied(), "Eventhub Connection Failed")
+	require.True(t, mockLogger.ctrl.Satisfied(), "Event Hub Connection Failed")
 }
 
 func TestConfigValidation(t *testing.T) {
@@ -114,13 +114,13 @@ func TestPublish_FailedBatchCreation(t *testing.T) {
 	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
 
-	mockLogger.EXPECT().Debug("azure eventhub connection started using connection string")
-	mockLogger.EXPECT().Debug("azure eventhub producer client setup success")
-	mockLogger.EXPECT().Debug("azure eventhub container client setup success")
-	mockLogger.EXPECT().Debug("azure eventhub blobstore client setup success")
-	mockLogger.EXPECT().Debug("azure eventhub consumer client setup success")
-	mockLogger.EXPECT().Debug("azure eventhub processor setup success")
-	mockLogger.EXPECT().Debug("azure eventhub processor running successfully").AnyTimes()
+	mockLogger.EXPECT().Debug("azure Event Hub connection started using connection string")
+	mockLogger.EXPECT().Debug("azure Event Hub producer client setup success")
+	mockLogger.EXPECT().Debug("azure Event Hub container client setup success")
+	mockLogger.EXPECT().Debug("azure Event Hub blobstore client setup success")
+	mockLogger.EXPECT().Debug("azure Event Hub consumer client setup success")
+	mockLogger.EXPECT().Debug("azure Event Hub processor setup success")
+	mockLogger.EXPECT().Debug("azure Event Hub processor running successfully").AnyTimes()
 
 	mockMetrics.EXPECT().IncrementCounter(context.Background(), "app_pubsub_publish_total_count", "topic", client.cfg.EventhubName)
 
@@ -133,9 +133,10 @@ func TestPublish_FailedBatchCreation(t *testing.T) {
 
 	err := client.Publish(context.Background(), client.cfg.EventhubName, []byte("my-message"))
 
-	require.Error(t, err, "Eventhub Publish Failed Batch Creation")
+	require.ErrorContains(t, err, "failed to WebSocket dial: failed to send handshake request: ",
+		"Eventhub Publish Failed Batch Creation")
 
-	require.True(t, mockLogger.ctrl.Satisfied(), "Eventhub Publish Failed Batch Creation")
+	require.True(t, mockLogger.ctrl.Satisfied(), "Event Hub Publish Failed Batch Creation")
 }
 
 func TestPublish_FailedInvalidTopic(t *testing.T) {
@@ -146,13 +147,13 @@ func TestPublish_FailedInvalidTopic(t *testing.T) {
 	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
 
-	mockLogger.EXPECT().Debug("azure eventhub connection started using connection string")
-	mockLogger.EXPECT().Debug("azure eventhub producer client setup success")
-	mockLogger.EXPECT().Debug("azure eventhub container client setup success")
-	mockLogger.EXPECT().Debug("azure eventhub blobstore client setup success")
-	mockLogger.EXPECT().Debug("azure eventhub consumer client setup success")
-	mockLogger.EXPECT().Debug("azure eventhub processor setup success")
-	mockLogger.EXPECT().Debug("azure eventhub processor running successfully").AnyTimes()
+	mockLogger.EXPECT().Debug("azure Event Hub connection started using connection string")
+	mockLogger.EXPECT().Debug("azure Event Hub producer client setup success")
+	mockLogger.EXPECT().Debug("azure Event Hub container client setup success")
+	mockLogger.EXPECT().Debug("azure Event Hub blobstore client setup success")
+	mockLogger.EXPECT().Debug("azure Event Hub consumer client setup success")
+	mockLogger.EXPECT().Debug("azure Event Hub processor setup success")
+	mockLogger.EXPECT().Debug("azure Event Hub processor running successfully").AnyTimes()
 
 	client.UseLogger(mockLogger)
 	client.UseMetrics(mockMetrics)
@@ -161,9 +162,9 @@ func TestPublish_FailedInvalidTopic(t *testing.T) {
 
 	err := client.Publish(context.Background(), "random topic", []byte("my-message"))
 
-	require.Equal(t, "topic should be same as eventhub name", err.Error(), "Eventhub Publish Failed Invalid Topic")
+	require.Equal(t, "topic should be same as Event Hub name", err.Error(), "Event Hub Publish Failed Invalid Topic")
 
-	require.True(t, mockLogger.ctrl.Satisfied(), "Eventhub Publish Failed Invalid Topic")
+	require.True(t, mockLogger.ctrl.Satisfied(), "Event Hub Publish Failed Invalid Topic")
 }
 
 func Test_CreateTopic(t *testing.T) {
@@ -174,14 +175,14 @@ func Test_CreateTopic(t *testing.T) {
 	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
 
-	mockLogger.EXPECT().Debug("azure eventhub connection started using connection string")
-	mockLogger.EXPECT().Debug("azure eventhub producer client setup success")
-	mockLogger.EXPECT().Debug("azure eventhub container client setup success")
-	mockLogger.EXPECT().Debug("azure eventhub blobstore client setup success")
-	mockLogger.EXPECT().Debug("azure eventhub consumer client setup success")
-	mockLogger.EXPECT().Debug("azure eventhub processor setup success")
-	mockLogger.EXPECT().Debug("azure eventhub processor running successfully").AnyTimes()
-	mockLogger.EXPECT().Error("topic deletion is not supported in eventhub")
+	mockLogger.EXPECT().Debug("azure Event Hub connection started using connection string")
+	mockLogger.EXPECT().Debug("azure Event Hub producer client setup success")
+	mockLogger.EXPECT().Debug("azure Event Hub container client setup success")
+	mockLogger.EXPECT().Debug("azure Event Hub blobstore client setup success")
+	mockLogger.EXPECT().Debug("azure Event Hub consumer client setup success")
+	mockLogger.EXPECT().Debug("azure Event Hub processor setup success")
+	mockLogger.EXPECT().Debug("azure Event Hub processor running successfully").AnyTimes()
+	mockLogger.EXPECT().Error("topic deletion is not supported in Event Hub")
 
 	client.UseLogger(mockLogger)
 	client.UseMetrics(mockMetrics)
@@ -190,9 +191,9 @@ func Test_CreateTopic(t *testing.T) {
 
 	err := client.DeleteTopic(context.Background(), "random-topic")
 
-	require.NoError(t, err, "Eventhub Topic Creation not allowed failed")
+	require.NoError(t, err, "Event Hub Topic Creation not allowed failed")
 
-	require.True(t, mockLogger.ctrl.Satisfied(), "Eventhub Topic Creation not allowed failed")
+	require.True(t, mockLogger.ctrl.Satisfied(), "Event Hub Topic Creation not allowed failed")
 }
 
 func Test_DeleteTopic(t *testing.T) {
@@ -203,14 +204,14 @@ func Test_DeleteTopic(t *testing.T) {
 	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
 
-	mockLogger.EXPECT().Debug("azure eventhub connection started using connection string")
-	mockLogger.EXPECT().Debug("azure eventhub producer client setup success")
-	mockLogger.EXPECT().Debug("azure eventhub container client setup success")
-	mockLogger.EXPECT().Debug("azure eventhub blobstore client setup success")
-	mockLogger.EXPECT().Debug("azure eventhub consumer client setup success")
-	mockLogger.EXPECT().Debug("azure eventhub processor setup success")
-	mockLogger.EXPECT().Debug("azure eventhub processor running successfully").AnyTimes()
-	mockLogger.EXPECT().Error("topic creation is not supported in eventhub")
+	mockLogger.EXPECT().Debug("azure Event Hub connection started using connection string")
+	mockLogger.EXPECT().Debug("azure Event Hub producer client setup success")
+	mockLogger.EXPECT().Debug("azure Event Hub container client setup success")
+	mockLogger.EXPECT().Debug("azure Event Hub blobstore client setup success")
+	mockLogger.EXPECT().Debug("azure Event Hub consumer client setup success")
+	mockLogger.EXPECT().Debug("azure Event Hub processor setup success")
+	mockLogger.EXPECT().Debug("azure Event Hub processor running successfully").AnyTimes()
+	mockLogger.EXPECT().Error("topic creation is not supported in Event Hub")
 
 	client.UseLogger(mockLogger)
 	client.UseMetrics(mockMetrics)
@@ -219,9 +220,9 @@ func Test_DeleteTopic(t *testing.T) {
 
 	err := client.CreateTopic(context.Background(), "random-topic")
 
-	require.NoError(t, err, "Eventhub Topic Deletion not allowed failed")
+	require.NoError(t, err, "Event Hub Topic Deletion not allowed failed")
 
-	require.True(t, mockLogger.ctrl.Satisfied(), "Eventhub Topic Deletion not allowed failed")
+	require.True(t, mockLogger.ctrl.Satisfied(), "Event Hub Topic Deletion not allowed failed")
 }
 
 func Test_HealthCheck(t *testing.T) {
@@ -232,14 +233,14 @@ func Test_HealthCheck(t *testing.T) {
 	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
 
-	mockLogger.EXPECT().Debug("azure eventhub connection started using connection string")
-	mockLogger.EXPECT().Debug("azure eventhub producer client setup success")
-	mockLogger.EXPECT().Debug("azure eventhub container client setup success")
-	mockLogger.EXPECT().Debug("azure eventhub blobstore client setup success")
-	mockLogger.EXPECT().Debug("azure eventhub consumer client setup success")
-	mockLogger.EXPECT().Debug("azure eventhub processor setup success")
-	mockLogger.EXPECT().Debug("azure eventhub processor running successfully").AnyTimes()
-	mockLogger.EXPECT().Error("health-check not implemented for eventhub")
+	mockLogger.EXPECT().Debug("azure Event Hub connection started using connection string")
+	mockLogger.EXPECT().Debug("azure Event Hub producer client setup success")
+	mockLogger.EXPECT().Debug("azure Event Hub container client setup success")
+	mockLogger.EXPECT().Debug("azure Event Hub blobstore client setup success")
+	mockLogger.EXPECT().Debug("azure Event Hub consumer client setup success")
+	mockLogger.EXPECT().Debug("azure Event Hub processor setup success")
+	mockLogger.EXPECT().Debug("azure Event Hub processor running successfully").AnyTimes()
+	mockLogger.EXPECT().Error("health-check not implemented for Event Hub")
 
 	client.UseLogger(mockLogger)
 	client.UseMetrics(mockMetrics)
@@ -248,7 +249,7 @@ func Test_HealthCheck(t *testing.T) {
 
 	_ = client.Health()
 
-	require.True(t, mockLogger.ctrl.Satisfied(), "Eventhub Topic Deletion not allowed failed")
+	require.True(t, mockLogger.ctrl.Satisfied(), "Event Hub Topic Deletion not allowed failed")
 }
 
 func getTestConfigs() Config {
