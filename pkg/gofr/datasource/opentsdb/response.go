@@ -14,7 +14,7 @@ import (
 )
 
 var (
-	errSendingRequest  = errors.New("openTSDB client error")
+	errSendingRequest  = errors.New("OpenTSDB client error")
 	errInvalidArgument = errors.New("invalid argument type")
 	errUnexpected      = errors.New("unexpected error")
 )

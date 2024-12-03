@@ -183,7 +183,6 @@ func TestPutInvalidDataPoint(t *testing.T) {
 	resp := &PutResponse{}
 
 	err := client.PutDataPoints(context.Background(), dataPoints, "", resp)
-	require.Error(t, err)
 	require.EqualError(t, err, "invalid data points: please give a valid value")
 }
 
@@ -202,8 +201,7 @@ func TestPutInvalidQueryParam(t *testing.T) {
 	resp := &PutResponse{}
 
 	err := client.PutDataPoints(context.Background(), dataPoints, "invalid_param", resp)
-	require.Error(t, err)
-	require.Equal(t, "invalid query parameters", err.Error())
+	require.ErrorIs(t, err, errInvalidQueryParam)
 }
 
 func TestPutErrorResponse(t *testing.T) {
@@ -228,8 +226,7 @@ func TestPutErrorResponse(t *testing.T) {
 	resp := &PutResponse{}
 
 	err := client.PutDataPoints(context.Background(), dataPoints, "", resp)
-	require.Error(t, err)
-	require.Equal(t, "openTSDB client error, status code: 400", err.Error())
+	require.EqualError(t, err, "OpenTSDB client error, status code: 400")
 }
 
 func TestPostQuerySuccess(t *testing.T) {
@@ -612,7 +609,6 @@ func TestHealthCheck_Failure(t *testing.T) {
 
 	resp, err := client.HealthCheck(context.Background())
 
-	require.Error(t, err, "Expected error during health check")
 	require.Nil(t, resp, "Expected response to be nil")
-	require.Equal(t, "connection error", err.Error(), "Expected specific error message")
+	require.EqualError(t, err, "connection error", "Expected error during health check")
 }

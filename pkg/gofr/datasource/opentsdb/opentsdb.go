@@ -184,7 +184,7 @@ func (c *Client) PutDataPoints(ctx context.Context, datas any, queryParam string
 
 	if !isValidPutParam(queryParam) {
 		message = "the given query param is invalid."
-		return fmt.Errorf("%w", errInvalidQueryParam)
+		return errInvalidQueryParam
 	}
 
 	putEndpoint := fmt.Sprintf("%s%s", c.endpoint, putPath)
@@ -229,7 +229,7 @@ func (c *Client) QueryDataPoints(ctx context.Context, parameters, resp any) erro
 
 	if !isValidQueryParam(param) {
 		message = "invalid query parameters"
-		return fmt.Errorf("%w", errInvalidQueryParam)
+		return errInvalidQueryParam
 	}
 
 	queryEndpoint := fmt.Sprintf("%s%s", c.endpoint, queryPath)
@@ -272,7 +272,7 @@ func (c *Client) QueryLatestDataPoints(ctx context.Context, parameters, resp any
 
 	if !isValidQueryLastParam(param) {
 		message = "invalid query last param"
-		return fmt.Errorf("%w", errInvalidQueryParam)
+		return errInvalidQueryParam
 	}
 
 	queryEndpoint := fmt.Sprintf("%s%s", c.endpoint, queryLastPath)

@@ -7,11 +7,6 @@ import (
 	"time"
 )
 
-// HTTPClient is an interface that wraps the http.Client's Do method.
-type httpClient interface {
-	Do(req *http.Request) (*http.Response, error)
-}
-
 //nolint:unused // connection interface defines all the methods to mock the connection
 // returned while testing healthcheck implementation .
 type connection interface {
@@ -23,6 +18,11 @@ type connection interface {
 	SetDeadline(t time.Time) error
 	SetReadDeadline(t time.Time) error
 	SetWriteDeadline(t time.Time) error
+}
+
+// httpClient is an interface that wraps the http.Client's Do method.
+type httpClient interface {
+	Do(req *http.Request) (*http.Response, error)
 }
 
 // Response defines the common behaviors all the specific response for
