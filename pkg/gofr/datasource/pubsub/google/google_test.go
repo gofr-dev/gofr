@@ -21,7 +21,7 @@ import (
 )
 
 var (
-	errTopicExists  = errors.New("Topic already exists")
+	errTopicExists  = errors.New("topic already exists")
 	errTestSentinel = errors.New("test-error")
 )
 
@@ -272,6 +272,7 @@ func TestGoogleClient_CreateTopic_Success(t *testing.T) {
 		name         string
 		topicName    string
 		mockBehavior func()
+		expectedErr  error
 	}{
 		{
 			name:      "CreateTopic_Success",
@@ -279,6 +280,7 @@ func TestGoogleClient_CreateTopic_Success(t *testing.T) {
 			mockBehavior: func() {
 				mockClient.EXPECT().CreateTopic(context.Background(), "test-topic").Return(&gcPubSub.Topic{}, nil)
 			},
+			expectedErr: nil,
 		},
 		{
 			name:      "CreateTopic_AlreadyExists",
@@ -286,6 +288,7 @@ func TestGoogleClient_CreateTopic_Success(t *testing.T) {
 			mockBehavior: func() {
 				mockClient.EXPECT().CreateTopic(context.Background(), "test-topic").Return(&gcPubSub.Topic{}, errTopicExists)
 			},
+			expectedErr: errTopicExists,
 		},
 	}
 
@@ -295,7 +298,7 @@ func TestGoogleClient_CreateTopic_Success(t *testing.T) {
 
 			err := g.CreateTopic(context.Background(), tt.topicName)
 
-			require.NoError(t, err, "expected no error, but got one")
+			require.ErrorIs(t, err, tt.expectedErr, "expected no error, but got one")
 		})
 	}
 }
