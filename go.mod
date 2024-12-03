@@ -42,7 +42,7 @@ require (
 	google.golang.org/api v0.209.0
 	google.golang.org/grpc v1.67.1
 	google.golang.org/protobuf v1.35.2
-	modernc.org/sqlite v1.34.1
+	modernc.org/sqlite v1.34.2
 )
 
 require (
