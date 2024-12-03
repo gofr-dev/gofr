@@ -5,13 +5,14 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"github.com/aws/aws-sdk-go-v2/aws"
 	"io"
 	"os"
 	"path"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
 
 	file "gofr.dev/pkg/gofr/datasource/file"
 )
