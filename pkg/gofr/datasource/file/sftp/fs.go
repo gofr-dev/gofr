@@ -65,11 +65,13 @@ func (f *FileSystem) Connect() {
 	conn, err := ssh.Dial("tcp", addr, config)
 	if err != nil {
 		f.logger.Errorf("failed to connect with sftp with err %v", err)
+		return
 	}
 
 	client, err := sftp.NewClient(conn)
 	if err != nil {
 		f.logger.Errorf("failed to create sftp client with err %v", err)
+		return
 	}
 
 	f.client = client
@@ -260,9 +262,9 @@ func (f *FileSystem) Getwd() (string, error) {
 }
 
 // TODO : Implement metrics.
-func (f *FileSystem) sendOperationStats(fl *FileLog, startTime time.Time) {
-	duration := time.Since(startTime).Milliseconds()
-
+func (f *fileSystem) sendOperationStats(fl *FileLog, startTime time.Time) {
+	duration := time.Since(startTime).Microseconds()
+  
 	fl.Duration = duration
 
 	f.logger.Debug(fl)

@@ -94,13 +94,15 @@ func (f *fileSystem) Connect() {
 		Status:    &status,
 	}, time.Now())
 
+	f.logger.Debugf("connecting to FTP Server at %v", ftpServer)
+
 	if f.config.DialTimeout == 0 {
 		f.config.DialTimeout = time.Second * 5
 	}
 
 	conn, err := ftp.Dial(ftpServer, ftp.DialWithTimeout(f.config.DialTimeout))
 	if err != nil {
-		f.logger.Errorf("Connection failed: %v", err)
+		f.logger.Errorf("error while connecting to FTP: %v", err)
 
 		status = "CONNECTION ERROR"
 
@@ -111,7 +113,7 @@ func (f *fileSystem) Connect() {
 
 	err = conn.Login(f.config.User, f.config.Password)
 	if err != nil {
-		f.logger.Errorf("Login failed: %v", err)
+		f.logger.Errorf("login failed: %v", err)
 
 		status = "LOGIN ERROR"
 
@@ -120,7 +122,7 @@ func (f *fileSystem) Connect() {
 
 	status = "LOGIN SUCCESS"
 
-	f.logger.Logf("Connected to FTP server at '%v'", ftpServer)
+	f.logger.Logf("connected to FTP server at '%v'", ftpServer)
 }
 
 // Create creates an empty file on the FTP server.
@@ -328,7 +330,7 @@ func (f *fileSystem) Rename(oldname, newname string) error {
 }
 
 func (f *fileSystem) sendOperationStats(fl *FileLog, startTime time.Time) {
-	duration := time.Since(startTime).Milliseconds()
+	duration := time.Since(startTime).Microseconds()
 
 	fl.Duration = duration
 
