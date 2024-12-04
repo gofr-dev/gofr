@@ -32,7 +32,7 @@ func TestRead(t *testing.T) {
 			name:     "Read with error",
 			filePath: "/ftp/one/nonexistent.txt",
 			mockReadResponse: func(response *MockftpResponse) {
-				response.EXPECT().Read(gomock.Any()).Return(0, errInOperation)
+				response.EXPECT().Read(gomock.Any()).Return(0, errMockErr)
 				response.EXPECT().Close().Return(nil)
 			},
 			expectError: true,
@@ -120,7 +120,7 @@ func TestReadAt(t *testing.T) {
 			filePath: "/ftp/one/nonexistent.txt",
 			offset:   0,
 			mockReadResponse: func(response *MockftpResponse) {
-				response.EXPECT().Read(gomock.Any()).Return(0, errInOperation)
+				response.EXPECT().Read(gomock.Any()).Return(0, errMockErr)
 				response.EXPECT().Close().Return(nil)
 			},
 			expectError: true,
@@ -208,7 +208,7 @@ func TestWrite(t *testing.T) {
 			filePath: "/ftp/one/nonexistent.txt",
 			mockWriteExpect: func(conn *MockserverConn, filePath string) {
 				emptyReader := bytes.NewReader([]byte("test content"))
-				conn.EXPECT().StorFrom(filePath, emptyReader, uint64(0)).Return(errInOperation)
+				conn.EXPECT().StorFrom(filePath, emptyReader, uint64(0)).Return(errMockErr)
 			},
 			expectError: true,
 		},
@@ -289,7 +289,7 @@ func TestWriteAt(t *testing.T) {
 			offset:   0,
 			mockWriteExpect: func(conn *MockserverConn, filePath string, offset int64) {
 				emptyReader := bytes.NewReader([]byte("test content"))
-				conn.EXPECT().StorFrom(filePath, emptyReader, uint64(math.Abs(float64(offset)))).Return(errInOperation)
+				conn.EXPECT().StorFrom(filePath, emptyReader, uint64(math.Abs(float64(offset)))).Return(errMockErr)
 			},
 			expectError: true,
 		},

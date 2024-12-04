@@ -18,8 +18,8 @@ import (
 )
 
 var (
-	errInOperation = errors.New("mocked error")
-	errNotFound    = errors.New("mocked file not found")
+	errMockErr  = errors.New("mocked error")
+	errNotFound = errors.New("mocked file not found")
 )
 
 func TestCreateFile(t *testing.T) {
@@ -90,7 +90,7 @@ func TestCreateFile(t *testing.T) {
 			if tt.expectStorCall {
 				emptyReader := new(bytes.Buffer)
 				if tt.mockStorError {
-					mockFtpConn.EXPECT().Stor("/ftp/one/"+tt.fileName, emptyReader).Return(errInOperation)
+					mockFtpConn.EXPECT().Stor("/ftp/one/"+tt.fileName, emptyReader).Return(errMockErr)
 				} else {
 					mockFtpConn.EXPECT().Stor("/ftp/one/"+tt.fileName, emptyReader).Return(nil)
 					mockFtpConn.EXPECT().GetTime("/ftp/one/"+tt.fileName).Return(time.Now(), nil)
@@ -194,7 +194,7 @@ func TestRenameFile(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if tt.expectRename {
 				if tt.mockError {
-					mockFtpConn.EXPECT().Rename("/ftp/one/"+tt.fromPath, "/ftp/one/"+tt.toPath).Return(errInOperation)
+					mockFtpConn.EXPECT().Rename("/ftp/one/"+tt.fromPath, "/ftp/one/"+tt.toPath).Return(errMockErr)
 				} else {
 					mockFtpConn.EXPECT().Rename("/ftp/one/"+tt.fromPath, "/ftp/one/"+tt.toPath).Return(nil)
 					mockFtpConn.EXPECT().GetTime("/ftp/one/"+tt.toPath).Return(time.Now(), nil)
@@ -270,7 +270,7 @@ func TestRemoveFile(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if tt.expectDelete {
 				if tt.mockError {
-					mockFtpConn.EXPECT().Delete("/ftp/one/" + tt.filePath).Return(errInOperation)
+					mockFtpConn.EXPECT().Delete("/ftp/one/" + tt.filePath).Return(errMockErr)
 				} else {
 					mockFtpConn.EXPECT().Delete("/ftp/one/" + tt.filePath).Return(nil)
 				}
@@ -311,7 +311,7 @@ func TestOpenFile(t *testing.T) {
 			basePath: "/ftp/one",
 			filePath: "nonexistent.txt",
 			mockRetrExpect: func(conn *MockserverConn, path string) {
-				conn.EXPECT().Retr(path).Return(nil, errInOperation)
+				conn.EXPECT().Retr(path).Return(nil, errMockErr)
 			},
 			expectError: true,
 		},
@@ -387,7 +387,7 @@ func TestMkDir(t *testing.T) {
 			basePath: "/ftp/one",
 			dirPath:  "directory2",
 			mockMkdirExpect: func(conn *MockserverConn, dirPath string) {
-				conn.EXPECT().MakeDir(dirPath).Return(errInOperation)
+				conn.EXPECT().MakeDir(dirPath).Return(errMockErr)
 			},
 			expectError: true,
 		},
@@ -488,7 +488,7 @@ func TestMkDirAll(t *testing.T) {
 			mockMkdirExpect: func(conn *MockserverConn, _ string) {
 				conn.EXPECT().MakeDir("testdir1/testdir2").Return(directoryError)
 				conn.EXPECT().MakeDir("testdir1").Return(directoryError)
-				conn.EXPECT().MakeDir("testdir1/testdir2").Return(errInOperation)
+				conn.EXPECT().MakeDir("testdir1/testdir2").Return(errMockErr)
 			},
 			expectError: true,
 		},
@@ -562,7 +562,7 @@ func TestRemoveDir(t *testing.T) {
 			basePath:   "/ftp/one",
 			removePath: "nonexistentdir",
 			mockRemoveExpect: func(conn *MockserverConn, basePath, removePath string) {
-				conn.EXPECT().RemoveDirRecur(path.Join(basePath, removePath)).Return(errInOperation)
+				conn.EXPECT().RemoveDirRecur(path.Join(basePath, removePath)).Return(errMockErr)
 			},
 			expectError: true,
 		},
@@ -642,7 +642,7 @@ func TestStat(t *testing.T) {
 			name:        "Error getting info of a file",
 			fileName:    "testfile.txt",
 			mockEntry:   nil,
-			mockError:   errInOperation,
+			mockError:   errMockErr,
 			expectError: true,
 		},
 		{
@@ -724,7 +724,7 @@ func TestGetwd(t *testing.T) {
 		{
 			name:        "error in retrieving path",
 			mockDir:     "",
-			mockError:   errInOperation,
+			mockError:   errMockErr,
 			expectError: true,
 		},
 	}
@@ -785,7 +785,7 @@ func TestChDir(t *testing.T) {
 		{
 			name:        "Change dir with error",
 			newDir:      "errordir",
-			mockError:   errInOperation,
+			mockError:   errMockErr,
 			expectError: true,
 		},
 		{
@@ -904,14 +904,14 @@ func getReadDirTestCases(t *testing.T) []struct {
 			name:        "Read dir with error",
 			dir:         "someDir",
 			mockEntries: nil,
-			mockError:   errInOperation,
+			mockError:   errMockErr,
 			expectError: true,
 		},
 		{
 			name:        "Empty directory path",
 			dir:         "",
 			mockEntries: nil,
-			mockError:   errInOperation,
+			mockError:   errMockErr,
 			expectError: true,
 		},
 		{
