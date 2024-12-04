@@ -79,7 +79,7 @@ func (d *Client) Connect() {
 		return
 	}
 
-	d.logger.Logf("connected to Dgraph client at %v:%v", d.config.Host, d.config.Port)
+	d.logger.Logf("connected to Dgraph server at %v:%v", d.config.Host, d.config.Port)
 }
 
 // UseLogger sets the logger for the Dgraph client which asserts the Logger interface.
