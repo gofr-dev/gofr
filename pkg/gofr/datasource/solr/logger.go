@@ -18,13 +18,13 @@ type Logger interface {
 
 type QueryLog struct {
 	Type     string `json:"type"`
-	Url      string `json:"Url"`
+	URL      string `json:"Url"`
 	Duration int64  `json:"duration"`
 }
 
 func (ql *QueryLog) PrettyPrint(writer io.Writer) {
 	fmt.Fprintf(writer, "\u001B[38;5;8m%-32s \u001B[38;5;206m%-6s\u001B[0m %8d\u001B[38;5;8mµs\u001B[0m %s\n",
-		clean(ql.Url), "SOLR", ql.Duration, clean(ql.Type))
+		clean(ql.URL), "SOLR", ql.Duration, clean(ql.Type))
 }
 
 // clean takes a string query as input and performs two operations to clean it up:
