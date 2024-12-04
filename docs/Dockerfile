@@ -1,4 +1,4 @@
-FROM ghcr.io/gofr-dev/website:latest
+FROM ghcr.io/gofr-dev/website:latest AS builder
 
 WORKDIR /app
 
@@ -9,20 +9,19 @@ COPY  docs/references /app/src/app/docs/references
 COPY  docs/page.md /app/src/app/docs
 COPY  docs/navigation.js /app/src/lib
 
-
 ENV NODE_ENV production
 
 RUN npm install
 RUN npm run build
 
-RUN addgroup -g 1001 -S nodejs
-RUN adduser -S nextjs -u 1001
+# Stage 2: Serve with Static Server
+FROM zopdev/static-server:v0.0.1
 
-USER nextjs
+# Copy static files from the builder stage
+COPY --from=builder /app/out website
 
-EXPOSE 3000
-ENV PORT 3000
+# Expose the port server is running on
+EXPOSE 8000
 
-ENV NEXT_TELEMETRY_DISABLED 1
-
-CMD ["node_modules/.bin/next", "start"]
+# Start go server
+CMD ["/main"]
