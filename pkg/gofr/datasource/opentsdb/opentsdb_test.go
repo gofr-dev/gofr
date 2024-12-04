@@ -226,7 +226,7 @@ func TestPutErrorResponse(t *testing.T) {
 	resp := &PutResponse{}
 
 	err := client.PutDataPoints(context.Background(), dataPoints, "", resp)
-	require.EqualError(t, err, "OpenTSDB client error, status code: 400")
+	require.EqualError(t, err, "error response from OpenTSDB server, status code: 400")
 }
 
 func TestPostQuerySuccess(t *testing.T) {

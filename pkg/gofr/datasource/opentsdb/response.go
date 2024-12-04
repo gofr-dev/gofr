@@ -14,7 +14,7 @@ import (
 )
 
 var (
-	errSendingRequest  = errors.New("OpenTSDB client error")
+	errResp            = errors.New("error response from OpenTSDB server")
 	errInvalidArgument = errors.New("invalid argument type")
 	errUnexpected      = errors.New("unexpected error")
 )
@@ -258,7 +258,7 @@ func (c *Client) sendRequest(ctx context.Context, method, url, reqBodyCnt string
 	}
 
 	if resp.StatusCode >= 400 && resp.StatusCode < 500 {
-		return fmt.Errorf("%w, status code: %d", errSendingRequest, resp.StatusCode)
+		return fmt.Errorf("%w, status code: %d", errResp, resp.StatusCode)
 	}
 
 	return nil
@@ -367,7 +367,7 @@ func (c *Client) operateAnnotation(ctx context.Context, queryAnnotation, resp an
 	}
 
 	if err = c.sendRequest(ctx, method, annoEndpoint, string(resultBytes), annResp); err != nil {
-		message = fmt.Sprintf("%s: error while processing %s annotation request to url %q: %s", operation, method, annoEndpoint, err.Error())
+		message = fmt.Sprintf("error processing %s annotation request to url %q: %s", method, annoEndpoint, err.Error())
 		return err
 	}
 

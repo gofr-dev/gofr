@@ -7,8 +7,9 @@ import (
 	"time"
 )
 
-//nolint:unused // connection interface defines all the methods to mock the connection
 // returned while testing healthcheck implementation .
+//
+//nolint:unused // connection interface defines all the methods to mock the connection
 type connection interface {
 	Read(b []byte) (n int, err error)
 	Write(b []byte) (n int, err error)

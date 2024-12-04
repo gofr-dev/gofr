@@ -241,7 +241,7 @@ func (c *Client) QueryDataPoints(ctx context.Context, parameters, resp any) erro
 	}
 
 	if err = c.sendRequest(ctx, http.MethodPost, queryEndpoint, reqBodyCnt, queryResp); err != nil {
-		message = fmt.Sprintf("error while processing request at url %q: %s ", queryEndpoint, err)
+		message = fmt.Sprintf("error processing Query request at url %q: %s ", queryEndpoint, err)
 		return err
 	}
 
@@ -284,7 +284,7 @@ func (c *Client) QueryLatestDataPoints(ctx context.Context, parameters, resp any
 	}
 
 	if err = c.sendRequest(ctx, http.MethodPost, queryEndpoint, reqBodyCnt, queryResp); err != nil {
-		message = fmt.Sprintf("error sending request at url %s : %s ", queryEndpoint, err)
+		message = fmt.Sprintf("error processing LatestQuery request at url %q: %s ", queryEndpoint, err)
 		return err
 	}
 
@@ -331,7 +331,7 @@ func (c *Client) QueryAnnotation(ctx context.Context, queryAnnoParam map[string]
 	annoEndpoint := fmt.Sprintf("%s%s?%s", c.endpoint, annotationPath, buffer.String())
 
 	if err := c.sendRequest(ctx, http.MethodGet, annoEndpoint, "", annResp); err != nil {
-		message = fmt.Sprintf("error while processing annotation query: %s", err.Error())
+		message = fmt.Sprintf("error processing AnnotationQuery request: %s", err.Error())
 		return err
 	}
 

@@ -174,7 +174,7 @@ func (c *Client) getResponse(ctx context.Context, putEndpoint string, datapoints
 	putResp := PutResponse{}
 
 	if err = c.sendRequest(ctx, http.MethodPost, putEndpoint, reqBodyCnt, &putResp); err != nil {
-		*message = fmt.Sprintf("error processing put request at url %q: %s", putEndpoint, err)
+		*message = fmt.Sprintf("error processing Put request at url %q: %s", putEndpoint, err)
 		return nil, err
 	}
 
