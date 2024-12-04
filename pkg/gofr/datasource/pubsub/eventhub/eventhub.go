@@ -132,7 +132,7 @@ func (c *Client) Connect() {
 		return
 	}
 
-	c.logger.Debug("azure Event Hub connection started using connection string")
+	c.logger.Debug("Event Hub connection started using connection string")
 
 	producerClient, err := azeventhubs.NewProducerClientFromConnectionString(c.cfg.ConnectionString,
 		c.cfg.EventhubName, c.cfg.ProducerOptions)
@@ -142,7 +142,7 @@ func (c *Client) Connect() {
 		return
 	}
 
-	c.logger.Debug("azure Event Hub producer client setup success")
+	c.logger.Debug("Event Hub producer client setup success")
 
 	containerClient, err := container.NewClientFromConnectionString(c.cfg.ContainerConnectionString, c.cfg.StorageContainerName,
 		c.cfg.StorageOptions)
@@ -152,7 +152,7 @@ func (c *Client) Connect() {
 		return
 	}
 
-	c.logger.Debug("azure Event Hub container client setup success")
+	c.logger.Debug("Event Hub container client setup success")
 
 	// create a checkpoint store that will be used by the event hub
 	checkpointStore, err := checkpoints.NewBlobStore(containerClient, c.cfg.BlobStoreOptions)
@@ -162,7 +162,7 @@ func (c *Client) Connect() {
 		return
 	}
 
-	c.logger.Debug("azure Event Hub blobstore client setup success")
+	c.logger.Debug("Event Hub blobstore client setup success")
 
 	// create a consumer client using a connection string to the namespace and the event hub
 	consumerClient, err := azeventhubs.NewConsumerClientFromConnectionString(c.cfg.ConnectionString, c.cfg.EventhubName,
@@ -173,7 +173,7 @@ func (c *Client) Connect() {
 		return
 	}
 
-	c.logger.Debug("azure Event Hub consumer client setup success")
+	c.logger.Debug("Event Hub consumer client setup success")
 
 	// create a processor to receive and process events
 	processor, err := azeventhubs.NewProcessor(consumerClient, checkpointStore, nil)
@@ -183,7 +183,7 @@ func (c *Client) Connect() {
 		return
 	}
 
-	c.logger.Debug("azure Event Hub processor setup success")
+	c.logger.Debug("Event Hub processor setup success")
 
 	processorCtx, processorCancel := context.WithCancel(context.TODO())
 	c.processorCtx = processorCancel
@@ -196,7 +196,7 @@ func (c *Client) Connect() {
 			return
 		}
 
-		c.logger.Debug("azure Event Hub processor running successfully")
+		c.logger.Debug("Event Hub processor running successfully")
 	}()
 
 	c.processor = processor
