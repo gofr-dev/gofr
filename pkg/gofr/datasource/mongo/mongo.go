@@ -22,7 +22,7 @@ type Client struct {
 	database string
 	logger   Logger
 	metrics  Metrics
-	config   Config
+	config   *Config
 	tracer   trace.Tracer
 }
 
@@ -43,8 +43,8 @@ var errStatusDown = errors.New("status down")
 
 /*
 Developer Note: We could have accepted logger and metrics as part of the factory function `New`, but when mongo driver is
-initialised in GoFr, We want to ensure that the user need not to provides logger and metrics and then connect to the database,
-i.e. by default observability features gets initialised when used with GoFr.
+initialized in GoFr, We want to ensure that the user need not to provides logger and metrics and then connect to the database,
+i.e. by default observability features gets initialized when used with GoFr.
 */
 
 // New initializes MongoDB driver with the provided configuration.
@@ -54,8 +54,10 @@ i.e. by default observability features gets initialised when used with GoFr.
 // client.UseLogger(loggerInstance)
 // client.UseMetrics(metricsInstance)
 // client.Connect().
+
+//nolint:gocritic // Configs do not need to be passed by reference
 func New(c Config) *Client {
-	return &Client{config: c}
+	return &Client{config: &c}
 }
 
 // UseLogger sets the logger for the MongoDB client which asserts the Logger interface.
