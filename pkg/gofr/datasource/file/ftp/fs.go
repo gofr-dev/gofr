@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	appFtpStats   = "app_ftp_stats"
+	appFTPStats   = "app_ftp_stats"
 	statusSuccess = "SUCCESS"
 	statusError   = "ERROR"
 )
@@ -84,7 +84,7 @@ func (f *fileSystem) Connect() {
 	var status string
 
 	ftpBuckets := []float64{.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 4, 5, 7.5, 10}
-	f.metrics.NewHistogram(appFtpStats, "Response time of File System operations in milliseconds.", ftpBuckets...)
+	f.metrics.NewHistogram(appFTPStats, "Response time of File System operations in milliseconds.", ftpBuckets...)
 
 	ftpServer := fmt.Sprintf("%v:%v", f.config.Host, f.config.Port)
 
@@ -336,6 +336,6 @@ func (f *fileSystem) sendOperationStats(fl *FileLog, startTime time.Time) {
 
 	f.logger.Debug(fl)
 
-	f.metrics.RecordHistogram(context.Background(), appFtpStats, float64(duration),
+	f.metrics.RecordHistogram(context.Background(), appFTPStats, float64(duration),
 		"type", fl.Operation, "status", clean(fl.Status))
 }

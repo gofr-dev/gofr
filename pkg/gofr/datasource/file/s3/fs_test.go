@@ -33,7 +33,7 @@ func Test_CreateFile(t *testing.T) {
 	defer ctrl.Finish()
 
 	// Create a mock S3 client
-	mockS3 := NewMocks3conn(ctrl) // Replace with the actual generated mock for the S3 client.
+	mockS3 := NewMocks3Client(ctrl) // Replace with the actual generated mock for the S3 client.
 	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
 
@@ -89,14 +89,14 @@ func Test_CreateFile(t *testing.T) {
 		SecretAccessKey: "dummy-secret-key",
 	}
 
-	f := s3file{
+	f := s3File{
 		logger:  mockLogger,
 		metrics: mockMetrics,
 		conn:    mockS3,
 	}
 
 	fs := &fileSystem{
-		s3file:  f,
+		s3File:  f,
 		conn:    mockS3,
 		logger:  mockLogger,
 		config:  config,
@@ -124,7 +124,7 @@ func Test_OpenFile(t *testing.T) {
 	defer ctrl.Finish()
 
 	// Create a mock S3 client
-	mockS3 := NewMocks3conn(ctrl) // Replace with the actual generated mock for the S3 client.
+	mockS3 := NewMocks3Client(ctrl) // Replace with the actual generated mock for the S3 client.
 	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
 
@@ -137,14 +137,14 @@ func Test_OpenFile(t *testing.T) {
 		SecretAccessKey: "dummy-secret-key",
 	}
 
-	f := s3file{
+	f := s3File{
 		logger:  mockLogger,
 		metrics: mockMetrics,
 		conn:    mockS3,
 	}
 
 	fs := &fileSystem{
-		s3file:  f,
+		s3File:  f,
 		conn:    mockS3,
 		logger:  mockLogger,
 		config:  config,
@@ -172,7 +172,7 @@ func Test_MakingDirectories(t *testing.T) {
 	defer ctrl.Finish()
 
 	// Create a mock S3 client
-	mockS3 := NewMocks3conn(ctrl)
+	mockS3 := NewMocks3Client(ctrl)
 	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
 
@@ -185,14 +185,14 @@ func Test_MakingDirectories(t *testing.T) {
 		SecretAccessKey: "dummy-secret-key",
 	}
 
-	f := s3file{
+	f := s3File{
 		logger:  mockLogger,
 		metrics: mockMetrics,
 		conn:    mockS3,
 	}
 
 	fs := &fileSystem{
-		s3file:  f,
+		s3File:  f,
 		conn:    mockS3,
 		logger:  mockLogger,
 		config:  config,
@@ -217,7 +217,7 @@ func Test_RenameDirectory(t *testing.T) {
 	defer ctrl.Finish()
 
 	// Create a mock S3 client
-	mockS3 := NewMocks3conn(ctrl)
+	mockS3 := NewMocks3Client(ctrl)
 	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
 
@@ -230,14 +230,14 @@ func Test_RenameDirectory(t *testing.T) {
 		SecretAccessKey: "dummy-secret-key",
 	}
 
-	f := s3file{
+	f := s3File{
 		logger:  mockLogger,
 		metrics: mockMetrics,
 		conn:    mockS3,
 	}
 
 	fs := &fileSystem{
-		s3file:  f,
+		s3File:  f,
 		conn:    mockS3,
 		logger:  mockLogger,
 		config:  config,
@@ -301,7 +301,7 @@ func Test_ReadDir(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockS3 := NewMocks3conn(ctrl)
+	mockS3 := NewMocks3Client(ctrl)
 	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
 
@@ -313,8 +313,8 @@ func Test_ReadDir(t *testing.T) {
 		SecretAccessKey: "dummy-secret-key",
 	}
 
-	f := s3file{logger: mockLogger, metrics: mockMetrics, conn: mockS3}
-	fs := &fileSystem{s3file: f, conn: mockS3, logger: mockLogger, config: config, metrics: mockMetrics}
+	f := s3File{logger: mockLogger, metrics: mockMetrics, conn: mockS3}
+	fs := &fileSystem{s3File: f, conn: mockS3, logger: mockLogger, config: config, metrics: mockMetrics}
 
 	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
@@ -391,7 +391,7 @@ func TestRemove(t *testing.T) {
 	defer ctrl.Finish()
 
 	// Create a mock S3 client
-	mockS3 := NewMocks3conn(ctrl) // Replace with the actual generated mock for the S3 client.
+	mockS3 := NewMocks3Client(ctrl) // Replace with the actual generated mock for the S3 client.
 	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
 
@@ -404,14 +404,14 @@ func TestRemove(t *testing.T) {
 		SecretAccessKey: "dummy-secret-key",
 	}
 
-	f := s3file{
+	f := s3File{
 		logger:  mockLogger,
 		metrics: mockMetrics,
 		conn:    mockS3,
 	}
 
 	fs := &fileSystem{
-		s3file:  f,
+		s3File:  f,
 		conn:    mockS3,
 		logger:  mockLogger,
 		config:  config,
@@ -437,7 +437,7 @@ func Test_RenameFile(t *testing.T) {
 	defer ctrl.Finish()
 
 	// Create a mock S3 client
-	mockS3 := NewMocks3conn(ctrl) // Replace with the actual generated mock for the S3 client.
+	mockS3 := NewMocks3Client(ctrl) // Replace with the actual generated mock for the S3 client.
 	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
 
@@ -450,14 +450,14 @@ func Test_RenameFile(t *testing.T) {
 		SecretAccessKey: "dummy-secret-key",
 	}
 
-	f := s3file{
+	f := s3File{
 		logger:  mockLogger,
 		metrics: mockMetrics,
 		conn:    mockS3,
 	}
 
 	fs := &fileSystem{
-		s3file:  f,
+		s3File:  f,
 		conn:    mockS3,
 		logger:  mockLogger,
 		config:  config,
@@ -538,7 +538,7 @@ func Test_StatFile(t *testing.T) {
 	defer ctrl.Finish()
 
 	// Create a mock S3 client
-	mockS3 := NewMocks3conn(ctrl) // Replace with the actual generated mock for the S3 client.
+	mockS3 := NewMocks3Client(ctrl) // Replace with the actual generated mock for the S3 client.
 	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
 
@@ -551,14 +551,14 @@ func Test_StatFile(t *testing.T) {
 		SecretAccessKey: "dummy-secret-key",
 	}
 
-	f := s3file{
+	f := s3File{
 		logger:  mockLogger,
 		metrics: mockMetrics,
 		conn:    mockS3,
 	}
 
 	fs := &fileSystem{
-		s3file:  f,
+		s3File:  f,
 		conn:    mockS3,
 		logger:  mockLogger,
 		config:  config,
@@ -604,7 +604,7 @@ func Test_StatDirectory(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
-	mockConn := NewMocks3conn(ctrl)
+	mockConn := NewMocks3Client(ctrl)
 
 	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
@@ -618,14 +618,14 @@ func Test_StatDirectory(t *testing.T) {
 		"test",
 		"test",
 	}
-	f := s3file{
+	f := s3File{
 		conn:    mockConn,
 		logger:  mockLogger,
 		metrics: mockMetrics,
 	}
 
 	fs := fileSystem{
-		s3file:  f,
+		s3File:  f,
 		logger:  mockLogger,
 		metrics: mockMetrics,
 		conn:    mockConn,

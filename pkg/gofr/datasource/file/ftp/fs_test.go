@@ -18,8 +18,8 @@ import (
 )
 
 var (
-	errMockErr  = errors.New("mocked error")
-	errNotFound = errors.New("mocked file not found")
+	errMockSentinel = errors.New("mocked error")
+	errNotFound     = errors.New("mocked file not found")
 )
 
 func TestCreateFile(t *testing.T) {
@@ -82,7 +82,7 @@ func TestCreateFile(t *testing.T) {
 	logger.EXPECT().Errorf(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	logger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 	logger.EXPECT().Debug(gomock.Any()).AnyTimes()
-	metrics.EXPECT().RecordHistogram(gomock.Any(), appFtpStats, gomock.Any(),
+	metrics.EXPECT().RecordHistogram(gomock.Any(), appFTPStats, gomock.Any(),
 		"type", gomock.Any(), "status", gomock.Any()).AnyTimes()
 
 	for _, tt := range tests {
@@ -90,7 +90,7 @@ func TestCreateFile(t *testing.T) {
 			if tt.expectStorCall {
 				emptyReader := new(bytes.Buffer)
 				if tt.mockStorError {
-					mockFtpConn.EXPECT().Stor("/ftp/one/"+tt.fileName, emptyReader).Return(errMockErr)
+					mockFtpConn.EXPECT().Stor("/ftp/one/"+tt.fileName, emptyReader).Return(errMockSentinel)
 				} else {
 					mockFtpConn.EXPECT().Stor("/ftp/one/"+tt.fileName, emptyReader).Return(nil)
 					mockFtpConn.EXPECT().GetTime("/ftp/one/"+tt.fileName).Return(time.Now(), nil)
@@ -187,14 +187,14 @@ func TestRenameFile(t *testing.T) {
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Logf(gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), appFtpStats, gomock.Any(),
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), appFTPStats, gomock.Any(),
 		"type", gomock.Any(), "status", gomock.Any()).AnyTimes()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if tt.expectRename {
 				if tt.mockError {
-					mockFtpConn.EXPECT().Rename("/ftp/one/"+tt.fromPath, "/ftp/one/"+tt.toPath).Return(errMockErr)
+					mockFtpConn.EXPECT().Rename("/ftp/one/"+tt.fromPath, "/ftp/one/"+tt.toPath).Return(errMockSentinel)
 				} else {
 					mockFtpConn.EXPECT().Rename("/ftp/one/"+tt.fromPath, "/ftp/one/"+tt.toPath).Return(nil)
 					mockFtpConn.EXPECT().GetTime("/ftp/one/"+tt.toPath).Return(time.Now(), nil)
@@ -263,14 +263,14 @@ func TestRemoveFile(t *testing.T) {
 	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), appFtpStats, gomock.Any(),
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), appFTPStats, gomock.Any(),
 		"type", gomock.Any(), "status", gomock.Any()).AnyTimes()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if tt.expectDelete {
 				if tt.mockError {
-					mockFtpConn.EXPECT().Delete("/ftp/one/" + tt.filePath).Return(errMockErr)
+					mockFtpConn.EXPECT().Delete("/ftp/one/" + tt.filePath).Return(errMockSentinel)
 				} else {
 					mockFtpConn.EXPECT().Delete("/ftp/one/" + tt.filePath).Return(nil)
 				}
@@ -311,7 +311,7 @@ func TestOpenFile(t *testing.T) {
 			basePath: "/ftp/one",
 			filePath: "nonexistent.txt",
 			mockRetrExpect: func(conn *MockserverConn, path string) {
-				conn.EXPECT().Retr(path).Return(nil, errMockErr)
+				conn.EXPECT().Retr(path).Return(nil, errMockSentinel)
 			},
 			expectError: true,
 		},
@@ -349,7 +349,7 @@ func TestOpenFile(t *testing.T) {
 	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes().AnyTimes()
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), appFtpStats, gomock.Any(),
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), appFTPStats, gomock.Any(),
 		"type", gomock.Any(), "status", gomock.Any()).AnyTimes()
 
 	for _, tt := range tests {
@@ -387,7 +387,7 @@ func TestMkDir(t *testing.T) {
 			basePath: "/ftp/one",
 			dirPath:  "directory2",
 			mockMkdirExpect: func(conn *MockserverConn, dirPath string) {
-				conn.EXPECT().MakeDir(dirPath).Return(errMockErr)
+				conn.EXPECT().MakeDir(dirPath).Return(errMockSentinel)
 			},
 			expectError: true,
 		},
@@ -424,7 +424,7 @@ func TestMkDir(t *testing.T) {
 	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), appFtpStats, gomock.Any(),
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), appFTPStats, gomock.Any(),
 		"type", gomock.Any(), "status", gomock.Any()).AnyTimes()
 
 	for _, tt := range tests {
@@ -488,7 +488,7 @@ func TestMkDirAll(t *testing.T) {
 			mockMkdirExpect: func(conn *MockserverConn, _ string) {
 				conn.EXPECT().MakeDir("testdir1/testdir2").Return(directoryError)
 				conn.EXPECT().MakeDir("testdir1").Return(directoryError)
-				conn.EXPECT().MakeDir("testdir1/testdir2").Return(errMockErr)
+				conn.EXPECT().MakeDir("testdir1/testdir2").Return(errMockSentinel)
 			},
 			expectError: true,
 		},
@@ -517,7 +517,7 @@ func TestMkDirAll(t *testing.T) {
 	mockLogger.EXPECT().Logf(gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), appFtpStats, gomock.Any(),
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), appFTPStats, gomock.Any(),
 		"type", gomock.Any(), "status", gomock.Any()).AnyTimes()
 
 	for _, tt := range tests {
@@ -562,7 +562,7 @@ func TestRemoveDir(t *testing.T) {
 			basePath:   "/ftp/one",
 			removePath: "nonexistentdir",
 			mockRemoveExpect: func(conn *MockserverConn, basePath, removePath string) {
-				conn.EXPECT().RemoveDirRecur(path.Join(basePath, removePath)).Return(errMockErr)
+				conn.EXPECT().RemoveDirRecur(path.Join(basePath, removePath)).Return(errMockSentinel)
 			},
 			expectError: true,
 		},
@@ -599,7 +599,7 @@ func TestRemoveDir(t *testing.T) {
 	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), appFtpStats, gomock.Any(),
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), appFTPStats, gomock.Any(),
 		"type", gomock.Any(), "status", gomock.Any()).AnyTimes()
 
 	for _, tt := range tests {
@@ -642,7 +642,7 @@ func TestStat(t *testing.T) {
 			name:        "Error getting info of a file",
 			fileName:    "testfile.txt",
 			mockEntry:   nil,
-			mockError:   errMockErr,
+			mockError:   errMockSentinel,
 			expectError: true,
 		},
 		{
@@ -683,7 +683,7 @@ func TestStat(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 			mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
-			mockMetrics.EXPECT().RecordHistogram(gomock.Any(), appFtpStats, gomock.Any(),
+			mockMetrics.EXPECT().RecordHistogram(gomock.Any(), appFTPStats, gomock.Any(),
 				"type", gomock.Any(), "status", gomock.Any()).AnyTimes()
 
 			filePath := path.Join(fs.config.RemoteDir, tt.fileName)
@@ -724,7 +724,7 @@ func TestGetwd(t *testing.T) {
 		{
 			name:        "error in retrieving path",
 			mockDir:     "",
-			mockError:   errMockErr,
+			mockError:   errMockSentinel,
 			expectError: true,
 		},
 	}
@@ -753,7 +753,7 @@ func TestGetwd(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 			mockFtpConn.EXPECT().CurrentDir().Return(tt.mockDir, tt.mockError)
-			mockMetrics.EXPECT().RecordHistogram(gomock.Any(), appFtpStats, gomock.Any(),
+			mockMetrics.EXPECT().RecordHistogram(gomock.Any(), appFTPStats, gomock.Any(),
 				"type", gomock.Any(), "status", gomock.Any()).AnyTimes()
 
 			dir, err := fs.Getwd()
@@ -785,7 +785,7 @@ func TestChDir(t *testing.T) {
 		{
 			name:        "Change dir with error",
 			newDir:      "errordir",
-			mockError:   errMockErr,
+			mockError:   errMockSentinel,
 			expectError: true,
 		},
 		{
@@ -823,7 +823,7 @@ func TestChDir(t *testing.T) {
 			mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 			mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 			mockFtpConn.EXPECT().ChangeDir(newPath).Return(tt.mockError)
-			mockMetrics.EXPECT().RecordHistogram(gomock.Any(), appFtpStats, gomock.Any(),
+			mockMetrics.EXPECT().RecordHistogram(gomock.Any(), appFTPStats, gomock.Any(),
 				"type", gomock.Any(), "status", gomock.Any()).AnyTimes()
 
 			err := fs.ChDir(tt.newDir)
@@ -904,14 +904,14 @@ func getReadDirTestCases(t *testing.T) []struct {
 			name:        "Read dir with error",
 			dir:         "someDir",
 			mockEntries: nil,
-			mockError:   errMockErr,
+			mockError:   errMockSentinel,
 			expectError: true,
 		},
 		{
 			name:        "Empty directory path",
 			dir:         "",
 			mockEntries: nil,
-			mockError:   errMockErr,
+			mockError:   errMockSentinel,
 			expectError: true,
 		},
 		{
@@ -956,7 +956,7 @@ func runReadDirTest(
 	mockFtpConn.EXPECT().List(pathName).Return(tt.mockEntries, tt.mockError)
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), appFtpStats, gomock.Any(),
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), appFTPStats, gomock.Any(),
 		"type", gomock.Any(), "status", gomock.Any()).AnyTimes()
 
 	files, err := fs.ReadDir(tt.dir)

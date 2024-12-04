@@ -205,14 +205,14 @@ func (f *fileSystem) ReadDir(name string) ([]file.FileInfo, error) {
 		relativepath := getRelativepath(*entries.Contents[i].Key, filePath)
 
 		if len(fileInfo) > 0 {
-			temp, ok := fileInfo[len(fileInfo)-1].(*s3file)
+			temp, ok := fileInfo[len(fileInfo)-1].(*s3File)
 
 			if ok && relativepath == path.Base(temp.name)+string(filepath.Separator) {
 				continue
 			}
 		}
 
-		fileInfo = append(fileInfo, &s3file{
+		fileInfo = append(fileInfo, &s3File{
 			conn:         f.conn,
 			logger:       f.logger,
 			metrics:      f.metrics,
@@ -328,8 +328,11 @@ func (f *fileSystem) Stat(name string) (file.FileInfo, error) {
 	if path.Ext(name) == "" {
 		filetype = TypeDirectory
 
-		if name[0] == '0' {
-			name = name[1:]
+		var isBinary bool
+
+		name, isBinary = strings.CutPrefix(name, "0")
+
+		if isBinary {
 			filetype = TypeFile
 		}
 	}
@@ -342,6 +345,10 @@ func (f *fileSystem) Stat(name string) (file.FileInfo, error) {
 	if err != nil {
 		f.logger.Errorf("Error returning file info: %v", err)
 		return nil, err
+	}
+
+	if len(res.Contents) == 0 {
+		return nil, nil
 	}
 
 	if filetype == TypeDirectory {
@@ -361,22 +368,18 @@ func (f *fileSystem) Stat(name string) (file.FileInfo, error) {
 		st = statusSuccess
 		msg = fmt.Sprintf("Directory with path %q info retrieved successfully", name)
 
-		if res.Contents != nil {
-			return &s3file{
-				conn:         f.conn,
-				logger:       f.logger,
-				metrics:      f.metrics,
-				size:         size,
-				contentType:  filetype,
-				name:         f.config.BucketName + string(filepath.Separator) + *res.Contents[0].Key,
-				lastModified: lastModified,
-			}, nil
-		}
-
-		return nil, nil
+		return &s3File{
+			conn:         f.conn,
+			logger:       f.logger,
+			metrics:      f.metrics,
+			size:         size,
+			contentType:  filetype,
+			name:         f.config.BucketName + string(filepath.Separator) + *res.Contents[0].Key,
+			lastModified: lastModified,
+		}, nil
 	}
 
-	return &s3file{
+	return &s3File{
 		conn:         f.conn,
 		logger:       f.logger,
 		metrics:      f.metrics,

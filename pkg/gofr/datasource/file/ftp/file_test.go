@@ -32,7 +32,7 @@ func TestRead(t *testing.T) {
 			name:     "Read with error",
 			filePath: "/ftp/one/nonexistent.txt",
 			mockReadResponse: func(response *MockftpResponse) {
-				response.EXPECT().Read(gomock.Any()).Return(0, errMockErr)
+				response.EXPECT().Read(gomock.Any()).Return(0, errMockSentinel)
 				response.EXPECT().Close().Return(nil)
 			},
 			expectError: true,
@@ -71,7 +71,7 @@ func TestRead(t *testing.T) {
 	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), appFtpStats, gomock.Any(),
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), appFTPStats, gomock.Any(),
 		"type", gomock.Any(), "status", gomock.Any()).AnyTimes()
 
 	for _, tt := range tests {
@@ -120,7 +120,7 @@ func TestReadAt(t *testing.T) {
 			filePath: "/ftp/one/nonexistent.txt",
 			offset:   0,
 			mockReadResponse: func(response *MockftpResponse) {
-				response.EXPECT().Read(gomock.Any()).Return(0, errMockErr)
+				response.EXPECT().Read(gomock.Any()).Return(0, errMockSentinel)
 				response.EXPECT().Close().Return(nil)
 			},
 			expectError: true,
@@ -159,7 +159,7 @@ func TestReadAt(t *testing.T) {
 	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), appFtpStats, gomock.Any(),
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), appFTPStats, gomock.Any(),
 		"type", gomock.Any(), "status", gomock.Any()).AnyTimes()
 
 	for _, tt := range readAtTests {
@@ -208,7 +208,7 @@ func TestWrite(t *testing.T) {
 			filePath: "/ftp/one/nonexistent.txt",
 			mockWriteExpect: func(conn *MockserverConn, filePath string) {
 				emptyReader := bytes.NewReader([]byte("test content"))
-				conn.EXPECT().StorFrom(filePath, emptyReader, uint64(0)).Return(errMockErr)
+				conn.EXPECT().StorFrom(filePath, emptyReader, uint64(0)).Return(errMockSentinel)
 			},
 			expectError: true,
 		},
@@ -247,7 +247,7 @@ func TestWrite(t *testing.T) {
 	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), appFtpStats, gomock.Any(),
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), appFTPStats, gomock.Any(),
 		"type", gomock.Any(), "status", gomock.Any()).AnyTimes()
 
 	for _, tt := range writeTests {
@@ -289,7 +289,7 @@ func TestWriteAt(t *testing.T) {
 			offset:   0,
 			mockWriteExpect: func(conn *MockserverConn, filePath string, offset int64) {
 				emptyReader := bytes.NewReader([]byte("test content"))
-				conn.EXPECT().StorFrom(filePath, emptyReader, uint64(math.Abs(float64(offset)))).Return(errMockErr)
+				conn.EXPECT().StorFrom(filePath, emptyReader, uint64(math.Abs(float64(offset)))).Return(errMockSentinel)
 			},
 			expectError: true,
 		},
@@ -329,7 +329,7 @@ func TestWriteAt(t *testing.T) {
 	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), appFtpStats, gomock.Any(),
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), appFTPStats, gomock.Any(),
 		"type", gomock.Any(), "status", gomock.Any()).AnyTimes()
 
 	for _, tt := range writeAtTests {
@@ -367,7 +367,7 @@ func TestSeek(t *testing.T) {
 	// Common mock setups for logger and metrics
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).Times(5)
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), appFtpStats, gomock.Any(),
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), appFTPStats, gomock.Any(),
 		"type", gomock.Any(), "status", gomock.Any()).AnyTimes()
 
 	for _, tt := range tests {

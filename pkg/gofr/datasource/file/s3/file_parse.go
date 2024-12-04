@@ -41,7 +41,7 @@ type jsonReader struct {
 }
 
 // ReadAll reads either JSON or text files based on file extension and returns a corresponding RowReader.
-func (f *s3file) ReadAll() (file.RowReader, error) {
+func (f *s3File) ReadAll() (file.RowReader, error) {
 	bucketName := strings.Split(f.name, string(filepath.Separator))[0]
 
 	var fileName string
@@ -63,7 +63,7 @@ func (f *s3file) ReadAll() (file.RowReader, error) {
 }
 
 // createJSONReader creates a JSON reader for JSON files.
-func (f *s3file) createJSONReader(location string) (file.RowReader, error) {
+func (f *s3File) createJSONReader(location string) (file.RowReader, error) {
 	status := statusErr
 
 	defer f.sendOperationStats(&FileLog{Operation: "JSON READER", Location: location, Status: &status}, time.Now())
@@ -100,7 +100,7 @@ func (f *s3file) createJSONReader(location string) (file.RowReader, error) {
 }
 
 // createTextCSVReader creates a text reader for reading text files.
-func (f *s3file) createTextCSVReader(location string) (file.RowReader, error) {
+func (f *s3File) createTextCSVReader(location string) (file.RowReader, error) {
 	status := statusErr
 
 	defer f.sendOperationStats(&FileLog{Operation: "TEXT/CSV READER", Location: location, Status: &status}, time.Now())
@@ -149,7 +149,7 @@ func (f *textReader) Scan(i interface{}) error {
 //
 // For a file, this method returns the name of the file without any directory components.
 // For directories, it returns the name of the directory.
-func (f *s3file) Name() string {
+func (f *s3File) Name() string {
 	bucketName := getBucketName(f.name)
 
 	f.sendOperationStats(&FileLog{
@@ -165,7 +165,7 @@ func (f *s3file) Name() string {
 //
 // Note: The Mode method does not provide meaningful information for S3 objects
 // and should be considered a placeholder in this context.
-func (f *s3file) Mode() os.FileMode {
+func (f *s3File) Mode() os.FileMode {
 	bucketName := getBucketName(f.name)
 
 	f.sendOperationStats(&FileLog{
@@ -184,7 +184,7 @@ func (f *s3file) Mode() os.FileMode {
 //
 // Note:
 //   - This method should be called on a FileInfo instance obtained from a Stat or ReadDir operation.
-func (f *s3file) Size() int64 {
+func (f *s3File) Size() int64 {
 	bucketName := getBucketName(f.name)
 
 	f.sendOperationStats(&FileLog{
@@ -200,7 +200,7 @@ func (f *s3file) Size() int64 {
 // For files, it returns the timestamp of the last modification to the file's contents.
 // For directories, it returns the timestamp of the most recent change to the directory's contents, including updates
 // to files within the directory.
-func (f *s3file) ModTime() time.Time {
+func (f *s3File) ModTime() time.Time {
 	bucketName := getBucketName(f.name)
 
 	f.sendOperationStats(&FileLog{
@@ -218,9 +218,9 @@ func (f *s3file) ModTime() time.Time {
 //
 // Note:
 //   - This method should be called on a FileInfo instance obtained from a Stat or ReadDir operation.
-//   - The FileInfo interface is used to describe file system objects, and IsDir is one of its methods
+//   - The [FileInfo] interface is used to describe file system objects, and IsDir is one of its methods
 //     to query whether the object is a directory.
-func (f *s3file) IsDir() bool {
+func (f *s3File) IsDir() bool {
 	bucketName := getBucketName(f.name)
 
 	f.sendOperationStats(&FileLog{
