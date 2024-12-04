@@ -10,7 +10,7 @@ import (
 	"go.uber.org/mock/gomock"
 )
 
-func setupDB(t *testing.T) *client {
+func setupDB(t *testing.T) *Client {
 	t.Helper()
 	cl := New(Configs{DirPath: t.TempDir()})
 
