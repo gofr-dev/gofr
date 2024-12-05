@@ -21,8 +21,8 @@ import (
 // It is different from other datasources.
 
 var (
-	errNoMsgReceived = errors.New("no message received")
-	errTopicMismatch = errors.New("topic should be same as Event Hub name")
+	ErrNoMsgReceived = errors.New("no message received")
+	ErrTopicMismatch = errors.New("topic should be same as Event Hub name")
 )
 
 type Config struct {
@@ -229,7 +229,7 @@ func (c *Client) Subscribe(ctx context.Context, topic string) (*pubsub.Message, 
 			return nil, nil
 		default:
 			msg, err = c.processEvents(ctx, partitionClient)
-			if errors.Is(err, errNoMsgReceived) {
+			if errors.Is(err, ErrNoMsgReceived) {
 				// If no message is received, we don't achieve anything by returning error rather check in a different partition.
 				// This logic may change if we remove the timeout while receiving a message. However, waiting on just one partition
 				// might lead to missing data, so spawning one go-routine or having a worker pool can be an option to do this operation faster.
@@ -269,7 +269,7 @@ func (*Client) processEvents(ctx context.Context, partitionClient *azeventhubs.P
 	}
 
 	if len(events) == 0 {
-		return nil, errNoMsgReceived
+		return nil, ErrNoMsgReceived
 	}
 
 	msg := pubsub.NewMessage(ctx)
@@ -292,7 +292,7 @@ func closePartitionResources(ctx context.Context, partitionClient *azeventhubs.P
 
 func (c *Client) Publish(ctx context.Context, topic string, message []byte) error {
 	if topic != c.cfg.EventhubName {
-		return errTopicMismatch
+		return ErrTopicMismatch
 	}
 
 	c.metrics.IncrementCounter(ctx, "app_pubsub_publish_total_count", "topic", topic)
