@@ -85,3 +85,20 @@ func serializeMessage(response any) ([]byte, error) {
 
 	return message, nil
 }
+
+func (a *App) AddWSService(serviceName, serviceAddress string) {
+	if a.container.WSManager == nil {
+		a.container.WSManager = websocket.New()
+	}
+
+	if a.container.WSServiceAddresses == nil {
+		a.container.WSServiceAddresses = make(map[string]string)
+	}
+
+	if _, ok := a.container.WSServiceAddresses[serviceName]; ok {
+		a.container.Debugf("Service %s already exists", serviceName)
+		return
+	}
+
+	a.container.WSServiceAddresses[serviceName] = serviceAddress
+}

@@ -15,6 +15,8 @@ package container
 import (
 	"context"
 	"errors"
+	"fmt"
+	gWebsocket "github.com/gorilla/websocket"
 	"strconv"
 	"strings"
 	"time"
@@ -49,6 +51,9 @@ type Container struct {
 	Services       map[string]service.HTTP
 	metricsManager metrics.Manager
 	PubSub         pubsub.Client
+
+	WSManager          *websocket.Manager
+	WSServiceAddresses map[string]string
 
 	Redis Redis
 	SQL   DB
@@ -272,4 +277,24 @@ func (*Container) GetConnectionFromContext(ctx context.Context) *websocket.Conne
 	}
 
 	return conn
+}
+
+func (c *Container) GetWSService(serviceName string) (*websocket.Connection, error) {
+	conn := c.WSManager.GetWebsocketConnection(serviceName)
+	if conn != nil {
+		return conn, nil
+	}
+
+	serviceAddress, ok := c.WSServiceAddresses[serviceName]
+	if !ok {
+		return nil, errors.New("WebSocket service not found")
+	}
+
+	wsConn, _, err := gWebsocket.DefaultDialer.Dial(serviceAddress, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to establish WebSocket connection: %w", err)
+	}
+
+	c.WSManager.AddWebsocketConnection(serviceName, &websocket.Connection{Conn: wsConn})
+	return c.WSManager.GetWebsocketConnection(serviceName), nil
 }
