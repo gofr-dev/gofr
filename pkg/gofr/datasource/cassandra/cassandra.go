@@ -72,7 +72,7 @@ func (c *Client) Connect() {
 	}
 
 	cassandraBucktes := []float64{.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 4, 5, 7.5, 10}
-	c.metrics.NewHistogram("app_cassandra_stats", "Response time of CASSANDRA queries in milliseconds.", cassandraBucktes...)
+	c.metrics.NewHistogram("app_cassandra_stats", "Response time of CASSANDRA queries in microseconds.", cassandraBucktes...)
 
 	c.logger.Logf("connected to '%s' keyspace at host '%s' and port '%d'", c.config.Keyspace, c.config.Hosts, c.config.Port)
 
@@ -115,12 +115,12 @@ func (c *Client) ExecCAS(dest any, stmt string, values ...any) (bool, error) {
 }
 
 func (c *Client) NewBatch(name string, batchType int) error {
-	return c.NewBatchWithCtx(nil, name, batchType)
+	return c.NewBatchWithCtx(context.Background(), name, batchType)
 }
 
 //nolint:exhaustive // We just want to take care of slice and struct in this case.
 func (c *Client) QueryWithCtx(ctx context.Context, dest any, stmt string, values ...any) error {
-	_, span := c.addTrace(ctx, "query", stmt)
+	span := c.addTrace(ctx, "query", stmt)
 
 	defer c.sendOperationStats(&QueryLog{Operation: "QueryWithCtx", Query: stmt, Keyspace: c.config.Keyspace}, time.Now(), "query", span)
 
@@ -169,7 +169,7 @@ func (c *Client) QueryWithCtx(ctx context.Context, dest any, stmt string, values
 }
 
 func (c *Client) ExecWithCtx(ctx context.Context, stmt string, values ...any) error {
-	_, span := c.addTrace(ctx, "exec", stmt)
+	span := c.addTrace(ctx, "exec", stmt)
 
 	defer c.sendOperationStats(&QueryLog{Operation: "ExecWithCtx", Query: stmt, Keyspace: c.config.Keyspace}, time.Now(), "exec", span)
 
@@ -183,7 +183,7 @@ func (c *Client) ExecCASWithCtx(ctx context.Context, dest any, stmt string, valu
 		err     error
 	)
 
-	_, span := c.addTrace(ctx, "exec-cas", stmt)
+	span := c.addTrace(ctx, "exec-cas", stmt)
 
 	defer c.sendOperationStats(&QueryLog{Operation: "ExecCASWithCtx", Query: stmt, Keyspace: c.config.Keyspace}, time.Now(), "exec-cas", span)
 
@@ -384,17 +384,17 @@ func (c *Client) HealthCheck(context.Context) (any, error) {
 	return &h, nil
 }
 
-func (c *Client) addTrace(ctx context.Context, method, query string) (context.Context, trace.Span) {
+func (c *Client) addTrace(ctx context.Context, method, query string) trace.Span {
 	if c.tracer != nil {
-		tracerCtx, span := c.tracer.Start(ctx, fmt.Sprintf("cassandra-%v", method))
+		_, span := c.tracer.Start(ctx, fmt.Sprintf("cassandra-%v", method))
 
 		span.SetAttributes(
 			attribute.String("cassandra.query", query),
 			attribute.String("cassandra.keyspace", c.config.Keyspace),
 		)
 
-		return tracerCtx, span
+		return span
 	}
 
-	return ctx, nil
+	return nil
 }
