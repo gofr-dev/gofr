@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 
 	"github.com/gorilla/mux"
@@ -53,4 +54,70 @@ func TestMetrics(t *testing.T) {
 
 	mockMetrics.AssertCalled(t, "RecordHistogram", mock.Anything, "app_http_response", mock.Anything,
 		[]string{"path", "/test", "method", "GET", "status", "200"})
+}
+
+func TestMetrics_StaticFile(t *testing.T) {
+	mockMetrics := &mockMetrics{}
+
+	mockMetrics.On("RecordHistogram", mock.Anything, "app_http_response", mock.Anything,
+		[]string{"path", "/static/example.js", "method", "GET", "status", "200"}).Return(nil)
+
+	// Create a temporary static file for the test
+	tempDir := t.TempDir()
+	staticFilePath := tempDir + "/example.js"
+
+	err := os.WriteFile(staticFilePath, []byte("console.log('test');"), 0600)
+	if err != nil {
+		t.Errorf("failed to create temporary static file: %v", err)
+	}
+
+	router := mux.NewRouter()
+	router.PathPrefix("/static/").Handler(http.StripPrefix("/static/", http.FileServer(http.Dir(tempDir)))).Name("/static/")
+
+	router.Use(Metrics(mockMetrics))
+
+	req := httptest.NewRequest(http.MethodGet, "/static/example.js", http.NoBody)
+	rr := httptest.NewRecorder()
+
+	router.ServeHTTP(rr, req)
+
+	if status := rr.Code; status != http.StatusOK {
+		t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusOK)
+	}
+
+	mockMetrics.AssertCalled(t, "RecordHistogram", mock.Anything, "app_http_response", mock.Anything,
+		[]string{"path", "/static/example.js", "method", "GET", "status", "200"})
+}
+
+func TestMetrics_StaticFileWithQueryParam(t *testing.T) {
+	mockMetrics := &mockMetrics{}
+
+	mockMetrics.On("RecordHistogram", mock.Anything, "app_http_response", mock.Anything,
+		[]string{"path", "/static/example.js", "method", "GET", "status", "200"}).Return(nil)
+
+	// Create a temporary static file for the test
+	tempDir := t.TempDir()
+	staticFilePath := tempDir + "/example.js"
+
+	err := os.WriteFile(staticFilePath, []byte("console.log('test');"), 0600)
+	if err != nil {
+		t.Errorf("failed to create temporary static file: %v", err)
+	}
+
+	router := mux.NewRouter()
+	router.PathPrefix("/static/").Handler(http.StripPrefix("/static/", http.FileServer(http.Dir(tempDir)))).Name("/static/")
+
+	router.Use(Metrics(mockMetrics))
+
+	req := httptest.NewRequest(http.MethodGet, "/static/example.js?v=42", http.NoBody)
+	rr := httptest.NewRecorder()
+
+	router.ServeHTTP(rr, req)
+
+	if status := rr.Code; status != http.StatusOK {
+		t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusOK)
+	}
+
+	mockMetrics.AssertCalled(t, "RecordHistogram", mock.Anything, "app_http_response", mock.Anything,
+		[]string{"path", "/static/example.js", "method", "GET", "status", "200"})
 }
