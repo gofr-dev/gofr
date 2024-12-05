@@ -18,7 +18,12 @@ type mocks struct {
 	file    *File.MockFile
 }
 
-func getMocks(t *testing.T) (fileSystem, mocks) {
+var (
+	errCreateFile = errors.New("failed to create file")
+	errOpenFile   = errors.New("failed to open file")
+)
+
+func getMocks(t *testing.T) (FileSystem, mocks) {
 	t.Helper()
 
 	ctrl := gomock.NewController(t)
@@ -30,7 +35,7 @@ func getMocks(t *testing.T) (fileSystem, mocks) {
 
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 
-	client := fileSystem{logger: mockLogger, metrics: mockMetrics, client: mockClient}
+	client := FileSystem{logger: mockLogger, metrics: mockMetrics, client: mockClient}
 
 	return client, mocks{
 		client:  mockClient,
@@ -48,7 +53,7 @@ func TestFiles_Mkdir(t *testing.T) {
 		err  error
 	}{
 		{"directory created successfully", nil},
-		{"directory creation failed", errors.New("failed to create file")},
+		{"directory creation failed", errCreateFile},
 	}
 
 	for _, tc := range testCases {
@@ -68,7 +73,7 @@ func TestFiles_MkdirAll(t *testing.T) {
 		err  error
 	}{
 		{"directory created successfully", nil},
-		{"directory creation failed", errors.New("failed to create file")},
+		{"directory creation failed", errCreateFile},
 	}
 
 	for _, tc := range testCases {
@@ -88,7 +93,7 @@ func TestFiles_Remove(t *testing.T) {
 		err  error
 	}{
 		{"directory removed successfully", nil},
-		{"directory removal failed", errors.New("failed to create file")},
+		{"directory removal failed", errCreateFile},
 	}
 
 	for _, tc := range testCases {
@@ -108,7 +113,7 @@ func TestFiles_RemoveAll(t *testing.T) {
 		err  error
 	}{
 		{"directory removed successfully", nil},
-		{"directory removal failed", errors.New("failed to create file")},
+		{"directory removal failed", errCreateFile},
 	}
 
 	for _, tc := range testCases {
@@ -128,7 +133,7 @@ func TestFiles_Rename(t *testing.T) {
 		err  error
 	}{
 		{"directory renamed successfully", nil},
-		{"directory rename failed", errors.New("failed to create file")},
+		{"directory rename failed", errCreateFile},
 	}
 
 	for i, tc := range testCases {
@@ -147,7 +152,7 @@ func TestFiles_ChDir(t *testing.T) {
 
 	err := files.ChDir("test.csv")
 
-	require.Equal(t, nil, err, "TEST[%d] Failed. Desc %v")
+	require.NoError(t, err, "TEST[%d] Failed. Desc %v")
 }
 
 func TestFiles_GetWd(t *testing.T) {
@@ -159,7 +164,7 @@ func TestFiles_GetWd(t *testing.T) {
 		err  error
 	}{
 		{"directory renamed successfully", "file", nil},
-		{"directory rename failed", "", errors.New("failed to create file")},
+		{"directory rename failed", "", errCreateFile},
 	}
 
 	for i, tc := range testCases {
@@ -184,7 +189,7 @@ func TestFiles_Create(t *testing.T) {
 		expError error
 	}{
 		{"File Created Successfully", "text.csv", sftpFile{File: &mockSftpFile, logger: mocks.logger}, nil},
-		{"File Creation Failed", "text.csv", nil, errors.New("File Creation Failed")},
+		{"File Creation Failed", "text.csv", nil, errCreateFile},
 	}
 
 	for i, tc := range testCases {
@@ -209,7 +214,7 @@ func TestFiles_Open(t *testing.T) {
 		expError error
 	}{
 		{"File Opened Successfully", "text.csv", sftpFile{File: &mockSftpFile, logger: mocks.logger}, nil},
-		{"File Open Failed", "text.csv", nil, errors.New("File Creation Failed")},
+		{"File Open Failed", "text.csv", nil, errCreateFile},
 	}
 
 	for i, tc := range testCases {
@@ -234,7 +239,7 @@ func TestFiles_OpenFile(t *testing.T) {
 		expError error
 	}{
 		{"File Opened Successfully", "text.csv", sftpFile{File: &mockSftpFile, logger: mocks.logger}, nil},
-		{"File Open Failed", "text.csv", nil, errors.New("File Open Failed")},
+		{"File Open Failed", "text.csv", nil, errOpenFile},
 	}
 
 	for i, tc := range testCases {
@@ -264,7 +269,7 @@ func TestFiles_ReadDir(t *testing.T) {
 		expError error
 	}{
 		{"Dir Read Successfully", "text.csv", []File.FileInfo{info}, nil},
-		{"Dir Read Failed", "text.csv", nil, errors.New("File Creation Failed")},
+		{"Dir Read Failed", "text.csv", nil, errCreateFile},
 	}
 
 	for i, tc := range testCases {
@@ -292,7 +297,7 @@ func TestFiles_Stat(t *testing.T) {
 		expError error
 	}{
 		{"File Stat Successfully Returned", "text.csv", info, nil},
-		{"File Stat Fetch Failed", "text.csv", nil, errors.New("File Creation Failed")},
+		{"File Stat Fetch Failed", "text.csv", nil, errCreateFile},
 	}
 
 	for i, tc := range testCases {
