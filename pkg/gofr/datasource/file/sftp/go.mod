@@ -8,7 +8,7 @@ replace gofr.dev => ../../../../../../gofr
 
 require (
 	github.com/pkg/sftp v1.13.6
-	github.com/stretchr/testify v1.9.0
+	github.com/stretchr/testify v1.10.0
 	go.uber.org/mock v0.5.0
 	gofr.dev v0.19.0
 	golang.org/x/crypto v0.29.0
