@@ -183,7 +183,8 @@ func TestPutInvalidDataPoint(t *testing.T) {
 	resp := &PutResponse{}
 
 	err := client.PutDataPoints(context.Background(), dataPoints, "", resp)
-	require.EqualError(t, err, "invalid data points: please give a valid value")
+	require.ErrorIs(t, err, errInvalidDataPoint)
+	require.ErrorContains(t, err, "please give a valid value")
 }
 
 func TestPutInvalidQueryParam(t *testing.T) {
@@ -226,7 +227,8 @@ func TestPutErrorResponse(t *testing.T) {
 	resp := &PutResponse{}
 
 	err := client.PutDataPoints(context.Background(), dataPoints, "", resp)
-	require.EqualError(t, err, "error response from OpenTSDB server, status code: 400")
+	require.ErrorIs(t, err, errResp)
+	require.ErrorContains(t, err, "status code: 400")
 }
 
 func TestPostQuerySuccess(t *testing.T) {

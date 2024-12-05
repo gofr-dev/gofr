@@ -72,7 +72,7 @@ func (c *Client) Connect() {
 	}
 
 	cassandraBucktes := []float64{.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 4, 5, 7.5, 10}
-	c.metrics.NewHistogram("app_cassandra_stats", "Response time of CASSANDRA queries in milliseconds.", cassandraBucktes...)
+	c.metrics.NewHistogram("app_cassandra_stats", "Response time of CASSANDRA queries in microseconds.", cassandraBucktes...)
 
 	c.logger.Logf("connected to '%s' keyspace at host '%s' and port '%d'", c.config.Keyspace, c.config.Hosts, c.config.Port)
 
