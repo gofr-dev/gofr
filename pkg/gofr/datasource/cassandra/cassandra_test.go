@@ -89,7 +89,7 @@ func Test_Connect(t *testing.T) {
 	}{
 		{"successful connection", func() {
 			mockClusterConfig.EXPECT().createSession().Return(&cassandraSession{}, nil).Times(1)
-			mockMetrics.EXPECT().NewHistogram("app_cassandra_stats", "Response time of CASSANDRA queries in milliseconds.",
+			mockMetrics.EXPECT().NewHistogram("app_cassandra_stats", "Response time of CASSANDRA queries in microseconds.",
 				cassandraBuckets).Times(1)
 			mockLogger.EXPECT().Debugf("connecting to Cassandra at %v on port %v to keyspace %v", "host1", 9042, "test_keyspace")
 			mockLogger.EXPECT().Logf("connected to '%s' keyspace at host '%s' and port '%d'", "test_keyspace", "host1", 9042)
