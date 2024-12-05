@@ -138,6 +138,18 @@ func (ws *Manager) CloseConnection(connID string) {
 	}
 }
 
+func (c *Connection) ReadMessage() (messageType int, p []byte, err error) {
+	return c.Conn.ReadMessage()
+}
+
+func (c *Connection) WriteMessage(messageType int, data []byte) error {
+	return c.Conn.WriteMessage(messageType, data)
+}
+
+func (c *Connection) Close() error {
+	return c.Conn.Close()
+}
+
 func (*Connection) Params(string) []string {
 	return nil
 }
