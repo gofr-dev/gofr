@@ -19,6 +19,7 @@ func TestLoggingDataPresent(t *testing.T) {
 	expected := "name:John"
 
 	var buf bytes.Buffer
+
 	queryLog.PrettyPrint(&buf)
 
 	assert.Contains(t, buf.String(), expected)
@@ -32,6 +33,7 @@ func TestLoggingEmptyData(t *testing.T) {
 	expected := "name:John"
 
 	var buf bytes.Buffer
+
 	queryLog.PrettyPrint(&buf)
 
 	assert.NotContains(t, buf.String(), expected)
