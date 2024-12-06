@@ -138,7 +138,7 @@ type Person struct {
 func main() {
 	app := gofr.New()
 	
-	db := mongo.New(Config{URI: "mongodb://localhost:27017", Database: "test",ConnectionTimeout: 4*time.Second})
+	db := mongo.New(mongo.Config{URI: "mongodb://localhost:27017", Database: "test",ConnectionTimeout: 4*time.Second})
 	
 	// inject the mongo into gofr to use mongoDB across the application
 	// using gofr context
@@ -619,7 +619,7 @@ func main() {
 	app := gofr.New()
 
 	// Initialize OpenTSDB connection
-	app.AddOpenTSDB(opentsdb.New(&opentsdb.Config{
+	app.AddOpenTSDB(opentsdb.New(opentsdb.Config{
 		Host:             "localhost:4242",
 		MaxContentLength: 4096,
 		MaxPutPointsNum:  1000,

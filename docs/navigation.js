@@ -141,6 +141,11 @@ export const navigation = [
                 title: 'WebSockets',
                 href: '/docs/advanced-guide/websocket',
                 desc: "Explore how gofr eases the process of WebSocket communication in your Golang application for real-time data exchange."
+            },
+            {
+                title: 'Serving-Static Files',
+                href: '/docs/advanced-guide/serving-static-files',
+                desc: "Know how GoFr automatically serves static content from a static folder in the application directory."
             }
         ],
     },

@@ -616,6 +616,12 @@ func (a *App) EnableOAuth(jwksEndpoint string, refreshInterval int) {
 // If the subscriber is not initialized in the container, an error is logged and
 // the subscription is not registered.
 func (a *App) Subscribe(topic string, handler SubscribeFunc) {
+	if topic == "" || handler == nil {
+		a.container.Logger.Errorf("invalid subscription: topic and handler must not be empty or nil")
+
+		return
+	}
+
 	if a.container.GetSubscriber() == nil {
 		a.container.Logger.Errorf("subscriber not initialized in the container")
 

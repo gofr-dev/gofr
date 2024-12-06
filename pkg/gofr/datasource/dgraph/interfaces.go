@@ -87,12 +87,12 @@ func (d *dgraphClientImpl) Alter(ctx context.Context, op *api.Operation) error {
 }
 
 // Login logs in to the Dgraph database.
-func (d *dgraphClientImpl) Login(ctx context.Context, userid string, password string) error {
+func (d *dgraphClientImpl) Login(ctx context.Context, userid, password string) error {
 	return d.client.Login(ctx, userid, password)
 }
 
 // LoginIntoNamespace logs in to the Dgraph database with a specific namespace.
-func (d *dgraphClientImpl) LoginIntoNamespace(ctx context.Context, userid string, password string, namespace uint64) error {
+func (d *dgraphClientImpl) LoginIntoNamespace(ctx context.Context, userid, password string, namespace uint64) error {
 	return d.client.LoginIntoNamespace(ctx, userid, password, namespace)
 }
 

@@ -6,6 +6,8 @@ import (
 	"strings"
 )
 
+var whitespaceRegex = regexp.MustCompile(`\s+`)
+
 // Logger interface with required methods.
 type Logger interface {
 	Debug(args ...interface{})
@@ -35,8 +37,8 @@ func (ql *QueryLog) PrettyPrint(logger Logger) {
 	logger.Debug(formattedLog)
 }
 
-// clean replaces multiple consecutive whitespace characters with a single space and trims leading/trailing whitespace
+// clean replaces multiple consecutive whitespace characters with a single space and trims leading/trailing whitespace.
 func clean(query string) string {
-	query = regexp.MustCompile(`\s+`).ReplaceAllString(query, " ")
+	query = whitespaceRegex.ReplaceAllString(query, " ")
 	return strings.TrimSpace(query)
 }

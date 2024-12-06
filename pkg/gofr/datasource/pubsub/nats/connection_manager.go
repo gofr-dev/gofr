@@ -2,7 +2,6 @@ package nats
 
 import (
 	"context"
-	"time"
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
@@ -12,10 +11,6 @@ import (
 )
 
 //go:generate mockgen -destination=mock_jetstream.go -package=nats github.com/nats-io/nats.go/jetstream jStream,Stream,Consumer,Msg,MessageBatch
-
-const (
-	ctxCloseTimeout = 5 * time.Second
-)
 
 type ConnectionManager struct {
 	conn             ConnInterface
@@ -109,7 +104,7 @@ func (cm *ConnectionManager) Connect() error {
 	return nil
 }
 
-func (cm *ConnectionManager) Close(ctx context.Context) {
+func (cm *ConnectionManager) Close(_ context.Context) {
 	if cm.conn != nil {
 		cm.conn.Close()
 	}

@@ -3,7 +3,6 @@ package eventhub
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 	"time"
 
@@ -21,7 +20,10 @@ import (
 // metrics are being registered in the container, and we are using the same metrics so we have not re-registered the metrics here.
 // It is different from other datasources.
 
-var errNoMsgReceived = errors.New("no message received")
+var (
+	ErrNoMsgReceived = errors.New("no message received")
+	ErrTopicMismatch = errors.New("topic should be same as Event Hub name")
+)
 
 type Config struct {
 	ConnectionString          string
@@ -31,7 +33,7 @@ type Config struct {
 	EventhubName              string
 	// if not provided, it will read from the $Default consumergroup.
 	ConsumerGroup string
-	// the following configs are for advance setup of the eventhub.
+	// the following configs are for advance setup of the Event Hub.
 	StorageOptions   *container.ClientOptions
 	BlobStoreOptions *checkpoints.BlobStoreOptions
 	ConsumerOptions  *azeventhubs.ConsumerClientOptions
@@ -53,13 +55,16 @@ type Client struct {
 	tracer       trace.Tracer
 }
 
-// New Creates the client for Eventhub
+// New Creates the client for Event Hub.
+//
+//nolint:gocritic // cfg is a configuration struct.
 func New(cfg Config) *Client {
 	return &Client{
 		cfg: cfg,
 	}
 }
 
+//nolint:gocritic // cfg is a configuration struct.
 func (c *Client) validConfigs(cfg Config) bool {
 	ok := true
 
@@ -98,24 +103,23 @@ func (c *Client) validConfigs(cfg Config) bool {
 	}
 
 	return ok
-
 }
 
-// UseLogger sets the logger for the eventhub client.
+// UseLogger sets the logger for the Event Hub client.
 func (c *Client) UseLogger(logger any) {
 	if l, ok := logger.(Logger); ok {
 		c.logger = l
 	}
 }
 
-// UseMetrics sets the metrics for the eventhub client.
+// UseMetrics sets the metrics for the Event Hub client.
 func (c *Client) UseMetrics(metrics any) {
 	if m, ok := metrics.(Metrics); ok {
 		c.metrics = m
 	}
 }
 
-// UseTracer sets the tracer for the eventhub client.
+// UseTracer sets the tracer for the Event Hub client.
 func (c *Client) UseTracer(tracer any) {
 	if t, ok := tracer.(trace.Tracer); ok {
 		c.tracer = t
@@ -128,7 +132,7 @@ func (c *Client) Connect() {
 		return
 	}
 
-	c.logger.Debug("azure eventhub connection started using connection string")
+	c.logger.Debug("Event Hub connection started using connection string")
 
 	producerClient, err := azeventhubs.NewProducerClientFromConnectionString(c.cfg.ConnectionString,
 		c.cfg.EventhubName, c.cfg.ProducerOptions)
@@ -138,7 +142,7 @@ func (c *Client) Connect() {
 		return
 	}
 
-	c.logger.Debug("azure eventhub producer client setup success")
+	c.logger.Debug("Event Hub producer client setup success")
 
 	containerClient, err := container.NewClientFromConnectionString(c.cfg.ContainerConnectionString, c.cfg.StorageContainerName,
 		c.cfg.StorageOptions)
@@ -148,7 +152,7 @@ func (c *Client) Connect() {
 		return
 	}
 
-	c.logger.Debug("azure eventhub container client setup success")
+	c.logger.Debug("Event Hub container client setup success")
 
 	// create a checkpoint store that will be used by the event hub
 	checkpointStore, err := checkpoints.NewBlobStore(containerClient, c.cfg.BlobStoreOptions)
@@ -158,7 +162,7 @@ func (c *Client) Connect() {
 		return
 	}
 
-	c.logger.Debug("azure eventhub blobstore client setup success")
+	c.logger.Debug("Event Hub blobstore client setup success")
 
 	// create a consumer client using a connection string to the namespace and the event hub
 	consumerClient, err := azeventhubs.NewConsumerClientFromConnectionString(c.cfg.ConnectionString, c.cfg.EventhubName,
@@ -169,7 +173,7 @@ func (c *Client) Connect() {
 		return
 	}
 
-	c.logger.Debug("azure eventhub consumer client setup success")
+	c.logger.Debug("Event Hub consumer client setup success")
 
 	// create a processor to receive and process events
 	processor, err := azeventhubs.NewProcessor(consumerClient, checkpointStore, nil)
@@ -179,7 +183,7 @@ func (c *Client) Connect() {
 		return
 	}
 
-	c.logger.Debug("azure eventhub processor setup success")
+	c.logger.Debug("Event Hub processor setup success")
 
 	processorCtx, processorCancel := context.WithCancel(context.TODO())
 	c.processorCtx = processorCancel
@@ -192,7 +196,7 @@ func (c *Client) Connect() {
 			return
 		}
 
-		c.logger.Debug("azure eventhub processor running successfully")
+		c.logger.Debug("Event Hub processor running successfully")
 	}()
 
 	c.processor = processor
@@ -225,7 +229,7 @@ func (c *Client) Subscribe(ctx context.Context, topic string) (*pubsub.Message, 
 			return nil, nil
 		default:
 			msg, err = c.processEvents(ctx, partitionClient)
-			if errors.Is(err, errNoMsgReceived) {
+			if errors.Is(err, ErrNoMsgReceived) {
 				// If no message is received, we don't achieve anything by returning error rather check in a different partition.
 				// This logic may change if we remove the timeout while receiving a message. However, waiting on just one partition
 				// might lead to missing data, so spawning one go-routine or having a worker pool can be an option to do this operation faster.
@@ -238,7 +242,7 @@ func (c *Client) Subscribe(ctx context.Context, topic string) (*pubsub.Message, 
 				Mode:          "SUB",
 				MessageValue:  strings.Join(strings.Fields(string(msg.Value)), " "),
 				Topic:         topic,
-				Host:          fmt.Sprint(c.cfg.EventhubName + ":" + c.cfg.ConsumerGroup + ":" + partitionClient.PartitionID()),
+				Host:          c.cfg.EventhubName + ":" + c.cfg.ConsumerGroup + ":" + partitionClient.PartitionID(),
 				PubSubBackend: "EVHUB",
 				Time:          end.Microseconds(),
 			})
@@ -252,11 +256,12 @@ func (c *Client) Subscribe(ctx context.Context, topic string) (*pubsub.Message, 
 	return nil, nil
 }
 
-func (c *Client) processEvents(ctx context.Context, partitionClient *azeventhubs.ProcessorPartitionClient) (*pubsub.Message, error) {
+func (*Client) processEvents(ctx context.Context, partitionClient *azeventhubs.ProcessorPartitionClient) (*pubsub.Message, error) {
 	defer closePartitionResources(ctx, partitionClient)
 
 	receiveCtx, receiveCtxCancel := context.WithTimeout(ctx, time.Second)
 	events, err := partitionClient.ReceiveEvents(receiveCtx, 1, nil)
+
 	receiveCtxCancel()
 
 	if err != nil && !errors.Is(err, context.DeadlineExceeded) {
@@ -264,7 +269,7 @@ func (c *Client) processEvents(ctx context.Context, partitionClient *azeventhubs
 	}
 
 	if len(events) == 0 {
-		return nil, errNoMsgReceived
+		return nil, ErrNoMsgReceived
 	}
 
 	msg := pubsub.NewMessage(ctx)
@@ -282,12 +287,12 @@ func (c *Client) processEvents(ctx context.Context, partitionClient *azeventhubs
 }
 
 func closePartitionResources(ctx context.Context, partitionClient *azeventhubs.ProcessorPartitionClient) {
-	defer partitionClient.Close(ctx)
+	partitionClient.Close(ctx)
 }
 
 func (c *Client) Publish(ctx context.Context, topic string, message []byte) error {
 	if topic != c.cfg.EventhubName {
-		return errors.New("topic should be same as eventhub name")
+		return ErrTopicMismatch
 	}
 
 	c.metrics.IncrementCounter(ctx, "app_pubsub_publish_total_count", "topic", topic)
@@ -307,12 +312,15 @@ func (c *Client) Publish(ctx context.Context, topic string, message []byte) erro
 
 	for i := 0; i < len(data); i++ {
 		err = batch.AddEventData(data[i], nil)
+		if err != nil {
+			c.logger.Debugf("failed to add event data to batch %v", err)
+		}
 	}
 
 	start := time.Now()
 
 	// send the batch of events to the event hub
-	if err = c.producer.SendEventDataBatch(ctx, batch, nil); err != nil {
+	if err := c.producer.SendEventDataBatch(ctx, batch, nil); err != nil {
 		return err
 	}
 
@@ -322,7 +330,7 @@ func (c *Client) Publish(ctx context.Context, topic string, message []byte) erro
 		Mode:          "PUB",
 		MessageValue:  strings.Join(strings.Fields(string(message)), " "),
 		Topic:         topic,
-		Host:          fmt.Sprint(c.cfg.EventhubName),
+		Host:          c.cfg.EventhubName,
 		PubSubBackend: "EVHUB",
 		Time:          end.Microseconds(),
 	})
@@ -333,19 +341,19 @@ func (c *Client) Publish(ctx context.Context, topic string, message []byte) erro
 }
 
 func (c *Client) Health() datasource.Health {
-	c.logger.Error("health-check not implemented for eventhub")
+	c.logger.Error("health-check not implemented for Event Hub")
 
 	return datasource.Health{}
 }
 
 func (c *Client) CreateTopic(context.Context, string) error {
-	c.logger.Error("topic creation is not supported in eventhub")
+	c.logger.Error("topic creation is not supported in Event Hub")
 
 	return nil
 }
 
 func (c *Client) DeleteTopic(context.Context, string) error {
-	c.logger.Error("topic deletion is not supported in eventhub")
+	c.logger.Error("topic deletion is not supported in Event Hub")
 
 	return nil
 }
@@ -353,12 +361,12 @@ func (c *Client) DeleteTopic(context.Context, string) error {
 func (c *Client) Close() error {
 	err := c.producer.Close(context.Background())
 	if err != nil {
-		c.logger.Errorf("failed to close eventhub producer %v", err)
+		c.logger.Errorf("failed to close Event Hub producer %v", err)
 	}
 
 	err = c.consumer.Close(context.Background())
 	if err != nil {
-		c.logger.Errorf("failed to close eventhub consumer %v", err)
+		c.logger.Errorf("failed to close Event Hub consumer %v", err)
 	}
 
 	c.processorCtx()

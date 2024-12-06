@@ -5,7 +5,7 @@ import (
 	"io"
 )
 
-// Logger interface with required methods
+// Logger interface with required methods.
 type Logger interface {
 	Debug(args ...interface{})
 	Debugf(pattern string, args ...interface{})

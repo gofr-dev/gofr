@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"strconv"
 	"sync"
 	"time"
@@ -352,7 +353,7 @@ func (m *MQTT) Unsubscribe(topic string) error {
 func (m *MQTT) Close() error {
 	timeout := m.config.CloseTimeout
 
-	return m.Disconnect(uint(timeout))
+	return m.Disconnect(uint(math.Min(float64(timeout.Milliseconds()), float64(math.MaxUint32))))
 }
 
 func (m *MQTT) Disconnect(waitTime uint) error {
