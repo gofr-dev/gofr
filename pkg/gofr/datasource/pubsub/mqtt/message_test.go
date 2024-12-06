@@ -36,6 +36,10 @@ func (m mockMessage) Topic() string {
 }
 
 func (m mockMessage) MessageID() uint16 {
+	if m.messageID < 0 || m.messageID > int(^uint16(0)) {
+		return 0
+	}
+
 	return uint16(m.messageID)
 }
 
