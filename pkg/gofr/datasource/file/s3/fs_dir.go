@@ -19,12 +19,26 @@ import (
 	file "gofr.dev/pkg/gofr/datasource/file"
 )
 
+var (
+	ErrOperationNotPermitted = errors.New("operation not permitted")
+)
+
+// getBucketName returns the currentS3Bucket.
+func getBucketName(filePath string) string {
+	return strings.Split(filePath, string(filepath.Separator))[0]
+}
+
+// getLocation returns the absolute path of the S3 bucket.
+func getLocation(bucket string) string {
+	return path.Join(string(filepath.Separator), bucket)
+}
+
 // Mkdir creates a directory and any necessary parent directories in the S3 bucket.
 //
 // This method creates a pseudo-directory in the S3 bucket by putting objects with the specified path prefixes.
 // Since S3 uses a flat storage structure, directories are represented by object keys with trailing slashes.
 // The method processes the path segments and ensures that each segment (directory) exists in S3.
-func (f *fileSystem) Mkdir(name string, _ os.FileMode) error {
+func (f *FileSystem) Mkdir(name string, _ os.FileMode) error {
 	var msg string
 
 	st := statusErr
@@ -67,7 +81,7 @@ func (f *fileSystem) Mkdir(name string, _ os.FileMode) error {
 // Instead, they use a flat structure.
 // S3 treats paths as part of object keys, so creating a directory is functionally equivalent to creating an
 // object with a specific prefix.
-func (f *fileSystem) MkdirAll(name string, perm os.FileMode) error {
+func (f *FileSystem) MkdirAll(name string, perm os.FileMode) error {
 	return f.Mkdir(name, perm)
 }
 
@@ -76,7 +90,7 @@ func (f *fileSystem) MkdirAll(name string, perm os.FileMode) error {
 // This method removes a directory and all objects within it from the S3 bucket. It only supports deleting directories
 // and will return an error if a file path (as indicated by a file extension) is provided. The method lists all objects
 // under the specified directory prefix and deletes them in a single batch operation.
-func (f *fileSystem) RemoveAll(name string) error {
+func (f *FileSystem) RemoveAll(name string) error {
 	if path.Ext(name) != "" {
 		return f.Remove(name)
 	}
@@ -150,7 +164,7 @@ func getRelativepath(key, filePath string) string {
 // Note:
 //   - Directories are represented by the prefixes of the file keys in S3, and this method retrieves file entries
 //     only one level deep from the specified directory.
-func (f *fileSystem) ReadDir(name string) ([]file.FileInfo, error) {
+func (f *FileSystem) ReadDir(name string) ([]file.FileInfo, error) {
 	var filePath, msg string
 
 	st := statusErr
@@ -181,7 +195,7 @@ func (f *fileSystem) ReadDir(name string) ([]file.FileInfo, error) {
 		return nil, err
 	}
 
-	var fileInfo []file.FileInfo
+	fileInfo := make([]file.FileInfo, 0)
 
 	for i := range entries.Contents {
 		if i == 0 && filePath != "" {
@@ -191,14 +205,14 @@ func (f *fileSystem) ReadDir(name string) ([]file.FileInfo, error) {
 		relativepath := getRelativepath(*entries.Contents[i].Key, filePath)
 
 		if len(fileInfo) > 0 {
-			temp, ok := fileInfo[len(fileInfo)-1].(*s3file)
+			temp, ok := fileInfo[len(fileInfo)-1].(*S3File)
 
 			if ok && relativepath == path.Base(temp.name)+string(filepath.Separator) {
 				continue
 			}
 		}
 
-		fileInfo = append(fileInfo, &s3file{
+		fileInfo = append(fileInfo, &S3File{
 			conn:         f.conn,
 			logger:       f.logger,
 			metrics:      f.metrics,
@@ -220,7 +234,7 @@ func (f *fileSystem) ReadDir(name string) ([]file.FileInfo, error) {
 //
 // This method attempts to change the current directory, but S3 does not support directory changes due to its flat file structure.
 // The bucket is constant and fixed, so directory operations are not applicable.
-func (f *fileSystem) ChDir(string) error {
+func (f *FileSystem) ChDir(string) error {
 	st := statusErr
 
 	defer f.sendOperationStats(&FileLog{
@@ -230,13 +244,13 @@ func (f *fileSystem) ChDir(string) error {
 		Message:   aws.String("Changing directory not supported"),
 	}, time.Now())
 
-	return errors.New("s3 does not support changing directories due to flat file structure")
+	return fmt.Errorf("%w: s3 has a flat file structure", ErrOperationNotPermitted)
 }
 
 // Getwd returns the currently set bucket on S3.
 //
 // This method retrieves the name of the bucket that is currently set for S3 operations.
-func (f *fileSystem) Getwd() (string, error) {
+func (f *FileSystem) Getwd() (string, error) {
 	status := statusSuccess
 
 	f.sendOperationStats(&FileLog{Operation: "GETWD", Location: getLocation(f.config.BucketName), Status: &status}, time.Now())
@@ -248,7 +262,7 @@ func (f *fileSystem) Getwd() (string, error) {
 //
 // This method handles the process of renaming a directory in an S3 bucket. It first lists all objects under the old
 // directory path, copies each object to the new directory path, and then deletes the old directory and its contents.
-func (f *fileSystem) renameDirectory(st, msg *string, oldPath, newPath string) error {
+func (f *FileSystem) renameDirectory(st, msg *string, oldPath, newPath string) error {
 	entries, err := f.conn.ListObjectsV2(context.TODO(), &s3.ListObjectsV2Input{
 		Bucket: aws.String(f.config.BucketName),
 		Prefix: aws.String(oldPath + "/"),
@@ -289,8 +303,95 @@ func (f *fileSystem) renameDirectory(st, msg *string, oldPath, newPath string) e
 	return nil
 }
 
+// Stat retrieves the FileInfo for the specified file or directory in the S3 bucket.
+//
+// If the provided name has no file extension, it is treated as a directory by default. If the name starts with "0",
+// it is interpreted as a binary file rather than a directory, with the "0" prefix removed.
+//
+// For directories, the method aggregates the sizes of all objects within the directory and returns the latest modified
+// time among them. For files, it returns the file's size and last modified time.
+func (f *FileSystem) Stat(name string) (file.FileInfo, error) {
+	var msg string
+
+	st := statusErr
+
+	defer f.sendOperationStats(&FileLog{
+		Operation: "STAT",
+		Location:  getLocation(f.config.BucketName),
+		Status:    &st,
+		Message:   &msg,
+	}, time.Now())
+
+	filetype := TypeFile
+
+	// Here we assume the user passes "0filePath" in case it wants to get fileinfo about a binary file instead of a directory
+	if path.Ext(name) == "" {
+		filetype = TypeDirectory
+
+		var isBinary bool
+
+		name, isBinary = strings.CutPrefix(name, "0")
+
+		if isBinary {
+			filetype = TypeFile
+		}
+	}
+
+	res, err := f.conn.ListObjectsV2(context.TODO(), &s3.ListObjectsV2Input{
+		Bucket: aws.String(f.config.BucketName),
+		Prefix: aws.String(name),
+	})
+
+	if err != nil {
+		f.logger.Errorf("Error returning file info: %v", err)
+		return nil, err
+	}
+
+	if len(res.Contents) == 0 {
+		return nil, nil
+	}
+
+	if filetype == TypeDirectory {
+		var size int64
+
+		var lastModified time.Time
+
+		for i := range res.Contents {
+			size += *res.Contents[i].Size
+
+			if res.Contents[i].LastModified.After(lastModified) {
+				lastModified = *res.Contents[i].LastModified
+			}
+		}
+
+		// directory exist and first value gives information about the directory
+		st = statusSuccess
+		msg = fmt.Sprintf("Directory with path %q info retrieved successfully", name)
+
+		return &S3File{
+			conn:         f.conn,
+			logger:       f.logger,
+			metrics:      f.metrics,
+			size:         size,
+			contentType:  filetype,
+			name:         f.config.BucketName + string(filepath.Separator) + *res.Contents[0].Key,
+			lastModified: lastModified,
+		}, nil
+	}
+
+	return &S3File{
+		conn:         f.conn,
+		logger:       f.logger,
+		metrics:      f.metrics,
+		size:         *res.Contents[0].Size,
+		name:         f.config.BucketName + string(filepath.Separator) + *res.Contents[0].Key,
+		contentType:  filetype,
+		lastModified: *res.Contents[0].LastModified,
+	}, nil
+}
+
 // sendOperationStats logs the FileLog of any file operations performed in S3.
-func (f *fileSystem) sendOperationStats(fl *FileLog, startTime time.Time) {
+func (f *FileSystem) sendOperationStats(fl *FileLog, startTime time.Time) {
 	duration := time.Since(startTime).Microseconds()
 
 	fl.Duration = duration

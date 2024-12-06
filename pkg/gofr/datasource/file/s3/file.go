@@ -17,8 +17,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
-type s3file struct {
-	conn         *s3.Client
+type S3File struct {
+	conn         s3Client
 	name         string
 	offset       int64
 	logger       Logger
@@ -29,94 +29,12 @@ type s3file struct {
 	lastModified time.Time
 }
 
-// Name returns the base name of the file.
-//
-// For a file, this method returns the name of the file without any directory components.
-// For directories, it returns the name of the directory.
-func (f *s3file) Name() string {
-	bucketName := getBucketName(f.name)
-
-	f.sendOperationStats(&FileLog{
-		Operation: "GET NAME",
-		Location:  getLocation(bucketName),
-	}, time.Now())
-
-	return path.Base(f.name)
-}
-
-// Mode is not supported for the current implementation of S3 buckets.
-// This method is included to adhere to the FileSystem interface in GoFr.
-//
-// Note: The Mode method does not provide meaningful information for S3 objects
-// and should be considered a placeholder in this context.
-func (f *s3file) Mode() os.FileMode {
-	bucketName := getBucketName(f.name)
-
-	f.sendOperationStats(&FileLog{
-		Operation: "FILE MODE",
-		Location:  getLocation(bucketName),
-		Message:   aws.String("Not supported for S3"),
-	}, time.Now())
-
-	return 0
-}
-
-// Size returns the size of the retrieved object.
-//
-// For files, it returns the size of the file in bytes.
-// For directories, it returns the sum of sizes of all files contained within the directory.
-//
-// Note:
-//   - This method should be called on a FileInfo instance obtained from a Stat or ReadDir operation.
-func (f *s3file) Size() int64 {
-	bucketName := getBucketName(f.name)
-
-	f.sendOperationStats(&FileLog{
-		Operation: "FILE/DIR SIZE",
-		Location:  getLocation(bucketName),
-	}, time.Now())
-
-	return f.size
-}
-
-// ModTime returns the last modification time of the file or directory.
-//
-// For files, it returns the timestamp of the last modification to the file's contents.
-// For directories, it returns the timestamp of the most recent change to the directory's contents, including updates
-// to files within the directory.
-func (f *s3file) ModTime() time.Time {
-	bucketName := getBucketName(f.name)
-
-	f.sendOperationStats(&FileLog{
-		Operation: "LAST MODIFIED",
-		Location:  getLocation(bucketName),
-	}, time.Now())
-
-	return f.lastModified
-}
-
-// IsDir checks if the FileInfo describes a directory.
-//
-// This method returns true if the FileInfo object represents a directory; otherwise, it returns false.
-// It is specifically used to determine the type of the file system object represented by the FileInfo.
-//
-// Note:
-//   - This method should be called on a FileInfo instance obtained from a Stat or ReadDir operation.
-//   - The FileInfo interface is used to describe file system objects, and IsDir is one of its methods
-//     to query whether the object is a directory.
-func (f *s3file) IsDir() bool {
-	bucketName := getBucketName(f.name)
-
-	f.sendOperationStats(&FileLog{
-		Operation: "IS DIR",
-		Location:  getLocation(bucketName),
-	}, time.Now())
-
-	return strings.HasSuffix(f.name, "/")
-}
+var (
+	ErrNilResponse = errors.New("response retrieved is nil ")
+)
 
 // Close closes the response body returned in Open/Create methods if the response body is not nil.
-func (f *s3file) Close() error {
+func (f *S3File) Close() error {
 	bucketName := getBucketName(f.name)
 
 	defer f.sendOperationStats(&FileLog{
@@ -136,7 +54,7 @@ func (f *s3file) Close() error {
 // it returns an io.EOF error to indicate that the end of the file has been reached before the slice was completely filled.
 //
 // Additionally, this method updates the file offset to reflect the next position that will be used for subsequent read or write operations.
-func (f *s3file) Read(p []byte) (n int, err error) {
+func (f *S3File) Read(p []byte) (n int, err error) {
 	var fileName, msg string
 
 	bucketName := getBucketName(f.name)
@@ -169,7 +87,7 @@ func (f *s3file) Read(p []byte) (n int, err error) {
 	f.body = res.Body
 	if f.body == nil {
 		msg = fmt.Sprintf("File %q is nil", fileName)
-		return 0, errors.New("s3 body is nil")
+		return 0, fmt.Errorf("%w: S3 file is empty", ErrNilResponse)
 	}
 
 	buffer := make([]byte, len(p)+int(f.offset))
@@ -197,7 +115,7 @@ func (f *s3file) Read(p []byte) (n int, err error) {
 //
 // This method reads up to len(p) bytes from the file, starting at the given offset. It does not alter the current file offset
 // used for other read or write operations. The number of bytes read is returned, along with any error encountered.
-func (f *s3file) ReadAt(p []byte, offset int64) (n int, err error) {
+func (f *S3File) ReadAt(p []byte, offset int64) (n int, err error) {
 	bucketName := getBucketName(f.name)
 
 	var fileName, msg string
@@ -217,12 +135,12 @@ func (f *s3file) ReadAt(p []byte, offset int64) (n int, err error) {
 		fileName = f.name[index+1:]
 	}
 
-	res, err := f.conn.GetObject(context.TODO(), &s3.GetObjectInput{
+	res, objectErr := f.conn.GetObject(context.TODO(), &s3.GetObjectInput{
 		Bucket: aws.String(bucketName),
 		Key:    aws.String(fileName),
 	})
 
-	if err != nil {
+	if objectErr != nil {
 		msg = fmt.Sprintf("Failed to retrieve file %q: %v", fileName, err)
 		return 0, err
 	}
@@ -235,7 +153,7 @@ func (f *s3file) ReadAt(p []byte, offset int64) (n int, err error) {
 
 	if int64(len(p))+offset+1 > f.size {
 		msg = fmt.Sprintf("Offset %v out of range", f.offset)
-		return 0, errors.New("reading out of range, fetching from the offset. Use Seek to reset offset")
+		return 0, fmt.Errorf("%w: reading out of range, fetching from the offset. Use Seek to reset offset", ErrOutOfRange)
 	}
 
 	buffer := make([]byte, len(p)+int(offset)+1)
@@ -260,7 +178,7 @@ func (f *s3file) ReadAt(p []byte, offset int64) (n int, err error) {
 //
 // This method writes up to len(p) bytes from the provided byte slice to the file, starting at the current offset.
 // It updates the file offset after the write operation to reflect the new position for subsequent read or write operations.
-func (f *s3file) Write(p []byte) (n int, err error) {
+func (f *S3File) Write(p []byte) (n int, err error) {
 	bucketName := getBucketName(f.name)
 
 	var fileName, msg string
@@ -284,14 +202,14 @@ func (f *s3file) Write(p []byte) (n int, err error) {
 
 	// if f.offset is not 0, we need to fetch the contents of the file till the offset and then write into the file
 	if f.offset != 0 {
-		res, err := f.conn.GetObject(context.TODO(), &s3.GetObjectInput{
+		res, objectErr := f.conn.GetObject(context.TODO(), &s3.GetObjectInput{
 			Bucket: aws.String(bucketName),
 			Key:    aws.String(fileName),
 		})
 
-		if err != nil {
-			msg = fmt.Sprintf("Failed to retrieve file %q: %v", fileName, err)
-			return 0, err
+		if objectErr != nil {
+			msg = fmt.Sprintf("Failed to retrieve file %q: %v", fileName, objectErr)
+			return 0, objectErr
 		}
 
 		f.body = res.Body
@@ -310,7 +228,8 @@ func (f *s3file) Write(p []byte) (n int, err error) {
 			contentAfterBufferBytes = buffer[f.offset+int64(len(p)):]
 		}
 
-		buffer = append(contentBeforeOffset, p...)
+		contentBeforeOffset = append(contentBeforeOffset, p...)
+		buffer = contentBeforeOffset
 		buffer = append(buffer, contentAfterBufferBytes...)
 	}
 
@@ -344,7 +263,7 @@ func (f *s3file) Write(p []byte) (n int, err error) {
 // This method writes up to len(p) bytes from the provided byte slice to the file, starting at the given offset.
 // It does not modify the file's current offset used for other read or write operations.
 // The number of bytes written and any error encountered during the operation are returned.
-func (f *s3file) WriteAt(p []byte, offset int64) (n int, err error) {
+func (f *S3File) WriteAt(p []byte, offset int64) (n int, err error) {
 	bucketName := getBucketName(f.name)
 
 	var fileName, msg string
@@ -380,7 +299,8 @@ func (f *s3file) WriteAt(p []byte, offset int64) (n int, err error) {
 		contentAfterBufferBytes = buffer[offset+int64(len(p)):]
 	}
 
-	buffer = append(contentBeforeOffset, p...)
+	contentBeforeOffset = append(contentBeforeOffset, p...)
+	buffer = contentBeforeOffset
 	buffer = append(buffer, contentAfterBufferBytes...)
 
 	_, err = f.conn.PutObject(context.TODO(), &s3.PutObjectInput{
@@ -409,7 +329,7 @@ func (f *s3file) WriteAt(p []byte, offset int64) (n int, err error) {
 //
 // This method performs validation on the arguments provided to the Seek operation. If the arguments are valid, it sets
 // the file offset to the specified position. If there are any validation errors, it returns an appropriate error.
-func (f *s3file) check(whence int, offset, length int64, msg *string) (int64, error) {
+func (f *S3File) check(whence int, offset, length int64, msg *string) (int64, error) {
 	switch whence {
 	case io.SeekStart:
 	case io.SeekEnd:
@@ -443,7 +363,7 @@ func (f *s3file) check(whence int, offset, length int64, msg *string) (int64, er
 //	  - `io.SeekStart` (0): Offset is relative to the start of the file.
 //	  - `io.SeekCurrent` (1): Offset is relative to the current position in the file.
 //	  - `io.SeekEnd` (2): Offset is relative to the end of the file.
-func (f *s3file) Seek(offset int64, whence int) (int64, error) {
+func (f *S3File) Seek(offset int64, whence int) (int64, error) {
 	var msg string
 
 	status := statusErr
@@ -467,7 +387,7 @@ func (f *s3file) Seek(offset int64, whence int) (int64, error) {
 }
 
 // sendOperationStats logs the FileLog of any file operations performed in S3.
-func (f *s3file) sendOperationStats(fl *FileLog, startTime time.Time) {
+func (f *S3File) sendOperationStats(fl *FileLog, startTime time.Time) {
 	duration := time.Since(startTime).Microseconds()
 
 	fl.Duration = duration
