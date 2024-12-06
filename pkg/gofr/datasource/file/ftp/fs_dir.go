@@ -17,7 +17,7 @@ import (
 func (f *fileSystem) Mkdir(name string, _ os.FileMode) error {
 	var msg string
 
-	status := "ERROR"
+	status := statusError
 
 	filePath := path.Join(f.config.RemoteDir, name)
 
@@ -39,7 +39,7 @@ func (f *fileSystem) Mkdir(name string, _ os.FileMode) error {
 		return err
 	}
 
-	status = "SUCCESS"
+	status = statusSuccess
 	msg = fmt.Sprintf("%q created successfully", name)
 
 	return nil
@@ -78,7 +78,7 @@ func (f *fileSystem) mkdirAllHelper(filepath string) []string {
 func (f *fileSystem) MkdirAll(name string, _ os.FileMode) error {
 	var msg string
 
-	status := "ERROR"
+	status := statusError
 
 	defer f.sendOperationStats(&FileLog{
 		Operation: "MkdirAll",
@@ -110,7 +110,7 @@ func (f *fileSystem) MkdirAll(name string, _ os.FileMode) error {
 		}
 	}
 
-	status = "SUCCESS"
+	status = statusSuccess
 	msg = fmt.Sprintf("Directories %q creation completed successfully", name)
 
 	return nil
@@ -120,7 +120,7 @@ func (f *fileSystem) MkdirAll(name string, _ os.FileMode) error {
 func (f *fileSystem) RemoveAll(name string) error {
 	var msg string
 
-	status := "ERROR"
+	status := statusError
 
 	filePath := path.Join(f.config.RemoteDir, name)
 
@@ -150,14 +150,14 @@ func (f *fileSystem) RemoveAll(name string) error {
 	}
 
 	msg = fmt.Sprintf("Directory with path %q deleted successfully", filePath)
-	status = "SUCCESS"
+	status = statusSuccess
 
 	return nil
 }
 
 // Stat returns information of the files/directories in the specified directory.
 func (f *fileSystem) Stat(name string) (file_interface.FileInfo, error) {
-	status := "ERROR"
+	status := statusError
 
 	defer f.sendOperationStats(&FileLog{
 		Operation: "Stat",
@@ -194,7 +194,7 @@ func (f *fileSystem) Stat(name string) (file_interface.FileInfo, error) {
 		return nil, err
 	}
 
-	status = "SUCCESS"
+	status = statusSuccess
 
 	return &file{
 		name:      entry[0].Name,
@@ -221,7 +221,7 @@ func (f *fileSystem) Getwd() (string, error) {
 func (f *fileSystem) ChDir(dir string) error {
 	var msg string
 
-	status := "ERROR"
+	status := statusError
 
 	defer f.sendOperationStats(&FileLog{
 		Operation: "ChDir",
@@ -240,7 +240,7 @@ func (f *fileSystem) ChDir(dir string) error {
 
 	msg = fmt.Sprintf("Changed current directory from %q to %q", f.config.RemoteDir, filepath)
 	f.config.RemoteDir = filepath
-	status = "SUCCESS"
+	status = statusSuccess
 
 	return nil
 }
@@ -251,7 +251,7 @@ func (f *fileSystem) ChDir(dir string) error {
 func (f *fileSystem) ReadDir(dir string) ([]file_interface.FileInfo, error) {
 	var msg string
 
-	status := "ERROR"
+	status := statusError
 
 	defer f.sendOperationStats(&FileLog{
 		Operation: "ReadDir",
@@ -271,7 +271,7 @@ func (f *fileSystem) ReadDir(dir string) ([]file_interface.FileInfo, error) {
 		return nil, err
 	}
 
-	var fileInfo []file_interface.FileInfo
+	fileInfo := make([]file_interface.FileInfo, 0)
 
 	for _, entry := range entries {
 		entryPath := path.Join(filepath, entry.Name)
@@ -287,7 +287,7 @@ func (f *fileSystem) ReadDir(dir string) ([]file_interface.FileInfo, error) {
 		})
 	}
 
-	status = "SUCCESS"
+	status = statusSuccess
 	msg = fmt.Sprintf("Found %d entries in %q", len(entries), filepath)
 
 	return fileInfo, nil
