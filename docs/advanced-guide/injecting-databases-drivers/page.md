@@ -619,7 +619,7 @@ func main() {
 	app := gofr.New()
 
 	// Initialize OpenTSDB connection
-	app.AddOpenTSDB(opentsdb.New(&opentsdb.Config{
+	app.AddOpenTSDB(opentsdb.New(opentsdb.Config{
 		Host:             "localhost:4242",
 		MaxContentLength: 4096,
 		MaxPutPointsNum:  1000,
