@@ -83,7 +83,7 @@ func (f *FileSystem) Connect() {
 	var status string
 
 	ftpBuckets := []float64{.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 4, 5, 7.5, 10}
-	f.metrics.NewHistogram(appFTPStats, "Response time of File System operations in milliseconds.", ftpBuckets...)
+	f.metrics.NewHistogram(appFTPStats, "Response time of File System operations in microseconds.", ftpBuckets...)
 
 	ftpServer := fmt.Sprintf("%v:%v", f.config.Host, f.config.Port)
 
