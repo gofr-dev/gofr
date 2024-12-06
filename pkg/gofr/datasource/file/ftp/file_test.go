@@ -54,7 +54,7 @@ func TestRead(t *testing.T) {
 	mockMetrics := NewMockMetrics(ctrl)
 
 	// Create ftpFileSystem instance
-	fs := &fileSystem{
+	fs := &FileSystem{
 		conn: mockFtpConn,
 		config: &Config{
 			Host:      "ftp.example.com",
@@ -78,7 +78,7 @@ func TestRead(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			response := NewMockftpResponse(ctrl)
 
-			f := file{path: tt.filePath, conn: fs.conn, logger: fs.logger, metrics: fs.metrics}
+			f := File{path: tt.filePath, conn: fs.conn, logger: fs.logger, metrics: fs.metrics}
 
 			if tt.name != "File does not exist" {
 				//nolint:gosec // We ensure the offset is never negative in the application logic.
@@ -145,7 +145,7 @@ func TestReadAt(t *testing.T) {
 	mockMetrics := NewMockMetrics(ctrl)
 
 	// Create ftpFileSystem instance
-	fs := &fileSystem{
+	fs := &FileSystem{
 		conn: mockFtpConn,
 		config: &Config{
 			Host:      "ftp.example.com",
@@ -179,7 +179,7 @@ func TestReadAt(t *testing.T) {
 			s := make([]byte, 1024)
 
 			// Create ftpFile instance
-			f := file{path: tt.filePath, conn: fs.conn, logger: fs.logger, metrics: fs.metrics}
+			f := File{path: tt.filePath, conn: fs.conn, logger: fs.logger, metrics: fs.metrics}
 
 			_, err := f.ReadAt(s, tt.offset)
 
@@ -233,7 +233,7 @@ func TestWrite(t *testing.T) {
 	mockMetrics := NewMockMetrics(ctrl)
 
 	// Create ftpFileSystem instance
-	fs := &fileSystem{
+	fs := &FileSystem{
 		conn: mockFtpConn,
 		config: &Config{
 			Host:      "ftp.example.com",
@@ -257,7 +257,7 @@ func TestWrite(t *testing.T) {
 			tt.mockWriteExpect(mockFtpConn, tt.filePath)
 
 			// Create ftpFile instance
-			f := file{path: tt.filePath, conn: fs.conn, logger: fs.logger, metrics: fs.metrics}
+			f := File{path: tt.filePath, conn: fs.conn, logger: fs.logger, metrics: fs.metrics}
 
 			_, err := f.Write([]byte("test content"))
 
@@ -315,7 +315,7 @@ func TestWriteAt(t *testing.T) {
 	mockMetrics := NewMockMetrics(ctrl)
 
 	// Create ftpFileSystem instance
-	fs := &fileSystem{
+	fs := &FileSystem{
 		conn: mockFtpConn,
 		config: &Config{
 			Host:      "ftp.example.com",
@@ -339,7 +339,7 @@ func TestWriteAt(t *testing.T) {
 			tt.mockWriteExpect(mockFtpConn, tt.filePath, tt.offset)
 
 			// Create ftpFile instance
-			f := file{path: tt.filePath, conn: fs.conn, logger: fs.logger, metrics: fs.metrics}
+			f := File{path: tt.filePath, conn: fs.conn, logger: fs.logger, metrics: fs.metrics}
 
 			_, err := f.WriteAt([]byte("test content"), tt.offset)
 
@@ -356,7 +356,7 @@ func TestSeek(t *testing.T) {
 	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
 
-	file := &file{
+	file := &File{
 		path:    "/ftp/one/testfile2.txt",
 		conn:    mockFtpConn,
 		offset:  5, // Starting offset for the file
@@ -461,7 +461,7 @@ func getSeekTestCases() []struct {
 
 func runSeekTest(
 	t *testing.T,
-	file *file,
+	file *File,
 	mockFtpConn *MockserverConn,
 	tt struct {
 		name          string

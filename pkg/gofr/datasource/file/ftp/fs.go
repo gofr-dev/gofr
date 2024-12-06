@@ -41,9 +41,8 @@ var (
 	errInvalidArg     = errors.New("invalid filename/directory")
 )
 
-// fileSystem represents a file system interface over FTP.
-type fileSystem struct {
-	*file
+// FileSystem represents a file system interface over FTP.
+type FileSystem struct {
 	conn    serverConn
 	config  *Config
 	logger  Logger
@@ -62,25 +61,25 @@ type Config struct {
 
 // New initializes a new instance of FTP fileSystem with provided configuration.
 func New(config *Config) file_interface.FileSystemProvider {
-	return &fileSystem{config: config}
+	return &FileSystem{config: config}
 }
 
 // UseLogger sets the Logger interface for the FTP file system.
-func (f *fileSystem) UseLogger(logger interface{}) {
+func (f *FileSystem) UseLogger(logger interface{}) {
 	if l, ok := logger.(Logger); ok {
 		f.logger = l
 	}
 }
 
 // UseMetrics sets the Metrics interface.
-func (f *fileSystem) UseMetrics(metrics interface{}) {
+func (f *FileSystem) UseMetrics(metrics interface{}) {
 	if m, ok := metrics.(Metrics); ok {
 		f.metrics = m
 	}
 }
 
 // Connect establishes a connection to the FTP server and logs in.
-func (f *fileSystem) Connect() {
+func (f *FileSystem) Connect() {
 	var status string
 
 	ftpBuckets := []float64{.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 4, 5, 7.5, 10}
@@ -126,12 +125,12 @@ func (f *fileSystem) Connect() {
 }
 
 // Create creates an empty file on the FTP server.
-func (f *fileSystem) Create(name string) (file_interface.File, error) {
+func (f *FileSystem) Create(name string) (file_interface.File, error) {
 	filePath := path.Join(f.config.RemoteDir, name)
 
 	var msg string
 
-	var fl = &file{}
+	var fl = &File{}
 
 	status := statusSuccess
 
@@ -168,7 +167,7 @@ func (f *fileSystem) Create(name string) (file_interface.File, error) {
 	status = statusSuccess
 	msg = fmt.Sprintf("Created file %q", name)
 
-	fl = &file{
+	fl = &File{
 		response:  res,
 		name:      filename,
 		path:      filePath,
@@ -189,7 +188,7 @@ func (f *fileSystem) Create(name string) (file_interface.File, error) {
 // Open retrieves a file from the FTP server and returns a file handle.
 // Note: Here Open and OpenFile both methods have been implemented so that the
 // FTP FileSystem comply with the gofr FileSystem interface.
-func (f *fileSystem) Open(name string) (file_interface.File, error) {
+func (f *FileSystem) Open(name string) (file_interface.File, error) {
 	var msg string
 
 	status := statusError
@@ -221,7 +220,7 @@ func (f *fileSystem) Open(name string) (file_interface.File, error) {
 	status = statusSuccess
 	msg = fmt.Sprintf("Opened file %q", name)
 
-	fl := &file{
+	fl := &File{
 		response:  res,
 		name:      filename,
 		path:      filePath,
@@ -243,13 +242,13 @@ func (f *fileSystem) Open(name string) (file_interface.File, error) {
 // Permissions are not clear for Ftp as file commands do not accept an argument and don't store their file permissions.
 // currently, this function just calls the Open function.
 // Here, os.FileMode is unused, but is added to comply with FileSystem interface.
-func (f *fileSystem) OpenFile(name string, _ int, _ os.FileMode) (file_interface.File, error) {
+func (f *FileSystem) OpenFile(name string, _ int, _ os.FileMode) (file_interface.File, error) {
 	return f.Open(name)
 }
 
 // Remove deletes a file from the FTP server.
 // Note: some server may return an error type even if delete is successful.
-func (f *fileSystem) Remove(name string) error {
+func (f *FileSystem) Remove(name string) error {
 	var msg string
 
 	status := statusError
@@ -281,10 +280,10 @@ func (f *fileSystem) Remove(name string) error {
 }
 
 // Rename renames a file/directory on the FTP server.
-func (f *fileSystem) Rename(oldname, newname string) error {
+func (f *FileSystem) Rename(oldname, newname string) error {
 	var msg string
 
-	var tempFile = &file{conn: f.conn, logger: f.logger, metrics: f.metrics}
+	var tempFile = &File{conn: f.conn, logger: f.logger, metrics: f.metrics}
 
 	status := statusError
 
@@ -329,7 +328,7 @@ func (f *fileSystem) Rename(oldname, newname string) error {
 	return nil
 }
 
-func (f *fileSystem) sendOperationStats(fl *FileLog, startTime time.Time) {
+func (f *FileSystem) sendOperationStats(fl *FileLog, startTime time.Time) {
 	duration := time.Since(startTime).Microseconds()
 
 	fl.Duration = duration

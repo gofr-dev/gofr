@@ -14,7 +14,7 @@ import (
 
 // Mkdir creates a directory on the FTP server.
 // Here, os.FileMode is unused, but is added to comply with FileSystem interface.
-func (f *fileSystem) Mkdir(name string, _ os.FileMode) error {
+func (f *FileSystem) Mkdir(name string, _ os.FileMode) error {
 	var msg string
 
 	status := statusError
@@ -45,7 +45,7 @@ func (f *fileSystem) Mkdir(name string, _ os.FileMode) error {
 	return nil
 }
 
-func (f *fileSystem) mkdirAllHelper(filepath string) []string {
+func (f *FileSystem) mkdirAllHelper(filepath string) []string {
 	var dirs []string
 
 	currentdir := filepath
@@ -75,7 +75,7 @@ func (f *fileSystem) mkdirAllHelper(filepath string) []string {
 
 // MkdirAll creates directories recursively on the FTP server.
 // Here, os.FileMode is unused, but is added to comply with FileSystem interface.
-func (f *fileSystem) MkdirAll(name string, _ os.FileMode) error {
+func (f *FileSystem) MkdirAll(name string, _ os.FileMode) error {
 	var msg string
 
 	status := statusError
@@ -117,7 +117,7 @@ func (f *fileSystem) MkdirAll(name string, _ os.FileMode) error {
 }
 
 // RemoveAll removes a directory and its contents recursively from the FTP server.
-func (f *fileSystem) RemoveAll(name string) error {
+func (f *FileSystem) RemoveAll(name string) error {
 	var msg string
 
 	status := statusError
@@ -156,7 +156,7 @@ func (f *fileSystem) RemoveAll(name string) error {
 }
 
 // Stat returns information of the files/directories in the specified directory.
-func (f *fileSystem) Stat(name string) (file_interface.FileInfo, error) {
+func (f *FileSystem) Stat(name string) (file_interface.FileInfo, error) {
 	status := statusError
 
 	defer f.sendOperationStats(&FileLog{
@@ -174,7 +174,7 @@ func (f *fileSystem) Stat(name string) (file_interface.FileInfo, error) {
 
 	// if it is a directory
 	if path.Ext(name) == "" {
-		fl := &file{
+		fl := &File{
 			name:      name,
 			path:      filePath,
 			entryType: ftp.EntryTypeFolder,
@@ -196,7 +196,7 @@ func (f *fileSystem) Stat(name string) (file_interface.FileInfo, error) {
 
 	status = statusSuccess
 
-	return &file{
+	return &File{
 		name:      entry[0].Name,
 		path:      filePath,
 		entryType: entry[0].Type,
@@ -208,7 +208,7 @@ func (f *fileSystem) Stat(name string) (file_interface.FileInfo, error) {
 }
 
 // Getwd returns the full path of the current directory.
-func (f *fileSystem) Getwd() (string, error) {
+func (f *FileSystem) Getwd() (string, error) {
 	defer f.sendOperationStats(&FileLog{
 		Operation: "Getwd",
 		Location:  f.config.RemoteDir,
@@ -218,7 +218,7 @@ func (f *fileSystem) Getwd() (string, error) {
 }
 
 // ChDir takes the relative path as argument and changes the current directory.
-func (f *fileSystem) ChDir(dir string) error {
+func (f *FileSystem) ChDir(dir string) error {
 	var msg string
 
 	status := statusError
@@ -248,7 +248,7 @@ func (f *fileSystem) ChDir(dir string) error {
 // ReadDir reads the named directory, returning all its directory entries sorted by filename.
 // If an error occurs reading the directory, ReadDir returns the entries it was able to read before the error, along with the error.
 // It returns the list of files/directories present in the current directory when "." is passed.
-func (f *fileSystem) ReadDir(dir string) ([]file_interface.FileInfo, error) {
+func (f *FileSystem) ReadDir(dir string) ([]file_interface.FileInfo, error) {
 	var msg string
 
 	status := statusError
@@ -276,7 +276,7 @@ func (f *fileSystem) ReadDir(dir string) ([]file_interface.FileInfo, error) {
 	for _, entry := range entries {
 		entryPath := path.Join(filepath, entry.Name)
 
-		fileInfo = append(fileInfo, &file{
+		fileInfo = append(fileInfo, &File{
 			name:      entry.Name,
 			modTime:   entry.Time,
 			entryType: entry.Type,

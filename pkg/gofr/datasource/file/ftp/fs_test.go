@@ -64,7 +64,7 @@ func TestCreateFile(t *testing.T) {
 	logger := NewMockLogger(ctrl)
 	metrics := NewMockMetrics(ctrl)
 
-	fs := &fileSystem{
+	fs := &FileSystem{
 		conn: mockFtpConn,
 		config: &Config{
 			Host:      "ftp.example.com",
@@ -169,7 +169,7 @@ func TestRenameFile(t *testing.T) {
 	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
 
-	fs := &fileSystem{
+	fs := &FileSystem{
 		conn: mockFtpConn,
 		config: &Config{
 			Host:      "ftp.example.com",
@@ -246,7 +246,7 @@ func TestRemoveFile(t *testing.T) {
 	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
 
-	fs := &fileSystem{
+	fs := &FileSystem{
 		conn: mockFtpConn,
 		config: &Config{
 			Host:      "ftp.example.com",
@@ -332,7 +332,7 @@ func TestOpenFile(t *testing.T) {
 	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
 
-	fs := &fileSystem{
+	fs := &FileSystem{
 		conn: mockFtpConn,
 		config: &Config{
 			Host:      "ftp.example.com",
@@ -408,7 +408,7 @@ func TestMkDir(t *testing.T) {
 	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
 
-	fs := &fileSystem{
+	fs := &FileSystem{
 		conn: mockFtpConn,
 		config: &Config{
 			Host:      "ftp.example.com",
@@ -501,7 +501,7 @@ func TestMkDirAll(t *testing.T) {
 	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
 
-	fs := &fileSystem{
+	fs := &FileSystem{
 		conn: mockFtpConn,
 		config: &Config{
 			Host:      "ftp.example.com",
@@ -583,7 +583,7 @@ func TestRemoveDir(t *testing.T) {
 	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
 
-	fs := &fileSystem{
+	fs := &FileSystem{
 		conn: mockFtpConn,
 		config: &Config{
 			Host:     "ftp.example.com",
@@ -666,7 +666,7 @@ func TestStat(t *testing.T) {
 	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
 
-	fs := &fileSystem{
+	fs := &FileSystem{
 		conn: mockFtpConn,
 		config: &Config{
 			Host:      "ftp.example.com",
@@ -736,7 +736,7 @@ func TestGetwd(t *testing.T) {
 	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
 
-	fs := &fileSystem{
+	fs := &FileSystem{
 		conn: mockFtpConn,
 		config: &Config{
 			Host:      "ftp.example.com",
@@ -803,7 +803,7 @@ func TestChDir(t *testing.T) {
 	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
 
-	fs := &fileSystem{
+	fs := &FileSystem{
 		conn: mockFtpConn,
 		config: &Config{
 			Host:      "ftp.example.com",
@@ -846,7 +846,7 @@ func TestReadDir(t *testing.T) {
 	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
 
-	fs := &fileSystem{
+	fs := &FileSystem{
 		conn: mockFtpConn,
 		config: &Config{
 			Host:      "ftp.example.com",
@@ -933,7 +933,7 @@ func getReadDirTestCases(t *testing.T) []struct {
 
 func runReadDirTest(
 	t *testing.T,
-	fs *fileSystem,
+	fs *FileSystem,
 	mockFtpConn *MockserverConn,
 	mockLogger *MockLogger,
 	mockMetrics *MockMetrics,
