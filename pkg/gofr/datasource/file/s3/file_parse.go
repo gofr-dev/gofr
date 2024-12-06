@@ -6,10 +6,13 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"os"
 	"path"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
 
 	file "gofr.dev/pkg/gofr/datasource/file"
 )
@@ -38,7 +41,7 @@ type jsonReader struct {
 }
 
 // ReadAll reads either JSON or text files based on file extension and returns a corresponding RowReader.
-func (f *s3file) ReadAll() (file.RowReader, error) {
+func (f *S3File) ReadAll() (file.RowReader, error) {
 	bucketName := strings.Split(f.name, string(filepath.Separator))[0]
 
 	var fileName string
@@ -60,7 +63,7 @@ func (f *s3file) ReadAll() (file.RowReader, error) {
 }
 
 // createJSONReader creates a JSON reader for JSON files.
-func (f *s3file) createJSONReader(location string) (file.RowReader, error) {
+func (f *S3File) createJSONReader(location string) (file.RowReader, error) {
 	status := statusErr
 
 	defer f.sendOperationStats(&FileLog{Operation: "JSON READER", Location: location, Status: &status}, time.Now())
@@ -97,7 +100,7 @@ func (f *s3file) createJSONReader(location string) (file.RowReader, error) {
 }
 
 // createTextCSVReader creates a text reader for reading text files.
-func (f *s3file) createTextCSVReader(location string) (file.RowReader, error) {
+func (f *S3File) createTextCSVReader(location string) (file.RowReader, error) {
 	status := statusErr
 
 	defer f.sendOperationStats(&FileLog{Operation: "TEXT/CSV READER", Location: location, Status: &status}, time.Now())
@@ -140,4 +143,90 @@ func (f *textReader) Scan(i interface{}) error {
 	}
 
 	return errStringNotPointer
+}
+
+// Name returns the base name of the file.
+//
+// For a file, this method returns the name of the file without any directory components.
+// For directories, it returns the name of the directory.
+func (f *S3File) Name() string {
+	bucketName := getBucketName(f.name)
+
+	f.sendOperationStats(&FileLog{
+		Operation: "GET NAME",
+		Location:  getLocation(bucketName),
+	}, time.Now())
+
+	return path.Base(f.name)
+}
+
+// Mode is not supported for the current implementation of S3 buckets.
+// This method is included to adhere to the FileSystem interface in GoFr.
+//
+// Note: The Mode method does not provide meaningful information for S3 objects
+// and should be considered a placeholder in this context.
+func (f *S3File) Mode() os.FileMode {
+	bucketName := getBucketName(f.name)
+
+	f.sendOperationStats(&FileLog{
+		Operation: "FILE MODE",
+		Location:  getLocation(bucketName),
+		Message:   aws.String("Not supported for S3"),
+	}, time.Now())
+
+	return 0
+}
+
+// Size returns the size of the retrieved object.
+//
+// For files, it returns the size of the file in bytes.
+// For directories, it returns the sum of sizes of all files contained within the directory.
+//
+// Note:
+//   - This method should be called on a FileInfo instance obtained from a Stat or ReadDir operation.
+func (f *S3File) Size() int64 {
+	bucketName := getBucketName(f.name)
+
+	f.sendOperationStats(&FileLog{
+		Operation: "FILE/DIR SIZE",
+		Location:  getLocation(bucketName),
+	}, time.Now())
+
+	return f.size
+}
+
+// ModTime returns the last modification time of the file or directory.
+//
+// For files, it returns the timestamp of the last modification to the file's contents.
+// For directories, it returns the timestamp of the most recent change to the directory's contents, including updates
+// to files within the directory.
+func (f *S3File) ModTime() time.Time {
+	bucketName := getBucketName(f.name)
+
+	f.sendOperationStats(&FileLog{
+		Operation: "LAST MODIFIED",
+		Location:  getLocation(bucketName),
+	}, time.Now())
+
+	return f.lastModified
+}
+
+// IsDir checks if the FileInfo describes a directory.
+//
+// This method returns true if the FileInfo object represents a directory; otherwise, it returns false.
+// It is specifically used to determine the type of the file system object represented by the FileInfo.
+//
+// Note:
+//   - This method should be called on a FileInfo instance obtained from a Stat or ReadDir operation.
+//   - The [FileInfo] interface is used to describe file system objects, and IsDir is one of its methods
+//     to query whether the object is a directory.
+func (f *S3File) IsDir() bool {
+	bucketName := getBucketName(f.name)
+
+	f.sendOperationStats(&FileLog{
+		Operation: "IS DIR",
+		Location:  getLocation(bucketName),
+	}, time.Now())
+
+	return strings.HasSuffix(f.name, "/")
 }
