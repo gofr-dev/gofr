@@ -12,7 +12,12 @@ import (
 	File "gofr.dev/pkg/gofr/datasource/file"
 )
 
-type fileSystem struct {
+const (
+	statusSuccess = "SUCCESS"
+	statusError   = "ERROR"
+)
+
+type FileSystem struct {
 	logger  Logger
 	metrics Metrics
 	config  Config
@@ -27,26 +32,26 @@ type Config struct {
 	HostKeyCallBack ssh.HostKeyCallback
 }
 
-func New(cfg Config) *fileSystem {
-	return &fileSystem{config: cfg}
+func New(cfg Config) *FileSystem {
+	return &FileSystem{config: cfg}
 }
 
 // UseLogger sets the logger for the FileSystem client.
-func (f *fileSystem) UseLogger(logger interface{}) {
+func (f *FileSystem) UseLogger(logger interface{}) {
 	if l, ok := logger.(Logger); ok {
 		f.logger = l
 	}
 }
 
 // UseMetrics sets the metrics for the FileSystem client.
-func (f *fileSystem) UseMetrics(metrics interface{}) {
+func (f *FileSystem) UseMetrics(metrics interface{}) {
 	if m, ok := metrics.(Metrics); ok {
 		f.metrics = m
 	}
 }
 
 // Connect establishes a connection to FileSystem and registers metrics using the provided configuration when the client was Created.
-func (f *fileSystem) Connect() {
+func (f *FileSystem) Connect() {
 	f.logger.Debugf("connecting to SFTP server with host `%v` and port `%v`", f.config.Host, f.config.Port)
 
 	addr := fmt.Sprintf("%s:%d", f.config.Host, f.config.Port)
@@ -74,8 +79,8 @@ func (f *fileSystem) Connect() {
 	f.logger.Logf("connected to SFTP client successfully")
 }
 
-func (f *fileSystem) Create(name string) (File.File, error) {
-	status := "ERROR"
+func (f *FileSystem) Create(name string) (File.File, error) {
+	status := statusError
 
 	defer f.sendOperationStats(&FileLog{
 		Operation: "CREATE",
@@ -88,7 +93,7 @@ func (f *fileSystem) Create(name string) (File.File, error) {
 		return nil, err
 	}
 
-	status = "SUCCESS"
+	status = statusSuccess
 
 	return sftpFile{
 		File:   newFile,
@@ -96,42 +101,42 @@ func (f *fileSystem) Create(name string) (File.File, error) {
 	}, nil
 }
 
-func (f *fileSystem) Mkdir(name string, _ os.FileMode) error {
-	status := "SUCCESS"
+func (f *FileSystem) Mkdir(name string, _ os.FileMode) error {
+	status := statusSuccess
 
 	defer f.sendOperationStats(&FileLog{Operation: "MKDIR", Location: name, Status: &status}, time.Now())
 
 	err := f.client.Mkdir(name)
 	if err != nil {
-		status = "ERROR"
+		status = statusError
 		return err
 	}
 
 	return nil
 }
 
-func (f *fileSystem) MkdirAll(path string, perm os.FileMode) error {
-	status := "SUCCESS"
+func (f *FileSystem) MkdirAll(path string, _ os.FileMode) error {
+	status := statusSuccess
 
 	defer f.sendOperationStats(&FileLog{Operation: "MKDIR", Location: path, Status: &status}, time.Now())
 
 	err := f.client.MkdirAll(path)
 	if err != nil {
-		status = "ERROR"
+		status = statusError
 		return err
 	}
 
 	return nil
 }
 
-func (f *fileSystem) Open(name string) (File.File, error) {
-	status := "SUCCESS"
+func (f *FileSystem) Open(name string) (File.File, error) {
+	status := statusSuccess
 
 	defer f.sendOperationStats(&FileLog{Operation: "OPEN", Location: name, Status: &status}, time.Now())
 
 	openedFile, err := f.client.Open(name)
 	if err != nil {
-		status = "ERROR"
+		status = statusError
 
 		return nil, err
 	}
@@ -142,14 +147,14 @@ func (f *fileSystem) Open(name string) (File.File, error) {
 	}, nil
 }
 
-func (f *fileSystem) OpenFile(name string, flag int, perm os.FileMode) (File.File, error) {
-	status := "SUCCESS"
+func (f *FileSystem) OpenFile(name string, flag int, _ os.FileMode) (File.File, error) {
+	status := statusSuccess
 
 	defer f.sendOperationStats(&FileLog{Operation: "OPENFILE", Location: name, Status: &status}, time.Now())
 
 	openedFile, err := f.client.OpenFile(name, flag)
 	if err != nil {
-		status = "ERROR"
+		status = statusSuccess
 
 		return nil, err
 	}
@@ -160,57 +165,57 @@ func (f *fileSystem) OpenFile(name string, flag int, perm os.FileMode) (File.Fil
 	}, nil
 }
 
-func (f *fileSystem) Remove(name string) error {
-	status := "SUCCESS"
+func (f *FileSystem) Remove(name string) error {
+	status := statusSuccess
 
 	defer f.sendOperationStats(&FileLog{Operation: "REMOVE", Location: name, Status: &status}, time.Now())
 
 	err := f.client.Remove(name)
 	if err != nil {
-		status = "ERROR"
+		status = statusError
 		return err
 	}
 
 	return nil
 }
 
-func (f *fileSystem) RemoveAll(path string) error {
-	status := "SUCCESS"
+func (f *FileSystem) RemoveAll(path string) error {
+	status := statusSuccess
 
 	defer f.sendOperationStats(&FileLog{Operation: "REMOVEALL", Location: path, Status: &status}, time.Now())
 
 	err := f.client.RemoveAll(path)
 	if err != nil {
-		status = "ERROR"
+		status = statusError
 		return err
 	}
 
 	return nil
 }
 
-func (f *fileSystem) Rename(oldname, newname string) error {
-	status := "SUCCESS"
+func (f *FileSystem) Rename(oldname, newname string) error {
+	status := statusSuccess
 
 	defer f.sendOperationStats(&FileLog{Operation: "RENAME", Location: fmt.Sprintf("%v to %v", oldname, newname),
 		Status: &status}, time.Now())
 
 	err := f.client.Rename(oldname, newname)
 	if err != nil {
-		status = "ERROR"
+		status = statusError
 		return err
 	}
 
 	return nil
 }
 
-func (f *fileSystem) ReadDir(dir string) ([]File.FileInfo, error) {
-	status := "SUCCESS"
+func (f *FileSystem) ReadDir(dir string) ([]File.FileInfo, error) {
+	status := statusSuccess
 
 	defer f.sendOperationStats(&FileLog{Operation: "READDIR", Location: dir, Status: &status}, time.Now())
 
 	dirs, err := f.client.ReadDir(dir)
 	if err != nil {
-		status = "ERROR"
+		status = statusError
 		return nil, err
 	}
 
@@ -223,45 +228,44 @@ func (f *fileSystem) ReadDir(dir string) ([]File.FileInfo, error) {
 	return newDirs, nil
 }
 
-func (f *fileSystem) Stat(name string) (File.FileInfo, error) {
-	status := "SUCCESS"
+func (f *FileSystem) Stat(name string) (File.FileInfo, error) {
+	status := statusSuccess
 
 	defer f.sendOperationStats(&FileLog{Operation: "STAT", Location: name, Status: &status}, time.Now())
 
 	fileInfo, err := f.client.Stat(name)
 	if err != nil {
-		status = "ERROR"
+		status = statusError
 		return nil, err
 	}
 
 	return fileInfo, nil
 }
 
-func (f *fileSystem) ChDir(dirname string) error {
+func (f *FileSystem) ChDir(_ string) error {
 	f.logger.Errorf("Chdir is not implemented for SFTP")
 	return nil
 }
 
-func (f *fileSystem) Getwd() (string, error) {
-	status := "SUCCESS"
+func (f *FileSystem) Getwd() (string, error) {
+	status := statusSuccess
 
 	defer f.sendOperationStats(&FileLog{Operation: "STAT", Location: "", Status: &status}, time.Now())
 
 	name, err := f.client.Getwd()
 	if err != nil {
-		status = "ERROR"
+		status = statusError
 		return "", err
 	}
 
 	return name, err
 }
 
-func (f *fileSystem) sendOperationStats(fl *FileLog, startTime time.Time) {
+// TODO : Implement metrics.
+func (f *FileSystem) sendOperationStats(fl *FileLog, startTime time.Time) {
 	duration := time.Since(startTime).Microseconds()
 
 	fl.Duration = duration
 
 	f.logger.Debug(fl)
-
-	// TODO : Implement metrics
 }

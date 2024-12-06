@@ -7,6 +7,7 @@ import (
 	"time"
 )
 
+//nolint:unused // connection interface defines all the methods to mock the connection returned while healthcheck implementation.
 type connection interface {
 	Read(b []byte) (n int, err error)
 	Write(b []byte) (n int, err error)
@@ -18,7 +19,7 @@ type connection interface {
 	SetWriteDeadline(t time.Time) error
 }
 
-// HTTPClient is an interface that wraps the http.Client's Do method.
+// httpClient is an interface that wraps the http.Client's Do method.
 type httpClient interface {
 	Do(req *http.Request) (*http.Response, error)
 }

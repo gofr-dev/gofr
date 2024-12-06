@@ -141,7 +141,7 @@ func (sm *SubscriptionManager) consumeMessages(
 }
 
 func (sm *SubscriptionManager) fetchAndProcessMessages(
-	ctx context.Context,
+	_ context.Context,
 	cons jetstream.Consumer,
 	topic string,
 	buffer chan *pubsub.Message,
@@ -155,7 +155,7 @@ func (sm *SubscriptionManager) fetchAndProcessMessages(
 	return sm.processFetchedMessages(msgs, topic, buffer, logger)
 }
 
-func (sm *SubscriptionManager) handleFetchError(err error, topic string, logger pubsub.Logger) error {
+func (*SubscriptionManager) handleFetchError(err error, topic string, logger pubsub.Logger) error {
 	if !errors.Is(err, context.DeadlineExceeded) {
 		logger.Errorf("Error fetching messages for topic %s: %v", topic, err)
 	}
@@ -181,16 +181,17 @@ func (sm *SubscriptionManager) processFetchedMessages(
 	return sm.checkBatchError(msgs, topic, logger)
 }
 
-func (sm *SubscriptionManager) createPubSubMessage(msg jetstream.Msg, topic string) *pubsub.Message {
+func (*SubscriptionManager) createPubSubMessage(msg jetstream.Msg, topic string) *pubsub.Message {
 	pubsubMsg := pubsub.NewMessage(context.Background()) // Pass a context if needed
 	pubsubMsg.Topic = topic
 	pubsubMsg.Value = msg.Data()
 	pubsubMsg.MetaData = msg.Headers()
 	pubsubMsg.Committer = &natsCommitter{msg: msg}
+
 	return pubsubMsg
 }
 
-func (sm *SubscriptionManager) sendToBuffer(msg *pubsub.Message, buffer chan *pubsub.Message) bool {
+func (*SubscriptionManager) sendToBuffer(msg *pubsub.Message, buffer chan *pubsub.Message) bool {
 	select {
 	case buffer <- msg:
 		return true
@@ -199,7 +200,7 @@ func (sm *SubscriptionManager) sendToBuffer(msg *pubsub.Message, buffer chan *pu
 	}
 }
 
-func (sm *SubscriptionManager) checkBatchError(msgs jetstream.MessageBatch, topic string, logger pubsub.Logger) error {
+func (*SubscriptionManager) checkBatchError(msgs jetstream.MessageBatch, topic string, logger pubsub.Logger) error {
 	if err := msgs.Error(); err != nil {
 		logger.Errorf("Error in message batch for topic %s: %v", topic, err)
 
