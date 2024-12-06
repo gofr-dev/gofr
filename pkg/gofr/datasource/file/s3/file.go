@@ -135,12 +135,14 @@ func (f *S3File) ReadAt(p []byte, offset int64) (n int, err error) {
 		fileName = f.name[index+1:]
 	}
 
-	res, objectErr := f.conn.GetObject(context.TODO(), &s3.GetObjectInput{
+	var res *s3.GetObjectOutput
+
+	res, err = f.conn.GetObject(context.TODO(), &s3.GetObjectInput{
 		Bucket: aws.String(bucketName),
 		Key:    aws.String(fileName),
 	})
 
-	if objectErr != nil {
+	if err != nil {
 		msg = fmt.Sprintf("Failed to retrieve file %q: %v", fileName, err)
 		return 0, err
 	}
@@ -200,16 +202,18 @@ func (f *S3File) Write(p []byte) (n int, err error) {
 
 	buffer := p
 
+	var res *s3.GetObjectOutput
+
 	// if f.offset is not 0, we need to fetch the contents of the file till the offset and then write into the file
 	if f.offset != 0 {
-		res, objectErr := f.conn.GetObject(context.TODO(), &s3.GetObjectInput{
+		res, err = f.conn.GetObject(context.TODO(), &s3.GetObjectInput{
 			Bucket: aws.String(bucketName),
 			Key:    aws.String(fileName),
 		})
 
-		if objectErr != nil {
-			msg = fmt.Sprintf("Failed to retrieve file %q: %v", fileName, objectErr)
-			return 0, objectErr
+		if err != nil {
+			msg = fmt.Sprintf("Failed to retrieve file %q: %v", fileName, err)
+			return 0, err
 		}
 
 		f.body = res.Body

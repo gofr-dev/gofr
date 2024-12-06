@@ -322,18 +322,18 @@ func (f *FileSystem) Stat(name string) (file.FileInfo, error) {
 		Message:   &msg,
 	}, time.Now())
 
-	filetype := TypeFile
+	filetype := typeFile
 
 	// Here we assume the user passes "0filePath" in case it wants to get fileinfo about a binary file instead of a directory
 	if path.Ext(name) == "" {
-		filetype = TypeDirectory
+		filetype = typeDirectory
 
 		var isBinary bool
 
 		name, isBinary = strings.CutPrefix(name, "0")
 
 		if isBinary {
-			filetype = TypeFile
+			filetype = typeFile
 		}
 	}
 
@@ -351,7 +351,7 @@ func (f *FileSystem) Stat(name string) (file.FileInfo, error) {
 		return nil, nil
 	}
 
-	if filetype == TypeDirectory {
+	if filetype == typeDirectory {
 		var size int64
 
 		var lastModified time.Time

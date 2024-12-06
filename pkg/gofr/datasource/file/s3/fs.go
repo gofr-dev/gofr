@@ -19,12 +19,12 @@ import (
 )
 
 const (
-	TypeFile      = "file"
-	TypeDirectory = "directory"
+	typeFile      = "file"
+	typeDirectory = "directory"
 )
 
 var (
-	ErrIncorrectFileType = errors.New("incorrect file type")
+	errIncorrectFileType = errors.New("incorrect file type")
 )
 
 // client struct embeds the *s3.Client.
@@ -316,7 +316,7 @@ func (f *FileSystem) Rename(oldname, newname string) error {
 	// check if they are of the same type or not
 	if path.Ext(oldname) != path.Ext(newname) {
 		f.logger.Errorf("new file must be same as the old file type")
-		return fmt.Errorf("%w: new filename must match the old file's type", ErrIncorrectFileType)
+		return fmt.Errorf("%w: new filename must match the old file's type", errIncorrectFileType)
 	}
 
 	_, err := f.conn.CopyObject(context.TODO(), &s3.CopyObjectInput{
