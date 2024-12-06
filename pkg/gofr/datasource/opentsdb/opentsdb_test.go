@@ -2,11 +2,12 @@ package opentsdb
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
-	"math/rand/v2"
+	"math/big"
 	"net"
 	"net/http"
 	"strings"
@@ -85,7 +86,7 @@ func setOpenTSDBTest(t *testing.T) (*Client, *MockhttpClient) {
 		DetectDeltaNum:   10,
 	}
 
-	tsdbClient := New(&opentsdbCfg)
+	tsdbClient := New(opentsdbCfg)
 
 	tracer := otel.GetTracerProvider().Tracer("gofr-opentsdb")
 
@@ -142,10 +143,11 @@ func TestPutSuccess(t *testing.T) {
 	}
 
 	for i := 0; i < PutDataPointNum; i++ {
+		val, _ := rand.Int(rand.Reader, big.NewInt(100))
 		data := DataPoint{
 			Metric:    name[i%len(name)],
 			Timestamp: time.Now().Unix(),
-			Value:     rand.Float64() * 100,
+			Value:     val.Int64(),
 			Tags:      tags,
 		}
 		cpuDatas = append(cpuDatas, data)
@@ -181,8 +183,8 @@ func TestPutInvalidDataPoint(t *testing.T) {
 	resp := &PutResponse{}
 
 	err := client.PutDataPoints(context.Background(), dataPoints, "", resp)
-	require.Error(t, err)
-	require.Equal(t, "the value of the given datapoint is invalid", err.Error())
+	require.ErrorIs(t, err, errInvalidDataPoint)
+	require.ErrorContains(t, err, "please give a valid value")
 }
 
 func TestPutInvalidQueryParam(t *testing.T) {
@@ -200,8 +202,7 @@ func TestPutInvalidQueryParam(t *testing.T) {
 	resp := &PutResponse{}
 
 	err := client.PutDataPoints(context.Background(), dataPoints, "invalid_param", resp)
-	require.Error(t, err)
-	require.Equal(t, "the given query param is invalid.", err.Error())
+	require.ErrorIs(t, err, errInvalidQueryParam)
 }
 
 func TestPutErrorResponse(t *testing.T) {
@@ -226,8 +227,8 @@ func TestPutErrorResponse(t *testing.T) {
 	resp := &PutResponse{}
 
 	err := client.PutDataPoints(context.Background(), dataPoints, "", resp)
-	require.Error(t, err)
-	require.Equal(t, "client error: 400", err.Error())
+	require.ErrorIs(t, err, errResp)
+	require.ErrorContains(t, err, "status code: 400")
 }
 
 func TestPostQuerySuccess(t *testing.T) {
@@ -610,7 +611,6 @@ func TestHealthCheck_Failure(t *testing.T) {
 
 	resp, err := client.HealthCheck(context.Background())
 
-	require.Error(t, err, "Expected error during health check")
 	require.Nil(t, resp, "Expected response to be nil")
-	require.Equal(t, "OpenTSDB is unreachable: connection error", err.Error(), "Expected specific error message")
+	require.EqualError(t, err, "connection error", "Expected error during health check")
 }
