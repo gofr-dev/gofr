@@ -140,6 +140,7 @@ func panicRecovery(re any, w http.ResponseWriter, logger logger) {
 	default:
 		e = "Unknown panic type"
 	}
+
 	logger.Error(panicLog{
 		Error:      e,
 		StackTrace: string(debug.Stack()),

@@ -23,7 +23,7 @@ type Client struct {
 	database string
 	logger   Logger
 	metrics  Metrics
-	config   Config
+	config   *Config
 	tracer   trace.Tracer
 }
 
@@ -34,8 +34,11 @@ type Config struct {
 	Port     int
 	Database string
 	// Deprecated Provide Host User Password Port Instead and driver will generate the URI
-	URI string
+	URI               string
+	ConnectionTimeout time.Duration
 }
+
+const defaultTimeout = 5 * time.Second
 
 var errStatusDown = errors.New("status down")
 
@@ -52,6 +55,7 @@ i.e. by default observability features gets initialized when used with GoFr.
 // client.UseLogger(loggerInstance)
 // client.UseMetrics(metricsInstance)
 // client.Connect().
+//nolint:gocritic // Configs do not need to be passed by reference
 func New(c *Config) *Client {
 	return &Client{config: *c}
 }
@@ -87,6 +91,7 @@ func (c *Client) Connect(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+
 
 	if err := c.pingDatabase(ctx, client); err != nil {
 		return err
@@ -135,6 +140,7 @@ func (*Client) isTimeoutError(err error) bool {
 	return strings.Contains(err.Error(), "connection timeout") || mongo.IsTimeout(err)
 }
 
+
 func (*Client) isAuthenticationError(err error) bool {
 	return strings.Contains(err.Error(), "authentication failed") ||
 		strings.Contains(err.Error(), "AuthenticationFailed")
@@ -153,6 +159,7 @@ func (c *Client) handlePingError(err error) error {
 		return fmt.Errorf("%w: connection timeout", ErrGenericConnection)
 	}
 
+
 	if errors.Is(err, mongo.ErrClientDisconnected) {
 		return fmt.Errorf("%w: client disconnected", ErrGenericConnection)
 	}
@@ -165,6 +172,13 @@ func (c *Client) handlePingError(err error) error {
 }
 
 func (c *Client) setupMetrics() {
+	if err = m.Ping(ctx, nil); err != nil {
+		c.logger.Errorf("could not connect to mongoDB at %v due to err: %v", c.config.URI, err)
+		return
+	}
+
+	c.logger.Logf("connected to mongoDB successfully at %v to database %v", c.config.URI, c.config.Database)
+
 	mongoBuckets := []float64{.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 4, 5, 7.5, 10}
 	c.metrics.NewHistogram("app_mongo_stats", "Response time of MONGO queries in milliseconds.", mongoBuckets...)
 }
@@ -174,7 +188,9 @@ func (c *Client) verifyDatabaseAccess(ctx context.Context) error {
 		return fmt.Errorf("%w: %w", ErrDatabaseConnection, err)
 	}
 
-	return nil
+	c.Database = m.Database(c.config.Database)
+
+	c.logger.Logf("connected to MongoDB at %v to database %v", uri, c.Database)
 }
 
 // InsertOne inserts a single document into the specified collection.

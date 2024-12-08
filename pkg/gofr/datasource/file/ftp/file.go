@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"strings"
 	"time"
@@ -23,8 +24,8 @@ var (
 	ErrOutOfRange = errors.New("out of range")
 )
 
-// file represents a file on an FTP server.
-type file struct {
+// File represents a file on an FTP server.
+type File struct {
 	response  ftpResponse
 	path      string
 	entryType ftp.EntryType
@@ -49,7 +50,7 @@ type jsonReader struct {
 }
 
 // ReadAll reads either JSON or text files based on file extension and returns a corresponding RowReader.
-func (f *file) ReadAll() (file_interface.RowReader, error) {
+func (f *File) ReadAll() (file_interface.RowReader, error) {
 	defer f.sendOperationStats(&FileLog{Operation: "ReadAll", Location: f.path}, time.Now())
 
 	if strings.HasSuffix(f.Name(), ".json") {
@@ -60,8 +61,8 @@ func (f *file) ReadAll() (file_interface.RowReader, error) {
 }
 
 // createJSONReader creates a JSON reader for JSON files.
-func (f *file) createJSONReader() (file_interface.RowReader, error) {
-	status := "ERROR"
+func (f *File) createJSONReader() (file_interface.RowReader, error) {
+	status := statusError
 
 	defer f.sendOperationStats(&FileLog{Operation: "JSON Reader", Location: f.path, Status: &status}, time.Now())
 
@@ -92,21 +93,21 @@ func (f *file) createJSONReader() (file_interface.RowReader, error) {
 	}
 
 	if d, ok := token.(json.Delim); ok && d == '[' {
-		status = "SUCCESS"
+		status = statusSuccess
 
 		return &jsonReader{decoder: decoder, token: token}, err
 	}
 
 	// Reading JSON object
 	decoder = json.NewDecoder(reader)
-	status = "SUCCESS"
+	status = statusSuccess
 
 	return &jsonReader{decoder: decoder}, nil
 }
 
 // createTextCSVReader creates a text reader for reading text files.
-func (f *file) createTextCSVReader() (file_interface.RowReader, error) {
-	status := "ERROR"
+func (f *File) createTextCSVReader() (file_interface.RowReader, error) {
+	status := statusError
 
 	defer f.sendOperationStats(&FileLog{Operation: "Text/CSV Reader", Location: f.path, Status: &status}, time.Now())
 
@@ -125,7 +126,7 @@ func (f *file) createTextCSVReader() (file_interface.RowReader, error) {
 	}
 
 	reader := bytes.NewReader(buffer)
-	status = "SUCCESS"
+	status = statusSuccess
 
 	return &textReader{
 		scanner: bufio.NewScanner(reader),
@@ -159,35 +160,35 @@ func (f *textReader) Scan(i interface{}) error {
 }
 
 // Close closes the FTP file connection.
-func (f *file) Close() error {
+func (f *File) Close() error {
 	var status string
 
 	defer f.sendOperationStats(&FileLog{Operation: "Close", Location: f.path, Status: &status}, time.Now())
 
 	err := f.response.Close()
 	if err != nil {
-		status = "ERROR"
+		status = statusError
 
 		return err
 	}
 
-	status = "SUCCESS"
+	status = statusSuccess
 
 	return nil
 }
 
 // Name returns the name of the file.
-func (f *file) Name() string {
+func (f *File) Name() string {
 	defer f.sendOperationStats(&FileLog{Operation: "Get Name", Location: f.path}, time.Now())
 
 	return f.name
 }
 
 // Size returns the size of the file.
-func (f *file) Size() int64 {
+func (f *File) Size() int64 {
 	var msg string
 
-	status := "ERROR"
+	status := statusError
 
 	defer f.sendOperationStats(&FileLog{Operation: "Size", Location: f.path, Status: &status, Message: &msg}, time.Now())
 
@@ -201,21 +202,21 @@ func (f *file) Size() int64 {
 
 // Mode checks the FileMode. FTP server doesn't support file modes.
 // This method is to comply with the generalized FileInfo interface.
-func (f *file) Mode() os.FileMode {
+func (f *File) Mode() os.FileMode {
 	f.sendOperationStats(&FileLog{Operation: "Mode", Location: f.path}, time.Now())
 	return os.ModePerm
 }
 
 // IsDir checks, if the file is a directory or not.
 // Note: IsDir must be used post Stat/ReadDir methods of fileSystem only.
-func (f *file) IsDir() bool {
+func (f *File) IsDir() bool {
 	defer f.sendOperationStats(&FileLog{Operation: "IsDir", Location: f.path}, time.Now())
 	return f.entryType == ftp.EntryTypeFolder
 }
 
 // ModTime returns the last time the file/directory was modified.
 // Note: ModTime must be used post Stat/ReadDir methods of fileSystem only.
-func (f *file) ModTime() time.Time {
+func (f *File) ModTime() time.Time {
 	defer f.sendOperationStats(&FileLog{Operation: "ModTime", Location: f.path}, time.Now())
 
 	t, err := f.conn.GetTime(f.path)
@@ -228,14 +229,16 @@ func (f *file) ModTime() time.Time {
 }
 
 // Read reads data from the FTP file into the provided byte slice and updates the file offset.
-func (f *file) Read(p []byte) (n int, err error) {
+func (f *File) Read(p []byte) (n int, err error) {
 	var msg string
 
-	status := "ERROR"
+	status := statusError
 
 	defer f.sendOperationStats(&FileLog{Operation: "Read", Location: f.path, Status: &status, Message: &msg}, time.Now())
 
+	//nolint:gosec // We ensure the offset is never negative in the application logic.
 	r, err := f.conn.RetrFrom(f.path, uint64(f.offset))
+
 	if err != nil {
 		f.logger.Errorf("Read failed: Failed to open file with path %q : %v", f.path, err)
 		return 0, err
@@ -252,21 +255,21 @@ func (f *file) Read(p []byte) (n int, err error) {
 		return n, err
 	}
 
-	status = "SUCCESS"
+	status = statusSuccess
 	msg = fmt.Sprintf("Read %v bytes from file with path %q", n, f.path)
 
 	return n, err
 }
 
 // ReadAt reads data from the FTP file starting at the specified offset.
-func (f *file) ReadAt(p []byte, off int64) (n int, err error) {
+func (f *File) ReadAt(p []byte, off int64) (n int, err error) {
 	var msg string
 
-	status := "ERROR"
+	status := statusError
 
 	defer f.sendOperationStats(&FileLog{Operation: "ReadAt", Location: f.path, Status: &status, Message: &msg}, time.Now())
 
-	resp, err := f.conn.RetrFrom(f.path, uint64(off))
+	resp, err := f.conn.RetrFrom(f.path, uint64(math.Abs(float64(off))))
 	if err != nil {
 		f.logger.Errorf("ReadAt failed: Error opening file with path %q at %v offset : %v", f.path, off, err)
 		return 0, err
@@ -280,13 +283,13 @@ func (f *file) ReadAt(p []byte, off int64) (n int, err error) {
 		return 0, err
 	}
 
-	status = "SUCCESS"
+	status = statusSuccess
 	msg = fmt.Sprintf("Read %v bytes from file with path %q at offset of %v", n, f.path, off)
 
 	return n, err
 }
 
-func (f *file) check(whence int, offset, length int64) (int64, error) {
+func (f *File) check(whence int, offset, length int64) (int64, error) {
 	switch whence {
 	case io.SeekStart:
 	case io.SeekEnd:
@@ -307,10 +310,10 @@ func (f *file) check(whence int, offset, length int64) (int64, error) {
 }
 
 // Seek sets the offset for the next Read/ Write operations.
-func (f *file) Seek(offset int64, whence int) (int64, error) {
+func (f *File) Seek(offset int64, whence int) (int64, error) {
 	var msg string
 
-	status := "ERROR"
+	status := statusError
 
 	defer f.sendOperationStats(&FileLog{Operation: "Seek", Location: f.path, Status: &status, Message: &msg}, time.Now())
 
@@ -326,22 +329,23 @@ func (f *file) Seek(offset int64, whence int) (int64, error) {
 		return 0, err
 	}
 
-	status = "SUCCESS"
+	status = statusSuccess
 	msg = fmt.Sprintf("Offset set to %v for file at path %q", res, f.path)
 
 	return res, nil
 }
 
 // Write writes data to the FTP file.
-func (f *file) Write(p []byte) (n int, err error) {
+func (f *File) Write(p []byte) (n int, err error) {
 	var msg string
 
-	status := "ERROR"
+	status := statusError
 
 	defer f.sendOperationStats(&FileLog{Operation: "Write", Location: f.path, Status: &status, Message: &msg}, time.Now())
 
 	reader := bytes.NewReader(p)
 
+	//nolint:gosec // We ensure the offset is never negative in the application logic.
 	err = f.conn.StorFrom(f.path, reader, uint64(f.offset))
 	if err != nil {
 		f.logger.Errorf("Write failed, error: %v", err)
@@ -355,23 +359,23 @@ func (f *file) Write(p []byte) (n int, err error) {
 		f.modTime = mt
 	}
 
-	status = "SUCCESS"
+	status = statusSuccess
 	msg = fmt.Sprintf("Wrote %v bytes to file at path %q", len(p), f.path)
 
 	return len(p), nil
 }
 
 // WriteAt writes data to the FTP file starting at the specified offset.
-func (f *file) WriteAt(p []byte, off int64) (n int, err error) {
+func (f *File) WriteAt(p []byte, off int64) (n int, err error) {
 	var msg string
 
-	status := "ERROR"
+	status := statusError
 
 	defer f.sendOperationStats(&FileLog{Operation: "WriteAt", Location: f.path, Status: &status, Message: &msg}, time.Now())
 
 	reader := bytes.NewReader(p)
 
-	err = f.conn.StorFrom(f.path, reader, uint64(off))
+	err = f.conn.StorFrom(f.path, reader, uint64(math.Abs(float64(off))))
 	if err != nil {
 		f.logger.Errorf("WriteAt failed. Error writing in file with path %q at %v offset : %v", f.path, off, err)
 		return 0, err
@@ -383,18 +387,18 @@ func (f *file) WriteAt(p []byte, off int64) (n int, err error) {
 	}
 
 	msg = fmt.Sprintf("Wrote %v bytes to file with path %q at offset of %v", len(p), f.path, off)
-	status = "SUCCESS"
+	status = statusSuccess
 
 	return len(p), nil
 }
 
-func (f *file) sendOperationStats(fl *FileLog, startTime time.Time) {
-	duration := time.Since(startTime).Milliseconds()
+func (f *File) sendOperationStats(fl *FileLog, startTime time.Time) {
+	duration := time.Since(startTime).Microseconds()
 
 	fl.Duration = duration
 
 	f.logger.Debug(fl)
 
-	f.metrics.RecordHistogram(context.Background(), appFtpStats, float64(duration),
+	f.metrics.RecordHistogram(context.Background(), appFTPStats, float64(duration),
 		"type", fl.Operation, "status", clean(fl.Status))
 }

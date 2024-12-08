@@ -31,6 +31,15 @@ func Test_NewMongoClient(t *testing.T) {
 		URI:      "mongodb://localhost:27017",
 		Database: "test",
 	})
+
+	logger.EXPECT().Debugf(gomock.Any(), gomock.Any())
+	logger.EXPECT().Logf(gomock.Any(), gomock.Any(), gomock.Any())
+
+	logger.EXPECT().Errorf(gomock.Any(), gomock.Any(), gomock.Any())
+
+	client := New(Config{Database: "test", Host: "localhost", Port: 27017, User: "admin", ConnectionTimeout: 1 * time.Second})
+	client.Database = &mongo.Database{}
+
 	client.UseLogger(logger)
 	client.UseMetrics(metrics)
 
@@ -309,6 +318,7 @@ func Test_FindOneCommands(t *testing.T) {
 		gomock.Any(), "database", gomock.Any(), "type", gomock.Any()).AnyTimes()
 
 	logger.EXPECT().Debug(gomock.Any()).AnyTimes()
+
 
 	cl.logger = logger
 

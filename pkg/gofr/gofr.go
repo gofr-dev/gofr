@@ -616,6 +616,12 @@ func (a *App) EnableOAuth(jwksEndpoint string, refreshInterval int) {
 // If the subscriber is not initialized in the container, an error is logged and
 // the subscription is not registered.
 func (a *App) Subscribe(topic string, handler SubscribeFunc) {
+	if topic == "" || handler == nil {
+		a.container.Logger.Errorf("invalid subscription: topic and handler must not be empty or nil")
+
+		return
+	}
+
 	if a.container.GetSubscriber() == nil {
 		a.container.Logger.Errorf("subscriber not initialized in the container")
 
@@ -641,6 +647,20 @@ func (a *App) AddRESTHandlers(object interface{}) error {
 // UseMiddleware is a setter method for adding user defined custom middleware to GoFr's router.
 func (a *App) UseMiddleware(middlewares ...gofrHTTP.Middleware) {
 	a.httpServer.router.UseMiddleware(middlewares...)
+}
+
+// UseMiddlewareWithContainer adds a middleware that has access to the container
+// and wraps the provided handler with the middleware logic.
+//
+// The `middleware` function receives the container and the handler, allowing
+// the middleware to modify the request processing flow.
+// Deprecated: UseMiddlewareWithContainer will be removed in a future release.
+// Please use the [*App.UseMiddleware] method that does not depend on the container.
+func (a *App) UseMiddlewareWithContainer(middlewareHandler func(c *container.Container, handler http.Handler) http.Handler) {
+	a.httpServer.router.Use(func(h http.Handler) http.Handler {
+		// Wrap the provided handler `h` with the middleware function `middlewareHandler`
+		return middlewareHandler(a.container, h)
+	})
 }
 
 // AddCronJob registers a cron job to the cron table.
@@ -676,6 +696,10 @@ func contains(elems []string, v string) bool {
 func (a *App) AddStaticFiles(endpoint, filePath string) {
 	a.httpRegistered = true
 
+	if !strings.HasPrefix(filePath, "./") && !filepath.IsAbs(filePath) {
+		filePath = "./" + filePath
+	}
+
 	// update file path based on current directory if it starts with ./
 	if strings.HasPrefix(filePath, "./") {
 		currentWorkingDir, _ := os.Getwd()
@@ -688,6 +712,8 @@ func (a *App) AddStaticFiles(endpoint, filePath string) {
 		a.container.Logger.Errorf("error in registering '%s' static endpoint, error: %v", endpoint, err)
 		return
 	}
+
+	a.container.Logger.Infof("registered static files at endpoint '%s' from directory '%s'", endpoint, filePath)
 
 	a.httpServer.router.AddStaticFiles(endpoint, filePath)
 }

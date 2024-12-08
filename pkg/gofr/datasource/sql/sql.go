@@ -108,7 +108,7 @@ func retryConnection(database *DB) {
 
 	for {
 		if database.DB.Ping() != nil {
-			database.logger.Log("retrying SQL database connection")
+			database.logger.Info("retrying SQL database connection")
 
 			for {
 				err := database.DB.Ping()
@@ -207,11 +207,15 @@ func pushDBMetrics(db *sql.DB, metrics Metrics) {
 }
 
 func printConnectionSuccessLog(status string, dbconfig *DBConfig, logger datasource.Logger) {
+	logFunc := logger.Infof
+	if status != "connected" {
+		logFunc = logger.Debugf
+	}
+
 	if dbconfig.Dialect == sqlite {
-		logger.Debugf("%s to '%s' database", status, dbconfig.Database)
+		logFunc("%s to '%s' database", status, dbconfig.Database)
 	} else {
-		logger.Debugf("%s to '%s' user to '%s' database at '%s:%s'", status, dbconfig.User,
-			dbconfig.Database, dbconfig.HostName, dbconfig.Port)
+		logFunc("%s to '%s' user to '%s' database at '%s:%s'", status, dbconfig.User, dbconfig.Database, dbconfig.HostName, dbconfig.Port)
 	}
 }
 

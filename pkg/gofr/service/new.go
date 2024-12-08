@@ -154,6 +154,16 @@ func (h *httpService) createAndSendRequest(ctx context.Context, method string, p
 	// encode the query parameters on the request
 	encodeQueryParameters(req, queryParams)
 
+	if !trace.SpanFromContext(ctx).SpanContext().HasTraceID() {
+		// Start context and Tracing
+		ctx = req.Context()
+
+		// extract the traceID and spanID from the headers and create a new context for the same
+		// this context will make a new span using the traceID and link the incoming SpanID as
+		// its parentID, thus connecting two spans
+		ctx = otel.GetTextMapPropagator().Extract(ctx, propagation.HeaderCarrier(req.Header))
+	}
+
 	// inject the TraceParent header manually in the request headers
 	otel.GetTextMapPropagator().Inject(spanContext, propagation.HeaderCarrier(req.Header))
 
@@ -170,7 +180,7 @@ func (h *httpService) createAndSendRequest(ctx context.Context, method string, p
 
 	respTime := time.Since(requestStart)
 
-	log.ResponseTime = respTime.Milliseconds()
+	log.ResponseTime = respTime.Microseconds()
 
 	if err != nil {
 		log.ResponseCode = http.StatusInternalServerError

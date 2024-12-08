@@ -21,6 +21,7 @@ const (
 var (
 	errNoFileFound    = errors.New("no files were bounded")
 	errNonPointerBind = errors.New("bind error, cannot bind to a non pointer type")
+	errNonSliceBind   = errors.New("bind error: input is not a pointer to a byte slice")
 )
 
 // Request is an abstraction over the underlying http.Request. This abstraction is useful because it allows us
@@ -70,6 +71,8 @@ func (r *Request) Bind(i interface{}) error {
 		return r.bindMultipart(i)
 	case "application/x-www-form-urlencoded":
 		return r.bindFormURLEncoded(i)
+	case "binary/octet-stream":
+		return r.bindBinary(i)
 	}
 
 	return nil
@@ -154,6 +157,25 @@ func (r *Request) bindForm(ptr any, isMultipart bool) error {
 
 		return errFieldsNotSet
 	}
+
+	return nil
+}
+
+// bindBinary handles binding for binary/octet-stream content type.
+func (r *Request) bindBinary(raw interface{}) error {
+	// Ensure raw is a pointer to a byte slice
+	byteSlicePtr, ok := raw.(*[]byte)
+	if !ok {
+		return fmt.Errorf("%w: %v", errNonSliceBind, raw)
+	}
+
+	body, err := r.body()
+	if err != nil {
+		return fmt.Errorf("failed to read request body: %w", err)
+	}
+
+	// Assign the body to the provided slice
+	*byteSlicePtr = body
 
 	return nil
 }

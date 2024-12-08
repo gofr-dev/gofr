@@ -1,22 +1,15 @@
-//go:build exclude
-// +build exclude
-
 package ftp
 
 import (
 	"bytes"
-	"encoding/json"
-	"errors"
 	"io"
+	"math"
 	"os"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
-
-	file_interface "gofr.dev/pkg/gofr/datasource/file"
 )
 
 func TestRead(t *testing.T) {
@@ -39,7 +32,7 @@ func TestRead(t *testing.T) {
 			name:     "Read with error",
 			filePath: "/ftp/one/nonexistent.txt",
 			mockReadResponse: func(response *MockftpResponse) {
-				response.EXPECT().Read(gomock.Any()).Return(0, errors.New("mocked read error"))
+				response.EXPECT().Read(gomock.Any()).Return(0, errMockSentinel)
 				response.EXPECT().Close().Return(nil)
 			},
 			expectError: true,
@@ -61,7 +54,7 @@ func TestRead(t *testing.T) {
 	mockMetrics := NewMockMetrics(ctrl)
 
 	// Create ftpFileSystem instance
-	fs := &fileSystem{
+	fs := &FileSystem{
 		conn: mockFtpConn,
 		config: &Config{
 			Host:      "ftp.example.com",
@@ -78,26 +71,28 @@ func TestRead(t *testing.T) {
 	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), appFtpStats, gomock.Any(),
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), appFTPStats, gomock.Any(),
 		"type", gomock.Any(), "status", gomock.Any()).AnyTimes()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			response := NewMockftpResponse(ctrl)
 
-			file := file{path: tt.filePath, conn: fs.conn, logger: fs.logger, metrics: fs.metrics}
+			f := File{path: tt.filePath, conn: fs.conn, logger: fs.logger, metrics: fs.metrics}
 
 			if tt.name != "File does not exist" {
-				mockFtpConn.EXPECT().RetrFrom(tt.filePath, uint64(file.offset)).Return(response, nil)
+				//nolint:gosec // We ensure the offset is never negative in the application logic.
+				mockFtpConn.EXPECT().RetrFrom(tt.filePath, uint64(f.offset)).Return(response, nil)
 			} else {
-				mockFtpConn.EXPECT().RetrFrom(tt.filePath, uint64(file.offset)).Return(nil, errors.New("file not found error"))
+				//nolint:gosec // We ensure the offset is never negative in the application logic.
+				mockFtpConn.EXPECT().RetrFrom(tt.filePath, uint64(f.offset)).Return(nil, errNotFound)
 			}
 
 			tt.mockReadResponse(response)
 
 			s := make([]byte, 1024)
 
-			_, err := file.Read(s)
+			_, err := f.Read(s)
 
 			assert.Equal(t, tt.expectError, err != nil, tt.name)
 		})
@@ -127,7 +122,7 @@ func TestReadAt(t *testing.T) {
 			filePath: "/ftp/one/nonexistent.txt",
 			offset:   0,
 			mockReadResponse: func(response *MockftpResponse) {
-				response.EXPECT().Read(gomock.Any()).Return(0, errors.New("mocked read error"))
+				response.EXPECT().Read(gomock.Any()).Return(0, errMockSentinel)
 				response.EXPECT().Close().Return(nil)
 			},
 			expectError: true,
@@ -150,7 +145,7 @@ func TestReadAt(t *testing.T) {
 	mockMetrics := NewMockMetrics(ctrl)
 
 	// Create ftpFileSystem instance
-	fs := &fileSystem{
+	fs := &FileSystem{
 		conn: mockFtpConn,
 		config: &Config{
 			Host:      "ftp.example.com",
@@ -166,7 +161,7 @@ func TestReadAt(t *testing.T) {
 	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), appFtpStats, gomock.Any(),
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), appFTPStats, gomock.Any(),
 		"type", gomock.Any(), "status", gomock.Any()).AnyTimes()
 
 	for _, tt := range readAtTests {
@@ -174,9 +169,9 @@ func TestReadAt(t *testing.T) {
 			response := NewMockftpResponse(ctrl)
 
 			if tt.name != "File does not exist" {
-				mockFtpConn.EXPECT().RetrFrom(tt.filePath, uint64(tt.offset)).Return(response, nil)
+				mockFtpConn.EXPECT().RetrFrom(tt.filePath, uint64(math.Abs(float64(tt.offset)))).Return(response, nil)
 			} else {
-				mockFtpConn.EXPECT().RetrFrom(tt.filePath, uint64(tt.offset)).Return(nil, errors.New("file not found error"))
+				mockFtpConn.EXPECT().RetrFrom(tt.filePath, uint64(math.Abs(float64(tt.offset)))).Return(nil, errNotFound)
 			}
 
 			tt.mockReadResponse(response)
@@ -184,9 +179,9 @@ func TestReadAt(t *testing.T) {
 			s := make([]byte, 1024)
 
 			// Create ftpFile instance
-			file := file{path: tt.filePath, conn: fs.conn, logger: fs.logger, metrics: fs.metrics}
+			f := File{path: tt.filePath, conn: fs.conn, logger: fs.logger, metrics: fs.metrics}
 
-			_, err := file.ReadAt(s, tt.offset)
+			_, err := f.ReadAt(s, tt.offset)
 
 			assert.Equal(t, tt.expectError, err != nil, tt.name)
 		})
@@ -215,7 +210,7 @@ func TestWrite(t *testing.T) {
 			filePath: "/ftp/one/nonexistent.txt",
 			mockWriteExpect: func(conn *MockserverConn, filePath string) {
 				emptyReader := bytes.NewReader([]byte("test content"))
-				conn.EXPECT().StorFrom(filePath, emptyReader, uint64(0)).Return(errors.New("mocked write error"))
+				conn.EXPECT().StorFrom(filePath, emptyReader, uint64(0)).Return(errMockSentinel)
 			},
 			expectError: true,
 		},
@@ -224,7 +219,7 @@ func TestWrite(t *testing.T) {
 			filePath: "/ftp/one/nonexistent.txt",
 			mockWriteExpect: func(conn *MockserverConn, filePath string) {
 				emptyReader := bytes.NewReader([]byte("test content"))
-				conn.EXPECT().StorFrom(filePath, emptyReader, uint64(0)).Return(errors.New("file not found error"))
+				conn.EXPECT().StorFrom(filePath, emptyReader, uint64(0)).Return(errNotFound)
 			},
 			expectError: true,
 		},
@@ -238,7 +233,7 @@ func TestWrite(t *testing.T) {
 	mockMetrics := NewMockMetrics(ctrl)
 
 	// Create ftpFileSystem instance
-	fs := &fileSystem{
+	fs := &FileSystem{
 		conn: mockFtpConn,
 		config: &Config{
 			Host:      "ftp.example.com",
@@ -254,7 +249,7 @@ func TestWrite(t *testing.T) {
 	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), appFtpStats, gomock.Any(),
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), appFTPStats, gomock.Any(),
 		"type", gomock.Any(), "status", gomock.Any()).AnyTimes()
 
 	for _, tt := range writeTests {
@@ -262,9 +257,9 @@ func TestWrite(t *testing.T) {
 			tt.mockWriteExpect(mockFtpConn, tt.filePath)
 
 			// Create ftpFile instance
-			file := file{path: tt.filePath, conn: fs.conn, logger: fs.logger, metrics: fs.metrics}
+			f := File{path: tt.filePath, conn: fs.conn, logger: fs.logger, metrics: fs.metrics}
 
-			_, err := file.Write([]byte("test content"))
+			_, err := f.Write([]byte("test content"))
 
 			assert.Equal(t, tt.expectError, err != nil, tt.name)
 		})
@@ -285,7 +280,7 @@ func TestWriteAt(t *testing.T) {
 			offset:   3,
 			mockWriteExpect: func(conn *MockserverConn, filePath string, offset int64) {
 				emptyReader := bytes.NewReader([]byte("test content"))
-				conn.EXPECT().StorFrom(filePath, emptyReader, uint64(offset)).Return(nil)
+				conn.EXPECT().StorFrom(filePath, emptyReader, uint64(math.Abs(float64(offset)))).Return(nil)
 				conn.EXPECT().GetTime(filePath).Return(time.Now(), nil)
 			},
 			expectError: false,
@@ -296,7 +291,7 @@ func TestWriteAt(t *testing.T) {
 			offset:   0,
 			mockWriteExpect: func(conn *MockserverConn, filePath string, offset int64) {
 				emptyReader := bytes.NewReader([]byte("test content"))
-				conn.EXPECT().StorFrom(filePath, emptyReader, uint64(offset)).Return(errors.New("mocked write error"))
+				conn.EXPECT().StorFrom(filePath, emptyReader, uint64(math.Abs(float64(offset)))).Return(errMockSentinel)
 			},
 			expectError: true,
 		},
@@ -306,7 +301,7 @@ func TestWriteAt(t *testing.T) {
 			offset:   0,
 			mockWriteExpect: func(conn *MockserverConn, filePath string, offset int64) {
 				emptyReader := bytes.NewReader([]byte("test content"))
-				conn.EXPECT().StorFrom(filePath, emptyReader, uint64(offset)).Return(errors.New("file not found error"))
+				conn.EXPECT().StorFrom(filePath, emptyReader, uint64(math.Abs(float64(offset)))).Return(errNotFound)
 			},
 			expectError: true,
 		},
@@ -320,7 +315,7 @@ func TestWriteAt(t *testing.T) {
 	mockMetrics := NewMockMetrics(ctrl)
 
 	// Create ftpFileSystem instance
-	fs := &fileSystem{
+	fs := &FileSystem{
 		conn: mockFtpConn,
 		config: &Config{
 			Host:      "ftp.example.com",
@@ -336,7 +331,7 @@ func TestWriteAt(t *testing.T) {
 	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), appFtpStats, gomock.Any(),
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), appFTPStats, gomock.Any(),
 		"type", gomock.Any(), "status", gomock.Any()).AnyTimes()
 
 	for _, tt := range writeAtTests {
@@ -344,9 +339,9 @@ func TestWriteAt(t *testing.T) {
 			tt.mockWriteExpect(mockFtpConn, tt.filePath, tt.offset)
 
 			// Create ftpFile instance
-			file := file{path: tt.filePath, conn: fs.conn, logger: fs.logger, metrics: fs.metrics}
+			f := File{path: tt.filePath, conn: fs.conn, logger: fs.logger, metrics: fs.metrics}
 
-			_, err := file.WriteAt([]byte("test content"), tt.offset)
+			_, err := f.WriteAt([]byte("test content"), tt.offset)
 
 			assert.Equal(t, tt.expectError, err != nil, tt.name)
 		})
@@ -354,7 +349,44 @@ func TestWriteAt(t *testing.T) {
 }
 
 func TestSeek(t *testing.T) {
-	tests := []struct {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockFtpConn := NewMockserverConn(ctrl)
+	mockLogger := NewMockLogger(ctrl)
+	mockMetrics := NewMockMetrics(ctrl)
+
+	file := &File{
+		path:    "/ftp/one/testfile2.txt",
+		conn:    mockFtpConn,
+		offset:  5, // Starting offset for the file
+		logger:  mockLogger,
+		metrics: mockMetrics,
+	}
+
+	tests := getSeekTestCases()
+
+	// Common mock setups for logger and metrics
+	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).Times(5)
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), appFTPStats, gomock.Any(),
+		"type", gomock.Any(), "status", gomock.Any()).AnyTimes()
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			runSeekTest(t, file, mockFtpConn, tt)
+		})
+	}
+}
+
+func getSeekTestCases() []struct {
+	name          string
+	offset        int64
+	whence        int
+	expectedPos   int64
+	expectedError error
+} {
+	return []struct {
 		name          string
 		offset        int64
 		whence        int
@@ -425,434 +457,27 @@ func TestSeek(t *testing.T) {
 			expectedError: os.ErrInvalid,
 		},
 	}
-
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockFtpConn := NewMockserverConn(ctrl)
-	mockLogger := NewMockLogger(ctrl)
-	mockMetrics := NewMockMetrics(ctrl)
-
-	file := &file{
-		path:    "/ftp/one/testfile2.txt",
-		conn:    mockFtpConn,
-		offset:  5, // Starting offset for the file
-		logger:  mockLogger,
-		metrics: mockMetrics,
-	}
-
-	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).Times(5)
-	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), appFtpStats, gomock.Any(),
-		"type", gomock.Any(), "status", gomock.Any()).AnyTimes()
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			mockFtpConn.EXPECT().FileSize("/ftp/one/testfile2.txt").Return(int64(10), nil)
-
-			pos, err := file.Seek(tt.offset, tt.whence)
-			file.offset = 5
-
-			assert.Equal(t, tt.expectedPos, pos)
-			assert.Equal(t, tt.expectedError, err)
-		})
-	}
 }
 
-// The test defined below do not use any mocking. They need an actual ftp server connection.
-func Test_ReadFromCSV(t *testing.T) {
-	runFtpTest(t, func(fs file_interface.FileSystemProvider) {
-		var csvContent = `Name,Age,Email
-John Doe,30,johndoe@example.com
-Jane Smith,25,janesmith@example.com
-Emily Johnson,35,emilyj@example.com
-Michael Brown,40,michaelb@example.com`
-
-		csvValue := []string{
-			"Name,Age,Email",
-			"John Doe,30,johndoe@example.com",
-			"Jane Smith,25,janesmith@example.com",
-			"Emily Johnson,35,emilyj@example.com",
-			"Michael Brown,40,michaelb@example.com",
-		}
-
-		ctrl := gomock.NewController(t)
-
-		mockLogger := NewMockLogger(ctrl)
-		mockMetrics := NewMockMetrics(ctrl)
-
-		fs.UseLogger(mockLogger)
-		fs.UseMetrics(mockMetrics)
-
-		mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
-		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-		mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
-
-		newCsvFile, _ := fs.Create("temp.csv")
-
-		_, err := newCsvFile.Write([]byte(csvContent))
-		if err != nil {
-			t.Errorf("Write method failed: %v", err)
-		}
-
-		newCsvFile, _ = fs.Open("temp.csv")
-
-		defer func(fs file_interface.FileSystem, name string) {
-			_ = fs.Remove(name)
-		}(fs, "temp.csv")
-
-		var i = 0
-
-		reader, _ := newCsvFile.ReadAll()
-		for reader.Next() {
-			var content string
-
-			err := reader.Scan(&content)
-
-			assert.Equal(t, csvValue[i], content)
-			assert.NoError(t, err)
-
-			i++
-		}
-	})
-}
-
-func Test_ReadFromCSVScanError(t *testing.T) {
-	runFtpTest(t, func(fs file_interface.FileSystemProvider) {
-		var csvContent = `Name,Age,Email`
-
-		ctrl := gomock.NewController(t)
-		mockLogger := NewMockLogger(ctrl)
-		mockMetrics := NewMockMetrics(ctrl)
-
-		fs.UseLogger(mockLogger)
-		fs.UseMetrics(mockMetrics)
-
-		mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
-		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-		mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
-
-		newCsvFile, _ := fs.Create("temp.csv")
-
-		_, _ = newCsvFile.Write([]byte(csvContent))
-		newCsvFile, _ = fs.Open("temp.csv")
-
-		reader, _ := newCsvFile.ReadAll()
-
-		defer func(fs file_interface.FileSystem, name string) {
-			err := fs.Remove(name)
-			if err != nil {
-				t.Error(err)
-			}
-		}(fs, "temp.csv")
-
-		for reader.Next() {
-			var content string
-
-			err := reader.Scan(content)
-
-			assert.Error(t, err)
-			assert.Equal(t, "", content)
-		}
-	})
-}
-
-func Test_ReadFromJSONArray(t *testing.T) {
-	runFtpTest(t, func(fs file_interface.FileSystemProvider) {
-		var jsonContent = `[{"name": "Sam", "age": 123},
-{"name": "Jane", "age": 456},
-{"name": "John", "age": 789},
-{"name": "Sam", "age": 123}]`
-
-		type User struct {
-			Name string `json:"name"`
-			Age  int    `json:"age"`
-		}
-
-		var jsonValue = []User{{"Sam", 123},
-			{"Jane", 456},
-			{"John", 789},
-			{"Sam", 123},
-		}
-
-		ctrl := gomock.NewController(t)
-		mockLogger := NewMockLogger(ctrl)
-		mockMetrics := NewMockMetrics(ctrl)
-
-		fs.UseLogger(mockLogger)
-		fs.UseMetrics(mockMetrics)
-
-		mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
-		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-		mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
-
-		newCsvFile, _ := fs.Create("temp.json")
-
-		_, _ = newCsvFile.Write([]byte(jsonContent))
-		newCsvFile, _ = fs.Open("temp.json")
-
-		defer func(fs file_interface.FileSystem, name string) {
-			err := fs.Remove(name)
-			if err != nil {
-				t.Error(err)
-			}
-		}(fs, "temp.json")
-
-		var i = 0
-
-		reader, readerError := newCsvFile.ReadAll()
-		if readerError == nil {
-			for reader.Next() {
-				var u User
-
-				err := reader.Scan(&u)
-
-				assert.Equal(t, jsonValue[i].Name, u.Name)
-				assert.Equal(t, jsonValue[i].Age, u.Age)
-				assert.NoError(t, err)
-
-				i++
-			}
-		}
-	})
-}
-
-func Test_ReadFromJSONObject(t *testing.T) {
-	runFtpTest(t, func(fs file_interface.FileSystemProvider) {
-		var jsonContent = `{"name": "Sam", "age": 123}`
-
-		type User struct {
-			Name string `json:"name"`
-			Age  int    `json:"age"`
-		}
-
-		ctrl := gomock.NewController(t)
-		mockLogger := NewMockLogger(ctrl)
-		mockMetrics := NewMockMetrics(ctrl)
-
-		fs.UseLogger(mockLogger)
-		fs.UseMetrics(mockMetrics)
-
-		mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
-		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-		mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
-
-		newCsvFile, _ := fs.Create("temp.json")
-
-		_, _ = newCsvFile.Write([]byte(jsonContent))
-		newCsvFile, _ = fs.Open("temp.json")
-
-		reader, _ := newCsvFile.ReadAll()
-
-		defer func(fs file_interface.FileSystem, name string) {
-			err := fs.Remove(name)
-			if err != nil {
-				t.Error(err)
-			}
-		}(fs, "temp.json")
-
-		for reader.Next() {
-			var u User
-
-			err := reader.Scan(&u)
-
-			assert.Equal(t, "Sam", u.Name)
-			assert.Equal(t, 123, u.Age)
-
-			assert.NoError(t, err)
-		}
-	})
-}
-
-func Test_ReadFromJSONArrayInvalidDelimiter(t *testing.T) {
-	runFtpTest(t, func(fs file_interface.FileSystemProvider) {
-		var jsonContent = `!@#$%^&*`
-
-		ctrl := gomock.NewController(t)
-		mockLogger := NewMockLogger(ctrl)
-		mockMetrics := NewMockMetrics(ctrl)
-
-		fs.UseLogger(mockLogger)
-		fs.UseMetrics(mockMetrics)
-
-		mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
-		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-		mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
-
-		newCsvFile, _ := fs.Create("temp.json")
-
-		_, _ = newCsvFile.Write([]byte(jsonContent))
-
-		newCsvFile.Close()
-
-		newCsvFile, _ = fs.Open("temp.json")
-
-		_, err := newCsvFile.ReadAll()
-
-		defer func(fs file_interface.FileSystem, name string) {
-			removeErr := fs.Remove(name)
-			if removeErr != nil {
-				t.Error(removeErr)
-			}
-		}(fs, "temp.json")
-
-		assert.IsType(t, &json.SyntaxError{}, err)
-	})
-}
-
-func Test_DirectoryOperations(t *testing.T) {
-	runFtpTest(t, func(fs file_interface.FileSystemProvider) {
-		ctrl := gomock.NewController(t)
-		mockLogger := NewMockLogger(ctrl)
-		mockMetrics := NewMockMetrics(ctrl)
-
-		fs.UseLogger(mockLogger)
-		fs.UseMetrics(mockMetrics)
-
-		mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
-		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-
-		err := fs.Mkdir("temp1", os.ModePerm)
-		require.NoError(t, err)
-
-		err = fs.Mkdir("temp2", os.ModePerm)
-		require.NoError(t, err)
-
-		defer func(fs file_interface.FileSystem) {
-			removeErr := fs.RemoveAll("../temp1")
-			require.NoError(t, removeErr)
-
-			removeErr = fs.RemoveAll("../temp2")
-			require.NoError(t, removeErr)
-		}(fs)
-
-		// ChangeDir Operations
-		err = fs.ChDir("temp1")
-		require.NoError(t, err)
-
-		err = fs.ChDir("../temp2")
-		require.NoError(t, err)
-
-		// Changing Remote Directory
-		currentdir, err := fs.Getwd()
-		require.NoError(t, err)
-		assert.Equal(t, "/ftp/user/temp2", currentdir)
-
-		_, err = fs.Create("temp.csv")
-		require.NoError(t, err)
-
-		v, err := fs.ReadDir(".")
-		require.NoError(t, err)
-		require.NotEmpty(t, v)
-		assert.Equal(t, "temp.csv", v[0].Name())
-		assert.False(t, v[0].IsDir())
-
-		p, err := fs.Stat("../temp2")
-		require.NoError(t, err)
-		require.NotEmpty(t, p)
-		assert.True(t, p.IsDir())
-
-		p, err = fs.Stat("temp.csv")
-		require.NoError(t, err)
-		require.NotEmpty(t, p)
-		assert.Equal(t, "temp.csv", p.Name())
-		assert.False(t, p.IsDir())
-	})
-}
-
-func Test_GetSize(t *testing.T) {
-	runFtpTest(t, func(fs file_interface.FileSystemProvider) {
-		ctrl := gomock.NewController(t)
-		mockLogger := NewMockLogger(ctrl)
-		mockMetrics := NewMockMetrics(ctrl)
-
-		fs.UseLogger(mockLogger)
-		fs.UseMetrics(mockMetrics)
-
-		mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
-		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-		mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
-
-		newFile, err := fs.Create("temp.json")
-		require.NoError(t, err)
-
-		defer func(fs file_interface.FileSystem) {
-			removeErr := fs.Remove("temp.json")
-			if removeErr != nil {
-				t.Error(removeErr)
-			}
-		}(fs)
-
-		p, err := fs.Stat("temp.json")
-		require.NoError(t, err)
-		assert.Zero(t, p.Size())
-
-		_, err = newFile.Write([]byte("Hello_World"))
-		require.NoError(t, err)
-
-		p, err = fs.Stat("temp.json")
-		require.NoError(t, err)
-		assert.NotZero(t, p.Size())
-	})
-}
-
-func Test_GetTime(t *testing.T) {
-	runFtpTest(t, func(fs file_interface.FileSystemProvider) {
-		ctrl := gomock.NewController(t)
-		mockLogger := NewMockLogger(ctrl)
-		mockMetrics := NewMockMetrics(ctrl)
-
-		fs.UseLogger(mockLogger)
-		fs.UseMetrics(mockMetrics)
-
-		mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
-		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-		mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
-
-		_, err := fs.Create("temp.json")
-		require.NoError(t, err)
-
-		defer func(fs file_interface.FileSystem) {
-			removeErr := fs.Remove("temp.json")
-			require.NoError(t, removeErr)
-		}(fs)
-
-		p, err := fs.Stat("temp.json")
-		require.NoError(t, err)
-		assert.False(t, p.ModTime().IsZero())
-	})
-}
-
-func runFtpTest(t *testing.T, testFunc func(fs file_interface.FileSystemProvider)) {
+func runSeekTest(
+	t *testing.T,
+	file *File,
+	mockFtpConn *MockserverConn,
+	tt struct {
+		name          string
+		offset        int64
+		whence        int
+		expectedPos   int64
+		expectedError error
+	},
+) {
 	t.Helper()
 
-	config := &Config{
-		Host:      "127.0.0.1",
-		User:      "user",
-		Password:  "password",
-		Port:      21,
-		RemoteDir: "/ftp/user",
-	}
+	mockFtpConn.EXPECT().FileSize(file.path).Return(int64(10), nil)
 
-	ftpClient := New(config)
+	pos, err := file.Seek(tt.offset, tt.whence)
+	file.offset = 5 // Reset file offset after each test
 
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockLogger := NewMockLogger(ctrl)
-	mockMetrics := NewMockMetrics(ctrl)
-
-	ftpClient.UseLogger(mockLogger)
-	ftpClient.UseMetrics(mockMetrics)
-
-	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
-	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-	mockMetrics.EXPECT().NewHistogram(appFtpStats, gomock.Any(), gomock.Any()).AnyTimes()
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), appFtpStats, gomock.Any(),
-		"type", gomock.Any(), "status", gomock.Any()).AnyTimes()
-
-	ftpClient.Connect()
-
-	// Run the test function with the initialized file system
-	testFunc(ftpClient)
+	assert.Equal(t, tt.expectedPos, pos)
+	assert.Equal(t, tt.expectedError, err)
 }

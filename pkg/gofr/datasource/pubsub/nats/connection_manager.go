@@ -2,7 +2,6 @@ package nats
 
 import (
 	"context"
-	"time"
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
@@ -12,10 +11,6 @@ import (
 )
 
 //go:generate mockgen -destination=mock_jetstream.go -package=nats github.com/nats-io/nats.go/jetstream jStream,Stream,Consumer,Msg,MessageBatch
-
-const (
-	ctxCloseTimeout = 5 * time.Second
-)
 
 type ConnectionManager struct {
 	conn             ConnInterface
@@ -84,8 +79,6 @@ func NewConnectionManager(
 
 // Connect establishes a connection to NATS and sets up JetStream.
 func (cm *ConnectionManager) Connect() error {
-	cm.logger.Debugf("Connecting to NATS server at %v", cm.config.Server)
-
 	opts := []nats.Option{nats.Name("GoFr NATS JetStreamClient")}
 
 	if cm.config.CredsFile != "" {
@@ -94,8 +87,6 @@ func (cm *ConnectionManager) Connect() error {
 
 	connInterface, err := cm.natsConnector.Connect(cm.config.Server, opts...)
 	if err != nil {
-		cm.logger.Errorf("failed to connect to NATS server at %v: %v", cm.config.Server, err)
-
 		return err
 	}
 
@@ -113,7 +104,7 @@ func (cm *ConnectionManager) Connect() error {
 	return nil
 }
 
-func (cm *ConnectionManager) Close(ctx context.Context) {
+func (cm *ConnectionManager) Close(_ context.Context) {
 	if cm.conn != nil {
 		cm.conn.Close()
 	}

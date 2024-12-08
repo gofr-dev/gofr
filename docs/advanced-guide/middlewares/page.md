@@ -25,9 +25,12 @@ The CORS middleware provides the following overridable configs:
 
 By adding custom middleware to your GoFr application, user can easily extend its functionality and implement 
 cross-cutting concerns in a modular and reusable way.
-User can use the `UseMiddleware` method on your GoFr application instance to register your custom middleware.
+User can use the `UseMiddleware` or `UseMiddlewareWithContainer` method on your GoFr application instance to register your custom middleware.
 
-### Example:
+### Using UseMiddleware method for Custom Middleware
+The UseMiddleware method is ideal for simple middleware that doesn't need direct access to the application's container.
+
+#### Example:
 
 ```go
 import (

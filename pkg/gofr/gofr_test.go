@@ -620,6 +620,57 @@ func Test_UseMiddleware(t *testing.T) {
 	assert.Equal(t, "applied", testHeaderValue, "Test_UseMiddleware Failed! header value mismatch.")
 }
 
+// Test the UseMiddlewareWithContainer function.
+func TestUseMiddlewareWithContainer(t *testing.T) {
+	// Initialize the mock container
+	mockContainer := container.NewContainer(config.NewMockConfig(nil))
+
+	// Create a simple handler to test middleware functionality
+	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("Hello, world!"))
+	})
+
+	// Middleware to modify response and test container access
+	middleware := func(c *container.Container, handler http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Ensure the container is passed correctly (for this test, we are just logging)
+			assert.NotNil(t, c, "Container should not be nil in the middleware")
+
+			// Continue with the handler execution
+			handler.ServeHTTP(w, r)
+		})
+	}
+
+	// Create a new App with a mock server
+	app := &App{
+		httpServer: &httpServer{
+			router: gofrHTTP.NewRouter(),
+			port:   8001,
+		},
+		container: mockContainer,
+		Config:    config.NewMockConfig(map[string]string{"REQUEST_TIMEOUT": "5"}),
+	}
+
+	// Use the middleware with the container
+	app.UseMiddlewareWithContainer(middleware)
+
+	// Register the handler to a route for testing
+	app.httpServer.router.Handle("/test", handler)
+
+	// Create a test request
+	req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+	// Create a test response recorder
+	rr := httptest.NewRecorder()
+
+	// Call the handler with the request and recorder
+	app.httpServer.router.ServeHTTP(rr, req)
+
+	// Assert the status code and response body
+	assert.Equal(t, http.StatusOK, rr.Code)
+	assert.Equal(t, "Hello, world!", rr.Body.String())
+}
+
 func Test_APIKeyAuthMiddleware(t *testing.T) {
 	c, _ := container.NewMockContainer(t)
 
@@ -764,7 +815,7 @@ func TestStaticHandler(t *testing.T) {
 
 	app := New()
 
-	app.AddStaticFiles("gofrTest", "./testdir")
+	app.AddStaticFiles("gofrTest", "testdir")
 
 	app.httpRegistered = true
 	app.httpServer.port = 8022
@@ -916,7 +967,10 @@ func TestApp_SubscriberInitialize(t *testing.T) {
 
 		app.container = &mockContainer
 
-		app.Subscribe("Hello", nil)
+		app.Subscribe("Hello", func(*Context) error {
+			// this is a test subscriber
+			return nil
+		})
 
 		_, ok := app.subscriptionManager.subscriptions["Hello"]
 
@@ -925,6 +979,45 @@ func TestApp_SubscriberInitialize(t *testing.T) {
 
 	t.Run("subscriber is not initialized", func(t *testing.T) {
 		app := New()
+		app.Subscribe("Hello", func(*Context) error {
+			// this is a test subscriber
+			return nil
+		})
+
+		_, ok := app.subscriptionManager.subscriptions["Hello"]
+
+		assert.False(t, ok)
+	})
+}
+
+func TestApp_Subscribe(t *testing.T) {
+	t.Run("topic is empty", func(t *testing.T) {
+		app := New()
+
+		mockContainer := container.Container{
+			Logger: logging.NewLogger(logging.ERROR),
+			PubSub: mockSubscriber{},
+		}
+
+		app.container = &mockContainer
+
+		app.Subscribe("", func(*Context) error { return nil })
+
+		_, ok := app.subscriptionManager.subscriptions[""]
+
+		assert.False(t, ok)
+	})
+
+	t.Run("handler is nil", func(t *testing.T) {
+		app := New()
+
+		mockContainer := container.Container{
+			Logger: logging.NewLogger(logging.ERROR),
+			PubSub: mockSubscriber{},
+		}
+
+		app.container = &mockContainer
+
 		app.Subscribe("Hello", nil)
 
 		_, ok := app.subscriptionManager.subscriptions["Hello"]

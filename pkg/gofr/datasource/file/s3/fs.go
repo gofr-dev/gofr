@@ -8,8 +8,6 @@ import (
 	"mime"
 	"os"
 	"path"
-	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -20,9 +18,23 @@ import (
 	file "gofr.dev/pkg/gofr/datasource/file"
 )
 
-type fileSystem struct {
-	s3file
-	conn    *s3.Client
+const (
+	typeFile      = "file"
+	typeDirectory = "directory"
+)
+
+var (
+	errIncorrectFileType = errors.New("incorrect file type")
+)
+
+// client struct embeds the *s3.Client.
+type client struct {
+	*s3.Client
+}
+
+type FileSystem struct {
+	s3File  S3File
+	conn    s3Client
 	config  *Config
 	logger  Logger
 	metrics Metrics
@@ -39,31 +51,21 @@ type Config struct {
 
 // New initializes a new instance of FTP fileSystem with provided configuration.
 func New(config *Config) file.FileSystemProvider {
-	return &fileSystem{config: config}
+	return &FileSystem{config: config}
 }
 
 // UseLogger sets the Logger interface for the FTP file system.
-func (f *fileSystem) UseLogger(logger interface{}) {
+func (f *FileSystem) UseLogger(logger interface{}) {
 	if l, ok := logger.(Logger); ok {
 		f.logger = l
 	}
 }
 
 // UseMetrics sets the Metrics interface.
-func (f *fileSystem) UseMetrics(metrics interface{}) {
+func (f *FileSystem) UseMetrics(metrics interface{}) {
 	if m, ok := metrics.(Metrics); ok {
 		f.metrics = m
 	}
-}
-
-// getBucketName returns the currentS3Bucket.
-func getBucketName(filePath string) string {
-	return strings.Split(filePath, string(filepath.Separator))[0]
-}
-
-// getLocation returns the absolute path of the S3 bucket.
-func getLocation(bucket string) string {
-	return path.Join(string(filepath.Separator), bucket)
 }
 
 // Connect initializes and validates the connection to the S3 service.
@@ -71,7 +73,7 @@ func getLocation(bucket string) string {
 // This method sets up the S3 client using the provided configuration, including access key, secret key, region, and base endpoint.
 // It loads the AWS configuration and creates an S3 client, which is then assigns it to the `fileSystem` struct.
 // This method also logs the outcome of the connection attempt.
-func (f *fileSystem) Connect() {
+func (f *FileSystem) Connect() {
 	var msg string
 
 	st := statusErr
@@ -82,6 +84,8 @@ func (f *fileSystem) Connect() {
 		Status:    &st,
 		Message:   &msg,
 	}, time.Now())
+
+	f.logger.Debugf("connecting to S3 bucket: %s", f.config.BucketName)
 
 	// Load the AWS configuration
 	cfg, err := awsConfig.LoadDefaultConfig(context.TODO(),
@@ -94,7 +98,8 @@ func (f *fileSystem) Connect() {
 	)
 
 	if err != nil {
-		f.logger.Errorf("Failed to load configuration: %v", err)
+		f.logger.Errorf("failed to load configuration: %v", err)
+		return
 	}
 
 	// Create the S3 client from config
@@ -105,11 +110,11 @@ func (f *fileSystem) Connect() {
 		},
 	)
 
-	f.conn = s3Client
+	f.conn = client{s3Client}
 	st = statusSuccess
 	msg = "S3 Client connected."
 
-	f.logger.Logf("Connected to S3 bucket %s", f.config.BucketName)
+	f.logger.Logf("connected to S3 bucket %s", f.config.BucketName)
 }
 
 // Create creates a new file in the S3 bucket.
@@ -117,7 +122,7 @@ func (f *fileSystem) Connect() {
 // This method creates an empty file at the specified path in the S3 bucket. It first checks if the parent directory exists;
 // if the parent directory does not exist, it returns an error. After creating the file, it retrieves the file metadata
 // and returns a `file` object representing the newly created file.
-func (f *fileSystem) Create(name string) (file.File, error) {
+func (f *FileSystem) Create(name string) (file.File, error) {
 	var msg string
 
 	st := statusErr
@@ -144,7 +149,7 @@ func (f *fileSystem) Create(name string) (file.File, error) {
 
 		if len(res2.Contents) == 0 {
 			f.logger.Errorf("Parentpath %q does not exist", parentPath)
-			return nil, errors.New("create parent path before creating a file")
+			return nil, fmt.Errorf("%w: create parent path before creating a file", ErrOperationNotPermitted)
 		}
 	}
 
@@ -177,7 +182,7 @@ func (f *fileSystem) Create(name string) (file.File, error) {
 
 	f.logger.Logf("File with name %s created.", name)
 
-	return &s3file{
+	return &S3File{
 		conn:         f.conn,
 		name:         path.Join(f.config.BucketName, name),
 		logger:       f.logger,
@@ -193,7 +198,7 @@ func (f *fileSystem) Create(name string) (file.File, error) {
 //
 // This method deletes the specified file from the S3 bucket. Currently, it supports the deletion of unversioned files
 // from general-purpose buckets only. Directory buckets and versioned files are not supported for deletion by this method.
-func (f *fileSystem) Remove(name string) error {
+func (f *FileSystem) Remove(name string) error {
 	var msg string
 
 	st := statusErr
@@ -227,7 +232,7 @@ func (f *fileSystem) Remove(name string) error {
 //
 // This method fetches the specified file from the S3 bucket and returns a `file` object with its content and metadata.
 // If the file cannot be retrieved, it returns an error.
-func (f *fileSystem) Open(name string) (file.File, error) {
+func (f *FileSystem) Open(name string) (file.File, error) {
 	var msg string
 
 	st := statusErr
@@ -245,14 +250,14 @@ func (f *fileSystem) Open(name string) (file.File, error) {
 	})
 
 	if err != nil {
-		f.logger.Errorf("Failed to retrieve %q: %v", name, err)
+		f.logger.Errorf("failed to retrieve %q: %v", name, err)
 		return nil, err
 	}
 
 	st = statusSuccess
 	msg = fmt.Sprintf("File with path %q retrieved successfully", name)
 
-	return &s3file{
+	return &S3File{
 		conn:         f.conn,
 		name:         path.Join(f.config.BucketName, name),
 		logger:       f.logger,
@@ -268,7 +273,7 @@ func (f *fileSystem) Open(name string) (file.File, error) {
 //
 // This method calls the `Open` method of the `fileSystem` struct to retrieve a file. It is provided to align with the
 // FileSystem interface requirements in the GoFr framework.
-func (f *fileSystem) OpenFile(name string, _ int, _ os.FileMode) (file.File, error) {
+func (f *FileSystem) OpenFile(name string, _ int, _ os.FileMode) (file.File, error) {
 	return f.Open(name)
 }
 
@@ -279,7 +284,7 @@ func (f *fileSystem) OpenFile(name string, _ int, _ os.FileMode) (file.File, err
 // - The file types of the old and new names match.
 //
 // If the old and new names are the same, no operation is performed.
-func (f *fileSystem) Rename(oldname, newname string) error {
+func (f *FileSystem) Rename(oldname, newname string) error {
 	var msg string
 
 	st := statusErr
@@ -300,7 +305,7 @@ func (f *fileSystem) Rename(oldname, newname string) error {
 	// check if both exist at same location or not
 	if path.Dir(oldname) != path.Dir(newname) {
 		f.logger.Errorf("%q & %q are not in same location", oldname, newname)
-		return errors.New("renaming as well as moving file to different location is not allowed")
+		return fmt.Errorf("%w: renaming as well as moving file to different location is not allowed", ErrOperationNotPermitted)
 	}
 
 	// check if it is a directory
@@ -311,7 +316,7 @@ func (f *fileSystem) Rename(oldname, newname string) error {
 	// check if they are of the same type or not
 	if path.Ext(oldname) != path.Ext(newname) {
 		f.logger.Errorf("new file must be same as the old file type")
-		return errors.New("incorrect file type of newname")
+		return fmt.Errorf("%w: new filename must match the old file's type", errIncorrectFileType)
 	}
 
 	_, err := f.conn.CopyObject(context.TODO(), &s3.CopyObjectInput{
@@ -342,86 +347,4 @@ func (f *fileSystem) Rename(oldname, newname string) error {
 	f.logger.Logf("File with path %q renamed to %q", oldname, newname)
 
 	return nil
-}
-
-// Stat retrieves the FileInfo for the specified file or directory in the S3 bucket.
-//
-// If the provided name has no file extension, it is treated as a directory by default. If the name starts with "0",
-// it is interpreted as a binary file rather than a directory, with the "0" prefix removed.
-//
-// For directories, the method aggregates the sizes of all objects within the directory and returns the latest modified
-// time among them. For files, it returns the file's size and last modified time.
-func (f *fileSystem) Stat(name string) (file.FileInfo, error) {
-	var msg string
-
-	st := statusErr
-
-	defer f.sendOperationStats(&FileLog{
-		Operation: "STAT",
-		Location:  getLocation(f.config.BucketName),
-		Status:    &st,
-		Message:   &msg,
-	}, time.Now())
-
-	filetype := "file"
-
-	// Here we assume the user passes "0filePath" in case it wants to get fileinfo about a binary file instead of a directory
-	if path.Ext(name) == "" {
-		filetype = "directory"
-
-		if name[0] == '0' {
-			name = name[1:]
-			filetype = "file"
-		}
-	}
-
-	res, err := f.conn.ListObjectsV2(context.TODO(), &s3.ListObjectsV2Input{
-		Bucket: aws.String(f.config.BucketName),
-		Prefix: aws.String(name),
-	})
-
-	if err != nil {
-		f.logger.Errorf("Error returning file info: %v", err)
-		return nil, err
-	}
-
-	if filetype == "directory" {
-		var size int64
-
-		var lastModified time.Time
-
-		for i := range res.Contents {
-			size += *res.Contents[i].Size
-
-			if res.Contents[i].LastModified.After(lastModified) {
-				lastModified = *res.Contents[i].LastModified
-			}
-		}
-
-		// directory exist and first value gives information about the directory
-		st = statusSuccess
-		msg = fmt.Sprintf("Directory with path %q info retrieved successfully", name)
-
-		if res.Contents != nil {
-			return &s3file{
-				conn:         f.conn,
-				logger:       f.logger,
-				metrics:      f.metrics,
-				size:         size,
-				name:         path.Join(f.config.BucketName, *res.Contents[0].Key),
-				lastModified: lastModified,
-			}, nil
-		}
-
-		return nil, nil
-	}
-
-	return &s3file{
-		conn:         f.conn,
-		logger:       f.logger,
-		metrics:      f.metrics,
-		size:         *res.Contents[0].Size,
-		name:         path.Join(f.config.BucketName, *res.Contents[0].Key),
-		lastModified: *res.Contents[0].LastModified,
-	}, nil
 }
