@@ -49,7 +49,7 @@ func createTableEmployee() migration.Migrate {
 `migration.Datasource` have the datasources whose migrations are supported i.e., Redis and SQL (MySQL and PostgreSQL).
 All migrations always run in a transaction.
 
-For MySQL it is highly recommended to use `IF EXISTS` and `IF NOT EXIST` in DDL commands as MySQL implicitly commits these commands.
+For MySQL, it is highly recommended to use `IF EXISTS` and `IF NOT EXIST` in DDL commands as MySQL implicitly commits these commands.
 
 **Create a function which returns all the migrations in a map**
 
