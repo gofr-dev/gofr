@@ -1,6 +1,6 @@
 # Connecting MySQL/MariaDB
 
-Just like Redis GoFr also supports connection to SQL(MySQL, MariaDB and Postgres) databases based on configuration variables.
+Just like Redis GoFr also supports connection to SQL (MySQL, MariaDB, and Postgres) databases based on configuration variables.
 
 ## Setup
 

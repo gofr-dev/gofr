@@ -69,21 +69,21 @@ Therefore, GoFr utilizes a pluggable approach for new datasources by separating 
 
 ## Supported Datasources
 
-| Datasource     | Health-Check | Logs | Metrics | Traces | As Driver |
-|----------------|-----------|------|------|--------|-----------|
-| MySQL          | ✅         | ✅    | ✅    | ✅      |           |
-| REDIS          | ✅         | ✅    | ✅    | ✅      |           |
-| PostgreSQL     | ✅         | ✅    | ✅    | ✅      |           |
-| MongoDB        | ✅         | ✅    | ✅    |  ✅      | ✅         |
-| SQLite         | ✅         | ✅    | ✅    | ✅      |           |
-| BadgerDB       | ✅         | ✅    | ✅    |    ✅    | ✅         |
-| Cassandra      | ✅         | ✅    | ✅    |  ✅      | ✅         |
-| Clickhouse     |           | ✅    | ✅    |   ✅     | ✅         |
-| FTP            |           | ✅    |      |        | ✅         |
-| SFTP           |           | ✅    |      |        | ✅         |
-| Solr           |           |   ✅   |   ✅  |   ✅     |      ✅     |
-| DGraph         | ✅  | ✅ |✅ |   ✅     ||
-| Azure Eventhub |   | ✅ |✅ |        |✅|
-| OpenTSDB       |     ✅     |   ✅   |      |   ✅     |      ✅     |
+| Datasource      | Health-Check | Logs | Metrics | Traces | As Driver |
+|-----------------|--------------|------|---------|--------|-----------|
+| MySQL           | ✅            | ✅    | ✅       | ✅      |           |
+| Redis           | ✅            | ✅    | ✅       | ✅      |           |
+| PostgreSQL      | ✅            | ✅    | ✅       | ✅      |           |
+| MongoDB         | ✅            | ✅    | ✅       | ✅      | ✅         |
+| SQLite          | ✅            | ✅    | ✅       | ✅      |           |
+| BadgerDB        | ✅            | ✅    | ✅       | ✅      | ✅         |
+| Cassandra       | ✅            | ✅    | ✅       | ✅      | ✅         |
+| ClickHouse      |              | ✅    | ✅       | ✅      | ✅         |
+| FTP             |              | ✅    |         |        | ✅         |
+| SFTP            |              | ✅    |         |        | ✅         |
+| Solr            |              | ✅    | ✅       | ✅      | ✅         |
+| Dgraph          | ✅            | ✅    | ✅       | ✅      |           |
+| Azure Event Hub |              | ✅    | ✅       |        | ✅         |
+| OpenTSDB        | ✅            | ✅    |         | ✅      | ✅         |
 
 

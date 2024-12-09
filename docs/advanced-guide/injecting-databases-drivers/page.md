@@ -7,9 +7,9 @@ as unnecessary database drivers are not being compiled and added to the build.
 > We are planning to provide custom drivers for most common databases, and is in the pipeline for upcoming releases!
 
 
-## Clickhouse
-GoFr supports injecting Clickhouse that supports the following interface. Any driver that implements the interface can be added
-using `app.AddClickhouse()` method, and user's can use Clickhouse across application with `gofr.Context`.
+## ClickHouse
+GoFr supports injecting ClickHouse that supports the following interface. Any driver that implements the interface can be added
+using `app.AddClickhouse()` method, and user's can use ClickHouse across application with `gofr.Context`.
 ```go
 type Clickhouse interface {
     Exec(ctx context.Context, query string, args ...any) error
@@ -278,8 +278,8 @@ func main() {
 	app.Run()
 }
 ```
-## DGraph
-GoFr supports injecting Dgraph with an interface that defines the necessary methods for interacting with the Dgraph 
+## Dgraph
+GoFr supports injecting Dgraph with an interface that defines the necessary methods for interacting with the Dgraph
 database. Any driver that implements the following interface can be added using the app.AddDgraph() method.
 
 ```go

@@ -50,7 +50,7 @@ func (u *userEntity) TableName() string {
 ```
 
 ## Adding Database Constraints
-By default, GoFr assumes to have manual insertion of id for a given struct, but to support sql constraints like `auto-increment`,
+By default, GoFr assumes to have manual insertion of id for a given struct, but to support SQL constraints like `auto-increment`,
 `not-null` user can use the `sql` tag while declaring the struct fields.
 
 ```go
@@ -141,4 +141,4 @@ The first field of the struct is typically used as the primary key for data oper
 | `bool` | `BOOLEAN` or `TINYINT(1)` | Use `BOOLEAN` (supported by most SQL databases like PostgreSQL, MySQL) or `TINYINT(1)` in MySQL (where `0` is false, and `1` is true). |
 | `float32`, `float64` | `FLOAT`, `DOUBLE`, `DECIMAL` | Use `DECIMAL` for precise decimal numbers (e.g., financial data), `FLOAT` or `DOUBLE` for approximate floating-point numbers. |
 | `time.Time` | `DATE`, `TIME`, `DATETIME`, `TIMESTAMP` | Use `DATE` for just the date, `TIME` for the time of day, and `DATETIME` or `TIMESTAMP` for both date and time. |
-> #### Check out the example on how to add REST Handlers in GoFr: [Visit Github](https://github.com/gofr-dev/gofr/tree/main/examples/using-add-rest-handlers)
+> #### Check out the example on how to add REST Handlers in GoFr: [Visit GitHub](https://github.com/gofr-dev/gofr/tree/main/examples/using-add-rest-handlers)

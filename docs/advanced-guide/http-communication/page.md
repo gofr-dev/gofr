@@ -86,7 +86,7 @@ func Customer(ctx *gofr.Context) (interface{}, error) {
 
 ### Additional Configurational Options
 
-GoFr provides its user with additional configurational options while registering http service for communication. These are:
+GoFr provides its user with additional configurational options while registering HTTP service for communication. These are:
 
 - **APIKeyConfig** - This option allows the user to set the `API-Key` Based authentication as the default auth for downstream HTTP Service.
 - **BasicAuthConfig** - This option allows the user to set basic auth (username and password) as the default auth for downstream HTTP Service.
