@@ -147,8 +147,18 @@ func (h *httpService) createAndSendRequest(ctx context.Context, method string, p
 		return nil, err
 	}
 
+	var isContentTypeSet bool
+
 	for k, v := range headers {
+		if strings.ToLower(k) == "content-type" {
+			isContentTypeSet = true
+		}
+
 		req.Header.Set(k, v)
+	}
+
+	if !isContentTypeSet {
+		req.Header.Set("Content-Type", "application/json")
 	}
 
 	// encode the query parameters on the request

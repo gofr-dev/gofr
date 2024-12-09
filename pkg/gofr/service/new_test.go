@@ -74,7 +74,7 @@ func TestHTTPService_createAndSendRequest(t *testing.T) {
 	// when params value is of type []string then last value is sent in request
 	resp, err := service.createAndSendRequest(ctx,
 		http.MethodPost, "test-path", map[string]interface{}{"key": "value", "name": []string{"gofr", "test"}},
-		[]byte("{Test Body}"), map[string]string{"header1": "value1"})
+		[]byte("{Test Body}"), map[string]string{"header1": "value1", "content-type": "application/json"})
 
 	if err != nil {
 		if resp != nil {
