@@ -96,6 +96,10 @@ func convertSpans(spans []sdktrace.ReadOnlySpan) []Span {
 	convertedSpans := make([]Span, 0, len(spans))
 
 	for i, s := range spans {
+		if s.Name() == "sql.connector.connect" {
+			continue
+		}
+
 		convertedSpan := Span{
 			TraceID:   s.SpanContext().TraceID().String(),
 			ID:        s.SpanContext().SpanID().String(),

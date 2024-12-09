@@ -161,7 +161,7 @@ func (h *httpService) createAndSendRequest(ctx context.Context, method string, p
 
 	log := &Log{
 		Timestamp:     time.Now(),
-		CorrelationID: trace.SpanFromContext(ctx).SpanContext().TraceID().String(),
+		CorrelationID: trace.SpanFromContext(clientTraceCtx).SpanContext().TraceID().String(),
 		HTTPMethod:    method,
 		URI:           uri,
 	}
@@ -178,11 +178,11 @@ func (h *httpService) createAndSendRequest(ctx context.Context, method string, p
 		log.ResponseCode = http.StatusInternalServerError
 		h.Log(&ErrorLog{Log: log, ErrorMessage: err.Error()})
 
-		h.updateMetrics(ctx, method, respTime.Seconds(), http.StatusInternalServerError)
+		h.updateMetrics(clientTraceCtx, method, respTime.Seconds(), http.StatusInternalServerError)
 		return resp, err
 	}
 
-	h.updateMetrics(ctx, method, respTime.Seconds(), resp.StatusCode)
+	h.updateMetrics(clientTraceCtx, method, respTime.Seconds(), resp.StatusCode)
 	log.ResponseCode = resp.StatusCode
 
 	h.Log(log)
