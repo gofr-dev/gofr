@@ -11,15 +11,7 @@ import (
 	"strings"
 )
 
-// defaultTransport defines the default HTTP transport settings,
-// including connection timeouts and idle connections.
-var defaultTransport = &http.Transport{
-	MaxIdleConnsPerHost: 10,
-	DialContext: (&net.Dialer{
-		Timeout:   defaultDialTime,
-		KeepAlive: connectionTimeout,
-	}).DialContext,
-}
+var errInvalidDataPoint = errors.New("invalid data points")
 
 // QueryParam is the structure used to hold the querying parameters when calling /api/query.
 // Each attributes in QueryParam matches the definition in
@@ -182,7 +174,7 @@ func (c *Client) getResponse(ctx context.Context, putEndpoint string, datapoints
 	putResp := PutResponse{}
 
 	if err = c.sendRequest(ctx, http.MethodPost, putEndpoint, reqBodyCnt, &putResp); err != nil {
-		*message = fmt.Sprintf("error processing put request at url %q: %s", putEndpoint, err)
+		*message = fmt.Sprintf("error processing Put request at url %q: %s", putEndpoint, err)
 		return nil, err
 	}
 
@@ -204,17 +196,17 @@ func parsePutErrorMsg(resp *PutResponse) error {
 		}
 	}
 
-	return errors.New(buf.String())
+	return fmt.Errorf("%w: %s", errUnexpected, buf.String())
 }
 
 func validateDataPoint(datas []DataPoint) error {
 	if len(datas) == 0 {
-		return errors.New("the given datapoint is empty")
+		return fmt.Errorf("%w: datapoints are empty", errInvalidDataPoint)
 	}
 
 	for _, data := range datas {
 		if !isValidDataPoint(&data) {
-			return errors.New("the value of the given datapoint is invalid")
+			return fmt.Errorf("%w: please give a valid value", errInvalidDataPoint)
 		}
 	}
 
@@ -300,7 +292,7 @@ func getQueryBodyContents(param any) (string, error) {
 }
 
 func isValidQueryParam(param *QueryParam) bool {
-	if param.Queries == nil || len(param.Queries) == 0 {
+	if len(param.Queries) == 0 {
 		return false
 	}
 
@@ -349,7 +341,7 @@ func isValidTimePoint(timePoint interface{}) bool {
 }
 
 func isValidQueryLastParam(param *QueryLastParam) bool {
-	if param.Queries == nil || len(param.Queries) == 0 {
+	if len(param.Queries) == 0 {
 		return false
 	}
 
@@ -363,9 +355,19 @@ func isValidQueryLastParam(param *QueryLastParam) bool {
 }
 
 func (c *Client) initializeClient() {
+	// defaultTransport defines the default HTTP transport settings,
+	// including connection timeouts and idle connections.
+	var defaultTransport = &http.Transport{
+		MaxIdleConnsPerHost: 10,
+		DialContext: (&net.Dialer{
+			Timeout:   defaultDialTime,
+			KeepAlive: connectionTimeout,
+		}).DialContext,
+	}
+
 	c.config.Host = strings.TrimSpace(c.config.Host)
 	if c.config.Host == "" {
-		c.logger.Fatal("the OpentsdbEndpoint in the given configuration cannot be empty.")
+		c.logger.Fatal("the OpenTSDB Endpoint in the given configuration cannot be empty.")
 	}
 
 	// Use custom transport settings if provided, otherwise, use the default transport.

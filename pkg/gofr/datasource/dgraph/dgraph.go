@@ -61,16 +61,14 @@ func (d *Client) Connect() {
 		return
 	}
 
+	var responseTimeBuckets = []float64{0.05, 0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0}
+
 	// Register metrics
-	// Register all metrics
-	d.metrics.NewHistogram("dgraph_query_duration", "Response time of Dgraph queries in milliseconds.",
-		0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10)
-	d.metrics.NewHistogram("dgraph_query_with_vars_duration", "Response time of Dgraph queries with variables in milliseconds.",
-		0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10)
-	d.metrics.NewHistogram("dgraph_mutate_duration", "Response time of Dgraph mutations in milliseconds.",
-		0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10)
-	d.metrics.NewHistogram("dgraph_alter_duration", "Response time of Dgraph alter operations in milliseconds.",
-		0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10)
+	d.metrics.NewHistogram("dgraph_query_duration", "Response time of Dgraph queries in microseconds.", responseTimeBuckets...)
+	d.metrics.NewHistogram("dgraph_query_with_vars_duration", "Response time of Dgraph "+
+		"queries with variables in microseconds.", responseTimeBuckets...)
+	d.metrics.NewHistogram("dgraph_mutate_duration", "Response time of Dgraph mutations in microseconds.", responseTimeBuckets...)
+	d.metrics.NewHistogram("dgraph_alter_duration", "Response time of Dgraph alter operations in microseconds.", responseTimeBuckets...)
 
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
 	d.client = NewDgraphClient(dg)
@@ -81,7 +79,7 @@ func (d *Client) Connect() {
 		return
 	}
 
-	d.logger.Logf("connected to Dgraph client at %v:%v", d.config.Host, d.config.Port)
+	d.logger.Logf("connected to Dgraph server at %v:%v", d.config.Host, d.config.Port)
 }
 
 // UseLogger sets the logger for the Dgraph client which asserts the Logger interface.
