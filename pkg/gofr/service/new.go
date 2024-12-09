@@ -179,6 +179,7 @@ func (h *httpService) createAndSendRequest(ctx context.Context, method string, p
 		h.Log(&ErrorLog{Log: log, ErrorMessage: err.Error()})
 
 		h.updateMetrics(clientTraceCtx, method, respTime.Seconds(), http.StatusInternalServerError)
+
 		return resp, err
 	}
 
