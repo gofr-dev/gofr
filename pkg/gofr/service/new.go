@@ -150,7 +150,7 @@ func (h *httpService) createAndSendRequest(ctx context.Context, method string, p
 	var isContentTypeSet bool
 
 	for k, v := range headers {
-		if strings.ToLower(k) == "content-type" {
+		if strings.EqualFold(k, "content-type") {
 			isContentTypeSet = true
 		}
 
