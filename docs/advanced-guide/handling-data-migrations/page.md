@@ -1,7 +1,7 @@
 # Handling Data Migrations
 
 Suppose you manually make changes to your database, and now it's your responsibility to inform other developers to execute them. Additionally, you need to keep track of which changes should be applied to production machines in the next deployment.
-GoFr supports data migrations for MySQL, Postgres, Redis, Clickhouse & Cassandra which allows altering the state of a database, be it adding a new column to existing table or modifying the data type of existing column or adding constraints to an existing table, setting and removing keys etc.
+GoFr supports data migrations for MySQL, Postgres, Redis, ClickHouse & Cassandra which allows altering the state of a database, be it adding a new column to existing table or modifying the data type of existing column or adding constraints to an existing table, setting and removing keys etc.
 
 ## Usage
 

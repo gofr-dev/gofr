@@ -17,7 +17,7 @@ They contain information such as request's correlation ID, status codes, request
 
 {% figure src="/quick-start-logs.png" alt="Pretty Printed Logs" /%}
 
-Logs are well-structured, they are of type JSON when exported to a file, such that they can be pushed to logging systems such as {% new-tab-link title="Loki" href="https://grafana.com/oss/loki/" /%}, elastic search etc.
+Logs are well-structured, they are of type JSON when exported to a file, such that they can be pushed to logging systems such as {% new-tab-link title="Loki" href="https://grafana.com/oss/loki/" /%}, Elasticsearch etc.
 
 ## Metrics
 
