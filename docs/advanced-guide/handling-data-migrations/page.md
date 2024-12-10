@@ -1,7 +1,7 @@
 # Handling Data Migrations
 
 Suppose you manually make changes to your database, and now it's your responsibility to inform other developers to execute them. Additionally, you need to keep track of which changes should be applied to production machines in the next deployment.
-GoFr supports data migrations for MySQL, Postgres, Redis, Clickhouse & Cassandra which allows altering the state of a database, be it adding a new column to existing table or modifying the data type of existing column or adding constraints to an existing table, setting and removing keys etc.
+GoFr supports data migrations for MySQL, Postgres, Redis, ClickHouse & Cassandra which allows altering the state of a database, be it adding a new column to existing table or modifying the data type of existing column or adding constraints to an existing table, setting and removing keys etc.
 
 ## Usage
 
@@ -49,7 +49,7 @@ func createTableEmployee() migration.Migrate {
 `migration.Datasource` have the datasources whose migrations are supported i.e., Redis and SQL (MySQL and PostgreSQL).
 All migrations always run in a transaction.
 
-For MySQL it is highly recommended to use `IF EXISTS` and `IF NOT EXIST` in DDL commands as MySQL implicitly commits these commands.
+For MySQL, it is highly recommended to use `IF EXISTS` and `IF NOT EXIST` in DDL commands as MySQL implicitly commits these commands.
 
 **Create a function which returns all the migrations in a map**
 
