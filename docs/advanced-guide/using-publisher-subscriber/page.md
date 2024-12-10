@@ -24,7 +24,7 @@ Some of the configurations that are required to configure the PubSub backend tha
 that are specific for the type of message broker user wants to use. 
 `PUBSUB_BACKEND` defines which message broker the application needs to use.
 
-### KAFKA
+### Kafka
 
 #### Configs
 {% table %}
@@ -152,8 +152,8 @@ docker run --name=gcloud-emulator -d -p 8086:8086 \
 
 #### Configs
 ```dotenv
-PUBSUB_BACKEND=MQTT            // using Mqtt as pubsub
-MQTT_HOST=localhost            // broker host url
+PUBSUB_BACKEND=MQTT            // using MQTT as pubsub
+MQTT_HOST=localhost            // broker host URL
 MQTT_PORT=1883                 // broker port
 MQTT_CLIENT_ID_SUFFIX=test     // suffix to a random generated client-id(uuid v4)
 
@@ -178,7 +178,7 @@ docker run -d \
  
 ### NATS JetStream
 
-NATS JetStream is supported as an external pubsub provider, meaning if you're not using it, it won't be added to your binary.
+NATS JetStream is supported as an external PubSub provider, meaning if you're not using it, it won't be added to your binary.
 
 **References**
 
@@ -254,22 +254,22 @@ docker run -d \
 When subscribing or publishing using NATS JetStream, make sure to use the appropriate subject name that matches your stream configuration.
 For more information on setting up and using NATS JetStream, refer to the official NATS documentation.
 
-### Azure Eventhub
-GoFr supports eventhub starting gofr version v1.22.0.
+### Azure Event Hub
+GoFr supports Event Hub starting gofr version v1.22.0.
 
 While subscribing gofr reads from all the partitions of the consumer group provided in the configuration reducing hassle to manage them.
 
 #### Configs
 
-Eventhub is supported as an external pubsub provider such that if you are not using it, it doesn't get added in your binary.
+Azure Event Hub is supported as an external PubSub provider such that if you are not using it, it doesn't get added in your binary.
 
-Import the external driver for eventhub using the following command.
+Import the external driver for `eventhub` using the following command.
 
 ```bash
 go get gofr.dev/pkg/gofr/datasources/pubsub/eventhub
 ```
 
-Use the AddPubSub method of GoFr's app to connect
+Use the `AddPubSub` method of GoFr's app to connect
 
 **Example**
 ```go
@@ -284,11 +284,11 @@ Use the AddPubSub method of GoFr's app to connect
     }))
 ```
 
-While subscribing/publishing from eventhub make sure to keep the topic-name same as event-hub name. 
+While subscribing/publishing from Event Hub make sure to keep the topic-name same as event-hub name.
 
 #### Setup
 
-1. To setup azure eventhub refer the following [documentation](https://learn.microsoft.com/en-us/azure/event-hubs/event-hubs-create).
+1. To set up Azure Event Hub refer the following [documentation](https://learn.microsoft.com/en-us/azure/event-hubs/event-hubs-create).
 
 2. As GoFr manages reading from all the partitions it needs to store the information about what has been read and what is left for that GoFr uses Azure Container which can be setup from the following [documentation](https://learn.microsoft.com/en-us/azure/storage/blobs/blob-containers-portal).
 
