@@ -140,23 +140,33 @@ func (h *httpService) createAndSendRequest(ctx context.Context, method string, p
 	ctx, span := h.Tracer.Start(ctx, uri)
 	defer span.End()
 
-	// Attach client-side trace handling for HTTP request
+	// Attach client-side trace handling for HTTP request.
 	clientTraceCtx := httptrace.WithClientTrace(ctx, otelhttptrace.NewClientTrace(ctx))
 
-	// Create the HTTP request with the tracing context
+	// Create the HTTP request with the tracing context.
 	req, err := http.NewRequestWithContext(clientTraceCtx, method, uri, bytes.NewBuffer(body))
 	if err != nil {
 		return nil, err
 	}
 
+	var isContentTypeSet bool
+
 	for k, v := range headers {
+		if strings.EqualFold(k, "content-type") {
+			isContentTypeSet = true
+		}
+
 		req.Header.Set(k, v)
 	}
+  
+  if !isContentTypeSet {
+		req.Header.Set("Content-Type", "application/json")
+	}
 
-	// Inject tracing information into the request headers
+	// Inject tracing information into the request headers.
 	otel.GetTextMapPropagator().Inject(clientTraceCtx, propagation.HeaderCarrier(req.Header))
 
-	// Encode the query parameters on the request
+	// encode the query parameters on the request.
 	encodeQueryParameters(req, queryParams)
 
 	log := &Log{
