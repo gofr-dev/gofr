@@ -192,9 +192,6 @@ jobs:
             # Return to the root directory
             cd -
           done
-            # Return to the root directory
-            cd -
-          done
 
       - name: Parse and Print Submodule Coverage
         run: |
