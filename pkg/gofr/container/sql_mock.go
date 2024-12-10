@@ -42,7 +42,7 @@ type sqlMockDB struct {
 }
 
 func (m sqlMockDB) Select(_ context.Context, _ interface{}, query string, args ...interface{}) {
-	if m.queryWithArgs == nil || len(m.queryWithArgs) == 0 {
+	if len(m.queryWithArgs) == 0 {
 		m.logger.Fatalf("Did not expect any calls for Select with query: %q", query)
 	}
 
@@ -68,7 +68,7 @@ func (m sqlMockDB) Select(_ context.Context, _ interface{}, query string, args .
 }
 
 func (m sqlMockDB) HealthCheck() *datasource.Health {
-	if m.expectedHealthCheck == nil || len(m.expectedHealthCheck) == 0 {
+	if len(m.expectedHealthCheck) == 0 {
 		m.logger.Fatal("Did not expect any mock calls for HealthCheck")
 	}
 
@@ -82,7 +82,7 @@ func (m sqlMockDB) HealthCheck() *datasource.Health {
 }
 
 func (m sqlMockDB) Dialect() string {
-	if m.expectedDialect == nil || len(m.expectedDialect) == 0 {
+	if len(m.expectedDialect) == 0 {
 		m.logger.Fatal("Did not expect any mock calls for Dialect")
 	}
 

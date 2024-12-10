@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -35,55 +36,76 @@ func TestNewHTTPService(t *testing.T) {
 
 func TestHTTPService_createAndSendRequest(t *testing.T) {
 	ctrl := gomock.NewController(t)
-
 	metrics := NewMockMetrics(ctrl)
-
-	// Setup a test server
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// read request body
-		var body []byte
-
-		_, err := r.Body.Read(body)
-		if err != nil {
-			t.Fatal("Unable to read request body")
-		}
-
-		assert.Equal(t, "POST", r.Method)
-		assert.Equal(t, "/test-path", r.URL.Path)
-		assert.Equal(t, "key=value&name=test", r.URL.RawQuery)
-		assert.Contains(t, "value1", r.Header.Get("header1"))
-		assert.Contains(t, "Test Body", string(body))
-
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer server.Close()
-
-	service := &httpService{
-		Client:  http.DefaultClient,
-		url:     server.URL,
-		Tracer:  otel.Tracer("gofr-http-client"),
-		Logger:  logging.NewMockLogger(logging.INFO),
-		Metrics: metrics,
-	}
-
 	ctx := context.Background()
 
-	metrics.EXPECT().RecordHistogram(gomock.Any(), "app_http_service_response", gomock.Any(), "path", server.URL,
-		"method", http.MethodPost, "status", fmt.Sprintf("%v", http.StatusOK))
-
-	// when params value is of type []string then last value is sent in request
-	resp, err := service.createAndSendRequest(ctx,
-		http.MethodPost, "test-path", map[string]interface{}{"key": "value", "name": []string{"gofr", "test"}},
-		[]byte("{Test Body}"), map[string]string{"header1": "value1"})
-
-	if err != nil {
-		if resp != nil {
-			defer resp.Body.Close()
-		}
+	tests := []struct {
+		desc           string
+		queryParams    map[string]interface{}
+		body           []byte
+		headers        map[string]string
+		expQueryParam  string
+		expContentType string
+	}{
+		{"with query params, body and header", map[string]interface{}{"key": "value", "name": []string{"gofr", "test"}},
+			[]byte("{Test Body}"), map[string]string{"header1": "value1"}, "key=value&name=test", "application/json"},
+		{"with query params, body, header and content type", map[string]interface{}{"key": "value", "name": []string{"gofr", "test"}},
+			[]byte("{Test Body}"), map[string]string{"header1": "value1", "content-type": "application/json"},
+			"key=value&name=test", "application/json"},
+		{"with query params, body, header and content type xml", map[string]interface{}{"key": "value", "name": []string{"gofr", "test"}},
+			[]byte("{Test Body}"), map[string]string{"header1": "value1", "content-type": "application/xml"},
+			"key=value&name=test", "application/xml"},
+		{"without query params, body, header and content type", nil, []byte("{Test Body}"),
+			map[string]string{"header1": "value1", "content-type": "application/json"},
+			"", "application/json"},
 	}
 
-	require.NoError(t, err)
-	assert.NotNil(t, resp, "TEST[%d], Failed.\n%s")
+	for i, tc := range tests {
+		// Setup a test server
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// read request body
+			var body []byte
+
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Fatal("Unable to read request body")
+			}
+
+			assert.Equal(t, http.MethodPost, r.Method)
+			assert.Equal(t, "/test-path", r.URL.Path)
+			assert.Equal(t, tc.expQueryParam, r.URL.RawQuery)
+			assert.Contains(t, "value1", r.Header.Get("header1"))
+			assert.Contains(t, tc.expContentType, r.Header.Get("content-type"))
+			assert.Equal(t, string(tc.body), string(body))
+
+			w.WriteHeader(http.StatusOK)
+		}))
+
+		service := &httpService{
+			Client:  http.DefaultClient,
+			url:     server.URL,
+			Tracer:  otel.Tracer("gofr-http-client"),
+			Logger:  logging.NewMockLogger(logging.INFO),
+			Metrics: metrics,
+		}
+
+		metrics.EXPECT().RecordHistogram(gomock.Any(), "app_http_service_response", gomock.Any(), "path", server.URL,
+			"method", http.MethodPost, "status", fmt.Sprintf("%v", http.StatusOK)).Times(1)
+
+		resp, err := service.createAndSendRequest(ctx,
+			http.MethodPost, "test-path", tc.queryParams, tc.body, tc.headers)
+
+		if err != nil {
+			if resp != nil {
+				resp.Body.Close()
+			}
+		}
+
+		require.NoError(t, err)
+		assert.NotNil(t, resp, "TEST[%d], Failed.\n%s", i, tc.desc)
+
+		server.Close()
+	}
 }
 
 func TestHTTPService_Get(t *testing.T) {
