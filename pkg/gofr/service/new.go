@@ -158,8 +158,8 @@ func (h *httpService) createAndSendRequest(ctx context.Context, method string, p
 
 		req.Header.Set(k, v)
 	}
-  
-  if !isContentTypeSet {
+
+	if !isContentTypeSet {
 		req.Header.Set("Content-Type", "application/json")
 	}
 
