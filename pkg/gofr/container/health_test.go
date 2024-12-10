@@ -111,7 +111,7 @@ func TestContainer_Health(t *testing.T) {
 
 		jsonData, _ := json.Marshal(healthData)
 
-		assert.Equal(t, string(expectedJSONdata), string(jsonData), "TEST[%d], Failed.\n%s", i, tc.desc)
+		assert.JSONEq(t, string(expectedJSONdata), string(jsonData), "TEST[%d], Failed.\n%s", i, tc.desc)
 	}
 }
 
