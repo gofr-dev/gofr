@@ -187,8 +187,11 @@ jobs:
             # Run tests for the submodule
             export APP_ENV=test
             go test ./... -v -short -coverprofile=submodule.cov -coverpkg=./...
-            # Merge submodule coverage into the root directory's merged coverage file
-            grep -v '/mock_' submodule.cov >> $GITHUB_WORKSPACE/submodules_merged.cov
+            # Remove the "mode: set" line from submodule coverage and append it to the merged coverage file
+            grep -v 'mode: set' submodule.cov >> $GITHUB_WORKSPACE/submodules_merged.cov
+            # Return to the root directory
+            cd -
+          done
             # Return to the root directory
             cd -
           done
