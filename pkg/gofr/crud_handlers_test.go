@@ -76,7 +76,7 @@ func Test_scanEntity(t *testing.T) {
 				entityType: reflect.TypeOf(userTestEntity{}),
 				primaryKey: "id",
 				tableName:  "user_test_entity",
-				restPath:   "userTestEntity",
+				restPath:   "usertestentity",
 				constraints: map[string]gofrSql.FieldConstraints{"id": {AutoIncrement: true, NotNull: false},
 					"name": {AutoIncrement: false, NotNull: true},
 				},
