@@ -76,7 +76,7 @@ func Test_scanEntity(t *testing.T) {
 				entityType: reflect.TypeOf(userTestEntity{}),
 				primaryKey: "id",
 				tableName:  "user_test_entity",
-				restPath:   "userTestEntity",
+				restPath:   "usertestentity",
 				constraints: map[string]gofrSql.FieldConstraints{"id": {AutoIncrement: true, NotNull: false},
 					"name": {AutoIncrement: false, NotNull: true},
 				},
@@ -180,10 +180,16 @@ func Test_getRestPath(t *testing.T) {
 			want:       "custom_path",
 		},
 		{
-			name:       "Test without RestPathOverrider interface",
+			name:       "Test without RestPathOverrider interface - with lower case transformation",
 			object:     &struct{}{},
 			structName: "TestStruct",
-			want:       "TestStruct",
+			want:       "teststruct",
+		},
+		{
+			name:       "Test without RestPathOverrider interface",
+			object:     &struct{}{},
+			structName: "test_struct",
+			want:       "test_struct",
 		},
 	}
 	for _, tt := range tests {
