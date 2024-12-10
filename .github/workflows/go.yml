@@ -178,17 +178,24 @@ jobs:
 
       - name: Detect and Test Submodules
         run: |
+          # Start with a clean merged coverage file and add the "mode: set" header
+          echo "mode: set" > $GITHUB_WORKSPACE/submodules_merged.cov
+
           # Find all directories containing a go.mod file within 'pkg'
           for module in $(find pkg -name "go.mod" -exec dirname {} \;); do
             echo "Testing module: $module"
             cd $module
+
             # Download dependencies for the submodule
             go mod download
-            # Run tests for the submodule
+
+            # Run tests for the submodule and generate coverage
             export APP_ENV=test
             go test ./... -v -short -coverprofile=submodule.cov -coverpkg=./...
-            # Remove the "mode: set" line from submodule coverage and append it to the merged coverage file
-            grep -v 'mode: set' submodule.cov >> $GITHUB_WORKSPACE/submodules_merged.cov
+
+            # Exclude mock files from the coverage output and append the rest
+            tail -n +2 submodule.cov | grep -vE '/mock_|_mock\.go' >> $GITHUB_WORKSPACE/submodules_merged.cov
+
             # Return to the root directory
             cd -
           done
