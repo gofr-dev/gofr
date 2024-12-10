@@ -188,6 +188,7 @@ jobs:
 
             # Download dependencies for the submodule
             go mod download
+            go mod tidy
 
             # Run tests for the submodule and generate coverage
             export APP_ENV=test
