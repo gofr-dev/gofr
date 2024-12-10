@@ -25,6 +25,8 @@ type Exporter struct {
 	logger   logging.Logger // Logger for logging errors and other messages.
 }
 
+const SQLConnectTrace = "sql.connector.connect"
+
 // NewExporter creates a new Exporter instance with a custom endpoint and logger.
 func NewExporter(endpoint string, logger logging.Logger) *Exporter {
 	return &Exporter{
@@ -96,6 +98,10 @@ func convertSpans(spans []sdktrace.ReadOnlySpan) []Span {
 	convertedSpans := make([]Span, 0, len(spans))
 
 	for i, s := range spans {
+		if s.Name() == SQLConnectTrace {
+			continue
+		}
+
 		convertedSpan := Span{
 			TraceID:   s.SpanContext().TraceID().String(),
 			ID:        s.SpanContext().SpanID().String(),
