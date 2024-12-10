@@ -39,14 +39,13 @@ func setupDB(t *testing.T) (*Client, *MockDgraphClient, *MockLogger, *MockMetric
 }
 
 func TestClient_Connect_Success(t *testing.T) {
-	// TODO: This test is skipped due to its dependency on a running Docker instance.
-	// Future work should mock the Docker-dependent methods to remove this dependency.
-	t.Skip()
 	client, _, mockLogger, mockMetrics := setupDB(t)
 
 	mockLogger.EXPECT().Debugf(gomock.Any(), gomock.Any())
 
-	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any())
+	mockLogger.EXPECT().Error(gomock.Any(), gomock.Any())
+
+	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any())
 
 	// Mock Metric behavior
 	mockMetrics.EXPECT().NewHistogram(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
