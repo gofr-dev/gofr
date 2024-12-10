@@ -1,4 +1,4 @@
-module gofr.dev/gofr/pkg/gofr/datasource/opentsdb
+module gofr.dev/pkg/gofr/datasource/opentsdb
 
 go 1.22.7
 
