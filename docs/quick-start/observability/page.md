@@ -7,7 +7,7 @@ GoFr by default manages observability in different ways once the server starts:
 Logs offer real-time information, providing valuable insights and immediate visibility into the ongoing state and activities of the system.
 It helps in identifying errors, debugging and troubleshooting, monitor performance, analyzing application usage, communications etc.
 
-GoFr logger allows to customize log level which provides flexibility to adjust logs based on specific needs.
+GoFr logger allows customizing log level which provides flexibility to adjust logs based on specific needs.
 
 Logs are generated only for events equal to or above the specified log level, by default GoFr logs at _INFO_ level.
 Log Level can be changed by setting the environment variable `LOG_LEVEL` value to _WARN,DEBUG,ERROR,NOTICE or FATAL_.
@@ -17,7 +17,7 @@ They contain information such as request's correlation ID, status codes, request
 
 {% figure src="/quick-start-logs.png" alt="Pretty Printed Logs" /%}
 
-Logs are well-structured, they are of type JSON when exported to a file, such that they can be pushed to logging systems such as {% new-tab-link title="Loki" href="https://grafana.com/oss/loki/" /%}, elastic search etc.
+Logs are well-structured, they are of type JSON when exported to a file, such that they can be pushed to logging systems such as {% new-tab-link title="Loki" href="https://grafana.com/oss/loki/" /%}, Elasticsearch etc.
 
 ## Metrics
 
@@ -257,6 +257,6 @@ TRACE_EXPORTER=gofr
 TRACER_RATIO=0.1
 ```
 
-> NOTE: `TRACER_RATIO` refers to the proportion of traces that are exported through sampling. It ranges between 0 to 1. By default, this ratio is set to 1, meaning all traces are exported.
+> NOTE: `TRACER_RATIO` refers to the proportion of traces that are exported through sampling. It ranges between 0 and 1. By default, this ratio is set to 1, meaning all traces are exported.
 
 Open {% new-tab-link title="gofr-tracer" href="https://tracer.gofr.dev/" /%} and search by TraceID (correlationID) to see the trace.
