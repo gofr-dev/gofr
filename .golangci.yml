@@ -146,10 +146,6 @@ linters:
   # - godox  # Disabling because we need TODO lines at this stage of project.
   # - testpackage # We also need to do unit test for unexported functions. And adding _internal in all files is cumbersome.
 
-
-service:
-  golangci-lint-version: 1.59.x
-
 issues:
   # exclude-use-default: false
   # exclude-use-default: false # By default, golangci-lint does not enforce comments on exported types. We want it.
