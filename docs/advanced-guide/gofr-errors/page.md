@@ -18,7 +18,7 @@ automatically handle HTTP status code selection. These include:
 - `ErrorPanicRecovery`: Represents an error for request which panicked.
 
 #### Usage:
-To use the predefined http errors,users can simply call them using GoFr's http package:
+To use the predefined HTTP errors, users can simply call them using GoFr's http package:
 ```go
  err := http.ErrorMissingParam{Param: []string{"id"}}
 ```

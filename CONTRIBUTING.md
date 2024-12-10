@@ -91,7 +91,7 @@ Please note that the recommended local port for the services are different than 
   DB, Logger etc.
 * No magic. So, no init. In a large project, it becomes difficult to track which package is doing what at the
   initialization step.
-* Exported functions must have an associated goDoc.
+* Exported functions must have an associated godoc.
 * Sensitive data(username, password, keys) should not be pushed. Always use environment variables.
 * Take interfaces and return concrete types.
     - Lean interfaces - take 'exactly' what you need, not more. Onus of interface definition is on the package who is

@@ -34,8 +34,8 @@ New datasources should implement logging with the following levels:
 > Additional logs can be added to enhance debugging and improving user experience.
 
 5. Tracing
-    
-GoFr supports tracing for all the datasouces, for example for SQL it traces the request using `github.com/XSAM/otelsql`.
+
+GoFr supports tracing for all the datasources, for example for SQL it traces the request using https://github.com/XSAM/otelsql.
 If any official package or any widely used package is not available we have to implement our own, but in scope of a different ISSUE.
 
 
@@ -69,21 +69,21 @@ Therefore, GoFr utilizes a pluggable approach for new datasources by separating 
 
 ## Supported Datasources
 
-| Datasource     | Health-Check | Logs | Metrics | Traces | As Driver |
-|----------------|-----------|------|------|--------|-----------|
-| MySQL          | ✅         | ✅    | ✅    | ✅      |           |
-| REDIS          | ✅         | ✅    | ✅    | ✅      |           |
-| PostgreSQL     | ✅         | ✅    | ✅    | ✅      |           |
-| MongoDB        | ✅         | ✅    | ✅    |  ✅      | ✅         |
-| SQLite         | ✅         | ✅    | ✅    | ✅      |           |
-| BadgerDB       | ✅         | ✅    | ✅    |    ✅    | ✅         |
-| Cassandra      | ✅         | ✅    | ✅    |  ✅      | ✅         |
-| Clickhouse     |           | ✅    | ✅    |   ✅     | ✅         |
-| FTP            |           | ✅    |      |        | ✅         |
-| SFTP           |           | ✅    |      |        | ✅         |
-| Solr           |           |   ✅   |   ✅  |   ✅     |      ✅     |
-| DGraph         | ✅  | ✅ |✅ |   ✅     ||
-| Azure Eventhub |   | ✅ |✅ |        |✅|
-| OpenTSDB       |     ✅     |   ✅   |      |   ✅     |      ✅     |
+| Datasource      | Health-Check | Logs | Metrics | Traces | As Driver |
+|-----------------|--------------|------|---------|--------|-----------|
+| MySQL           | ✅            | ✅    | ✅       | ✅      |           |
+| Redis           | ✅            | ✅    | ✅       | ✅      |           |
+| PostgreSQL      | ✅            | ✅    | ✅       | ✅      |           |
+| MongoDB         | ✅            | ✅    | ✅       | ✅      | ✅         |
+| SQLite          | ✅            | ✅    | ✅       | ✅      |           |
+| BadgerDB        | ✅            | ✅    | ✅       | ✅      | ✅         |
+| Cassandra       | ✅            | ✅    | ✅       | ✅      | ✅         |
+| ClickHouse      |              | ✅    | ✅       | ✅      | ✅         |
+| FTP             |              | ✅    |         |        | ✅         |
+| SFTP            |              | ✅    |         |        | ✅         |
+| Solr            |              | ✅    | ✅       | ✅      | ✅         |
+| Dgraph          | ✅            | ✅    | ✅       | ✅      |           |
+| Azure Event Hub |              | ✅    | ✅       |        | ✅         |
+| OpenTSDB        | ✅            | ✅    |         | ✅      | ✅         |
 
 
