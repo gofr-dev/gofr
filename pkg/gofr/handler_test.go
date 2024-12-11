@@ -36,6 +36,8 @@ func TestHandler_ServeHTTP(t *testing.T) {
 			`{}`},
 		{"method is get, data is mil, error is not nil", http.MethodGet, nil, errTest, http.StatusInternalServerError,
 			`{"error":{"message":"some error"}}`},
+		{"method is get, data is mil, error is http error", http.MethodGet, nil, gofrHTTP.ErrorEntityNotFound{}, http.StatusNotFound,
+			`{"error":{"message":"No entity found with : "}}`},
 		{"method is post, data is nil and error is nil", http.MethodPost, "Created", nil, http.StatusCreated,
 			`{"data":"Created"}`},
 		{"method is delete, data is nil and error is nil", http.MethodDelete, nil, nil, http.StatusNoContent,

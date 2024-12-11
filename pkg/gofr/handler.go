@@ -150,7 +150,6 @@ func (h handler) logError(traceID string, err error) {
 	if err != nil {
 		errorLog := &ErrorLogEntry{TraceID: traceID, Error: err.Error()}
 
-		// Check if the error is one of the known types
 		if isHTTPError(err) {
 			h.container.Logger.Info(errorLog)
 		} else {
@@ -161,24 +160,26 @@ func (h handler) logError(traceID string, err error) {
 
 // Helper function to check if the error is one of the known HTTP Error types.
 func isHTTPError(err error) bool {
-	// Define all known error types explicitly
+	var (
+		entityNotFoundError     gofrHTTP.ErrorEntityNotFound
+		entityAlreadyExistError gofrHTTP.ErrorEntityAlreadyExist
+		invalidParamError       gofrHTTP.ErrorInvalidParam
+		missingParamError       gofrHTTP.ErrorMissingParam
+		invalidRouteError       gofrHTTP.ErrorInvalidRoute
+		requestTimeoutError     gofrHTTP.ErrorRequestTimeout
+	)
+
 	switch {
-	case isSpecificError[*gofrHTTP.ErrorEntityNotFound](err),
-		isSpecificError[*gofrHTTP.ErrorEntityAlreadyExist](err),
-		isSpecificError[*gofrHTTP.ErrorInvalidParam](err),
-		isSpecificError[*gofrHTTP.ErrorMissingParam](err),
-		isSpecificError[*gofrHTTP.ErrorInvalidRoute](err),
-		isSpecificError[*gofrHTTP.ErrorRequestTimeout](err):
+	case errors.Is(err, entityNotFoundError),
+		errors.Is(err, entityAlreadyExistError),
+		errors.Is(err, invalidParamError),
+		errors.Is(err, missingParamError),
+		errors.Is(err, invalidRouteError),
+		errors.Is(err, requestTimeoutError):
 		return true
 	default:
 		return false
 	}
-}
-
-// Generic function to match a specific error type using errors.As.
-func isSpecificError[T any](err error) bool {
-	var target T
-	return errors.As(err, &target)
 }
 
 func handleWebSocketUpgrade(r *http.Request) {
