@@ -21,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go-version: ['1.22', '1.21']
+        go-version: ['1.23', '1.22']
 
     services:
       kafka:
@@ -178,9 +178,6 @@ jobs:
 
       - name: Detect and Test Submodules
         run: |
-          # Start with a clean merged coverage file and add the "mode: set" header
-          echo "mode: set" > $GITHUB_WORKSPACE/submodules_merged.cov
-
           # Find all directories containing a go.mod file within 'pkg'
           for module in $(find pkg -name "go.mod" -exec dirname {} \;); do
             echo "Testing module: $module"
@@ -193,9 +190,6 @@ jobs:
             # Run tests for the submodule and generate coverage
             export APP_ENV=test
             go test ./... -v -short -coverprofile=submodule.cov -coverpkg=./...
-
-            # Exclude mock files from the coverage output and append the rest
-            tail -n +2 submodule.cov | grep -vE '/mock_|_mock\.go' >> $GITHUB_WORKSPACE/submodules_merged.cov
 
             # Return to the root directory
             cd -
@@ -238,7 +232,7 @@ jobs:
         uses: actions/checkout@v4
       - name: Get dependencies
         run: go get -v -t -d ./...
-      - name: Lint Root Module with golangci-lint
+      - name: Lint Root Module
         run: |
           echo "Linting root module..."
           golangci-lint run --timeout 9m0s
