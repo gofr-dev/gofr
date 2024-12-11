@@ -38,7 +38,7 @@ func setupDB(t *testing.T) (*Client, *MockDgraphClient, *MockLogger, *MockMetric
 	return client, mockDgraphClient, mockLogger, mockMetrics
 }
 
-func TestClient_Connect_Success(t *testing.T) {
+func TestClient_Connect_Failiure(t *testing.T) {
 	client, _, mockLogger, mockMetrics := setupDB(t)
 
 	mockLogger.EXPECT().Debugf(gomock.Any(), gomock.Any())
