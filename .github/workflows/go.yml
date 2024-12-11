@@ -182,6 +182,9 @@ jobs:
           for module in $(find pkg -name "go.mod" -exec dirname {} \;); do
             echo "Testing module: $module"
             cd $module
+          
+            # Extract module name (replace '/' with '_')
+            module_name=$(echo $module | tr '/' '_')
 
             # Download dependencies for the submodule
             go mod download
@@ -189,11 +192,18 @@ jobs:
 
             # Run tests for the submodule and generate coverage
             export APP_ENV=test
-            go test ./... -v -short -coverprofile=submodule.cov -coverpkg=./...
+            go test ./... -v -short -coverprofile=${module_name}.cov -coverpkg=./...
 
             # Return to the root directory
             cd -
           done
+
+      - name: Upload Coverage Reports
+        uses: actions/upload-artifact@v3
+        with:
+          name: coverage-reports
+          path: pkg/**/*.cov
+
 
   upload_coverage:
     name: Upload Coverage📊
