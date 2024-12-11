@@ -205,6 +205,16 @@ This document lists all the configuration options supported by the GoFr framewor
 -  REDIS_PORT
 -  Port of the Redis server.
 
+---
+
+- REDIS_USER
+- Username for the Redis server.
+
+---
+
+- REDIS_PASSWORD
+- Password for the Redis server.
+
 {% /table %}
 
 ### Pub/Sub
