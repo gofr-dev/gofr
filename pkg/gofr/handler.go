@@ -145,34 +145,23 @@ func panicRecoveryHandler(re any, log logging.Logger, panicked chan struct{}) {
 	})
 }
 
-// Log the error(if any) with traceID and errorMessage.
+//nolint:nestif // Log the error(if any) with traceID and errorMessage.
 func (h handler) logError(traceID string, err error) {
 	if err != nil {
 		errorLog := &ErrorLogEntry{TraceID: traceID, Error: err.Error()}
 
-		if isHTTPError(err) {
+		if errors.As(err, &gofrHTTP.ErrorEntityAlreadyExist{}) {
+			h.container.Logger.Info(errorLog)
+		} else if errors.As(err, &gofrHTTP.ErrorEntityNotFound{}) {
+			h.container.Logger.Info(errorLog)
+		} else if errors.As(err, &gofrHTTP.ErrorInvalidParam{}) {
+			h.container.Logger.Info(errorLog)
+		} else if errors.As(err, &gofrHTTP.ErrorMissingParam{}) {
 			h.container.Logger.Info(errorLog)
 		} else {
 			h.container.Logger.Error(errorLog)
 		}
 	}
-}
-
-//nolint:govet // We are using this function to check if the error is of type HTTP error.
-func isHTTPError(err error) bool {
-	httpErrors := []error{
-		&gofrHTTP.ErrorEntityAlreadyExist{},
-		&gofrHTTP.ErrorEntityNotFound{},
-		&gofrHTTP.ErrorInvalidParam{},
-		&gofrHTTP.ErrorMissingParam{},
-	}
-	for _, knownErr := range httpErrors {
-		if errors.As(err, &knownErr) {
-			return true
-		}
-	}
-
-	return false
 }
 
 func handleWebSocketUpgrade(r *http.Request) {
