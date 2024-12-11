@@ -158,28 +158,21 @@ func (h handler) logError(traceID string, err error) {
 	}
 }
 
-// Helper function to check if the error is one of the known HTTP Error types.
+//nolint:govet // We are using this function to check if the error is of type HTTP error.
 func isHTTPError(err error) bool {
-	var (
-		entityNotFoundError     gofrHTTP.ErrorEntityNotFound
-		entityAlreadyExistError gofrHTTP.ErrorEntityAlreadyExist
-		invalidParamError       gofrHTTP.ErrorInvalidParam
-		missingParamError       gofrHTTP.ErrorMissingParam
-		invalidRouteError       gofrHTTP.ErrorInvalidRoute
-		requestTimeoutError     gofrHTTP.ErrorRequestTimeout
-	)
-
-	switch {
-	case errors.Is(err, entityNotFoundError),
-		errors.Is(err, entityAlreadyExistError),
-		errors.Is(err, invalidParamError),
-		errors.Is(err, missingParamError),
-		errors.Is(err, invalidRouteError),
-		errors.Is(err, requestTimeoutError):
-		return true
-	default:
-		return false
+	httpErrors := []error{
+		&gofrHTTP.ErrorEntityAlreadyExist{},
+		&gofrHTTP.ErrorEntityNotFound{},
+		&gofrHTTP.ErrorInvalidParam{},
+		&gofrHTTP.ErrorMissingParam{},
 	}
+	for _, knownErr := range httpErrors {
+		if errors.As(err, &knownErr) {
+			return true
+		}
+	}
+
+	return false
 }
 
 func handleWebSocketUpgrade(r *http.Request) {
