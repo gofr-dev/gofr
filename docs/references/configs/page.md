@@ -263,6 +263,24 @@ This document lists all the configuration options supported by the GoFr framewor
 
 ---
 
+- KAFKA_BATCH_SIZE
+- Number of messages to batch before sending to Kafka
+- 1
+
+---
+
+- KAFKA_BATCH_BYTES
+- Number of bytes to batch before sending to Kafka
+- 1048576
+
+---
+
+- KAFKA_BATCH_TIMEOUT
+- Time to wait before sending a batch to Kafka
+- 100ms
+
+---
+
 -  CONSUMER_ID
 -  Unique identifier for this consumer
 -  gofr-consumer
