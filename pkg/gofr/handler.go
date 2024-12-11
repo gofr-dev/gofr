@@ -149,8 +149,36 @@ func panicRecoveryHandler(re any, log logging.Logger, panicked chan struct{}) {
 func (h handler) logError(traceID string, err error) {
 	if err != nil {
 		errorLog := &ErrorLogEntry{TraceID: traceID, Error: err.Error()}
-		h.container.Logger.Error(errorLog)
+
+		// Check if the error is one of the known types
+		if isHTTPError(err) {
+			h.container.Logger.Info(errorLog)
+		} else {
+			h.container.Logger.Error(errorLog)
+		}
 	}
+}
+
+// Helper function to check if the error is one of the known HTTP Error types.
+func isHTTPError(err error) bool {
+	// Define all known error types explicitly
+	switch {
+	case isSpecificError[*gofrHTTP.ErrorEntityNotFound](err),
+		isSpecificError[*gofrHTTP.ErrorEntityAlreadyExist](err),
+		isSpecificError[*gofrHTTP.ErrorInvalidParam](err),
+		isSpecificError[*gofrHTTP.ErrorMissingParam](err),
+		isSpecificError[*gofrHTTP.ErrorInvalidRoute](err),
+		isSpecificError[*gofrHTTP.ErrorRequestTimeout](err):
+		return true
+	default:
+		return false
+	}
+}
+
+// Generic function to match a specific error type using errors.As.
+func isSpecificError[T any](err error) bool {
+	var target T
+	return errors.As(err, &target)
 }
 
 func handleWebSocketUpgrade(r *http.Request) {
