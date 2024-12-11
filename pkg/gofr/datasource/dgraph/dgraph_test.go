@@ -39,20 +39,15 @@ func setupDB(t *testing.T) (*Client, *MockDgraphClient, *MockLogger, *MockMetric
 }
 
 func TestClient_Connect_Success(t *testing.T) {
-	client, mockClient, mockLogger, mockMetrics := setupDB(t)
+	client, _, mockLogger, mockMetrics := setupDB(t)
 
 	mockLogger.EXPECT().Debugf(gomock.Any(), gomock.Any())
 
-	//mockLogger.EXPECT().Error(gomock.Any(), gomock.Any())
-	//
-	//mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any())
-
-	mockTxn := NewMockTxn(gomock.NewController(t))
+	mockLogger.EXPECT().Error(gomock.Any(), gomock.Any())
+	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any())
 
 	// Mock Metric behavior
 	mockMetrics.EXPECT().NewHistogram(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
-	mockClient.EXPECT().NewTxn().Return(mockTxn)
-	mockTxn.EXPECT().Query(gomock.Any(), gomock.Any()).Return(nil, nil)
 
 	// Perform the connect operation
 	client.Connect()
