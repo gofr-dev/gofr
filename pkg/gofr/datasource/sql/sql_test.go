@@ -237,8 +237,20 @@ func TestSQL_getDBConnectionString(t *testing.T) {
 			expOut: "file:test.db",
 		},
 		{
+			desc: "mssql dialect",
+			configs: &DBConfig{
+				Dialect:  "mssql",
+				HostName: "host",
+				User:     "user",
+				Password: "password",
+				Port:     "1433",
+				Database: "test",
+			},
+			expOut: "sqlserver://user:password@host:1433?database=test",
+		},
+		{
 			desc:    "unsupported dialect",
-			configs: &DBConfig{Dialect: "mssql"},
+			configs: &DBConfig{Dialect: "mtsql"},
 			expOut:  "",
 			expErr:  errUnsupportedDialect,
 		},

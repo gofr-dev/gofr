@@ -8,7 +8,8 @@ import (
 	"time"
 
 	"github.com/XSAM/otelsql"
-	_ "github.com/lib/pq" // used for concrete implementation of the database driver.
+	_ "github.com/lib/pq"               // used for concrete implementation of the database driver.
+	_ "github.com/microsoft/go-mssqldb" // used for concrete implementation of the MSSQL database driver.
 	_ "modernc.org/sqlite"
 
 	"gofr.dev/pkg/gofr/config"
@@ -20,7 +21,7 @@ const (
 	defaultDBPort = 3306
 )
 
-var errUnsupportedDialect = fmt.Errorf("unsupported db dialect; supported dialects are - mysql, postgres, sqlite")
+var errUnsupportedDialect = fmt.Errorf("unsupported db dialect; supported dialects are - mysql, postgres, sqlite,mssql")
 
 // DBConfig has those members which are necessary variables while connecting to database.
 type DBConfig struct {
@@ -186,6 +187,9 @@ func getDBConnectionString(dbConfig *DBConfig) (string, error) {
 		s := strings.TrimSuffix(dbConfig.Database, ".db")
 
 		return fmt.Sprintf("file:%s.db", s), nil
+	case "mssql":
+		return fmt.Sprintf("sqlserver://%s:%s@%s:%s?database=%s",
+			dbConfig.User, dbConfig.Password, dbConfig.HostName, dbConfig.Port, dbConfig.Database), nil
 	default:
 		return "", errUnsupportedDialect
 	}
