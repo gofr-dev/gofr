@@ -17,7 +17,8 @@ const (
     constraint primary_key primary key (version, method)
 );`
 
-	createSQLGoFrMigrationsTableMSSQL = `IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'gofr_migrations') AND type = N'U')
+	createSQLGoFrMigrationsTableMSSQL = `IF NOT EXISTS (SELECT * FROM sys.objects 
+	WHERE object_id = OBJECT_ID(N'gofr_migrations') AND type = N'U')
     BEGIN
         CREATE TABLE gofr_migrations (
                                          version BIGINT NOT NULL,
@@ -36,6 +37,11 @@ const (
 	insertGoFrMigrationRowPostgres = `INSERT INTO gofr_migrations (version, method, start_time,duration) VALUES ($1, $2, $3, $4);`
 
 	insertGoFrMigrationRowMSSQL = `INSERT INTO gofr_migrations (version, method, start_time, duration) VALUES (?, ?, ?, ?);`
+
+	mySQL    = "mysql"
+	mssql    = "mssql"
+	sqlite   = "sqlite"
+	postgres = "postgres"
 )
 
 // database/sql is the package imported so named it sqlDS.
@@ -60,9 +66,9 @@ func (d sqlMigrator) checkAndCreateMigrationTable(c *container.Container) error 
 	var createTableQuery string
 
 	switch c.SQL.Dialect() {
-	case "mysql", "sqlite", "postgres":
+	case mySQL, sqlite, postgres:
 		createTableQuery = createSQLGoFrMigrationsTable
-	case "mssql":
+	case mssql:
 		createTableQuery = createSQLGoFrMigrationsTableMSSQL
 	}
 
@@ -94,7 +100,7 @@ func (d sqlMigrator) getLastMigration(c *container.Container) int64 {
 
 func (d sqlMigrator) commitMigration(c *container.Container, data transactionData) error {
 	switch c.SQL.Dialect() {
-	case "mysql", "sqlite":
+	case mySQL, sqlite:
 		err := insertMigrationRecord(data.SQLTx, insertGoFrMigrationRowMySQL, data.MigrationNumber, data.StartTime)
 		if err != nil {
 			return err
@@ -102,14 +108,14 @@ func (d sqlMigrator) commitMigration(c *container.Container, data transactionDat
 
 		c.Debugf("inserted record for migration %v in gofr_migrations table", data.MigrationNumber)
 
-	case "postgres":
+	case postgres:
 		err := insertMigrationRecord(data.SQLTx, insertGoFrMigrationRowPostgres, data.MigrationNumber, data.StartTime)
 		if err != nil {
 			return err
 		}
 
 		c.Debugf("inserted record for migration %v in gofr_migrations table", data.MigrationNumber)
-	case "mssql":
+	case mssql:
 		err := insertMigrationRecord(data.SQLTx, insertGoFrMigrationRowMSSQL, data.MigrationNumber, data.StartTime)
 		if err != nil {
 			return err
