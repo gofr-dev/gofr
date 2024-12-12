@@ -219,3 +219,21 @@ func checkIfTerminal(w io.Writer) bool {
 func (l *logger) ChangeLevel(level Level) {
 	l.level = level
 }
+
+// LogLevelResponder is an interface that provides a method to get the log level.
+type LogLevelResponder interface {
+	LogLevel() Level
+}
+
+// GetLogLevelForError returns the log level for the given error.
+// If the error implements [logLevelResponder], its log level is returned.
+// Otherwise, the default log level "error" is returned.
+func GetLogLevelForError(err error) Level {
+	level := ERROR
+
+	if e, ok := err.(LogLevelResponder); ok {
+		level = e.LogLevel()
+	}
+
+	return level
+}
