@@ -99,6 +99,14 @@ type statusCodeResponder interface {
 	StatusCode() int
 }
 
+// Unwrapper interface replicates the interface tested by the [errors.Unwrap] function.
+// This interface is used called when using the [errors.Is] function.
+//
+// It is provided here for document purpose, as it allows us to use godoc links.
+type Unwrapper interface {
+	Unwrap() error
+}
+
 // isNil checks if the given interface{} value is nil.
 // It returns true if the value is nil or if it is a pointer that points to nil.
 // This function is useful for determining whether a value, including interface or pointer types, is effectively nil.
