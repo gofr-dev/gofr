@@ -80,11 +80,11 @@ Therefore, GoFr utilizes a pluggable approach for new datasources by separating 
 | BadgerDB        | ✅            | ✅    | ✅       | ✅      | ✅         |
 | Cassandra       | ✅            | ✅    | ✅       | ✅      | ✅         |
 | ClickHouse      |              | ✅    | ✅       | ✅      | ✅         |
-| FTP             |              | ✅    |         |        | ✅         |
-| SFTP            |              | ✅    |         |        | ✅         |
+| FTP             |              | ✅    |         | ✅      | ✅         |
+| SFTP            |              | ✅    |         | ✅      | ✅         |
 | Solr            |              | ✅    | ✅       | ✅      | ✅         |
-| Dgraph          | ✅            | ✅    | ✅       | ✅      |           |
-| Azure Event Hub |              | ✅    | ✅       |        | ✅         |
+| Dgraph          | ✅            | ✅    | ✅       | ✅      | ✅         |
+| Azure Event Hub |              | ✅    | ✅       | ✅      | ✅         |
 | OpenTSDB        | ✅            | ✅    |         | ✅      | ✅         |
 
 
