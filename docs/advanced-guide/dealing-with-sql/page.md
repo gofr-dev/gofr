@@ -1,12 +1,13 @@
 # Dealing with SQL
 
 GoFr simplifies the process of connecting to SQL databases where one needs to add respective configs in .env,
-which allows connecting to different SQL dialects(MySQL, PostgreSQL, SQLite) without going into complexity of configuring connections.
+which allows connecting to different SQL dialects(MySQL, PostgreSQL, SQLite,MSSQL) without going into complexity of configuring connections.
 
 With GoFr, connecting to different SQL databases is as straightforward as setting the DB_DIALECT environment variable to the respective dialect.
 
-## Usage for PostgreSQL and MySQL
-To connect with PostgreSQL, set `DB_DIALECT` to `postgres`. Similarly, To connect with MySQL, simply set `DB_DIALECT` to `mysql`.
+## Usage for PostgreSQL, MySQL and MSSQL
+To connect with PostgreSQL, set `DB_DIALECT` to `postgres`.  To connect with MySQL, simply set `DB_DIALECT` to `mysql`. 
+Similarly, to connect with MSSQL, set `DB_DIALECT` to `mssql`.
 
 ```dotenv
 DB_HOST=localhost

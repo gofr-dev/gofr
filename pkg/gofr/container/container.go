@@ -4,7 +4,7 @@ logging, connection pools, and service management. This package is designed to f
 management of these concerns across different parts of an application.
 
 Supported data sources:
-  - Databases (Cassandra, ClickHouse, MongoDB, DGraph, MySQL, PostgreSQL, SQLite)
+  - Databases (Cassandra, ClickHouse, MongoDB, DGraph, MySQL, PostgreSQL, SQLite, MSSQL)
   - Key-value storages (Redis, BadgerDB)
   - Pub/Sub systems (Azure Event Hub, Google as backend, Kafka, MQTT)
   - Search engines (Solr)
