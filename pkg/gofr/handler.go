@@ -145,22 +145,30 @@ func panicRecoveryHandler(re any, log logging.Logger, panicked chan struct{}) {
 	})
 }
 
-//nolint:nestif // Log the error(if any) with traceID and errorMessage.
+// Log the error(if any) with traceID and errorMessage.
 func (h handler) logError(traceID string, err error) {
 	if err != nil {
 		errorLog := &ErrorLogEntry{TraceID: traceID, Error: err.Error()}
 
-		if errors.As(err, &gofrHTTP.ErrorEntityAlreadyExist{}) {
-			h.container.Logger.Info(errorLog)
-		} else if errors.As(err, &gofrHTTP.ErrorEntityNotFound{}) {
-			h.container.Logger.Info(errorLog)
-		} else if errors.As(err, &gofrHTTP.ErrorInvalidParam{}) {
-			h.container.Logger.Info(errorLog)
-		} else if errors.As(err, &gofrHTTP.ErrorMissingParam{}) {
-			h.container.Logger.Info(errorLog)
-		} else {
-			h.container.Logger.Error(errorLog)
+		// define the default log level for error
+		loggerHelper := h.container.Logger.Error
+
+		switch logging.GetLogLevelForError(err) {
+		case logging.ERROR:
+			// we use the default log level for error
+		case logging.INFO:
+			loggerHelper = h.container.Logger.Info
+		case logging.NOTICE:
+			loggerHelper = h.container.Logger.Notice
+		case logging.DEBUG:
+			loggerHelper = h.container.Logger.Debug
+		case logging.WARN:
+			loggerHelper = h.container.Logger.Warn
+		case logging.FATAL:
+			loggerHelper = h.container.Logger.Fatal
 		}
+
+		loggerHelper(errorLog)
 	}
 }
 
