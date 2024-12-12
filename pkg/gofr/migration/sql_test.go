@@ -192,6 +192,7 @@ func TestCheckAndCreateMigrationTableSuccess(t *testing.T) {
 	mockContainer, mocks := container.NewMockContainer(t)
 
 	mockMigrator.EXPECT().checkAndCreateMigrationTable(mockContainer)
+	mocks.SQL.ExpectDialect().WillReturnString("mysql")
 	mocks.SQL.ExpectExec(createSQLGoFrMigrationsTable).WillReturnResult(mocks.SQL.NewResult(1, 1))
 
 	migrator := sqlMigrator{
@@ -209,7 +210,8 @@ func TestCheckAndCreateMigrationTableExecError(t *testing.T) {
 	mockContainer, mocks := container.NewMockContainer(t)
 	expectedErr := sql.ErrNoRows
 
-	mocks.SQL.ExpectExec(createSQLGoFrMigrationsTable).WillReturnError(expectedErr)
+	mocks.SQL.ExpectDialect().WillReturnString("mssql")
+	mocks.SQL.ExpectExec(createSQLGoFrMigrationsTableMSSQL).WillReturnError(expectedErr)
 
 	migrator := sqlMigrator{
 		SQL:      mockContainer.SQL,
