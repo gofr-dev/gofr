@@ -38,10 +38,10 @@ const (
 
 	insertGoFrMigrationRowMSSQL = `INSERT INTO gofr_migrations (version, method, start_time, duration) VALUES (?, ?, ?, ?);`
 
-	mySQL    = "mysql"
-	mssql    = "mssql"
-	sqlite   = "sqlite"
-	postgres = "postgres"
+	dialectMySQL    = "mysql"
+	dialectMSSQL    = "dialectMSSQL"
+	dialectSQLite   = "dialectSQLite"
+	dialectPostgres = "dialectPostgres"
 )
 
 // database/sql is the package imported so named it sqlDS.
@@ -66,9 +66,9 @@ func (d sqlMigrator) checkAndCreateMigrationTable(c *container.Container) error 
 	var createTableQuery string
 
 	switch c.SQL.Dialect() {
-	case mySQL, sqlite, postgres:
+	case dialectMySQL, dialectSQLite, dialectPostgres:
 		createTableQuery = createSQLGoFrMigrationsTable
-	case mssql:
+	case dialectMSSQL:
 		createTableQuery = createSQLGoFrMigrationsTableMSSQL
 	}
 
@@ -100,7 +100,7 @@ func (d sqlMigrator) getLastMigration(c *container.Container) int64 {
 
 func (d sqlMigrator) commitMigration(c *container.Container, data transactionData) error {
 	switch c.SQL.Dialect() {
-	case mySQL, sqlite:
+	case dialectMySQL, dialectSQLite:
 		err := insertMigrationRecord(data.SQLTx, insertGoFrMigrationRowMySQL, data.MigrationNumber, data.StartTime)
 		if err != nil {
 			return err
@@ -108,14 +108,14 @@ func (d sqlMigrator) commitMigration(c *container.Container, data transactionDat
 
 		c.Debugf("inserted record for migration %v in gofr_migrations table", data.MigrationNumber)
 
-	case postgres:
+	case dialectPostgres:
 		err := insertMigrationRecord(data.SQLTx, insertGoFrMigrationRowPostgres, data.MigrationNumber, data.StartTime)
 		if err != nil {
 			return err
 		}
 
 		c.Debugf("inserted record for migration %v in gofr_migrations table", data.MigrationNumber)
-	case mssql:
+	case dialectMSSQL:
 		err := insertMigrationRecord(data.SQLTx, insertGoFrMigrationRowMSSQL, data.MigrationNumber, data.StartTime)
 		if err != nil {
 			return err

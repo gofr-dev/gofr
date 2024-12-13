@@ -21,7 +21,7 @@ const (
 	defaultDBPort = 3306
 )
 
-var errUnsupportedDialect = fmt.Errorf("unsupported db dialect; supported dialects are - mysql, postgres, sqlite,mssql")
+var errUnsupportedDialect = fmt.Errorf("unsupported db dialect; supported dialects are - mysql, postgres, sqlite, mssql")
 
 // DBConfig has those members which are necessary variables while connecting to database.
 type DBConfig struct {
