@@ -60,7 +60,7 @@ type Mongo interface {
 	UpdateMany(ctx context.Context, collection string, filter any, update any) (int64, error)
 	Drop(ctx context.Context, collection string) error
 	CreateCollection(ctx context.Context, name string) error
-	StartSession() (any, error)
+	StartSession(ctx context.Context) (any, error)
 }
 
 // keeping the migrator interface unexported as, right now it is not being implemented directly, by the externalDB drivers.
