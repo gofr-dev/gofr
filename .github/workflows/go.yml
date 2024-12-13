@@ -21,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go-version: ['1.22', '1.21']
+        go-version: ['1.23', '1.22']
 
     services:
       kafka:
@@ -157,6 +157,53 @@ jobs:
 #          codeCoverage=${{ env.CODE_COVERAGE }}
 #          codeCoverage=${codeCoverage%??}
 #          if [[ $codeCoverage -lt 92 ]]; then echo "code coverage cannot be less than 92%, currently its ${{ env.CODE_COVERAGE }}%" && exit 1; fi;
+  Submodule-Unit-Testing:
+    name: Submodule Unit Testing (v${{ matrix.go-version }})🛠
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        go-version: [ '1.23', '1.22' ]
+
+    steps:
+      - name: Checkout code into go module directory
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go ${{ matrix.go-version }}
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go-version }}
+        id: Go
+
+      - name: Detect and Test Submodules
+        run: |
+          # Find all directories containing a go.mod file within 'pkg'
+          for module in $(find pkg -name "go.mod" -exec dirname {} \;); do
+            echo "Testing module: $module"
+            cd $module
+          
+            # Extract module name (replace '/' with '_')
+            module_name=$(echo $module | tr '/' '_')
+
+            # Download dependencies for the submodule
+            go mod download
+            go mod tidy
+
+            # Run tests for the submodule and generate coverage
+            export APP_ENV=test
+            go test ./... -v -short -coverprofile=${module_name}.cov -coverpkg=./...
+
+            # Return to the root directory
+            cd -
+          done
+
+      - name: Upload Coverage Reports
+        uses: actions/upload-artifact@v3
+        with:
+          name: coverage-reports
+          path: pkg/**/*.cov
+
 
   upload_coverage:
     name: Upload Coverage📊
@@ -195,9 +242,20 @@ jobs:
         uses: actions/checkout@v4
       - name: Get dependencies
         run: go get -v -t -d ./...
-      - name: GolangCI-Lint
+      - name: Lint Root Module
         run: |
+          echo "Linting root module..."
           golangci-lint run --timeout 9m0s
+      - name: Lint Submodules
+        run: |
+          echo "Searching for submodules..."
+          for module in $(find pkg -name "go.mod" -exec dirname {} \;); do
+            echo "Linting submodule: $module"
+            cd $module
+            go mod tidy
+            golangci-lint run --timeout 9m0s
+            cd -
+          done    
 
   linting_party:
     name: Linting Party🥳

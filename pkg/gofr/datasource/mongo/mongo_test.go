@@ -23,10 +23,7 @@ func Test_NewMongoClient(t *testing.T) {
 	metrics := NewMockMetrics(ctrl)
 	logger := NewMockLogger(ctrl)
 
-	metrics.EXPECT().NewHistogram("app_mongo_stats", "Response time of MONGO queries in milliseconds.", gomock.Any())
-
 	logger.EXPECT().Debugf(gomock.Any(), gomock.Any())
-	logger.EXPECT().Logf(gomock.Any(), gomock.Any(), gomock.Any())
 
 	logger.EXPECT().Errorf(gomock.Any(), gomock.Any(), gomock.Any())
 
