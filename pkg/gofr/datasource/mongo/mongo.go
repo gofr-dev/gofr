@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"go.opentelemetry.io/otel/attribute"
@@ -55,9 +54,10 @@ i.e. by default observability features gets initialized when used with GoFr.
 // client.UseLogger(loggerInstance)
 // client.UseMetrics(metricsInstance)
 // client.Connect().
+
 //nolint:gocritic // Configs do not need to be passed by reference
-func New(c *Config) *Client {
-	return &Client{config: *c}
+func New(c Config) *Client {
+	return &Client{config: &c}
 }
 
 // UseLogger sets the logger for the MongoDB client which asserts the Logger interface.
@@ -82,16 +82,37 @@ func (c *Client) UseTracer(tracer any) {
 }
 
 // Connect establishes a connection to MongoDB and registers metrics using the provided configuration when the client was Created.
+<<<<<<< HEAD
 func (c *Client) Connect(ctx context.Context) error {
 	c.logger.Logf("connecting to MongoDB at %v to database %v", c.config.URI, c.config.Database)
+=======
+func (c *Client) Connect(ctx context.Context) {
+	c.logger.Debugf("connecting to MongoDB at %v to database %v", c.config.URI, c.config.Database)
+>>>>>>> 62bc0c4 (🔧 cleanup mongo.go)
 
-	uri := c.getURI()
+	uri := c.config.URI
 
-	client, err := c.createClient(ctx, uri)
-	if err != nil {
-		return err
+	if uri == "" {
+		uri = fmt.Sprintf("mongodb://%s:%s@%s:%d/%s?authSource=admin",
+			c.config.User, c.config.Password, c.config.Host, c.config.Port, c.config.Database)
 	}
 
+	timeout := c.config.ConnectionTimeout
+	if timeout == 0 {
+		timeout = defaultTimeout
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	m, err := mongo.Connect(ctx, options.Client().ApplyURI(uri))
+	if err != nil {
+		c.logger.Errorf("error while connecting to MongoDB, err:%v", err)
+
+		return
+	}
+
+<<<<<<< HEAD
 
 	if err := c.pingDatabase(ctx, client); err != nil {
 		return err
@@ -172,6 +193,8 @@ func (c *Client) handlePingError(err error) error {
 }
 
 func (c *Client) setupMetrics() {
+=======
+>>>>>>> 62bc0c4 (🔧 cleanup mongo.go)
 	if err = m.Ping(ctx, nil); err != nil {
 		c.logger.Errorf("could not connect to mongoDB at %v due to err: %v", c.config.URI, err)
 		return
@@ -180,6 +203,7 @@ func (c *Client) setupMetrics() {
 	c.logger.Logf("connected to mongoDB successfully at %v to database %v", c.config.URI, c.config.Database)
 
 	mongoBuckets := []float64{.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 4, 5, 7.5, 10}
+<<<<<<< HEAD
  	c.metrics.NewHistogram("app_mongo_stats", "Response time of MongoDB queries in milliseconds.", mongoBuckets...)
 }
 
@@ -187,6 +211,9 @@ func (c *Client) verifyDatabaseAccess(ctx context.Context) error {
 	if err := c.Database.RunCommand(ctx, bson.D{{Key: "ping", Value: 1}}).Err(); err != nil {
 		return fmt.Errorf("%w: %w", ErrDatabaseConnection, err)
 	}
+=======
+	c.metrics.NewHistogram("app_mongo_stats", "Response time of MONGO queries in milliseconds.", mongoBuckets...)
+>>>>>>> 62bc0c4 (🔧 cleanup mongo.go)
 
 	c.Database = m.Database(c.config.Database)
 
@@ -199,7 +226,7 @@ func (c *Client) InsertOne(ctx context.Context, collection string, document inte
 
 	result, err := c.Database.Collection(collection).InsertOne(tracerCtx, document)
 
-	defer c.sendOperationStats(ctx, &QueryLog{Query: "insertOne", Collection: collection, Filter: document}, time.Now(),
+	defer c.sendOperationStats(&QueryLog{Query: "insertOne", Collection: collection, Filter: document}, time.Now(),
 		"insert", span)
 
 	return result, err
@@ -214,7 +241,7 @@ func (c *Client) InsertMany(ctx context.Context, collection string, documents []
 		return nil, err
 	}
 
-	defer c.sendOperationStats(ctx, &QueryLog{Query: "insertMany", Collection: collection, Filter: documents}, time.Now(),
+	defer c.sendOperationStats(&QueryLog{Query: "insertMany", Collection: collection, Filter: documents}, time.Now(),
 		"insertMany", span)
 
 	return res.InsertedIDs, nil
@@ -229,18 +256,13 @@ func (c *Client) Find(ctx context.Context, collection string, filter, results in
 		return err
 	}
 
-	defer func(cur *mongo.Cursor, ctx context.Context) {
-		err := cur.Close(ctx)
-		if err != nil {
-			c.logger.Errorf("error closing cursor: %v", err)
-		}
-	}(cur, ctx)
+	defer cur.Close(ctx)
 
 	if err := cur.All(ctx, results); err != nil {
 		return err
 	}
 
-	defer c.sendOperationStats(ctx, &QueryLog{Query: "find", Collection: collection, Filter: filter}, time.Now(), "find",
+	defer c.sendOperationStats(&QueryLog{Query: "find", Collection: collection, Filter: filter}, time.Now(), "find",
 		span)
 
 	return nil
@@ -255,7 +277,7 @@ func (c *Client) FindOne(ctx context.Context, collection string, filter, result 
 		return err
 	}
 
-	defer c.sendOperationStats(ctx, &QueryLog{Query: "findOne", Collection: collection, Filter: filter}, time.Now(),
+	defer c.sendOperationStats(&QueryLog{Query: "findOne", Collection: collection, Filter: filter}, time.Now(),
 		"findOne", span)
 
 	return bson.Unmarshal(b, result)
@@ -267,14 +289,10 @@ func (c *Client) UpdateByID(ctx context.Context, collection string, id, update i
 
 	res, err := c.Database.Collection(collection).UpdateByID(tracerCtx, id, update)
 
-	defer c.sendOperationStats(ctx, &QueryLog{Query: "updateByID", Collection: collection, ID: id, Update: update}, time.Now(),
+	defer c.sendOperationStats(&QueryLog{Query: "updateByID", Collection: collection, ID: id, Update: update}, time.Now(),
 		"updateByID", span)
 
-	if err != nil {
-		return 0, err
-	}
-
-	return res.ModifiedCount, nil
+	return res.ModifiedCount, err
 }
 
 // UpdateOne updates a single document in the specified collection based on the provided filter.
@@ -283,7 +301,7 @@ func (c *Client) UpdateOne(ctx context.Context, collection string, filter, updat
 
 	_, err := c.Database.Collection(collection).UpdateOne(tracerCtx, filter, update)
 
-	defer c.sendOperationStats(ctx, &QueryLog{Query: "updateOne", Collection: collection, Filter: filter, Update: update},
+	defer c.sendOperationStats(&QueryLog{Query: "updateOne", Collection: collection, Filter: filter, Update: update},
 		time.Now(), "updateOne", span)
 
 	return err
@@ -295,14 +313,10 @@ func (c *Client) UpdateMany(ctx context.Context, collection string, filter, upda
 
 	res, err := c.Database.Collection(collection).UpdateMany(tracerCtx, filter, update)
 
-	defer c.sendOperationStats(ctx, &QueryLog{Query: "updateMany", Collection: collection, Filter: filter, Update: update}, time.Now(),
+	defer c.sendOperationStats(&QueryLog{Query: "updateMany", Collection: collection, Filter: filter, Update: update}, time.Now(),
 		"updateMany", span)
 
-	if err != nil {
-		return 0, err
-	}
-
-	return res.ModifiedCount, nil
+	return res.ModifiedCount, err
 }
 
 // CountDocuments counts the number of documents in the specified collection based on the provided filter.
@@ -311,7 +325,7 @@ func (c *Client) CountDocuments(ctx context.Context, collection string, filter i
 
 	result, err := c.Database.Collection(collection).CountDocuments(tracerCtx, filter)
 
-	defer c.sendOperationStats(ctx, &QueryLog{Query: "countDocuments", Collection: collection, Filter: filter}, time.Now(),
+	defer c.sendOperationStats(&QueryLog{Query: "countDocuments", Collection: collection, Filter: filter}, time.Now(),
 		"countDocuments", span)
 
 	return result, err
@@ -326,7 +340,7 @@ func (c *Client) DeleteOne(ctx context.Context, collection string, filter interf
 		return 0, err
 	}
 
-	defer c.sendOperationStats(ctx, &QueryLog{Query: "deleteOne", Collection: collection, Filter: filter}, time.Now(),
+	defer c.sendOperationStats(&QueryLog{Query: "deleteOne", Collection: collection, Filter: filter}, time.Now(),
 		"deleteOne", span)
 
 	return res.DeletedCount, nil
@@ -341,7 +355,7 @@ func (c *Client) DeleteMany(ctx context.Context, collection string, filter inter
 		return 0, err
 	}
 
-	defer c.sendOperationStats(ctx, &QueryLog{Query: "deleteMany", Collection: collection, Filter: filter}, time.Now(),
+	defer c.sendOperationStats(&QueryLog{Query: "deleteMany", Collection: collection, Filter: filter}, time.Now(),
 		"deleteMany", span)
 
 	return res.DeletedCount, nil
@@ -353,7 +367,7 @@ func (c *Client) Drop(ctx context.Context, collection string) error {
 
 	err := c.Database.Collection(collection).Drop(tracerCtx)
 
-	defer c.sendOperationStats(ctx, &QueryLog{Query: "drop", Collection: collection}, time.Now(), "drop", span)
+	defer c.sendOperationStats(&QueryLog{Query: "drop", Collection: collection}, time.Now(), "drop", span)
 
 	return err
 }
@@ -364,20 +378,20 @@ func (c *Client) CreateCollection(ctx context.Context, name string) error {
 
 	err := c.Database.CreateCollection(tracerCtx, name)
 
-	defer c.sendOperationStats(ctx, &QueryLog{Query: "createCollection", Collection: name}, time.Now(), "createCollection",
+	defer c.sendOperationStats(&QueryLog{Query: "createCollection", Collection: name}, time.Now(), "createCollection",
 		span)
 
 	return err
 }
 
-func (c *Client) sendOperationStats(ctx context.Context, ql *QueryLog, startTime time.Time, method string, span trace.Span) {
-	duration := time.Since(startTime).Milliseconds()
+func (c *Client) sendOperationStats(ql *QueryLog, startTime time.Time, method string, span trace.Span) {
+	duration := time.Since(startTime).Microseconds()
 
 	ql.Duration = duration
 
 	c.logger.Debug(ql)
 
-	c.metrics.RecordHistogram(ctx, "app_mongo_stats", float64(duration), "hostname", c.uri,
+	c.metrics.RecordHistogram(context.Background(), "app_mongo_stats", float64(duration), "hostname", c.uri,
 		"database", c.database, "type", ql.Query)
 
 	if span != nil {
@@ -412,8 +426,8 @@ func (c *Client) HealthCheck(ctx context.Context) (any, error) {
 	return &h, nil
 }
 
-func (c *Client) StartSession(ctx context.Context) (interface{}, error) {
-	defer c.sendOperationStats(ctx, &QueryLog{Query: "startSession"}, time.Now(), "", nil)
+func (c *Client) StartSession() (interface{}, error) {
+	defer c.sendOperationStats(&QueryLog{Query: "startSession"}, time.Now(), "", nil)
 
 	s, err := c.Client().StartSession()
 	ses := &session{s}
