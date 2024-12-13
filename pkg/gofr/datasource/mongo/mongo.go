@@ -83,7 +83,7 @@ func (c *Client) UseTracer(tracer any) {
 
 // Connect establishes a connection to MongoDB and registers metrics using the provided configuration when the client was Created.
 func (c *Client) Connect(ctx context.Context) error {
-	c.logger.Logf("connecting to mongoDB at %v to database %v", c.config.URI, c.config.Database)
+	c.logger.Logf("connecting to MongoDB at %v to database %v", c.config.URI, c.config.Database)
 
 	uri := c.getURI()
 
