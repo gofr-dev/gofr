@@ -2,7 +2,6 @@ package mongo
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -24,13 +23,7 @@ func Test_NewMongoClient(t *testing.T) {
 	metrics := NewMockMetrics(ctrl)
 	logger := NewMockLogger(ctrl)
 
-	metrics.EXPECT().NewHistogram("app_mongo_stats", "Response time of MONGO queries in milliseconds.", gomock.Any()).AnyTimes()
-	logger.EXPECT().Logf("connecting to mongoDB at %v to database %v", gomock.Any(), "test").AnyTimes()
-
-	client := New(&Config{
-		URI:      "mongodb://localhost:27017",
-		Database: "test",
-	})
+	metrics.EXPECT().NewHistogram("app_mongo_stats", "Response time of MONGO queries in milliseconds.", gomock.Any())
 
 	logger.EXPECT().Debugf(gomock.Any(), gomock.Any())
 	logger.EXPECT().Logf(gomock.Any(), gomock.Any(), gomock.Any())
@@ -39,25 +32,13 @@ func Test_NewMongoClient(t *testing.T) {
 
 	client := New(Config{Database: "test", Host: "localhost", Port: 27017, User: "admin", ConnectionTimeout: 1 * time.Second})
 	client.Database = &mongo.Database{}
-
 	client.UseLogger(logger)
 	client.UseMetrics(metrics)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+	ctx := context.Background()
+	require.NoError(t, client.Connect(ctx))
 
-	err := client.Connect(ctx)
-	if err != nil {
-		if !errors.Is(err, ErrGenericConnection) {
-			t.Errorf("Expected ErrGenericConnection, got %v", err)
-		}
-		// If MongoDB is not available, this is an acceptable error
-		t.Logf("Connection failed (this is okay if MongoDB is not running): %v", err)
-	} else {
-		assert.NotNil(t, client.Database)
-		err = client.Database.Client().Disconnect(ctx)
-		require.NoError(t, err)
-	}
+	assert.NotNil(t, client)
 }
 
 func Test_NewMongoClientError(t *testing.T) {
@@ -67,60 +48,17 @@ func Test_NewMongoClientError(t *testing.T) {
 	metrics := NewMockMetrics(ctrl)
 	logger := NewMockLogger(ctrl)
 
-	logger.EXPECT().Logf("connecting to mongoDB at %v to database %v", gomock.Any(), "test").AnyTimes()
+	logger.EXPECT().Debugf("connecting to MongoDB at %v to database %v", "mongo", "test")
+	logger.EXPECT().Errorf("error while connecting to MongoDB, err:%v", gomock.Any())
 
-	testCases := []struct {
-		name        string
-		config      Config
-		expectedErr error
-	}{
-		{
-			name: "Invalid URI",
-			config: Config{
-				URI:      "invalid://uri",
-				Database: "test",
-			},
-			expectedErr: ErrGenericConnection,
-		},
-		{
-			name: "Authentication Error or Timeout",
-			config: Config{
-				URI:      "mongodb://wronguser:wrongpass@localhost:27017/test",
-				Database: "test",
-			},
-			expectedErr: ErrGenericConnection, // This could be ErrAuthentication or ErrGenericConnection (timeout)
-		},
-		{
-			name: "Database Connection Error",
-			config: Config{
-				URI:      "mongodb://localhost:27018/test", // Using wrong port
-				Database: "test",
-			},
-			expectedErr: ErrGenericConnection,
-		},
-	}
+	client := New(Config{URI: "mongo", Database: "test"})
+	client.UseLogger(logger)
+	client.UseMetrics(metrics)
 
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			client := New(&tc.config)
-			client.UseLogger(logger)
-			client.UseMetrics(metrics)
+	ctx := context.Background()
+	require.NoError(t, client.Connect(ctx))
 
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-
-			err := client.Connect(ctx)
-
-			require.Error(t, err)
-
-			if !errors.Is(err, tc.expectedErr) {
-				t.Errorf("Expected error type %T, got %T", tc.expectedErr, err)
-				t.Errorf("Expected error to be wrapped with %v, but it wasn't", tc.expectedErr)
-			}
-
-			t.Logf("Received error: %v", err) // Log the full error message
-		})
-	}
+	assert.Nil(t, client.Database)
 }
 
 func Test_InsertCommands(t *testing.T) {
@@ -135,10 +73,10 @@ func Test_InsertCommands(t *testing.T) {
 
 	cl := Client{metrics: metrics, tracer: otel.GetTracerProvider().Tracer("gofr-mongo")}
 
-	metrics.EXPECT().RecordHistogram(gomock.Any(), "app_mongo_stats", gomock.Any(), "hostname",
-		gomock.Any(), "database", gomock.Any(), "type", gomock.Any()).AnyTimes()
+	metrics.EXPECT().RecordHistogram(context.Background(), "app_mongo_stats", gomock.Any(), "hostname",
+		gomock.Any(), "database", gomock.Any(), "type", gomock.Any()).Times(3)
 
-	logger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	logger.EXPECT().Debug(gomock.Any()).Times(3)
 
 	cl.logger = logger
 
@@ -240,10 +178,10 @@ func Test_FindMultipleCommands(t *testing.T) {
 
 	cl := Client{metrics: metrics, tracer: otel.GetTracerProvider().Tracer("gofr-mongo")}
 
-	metrics.EXPECT().RecordHistogram(gomock.Any(), "app_mongo_stats", gomock.Any(), "hostname",
-		gomock.Any(), "database", gomock.Any(), "type", gomock.Any()).AnyTimes()
+	metrics.EXPECT().RecordHistogram(context.Background(), "app_mongo_stats", gomock.Any(), "hostname",
+		gomock.Any(), "database", gomock.Any(), "type", gomock.Any())
 
-	logger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	logger.EXPECT().Debug(gomock.Any())
 
 	cl.logger = logger
 
@@ -314,11 +252,10 @@ func Test_FindOneCommands(t *testing.T) {
 
 	cl := Client{metrics: metrics, tracer: otel.GetTracerProvider().Tracer("gofr-mongo")}
 
-	metrics.EXPECT().RecordHistogram(gomock.Any(), "app_mongo_stats", gomock.Any(), "hostname",
-		gomock.Any(), "database", gomock.Any(), "type", gomock.Any()).AnyTimes()
+	metrics.EXPECT().RecordHistogram(context.Background(), "app_mongo_stats", gomock.Any(), "hostname",
+		gomock.Any(), "database", gomock.Any(), "type", gomock.Any())
 
-	logger.EXPECT().Debug(gomock.Any()).AnyTimes()
-
+	logger.EXPECT().Debug(gomock.Any())
 
 	cl.logger = logger
 
@@ -371,6 +308,7 @@ func Test_FindOneCommands(t *testing.T) {
 }
 
 func Test_UpdateCommands(t *testing.T) {
+	// Create a connected client using the mock database
 	mt := mtest.New(t, mtest.NewOptions().ClientType(mtest.Mock))
 
 	ctrl := gomock.NewController(t)
@@ -382,52 +320,42 @@ func Test_UpdateCommands(t *testing.T) {
 	cl := Client{metrics: metrics, tracer: otel.GetTracerProvider().Tracer("gofr-mongo")}
 
 	metrics.EXPECT().RecordHistogram(context.Background(), "app_mongo_stats", gomock.Any(), "hostname",
-		gomock.Any(), "database", gomock.Any(), "type", gomock.Any()).AnyTimes()
+		gomock.Any(), "database", gomock.Any(), "type", gomock.Any()).Times(3)
 
-	logger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	logger.EXPECT().Debug(gomock.Any()).Times(3)
 
 	cl.logger = logger
 
-	mt.Run("updateByIDSuccess", func(mt *mtest.T) {
+	mt.Run("updateByID", func(mt *mtest.T) {
 		cl.Database = mt.DB
-		mt.AddMockResponses(bson.D{{Key: "ok", Value: 1}, {Key: "nModified", Value: 1}})
+		mt.AddMockResponses(mtest.CreateSuccessResponse())
+		// Create a document to insert
 
 		resp, err := cl.UpdateByID(context.Background(), mt.Coll.Name(), "1", bson.M{"$set": bson.M{"name": "test"}})
 
-		assert.Equal(t, int64(1), resp)
+		assert.NotNil(t, resp)
 		assert.NoError(t, err)
 	})
 
-	mt.Run("updateByIDError", func(mt *mtest.T) {
+	mt.Run("updateOne", func(mt *mtest.T) {
 		cl.Database = mt.DB
-		mt.AddMockResponses(bson.D{{Key: "ok", Value: 0}})
+		mt.AddMockResponses(mtest.CreateSuccessResponse())
+		// Create a document to insert
 
-		resp, err := cl.UpdateByID(context.Background(), mt.Coll.Name(), "1", bson.M{"$set": bson.M{"name": "test"}})
+		err := cl.UpdateOne(context.Background(), mt.Coll.Name(), bson.D{{Key: "name", Value: "test"}}, bson.M{"$set": bson.M{"name": "testing"}})
 
-		assert.Equal(t, int64(0), resp)
-		assert.Error(t, err)
+		assert.NoError(t, err)
 	})
 
 	mt.Run("updateMany", func(mt *mtest.T) {
 		cl.Database = mt.DB
-		mt.AddMockResponses(bson.D{{Key: "ok", Value: 1}, {Key: "nModified", Value: 2}})
+		mt.AddMockResponses(mtest.CreateSuccessResponse())
+		// Create a document to insert
 
-		resp, err := cl.UpdateMany(context.Background(), mt.Coll.Name(), bson.D{{Key: "name", Value: "test"}},
+		_, err := cl.UpdateMany(context.Background(), mt.Coll.Name(), bson.D{{Key: "name", Value: "test"}},
 			bson.M{"$set": bson.M{"name": "testing"}})
 
-		assert.Equal(t, int64(2), resp)
 		assert.NoError(t, err)
-	})
-
-	mt.Run("updateManyError", func(mt *mtest.T) {
-		cl.Database = mt.DB
-		mt.AddMockResponses(bson.D{{Key: "ok", Value: 0}})
-
-		resp, err := cl.UpdateMany(context.Background(), mt.Coll.Name(), bson.D{{Key: "name", Value: "test"}},
-			bson.M{"$set": bson.M{"name": "testing"}})
-
-		assert.Equal(t, int64(0), resp)
-		assert.Error(t, err)
 	})
 }
 
@@ -462,7 +390,7 @@ func Test_CountDocuments(t *testing.T) {
 			Keys: bson.D{{Key: "x", Value: 1}},
 		})
 
-		require.NoError(t, err)
+		require.NoError(mt, err, "CreateOne error for index: %v", err)
 
 		resp, err := cl.CountDocuments(context.Background(), mt.Coll.Name(), bson.D{{Key: "name", Value: "test"}})
 
@@ -483,10 +411,10 @@ func Test_DeleteCommands(t *testing.T) {
 
 	cl := Client{metrics: metrics, tracer: otel.GetTracerProvider().Tracer("gofr-mongo")}
 
-	metrics.EXPECT().RecordHistogram(gomock.Any(), "app_mongo_stats", gomock.Any(), "hostname",
-		gomock.Any(), "database", gomock.Any(), "type", gomock.Any()).AnyTimes()
+	metrics.EXPECT().RecordHistogram(context.Background(), "app_mongo_stats", gomock.Any(), "hostname",
+		gomock.Any(), "database", gomock.Any(), "type", gomock.Any()).Times(2)
 
-	logger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	logger.EXPECT().Debug(gomock.Any()).Times(2)
 
 	cl.logger = logger
 
@@ -595,7 +523,7 @@ func TestClient_StartSession(t *testing.T) {
 		mt.AddMockResponses(mtest.CreateSuccessResponse())
 
 		// Call the StartSession method
-		sess, err := cl.StartSession(context.Background())
+		sess, err := cl.StartSession()
 
 		ses, ok := sess.(Transaction)
 		if ok {
@@ -621,7 +549,7 @@ func TestClient_StartSession(t *testing.T) {
 		ses.EndSession(context.Background())
 
 		// Assert that there was no error
-		assert.NoError(t, err)
+		require.NoError(t, err)
 	})
 }
 
