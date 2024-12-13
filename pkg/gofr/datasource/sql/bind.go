@@ -5,9 +5,6 @@ import (
 )
 
 const (
-	dialectMysql    = "mysql"
-	dialectPostgres = "postgres"
-
 	quoteBack   = "`"
 	quoteDouble = `"`
 )
@@ -23,9 +20,9 @@ const (
 
 func bindType(dialect string) BindVarType {
 	switch dialect {
-	case dialectMysql:
+	case DialectMySQL:
 		return QUESTION
-	case dialectPostgres:
+	case DialectPostgres:
 		return DOLLAR
 	default:
 		return UNKNOWN
@@ -40,7 +37,7 @@ func bindVar(dialect string, position int) string {
 	return "?"
 }
 func quote(dialect string) string {
-	if dialectPostgres == dialect {
+	if DialectPostgres == dialect {
 		return quoteDouble
 	}
 

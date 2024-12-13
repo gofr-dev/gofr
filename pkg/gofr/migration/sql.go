@@ -37,11 +37,6 @@ const (
 	insertGoFrMigrationRowPostgres = `INSERT INTO gofr_migrations (version, method, start_time,duration) VALUES ($1, $2, $3, $4);`
 
 	insertGoFrMigrationRowMSSQL = `INSERT INTO gofr_migrations (version, method, start_time, duration) VALUES (?, ?, ?, ?);`
-
-	dialectMySQL    = "mysql"
-	dialectMSSQL    = "dialectMSSQL"
-	dialectSQLite   = "dialectSQLite"
-	dialectPostgres = "dialectPostgres"
 )
 
 // database/sql is the package imported so named it sqlDS.
@@ -66,9 +61,9 @@ func (d sqlMigrator) checkAndCreateMigrationTable(c *container.Container) error 
 	var createTableQuery string
 
 	switch c.SQL.Dialect() {
-	case dialectMySQL, dialectSQLite, dialectPostgres:
+	case gofrSql.DialectMySQL, gofrSql.DialectSQLite, gofrSql.DialectPostgres:
 		createTableQuery = createSQLGoFrMigrationsTable
-	case dialectMSSQL:
+	case gofrSql.DialectMSSQL:
 		createTableQuery = createSQLGoFrMigrationsTableMSSQL
 	}
 
@@ -100,7 +95,7 @@ func (d sqlMigrator) getLastMigration(c *container.Container) int64 {
 
 func (d sqlMigrator) commitMigration(c *container.Container, data transactionData) error {
 	switch c.SQL.Dialect() {
-	case dialectMySQL, dialectSQLite:
+	case gofrSql.DialectMySQL, gofrSql.DialectSQLite:
 		err := insertMigrationRecord(data.SQLTx, insertGoFrMigrationRowMySQL, data.MigrationNumber, data.StartTime)
 		if err != nil {
 			return err
@@ -108,14 +103,14 @@ func (d sqlMigrator) commitMigration(c *container.Container, data transactionDat
 
 		c.Debugf("inserted record for migration %v in gofr_migrations table", data.MigrationNumber)
 
-	case dialectPostgres:
+	case gofrSql.DialectPostgres:
 		err := insertMigrationRecord(data.SQLTx, insertGoFrMigrationRowPostgres, data.MigrationNumber, data.StartTime)
 		if err != nil {
 			return err
 		}
 
 		c.Debugf("inserted record for migration %v in gofr_migrations table", data.MigrationNumber)
-	case dialectMSSQL:
+	case gofrSql.DialectMSSQL:
 		err := insertMigrationRecord(data.SQLTx, insertGoFrMigrationRowMSSQL, data.MigrationNumber, data.StartTime)
 		if err != nil {
 			return err

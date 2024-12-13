@@ -17,8 +17,11 @@ import (
 )
 
 const (
-	sqlite        = "sqlite"
-	defaultDBPort = 3306
+	defaultDBPort   = 3306
+	DialectMySQL    = "mysql"
+	DialectMSSQL    = "mssql"
+	DialectSQLite   = "sqlite"
+	DialectPostgres = "postgres"
 )
 
 var errUnsupportedDialect = fmt.Errorf("unsupported db dialect; supported dialects are - mysql, postgres, sqlite, mssql")
@@ -43,7 +46,7 @@ func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *D
 	dbConfig := getDBConfig(configs)
 
 	// if Hostname is not provided, we won't try to connect to DB
-	if dbConfig.Dialect != sqlite && dbConfig.HostName == "" {
+	if dbConfig.Dialect != DialectSQLite && dbConfig.HostName == "" {
 		logger.Debugf("not connecting to database as database configurations aren't available")
 		return nil
 	}
@@ -167,7 +170,7 @@ func getDBConfig(configs config.Config) *DBConfig {
 
 func getDBConnectionString(dbConfig *DBConfig) (string, error) {
 	switch dbConfig.Dialect {
-	case "mysql":
+	case DialectMySQL:
 		if dbConfig.Charset == "" {
 			dbConfig.Charset = "utf8"
 		}
@@ -180,14 +183,14 @@ func getDBConnectionString(dbConfig *DBConfig) (string, error) {
 			dbConfig.Database,
 			dbConfig.Charset,
 		), nil
-	case "postgres":
+	case DialectPostgres:
 		return fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
 			dbConfig.HostName, dbConfig.Port, dbConfig.User, dbConfig.Password, dbConfig.Database, dbConfig.SSLMode), nil
-	case sqlite:
+	case DialectSQLite:
 		s := strings.TrimSuffix(dbConfig.Database, ".db")
 
 		return fmt.Sprintf("file:%s.db", s), nil
-	case "mssql":
+	case DialectMSSQL:
 		return fmt.Sprintf("sqlserver://%s:%s@%s:%s?database=%s",
 			dbConfig.User, dbConfig.Password, dbConfig.HostName, dbConfig.Port, dbConfig.Database), nil
 	default:
@@ -216,7 +219,7 @@ func printConnectionSuccessLog(status string, dbconfig *DBConfig, logger datasou
 		logFunc = logger.Debugf
 	}
 
-	if dbconfig.Dialect == sqlite {
+	if dbconfig.Dialect == DialectSQLite {
 		logFunc("%s to '%s' database", status, dbconfig.Database)
 	} else {
 		logFunc("%s to '%s' user to '%s' database at '%s:%s'", status, dbconfig.User, dbconfig.Database, dbconfig.HostName, dbconfig.Port)
@@ -224,7 +227,7 @@ func printConnectionSuccessLog(status string, dbconfig *DBConfig, logger datasou
 }
 
 func printConnectionFailureLog(action string, dbconfig *DBConfig, logger datasource.Logger, err error) {
-	if dbconfig.Dialect == sqlite {
+	if dbconfig.Dialect == DialectSQLite {
 		logger.Errorf("could not %s database '%s', error: %v", action, dbconfig.Database, err)
 	} else {
 		logger.Errorf("could not %s '%s' user to '%s' database at '%s:%s', error: %v",

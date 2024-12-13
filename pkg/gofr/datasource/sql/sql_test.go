@@ -300,7 +300,7 @@ func Test_sqliteSuccessfulConnLogs(t *testing.T) {
 		logs := testutil.StdoutOutputForFunc(func() {
 			mockLogger := logging.NewMockLogger(logging.DEBUG)
 			mockConfig := &DBConfig{
-				Dialect:  sqlite,
+				Dialect:  DialectSQLite,
 				Database: "test",
 			}
 
@@ -327,7 +327,7 @@ func Test_sqliteErrConnLogs(t *testing.T) {
 		logs := testutil.StderrOutputForFunc(func() {
 			mockLogger := logging.NewMockLogger(logging.DEBUG)
 			mockConfig := &DBConfig{
-				Dialect:  sqlite,
+				Dialect:  DialectSQLite,
 				Database: "test",
 			}
 
