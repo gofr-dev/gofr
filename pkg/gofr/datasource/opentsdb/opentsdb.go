@@ -148,7 +148,7 @@ func (c *Client) Connect(ctx context.Context) error {
 
 	res := VersionResponse{}
 
-	err := c.version(context.Background(), &res)
+	err := c.version(ctx, &res)
 	if err != nil {
 		c.logger.Errorf("error while connecting to OpenTSDB: %v", err)
 		return err
