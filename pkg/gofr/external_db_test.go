@@ -172,9 +172,10 @@ func TestApp_AddOpenTSDB(t *testing.T) {
 		mock.EXPECT().UseLogger(app.Logger())
 		mock.EXPECT().UseMetrics(app.Metrics())
 		mock.EXPECT().UseTracer(gomock.Any())
-		mock.EXPECT().Connect()
 
 		ctx := context.Background()
+
+		mock.EXPECT().Connect(ctx)
 
 		require.NoError(t, app.AddOpenTSDB(ctx, mock))
 
