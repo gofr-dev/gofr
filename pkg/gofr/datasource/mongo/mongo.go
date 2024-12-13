@@ -330,7 +330,7 @@ func (c *Client) HealthCheck(ctx context.Context) (any, error) {
 	return &h, nil
 }
 
-func (c *Client) StartSession() (interface{}, error) {
+func (c *Client) StartSession(_ context.Context) (interface{}, error) {
 	defer c.sendOperationStats(&QueryLog{Query: "startSession"}, time.Now(), "", nil)
 
 	s, err := c.Client().StartSession()
