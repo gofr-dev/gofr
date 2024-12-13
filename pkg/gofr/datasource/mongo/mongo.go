@@ -161,7 +161,7 @@ func (c *Client) handlePingError(err error) error {
 
 
 	if errors.Is(err, mongo.ErrClientDisconnected) {
-		return fmt.Errorf("%w: client disconnected", ErrGenericConnection)
+		return fmt.Errorf("%w: client disconnected: %w", ErrGenericConnection, err)
 	}
 
 	if c.isAuthenticationError(err) {
