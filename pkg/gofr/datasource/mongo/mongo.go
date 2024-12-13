@@ -82,13 +82,8 @@ func (c *Client) UseTracer(tracer any) {
 }
 
 // Connect establishes a connection to MongoDB and registers metrics using the provided configuration when the client was Created.
-<<<<<<< HEAD
 func (c *Client) Connect(ctx context.Context) error {
-	c.logger.Logf("connecting to MongoDB at %v to database %v", c.config.URI, c.config.Database)
-=======
-func (c *Client) Connect(ctx context.Context) {
 	c.logger.Debugf("connecting to MongoDB at %v to database %v", c.config.URI, c.config.Database)
->>>>>>> 62bc0c4 (🔧 cleanup mongo.go)
 
 	uri := c.config.URI
 
@@ -109,115 +104,24 @@ func (c *Client) Connect(ctx context.Context) {
 	if err != nil {
 		c.logger.Errorf("error while connecting to MongoDB, err:%v", err)
 
-		return
-	}
-
-<<<<<<< HEAD
-
-	if err := c.pingDatabase(ctx, client); err != nil {
 		return err
 	}
 
-	c.setupMetrics()
-
-	c.Database = client.Database(c.config.Database)
-
-	return c.verifyDatabaseAccess(ctx)
-}
-
-func (c *Client) getURI() string {
-	if c.config.URI != "" {
-		return c.config.URI
-	}
-
-	return fmt.Sprintf("mongodb://%s:%s@%s:%d/%s?authSource=admin",
-		c.config.User, c.config.Password, c.config.Host, c.config.Port, c.config.Database)
-}
-
-func (c *Client) createClient(ctx context.Context, uri string) (*mongo.Client, error) {
-	clientOpts := options.Client().ApplyURI(uri)
-
-	client, err := mongo.Connect(ctx, clientOpts)
-	if err != nil {
-		return nil, c.handleConnectionError(err)
-	}
-
-	return client, nil
-}
-
-func (c *Client) handleConnectionError(err error) error {
-	if c.isAuthenticationError(err) {
-		return fmt.Errorf("%w: %w", ErrAuthentication, err)
-	}
-
-	if c.isTimeoutError(err) {
-		return fmt.Errorf("%w: connection timeout", ErrGenericConnection)
-	}
-
-	return fmt.Errorf("%w: %w", ErrGenericConnection, err)
-}
-
-func (*Client) isTimeoutError(err error) bool {
-	return strings.Contains(err.Error(), "connection timeout") || mongo.IsTimeout(err)
-}
-
-
-func (*Client) isAuthenticationError(err error) bool {
-	return strings.Contains(err.Error(), "authentication failed") ||
-		strings.Contains(err.Error(), "AuthenticationFailed")
-}
-
-func (c *Client) pingDatabase(ctx context.Context, client *mongo.Client) error {
-	if err := client.Ping(ctx, nil); err != nil {
-		return c.handlePingError(err)
-	}
-
-	return nil
-}
-
-func (c *Client) handlePingError(err error) error {
-	if mongo.IsTimeout(err) {
-		return fmt.Errorf("%w: connection timeout: %w", ErrGenericConnection, err)
-	}
-
-
-	if errors.Is(err, mongo.ErrClientDisconnected) {
-		return fmt.Errorf("%w: client disconnected: %w", ErrGenericConnection, err)
-	}
-
-	if c.isAuthenticationError(err) {
-		return fmt.Errorf("%w: %w", ErrAuthentication, err)
-	}
-
-	return fmt.Errorf("%w: %w", ErrGenericConnection, err)
-}
-
-func (c *Client) setupMetrics() {
-=======
->>>>>>> 62bc0c4 (🔧 cleanup mongo.go)
 	if err = m.Ping(ctx, nil); err != nil {
 		c.logger.Errorf("could not connect to mongoDB at %v due to err: %v", c.config.URI, err)
-		return
+		return err
 	}
 
 	c.logger.Logf("connected to mongoDB successfully at %v to database %v", c.config.URI, c.config.Database)
 
 	mongoBuckets := []float64{.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 4, 5, 7.5, 10}
-<<<<<<< HEAD
- 	c.metrics.NewHistogram("app_mongo_stats", "Response time of MongoDB queries in milliseconds.", mongoBuckets...)
-}
-
-func (c *Client) verifyDatabaseAccess(ctx context.Context) error {
-	if err := c.Database.RunCommand(ctx, bson.D{{Key: "ping", Value: 1}}).Err(); err != nil {
-		return fmt.Errorf("%w: %w", ErrDatabaseConnection, err)
-	}
-=======
 	c.metrics.NewHistogram("app_mongo_stats", "Response time of MONGO queries in milliseconds.", mongoBuckets...)
->>>>>>> 62bc0c4 (🔧 cleanup mongo.go)
 
 	c.Database = m.Database(c.config.Database)
 
 	c.logger.Logf("connected to MongoDB at %v to database %v", uri, c.Database)
+
+	return nil
 }
 
 // InsertOne inserts a single document into the specified collection.
