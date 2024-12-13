@@ -213,7 +213,7 @@ type mockLog struct {
 }
 
 func (m *mockLog) PrettyPrint(writer io.Writer) {
-	fmt.Fprintf(writer, "TEST "+m.msg)
+	fmt.Fprintf(writer, "TEST %s", m.msg)
 }
 
 func TestPrettyPrint(t *testing.T) {
