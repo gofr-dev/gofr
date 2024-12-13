@@ -156,7 +156,7 @@ func (c *Client) pingDatabase(ctx context.Context, client *mongo.Client) error {
 
 func (c *Client) handlePingError(err error) error {
 	if mongo.IsTimeout(err) {
-		return fmt.Errorf("%w: connection timeout", ErrGenericConnection)
+		return fmt.Errorf("%w: connection timeout: %w", ErrGenericConnection, err)
 	}
 
 
