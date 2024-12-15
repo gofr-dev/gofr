@@ -108,7 +108,7 @@ func (c *Client) Connect(ctx context.Context) error {
 	}
 
 	if err = m.Ping(ctx, nil); err != nil {
-		c.logger.Errorf("could not connect to mongoDB at %v due to err: %v", c.config.URI, err)
+ 		c.logger.Errorf("could not connect to MongoDB at %v due to err: %v", c.config.URI, err)
 		return err
 	}
 
