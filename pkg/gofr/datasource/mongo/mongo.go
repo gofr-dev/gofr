@@ -82,7 +82,7 @@ func (c *Client) UseTracer(tracer any) {
 }
 
 // Connect establishes a connection to MongoDB and registers metrics using the provided configuration when the client was Created.
-func (c *Client) Connect() {
+func (c *Client) Connect(ctx context.Context) error {
 	c.logger.Debugf("connecting to MongoDB at %v to database %v", c.config.URI, c.config.Database)
 
 	uri := c.config.URI
@@ -97,22 +97,22 @@ func (c *Client) Connect() {
 		timeout = defaultTimeout
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
 	m, err := mongo.Connect(ctx, options.Client().ApplyURI(uri))
 	if err != nil {
 		c.logger.Errorf("error while connecting to MongoDB, err:%v", err)
 
-		return
+		return err
 	}
 
 	if err = m.Ping(ctx, nil); err != nil {
-		c.logger.Errorf("could not connect to mongoDB at %v due to err: %v", c.config.URI, err)
-		return
+ 		c.logger.Errorf("could not connect to MongoDB at %v due to err: %v", c.config.URI, err)
+		return err
 	}
 
-	c.logger.Logf("connected to mongoDB successfully at %v to database %v", c.config.URI, c.config.Database)
+ 	c.logger.Logf("connected to MongoDB successfully at %v to database %v", c.config.URI, c.config.Database)
 
 	mongoBuckets := []float64{.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 4, 5, 7.5, 10}
 	c.metrics.NewHistogram("app_mongo_stats", "Response time of MONGO queries in milliseconds.", mongoBuckets...)
@@ -120,6 +120,8 @@ func (c *Client) Connect() {
 	c.Database = m.Database(c.config.Database)
 
 	c.logger.Logf("connected to MongoDB at %v to database %v", uri, c.Database)
+
+	return nil
 }
 
 // InsertOne inserts a single document into the specified collection.
@@ -328,7 +330,7 @@ func (c *Client) HealthCheck(ctx context.Context) (any, error) {
 	return &h, nil
 }
 
-func (c *Client) StartSession() (interface{}, error) {
+func (c *Client) StartSession(_ context.Context) (interface{}, error) {
 	defer c.sendOperationStats(&QueryLog{Query: "startSession"}, time.Now(), "", nil)
 
 	s, err := c.Client().StartSession()

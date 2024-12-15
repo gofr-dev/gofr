@@ -130,8 +130,8 @@ func (c *Client) UseTracer(tracer any) {
 
 // Connect initializes an HTTP client for OpenTSDB using the provided configuration.
 // If the configuration is invalid or the endpoint is unreachable, an error is logged.
-func (c *Client) Connect() {
-	span := c.addTrace(context.Background(), "Connect")
+func (c *Client) Connect(ctx context.Context) error {
+	span := c.addTrace(ctx, "Connect")
 
 	if span != nil {
 		span.SetAttributes(attribute.Int64(fmt.Sprintf("opentsdb.%v", "Connect"), 0))
@@ -148,13 +148,14 @@ func (c *Client) Connect() {
 
 	res := VersionResponse{}
 
-	err := c.version(context.Background(), &res)
+	err := c.version(ctx, &res)
 	if err != nil {
 		c.logger.Errorf("error while connecting to OpenTSDB: %v", err)
-		return
+		return err
 	}
 
 	c.logger.Logf("connected to OpenTSDB at %s", c.endpoint)
+	return nil
 }
 
 func (c *Client) PutDataPoints(ctx context.Context, datas any, queryParam string, resp any) error {

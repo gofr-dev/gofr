@@ -27,6 +27,7 @@ import (
 type MockDB struct {
 	ctrl     *gomock.Controller
 	recorder *MockDBMockRecorder
+	isgomock struct{}
 }
 
 // MockDBMockRecorder is the mock recorder for MockDB.
@@ -257,6 +258,7 @@ func (mr *MockDBMockRecorder) Select(ctx, data, query any, args ...any) *gomock.
 type MockRedis struct {
 	ctrl     *gomock.Controller
 	recorder *MockRedisMockRecorder
+	isgomock struct{}
 }
 
 // MockRedisMockRecorder is the mock recorder for MockRedis.
@@ -7986,6 +7988,7 @@ func (mr *MockRedisMockRecorder) ZUnionWithScores(ctx, store any) *gomock.Call {
 type MockCassandra struct {
 	ctrl     *gomock.Controller
 	recorder *MockCassandraMockRecorder
+	isgomock struct{}
 }
 
 // MockCassandraMockRecorder is the mock recorder for MockCassandra.
@@ -8149,6 +8152,7 @@ func (mr *MockCassandraMockRecorder) Query(dest, stmt any, values ...any) *gomoc
 type MockCassandraBatch struct {
 	ctrl     *gomock.Controller
 	recorder *MockCassandraBatchMockRecorder
+	isgomock struct{}
 }
 
 // MockCassandraBatchMockRecorder is the mock recorder for MockCassandraBatch.
@@ -8225,6 +8229,7 @@ func (mr *MockCassandraBatchMockRecorder) ExecuteBatchCAS(name any, dest ...any)
 type MockCassandraWithContext struct {
 	ctrl     *gomock.Controller
 	recorder *MockCassandraWithContextMockRecorder
+	isgomock struct{}
 }
 
 // MockCassandraWithContextMockRecorder is the mock recorder for MockCassandraWithContext.
@@ -8513,6 +8518,7 @@ func (mr *MockCassandraWithContextMockRecorder) QueryWithCtx(ctx, dest, stmt any
 type MockCassandraBatchWithContext struct {
 	ctrl     *gomock.Controller
 	recorder *MockCassandraBatchWithContextMockRecorder
+	isgomock struct{}
 }
 
 // MockCassandraBatchWithContextMockRecorder is the mock recorder for MockCassandraBatchWithContext.
@@ -8589,6 +8595,7 @@ func (mr *MockCassandraBatchWithContextMockRecorder) ExecuteBatchWithCtx(ctx, na
 type MockCassandraProvider struct {
 	ctrl     *gomock.Controller
 	recorder *MockCassandraProviderMockRecorder
+	isgomock struct{}
 }
 
 // MockCassandraProviderMockRecorder is the mock recorder for MockCassandraProvider.
@@ -8647,15 +8654,17 @@ func (mr *MockCassandraProviderMockRecorder) BatchQueryWithCtx(ctx, name, stmt a
 }
 
 // Connect mocks base method.
-func (m *MockCassandraProvider) Connect() {
+func (m *MockCassandraProvider) Connect(ctx context.Context) error {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "Connect")
+	ret := m.ctrl.Call(m, "Connect", ctx)
+	ret0, _ := ret[0].(error)
+	return ret0
 }
 
 // Connect indicates an expected call of Connect.
-func (mr *MockCassandraProviderMockRecorder) Connect() *gomock.Call {
+func (mr *MockCassandraProviderMockRecorder) Connect(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Connect", reflect.TypeOf((*MockCassandraProvider)(nil).Connect))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Connect", reflect.TypeOf((*MockCassandraProvider)(nil).Connect), ctx)
 }
 
 // Exec mocks base method.
@@ -8925,6 +8934,7 @@ func (mr *MockCassandraProviderMockRecorder) UseTracer(tracer any) *gomock.Call 
 type MockClickhouse struct {
 	ctrl     *gomock.Controller
 	recorder *MockClickhouseMockRecorder
+	isgomock struct{}
 }
 
 // MockClickhouseMockRecorder is the mock recorder for MockClickhouse.
@@ -9020,6 +9030,7 @@ func (mr *MockClickhouseMockRecorder) Select(ctx, dest, query any, args ...any) 
 type MockClickhouseProvider struct {
 	ctrl     *gomock.Controller
 	recorder *MockClickhouseProviderMockRecorder
+	isgomock struct{}
 }
 
 // MockClickhouseProviderMockRecorder is the mock recorder for MockClickhouseProvider.
@@ -9059,15 +9070,17 @@ func (mr *MockClickhouseProviderMockRecorder) AsyncInsert(ctx, query, wait any, 
 }
 
 // Connect mocks base method.
-func (m *MockClickhouseProvider) Connect() {
+func (m *MockClickhouseProvider) Connect(ctx context.Context) error {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "Connect")
+	ret := m.ctrl.Call(m, "Connect", ctx)
+	ret0, _ := ret[0].(error)
+	return ret0
 }
 
 // Connect indicates an expected call of Connect.
-func (mr *MockClickhouseProviderMockRecorder) Connect() *gomock.Call {
+func (mr *MockClickhouseProviderMockRecorder) Connect(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Connect", reflect.TypeOf((*MockClickhouseProvider)(nil).Connect))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Connect", reflect.TypeOf((*MockClickhouseProvider)(nil).Connect), ctx)
 }
 
 // Exec mocks base method.
@@ -9163,6 +9176,7 @@ func (mr *MockClickhouseProviderMockRecorder) UseTracer(tracer any) *gomock.Call
 type MockMongo struct {
 	ctrl     *gomock.Controller
 	recorder *MockMongoMockRecorder
+	isgomock struct{}
 }
 
 // MockMongoMockRecorder is the mock recorder for MockMongo.
@@ -9329,18 +9343,18 @@ func (mr *MockMongoMockRecorder) InsertOne(ctx, collection, document any) *gomoc
 }
 
 // StartSession mocks base method.
-func (m *MockMongo) StartSession() (any, error) {
+func (m *MockMongo) StartSession(ctx context.Context) (any, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "StartSession")
+	ret := m.ctrl.Call(m, "StartSession", ctx)
 	ret0, _ := ret[0].(any)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // StartSession indicates an expected call of StartSession.
-func (mr *MockMongoMockRecorder) StartSession() *gomock.Call {
+func (mr *MockMongoMockRecorder) StartSession(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartSession", reflect.TypeOf((*MockMongo)(nil).StartSession))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartSession", reflect.TypeOf((*MockMongo)(nil).StartSession), ctx)
 }
 
 // UpdateByID mocks base method.
@@ -9391,6 +9405,7 @@ func (mr *MockMongoMockRecorder) UpdateOne(ctx, collection, filter, update any) 
 type MockTransaction struct {
 	ctrl     *gomock.Controller
 	recorder *MockTransactionMockRecorder
+	isgomock struct{}
 }
 
 // MockTransactionMockRecorder is the mock recorder for MockTransaction.
@@ -9468,6 +9483,7 @@ func (mr *MockTransactionMockRecorder) StartTransaction() *gomock.Call {
 type MockMongoProvider struct {
 	ctrl     *gomock.Controller
 	recorder *MockMongoProviderMockRecorder
+	isgomock struct{}
 }
 
 // MockMongoProviderMockRecorder is the mock recorder for MockMongoProvider.
@@ -9488,15 +9504,17 @@ func (m *MockMongoProvider) EXPECT() *MockMongoProviderMockRecorder {
 }
 
 // Connect mocks base method.
-func (m *MockMongoProvider) Connect() {
+func (m *MockMongoProvider) Connect(ctx context.Context) error {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "Connect")
+	ret := m.ctrl.Call(m, "Connect", ctx)
+	ret0, _ := ret[0].(error)
+	return ret0
 }
 
 // Connect indicates an expected call of Connect.
-func (mr *MockMongoProviderMockRecorder) Connect() *gomock.Call {
+func (mr *MockMongoProviderMockRecorder) Connect(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Connect", reflect.TypeOf((*MockMongoProvider)(nil).Connect))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Connect", reflect.TypeOf((*MockMongoProvider)(nil).Connect), ctx)
 }
 
 // CountDocuments mocks base method.
@@ -9646,18 +9664,18 @@ func (mr *MockMongoProviderMockRecorder) InsertOne(ctx, collection, document any
 }
 
 // StartSession mocks base method.
-func (m *MockMongoProvider) StartSession() (any, error) {
+func (m *MockMongoProvider) StartSession(ctx context.Context) (any, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "StartSession")
+	ret := m.ctrl.Call(m, "StartSession", ctx)
 	ret0, _ := ret[0].(any)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // StartSession indicates an expected call of StartSession.
-func (mr *MockMongoProviderMockRecorder) StartSession() *gomock.Call {
+func (mr *MockMongoProviderMockRecorder) StartSession(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartSession", reflect.TypeOf((*MockMongoProvider)(nil).StartSession))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartSession", reflect.TypeOf((*MockMongoProvider)(nil).StartSession), ctx)
 }
 
 // UpdateByID mocks base method.
@@ -9744,6 +9762,7 @@ func (mr *MockMongoProviderMockRecorder) UseTracer(tracer any) *gomock.Call {
 type Mockprovider struct {
 	ctrl     *gomock.Controller
 	recorder *MockproviderMockRecorder
+	isgomock struct{}
 }
 
 // MockproviderMockRecorder is the mock recorder for Mockprovider.
@@ -9764,15 +9783,17 @@ func (m *Mockprovider) EXPECT() *MockproviderMockRecorder {
 }
 
 // Connect mocks base method.
-func (m *Mockprovider) Connect() {
+func (m *Mockprovider) Connect(ctx context.Context) error {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "Connect")
+	ret := m.ctrl.Call(m, "Connect", ctx)
+	ret0, _ := ret[0].(error)
+	return ret0
 }
 
 // Connect indicates an expected call of Connect.
-func (mr *MockproviderMockRecorder) Connect() *gomock.Call {
+func (mr *MockproviderMockRecorder) Connect(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Connect", reflect.TypeOf((*Mockprovider)(nil).Connect))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Connect", reflect.TypeOf((*Mockprovider)(nil).Connect), ctx)
 }
 
 // UseLogger mocks base method.
@@ -9815,6 +9836,7 @@ func (mr *MockproviderMockRecorder) UseTracer(tracer any) *gomock.Call {
 type MockHealthChecker struct {
 	ctrl     *gomock.Controller
 	recorder *MockHealthCheckerMockRecorder
+	isgomock struct{}
 }
 
 // MockHealthCheckerMockRecorder is the mock recorder for MockHealthChecker.
@@ -9853,6 +9875,7 @@ func (mr *MockHealthCheckerMockRecorder) HealthCheck(arg0 any) *gomock.Call {
 type MockKVStore struct {
 	ctrl     *gomock.Controller
 	recorder *MockKVStoreMockRecorder
+	isgomock struct{}
 }
 
 // MockKVStoreMockRecorder is the mock recorder for MockKVStore.
@@ -9934,6 +9957,7 @@ func (mr *MockKVStoreMockRecorder) Set(ctx, key, value any) *gomock.Call {
 type MockKVStoreProvider struct {
 	ctrl     *gomock.Controller
 	recorder *MockKVStoreProviderMockRecorder
+	isgomock struct{}
 }
 
 // MockKVStoreProviderMockRecorder is the mock recorder for MockKVStoreProvider.
@@ -9954,15 +9978,17 @@ func (m *MockKVStoreProvider) EXPECT() *MockKVStoreProviderMockRecorder {
 }
 
 // Connect mocks base method.
-func (m *MockKVStoreProvider) Connect() {
+func (m *MockKVStoreProvider) Connect(ctx context.Context) error {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "Connect")
+	ret := m.ctrl.Call(m, "Connect", ctx)
+	ret0, _ := ret[0].(error)
+	return ret0
 }
 
 // Connect indicates an expected call of Connect.
-func (mr *MockKVStoreProviderMockRecorder) Connect() *gomock.Call {
+func (mr *MockKVStoreProviderMockRecorder) Connect(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Connect", reflect.TypeOf((*MockKVStoreProvider)(nil).Connect))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Connect", reflect.TypeOf((*MockKVStoreProvider)(nil).Connect), ctx)
 }
 
 // Delete mocks base method.
@@ -10063,6 +10089,7 @@ func (mr *MockKVStoreProviderMockRecorder) UseTracer(tracer any) *gomock.Call {
 type MockPubSubProvider struct {
 	ctrl     *gomock.Controller
 	recorder *MockPubSubProviderMockRecorder
+	isgomock struct{}
 }
 
 // MockPubSubProviderMockRecorder is the mock recorder for MockPubSubProvider.
@@ -10097,15 +10124,17 @@ func (mr *MockPubSubProviderMockRecorder) Close() *gomock.Call {
 }
 
 // Connect mocks base method.
-func (m *MockPubSubProvider) Connect() {
+func (m *MockPubSubProvider) Connect(ctx context.Context) error {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "Connect")
+	ret := m.ctrl.Call(m, "Connect", ctx)
+	ret0, _ := ret[0].(error)
+	return ret0
 }
 
 // Connect indicates an expected call of Connect.
-func (mr *MockPubSubProviderMockRecorder) Connect() *gomock.Call {
+func (mr *MockPubSubProviderMockRecorder) Connect(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Connect", reflect.TypeOf((*MockPubSubProvider)(nil).Connect))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Connect", reflect.TypeOf((*MockPubSubProvider)(nil).Connect), ctx)
 }
 
 // CreateTopic mocks base method.
@@ -10219,6 +10248,7 @@ func (mr *MockPubSubProviderMockRecorder) UseTracer(tracer any) *gomock.Call {
 type MockSolr struct {
 	ctrl     *gomock.Controller
 	recorder *MockSolrMockRecorder
+	isgomock struct{}
 }
 
 // MockSolrMockRecorder is the mock recorder for MockSolr.
@@ -10392,6 +10422,7 @@ func (mr *MockSolrMockRecorder) UpdateField(ctx, collection, document any) *gomo
 type MockSolrProvider struct {
 	ctrl     *gomock.Controller
 	recorder *MockSolrProviderMockRecorder
+	isgomock struct{}
 }
 
 // MockSolrProviderMockRecorder is the mock recorder for MockSolrProvider.
@@ -10427,15 +10458,17 @@ func (mr *MockSolrProviderMockRecorder) AddField(ctx, collection, document any) 
 }
 
 // Connect mocks base method.
-func (m *MockSolrProvider) Connect() {
+func (m *MockSolrProvider) Connect(ctx context.Context) error {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "Connect")
+	ret := m.ctrl.Call(m, "Connect", ctx)
+	ret0, _ := ret[0].(error)
+	return ret0
 }
 
 // Connect indicates an expected call of Connect.
-func (mr *MockSolrProviderMockRecorder) Connect() *gomock.Call {
+func (mr *MockSolrProviderMockRecorder) Connect(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Connect", reflect.TypeOf((*MockSolrProvider)(nil).Connect))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Connect", reflect.TypeOf((*MockSolrProvider)(nil).Connect), ctx)
 }
 
 // Create mocks base method.
@@ -10613,6 +10646,7 @@ func (mr *MockSolrProviderMockRecorder) UseTracer(tracer any) *gomock.Call {
 type MockDgraph struct {
 	ctrl     *gomock.Controller
 	recorder *MockDgraphMockRecorder
+	isgomock struct{}
 }
 
 // MockDgraphMockRecorder is the mock recorder for MockDgraph.
@@ -10738,6 +10772,7 @@ func (mr *MockDgraphMockRecorder) QueryWithVars(ctx, query, vars any) *gomock.Ca
 type MockDgraphProvider struct {
 	ctrl     *gomock.Controller
 	recorder *MockDgraphProviderMockRecorder
+	isgomock struct{}
 }
 
 // MockDgraphProviderMockRecorder is the mock recorder for MockDgraphProvider.
@@ -10772,15 +10807,17 @@ func (mr *MockDgraphProviderMockRecorder) Alter(ctx, op any) *gomock.Call {
 }
 
 // Connect mocks base method.
-func (m *MockDgraphProvider) Connect() {
+func (m *MockDgraphProvider) Connect(ctx context.Context) error {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "Connect")
+	ret := m.ctrl.Call(m, "Connect", ctx)
+	ret0, _ := ret[0].(error)
+	return ret0
 }
 
 // Connect indicates an expected call of Connect.
-func (mr *MockDgraphProviderMockRecorder) Connect() *gomock.Call {
+func (mr *MockDgraphProviderMockRecorder) Connect(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Connect", reflect.TypeOf((*MockDgraphProvider)(nil).Connect))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Connect", reflect.TypeOf((*MockDgraphProvider)(nil).Connect), ctx)
 }
 
 // HealthCheck mocks base method.
@@ -10911,6 +10948,7 @@ func (mr *MockDgraphProviderMockRecorder) UseTracer(tracer any) *gomock.Call {
 type MockOpenTSDBProvider struct {
 	ctrl     *gomock.Controller
 	recorder *MockOpenTSDBProviderMockRecorder
+	isgomock struct{}
 }
 
 // MockOpenTSDBProviderMockRecorder is the mock recorder for MockOpenTSDBProvider.
@@ -10931,15 +10969,17 @@ func (m *MockOpenTSDBProvider) EXPECT() *MockOpenTSDBProviderMockRecorder {
 }
 
 // Connect mocks base method.
-func (m *MockOpenTSDBProvider) Connect() {
+func (m *MockOpenTSDBProvider) Connect(ctx context.Context) error {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "Connect")
+	ret := m.ctrl.Call(m, "Connect", ctx)
+	ret0, _ := ret[0].(error)
+	return ret0
 }
 
 // Connect indicates an expected call of Connect.
-func (mr *MockOpenTSDBProviderMockRecorder) Connect() *gomock.Call {
+func (mr *MockOpenTSDBProviderMockRecorder) Connect(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Connect", reflect.TypeOf((*MockOpenTSDBProvider)(nil).Connect))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Connect", reflect.TypeOf((*MockOpenTSDBProvider)(nil).Connect), ctx)
 }
 
 // DeleteAnnotation mocks base method.
@@ -11109,6 +11149,7 @@ func (mr *MockOpenTSDBProviderMockRecorder) UseTracer(tracer any) *gomock.Call {
 type MockOpenTSDB struct {
 	ctrl     *gomock.Controller
 	recorder *MockOpenTSDBMockRecorder
+	isgomock struct{}
 }
 
 // MockOpenTSDBMockRecorder is the mock recorder for MockOpenTSDB.

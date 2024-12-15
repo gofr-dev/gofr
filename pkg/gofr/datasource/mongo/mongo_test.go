@@ -31,7 +31,9 @@ func Test_NewMongoClient(t *testing.T) {
 	client.Database = &mongo.Database{}
 	client.UseLogger(logger)
 	client.UseMetrics(metrics)
-	client.Connect()
+
+	ctx := context.Background()
+	require.NoError(t, client.Connect(ctx))
 
 	assert.NotNil(t, client)
 }
@@ -49,7 +51,9 @@ func Test_NewMongoClientError(t *testing.T) {
 	client := New(Config{URI: "mongo", Database: "test"})
 	client.UseLogger(logger)
 	client.UseMetrics(metrics)
-	client.Connect()
+
+	ctx := context.Background()
+	require.NoError(t, client.Connect(ctx))
 
 	assert.Nil(t, client.Database)
 }

@@ -19,48 +19,11 @@ import (
 	gomock "go.uber.org/mock/gomock"
 )
 
-// MockhttpClient is a mock of httpClient interface.
-type MockhttpClient struct {
-	ctrl     *gomock.Controller
-	recorder *MockhttpClientMockRecorder
-}
-
-// MockhttpClientMockRecorder is the mock recorder for MockhttpClient.
-type MockhttpClientMockRecorder struct {
-	mock *MockhttpClient
-}
-
-// NewMockhttpClient creates a new mock instance.
-func NewMockhttpClient(ctrl *gomock.Controller) *MockhttpClient {
-	mock := &MockhttpClient{ctrl: ctrl}
-	mock.recorder = &MockhttpClientMockRecorder{mock}
-	return mock
-}
-
-// EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockhttpClient) EXPECT() *MockhttpClientMockRecorder {
-	return m.recorder
-}
-
-// Do mocks base method.
-func (m *MockhttpClient) Do(req *http.Request) (*http.Response, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Do", req)
-	ret0, _ := ret[0].(*http.Response)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// Do indicates an expected call of Do.
-func (mr *MockhttpClientMockRecorder) Do(req any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Do", reflect.TypeOf((*MockhttpClient)(nil).Do), req)
-}
-
 // Mockconnection is a mock of connection interface.
 type Mockconnection struct {
 	ctrl     *gomock.Controller
 	recorder *MockconnectionMockRecorder
+	isgomock struct{}
 }
 
 // MockconnectionMockRecorder is the mock recorder for Mockconnection.
@@ -194,10 +157,50 @@ func (mr *MockconnectionMockRecorder) Write(b any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Write", reflect.TypeOf((*Mockconnection)(nil).Write), b)
 }
 
+// MockhttpClient is a mock of httpClient interface.
+type MockhttpClient struct {
+	ctrl     *gomock.Controller
+	recorder *MockhttpClientMockRecorder
+	isgomock struct{}
+}
+
+// MockhttpClientMockRecorder is the mock recorder for MockhttpClient.
+type MockhttpClientMockRecorder struct {
+	mock *MockhttpClient
+}
+
+// NewMockhttpClient creates a new mock instance.
+func NewMockhttpClient(ctrl *gomock.Controller) *MockhttpClient {
+	mock := &MockhttpClient{ctrl: ctrl}
+	mock.recorder = &MockhttpClientMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockhttpClient) EXPECT() *MockhttpClientMockRecorder {
+	return m.recorder
+}
+
+// Do mocks base method.
+func (m *MockhttpClient) Do(req *http.Request) (*http.Response, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Do", req)
+	ret0, _ := ret[0].(*http.Response)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Do indicates an expected call of Do.
+func (mr *MockhttpClientMockRecorder) Do(req any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Do", reflect.TypeOf((*MockhttpClient)(nil).Do), req)
+}
+
 // Mockresponse is a mock of response interface.
 type Mockresponse struct {
 	ctrl     *gomock.Controller
 	recorder *MockresponseMockRecorder
+	isgomock struct{}
 }
 
 // MockresponseMockRecorder is the mock recorder for Mockresponse.
@@ -235,6 +238,7 @@ func (mr *MockresponseMockRecorder) getCustomParser(arg0 any) *gomock.Call {
 type MockLogger struct {
 	ctrl     *gomock.Controller
 	recorder *MockLoggerMockRecorder
+	isgomock struct{}
 }
 
 // MockLoggerMockRecorder is the mock recorder for MockLogger.
@@ -357,6 +361,7 @@ func (mr *MockLoggerMockRecorder) Logf(pattern any, args ...any) *gomock.Call {
 type MockMetrics struct {
 	ctrl     *gomock.Controller
 	recorder *MockMetricsMockRecorder
+	isgomock struct{}
 }
 
 // MockMetricsMockRecorder is the mock recorder for MockMetrics.
