@@ -161,7 +161,7 @@ func (a *App) AddDgraph(ctx context.Context, db container.DgraphProvider) error 
 	return nil
 }
 
-// AddOpenTSDB AddOpentsdb sets the opentsdb datasource in the app's container.
+// AddOpenTSDB sets the opentsdb datasource in the app's container.
 func (a *App) AddOpenTSDB(ctx context.Context, db container.OpenTSDBProvider) error {
 	// Create the Opentsdb client with the provided configuration
 	db.UseLogger(a.Logger())
