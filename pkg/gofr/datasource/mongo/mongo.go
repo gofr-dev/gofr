@@ -112,7 +112,7 @@ func (c *Client) Connect(ctx context.Context) error {
 		return err
 	}
 
-	c.logger.Logf("connected to mongoDB successfully at %v to database %v", c.config.URI, c.config.Database)
+ 	c.logger.Logf("connected to MongoDB successfully at %v to database %v", c.config.URI, c.config.Database)
 
 	mongoBuckets := []float64{.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 4, 5, 7.5, 10}
 	c.metrics.NewHistogram("app_mongo_stats", "Response time of MONGO queries in milliseconds.", mongoBuckets...)
