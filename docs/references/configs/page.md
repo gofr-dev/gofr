@@ -205,6 +205,16 @@ This document lists all the configuration options supported by the GoFr framewor
 -  REDIS_PORT
 -  Port of the Redis server.
 
+---
+
+- REDIS_USER
+- Username for the Redis server.
+
+---
+
+- REDIS_PASSWORD
+- Password for the Redis server.
+
 {% /table %}
 
 ### Pub/Sub
@@ -250,6 +260,24 @@ This document lists all the configuration options supported by the GoFr framewor
 -  PUBSUB_OFFSET
 -  Offset to start consuming messages from. -1 for earliest, 0 for latest.
 -  -1
+
+---
+
+- KAFKA_BATCH_SIZE
+- Number of messages to batch before sending to Kafka
+- 1
+
+---
+
+- KAFKA_BATCH_BYTES
+- Number of bytes to batch before sending to Kafka
+- 1048576
+
+---
+
+- KAFKA_BATCH_TIMEOUT
+- Time to wait before sending a batch to Kafka
+- 100ms
 
 ---
 
