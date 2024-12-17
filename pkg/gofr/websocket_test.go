@@ -14,7 +14,10 @@ import (
 )
 
 func Test_WebSocket_Success(t *testing.T) {
-	t.Setenv("HTTP_PORT", "8002")
+	port, err := GetFreePort()
+	require.NoError(t, err, "Failed to get a free port.")
+
+	t.Setenv("HTTP_PORT", fmt.Sprintf("%d", port))
 
 	app := New()
 

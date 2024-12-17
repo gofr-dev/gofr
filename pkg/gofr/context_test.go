@@ -3,6 +3,7 @@ package gofr
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -75,7 +76,10 @@ func TestContext_AddTrace(t *testing.T) {
 }
 
 func TestContext_WriteMessageToSocket(t *testing.T) {
-	t.Setenv("HTTP_PORT", "8005")
+	port, err := GetFreePort()
+	require.NoError(t, err, "Failed to get a free port.")
+
+	t.Setenv("HTTP_PORT", fmt.Sprintf("%d", port))
 
 	app := New()
 
