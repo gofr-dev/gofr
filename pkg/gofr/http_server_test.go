@@ -15,10 +15,11 @@ import (
 	"gofr.dev/pkg/gofr/container"
 	gofrHTTP "gofr.dev/pkg/gofr/http"
 	"gofr.dev/pkg/gofr/logging"
+	"gofr.dev/pkg/gofr/testutil"
 )
 
 func TestRun_ServerStartsListening(t *testing.T) {
-	port := GetFreePort(t)
+	port := testutil.GetFreePort(t)
 
 	// Create a mock router and add a new route
 	router := &gofrHTTP.Router{}
@@ -60,7 +61,7 @@ func TestRun_ServerStartsListening(t *testing.T) {
 }
 
 func TestRegisterProfillingRoutes(t *testing.T) {
-	port := GetFreePort(t)
+	port := testutil.GetFreePort(t)
 
 	c := &container.Container{
 		Logger: logging.NewLogger(logging.INFO),
