@@ -30,9 +30,9 @@ require (
 	go.opentelemetry.io/otel v1.33.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.32.0
 	go.opentelemetry.io/otel/exporters/prometheus v0.52.0
-	go.opentelemetry.io/otel/exporters/zipkin v1.32.0
+	go.opentelemetry.io/otel/exporters/zipkin v1.33.0
 	go.opentelemetry.io/otel/metric v1.33.0
-	go.opentelemetry.io/otel/sdk v1.32.0
+	go.opentelemetry.io/otel/sdk v1.33.0
 	go.opentelemetry.io/otel/sdk/metric v1.30.0
 	go.opentelemetry.io/otel/trace v1.33.0
 	go.uber.org/mock v0.5.0
