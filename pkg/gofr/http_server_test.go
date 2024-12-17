@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strconv"
 	"testing"
 	"time"
 
@@ -83,7 +84,7 @@ func TestRegisterProfillingRoutes(t *testing.T) {
 		"/debug/pprof/symbol",
 	}
 
-	serverURL := fmt.Sprintf("http://localhost:%d", port)
+	serverURL := "http://localhost:" + strconv.Itoa(8000)
 
 	for _, route := range expectedRoutes {
 		r := httptest.NewRequest(http.MethodGet, serverURL+route, http.NoBody)
