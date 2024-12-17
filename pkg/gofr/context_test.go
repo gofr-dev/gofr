@@ -20,6 +20,7 @@ import (
 	gofrHTTP "gofr.dev/pkg/gofr/http"
 	"gofr.dev/pkg/gofr/http/middleware"
 	"gofr.dev/pkg/gofr/logging"
+	"gofr.dev/pkg/gofr/testutil"
 	"gofr.dev/pkg/gofr/version"
 )
 
@@ -76,7 +77,7 @@ func TestContext_AddTrace(t *testing.T) {
 }
 
 func TestContext_WriteMessageToSocket(t *testing.T) {
-	port := GetFreePort(t)
+	port := testutil.GetFreePort(t)
 
 	t.Setenv("HTTP_PORT", fmt.Sprintf("%d", port))
 
