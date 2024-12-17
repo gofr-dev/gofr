@@ -87,9 +87,9 @@ func TestContext_WriteMessageToSocket(t *testing.T) {
 	defer server.Close()
 
 	app.WebSocket("/ws", func(ctx *Context) (interface{}, error) {
-		err := ctx.WriteMessageToSocket("Hello! GoFr")
-		if err != nil {
-			return nil, err
+		socketErr := ctx.WriteMessageToSocket("Hello! GoFr")
+		if socketErr != nil {
+			return nil, socketErr
 		}
 
 		// TODO: returning error here to close the connection to the websocket

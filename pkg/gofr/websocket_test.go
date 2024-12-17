@@ -14,8 +14,8 @@ import (
 )
 
 func Test_WebSocket_Success(t *testing.T) {
-	port, err := GetFreePort()
-	require.NoError(t, err, "Failed to get a free port.")
+	port, portErr := GetFreePort()
+	require.NoError(t, portErr, "Failed to get a free port.")
 
 	t.Setenv("HTTP_PORT", fmt.Sprintf("%d", port))
 
@@ -43,27 +43,27 @@ func Test_WebSocket_Success(t *testing.T) {
 	// Create a WebSocket client
 	wsURL := "ws" + server.URL[len("http"):] + "/ws"
 
-	ws, resp, err := websocket.DefaultDialer.Dial(wsURL, nil)
-	require.NoError(t, err)
+	ws, resp, portErr := websocket.DefaultDialer.Dial(wsURL, nil)
+	require.NoError(t, portErr)
 
 	defer ws.Close()
 	defer resp.Body.Close()
 
 	// Send a test message
 	testMessage := "Hello, WebSocket!"
-	err = ws.WriteMessage(websocket.TextMessage, []byte(testMessage))
-	require.NoError(t, err)
+	portErr = ws.WriteMessage(websocket.TextMessage, []byte(testMessage))
+	require.NoError(t, portErr)
 
 	// Read the response
-	_, message, err := ws.ReadMessage()
-	require.NoError(t, err)
+	_, message, portErr := ws.ReadMessage()
+	require.NoError(t, portErr)
 
 	expectedResponse := fmt.Sprintf("Received: %s", testMessage)
 	assert.Equal(t, expectedResponse, string(message))
 
 	// Close the client connection
-	err = ws.Close()
-	require.NoError(t, err)
+	portErr = ws.Close()
+	require.NoError(t, portErr)
 }
 
 func TestSerializeMessage(t *testing.T) {

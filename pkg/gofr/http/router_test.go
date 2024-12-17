@@ -1,6 +1,8 @@
 package http
 
 import (
+	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -9,13 +11,29 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
 )
 
+// GetFreePort asks the kernel for a free open port that is ready to use.
+func getFreePort() (int, error) {
+	listener, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		return 0, err
+	}
+
+	defer listener.Close()
+
+	return listener.Addr().(*net.TCPAddr).Port, nil
+}
+
 func TestRouter(t *testing.T) {
-	cfg := map[string]string{"HTTP_PORT": "8000", "LOG_LEVEL": "INFO"}
+	port, err := getFreePort()
+	require.NoError(t, err, "Failed to get a free port.")
+
+	cfg := map[string]string{"HTTP_PORT": fmt.Sprintf("%d", port), "LOG_LEVEL": "INFO"}
 	c := container.NewContainer(config.NewMockConfig(cfg))
 
 	c.Metrics().NewCounter("test-counter", "test")
@@ -38,7 +56,10 @@ func TestRouter(t *testing.T) {
 }
 
 func TestRouterWithMiddleware(t *testing.T) {
-	cfg := map[string]string{"HTTP_PORT": "8000", "LOG_LEVEL": "INFO"}
+	port, err := getFreePort()
+	require.NoError(t, err, "Failed to get a free port.")
+
+	cfg := map[string]string{"HTTP_PORT": fmt.Sprintf("%d", port), "LOG_LEVEL": "INFO"}
 	c := container.NewContainer(config.NewMockConfig(cfg))
 
 	c.Metrics().NewCounter("test-counter", "test")
@@ -71,7 +92,10 @@ func TestRouterWithMiddleware(t *testing.T) {
 }
 
 func TestRouter_AddStaticFiles(t *testing.T) {
-	cfg := map[string]string{"HTTP_PORT": "8000", "LOG_LEVEL": "INFO"}
+	port, err := getFreePort()
+	require.NoError(t, err, "Failed to get a free port.")
+
+	cfg := map[string]string{"HTTP_PORT": fmt.Sprintf("%d", port), "LOG_LEVEL": "INFO"}
 	_ = container.NewContainer(config.NewMockConfig(cfg))
 
 	createTestFileAndDirectory(t, "testDir")

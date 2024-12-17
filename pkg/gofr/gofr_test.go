@@ -763,8 +763,8 @@ func Test_APIKeyAuthMiddleware(t *testing.T) {
 }
 
 func Test_SwaggerEndpoints(t *testing.T) {
-	port, err := GetFreePort()
-	require.NoError(t, err, "Failed to get a free port.")
+	port, portErr := GetFreePort()
+	require.NoError(t, portErr, "Failed to get a free port.")
 
 	// Create the openapi.json file within the static directory
 	openAPIFilePath := filepath.Join("static", OpenAPIJSON)
@@ -795,16 +795,16 @@ func Test_SwaggerEndpoints(t *testing.T) {
 
 	re, _ := http.NewRequestWithContext(context.Background(), http.MethodGet,
 		fmt.Sprintf("http://localhost:%d", port)+"/.well-known/swagger", http.NoBody)
-	resp, err := netClient.Do(re)
+	resp, portErr := netClient.Do(re)
 
 	defer func() {
-		err = resp.Body.Close()
-		if err != nil {
-			t.Errorf("error closing response body: %v", err)
+		portErr = resp.Body.Close()
+		if portErr != nil {
+			t.Errorf("error closing response body: %v", portErr)
 		}
 	}()
 
-	require.NoError(t, err, "Expected error to be nil, got : %v", err)
+	require.NoError(t, portErr, "Expected error to be nil, got : %v", portErr)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	assert.Equal(t, "text/html; charset=utf-8", resp.Header.Get("Content-Type"))
 }
