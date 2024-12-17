@@ -1,6 +1,7 @@
 module gofr.dev
 
 go 1.22
+toolchain go1.22.5
 
 require (
 	cloud.google.com/go/pubsub v1.45.3
@@ -26,14 +27,14 @@ require (
 	github.com/stretchr/testify v1.10.0
 	go.opentelemetry.io/contrib/instrumentation/net/http/httptrace/otelhttptrace v0.56.0
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.57.0
-	go.opentelemetry.io/otel v1.32.0
+	go.opentelemetry.io/otel v1.33.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.32.0
 	go.opentelemetry.io/otel/exporters/prometheus v0.52.0
 	go.opentelemetry.io/otel/exporters/zipkin v1.32.0
-	go.opentelemetry.io/otel/metric v1.32.0
+	go.opentelemetry.io/otel/metric v1.33.0
 	go.opentelemetry.io/otel/sdk v1.32.0
 	go.opentelemetry.io/otel/sdk/metric v1.30.0
-	go.opentelemetry.io/otel/trace v1.32.0
+	go.opentelemetry.io/otel/trace v1.33.0
 	go.uber.org/mock v0.5.0
 	golang.org/x/oauth2 v0.24.0
 	golang.org/x/sync v0.10.0
@@ -85,6 +86,7 @@ require (
 	github.com/yuin/gopher-lua v1.1.1 // indirect
 	go.einride.tech/aip v0.68.0 // indirect
 	go.opencensus.io v0.24.0 // indirect
+	go.opentelemetry.io/auto/sdk v1.1.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.54.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.32.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.3.1 // indirect
