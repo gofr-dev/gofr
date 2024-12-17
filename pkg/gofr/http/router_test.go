@@ -33,7 +33,7 @@ func TestRouter(t *testing.T) {
 	port, err := getFreePort()
 	require.NoError(t, err, "Failed to get a free port.")
 
-	cfg := map[string]string{"HTTP_PORT": fmt.Sprintf("%d", port), "LOG_LEVEL": "INFO"}
+	cfg := map[string]string{"HTTP_PORT": fmt.Sprint(port), "LOG_LEVEL": "INFO"}
 	c := container.NewContainer(config.NewMockConfig(cfg))
 
 	c.Metrics().NewCounter("test-counter", "test")
@@ -59,7 +59,7 @@ func TestRouterWithMiddleware(t *testing.T) {
 	port, err := getFreePort()
 	require.NoError(t, err, "Failed to get a free port.")
 
-	cfg := map[string]string{"HTTP_PORT": fmt.Sprintf("%d", port), "LOG_LEVEL": "INFO"}
+	cfg := map[string]string{"HTTP_PORT": fmt.Sprint(port), "LOG_LEVEL": "INFO"}
 	c := container.NewContainer(config.NewMockConfig(cfg))
 
 	c.Metrics().NewCounter("test-counter", "test")
@@ -95,7 +95,7 @@ func TestRouter_AddStaticFiles(t *testing.T) {
 	port, err := getFreePort()
 	require.NoError(t, err, "Failed to get a free port.")
 
-	cfg := map[string]string{"HTTP_PORT": fmt.Sprintf("%d", port), "LOG_LEVEL": "INFO"}
+	cfg := map[string]string{"HTTP_PORT": fmt.Sprint(port), "LOG_LEVEL": "INFO"}
 	_ = container.NewContainer(config.NewMockConfig(cfg))
 
 	createTestFileAndDirectory(t, "testDir")

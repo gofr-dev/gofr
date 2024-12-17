@@ -42,27 +42,27 @@ func Test_WebSocket_Success(t *testing.T) {
 	// Create a WebSocket client
 	wsURL := "ws" + server.URL[len("http"):] + "/ws"
 
-	ws, resp, portErr := websocket.DefaultDialer.Dial(wsURL, nil)
-	require.NoError(t, portErr)
+	ws, resp, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	require.NoError(t, err)
 
 	defer ws.Close()
 	defer resp.Body.Close()
 
 	// Send a test message
 	testMessage := "Hello, WebSocket!"
-	portErr = ws.WriteMessage(websocket.TextMessage, []byte(testMessage))
-	require.NoError(t, portErr)
+	err = ws.WriteMessage(websocket.TextMessage, []byte(testMessage))
+	require.NoError(t, err)
 
 	// Read the response
-	_, message, portErr := ws.ReadMessage()
-	require.NoError(t, portErr)
+	_, message, err := ws.ReadMessage()
+	require.NoError(t, err)
 
 	expectedResponse := fmt.Sprintf("Received: %s", testMessage)
 	assert.Equal(t, expectedResponse, string(message))
 
 	// Close the client connection
-	portErr = ws.Close()
-	require.NoError(t, portErr)
+	err = ws.Close()
+	require.NoError(t, err)
 }
 
 func TestSerializeMessage(t *testing.T) {

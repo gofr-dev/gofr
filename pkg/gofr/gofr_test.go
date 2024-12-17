@@ -787,16 +787,16 @@ func Test_SwaggerEndpoints(t *testing.T) {
 
 	re, _ := http.NewRequestWithContext(context.Background(), http.MethodGet,
 		fmt.Sprintf("http://localhost:%d", port)+"/.well-known/swagger", http.NoBody)
-	resp, portErr := netClient.Do(re)
+	resp, err := netClient.Do(re)
 
 	defer func() {
-		portErr = resp.Body.Close()
-		if portErr != nil {
-			t.Errorf("error closing response body: %v", portErr)
+		err = resp.Body.Close()
+		if err != nil {
+			t.Errorf("error closing response body: %v", err)
 		}
 	}()
 
-	require.NoError(t, portErr, "Expected error to be nil, got : %v", portErr)
+	require.NoError(t, err, "Expected error to be nil, got : %v", err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	assert.Equal(t, "text/html; charset=utf-8", resp.Header.Get("Content-Type"))
 }
