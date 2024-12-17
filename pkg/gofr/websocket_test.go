@@ -14,8 +14,7 @@ import (
 )
 
 func Test_WebSocket_Success(t *testing.T) {
-	port, portErr := GetFreePort()
-	require.NoError(t, portErr, "Failed to get a free port.")
+	port := GetFreePort(t)
 
 	t.Setenv("HTTP_PORT", fmt.Sprintf("%d", port))
 

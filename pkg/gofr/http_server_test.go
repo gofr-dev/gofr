@@ -18,8 +18,7 @@ import (
 )
 
 func TestRun_ServerStartsListening(t *testing.T) {
-	port, err := GetFreePort()
-	require.NoError(t, err, "Failed to get a free port.")
+	port := GetFreePort(t)
 
 	// Create a mock router and add a new route
 	router := &gofrHTTP.Router{}
@@ -61,8 +60,7 @@ func TestRun_ServerStartsListening(t *testing.T) {
 }
 
 func TestRegisterProfillingRoutes(t *testing.T) {
-	port, err := GetFreePort()
-	require.NoError(t, err, "Failed to get a free port.")
+	port := GetFreePort(t)
 
 	c := &container.Container{
 		Logger: logging.NewLogger(logging.INFO),

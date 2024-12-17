@@ -76,8 +76,7 @@ func TestContext_AddTrace(t *testing.T) {
 }
 
 func TestContext_WriteMessageToSocket(t *testing.T) {
-	port, err := GetFreePort()
-	require.NoError(t, err, "Failed to get a free port.")
+	port := GetFreePort(t)
 
 	t.Setenv("HTTP_PORT", fmt.Sprintf("%d", port))
 
