@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -27,6 +28,18 @@ import (
 
 const helloWorld = "Hello World!"
 
+// GetFreePort asks the kernel for a free open port that is ready to use.
+func GetFreePort() (int, error) {
+	listener, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		return 0, err
+	}
+
+	defer listener.Close()
+
+	return listener.Addr().(*net.TCPAddr).Port, nil
+}
+
 func TestNewCMD(t *testing.T) {
 	a := NewCMD()
 	// Without args we should get error on stderr.
@@ -46,6 +59,11 @@ func TestGofr_readConfig(t *testing.T) {
 }
 
 func TestGofr_ServerRoutes(t *testing.T) {
+	port, err := GetFreePort()
+	require.NoError(t, err, "Failed to get a free port.")
+
+	t.Setenv("HTTP_PORT", fmt.Sprintf("%d", port))
+
 	type response struct {
 		Data interface{} `json:"data"`
 	}
@@ -120,6 +138,11 @@ func TestGofr_ServerRoutes(t *testing.T) {
 }
 
 func TestGofr_ServerRun(t *testing.T) {
+	port, err := GetFreePort()
+	require.NoError(t, err, "Failed to get a free port.")
+
+	t.Setenv("HTTP_PORT", fmt.Sprintf("%d", port))
+
 	g := New()
 
 	g.GET("/hello", func(*Context) (interface{}, error) {
@@ -134,7 +157,7 @@ func TestGofr_ServerRun(t *testing.T) {
 	}
 
 	re, _ := http.NewRequestWithContext(context.Background(), http.MethodGet,
-		"http://localhost:"+strconv.Itoa(defaultHTTPPort)+"/hello", http.NoBody)
+		"http://localhost:"+strconv.Itoa(port)+"/hello", http.NoBody)
 	resp, err := netClient.Do(re)
 
 	require.NoError(t, err, "TEST Failed.\n")
@@ -252,6 +275,9 @@ func Test_addRoute(t *testing.T) {
 }
 
 func TestEnableBasicAuthWithFunc(t *testing.T) {
+	port, err := GetFreePort()
+	require.NoError(t, err, "Failed to get a free port.")
+
 	jwksServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -262,6 +288,7 @@ func TestEnableBasicAuthWithFunc(t *testing.T) {
 	a := &App{
 		httpServer: &httpServer{
 			router: gofrHTTP.NewRouter(),
+			port:   port,
 		},
 		container: c,
 	}
@@ -311,6 +338,9 @@ func encodeBasicAuthorization(t *testing.T, arg string) string {
 }
 
 func Test_EnableBasicAuth(t *testing.T) {
+	port, err := GetFreePort()
+	require.NoError(t, err, "Failed to get a free port.")
+
 	mockContainer, _ := container.NewMockContainer(t)
 
 	tests := []struct {
@@ -351,6 +381,7 @@ func Test_EnableBasicAuth(t *testing.T) {
 			a := &App{
 				httpServer: &httpServer{
 					router: gofrHTTP.NewRouter(),
+					port:   port,
 				},
 				container: mockContainer,
 			}
@@ -385,6 +416,9 @@ func Test_EnableBasicAuth(t *testing.T) {
 }
 
 func Test_EnableBasicAuthWithValidator(t *testing.T) {
+	port, err := GetFreePort()
+	require.NoError(t, err, "Failed to get a free port.")
+
 	mockContainer, _ := container.NewMockContainer(t)
 
 	tests := []struct {
@@ -415,7 +449,7 @@ func Test_EnableBasicAuthWithValidator(t *testing.T) {
 			a := &App{
 				httpServer: &httpServer{
 					router: gofrHTTP.NewRouter(),
-					port:   8001,
+					port:   port,
 				},
 				container: mockContainer,
 			}
@@ -571,6 +605,9 @@ func Test_initTracer_invalidConfig(t *testing.T) {
 }
 
 func Test_UseMiddleware(t *testing.T) {
+	port, err := GetFreePort()
+	require.NoError(t, err, "Failed to get a free port.")
+
 	testMiddleware := func(inner http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("X-Test-Middleware", "applied")
@@ -583,7 +620,7 @@ func Test_UseMiddleware(t *testing.T) {
 	app := &App{
 		httpServer: &httpServer{
 			router: gofrHTTP.NewRouter(),
-			port:   8001,
+			port:   port,
 		},
 		container: c,
 		Config:    config.NewMockConfig(map[string]string{"REQUEST_TIMEOUT": "5"}),
@@ -603,7 +640,7 @@ func Test_UseMiddleware(t *testing.T) {
 	}
 
 	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet,
-		"http://localhost:8001"+"/test", http.NoBody)
+		fmt.Sprintf("http://localhost:%d", port)+"/test", http.NoBody)
 
 	resp, err := netClient.Do(req)
 	if err != nil {
@@ -622,6 +659,9 @@ func Test_UseMiddleware(t *testing.T) {
 
 // Test the UseMiddlewareWithContainer function.
 func TestUseMiddlewareWithContainer(t *testing.T) {
+	port, err := GetFreePort()
+	require.NoError(t, err, "Failed to get a free port.")
+
 	// Initialize the mock container
 	mockContainer := container.NewContainer(config.NewMockConfig(nil))
 
@@ -646,7 +686,7 @@ func TestUseMiddlewareWithContainer(t *testing.T) {
 	app := &App{
 		httpServer: &httpServer{
 			router: gofrHTTP.NewRouter(),
-			port:   8001,
+			port:   port,
 		},
 		container: mockContainer,
 		Config:    config.NewMockConfig(map[string]string{"REQUEST_TIMEOUT": "5"}),
@@ -672,12 +712,15 @@ func TestUseMiddlewareWithContainer(t *testing.T) {
 }
 
 func Test_APIKeyAuthMiddleware(t *testing.T) {
+	port, err := GetFreePort()
+	require.NoError(t, err, "Failed to get a free port.")
+
 	c, _ := container.NewMockContainer(t)
 
 	app := &App{
 		httpServer: &httpServer{
 			router: gofrHTTP.NewRouter(),
-			port:   8001,
+			port:   port,
 		},
 		container: c,
 		Config:    config.NewMockConfig(map[string]string{"REQUEST_TIMEOUT": "5"}),
@@ -704,7 +747,7 @@ func Test_APIKeyAuthMiddleware(t *testing.T) {
 	}
 
 	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet,
-		"http://localhost:8001/test", http.NoBody)
+		fmt.Sprintf("http://localhost:%d", port)+"/test", http.NoBody)
 	req.Header.Set("X-API-Key", "test-key")
 
 	// Send the request and check for successful response
@@ -720,6 +763,9 @@ func Test_APIKeyAuthMiddleware(t *testing.T) {
 }
 
 func Test_SwaggerEndpoints(t *testing.T) {
+	port, err := GetFreePort()
+	require.NoError(t, err, "Failed to get a free port.")
+
 	// Create the openapi.json file within the static directory
 	openAPIFilePath := filepath.Join("static", OpenAPIJSON)
 
@@ -738,7 +784,7 @@ func Test_SwaggerEndpoints(t *testing.T) {
 
 	app := New()
 	app.httpRegistered = true
-	app.httpServer.port = 8002
+	app.httpServer.port = port
 
 	go app.Run()
 	time.Sleep(100 * time.Millisecond)
@@ -748,7 +794,7 @@ func Test_SwaggerEndpoints(t *testing.T) {
 	}
 
 	re, _ := http.NewRequestWithContext(context.Background(), http.MethodGet,
-		"http://localhost:8002"+"/.well-known/swagger", http.NoBody)
+		fmt.Sprintf("http://localhost:%d", port)+"/.well-known/swagger", http.NoBody)
 	resp, err := netClient.Do(re)
 
 	defer func() {
@@ -800,6 +846,9 @@ func Test_AddCronJob_Success(t *testing.T) {
 }
 
 func TestStaticHandler(t *testing.T) {
+	port, err := GetFreePort()
+	require.NoError(t, err, "Failed to get a free port.")
+
 	const indexHTML = "indexTest.html"
 
 	// Generating some files for testing
@@ -818,12 +867,12 @@ func TestStaticHandler(t *testing.T) {
 	app.AddStaticFiles("gofrTest", "testdir")
 
 	app.httpRegistered = true
-	app.httpServer.port = 8022
+	app.httpServer.port = port
 
 	go app.Run()
 	time.Sleep(100 * time.Millisecond)
 
-	host := "http://localhost:8022"
+	host := fmt.Sprintf("http://localhost:%d", port)
 
 	tests := []struct {
 		desc                       string
