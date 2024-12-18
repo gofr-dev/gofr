@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -77,12 +78,22 @@ func New() *App {
 		port = defaultMetricPort
 	}
 
+	if !app.isPortAvailable(port) {
+		app.container.Logger.Fatalf("metrics port %d is blocked or unreachable", port)
+		return app
+	}
+
 	app.metricServer = newMetricServer(port)
 
 	// HTTP Server
 	port, err = strconv.Atoi(app.Config.Get("HTTP_PORT"))
 	if err != nil || port <= 0 {
 		port = defaultHTTPPort
+	}
+
+	if !app.isPortAvailable(port) {
+		app.container.Logger.Fatalf("http port %d is blocked or unreachable", port)
+		return app
 	}
 
 	app.httpServer = newHTTPServer(app.container, port, middleware.GetConfigs(app.Config))
@@ -242,6 +253,16 @@ func (a *App) Shutdown(ctx context.Context) error {
 	a.container.Logger.Info("Application shutdown complete")
 
 	return err
+}
+
+func (a *App) isPortAvailable(port int) bool {
+	conn, err := net.DialTimeout("tcp", fmt.Sprintf(":%d", port), 2*time.Second)
+	if err != nil {
+		return true
+	}
+
+	conn.Close()
+	return false
 }
 
 func (a *App) httpServerSetup() {
