@@ -48,7 +48,7 @@ func TestGofr_readConfig(t *testing.T) {
 func TestGofr_ServerRoutes(t *testing.T) {
 	port := testutil.GetFreePort(t)
 
-	t.Setenv("HTTP_PORT", fmt.Sprintf("%d", port))
+	t.Setenv("HTTP_PORT", fmt.Sprint(port))
 
 	type response struct {
 		Data interface{} `json:"data"`
@@ -126,7 +126,7 @@ func TestGofr_ServerRoutes(t *testing.T) {
 func TestGofr_ServerRun(t *testing.T) {
 	port := testutil.GetFreePort(t)
 
-	t.Setenv("HTTP_PORT", fmt.Sprintf("%d", port))
+	t.Setenv("HTTP_PORT", fmt.Sprint(port))
 
 	g := New()
 

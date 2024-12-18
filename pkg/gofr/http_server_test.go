@@ -75,7 +75,7 @@ func TestRegisterProfillingRoutes(t *testing.T) {
 
 	server.RegisterProfilingRoutes()
 
-	server.Run(c)
+	go server.Run(c)
 
 	// Test if the expected handlers are registered for the pprof endpoints
 	expectedRoutes := []string{

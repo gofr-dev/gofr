@@ -18,7 +18,7 @@ import (
 func Test_WebSocket_Success(t *testing.T) {
 	port := testutil.GetFreePort(t)
 
-	t.Setenv("HTTP_PORT", fmt.Sprintf("%d", port))
+	t.Setenv("HTTP_PORT", fmt.Sprint(port))
 
 	app := New()
 
