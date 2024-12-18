@@ -23,6 +23,7 @@ type Config struct {
 	Username string
 	Password string
 	Port     int
+	DB       int
 	Options  *redis.Options
 }
 
@@ -42,7 +43,7 @@ func NewClient(c config.Config, logger datasource.Logger, metrics Metrics) *Redi
 		return nil
 	}
 
-	logger.Debugf("connecting to redis at '%s:%d'", redisConfig.HostName, redisConfig.Port)
+	logger.Debugf("connecting to redis at '%s:%d' on database %d", redisConfig.HostName, redisConfig.Port, redisConfig.DB)
 
 	rc := redis.NewClient(redisConfig.Options)
 	rc.AddHook(&redisHook{config: redisConfig, logger: logger, metrics: metrics})
@@ -55,9 +56,9 @@ func NewClient(c config.Config, logger datasource.Logger, metrics Metrics) *Redi
 			logger.Errorf("could not add tracing instrumentation, error: %s", err)
 		}
 
-		logger.Infof("connected to redis at %s:%d", redisConfig.HostName, redisConfig.Port)
+		logger.Infof("connected to redis at %s:%d on database %d", redisConfig.HostName, redisConfig.Port, redisConfig.DB)
 	} else {
-		logger.Errorf("could not connect to redis at '%s:%d', error: %s", redisConfig.HostName, redisConfig.Port, err)
+		logger.Errorf("could not connect to redis at '%s:%d' , error: %s", redisConfig.HostName, redisConfig.Port, err)
 	}
 
 	return &Redis{Client: rc, config: redisConfig, logger: logger}
@@ -88,6 +89,13 @@ func getRedisConfig(c config.Config) *Config {
 
 	redisConfig.Port = port
 
+	db, err := strconv.Atoi(c.Get("REDIS_DB"))
+	if err != nil {
+		db = 0 // default to DB 0 if not specified
+	}
+
+	redisConfig.DB = db
+
 	options := new(redis.Options)
 
 	if options.Addr == "" {
@@ -101,6 +109,8 @@ func getRedisConfig(c config.Config) *Config {
 	if options.Password == "" {
 		options.Password = redisConfig.Password
 	}
+
+	options.DB = redisConfig.DB
 
 	redisConfig.Options = options
 
