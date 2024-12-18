@@ -23,6 +23,7 @@ type Config struct {
 	Username string
 	Password string
 	Port     int
+	DB       int
 	Options  *redis.Options
 }
 
@@ -88,6 +89,13 @@ func getRedisConfig(c config.Config) *Config {
 
 	redisConfig.Port = port
 
+	db, err := strconv.Atoi(c.Get("REDIS_DB"))
+	if err != nil {
+		db = 0 // default to DB 0 if not specified
+	}
+
+	redisConfig.DB = db
+
 	options := new(redis.Options)
 
 	if options.Addr == "" {
@@ -101,6 +109,8 @@ func getRedisConfig(c config.Config) *Config {
 	if options.Password == "" {
 		options.Password = redisConfig.Password
 	}
+
+	options.DB = redisConfig.DB
 
 	redisConfig.Options = options
 
