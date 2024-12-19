@@ -3,6 +3,7 @@ package gofr
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -19,6 +20,7 @@ import (
 	gofrHTTP "gofr.dev/pkg/gofr/http"
 	"gofr.dev/pkg/gofr/http/middleware"
 	"gofr.dev/pkg/gofr/logging"
+	"gofr.dev/pkg/gofr/testutil"
 	"gofr.dev/pkg/gofr/version"
 )
 
@@ -75,7 +77,9 @@ func TestContext_AddTrace(t *testing.T) {
 }
 
 func TestContext_WriteMessageToSocket(t *testing.T) {
-	t.Setenv("HTTP_PORT", "8005")
+	port := testutil.GetFreePort(t)
+
+	t.Setenv("HTTP_PORT", fmt.Sprint(port))
 
 	app := New()
 
@@ -83,9 +87,9 @@ func TestContext_WriteMessageToSocket(t *testing.T) {
 	defer server.Close()
 
 	app.WebSocket("/ws", func(ctx *Context) (interface{}, error) {
-		err := ctx.WriteMessageToSocket("Hello! GoFr")
-		if err != nil {
-			return nil, err
+		socketErr := ctx.WriteMessageToSocket("Hello! GoFr")
+		if socketErr != nil {
+			return nil, socketErr
 		}
 
 		// TODO: returning error here to close the connection to the websocket
