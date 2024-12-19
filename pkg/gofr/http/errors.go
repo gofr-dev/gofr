@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+
+	"gofr.dev/pkg/gofr/logging"
 )
 
 const alreadyExistsMessage = "entity already exists"
@@ -24,9 +26,12 @@ func (ErrorEntityNotFound) StatusCode() int {
 	return http.StatusNotFound
 }
 
-// ErrorEntityAlreadyExist represents an error for when entity is already present in the storage and we are trying to make duplicate entry.
-type ErrorEntityAlreadyExist struct {
+func (ErrorEntityNotFound) LogLevel() logging.Level {
+	return logging.INFO
 }
+
+// ErrorEntityAlreadyExist represents an error for when entity is already present in the storage and we are trying to make duplicate entry.
+type ErrorEntityAlreadyExist struct{}
 
 func (ErrorEntityAlreadyExist) Error() string {
 	return alreadyExistsMessage
@@ -34,6 +39,10 @@ func (ErrorEntityAlreadyExist) Error() string {
 
 func (ErrorEntityAlreadyExist) StatusCode() int {
 	return http.StatusConflict
+}
+
+func (ErrorEntityAlreadyExist) LogLevel() logging.Level {
+	return logging.WARN
 }
 
 // ErrorInvalidParam represents an error for invalid parameter values.
@@ -49,6 +58,10 @@ func (ErrorInvalidParam) StatusCode() int {
 	return http.StatusBadRequest
 }
 
+func (ErrorInvalidParam) LogLevel() logging.Level {
+	return logging.INFO
+}
+
 // ErrorMissingParam represents an error for missing parameters in a request.
 type ErrorMissingParam struct {
 	Params []string `json:"param,omitempty"`
@@ -56,6 +69,10 @@ type ErrorMissingParam struct {
 
 func (e ErrorMissingParam) Error() string {
 	return fmt.Sprintf("'%d' missing parameter(s): %s", len(e.Params), strings.Join(e.Params, ", "))
+}
+
+func (ErrorMissingParam) LogLevel() logging.Level {
+	return logging.INFO
 }
 
 func (ErrorMissingParam) StatusCode() int {
@@ -67,6 +84,10 @@ type ErrorInvalidRoute struct{}
 
 func (ErrorInvalidRoute) Error() string {
 	return "route not registered"
+}
+
+func (ErrorInvalidRoute) LogLevel() logging.Level {
+	return logging.INFO
 }
 
 func (ErrorInvalidRoute) StatusCode() int {
@@ -84,6 +105,10 @@ func (ErrorRequestTimeout) StatusCode() int {
 	return http.StatusRequestTimeout
 }
 
+func (ErrorRequestTimeout) LogLevel() logging.Level {
+	return logging.INFO
+}
+
 // ErrorPanicRecovery represents an error for request which panicked.
 type ErrorPanicRecovery struct{}
 
@@ -94,3 +119,26 @@ func (ErrorPanicRecovery) Error() string {
 func (ErrorPanicRecovery) StatusCode() int {
 	return http.StatusInternalServerError
 }
+
+func (ErrorPanicRecovery) LogLevel() logging.Level {
+	return logging.ERROR
+}
+
+// validate the errors satisfy the underlying interfaces they depend on.
+var (
+	_ statusCodeResponder = ErrorEntityNotFound{}
+	_ statusCodeResponder = ErrorEntityAlreadyExist{}
+	_ statusCodeResponder = ErrorInvalidParam{}
+	_ statusCodeResponder = ErrorMissingParam{}
+	_ statusCodeResponder = ErrorInvalidRoute{}
+	_ statusCodeResponder = ErrorRequestTimeout{}
+	_ statusCodeResponder = ErrorPanicRecovery{}
+
+	_ logging.LogLevelResponder = ErrorEntityNotFound{}
+	_ logging.LogLevelResponder = ErrorEntityAlreadyExist{}
+	_ logging.LogLevelResponder = ErrorInvalidParam{}
+	_ logging.LogLevelResponder = ErrorMissingParam{}
+	_ logging.LogLevelResponder = ErrorInvalidRoute{}
+	_ logging.LogLevelResponder = ErrorRequestTimeout{}
+	_ logging.LogLevelResponder = ErrorPanicRecovery{}
+)
