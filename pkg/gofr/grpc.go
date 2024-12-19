@@ -61,13 +61,16 @@ func (g *grpcServer) Shutdown(ctx context.Context) error {
 }
 
 var (
-	errNonAddressable = errors.New("cannot inject container as it is not addressable or is fail")
+	errNonAddressable       = errors.New("cannot inject container as it is not addressable or is fail")
+	isFirstGrpcService bool = true // This check avoids extra unnecessary calls to check port if one grpc service has already been added.
 )
 
 // RegisterService adds a gRPC service to the GoFr application.
 func (a *App) RegisterService(desc *grpc.ServiceDesc, impl any) {
-	if !a.isPortAvailable(a.grpcServer.port) {
+	if isFirstGrpcService && !a.isPortAvailable(a.grpcServer.port) {
 		a.container.Logger.Fatalf("grpc port %d is blocked or unreachable", a.grpcServer.port)
+	} else {
+		isFirstGrpcService = false
 	}
 
 	a.container.Logger.Infof("registering gRPC Server: %s", desc.ServiceName)

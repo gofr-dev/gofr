@@ -363,9 +363,13 @@ func (a *App) PATCH(pattern string, handler Handler) {
 	a.add("PATCH", pattern, handler)
 }
 
+var isFirstHttpRoute bool = true // This check avoids extra unnecessary calls to check port if one http route has already been added.
+
 func (a *App) add(method, pattern string, h Handler) {
-	if !a.isPortAvailable(a.httpServer.port) {
+	if isFirstHttpRoute && !a.isPortAvailable(a.httpServer.port) {
 		a.container.Logger.Fatalf("http port %d is blocked or unreachable", a.httpServer.port)
+	} else {
+		isFirstHttpRoute = false
 	}
 
 	a.httpRegistered = true
@@ -713,8 +717,10 @@ func contains(elems []string, v string) bool {
 // If `filePath` starts with "./", it will be interpreted as a relative path
 // to the current working directory.
 func (a *App) AddStaticFiles(endpoint, filePath string) {
-	if !a.isPortAvailable(a.httpServer.port) {
+	if isFirstHttpRoute && !a.isPortAvailable(a.httpServer.port) {
 		a.container.Logger.Fatalf("http port %d is blocked or unreachable", a.httpServer.port)
+	} else {
+		isFirstHttpRoute = false
 	}
 
 	a.httpRegistered = true
