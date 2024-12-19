@@ -2,6 +2,7 @@ package ftp
 
 import (
 	"fmt"
+	"io/fs"
 	"os"
 	"path"
 	"slices"
@@ -154,7 +155,7 @@ func (f *FileSystem) RemoveAll(name string) error {
 }
 
 // Stat returns information of the files/directories in the specified directory.
-func (f *FileSystem) Stat(name string) (FileInfo, error) {
+func (f *FileSystem) Stat(name string) (fs.FileInfo, error) {
 	status := statusError
 
 	defer f.sendOperationStats(&FileLog{
@@ -246,7 +247,7 @@ func (f *FileSystem) ChDir(dir string) error {
 // ReadDir reads the named directory, returning all its directory entries sorted by filename.
 // If an error occurs reading the directory, ReadDir returns the entries it was able to read before the error, along with the error.
 // It returns the list of files/directories present in the current directory when "." is passed.
-func (f *FileSystem) ReadDir(dir string) ([]FileInfo, error) {
+func (f *FileSystem) ReadDir(dir string) ([]fs.FileInfo, error) {
 	var msg string
 
 	status := statusError
@@ -269,7 +270,7 @@ func (f *FileSystem) ReadDir(dir string) ([]FileInfo, error) {
 		return nil, err
 	}
 
-	fileInfo := make([]FileInfo, 0)
+	fileInfo := make([]fs.FileInfo, 0)
 
 	for _, entry := range entries {
 		entryPath := path.Join(filepath, entry.Name)
