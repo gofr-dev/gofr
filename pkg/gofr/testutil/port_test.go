@@ -17,5 +17,5 @@ func TestGetFreePort(t *testing.T) {
 	listener, err := net.Listen("tcp", fmt.Sprintf("localhost:%d", port))
 	require.NoError(t, err, "Expected to be able to listen on the free port")
 
-	listener.Close()
+	_ = listener.Close()
 }

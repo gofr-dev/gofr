@@ -142,7 +142,7 @@ func TestGofr_ServerRun(t *testing.T) {
 	}
 
 	re, _ := http.NewRequestWithContext(context.Background(), http.MethodGet,
-		"http://localhost:"+strconv.Itoa(port)+"/hello", http.NoBody)
+		"http://localhost:"+fmt.Sprint(port)+"/hello", http.NoBody)
 	resp, err := netClient.Do(re)
 
 	require.NoError(t, err, "TEST Failed.\n")
