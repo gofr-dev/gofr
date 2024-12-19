@@ -41,6 +41,7 @@ const (
 	shutDownTimeout        = 30 * time.Second
 	gofrTraceExporter      = "gofr"
 	gofrTracerURL          = "https://tracer.gofr.dev"
+	checkPortTimeout       = 2 * time.Second
 )
 
 // App is the main application in the GoFr framework.
@@ -99,16 +100,7 @@ func New() *App {
 	app.add(http.MethodGet, "/.well-known/alive", liveHandler)
 	app.add(http.MethodGet, "/favicon.ico", faviconHandler)
 
-	// If the openapi.json file exists in the static directory, set up routes for OpenAPI and Swagger documentation.
-	if _, err = os.Stat("./static/" + gofrHTTP.DefaultSwaggerFileName); err == nil {
-		// Route to serve the OpenAPI JSON specification file.
-		app.add(http.MethodGet, "/.well-known/"+gofrHTTP.DefaultSwaggerFileName, OpenAPIHandler)
-		// Route to serve the Swagger UI, providing a user interface for the API documentation.
-		app.add(http.MethodGet, "/.well-known/swagger", SwaggerUIHandler)
-		// Catchall route: any request to /.well-known/{name} (e.g., /.well-known/other)
-		// will be handled by the SwaggerUIHandler, serving the Swagger UI.
-		app.add(http.MethodGet, "/.well-known/{name}", SwaggerUIHandler)
-	}
+	app.addOpenAPIDocumentation()
 
 	if app.Config.Get("APP_ENV") == "DEBUG" {
 		app.httpServer.RegisterProfilingRoutes()
@@ -133,6 +125,19 @@ func New() *App {
 	}
 
 	return app
+}
+
+func (a *App) addOpenAPIDocumentation() {
+	// If the openapi.json file exists in the static directory, set up routes for OpenAPI and Swagger documentation.
+	if _, err := os.Stat("./static/" + gofrHTTP.DefaultSwaggerFileName); err == nil {
+		// Route to serve the OpenAPI JSON specification file.
+		a.add(http.MethodGet, "/.well-known/"+gofrHTTP.DefaultSwaggerFileName, OpenAPIHandler)
+		// Route to serve the Swagger UI, providing a user interface for the API documentation.
+		a.add(http.MethodGet, "/.well-known/swagger", SwaggerUIHandler)
+		// Catchall route: any request to /.well-known/{name} (e.g., /.well-known/other)
+		// will be handled by the SwaggerUIHandler, serving the Swagger UI.
+		a.add(http.MethodGet, "/.well-known/{name}", SwaggerUIHandler)
+	}
 }
 
 // NewCMD creates a command-line application.
@@ -249,13 +254,14 @@ func (a *App) Shutdown(ctx context.Context) error {
 	return err
 }
 
-func (a *App) isPortAvailable(port int) bool {
-	conn, err := net.DialTimeout("tcp", fmt.Sprintf(":%d", port), 2*time.Second)
+func (*App) isPortAvailable(port int) bool {
+	conn, err := net.DialTimeout("tcp", fmt.Sprintf(":%d", port), checkPortTimeout)
 	if err != nil {
 		return true
 	}
 
 	conn.Close()
+
 	return false
 }
 
@@ -363,13 +369,9 @@ func (a *App) PATCH(pattern string, handler Handler) {
 	a.add("PATCH", pattern, handler)
 }
 
-var isFirstHttpRoute bool = true // This check avoids extra unnecessary calls to check port if one http route has already been added.
-
 func (a *App) add(method, pattern string, h Handler) {
-	if isFirstHttpRoute && !a.isPortAvailable(a.httpServer.port) {
+	if a.httpRegistered && !a.isPortAvailable(a.httpServer.port) {
 		a.container.Logger.Fatalf("http port %d is blocked or unreachable", a.httpServer.port)
-	} else {
-		isFirstHttpRoute = false
 	}
 
 	a.httpRegistered = true
@@ -717,10 +719,8 @@ func contains(elems []string, v string) bool {
 // If `filePath` starts with "./", it will be interpreted as a relative path
 // to the current working directory.
 func (a *App) AddStaticFiles(endpoint, filePath string) {
-	if isFirstHttpRoute && !a.isPortAvailable(a.httpServer.port) {
+	if a.httpRegistered && !a.isPortAvailable(a.httpServer.port) {
 		a.container.Logger.Fatalf("http port %d is blocked or unreachable", a.httpServer.port)
-	} else {
-		isFirstHttpRoute = false
 	}
 
 	a.httpRegistered = true
