@@ -14,8 +14,6 @@ import (
 	"time"
 
 	"github.com/jlaffaye/ftp"
-
-	file_interface "gofr.dev/pkg/gofr/datasource/file"
 )
 
 var (
@@ -50,7 +48,7 @@ type jsonReader struct {
 }
 
 // ReadAll reads either JSON or text files based on file extension and returns a corresponding RowReader.
-func (f *File) ReadAll() (file_interface.RowReader, error) {
+func (f *File) ReadAll() (RowReader, error) {
 	defer f.sendOperationStats(&FileLog{Operation: "ReadAll", Location: f.path}, time.Now())
 
 	if strings.HasSuffix(f.Name(), ".json") {
@@ -61,7 +59,7 @@ func (f *File) ReadAll() (file_interface.RowReader, error) {
 }
 
 // createJSONReader creates a JSON reader for JSON files.
-func (f *File) createJSONReader() (file_interface.RowReader, error) {
+func (f *File) createJSONReader() (RowReader, error) {
 	status := statusError
 
 	defer f.sendOperationStats(&FileLog{Operation: "JSON Reader", Location: f.path, Status: &status}, time.Now())
@@ -106,7 +104,7 @@ func (f *File) createJSONReader() (file_interface.RowReader, error) {
 }
 
 // createTextCSVReader creates a text reader for reading text files.
-func (f *File) createTextCSVReader() (file_interface.RowReader, error) {
+func (f *File) createTextCSVReader() (RowReader, error) {
 	status := statusError
 
 	defer f.sendOperationStats(&FileLog{Operation: "Text/CSV Reader", Location: f.path, Status: &status}, time.Now())

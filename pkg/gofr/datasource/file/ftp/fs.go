@@ -10,8 +10,6 @@ import (
 	"time"
 
 	"github.com/jlaffaye/ftp"
-
-	file_interface "gofr.dev/pkg/gofr/datasource/file"
 )
 
 const (
@@ -60,7 +58,7 @@ type Config struct {
 }
 
 // New initializes a new instance of FTP fileSystem with provided configuration.
-func New(config *Config) file_interface.FileSystemProvider {
+func New(config *Config) FileSystemProvider {
 	return &FileSystem{config: config}
 }
 
@@ -125,7 +123,7 @@ func (f *FileSystem) Connect() {
 }
 
 // Create creates an empty file on the FTP server.
-func (f *FileSystem) Create(name string) (file_interface.File, error) {
+func (f *FileSystem) Create(name string) (FTPFile, error) {
 	filePath := path.Join(f.config.RemoteDir, name)
 
 	var msg string
@@ -188,7 +186,7 @@ func (f *FileSystem) Create(name string) (file_interface.File, error) {
 // Open retrieves a file from the FTP server and returns a file handle.
 // Note: Here Open and OpenFile both methods have been implemented so that the
 // FTP FileSystem comply with the gofr FileSystem interface.
-func (f *FileSystem) Open(name string) (file_interface.File, error) {
+func (f *FileSystem) Open(name string) (FTPFile, error) {
 	var msg string
 
 	status := statusError
@@ -242,7 +240,7 @@ func (f *FileSystem) Open(name string) (file_interface.File, error) {
 // Permissions are not clear for Ftp as file commands do not accept an argument and don't store their file permissions.
 // currently, this function just calls the Open function.
 // Here, os.FileMode is unused, but is added to comply with FileSystem interface.
-func (f *FileSystem) OpenFile(name string, _ int, _ os.FileMode) (file_interface.File, error) {
+func (f *FileSystem) OpenFile(name string, _ int, _ os.FileMode) (FTPFile, error) {
 	return f.Open(name)
 }
 
