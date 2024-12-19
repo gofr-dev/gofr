@@ -37,6 +37,7 @@ Following configuration keys are required for Redis connectivity:
 * `REDIS_PORT`: It specifies the port number on which your Redis server is listening. The default Redis port is 6379.
 * `REDIS_USER` : This is the user you'll use to connect to your Redis server. You can configure multiple users with different permissions in a single Redis container. For more details, refer to the [official docs](https://redis.io/docs/latest/operate/oss_and_stack/management/security/acl/)
 * `REDIS_PASSWORD`: The password is required only if your Redis server is configured for authentication; if authentication is not enabled, no password is necessary.
+* `REDIS_DB`: The database number to use for the Redis server. The default value is 0.
 ```dotenv
 APP_NAME=test-service
 HTTP_PORT=9000
@@ -44,6 +45,7 @@ HTTP_PORT=9000
 REDIS_HOST=localhost
 REDIS_PORT=6379
 REDIS_PASSWORD=password
+REDIS_DB=2
 ```
 
 The following code snippet demonstrates how to retrieve data from a Redis key named "greeting":
