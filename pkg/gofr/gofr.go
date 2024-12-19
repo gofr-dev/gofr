@@ -80,7 +80,6 @@ func New() *App {
 
 	if !app.isPortAvailable(port) {
 		app.container.Logger.Fatalf("metrics port %d is blocked or unreachable", port)
-		return app
 	}
 
 	app.metricServer = newMetricServer(port)
@@ -89,11 +88,6 @@ func New() *App {
 	port, err = strconv.Atoi(app.Config.Get("HTTP_PORT"))
 	if err != nil || port <= 0 {
 		port = defaultHTTPPort
-	}
-
-	if !app.isPortAvailable(port) {
-		app.container.Logger.Fatalf("http port %d is blocked or unreachable", port)
-		return app
 	}
 
 	app.httpServer = newHTTPServer(app.container, port, middleware.GetConfigs(app.Config))
@@ -370,6 +364,10 @@ func (a *App) PATCH(pattern string, handler Handler) {
 }
 
 func (a *App) add(method, pattern string, h Handler) {
+	if !a.isPortAvailable(a.httpServer.port) {
+		a.container.Logger.Fatalf("http port %d is blocked or unreachable", a.httpServer.port)
+	}
+
 	a.httpRegistered = true
 
 	reqTimeout, err := strconv.Atoi(a.Config.Get("REQUEST_TIMEOUT"))
@@ -715,6 +713,10 @@ func contains(elems []string, v string) bool {
 // If `filePath` starts with "./", it will be interpreted as a relative path
 // to the current working directory.
 func (a *App) AddStaticFiles(endpoint, filePath string) {
+	if !a.isPortAvailable(a.httpServer.port) {
+		a.container.Logger.Fatalf("http port %d is blocked or unreachable", a.httpServer.port)
+	}
+
 	a.httpRegistered = true
 
 	if !strings.HasPrefix(filePath, "./") && !filepath.IsAbs(filePath) {
