@@ -1,6 +1,8 @@
 package http
 
 import (
+	"fmt"
+
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -9,13 +11,15 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
+	"gofr.dev/pkg/gofr/testutil"
 )
 
 func TestRouter(t *testing.T) {
-	cfg := map[string]string{"HTTP_PORT": "8000", "LOG_LEVEL": "INFO"}
+	port := testutil.GetFreePort(t)
+
+	cfg := map[string]string{"HTTP_PORT": fmt.Sprint(port), "LOG_LEVEL": "INFO"}
 	c := container.NewContainer(config.NewMockConfig(cfg))
 
 	c.Metrics().NewCounter("test-counter", "test")
@@ -38,7 +42,9 @@ func TestRouter(t *testing.T) {
 }
 
 func TestRouterWithMiddleware(t *testing.T) {
-	cfg := map[string]string{"HTTP_PORT": "8000", "LOG_LEVEL": "INFO"}
+	port := testutil.GetFreePort(t)
+
+	cfg := map[string]string{"HTTP_PORT": fmt.Sprint(port), "LOG_LEVEL": "INFO"}
 	c := container.NewContainer(config.NewMockConfig(cfg))
 
 	c.Metrics().NewCounter("test-counter", "test")
@@ -71,7 +77,9 @@ func TestRouterWithMiddleware(t *testing.T) {
 }
 
 func TestRouter_AddStaticFiles(t *testing.T) {
-	cfg := map[string]string{"HTTP_PORT": "8000", "LOG_LEVEL": "INFO"}
+	port := testutil.GetFreePort(t)
+
+	cfg := map[string]string{"HTTP_PORT": fmt.Sprint(port), "LOG_LEVEL": "INFO"}
 	_ = container.NewContainer(config.NewMockConfig(cfg))
 
 	createTestFileAndDirectory(t, "testDir")
