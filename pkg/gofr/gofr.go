@@ -79,7 +79,7 @@ func New() *App {
 		port = defaultMetricPort
 	}
 
-	if !app.isPortAvailable(port) {
+	if !isPortAvailable(port) {
 		app.container.Logger.Fatalf("metrics port %d is blocked or unreachable", port)
 	}
 
@@ -100,7 +100,7 @@ func New() *App {
 	app.add(http.MethodGet, "/.well-known/alive", liveHandler)
 	app.add(http.MethodGet, "/favicon.ico", faviconHandler)
 
-	app.addOpenAPIDocumentation()
+	app.checkAndAddOpenAPIDocumentation()
 
 	if app.Config.Get("APP_ENV") == "DEBUG" {
 		app.httpServer.RegisterProfilingRoutes()
@@ -127,7 +127,7 @@ func New() *App {
 	return app
 }
 
-func (a *App) addOpenAPIDocumentation() {
+func (a *App) checkAndAddOpenAPIDocumentation() {
 	// If the openapi.json file exists in the static directory, set up routes for OpenAPI and Swagger documentation.
 	if _, err := os.Stat("./static/" + gofrHTTP.DefaultSwaggerFileName); err == nil {
 		// Route to serve the OpenAPI JSON specification file.
@@ -254,7 +254,7 @@ func (a *App) Shutdown(ctx context.Context) error {
 	return err
 }
 
-func (*App) isPortAvailable(port int) bool {
+func isPortAvailable(port int) bool {
 	conn, err := net.DialTimeout("tcp", fmt.Sprintf(":%d", port), checkPortTimeout)
 	if err != nil {
 		return true
@@ -370,7 +370,7 @@ func (a *App) PATCH(pattern string, handler Handler) {
 }
 
 func (a *App) add(method, pattern string, h Handler) {
-	if a.httpRegistered && !a.isPortAvailable(a.httpServer.port) {
+	if a.httpRegistered && !isPortAvailable(a.httpServer.port) {
 		a.container.Logger.Fatalf("http port %d is blocked or unreachable", a.httpServer.port)
 	}
 
@@ -719,7 +719,7 @@ func contains(elems []string, v string) bool {
 // If `filePath` starts with "./", it will be interpreted as a relative path
 // to the current working directory.
 func (a *App) AddStaticFiles(endpoint, filePath string) {
-	if a.httpRegistered && !a.isPortAvailable(a.httpServer.port) {
+	if a.httpRegistered && !isPortAvailable(a.httpServer.port) {
 		a.container.Logger.Fatalf("http port %d is blocked or unreachable", a.httpServer.port)
 	}
 
