@@ -1,10 +1,9 @@
 package file
 
 import (
-	"errors"
 	"io"
+	"io/fs"
 	"os"
-	"time"
 )
 
 // File represents a file in the filesystem.
@@ -19,14 +18,6 @@ type File interface {
 	ReadAll() (RowReader, error)
 }
 
-type FileInfo interface {
-	Name() string       // base name of the file
-	Size() int64        // length in bytes for regular files; system-dependent for others
-	ModTime() time.Time // modification time
-	Mode() os.FileMode  // file mode bits
-	IsDir() bool        // abbreviation for Mode().IsDir()
-}
-
 type RowReader interface {
 	Next() bool
 	Scan(interface{}) error
@@ -39,6 +30,7 @@ type FileSystem interface {
 	Create(name string) (File, error)
 
 	// TODO - Lets make bucket constant for MkdirAll as well, we might create buckets from migrations
+
 	// Mkdir creates a directory in the filesystem, return an error if any
 	// happens.
 	Mkdir(name string, perm os.FileMode) error
@@ -65,36 +57,14 @@ type FileSystem interface {
 	Rename(oldname, newname string) error
 
 	// ReadDir returns a list of files/directories present in the directory.
-	ReadDir(dir string) ([]FileInfo, error)
+	ReadDir(dir string) ([]fs.FileInfo, error)
 
 	// Stat returns the file/directory information in the directory.
-	Stat(name string) (FileInfo, error)
+	Stat(name string) (fs.FileInfo, error)
 
 	// ChDir changes the current directory.
 	ChDir(dirname string) error
 
 	// Getwd returns the path of the current directory.
 	Getwd() (string, error)
-}
-
-var (
-	ErrFileClosed        = errors.New("File is closed")
-	ErrOutOfRange        = errors.New("out of range")
-	ErrTooLarge          = errors.New("too large")
-	ErrFileNotFound      = os.ErrNotExist
-	ErrFileExists        = os.ErrExist
-	ErrDestinationExists = os.ErrExist
-)
-
-type FileSystemProvider interface {
-	FileSystem
-
-	// UseLogger sets the logger for the FileSystem client.
-	UseLogger(logger interface{})
-
-	// UseMetrics sets the metrics for the FileSystem client.
-	UseMetrics(metrics interface{})
-
-	// Connect establishes a connection to FileSystem and registers metrics using the provided configuration when the client was Created.
-	Connect()
 }

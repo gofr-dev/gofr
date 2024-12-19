@@ -62,11 +62,12 @@ func Test_CreateReadDeleteFile(t *testing.T) {
 
 	fileStore := New(logger)
 
-	newFile, err := fileStore.Create(fileName)
+	fi, err := fileStore.Create(fileName)
+	newFile := fi.(*file)
 
 	_, _ = newFile.Write([]byte("some content"))
 
-	defer func(fileStore FileSystem, name string) {
+	defer func(fileStore *FileSys, name string) {
 		_ = fileStore.Remove(name)
 	}(fileStore, fileName)
 
@@ -94,7 +95,7 @@ func Test_CreateMoveDeleteFile(t *testing.T) {
 	require.NoError(t, err)
 
 	err = fileStore.Rename("temp.txt", "temp.text")
-	defer func(fileStore FileSystem, name string) {
+	defer func(fileStore *FileSys, name string) {
 		_ = fileStore.Remove(name)
 	}(fileStore, "temp.text")
 
@@ -112,7 +113,7 @@ func Test_CreateUpdateReadFile(t *testing.T) {
 
 	_, _ = newFile.Write([]byte("some content"))
 
-	defer func(fileStore FileSystem, name string) {
+	defer func(fileStore *FileSys, name string) {
 		_ = fileStore.Remove(name)
 	}(fileStore, fileName)
 
@@ -178,7 +179,7 @@ Michael Brown,40,michaelb@example.com`
 	newCsvFile, _ = fileStore.Open("temp.csv")
 	reader, _ := newCsvFile.ReadAll()
 
-	defer func(fileStore FileSystem, name string) {
+	defer func(fileStore *FileSys, name string) {
 		_ = fileStore.RemoveAll(name)
 	}(fileStore, "temp.csv")
 
@@ -211,7 +212,7 @@ func Test_ReadFromCSVScanError(t *testing.T) {
 	newCsvFile, _ = fileStore.Open("temp.csv")
 	reader, _ := newCsvFile.ReadAll()
 
-	defer func(fileStore FileSystem, name string) {
+	defer func(fileStore *FileSys, name string) {
 		_ = fileStore.RemoveAll(name)
 	}(fileStore, "temp.csv")
 
@@ -246,7 +247,7 @@ func Test_ReadFromJSONArray(t *testing.T) {
 	newCsvFile, _ = fileStore.Open("temp.json")
 	reader, _ := newCsvFile.ReadAll()
 
-	defer func(fileStore FileSystem, name string) {
+	defer func(fileStore *FileSys, name string) {
 		_ = fileStore.RemoveAll(name)
 	}(fileStore, "temp.json")
 
@@ -285,7 +286,7 @@ func Test_ReadFromJSONObject(t *testing.T) {
 	newCsvFile, _ = fileStore.Open("temp.json")
 	reader, _ := newCsvFile.ReadAll()
 
-	defer func(fileStore FileSystem, name string) {
+	defer func(fileStore *FileSys, name string) {
 		_ = fileStore.RemoveAll(name)
 	}(fileStore, "temp.json")
 
@@ -316,7 +317,7 @@ func Test_ReadFromJSONArrayInvalidDelimiter(t *testing.T) {
 
 	_, err := newCsvFile.ReadAll()
 
-	defer func(fileStore FileSystem, name string) {
+	defer func(fileStore *FileSys, name string) {
 		_ = fileStore.RemoveAll(name)
 	}(fileStore, "temp.json")
 
