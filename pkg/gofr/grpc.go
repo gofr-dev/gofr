@@ -66,7 +66,7 @@ var (
 
 // RegisterService adds a gRPC service to the GoFr application.
 func (a *App) RegisterService(desc *grpc.ServiceDesc, impl any) {
-	if a.grpcRegistered && !isPortAvailable(a.grpcServer.port) {
+	if !a.grpcRegistered && !isPortAvailable(a.grpcServer.port) {
 		a.container.Logger.Fatalf("gRPC port %d is blocked or unreachable", a.grpcServer.port)
 	}
 

@@ -370,7 +370,7 @@ func (a *App) PATCH(pattern string, handler Handler) {
 }
 
 func (a *App) add(method, pattern string, h Handler) {
-	if a.httpRegistered && !isPortAvailable(a.httpServer.port) {
+	if !a.httpRegistered && !isPortAvailable(a.httpServer.port) {
 		a.container.Logger.Fatalf("http port %d is blocked or unreachable", a.httpServer.port)
 	}
 
@@ -719,7 +719,7 @@ func contains(elems []string, v string) bool {
 // If `filePath` starts with "./", it will be interpreted as a relative path
 // to the current working directory.
 func (a *App) AddStaticFiles(endpoint, filePath string) {
-	if a.httpRegistered && !isPortAvailable(a.httpServer.port) {
+	if !a.httpRegistered && !isPortAvailable(a.httpServer.port) {
 		a.container.Logger.Fatalf("http port %d is blocked or unreachable", a.httpServer.port)
 	}
 
