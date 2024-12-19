@@ -21,7 +21,7 @@ func getRestPath(object any, structName string) string {
 		return v.RestPath()
 	}
 
-	return structName
+	return strings.ToLower(structName)
 }
 
 func hasAutoIncrementID(constraints map[string]sql.FieldConstraints) bool {
