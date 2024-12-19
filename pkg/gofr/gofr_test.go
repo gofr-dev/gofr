@@ -52,15 +52,17 @@ func TestGoFr_isPortAvailable(t *testing.T) {
 		name        string
 		isAvailable bool
 	}{
-		{"Port is availible", true},
-		{"Port is not availible", false},
+		{"Port is available", true},
+		{"Port is not available", false},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if !tt.isAvailable {
 				t.Setenv("HTTP_PORT", fmt.Sprint(port))
+
 				g := New()
+
 				go g.Run()
 				time.Sleep(100 * time.Millisecond)
 			}
@@ -69,7 +71,6 @@ func TestGoFr_isPortAvailable(t *testing.T) {
 			require.Equal(t, tt.isAvailable, isAvailable)
 		})
 	}
-
 }
 
 func TestGofr_ServerRoutes(t *testing.T) {
