@@ -1,8 +1,8 @@
 package datasource
 
 import (
-	"errors"
 	"io"
+	"io/fs"
 	"os"
 )
 
@@ -15,7 +15,7 @@ type File interface {
 	io.Writer
 	io.WriterAt
 
-	ReadAll() (RowReader, error)
+	ReadAll() (any, error)
 }
 
 type RowReader interface {
@@ -27,7 +27,9 @@ type RowReader interface {
 type FileSystem interface {
 	// Create creates a file in the filesystem, returning the file and an
 	// error, if any happens.
-	Create(name string) (File, error)
+	Create(name string) (any, error)
+
+	//TODO - Lets make bucket constant for MkdirAll as well, we might create buckets from migrations
 
 	// Mkdir creates a directory in the filesystem, return an error if any
 	// happens.
@@ -38,10 +40,10 @@ type FileSystem interface {
 	MkdirAll(path string, perm os.FileMode) error
 
 	// Open opens a file, returning it or an error, if any happens.
-	Open(name string) (File, error)
+	Open(name string) (any, error)
 
 	// OpenFile opens a file using the given flags and the given mode.
-	OpenFile(name string, flag int, perm os.FileMode) (File, error)
+	OpenFile(name string, flag int, perm os.FileMode) (any, error)
 
 	// Remove removes a file identified by name, returning an error, if any
 	// happens.
@@ -53,16 +55,19 @@ type FileSystem interface {
 
 	// Rename renames a file.
 	Rename(oldname, newname string) error
-}
 
-var (
-	ErrFileClosed        = errors.New("File is closed")
-	ErrOutOfRange        = errors.New("out of range")
-	ErrTooLarge          = errors.New("too large")
-	ErrFileNotFound      = os.ErrNotExist
-	ErrFileExists        = os.ErrExist
-	ErrDestinationExists = os.ErrExist
-)
+	// ReadDir returns a list of files/directories present in the directory.
+	ReadDir(dir string) ([]fs.FileInfo, error)
+
+	// Stat returns the file/directory information in the directory.
+	Stat(name string) (fs.FileInfo, error)
+
+	// ChDir changes the current directory.
+	ChDir(dirname string) error
+
+	// Getwd returns the path of the current directory.
+	Getwd() (string, error)
+}
 
 type FileSystemProvider interface {
 	FileSystem
