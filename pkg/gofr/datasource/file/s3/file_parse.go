@@ -149,6 +149,7 @@ func (f *textReader) Scan(i interface{}) error {
 // For directories, it returns the name of the directory.
 func (f *S3File) Name() string {
 	bucketName := getBucketName(f.name)
+
 	f.sendOperationStats(&FileLog{
 		Operation: "GET NAME",
 		Location:  getLocation(bucketName),
@@ -182,6 +183,7 @@ func (f *S3File) Mode() os.FileMode {
 //   - This method should be called on a FileInfo instance obtained from a Stat or ReadDir operation.
 func (f *S3File) Size() int64 {
 	bucketName := getBucketName(f.name)
+
 	f.sendOperationStats(&FileLog{
 		Operation: "FILE/DIR SIZE",
 		Location:  getLocation(bucketName),
@@ -197,6 +199,7 @@ func (f *S3File) Size() int64 {
 // to files within the directory.
 func (f *S3File) ModTime() time.Time {
 	bucketName := getBucketName(f.name)
+
 	f.sendOperationStats(&FileLog{
 		Operation: "LAST MODIFIED",
 		Location:  getLocation(bucketName),
@@ -216,6 +219,7 @@ func (f *S3File) ModTime() time.Time {
 //     to query whether the object is a directory.
 func (f *S3File) IsDir() bool {
 	bucketName := getBucketName(f.name)
+
 	f.sendOperationStats(&FileLog{
 		Operation: "IS DIR",
 		Location:  getLocation(bucketName),

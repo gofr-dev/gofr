@@ -361,6 +361,7 @@ func (f *FileSystem) Stat(name string) (fs.FileInfo, error) {
 				lastModified = *res.Contents[i].LastModified
 			}
 		}
+
 		// directory exist and first value gives information about the directory
 		st = statusSuccess
 		msg = fmt.Sprintf("Directory with path %q info retrieved successfully", name)
