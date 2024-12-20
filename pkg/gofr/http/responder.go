@@ -28,6 +28,10 @@ func (r Responder) Respond(data interface{}, err error) {
 	switch v := data.(type) {
 	case resTypes.Raw:
 		resp = v.Data
+	case resTypes.Response:
+		res := data.(resTypes.Response)
+
+		resp = response{Data: res.Data, Metadata: res.Metadata, Error: errorObj}
 	case resTypes.File:
 		r.w.Header().Set("Content-Type", v.ContentType)
 		r.w.WriteHeader(statusCode)
@@ -41,12 +45,7 @@ func (r Responder) Respond(data interface{}, err error) {
 			data = nil
 		}
 
-		res, ok := data.(resTypes.Response)
-		if !ok {
-			resp = response{Data: data, Error: errorObj}
-		} else {
-			resp = res
-		}
+		resp = response{Data: data, Error: errorObj}
 	}
 
 	r.w.Header().Set("Content-Type", "application/json")
