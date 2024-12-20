@@ -311,23 +311,30 @@ func (f *FileSystem) renameDirectory(st, msg *string, oldPath, newPath string) e
 // time among them. For files, it returns the file's size and last modified time.
 func (f *FileSystem) Stat(name string) (fs.FileInfo, error) {
 	var msg string
+
 	st := statusErr
+
 	defer f.sendOperationStats(&FileLog{
 		Operation: "STAT",
 		Location:  getLocation(f.config.BucketName),
 		Status:    &st,
 		Message:   &msg,
 	}, time.Now())
+
 	filetype := typeFile
 	// Here we assume the user passes "0filePath" in case it wants to get fileinfo about a binary file instead of a directory
 	if path.Ext(name) == "" {
 		filetype = typeDirectory
+
 		var isBinary bool
+
 		name, isBinary = strings.CutPrefix(name, "0")
+
 		if isBinary {
 			filetype = typeFile
 		}
 	}
+
 	res, err := f.conn.ListObjectsV2(context.TODO(), &s3.ListObjectsV2Input{
 		Bucket: aws.String(f.config.BucketName),
 		Prefix: aws.String(name),
@@ -336,14 +343,20 @@ func (f *FileSystem) Stat(name string) (fs.FileInfo, error) {
 		f.logger.Errorf("Error returning file info: %v", err)
 		return nil, err
 	}
+
 	if len(res.Contents) == 0 {
 		return nil, nil
 	}
+
 	if filetype == typeDirectory {
-		var size int64
-		var lastModified time.Time
+		var (
+			size         int64
+			lastModified time.Time
+		)
+
 		for i := range res.Contents {
 			size += *res.Contents[i].Size
+
 			if res.Contents[i].LastModified.After(lastModified) {
 				lastModified = *res.Contents[i].LastModified
 			}
@@ -351,6 +364,7 @@ func (f *FileSystem) Stat(name string) (fs.FileInfo, error) {
 		// directory exist and first value gives information about the directory
 		st = statusSuccess
 		msg = fmt.Sprintf("Directory with path %q info retrieved successfully", name)
+
 		return &S3File{
 			conn:         f.conn,
 			logger:       f.logger,
@@ -361,6 +375,7 @@ func (f *FileSystem) Stat(name string) (fs.FileInfo, error) {
 			lastModified: lastModified,
 		}, nil
 	}
+
 	return &S3File{
 		conn:         f.conn,
 		logger:       f.logger,

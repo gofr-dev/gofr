@@ -34,7 +34,7 @@ type S3File struct {
 }
 
 // Sys returns the underlying data source (in this case, S3) for the file.
-func (f *S3File) Sys() any {
+func (*S3File) Sys() any {
 	return "S3"
 }
 

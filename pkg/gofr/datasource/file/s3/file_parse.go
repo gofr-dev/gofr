@@ -153,6 +153,7 @@ func (f *S3File) Name() string {
 		Operation: "GET NAME",
 		Location:  getLocation(bucketName),
 	}, time.Now())
+
 	return path.Base(f.name)
 }
 
@@ -168,6 +169,7 @@ func (f *S3File) Mode() os.FileMode {
 		Location:  getLocation(bucketName),
 		Message:   aws.String("Not supported for S3"),
 	}, time.Now())
+
 	return 0
 }
 
@@ -184,6 +186,7 @@ func (f *S3File) Size() int64 {
 		Operation: "FILE/DIR SIZE",
 		Location:  getLocation(bucketName),
 	}, time.Now())
+
 	return f.size
 }
 
@@ -198,6 +201,7 @@ func (f *S3File) ModTime() time.Time {
 		Operation: "LAST MODIFIED",
 		Location:  getLocation(bucketName),
 	}, time.Now())
+
 	return f.lastModified
 }
 
@@ -216,5 +220,6 @@ func (f *S3File) IsDir() bool {
 		Operation: "IS DIR",
 		Location:  getLocation(bucketName),
 	}, time.Now())
+
 	return strings.HasSuffix(f.name, "/")
 }
