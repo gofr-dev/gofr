@@ -60,6 +60,7 @@ func TestRedis_QueryLogging(t *testing.T) {
 		client := NewClient(config.NewMockConfig(map[string]string{
 			"REDIS_HOST": s.Host(),
 			"REDIS_PORT": s.Port(),
+			"REDIS_DB":   "1",
 		}), mockLogger, mockMetric)
 
 		require.NoError(t, err)

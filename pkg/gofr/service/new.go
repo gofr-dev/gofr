@@ -137,39 +137,41 @@ func (h *httpService) createAndSendRequest(ctx context.Context, method string, p
 	uri := h.url + "/" + path
 	uri = strings.TrimRight(uri, "/")
 
-	spanContext, span := h.Tracer.Start(ctx, uri)
+	ctx, span := h.Tracer.Start(ctx, uri)
 	defer span.End()
 
-	spanContext = httptrace.WithClientTrace(spanContext, otelhttptrace.NewClientTrace(ctx))
+	// Attach client-side trace handling for HTTP request.
+	clientTraceCtx := httptrace.WithClientTrace(ctx, otelhttptrace.NewClientTrace(ctx))
 
-	req, err := http.NewRequestWithContext(spanContext, method, uri, bytes.NewBuffer(body))
+	// Create the HTTP request with the tracing context.
+	req, err := http.NewRequestWithContext(clientTraceCtx, method, uri, bytes.NewBuffer(body))
 	if err != nil {
 		return nil, err
 	}
 
+	var isContentTypeSet bool
+
 	for k, v := range headers {
+		if strings.EqualFold(k, "content-type") {
+			isContentTypeSet = true
+		}
+
 		req.Header.Set(k, v)
 	}
 
-	// encode the query parameters on the request
-	encodeQueryParameters(req, queryParams)
-
-	if !trace.SpanFromContext(ctx).SpanContext().HasTraceID() {
-		// Start context and Tracing
-		ctx = req.Context()
-
-		// extract the traceID and spanID from the headers and create a new context for the same
-		// this context will make a new span using the traceID and link the incoming SpanID as
-		// its parentID, thus connecting two spans
-		ctx = otel.GetTextMapPropagator().Extract(ctx, propagation.HeaderCarrier(req.Header))
+	if !isContentTypeSet {
+		req.Header.Set("Content-Type", "application/json")
 	}
 
-	// inject the TraceParent header manually in the request headers
-	otel.GetTextMapPropagator().Inject(spanContext, propagation.HeaderCarrier(req.Header))
+	// Inject tracing information into the request headers.
+	otel.GetTextMapPropagator().Inject(clientTraceCtx, propagation.HeaderCarrier(req.Header))
+
+	// encode the query parameters on the request.
+	encodeQueryParameters(req, queryParams)
 
 	log := &Log{
 		Timestamp:     time.Now(),
-		CorrelationID: trace.SpanFromContext(ctx).SpanContext().TraceID().String(),
+		CorrelationID: trace.SpanFromContext(clientTraceCtx).SpanContext().TraceID().String(),
 		HTTPMethod:    method,
 		URI:           uri,
 	}
@@ -186,12 +188,12 @@ func (h *httpService) createAndSendRequest(ctx context.Context, method string, p
 		log.ResponseCode = http.StatusInternalServerError
 		h.Log(&ErrorLog{Log: log, ErrorMessage: err.Error()})
 
-		h.updateMetrics(ctx, method, respTime.Seconds(), http.StatusInternalServerError)
+		h.updateMetrics(clientTraceCtx, method, respTime.Seconds(), http.StatusInternalServerError)
 
 		return resp, err
 	}
 
-	h.updateMetrics(ctx, method, respTime.Seconds(), resp.StatusCode)
+	h.updateMetrics(clientTraceCtx, method, respTime.Seconds(), resp.StatusCode)
 	log.ResponseCode = resp.StatusCode
 
 	h.Log(log)

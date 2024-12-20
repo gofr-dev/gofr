@@ -11,10 +11,14 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"gofr.dev/pkg/gofr/testutil"
 )
 
 func Test_WebSocket_Success(t *testing.T) {
-	t.Setenv("HTTP_PORT", "8002")
+	port := testutil.GetFreePort(t)
+
+	t.Setenv("HTTP_PORT", fmt.Sprint(port))
 
 	app := New()
 
