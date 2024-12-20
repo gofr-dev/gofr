@@ -40,6 +40,9 @@ func initializeTest(t *testing.T) {
 
 func TestExampleSubscriber(t *testing.T) {
 	log := testutil.StdoutOutputForFunc(func() {
+		t.Setenv("HTTP_PORT", "8080")
+		t.Setenv("METRICS_PORT", "2031")
+
 		go main()
 		time.Sleep(time.Second * 1) // Giving some time to start the server
 

@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"net/http"
 	"testing"
 	"time"
@@ -12,6 +13,8 @@ import (
 
 func TestExamplePublisher(t *testing.T) {
 	const host = "http://localhost:8100"
+	t.Setenv("METRICS_PORT", fmt.Sprint(2032))
+
 	go main()
 	time.Sleep(200 * time.Millisecond)
 

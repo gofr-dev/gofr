@@ -11,6 +11,9 @@ import (
 
 func TestIntegration(t *testing.T) {
 	const host = "http://localhost:9011"
+	t.Setenv("HTTP_PORT", "9011")
+	t.Setenv("METRICS_PORT", "2120")
+
 	go main()
 	time.Sleep(100 * time.Millisecond) // Giving some time to start the server
 

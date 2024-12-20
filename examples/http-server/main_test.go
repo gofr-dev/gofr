@@ -143,6 +143,9 @@ func TestIntegration_SimpleAPIServer_Health(t *testing.T) {
 }
 
 func TestRedisHandler(t *testing.T) {
+	t.Setenv("METRICS_PORT", "2036")
+	t.Setenv("HTTP_PORT", "8082")
+
 	a := gofr.New()
 	logger := logging.NewLogger(logging.DEBUG)
 	redisClient, mock := redismock.NewClientMock()
