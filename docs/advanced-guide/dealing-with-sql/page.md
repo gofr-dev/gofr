@@ -29,11 +29,11 @@ DB_DIALECT=sqlite
 
 ## Setting Max open and Idle Connections
 
-To set max open and idle connection for any MYSQL, PostgreSQL, sqlite. 
+To set max open and idle connection for any MySQL, PostgreSQL, SQLite.
 Add the following configs in `.env` file.
 
 ```dotenv
 DB_MAX_IDLE_CONNECTION=5 // Default 2
 DB_MAX_OPEN_CONNECTION=5 // Default unlimited
 ```
-> ##### Check out the example on how to add configuration for SQL in GoFr: [Visit Github](https://github.com/gofr-dev/gofr/blob/main/examples/http-server/configs/.env)
+> ##### Check out the example on how to add configuration for SQL in GoFr: [Visit GitHub](https://github.com/gofr-dev/gofr/blob/main/examples/http-server/configs/.env)

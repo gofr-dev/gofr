@@ -75,6 +75,7 @@ func LoggingInterceptor(logger Logger) grpc.UnaryServerInterceptor {
 				// Check if the error is a gRPC status error
 				if statusErr, ok := status.FromError(err); ok {
 					// You can access the gRPC status code here
+					//nolint:gosec // Conversion from uint32 to int32 is safe in this context because gRPC status codes are within the int32 range
 					l.StatusCode = int32(statusErr.Code())
 				}
 			} else {
