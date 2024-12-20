@@ -13,8 +13,6 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
-
-	file "gofr.dev/pkg/gofr/datasource/file"
 )
 
 var (
@@ -41,7 +39,7 @@ type jsonReader struct {
 }
 
 // ReadAll reads either JSON or text files based on file extension and returns a corresponding RowReader.
-func (f *S3File) ReadAll() (file.RowReader, error) {
+func (f *S3File) ReadAll() (any, error) {
 	bucketName := strings.Split(f.name, string(filepath.Separator))[0]
 
 	var fileName string
@@ -63,7 +61,7 @@ func (f *S3File) ReadAll() (file.RowReader, error) {
 }
 
 // createJSONReader creates a JSON reader for JSON files.
-func (f *S3File) createJSONReader(location string) (file.RowReader, error) {
+func (f *S3File) createJSONReader(location string) (any, error) {
 	status := statusErr
 
 	defer f.sendOperationStats(&FileLog{Operation: "JSON READER", Location: location, Status: &status}, time.Now())
@@ -100,7 +98,7 @@ func (f *S3File) createJSONReader(location string) (file.RowReader, error) {
 }
 
 // createTextCSVReader creates a text reader for reading text files.
-func (f *S3File) createTextCSVReader(location string) (file.RowReader, error) {
+func (f *S3File) createTextCSVReader(location string) (any, error) {
 	status := statusErr
 
 	defer f.sendOperationStats(&FileLog{Operation: "TEXT/CSV READER", Location: location, Status: &status}, time.Now())
@@ -151,12 +149,10 @@ func (f *textReader) Scan(i interface{}) error {
 // For directories, it returns the name of the directory.
 func (f *S3File) Name() string {
 	bucketName := getBucketName(f.name)
-
 	f.sendOperationStats(&FileLog{
 		Operation: "GET NAME",
 		Location:  getLocation(bucketName),
 	}, time.Now())
-
 	return path.Base(f.name)
 }
 
@@ -167,13 +163,11 @@ func (f *S3File) Name() string {
 // and should be considered a placeholder in this context.
 func (f *S3File) Mode() os.FileMode {
 	bucketName := getBucketName(f.name)
-
 	f.sendOperationStats(&FileLog{
 		Operation: "FILE MODE",
 		Location:  getLocation(bucketName),
 		Message:   aws.String("Not supported for S3"),
 	}, time.Now())
-
 	return 0
 }
 
@@ -186,12 +180,10 @@ func (f *S3File) Mode() os.FileMode {
 //   - This method should be called on a FileInfo instance obtained from a Stat or ReadDir operation.
 func (f *S3File) Size() int64 {
 	bucketName := getBucketName(f.name)
-
 	f.sendOperationStats(&FileLog{
 		Operation: "FILE/DIR SIZE",
 		Location:  getLocation(bucketName),
 	}, time.Now())
-
 	return f.size
 }
 
@@ -202,12 +194,10 @@ func (f *S3File) Size() int64 {
 // to files within the directory.
 func (f *S3File) ModTime() time.Time {
 	bucketName := getBucketName(f.name)
-
 	f.sendOperationStats(&FileLog{
 		Operation: "LAST MODIFIED",
 		Location:  getLocation(bucketName),
 	}, time.Now())
-
 	return f.lastModified
 }
 
@@ -222,11 +212,9 @@ func (f *S3File) ModTime() time.Time {
 //     to query whether the object is a directory.
 func (f *S3File) IsDir() bool {
 	bucketName := getBucketName(f.name)
-
 	f.sendOperationStats(&FileLog{
 		Operation: "IS DIR",
 		Location:  getLocation(bucketName),
 	}, time.Now())
-
 	return strings.HasSuffix(f.name, "/")
 }

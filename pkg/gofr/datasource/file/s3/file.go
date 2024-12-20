@@ -17,6 +17,10 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
+var (
+	ErrNilResponse = errors.New("response retrieved is nil ")
+)
+
 type S3File struct {
 	conn         s3Client
 	name         string
@@ -29,9 +33,10 @@ type S3File struct {
 	lastModified time.Time
 }
 
-var (
-	ErrNilResponse = errors.New("response retrieved is nil ")
-)
+// Sys returns the underlying data source (in this case, S3) for the file.
+func (f *S3File) Sys() any {
+	return "S3"
+}
 
 // Close closes the response body returned in Open/Create methods if the response body is not nil.
 func (f *S3File) Close() error {

@@ -14,8 +14,6 @@ import (
 	awsConfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-
-	file "gofr.dev/pkg/gofr/datasource/file"
 )
 
 const (
@@ -50,7 +48,7 @@ type Config struct {
 }
 
 // New initializes a new instance of FTP fileSystem with provided configuration.
-func New(config *Config) file.FileSystemProvider {
+func New(config *Config) *FileSystem {
 	return &FileSystem{config: config}
 }
 
@@ -71,7 +69,7 @@ func (f *FileSystem) UseMetrics(metrics interface{}) {
 // Connect initializes and validates the connection to the S3 service.
 //
 // This method sets up the S3 client using the provided configuration, including access key, secret key, region, and base endpoint.
-// It loads the AWS configuration and creates an S3 client, which is then assigns it to the `fileSystem` struct.
+// It loads the AWS configuration and creates an S3 client, which is then assigns it to the `FileSystem` struct.
 // This method also logs the outcome of the connection attempt.
 func (f *FileSystem) Connect() {
 	var msg string
@@ -122,7 +120,7 @@ func (f *FileSystem) Connect() {
 // This method creates an empty file at the specified path in the S3 bucket. It first checks if the parent directory exists;
 // if the parent directory does not exist, it returns an error. After creating the file, it retrieves the file metadata
 // and returns a `file` object representing the newly created file.
-func (f *FileSystem) Create(name string) (file.File, error) {
+func (f *FileSystem) Create(name string) (any, error) {
 	var msg string
 
 	st := statusErr
@@ -232,7 +230,7 @@ func (f *FileSystem) Remove(name string) error {
 //
 // This method fetches the specified file from the S3 bucket and returns a `file` object with its content and metadata.
 // If the file cannot be retrieved, it returns an error.
-func (f *FileSystem) Open(name string) (file.File, error) {
+func (f *FileSystem) Open(name string) (any, error) {
 	var msg string
 
 	st := statusErr
@@ -271,9 +269,9 @@ func (f *FileSystem) Open(name string) (file.File, error) {
 
 // OpenFile is a wrapper for the Open method to comply with the generic FileSystem interface.
 //
-// This method calls the `Open` method of the `fileSystem` struct to retrieve a file. It is provided to align with the
+// This method calls the `Open` method of the `FileSystem` struct to retrieve a file. It is provided to align with the
 // FileSystem interface requirements in the GoFr framework.
-func (f *FileSystem) OpenFile(name string, _ int, _ os.FileMode) (file.File, error) {
+func (f *FileSystem) OpenFile(name string, _ int, _ os.FileMode) (any, error) {
 	return f.Open(name)
 }
 
