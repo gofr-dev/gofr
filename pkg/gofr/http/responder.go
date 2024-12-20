@@ -41,7 +41,12 @@ func (r Responder) Respond(data interface{}, err error) {
 			data = nil
 		}
 
-		resp = response{Data: data, Error: errorObj}
+		res, ok := data.(resTypes.Response)
+		if !ok {
+			resp = response{Data: data, Error: errorObj}
+		} else {
+			resp = res
+		}
 	}
 
 	r.w.Header().Set("Content-Type", "application/json")
@@ -91,8 +96,9 @@ func createErrorResponse(err error) map[string]interface{} {
 
 // response represents an HTTP response.
 type response struct {
-	Error interface{} `json:"error,omitempty"`
-	Data  interface{} `json:"data,omitempty"`
+	Error    interface{} `json:"error,omitempty"`
+	Metadata interface{} `json:"metadata,omitempty"`
+	Data     interface{} `json:"data,omitempty"`
 }
 
 type statusCodeResponder interface {
