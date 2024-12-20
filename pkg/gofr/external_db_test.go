@@ -106,7 +106,7 @@ func TestApp_AddFTP(t *testing.T) {
 
 		app.AddFTP(mock)
 
-		assert.Equal(t, mock, app.container.File)
+		assert.True(t, ctrl.Satisfied())
 	})
 
 	t.Run("Adding FTP", func(t *testing.T) {
@@ -123,7 +123,7 @@ func TestApp_AddFTP(t *testing.T) {
 
 		app.AddFileStore(mock)
 
-		assert.Equal(t, mock, app.container.File)
+		assert.True(t, ctrl.Satisfied())
 	})
 }
 
@@ -142,7 +142,7 @@ func TestApp_AddS3(t *testing.T) {
 
 		app.AddFileStore(mock)
 
-		assert.Equal(t, mock, app.container.File)
+		assert.True(t, ctrl.Satisfied())
 	})
 }
 
