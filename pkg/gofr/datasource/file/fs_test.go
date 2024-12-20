@@ -65,7 +65,7 @@ func Test_CreateReadDeleteFile(t *testing.T) {
 	fi, err := fileStore.Create(fileName)
 	newFile := fi.(*file)
 
-	_, _ = newFile.Write([]byte("some content"))
+	_, _ = newFile.WriteString("some content")
 
 	defer func(fileStore *FileSys, name string) {
 		_ = fileStore.Remove(name)

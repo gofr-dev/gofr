@@ -49,7 +49,7 @@ type jsonReader struct {
 	token   json.Token
 }
 
-func (f *File) Sys() any {
+func (*File) Sys() any {
 	return "ftp"
 }
 

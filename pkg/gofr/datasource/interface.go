@@ -29,7 +29,7 @@ type FileSystem interface {
 	// error, if any happens.
 	Create(name string) (any, error)
 
-	//TODO - Lets make bucket constant for MkdirAll as well, we might create buckets from migrations
+	// TODO - Lets make bucket constant for MkdirAll as well, we might create buckets from migrations
 
 	// Mkdir creates a directory in the filesystem, return an error if any
 	// happens.

@@ -8,7 +8,7 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"gofr.dev/pkg/gofr/container"
-	"gofr.dev/pkg/gofr/datasource/file"
+	"gofr.dev/pkg/gofr/datasource"
 )
 
 func TestApp_AddKVStore(t *testing.T) {
@@ -98,7 +98,7 @@ func TestApp_AddFTP(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
-		mock := file.NewMockFileSystemProvider(ctrl)
+		mock := datasource.NewMockFileSystemProvider(ctrl)
 
 		mock.EXPECT().UseLogger(app.Logger())
 		mock.EXPECT().UseMetrics(app.Metrics())
@@ -115,7 +115,7 @@ func TestApp_AddFTP(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
-		mock := file.NewMockFileSystemProvider(ctrl)
+		mock := datasource.NewMockFileSystemProvider(ctrl)
 
 		mock.EXPECT().UseLogger(app.Logger())
 		mock.EXPECT().UseMetrics(app.Metrics())
@@ -134,7 +134,7 @@ func TestApp_AddS3(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
-		mock := file.NewMockFileSystemProvider(ctrl)
+		mock := datasource.NewMockFileSystemProvider(ctrl)
 
 		mock.EXPECT().UseLogger(app.Logger())
 		mock.EXPECT().UseMetrics(app.Metrics())

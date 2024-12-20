@@ -20,7 +20,7 @@ func New(logger datasource.Logger) *FileSys {
 // Create creates or truncates the named file. If the file already exists, it is truncated.
 // If the file does not exist, it is created with mode 666.
 // If successful, methods on the returned File can be used for I/ O; the associated file descriptor has mode O_RDWR.
-// If there is an error, it will be of type *PathError
+// If there is an error, it will be of type *PathError.
 func (f *FileSys) Create(name string) (File, error) {
 	newFile, err := os.Create(name)
 	if err != nil {

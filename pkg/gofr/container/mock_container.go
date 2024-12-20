@@ -24,7 +24,7 @@ type Mocks struct {
 	KVStore     *MockKVStore
 	DGraph      *MockDgraph
 	OpenTSDB    *MockOpenTSDBProvider
-	File        *file.MockFileSystemProvider
+	File        *file.MockFileSystem
 	HTTPService *service.MockHTTP
 	Metrics     *MockMetrics
 }
@@ -77,7 +77,7 @@ func NewMockContainer(t *testing.T, options ...options) (*Container, *Mocks) {
 	kvStoreMock := NewMockKVStore(ctrl)
 	container.KVStore = kvStoreMock
 
-	fileStoreMock := file.NewMockFileSystemProvider(ctrl)
+	fileStoreMock := file.NewMockFileSystem(ctrl)
 	container.File = fileStoreMock
 
 	dgraphMock := NewMockDgraph(ctrl)

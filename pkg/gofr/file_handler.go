@@ -2,10 +2,16 @@ package gofr
 
 import (
 	"errors"
+	"fmt"
 	"os"
 
 	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/datasource/file"
+)
+
+var (
+	ErrFailedToCreateFile = errors.New("failed to create file")
+	ErrFailedToOpenFile   = errors.New("failed to open file")
 )
 
 // Developer Note: fileSysWrapper wraps a datasource.FileSystem to return file.File instead of an interface,
@@ -20,7 +26,7 @@ func (fsW *fileSysWrapper) Create(name string) (file.File, error) {
 
 	f, ok := fI.(file.File)
 	if !ok {
-		return nil, errors.New("failed to create file")
+		return nil, fmt.Errorf("%w: %w", ErrFailedToCreateFile, err)
 	}
 
 	return f, err
@@ -31,7 +37,7 @@ func (fsW *fileSysWrapper) Open(name string) (file.File, error) {
 
 	f, ok := fI.(file.File)
 	if !ok {
-		return nil, errors.New("failed to open file")
+		return nil, fmt.Errorf("%w: %w", ErrFailedToOpenFile, err)
 	}
 
 	return f, err
@@ -42,7 +48,7 @@ func (fsW *fileSysWrapper) OpenFile(name string, flag int, perm os.FileMode) (fi
 
 	f, ok := fI.(file.File)
 	if !ok {
-		return nil, errors.New("failed to open file")
+		return nil, fmt.Errorf("%w: %w", ErrFailedToOpenFile, err)
 	}
 
 	return f, err
