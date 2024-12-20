@@ -2,11 +2,12 @@ package main
 
 import (
 	"fmt"
+	"io/fs"
 	"strconv"
 	"strings"
 
 	"gofr.dev/pkg/gofr"
-	"gofr.dev/pkg/gofr/datasource/file"
+	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/datasource/file/ftp"
 )
 
@@ -90,7 +91,7 @@ func rmCommandHandler(c *gofr.Context) (interface{}, error) {
 }
 
 // This can be a common function to configure both FTP and SFTP server.
-func configureFileServer(app *gofr.App) file.FileSystemProvider {
+func configureFileServer(app *gofr.App) datasource.FileSystemProvider {
 	port, _ := strconv.Atoi(app.Config.Get("PORT"))
 
 	return ftp.New(&ftp.Config{
@@ -102,13 +103,13 @@ func configureFileServer(app *gofr.App) file.FileSystemProvider {
 	})
 }
 
-func printFiles(files []file.FileInfo) {
+func printFiles(files []fs.FileInfo) {
 	for _, f := range files {
 		fmt.Println(f.Name())
 	}
 }
 
-func grepFiles(files []file.FileInfo, keyword string) {
+func grepFiles(files []fs.FileInfo, keyword string) {
 	for _, f := range files {
 		if strings.HasPrefix(f.Name(), keyword) {
 			fmt.Println(f.Name())
