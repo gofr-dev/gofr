@@ -29,9 +29,7 @@ func (r Responder) Respond(data interface{}, err error) {
 	case resTypes.Raw:
 		resp = v.Data
 	case resTypes.Response:
-		res := data.(resTypes.Response)
-
-		resp = response{Data: res.Data, Metadata: res.Metadata, Error: errorObj}
+		resp = response{Data: v.Data, Metadata: v.Metadata, Error: errorObj}
 	case resTypes.File:
 		r.w.Header().Set("Content-Type", v.ContentType)
 		r.w.WriteHeader(statusCode)
