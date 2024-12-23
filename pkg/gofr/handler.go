@@ -147,7 +147,26 @@ func panicRecoveryHandler(re any, log logging.Logger, panicked chan struct{}) {
 func (h handler) logError(traceID string, err error) {
 	if err != nil {
 		errorLog := &ErrorLogEntry{TraceID: traceID, Error: err.Error()}
-		h.container.Logger.Error(errorLog)
+
+		// define the default log level for error
+		loggerHelper := h.container.Logger.Error
+
+		switch logging.GetLogLevelForError(err) {
+		case logging.ERROR:
+			// we use the default log level for error
+		case logging.INFO:
+			loggerHelper = h.container.Logger.Info
+		case logging.NOTICE:
+			loggerHelper = h.container.Logger.Notice
+		case logging.DEBUG:
+			loggerHelper = h.container.Logger.Debug
+		case logging.WARN:
+			loggerHelper = h.container.Logger.Warn
+		case logging.FATAL:
+			loggerHelper = h.container.Logger.Fatal
+		}
+
+		loggerHelper(errorLog)
 	}
 }
 
