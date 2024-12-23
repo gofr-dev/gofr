@@ -44,43 +44,45 @@ To include custom headers and metadata in your response, populate the Headers an
 package main
 
 import (
-"gofr.dev/pkg/gofr"
-"gofr.dev/pkg/gofr/http/response"
+   "time"
+
+   "gofr.dev/pkg/gofr"
+   "gofr.dev/pkg/gofr/http/response"
 )
 
 func main() {
-    app := gofr.New()
+   app := gofr.New()
 
-	app.GET("/hello", HelloHandler)
+   app.GET("/hello", HelloHandler)
 
-	app.Run()
+   app.Run()
 }
 
 func HelloHandler(c *gofr.Context) (interface{}, error) {
-	name := c.Param("name")
-    if name == "" {
-        c.Log("Name parameter is empty, defaulting to 'World'")
-        name = "World"
-        }
+   name := c.Param("name")
+   if name == "" {
+      c.Log("Name parameter is empty, defaulting to 'World'")
+      name = "World"
+   }
 
-	// Define custom headers (map[string]string)
-	headers := map[string]string{
-		"X-Custom-Header":  "CustomValue",
-		"X-Another-Header": "AnotherValue",
-	}
+   // Define custom headers (map[string]string)
+   headers := map[string]string{
+      "X-Custom-Header":  "CustomValue",
+      "X-Another-Header": "AnotherValue",
+   }
 
-	// Define metadata (map[string]any)
-	metaData := map[string]any{
-		"environment": "staging",
-		"timestamp":   c.TimeNow().String(),
-	}
+   // Define metadata (map[string]any)
+   metaData := map[string]any{
+      "environment": "staging",
+      "timestamp":   time.Now(),
+   }
 
-	// Return response with custom headers and metadata
-	return response.Response{
-		Data:     map[string]string{"message": "Hello, " + name + "!"},
-		MetaData: metaData,
-		Headers:  headers,
-	}, nil
+   // Return response with custom headers and metadata
+   return response.Response{
+      Data:     map[string]string{"message": "Hello, " + name + "!"},
+      Metadata: metaData,
+      Headers:  headers,
+   }, nil
 }
 ```
 
