@@ -6,30 +6,77 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	resTypes "gofr.dev/pkg/gofr/http/response"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	resTypes "gofr.dev/pkg/gofr/http/response"
 )
 
-func TestResponder_Respond(t *testing.T) {
-	r := NewResponder(httptest.NewRecorder(), http.MethodGet)
-
+func TestResponder(t *testing.T) {
 	tests := []struct {
-		desc        string
-		data        interface{}
-		contentType string
+		desc         string
+		data         interface{}
+		contentType  string
+		expectedBody []byte
 	}{
-		{"raw response type", resTypes.Raw{}, "application/json"},
-		{"file response type", resTypes.File{ContentType: "image/png"}, "image/png"},
-		{"map response type", map[string]string{}, "application/json"},
+		{
+			desc:         "raw response type",
+			data:         resTypes.Raw{Data: []byte("raw data")},
+			contentType:  "application/json",
+			expectedBody: []byte(`"cmF3IGRhdGE="`),
+		},
+		{
+			desc: "file response type",
+			data: resTypes.File{
+				ContentType: "image/png",
+			},
+			contentType:  "image/png",
+			expectedBody: nil,
+		},
+		{
+			desc:         "map response type",
+			data:         map[string]string{"key": "value"},
+			contentType:  "application/json",
+			expectedBody: []byte(`{"data":{"key":"value"}}`),
+		},
+		{
+			desc: "gofr response type with metadata",
+			data: resTypes.Response{
+				Data: "Hello World from new Server",
+				Metadata: map[string]any{
+					"environment": "stage",
+				},
+			},
+			contentType:  "application/json",
+			expectedBody: []byte(`{"metadata":{"environment":"stage"},"data":"Hello World from new Server"}`),
+		},
+		{
+			desc: "gofr response type without metadata",
+			data: resTypes.Response{
+				Data: "Hello World from new Server",
+			},
+			contentType:  "application/json",
+			expectedBody: []byte(`{"metadata":null,"data":"Hello World from new Server"}`),
+		},
 	}
 
 	for i, tc := range tests {
-		r.Respond(tc.data, nil)
-		contentType := r.w.Header().Get("Content-Type")
+		recorder := httptest.NewRecorder()
+		recorder.Body.Reset()
+		r := NewResponder(recorder, http.MethodGet)
 
-		assert.Equal(t, tc.contentType, contentType, "TEST[%d], Failed.\n%s", i, tc.desc)
+		r.Respond(tc.data, nil)
+
+		contentType := recorder.Header().Get("Content-Type")
+		assert.Equal(t, tc.contentType, contentType, "TEST[%d] Failed: %s", i, tc.desc)
+
+		responseBody := recorder.Body.Bytes()
+
+		expected := bytes.TrimSpace(tc.expectedBody)
+
+		actual := bytes.TrimSpace(responseBody)
+
+		assert.Equal(t, expected, actual, "TEST[%d] Failed: %s", i, tc.desc)
 	}
 }
 
