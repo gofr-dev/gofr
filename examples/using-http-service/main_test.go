@@ -20,6 +20,7 @@ import (
 )
 
 func Test_main(t *testing.T) {
+	t.Setenv("METRICS_PORT", "2137")
 	const host = "http://localhost:9001"
 	c := &http.Client{}
 
