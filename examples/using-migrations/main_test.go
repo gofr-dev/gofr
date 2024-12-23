@@ -12,6 +12,7 @@ import (
 
 func TestExampleMigration(t *testing.T) {
 	const host = "http://localhost:9100"
+	t.Setenv("METRICS_PORT", "2139")
 	go main()
 	time.Sleep(100 * time.Millisecond) // Giving some time to start the server
 

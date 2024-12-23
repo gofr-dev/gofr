@@ -23,6 +23,7 @@ import (
 const host = "http://localhost:9000"
 
 func TestIntegration_SimpleAPIServer(t *testing.T) {
+	t.Setenv("METRICS_PORT", "2144")
 	go main()
 	time.Sleep(100 * time.Millisecond) // Giving some time to start the server
 
@@ -143,7 +144,7 @@ func TestIntegration_SimpleAPIServer_Health(t *testing.T) {
 }
 
 func TestRedisHandler(t *testing.T) {
-	t.Setenv("METRICS_PORT", "2036")
+	t.Setenv("METRICS_PORT", "2045")
 	t.Setenv("HTTP_PORT", "8082")
 
 	a := gofr.New()

@@ -15,6 +15,7 @@ import (
 
 func TestGRPCServer(t *testing.T) {
 	const host = "localhost:10000"
+	t.Setenv("METRICS_PORT", "2146")
 
 	go main()
 	time.Sleep(100 * time.Millisecond)

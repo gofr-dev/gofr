@@ -15,6 +15,7 @@ import (
 
 func TestMain_BindError(t *testing.T) {
 	const host = "http://localhost:8300"
+	t.Setenv("METRICS_PORT", "2140")
 	go main()
 	time.Sleep(100 * time.Millisecond)
 
