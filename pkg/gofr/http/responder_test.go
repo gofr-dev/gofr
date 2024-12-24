@@ -56,7 +56,7 @@ func TestResponder(t *testing.T) {
 				Data: "Hello World from new Server",
 			},
 			contentType:  "application/json",
-			expectedBody: []byte(`{"metadata":null,"data":"Hello World from new Server"}`),
+			expectedBody: []byte(`{"data":"Hello World from new Server"}`),
 		},
 	}
 
