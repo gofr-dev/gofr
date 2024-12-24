@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	publicBroker  = "test.mosquitto.org"
+	publicBroker  = "broker.emqx.io"
 	messageBuffer = 10
 )
 
