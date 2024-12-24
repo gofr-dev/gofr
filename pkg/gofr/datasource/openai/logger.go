@@ -14,7 +14,7 @@ type OpenAiAPILog struct {
 	Model             string `json:"model,omitempty"`
 	ServiceTier       string `json:"service_tier,omitempty"`
 	SystemFingerprint string `json:"system_fingerprint,omitempty"`
-	Duration          int64 `json:"duration,omitempty"`
+	Duration          int64  `json:"duration,omitempty"`
 
 	Usage struct {
 		PromptTokens           int         `json:"prompt_tokens,omitempty"`

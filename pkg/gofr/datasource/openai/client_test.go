@@ -33,4 +33,3 @@ func Test_NewClient(t *testing.T) {
 		})
 	}
 }
-
