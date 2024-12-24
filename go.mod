@@ -6,7 +6,7 @@ toolchain go1.22.10
 require (
 	cloud.google.com/go/pubsub v1.45.3
 	github.com/DATA-DOG/go-sqlmock v1.5.2
-	github.com/XSAM/otelsql v0.34.0
+	github.com/XSAM/otelsql v0.36.0
 	github.com/alicebob/miniredis/v2 v2.34.0
 	github.com/eclipse/paho.mqtt.golang v1.5.0
 	github.com/go-redis/redismock/v9 v9.2.0
@@ -33,7 +33,7 @@ require (
 	go.opentelemetry.io/otel/exporters/zipkin v1.33.0
 	go.opentelemetry.io/otel/metric v1.33.0
 	go.opentelemetry.io/otel/sdk v1.33.0
-	go.opentelemetry.io/otel/sdk/metric v1.30.0
+	go.opentelemetry.io/otel/sdk/metric v1.33.0
 	go.opentelemetry.io/otel/trace v1.33.0
 	go.uber.org/mock v0.5.0
 	golang.org/x/oauth2 v0.24.0
