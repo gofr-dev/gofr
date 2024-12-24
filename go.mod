@@ -25,7 +25,7 @@ require (
 	github.com/redis/go-redis/v9 v9.7.0
 	github.com/segmentio/kafka-go v0.4.47
 	github.com/stretchr/testify v1.10.0
-	go.opentelemetry.io/contrib/instrumentation/net/http/httptrace/otelhttptrace v0.56.0
+	go.opentelemetry.io/contrib/instrumentation/net/http/httptrace/otelhttptrace v0.58.0
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.58.0
 	go.opentelemetry.io/otel v1.33.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.33.0
@@ -40,9 +40,9 @@ require (
 	golang.org/x/sync v0.10.0
 	golang.org/x/term v0.27.0
 	golang.org/x/text v0.21.0
-	google.golang.org/api v0.212.0
+	google.golang.org/api v0.214.0
 	google.golang.org/grpc v1.68.1
-	google.golang.org/protobuf v1.36.0
+	google.golang.org/protobuf v1.36.1
 	modernc.org/sqlite v1.34.2
 )
 
@@ -91,7 +91,7 @@ require (
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.33.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.4.0 // indirect
 	golang.org/x/crypto v0.31.0 // indirect
-	golang.org/x/net v0.32.0 // indirect
+	golang.org/x/net v0.33.0 // indirect
 	golang.org/x/sys v0.28.0 // indirect
 	golang.org/x/time v0.8.0 // indirect
 	google.golang.org/genproto v0.0.0-20241118233622-e639e219e697 // indirect
