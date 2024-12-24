@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"fmt"
+	"gofr.dev/pkg/gofr/testutil"
 	"net/http"
 	"testing"
 	"time"
@@ -12,7 +14,9 @@ import (
 
 func TestIntegration_AddRESTHandlers(t *testing.T) {
 	const host = "http://localhost:9090"
-	t.Setenv("METRICS_PORT", "2023")
+
+	port := testutil.GetFreePort(t)
+	t.Setenv("METRICS_PORT", fmt.Sprint(port))
 
 	go main()
 	time.Sleep(100 * time.Millisecond) // Giving some time to start the server

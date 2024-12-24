@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"fmt"
+	"gofr.dev/pkg/gofr/testutil"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -15,7 +17,10 @@ import (
 
 func TestMain_BindError(t *testing.T) {
 	const host = "http://localhost:8300"
-	t.Setenv("METRICS_PORT", "2140")
+
+	port := testutil.GetFreePort(t)
+	t.Setenv("METRICS_PORT", fmt.Sprint(port))
+
 	go main()
 	time.Sleep(100 * time.Millisecond)
 

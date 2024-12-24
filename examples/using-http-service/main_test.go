@@ -3,6 +3,8 @@ package main
 import (
 	"bytes"
 	"context"
+	"fmt"
+	"gofr.dev/pkg/gofr/testutil"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -21,7 +23,9 @@ import (
 
 func Test_main(t *testing.T) {
 	const host = "http://localhost:9001"
-	t.Setenv("METRICS_PORT", "2137")
+
+	port := testutil.GetFreePort(t)
+	t.Setenv("METRICS_PORT", fmt.Sprint(port))
 
 	c := &http.Client{}
 

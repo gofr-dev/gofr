@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -40,8 +41,11 @@ func initializeTest(t *testing.T) {
 
 func TestExampleSubscriber(t *testing.T) {
 	log := testutil.StdoutOutputForFunc(func() {
-		t.Setenv("HTTP_PORT", "8080")
-		t.Setenv("METRICS_PORT", "2031")
+		httpPort := testutil.GetFreePort(t)
+		t.Setenv("HTTP_PORT", fmt.Sprint(httpPort))
+
+		metricsPort := testutil.GetFreePort(t)
+		t.Setenv("METRICS_PORT", fmt.Sprint(metricsPort))
 
 		go main()
 		time.Sleep(time.Second * 1) // Giving some time to start the server

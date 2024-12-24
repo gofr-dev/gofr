@@ -1,6 +1,8 @@
 package main
 
 import (
+	"fmt"
+	"gofr.dev/pkg/gofr/testutil"
 	"testing"
 	"time"
 
@@ -8,7 +10,8 @@ import (
 )
 
 func Test_UserPurgeCron(t *testing.T) {
-	t.Setenv("METRICS_PORT", "2022")
+	port := testutil.GetFreePort(t)
+	t.Setenv("METRICS_PORT", fmt.Sprint(port))
 
 	go main()
 	time.Sleep(1100 * time.Millisecond)

@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"net/http"
 	"testing"
 	"time"
@@ -22,7 +23,9 @@ import (
 
 func TestHTTPServerUsingRedis(t *testing.T) {
 	const host = "http://localhost:8000"
-	t.Setenv("METRICS_PORT", "2034")
+
+	port := testutil.GetFreePort(t)
+	t.Setenv("METRICS_PORT", fmt.Sprint(port))
 
 	go main()
 	time.Sleep(100 * time.Millisecond) // Giving some time to start the server
@@ -57,8 +60,11 @@ func TestHTTPServerUsingRedis(t *testing.T) {
 }
 
 func TestRedisSetHandler(t *testing.T) {
-	t.Setenv("HTTP_PORT", "8085")
-	t.Setenv("METRICS_PORT", "2036")
+	metricsPort := testutil.GetFreePort(t)
+	httpPort := testutil.GetFreePort(t)
+
+	t.Setenv("METRICS_PORT", fmt.Sprint(metricsPort))
+	t.Setenv("HTTP_PORT", fmt.Sprint(httpPort))
 
 	a := gofr.New()
 	logger := logging.NewLogger(logging.DEBUG)
