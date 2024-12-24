@@ -93,9 +93,9 @@ func createErrorResponse(err error) map[string]interface{} {
 
 // response represents an HTTP response.
 type response struct {
-	Error    interface{} `json:"error,omitempty"`
-	Metadata interface{} `json:"metadata,omitempty"`
-	Data     interface{} `json:"data,omitempty"`
+	Error    interface{}    `json:"error,omitempty"`
+	Metadata map[string]any `json:"metadata,omitempty"`
+	Data     interface{}    `json:"data,omitempty"`
 }
 
 type statusCodeResponder interface {
