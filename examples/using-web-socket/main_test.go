@@ -11,7 +11,7 @@ import (
 
 func Test_WebSocket_Success(t *testing.T) {
 	wsURL := fmt.Sprintf("ws://%s/ws", "localhost:8001")
-	t.Setenv("METRICS_PORT", fmt.Sprint(2030))
+	t.Setenv("METRICS_PORT", "2030")
 
 	go main()
 	time.Sleep(100 * time.Millisecond)

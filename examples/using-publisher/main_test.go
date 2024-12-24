@@ -13,7 +13,7 @@ import (
 
 func TestExamplePublisher(t *testing.T) {
 	const host = "http://localhost:8100"
-	t.Setenv("METRICS_PORT", fmt.Sprint(2032))
+	t.Setenv("METRICS_PORT", "2032")
 
 	go main()
 	time.Sleep(200 * time.Millisecond)
@@ -67,7 +67,7 @@ func TestExamplePublisher(t *testing.T) {
 func TestExamplePublisherError(t *testing.T) {
 	t.Setenv("PUBSUB_BROKER", "localhost:1012")
 	t.Setenv("HTTP_PORT", "8200")
-	t.Setenv("METRICS_PORT", fmt.Sprint(2038))
+	t.Setenv("METRICS_PORT", "2038")
 
 	const host = "http://localhost:8200"
 	go main()

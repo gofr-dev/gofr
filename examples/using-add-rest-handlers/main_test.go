@@ -13,7 +13,7 @@ import (
 
 func TestIntegration_AddRESTHandlers(t *testing.T) {
 	const host = "http://localhost:9090"
-	t.Setenv("METRICS_PORT", fmt.Sprint(2023))
+	t.Setenv("METRICS_PORT", "2023")
 
 	go main()
 	time.Sleep(100 * time.Millisecond) // Giving some time to start the server

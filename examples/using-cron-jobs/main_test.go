@@ -9,7 +9,7 @@ import (
 )
 
 func Test_UserPurgeCron(t *testing.T) {
-	t.Setenv("METRICS_PORT", fmt.Sprint(2022))
+	t.Setenv("METRICS_PORT", "2022")
 
 	go main()
 	time.Sleep(1100 * time.Millisecond)
