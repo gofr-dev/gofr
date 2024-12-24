@@ -28,6 +28,8 @@ func (r Responder) Respond(data interface{}, err error) {
 	switch v := data.(type) {
 	case resTypes.Raw:
 		resp = v.Data
+	case resTypes.Response:
+		resp = response{Data: v.Data, Metadata: v.Metadata, Error: errorObj}
 	case resTypes.File:
 		r.w.Header().Set("Content-Type", v.ContentType)
 		r.w.WriteHeader(statusCode)
@@ -91,8 +93,9 @@ func createErrorResponse(err error) map[string]interface{} {
 
 // response represents an HTTP response.
 type response struct {
-	Error interface{} `json:"error,omitempty"`
-	Data  interface{} `json:"data,omitempty"`
+	Error    interface{}    `json:"error,omitempty"`
+	Metadata map[string]any `json:"metadata,omitempty"`
+	Data     interface{}    `json:"data,omitempty"`
 }
 
 type statusCodeResponder interface {
