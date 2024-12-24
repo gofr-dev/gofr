@@ -16,9 +16,12 @@ import (
 	"gofr.dev/pkg/gofr/container"
 	gofrHTTP "gofr.dev/pkg/gofr/http"
 	"gofr.dev/pkg/gofr/logging"
+	"gofr.dev/pkg/gofr/testutil"
 )
 
 func TestRun_ServerStartsListening(t *testing.T) {
+	port := testutil.GetFreePort(t)
+
 	// Create a mock router and add a new route
 	router := &gofrHTTP.Router{}
 	router.Add(http.MethodGet, "/", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -33,7 +36,7 @@ func TestRun_ServerStartsListening(t *testing.T) {
 	// Create an instance of httpServer
 	server := &httpServer{
 		router: router,
-		port:   8080,
+		port:   port,
 	}
 
 	// Start the server
@@ -47,7 +50,8 @@ func TestRun_ServerStartsListening(t *testing.T) {
 	}
 
 	// Send a GET request to the server
-	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://localhost:8080", http.NoBody)
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet,
+		fmt.Sprintf("http://localhost:%d", port), http.NoBody)
 	resp, err := netClient.Do(req)
 
 	require.NoError(t, err, "TEST Failed.\n")
@@ -58,18 +62,20 @@ func TestRun_ServerStartsListening(t *testing.T) {
 }
 
 func TestRegisterProfillingRoutes(t *testing.T) {
+	port := testutil.GetFreePort(t)
+
 	c := &container.Container{
 		Logger: logging.NewLogger(logging.INFO),
 	}
 
 	server := &httpServer{
 		router: gofrHTTP.NewRouter(),
-		port:   8080,
+		port:   port,
 	}
 
 	server.RegisterProfilingRoutes()
 
-	server.Run(c)
+	go server.Run(c)
 
 	// Test if the expected handlers are registered for the pprof endpoints
 	expectedRoutes := []string{
