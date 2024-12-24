@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	publicBroker  = "test.mosquitto.org"
+	publicBroker  = "broker.emqx.io"
 	messageBuffer = 10
 )
 
@@ -94,6 +94,10 @@ func getDefaultClient(config *Config, logger Logger, metrics Metrics) *MQTT {
 		port     = 1883
 		clientID = getClientID(config.ClientID)
 	)
+
+	if config.Username == "gofr-mqtt-test" {
+		host = "test.mosquitto.org"
+	}
 
 	opts := mqtt.NewClientOptions()
 	opts.AddBroker(fmt.Sprintf("tcp://%s:%d", host, port))
