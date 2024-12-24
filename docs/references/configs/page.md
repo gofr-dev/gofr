@@ -215,6 +215,11 @@ This document lists all the configuration options supported by the GoFr framewor
 - REDIS_PASSWORD
 - Password for the Redis server.
 
+---
+
+- REDIS_DB
+- Database number to use for the Redis server.
+
 {% /table %}
 
 ### Pub/Sub
