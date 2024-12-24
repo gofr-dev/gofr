@@ -5,8 +5,9 @@ import (
 )
 
 type Response struct {
-	Data    any               `json:"data"`
-	Headers map[string]string `json:"-"`
+	Data     any               `json:"data"`
+	Metadata map[string]any    `json:"metadata,omitempty"`
+	Headers  map[string]string `json:"-"`
 }
 
 func (resp Response) SetCustomHeaders(w http.ResponseWriter) {
