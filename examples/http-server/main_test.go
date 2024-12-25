@@ -25,10 +25,7 @@ import (
 var host string
 
 func TestIntegration_SimpleAPIServer(t *testing.T) {
-	httpPort := testutil.GetFreePort(t)
-
-	t.Setenv("HTTP_PORT", strconv.Itoa(httpPort))
-	host = fmt.Sprint("http://localhost:", httpPort)
+	host = fmt.Sprint("http://localhost:9000")
 
 	port := testutil.GetFreePort(t)
 	t.Setenv("METRICS_PORT", strconv.Itoa(port))
