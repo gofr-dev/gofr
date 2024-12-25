@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"gofr.dev/pkg/gofr/testutil"
+	"strconv"
 	"testing"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 
 func Test_WebSocket_Success(t *testing.T) {
 	port := testutil.GetFreePort(t)
+	t.Setenv("HTTP_PORT", strconv.Itoa(port))
 	wsURL := fmt.Sprintf("ws://%s/ws", fmt.Sprint("localhost:", port))
 
 	metricsPort := testutil.GetFreePort(t)
