@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"gofr.dev/pkg/gofr/testutil"
+	"strconv"
 	"testing"
 	"time"
 
@@ -17,10 +18,11 @@ import (
 
 func TestGRPCServer(t *testing.T) {
 	gRPCPort := testutil.GetFreePort(t)
+	t.Setenv("GRPC_PORT", strconv.Itoa(gRPCPort))
 	host := fmt.Sprint("localhost:", gRPCPort)
 
 	port := testutil.GetFreePort(t)
-	t.Setenv("METRICS_PORT", fmt.Sprint(port))
+	t.Setenv("METRICS_PORT", strconv.Itoa(port))
 
 	go main()
 	time.Sleep(100 * time.Millisecond)
