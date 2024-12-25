@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"testing"
 	"time"
 
@@ -21,11 +22,16 @@ import (
 	"gofr.dev/pkg/gofr/testutil"
 )
 
-const host = "http://localhost:9000"
+var host string
 
 func TestIntegration_SimpleAPIServer(t *testing.T) {
+	httpPort := testutil.GetFreePort(t)
+
+	t.Setenv("HTTP_PORT", strconv.Itoa(httpPort))
+	host = fmt.Sprint("http://localhost:", httpPort)
+
 	port := testutil.GetFreePort(t)
-	t.Setenv("METRICS_PORT", fmt.Sprint(port))
+	t.Setenv("METRICS_PORT", strconv.Itoa(port))
 
 	go main()
 	time.Sleep(100 * time.Millisecond) // Giving some time to start the server

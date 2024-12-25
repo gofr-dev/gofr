@@ -11,7 +11,8 @@ import (
 )
 
 func Test_WebSocket_Success(t *testing.T) {
-	wsURL := fmt.Sprintf("ws://%s/ws", "localhost:8001")
+	port := testutil.GetFreePort(t)
+	wsURL := fmt.Sprintf("ws://%s/ws", fmt.Sprint("localhost:", port))
 
 	metricsPort := testutil.GetFreePort(t)
 	t.Setenv("METRICS_PORT", fmt.Sprint(metricsPort))

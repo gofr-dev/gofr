@@ -16,7 +16,8 @@ import (
 )
 
 func TestGRPCServer(t *testing.T) {
-	const host = "localhost:10000"
+	gRPCPort := testutil.GetFreePort(t)
+	host := fmt.Sprint("localhost:", gRPCPort)
 
 	port := testutil.GetFreePort(t)
 	t.Setenv("METRICS_PORT", fmt.Sprint(port))

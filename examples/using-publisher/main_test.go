@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"gofr.dev/pkg/gofr/testutil"
 	"net/http"
+	"strconv"
 	"testing"
 	"time"
 
@@ -13,10 +14,12 @@ import (
 )
 
 func TestExamplePublisher(t *testing.T) {
-	const host = "http://localhost:8100"
+	httpPort := testutil.GetFreePort(t)
+	t.Setenv("HTTP_PORT", strconv.Itoa(httpPort))
+	host := fmt.Sprint("http://localhost:", httpPort)
 
 	port := testutil.GetFreePort(t)
-	t.Setenv("METRICS_PORT", fmt.Sprint(port))
+	t.Setenv("METRICS_PORT", strconv.Itoa(port))
 
 	go main()
 	time.Sleep(200 * time.Millisecond)
@@ -71,12 +74,13 @@ func TestExamplePublisherError(t *testing.T) {
 	t.Setenv("PUBSUB_BROKER", "localhost:1012")
 
 	httpPort := testutil.GetFreePort(t)
-	t.Setenv("HTTP_PORT", fmt.Sprint(httpPort))
+	t.Setenv("HTTP_PORT", strconv.Itoa(httpPort))
 
 	metricsPort := testutil.GetFreePort(t)
-	t.Setenv("METRICS_PORT", fmt.Sprint(metricsPort))
+	t.Setenv("METRICS_PORT", strconv.Itoa(metricsPort))
 
-	const host = "http://localhost:8200"
+	host := fmt.Sprint("http://localhost:", httpPort)
+
 	go main()
 	time.Sleep(200 * time.Millisecond)
 
