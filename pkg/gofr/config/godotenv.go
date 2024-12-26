@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"strings"
 
 	"github.com/joho/godotenv"
 )
@@ -12,6 +13,7 @@ import (
 const (
 	defaultFileName         = "/.env"
 	defaultOverrideFileName = "/.local.env"
+	splitParts              = 2
 )
 
 type EnvLoader struct {
@@ -63,6 +65,14 @@ func (e *EnvLoader) read(folder string) {
 		}
 	} else {
 		e.logger.Infof("Loaded config from file: %v", overrideFile)
+	}
+
+	// Reload system environment variables to ensure they override any previously loaded values
+	for _, envVar := range os.Environ() {
+		keyValue := strings.SplitN(envVar, "=", splitParts)
+		if len(keyValue) == splitParts {
+			os.Setenv(keyValue[0], keyValue[1])
+		}
 	}
 }
 
