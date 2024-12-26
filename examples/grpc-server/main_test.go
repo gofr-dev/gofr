@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"gofr.dev/pkg/gofr/testutil"
 	"strconv"
 	"testing"
 	"time"
@@ -14,6 +13,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 
 	grpcExample "gofr.dev/examples/grpc-server/grpc"
+	"gofr.dev/pkg/gofr/testutil"
 )
 
 func TestGRPCServer(t *testing.T) {

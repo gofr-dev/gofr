@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"gofr.dev/pkg/gofr/testutil"
 	"net/http"
 	"strconv"
 	"testing"
@@ -11,6 +10,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gofr.dev/pkg/gofr/testutil"
 )
 
 func TestExampleMigration(t *testing.T) {

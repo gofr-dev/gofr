@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"gofr.dev/pkg/gofr/testutil"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -20,6 +19,7 @@ import (
 	gofrHTTP "gofr.dev/pkg/gofr/http"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/service"
+	"gofr.dev/pkg/gofr/testutil"
 )
 
 var port int

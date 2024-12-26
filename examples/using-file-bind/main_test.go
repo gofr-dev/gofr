@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"gofr.dev/pkg/gofr/testutil"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -14,6 +13,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gofr.dev/pkg/gofr/testutil"
 )
 
 func TestMain_BindError(t *testing.T) {

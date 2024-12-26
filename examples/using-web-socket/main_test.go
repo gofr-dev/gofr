@@ -2,22 +2,22 @@ package main
 
 import (
 	"fmt"
-	"gofr.dev/pkg/gofr/testutil"
 	"strconv"
 	"testing"
 	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
+	"gofr.dev/pkg/gofr/testutil"
 )
 
 func Test_WebSocket_Success(t *testing.T) {
 	port := testutil.GetFreePort(t)
 	t.Setenv("HTTP_PORT", strconv.Itoa(port))
-	wsURL := fmt.Sprintf("ws://%s/ws", fmt.Sprint("localhost:", port))
+	wsURL := fmt.Sprintf("ws://localhost:%d/ws", port)
 
 	metricsPort := testutil.GetFreePort(t)
-	t.Setenv("METRICS_PORT", fmt.Sprint(metricsPort))
+	t.Setenv("METRICS_PORT", strconv.Itoa(metricsPort))
 
 	go main()
 	time.Sleep(100 * time.Millisecond)

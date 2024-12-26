@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"strconv"
@@ -25,7 +24,7 @@ import (
 var host string
 
 func TestIntegration_SimpleAPIServer(t *testing.T) {
-	host = fmt.Sprint("http://localhost:9000")
+	host = "http://localhost:9000"
 
 	port := testutil.GetFreePort(t)
 	t.Setenv("METRICS_PORT", strconv.Itoa(port))
@@ -153,8 +152,8 @@ func TestRedisHandler(t *testing.T) {
 	metricsPort := testutil.GetFreePort(t)
 	httpPort := testutil.GetFreePort(t)
 
-	t.Setenv("METRICS_PORT", fmt.Sprint(metricsPort))
-	t.Setenv("HTTP_PORT", fmt.Sprint(httpPort))
+	t.Setenv("METRICS_PORT", strconv.Itoa(metricsPort))
+	t.Setenv("HTTP_PORT", strconv.Itoa(httpPort))
 
 	a := gofr.New()
 	logger := logging.NewLogger(logging.DEBUG)

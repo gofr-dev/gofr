@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"gofr.dev/pkg/gofr/testutil"
 	"io"
 	"net/http"
 	"strconv"
@@ -10,6 +9,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"gofr.dev/pkg/gofr/testutil"
 )
 
 func TestIntegration(t *testing.T) {
@@ -40,11 +40,11 @@ func TestIntegration(t *testing.T) {
 		t.Fatalf("request to /transaction failed %v", err)
 	}
 
-	req, _ = http.NewRequest(http.MethodGet, fmt.Sprint("http://localhost:", metricsPort, "/metrics"), nil)
+	req, _ = http.NewRequest(http.MethodGet, fmt.Sprintf("http://localhost:%d/metrics", metricsPort), nil)
 
 	resp, err := c.Do(req)
 	if err != nil {
-		t.Fatalf("request to fmt.Sprint(\"http://localhost:\", metricsPort,\"/metrics\") failed %v", err)
+		t.Fatalf("request to localhost:%d/metrics failed: %v", metricsPort, err)
 	}
 
 	body, _ := io.ReadAll(resp.Body)
