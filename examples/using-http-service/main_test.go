@@ -3,9 +3,11 @@ package main
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 	"time"
 
@@ -17,10 +19,19 @@ import (
 	gofrHTTP "gofr.dev/pkg/gofr/http"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/service"
+	"gofr.dev/pkg/gofr/testutil"
 )
 
+var port int
+
 func Test_main(t *testing.T) {
-	const host = "http://localhost:9001"
+	port = testutil.GetFreePort(t)
+	t.Setenv("HTTP_PORT", strconv.Itoa(port))
+	host := fmt.Sprint("http://localhost:", port)
+
+	metricsPort := testutil.GetFreePort(t)
+	t.Setenv("METRICS_PORT", strconv.Itoa(metricsPort))
+
 	c := &http.Client{}
 
 	go main()
@@ -68,7 +79,7 @@ func Test_main(t *testing.T) {
 
 func TestHTTPHandlerURLError(t *testing.T) {
 	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet,
-		"http://localhost:5000/handle", bytes.NewBuffer([]byte(`{"key":"value"}`)))
+		fmt.Sprint("http://localhost:", port, "/handle"), bytes.NewBuffer([]byte(`{"key":"value"}`)))
 	gofrReq := gofrHTTP.NewRequest(req)
 
 	mockContainer, _ := container.NewMockContainer(t)
@@ -93,7 +104,7 @@ func TestHTTPHandlerResponseUnmarshalError(t *testing.T) {
 
 	logger := logging.NewLogger(logging.DEBUG)
 
-	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://localhost:5000/handle", bytes.NewBuffer([]byte(`{"key":"value"}`)))
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, fmt.Sprint("http://localhost:", port, "/handle"), bytes.NewBuffer([]byte(`{"key":"value"}`)))
 
 	gofrReq := gofrHTTP.NewRequest(req)
 
