@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"gofr.dev/pkg/gofr/testutil"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strconv"
 	"testing"
 	"time"
 
@@ -235,6 +237,9 @@ func TestHandler_livelinessHandler(t *testing.T) {
 }
 
 func TestHandler_healthHandler(t *testing.T) {
+	metricsPort := testutil.GetFreePort(t)
+	t.Setenv("METRICS_PORT", strconv.Itoa(metricsPort))
+
 	a := New()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -47,6 +47,7 @@ func TestGofr_readConfig(t *testing.T) {
 
 func TestGoFr_isPortAvailable(t *testing.T) {
 	port := testutil.GetFreePort(t)
+	metricsPort := testutil.GetFreePort(t)
 
 	tests := []struct {
 		name        string
@@ -59,7 +60,8 @@ func TestGoFr_isPortAvailable(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if !tt.isAvailable {
-				t.Setenv("HTTP_PORT", fmt.Sprint(port))
+				t.Setenv("HTTP_PORT", strconv.Itoa(port))
+				t.Setenv("METRICS_PORT", strconv.Itoa(metricsPort))
 
 				g := New()
 
@@ -75,8 +77,10 @@ func TestGoFr_isPortAvailable(t *testing.T) {
 
 func TestGofr_ServerRoutes(t *testing.T) {
 	port := testutil.GetFreePort(t)
+	metricsPort := testutil.GetFreePort(t)
 
-	t.Setenv("HTTP_PORT", fmt.Sprint(port))
+	t.Setenv("HTTP_PORT", strconv.Itoa(port))
+	t.Setenv("METRICS_PORT", strconv.Itoa(metricsPort))
 
 	type response struct {
 		Data interface{} `json:"data"`
@@ -153,8 +157,10 @@ func TestGofr_ServerRoutes(t *testing.T) {
 
 func TestGofr_ServerRun(t *testing.T) {
 	port := testutil.GetFreePort(t)
+	metricsPort := testutil.GetFreePort(t)
 
-	t.Setenv("HTTP_PORT", fmt.Sprint(port))
+	t.Setenv("HTTP_PORT", strconv.Itoa(port))
+	t.Setenv("METRICS_PORT", strconv.Itoa(metricsPort))
 
 	g := New()
 
@@ -181,6 +187,12 @@ func TestGofr_ServerRun(t *testing.T) {
 }
 
 func Test_AddHTTPService(t *testing.T) {
+	port := testutil.GetFreePort(t)
+	metricsPort := testutil.GetFreePort(t)
+
+	t.Setenv("HTTP_PORT", strconv.Itoa(port))
+	t.Setenv("METRICS_PORT", strconv.Itoa(metricsPort))
+
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/test", r.URL.Path)
 
@@ -203,6 +215,9 @@ func Test_AddDuplicateHTTPService(t *testing.T) {
 	t.Setenv("LOG_LEVEL", "DEBUG")
 
 	logs := testutil.StdoutOutputForFunc(func() {
+		metricsPort := testutil.GetFreePort(t)
+		t.Setenv("METRICS_PORT", strconv.Itoa(metricsPort))
+
 		a := New()
 
 		a.AddHTTPService("test-service", "http://localhost")
@@ -213,12 +228,18 @@ func Test_AddDuplicateHTTPService(t *testing.T) {
 }
 
 func TestApp_Metrics(t *testing.T) {
+	metricsPort := testutil.GetFreePort(t)
+	t.Setenv("METRICS_PORT", strconv.Itoa(metricsPort))
+
 	app := New()
 
 	assert.NotNil(t, app.Metrics())
 }
 
 func TestApp_AddAndGetHTTPService(t *testing.T) {
+	metricsPort := testutil.GetFreePort(t)
+	t.Setenv("METRICS_PORT", strconv.Itoa(metricsPort))
+
 	app := New()
 
 	app.AddHTTPService("test-service", "http://test")
@@ -230,6 +251,9 @@ func TestApp_AddAndGetHTTPService(t *testing.T) {
 
 func TestApp_MigrateInvalidKeys(t *testing.T) {
 	logs := testutil.StderrOutputForFunc(func() {
+		metricsPort := testutil.GetFreePort(t)
+		t.Setenv("METRICS_PORT", strconv.Itoa(metricsPort))
+
 		app := New()
 		app.Migrate(map[int64]migration.Migrate{1: {}})
 	})
@@ -239,6 +263,9 @@ func TestApp_MigrateInvalidKeys(t *testing.T) {
 
 func TestApp_MigratePanicRecovery(t *testing.T) {
 	logs := testutil.StderrOutputForFunc(func() {
+		metricsPort := testutil.GetFreePort(t)
+		t.Setenv("METRICS_PORT", strconv.Itoa(metricsPort))
+
 		app := New()
 
 		app.container.PubSub = &container.MockPubSub{}
@@ -498,6 +525,9 @@ func Test_EnableBasicAuthWithValidator(t *testing.T) {
 }
 
 func Test_AddRESTHandlers(t *testing.T) {
+	metricsPort := testutil.GetFreePort(t)
+	t.Setenv("METRICS_PORT", strconv.Itoa(metricsPort))
+
 	app := New()
 
 	type user struct {
@@ -772,6 +802,9 @@ func Test_APIKeyAuthMiddleware(t *testing.T) {
 func Test_SwaggerEndpoints(t *testing.T) {
 	port := testutil.GetFreePort(t)
 
+	metricsPort := testutil.GetFreePort(t)
+	t.Setenv("METRICS_PORT", strconv.Itoa(metricsPort))
+
 	// Create the openapi.json file within the static directory
 	openAPIFilePath := filepath.Join("static", OpenAPIJSON)
 
@@ -853,6 +886,9 @@ func Test_AddCronJob_Success(t *testing.T) {
 
 func TestStaticHandler(t *testing.T) {
 	port := testutil.GetFreePort(t)
+	metricsPort := testutil.GetFreePort(t)
+
+	t.Setenv("METRICS_PORT", strconv.Itoa(metricsPort))
 
 	const indexHTML = "indexTest.html"
 
@@ -956,6 +992,9 @@ func TestStaticHandler(t *testing.T) {
 func TestStaticHandlerInvalidFilePath(t *testing.T) {
 	// Generating some files for testing
 	logs := testutil.StderrOutputForFunc(func() {
+		metricsPort := testutil.GetFreePort(t)
+		t.Setenv("METRICS_PORT", strconv.Itoa(metricsPort))
+
 		app := New()
 
 		app.AddStaticFiles("gofrTest", ".//,.!@#$%^&")
@@ -993,6 +1032,9 @@ func createPublicDirectory(t *testing.T, defaultPublicStaticDir string, htmlCont
 
 func Test_Shutdown(t *testing.T) {
 	logs := testutil.StdoutOutputForFunc(func() {
+		metricsPort := testutil.GetFreePort(t)
+		t.Setenv("METRICS_PORT", strconv.Itoa(metricsPort))
+
 		g := New()
 
 		g.GET("/hello", func(*Context) (interface{}, error) {
@@ -1012,6 +1054,9 @@ func Test_Shutdown(t *testing.T) {
 
 func TestApp_SubscriberInitialize(t *testing.T) {
 	t.Run("subscriber is initialized", func(t *testing.T) {
+		metricsPort := testutil.GetFreePort(t)
+		t.Setenv("METRICS_PORT", strconv.Itoa(metricsPort))
+
 		app := New()
 
 		mockContainer := container.Container{
@@ -1032,6 +1077,9 @@ func TestApp_SubscriberInitialize(t *testing.T) {
 	})
 
 	t.Run("subscriber is not initialized", func(t *testing.T) {
+		metricsPort := testutil.GetFreePort(t)
+		t.Setenv("METRICS_PORT", strconv.Itoa(metricsPort))
+
 		app := New()
 		app.Subscribe("Hello", func(*Context) error {
 			// this is a test subscriber
@@ -1046,6 +1094,9 @@ func TestApp_SubscriberInitialize(t *testing.T) {
 
 func TestApp_Subscribe(t *testing.T) {
 	t.Run("topic is empty", func(t *testing.T) {
+		metricsPort := testutil.GetFreePort(t)
+		t.Setenv("METRICS_PORT", strconv.Itoa(metricsPort))
+
 		app := New()
 
 		mockContainer := container.Container{
@@ -1063,6 +1114,9 @@ func TestApp_Subscribe(t *testing.T) {
 	})
 
 	t.Run("handler is nil", func(t *testing.T) {
+		metricsPort := testutil.GetFreePort(t)
+		t.Setenv("METRICS_PORT", strconv.Itoa(metricsPort))
+
 		app := New()
 
 		mockContainer := container.Container{
