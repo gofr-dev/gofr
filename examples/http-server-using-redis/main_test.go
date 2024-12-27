@@ -3,7 +3,9 @@ package main
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"net/http"
+	"strconv"
 	"testing"
 	"time"
 
@@ -21,7 +23,13 @@ import (
 )
 
 func TestHTTPServerUsingRedis(t *testing.T) {
-	const host = "http://localhost:8000"
+	httpPort := testutil.GetFreePort(t)
+	t.Setenv("HTTP_PORT", strconv.Itoa(httpPort))
+	host := fmt.Sprint("http://localhost:", httpPort)
+
+	port := testutil.GetFreePort(t)
+	t.Setenv("METRICS_PORT", strconv.Itoa(port))
+
 	go main()
 	time.Sleep(100 * time.Millisecond) // Giving some time to start the server
 
@@ -55,6 +63,12 @@ func TestHTTPServerUsingRedis(t *testing.T) {
 }
 
 func TestRedisSetHandler(t *testing.T) {
+	metricsPort := testutil.GetFreePort(t)
+	httpPort := testutil.GetFreePort(t)
+
+	t.Setenv("METRICS_PORT", strconv.Itoa(metricsPort))
+	t.Setenv("HTTP_PORT", strconv.Itoa(httpPort))
+
 	a := gofr.New()
 	logger := logging.NewLogger(logging.DEBUG)
 	redisClient, mock := redismock.NewClientMock()
@@ -64,7 +78,7 @@ func TestRedisSetHandler(t *testing.T) {
 
 	mock.ExpectSet("key", "value", 5*time.Minute).SetErr(testutil.CustomError{ErrorMessage: "redis get error"})
 
-	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://localhost:5000/handle", bytes.NewBuffer([]byte(`{"key":"value"}`)))
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, fmt.Sprintf("http://localhost:%d/handle", httpPort), bytes.NewBuffer([]byte(`{"key":"value"}`)))
 	req.Header.Set("content-type", "application/json")
 	gofrReq := gofrHTTP.NewRequest(req)
 
@@ -78,6 +92,12 @@ func TestRedisSetHandler(t *testing.T) {
 }
 
 func TestRedisPipelineHandler(t *testing.T) {
+	metricsPort := testutil.GetFreePort(t)
+	httpPort := testutil.GetFreePort(t)
+
+	t.Setenv("METRICS_PORT", strconv.Itoa(metricsPort))
+	t.Setenv("HTTP_PORT", strconv.Itoa(httpPort))
+
 	a := gofr.New()
 	logger := logging.NewLogger(logging.DEBUG)
 	redisClient, mock := redismock.NewClientMock()
@@ -88,7 +108,7 @@ func TestRedisPipelineHandler(t *testing.T) {
 	mock.ExpectSet("testKey1", "testValue1", time.Minute*5).SetErr(testutil.CustomError{ErrorMessage: "redis get error"})
 	mock.ClearExpect()
 
-	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://localhost:5000/handle", bytes.NewBuffer([]byte(`{"key":"value"}`)))
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, fmt.Sprint("http://localhost:", httpPort, "/handle"), bytes.NewBuffer([]byte(`{"key":"value"}`)))
 	req.Header.Set("content-type", "application/json")
 
 	gofrReq := gofrHTTP.NewRequest(req)

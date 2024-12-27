@@ -2,16 +2,26 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"net/http"
+	"strconv"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"gofr.dev/pkg/gofr/testutil"
 )
 
 func TestIntegration_AddRESTHandlers(t *testing.T) {
-	const host = "http://localhost:9090"
+	httpPort := testutil.GetFreePort(t)
+	t.Setenv("HTTP_PORT", strconv.Itoa(httpPort))
+	host := fmt.Sprint("http://localhost:", httpPort)
+
+	port := testutil.GetFreePort(t)
+	t.Setenv("METRICS_PORT", strconv.Itoa(port))
+
 	go main()
 	time.Sleep(100 * time.Millisecond) // Giving some time to start the server
 
