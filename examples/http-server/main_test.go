@@ -21,10 +21,8 @@ import (
 	"gofr.dev/pkg/gofr/testutil"
 )
 
-var host string
-
 func TestIntegration_SimpleAPIServer(t *testing.T) {
-	host = "http://localhost:9000"
+	host := "http://localhost:9000"
 
 	port := testutil.GetFreePort(t)
 	t.Setenv("METRICS_PORT", strconv.Itoa(port))
@@ -72,6 +70,8 @@ func TestIntegration_SimpleAPIServer(t *testing.T) {
 }
 
 func TestIntegration_SimpleAPIServer_Errors(t *testing.T) {
+	host := "http://localhost:9000"
+
 	tests := []struct {
 		desc       string
 		path       string
@@ -126,6 +126,8 @@ func TestIntegration_SimpleAPIServer_Errors(t *testing.T) {
 }
 
 func TestIntegration_SimpleAPIServer_Health(t *testing.T) {
+	host := "http://localhost:9000"
+
 	tests := []struct {
 		desc       string
 		path       string
