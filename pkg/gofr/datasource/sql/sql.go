@@ -37,15 +37,14 @@ type DBConfig struct {
 }
 
 func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *DB {
-	logger.Debugf("reading database configurations from config file")
-
 	dbConfig := getDBConfig(configs)
 
 	// if Hostname is not provided, we won't try to connect to DB
 	if dbConfig.Dialect != sqlite && dbConfig.HostName == "" {
-		logger.Debugf("not connecting to database as database configurations aren't available")
 		return nil
 	}
+
+	logger.Debugf("Loaded SQL database configurations from the configuration file")
 
 	logger.Debugf("generating database connection string for '%s'", dbConfig.Dialect)
 
