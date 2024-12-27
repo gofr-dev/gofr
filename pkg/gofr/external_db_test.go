@@ -1,9 +1,10 @@
 package gofr
 
 import (
-	"gofr.dev/pkg/gofr/testutil"
 	"strconv"
 	"testing"
+
+	"gofr.dev/pkg/gofr/testutil"
 
 	"github.com/stretchr/testify/assert"
 	"go.opentelemetry.io/otel"

@@ -884,24 +884,20 @@ func Test_AddCronJob_Success(t *testing.T) {
 	assert.Truef(t, pass, "unable to add cron job to cron table")
 }
 
-func TestStaticHandler(t *testing.T) {
+func setupTestEnvironment(t *testing.T) (host string, htmlContent []byte) {
+	t.Helper()
+
 	port := testutil.GetFreePort(t)
 	metricsPort := testutil.GetFreePort(t)
 
 	t.Setenv("METRICS_PORT", strconv.Itoa(metricsPort))
 
-	const indexHTML = "indexTest.html"
-
 	// Generating some files for testing
-	htmlContent := []byte("<html><head><title>Test Static File</title></head><body><p>Testing Static File</p></body></html>")
+	htmlContent = []byte("<html><head><title>Test Static File</title></head><body><p>Testing Static File</p></body></html>")
 
 	createPublicDirectory(t, defaultPublicStaticDir, htmlContent)
 
-	defer os.Remove("static/indexTest.html")
-
 	createPublicDirectory(t, "testdir", htmlContent)
-
-	defer os.RemoveAll("testdir")
 
 	app := New()
 
@@ -913,7 +909,18 @@ func TestStaticHandler(t *testing.T) {
 	go app.Run()
 	time.Sleep(100 * time.Millisecond)
 
-	host := fmt.Sprintf("http://localhost:%d", port)
+	host = fmt.Sprintf("http://localhost:%d", port)
+
+	return host, htmlContent
+}
+
+func TestStaticHandler(t *testing.T) {
+	const indexHTML = "indexTest.html"
+
+	host, htmlContent := setupTestEnvironment(t)
+
+	defer os.Remove("static/indexTest.html")
+	defer os.RemoveAll("testdir")
 
 	tests := []struct {
 		desc                       string
