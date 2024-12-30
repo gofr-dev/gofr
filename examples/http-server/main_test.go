@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"strconv"
 	"testing"
 	"time"
 
@@ -20,9 +21,12 @@ import (
 	"gofr.dev/pkg/gofr/testutil"
 )
 
-const host = "http://localhost:9000"
-
 func TestIntegration_SimpleAPIServer(t *testing.T) {
+	host := "http://localhost:9000"
+
+	port := testutil.GetFreePort(t)
+	t.Setenv("METRICS_PORT", strconv.Itoa(port))
+
 	go main()
 	time.Sleep(100 * time.Millisecond) // Giving some time to start the server
 
@@ -66,6 +70,8 @@ func TestIntegration_SimpleAPIServer(t *testing.T) {
 }
 
 func TestIntegration_SimpleAPIServer_Errors(t *testing.T) {
+	host := "http://localhost:9000"
+
 	tests := []struct {
 		desc       string
 		path       string
@@ -120,6 +126,8 @@ func TestIntegration_SimpleAPIServer_Errors(t *testing.T) {
 }
 
 func TestIntegration_SimpleAPIServer_Health(t *testing.T) {
+	host := "http://localhost:9000"
+
 	tests := []struct {
 		desc       string
 		path       string
@@ -143,6 +151,12 @@ func TestIntegration_SimpleAPIServer_Health(t *testing.T) {
 }
 
 func TestRedisHandler(t *testing.T) {
+	metricsPort := testutil.GetFreePort(t)
+	httpPort := testutil.GetFreePort(t)
+
+	t.Setenv("METRICS_PORT", strconv.Itoa(metricsPort))
+	t.Setenv("HTTP_PORT", strconv.Itoa(httpPort))
+
 	a := gofr.New()
 	logger := logging.NewLogger(logging.DEBUG)
 	redisClient, mock := redismock.NewClientMock()
