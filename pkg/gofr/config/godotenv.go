@@ -13,7 +13,6 @@ import (
 const (
 	defaultFileName         = "/.env"
 	defaultOverrideFileName = "/.local.env"
-	splitParts              = 2
 )
 
 type EnvLoader struct {
