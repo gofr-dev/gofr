@@ -7,8 +7,11 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strconv"
 	"testing"
 	"time"
+
+	"gofr.dev/pkg/gofr/testutil"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -235,6 +238,9 @@ func TestHandler_livelinessHandler(t *testing.T) {
 }
 
 func TestHandler_healthHandler(t *testing.T) {
+	metricsPort := testutil.GetFreePort(t)
+	t.Setenv("METRICS_PORT", strconv.Itoa(metricsPort))
+
 	a := New()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
