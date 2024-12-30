@@ -39,8 +39,13 @@ type DBConfig struct {
 func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *DB {
 	dbConfig := getDBConfig(configs)
 
+	if dbConfig.Dialect == "" {
+		return nil
+	}
+
 	// if Hostname is not provided, we won't try to connect to DB
 	if dbConfig.Dialect != sqlite && dbConfig.HostName == "" {
+		logger.Errorf("connection to SQL failed: host name is empty.")
 		return nil
 	}
 
