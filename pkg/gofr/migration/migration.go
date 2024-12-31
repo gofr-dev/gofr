@@ -75,6 +75,8 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 
 		err = migrationsMap[currentMigration].UP(ds)
 		if err != nil {
+			c.Logger.Errorf("failed to run migration, err: %v", err)
+
 			mg.rollback(c, migrationInfo)
 
 			return
