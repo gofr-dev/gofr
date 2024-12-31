@@ -133,7 +133,7 @@ func (c *Client) Connect() {
 }
 
 func getDBHost(uri string) (host string) {
-	// Define a regular expression to extract the host
+	// regular expression to extract the host
 	re := regexp.MustCompile(`mongodb://.*?:.*?@(.*?):\d+/.*`)
 
 	matches := re.FindStringSubmatch(uri)
