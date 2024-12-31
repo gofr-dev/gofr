@@ -83,7 +83,7 @@ func (c *Client) UseTracer(tracer any) {
 
 // Connect establishes a connection to MongoDB and registers metrics using the provided configuration when the client was Created.
 func (c *Client) Connect() {
-	c.logger.Debugf("connecting to MongoDB at %v to database %v", c.config.URI, c.config.Database)
+	c.logger.Debugf("connecting to MongoDB at %v to database %v", c.config.Host, c.config.Database)
 
 	uri := c.config.URI
 
@@ -108,18 +108,18 @@ func (c *Client) Connect() {
 	}
 
 	if err = m.Ping(ctx, nil); err != nil {
-		c.logger.Errorf("could not connect to mongoDB at %v due to err: %v", c.config.URI, err)
+		c.logger.Errorf("could not connect to mongoDB at %v due to err: %v", c.config.Host, err)
 		return
 	}
 
-	c.logger.Logf("connected to mongoDB successfully at %v to database %v", c.config.URI, c.config.Database)
+	c.logger.Logf("connected to mongoDB successfully at %v to database %v", c.config.Host, c.config.Database)
 
 	mongoBuckets := []float64{.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 4, 5, 7.5, 10}
 	c.metrics.NewHistogram("app_mongo_stats", "Response time of MONGO queries in milliseconds.", mongoBuckets...)
 
 	c.Database = m.Database(c.config.Database)
 
-	c.logger.Logf("connected to MongoDB at %v to database %v", uri, c.Database)
+	c.logger.Logf("connected to MongoDB at %v to database %v", c.config.Host, c.Database)
 }
 
 // InsertOne inserts a single document into the specified collection.
