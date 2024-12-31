@@ -126,7 +126,7 @@ func TestMigrationRunClickhouseMigrationFailure(t *testing.T) {
 		assert.True(t, mockClickHouse.ctrl.Satisfied())
 	})
 
-	assert.Contains(t, logs, "failed to run migration, err: sql: connection is already closed")
+	assert.Contains(t, logs, "failed to run migration : [1], err: sql: connection is already closed")
 }
 
 func TestMigrationRunClickhouseMigrationFailureWhileCheckingTable(t *testing.T) {
