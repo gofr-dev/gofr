@@ -36,6 +36,47 @@ func Test_NewMongoClient(t *testing.T) {
 	assert.NotNil(t, client)
 }
 
+func TestGetDBHost(t *testing.T) {
+	tests := []struct {
+		name     string
+		uri      string
+		expected string
+	}{
+		{
+			name:     "Valid URI with host and port",
+			uri:      "mongodb://username:password@hostname:27017/database?authSource=admin",
+			expected: "hostname",
+		},
+		{
+			name:     "Valid URI with IP address as host",
+			uri:      "mongodb://username:password@192.168.1.1:27017/database?authSource=admin",
+			expected: "192.168.1.1",
+		},
+		{
+			name:     "Invalid URI with no host",
+			uri:      "mongodb://username:password@:27017/database?authSource=admin",
+			expected: "",
+		},
+		{
+			name:     "Empty URI",
+			uri:      "",
+			expected: "",
+		},
+		{
+			name:     "Malformed URI",
+			uri:      "mongodb:/username:password@hostname:27017/database?authSource=admin",
+			expected: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := getDBHost(tt.uri)
+			assert.Equal(t, tt.expected, result, "Test case: %s", tt.name)
+		})
+	}
+}
+
 func Test_NewMongoClientError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()

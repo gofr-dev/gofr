@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 	"time"
 
 	"go.opentelemetry.io/otel/attribute"
@@ -83,6 +84,7 @@ func (c *Client) UseTracer(tracer any) {
 
 // Connect establishes a connection to MongoDB and registers metrics using the provided configuration when the client was Created.
 func (c *Client) Connect() {
+	var host string
 	c.logger.Debugf("connecting to MongoDB at %v to database %v", c.config.Host, c.config.Database)
 
 	uri := c.config.URI
@@ -90,6 +92,14 @@ func (c *Client) Connect() {
 	if uri == "" {
 		uri = fmt.Sprintf("mongodb://%s:%s@%s:%d/%s?authSource=admin",
 			c.config.User, c.config.Password, c.config.Host, c.config.Port, c.config.Database)
+
+		host = c.config.Host
+	} else {
+		host = getDBHost(uri)
+
+		if host == "" {
+			c.logger.Debug("failed to parse URI: incorrect format provided")
+		}
 	}
 
 	timeout := c.config.ConnectionTimeout
@@ -108,18 +118,31 @@ func (c *Client) Connect() {
 	}
 
 	if err = m.Ping(ctx, nil); err != nil {
-		c.logger.Errorf("could not connect to mongoDB at %v due to err: %v", c.config.Host, err)
+		c.logger.Errorf("could not connect to mongoDB at %v due to err: %v", host, err)
 		return
 	}
 
-	c.logger.Logf("connected to mongoDB successfully at %v to database %v", c.config.Host, c.config.Database)
+	c.logger.Logf("connected to mongoDB successfully at %v to database %v", host, c.config.Database)
 
 	mongoBuckets := []float64{.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 4, 5, 7.5, 10}
 	c.metrics.NewHistogram("app_mongo_stats", "Response time of MONGO queries in milliseconds.", mongoBuckets...)
 
 	c.Database = m.Database(c.config.Database)
 
-	c.logger.Logf("connected to MongoDB at %v to database %v", c.config.Host, c.Database)
+	c.logger.Logf("connected to MongoDB at %v to database %v", host, c.Database)
+}
+
+func getDBHost(uri string) (host string) {
+	// Define a regular expression to extract the host
+	re := regexp.MustCompile(`mongodb://.*?:.*?@(.*?):\d+/.*`)
+
+	matches := re.FindStringSubmatch(uri)
+
+	if len(matches) > 1 {
+		host = matches[1]
+	}
+
+	return
 }
 
 // InsertOne inserts a single document into the specified collection.
