@@ -85,6 +85,7 @@ func (c *Client) UseTracer(tracer any) {
 // Connect establishes a connection to MongoDB and registers metrics using the provided configuration when the client was Created.
 func (c *Client) Connect() {
 	var host string
+
 	c.logger.Debugf("connecting to MongoDB at %v to database %v", c.config.Host, c.config.Database)
 
 	uri := c.config.URI
@@ -142,7 +143,7 @@ func getDBHost(uri string) (host string) {
 		host = matches[1]
 	}
 
-	return
+	return host
 }
 
 // InsertOne inserts a single document into the specified collection.
