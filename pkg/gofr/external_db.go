@@ -2,7 +2,6 @@ package gofr
 
 import (
 	"go.opentelemetry.io/otel"
-
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/datasource/file"
 )
@@ -143,4 +142,18 @@ func (a *App) AddOpenTSDB(db container.OpenTSDBProvider) {
 	db.Connect()
 
 	a.container.OpenTSDB = db
+}
+
+// AddSurrealDB sets the opentsdb datasource in the app's container.
+func (a *App) AddSurrealDB(db container.SurrealBDProvider) {
+	db.UseLogger(a.Logger())
+	db.UseMetrics(a.Metrics())
+
+	tracer := otel.GetTracerProvider().Tracer("gofr-surrealDD")
+
+	db.UseTracer(tracer)
+	db.Connect()
+
+	a.container.SurrealDB = db
+
 }

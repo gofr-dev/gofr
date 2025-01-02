@@ -275,6 +275,23 @@ type MongoProvider interface {
 	provider
 }
 
+// SurrealDBClient defines database operations interface
+type SurrealDB interface {
+	UseNamespace(ns string) error
+	UseDatabase(db string) error
+	Query(ctx context.Context, query string, vars map[string]interface{}) ([]interface{}, error)
+	Create(ctx context.Context, table string, data interface{}) (map[string]interface{}, error)
+	Update(ctx context.Context, table string, id string, data interface{}) (interface{}, error)
+	Delete(ctx context.Context, table string, id string) (any, error)
+	Select(ctx context.Context, table string) ([]map[string]interface{}, error)
+}
+
+type SurrealBDProvider interface {
+	SurrealDB
+
+	provider
+}
+
 type provider interface {
 	// UseLogger sets the logger for the Cassandra client.
 	UseLogger(logger any)
