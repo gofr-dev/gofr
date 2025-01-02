@@ -45,13 +45,11 @@ func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *D
 
 	// if Hostname is not provided, we won't try to connect to DB
 	if dbConfig.Dialect != sqlite && dbConfig.HostName == "" {
-		logger.Errorf("connection to SQL failed: host name is empty.")
+		logger.Errorf("connection to %s failed: host name is empty.", dbConfig.Dialect)
 		return nil
 	}
 
-	logger.Debugf("Loaded SQL database configurations from the configuration file")
-
-	logger.Debugf("generating database connection string for '%s'", dbConfig.Dialect)
+	logger.Debugf("Loaded SQL configs and generating connection string for '%s'", dbConfig.Dialect)
 
 	dbConnectionString, err := getDBConnectionString(dbConfig)
 	if err != nil {
