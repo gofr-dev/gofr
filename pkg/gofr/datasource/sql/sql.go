@@ -49,7 +49,7 @@ func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *D
 		return nil
 	}
 
-	logger.Debugf("Loaded SQL configs and generating connection string for '%s'", dbConfig.Dialect)
+	logger.Debugf("generating database connection string for '%s'", dbConfig.Dialect)
 
 	dbConnectionString, err := getDBConnectionString(dbConfig)
 	if err != nil {
