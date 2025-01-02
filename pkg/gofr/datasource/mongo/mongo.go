@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"regexp"
+	"net/url"
 	"time"
 
 	"go.opentelemetry.io/otel/attribute"
@@ -134,16 +134,12 @@ func (c *Client) Connect() {
 }
 
 func getDBHost(uri string) (host string) {
-	// regular expression to extract the host
-	re := regexp.MustCompile(`mongodb://.*?:.*?@(.*?):\d+/.*`)
-
-	matches := re.FindStringSubmatch(uri)
-
-	if len(matches) > 1 {
-		host = matches[1]
+	parsedURL, err := url.Parse(uri)
+	if err != nil {
+		return ""
 	}
 
-	return host
+	return parsedURL.Hostname()
 }
 
 // InsertOne inserts a single document into the specified collection.
