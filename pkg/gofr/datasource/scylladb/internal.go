@@ -1,48 +1,65 @@
 package scylladb
 
 import (
-	"github.com/gocql/gocql"
 	"regexp"
 	"strings"
+
+	"github.com/gocql/gocql"
 )
 
+// scylladbIterator implements iterator interface.
 type scylladbIterator struct {
 	iter *gocql.Iter
 }
 
-func (s *scylladbIterator) columns() []gocql.ColumnInfo {
+// Columns gets the Column information.
+// This method wraps the `Columns` method of the underlying `iter` object.
+func (s *scylladbIterator) Columns() []gocql.ColumnInfo {
 	return s.iter.Columns()
 }
-func (s *scylladbIterator) scan(dest ...any) bool {
+
+//	Scan gets the next row from the Cassandra iterator and fills in the provided arguments.
+//
+// This method wraps the `Scan` method of the underlying `iter` object.
+func (s *scylladbIterator) Scan(dest ...any) bool {
 	return s.iter.Scan(dest...)
 }
 
-func (s *scylladbIterator) numRows() int {
+// NumRows returns a number of rows.
+func (s *scylladbIterator) NumRows() int {
 	return s.iter.NumRows()
 }
 
+// scylladbQuery implements query interface.
 type scylladbQuery struct {
 	query *gocql.Query
 }
 
-func (s *scylladbQuery) exec() error {
+// Exec performs a ScyllaDB Query Exec.
+func (s *scylladbQuery) Exec() error {
 	return s.query.Exec()
 }
 
-func (s *scylladbQuery) iter() iterator {
+// Iter returns a ScyllaDB iterator.
+func (s *scylladbQuery) Iter() iterator {
 	iter := scylladbIterator{iter: s.query.Iter()}
 
 	return &iter
 }
 
-func (c *scylladbQuery) mapScanCAS(dest map[string]any) (applied bool, err error) {
-	return c.query.MapScanCAS(dest)
+// MapScanCAS checks a ScyllaDB query an IF clause and scans the existing data into map[string]any (if any).
+// This method wraps the `MapScanCAS` method of the underlying `query` object.
+func (s *scylladbQuery) MapScanCAS(dest map[string]any) (applied bool, err error) {
+	return s.query.MapScanCAS(dest)
 }
 
-func (c *scylladbQuery) scanCAS(dest ...any) (applied bool, err error) {
-	return c.query.ScanCAS(dest)
+// ScanCAS checks a ScyllaDB query with a IF clause and scans the existing data.
+// This method wraps the `ScanCAS` method of the underlying `query` object.
+func (s *scylladbQuery) ScanCAS(dest ...any) (applied bool, err error) {
+	return s.query.ScanCAS(dest)
 }
 
+// scyllaClusterConfig implements clusterConfig.
 type scyllaClusterConfig struct {
 	clusterConfig *gocql.ClusterConfig
 }
@@ -60,12 +77,9 @@ func newClusterConfig(config *Config) clusterConfig {
 	return &s
 }
 
-type scyllaSession struct {
-	session *gocql.Session
-}
-
-func (c *scyllaClusterConfig) createSession() (session, error) {
-	sess, err := c.clusterConfig.CreateSession()
+// createSession creates a ScyllaDB session based on the provided configuration.
+func (s *scyllaClusterConfig) createSession() (session, error) {
+	sess, err := s.clusterConfig.CreateSession()
 	if err != nil {
 		return nil, err
 	}
@@ -73,38 +87,49 @@ func (c *scyllaClusterConfig) createSession() (session, error) {
 	return &scyllaSession{session: sess}, nil
 }
 
-func (c *scyllaSession) query(stmt string, values ...any) query {
-	return &scylladbQuery{query: c.session.Query(stmt, values...)}
+// scyllaSession implements session.
+type scyllaSession struct {
+	session *gocql.Session
 }
 
-func (c *scyllaSession) newBatch(batchType gocql.BatchType) batch {
-	return &scyllaBatch{batch: c.session.NewBatch(batchType)}
+// Query creates a ScyllaDB query.
+func (s *scyllaSession) Query(stmt string, values ...any) query {
+	return &scylladbQuery{query: s.session.Query(stmt, values...)}
 }
 
-func (c *scyllaSession) executeBatch(b batch) error {
+func (s *scyllaSession) newBatch(batchType gocql.BatchType) batch {
+	return &scyllaBatch{batch: s.session.NewBatch(batchType)}
+}
+
+// executeBatch executes a batch operation.
+func (s *scyllaSession) executeBatch(b batch) error {
 	gocqlBatch := b.getBatch()
 
-	return c.session.ExecuteBatch(gocqlBatch)
+	return s.session.ExecuteBatch(gocqlBatch)
 }
 
-func (c *scyllaSession) executeBatchCAS(b batch, dest ...any) (bool, error) {
-	gocqlBatch := b.getBatch()
+// executeBatchCAS executes a batch operation and returns true if successful.
+func (s *scyllaSession) executeBatchCAS(batch batch, dest ...any) (bool, error) {
+	gocqlBatch := batch.getBatch()
 
-	applied, _, err := c.session.ExecuteBatchCAS(gocqlBatch, dest...)
+	applied, _, err := s.session.ExecuteBatchCAS(gocqlBatch, dest...)
 
 	return applied, err
 }
 
+// scyllaBatch  implements batch.
 type scyllaBatch struct {
 	batch *gocql.Batch
 }
 
-func (c *scyllaBatch) Query(stmt string, args ...any) {
-	c.batch.Query(stmt, args...)
+// Query adds the query to the batch operation.
+func (s *scyllaBatch) Query(stmt string, args ...any) {
+	s.batch.Query(stmt, args...)
 }
 
-func (c *scyllaBatch) getBatch() *gocql.Batch {
-	return c.batch
+// getBatch returns the underlying `gocql.Batch`.
+func (s *scyllaBatch) getBatch() *gocql.Batch {
+	return s.batch
 }
 
 var matchFirstCap = regexp.MustCompile("(.)([A-Z][a-z]+)")

@@ -713,3 +713,204 @@ func queryDataPoints(c *gofr.Context) (any, error) {
 	return queryResp.QueryRespCnts, nil
 }
 ```
+ScyllaDB
+
+
+GoFr supports injecting ScyllaDB to facilitate interaction with ScyllaDB REST APIs.Implementations adhering to the ScyllaDB interface can be registered with app.AddScyllaDB(),enabling applications to leverage ScyllaDB for time-series data management through gofr.Context
+```go
+type ScyllaDB interface {
+	// Query executes a CQL (Cassandra Query Language) query on the ScyllaDB cluster
+	// and stores the result in the provided destination variable `dest`
+	
+	Query(dest any, stmt string, values ...any) error
+	
+	//QueryWithCtx executes a CQL query with the provided context and stores the result in the `dest` variable
+	QueryWithCtx(ctx context.Context, dest any, stmt string, values ...any) error
+	
+	//Exec executes a CQL statement (e.g., INSERT, UPDATE, DELETE) on the ScyllaDB cluster without returning any result
+	Exec(stmt string, values ...any) error
+	
+	// ExecWithCtx executes a CQL statement with the provided context and without returning any result.
+	ExecWithCtx(ctx context.Context, stmt string, values ...any) error
+	
+	// ExecCAS performs a conditional (Compare and Set) operation on ScyllaDB, executing a CQL statement
+	ExecCAS(dest any, stmt string, values ...any) (bool, error)
+	
+	// NewBatch initializes a new batch operation with the specified name and batch type.
+	NewBatch(name string, batchType int) error
+	
+	// BatchQuery executes a batch query in the ScyllaDB cluster with the specified name, statement, and values.
+	BatchQuery(name, stmt string, values ...any) error
+	
+	// BatchQueryWithCtx executes a batch query with the provided context
+	BatchQueryWithCtx(ctx context.Context, name, stmt string, values ...any) error
+	
+	ExecuteBatchWithCtx(ctx context.Context, name string) error
+	
+	// HealthChecker defines the HealthChecker interface
+	HealthChecker
+}
+````
+
+
+Import the gofr's external driver for ScyllaDB:
+
+```go
+go get gofr.dev/pkg/gofr/datasource/scylladb
+```
+```go
+package main
+
+import (
+	"fmt"
+	"github.com/gocql/gocql"
+	"gofr.dev/pkg/gofr"
+	"gofr.dev/pkg/gofr/datasource/scylladb"
+	"log"
+)
+
+type User struct {
+	ID    gocql.UUID `json:"id"`
+	Name  string     `json:"name"`
+	Email string     `json:"email"`
+}
+
+func main() {
+	app := gofr.New()
+
+	client := scylladb.New(scylladb.Config{
+		Hosts:    "localhost",
+		Keyspace: "test2_keyspace",
+		Port:     9042,
+		Username: "root",
+		Password: "password",
+	})
+
+	if client == nil {
+		log.Fatal("Failed to initialize ScyllaDB client")
+	}
+
+	app.AddScyllaDB(client)
+
+	app.GET("/users/{id}", getUser)
+	app.POST("/users", addUser)
+	app.DELETE("/users/{id}", deleteUser)
+	app.PUT("/users/{id}", updateUser)
+
+	app.Run()
+
+}
+
+func updateUser(c *gofr.Context) (interface{}, error) {
+	uuidStr := c.PathParam("id")
+	if uuidStr == "" {
+		return nil, fmt.Errorf("UUID is required")
+	}
+
+	userID, err := gocql.ParseUUID(uuidStr)
+	if err != nil {
+		c.Logger.Error("Invalid UUID format:", err)
+		return nil, fmt.Errorf("Invalid UUID format")
+	}
+
+	var updatedUser struct {
+		Email string `json:"email"`
+		Name  string `json:"name"`
+	}
+
+	err = c.Bind(&updatedUser)
+	if err != nil {
+		c.Logger.Error("Error binding request data:", err)
+		return nil, err
+	}
+
+	if updatedUser.Email == "" {
+		return nil, fmt.Errorf("Email is required")
+	}
+	var newUser User
+	query := `UPDATE users SET email = ?, name = ? WHERE id = ?`
+
+	err = c.ScyllaDB.QueryWithCtx(c, &newUser, query, updatedUser.Email, updatedUser.Name, userID)
+
+	if err != nil {
+		c.Logger.Error("Error updating user email and name:", err)
+		return nil, err
+	}
+
+	return map[string]string{
+		"message": "User email and name updated successfully",
+	}, nil
+}
+
+func deleteUser(c *gofr.Context) (interface{}, error) {
+
+	uuidStr := c.PathParam("id")
+
+	if uuidStr == "" {
+		return nil, fmt.Errorf("UUID is required")
+	}
+
+	userID, err := gocql.ParseUUID(uuidStr)
+	if err != nil {
+		c.Logger.Error("Invalid UUID format:", err)
+		return nil, fmt.Errorf("Invalid UUID format")
+	}
+
+	query := `DELETE FROM users WHERE id = ?`
+	err = c.ScyllaDB.ExecWithCtx(c, query, userID)
+
+	if err != nil {
+		c.Logger.Error("Error deleting user by UUID:", err)
+		return nil, err
+	}
+
+	return map[string]string{
+		"message": "User deleted successfully by UUID",
+	}, nil
+}
+
+func addUser(c *gofr.Context) (interface{}, error) {
+
+	var newUser User
+	err := c.Bind(&newUser)
+	if err != nil {
+		return nil, err
+	}
+	err = c.ScyllaDB.ExecWithCtx(c, `INSERT INTO users (id, name, email) VALUES (?, ?, ?)`, newUser.ID, newUser.Name, newUser.Email)
+
+	if err != nil {
+
+		c.Logger.Error("Error inserting user into ScyllaDB:", err)
+		return nil, err
+	}
+	return newUser, nil
+
+}
+
+func getUser(c *gofr.Context) (interface{}, error) {
+	var user User
+	id := c.PathParam("id")
+
+	if id == "" {
+		return nil, fmt.Errorf("ID is required")
+	}
+
+	userID, err := gocql.ParseUUID(id)
+	if err != nil {
+		c.Logger.Error("Invalid UUID format:", err)
+		return nil, fmt.Errorf("Invalid UUID format")
+	}
+
+	err = c.ScyllaDB.QueryWithCtx(c, &user, `SELECT id, name, email FROM users WHERE id = ?`, userID)
+	if err != nil {
+		c.Logger.Error("Error in selecting the user:", err)
+		if err == gocql.ErrNotFound {
+			return nil, fmt.Errorf("User not found")
+		}
+		return nil, err
+	}
+
+	return user, nil
+}
+
+````

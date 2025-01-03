@@ -4,14 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/gocql/gocql"
-	_ "github.com/sirupsen/logrus"
-	"go.opentelemetry.io/otel/attribute"
 	"reflect"
-
-	"go.opentelemetry.io/otel/trace"
-
 	"time"
+
+	"github.com/gocql/gocql"
+
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 const (
@@ -22,6 +21,8 @@ const (
 
 var errStatusDown = errors.New("status down")
 
+// Config holds the configuration settings for connecting to a ScyllaDB cluster,
+// including host addresses, keyspace, port, and authentication credentials.
 type Config struct {
 	Hosts    string
 	Keyspace string
@@ -30,77 +31,108 @@ type Config struct {
 	Password string
 }
 
-type scylladb struct {
+// Scylladb represents the connection and operations context for interacting with a ScyllaDB cluster,
+// including configuration, active session, query handling, and initialized batches.
+type Scylladb struct {
 	clusterConfig clusterConfig
 	session       session
 	query         query
 	batches       map[string]batch
 }
+
+// Client is the main interface for interacting with a ScyllaDB cluster,
+// managing configuration, ScyllaDB operations, logging, metrics, and tracing.
 type Client struct {
 	config *Config
 
-	scylla *scylladb
+	scylla *Scylladb
+	logger Logger
 
-	session session
-
-	logger  Logger
 	metrics Metrics
-	tracer  trace.Tracer
+
+	tracer trace.Tracer
 }
 
+// Health represents the health status of the ScyllaDB cluster,
+// including the overall status (e.g., "UP" or "DOWN") and additional details.
 type Health struct {
 	Status  string         `json:" status,omitempty"`
 	Details map[string]any `json:"details,omitempty"`
 }
 
+// New initializes ScyllaDB driver with the provided configuration.
 func New(conf Config) *Client {
-	cass := &scylladb{clusterConfig: newClusterConfig(&conf)}
+	cass := &Scylladb{clusterConfig: newClusterConfig(&conf)}
 
 	return &Client{config: &conf, scylla: cass}
 }
 
+// Connect establishes a connection to Scylladb.
 func (c *Client) Connect() {
-
 	c.logger.Debugf("Connecting to ScyllaDB at %v on port %v to keyspace %v", c.config.Hosts, c.config.Port, c.config.Keyspace)
-
 	sess, err := c.scylla.clusterConfig.createSession()
+
 	if err != nil {
 		c.logger.Error("failed to connect to ScyllaDB:", err)
 		return
 	}
+
 	scyllaBuckets := []float64{.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 4, 5, 7.5, 10}
 	c.metrics.NewHistogram("app_scylla_stats", "Response time of scylla queries in microseconds", scyllaBuckets...)
 
 	c.logger.Logf("connected to '%s' keyspace at host '%s' and port '%d'", c.config.Keyspace, c.config.Hosts, c.config.Port)
 	c.scylla.session = sess
-
 }
+
+// UseLogger sets the logger for the scylladb client.
 func (c *Client) UseLogger(logger interface{}) {
 	if l, ok := logger.(Logger); ok {
 		c.logger = l
 	}
 }
 
+// UseMetrics sets the metrics for the scylladb client.
 func (c *Client) UseMetrics(metrics interface{}) {
 	if m, ok := metrics.(Metrics); ok {
 		c.metrics = m
 	}
 }
 
+// UseTracer sets the tracer for the scylladb client.
 func (c *Client) UseTracer(tracer any) {
 	if tracer, ok := tracer.(trace.Tracer); ok {
 		c.tracer = tracer
 	}
 }
 
+// Query is the original method without context.
+// It internally delegates to QueryWithCtx using context.Background() as the default context.
 func (c *Client) Query(dest any, stmt string, values ...any) error {
 	return c.QueryWithCtx(context.Background(), dest, stmt, values...)
-
 }
 
+// Exec executes a CQL (Cassandra Query Language) statement on a ScyllaDB cluster
+// with the provided values, using the default context (context.Background()).
+func (c *Client) Exec(stmt string, values ...any) error {
+	return c.ExecWithCtx(context.Background(), stmt, values)
+}
+
+// ExecWithCtx executes a CQL statement by using the context,statement,values and returns error.
+func (c *Client) ExecWithCtx(ctx context.Context, stmt string, values ...any) error {
+	span := c.addTrace(ctx, "exec", stmt)
+	defer c.sendOperationStats(&QueryLog{Operation: "ExecWithCtx", Query: stmt, Keyspace: c.config.Keyspace}, time.Now(), "exec", span)
+
+	return c.scylla.session.Query(stmt, values...).Exec()
+}
+
+// ExecCAS performs Compare and Set operation on ScyllaDB cluster.
 func (c *Client) ExecCAS(dest any, stmt string, values ...any) (bool, error) {
 	return c.ExecCASWithCtx(context.Background(), dest, stmt, values)
 }
+
+// ExecCASWithCtx takes default context,destination,statement,values and  return bool and error.
+//
+//nolint:exhaustive // We just want to take care of slice and struct in this case.
 func (c *Client) ExecCASWithCtx(ctx context.Context, dest any, stmt string, values ...any) (bool, error) {
 	var (
 		applied bool
@@ -119,7 +151,7 @@ func (c *Client) ExecCASWithCtx(ctx context.Context, dest any, stmt string, valu
 	}
 
 	rv := rvo.Elem()
-	q := c.scylla.session.query(stmt, values...)
+	q := c.scylla.session.Query(stmt, values...)
 
 	switch rv.Kind() {
 	case reflect.Struct:
@@ -136,11 +168,14 @@ func (c *Client) ExecCASWithCtx(ctx context.Context, dest any, stmt string, valu
 		return false, errUnexpectedMap
 
 	default:
-		applied, err = q.scanCAS(rv.Interface())
+		applied = true
 	}
 
 	return applied, err
 }
+
+// rowsToStructCAS Scans a CAS query result into a struct, setting fields based on column names and types,
+// and returns if the update was applied.
 func (c *Client) rowsToStructCAS(query query, vo reflect.Value) (bool, error) {
 	v := vo
 	if vo.Kind() == reflect.Ptr {
@@ -149,7 +184,7 @@ func (c *Client) rowsToStructCAS(query query, vo reflect.Value) (bool, error) {
 
 	row := make(map[string]any)
 
-	applied, err := query.mapScanCAS(row)
+	applied, err := query.MapScanCAS(row)
 	if err != nil {
 		return false, err
 	}
@@ -172,6 +207,9 @@ func (c *Client) rowsToStructCAS(query query, vo reflect.Value) (bool, error) {
 	return applied, nil
 }
 
+// QueryWithCtx takes context ,destination,statement,values and returns error.
+//
+//nolint:exhaustive // We just want to take care of slice and struct in this case
 func (c *Client) QueryWithCtx(ctx context.Context, dest any, stmt string, values ...any) error {
 	span := c.addTrace(ctx, "query", stmt)
 
@@ -180,16 +218,15 @@ func (c *Client) QueryWithCtx(ctx context.Context, dest any, stmt string, values
 	rvo := reflect.ValueOf(dest)
 	if rvo.Kind() != reflect.Ptr {
 		c.logger.Error("we did not get a pointer. data is not settable.")
-
 		return errDestinationIsNotPointer
 	}
 
 	rv := rvo.Elem()
-	iter := c.scylla.session.query(stmt, values...).iter()
+	iter := c.scylla.session.Query(stmt, values...).Iter()
 
 	switch rv.Kind() {
 	case reflect.Slice:
-		numRows := iter.numRows()
+		numRows := iter.NumRows()
 
 		for numRows > 0 {
 			val := reflect.New(rv.Type().Elem())
@@ -197,7 +234,7 @@ func (c *Client) QueryWithCtx(ctx context.Context, dest any, stmt string, values
 			if rv.Type().Elem().Kind() == reflect.Struct {
 				c.rowsToStruct(iter, val)
 			} else {
-				_ = iter.scan(val.Interface())
+				_ = iter.Scan(val.Interface())
 			}
 
 			rv = reflect.Append(rv, val.Elem())
@@ -221,20 +258,13 @@ func (c *Client) QueryWithCtx(ctx context.Context, dest any, stmt string, values
 	return nil
 }
 
-func (c *Client) Exec(stmt string, values ...any) error {
-	return c.ExecWithCtx(context.Background(), stmt, values)
-}
-
-func (c *Client) ExecWithCtx(ctx context.Context, stmt string, values ...any) error {
-	span := c.addTrace(ctx, "exec", stmt)
-	defer c.sendOperationStats(&QueryLog{Operation: "ExecWithCtx", Query: stmt, Keyspace: c.config.Keyspace}, time.Now(), "exec", span)
-
-	return c.session.query(stmt, values...).exec()
-}
-
+// NewBatch creates a new batch operation for a ScyllaDB cluster with the provided
+// name and batch type, using the default context (context.Background()).
 func (c *Client) NewBatch(name string, batchType int) error {
 	return c.NewBatchWithCtx(context.Background(), name, batchType)
 }
+
+// NewBatchWithCtx uses context ,name ,batchType and returns error
 func (c *Client) NewBatchWithCtx(_ context.Context, name string, batchType int) error {
 	switch batchType {
 	case LoggedBatch, UnloggedBatch, CounterBatch:
@@ -250,10 +280,13 @@ func (c *Client) NewBatchWithCtx(_ context.Context, name string, batchType int) 
 	}
 }
 
+// BatchQuery executes a batched query in a ScyllaDB cluster with the provided
+// name, statement, and values, using the default context (context.Background()).
 func (c *Client) BatchQuery(name, stmt string, values ...any) error {
 	return c.BatchQueryWithCtx(context.Background(), name, stmt, values...)
 }
 
+// BatchQueryWithCtx executes Query with  the provided context,name,statement and values.
 func (c *Client) BatchQueryWithCtx(ctx context.Context, name, stmt string, values ...any) error {
 	span := c.addTrace(ctx, "batch-query", stmt)
 
@@ -273,6 +306,7 @@ func (c *Client) BatchQueryWithCtx(ctx context.Context, name, stmt string, value
 	return nil
 }
 
+// ExecuteBatchWithCtx executes batch with provided context,name and returns err.
 func (c *Client) ExecuteBatchWithCtx(ctx context.Context, name string) error {
 	span := c.addTrace(ctx, "execute-batch", "batch")
 
@@ -290,22 +324,54 @@ func (c *Client) ExecuteBatchWithCtx(ctx context.Context, name string) error {
 	return c.scylla.session.executeBatch(b)
 }
 
+// ExecuteBatchCAS executes a Compare and set operation on ScyllaDB cluster using the provided batch name.
+func (c *Client) ExecuteBatchCAS(name string, dest ...any) (bool, error) {
+	return c.ExecuteBatchCASWithCtx(context.Background(), name, dest)
+}
+
+// ExecuteBatchCASWithCtx takes default context,name,destination returns bool and error.
+func (c *Client) ExecuteBatchCASWithCtx(ctx context.Context, name string, dest ...any) (bool, error) {
+	span := c.addTrace(ctx, "execute-batch-cas", "batch")
+
+	defer c.sendOperationStats(&QueryLog{
+		Operation: "ExecuteBatchCASWithCtx",
+		Query:     "batch",
+		Keyspace:  c.config.Keyspace,
+	}, time.Now(), "execute-batch-cas", span)
+
+	b, ok := c.scylla.batches[name]
+	if !ok {
+		return false, errBatchNotInitialised
+	}
+
+	return c.scylla.session.executeBatchCAS(b, dest...)
+}
+
+// ExecuteBatch executes a previously initialized batch operation in a ScyllaDB cluster
+// using the provided batch name, with the default context (context.Background()).
+func (c *Client) ExecuteBatch(name string) error {
+	return c.ExecuteBatchWithCtx(context.Background(), name)
+}
+
+// rowsToStruct Scans the iterator row data and maps it to the fields of the provided struct.
 func (c *Client) rowsToStruct(iter iterator, vo reflect.Value) {
 	v := vo
 	if vo.Kind() == reflect.Ptr {
 		v = vo.Elem()
 	}
 
-	columns := c.getColumnsFromColumnsInfo(iter.columns())
+	columns := c.getColumnsFromColumnsInfo(iter.Columns())
 	fieldNameIndex := c.getFieldNameIndex(v)
-	fields := c.getFields(columns, fieldNameIndex, v)
+	fields := getFields(columns, fieldNameIndex, v)
 
-	_ = iter.scan(fields...)
+	_ = iter.Scan(fields...)
 
 	if vo.CanSet() {
 		vo.Set(v)
 	}
 }
+
+// getColumnsFromColumnsInfo Extracts and returns a slice of column names from the provided gocql.ColumnInfo slice.
 func (*Client) getColumnsFromColumnsInfo(columns []gocql.ColumnInfo) []string {
 	cols := make([]string, 0)
 
@@ -316,6 +382,7 @@ func (*Client) getColumnsFromColumnsInfo(columns []gocql.ColumnInfo) []string {
 	return cols
 }
 
+// getFieldNameIndex Returns a map of field names from struct convert  toSnakeCase to their index positions in the struct.
 func (*Client) getFieldNameIndex(v reflect.Value) map[string]int {
 	fieldNameIndex := map[string]int{}
 
@@ -337,6 +404,7 @@ func (*Client) getFieldNameIndex(v reflect.Value) map[string]int {
 	return fieldNameIndex
 }
 
+// HealthCheck performs a health check on the ScyllaDB cluster by querying.
 func (c *Client) HealthCheck(context.Context) (any, error) {
 	const (
 		statusDown = "DOWN"
@@ -357,7 +425,7 @@ func (c *Client) HealthCheck(context.Context) (any, error) {
 		return &h, errStatusDown
 	}
 
-	err := c.scylla.session.query("SELECT now() FROM system.local").exec()
+	err := c.scylla.session.Query("SELECT now() FROM system.local").Exec()
 	if err != nil {
 		h.Status = statusDown
 		h.Details["message"] = err.Error()
@@ -370,6 +438,7 @@ func (c *Client) HealthCheck(context.Context) (any, error) {
 	return &h, nil
 }
 
+// addTrace starts a new trace span for the specified method and query.
 func (c *Client) addTrace(ctx context.Context, method, query string) trace.Span {
 	if c.tracer != nil {
 		_, span := c.tracer.Start(ctx, fmt.Sprintf("scylladb-%v", method))
@@ -378,11 +447,14 @@ func (c *Client) addTrace(ctx context.Context, method, query string) trace.Span 
 			attribute.String("scylladb.query", query),
 			attribute.String("scylladb.keyspace", c.config.Keyspace),
 		)
+
 		return span
 	}
+
 	return nil
 }
 
+// sendOperationStats Logs query duration and stats, records metrics, and ends the trace span if present.
 func (c *Client) sendOperationStats(ql *QueryLog, startTime time.Time, method string, span trace.Span) {
 	duration := time.Since(startTime).Microseconds()
 
@@ -401,8 +473,10 @@ func (c *Client) sendOperationStats(ql *QueryLog, startTime time.Time, method st
 	c.scylla.query = nil
 }
 
-func (c *Client) getFields(columns []string, fieldNameIndex map[string]int, v reflect.Value) []interface{} {
+// getFields returns a slice of field pointers from the struct, mapping columns to their corresponding fields.
+func getFields(columns []string, fieldNameIndex map[string]int, v reflect.Value) []interface{} {
 	fields := make([]interface{}, len(columns))
+
 	for i, column := range columns {
 		if index, ok := fieldNameIndex[column]; ok {
 			fields[i] = v.Field(index).Addr().Interface()
@@ -410,25 +484,6 @@ func (c *Client) getFields(columns []string, fieldNameIndex map[string]int, v re
 			fields[i] = new(interface{})
 		}
 	}
+
 	return fields
-}
-
-func (c *Client) ExecuteBatchCAS(name string, dest ...any) (bool, error) {
-	return c.ExecuteBatchCASWithCtx(context.Background(), name, dest)
-}
-func (c *Client) ExecuteBatchCASWithCtx(ctx context.Context, name string, dest ...any) (bool, error) {
-	span := c.addTrace(ctx, "execute-batch-cas", "batch")
-
-	defer c.sendOperationStats(&QueryLog{
-		Operation: "ExecuteBatchCASWithCtx",
-		Query:     "batch",
-		Keyspace:  c.config.Keyspace,
-	}, time.Now(), "execute-batch-cas", span)
-
-	b, ok := c.scylla.batches[name]
-	if !ok {
-		return false, errBatchNotInitialised
-	}
-
-	return c.scylla.session.executeBatchCAS(b, dest...)
 }

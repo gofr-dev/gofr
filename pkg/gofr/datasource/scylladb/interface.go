@@ -2,34 +2,38 @@ package scylladb
 
 import (
 	"github.com/gocql/gocql"
-	_ "github.com/gocql/gocql"
 )
 
+// clusterConfig defines methods for interacting with a ScyllaDB clusterConfig.
 type clusterConfig interface {
 	createSession() (session, error)
 }
 
+// iterator defines methods for interacting with a ScyllaDB iterator.
 type iterator interface {
-	columns() []gocql.ColumnInfo
-	scan(dest ...interface{}) bool
-	numRows() int
+	Columns() []gocql.ColumnInfo
+	Scan(dest ...interface{}) bool
+	NumRows() int
 }
 
+// query defines methods for interacting with a ScyllaDB query.
 type query interface {
-	exec() error
-	iter() iterator
-	mapScanCAS(dest map[string]interface{}) (applied bool, err error)
-	scanCAS(dest ...interface{}) (applied bool, err error)
+	Exec() error
+	Iter() iterator
+	MapScanCAS(dest map[string]interface{}) (applied bool, err error)
+	ScanCAS(dest ...interface{}) (applied bool, err error)
 }
 
+// batch defines methods for interacting with a ScyllaDB batch.
 type batch interface {
 	Query(stmt string, args ...interface{})
 	getBatch() *gocql.Batch
 }
 
+// session defines methods for interacting with a ScyllaDB session.
 type session interface {
-	query(stmt string, values ...interface{}) query
+	Query(stmt string, values ...interface{}) query
 	newBatch(batchType gocql.BatchType) batch
 	executeBatch(batch batch) error
-	executeBatchCAS(batch batch, dest ...interface{}) (bool, error)
+	executeBatchCAS(batch batch, dest ...any) (bool, error)
 }

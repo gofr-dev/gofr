@@ -79,50 +79,50 @@ func (m *Mockiterator) EXPECT() *MockiteratorMockRecorder {
 	return m.recorder
 }
 
-// columns mocks base method.
-func (m *Mockiterator) columns() []gocql.ColumnInfo {
+// Columns mocks base method.
+func (m *Mockiterator) Columns() []gocql.ColumnInfo {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "columns")
+	ret := m.ctrl.Call(m, "Columns")
 	ret0, _ := ret[0].([]gocql.ColumnInfo)
 	return ret0
 }
 
-// columns indicates an expected call of columns.
-func (mr *MockiteratorMockRecorder) columns() *gomock.Call {
+// Columns indicates an expected call of Columns.
+func (mr *MockiteratorMockRecorder) Columns() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "columns", reflect.TypeOf((*Mockiterator)(nil).columns))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Columns", reflect.TypeOf((*Mockiterator)(nil).Columns))
 }
 
-// numRows mocks base method.
-func (m *Mockiterator) numRows() int {
+// NumRows mocks base method.
+func (m *Mockiterator) NumRows() int {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "numRows")
+	ret := m.ctrl.Call(m, "NumRows")
 	ret0, _ := ret[0].(int)
 	return ret0
 }
 
-// numRows indicates an expected call of numRows.
-func (mr *MockiteratorMockRecorder) numRows() *gomock.Call {
+// NumRows indicates an expected call of NumRows.
+func (mr *MockiteratorMockRecorder) NumRows() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "numRows", reflect.TypeOf((*Mockiterator)(nil).numRows))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NumRows", reflect.TypeOf((*Mockiterator)(nil).NumRows))
 }
 
-// scan mocks base method.
-func (m *Mockiterator) scan(dest ...any) bool {
+// Scan mocks base method.
+func (m *Mockiterator) Scan(dest ...any) bool {
 	m.ctrl.T.Helper()
 	varargs := []any{}
 	for _, a := range dest {
 		varargs = append(varargs, a)
 	}
-	ret := m.ctrl.Call(m, "scan", varargs...)
+	ret := m.ctrl.Call(m, "Scan", varargs...)
 	ret0, _ := ret[0].(bool)
 	return ret0
 }
 
-// scan indicates an expected call of scan.
-func (mr *MockiteratorMockRecorder) scan(dest ...any) *gomock.Call {
+// Scan indicates an expected call of Scan.
+func (mr *MockiteratorMockRecorder) Scan(dest ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "scan", reflect.TypeOf((*Mockiterator)(nil).scan), dest...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Scan", reflect.TypeOf((*Mockiterator)(nil).Scan), dest...)
 }
 
 // Mockquery is a mock of query interface.
@@ -149,66 +149,66 @@ func (m *Mockquery) EXPECT() *MockqueryMockRecorder {
 	return m.recorder
 }
 
-// exec mocks base method.
-func (m *Mockquery) exec() error {
+// Exec mocks base method.
+func (m *Mockquery) Exec() error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "exec")
+	ret := m.ctrl.Call(m, "Exec")
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// exec indicates an expected call of exec.
-func (mr *MockqueryMockRecorder) exec() *gomock.Call {
+// Exec indicates an expected call of Exec.
+func (mr *MockqueryMockRecorder) Exec() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "exec", reflect.TypeOf((*Mockquery)(nil).exec))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Exec", reflect.TypeOf((*Mockquery)(nil).Exec))
 }
 
-// iter mocks base method.
-func (m *Mockquery) iter() iterator {
+// Iter mocks base method.
+func (m *Mockquery) Iter() iterator {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "iter")
+	ret := m.ctrl.Call(m, "Iter")
 	ret0, _ := ret[0].(iterator)
 	return ret0
 }
 
-// iter indicates an expected call of iter.
-func (mr *MockqueryMockRecorder) iter() *gomock.Call {
+// Iter indicates an expected call of Iter.
+func (mr *MockqueryMockRecorder) Iter() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "iter", reflect.TypeOf((*Mockquery)(nil).iter))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Iter", reflect.TypeOf((*Mockquery)(nil).Iter))
 }
 
-// mapScanCAS mocks base method.
-func (m *Mockquery) mapScanCAS(dest map[string]any) (bool, error) {
+// MapScanCAS mocks base method.
+func (m *Mockquery) MapScanCAS(dest map[string]any) (bool, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "mapScanCAS", dest)
+	ret := m.ctrl.Call(m, "MapScanCAS", dest)
 	ret0, _ := ret[0].(bool)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// mapScanCAS indicates an expected call of mapScanCAS.
-func (mr *MockqueryMockRecorder) mapScanCAS(dest any) *gomock.Call {
+// MapScanCAS indicates an expected call of MapScanCAS.
+func (mr *MockqueryMockRecorder) MapScanCAS(dest any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "mapScanCAS", reflect.TypeOf((*Mockquery)(nil).mapScanCAS), dest)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MapScanCAS", reflect.TypeOf((*Mockquery)(nil).MapScanCAS), dest)
 }
 
-// scanCAS mocks base method.
-func (m *Mockquery) scanCAS(dest ...any) (bool, error) {
+// ScanCAS mocks base method.
+func (m *Mockquery) ScanCAS(dest ...any) (bool, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{}
 	for _, a := range dest {
 		varargs = append(varargs, a)
 	}
-	ret := m.ctrl.Call(m, "scanCAS", varargs...)
+	ret := m.ctrl.Call(m, "ScanCAS", varargs...)
 	ret0, _ := ret[0].(bool)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// scanCAS indicates an expected call of scanCAS.
-func (mr *MockqueryMockRecorder) scanCAS(dest ...any) *gomock.Call {
+// ScanCAS indicates an expected call of ScanCAS.
+func (mr *MockqueryMockRecorder) ScanCAS(dest ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "scanCAS", reflect.TypeOf((*Mockquery)(nil).scanCAS), dest...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ScanCAS", reflect.TypeOf((*Mockquery)(nil).ScanCAS), dest...)
 }
 
 // Mockbatch is a mock of batch interface.
@@ -290,6 +290,25 @@ func (m *Mocksession) EXPECT() *MocksessionMockRecorder {
 	return m.recorder
 }
 
+// Query mocks base method.
+func (m *Mocksession) Query(stmt string, values ...any) query {
+	m.ctrl.T.Helper()
+	varargs := []any{stmt}
+	for _, a := range values {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "Query", varargs...)
+	ret0, _ := ret[0].(query)
+	return ret0
+}
+
+// Query indicates an expected call of Query.
+func (mr *MocksessionMockRecorder) Query(stmt any, values ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{stmt}, values...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Query", reflect.TypeOf((*Mocksession)(nil).Query), varargs...)
+}
+
 // executeBatch mocks base method.
 func (m *Mocksession) executeBatch(batch batch) error {
 	m.ctrl.T.Helper()
@@ -336,23 +355,4 @@ func (m *Mocksession) newBatch(batchType gocql.BatchType) batch {
 func (mr *MocksessionMockRecorder) newBatch(batchType any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "newBatch", reflect.TypeOf((*Mocksession)(nil).newBatch), batchType)
-}
-
-// query mocks base method.
-func (m *Mocksession) query(stmt string, values ...any) query {
-	m.ctrl.T.Helper()
-	varargs := []any{stmt}
-	for _, a := range values {
-		varargs = append(varargs, a)
-	}
-	ret := m.ctrl.Call(m, "query", varargs...)
-	ret0, _ := ret[0].(query)
-	return ret0
-}
-
-// query indicates an expected call of query.
-func (mr *MocksessionMockRecorder) query(stmt any, values ...any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{stmt}, values...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "query", reflect.TypeOf((*Mocksession)(nil).query), varargs...)
 }
