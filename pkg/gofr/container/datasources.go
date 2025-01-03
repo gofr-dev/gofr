@@ -503,3 +503,31 @@ type OpenTSDB interface {
 	// - Error if parameters are invalid, response parsing fails, or if connectivity issues occur.
 	DeleteAnnotation(ctx context.Context, annotation any, res any) error
 }
+
+type ScyllaDB interface {
+	// Query executes a CQL (Cassandra Query Language) query on the ScyllaDB cluster
+	// and stores the result in the provided destination variable `dest`
+	Query(dest any, stmt string, values ...any) error
+	//QueryWithCtx executes a CQL query with the provided context and stores the result in the `dest` variable
+	QueryWithCtx(ctx context.Context, dest any, stmt string, values ...any) error
+	//Exec executes a CQL statement (e.g., INSERT, UPDATE, DELETE) on the ScyllaDB cluster without returning any result
+	Exec(stmt string, values ...any) error
+	// ExecWithCtx executes a CQL statement with the provided context and without returning any result.
+	ExecWithCtx(ctx context.Context, stmt string, values ...any) error
+	// ExecCAS performs a conditional (Compare and Set) operation on ScyllaDB, executing a CQL statement
+	ExecCAS(dest any, stmt string, values ...any) (bool, error)
+	// NewBatch initializes a new batch operation with the specified name and batch type.
+	NewBatch(name string, batchType int) error
+	// BatchQuery executes a batch query in the ScyllaDB cluster with the specified name, statement, and values.
+	BatchQuery(name, stmt string, values ...any) error
+	// BatchQueryWithCtx executes a batch query with the provided context
+	BatchQueryWithCtx(ctx context.Context, name, stmt string, values ...any) error
+	ExecuteBatchWithCtx(ctx context.Context, name string) error
+	// HealthChecker defines the HealthChecker interface
+	HealthChecker
+}
+
+type ScyllaDBProvider interface {
+	ScyllaDB
+	provider
+}
