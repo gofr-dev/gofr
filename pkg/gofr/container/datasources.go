@@ -275,17 +275,39 @@ type MongoProvider interface {
 	provider
 }
 
-// SurrealDBClient defines database operations interface
+// SurrealDB defines an interface representing a SurrealDB client with common database operations.
 type SurrealDB interface {
+	// UseNamespace switches the database client to a specific namespace.
+	// It returns an error if the operation fails.
 	UseNamespace(ns string) error
+
+	// UseDatabase switches the database client to a specific database within the current namespace.
+	// It returns an error if the operation fails.
 	UseDatabase(db string) error
+
+	// Query executes a Surreal query with the provided variables and returns the query results as a slice of interfaces.
+	// It returns an error if the query execution fails.
 	Query(ctx context.Context, query string, vars map[string]interface{}) ([]interface{}, error)
+
+	// Create inserts a new record into the specified table and returns the created record as a map.
+	// It returns an error if the operation fails.
 	Create(ctx context.Context, table string, data interface{}) (map[string]interface{}, error)
+
+	// Update modifies an existing record in the specified table by its ID with the provided data.
+	// It returns the updated record as an interface and an error if the operation fails.
 	Update(ctx context.Context, table string, id string, data interface{}) (interface{}, error)
+
+	// Delete removes a record from the specified table by its ID.
+	// It returns the result of the delete operation as an interface and an error if the operation fails.
 	Delete(ctx context.Context, table string, id string) (any, error)
+
+	// Select retrieves all records from the specified table.
+	// It returns a slice of maps representing the records and an error if the operation fails.
 	Select(ctx context.Context, table string) ([]map[string]interface{}, error)
 }
 
+// SurrealBDProvider is an interface that extends SurrealDB with additional methods for logging, metrics, or connection management.
+// It is typically used for initializing and managing SurrealDB-based data sources.
 type SurrealBDProvider interface {
 	SurrealDB
 

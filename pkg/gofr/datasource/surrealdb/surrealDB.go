@@ -4,16 +4,20 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
 	surrealdb "github.com/surrealdb/surrealdb.go"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
+
 	"time"
 )
 
 var (
+	// ErrNotConnected indicates that the database client is not connected.
 	ErrNotConnected = errors.New("not connected to database")
 )
 
+// Config represents the configuration required to connect to SurrealDB.
 type Config struct {
 	Host       string
 	Port       int
@@ -24,6 +28,7 @@ type Config struct {
 	TLSEnabled bool
 }
 
+// Client represents a client to interact with SurrealDB.
 type Client struct {
 	config  Config
 	db      *surrealdb.DB
@@ -32,30 +37,35 @@ type Client struct {
 	tracer  trace.Tracer
 }
 
+// New creates a new Client with the provided configuration.
 func New(config Config) *Client {
 	return &Client{
 		config: config,
 	}
 }
 
+// UseLogger sets a custom logger for the Client.
 func (c *Client) UseLogger(logger interface{}) {
 	if l, ok := logger.(Logger); ok {
 		c.logger = l
 	}
 }
 
+// UseMetrics sets a custom metrics recorder for the Client.
 func (c *Client) UseMetrics(metrics interface{}) {
 	if m, ok := metrics.(Metrics); ok {
 		c.metrics = m
 	}
 }
 
+// UseTracer sets a custom tracer for the Client.
 func (c *Client) UseTracer(tracer interface{}) {
 	if t, ok := tracer.(trace.Tracer); ok {
 		c.tracer = t
 	}
 }
 
+// Connect establishes a connection to the SurrealDB server using the client's configuration.
 func (c *Client) Connect() {
 	endpoint := fmt.Sprintf("ws://%s:%d", c.config.Host, c.config.Port)
 	if c.config.TLSEnabled {
@@ -68,17 +78,18 @@ func (c *Client) Connect() {
 
 	db, err := surrealdb.New(endpoint)
 	if err != nil {
-		if c.logger != nil {
-			c.logger.Errorf("failed to connect to SurrealDB: %v", err)
-		}
+		c.logger.Errorf("failed to connect to SurrealDB: %v", err)
+		return
+	}
+
+	if db == nil {
+		c.logger.Errorf("failed to connect to SurrealDB: %v")
 		return
 	}
 
 	err = db.Use(c.config.Namespace, c.config.Database)
 	if err != nil {
-		if c.logger != nil {
-			c.logger.Errorf("unable to set the namespace and database for SurrealDB: %v", err)
-		}
+		c.logger.Errorf("unable to set the namespace and database for SurrealDB: %v", err)
 		return
 	}
 
@@ -97,36 +108,42 @@ func (c *Client) Connect() {
 			if c.logger != nil {
 				c.logger.Errorf("failed to sign in to SurrealDB: %v", err)
 			}
+
 			return
 		}
 	}
 
-	if c.logger != nil {
-		c.logger.Debugf("successfully connected to SurrealDB")
-	}
+	c.logger.Debugf("successfully connected to SurrealDB")
 }
 
+// Close closes the database connection.
 func (c *Client) Close() error {
 	if c.db != nil {
 		return c.db.Close()
 	}
+
 	return nil
 }
 
+// UseNamespace switches the active namespace for the database connection.
 func (c *Client) UseNamespace(ns string) error {
 	if c.db == nil {
 		return ErrNotConnected
 	}
+
 	return c.db.Use(ns, "")
 }
 
+// UseDatabase switches the active database for the connection.
 func (c *Client) UseDatabase(db string) error {
 	if c.db == nil {
 		return ErrNotConnected
 	}
+
 	return c.db.Use("", db)
 }
 
+// Query executes a query on the SurrealDB instance.
 func (c *Client) Query(ctx context.Context, query string, vars map[string]interface{}) ([]interface{}, error) {
 	if c.db == nil {
 		return nil, ErrNotConnected
@@ -150,21 +167,17 @@ func (c *Client) Query(ctx context.Context, query string, vars map[string]interf
 			if res, ok := r.Result.([]interface{}); ok {
 				resp = append(resp, res...)
 			} else {
-
-				if c.logger != nil {
-					c.logger.Errorf("unexpected result type: %v", r.Result)
-				}
+				c.logger.Errorf("unexpected result type: %v", r.Result)
 			}
 		} else {
-			if c.logger != nil {
-				c.logger.Errorf("query result error: %v", r.Status)
-			}
+			c.logger.Errorf("query result error: %v", r.Status)
 		}
 	}
 
 	return resp, nil
 }
 
+// Select retrieves all records from a specific table in SurrealDB.
 func (c *Client) Select(ctx context.Context, table string) ([]map[string]interface{}, error) {
 	if c.db == nil {
 		return nil, ErrNotConnected
@@ -184,11 +197,13 @@ func (c *Client) Select(ctx context.Context, table string) ([]map[string]interfa
 		}
 
 		resMap := make(map[string]interface{})
+
 		for k, v := range recordMap {
 			keyStr, ok := k.(string)
 			if !ok {
 				return nil, fmt.Errorf("non-string key encountered: %v", k)
 			}
+
 			resMap[keyStr] = v
 		}
 
@@ -198,6 +213,7 @@ func (c *Client) Select(ctx context.Context, table string) ([]map[string]interfa
 	return resSlice, nil
 }
 
+// Create inserts a new record into the specified table in SurrealDB.
 func (c *Client) Create(ctx context.Context, table string, data interface{}) (map[string]interface{}, error) {
 	if c.db == nil {
 		return nil, ErrNotConnected
@@ -215,7 +231,8 @@ func (c *Client) Create(ctx context.Context, table string, data interface{}) (ma
 	return *result, nil
 }
 
-func (c *Client) Update(ctx context.Context, table string, id string, data interface{}) (interface{}, error) {
+// Update modifies an existing record in the specified table.
+func (c *Client) Update(ctx context.Context, table, id string, data interface{}) (interface{}, error) {
 	if c.db == nil {
 		return nil, ErrNotConnected
 	}
@@ -237,14 +254,19 @@ func (c *Client) Update(ctx context.Context, table string, id string, data inter
 			resMap[kStr] = v
 		}
 	}
+
 	return resMap, nil
 }
 
-func (c *Client) Delete(ctx context.Context, table string, id string) (any, error) {
+// Delete removes a record from the specified table in SurrealDB.
+func (c *Client) Delete(ctx context.Context, table, id string) (any, error) {
+
 	if c.db == nil {
 		return nil, ErrNotConnected
 	}
+
 	result, err := surrealdb.Delete[any, string](c.db, table)
+
 	if err != nil {
 		return nil, err
 	}
@@ -252,6 +274,7 @@ func (c *Client) Delete(ctx context.Context, table string, id string) (any, erro
 	return *result, nil
 }
 
+// sendOperationStats logs and records metrics for a database operation.
 func (c *Client) sendOperationStats(ql *QueryLog, startTime time.Time, method string, span trace.Span) {
 	duration := time.Since(startTime).Microseconds()
 
@@ -259,8 +282,8 @@ func (c *Client) sendOperationStats(ql *QueryLog, startTime time.Time, method st
 
 	c.logger.Debug(ql)
 
-	//c.metrics.RecordHistogram(context.Background(), "app_surreal_stats", float64(duration), "hostname",
-	//	"namespace", ql.Namespace, "database", ql.Database, "query", ql.Query)
+	c.metrics.RecordHistogram(context.Background(), "app_surreal_stats", float64(duration), "hostname",
+		"namespace", ql.Namespace, "database", ql.Database, "query", ql.Query)
 
 	if span != nil {
 		defer span.End()
@@ -273,8 +296,15 @@ type Health struct {
 	Details map[string]interface{} `json:"details,omitempty"`
 }
 
+// HealthCheck performs a health check on the SurrealDB connection.
 func (c *Client) HealthCheck(ctx context.Context) (any, error) {
+	const (
+		statusDown = "DOWN"
+		statusUP   = "UP"
+	)
+
 	h := Health{
+
 		Details: make(map[string]interface{}),
 	}
 	h.Details["host"] = fmt.Sprintf("%s:%d", c.config.Host, c.config.Port)
@@ -282,19 +312,24 @@ func (c *Client) HealthCheck(ctx context.Context) (any, error) {
 	h.Details["database"] = c.config.Database
 
 	if c.db == nil {
-		h.Status = "DOWN"
+		h.Status = statusDown
 		h.Details["error"] = "Database client is not connected"
+
 		return &h, ErrNotConnected
 	}
 
 	query := "RETURN 'SurrealDB Health Check'"
+
 	_, err := surrealdb.Query[any](c.db, query, nil)
+
 	if err != nil {
-		h.Status = "DOWN"
+		h.Status = statusDown
 		h.Details["error"] = fmt.Sprintf("Failed to execute health check query: %v", err)
+
 		return &h, err
 	}
 
-	h.Status = "UP"
+	h.Status = statusUP
+
 	return &h, nil
 }

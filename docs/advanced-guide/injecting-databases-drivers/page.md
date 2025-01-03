@@ -713,3 +713,184 @@ func queryDataPoints(c *gofr.Context) (any, error) {
 	return queryResp.QueryRespCnts, nil
 }
 ```
+
+## SurrealDB
+GoFr supports injecting SurrealDB database that supports the following interface. Any driver that implements the interface can be added
+using `app.AddSurrealDB()` method, and user's can use Surreal DB across application with `gofr.Context`.
+
+```go
+// SurrealDB defines an interface representing a SurrealDB client with common database operations.
+type SurrealDB interface {
+	// UseNamespace switches the database client to a specific namespace.
+	// It returns an error if the operation fails.
+	UseNamespace(ns string) error
+
+	// UseDatabase switches the database client to a specific database within the current namespace.
+	// It returns an error if the operation fails.
+	UseDatabase(db string) error
+
+	// Query executes a Surreal query with the provided variables and returns the query results as a slice of interfaces.
+	// It returns an error if the query execution fails.
+	Query(ctx context.Context, query string, vars map[string]interface{}) ([]interface{}, error)
+
+	// Create inserts a new record into the specified table and returns the created record as a map.
+	// It returns an error if the operation fails.
+	Create(ctx context.Context, table string, data interface{}) (map[string]interface{}, error)
+
+	// Update modifies an existing record in the specified table by its ID with the provided data.
+	// It returns the updated record as an interface and an error if the operation fails.
+	Update(ctx context.Context, table string, id string, data interface{}) (interface{}, error)
+
+	// Delete removes a record from the specified table by its ID.
+	// It returns the result of the delete operation as an interface and an error if the operation fails.
+	Delete(ctx context.Context, table string, id string) (any, error)
+
+	// Select retrieves all records from the specified table.
+	// It returns a slice of maps representing the records and an error if the operation fails.
+	Select(ctx context.Context, table string) ([]map[string]interface{}, error)
+}
+
+```
+Import the gofr's external driver for SurrealDB:
+```go
+go get gofr.dev/pkg/gofr/datasource/surrealdb
+```
+The following example demonstrates injecting an SurrealDB instance into a GoFr application.
+
+```go
+package main
+
+import (
+	"gofr.dev/pkg/gofr"
+	"gofr.dev/pkg/gofr/datasource/surrealdb"
+)
+
+type Person struct {
+	ID    string `json:"id,omitempty"`
+	Name  string `json:"name"`
+	Age   int    `json:"age"`
+	Email string `json:"email,omitempty"`
+}
+
+func main() {
+	app := gofr.New()
+
+	client := surrealdb.New(surrealdb.Config{
+		Host:       "localhost",
+		Port:       8000,
+		Username:   "root",
+		Password:   "root",
+		Namespace:  "test_namespace",
+		Database:   "test_database",
+		TLSEnabled: false,
+	})
+
+	app.AddSurrealDB(client)
+
+	//GET
+	app.GET("/person", func(ctx *gofr.Context) (interface{}, error) {
+		persons, err := ctx.SurrealDB.Select(ctx, "person")
+		if err != nil {
+			ctx.Logger.Error("Select error: ", err)
+			return nil, err
+		}
+
+		if len(persons) == 0 {
+			return []interface{}{}, nil
+		}
+
+		return persons, nil
+	})
+
+	// POST
+	app.POST("/person", func(ctx *gofr.Context) (interface{}, error) {
+		var person Person
+		if err := ctx.Bind(&person); err != nil {
+			ctx.Logger.Error("Binding error: ", err)
+			return nil, err
+		}
+
+		query := "CREATE person SET name = $name, age = $age, email = $email;"
+		vars := map[string]interface{}{
+			"name":  person.Name,
+			"age":   person.Age,
+			"email": person.Email,
+		}
+
+		ctx.Logger.Debugf("Executing query: %s with vars: %+v", query, vars)
+
+		result, err := ctx.SurrealDB.Query(ctx, query, vars)
+		if err != nil {
+			ctx.Logger.Errorf("Query error: %v", err)
+			return nil, err
+		}
+
+		ctx.Logger.Debugf("Raw result: %+v", result)
+
+		verifyResult, err := ctx.SurrealDB.Query(ctx, "SELECT * FROM person ORDER BY id DESC LIMIT 1;", nil)
+		if err != nil {
+			ctx.Logger.Errorf("Verify error: %v", err)
+		} else {
+			ctx.Logger.Debugf("Verify result: %+v", verifyResult)
+		}
+
+		return map[string]interface{}{
+			"message": "Creation attempted",
+			"result":  result,
+			"verify":  verifyResult,
+		}, nil
+	})
+
+	// PUT
+	app.PUT("/person/{id}", func(ctx *gofr.Context) (interface{}, error) {
+		id := ctx.PathParam("id")
+		var person Person
+		if err := ctx.Bind(&person); err != nil {
+			ctx.Logger.Error("Binding error: ", err)
+			return nil, err
+		}
+
+		query := "UPDATE person:" + id + " SET name = $name, age = $age, email = $email RETURN *"
+		vars := map[string]interface{}{
+			"name":  person.Name,
+			"age":   person.Age,
+			"email": person.Email,
+		}
+
+		result, err := ctx.SurrealDB.Query(ctx, query, vars)
+		if err != nil {
+			ctx.Logger.Error("Update error: ", err)
+			return nil, err
+		}
+
+		if len(result) > 0 && len(result[0].(map[interface{}]interface{})) > 0 {
+			return result[0].(map[interface{}]interface{}), nil
+		}
+		return nil, nil
+	})
+
+	app.DELETE("/person/{id}", func(ctx *gofr.Context) (interface{}, error) {
+		id := ctx.PathParam("id")
+		query := "DELETE person:" + id + " RETURN *"
+
+		result, err := ctx.SurrealDB.Query(ctx, query, nil)
+		if err != nil {
+			ctx.Logger.Error("Delete error: ", err)
+			return nil, err
+		}
+
+		if result != nil && len(result) > 0 {
+			return map[string]interface{}{
+				"message": "Person deleted successfully",
+				"deleted": result[0],
+			}, nil
+		}
+
+		return map[string]string{"message": "Person not found"}, nil
+	})
+
+	app.Run()
+}
+```
+
+
