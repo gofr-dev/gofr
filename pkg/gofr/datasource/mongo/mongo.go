@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"time"
 
 	"go.opentelemetry.io/otel/attribute"
@@ -39,7 +40,12 @@ type Config struct {
 
 const defaultTimeout = 5 * time.Second
 
-var errStatusDown = errors.New("status down")
+var (
+	errStatusDown   = errors.New("status down")
+	errMissingField = errors.New("missing required field in config")
+	errIncorrectURI = errors.New("incorrect URI for mongo")
+	errParseHost    = errors.New("failed to parse host from MongoDB URI")
+)
 
 /*
 Developer Note: We could have accepted logger and metrics as part of the factory function `New`, but when mongo driver is
@@ -83,14 +89,13 @@ func (c *Client) UseTracer(tracer any) {
 
 // Connect establishes a connection to MongoDB and registers metrics using the provided configuration when the client was Created.
 func (c *Client) Connect() {
-	c.logger.Debugf("connecting to MongoDB at %v to database %v", c.config.URI, c.config.Database)
-
-	uri := c.config.URI
-
-	if uri == "" {
-		uri = fmt.Sprintf("mongodb://%s:%s@%s:%d/%s?authSource=admin",
-			c.config.User, c.config.Password, c.config.Host, c.config.Port, c.config.Database)
+	uri, host, err := generateMongoURI(c.config)
+	if err != nil {
+		c.logger.Errorf("error generating mongo URI: %v", err)
+		return
 	}
+
+	c.logger.Debugf("connecting to MongoDB at %v to database %v", c.config.Host, c.config.Database)
 
 	timeout := c.config.ConnectionTimeout
 	if timeout == 0 {
@@ -108,18 +113,60 @@ func (c *Client) Connect() {
 	}
 
 	if err = m.Ping(ctx, nil); err != nil {
-		c.logger.Errorf("could not connect to mongoDB at %v due to err: %v", c.config.URI, err)
+		c.logger.Errorf("could not connect to mongoDB at %v due to err: %v", host, err)
 		return
 	}
 
-	c.logger.Logf("connected to mongoDB successfully at %v to database %v", c.config.URI, c.config.Database)
+	c.logger.Logf("connected to mongoDB successfully at %v to database %v", host, c.config.Database)
 
 	mongoBuckets := []float64{.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 4, 5, 7.5, 10}
 	c.metrics.NewHistogram("app_mongo_stats", "Response time of MONGO queries in milliseconds.", mongoBuckets...)
 
 	c.Database = m.Database(c.config.Database)
 
-	c.logger.Logf("connected to MongoDB at %v to database %v", uri, c.Database)
+	c.logger.Logf("connected to MongoDB at %v to database %v", host, c.Database)
+}
+
+func generateMongoURI(config *Config) (uri, host string, err error) {
+	if config.URI != "" {
+		host, err = getDBHost(config.URI)
+		if err != nil || host == "" {
+			return "", "", err
+		}
+
+		return config.URI, host, nil
+	}
+
+	switch {
+	case config.Host == "":
+		return "", "", fmt.Errorf("%w: host is empty", errMissingField)
+	case config.Port == 0:
+		return "", "", fmt.Errorf("%w: port is empty", errMissingField)
+	case config.Database == "":
+		return "", "", fmt.Errorf("%w: database is empty", errMissingField)
+	}
+
+	uri = fmt.Sprintf("mongodb://%s:%s@%s:%d/%s?authSource=admin",
+		config.User, config.Password, config.Host, config.Port, config.Database)
+
+	return uri, config.Host, nil
+}
+
+func getDBHost(uri string) (host string, err error) {
+	parsedURL, err := url.Parse(uri)
+	if err != nil {
+		return "", err
+	}
+
+	if parsedURL.Scheme != "mongodb" {
+		return "", errIncorrectURI
+	}
+
+	if parsedURL.Hostname() == "" {
+		return "", errParseHost
+	}
+
+	return parsedURL.Hostname(), nil
 }
 
 // InsertOne inserts a single document into the specified collection.
