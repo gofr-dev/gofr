@@ -76,6 +76,30 @@ func Test_EnvSuccess_Local_Override(t *testing.T) {
 	assert.Equal(t, "overloaded_api_key", env.Get("API_KEY"), "TEST Failed.\n godotenv success")
 }
 
+func Test_EnvSuccess_SystemEnv_Override(t *testing.T) {
+	// Set initial environment variables
+	envData := map[string]string{
+		"TEST_ENV": "env",
+	}
+
+	dir := t.TempDir()
+
+	// Create the .env file
+	createEnvFile(t, dir, ".env", envData)
+
+	// Create the override file
+	createEnvFile(t, dir, ".local.env", map[string]string{"TEST_ENV": "local"})
+
+	// Set system environment variables
+	os.Setenv("TEST_ENV", "system")
+
+	logger := logging.NewMockLogger(logging.DEBUG)
+
+	env := NewEnvFile(dir, logger)
+
+	assert.Equal(t, "system", env.Get("TEST_ENV"), "TEST Failed.\n system env override")
+}
+
 func Test_EnvFailureWithHyphen(t *testing.T) {
 	envData := map[string]string{
 		"KEY-WITH-HYPHEN": "DASH-VALUE",
