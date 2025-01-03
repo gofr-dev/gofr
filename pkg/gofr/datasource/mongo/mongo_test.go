@@ -182,8 +182,7 @@ func Test_NewMongoClientError(t *testing.T) {
 	metrics := NewMockMetrics(ctrl)
 	logger := NewMockLogger(ctrl)
 
-	logger.EXPECT().Debugf("connecting to MongoDB at %v to database %v", "mongo", "test")
-	logger.EXPECT().Errorf("error while connecting to MongoDB, err:%v", gomock.Any())
+	logger.EXPECT().Errorf("error generating mongo URI: %v", gomock.Any())
 
 	client := New(Config{Host: "mongo", Database: "test"})
 	client.UseLogger(logger)
