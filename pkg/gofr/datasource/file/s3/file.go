@@ -33,6 +33,11 @@ var (
 	ErrNilResponse = errors.New("response retrieved is nil ")
 )
 
+// Sys returns the underlying data source (in this case, S3) for the file.
+func (*S3File) Sys() any {
+	return "S3"
+}
+
 // Close closes the response body returned in Open/Create methods if the response body is not nil.
 func (f *S3File) Close() error {
 	bucketName := getBucketName(f.name)

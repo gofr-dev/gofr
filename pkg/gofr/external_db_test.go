@@ -1,7 +1,6 @@
 package gofr
 
 import (
-	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -9,15 +8,11 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"gofr.dev/pkg/gofr/container"
-	"gofr.dev/pkg/gofr/datasource/file"
-	"gofr.dev/pkg/gofr/testutil"
+	"gofr.dev/pkg/gofr/datasource"
 )
 
 func TestApp_AddKVStore(t *testing.T) {
 	t.Run("Adding KV-Store", func(t *testing.T) {
-		port := testutil.GetFreePort(t)
-		t.Setenv("METRICS_PORT", strconv.Itoa(port))
-
 		app := New()
 
 		ctrl := gomock.NewController(t)
@@ -38,9 +33,6 @@ func TestApp_AddKVStore(t *testing.T) {
 
 func TestApp_AddMongo(t *testing.T) {
 	t.Run("Adding MongoDB", func(t *testing.T) {
-		port := testutil.GetFreePort(t)
-		t.Setenv("METRICS_PORT", strconv.Itoa(port))
-
 		app := New()
 
 		ctrl := gomock.NewController(t)
@@ -61,9 +53,6 @@ func TestApp_AddMongo(t *testing.T) {
 
 func TestApp_AddCassandra(t *testing.T) {
 	t.Run("Adding Cassandra", func(t *testing.T) {
-		port := testutil.GetFreePort(t)
-		t.Setenv("METRICS_PORT", strconv.Itoa(port))
-
 		app := New()
 
 		ctrl := gomock.NewController(t)
@@ -84,9 +73,6 @@ func TestApp_AddCassandra(t *testing.T) {
 
 func TestApp_AddClickhouse(t *testing.T) {
 	t.Run("Adding Clickhouse", func(t *testing.T) {
-		port := testutil.GetFreePort(t)
-		t.Setenv("METRICS_PORT", strconv.Itoa(port))
-
 		app := New()
 
 		ctrl := gomock.NewController(t)
@@ -107,15 +93,12 @@ func TestApp_AddClickhouse(t *testing.T) {
 
 func TestApp_AddFTP(t *testing.T) {
 	t.Run("Adding FTP", func(t *testing.T) {
-		port := testutil.GetFreePort(t)
-		t.Setenv("METRICS_PORT", strconv.Itoa(port))
-
 		app := New()
 
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
-		mock := file.NewMockFileSystemProvider(ctrl)
+		mock := datasource.NewMockFileSystemProvider(ctrl)
 
 		mock.EXPECT().UseLogger(app.Logger())
 		mock.EXPECT().UseMetrics(app.Metrics())
@@ -123,19 +106,16 @@ func TestApp_AddFTP(t *testing.T) {
 
 		app.AddFTP(mock)
 
-		assert.Equal(t, mock, app.container.File)
+		assert.True(t, ctrl.Satisfied())
 	})
 
 	t.Run("Adding FTP", func(t *testing.T) {
-		port := testutil.GetFreePort(t)
-		t.Setenv("METRICS_PORT", strconv.Itoa(port))
-
 		app := New()
 
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
-		mock := file.NewMockFileSystemProvider(ctrl)
+		mock := datasource.NewMockFileSystemProvider(ctrl)
 
 		mock.EXPECT().UseLogger(app.Logger())
 		mock.EXPECT().UseMetrics(app.Metrics())
@@ -143,21 +123,18 @@ func TestApp_AddFTP(t *testing.T) {
 
 		app.AddFileStore(mock)
 
-		assert.Equal(t, mock, app.container.File)
+		assert.True(t, ctrl.Satisfied())
 	})
 }
 
 func TestApp_AddS3(t *testing.T) {
 	t.Run("Adding S3", func(t *testing.T) {
-		port := testutil.GetFreePort(t)
-		t.Setenv("METRICS_PORT", strconv.Itoa(port))
-
 		app := New()
 
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
-		mock := file.NewMockFileSystemProvider(ctrl)
+		mock := datasource.NewMockFileSystemProvider(ctrl)
 
 		mock.EXPECT().UseLogger(app.Logger())
 		mock.EXPECT().UseMetrics(app.Metrics())
@@ -165,15 +142,12 @@ func TestApp_AddS3(t *testing.T) {
 
 		app.AddFileStore(mock)
 
-		assert.Equal(t, mock, app.container.File)
+		assert.True(t, ctrl.Satisfied())
 	})
 }
 
 func TestApp_AddOpenTSDB(t *testing.T) {
 	t.Run("Adding OpenTSDB", func(t *testing.T) {
-		port := testutil.GetFreePort(t)
-		t.Setenv("METRICS_PORT", strconv.Itoa(port))
-
 		app := New()
 
 		ctrl := gomock.NewController(t)

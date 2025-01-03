@@ -1,3 +1,6 @@
+// Package file provides the implementation of the file system operations on local system.
+// It provides the functionality to create, open, read and write the file and other file and directory operations.
+// this package provides the functionality to read the file in JSON, CSV or text format
 package file
 
 import (

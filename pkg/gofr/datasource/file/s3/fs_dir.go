@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"mime"
 	"os"
 	"path"
@@ -15,8 +16,6 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-
-	file "gofr.dev/pkg/gofr/datasource/file"
 )
 
 var (
@@ -164,7 +163,7 @@ func getRelativepath(key, filePath string) string {
 // Note:
 //   - Directories are represented by the prefixes of the file keys in S3, and this method retrieves file entries
 //     only one level deep from the specified directory.
-func (f *FileSystem) ReadDir(name string) ([]file.FileInfo, error) {
+func (f *FileSystem) ReadDir(name string) ([]fs.FileInfo, error) {
 	var filePath, msg string
 
 	st := statusErr
@@ -195,7 +194,7 @@ func (f *FileSystem) ReadDir(name string) ([]file.FileInfo, error) {
 		return nil, err
 	}
 
-	fileInfo := make([]file.FileInfo, 0)
+	fileInfo := make([]fs.FileInfo, 0)
 
 	for i := range entries.Contents {
 		if i == 0 && filePath != "" {
@@ -310,7 +309,7 @@ func (f *FileSystem) renameDirectory(st, msg *string, oldPath, newPath string) e
 //
 // For directories, the method aggregates the sizes of all objects within the directory and returns the latest modified
 // time among them. For files, it returns the file's size and last modified time.
-func (f *FileSystem) Stat(name string) (file.FileInfo, error) {
+func (f *FileSystem) Stat(name string) (fs.FileInfo, error) {
 	var msg string
 
 	st := statusErr
@@ -323,7 +322,6 @@ func (f *FileSystem) Stat(name string) (file.FileInfo, error) {
 	}, time.Now())
 
 	filetype := typeFile
-
 	// Here we assume the user passes "0filePath" in case it wants to get fileinfo about a binary file instead of a directory
 	if path.Ext(name) == "" {
 		filetype = typeDirectory
@@ -341,7 +339,6 @@ func (f *FileSystem) Stat(name string) (file.FileInfo, error) {
 		Bucket: aws.String(f.config.BucketName),
 		Prefix: aws.String(name),
 	})
-
 	if err != nil {
 		f.logger.Errorf("Error returning file info: %v", err)
 		return nil, err
@@ -352,9 +349,10 @@ func (f *FileSystem) Stat(name string) (file.FileInfo, error) {
 	}
 
 	if filetype == typeDirectory {
-		var size int64
-
-		var lastModified time.Time
+		var (
+			size         int64
+			lastModified time.Time
+		)
 
 		for i := range res.Contents {
 			size += *res.Contents[i].Size

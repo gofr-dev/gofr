@@ -14,13 +14,13 @@ import (
 	"time"
 
 	"github.com/jlaffaye/ftp"
-
-	file_interface "gofr.dev/pkg/gofr/datasource/file"
 )
 
 var (
 	// errNotPointer is returned when Read method is called with a non-pointer argument.
 	errNotPointer = errors.New("input should be a pointer to a string")
+
+	// ErrOutOfRange is returned when the offset is out of range.
 	ErrOutOfRange = errors.New("out of range")
 )
 
@@ -49,8 +49,12 @@ type jsonReader struct {
 	token   json.Token
 }
 
+func (*File) Sys() any {
+	return "ftp"
+}
+
 // ReadAll reads either JSON or text files based on file extension and returns a corresponding RowReader.
-func (f *File) ReadAll() (file_interface.RowReader, error) {
+func (f *File) ReadAll() (any, error) {
 	defer f.sendOperationStats(&FileLog{Operation: "ReadAll", Location: f.path}, time.Now())
 
 	if strings.HasSuffix(f.Name(), ".json") {
@@ -61,7 +65,7 @@ func (f *File) ReadAll() (file_interface.RowReader, error) {
 }
 
 // createJSONReader creates a JSON reader for JSON files.
-func (f *File) createJSONReader() (file_interface.RowReader, error) {
+func (f *File) createJSONReader() (any, error) {
 	status := statusError
 
 	defer f.sendOperationStats(&FileLog{Operation: "JSON Reader", Location: f.path, Status: &status}, time.Now())
@@ -106,7 +110,7 @@ func (f *File) createJSONReader() (file_interface.RowReader, error) {
 }
 
 // createTextCSVReader creates a text reader for reading text files.
-func (f *File) createTextCSVReader() (file_interface.RowReader, error) {
+func (f *File) createTextCSVReader() (any, error) {
 	status := statusError
 
 	defer f.sendOperationStats(&FileLog{Operation: "Text/CSV Reader", Location: f.path, Status: &status}, time.Now())
