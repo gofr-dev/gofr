@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"fmt"
+	"strconv"
 	"testing"
 	"time"
 
@@ -11,10 +13,16 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 
 	grpcExample "gofr.dev/examples/grpc-server/grpc"
+	"gofr.dev/pkg/gofr/testutil"
 )
 
 func TestGRPCServer(t *testing.T) {
-	const host = "localhost:10000"
+	gRPCPort := testutil.GetFreePort(t)
+	t.Setenv("GRPC_PORT", strconv.Itoa(gRPCPort))
+	host := fmt.Sprint("localhost:", gRPCPort)
+
+	port := testutil.GetFreePort(t)
+	t.Setenv("METRICS_PORT", strconv.Itoa(port))
 
 	go main()
 	time.Sleep(100 * time.Millisecond)
