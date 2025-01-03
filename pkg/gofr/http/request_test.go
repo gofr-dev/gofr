@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"github.com/gorilla/mux"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -316,4 +317,55 @@ func TestBind_BinaryOctetStream_NotPointerToByteSlice(t *testing.T) {
 	if !strings.Contains(err.Error(), "input is not a pointer to a byte slice: invalid input") {
 		t.Errorf("Expected error to contain: input is not a pointer to a byte slice: invalid input, got: %v", err)
 	}
+}
+
+func TestSetPathParam(t *testing.T) {
+	t.Run("Set Single Path Param", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/test", nil)
+
+		params := map[string]string{"id": "123"}
+		reqWithParams := SetPathParam(req, params)
+
+		assert.Equal(t, "123", mux.Vars(reqWithParams)["id"])
+	})
+
+	t.Run("Set Multiple Path Params", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/test", nil)
+
+		params := map[string]string{"id": "123", "name": "test-name"}
+		reqWithParams := SetPathParam(req, params)
+
+		assert.Equal(t, "123", mux.Vars(reqWithParams)["id"])
+		assert.Equal(t, "test-name", mux.Vars(reqWithParams)["name"])
+	})
+
+	t.Run("Overwrite Existing Path Params", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/test", nil)
+
+		initialParams := map[string]string{"id": "123"}
+		reqWithParams := SetPathParam(req, initialParams)
+
+		newParams := map[string]string{"id": "456", "status": "active"}
+		reqWithNewParams := SetPathParam(reqWithParams, newParams)
+
+		assert.Equal(t, "456", mux.Vars(reqWithNewParams)["id"])
+		assert.Equal(t, "active", mux.Vars(reqWithNewParams)["status"])
+	})
+
+	t.Run("Set Empty Path Params", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/test", nil)
+
+		params := map[string]string{}
+		reqWithParams := SetPathParam(req, params)
+
+		assert.Empty(t, mux.Vars(reqWithParams))
+	})
+
+	t.Run("Nil Path Params", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/test", nil)
+
+		reqWithParams := SetPathParam(req, nil)
+
+		assert.Nil(t, mux.Vars(reqWithParams))
+	})
 }

@@ -179,3 +179,8 @@ func (r *Request) bindBinary(raw interface{}) error {
 
 	return nil
 }
+
+// SetPathParam sets URL path parameters for the given HTTP request.
+func SetPathParam(r *http.Request, prm map[string]string) *http.Request {
+	return mux.SetURLVars(r, prm)
+}
