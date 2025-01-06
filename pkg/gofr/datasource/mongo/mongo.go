@@ -130,7 +130,7 @@ func (c *Client) Connect() {
 func generateMongoURI(config *Config) (uri, host string, err error) {
 	if config.URI != "" {
 		host, err = getDBHost(config.URI)
-		if err != nil || host == "" {
+		if err != nil {
 			return "", "", err
 		}
 
@@ -146,10 +146,21 @@ func generateMongoURI(config *Config) (uri, host string, err error) {
 		return "", "", fmt.Errorf("%w: database is empty", errMissingField)
 	}
 
-	uri = fmt.Sprintf("mongodb://%s:%s@%s:%d/%s?authSource=admin",
-		config.User, config.Password, config.Host, config.Port, config.Database)
+	u := &url.URL{
+		Scheme: "mongodb",
+		Host:   fmt.Sprintf("%s:%d", config.Host, config.Port),
+		Path:   "/" + url.PathEscape(config.Database),
+	}
 
-	return uri, config.Host, nil
+	if config.User != "" && config.Password != "" {
+		u.User = url.UserPassword(url.QueryEscape(config.User), url.QueryEscape(config.Password))
+	}
+
+	q := u.Query()
+	q.Set("authSource", "admin")
+	u.RawQuery = q.Encode()
+
+	return u.String(), u.Hostname(), nil
 }
 
 func getDBHost(uri string) (host string, err error) {
