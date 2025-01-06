@@ -3,6 +3,7 @@ package container
 import (
 	"context"
 	"database/sql"
+	"reflect"
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
@@ -26,6 +27,7 @@ type expectedQuery struct {
 type queryWithArgs struct {
 	queryText string
 	arguments []interface{}
+	value     any
 }
 
 // mockSQL wraps go-mock-sql and expectations.
@@ -41,35 +43,60 @@ type sqlMockDB struct {
 	logger logging.Logger
 }
 
-func (m sqlMockDB) Select(_ context.Context, _ interface{}, query string, args ...interface{}) {
+func (m sqlMockDB) Select(_ context.Context, value any, query string, args ...interface{}) {
 	if len(m.queryWithArgs) == 0 {
-		m.logger.Fatalf("Did not expect any calls for Select with query: %q", query)
+		m.logger.Errorf("did not expect any calls for Select with query: %q", query)
+		return
 	}
 
 	lastIndex := len(m.queryWithArgs) - 1
+
+	defer func() {
+		m.queryWithArgs = m.queryWithArgs[:lastIndex]
+	}()
+
 	expectedText := m.queryWithArgs[lastIndex].queryText
 	expectedArgs := m.queryWithArgs[lastIndex].arguments
 
+	valueType := reflect.TypeOf(value)
+	if valueType.Kind() != reflect.Ptr {
+		m.logger.Errorf("expected a pointer type: %q", query)
+		return
+	}
+
+	if m.queryWithArgs[lastIndex].value == nil {
+		m.logger.Errorf("received different expectations: %v", query)
+		return
+	}
+
+	v := reflect.ValueOf(value)
+
+	if v.Kind() == reflect.Ptr && !v.IsNil() {
+		tobechanged := v.Elem()
+		tobechanged.Set(reflect.ValueOf(m.queryWithArgs[lastIndex].value))
+	}
+
 	if expectedText != query {
-		m.logger.Fatalf("expected query: %s, actual query: %s", query, expectedText)
+		m.logger.Errorf("expected query: %s, actual query: %s", query, expectedText)
+		return
 	}
 
 	if len(args) != len(expectedArgs) {
-		m.logger.Fatalf("expected %d args, actual %d", len(expectedArgs), len(args))
+		m.logger.Errorf("expected %d args, actual %d", len(expectedArgs), len(args))
+		return
 	}
 
 	for i := range args {
 		if args[i] != expectedArgs[i] {
-			m.logger.Fatalf("expected arg %d, actual arg %d", args[i], expectedArgs[i])
+			m.logger.Errorf("expected arg %d, actual arg %d", args[i], expectedArgs[i])
+			return
 		}
 	}
-
-	m.queryWithArgs = m.queryWithArgs[:lastIndex]
 }
 
 func (m sqlMockDB) HealthCheck() *datasource.Health {
 	if len(m.expectedHealthCheck) == 0 {
-		m.logger.Fatal("Did not expect any mock calls for HealthCheck")
+		m.logger.Error("Did not expect any mock calls for HealthCheck")
 	}
 
 	lastIndex := len(m.expectedHealthCheck) - 1
@@ -83,7 +110,7 @@ func (m sqlMockDB) HealthCheck() *datasource.Health {
 
 func (m sqlMockDB) Dialect() string {
 	if len(m.expectedDialect) == 0 {
-		m.logger.Fatal("Did not expect any mock calls for Dialect")
+		m.logger.Error("Did not expect any mock calls for Dialect")
 	}
 
 	lastIndex := len(m.expectedDialect) - 1
@@ -107,17 +134,41 @@ func (m sqlMockDB) finish(t *testing.T) {
 // ExpectSelect is not a direct method for mocking the Select method of SQL in go-mock-sql.
 // Hence, it expects the user to already provide the populated data interface field,
 // which can then be used within the functions implemented by the user.
-func (m *mockSQL) ExpectSelect(_ context.Context, _ interface{}, query string, args ...interface{}) {
+func (m *mockSQL) ExpectSelect(_ context.Context, value any, query string, args ...interface{}) *queryWithArgs {
 	sliceQueryWithArgs := make([]queryWithArgs, 0)
 
 	if m.queryWithArgs == nil {
 		m.queryWithArgs = sliceQueryWithArgs
 	}
 
-	qr := queryWithArgs{query, args}
+	qr := queryWithArgs{queryText: query, arguments: args}
+
+	fieldType := reflect.TypeOf(value)
+	if fieldType.Kind() == reflect.Ptr {
+		qr.value = value
+	}
 
 	sliceQueryWithArgs = append(sliceQueryWithArgs, qr)
 	m.queryWithArgs = append(sliceQueryWithArgs, m.queryWithArgs...)
+
+	return &m.queryWithArgs[0]
+}
+
+func (q *queryWithArgs) ReturnsResponse(value any) {
+	fieldType := reflect.TypeOf(q.value)
+	if fieldType == nil {
+		return
+	}
+
+	fieldType = fieldType.Elem()
+
+	valueType := reflect.TypeOf(value)
+
+	if fieldType == valueType {
+		q.value = value
+	} else {
+		q.value = nil
+	}
 }
 
 func (m *mockSQL) ExpectHealthCheck() *health {
