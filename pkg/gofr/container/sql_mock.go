@@ -97,6 +97,7 @@ func (m sqlMockDB) Select(_ context.Context, value any, query string, args ...in
 func (m sqlMockDB) HealthCheck() *datasource.Health {
 	if len(m.expectedHealthCheck) == 0 {
 		m.logger.Error("Did not expect any mock calls for HealthCheck")
+		return nil
 	}
 
 	lastIndex := len(m.expectedHealthCheck) - 1
@@ -111,6 +112,7 @@ func (m sqlMockDB) HealthCheck() *datasource.Health {
 func (m sqlMockDB) Dialect() string {
 	if len(m.expectedDialect) == 0 {
 		m.logger.Error("Did not expect any mock calls for Dialect")
+		return ""
 	}
 
 	lastIndex := len(m.expectedDialect) - 1

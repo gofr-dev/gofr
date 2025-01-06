@@ -26,7 +26,6 @@ type Mocks struct {
 	OpenTSDB    *MockOpenTSDBProvider
 	File        *file.MockFileSystemProvider
 	HTTPService *service.MockHTTP
-	Logs        *MockLogger
 	Metrics     *MockMetrics
 }
 
@@ -51,8 +50,7 @@ func NewMockContainer(t *testing.T, options ...options) (*Container, *Mocks) {
 
 	ctrl := gomock.NewController(t)
 
-	mockLogs := NewMockLogger(ctrl)
-	container.Logger = mockLogs
+	container.Logger = logging.NewLogger(logging.DEBUG)
 
 	mockDB, sqlMock, _ := sql.NewSQLMocks(t)
 	// initialisation of expectations
@@ -119,7 +117,6 @@ func NewMockContainer(t *testing.T, options ...options) (*Container, *Mocks) {
 		DGraph:      dgraphMock,
 		OpenTSDB:    opentsdbMock,
 		Metrics:     mockMetrics,
-		Logs:        mockLogs,
 	}
 
 	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_http_service_response", gomock.Any(), "path", gomock.Any(),
