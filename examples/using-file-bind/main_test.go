@@ -2,19 +2,28 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"mime/multipart"
 	"net/http"
 	"os"
+	"strconv"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gofr.dev/pkg/gofr/testutil"
 )
 
 func TestMain_BindError(t *testing.T) {
-	const host = "http://localhost:8300"
+	httpPort := testutil.GetFreePort(t)
+	t.Setenv("HTTP_PORT", strconv.Itoa(httpPort))
+	host := fmt.Sprint("http://localhost:", httpPort)
+
+	port := testutil.GetFreePort(t)
+	t.Setenv("METRICS_PORT", strconv.Itoa(port))
+
 	go main()
 	time.Sleep(100 * time.Millisecond)
 

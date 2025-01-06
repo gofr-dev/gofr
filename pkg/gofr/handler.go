@@ -99,8 +99,6 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Handle custom headers if 'result' is a 'Response'.
 	if resp, ok := result.(response.Response); ok {
 		resp.SetCustomHeaders(w)
-
-		result = resp.Data
 	}
 
 	// Handler function completed
