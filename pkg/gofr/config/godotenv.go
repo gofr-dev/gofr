@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"strings"
 
 	"github.com/joho/godotenv"
 )
@@ -63,6 +64,14 @@ func (e *EnvLoader) read(folder string) {
 		}
 	} else {
 		e.logger.Infof("Loaded config from file: %v", overrideFile)
+	}
+
+	// Reload system environment variables to ensure they override any previously loaded values
+	for _, envVar := range os.Environ() {
+		key, value, found := strings.Cut(envVar, "=")
+		if found {
+			os.Setenv(key, value)
+		}
 	}
 }
 
