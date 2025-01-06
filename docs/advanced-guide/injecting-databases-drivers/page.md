@@ -715,6 +715,7 @@ func queryDataPoints(c *gofr.Context) (any, error) {
 ```
 
 ## SurrealDB
+
 GoFr supports injecting SurrealDB database that supports the following interface. Any driver that implements the interface can be added
 using `app.AddSurrealDB()` method, and user's can use Surreal DB across application with `gofr.Context`.
 
@@ -787,7 +788,7 @@ func main() {
 
 	app.AddSurrealDB(client)
 
-	//GET
+	// GET
 	app.GET("/person", func(ctx *gofr.Context) (interface{}, error) {
 		persons, err := ctx.SurrealDB.Select(ctx, "person")
 		if err != nil {
@@ -851,7 +852,7 @@ func main() {
 		}
 
 		query := "UPDATE person:" + id + " SET name = $name, age = $age, email = $email RETURN *"
-		vars := map[string]interface{}{
+		vars := map[string]any{
 			"name":  person.Name,
 			"age":   person.Age,
 			"email": person.Email,
@@ -863,12 +864,19 @@ func main() {
 			return nil, err
 		}
 
-		if len(result) > 0 && len(result[0].(map[interface{}]interface{})) > 0 {
-			return result[0].(map[interface{}]interface{}), nil
+		if len(result) == 0 {
+			return nil, nil
 		}
-		return nil, nil
-	})
 
+		m, ok := result[0].(map[any]any)
+		if !ok || len(m) == 0 {
+			return nil, nil
+		}
+
+		return m, nil
+	})
+	
+    // DELETE
 	app.DELETE("/person/{id}", func(ctx *gofr.Context) (interface{}, error) {
 		id := ctx.PathParam("id")
 		query := "DELETE person:" + id + " RETURN *"

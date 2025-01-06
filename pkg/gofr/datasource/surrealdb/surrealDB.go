@@ -66,11 +66,12 @@ func (c *Client) UseTracer(tracer interface{}) {
 }
 
 // Connect establishes a connection to the SurrealDB server using the client's configuration.
-func (c *Client) Connect() {
-	endpoint := fmt.Sprintf("ws://%s:%d", c.config.Host, c.config.Port)
+func (c *Client) Connect() error {
+	scheme := "ws"
 	if c.config.TLSEnabled {
-		endpoint = fmt.Sprintf("https://%s:%d", c.config.Host, c.config.Port)
+		scheme = "https"
 	}
+	endpoint := fmt.Sprintf("%s://%s:%d", scheme, c.config.Host, c.config.Port)
 
 	if c.logger != nil {
 		c.logger.Debugf("connecting to SurrealDB at %s", endpoint)
@@ -78,19 +79,26 @@ func (c *Client) Connect() {
 
 	db, err := surrealdb.New(endpoint)
 	if err != nil {
-		c.logger.Errorf("failed to connect to SurrealDB: %v", err)
-		return
+		if c.logger != nil {
+			c.logger.Errorf("failed to connect to SurrealDB: %v", err)
+		}
+		return err
 	}
 
 	if db == nil {
-		c.logger.Errorf("failed to connect to SurrealDB: %v")
-		return
+		err := fmt.Errorf("failed to connect to SurrealDB: no valid database instance")
+		if c.logger != nil {
+			c.logger.Errorf("error")
+		}
+		return err
 	}
 
 	err = db.Use(c.config.Namespace, c.config.Database)
 	if err != nil {
-		c.logger.Errorf("unable to set the namespace and database for SurrealDB: %v", err)
-		return
+		if c.logger != nil {
+			c.logger.Errorf("unable to set the namespace and database for SurrealDB: %v", err)
+		}
+		return err
 	}
 
 	c.db = db
@@ -99,21 +107,23 @@ func (c *Client) Connect() {
 		c.metrics.NewHistogram("surreal_db_operation_duration", "Duration of SurrealDB operations")
 	}
 
+	if (c.config.Username == "" && c.config.Password != "") || (c.config.Username != "" && c.config.Password == "") {
+		return errors.New("both username and password must be provided")
+	}
+
 	if c.config.Username != "" && c.config.Password != "" {
 		_, err := db.SignIn(&surrealdb.Auth{
 			Username: c.config.Username,
 			Password: c.config.Password,
 		})
 		if err != nil {
-			if c.logger != nil {
-				c.logger.Errorf("failed to sign in to SurrealDB: %v", err)
-			}
-
-			return
+			c.logger.Errorf("failed to sign in to SurrealDB: %v", err)
+			return err
 		}
 	}
-
 	c.logger.Debugf("successfully connected to SurrealDB")
+
+	return nil
 }
 
 // Close closes the database connection.
