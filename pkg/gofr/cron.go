@@ -34,6 +34,7 @@ type CronFunc func(ctx *Context)
 type Crontab struct {
 	// contains unexported fields
 	ticker    *time.Ticker
+	location  *time.Location
 	jobs      []*job
 	container *container.Container
 
@@ -62,20 +63,32 @@ type tick struct {
 }
 
 // NewCron initializes and returns new cron tab.
-func NewCron(cntnr *container.Container) *Crontab {
+func NewCron(cntnr *container.Container, options ...func(*Crontab)) *Crontab {
 	c := &Crontab{
 		ticker:    time.NewTicker(time.Second),
+		location:  time.Local,
 		container: cntnr,
 		jobs:      make([]*job, 0),
 	}
 
+	for _, option := range options {
+		option(c)
+	}
+
 	go func() {
 		for t := range c.ticker.C {
+			t = t.In(c.location)
 			c.runScheduled(t)
 		}
 	}()
 
 	return c
+}
+
+func WithTimezone(location *time.Location) func(*Crontab) {
+	return func(c *Crontab) {
+		c.location = location
+	}
 }
 
 // this will compile the regex once instead of compiling it each time when it is being called.
