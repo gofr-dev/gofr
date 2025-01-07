@@ -150,7 +150,7 @@ func TestGetDBHost(t *testing.T) {
 			name:        "Empty URI",
 			uri:         "",
 			expected:    "",
-			expectedErr: "incorrect URI for mongo",
+			expectedErr: "incorrect URI for MongoDB",
 		},
 		{
 			name:        "Malformed URI",
@@ -182,7 +182,7 @@ func Test_NewMongoClientError(t *testing.T) {
 	metrics := NewMockMetrics(ctrl)
 	logger := NewMockLogger(ctrl)
 
-	logger.EXPECT().Errorf("error generating mongo URI: %v", gomock.Any())
+	logger.EXPECT().Errorf("error generating MongoDB URI: %v", gomock.Any())
 
 	client := New(Config{Host: "mongo", Database: "test"})
 	client.UseLogger(logger)

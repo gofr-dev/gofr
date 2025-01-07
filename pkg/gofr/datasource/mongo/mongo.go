@@ -43,7 +43,7 @@ const defaultTimeout = 5 * time.Second
 var (
 	errStatusDown   = errors.New("status down")
 	errMissingField = errors.New("missing required field in config")
-	errIncorrectURI = errors.New("incorrect URI for mongo")
+	errIncorrectURI = errors.New("incorrect URI for MongoDB")
 	errParseHost    = errors.New("failed to parse host from MongoDB URI")
 )
 
@@ -91,7 +91,7 @@ func (c *Client) UseTracer(tracer any) {
 func (c *Client) Connect() {
 	uri, host, err := generateMongoURI(c.config)
 	if err != nil {
-		c.logger.Errorf("error generating mongo URI: %v", err)
+		c.logger.Errorf("error generating MongoDB URI: %v", err)
 		return
 	}
 
@@ -113,14 +113,14 @@ func (c *Client) Connect() {
 	}
 
 	if err = m.Ping(ctx, nil); err != nil {
-		c.logger.Errorf("could not connect to mongoDB at %v due to err: %v", host, err)
+		c.logger.Errorf("could not connect to MongoDB at %v due to err: %v", host, err)
 		return
 	}
 
-	c.logger.Logf("connected to mongoDB successfully at %v to database %v", host, c.config.Database)
+	c.logger.Logf("connected to MongoDB successfully at %v to database %v", host, c.config.Database)
 
 	mongoBuckets := []float64{.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 4, 5, 7.5, 10}
-	c.metrics.NewHistogram("app_mongo_stats", "Response time of MONGO queries in milliseconds.", mongoBuckets...)
+	c.metrics.NewHistogram("app_mongo_stats", "Response time of MongoDB queries in milliseconds.", mongoBuckets...)
 
 	c.Database = m.Database(c.config.Database)
 
