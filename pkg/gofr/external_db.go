@@ -4,6 +4,7 @@ import (
 	"go.opentelemetry.io/otel"
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/datasource/file"
+	"gofr.dev/pkg/gofr/datasource/surrealdb"
 )
 
 // AddMongo sets the Mongo datasource in the app's container.
@@ -145,7 +146,7 @@ func (a *App) AddOpenTSDB(db container.OpenTSDBProvider) {
 }
 
 // AddSurrealDB sets the opentsdb datasource in the app's container.
-func (a *App) AddSurrealDB(db container.SurrealBDProvider) {
+func (a *App) AddSurrealDB(db *surrealdb.Client) {
 	db.UseLogger(a.Logger())
 	db.UseMetrics(a.Metrics())
 

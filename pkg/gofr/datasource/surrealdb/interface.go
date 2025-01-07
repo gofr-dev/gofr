@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"strings"
+
+	"go.opentelemetry.io/otel/trace"
 )
 
 // Logger defines methods for logging debug, log, and error messages.
@@ -19,13 +21,14 @@ type Logger interface {
 	Errorf(pattern string, args ...interface{})
 }
 
-// mockLogger is an implementation of the Logger interface for testing.
-type mockLogger struct{}
-
-func (m *mockLogger) Debugf(pattern string, args ...interface{}) {}
-func (m *mockLogger) Debug(args ...interface{})                  {}
-func (m *mockLogger) Logf(pattern string, args ...interface{})   {}
-func (m *mockLogger) Errorf(pattern string, args ...interface{}) {}
+type Connection interface {
+	Connect() error
+	Close() error
+	Send(res interface{}, method string, params ...interface{}) error
+	Use(namespace string, database string) error
+	Let(key string, value interface{}) error
+	Unset(key string) error
+}
 
 // Metrics provides methods to record and manage application metrics.
 type Metrics interface {
@@ -57,7 +60,8 @@ type QueryLog struct {
 	Data       interface{} `json:"data"`                 // The data affected or retrieved.
 	Filter     interface{} `json:"filter,omitempty"`     // Optional filter applied to the query.
 	Update     interface{} `json:"update,omitempty"`     // Optional update data for the query.
-	Collection string      `json:"collection,omitempty"` // Optional collection affected.
+	Collection string      `json:"collection,omitempty"` // Optional collection affected.\
+	Span       trace.Span  `json:"span,omitempty"`       // Optional tracing span associated with the query.
 }
 
 // PrettyPrint outputs a formatted string representation of the QueryLog.
