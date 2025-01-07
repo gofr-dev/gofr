@@ -7,31 +7,52 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 
 	"github.com/google/go-querystring/query"
 	"go.opentelemetry.io/otel/trace"
 )
 
 type Config struct {
-	APIKey  string
-	Model   string
-	BaseURL string
+	APIKey       string
+	Model        string
+	BaseURL      string
+	Timeout      time.Duration
+	MaxIdleConns int
 }
 
 type Client struct {
-	config  *Config
-	logger  Logger
-	metrics Metrics
-	tracer  trace.Tracer
+	config     *Config
+	logger     Logger
+	metrics    Metrics
+	tracer     trace.Tracer
+	httpClient *http.Client
 }
 
-func NewCLient(config *Config) *Client {
+func NewClient(config *Config, customHTTPClient *http.Client) *Client {
 	if config.BaseURL == "" {
 		config.BaseURL = "https://api.openai.com"
 	}
 
+	// Use the provided HTTP client or create a new one with defaults
+	var httpClient *http.Client
+
+	if customHTTPClient != nil {
+		httpClient = customHTTPClient
+	} else {
+		// Create a new HTTP client with default or configured settings
+		httpClient = &http.Client{
+			Timeout: config.Timeout,
+			Transport: &http.Transport{
+				MaxIdleConns:    config.MaxIdleConns,
+				IdleConnTimeout: 30 * time.Second,
+			},
+		}
+	}
+
 	return &Client{
-		config: config,
+		config:     config,
+		httpClient: httpClient,
 	}
 }
 
@@ -88,16 +109,21 @@ func (c *Client) Post(ctx context.Context, url string, input any) (response []by
 
 	reqJSON, err := json.Marshal(input)
 	if err != nil {
+		c.logger.Errorf("%v", err)
 		return response, err
 	}
 
 	resp, err := c.Call(ctx, http.MethodPost, url, bytes.NewReader(reqJSON))
 	if err != nil {
+		c.logger.Errorf("%v", err)
 		return response, err
 	}
 	defer resp.Body.Close()
 
 	response, err = io.ReadAll(resp.Body)
+	if err != nil {
+		c.logger.Errorf("%v", err)
+	}
 
 	return response, err
 }
@@ -115,11 +141,15 @@ func (c *Client) Get(ctx context.Context, url string, input any) (response []byt
 
 	resp, err := c.Call(ctx, http.MethodGet, url, nil)
 	if err != nil {
+		c.logger.Errorf("%v", err)
 		return response, err
 	}
 	defer resp.Body.Close()
 
 	response, err = io.ReadAll(resp.Body)
+	if err != nil {
+		c.logger.Errorf("%v", err)
+	}
 
 	return response, err
 }
@@ -130,14 +160,17 @@ func (c *Client) Call(ctx context.Context, method, endpoint string, body io.Read
 
 	req, err := http.NewRequestWithContext(ctx, method, url, body)
 	if err != nil {
+		c.logger.Errorf("%v", err)
 		return response, err
 	}
 
 	req.Header.Add("Authorization", "Bearer "+c.config.APIKey)
 	req.Header.Add("Content-Type", "application/json")
 
-	client := &http.Client{}
-	resp, err := client.Do(req)
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		c.logger.Errorf("%v", err)
+	}
 
 	return resp, err
 }

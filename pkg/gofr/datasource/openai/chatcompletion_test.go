@@ -104,8 +104,9 @@ func Test_ChatCompletions(t *testing.T) {
 					APIKey:  "test-api-key",
 					BaseURL: serverURL,
 				},
-				logger:  mockLogger,
-				metrics: mockMetrics,
+				httpClient: http.DefaultClient,
+				logger:     mockLogger,
+				metrics:    mockMetrics,
 			}
 
 			tt.setupMocks(mockLogger, mockMetrics)
