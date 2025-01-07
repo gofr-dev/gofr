@@ -42,12 +42,7 @@ type Crontab struct {
 }
 
 type job struct {
-	sec       map[int]struct{}
-	min       map[int]struct{}
-	hour      map[int]struct{}
-	day       map[int]struct{}
-	month     map[int]struct{}
-	dayOfWeek map[int]struct{}
+	sec, min, hour, day, month, dayOfWeek map[int]struct{}
 
 	name string
 	fn   CronFunc
@@ -86,9 +81,7 @@ func NewCron(cntnr *container.Container, options ...func(*Crontab)) *Crontab {
 }
 
 func WithTimezone(location *time.Location) func(*Crontab) {
-	return func(c *Crontab) {
-		c.location = location
-	}
+	return func(c *Crontab) { c.location = location }
 }
 
 // this will compile the regex once instead of compiling it each time when it is being called.
