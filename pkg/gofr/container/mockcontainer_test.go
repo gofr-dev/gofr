@@ -70,7 +70,7 @@ func TestExpectSelect_ValidCases(t *testing.T) {
 		require.Equal(t, expectedIDs, actualResultSlice)
 	})
 
-	t.Run("Test with string slice", func(t *testing.T) {
+	t.Run("Test with string slice with multiple expectations", func(t *testing.T) {
 		var passedResultSlice, actualResultSlice, actualResultSlice2 []string
 
 		expectedIDs := []string{"1", "2"}
