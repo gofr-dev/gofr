@@ -60,12 +60,12 @@ func (m sqlMockDB) Select(_ context.Context, value any, query string, args ...in
 
 	valueType := reflect.TypeOf(value)
 	if valueType.Kind() != reflect.Ptr {
-		m.logger.Errorf("expected a pointer type: %q", query)
+		m.logger.Errorf("expected a pointer type: %q", value)
 		return
 	}
 
 	if m.queryWithArgs[lastIndex].value == nil {
-		m.logger.Errorf("received different expectations: %v", query)
+		m.logger.Errorf("received different expectations: %q", query)
 		return
 	}
 
@@ -77,7 +77,7 @@ func (m sqlMockDB) Select(_ context.Context, value any, query string, args ...in
 	}
 
 	if expectedText != query {
-		m.logger.Errorf("expected query: %s, actual query: %s", query, expectedText)
+		m.logger.Errorf("expected query: %q, actual query: %q", query, expectedText)
 		return
 	}
 
@@ -162,14 +162,13 @@ func (q *queryWithArgs) ReturnsResponse(value any) {
 		return
 	}
 
-	fieldType = fieldType.Elem()
-
 	valueType := reflect.TypeOf(value)
 
+	fieldType = fieldType.Elem()
+
+	q.value = nil
 	if fieldType == valueType {
 		q.value = value
-	} else {
-		q.value = nil
 	}
 }
 

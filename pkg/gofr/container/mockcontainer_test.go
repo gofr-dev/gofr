@@ -60,9 +60,9 @@ func TestExpectSelect_ValidCases(t *testing.T) {
 	mockContainer, mock := NewMockContainer(t)
 
 	t.Run("Test with string slice", func(t *testing.T) {
+		var passedResultSlice, actualResultSlice []string
+
 		expectedIDs := []string{"1", "2"}
-		passedResultSlice := make([]string, 0)
-		actualResultSlice := make([]string, 0)
 
 		mock.SQL.ExpectSelect(context.Background(), &passedResultSlice, "SELECT id FROM users").ReturnsResponse(expectedIDs)
 
@@ -76,9 +76,9 @@ func TestExpectSelect_ValidCases(t *testing.T) {
 			Name string
 		}
 
+		var passedUser, actualUser User
+
 		expectedUser := User{ID: 1, Name: "John"}
-		passedUser := User{}
-		actualUser := User{}
 
 		mock.SQL.ExpectSelect(context.Background(), &passedUser, "SELECT * FROM users WHERE id = ?", 1).ReturnsResponse(expectedUser)
 
@@ -87,9 +87,9 @@ func TestExpectSelect_ValidCases(t *testing.T) {
 	})
 
 	t.Run("Test with map", func(t *testing.T) {
+		var passedSettings, actualSettings map[string]int
+
 		expectedSettings := map[string]int{"a": 1, "b": 2}
-		passedSettings := map[string]int{}
-		actualSettings := map[string]int{}
 
 		mock.SQL.ExpectSelect(context.Background(), &passedSettings, "SELECT * FROM settings").ReturnsResponse(expectedSettings)
 
@@ -136,8 +136,7 @@ func TestExpectSelect_ErrorCases(t *testing.T) {
 	t.Run("Type_Mismatch_Between_Expect_And_Response", func(t *testing.T) {
 		mockLogger.EXPECT().Errorf("received different expectations: %v", gomock.Any())
 
-		expectedVal := make([]string, 0)
-		resultVal := make([]string, 0)
+		var expectedVal, resultVal []string
 
 		sqlMockWrapper.ExpectSelect(context.Background(), &expectedVal, "SELECT * FROM test WHERE id=?", 1).ReturnsResponse(123)
 
@@ -148,7 +147,7 @@ func TestExpectSelect_ErrorCases(t *testing.T) {
 	t.Run("Select_Called_Without_Expectations", func(t *testing.T) {
 		mockLogger.EXPECT().Errorf("did not expect any calls for Select with query: %q", gomock.Any())
 
-		val := make([]string, 0)
+		var val []string
 
 		sqlDB.Select(context.Background(), &val, "SELECT * FROM test WHERE id=?", 1)
 		assert.Empty(t, val)
