@@ -79,19 +79,9 @@ docker run --name kafka-1 -p 9092:9092 \
 -e KAFKA_CFG_NODE_ID=1 \
 -v kafka_data:/bitnami \
 bitnami/kafka:3.4
-docker run -d \
---name scylla \
--p 9042:9042 \
--p 7000:7000 \
--p 7001:7001 \
--p 7199:7199 \
--e SCYLLA_LISTEN_ADDRESS=0.0.0.0 \
--e SCYLLA_RPC_ADDRESS=0.0.0.0 \
--e SCYLLA_BROADCAST_ADDRESS=127.0.0.1 \
--e SCYLLA_SEEDS=127.0.0.1 \
---volume /var/lib/scylla \
---network host \
-scylladb/scylla:latest
+docker run -d --name scylla -p 2025:9042
+-e SCYLLA_LISTEN_ADDRESS=0.0.0.0 SCYLLA_RPC_ADDRESS=0.0.0.0 SCYLLA_BROADCAST_ADDRESS=127.0.0.1 
+-e SCYLLA_SEEDS=127.0.0.1 --volume /var/lib/scylla --network host scylladb/scylla:latest
 
 
 

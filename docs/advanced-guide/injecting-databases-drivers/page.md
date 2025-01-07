@@ -750,12 +750,12 @@ type ScyllaDB interface {
 	// HealthChecker defines the HealthChecker interface
 	HealthChecker
 }
-````
+```
 
 
 Import the gofr's external driver for ScyllaDB:
 
-```go
+```shell
 go get gofr.dev/pkg/gofr/datasource/scylladb
 ```
 ```go
@@ -1011,4 +1011,4 @@ func addUserWithMultipleQueries(c *gofr.Context) (interface{}, error) {
 	}, nil
 }
 
-````
+```

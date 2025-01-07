@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/gocql/gocql"
-
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -31,7 +30,7 @@ type Config struct {
 
 // Scylladb represents the connection and operations context for interacting with a ScyllaDB cluster,
 // including configuration, active session, query handling, and initialized batches.
-type Scylladb struct {
+type ScyllaDB struct {
 	clusterConfig clusterConfig
 	session       session
 	query         query
@@ -43,7 +42,7 @@ type Scylladb struct {
 type Client struct {
 	config *Config
 
-	scylla *Scylladb
+	scylla *ScyllaDB
 	logger Logger
 
 	metrics Metrics
@@ -60,7 +59,7 @@ type Health struct {
 
 // New initializes ScyllaDB driver with the provided configuration.
 func New(conf Config) *Client {
-	scylla := &Scylladb{clusterConfig: newClusterConfig(&conf)}
+	scylla := &ScyllaDB{clusterConfig: newClusterConfig(&conf)}
 
 	return &Client{config: &conf, scylla: scylla}
 }
@@ -76,7 +75,7 @@ func (c *Client) Connect() {
 	}
 
 	scyllaBuckets := []float64{.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 4, 5, 7.5, 10}
-	c.metrics.NewHistogram("app_scylla_stats", "Response time of scylla queries in microseconds", scyllaBuckets...)
+	c.metrics.NewHistogram("app_scylla_stats", "Response time of ScyllaDB queries in microseconds", scyllaBuckets...)
 
 	c.logger.Logf("connected to '%s' keyspace at host '%s' and port '%d'", c.config.Keyspace, c.config.Host, c.config.Port)
 	c.scylla.session = sess
