@@ -70,6 +70,22 @@ func TestExpectSelect_ValidCases(t *testing.T) {
 		require.Equal(t, expectedIDs, actualResultSlice)
 	})
 
+	t.Run("Test with string slice", func(t *testing.T) {
+		var passedResultSlice, actualResultSlice, actualResultSlice2 []string
+
+		expectedIDs := []string{"1", "2"}
+		expectedIDs2 := []string{"1", "3"}
+
+		mock.SQL.ExpectSelect(context.Background(), &passedResultSlice, "SELECT id FROM users").ReturnsResponse(expectedIDs)
+		mock.SQL.ExpectSelect(context.Background(), &passedResultSlice, "SELECT id FROM users").ReturnsResponse(expectedIDs2)
+
+		mockContainer.SQL.Select(context.Background(), &actualResultSlice, "SELECT id FROM users")
+		mockContainer.SQL.Select(context.Background(), &actualResultSlice2, "SELECT id FROM users")
+
+		require.Equal(t, expectedIDs, actualResultSlice)
+		require.Equal(t, expectedIDs2, actualResultSlice2)
+	})
+
 	t.Run("Test with struct", func(t *testing.T) {
 		type User struct {
 			ID   int

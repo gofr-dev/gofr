@@ -43,20 +43,22 @@ type sqlMockDB struct {
 	logger logging.Logger
 }
 
+func emptyExpectation(m *sqlMockDB) {
+	if len(m.queryWithArgs) > 0 {
+		m.queryWithArgs = m.queryWithArgs[1:]
+	}
+}
+
 func (m sqlMockDB) Select(_ context.Context, value any, query string, args ...interface{}) {
 	if len(m.queryWithArgs) == 0 {
 		m.logger.Errorf("did not expect any calls for Select with query: %q", query)
 		return
 	}
 
-	lastIndex := len(m.queryWithArgs) - 1
+	defer emptyExpectation(&m)
 
-	defer func() {
-		m.queryWithArgs = m.queryWithArgs[:lastIndex]
-	}()
-
-	expectedText := m.queryWithArgs[lastIndex].queryText
-	expectedArgs := m.queryWithArgs[lastIndex].arguments
+	expectedText := m.queryWithArgs[0].queryText
+	expectedArgs := m.queryWithArgs[0].arguments
 
 	valueType := reflect.TypeOf(value)
 	if valueType.Kind() != reflect.Ptr {
@@ -64,7 +66,7 @@ func (m sqlMockDB) Select(_ context.Context, value any, query string, args ...in
 		return
 	}
 
-	if m.queryWithArgs[lastIndex].value == nil {
+	if m.queryWithArgs[0].value == nil {
 		m.logger.Errorf("received different expectations: %q", query)
 		return
 	}
@@ -73,7 +75,7 @@ func (m sqlMockDB) Select(_ context.Context, value any, query string, args ...in
 
 	if v.Kind() == reflect.Ptr && !v.IsNil() {
 		tobechanged := v.Elem()
-		tobechanged.Set(reflect.ValueOf(m.queryWithArgs[lastIndex].value))
+		tobechanged.Set(reflect.ValueOf(m.queryWithArgs[0].value))
 	}
 
 	if expectedText != query {
@@ -100,11 +102,12 @@ func (m sqlMockDB) HealthCheck() *datasource.Health {
 		return nil
 	}
 
-	lastIndex := len(m.expectedHealthCheck) - 1
-	expectedString := m.expectedHealthCheck[lastIndex]
+	expectedString := m.expectedHealthCheck[0]
 	d := datasource.Health(expectedString)
 
-	m.expectedHealthCheck = m.expectedHealthCheck[:lastIndex]
+	if len(m.expectedHealthCheck) > 0 {
+		m.expectedHealthCheck = m.expectedHealthCheck[1:]
+	}
 
 	return &d
 }
@@ -115,10 +118,11 @@ func (m sqlMockDB) Dialect() string {
 		return ""
 	}
 
-	lastIndex := len(m.expectedDialect) - 1
-	expectedString := m.expectedDialect[lastIndex]
+	expectedString := m.expectedDialect[0]
 
-	m.expectedDialect = m.expectedDialect[:lastIndex]
+	if len(m.expectedDialect) > 0 {
+		m.expectedDialect = m.expectedDialect[1:]
+	}
 
 	return string(expectedString)
 }
@@ -137,12 +141,6 @@ func (m sqlMockDB) finish(t *testing.T) {
 // Hence, it expects the user to already provide the populated data interface field,
 // which can then be used within the functions implemented by the user.
 func (m *mockSQL) ExpectSelect(_ context.Context, value any, query string, args ...interface{}) *queryWithArgs {
-	sliceQueryWithArgs := make([]queryWithArgs, 0)
-
-	if m.queryWithArgs == nil {
-		m.queryWithArgs = sliceQueryWithArgs
-	}
-
 	qr := queryWithArgs{queryText: query, arguments: args}
 
 	fieldType := reflect.TypeOf(value)
@@ -150,10 +148,9 @@ func (m *mockSQL) ExpectSelect(_ context.Context, value any, query string, args 
 		qr.value = value
 	}
 
-	sliceQueryWithArgs = append(sliceQueryWithArgs, qr)
-	m.queryWithArgs = append(sliceQueryWithArgs, m.queryWithArgs...)
+	m.queryWithArgs = append(m.queryWithArgs, qr)
 
-	return &m.queryWithArgs[0]
+	return &m.queryWithArgs[len(m.queryWithArgs)-1]
 }
 
 func (q *queryWithArgs) ReturnsResponse(value any) {
@@ -173,18 +170,11 @@ func (q *queryWithArgs) ReturnsResponse(value any) {
 }
 
 func (m *mockSQL) ExpectHealthCheck() *health {
-	healthCheckSlice := make([]health, 0)
-
-	if m.expectedHealthCheck == nil {
-		m.expectedHealthCheck = healthCheckSlice
-	}
-
 	hc := health{}
 
-	healthCheckSlice = append(healthCheckSlice, hc)
-	m.expectedHealthCheck = append(healthCheckSlice, m.expectedHealthCheck...)
+	m.expectedHealthCheck = append(m.expectedHealthCheck, hc)
 
-	return &m.expectedHealthCheck[0]
+	return &m.expectedHealthCheck[len(m.expectedHealthCheck)-1]
 }
 
 func (d *health) WillReturnHealthCheck(dh *datasource.Health) {
@@ -192,18 +182,11 @@ func (d *health) WillReturnHealthCheck(dh *datasource.Health) {
 }
 
 func (m *mockSQL) ExpectDialect() *dialect {
-	dialectSlice := make([]dialect, 0)
-
-	if m.expectedDialect == nil {
-		m.expectedDialect = dialectSlice
-	}
-
 	d := dialect("")
 
-	dialectSlice = append(dialectSlice, d)
-	m.expectedDialect = append(dialectSlice, m.expectedDialect...)
+	m.expectedDialect = append(m.expectedDialect, d)
 
-	return &m.expectedDialect[0]
+	return &m.expectedDialect[len(m.expectedDialect)-1]
 }
 
 func (*mockSQL) NewResult(lastInsertID, rowsAffected int64) sql.Result {
