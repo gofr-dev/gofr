@@ -24,7 +24,7 @@ func (s *scylladbIterator) Columns() []gocql.ColumnInfo {
 	return s.iter.Columns()
 }
 
-// Scan gets the next row from the Cassandra iterator and fills in the provided arguments.
+// Scan gets the next row from the ScyllaDB iterator and fills in the provided arguments.
 func (s *scylladbIterator) Scan(dest ...any) bool {
 	return s.iter.Scan(dest...)
 }
