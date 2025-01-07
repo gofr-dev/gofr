@@ -121,7 +121,7 @@ func TestExpectSelect_ErrorCases(t *testing.T) {
 	})
 
 	t.Run("PointerValue_In_ReturnsResponse", func(t *testing.T) {
-		mockLogger.EXPECT().Errorf("received different expectations: %v", gomock.Any())
+		mockLogger.EXPECT().Errorf("received different expectations: %q", gomock.Any())
 
 		var uninitializedVal, resultVal int
 
@@ -134,7 +134,7 @@ func TestExpectSelect_ErrorCases(t *testing.T) {
 	})
 
 	t.Run("Type_Mismatch_Between_Expect_And_Response", func(t *testing.T) {
-		mockLogger.EXPECT().Errorf("received different expectations: %v", gomock.Any())
+		mockLogger.EXPECT().Errorf("received different expectations: %q", gomock.Any())
 
 		var expectedVal, resultVal []string
 
