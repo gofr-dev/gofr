@@ -57,8 +57,7 @@ func (s *scylladbQuery) MapScanCAS(dest map[string]any) (applied bool, err error
 	return s.query.MapScanCAS(dest)
 }
 
-// ScanCAS checks a ScyllaDB query with a IF clause and scans the existing data.
-// This method wraps the `ScanCAS` method of the underlying `query` object.
+// ScanCAS checks a ScyllaDB query with a IF clause and scans the existing data. This method wraps the `ScanCAS` method of the underlying `query` object.
 func (s *scylladbQuery) ScanCAS(dest ...any) (applied bool, err error) {
 	return s.query.ScanCAS(dest)
 }
