@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"net/url"
+	"strconv"
 	"time"
 
 	"go.opentelemetry.io/otel/attribute"
@@ -148,7 +150,7 @@ func generateMongoURI(config *Config) (uri, host string, err error) {
 
 	u := &url.URL{
 		Scheme: "mongodb",
-		Host:   fmt.Sprintf("%s:%d", config.Host, config.Port),
+		Host:   net.JoinHostPort(config.Host, strconv.Itoa(int(config.Port))),
 		Path:   "/" + url.PathEscape(config.Database),
 	}
 
