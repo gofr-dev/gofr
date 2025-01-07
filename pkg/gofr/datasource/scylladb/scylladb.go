@@ -3,13 +3,11 @@ package scylladb
 import (
 	"context"
 	"errors"
-	"fmt"
 	"reflect"
 	"time"
 
 	"github.com/gocql/gocql"
 
-	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -24,7 +22,7 @@ var errStatusDown = errors.New("status down")
 // Config holds the configuration settings for connecting to a ScyllaDB cluster,
 // including host addresses, keyspace, port, and authentication credentials.
 type Config struct {
-	Hosts    string
+	Host     string
 	Keyspace string
 	Port     int
 	Username string
@@ -62,14 +60,14 @@ type Health struct {
 
 // New initializes ScyllaDB driver with the provided configuration.
 func New(conf Config) *Client {
-	cass := &Scylladb{clusterConfig: newClusterConfig(&conf)}
+	scylla := &Scylladb{clusterConfig: newClusterConfig(&conf)}
 
-	return &Client{config: &conf, scylla: cass}
+	return &Client{config: &conf, scylla: scylla}
 }
 
 // Connect establishes a connection to Scylladb.
 func (c *Client) Connect() {
-	c.logger.Debugf("Connecting to ScyllaDB at %v on port %v to keyspace %v", c.config.Hosts, c.config.Port, c.config.Keyspace)
+	c.logger.Debugf("connecting to ScyllaDB at %v on port %v to keyspace %v", c.config.Host, c.config.Port, c.config.Keyspace)
 	sess, err := c.scylla.clusterConfig.createSession()
 
 	if err != nil {
@@ -80,7 +78,7 @@ func (c *Client) Connect() {
 	scyllaBuckets := []float64{.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 4, 5, 7.5, 10}
 	c.metrics.NewHistogram("app_scylla_stats", "Response time of scylla queries in microseconds", scyllaBuckets...)
 
-	c.logger.Logf("connected to '%s' keyspace at host '%s' and port '%d'", c.config.Keyspace, c.config.Hosts, c.config.Port)
+	c.logger.Logf("connected to '%s' keyspace at host '%s' and port '%d'", c.config.Keyspace, c.config.Host, c.config.Port)
 	c.scylla.session = sess
 }
 
@@ -174,39 +172,6 @@ func (c *Client) ExecCASWithCtx(ctx context.Context, dest any, stmt string, valu
 	return applied, err
 }
 
-// rowsToStructCAS Scans a CAS query result into a struct, setting fields based on column names and types,
-// and returns if the update was applied.
-func (c *Client) rowsToStructCAS(query query, vo reflect.Value) (bool, error) {
-	v := vo
-	if vo.Kind() == reflect.Ptr {
-		v = vo.Elem()
-	}
-
-	row := make(map[string]any)
-
-	applied, err := query.MapScanCAS(row)
-	if err != nil {
-		return false, err
-	}
-
-	fieldNameIndex := c.getFieldNameIndex(v)
-
-	for col, value := range row {
-		if i, ok := fieldNameIndex[col]; ok {
-			field := v.Field(i)
-			if reflect.TypeOf(value) == field.Type() {
-				field.Set(reflect.ValueOf(value))
-			}
-		}
-	}
-
-	if vo.CanSet() {
-		vo.Set(v)
-	}
-
-	return applied, nil
-}
-
 // QueryWithCtx takes context ,destination,statement,values and returns error.
 //
 //nolint:exhaustive // We just want to take care of slice and struct in this case
@@ -264,7 +229,7 @@ func (c *Client) NewBatch(name string, batchType int) error {
 	return c.NewBatchWithCtx(context.Background(), name, batchType)
 }
 
-// NewBatchWithCtx uses context ,name ,batchType and returns error
+// NewBatchWithCtx uses context ,name ,batchType and returns error.
 func (c *Client) NewBatchWithCtx(_ context.Context, name string, batchType int) error {
 	switch batchType {
 	case LoggedBatch, UnloggedBatch, CounterBatch:
@@ -353,57 +318,6 @@ func (c *Client) ExecuteBatch(name string) error {
 	return c.ExecuteBatchWithCtx(context.Background(), name)
 }
 
-// rowsToStruct Scans the iterator row data and maps it to the fields of the provided struct.
-func (c *Client) rowsToStruct(iter iterator, vo reflect.Value) {
-	v := vo
-	if vo.Kind() == reflect.Ptr {
-		v = vo.Elem()
-	}
-
-	columns := c.getColumnsFromColumnsInfo(iter.Columns())
-	fieldNameIndex := c.getFieldNameIndex(v)
-	fields := getFields(columns, fieldNameIndex, v)
-
-	_ = iter.Scan(fields...)
-
-	if vo.CanSet() {
-		vo.Set(v)
-	}
-}
-
-// getColumnsFromColumnsInfo Extracts and returns a slice of column names from the provided gocql.ColumnInfo slice.
-func (*Client) getColumnsFromColumnsInfo(columns []gocql.ColumnInfo) []string {
-	cols := make([]string, 0)
-
-	for _, column := range columns {
-		cols = append(cols, column.Name)
-	}
-
-	return cols
-}
-
-// getFieldNameIndex Returns a map of field names from struct convert  toSnakeCase to their index positions in the struct.
-func (*Client) getFieldNameIndex(v reflect.Value) map[string]int {
-	fieldNameIndex := map[string]int{}
-
-	for i := 0; i < v.Type().NumField(); i++ {
-		var name string
-
-		f := v.Type().Field(i)
-		tag := f.Tag.Get("db")
-
-		if tag != "" {
-			name = tag
-		} else {
-			name = toSnakeCase(f.Name)
-		}
-
-		fieldNameIndex[name] = i
-	}
-
-	return fieldNameIndex
-}
-
 // HealthCheck performs a health check on the ScyllaDB cluster by querying.
 func (c *Client) HealthCheck(context.Context) (any, error) {
 	const (
@@ -415,12 +329,12 @@ func (c *Client) HealthCheck(context.Context) (any, error) {
 		Details: make(map[string]interface{}),
 	}
 
-	h.Details["host"] = c.config.Hosts
+	h.Details["host"] = c.config.Host
 	h.Details["keyspace"] = c.config.Keyspace
 
 	if c.scylla.session == nil {
 		h.Status = statusDown
-		h.Details["message"] = "cassandra not connected"
+		h.Details["message"] = "ScyllaDB not connected"
 
 		return &h, errStatusDown
 	}
@@ -436,54 +350,4 @@ func (c *Client) HealthCheck(context.Context) (any, error) {
 	h.Status = statusUp
 
 	return &h, nil
-}
-
-// addTrace starts a new trace span for the specified method and query.
-func (c *Client) addTrace(ctx context.Context, method, query string) trace.Span {
-	if c.tracer != nil {
-		_, span := c.tracer.Start(ctx, fmt.Sprintf("scylladb-%v", method))
-
-		span.SetAttributes(
-			attribute.String("scylladb.query", query),
-			attribute.String("scylladb.keyspace", c.config.Keyspace),
-		)
-
-		return span
-	}
-
-	return nil
-}
-
-// sendOperationStats Logs query duration and stats, records metrics, and ends the trace span if present.
-func (c *Client) sendOperationStats(ql *QueryLog, startTime time.Time, method string, span trace.Span) {
-	duration := time.Since(startTime).Microseconds()
-
-	ql.Duration = duration
-
-	c.logger.Debug(ql)
-
-	if span != nil {
-		defer span.End()
-		span.SetAttributes(attribute.Int64(fmt.Sprintf("scylla.%v.duration", method), duration))
-	}
-
-	c.metrics.RecordHistogram(context.Background(), "app_scylla_stats", float64(duration), "hostname", c.config.Hosts,
-		"keyspace", c.config.Keyspace)
-
-	c.scylla.query = nil
-}
-
-// getFields returns a slice of field pointers from the struct, mapping columns to their corresponding fields.
-func getFields(columns []string, fieldNameIndex map[string]int, v reflect.Value) []interface{} {
-	fields := make([]interface{}, len(columns))
-
-	for i, column := range columns {
-		if index, ok := fieldNameIndex[column]; ok {
-			fields[i] = v.Field(index).Addr().Interface()
-		} else {
-			fields[i] = new(interface{})
-		}
-	}
-
-	return fields
 }

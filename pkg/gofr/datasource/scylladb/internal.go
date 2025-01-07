@@ -1,10 +1,17 @@
 package scylladb
 
 import (
+	"context"
+	"fmt"
+	"reflect"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/gocql/gocql"
+
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // scylladbIterator implements iterator interface.
@@ -12,15 +19,12 @@ type scylladbIterator struct {
 	iter *gocql.Iter
 }
 
-// Columns gets the Column information.
-// This method wraps the `Columns` method of the underlying `iter` object.
+// Columns gets the Column information. This method wraps the `Columns` method of the underlying `iter` object.
 func (s *scylladbIterator) Columns() []gocql.ColumnInfo {
 	return s.iter.Columns()
 }
 
-//	Scan gets the next row from the Cassandra iterator and fills in the provided arguments.
-//
-// This method wraps the `Scan` method of the underlying `iter` object.
+// Scan gets the next row from the Cassandra iterator and fills in the provided arguments.
 func (s *scylladbIterator) Scan(dest ...any) bool {
 	return s.iter.Scan(dest...)
 }
@@ -67,8 +71,8 @@ type scyllaClusterConfig struct {
 func newClusterConfig(config *Config) clusterConfig {
 	var s scyllaClusterConfig
 
-	config.Hosts = strings.TrimSuffix(strings.TrimSpace(config.Hosts), ",")
-	hosts := strings.Split(config.Hosts, ",")
+	config.Host = strings.TrimSuffix(strings.TrimSpace(config.Host), ",")
+	hosts := strings.Split(config.Host, ",")
 	s.clusterConfig = gocql.NewCluster(hosts...)
 	s.clusterConfig.Keyspace = config.Keyspace
 	s.clusterConfig.Port = config.Port
@@ -140,4 +144,138 @@ func toSnakeCase(str string) string {
 	snake = matchAllCap.ReplaceAllString(snake, "${1}_${2}")
 
 	return strings.ToLower(snake)
+}
+
+// getFields returns a slice of field pointers from the struct, mapping columns to their corresponding fields.
+func getFields(columns []string, fieldNameIndex map[string]int, v reflect.Value) []interface{} {
+	fields := make([]interface{}, len(columns))
+
+	for i, column := range columns {
+		if index, ok := fieldNameIndex[column]; ok {
+			fields[i] = v.Field(index).Addr().Interface()
+		} else {
+			fields[i] = new(interface{})
+		}
+	}
+
+	return fields
+}
+
+// addTrace starts a new trace span for the specified method and query.
+func (c *Client) addTrace(ctx context.Context, method, query string) trace.Span {
+	if c.tracer != nil {
+		_, span := c.tracer.Start(ctx, fmt.Sprintf("scylladb-%v", method))
+
+		span.SetAttributes(
+			attribute.String("scylladb.query", query),
+			attribute.String("scylladb.keyspace", c.config.Keyspace),
+		)
+
+		return span
+	}
+
+	return nil
+}
+
+// getColumnsFromColumnsInfo Extracts and returns a slice of column names from the provided gocql.ColumnInfo slice.
+func (*Client) getColumnsFromColumnsInfo(columns []gocql.ColumnInfo) []string {
+	cols := make([]string, 0)
+
+	for _, column := range columns {
+		cols = append(cols, column.Name)
+	}
+
+	return cols
+}
+
+// rowsToStruct Scans the iterator row data and maps it to the fields of the provided struct.
+func (c *Client) rowsToStruct(iter iterator, vo reflect.Value) {
+	v := vo
+	if vo.Kind() == reflect.Ptr {
+		v = vo.Elem()
+	}
+
+	columns := c.getColumnsFromColumnsInfo(iter.Columns())
+	fieldNameIndex := c.getFieldNameIndex(v)
+	fields := getFields(columns, fieldNameIndex, v)
+
+	_ = iter.Scan(fields...)
+
+	if vo.CanSet() {
+		vo.Set(v)
+	}
+}
+
+// getFieldNameIndex Returns a map of field names from struct convert  toSnakeCase to their index positions in the struct.
+func (*Client) getFieldNameIndex(v reflect.Value) map[string]int {
+	fieldNameIndex := map[string]int{}
+
+	for i := 0; i < v.Type().NumField(); i++ {
+		var name string
+
+		f := v.Type().Field(i)
+		tag := f.Tag.Get("db")
+
+		if tag != "" {
+			name = tag
+		} else {
+			name = toSnakeCase(f.Name)
+		}
+
+		fieldNameIndex[name] = i
+	}
+
+	return fieldNameIndex
+}
+
+// sendOperationStats Logs query duration and stats, records metrics, and ends the trace span if present.
+func (c *Client) sendOperationStats(ql *QueryLog, startTime time.Time, method string, span trace.Span) {
+	duration := time.Since(startTime).Microseconds()
+
+	ql.Duration = duration
+
+	c.logger.Debug(ql)
+
+	if span != nil {
+		defer span.End()
+		span.SetAttributes(attribute.Int64(fmt.Sprintf("scylla.%v.duration", method), duration))
+	}
+
+	c.metrics.RecordHistogram(context.Background(), "app_scylla_stats", float64(duration), "hostname",
+		c.config.Host, "keyspace", c.config.Keyspace)
+
+	c.scylla.query = nil
+}
+
+// rowsToStructCAS Scans a CAS query result into a struct, setting fields based on column names and types,
+// and returns if the update was applied.
+func (c *Client) rowsToStructCAS(query query, vo reflect.Value) (bool, error) {
+	v := vo
+	if vo.Kind() == reflect.Ptr {
+		v = vo.Elem()
+	}
+
+	row := make(map[string]any)
+
+	applied, err := query.MapScanCAS(row)
+	if err != nil {
+		return false, err
+	}
+
+	fieldNameIndex := c.getFieldNameIndex(v)
+
+	for col, value := range row {
+		if i, ok := fieldNameIndex[col]; ok {
+			field := v.Field(i)
+			if reflect.TypeOf(value) == field.Type() {
+				field.Set(reflect.ValueOf(value))
+			}
+		}
+	}
+
+	if vo.CanSet() {
+		vo.Set(v)
+	}
+
+	return applied, nil
 }

@@ -1,6 +1,7 @@
 package scylladb
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"regexp"
@@ -26,7 +27,7 @@ type QueryLog struct {
 
 func (ql *QueryLog) PrettyPrint(writer io.Writer) {
 	fmt.Fprintf(writer, "\u001B[38;5;8m%-32s \u001B[38;5;206m%-6s\u001B[0m %8d\u001B[38;5;8mµs\u001B[0m %s \u001B[38;5;8m%-32s\u001B[0m\n",
-		clean(ql.Operation), "CASS", ql.Duration, clean(ql.Keyspace), clean(ql.Query))
+		clean(ql.Operation), "ScyllaDB", ql.Duration, clean(ql.Keyspace), clean(ql.Query))
 }
 
 // // clean takes a string query as input and performs two operations to clean it up:
@@ -38,4 +39,9 @@ func clean(query string) string {
 	query = strings.TrimSpace(query)
 
 	return query
+}
+
+type Metrics interface {
+	NewHistogram(name, desc string, buckets ...float64)
+	RecordHistogram(ctx context.Context, name string, value float64, labels ...string)
 }

@@ -766,7 +766,7 @@ import (
 	"github.com/gocql/gocql"
 	"gofr.dev/pkg/gofr"
 	"gofr.dev/pkg/gofr/datasource/scylladb"
-	"log"
+	"gofr.dev/pkg/gofr/http"
 )
 
 type User struct {
@@ -779,7 +779,7 @@ func main() {
 	app := gofr.New()
 
 	client := scylladb.New(scylladb.Config{
-		Hosts:    "localhost",
+		Host:     "localhost",
 		Keyspace: "test2_keyspace",
 		Port:     9042,
 		Username: "root",
@@ -787,7 +787,7 @@ func main() {
 	})
 
 	if client == nil {
-		log.Fatal("Failed to initialize ScyllaDB client")
+		app.Logger().Error("Failed to initialize the scylladb client")
 	}
 
 	app.AddScyllaDB(client)
@@ -796,6 +796,8 @@ func main() {
 	app.POST("/users", addUser)
 	app.DELETE("/users/{id}", deleteUser)
 	app.PUT("/users/{id}", updateUser)
+	app.POST("/createBatch", createBatch)
+	app.POST("/addBatch", addUserWithMultipleQueries)
 
 	app.Run()
 
@@ -804,13 +806,13 @@ func main() {
 func updateUser(c *gofr.Context) (interface{}, error) {
 	uuidStr := c.PathParam("id")
 	if uuidStr == "" {
-		return nil, fmt.Errorf("UUID is required")
+		return nil, http.ErrorMissingParam{}
 	}
 
 	userID, err := gocql.ParseUUID(uuidStr)
 	if err != nil {
-		c.Logger.Error("Invalid UUID format:", err)
-		return nil, fmt.Errorf("Invalid UUID format")
+		c.Logger.Errorf("Invalid UUID format:%v", err)
+		return nil, err
 	}
 
 	var updatedUser struct {
@@ -820,12 +822,12 @@ func updateUser(c *gofr.Context) (interface{}, error) {
 
 	err = c.Bind(&updatedUser)
 	if err != nil {
-		c.Logger.Error("Error binding request data:", err)
+		c.Logger.Errorf("Error binding request data:%v", err)
 		return nil, err
 	}
 
 	if updatedUser.Email == "" {
-		return nil, fmt.Errorf("Email is required")
+		return nil, http.ErrorMissingParam{}
 	}
 	var newUser User
 	query := `UPDATE users SET email = ?, name = ? WHERE id = ?`
@@ -833,7 +835,7 @@ func updateUser(c *gofr.Context) (interface{}, error) {
 	err = c.ScyllaDB.QueryWithCtx(c, &newUser, query, updatedUser.Email, updatedUser.Name, userID)
 
 	if err != nil {
-		c.Logger.Error("Error updating user email and name:", err)
+		c.Logger.Errorf("Error updating user email and name:%v", err)
 		return nil, err
 	}
 
@@ -847,20 +849,20 @@ func deleteUser(c *gofr.Context) (interface{}, error) {
 	uuidStr := c.PathParam("id")
 
 	if uuidStr == "" {
-		return nil, fmt.Errorf("UUID is required")
+		return nil, http.ErrorMissingParam{}
 	}
 
 	userID, err := gocql.ParseUUID(uuidStr)
 	if err != nil {
-		c.Logger.Error("Invalid UUID format:", err)
-		return nil, fmt.Errorf("Invalid UUID format")
+		c.Logger.Errorf("Invalid UUID format:%v", err)
+		return nil, err
 	}
 
 	query := `DELETE FROM users WHERE id = ?`
 	err = c.ScyllaDB.ExecWithCtx(c, query, userID)
 
 	if err != nil {
-		c.Logger.Error("Error deleting user by UUID:", err)
+		c.Logger.Errorf("Error deleting user by UUID:%v", err)
 		return nil, err
 	}
 
@@ -870,7 +872,6 @@ func deleteUser(c *gofr.Context) (interface{}, error) {
 }
 
 func addUser(c *gofr.Context) (interface{}, error) {
-
 	var newUser User
 	err := c.Bind(&newUser)
 	if err != nil {
@@ -880,9 +881,10 @@ func addUser(c *gofr.Context) (interface{}, error) {
 
 	if err != nil {
 
-		c.Logger.Error("Error inserting user into ScyllaDB:", err)
+		c.Logger.Errorf("Error inserting user into ScyllaDB:%v", err)
 		return nil, err
 	}
+
 	return newUser, nil
 
 }
@@ -892,25 +894,121 @@ func getUser(c *gofr.Context) (interface{}, error) {
 	id := c.PathParam("id")
 
 	if id == "" {
-		return nil, fmt.Errorf("ID is required")
+		return nil, http.ErrorMissingParam{}
 	}
 
 	userID, err := gocql.ParseUUID(id)
 	if err != nil {
-		c.Logger.Error("Invalid UUID format:", err)
-		return nil, fmt.Errorf("Invalid UUID format")
+		c.Logger.Errorf("Invalid UUID format:%v", err)
+		return nil, http.ErrorInvalidRoute{}
 	}
 
 	err = c.ScyllaDB.QueryWithCtx(c, &user, `SELECT id, name, email FROM users WHERE id = ?`, userID)
 	if err != nil {
-		c.Logger.Error("Error in selecting the user:", err)
+		c.Logger.Errorf("Error in selecting the user:%v", err)
 		if err == gocql.ErrNotFound {
-			return nil, fmt.Errorf("User not found")
+			return nil, http.ErrorEntityNotFound{}
 		}
 		return nil, err
 	}
 
 	return user, nil
+}
+
+type BatchRequest struct {
+	BatchName string `json:"batchName"`
+	BatchType string `json:"batchType"`
+}
+
+func createBatch(c *gofr.Context) (interface{}, error) {
+
+	var request BatchRequest
+	err := c.Bind(&request)
+	if err != nil {
+		c.Logger.Errorf("Error binding request data:%v", err)
+		return nil, err
+	}
+
+	var batchType int
+	switch request.BatchType {
+	case "Logged":
+		batchType = scylladb.LoggedBatch
+	case "Unlogged":
+		batchType = scylladb.UnloggedBatch
+	case "Counter":
+		batchType = scylladb.CounterBatch
+	default:
+		return nil, http.ErrorInvalidRoute{}
+	}
+
+	batchName := request.BatchName
+
+	ctx := c.Request.Context()
+	err = c.ScyllaDB.NewBatchWithCtx(ctx, batchName, batchType)
+	if err != nil {
+		c.Logger.Errorf("Error creating batch:%v", err)
+		return nil, err
+	}
+	return map[string]string{
+		"message": fmt.Sprintf("Batch %s created successfully with type %s", batchName, request.BatchType),
+	}, nil
+}
+
+func addUserWithMultipleQueries(c *gofr.Context) (interface{}, error) {
+
+	var newUser struct {
+		ID    string `json:"id"`
+		Name  string `json:"name"`
+		Email string `json:"email"`
+	}
+	err := c.Bind(&newUser)
+	if err != nil {
+		c.Logger.Errorf("Error binding request data:%v", err)
+		return nil, err
+	}
+
+	userID, err := gocql.ParseUUID(newUser.ID)
+	if err != nil {
+		c.Logger.Errorf("Invalid UUID format:%v", err)
+		return nil, err
+	}
+
+	batchName := "myBatch"
+	batchType := scylladb.LoggedBatch
+
+	err = c.ScyllaDB.NewBatch(batchName, batchType)
+	if err != nil {
+		c.Logger.Errorf("Error creating batch:%v", err)
+		return nil, err
+	}
+
+	err = c.ScyllaDB.BatchQueryWithCtx(c, batchName, "INSERT INTO users (id, name, email) VALUES (?, ?, ?)", userID, newUser.Name, newUser.Email)
+	if err != nil {
+		c.Logger.Errorf("Error adding query to batch (insert):%v", err)
+		return nil, err
+	}
+
+	err = c.ScyllaDB.BatchQueryWithCtx(c, batchName, "UPDATE users SET email = ? WHERE id = ?", newUser.Email, userID)
+	if err != nil {
+		c.Logger.Errorf("Error adding query to batch (update):%v", err)
+		return nil, err
+	}
+
+	err = c.ScyllaDB.BatchQueryWithCtx(c, batchName, "DELETE FROM users WHERE id = ?", userID)
+	if err != nil {
+		c.Logger.Errorf("Error adding query to batch (delete):%v", err)
+		return nil, err
+	}
+
+	err = c.ScyllaDB.ExecuteBatchWithCtx(c, batchName)
+	if err != nil {
+		c.Logger.Errorf("Error executing batch:%v", err)
+		return nil, err
+	}
+
+	return map[string]string{
+		"message": "User created and additional queries executed successfully",
+	}, nil
 }
 
 ````

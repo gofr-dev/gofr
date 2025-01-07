@@ -39,7 +39,7 @@ func initTest(t *testing.T) (*Client, *mockDependencies) {
 	mockiter := NewMockiterator(ctrl)
 
 	config := Config{
-		Hosts:    "host1",
+		Host:     "host1",
 		Port:     9042,
 		Keyspace: "my_Keyspace",
 	}
@@ -50,7 +50,7 @@ func initTest(t *testing.T) (*Client, *mockDependencies) {
 	client.scylla.batches = map[string]batch{mockBatchName: mockBatch}
 
 	mockMetrics.EXPECT().RecordHistogram(gomock.AssignableToTypeOf(context.Background()), "app_scylla_stats",
-		gomock.AssignableToTypeOf(float64(0)), "hostname", client.config.Hosts, "keyspace", client.config.Keyspace).
+		gomock.AssignableToTypeOf(float64(0)), "hostname", client.config.Host, "keyspace", client.config.Keyspace).
 		AnyTimes()
 	mockLogger.EXPECT().Debugf(gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Error("we did not get a pointer ,data is not settable").AnyTimes()
@@ -69,7 +69,7 @@ func TestScyllaDB_Connect(t *testing.T) {
 	mockClusterConfig := NewMockclusterConfig(ctrl)
 
 	config := Config{
-		Hosts:    "host1",
+		Host:     "host1",
 		Port:     9042,
 		Keyspace: "my_keyspace",
 	}
@@ -84,12 +84,12 @@ func TestScyllaDB_Connect(t *testing.T) {
 			mockClusterConfig.EXPECT().createSession().Return(&scyllaSession{}, nil).Times(1)
 			mockMetrics.EXPECT().NewHistogram("app_scylla_stats", "Response time of scylla queries in microseconds",
 				scylladbBuckets).Times(1)
-			mockLogger.EXPECT().Debugf("Connecting to ScyllaDB at %v on port %v to keyspace %v", "host1", 9042, "my_keyspace")
+			mockLogger.EXPECT().Debugf("connecting to ScyllaDB at %v on port %v to keyspace %v", "host1", 9042, "my_keyspace")
 			mockLogger.EXPECT().Logf("connected to '%s' keyspace at host '%s' and port '%d'", "my_keyspace", "host1", 9042)
 		}, &scyllaSession{}},
 		{
 			"Connection failed", func() {
-				mockLogger.EXPECT().Debugf("Connecting to ScyllaDB at %v on port %v to keyspace %v", "host1", 9042, "my_keyspace")
+				mockLogger.EXPECT().Debugf("connecting to ScyllaDB at %v on port %v to keyspace %v", "host1", 9042, "my_keyspace")
 				mockClusterConfig.EXPECT().createSession().Return(nil, errConnFail).Times(1)
 				mockLogger.EXPECT().Error("failed to connect to ScyllaDB:")
 			}, nil,
@@ -265,25 +265,25 @@ func Test_HealthCheck(t *testing.T) {
 			mockDeps.mockQuery.EXPECT().Exec().Return(nil).Times(1)
 		}, &Health{
 			Status:  "UP",
-			Details: map[string]interface{}{"host": client.config.Hosts, "keyspace": client.config.Keyspace},
+			Details: map[string]interface{}{"host": client.config.Host, "keyspace": client.config.Keyspace},
 		}, nil},
 		{"failure case: exec error", func() {
 			mockDeps.mockSession.EXPECT().Query(query).Return(mockDeps.mockQuery).Times(1)
 			mockDeps.mockQuery.EXPECT().Exec().Return(errMock).Times(1)
 		}, &Health{
 			Status: "DOWN",
-			Details: map[string]interface{}{"host": client.config.Hosts, "keyspace": client.config.Keyspace,
+			Details: map[string]interface{}{"host": client.config.Host, "keyspace": client.config.Keyspace,
 				"message": errMock.Error()},
 		}, errStatusDown},
-		{"failure case: cassandra not initializes", func() {
+		{"failure case: ScyllaDB not initialized", func() {
 			client.scylla.session = nil
 
 			mockDeps.mockSession.EXPECT().Query(query).Return(mockDeps.mockQuery).Times(1)
 			mockDeps.mockQuery.EXPECT().Exec().Return(nil).Times(1)
 		}, &Health{
 			Status: "DOWN",
-			Details: map[string]interface{}{"host": client.config.Hosts, "keyspace": client.config.Keyspace,
-				"message": "cassandra not connected"},
+			Details: map[string]interface{}{"host": client.config.Host, "keyspace": client.config.Keyspace,
+				"message": "ScyllaDB not connected"},
 		}, errStatusDown},
 	}
 
