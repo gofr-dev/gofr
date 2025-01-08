@@ -166,7 +166,7 @@ func generateMongoURI(config *Config) (uri, host string, err error) {
 }
 
 func getDBHost(uri string) (host string, err error) {
-	parsedURL, err := url.Parse(uri)
+	parsedURL, err := url.ParseRequestURI(uri)
 	if err != nil {
 		return "", err
 	}
