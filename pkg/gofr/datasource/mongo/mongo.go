@@ -150,7 +150,7 @@ func generateMongoURI(config *Config) (uri, host string, err error) {
 
 	u := &url.URL{
 		Scheme: "mongodb",
-		Host:   net.JoinHostPort(config.Host, strconv.Itoa(int(config.Port))),
+		Host:   net.JoinHostPort(config.Host, strconv.Itoa(config.Port)),
 		Path:   "/" + url.PathEscape(config.Database),
 	}
 
