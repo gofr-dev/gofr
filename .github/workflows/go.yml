@@ -121,7 +121,7 @@ jobs:
       - name: Count Warnings
         id: count-warnings
         run: |
-          warning_count=$(go test gofr.dev/pkg/... -v | grep -c "WARNING")
+          warning_count=$(go test gofr.dev/pkg/... -v | grep -c "WARNING" || true)
           echo "Warnings found: $warning_count"
           echo "warning_count=$warning_count" >> $GITHUB_ENV
 
