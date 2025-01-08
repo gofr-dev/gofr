@@ -155,5 +155,4 @@ func (a *App) AddSurrealDB(db container.SurrealBDProvider) {
 	db.Connect()
 
 	a.container.SurrealDB = db
-
 }
