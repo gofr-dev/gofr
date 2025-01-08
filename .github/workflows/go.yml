@@ -118,6 +118,20 @@ jobs:
           grep -v '/mock_' package.cov > profile.cov
           go tool cover -func profile.cov
 
+      - name: Count Warnings
+        id: count-warnings
+        run: |
+          warning_count=$(go test gofr.dev/pkg/... -v | grep -c "WARNING")
+          echo "Warnings found: $warning_count"
+          echo "warning_count=$warning_count" >> $GITHUB_ENV
+
+      - name: Fail if too many warnings
+        run: |
+          if [ ${{ env.warning_count }} -gt 10 ]; then
+            echo "Too many warnings: ${{ env.warning_count }}"
+            exit 1
+          fi      
+
       - name: Upload Test Coverage
         if: ${{ matrix.go-version == '1.22'}}
         uses: actions/upload-artifact@v4
