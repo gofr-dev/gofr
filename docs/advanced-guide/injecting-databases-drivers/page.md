@@ -719,36 +719,29 @@ ScyllaDB
 GoFr supports injecting ScyllaDB to facilitate interaction with ScyllaDB REST APIs.Implementations adhering to the ScyllaDB interface can be registered with app.AddScyllaDB(),enabling applications to leverage ScyllaDB for time-series data management through gofr.Context
 ```go
 type ScyllaDB interface {
-	// Query executes a CQL (Cassandra Query Language) query on the ScyllaDB cluster
-	// and stores the result in the provided destination variable `dest`
-	
-	Query(dest any, stmt string, values ...any) error
-	
-	//QueryWithCtx executes a CQL query with the provided context and stores the result in the `dest` variable
-	QueryWithCtx(ctx context.Context, dest any, stmt string, values ...any) error
-	
-	//Exec executes a CQL statement (e.g., INSERT, UPDATE, DELETE) on the ScyllaDB cluster without returning any result
-	Exec(stmt string, values ...any) error
-	
-	// ExecWithCtx executes a CQL statement with the provided context and without returning any result.
-	ExecWithCtx(ctx context.Context, stmt string, values ...any) error
-	
-	// ExecCAS performs a conditional (Compare and Set) operation on ScyllaDB, executing a CQL statement
-	ExecCAS(dest any, stmt string, values ...any) (bool, error)
-	
-	// NewBatch initializes a new batch operation with the specified name and batch type.
-	NewBatch(name string, batchType int) error
-	
-	// BatchQuery executes a batch query in the ScyllaDB cluster with the specified name, statement, and values.
-	BatchQuery(name, stmt string, values ...any) error
-	
-	// BatchQueryWithCtx executes a batch query with the provided context
-	BatchQueryWithCtx(ctx context.Context, name, stmt string, values ...any) error
-	
-	ExecuteBatchWithCtx(ctx context.Context, name string) error
-	
-	// HealthChecker defines the HealthChecker interface
-	HealthChecker
+// Query executes a CQL (Cassandra Query Language) query on the ScyllaDB cluster
+// and stores the result in the provided destination variable `dest`.
+Query(dest any, stmt string, values ...any) error
+// QueryWithCtx executes a CQL query with the provided context and stores the result in the `dest` variable.
+QueryWithCtx(ctx context.Context, dest any, stmt string, values ...any) error
+// Exec executes a CQL statement (e.g., INSERT, UPDATE, DELETE) on the ScyllaDB cluster without returning any result.
+Exec(stmt string, values ...any) error
+// ExecWithCtx executes a CQL statement with the provided context and without returning any result.
+ExecWithCtx(ctx context.Context, stmt string, values ...any) error
+// ExecCAS performs a conditional (Compare and Set) operation on ScyllaDB, executing a CQL statement
+ExecCAS(dest any, stmt string, values ...any) (bool, error)
+// NewBatch initializes a new batch operation with the specified name and batch type.
+NewBatch(name string, batchType int) error
+// NewBatchWithCtx takes context,name and batchtype and return error.
+NewBatchWithCtx(_ context.Context, name string, batchType int) error
+// BatchQuery executes a batch query in the ScyllaDB cluster with the specified name, statement, and values.
+BatchQuery(name, stmt string, values ...any) error
+// BatchQueryWithCtx executes a batch query with the provided context.
+BatchQueryWithCtx(ctx context.Context, name, stmt string, values ...any) error
+// ExecuteBatchWithCtx executes a batch with context and name returns error.
+ExecuteBatchWithCtx(ctx context.Context, name string) error
+// HealthChecker defines the HealthChecker interface.
+HealthChecker
 }
 ```
 
@@ -763,9 +756,8 @@ go get gofr.dev/pkg/gofr/datasource/scylladb
 package main
 
 import (
-	"errors"
-	"fmt"
 	"github.com/gocql/gocql"
+
 	"gofr.dev/pkg/gofr"
 	"gofr.dev/pkg/gofr/datasource/scylladb"
 	"gofr.dev/pkg/gofr/http"
@@ -782,95 +774,23 @@ func main() {
 
 	client := scylladb.New(scylladb.Config{
 		Host:     "localhost",
-		Keyspace: "test2_keyspace",
-		Port:     9042,
+		Keyspace: "my_keyspace",
+		Port:     2025,
 		Username: "root",
 		Password: "password",
 	})
 
 	if client == nil {
-		app.Logger().Error("Failed to initialize the scylladb client")
+		app.Logger().Errorf("Failed to initialize the scylladb client")
 	}
 
 	app.AddScyllaDB(client)
 
 	app.GET("/users/{id}", getUser)
 	app.POST("/users", addUser)
-	app.DELETE("/users/{id}", deleteUser)
-	app.PUT("/users/{id}", updateUser)
-	app.POST("/createBatch", createBatch)
-	app.POST("/addBatch", addUserWithMultipleQueries)
 
 	app.Run()
 
-}
-
-func updateUser(c *gofr.Context) (interface{}, error) {
-	uuidStr := c.PathParam("id")
-	if uuidStr == "" {
-		return nil, http.ErrorMissingParam{}
-	}
-
-	userID, err := gocql.ParseUUID(uuidStr)
-	if err != nil {
-		c.Logger.Errorf("Invalid UUID format:%v", err)
-		return nil, err
-	}
-
-	var updatedUser struct {
-		Email string `json:"email"`
-		Name  string `json:"name"`
-	}
-
-	err = c.Bind(&updatedUser)
-	if err != nil {
-		c.Logger.Errorf("Error binding request data:%v", err)
-		return nil, err
-	}
-
-	if updatedUser.Email == "" {
-		return nil, http.ErrorMissingParam{}
-	}
-	var newUser User
-	query := `UPDATE users SET email = ?, name = ? WHERE id = ?`
-
-	err = c.ScyllaDB.QueryWithCtx(c, &newUser, query, updatedUser.Email, updatedUser.Name, userID)
-
-	if err != nil {
-		c.Logger.Errorf("Error updating user email and name:%v", err)
-		return nil, err
-	}
-
-	return map[string]string{
-		"message": "User email and name updated successfully",
-	}, nil
-}
-
-func deleteUser(c *gofr.Context) (interface{}, error) {
-
-	uuidStr := c.PathParam("id")
-
-	if uuidStr == "" {
-		return nil, http.ErrorMissingParam{}
-	}
-
-	userID, err := gocql.ParseUUID(uuidStr)
-	if err != nil {
-		c.Logger.Errorf("Invalid UUID format:%v", err)
-		return nil, err
-	}
-
-	query := `DELETE FROM users WHERE id = ?`
-	err = c.ScyllaDB.ExecWithCtx(c, query, userID)
-
-	if err != nil {
-		c.Logger.Errorf("Error deleting user by UUID:%v", err)
-		return nil, err
-	}
-
-	return map[string]string{
-		"message": "User deleted successfully by UUID",
-	}, nil
 }
 
 func addUser(c *gofr.Context) (interface{}, error) {
@@ -879,13 +799,7 @@ func addUser(c *gofr.Context) (interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	err = c.ScyllaDB.ExecWithCtx(c, `INSERT INTO users (id, name, email) VALUES (?, ?, ?)`, newUser.ID, newUser.Name, newUser.Email)
-
-	if err != nil {
-
-		c.Logger.Errorf("Error inserting user into ScyllaDB:%v", err)
-		return nil, err
-	}
+	_ = c.ScyllaDB.ExecWithCtx(c, `INSERT INTO users (user_id, username, email) VALUES (?, ?, ?)`, newUser.ID, newUser.Name, newUser.Email)
 
 	return newUser, nil
 
@@ -899,118 +813,12 @@ func getUser(c *gofr.Context) (interface{}, error) {
 		return nil, http.ErrorMissingParam{}
 	}
 
-	userID, err := gocql.ParseUUID(id)
-	if err != nil {
-		c.Logger.Errorf("Invalid UUID format:%v", err)
-		return nil, http.ErrorInvalidRoute{}
-	}
+	userID, _ := gocql.ParseUUID(id)
 
-	err = c.ScyllaDB.QueryWithCtx(c, &user, `SELECT id, name, email FROM users WHERE id = ?`, userID)
-	if err != nil {
-		c.Logger.Errorf("Error in selecting the user:%v", err)
-		if errors.Is(err,gocql.ErrNotFound) {
-			return nil, http.ErrorEntityNotFound{}
-		}
-		return nil, err
-	}
+	_ = c.ScyllaDB.QueryWithCtx(c, &user, `SELECT user_id, username, email FROM users WHERE user_id = ?`, userID)
 
 	return user, nil
 }
 
-type BatchRequest struct {
-	BatchName string `json:"batchName"`
-	BatchType string `json:"batchType"`
-}
-
-func createBatch(c *gofr.Context) (interface{}, error) {
-
-	var request BatchRequest
-	err := c.Bind(&request)
-	if err != nil {
-		c.Logger.Errorf("Error binding request data:%v", err)
-		return nil, err
-	}
-
-	var batchType int
-	switch request.BatchType {
-	case "Logged":
-		batchType = scylladb.LoggedBatch
-	case "Unlogged":
-		batchType = scylladb.UnloggedBatch
-	case "Counter":
-		batchType = scylladb.CounterBatch
-	default:
-		return nil, http.ErrorInvalidRoute{}
-	}
-
-	batchName := request.BatchName
-
-	ctx := c.Request.Context()
-	err = c.ScyllaDB.NewBatchWithCtx(ctx, batchName, batchType)
-	if err != nil {
-		c.Logger.Errorf("Error creating batch:%v", err)
-		return nil, err
-	}
-	return map[string]string{
-		"message": fmt.Sprintf("Batch %s created successfully with type %s", batchName, request.BatchType),
-	}, nil
-}
-
-func addUserWithMultipleQueries(c *gofr.Context) (interface{}, error) {
-
-	var newUser struct {
-		ID    string `json:"id"`
-		Name  string `json:"name"`
-		Email string `json:"email"`
-	}
-	err := c.Bind(&newUser)
-	if err != nil {
-		c.Logger.Errorf("Error binding request data:%v", err)
-		return nil, err
-	}
-
-	userID, err := gocql.ParseUUID(newUser.ID)
-	if err != nil {
-		c.Logger.Errorf("Invalid UUID format:%v", err)
-		return nil, err
-	}
-
-	batchName := "myBatch"
-	batchType := scylladb.LoggedBatch
-
-	err = c.ScyllaDB.NewBatch(batchName, batchType)
-	if err != nil {
-		c.Logger.Errorf("Error creating batch:%v", err)
-		return nil, err
-	}
-
-	err = c.ScyllaDB.BatchQueryWithCtx(c, batchName, "INSERT INTO users (id, name, email) VALUES (?, ?, ?)", userID, newUser.Name, newUser.Email)
-	if err != nil {
-		c.Logger.Errorf("Error adding query to batch (insert):%v", err)
-		return nil, err
-	}
-
-	err = c.ScyllaDB.BatchQueryWithCtx(c, batchName, "UPDATE users SET email = ? WHERE id = ?", newUser.Email, userID)
-	if err != nil {
-		c.Logger.Errorf("Error adding query to batch (update):%v", err)
-		return nil, err
-	}
-
-	err = c.ScyllaDB.BatchQueryWithCtx(c, batchName, "DELETE FROM users WHERE id = ?", userID)
-	if err != nil {
-		c.Logger.Errorf("Error adding query to batch (delete):%v", err)
-		return nil, err
-	}
-
-	err = c.ScyllaDB.ExecuteBatchWithCtx(c, batchName)
-	if err != nil {
-		c.Logger.Errorf("Error executing batch:%v", err)
-		return nil, err
-	}
-
-	return map[string]string{
-		"message": "User created and additional queries executed successfully",
-	}, nil
-}
 
 ```

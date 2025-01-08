@@ -12,7 +12,7 @@ import (
 
 const (
 	LoggedBatch = iota
-	UnloggedBatch
+	UnLoggedBatch
 	CounterBatch
 )
 
@@ -231,7 +231,7 @@ func (c *Client) NewBatch(name string, batchType int) error {
 // NewBatchWithCtx uses context ,name ,batchType and returns error.
 func (c *Client) NewBatchWithCtx(_ context.Context, name string, batchType int) error {
 	switch batchType {
-	case LoggedBatch, UnloggedBatch, CounterBatch:
+	case LoggedBatch, UnLoggedBatch, CounterBatch:
 		if len(c.scylla.batches) == 0 {
 			c.scylla.batches = make(map[string]batch)
 		}
