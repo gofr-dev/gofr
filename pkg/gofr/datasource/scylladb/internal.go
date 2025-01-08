@@ -11,6 +11,7 @@ import (
 	"github.com/gocql/gocql"
 
 	"go.opentelemetry.io/otel/attribute"
+
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -100,6 +101,7 @@ func (s *scyllaSession) Query(stmt string, values ...any) query {
 	return &scylladbQuery{query: s.session.Query(stmt, values...)}
 }
 
+// newBatch creates a `gocql.BatchType`.
 func (s *scyllaSession) newBatch(batchType gocql.BatchType) batch {
 	return &scyllaBatch{batch: s.session.NewBatch(batchType)}
 }

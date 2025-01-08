@@ -9,13 +9,13 @@ import (
 )
 
 type Logger interface {
-	Debug(args ...interface{})
-	Debugf(pattern string, args ...interface{})
+	Debug(args ...any)
+	Debugf(pattern string, args ...any)
 	Error(args ...interface{})
-	Infof(pattern string, args ...interface{})
-	Errorf(format string, args ...interface{})
+	Infof(pattern string, args ...any)
+	Errorf(format string, args ...any)
 	Log(args ...interface{})
-	Logf(pattern string, args ...interface{})
+	Logf(pattern string, args ...any)
 }
 
 type QueryLog struct {
@@ -30,10 +30,11 @@ func (ql *QueryLog) PrettyPrint(writer io.Writer) {
 		clean(ql.Operation), "ScyllaDB", ql.Duration, clean(ql.Keyspace), clean(ql.Query))
 }
 
-// // clean takes a string query as input and performs two operations to clean it up:
-// // 1. It replaces multiple consecutive whitespace characters with a single space.
-// // 2. It trims leading and trailing whitespace from the string.
-// // The cleaned-up query string is then returned.
+//	clean takes a string query as input and performs two operations to clean it up:
+//
+// 1. It replaces multiple consecutive whitespace characters with a single space.
+// 2. It trims leading and trailing whitespace from the string.
+// The cleaned-up query string is then returned.
 func clean(query string) string {
 	query = regexp.MustCompile(`\s+`).ReplaceAllString(query, " ")
 	query = strings.TrimSpace(query)
