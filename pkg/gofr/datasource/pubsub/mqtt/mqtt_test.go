@@ -70,7 +70,7 @@ func TestMQTT_EmptyConfigs(t *testing.T) {
 
 	out := testutil.StdoutOutputForFunc(func() {
 		mockLogger := logging.NewMockLogger(logging.DEBUG)
-		client = New(&Config{}, mockLogger, nil)
+		client = New(&Config{Username: "gofr-mqtt-test"}, mockLogger, nil)
 	})
 
 	assert.NotNil(t, client)
