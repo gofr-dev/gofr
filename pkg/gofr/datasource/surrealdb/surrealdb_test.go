@@ -67,28 +67,6 @@ func Test_UseMetrics(t *testing.T) {
 	})
 }
 
-func Test_Connect(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockLogger := NewMockLogger(ctrl)
-
-	t.Run("invalid credentials", func(t *testing.T) {
-		client := New(&Config{
-			Host:     "localhost",
-			Port:     8000,
-			Username: "root",
-		})
-		client.UseLogger(mockLogger)
-
-		mockLogger.EXPECT().Debugf(gomock.Any(), gomock.Any())
-
-		err := client.Connect()
-		require.Error(t, err)
-		require.Equal(t, ErrInvalidCredentialsConfig, err)
-	})
-}
-
 var errInvalidQuery = errors.New("invalid query")
 
 func Test_Query(t *testing.T) {

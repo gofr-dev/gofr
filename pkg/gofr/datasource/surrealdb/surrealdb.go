@@ -19,7 +19,7 @@ import (
 
 var (
 	// ErrNotConnected indicates that the database client is not connected.
-	ErrNotConnected = errors.New("not connected to database")
+	errNotConnected = errors.New("not connected to database")
 )
 
 const (
@@ -77,10 +77,10 @@ func (c *Client) UseTracer(tracer interface{}) {
 
 // Connect establishes a connection to the SurrealDB server using the client's configuration.
 var (
-	ErrNoDatabaseInstance       = errors.New("failed to connect to SurrealDB: no valid database instance")
-	ErrInvalidCredentialsConfig = errors.New("both username and password must be provided")
-	ErrEmbeddedDBNotEnabled     = errors.New("embedded database not enabled")
-	ErrInvalidConnectionURL     = errors.New("invalid connection URL")
+	errNoDatabaseInstance       = errors.New("failed to connect to SurrealDB: no valid database instance")
+	errInvalidCredentialsConfig = errors.New("both username and password must be provided")
+	errEmbeddedDBNotEnabled     = errors.New("embedded database not enabled")
+	errInvalidConnectionURL     = errors.New("invalid connection URL")
 )
 
 // NewDB creates a new SurrealDB client.
@@ -104,9 +104,9 @@ func NewDB(connectionURL string) (con connection.Connection, err error) {
 	} else if scheme == ws || scheme == "wss" {
 		con = connection.NewWebSocketConnection(newParams)
 	} else if scheme == "memory" || scheme == "mem" || scheme == "surrealkv" {
-		return nil, fmt.Errorf("%w", ErrEmbeddedDBNotEnabled)
+		return nil, fmt.Errorf("%w", errEmbeddedDBNotEnabled)
 	} else {
-		return nil, fmt.Errorf("%w", ErrInvalidConnectionURL)
+		return nil, fmt.Errorf("%w", errInvalidConnectionURL)
 	}
 
 	err = con.Connect()
@@ -161,7 +161,7 @@ func (c *Client) connectToDatabase(endpoint string) error {
 
 	if db == nil {
 		c.logError("failed to connect to SurrealDB: no valid database instance", nil)
-		return ErrNoDatabaseInstance
+		return errNoDatabaseInstance
 	}
 
 	c.db = db
@@ -249,7 +249,7 @@ func (c *Client) Authenticate(token string) error {
 // authenticate handles the authentication process if credentials are provided.
 func (c *Client) authenticate() error {
 	if (c.config.Username == "" && c.config.Password != "") || (c.config.Username != "" && c.config.Password == "") {
-		return ErrInvalidCredentialsConfig
+		return errInvalidCredentialsConfig
 	}
 
 	if c.config.Username != "" && c.config.Password != "" {
@@ -289,7 +289,7 @@ func (c *Client) Close() error {
 // UseNamespace switches the active namespace for the database connection.
 func (c *Client) UseNamespace(ns string) error {
 	if c.db == nil {
-		return ErrNotConnected
+		return errNotConnected
 	}
 
 	return c.db.Use(ns, "")
@@ -298,7 +298,7 @@ func (c *Client) UseNamespace(ns string) error {
 // UseDatabase switches the active database for the connection.
 func (c *Client) UseDatabase(db string) error {
 	if c.db == nil {
-		return ErrNotConnected
+		return errNotConnected
 	}
 
 	return c.db.Use("", db)
@@ -319,7 +319,7 @@ type QueryResult struct {
 // Query executes a query on the SurrealDB instance.
 func (c *Client) Query(ctx context.Context, query string, vars map[string]interface{}) ([]interface{}, error) {
 	if c.db == nil {
-		return nil, ErrNotConnected
+		return nil, errNotConnected
 	}
 
 	var res RPCResponse
@@ -366,7 +366,7 @@ var (
 
 func (c *Client) Select(ctx context.Context, table string) ([]map[string]interface{}, error) {
 	if c.db == nil {
-		return nil, ErrNotConnected
+		return nil, errNotConnected
 	}
 	//
 	var res Response
@@ -412,7 +412,7 @@ var ErrUnexpectedResultType = errors.New("unexpected result type")
 
 func (c *Client) Create(ctx context.Context, table string, data interface{}) (map[string]interface{}, error) {
 	if c.db == nil {
-		return nil, ErrNotConnected
+		return nil, errNotConnected
 	}
 
 	var CreateResult Response
@@ -435,7 +435,7 @@ func (c *Client) Create(ctx context.Context, table string, data interface{}) (ma
 // Update modifies an existing record in the specified table.
 func (c *Client) Update(ctx context.Context, table, _ string, data interface{}) (interface{}, error) {
 	if c.db == nil {
-		return nil, ErrNotConnected
+		return nil, errNotConnected
 	}
 
 	var UpdateResult Response
@@ -467,7 +467,7 @@ func (c *Client) Update(ctx context.Context, table, _ string, data interface{}) 
 // Insert inserts a new record into the specified table in SurrealDB.
 func (c *Client) Insert(ctx context.Context, table string, data interface{}) (*Response, error) {
 	if c.db == nil {
-		return nil, ErrNotConnected
+		return nil, errNotConnected
 	}
 
 	var insertResult Response
@@ -485,7 +485,7 @@ func (c *Client) Insert(ctx context.Context, table string, data interface{}) (*R
 // Delete removes a record from the specified table in SurrealDB.
 func (c *Client) Delete(ctx context.Context, table, id string) (any, error) {
 	if c.db == nil {
-		return nil, ErrNotConnected
+		return nil, errNotConnected
 	}
 
 	var DeleteResult Response
@@ -532,7 +532,7 @@ func (c *Client) HealthCheck(ctx context.Context) (any, error) {
 		h.Status = statusDown
 		h.Details["error"] = "Database client is not connected"
 
-		return &h, ErrNotConnected
+		return &h, errNotConnected
 	}
 
 	query := "RETURN 'SurrealDB Health Check'"

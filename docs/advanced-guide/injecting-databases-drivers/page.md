@@ -764,6 +764,7 @@ package main
 import (
 	"gofr.dev/pkg/gofr"
 	"gofr.dev/pkg/gofr/datasource/surrealdb"
+	"gofr.dev/pkg/gofr/http"
 )
 
 type Person struct {
@@ -776,7 +777,7 @@ type Person struct {
 func main() {
 	app := gofr.New()
 
-	client := surrealdb.New(surrealdb.Config{
+	client := surrealdb.New(&surrealdb.Config{
 		Host:       "localhost",
 		Port:       8000,
 		Username:   "root",
@@ -788,7 +789,7 @@ func main() {
 
 	app.AddSurrealDB(client)
 
-	// GET
+	// GET request to fetch all persons.
 	app.GET("/person", func(ctx *gofr.Context) (interface{}, error) {
 		persons, err := ctx.SurrealDB.Select(ctx, "person")
 		if err != nil {
@@ -803,12 +804,12 @@ func main() {
 		return persons, nil
 	})
 
-	// POST
+	// POST request to create a new person.
 	app.POST("/person", func(ctx *gofr.Context) (interface{}, error) {
 		var person Person
 		if err := ctx.Bind(&person); err != nil {
 			ctx.Logger.Error("Binding error: ", err)
-			return nil, err
+			return nil, http.ErrorInvalidParam{Params: []string{"body"}}
 		}
 
 		query := "CREATE person SET name = $name, age = $age, email = $email;"
@@ -842,63 +843,54 @@ func main() {
 		}, nil
 	})
 
-	// PUT
+	// PUT request to replace a person with the id.
 	app.PUT("/person/{id}", func(ctx *gofr.Context) (interface{}, error) {
 		id := ctx.PathParam("id")
 		var person Person
 		if err := ctx.Bind(&person); err != nil {
 			ctx.Logger.Error("Binding error: ", err)
-			return nil, err
+			return nil, http.ErrorInvalidParam{Params: []string{"body"}}
 		}
 
-		query := "UPDATE person:" + id + " SET name = $name, age = $age, email = $email RETURN *"
-		vars := map[string]any{
+		data := map[string]interface{}{
 			"name":  person.Name,
 			"age":   person.Age,
 			"email": person.Email,
 		}
 
-		result, err := ctx.SurrealDB.Query(ctx, query, vars)
+		result, err := ctx.SurrealDB.Update(ctx, "person", id, data)
 		if err != nil {
 			ctx.Logger.Error("Update error: ", err)
 			return nil, err
 		}
 
-		if len(result) == 0 {
-			return nil, nil
-		}
-
-		m, ok := result[0].(map[any]any)
+		m, ok := result.(map[interface{}]interface{})
 		if !ok || len(m) == 0 {
 			return nil, nil
 		}
 
 		return m, nil
 	})
-	
-    // DELETE
+
+	//DELETE request to delete a person with the id.
 	app.DELETE("/person/{id}", func(ctx *gofr.Context) (interface{}, error) {
 		id := ctx.PathParam("id")
-		query := "DELETE person:" + id + " RETURN *"
 
-		result, err := ctx.SurrealDB.Query(ctx, query, nil)
+		result, err := ctx.SurrealDB.Delete(ctx, "person", id)
+
 		if err != nil {
-			ctx.Logger.Error("Delete error: ", err)
-			return nil, err
+			return map[string]string{"message": "Person not found"}, nil
 		}
-
-		if result != nil && len(result) > 0 {
-			return map[string]interface{}{
-				"message": "Person deleted successfully",
-				"deleted": result[0],
-			}, nil
-		}
-
-		return map[string]string{"message": "Person not found"}, nil
+		return map[string]interface{}{
+			"message": "Person deleted successfully",
+			"deleted": result,
+		}, nil
 	})
 
 	app.Run()
+
 }
+
 ```
 
 
