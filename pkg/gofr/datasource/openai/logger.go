@@ -7,7 +7,7 @@ type Logger interface {
 	Errorf(pattern string, args ...interface{})
 }
 
-type OpenAiAPILog struct {
+type APILog struct {
 	ID                string `json:"id,omitempty"`
 	Object            string `json:"object,omitempty"`
 	Created           int    `json:"created,omitempty"`
@@ -17,11 +17,11 @@ type OpenAiAPILog struct {
 	Duration          int64  `json:"duration,omitempty"`
 
 	Usage struct {
-		PromptTokens           int         `json:"prompt_tokens,omitempty"`
-		CompletionTokens       int         `json:"completion_tokens,omitempty"`
-		TotalTokens            int         `json:"total_tokens,omitempty"`
-		CompletionTokelDetails interface{} `json:"completion_tokens_details,omitempty"`
-		PromptTokenDetails     interface{} `json:"prompt_tokens_details,omitempty"`
+		PromptTokens            int         `json:"prompt_tokens,omitempty"`
+		CompletionTokens        int         `json:"completion_tokens,omitempty"`
+		TotalTokens             int         `json:"total_tokens,omitempty"`
+		CompletionTokensDetails interface{} `json:"completion_tokens_details,omitempty"`
+		PromptTokensDetails     interface{} `json:"prompt_tokens_details,omitempty"`
 	} `json:"usage,omitempty"`
 
 	Error *Error `json:"error,omitempty"`

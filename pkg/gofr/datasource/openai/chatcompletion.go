@@ -58,7 +58,7 @@ type CreateCompletionsRequest struct {
 		} `json:"function,omitempty"`
 	} `json:"tools,omitempty"`
 
-	ToolChoice        interface{} `json:"toolChoice,omitempty"`
+	ToolChoice        interface{} `json:"tool_choice,omitempty"`
 	ParallelToolCalls bool        `json:"parallel_tool_calls,omitempty"`
 	Suffix            string      `json:"suffix,omitempty"`
 	User              string      `json:"user,omitempty"`
@@ -96,8 +96,8 @@ type CreateCompletionsResponse struct {
 		PromptTokens           int         `json:"prompt_tokens,omitempty"`
 		CompletionTokens       int         `json:"completion_tokens,omitempty"`
 		TotalTokens            int         `json:"total_tokens,omitempty"`
-		CompletionTokelDetails interface{} `json:"completion_tokens_details,omitempty"`
-		PromptTokenDetails     interface{} `json:"prompt_tokens_details,omitempty"`
+		CompletionTokensDetails interface{} `json:"completion_tokens_details,omitempty"`
+		PromptTokensDetails     interface{} `json:"prompt_tokens_details,omitempty"`
 	} `json:"usage,omitempty"`
 
 	Error *Error `json:"error,omitempty"`
@@ -149,8 +149,11 @@ func (c *Client) CreateCompletions(ctx context.Context, r *CreateCompletionsRequ
 	}
 
 	err = json.Unmarshal(raw, &response)
+	if err != nil {
+		return nil, err
+	}
 
-	ql := &OpenAiAPILog{
+	ql := &APILog{
 		ID:                response.ID,
 		Object:            response.Object,
 		Created:           response.Created,
@@ -166,7 +169,7 @@ func (c *Client) CreateCompletions(ctx context.Context, r *CreateCompletionsRequ
 	return response, err
 }
 
-func (c *Client) SendChatCompletionOperationStats(ql *OpenAiAPILog, startTime time.Time, method string, span trace.Span) {
+func (c *Client) SendChatCompletionOperationStats(ql *APILog, startTime time.Time, method string, span trace.Span) {
 	duration := time.Since(startTime).Microseconds()
 
 	ql.Duration = duration

@@ -38,11 +38,11 @@ func Test_ChatCompletions(t *testing.T) {
 				Object:  "chat.completion",
 				Created: 1234567890,
 				Usage: struct {
-					PromptTokens           int         `json:"prompt_tokens,omitempty"`
-					CompletionTokens       int         `json:"completion_tokens,omitempty"`
-					TotalTokens            int         `json:"total_tokens,omitempty"`
-					CompletionTokelDetails interface{} `json:"completion_tokens_details,omitempty"`
-					PromptTokenDetails     interface{} `json:"prompt_tokens_details,omitempty"`
+					PromptTokens            int         `json:"prompt_tokens,omitempty"`
+					CompletionTokens        int         `json:"completion_tokens,omitempty"`
+					TotalTokens             int         `json:"total_tokens,omitempty"`
+					CompletionTokensDetails interface{} `json:"completion_tokens_details,omitempty"`
+					PromptTokensDetails     interface{} `json:"prompt_tokens_details,omitempty"`
 				}{
 					PromptTokens:     10,
 					CompletionTokens: 20,

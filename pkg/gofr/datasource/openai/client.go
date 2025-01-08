@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -29,31 +30,50 @@ type Client struct {
 	httpClient *http.Client
 }
 
-func NewClient(config *Config, customHTTPClient *http.Client) *Client {
+var (
+	ErrorMissingAPIKey = errors.New("api key not provided")
+)
+
+type ClientOption func(*Client)
+
+func WithClientHTTP(httpClient *http.Client) func(*Client) {
+	return func(c *Client) {
+		c.httpClient = httpClient
+	}
+}
+
+func WithClientTimeout(d time.Duration) func(*Client) {
+	return func(c *Client) {
+		c.httpClient.Timeout = d
+	}
+}
+
+func NewClient(config *Config, opts ...ClientOption) (*Client, error) {
+	if config.APIKey == "" {
+		return nil, ErrorMissingAPIKey
+	}
+
 	if config.BaseURL == "" {
 		config.BaseURL = "https://api.openai.com"
 	}
 
 	// Use the provided HTTP client or create a new one with defaults
-	var httpClient *http.Client
-
-	if customHTTPClient != nil {
-		httpClient = customHTTPClient
-	} else {
-		// Create a new HTTP client with default or configured settings
-		httpClient = &http.Client{
+	c := &Client{
+		config: config,
+		httpClient: &http.Client{
 			Timeout: config.Timeout,
 			Transport: &http.Transport{
 				MaxIdleConns:    config.MaxIdleConns,
 				IdleConnTimeout: 30 * time.Second,
 			},
-		}
+		},
 	}
 
-	return &Client{
-		config:     config,
-		httpClient: httpClient,
+	for _, opt := range opts {
+		opt(c)
 	}
+
+	return c, nil
 }
 
 func (c *Client) UseLogger(logger interface{}) {
