@@ -53,7 +53,7 @@ func initTest(t *testing.T) (*Client, *mockDependencies) {
 		gomock.AssignableToTypeOf(float64(0)), "hostname", client.config.Host, "keyspace", client.config.Keyspace).
 		AnyTimes()
 	mockLogger.EXPECT().Debugf(gomock.Any()).AnyTimes()
-	mockLogger.EXPECT().Error("we did not get a pointer ,data is not settable").AnyTimes()
+	mockLogger.EXPECT().Errorf("we did not get a pointer. data is not settable.").AnyTimes()
 	mockLogger.EXPECT().Debugf(gomock.Any(), gomock.Any()).AnyTimes()
 
 	return client, &mockDependencies{mockSession: mockSession, mockQuery: mockQuery, mockBatch: mockBatch,
@@ -82,7 +82,7 @@ func TestScyllaDB_Connect(t *testing.T) {
 	}{
 		{"Successful connection", func() {
 			mockClusterConfig.EXPECT().createSession().Return(&scyllaSession{}, nil).Times(1)
-			mockMetrics.EXPECT().NewHistogram("app_scylla_stats", "Response time of scylla queries in microseconds",
+			mockMetrics.EXPECT().NewHistogram("app_scylla_stats", "Response time of ScyllaDB queries in microseconds",
 				scylladbBuckets).Times(1)
 			mockLogger.EXPECT().Debugf("connecting to ScyllaDB at %v on port %v to keyspace %v", "host1", 9042, "my_keyspace")
 			mockLogger.EXPECT().Logf("connected to '%s' keyspace at host '%s' and port '%d'", "my_keyspace", "host1", 9042)

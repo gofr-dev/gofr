@@ -31,10 +31,10 @@ func (ql *QueryLog) PrettyPrint(writer io.Writer) {
 }
 
 //	clean takes a string query as input and performs two operations to clean it up:
-//
 // 1. It replaces multiple consecutive whitespace characters with a single space.
 // 2. It trims leading and trailing whitespace from the string.
 // The cleaned-up query string is then returned.
+
 func clean(query string) string {
 	query = regexp.MustCompile(`\s+`).ReplaceAllString(query, " ")
 	query = strings.TrimSpace(query)

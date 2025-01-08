@@ -142,7 +142,7 @@ func (c *Client) ExecCASWithCtx(ctx context.Context, dest any, stmt string, valu
 
 	rvo := reflect.ValueOf(dest)
 	if rvo.Kind() != reflect.Ptr {
-		c.logger.Debugf("we did not get a pointer. data is not settable.")
+		c.logger.Errorf("we did not get a pointer. data is not settable.")
 
 		return false, errDestinationIsNotPointer
 	}
@@ -181,7 +181,7 @@ func (c *Client) QueryWithCtx(ctx context.Context, dest any, stmt string, values
 
 	rvo := reflect.ValueOf(dest)
 	if rvo.Kind() != reflect.Ptr {
-		c.logger.Error("we did not get a pointer. data is not settable.")
+		c.logger.Debug("we did not get a pointer. data is not settable.")
 		return errDestinationIsNotPointer
 	}
 

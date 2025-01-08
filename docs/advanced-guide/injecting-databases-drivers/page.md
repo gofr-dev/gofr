@@ -758,10 +758,12 @@ Import the gofr's external driver for ScyllaDB:
 ```shell
 go get gofr.dev/pkg/gofr/datasource/scylladb
 ```
+
 ```go
 package main
 
 import (
+	"errors"
 	"fmt"
 	"github.com/gocql/gocql"
 	"gofr.dev/pkg/gofr"
@@ -906,7 +908,7 @@ func getUser(c *gofr.Context) (interface{}, error) {
 	err = c.ScyllaDB.QueryWithCtx(c, &user, `SELECT id, name, email FROM users WHERE id = ?`, userID)
 	if err != nil {
 		c.Logger.Errorf("Error in selecting the user:%v", err)
-		if err == gocql.ErrNotFound {
+		if errors.Is(err,gocql.ErrNotFound) {
 			return nil, http.ErrorEntityNotFound{}
 		}
 		return nil, err

@@ -4,11 +4,11 @@ import (
 	"context"
 	"fmt"
 	"reflect"
-	"regexp"
 	"strings"
 	"time"
 
 	"github.com/gocql/gocql"
+	"github.com/stoewer/go-strcase"
 
 	"go.opentelemetry.io/otel/attribute"
 
@@ -58,7 +58,8 @@ func (s *scylladbQuery) MapScanCAS(dest map[string]any) (applied bool, err error
 	return s.query.MapScanCAS(dest)
 }
 
-// ScanCAS checks a ScyllaDB query with a IF clause and scans the existing data. This method wraps the `ScanCAS` method of the underlying `query` object.
+// ScanCAS checks a ScyllaDB query with a IF clause and scans the existing data.
+// This method wraps the `ScanCAS` method of the underlying `query` object.
 func (s *scylladbQuery) ScanCAS(dest ...any) (applied bool, err error) {
 	return s.query.ScanCAS(dest)
 }
@@ -137,16 +138,6 @@ func (s *scyllaBatch) getBatch() *gocql.Batch {
 	return s.batch
 }
 
-var matchFirstCap = regexp.MustCompile("(.)([A-Z][a-z]+)")
-var matchAllCap = regexp.MustCompile("([a-z0-9])([A-Z])")
-
-func toSnakeCase(str string) string {
-	snake := matchFirstCap.ReplaceAllString(str, "${1}_${2}")
-	snake = matchAllCap.ReplaceAllString(snake, "${1}_${2}")
-
-	return strings.ToLower(snake)
-}
-
 // getFields returns a slice of field pointers from the struct, mapping columns to their corresponding fields.
 func getFields(columns []string, fieldNameIndex map[string]int, v reflect.Value) []interface{} {
 	fields := make([]interface{}, len(columns))
@@ -164,18 +155,18 @@ func getFields(columns []string, fieldNameIndex map[string]int, v reflect.Value)
 
 // addTrace starts a new trace span for the specified method and query.
 func (c *Client) addTrace(ctx context.Context, method, query string) trace.Span {
-	if c.tracer != nil {
-		_, span := c.tracer.Start(ctx, fmt.Sprintf("scylladb-%v", method))
-
-		span.SetAttributes(
-			attribute.String("scylladb.query", query),
-			attribute.String("scylladb.keyspace", c.config.Keyspace),
-		)
-
-		return span
+	if c.tracer == nil {
+		return nil
 	}
 
-	return nil
+	_, span := c.tracer.Start(ctx, fmt.Sprintf("scylladb-%v", method))
+
+	span.SetAttributes(
+		attribute.String("scylladb.query", query),
+		attribute.String("scylladb.keyspace", c.config.Keyspace),
+	)
+
+	return span
 }
 
 // getColumnsFromColumnsInfo Extracts and returns a slice of column names from the provided gocql.ColumnInfo slice.
@@ -220,7 +211,7 @@ func (*Client) getFieldNameIndex(v reflect.Value) map[string]int {
 		if tag != "" {
 			name = tag
 		} else {
-			name = toSnakeCase(f.Name)
+			name = strcase.SnakeCase(f.Name)
 		}
 
 		fieldNameIndex[name] = i
