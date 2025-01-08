@@ -118,23 +118,25 @@ func NewDB(connectionURL string) (con connection.Connection, err error) {
 }
 
 // Connect establishes a connection to the SurrealDB database.
-func (c *Client) Connect() error {
+func (c *Client) Connect() {
 	endpoint := c.buildEndpoint()
-	if err := c.connectToDatabase(endpoint); err != nil {
-		return err
+	err := c.connectToDatabase(endpoint)
+
+	if err != nil {
+		return
 	}
 
-	if err := c.setupNamespaceAndDatabase(); err != nil {
-		return err
+	err = c.setupNamespaceAndDatabase()
+	if err != nil {
+		return
 	}
 
-	if err := c.authenticate(); err != nil {
-		return err
+	err = c.authenticate()
+	if err != nil {
+		return
 	}
 
 	c.logger.Debugf("successfully connected to SurrealDB")
-
-	return nil
 }
 
 // buildEndpoint constructs the SurrealDB endpoint based on the configuration.

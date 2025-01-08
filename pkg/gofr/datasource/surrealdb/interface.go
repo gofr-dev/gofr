@@ -21,9 +21,6 @@ type Logger interface {
 	Errorf(pattern string, args ...interface{})
 }
 
-type mockLogger interface {
-}
-
 type Connection interface {
 	Connect() error
 	Close() error
