@@ -103,7 +103,7 @@ To install the CLI -
      gofr wrap grpc -proto=./path/your/proto/file
    ```
 
-This command leverages the `gofr-cli` to generate a `{serviceName}Server.go` file (e.g., `CustomerServer.go`)
+This command leverages the `gofr-cli` to generate a `{serviceName}_server.go` file (e.g., `CustomerServer.go`)
 containing a template for your gRPC server implementation, including context support, in the same directory as 
 that of the specified proto file.
 
