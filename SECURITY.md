@@ -12,7 +12,3 @@ Following versions are being supported for security updates.
 ## Reporting a Vulnerability
 
 To report a vulnerability, please file an issue on this repo and add "security" label. Security related issues will be prioritized over others. We strive to triage the issue within a single working day.
-
-## Private Defect Report via Web
-
-You can submit vulnerability reports via our secure web form: [Submit a Vulnerability Report](https://forms.gle/ARn2nJJxz7HjMnBF6)
