@@ -36,6 +36,156 @@ func Test_NewMongoClient(t *testing.T) {
 	assert.NotNil(t, client)
 }
 
+func TestGenerateMongoURI(t *testing.T) {
+	tests := []struct {
+		name          string
+		config        Config
+		expectedURI   string
+		expectedHost  string
+		expectedError string
+	}{
+		{
+			name: "Valid Config",
+			config: Config{
+				User:     "admin",
+				Password: "p@##word:",
+				Host:     "localhost",
+				Port:     27017,
+				Database: "mydb",
+			},
+			expectedURI:   "mongodb://admin:p%2540%2523%2523word%253A@localhost:27017/mydb?authSource=admin",
+			expectedHost:  "localhost",
+			expectedError: "",
+		},
+		{
+			name: "Valid Config without authentication",
+			config: Config{
+				Host:     "localhost",
+				Port:     27017,
+				Database: "mydb",
+			},
+			expectedURI:   "mongodb://localhost:27017/mydb?authSource=admin",
+			expectedHost:  "localhost",
+			expectedError: "",
+		},
+		{
+			name: "Predefined URI",
+			config: Config{
+				URI: "mongodb://admin:password@localhost:27017/mydb?authSource=admin",
+			},
+			expectedURI:   "mongodb://admin:password@localhost:27017/mydb?authSource=admin",
+			expectedHost:  "localhost",
+			expectedError: "",
+		},
+		{
+			name: "Empty Host",
+			config: Config{
+				User:     "admin",
+				Password: "password",
+				Port:     27017,
+				Database: "mydb",
+			},
+			expectedURI:   "",
+			expectedHost:  "",
+			expectedError: "missing required field in config: host is empty",
+		},
+		{
+			name: "Invalid Port",
+			config: Config{
+				User:     "admin",
+				Password: "password",
+				Host:     "localhost",
+				Database: "mydb",
+			},
+			expectedURI:   "",
+			expectedHost:  "",
+			expectedError: "missing required field in config: port is empty",
+		},
+		{
+			name: "Empty Database",
+			config: Config{
+				User:     "admin",
+				Password: "password",
+				Host:     "localhost",
+				Port:     27017,
+			},
+			expectedURI:   "",
+			expectedHost:  "",
+			expectedError: "missing required field in config: database is empty",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			client := Client{config: &test.config}
+			uri, host, err := generateMongoURI(client.config)
+
+			assert.Equal(t, test.expectedURI, uri, "Unexpected URI")
+			assert.Equal(t, test.expectedHost, host, "Unexpected Host")
+
+			if test.expectedError != "" {
+				assert.EqualError(t, err, test.expectedError, "Unexpected error message")
+			} else {
+				assert.NoError(t, err, "Expected no error but got one")
+			}
+		})
+	}
+}
+
+func TestGetDBHost(t *testing.T) {
+	tests := []struct {
+		name        string
+		uri         string
+		expected    string
+		expectedErr string
+	}{
+		{
+			name:        "Valid URI with host and port",
+			uri:         "mongodb://username:password@hostname:27017/database?authSource=admin",
+			expected:    "hostname",
+			expectedErr: "",
+		},
+		{
+			name:        "Valid URI with IP address as host",
+			uri:         "mongodb://username:password@192.168.1.1:27017/database?authSource=admin",
+			expected:    "192.168.1.1",
+			expectedErr: "",
+		},
+		{
+			name:        "Invalid URI with no host",
+			uri:         "mongodb://username:password@:27017/database?authSource=admin",
+			expected:    "",
+			expectedErr: "failed to parse host from MongoDB URI",
+		},
+		{
+			name:        "Empty URI",
+			uri:         "",
+			expected:    "",
+			expectedErr: "parse \"\": empty url",
+		},
+		{
+			name:        "Malformed URI",
+			uri:         "mongodb:/username:password@hostname:27017/database?authSource=admin",
+			expected:    "",
+			expectedErr: "failed to parse host from MongoDB URI",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			host, err := getDBHost(tt.uri)
+
+			assert.Equal(t, tt.expected, host, "Test case: %s", tt.name)
+
+			if tt.expectedErr == "" {
+				assert.NoError(t, err, "Test case: %s", tt.name)
+			} else {
+				assert.EqualError(t, err, tt.expectedErr, "Test case: %s", tt.name)
+			}
+		})
+	}
+}
+
 func Test_NewMongoClientError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -43,10 +193,9 @@ func Test_NewMongoClientError(t *testing.T) {
 	metrics := NewMockMetrics(ctrl)
 	logger := NewMockLogger(ctrl)
 
-	logger.EXPECT().Debugf("connecting to MongoDB at %v to database %v", "mongo", "test")
-	logger.EXPECT().Errorf("error while connecting to MongoDB, err:%v", gomock.Any())
+	logger.EXPECT().Errorf("error generating MongoDB URI: %v", gomock.Any())
 
-	client := New(Config{URI: "mongo", Database: "test"})
+	client := New(Config{Host: "mongo", Database: "test"})
 	client.UseLogger(logger)
 	client.UseMetrics(metrics)
 	client.Connect()
