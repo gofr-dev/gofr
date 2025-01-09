@@ -139,7 +139,7 @@ that of the specified proto file.
    func main() {
        app := gofr.New()
 
-       packageName.RegisterCustomerServiceServer(app, &customer.CustomerServer{})
+       packageName.RegisterCustomerServerWithGofr(app, &customer.CustomerGoFrServer{})
 
        app.Run()
    }
