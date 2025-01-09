@@ -57,7 +57,8 @@ Create a `.proto` file (e.g., `customer.proto`) to define your service and the R
 
 **2. Specify Request and Response Types:**
 
-For example: The CustomerFilter and CustomerData are two types of messages that will be exchanged between server and client. Users must define those for protocol buffer to serialize them when making a remote procedure call.
+Users must define the type of message being exchanged between server and client, for protocol buffer to serialize them when making a remote 
+procedure call. Below is a generic representation for services' gRPC messages type.
 
 ```protobuf
 message {serviceRequest} {
