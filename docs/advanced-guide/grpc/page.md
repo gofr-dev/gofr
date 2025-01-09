@@ -48,11 +48,10 @@ Create a `.proto` file (e.g., `customer.proto`) to define your service and the R
    // Indicates the protocol buffer version that is being used
    syntax = "proto3";
    // Indicates the go package where the generated file will be produced
-   // assuming proto file is defined in package with path github.com/grpc/customer
-   option go_package = "github.com/grpc/customer";
+   option go_package = "path/to/your/proto/file";
 
-   service CustomerService {
-       rpc GetCustomer (CustomerFilter) returns (CustomerData) {}
+   service {serviceName}Service {
+       rpc {serviceMethod} ({serviceRequest}) returns ({serviceResponse}) {}
    }
    ```
 
@@ -60,14 +59,14 @@ Create a `.proto` file (e.g., `customer.proto`) to define your service and the R
 
 For example: The CustomerFilter and CustomerData are two types of messages that will be exchanged between server and client. Users must define those for protocol buffer to serialize them when making a remote procedure call.
 
-```go
-message CustomerFilter {
+```protobuf
+message {serviceRequest} {
 int64 id = 1;
 string name = 2;
 // other fields that can be passed
 }
 
-message CustomerData {
+message {serviceResponse} {
 int64 id = 1;
 string name = 2;
 string address = 3;
@@ -85,10 +84,10 @@ Run the following command to generate Go code using the Go gRPC plugins:
    --go_opt=paths=source_relative \
    --go-grpc_out=. \
    --go-grpc_opt=paths=source_relative \
-   customer.proto
+   {serviceName}.proto
    ```
 
-This command generates two files, `customer.pb.go` and `customer_grpc.pb.go`, containing the necessary code for performing RPC calls.
+This command generates two files, `{serviceName}.pb.go` and `{serviceName}_grpc.pb.go`, containing the necessary code for performing RPC calls.
 
 ## Generating gRPC Handler Template using `gofr wrap grpc` 
 
@@ -99,16 +98,9 @@ To install the CLI -
   go install gofr.dev/cli/gofr@latest
 ```
 
-To check the installation -
-```bash
-  gofr version
-```
-
-
 **1. Use the `gofr wrap grpc` Command:**
-
    ```bash
-     gofr wrap grpc -proto=./grpc/customer.proto
+     gofr wrap grpc -proto=./path/your/proto/file
    ```
 
 This command leverages the `gofr-cli` to generate a `{serviceName}Server.go` file (e.g., `CustomerServer.go`)
@@ -117,9 +109,9 @@ that of the specified proto file.
 
 **2. Modify the Generated Code:**
 
-- Customize the `CustomerGoFrServer` struct with required dependencies and fields.
-- Implement the `GetCustomer` method to handle incoming requests, as required in this usecase:
-    - Bind the request payload using `ctx.Bind(&request)`.
+- Customize the `{serviceName}GoFrServer` struct with required dependencies and fields.
+- Implement the `{serviceMethod}` method to handle incoming requests, as required in this usecase:
+    - Bind the request payload using `ctx.Bind(&{serviceRequest})`.
     - Process the request and generate a response.
 
 ## Registering the gRPC Service with Gofr
@@ -139,7 +131,7 @@ that of the specified proto file.
    func main() {
        app := gofr.New()
 
-       packageName.RegisterCustomerServerWithGofr(app, &customer.CustomerGoFrServer{})
+       packageName.Register{serviceName}ServerWithGofr(app, &packageName.{serviceName}GoFrServer{})
 
        app.Run()
    }
