@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/google/go-querystring/query"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -99,7 +98,7 @@ func (c *Client) InitMetrics() {
 
 	c.metrics.NewHistogram(
 		"openai_api_request_duration",
-		"Duration of OpenAPI requests in seconds",
+		"duration of OpenAPI requests in seconds",
 		openaiHistogramBuckets...,
 	)
 
@@ -149,16 +148,7 @@ func (c *Client) Post(ctx context.Context, url string, input any) (response []by
 }
 
 // Get makes a get request.
-func (c *Client) Get(ctx context.Context, url string, input any) (response []byte, err error) {
-	if input != nil {
-		vals, _ := query.Values(input)
-		queryString := vals.Encode()
-
-		if queryString != "" {
-			url += "?" + queryString
-		}
-	}
-
+func (c *Client) Get(ctx context.Context, url string) (response []byte, err error) {
 	resp, err := c.Call(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		c.logger.Errorf("%v", err)

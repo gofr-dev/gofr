@@ -37,13 +37,7 @@ func Test_ChatCompletions(t *testing.T) {
 				ID:      "test-id",
 				Object:  "chat.completion",
 				Created: 1234567890,
-				Usage: struct {
-					PromptTokens            int         `json:"prompt_tokens,omitempty"`
-					CompletionTokens        int         `json:"completion_tokens,omitempty"`
-					TotalTokens             int         `json:"total_tokens,omitempty"`
-					CompletionTokensDetails interface{} `json:"completion_tokens_details,omitempty"`
-					PromptTokensDetails     interface{} `json:"prompt_tokens_details,omitempty"`
-				}{
+				Usage: Usage{
 					PromptTokens:     10,
 					CompletionTokens: 20,
 					TotalTokens:      30,
@@ -114,7 +108,7 @@ func Test_ChatCompletions(t *testing.T) {
 			response, err := client.CreateCompletions(context.Background(), tt.request)
 
 			if tt.expectedError != nil {
-				assert.Equal(t, tt.expectedError, err)
+				require.ErrorIs(t, err, tt.expectedError)
 				assert.Nil(t, response)
 			} else {
 				require.NoError(t, err)
@@ -136,7 +130,7 @@ func setupTestServer(t *testing.T, path string, response interface{}) *httptest.
 
 				w.Header().Set("Content-Type", "application/json")
 				err := json.NewEncoder(w).Encode(response)
-
+				
 				if err != nil {
 					t.Error(err)
 					return

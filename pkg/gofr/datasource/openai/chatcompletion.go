@@ -92,15 +92,17 @@ type CreateCompletionsResponse struct {
 		FinishReason string      `json:"finish_reason,omitempty"`
 	} `json:"choices,omitempty"`
 
-	Usage struct {
-		PromptTokens           int         `json:"prompt_tokens,omitempty"`
-		CompletionTokens       int         `json:"completion_tokens,omitempty"`
-		TotalTokens            int         `json:"total_tokens,omitempty"`
-		CompletionTokensDetails interface{} `json:"completion_tokens_details,omitempty"`
-		PromptTokensDetails     interface{} `json:"prompt_tokens_details,omitempty"`
-	} `json:"usage,omitempty"`
+	Usage Usage `json:"usage,omitempty"`
 
 	Error *Error `json:"error,omitempty"`
+}
+
+type Usage struct {
+	PromptTokens            int         `json:"prompt_tokens,omitempty"`
+	CompletionTokens        int         `json:"completion_tokens,omitempty"`
+	TotalTokens             int         `json:"total_tokens,omitempty"`
+	CompletionTokensDetails interface{} `json:"completion_tokens_details,omitempty"`
+	PromptTokensDetails     interface{} `json:"prompt_tokens_details,omitempty"`
 }
 
 type Error struct {
@@ -164,21 +166,21 @@ func (c *Client) CreateCompletions(ctx context.Context, r *CreateCompletionsRequ
 		Error:             response.Error,
 	}
 
-	c.SendChatCompletionOperationStats(ql, startTime, "ChatCompletion", span)
+	c.SendChatCompletionOperationStats(ctx, ql, startTime, "ChatCompletion", span)
 
 	return response, err
 }
 
-func (c *Client) SendChatCompletionOperationStats(ql *APILog, startTime time.Time, method string, span trace.Span) {
+func (c *Client) SendChatCompletionOperationStats(ctx context.Context, ql *APILog, startTime time.Time, method string, span trace.Span) {
 	duration := time.Since(startTime).Microseconds()
 
 	ql.Duration = duration
 
 	c.logger.Debug(ql)
 
-	c.metrics.RecordHistogram(context.Background(), "openai_api_request_duration", float64(duration))
-	c.metrics.RecordRequestCount(context.Background(), "openai_api_total_request_count")
-	c.metrics.RecordTokenUsage(context.Background(), "openai_api_token_usage", ql.Usage.PromptTokens, ql.Usage.CompletionTokens)
+	c.metrics.RecordHistogram(ctx, "openai_api_request_duration", float64(duration))
+	c.metrics.RecordRequestCount(ctx, "openai_api_total_request_count")
+	c.metrics.RecordTokenUsage(ctx, "openai_api_token_usage", ql.Usage.PromptTokens, ql.Usage.CompletionTokens)
 
 	if span != nil {
 		defer span.End()
