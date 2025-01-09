@@ -130,7 +130,7 @@ func setupTestServer(t *testing.T, path string, response interface{}) *httptest.
 
 				w.Header().Set("Content-Type", "application/json")
 				err := json.NewEncoder(w).Encode(response)
-				
+
 				if err != nil {
 					t.Error(err)
 					return

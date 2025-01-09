@@ -24,16 +24,16 @@ func Test_NewClient(t *testing.T) {
 			expectedError: nil,
 		},
 		{
-			name:       "with custom base URL",
-			config:     &Config{APIKey: "test-key", Model: "gpt-4", BaseURL: "https://custom.openai.com"},
-			httpClient: &http.Client{},
-			expected:   "https://custom.openai.com",
+			name:          "with custom base URL",
+			config:        &Config{APIKey: "test-key", Model: "gpt-4", BaseURL: "https://custom.openai.com"},
+			httpClient:    &http.Client{},
+			expected:      "https://custom.openai.com",
 			expectedError: nil,
 		},
 		{
-			name:       "missing api key",
-			config:     &Config{Model: "gpt-4"},
-			httpClient: &http.Client{},
+			name:          "missing api key",
+			config:        &Config{Model: "gpt-4"},
+			httpClient:    &http.Client{},
 			expectedError: ErrorMissingAPIKey,
 		},
 	}
