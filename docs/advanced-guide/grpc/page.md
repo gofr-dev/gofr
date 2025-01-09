@@ -117,7 +117,7 @@ that of the specified proto file.
 
 **2. Modify the Generated Code:**
 
-- Customize the `CustomerServer` struct with required dependencies and fields.
+- Customize the `CustomerGoFrServer` struct with required dependencies and fields.
 - Implement the `GetCustomer` method to handle incoming requests, as required in this usecase:
     - Bind the request payload using `ctx.Bind(&request)`.
     - Process the request and generate a response.
