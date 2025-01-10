@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http/httptest"
 	"reflect"
+	"strconv"
 	"testing"
 	"time"
 
@@ -17,8 +18,10 @@ import (
 
 func Test_WebSocket_Success(t *testing.T) {
 	port := testutil.GetFreePort(t)
+	metricsPort := testutil.GetFreePort(t)
 
 	t.Setenv("HTTP_PORT", fmt.Sprint(port))
+	t.Setenv("METRICS_PORT", strconv.Itoa(metricsPort))
 
 	app := New()
 

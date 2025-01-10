@@ -55,7 +55,7 @@ func (d *Client) Connect() {
 	address := fmt.Sprintf("%s:%s", d.config.Host, d.config.Port)
 	d.logger.Debugf("connecting to Dgraph at %v", address)
 
-	conn, err := grpc.Dial(address, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(address, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		d.logger.Errorf("error while connecting to Dgraph, err: %v", err)
 		return
