@@ -35,7 +35,7 @@ type CreateCompletionsRequest struct {
 		Format string `json:"format,omitempty"`
 	} `json:"audio,omitempty"`
 
-	ResposneFormat interface{} `json:"response_format,omitempty"`
+	ResponseFormat interface{} `json:"response_format,omitempty"`
 	Seed           int         `json:"seed,omitempty"`
 	ServiceTier    string      `json:"service_tier,omitempty"`
 	Stop           interface{} `json:"stop,omitempty"`
