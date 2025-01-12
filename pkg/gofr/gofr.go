@@ -691,9 +691,9 @@ func (a *App) UseMiddlewareWithContainer(middlewareHandler func(c *container.Con
 // AddCronJob registers a cron job to the cron table.
 // The cron expression can be either a 5-part or 6-part format. The 6-part format includes an
 // optional second field (in beginning) and others being minute, hour, day, month and day of week respectively.
-func (a *App) AddCronJob(schedule, jobName string, job CronFunc) {
+func (a *App) AddCronJob(schedule, jobName string, job CronFunc, options ...func(*Crontab)) {
 	if a.cron == nil {
-		a.cron = NewCron(a.container)
+		a.cron = NewCron(a.container, options...)
 	}
 
 	if err := a.cron.AddJob(schedule, jobName, job); err != nil {

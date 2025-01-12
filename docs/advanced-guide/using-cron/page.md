@@ -74,4 +74,33 @@ func main() {
 }
 ```
 
+Gofr also allows to specify timezone against which the schedule will be evaluated.
+
+### Example
+
+```go
+package main
+
+import (
+	"time"
+	
+	"gofr.dev/pkg/gofr"
+)
+
+func main() {
+	app := gofr.New()
+
+	// tzdata will be taking care of DST
+	estTimezone, _ := time.LoadLocation("America/New_York")
+
+	// Run the cron job every day at 7AM EST
+	app.AddCronJob("0 7 * * *", "", func(ctx *gofr.Context) {
+		ctx.Logger.Infof("current time is %v", time.Now())
+	}, gofr.WithTimezone(estTimezone))
+
+	app.Run()
+}
+```
+
+
 > #### Check out the example on how to add cron jobs in GoFr: [Visit GitHub](https://github.com/gofr-dev/gofr/blob/main/examples/using-cron-jobs/main.go)
