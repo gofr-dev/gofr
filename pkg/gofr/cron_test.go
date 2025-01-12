@@ -608,21 +608,32 @@ func TestCron_parsePart(t *testing.T) {
 }
 
 func TestCron_WithTimezone(t *testing.T) {
+	est, _ := time.LoadLocation("America/New_York")
+
 	tests := []struct {
 		name     string
-		option   func(*Crontab)
+		options  []func(*Crontab)
 		expected *time.Location
 	}{
 		{
-			name:     "Factory with timezone option",
-			option:   WithTimezone(time.UTC),
+			name:     "Factory without options",
+			expected: time.Local,
+		},
+		{
+			name:     "Factory with UTC timezone option",
+			options:  []func(crontab *Crontab){WithTimezone(time.UTC)},
 			expected: time.UTC,
+		},
+		{
+			name:     "Factory with EST/EDT timezone option",
+			options:  []func(crontab *Crontab){WithTimezone(est)},
+			expected: est,
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			got := NewCron(nil, test.option)
+			got := NewCron(nil, test.options...)
 			got.ticker.Stop()
 			assert.Equal(t, test.expected, got.location)
 		})
