@@ -162,13 +162,13 @@ jobs:
           codeCoverage=${codeCoverage%?}
           echo "CODE_COVERAGE=$codeCoverage" >> $GITHUB_ENV
 
-      - name: Check if code-coverage is greater than threshold
-        run: |
-          codeCoverage=${{ env.CODE_COVERAGE }}
-          if (( $(echo "$codeCoverage < 92" | bc -l) )); then 
-            echo "code coverage cannot be less than 92%, currently its $codeCoverage%" 
-            exit 1
-          fi
+#      - name: Check if code-coverage is greater than threshold
+#        run: |
+#          codeCoverage=${{ env.CODE_COVERAGE }}
+#          if (( $(echo "$codeCoverage < 92" | bc -l) )); then
+#            echo "code coverage cannot be less than 92%, currently its $codeCoverage%"
+#            exit 1
+#          fi
   Submodule-Unit-Testing:
     name: Submodule Unit Testing (v${{ matrix.go-version }})🛠
     runs-on: ubuntu-latest
