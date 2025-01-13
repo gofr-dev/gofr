@@ -277,13 +277,6 @@ type MongoProvider interface {
 
 // SurrealDB defines an interface representing a SurrealDB client with common database operations.
 type SurrealDB interface {
-	// UseNamespace switches the database client to a specific namespace.
-	// It returns an error if the operation fails.
-	UseNamespace(ns string) error
-
-	// UseDatabase switches the database client to a specific database within the current namespace.
-	// It returns an error if the operation fails.
-	UseDatabase(db string) error
 
 	// Query executes a Surreal query with the provided variables and returns the query results as a slice of interfaces.
 	// It returns an error if the query execution fails.

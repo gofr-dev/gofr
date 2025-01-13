@@ -18,7 +18,7 @@ import (
 )
 
 var (
-	// ErrNotConnected indicates that the database client is not connected.
+	// errNotConnected indicates that the database client is not connected.
 	errNotConnected = errors.New("not connected to database")
 )
 
@@ -151,9 +151,7 @@ func (c *Client) buildEndpoint() string {
 
 // connectToDatabase handles the connection to SurrealDB and returns an error if failed.
 func (c *Client) connectToDatabase(endpoint string) error {
-	if c.logger != nil {
-		c.logger.Debugf("connecting to SurrealDB at %s", endpoint)
-	}
+	c.logger.Debugf("connecting to SurrealDB at %s", endpoint)
 
 	db, err := NewDB(endpoint)
 	if err != nil {
@@ -187,6 +185,7 @@ func (c *Client) Use(ns, database string) error {
 	return c.db.Use(ns, database)
 }
 
+// Info retrieves information about the current connection or database state.
 func (c *Client) Info() (map[string]interface{}, error) {
 	var info connection.RPCResponse[map[string]interface{}]
 	err := c.db.Send(&info, "info")
@@ -288,8 +287,8 @@ func (c *Client) Close() error {
 	return nil
 }
 
-// UseNamespace switches the active namespace for the database connection.
-func (c *Client) UseNamespace(ns string) error {
+// useNamespace switches the active namespace for the database connection.
+func (c *Client) useNamespace(ns string) error {
 	if c.db == nil {
 		return errNotConnected
 	}
@@ -297,8 +296,8 @@ func (c *Client) UseNamespace(ns string) error {
 	return c.db.Use(ns, "")
 }
 
-// UseDatabase switches the active database for the connection.
-func (c *Client) UseDatabase(db string) error {
+// useDatabase switches the active database for the connection.
+func (c *Client) useDatabase(db string) error {
 	if c.db == nil {
 		return errNotConnected
 	}
@@ -306,7 +305,7 @@ func (c *Client) UseDatabase(db string) error {
 	return c.db.Use("", db)
 }
 
-type RPCResponse struct {
+type QueryResponse struct {
 	ID     interface{}          `json:"id" msgpack:"id"`
 	Error  *connection.RPCError `json:"error,omitempty" msgpack:"error,omitempty"`
 	Result *[]QueryResult       `json:"result,omitempty" msgpack:"result,omitempty"`
@@ -324,7 +323,7 @@ func (c *Client) Query(ctx context.Context, query string, vars map[string]interf
 		return nil, errNotConnected
 	}
 
-	var res RPCResponse
+	var res QueryResponse
 
 	if err := c.db.Send(&res, "query", query, vars); err != nil {
 		return nil, err
@@ -332,11 +331,7 @@ func (c *Client) Query(ctx context.Context, query string, vars map[string]interf
 
 	result := res.Result
 
-	fmt.Println("Raw Query Result:", result)
-
-	if c.metrics != nil {
-		c.metrics.RecordHistogram(ctx, "surreal_db_operation_duration", 0, "operation", "query")
-	}
+	c.metrics.RecordHistogram(ctx, "surreal_db_operation_duration", 0, "operation", "query")
 
 	resp := make([]interface{}, 0)
 
@@ -361,11 +356,11 @@ type Response struct {
 	Result any                  `json:"result,omitempty" msgpack:"result,omitempty"`
 }
 
-// Select retrieves all records from a specific table in SurrealDB.
 var (
-	ErrNonStringKey = errors.New("non-string key encountered")
+	errNonStringKey = errors.New("non-string key encountered")
 )
 
+// Select queries the specified table in the database and retrieves all records.
 func (c *Client) Select(ctx context.Context, table string) ([]map[string]interface{}, error) {
 	if c.db == nil {
 		return nil, errNotConnected
@@ -376,11 +371,9 @@ func (c *Client) Select(ctx context.Context, table string) ([]map[string]interfa
 		return nil, err
 	}
 
-	res1 := res.Result
-	result, ok := res1.([]interface{})
-
+	result, ok := res.Result.([]interface{})
 	if !ok {
-		return nil, fmt.Errorf("%w", ErrNonStringKey)
+		return nil, fmt.Errorf("%w", errNonStringKey)
 	}
 
 	resSlice := make([]map[string]interface{}, 0)
@@ -393,7 +386,7 @@ func (c *Client) Select(ctx context.Context, table string) ([]map[string]interfa
 		for k, v := range recordMap {
 			keyStr, ok := k.(string)
 			if !ok {
-				return nil, fmt.Errorf("%w: %v", ErrNonStringKey, k)
+				return nil, fmt.Errorf("%w: %v", errNonStringKey, k)
 			}
 
 			resMap[keyStr] = v
@@ -402,16 +395,14 @@ func (c *Client) Select(ctx context.Context, table string) ([]map[string]interfa
 		resSlice = append(resSlice, resMap)
 	}
 
-	if c.metrics != nil {
-		c.metrics.RecordHistogram(ctx, "surreal_db_operation_duration", 0, "operation", "query")
-	}
+	c.metrics.RecordHistogram(ctx, "surreal_db_operation_duration", 0, "operation", "query")
 
 	return resSlice, nil
 }
 
-// Create inserts a new record into the specified table in SurrealDB.
-var ErrUnexpectedResultType = errors.New("unexpected result type")
+var errUnexpectedResultType = errors.New("unexpected result type")
 
+// Create creates a new record into the specified table in the database.
 func (c *Client) Create(ctx context.Context, table string, data interface{}) (map[string]interface{}, error) {
 	if c.db == nil {
 		return nil, errNotConnected
@@ -422,13 +413,11 @@ func (c *Client) Create(ctx context.Context, table string, data interface{}) (ma
 		return nil, err
 	}
 
-	if c.metrics != nil {
-		c.metrics.RecordHistogram(ctx, "surreal_db_operation_duration", 0, "operation", "create")
-	}
+	c.metrics.RecordHistogram(ctx, "surreal_db_operation_duration", 0, "operation", "create")
 
 	result, ok := CreateResult.Result.(map[string]interface{})
 	if !ok {
-		return nil, fmt.Errorf("%w: %v", ErrUnexpectedResultType, CreateResult.Result)
+		return nil, fmt.Errorf("%w: %v", errUnexpectedResultType, CreateResult.Result)
 	}
 
 	return result, nil
@@ -459,9 +448,7 @@ func (c *Client) Update(ctx context.Context, table, _ string, data interface{}) 
 		}
 	}
 
-	if c.metrics != nil {
-		c.metrics.RecordHistogram(ctx, "surreal_db_operation_duration", 0, "operation", "query")
-	}
+	c.metrics.RecordHistogram(ctx, "surreal_db_operation_duration", 0, "operation", "query")
 
 	return resMap, nil
 }
@@ -477,9 +464,7 @@ func (c *Client) Insert(ctx context.Context, table string, data interface{}) (*R
 		return nil, err
 	}
 
-	if c.metrics != nil {
-		c.metrics.RecordHistogram(ctx, "surreal_db_operation_duration", 0, "operation", "insert")
-	}
+	c.metrics.RecordHistogram(ctx, "surreal_db_operation_duration", 0, "operation", "insert")
 
 	return &insertResult, nil
 }
@@ -501,9 +486,7 @@ func (c *Client) Delete(ctx context.Context, table, id string) (any, error) {
 		return nil, err
 	}
 
-	if c.metrics != nil {
-		c.metrics.RecordHistogram(ctx, "surreal_db_operation_duration", 0, "operation", "query")
-	}
+	c.metrics.RecordHistogram(ctx, "surreal_db_operation_duration", 0, "operation", "query")
 
 	return DeleteResult.Result, nil
 }
@@ -514,7 +497,7 @@ type Health struct {
 }
 
 // HealthCheck performs a health check on the SurrealDB connection.
-var ErrUnexpectedHealthCheckResult = errors.New("unexpected result from health check query")
+var errUnexpectedHealthCheckResult = errors.New("unexpected result from health check query")
 
 func (c *Client) HealthCheck(ctx context.Context) (any, error) {
 	const (
@@ -549,9 +532,9 @@ func (c *Client) HealthCheck(ctx context.Context) (any, error) {
 
 	if len(result) == 0 || result[0] != "SurrealDB Health Check" {
 		h.Status = statusDown
-		h.Details["error"] = ErrUnexpectedHealthCheckResult.Error()
+		h.Details["error"] = errUnexpectedHealthCheckResult.Error()
 
-		return &h, fmt.Errorf("%w", ErrUnexpectedHealthCheckResult)
+		return &h, fmt.Errorf("%w", errUnexpectedHealthCheckResult)
 	}
 
 	h.Status = statusUP

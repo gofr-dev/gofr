@@ -49,6 +49,85 @@ func Test_UseLogger(t *testing.T) {
 	})
 }
 
+var errorDatabase = errors.New("database error")
+
+func Test_useNamespace(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockLogger := NewMockLogger(ctrl)
+	mockMetrics := NewMockMetrics(ctrl)
+	mockConn := NewMockConnection(ctrl)
+
+	client := New(&Config{})
+	client.UseLogger(mockLogger)
+	client.UseMetrics(mockMetrics)
+	client.db = mockConn
+
+	t.Run("successful namespace switch", func(t *testing.T) {
+		mockConn.EXPECT().Use("test_namespace", "").Return(nil)
+
+		err := client.useNamespace("test_namespace")
+		require.NoError(t, err)
+	})
+
+	t.Run("nil database connection", func(t *testing.T) {
+		client.db = nil
+
+		err := client.useNamespace("test_namespace")
+		assert.ErrorIs(t, err, errNotConnected)
+	})
+
+	t.Run("database error", func(t *testing.T) {
+		client.db = mockConn
+
+		mockConn.EXPECT().Use("test_namespace", "").Return(errorDatabase)
+
+		err := client.useNamespace("test_namespace")
+		require.Error(t, err)
+		assert.Equal(t, errorDatabase, err)
+	})
+}
+
+func Test_useDatabase(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockLogger := NewMockLogger(ctrl)
+	mockMetrics := NewMockMetrics(ctrl)
+	mockConn := NewMockConnection(ctrl)
+
+	client := New(&Config{})
+	client.UseLogger(mockLogger)
+	client.UseMetrics(mockMetrics)
+	client.db = mockConn
+
+	t.Run("successful database switch", func(t *testing.T) {
+		mockConn.EXPECT().Use("", "test_database").Return(nil)
+
+		err := client.useDatabase("test_database")
+		require.NoError(t, err)
+	})
+
+	t.Run("nil database connection", func(t *testing.T) {
+		client.db = nil
+
+		err := client.useDatabase("test_database")
+		assert.ErrorIs(t, err, errNotConnected)
+	})
+
+	t.Run("database error", func(t *testing.T) {
+		client.db = mockConn
+		expectedErr := errorDatabase
+
+		mockConn.EXPECT().Use("", "test_database").Return(expectedErr)
+
+		err := client.useDatabase("test_database")
+		require.Error(t, err)
+		require.Equal(t, expectedErr, err)
+	})
+}
+
 func Test_UseMetrics(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -100,7 +179,7 @@ func Test_Query(t *testing.T) {
 
 		mockMetrics.EXPECT().RecordHistogram(ctx, "surreal_db_operation_duration", float64(0), "operation", "query")
 
-		var resp RPCResponse
+		var resp QueryResponse
 		resp.Result = &queryResult
 		mockConn.EXPECT().Send(gomock.Any(), "query", query, nil).Return(nil).SetArg(0, resp)
 
@@ -217,6 +296,43 @@ func Test_Create(t *testing.T) {
 		assert.Equal(t, "test", result["name"])
 		assert.Equal(t, "test@example.com", result["email"])
 	})
+
+	t.Run("database error", func(t *testing.T) {
+		ctx := context.Background()
+		client.db = mockConn
+
+		data := map[string]interface{}{
+			"name": "test",
+		}
+
+		dbError := errorDatabase
+		mockConn.EXPECT().Send(gomock.Any(), "create", "users", data).Return(dbError)
+
+		result, err := client.Create(ctx, "users", data)
+		require.Error(t, err)
+		require.Equal(t, dbError, err)
+		require.Nil(t, result)
+	})
+
+	t.Run("unexpected result type error", func(t *testing.T) {
+		ctx := context.Background()
+		data := map[string]interface{}{
+			"name": "test",
+		}
+
+		// Return a string instead of map[string]interface{}
+		unexpectedResponse := Response{
+			Result: "unexpected type",
+		}
+
+		mockMetrics.EXPECT().RecordHistogram(ctx, "surreal_db_operation_duration", float64(0), "operation", "create")
+		mockConn.EXPECT().Send(gomock.Any(), "create", "users", data).Return(nil).SetArg(0, unexpectedResponse)
+
+		result, err := client.Create(ctx, "users", data)
+		require.Error(t, err)
+		require.ErrorIs(t, err, errUnexpectedResultType)
+		require.Nil(t, result)
+	})
 }
 
 func Test_Update(t *testing.T) {
@@ -253,6 +369,22 @@ func Test_Update(t *testing.T) {
 		result, err := client.Update(ctx, "users", "123", data)
 		require.NoError(t, err)
 		assert.NotNil(t, result)
+	})
+
+	t.Run("not connected error", func(t *testing.T) {
+		ctx := context.Background()
+		client.db = nil
+
+		data := map[string]interface{}{
+			"name": "updated",
+		}
+
+		result, err := client.Update(ctx, "users", "123", data)
+		require.Error(t, err)
+		require.Equal(t, errNotConnected, err)
+		require.Nil(t, result)
+
+		client.db = mockConn
 	})
 }
 
@@ -293,8 +425,29 @@ func Test_Delete(t *testing.T) {
 		require.NoError(t, err)
 		assert.NotNil(t, result)
 	})
-}
 
+	t.Run("empty record ID", func(t *testing.T) {
+		ctx := context.Background()
+		table := "users"
+		id := "" // Empty ID
+
+		arg := models.RecordID{
+			Table: table,
+			ID:    id,
+		}
+
+		deleteResponse := Response{
+			Result: nil, // Empty result for non-existent record
+		}
+
+		mockMetrics.EXPECT().RecordHistogram(ctx, "surreal_db_operation_duration", float64(0), "operation", "query")
+		mockConn.EXPECT().Send(gomock.Any(), "delete", arg).Return(nil).SetArg(0, deleteResponse)
+
+		result, err := client.Delete(ctx, table, id)
+		require.NoError(t, err)
+		require.Nil(t, result)
+	})
+}
 func Test_Select(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -327,6 +480,20 @@ func Test_Select(t *testing.T) {
 		require.NoError(t, err)
 		assert.NotEmpty(t, results)
 		assert.Equal(t, "test", results[0]["name"])
+	})
+
+	t.Run("empty result set", func(t *testing.T) {
+		ctx := context.Background()
+		emptyResponse := Response{
+			Result: []interface{}{},
+		}
+
+		mockMetrics.EXPECT().RecordHistogram(ctx, "surreal_db_operation_duration", float64(0), "operation", "query")
+		mockConn.EXPECT().Send(gomock.Any(), "select", "users").Return(nil).SetArg(0, emptyResponse)
+
+		results, err := client.Select(ctx, "users")
+		require.NoError(t, err)
+		assert.Empty(t, results)
 	})
 }
 
@@ -386,7 +553,7 @@ func Test_HealthCheck(t *testing.T) {
 			},
 		}
 
-		var resp RPCResponse
+		var resp QueryResponse
 		resp.Result = &queryResult
 		mockConn.EXPECT().Send(gomock.Any(), "query", "RETURN 'SurrealDB Health Check'", nil).Return(nil).SetArg(0, resp)
 

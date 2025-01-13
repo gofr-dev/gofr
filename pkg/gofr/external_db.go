@@ -149,7 +149,7 @@ func (a *App) AddSurrealDB(db container.SurrealBDProvider) {
 	db.UseLogger(a.Logger())
 	db.UseMetrics(a.Metrics())
 
-	tracer := otel.GetTracerProvider().Tracer("gofr-surrealDD")
+	tracer := otel.GetTracerProvider().Tracer("gofr-surrealDB")
 
 	db.UseTracer(tracer)
 	db.Connect()

@@ -753,12 +753,15 @@ type SurrealDB interface {
 
 ```
 Import the gofr's external driver for SurrealDB:
-```go
+
+```shell
 go get gofr.dev/pkg/gofr/datasource/surrealdb
 ```
+
 The following example demonstrates injecting an SurrealDB instance into a GoFr application.
 
-```go
+```shell
+
 package main
 
 import (
@@ -789,22 +792,25 @@ func main() {
 
 	app.AddSurrealDB(client)
 
-	// GET request to fetch all persons.
-	app.GET("/person", func(ctx *gofr.Context) (interface{}, error) {
-		persons, err := ctx.SurrealDB.Select(ctx, "person")
+	// GET request to fetch person by ID
+	app.GET("/person/{id}", func(ctx *gofr.Context) (interface{}, error) {
+		id := ctx.PathParam("id")
+
+		query := "SELECT * FROM person WHERE id = $id"
+		vars := map[string]interface{}{
+			"id": id,
+		}
+
+		result, err := ctx.SurrealDB.Query(ctx, query, vars)
 		if err != nil {
-			ctx.Logger.Error("Select error: ", err)
+			ctx.Logger.Error("Query error: ", err)
 			return nil, err
 		}
 
-		if len(persons) == 0 {
-			return []interface{}{}, nil
-		}
-
-		return persons, nil
+		return result[0], nil
 	})
 
-	// POST request to create a new person.
+	// POST request to create a new person
 	app.POST("/person", func(ctx *gofr.Context) (interface{}, error) {
 		var person Person
 		if err := ctx.Bind(&person); err != nil {
@@ -829,7 +835,7 @@ func main() {
 
 		ctx.Logger.Debugf("Raw result: %+v", result)
 
-		verifyResult, err := ctx.SurrealDB.Query(ctx, "SELECT * FROM person ORDER BY id DESC LIMIT 1;", nil)
+		verifyResult, err := ctx.SurrealDB.Create(ctx, "SELECT * FROM person ORDER BY id DESC LIMIT 1;", nil)
 		if err != nil {
 			ctx.Logger.Errorf("Verify error: %v", err)
 		} else {
@@ -843,52 +849,7 @@ func main() {
 		}, nil
 	})
 
-	// PUT request to replace a person with the id.
-	app.PUT("/person/{id}", func(ctx *gofr.Context) (interface{}, error) {
-		id := ctx.PathParam("id")
-		var person Person
-		if err := ctx.Bind(&person); err != nil {
-			ctx.Logger.Error("Binding error: ", err)
-			return nil, http.ErrorInvalidParam{Params: []string{"body"}}
-		}
-
-		data := map[string]interface{}{
-			"name":  person.Name,
-			"age":   person.Age,
-			"email": person.Email,
-		}
-
-		result, err := ctx.SurrealDB.Update(ctx, "person", id, data)
-		if err != nil {
-			ctx.Logger.Error("Update error: ", err)
-			return nil, err
-		}
-
-		m, ok := result.(map[interface{}]interface{})
-		if !ok || len(m) == 0 {
-			return nil, nil
-		}
-
-		return m, nil
-	})
-
-	//DELETE request to delete a person with the id.
-	app.DELETE("/person/{id}", func(ctx *gofr.Context) (interface{}, error) {
-		id := ctx.PathParam("id")
-
-		result, err := ctx.SurrealDB.Delete(ctx, "person", id)
-
-		if err != nil {
-			return map[string]string{"message": "Person not found"}, nil
-		}
-		return map[string]interface{}{
-			"message": "Person deleted successfully",
-			"deleted": result,
-		}, nil
-	})
-
 	app.Run()
-
 }
 
 ```
