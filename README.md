@@ -119,6 +119,18 @@ Help us make GoFr even better:
 
 ---
 
+## 🔒 **Secure Cloning**
+To securely clone the GoFr repository, you can use HTTPS or SSH:
+
+### Cloning with HTTPS
+```bash
+git clone https://github.com/gofr-dev/gofr.git
+```
+### Cloning with SSH
+```bash
+git clone git@github.com:gofr-dev/gofr.git
+```
+
 ### 🎁 **Get a GoFr T-Shirt & Stickers!**
 
 If your PR is merged, or if you contribute by writing articles or promoting GoFr, we invite you to fill out [this form](https://forms.gle/R1Yz7ZzY3U5WWTgy5) to claim your GoFr merchandise as a token of our appreciation! 
