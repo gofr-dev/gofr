@@ -507,14 +507,20 @@ type OpenTSDB interface {
 type ScyllaDB interface {
 	// Query executes a CQL (Cassandra Query Language) query on the ScyllaDB cluster
 	// and stores the result in the provided destination variable `dest`.
+	// Accepts pointer to struct or slice as dest parameter for single and multiple
 	Query(dest any, stmt string, values ...any) error
-	// QueryWithCtx executes a CQL query with the provided context and stores the result in the `dest` variable.
+	// QueryWithCtx executes the query with a context and binds the result into dest parameter.
+	// Accepts pointer to struct or slice as dest parameter for single and multiple rows retrieval respectively.
 	QueryWithCtx(ctx context.Context, dest any, stmt string, values ...any) error
 	// Exec executes a CQL statement (e.g., INSERT, UPDATE, DELETE) on the ScyllaDB cluster without returning any result.
 	Exec(stmt string, values ...any) error
 	// ExecWithCtx executes a CQL statement with the provided context and without returning any result.
 	ExecWithCtx(ctx context.Context, stmt string, values ...any) error
-	// ExecCAS performs a conditional (Compare and Set) operation on ScyllaDB, executing a CQL statement
+	// ExecCAS executes a lightweight transaction (i.e. an UPDATE or INSERT statement containing an IF clause).
+	//If the transaction fails because the existing values did not match, the previous values will be stored in dest.
+	//Returns true if the query is applied otherwise false.
+	// Returns false and error if any error occur while executing the query.
+	// Accepts only pointer to struct and built-in types as the dest parameter.
 	ExecCAS(dest any, stmt string, values ...any) (bool, error)
 	// NewBatch initializes a new batch operation with the specified name and batch type.
 	NewBatch(name string, batchType int) error
