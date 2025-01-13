@@ -164,9 +164,11 @@ jobs:
 
       - name: Check if code-coverage is greater than threshold
         run: |
-          codeCoverage=${{ env.CODE_COVERAGE }}
-          codeCoverage=${codeCoverage%??}
-          if [[ $codeCoverage -lt 92 ]]; then echo "code coverage cannot be less than 92%, currently its ${{ env.CODE_COVERAGE }}%" && exit 1; fi;
+            codeCoverage=${{ env.CODE_COVERAGE }}
+            if [[ $codeCoverage -lt 92 ]]; then 
+              echo "code coverage cannot be less than 92%, currently its $codeCoverage%" 
+              exit 1
+            fi
   Submodule-Unit-Testing:
     name: Submodule Unit Testing (v${{ matrix.go-version }})🛠
     runs-on: ubuntu-latest
