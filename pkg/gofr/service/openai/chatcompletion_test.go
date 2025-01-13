@@ -12,7 +12,14 @@ import (
 	"go.uber.org/mock/gomock"
 )
 
-//nolint:funlen // Function length is intentional due to complexity
+type test struct {
+	name          string
+	request       *CreateCompletionsRequest
+	response      *CreateCompletionsResponse
+	expectedError error
+	setupMocks    func(*MockLogger, *MockMetrics)
+}
+
 func Test_ChatCompletions(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -20,13 +27,7 @@ func Test_ChatCompletions(t *testing.T) {
 	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
 
-	tests := []struct {
-		name          string
-		request       *CreateCompletionsRequest
-		response      *CreateCompletionsResponse
-		expectedError error
-		setupMocks    func(*MockLogger, *MockMetrics)
-	}{
+	tests := []test{
 		{
 			name: "successful completion request",
 			request: &CreateCompletionsRequest{
@@ -54,9 +55,9 @@ func Test_ChatCompletions(t *testing.T) {
 		{
 			name:          "missing both messages and model",
 			request:       &CreateCompletionsRequest{},
-			expectedError: ErrMissingBoth,
+			expectedError: errMissingBoth,
 			setupMocks: func(logger *MockLogger, _ *MockMetrics) {
-				logger.EXPECT().Errorf("%v", ErrMissingBoth)
+				logger.EXPECT().Errorf("%v", errMissingBoth)
 			},
 		},
 		{
@@ -64,9 +65,9 @@ func Test_ChatCompletions(t *testing.T) {
 			request: &CreateCompletionsRequest{
 				Model: "gpt-3.5-turbo",
 			},
-			expectedError: ErrMissingMessages,
+			expectedError: errMissingMessages,
 			setupMocks: func(logger *MockLogger, _ *MockMetrics) {
-				logger.EXPECT().Errorf("%v", ErrMissingMessages)
+				logger.EXPECT().Errorf("%v", errMissingMessages)
 			},
 		},
 		{
@@ -74,9 +75,9 @@ func Test_ChatCompletions(t *testing.T) {
 			request: &CreateCompletionsRequest{
 				Messages: []Message{{Role: "user", Content: "Hello"}},
 			},
-			expectedError: ErrMissingModel,
+			expectedError: errMissingModel,
 			setupMocks: func(logger *MockLogger, _ *MockMetrics) {
-				logger.EXPECT().Errorf("%v", ErrMissingModel)
+				logger.EXPECT().Errorf("%v", errMissingModel)
 			},
 		},
 	}
@@ -104,7 +105,6 @@ func Test_ChatCompletions(t *testing.T) {
 			}
 
 			tt.setupMocks(mockLogger, mockMetrics)
-
 			response, err := client.CreateCompletions(context.Background(), tt.request)
 
 			if tt.expectedError != nil {

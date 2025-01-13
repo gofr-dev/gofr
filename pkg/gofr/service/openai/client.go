@@ -30,7 +30,7 @@ type Client struct {
 }
 
 var (
-	ErrorMissingAPIKey = errors.New("api key not provided")
+	errorMissingAPIKey = errors.New("api key not provided")
 )
 
 type ClientOption func(*Client)
@@ -49,11 +49,15 @@ func WithClientTimeout(d time.Duration) func(*Client) {
 
 func NewClient(config *Config, opts ...ClientOption) (*Client, error) {
 	if config.APIKey == "" {
-		return nil, ErrorMissingAPIKey
+		return nil, errorMissingAPIKey
 	}
 
 	if config.BaseURL == "" {
 		config.BaseURL = "https://api.openai.com"
+	}
+
+	if config.Model == "" {
+		config.Model = "gpt-4o"
 	}
 
 	// Use the provided HTTP client or create a new one with defaults

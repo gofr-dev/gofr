@@ -113,9 +113,9 @@ type Error struct {
 }
 
 var (
-	ErrMissingBoth     = errors.New("both messages and model fields not provided")
-	ErrMissingMessages = errors.New("messages fields not provided")
-	ErrMissingModel    = errors.New("model fields not provided")
+	errMissingBoth     = errors.New("both messages and model fields not provided")
+	errMissingMessages = errors.New("messages fields not provided")
+	errMissingModel    = errors.New("model fields not provided")
 )
 
 func (e *Error) Error() string {
@@ -131,18 +131,18 @@ func (c *Client) CreateCompletions(ctx context.Context, r *CreateCompletionsRequ
 	startTime := time.Now()
 
 	if r.Messages == nil && r.Model == "" {
-		c.logger.Errorf("%v", ErrMissingBoth)
-		return nil, ErrMissingBoth
+		c.logger.Errorf("%v", errMissingBoth)
+		return nil, errMissingBoth
 	}
 
 	if r.Messages == nil {
-		c.logger.Errorf("%v", ErrMissingMessages)
-		return nil, ErrMissingMessages
+		c.logger.Errorf("%v", errMissingMessages)
+		return nil, errMissingMessages
 	}
 
 	if r.Model == "" {
-		c.logger.Errorf("%v", ErrMissingModel)
-		return nil, ErrMissingModel
+		c.logger.Errorf("%v", errMissingModel)
+		return nil, errMissingModel
 	}
 
 	raw, err := c.CreateCompletionsRaw(tracerCtx, r)
