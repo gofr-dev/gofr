@@ -608,7 +608,8 @@ func TestCron_parsePart(t *testing.T) {
 }
 
 func TestCron_WithTimezone(t *testing.T) {
-	est, _ := time.LoadLocation("America/New_York")
+	est, err := time.LoadLocation("America/New_York")
+	require.NoError(t, err, "computing prerequisite timezone")
 
 	tests := []struct {
 		name     string
