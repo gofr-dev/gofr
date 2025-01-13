@@ -116,9 +116,10 @@ jobs:
           export APP_ENV=test
           warning_count=$(go test gofr.dev/pkg/... -v -short -coverprofile package.cov -coverpkg=gofr.dev/pkg/... | tee /dev/tty | grep -c "WARNING" || true)
           grep -v '/mock_' package.cov > profile.cov
-          go tool cover -func profile.cov
+          codeCoverage=$(go tool cover -func profile.cov | awk '/total/ {print substr($3, 1, length($3)-1)}')
           echo "Warnings found: $warning_count"
           echo "warning_count=$warning_count" >> $GITHUB_ENV
+          echo "CODE_COVERAGE=$codeCoverage" >> $GITHUB_ENV
 
       - name: Fail if too many warnings
         run: |
