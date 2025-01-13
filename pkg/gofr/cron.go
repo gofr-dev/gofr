@@ -80,7 +80,7 @@ func NewCron(cntnr *container.Container, options ...func(*Crontab)) *Crontab {
 	return c
 }
 
-// WithTimezone is a functional option for NewCron to specify timezone against which the cron schedule will be evaluated,
+// WithTimezone is a functional option for NewCron to specify timezone against which the cron schedule will be evaluated.
 func WithTimezone(location *time.Location) func(*Crontab) {
 	return func(c *Crontab) { c.location = location }
 }
