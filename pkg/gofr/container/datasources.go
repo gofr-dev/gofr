@@ -503,3 +503,71 @@ type OpenTSDB interface {
 	// - Error if parameters are invalid, response parsing fails, or if connectivity issues occur.
 	DeleteAnnotation(ctx context.Context, annotation any, res any) error
 }
+
+type ArangoDB interface {
+	// CreateUser creates a new user in ArangoDB.
+	CreateUser(ctx context.Context, username, password string) error
+	// DropUser deletes an existing user in ArangoDB.
+	DropUser(ctx context.Context, username string) error
+	// GrantDB grants permissions for a database to a user.
+	GrantDB(ctx context.Context, database, username, permission string) error
+	// GrantCollection grants permissions for a collection to a user.
+	GrantCollection(ctx context.Context, database, collection, username, permission string) error
+
+	// ListDBs lists all databases in ArangoDB.
+	ListDBs(ctx context.Context) ([]string, error)
+	// CreateDB creates a new database in ArangoDB.
+	CreateDB(ctx context.Context, database string) error
+	// DropDB deletes an existing database in ArangoDB.
+	DropDB(ctx context.Context, database string) error
+
+	// CreateCollection creates a new collection in a database with specified type.
+	CreateCollection(ctx context.Context, database, collection string, isEdge bool) error
+	// DropCollection deletes an existing collection from a database.
+	DropCollection(ctx context.Context, database, collection string) error
+	// TruncateCollection truncates a collection in a database.
+	TruncateCollection(ctx context.Context, database, collection string) error
+	// ListCollections lists all collections in a database.
+	ListCollections(ctx context.Context, database string) ([]string, error)
+
+	// CreateDocument creates a new document in the specified collection.
+	CreateDocument(ctx context.Context, dbName, collectionName string, document interface{}) (string, error)
+	// GetDocument retrieves a document by its ID from the specified collection.
+	GetDocument(ctx context.Context, dbName, collectionName, documentID string, result interface{}) error
+	// UpdateDocument updates an existing document in the specified collection.
+	UpdateDocument(ctx context.Context, dbName, collectionName, documentID string, document interface{}) error
+	// DeleteDocument deletes a document by its ID from the specified collection.
+	DeleteDocument(ctx context.Context, dbName, collectionName, documentID string) error
+
+	// CreateEdgeDocument creates a new edge document between two vertices
+	CreateEdgeDocument(ctx context.Context, dbName, collectionName string, from, to string, document interface{}) (string, error)
+
+	// CreateGraph creates a new graph in a database.
+	CreateGraph(ctx context.Context, database, graph string, edgeDefinitions []EdgeDefinition) error
+	// DropGraph deletes an existing graph from a database.
+	DropGraph(ctx context.Context, database, graph string) error
+	// ListGraphs lists all graphs in a database.
+	ListGraphs(ctx context.Context, database string) ([]string, error)
+
+	// Query executes an AQL query and binds the results
+	Query(ctx context.Context, dbName string, query string, bindVars map[string]interface{}, result interface{}) error
+
+	HealthChecker
+}
+
+// EdgeDefinition represents the definition of edges in a graph
+type EdgeDefinition struct {
+	// Collection is the name of the edge collection to be used
+	Collection string `json:"collection"`
+	// From is an array of vertex collection names for the source vertices
+	From []string `json:"from"`
+	// To is an array of vertex collection names for the target vertices
+	To []string `json:"to"`
+}
+
+// ArangoProvider is an interface that extends Arango with additional methods for logging, metrics, and connection management.
+type ArangoProvider interface {
+	ArangoDB
+
+	provider
+}
