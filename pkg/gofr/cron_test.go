@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/testutil"
 )
 
@@ -203,7 +204,7 @@ func TestCronTab_AddJob(t *testing.T) {
 		},
 	}
 
-	c := NewCron(nil)
+	c := newCronT(t, nil)
 
 	for _, tc := range testCases {
 		err := c.AddJob(tc.schedule, "test-job", fn)
@@ -225,7 +226,7 @@ func TestCronTab_runScheduled(t *testing.T) {
 
 	// can make container nil as we are not testing the internal working of
 	// dependency function as it is user defined
-	c := NewCron(nil)
+	c := newCronT(t, nil)
 
 	// Populate the job array for cron table
 	c.jobs = []*job{j}
@@ -634,9 +635,18 @@ func TestCron_WithTimezone(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			got := NewCron(nil, test.options...)
-			got.ticker.Stop()
+			got := newCronT(t, nil, test.options...)
 			assert.Equal(t, test.expected, got.location)
 		})
 	}
+}
+
+func newCronT(t *testing.T, cntnr *container.Container, options ...func(*Crontab)) *Crontab {
+	c := NewCron(cntnr, options...)
+
+	t.Cleanup(func() {
+		c.ticker.Stop()
+	})
+
+	return c
 }
