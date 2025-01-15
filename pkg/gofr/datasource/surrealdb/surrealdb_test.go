@@ -56,12 +56,10 @@ func Test_useNamespace(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockLogger := NewMockLogger(ctrl)
-	mockMetrics := NewMockMetrics(ctrl)
 	mockConn := NewMockConnection(ctrl)
 
 	client := New(&Config{})
 	client.UseLogger(mockLogger)
-	client.UseMetrics(mockMetrics)
 	client.db = mockConn
 
 	t.Run("successful namespace switch", func(t *testing.T) {
@@ -94,12 +92,10 @@ func Test_useDatabase(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockLogger := NewMockLogger(ctrl)
-	mockMetrics := NewMockMetrics(ctrl)
 	mockConn := NewMockConnection(ctrl)
 
 	client := New(&Config{})
 	client.UseLogger(mockLogger)
-	client.UseMetrics(mockMetrics)
 	client.db = mockConn
 
 	t.Run("successful database switch", func(t *testing.T) {
@@ -128,24 +124,6 @@ func Test_useDatabase(t *testing.T) {
 	})
 }
 
-func Test_UseMetrics(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	client := New(&Config{})
-	mockMetrics := NewMockMetrics(ctrl)
-
-	t.Run("valid metrics", func(t *testing.T) {
-		client.UseMetrics(mockMetrics)
-		assert.NotNil(t, client.metrics)
-	})
-
-	t.Run("invalid metrics", func(t *testing.T) {
-		client.UseMetrics("not metrics")
-		assert.NotNil(t, client.metrics)
-	})
-}
-
 var errInvalidQuery = errors.New("invalid query")
 
 func Test_Query(t *testing.T) {
@@ -153,12 +131,10 @@ func Test_Query(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockLogger := NewMockLogger(ctrl)
-	mockMetrics := NewMockMetrics(ctrl)
 	mockConn := NewMockConnection(ctrl)
 
 	client := New(&Config{})
 	client.UseLogger(mockLogger)
-	client.UseMetrics(mockMetrics)
 	client.db = mockConn
 
 	t.Run("successful query", func(t *testing.T) {
@@ -176,8 +152,6 @@ func Test_Query(t *testing.T) {
 				},
 			},
 		}
-
-		mockMetrics.EXPECT().RecordHistogram(ctx, "surreal_db_operation_duration", float64(0), "operation", "query")
 
 		var resp QueryResponse
 		resp.Result = &queryResult
@@ -208,12 +182,10 @@ func Test_Insert(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockLogger := NewMockLogger(ctrl)
-	mockMetrics := NewMockMetrics(ctrl)
 	mockConn := NewMockConnection(ctrl)
 
 	client := New(&Config{})
 	client.UseLogger(mockLogger)
-	client.UseMetrics(mockMetrics)
 	client.db = mockConn
 
 	t.Run("successful insert", func(t *testing.T) {
@@ -231,7 +203,6 @@ func Test_Insert(t *testing.T) {
 			},
 		}
 
-		mockMetrics.EXPECT().RecordHistogram(ctx, "surreal_db_operation_duration", float64(0), "operation", "insert")
 		mockConn.EXPECT().Send(gomock.Any(), "insert", "users", data).Return(nil).SetArg(0, insertResponse)
 
 		result, err := client.Insert(ctx, "users", data)
@@ -265,12 +236,10 @@ func Test_Create(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockLogger := NewMockLogger(ctrl)
-	mockMetrics := NewMockMetrics(ctrl)
 	mockConn := NewMockConnection(ctrl)
 
 	client := New(&Config{})
 	client.UseLogger(mockLogger)
-	client.UseMetrics(mockMetrics)
 	client.db = mockConn
 
 	t.Run("successful create", func(t *testing.T) {
@@ -288,7 +257,6 @@ func Test_Create(t *testing.T) {
 			},
 		}
 
-		mockMetrics.EXPECT().RecordHistogram(ctx, "surreal_db_operation_duration", float64(0), "operation", "create")
 		mockConn.EXPECT().Send(gomock.Any(), "create", "users", data).Return(nil).SetArg(0, expectedResponse)
 
 		result, err := client.Create(ctx, "users", data)
@@ -325,7 +293,6 @@ func Test_Create(t *testing.T) {
 			Result: "unexpected type",
 		}
 
-		mockMetrics.EXPECT().RecordHistogram(ctx, "surreal_db_operation_duration", float64(0), "operation", "create")
 		mockConn.EXPECT().Send(gomock.Any(), "create", "users", data).Return(nil).SetArg(0, unexpectedResponse)
 
 		result, err := client.Create(ctx, "users", data)
@@ -340,12 +307,10 @@ func Test_Update(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockLogger := NewMockLogger(ctrl)
-	mockMetrics := NewMockMetrics(ctrl)
 	mockConn := NewMockConnection(ctrl)
 
 	client := New(&Config{})
 	client.UseLogger(mockLogger)
-	client.UseMetrics(mockMetrics)
 	client.db = mockConn
 
 	t.Run("successful update", func(t *testing.T) {
@@ -363,7 +328,6 @@ func Test_Update(t *testing.T) {
 			},
 		}
 
-		mockMetrics.EXPECT().RecordHistogram(ctx, "surreal_db_operation_duration", float64(0), "operation", "query")
 		mockConn.EXPECT().Send(gomock.Any(), "update", "users", data).Return(nil).SetArg(0, updateResponse)
 
 		result, err := client.Update(ctx, "users", "123", data)
@@ -393,12 +357,10 @@ func Test_Delete(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockLogger := NewMockLogger(ctrl)
-	mockMetrics := NewMockMetrics(ctrl)
 	mockConn := NewMockConnection(ctrl)
 
 	client := New(&Config{})
 	client.UseLogger(mockLogger)
-	client.UseMetrics(mockMetrics)
 	client.db = mockConn
 
 	t.Run("successful delete", func(t *testing.T) {
@@ -418,7 +380,6 @@ func Test_Delete(t *testing.T) {
 			ID:    id,
 		}
 
-		mockMetrics.EXPECT().RecordHistogram(ctx, "surreal_db_operation_duration", float64(0), "operation", "query")
 		mockConn.EXPECT().Send(gomock.Any(), "delete", arg).Return(nil).SetArg(0, deleteResponse)
 
 		result, err := client.Delete(ctx, table, id)
@@ -437,10 +398,9 @@ func Test_Delete(t *testing.T) {
 		}
 
 		deleteResponse := Response{
-			Result: nil, // Empty result for non-existent record
+			Result: nil,
 		}
 
-		mockMetrics.EXPECT().RecordHistogram(ctx, "surreal_db_operation_duration", float64(0), "operation", "query")
 		mockConn.EXPECT().Send(gomock.Any(), "delete", arg).Return(nil).SetArg(0, deleteResponse)
 
 		result, err := client.Delete(ctx, table, id)
@@ -453,12 +413,10 @@ func Test_Select(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockLogger := NewMockLogger(ctrl)
-	mockMetrics := NewMockMetrics(ctrl)
 	mockConn := NewMockConnection(ctrl)
 
 	client := New(&Config{})
 	client.UseLogger(mockLogger)
-	client.UseMetrics(mockMetrics)
 	client.db = mockConn
 
 	t.Run("successful select", func(t *testing.T) {
@@ -473,7 +431,6 @@ func Test_Select(t *testing.T) {
 			},
 		}
 
-		mockMetrics.EXPECT().RecordHistogram(ctx, "surreal_db_operation_duration", float64(0), "operation", "query")
 		mockConn.EXPECT().Send(gomock.Any(), "select", "users").Return(nil).SetArg(0, selectResponse)
 
 		results, err := client.Select(ctx, "users")
@@ -488,7 +445,6 @@ func Test_Select(t *testing.T) {
 			Result: []interface{}{},
 		}
 
-		mockMetrics.EXPECT().RecordHistogram(ctx, "surreal_db_operation_duration", float64(0), "operation", "query")
 		mockConn.EXPECT().Send(gomock.Any(), "select", "users").Return(nil).SetArg(0, emptyResponse)
 
 		results, err := client.Select(ctx, "users")

@@ -722,21 +722,13 @@ using `app.AddSurrealDB()` method, and user's can use Surreal DB across applicat
 ```go
 // SurrealDB defines an interface representing a SurrealDB client with common database operations.
 type SurrealDB interface {
-	// UseNamespace switches the database client to a specific namespace.
-	// It returns an error if the operation fails.
-	UseNamespace(ns string) error
-
-	// UseDatabase switches the database client to a specific database within the current namespace.
-	// It returns an error if the operation fails.
-	UseDatabase(db string) error
-
 	// Query executes a Surreal query with the provided variables and returns the query results as a slice of interfaces.
 	// It returns an error if the query execution fails.
 	Query(ctx context.Context, query string, vars map[string]interface{}) ([]interface{}, error)
 
 	// Create inserts a new record into the specified table and returns the created record as a map.
 	// It returns an error if the operation fails.
-	Create(ctx context.Context, table string, data interface{}) (map[string]interface{}, error)
+	Create(ctx context.Context, table string, data interface{}) (map[interface{}]interface{}, error)
 
 	// Update modifies an existing record in the specified table by its ID with the provided data.
 	// It returns the updated record as an interface and an error if the operation fails.
@@ -765,9 +757,9 @@ The following example demonstrates injecting an SurrealDB instance into a GoFr a
 package main
 
 import (
+	"fmt"
 	"gofr.dev/pkg/gofr"
 	"gofr.dev/pkg/gofr/datasource/surrealdb"
-	"gofr.dev/pkg/gofr/http"
 )
 
 type Person struct {
@@ -775,6 +767,10 @@ type Person struct {
 	Name  string `json:"name"`
 	Age   int    `json:"age"`
 	Email string `json:"email,omitempty"`
+}
+
+type ErrorResponse struct {
+	Message string `json:"message"`
 }
 
 func main() {
@@ -791,12 +787,12 @@ func main() {
 	})
 
 	app.AddSurrealDB(client)
-
+	
 	// GET request to fetch person by ID
 	app.GET("/person/{id}", func(ctx *gofr.Context) (interface{}, error) {
 		id := ctx.PathParam("id")
 
-		query := "SELECT * FROM person WHERE id = $id"
+		query := "SELECT * FROM type::thing('person', $id)"
 		vars := map[string]interface{}{
 			"id": id,
 		}
@@ -807,7 +803,11 @@ func main() {
 			return nil, err
 		}
 
-		return result[0], nil
+		if len(result) > 0 {
+			return result[0], nil
+		}
+
+		return nil, fmt.Errorf("person not found")
 	})
 
 	// POST request to create a new person
@@ -815,42 +815,31 @@ func main() {
 		var person Person
 		if err := ctx.Bind(&person); err != nil {
 			ctx.Logger.Error("Binding error: ", err)
-			return nil, http.ErrorInvalidParam{Params: []string{"body"}}
+			return ErrorResponse{Message: "Invalid request body"}, nil
 		}
 
-		query := "CREATE person SET name = $name, age = $age, email = $email;"
-		vars := map[string]interface{}{
+		result, err := ctx.SurrealDB.Create(ctx, "person", map[string]interface{}{
 			"name":  person.Name,
 			"age":   person.Age,
 			"email": person.Email,
-		}
+		})
 
-		ctx.Logger.Debugf("Executing query: %s with vars: %+v", query, vars)
-
-		result, err := ctx.SurrealDB.Query(ctx, query, vars)
 		if err != nil {
-			ctx.Logger.Errorf("Query error: %v", err)
-			return nil, err
+			ctx.Logger.Errorf("Creation error: %v", err)
+			return ErrorResponse{Message: "Creation failed"}, nil
 		}
 
-		ctx.Logger.Debugf("Raw result: %+v", result)
-
-		verifyResult, err := ctx.SurrealDB.Create(ctx, "SELECT * FROM person ORDER BY id DESC LIMIT 1;", nil)
-		if err != nil {
-			ctx.Logger.Errorf("Verify error: %v", err)
-		} else {
-			ctx.Logger.Debugf("Verify result: %+v", verifyResult)
+		if id, ok := result["id"]; ok {
+			person.ID = fmt.Sprintf("%v", id)
+			return person, nil
 		}
 
-		return map[string]interface{}{
-			"message": "Creation attempted",
-			"result":  result,
-			"verify":  verifyResult,
-		}, nil
+		return ErrorResponse{Message: "Unexpected result format"}, nil
 	})
 
 	app.Run()
 }
+
 
 ```
 

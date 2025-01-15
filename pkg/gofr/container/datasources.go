@@ -284,7 +284,7 @@ type SurrealDB interface {
 
 	// Create inserts a new record into the specified table and returns the created record as a map.
 	// It returns an error if the operation fails.
-	Create(ctx context.Context, table string, data interface{}) (map[string]interface{}, error)
+	Create(ctx context.Context, table string, data interface{}) (map[interface{}]interface{}, error)
 
 	// Update modifies an existing record in the specified table by its ID with the provided data.
 	// It returns the updated record as an interface and an error if the operation fails.
