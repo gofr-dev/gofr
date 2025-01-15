@@ -171,7 +171,7 @@ export const navigation = [
             {
                 title: 'GoFR CLI',
                 href: 'docs/references/gofrcli',
-                desc: "GoFr CLI is the command line tool for initializing projects and performing tasks in accordance with GoFr framework."
+                desc: "GoFr CLI is the command line tool for initializing projects and performing tasks in accordance with the GoFr framework."
             }
         ],
     },

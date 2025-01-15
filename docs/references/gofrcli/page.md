@@ -32,7 +32,7 @@ To check the installation:
 The CLI can be run directly from the terminal after installation. Here’s the general syntax:
 
 ```go
-gofr <subcommand> [flags] [arguments]
+gofr <subcommand> [flags]=[arguments]
 ```
 ---
 
