@@ -34,6 +34,7 @@ type CronFunc func(ctx *Context)
 type Crontab struct {
 	// contains unexported fields
 	ticker    *time.Ticker
+	location  *time.Location
 	jobs      []*job
 	container *container.Container
 
@@ -41,12 +42,7 @@ type Crontab struct {
 }
 
 type job struct {
-	sec       map[int]struct{}
-	min       map[int]struct{}
-	hour      map[int]struct{}
-	day       map[int]struct{}
-	month     map[int]struct{}
-	dayOfWeek map[int]struct{}
+	sec, min, hour, day, month, dayOfWeek map[int]struct{}
 
 	name string
 	fn   CronFunc
@@ -62,20 +58,31 @@ type tick struct {
 }
 
 // NewCron initializes and returns new cron tab.
-func NewCron(cntnr *container.Container) *Crontab {
+func NewCron(cntnr *container.Container, options ...func(*Crontab)) *Crontab {
 	c := &Crontab{
 		ticker:    time.NewTicker(time.Second),
+		location:  time.Local,
 		container: cntnr,
 		jobs:      make([]*job, 0),
 	}
 
+	for _, option := range options {
+		option(c)
+	}
+
 	go func() {
 		for t := range c.ticker.C {
+			t = t.In(c.location)
 			c.runScheduled(t)
 		}
 	}()
 
 	return c
+}
+
+// WithTimezone is a functional option for NewCron to specify timezone against which the cron schedule will be evaluated.
+func WithTimezone(location *time.Location) func(*Crontab) {
+	return func(c *Crontab) { c.location = location }
 }
 
 // this will compile the regex once instead of compiling it each time when it is being called.

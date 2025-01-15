@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/testutil"
 )
 
@@ -203,7 +204,7 @@ func TestCronTab_AddJob(t *testing.T) {
 		},
 	}
 
-	c := NewCron(nil)
+	c := newCronT(t, nil)
 
 	for _, tc := range testCases {
 		err := c.AddJob(tc.schedule, "test-job", fn)
@@ -225,7 +226,7 @@ func TestCronTab_runScheduled(t *testing.T) {
 
 	// can make container nil as we are not testing the internal working of
 	// dependency function as it is user defined
-	c := NewCron(nil)
+	c := newCronT(t, nil)
 
 	// Populate the job array for cron table
 	c.jobs = []*job{j}
@@ -605,4 +606,47 @@ func TestCron_parsePart(t *testing.T) {
 			assert.Equal(t, test.expected, output, "TEST[%d] - Expected: %v, got: %v", i, test.expected, output)
 		})
 	}
+}
+
+func TestCron_WithTimezone(t *testing.T) {
+	est, err := time.LoadLocation("America/New_York")
+	require.NoError(t, err, "computing prerequisite timezone")
+
+	tests := []struct {
+		name     string
+		options  []func(*Crontab)
+		expected *time.Location
+	}{
+		{
+			name:     "Factory without options",
+			expected: time.Local,
+		},
+		{
+			name:     "Factory with UTC timezone option",
+			options:  []func(crontab *Crontab){WithTimezone(time.UTC)},
+			expected: time.UTC,
+		},
+		{
+			name:     "Factory with EST/EDT timezone option",
+			options:  []func(crontab *Crontab){WithTimezone(est)},
+			expected: est,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got := newCronT(t, nil, test.options...)
+			assert.Equal(t, test.expected, got.location)
+		})
+	}
+}
+
+func newCronT(t *testing.T, cntnr *container.Container, options ...func(*Crontab)) *Crontab {
+	c := NewCron(cntnr, options...)
+
+	t.Cleanup(func() {
+		c.ticker.Stop()
+	})
+
+	return c
 }
