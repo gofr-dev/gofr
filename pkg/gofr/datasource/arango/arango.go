@@ -32,7 +32,7 @@ type Config struct {
 	Port     int
 }
 
-// EdgeDefinition represents the definition of edges in a graph
+// EdgeDefinition represents the definition of edges in a graph.
 type EdgeDefinition struct {
 	// Collection is the name of the edge collection to be used
 	Collection string `json:"collection"`
@@ -41,8 +41,6 @@ type EdgeDefinition struct {
 	// To is an array of vertex collection names for the target vertices
 	To []string `json:"to"`
 }
-
-const defaultTimeout = 5 * time.Second
 
 var (
 	errStatusDown   = errors.New("status down")
@@ -75,7 +73,7 @@ func (c *Client) UseTracer(tracer interface{}) {
 	}
 }
 
-// Connect establishes a connection to the ArangoDB server
+// Connect establishes a connection to the ArangoDB server.
 func (c *Client) Connect() {
 	if err := c.validateConfig(); err != nil {
 		c.logger.Errorf("config validation error: %v", err)
@@ -86,7 +84,7 @@ func (c *Client) Connect() {
 	c.logger.Debugf("connecting to ArangoDB at %s", c.endpoint)
 
 	endpoint := connection.NewRoundRobinEndpoints([]string{c.endpoint})
-	conn := connection.NewHttp2Connection(connection.DefaultHTTP2ConfigurationWrapper(endpoint /*InsecureSkipVerify*/, false))
+	conn := connection.NewHttp2Connection(connection.DefaultHTTP2ConfigurationWrapper(endpoint, false))
 
 	auth := connection.NewBasicAuth(c.config.User, c.config.Password)
 
@@ -125,7 +123,7 @@ func (c *Client) validateConfig() error {
 	return nil
 }
 
-// CreateUser creates a new user in ArangoDB
+// CreateUser creates a new user in ArangoDB.
 func (c *Client) CreateUser(ctx context.Context, username, password string) error {
 	tracerCtx, span := c.addTrace(ctx, "createUser", map[string]string{"user": username})
 	startTime := time.Now()
@@ -138,7 +136,7 @@ func (c *Client) CreateUser(ctx context.Context, username, password string) erro
 	return err
 }
 
-// DropUser deletes a user from ArangoDB
+// DropUser deletes a user from ArangoDB.
 func (c *Client) DropUser(ctx context.Context, username string) error {
 	tracerCtx, span := c.addTrace(ctx, "dropUser", map[string]string{"user": username})
 	startTime := time.Now()
@@ -187,7 +185,7 @@ func (c *Client) GrantCollection(ctx context.Context, database, collection, user
 	return err
 }
 
-// ListDBs returns a list of all databases in ArangoDB
+// ListDBs returns a list of all databases in ArangoDB.
 func (c *Client) ListDBs(ctx context.Context) ([]string, error) {
 	tracerCtx, span := c.addTrace(ctx, "listDBs", nil)
 	startTime := time.Now()
@@ -199,7 +197,7 @@ func (c *Client) ListDBs(ctx context.Context) ([]string, error) {
 		return nil, err
 	}
 
-	var names []string
+	names := make([]string, len(dbs))
 	for _, db := range dbs {
 		names = append(names, db.Name())
 	}
@@ -207,7 +205,7 @@ func (c *Client) ListDBs(ctx context.Context) ([]string, error) {
 	return names, nil
 }
 
-// CreateDB creates a new database in ArangoDB
+// CreateDB creates a new database in ArangoDB.
 func (c *Client) CreateDB(ctx context.Context, database string) error {
 	tracerCtx, span := c.addTrace(ctx, "createDB", map[string]string{"db": database})
 	startTime := time.Now()
@@ -219,7 +217,7 @@ func (c *Client) CreateDB(ctx context.Context, database string) error {
 	return err
 }
 
-// DropDB deletes a database from ArangoDB
+// DropDB deletes a database from ArangoDB.
 func (c *Client) DropDB(ctx context.Context, database string) error {
 	tracerCtx, span := c.addTrace(ctx, "dropDB", map[string]string{"db": database})
 	startTime := time.Now()
@@ -261,24 +259,33 @@ func (c *Client) CreateCollection(ctx context.Context, database, collection stri
 	return err
 }
 
+func (c *Client) getCollection(ctx context.Context, dbName, collectionName string) (arangodb.Collection, error) {
+	db, err := c.client.Database(ctx, dbName)
+	if err != nil {
+		return nil, err
+	}
+
+	collection, err := db.Collection(ctx, collectionName)
+	if err != nil {
+		return nil, err
+	}
+
+	return collection, nil
+}
+
 // DropCollection deletes an existing collection from a database.
-func (c *Client) DropCollection(ctx context.Context, database, collection string) error {
-	tracerCtx, span := c.addTrace(ctx, "dropCollection", map[string]string{"collection": collection})
+func (c *Client) DropCollection(ctx context.Context, database, collectionName string) error {
+	tracerCtx, span := c.addTrace(ctx, "dropCollection", map[string]string{"collection": collectionName})
 	startTime := time.Now()
 
-	defer c.sendOperationStats(&QueryLog{Query: "dropCollection", Collection: collection}, startTime, "dropCollection", span)
+	defer c.sendOperationStats(&QueryLog{Query: "dropCollection", Collection: collectionName}, startTime, "dropCollection", span)
 
-	db, err := c.client.Database(tracerCtx, database)
+	collection, err := c.getCollection(tracerCtx, database, collectionName)
 	if err != nil {
 		return err
 	}
 
-	coll, err := db.Collection(tracerCtx, collection)
-	if err != nil {
-		return err
-	}
-
-	err = coll.Remove(ctx)
+	err = collection.Remove(ctx)
 	if err != nil {
 		return err
 	}
@@ -287,23 +294,18 @@ func (c *Client) DropCollection(ctx context.Context, database, collection string
 }
 
 // TruncateCollection truncates a collection in a database.
-func (c *Client) TruncateCollection(ctx context.Context, database, collection string) error {
-	tracerCtx, span := c.addTrace(ctx, "truncateCollection", map[string]string{"collection": collection})
+func (c *Client) TruncateCollection(ctx context.Context, database, collectionName string) error {
+	tracerCtx, span := c.addTrace(ctx, "truncateCollection", map[string]string{"collection": collectionName})
 	startTime := time.Now()
 
-	defer c.sendOperationStats(&QueryLog{Query: "truncateCollection", Collection: collection}, startTime, "truncateCollection", span)
+	defer c.sendOperationStats(&QueryLog{Query: "truncateCollection", Collection: collectionName}, startTime, "truncateCollection", span)
 
-	db, err := c.client.Database(tracerCtx, database)
+	collection, err := c.getCollection(tracerCtx, database, collectionName)
 	if err != nil {
 		return err
 	}
 
-	coll, err := db.Collection(tracerCtx, collection)
-	if err != nil {
-		return err
-	}
-
-	err = coll.Truncate(ctx)
+	err = collection.Truncate(ctx)
 	if err != nil {
 		return err
 	}
@@ -328,7 +330,7 @@ func (c *Client) ListCollections(ctx context.Context, database string) ([]string
 		return nil, err
 	}
 
-	var names []string
+	names := make([]string, 0, len(collections))
 	for _, coll := range collections {
 		names = append(names, coll.Name())
 	}
@@ -343,12 +345,7 @@ func (c *Client) CreateDocument(ctx context.Context, dbName, collectionName stri
 
 	defer c.sendOperationStats(&QueryLog{Query: "createDocument", Collection: collectionName}, startTime, "createDocument", span)
 
-	db, err := c.client.Database(tracerCtx, dbName)
-	if err != nil {
-		return "", err
-	}
-
-	collection, err := db.Collection(tracerCtx, collectionName)
+	collection, err := c.getCollection(tracerCtx, dbName, collectionName)
 	if err != nil {
 		return "", err
 	}
@@ -368,12 +365,7 @@ func (c *Client) GetDocument(ctx context.Context, dbName, collectionName, docume
 
 	defer c.sendOperationStats(&QueryLog{Query: "getDocument", Collection: collectionName, ID: documentID}, startTime, "getDocument", span)
 
-	db, err := c.client.Database(tracerCtx, dbName)
-	if err != nil {
-		return err
-	}
-
-	collection, err := db.Collection(tracerCtx, collectionName)
+	collection, err := c.getCollection(tracerCtx, dbName, collectionName)
 	if err != nil {
 		return err
 	}
@@ -388,14 +380,10 @@ func (c *Client) UpdateDocument(ctx context.Context, dbName, collectionName, doc
 	tracerCtx, span := c.addTrace(ctx, "updateDocument", map[string]string{"collection": collectionName})
 	startTime := time.Now()
 
-	defer c.sendOperationStats(&QueryLog{Query: "updateDocument", Collection: collectionName, ID: documentID}, startTime, "updateDocument", span)
+	defer c.sendOperationStats(&QueryLog{Query: "updateDocument", Collection: collectionName,
+		ID: documentID}, startTime, "updateDocument", span)
 
-	db, err := c.client.Database(tracerCtx, dbName)
-	if err != nil {
-		return err
-	}
-
-	collection, err := db.Collection(tracerCtx, collectionName)
+	collection, err := c.getCollection(tracerCtx, dbName, collectionName)
 	if err != nil {
 		return err
 	}
@@ -410,14 +398,10 @@ func (c *Client) DeleteDocument(ctx context.Context, dbName, collectionName, doc
 	tracerCtx, span := c.addTrace(ctx, "deleteDocument", map[string]string{"collection": collectionName})
 	startTime := time.Now()
 
-	defer c.sendOperationStats(&QueryLog{Query: "deleteDocument", Collection: collectionName, ID: documentID}, startTime, "deleteDocument", span)
+	defer c.sendOperationStats(&QueryLog{Query: "deleteDocument", Collection: collectionName,
+		ID: documentID}, startTime, "deleteDocument", span)
 
-	db, err := c.client.Database(tracerCtx, dbName)
-	if err != nil {
-		return err
-	}
-
-	collection, err := db.Collection(tracerCtx, collectionName)
+	collection, err := c.getCollection(tracerCtx, dbName, collectionName)
 	if err != nil {
 		return err
 	}
@@ -427,19 +411,14 @@ func (c *Client) DeleteDocument(ctx context.Context, dbName, collectionName, doc
 	return err
 }
 
-// CreateEdgeDocument creates a new edge document between two vertices
-func (c *Client) CreateEdgeDocument(ctx context.Context, dbName, collectionName string, from, to string, document interface{}) (string, error) {
+// CreateEdgeDocument creates a new edge document between two vertices.
+func (c *Client) CreateEdgeDocument(ctx context.Context, dbName, collectionName, from, to string, document interface{}) (string, error) {
 	tracerCtx, span := c.addTrace(ctx, "createEdgeDocument", map[string]string{"collection": collectionName})
 	startTime := time.Now()
 
 	defer c.sendOperationStats(&QueryLog{Query: "createEdgeDocument", Collection: collectionName}, startTime, "createEdgeDocument", span)
 
-	db, err := c.client.Database(tracerCtx, dbName)
-	if err != nil {
-		return "", err
-	}
-
-	collection, err := db.Collection(tracerCtx, collectionName)
+	collection, err := c.getCollection(tracerCtx, dbName, collectionName)
 	if err != nil {
 		return "", err
 	}
@@ -468,7 +447,7 @@ func (c *Client) CreateGraph(ctx context.Context, database, graph string, edgeDe
 		return err
 	}
 
-	var arangoEdgeDefs []arangodb.EdgeDefinition
+	arangoEdgeDefs := make([]arangodb.EdgeDefinition, 0, len(edgeDefinitions))
 	for _, ed := range edgeDefinitions {
 		arangoEdgeDefs = append(arangoEdgeDefs, arangodb.EdgeDefinition{
 			Collection: ed.Collection,
@@ -529,6 +508,7 @@ func (c *Client) ListGraphs(ctx context.Context, database string) ([]string, err
 	}
 
 	var graphNames []string
+
 	for {
 		graph, err := graphsReader.Read()
 		if driver.IsNoMoreDocuments(err) {
@@ -538,14 +518,15 @@ func (c *Client) ListGraphs(ctx context.Context, database string) ([]string, err
 		if err != nil {
 			return nil, err
 		}
+
 		graphNames = append(graphNames, graph.Name())
 	}
 
 	return graphNames, nil
 }
 
-// Query executes an AQL query and binds the results
-func (c *Client) Query(ctx context.Context, dbName string, query string, bindVars map[string]interface{}, result interface{}) error {
+// Query executes an AQL query and binds the results.
+func (c *Client) Query(ctx context.Context, dbName, query string, bindVars map[string]interface{}, result interface{}) error {
 	tracerCtx, span := c.addTrace(ctx, "query", map[string]string{"db": dbName})
 	startTime := time.Now()
 
@@ -568,7 +549,7 @@ func (c *Client) Query(ctx context.Context, dbName string, query string, bindVar
 	return err
 }
 
-// addTrace adds tracing to context if tracer is configured
+// addTrace adds tracing to context if tracer is configured.
 func (c *Client) addTrace(ctx context.Context, operation string, attributes map[string]string) (context.Context, trace.Span) {
 	if c.tracer != nil {
 		contextWithTrace, span := c.tracer.Start(ctx, fmt.Sprintf("arango-%v", operation))
@@ -604,13 +585,13 @@ func (c *Client) sendOperationStats(ql *QueryLog, startTime time.Time, method st
 	}
 }
 
-// Health represents the health status of ArangoDB
+// Health represents the health status of ArangoDB.
 type Health struct {
 	Status  string                 `json:"status,omitempty"`
 	Details map[string]interface{} `json:"details,omitempty"`
 }
 
-// HealthCheck performs a health check
+// HealthCheck performs a health check.
 func (c *Client) HealthCheck(ctx context.Context) (interface{}, error) {
 	h := Health{
 		Details: map[string]interface{}{
