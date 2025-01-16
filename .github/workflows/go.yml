@@ -204,11 +204,22 @@ jobs:
 
             # Run tests for the submodule and generate coverage
             export APP_ENV=test
-            go test ./... -v -short -coverprofile=${module_name}.cov -coverpkg=./...
+            warning_count=$(go test ./... -v -short -coverprofile=${module_name}.cov -coverpkg=./... | tee /dev/tty | grep -c "WARNING" || true)
+            total_warning_count=$((total_warning_count + warning_count))
 
             # Return to the root directory
             cd -
           done
+          
+          echo "Total warnings found: $total_warning_count"
+          echo "total_warning_count=$total_warning_count" >> $GITHUB_ENV
+
+      - name: Fail if too many warnings
+        run: |
+          if [ ${{ env.total_warning_count }} -gt 10 ]; then
+            echo "Too many warnings: ${{ env.total_warning_count }}"
+            exit 1
+          fi
 
       - name: Upload Coverage Reports
         uses: actions/upload-artifact@v3
