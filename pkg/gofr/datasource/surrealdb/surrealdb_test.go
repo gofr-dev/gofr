@@ -151,14 +151,18 @@ func Test_Query(t *testing.T) {
 		var resp QueryResponse
 		resp.Result = &queryResult
 
-		// Add metrics expectation
-		mockMetrics.EXPECT().
-			RecordHistogram(ctx, "surreal_db_operation_duration", float64(0), "operation", "query")
-
 		mockConn.EXPECT().
 			Send(gomock.Any(), "query", query, nil).
 			Return(nil).
 			SetArg(0, resp)
+
+		mockLogger.EXPECT().
+			Debug(gomock.Any()).
+			AnyTimes()
+
+		mockLogger.EXPECT().
+			Errorf(gomock.Any(), gomock.Any()).
+			AnyTimes()
 
 		results, err := client.Query(ctx, query, nil)
 		require.NoError(t, err)
@@ -173,6 +177,10 @@ func Test_Query(t *testing.T) {
 		mockConn.EXPECT().
 			Send(gomock.Any(), "query", query, nil).
 			Return(errInvalidQuery)
+
+		mockLogger.EXPECT().
+			Debug(gomock.Any(), gomock.Any()).
+			AnyTimes()
 
 		results, err := client.Query(ctx, query, nil)
 		require.Error(t, err)
@@ -219,6 +227,10 @@ func Test_Insert(t *testing.T) {
 			Return(nil).
 			SetArg(0, insertResponse)
 
+		mockLogger.EXPECT().
+			Debug(gomock.Any()).
+			AnyTimes()
+
 		result, err := client.Insert(ctx, "users", data)
 		require.NoError(t, err)
 		assert.NotNil(t, result)
@@ -240,6 +252,10 @@ func Test_Insert(t *testing.T) {
 		mockConn.EXPECT().
 			Send(gomock.Any(), "insert", "users", data).
 			Return(errInsert)
+
+		mockLogger.EXPECT().
+			Debug(gomock.Any()).
+			AnyTimes()
 
 		result, err := client.Insert(ctx, "users", data)
 		require.Error(t, err)
@@ -278,6 +294,10 @@ func Test_Create(t *testing.T) {
 		mockMetrics.EXPECT().
 			RecordHistogram(ctx, "surreal_db_operation_duration", float64(0), "operation", "create")
 
+		mockLogger.EXPECT().
+			Debug(gomock.Any()).
+			AnyTimes()
+
 		mockConn.EXPECT().Send(gomock.Any(), "create", "users", data).Return(nil).SetArg(0, expectedResponse)
 
 		result, err := client.Create(ctx, "users", data)
@@ -293,6 +313,10 @@ func Test_Create(t *testing.T) {
 		data := map[string]any{
 			"name": "test",
 		}
+
+		mockLogger.EXPECT().
+			Debug(gomock.Any()).
+			AnyTimes()
 
 		dbError := errorDatabase
 		mockConn.EXPECT().Send(gomock.Any(), "create", "users", data).Return(dbError)
@@ -332,6 +356,10 @@ func Test_Update(t *testing.T) {
 			},
 		}
 
+		mockLogger.EXPECT().
+			Debug(gomock.Any()).
+			AnyTimes()
+
 		mockMetrics.EXPECT().
 			RecordHistogram(ctx, "surreal_db_operation_duration", float64(0), "operation", "update")
 
@@ -349,6 +377,10 @@ func Test_Update(t *testing.T) {
 		data := map[string]any{
 			"name": "updated",
 		}
+
+		mockLogger.EXPECT().
+			Debug(gomock.Any()).
+			AnyTimes()
 
 		result, err := client.Update(ctx, "users", "123", data)
 		require.Error(t, err)
@@ -392,6 +424,10 @@ func Test_Delete(t *testing.T) {
 		mockMetrics.EXPECT().
 			RecordHistogram(ctx, "surreal_db_operation_duration", float64(0), "operation", "delete")
 
+		mockLogger.EXPECT().
+			Debug(gomock.Any()).
+			AnyTimes()
+
 		mockConn.EXPECT().Send(gomock.Any(), "delete", arg).Return(nil).SetArg(0, deleteResponse)
 
 		result, err := client.Delete(ctx, table, id)
@@ -416,6 +452,10 @@ func Test_Delete(t *testing.T) {
 		// Add metrics expectation since the operation still completes
 		mockMetrics.EXPECT().
 			RecordHistogram(ctx, "surreal_db_operation_duration", float64(0), "operation", "delete")
+
+		mockLogger.EXPECT().
+			Debug(gomock.Any()).
+			AnyTimes()
 
 		mockConn.EXPECT().Send(gomock.Any(), "delete", arg).Return(nil).SetArg(0, deleteResponse)
 
@@ -453,6 +493,10 @@ func Test_Select(t *testing.T) {
 		mockMetrics.EXPECT().
 			RecordHistogram(ctx, "surreal_db_operation_duration", float64(0), "operation", "select")
 
+		mockLogger.EXPECT().
+			Debug(gomock.Any()).
+			AnyTimes()
+
 		mockConn.EXPECT().Send(gomock.Any(), "select", "users").Return(nil).SetArg(0, selectResponse)
 
 		results, err := client.Select(ctx, "users")
@@ -469,6 +513,10 @@ func Test_Select(t *testing.T) {
 
 		mockMetrics.EXPECT().
 			RecordHistogram(ctx, "surreal_db_operation_duration", float64(0), "operation", "select")
+
+		mockLogger.EXPECT().
+			Debug(gomock.Any()).
+			AnyTimes()
 
 		mockConn.EXPECT().Send(gomock.Any(), "select", "users").Return(nil).SetArg(0, emptyResponse)
 

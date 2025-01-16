@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/url"
 	"os"
+	"time"
 
 	"github.com/surrealdb/surrealdb.go"
 	"github.com/surrealdb/surrealdb.go/pkg/connection"
@@ -14,6 +15,7 @@ import (
 	"github.com/surrealdb/surrealdb.go/pkg/logger"
 	"github.com/surrealdb/surrealdb.go/pkg/models"
 
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -137,7 +139,7 @@ func (c *Client) Connect() {
 		return
 	}
 
-	err = c.authenticate()
+	err = c.authenticateCredentials()
 	if err != nil {
 		return
 	}
@@ -155,7 +157,6 @@ func (c *Client) buildEndpoint() string {
 	return fmt.Sprintf("%s://%s:%d", scheme, c.config.Host, c.config.Port)
 }
 
-// connectToDatabase handles the connection to SurrealDB and returns an error if failed.
 // connectToDatabase handles the connection to SurrealDB and returns an error if failed.
 func (c *Client) connectToDatabase(endpoint string) error {
 	c.logger.Debugf("connecting to SurrealDB at %s", endpoint)
@@ -187,35 +188,8 @@ func (c *Client) setupNamespaceAndDatabase() error {
 	return nil
 }
 
-// Use is a method to select the namespace and table to use.
-func (c *Client) Use(ns, database string) error {
-	return c.db.Use(ns, database)
-}
-
-// Info retrieves information about the current connection or database state.
-func (c *Client) Info() (map[string]any, error) {
-	var info connection.RPCResponse[map[string]any]
-	err := c.db.Send(&info, "info")
-
-	return *info.Result, err
-}
-
-// SignUp is a helper method for signing up a new user.
-func (c *Client) SignUp(authData *surrealdb.Auth) (string, error) {
-	var token connection.RPCResponse[string]
-	if err := c.db.Send(&token, "signup", authData); err != nil {
-		return "", err
-	}
-
-	if err := c.db.Let(constants.AuthTokenKey, token.Result); err != nil {
-		return "", err
-	}
-
-	return *token.Result, nil
-}
-
 // SignIn is a helper method for signing in a user.
-func (c *Client) SignIn(authData *surrealdb.Auth) (string, error) {
+func (c *Client) signIn(authData *surrealdb.Auth) (string, error) {
 	var token connection.RPCResponse[string]
 	if err := c.db.Send(&token, "signin", authData); err != nil {
 		return "", err
@@ -228,34 +202,8 @@ func (c *Client) SignIn(authData *surrealdb.Auth) (string, error) {
 	return *token.Result, nil
 }
 
-// Invalidate clears the current authentication token from the database.
-func (c *Client) Invalidate() error {
-	if err := c.db.Send(nil, "invalidate"); err != nil {
-		return err
-	}
-
-	if err := c.db.Unset(constants.AuthTokenKey); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// Authenticate sends the provided authentication token to the database.
-func (c *Client) Authenticate(token string) error {
-	if err := c.db.Send(nil, "authenticate", token); err != nil {
-		return err
-	}
-
-	if err := c.db.Let(constants.AuthTokenKey, token); err != nil {
-		return err
-	}
-
-	return nil
-}
-
 // authenticate handles the authentication process if credentials are provided.
-func (c *Client) authenticate() error {
+func (c *Client) authenticateCredentials() error {
 	if c.config.Username == "" && c.config.Password == "" {
 		return nil
 	}
@@ -264,7 +212,7 @@ func (c *Client) authenticate() error {
 		return errInvalidCredentialsConfig
 	}
 
-	_, err := c.SignIn(&surrealdb.Auth{
+	_, err := c.signIn(&surrealdb.Auth{
 		Username: c.config.Username,
 		Password: c.config.Password,
 	})
@@ -285,15 +233,6 @@ func (c *Client) logError(message string, err error) {
 			c.logger.Errorf("%s", message)
 		}
 	}
-}
-
-// Close closes the database connection.
-func (c *Client) Close() error {
-	if c.db != nil {
-		return c.db.Close()
-	}
-
-	return nil
 }
 
 // useNamespace switches the active namespace for the database connection.
@@ -327,10 +266,27 @@ type QueryResult struct {
 }
 
 // Query executes a query on the SurrealDB instance.
+// Query executes a query on the SurrealDB instance.
 func (c *Client) Query(ctx context.Context, query string, vars map[string]any) ([]any, error) {
+	span := c.addTrace(ctx, "Query", query)
+	if span != nil {
+		defer span.End()
+	}
+
 	if c.db == nil {
 		return nil, errNotConnected
 	}
+
+	startTime := time.Now()
+
+	defer c.sendOperationStats(&QueryLog{
+		Query:         query,
+		OperationName: "query",
+		Namespace:     c.config.Namespace,
+		Database:      c.config.Database,
+		Data:          vars,
+		Span:          span,
+	}, startTime)
 
 	var res QueryResponse
 
@@ -339,8 +295,6 @@ func (c *Client) Query(ctx context.Context, query string, vars map[string]any) (
 	}
 
 	result := res.Result
-
-	c.metrics.RecordHistogram(ctx, "surreal_db_operation_duration", 0, "operation", "query")
 
 	resp := make([]any, 0)
 
@@ -372,10 +326,28 @@ var (
 
 // Select queries the specified table in the database and retrieves all records.
 func (c *Client) Select(ctx context.Context, table string) ([]map[string]any, error) {
+	query := fmt.Sprintf("SELECT * FROM %s", table)
+	span := c.addTrace(ctx, "Select", query)
+	if span != nil {
+		defer span.End()
+	}
+
 	if c.db == nil {
 		return nil, errNotConnected
 	}
-	//
+
+	startTime := time.Now()
+
+	// Set up deferred stats collection at the start
+	defer c.sendOperationStats(&QueryLog{
+		Query:         query,
+		OperationName: "select",
+		Namespace:     c.config.Namespace,
+		Database:      c.config.Database,
+		Collection:    table,
+		Span:          span,
+	}, startTime)
+
 	var res Response
 	if err := c.db.Send(&res, "select", table); err != nil {
 		return nil, err
@@ -414,9 +386,27 @@ var errUnexpectedResultType = errors.New("unexpected result type")
 
 // Create creates a new record into the specified table in the database.
 func (c *Client) Create(ctx context.Context, table string, data any) (map[string]any, error) {
+	query := fmt.Sprintf("CREATE INTO %s", table)
+	span := c.addTrace(ctx, "Create", query)
+	if span != nil {
+		defer span.End()
+	}
+
 	if c.db == nil {
 		return nil, errNotConnected
 	}
+
+	startTime := time.Now()
+
+	defer c.sendOperationStats(&QueryLog{
+		Query:         query,
+		OperationName: "create",
+		Namespace:     c.config.Namespace,
+		Database:      c.config.Database,
+		Collection:    table,
+		Data:          data,
+		Span:          span,
+	}, startTime)
 
 	var CreateResult Response
 	if err := c.db.Send(&CreateResult, "create", table, data); err != nil {
@@ -435,9 +425,28 @@ func (c *Client) Create(ctx context.Context, table string, data any) (map[string
 
 // Update modifies an existing record in the specified table.
 func (c *Client) Update(ctx context.Context, table, _ string, data any) (any, error) {
+	query := fmt.Sprintf("UPDATE %s", table)
+	span := c.addTrace(ctx, "Update", query)
+	if span != nil {
+		defer span.End()
+	}
+
 	if c.db == nil {
 		return nil, errNotConnected
 	}
+
+	startTime := time.Now()
+
+	defer c.sendOperationStats(&QueryLog{
+		Query:         query,
+		OperationName: "update",
+		Namespace:     c.config.Namespace,
+		Database:      c.config.Database,
+		Collection:    table,
+		Data:          data,
+		Update:        data,
+		Span:          span,
+	}, startTime)
 
 	var UpdateResult Response
 
@@ -453,7 +462,6 @@ func (c *Client) Update(ctx context.Context, table, _ string, data any) (any, er
 		rMap := r.(map[any]any)
 		for k, v := range rMap {
 			kStr := k.(string)
-
 			resMap[kStr] = v
 		}
 	}
@@ -465,9 +473,27 @@ func (c *Client) Update(ctx context.Context, table, _ string, data any) (any, er
 
 // Insert inserts a new record into the specified table in SurrealDB.
 func (c *Client) Insert(ctx context.Context, table string, data any) (*Response, error) {
+	query := fmt.Sprintf("INSERT INTO %s", table)
+	span := c.addTrace(ctx, "Insert", query)
+	if span != nil {
+		defer span.End()
+	}
+
 	if c.db == nil {
 		return nil, errNotConnected
 	}
+
+	startTime := time.Now()
+
+	defer c.sendOperationStats(&QueryLog{
+		Query:         query,
+		OperationName: "insert",
+		Namespace:     c.config.Namespace,
+		Database:      c.config.Database,
+		Collection:    table,
+		Data:          data,
+		Span:          span,
+	}, startTime)
 
 	var insertResult Response
 	if err := c.db.Send(&insertResult, "insert", table, data); err != nil {
@@ -481,9 +507,27 @@ func (c *Client) Insert(ctx context.Context, table string, data any) (*Response,
 
 // Delete removes a record from the specified table in SurrealDB.
 func (c *Client) Delete(ctx context.Context, table, id string) (any, error) {
+	query := fmt.Sprintf("DELETE FROM %s WHERE id = %s", table, id)
+	span := c.addTrace(ctx, "Delete", query)
+	if span != nil {
+		defer span.End()
+	}
+
 	if c.db == nil {
 		return nil, errNotConnected
 	}
+
+	startTime := time.Now()
+
+	defer c.sendOperationStats(&QueryLog{
+		Query:         query,
+		OperationName: "delete",
+		Namespace:     c.config.Namespace,
+		Database:      c.config.Database,
+		Collection:    table,
+		ID:            id,
+		Span:          span,
+	}, startTime)
 
 	var DeleteResult Response
 
@@ -499,6 +543,43 @@ func (c *Client) Delete(ctx context.Context, table, id string) (any, error) {
 	c.metrics.RecordHistogram(ctx, "surreal_db_operation_duration", 0, "operation", "delete")
 
 	return DeleteResult.Result, nil
+}
+
+// addTrace starts a new trace span for the specified method and query.
+func (c *Client) addTrace(ctx context.Context, method, query string) trace.Span {
+	if c.tracer == nil {
+		return nil
+	}
+
+	_, span := c.tracer.Start(ctx, fmt.Sprintf("SurrealDB.%v", method))
+	span.SetAttributes(
+		attribute.String("surrealdb.query", query),
+		attribute.String("surrealdb.namespace", c.config.Namespace),
+		attribute.String("surrealdb.database", c.config.Database),
+	)
+	return span
+}
+
+func (c *Client) sendOperationStats(ql *QueryLog, startTime time.Time) {
+	duration := time.Since(startTime).Microseconds()
+
+	ql.Duration = duration
+
+	c.logger.Debug(ql)
+
+	ql.Namespace = c.config.Namespace
+	ql.Database = c.config.Database
+
+	if ql.Span != nil {
+		ql.Span.SetAttributes(
+			attribute.Int64("surrealdb.duration", duration),
+			attribute.String("surrealdb.query", ql.Query),
+			attribute.String("surrealdb.operation", ql.OperationName),
+			attribute.String("surrealdb.namespace", ql.Namespace),
+			attribute.String("surrealdb.database", ql.Database),
+			attribute.String("surrealdb.collection", ql.Collection),
+		)
+	}
 }
 
 type Health struct {

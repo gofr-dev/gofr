@@ -107,30 +107,6 @@ func (mr *MockLoggerMockRecorder) Logf(pattern any, args ...any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Logf", reflect.TypeOf((*MockLogger)(nil).Logf), varargs...)
 }
 
-// MockmockLogger is a mock of mockLogger interface.
-type MockmockLogger struct {
-	ctrl     *gomock.Controller
-	recorder *MockmockLoggerMockRecorder
-	isgomock struct{}
-}
-
-// MockmockLoggerMockRecorder is the mock recorder for MockmockLogger.
-type MockmockLoggerMockRecorder struct {
-	mock *MockmockLogger
-}
-
-// NewMockmockLogger creates a new mock instance.
-func NewMockmockLogger(ctrl *gomock.Controller) *MockmockLogger {
-	mock := &MockmockLogger{ctrl: ctrl}
-	mock.recorder = &MockmockLoggerMockRecorder{mock}
-	return mock
-}
-
-// EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockmockLogger) EXPECT() *MockmockLoggerMockRecorder {
-	return m.recorder
-}
-
 // MockConnection is a mock of Connection interface.
 type MockConnection struct {
 	ctrl     *gomock.Controller

@@ -297,6 +297,8 @@ type SurrealDB interface {
 	// Select retrieves all records from the specified table.
 	// It returns a slice of maps representing the records and an error if the operation fails.
 	Select(ctx context.Context, table string) ([]map[string]any, error)
+
+	HealthChecker
 }
 
 // SurrealBDProvider is an interface that extends SurrealDB with additional methods for logging, metrics, or connection management.

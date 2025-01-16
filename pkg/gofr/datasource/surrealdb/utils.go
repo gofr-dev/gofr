@@ -43,6 +43,7 @@ const defaultValue = "default"
 
 // PrettyPrint outputs a formatted string representation of the QueryLog.
 func (ql *QueryLog) PrettyPrint(writer io.Writer) {
+	// Set default values for nil fields
 	if ql.Filter == nil {
 		ql.Filter = ""
 	}
@@ -63,11 +64,13 @@ func (ql *QueryLog) PrettyPrint(writer io.Writer) {
 		ql.Namespace = defaultValue
 	}
 
-	fmt.Fprintf(writer, "\u001B[38;5;206m%-15s\u001B[0m %-6s %8d\u001B[38;5;8mµs\u001B[0m \u001B[38;5;8m%s:%s\u001B[0m %s\n",
-		ql.OperationName,
+	// Format string with proper color codes and positioning
+	fmt.Fprintf(writer, "\u001B[38;5;8m%-32s \u001B[38;5;206m%-6s\u001B[0m %8d\u001B[38;5;8mµs\u001B[0m %s:%s \u001B[38;5;8m%-32s\u001B[0m\n",
+		clean(ql.OperationName),
 		"SURREAL",
 		ql.Duration,
-		ql.Database, ql.Namespace,
+		ql.Database,
+		ql.Namespace,
 		clean(ql.Query),
 	)
 }
