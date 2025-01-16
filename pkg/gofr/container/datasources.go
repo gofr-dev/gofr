@@ -280,15 +280,15 @@ type SurrealDB interface {
 
 	// Query executes a Surreal query with the provided variables and returns the query results as a slice of interfaces.
 	// It returns an error if the query execution fails.
-	Query(ctx context.Context, query string, vars map[string]interface{}) ([]interface{}, error)
+	Query(ctx context.Context, query string, vars map[string]any) ([]any, error)
 
 	// Create inserts a new record into the specified table and returns the created record as a map.
 	// It returns an error if the operation fails.
-	Create(ctx context.Context, table string, data interface{}) (map[interface{}]interface{}, error)
+	Create(ctx context.Context, table string, data any) (map[string]any, error)
 
 	// Update modifies an existing record in the specified table by its ID with the provided data.
 	// It returns the updated record as an interface and an error if the operation fails.
-	Update(ctx context.Context, table string, id string, data interface{}) (interface{}, error)
+	Update(ctx context.Context, table string, id string, data any) (any, error)
 
 	// Delete removes a record from the specified table by its ID.
 	// It returns the result of the delete operation as an interface and an error if the operation fails.
@@ -296,7 +296,7 @@ type SurrealDB interface {
 
 	// Select retrieves all records from the specified table.
 	// It returns a slice of maps representing the records and an error if the operation fails.
-	Select(ctx context.Context, table string) ([]map[string]interface{}, error)
+	Select(ctx context.Context, table string) ([]map[string]any, error)
 }
 
 // SurrealBDProvider is an interface that extends SurrealDB with additional methods for logging, metrics, or connection management.

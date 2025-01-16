@@ -23,8 +23,13 @@ var (
 )
 
 const (
-	https = "https"
-	ws    = "ws"
+	schemeHTTPS     = "https"
+	schemeWS        = "ws"
+	schemeHTTP      = "http"
+	schemeWss       = "wss"
+	schemeMemory    = "memory"
+	schemeMem       = "mem"
+	schemeSurrealkv = "surrealkv"
 )
 
 // Config represents the configuration required to connect to SurrealDB.
@@ -55,21 +60,21 @@ func New(config *Config) *Client {
 }
 
 // UseLogger sets a custom logger for the Client.
-func (c *Client) UseLogger(customlogger interface{}) {
+func (c *Client) UseLogger(customlogger any) {
 	if l, ok := customlogger.(Logger); ok {
 		c.logger = l
 	}
 }
 
 // UseMetrics sets a custom metrics recorder for the Client.
-func (c *Client) UseMetrics(metrics interface{}) {
+func (c *Client) UseMetrics(metrics any) {
 	if m, ok := metrics.(Metrics); ok {
 		c.metrics = m
 	}
 }
 
 // UseTracer sets a custom tracer for the Client.
-func (c *Client) UseTracer(tracer interface{}) {
+func (c *Client) UseTracer(tracer any) {
 	if t, ok := tracer.(trace.Tracer); ok {
 		c.tracer = t
 	}
@@ -99,13 +104,14 @@ func NewDB(connectionURL string) (con connection.Connection, err error) {
 		Logger:      logger.New(slog.NewTextHandler(os.Stdout, nil)),
 	}
 
-	if scheme == "http" || scheme == https {
+	switch scheme {
+	case schemeHTTP, schemeHTTPS:
 		con = connection.NewHTTPConnection(newParams)
-	} else if scheme == ws || scheme == "wss" {
+	case schemeWS, schemeWss:
 		con = connection.NewWebSocketConnection(newParams)
-	} else if scheme == "memory" || scheme == "mem" || scheme == "surrealkv" {
+	case schemeMemory, schemeMem, schemeSurrealkv:
 		return nil, fmt.Errorf("%w", errEmbeddedDBNotEnabled)
-	} else {
+	default:
 		return nil, fmt.Errorf("%w", errInvalidConnectionURL)
 	}
 
@@ -141,30 +147,31 @@ func (c *Client) Connect() {
 
 // buildEndpoint constructs the SurrealDB endpoint based on the configuration.
 func (c *Client) buildEndpoint() string {
-	scheme := ws
+	scheme := schemeWS
 	if c.config.TLSEnabled {
-		scheme = https
+		scheme = schemeHTTPS
 	}
 
 	return fmt.Sprintf("%s://%s:%d", scheme, c.config.Host, c.config.Port)
 }
 
 // connectToDatabase handles the connection to SurrealDB and returns an error if failed.
+// connectToDatabase handles the connection to SurrealDB and returns an error if failed.
 func (c *Client) connectToDatabase(endpoint string) error {
 	c.logger.Debugf("connecting to SurrealDB at %s", endpoint)
 
-	db, err := NewDB(endpoint)
+	var err error
+	c.db, err = NewDB(endpoint)
+
 	if err != nil {
 		c.logError("failed to connect to SurrealDB", err)
 		return err
 	}
 
-	if db == nil {
+	if c.db == nil {
 		c.logError("failed to connect to SurrealDB: no valid database instance", nil)
 		return errNoDatabaseInstance
 	}
-
-	c.db = db
 
 	return nil
 }
@@ -186,8 +193,8 @@ func (c *Client) Use(ns, database string) error {
 }
 
 // Info retrieves information about the current connection or database state.
-func (c *Client) Info() (map[string]interface{}, error) {
-	var info connection.RPCResponse[map[string]interface{}]
+func (c *Client) Info() (map[string]any, error) {
+	var info connection.RPCResponse[map[string]any]
 	err := c.db.Send(&info, "info")
 
 	return *info.Result, err
@@ -249,19 +256,21 @@ func (c *Client) Authenticate(token string) error {
 
 // authenticate handles the authentication process if credentials are provided.
 func (c *Client) authenticate() error {
-	if (c.config.Username == "" && c.config.Password != "") || (c.config.Username != "" && c.config.Password == "") {
+	if c.config.Username == "" && c.config.Password == "" {
+		return nil
+	}
+
+	if c.config.Username == "" || c.config.Password == "" {
 		return errInvalidCredentialsConfig
 	}
 
-	if c.config.Username != "" && c.config.Password != "" {
-		_, err := c.SignIn(&surrealdb.Auth{
-			Username: c.config.Username,
-			Password: c.config.Password,
-		})
-		if err != nil {
-			c.logError("failed to sign in to SurrealDB", err)
-			return err
-		}
+	_, err := c.SignIn(&surrealdb.Auth{
+		Username: c.config.Username,
+		Password: c.config.Password,
+	})
+	if err != nil {
+		c.logError("failed to sign in to SurrealDB", err)
+		return err
 	}
 
 	return nil
@@ -306,7 +315,7 @@ func (c *Client) useDatabase(db string) error {
 }
 
 type QueryResponse struct {
-	ID     interface{}          `json:"id" msgpack:"id"`
+	ID     any                  `json:"id" msgpack:"id"`
 	Error  *connection.RPCError `json:"error,omitempty" msgpack:"error,omitempty"`
 	Result *[]QueryResult       `json:"result,omitempty" msgpack:"result,omitempty"`
 }
@@ -318,7 +327,7 @@ type QueryResult struct {
 }
 
 // Query executes a query on the SurrealDB instance.
-func (c *Client) Query(ctx context.Context, query string, vars map[string]interface{}) ([]interface{}, error) {
+func (c *Client) Query(ctx context.Context, query string, vars map[string]any) ([]any, error) {
 	if c.db == nil {
 		return nil, errNotConnected
 	}
@@ -333,17 +342,18 @@ func (c *Client) Query(ctx context.Context, query string, vars map[string]interf
 
 	c.metrics.RecordHistogram(ctx, "surreal_db_operation_duration", 0, "operation", "query")
 
-	resp := make([]interface{}, 0)
+	resp := make([]any, 0)
 
 	for _, r := range *result {
-		if r.Status == "OK" {
-			if res, ok := r.Result.([]interface{}); ok {
-				resp = append(resp, res...)
-			} else {
-				c.logger.Errorf("unexpected result type: %v", r.Result)
-			}
-		} else {
+		if r.Status != "OK" {
 			c.logger.Errorf("query result error: %v", r.Status)
+			continue
+		}
+
+		if res, ok := r.Result.([]any); ok {
+			resp = append(resp, res...)
+		} else {
+			c.logger.Errorf("unexpected result type: %v", r.Result)
 		}
 	}
 
@@ -351,7 +361,7 @@ func (c *Client) Query(ctx context.Context, query string, vars map[string]interf
 }
 
 type Response struct {
-	ID     interface{}          `json:"id" msgpack:"id"`
+	ID     any                  `json:"id" msgpack:"id"`
 	Error  *connection.RPCError `json:"error,omitempty" msgpack:"error,omitempty"`
 	Result any                  `json:"result,omitempty" msgpack:"result,omitempty"`
 }
@@ -361,7 +371,7 @@ var (
 )
 
 // Select queries the specified table in the database and retrieves all records.
-func (c *Client) Select(ctx context.Context, table string) ([]map[string]interface{}, error) {
+func (c *Client) Select(ctx context.Context, table string) ([]map[string]any, error) {
 	if c.db == nil {
 		return nil, errNotConnected
 	}
@@ -371,17 +381,17 @@ func (c *Client) Select(ctx context.Context, table string) ([]map[string]interfa
 		return nil, err
 	}
 
-	result, ok := res.Result.([]interface{})
+	result, ok := res.Result.([]any)
 	if !ok {
 		return nil, fmt.Errorf("%w", errNonStringKey)
 	}
 
-	resSlice := make([]map[string]interface{}, 0)
+	resSlice := make([]map[string]any, 0)
 
 	for _, record := range result {
-		recordMap := record.(map[interface{}]interface{})
+		recordMap := record.(map[any]any)
 
-		resMap := make(map[string]interface{})
+		resMap := make(map[string]any)
 
 		for k, v := range recordMap {
 			keyStr, ok := k.(string)
@@ -395,7 +405,7 @@ func (c *Client) Select(ctx context.Context, table string) ([]map[string]interfa
 		resSlice = append(resSlice, resMap)
 	}
 
-	c.metrics.RecordHistogram(ctx, "surreal_db_operation_duration", 0, "operation", "query")
+	c.metrics.RecordHistogram(ctx, "surreal_db_operation_duration", 0, "operation", "select")
 
 	return resSlice, nil
 }
@@ -403,7 +413,7 @@ func (c *Client) Select(ctx context.Context, table string) ([]map[string]interfa
 var errUnexpectedResultType = errors.New("unexpected result type")
 
 // Create creates a new record into the specified table in the database.
-func (c *Client) Create(ctx context.Context, table string, data interface{}) (map[string]interface{}, error) {
+func (c *Client) Create(ctx context.Context, table string, data any) (map[string]any, error) {
 	if c.db == nil {
 		return nil, errNotConnected
 	}
@@ -415,7 +425,7 @@ func (c *Client) Create(ctx context.Context, table string, data interface{}) (ma
 
 	c.metrics.RecordHistogram(ctx, "surreal_db_operation_duration", 0, "operation", "create")
 
-	result, ok := CreateResult.Result.(map[string]interface{})
+	result, ok := CreateResult.Result.(map[string]any)
 	if !ok {
 		return nil, fmt.Errorf("%w: %v", errUnexpectedResultType, CreateResult.Result)
 	}
@@ -424,7 +434,7 @@ func (c *Client) Create(ctx context.Context, table string, data interface{}) (ma
 }
 
 // Update modifies an existing record in the specified table.
-func (c *Client) Update(ctx context.Context, table, _ string, data interface{}) (interface{}, error) {
+func (c *Client) Update(ctx context.Context, table, _ string, data any) (any, error) {
 	if c.db == nil {
 		return nil, errNotConnected
 	}
@@ -435,12 +445,12 @@ func (c *Client) Update(ctx context.Context, table, _ string, data interface{}) 
 		return nil, err
 	}
 
-	resultSlice := (UpdateResult.Result).([]interface{})
+	resultSlice := (UpdateResult.Result).([]any)
 
-	resMap := make(map[string]interface{})
+	resMap := make(map[string]any)
 
 	for _, r := range resultSlice {
-		rMap := r.(map[interface{}]interface{})
+		rMap := r.(map[any]any)
 		for k, v := range rMap {
 			kStr := k.(string)
 
@@ -448,13 +458,13 @@ func (c *Client) Update(ctx context.Context, table, _ string, data interface{}) 
 		}
 	}
 
-	c.metrics.RecordHistogram(ctx, "surreal_db_operation_duration", 0, "operation", "query")
+	c.metrics.RecordHistogram(ctx, "surreal_db_operation_duration", 0, "operation", "update")
 
 	return resMap, nil
 }
 
 // Insert inserts a new record into the specified table in SurrealDB.
-func (c *Client) Insert(ctx context.Context, table string, data interface{}) (*Response, error) {
+func (c *Client) Insert(ctx context.Context, table string, data any) (*Response, error) {
 	if c.db == nil {
 		return nil, errNotConnected
 	}
@@ -486,14 +496,14 @@ func (c *Client) Delete(ctx context.Context, table, id string) (any, error) {
 		return nil, err
 	}
 
-	c.metrics.RecordHistogram(ctx, "surreal_db_operation_duration", 0, "operation", "query")
+	c.metrics.RecordHistogram(ctx, "surreal_db_operation_duration", 0, "operation", "delete")
 
 	return DeleteResult.Result, nil
 }
 
 type Health struct {
-	Status  string                 `json:"status,omitempty"`
-	Details map[string]interface{} `json:"details,omitempty"`
+	Status  string         `json:"status,omitempty"`
+	Details map[string]any `json:"details,omitempty"`
 }
 
 // HealthCheck performs a health check on the SurrealDB connection.
@@ -506,7 +516,7 @@ func (c *Client) HealthCheck(ctx context.Context) (any, error) {
 	)
 
 	h := Health{
-		Details: make(map[string]interface{}),
+		Details: make(map[string]any),
 	}
 
 	h.Details["host"] = fmt.Sprintf("%s:%d", c.config.Host, c.config.Port)

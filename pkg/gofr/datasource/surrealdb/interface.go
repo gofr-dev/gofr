@@ -7,13 +7,13 @@ import (
 // Logger defines methods for logging debug, log, and error messages.
 type Logger interface {
 	// Debugf logs a formatted debug message.
-	Debugf(pattern string, args ...interface{})
+	Debugf(pattern string, args ...any)
 	// Debug logs a debug message
 	Debug(args ...interface{})
 	// Logf logs a formatted log message.
-	Logf(pattern string, args ...interface{})
+	Logf(pattern string, args ...any)
 	// Errorf logs a formatted error message
-	Errorf(pattern string, args ...interface{})
+	Errorf(pattern string, args ...any)
 }
 
 // Connection defines methods for interacting with a database connection.
@@ -23,11 +23,11 @@ type Connection interface {
 	// Close terminates the database connection.
 	Close() error
 	// Send executes a database operation with the given method and parameters.
-	Send(res interface{}, method string, params ...interface{}) error
+	Send(res any, method string, params ...any) error
 	// Use sets the active namespace and database for the connection.
 	Use(namespace string, database string) error
 	// Let sets a session variable in the connection.
-	Let(key string, value interface{}) error
+	Let(key string, value any) error
 	// Unset removes a session variable from the connection.
 	Unset(key string) error
 }
