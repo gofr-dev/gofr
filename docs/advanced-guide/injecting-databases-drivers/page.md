@@ -713,15 +713,18 @@ func queryDataPoints(c *gofr.Context) (any, error) {
 	return queryResp.QueryRespCnts, nil
 }
 ```
-ScyllaDB
 
 
-GoFr supports injecting ScyllaDB to facilitate interaction with ScyllaDB REST APIs.Implementations adhering to the ScyllaDB interface can be registered with app.AddScyllaDB(),enabling applications to leverage ScyllaDB for time-series data management through gofr.Context
+## ScyllaDB
+
+
+GoFr supports injecting ScyllaDB to facilitate interaction with ScyllaDB REST APIs.Implementations adhering to the ScyllaDB interface can be registered with app.AddScyllaDB(), enabling applications to leverage ScyllaDB for time-series data management through gofr.Context
+
 ```go
 type ScyllaDB interface {
 // Query executes a CQL (Cassandra Query Language) query on the ScyllaDB cluster
 // and stores the result in the provided destination variable `dest`.
-// Accepts pointer to struct or slice as dest parameter for single and multiple 
+// Accepts pointer to struct or slice as dest parameter for single and multiple
 Query(dest any, stmt string, values ...any) error
 // QueryWithCtx executes the query with a context and binds the result into dest parameter.
 // Accepts pointer to struct or slice as dest parameter for single and multiple rows retrieval respectively.
@@ -731,8 +734,8 @@ Exec(stmt string, values ...any) error
 // ExecWithCtx executes a CQL statement with the provided context and without returning any result.
 ExecWithCtx(ctx context.Context, stmt string, values ...any) error
 // ExecCAS executes a lightweight transaction (i.e. an UPDATE or INSERT statement containing an IF clause).
-//If the transaction fails because the existing values did not match, the previous values will be stored in dest.
-//Returns true if the query is applied otherwise false.
+// If the transaction fails because the existing values did not match, the previous values will be stored in dest.
+// Returns true if the query is applied otherwise false.
 // Returns false and error if any error occur while executing the query.
 // Accepts only pointer to struct and built-in types as the dest parameter.
 ExecCAS(dest any, stmt string, values ...any) (bool, error)
@@ -817,10 +820,23 @@ func getUser(c *gofr.Context) (interface{}, error) {
 	id := c.PathParam("id")
 
 	if id == "" {
-		return nil, http.ErrorMissingParam{}
+		return nil, fmt.Errorf("ID is required")
 	}
 
-	_ = c.ScyllaDB.QueryWithCtx(c, &user, `SELECT user_id, username, email FROM users WHERE user_id = ?`, id)
+	userID, err := gocql.ParseUUID(id)
+	if err != nil {
+		c.Logger.Error("Invalid UUID format:", err)
+		return nil, fmt.Errorf("Invalid UUID format")
+	}
+
+	err = c.ScyllaDB.QueryWithCtx(c, &user, "SELECT id, name, email FROM users WHERE id = ?", userID)
+	if err != nil {
+		c.Logger.Error("Error querying user:", err)
+		if err == gocql.ErrNotFound {
+			return nil, fmt.Errorf("User not found")
+		}
+		return nil, fmt.Errorf("Internal Server Error")
+	}
 
 	return user, nil
 }

@@ -517,8 +517,8 @@ type ScyllaDB interface {
 	// ExecWithCtx executes a CQL statement with the provided context and without returning any result.
 	ExecWithCtx(ctx context.Context, stmt string, values ...any) error
 	// ExecCAS executes a lightweight transaction (i.e. an UPDATE or INSERT statement containing an IF clause).
-	//If the transaction fails because the existing values did not match, the previous values will be stored in dest.
-	//Returns true if the query is applied otherwise false.
+	// If the transaction fails because the existing values did not match, the previous values will be stored in dest.
+	// Returns true if the query is applied otherwise false.
 	// Returns false and error if any error occur while executing the query.
 	// Accepts only pointer to struct and built-in types as the dest parameter.
 	ExecCAS(dest any, stmt string, values ...any) (bool, error)

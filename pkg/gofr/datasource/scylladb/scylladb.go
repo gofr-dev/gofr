@@ -223,12 +223,12 @@ func (c *Client) QueryWithCtx(ctx context.Context, dest any, stmt string, values
 }
 
 // NewBatch creates a new batch operation for a ScyllaDB cluster with the provided
-// name and batch type, using the default context (context.Background()).
+// batch name and batch type, using the default context (context.Background()).
 func (c *Client) NewBatch(name string, batchType int) error {
 	return c.NewBatchWithCtx(context.Background(), name, batchType)
 }
 
-// NewBatchWithCtx uses context ,name ,batchType and returns error.
+// NewBatchWithCtx uses context ,batch name,and batch type, and returns error.
 func (c *Client) NewBatchWithCtx(_ context.Context, name string, batchType int) error {
 	switch batchType {
 	case LoggedBatch, UnLoggedBatch, CounterBatch:
@@ -245,12 +245,12 @@ func (c *Client) NewBatchWithCtx(_ context.Context, name string, batchType int) 
 }
 
 // BatchQuery executes a batched query in a ScyllaDB cluster with the provided
-// name, statement, and values, using the default context (context.Background()).
+// batch name, statement, and values, using the default context (context.Background()).
 func (c *Client) BatchQuery(name, stmt string, values ...any) error {
 	return c.BatchQueryWithCtx(context.Background(), name, stmt, values...)
 }
 
-// BatchQueryWithCtx executes Query with  the provided context,name,statement and values.
+// BatchQueryWithCtx executes Query with  the provided context,batch name, statement and values.
 func (c *Client) BatchQueryWithCtx(ctx context.Context, name, stmt string, values ...any) error {
 	span := c.addTrace(ctx, "batch-query", stmt)
 
@@ -270,7 +270,7 @@ func (c *Client) BatchQueryWithCtx(ctx context.Context, name, stmt string, value
 	return nil
 }
 
-// ExecuteBatchWithCtx executes batch with provided context,name and returns err.
+// ExecuteBatchWithCtx executes batch with provided context, batch name and returns err.
 func (c *Client) ExecuteBatchWithCtx(ctx context.Context, name string) error {
 	span := c.addTrace(ctx, "execute-batch", "batch")
 
@@ -293,7 +293,7 @@ func (c *Client) ExecuteBatchCAS(name string, dest ...any) (bool, error) {
 	return c.ExecuteBatchCASWithCtx(context.Background(), name, dest)
 }
 
-// ExecuteBatchCASWithCtx takes default context,name,destination returns bool and error.
+// ExecuteBatchCASWithCtx takes default context, batch name and destination returns bool and error.
 func (c *Client) ExecuteBatchCASWithCtx(ctx context.Context, name string, dest ...any) (bool, error) {
 	span := c.addTrace(ctx, "execute-batch-cas", "batch")
 
@@ -325,7 +325,7 @@ func (c *Client) HealthCheck(context.Context) (any, error) {
 	)
 
 	h := Health{
-		Details: make(map[string]interface{}),
+		Details: make(map[string]any),
 	}
 
 	h.Details["host"] = c.config.Host
