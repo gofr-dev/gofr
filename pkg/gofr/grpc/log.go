@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+
 	"io"
 	"math"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
 
@@ -56,10 +58,34 @@ func (l RPCLog) String() string {
 }
 
 func LoggingInterceptor(logger Logger) grpc.UnaryServerInterceptor {
+	tracer := otel.GetTracerProvider().Tracer("gofr", trace.WithInstrumentationVersion("v0.1"))
+
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-		ctx, span := otel.GetTracerProvider().Tracer("gofr",
-			trace.WithInstrumentationVersion("v0.1")).Start(ctx, info.FullMethod)
 		start := time.Now()
+		// Extract metadata from the incoming context
+		md, _ := metadata.FromIncomingContext(ctx)
+
+		var spanContext trace.SpanContext
+
+		traceIDHex := getMetadataValue(md, "x-gofr-traceid")
+		spanIDHex := getMetadataValue(md, "x-gofr-spanid")
+
+		if traceIDHex != "" && spanIDHex != "" {
+			traceID, _ := trace.TraceIDFromHex(traceIDHex)
+			spanID, _ := trace.SpanIDFromHex(spanIDHex)
+
+			spanContext = trace.NewSpanContext(trace.SpanContextConfig{
+				TraceID:    traceID,
+				SpanID:     spanID,
+				TraceFlags: trace.FlagsSampled,
+				Remote:     true,
+			})
+
+			ctx = trace.ContextWithRemoteSpanContext(ctx, spanContext)
+		}
+
+		// Start a new span
+		ctx, span := tracer.Start(ctx, info.FullMethod)
 
 		resp, err := handler(ctx, req)
 
@@ -92,4 +118,13 @@ func LoggingInterceptor(logger Logger) grpc.UnaryServerInterceptor {
 
 		return resp, err
 	}
+}
+
+// Helper function to safely extract a value from metadata.
+func getMetadataValue(md metadata.MD, key string) string {
+	if values, ok := md[key]; ok && len(values) > 0 {
+		return values[0]
+	}
+
+	return ""
 }
