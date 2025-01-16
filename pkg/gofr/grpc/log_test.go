@@ -10,15 +10,10 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/metadata"
 
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/testutil"
-)
-
-type contextKey string
-
-const (
-	id = "b00ff8de800911ec8f6502bfe7568078"
 )
 
 func TestRPCLog_String(t *testing.T) {
@@ -36,8 +31,7 @@ func TestRPCLog_String(t *testing.T) {
 
 func TestLoggingInterceptor(t *testing.T) {
 	var (
-		err            = errors.New("DB error") //nolint:err113 // We are testing if a dynamic error would work
-		key contextKey = "id"
+		err = errors.New("DB error") //nolint:err113 // We are testing if a dynamic error would work
 
 		successHandler = func(context.Context, interface{}) (interface{}, error) {
 			return "success", nil
@@ -48,36 +42,40 @@ func TestLoggingInterceptor(t *testing.T) {
 		}
 	)
 
-	serverInfo := &grpc.UnaryServerInfo{FullMethod: "/ExampleService/abc"}
+	mdWithoutTraceID := metadata.Pairs() // No traceId or spanId in metadata
+	mdWithTraceID := metadata.Pairs("x-gofr-traceid", "traceid123", "x-gofr-spanid", "spanid123")
+
 	expLog := `"method":"ExampleService"`
-	expLogWithTraceID := `\"id\":\"` + id + `"\",` + expLog
+	expLogWithTraceID := `\"id\":\"traceid123\",\"method":"ExampleService"`
 
 	tests := []struct {
 		desc      string
 		id        string
+		md        metadata.MD
 		handler   grpc.UnaryHandler
 		expOutput interface{}
 		err       error
 		expLog    string
 	}{
-		{"handler returns successful response without traceID passed in context", "",
+		{"handler returns successful response without traceID passed in metadata", "", mdWithoutTraceID,
 			successHandler, "success", nil, expLog},
-		{"handler returns successful response with traceID passed in context", id,
+		{"handler returns successful response with traceID passed in metadata", "traceid123", mdWithTraceID,
 			successHandler, "success", nil, expLogWithTraceID},
-		{"handler returns error without traceID passed in context", "", errorHandler,
-			nil, err, expLog},
-		{"handler returns error with traceID passed in context", id,
+		{"handler returns error without traceID passed in metadata", "", mdWithoutTraceID,
+			errorHandler, nil, err, expLog},
+		{"handler returns error with traceID passed in metadata", "traceid123", mdWithTraceID,
 			errorHandler, nil, err, expLogWithTraceID},
 	}
 
 	for i, tc := range tests {
-		ctx := context.WithValue(context.Background(), key, tc.id)
+		ctx := metadata.NewIncomingContext(context.Background(), tc.md)
+
 		l := logging.NewMockLogger(logging.INFO)
 
-		resp, err := LoggingInterceptor(l)(ctx, nil, serverInfo, tc.handler)
+		// Call the LoggingInterceptor with the context, passing metadata for each test case
+		resp, err := LoggingInterceptor(l)(ctx, nil, &grpc.UnaryServerInfo{FullMethod: "/ExampleService/abc"}, tc.handler)
 
 		assert.Equal(t, tc.expOutput, resp, "TEST[%d], Failed.\n%s", i, tc.desc)
-
 		assert.Equal(t, tc.err, err, "TEST[%d], Failed.\n%s", i, tc.desc)
 	}
 }
