@@ -819,23 +819,16 @@ func getUser(c *gofr.Context) (interface{}, error) {
 	var user User
 	id := c.PathParam("id")
 
-	if id == "" {
-		return nil, fmt.Errorf("ID is required")
-	}
-
 	userID, err := gocql.ParseUUID(id)
 	if err != nil {
 		c.Logger.Error("Invalid UUID format:", err)
-		return nil, fmt.Errorf("Invalid UUID format")
+		return nil, err
 	}
 
 	err = c.ScyllaDB.QueryWithCtx(c, &user, "SELECT id, name, email FROM users WHERE id = ?", userID)
 	if err != nil {
 		c.Logger.Error("Error querying user:", err)
-		if err == gocql.ErrNotFound {
-			return nil, fmt.Errorf("User not found")
-		}
-		return nil, fmt.Errorf("Internal Server Error")
+		return nil, err
 	}
 
 	return user, nil
