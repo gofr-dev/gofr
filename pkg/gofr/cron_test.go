@@ -642,6 +642,8 @@ func TestCron_WithTimezone(t *testing.T) {
 }
 
 func newCronT(t *testing.T, cntnr *container.Container, options ...func(*Crontab)) *Crontab {
+	t.Helper()
+
 	c := NewCron(cntnr, options...)
 
 	t.Cleanup(func() {
