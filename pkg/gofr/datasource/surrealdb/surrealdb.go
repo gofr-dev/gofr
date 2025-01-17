@@ -14,7 +14,6 @@ import (
 	"github.com/surrealdb/surrealdb.go/pkg/constants"
 	"github.com/surrealdb/surrealdb.go/pkg/logger"
 	"github.com/surrealdb/surrealdb.go/pkg/models"
-
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 )
@@ -25,10 +24,10 @@ var (
 )
 
 const (
+	schemeHTTP      = "http"
 	schemeHTTPS     = "https"
 	schemeWS        = "ws"
-	schemeHTTP      = "http"
-	schemeWss       = "wss"
+	schemeWSS       = "wss"
 	schemeMemory    = "memory"
 	schemeMem       = "mem"
 	schemeSurrealkv = "surrealkv"
@@ -109,7 +108,7 @@ func NewDB(connectionURL string) (con connection.Connection, err error) {
 	switch scheme {
 	case schemeHTTP, schemeHTTPS:
 		con = connection.NewHTTPConnection(newParams)
-	case schemeWS, schemeWss:
+	case schemeWS, schemeWSS:
 		con = connection.NewWebSocketConnection(newParams)
 	case schemeMemory, schemeMem, schemeSurrealkv:
 		return nil, fmt.Errorf("%w", errEmbeddedDBNotEnabled)
@@ -226,13 +225,16 @@ func (c *Client) authenticateCredentials() error {
 
 // logError is a helper function to log errors.
 func (c *Client) logError(message string, err error) {
-	if c.logger != nil {
-		if err != nil {
-			c.logger.Errorf("%s: %v", message, err)
-		} else {
-			c.logger.Errorf("%s", message)
-		}
+	if c.logger == nil {
+		return
 	}
+
+	if err != nil {
+		c.logger.Errorf("%s: %v", message, err)
+		return
+	}
+
+	c.logger.Errorf("%s", message)
 }
 
 // useNamespace switches the active namespace for the database connection.
@@ -304,11 +306,13 @@ func (c *Client) Query(ctx context.Context, query string, vars map[string]any) (
 			continue
 		}
 
-		if res, ok := r.Result.([]any); ok {
-			resp = append(resp, res...)
-		} else {
+		res, ok := r.Result.([]any)
+		if !ok {
 			c.logger.Errorf("unexpected result type: %v", r.Result)
+			continue
 		}
+
+		resp = append(resp, res...)
 	}
 
 	return resp, nil
@@ -328,6 +332,7 @@ var (
 func (c *Client) Select(ctx context.Context, table string) ([]map[string]any, error) {
 	query := fmt.Sprintf("SELECT * FROM %s", table)
 	span := c.addTrace(ctx, "Select", query)
+
 	if span != nil {
 		defer span.End()
 	}
@@ -388,6 +393,7 @@ var errUnexpectedResultType = errors.New("unexpected result type")
 func (c *Client) Create(ctx context.Context, table string, data any) (map[string]any, error) {
 	query := fmt.Sprintf("CREATE INTO %s", table)
 	span := c.addTrace(ctx, "Create", query)
+
 	if span != nil {
 		defer span.End()
 	}
@@ -427,6 +433,7 @@ func (c *Client) Create(ctx context.Context, table string, data any) (map[string
 func (c *Client) Update(ctx context.Context, table, _ string, data any) (any, error) {
 	query := fmt.Sprintf("UPDATE %s", table)
 	span := c.addTrace(ctx, "Update", query)
+
 	if span != nil {
 		defer span.End()
 	}
@@ -475,6 +482,7 @@ func (c *Client) Update(ctx context.Context, table, _ string, data any) (any, er
 func (c *Client) Insert(ctx context.Context, table string, data any) (*Response, error) {
 	query := fmt.Sprintf("INSERT INTO %s", table)
 	span := c.addTrace(ctx, "Insert", query)
+
 	if span != nil {
 		defer span.End()
 	}
@@ -509,6 +517,7 @@ func (c *Client) Insert(ctx context.Context, table string, data any) (*Response,
 func (c *Client) Delete(ctx context.Context, table, id string) (any, error) {
 	query := fmt.Sprintf("DELETE FROM %s WHERE id = %s", table, id)
 	span := c.addTrace(ctx, "Delete", query)
+
 	if span != nil {
 		defer span.End()
 	}
@@ -557,29 +566,29 @@ func (c *Client) addTrace(ctx context.Context, method, query string) trace.Span 
 		attribute.String("surrealdb.namespace", c.config.Namespace),
 		attribute.String("surrealdb.database", c.config.Database),
 	)
+
 	return span
 }
 
 func (c *Client) sendOperationStats(ql *QueryLog, startTime time.Time) {
 	duration := time.Since(startTime).Microseconds()
-
 	ql.Duration = duration
-
 	c.logger.Debug(ql)
-
 	ql.Namespace = c.config.Namespace
 	ql.Database = c.config.Database
 
-	if ql.Span != nil {
-		ql.Span.SetAttributes(
-			attribute.Int64("surrealdb.duration", duration),
-			attribute.String("surrealdb.query", ql.Query),
-			attribute.String("surrealdb.operation", ql.OperationName),
-			attribute.String("surrealdb.namespace", ql.Namespace),
-			attribute.String("surrealdb.database", ql.Database),
-			attribute.String("surrealdb.collection", ql.Collection),
-		)
+	if ql.Span == nil {
+		return
 	}
+
+	ql.Span.SetAttributes(
+		attribute.Int64("surrealdb.duration", duration),
+		attribute.String("surrealdb.query", ql.Query),
+		attribute.String("surrealdb.operation", ql.OperationName),
+		attribute.String("surrealdb.namespace", ql.Namespace),
+		attribute.String("surrealdb.database", ql.Database),
+		attribute.String("surrealdb.collection", ql.Collection),
+	)
 }
 
 type Health struct {
