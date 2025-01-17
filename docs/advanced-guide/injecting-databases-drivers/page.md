@@ -792,10 +792,6 @@ func main() {
 		Password: "password",
 	})
 
-	if client == nil {
-		app.Logger().Errorf("Failed to initialize the scylladb client")
-	}
-
 	app.AddScyllaDB(client)
 
 	app.GET("/users/{id}", getUser)
