@@ -31,6 +31,7 @@ const (
 	schemeMemory    = "memory"
 	schemeMem       = "mem"
 	schemeSurrealkv = "surrealkv"
+	StatusOK        = "OK"
 )
 
 // Config represents the configuration required to connect to SurrealDB.
@@ -268,7 +269,6 @@ type QueryResult struct {
 }
 
 // Query executes a query on the SurrealDB instance.
-// Query executes a query on the SurrealDB instance.
 func (c *Client) Query(ctx context.Context, query string, vars map[string]any) ([]any, error) {
 	span := c.addTrace(ctx, "Query", query)
 	if span != nil {
@@ -301,7 +301,7 @@ func (c *Client) Query(ctx context.Context, query string, vars map[string]any) (
 	resp := make([]any, 0)
 
 	for _, r := range *result {
-		if r.Status != "OK" {
+		if r.Status != StatusOK {
 			c.logger.Errorf("query result error: %v", r.Status)
 			continue
 		}
@@ -430,20 +430,19 @@ func (c *Client) Create(ctx context.Context, table string, data any) (map[string
 }
 
 // Update modifies an existing record in the specified table.
-func (c *Client) Update(ctx context.Context, table, _ string, data any) (any, error) {
-	query := fmt.Sprintf("UPDATE %s", table)
+func (c *Client) Update(ctx context.Context, table, id string, data any) (any, error) {
+	if c.db == nil {
+		return nil, errNotConnected
+	}
+
+	query := fmt.Sprintf("UPDATE %s SET data = $1 WHERE id = $2", table)
 	span := c.addTrace(ctx, "Update", query)
 
 	if span != nil {
 		defer span.End()
 	}
 
-	if c.db == nil {
-		return nil, errNotConnected
-	}
-
 	startTime := time.Now()
-
 	defer c.sendOperationStats(&QueryLog{
 		Query:         query,
 		OperationName: "update",
@@ -455,14 +454,13 @@ func (c *Client) Update(ctx context.Context, table, _ string, data any) (any, er
 		Span:          span,
 	}, startTime)
 
-	var UpdateResult Response
+	var updateResult Response
 
-	if err := c.db.Send(&UpdateResult, "update", table, data); err != nil {
+	if err := c.db.Send(&updateResult, "update", table, data, id); err != nil {
 		return nil, err
 	}
 
-	resultSlice := (UpdateResult.Result).([]any)
-
+	resultSlice := updateResult.Result.([]any)
 	resMap := make(map[string]any)
 
 	for _, r := range resultSlice {
