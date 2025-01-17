@@ -111,12 +111,22 @@ jobs:
         run: |
           go mod download
 
-      - name: Test
+      - name: Test and Count Warnings
         run: |
           export APP_ENV=test
-          go test gofr.dev/pkg/... -v -short -coverprofile package.cov -coverpkg=gofr.dev/pkg/...
+          warning_count=$(go test gofr.dev/pkg/... -v -short -coverprofile package.cov -coverpkg=gofr.dev/pkg/... | tee /dev/tty | grep -c "WARNING" || true)
           grep -v '/mock_' package.cov > profile.cov
-          go tool cover -func profile.cov
+          codeCoverage=$(go tool cover -func profile.cov | awk '/total/ {print substr($3, 1, length($3)-1)}')
+          echo "Warnings found: $warning_count"
+          echo "warning_count=$warning_count" >> $GITHUB_ENV
+          echo "CODE_COVERAGE=$codeCoverage" >> $GITHUB_ENV
+
+      - name: Fail if too many warnings
+        run: |
+          if [ ${{ env.warning_count }} -gt 10 ]; then
+            echo "Too many warnings: ${{ env.warning_count }}"
+            exit 1
+          fi   
 
       - name: Upload Test Coverage
         if: ${{ matrix.go-version == '1.22'}}
@@ -155,8 +165,10 @@ jobs:
 #      - name: Check if code-coverage is greater than threshold
 #        run: |
 #          codeCoverage=${{ env.CODE_COVERAGE }}
-#          codeCoverage=${codeCoverage%??}
-#          if [[ $codeCoverage -lt 92 ]]; then echo "code coverage cannot be less than 92%, currently its ${{ env.CODE_COVERAGE }}%" && exit 1; fi;
+#          if (( $(echo "$codeCoverage < 92" | bc -l) )); then
+#            echo "code coverage cannot be less than 92%, currently its $codeCoverage%"
+#            exit 1
+#          fi
   Submodule-Unit-Testing:
     name: Submodule Unit Testing (v${{ matrix.go-version }})🛠
     runs-on: ubuntu-latest
@@ -192,11 +204,22 @@ jobs:
 
             # Run tests for the submodule and generate coverage
             export APP_ENV=test
-            go test ./... -v -short -coverprofile=${module_name}.cov -coverpkg=./...
+            warning_count=$(go test ./... -v -short -coverprofile=${module_name}.cov -coverpkg=./... | tee /dev/tty | grep -c "WARNING" || true)
+            total_warning_count=$((total_warning_count + warning_count))
 
             # Return to the root directory
             cd -
           done
+          
+          echo "Total warnings found: $total_warning_count"
+          echo "total_warning_count=$total_warning_count" >> $GITHUB_ENV
+
+      - name: Fail if too many warnings
+        run: |
+          if [ ${{ env.total_warning_count }} -gt 10 ]; then
+            echo "Too many warnings: ${{ env.total_warning_count }}"
+            exit 1
+          fi
 
       - name: Upload Coverage Reports
         uses: actions/upload-artifact@v3
