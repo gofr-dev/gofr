@@ -37,7 +37,7 @@ type ServiceConfigs struct {
 // ServerConfigsProvider sets up server configurations for testing and returns a ServiceConfigs struct.
 // It dynamically assigns free ports for HTTP, Metrics, and gRPC services, sets up environment variables for them,
 // and returns a struct with the configured values.
-func ServerConfigsProvider(t *testing.T) *ServiceConfigs {
+func NewServerConfigs(t *testing.T) *ServiceConfigs {
 	t.Helper()
 
 	httpPort := GetFreePort(t)
