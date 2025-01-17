@@ -713,3 +713,177 @@ func queryDataPoints(c *gofr.Context) (any, error) {
 	return queryResp.QueryRespCnts, nil
 }
 ```
+
+## ArangoDB
+GoFr supports injecting `ArangoDB` that implements the following interface. Any driver that implements the interface can be 
+added using the `app.AddArango()` method, and users can use Arango across the application with `gofr.Context`.
+
+```go
+type ArangoDB interface {
+    // CreateUser creates a new user in ArangoDB.
+    CreateUser(ctx context.Context, username, password string) error
+    // DropUser deletes an existing user in ArangoDB.
+    DropUser(ctx context.Context, username string) error
+    // GrantDB grants permissions for a database to a user.
+    GrantDB(ctx context.Context, database, username, permission string) error
+    // GrantCollection grants permissions for a collection to a user.
+    GrantCollection(ctx context.Context, database, collection, username, permission string) error
+
+    // ListDBs lists all databases in ArangoDB.
+    ListDBs(ctx context.Context) ([]string, error)
+    // CreateDB creates a new database in ArangoDB.
+    CreateDB(ctx context.Context, database string) error
+    // DropDB deletes an existing database in ArangoDB.
+    DropDB(ctx context.Context, database string) error
+
+    // CreateCollection creates a new collection in a database with specified type.
+    CreateCollection(ctx context.Context, database, collection string, isEdge bool) error
+    // DropCollection deletes an existing collection from a database.
+    DropCollection(ctx context.Context, database, collection string) error
+    // TruncateCollection truncates a collection in a database.
+    TruncateCollection(ctx context.Context, database, collection string) error
+    // ListCollections lists all collections in a database.
+    ListCollections(ctx context.Context, database string) ([]string, error)
+
+    // CreateDocument creates a new document in the specified collection.
+    CreateDocument(ctx context.Context, dbName, collectionName string, document interface{}) (string, error)
+    // GetDocument retrieves a document by its ID from the specified collection.
+    GetDocument(ctx context.Context, dbName, collectionName, documentID string, result interface{}) error
+    // UpdateDocument updates an existing document in the specified collection.
+    UpdateDocument(ctx context.Context, dbName, collectionName, documentID string, document interface{}) error
+    // DeleteDocument deletes a document by its ID from the specified collection.
+    DeleteDocument(ctx context.Context, dbName, collectionName, documentID string) error
+
+    // CreateEdgeDocument creates a new edge document between two vertices.
+    CreateEdgeDocument(ctx context.Context, dbName, collectionName string, from, to string, document interface{}) (string, error)
+
+    // CreateGraph creates a new graph in a database.
+    CreateGraph(ctx context.Context, database, graph string, edgeDefinitions []arango.EdgeDefinition) error
+    // DropGraph deletes an existing graph from a database.
+    DropGraph(ctx context.Context, database, graph string) error
+    // ListGraphs lists all graphs in a database.
+    ListGraphs(ctx context.Context, database string) ([]string, error)
+
+    // Query executes an AQL query and binds the results.
+    Query(ctx context.Context, dbName string, query string, bindVars map[string]interface{}, result interface{}) error
+
+    HealthChecker
+}
+```
+
+Users can easily inject a driver that supports this interface, providing usability without compromising the extensibility to use multiple databases.
+
+Import the GoFr's external driver for ArangoDB:
+
+```shell
+go get gofr.dev/pkg/gofr/datasource/arango@latest
+```
+
+### Example
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "strings"
+
+    "gofr.dev/pkg/gofr"
+    "gofr.dev/pkg/gofr/datasource/arango"
+)
+
+type Person struct {
+    Name string `json:"name"`
+    Age  int    `json:"age"`
+    City string `json:"city"`
+}
+
+func main() {
+    app := gofr.New()
+
+    // Configure the ArangoDB client
+    arangoClient := arango.New(arango.Config{
+        Host:     "localhost",
+        User:     "root",
+        Password: "root",
+        Port:     8529,
+    })
+    app.AddArango(arangoClient)
+
+    // Create a collection for storing Person documents
+    err := arangoClient.CreateCollection(context.Background(), "_system", "people", false)
+    if err != nil {
+        app.Logger().Errorf("error creating collection")
+    }
+
+    // CRUD routes
+    app.POST("/people", Insert)
+    app.GET("/people/{id}", Get)
+    app.PUT("/people/{id}", Update)
+    app.DELETE("/people/{id}", Delete)
+
+    app.Run()
+}
+
+// Insert creates a new person document in the ArangoDB collection
+func Insert(ctx *gofr.Context) (interface{}, error) {
+    var p Person
+    err := ctx.Bind(&p)
+    if err != nil {
+        return nil, err
+    }
+
+    res, err := ctx.Arango.CreateDocument(ctx, "_system", "people", p)
+    if err != nil {
+        return nil, err
+    }
+
+    return res, nil
+}
+
+// Get retrieves a person document by ID
+func Get(ctx *gofr.Context) (interface{}, error) {
+    id := strings.TrimPrefix(ctx.PathParam("id"), "id=")
+
+    var result Person
+    err := ctx.Arango.GetDocument(ctx, "_system", "people", id, &result)
+    if err != nil {
+        return nil, err
+    }
+
+    return result, nil
+}
+
+// Update modifies an existing person document
+func Update(ctx *gofr.Context) (interface{}, error) {
+    id := strings.TrimPrefix(ctx.PathParam("id"), "id=")
+
+    var p Person
+    err := ctx.Bind(&p)
+    if err != nil {
+        return nil, err
+    }
+
+    err = ctx.Arango.UpdateDocument(ctx, "_system", "people", id, p)
+    if err != nil {
+        return nil, err
+    }
+
+    return fmt.Sprintf("Document with id %s updated", id), nil
+}
+
+// Delete removes a person document by ID
+func Delete(ctx *gofr.Context) (interface{}, error) {
+    id := strings.TrimPrefix(ctx.PathParam("id"), "id=")
+
+    err := ctx.Arango.DeleteDocument(ctx, "_system", "people", id)
+    if err != nil {
+        return nil, err
+    }
+
+    return fmt.Sprintf("Document with id %s deleted", id), nil
+}
+```
+
+
