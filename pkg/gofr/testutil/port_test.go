@@ -3,6 +3,7 @@ package testutil
 import (
 	"fmt"
 	"net"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -18,4 +19,17 @@ func TestGetFreePort(t *testing.T) {
 	require.NoError(t, err, "Expected to be able to listen on the free port")
 
 	_ = listener.Close()
+}
+
+func TestServerConfigsProvider(t *testing.T) {
+	env := ServerConfigsProvider(t)
+
+	assert.NotZero(t, env.HTTPPort, "HTTPPort should not be zero")
+	assert.Equal(t, env.HTTPHost, "http://localhost:"+os.Getenv("HTTP_PORT"), "HTTPHost should match environment variable")
+
+	assert.NotZero(t, env.MetricsPort, "MetricsPort should not be zero")
+	assert.Equal(t, env.MetricsHost, "http://localhost:"+os.Getenv("METRICS_PORT"), "MetricsHost should match environment variable")
+
+	assert.NotZero(t, env.GRPCPort, "GRPCPort should not be zero")
+	assert.Equal(t, env.GRPCHost, "localhost:"+os.Getenv("GRPC_PORT"), "GRPCHost should match environment variable")
 }
