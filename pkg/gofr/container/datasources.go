@@ -8,6 +8,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"gofr.dev/pkg/gofr/datasource"
+	"gofr.dev/pkg/gofr/datasource/arango"
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 	gofrSQL "gofr.dev/pkg/gofr/datasource/sql"
 )
@@ -543,7 +544,7 @@ type ArangoDB interface {
 	CreateEdgeDocument(ctx context.Context, dbName, collectionName string, from, to string, document interface{}) (string, error)
 
 	// CreateGraph creates a new graph in a database.
-	CreateGraph(ctx context.Context, database, graph string, edgeDefinitions []EdgeDefinition) error
+	CreateGraph(ctx context.Context, database, graph string, edgeDefinitions []arango.EdgeDefinition) error
 	// DropGraph deletes an existing graph from a database.
 	DropGraph(ctx context.Context, database, graph string) error
 	// ListGraphs lists all graphs in a database.
@@ -553,16 +554,6 @@ type ArangoDB interface {
 	Query(ctx context.Context, dbName string, query string, bindVars map[string]interface{}, result interface{}) error
 
 	HealthChecker
-}
-
-// EdgeDefinition represents the definition of edges in a graph
-type EdgeDefinition struct {
-	// Collection is the name of the edge collection to be used
-	Collection string `json:"collection"`
-	// From is an array of vertex collection names for the source vertices
-	From []string `json:"from"`
-	// To is an array of vertex collection names for the target vertices
-	To []string `json:"to"`
 }
 
 // ArangoProvider is an interface that extends Arango with additional methods for logging, metrics, and connection management.

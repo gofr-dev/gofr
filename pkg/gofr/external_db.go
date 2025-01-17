@@ -144,3 +144,20 @@ func (a *App) AddOpenTSDB(db container.OpenTSDBProvider) {
 
 	a.container.OpenTSDB = db
 }
+
+// AddArango sets the ArangoDB datasource in the app's container
+func (a *App) AddArango(db container.ArangoProvider) {
+	// Set up logger, metrics, and tracer
+	db.UseLogger(a.Logger())
+	db.UseMetrics(a.Metrics())
+
+	// Get tracer from OpenTelemetry
+	tracer := otel.GetTracerProvider().Tracer("gofr-arango")
+	db.UseTracer(tracer)
+
+	// Connect to ArangoDB
+	db.Connect()
+
+	// Add the ArangoDB provider to the container
+	a.container.ArangoDB = db
+}

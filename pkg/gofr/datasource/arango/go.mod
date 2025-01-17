@@ -3,8 +3,8 @@ module gofr.dev/pkg/gofr/datasource/arango
 go 1.23.4
 
 require (
-	github.com/arangodb/go-driver v1.6.5
 	github.com/arangodb/go-driver/v2 v2.1.2
+	go.opentelemetry.io/otel v1.33.0
 	go.opentelemetry.io/otel/trace v1.33.0
 )
 
@@ -17,7 +17,6 @@ require (
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/rs/zerolog v1.33.0 // indirect
-	go.opentelemetry.io/otel v1.33.0 // indirect
 	golang.org/x/net v0.31.0 // indirect
 	golang.org/x/sys v0.27.0 // indirect
 	golang.org/x/text v0.20.0 // indirect

@@ -9,8 +9,8 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 
-	"github.com/arangodb/go-driver"
 	"github.com/arangodb/go-driver/v2/arangodb"
+	"github.com/arangodb/go-driver/v2/arangodb/shared"
 	"github.com/arangodb/go-driver/v2/connection"
 )
 
@@ -84,7 +84,9 @@ func (c *Client) Connect() {
 	c.logger.Debugf("connecting to ArangoDB at %s", c.endpoint)
 
 	endpoint := connection.NewRoundRobinEndpoints([]string{c.endpoint})
-	conn := connection.NewHttp2Connection(connection.DefaultHTTP2ConfigurationWrapper(endpoint, false))
+	conn := connection.NewHttpConnection(connection.HttpConfiguration{
+		Endpoint: endpoint,
+	})
 
 	auth := connection.NewBasicAuth(c.config.User, c.config.Password)
 
@@ -511,7 +513,7 @@ func (c *Client) ListGraphs(ctx context.Context, database string) ([]string, err
 
 	for {
 		graph, err := graphsReader.Read()
-		if driver.IsNoMoreDocuments(err) {
+		if errors.Is(err, shared.NoMoreDocumentsError{}) {
 			break
 		}
 
@@ -544,7 +546,25 @@ func (c *Client) Query(ctx context.Context, dbName, query string, bindVars map[s
 
 	defer cursor.Close()
 
-	_, err = cursor.ReadDocument(tracerCtx, result)
+	resultSlice, ok := result.(*[]map[string]interface{})
+	if !ok {
+		return fmt.Errorf("result must be a pointer to a slice of maps")
+	}
+
+	for {
+		var doc map[string]interface{}
+
+		_, err := cursor.ReadDocument(tracerCtx, &doc)
+		if errors.Is(err, shared.NoMoreDocumentsError{}) {
+			break
+		}
+
+		if err != nil {
+			return err
+		}
+
+		*resultSlice = append(*resultSlice, doc)
+	}
 
 	return err
 }
