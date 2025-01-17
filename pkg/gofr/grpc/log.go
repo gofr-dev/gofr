@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-
 	"io"
 	"math"
 	"time"
@@ -62,61 +61,64 @@ func LoggingInterceptor(logger Logger) grpc.UnaryServerInterceptor {
 
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 		start := time.Now()
-		// Extract metadata from the incoming context
-		md, _ := metadata.FromIncomingContext(ctx)
 
-		var spanContext trace.SpanContext
-
-		traceIDHex := getMetadataValue(md, "x-gofr-traceid")
-		spanIDHex := getMetadataValue(md, "x-gofr-spanid")
-
-		if traceIDHex != "" && spanIDHex != "" {
-			traceID, _ := trace.TraceIDFromHex(traceIDHex)
-			spanID, _ := trace.SpanIDFromHex(spanIDHex)
-
-			spanContext = trace.NewSpanContext(trace.SpanContextConfig{
-				TraceID:    traceID,
-				SpanID:     spanID,
-				TraceFlags: trace.FlagsSampled,
-				Remote:     true,
-			})
-
-			ctx = trace.ContextWithRemoteSpanContext(ctx, spanContext)
-		}
-
-		// Start a new span
+		ctx, _ = initializeSpanContext(ctx)
 		ctx, span := tracer.Start(ctx, info.FullMethod)
 
 		resp, err := handler(ctx, req)
 
-		defer func() {
-			l := RPCLog{
-				ID:           trace.SpanFromContext(ctx).SpanContext().TraceID().String(),
-				StartTime:    start.Format("2006-01-02T15:04:05.999999999-07:00"),
-				ResponseTime: time.Since(start).Microseconds(),
-				Method:       info.FullMethod,
-			}
+		documentRPCLog(ctx, logger, info.FullMethod, start, err)
 
-			if err != nil {
-				// Check if the error is a gRPC status error
-				if statusErr, ok := status.FromError(err); ok {
-					// You can access the gRPC status code here
-					//nolint:gosec // Conversion from uint32 to int32 is safe in this context because gRPC status codes are within the int32 range
-					l.StatusCode = int32(statusErr.Code())
-				}
-			} else {
-				// If there was no error, you can access the response status code here
-				l.StatusCode = int32(codes.OK)
-			}
-
-			if logger != nil {
-				logger.Info(l)
-			}
-
-			span.End()
-		}()
+		span.End()
 
 		return resp, err
+	}
+}
+
+func initializeSpanContext(ctx context.Context) (context.Context, trace.SpanContext) {
+	md, _ := metadata.FromIncomingContext(ctx)
+
+	traceIDHex := getMetadataValue(md, "x-gofr-traceid")
+	spanIDHex := getMetadataValue(md, "x-gofr-spanid")
+
+	if traceIDHex != "" && spanIDHex != "" {
+		traceID, _ := trace.TraceIDFromHex(traceIDHex)
+		spanID, _ := trace.SpanIDFromHex(spanIDHex)
+
+		spanContext := trace.NewSpanContext(trace.SpanContextConfig{
+			TraceID:    traceID,
+			SpanID:     spanID,
+			TraceFlags: trace.FlagsSampled,
+			Remote:     true,
+		})
+
+		ctx = trace.ContextWithRemoteSpanContext(ctx, spanContext)
+
+		return ctx, spanContext
+	}
+
+	return ctx, trace.SpanContext{}
+}
+
+func documentRPCLog(ctx context.Context, logger Logger, method string, start time.Time, err error) {
+	logEntry := RPCLog{
+		ID:           trace.SpanFromContext(ctx).SpanContext().TraceID().String(),
+		StartTime:    start.Format("2006-01-02T15:04:05.999999999-07:00"),
+		ResponseTime: time.Since(start).Microseconds(),
+		Method:       method,
+	}
+
+	if err != nil {
+		if statusErr, ok := status.FromError(err); ok {
+			//nolint:gosec // gRPC codes are typically under the range.
+			logEntry.StatusCode = int32(statusErr.Code())
+		}
+	} else {
+		logEntry.StatusCode = int32(codes.OK)
+	}
+
+	if logger != nil {
+		logger.Info(logEntry)
 	}
 }
 
