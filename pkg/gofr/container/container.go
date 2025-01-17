@@ -59,6 +59,7 @@ type Container struct {
 	Solr       Solr
 	DGraph     Dgraph
 	OpenTSDB   OpenTSDB
+	ScyllaDB   ScyllaDB
 
 	KVStore KVStore
 
