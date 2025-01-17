@@ -97,8 +97,8 @@ func (c *Client) UseMetrics(metrics interface{}) {
 
 // UseTracer sets the tracer for the scylladb client.
 func (c *Client) UseTracer(tracer any) {
-	if tracer, ok := tracer.(trace.Tracer); ok {
-		c.tracer = tracer
+	if t, ok := tracer.(trace.Tracer); ok {
+		c.tracer = t
 	}
 }
 

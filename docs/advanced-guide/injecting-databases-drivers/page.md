@@ -718,7 +718,9 @@ func queryDataPoints(c *gofr.Context) (any, error) {
 ## ScyllaDB
 
 
-GoFr supports injecting ScyllaDB to facilitate interaction with ScyllaDB REST APIs.Implementations adhering to the ScyllaDB interface can be registered with app.AddScyllaDB(), enabling applications to leverage ScyllaDB for time-series data management through gofr.Context
+GoFr supports pluggable ScyllaDB drivers. It defines an interface that specifies the required methods for interacting
+with ScyllaDB. Any driver implementation that adheres to this interface can be integrated into GoFr using the
+`app.AddScyllaDB()` method.
 
 ```go
 type ScyllaDB interface {

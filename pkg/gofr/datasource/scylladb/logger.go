@@ -27,7 +27,7 @@ type QueryLog struct {
 
 func (ql *QueryLog) PrettyPrint(writer io.Writer) {
 	fmt.Fprintf(writer, "\u001B[38;5;8m%-32s \u001B[38;5;206m%-6s\u001B[0m %8d\u001B[38;5;8mµs\u001B[0m %s \u001B[38;5;8m%-32s\u001B[0m\n",
-		clean(ql.Operation), "ScyllaDB", ql.Duration, clean(ql.Keyspace), clean(ql.Query))
+		clean(ql.Operation), "SCYLDB", ql.Duration, clean(ql.Keyspace), clean(ql.Query))
 }
 
 var matchSpaces = regexp.MustCompile(`\s+`)
