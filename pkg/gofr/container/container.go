@@ -59,7 +59,7 @@ type Container struct {
 	Solr       Solr
 	DGraph     Dgraph
 	OpenTSDB   OpenTSDB
-	ArangoDB   ArangoDB
+	Arango     ArangoDB
 
 	KVStore KVStore
 

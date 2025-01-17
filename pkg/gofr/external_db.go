@@ -159,5 +159,5 @@ func (a *App) AddArango(db container.ArangoProvider) {
 	db.Connect()
 
 	// Add the ArangoDB provider to the container
-	a.container.ArangoDB = db
+	a.container.Arango = db
 }
