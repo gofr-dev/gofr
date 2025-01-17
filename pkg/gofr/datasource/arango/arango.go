@@ -125,17 +125,31 @@ func (c *Client) validateConfig() error {
 	return nil
 }
 
+func (c *Client) User(ctx context.Context, username string) (arangodb.User, error) {
+	return c.client.User(ctx, username)
+}
+
+func (c *Client) Database(ctx context.Context, name string) (arangodb.Database, error) {
+	return c.client.Database(ctx, name)
+}
+
+func (c *Client) Version(ctx context.Context) (arangodb.VersionInfo, error) {
+	return c.client.Version(ctx)
+}
+
 // CreateUser creates a new user in ArangoDB.
-func (c *Client) CreateUser(ctx context.Context, username, password string) error {
-	tracerCtx, span := c.addTrace(ctx, "createUser", map[string]string{"user": username})
+func (c *Client) CreateUser(ctx context.Context, name string, options *arangodb.UserOptions) (arangodb.User, error) {
+	tracerCtx, span := c.addTrace(ctx, "createUser", map[string]string{"user": name})
 	startTime := time.Now()
 
 	defer c.sendOperationStats(&QueryLog{Query: "createUser"}, startTime, "createUser", span)
 
-	options := arangodb.UserOptions{Password: password}
-	_, err := c.client.CreateUser(tracerCtx, username, &options)
+	user, err := c.client.CreateUser(tracerCtx, name, options)
+	if err != nil {
+		return nil, err
+	}
 
-	return err
+	return user, nil
 }
 
 // DropUser deletes a user from ArangoDB.
