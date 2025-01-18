@@ -169,7 +169,7 @@ GoFr has support for following trace-exporters:
 To see the traces install zipkin image using the following Docker command:
 
 ```bash
-  docker run --name gofr-zipkin -p 2005:9411 -d openzipkin/zipkin:latest
+docker run --name gofr-zipkin -p 2005:9411 -d openzipkin/zipkin:latest
 ```
 
 Add Tracer configs in `.env` file, your .env will be updated to
@@ -207,11 +207,11 @@ To see the traces install jaeger image using the following Docker command:
 
 ```bash
 docker run -d --name jaeger \
-  -e COLLECTOR_OTLP_ENABLED=true \
-  -p 16686:16686 \
-  -p 14317:4317 \
-  -p 14318:4318 \
-  jaegertracing/all-in-one:1.41
+	-e COLLECTOR_OTLP_ENABLED=true \
+	-p 16686:16686 \
+	-p 14317:4317 \
+	-p 14318:4318 \
+	jaegertracing/all-in-one:1.41
 ```
 
 Add Jaeger Tracer configs in `.env` file, your .env will be updated to

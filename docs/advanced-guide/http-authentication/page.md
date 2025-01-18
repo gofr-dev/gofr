@@ -25,11 +25,11 @@ Use `EnableBasicAuth(username, password)` to configure GoFr with pre-defined cre
 ```go
 func main() {
 	app := gofr.New()
-    
+
 	app.EnableBasicAuth("admin", "secret_password") // Replace with your credentials
-    
+
 	app.GET("/protected-resource", func(c *gofr.Context) (interface{}, error) {
-		// Handle protected resource access 
+		// Handle protected resource access
 		return nil, nil
 	})
 
@@ -44,18 +44,18 @@ The `validationFunc` takes the username and password as arguments and returns tr
 
 ```go
 func validateUser(c *container.Container, username, password string) bool {
-	// Implement your credential validation logic here 
-	// This example uses hardcoded credentials for illustration only   
-	return username == "john" && password == "doe123" 
-} 
+	// Implement your credential validation logic here
+	// This example uses hardcoded credentials for illustration only
+	return username == "john" && password == "doe123"
+}
 
-func main() { 
-	app := gofr.New() 
+func main() {
+	app := gofr.New()
 
-	app.EnableBasicAuthWithValidator(validateUser) 
+	app.EnableBasicAuthWithValidator(validateUser)
 
-	app.GET("/secure-data", func(c *gofr.Context) (interface{}, error) { 
-		// Handle access to secure data 
+	app.GET("/secure-data", func(c *gofr.Context) (interface{}, error) {
+		// Handle access to secure data
 		return nil, nil
 	})
 
@@ -146,10 +146,10 @@ Use `EnableOAuth(jwks-endpoint,refresh_interval)` to configure GoFr with pre-def
 func main() {
 	app := gofr.New()
 
-	app.EnableOAuth("http://jwks-endpoint", 20) 
-    
+	app.EnableOAuth("http://jwks-endpoint", 20)
+
 	app.GET("/protected-resource", func(c *gofr.Context) (interface{}, error) {
-		// Handle protected resource access 
+		// Handle protected resource access
 		return nil, nil
 	})
 

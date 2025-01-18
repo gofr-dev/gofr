@@ -14,21 +14,20 @@ package main
 import "gofr.dev/pkg/gofr"
 
 type user struct {
-  ID   int    `json:"id"`
-  Name string `json:"name"`
+	ID   int    `json:"id"`
+	Name string `json:"name"`
 }
 
 func main() {
-  app := gofr.New()
+	app := gofr.New()
 
-  app.GET("/users", func(ctx *gofr.Context) (interface{}, error) {
+	app.GET("/users", func(ctx *gofr.Context) (interface{}, error) {
+		users := []user{{ID: 1, Name: "Daria"}, {ID: 2, Name: "Ihor"}}
 
-    users := []user{{ID: 1, Name: "Daria"}, {ID: 2, Name: "Ihor"}}
+		return users, nil
+	})
 
-    return users, nil
-  })
-
-  app.Run()
+	app.Run()
 }
 ```
 

@@ -90,13 +90,14 @@ Run the following command to generate Go code using the Go gRPC plugins:
 
 This command generates two files, `{serviceName}.pb.go` and `{serviceName}_grpc.pb.go`, containing the necessary code for performing RPC calls.
 
-## Generating gRPC Handler Template using `gofr wrap grpc` 
+## Generating gRPC Handler Template using `gofr wrap grpc`
 
 #### Prerequisite: gofr-cli must be installed
 
 To install the CLI -
+
 ```bash
-  go install gofr.dev/cli/gofr@latest
+go install gofr.dev/cli/gofr@latest
 ```
 
 **1. Use the `gofr wrap grpc` Command:**
