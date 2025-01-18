@@ -20,6 +20,7 @@ GoFr simplifies the process of adding custom HTTP response headers and metadata 
     - Keys must be strings, and values can be of any type.
 
 When metadata is included, the response structure is:
+
 ```json
 {
   "data": {},
@@ -92,26 +93,26 @@ When metadata is included, the response contains the metadata field:
 
 ```json
 {
-        "data": {
-            "message": "Hello, World!"
-        },
-        "metadata": {
-            "environment": "staging",
-            "timestamp": "2024-12-23T12:34:56Z"
-        }
-    }
-   ```
+  "data": {
+    "message": "Hello, World!"
+  },
+  "metadata": {
+    "environment": "staging",
+    "timestamp": "2024-12-23T12:34:56Z"
+  }
+}
+```
 
 #### Response without Metadata:
 If no metadata is provided, the response only includes the data field:
 
 ```json
-    {
-        "data": {
-            "message": "Hello, World!"
-        }
-    }
-   ```
+{
+  "data": {
+    "message": "Hello, World!"
+  }
+}
+```
 
 
 This functionality offers a convenient, structured way to include additional response information without altering the 
