@@ -29,17 +29,11 @@ type RPCLog struct {
 }
 
 func (l RPCLog) PrettyPrint(writer io.Writer) {
-	var statusCodeLen int
+	// checking the length of status code to match the spacing that is being done in HTTP logs after status codes
+	statusCodeLen := 9 - int(math.Log10(float64(l.StatusCode))) + 1
 
-	if l.StatusCode <= 0 {
-		statusCodeLen = 1 // Default to 1 if StatusCode is invalid
-	} else {
-		statusCodeLen = 9 - int(math.Log10(float64(l.StatusCode))) + 1
-	}
-
-	// Print the log message with dynamic width for the status code
 	fmt.Fprintf(writer, "\u001B[38;5;8m%s \u001B[38;5;%dm%-6d"+
-		"\u001B[0m %-*d\u001B[38;5;8mµs\u001B[0m %s \n",
+		"\u001B[0m %*d\u001B[38;5;8mµs\u001B[0m %s \n",
 		l.ID, colorForGRPCCode(l.StatusCode),
 		l.StatusCode, statusCodeLen, l.ResponseTime, l.Method)
 }
@@ -107,10 +101,6 @@ func initializeSpanContext(ctx context.Context) (context.Context, trace.SpanCont
 }
 
 func documentRPCLog(ctx context.Context, logger Logger, method string, start time.Time, err error) {
-	if logger == nil {
-		return
-	}
-
 	logEntry := RPCLog{
 		ID:           trace.SpanFromContext(ctx).SpanContext().TraceID().String(),
 		StartTime:    start.Format("2006-01-02T15:04:05.999999999-07:00"),
@@ -118,17 +108,17 @@ func documentRPCLog(ctx context.Context, logger Logger, method string, start tim
 		Method:       method,
 	}
 
-	statusCode := codes.OK
-
 	if err != nil {
 		statusErr, _ := status.FromError(err)
-		statusCode = statusErr.Code()
+		//nolint:gosec // gRPC codes are typically under the range.
+		logEntry.StatusCode = int32(statusErr.Code())
+	} else {
+		logEntry.StatusCode = int32(codes.OK)
 	}
 
-	//nolint:gosec // gRPC codes are typically under the range.
-	logEntry.StatusCode = int32(statusCode)
-
-	logger.Info(logEntry)
+	if logger != nil {
+		logger.Info(logEntry)
+	}
 }
 
 // Helper function to safely extract a value from metadata.
