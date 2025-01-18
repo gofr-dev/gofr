@@ -37,8 +37,8 @@ Testing is a crucial aspect of software development, and adherence to these guid
 -   Prefix unit test functions with `Test`.
 -   Use clear and descriptive names.
 ```go
-func TestFunctionName(t *testing.T) { 
-// Test logic 
+func TestFunctionName(t *testing.T) {
+	// Test logic
 }
 ```
 
