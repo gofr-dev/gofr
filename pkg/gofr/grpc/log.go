@@ -101,6 +101,10 @@ func initializeSpanContext(ctx context.Context) (context.Context, trace.SpanCont
 }
 
 func documentRPCLog(ctx context.Context, logger Logger, method string, start time.Time, err error) {
+	if logger == nil {
+		return
+	}
+
 	logEntry := RPCLog{
 		ID:           trace.SpanFromContext(ctx).SpanContext().TraceID().String(),
 		StartTime:    start.Format("2006-01-02T15:04:05.999999999-07:00"),
@@ -118,9 +122,7 @@ func documentRPCLog(ctx context.Context, logger Logger, method string, start tim
 	//nolint:gosec // gRPC codes are typically under the range.
 	logEntry.StatusCode = int32(statusCode)
 
-	if logger != nil {
-		logger.Info(logEntry)
-	}
+	logger.Info(logEntry)
 }
 
 // Helper function to safely extract a value from metadata.
