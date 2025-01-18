@@ -153,13 +153,13 @@ This command leverages the `gofr-cli` to generate a `{serviceName}_client.go` fi
 // gRPC Handler with context support
 func {serviceMethod}(ctx *gofr.Context) (*{serviceResponse}, error) {
 // Create the gRPC client
-srv, err := New{serviceName}GoFrClient("your-grpc-server-host")
+srv, err := New{external_serviceName}GoFrClient("your-grpc-server-host")
 if err != nil {
 return nil, err
 }
 
 // Prepare the request
-req := &{serviceRequest}{
+req := &{external_serviceRequest}{
 // populate fields as necessary
 }
 
