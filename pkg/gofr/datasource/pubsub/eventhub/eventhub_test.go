@@ -7,12 +7,9 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/messaging/azeventhubs"
 	"github.com/stretchr/testify/require"
-
-	"nhooyr.io/websocket"
-
 	"go.uber.org/mock/gomock"
-
 	"gofr.dev/pkg/gofr/testutil"
+	"nhooyr.io/websocket"
 )
 
 func TestConnect(t *testing.T) {
