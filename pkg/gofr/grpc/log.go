@@ -81,23 +81,23 @@ func initializeSpanContext(ctx context.Context) (context.Context, trace.SpanCont
 	traceIDHex := getMetadataValue(md, "x-gofr-traceid")
 	spanIDHex := getMetadataValue(md, "x-gofr-spanid")
 
-	if traceIDHex != "" && spanIDHex != "" {
-		traceID, _ := trace.TraceIDFromHex(traceIDHex)
-		spanID, _ := trace.SpanIDFromHex(spanIDHex)
-
-		spanContext := trace.NewSpanContext(trace.SpanContextConfig{
-			TraceID:    traceID,
-			SpanID:     spanID,
-			TraceFlags: trace.FlagsSampled,
-			Remote:     true,
-		})
-
-		ctx = trace.ContextWithRemoteSpanContext(ctx, spanContext)
-
-		return ctx, spanContext
+	if traceIDHex == "" || spanIDHex == "" {
+		return ctx, trace.SpanContext{}
 	}
 
-	return ctx, trace.SpanContext{}
+	traceID, _ := trace.TraceIDFromHex(traceIDHex)
+	spanID, _ := trace.SpanIDFromHex(spanIDHex)
+
+	spanContext := trace.NewSpanContext(trace.SpanContextConfig{
+		TraceID:    traceID,
+		SpanID:     spanID,
+		TraceFlags: trace.FlagsSampled,
+		Remote:     true,
+	})
+
+	ctx = trace.ContextWithRemoteSpanContext(ctx, spanContext)
+
+	return ctx, spanContext
 }
 
 func documentRPCLog(ctx context.Context, logger Logger, method string, start time.Time, err error) {
@@ -109,10 +109,9 @@ func documentRPCLog(ctx context.Context, logger Logger, method string, start tim
 	}
 
 	if err != nil {
-		if statusErr, ok := status.FromError(err); ok {
-			//nolint:gosec // gRPC codes are typically under the range.
-			logEntry.StatusCode = int32(statusErr.Code())
-		}
+		statusErr, _ := status.FromError(err)
+		//nolint:gosec // gRPC codes are typically under the range.
+		logEntry.StatusCode = int32(statusErr.Code())
 	} else {
 		logEntry.StatusCode = int32(codes.OK)
 	}

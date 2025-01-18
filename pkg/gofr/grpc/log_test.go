@@ -65,6 +65,8 @@ func TestLoggingInterceptor(t *testing.T) {
 			errorHandler, nil, err, expLog},
 		{"handler returns error with traceID passed in metadata", "traceid123", mdWithTraceID,
 			errorHandler, nil, err, expLogWithTraceID},
+		{"handler returns with nil metadata", "", nil,
+			successHandler, "success", nil, expLog},
 	}
 
 	for i, tc := range tests {
