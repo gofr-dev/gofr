@@ -88,9 +88,9 @@ func (mr *MockLoggerMockRecorder) Error(args ...any) *gomock.Call {
 }
 
 // Errorf mocks base method.
-func (m *MockLogger) Errorf(patter string, args ...any) {
+func (m *MockLogger) Errorf(pattern string, args ...any) {
 	m.ctrl.T.Helper()
-	varargs := []any{patter}
+	varargs := []any{pattern}
 	for _, a := range args {
 		varargs = append(varargs, a)
 	}
@@ -98,9 +98,9 @@ func (m *MockLogger) Errorf(patter string, args ...any) {
 }
 
 // Errorf indicates an expected call of Errorf.
-func (mr *MockLoggerMockRecorder) Errorf(patter any, args ...any) *gomock.Call {
+func (mr *MockLoggerMockRecorder) Errorf(pattern any, args ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{patter}, args...)
+	varargs := append([]any{pattern}, args...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Errorf", reflect.TypeOf((*MockLogger)(nil).Errorf), varargs...)
 }
 
