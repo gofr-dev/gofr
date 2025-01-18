@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
 	"gofr.dev/pkg/gofr"
 	"gofr.dev/pkg/gofr/cmd"
 	"gofr.dev/pkg/gofr/cmd/terminal"

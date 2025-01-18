@@ -6,10 +6,10 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	resTypes "gofr.dev/pkg/gofr/http/response"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	resTypes "gofr.dev/pkg/gofr/http/response"
 )
 
 func TestResponder(t *testing.T) {
