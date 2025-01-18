@@ -20,7 +20,7 @@ automatically handle HTTP status code selection. These include:
 #### Usage:
 To use the predefined HTTP errors, users can simply call them using GoFr's http package:
 ```go
- err := http.ErrorMissingParam{Param: []string{"id"}}
+err := http.ErrorMissingParam{Param: []string{"id"}}
 ```
 
 ## Database Errors

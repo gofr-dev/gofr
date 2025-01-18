@@ -28,9 +28,9 @@ package main
 
 import "gofr.dev/pkg/gofr"
 
-func main(){
-    app := gofr.New()
-    app.Run()
+func main() {
+	app := gofr.New()
+	app.Run()
 }
 ```
 
@@ -65,10 +65,10 @@ package main
 
 import "gofr.dev/pkg/gofr"
 
-func main(){
-    app := gofr.New()
-    app.AddStaticFiles("public", "./public")
-    app.Run()
+func main() {
+	app := gofr.New()
+	app.AddStaticFiles("public", "./public")
+	app.Run()
 }
 ```
 
