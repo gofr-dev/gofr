@@ -256,10 +256,8 @@ jobs:
           coverageLocations: artifacts/merged_profile.cov:gocov
           prefix: gofr.dev
 
-  name: Code Quality🎖️
-  runs-on: ubuntu-latest
-  jobs:
     lint:
+      name: Code Quality🎖️
       runs-on: ubuntu-latest
       steps:
         - name: Check out code into the Go module directory
@@ -284,7 +282,6 @@ jobs:
               echo "Linting submodule: $module"
               golangci-lint run --timeout 9m0s --working-directory=$module
             done
-  
 
   linting_party:
     name: Linting Party🥳
