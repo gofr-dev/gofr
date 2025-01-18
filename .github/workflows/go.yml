@@ -269,6 +269,9 @@ jobs:
           go-version: '1.22'
           cache: false
 
+      - name: Install GNU Parallel
+        run: sudo apt-get install parallel
+
       - name: Get dependencies
         run: |
          go mod tidy
@@ -279,13 +282,16 @@ jobs:
           version: v1.62
           working-directory: .
 
-      - name: Lint Submodules
+      - name: Lint Submodules in Parallel
         run: |
           echo "Searching for submodules..."
-          for module in $(find pkg -name "go.mod" -exec dirname {} \;); do
-            echo "Linting submodule: $module"
-            golangci-lint run --timeout 9m0s --working-directory=$module
-          done    
+          total_errors=0  # Initialize error counter
+          submodules=$(find pkg -name "go.mod" -exec dirname {} \;)
+          parallel --halt soon,fail=1 golangci-lint run --timeout 10m --working-directory={} ::: $submodules
+          if [ $total_errors -gt 0 ]; then
+            echo "Linting failed for $total_errors submodule(s)."
+            exit 1
+          fi
 
   linting_party:
     name: Linting Party🥳
