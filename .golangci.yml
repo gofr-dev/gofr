@@ -94,13 +94,13 @@ linters:
   enable:
     - asciicheck
     - bodyclose
+    - copyloopvar
     - dogsled
     - dupl
     - err113
     - errcheck
     - errorlint
     - exhaustive
-    - exportloopref
     - funlen
     - gci
     - gochecknoglobals
