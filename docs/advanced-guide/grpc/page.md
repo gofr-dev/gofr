@@ -111,7 +111,7 @@ that of the specified proto file.
 **2. Modify the Generated Code:**
 
 - Customize the `{serviceName}GoFrServer` struct with required dependencies and fields.
-- Implement the `{serviceMethod}` method to handle incoming requests, as required in this usecase:
+- Implement the `{serviceMethod}` method to handle incoming requests, as required in this use case:
     - Bind the request payload using `ctx.Bind(&{serviceRequest})`.
     - Process the request and generate a response.
 
