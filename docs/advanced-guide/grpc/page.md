@@ -99,12 +99,12 @@ To install the CLI -
 
 ## Generating gRPC Server Handler Template using `gofr wrap grpc server`
 
-**1. Use the `gofr wrap grpc` Command:**
+**1. Use the `gofr wrap grpc server` Command:**
    ```bash
      gofr wrap grpc server -proto=./path/your/proto/file
    ```
 
-This command leverages the `gofr-cli` to generate a `{serviceName}_server.go` file (e.g., `CustomerServer.go`)
+This command leverages the `gofr-cli` to generate a `{serviceName}_server.go` file (e.g., `customer_server.go`)
 containing a template for your gRPC server implementation, including context support, in the same directory as 
 that of the specified proto file.
 
@@ -147,11 +147,11 @@ that of the specified proto file.
    ```
 This command leverages the `gofr-cli` to generate a `{serviceName}_client.go` file (e.g., `customer_client.go`). This file must not be modified.
 
-**2. Register the connection to your gRPC server in your {serviceName}.:**
+**2. Register the connection to your gRPC service inside your {serviceMethod} and make inter-service calls as follows :**
 
    ```go
 // gRPC Handler with context support
-func YourHandler(ctx *gofr.Context) (*{serviceResponse}, error) {
+func {serviceMethod}(ctx *gofr.Context) (*{serviceResponse}, error) {
 // Create the gRPC client
 srv, err := New{serviceName}GoFrClient("your-grpc-server-host")
 if err != nil {
