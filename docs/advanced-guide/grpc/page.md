@@ -2,23 +2,24 @@
 
 We have already seen how GoFr can help ease the development of HTTP servers, but there are cases where performance is primarily required sacrificing flexibility. In these types of scenarios gRPC protocol comes into picture. {% new-tab-link title="gRPC" href="https://grpc.io/docs/what-is-grpc/introduction/" /%} is an open-source RPC(Remote Procedure Call) framework initially developed by Google. 
 
-GoFr enables you to create gRPC handlers efficiently while leveraging GoFr's context support for seamless access to connected datasources and trace management within your handlers.
+GoFr simplifies creating gRPC servers and enables efficient tracing across inter-service calls, leveraging its context for seamless data access and trace management in your handlers.
 
 ## Prerequisites
 
 **1. Protocol Buffer Compiler (`protoc`) Installation:**
 
 - **Linux (using `apt` or `apt-get`):**
+
 ```bash
-  sudo apt install -y protobuf-compiler
-  protoc --version  # Ensure compiler version is 3+
-  ```
+sudo apt install -y protobuf-compiler
+protoc --version # Ensure compiler version is 3+
+```
 
 - **macOS (using Homebrew):**
 
 ```bash
-  brew install protobuf
-  protoc --version  # Ensure compiler version is 3+
+brew install protobuf
+protoc --version # Ensure compiler version is 3+
 ```
 
 **2. Go Plugins for Protocol Compiler:**
@@ -100,10 +101,13 @@ To install the CLI -
 go install gofr.dev/cli/gofr@latest
 ```
 
+## Generating gRPC Server Handler Template using `gofr wrap grpc server`
+
 **1. Use the `gofr wrap grpc` Command:**
-   ```bash
-     gofr wrap grpc -proto=./path/your/proto/file
-   ```
+
+```bash
+gofr wrap grpc -proto=./path/your/proto/file
+```
 
 This command leverages the `gofr-cli` to generate a `{serviceName}_server.go` file (e.g., `CustomerServer.go`)
 containing a template for your gRPC server implementation, including context support, in the same directory as 
@@ -129,15 +133,49 @@ that of the specified proto file.
 
 **2. Register the Service in your `main.go`:**
 
-   ```go
-   func main() {
-       app := gofr.New()
+```go
+func main() {
+    app := gofr.New()
 
-       packageName.Register{serviceName}ServerWithGofr(app, &packageName.{serviceName}GoFrServer{})
+    packageName.Register{serviceName}ServerWithGofr(app, &packageName.{serviceName}GoFrServer{})
 
-       app.Run()
-   }
-   ```
+    app.Run()
+}
+```
+
 >Note: By default, gRPC server will run on port 9000, to customize the port users can set `GRPC_PORT` config in the .env
 
+## Generating tracing enabled gRPC Client Template using `gofr wrap grpc client`
+
+**1. Use the `gofr wrap grpc client` Command:**
+   ```bash
+     gofr wrap grpc client -proto=./path/your/proto/file
+   ```
+This command leverages the `gofr-cli` to generate a `{serviceName}_client.go` file (e.g., `customer_client.go`). This file must not be modified.
+
+**2. Register the connection to your gRPC server in your {serviceName}.:**
+
+   ```go
+// gRPC Handler with context support
+func YourHandler(ctx *gofr.Context) (*{serviceResponse}, error) {
+// Create the gRPC client
+srv, err := New{serviceName}GoFrClient("your-grpc-server-host")
+if err != nil {
+return nil, err
+}
+
+// Prepare the request
+req := &{serviceRequest}{
+// populate fields as necessary
+}
+
+// Call the gRPC method with tracing enabled
+res, err := srv.{serviceMethod}(ctx, req)
+if err != nil {
+return nil, err
+}
+
+return res, nil
+}
+```
 > ##### Check out the example of setting up a gRPC server in GoFr: [Visit GitHub](https://github.com/gofr-dev/gofr/blob/main/examples/grpc-server/main.go)
