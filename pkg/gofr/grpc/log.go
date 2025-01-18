@@ -108,13 +108,15 @@ func documentRPCLog(ctx context.Context, logger Logger, method string, start tim
 		Method:       method,
 	}
 
+	statusCode := codes.OK
+
 	if err != nil {
 		statusErr, _ := status.FromError(err)
-		//nolint:gosec // gRPC codes are typically under the range.
-		logEntry.StatusCode = int32(statusErr.Code())
-	} else {
-		logEntry.StatusCode = int32(codes.OK)
+		statusCode = statusErr.Code()
 	}
+
+	//nolint:gosec // gRPC codes are typically under the range.
+	logEntry.StatusCode = int32(statusCode)
 
 	if logger != nil {
 		logger.Info(logEntry)
