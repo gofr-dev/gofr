@@ -174,7 +174,7 @@ for reader.Next() {
 	var b string
 		
 	// For reading CSV/TEXT files user need to pass pointer to string to SCAN.
-	// Incase of JSON user should pass structs with JSON tags as defined in encoding/json.
+	// In case of JSON user should pass structs with JSON tags as defined in encoding/json.
 	err = reader.Scan(&b)
 
 	fmt.Println(b)
