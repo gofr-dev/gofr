@@ -256,32 +256,36 @@ jobs:
           coverageLocations: artifacts/merged_profile.cov:gocov
           prefix: gofr.dev
 
-    lint:
-      name: Code Quality🎖️
-      runs-on: ubuntu-latest
-      steps:
-        - name: Check out code into the Go module directory
-          uses: actions/checkout@v4
+  code_quality:
+    name: Code Quality🎖️
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v4
 
-        - name: Set up Go environment
-          uses: actions/setup-go@v4
-          with:
-            go-version: '1.22'
-            cache: false
+      - name: Set up Go environment
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.22'
+          cache: false
 
-        - name: Lint Root Module
-          uses: golangci/golangci-lint-action@v3
-          with:
-            version: v1.54
-            working-directory: .
+      - name: Get dependencies
+        run: |
+         go mod tidy
 
-        - name: Lint Submodules
-          run: |
-            echo "Searching for submodules..."
-            for module in $(find pkg -name "go.mod" -exec dirname {} \;); do
-              echo "Linting submodule: $module"
-              golangci-lint run --timeout 9m0s --working-directory=$module
-            done
+      - name: Lint Root Module
+        uses: golangci/golangci-lint-action@v3
+        with:
+          version: v1.62
+          working-directory: .
+
+      - name: Lint Submodules
+        run: |
+          echo "Searching for submodules..."
+          for module in $(find pkg -name "go.mod" -exec dirname {} \;); do
+            echo "Linting submodule: $module"
+            golangci-lint run --timeout 9m0s --working-directory=$module
+          done    
 
   linting_party:
     name: Linting Party🥳
