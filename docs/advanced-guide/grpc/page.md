@@ -91,6 +91,7 @@ Run the following command to generate Go code using the Go gRPC plugins:
 
 This command generates two files, `{serviceName}.pb.go` and `{serviceName}_grpc.pb.go`, containing the necessary code for performing RPC calls.
 
+## Prerequisite: gofr-cli must be installed
 ## Generating gRPC Handler Template using `gofr wrap grpc`
 
 #### Prerequisite: gofr-cli must be installed
@@ -104,12 +105,16 @@ go install gofr.dev/cli/gofr@latest
 ## Generating gRPC Server Handler Template using `gofr wrap grpc server`
 
 **1. Use the `gofr wrap grpc` Command:**
+   ```bash
+     gofr wrap grpc server -proto=./path/your/proto/file
+   ```
 
 ```bash
 gofr wrap grpc -proto=./path/your/proto/file
 ```
 
 This command leverages the `gofr-cli` to generate a `{serviceName}_server.go` file (e.g., `CustomerServer.go`)
+This command leverages the `gofr-cli` to generate a `{serviceName}_server.go` file (e.g., `customer_server.go`)
 containing a template for your gRPC server implementation, including context support, in the same directory as 
 that of the specified proto file.
 
@@ -124,12 +129,13 @@ that of the specified proto file.
 
 **1. Import Necessary Packages:**
 
-   ```go
-   import (
-       "gofr.dev/pkg/gofr"
-       "path/to/your/generated-grpc-server/packageName"
-   )
-   ```
+```go
+import (
+	"path/to/your/generated-grpc-server/packageName"
+
+	"gofr.dev/pkg/gofr"
+)
+```
 
 **2. Register the Service in your `main.go`:**
 
