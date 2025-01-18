@@ -269,9 +269,6 @@ jobs:
           go-version: '1.22'
           cache: false
 
-      - name: Install GNU Parallel
-        run: sudo apt-get install parallel
-
       - name: Get dependencies
         run: |
          go mod tidy
@@ -291,7 +288,7 @@ jobs:
             # Change directory to the submodule and run golangci-lint
             cd $module
             go mod tidy
-            golangci-lint run --timeout 10m || total_errors=$((total_errors + 1))
+            golangci-lint run --timeout 9m0s || total_errors=$((total_errors + 1))
             cd -  # Return to the root directory
           done
           echo "Total submodule lint errors: $total_errors"
