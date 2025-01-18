@@ -159,12 +159,12 @@ func (l *logger) prettyPrint(e logEntry, out io.Writer) {
 	// This decouples the logger implementation from its usage
 	if fn, ok := e.Message.(PrettyPrint); ok {
 		fmt.Fprintf(out, "\u001B[38;5;%dm%s\u001B[0m [%s] ", e.Level.color(), e.Level.String()[0:4],
-			e.Time.Format("15:04:05"))
+			e.Time.Format(time.TimeOnly))
 
 		fn.PrettyPrint(out)
 	} else {
 		fmt.Fprintf(out, "\u001B[38;5;%dm%s\u001B[0m [%s] ", e.Level.color(), e.Level.String()[0:4],
-			e.Time.Format("15:04:05"))
+			e.Time.Format(time.TimeOnly))
 
 		fmt.Fprintf(out, "%v\n", e.Message)
 	}
