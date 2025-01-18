@@ -74,7 +74,7 @@ func (*formData) setStructValue(value reflect.Value, data string) (bool, error) 
 	var multiErr error
 
 	// Create a map for case-insensitive lookups
-	caseInsensitiveMap := make(map[string]interface{})
+	caseInsensitiveMap := make(map[string]any)
 	for key, val := range dataMap {
 		caseInsensitiveMap[strings.ToLower(key)] = val
 	}
@@ -111,7 +111,7 @@ func (*formData) setStructValue(value reflect.Value, data string) (bool, error) 
 }
 
 // setFieldValueFromData sets the field's value based on the provided data.
-func setFieldValueFromData(field reflect.Value, data interface{}) error {
+func setFieldValueFromData(field reflect.Value, data any) error {
 	switch field.Kind() {
 	case reflect.String:
 		return setStringField(field, data)
@@ -131,12 +131,12 @@ func setFieldValueFromData(field reflect.Value, data interface{}) error {
 }
 
 type customUnmarshaller struct {
-	dataMap map[string]interface{}
+	dataMap map[string]any
 }
 
 // UnmarshalJSON is a custom unmarshaller because json package in Go unmarshal numbers to float64 by default.
 func (c *customUnmarshaller) UnmarshalJSON(data []byte) error {
-	var rawData map[string]interface{}
+	var rawData map[string]any
 
 	err := json.Unmarshal(data, &rawData)
 	if err != nil {
@@ -161,14 +161,14 @@ func (c *customUnmarshaller) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func parseStringToMap(data string) (map[string]interface{}, error) {
+func parseStringToMap(data string) (map[string]any, error) {
 	var c customUnmarshaller
 	err := json.Unmarshal([]byte(data), &c)
 
 	return c.dataMap, err
 }
 
-func setStringField(field reflect.Value, data interface{}) error {
+func setStringField(field reflect.Value, data any) error {
 	if val, ok := data.(string); ok {
 		field.SetString(val)
 		return nil
@@ -177,7 +177,7 @@ func setStringField(field reflect.Value, data interface{}) error {
 	return fmt.Errorf("%w: expected string but got %T", errUnsupportedFieldType, data)
 }
 
-func setIntField(field reflect.Value, data interface{}) error {
+func setIntField(field reflect.Value, data any) error {
 	if val, ok := data.(int); ok {
 		field.SetInt(int64(val))
 		return nil
@@ -186,7 +186,7 @@ func setIntField(field reflect.Value, data interface{}) error {
 	return fmt.Errorf("%w: expected int but got %T", errUnsupportedFieldType, data)
 }
 
-func setFloatField(field reflect.Value, data interface{}) error {
+func setFloatField(field reflect.Value, data any) error {
 	if val, ok := data.(float64); ok {
 		field.SetFloat(val)
 		return nil
@@ -195,7 +195,7 @@ func setFloatField(field reflect.Value, data interface{}) error {
 	return fmt.Errorf("%w: expected float64 but got %T", errUnsupportedFieldType, data)
 }
 
-func setBoolField(field reflect.Value, data interface{}) error {
+func setBoolField(field reflect.Value, data any) error {
 	if val, ok := data.(bool); ok {
 		field.SetBool(val)
 		return nil
