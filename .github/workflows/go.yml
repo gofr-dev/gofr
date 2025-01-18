@@ -290,6 +290,7 @@ jobs:
             echo "Linting submodule: $module"
             # Change directory to the submodule and run golangci-lint
             cd $module
+            go mod tidy
             golangci-lint run --timeout 10m || total_errors=$((total_errors + 1))
             cd -  # Return to the root directory
           done
