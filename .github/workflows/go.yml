@@ -282,15 +282,21 @@ jobs:
           version: v1.62
           working-directory: .
 
-      - name: Lint Submodules in Parallel
+      - name: Lint Submodules
         run: |
           echo "Searching for submodules..."
           total_errors=0  # Initialize error counter
-          submodules=$(find pkg -name "go.mod" -exec dirname {} \;)
-          parallel --halt soon,fail=1 golangci-lint run --timeout 10m --working-directory={} ::: $submodules
+          for module in $(find pkg -name "go.mod" -exec dirname {} \;); do
+            echo "Linting submodule: $module"
+            # Change directory to the submodule and run golangci-lint
+            cd $module
+            golangci-lint run --timeout 10m || total_errors=$((total_errors + 1))
+            cd -  # Return to the root directory
+          done
+          echo "Total submodule lint errors: $total_errors"
           if [ $total_errors -gt 0 ]; then
             echo "Linting failed for $total_errors submodule(s)."
-            exit 1
+            exit 1  # Fail the job if there are linting errors in submodules
           fi
 
   linting_party:
