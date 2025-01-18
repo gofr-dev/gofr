@@ -27,7 +27,7 @@ type expectedQuery struct {
 
 type queryWithArgs struct {
 	queryText string
-	arguments []interface{}
+	arguments []any
 	value     any
 }
 
@@ -50,7 +50,7 @@ func emptyExpectation(m *sqlMockDB) {
 	}
 }
 
-func (m sqlMockDB) Select(_ context.Context, value any, query string, args ...interface{}) {
+func (m sqlMockDB) Select(_ context.Context, value any, query string, args ...any) {
 	if len(m.queryWithArgs) == 0 {
 		m.logger.Errorf("did not expect any calls for Select with query: %q", query)
 		return
@@ -141,7 +141,7 @@ func (m sqlMockDB) finish(t *testing.T) {
 // ExpectSelect is not a direct method for mocking the Select method of SQL in go-mock-sql.
 // Hence, it expects the user to already provide the populated data interface field,
 // which can then be used within the functions implemented by the user.
-func (m *mockSQL) ExpectSelect(_ context.Context, value any, query string, args ...interface{}) *queryWithArgs {
+func (m *mockSQL) ExpectSelect(_ context.Context, value any, query string, args ...any) *queryWithArgs {
 	qr := queryWithArgs{queryText: query, arguments: args}
 
 	fieldType := reflect.TypeOf(value)

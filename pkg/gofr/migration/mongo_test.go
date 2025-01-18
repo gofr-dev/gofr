@@ -98,7 +98,7 @@ func Test_MongoCommitMigration(t *testing.T) {
 		MigrationNumber: 10,
 	}
 
-	migrationDoc := map[string]interface{}{
+	migrationDoc := map[string]any{
 		"version":    td.MigrationNumber,
 		"method":     "UP",
 		"start_time": td.StartTime,

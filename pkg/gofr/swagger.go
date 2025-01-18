@@ -19,7 +19,7 @@ const (
 
 // OpenAPIHandler serves the `openapi.json` file at the specified path.
 // It reads the file from the disk and returns its content as a response.
-func OpenAPIHandler(c *Context) (interface{}, error) {
+func OpenAPIHandler(c *Context) (any, error) {
 	rootDir, _ := os.Getwd()
 	filePath := filepath.Join(rootDir, "static", OpenAPIJSON)
 
@@ -33,7 +33,7 @@ func OpenAPIHandler(c *Context) (interface{}, error) {
 }
 
 // SwaggerUIHandler serves the static files of the Swagger UI.
-func SwaggerUIHandler(c *Context) (interface{}, error) {
+func SwaggerUIHandler(c *Context) (any, error) {
 	fileName := c.PathParam("name")
 	if fileName == "" {
 		// Read the index.html file

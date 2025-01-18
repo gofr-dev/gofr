@@ -33,7 +33,7 @@ func main() {
 	a.Run()
 }
 
-func TransactionHandler(c *gofr.Context) (interface{}, error) {
+func TransactionHandler(c *gofr.Context) (any, error) {
 	transactionStartTime := time.Now()
 
 	// transaction logic
@@ -49,7 +49,7 @@ func TransactionHandler(c *gofr.Context) (interface{}, error) {
 	return "Transaction Successful", nil
 }
 
-func ReturnHandler(c *gofr.Context) (interface{}, error) {
+func ReturnHandler(c *gofr.Context) (any, error) {
 	// logic to create a sales return
 	c.Metrics().DeltaUpDownCounter(c, totalCreditDaySales, -1000, "sale_type", "credit_return")
 

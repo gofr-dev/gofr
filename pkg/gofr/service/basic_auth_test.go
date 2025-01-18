@@ -21,7 +21,7 @@ func TestBasicAuthProvider_Get(t *testing.T) {
 	defer ctrl.Finish()
 
 	path := "/path"
-	queryParams := map[string]interface{}{"key": "value"}
+	queryParams := map[string]any{"key": "value"}
 	body := []byte("body")
 
 	// Create a mock HTTP server
@@ -62,7 +62,7 @@ func TestBasicAuthProvider_Post(t *testing.T) {
 	defer ctrl.Finish()
 
 	path := "/path"
-	queryParams := map[string]interface{}{"key": "value"}
+	queryParams := map[string]any{"key": "value"}
 	body := []byte("body")
 
 	// Create a mock HTTP server (verify POST method)
@@ -94,7 +94,7 @@ func TestBasicAuthProvider_Put(t *testing.T) {
 	defer ctrl.Finish()
 
 	path := "/path"
-	queryParams := map[string]interface{}{"key": "value"}
+	queryParams := map[string]any{"key": "value"}
 	body := []byte("body")
 
 	// Create a mock HTTP server (verify PUT method)
@@ -126,7 +126,7 @@ func TestBasicAuthProvider_Patch(t *testing.T) {
 	defer ctrl.Finish()
 
 	path := "/path"
-	queryParams := map[string]interface{}{"key": "value"}
+	queryParams := map[string]any{"key": "value"}
 	body := []byte("body")
 
 	// Create a mock HTTP server (verify PATCH method)
