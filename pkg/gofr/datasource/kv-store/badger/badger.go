@@ -7,10 +7,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dgraph-io/badger/v4"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
-
-	"github.com/dgraph-io/badger/v4"
 )
 
 var errStatusDown = errors.New("status down")
