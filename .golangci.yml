@@ -32,8 +32,6 @@ linters-settings:
     min-complexity: 10
   goimports:
     local-prefixes: github.com/golangci/golangci-lint
-  golint:
-    min-confidence: 0
   mnd:
     checks:
       - argument
@@ -50,8 +48,6 @@ linters-settings:
           - (gofr.dev/pkg/gofr/Logger).Errorf
   lll:
     line-length: 140
-  maligned:
-    suggest-new: true
   misspell:
     locale: US
   nolintlint:
