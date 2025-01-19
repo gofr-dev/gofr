@@ -7,11 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"go.opentelemetry.io/otel/attribute"
-
-	"go.opentelemetry.io/otel/trace"
-
 	"github.com/ClickHouse/clickhouse-go/v2"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type Config struct {

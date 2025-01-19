@@ -9,9 +9,7 @@ import (
 
 	"github.com/gocql/gocql"
 	"github.com/stoewer/go-strcase"
-
 	"go.opentelemetry.io/otel/attribute"
-
 	"go.opentelemetry.io/otel/trace"
 )
 
