@@ -16,8 +16,8 @@ You can also set up a development environment with password authentication as de
 
 ```bash
 docker run --name gofr-redis -p 2002:6379 -d \
-  -e REDIS_PASSWORD=password \
-  redis:7.0.5 --requirepass password
+	-e REDIS_PASSWORD=password \
+	redis:7.0.5 --requirepass password
 ```
 
 You can set a sample key `greeting` using the following command:
