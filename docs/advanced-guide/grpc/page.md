@@ -9,32 +9,33 @@ GoFr enables you to create gRPC handlers efficiently while leveraging GoFr's con
 **1. Protocol Buffer Compiler (`protoc`) Installation:**
 
 - **Linux (using `apt` or `apt-get`):**
+
 ```bash
-  sudo apt install -y protobuf-compiler
-  protoc --version  # Ensure compiler version is 3+
-  ```
+sudo apt install -y protobuf-compiler
+protoc --version # Ensure compiler version is 3+
+```
 
 - **macOS (using Homebrew):**
 
 ```bash
-  brew install protobuf
-  protoc --version  # Ensure compiler version is 3+
+brew install protobuf
+protoc --version # Ensure compiler version is 3+
 ```
 
 **2. Go Plugins for Protocol Compiler:**
 
 a. Install protocol compiler plugins for Go:
 
-   ```bash
-     go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.28
-     go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.2
-   ```
+```bash
+go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.28
+go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.2
+```
 
 b. Update `PATH` for `protoc` to locate the plugins:
 
-   ```bash
-     export PATH="$PATH:$(go env GOPATH)/bin"
-   ```
+```bash
+export PATH="$PATH:$(go env GOPATH)/bin"
+```
 
 ## Creating Protocol Buffers
 
@@ -44,16 +45,16 @@ For a detailed guide, refer to the official gRPC documentation's tutorial: {% ne
 
 Create a `.proto` file (e.g., `customer.proto`) to define your service and the RPC methods it provides:
 
-   ```protobuf
-   // Indicates the protocol buffer version that is being used
-   syntax = "proto3";
-   // Indicates the go package where the generated file will be produced
-   option go_package = "path/to/your/proto/file";
+```protobuf
+// Indicates the protocol buffer version that is being used
+syntax = "proto3";
+// Indicates the go package where the generated file will be produced
+option go_package = "path/to/your/proto/file";
 
-   service {serviceName}Service {
-       rpc {serviceMethod} ({serviceRequest}) returns ({serviceResponse}) {}
-   }
-   ```
+service {serviceName}Service {
+    rpc {serviceMethod} ({serviceRequest}) returns ({serviceResponse}) {}
+}
+```
 
 **2. Specify Request and Response Types:**
 
@@ -79,30 +80,32 @@ string address = 3;
 
 Run the following command to generate Go code using the Go gRPC plugins:
 
-   ```bash
-     protoc \
-   --go_out=. \
-   --go_opt=paths=source_relative \
-   --go-grpc_out=. \
-   --go-grpc_opt=paths=source_relative \
-   {serviceName}.proto
-   ```
+```bash
+protoc \
+	--go_out=. \
+	--go_opt=paths=source_relative \
+	--go-grpc_out=. \
+	--go-grpc_opt=paths=source_relative \
+	{serviceName}.proto
+```
 
 This command generates two files, `{serviceName}.pb.go` and `{serviceName}_grpc.pb.go`, containing the necessary code for performing RPC calls.
 
-## Generating gRPC Handler Template using `gofr wrap grpc` 
+## Generating gRPC Handler Template using `gofr wrap grpc`
 
 #### Prerequisite: gofr-cli must be installed
 
 To install the CLI -
+
 ```bash
-  go install gofr.dev/cli/gofr@latest
+go install gofr.dev/cli/gofr@latest
 ```
 
 **1. Use the `gofr wrap grpc` Command:**
-   ```bash
-     gofr wrap grpc -proto=./path/your/proto/file
-   ```
+
+```bash
+gofr wrap grpc -proto=./path/your/proto/file
+```
 
 This command leverages the `gofr-cli` to generate a `{serviceName}_server.go` file (e.g., `CustomerServer.go`)
 containing a template for your gRPC server implementation, including context support, in the same directory as 
@@ -119,24 +122,26 @@ that of the specified proto file.
 
 **1. Import Necessary Packages:**
 
-   ```go
-   import (
-       "gofr.dev/pkg/gofr"
-       "path/to/your/generated-grpc-server/packageName"
-   )
-   ```
+```go
+import (
+	"path/to/your/generated-grpc-server/packageName"
+
+	"gofr.dev/pkg/gofr"
+)
+```
 
 **2. Register the Service in your `main.go`:**
 
-   ```go
-   func main() {
-       app := gofr.New()
+```go
+func main() {
+    app := gofr.New()
 
-       packageName.Register{serviceName}ServerWithGofr(app, &packageName.{serviceName}GoFrServer{})
+    packageName.Register{serviceName}ServerWithGofr(app, &packageName.{serviceName}GoFrServer{})
 
-       app.Run()
-   }
-   ```
+    app.Run()
+}
+```
+
 >Note: By default, gRPC server will run on port 9000, to customize the port users can set `GRPC_PORT` config in the .env
 
 > ##### Check out the example of setting up a gRPC server in GoFr: [Visit GitHub](https://github.com/gofr-dev/gofr/blob/main/examples/grpc-server/main.go)
