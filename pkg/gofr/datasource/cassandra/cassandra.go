@@ -7,10 +7,9 @@ import (
 	"reflect"
 	"time"
 
+	"github.com/gocql/gocql"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
-
-	"github.com/gocql/gocql"
 )
 
 const (
