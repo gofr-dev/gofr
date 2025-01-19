@@ -147,9 +147,9 @@ func (l *logger) Fatalf(format string, args ...interface{}) {
 }
 
 func (l *logger) prettyPrint(e logEntry, out io.Writer) {
-	// Note: we need to lock the pretty print as printing to stdandard output not concurency safe
-	// the logs when printed in go routines were getting missaligned since we are achieveing
-	// a single line of log, in 2 separate statements which caused the missalignment.
+	// Note: we need to lock the pretty print as printing to standard output not concurrency safe
+	// the logs when printed in go routines were getting misaligned since we are achieving
+	// a single line of log, in 2 separate statements which caused the misalignment.
 	l.lock <- struct{}{} // Acquire the channel's lock
 	defer func() {
 		<-l.lock // Release the channel's token

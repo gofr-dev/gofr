@@ -128,7 +128,7 @@ type QueryLastResponse struct {
 // It holds the response item defined in the
 // [OpenTSDB Official Docs]: http://opentsdb.net/docs/build/html/api_http/query/last.html.
 type QueryRespLastItem struct {
-	// Name of the metric retreived for the time series.
+	// Name of the metric retrieved for the time series.
 	// Only returned if resolve was set to true.
 	Metric string `json:"metric"`
 
