@@ -1,6 +1,6 @@
 # gRPC with Gofr
 
-We have already seen how GoFr can help ease the development of HTTP servers, but there are cases where performance is primarily required sacrificing flexibility. In these types of scenarios gRPC protocol comes into picture. {% new-tab-link title="gRPC" href="https://grpc.io/docs/what-is-grpc/introduction/" /%} is an open-source RPC(Remote Procedure Call) framework initially developed by Google. 
+We have already seen how GoFr can help ease the development of HTTP servers, but there are cases where performance is primarily required sacrificing flexibility. In these types of scenarios gRPC protocol comes into picture. {% new-tab-link title="gRPC" href="https://grpc.io/docs/what-is-grpc/introduction/" /%} is an open-source RPC(Remote Procedure Call) framework initially developed by Google.
 
 GoFr simplifies creating gRPC servers and enables efficient tracing across inter-service calls, leveraging its context for seamless data access and trace management in your handlers.
 
@@ -52,28 +52,28 @@ syntax = "proto3";
 option go_package = "path/to/your/proto/file";
 
 service {serviceName}Service {
-    rpc {serviceMethod} ({serviceRequest}) returns ({serviceResponse}) {}
-}
+rpc {serviceMethod} ({serviceRequest}) returns ({serviceResponse}) {}
+        }
 ```
 
 **2. Specify Request and Response Types:**
 
-Users must define the type of message being exchanged between server and client, for protocol buffer to serialize them when making a remote 
+Users must define the type of message being exchanged between server and client, for protocol buffer to serialize them when making a remote
 procedure call. Below is a generic representation for services' gRPC messages type.
 
 ```protobuf
 message {serviceRequest} {
 int64 id = 1;
-string name = 2;
+        string name = 2;
 // other fields that can be passed
-}
+        }
 
 message {serviceResponse} {
 int64 id = 1;
-string name = 2;
+        string name = 2;
 string address = 3;
 // other customer related fields
-}
+        }
 ```
 
 **3. Generate Go Code:**
@@ -102,23 +102,23 @@ To install the CLI -
 
 **1. Use the `gofr wrap grpc server` Command:**
    ```bash
-  gofr grpc grpc server -proto=./path/your/proto/file
+  gofr wrap grpc server -proto=./path/your/proto/file
    ```
 
 ```bash
-  gofr grpc grpc -proto=./path/your/proto/file
+  gofr wrap grpc -proto=./path/your/proto/file
 ```
 
 This command leverages the `gofr-cli` to generate a `{serviceName}_server.go` file (e.g., `customer_server.go`)
-containing a template for your gRPC server implementation, including context support, in the same directory as 
+containing a template for your gRPC server implementation, including context support, in the same directory as
 that of the specified proto file.
 
 **2. Modify the Generated Code:**
 
 - Customize the `{serviceName}GoFrServer` struct with required dependencies and fields.
 - Implement the `{serviceMethod}` method to handle incoming requests, as required in this usecase:
-    - Bind the request payload using `ctx.Bind(&{serviceRequest})`.
-    - Process the request and generate a response.
+  - Bind the request payload using `ctx.Bind(&{serviceRequest})`.
+  - Process the request and generate a response.
 
 ## Registering the gRPC Service with Gofr
 
@@ -150,7 +150,7 @@ func main() {
 
 **1. Use the `gofr wrap grpc client` Command:**
    ```bash
-     gofr grpc grpc client -proto=./path/your/proto/file
+     gofr wrap grpc client -proto=./path/your/proto/file
    ```
 This command leverages the `gofr-cli` to generate a `{serviceName}_client.go` file (e.g., `customer_client.go`). This file must not be modified.
 
