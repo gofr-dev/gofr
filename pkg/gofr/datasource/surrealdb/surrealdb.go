@@ -429,13 +429,15 @@ func (c *Client) Create(ctx context.Context, table string, data any) (map[string
 	return result, nil
 }
 
+var errNoRecord = errors.New("no record found")
+
 // Update modifies an existing record in the specified table.
 func (c *Client) Update(ctx context.Context, table, id string, data any) (any, error) {
 	if c.db == nil {
 		return nil, errNotConnected
 	}
 
-	query := fmt.Sprintf("UPDATE %s SET data = $1 WHERE id = $2", table)
+	query := fmt.Sprintf("UPDATE %s SET", table)
 	span := c.addTrace(ctx, "Update", query)
 
 	if span != nil {
@@ -454,26 +456,31 @@ func (c *Client) Update(ctx context.Context, table, id string, data any) (any, e
 		Span:          span,
 	}, startTime)
 
+	dataMap := data.(map[string]any)
+
 	var updateResult Response
 
-	if err := c.db.Send(&updateResult, "update", table, data, id); err != nil {
+	updateQuery := fmt.Sprintf(`
+        UPDATE %s:%s SET 
+        name = $name, 
+        age = $age, 
+        email = $email
+        RETURN *`, table, id)
+
+	if err := c.db.Send(&updateResult, "query", updateQuery, map[string]any{
+		"name":  dataMap["name"],
+		"age":   dataMap["age"],
+		"email": dataMap["email"],
+	}); err != nil {
 		return nil, err
 	}
 
-	resultSlice := updateResult.Result.([]any)
-	resMap := make(map[string]any)
-
-	for _, r := range resultSlice {
-		rMap := r.(map[any]any)
-		for k, v := range rMap {
-			kStr := k.(string)
-			resMap[kStr] = v
-		}
+	resultSlice, ok := updateResult.Result.([]any)
+	if !ok || len(resultSlice) == 0 {
+		return nil, errNoRecord
 	}
 
-	c.metrics.RecordHistogram(ctx, "surreal_db_operation_duration", 0, "operation", "update")
-
-	return resMap, nil
+	return resultSlice[0], nil
 }
 
 // Insert inserts a new record into the specified table in SurrealDB.

@@ -343,15 +343,36 @@ func Test_Update(t *testing.T) {
 
 	t.Run("successful update", func(t *testing.T) {
 		ctx := context.Background()
-		data := map[string]any{
-			"name": "updated",
+		data := map[string]interface{}{
+			"name":  "updated",
+			"age":   25,
+			"email": "test@example.com",
+		}
+
+		// Match the new update query format
+		expectedQuery := `
+        UPDATE users:123 SET 
+        name = $name, 
+        age = $age, 
+        email = $email
+        RETURN *`
+
+		expectedParams := map[string]interface{}{
+			"name":  "updated",
+			"age":   25,
+			"email": "test@example.com",
 		}
 
 		updateResponse := Response{
-			Result: []any{
-				map[any]any{
-					"id":   "user:123",
-					"name": "updated",
+			Result: []interface{}{
+				map[string]interface{}{
+					"id": map[string]interface{}{
+						"Table": "users",
+						"ID":    "123",
+					},
+					"name":  "updated",
+					"age":   25,
+					"email": "test@example.com",
 				},
 			},
 		}
@@ -360,14 +381,20 @@ func Test_Update(t *testing.T) {
 			Debug(gomock.Any()).
 			AnyTimes()
 
-		mockMetrics.EXPECT().
-			RecordHistogram(ctx, "surreal_db_operation_duration", float64(0), "operation", "update")
-
-		mockConn.EXPECT().Send(gomock.Any(), "update", "users", data).Return(nil).SetArg(0, updateResponse)
+		mockConn.EXPECT().
+			Send(gomock.Any(), "query", expectedQuery, expectedParams).
+			Return(nil).
+			SetArg(0, updateResponse)
 
 		result, err := client.Update(ctx, "users", "123", data)
 		require.NoError(t, err)
 		assert.NotNil(t, result)
+
+		resultMap, ok := result.(map[string]interface{})
+		require.True(t, ok)
+		assert.Equal(t, "updated", resultMap["name"])
+		assert.Equal(t, 25, resultMap["age"])
+		assert.Equal(t, "test@example.com", resultMap["email"])
 	})
 
 	t.Run("not connected error", func(t *testing.T) {
