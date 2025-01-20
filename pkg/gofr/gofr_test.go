@@ -59,7 +59,6 @@ func TestGoFr_isPortAvailable(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if !tt.isAvailable {
-
 				g := New()
 
 				go g.Run()
@@ -200,7 +199,6 @@ func Test_AddDuplicateHTTPService(t *testing.T) {
 	t.Setenv("LOG_LEVEL", "DEBUG")
 
 	logs := testutil.StdoutOutputForFunc(func() {
-
 		a := New()
 
 		a.AddHTTPService("test-service", "http://localhost")
@@ -808,7 +806,7 @@ func Test_SwaggerEndpoints(t *testing.T) {
 	}
 
 	re, _ := http.NewRequestWithContext(context.Background(), http.MethodGet,
-		fmt.Sprintf("http://localhost:%d", configs.HTTPPort)+"/.well-known/swagger", http.NoBody)
+		fmt.Sprintf("http://localhost:%s", configs.HTTPHost)+"/.well-known/swagger", http.NoBody)
 	resp, err := netClient.Do(re)
 
 	defer func() {
@@ -860,6 +858,7 @@ func Test_AddCronJob_Success(t *testing.T) {
 }
 
 func setupTestEnvironment(t *testing.T) (host string, htmlContent []byte) {
+	t.Helper()
 	configs := testutil.NewServerConfigs(t)
 
 	// Generating some files for testing
@@ -879,7 +878,7 @@ func setupTestEnvironment(t *testing.T) (host string, htmlContent []byte) {
 	go app.Run()
 	time.Sleep(100 * time.Millisecond)
 
-	host = fmt.Sprintf("http://localhost:%d", configs.HTTPPort)
+	host = configs.HTTPHost
 
 	return host, htmlContent
 }
@@ -1030,6 +1029,7 @@ func Test_Shutdown(t *testing.T) {
 func TestApp_SubscriberInitialize(t *testing.T) {
 	t.Run("subscriber is initialized", func(t *testing.T) {
 		testutil.NewServerConfigs(t)
+
 		app := New()
 
 		mockContainer := container.Container{

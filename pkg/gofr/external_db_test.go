@@ -184,8 +184,7 @@ func TestApp_AddOpenTSDB(t *testing.T) {
 }
 func TestApp_AddScyllaDB(t *testing.T) {
 	t.Run("Adding ScyllaDB", func(t *testing.T) {
-		port := testutil.GetFreePort(t)
-		t.Setenv("METRICS_PORT", strconv.Itoa(port))
+		testutil.NewServerConfigs(t)
 
 		app := New()
 

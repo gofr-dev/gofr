@@ -3,7 +3,6 @@ package gofr
 import (
 	"encoding/json"
 	"fmt"
-	"gofr.dev/pkg/gofr/testutil"
 	"net/http/httptest"
 	"reflect"
 	"testing"
@@ -12,6 +11,8 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"gofr.dev/pkg/gofr/testutil"
 )
 
 func Test_WebSocket_Success(t *testing.T) {
