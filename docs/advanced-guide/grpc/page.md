@@ -102,11 +102,11 @@ To install the CLI -
 
 **1. Use the `gofr wrap grpc server` Command:**
    ```bash
-  gofr wrap grpc server -proto=./path/your/proto/file
+  gofr grpc grpc server -proto=./path/your/proto/file
    ```
 
 ```bash
-  gofr wrap grpc -proto=./path/your/proto/file
+  gofr grpc grpc -proto=./path/your/proto/file
 ```
 
 This command leverages the `gofr-cli` to generate a `{serviceName}_server.go` file (e.g., `customer_server.go`)
@@ -150,7 +150,7 @@ func main() {
 
 **1. Use the `gofr wrap grpc client` Command:**
    ```bash
-     gofr wrap grpc client -proto=./path/your/proto/file
+     gofr grpc grpc client -proto=./path/your/proto/file
    ```
 This command leverages the `gofr-cli` to generate a `{serviceName}_client.go` file (e.g., `customer_client.go`). This file must not be modified.
 
