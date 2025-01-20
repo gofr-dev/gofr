@@ -68,6 +68,12 @@ linters-settings:
       - name: error-return
       - name: error-strings
       - name: errorf
+      - name: exported
+        arguments:
+          # enables checking public methods of private types
+          - "checkPrivateReceivers"
+          # make error messages clearer
+          - "sayRepetitiveInsteadOfStutters"
       - name: increment-decrement
       - name: indent-error-flow
       - name: range
@@ -146,6 +152,9 @@ linters:
   # - testpackage # We also need to do unit test for unexported functions. And adding _internal in all files is cumbersome.
 
 issues:
+  include:
+    - EXC0014
+
   # exclude-use-default: false
   # exclude-use-default: false # By default, golangci-lint does not enforce comments on exported types. We want it.
   # Excluding configuration per-path, per-linter, per-text and per-source

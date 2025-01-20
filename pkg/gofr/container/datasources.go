@@ -13,6 +13,7 @@ import (
 )
 
 //go:generate go run go.uber.org/mock/mockgen -source=datasources.go -destination=mock_datasources.go -package=container
+
 type DB interface {
 	Query(query string, args ...any) (*sql.Rows, error)
 	QueryRow(query string, args ...any) *sql.Row
@@ -405,7 +406,6 @@ type OpenTSDBProvider interface {
 // through its REST APIs. Each method corresponds to an API endpoint defined in the
 // OpenTSDB documentation (http://opentsdb.net/docs/build/html/api_http/index.html#api-endpoints).
 type OpenTSDB interface {
-
 	// HealthChecker verifies if the OpenTSDB server is reachable.
 	// Returns an error if the server is unreachable, otherwise nil.
 	HealthChecker
