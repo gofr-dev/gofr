@@ -94,7 +94,7 @@ type ConnectionHub struct {
 	WebSocketConnections map[string]*Connection
 }
 
-// New intializes a new websocket manager with default websocket upgrader.
+// New initializes a new websocket manager with default websocket upgrader.
 func New() *Manager {
 	return &Manager{
 		WebSocketUpgrader: NewWSUpgrader(),
@@ -110,7 +110,7 @@ func (u *WSUpgrader) Upgrade(w http.ResponseWriter, r *http.Request, responseHea
 	return u.Upgrader.Upgrade(w, r, responseHeader)
 }
 
-// GetWebsocketConnection returns a websocket connection which has been intialized in the middleware.
+// GetWebsocketConnection returns a websocket connection which has been initialized in the middleware.
 func (ws *Manager) GetWebsocketConnection(connID string) *Connection {
 	ws.mu.Lock()
 	defer ws.mu.Unlock()
