@@ -8,7 +8,7 @@ import (
 )
 
 // Error can also be returned from all the methods, but it is decided not to do so such that to keep the usage clean -
-// as any errors are already being logged from here. Otherwise, user would need to check the error everytime.
+// as any errors are already being logged from here. Otherwise, user would need to check the error every time.
 
 // Manager defines the interface for registering and interacting with different types of metrics
 // (counters, up-down counters, histograms, and gauges).

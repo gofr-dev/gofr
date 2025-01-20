@@ -59,6 +59,7 @@ package main
 
 import (
 	"time"
+
 	"gofr.dev/pkg/gofr"
 	"gofr.dev/pkg/gofr/websocket"
 )
@@ -67,11 +68,11 @@ func main() {
 	app := gofr.New()
 
 	wsUpgrader := websocket.NewWSUpgrader(
-		websocket.WithHandshakeTimeout(5 * time.Second), // Set handshake timeout
-		websocket.WithReadBufferSize(2048),              // Set read buffer size
-		websocket.WithWriteBufferSize(2048),             // Set write buffer size
-		websocket.WithSubprotocols("chat", "binary"),    // Specify subprotocols
-		websocket.WithCompression(),                     // Enable compression
+		websocket.WithHandshakeTimeout(5*time.Second), // Set handshake timeout
+		websocket.WithReadBufferSize(2048),            // Set read buffer size
+		websocket.WithWriteBufferSize(2048),           // Set write buffer size
+		websocket.WithSubprotocols("chat", "binary"),  // Specify subprotocols
+		websocket.WithCompression(),                   // Enable compression
 	)
 
 	app.OverrideWebSocketUpgrader(wsUpgrader)
