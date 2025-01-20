@@ -1,6 +1,7 @@
 # GRPC Client Example
-This GoFr example demonstrates a simple gRPC server that communicates with another gRPC service hosted on a different machine. It serves as a client for another gRPC example included in this examples folder. For detailed instructions on setting up gRPC handlers with GoFr’s context support—enabling built-in tracing and database integration within your gRPC handlers—please refer to our [official documentation](https://gofr.dev/docs/advanced-guide/grpc).
 
+This GoFr example demonstrates a simple gRPC server that communicates with another gRPC service hosted on a different machine. It serves as a client for another gRPC example included in this examples folder.
+Refer to the documentation to setup
 
 ### Steps to Run the Example
 
