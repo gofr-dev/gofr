@@ -59,6 +59,7 @@ type Container struct {
 	Solr       Solr
 	DGraph     Dgraph
 	OpenTSDB   OpenTSDB
+	ScyllaDB   ScyllaDB
 
 	KVStore KVStore
 
@@ -103,7 +104,7 @@ func (c *Container) Create(conf config.Config) {
 		}
 	}
 
-	c.Debug("Container is being created")
+	c.Logger.Debug("Container is being created")
 
 	c.metricsManager = metrics.NewMetricsManager(exporters.Prometheus(c.GetAppName(), c.GetAppVersion()), c.Logger)
 

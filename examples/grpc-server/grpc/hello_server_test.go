@@ -2,20 +2,15 @@ package grpc
 
 import (
 	"context"
+	"gofr.dev/pkg/gofr"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"gofr.dev/pkg/gofr/container"
 )
 
 func TestServer_SayHello(t *testing.T) {
-	c, _ := container.NewMockContainer(t)
-
-	s := Server{
-		Container: c,
-	}
+	s := HelloGoFrServer{}
 
 	tests := []struct {
 		input string
@@ -28,10 +23,22 @@ func TestServer_SayHello(t *testing.T) {
 
 	for i, tc := range tests {
 		req := &HelloRequest{Name: tc.input}
-		resp, err := s.SayHello(context.Background(), req)
+
+		request := &HelloRequestWrapper{
+			context.Background(),
+			req,
+		}
+
+		ctx := &gofr.Context{
+			Request: request,
+		}
+
+		resp, err := s.SayHello(ctx)
+		grpcResponse, ok := resp.(*HelloResponse)
+		require.True(t, ok)
 
 		require.NoError(t, err, "TEST[%d], Failed.\n", i)
 
-		assert.Equal(t, tc.resp, resp.Message, "TEST[%d], Failed.\n", i)
+		assert.Equal(t, tc.resp, grpcResponse.Message, "TEST[%d], Failed.\n", i)
 	}
 }
