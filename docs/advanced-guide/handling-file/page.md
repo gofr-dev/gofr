@@ -13,13 +13,13 @@ GoFr also supports FTP/SFTP file-store. Developers can also connect and use thei
 package main
 
 import (
-    "gofr.dev/pkg/gofr"
+	"gofr.dev/pkg/gofr"
 
-    "gofr.dev/pkg/gofr/datasource/file/ftp"
+	"gofr.dev/pkg/gofr/datasource/file/ftp"
 )
 
 func main() {
-    app := gofr.New()
+	app := gofr.New()
 
 	app.AddFileStore(ftp.New(&ftp.Config{
 		Host:      "127.0.0.1",
@@ -28,8 +28,8 @@ func main() {
 		Port:      21,
 		RemoteDir: "/ftp/user",
 	}))
-    
-    app.Run()
+
+	app.Run()
 }
 ```
 
@@ -38,22 +38,22 @@ func main() {
 package main
 
 import (
-    "gofr.dev/pkg/gofr"
+	"gofr.dev/pkg/gofr"
 
-    "gofr.dev/pkg/gofr/datasource/file/sftp"
+	"gofr.dev/pkg/gofr/datasource/file/sftp"
 )
 
 func main() {
-    app := gofr.New()
+	app := gofr.New()
 
 	app.AddFileStore(sftp.New(&sftp.Config{
-		Host:      "127.0.0.1",
-		User:      "user",
-		Password:  "password",
-		Port:      22,
+		Host:     "127.0.0.1",
+		User:     "user",
+		Password: "password",
+		Port:     22,
 	}))
-    
-    app.Run()
+
+	app.Run()
 }
 ```
 
@@ -67,16 +67,14 @@ To run S3 File-Store locally we can use localstack,
 package main
 
 import (
-    "gofr.dev/pkg/gofr"
+	"gofr.dev/pkg/gofr"
 
-    "gofr.dev/pkg/gofr/datasource/file/s3"
+	"gofr.dev/pkg/gofr/datasource/file/s3"
 )
 
 func main() {
-    app := gofr.New()
-	
-	
-	
+	app := gofr.New()
+
 	// Note that currently we do not handle connections through session token.
 	// BaseEndpoint is not necessary while connecting to AWS as it automatically resolves it on the basis of region.
 	// However, in case we are using any other AWS compatible service, such like running or testing locally, then this needs to be set.
@@ -88,8 +86,8 @@ func main() {
 		AccessKeyID:     app.Config.Get("AWS_ACCESS_KEY_ID"),
 		SecretAccessKey: app.Config.Get("AWS_SECRET_ACCESS_KEY"),
 	}))
-    
-    app.Run()
+
+	app.Run()
 }
 ```
 > Note: The current implementation supports handling only one bucket at a time, 
@@ -174,7 +172,7 @@ for reader.Next() {
 	var b string
 		
 	// For reading CSV/TEXT files user need to pass pointer to string to SCAN.
-	// Incase of JSON user should pass structs with JSON tags as defined in encoding/json.
+	// In case of JSON user should pass structs with JSON tags as defined in encoding/json.
 	err = reader.Scan(&b)
 
 	fmt.Println(b)
@@ -202,7 +200,6 @@ _, err = csvFile.WriteAt([]byte("test content"), 4)
 if err != nil {
      return nil, err
 }
-
 ```
 
 ### Getting Information of the file/directory
@@ -217,7 +214,6 @@ if entry.IsDir() {
 }
 
 fmt.Printf("%v: %v Size: %v Last Modified Time : %v\n" entryType, entry.Name(), entry.Size(), entry.ModTime())
-
 ```
 >Note: In S3:
 > - Names without a file extension are treated as directories by default.

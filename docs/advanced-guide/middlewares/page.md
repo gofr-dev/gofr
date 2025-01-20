@@ -34,36 +34,36 @@ The UseMiddleware method is ideal for simple middleware that doesn't need direct
 
 ```go
 import (
-    "net/http"
+	"net/http"
 
-    gofrHTTP "gofr.dev/pkg/gofr/http"
+	gofrHTTP "gofr.dev/pkg/gofr/http"
 )
 
 // Define your custom middleware function
 func customMiddleware() gofrHTTP.Middleware {
-    return func(inner http.Handler) http.Handler {
-        return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-            // Your custom logic here
-            // For example, logging, authentication, etc.
-            
-            // Call the next handler in the chain
-            inner.ServeHTTP(w, r)
-        })
-    }
+	return func(inner http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Your custom logic here
+			// For example, logging, authentication, etc.
+
+			// Call the next handler in the chain
+			inner.ServeHTTP(w, r)
+		})
+	}
 }
 
 func main() {
-    // Create a new instance of your GoFr application
-    app := gofr.New()
+	// Create a new instance of your GoFr application
+	app := gofr.New()
 
-    // Add your custom middleware to the application
-    app.UseMiddleware(customMiddleware())
+	// Add your custom middleware to the application
+	app.UseMiddleware(customMiddleware())
 
-    // Define your application routes and handlers
-    // ...
+	// Define your application routes and handlers
+	// ...
 
-    // Run your GoFr application
-    app.Run()
+	// Run your GoFr application
+	app.Run()
 }
 ```
 

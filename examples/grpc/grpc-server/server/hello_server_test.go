@@ -1,12 +1,13 @@
-package grpc
+package server
 
 import (
 	"context"
-	"gofr.dev/pkg/gofr"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"gofr.dev/pkg/gofr"
 )
 
 func TestServer_SayHello(t *testing.T) {

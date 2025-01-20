@@ -98,7 +98,7 @@ export const navigation = [
                 desc: "Explore strategies for managing data migrations within your GoFR application to ensure smooth transitions and data integrity."
             },
             {
-                title: 'Writing gRPC Server',
+                title: 'Writing gRPC Server/Client',
                 href: '/docs/advanced-guide/grpc',
                 desc: "Step-by-step guide on writing a gRPC server in GoFR to facilitate efficient communication between services."
             },

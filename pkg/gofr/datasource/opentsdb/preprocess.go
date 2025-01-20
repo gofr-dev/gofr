@@ -64,7 +64,7 @@ type SubQuery struct {
 	// The value is required with non-empty one in the range of
 	// the response of calling /api/aggregators.
 	//
-	// By default, the potential values and corresponding descriptions are as followings:
+	// By default, the potential values and corresponding descriptions are as following:
 	//   "sum": Adds all of the data points for a timestamp.
 	//   "min": Picks the smallest data point for each timestamp.
 	//   "max": Picks the largest data point for each timestamp.
