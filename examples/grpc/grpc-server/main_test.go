@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"gofr.dev/examples/grpc/grpc-server/server"
 	"strconv"
 	"testing"
 	"time"
@@ -12,7 +13,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	grpcExample "gofr.dev/examples/grpc-server/grpc"
 	"gofr.dev/pkg/gofr/testutil"
 )
 
@@ -32,15 +32,15 @@ func TestGRPCServer(t *testing.T) {
 
 	tests := []struct {
 		desc            string
-		request         *grpcExample.HelloRequest
+		request         *server.HelloRequest
 		expectedErr     error
 		responseMessage string
 	}{
-		{"SayHello with name", &grpcExample.HelloRequest{Name: "John"},
+		{"SayHello with name", &server.HelloRequest{Name: "John"},
 			nil, "Hello John!"},
-		{"SayHello without name", &grpcExample.HelloRequest{},
+		{"SayHello without name", &server.HelloRequest{},
 			nil, "Hello World!"},
-		{"Name exceeding limit", &grpcExample.HelloRequest{Name: "This name exceeds the allowed maximum length."},
+		{"Name exceeding limit", &server.HelloRequest{Name: "This name exceeds the allowed maximum length."},
 			nil, "Hello This name exceeds the allowed maximum length.!"},
 	}
 
@@ -58,27 +58,27 @@ func TestGRPCServer(t *testing.T) {
 	// Test context cancellation
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	_, err = client.SayHello(ctx, &grpcExample.HelloRequest{Name: "Test"})
+	_, err = client.SayHello(ctx, &server.HelloRequest{Name: "Test"})
 	assert.Equal(t, "rpc error: code = Canceled desc = context canceled", err.Error())
 }
 
-func createGRPCClient(t *testing.T, host string) (grpcExample.HelloClient, *grpc.ClientConn) {
+func createGRPCClient(t *testing.T, host string) (server.HelloClient, *grpc.ClientConn) {
 	conn, err := grpc.Dial(host, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Errorf("did not connect: %s", err)
 	}
 
-	return grpcExample.NewHelloClient(conn), conn
+	return server.NewHelloClient(conn), conn
 }
 
 func TestHelloProtoMethods(t *testing.T) {
 	// Test HelloRequest methods
-	req := &grpcExample.HelloRequest{Name: "John"}
+	req := &server.HelloRequest{Name: "John"}
 	assert.Equal(t, "John", req.GetName())
 	assert.Equal(t, "name:\"John\"", req.String())
 
 	// Test HelloResponse methods
-	resp := &grpcExample.HelloResponse{Message: "Hello World"}
+	resp := &server.HelloResponse{Message: "Hello World"}
 	assert.Equal(t, "Hello World", resp.GetMessage())
 	assert.Equal(t, "message:\"Hello World\"", resp.String())
 }
