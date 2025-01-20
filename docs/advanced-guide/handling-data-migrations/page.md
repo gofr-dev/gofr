@@ -23,7 +23,6 @@ package migrations
 
 import "gofr.dev/pkg/gofr/migration"
 
-
 const createTable = `CREATE TABLE IF NOT EXISTS employee
 (
     id             int         not null
@@ -89,7 +88,6 @@ func main() {
 	// Run the application
 	a.Run()
 }
-
 ```
 
 When we run the app we will see the following logs for migrations which ran successfully.
@@ -171,7 +169,7 @@ When using batch operations, consider using a `LoggedBatch` for atomicity or an 
 package migrations
 
 import (
-    "gofr.dev/pkg/gofr/migration"
+	"gofr.dev/pkg/gofr/migration"
 )
 
 const (
@@ -181,52 +179,52 @@ const (
                             gender text,
                             number text
                             );`
-	
+
 	addCassandraRecords = `BEGIN BATCH
                            INSERT INTO employee (id, name, gender, number) VALUES (1, 'Alison', 'F', '1234567980');
                            INSERT INTO employee (id, name, gender, number) VALUES (2, 'Alice', 'F', '9876543210');
                            APPLY BATCH;
                            `
-	
+
 	employeeDataCassandra = `INSERT INTO employee (id, name, gender, number) VALUES (?, ?, ?, ?);`
 )
 
 func createTableEmployeeCassandra() migration.Migrate {
-    return migration.Migrate{
-        UP: func(d migration.Datasource) error {
-            // Execute the create table statement
-            if err := d.Cassandra.Exec(createTableCassandra); err != nil {
-                return err
-            }
+	return migration.Migrate{
+		UP: func(d migration.Datasource) error {
+			// Execute the create table statement
+			if err := d.Cassandra.Exec(createTableCassandra); err != nil {
+				return err
+			}
 
-            // Batch processes can also be executed in Exec as follows:
+			// Batch processes can also be executed in Exec as follows:
 			if err := d.Cassandra.Exec(addCassandraRecords); err != nil {
 				return err
-			}	
+			}
 
-            // Create a new batch operation
-            batchName := "employeeBatch"
-            if err := d.Cassandra.NewBatch(batchName, 0); err != nil { // 0 for LoggedBatch
-                return err
-            }
+			// Create a new batch operation
+			batchName := "employeeBatch"
+			if err := d.Cassandra.NewBatch(batchName, 0); err != nil { // 0 for LoggedBatch
+				return err
+			}
 
-            // Add multiple queries to the batch
-            if err := d.Cassandra.BatchQuery(batchName, employeeDataCassandra, 1, "Harry", "M", "1234567980"); err != nil {
-                return err
-            }
+			// Add multiple queries to the batch
+			if err := d.Cassandra.BatchQuery(batchName, employeeDataCassandra, 1, "Harry", "M", "1234567980"); err != nil {
+				return err
+			}
 
-            if err := d.Cassandra.BatchQuery(batchName, employeeDataCassandra, 2, "John", "M", "9876543210"); err != nil {
-                return err
-            }
+			if err := d.Cassandra.BatchQuery(batchName, employeeDataCassandra, 2, "John", "M", "9876543210"); err != nil {
+				return err
+			}
 
-            // Execute the batch operation
-            if err := d.Cassandra.ExecuteBatch(batchName); err != nil {
-                return err
-            }
+			// Execute the batch operation
+			if err := d.Cassandra.ExecuteBatch(batchName); err != nil {
+				return err
+			}
 
-            return nil
-        },
-    }
+			return nil
+		},
+	}
 }
 ```
 

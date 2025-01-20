@@ -7,6 +7,7 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
+
 	"gofr.dev/pkg/gofr/testutil"
 )
 
