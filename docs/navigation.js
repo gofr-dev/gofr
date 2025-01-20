@@ -165,7 +165,7 @@ export const navigation = [
             {
                 title: 'Testing',
                 href: '/docs/references/testing',
-                desc: "GoFR provides a centralized collection of mocks to facilitate writing effective unit tests. Explore testing strategies and tools for GoFR applications, ensuring your code is robust, reliable, and maintainable."
+                desc: "GoFR provides a centralized collection of mocks to facilitate writing effective unit tests. Explore testing strategies and tools for GoFR applications, ensuring the code is robust, reliable, and maintainable."
             }
         ],
     },
