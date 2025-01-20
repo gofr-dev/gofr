@@ -4,7 +4,7 @@
 // 	protoc        v3.7.0
 // source: hello.proto
 
-package grpc
+package client
 
 import (
 	reflect "reflect"
