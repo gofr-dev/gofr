@@ -29,11 +29,17 @@ type RPCLog struct {
 }
 
 func (l RPCLog) PrettyPrint(writer io.Writer) {
-	// checking the length of status code to match the spacing that is being done in HTTP logs after status codes
-	statusCodeLen := 9 - int(math.Log10(float64(l.StatusCode))) + 1
+	var statusCodeLen int
 
+	if l.StatusCode <= 0 {
+		statusCodeLen = 1 // Default to 1 if StatusCode is invalid
+	} else {
+		statusCodeLen = 9 - int(math.Log10(float64(l.StatusCode))) + 1
+	}
+
+	// Print the log message with dynamic width for the status code
 	fmt.Fprintf(writer, "\u001B[38;5;8m%s \u001B[38;5;%dm%-6d"+
-		"\u001B[0m %*d\u001B[38;5;8mµs\u001B[0m %s \n",
+		"\u001B[0m %-*d\u001B[38;5;8mµs\u001B[0m %s \n",
 		l.ID, colorForGRPCCode(l.StatusCode),
 		l.StatusCode, statusCodeLen, l.ResponseTime, l.Method)
 }

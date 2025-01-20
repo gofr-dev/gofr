@@ -1,5 +1,5 @@
 syntax = "proto3";
-option go_package = "gofr.dev/examples/grpc-client/client";
+option go_package = "gofr.dev/examples/client-client/client";
 
 message HelloRequest {
   string name = 1;
