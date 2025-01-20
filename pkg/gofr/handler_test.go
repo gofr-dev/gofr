@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"strconv"
 	"testing"
 	"time"
 
@@ -238,8 +237,7 @@ func TestHandler_livelinessHandler(t *testing.T) {
 }
 
 func TestHandler_healthHandler(t *testing.T) {
-	metricsPort := testutil.GetFreePort(t)
-	t.Setenv("METRICS_PORT", strconv.Itoa(metricsPort))
+	testutil.NewServerConfigs(t)
 
 	a := New()
 

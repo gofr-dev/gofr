@@ -2,9 +2,7 @@ package main
 
 import (
 	"bytes"
-	"fmt"
 	"net/http"
-	"strconv"
 	"testing"
 	"time"
 
@@ -14,12 +12,9 @@ import (
 )
 
 func TestExampleMigration(t *testing.T) {
-	httpPort := testutil.GetFreePort(t)
-	t.Setenv("HTTP_PORT", strconv.Itoa(httpPort))
-	host := fmt.Sprint("http://localhost:", httpPort)
+	configs := testutil.NewServerConfigs(t)
 
-	port := testutil.GetFreePort(t)
-	t.Setenv("METRICS_PORT", strconv.Itoa(port))
+	host := configs.HTTPHost
 
 	go main()
 	time.Sleep(100 * time.Millisecond) // Giving some time to start the server

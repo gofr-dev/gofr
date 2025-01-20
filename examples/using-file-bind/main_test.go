@@ -2,12 +2,10 @@ package main
 
 import (
 	"bytes"
-	"fmt"
 	"io"
 	"mime/multipart"
 	"net/http"
 	"os"
-	"strconv"
 	"testing"
 	"time"
 
@@ -17,19 +15,14 @@ import (
 )
 
 func TestMain_BindError(t *testing.T) {
-	httpPort := testutil.GetFreePort(t)
-	t.Setenv("HTTP_PORT", strconv.Itoa(httpPort))
-	host := fmt.Sprint("http://localhost:", httpPort)
-
-	port := testutil.GetFreePort(t)
-	t.Setenv("METRICS_PORT", strconv.Itoa(port))
+	configs := testutil.NewServerConfigs(t)
 
 	go main()
 	time.Sleep(100 * time.Millisecond)
 
 	c := http.Client{}
 
-	req, _ := http.NewRequest(http.MethodPost, host+"/upload", http.NoBody)
+	req, _ := http.NewRequest(http.MethodPost, configs.HTTPHost+"/upload", http.NoBody)
 	req.Header.Set("content-type", "multipart/form-data")
 	resp, err := c.Do(req)
 
@@ -37,7 +30,7 @@ func TestMain_BindError(t *testing.T) {
 	require.NoError(t, err)
 
 	buf, contentType := generateMultiPartBody(t)
-	req, _ = http.NewRequest(http.MethodPost, host+"/upload", buf)
+	req, _ = http.NewRequest(http.MethodPost, configs.HTTPHost+"/upload", buf)
 	req.Header.Set("content-type", contentType)
 	req.ContentLength = int64(buf.Len())
 

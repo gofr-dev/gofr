@@ -22,10 +22,7 @@ import (
 )
 
 func TestIntegration_SimpleAPIServer(t *testing.T) {
-	host := "http://localhost:9000"
-
-	port := testutil.GetFreePort(t)
-	t.Setenv("METRICS_PORT", strconv.Itoa(port))
+	configs := testutil.NewServerConfigs(t)
 
 	go main()
 	time.Sleep(100 * time.Millisecond) // Giving some time to start the server
@@ -43,7 +40,7 @@ func TestIntegration_SimpleAPIServer(t *testing.T) {
 	}
 
 	for i, tc := range tests {
-		req, _ := http.NewRequest(http.MethodGet, host+tc.path, nil)
+		req, _ := http.NewRequest(http.MethodGet, configs.HTTPHost+tc.path, nil)
 		req.Header.Set("content-type", "application/json")
 
 		c := http.Client{}
@@ -70,7 +67,7 @@ func TestIntegration_SimpleAPIServer(t *testing.T) {
 }
 
 func TestIntegration_SimpleAPIServer_Errors(t *testing.T) {
-	host := "http://localhost:9000"
+	configs := testutil.NewServerConfigs(t)
 
 	tests := []struct {
 		desc       string
@@ -99,7 +96,7 @@ func TestIntegration_SimpleAPIServer_Errors(t *testing.T) {
 	}
 
 	for i, tc := range tests {
-		req, _ := http.NewRequest(http.MethodGet, host+tc.path, nil)
+		req, _ := http.NewRequest(http.MethodGet, configs.HTTPHost+tc.path, nil)
 		req.Header.Set("content-type", "application/json")
 
 		c := http.Client{}
@@ -126,7 +123,7 @@ func TestIntegration_SimpleAPIServer_Errors(t *testing.T) {
 }
 
 func TestIntegration_SimpleAPIServer_Health(t *testing.T) {
-	host := "http://localhost:9000"
+	configs := testutil.NewServerConfigs(t)
 
 	tests := []struct {
 		desc       string
@@ -138,7 +135,7 @@ func TestIntegration_SimpleAPIServer_Health(t *testing.T) {
 	}
 
 	for i, tc := range tests {
-		req, _ := http.NewRequest(http.MethodGet, host+tc.path, nil)
+		req, _ := http.NewRequest(http.MethodGet, configs.HTTPHost+tc.path, nil)
 		req.Header.Set("content-type", "application/json")
 
 		c := http.Client{}
@@ -151,17 +148,13 @@ func TestIntegration_SimpleAPIServer_Health(t *testing.T) {
 }
 
 func TestRedisHandler(t *testing.T) {
-	metricsPort := testutil.GetFreePort(t)
-	httpPort := testutil.GetFreePort(t)
-
-	t.Setenv("METRICS_PORT", strconv.Itoa(metricsPort))
-	t.Setenv("HTTP_PORT", strconv.Itoa(httpPort))
+	configs := testutil.NewServerConfigs(t)
 
 	a := gofr.New()
 	logger := logging.NewLogger(logging.DEBUG)
 	redisClient, mock := redismock.NewClientMock()
 
-	rc := redis.NewClient(config.NewMockConfig(map[string]string{"REDIS_HOST": "localhost", "REDIS_PORT": "2001"}), logger, a.Metrics())
+	rc := redis.NewClient(config.NewMockConfig(map[string]string{"REDIS_HOST": "localhost", "REDIS_PORT": strconv.Itoa(configs.MetricsPort)}), logger, a.Metrics())
 	rc.Client = redisClient
 
 	mock.ExpectGet("test").SetErr(testutil.CustomError{ErrorMessage: "redis get error"})

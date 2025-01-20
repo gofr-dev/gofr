@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"gofr.dev/pkg/gofr/testutil"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -20,7 +21,6 @@ import (
 	gofrHTTP "gofr.dev/pkg/gofr/http"
 	"gofr.dev/pkg/gofr/http/middleware"
 	"gofr.dev/pkg/gofr/logging"
-	"gofr.dev/pkg/gofr/testutil"
 	"gofr.dev/pkg/gofr/version"
 )
 
@@ -77,14 +77,9 @@ func TestContext_AddTrace(t *testing.T) {
 }
 
 func TestContext_WriteMessageToSocket(t *testing.T) {
-	port := testutil.GetFreePort(t)
-
-	t.Setenv("HTTP_PORT", fmt.Sprint(port))
+	configs := testutil.NewServerConfigs(t)
 
 	app := New()
-
-	server := httptest.NewServer(app.httpServer.router)
-	defer server.Close()
 
 	app.WebSocket("/ws", func(ctx *Context) (interface{}, error) {
 		socketErr := ctx.WriteMessageToSocket("Hello! GoFr")
@@ -100,7 +95,7 @@ func TestContext_WriteMessageToSocket(t *testing.T) {
 
 	go app.Run()
 
-	wsURL := "ws" + server.URL[len("http"):] + "/ws"
+	wsURL := fmt.Sprintf("ws://localhost:%d/ws", configs.HTTPPort)
 
 	// Create a WebSocket client
 	ws, resp, err := websocket.DefaultDialer.Dial(wsURL, nil)

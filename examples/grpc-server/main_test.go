@@ -2,8 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
-	"strconv"
 	"testing"
 	"time"
 
@@ -17,12 +15,8 @@ import (
 )
 
 func TestGRPCServer(t *testing.T) {
-	gRPCPort := testutil.GetFreePort(t)
-	t.Setenv("GRPC_PORT", strconv.Itoa(gRPCPort))
-	host := fmt.Sprint("localhost:", gRPCPort)
-
-	port := testutil.GetFreePort(t)
-	t.Setenv("METRICS_PORT", strconv.Itoa(port))
+	configs := testutil.NewServerConfigs(t)
+	host := configs.GRPCHost
 
 	go main()
 	time.Sleep(100 * time.Millisecond)
