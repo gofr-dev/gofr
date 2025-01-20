@@ -78,7 +78,10 @@ docker run --name kafka-1 -p 9092:9092 \
 -e ALLOW_PLAINTEXT_LISTENER=yes \
 -e KAFKA_CFG_NODE_ID=1 \
 -v kafka_data:/bitnami \
-bitnami/kafka:3.4 
+bitnami/kafka:3.4
+docker pull surrealdb/surrealdb:latest
+docker run --name surrealdb -d -p 8000:8000 surrealdb/surrealdb:latest start --bind 0.0.0.0:8000
+
 
 
 

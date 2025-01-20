@@ -31,7 +31,7 @@ const (
 	schemeMemory    = "memory"
 	schemeMem       = "mem"
 	schemeSurrealkv = "surrealkv"
-	StatusOK        = "OK"
+	statusOK        = "OK"
 )
 
 // Config represents the configuration required to connect to SurrealDB.
@@ -301,7 +301,7 @@ func (c *Client) Query(ctx context.Context, query string, vars map[string]any) (
 	resp := make([]any, 0)
 
 	for _, r := range *result {
-		if r.Status != StatusOK {
+		if r.Status != statusOK {
 			c.logger.Errorf("query result error: %v", r.Status)
 			continue
 		}
