@@ -278,6 +278,9 @@ jobs:
         with:
           version: v1.62
           working-directory: .
+          args: >
+            --out-format=colored-line-number
+            --timeout=5m
 
       - name: Lint Submodules
         run: |
