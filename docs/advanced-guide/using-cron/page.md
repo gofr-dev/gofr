@@ -53,18 +53,18 @@ package main
 
 import (
 	"time"
-	
+
 	"gofr.dev/pkg/gofr"
 )
 
 func main() {
-    app := gofr.New()
+	app := gofr.New()
 
 	// Run the cron job every 5 hours(*/5)
 	app.AddCronJob("* */5 * * *", "", func(ctx *gofr.Context) {
 		ctx.Logger.Infof("current time is %v", time.Now())
 	})
-	
+
 	// Run the cron job every 10 seconds(*/10)
 	app.AddCronJob("*/10 * * * * *", "", func(ctx *gofr.Context) {
 		ctx.Logger.Infof("current time is %v", time.Now())

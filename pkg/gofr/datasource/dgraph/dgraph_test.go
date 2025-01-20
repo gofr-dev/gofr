@@ -5,11 +5,10 @@ import (
 	"errors"
 	"testing"
 
-	"go.opentelemetry.io/otel"
-	"go.uber.org/mock/gomock"
-
 	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel"
+	"go.uber.org/mock/gomock"
 )
 
 var (

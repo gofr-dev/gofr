@@ -191,3 +191,25 @@ func TestApp_AddOpenTSDB(t *testing.T) {
 		assert.Equal(t, mock, app.container.OpenTSDB)
 	})
 }
+func TestApp_AddScyllaDB(t *testing.T) {
+	t.Run("Adding ScyllaDB", func(t *testing.T) {
+		port := testutil.GetFreePort(t)
+		t.Setenv("METRICS_PORT", strconv.Itoa(port))
+
+		app := New()
+
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mock := container.NewMockScyllaDBProvider(ctrl)
+
+		mock.EXPECT().UseLogger(app.Logger())
+		mock.EXPECT().UseMetrics(app.Metrics())
+		mock.EXPECT().UseTracer(gomock.Any())
+		mock.EXPECT().Connect()
+
+		app.AddScyllaDB(mock)
+
+		assert.Equal(t, mock, app.container.ScyllaDB)
+	})
+}

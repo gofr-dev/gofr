@@ -20,11 +20,11 @@ and returns a trace.Span.
 
 ```go
 func MyHandler(c context.Context) error {
-    span := c.Trace("my-custom-span")
-    defer span.Close()
-    
-    // Do some work here
-    return nil
+	span := c.Trace("my-custom-span")
+	defer span.Close()
+
+	// Do some work here
+	return nil
 }
 ```
 

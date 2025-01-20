@@ -5,11 +5,10 @@ import (
 	"errors"
 	"testing"
 
-	"go.opentelemetry.io/otel"
-
 	"github.com/gocql/gocql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel"
 	"go.uber.org/mock/gomock"
 )
 

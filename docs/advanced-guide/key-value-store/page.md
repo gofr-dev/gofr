@@ -10,9 +10,9 @@ the framework itself. GoFr provide the following functionalities for its key-val
 
 ```go
 type KVStore interface {
-    Get(ctx context.Context, key string) (string, error)
-    Set(ctx context.Context, key, value string) error
-    Delete(ctx context.Context, key string) error
+	Get(ctx context.Context, key string) (string, error)
+	Set(ctx context.Context, key, value string) error
+	Delete(ctx context.Context, key string) error
 }
 ```
 
