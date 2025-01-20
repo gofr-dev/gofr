@@ -76,13 +76,13 @@ package main
 import "gofr.dev/pkg/gofr"
 
 func main() {
-    app := gofr.New()
+	app := gofr.New()
 
-    app.GET("/greet", func(ctx *gofr.Context) (interface{}, error) {
-        return "Hello World!", nil
-    })
+	app.GET("/greet", func(ctx *gofr.Context) (interface{}, error) {
+		return "Hello World!", nil
+	})
 
-    app.Run() // listens and serves on localhost:8000 
+	app.Run() // listens and serves on localhost:8000
 }
 ```
 
@@ -118,6 +118,18 @@ Help us make GoFr even better:
 3. Review the **[CONTRIBUTING.md](CONTRIBUTING.md)** guide to learn how to contribute to the project.
 
 ---
+
+## 🔒 **Secure Cloning**
+To securely clone the GoFr repository, you can use HTTPS or SSH:
+
+### Cloning with HTTPS
+```bash
+git clone https://github.com/gofr-dev/gofr.git
+```
+### Cloning with SSH
+```bash
+git clone git@github.com:gofr-dev/gofr.git
+```
 
 ### 🎁 **Get a GoFr T-Shirt & Stickers!**
 

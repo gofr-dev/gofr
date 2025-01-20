@@ -20,6 +20,7 @@ GoFr simplifies the process of adding custom HTTP response headers and metadata 
     - Keys must be strings, and values can be of any type.
 
 When metadata is included, the response structure is:
+
 ```json
 {
   "data": {},
@@ -44,45 +45,45 @@ To include custom headers and metadata in your response, populate the Headers an
 package main
 
 import (
-   "time"
+	"time"
 
-   "gofr.dev/pkg/gofr"
-   "gofr.dev/pkg/gofr/http/response"
+	"gofr.dev/pkg/gofr"
+	"gofr.dev/pkg/gofr/http/response"
 )
 
 func main() {
-   app := gofr.New()
+	app := gofr.New()
 
-   app.GET("/hello", HelloHandler)
+	app.GET("/hello", HelloHandler)
 
-   app.Run()
+	app.Run()
 }
 
 func HelloHandler(c *gofr.Context) (interface{}, error) {
-   name := c.Param("name")
-   if name == "" {
-      c.Log("Name parameter is empty, defaulting to 'World'")
-      name = "World"
-   }
+	name := c.Param("name")
+	if name == "" {
+		c.Log("Name parameter is empty, defaulting to 'World'")
+		name = "World"
+	}
 
-   // Define custom headers (map[string]string)
-   headers := map[string]string{
-      "X-Custom-Header":  "CustomValue",
-      "X-Another-Header": "AnotherValue",
-   }
+	// Define custom headers (map[string]string)
+	headers := map[string]string{
+		"X-Custom-Header":  "CustomValue",
+		"X-Another-Header": "AnotherValue",
+	}
 
-   // Define metadata (map[string]any)
-   metaData := map[string]any{
-      "environment": "staging",
-      "timestamp":   time.Now(),
-   }
+	// Define metadata (map[string]any)
+	metaData := map[string]any{
+		"environment": "staging",
+		"timestamp":   time.Now(),
+	}
 
-   // Return response with custom headers and metadata
-   return response.Response{
-      Data:     map[string]string{"message": "Hello, " + name + "!"},
-      Metadata: metaData,
-      Headers:  headers,
-   }, nil
+	// Return response with custom headers and metadata
+	return response.Response{
+		Data:     map[string]string{"message": "Hello, " + name + "!"},
+		Metadata: metaData,
+		Headers:  headers,
+	}, nil
 }
 ```
 
@@ -90,28 +91,28 @@ func HelloHandler(c *gofr.Context) (interface{}, error) {
 #### Response with Metadata:
 When metadata is included, the response contains the metadata field:
 
-```json 
-    {
-        "data": {
-            "message": "Hello, World!"
-        },
-        "metadata": {
-            "environment": "staging",
-            "timestamp": "2024-12-23T12:34:56Z"
-        }
-    }
-   ```
+```json
+{
+  "data": {
+    "message": "Hello, World!"
+  },
+  "metadata": {
+    "environment": "staging",
+    "timestamp": "2024-12-23T12:34:56Z"
+  }
+}
+```
 
 #### Response without Metadata:
 If no metadata is provided, the response only includes the data field:
 
 ```json
-    {
-        "data": {
-            "message": "Hello, World!"
-        }
-    }
-   ```
+{
+  "data": {
+    "message": "Hello, World!"
+  }
+}
+```
 
 
 This functionality offers a convenient, structured way to include additional response information without altering the 

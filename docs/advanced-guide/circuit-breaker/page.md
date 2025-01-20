@@ -26,10 +26,10 @@ func main() {
 
 	app.AddHTTPService("order", "https://order-func",
 		&service.CircuitBreakerConfig{
-		    // Number of consecutive failed requests after which circuit breaker will be enabled
+			// Number of consecutive failed requests after which circuit breaker will be enabled
 			Threshold: 4,
 			// Time interval at which circuit breaker will hit the aliveness endpoint.
-			Interval:  1 * time.Second,
+			Interval: 1 * time.Second,
 		},
 	)
 

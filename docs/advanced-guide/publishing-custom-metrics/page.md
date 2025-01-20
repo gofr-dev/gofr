@@ -166,7 +166,7 @@ By effectively using labels in GoFr, you can enrich your custom metrics and gain
 ### Usage:
 
 Labels are added while populating the data for metrics, by passing them as arguments (comma separated key-value pairs)
-in the GoFr's methods (namely: `IncreamentCounter`, `DeltaUpDownCounter`, `RecordHistogram`, `SetGauge`).
+in the GoFr's methods (namely: `IncrementCounter`, `DeltaUpDownCounter`, `RecordHistogram`, `SetGauge`).
 
 Example: `c.Metrics().IncrementCounter(c, "metric-name", "metric-value", "label-1", "value-1", "label-2", "value-2")`
 

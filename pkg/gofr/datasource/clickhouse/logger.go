@@ -11,7 +11,7 @@ type Logger interface {
 	Debugf(pattern string, args ...interface{})
 	Debug(args ...interface{})
 	Logf(pattern string, args ...interface{})
-	Errorf(patter string, args ...interface{})
+	Errorf(pattern string, args ...interface{})
 }
 
 type Log struct {
