@@ -37,8 +37,8 @@ Testing is a crucial aspect of software development, and adherence to these guid
 -   Prefix unit test functions with `Test`.
 -   Use clear and descriptive names.
 ```go
-func TestFunctionName(t *testing.T) { 
-// Test logic 
+func TestFunctionName(t *testing.T) {
+	// Test logic
 }
 ```
 
@@ -78,8 +78,9 @@ docker run --name kafka-1 -p 9092:9092 \
 -e ALLOW_PLAINTEXT_LISTENER=yes \
 -e KAFKA_CFG_NODE_ID=1 \
 -v kafka_data:/bitnami \
-bitnami/kafka:3.4 
-
+bitnami/kafka:3.4
+docker pull scylladb/scylla
+docker run --name scylla -d -p 2025:9042 scylladb/scylla
 
 
 
