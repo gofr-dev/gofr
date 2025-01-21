@@ -384,8 +384,6 @@ func (c *Client) Select(ctx context.Context, table string) ([]map[string]any, er
 		resSlice = append(resSlice, resMap)
 	}
 
-	c.metrics.RecordHistogram(ctx, "surreal_db_operation_duration", 0, "operation", "select")
-
 	return resSlice, nil
 }
 
