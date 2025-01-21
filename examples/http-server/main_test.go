@@ -33,7 +33,7 @@ func TestIntegration_SimpleAPIServer(t *testing.T) {
 	tests := []struct {
 		desc string
 		path string
-		body interface{}
+		body any
 	}{
 		{"hello handler", "/hello", "Hello World!"},
 		{"hello handler with query parameter", "/hello?name=gofr", "Hello gofr!"},
@@ -50,7 +50,7 @@ func TestIntegration_SimpleAPIServer(t *testing.T) {
 		resp, err := c.Do(req)
 
 		var data = struct {
-			Data interface{} `json:"data"`
+			Data any `json:"data"`
 		}{}
 
 		b, err := io.ReadAll(resp.Body)
@@ -75,26 +75,26 @@ func TestIntegration_SimpleAPIServer_Errors(t *testing.T) {
 	tests := []struct {
 		desc       string
 		path       string
-		body       interface{}
+		body       any
 		statusCode int
 	}{
 		{
 			desc:       "error handler called",
 			path:       "/error",
 			statusCode: http.StatusInternalServerError,
-			body:       map[string]interface{}{"message": "some error occurred"},
+			body:       map[string]any{"message": "some error occurred"},
 		},
 		{
 			desc:       "empty route",
 			path:       "/",
 			statusCode: http.StatusNotFound,
-			body:       map[string]interface{}{"message": "route not registered"},
+			body:       map[string]any{"message": "route not registered"},
 		},
 		{
 			desc:       "route not registered with the server",
 			path:       "/route",
 			statusCode: http.StatusNotFound,
-			body:       map[string]interface{}{"message": "route not registered"},
+			body:       map[string]any{"message": "route not registered"},
 		},
 	}
 
@@ -106,7 +106,7 @@ func TestIntegration_SimpleAPIServer_Errors(t *testing.T) {
 		resp, err := c.Do(req)
 
 		var data = struct {
-			Error interface{} `json:"error"`
+			Error any `json:"error"`
 		}{}
 
 		b, err := io.ReadAll(resp.Body)

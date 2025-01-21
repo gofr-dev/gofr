@@ -131,9 +131,9 @@ func Test_Query(t *testing.T) {
 
 	testCases := []struct {
 		desc     string
-		dest     interface{}
+		dest     any
 		mockCall func()
-		expRes   interface{}
+		expRes   any
 		expErr   error
 	}{
 		{"success case: struct slice", &mockStructSlice, func() {
@@ -217,14 +217,14 @@ func Test_ExecCAS(t *testing.T) {
 
 	testCases := []struct {
 		desc       string
-		dest       interface{}
+		dest       any
 		mockCall   func()
 		expApplied bool
 		expErr     error
 	}{
 		{"success case: struct dest, applied true", &mockStruct, func() {
 			mockDeps.mockSession.EXPECT().query(query, nil).Return(mockDeps.mockQuery).Times(1)
-			mockDeps.mockQuery.EXPECT().mapScanCAS(gomock.AssignableToTypeOf(map[string]interface{}{})).Return(true, nil).Times(1)
+			mockDeps.mockQuery.EXPECT().mapScanCAS(gomock.AssignableToTypeOf(map[string]any{})).Return(true, nil).Times(1)
 		}, true, nil},
 		{"success case: int dest, applied true", &mockInt, func() {
 			mockDeps.mockSession.EXPECT().query(query, nil).Return(mockDeps.mockQuery).Times(1)
@@ -232,7 +232,7 @@ func Test_ExecCAS(t *testing.T) {
 		}, true, nil},
 		{"failure case: struct dest, error", &mockStruct, func() {
 			mockDeps.mockSession.EXPECT().query(query, nil).Return(mockDeps.mockQuery).Times(1)
-			mockDeps.mockQuery.EXPECT().mapScanCAS(gomock.AssignableToTypeOf(map[string]interface{}{})).Return(false, errMock).Times(1)
+			mockDeps.mockQuery.EXPECT().mapScanCAS(gomock.AssignableToTypeOf(map[string]any{})).Return(false, errMock).Times(1)
 		}, false, errMock},
 		{"failure case: int dest, error", &mockInt, func() {
 			mockDeps.mockSession.EXPECT().query(query, nil).Return(mockDeps.mockQuery).Times(1)
@@ -242,7 +242,7 @@ func Test_ExecCAS(t *testing.T) {
 		{"failure case: dest is slice", &[]int{}, func() {
 			mockDeps.mockSession.EXPECT().query(query, nil).Return(mockDeps.mockQuery).Times(1)
 		}, false, errUnexpectedSlice{target: "[]*[]int"}},
-		{"failure case: dest is map", &map[string]interface{}{}, func() {
+		{"failure case: dest is map", &map[string]any{}, func() {
 			mockDeps.mockSession.EXPECT().query(query, nil).Return(mockDeps.mockQuery).Times(1)
 		}, false, errUnexpectedMap},
 	}
@@ -310,14 +310,14 @@ func Test_HealthCheck(t *testing.T) {
 			mockDeps.mockQuery.EXPECT().exec().Return(nil).Times(1)
 		}, &Health{
 			Status:  "UP",
-			Details: map[string]interface{}{"host": client.config.Hosts, "keyspace": client.config.Keyspace},
+			Details: map[string]any{"host": client.config.Hosts, "keyspace": client.config.Keyspace},
 		}, nil},
 		{"failure case: exec error", func() {
 			mockDeps.mockSession.EXPECT().query(query).Return(mockDeps.mockQuery).Times(1)
 			mockDeps.mockQuery.EXPECT().exec().Return(errMock).Times(1)
 		}, &Health{
 			Status: "DOWN",
-			Details: map[string]interface{}{"host": client.config.Hosts, "keyspace": client.config.Keyspace,
+			Details: map[string]any{"host": client.config.Hosts, "keyspace": client.config.Keyspace,
 				"message": errMock.Error()},
 		}, errStatusDown},
 		{"failure case: cassandra not initializes", func() {
@@ -327,7 +327,7 @@ func Test_HealthCheck(t *testing.T) {
 			mockDeps.mockQuery.EXPECT().exec().Return(nil).Times(1)
 		}, &Health{
 			Status: "DOWN",
-			Details: map[string]interface{}{"host": client.config.Hosts, "keyspace": client.config.Keyspace,
+			Details: map[string]any{"host": client.config.Hosts, "keyspace": client.config.Keyspace,
 				"message": "cassandra not connected"},
 		}, errStatusDown},
 	}

@@ -49,7 +49,7 @@ func (p *PublicKeys) Get(kid string) *rsa.PublicKey {
 }
 
 type JWKSProvider interface {
-	GetWithHeaders(ctx context.Context, path string, queryParams map[string]interface{},
+	GetWithHeaders(ctx context.Context, path string, queryParams map[string]any,
 		headers map[string]string) (*http.Response, error)
 }
 
@@ -160,7 +160,7 @@ func extractToken(authHeader string) (string, error) {
 
 // ParseToken parses the JWT token using the provided key provider.
 func parseToken(tokenString string, key PublicKeyProvider) (*jwt.Token, error) {
-	return jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+	return jwt.Parse(tokenString, func(token *jwt.Token) (any, error) {
 		kid := token.Header["kid"]
 		jwks := key.Get(fmt.Sprint(kid))
 

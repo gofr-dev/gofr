@@ -79,14 +79,14 @@ func (c *Client) Connect() {
 }
 
 // UseLogger sets the logger for the Cassandra client which asserts the Logger interface.
-func (c *Client) UseLogger(logger interface{}) {
+func (c *Client) UseLogger(logger any) {
 	if l, ok := logger.(Logger); ok {
 		c.logger = l
 	}
 }
 
 // UseMetrics sets the metrics for the Cassandra client which asserts the Metrics interface.
-func (c *Client) UseMetrics(metrics interface{}) {
+func (c *Client) UseMetrics(metrics any) {
 	if m, ok := metrics.(Metrics); ok {
 		c.metrics = m
 	}
@@ -357,7 +357,7 @@ func (c *Client) HealthCheck(context.Context) (any, error) {
 	)
 
 	h := Health{
-		Details: make(map[string]interface{}),
+		Details: make(map[string]any),
 	}
 
 	h.Details["host"] = c.config.Hosts
