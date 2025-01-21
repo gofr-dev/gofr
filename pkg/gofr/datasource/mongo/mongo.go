@@ -61,7 +61,7 @@ i.e. by default observability features gets initialized when used with GoFr.
 // client.UseLogger(loggerInstance)
 // client.UseMetrics(metricsInstance)
 // client.Connect().
-
+//
 //nolint:gocritic // Configs do not need to be passed by reference
 func New(c Config) *Client {
 	return &Client{config: &c}
