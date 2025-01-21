@@ -419,8 +419,6 @@ func (c *Client) Create(ctx context.Context, table string, data any) (map[string
 		return nil, err
 	}
 
-	c.metrics.RecordHistogram(ctx, "surreal_db_operation_duration", 0, "operation", "create")
-
 	result, ok := CreateResult.Result.(map[string]any)
 	if !ok {
 		return nil, fmt.Errorf("%w: %v", errUnexpectedResultType, CreateResult.Result)
@@ -513,8 +511,6 @@ func (c *Client) Insert(ctx context.Context, table string, data any) (*Response,
 		return nil, err
 	}
 
-	c.metrics.RecordHistogram(ctx, "surreal_db_operation_duration", 0, "operation", "insert")
-
 	return &insertResult, nil
 }
 
@@ -553,8 +549,6 @@ func (c *Client) Delete(ctx context.Context, table, id string) (any, error) {
 	if err := c.db.Send(&DeleteResult, "delete", arg); err != nil {
 		return nil, err
 	}
-
-	c.metrics.RecordHistogram(ctx, "surreal_db_operation_duration", 0, "operation", "delete")
 
 	return DeleteResult.Result, nil
 }

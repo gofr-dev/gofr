@@ -217,9 +217,6 @@ func Test_Insert(t *testing.T) {
 			},
 		}
 
-		mockMetrics.EXPECT().
-			RecordHistogram(ctx, "surreal_db_operation_duration", float64(0), "operation", "insert")
-
 		mockConn.EXPECT().
 			Send(gomock.Any(), "insert", "users", data).
 			Return(nil).
@@ -288,9 +285,6 @@ func Test_Create(t *testing.T) {
 				"email": "test@example.com",
 			},
 		}
-
-		mockMetrics.EXPECT().
-			RecordHistogram(ctx, "surreal_db_operation_duration", float64(0), "operation", "create")
 
 		mockLogger.EXPECT().
 			Debug(gomock.Any()).
@@ -446,9 +440,6 @@ func Test_Delete(t *testing.T) {
 			ID:    id,
 		}
 
-		mockMetrics.EXPECT().
-			RecordHistogram(ctx, "surreal_db_operation_duration", float64(0), "operation", "delete")
-
 		mockLogger.EXPECT().
 			Debug(gomock.Any()).
 			AnyTimes()
@@ -473,10 +464,6 @@ func Test_Delete(t *testing.T) {
 		deleteResponse := Response{
 			Result: nil,
 		}
-
-		// Add metrics expectation since the operation still completes
-		mockMetrics.EXPECT().
-			RecordHistogram(ctx, "surreal_db_operation_duration", float64(0), "operation", "delete")
 
 		mockLogger.EXPECT().
 			Debug(gomock.Any()).
