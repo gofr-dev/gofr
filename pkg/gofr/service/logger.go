@@ -7,7 +7,7 @@ import (
 )
 
 type Logger interface {
-	Log(args ...interface{})
+	Log(args ...any)
 }
 
 type Log struct {

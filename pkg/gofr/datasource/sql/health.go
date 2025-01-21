@@ -25,7 +25,7 @@ type DBStats struct {
 
 func (d *DB) HealthCheck() *datasource.Health {
 	h := datasource.Health{
-		Details: make(map[string]interface{}),
+		Details: make(map[string]any),
 	}
 
 	h.Details["host"] = d.config.HostName + ":" + d.config.Port + "/" + d.config.Database
