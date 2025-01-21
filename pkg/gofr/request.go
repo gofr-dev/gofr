@@ -11,7 +11,7 @@ type Request interface {
 	Context() context.Context
 	Param(string) string
 	PathParam(string) string
-	Bind(interface{}) error
+	Bind(any) error
 	HostName() string
 	Params(string) []string
 }

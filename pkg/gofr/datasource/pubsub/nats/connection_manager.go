@@ -149,7 +149,7 @@ func (cm *ConnectionManager) Health() datasource.Health {
 	if status == nats.CONNECTED {
 		return datasource.Health{
 			Status: datasource.StatusUp,
-			Details: map[string]interface{}{
+			Details: map[string]any{
 				"server": cm.config.Server,
 			},
 		}
@@ -157,7 +157,7 @@ func (cm *ConnectionManager) Health() datasource.Health {
 
 	return datasource.Health{
 		Status: datasource.StatusDown,
-		Details: map[string]interface{}{
+		Details: map[string]any{
 			"server": cm.config.Server,
 		},
 	}

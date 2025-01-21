@@ -13,8 +13,8 @@ const (
 )
 
 type Health struct {
-	Status  string                 `json:"status"`
-	Details map[string]interface{} `json:"details"`
+	Status  string         `json:"status"`
+	Details map[string]any `json:"details"`
 }
 
 func (h *httpService) HealthCheck(ctx context.Context) *Health {
@@ -23,7 +23,7 @@ func (h *httpService) HealthCheck(ctx context.Context) *Health {
 
 func (h *httpService) getHealthResponseForEndpoint(ctx context.Context, endpoint string, timeout int) *Health {
 	var healthResponse = Health{
-		Details: make(map[string]interface{}),
+		Details: make(map[string]any),
 	}
 
 	// create a new context with timeout for healthCheck call.

@@ -10,12 +10,12 @@ var whitespaceRegex = regexp.MustCompile(`\s+`)
 
 // Logger interface with required methods.
 type Logger interface {
-	Debug(args ...interface{})
-	Debugf(pattern string, args ...interface{})
-	Log(args ...interface{})
-	Logf(pattern string, args ...interface{})
-	Error(args ...interface{})
-	Errorf(pattern string, args ...interface{})
+	Debug(args ...any)
+	Debugf(pattern string, args ...any)
+	Log(args ...any)
+	Logf(pattern string, args ...any)
+	Error(args ...any)
+	Errorf(pattern string, args ...any)
 }
 
 // QueryLog represents the structure for query logging.

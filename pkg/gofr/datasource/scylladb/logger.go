@@ -11,10 +11,10 @@ import (
 type Logger interface {
 	Debug(args ...any)
 	Debugf(pattern string, args ...any)
-	Error(args ...interface{})
+	Error(args ...any)
 	Infof(pattern string, args ...any)
 	Errorf(format string, args ...any)
-	Log(args ...interface{})
+	Log(args ...any)
 	Logf(pattern string, args ...any)
 }
 

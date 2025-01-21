@@ -508,7 +508,7 @@ func TestQueryAnnotationSuccess(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, postResp)
 
-	queryAnnoMap := map[string]interface{}{
+	queryAnnoMap := map[string]any{
 		anQueryStartTime: addedST,
 		anQueryTSUid:     addedTsuid,
 	}

@@ -27,7 +27,7 @@ type Book struct {
 	Title string `json:"title"`
 }
 
-func Add(ctx *gofr.Context) (interface{}, error) {
+func Add(ctx *gofr.Context) (any, error) {
 	var book Book
 
 	if err := ctx.Bind(&book); err != nil {
@@ -86,7 +86,7 @@ import (
 
 func TestAdd(t *testing.T) {
 	type gofrResponse struct {
-		result interface{}
+		result any
 		err    error
 	}
 
@@ -106,7 +106,7 @@ func TestAdd(t *testing.T) {
 		name             string
 		requestBody      string
 		mockExpect       func()
-		expectedResponse interface{}
+		expectedResponse any
 	}{
 		{
 			name:        "Error while Binding",

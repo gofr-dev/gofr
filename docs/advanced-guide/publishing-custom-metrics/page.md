@@ -33,7 +33,7 @@ func main() {
 
 	app.Metrics().NewCounter("transaction_success", "used to track the count of successful transactions")
 
-	app.POST("/transaction", func(ctx *gofr.Context) (interface{}, error) {
+	app.POST("/transaction", func(ctx *gofr.Context) (any, error) {
 		ctx.Metrics().IncrementCounter(ctx, "transaction_success")
 
 		return "Transaction Successful", nil
@@ -63,7 +63,7 @@ func main() {
 
 	app.Metrics().NewUpDownCounter("total_credit_day_sale", "used to track the total credit sales in a day")
 
-	app.POST("/sale", func(ctx *gofr.Context) (interface{}, error) {
+	app.POST("/sale", func(ctx *gofr.Context) (any, error) {
 		ctx.Metrics().DeltaUpDownCounter(ctx, "total_credit_day_sale", 1000)
 
 		return "Sale Completed", nil
@@ -94,7 +94,7 @@ func main() {
 	app.Metrics().NewHistogram("transaction_time", "used to track the time taken by a transaction",
 		5, 10, 15, 20, 25, 35)
 
-	app.POST("/transaction", func(ctx *gofr.Context) (interface{}, error) {
+	app.POST("/transaction", func(ctx *gofr.Context) (any, error) {
 		transactionStartTime := time.Now()
 
 		// transaction logic
@@ -129,7 +129,7 @@ func main() {
 
 	app.Metrics().NewGauge("product_stock", "used to track the number of products in stock")
 
-	app.POST("/sale", func(ctx *gofr.Context) (interface{}, error) {
+	app.POST("/sale", func(ctx *gofr.Context) (any, error) {
 		ctx.Metrics().SetGauge("product_stock", 10)
 
 		return "Sale Completed", nil
@@ -192,7 +192,7 @@ func main() {
 	a.Run()
 }
 
-func SaleHandler(c *gofr.Context) (interface{}, error) {
+func SaleHandler(c *gofr.Context) (any, error) {
 	// logic to create sales
 
 	c.Metrics().DeltaUpDownCounter(c, "total_credit_day_sale", 10, "sale_type", "credit", "product_type", "beverage") // Here "sale_type" & "product_type" are the labels and "credit" & "beverage" are the values
@@ -200,7 +200,7 @@ func SaleHandler(c *gofr.Context) (interface{}, error) {
 	return "Sale Successful", nil
 }
 
-func ReturnHandler(c *gofr.Context) (interface{}, error) {
+func ReturnHandler(c *gofr.Context) (any, error) {
 	// logic to create a sales return
 
 	c.Metrics().DeltaUpDownCounter(c, "total_credit_day_sale", -5, "sale_type", "credit_return", "product_type", "dairy")

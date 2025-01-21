@@ -42,14 +42,14 @@ func New(config Config) *Client {
 }
 
 // UseLogger sets the logger for the Clickhouse client.
-func (c *Client) UseLogger(logger interface{}) {
+func (c *Client) UseLogger(logger any) {
 	if l, ok := logger.(Logger); ok {
 		c.logger = l
 	}
 }
 
 // UseMetrics sets the metrics for the Clickhouse client.
-func (c *Client) UseMetrics(metrics interface{}) {
+func (c *Client) UseMetrics(metrics any) {
 	if m, ok := metrics.(Metrics); ok {
 		c.metrics = m
 	}
@@ -164,7 +164,7 @@ func (c *Client) AsyncInsert(ctx context.Context, query string, wait bool, args 
 }
 
 func (c *Client) sendOperationStats(start time.Time, methodType, query string, method string,
-	span trace.Span, args ...interface{}) {
+	span trace.Span, args ...any) {
 	duration := time.Since(start).Microseconds()
 
 	c.logger.Debug(&Log{
@@ -191,14 +191,14 @@ func getOperationType(query string) string {
 }
 
 type Health struct {
-	Status  string                 `json:"status,omitempty"`
-	Details map[string]interface{} `json:"details,omitempty"`
+	Status  string         `json:"status,omitempty"`
+	Details map[string]any `json:"details,omitempty"`
 }
 
 // HealthCheck checks the health of the MongoDB client by pinging the database.
 func (c *Client) HealthCheck(ctx context.Context) (any, error) {
 	h := Health{
-		Details: make(map[string]interface{}),
+		Details: make(map[string]any),
 	}
 
 	h.Details["host"] = c.config.Hosts
