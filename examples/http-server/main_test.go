@@ -3,14 +3,15 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"github.com/go-redis/redismock/v9"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"io"
 	"net/http"
 	"strconv"
 	"testing"
 	"time"
+
+	"github.com/go-redis/redismock/v9"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"gofr.dev/pkg/gofr"
 	"gofr.dev/pkg/gofr/config"
@@ -125,7 +126,7 @@ func TestIntegration_SimpleAPIServer_Errors(t *testing.T) {
 }
 
 func TestIntegration_SimpleAPIServer_Health(t *testing.T) {
-	configs := testutil.NewServerConfigs(t)
+	host := "http://localhost:9000"
 
 	tests := []struct {
 		desc       string
@@ -137,7 +138,7 @@ func TestIntegration_SimpleAPIServer_Health(t *testing.T) {
 	}
 
 	for i, tc := range tests {
-		req, _ := http.NewRequest(http.MethodGet, configs.HTTPHost+tc.path, nil)
+		req, _ := http.NewRequest(http.MethodGet, host+tc.path, nil)
 		req.Header.Set("content-type", "application/json")
 
 		c := http.Client{}
@@ -150,13 +151,17 @@ func TestIntegration_SimpleAPIServer_Health(t *testing.T) {
 }
 
 func TestRedisHandler(t *testing.T) {
-	configs := testutil.NewServerConfigs(t)
+	metricsPort := testutil.GetFreePort(t)
+	httpPort := testutil.GetFreePort(t)
+
+	t.Setenv("METRICS_PORT", strconv.Itoa(metricsPort))
+	t.Setenv("HTTP_PORT", strconv.Itoa(httpPort))
 
 	a := gofr.New()
 	logger := logging.NewLogger(logging.DEBUG)
 	redisClient, mock := redismock.NewClientMock()
 
-	rc := redis.NewClient(config.NewMockConfig(map[string]string{"REDIS_HOST": "localhost", "REDIS_PORT": strconv.Itoa(configs.MetricsPort)}), logger, a.Metrics())
+	rc := redis.NewClient(config.NewMockConfig(map[string]string{"REDIS_HOST": "localhost", "REDIS_PORT": "2001"}), logger, a.Metrics())
 	rc.Client = redisClient
 
 	mock.ExpectGet("test").SetErr(testutil.CustomError{ErrorMessage: "redis get error"})
