@@ -4,12 +4,13 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/gorilla/websocket"
+	"gofr.dev/pkg/gofr/testutil"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel"
@@ -20,7 +21,6 @@ import (
 	gofrHTTP "gofr.dev/pkg/gofr/http"
 	"gofr.dev/pkg/gofr/http/middleware"
 	"gofr.dev/pkg/gofr/logging"
-	"gofr.dev/pkg/gofr/testutil"
 	"gofr.dev/pkg/gofr/version"
 )
 
@@ -77,9 +77,14 @@ func TestContext_AddTrace(t *testing.T) {
 }
 
 func TestContext_WriteMessageToSocket(t *testing.T) {
-	configs := testutil.NewServerConfigs(t)
+	port := testutil.GetFreePort(t)
+
+	t.Setenv("HTTP_PORT", fmt.Sprint(port))
 
 	app := New()
+
+	server := httptest.NewServer(app.httpServer.router)
+	defer server.Close()
 
 	app.WebSocket("/ws", func(ctx *Context) (interface{}, error) {
 		socketErr := ctx.WriteMessageToSocket("Hello! GoFr")
@@ -95,7 +100,7 @@ func TestContext_WriteMessageToSocket(t *testing.T) {
 
 	go app.Run()
 
-	wsURL := fmt.Sprintf("ws://localhost:%d/ws", configs.HTTPPort)
+	wsURL := "ws" + server.URL[len("http"):] + "/ws"
 
 	// Create a WebSocket client
 	ws, resp, err := websocket.DefaultDialer.Dial(wsURL, nil)
