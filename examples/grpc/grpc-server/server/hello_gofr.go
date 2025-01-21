@@ -70,7 +70,7 @@ func (h *HelloRequestWrapper) PathParam(s string) string {
 	return ""
 }
 
-func (h *HelloRequestWrapper) Bind(p interface{}) error {
+func (h *HelloRequestWrapper) Bind(p any) error {
 	ptr := reflect.ValueOf(p)
 	if ptr.Kind() != reflect.Ptr {
 		return fmt.Errorf("expected a pointer, got %T", p)

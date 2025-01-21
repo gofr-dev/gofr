@@ -11,7 +11,7 @@ type Data struct {
 	FileHeader *multipart.FileHeader `file:"file_upload"`
 }
 
-func Handler(c *gofr.Context) (interface{}, error) {
+func Handler(c *gofr.Context) (any, error) {
 	var d Data
 
 	// bind the multipart data into the variable d

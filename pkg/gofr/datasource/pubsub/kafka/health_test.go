@@ -29,7 +29,7 @@ func TestKafkaClient_HealthStatusUP(t *testing.T) {
 
 	expectedHealth := datasource.Health{
 		Status: datasource.StatusUp,
-		Details: map[string]interface{}{
+		Details: map[string]any{
 			"host":    "",
 			"backend": "KAFKA",
 		},
@@ -62,7 +62,7 @@ func TestKafkaClient_HealthStatusDown(t *testing.T) {
 
 	expectedHealth := datasource.Health{
 		Status: datasource.StatusDown,
-		Details: map[string]interface{}{
+		Details: map[string]any{
 			"host":    "",
 			"backend": "KAFKA",
 		},
@@ -116,8 +116,8 @@ func TestKafkaClient_getReaderStatsAsMap(t *testing.T) {
 func TestKafkaClint_convertStructToMap(t *testing.T) {
 	testCases := []struct {
 		desc   string
-		input  interface{}
-		output interface{}
+		input  any
+		output any
 	}{
 		{"unmarshal error", make(chan int), nil},
 	}
