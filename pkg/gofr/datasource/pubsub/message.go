@@ -15,7 +15,7 @@ type Message struct {
 
 	Topic    string
 	Value    []byte
-	MetaData interface{}
+	MetaData any
 
 	Committer
 }

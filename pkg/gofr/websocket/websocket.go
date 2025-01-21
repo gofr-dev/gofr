@@ -60,7 +60,7 @@ func (*Connection) PathParam(_ string) string {
 	return "" // Not applicable for WebSocket, can be implemented if needed
 }
 
-func (w *Connection) Bind(v interface{}) error {
+func (w *Connection) Bind(v any) error {
 	_, message, err := w.Conn.ReadMessage()
 	if err != nil {
 		return err

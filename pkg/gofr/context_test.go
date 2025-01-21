@@ -81,7 +81,10 @@ func TestContext_WriteMessageToSocket(t *testing.T) {
 
 	app := New()
 
-	app.WebSocket("/ws", func(ctx *Context) (interface{}, error) {
+	server := httptest.NewServer(app.httpServer.router)
+	defer server.Close()
+
+	app.WebSocket("/ws", func(ctx *Context) (any, error) {
 		socketErr := ctx.WriteMessageToSocket("Hello! GoFr")
 		if socketErr != nil {
 			return nil, socketErr

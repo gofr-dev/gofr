@@ -19,7 +19,7 @@ func Test_Run_SuccessCallRegisteredArgument(t *testing.T) {
 	c := cmd{}
 
 	c.addRoute("log",
-		func(c *Context) (interface{}, error) {
+		func(c *Context) (any, error) {
 			c.Logger.Info("handler called")
 			return nil, nil
 		},
@@ -40,7 +40,7 @@ func Test_Run_SuccessSkipEmptySpaceAndMatchCommandWithSpace(t *testing.T) {
 	c := cmd{}
 
 	c.addRoute("log",
-		func(c *Context) (interface{}, error) {
+		func(c *Context) (any, error) {
 			c.Logger.Info("handler called")
 			return nil, nil
 		},
@@ -60,7 +60,7 @@ func Test_Run_SuccessCommandWithMultipleParameters(t *testing.T) {
 	c := cmd{}
 
 	c.addRoute("log",
-		func(c *Context) (interface{}, error) {
+		func(c *Context) (any, error) {
 			assert.Equal(t, "value", c.Request.Param("param"))
 			assert.Equal(t, "true", c.Request.Param("b"))
 			c.Logger.Info("handler called")
@@ -95,7 +95,7 @@ func Test_Run_SuccessRouteWithSpecialCharacters(t *testing.T) {
 		c := cmd{}
 
 		c.addRoute(tc.args[1],
-			func(c *Context) (interface{}, error) {
+			func(c *Context) (any, error) {
 				c.Logger.Info("handler called")
 				return nil, nil
 			},
@@ -125,7 +125,7 @@ func Test_Run_ErrorRouteWithSpecialCharacters(t *testing.T) {
 		c := cmd{}
 
 		c.addRoute(tc.args[1],
-			func(c *Context) (interface{}, error) {
+			func(c *Context) (any, error) {
 				c.Logger.Info("handler called")
 				return nil, nil
 			},
@@ -147,7 +147,7 @@ func Test_Run_ErrorParamNotReadWithoutHyphen(t *testing.T) {
 	c := cmd{}
 
 	c.addRoute("log",
-		func(c *Context) (interface{}, error) {
+		func(c *Context) (any, error) {
 			assert.Equal(t, "", c.Request.Param("hello"))
 			c.Logger.Info("handler called")
 
@@ -181,7 +181,7 @@ func Test_Run_ErrorWhenOnlyParamAreGiven(t *testing.T) {
 	c := cmd{}
 
 	c.addRoute("-route",
-		func(c *Context) (interface{}, error) {
+		func(c *Context) (any, error) {
 			c.Logger.Info("handler called of route -route")
 			return nil, nil
 		},
@@ -235,7 +235,7 @@ func Test_Run_SuccessCallInvalidHyphens(t *testing.T) {
 	c := cmd{}
 
 	c.addRoute("log",
-		func(c *Context) (interface{}, error) {
+		func(c *Context) (any, error) {
 			c.Logger.Info("handler called")
 			return nil, nil
 		},
@@ -255,7 +255,7 @@ func Test_Run_HelpCommand(t *testing.T) {
 	c := cmd{}
 
 	c.addRoute("log",
-		func(c *Context) (interface{}, error) {
+		func(c *Context) (any, error) {
 			c.Logger.Info("handler called")
 			return nil, nil
 		},
@@ -278,7 +278,7 @@ func Test_Run_HelpCommandLong(t *testing.T) {
 	c := cmd{}
 
 	c.addRoute("log",
-		func(c *Context) (interface{}, error) {
+		func(c *Context) (any, error) {
 			c.Logger.Info("handler called")
 			return nil, nil
 		},
@@ -302,7 +302,7 @@ func Test_Run_UnknownCommandShowsHelp(t *testing.T) {
 	c := cmd{}
 
 	c.addRoute("log",
-		func(c *Context) (interface{}, error) {
+		func(c *Context) (any, error) {
 			c.Logger.Info("handler called")
 			return nil, nil
 		},
@@ -337,7 +337,7 @@ func Test_Run_handler_help(t *testing.T) {
 			out: terminal.New(),
 		}
 
-		c.addRoute("hello", func(_ *Context) (interface{}, error) {
+		c.addRoute("hello", func(_ *Context) (any, error) {
 			return "Hello", nil
 		}, AddHelp("this a helper string for hello sub command"))
 
