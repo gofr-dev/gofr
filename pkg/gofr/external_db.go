@@ -155,3 +155,13 @@ func (a *App) AddScyllaDB(db container.ScyllaDBProvider) {
 	db.Connect()
 	a.container.ScyllaDB = db
 }
+
+func (a *App) AddSurrealDB(db container.SurrealBDProvider) {
+	db.UseLogger(a.Logger())
+	db.UseMetrics(a.Metrics())
+
+	tracer := otel.GetTracerProvider().Tracer("gofr-scylladb")
+	db.UseTracer(tracer)
+	db.Connect()
+	a.container.SurrealDB = db
+}
