@@ -82,14 +82,14 @@ func (c *Client) Connect() {
 }
 
 // UseLogger sets the logger for the scylladb client.
-func (c *Client) UseLogger(logger interface{}) {
+func (c *Client) UseLogger(logger any) {
 	if l, ok := logger.(Logger); ok {
 		c.logger = l
 	}
 }
 
 // UseMetrics sets the metrics for the scylladb client.
-func (c *Client) UseMetrics(metrics interface{}) {
+func (c *Client) UseMetrics(metrics any) {
 	if m, ok := metrics.(Metrics); ok {
 		c.metrics = m
 	}

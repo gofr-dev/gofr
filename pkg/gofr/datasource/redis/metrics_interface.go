@@ -37,7 +37,7 @@ func (m *MockMetrics) EXPECT() *MockMetricsMockRecorder {
 // RecordHistogram mocks base method.
 func (m *MockMetrics) RecordHistogram(ctx context.Context, name string, value float64, labels ...string) {
 	m.ctrl.T.Helper()
-	varargs := []interface{}{ctx, name, value}
+	varargs := []any{ctx, name, value}
 	for _, a := range labels {
 		varargs = append(varargs, a)
 	}
@@ -45,8 +45,8 @@ func (m *MockMetrics) RecordHistogram(ctx context.Context, name string, value fl
 }
 
 // RecordHistogram indicates an expected call of RecordHistogram.
-func (mr *MockMetricsMockRecorder) RecordHistogram(ctx, name, value interface{}, labels ...interface{}) *gomock.Call {
+func (mr *MockMetricsMockRecorder) RecordHistogram(ctx, name, value any, labels ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]interface{}{ctx, name, value}, labels...)
+	varargs := append([]any{ctx, name, value}, labels...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RecordHistogram", reflect.TypeOf((*MockMetrics)(nil).RecordHistogram), varargs...)
 }

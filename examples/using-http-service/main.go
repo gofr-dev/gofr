@@ -45,7 +45,7 @@ func Handler(c *gofr.Context) (any, error) {
 
 	var catFacts = c.GetHTTPService("cat-facts")
 
-	resp, err := catFacts.Get(c, "fact", map[string]interface{}{
+	resp, err := catFacts.Get(c, "fact", map[string]any{
 		"max_length": 20,
 	})
 	if err != nil {

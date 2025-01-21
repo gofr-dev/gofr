@@ -21,7 +21,7 @@ type user struct {
 func main() {
 	app := gofr.New()
 
-	app.GET("/users", func(ctx *gofr.Context) (interface{}, error) {
+	app.GET("/users", func(ctx *gofr.Context) (any, error) {
 		users := []user{{ID: 1, Name: "Daria"}, {ID: 2, Name: "Ihor"}}
 
 		return users, nil
@@ -49,11 +49,11 @@ Response example:
 
 If you want to have a raw response structure - wrap it in `response.Raw`:
 ```go
-app.GET("/users", func(ctx *gofr.Context) (interface{}, error) {
+app.GET("/users", func(ctx *gofr.Context) (any, error) {
 
     users := []user{{ID: 1, Name: "Daria"}, {ID: 2, Name: "Ihor"}}
 
-    return response.Raw{Data: users}, nil	
+    return response.Raw{Data: users}, nil
 })
 ```
 

@@ -70,7 +70,7 @@ func RegisterHelloServer(s grpc.ServiceRegistrar, srv HelloServer) {
 	s.RegisterService(&Hello_ServiceDesc, srv)
 }
 
-func _Hello_SayHello_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Hello_SayHello_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(HelloRequest)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -82,7 +82,7 @@ func _Hello_SayHello_Handler(srv interface{}, ctx context.Context, dec func(inte
 		Server:     srv,
 		FullMethod: "/Hello/SayHello",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(HelloServer).SayHello(ctx, req.(*HelloRequest))
 	}
 	return interceptor(ctx, in, info, handler)

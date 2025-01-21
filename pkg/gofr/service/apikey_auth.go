@@ -24,47 +24,47 @@ type apiKeyAuthProvider struct {
 	HTTP
 }
 
-func (a *apiKeyAuthProvider) Get(ctx context.Context, path string, queryParams map[string]interface{}) (*http.Response, error) {
+func (a *apiKeyAuthProvider) Get(ctx context.Context, path string, queryParams map[string]any) (*http.Response, error) {
 	return a.GetWithHeaders(ctx, path, queryParams, nil)
 }
 
-func (a *apiKeyAuthProvider) GetWithHeaders(ctx context.Context, path string, queryParams map[string]interface{},
+func (a *apiKeyAuthProvider) GetWithHeaders(ctx context.Context, path string, queryParams map[string]any,
 	headers map[string]string) (*http.Response, error) {
 	headers = setXApiKey(headers, a.apiKey)
 
 	return a.HTTP.GetWithHeaders(ctx, path, queryParams, headers)
 }
 
-func (a *apiKeyAuthProvider) Post(ctx context.Context, path string, queryParams map[string]interface{},
+func (a *apiKeyAuthProvider) Post(ctx context.Context, path string, queryParams map[string]any,
 	body []byte) (*http.Response, error) {
 	return a.PostWithHeaders(ctx, path, queryParams, body, nil)
 }
 
-func (a *apiKeyAuthProvider) PostWithHeaders(ctx context.Context, path string, queryParams map[string]interface{}, body []byte,
+func (a *apiKeyAuthProvider) PostWithHeaders(ctx context.Context, path string, queryParams map[string]any, body []byte,
 	headers map[string]string) (*http.Response, error) {
 	headers = setXApiKey(headers, a.apiKey)
 
 	return a.HTTP.PostWithHeaders(ctx, path, queryParams, body, headers)
 }
 
-func (a *apiKeyAuthProvider) Put(ctx context.Context, api string, queryParams map[string]interface{}, body []byte) (
+func (a *apiKeyAuthProvider) Put(ctx context.Context, api string, queryParams map[string]any, body []byte) (
 	*http.Response, error) {
 	return a.PutWithHeaders(ctx, api, queryParams, body, nil)
 }
 
-func (a *apiKeyAuthProvider) PutWithHeaders(ctx context.Context, path string, queryParams map[string]interface{}, body []byte,
+func (a *apiKeyAuthProvider) PutWithHeaders(ctx context.Context, path string, queryParams map[string]any, body []byte,
 	headers map[string]string) (*http.Response, error) {
 	headers = setXApiKey(headers, a.apiKey)
 
 	return a.HTTP.PutWithHeaders(ctx, path, queryParams, body, headers)
 }
 
-func (a *apiKeyAuthProvider) Patch(ctx context.Context, path string, queryParams map[string]interface{}, body []byte) (
+func (a *apiKeyAuthProvider) Patch(ctx context.Context, path string, queryParams map[string]any, body []byte) (
 	*http.Response, error) {
 	return a.PatchWithHeaders(ctx, path, queryParams, body, nil)
 }
 
-func (a *apiKeyAuthProvider) PatchWithHeaders(ctx context.Context, path string, queryParams map[string]interface{}, body []byte,
+func (a *apiKeyAuthProvider) PatchWithHeaders(ctx context.Context, path string, queryParams map[string]any, body []byte,
 	headers map[string]string) (*http.Response, error) {
 	headers = setXApiKey(headers, a.apiKey)
 

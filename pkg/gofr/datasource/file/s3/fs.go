@@ -54,14 +54,14 @@ func New(config *Config) file.FileSystemProvider {
 }
 
 // UseLogger sets the Logger interface for the FTP file system.
-func (f *FileSystem) UseLogger(logger interface{}) {
+func (f *FileSystem) UseLogger(logger any) {
 	if l, ok := logger.(Logger); ok {
 		f.logger = l
 	}
 }
 
 // UseMetrics sets the Metrics interface.
-func (f *FileSystem) UseMetrics(metrics interface{}) {
+func (f *FileSystem) UseMetrics(metrics any) {
 	if m, ok := metrics.(Metrics); ok {
 		f.metrics = m
 	}

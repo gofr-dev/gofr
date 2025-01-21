@@ -13,7 +13,7 @@ func main() {
 	app := gofr.NewCMD()
 
 	// Add a sub-command "hello" with its handler, help and description
-	app.SubCommand("hello", func(c *gofr.Context) (interface{}, error) {
+	app.SubCommand("hello", func(c *gofr.Context) (any, error) {
 		return "Hello World!", nil
 	},
 		gofr.AddDescription("Print 'Hello World!'"),
@@ -21,7 +21,7 @@ func main() {
 	)
 
 	// Add a sub-command "params" with its handler, help and description
-	app.SubCommand("params", func(c *gofr.Context) (interface{}, error) {
+	app.SubCommand("params", func(c *gofr.Context) (any, error) {
 		return fmt.Sprintf("Hello %s!", c.Param("name")), nil
 	})
 
@@ -33,7 +33,7 @@ func main() {
 	app.Run()
 }
 
-func spinner(ctx *gofr.Context) (interface{}, error) {
+func spinner(ctx *gofr.Context) (any, error) {
 	// initialize the spinner
 	sp := terminal.NewDotSpinner(ctx.Out)
 	sp.Spin(ctx)
@@ -49,7 +49,7 @@ func spinner(ctx *gofr.Context) (interface{}, error) {
 	return "Process Complete", nil
 }
 
-func progress(ctx *gofr.Context) (interface{}, error) {
+func progress(ctx *gofr.Context) (any, error) {
 	p, err := terminal.NewProgressBar(ctx.Out, 100)
 	if err != nil {
 		ctx.Warn("error initializing progress bar, err : %v", err)

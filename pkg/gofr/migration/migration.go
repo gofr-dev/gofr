@@ -177,7 +177,7 @@ func getMigrator(c *container.Container) (Datasource, migrator, bool) {
 	return ds, mg, ok
 }
 
-func isNil(i interface{}) bool {
+func isNil(i any) bool {
 	// Get the value of the interface
 	val := reflect.ValueOf(i)
 

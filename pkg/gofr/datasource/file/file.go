@@ -120,7 +120,7 @@ func (j jsonReader) Next() bool {
 }
 
 // Scan binds the data to provided struct.
-func (j jsonReader) Scan(i interface{}) error {
+func (j jsonReader) Scan(i any) error {
 	return j.decoder.Decode(&i)
 }
 
@@ -130,7 +130,7 @@ func (f textReader) Next() bool {
 }
 
 // Scan binds the line to provided pointer to string.
-func (f textReader) Scan(i interface{}) error {
+func (f textReader) Scan(i any) error {
 	switch target := i.(type) {
 	case *string:
 		*target = f.scanner.Text()
