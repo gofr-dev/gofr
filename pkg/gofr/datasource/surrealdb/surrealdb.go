@@ -82,7 +82,6 @@ func (c *Client) UseTracer(tracer any) {
 	}
 }
 
-// Connect establishes a connection to the SurrealDB server using the client's configuration.
 var (
 	errNoDatabaseInstance       = errors.New("failed to connect to SurrealDB: no valid database instance")
 	errInvalidCredentialsConfig = errors.New("both username and password must be provided")
@@ -90,8 +89,8 @@ var (
 	errInvalidConnectionURL     = errors.New("invalid connection URL")
 )
 
-// NewDB creates a new SurrealDB client.
-func NewDB(connectionURL string) (con connection.Connection, err error) {
+// newDB creates a new SurrealDB client.
+func newDB(connectionURL string) (con connection.Connection, err error) {
 	u, err := url.ParseRequestURI(connectionURL)
 	if err != nil {
 		return nil, err
@@ -164,7 +163,7 @@ func (c *Client) connectToDatabase(endpoint string) error {
 	c.logger.Debugf("connecting to SurrealDB at %s", endpoint)
 
 	var err error
-	c.db, err = NewDB(endpoint)
+	c.db, err = newDB(endpoint)
 
 	if err != nil {
 		c.logError("failed to connect to SurrealDB", err)
