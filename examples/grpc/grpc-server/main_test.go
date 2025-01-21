@@ -7,11 +7,11 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gofr.dev/pkg/gofr/testutil"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
 	"gofr.dev/examples/grpc/grpc-server/server"
+	"gofr.dev/pkg/gofr/testutil"
 )
 
 func TestGRPCServer(t *testing.T) {
