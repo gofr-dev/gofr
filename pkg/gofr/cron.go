@@ -339,7 +339,7 @@ var errBadScheduleFormat = errors.New("schedule string must have five components
 
 // errOutOfRange denotes the errors that occur when a range in schedule is out of scope for the particular time unit.
 type errOutOfRange struct {
-	rangeVal interface{}
+	rangeVal any
 	input    string
 	min, max int
 }
@@ -383,7 +383,7 @@ func (noopRequest) HostName() string {
 	return "gofr"
 }
 
-func (noopRequest) Bind(interface{}) error {
+func (noopRequest) Bind(any) error {
 	return nil
 }
 

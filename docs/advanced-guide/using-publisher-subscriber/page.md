@@ -420,7 +420,7 @@ func main() {
 	app.Run()
 }
 
-func order(ctx *gofr.Context) (interface{}, error) {
+func order(ctx *gofr.Context) (any, error) {
 	type orderStatus struct {
 		OrderId string `json:"orderId"`
 		Status  string `json:"status"`
