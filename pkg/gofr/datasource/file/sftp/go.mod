@@ -4,7 +4,7 @@ go 1.22.7
 
 toolchain go1.23.4
 
-replace gofr.dev => ../../../../../../gofr
+replace gofr.dev => ../../../../..
 
 require (
 	github.com/pkg/sftp v1.13.6

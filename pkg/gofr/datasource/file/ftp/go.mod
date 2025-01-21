@@ -2,7 +2,7 @@ module gofr.dev/pkg/gofr/datasource/file/ftp
 
 go 1.22.3
 
-replace gofr.dev => ../../../../../../gofr
+replace gofr.dev => ../../../../..
 
 require (
 	github.com/jlaffaye/ftp v0.2.0

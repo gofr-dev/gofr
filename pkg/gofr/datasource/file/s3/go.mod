@@ -2,7 +2,7 @@ module gofr.dev/pkg/gofr/datasource/file/s3
 
 go 1.22.4
 
-replace gofr.dev => ../../../../../../gofr
+replace gofr.dev => ../../../../..
 
 require (
 	github.com/aws/aws-sdk-go-v2 v1.30.4
