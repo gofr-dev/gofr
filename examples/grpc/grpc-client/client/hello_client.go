@@ -48,5 +48,12 @@ func (h *HelloClientWrapper) SayHello(ctx *gofr.Context, req *HelloRequest) (*He
 
 	ctx.Context = metadata.NewOutgoingContext(ctx.Context, md)
 
-	return h.client.SayHello(ctx.Context, req)
+	var header metadata.MD
+
+	res, err := h.client.SayHello(ctx.Context, req, grpc.Header(&header))
+	if err != nil {
+		return nil, err
+	}
+
+	return res, nil
 }
