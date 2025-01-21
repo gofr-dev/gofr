@@ -19,7 +19,7 @@ func TestConnection_Bind_Success(t *testing.T) {
 	tests := []struct {
 		name         string
 		inputMessage []byte
-		expectedData interface{}
+		expectedData any
 	}{
 		{
 			name:         "Bind to string",
@@ -29,7 +29,7 @@ func TestConnection_Bind_Success(t *testing.T) {
 		{
 			name:         "Bind to JSON struct",
 			inputMessage: []byte(`{"key":"value"}`),
-			expectedData: map[string]interface{}{"key": "value"},
+			expectedData: map[string]any{"key": "value"},
 		},
 	}
 
@@ -42,12 +42,12 @@ func TestConnection_Bind_Success(t *testing.T) {
 
 				wsConn := &Connection{Conn: conn}
 
-				var data interface{}
+				var data any
 				switch tt.expectedData.(type) {
 				case string:
 					data = new(string)
 				default:
-					data = &map[string]interface{}{}
+					data = &map[string]any{}
 				}
 
 				err = wsConn.Bind(data)
@@ -134,11 +134,11 @@ func Test_UnimplementedMethods(t *testing.T) {
 	assert.Nil(t, conn.Params("test"))
 }
 
-func dereference(v interface{}) interface{} {
+func dereference(v any) any {
 	switch v := v.(type) {
 	case *string:
 		return *v
-	case *map[string]interface{}:
+	case *map[string]any:
 		return *v
 	default:
 		return v

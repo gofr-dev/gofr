@@ -96,7 +96,7 @@ func (r *Request) Params(key string) []string {
 	return strings.Split(value, ",")
 }
 
-func (r *Request) Bind(i interface{}) error {
+func (r *Request) Bind(i any) error {
 	// pointer to struct - addressable
 	ps := reflect.ValueOf(i)
 	// struct

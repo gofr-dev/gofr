@@ -67,7 +67,7 @@ func (o *oAuth) addAuthorizationHeader(ctx context.Context, headers map[string]s
 	return headers, nil
 }
 
-func (o *oAuth) GetWithHeaders(ctx context.Context, path string, queryParams map[string]interface{},
+func (o *oAuth) GetWithHeaders(ctx context.Context, path string, queryParams map[string]any,
 	headers map[string]string) (*http.Response, error) {
 	headers, err := o.addAuthorizationHeader(ctx, headers)
 	if err != nil {
@@ -78,7 +78,7 @@ func (o *oAuth) GetWithHeaders(ctx context.Context, path string, queryParams map
 }
 
 // PostWithHeaders is a wrapper for doRequest with the POST method and headers.
-func (o *oAuth) PostWithHeaders(ctx context.Context, path string, queryParams map[string]interface{},
+func (o *oAuth) PostWithHeaders(ctx context.Context, path string, queryParams map[string]any,
 	body []byte, headers map[string]string) (*http.Response, error) {
 	headers, err := o.addAuthorizationHeader(ctx, headers)
 	if err != nil {
@@ -89,7 +89,7 @@ func (o *oAuth) PostWithHeaders(ctx context.Context, path string, queryParams ma
 }
 
 // PatchWithHeaders is a wrapper for doRequest with the PATCH method and headers.
-func (o *oAuth) PatchWithHeaders(ctx context.Context, path string, queryParams map[string]interface{},
+func (o *oAuth) PatchWithHeaders(ctx context.Context, path string, queryParams map[string]any,
 	body []byte, headers map[string]string) (*http.Response, error) {
 	headers, err := o.addAuthorizationHeader(ctx, headers)
 	if err != nil {
@@ -100,7 +100,7 @@ func (o *oAuth) PatchWithHeaders(ctx context.Context, path string, queryParams m
 }
 
 // PutWithHeaders is a wrapper for doRequest with the PUT method and headers.
-func (o *oAuth) PutWithHeaders(ctx context.Context, path string, queryParams map[string]interface{},
+func (o *oAuth) PutWithHeaders(ctx context.Context, path string, queryParams map[string]any,
 	body []byte, headers map[string]string) (*http.Response, error) {
 	headers, err := o.addAuthorizationHeader(ctx, headers)
 	if err != nil {
@@ -121,24 +121,24 @@ func (o *oAuth) DeleteWithHeaders(ctx context.Context, path string, body []byte,
 	return o.HTTP.DeleteWithHeaders(ctx, path, body, headers)
 }
 
-func (o *oAuth) Get(ctx context.Context, path string, queryParams map[string]interface{}) (*http.Response, error) {
+func (o *oAuth) Get(ctx context.Context, path string, queryParams map[string]any) (*http.Response, error) {
 	return o.GetWithHeaders(ctx, path, queryParams, nil)
 }
 
 // Post is a wrapper for doRequest with the POST method and headers.
-func (o *oAuth) Post(ctx context.Context, path string, queryParams map[string]interface{},
+func (o *oAuth) Post(ctx context.Context, path string, queryParams map[string]any,
 	body []byte) (*http.Response, error) {
 	return o.PostWithHeaders(ctx, path, queryParams, body, nil)
 }
 
 // Patch is a wrapper for doRequest with the PATCH method and headers.
-func (o *oAuth) Patch(ctx context.Context, path string, queryParams map[string]interface{},
+func (o *oAuth) Patch(ctx context.Context, path string, queryParams map[string]any,
 	body []byte) (*http.Response, error) {
 	return o.PatchWithHeaders(ctx, path, queryParams, body, nil)
 }
 
 // Put is a wrapper for doRequest with the PUT method and headers.
-func (o *oAuth) Put(ctx context.Context, path string, queryParams map[string]interface{},
+func (o *oAuth) Put(ctx context.Context, path string, queryParams map[string]any,
 	body []byte) (*http.Response, error) {
 	return o.PutWithHeaders(ctx, path, queryParams, body, nil)
 }

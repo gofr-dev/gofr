@@ -18,23 +18,23 @@ var (
 )
 
 type Create interface {
-	Create(c *Context) (interface{}, error)
+	Create(c *Context) (any, error)
 }
 
 type GetAll interface {
-	GetAll(c *Context) (interface{}, error)
+	GetAll(c *Context) (any, error)
 }
 
 type Get interface {
-	Get(c *Context) (interface{}, error)
+	Get(c *Context) (any, error)
 }
 
 type Update interface {
-	Update(c *Context) (interface{}, error)
+	Update(c *Context) (any, error)
 }
 
 type Delete interface {
-	Delete(c *Context) (interface{}, error)
+	Delete(c *Context) (any, error)
 }
 
 type TableNameOverrider interface {
@@ -64,7 +64,7 @@ type entity struct {
 }
 
 // scanEntity extracts entity information for CRUD operations.
-func scanEntity(object interface{}) (*entity, error) {
+func scanEntity(object any) (*entity, error) {
 	if object == nil {
 		return nil, errObjectIsNil
 	}
@@ -113,7 +113,7 @@ func scanEntity(object interface{}) (*entity, error) {
 }
 
 // registerCRUDHandlers registers CRUD handlers for an entity.
-func (a *App) registerCRUDHandlers(e *entity, object interface{}) {
+func (a *App) registerCRUDHandlers(e *entity, object any) {
 	basePath := fmt.Sprintf("/%s", e.restPath)
 	idPath := fmt.Sprintf("/%s/{%s}", e.restPath, e.primaryKey)
 
@@ -148,7 +148,7 @@ func (a *App) registerCRUDHandlers(e *entity, object interface{}) {
 	}
 }
 
-func (e *entity) Create(c *Context) (interface{}, error) {
+func (e *entity) Create(c *Context) (any, error) {
 	newEntity, err := e.bindAndValidateEntity(c)
 	if err != nil {
 		return nil, err
@@ -166,7 +166,7 @@ func (e *entity) Create(c *Context) (interface{}, error) {
 		return nil, err
 	}
 
-	var lastID interface{}
+	var lastID any
 
 	if hasAutoIncrementID(e.constraints) { // Check for auto-increment ID
 		lastID, err = result.LastInsertId()
@@ -180,7 +180,7 @@ func (e *entity) Create(c *Context) (interface{}, error) {
 	return fmt.Sprintf("%s successfully created with id: %v", e.name, lastID), nil
 }
 
-func (e *entity) bindAndValidateEntity(c *Context) (interface{}, error) {
+func (e *entity) bindAndValidateEntity(c *Context) (any, error) {
 	newEntity := reflect.New(e.entityType).Interface()
 
 	err := c.Bind(newEntity)
@@ -219,7 +219,7 @@ func (e *entity) extractFields(newEntity any) (fieldNames []string, fieldValues 
 	return fieldNames, fieldValues
 }
 
-func (e *entity) GetAll(c *Context) (interface{}, error) {
+func (e *entity) GetAll(c *Context) (any, error) {
 	query := sql.SelectQuery(c.SQL.Dialect(), e.tableName)
 
 	rows, err := c.SQL.QueryContext(c, query)
@@ -229,14 +229,14 @@ func (e *entity) GetAll(c *Context) (interface{}, error) {
 
 	defer rows.Close()
 
-	dest := make([]interface{}, e.entityType.NumField())
+	dest := make([]any, e.entityType.NumField())
 	val := reflect.New(e.entityType).Elem()
 
 	for i := 0; i < e.entityType.NumField(); i++ {
 		dest[i] = val.Field(i).Addr().Interface()
 	}
 
-	var entities []interface{}
+	var entities []any
 
 	for rows.Next() {
 		newEntity := reflect.New(e.entityType).Interface()
@@ -258,7 +258,7 @@ func (e *entity) GetAll(c *Context) (interface{}, error) {
 	return entities, nil
 }
 
-func (e *entity) Get(c *Context) (interface{}, error) {
+func (e *entity) Get(c *Context) (any, error) {
 	newEntity := reflect.New(e.entityType).Interface()
 	id := c.Request.PathParam("id")
 
@@ -266,7 +266,7 @@ func (e *entity) Get(c *Context) (interface{}, error) {
 
 	row := c.SQL.QueryRowContext(c, query, id)
 
-	dest := make([]interface{}, e.entityType.NumField())
+	dest := make([]any, e.entityType.NumField())
 	val := reflect.ValueOf(newEntity).Elem()
 
 	for i := 0; i < val.NumField(); i++ {
@@ -281,7 +281,7 @@ func (e *entity) Get(c *Context) (interface{}, error) {
 	return newEntity, nil
 }
 
-func (e *entity) Update(c *Context) (interface{}, error) {
+func (e *entity) Update(c *Context) (any, error) {
 	newEntity := reflect.New(e.entityType).Interface()
 
 	err := c.Bind(newEntity)
@@ -290,7 +290,7 @@ func (e *entity) Update(c *Context) (interface{}, error) {
 	}
 
 	fieldNames := make([]string, 0, e.entityType.NumField())
-	fieldValues := make([]interface{}, 0, e.entityType.NumField())
+	fieldValues := make([]any, 0, e.entityType.NumField())
 
 	for i := 0; i < e.entityType.NumField(); i++ {
 		field := e.entityType.Field(i)
@@ -311,7 +311,7 @@ func (e *entity) Update(c *Context) (interface{}, error) {
 	return fmt.Sprintf("%s successfully updated with id: %s", e.name, id), nil
 }
 
-func (e *entity) Delete(c *Context) (interface{}, error) {
+func (e *entity) Delete(c *Context) (any, error) {
 	id := c.PathParam("id")
 
 	query := sql.DeleteByQuery(c.SQL.Dialect(), e.tableName, e.primaryKey)

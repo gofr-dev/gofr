@@ -23,7 +23,7 @@ func TestHealth_HealthCheck(t *testing.T) {
 
 	expected := &datasource.Health{
 		Status: "UP",
-		Details: map[string]interface{}{
+		Details: map[string]any{
 			"host": "host:3306/test",
 			"stats": DBStats{
 				MaxOpenConnections: db.Stats().MaxOpenConnections,
@@ -55,7 +55,7 @@ func TestHealth_HealthCheckDBNotConnected(t *testing.T) {
 
 	expected := &datasource.Health{
 		Status: "DOWN",
-		Details: map[string]interface{}{
+		Details: map[string]any{
 			"host": "host:3306/test",
 		},
 	}
@@ -79,7 +79,7 @@ func TestHealth_HealthCheckDBPingFailed(t *testing.T) {
 
 	expected := &datasource.Health{
 		Status: "DOWN",
-		Details: map[string]interface{}{
+		Details: map[string]any{
 			"host": "host:3306/test",
 		},
 	}
