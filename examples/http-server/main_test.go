@@ -3,15 +3,14 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"github.com/go-redis/redismock/v9"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"io"
 	"net/http"
 	"strconv"
 	"testing"
 	"time"
-
-	"github.com/go-redis/redismock/v9"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"gofr.dev/pkg/gofr"
 	"gofr.dev/pkg/gofr/config"
@@ -22,7 +21,10 @@ import (
 )
 
 func TestIntegration_SimpleAPIServer(t *testing.T) {
-	configs := testutil.NewServerConfigs(t)
+	host := "http://localhost:9000"
+
+	port := testutil.GetFreePort(t)
+	t.Setenv("METRICS_PORT", strconv.Itoa(port))
 
 	go main()
 	time.Sleep(100 * time.Millisecond) // Giving some time to start the server
@@ -40,7 +42,7 @@ func TestIntegration_SimpleAPIServer(t *testing.T) {
 	}
 
 	for i, tc := range tests {
-		req, _ := http.NewRequest(http.MethodGet, configs.HTTPHost+tc.path, nil)
+		req, _ := http.NewRequest(http.MethodGet, host+tc.path, nil)
 		req.Header.Set("content-type", "application/json")
 
 		c := http.Client{}
@@ -67,7 +69,7 @@ func TestIntegration_SimpleAPIServer(t *testing.T) {
 }
 
 func TestIntegration_SimpleAPIServer_Errors(t *testing.T) {
-	configs := testutil.NewServerConfigs(t)
+	host := "http://localhost:9000"
 
 	tests := []struct {
 		desc       string
@@ -96,7 +98,7 @@ func TestIntegration_SimpleAPIServer_Errors(t *testing.T) {
 	}
 
 	for i, tc := range tests {
-		req, _ := http.NewRequest(http.MethodGet, configs.HTTPHost+tc.path, nil)
+		req, _ := http.NewRequest(http.MethodGet, host+tc.path, nil)
 		req.Header.Set("content-type", "application/json")
 
 		c := http.Client{}
