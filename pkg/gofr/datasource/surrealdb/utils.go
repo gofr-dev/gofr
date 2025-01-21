@@ -26,17 +26,17 @@ func clean(query string) string {
 }
 
 type QueryLog struct {
-	Query         string      `json:"query"`                // The query executed.
-	OperationName string      `json:"operationName"`        // The operation name
-	Duration      int64       `json:"duration"`             // Execution time in microseconds.
-	Namespace     string      `json:"namespace"`            // The namespace of the query.
-	Database      string      `json:"database"`             // The database the query was executed on.
-	ID            interface{} `json:"id"`                   // The ID of the affected items.
-	Data          interface{} `json:"data"`                 // The data affected or retrieved.
-	Filter        interface{} `json:"filter,omitempty"`     // Optional filter applied to the query.
-	Update        interface{} `json:"update,omitempty"`     // Optional update data for the query.
-	Collection    string      `json:"collection,omitempty"` // Optional collection affected.\
-	Span          trace.Span  `json:"span,omitempty"`       // Optional tracing span associated with the query.
+	Query         string     `json:"query"`                // The query executed.
+	OperationName string     `json:"operationName"`        // The operation name
+	Duration      int64      `json:"duration"`             // Execution time in microseconds.
+	Namespace     string     `json:"namespace"`            // The namespace of the query.
+	Database      string     `json:"database"`             // The database the query was executed on.
+	ID            any        `json:"id"`                   // The ID of the affected items.
+	Data          any        `json:"data"`                 // The data affected or retrieved.
+	Filter        any        `json:"filter,omitempty"`     // Optional filter applied to the query.
+	Update        any        `json:"update,omitempty"`     // Optional update data for the query.
+	Collection    string     `json:"collection,omitempty"` // Optional collection affected.\
+	Span          trace.Span `json:"span,omitempty"`       // Optional tracing span associated with the query.
 }
 
 const defaultValue = "default"

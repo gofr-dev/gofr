@@ -335,7 +335,7 @@ func Test_Update(t *testing.T) {
 
 	t.Run("successful update", func(t *testing.T) {
 		ctx := context.Background()
-		data := map[string]interface{}{
+		data := map[string]any{
 			"name":  "updated",
 			"age":   25,
 			"email": "test@example.com",
@@ -349,16 +349,16 @@ func Test_Update(t *testing.T) {
         email = $email
         RETURN *`
 
-		expectedParams := map[string]interface{}{
+		expectedParams := map[string]any{
 			"name":  "updated",
 			"age":   25,
 			"email": "test@example.com",
 		}
 
 		updateResponse := Response{
-			Result: []interface{}{
-				map[string]interface{}{
-					"id": map[string]interface{}{
+			Result: []any{
+				map[string]any{
+					"id": map[string]any{
 						"Table": "users",
 						"ID":    "123",
 					},
@@ -382,7 +382,7 @@ func Test_Update(t *testing.T) {
 		require.NoError(t, err)
 		assert.NotNil(t, result)
 
-		resultMap, ok := result.(map[string]interface{})
+		resultMap, ok := result.(map[string]any)
 		require.True(t, ok)
 		assert.Equal(t, "updated", resultMap["name"])
 		assert.Equal(t, 25, resultMap["age"])

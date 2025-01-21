@@ -127,6 +127,8 @@ func NewDB(connectionURL string) (con connection.Connection, err error) {
 
 // Connect establishes a connection to the SurrealDB database.
 func (c *Client) Connect() {
+	c.logger.Debugf("connecting to SurrealDB at %v:%v to database %v", c.config.Host, c.config.Port, c.config.Database)
+
 	endpoint := c.buildEndpoint()
 	err := c.connectToDatabase(endpoint)
 
@@ -144,7 +146,7 @@ func (c *Client) Connect() {
 		return
 	}
 
-	c.logger.Debugf("successfully connected to SurrealDB")
+	c.logger.Logf("Successfully connected to SurrealDB at %v:%v to database %v", c.config.Host, c.config.Port, c.config.Database)
 }
 
 // buildEndpoint constructs the SurrealDB endpoint based on the configuration.

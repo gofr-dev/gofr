@@ -9,7 +9,7 @@ type Logger interface {
 	// Debugf logs a formatted debug message.
 	Debugf(pattern string, args ...any)
 	// Debug logs a debug message
-	Debug(args ...interface{})
+	Debug(args ...any)
 	// Logf logs a formatted log message.
 	Logf(pattern string, args ...any)
 	// Errorf logs a formatted error message
