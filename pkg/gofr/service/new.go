@@ -34,27 +34,27 @@ type HTTP interface {
 
 type httpClient interface {
 	// Get performs an HTTP GET request.
-	Get(ctx context.Context, api string, queryParams map[string]interface{}) (*http.Response, error)
+	Get(ctx context.Context, api string, queryParams map[string]any) (*http.Response, error)
 	// GetWithHeaders performs an HTTP GET request with custom headers.
-	GetWithHeaders(ctx context.Context, path string, queryParams map[string]interface{},
+	GetWithHeaders(ctx context.Context, path string, queryParams map[string]any,
 		headers map[string]string) (*http.Response, error)
 
 	// Post performs an HTTP POST request.
-	Post(ctx context.Context, path string, queryParams map[string]interface{}, body []byte) (*http.Response, error)
+	Post(ctx context.Context, path string, queryParams map[string]any, body []byte) (*http.Response, error)
 	// PostWithHeaders performs an HTTP POST request with custom headers.
-	PostWithHeaders(ctx context.Context, path string, queryParams map[string]interface{}, body []byte,
+	PostWithHeaders(ctx context.Context, path string, queryParams map[string]any, body []byte,
 		headers map[string]string) (*http.Response, error)
 
 	// Put performs an HTTP PUT request.
-	Put(ctx context.Context, api string, queryParams map[string]interface{}, body []byte) (*http.Response, error)
+	Put(ctx context.Context, api string, queryParams map[string]any, body []byte) (*http.Response, error)
 	// PutWithHeaders performs an HTTP PUT request with custom headers.
-	PutWithHeaders(ctx context.Context, api string, queryParams map[string]interface{}, body []byte,
+	PutWithHeaders(ctx context.Context, api string, queryParams map[string]any, body []byte,
 		headers map[string]string) (*http.Response, error)
 
 	// Patch performs an HTTP PATCH request.
-	Patch(ctx context.Context, api string, queryParams map[string]interface{}, body []byte) (*http.Response, error)
+	Patch(ctx context.Context, api string, queryParams map[string]any, body []byte) (*http.Response, error)
 	// PatchWithHeaders performs an HTTP PATCH request with custom headers.
-	PatchWithHeaders(ctx context.Context, api string, queryParams map[string]interface{}, body []byte,
+	PatchWithHeaders(ctx context.Context, api string, queryParams map[string]any, body []byte,
 		headers map[string]string) (*http.Response, error)
 
 	// Delete performs an HTTP DELETE request.
@@ -86,40 +86,40 @@ func NewHTTPService(serviceAddress string, logger Logger, metrics Metrics, optio
 	return svc
 }
 
-func (h *httpService) Get(ctx context.Context, path string, queryParams map[string]interface{}) (*http.Response, error) {
+func (h *httpService) Get(ctx context.Context, path string, queryParams map[string]any) (*http.Response, error) {
 	return h.GetWithHeaders(ctx, path, queryParams, nil)
 }
 
-func (h *httpService) GetWithHeaders(ctx context.Context, path string, queryParams map[string]interface{},
+func (h *httpService) GetWithHeaders(ctx context.Context, path string, queryParams map[string]any,
 	headers map[string]string) (*http.Response, error) {
 	return h.createAndSendRequest(ctx, http.MethodGet, path, queryParams, nil, headers)
 }
 
-func (h *httpService) Post(ctx context.Context, path string, queryParams map[string]interface{},
+func (h *httpService) Post(ctx context.Context, path string, queryParams map[string]any,
 	body []byte) (*http.Response, error) {
 	return h.PostWithHeaders(ctx, path, queryParams, body, nil)
 }
 
-func (h *httpService) PostWithHeaders(ctx context.Context, path string, queryParams map[string]interface{},
+func (h *httpService) PostWithHeaders(ctx context.Context, path string, queryParams map[string]any,
 	body []byte, headers map[string]string) (*http.Response, error) {
 	return h.createAndSendRequest(ctx, http.MethodPost, path, queryParams, body, headers)
 }
 
-func (h *httpService) Patch(ctx context.Context, path string, queryParams map[string]interface{}, body []byte) (*http.Response, error) {
+func (h *httpService) Patch(ctx context.Context, path string, queryParams map[string]any, body []byte) (*http.Response, error) {
 	return h.PatchWithHeaders(ctx, path, queryParams, body, nil)
 }
 
-func (h *httpService) PatchWithHeaders(ctx context.Context, path string, queryParams map[string]interface{},
+func (h *httpService) PatchWithHeaders(ctx context.Context, path string, queryParams map[string]any,
 	body []byte, headers map[string]string) (*http.Response, error) {
 	return h.createAndSendRequest(ctx, http.MethodPatch, path, queryParams, body, headers)
 }
 
-func (h *httpService) Put(ctx context.Context, path string, queryParams map[string]interface{},
+func (h *httpService) Put(ctx context.Context, path string, queryParams map[string]any,
 	body []byte) (*http.Response, error) {
 	return h.PutWithHeaders(ctx, path, queryParams, body, nil)
 }
 
-func (h *httpService) PutWithHeaders(ctx context.Context, path string, queryParams map[string]interface{},
+func (h *httpService) PutWithHeaders(ctx context.Context, path string, queryParams map[string]any,
 	body []byte, headers map[string]string) (*http.Response, error) {
 	return h.createAndSendRequest(ctx, http.MethodPut, path, queryParams, body, headers)
 }
@@ -133,7 +133,7 @@ func (h *httpService) DeleteWithHeaders(ctx context.Context, path string, body [
 }
 
 func (h *httpService) createAndSendRequest(ctx context.Context, method string, path string,
-	queryParams map[string]interface{}, body []byte, headers map[string]string) (*http.Response, error) {
+	queryParams map[string]any, body []byte, headers map[string]string) (*http.Response, error) {
 	uri := h.url + "/" + path
 	uri = strings.TrimRight(uri, "/")
 
@@ -208,7 +208,7 @@ func (h *httpService) updateMetrics(ctx context.Context, method string, timeTake
 	}
 }
 
-func encodeQueryParameters(req *http.Request, queryParams map[string]interface{}) {
+func encodeQueryParameters(req *http.Request, queryParams map[string]any) {
 	q := req.URL.Query()
 
 	for k, v := range queryParams {

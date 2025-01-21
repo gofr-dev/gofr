@@ -1,5 +1,5 @@
 package response
 
 type Raw struct {
-	Data interface{}
+	Data any
 }

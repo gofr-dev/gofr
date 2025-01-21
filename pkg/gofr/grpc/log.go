@@ -17,7 +17,7 @@ import (
 )
 
 type Logger interface {
-	Info(args ...interface{})
+	Info(args ...any)
 }
 
 type RPCLog struct {
@@ -65,7 +65,7 @@ func (l RPCLog) String() string {
 func LoggingInterceptor(logger Logger) grpc.UnaryServerInterceptor {
 	tracer := otel.GetTracerProvider().Tracer("gofr", trace.WithInstrumentationVersion("v0.1"))
 
-	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 		start := time.Now()
 
 		ctx, _ = initializeSpanContext(ctx)
