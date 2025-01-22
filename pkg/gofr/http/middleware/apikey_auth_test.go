@@ -53,7 +53,7 @@ func Test_ApiKeyAuthMiddleware(t *testing.T) {
 	for i, tc := range testCases {
 		rr := httptest.NewRecorder()
 
-		req.Header.Set("X-API-KEY", tc.apiKey)
+		req.Header.Set("X-Api-Key", tc.apiKey)
 
 		provider := APIKeyAuthProvider{
 			ValidateFunc:                tc.validatorFunc,

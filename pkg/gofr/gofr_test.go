@@ -139,7 +139,7 @@ func TestGofr_ServerRoutes(t *testing.T) {
 		w := httptest.NewRecorder()
 		r := httptest.NewRequest(tc.method, tc.target, http.NoBody)
 
-		r.Header.Set("content-type", "application/json")
+		r.Header.Set("Content-Type", "application/json")
 
 		g.httpServer.router.ServeHTTP(w, r)
 
@@ -785,7 +785,7 @@ func Test_APIKeyAuthMiddleware(t *testing.T) {
 
 	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet,
 		fmt.Sprintf("http://localhost:%d", port)+"/test", http.NoBody)
-	req.Header.Set("X-API-Key", "test-key")
+	req.Header.Set("X-Api-Key", "test-key")
 
 	// Send the request and check for successful response
 	resp, err := netClient.Do(req)
