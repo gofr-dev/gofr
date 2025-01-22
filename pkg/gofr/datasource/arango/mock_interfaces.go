@@ -11,13 +11,32 @@ package arango
 
 import (
 	context "context"
-	reflect "reflect"
-
+	"fmt"
 	"github.com/arangodb/go-driver/v2/connection"
+	reflect "reflect"
+	"strings"
 
 	arangodb "github.com/arangodb/go-driver/v2/arangodb"
 	gomock "go.uber.org/mock/gomock"
 )
+
+// MockArangoMockRecorder is the mock recorder for MockArango.
+type MockArangoMockRecorder struct {
+	mock *MockArango
+}
+
+// NewMockArango creates a new mock instance.
+func NewMockArango(ctrl *gomock.Controller) *MockArango {
+	mock := &MockArango{ctrl: ctrl}
+	mock.recorder = &MockArangoMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockArango) EXPECT() *MockArangoMockRecorder {
+	return m.recorder
+}
+
 
 // MockArango is a mock of Arango interface.
 type MockArango struct {
@@ -26,51 +45,107 @@ type MockArango struct {
 }
 
 func (m *MockArango) Connection() connection.Connection {
-	//TODO implement me
-	panic("implement me")
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Connection")
+	return ret[0].(connection.Connection)
+}
+
+func (mr *MockArangoMockRecorder) Connection() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Connection", reflect.TypeOf((*MockArango)(nil).Connection))
 }
 
 func (m *MockArango) Get(ctx context.Context, output interface{}, urlParts ...string) (connection.Response, error) {
-	//TODO implement me
-	panic("implement me")
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Get", ctx, output, urlParts)
+	return ret[0].(connection.Response), ret[1].(error)
+}
+
+func (mr *MockArangoMockRecorder) Get(ctx, output interface{}, urlParts ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockArango)(nil).Get), ctx, output, urlParts)
 }
 
 func (m *MockArango) Post(ctx context.Context, output, input interface{}, urlParts ...string) (connection.Response, error) {
-	//TODO implement me
-	panic("implement me")
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Post", ctx, output, input, urlParts)
+	return ret[0].(connection.Response), ret[1].(error)
+}
+
+func (mr *MockArangoMockRecorder) Post(ctx, output, input interface{}, urlParts ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Post", reflect.TypeOf((*MockArango)(nil).Post), ctx, output, input, urlParts)
 }
 
 func (m *MockArango) Put(ctx context.Context, output, input interface{}, urlParts ...string) (connection.Response, error) {
-	//TODO implement me
-	panic("implement me")
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Put", ctx, output, input, urlParts)
+	return ret[0].(connection.Response), ret[1].(error)
+}
+
+func (mr *MockArangoMockRecorder) Put(ctx, output, input interface{}, urlParts ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Put", reflect.TypeOf((*MockArango)(nil).Put), ctx, output, input, urlParts)
 }
 
 func (m *MockArango) Delete(ctx context.Context, output interface{}, urlParts ...string) (connection.Response, error) {
-	//TODO implement me
-	panic("implement me")
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Delete", ctx, output, urlParts)
+	return ret[0].(connection.Response), ret[1].(error)
+}
+
+func (mr *MockArangoMockRecorder) Delete(ctx, output interface{}, urlParts ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockArango)(nil).Delete), ctx, output, urlParts)
 }
 
 func (m *MockArango) Head(ctx context.Context, output interface{}, urlParts ...string) (connection.Response, error) {
-	//TODO implement me
-	panic("implement me")
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Head", ctx, output, urlParts)
+	return ret[0].(connection.Response), ret[1].(error)
+}
+
+func (mr *MockArangoMockRecorder) Head(ctx, output interface{}, urlParts ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Head", reflect.TypeOf((*MockArango)(nil).Head), ctx, output, urlParts)
 }
 
 func (m *MockArango) Patch(ctx context.Context, output, input interface{}, urlParts ...string) (connection.Response, error) {
-	//TODO implement me
-	panic("implement me")
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Patch", ctx, output, input, urlParts)
+	return ret[0].(connection.Response), ret[1].(error)
+}
+
+func (mr *MockArangoMockRecorder) Patch(ctx, output, input interface{}, urlParts ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Patch", reflect.TypeOf((*MockArango)(nil).Patch), ctx, output, input, urlParts)
+}
+
+func (m *MockArango) CreateDatabase(ctx context.Context, name string, options *arangodb.CreateDatabaseOptions) (arangodb.Database, error) {
+	db := NewMockDatabase(m.ctrl)
+	if strings.Contains(name, "error") {
+		return nil,fmt.Errorf("database creation error")
+	}
+
+	return db,nil
+}
+
+func (mr *MockArangoMockRecorder) CreateDatabase(ctx, name, options interface{}) *gomock.Call {
+	return mr.CreateDB(ctx, name)
 }
 
 func (m *MockArango) GetDatabase(ctx context.Context, name string, options *arangodb.GetDatabaseOptions) (arangodb.Database, error) {
-	//TODO implement me
-	panic("implement me")
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetDatabase", ctx, name, options)
+	return ret[0].(arangodb.Database), ret[1].(error)
+}
+
+func (mr *MockArangoMockRecorder) GetDatabase(ctx, name, options interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDatabase", reflect.TypeOf((*MockArango)(nil).GetDatabase), ctx, name, options)
 }
 
 func (m *MockArango) DatabaseExists(ctx context.Context, name string) (bool, error) {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (m *MockArango) Databases(ctx context.Context) ([]arangodb.Database, error) {
 	//TODO implement me
 	panic("implement me")
 }
@@ -80,10 +155,6 @@ func (m *MockArango) AccessibleDatabases(ctx context.Context) ([]arangodb.Databa
 	panic("implement me")
 }
 
-func (m *MockArango) CreateDatabase(ctx context.Context, name string, options *arangodb.CreateDatabaseOptions) (arangodb.Database, error) {
-	//TODO implement me
-	panic("implement me")
-}
 
 func (m *MockArango) UserExists(ctx context.Context, name string) (bool, error) {
 	//TODO implement me
@@ -96,23 +167,46 @@ func (m *MockArango) Users(ctx context.Context) ([]arangodb.User, error) {
 }
 
 func (m *MockArango) ReplaceUser(ctx context.Context, name string, options *arangodb.UserOptions) (arangodb.User, error) {
-	//TODO implement me
-	panic("implement me")
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ReplaceUser", ctx, name, options)
+	return ret[0].(arangodb.User), ret[1].(error)
+}
+
+// Mock recorder method for setting up expectations
+func (mr *MockArangoMockRecorder) ReplaceUser(ctx, name, options interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReplaceUser", reflect.TypeOf((*MockArango)(nil).ReplaceUser), ctx, name, options)
 }
 
 func (m *MockArango) UpdateUser(ctx context.Context, name string, options *arangodb.UserOptions) (arangodb.User, error) {
-	//TODO implement me
-	panic("implement me")
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateUser", ctx, name, options)
+	return ret[0].(arangodb.User), ret[1].(error)
 }
+
+// Mock recorder method for setting up expectations
+func (mr *MockArangoMockRecorder) UpdateUser(ctx, name, options interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateUser", reflect.TypeOf((*MockArango)(nil).UpdateUser), ctx, name, options)
+}
+
 
 func (m *MockArango) RemoveUser(ctx context.Context, name string) error {
 	return m.DropUser(ctx, name)
 }
 
 func (m *MockArango) VersionWithOptions(ctx context.Context, opts *arangodb.GetVersionOptions) (arangodb.VersionInfo, error) {
-	//TODO implement me
-	panic("implement me")
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "VersionWithOptions", ctx, opts)
+	return ret[0].(arangodb.VersionInfo), ret[1].(error)
 }
+
+// Mock recorder method for setting up expectations
+func (mr *MockArangoMockRecorder) VersionWithOptions(ctx, opts interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VersionWithOptions", reflect.TypeOf((*MockArango)(nil).VersionWithOptions), ctx, opts)
+}
+
 
 func (m *MockArango) ServerRole(ctx context.Context) (arangodb.ServerRole, error) {
 	//TODO implement me
@@ -254,23 +348,6 @@ func (m *MockArango) AsyncJobDelete(ctx context.Context, deleteType arangodb.Asy
 	panic("implement me")
 }
 
-// MockArangoMockRecorder is the mock recorder for MockArango.
-type MockArangoMockRecorder struct {
-	mock *MockArango
-}
-
-// NewMockArango creates a new mock instance.
-func NewMockArango(ctrl *gomock.Controller) *MockArango {
-	mock := &MockArango{ctrl: ctrl}
-	mock.recorder = &MockArangoMockRecorder{mock}
-	return mock
-}
-
-// EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockArango) EXPECT() *MockArangoMockRecorder {
-	return m.recorder
-}
-
 // Connect mocks base method.
 func (m *MockArango) Connect() {
 	m.ctrl.T.Helper()
@@ -383,6 +460,21 @@ func (m *MockArango) Database(ctx context.Context, name string) (arangodb.Databa
 func (mr *MockArangoMockRecorder) Database(ctx, name any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Database", reflect.TypeOf((*MockArango)(nil).Database), ctx, name)
+}
+
+// Databases mocks base method.
+func (m *MockArango) Databases(ctx context.Context) ([]arangodb.Database, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Databases", ctx)
+	ret0, _ := ret[0].([]arangodb.Database)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Databases indicates an expected call of Databases.
+func (mr *MockArangoMockRecorder) Databases(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Databases", reflect.TypeOf((*MockArango)(nil).Databases), ctx)
 }
 
 // DeleteDocument mocks base method.
@@ -629,26 +721,26 @@ func (mr *MockArangoMockRecorder) Version(ctx any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Version", reflect.TypeOf((*MockArango)(nil).Version), ctx)
 }
 
-// MockArangoUser is a mock of ArangoUser interface.
+// MockArangoUser is a mock of User interface.
 type MockArangoUser struct {
 	ctrl     *gomock.Controller
-	recorder *MockArangoUserMockRecorder
+	recorder *MockUserMockRecorder
 }
 
-// MockArangoUserMockRecorder is the mock recorder for MockArangoUser.
-type MockArangoUserMockRecorder struct {
+// MockUserMockRecorder is the mock recorder for MockArangoUser.
+type MockUserMockRecorder struct {
 	mock *MockArangoUser
 }
 
-// NewMockArangoUser creates a new mock instance.
+// NewMockUser creates a new mock instance.
 func NewMockArangoUser(ctrl *gomock.Controller) *MockArangoUser {
 	mock := &MockArangoUser{ctrl: ctrl}
-	mock.recorder = &MockArangoUserMockRecorder{mock}
+	mock.recorder = &MockUserMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockArangoUser) EXPECT() *MockArangoUserMockRecorder {
+func (m *MockArangoUser) EXPECT() *MockUserMockRecorder {
 	return m.recorder
 }
 
@@ -661,7 +753,7 @@ func (m *MockArangoUser) SetCollectionAccess(ctx context.Context, database, coll
 }
 
 // SetCollectionAccess indicates an expected call of SetCollectionAccess.
-func (mr *MockArangoUserMockRecorder) SetCollectionAccess(ctx, database, collection, grant any) *gomock.Call {
+func (mr *MockUserMockRecorder) SetCollectionAccess(ctx, database, collection, grant any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetCollectionAccess", reflect.TypeOf((*MockArangoUser)(nil).SetCollectionAccess), ctx, database, collection, grant)
 }
@@ -675,31 +767,31 @@ func (m *MockArangoUser) SetDatabaseAccess(ctx context.Context, database string,
 }
 
 // SetDatabaseAccess indicates an expected call of SetDatabaseAccess.
-func (mr *MockArangoUserMockRecorder) SetDatabaseAccess(ctx, database, grant any) *gomock.Call {
+func (mr *MockUserMockRecorder) SetDatabaseAccess(ctx, database, grant any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetDatabaseAccess", reflect.TypeOf((*MockArangoUser)(nil).SetDatabaseAccess), ctx, database, grant)
 }
 
-// MockArangoDatabase is a mock of ArangoDatabase interface.
+// MockArangoDatabase is a mock of Database interface.
 type MockArangoDatabase struct {
 	ctrl     *gomock.Controller
-	recorder *MockArangoDatabaseMockRecorder
+	recorder *MockDatabaseMockRecorder
 }
 
-// MockArangoDatabaseMockRecorder is the mock recorder for MockArangoDatabase.
+// MockDatabaseMockRecorder is the mock recorder for MockArangoDatabase.
 type MockArangoDatabaseMockRecorder struct {
 	mock *MockArangoDatabase
 }
 
-// NewMockArangoDatabase creates a new mock instance.
+// NewMockDatabase creates a new mock instance.
 func NewMockArangoDatabase(ctrl *gomock.Controller) *MockArangoDatabase {
 	mock := &MockArangoDatabase{ctrl: ctrl}
-	mock.recorder = &MockArangoDatabaseMockRecorder{mock}
+	mock.recorder = &MockDatabaseMockRecorder{(*MockDatabase)(mock)}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockArangoDatabase) EXPECT() *MockArangoDatabaseMockRecorder {
+func (m *MockArangoDatabase) EXPECT() *MockDatabaseMockRecorder {
 	return m.recorder
 }
 
@@ -792,18 +884,18 @@ func (mr *MockArangoDatabaseMockRecorder) Remove(ctx any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Remove", reflect.TypeOf((*MockArangoDatabase)(nil).Remove), ctx)
 }
 
-// MockArangoCollection is a mock of ArangoCollection interface.
+// MockCollection is a mock of Collection interface.
 type MockArangoCollection struct {
 	ctrl     *gomock.Controller
 	recorder *MockArangoCollectionMockRecorder
 }
 
-// MockArangoCollectionMockRecorder is the mock recorder for MockArangoCollection.
+// MockCollectionMockRecorder is the mock recorder for MockCollection.
 type MockArangoCollectionMockRecorder struct {
 	mock *MockArangoCollection
 }
 
-// NewMockArangoCollection creates a new mock instance.
+// NewMockCollection creates a new mock instance.
 func NewMockArangoCollection(ctrl *gomock.Controller) *MockArangoCollection {
 	mock := &MockArangoCollection{ctrl: ctrl}
 	mock.recorder = &MockArangoCollectionMockRecorder{mock}
@@ -827,7 +919,7 @@ func (m *MockArangoCollection) CreateDocument(ctx context.Context, document any)
 // CreateDocument indicates an expected call of CreateDocument.
 func (mr *MockArangoCollectionMockRecorder) CreateDocument(ctx, document any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateDocument", reflect.TypeOf((*MockArangoCollection)(nil).CreateDocument), ctx, document)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateDocument", reflect.TypeOf((*MockCollection)(nil).CreateDocument), ctx, document)
 }
 
 // DeleteDocument mocks base method.
@@ -842,7 +934,7 @@ func (m *MockArangoCollection) DeleteDocument(ctx context.Context, key string) (
 // DeleteDocument indicates an expected call of DeleteDocument.
 func (mr *MockArangoCollectionMockRecorder) DeleteDocument(ctx, key any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteDocument", reflect.TypeOf((*MockArangoCollection)(nil).DeleteDocument), ctx, key)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteDocument", reflect.TypeOf((*MockCollection)(nil).DeleteDocument), ctx, key)
 }
 
 // ReadDocument mocks base method.
@@ -857,7 +949,7 @@ func (m *MockArangoCollection) ReadDocument(ctx context.Context, key string, res
 // ReadDocument indicates an expected call of ReadDocument.
 func (mr *MockArangoCollectionMockRecorder) ReadDocument(ctx, key, result any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReadDocument", reflect.TypeOf((*MockArangoCollection)(nil).ReadDocument), ctx, key, result)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReadDocument", reflect.TypeOf((*MockCollection)(nil).ReadDocument), ctx, key, result)
 }
 
 // Remove mocks base method.
@@ -871,7 +963,7 @@ func (m *MockArangoCollection) Remove(ctx context.Context) error {
 // Remove indicates an expected call of Remove.
 func (mr *MockArangoCollectionMockRecorder) Remove(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Remove", reflect.TypeOf((*MockArangoCollection)(nil).Remove), ctx)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Remove", reflect.TypeOf((*MockCollection)(nil).Remove), ctx)
 }
 
 // Truncate mocks base method.
@@ -885,7 +977,7 @@ func (m *MockArangoCollection) Truncate(ctx context.Context) error {
 // Truncate indicates an expected call of Truncate.
 func (mr *MockArangoCollectionMockRecorder) Truncate(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Truncate", reflect.TypeOf((*MockArangoCollection)(nil).Truncate), ctx)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Truncate", reflect.TypeOf((*MockCollection)(nil).Truncate), ctx)
 }
 
 // UpdateDocument mocks base method.
@@ -900,34 +992,34 @@ func (m *MockArangoCollection) UpdateDocument(ctx context.Context, key string, d
 // UpdateDocument indicates an expected call of UpdateDocument.
 func (mr *MockArangoCollectionMockRecorder) UpdateDocument(ctx, key, document any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateDocument", reflect.TypeOf((*MockArangoCollection)(nil).UpdateDocument), ctx, key, document)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateDocument", reflect.TypeOf((*MockCollection)(nil).UpdateDocument), ctx, key, document)
 }
 
-// MockArangoGraph is a mock of ArangoGraph interface.
-type MockArangoGraph struct {
+// MockGraph is a mock of Graph interface.
+type MockGraph struct {
 	ctrl     *gomock.Controller
-	recorder *MockArangoGraphMockRecorder
+	recorder *MockGraphMockRecorder
 }
 
-// MockArangoGraphMockRecorder is the mock recorder for MockArangoGraph.
-type MockArangoGraphMockRecorder struct {
-	mock *MockArangoGraph
+// MockGraphMockRecorder is the mock recorder for MockGraph.
+type MockGraphMockRecorder struct {
+	mock *MockGraph
 }
 
-// NewMockArangoGraph creates a new mock instance.
-func NewMockArangoGraph(ctrl *gomock.Controller) *MockArangoGraph {
-	mock := &MockArangoGraph{ctrl: ctrl}
-	mock.recorder = &MockArangoGraphMockRecorder{mock}
+// NewMockGraph creates a new mock instance.
+func NewMockGraph(ctrl *gomock.Controller) *MockGraph {
+	mock := &MockGraph{ctrl: ctrl}
+	mock.recorder = &MockGraphMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockArangoGraph) EXPECT() *MockArangoGraphMockRecorder {
+func (m *MockGraph) EXPECT() *MockGraphMockRecorder {
 	return m.recorder
 }
 
 // Remove mocks base method.
-func (m *MockArangoGraph) Remove(ctx context.Context, options *arangodb.RemoveGraphOptions) error {
+func (m *MockGraph) Remove(ctx context.Context, options *arangodb.RemoveGraphOptions) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Remove", ctx, options)
 	ret0, _ := ret[0].(error)
@@ -935,7 +1027,7 @@ func (m *MockArangoGraph) Remove(ctx context.Context, options *arangodb.RemoveGr
 }
 
 // Remove indicates an expected call of Remove.
-func (mr *MockArangoGraphMockRecorder) Remove(ctx, options any) *gomock.Call {
+func (mr *MockGraphMockRecorder) Remove(ctx, options any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Remove", reflect.TypeOf((*MockArangoGraph)(nil).Remove), ctx, options)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Remove", reflect.TypeOf((*MockGraph)(nil).Remove), ctx, options)
 }

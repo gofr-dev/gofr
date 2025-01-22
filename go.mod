@@ -1,7 +1,6 @@
 module gofr.dev
 
-go 1.22
-toolchain go1.22.10
+go 1.23.4
 
 replace gofr.dev/pkg/gofr/datasource/arango => ./pkg/gofr/datasource/arango
 
@@ -75,7 +74,6 @@ require (
 	github.com/googleapis/enterprise-certificate-proxy v0.3.4 // indirect
 	github.com/googleapis/gax-go/v2 v2.14.1 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.24.0 // indirect
-	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
 	github.com/kkdai/maglev v0.2.0 // indirect
 	github.com/klauspost/compress v1.17.9 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect

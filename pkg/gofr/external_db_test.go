@@ -228,7 +228,7 @@ func TestApp_AddArangoDB(t *testing.T) {
 
 		mock.EXPECT().UseLogger(app.Logger())
 		mock.EXPECT().UseMetrics(app.Metrics())
-		mock.EXPECT().UseTracer(gomock.Any())
+		mock.EXPECT().UseTracer(otel.GetTracerProvider().Tracer("gofr-arango"))
 		mock.EXPECT().Connect()
 
 		app.AddArango(mock)

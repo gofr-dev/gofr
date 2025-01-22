@@ -6,12 +6,11 @@ import (
 	"fmt"
 	"time"
 
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/trace"
-
 	"github.com/arangodb/go-driver/v2/arangodb"
 	"github.com/arangodb/go-driver/v2/arangodb/shared"
 	"github.com/arangodb/go-driver/v2/connection"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // Client represents an ArangoDB client.
@@ -43,8 +42,9 @@ type EdgeDefinition struct {
 }
 
 var (
-	errStatusDown   = errors.New("status down")
-	errMissingField = errors.New("missing required field in config")
+	errStatusDown        = errors.New("status down")
+	errMissingField      = errors.New("missing required field in config")
+	errInvalidResultType = errors.New("result must be a pointer to a slice of maps")
 )
 
 // New creates a new ArangoDB client with the provided configuration.
@@ -53,21 +53,21 @@ func New(c Config) *Client {
 }
 
 // UseLogger sets the logger for the ArangoDB client.
-func (c *Client) UseLogger(logger interface{}) {
+func (c *Client) UseLogger(logger any) {
 	if l, ok := logger.(Logger); ok {
 		c.logger = l
 	}
 }
 
 // UseMetrics sets the metrics for the ArangoDB client.
-func (c *Client) UseMetrics(metrics interface{}) {
+func (c *Client) UseMetrics(metrics any) {
 	if m, ok := metrics.(Metrics); ok {
 		c.metrics = m
 	}
 }
 
 // UseTracer sets the tracer for the ArangoDB client.
-func (c *Client) UseTracer(tracer interface{}) {
+func (c *Client) UseTracer(tracer any) {
 	if t, ok := tracer.(trace.Tracer); ok {
 		c.tracer = t
 	}
@@ -131,6 +131,10 @@ func (c *Client) User(ctx context.Context, username string) (arangodb.User, erro
 
 func (c *Client) Database(ctx context.Context, name string) (arangodb.Database, error) {
 	return c.client.Database(ctx, name)
+}
+
+func (c *Client) Databases(ctx context.Context) ([]arangodb.Database, error) {
+	return c.client.Databases(ctx)
 }
 
 func (c *Client) Version(ctx context.Context) (arangodb.VersionInfo, error) {
@@ -215,7 +219,9 @@ func (c *Client) ListDBs(ctx context.Context) ([]string, error) {
 
 	names := make([]string, len(dbs))
 	for _, db := range dbs {
-		names = append(names, db.Name())
+		if db.Name() != "" {
+			names = append(names, db.Name())
+		}
 	}
 
 	return names, nil
@@ -355,7 +361,7 @@ func (c *Client) ListCollections(ctx context.Context, database string) ([]string
 }
 
 // CreateDocument creates a new document in the specified collection.
-func (c *Client) CreateDocument(ctx context.Context, dbName, collectionName string, document interface{}) (string, error) {
+func (c *Client) CreateDocument(ctx context.Context, dbName, collectionName string, document any) (string, error) {
 	tracerCtx, span := c.addTrace(ctx, "createDocument", map[string]string{"collection": collectionName})
 	startTime := time.Now()
 
@@ -375,7 +381,7 @@ func (c *Client) CreateDocument(ctx context.Context, dbName, collectionName stri
 }
 
 // GetDocument retrieves a document by its ID from the specified collection.
-func (c *Client) GetDocument(ctx context.Context, dbName, collectionName, documentID string, result interface{}) error {
+func (c *Client) GetDocument(ctx context.Context, dbName, collectionName, documentID string, result any) error {
 	tracerCtx, span := c.addTrace(ctx, "getDocument", map[string]string{"collection": collectionName})
 	startTime := time.Now()
 
@@ -392,7 +398,7 @@ func (c *Client) GetDocument(ctx context.Context, dbName, collectionName, docume
 }
 
 // UpdateDocument updates an existing document in the specified collection.
-func (c *Client) UpdateDocument(ctx context.Context, dbName, collectionName, documentID string, document interface{}) error {
+func (c *Client) UpdateDocument(ctx context.Context, dbName, collectionName, documentID string, document any) error {
 	tracerCtx, span := c.addTrace(ctx, "updateDocument", map[string]string{"collection": collectionName})
 	startTime := time.Now()
 
@@ -428,7 +434,7 @@ func (c *Client) DeleteDocument(ctx context.Context, dbName, collectionName, doc
 }
 
 // CreateEdgeDocument creates a new edge document between two vertices.
-func (c *Client) CreateEdgeDocument(ctx context.Context, dbName, collectionName, from, to string, document interface{}) (string, error) {
+func (c *Client) CreateEdgeDocument(ctx context.Context, dbName, collectionName, from, to string, document any) (string, error) {
 	tracerCtx, span := c.addTrace(ctx, "createEdgeDocument", map[string]string{"collection": collectionName})
 	startTime := time.Now()
 
@@ -439,7 +445,7 @@ func (c *Client) CreateEdgeDocument(ctx context.Context, dbName, collectionName,
 		return "", err
 	}
 
-	meta, err := collection.CreateDocument(tracerCtx, map[string]interface{}{
+	meta, err := collection.CreateDocument(tracerCtx, map[string]any{
 		"_from": from,
 		"_to":   to,
 		"data":  document,
@@ -542,7 +548,7 @@ func (c *Client) ListGraphs(ctx context.Context, database string) ([]string, err
 }
 
 // Query executes an AQL query and binds the results.
-func (c *Client) Query(ctx context.Context, dbName, query string, bindVars map[string]interface{}, result interface{}) error {
+func (c *Client) Query(ctx context.Context, dbName, query string, bindVars map[string]any, result any) error {
 	tracerCtx, span := c.addTrace(ctx, "query", map[string]string{"db": dbName})
 	startTime := time.Now()
 
@@ -560,15 +566,15 @@ func (c *Client) Query(ctx context.Context, dbName, query string, bindVars map[s
 
 	defer cursor.Close()
 
-	resultSlice, ok := result.(*[]map[string]interface{})
+	resultSlice, ok := result.(*[]map[string]any)
 	if !ok {
-		return fmt.Errorf("result must be a pointer to a slice of maps")
+		return errInvalidResultType
 	}
 
 	for {
-		var doc map[string]interface{}
+		var doc map[string]any
 
-		_, err := cursor.ReadDocument(tracerCtx, &doc)
+		_, err = cursor.ReadDocument(tracerCtx, &doc)
 		if errors.Is(err, shared.NoMoreDocumentsError{}) {
 			break
 		}
@@ -621,14 +627,14 @@ func (c *Client) sendOperationStats(ql *QueryLog, startTime time.Time, method st
 
 // Health represents the health status of ArangoDB.
 type Health struct {
-	Status  string                 `json:"status,omitempty"`
-	Details map[string]interface{} `json:"details,omitempty"`
+	Status  string         `json:"status,omitempty"`
+	Details map[string]any `json:"details,omitempty"`
 }
 
 // HealthCheck performs a health check.
-func (c *Client) HealthCheck(ctx context.Context) (interface{}, error) {
+func (c *Client) HealthCheck(ctx context.Context) (any, error) {
 	h := Health{
-		Details: map[string]interface{}{
+		Details: map[string]any{
 			"endpoint": c.endpoint,
 		},
 	}

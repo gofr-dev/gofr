@@ -8,19 +8,19 @@ import (
 )
 
 type Logger interface {
-	Debug(args ...interface{})
-	Debugf(pattern string, args ...interface{})
-	Logf(pattern string, args ...interface{})
-	Errorf(pattern string, args ...interface{})
+	Debug(args ...any)
+	Debugf(pattern string, args ...any)
+	Logf(pattern string, args ...any)
+	Errorf(pattern string, args ...any)
 }
 
 type QueryLog struct {
-	Query      string      `json:"query"`
-	Duration   int64       `json:"duration"`
-	Collection string      `json:"collection,omitempty"`
-	Filter     interface{} `json:"filter,omitempty"`
-	ID         interface{} `json:"id,omitempty"`
-	Update     interface{} `json:"update,omitempty"`
+	Query      string `json:"query"`
+	Duration   int64  `json:"duration"`
+	Collection string `json:"collection,omitempty"`
+	Filter     any    `json:"filter,omitempty"`
+	ID         any    `json:"id,omitempty"`
+	Update     any    `json:"update,omitempty"`
 }
 
 // PrettyPrint formats the QueryLog for output.

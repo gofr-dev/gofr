@@ -11,6 +11,7 @@ type Arango interface {
 
 	User(ctx context.Context, username string) (arangodb.User, error)
 	Database(ctx context.Context, name string) (arangodb.Database, error)
+	Databases(ctx context.Context) ([]arangodb.Database, error)
 	Version(ctx context.Context) (arangodb.VersionInfo, error)
 
 	CreateUser(ctx context.Context, name string, options *arangodb.UserOptions) (arangodb.User, error)
@@ -27,21 +28,21 @@ type Arango interface {
 	TruncateCollection(ctx context.Context, database, collection string) error
 	ListCollections(ctx context.Context, database string) ([]string, error)
 
-	CreateDocument(ctx context.Context, dbName, collectionName string, document interface{}) (string, error)
-	GetDocument(ctx context.Context, dbName, collectionName, documentID string, result interface{}) error
-	UpdateDocument(ctx context.Context, dbName, collectionName, documentID string, document interface{}) error
+	CreateDocument(ctx context.Context, dbName, collectionName string, document any) (string, error)
+	GetDocument(ctx context.Context, dbName, collectionName, documentID string, result any) error
+	UpdateDocument(ctx context.Context, dbName, collectionName, documentID string, document any) error
 	DeleteDocument(ctx context.Context, dbName, collectionName, documentID string) error
 
-	CreateEdgeDocument(ctx context.Context, dbName, collectionName string, from, to string, document interface{}) (string, error)
+	CreateEdgeDocument(ctx context.Context, dbName, collectionName string, from, to string, document any) (string, error)
 
 	CreateGraph(ctx context.Context, database, graph string, edgeDefinitions []EdgeDefinition) error
 	DropGraph(ctx context.Context, database, graph string) error
 	ListGraphs(ctx context.Context, database string) ([]string, error)
 
 	// Query operations
-	Query(ctx context.Context, dbName string, query string, bindVars map[string]interface{}, result interface{}) error
+	Query(ctx context.Context, dbName string, query string, bindVars map[string]any, result any) error
 
-	HealthCheck(ctx context.Context) (interface{}, error)
+	HealthCheck(ctx context.Context) (any, error)
 }
 
 type User interface {
@@ -49,22 +50,18 @@ type User interface {
 	SetCollectionAccess(ctx context.Context, database, collection string, grant arangodb.Grant) error
 }
 
-type Database interface {
-	Collection(ctx context.Context, name string) (arangodb.Collection, error)
-	Collections(ctx context.Context) ([]arangodb.Collection, error)
-	CreateCollection(ctx context.Context, name string, options *arangodb.CreateCollectionProperties) (arangodb.Collection, error)
-	Graph(ctx context.Context, name string, options *arangodb.GraphDefinition) (arangodb.Graph, error)
-	Graphs(ctx context.Context) (arangodb.Cursor, error)
-	Remove(ctx context.Context) error
-}
-
 type Collection interface {
-	CreateDocument(ctx context.Context, document interface{}) (arangodb.DocumentMeta, error)
-	ReadDocument(ctx context.Context, key string, result interface{}) (arangodb.DocumentMeta, error)
-	UpdateDocument(ctx context.Context, key string, document interface{}) (arangodb.DocumentMeta, error)
-	DeleteDocument(ctx context.Context, key string) (arangodb.DocumentMeta, error)
+	Name() string
+	Database() arangodb.Database
+	Shards(ctx context.Context, details bool) (arangodb.CollectionShards, error)
 	Remove(ctx context.Context) error
+	RemoveWithOptions(ctx context.Context, opts *arangodb.RemoveCollectionOptions) error
 	Truncate(ctx context.Context) error
+	Properties(ctx context.Context) (arangodb.CollectionProperties, error)
+	SetProperties(ctx context.Context, options arangodb.SetCollectionPropertiesOptions) error
+	Count(ctx context.Context) (int64, error)
+	arangodb.CollectionDocuments
+	arangodb.CollectionIndexes
 }
 
 type Graph interface {
