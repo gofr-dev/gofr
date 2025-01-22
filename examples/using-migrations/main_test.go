@@ -15,8 +15,6 @@ import (
 func TestExampleMigration(t *testing.T) {
 	configs := testutil.NewServerConfigs(t)
 
-	host := configs.HTTPHost
-
 	go main()
 	time.Sleep(100 * time.Millisecond) // Giving some time to start the server
 
@@ -39,7 +37,7 @@ func TestExampleMigration(t *testing.T) {
 	}
 
 	for i, tc := range tests {
-		req, _ := http.NewRequest(tc.method, host+tc.path, bytes.NewBuffer(tc.body))
+		req, _ := http.NewRequest(tc.method, configs.HTTPHost+tc.path, bytes.NewBuffer(tc.body))
 		req.Header.Set("content-type", "application/json")
 		c := http.Client{}
 		resp, err := c.Do(req)
