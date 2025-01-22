@@ -116,7 +116,7 @@ Please note that the recommended local port for the services are different than 
 * After adding or modifying code existing code, update the documentation too - [development/docs](https://github.com/gofr-dev/gofr/tree/development/docs).
 * When you consider a new documentation page is needed, start by adding a new file and writing your new documentation. Then - add a reference to it in [navigation.js](https://gofr.dev/docs/navigation.js).
 * If needed, update or add proper code examples for your changes.
-* In case images are needed, add it to [docs/public](https://gofr.dev/docs/public) folder.
+* In case images are needed, add it to [docs/public](./docs/public) folder.
 * Make sure you don't break existing links and references.
 * Maintain Markdown standards, you can read more [here](https://www.markdownguide.org/basic-syntax/), this includes:
     - Headings (`#`, `##`, etc.) should be placed in order.
