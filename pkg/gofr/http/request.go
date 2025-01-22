@@ -56,7 +56,7 @@ func (r *Request) PathParam(key string) string {
 
 // Bind parses the request body and binds it to the provided interface.
 func (r *Request) Bind(i any) error {
-	v := r.req.Header.Get("content-type")
+	v := r.req.Header.Get("Content-Type")
 	contentType := strings.Split(v, ";")[0]
 
 	switch contentType {
@@ -80,7 +80,7 @@ func (r *Request) Bind(i any) error {
 
 // HostName retrieves the hostname from the request.
 func (r *Request) HostName() string {
-	proto := r.req.Header.Get("X-forwarded-proto")
+	proto := r.req.Header.Get("X-Forwarded-Proto")
 	if proto == "" {
 		proto = "http"
 	}
