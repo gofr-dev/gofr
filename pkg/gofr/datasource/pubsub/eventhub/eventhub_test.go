@@ -7,12 +7,9 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/messaging/azeventhubs"
 	"github.com/stretchr/testify/require"
-
-	"nhooyr.io/websocket"
-
 	"go.uber.org/mock/gomock"
-
 	"gofr.dev/pkg/gofr/testutil"
+	"nhooyr.io/websocket"
 )
 
 func TestConnect(t *testing.T) {
@@ -109,7 +106,7 @@ func TestConnect_ContainerError(t *testing.T) {
 func TestPublish_FailedBatchCreation(t *testing.T) {
 	// TODO: This test is skipped due to long runtime and occasional panic, causing pipeline failures.
 	// It needs modification in the future.
-	t.Skip("disbled on 2024-12-11, TODO: cause of occasional panic in this test needs to be addressed.")
+	t.Skip("disabled on 2024-12-11, TODO: cause of occasional panic in this test needs to be addressed.")
 
 	ctrl := gomock.NewController(t)
 

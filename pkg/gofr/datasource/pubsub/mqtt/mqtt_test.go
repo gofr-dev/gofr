@@ -405,7 +405,7 @@ func TestMQTT_Health(t *testing.T) {
 		res := m.Health()
 		assert.Equal(t, datasource.Health{
 			Status:  "DOWN",
-			Details: map[string]interface{}{"backend": "MQTT", "host": ""},
+			Details: map[string]any{"backend": "MQTT", "host": ""},
 		}, res)
 	})
 
@@ -421,7 +421,7 @@ func TestMQTT_Health(t *testing.T) {
 		res := client.Health()
 		assert.Equal(t, datasource.Health{
 			Status:  "DOWN",
-			Details: map[string]interface{}{"backend": "MQTT", "host": "localhost"},
+			Details: map[string]any{"backend": "MQTT", "host": "localhost"},
 		}, res)
 	})
 
@@ -437,7 +437,7 @@ func TestMQTT_Health(t *testing.T) {
 		res := client.Health()
 		assert.Equal(t, datasource.Health{
 			Status:  "UP",
-			Details: map[string]interface{}{"backend": "MQTT", "host": "localhost"},
+			Details: map[string]any{"backend": "MQTT", "host": "localhost"},
 		}, res)
 	})
 }
@@ -472,7 +472,7 @@ func TestConnectionLostHandler(t *testing.T) {
 
 	mockLogger := NewMockLogger(ctrl)
 	mockLogger.EXPECT().Errorf("mqtt connection lost, error: %v", gomock.Any()).
-		DoAndReturn(func(_ string, args ...interface{}) {
+		DoAndReturn(func(_ string, args ...any) {
 			assert.Len(t, args, 1)
 			require.Error(t, mqtt.ErrNotConnected, args[0])
 		})

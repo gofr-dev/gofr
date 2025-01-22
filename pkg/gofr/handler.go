@@ -22,7 +22,7 @@ import (
 
 const colorCodeError = 202 // 202 is red color code
 
-type Handler func(c *Context) (interface{}, error)
+type Handler func(c *Context) (any, error)
 
 /*
 Developer Note: There is an implementation where we do not need this internal handler struct
@@ -70,7 +70,7 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	panicked := make(chan struct{})
 
 	var (
-		result interface{}
+		result any
 		err    error
 	)
 
@@ -105,17 +105,17 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	c.responder.Respond(result, err)
 }
 
-func healthHandler(c *Context) (interface{}, error) {
+func healthHandler(c *Context) (any, error) {
 	return c.Health(c), nil
 }
 
-func liveHandler(*Context) (interface{}, error) {
+func liveHandler(*Context) (any, error) {
 	return struct {
 		Status string `json:"status"`
 	}{Status: "UP"}, nil
 }
 
-func faviconHandler(*Context) (interface{}, error) {
+func faviconHandler(*Context) (any, error) {
 	data, err := os.ReadFile("./static/favicon.ico")
 	if err != nil {
 		data, err = static.Files.ReadFile("favicon.ico")
@@ -127,7 +127,7 @@ func faviconHandler(*Context) (interface{}, error) {
 	}, err
 }
 
-func catchAllHandler(*Context) (interface{}, error) {
+func catchAllHandler(*Context) (any, error) {
 	return nil, gofrHTTP.ErrorInvalidRoute{}
 }
 

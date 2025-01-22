@@ -4,9 +4,8 @@ import (
 	"bytes"
 	"testing"
 
-	"go.uber.org/mock/gomock"
-
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 )
 
 func Test_PrettyPrint(t *testing.T) {

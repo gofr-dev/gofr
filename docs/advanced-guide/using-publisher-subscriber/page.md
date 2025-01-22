@@ -112,19 +112,19 @@ KAFKA_BATCH_TIMEOUT=300
 #### Docker setup
 ```shell
 docker run --name kafka-1 -p 9092:9092 \
- -e KAFKA_ENABLE_KRAFT=yes \
--e KAFKA_CFG_PROCESS_ROLES=broker,controller \
--e KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER \
--e KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093 \
--e KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT \
--e KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://127.0.0.1:9092 \
--e KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE=true \
--e KAFKA_BROKER_ID=1 \
--e KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=1@127.0.0.1:9093 \
--e ALLOW_PLAINTEXT_LISTENER=yes \
--e KAFKA_CFG_NODE_ID=1 \
--v kafka_data:/bitnami \
-bitnami/kafka:3.4 
+	-e KAFKA_ENABLE_KRAFT=yes \
+	-e KAFKA_CFG_PROCESS_ROLES=broker,controller \
+	-e KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER \
+	-e KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093 \
+	-e KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT \
+	-e KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://127.0.0.1:9092 \
+	-e KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE=true \
+	-e KAFKA_BROKER_ID=1 \
+	-e KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=1@127.0.0.1:9093 \
+	-e ALLOW_PLAINTEXT_LISTENER=yes \
+	-e KAFKA_CFG_NODE_ID=1 \
+	-v kafka_data:/bitnami \
+	bitnami/kafka:3.4
 ```
 
 ### GOOGLE
@@ -140,8 +140,8 @@ GOOGLE_SUBSCRIPTION_NAME=order-consumer // unique subscription name to identify 
 ```shell
 docker pull gcr.io/google.com/cloudsdktool/google-cloud-cli:emulators
 docker run --name=gcloud-emulator -d -p 8086:8086 \
-       gcr.io/google.com/cloudsdktool/google-cloud-cli:emulators gcloud beta emulators pubsub start --project=test123 \
-       --host-port=0.0.0.0:8086
+	gcr.io/google.com/cloudsdktool/google-cloud-cli:emulators gcloud beta emulators pubsub start --project=test123 \
+	--host-port=0.0.0.0:8086
 ```
 > **Note**: To set GOOGLE_APPLICATION_CREDENTIAL - refer {% new-tab-link title="here" href="https://cloud.google.com/docs/authentication/application-default-credentials" /%}
 
@@ -169,10 +169,10 @@ MQTT_PASSWORD=password   // authentication password
 #### Docker setup
 ```shell 
 docker run -d \
-  --name mqtt \
-  -p 8883:8883 \
-  -v <path-to>/mosquitto.conf:/mosquitto/config/mosquitto.conf \
-  eclipse-mosquitto:latest
+	--name mqtt \
+	-p 8883:8883 \
+	-v \
+	eclipse-mosquitto:latest <path-to >/mosquitto.conf:/mosquitto/config/mosquitto.conf
 ```
 > **Note**: find the default mosquitto config file {% new-tab-link title="here" href="https://github.com/eclipse/mosquitto/blob/master/mosquitto.conf" /%}
  
@@ -229,12 +229,12 @@ app.AddPubSub(nats.New(nats.Config{
 #### Docker setup
 ```shell
 docker run -d \
-  --name nats \
-  -p 4222:4222 \
-  -p 8222:8222 \
-  -v <path-to>/nats.conf:/nats/config/nats.conf \
-  nats:2.9.16
-``` 
+	--name nats \
+	-p 4222:4222 \
+	-p 8222:8222 \
+	-v \
+	nats:2.9.16 <path-to >/nats.conf:/nats/config/nats.conf
+```
 
 #### Configuration Options
 
@@ -273,7 +273,7 @@ Use the `AddPubSub` method of GoFr's app to connect
 
 **Example**
 ```go
-    app := gofr.New()
+app := gofr.New()
     
     app.AddPubSub(eventhub.New(eventhub.Config{
        ConnectionString:          "Endpoint=sb://gofr-dev.servicebus.windows.net/;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=<key>",
@@ -375,7 +375,7 @@ func main() {
 		err := c.Bind(&orderStatus)
 		if err != nil {
 			c.Logger.Error(err)
-			
+
 			// returning nil here as we would like to ignore the
 			// incompatible message and continue reading forward
 			return nil
@@ -420,7 +420,7 @@ func main() {
 	app.Run()
 }
 
-func order(ctx *gofr.Context) (interface{}, error) {
+func order(ctx *gofr.Context) (any, error) {
 	type orderStatus struct {
 		OrderId string `json:"orderId"`
 		Status  string `json:"status"`

@@ -28,18 +28,17 @@ package main
 import "gofr.dev/pkg/gofr"
 
 func main() {
-    // initialise gofr object
-    app := gofr.New()
+	// initialise gofr object
+	app := gofr.New()
 
-    // register route greet
-    app.GET("/greet", func(ctx *gofr.Context) (interface{}, error) {
+	// register route greet
+	app.GET("/greet", func(ctx *gofr.Context) (any, error) {
+		return "Hello World!", nil
+	})
 
-        return "Hello World!", nil
-    })
-
-    // Runs the server, it will listen on the default port 8000.
-    // it can be over-ridden through configs
-   app.Run()
+	// Runs the server, it will listen on the default port 8000.
+	// it can be over-ridden through configs
+	app.Run()
 }
 ```
 
@@ -74,7 +73,7 @@ The `hello-world` server involves three essential steps:
    **Good To Know**
 
 > In Go, functions are first-class citizens, allowing easy handler definition and reference.
-> HTTP Handler functions should follow the `func(ctx *gofr.Context) (interface{}, error)` signature.
+> HTTP Handler functions should follow the `func(ctx *gofr.Context) (any, error)` signature.
 > They take a context as input, returning two values: the response data and an error (set to `nil` when there is no error).
 
 GoFr {% new-tab-link  newtab=false title="context" href="/docs/references/context" /%} `ctx *gofr.Context` serves as a wrapper for requests, responses, and dependencies, providing various functionalities.

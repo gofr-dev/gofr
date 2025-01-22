@@ -8,17 +8,17 @@ import (
 )
 
 type Logger interface {
-	Debugf(pattern string, args ...interface{})
-	Debug(args ...interface{})
-	Logf(pattern string, args ...interface{})
-	Errorf(patter string, args ...interface{})
+	Debugf(pattern string, args ...any)
+	Debug(args ...any)
+	Logf(pattern string, args ...any)
+	Errorf(pattern string, args ...any)
 }
 
 type Log struct {
-	Type     string        `json:"type"`
-	Query    string        `json:"query"`
-	Duration int64         `json:"duration"`
-	Args     []interface{} `json:"args,omitempty"`
+	Type     string `json:"type"`
+	Query    string `json:"query"`
+	Duration int64  `json:"duration"`
+	Args     []any  `json:"args,omitempty"`
 }
 
 func (l *Log) PrettyPrint(writer io.Writer) {

@@ -11,8 +11,6 @@ import (
 	"testing"
 	"time"
 
-	"gofr.dev/pkg/gofr/testutil"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -20,6 +18,7 @@ import (
 	gofrHTTP "gofr.dev/pkg/gofr/http"
 	"gofr.dev/pkg/gofr/http/response"
 	"gofr.dev/pkg/gofr/logging"
+	"gofr.dev/pkg/gofr/testutil"
 )
 
 var (
@@ -30,7 +29,7 @@ func TestHandler_ServeHTTP(t *testing.T) {
 	testCases := []struct {
 		desc       string
 		method     string
-		data       interface{}
+		data       any
 		err        error
 		statusCode int
 		body       string
@@ -55,7 +54,7 @@ func TestHandler_ServeHTTP(t *testing.T) {
 		}
 
 		handler{
-			function: func(*Context) (interface{}, error) {
+			function: func(*Context) (any, error) {
 				return tc.data, tc.err
 			},
 			container: c,
@@ -73,7 +72,7 @@ func TestHandler_ServeHTTP_Timeout(t *testing.T) {
 	h := handler{requestTimeout: 100 * time.Millisecond}
 
 	h.container = &container.Container{Logger: logging.NewLogger(logging.FATAL)}
-	h.function = func(*Context) (interface{}, error) {
+	h.function = func(*Context) (any, error) {
 		time.Sleep(200 * time.Millisecond)
 
 		return "hey", nil
@@ -93,7 +92,7 @@ func TestHandler_ServeHTTP_Panic(t *testing.T) {
 	h := handler{}
 
 	h.container = &container.Container{Logger: logging.NewLogger(logging.FATAL)}
-	h.function = func(*Context) (interface{}, error) {
+	h.function = func(*Context) (any, error) {
 		panic("runtime panic")
 	}
 

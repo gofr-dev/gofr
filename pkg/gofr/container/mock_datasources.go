@@ -11279,6 +11279,484 @@ func (mr *MockOpenTSDBMockRecorder) QueryLatestDataPoints(ctx, param, res any) *
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryLatestDataPoints", reflect.TypeOf((*MockOpenTSDB)(nil).QueryLatestDataPoints), ctx, param, res)
 }
 
+// MockScyllaDB is a mock of ScyllaDB interface.
+type MockScyllaDB struct {
+	ctrl     *gomock.Controller
+	recorder *MockScyllaDBMockRecorder
+	isgomock struct{}
+}
+
+// MockScyllaDBMockRecorder is the mock recorder for MockScyllaDB.
+type MockScyllaDBMockRecorder struct {
+	mock *MockScyllaDB
+}
+
+// NewMockScyllaDB creates a new mock instance.
+func NewMockScyllaDB(ctrl *gomock.Controller) *MockScyllaDB {
+	mock := &MockScyllaDB{ctrl: ctrl}
+	mock.recorder = &MockScyllaDBMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockScyllaDB) EXPECT() *MockScyllaDBMockRecorder {
+	return m.recorder
+}
+
+// BatchQuery mocks base method.
+func (m *MockScyllaDB) BatchQuery(name, stmt string, values ...any) error {
+	m.ctrl.T.Helper()
+	varargs := []any{name, stmt}
+	for _, a := range values {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "BatchQuery", varargs...)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// BatchQuery indicates an expected call of BatchQuery.
+func (mr *MockScyllaDBMockRecorder) BatchQuery(name, stmt any, values ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{name, stmt}, values...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BatchQuery", reflect.TypeOf((*MockScyllaDB)(nil).BatchQuery), varargs...)
+}
+
+// BatchQueryWithCtx mocks base method.
+func (m *MockScyllaDB) BatchQueryWithCtx(ctx context.Context, name, stmt string, values ...any) error {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, name, stmt}
+	for _, a := range values {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "BatchQueryWithCtx", varargs...)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// BatchQueryWithCtx indicates an expected call of BatchQueryWithCtx.
+func (mr *MockScyllaDBMockRecorder) BatchQueryWithCtx(ctx, name, stmt any, values ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, name, stmt}, values...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BatchQueryWithCtx", reflect.TypeOf((*MockScyllaDB)(nil).BatchQueryWithCtx), varargs...)
+}
+
+// Exec mocks base method.
+func (m *MockScyllaDB) Exec(stmt string, values ...any) error {
+	m.ctrl.T.Helper()
+	varargs := []any{stmt}
+	for _, a := range values {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "Exec", varargs...)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Exec indicates an expected call of Exec.
+func (mr *MockScyllaDBMockRecorder) Exec(stmt any, values ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{stmt}, values...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Exec", reflect.TypeOf((*MockScyllaDB)(nil).Exec), varargs...)
+}
+
+// ExecCAS mocks base method.
+func (m *MockScyllaDB) ExecCAS(dest any, stmt string, values ...any) (bool, error) {
+	m.ctrl.T.Helper()
+	varargs := []any{dest, stmt}
+	for _, a := range values {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "ExecCAS", varargs...)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ExecCAS indicates an expected call of ExecCAS.
+func (mr *MockScyllaDBMockRecorder) ExecCAS(dest, stmt any, values ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{dest, stmt}, values...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExecCAS", reflect.TypeOf((*MockScyllaDB)(nil).ExecCAS), varargs...)
+}
+
+// ExecWithCtx mocks base method.
+func (m *MockScyllaDB) ExecWithCtx(ctx context.Context, stmt string, values ...any) error {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, stmt}
+	for _, a := range values {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "ExecWithCtx", varargs...)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// ExecWithCtx indicates an expected call of ExecWithCtx.
+func (mr *MockScyllaDBMockRecorder) ExecWithCtx(ctx, stmt any, values ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, stmt}, values...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExecWithCtx", reflect.TypeOf((*MockScyllaDB)(nil).ExecWithCtx), varargs...)
+}
+
+// ExecuteBatchWithCtx mocks base method.
+func (m *MockScyllaDB) ExecuteBatchWithCtx(ctx context.Context, name string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ExecuteBatchWithCtx", ctx, name)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// ExecuteBatchWithCtx indicates an expected call of ExecuteBatchWithCtx.
+func (mr *MockScyllaDBMockRecorder) ExecuteBatchWithCtx(ctx, name any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExecuteBatchWithCtx", reflect.TypeOf((*MockScyllaDB)(nil).ExecuteBatchWithCtx), ctx, name)
+}
+
+// HealthCheck mocks base method.
+func (m *MockScyllaDB) HealthCheck(arg0 context.Context) (any, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HealthCheck", arg0)
+	ret0, _ := ret[0].(any)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// HealthCheck indicates an expected call of HealthCheck.
+func (mr *MockScyllaDBMockRecorder) HealthCheck(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HealthCheck", reflect.TypeOf((*MockScyllaDB)(nil).HealthCheck), arg0)
+}
+
+// NewBatch mocks base method.
+func (m *MockScyllaDB) NewBatch(name string, batchType int) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "NewBatch", name, batchType)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// NewBatch indicates an expected call of NewBatch.
+func (mr *MockScyllaDBMockRecorder) NewBatch(name, batchType any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NewBatch", reflect.TypeOf((*MockScyllaDB)(nil).NewBatch), name, batchType)
+}
+
+// NewBatchWithCtx mocks base method.
+func (m *MockScyllaDB) NewBatchWithCtx(arg0 context.Context, name string, batchType int) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "NewBatchWithCtx", arg0, name, batchType)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// NewBatchWithCtx indicates an expected call of NewBatchWithCtx.
+func (mr *MockScyllaDBMockRecorder) NewBatchWithCtx(arg0, name, batchType any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NewBatchWithCtx", reflect.TypeOf((*MockScyllaDB)(nil).NewBatchWithCtx), arg0, name, batchType)
+}
+
+// Query mocks base method.
+func (m *MockScyllaDB) Query(dest any, stmt string, values ...any) error {
+	m.ctrl.T.Helper()
+	varargs := []any{dest, stmt}
+	for _, a := range values {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "Query", varargs...)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Query indicates an expected call of Query.
+func (mr *MockScyllaDBMockRecorder) Query(dest, stmt any, values ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{dest, stmt}, values...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Query", reflect.TypeOf((*MockScyllaDB)(nil).Query), varargs...)
+}
+
+// QueryWithCtx mocks base method.
+func (m *MockScyllaDB) QueryWithCtx(ctx context.Context, dest any, stmt string, values ...any) error {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, dest, stmt}
+	for _, a := range values {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "QueryWithCtx", varargs...)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// QueryWithCtx indicates an expected call of QueryWithCtx.
+func (mr *MockScyllaDBMockRecorder) QueryWithCtx(ctx, dest, stmt any, values ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, dest, stmt}, values...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryWithCtx", reflect.TypeOf((*MockScyllaDB)(nil).QueryWithCtx), varargs...)
+}
+
+// MockScyllaDBProvider is a mock of ScyllaDBProvider interface.
+type MockScyllaDBProvider struct {
+	ctrl     *gomock.Controller
+	recorder *MockScyllaDBProviderMockRecorder
+	isgomock struct{}
+}
+
+// MockScyllaDBProviderMockRecorder is the mock recorder for MockScyllaDBProvider.
+type MockScyllaDBProviderMockRecorder struct {
+	mock *MockScyllaDBProvider
+}
+
+// NewMockScyllaDBProvider creates a new mock instance.
+func NewMockScyllaDBProvider(ctrl *gomock.Controller) *MockScyllaDBProvider {
+	mock := &MockScyllaDBProvider{ctrl: ctrl}
+	mock.recorder = &MockScyllaDBProviderMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockScyllaDBProvider) EXPECT() *MockScyllaDBProviderMockRecorder {
+	return m.recorder
+}
+
+// BatchQuery mocks base method.
+func (m *MockScyllaDBProvider) BatchQuery(name, stmt string, values ...any) error {
+	m.ctrl.T.Helper()
+	varargs := []any{name, stmt}
+	for _, a := range values {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "BatchQuery", varargs...)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// BatchQuery indicates an expected call of BatchQuery.
+func (mr *MockScyllaDBProviderMockRecorder) BatchQuery(name, stmt any, values ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{name, stmt}, values...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BatchQuery", reflect.TypeOf((*MockScyllaDBProvider)(nil).BatchQuery), varargs...)
+}
+
+// BatchQueryWithCtx mocks base method.
+func (m *MockScyllaDBProvider) BatchQueryWithCtx(ctx context.Context, name, stmt string, values ...any) error {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, name, stmt}
+	for _, a := range values {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "BatchQueryWithCtx", varargs...)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// BatchQueryWithCtx indicates an expected call of BatchQueryWithCtx.
+func (mr *MockScyllaDBProviderMockRecorder) BatchQueryWithCtx(ctx, name, stmt any, values ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, name, stmt}, values...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BatchQueryWithCtx", reflect.TypeOf((*MockScyllaDBProvider)(nil).BatchQueryWithCtx), varargs...)
+}
+
+// Connect mocks base method.
+func (m *MockScyllaDBProvider) Connect() {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "Connect")
+}
+
+// Connect indicates an expected call of Connect.
+func (mr *MockScyllaDBProviderMockRecorder) Connect() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Connect", reflect.TypeOf((*MockScyllaDBProvider)(nil).Connect))
+}
+
+// Exec mocks base method.
+func (m *MockScyllaDBProvider) Exec(stmt string, values ...any) error {
+	m.ctrl.T.Helper()
+	varargs := []any{stmt}
+	for _, a := range values {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "Exec", varargs...)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Exec indicates an expected call of Exec.
+func (mr *MockScyllaDBProviderMockRecorder) Exec(stmt any, values ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{stmt}, values...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Exec", reflect.TypeOf((*MockScyllaDBProvider)(nil).Exec), varargs...)
+}
+
+// ExecCAS mocks base method.
+func (m *MockScyllaDBProvider) ExecCAS(dest any, stmt string, values ...any) (bool, error) {
+	m.ctrl.T.Helper()
+	varargs := []any{dest, stmt}
+	for _, a := range values {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "ExecCAS", varargs...)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ExecCAS indicates an expected call of ExecCAS.
+func (mr *MockScyllaDBProviderMockRecorder) ExecCAS(dest, stmt any, values ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{dest, stmt}, values...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExecCAS", reflect.TypeOf((*MockScyllaDBProvider)(nil).ExecCAS), varargs...)
+}
+
+// ExecWithCtx mocks base method.
+func (m *MockScyllaDBProvider) ExecWithCtx(ctx context.Context, stmt string, values ...any) error {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, stmt}
+	for _, a := range values {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "ExecWithCtx", varargs...)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// ExecWithCtx indicates an expected call of ExecWithCtx.
+func (mr *MockScyllaDBProviderMockRecorder) ExecWithCtx(ctx, stmt any, values ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, stmt}, values...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExecWithCtx", reflect.TypeOf((*MockScyllaDBProvider)(nil).ExecWithCtx), varargs...)
+}
+
+// ExecuteBatchWithCtx mocks base method.
+func (m *MockScyllaDBProvider) ExecuteBatchWithCtx(ctx context.Context, name string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ExecuteBatchWithCtx", ctx, name)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// ExecuteBatchWithCtx indicates an expected call of ExecuteBatchWithCtx.
+func (mr *MockScyllaDBProviderMockRecorder) ExecuteBatchWithCtx(ctx, name any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExecuteBatchWithCtx", reflect.TypeOf((*MockScyllaDBProvider)(nil).ExecuteBatchWithCtx), ctx, name)
+}
+
+// HealthCheck mocks base method.
+func (m *MockScyllaDBProvider) HealthCheck(arg0 context.Context) (any, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HealthCheck", arg0)
+	ret0, _ := ret[0].(any)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// HealthCheck indicates an expected call of HealthCheck.
+func (mr *MockScyllaDBProviderMockRecorder) HealthCheck(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HealthCheck", reflect.TypeOf((*MockScyllaDBProvider)(nil).HealthCheck), arg0)
+}
+
+// NewBatch mocks base method.
+func (m *MockScyllaDBProvider) NewBatch(name string, batchType int) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "NewBatch", name, batchType)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// NewBatch indicates an expected call of NewBatch.
+func (mr *MockScyllaDBProviderMockRecorder) NewBatch(name, batchType any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NewBatch", reflect.TypeOf((*MockScyllaDBProvider)(nil).NewBatch), name, batchType)
+}
+
+// NewBatchWithCtx mocks base method.
+func (m *MockScyllaDBProvider) NewBatchWithCtx(arg0 context.Context, name string, batchType int) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "NewBatchWithCtx", arg0, name, batchType)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// NewBatchWithCtx indicates an expected call of NewBatchWithCtx.
+func (mr *MockScyllaDBProviderMockRecorder) NewBatchWithCtx(arg0, name, batchType any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NewBatchWithCtx", reflect.TypeOf((*MockScyllaDBProvider)(nil).NewBatchWithCtx), arg0, name, batchType)
+}
+
+// Query mocks base method.
+func (m *MockScyllaDBProvider) Query(dest any, stmt string, values ...any) error {
+	m.ctrl.T.Helper()
+	varargs := []any{dest, stmt}
+	for _, a := range values {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "Query", varargs...)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Query indicates an expected call of Query.
+func (mr *MockScyllaDBProviderMockRecorder) Query(dest, stmt any, values ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{dest, stmt}, values...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Query", reflect.TypeOf((*MockScyllaDBProvider)(nil).Query), varargs...)
+}
+
+// QueryWithCtx mocks base method.
+func (m *MockScyllaDBProvider) QueryWithCtx(ctx context.Context, dest any, stmt string, values ...any) error {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, dest, stmt}
+	for _, a := range values {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "QueryWithCtx", varargs...)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// QueryWithCtx indicates an expected call of QueryWithCtx.
+func (mr *MockScyllaDBProviderMockRecorder) QueryWithCtx(ctx, dest, stmt any, values ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, dest, stmt}, values...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryWithCtx", reflect.TypeOf((*MockScyllaDBProvider)(nil).QueryWithCtx), varargs...)
+}
+
+// UseLogger mocks base method.
+func (m *MockScyllaDBProvider) UseLogger(logger any) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "UseLogger", logger)
+}
+
+// UseLogger indicates an expected call of UseLogger.
+func (mr *MockScyllaDBProviderMockRecorder) UseLogger(logger any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UseLogger", reflect.TypeOf((*MockScyllaDBProvider)(nil).UseLogger), logger)
+}
+
+// UseMetrics mocks base method.
+func (m *MockScyllaDBProvider) UseMetrics(metrics any) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "UseMetrics", metrics)
+}
+
+// UseMetrics indicates an expected call of UseMetrics.
+func (mr *MockScyllaDBProviderMockRecorder) UseMetrics(metrics any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UseMetrics", reflect.TypeOf((*MockScyllaDBProvider)(nil).UseMetrics), metrics)
+}
+
+// UseTracer mocks base method.
+func (m *MockScyllaDBProvider) UseTracer(tracer any) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "UseTracer", tracer)
+}
+
+// UseTracer indicates an expected call of UseTracer.
+func (mr *MockScyllaDBProviderMockRecorder) UseTracer(tracer any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UseTracer", reflect.TypeOf((*MockScyllaDBProvider)(nil).UseTracer), tracer)
+}
+
 // MockArangoDB is a mock of ArangoDB interface.
 type MockArangoDB struct {
 	ctrl     *gomock.Controller

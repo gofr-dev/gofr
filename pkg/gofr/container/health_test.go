@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
 	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/datasource/sql"
 	"gofr.dev/pkg/gofr/logging"
@@ -32,40 +33,40 @@ func TestContainer_Health(t *testing.T) {
 	}
 
 	for i, tc := range tests {
-		expected := map[string]interface{}{
+		expected := map[string]any{
 			"kv-store": datasource.Health{
-				Status: tc.datasourceHealth, Details: map[string]interface{}{
+				Status: tc.datasourceHealth, Details: map[string]any{
 					"host":  "localhost:1234",
 					"error": "kv-store not connected",
 				},
 			},
 			"redis": datasource.Health{
-				Status: tc.datasourceHealth, Details: map[string]interface{}{
+				Status: tc.datasourceHealth, Details: map[string]any{
 					"host":  "localhost:6379",
 					"error": "redis not connected",
 				},
 			},
 			"mongo": datasource.Health{
-				Status: tc.datasourceHealth, Details: map[string]interface{}{
+				Status: tc.datasourceHealth, Details: map[string]any{
 					"host":  "localhost:6379",
 					"error": "mongo not connected",
 				},
 			},
 			"clickHouse": datasource.Health{
-				Status: tc.datasourceHealth, Details: map[string]interface{}{
+				Status: tc.datasourceHealth, Details: map[string]any{
 					"host":  "localhost:6379",
 					"error": "clickhouse not connected",
 				},
 			},
 			"cassandra": datasource.Health{
-				Status: tc.datasourceHealth, Details: map[string]interface{}{
+				Status: tc.datasourceHealth, Details: map[string]any{
 					"host":  "localhost:6379",
 					"error": "cassandra not connected",
 				},
 			},
 
 			"sql": &datasource.Health{
-				Status: tc.datasourceHealth, Details: map[string]interface{}{
+				Status: tc.datasourceHealth, Details: map[string]any{
 					"host": "localhost:3306/test",
 					"stats": sql.DBStats{
 						MaxOpenConnections: 0, OpenConnections: 1, InUse: 0, Idle: 1, WaitCount: 0,
@@ -74,7 +75,7 @@ func TestContainer_Health(t *testing.T) {
 				},
 			},
 			"dgraph": datasource.Health{
-				Status: tc.datasourceHealth, Details: map[string]interface{}{
+				Status: tc.datasourceHealth, Details: map[string]any{
 					"host":  "localhost:8000",
 					"error": "dgraph not connected",
 				},
@@ -118,7 +119,7 @@ func TestContainer_Health(t *testing.T) {
 func registerMocks(mocks *Mocks, health string) {
 	mocks.SQL.ExpectHealthCheck().WillReturnHealthCheck(&datasource.Health{
 		Status: health,
-		Details: map[string]interface{}{
+		Details: map[string]any{
 			"host": "localhost:3306/test",
 			"stats": sql.DBStats{
 				MaxOpenConnections: 0, OpenConnections: 1, InUse: 0, Idle: 1, WaitCount: 0,
@@ -129,7 +130,7 @@ func registerMocks(mocks *Mocks, health string) {
 
 	mocks.Redis.EXPECT().HealthCheck().Return(datasource.Health{
 		Status: health,
-		Details: map[string]interface{}{
+		Details: map[string]any{
 			"host":  "localhost:6379",
 			"error": "redis not connected",
 		},
@@ -137,7 +138,7 @@ func registerMocks(mocks *Mocks, health string) {
 
 	mocks.Mongo.EXPECT().HealthCheck(context.Background()).Return(datasource.Health{
 		Status: health,
-		Details: map[string]interface{}{
+		Details: map[string]any{
 			"host":  "localhost:6379",
 			"error": "mongo not connected",
 		},
@@ -145,7 +146,7 @@ func registerMocks(mocks *Mocks, health string) {
 
 	mocks.Cassandra.EXPECT().HealthCheck(context.Background()).Return(datasource.Health{
 		Status: health,
-		Details: map[string]interface{}{
+		Details: map[string]any{
 			"host":  "localhost:6379",
 			"error": "cassandra not connected",
 		},
@@ -153,7 +154,7 @@ func registerMocks(mocks *Mocks, health string) {
 
 	mocks.Clickhouse.EXPECT().HealthCheck(context.Background()).Return(datasource.Health{
 		Status: health,
-		Details: map[string]interface{}{
+		Details: map[string]any{
 			"host":  "localhost:6379",
 			"error": "clickhouse not connected",
 		},
@@ -161,7 +162,7 @@ func registerMocks(mocks *Mocks, health string) {
 
 	mocks.KVStore.EXPECT().HealthCheck(context.Background()).Return(datasource.Health{
 		Status: health,
-		Details: map[string]interface{}{
+		Details: map[string]any{
 			"host":  "localhost:1234",
 			"error": "kv-store not connected",
 		},
@@ -169,7 +170,7 @@ func registerMocks(mocks *Mocks, health string) {
 
 	mocks.DGraph.EXPECT().HealthCheck(context.Background()).Return(datasource.Health{
 		Status: health,
-		Details: map[string]interface{}{
+		Details: map[string]any{
 			"host":  "localhost:8000",
 			"error": "dgraph not connected",
 		},

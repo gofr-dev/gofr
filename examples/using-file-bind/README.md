@@ -6,19 +6,19 @@ it to the fields of the struct. GoFr currently supports zip file type and also b
 ### Usage
 ```go
 type Data struct {
-    Compressed file.Zip `file:"upload"`
+	Compressed file.Zip `file:"upload"`
 
-    FileHeader *multipart.FileHeader `file:"file_upload"`
+	FileHeader *multipart.FileHeader `file:"file_upload"`
 }
 
-func Handler (c *gofr.Context) (interface{}, error) {
-    var d Data
-    
-    // bind the multipart data into the variable d
-    err := c.Bind(&d)
-    if err != nil {
-        return nil, err
-    }
+func Handler(c *gofr.Context) (any, error) {
+	var d Data
+
+	// bind the multipart data into the variable d
+	err := c.Bind(&d)
+	if err != nil {
+		return nil, err
+	}
 }
 ```
 

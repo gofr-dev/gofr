@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/jlaffaye/ftp"
-
 	file_interface "gofr.dev/pkg/gofr/datasource/file"
 )
 
@@ -140,7 +139,7 @@ func (j *jsonReader) Next() bool {
 }
 
 // Scan decodes the next JSON object into the provided structure.
-func (j *jsonReader) Scan(i interface{}) error {
+func (j *jsonReader) Scan(i any) error {
 	return j.decoder.Decode(&i)
 }
 
@@ -150,7 +149,7 @@ func (f *textReader) Next() bool {
 }
 
 // Scan scans the next line from the text file into the provided pointer to string.
-func (f *textReader) Scan(i interface{}) error {
+func (f *textReader) Scan(i any) error {
 	if val, ok := i.(*string); ok {
 		*val = f.scanner.Text()
 		return nil

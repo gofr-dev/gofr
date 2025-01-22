@@ -20,9 +20,9 @@ func TestMessage_Context(t *testing.T) {
 func TestMessage_Bind(t *testing.T) {
 	testCases := []struct {
 		desc     string
-		input    interface{}
+		input    any
 		value    []byte
-		expected interface{}
+		expected any
 		hasError bool
 	}{
 		{
@@ -54,10 +54,10 @@ func TestMessage_Bind(t *testing.T) {
 			hasError: false,
 		},
 		{
-			desc:     "bind to map[string]interface{}",
-			input:    &map[string]interface{}{},
+			desc:     "bind to map[string]any",
+			input:    &map[string]any{},
 			value:    []byte(`{"key":"value"}`),
-			expected: &map[string]interface{}{"key": "value"},
+			expected: &map[string]any{"key": "value"},
 			hasError: false,
 		},
 		{
@@ -169,14 +169,14 @@ func TestBindBool(t *testing.T) {
 func TestBindStruct(t *testing.T) {
 	m := &Message{Value: []byte(`{"key":"value"}`)}
 
-	var i map[string]interface{}
+	var i map[string]any
 	err := m.bindStruct(&i)
 	require.NoError(t, err)
-	assert.Equal(t, map[string]interface{}{"key": "value"}, i)
+	assert.Equal(t, map[string]any{"key": "value"}, i)
 
 	m = &Message{Value: []byte(`{"key":}`)}
 
-	var i2 map[string]interface{}
+	var i2 map[string]any
 	err = m.bindStruct(&i2)
 	require.Error(t, err)
 }

@@ -6,10 +6,8 @@ import (
 	"time"
 
 	"github.com/pkg/sftp"
-
-	"golang.org/x/crypto/ssh"
-
 	File "gofr.dev/pkg/gofr/datasource/file"
+	"golang.org/x/crypto/ssh"
 )
 
 const (
@@ -37,14 +35,14 @@ func New(cfg Config) *FileSystem {
 }
 
 // UseLogger sets the logger for the FileSystem client.
-func (f *FileSystem) UseLogger(logger interface{}) {
+func (f *FileSystem) UseLogger(logger any) {
 	if l, ok := logger.(Logger); ok {
 		f.logger = l
 	}
 }
 
 // UseMetrics sets the metrics for the FileSystem client.
-func (f *FileSystem) UseMetrics(metrics interface{}) {
+func (f *FileSystem) UseMetrics(metrics any) {
 	if m, ok := metrics.(Metrics); ok {
 		f.metrics = m
 	}

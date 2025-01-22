@@ -59,6 +59,7 @@ type Container struct {
 	Solr       Solr
 	DGraph     Dgraph
 	OpenTSDB   OpenTSDB
+	ScyllaDB   ScyllaDB
 	Arango     ArangoDB
 
 	KVStore KVStore
@@ -178,7 +179,7 @@ func (c *Container) createMqttPubSub(conf config.Config) pubsub.Client {
 	if err != nil {
 		keepAlive = 30 * time.Second
 
-		c.Logger.Debug("MQTT_KEEP_ALIVE is not set or ivalid, setting it to 30 seconds")
+		c.Logger.Debug("MQTT_KEEP_ALIVE is not set or invalid, setting it to 30 seconds")
 	}
 
 	switch conf.Get("MQTT_QOS") {

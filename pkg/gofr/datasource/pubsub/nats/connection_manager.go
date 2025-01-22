@@ -5,7 +5,6 @@ import (
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
-
 	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 )
@@ -150,7 +149,7 @@ func (cm *ConnectionManager) Health() datasource.Health {
 	if status == nats.CONNECTED {
 		return datasource.Health{
 			Status: datasource.StatusUp,
-			Details: map[string]interface{}{
+			Details: map[string]any{
 				"server": cm.config.Server,
 			},
 		}
@@ -158,7 +157,7 @@ func (cm *ConnectionManager) Health() datasource.Health {
 
 	return datasource.Health{
 		Status: datasource.StatusDown,
-		Details: map[string]interface{}{
+		Details: map[string]any{
 			"server": cm.config.Server,
 		},
 	}

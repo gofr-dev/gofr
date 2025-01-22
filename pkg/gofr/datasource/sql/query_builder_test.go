@@ -13,7 +13,7 @@ func Test_InsertQuery_Success(t *testing.T) {
 		dialect     string
 		tableName   string
 		fieldNames  []string
-		values      []interface{}
+		values      []any
 		constraints map[string]FieldConstraints
 		expected    string
 	}{
@@ -22,7 +22,7 @@ func Test_InsertQuery_Success(t *testing.T) {
 			dialect:    "mysql",
 			tableName:  "user",
 			fieldNames: []string{"name", "age"},
-			values:     []interface{}{"John Doe", 30},
+			values:     []any{"John Doe", 30},
 			expected:   "INSERT INTO `user` (`name`, `age`) VALUES (?, ?)",
 		},
 		{
@@ -30,7 +30,7 @@ func Test_InsertQuery_Success(t *testing.T) {
 			dialect:    "postgres",
 			tableName:  "user",
 			fieldNames: []string{"name", "age"},
-			values:     []interface{}{"John Doe", 30},
+			values:     []any{"John Doe", 30},
 			expected:   `INSERT INTO "user" ("name", "age") VALUES ($1, $2)`,
 		},
 		{
@@ -38,7 +38,7 @@ func Test_InsertQuery_Success(t *testing.T) {
 			dialect:    "mysql",
 			tableName:  "user",
 			fieldNames: []string{"id", "name"},
-			values:     []interface{}{1, "John Doe"},
+			values:     []any{1, "John Doe"},
 			constraints: map[string]FieldConstraints{
 				"id": {AutoIncrement: true},
 			},
@@ -49,7 +49,7 @@ func Test_InsertQuery_Success(t *testing.T) {
 			dialect:    "postgres",
 			tableName:  "user",
 			fieldNames: []string{"id", "name"},
-			values:     []interface{}{1, "John Doe"},
+			values:     []any{1, "John Doe"},
 			constraints: map[string]FieldConstraints{
 				"id": {AutoIncrement: true},
 			},
@@ -72,7 +72,7 @@ func Test_InsertQuery_Error(t *testing.T) {
 		dialect     string
 		tableName   string
 		fieldNames  []string
-		values      []interface{}
+		values      []any
 		constraints map[string]FieldConstraints
 	}{
 		{
@@ -80,7 +80,7 @@ func Test_InsertQuery_Error(t *testing.T) {
 			dialect:    "mysql",
 			tableName:  "user",
 			fieldNames: []string{"name"},
-			values:     []interface{}{""},
+			values:     []any{""},
 			constraints: map[string]FieldConstraints{
 				"name": {NotNull: true},
 			},
@@ -90,7 +90,7 @@ func Test_InsertQuery_Error(t *testing.T) {
 			dialect:    "postgres",
 			tableName:  "user",
 			fieldNames: []string{"age"},
-			values:     []interface{}{0},
+			values:     []any{0},
 			constraints: map[string]FieldConstraints{
 				"age": {NotNull: true},
 			},
@@ -212,7 +212,7 @@ func Test_validateNotNull_Error(t *testing.T) {
 	tests := []struct {
 		name        string
 		fieldName   string
-		value       interface{}
+		value       any
 		isNotNull   bool
 		expectedErr string
 	}{

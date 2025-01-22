@@ -18,70 +18,77 @@ user access to dependencies.
 parts of the request.
 
 - `Context()` - to access the context associated with the incoming request
-  ```go
-  ctx.Request.Context()
-  ```
+
+```go
+ctx.Request.Context()
+```
+
 - `Param(string)` - to access the query parameters present in the request, it returns the value of the key provided
-  ```go
-  // Example: Request is /configs?key1=value1&key2=value2
-  value := ctx.Request.Param("key1")
-  // value = "value1"
-  ```
+
+```go
+// Example: Request is /configs?key1=value1&key2=value2
+value := ctx.Request.Param("key1")
+// value = "value1"
+```
+
 - `PathParam(string)` - to retrieve the path parameters
   ```go
   // Consider the path to be /employee/{id}
   id := ctx.Request.PathParam("id")
   ```
-- `Bind(interface{})` - to access a decoded format of the request body, the body is mapped to the interface provided
+- `Bind(any)` - to access a decoded format of the request body, the body is mapped to the interface provided
 
-  ```go
-  // incoming request body is
-  // {
-  //    "name" : "trident",
-  //    "category" : "snacks"
-  // }
+```go
+// incoming request body is
+// {
+//    "name" : "trident",
+//    "category" : "snacks"
+// }
 
-   type product struct{
-      Name string `json:"name"`
-      Category string `json:"category"`
-   }
+type product struct{
+  Name string `json:"name"`
+  Category string `json:"category"`
+}
 
-  var p product
-  ctx.Bind(&p)
-  // the Bind() method will map the incoming request to variable p
-  ```
-  
-- `Binding multipart-form data / urlencoded form data ` 
-  - To bind multipart-form data or url-encoded form, you can use the Bind method similarly. The struct fields should be tagged appropriately 
+var p product
+ctx.Bind(&p)
+// the Bind() method will map the incoming request to variable p
+```
+
+- `Binding multipart-form data / urlencoded form data `
+  - To bind multipart-form data or url-encoded form, you can use the Bind method similarly. The struct fields should be tagged appropriately
     to map the form fields to the struct fields. The supported content types are `multipart/form-data` and `application/x-www-form-urlencoded`
-    
-    ```go
-    type Data struct {
-    Name string `form:"name"`
 
-    Compressed file.Zip `file:"upload"`
+```go
+type Data struct {
+	Name string `form:"name"`
 
-    FileHeader *multipart.FileHeader `file:"file_upload"`
-    }
-    ```
+	Compressed file.Zip `file:"upload"`
+
+	FileHeader *multipart.FileHeader `file:"file_upload"`
+}
+```
 
   - The `form` tag is used to bind non-file fields.
   - The `file` tag is used to bind file fields. If the tag is not present, the field name is used as the key.
 
 
 - `HostName()` - to access the host name for the incoming request
-  ```go
-    // for example if request is made from xyz.com
-    host := ctx.Request.HostName()
-    // the host would be http://xyz.com
-    // Note: the protocol if not provided in the headers will be set to http by default
-  ```
+
+```go
+// for example if request is made from xyz.com
+  host := ctx.Request.HostName()
+  // the host would be http://xyz.com
+  // Note: the protocol if not provided in the headers will be set to http by default
+```
+
 - `Params(string)` - to access all query parameters for a given key returning slice of strings.
-  ```go 
-    // Example: Request is /search?category=books,electronics&category=tech
-    values := ctx.Request.Params("category")
-    // values = []string{"books", "electronics", "tech"}
-  ```
+
+```go
+// Example: Request is /search?category=books,electronics&category=tech
+values := ctx.Request.Params("category")
+// values = []string{"books", "electronics", "tech"}
+```
 
 ## Accessing dependencies
 
