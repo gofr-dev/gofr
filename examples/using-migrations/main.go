@@ -37,7 +37,7 @@ type Employee struct {
 }
 
 // GetHandler handles GET requests for retrieving employee information
-func GetHandler(c *gofr.Context) (interface{}, error) {
+func GetHandler(c *gofr.Context) (any, error) {
 	name := c.Param("name")
 	if name == "" {
 		return nil, errors.New("name can't be empty")
@@ -55,7 +55,7 @@ func GetHandler(c *gofr.Context) (interface{}, error) {
 }
 
 // PostHandler handles POST requests for creating new employees
-func PostHandler(c *gofr.Context) (interface{}, error) {
+func PostHandler(c *gofr.Context) (any, error) {
 	var emp Employee
 	if err := c.Bind(&emp); err != nil {
 		c.Logger.Errorf("error in binding: %v", err)
