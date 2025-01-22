@@ -124,7 +124,7 @@ func (mr *MockArangoMockRecorder) Patch(ctx, output, input interface{}, urlParts
 func (m *MockArango) CreateDatabase(ctx context.Context, name string, options *arangodb.CreateDatabaseOptions) (arangodb.Database, error) {
 	db := NewMockDatabase(m.ctrl)
 	if strings.Contains(name, "error") {
-		return nil,fmt.Errorf("database creation error")
+		return nil,fmt.Errorf("database not found")
 	}
 
 	return db,nil

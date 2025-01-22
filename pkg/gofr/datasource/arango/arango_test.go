@@ -3,7 +3,6 @@ package arango
 import (
 	"context"
 	"errors"
-	"fmt"
 	"testing"
 
 	"github.com/arangodb/go-driver/v2/arangodb"
@@ -14,8 +13,9 @@ import (
 )
 
 var (
-	errUserNotFound = errors.New("user not found")
-	errDBNotFound   = errors.New("database not found")
+	errUserNotFound       = errors.New("user not found")
+	errDBNotFound         = errors.New("database not found")
+	errCollectionNotFound = errors.New("collection not found")
 )
 
 func setupDB(t *testing.T) (*Client, *MockArango, *MockUser, *MockLogger, *MockMetrics) {
@@ -81,7 +81,8 @@ func Test_Arango_DropUser(t *testing.T) {
 	// Ensure the mock returns nil as an error type
 	mockArango.EXPECT().DropUser(gomock.Any(), "test").Return(nil)
 	mockLogger.EXPECT().Debug(gomock.Any())
-	mockMetrics.EXPECT().RecordHistogram(context.Background(), "app_arango_stats", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any())
+	mockMetrics.EXPECT().RecordHistogram(context.Background(), "app_arango_stats", gomock.Any(),
+		gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any())
 
 	err := client.DropUser(context.Background(), "test")
 	require.NoError(t, err, "Test_Arango_DropUser: failed to drop user")
@@ -359,7 +360,8 @@ func Test_Client_ListDBs(t *testing.T) {
 	// Expectations
 	mockArango.EXPECT().Databases(gomock.Any()).Return(mockDatabases, nil)
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_arango_stats", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_arango_stats", gomock.Any(),
+		gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	// Execute
 	names, err := client.ListDBs(ctx)
@@ -375,7 +377,8 @@ func Test_Client_CreateDB(t *testing.T) {
 
 	mockArango.EXPECT().CreateDatabase(gomock.Any(), database, nil).Return(nil)
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_arango_stats", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_arango_stats", gomock.Any(),
+		gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	err := client.CreateDB(ctx, database)
 	require.NoError(t, err, "Expected no error while creating the database")
@@ -387,13 +390,14 @@ func Test_Client_CreateDB_Error(t *testing.T) {
 	ctx := context.Background()
 	database := "errorDB"
 
-	mockArango.EXPECT().CreateDatabase(gomock.Any(), database, nil).Return(fmt.Errorf("database creation error")).Times(1) // Mock error in CreateDatabase
+	mockArango.EXPECT().CreateDatabase(gomock.Any(), database, nil).Return(errDBNotFound)
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_arango_stats", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_arango_stats", gomock.Any(),
+		gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	err := client.CreateDB(ctx, database)
 	require.Error(t, err, "Expected an error while creating the database")
-	require.Equal(t, "database creation error", err.Error())
+	require.Equal(t, "database not found", err.Error())
 }
 
 func Test_Client_DropDB(t *testing.T) {
@@ -407,7 +411,8 @@ func Test_Client_DropDB(t *testing.T) {
 	mockArango.EXPECT().Database(gomock.Any(), database).Return(mockDB, nil).Times(1)
 	mockDB.EXPECT().Remove(gomock.Any()).Return(nil).Times(1) // Mock Remove to return no error
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_arango_stats", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_arango_stats", gomock.Any(),
+		gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	err := client.DropDB(ctx, database)
 	require.NoError(t, err, "Expected no error while dropping the database")
@@ -419,9 +424,10 @@ func Test_Client_DropDB_Error(t *testing.T) {
 	ctx := context.Background()
 	database := "testDB"
 
-	mockArango.EXPECT().Database(gomock.Any(), database).Return(nil, fmt.Errorf("database not found")).Times(1)
+	mockArango.EXPECT().Database(gomock.Any(), database).Return(nil, errDBNotFound).Times(1)
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_arango_stats", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_arango_stats", gomock.Any(),
+		gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	err := client.DropDB(ctx, database)
 	require.Error(t, err, "Expected error when trying to drop a non-existent database")
@@ -433,13 +439,14 @@ func Test_Client_DropDB_RemoveError(t *testing.T) {
 	mockDB := NewMockDatabase(gomock.NewController(t))
 
 	mockArango.EXPECT().Database(gomock.Any(), "testDB").Return(mockDB, nil)
-	mockDB.EXPECT().Remove(gomock.Any()).Return(fmt.Errorf("error removing database"))
+	mockDB.EXPECT().Remove(gomock.Any()).Return(errDBNotFound)
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_arango_stats", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_arango_stats", gomock.Any(),
+		gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	err := client.DropDB(context.Background(), "testDB")
 	require.Error(t, err, "Expected error when removing the database")
-	require.Equal(t, "error removing database", err.Error())
+	require.Equal(t, "database not found", err.Error())
 }
 
 func Test_Client_CreateCollection(t *testing.T) {
@@ -449,7 +456,8 @@ func Test_Client_CreateCollection(t *testing.T) {
 	mockArango.EXPECT().Database(gomock.Any(), "testDB").Return(mockDB, nil)
 	mockDB.EXPECT().CreateCollection(gomock.Any(), "testCollection", gomock.Any()).Return(nil, nil)
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_arango_stats", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_arango_stats", gomock.Any(),
+		gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	err := client.CreateCollection(context.Background(), "testDB", "testCollection", true)
 	require.NoError(t, err, "Expected no error while creating the collection")
@@ -460,13 +468,14 @@ func Test_Client_CreateCollection_Error(t *testing.T) {
 	mockDB := NewMockDatabase(gomock.NewController(t))
 
 	mockArango.EXPECT().Database(gomock.Any(), "testDB").Return(mockDB, nil)
-	mockDB.EXPECT().CreateCollection(gomock.Any(), "testCollection", gomock.Any()).Return(nil, fmt.Errorf("create collection error"))
+	mockDB.EXPECT().CreateCollection(gomock.Any(), "testCollection", gomock.Any()).Return(nil, errCollectionNotFound)
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_arango_stats", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_arango_stats", gomock.Any(),
+		gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	err := client.CreateCollection(context.Background(), "testDB", "testCollection", false)
 	require.Error(t, err, "Expected an error while creating the collection")
-	require.Equal(t, "create collection error", err.Error())
+	require.Equal(t, "collection not found", err.Error())
 }
 
 func Test_Client_DropCollection(t *testing.T) {
@@ -478,7 +487,8 @@ func Test_Client_DropCollection(t *testing.T) {
 	mockDB.EXPECT().Collection(gomock.Any(), "testCollection").Return(mockCollection, nil)
 	mockCollection.EXPECT().Remove(gomock.Any()).Return(nil)
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_arango_stats", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_arango_stats",
+		gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	// Execute
 	err := client.DropCollection(context.Background(), "testDB", "testCollection")
@@ -490,9 +500,10 @@ func Test_Client_DropCollection_Error(t *testing.T) {
 	mockDB := NewMockDatabase(gomock.NewController(t))
 
 	mockArango.EXPECT().Database(gomock.Any(), "testDB").Return(mockDB, nil)
-	mockDB.EXPECT().Collection(gomock.Any(), "testCollection").Return(nil, fmt.Errorf("collection not found"))
+	mockDB.EXPECT().Collection(gomock.Any(), "testCollection").Return(nil, errCollectionNotFound)
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_arango_stats", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_arango_stats", gomock.Any(),
+		gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	err := client.DropCollection(context.Background(), "testDB", "testCollection")
 	require.Error(t, err, "Expected error when trying to drop a non-existent collection")
@@ -508,7 +519,8 @@ func Test_Client_TruncateCollection(t *testing.T) {
 	mockDB.EXPECT().Collection(gomock.Any(), "testCollection").Return(mockCollection, nil)
 	mockCollection.EXPECT().Truncate(gomock.Any()).Return(nil)
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_arango_stats", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_arango_stats", gomock.Any(),
+		gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	err := client.TruncateCollection(context.Background(), "testDB", "testCollection")
 	require.NoError(t, err, "Expected no error while truncating the collection")
@@ -519,12 +531,48 @@ func Test_Client_TruncateCollection_Error(t *testing.T) {
 	mockDB := NewMockDatabase(gomock.NewController(t))
 
 	mockArango.EXPECT().Database(gomock.Any(), "testDB").Return(mockDB, nil).Times(1)
-	mockDB.EXPECT().Collection(gomock.Any(), "testCollection").Return(nil, fmt.Errorf("collection not found")).Times(1)
+	mockDB.EXPECT().Collection(gomock.Any(), "testCollection").Return(nil, errCollectionNotFound).Times(1)
 
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_arango_stats", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_arango_stats",
+		gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	err := client.TruncateCollection(context.Background(), "testDB", "testCollection")
 	require.Error(t, err, "Expected error when trying to truncate a non-existent collection")
 	require.Equal(t, "collection not found", err.Error())
+}
+
+func Test_Client_ListCollections(t *testing.T) {
+	client, mockArango, _, mockLogger, mockMetrics := setupDB(t)
+	mockDB := NewMockDatabase(gomock.NewController(t))
+	mockCollection1 := NewMockCollection(gomock.NewController(t))
+	mockCollection2 := NewMockCollection(gomock.NewController(t))
+
+	mockArango.EXPECT().Database(gomock.Any(), "testDB").Return(mockDB, nil)
+	mockDB.EXPECT().Collections(gomock.Any()).Return([]arangodb.Collection{mockCollection1, mockCollection2}, nil)
+	mockCollection1.EXPECT().Name().Return("testCollection1")
+	mockCollection2.EXPECT().Name().Return("testCollection2")
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_arango_stats", gomock.Any(),
+		gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+
+	names, err := client.ListCollections(context.Background(), "testDB")
+	require.NoError(t, err, "Expected no error while listing collections")
+	require.Equal(t, []string{"testCollection1", "testCollection2"}, names)
+}
+
+func Test_Client_ListCollections_Error(t *testing.T) {
+	client, mockArango, _, mockLogger, mockMetrics := setupDB(t)
+	mockDB := NewMockDatabase(gomock.NewController(t))
+
+	mockArango.EXPECT().Database(gomock.Any(), "testDB").Return(mockDB, nil)
+	mockDB.EXPECT().Collections(gomock.Any()).Return(nil, errCollectionNotFound)
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_arango_stats", gomock.Any(),
+		gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+
+	// Execute
+	names, err := client.ListCollections(context.Background(), "testDB")
+	require.Error(t, err, "collection not found")
+	require.Nil(t, names)
 }

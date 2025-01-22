@@ -218,6 +218,7 @@ func (c *Client) ListDBs(ctx context.Context) ([]string, error) {
 	}
 
 	names := make([]string, len(dbs))
+
 	for _, db := range dbs {
 		if db.Name() != "" {
 			names = append(names, db.Name())
