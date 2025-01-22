@@ -137,14 +137,14 @@ func (s *scyllaBatch) getBatch() *gocql.Batch {
 }
 
 // getFields returns a slice of field pointers from the struct, mapping columns to their corresponding fields.
-func (Client) getFields(columns []string, fieldNameIndex map[string]int, v reflect.Value) []interface{} {
-	fields := make([]interface{}, len(columns))
+func (Client) getFields(columns []string, fieldNameIndex map[string]int, v reflect.Value) []any {
+	fields := make([]any, len(columns))
 
 	for i, column := range columns {
 		if index, ok := fieldNameIndex[column]; ok {
 			fields[i] = v.Field(index).Addr().Interface()
 		} else {
-			fields[i] = new(interface{})
+			fields[i] = new(any)
 		}
 	}
 

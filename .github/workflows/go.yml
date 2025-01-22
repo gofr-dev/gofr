@@ -259,26 +259,46 @@ jobs:
   code_quality:
     name: Code Quality🎖️
     runs-on: ubuntu-latest
-    container: "golangci/golangci-lint:v1.62.0"
     steps:
       - name: Check out code into the Go module directory
         uses: actions/checkout@v4
+
+      - name: Set up Go environment
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache: false
+
       - name: Get dependencies
-        run: go get -v -t -d ./...
-      - name: Lint Root Module
         run: |
-          echo "Linting root module..."
-          golangci-lint run --timeout 9m0s
+         go mod tidy
+
+      - name: Lint Root Module
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: v1.62
+          working-directory: .
+          args: >
+            --out-format=colored-line-number
+            --timeout=5m
+
       - name: Lint Submodules
         run: |
           echo "Searching for submodules..."
+          total_errors=0  # Initialize error counter
           for module in $(find pkg -name "go.mod" -exec dirname {} \;); do
             echo "Linting submodule: $module"
+            # Change directory to the submodule and run golangci-lint
             cd $module
             go mod tidy
-            golangci-lint run --timeout 9m0s
-            cd -
-          done    
+            golangci-lint run --timeout 9m0s || total_errors=$((total_errors + 1))
+            cd -  # Return to the root directory
+          done
+          echo "Total submodule lint errors: $total_errors"
+          if [ $total_errors -gt 0 ]; then
+            echo "Linting failed for $total_errors submodule(s)."
+            exit 1  # Fail the job if there are linting errors in submodules
+          fi
 
   linting_party:
     name: Linting Party🥳
