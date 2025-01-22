@@ -657,7 +657,7 @@ func (a *App) Subscribe(topic string, handler SubscribeFunc) {
 }
 
 // AddRESTHandlers creates and registers CRUD routes for the given struct, the struct should always be passed by reference.
-func (a *App) AddRESTHandlers(object interface{}) error {
+func (a *App) AddRESTHandlers(object any) error {
 	cfg, err := scanEntity(object)
 	if err != nil {
 		a.container.Logger.Errorf(err.Error())

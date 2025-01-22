@@ -265,7 +265,7 @@ func (*Client) createRequest(ctx context.Context, method, url string, params map
 	}
 
 	if method != http.MethodGet {
-		req.Header.Add("content-type", "application/json")
+		req.Header.Add("Content-Type", "application/json")
 	}
 
 	q := req.URL.Query()

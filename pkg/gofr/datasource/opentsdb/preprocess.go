@@ -323,7 +323,7 @@ func areValidParams(query *SubQuery) bool {
 	return true
 }
 
-func isValidTimePoint(timePoint interface{}) bool {
+func isValidTimePoint(timePoint any) bool {
 	if timePoint == nil {
 		return false
 	}

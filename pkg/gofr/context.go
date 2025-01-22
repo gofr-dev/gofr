@@ -67,7 +67,7 @@ func (c *Context) Trace(name string) trace.Span {
 	return span
 }
 
-func (c *Context) Bind(i interface{}) error {
+func (c *Context) Bind(i any) error {
 	return c.Request.Bind(i)
 }
 

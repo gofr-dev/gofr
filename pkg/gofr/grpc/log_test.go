@@ -33,11 +33,11 @@ func TestLoggingInterceptor(t *testing.T) {
 	var (
 		err = errors.New("DB error") //nolint:err113 // We are testing if a dynamic error would work
 
-		successHandler = func(context.Context, interface{}) (interface{}, error) {
+		successHandler = func(context.Context, any) (any, error) {
 			return "success", nil
 		}
 
-		errorHandler = func(context.Context, interface{}) (interface{}, error) {
+		errorHandler = func(context.Context, any) (any, error) {
 			return nil, err
 		}
 	)
@@ -53,7 +53,7 @@ func TestLoggingInterceptor(t *testing.T) {
 		id        string
 		md        metadata.MD
 		handler   grpc.UnaryHandler
-		expOutput interface{}
+		expOutput any
 		err       error
 		expLog    string
 	}{

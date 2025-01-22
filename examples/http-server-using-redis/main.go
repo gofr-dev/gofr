@@ -22,7 +22,7 @@ func main() {
 }
 
 // RedisSetHandler sets a key-value pair in Redis using the Set Command.
-func RedisSetHandler(c *gofr.Context) (interface{}, error) {
+func RedisSetHandler(c *gofr.Context) (any, error) {
 	input := make(map[string]string)
 
 	if err := c.Request.Bind(&input); err != nil {
@@ -40,7 +40,7 @@ func RedisSetHandler(c *gofr.Context) (interface{}, error) {
 }
 
 // RedisGetHandler gets the value from Redis.
-func RedisGetHandler(c *gofr.Context) (interface{}, error) {
+func RedisGetHandler(c *gofr.Context) (any, error) {
 	key := c.PathParam("key")
 
 	value, err := c.Redis.Get(c, key).Result()
@@ -55,7 +55,7 @@ func RedisGetHandler(c *gofr.Context) (interface{}, error) {
 }
 
 // RedisPipelineHandler demonstrates using multiple Redis commands efficiently within a pipeline.
-func RedisPipelineHandler(c *gofr.Context) (interface{}, error) {
+func RedisPipelineHandler(c *gofr.Context) (any, error) {
 	pipe := c.Redis.Pipeline()
 
 	// Add multiple commands to the pipeline

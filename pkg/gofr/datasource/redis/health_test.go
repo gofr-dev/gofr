@@ -40,7 +40,7 @@ func TestRedis_HealthHandlerError(t *testing.T) {
 
 	assert.Equal(t, datasource.Health{
 		Status:  "DOWN",
-		Details: map[string]interface{}{"error": "section (Stats) is not supported", "host": s.Host() + ":" + s.Port()},
+		Details: map[string]any{"error": "section (Stats) is not supported", "host": s.Host() + ":" + s.Port()},
 	}, health)
 }
 

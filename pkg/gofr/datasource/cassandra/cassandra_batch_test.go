@@ -13,7 +13,7 @@ func Test_BatchQuery(t *testing.T) {
 
 	const stmt = "INSERT INTO users (id, name) VALUES(?, ?)"
 
-	values := []interface{}{1, "Test"}
+	values := []any{1, "Test"}
 
 	testCases := []struct {
 		desc     string
@@ -110,9 +110,9 @@ func Test_ExecuteBatchCAS(t *testing.T) {
 
 	testCases := []struct {
 		desc     string
-		dest     interface{}
+		dest     any
 		mockCall func()
-		expRes   interface{}
+		expRes   any
 		expErr   error
 	}{
 		{"success case: struct slice", &mockStructSlice, func() {

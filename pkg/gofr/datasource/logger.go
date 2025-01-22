@@ -7,12 +7,12 @@ package datasource
 // avoiding the cyclical import issue. Idiomatically, interfaces should be defined by packages who are using it; unlike
 // other languages. Also - accept interfaces, return concrete types.
 type Logger interface {
-	Debug(args ...interface{})
-	Debugf(format string, args ...interface{})
-	Info(args ...interface{})
-	Infof(format string, args ...interface{})
-	Error(args ...interface{})
-	Errorf(format string, args ...interface{})
-	Warn(args ...interface{})
-	Warnf(format string, args ...interface{})
+	Debug(args ...any)
+	Debugf(format string, args ...any)
+	Info(args ...any)
+	Infof(format string, args ...any)
+	Error(args ...any)
+	Errorf(format string, args ...any)
+	Warn(args ...any)
+	Warnf(format string, args ...any)
 }

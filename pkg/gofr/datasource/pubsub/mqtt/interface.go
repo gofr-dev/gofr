@@ -13,11 +13,11 @@ import (
 //go:generate go run go.uber.org/mock/mockgen -source=interface.go -destination=mock_interfaces.go -package=mqtt
 
 type Logger interface {
-	Infof(format string, args ...interface{})
-	Debug(args ...interface{})
-	Debugf(format string, args ...interface{})
-	Warnf(format string, args ...interface{})
-	Errorf(format string, args ...interface{})
+	Infof(format string, args ...any)
+	Debug(args ...any)
+	Debugf(format string, args ...any)
+	Warnf(format string, args ...any)
+	Errorf(format string, args ...any)
 }
 
 type Metrics interface {

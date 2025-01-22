@@ -12,17 +12,17 @@ import (
 
 type Redis interface {
 	Get(ctx context.Context, key string) *goRedis.StringCmd
-	Set(ctx context.Context, key string, value interface{}, expiration time.Duration) *goRedis.StatusCmd
+	Set(ctx context.Context, key string, value any, expiration time.Duration) *goRedis.StatusCmd
 	Del(ctx context.Context, keys ...string) *goRedis.IntCmd
 	Rename(ctx context.Context, key, newKey string) *goRedis.StatusCmd
 }
 
 type SQL interface {
-	Query(query string, args ...interface{}) (*sql.Rows, error)
-	QueryRow(query string, args ...interface{}) *sql.Row
-	QueryRowContext(ctx context.Context, query string, args ...interface{}) *sql.Row
-	Exec(query string, args ...interface{}) (sql.Result, error)
-	ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
+	Query(query string, args ...any) (*sql.Rows, error)
+	QueryRow(query string, args ...any) *sql.Row
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+	Exec(query string, args ...any) (sql.Result, error)
+	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
 }
 
 type PubSub interface {
@@ -39,7 +39,7 @@ type Clickhouse interface {
 }
 
 type Cassandra interface {
-	Exec(query string, args ...interface{}) error
+	Exec(query string, args ...any) error
 	NewBatch(name string, batchType int) error
 	BatchQuery(name, stmt string, values ...any) error
 	ExecuteBatch(name string) error
