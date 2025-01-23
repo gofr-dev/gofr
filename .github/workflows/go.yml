@@ -77,7 +77,7 @@ jobs:
       - name: Test
         run: |
           export APP_ENV=test
-          go test gofr.dev/examples/... -v -short -coverprofile packageWithpbgo.cov -coverpkg=gofr.dev/examples/...
+          go test gofr.dev/examples/... -v -coverprofile packageWithpbgo.cov -coverpkg=gofr.dev/examples/...
           grep -vE '^gofr\.dev\/.*\.pb\.go' packageWithpbgo.cov > profile.cov
           go tool cover -func profile.cov
 
@@ -245,6 +245,14 @@ jobs:
         run: |
           awk '!/^mode: / && FNR==1{print "mode: set"} {print}' ./Example-Test-Report/profile.cov > merged_profile.cov
           tail -n +2 ./PKG-Coverage-Report/profile.cov >> merged_profile.cov
+
+      - name: Display Merged Coverage
+        working-directory: artifacts
+        run: |
+          echo "Merged coverage summary:"
+          go tool cover -func=merged_profile.cov
+          codeCoverage=$(go tool cover -func=merged_profile.cov | grep total | awk '{print $3}')
+          echo "Merged Coverage Percentage: ${codeCoverage%?}%"
 
       - name: Upload
         uses: paambaati/codeclimate-action@v9.0.0
