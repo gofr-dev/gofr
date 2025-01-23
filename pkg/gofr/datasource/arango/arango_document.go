@@ -3,6 +3,8 @@ package arango
 import (
 	"context"
 	"time"
+
+	"github.com/arangodb/go-driver/v2/arangodb"
 )
 
 type Document struct {
@@ -11,12 +13,7 @@ type Document struct {
 
 // CreateDocument creates a new document in the specified collection.
 func (d *Document) CreateDocument(ctx context.Context, dbName, collectionName string, document any) (string, error) {
-	tracerCtx, span := d.client.addTrace(ctx, "createDocument", map[string]string{"collection": collectionName})
-	startTime := time.Now()
-
-	defer d.client.sendOperationStats(&QueryLog{Query: "createDocument", Collection: collectionName}, startTime, "createDocument", span)
-
-	collection, err := d.client.DB.getCollection(tracerCtx, dbName, collectionName)
+	collection, tracerCtx, err := executeCollectionOperation(ctx, *d, dbName, collectionName, "createDocument")
 	if err != nil {
 		return "", err
 	}
@@ -31,12 +28,7 @@ func (d *Document) CreateDocument(ctx context.Context, dbName, collectionName st
 
 // GetDocument retrieves a document by its ID from the specified collection.
 func (d *Document) GetDocument(ctx context.Context, dbName, collectionName, documentID string, result any) error {
-	tracerCtx, span := d.client.addTrace(ctx, "getDocument", map[string]string{"collection": collectionName})
-	startTime := time.Now()
-
-	defer d.client.sendOperationStats(&QueryLog{Query: "getDocument", Collection: collectionName, ID: documentID}, startTime, "getDocument", span)
-
-	collection, err := d.client.DB.getCollection(tracerCtx, dbName, collectionName)
+	collection, tracerCtx, err := executeCollectionOperation(ctx, *d, dbName, collectionName, "getDocument")
 	if err != nil {
 		return err
 	}
@@ -48,13 +40,7 @@ func (d *Document) GetDocument(ctx context.Context, dbName, collectionName, docu
 
 // UpdateDocument updates an existing document in the specified collection.
 func (d *Document) UpdateDocument(ctx context.Context, dbName, collectionName, documentID string, document any) error {
-	tracerCtx, span := d.client.addTrace(ctx, "updateDocument", map[string]string{"collection": collectionName})
-	startTime := time.Now()
-
-	defer d.client.sendOperationStats(&QueryLog{Query: "updateDocument", Collection: collectionName,
-		ID: documentID}, startTime, "updateDocument", span)
-
-	collection, err := d.client.DB.getCollection(tracerCtx, dbName, collectionName)
+	collection, tracerCtx, err := executeCollectionOperation(ctx, *d, dbName, collectionName, "updateDocument")
 	if err != nil {
 		return err
 	}
@@ -66,13 +52,7 @@ func (d *Document) UpdateDocument(ctx context.Context, dbName, collectionName, d
 
 // DeleteDocument deletes a document by its ID from the specified collection.
 func (d *Document) DeleteDocument(ctx context.Context, dbName, collectionName, documentID string) error {
-	tracerCtx, span := d.client.addTrace(ctx, "deleteDocument", map[string]string{"collection": collectionName})
-	startTime := time.Now()
-
-	defer d.client.sendOperationStats(&QueryLog{Query: "deleteDocument", Collection: collectionName,
-		ID: documentID}, startTime, "deleteDocument", span)
-
-	collection, err := d.client.DB.getCollection(tracerCtx, dbName, collectionName)
+	collection, tracerCtx, err := executeCollectionOperation(ctx, *d, dbName, collectionName, "deleteDocument")
 	if err != nil {
 		return err
 	}
@@ -84,12 +64,7 @@ func (d *Document) DeleteDocument(ctx context.Context, dbName, collectionName, d
 
 // CreateEdgeDocument creates a new edge document between two vertices.
 func (d *Document) CreateEdgeDocument(ctx context.Context, dbName, collectionName, from, to string, document any) (string, error) {
-	tracerCtx, span := d.client.addTrace(ctx, "createEdgeDocument", map[string]string{"collection": collectionName})
-	startTime := time.Now()
-
-	defer d.client.sendOperationStats(&QueryLog{Query: "createEdgeDocument", Collection: collectionName}, startTime, "createEdgeDocument", span)
-
-	collection, err := d.client.DB.getCollection(tracerCtx, dbName, collectionName)
+	collection, tracerCtx, err := executeCollectionOperation(ctx, *d, dbName, collectionName, "createEdgeDocument")
 	if err != nil {
 		return "", err
 	}
@@ -104,4 +79,20 @@ func (d *Document) CreateEdgeDocument(ctx context.Context, dbName, collectionNam
 	}
 
 	return meta.Key, nil
+}
+
+func executeCollectionOperation(ctx context.Context, d Document, dbName, collectionName,
+	operation string) (arangodb.Collection, context.Context, error) {
+	tracerCtx, span := d.client.addTrace(ctx, operation, map[string]string{"collection": collectionName})
+	startTime := time.Now()
+
+	defer d.client.sendOperationStats(&QueryLog{Query: operation,
+		Collection: collectionName}, startTime, operation, span)
+
+	collection, err := d.client.DB.getCollection(tracerCtx, dbName, collectionName)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return collection, tracerCtx, nil
 }

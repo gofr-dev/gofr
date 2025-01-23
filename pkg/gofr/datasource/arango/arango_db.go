@@ -2,8 +2,9 @@ package arango
 
 import (
 	"context"
-	"github.com/arangodb/go-driver/v2/arangodb"
 	"time"
+
+	"github.com/arangodb/go-driver/v2/arangodb"
 )
 
 type DB struct {
@@ -112,7 +113,8 @@ func (d *DB) TruncateCollection(ctx context.Context, database, collectionName st
 	tracerCtx, span := d.client.addTrace(ctx, "truncateCollection", map[string]string{"collection": collectionName})
 	startTime := time.Now()
 
-	defer d.client.sendOperationStats(&QueryLog{Query: "truncateCollection", Collection: collectionName}, startTime, "truncateCollection", span)
+	defer d.client.sendOperationStats(&QueryLog{Query: "truncateCollection", Collection: collectionName},
+		startTime, "truncateCollection", span)
 
 	collection, err := d.getCollection(tracerCtx, database, collectionName)
 	if err != nil {
