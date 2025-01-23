@@ -247,7 +247,8 @@ jobs:
         run: |
           awk '!/^mode: / && FNR==1{print "mode: set"} {print}' ./Example-Test-Report/profile.cov > merged_profile.cov
           tail -n +2 ./PKG-Coverage-Report/profile.cov >> merged_profile.cov
-        # Echo the merged coverage percentage
+          
+          # Echo the merged coverage percentage
           echo "Merged coverage summary:"
           go tool cover -func=merged_profile.cov
 
