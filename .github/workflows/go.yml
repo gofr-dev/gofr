@@ -159,17 +159,14 @@ jobs:
         working-directory: artifacts
         run: |
           codeCoverage=$(go tool cover -func=merged_profile.cov | grep total | awk '{print $3}')
-          codeCoverage=${codeCoverage%?}
+          echo codeCoverage=${codeCoverage%?}
           echo "CODE_COVERAGE=$codeCoverage" >> $GITHUB_ENV
-          echo ${{ env.CODE_COVERAGE }}
 
-#      - name: Check if code-coverage is greater than threshold
-#        run: |
-#          codeCoverage=${{ env.CODE_COVERAGE }}
-#          if (( $(echo "$codeCoverage < 92" | bc -l) )); then
-#            echo "code coverage cannot be less than 92%, currently its $codeCoverage%"
-#            exit 1
-#          fi
+      - name: Check if code-coverage is greater than threshold
+        run: |
+          codeCoverage=${{ env.CODE_COVERAGE }}
+          echo "currently code coverage is $codeCoverage%"
+
   Submodule-Unit-Testing:
     name: Submodule Unit Testing (v${{ matrix.go-version }})🛠
     runs-on: ubuntu-latest
