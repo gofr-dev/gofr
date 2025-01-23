@@ -226,7 +226,7 @@ func Test_InsertCommands(t *testing.T) {
 		cl.Database = mt.DB
 		mt.AddMockResponses(mtest.CreateSuccessResponse())
 
-		doc := map[string]interface{}{"name": "Aryan"}
+		doc := map[string]any{"name": "Aryan"}
 
 		resp, err := cl.InsertOne(context.Background(), mt.Coll.Name(), doc)
 
@@ -242,7 +242,7 @@ func Test_InsertCommands(t *testing.T) {
 			Message: "duplicate key error",
 		}))
 
-		doc := map[string]interface{}{"name": "Aryan"}
+		doc := map[string]any{"name": "Aryan"}
 
 		resp, err := cl.InsertOne(context.Background(), mt.Coll.Name(), doc)
 
@@ -254,9 +254,9 @@ func Test_InsertCommands(t *testing.T) {
 		cl.Database = mt.DB
 		mt.AddMockResponses(mtest.CreateSuccessResponse())
 
-		doc := map[string]interface{}{"name": "Aryan"}
+		doc := map[string]any{"name": "Aryan"}
 
-		resp, err := cl.InsertMany(context.Background(), mt.Coll.Name(), []interface{}{doc, doc})
+		resp, err := cl.InsertMany(context.Background(), mt.Coll.Name(), []any{doc, doc})
 
 		assert.NotNil(t, resp)
 		require.NoError(t, err)
@@ -270,9 +270,9 @@ func Test_InsertCommands(t *testing.T) {
 			Message: "duplicate key error",
 		}))
 
-		doc := map[string]interface{}{"name": "Aryan"}
+		doc := map[string]any{"name": "Aryan"}
 
-		resp, err := cl.InsertMany(context.Background(), mt.Coll.Name(), []interface{}{doc, doc})
+		resp, err := cl.InsertMany(context.Background(), mt.Coll.Name(), []any{doc, doc})
 
 		assert.Nil(t, resp)
 		require.Error(t, err)
@@ -330,7 +330,7 @@ func Test_FindMultipleCommands(t *testing.T) {
 	mt.Run("FindSuccess", func(mt *mtest.T) {
 		cl.Database = mt.DB
 
-		var foundDocuments []interface{}
+		var foundDocuments []any
 
 		id1 := primitive.NewObjectID()
 
@@ -362,7 +362,7 @@ func Test_FindMultipleCommands(t *testing.T) {
 	mt.Run("FindCursorParseError", func(mt *mtest.T) {
 		cl.Database = mt.DB
 
-		var foundDocuments []interface{}
+		var foundDocuments []any
 
 		id1 := primitive.NewObjectID()
 
@@ -677,7 +677,7 @@ func TestClient_StartSession(t *testing.T) {
 		cl.Database = mt.DB
 		mt.AddMockResponses(mtest.CreateSuccessResponse())
 
-		doc := map[string]interface{}{"name": "Aryan"}
+		doc := map[string]any{"name": "Aryan"}
 
 		resp, err := cl.InsertOne(context.Background(), mt.Coll.Name(), doc)
 

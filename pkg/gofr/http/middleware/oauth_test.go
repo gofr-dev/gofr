@@ -318,10 +318,10 @@ func TestOAuthJSONUnmarshalError(t *testing.T) {
 type MockProvider struct {
 }
 
-func (*MockProvider) GetWithHeaders(context.Context, string, map[string]interface{},
+func (*MockProvider) GetWithHeaders(context.Context, string, map[string]any,
 	map[string]string) (*http.Response, error) {
 	// Marshal the JSON body
-	responseBody := map[string]interface{}{
+	responseBody := map[string]any{
 		"keys": []map[string]string{
 			{
 				"kty": "RSA",
@@ -356,7 +356,7 @@ func (*MockProvider) GetWithHeaders(context.Context, string, map[string]interfac
 type MockErrorProvider struct {
 }
 
-func (*MockErrorProvider) GetWithHeaders(context.Context, string, map[string]interface{},
+func (*MockErrorProvider) GetWithHeaders(context.Context, string, map[string]any,
 	map[string]string) (*http.Response, error) {
 	// Marshal the JSON body
 	return nil, oauthError{msg: "response error"}
@@ -379,7 +379,7 @@ func (*CustomReader) Read([]byte) (int, error) {
 
 type MockReaderErrorProvider struct{}
 
-func (*MockReaderErrorProvider) GetWithHeaders(context.Context, string, map[string]interface{},
+func (*MockReaderErrorProvider) GetWithHeaders(context.Context, string, map[string]any,
 	map[string]string) (*http.Response, error) {
 	// Create a custom reader that returns an error
 	body := &CustomReader{}
@@ -395,7 +395,7 @@ func (*MockReaderErrorProvider) GetWithHeaders(context.Context, string, map[stri
 
 type MockJSONResponseErrorProvider struct{}
 
-func (*MockJSONResponseErrorProvider) GetWithHeaders(context.Context, string, map[string]interface{},
+func (*MockJSONResponseErrorProvider) GetWithHeaders(context.Context, string, map[string]any,
 	map[string]string) (*http.Response, error) {
 	// Create a body with invalid JSON
 	body := strings.NewReader("invalid JSON")

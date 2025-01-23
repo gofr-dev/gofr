@@ -32,7 +32,7 @@ func main() {
 	app := gofr.New()
 
 	// register route greet
-	app.GET("/greet", func(ctx *gofr.Context) (interface{}, error) {
+	app.GET("/greet", func(ctx *gofr.Context) (any, error) {
 		return "Hello World!", nil
 	})
 
@@ -73,7 +73,7 @@ The `hello-world` server involves three essential steps:
    **Good To Know**
 
 > In Go, functions are first-class citizens, allowing easy handler definition and reference.
-> HTTP Handler functions should follow the `func(ctx *gofr.Context) (interface{}, error)` signature.
+> HTTP Handler functions should follow the `func(ctx *gofr.Context) (any, error)` signature.
 > They take a context as input, returning two values: the response data and an error (set to `nil` when there is no error).
 
 GoFr {% new-tab-link  newtab=false title="context" href="/docs/references/context" /%} `ctx *gofr.Context` serves as a wrapper for requests, responses, and dependencies, providing various functionalities.

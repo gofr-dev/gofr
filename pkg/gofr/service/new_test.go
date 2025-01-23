@@ -41,18 +41,18 @@ func TestHTTPService_createAndSendRequest(t *testing.T) {
 
 	tests := []struct {
 		desc           string
-		queryParams    map[string]interface{}
+		queryParams    map[string]any
 		body           []byte
 		headers        map[string]string
 		expQueryParam  string
 		expContentType string
 	}{
-		{"with query params, body and header", map[string]interface{}{"key": "value", "name": []string{"gofr", "test"}},
+		{"with query params, body and header", map[string]any{"key": "value", "name": []string{"gofr", "test"}},
 			[]byte("{Test Body}"), map[string]string{"header1": "value1"}, "key=value&name=test", "application/json"},
-		{"with query params, body, header and content type", map[string]interface{}{"key": "value", "name": []string{"gofr", "test"}},
+		{"with query params, body, header and content type", map[string]any{"key": "value", "name": []string{"gofr", "test"}},
 			[]byte("{Test Body}"), map[string]string{"header1": "value1", "content-type": "application/json"},
 			"key=value&name=test", "application/json"},
-		{"with query params, body, header and content type xml", map[string]interface{}{"key": "value", "name": []string{"gofr", "test"}},
+		{"with query params, body, header and content type xml", map[string]any{"key": "value", "name": []string{"gofr", "test"}},
 			[]byte("{Test Body}"), map[string]string{"header1": "value1", "content-type": "application/xml"},
 			"key=value&name=test", "application/xml"},
 		{"without query params, body, header and content type", nil, []byte("{Test Body}"),
@@ -74,8 +74,8 @@ func TestHTTPService_createAndSendRequest(t *testing.T) {
 			assert.Equal(t, http.MethodPost, r.Method)
 			assert.Equal(t, "/test-path", r.URL.Path)
 			assert.Equal(t, tc.expQueryParam, r.URL.RawQuery)
-			assert.Contains(t, "value1", r.Header.Get("header1"))
-			assert.Contains(t, tc.expContentType, r.Header.Get("content-type"))
+			assert.Contains(t, "value1", r.Header.Get("Header1"))
+			assert.Contains(t, tc.expContentType, r.Header.Get("Content-Type"))
 			assert.Equal(t, string(tc.body), string(body))
 
 			w.WriteHeader(http.StatusOK)
@@ -129,7 +129,7 @@ func TestHTTPService_Get(t *testing.T) {
 	// TODO : Nil Correlation ID is coming in logs, it has to be fixed
 
 	resp, err := service.Get(context.Background(), "test-path",
-		map[string]interface{}{"key": "value", "name": []string{"gofr", "test"}})
+		map[string]any{"key": "value", "name": []string{"gofr", "test"}})
 
 	if resp != nil {
 		defer resp.Body.Close()
@@ -145,7 +145,7 @@ func TestHTTPService_GetWithHeaders(t *testing.T) {
 		assert.Equal(t, http.MethodGet, r.Method)
 		assert.Equal(t, "/test-path", r.URL.Path)
 		assert.Equal(t, "key=value&name=test", r.URL.RawQuery)
-		assert.Contains(t, "value1", r.Header.Get("header1"))
+		assert.Contains(t, "value1", r.Header.Get("Header1"))
 
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -161,7 +161,7 @@ func TestHTTPService_GetWithHeaders(t *testing.T) {
 	// TODO : Nil Correlation ID is coming in logs, it has to be fixed
 
 	resp, err := service.GetWithHeaders(context.Background(), "test-path",
-		map[string]interface{}{"key": "value", "name": []string{"gofr", "test"}},
+		map[string]any{"key": "value", "name": []string{"gofr", "test"}},
 		map[string]string{"header1": "value1"})
 
 	if resp != nil {
@@ -202,7 +202,7 @@ func TestHTTPService_Put(t *testing.T) {
 	// TODO : Nil Correlation ID is coming in logs, it has to be fixed
 
 	resp, err := service.Put(context.Background(), "test-path",
-		map[string]interface{}{"key": "value", "name": []string{"gofr", "test"}}, []byte("{Test Body}"))
+		map[string]any{"key": "value", "name": []string{"gofr", "test"}}, []byte("{Test Body}"))
 
 	if resp != nil {
 		defer resp.Body.Close()
@@ -226,7 +226,7 @@ func TestHTTPService_PutWithHeaders(t *testing.T) {
 		assert.Equal(t, http.MethodPut, r.Method)
 		assert.Equal(t, "/test-path", r.URL.Path)
 		assert.Equal(t, "key=value&name=test", r.URL.RawQuery)
-		assert.Contains(t, "value1", r.Header.Get("header1"))
+		assert.Contains(t, "value1", r.Header.Get("Header1"))
 		assert.Contains(t, "Test Body", string(body))
 
 		w.WriteHeader(http.StatusOK)
@@ -243,7 +243,7 @@ func TestHTTPService_PutWithHeaders(t *testing.T) {
 	// TODO : Nil Correlation ID is coming in logs, it has to be fixed
 
 	resp, err := service.PutWithHeaders(context.Background(), "test-path",
-		map[string]interface{}{"key": "value", "name": []string{"gofr", "test"}}, []byte("{Test Body}"),
+		map[string]any{"key": "value", "name": []string{"gofr", "test"}}, []byte("{Test Body}"),
 		map[string]string{"header1": "value1"})
 
 	if resp != nil {
@@ -284,7 +284,7 @@ func TestHTTPService_Patch(t *testing.T) {
 	// TODO : Nil Correlation ID is coming in logs, it has to be fixed
 
 	resp, err := service.Patch(context.Background(), "test-path",
-		map[string]interface{}{"key": "value", "name": []string{"gofr", "test"}}, []byte("{Test Body}"))
+		map[string]any{"key": "value", "name": []string{"gofr", "test"}}, []byte("{Test Body}"))
 
 	if resp != nil {
 		defer resp.Body.Close()
@@ -308,7 +308,7 @@ func TestHTTPService_PatchWithHeaders(t *testing.T) {
 		assert.Equal(t, http.MethodPut, r.Method)
 		assert.Equal(t, "/test-path", r.URL.Path)
 		assert.Equal(t, "key=value&name=test", r.URL.RawQuery)
-		assert.Contains(t, "value1", r.Header.Get("header1"))
+		assert.Contains(t, "value1", r.Header.Get("Header1"))
 		assert.Contains(t, "Test Body", string(body))
 
 		w.WriteHeader(http.StatusOK)
@@ -325,7 +325,7 @@ func TestHTTPService_PatchWithHeaders(t *testing.T) {
 	// TODO : Nil Correlation ID is coming in logs, it has to be fixed
 
 	resp, err := service.PutWithHeaders(context.Background(), "test-path",
-		map[string]interface{}{"key": "value", "name": []string{"gofr", "test"}}, []byte("{Test Body}"),
+		map[string]any{"key": "value", "name": []string{"gofr", "test"}}, []byte("{Test Body}"),
 		map[string]string{"header1": "value1"})
 
 	if resp != nil {
@@ -366,7 +366,7 @@ func TestHTTPService_Post(t *testing.T) {
 	// TODO : Nil Correlation ID is coming in logs, it has to be fixed
 
 	resp, err := service.Post(context.Background(), "test-path",
-		map[string]interface{}{"key": "value", "name": []string{"gofr", "test"}}, []byte("{Test Body}"))
+		map[string]any{"key": "value", "name": []string{"gofr", "test"}}, []byte("{Test Body}"))
 
 	if resp != nil {
 		defer resp.Body.Close()
@@ -390,7 +390,7 @@ func TestHTTPService_PostWithHeaders(t *testing.T) {
 		assert.Equal(t, http.MethodPost, r.Method)
 		assert.Equal(t, "/test-path", r.URL.Path)
 		assert.Equal(t, "key=value&name=test", r.URL.RawQuery)
-		assert.Contains(t, "value1", r.Header.Get("header1"))
+		assert.Contains(t, "value1", r.Header.Get("Header1"))
 		assert.Contains(t, "Test Body", string(body))
 
 		w.WriteHeader(http.StatusOK)
@@ -407,7 +407,7 @@ func TestHTTPService_PostWithHeaders(t *testing.T) {
 	// TODO : Nil Correlation ID is coming in logs, it has to be fixed
 
 	resp, err := service.PostWithHeaders(context.Background(), "test-path",
-		map[string]interface{}{"key": "value", "name": []string{"gofr", "test"}}, []byte("{Test Body}"),
+		map[string]any{"key": "value", "name": []string{"gofr", "test"}}, []byte("{Test Body}"),
 		map[string]string{"header1": "value1"})
 
 	if resp != nil {
@@ -469,7 +469,7 @@ func TestHTTPService_DeleteWithHeaders(t *testing.T) {
 
 		assert.Equal(t, http.MethodDelete, r.Method)
 		assert.Equal(t, "/test-path", r.URL.Path)
-		assert.Contains(t, "value1", r.Header.Get("header1"))
+		assert.Contains(t, "value1", r.Header.Get("Header1"))
 		assert.Contains(t, "Test Body", string(body))
 
 		w.WriteHeader(http.StatusOK)
@@ -506,7 +506,7 @@ func TestHTTPService_createAndSendRequestCreateRequestFailure(t *testing.T) {
 	ctx := context.Background()
 	// when params value is of type []string then last value is sent in request
 	resp, err := service.createAndSendRequest(ctx,
-		"!@#$", "test-path", map[string]interface{}{"key": "value", "name": []string{"gofr", "test"}},
+		"!@#$", "test-path", map[string]any{"key": "value", "name": []string{"gofr", "test"}},
 		[]byte("{Test Body}"), map[string]string{"header1": "value1"})
 
 	if resp != nil {
@@ -535,7 +535,7 @@ func TestHTTPService_createAndSendRequestServerError(t *testing.T) {
 
 	// when params value is of type []string then last value is sent in request
 	resp, err := service.createAndSendRequest(ctx,
-		http.MethodPost, "test-path", map[string]interface{}{"key": "value", "name": []string{"gofr", "test"}},
+		http.MethodPost, "test-path", map[string]any{"key": "value", "name": []string{"gofr", "test"}},
 		[]byte("{Test Body}"), map[string]string{"header1": "value1"})
 
 	if resp != nil {

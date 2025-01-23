@@ -26,10 +26,10 @@ type DB struct {
 }
 
 type Log struct {
-	Type     string        `json:"type"`
-	Query    string        `json:"query"`
-	Duration int64         `json:"duration"`
-	Args     []interface{} `json:"args,omitempty"`
+	Type     string `json:"type"`
+	Query    string `json:"query"`
+	Duration int64  `json:"duration"`
+	Args     []any  `json:"args,omitempty"`
 }
 
 func (l *Log) PrettyPrint(writer io.Writer) {
@@ -44,7 +44,7 @@ func clean(query string) string {
 	return query
 }
 
-func (d *DB) sendOperationStats(start time.Time, queryType, query string, args ...interface{}) {
+func (d *DB) sendOperationStats(start time.Time, queryType, query string, args ...any) {
 	duration := time.Since(start).Microseconds()
 
 	d.logger.Debug(&Log{
@@ -65,7 +65,7 @@ func getOperationType(query string) string {
 	return words[0]
 }
 
-func (d *DB) Query(query string, args ...interface{}) (*sql.Rows, error) {
+func (d *DB) Query(query string, args ...any) (*sql.Rows, error) {
 	defer d.sendOperationStats(time.Now(), "Query", query, args...)
 	return d.DB.Query(query, args...)
 }
@@ -79,22 +79,22 @@ func (d *DB) Dialect() string {
 	return d.config.Dialect
 }
 
-func (d *DB) QueryRow(query string, args ...interface{}) *sql.Row {
+func (d *DB) QueryRow(query string, args ...any) *sql.Row {
 	defer d.sendOperationStats(time.Now(), "QueryRow", query, args...)
 	return d.DB.QueryRow(query, args...)
 }
 
-func (d *DB) QueryRowContext(ctx context.Context, query string, args ...interface{}) *sql.Row {
+func (d *DB) QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row {
 	defer d.sendOperationStats(time.Now(), "QueryRowContext", query, args...)
 	return d.DB.QueryRowContext(ctx, query, args...)
 }
 
-func (d *DB) Exec(query string, args ...interface{}) (sql.Result, error) {
+func (d *DB) Exec(query string, args ...any) (sql.Result, error) {
 	defer d.sendOperationStats(time.Now(), "Exec", query, args...)
 	return d.DB.Exec(query, args...)
 }
 
-func (d *DB) ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
+func (d *DB) ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error) {
 	defer d.sendOperationStats(time.Now(), "ExecContext", query, args...)
 	return d.DB.ExecContext(ctx, query, args...)
 }
@@ -128,7 +128,7 @@ type Tx struct {
 	metrics Metrics
 }
 
-func (t *Tx) sendOperationStats(start time.Time, queryType, query string, args ...interface{}) {
+func (t *Tx) sendOperationStats(start time.Time, queryType, query string, args ...any) {
 	duration := time.Since(start).Microseconds()
 
 	t.logger.Debug(&Log{
@@ -142,27 +142,27 @@ func (t *Tx) sendOperationStats(start time.Time, queryType, query string, args .
 		"database", t.config.Database, "type", getOperationType(query))
 }
 
-func (t *Tx) Query(query string, args ...interface{}) (*sql.Rows, error) {
+func (t *Tx) Query(query string, args ...any) (*sql.Rows, error) {
 	defer t.sendOperationStats(time.Now(), "TxQuery", query, args...)
 	return t.Tx.Query(query, args...)
 }
 
-func (t *Tx) QueryRow(query string, args ...interface{}) *sql.Row {
+func (t *Tx) QueryRow(query string, args ...any) *sql.Row {
 	defer t.sendOperationStats(time.Now(), "TxQueryRow", query, args...)
 	return t.Tx.QueryRow(query, args...)
 }
 
-func (t *Tx) QueryRowContext(ctx context.Context, query string, args ...interface{}) *sql.Row {
+func (t *Tx) QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row {
 	defer t.sendOperationStats(time.Now(), "TxQueryRowContext", query, args...)
 	return t.Tx.QueryRowContext(ctx, query, args...)
 }
 
-func (t *Tx) Exec(query string, args ...interface{}) (sql.Result, error) {
+func (t *Tx) Exec(query string, args ...any) (sql.Result, error) {
 	defer t.sendOperationStats(time.Now(), "TxExec", query, args...)
 	return t.Tx.Exec(query, args...)
 }
 
-func (t *Tx) ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
+func (t *Tx) ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error) {
 	defer t.sendOperationStats(time.Now(), "TxExecContext", query, args...)
 	return t.Tx.ExecContext(ctx, query, args...)
 }
@@ -211,7 +211,7 @@ func (t *Tx) Rollback() error {
 //     db.Select(ctx, &users, "select * from users")
 //
 //nolint:exhaustive // We just want to take care of slice and struct in this case.
-func (d *DB) Select(ctx context.Context, data interface{}, query string, args ...interface{}) {
+func (d *DB) Select(ctx context.Context, data any, query string, args ...any) {
 	// If context is done, it is not needed
 	if ctx.Err() != nil {
 		return
@@ -240,7 +240,7 @@ func (d *DB) Select(ctx context.Context, data interface{}, query string, args ..
 	}
 }
 
-func (d *DB) selectSlice(ctx context.Context, query string, args []interface{}, rvo, rv reflect.Value) {
+func (d *DB) selectSlice(ctx context.Context, query string, args []any, rvo, rv reflect.Value) {
 	rows, err := d.QueryContext(ctx, query, args...)
 	if err != nil {
 		d.logger.Errorf("error running query: %v", err)
@@ -269,7 +269,7 @@ func (d *DB) selectSlice(ctx context.Context, query string, args []interface{}, 
 	}
 }
 
-func (d *DB) selectStruct(ctx context.Context, query string, args []interface{}, rv reflect.Value) {
+func (d *DB) selectStruct(ctx context.Context, query string, args []any, rv reflect.Value) {
 	rows, err := d.QueryContext(ctx, query, args...)
 	if err != nil {
 		d.logger.Errorf("error running query: %v", err)
@@ -310,14 +310,14 @@ func (*DB) rowsToStruct(rows *sql.Rows, vo reflect.Value) {
 		fieldNameIndex[name] = i
 	}
 
-	fields := []interface{}{}
+	fields := []any{}
 	columns, _ := rows.Columns()
 
 	for _, c := range columns {
 		if i, ok := fieldNameIndex[c]; ok {
 			fields = append(fields, v.Field(i).Addr().Interface())
 		} else {
-			var i interface{}
+			var i any
 			fields = append(fields, &i)
 		}
 	}
