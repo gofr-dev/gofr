@@ -46,8 +46,7 @@ func TestGofr_readConfig(t *testing.T) {
 }
 
 func TestGoFr_isPortAvailable(t *testing.T) {
-	port := testutil.GetFreePort(t)
-	metricsPort := testutil.GetFreePort(t)
+	configs := testutil.NewServerConfigs(t)
 
 	tests := []struct {
 		name        string
@@ -60,30 +59,23 @@ func TestGoFr_isPortAvailable(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if !tt.isAvailable {
-				t.Setenv("HTTP_PORT", strconv.Itoa(port))
-				t.Setenv("METRICS_PORT", strconv.Itoa(metricsPort))
-
 				g := New()
 
 				go g.Run()
 				time.Sleep(100 * time.Millisecond)
 			}
 
-			isAvailable := isPortAvailable(port)
+			isAvailable := isPortAvailable(configs.HTTPPort)
 			require.Equal(t, tt.isAvailable, isAvailable)
 		})
 	}
 }
 
 func TestGofr_ServerRoutes(t *testing.T) {
-	port := testutil.GetFreePort(t)
-	metricsPort := testutil.GetFreePort(t)
-
-	t.Setenv("HTTP_PORT", strconv.Itoa(port))
-	t.Setenv("METRICS_PORT", strconv.Itoa(metricsPort))
+	_ = testutil.NewServerConfigs(t)
 
 	type response struct {
-		Data interface{} `json:"data"`
+		Data any `json:"data"`
 	}
 
 	testCases := []struct {
@@ -106,32 +98,32 @@ func TestGofr_ServerRoutes(t *testing.T) {
 
 	g := New()
 
-	g.GET("/hello", func(*Context) (interface{}, error) {
+	g.GET("/hello", func(*Context) (any, error) {
 		return helloWorld, nil
 	})
 
 	// using add() func
-	g.add(http.MethodGet, "/hello2", func(*Context) (interface{}, error) {
+	g.add(http.MethodGet, "/hello2", func(*Context) (any, error) {
 		return helloWorld, nil
 	})
 
-	g.PUT("/hello", func(*Context) (interface{}, error) {
+	g.PUT("/hello", func(*Context) (any, error) {
 		return helloWorld, nil
 	})
 
-	g.POST("/hello", func(*Context) (interface{}, error) {
+	g.POST("/hello", func(*Context) (any, error) {
 		return helloWorld, nil
 	})
 
-	g.GET("/params", func(c *Context) (interface{}, error) {
+	g.GET("/params", func(c *Context) (any, error) {
 		return fmt.Sprintf("Hello %s!", c.Param("name")), nil
 	})
 
-	g.DELETE("/delete", func(*Context) (interface{}, error) {
+	g.DELETE("/delete", func(*Context) (any, error) {
 		return "Success", nil
 	})
 
-	g.PATCH("/patch", func(*Context) (interface{}, error) {
+	g.PATCH("/patch", func(*Context) (any, error) {
 		return "Success", nil
 	})
 
@@ -139,7 +131,7 @@ func TestGofr_ServerRoutes(t *testing.T) {
 		w := httptest.NewRecorder()
 		r := httptest.NewRequest(tc.method, tc.target, http.NoBody)
 
-		r.Header.Set("content-type", "application/json")
+		r.Header.Set("Content-Type", "application/json")
 
 		g.httpServer.router.ServeHTTP(w, r)
 
@@ -156,15 +148,11 @@ func TestGofr_ServerRoutes(t *testing.T) {
 }
 
 func TestGofr_ServerRun(t *testing.T) {
-	port := testutil.GetFreePort(t)
-	metricsPort := testutil.GetFreePort(t)
-
-	t.Setenv("HTTP_PORT", strconv.Itoa(port))
-	t.Setenv("METRICS_PORT", strconv.Itoa(metricsPort))
+	configs := testutil.NewServerConfigs(t)
 
 	g := New()
 
-	g.GET("/hello", func(*Context) (interface{}, error) {
+	g.GET("/hello", func(*Context) (any, error) {
 		return helloWorld, nil
 	})
 
@@ -176,7 +164,7 @@ func TestGofr_ServerRun(t *testing.T) {
 	}
 
 	re, _ := http.NewRequestWithContext(context.Background(), http.MethodGet,
-		"http://localhost:"+fmt.Sprint(port)+"/hello", http.NoBody)
+		"http://localhost:"+fmt.Sprint(configs.HTTPPort)+"/hello", http.NoBody)
 	resp, err := netClient.Do(re)
 
 	require.NoError(t, err, "TEST Failed.\n")
@@ -187,11 +175,7 @@ func TestGofr_ServerRun(t *testing.T) {
 }
 
 func Test_AddHTTPService(t *testing.T) {
-	port := testutil.GetFreePort(t)
-	metricsPort := testutil.GetFreePort(t)
-
-	t.Setenv("HTTP_PORT", strconv.Itoa(port))
-	t.Setenv("METRICS_PORT", strconv.Itoa(metricsPort))
+	_ = testutil.NewServerConfigs(t)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/test", r.URL.Path)
@@ -215,9 +199,6 @@ func Test_AddDuplicateHTTPService(t *testing.T) {
 	t.Setenv("LOG_LEVEL", "DEBUG")
 
 	logs := testutil.StdoutOutputForFunc(func() {
-		metricsPort := testutil.GetFreePort(t)
-		t.Setenv("METRICS_PORT", strconv.Itoa(metricsPort))
-
 		a := New()
 
 		a.AddHTTPService("test-service", "http://localhost")
@@ -228,8 +209,7 @@ func Test_AddDuplicateHTTPService(t *testing.T) {
 }
 
 func TestApp_Metrics(t *testing.T) {
-	metricsPort := testutil.GetFreePort(t)
-	t.Setenv("METRICS_PORT", strconv.Itoa(metricsPort))
+	testutil.NewServerConfigs(t)
 
 	app := New()
 
@@ -237,8 +217,7 @@ func TestApp_Metrics(t *testing.T) {
 }
 
 func TestApp_AddAndGetHTTPService(t *testing.T) {
-	metricsPort := testutil.GetFreePort(t)
-	t.Setenv("METRICS_PORT", strconv.Itoa(metricsPort))
+	testutil.NewServerConfigs(t)
 
 	app := New()
 
@@ -251,8 +230,7 @@ func TestApp_AddAndGetHTTPService(t *testing.T) {
 
 func TestApp_MigrateInvalidKeys(t *testing.T) {
 	logs := testutil.StderrOutputForFunc(func() {
-		metricsPort := testutil.GetFreePort(t)
-		t.Setenv("METRICS_PORT", strconv.Itoa(metricsPort))
+		testutil.NewServerConfigs(t)
 
 		app := New()
 		app.Migrate(map[int64]migration.Migrate{1: {}})
@@ -263,8 +241,7 @@ func TestApp_MigrateInvalidKeys(t *testing.T) {
 
 func TestApp_MigratePanicRecovery(t *testing.T) {
 	logs := testutil.StderrOutputForFunc(func() {
-		metricsPort := testutil.GetFreePort(t)
-		t.Setenv("METRICS_PORT", strconv.Itoa(metricsPort))
+		testutil.NewServerConfigs(t)
 
 		app := New()
 
@@ -301,7 +278,7 @@ func Test_addRoute(t *testing.T) {
 		a := NewCMD()
 
 		// Add the "log" sub-command with its handler and description.
-		a.SubCommand("log", func(c *Context) (interface{}, error) {
+		a.SubCommand("log", func(c *Context) (any, error) {
 			c.Logger.Info("logging in handler")
 			return "handler called", nil
 		}, AddDescription("Logs a message"))
@@ -525,8 +502,7 @@ func Test_EnableBasicAuthWithValidator(t *testing.T) {
 }
 
 func Test_AddRESTHandlers(t *testing.T) {
-	metricsPort := testutil.GetFreePort(t)
-	t.Setenv("METRICS_PORT", strconv.Itoa(metricsPort))
+	testutil.NewServerConfigs(t)
 
 	app := New()
 
@@ -539,7 +515,7 @@ func Test_AddRESTHandlers(t *testing.T) {
 
 	tests := []struct {
 		desc  string
-		input interface{}
+		input any
 		err   error
 	}{
 		{"success case", &user{}, nil},
@@ -667,7 +643,7 @@ func Test_UseMiddleware(t *testing.T) {
 
 	app.UseMiddleware(testMiddleware)
 
-	app.GET("/test", func(*Context) (interface{}, error) {
+	app.GET("/test", func(*Context) (any, error) {
 		return "success", nil
 	})
 
@@ -772,7 +748,7 @@ func Test_APIKeyAuthMiddleware(t *testing.T) {
 	app.EnableAPIKeyAuth(apiKeys...)
 	app.EnableAPIKeyAuthWithValidator(validateFunc)
 
-	app.GET("/test", func(_ *Context) (interface{}, error) {
+	app.GET("/test", func(_ *Context) (any, error) {
 		return "success", nil
 	})
 
@@ -785,7 +761,7 @@ func Test_APIKeyAuthMiddleware(t *testing.T) {
 
 	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet,
 		fmt.Sprintf("http://localhost:%d", port)+"/test", http.NoBody)
-	req.Header.Set("X-API-Key", "test-key")
+	req.Header.Set("X-Api-Key", "test-key")
 
 	// Send the request and check for successful response
 	resp, err := netClient.Do(req)
@@ -800,10 +776,7 @@ func Test_APIKeyAuthMiddleware(t *testing.T) {
 }
 
 func Test_SwaggerEndpoints(t *testing.T) {
-	port := testutil.GetFreePort(t)
-
-	metricsPort := testutil.GetFreePort(t)
-	t.Setenv("METRICS_PORT", strconv.Itoa(metricsPort))
+	configs := testutil.NewServerConfigs(t)
 
 	// Create the openapi.json file within the static directory
 	openAPIFilePath := filepath.Join("static", OpenAPIJSON)
@@ -823,7 +796,7 @@ func Test_SwaggerEndpoints(t *testing.T) {
 
 	app := New()
 	app.httpRegistered = true
-	app.httpServer.port = port
+	app.httpServer.port = configs.HTTPPort
 
 	go app.Run()
 	time.Sleep(100 * time.Millisecond)
@@ -833,7 +806,7 @@ func Test_SwaggerEndpoints(t *testing.T) {
 	}
 
 	re, _ := http.NewRequestWithContext(context.Background(), http.MethodGet,
-		fmt.Sprintf("http://localhost:%d", port)+"/.well-known/swagger", http.NoBody)
+		fmt.Sprintf("http://localhost:%s", configs.HTTPHost)+"/.well-known/swagger", http.NoBody)
 	resp, err := netClient.Do(re)
 
 	defer func() {
@@ -886,11 +859,7 @@ func Test_AddCronJob_Success(t *testing.T) {
 
 func setupTestEnvironment(t *testing.T) (host string, htmlContent []byte) {
 	t.Helper()
-
-	port := testutil.GetFreePort(t)
-	metricsPort := testutil.GetFreePort(t)
-
-	t.Setenv("METRICS_PORT", strconv.Itoa(metricsPort))
+	configs := testutil.NewServerConfigs(t)
 
 	// Generating some files for testing
 	htmlContent = []byte("<html><head><title>Test Static File</title></head><body><p>Testing Static File</p></body></html>")
@@ -904,12 +873,12 @@ func setupTestEnvironment(t *testing.T) (host string, htmlContent []byte) {
 	app.AddStaticFiles("gofrTest", "testdir")
 
 	app.httpRegistered = true
-	app.httpServer.port = port
+	app.httpServer.port = configs.HTTPPort
 
 	go app.Run()
 	time.Sleep(100 * time.Millisecond)
 
-	host = fmt.Sprintf("http://localhost:%d", port)
+	host = configs.HTTPHost
 
 	return host, htmlContent
 }
@@ -999,8 +968,7 @@ func TestStaticHandler(t *testing.T) {
 func TestStaticHandlerInvalidFilePath(t *testing.T) {
 	// Generating some files for testing
 	logs := testutil.StderrOutputForFunc(func() {
-		metricsPort := testutil.GetFreePort(t)
-		t.Setenv("METRICS_PORT", strconv.Itoa(metricsPort))
+		testutil.NewServerConfigs(t)
 
 		app := New()
 
@@ -1039,12 +1007,11 @@ func createPublicDirectory(t *testing.T, defaultPublicStaticDir string, htmlCont
 
 func Test_Shutdown(t *testing.T) {
 	logs := testutil.StdoutOutputForFunc(func() {
-		metricsPort := testutil.GetFreePort(t)
-		t.Setenv("METRICS_PORT", strconv.Itoa(metricsPort))
+		testutil.NewServerConfigs(t)
 
 		g := New()
 
-		g.GET("/hello", func(*Context) (interface{}, error) {
+		g.GET("/hello", func(*Context) (any, error) {
 			return helloWorld, nil
 		})
 
@@ -1061,8 +1028,7 @@ func Test_Shutdown(t *testing.T) {
 
 func TestApp_SubscriberInitialize(t *testing.T) {
 	t.Run("subscriber is initialized", func(t *testing.T) {
-		metricsPort := testutil.GetFreePort(t)
-		t.Setenv("METRICS_PORT", strconv.Itoa(metricsPort))
+		testutil.NewServerConfigs(t)
 
 		app := New()
 
@@ -1084,8 +1050,7 @@ func TestApp_SubscriberInitialize(t *testing.T) {
 	})
 
 	t.Run("subscriber is not initialized", func(t *testing.T) {
-		metricsPort := testutil.GetFreePort(t)
-		t.Setenv("METRICS_PORT", strconv.Itoa(metricsPort))
+		testutil.NewServerConfigs(t)
 
 		app := New()
 		app.Subscribe("Hello", func(*Context) error {
@@ -1101,8 +1066,7 @@ func TestApp_SubscriberInitialize(t *testing.T) {
 
 func TestApp_Subscribe(t *testing.T) {
 	t.Run("topic is empty", func(t *testing.T) {
-		metricsPort := testutil.GetFreePort(t)
-		t.Setenv("METRICS_PORT", strconv.Itoa(metricsPort))
+		testutil.NewServerConfigs(t)
 
 		app := New()
 
@@ -1121,8 +1085,7 @@ func TestApp_Subscribe(t *testing.T) {
 	})
 
 	t.Run("handler is nil", func(t *testing.T) {
-		metricsPort := testutil.GetFreePort(t)
-		t.Setenv("METRICS_PORT", strconv.Itoa(metricsPort))
+		testutil.NewServerConfigs(t)
 
 		app := New()
 

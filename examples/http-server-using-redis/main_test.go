@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"strconv"
 	"testing"
 	"time"
 
@@ -23,12 +22,7 @@ import (
 )
 
 func TestHTTPServerUsingRedis(t *testing.T) {
-	httpPort := testutil.GetFreePort(t)
-	t.Setenv("HTTP_PORT", strconv.Itoa(httpPort))
-	host := fmt.Sprint("http://localhost:", httpPort)
-
-	port := testutil.GetFreePort(t)
-	t.Setenv("METRICS_PORT", strconv.Itoa(port))
+	configs := testutil.NewServerConfigs(t)
 
 	go main()
 	time.Sleep(100 * time.Millisecond) // Giving some time to start the server
@@ -51,7 +45,7 @@ func TestHTTPServerUsingRedis(t *testing.T) {
 	}
 
 	for i, tc := range tests {
-		req, _ := http.NewRequest(tc.method, host+tc.path, bytes.NewBuffer(tc.body))
+		req, _ := http.NewRequest(tc.method, configs.HTTPHost+tc.path, bytes.NewBuffer(tc.body))
 		req.Header.Set("content-type", "application/json")
 		c := http.Client{}
 		resp, err := c.Do(req)
@@ -63,11 +57,7 @@ func TestHTTPServerUsingRedis(t *testing.T) {
 }
 
 func TestRedisSetHandler(t *testing.T) {
-	metricsPort := testutil.GetFreePort(t)
-	httpPort := testutil.GetFreePort(t)
-
-	t.Setenv("METRICS_PORT", strconv.Itoa(metricsPort))
-	t.Setenv("HTTP_PORT", strconv.Itoa(httpPort))
+	configs := testutil.NewServerConfigs(t)
 
 	a := gofr.New()
 	logger := logging.NewLogger(logging.DEBUG)
@@ -78,7 +68,7 @@ func TestRedisSetHandler(t *testing.T) {
 
 	mock.ExpectSet("key", "value", 5*time.Minute).SetErr(testutil.CustomError{ErrorMessage: "redis get error"})
 
-	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, fmt.Sprintf("http://localhost:%d/handle", httpPort), bytes.NewBuffer([]byte(`{"key":"value"}`)))
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, fmt.Sprintf("http://localhost:%d/handle", configs.HTTPPort), bytes.NewBuffer([]byte(`{"key":"value"}`)))
 	req.Header.Set("content-type", "application/json")
 	gofrReq := gofrHTTP.NewRequest(req)
 
@@ -92,11 +82,7 @@ func TestRedisSetHandler(t *testing.T) {
 }
 
 func TestRedisPipelineHandler(t *testing.T) {
-	metricsPort := testutil.GetFreePort(t)
-	httpPort := testutil.GetFreePort(t)
-
-	t.Setenv("METRICS_PORT", strconv.Itoa(metricsPort))
-	t.Setenv("HTTP_PORT", strconv.Itoa(httpPort))
+	configs := testutil.NewServerConfigs(t)
 
 	a := gofr.New()
 	logger := logging.NewLogger(logging.DEBUG)
@@ -108,7 +94,7 @@ func TestRedisPipelineHandler(t *testing.T) {
 	mock.ExpectSet("testKey1", "testValue1", time.Minute*5).SetErr(testutil.CustomError{ErrorMessage: "redis get error"})
 	mock.ClearExpect()
 
-	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, fmt.Sprint("http://localhost:", httpPort, "/handle"), bytes.NewBuffer([]byte(`{"key":"value"}`)))
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, fmt.Sprint("http://localhost:", configs.HTTPHost, "/handle"), bytes.NewBuffer([]byte(`{"key":"value"}`)))
 	req.Header.Set("content-type", "application/json")
 
 	gofrReq := gofrHTTP.NewRequest(req)
