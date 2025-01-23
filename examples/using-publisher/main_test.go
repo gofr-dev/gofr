@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"net/http"
-	"strconv"
 	"testing"
 	"time"
 
@@ -15,12 +14,7 @@ import (
 )
 
 func TestExamplePublisher(t *testing.T) {
-	httpPort := testutil.GetFreePort(t)
-	t.Setenv("HTTP_PORT", strconv.Itoa(httpPort))
-	host := fmt.Sprint("http://localhost:", httpPort)
-
-	port := testutil.GetFreePort(t)
-	t.Setenv("METRICS_PORT", strconv.Itoa(port))
+	configs := testutil.NewServerConfigs(t)
 
 	go main()
 	time.Sleep(200 * time.Millisecond)
@@ -61,7 +55,7 @@ func TestExamplePublisher(t *testing.T) {
 	c := http.Client{}
 
 	for i, tc := range testCases {
-		req, _ := http.NewRequest(http.MethodPost, host+tc.path, bytes.NewBuffer(tc.body))
+		req, _ := http.NewRequest(http.MethodPost, configs.HTTPHost+tc.path, bytes.NewBuffer(tc.body))
 		req.Header.Set("content-type", "application/json")
 		resp, err := c.Do(req)
 		defer resp.Body.Close()
@@ -74,13 +68,9 @@ func TestExamplePublisher(t *testing.T) {
 func TestExamplePublisherError(t *testing.T) {
 	t.Setenv("PUBSUB_BROKER", "localhost:1012")
 
-	httpPort := testutil.GetFreePort(t)
-	t.Setenv("HTTP_PORT", strconv.Itoa(httpPort))
+	configs := testutil.NewServerConfigs(t)
 
-	metricsPort := testutil.GetFreePort(t)
-	t.Setenv("METRICS_PORT", strconv.Itoa(metricsPort))
-
-	host := fmt.Sprint("http://localhost:", httpPort)
+	host := fmt.Sprint("http://localhost:", configs.HTTPPort)
 
 	go main()
 	time.Sleep(200 * time.Millisecond)
