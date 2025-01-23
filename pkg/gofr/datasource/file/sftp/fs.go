@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/pkg/sftp"
-	File "gofr.dev/pkg/gofr/datasource/file"
+	"gofr.dev/pkg/gofr/datasource/file"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -77,7 +77,7 @@ func (f *FileSystem) Connect() {
 	f.logger.Logf("connected to SFTP client successfully")
 }
 
-func (f *FileSystem) Create(name string) (File.File, error) {
+func (f *FileSystem) Create(name string) (file.File, error) {
 	status := statusError
 
 	defer f.sendOperationStats(&FileLog{
@@ -127,7 +127,7 @@ func (f *FileSystem) MkdirAll(path string, _ os.FileMode) error {
 	return nil
 }
 
-func (f *FileSystem) Open(name string) (File.File, error) {
+func (f *FileSystem) Open(name string) (file.File, error) {
 	status := statusSuccess
 
 	defer f.sendOperationStats(&FileLog{Operation: "OPEN", Location: name, Status: &status}, time.Now())
@@ -145,7 +145,7 @@ func (f *FileSystem) Open(name string) (File.File, error) {
 	}, nil
 }
 
-func (f *FileSystem) OpenFile(name string, flag int, _ os.FileMode) (File.File, error) {
+func (f *FileSystem) OpenFile(name string, flag int, _ os.FileMode) (file.File, error) {
 	status := statusSuccess
 
 	defer f.sendOperationStats(&FileLog{Operation: "OPENFILE", Location: name, Status: &status}, time.Now())
@@ -206,7 +206,7 @@ func (f *FileSystem) Rename(oldname, newname string) error {
 	return nil
 }
 
-func (f *FileSystem) ReadDir(dir string) ([]File.FileInfo, error) {
+func (f *FileSystem) ReadDir(dir string) ([]file.FileInfo, error) {
 	status := statusSuccess
 
 	defer f.sendOperationStats(&FileLog{Operation: "READDIR", Location: dir, Status: &status}, time.Now())
@@ -217,7 +217,7 @@ func (f *FileSystem) ReadDir(dir string) ([]File.FileInfo, error) {
 		return nil, err
 	}
 
-	newDirs := make([]File.FileInfo, 0, len(dirs))
+	newDirs := make([]file.FileInfo, 0, len(dirs))
 
 	for _, v := range dirs {
 		newDirs = append(newDirs, v)
@@ -226,7 +226,7 @@ func (f *FileSystem) ReadDir(dir string) ([]File.FileInfo, error) {
 	return newDirs, nil
 }
 
-func (f *FileSystem) Stat(name string) (File.FileInfo, error) {
+func (f *FileSystem) Stat(name string) (file.FileInfo, error) {
 	status := statusSuccess
 
 	defer f.sendOperationStats(&FileLog{Operation: "STAT", Location: name, Status: &status}, time.Now())
