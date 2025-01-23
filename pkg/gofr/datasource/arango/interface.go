@@ -44,26 +44,3 @@ type Arango interface {
 
 	HealthCheck(ctx context.Context) (any, error)
 }
-
-type User interface {
-	SetDatabaseAccess(ctx context.Context, database string, grant arangodb.Grant) error
-	SetCollectionAccess(ctx context.Context, database, collection string, grant arangodb.Grant) error
-}
-
-type Collection interface {
-	Name() string
-	Database() arangodb.Database
-	Shards(ctx context.Context, details bool) (arangodb.CollectionShards, error)
-	Remove(ctx context.Context) error
-	RemoveWithOptions(ctx context.Context, opts *arangodb.RemoveCollectionOptions) error
-	Truncate(ctx context.Context) error
-	Properties(ctx context.Context) (arangodb.CollectionProperties, error)
-	SetProperties(ctx context.Context, options arangodb.SetCollectionPropertiesOptions) error
-	Count(ctx context.Context) (int64, error)
-	arangodb.CollectionDocuments
-	arangodb.CollectionIndexes
-}
-
-type Graph interface {
-	Remove(ctx context.Context, options *arangodb.RemoveGraphOptions) error
-}

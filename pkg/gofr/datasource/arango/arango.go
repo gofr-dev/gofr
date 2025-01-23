@@ -21,6 +21,9 @@ type Client struct {
 	tracer   trace.Tracer
 	config   *Config
 	endpoint string
+	*DB
+	*Document
+	*Graph
 }
 
 // Config holds the configuration for ArangoDB connection.
@@ -49,7 +52,15 @@ var (
 
 // New creates a new ArangoDB client with the provided configuration.
 func New(c Config) *Client {
-	return &Client{config: &c}
+	client := &Client{
+		config: &c,
+	}
+
+	client.DB = &DB{client: client}
+	client.Document = &Document{client: client}
+	client.Graph = &Graph{client: client}
+
+	return client
 }
 
 // UseLogger sets the logger for the ArangoDB client.
@@ -173,7 +184,7 @@ func (c *Client) DropUser(ctx context.Context, username string) error {
 
 // GrantDB grants permissions for a database to a user.
 func (c *Client) GrantDB(ctx context.Context, database, username, permission string) error {
-	tracerCtx, span := c.addTrace(ctx, "grantDB", map[string]string{"db": database})
+	tracerCtx, span := c.addTrace(ctx, "grantDB", map[string]string{"DB": database})
 	startTime := time.Now()
 
 	defer c.sendOperationStats(&QueryLog{Query: "grantDB", Collection: database, ID: username}, startTime, "grantDB", span)
@@ -205,352 +216,9 @@ func (c *Client) GrantCollection(ctx context.Context, database, collection, user
 	return err
 }
 
-// ListDBs returns a list of all databases in ArangoDB.
-func (c *Client) ListDBs(ctx context.Context) ([]string, error) {
-	tracerCtx, span := c.addTrace(ctx, "listDBs", nil)
-	startTime := time.Now()
-
-	defer c.sendOperationStats(&QueryLog{Query: "listDBs"}, startTime, "listDBs", span)
-
-	dbs, err := c.client.Databases(tracerCtx)
-	if err != nil {
-		return nil, err
-	}
-
-	names := make([]string, len(dbs))
-
-	for _, db := range dbs {
-		if db.Name() != "" {
-			names = append(names, db.Name())
-		}
-	}
-
-	return names, nil
-}
-
-// CreateDB creates a new database in ArangoDB.
-func (c *Client) CreateDB(ctx context.Context, database string) error {
-	tracerCtx, span := c.addTrace(ctx, "createDB", map[string]string{"db": database})
-	startTime := time.Now()
-
-	defer c.sendOperationStats(&QueryLog{Query: "createDB", Collection: database}, startTime, "createDB", span)
-
-	_, err := c.client.CreateDatabase(tracerCtx, database, nil)
-
-	return err
-}
-
-// DropDB deletes a database from ArangoDB.
-func (c *Client) DropDB(ctx context.Context, database string) error {
-	tracerCtx, span := c.addTrace(ctx, "dropDB", map[string]string{"db": database})
-	startTime := time.Now()
-
-	defer c.sendOperationStats(&QueryLog{Query: "dropDB", Collection: database}, startTime, "dropDB", span)
-
-	db, err := c.client.Database(tracerCtx, database)
-	if err != nil {
-		return err
-	}
-
-	err = db.Remove(tracerCtx)
-	if err != nil {
-		return err
-	}
-
-	return err
-}
-
-// CreateCollection creates a new collection in a database with specified type.
-func (c *Client) CreateCollection(ctx context.Context, database, collection string, isEdge bool) error {
-	tracerCtx, span := c.addTrace(ctx, "createCollection", map[string]string{"collection": collection})
-	startTime := time.Now()
-
-	defer c.sendOperationStats(&QueryLog{Query: "createCollection", Collection: collection}, startTime, "createCollection", span)
-
-	db, err := c.client.Database(tracerCtx, database)
-	if err != nil {
-		return err
-	}
-
-	options := arangodb.CreateCollectionProperties{Type: arangodb.CollectionTypeDocument}
-	if isEdge {
-		options.Type = arangodb.CollectionTypeEdge
-	}
-
-	_, err = db.CreateCollection(tracerCtx, collection, &options)
-
-	return err
-}
-
-func (c *Client) getCollection(ctx context.Context, dbName, collectionName string) (arangodb.Collection, error) {
-	db, err := c.client.Database(ctx, dbName)
-	if err != nil {
-		return nil, err
-	}
-
-	collection, err := db.Collection(ctx, collectionName)
-	if err != nil {
-		return nil, err
-	}
-
-	return collection, nil
-}
-
-// DropCollection deletes an existing collection from a database.
-func (c *Client) DropCollection(ctx context.Context, database, collectionName string) error {
-	tracerCtx, span := c.addTrace(ctx, "dropCollection", map[string]string{"collection": collectionName})
-	startTime := time.Now()
-
-	defer c.sendOperationStats(&QueryLog{Query: "dropCollection", Collection: collectionName}, startTime, "dropCollection", span)
-
-	collection, err := c.getCollection(tracerCtx, database, collectionName)
-	if err != nil {
-		return err
-	}
-
-	err = collection.Remove(ctx)
-	if err != nil {
-		return err
-	}
-
-	return err
-}
-
-// TruncateCollection truncates a collection in a database.
-func (c *Client) TruncateCollection(ctx context.Context, database, collectionName string) error {
-	tracerCtx, span := c.addTrace(ctx, "truncateCollection", map[string]string{"collection": collectionName})
-	startTime := time.Now()
-
-	defer c.sendOperationStats(&QueryLog{Query: "truncateCollection", Collection: collectionName}, startTime, "truncateCollection", span)
-
-	collection, err := c.getCollection(tracerCtx, database, collectionName)
-	if err != nil {
-		return err
-	}
-
-	err = collection.Truncate(ctx)
-	if err != nil {
-		return err
-	}
-
-	return err
-}
-
-// ListCollections lists all collections in a database.
-func (c *Client) ListCollections(ctx context.Context, database string) ([]string, error) {
-	tracerCtx, span := c.addTrace(ctx, "listCollections", map[string]string{"db": database})
-	startTime := time.Now()
-
-	defer c.sendOperationStats(&QueryLog{Query: "listCollections", Collection: database}, startTime, "listCollections", span)
-
-	db, err := c.client.Database(tracerCtx, database)
-	if err != nil {
-		return nil, err
-	}
-
-	collections, err := db.Collections(tracerCtx)
-	if err != nil {
-		return nil, err
-	}
-
-	names := make([]string, 0, len(collections))
-	for _, coll := range collections {
-		names = append(names, coll.Name())
-	}
-
-	return names, nil
-}
-
-// CreateDocument creates a new document in the specified collection.
-func (c *Client) CreateDocument(ctx context.Context, dbName, collectionName string, document any) (string, error) {
-	tracerCtx, span := c.addTrace(ctx, "createDocument", map[string]string{"collection": collectionName})
-	startTime := time.Now()
-
-	defer c.sendOperationStats(&QueryLog{Query: "createDocument", Collection: collectionName}, startTime, "createDocument", span)
-
-	collection, err := c.getCollection(tracerCtx, dbName, collectionName)
-	if err != nil {
-		return "", err
-	}
-
-	meta, err := collection.CreateDocument(tracerCtx, document)
-	if err != nil {
-		return "", err
-	}
-
-	return meta.Key, nil
-}
-
-// GetDocument retrieves a document by its ID from the specified collection.
-func (c *Client) GetDocument(ctx context.Context, dbName, collectionName, documentID string, result any) error {
-	tracerCtx, span := c.addTrace(ctx, "getDocument", map[string]string{"collection": collectionName})
-	startTime := time.Now()
-
-	defer c.sendOperationStats(&QueryLog{Query: "getDocument", Collection: collectionName, ID: documentID}, startTime, "getDocument", span)
-
-	collection, err := c.getCollection(tracerCtx, dbName, collectionName)
-	if err != nil {
-		return err
-	}
-
-	_, err = collection.ReadDocument(tracerCtx, documentID, result)
-
-	return err
-}
-
-// UpdateDocument updates an existing document in the specified collection.
-func (c *Client) UpdateDocument(ctx context.Context, dbName, collectionName, documentID string, document any) error {
-	tracerCtx, span := c.addTrace(ctx, "updateDocument", map[string]string{"collection": collectionName})
-	startTime := time.Now()
-
-	defer c.sendOperationStats(&QueryLog{Query: "updateDocument", Collection: collectionName,
-		ID: documentID}, startTime, "updateDocument", span)
-
-	collection, err := c.getCollection(tracerCtx, dbName, collectionName)
-	if err != nil {
-		return err
-	}
-
-	_, err = collection.UpdateDocument(tracerCtx, documentID, document)
-
-	return err
-}
-
-// DeleteDocument deletes a document by its ID from the specified collection.
-func (c *Client) DeleteDocument(ctx context.Context, dbName, collectionName, documentID string) error {
-	tracerCtx, span := c.addTrace(ctx, "deleteDocument", map[string]string{"collection": collectionName})
-	startTime := time.Now()
-
-	defer c.sendOperationStats(&QueryLog{Query: "deleteDocument", Collection: collectionName,
-		ID: documentID}, startTime, "deleteDocument", span)
-
-	collection, err := c.getCollection(tracerCtx, dbName, collectionName)
-	if err != nil {
-		return err
-	}
-
-	_, err = collection.DeleteDocument(tracerCtx, documentID)
-
-	return err
-}
-
-// CreateEdgeDocument creates a new edge document between two vertices.
-func (c *Client) CreateEdgeDocument(ctx context.Context, dbName, collectionName, from, to string, document any) (string, error) {
-	tracerCtx, span := c.addTrace(ctx, "createEdgeDocument", map[string]string{"collection": collectionName})
-	startTime := time.Now()
-
-	defer c.sendOperationStats(&QueryLog{Query: "createEdgeDocument", Collection: collectionName}, startTime, "createEdgeDocument", span)
-
-	collection, err := c.getCollection(tracerCtx, dbName, collectionName)
-	if err != nil {
-		return "", err
-	}
-
-	meta, err := collection.CreateDocument(tracerCtx, map[string]any{
-		"_from": from,
-		"_to":   to,
-		"data":  document,
-	})
-	if err != nil {
-		return "", err
-	}
-
-	return meta.Key, nil
-}
-
-// CreateGraph creates a new graph in a database.
-func (c *Client) CreateGraph(ctx context.Context, database, graph string, edgeDefinitions []EdgeDefinition) error {
-	tracerCtx, span := c.addTrace(ctx, "createGraph", map[string]string{"graph": graph})
-	startTime := time.Now()
-
-	defer c.sendOperationStats(&QueryLog{Query: "createGraph", Collection: graph}, startTime, "createGraph", span)
-
-	db, err := c.client.Database(tracerCtx, database)
-	if err != nil {
-		return err
-	}
-
-	arangoEdgeDefs := make([]arangodb.EdgeDefinition, 0, len(edgeDefinitions))
-	for _, ed := range edgeDefinitions {
-		arangoEdgeDefs = append(arangoEdgeDefs, arangodb.EdgeDefinition{
-			Collection: ed.Collection,
-			From:       ed.From,
-			To:         ed.To,
-		})
-	}
-
-	options := &arangodb.GraphDefinition{
-		EdgeDefinitions: arangoEdgeDefs,
-	}
-
-	_, err = db.CreateGraph(tracerCtx, graph, options, nil)
-
-	return err
-}
-
-// DropGraph deletes an existing graph from a database.
-func (c *Client) DropGraph(ctx context.Context, database, graphName string) error {
-	tracerCtx, span := c.addTrace(ctx, "dropGraph", map[string]string{"graph": graphName})
-	startTime := time.Now()
-
-	defer c.sendOperationStats(&QueryLog{Query: "dropGraph", Collection: graphName}, startTime, "dropGraph", span)
-
-	db, err := c.client.Database(tracerCtx, database)
-	if err != nil {
-		return err
-	}
-
-	graph, err := db.Graph(tracerCtx, graphName, nil)
-	if err != nil {
-		return err
-	}
-
-	err = graph.Remove(tracerCtx, &arangodb.RemoveGraphOptions{DropCollections: true})
-	if err != nil {
-		return err
-	}
-
-	return err
-}
-
-// ListGraphs lists all graphs in a database.
-func (c *Client) ListGraphs(ctx context.Context, database string) ([]string, error) {
-	tracerCtx, span := c.addTrace(ctx, "listGraphs", map[string]string{})
-	startTime := time.Now()
-
-	defer c.sendOperationStats(&QueryLog{Query: "listGraphs", Collection: database}, startTime, "listGraphs", span)
-
-	db, err := c.client.Database(tracerCtx, database)
-	if err != nil {
-		return nil, err
-	}
-
-	graphsReader, err := db.Graphs(tracerCtx)
-	if err != nil {
-		return nil, err
-	}
-
-	var graphNames []string
-
-	for {
-		graph, err := graphsReader.Read()
-		if errors.Is(err, shared.NoMoreDocumentsError{}) {
-			break
-		}
-
-		if err != nil {
-			return nil, err
-		}
-
-		graphNames = append(graphNames, graph.Name())
-	}
-
-	return graphNames, nil
-}
-
 // Query executes an AQL query and binds the results.
 func (c *Client) Query(ctx context.Context, dbName, query string, bindVars map[string]any, result any) error {
-	tracerCtx, span := c.addTrace(ctx, "query", map[string]string{"db": dbName})
+	tracerCtx, span := c.addTrace(ctx, "query", map[string]string{"DB": dbName})
 	startTime := time.Now()
 
 	defer c.sendOperationStats(&QueryLog{Query: query}, startTime, "query", span)
