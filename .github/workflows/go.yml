@@ -247,6 +247,13 @@ jobs:
         run: |
           awk '!/^mode: / && FNR==1{print "mode: set"} {print}' ./Example-Test-Report/profile.cov > merged_profile.cov
           tail -n +2 ./PKG-Coverage-Report/profile.cov >> merged_profile.cov
+        # Echo the merged coverage percentage
+          echo "Merged coverage summary:"
+          go tool cover -func=merged_profile.cov
+
+          # Extract and display the total merged coverage percentage
+          mergedCoverage=$(go tool cover -func=merged_profile.cov | grep total | awk '{print $3}')
+          echo "Merged Coverage Percentage: ${mergedCoverage%?}%"
 
       - name: Upload
         uses: paambaati/codeclimate-action@v9.0.0
