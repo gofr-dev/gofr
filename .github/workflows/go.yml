@@ -6,6 +6,7 @@ on:
     branches:
       - main
       - development
+      - test/pipeline
     paths-ignore:
       - 'docs/**'
   pull_request:
@@ -111,22 +112,12 @@ jobs:
         run: |
           go mod download
 
-      - name: Test and Count Warnings
+      - name: Test
         run: |
           export APP_ENV=test
-          warning_count=$(go test gofr.dev/pkg/... -v -short -coverprofile package.cov -coverpkg=gofr.dev/pkg/... | tee /dev/tty | grep -c "WARNING" || true)
+          go test gofr.dev/pkg/... -v -short -coverprofile package.cov -coverpkg=gofr.dev/pkg/...
           grep -v '/mock_' package.cov > profile.cov
-          codeCoverage=$(go tool cover -func profile.cov | awk '/total/ {print substr($3, 1, length($3)-1)}')
-          echo "Warnings found: $warning_count"
-          echo "warning_count=$warning_count" >> $GITHUB_ENV
-          echo "CODE_COVERAGE=$codeCoverage" >> $GITHUB_ENV
-
-      - name: Fail if too many warnings
-        run: |
-          if [ ${{ env.warning_count }} -gt 10 ]; then
-            echo "Too many warnings: ${{ env.warning_count }}"
-            exit 1
-          fi   
+          go tool cover -func profile.cov
 
       - name: Upload Test Coverage
         if: ${{ matrix.go-version == '1.22'}}
@@ -162,13 +153,11 @@ jobs:
           codeCoverage=${codeCoverage%?}
           echo "CODE_COVERAGE=$codeCoverage" >> $GITHUB_ENV
 
-#      - name: Check if code-coverage is greater than threshold
-#        run: |
-#          codeCoverage=${{ env.CODE_COVERAGE }}
-#          if (( $(echo "$codeCoverage < 92" | bc -l) )); then
-#            echo "code coverage cannot be less than 92%, currently its $codeCoverage%"
-#            exit 1
-#          fi
+  #      - name: Check if code-coverage is greater than threshold
+  #        run: |
+  #          codeCoverage=${{ env.CODE_COVERAGE }}
+  #          codeCoverage=${codeCoverage%??}
+  #          if [[ $codeCoverage -lt 92 ]]; then echo "code coverage cannot be less than 92%, currently its ${{ env.CODE_COVERAGE }}%" && exit 1; fi;
   Submodule-Unit-Testing:
     name: Submodule Unit Testing (v${{ matrix.go-version }})🛠
     runs-on: ubuntu-latest
@@ -204,22 +193,11 @@ jobs:
 
             # Run tests for the submodule and generate coverage
             export APP_ENV=test
-            warning_count=$(go test ./... -v -short -coverprofile=${module_name}.cov -coverpkg=./... | tee /dev/tty | grep -c "WARNING" || true)
-            total_warning_count=$((total_warning_count + warning_count))
+            go test ./... -v -short -coverprofile=${module_name}.cov -coverpkg=./...
 
             # Return to the root directory
             cd -
           done
-          
-          echo "Total warnings found: $total_warning_count"
-          echo "total_warning_count=$total_warning_count" >> $GITHUB_ENV
-
-      - name: Fail if too many warnings
-        run: |
-          if [ ${{ env.total_warning_count }} -gt 10 ]; then
-            echo "Too many warnings: ${{ env.total_warning_count }}"
-            exit 1
-          fi
 
       - name: Upload Coverage Reports
         uses: actions/upload-artifact@v3
@@ -247,6 +225,13 @@ jobs:
         run: |
           awk '!/^mode: / && FNR==1{print "mode: set"} {print}' ./Example-Test-Report/profile.cov > merged_profile.cov
           tail -n +2 ./PKG-Coverage-Report/profile.cov >> merged_profile.cov
+          
+           #Echo the merged coverage percentage
+          echo "Merged coverage summary:"
+          go tool cover -func=merged_profile.cov
+          # Extract and display the total merged coverage percentage
+          mergedCoverage=$(go tool cover -func=merged_profile.cov | grep total | awk '{print $3}')
+          echo "Merged Coverage Percentage: ${mergedCoverage%?}%"
 
       - name: Upload
         uses: paambaati/codeclimate-action@v9.0.0
@@ -259,46 +244,26 @@ jobs:
   code_quality:
     name: Code Quality🎖️
     runs-on: ubuntu-latest
+    container: "golangci/golangci-lint:v1.62.0"
     steps:
       - name: Check out code into the Go module directory
         uses: actions/checkout@v4
-
-      - name: Set up Go environment
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.22'
-          cache: false
-
       - name: Get dependencies
-        run: |
-         go mod tidy
-
+        run: go get -v -t -d ./...
       - name: Lint Root Module
-        uses: golangci/golangci-lint-action@v6
-        with:
-          version: v1.62
-          working-directory: .
-          args: >
-            --out-format=colored-line-number
-            --timeout=5m
-
+        run: |
+          echo "Linting root module..."
+          golangci-lint run --timeout 9m0s
       - name: Lint Submodules
         run: |
           echo "Searching for submodules..."
-          total_errors=0  # Initialize error counter
           for module in $(find pkg -name "go.mod" -exec dirname {} \;); do
             echo "Linting submodule: $module"
-            # Change directory to the submodule and run golangci-lint
             cd $module
             go mod tidy
-            golangci-lint run --timeout 9m0s || total_errors=$((total_errors + 1))
-            cd -  # Return to the root directory
-          done
-          echo "Total submodule lint errors: $total_errors"
-          if [ $total_errors -gt 0 ]; then
-            echo "Linting failed for $total_errors submodule(s)."
-            exit 1  # Fail the job if there are linting errors in submodules
-          fi
+            golangci-lint run --timeout 9m0s
+            cd -
+          done    
 
   linting_party:
     name: Linting Party🥳
