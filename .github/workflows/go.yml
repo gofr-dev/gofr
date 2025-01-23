@@ -114,7 +114,7 @@ jobs:
       - name: Test and Count Warnings
         run: |
           export APP_ENV=test
-          warning_count=$(go test gofr.dev/pkg/... -v -short -coverprofile package.cov -coverpkg=gofr.dev/pkg/... | tee /dev/tty | grep -c "WARNING" || true)
+          warning_count=$(go test gofr.dev/pkg/... -v -coverprofile package.cov -coverpkg=gofr.dev/pkg/... | tee /dev/tty | grep -c "WARNING" || true)
           grep -v '/mock_' package.cov > profile.cov
           codeCoverage=$(go tool cover -func profile.cov | awk '/total/ {print substr($3, 1, length($3)-1)}')
           echo "Warnings found: $warning_count"
@@ -161,6 +161,7 @@ jobs:
           codeCoverage=$(go tool cover -func=merged_profile.cov | grep total | awk '{print $3}')
           codeCoverage=${codeCoverage%?}
           echo "CODE_COVERAGE=$codeCoverage" >> $GITHUB_ENV
+          echo ${{ env.CODE_COVERAGE }}
 
 #      - name: Check if code-coverage is greater than threshold
 #        run: |
