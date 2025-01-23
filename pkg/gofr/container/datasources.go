@@ -569,16 +569,16 @@ type ArangoDB interface {
 	ListCollections(ctx context.Context, database string) ([]string, error)
 
 	// CreateDocument creates a new document in the specified collection.
-	CreateDocument(ctx context.Context, dbName, collectionName string, document interface{}) (string, error)
+	CreateDocument(ctx context.Context, dbName, collectionName string, document any) (string, error)
 	// GetDocument retrieves a document by its ID from the specified collection.
-	GetDocument(ctx context.Context, dbName, collectionName, documentID string, result interface{}) error
+	GetDocument(ctx context.Context, dbName, collectionName, documentID string, result any) error
 	// UpdateDocument updates an existing document in the specified collection.
-	UpdateDocument(ctx context.Context, dbName, collectionName, documentID string, document interface{}) error
+	UpdateDocument(ctx context.Context, dbName, collectionName, documentID string, document any) error
 	// DeleteDocument deletes a document by its ID from the specified collection.
 	DeleteDocument(ctx context.Context, dbName, collectionName, documentID string) error
 
 	// CreateEdgeDocument creates a new edge document between two vertices
-	CreateEdgeDocument(ctx context.Context, dbName, collectionName string, from, to string, document interface{}) (string, error)
+	CreateEdgeDocument(ctx context.Context, dbName, collectionName string, from, to string, document any) (string, error)
 
 	// CreateGraph creates a new graph in a database.
 	CreateGraph(ctx context.Context, database, graph string, edgeDefinitions []arango.EdgeDefinition) error
@@ -588,7 +588,7 @@ type ArangoDB interface {
 	ListGraphs(ctx context.Context, database string) ([]string, error)
 
 	// Query executes an AQL query and binds the results
-	Query(ctx context.Context, dbName string, query string, bindVars map[string]interface{}, result interface{}) error
+	Query(ctx context.Context, dbName string, query string, bindVars map[string]any, result any) error
 
 	HealthChecker
 }

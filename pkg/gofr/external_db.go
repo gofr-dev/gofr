@@ -130,7 +130,7 @@ func (a *App) AddDgraph(db container.DgraphProvider) {
 	a.container.DGraph = db
 }
 
-// AddOpentsdb sets the opentsdb datasource in the app's container.
+// AddOpenTSDB  sets the opentsdb datasource in the app's container.
 func (a *App) AddOpenTSDB(db container.OpenTSDBProvider) {
 	// Create the Opentsdb client with the provided configuration
 	db.UseLogger(a.Logger())
@@ -145,6 +145,7 @@ func (a *App) AddOpenTSDB(db container.OpenTSDBProvider) {
 	a.container.OpenTSDB = db
 }
 
+// AddScyllaDB sets the ScyllaDB datasource in the app's container.
 func (a *App) AddScyllaDB(db container.ScyllaDBProvider) {
 	// Create the ScyllaDB client with the provided configuration
 	db.UseLogger(a.Logger())
@@ -156,7 +157,7 @@ func (a *App) AddScyllaDB(db container.ScyllaDBProvider) {
 	a.container.ScyllaDB = db
 }
 
-// AddArango sets the ArangoDB datasource in the app's container
+// AddArango sets the ArangoDB datasource in the app's container.
 func (a *App) AddArango(db container.ArangoProvider) {
 	// Set up logger, metrics, and tracer
 	db.UseLogger(a.Logger())
