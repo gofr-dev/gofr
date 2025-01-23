@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http/httptest"
 	"reflect"
-	"strconv"
 	"testing"
 	"time"
 
@@ -17,18 +16,14 @@ import (
 )
 
 func Test_WebSocket_Success(t *testing.T) {
-	port := testutil.GetFreePort(t)
-	metricsPort := testutil.GetFreePort(t)
-
-	t.Setenv("HTTP_PORT", fmt.Sprint(port))
-	t.Setenv("METRICS_PORT", strconv.Itoa(metricsPort))
+	testutil.NewServerConfigs(t)
 
 	app := New()
 
 	server := httptest.NewServer(app.httpServer.router)
 	defer server.Close()
 
-	app.WebSocket("/ws", func(ctx *Context) (interface{}, error) {
+	app.WebSocket("/ws", func(ctx *Context) (any, error) {
 		var message string
 
 		err := ctx.Bind(&message)
@@ -73,7 +68,7 @@ func Test_WebSocket_Success(t *testing.T) {
 func TestSerializeMessage(t *testing.T) {
 	tests := []struct {
 		name     string
-		input    interface{}
+		input    any
 		expected []byte
 	}{
 		{
@@ -102,7 +97,7 @@ func TestSerializeMessage(t *testing.T) {
 		},
 		{
 			name:     "Map input",
-			input:    map[string]interface{}{"key": "value"},
+			input:    map[string]any{"key": "value"},
 			expected: []byte(`{"key":"value"}`),
 		},
 	}
@@ -112,7 +107,7 @@ func TestSerializeMessage(t *testing.T) {
 			actual, err := serializeMessage(tt.input)
 			require.NoError(t, err, "TestSerializeMessage Failed!")
 
-			var expectedFormatted, actualFormatted interface{}
+			var expectedFormatted, actualFormatted any
 
 			_ = json.Unmarshal(tt.expected, &expectedFormatted)
 

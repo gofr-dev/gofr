@@ -39,11 +39,11 @@ func (ba *basicAuthProvider) addAuthorizationHeader(headers map[string]string) e
 	return nil
 }
 
-func (ba *basicAuthProvider) Get(ctx context.Context, path string, queryParams map[string]interface{}) (*http.Response, error) {
+func (ba *basicAuthProvider) Get(ctx context.Context, path string, queryParams map[string]any) (*http.Response, error) {
 	return ba.GetWithHeaders(ctx, path, queryParams, nil)
 }
 
-func (ba *basicAuthProvider) GetWithHeaders(ctx context.Context, path string, queryParams map[string]interface{},
+func (ba *basicAuthProvider) GetWithHeaders(ctx context.Context, path string, queryParams map[string]any,
 	headers map[string]string) (*http.Response, error) {
 	err := ba.populateHeaders(headers)
 	if err != nil {
@@ -53,12 +53,12 @@ func (ba *basicAuthProvider) GetWithHeaders(ctx context.Context, path string, qu
 	return ba.HTTP.GetWithHeaders(ctx, path, queryParams, headers)
 }
 
-func (ba *basicAuthProvider) Post(ctx context.Context, path string, queryParams map[string]interface{},
+func (ba *basicAuthProvider) Post(ctx context.Context, path string, queryParams map[string]any,
 	body []byte) (*http.Response, error) {
 	return ba.PostWithHeaders(ctx, path, queryParams, body, nil)
 }
 
-func (ba *basicAuthProvider) PostWithHeaders(ctx context.Context, path string, queryParams map[string]interface{},
+func (ba *basicAuthProvider) PostWithHeaders(ctx context.Context, path string, queryParams map[string]any,
 	body []byte, headers map[string]string) (*http.Response, error) {
 	err := ba.populateHeaders(headers)
 	if err != nil {
@@ -68,11 +68,11 @@ func (ba *basicAuthProvider) PostWithHeaders(ctx context.Context, path string, q
 	return ba.HTTP.PostWithHeaders(ctx, path, queryParams, body, headers)
 }
 
-func (ba *basicAuthProvider) Put(ctx context.Context, api string, queryParams map[string]interface{}, body []byte) (*http.Response, error) {
+func (ba *basicAuthProvider) Put(ctx context.Context, api string, queryParams map[string]any, body []byte) (*http.Response, error) {
 	return ba.PutWithHeaders(ctx, api, queryParams, body, nil)
 }
 
-func (ba *basicAuthProvider) PutWithHeaders(ctx context.Context, path string, queryParams map[string]interface{},
+func (ba *basicAuthProvider) PutWithHeaders(ctx context.Context, path string, queryParams map[string]any,
 	body []byte, headers map[string]string) (*http.Response, error) {
 	err := ba.populateHeaders(headers)
 	if err != nil {
@@ -82,12 +82,12 @@ func (ba *basicAuthProvider) PutWithHeaders(ctx context.Context, path string, qu
 	return ba.HTTP.PutWithHeaders(ctx, path, queryParams, body, headers)
 }
 
-func (ba *basicAuthProvider) Patch(ctx context.Context, path string, queryParams map[string]interface{},
+func (ba *basicAuthProvider) Patch(ctx context.Context, path string, queryParams map[string]any,
 	body []byte) (*http.Response, error) {
 	return ba.PatchWithHeaders(ctx, path, queryParams, body, nil)
 }
 
-func (ba *basicAuthProvider) PatchWithHeaders(ctx context.Context, path string, queryParams map[string]interface{},
+func (ba *basicAuthProvider) PatchWithHeaders(ctx context.Context, path string, queryParams map[string]any,
 	body []byte, headers map[string]string) (*http.Response, error) {
 	err := ba.populateHeaders(headers)
 	if err != nil {

@@ -64,7 +64,7 @@ func Test_scanEntity(t *testing.T) {
 
 	tests := []struct {
 		desc  string
-		input interface{}
+		input any
 		resp  *entity
 		err   error
 	}{
@@ -133,7 +133,7 @@ func (m *mockTableName) TableName() string {
 func Test_getTableName(t *testing.T) {
 	tests := []struct {
 		name       string
-		object     interface{}
+		object     any
 		structName string
 		want       string
 	}{
@@ -169,7 +169,7 @@ func (m *mockRestPath) RestPath() string {
 func Test_getRestPath(t *testing.T) {
 	tests := []struct {
 		name       string
-		object     interface{}
+		object     any
 		structName string
 		want       string
 	}{
@@ -215,7 +215,7 @@ func Test_CreateHandler(t *testing.T) {
 		id            int
 		mockErr       error
 		expectedQuery string
-		expectedResp  interface{}
+		expectedResp  any
 		expectedErr   error
 	}{
 		{
@@ -305,7 +305,7 @@ func Test_GetAllHandler(t *testing.T) {
 		desc         string
 		mockResp     *sqlmock.Rows
 		mockErr      error
-		expectedResp interface{}
+		expectedResp any
 		expectedErr  error
 	}
 
@@ -315,7 +315,7 @@ func Test_GetAllHandler(t *testing.T) {
 				desc:     "success case",
 				mockResp: sqlmock.NewRows([]string{"id", "name", "is_employed"}).AddRow(1, "John Doe", true).AddRow(2, "Jane Doe", false),
 				mockErr:  nil,
-				expectedResp: []interface{}{&userEntity{ID: 1, Name: "John Doe", IsEmployed: true},
+				expectedResp: []any{&userEntity{ID: 1, Name: "John Doe", IsEmployed: true},
 					&userEntity{ID: 2, Name: "Jane Doe", IsEmployed: false}},
 				expectedErr: nil,
 			},
@@ -394,7 +394,7 @@ func Test_GetHandler(t *testing.T) {
 		id           string
 		mockRow      *sqlmock.Rows
 		mockErr      error
-		expectedResp interface{}
+		expectedResp any
 		expectedErr  error
 	}
 
@@ -481,7 +481,7 @@ func Test_UpdateHandler(t *testing.T) {
 		id           int
 		reqBody      []byte
 		mockErr      error
-		expectedResp interface{}
+		expectedResp any
 		expectedErr  error
 	}
 
@@ -567,7 +567,7 @@ func Test_DeleteHandler(t *testing.T) {
 		mockResp     driver.Result
 		mockErr      error
 		expectedErr  error
-		expectedResp interface{}
+		expectedResp any
 	}
 
 	for _, dc := range dialectCases {

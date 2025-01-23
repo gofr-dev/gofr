@@ -29,7 +29,7 @@ type FileInfo interface {
 
 type RowReader interface {
 	Next() bool
-	Scan(interface{}) error
+	Scan(any) error
 }
 
 // FileSystem : Any simulated or real filesystem should implement this interface.
@@ -90,10 +90,10 @@ type FileSystemProvider interface {
 	FileSystem
 
 	// UseLogger sets the logger for the FileSystem client.
-	UseLogger(logger interface{})
+	UseLogger(logger any)
 
 	// UseMetrics sets the metrics for the FileSystem client.
-	UseMetrics(metrics interface{})
+	UseMetrics(metrics any)
 
 	// Connect establishes a connection to FileSystem and registers metrics using the provided configuration when the client was Created.
 	Connect()

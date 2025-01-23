@@ -21,7 +21,7 @@ func (a *App) OverrideWebsocketUpgrader(wsUpgrader websocket.Upgrader) {
 // WebSocket connections. It internally handles the WebSocket handshake and provides a `websocket.Connection` object
 // within the handler context. User can access the underlying WebSocket connection using `ctx.GetWebsocketConnection()`.
 func (a *App) WebSocket(route string, handler Handler) {
-	a.GET(route, func(ctx *Context) (interface{}, error) {
+	a.GET(route, func(ctx *Context) (any, error) {
 		connID := ctx.Request.Context().Value(websocket.WSConnectionKey).(string)
 
 		conn := a.httpServer.ws.GetWebsocketConnection(connID)

@@ -21,10 +21,10 @@ type Responder struct {
 
 // Respond sends a response with the given data and handles potential errors, setting appropriate
 // status codes and formatting responses as JSON or raw data as needed.
-func (r Responder) Respond(data interface{}, err error) {
+func (r Responder) Respond(data any, err error) {
 	statusCode, errorObj := getStatusCode(r.method, data, err)
 
-	var resp interface{}
+	var resp any
 	switch v := data.(type) {
 	case resTypes.Raw:
 		resp = v.Data
@@ -54,7 +54,7 @@ func (r Responder) Respond(data interface{}, err error) {
 }
 
 // getStatusCode returns corresponding HTTP status codes.
-func getStatusCode(method string, data interface{}, err error) (statusCode int, errResp interface{}) {
+func getStatusCode(method string, data any, err error) (statusCode int, errResp any) {
 	if err == nil {
 		return handleSuccess(method, data)
 	}
@@ -70,7 +70,7 @@ func getStatusCode(method string, data interface{}, err error) (statusCode int, 
 	return http.StatusInternalServerError, createErrorResponse(err)
 }
 
-func handleSuccess(method string, data interface{}) (statusCode int, err interface{}) {
+func handleSuccess(method string, data any) (statusCode int, err any) {
 	switch method {
 	case http.MethodPost:
 		if data != nil {
@@ -85,24 +85,24 @@ func handleSuccess(method string, data interface{}) (statusCode int, err interfa
 	}
 }
 
-func createErrorResponse(err error) map[string]interface{} {
-	return map[string]interface{}{
+func createErrorResponse(err error) map[string]any {
+	return map[string]any{
 		"message": err.Error(),
 	}
 }
 
 // response represents an HTTP response.
 type response struct {
-	Error    interface{}    `json:"error,omitempty"`
+	Error    any            `json:"error,omitempty"`
 	Metadata map[string]any `json:"metadata,omitempty"`
-	Data     interface{}    `json:"data,omitempty"`
+	Data     any            `json:"data,omitempty"`
 }
 
 type statusCodeResponder interface {
 	StatusCode() int
 }
 
-// isNil checks if the given interface{} value is nil.
+// isNil checks if the given any value is nil.
 // It returns true if the value is nil or if it is a pointer that points to nil.
 // This function is useful for determining whether a value, including interface or pointer types, is effectively nil.
 func isNil(i any) bool {

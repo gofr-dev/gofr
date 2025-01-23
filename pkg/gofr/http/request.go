@@ -55,8 +55,8 @@ func (r *Request) PathParam(key string) string {
 }
 
 // Bind parses the request body and binds it to the provided interface.
-func (r *Request) Bind(i interface{}) error {
-	v := r.req.Header.Get("content-type")
+func (r *Request) Bind(i any) error {
+	v := r.req.Header.Get("Content-Type")
 	contentType := strings.Split(v, ";")[0]
 
 	switch contentType {
@@ -80,7 +80,7 @@ func (r *Request) Bind(i interface{}) error {
 
 // HostName retrieves the hostname from the request.
 func (r *Request) HostName() string {
-	proto := r.req.Header.Get("X-forwarded-proto")
+	proto := r.req.Header.Get("X-Forwarded-Proto")
 	if proto == "" {
 		proto = "http"
 	}
@@ -162,7 +162,7 @@ func (r *Request) bindForm(ptr any, isMultipart bool) error {
 }
 
 // bindBinary handles binding for binary/octet-stream content type.
-func (r *Request) bindBinary(raw interface{}) error {
+func (r *Request) bindBinary(raw any) error {
 	// Ensure raw is a pointer to a byte slice
 	byteSlicePtr, ok := raw.(*[]byte)
 	if !ok {

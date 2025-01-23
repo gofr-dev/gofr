@@ -8,10 +8,10 @@ import (
 
 // Logger interface is used by s3 package to log information about query execution.
 type Logger interface {
-	Debug(args ...interface{})
-	Debugf(pattern string, args ...interface{})
-	Logf(pattern string, args ...interface{})
-	Errorf(pattern string, args ...interface{})
+	Debug(args ...any)
+	Debugf(pattern string, args ...any)
+	Logf(pattern string, args ...any)
+	Errorf(pattern string, args ...any)
 }
 
 // s3Client defines the interface that is used for gofr-s3 datasource as well as mocks to
