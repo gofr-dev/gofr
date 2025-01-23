@@ -68,7 +68,7 @@ go get -u gofr.dev/pkg/gofr
 
 ## 🏃 **Running GoFr**
 
-Here's a simple example to get a GoFr application up and running:
+Here's a simple example to run a GoFr application:
 
 ```go
 package main
