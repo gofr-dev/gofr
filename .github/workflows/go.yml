@@ -230,7 +230,7 @@ jobs:
     name: Upload Coverage📊
     runs-on: ubuntu-latest
     needs: [Example-Unit-Testing,PKG-Unit-Testing]
-    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/development'}}
+    if: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/development') || (github.event_name == 'pull_request' && github.base_ref == 'development') }}
     steps:
       - name: Check out code into the Go module directory
         uses: actions/checkout@v4
