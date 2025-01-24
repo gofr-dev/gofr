@@ -74,8 +74,8 @@ func TestHTTPService_createAndSendRequest(t *testing.T) {
 			assert.Equal(t, http.MethodPost, r.Method)
 			assert.Equal(t, "/test-path", r.URL.Path)
 			assert.Equal(t, tc.expQueryParam, r.URL.RawQuery)
-			assert.Contains(t, "value1", r.Header.Get("header1"))
-			assert.Contains(t, tc.expContentType, r.Header.Get("content-type"))
+			assert.Contains(t, "value1", r.Header.Get("Header1"))
+			assert.Contains(t, tc.expContentType, r.Header.Get("Content-Type"))
 			assert.Equal(t, string(tc.body), string(body))
 
 			w.WriteHeader(http.StatusOK)
@@ -145,7 +145,7 @@ func TestHTTPService_GetWithHeaders(t *testing.T) {
 		assert.Equal(t, http.MethodGet, r.Method)
 		assert.Equal(t, "/test-path", r.URL.Path)
 		assert.Equal(t, "key=value&name=test", r.URL.RawQuery)
-		assert.Contains(t, "value1", r.Header.Get("header1"))
+		assert.Contains(t, "value1", r.Header.Get("Header1"))
 
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -226,7 +226,7 @@ func TestHTTPService_PutWithHeaders(t *testing.T) {
 		assert.Equal(t, http.MethodPut, r.Method)
 		assert.Equal(t, "/test-path", r.URL.Path)
 		assert.Equal(t, "key=value&name=test", r.URL.RawQuery)
-		assert.Contains(t, "value1", r.Header.Get("header1"))
+		assert.Contains(t, "value1", r.Header.Get("Header1"))
 		assert.Contains(t, "Test Body", string(body))
 
 		w.WriteHeader(http.StatusOK)
@@ -308,7 +308,7 @@ func TestHTTPService_PatchWithHeaders(t *testing.T) {
 		assert.Equal(t, http.MethodPut, r.Method)
 		assert.Equal(t, "/test-path", r.URL.Path)
 		assert.Equal(t, "key=value&name=test", r.URL.RawQuery)
-		assert.Contains(t, "value1", r.Header.Get("header1"))
+		assert.Contains(t, "value1", r.Header.Get("Header1"))
 		assert.Contains(t, "Test Body", string(body))
 
 		w.WriteHeader(http.StatusOK)
@@ -390,7 +390,7 @@ func TestHTTPService_PostWithHeaders(t *testing.T) {
 		assert.Equal(t, http.MethodPost, r.Method)
 		assert.Equal(t, "/test-path", r.URL.Path)
 		assert.Equal(t, "key=value&name=test", r.URL.RawQuery)
-		assert.Contains(t, "value1", r.Header.Get("header1"))
+		assert.Contains(t, "value1", r.Header.Get("Header1"))
 		assert.Contains(t, "Test Body", string(body))
 
 		w.WriteHeader(http.StatusOK)
@@ -469,7 +469,7 @@ func TestHTTPService_DeleteWithHeaders(t *testing.T) {
 
 		assert.Equal(t, http.MethodDelete, r.Method)
 		assert.Equal(t, "/test-path", r.URL.Path)
-		assert.Contains(t, "value1", r.Header.Get("header1"))
+		assert.Contains(t, "value1", r.Header.Get("Header1"))
 		assert.Contains(t, "Test Body", string(body))
 
 		w.WriteHeader(http.StatusOK)
