@@ -810,7 +810,7 @@ func Test_SwaggerEndpoints(t *testing.T) {
 	}
 
 	re, _ := http.NewRequestWithContext(context.Background(), http.MethodGet,
-		fmt.Sprintf("http://localhost:%s", configs.HTTPHost)+"/.well-known/swagger", http.NoBody)
+		fmt.Sprintf("%s", configs.HTTPHost)+"/.well-known/swagger", http.NoBody)
 	resp, err := netClient.Do(re)
 
 	defer func() {
