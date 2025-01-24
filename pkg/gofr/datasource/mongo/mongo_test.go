@@ -24,8 +24,9 @@ func Test_NewMongoClient(t *testing.T) {
 	logger := NewMockLogger(ctrl)
 
 	logger.EXPECT().Debugf(gomock.Any(), gomock.Any())
+	logger.EXPECT().Logf(gomock.Any(), gomock.Any(), gomock.Any())
 
-	logger.EXPECT().Errorf(gomock.Any(), gomock.Any(), gomock.Any())
+	metrics.EXPECT().NewHistogram(gomock.Any(), gomock.Any(), gomock.Any())
 
 	client := New(Config{Database: "test", Host: "localhost", Port: 27017, User: "admin", ConnectionTimeout: 1 * time.Second})
 	client.Database = &mongo.Database{}
