@@ -97,6 +97,7 @@ linters:
   enable:
     - asciicheck
     - bodyclose
+    - canonicalheader
     - copyloopvar
     - dogsled
     - dupl
