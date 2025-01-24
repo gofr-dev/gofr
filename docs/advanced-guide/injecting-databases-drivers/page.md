@@ -905,7 +905,7 @@ func main() {
 }
 
 // getPersonByID handles the retrieval of a specific person by ID
-func getPersonByID(ctx *gofr.Context) (interface{}, error) {
+func getPersonByID(ctx *gofr.Context) (any, error) {
 	id := ctx.PathParam("id")
 
 	query := "SELECT * FROM type::thing('person', $id)"
@@ -927,7 +927,7 @@ func getPersonByID(ctx *gofr.Context) (interface{}, error) {
 }
 
 // createPerson handles the creation of a new person
-func createPerson(ctx *gofr.Context) (interface{}, error) {
+func createPerson(ctx *gofr.Context) (any, error) {
 	var person Person
 
 	if err := ctx.Bind(&person); err != nil {

@@ -278,7 +278,7 @@ type MongoProvider interface {
 // SurrealDB defines an interface representing a SurrealDB client with common database operations.
 type SurrealDB interface {
 
-	// Query executes a Surreal query with the provided variables and returns the query results as a slice of interfaces.
+	// Query executes a Surreal query with the provided variables and returns the query results as a slice of interfaces{}.
 	// It returns an error if the query execution fails.
 	Query(ctx context.Context, query string, vars map[string]any) ([]any, error)
 
