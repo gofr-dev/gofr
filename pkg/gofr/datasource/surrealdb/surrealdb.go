@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"net/url"
 	"os"
 	"time"
@@ -19,8 +20,18 @@ import (
 )
 
 var (
-	// errNotConnected indicates that the database client is not connected.
-	errNotConnected = errors.New("not connected to database")
+	errNotConnected                = errors.New("not connected to database")
+	errNoDatabaseInstance          = errors.New("failed to connect to SurrealDB: no valid database instance")
+	errInvalidCredentialsConfig    = errors.New("both username and password must be provided")
+	errEmbeddedDBNotEnabled        = errors.New("embedded database not enabled")
+	errInvalidConnectionURL        = errors.New("invalid connection URL")
+	errNoRecord                    = errors.New("no record found")
+	errUnexpectedResultType        = errors.New("unexpected result type")
+	errUnexpectedHealthCheckResult = errors.New("unexpected result from health check query")
+	errNoResult                    = errors.New("no result found in query response")
+	errInvalidResult               = errors.New("unexpected result format: expected []any")
+	ErrInvalidRecord               = errors.New("invalid record format, expected map[any]any")
+	errUnexpectedResult            = errors.New("unexpected result type: expected []any")
 )
 
 const (
@@ -81,13 +92,6 @@ func (c *Client) UseTracer(tracer any) {
 		c.tracer = t
 	}
 }
-
-var (
-	errNoDatabaseInstance       = errors.New("failed to connect to SurrealDB: no valid database instance")
-	errInvalidCredentialsConfig = errors.New("both username and password must be provided")
-	errEmbeddedDBNotEnabled     = errors.New("embedded database not enabled")
-	errInvalidConnectionURL     = errors.New("invalid connection URL")
-)
 
 // newDB creates a new SurrealDB client.
 func newDB(connectionURL string) (con connection.Connection, err error) {
@@ -257,12 +261,20 @@ func (c *Client) useDatabase(db string) error {
 	return c.db.Use("", db)
 }
 
+type DBResponse struct {
+	ID     any                  `json:"id" msgpack:"id"`
+	Error  *connection.RPCError `json:"error,omitempty" msgpack:"error,omitempty"`
+	Result any
+}
+
+// QueryResponse defines the structure of the query response.
 type QueryResponse struct {
 	ID     any                  `json:"id" msgpack:"id"`
 	Error  *connection.RPCError `json:"error,omitempty" msgpack:"error,omitempty"`
 	Result *[]QueryResult       `json:"result,omitempty" msgpack:"result,omitempty"`
 }
 
+// QueryResult represents each query result from SurrealDB.
 type QueryResult struct {
 	Status string `json:"status"`
 	Time   string `json:"time"`
@@ -271,17 +283,19 @@ type QueryResult struct {
 
 // Query executes a query on the SurrealDB instance.
 func (c *Client) Query(ctx context.Context, query string, vars map[string]any) ([]any, error) {
+	// Initialize tracing for query performance monitoring
 	span := c.addTrace(ctx, "Query", query)
-	if span != nil {
-		defer span.End()
-	}
+	defer func() {
+		if span != nil {
+			span.End()
+		}
+	}()
 
 	if c.db == nil {
 		return nil, errNotConnected
 	}
 
 	startTime := time.Now()
-
 	defer c.sendOperationStats(&QueryLog{
 		Query:         query,
 		OperationName: "query",
@@ -292,59 +306,115 @@ func (c *Client) Query(ctx context.Context, query string, vars map[string]any) (
 	}, startTime)
 
 	var res QueryResponse
-
 	if err := c.db.Send(&res, "query", query, vars); err != nil {
-		return nil, err
+		return nil, errNoResult
 	}
 
-	result := res.Result
+	if res.Result == nil {
+		return nil, errNoResult
+	}
 
-	resp := make([]any, 0)
+	return c.processResults(res.Result)
+}
 
-	for _, r := range *result {
+// processResults processes and extracts meaningful data from query results.
+func (c *Client) processResults(results *[]QueryResult) ([]any, error) {
+	var resp []any
+
+	if len(*results) > 0 {
+		resp = make([]any, 0, len(*results))
+	}
+
+	for _, r := range *results {
 		if r.Status != statusOK {
 			c.logger.Errorf("query result error: %v", r.Status)
 			continue
 		}
 
-		res, ok := r.Result.([]any)
+		recordList, ok := r.Result.([]any)
 		if !ok {
-			c.logger.Errorf("unexpected result type: %v", r.Result)
-			continue
+			return nil, errInvalidResult
 		}
 
-		resp = append(resp, res...)
+		for _, record := range recordList {
+			extracted, err := c.extractRecord(record)
+			if err != nil {
+				return nil, fmt.Errorf("failed to extract record: %w", err)
+			}
+
+			resp = append(resp, extracted)
+		}
 	}
 
 	return resp, nil
 }
 
-type Response struct {
-	ID     any                  `json:"id" msgpack:"id"`
-	Error  *connection.RPCError `json:"error,omitempty" msgpack:"error,omitempty"`
-	Result any                  `json:"result,omitempty" msgpack:"result,omitempty"`
+// extractRecord extracts and processes a single record into a map[string]any}.
+func (c *Client) extractRecord(record any) (map[string]any, error) {
+	recordMap, ok := record.(map[any]any)
+	if !ok {
+		return nil, errUnexpectedResult
+	}
+
+	extracted := make(map[string]any, len(recordMap))
+
+	for k, v := range recordMap {
+		keyStr, ok := k.(string)
+		if !ok {
+			c.logger.Errorf("non-string key encountered: %v", k)
+			continue
+		}
+
+		val := c.convertValue(v)
+
+		extracted[keyStr] = val
+	}
+
+	return extracted, nil
 }
 
-var (
-	errNonStringKey = errors.New("non-string key encountered")
-)
+func (*Client) convertValue(v any) any {
+	switch val := v.(type) {
+	case float64:
+		if val > math.MaxInt || val < math.MinInt {
+			return nil
+		}
 
-// Select queries the specified table in the database and retrieves all records.
+		return int(val)
+	case uint64:
+		if val > math.MaxInt {
+			return nil
+		}
+
+		return int(val)
+	case int64:
+		if val > math.MaxInt || val < math.MinInt {
+			return nil
+		}
+
+		return int(val)
+	case string:
+		return val
+	default:
+		return val
+	}
+}
+
 func (c *Client) Select(ctx context.Context, table string) ([]map[string]any, error) {
 	query := fmt.Sprintf("SELECT * FROM %s", table)
 	span := c.addTrace(ctx, "Select", query)
 
-	if span != nil {
-		defer span.End()
-	}
+	defer func() {
+		if span != nil {
+			span.End()
+		}
+	}()
 
 	if c.db == nil {
 		return nil, errNotConnected
 	}
 
 	startTime := time.Now()
-
-	// Set up deferred stats collection at the start
 	defer c.sendOperationStats(&QueryLog{
 		Query:         query,
 		OperationName: "select",
@@ -354,55 +424,50 @@ func (c *Client) Select(ctx context.Context, table string) ([]map[string]any, er
 		Span:          span,
 	}, startTime)
 
-	var res Response
+	var res DBResponse
 	if err := c.db.Send(&res, "select", table); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("select operation failed: %w", err)
 	}
 
-	result, ok := res.Result.([]any)
-	if !ok {
-		return nil, fmt.Errorf("%w", errNonStringKey)
-	}
-
-	resSlice := make([]map[string]any, 0)
-
-	for _, record := range result {
-		recordMap := record.(map[any]any)
-
-		resMap := make(map[string]any)
-
-		for k, v := range recordMap {
-			keyStr, ok := k.(string)
-			if !ok {
-				return nil, fmt.Errorf("%w: %v", errNonStringKey, k)
-			}
-
-			resMap[keyStr] = v
-		}
-
-		resSlice = append(resSlice, resMap)
-	}
-
-	return resSlice, nil
+	return c.processSelectResults(res.Result)
 }
 
-var errUnexpectedResultType = errors.New("unexpected result type")
+func (c *Client) processSelectResults(result any) ([]map[string]any, error) {
+	records, ok := result.([]any)
+	if !ok {
+		return nil, errUnexpectedResult
+	}
+
+	processed := make([]map[string]any, 0, len(records))
+
+	for _, record := range records {
+		extracted, err := c.extractRecord(record)
+		if err != nil {
+			return nil, fmt.Errorf("failed to process record: %w", err)
+		}
+
+		processed = append(processed, extracted)
+	}
+
+	return processed, nil
+}
 
 // Create creates a new record into the specified table in the database.
 func (c *Client) Create(ctx context.Context, table string, data any) (map[string]any, error) {
-	query := fmt.Sprintf("CREATE INTO %s", table)
+	query := fmt.Sprintf("CREATE %s", table)
 	span := c.addTrace(ctx, "Create", query)
 
-	if span != nil {
-		defer span.End()
-	}
+	defer func() {
+		if span != nil {
+			span.End()
+		}
+	}()
 
 	if c.db == nil {
 		return nil, errNotConnected
 	}
 
 	startTime := time.Now()
-
 	defer c.sendOperationStats(&QueryLog{
 		Query:         query,
 		OperationName: "create",
@@ -413,20 +478,13 @@ func (c *Client) Create(ctx context.Context, table string, data any) (map[string
 		Span:          span,
 	}, startTime)
 
-	var CreateResult Response
-	if err := c.db.Send(&CreateResult, "create", table, data); err != nil {
-		return nil, err
+	var res DBResponse
+	if err := c.db.Send(&res, "create", table, data); err != nil {
+		return nil, fmt.Errorf("create operation failed: %w", err)
 	}
 
-	result, ok := CreateResult.Result.(map[string]any)
-	if !ok {
-		return nil, fmt.Errorf("%w: %v", errUnexpectedResultType, CreateResult.Result)
-	}
-
-	return result, nil
+	return c.extractRecord(res.Result)
 }
-
-var errNoRecord = errors.New("no record found")
 
 // Update modifies an existing record in the specified table.
 func (c *Client) Update(ctx context.Context, table, id string, data any) (any, error) {
@@ -455,7 +513,7 @@ func (c *Client) Update(ctx context.Context, table, id string, data any) (any, e
 
 	dataMap := data.(map[string]any)
 
-	var updateResult Response
+	var updateResult DBResponse
 
 	updateQuery := fmt.Sprintf(`
         UPDATE %s:%s SET 
@@ -481,7 +539,7 @@ func (c *Client) Update(ctx context.Context, table, id string, data any) (any, e
 }
 
 // Insert inserts a new record into the specified table in SurrealDB.
-func (c *Client) Insert(ctx context.Context, table string, data any) (*Response, error) {
+func (c *Client) Insert(ctx context.Context, table string, data any) ([]map[string]any, error) {
 	query := fmt.Sprintf("INSERT INTO %s", table)
 	span := c.addTrace(ctx, "Insert", query)
 
@@ -494,7 +552,6 @@ func (c *Client) Insert(ctx context.Context, table string, data any) (*Response,
 	}
 
 	startTime := time.Now()
-
 	defer c.sendOperationStats(&QueryLog{
 		Query:         query,
 		OperationName: "insert",
@@ -505,29 +562,40 @@ func (c *Client) Insert(ctx context.Context, table string, data any) (*Response,
 		Span:          span,
 	}, startTime)
 
-	var insertResult Response
-	if err := c.db.Send(&insertResult, "insert", table, data); err != nil {
+	var res DBResponse
+	if err := c.db.Send(&res, "insert", table, data); err != nil {
 		return nil, err
 	}
 
-	return &insertResult, nil
+	result, ok := res.Result.([]any)
+	if !ok {
+		return nil, fmt.Errorf("%w: %T", errUnexpectedResultType, res.Result)
+	}
+
+	resSlice := make([]map[string]any, 0)
+	for _, record := range result {
+		resSlice = append(resSlice, record.(map[string]any))
+	}
+
+	return resSlice, nil
 }
 
 // Delete removes a record from the specified table in SurrealDB.
 func (c *Client) Delete(ctx context.Context, table, id string) (any, error) {
-	query := fmt.Sprintf("DELETE FROM %s WHERE id = %s", table, id)
+	query := fmt.Sprintf("DELETE FROM %s:%s", table, id)
 	span := c.addTrace(ctx, "Delete", query)
 
-	if span != nil {
-		defer span.End()
-	}
+	defer func() {
+		if span != nil {
+			span.End()
+		}
+	}()
 
 	if c.db == nil {
 		return nil, errNotConnected
 	}
 
 	startTime := time.Now()
-
 	defer c.sendOperationStats(&QueryLog{
 		Query:         query,
 		OperationName: "delete",
@@ -538,18 +606,12 @@ func (c *Client) Delete(ctx context.Context, table, id string) (any, error) {
 		Span:          span,
 	}, startTime)
 
-	var DeleteResult Response
-
-	arg := models.RecordID{
-		Table: table,
-		ID:    id,
+	var res DBResponse
+	if err := c.db.Send(&res, "delete", table+":"+id); err != nil {
+		return nil, fmt.Errorf("delete operation failed: %w", err)
 	}
 
-	if err := c.db.Send(&DeleteResult, "delete", arg); err != nil {
-		return nil, err
-	}
-
-	return DeleteResult.Result, nil
+	return c.extractRecord(res.Result)
 }
 
 // addTrace starts a new trace span for the specified method and query.
@@ -593,9 +655,6 @@ type Health struct {
 	Status  string         `json:"status,omitempty"`
 	Details map[string]any `json:"details,omitempty"`
 }
-
-// HealthCheck performs a health check on the SurrealDB connection.
-var errUnexpectedHealthCheckResult = errors.New("unexpected result from health check query")
 
 func (c *Client) HealthCheck(ctx context.Context) (any, error) {
 	const (

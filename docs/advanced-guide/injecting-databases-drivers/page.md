@@ -898,56 +898,57 @@ func main() {
 
 	app.AddSurrealDB(client)
 
-	// GET request to fetch person by ID
-	app.GET("/person/{id}", func(ctx *gofr.Context) (interface{}, error) {
-		id := ctx.PathParam("id")
-
-		query := "SELECT * FROM type::thing('person', $id)"
-		vars := map[string]interface{}{
-			"id": id,
-		}
-
-		result, err := ctx.SurrealDB.Query(ctx, query, vars)
-		if err != nil {
-			ctx.Logger.Error("Query error: ", err)
-			return nil, err
-		}
-
-		if len(result) > 0 {
-			return result[0], nil
-		}
-
-		return nil, fmt.Errorf("person not found")
-	})
-
-	// POST request to create a new person
-	app.POST("/person", func(ctx *gofr.Context) (interface{}, error) {
-		var person Person
-		if err := ctx.Bind(&person); err != nil {
-			ctx.Logger.Error("Binding error: ", err)
-			return ErrorResponse{Message: "Invalid request body"}, nil
-		}
-
-		result, err := ctx.SurrealDB.Create(ctx, "person", map[string]interface{}{
-			"name":  person.Name,
-			"age":   person.Age,
-			"email": person.Email,
-		})
-
-		if err != nil {
-			ctx.Logger.Errorf("Creation error: %v", err)
-			return ErrorResponse{Message: "Creation failed"}, nil
-		}
-
-		if id, ok := result["id"]; ok {
-			person.ID = fmt.Sprintf("%v", id)
-			return person, nil
-		}
-
-		return ErrorResponse{Message: "Unexpected result format"}, nil
-	})
+	app.GET("/person/{id}", getPersonByID)
+	app.POST("/person", createPerson)
 
 	app.Run()
 }
 
+// getPersonByID handles the retrieval of a specific person by ID
+func getPersonByID(ctx *gofr.Context) (interface{}, error) {
+	id := ctx.PathParam("id")
+
+	query := "SELECT * FROM type::thing('person', $id)"
+	vars := map[string]interface{}{
+		"id": id,
+	}
+
+	result, err := ctx.SurrealDB.Query(ctx, query, vars)
+	if err != nil {
+		ctx.Logger.Error("Query error: ", err)
+		return nil, err
+	}
+
+	if len(result) > 0 {
+		return result[0].(map[string]any), nil
+	}
+
+	return nil, fmt.Errorf("person not found")
+}
+
+// createPerson handles the creation of a new person
+func createPerson(ctx *gofr.Context) (interface{}, error) {
+	var person Person
+
+	if err := ctx.Bind(&person); err != nil {
+		return ErrorResponse{Message: "Invalid request body"}, nil
+	}
+
+	if person.Name == "" {
+		return ErrorResponse{Message: "Name is required"}, nil
+	}
+
+	result, err := ctx.SurrealDB.Create(ctx, "person", person)
+	if err != nil {
+		ctx.Logger.Error("Creation error: ", err)
+		return ErrorResponse{Message: "Creation failed"}, nil
+	}
+
+	if id, ok := result["id"]; ok {
+		person.ID = fmt.Sprintf("%v", id)
+	}
+
+	return person, nil
+
+}
 ```
