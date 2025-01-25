@@ -160,7 +160,7 @@ func (a *App) AddSurrealDB(db container.SurrealBDProvider) {
 	db.UseLogger(a.Logger())
 	db.UseMetrics(a.Metrics())
 
-	tracer := otel.GetTracerProvider().Tracer("gofr-scylladb")
+	tracer := otel.GetTracerProvider().Tracer("gofr-surrealdb")
 	db.UseTracer(tracer)
 	db.Connect()
 	a.container.SurrealDB = db

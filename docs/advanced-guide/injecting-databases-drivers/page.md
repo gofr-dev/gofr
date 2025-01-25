@@ -831,7 +831,7 @@ func getUser(c *gofr.Context) (any, error) {
 ## SurrealDB
 
 GoFr supports injecting SurrealDB database that supports the following interface. Any driver that implements the interface can be added
-using `app.AddSurrealDB()` method, and user's can use Surreal DB across application with `gofr.Context`.
+using `app.AddSurrealDB()` method, and users can use Surreal DB across application through the `gofr.Context`.
 
 ```go
 // SurrealDB defines an interface representing a SurrealDB client with common database operations.

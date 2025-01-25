@@ -372,6 +372,7 @@ func (c *Client) extractRecord(record any) (map[string]any, error) {
 	return extracted, nil
 }
 
+// convertValue handles the conversion of different numeric types and strings to appropriate Go types.
 func (*Client) convertValue(v any) any {
 	switch val := v.(type) {
 	case float64:
@@ -399,6 +400,7 @@ func (*Client) convertValue(v any) any {
 	}
 }
 
+// Select retrieves all records from the specified table in the SurrealDB database.
 func (c *Client) Select(ctx context.Context, table string) ([]map[string]any, error) {
 	query := fmt.Sprintf("SELECT * FROM %s", table)
 	span := c.addTrace(ctx, "Select", query)
@@ -431,6 +433,7 @@ func (c *Client) Select(ctx context.Context, table string) ([]map[string]any, er
 	return c.processSelectResults(res.Result)
 }
 
+// processSelectResults handles the conversion of raw database results into a structured format.
 func (c *Client) processSelectResults(result any) ([]map[string]any, error) {
 	records, ok := result.([]any)
 	if !ok {
