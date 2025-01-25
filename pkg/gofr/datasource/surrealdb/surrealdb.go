@@ -20,17 +20,16 @@ import (
 )
 
 var (
-	errNotConnected                = errors.New("not connected to database")
-	errNoDatabaseInstance          = errors.New("failed to connect to SurrealDB: no valid database instance")
-	errInvalidCredentialsConfig    = errors.New("both username and password must be provided")
-	errEmbeddedDBNotEnabled        = errors.New("embedded database not enabled")
-	errInvalidConnectionURL        = errors.New("invalid connection URL")
-	errNoRecord                    = errors.New("no record found")
-	errUnexpectedResultType        = errors.New("unexpected result type")
-	errUnexpectedHealthCheckResult = errors.New("unexpected result from health check query")
-	errNoResult                    = errors.New("no result found in query response")
-	errInvalidResult               = errors.New("unexpected result format: expected []any")
-	errUnexpectedResult            = errors.New("unexpected result type: expected []any")
+	errNotConnected             = errors.New("not connected to database")
+	errNoDatabaseInstance       = errors.New("failed to connect to SurrealDB: no valid database instance")
+	errInvalidCredentialsConfig = errors.New("both username and password must be provided")
+	errEmbeddedDBNotEnabled     = errors.New("embedded database not enabled")
+	errInvalidConnectionURL     = errors.New("invalid connection URL")
+	errNoRecord                 = errors.New("no record found")
+	errUnexpectedResultType     = errors.New("unexpected result type")
+	errNoResult                 = errors.New("no result found in query response")
+	errInvalidResult            = errors.New("unexpected result format: expected []any")
+	errUnexpectedResult         = errors.New("unexpected result type: expected []any")
 )
 
 const (
@@ -456,7 +455,7 @@ func (c *Client) processSelectResults(result any) ([]map[string]any, error) {
 
 // Create creates a new record into the specified table in the database.
 func (c *Client) Create(ctx context.Context, table string, data any) (map[string]any, error) {
-	query := fmt.Sprintf("CREATE %s", table)
+	query := fmt.Sprintf("CREATE INTO %s SET", table)
 	span := c.addTrace(ctx, "Create", query)
 
 	defer func() {
@@ -517,7 +516,12 @@ func (c *Client) Update(ctx context.Context, table, id string, data any) (any, e
 
 	var updateResult DBResponse
 
-	updateQuery := fmt.Sprintf(` UPDATE %s:%s SET name = $name,  age = $age, email = $email RETURN *`, table, id)
+	updateQuery := fmt.Sprintf(`
+        UPDATE %s:%s SET 
+        name = $name, 
+        age = $age, 
+        email = $email
+        RETURN *`, table, id)
 
 	if err := c.db.Send(&updateResult, "query", updateQuery, map[string]any{
 		"name":  dataMap["name"],
@@ -658,7 +662,7 @@ type Health struct {
 	Details map[string]any `json:"details,omitempty"`
 }
 
-func (c *Client) HealthCheck(ctx context.Context) (any, error) {
+func (c *Client) HealthCheck(context.Context) (any, error) {
 	const (
 		statusDown = "DOWN"
 		statusUP   = "UP"
@@ -679,24 +683,26 @@ func (c *Client) HealthCheck(ctx context.Context) (any, error) {
 		return &h, errNotConnected
 	}
 
-	query := "RETURN 'SurrealDB Health Check'"
-
-	result, err := c.Query(ctx, query, nil)
-	if err != nil {
+	var res DBResponse
+	if err := c.db.Send(&res, "info"); err != nil {
 		h.Status = statusDown
-		h.Details["error"] = fmt.Sprintf("Failed to execute health check query: %v", err)
+		h.Details["error"] = fmt.Sprintf("Connection test failed: %v", err)
+		h.Details["connection_state"] = "failed"
 
 		return &h, err
 	}
 
-	if len(result) == 0 || result[0] != "SurrealDB Health Check" {
+	if err := c.db.Use(c.config.Namespace, c.config.Database); err != nil {
 		h.Status = statusDown
-		h.Details["error"] = errUnexpectedHealthCheckResult.Error()
+		h.Details["error"] = fmt.Sprintf("Database access verification failed: %v", err)
+		h.Details["connection_state"] = "connected_but_access_failed"
 
-		return &h, fmt.Errorf("%w", errUnexpectedHealthCheckResult)
+		return &h, err
 	}
 
 	h.Status = statusUP
+	h.Details["message"] = "Database is healthy"
+	h.Details["connection_state"] = "fully_connected"
 
 	return &h, nil
 }
