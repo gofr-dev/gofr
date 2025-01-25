@@ -30,7 +30,6 @@ var (
 	errUnexpectedHealthCheckResult = errors.New("unexpected result from health check query")
 	errNoResult                    = errors.New("no result found in query response")
 	errInvalidResult               = errors.New("unexpected result format: expected []any")
-	ErrInvalidRecord               = errors.New("invalid record format, expected map[any]any")
 	errUnexpectedResult            = errors.New("unexpected result type: expected []any")
 )
 
@@ -515,12 +514,7 @@ func (c *Client) Update(ctx context.Context, table, id string, data any) (any, e
 
 	var updateResult DBResponse
 
-	updateQuery := fmt.Sprintf(`
-        UPDATE %s:%s SET 
-        name = $name, 
-        age = $age, 
-        email = $email
-        RETURN *`, table, id)
+	updateQuery := fmt.Sprintf(` UPDATE %s:%s SET name = $name,  age = $age, email = $email RETURN *`, table, id)
 
 	if err := c.db.Send(&updateResult, "query", updateQuery, map[string]any{
 		"name":  dataMap["name"],
@@ -582,7 +576,7 @@ func (c *Client) Insert(ctx context.Context, table string, data any) ([]map[stri
 
 // Delete removes a record from the specified table in SurrealDB.
 func (c *Client) Delete(ctx context.Context, table, id string) (any, error) {
-	query := fmt.Sprintf("DELETE FROM %s:%s", table, id)
+	query := fmt.Sprintf("DELETE FROM %s:%s RETURN BEFORE;", table, id)
 	span := c.addTrace(ctx, "Delete", query)
 
 	defer func() {
@@ -607,11 +601,16 @@ func (c *Client) Delete(ctx context.Context, table, id string) (any, error) {
 	}, startTime)
 
 	var res DBResponse
-	if err := c.db.Send(&res, "delete", table+":"+id); err != nil {
+	if err := c.db.Send(&res, "query", query, nil); err != nil {
 		return nil, fmt.Errorf("delete operation failed: %w", err)
 	}
 
-	return c.extractRecord(res.Result)
+	results, ok := res.Result.([]any)
+	if !ok || len(results) == 0 {
+		return nil, nil
+	}
+
+	return c.extractRecord(results[0])
 }
 
 // addTrace starts a new trace span for the specified method and query.
