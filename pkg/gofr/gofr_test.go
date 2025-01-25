@@ -196,7 +196,11 @@ func Test_AddHTTPService(t *testing.T) {
 }
 
 func Test_AddDuplicateHTTPService(t *testing.T) {
+	configs := testutil.NewServerConfigs(t)
+
 	t.Setenv("LOG_LEVEL", "DEBUG")
+	t.Setenv("METRICS_PORT", strconv.Itoa(configs.MetricsPort))
+	t.Setenv("HTTP_PORT", strconv.Itoa(configs.HTTPPort))
 
 	logs := testutil.StdoutOutputForFunc(func() {
 		a := New()
@@ -806,7 +810,7 @@ func Test_SwaggerEndpoints(t *testing.T) {
 	}
 
 	re, _ := http.NewRequestWithContext(context.Background(), http.MethodGet,
-		fmt.Sprintf("http://localhost:%s", configs.HTTPHost)+"/.well-known/swagger", http.NoBody)
+		configs.HTTPHost+"/.well-known/swagger", http.NoBody)
 	resp, err := netClient.Do(re)
 
 	defer func() {
