@@ -877,7 +877,6 @@ The following example demonstrates injecting an SurrealDB instance into a GoFr a
 package main
 
 import (
-	"fmt"
 	"gofr.dev/pkg/gofr"
 	"gofr.dev/pkg/gofr/datasource/surrealdb"
 )
@@ -908,57 +907,45 @@ func main() {
 
 	app.AddSurrealDB(client)
 
-	app.GET("/person/{id}", getPersonByID)
-	app.POST("/person", createPerson)
+	// GET request to fetch person by ID
+	app.GET("/person/{id}", func(ctx *gofr.Context) (interface{}, error) {
+		id := ctx.PathParam("id")
+
+		query := "SELECT * FROM type::thing('person', $id)"
+		vars := map[string]interface{}{
+			"id": id,
+		}
+
+		result, err := ctx.SurrealDB.Query(ctx, query, vars)
+		if err != nil {
+			return nil, err
+		}
+
+		return result, nil
+	})
+
+	// POST request to create a new person
+	app.POST("/person", func(ctx *gofr.Context) (interface{}, error) {
+		var person Person
+
+		if err := ctx.Bind(&person); err != nil {
+			return ErrorResponse{Message: "Invalid request body"}, nil
+		}
+
+		result, err := ctx.SurrealDB.Create(ctx, "person", map[string]interface{}{
+			"name":  person.Name,
+			"age":   person.Age,
+			"email": person.Email,
+		})
+
+		if err != nil {
+			return nil, err
+		}
+
+		return result, nil
+	})
 
 	app.Run()
 }
 
-// getPersonByID handles the retrieval of a specific person by ID
-func getPersonByID(ctx *gofr.Context) (any, error) {
-	id := ctx.PathParam("id")
-
-	query := "SELECT * FROM type::thing('person', $id)"
-	vars := map[string]interface{}{
-		"id": id,
-	}
-
-	result, err := ctx.SurrealDB.Query(ctx, query, vars)
-	if err != nil {
-		ctx.Logger.Error("Query error: ", err)
-		return nil, err
-	}
-
-	if len(result) > 0 {
-		return result[0].(map[string]any), nil
-	}
-
-	return nil, fmt.Errorf("person not found")
-}
-
-// createPerson handles the creation of a new person
-func createPerson(ctx *gofr.Context) (any, error) {
-	var person Person
-
-	if err := ctx.Bind(&person); err != nil {
-		return ErrorResponse{Message: "Invalid request body"}, nil
-	}
-
-	if person.Name == "" {
-		return ErrorResponse{Message: "Name is required"}, nil
-	}
-
-	result, err := ctx.SurrealDB.Create(ctx, "person", person)
-	if err != nil {
-		ctx.Logger.Error("Creation error: ", err)
-		return ErrorResponse{Message: "Creation failed"}, nil
-	}
-
-	if id, ok := result["id"]; ok {
-		person.ID = fmt.Sprintf("%v", id)
-	}
-
-	return person, nil
-
-}
 ```
