@@ -414,9 +414,11 @@ func (c *Client) Select(ctx context.Context, table string) ([]map[string]any, er
 		return nil, errNotConnected
 	}
 
+	logMessage := fmt.Sprintf("Fetching all records from table '%s'", table)
+
 	startTime := time.Now()
 	defer c.sendOperationStats(&QueryLog{
-		Query:         query,
+		Query:         logMessage,
 		OperationName: "select",
 		Namespace:     c.config.Namespace,
 		Database:      c.config.Database,
@@ -468,9 +470,11 @@ func (c *Client) Create(ctx context.Context, table string, data any) (map[string
 		return nil, errNotConnected
 	}
 
+	logMessage := fmt.Sprintf("Creating new record in table '%s'", table)
+
 	startTime := time.Now()
 	defer c.sendOperationStats(&QueryLog{
-		Query:         query,
+		Query:         logMessage,
 		OperationName: "create",
 		Namespace:     c.config.Namespace,
 		Database:      c.config.Database,
@@ -500,9 +504,11 @@ func (c *Client) Update(ctx context.Context, table, id string, data any) (any, e
 		defer span.End()
 	}
 
+	logMessage := fmt.Sprintf("Updating record with ID '%s' in table '%s'", id, table)
+
 	startTime := time.Now()
 	defer c.sendOperationStats(&QueryLog{
-		Query:         query,
+		Query:         logMessage,
 		OperationName: "update",
 		Namespace:     c.config.Namespace,
 		Database:      c.config.Database,
@@ -552,9 +558,11 @@ func (c *Client) Insert(ctx context.Context, table string, data any) ([]map[stri
 		return nil, errNotConnected
 	}
 
+	logMessage := fmt.Sprintf("Inserting record to table '%s'", table)
+
 	startTime := time.Now()
 	defer c.sendOperationStats(&QueryLog{
-		Query:         query,
+		Query:         logMessage,
 		OperationName: "insert",
 		Namespace:     c.config.Namespace,
 		Database:      c.config.Database,
@@ -596,9 +604,11 @@ func (c *Client) Delete(ctx context.Context, table, id string) (any, error) {
 		return nil, errNotConnected
 	}
 
+	logMessage := fmt.Sprintf("Deleting record with ID '%s' from table '%s'", id, table)
+
 	startTime := time.Now()
 	defer c.sendOperationStats(&QueryLog{
-		Query:         query,
+		Query:         logMessage,
 		OperationName: "delete",
 		Namespace:     c.config.Namespace,
 		Database:      c.config.Database,
