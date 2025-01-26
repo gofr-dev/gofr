@@ -2,12 +2,30 @@
 package client
 
 import (
+	"io"
+	"fmt"
+	"encoding/json"
+
 	"gofr.dev/pkg/gofr"
 	"gofr.dev/pkg/gofr/container"
+
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
 )
+
+const (
+	statusCodeWidth  = 3
+	responseTimeWidth = 11
+)
+
+type RPCLog struct {
+	ID           string `json:"id"`
+StartTime    string `json:"startTime"`
+ResponseTime int64  `json:"responseTime"`
+Method       string `json:"method"`
+StatusCode   int32  `json:"statusCode"`
+}
 
 type HelloGoFrClient interface {
 	SayHello(*gofr.Context, *HelloRequest) (*HelloResponse, error)
@@ -48,5 +66,45 @@ func (h *HelloClientWrapper) SayHello(ctx *gofr.Context, req *HelloRequest) (*He
 
 	ctx.Context = metadata.NewOutgoingContext(ctx.Context, md)
 
-	return h.client.SayHello(ctx.Context, req)
+	var header metadata.MD
+
+	res, err := h.client.SayHello(ctx.Context, req, grpc.Header(&header))
+	if err != nil {
+		return nil, err
+	}
+
+	log := &RPCLog{}
+
+	if values, ok := header["log"]; ok && len(values) > 0 {
+		errUnmarshal := json.Unmarshal([]byte(values[0]), log)
+		if errUnmarshal != nil {
+			return nil, fmt.Errorf("error while unmarshaling: %v", errUnmarshal)
+		}
+	}
+
+	ctx.Logger.Info(log)
+
+	return res, err
+}
+
+func (l RPCLog) PrettyPrint(writer io.Writer) {
+	fmt.Fprintf(writer, "\u001B[38;5;8m%s \u001B[38;5;%dm%-*d"+
+		"\u001B[0m %*d\u001B[38;5;8mµs\u001B[0m %s\n",
+		l.ID, colorForGRPCCode(l.StatusCode),
+		statusCodeWidth, l.StatusCode,
+		responseTimeWidth, l.ResponseTime,
+		l.Method)
+}
+
+func colorForGRPCCode(s int32) int {
+	const (
+		blue = 34
+		red  = 202
+	)
+
+	if s == 0 {
+		return blue
+	}
+
+	return red
 }
