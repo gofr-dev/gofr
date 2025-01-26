@@ -280,10 +280,10 @@ type QueryResult struct {
 	Result any    `json:"result"`
 }
 
-const unknown = "unknown"
-
 // Query executes a query on the SurrealDB instance.
 func (c *Client) Query(ctx context.Context, query string, vars map[string]any) ([]any, error) {
+	const unknown = "unknown"
+
 	table := unknown
 	id := unknown
 
