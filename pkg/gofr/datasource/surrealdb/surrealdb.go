@@ -8,6 +8,7 @@ import (
 	"math"
 	"net/url"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/surrealdb/surrealdb.go"
@@ -279,9 +280,28 @@ type QueryResult struct {
 	Result any    `json:"result"`
 }
 
+const unknown = "unknown"
+
 // Query executes a query on the SurrealDB instance.
 func (c *Client) Query(ctx context.Context, query string, vars map[string]any) ([]any, error) {
-	// Initialize tracing for query performance monitoring
+	table := unknown
+	id := unknown
+
+	if vars != nil {
+		if idVal, ok := vars["id"]; ok {
+			id = fmt.Sprintf("%v", idVal)
+		}
+
+		if strings.Contains(query, "type::thing") {
+			parts := strings.Split(query, "'")
+			if len(parts) > 1 {
+				table = parts[1]
+			}
+		}
+	}
+
+	logMessage := fmt.Sprintf("Fetching record with ID %q from table %q", id, table)
+
 	span := c.addTrace(ctx, "Query", query)
 	defer func() {
 		if span != nil {
@@ -295,7 +315,7 @@ func (c *Client) Query(ctx context.Context, query string, vars map[string]any) (
 
 	startTime := time.Now()
 	defer c.sendOperationStats(&QueryLog{
-		Query:         query,
+		Query:         logMessage,
 		OperationName: "query",
 		Namespace:     c.config.Namespace,
 		Database:      c.config.Database,
@@ -414,7 +434,7 @@ func (c *Client) Select(ctx context.Context, table string) ([]map[string]any, er
 		return nil, errNotConnected
 	}
 
-	logMessage := fmt.Sprintf("Fetching all records from table '%s'", table)
+	logMessage := fmt.Sprintf("Fetching all records from table %q", table)
 
 	startTime := time.Now()
 	defer c.sendOperationStats(&QueryLog{
@@ -470,7 +490,7 @@ func (c *Client) Create(ctx context.Context, table string, data any) (map[string
 		return nil, errNotConnected
 	}
 
-	logMessage := fmt.Sprintf("Creating new record in table '%s'", table)
+	logMessage := fmt.Sprintf("Creating new record in table %q", table)
 
 	startTime := time.Now()
 	defer c.sendOperationStats(&QueryLog{
@@ -504,7 +524,7 @@ func (c *Client) Update(ctx context.Context, table, id string, data any) (any, e
 		defer span.End()
 	}
 
-	logMessage := fmt.Sprintf("Updating record with ID '%s' in table '%s'", id, table)
+	logMessage := fmt.Sprintf("Updating record with ID %q in table %q", id, table)
 
 	startTime := time.Now()
 	defer c.sendOperationStats(&QueryLog{
@@ -558,7 +578,7 @@ func (c *Client) Insert(ctx context.Context, table string, data any) ([]map[stri
 		return nil, errNotConnected
 	}
 
-	logMessage := fmt.Sprintf("Inserting record to table '%s'", table)
+	logMessage := fmt.Sprintf("Inserting record to table %q", table)
 
 	startTime := time.Now()
 	defer c.sendOperationStats(&QueryLog{
@@ -604,7 +624,7 @@ func (c *Client) Delete(ctx context.Context, table, id string) (any, error) {
 		return nil, errNotConnected
 	}
 
-	logMessage := fmt.Sprintf("Deleting record with ID '%s' from table '%s'", id, table)
+	logMessage := fmt.Sprintf("Deleting record with ID %q in table %q", id, table)
 
 	startTime := time.Now()
 	defer c.sendOperationStats(&QueryLog{
@@ -672,11 +692,29 @@ type Health struct {
 	Details map[string]any `json:"details,omitempty"`
 }
 
-func (c *Client) HealthCheck(context.Context) (any, error) {
+func (c *Client) HealthCheck(ctx context.Context) (any, error) {
 	const (
 		statusDown = "DOWN"
 		statusUP   = "UP"
 	)
+
+	logMessage := fmt.Sprintf("Database health at \"%s:%d\"", c.config.Host, c.config.Port)
+
+	span := c.addTrace(ctx, "HealthCheck", "info")
+	defer func() {
+		if span != nil {
+			span.End()
+		}
+	}()
+
+	startTime := time.Now()
+	defer c.sendOperationStats(&QueryLog{
+		Query:         logMessage,
+		OperationName: "health_check",
+		Namespace:     c.config.Namespace,
+		Database:      c.config.Database,
+		Span:          span,
+	}, startTime)
 
 	h := Health{
 		Details: make(map[string]any),
