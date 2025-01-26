@@ -7,6 +7,8 @@ It provides built-in tracing, metrics, and logging to ensure seamless performanc
 gRPC servers and inter-service gRPC communication. Using GoFr's context, you can easily define custom metrics and 
 traces across gRPC handlers, enabling consistent observability and simplified debugging throughout your system.
 
+## Prerequisites
+
 **1. Protocol Buffer Compiler (`protoc`) Installation:**
 
 - **Linux (using `apt` or `apt-get`):**
