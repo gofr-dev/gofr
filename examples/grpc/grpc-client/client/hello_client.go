@@ -5,9 +5,10 @@ import (
 	"io"
 	"fmt"
 	"encoding/json"
+	"time"
 
 	"gofr.dev/pkg/gofr"
-	"gofr.dev/pkg/gofr/container"
+
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -33,7 +34,6 @@ type HelloGoFrClient interface {
 
 type HelloClientWrapper struct {
 	client    HelloClient
-	Container *container.Container
 	HelloGoFrClient
 }
 
@@ -45,17 +45,24 @@ func createGRPCConn(host string) (*grpc.ClientConn, error) {
 	return conn, nil
 }
 
-func NewHelloGoFrClient(host string) (*HelloClientWrapper, error) {
+func NewHelloGoFrClient(host string, app *gofr.App) (*HelloClientWrapper, error) {
 	conn, err := createGRPCConn(host)
 	if err != nil {
 		return &HelloClientWrapper{client: nil}, err
 	}
+
+	gRPCBuckets := []float64{0.005, 0.01, .05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 4, 5, 7.5, 10}
+	app.Metrics().NewHistogram("app_gRPC-Client_stats",
+		"Response time of gRPC client in milliseconds.",
+		gRPCBuckets...)
+
 
 	res := NewHelloClient(conn)
 	return &HelloClientWrapper{
 		client: res,
 	}, nil
 }
+
 func (h *HelloClientWrapper) SayHello(ctx *gofr.Context, req *HelloRequest) (*HelloResponse, error) {
 	span := ctx.Trace("gRPC-srv-call: SayHello")
 	defer span.End()
@@ -67,11 +74,20 @@ func (h *HelloClientWrapper) SayHello(ctx *gofr.Context, req *HelloRequest) (*He
 	ctx.Context = metadata.NewOutgoingContext(ctx.Context, md)
 
 	var header metadata.MD
+  
+	transactionStartTime := time.Now()
 
 	res, err := h.client.SayHello(ctx.Context, req, grpc.Header(&header))
 	if err != nil {
 		return nil, err
 	}
+
+	duration := time.Since(transactionStartTime)
+
+	ctx.Metrics().RecordHistogram(ctx, "app_gRPC-Client_stats",
+									float64(duration.Milliseconds())+float64(duration.Nanoseconds()%1e6)/1e6,
+									"gRPC_Service", "Hello",
+									"method", "SayHello")
 
 	log := &RPCLog{}
 
