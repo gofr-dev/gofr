@@ -28,7 +28,7 @@ func APIKeyAuthMiddleware(a APIKeyAuthProvider, apiKeys ...string) func(handler 
 				return
 			}
 
-			authKey := r.Header.Get("X-API-KEY")
+			authKey := r.Header.Get("X-Api-Key")
 			if authKey == "" {
 				http.Error(w, "Unauthorized: Authorization header missing", http.StatusUnauthorized)
 				return

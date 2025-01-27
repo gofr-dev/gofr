@@ -65,7 +65,7 @@ func TestGetFieldName(t *testing.T) {
 
 type testValue struct {
 	kind  reflect.Kind
-	value interface{}
+	value any
 }
 
 func Test_SetFieldValue_Success(t *testing.T) {

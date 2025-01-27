@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strconv"
 	"testing"
 	"time"
 
@@ -14,19 +13,14 @@ import (
 )
 
 func TestIntegration(t *testing.T) {
-	httpPort := testutil.GetFreePort(t)
-	t.Setenv("HTTP_PORT", strconv.Itoa(httpPort))
-	host := fmt.Sprint("http://localhost:", httpPort)
-
-	metricsPort := testutil.GetFreePort(t)
-	t.Setenv("METRICS_PORT", strconv.Itoa(metricsPort))
+	configs := testutil.NewServerConfigs(t)
 
 	go main()
 	time.Sleep(100 * time.Millisecond) // Giving some time to start the server
 
 	c := http.Client{}
 
-	req, _ := http.NewRequest(http.MethodPost, host+"/transaction", nil)
+	req, _ := http.NewRequest(http.MethodPost, configs.HTTPHost+"/transaction", nil)
 	req.Header.Set("content-type", "application/json")
 
 	_, err := c.Do(req)
@@ -34,18 +28,18 @@ func TestIntegration(t *testing.T) {
 		t.Fatalf("request to /transaction failed %v", err)
 	}
 
-	req, _ = http.NewRequest(http.MethodPost, host+"/return", nil)
+	req, _ = http.NewRequest(http.MethodPost, configs.HTTPHost+"/return", nil)
 
 	_, err = c.Do(req)
 	if err != nil {
 		t.Fatalf("request to /transaction failed %v", err)
 	}
 
-	req, _ = http.NewRequest(http.MethodGet, fmt.Sprintf("http://localhost:%d/metrics", metricsPort), nil)
+	req, _ = http.NewRequest(http.MethodGet, fmt.Sprintf("http://localhost:%d/metrics", configs.MetricsPort), nil)
 
 	resp, err := c.Do(req)
 	if err != nil {
-		t.Fatalf("request to localhost:%d/metrics failed: %v", metricsPort, err)
+		t.Fatalf("request to localhost:%d/metrics failed: %v", configs.MetricsPort, err)
 	}
 
 	body, _ := io.ReadAll(resp.Body)

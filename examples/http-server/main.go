@@ -32,7 +32,7 @@ func main() {
 	a.Run()
 }
 
-func HelloHandler(c *gofr.Context) (interface{}, error) {
+func HelloHandler(c *gofr.Context) (any, error) {
 	name := c.Param("name")
 	if name == "" {
 		c.Log("Name came empty")
@@ -42,11 +42,11 @@ func HelloHandler(c *gofr.Context) (interface{}, error) {
 	return fmt.Sprintf("Hello %s!", name), nil
 }
 
-func ErrorHandler(c *gofr.Context) (interface{}, error) {
+func ErrorHandler(c *gofr.Context) (any, error) {
 	return nil, errors.New("some error occurred")
 }
 
-func RedisHandler(c *gofr.Context) (interface{}, error) {
+func RedisHandler(c *gofr.Context) (any, error) {
 	val, err := c.Redis.Get(c, "test").Result()
 	if err != nil && err != redis.Nil { // If key is not found, we are not considering this an error and returning "".
 		return nil, datasource.ErrorDB{Err: err, Message: "error from redis db"}
@@ -55,7 +55,7 @@ func RedisHandler(c *gofr.Context) (interface{}, error) {
 	return val, nil
 }
 
-func TraceHandler(c *gofr.Context) (interface{}, error) {
+func TraceHandler(c *gofr.Context) (any, error) {
 	defer c.Trace("traceHandler").End()
 
 	span2 := c.Trace("some-sample-work")
@@ -84,7 +84,7 @@ func TraceHandler(c *gofr.Context) (interface{}, error) {
 	defer resp.Body.Close()
 
 	var data = struct {
-		Data interface{} `json:"data"`
+		Data any `json:"data"`
 	}{}
 
 	b, err := io.ReadAll(resp.Body)
@@ -97,7 +97,7 @@ func TraceHandler(c *gofr.Context) (interface{}, error) {
 	return data.Data, nil
 }
 
-func MysqlHandler(c *gofr.Context) (interface{}, error) {
+func MysqlHandler(c *gofr.Context) (any, error) {
 	var value int
 	err := c.SQL.QueryRowContext(c, "select 2+2").Scan(&value)
 	if err != nil {

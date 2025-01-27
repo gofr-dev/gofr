@@ -26,7 +26,7 @@ func TestHTTPService_HealthCheck(t *testing.T) {
 	// when params value is of type []string then last value is sent in request
 	resp := service.HealthCheck(context.Background())
 
-	assert.Equal(t, &Health{Status: serviceUp, Details: map[string]interface{}{"host": server.URL[7:]}},
+	assert.Equal(t, &Health{Status: serviceUp, Details: map[string]any{"host": server.URL[7:]}},
 		resp, "TEST[%d], Failed.\n%s")
 }
 
@@ -40,7 +40,7 @@ func TestHTTPService_HealthCheckCustomURL(t *testing.T) {
 	// when params value is of type []string then last value is sent in request
 	resp := service.HealthCheck(context.Background())
 
-	assert.Equal(t, &Health{Status: serviceUp, Details: map[string]interface{}{"host": server.URL[7:]}},
+	assert.Equal(t, &Health{Status: serviceUp, Details: map[string]any{"host": server.URL[7:]}},
 		resp, "TEST[%d], Failed.\n%s")
 }
 
@@ -72,7 +72,7 @@ func TestHTTPService_HealthCheckDifferentStatusCode(t *testing.T) {
 	resp := service.HealthCheck(context.Background())
 
 	assert.Equal(t, &Health{Status: serviceDown,
-		Details: map[string]interface{}{"host": server.URL[7:], "error": "service down"}},
+		Details: map[string]any{"host": server.URL[7:], "error": "service down"}},
 		resp, "TEST[%d], Failed.\n%s")
 }
 
@@ -95,7 +95,7 @@ func TestHTTPService_HealthCheckTimeout(t *testing.T) {
 		resp := service.HealthCheck(context.Background())
 
 		assert.Equal(t, &Health{Status: serviceDown,
-			Details: map[string]interface{}{"error": "Get \"" + server.URL + "/.well-known/alive\": context deadline exceeded"}},
+			Details: map[string]any{"error": "Get \"" + server.URL + "/.well-known/alive\": context deadline exceeded"}},
 			resp, "TEST[%d], Failed.\n%s")
 	})
 
