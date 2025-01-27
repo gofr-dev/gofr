@@ -273,6 +273,7 @@ func (r *RateLimiter) processRequest(req requestWrapper) {
 		return
 	}
 
+	//nolint:bodyclose // Response body must be closed by the consumer
 	resp, err := req.execute()
 	if err != nil {
 		req.respCh <- &requestResponse{nil, fmt.Errorf("request execution error: %w", err)}
