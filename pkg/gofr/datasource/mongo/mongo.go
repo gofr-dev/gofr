@@ -118,14 +118,12 @@ func (c *Client) Connect() {
 		return
 	}
 
-	c.logger.Logf("connected to MongoDB successfully at %v to database %v", host, c.config.Database)
-
 	mongoBuckets := []float64{.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 4, 5, 7.5, 10}
 	c.metrics.NewHistogram("app_mongo_stats", "Response time of MongoDB queries in milliseconds.", mongoBuckets...)
 
 	c.Database = m.Database(c.config.Database)
 
-	c.logger.Logf("connected to MongoDB at %v to database %v", host, c.Database)
+	c.logger.Logf("connected to MongoDB at %v to database %v", host, c.config.Database)
 }
 
 func generateMongoURI(config *Config) (uri, host string, err error) {

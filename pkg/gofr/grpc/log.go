@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"math"
 	"time"
 
 	"go.opentelemetry.io/otel"
@@ -16,8 +15,14 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+const (
+	statusCodeWidth   = 3
+	responseTimeWidth = 11
+)
+
 type Logger interface {
 	Info(args ...any)
+	Errorf(string, ...any)
 }
 
 type RPCLog struct {
@@ -29,19 +34,12 @@ type RPCLog struct {
 }
 
 func (l RPCLog) PrettyPrint(writer io.Writer) {
-	var statusCodeLen int
-
-	if l.StatusCode <= 0 {
-		statusCodeLen = 1 // Default to 1 if StatusCode is invalid
-	} else {
-		statusCodeLen = 9 - int(math.Log10(float64(l.StatusCode))) + 1
-	}
-
-	// Print the log message with dynamic width for the status code
-	fmt.Fprintf(writer, "\u001B[38;5;8m%s \u001B[38;5;%dm%-6d"+
-		"\u001B[0m %-*d\u001B[38;5;8mµs\u001B[0m %s \n",
+	fmt.Fprintf(writer, "\u001B[38;5;8m%s \u001B[38;5;%dm%-*d"+
+		"\u001B[0m %*d\u001B[38;5;8mµs\u001B[0m %s\n",
 		l.ID, colorForGRPCCode(l.StatusCode),
-		l.StatusCode, statusCodeLen, l.ResponseTime, l.Method)
+		statusCodeWidth, l.StatusCode,
+		responseTimeWidth, l.ResponseTime,
+		l.Method)
 }
 
 func colorForGRPCCode(s int32) int {
@@ -72,8 +70,16 @@ func LoggingInterceptor(logger Logger) grpc.UnaryServerInterceptor {
 		ctx, span := tracer.Start(ctx, info.FullMethod)
 
 		resp, err := handler(ctx, req)
+		if err != nil {
+			logger.Errorf("error while handling gRPC request to method %q: %q", info.FullMethod, err)
+		}
 
-		documentRPCLog(ctx, logger, info.FullMethod, start, err)
+		md := documentRPCLog(ctx, logger, info.FullMethod, start, err)
+
+		err = grpc.SendHeader(ctx, md)
+		if err != nil {
+			logger.Errorf("failed to send metadata in response to request method: %v, Error: %v", info.FullMethod, err)
+		}
 
 		span.End()
 
@@ -106,7 +112,7 @@ func initializeSpanContext(ctx context.Context) (context.Context, trace.SpanCont
 	return ctx, spanContext
 }
 
-func documentRPCLog(ctx context.Context, logger Logger, method string, start time.Time, err error) {
+func documentRPCLog(ctx context.Context, logger Logger, method string, start time.Time, err error) metadata.MD {
 	logEntry := RPCLog{
 		ID:           trace.SpanFromContext(ctx).SpanContext().TraceID().String(),
 		StartTime:    start.Format("2006-01-02T15:04:05.999999999-07:00"),
@@ -125,6 +131,8 @@ func documentRPCLog(ctx context.Context, logger Logger, method string, start tim
 	if logger != nil {
 		logger.Info(logEntry)
 	}
+
+	return metadata.Pairs("log", logEntry.String())
 }
 
 // Helper function to safely extract a value from metadata.
