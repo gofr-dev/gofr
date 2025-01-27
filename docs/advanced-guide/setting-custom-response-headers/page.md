@@ -59,7 +59,7 @@ func main() {
 	app.Run()
 }
 
-func HelloHandler(c *gofr.Context) (interface{}, error) {
+func HelloHandler(c *gofr.Context) (any, error) {
 	name := c.Param("name")
 	if name == "" {
 		c.Log("Name parameter is empty, defaulting to 'World'")

@@ -54,6 +54,8 @@ linters-settings:
     allow-unused: false # report any unused nolint directives
     require-explanation: true # require an explanation for nolint directives
     require-specific: true # require nolint directives to be specific about which linter is being skipped
+  usestdlibvars:
+    time-layout: true # Suggest the use of constants available in time package
   revive:
     rules:
     # default revive rules, they have to be present otherwise they are disabled
@@ -66,6 +68,12 @@ linters-settings:
       - name: error-return
       - name: error-strings
       - name: errorf
+      - name: exported
+        arguments:
+          # enables checking public methods of private types
+          - "checkPrivateReceivers"
+          # make error messages clearer
+          - "sayRepetitiveInsteadOfStutters"
       - name: increment-decrement
       - name: indent-error-flow
       - name: range
@@ -86,6 +94,7 @@ linters-settings:
       - name: defer
       - name: deep-exit
       - name: unused-receiver
+      - name: use-any
 
 linters:
   # please, do not use `enable-all`: it's deprecated and will be removed soon.
@@ -94,6 +103,7 @@ linters:
   enable:
     - asciicheck
     - bodyclose
+    - canonicalheader
     - copyloopvar
     - dogsled
     - dupl
@@ -143,6 +153,9 @@ linters:
   # - testpackage # We also need to do unit test for unexported functions. And adding _internal in all files is cumbersome.
 
 issues:
+  include:
+    - EXC0014
+
   # exclude-use-default: false
   # exclude-use-default: false # By default, golangci-lint does not enforce comments on exported types. We want it.
   # Excluding configuration per-path, per-linter, per-text and per-source

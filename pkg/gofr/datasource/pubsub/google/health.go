@@ -11,7 +11,7 @@ import (
 )
 
 func (g *googleClient) Health() (health datasource.Health) {
-	health.Details = make(map[string]interface{})
+	health.Details = make(map[string]any)
 
 	var writerStatus, readerStatus string
 
@@ -30,7 +30,7 @@ func (g *googleClient) Health() (health datasource.Health) {
 }
 
 //nolint:dupl // getWriterDetails provides the publishing details for current google publishers.
-func (g *googleClient) getWriterDetails() (status string, details map[string]interface{}) {
+func (g *googleClient) getWriterDetails() (status string, details map[string]any) {
 	const contextTimeoutDuration = 50
 
 	status = datasource.StatusUp
@@ -40,7 +40,7 @@ func (g *googleClient) getWriterDetails() (status string, details map[string]int
 
 	it := g.client.Topics(ctx)
 
-	details = make(map[string]interface{})
+	details = make(map[string]any)
 
 	for {
 		topic, err := it.Next()
@@ -63,7 +63,7 @@ func (g *googleClient) getWriterDetails() (status string, details map[string]int
 }
 
 //nolint:dupl // getReaderDetails provides the subscription details for current google subscriptions.
-func (g *googleClient) getReaderDetails() (status string, details map[string]interface{}) {
+func (g *googleClient) getReaderDetails() (status string, details map[string]any) {
 	const contextTimeoutDuration = 50
 
 	status = datasource.StatusUp
@@ -73,7 +73,7 @@ func (g *googleClient) getReaderDetails() (status string, details map[string]int
 
 	subIt := g.client.Subscriptions(ctx)
 
-	details = make(map[string]interface{})
+	details = make(map[string]any)
 
 	for {
 		subscription, err := subIt.Next()

@@ -100,33 +100,33 @@ GoFr provides its user with additional configurational options while registering
 #### Usage:
 
 ```go
-a.AddHTTPService("cat-facts", "https://catfact.ninja",  
-    &service.APIKeyConfig{APIKey: "some-random-key"},  
-    
-    &service.BasicAuthConfig{  
-       UserName: "gofr",  
-       Password: "gofr",  
+a.AddHTTPService("cat-facts", "https://catfact.ninja",
+    &service.APIKeyConfig{APIKey: "some-random-key"},
+
+    &service.BasicAuthConfig{
+       UserName: "gofr",
+       Password: "gofr",
   },
-    
-    &service.CircuitBreakerConfig{  
-       Threshold: 4,  
-       Interval:  1 * time.Second,  
-  },  
-  
-   &service.DefaultHeaders{Headers: map[string]string{"key": "value"}},  
- 
-   &service.HealthConfig{  
-       HealthEndpoint: "breeds",  
-  }, 
-   
-   &service.OAuthConfig{  
-       ClientID:       "abc",  
-       ClientSecret:   "abc",  
-       TokenURL:       "http://test.com",  
-       Scopes:         nil,  
-       EndpointParams: nil,  
+
+    &service.CircuitBreakerConfig{
+       Threshold: 4,
+       Interval:  1 * time.Second,
   },
-    
+
+   &service.DefaultHeaders{Headers: map[string]string{"key": "value"}},
+
+   &service.HealthConfig{
+       HealthEndpoint: "breeds",
+  },
+
+   &service.OAuthConfig{
+       ClientID:       "abc",
+       ClientSecret:   "abc",
+       TokenURL:       "http://test.com",
+       Scopes:         nil,
+       EndpointParams: nil,
+  },
+
   &service.RetryConfig{
       MaxRetries: 5
   },

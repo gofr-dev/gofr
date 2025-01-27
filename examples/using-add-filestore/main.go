@@ -33,13 +33,13 @@ func main() {
 	app.Run()
 }
 
-func pwdCommandHandler(c *gofr.Context) (interface{}, error) {
+func pwdCommandHandler(c *gofr.Context) (any, error) {
 	workingDirectory, err := c.File.Getwd()
 
 	return workingDirectory, err
 }
 
-func lsCommandHandler(c *gofr.Context) (interface{}, error) {
+func lsCommandHandler(c *gofr.Context) (any, error) {
 	path := c.Param("path")
 
 	files, err := c.File.ReadDir(path)
@@ -52,7 +52,7 @@ func lsCommandHandler(c *gofr.Context) (interface{}, error) {
 	return "", err
 }
 
-func grepCommandHandler(c *gofr.Context) (interface{}, error) {
+func grepCommandHandler(c *gofr.Context) (any, error) {
 	keyword := c.Param("keyword")
 	path := c.Param("path")
 
@@ -67,7 +67,7 @@ func grepCommandHandler(c *gofr.Context) (interface{}, error) {
 	return "", err
 }
 
-func createFileCommandHandler(c *gofr.Context) (interface{}, error) {
+func createFileCommandHandler(c *gofr.Context) (any, error) {
 	fileName := c.Param("filename")
 
 	_, err := c.File.Create(fileName)
@@ -78,7 +78,7 @@ func createFileCommandHandler(c *gofr.Context) (interface{}, error) {
 	return fmt.Sprintln("Successfully created file:", fileName), nil
 }
 
-func rmCommandHandler(c *gofr.Context) (interface{}, error) {
+func rmCommandHandler(c *gofr.Context) (any, error) {
 	fileName := c.Param("filename")
 
 	err := c.File.Remove(fileName)

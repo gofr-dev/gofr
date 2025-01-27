@@ -18,7 +18,7 @@ type FieldConstraints struct {
 	NotNull       bool
 }
 
-func InsertQuery(dialect, tableName string, fieldNames []string, values []interface{},
+func InsertQuery(dialect, tableName string, fieldNames []string, values []any,
 	constraints map[string]FieldConstraints) (string, error) {
 	bindVars := make([]string, 0, len(fieldNames))
 	columns := make([]string, 0, len(fieldNames))
@@ -88,7 +88,7 @@ func DeleteByQuery(dialect, tableName, field string) string {
 		bindVar(dialect, 1))
 }
 
-func validateNotNull(fieldName string, value interface{}, isNotNull bool) error {
+func validateNotNull(fieldName string, value any, isNotNull bool) error {
 	if !isNotNull {
 		return nil
 	}
@@ -113,7 +113,7 @@ func validateStringNotNull(fieldName, value string) error {
 	return nil
 }
 
-func validateIntNotNull(fieldName string, value interface{}) error {
+func validateIntNotNull(fieldName string, value any) error {
 	if reflect.ValueOf(value).Int() == 0 {
 		return fmt.Errorf("%w: %s", errFieldCannotBeZero, fieldName)
 	}
@@ -121,7 +121,7 @@ func validateIntNotNull(fieldName string, value interface{}) error {
 	return nil
 }
 
-func validateFloatNotNull(fieldName string, value interface{}) error {
+func validateFloatNotNull(fieldName string, value any) error {
 	if reflect.ValueOf(value).Float() == 0.0 {
 		return fmt.Errorf("%w: %s", errFieldCannotBeZero, fieldName)
 	}
@@ -129,7 +129,7 @@ func validateFloatNotNull(fieldName string, value interface{}) error {
 	return nil
 }
 
-func validateDefaultNotNull(fieldName string, value interface{}) error {
+func validateDefaultNotNull(fieldName string, value any) error {
 	if reflect.ValueOf(value).IsNil() {
 		return fmt.Errorf("%w: %s", errFieldCannotBeNull, fieldName)
 	}
