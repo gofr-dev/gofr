@@ -68,14 +68,14 @@ func New(c Config) *Client {
 }
 
 // UseLogger sets the logger for the MongoDB client which asserts the Logger interface.
-func (c *Client) UseLogger(logger interface{}) {
+func (c *Client) UseLogger(logger any) {
 	if l, ok := logger.(Logger); ok {
 		c.logger = l
 	}
 }
 
 // UseMetrics sets the metrics for the MongoDB client which asserts the Metrics interface.
-func (c *Client) UseMetrics(metrics interface{}) {
+func (c *Client) UseMetrics(metrics any) {
 	if m, ok := metrics.(Metrics); ok {
 		c.metrics = m
 	}
@@ -118,14 +118,12 @@ func (c *Client) Connect() {
 		return
 	}
 
-	c.logger.Logf("connected to MongoDB successfully at %v to database %v", host, c.config.Database)
-
 	mongoBuckets := []float64{.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 4, 5, 7.5, 10}
 	c.metrics.NewHistogram("app_mongo_stats", "Response time of MongoDB queries in milliseconds.", mongoBuckets...)
 
 	c.Database = m.Database(c.config.Database)
 
-	c.logger.Logf("connected to MongoDB at %v to database %v", host, c.Database)
+	c.logger.Logf("connected to MongoDB at %v to database %v", host, c.config.Database)
 }
 
 func generateMongoURI(config *Config) (uri, host string, err error) {
@@ -182,7 +180,7 @@ func getDBHost(uri string) (host string, err error) {
 }
 
 // InsertOne inserts a single document into the specified collection.
-func (c *Client) InsertOne(ctx context.Context, collection string, document interface{}) (interface{}, error) {
+func (c *Client) InsertOne(ctx context.Context, collection string, document any) (any, error) {
 	tracerCtx, span := c.addTrace(ctx, "insertOne", collection)
 
 	result, err := c.Database.Collection(collection).InsertOne(tracerCtx, document)
@@ -194,7 +192,7 @@ func (c *Client) InsertOne(ctx context.Context, collection string, document inte
 }
 
 // InsertMany inserts multiple documents into the specified collection.
-func (c *Client) InsertMany(ctx context.Context, collection string, documents []interface{}) ([]interface{}, error) {
+func (c *Client) InsertMany(ctx context.Context, collection string, documents []any) ([]any, error) {
 	tracerCtx, span := c.addTrace(ctx, "insertMany", collection)
 
 	res, err := c.Database.Collection(collection).InsertMany(tracerCtx, documents)
@@ -209,7 +207,7 @@ func (c *Client) InsertMany(ctx context.Context, collection string, documents []
 }
 
 // Find retrieves documents from the specified collection based on the provided filter and binds response to result.
-func (c *Client) Find(ctx context.Context, collection string, filter, results interface{}) error {
+func (c *Client) Find(ctx context.Context, collection string, filter, results any) error {
 	tracerCtx, span := c.addTrace(ctx, "find", collection)
 
 	cur, err := c.Database.Collection(collection).Find(tracerCtx, filter)
@@ -230,7 +228,7 @@ func (c *Client) Find(ctx context.Context, collection string, filter, results in
 }
 
 // FindOne retrieves a single document from the specified collection based on the provided filter and binds response to result.
-func (c *Client) FindOne(ctx context.Context, collection string, filter, result interface{}) error {
+func (c *Client) FindOne(ctx context.Context, collection string, filter, result any) error {
 	tracerCtx, span := c.addTrace(ctx, "findOne", collection)
 
 	b, err := c.Database.Collection(collection).FindOne(tracerCtx, filter).Raw()
@@ -245,7 +243,7 @@ func (c *Client) FindOne(ctx context.Context, collection string, filter, result 
 }
 
 // UpdateByID updates a document in the specified collection by its ID.
-func (c *Client) UpdateByID(ctx context.Context, collection string, id, update interface{}) (int64, error) {
+func (c *Client) UpdateByID(ctx context.Context, collection string, id, update any) (int64, error) {
 	tracerCtx, span := c.addTrace(ctx, "updateByID", collection)
 
 	res, err := c.Database.Collection(collection).UpdateByID(tracerCtx, id, update)
@@ -257,7 +255,7 @@ func (c *Client) UpdateByID(ctx context.Context, collection string, id, update i
 }
 
 // UpdateOne updates a single document in the specified collection based on the provided filter.
-func (c *Client) UpdateOne(ctx context.Context, collection string, filter, update interface{}) error {
+func (c *Client) UpdateOne(ctx context.Context, collection string, filter, update any) error {
 	tracerCtx, span := c.addTrace(ctx, "updateOne", collection)
 
 	_, err := c.Database.Collection(collection).UpdateOne(tracerCtx, filter, update)
@@ -269,7 +267,7 @@ func (c *Client) UpdateOne(ctx context.Context, collection string, filter, updat
 }
 
 // UpdateMany updates multiple documents in the specified collection based on the provided filter.
-func (c *Client) UpdateMany(ctx context.Context, collection string, filter, update interface{}) (int64, error) {
+func (c *Client) UpdateMany(ctx context.Context, collection string, filter, update any) (int64, error) {
 	tracerCtx, span := c.addTrace(ctx, "updateMany", collection)
 
 	res, err := c.Database.Collection(collection).UpdateMany(tracerCtx, filter, update)
@@ -281,7 +279,7 @@ func (c *Client) UpdateMany(ctx context.Context, collection string, filter, upda
 }
 
 // CountDocuments counts the number of documents in the specified collection based on the provided filter.
-func (c *Client) CountDocuments(ctx context.Context, collection string, filter interface{}) (int64, error) {
+func (c *Client) CountDocuments(ctx context.Context, collection string, filter any) (int64, error) {
 	tracerCtx, span := c.addTrace(ctx, "countDocuments", collection)
 
 	result, err := c.Database.Collection(collection).CountDocuments(tracerCtx, filter)
@@ -293,7 +291,7 @@ func (c *Client) CountDocuments(ctx context.Context, collection string, filter i
 }
 
 // DeleteOne deletes a single document from the specified collection based on the provided filter.
-func (c *Client) DeleteOne(ctx context.Context, collection string, filter interface{}) (int64, error) {
+func (c *Client) DeleteOne(ctx context.Context, collection string, filter any) (int64, error) {
 	tracerCtx, span := c.addTrace(ctx, "deleteOne", collection)
 
 	res, err := c.Database.Collection(collection).DeleteOne(tracerCtx, filter)
@@ -308,7 +306,7 @@ func (c *Client) DeleteOne(ctx context.Context, collection string, filter interf
 }
 
 // DeleteMany deletes multiple documents from the specified collection based on the provided filter.
-func (c *Client) DeleteMany(ctx context.Context, collection string, filter interface{}) (int64, error) {
+func (c *Client) DeleteMany(ctx context.Context, collection string, filter any) (int64, error) {
 	tracerCtx, span := c.addTrace(ctx, "deleteMany", collection)
 
 	res, err := c.Database.Collection(collection).DeleteMany(tracerCtx, filter)
@@ -362,14 +360,14 @@ func (c *Client) sendOperationStats(ql *QueryLog, startTime time.Time, method st
 }
 
 type Health struct {
-	Status  string                 `json:"status,omitempty"`
-	Details map[string]interface{} `json:"details,omitempty"`
+	Status  string         `json:"status,omitempty"`
+	Details map[string]any `json:"details,omitempty"`
 }
 
 // HealthCheck checks the health of the MongoDB client by pinging the database.
 func (c *Client) HealthCheck(ctx context.Context) (any, error) {
 	h := Health{
-		Details: make(map[string]interface{}),
+		Details: make(map[string]any),
 	}
 
 	h.Details["host"] = c.uri
@@ -387,7 +385,7 @@ func (c *Client) HealthCheck(ctx context.Context) (any, error) {
 	return &h, nil
 }
 
-func (c *Client) StartSession() (interface{}, error) {
+func (c *Client) StartSession() (any, error) {
 	defer c.sendOperationStats(&QueryLog{Query: "startSession"}, time.Now(), "", nil)
 
 	s, err := c.Client().StartSession()

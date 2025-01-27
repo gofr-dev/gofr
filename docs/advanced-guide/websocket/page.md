@@ -24,7 +24,7 @@ func main() {
 	app.Run()
 }
 
-func WSHandler(ctx *gofr.Context) (interface{}, error) {
+func WSHandler(ctx *gofr.Context) (any, error) {
 	var message string
 
 	err := ctx.Bind(&message)
@@ -82,7 +82,7 @@ func main() {
 	app.Run()
 }
 
-func WSHandler(ctx *gofr.Context) (interface{}, error) {
+func WSHandler(ctx *gofr.Context) (any, error) {
 	var message string
 
 	err := ctx.Bind(&message)

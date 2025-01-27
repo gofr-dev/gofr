@@ -28,7 +28,7 @@ func TestParam(t *testing.T) {
 
 func TestBind(t *testing.T) {
 	r := httptest.NewRequest(http.MethodPost, "/abc", strings.NewReader(`{"a": "b", "b": 5}`))
-	r.Header.Set("content-type", "application/json")
+	r.Header.Set("Content-Type", "application/json")
 	req := NewRequest(r)
 
 	x := struct {
@@ -202,7 +202,7 @@ func generateMultipartRequestZip(t *testing.T) *http.Request {
 
 	// Create a new HTTP request with the multipart data
 	req := httptest.NewRequest(http.MethodPost, "/upload", &buf)
-	req.Header.Set("content-type", writer.FormDataContentType())
+	req.Header.Set("Content-Type", writer.FormDataContentType())
 
 	return req
 }

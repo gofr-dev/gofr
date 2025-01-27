@@ -13,7 +13,7 @@ type user struct {
 }
 
 // GetAll : User can overwrite the specific handlers by implementing them like this
-func (u *user) GetAll(c *gofr.Context) (interface{}, error) {
+func (u *user) GetAll(c *gofr.Context) (any, error) {
 	return "user GetAll called", nil
 }
 

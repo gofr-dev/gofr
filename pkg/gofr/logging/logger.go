@@ -20,20 +20,20 @@ type PrettyPrint interface {
 
 // Logger represents a logging interface.
 type Logger interface {
-	Debug(args ...interface{})
-	Debugf(format string, args ...interface{})
-	Log(args ...interface{})
-	Logf(format string, args ...interface{})
-	Info(args ...interface{})
-	Infof(format string, args ...interface{})
-	Notice(args ...interface{})
-	Noticef(format string, args ...interface{})
-	Warn(args ...interface{})
-	Warnf(format string, args ...interface{})
-	Error(args ...interface{})
-	Errorf(format string, args ...interface{})
-	Fatal(args ...interface{})
-	Fatalf(format string, args ...interface{})
+	Debug(args ...any)
+	Debugf(format string, args ...any)
+	Log(args ...any)
+	Logf(format string, args ...any)
+	Info(args ...any)
+	Infof(format string, args ...any)
+	Notice(args ...any)
+	Noticef(format string, args ...any)
+	Warn(args ...any)
+	Warnf(format string, args ...any)
+	Error(args ...any)
+	Errorf(format string, args ...any)
+	Fatal(args ...any)
+	Fatalf(format string, args ...any)
 	ChangeLevel(level Level)
 }
 
@@ -46,13 +46,13 @@ type logger struct {
 }
 
 type logEntry struct {
-	Level       Level       `json:"level"`
-	Time        time.Time   `json:"time"`
-	Message     interface{} `json:"message"`
-	GofrVersion string      `json:"gofrVersion"`
+	Level       Level     `json:"level"`
+	Time        time.Time `json:"time"`
+	Message     any       `json:"message"`
+	GofrVersion string    `json:"gofrVersion"`
 }
 
-func (l *logger) logf(level Level, format string, args ...interface{}) {
+func (l *logger) logf(level Level, format string, args ...any) {
 	if level < l.level {
 		return
 	}
@@ -84,62 +84,62 @@ func (l *logger) logf(level Level, format string, args ...interface{}) {
 	}
 }
 
-func (l *logger) Debug(args ...interface{}) {
+func (l *logger) Debug(args ...any) {
 	l.logf(DEBUG, "", args...)
 }
 
-func (l *logger) Debugf(format string, args ...interface{}) {
+func (l *logger) Debugf(format string, args ...any) {
 	l.logf(DEBUG, format, args...)
 }
 
-func (l *logger) Info(args ...interface{}) {
+func (l *logger) Info(args ...any) {
 	l.logf(INFO, "", args...)
 }
 
-func (l *logger) Infof(format string, args ...interface{}) {
+func (l *logger) Infof(format string, args ...any) {
 	l.logf(INFO, format, args...)
 }
 
-func (l *logger) Notice(args ...interface{}) {
+func (l *logger) Notice(args ...any) {
 	l.logf(NOTICE, "", args...)
 }
 
-func (l *logger) Noticef(format string, args ...interface{}) {
+func (l *logger) Noticef(format string, args ...any) {
 	l.logf(NOTICE, format, args...)
 }
 
-func (l *logger) Warn(args ...interface{}) {
+func (l *logger) Warn(args ...any) {
 	l.logf(WARN, "", args...)
 }
 
-func (l *logger) Warnf(format string, args ...interface{}) {
+func (l *logger) Warnf(format string, args ...any) {
 	l.logf(WARN, format, args...)
 }
 
-func (l *logger) Log(args ...interface{}) {
+func (l *logger) Log(args ...any) {
 	l.logf(INFO, "", args...)
 }
 
-func (l *logger) Logf(format string, args ...interface{}) {
+func (l *logger) Logf(format string, args ...any) {
 	l.logf(INFO, format, args...)
 }
 
-func (l *logger) Error(args ...interface{}) {
+func (l *logger) Error(args ...any) {
 	l.logf(ERROR, "", args...)
 }
 
-func (l *logger) Errorf(format string, args ...interface{}) {
+func (l *logger) Errorf(format string, args ...any) {
 	l.logf(ERROR, format, args...)
 }
 
-func (l *logger) Fatal(args ...interface{}) {
+func (l *logger) Fatal(args ...any) {
 	l.logf(FATAL, "", args...)
 
 	//nolint:revive // exit status is 1 as it denotes failure as signified by Fatal log
 	os.Exit(1)
 }
 
-func (l *logger) Fatalf(format string, args ...interface{}) {
+func (l *logger) Fatalf(format string, args ...any) {
 	l.logf(FATAL, format, args...)
 
 	//nolint:revive // exit status is 1 as it denotes failure as signified by Fatal log
@@ -159,12 +159,12 @@ func (l *logger) prettyPrint(e logEntry, out io.Writer) {
 	// This decouples the logger implementation from its usage
 	if fn, ok := e.Message.(PrettyPrint); ok {
 		fmt.Fprintf(out, "\u001B[38;5;%dm%s\u001B[0m [%s] ", e.Level.color(), e.Level.String()[0:4],
-			e.Time.Format("15:04:05"))
+			e.Time.Format(time.TimeOnly))
 
 		fn.PrettyPrint(out)
 	} else {
 		fmt.Fprintf(out, "\u001B[38;5;%dm%s\u001B[0m [%s] ", e.Level.color(), e.Level.String()[0:4],
-			e.Time.Format("15:04:05"))
+			e.Time.Format(time.TimeOnly))
 
 		fmt.Fprintf(out, "%v\n", e.Message)
 	}
