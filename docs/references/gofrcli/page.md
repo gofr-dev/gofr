@@ -6,13 +6,8 @@ Managing repetitive tasks and maintaining consistency across large-scale applica
 
 * All-in-one command-line tool designed specifically for GoFr applications
 * Simplifies **database migrations** management
-* Automates **gRPC wrapper** generation
+* Abstracts **tracing**, **metrics** and structured **logging** for GoFr's gRPC server/client
 * Enforces standard **GoFr conventions** in new projects
-
-**Key Benefits**
-- **Streamlined gRPC Integration**: Automatically generates necessary files according to your protofiles to quickly set up gRPC services in your GoFr project.
-- **Context-Aware Handling**: The generated server structure includes the necessary hooks to handle requests and responses seamlessly.
-- **Minimal Configuration**: Simplifies gRPC handler setup, focusing on business logic rather than the infrastructure.
 
 ## Prerequisites
 
@@ -60,13 +55,53 @@ The CLI can be run directly from the terminal after installation. Here’s the g
    The migrate create command generates a migration template file with pre-defined structure in your migrations directory.
    This boilerplate code helps you maintain consistent patterns when writing database schema modifications across your project.
 
+
 ### Command Usage
 ```bash
-  gofr migrate create -name=<migration-name>
+  gofr migrate create -name=<migration-name
 ```
-
 For detailed instructions on handling database migrations, see the [handling-data-migrations documentation](../../advanced-guide/handling-data-migrations/page.md)
 
+### Example Usage
+
+```bash
+gofr migrate create -name=create_employee_table
+```
+This command generates:
+
+1. A new migration file with timestamp prefix (e.g., `20250127152047_create_employee_table.go`) containing:
+```go
+package migrations
+
+import (
+    "gofr.dev/pkg/gofr/migration"
+)
+
+func create_employee_table() migration.Migrate {
+    return migration.Migrate{
+        UP: func(d migration.Datasource) error {
+            // write your migrations here
+            return nil
+        },
+    }
+}
+```
+2. An auto-generated all.go file that maintains a registry of all migrations:
+```go
+// This is auto-generated file using 'gofr migrate' tool. DO NOT EDIT.
+package migrations
+
+import (
+    "gofr.dev/pkg/gofr/migration"
+)
+
+func All() map[int64]migration.Migrate {
+    return map[int64]migration.Migrate {
+        20250127152047: create_employee_table(),
+    }
+}
+```
+For more examples, see the [using-migrations](https://github.com/gofr-dev/gofr/tree/main/examples/using-migrations)
 ---
 
 3. ***`wrap grpc`***
@@ -88,41 +123,26 @@ For detailed instructions on handling database migrations, see the [handling-dat
 ### Example Usage
 **gRPC Server**
 
-The generated Server code can be modified like this
+The command generates a server implementation template similar to this:
 ```go
 package server
 
 import (
-"fmt"
-
-	"gofr.dev/pkg/gofr"
+   "gofr.dev/pkg/gofr"
 )
 
 // Register the gRPC service in your app using the following code in your main.go:
 //
-// client.RegisterHelloServerWithGofr(app, &client.HelloGoFrServer{})
+// service.Register{ServiceName}ServerWithGofr(app, &server.{ServiceName}Server{})
 //
-// HelloGoFrServer defines the gRPC client implementation.
+// {ServiceName}Server defines the gRPC server implementation.
 // Customize the struct with required dependencies and fields as needed.
-type HelloGoFrServer struct {
+type {ServiceName}Server struct {
 }
 
-func (s *HelloGoFrServer) SayHello(ctx *gofr.Context) (any, error) {
-	request := HelloRequest{}
-
-	err := ctx.Bind(&request)
-	if err != nil {
-		return nil, err
-	}
-
-	name := request.Name
-	if name == "" {
-		name = "World"
-	}
-
-	return &HelloResponse{
-		Message: fmt.Sprintf("Hello %s!", name),
-	}, nil
+// Example method (actual methods will depend on your proto file)
+func (s *{ServiceName}Server) MethodName(ctx *gofr.Context) (any, error) {
+return nil, nil
 }
 ```
 
@@ -134,7 +154,6 @@ For detailed instruction on setting up a gRPC server with GoFr see the [gRPC Ser
 ```
 
 **Client**
-- ```{serviceName}_gofr.go (auto-generated; do not modify)```
 - ```{serviceName}_client.go (example structure below)```
 
 
@@ -166,7 +185,7 @@ func main() {
     app := gofr.New()
 
 // Create a gRPC client for the Hello service
-    helloGRPCClient, err := client.NewHelloGoFrClient(app.Config.Get("GRPC_SERVER_HOST"))
+    helloGRPCClient, err := client.NewHelloGoFrClient(app.Config.Get("GRPC_SERVER_HOST"), app.Metrics())
     if err != nil {
 		app.Logger().Errorf("Failed to create Hello gRPC client: %v", err)
     return
@@ -181,4 +200,4 @@ func main() {
     app.Run()
 }
 ```
-For examples refer [gRPC Examples](https://github.com/gofr-dev/gofr/tree/development/examples/grpc)
+For examples refer [gRPC Examples](https://github.com/gofr-dev/gofr/tree/main/examples/grpc)
