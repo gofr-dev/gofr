@@ -27,7 +27,7 @@ import (
 func Test_newContextSuccess(t *testing.T) {
 	httpRequest, err := http.NewRequestWithContext(context.Background(),
 		http.MethodPost, "/test", bytes.NewBufferString(`{"key":"value"}`))
-	httpRequest.Header.Set("content-type", "application/json")
+	httpRequest.Header.Set("Content-Type", "application/json")
 
 	if err != nil {
 		t.Fatalf("unable to create request with context %v", err)
@@ -86,7 +86,7 @@ func TestContext_WriteMessageToSocket(t *testing.T) {
 	server := httptest.NewServer(app.httpServer.router)
 	defer server.Close()
 
-	app.WebSocket("/ws", func(ctx *Context) (interface{}, error) {
+	app.WebSocket("/ws", func(ctx *Context) (any, error) {
 		socketErr := ctx.WriteMessageToSocket("Hello! GoFr")
 		if socketErr != nil {
 			return nil, socketErr

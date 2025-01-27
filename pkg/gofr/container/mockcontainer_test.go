@@ -38,11 +38,11 @@ func Test_HttpServiceMock(t *testing.T) {
 	result := res.Result()
 
 	// Setting mock expectations
-	mock.HTTPService.EXPECT().Get(context.Background(), "fact", map[string]interface{}{
+	mock.HTTPService.EXPECT().Get(context.Background(), "fact", map[string]any{
 		"max_length": 20,
 	}).Return(result, nil)
 
-	resp, err := mock.HTTPService.Get(context.Background(), "fact", map[string]interface{}{
+	resp, err := mock.HTTPService.Get(context.Background(), "fact", map[string]any{
 		"max_length": 20,
 	})
 
@@ -185,7 +185,7 @@ func TestMockSQL_HealthCheck(t *testing.T) {
 
 	expectedHealth := &datasource.Health{
 		Status:  "up",
-		Details: map[string]interface{}{"uptime": 1234567}}
+		Details: map[string]any{"uptime": 1234567}}
 
 	mock.SQL.ExpectHealthCheck().WillReturnHealthCheck(expectedHealth)
 

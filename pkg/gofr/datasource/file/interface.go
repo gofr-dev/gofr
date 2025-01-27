@@ -19,6 +19,9 @@ type File interface {
 	ReadAll() (RowReader, error)
 }
 
+// FileInfo : Any simulated or real file should implement this interface.
+//
+//nolint:revive // let's consider file.FileInfo doesn't sound repetitive
 type FileInfo interface {
 	Name() string       // base name of the file
 	Size() int64        // length in bytes for regular files; system-dependent for others
@@ -29,10 +32,12 @@ type FileInfo interface {
 
 type RowReader interface {
 	Next() bool
-	Scan(interface{}) error
+	Scan(any) error
 }
 
 // FileSystem : Any simulated or real filesystem should implement this interface.
+//
+//nolint:revive // let's consider file.FileSystem doesn't sound repetitive
 type FileSystem interface {
 	// Create creates a file in the filesystem, returning the file and an
 	// error, if any happens.
@@ -86,14 +91,17 @@ var (
 	ErrDestinationExists = os.ErrExist
 )
 
+// FileSystemProvider : Any simulated or real filesystem provider should implement this interface.
+//
+//nolint:revive // let's consider file.FileSystemProvider doesn't sound repetitive
 type FileSystemProvider interface {
 	FileSystem
 
 	// UseLogger sets the logger for the FileSystem client.
-	UseLogger(logger interface{})
+	UseLogger(logger any)
 
 	// UseMetrics sets the metrics for the FileSystem client.
-	UseMetrics(metrics interface{})
+	UseMetrics(metrics any)
 
 	// Connect establishes a connection to FileSystem and registers metrics using the provided configuration when the client was Created.
 	Connect()

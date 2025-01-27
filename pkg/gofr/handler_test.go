@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"strconv"
 	"testing"
 	"time"
 
@@ -29,7 +28,7 @@ func TestHandler_ServeHTTP(t *testing.T) {
 	testCases := []struct {
 		desc       string
 		method     string
-		data       interface{}
+		data       any
 		err        error
 		statusCode int
 		body       string
@@ -54,7 +53,7 @@ func TestHandler_ServeHTTP(t *testing.T) {
 		}
 
 		handler{
-			function: func(*Context) (interface{}, error) {
+			function: func(*Context) (any, error) {
 				return tc.data, tc.err
 			},
 			container: c,
@@ -72,7 +71,7 @@ func TestHandler_ServeHTTP_Timeout(t *testing.T) {
 	h := handler{requestTimeout: 100 * time.Millisecond}
 
 	h.container = &container.Container{Logger: logging.NewLogger(logging.FATAL)}
-	h.function = func(*Context) (interface{}, error) {
+	h.function = func(*Context) (any, error) {
 		time.Sleep(200 * time.Millisecond)
 
 		return "hey", nil
@@ -92,7 +91,7 @@ func TestHandler_ServeHTTP_Panic(t *testing.T) {
 	h := handler{}
 
 	h.container = &container.Container{Logger: logging.NewLogger(logging.FATAL)}
-	h.function = func(*Context) (interface{}, error) {
+	h.function = func(*Context) (any, error) {
 		panic("runtime panic")
 	}
 
@@ -237,8 +236,7 @@ func TestHandler_livelinessHandler(t *testing.T) {
 }
 
 func TestHandler_healthHandler(t *testing.T) {
-	metricsPort := testutil.GetFreePort(t)
-	t.Setenv("METRICS_PORT", strconv.Itoa(metricsPort))
+	testutil.NewServerConfigs(t)
 
 	a := New()
 

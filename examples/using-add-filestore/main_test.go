@@ -10,7 +10,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
-
 	"gofr.dev/pkg/gofr"
 	"gofr.dev/pkg/gofr/cmd"
 	"gofr.dev/pkg/gofr/container"
@@ -27,7 +26,7 @@ func (mockFileInfo) Size() int64        { return 0 }
 func (mockFileInfo) Mode() os.FileMode  { return 0 }
 func (mockFileInfo) ModTime() time.Time { return time.Now() }
 func (mockFileInfo) IsDir() bool        { return false }
-func (mockFileInfo) Sys() interface{}   { return nil }
+func (mockFileInfo) Sys() any           { return nil }
 
 func getContext(request gofr.Request, fileMock file.FileSystem) *gofr.Context {
 	return &gofr.Context{

@@ -59,7 +59,7 @@ func main() {
 	app.Run()
 }
 
-func Post(ctx *gofr.Context) (interface{}, error) {
+func Post(ctx *gofr.Context) (any, error) {
 	err := ctx.Clickhouse.Exec(ctx, "INSERT INTO users (id, name, age) VALUES (?, ?, ?)", "8f165e2d-feef-416c-95f6-913ce3172e15", "aryan", "10")
 	if err != nil {
 		return nil, err
@@ -68,7 +68,7 @@ func Post(ctx *gofr.Context) (interface{}, error) {
 	return "successful inserted", nil
 }
 
-func Get(ctx *gofr.Context) (interface{}, error) {
+func Get(ctx *gofr.Context) (any, error) {
 	var user []User
 
 	err := ctx.Clickhouse.Select(ctx, &user, "SELECT * FROM users")
@@ -85,25 +85,25 @@ GoFr supports injecting MongoDB that supports the following interface. Any drive
 using `app.AddMongo()` method, and user's can use MongoDB across application with `gofr.Context`.
 ```go
 type Mongo interface {
-	Find(ctx context.Context, collection string, filter interface{}, results interface{}) error
+	Find(ctx context.Context, collection string, filter any, results any) error
 
-	FindOne(ctx context.Context, collection string, filter interface{}, result interface{}) error
+	FindOne(ctx context.Context, collection string, filter any, result any) error
 
-	InsertOne(ctx context.Context, collection string, document interface{}) (interface{}, error)
+	InsertOne(ctx context.Context, collection string, document any) (any, error)
 
-	InsertMany(ctx context.Context, collection string, documents []interface{}) ([]interface{}, error)
+	InsertMany(ctx context.Context, collection string, documents []any) ([]any, error)
 
-	DeleteOne(ctx context.Context, collection string, filter interface{}) (int64, error)
+	DeleteOne(ctx context.Context, collection string, filter any) (int64, error)
 
-	DeleteMany(ctx context.Context, collection string, filter interface{}) (int64, error)
+	DeleteMany(ctx context.Context, collection string, filter any) (int64, error)
 
-	UpdateByID(ctx context.Context, collection string, id interface{}, update interface{}) (int64, error)
+	UpdateByID(ctx context.Context, collection string, id any, update any) (int64, error)
 
-	UpdateOne(ctx context.Context, collection string, filter interface{}, update interface{}) error
+	UpdateOne(ctx context.Context, collection string, filter any, update any) error
 
-	UpdateMany(ctx context.Context, collection string, filter interface{}, update interface{}) (int64, error)
+	UpdateMany(ctx context.Context, collection string, filter any, update any) (int64, error)
 
-	CountDocuments(ctx context.Context, collection string, filter interface{}) (int64, error)
+	CountDocuments(ctx context.Context, collection string, filter any) (int64, error)
 
 	Drop(ctx context.Context, collection string) error
 }
@@ -150,7 +150,7 @@ func main() {
 	app.Run()
 }
 
-func Insert(ctx *gofr.Context) (interface{}, error) {
+func Insert(ctx *gofr.Context) (any, error) {
 	var p Person
 	err := ctx.Bind(&p)
 	if err != nil {
@@ -165,7 +165,7 @@ func Insert(ctx *gofr.Context) (interface{}, error) {
 	return res, nil
 }
 
-func Get(ctx *gofr.Context) (interface{}, error) {
+func Get(ctx *gofr.Context) (any, error) {
 	var result Person
 
 	p := ctx.Param("name")
@@ -250,7 +250,7 @@ func main() {
 
 	app.AddCassandra(cassandra)
 
-	app.POST("/user", func(c *gofr.Context) (interface{}, error) {
+	app.POST("/user", func(c *gofr.Context) (any, error) {
 		person := Person{}
 
 		err := c.Bind(&person)
@@ -267,7 +267,7 @@ func main() {
 		return "created", nil
 	})
 
-	app.GET("/user", func(c *gofr.Context) (interface{}, error) {
+	app.GET("/user", func(c *gofr.Context) (any, error) {
 		persons := make([]Person, 0)
 
 		err := c.Cassandra.QueryWithCtx(c, &persons, `SELECT id, name, age, location FROM persons`)
@@ -286,22 +286,22 @@ database. Any driver that implements the following interface can be added using 
 // Dgraph defines the methods for interacting with a Dgraph database.
 type Dgraph interface {
 	// Query executes a read-only query in the Dgraph database and returns the result.
-	Query(ctx context.Context, query string) (interface{}, error)
+	Query(ctx context.Context, query string) (any, error)
 
 	// QueryWithVars executes a read-only query with variables in the Dgraph database.
-	QueryWithVars(ctx context.Context, query string, vars map[string]string) (interface{}, error)
+	QueryWithVars(ctx context.Context, query string, vars map[string]string) (any, error)
 
 	// Mutate executes a write operation (mutation) in the Dgraph database and returns the result.
-	Mutate(ctx context.Context, mu interface{}) (interface{}, error)
+	Mutate(ctx context.Context, mu any) (any, error)
 
 	// Alter applies schema or other changes to the Dgraph database.
-	Alter(ctx context.Context, op interface{}) error
+	Alter(ctx context.Context, op any) error
 
 	// NewTxn creates a new transaction (read-write) for interacting with the Dgraph database.
-	NewTxn() interface{}
+	NewTxn() any
 
 	// NewReadOnlyTxn creates a new read-only transaction for querying the Dgraph database.
-	NewReadOnlyTxn() interface{}
+	NewReadOnlyTxn() any
 
 	// HealthChecker checks the health of the Dgraph instance.
 	HealthChecker
@@ -353,7 +353,7 @@ func main() {
 }
 
 // DGraphInsertHandler handles POST requests to insert data into Dgraph
-func DGraphInsertHandler(c *gofr.Context) (interface{}, error) {
+func DGraphInsertHandler(c *gofr.Context) (any, error) {
 	// Example mutation data to insert into Dgraph
 	mutationData := `
 		{
@@ -384,7 +384,7 @@ func DGraphInsertHandler(c *gofr.Context) (interface{}, error) {
 }
 
 // DGraphQueryHandler handles GET requests to fetch data from Dgraph
-func DGraphQueryHandler(c *gofr.Context) (interface{}, error) {
+func DGraphQueryHandler(c *gofr.Context) (any, error) {
 	// A simple query to fetch all persons with a name in Dgraph
 	response, err := c.DGraph.Query(c, "{ persons(func: has(name)) { uid name } }")
 	if err != nil {
@@ -398,7 +398,7 @@ func DGraphQueryHandler(c *gofr.Context) (interface{}, error) {
 	}
 
 	// Parse the response JSON
-	var result map[string]interface{}
+	var result map[string]any
 	err = json.Unmarshal(resp.Json, &result)
 	if err != nil {
 		return nil, err
@@ -473,7 +473,7 @@ type Person struct {
 	Age  int
 }
 
-func post(c *gofr.Context) (interface{}, error) {
+func post(c *gofr.Context) (any, error) {
 	p := []Person{{Name: "Srijan", Age: 24}}
 	body, _ := json.Marshal(p)
 
@@ -485,7 +485,7 @@ func post(c *gofr.Context) (interface{}, error) {
 	return resp, nil
 }
 
-func get(c *gofr.Context) (interface{}, error) {
+func get(c *gofr.Context) (any, error) {
 	resp, err := c.Solr.Search(c, "test", nil)
 	if err != nil {
 		return nil, err
@@ -798,7 +798,7 @@ func main() {
 	app.Run()
 }
 
-func addUser(c *gofr.Context) (interface{}, error) {
+func addUser(c *gofr.Context) (any, error) {
 	var newUser User
 	err := c.Bind(&newUser)
 	if err != nil {
@@ -809,7 +809,7 @@ func addUser(c *gofr.Context) (interface{}, error) {
 	return newUser, nil
 }
 
-func getUser(c *gofr.Context) (interface{}, error) {
+func getUser(c *gofr.Context) (any, error) {
 	var user User
 	id := c.PathParam("id")
 
@@ -827,4 +827,125 @@ func getUser(c *gofr.Context) (interface{}, error) {
 
 	return user, nil
 }
+```
+## SurrealDB
+
+GoFr supports injecting SurrealDB database that supports the following interface. Any driver that implements the interface can be added
+using `app.AddSurrealDB()` method, and users can use Surreal DB across application through the `gofr.Context`.
+
+```go
+// SurrealDB defines an interface representing a SurrealDB client with common database operations.
+type SurrealDB interface {
+    // Query executes a Surreal query with the provided variables and returns the query results as a slice of interfaces{}.
+    // It returns an error if the query execution fails.
+    Query(ctx context.Context, query string, vars map[string]any) ([]any, error)
+
+    // Create inserts a new record into the specified table and returns the created record as a map.
+    // It returns an error if the operation fails.
+    Create(ctx context.Context, table string, data any) (map[string]any, error)
+
+    // Update modifies an existing record in the specified table by its ID with the provided data.
+    // It returns the updated record as an interface and an error if the operation fails.
+    Update(ctx context.Context, table string, id string, data any) (any, error)
+
+    // Delete removes a record from the specified table by its ID.
+    // It returns the result of the delete operation as an interface and an error if the operation fails.
+    Delete(ctx context.Context, table string, id string) (any, error)
+
+    // Select retrieves all records from the specified table.
+    // It returns a slice of maps representing the records and an error if the operation fails.
+    Select(ctx context.Context, table string) ([]map[string]any, error)
+
+    HealthChecker
+}
+
+// SurrealDBProvider is an interface that extends SurrealDB with additional methods for logging, metrics, or connection management.
+// It is typically used for initializing and managing SurrealDB-based data sources.
+type SurrealDBProvider interface {
+    SurrealDB
+
+    provider
+}
+```
+Import the gofr's external driver for SurrealDB:
+```shell
+  go get gofr.dev/pkg/gofr/datasource/surrealdb
+```
+The following example demonstrates injecting an SurrealDB instance into a GoFr application.
+
+```go
+package main
+
+import (
+	"gofr.dev/pkg/gofr"
+	"gofr.dev/pkg/gofr/datasource/surrealdb"
+)
+
+type Person struct {
+	ID    string `json:"id,omitempty"`
+	Name  string `json:"name"`
+	Age   int    `json:"age"`
+	Email string `json:"email,omitempty"`
+}
+
+type ErrorResponse struct {
+	Message string `json:"message"`
+}
+
+func main() {
+	app := gofr.New()
+
+	client := surrealdb.New(&surrealdb.Config{
+		Host:       "localhost",
+		Port:       8000,
+		Username:   "root",
+		Password:   "root",
+		Namespace:  "test_namespace",
+		Database:   "test_database",
+		TLSEnabled: false,
+	})
+
+	app.AddSurrealDB(client)
+
+	// GET request to fetch person by ID
+	app.GET("/person/{id}", func(ctx *gofr.Context) (interface{}, error) {
+		id := ctx.PathParam("id")
+
+		query := "SELECT * FROM type::thing('person', $id)"
+		vars := map[string]interface{}{
+			"id": id,
+		}
+
+		result, err := ctx.SurrealDB.Query(ctx, query, vars)
+		if err != nil {
+			return nil, err
+		}
+
+		return result, nil
+	})
+
+	// POST request to create a new person
+	app.POST("/person", func(ctx *gofr.Context) (interface{}, error) {
+		var person Person
+
+		if err := ctx.Bind(&person); err != nil {
+			return ErrorResponse{Message: "Invalid request body"}, nil
+		}
+
+		result, err := ctx.SurrealDB.Create(ctx, "person", map[string]interface{}{
+			"name":  person.Name,
+			"age":   person.Age,
+			"email": person.Email,
+		})
+
+		if err != nil {
+			return nil, err
+		}
+
+		return result, nil
+	})
+
+	app.Run()
+}
+
 ```

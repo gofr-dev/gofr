@@ -17,6 +17,9 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
+// S3File represents a file in an S3 bucket.
+//
+//nolint:revive // s3.S3File is repetitive. A better name could have been chosen, but it's too late as it's already exported.
 type S3File struct {
 	conn         s3Client
 	name         string

@@ -22,9 +22,9 @@ type redisHook struct {
 
 // QueryLog represents a logged Redis query.
 type QueryLog struct {
-	Query    string      `json:"query"`
-	Duration int64       `json:"duration"`
-	Args     interface{} `json:"args,omitempty"`
+	Query    string `json:"query"`
+	Duration int64  `json:"duration"`
+	Args     any    `json:"args,omitempty"`
 }
 
 func (ql *QueryLog) PrettyPrint(writer io.Writer) {
@@ -51,7 +51,7 @@ func (ql *QueryLog) String() string {
 	}
 
 	switch args := ql.Args.(type) {
-	case []interface{}:
+	case []any:
 		strArgs := make([]string, len(args))
 		for i, arg := range args {
 			strArgs[i] = fmt.Sprint(arg)
@@ -64,7 +64,7 @@ func (ql *QueryLog) String() string {
 }
 
 // logQuery logs the Redis query information.
-func (r *redisHook) sendOperationStats(start time.Time, query string, args ...interface{}) {
+func (r *redisHook) sendOperationStats(start time.Time, query string, args ...any) {
 	duration := time.Since(start).Microseconds()
 
 	r.logger.Debug(&QueryLog{

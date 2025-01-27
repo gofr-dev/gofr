@@ -75,7 +75,7 @@ func main() {
 	// initialise gofr object
 	app := gofr.New()
 
-	app.GET("/redis", func(ctx *gofr.Context) (interface{}, error) {
+	app.GET("/redis", func(ctx *gofr.Context) (any, error) {
 		// Get the value using the Redis instance
 
 		val, err := ctx.Redis.Get(ctx.Context, "test").Result()
@@ -87,7 +87,7 @@ func main() {
 		return val, nil
 	})
 
-	app.POST("/customer/{name}", func(ctx *gofr.Context) (interface{}, error) {
+	app.POST("/customer/{name}", func(ctx *gofr.Context) (any, error) {
 		name := ctx.PathParam("name")
 
 		// Inserting a customer row in database using SQL
@@ -96,7 +96,7 @@ func main() {
 		return nil, err
 	})
 
-	app.GET("/customer", func(ctx *gofr.Context) (interface{}, error) {
+	app.GET("/customer", func(ctx *gofr.Context) (any, error) {
 		var customers []Customer
 
 		// Getting the customer from the database using SQL

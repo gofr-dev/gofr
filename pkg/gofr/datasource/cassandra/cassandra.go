@@ -79,14 +79,14 @@ func (c *Client) Connect() {
 }
 
 // UseLogger sets the logger for the Cassandra client which asserts the Logger interface.
-func (c *Client) UseLogger(logger interface{}) {
+func (c *Client) UseLogger(logger any) {
 	if l, ok := logger.(Logger); ok {
 		c.logger = l
 	}
 }
 
 // UseMetrics sets the metrics for the Cassandra client which asserts the Metrics interface.
-func (c *Client) UseMetrics(metrics interface{}) {
+func (c *Client) UseMetrics(metrics any) {
 	if m, ok := metrics.(Metrics); ok {
 		c.metrics = m
 	}
@@ -100,7 +100,7 @@ func (c *Client) UseTracer(tracer any) {
 }
 
 // Query is the original method without context, preserved for backward compatibility.
-// It internally delegates to QueryWithCtx using context.Background() as the default context.
+// It internally delegates to [Client.QueryWithCtx] using context.Background() as the default context.
 func (c *Client) Query(dest any, stmt string, values ...any) error {
 	return c.QueryWithCtx(context.Background(), dest, stmt, values...)
 }
@@ -117,6 +117,8 @@ func (c *Client) NewBatch(name string, batchType int) error {
 	return c.NewBatchWithCtx(context.Background(), name, batchType)
 }
 
+// QueryWithCtx executes a CQL query in the Cassandra database and returns the result.
+//
 //nolint:exhaustive // We just want to take care of slice and struct in this case.
 func (c *Client) QueryWithCtx(ctx context.Context, dest any, stmt string, values ...any) error {
 	span := c.addTrace(ctx, "query", stmt)
@@ -175,6 +177,8 @@ func (c *Client) ExecWithCtx(ctx context.Context, stmt string, values ...any) er
 	return c.cassandra.session.query(stmt, values...).exec()
 }
 
+// ExecCASWithCtx executes a CQL query in the Cassandra database and returns the true if the query is applied.
+//
 //nolint:exhaustive // We just want to take care of slice and struct in this case.
 func (c *Client) ExecCASWithCtx(ctx context.Context, dest any, stmt string, values ...any) (bool, error) {
 	var (
@@ -357,7 +361,7 @@ func (c *Client) HealthCheck(context.Context) (any, error) {
 	)
 
 	h := Health{
-		Details: make(map[string]interface{}),
+		Details: make(map[string]any),
 	}
 
 	h.Details["host"] = c.config.Hosts

@@ -12,7 +12,7 @@ import (
 
 func (r *Redis) HealthCheck() datasource.Health {
 	h := datasource.Health{
-		Details: make(map[string]interface{}),
+		Details: make(map[string]any),
 	}
 
 	h.Details["host"] = r.config.HostName + ":" + strconv.Itoa(r.config.Port)

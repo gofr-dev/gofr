@@ -32,12 +32,11 @@ value := ctx.Request.Param("key1")
 ```
 
 - `PathParam(string)` - to retrieve the path parameters
-
-```go
-// Consider the path to be /employee/{id}
-id := ctx.Request.PathParam("id")
-```
-- `Bind(interface{})` - to access a decoded format of the request body, the body is mapped to the interface provided
+  ```go
+  // Consider the path to be /employee/{id}
+  id := ctx.Request.PathParam("id")
+  ```
+- `Bind(any)` - to access a decoded format of the request body, the body is mapped to the interface provided
 
 ```go
 // incoming request body is

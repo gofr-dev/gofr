@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"time"
 
 	"gofr.dev/pkg/gofr"
 	"gofr.dev/pkg/gofr/container"
@@ -25,11 +26,15 @@ type HelloServerWrapper struct {
 func (h *HelloServerWrapper) SayHello(ctx context.Context, req *HelloRequest) (*HelloResponse, error) {
 	gctx := h.GetGofrContext(ctx, &HelloRequestWrapper{ctx: ctx, HelloRequest: req})
 
-	res, err := h.server.SayHello(gctx)
+	start := time.Now()
 
+	res, err := h.server.SayHello(gctx)
 	if err != nil {
 		return nil, err
 	}
+
+	duration := time.Since(start)
+	gctx.Metrics().RecordHistogram(ctx, "app_gRPC-Server_stats", float64(duration.Milliseconds())+float64(duration.Nanoseconds()%1e6)/1e6, "gRPC_Service", "Hello", "method", "SayHello")
 
 	resp, ok := res.(*HelloResponse)
 	if !ok {
@@ -41,8 +46,14 @@ func (h *HelloServerWrapper) SayHello(ctx context.Context, req *HelloRequest) (*
 
 func (h *HelloServerWrapper) mustEmbedUnimplementedHelloServer() {}
 
-func RegisterHelloServerWithGofr(s grpc.ServiceRegistrar, srv HelloServerWithGofr) {
+func RegisterHelloServerWithGofr(app *gofr.App, srv HelloServerWithGofr) {
+	var s grpc.ServiceRegistrar = app
+
 	wrapper := &HelloServerWrapper{server: srv}
+
+	gRPCBuckets := []float64{0.005, 0.01, .05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 4, 5, 7.5, 10}
+	app.Metrics().NewHistogram("app_gRPC-Server_stats", "Response time of gRPC server in milliseconds.", gRPCBuckets...)
+
 	RegisterHelloServer(s, wrapper)
 }
 

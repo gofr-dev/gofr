@@ -18,7 +18,7 @@ func Test_CustomDomainProvider_Get(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	queryParams := map[string]interface{}{"key": "value"}
+	queryParams := map[string]any{"key": "value"}
 	body := []byte("body")
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -57,7 +57,7 @@ func Test_CustomDomainProvider_Post(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	queryParams := map[string]interface{}{"key": "value"}
+	queryParams := map[string]any{"key": "value"}
 	body := []byte("body")
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -86,7 +86,7 @@ func TestCustomDomainProvider_Put(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	queryParams := map[string]interface{}{"key": "value"}
+	queryParams := map[string]any{"key": "value"}
 	body := []byte("body")
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -115,7 +115,7 @@ func TestCustomDomainProvider_Patch(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	queryParams := map[string]interface{}{"key": "value"}
+	queryParams := map[string]any{"key": "value"}
 	body := []byte("body")
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
