@@ -6,16 +6,16 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	resTypes "gofr.dev/pkg/gofr/http/response"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	resTypes "gofr.dev/pkg/gofr/http/response"
 )
 
 func TestResponder(t *testing.T) {
 	tests := []struct {
 		desc         string
-		data         interface{}
+		data         any
 		contentType  string
 		expectedBody []byte
 	}{
@@ -84,21 +84,21 @@ func TestResponder_getStatusCode(t *testing.T) {
 	tests := []struct {
 		desc       string
 		method     string
-		data       interface{}
+		data       any
 		err        error
 		statusCode int
-		errObj     interface{}
+		errObj     any
 	}{
 		{"success case", http.MethodGet, "success response", nil, http.StatusOK, nil},
 		{"post with response body", http.MethodPost, "entity created", nil, http.StatusCreated, nil},
 		{"post with nil response", http.MethodPost, nil, nil, http.StatusAccepted, nil},
 		{"success delete", http.MethodDelete, nil, nil, http.StatusNoContent, nil},
 		{"invalid route error", http.MethodGet, nil, ErrorInvalidRoute{}, http.StatusNotFound,
-			map[string]interface{}{"message": ErrorInvalidRoute{}.Error()}},
+			map[string]any{"message": ErrorInvalidRoute{}.Error()}},
 		{"internal server error", http.MethodGet, nil, http.ErrHandlerTimeout, http.StatusInternalServerError,
-			map[string]interface{}{"message": http.ErrHandlerTimeout.Error()}},
+			map[string]any{"message": http.ErrHandlerTimeout.Error()}},
 		{"partial content with error", http.MethodGet, "partial response", ErrorInvalidRoute{},
-			http.StatusPartialContent, map[string]interface{}{"message": ErrorInvalidRoute{}.Error()}},
+			http.StatusPartialContent, map[string]any{"message": ErrorInvalidRoute{}.Error()}},
 	}
 
 	for i, tc := range tests {
@@ -125,7 +125,7 @@ func TestRespondWithApplicationJSON(t *testing.T) {
 
 	tests := []struct {
 		desc         string
-		data         interface{}
+		data         any
 		err          error
 		expectedCode int
 		expectedBody string

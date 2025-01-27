@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+
 	"gofr.dev/pkg/gofr/container"
 )
 
@@ -97,7 +98,7 @@ func Test_MongoCommitMigration(t *testing.T) {
 		MigrationNumber: 10,
 	}
 
-	migrationDoc := map[string]interface{}{
+	migrationDoc := map[string]any{
 		"version":    td.MigrationNumber,
 		"method":     "UP",
 		"start_time": td.StartTime,

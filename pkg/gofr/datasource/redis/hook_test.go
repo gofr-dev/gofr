@@ -18,7 +18,7 @@ func TestQueryLog_PrettyPrint(t *testing.T) {
 			ql: &QueryLog{
 				Query:    "pipeline",
 				Duration: 112,
-				Args:     []interface{}{"[", "set a", "get a", "ex 300: OK", "]"},
+				Args:     []any{"[", "set a", "get a", "ex 300: OK", "]"},
 			},
 			expOut: []string{"pipeline", "112", "REDIS", "set a", "get a"},
 		},
@@ -27,7 +27,7 @@ func TestQueryLog_PrettyPrint(t *testing.T) {
 			ql: &QueryLog{
 				Query:    "get",
 				Duration: 22,
-				Args:     []interface{}{"get", "key1"},
+				Args:     []any{"get", "key1"},
 			},
 			expOut: []string{"get", "REDIS", "22", "get key1"},
 		},

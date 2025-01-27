@@ -27,30 +27,30 @@ i.e. the order of the options is not important.
 > Service names are to be kept unique to one service.
 
 ```go  
-app.AddHTTPService(<service_name> , <service_address>)  
-```  
+app.AddHTTPService(<service_name> , <service_address>)
+```
 
 #### Example
 ```go  
-package main  
-  
-import (  
-    "gofr.dev/pkg/gofr"  
-)  
-  
-func main() {  
-    // Create a new application  
-    app := gofr.New()  
-  
-    // register a payment service which is hosted at http://localhost:9000  
-    app.AddHTTPService("payment", "http://localhost:9000")  
-  
-    app.GET("/customer", Customer)  
-  
-    // Run the application  
-    app.Run()  
-}  
-```  
+package main
+
+import (
+	"gofr.dev/pkg/gofr"
+)
+
+func main() {
+	// Create a new application
+	app := gofr.New()
+
+	// register a payment service which is hosted at http://localhost:9000
+	app.AddHTTPService("payment", "http://localhost:9000")
+
+	app.GET("/customer", Customer)
+
+	// Run the application
+	app.Run()
+}
+```
 
 ### Accessing HTTP Service in handler
 
@@ -59,29 +59,29 @@ Using the `GetHTTPService` method with the service name that was given at the ti
 the client can be retrieved as shown below:
 
 ```go  
-svc := ctx.GetHTTPService(<service_name>)  
-```  
+svc := ctx.GetHTTPService(<service_name>)
+```
 
 ```go  
-func Customer(ctx *gofr.Context) (interface{}, error) {  
-    // Get the payment service client  
-    paymentSvc := ctx.GetHTTPService("payment")  
-  
-    // Use the Get method to call the GET /user endpoint of payments service  
-    resp, err := paymentSvc.Get(ctx, "user", nil)  
-    if err != nil {  
-        return nil, err  
-    }  
-  
-    defer resp.Body.Close()  
-  
-    body, err := io.ReadAll(resp.Body)  
-    if err != nil {  
-        return nil, err  
-    }  
-  
-    return string(body), nil  
-}  
+func Customer(ctx *gofr.Context) (interface{}, error) {
+	// Get the payment service client
+	paymentSvc := ctx.GetHTTPService("payment")
+
+	// Use the Get method to call the GET /user endpoint of payments service
+	resp, err := paymentSvc.Get(ctx, "user", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	return string(body), nil
+}
 ```
 
 ### Additional Configurational Options
@@ -99,35 +99,35 @@ GoFr provides its user with additional configurational options while registering
 #### Usage:
 
 ```go
-a.AddHTTPService("cat-facts", "https://catfact.ninja",  
-    &service.APIKeyConfig{APIKey: "some-random-key"},  
-    
-    &service.BasicAuthConfig{  
-       UserName: "gofr",  
-       Password: "gofr",  
+a.AddHTTPService("cat-facts", "https://catfact.ninja",
+    &service.APIKeyConfig{APIKey: "some-random-key"},
+
+    &service.BasicAuthConfig{
+       UserName: "gofr",
+       Password: "gofr",
   },
-    
-    &service.CircuitBreakerConfig{  
-       Threshold: 4,  
-       Interval:  1 * time.Second,  
-  },  
-  
-   &service.DefaultHeaders{Headers: map[string]string{"key": "value"}},  
- 
-   &service.HealthConfig{  
-       HealthEndpoint: "breeds",  
-  }, 
-   
-   &service.OAuthConfig{  
-       ClientID:       "abc",  
-       ClientSecret:   "abc",  
-       TokenURL:       "http://test.com",  
-       Scopes:         nil,  
-       EndpointParams: nil,  
+
+    &service.CircuitBreakerConfig{
+       Threshold: 4,
+       Interval:  1 * time.Second,
   },
-    
+
+   &service.DefaultHeaders{Headers: map[string]string{"key": "value"}},
+
+   &service.HealthConfig{
+       HealthEndpoint: "breeds",
+  },
+
+   &service.OAuthConfig{
+       ClientID:       "abc",
+       ClientSecret:   "abc",
+       TokenURL:       "http://test.com",
+       Scopes:         nil,
+       EndpointParams: nil,
+  },
+
   &service.RetryConfig{
       MaxRetries: 5
-  },  
+  },
 )
 ```

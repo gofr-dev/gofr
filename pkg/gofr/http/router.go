@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/gorilla/mux"
-
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 

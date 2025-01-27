@@ -16,8 +16,8 @@ You can also set up a development environment with password authentication as de
 
 ```bash
 docker run --name gofr-redis -p 2002:6379 -d \
-  -e REDIS_PASSWORD=password \
-  redis:7.0.5 --requirepass password
+	-e REDIS_PASSWORD=password \
+	redis:7.0.5 --requirepass password
 ```
 
 You can set a sample key `greeting` using the following command:
@@ -65,7 +65,7 @@ func main() {
 	// Initialize GoFr object
 	app := gofr.New()
 
-	app.GET("/redis", func(ctx *gofr.Context) (interface{}, error) {
+	app.GET("/redis", func(ctx *gofr.Context) (any, error) {
 		// Get the value using the Redis instance
 
 		val, err := ctx.Redis.Get(ctx.Context, "greeting").Result()

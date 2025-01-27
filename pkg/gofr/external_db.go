@@ -144,3 +144,24 @@ func (a *App) AddOpenTSDB(db container.OpenTSDBProvider) {
 
 	a.container.OpenTSDB = db
 }
+
+func (a *App) AddScyllaDB(db container.ScyllaDBProvider) {
+	// Create the ScyllaDB client with the provided configuration
+	db.UseLogger(a.Logger())
+	db.UseMetrics(a.Metrics())
+
+	tracer := otel.GetTracerProvider().Tracer("gofr-scylladb")
+	db.UseTracer(tracer)
+	db.Connect()
+	a.container.ScyllaDB = db
+}
+
+func (a *App) AddSurrealDB(db container.SurrealBDProvider) {
+	db.UseLogger(a.Logger())
+	db.UseMetrics(a.Metrics())
+
+	tracer := otel.GetTracerProvider().Tracer("gofr-surrealdb")
+	db.UseTracer(tracer)
+	db.Connect()
+	a.container.SurrealDB = db
+}

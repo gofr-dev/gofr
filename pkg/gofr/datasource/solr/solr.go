@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"go.opentelemetry.io/contrib/instrumentation/net/http/httptrace/otelhttptrace"
-
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 )
@@ -266,7 +265,7 @@ func (*Client) createRequest(ctx context.Context, method, url string, params map
 	}
 
 	if method != http.MethodGet {
-		req.Header.Add("content-type", "application/json")
+		req.Header.Add("Content-Type", "application/json")
 	}
 
 	q := req.URL.Query()

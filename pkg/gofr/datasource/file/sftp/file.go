@@ -121,7 +121,7 @@ func (j jsonReader) Next() bool {
 }
 
 // Scan binds the data to provided struct.
-func (j jsonReader) Scan(i interface{}) error {
+func (j jsonReader) Scan(i any) error {
 	return j.decoder.Decode(&i)
 }
 
@@ -131,7 +131,7 @@ func (f textReader) Next() bool {
 }
 
 // Scan binds the line to provided pointer to string.
-func (f textReader) Scan(i interface{}) error {
+func (f textReader) Scan(i any) error {
 	// Use a type switch to check if the provided interface is a pointer to a string.
 	switch target := i.(type) {
 	case *string:

@@ -10,9 +10,9 @@ the framework itself. GoFr provide the following functionalities for its key-val
 
 ```go
 type KVStore interface {
-    Get(ctx context.Context, key string) (string, error)
-    Set(ctx context.Context, key, value string) error
-    Delete(ctx context.Context, key string) error
+	Get(ctx context.Context, key string) (string, error)
+	Set(ctx context.Context, key, value string) error
+	Delete(ctx context.Context, key string) error
 }
 ```
 
@@ -58,7 +58,7 @@ func main() {
 	app.Run()
 }
 
-func Post(ctx *gofr.Context) (interface{}, error) {
+func Post(ctx *gofr.Context) (any, error) {
 	err := ctx.KVStore.Set(ctx, "name", "gofr")
 	if err != nil {
 		return nil, err
@@ -67,7 +67,7 @@ func Post(ctx *gofr.Context) (interface{}, error) {
 	return "Insertion to Key Value Store Successful", nil
 }
 
-func Get(ctx *gofr.Context) (interface{}, error) {
+func Get(ctx *gofr.Context) (any, error) {
 	value, err := ctx.KVStore.Get(ctx, "name")
 	if err != nil {
 		return nil, err
@@ -76,7 +76,7 @@ func Get(ctx *gofr.Context) (interface{}, error) {
 	return value, nil
 }
 
-func Delete(ctx *gofr.Context) (interface{}, error) {
+func Delete(ctx *gofr.Context) (any, error) {
 	err := ctx.KVStore.Delete(ctx, "name")
 	if err != nil {
 		return nil, err

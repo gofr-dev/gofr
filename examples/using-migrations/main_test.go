@@ -2,24 +2,18 @@ package main
 
 import (
 	"bytes"
-	"fmt"
 	"net/http"
-	"strconv"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"gofr.dev/pkg/gofr/testutil"
 )
 
 func TestExampleMigration(t *testing.T) {
-	httpPort := testutil.GetFreePort(t)
-	t.Setenv("HTTP_PORT", strconv.Itoa(httpPort))
-	host := fmt.Sprint("http://localhost:", httpPort)
-
-	port := testutil.GetFreePort(t)
-	t.Setenv("METRICS_PORT", strconv.Itoa(port))
+	configs := testutil.NewServerConfigs(t)
 
 	go main()
 	time.Sleep(100 * time.Millisecond) // Giving some time to start the server
@@ -43,7 +37,7 @@ func TestExampleMigration(t *testing.T) {
 	}
 
 	for i, tc := range tests {
-		req, _ := http.NewRequest(tc.method, host+tc.path, bytes.NewBuffer(tc.body))
+		req, _ := http.NewRequest(tc.method, configs.HTTPHost+tc.path, bytes.NewBuffer(tc.body))
 		req.Header.Set("content-type", "application/json")
 		c := http.Client{}
 		resp, err := c.Do(req)

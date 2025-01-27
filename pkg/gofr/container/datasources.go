@@ -275,6 +275,40 @@ type MongoProvider interface {
 	provider
 }
 
+// SurrealDB defines an interface representing a SurrealDB client with common database operations.
+type SurrealDB interface {
+
+	// Query executes a Surreal query with the provided variables and returns the query results as a slice of interfaces{}.
+	// It returns an error if the query execution fails.
+	Query(ctx context.Context, query string, vars map[string]any) ([]any, error)
+
+	// Create inserts a new record into the specified table and returns the created record as a map.
+	// It returns an error if the operation fails.
+	Create(ctx context.Context, table string, data any) (map[string]any, error)
+
+	// Update modifies an existing record in the specified table by its ID with the provided data.
+	// It returns the updated record as an interface and an error if the operation fails.
+	Update(ctx context.Context, table string, id string, data any) (any, error)
+
+	// Delete removes a record from the specified table by its ID.
+	// It returns the result of the delete operation as an interface and an error if the operation fails.
+	Delete(ctx context.Context, table string, id string) (any, error)
+
+	// Select retrieves all records from the specified table.
+	// It returns a slice of maps representing the records and an error if the operation fails.
+	Select(ctx context.Context, table string) ([]map[string]any, error)
+
+	HealthChecker
+}
+
+// SurrealBDProvider is an interface that extends SurrealDB with additional methods for logging, metrics, or connection management.
+// It is typically used for initializing and managing SurrealDB-based data sources.
+type SurrealBDProvider interface {
+	SurrealDB
+
+	provider
+}
+
 type provider interface {
 	// UseLogger sets the logger for the Cassandra client.
 	UseLogger(logger any)
@@ -502,4 +536,41 @@ type OpenTSDB interface {
 	// Returns:
 	// - Error if parameters are invalid, response parsing fails, or if connectivity issues occur.
 	DeleteAnnotation(ctx context.Context, annotation any, res any) error
+}
+
+type ScyllaDB interface {
+	// Query executes a CQL (Cassandra Query Language) query on the ScyllaDB cluster
+	// and stores the result in the provided destination variable `dest`.
+	// Accepts pointer to struct or slice as dest parameter for single and multiple
+	Query(dest any, stmt string, values ...any) error
+	// QueryWithCtx executes the query with a context and binds the result into dest parameter.
+	// Accepts pointer to struct or slice as dest parameter for single and multiple rows retrieval respectively.
+	QueryWithCtx(ctx context.Context, dest any, stmt string, values ...any) error
+	// Exec executes a CQL statement (e.g., INSERT, UPDATE, DELETE) on the ScyllaDB cluster without returning any result.
+	Exec(stmt string, values ...any) error
+	// ExecWithCtx executes a CQL statement with the provided context and without returning any result.
+	ExecWithCtx(ctx context.Context, stmt string, values ...any) error
+	// ExecCAS executes a lightweight transaction (i.e. an UPDATE or INSERT statement containing an IF clause).
+	// If the transaction fails because the existing values did not match, the previous values will be stored in dest.
+	// Returns true if the query is applied otherwise false.
+	// Returns false and error if any error occur while executing the query.
+	// Accepts only pointer to struct and built-in types as the dest parameter.
+	ExecCAS(dest any, stmt string, values ...any) (bool, error)
+	// NewBatch initializes a new batch operation with the specified name and batch type.
+	NewBatch(name string, batchType int) error
+	// NewBatchWithCtx takes context,name and batchtype and return error.
+	NewBatchWithCtx(_ context.Context, name string, batchType int) error
+	// BatchQuery executes a batch query in the ScyllaDB cluster with the specified name, statement, and values.
+	BatchQuery(name, stmt string, values ...any) error
+	// BatchQueryWithCtx executes a batch query with the provided context.
+	BatchQueryWithCtx(ctx context.Context, name, stmt string, values ...any) error
+	// ExecuteBatchWithCtx executes a batch with context and name returns error.
+	ExecuteBatchWithCtx(ctx context.Context, name string) error
+	// HealthChecker defines the HealthChecker interface.
+	HealthChecker
+}
+
+type ScyllaDBProvider interface {
+	ScyllaDB
+	provider
 }
