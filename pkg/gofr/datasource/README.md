@@ -71,17 +71,18 @@ Therefore, GoFr utilizes a pluggable approach for new datasources by separating 
 
 | Datasource       | Health-Check | Logs | Metrics | Traces | As Driver |
 |------------------|:------------:|:----:|:-------:|:------:|:---------:|
-| MySQL            | ✅          | ✅    | ✅    | ✅      |           |
-| REDIS            | ✅          | ✅    | ✅    | ✅      |           |
-| PostgreSQL       | ✅          | ✅    | ✅    | ✅      |           |
-| MongoDB          | ✅          | ✅    | ✅    |  ✅     | ✅         |
-| SQLite           | ✅          | ✅    | ✅    | ✅      |           |
-| BadgerDB         | ✅          | ✅    | ✅    |    ✅   | ✅         |
-| Cassandra        | ✅          | ✅    | ✅    |  ✅     | ✅         |
+| MySQL            | ✅          | ✅    | ✅    |   ✅    |           |
+| REDIS            | ✅          | ✅    | ✅    |   ✅    |           |
+| PostgreSQL       | ✅          | ✅    | ✅    |   ✅    |           |
+| MongoDB          | ✅          | ✅    | ✅    |   ✅    | ✅         |
+| SQLite           | ✅          | ✅    | ✅    |   ✅    |           |
+| BadgerDB         | ✅          | ✅    | ✅    |   ✅    | ✅         |
+| Cassandra        | ✅          | ✅    | ✅    |   ✅    | ✅         |
 | ClickHouse       |             | ✅    | ✅    |   ✅    | ✅         |
-| FTP              |             | ✅    |       |          | ✅         |
-| SFTP             |             | ✅    |       |          | ✅         |
+| FTP              |             | ✅    |       |        | ✅         |
+| SFTP             |             | ✅    |       |        | ✅         |
 | Solr             |             | ✅    | ✅    |   ✅    |   ✅      |
 | DGraph           | ✅          | ✅    | ✅    |   ✅    |           |
-| Azure Event Hubs |             | ✅    | ✅    |          |✅       |
+| Azure Event Hubs |             | ✅    | ✅    |        |✅       |
 | OpenTSDB         | ✅         | ✅     |       |   ✅    |   ✅     |
+| SurrealDB        | ✅         | ✅     |       |    ✅   |   ✅     |

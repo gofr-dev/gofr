@@ -38,6 +38,8 @@ type Txn interface {
 }
 
 // DgraphClient is an interface that defines the methods for interacting with Dgraph.
+//
+//nolint:revive // dgraph.DgraphClient is repetitive. A better name could have been chosen, but it's too late as it's already exported.
 type DgraphClient interface {
 	// NewTxn creates a new transaction (read-write) for interacting with the Dgraph database.
 	NewTxn() Txn
