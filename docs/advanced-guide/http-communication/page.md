@@ -95,6 +95,7 @@ GoFr provides its user with additional configurational options while registering
 - **DefaultHeaders** - This option allows user to set some default headers that will be propagated to the downstream HTTP Service every time it is being called.
 - **HealthConfig** - This option allows user to add the `HealthEndpoint` along with `Timeout` to enable and perform the timely health checks for downstream HTTP Service.
 - **RetryConfig** - This option allows user to add the maximum number of retry count if before returning error if any downstream HTTP Service fails.
+- **APIRateLimit** - This option allows users to configure rate limiting for HTTP service calls. It helps prevent overwhelming downstream services by controlling the request rate based on specified limits and queuing parameters.
 
 #### Usage:
 
@@ -128,6 +129,11 @@ a.AddHTTPService("cat-facts", "https://catfact.ninja",
     
   &service.RetryConfig{
       MaxRetries: 5
-  },  
+  },
+    service.APIRateLimit(
+        100, // Maximum number of requests allowed in the duration window       
+        time.Second, // Duration window - requests will be limited to 100 per second
+        1000, // Maximum queue size - if queue is full, new requests will be rejected
+    ),
 )
 ```

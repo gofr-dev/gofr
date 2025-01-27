@@ -23,6 +23,7 @@ func main() {
 		&service.HealthConfig{
 			HealthEndpoint: "breeds",
 		},
+		service.APIRateLimit(10, time.Second, 100),
 	)
 
 	// service with improper health-check to test health check
