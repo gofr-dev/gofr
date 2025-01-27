@@ -1,6 +1,6 @@
 # GoFR Command Line Interface
 
-Managing repetitive tasks and maintaining consistency across large-scale applications is challenging:
+Managing repetitive tasks and maintaining consistency across large-scale applications is challenging!
 
 **GoFr CLI provides the following:**
 
@@ -40,7 +40,7 @@ The CLI can be run directly from the terminal after installation. Here’s the g
 
 ## **Commands**
 
-1. ***`init`***
+## 1. ***`init`***
 
    The init command initializes a new GoFr project. It sets up the foundational structure for the project and generates a basic "Hello World!" program as a starting point. This allows developers to quickly dive into building their application with a ready-made structure.
 
@@ -50,7 +50,7 @@ The CLI can be run directly from the terminal after installation. Here’s the g
 ```
 ---
 
-2. ***`migrate create`***
+## 2. ***`migrate create`***
 
    The migrate create command generates a migration template file with pre-defined structure in your migrations directory.
    This boilerplate code helps you maintain consistent patterns when writing database schema modifications across your project.
@@ -104,10 +104,10 @@ For detailed instructions on handling database migrations, see the [handling-dat
 For more examples, see the [using-migrations](https://github.com/gofr-dev/gofr/tree/main/examples/using-migrations)
 ---
 
-3. ***`wrap grpc`***
+## 3. ***`wrap grpc`***
 
    * The gofr wrap grpc command streamlines gRPC integration in a GoFr project by generating GoFr's context-aware structures.
-   * It simplifies accessing datasources, adding tracing as well as custom metrics, and setting up gRPC handlers with minimal configuration. Based on the proto file it creates the handler/client with GoFr's context.
+   * It simplifies setting up gRPC handlers with minimal steps, and accessing datasources, adding tracing as well as custom metrics. Based on the proto file it creates the handler/client with GoFr's context.
    For detailed instructions on using grpc with GoFr see the [gRPC documentation](../../advanced-guide/grpc/page.md)
 
 ### Command Usage
@@ -144,7 +144,6 @@ type {ServiceName}Server struct {
 func (s *MyServiceServer) MethodName(ctx *gofr.Context) (any, error) {
    // Replace with actual logic if needed
    return &ServiceResponse{
-      Message: "",
    }, nil
 }
 ```
@@ -160,7 +159,7 @@ For detailed instruction on setting up a gRPC server with GoFr see the [gRPC Ser
 
 
 ### Example Usage:
-After generating the hello_client.go file, you can register and access the gRPC service as follows:
+Assuming the service is named hello, after generating the hello_client.go file, you can seamlessly register and access the gRPC service using the following steps:
 
 ```go
 type GreetHandler struct {
