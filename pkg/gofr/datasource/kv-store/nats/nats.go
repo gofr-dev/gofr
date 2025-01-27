@@ -12,58 +12,82 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-type NATSKVStore struct {
+var errStatusDown = errors.New("status down")
+
+type Configs struct {
+	Server string
+	Bucket string
+}
+
+type Client struct {
+	conn    *nats.Conn
 	js      nats.JetStreamContext
 	kv      nats.KeyValue
-	bucket  string
+	configs *Configs
 	tracer  trace.Tracer
 	metrics Metrics
 	logger  Logger
 }
 
-func NewNATSKVStore(nc *nats.Conn, bucketName string) (*NATSKVStore, error) {
+func New(configs Configs) *Client {
+	return &Client{configs: &configs}
+}
+
+func (c *Client) UseLogger(logger any) {
+	if l, ok := logger.(Logger); ok {
+		c.logger = l
+	}
+}
+
+func (c *Client) UseMetrics(metrics any) {
+	if m, ok := metrics.(Metrics); ok {
+		c.metrics = m
+	}
+}
+
+func (c *Client) UseTracer(tracer any) {
+	if t, ok := tracer.(trace.Tracer); ok {
+		c.tracer = t
+	}
+}
+
+func (c *Client) Connect() {
+	c.logger.Debugf("connecting to NATS at %v with bucket %v", c.configs.Server, c.configs.Bucket)
+
+	natsBuckets := []float64{.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 4, 5, 7.5, 10}
+	c.metrics.NewHistogram("app_natskv_stats", "Response time of NATS KV operations in milliseconds.", natsBuckets...)
+
+	nc, err := nats.Connect(c.configs.Server)
+	if err != nil {
+		c.logger.Errorf("error while connecting to NATS: %v", err)
+		return
+	}
+	c.conn = nc
+
 	js, err := nc.JetStream()
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize JetStream: %w", err)
+		c.logger.Errorf("error while initializing JetStream: %v", err)
+		return
 	}
+	c.js = js
 
 	kv, err := js.CreateKeyValue(&nats.KeyValueConfig{
-		Bucket: bucketName,
+		Bucket: c.configs.Bucket,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to create/access KV bucket: %w", err)
+		c.logger.Errorf("error while creating/accessing KV bucket: %v", err)
+		return
 	}
+	c.kv = kv
 
-	return &NATSKVStore{
-		js:     js,
-		kv:     kv,
-		bucket: bucketName,
-	}, nil
+	c.logger.Infof("connected to NATS at %v with bucket %v", c.configs.Server, c.configs.Bucket)
 }
 
-func (store *NATSKVStore) UseLogger(logger any) {
-	if l, ok := logger.(Logger); ok {
-		store.logger = l
-	}
-}
+func (c *Client) Get(ctx context.Context, key string) (string, error) {
+	span := c.addTrace(ctx, "get", key)
+	defer c.sendOperationStats(time.Now(), "GET", "get", span, key)
 
-func (store *NATSKVStore) UseMetrics(metrics any) {
-	if m, ok := metrics.(Metrics); ok {
-		store.metrics = m
-	}
-}
-
-func (store *NATSKVStore) UseTracer(tracer any) {
-	if t, ok := tracer.(trace.Tracer); ok {
-		store.tracer = t
-	}
-}
-
-func (store *NATSKVStore) Get(ctx context.Context, key string) (string, error) {
-	span := store.addTrace(ctx, "get", key)
-	defer store.sendOperationStats(time.Now(), "GET", span, key)
-
-	entry, err := store.kv.Get(key)
+	entry, err := c.kv.Get(key)
 	if err != nil {
 		if errors.Is(err, nats.ErrKeyNotFound) {
 			return "", fmt.Errorf("key not found: %s", key)
@@ -74,11 +98,11 @@ func (store *NATSKVStore) Get(ctx context.Context, key string) (string, error) {
 	return string(entry.Value()), nil
 }
 
-func (store *NATSKVStore) Set(ctx context.Context, key, value string) error {
-	span := store.addTrace(ctx, "set", key)
-	defer store.sendOperationStats(time.Now(), "SET", span, key, value)
+func (c *Client) Set(ctx context.Context, key, value string) error {
+	span := c.addTrace(ctx, "set", key)
+	defer c.sendOperationStats(time.Now(), "SET", "set", span, key, value)
 
-	_, err := store.kv.Put(key, []byte(value))
+	_, err := c.kv.Put(key, []byte(value))
 	if err != nil {
 		return fmt.Errorf("failed to set key-value pair: %w", err)
 	}
@@ -86,11 +110,11 @@ func (store *NATSKVStore) Set(ctx context.Context, key, value string) error {
 	return nil
 }
 
-func (store *NATSKVStore) Delete(ctx context.Context, key string) error {
-	span := store.addTrace(ctx, "delete", key)
-	defer store.sendOperationStats(time.Now(), "DELETE", span, key)
+func (c *Client) Delete(ctx context.Context, key string) error {
+	span := c.addTrace(ctx, "delete", key)
+	defer c.sendOperationStats(time.Now(), "DELETE", "delete", span, key)
 
-	err := store.kv.Delete(key)
+	err := c.kv.Delete(key)
 	if err != nil {
 		if errors.Is(err, nats.ErrKeyNotFound) {
 			return fmt.Errorf("key not found: %s", key)
@@ -106,28 +130,29 @@ type Health struct {
 	Details map[string]any `json:"details,omitempty"`
 }
 
-func (store *NATSKVStore) HealthCheck(context.Context) (any, error) {
+func (c *Client) HealthCheck(context.Context) (any, error) {
 	h := &Health{
 		Details: make(map[string]any),
 	}
 
-	h.Details["bucket"] = store.bucket
+	h.Details["url"] = c.configs.Server
+	h.Details["bucket"] = c.configs.Bucket
 
-	_, err := store.js.AccountInfo()
+	_, err := c.js.AccountInfo()
 	if err != nil {
 		h.Status = "DOWN"
-		store.logger.Debugf("JetStream health check failed: %v", err)
-		return h, fmt.Errorf("JetStream is not healthy: %w", err)
+		c.logger.Debugf("JetStream health check failed: %v", err)
+		return h, errStatusDown
 	}
 
 	h.Status = "UP"
 	return h, nil
 }
 
-func (store *NATSKVStore) sendOperationStats(start time.Time, methodType string, span trace.Span, kv ...string) {
+func (c *Client) sendOperationStats(start time.Time, methodType string, method string, span trace.Span, kv ...string) {
 	duration := time.Since(start).Microseconds()
 
-	store.logger.Debug(&Log{
+	c.logger.Debug(&Log{
 		Type:     methodType,
 		Duration: duration,
 		Key:      strings.Join(kv, " "),
@@ -135,17 +160,17 @@ func (store *NATSKVStore) sendOperationStats(start time.Time, methodType string,
 
 	if span != nil {
 		defer span.End()
-		span.SetAttributes(attribute.Int64(fmt.Sprintf("natskv.%v.duration(μs)", methodType), duration))
+		span.SetAttributes(attribute.Int64(fmt.Sprintf("natskv.%v.duration(μs)", method), duration))
 	}
 
-	if store.metrics != nil {
-		store.metrics.RecordHistogram(context.Background(), "app_natskv_stats", float64(duration), "method", methodType)
-	}
+	c.metrics.RecordHistogram(context.Background(), "app_natskv_stats", float64(duration),
+		"bucket", c.configs.Bucket,
+		"type", methodType)
 }
 
-func (store *NATSKVStore) addTrace(ctx context.Context, method, key string) trace.Span {
-	if store.tracer != nil {
-		_, span := store.tracer.Start(ctx, fmt.Sprintf("natskv-%v", method))
+func (c *Client) addTrace(ctx context.Context, method, key string) trace.Span {
+	if c.tracer != nil {
+		_, span := c.tracer.Start(ctx, fmt.Sprintf("natskv-%v", method))
 		span.SetAttributes(attribute.String("natskv.key", key))
 		return span
 	}
