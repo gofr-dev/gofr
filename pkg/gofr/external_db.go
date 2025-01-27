@@ -42,7 +42,7 @@ func (a *App) AddPubSub(pubsub container.PubSubProvider) {
 	a.container.PubSub = pubsub
 }
 
-// AddFile sets the FTP,SFTP,S3 datasource in the app's container.
+// AddFileStore sets the FTP,SFTP,S3 datasource in the app's container.
 func (a *App) AddFileStore(fs file.FileSystemProvider) {
 	fs.UseLogger(a.Logger())
 	fs.UseMetrics(a.Metrics())
@@ -130,7 +130,7 @@ func (a *App) AddDgraph(db container.DgraphProvider) {
 	a.container.DGraph = db
 }
 
-// AddOpenTSDB  sets the opentsdb datasource in the app's container.
+// AddOpenTSDB sets the OpenTSDB datasource in the app's container.
 func (a *App) AddOpenTSDB(db container.OpenTSDBProvider) {
 	// Create the Opentsdb client with the provided configuration
 	db.UseLogger(a.Logger())
@@ -172,4 +172,14 @@ func (a *App) AddArango(db container.ArangoProvider) {
 
 	// Add the ArangoDB provider to the container
 	a.container.Arango = db
+}
+
+func (a *App) AddSurrealDB(db container.SurrealBDProvider) {
+	db.UseLogger(a.Logger())
+	db.UseMetrics(a.Metrics())
+
+	tracer := otel.GetTracerProvider().Tracer("gofr-surrealdb")
+	db.UseTracer(tracer)
+	db.Connect()
+	a.container.SurrealDB = db
 }
