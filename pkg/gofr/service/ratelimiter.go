@@ -279,62 +279,58 @@ func (r *RateLimiter) processRequest(req requestWrapper) {
 		return
 	}
 
-	if resp != nil && resp.Body != nil {
-		resp.Body.Close()
-	}
-
 	req.respCh <- &requestResponse{resp, nil}
 }
 
-func (r *RateLimiter) Get(ctx context.Context, api string, queryParams map[string]interface{}) (*http.Response, error) {
+func (r *RateLimiter) Get(ctx context.Context, api string, queryParams map[string]any) (*http.Response, error) {
 	return r.enqueueRequest(ctx, func() (*http.Response, error) {
 		return r.HTTP.Get(ctx, api, queryParams)
 	})
 }
 
-func (r *RateLimiter) GetWithHeaders(ctx context.Context, path string, queryParams map[string]interface{},
+func (r *RateLimiter) GetWithHeaders(ctx context.Context, path string, queryParams map[string]any,
 	headers map[string]string) (*http.Response, error) {
 	return r.enqueueRequest(ctx, func() (*http.Response, error) {
 		return r.HTTP.GetWithHeaders(ctx, path, queryParams, headers)
 	})
 }
 
-func (r *RateLimiter) Post(ctx context.Context, path string, queryParams map[string]interface{},
+func (r *RateLimiter) Post(ctx context.Context, path string, queryParams map[string]any,
 	body []byte) (*http.Response, error) {
 	return r.enqueueRequest(ctx, func() (*http.Response, error) {
 		return r.HTTP.Post(ctx, path, queryParams, body)
 	})
 }
 
-func (r *RateLimiter) PostWithHeaders(ctx context.Context, path string, queryParams map[string]interface{}, body []byte,
+func (r *RateLimiter) PostWithHeaders(ctx context.Context, path string, queryParams map[string]any, body []byte,
 	headers map[string]string) (*http.Response, error) {
 	return r.enqueueRequest(ctx, func() (*http.Response, error) {
 		return r.HTTP.PostWithHeaders(ctx, path, queryParams, body, headers)
 	})
 }
 
-func (r *RateLimiter) Put(ctx context.Context, api string, queryParams map[string]interface{},
+func (r *RateLimiter) Put(ctx context.Context, api string, queryParams map[string]any,
 	body []byte) (*http.Response, error) {
 	return r.enqueueRequest(ctx, func() (*http.Response, error) {
 		return r.HTTP.Put(ctx, api, queryParams, body)
 	})
 }
 
-func (r *RateLimiter) PutWithHeaders(ctx context.Context, api string, queryParams map[string]interface{},
+func (r *RateLimiter) PutWithHeaders(ctx context.Context, api string, queryParams map[string]any,
 	body []byte, headers map[string]string) (*http.Response, error) {
 	return r.enqueueRequest(ctx, func() (*http.Response, error) {
 		return r.HTTP.PutWithHeaders(ctx, api, queryParams, body, headers)
 	})
 }
 
-func (r *RateLimiter) Patch(ctx context.Context, api string, queryParams map[string]interface{},
+func (r *RateLimiter) Patch(ctx context.Context, api string, queryParams map[string]any,
 	body []byte) (*http.Response, error) {
 	return r.enqueueRequest(ctx, func() (*http.Response, error) {
 		return r.HTTP.Patch(ctx, api, queryParams, body)
 	})
 }
 
-func (r *RateLimiter) PatchWithHeaders(ctx context.Context, api string, queryParams map[string]interface{},
+func (r *RateLimiter) PatchWithHeaders(ctx context.Context, api string, queryParams map[string]any,
 	body []byte, headers map[string]string) (*http.Response, error) {
 	return r.enqueueRequest(ctx, func() (*http.Response, error) {
 		return r.HTTP.PatchWithHeaders(ctx, api, queryParams, body, headers)
