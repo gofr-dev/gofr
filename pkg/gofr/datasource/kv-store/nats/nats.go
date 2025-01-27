@@ -13,6 +13,7 @@ import (
 )
 
 var errStatusDown = errors.New("status down")
+var errKeyNotFound = errors.New("key not found")
 
 type Configs struct {
 	Server string
@@ -33,24 +34,28 @@ func New(configs Configs) *Client {
 	return &Client{configs: &configs}
 }
 
+// UseLogger sets the logger for the NATS-KV client which asserts the Logger interface.
 func (c *Client) UseLogger(logger any) {
 	if l, ok := logger.(Logger); ok {
 		c.logger = l
 	}
 }
 
+// UseMetrics sets the metrics for the NATS-KV client which asserts the Metrics interface.
 func (c *Client) UseMetrics(metrics any) {
 	if m, ok := metrics.(Metrics); ok {
 		c.metrics = m
 	}
 }
 
+// UseTracer sets the tracer for NATS-KV client.
 func (c *Client) UseTracer(tracer any) {
 	if t, ok := tracer.(trace.Tracer); ok {
 		c.tracer = t
 	}
 }
 
+// Connect establishes a connection to NATS-KV and registers metrics using the provided configuration when the client was Created.
 func (c *Client) Connect() {
 	c.logger.Debugf("connecting to NATS at %v with bucket %v", c.configs.Server, c.configs.Bucket)
 
@@ -62,14 +67,18 @@ func (c *Client) Connect() {
 		c.logger.Errorf("error while connecting to NATS: %v", err)
 		return
 	}
+
 	c.conn = nc
+	c.logger.Debugf("%s:%s Successfully established NATS connection", c.configs.Server, c.configs.Bucket)
 
 	js, err := nc.JetStream()
 	if err != nil {
 		c.logger.Errorf("error while initializing JetStream: %v", err)
 		return
 	}
+
 	c.js = js
+	c.logger.Debugf("%s:%s Successfully initialized JetStream", c.configs.Server, c.configs.Bucket)
 
 	kv, err := js.CreateKeyValue(&nats.KeyValueConfig{
 		Bucket: c.configs.Bucket,
@@ -78,20 +87,26 @@ func (c *Client) Connect() {
 		c.logger.Errorf("error while creating/accessing KV bucket: %v", err)
 		return
 	}
-	c.kv = kv
 
-	c.logger.Infof("connected to NATS at %v with bucket %v", c.configs.Server, c.configs.Bucket)
+	c.kv = kv
+	c.logger.Infof("%s:%s Successfully connected to NATS KV store", c.configs.Server, c.configs.Bucket)
 }
 
 func (c *Client) Get(ctx context.Context, key string) (string, error) {
+	c.logger.Debugf("%s:%s Fetching value for key '%s'", c.configs.Server, c.configs.Bucket, key)
+
 	span := c.addTrace(ctx, "get", key)
 	defer c.sendOperationStats(time.Now(), "GET", "get", span, key)
 
 	entry, err := c.kv.Get(key)
 	if err != nil {
 		if errors.Is(err, nats.ErrKeyNotFound) {
-			return "", fmt.Errorf("key not found: %s", key)
+			c.logger.Debugf("%s:%s Key not found: '%s'", c.configs.Server, c.configs.Bucket, key)
+			return "", fmt.Errorf("%w: %s", errKeyNotFound, key)
 		}
+
+		c.logger.Debugf("%s:%s Successfully retrieved value for key '%s'", c.configs.Server, c.configs.Bucket, key)
+
 		return "", fmt.Errorf("failed to get key: %w", err)
 	}
 
@@ -99,13 +114,18 @@ func (c *Client) Get(ctx context.Context, key string) (string, error) {
 }
 
 func (c *Client) Set(ctx context.Context, key, value string) error {
+	c.logger.Debugf("%s:%s Setting value for key '%s'", c.configs.Server, c.configs.Bucket, key)
+
 	span := c.addTrace(ctx, "set", key)
 	defer c.sendOperationStats(time.Now(), "SET", "set", span, key, value)
 
 	_, err := c.kv.Put(key, []byte(value))
 	if err != nil {
+		c.logger.Debugf("%s:%s Failed to set value for key '%s': %v", c.configs.Server, c.configs.Bucket, key, err)
 		return fmt.Errorf("failed to set key-value pair: %w", err)
 	}
+
+	c.logger.Debugf("%s:%s Successfully set value for key '%s'", c.configs.Server, c.configs.Bucket, key)
 
 	return nil
 }
@@ -117,10 +137,16 @@ func (c *Client) Delete(ctx context.Context, key string) error {
 	err := c.kv.Delete(key)
 	if err != nil {
 		if errors.Is(err, nats.ErrKeyNotFound) {
-			return fmt.Errorf("key not found: %s", key)
+			c.logger.Debugf("%s:%s Key not found for deletion: '%s'", c.configs.Server, c.configs.Bucket, key)
+			return fmt.Errorf("%w: %s", errKeyNotFound, key)
 		}
+
+		c.logger.Debugf("%s:%s Failed to delete key '%s': %v", c.configs.Server, c.configs.Bucket, key, err)
+
 		return fmt.Errorf("failed to delete key: %w", err)
 	}
+
+	c.logger.Debugf("%s:%s Successfully deleted key '%s'", c.configs.Server, c.configs.Bucket, key)
 
 	return nil
 }
@@ -131,6 +157,8 @@ type Health struct {
 }
 
 func (c *Client) HealthCheck(context.Context) (any, error) {
+	c.logger.Debugf("%s:%s Performing health check", c.configs.Server, c.configs.Bucket)
+
 	h := &Health{
 		Details: make(map[string]any),
 	}
@@ -141,15 +169,20 @@ func (c *Client) HealthCheck(context.Context) (any, error) {
 	_, err := c.js.AccountInfo()
 	if err != nil {
 		h.Status = "DOWN"
-		c.logger.Debugf("JetStream health check failed: %v", err)
+
+		c.logger.Debugf("%s:%s Health check failed: %v", c.configs.Server, c.configs.Bucket, err)
+
 		return h, errStatusDown
 	}
 
 	h.Status = "UP"
+
+	c.logger.Debugf("%s:%s Health check successful", c.configs.Server, c.configs.Bucket)
+
 	return h, nil
 }
 
-func (c *Client) sendOperationStats(start time.Time, methodType string, method string, span trace.Span, kv ...string) {
+func (c *Client) sendOperationStats(start time.Time, methodType, method string, span trace.Span, kv ...string) {
 	duration := time.Since(start).Microseconds()
 
 	c.logger.Debug(&Log{
@@ -172,7 +205,9 @@ func (c *Client) addTrace(ctx context.Context, method, key string) trace.Span {
 	if c.tracer != nil {
 		_, span := c.tracer.Start(ctx, fmt.Sprintf("natskv-%v", method))
 		span.SetAttributes(attribute.String("natskv.key", key))
+
 		return span
 	}
+
 	return nil
 }

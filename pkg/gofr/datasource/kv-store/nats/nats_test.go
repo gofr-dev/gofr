@@ -10,22 +10,19 @@ import (
 	"go.uber.org/mock/gomock"
 )
 
-// setupNATS creates a new NATS client with mocked dependencies for testing
+// setupNATS creates a new NATS client with mocked dependencies for testing.
 func setupNATS(t *testing.T) *Client {
 	t.Helper()
 
-	// Create new client with test configuration
 	cl := New(Configs{
 		Server: "nats://localhost:4222",
 		Bucket: "test_bucket",
 	})
 
-	// Set up mocks
 	ctrl := gomock.NewController(t)
 	mockMetrics := NewMockMetrics(ctrl)
 	mockLogger := NewMockLogger(ctrl)
 
-	// Set up metrics expectations
 	mockMetrics.EXPECT().NewHistogram("app_natskv_stats",
 		"Response time of NATS KV operations in milliseconds.",
 		gomock.Any())
@@ -36,14 +33,12 @@ func setupNATS(t *testing.T) *Client {
 		"bucket", cl.configs.Bucket,
 		"type", gomock.Any()).AnyTimes()
 
-	// Set up logger expectations
 	mockLogger.EXPECT().Infof(gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Info(gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Debugf(gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 
-	// Initialize client with mocks
 	cl.UseLogger(mockLogger)
 	cl.UseMetrics(mockMetrics)
 	cl.Connect()
@@ -62,11 +57,9 @@ func Test_ClientSet(t *testing.T) {
 func Test_ClientGet(t *testing.T) {
 	cl := setupNATS(t)
 
-	// First set a value
 	err := cl.Set(context.Background(), "test_key", "test_value")
 	require.NoError(t, err)
 
-	// Then try to retrieve it
 	val, err := cl.Get(context.Background(), "test_key")
 
 	require.NoError(t, err)
