@@ -9,7 +9,7 @@ func main() {
 	app := gofr.New()
 
 	// Create a gRPC client for the Hello service
-	helloGRPCClient, err := client.NewHelloGoFrClient(app.Config.Get("GRPC_SERVER_HOST"), app)
+	helloGRPCClient, err := client.NewHelloGoFrClient(app.Config.Get("GRPC_SERVER_HOST"), app.Metrics())
 	if err != nil {
 		app.Logger().Errorf("Failed to create Hello gRPC client: %v", err)
 		return

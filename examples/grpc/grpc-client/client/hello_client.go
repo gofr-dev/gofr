@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"gofr.dev/pkg/gofr"
-
+	"gofr.dev/pkg/gofr/metrics"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -45,14 +45,14 @@ func createGRPCConn(host string) (*grpc.ClientConn, error) {
 	return conn, nil
 }
 
-func NewHelloGoFrClient(host string, app *gofr.App) (*HelloClientWrapper, error) {
+func NewHelloGoFrClient(host string, metrics metrics.Manager) (*HelloClientWrapper, error) {
 	conn, err := createGRPCConn(host)
 	if err != nil {
 		return &HelloClientWrapper{client: nil}, err
 	}
 
 	gRPCBuckets := []float64{0.005, 0.01, .05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 4, 5, 7.5, 10}
-	app.Metrics().NewHistogram("app_gRPC-Client_stats",
+	metrics.NewHistogram("app_gRPC-Client_stats",
 		"Response time of gRPC client in milliseconds.",
 		gRPCBuckets...)
 
