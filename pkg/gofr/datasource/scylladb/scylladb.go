@@ -28,7 +28,7 @@ type Config struct {
 	Password string
 }
 
-// Scylladb represents the connection and operations context for interacting with a ScyllaDB cluster,
+// ScyllaDB represents the connection and operations context for interacting with a ScyllaDB cluster,
 // including configuration, active session, query handling, and initialized batches.
 type ScyllaDB struct {
 	clusterConfig clusterConfig
@@ -67,8 +67,8 @@ func New(conf Config) *Client {
 // Connect establishes a connection to Scylladb.
 func (c *Client) Connect() {
 	c.logger.Debugf("connecting to ScyllaDB at %v on port %v to keyspace %v", c.config.Host, c.config.Port, c.config.Keyspace)
-	sess, err := c.scylla.clusterConfig.createSession()
 
+	sess, err := c.scylla.clusterConfig.createSession()
 	if err != nil {
 		c.logger.Error("failed to connect to ScyllaDB:", err)
 		return
