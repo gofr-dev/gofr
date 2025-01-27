@@ -23,11 +23,13 @@ var (
 	ErrShutdownFailed = errors.New("shutdown timeout")
 )
 
+// RateLimiterConfig holds configuration for creating a new rate limiter.
 type RateLimiterConfig struct {
 	Limit, MaxQueue int
 	Duration        time.Duration
 }
 
+// AddOption creates a new rate limiter with the config settings and wraps the provided HTTP client.
 func (r *RateLimiterConfig) AddOption(h HTTP) HTTP {
 	rl := NewRateLimiter(r.Limit, r.Duration, r.MaxQueue)
 	rl.HTTP = h
@@ -58,6 +60,7 @@ type requestResponse struct {
 	err      error
 }
 
+// NewRateLimiter creates a rate limiter.
 func NewRateLimiter(limit int, window time.Duration, maxQueue int) *RateLimiter {
 	if maxQueue <= 0 {
 		maxQueue = 1000
@@ -76,6 +79,7 @@ func NewRateLimiter(limit int, window time.Duration, maxQueue int) *RateLimiter 
 	return rl
 }
 
+// handleContextDeadline ensures context has proper tracing setup and cancellation.
 func handleContextDeadline(ctx context.Context) (context.Context, context.CancelFunc) {
 	if _, ok := ctx.Deadline(); !ok {
 		span := trace.SpanFromContext(ctx)
@@ -96,6 +100,7 @@ func handleContextDeadline(ctx context.Context) (context.Context, context.Cancel
 	return context.WithCancel(ctx)
 }
 
+// Shutdown gracefully shuts down the rate limiter.
 func (r *RateLimiter) Shutdown(ctx context.Context) error {
 	r.mutex.Lock()
 	if r.isShuttingDown {
@@ -127,6 +132,7 @@ func (r *RateLimiter) Shutdown(ctx context.Context) error {
 	}
 }
 
+// handleResponse processes the response from the request channel, handling cancellation and errors.
 func (r *RateLimiter) handleResponse(ctx context.Context, respCh chan *requestResponse,
 	reqCancel context.CancelFunc) (*http.Response, error) {
 	select {
@@ -158,6 +164,7 @@ func (r *RateLimiter) handleResponse(ctx context.Context, respCh chan *requestRe
 	}
 }
 
+// enqueueRequest adds a request to the rate limiter queue and waits for its response.
 func (r *RateLimiter) enqueueRequest(ctx context.Context, execute func() (*http.Response, error)) (*http.Response, error) {
 	ctx, cancel := handleContextDeadline(ctx)
 	defer cancel()
@@ -223,6 +230,7 @@ func (r *RateLimiter) enqueueRequest(ctx context.Context, execute func() (*http.
 	}
 }
 
+// Start begins processing requests from the queue.
 func (r *RateLimiter) Start() {
 	go func() {
 		for {
@@ -237,6 +245,7 @@ func (r *RateLimiter) Start() {
 	}()
 }
 
+// drainQueue processes remaining requests during shutdown.
 func (r *RateLimiter) drainQueue() {
 	for {
 		select {
@@ -248,6 +257,7 @@ func (r *RateLimiter) drainQueue() {
 	}
 }
 
+// processRequest executes a single request with rate limiting.
 func (r *RateLimiter) processRequest(req requestWrapper) {
 	defer func() {
 		if rec := recover(); rec != nil {
@@ -283,12 +293,14 @@ func (r *RateLimiter) processRequest(req requestWrapper) {
 	req.respCh <- &requestResponse{resp, nil}
 }
 
+// Get performs a rate-limited GET request.
 func (r *RateLimiter) Get(ctx context.Context, api string, queryParams map[string]any) (*http.Response, error) {
 	return r.enqueueRequest(ctx, func() (*http.Response, error) {
 		return r.HTTP.Get(ctx, api, queryParams)
 	})
 }
 
+// GetWithHeaders performs a rate-limited GET request with custom headers.
 func (r *RateLimiter) GetWithHeaders(ctx context.Context, path string, queryParams map[string]any,
 	headers map[string]string) (*http.Response, error) {
 	return r.enqueueRequest(ctx, func() (*http.Response, error) {
@@ -296,6 +308,7 @@ func (r *RateLimiter) GetWithHeaders(ctx context.Context, path string, queryPara
 	})
 }
 
+// Post performs a rate-limited POST request.
 func (r *RateLimiter) Post(ctx context.Context, path string, queryParams map[string]any,
 	body []byte) (*http.Response, error) {
 	return r.enqueueRequest(ctx, func() (*http.Response, error) {
@@ -303,6 +316,7 @@ func (r *RateLimiter) Post(ctx context.Context, path string, queryParams map[str
 	})
 }
 
+// PostWithHeaders performs a rate-limited POST request with custom headers.
 func (r *RateLimiter) PostWithHeaders(ctx context.Context, path string, queryParams map[string]any, body []byte,
 	headers map[string]string) (*http.Response, error) {
 	return r.enqueueRequest(ctx, func() (*http.Response, error) {
@@ -310,6 +324,7 @@ func (r *RateLimiter) PostWithHeaders(ctx context.Context, path string, queryPar
 	})
 }
 
+// Put performs a rate-limited PUT request.
 func (r *RateLimiter) Put(ctx context.Context, api string, queryParams map[string]any,
 	body []byte) (*http.Response, error) {
 	return r.enqueueRequest(ctx, func() (*http.Response, error) {
@@ -317,6 +332,7 @@ func (r *RateLimiter) Put(ctx context.Context, api string, queryParams map[strin
 	})
 }
 
+// PutWithHeaders performs a rate-limited PUT request with custom headers.
 func (r *RateLimiter) PutWithHeaders(ctx context.Context, api string, queryParams map[string]any,
 	body []byte, headers map[string]string) (*http.Response, error) {
 	return r.enqueueRequest(ctx, func() (*http.Response, error) {
@@ -324,6 +340,7 @@ func (r *RateLimiter) PutWithHeaders(ctx context.Context, api string, queryParam
 	})
 }
 
+// Patch performs a rate-limited PATCH request.
 func (r *RateLimiter) Patch(ctx context.Context, api string, queryParams map[string]any,
 	body []byte) (*http.Response, error) {
 	return r.enqueueRequest(ctx, func() (*http.Response, error) {
@@ -331,6 +348,7 @@ func (r *RateLimiter) Patch(ctx context.Context, api string, queryParams map[str
 	})
 }
 
+// PatchWithHeaders performs a rate-limited PATCH request with custom headers.
 func (r *RateLimiter) PatchWithHeaders(ctx context.Context, api string, queryParams map[string]any,
 	body []byte, headers map[string]string) (*http.Response, error) {
 	return r.enqueueRequest(ctx, func() (*http.Response, error) {
@@ -338,18 +356,21 @@ func (r *RateLimiter) PatchWithHeaders(ctx context.Context, api string, queryPar
 	})
 }
 
+// Delete performs a rate-limited DELETE request.
 func (r *RateLimiter) Delete(ctx context.Context, api string, body []byte) (*http.Response, error) {
 	return r.enqueueRequest(ctx, func() (*http.Response, error) {
 		return r.HTTP.Delete(ctx, api, body)
 	})
 }
 
+// DeleteWithHeaders performs a rate-limited DELETE request with custom headers.
 func (r *RateLimiter) DeleteWithHeaders(ctx context.Context, api string, body []byte, headers map[string]string) (*http.Response, error) {
 	return r.enqueueRequest(ctx, func() (*http.Response, error) {
 		return r.HTTP.DeleteWithHeaders(ctx, api, body, headers)
 	})
 }
 
+// APIRateLimit creates a rate limiter config.
 func APIRateLimit(limit int, duration time.Duration, maxQueue int) *RateLimiterConfig {
 	return &RateLimiterConfig{
 		Limit:    limit,
