@@ -6,6 +6,6 @@ const (
 )
 
 type Health struct {
-	Status  string                 `json:"status,omitempty"`
-	Details map[string]interface{} `json:"details,omitempty"`
+	Status  string         `json:"status,omitempty"`
+	Details map[string]any `json:"details,omitempty"`
 }

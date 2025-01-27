@@ -127,9 +127,9 @@ func Test_Query(t *testing.T) {
 
 	testCases := []struct {
 		desc     string
-		dest     interface{}
+		dest     any
 		mockCall func()
-		expRes   interface{}
+		expRes   any
 		expErr   error
 	}{
 		{"success case: struct slice", &mockStructSlice, func() {
@@ -264,14 +264,14 @@ func Test_HealthCheck(t *testing.T) {
 			mockDeps.mockQuery.EXPECT().Exec().Return(nil).Times(1)
 		}, &Health{
 			Status:  "UP",
-			Details: map[string]interface{}{"host": client.config.Host, "keyspace": client.config.Keyspace},
+			Details: map[string]any{"host": client.config.Host, "keyspace": client.config.Keyspace},
 		}, nil},
 		{"failure case: exec error", func() {
 			mockDeps.mockSession.EXPECT().Query(query).Return(mockDeps.mockQuery).Times(1)
 			mockDeps.mockQuery.EXPECT().Exec().Return(errMock).Times(1)
 		}, &Health{
 			Status: "DOWN",
-			Details: map[string]interface{}{"host": client.config.Host, "keyspace": client.config.Keyspace,
+			Details: map[string]any{"host": client.config.Host, "keyspace": client.config.Keyspace,
 				"message": errMock.Error()},
 		}, errStatusDown},
 		{"failure case: ScyllaDB not initialized", func() {
@@ -281,7 +281,7 @@ func Test_HealthCheck(t *testing.T) {
 			mockDeps.mockQuery.EXPECT().Exec().Return(nil).Times(1)
 		}, &Health{
 			Status: "DOWN",
-			Details: map[string]interface{}{"host": client.config.Host, "keyspace": client.config.Keyspace,
+			Details: map[string]any{"host": client.config.Host, "keyspace": client.config.Keyspace,
 				"message": "ScyllaDB not connected"},
 		}, errStatusDown},
 	}
@@ -301,7 +301,7 @@ func Test_BatchQuery(t *testing.T) {
 
 	const stmt = "INSERT INTO users (id, name) VALUES(?, ?)"
 
-	values := []interface{}{1, "Test"}
+	values := []any{1, "Test"}
 
 	testCases := []struct {
 		desc     string
@@ -339,9 +339,9 @@ func Test_ExecuteBatchCAS(t *testing.T) {
 
 	testCases := []struct {
 		desc     string
-		dest     interface{}
+		dest     any
 		mockCall func()
-		expRes   interface{}
+		expRes   any
 		expErr   error
 	}{
 		{"success case: struct slice", &mockStructSlice, func() {
@@ -384,7 +384,7 @@ func Test_ExecCAS(t *testing.T) {
 
 	testCases := []struct {
 		desc       string
-		dest       interface{}
+		dest       any
 		mockCall   func()
 		expApplied bool
 		expErr     error
@@ -392,7 +392,7 @@ func Test_ExecCAS(t *testing.T) {
 		{"success case: struct dest, applied true", &mockStruct, func() {
 			mockDeps.mockLogger.EXPECT().Debug(gomock.AssignableToTypeOf(&QueryLog{})).AnyTimes()
 			mockDeps.mockSession.EXPECT().Query(query, nil).Return(mockDeps.mockQuery).AnyTimes()
-			mockDeps.mockQuery.EXPECT().MapScanCAS(gomock.AssignableToTypeOf(map[string]interface{}{})).Return(true, nil).AnyTimes()
+			mockDeps.mockQuery.EXPECT().MapScanCAS(gomock.AssignableToTypeOf(map[string]any{})).Return(true, nil).AnyTimes()
 		}, true, nil},
 
 		{"success case: int dest, applied true", &mockInt, func() {
@@ -404,7 +404,7 @@ func Test_ExecCAS(t *testing.T) {
 		{"failure case: struct dest, error", &mockStruct, func() {
 			mockDeps.mockLogger.EXPECT().Debug(gomock.AssignableToTypeOf(&QueryLog{}))
 			mockDeps.mockSession.EXPECT().Query(query, nil).Return(mockDeps.mockQuery).AnyTimes()
-			mockDeps.mockQuery.EXPECT().MapScanCAS(gomock.AssignableToTypeOf(map[string]interface{}{})).Return(false, errMock).AnyTimes()
+			mockDeps.mockQuery.EXPECT().MapScanCAS(gomock.AssignableToTypeOf(map[string]any{})).Return(false, errMock).AnyTimes()
 		}, true, nil},
 		{"failure case: int dest, error", &mockInt, func() {
 			mockDeps.mockLogger.EXPECT().Debug(gomock.AssignableToTypeOf(&QueryLog{}))
@@ -417,7 +417,7 @@ func Test_ExecCAS(t *testing.T) {
 		{"failure case: dest is slice", &[]int{}, func() {
 			mockDeps.mockSession.EXPECT().Query(query, nil).Return(mockDeps.mockQuery).AnyTimes()
 		}, false, errUnexpectedSlice{target: "[]*[]int"}},
-		{"failure case: dest is map", &map[string]interface{}{}, func() {
+		{"failure case: dest is map", &map[string]any{}, func() {
 			mockDeps.mockSession.EXPECT().Query(query, nil).Return(mockDeps.mockQuery).AnyTimes()
 		}, false, errUnexpectedMap},
 	}
@@ -444,9 +444,9 @@ func TestClient_ExecuteBatchCASWithCtx(t *testing.T) {
 	testCases := []struct {
 		desc      string
 		batchName string
-		dest      interface{}
+		dest      any
 		mockCall  func()
-		expRes    interface{}
+		expRes    any
 		expErr    error
 	}{
 		{

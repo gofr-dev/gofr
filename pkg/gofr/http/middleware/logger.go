@@ -61,8 +61,8 @@ func colorForStatusCode(status int) int {
 }
 
 type logger interface {
-	Log(...interface{})
-	Error(...interface{})
+	Log(...any)
+	Error(...any)
 }
 
 // Logging is a middleware which logs response status and time in milliseconds along with other data.
@@ -148,6 +148,6 @@ func panicRecovery(re any, w http.ResponseWriter, logger logger) {
 
 	w.WriteHeader(http.StatusInternalServerError)
 
-	res := map[string]interface{}{"code": http.StatusInternalServerError, "status": "ERROR", "message": "Some unexpected error has occurred"}
+	res := map[string]any{"code": http.StatusInternalServerError, "status": "ERROR", "message": "Some unexpected error has occurred"}
 	_ = json.NewEncoder(w).Encode(res)
 }
