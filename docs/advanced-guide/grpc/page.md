@@ -159,7 +159,7 @@ This command leverages the `gofr-cli` to generate a `{serviceName}_client.go` fi
 // gRPC Handler with context support
 func {serviceMethod}(ctx *gofr.Context) (*{serviceResponse}, error) {
 // Create the gRPC client
-srv, err := New{serviceName}GoFrClient("your-grpc-server-host", app)
+srv, err := New{serviceName}GoFrClient("your-grpc-server-host", ctx.Metrics())
 if err != nil {
 return nil, err
 }
