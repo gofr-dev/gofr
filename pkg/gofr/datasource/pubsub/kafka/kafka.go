@@ -191,7 +191,7 @@ func (k *kafkaClient) Subscribe(ctx context.Context, topic string) (*pubsub.Mess
 
 	// Read a single message from the topic
 	reader = k.reader[topic]
-	msg, err := reader.ReadMessage(ctx)
+	msg, err := reader.FetchMessage(ctx)
 
 	if err != nil {
 		k.logger.Errorf("failed to read message from kafka topic %s: %v", topic, err)
