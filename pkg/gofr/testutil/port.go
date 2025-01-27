@@ -34,7 +34,7 @@ type ServiceConfigs struct {
 	GRPCHost    string
 }
 
-// ServerConfigsProvider sets up server configurations for testing and returns a ServiceConfigs struct.
+// NewServerConfigs sets up server configurations for testing and returns a ServiceConfigs struct.
 // It dynamically assigns free ports for HTTP, Metrics, and gRPC services, sets up environment variables for them,
 // and returns a struct with the configured values.
 func NewServerConfigs(t *testing.T) *ServiceConfigs {
