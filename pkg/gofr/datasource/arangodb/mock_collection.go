@@ -7,7 +7,7 @@
 //
 
 // Package arango is a generated GoMock package.
-package arango
+package arangodb
 
 import (
 	context "context"
