@@ -92,7 +92,7 @@ func (a *App) AddKVStore(db container.KVStoreProvider) {
 	db.UseLogger(a.Logger())
 	db.UseMetrics(a.Metrics())
 
-	tracer := otel.GetTracerProvider().Tracer("gofr-badger")
+	tracer := otel.GetTracerProvider().Tracer("gofr-kvstore")
 
 	db.UseTracer(tracer)
 
