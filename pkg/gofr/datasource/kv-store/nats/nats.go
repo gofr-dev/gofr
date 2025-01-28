@@ -100,6 +100,7 @@ func (c *Client) Get(ctx context.Context, key string) (string, error) {
 		if errors.Is(err, nats.ErrKeyNotFound) {
 			return "", fmt.Errorf("%w: %s", errKeyNotFound, key)
 		}
+
 		return "", fmt.Errorf("failed to get key: %w", err)
 	}
 
@@ -127,6 +128,7 @@ func (c *Client) Delete(ctx context.Context, key string) error {
 		if errors.Is(err, nats.ErrKeyNotFound) {
 			return fmt.Errorf("%w: %s", errKeyNotFound, key)
 		}
+
 		return fmt.Errorf("failed to delete key: %w", err)
 	}
 

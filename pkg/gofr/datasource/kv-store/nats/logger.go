@@ -5,6 +5,10 @@ import (
 	"io"
 )
 
+const (
+	UUIDLength = 36
+)
+
 type Logger interface {
 	Debug(args ...any)
 	Debugf(pattern string, args ...any)
@@ -23,11 +27,12 @@ type Log struct {
 
 func (l *Log) PrettyPrint(writer io.Writer) {
 	var description string
+
 	switch l.Type {
 	case "GET":
 		description = fmt.Sprintf("Fetching record from bucket '%s' with ID '%s'", l.Value, l.Key)
 	case "SET":
-		if len(l.Key) == 36 {
+		if len(l.Key) == UUIDLength {
 			description = fmt.Sprintf("Creating new record in bucket '%s' with ID '%s'", l.Value, l.Key)
 		} else {
 			description = fmt.Sprintf("Updating record with ID '%s' in bucket '%s'", l.Key, l.Value)
