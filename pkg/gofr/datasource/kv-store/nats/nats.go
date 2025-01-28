@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/nats-io/nats.go"
@@ -93,20 +92,14 @@ func (c *Client) Connect() {
 }
 
 func (c *Client) Get(ctx context.Context, key string) (string, error) {
-	c.logger.Debugf("%s:%s Fetching value for key '%s'", c.configs.Server, c.configs.Bucket, key)
-
 	span := c.addTrace(ctx, "get", key)
 	defer c.sendOperationStats(time.Now(), "GET", "get", span, key)
 
 	entry, err := c.kv.Get(key)
 	if err != nil {
 		if errors.Is(err, nats.ErrKeyNotFound) {
-			c.logger.Debugf("%s:%s Key not found: '%s'", c.configs.Server, c.configs.Bucket, key)
 			return "", fmt.Errorf("%w: %s", errKeyNotFound, key)
 		}
-
-		c.logger.Debugf("%s:%s Successfully retrieved value for key '%s'", c.configs.Server, c.configs.Bucket, key)
-
 		return "", fmt.Errorf("failed to get key: %w", err)
 	}
 
@@ -114,18 +107,13 @@ func (c *Client) Get(ctx context.Context, key string) (string, error) {
 }
 
 func (c *Client) Set(ctx context.Context, key, value string) error {
-	c.logger.Debugf("%s:%s Setting value for key '%s'", c.configs.Server, c.configs.Bucket, key)
-
 	span := c.addTrace(ctx, "set", key)
 	defer c.sendOperationStats(time.Now(), "SET", "set", span, key, value)
 
 	_, err := c.kv.Put(key, []byte(value))
 	if err != nil {
-		c.logger.Debugf("%s:%s Failed to set value for key '%s': %v", c.configs.Server, c.configs.Bucket, key, err)
 		return fmt.Errorf("failed to set key-value pair: %w", err)
 	}
-
-	c.logger.Debugf("%s:%s Successfully set value for key '%s'", c.configs.Server, c.configs.Bucket, key)
 
 	return nil
 }
@@ -137,16 +125,10 @@ func (c *Client) Delete(ctx context.Context, key string) error {
 	err := c.kv.Delete(key)
 	if err != nil {
 		if errors.Is(err, nats.ErrKeyNotFound) {
-			c.logger.Debugf("%s:%s Key not found for deletion: '%s'", c.configs.Server, c.configs.Bucket, key)
 			return fmt.Errorf("%w: %s", errKeyNotFound, key)
 		}
-
-		c.logger.Debugf("%s:%s Failed to delete key '%s': %v", c.configs.Server, c.configs.Bucket, key, err)
-
 		return fmt.Errorf("failed to delete key: %w", err)
 	}
-
-	c.logger.Debugf("%s:%s Successfully deleted key '%s'", c.configs.Server, c.configs.Bucket, key)
 
 	return nil
 }
@@ -185,10 +167,16 @@ func (c *Client) HealthCheck(context.Context) (any, error) {
 func (c *Client) sendOperationStats(start time.Time, methodType, method string, span trace.Span, kv ...string) {
 	duration := time.Since(start).Microseconds()
 
+	var key string
+	if len(kv) > 0 {
+		key = kv[0]
+	}
+
 	c.logger.Debug(&Log{
 		Type:     methodType,
 		Duration: duration,
-		Key:      strings.Join(kv, " "),
+		Key:      key,
+		Value:    c.configs.Bucket,
 	})
 
 	if span != nil {

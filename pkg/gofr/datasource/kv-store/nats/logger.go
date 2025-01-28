@@ -22,6 +22,22 @@ type Log struct {
 }
 
 func (l *Log) PrettyPrint(writer io.Writer) {
-	fmt.Fprintf(writer, "\u001B[38;5;8m%-32s \u001B[38;5;162m%-6s\u001B[0m %8d\u001B[38;5;8mµs\u001B[0m %s \n",
-		l.Type, "NATS", l.Duration, l.Key+" "+l.Value)
+	var description string
+	switch l.Type {
+	case "GET":
+		description = fmt.Sprintf("Fetching record from bucket '%s' with ID '%s'", l.Value, l.Key)
+	case "SET":
+		if len(l.Key) == 36 {
+			description = fmt.Sprintf("Creating new record in bucket '%s' with ID '%s'", l.Value, l.Key)
+		} else {
+			description = fmt.Sprintf("Updating record with ID '%s' in bucket '%s'", l.Key, l.Value)
+		}
+	case "DELETE":
+		description = fmt.Sprintf("Deleting record from bucket '%s' with ID '%s'", l.Value, l.Key)
+	}
+
+	fmt.Fprintf(writer, "%-32s \u001B[38;5;162mNATS\u001B[0m   %8dμs \u001B[38;5;8m%s\u001B[0m\n",
+		l.Type,
+		l.Duration,
+		description)
 }

@@ -81,6 +81,7 @@ docker run --name kafka-1 -p 9092:9092 \
 bitnami/kafka:3.4
 docker pull scylladb/scylla
 docker run --name scylla -d -p 2025:9042 scylladb/scylla
+docker run -d --name nats-server -p 4222:4222 -p 8222:8222 nats:latest -js
 
 
 
