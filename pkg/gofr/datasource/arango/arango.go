@@ -93,7 +93,7 @@ func (c *Client) Connect() {
 
 	err := conn.SetAuthentication(auth)
 	if err != nil {
-		c.logger.Errorf("Failed to set authentication: %v", err)
+		c.logger.Errorf("authentication setup failed: %v", err)
 	}
 
 	client := arangodb.NewClient(conn)
@@ -194,7 +194,7 @@ func (c *Client) GrantCollection(ctx context.Context, database, collection, user
 	tracerCtx, span := c.addTrace(ctx, "GrantCollection", map[string]string{"collection": collection})
 	startTime := time.Now()
 
-	defer c.sendOperationStats(&QueryLog{Query: "GrantCollection", Collection: database, ID: username}, startTime, "GrantCollection", span)
+	defer c.sendOperationStats(&QueryLog{Query: "GrantCollection", Collection: collection, ID: username}, startTime, "GrantCollection", span)
 
 	user, err := c.client.User(tracerCtx, username)
 	if err != nil {

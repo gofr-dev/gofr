@@ -22,12 +22,10 @@ func NewMockUser(ctrl *gomock.Controller) *MockUser {
 	}
 }
 
-// Required User interface methods.
 func (m *MockUser) Name() string   { return m.name }
 func (m *MockUser) IsActive() bool { return m.active }
 func (*MockUser) Extra(any) error  { return nil }
 
-// UserPermissions interface methods.
 func (*MockUser) AccessibleDatabases(context.Context) (map[string]arangodb.Grant, error) {
 	return nil, nil
 }

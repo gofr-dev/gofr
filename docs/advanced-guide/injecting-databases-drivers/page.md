@@ -1049,7 +1049,7 @@ func main() {
     app.AddArango(arangoClient)
 
     // Create a collection for storing Person documents
-    err := arangoClient.CreateCollection(context.Background(), "_system", "people", false)
+    err := arangoClient.CreateCollection(context.Background(), "my_database", "people", false)
     if err != nil {
         app.Logger().Errorf("error creating collection")
     }

@@ -10,6 +10,11 @@ import (
 	"github.com/arangodb/go-driver/v2/arangodb/shared"
 )
 
+var (
+	errInvalidEdgeDefinitionsType = errors.New("edgeDefinitions must be a *[]EdgeDefinition type")
+	errNilEdgeDefinitions         = errors.New("edgeDefinitions cannot be nil")
+)
+
 type Graph struct {
 	client *Client
 }
@@ -29,11 +34,11 @@ func (g *Graph) CreateGraph(ctx context.Context, database, graph string, edgeDef
 	// Type assertion for edgeDefinitions
 	edgeDefs, ok := edgeDefinitions.(*[]arangodb.EdgeDefinition)
 	if !ok {
-		return fmt.Errorf("edgeDefinitions must be a *[]EdgeDefinition type")
+		return fmt.Errorf("%w", errInvalidEdgeDefinitionsType)
 	}
 
 	if edgeDefs == nil {
-		return fmt.Errorf("edgeDefinitions cannot be nil")
+		return fmt.Errorf("%w", errNilEdgeDefinitions)
 	}
 
 	arangoEdgeDefs := make([]arangodb.EdgeDefinition, 0, len(*edgeDefs))
