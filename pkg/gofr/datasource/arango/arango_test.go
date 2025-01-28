@@ -34,7 +34,7 @@ func setupDB(t *testing.T) (*Client, *MockArango, *MockUser, *MockLogger, *MockM
 	client := New(config)
 	client.UseLogger(mockLogger)
 	client.UseMetrics(mockMetrics)
-	client.UseTracer(otel.GetTracerProvider().Tracer("gofr-arango"))
+	client.UseTracer(otel.GetTracerProvider().Tracer("gofr-arangodb"))
 
 	client.client = mockArango
 
@@ -276,7 +276,7 @@ func TestClient_Database(t *testing.T) {
 	client := New(config)
 	client.UseLogger(mockLogger)
 	client.UseMetrics(mockMetrics)
-	client.UseTracer(otel.GetTracerProvider().Tracer("gofr-arango"))
+	client.UseTracer(otel.GetTracerProvider().Tracer("gofr-arangodb"))
 
 	client.client = mockArango
 

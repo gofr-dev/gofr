@@ -23,7 +23,7 @@ func Test_Client_ListDBs(t *testing.T) {
 	client := New(config)
 	client.UseLogger(mockLogger)
 	client.UseMetrics(mockMetrics)
-	client.UseTracer(otel.GetTracerProvider().Tracer("gofr-arango"))
+	client.UseTracer(otel.GetTracerProvider().Tracer("gofr-arangodb"))
 
 	client.client = mockArango
 

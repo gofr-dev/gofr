@@ -61,7 +61,7 @@ type Container struct {
 	OpenTSDB   OpenTSDB
 	ScyllaDB   ScyllaDB
 	SurrealDB  SurrealDB
-	Arango     ArangoDB
+	ArangoDB   ArangoDB
 
 	KVStore KVStore
 

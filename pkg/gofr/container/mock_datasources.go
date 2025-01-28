@@ -12101,17 +12101,17 @@ func (mr *MockArangoDBMockRecorder) CreateGraph(ctx, database, graph, edgeDefini
 }
 
 // CreateUser mocks base method.
-func (m *MockArangoDB) CreateUser(ctx context.Context, username, password string) error {
+func (m *MockArangoDB) CreateUser(ctx context.Context, userName string, options any) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateUser", ctx, username, password)
+	ret := m.ctrl.Call(m, "CreateUser", ctx, userName, options)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // CreateUser indicates an expected call of CreateUser.
-func (mr *MockArangoDBMockRecorder) CreateUser(ctx, username, password any) *gomock.Call {
+func (mr *MockArangoDBMockRecorder) CreateUser(ctx, userName, options any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateUser", reflect.TypeOf((*MockArangoDB)(nil).CreateUser), ctx, username, password)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateUser", reflect.TypeOf((*MockArangoDB)(nil).CreateUser), ctx, userName, options)
 }
 
 // DeleteDocument mocks base method.
@@ -12436,17 +12436,17 @@ func (mr *MockArangoProviderMockRecorder) CreateGraph(ctx, database, graph, edge
 }
 
 // CreateUser mocks base method.
-func (m *MockArangoProvider) CreateUser(ctx context.Context, username, password string) error {
+func (m *MockArangoProvider) CreateUser(ctx context.Context, userName string, options any) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateUser", ctx, username, password)
+	ret := m.ctrl.Call(m, "CreateUser", ctx, userName, options)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // CreateUser indicates an expected call of CreateUser.
-func (mr *MockArangoProviderMockRecorder) CreateUser(ctx, username, password any) *gomock.Call {
+func (mr *MockArangoProviderMockRecorder) CreateUser(ctx, userName, options any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateUser", reflect.TypeOf((*MockArangoProvider)(nil).CreateUser), ctx, username, password)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateUser", reflect.TypeOf((*MockArangoProvider)(nil).CreateUser), ctx, userName, options)
 }
 
 // DeleteDocument mocks base method.

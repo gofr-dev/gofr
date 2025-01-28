@@ -246,7 +246,7 @@ func (c *Client) Query(ctx context.Context, dbName, query string, bindVars map[s
 		var doc map[string]any
 
 		_, err = cursor.ReadDocument(tracerCtx, &doc)
-		if errors.Is(err, shared.NoMoreDocumentsError{}) {
+		if errors.As(err, &shared.NoMoreDocumentsError{}) {
 			break
 		}
 
@@ -263,14 +263,14 @@ func (c *Client) Query(ctx context.Context, dbName, query string, bindVars map[s
 // addTrace adds tracing to context if tracer is configured.
 func (c *Client) addTrace(ctx context.Context, operation string, attributes map[string]string) (context.Context, trace.Span) {
 	if c.tracer != nil {
-		contextWithTrace, span := c.tracer.Start(ctx, fmt.Sprintf("arango-%v", operation))
+		contextWithTrace, span := c.tracer.Start(ctx, fmt.Sprintf("arangodb-%v", operation))
 
 		// Add default attributes
-		span.SetAttributes(attribute.String("arango.operation", operation))
+		span.SetAttributes(attribute.String("arangodb.operation", operation))
 
 		// Add custom attributes if provided
 		for key, value := range attributes {
-			span.SetAttributes(attribute.String(fmt.Sprintf("arango.%s", key), value))
+			span.SetAttributes(attribute.String(fmt.Sprintf("arangodb.%s", key), value))
 		}
 
 		return contextWithTrace, span
@@ -292,7 +292,7 @@ func (c *Client) sendOperationStats(ql *QueryLog, startTime time.Time, method st
 
 	if span != nil {
 		defer span.End()
-		span.SetAttributes(attribute.Int64(fmt.Sprintf("arango.%v.duration", method), duration))
+		span.SetAttributes(attribute.Int64(fmt.Sprintf("arangodb.%v.duration", method), duration))
 	}
 }
 

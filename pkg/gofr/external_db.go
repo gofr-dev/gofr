@@ -171,7 +171,7 @@ func (a *App) AddArango(db container.ArangoProvider) {
 	db.Connect()
 
 	// Add the ArangoDB provider to the container
-	a.container.Arango = db
+	a.container.ArangoDB = db
 }
 
 func (a *App) AddSurrealDB(db container.SurrealBDProvider) {

@@ -224,6 +224,6 @@ func TestApp_AddArangoDB(t *testing.T) {
 
 		app.AddArango(mock)
 
-		assert.Equal(t, mock, app.container.Arango)
+		assert.Equal(t, mock, app.container.ArangoDB)
 	})
 }
