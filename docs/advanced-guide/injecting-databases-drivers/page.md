@@ -1004,7 +1004,7 @@ type ArangoDB interface {
     // Query executes an AQL query and binds the results.
     Query(ctx context.Context, dbName string, query string, bindVars map[string]interface{}, result interface{}) error
 
-    HealthChecker
+   HealthCheck(context.Context) (any, error)
 }
 ```
 
