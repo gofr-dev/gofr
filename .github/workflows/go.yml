@@ -251,7 +251,7 @@ jobs:
           go mod tidy
 
       - name: Lint Root Module
-        uses: golangci/golangci-lint-action@v3
+        uses: golangci/golangci-lint-action@v6
         with:
           version: v1.62
           working-directory: .
