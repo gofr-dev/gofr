@@ -419,7 +419,7 @@ func (mr *MockArangoMockRecorder) CreateEdgeDocument(ctx, dbName, collectionName
 }
 
 // CreateGraph mocks base method.
-func (m *MockArango) CreateGraph(ctx context.Context, database, graph string, edgeDefinitions []EdgeDefinition) error {
+func (m *MockArango) CreateGraph(ctx context.Context, database, graph string, edgeDefinitions any) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "CreateGraph", ctx, database, graph, edgeDefinitions)
 	ret0, _ := ret[0].(error)

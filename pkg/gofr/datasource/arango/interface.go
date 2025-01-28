@@ -35,7 +35,7 @@ type Arango interface {
 
 	CreateEdgeDocument(ctx context.Context, dbName, collectionName string, from, to string, document any) (string, error)
 
-	CreateGraph(ctx context.Context, database, graph string, edgeDefinitions []EdgeDefinition) error
+	CreateGraph(ctx context.Context, database, graph string, edgeDefinitions any) error
 	DropGraph(ctx context.Context, database, graph string) error
 	ListGraphs(ctx context.Context, database string) ([]string, error)
 

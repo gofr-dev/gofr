@@ -3,6 +3,7 @@ package arango
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/arangodb/go-driver/v2/arangodb"
@@ -14,7 +15,7 @@ type Graph struct {
 }
 
 // CreateGraph creates a new graph in a database.
-func (g *Graph) CreateGraph(ctx context.Context, database, graph string, edgeDefinitions []EdgeDefinition) error {
+func (g *Graph) CreateGraph(ctx context.Context, database, graph string, edgeDefinitions any) error {
 	tracerCtx, span := g.client.addTrace(ctx, "createGraph", map[string]string{"graph": graph})
 	startTime := time.Now()
 
@@ -25,8 +26,18 @@ func (g *Graph) CreateGraph(ctx context.Context, database, graph string, edgeDef
 		return err
 	}
 
-	arangoEdgeDefs := make([]arangodb.EdgeDefinition, 0, len(edgeDefinitions))
-	for _, ed := range edgeDefinitions {
+	// Type assertion for edgeDefinitions
+	edgeDefs, ok := edgeDefinitions.(*[]arangodb.EdgeDefinition)
+	if !ok {
+		return fmt.Errorf("edgeDefinitions must be a *[]EdgeDefinition type")
+	}
+
+	if edgeDefs == nil {
+		return fmt.Errorf("edgeDefinitions cannot be nil")
+	}
+
+	arangoEdgeDefs := make([]arangodb.EdgeDefinition, 0, len(*edgeDefs))
+	for _, ed := range *edgeDefs {
 		arangoEdgeDefs = append(arangoEdgeDefs, arangodb.EdgeDefinition{
 			Collection: ed.Collection,
 			From:       ed.From,

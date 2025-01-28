@@ -4,11 +4,9 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
-
 	"github.com/redis/go-redis/v9"
 
 	"gofr.dev/pkg/gofr/datasource"
-	"gofr.dev/pkg/gofr/datasource/arango"
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 	gofrSQL "gofr.dev/pkg/gofr/datasource/sql"
 )
@@ -614,8 +612,8 @@ type ArangoDB interface {
 	// CreateEdgeDocument creates a new edge document between two vertices
 	CreateEdgeDocument(ctx context.Context, dbName, collectionName string, from, to string, document any) (string, error)
 
-	// CreateGraph creates a new graph in a database.
-	CreateGraph(ctx context.Context, database, graph string, edgeDefinitions []arango.EdgeDefinition) error
+	// CreateGraph creates a new graph in a database taking graph name and *[]arangodb.EdgeDefinition as input.
+	CreateGraph(ctx context.Context, database, graph string, edgeDefinitions any) error
 	// DropGraph deletes an existing graph from a database.
 	DropGraph(ctx context.Context, database, graph string) error
 	// ListGraphs lists all graphs in a database.

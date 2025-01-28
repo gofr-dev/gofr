@@ -34,16 +34,6 @@ type Config struct {
 	Port     int
 }
 
-// EdgeDefinition represents the definition of edges in a graph.
-type EdgeDefinition struct {
-	// Collection is the name of the edge collection to be used
-	Collection string `json:"collection"`
-	// From is an array of vertex collection names for the source vertices
-	From []string `json:"from"`
-	// To is an array of vertex collection names for the target vertices
-	To []string `json:"to"`
-}
-
 var (
 	errStatusDown        = errors.New("status down")
 	errMissingField      = errors.New("missing required field in config")
