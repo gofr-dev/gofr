@@ -159,7 +159,7 @@ For detailed instruction on setting up a gRPC server with GoFr see the [gRPC Ser
 
 
 ### Example Usage:
-Assuming the service is named hello, after generating the hello_client.go file, you can seamlessly register and access the gRPC service using the following steps:
+Assuming the service is named hello, after generating the hello_client.go file, we can seamlessly register and access the gRPC service using the following steps:
 
 ```go
 type GreetHandler struct {
