@@ -949,3 +949,215 @@ func main() {
 }
 
 ```
+
+
+## ArangoDB
+GoFr supports injecting `ArangoDB` that implements the following interface. Any driver that implements the interface can be 
+added using the `app.AddArango()` method, and users can use Arango across the application with `gofr.Context`.
+
+```go
+type ArangoDB interface {
+    // CreateUser creates a new user in ArangoDB.
+    CreateUser(ctx context.Context, username, password string) error
+    // DropUser deletes an existing user in ArangoDB.
+    DropUser(ctx context.Context, username string) error
+    // GrantDB grants permissions for a database to a user.
+    GrantDB(ctx context.Context, database, username, permission string) error
+    // GrantCollection grants permissions for a collection to a user.
+    GrantCollection(ctx context.Context, database, collection, username, permission string) error
+
+    // ListDBs lists all databases in ArangoDB.
+    ListDBs(ctx context.Context) ([]string, error)
+    // CreateDB creates a new database in ArangoDB.
+    CreateDB(ctx context.Context, database string) error
+    // DropDB deletes an existing database in ArangoDB.
+    DropDB(ctx context.Context, database string) error
+
+    // CreateCollection creates a new collection in a database with specified type.
+    CreateCollection(ctx context.Context, database, collection string, isEdge bool) error
+    // DropCollection deletes an existing collection from a database.
+    DropCollection(ctx context.Context, database, collection string) error
+    // TruncateCollection truncates a collection in a database.
+    TruncateCollection(ctx context.Context, database, collection string) error
+    // ListCollections lists all collections in a database.
+    ListCollections(ctx context.Context, database string) ([]string, error)
+
+    // CreateDocument creates a new document in the specified collection.
+    CreateDocument(ctx context.Context, dbName, collectionName string, document interface{}) (string, error)
+    // GetDocument retrieves a document by its ID from the specified collection.
+    GetDocument(ctx context.Context, dbName, collectionName, documentID string, result interface{}) error
+    // UpdateDocument updates an existing document in the specified collection.
+    UpdateDocument(ctx context.Context, dbName, collectionName, documentID string, document interface{}) error
+    // DeleteDocument deletes a document by its ID from the specified collection.
+    DeleteDocument(ctx context.Context, dbName, collectionName, documentID string) error
+
+    // CreateEdgeDocument creates a new edge document between two vertices.
+    CreateEdgeDocument(ctx context.Context, dbName, collectionName string, from, to string, document interface{}) (string, error)
+
+    // CreateGraph creates a new graph in a database.
+    CreateGraph(ctx context.Context, database, graph string, edgeDefinitions []arango.EdgeDefinition) error
+    // DropGraph deletes an existing graph from a database.
+    DropGraph(ctx context.Context, database, graph string) error
+    // ListGraphs lists all graphs in a database.
+    ListGraphs(ctx context.Context, database string) ([]string, error)
+
+    // Query executes an AQL query and binds the results.
+    Query(ctx context.Context, dbName string, query string, bindVars map[string]interface{}, result interface{}) error
+
+   HealthCheck(context.Context) (any, error)
+}
+```
+
+Users can easily inject a driver that supports this interface, providing usability without compromising the extensibility to use multiple databases.
+
+Import the GoFr's external driver for ArangoDB:
+
+```shell
+go get gofr.dev/pkg/gofr/datasource/arango@latest
+```
+
+### Example
+
+```go
+package main
+
+import (
+	"fmt"
+
+	"github.com/arangodb/go-driver/v2/arangodb"
+
+	"gofr.dev/pkg/gofr"
+	"gofr.dev/pkg/gofr/datasource/arango"
+)
+
+type Person struct {
+	Name string `json:"name"`
+	Age  int    `json:"age"`
+}
+
+type Friendship struct {
+	StartDate string `json:"startDate"`
+}
+
+func main() {
+	app := gofr.New()
+
+	// Configure the ArangoDB client
+	arangoClient := arango.New(arango.Config{
+		Host:     "localhost",
+		User:     "root",
+		Password: "root",
+		Port:     8529,
+	})
+	app.AddArango(arangoClient)
+
+	// Example routes demonstrating different types of operations
+	app.POST("/setup", Setup)
+	app.POST("/users/{name}", CreateUserHandler)
+	app.POST("/friends", CreateFriendship)
+
+	app.Run()
+}
+
+// Setup demonstrates database and collection creation
+func Setup(ctx *gofr.Context) (interface{}, error) {
+	// Create a database
+	err := ctx.Arango.CreateDB(ctx, "social_network")
+	if err != nil {
+		return nil, fmt.Errorf("failed to create database: %w", err)
+	}
+
+	// Create a regular collection for persons
+	err = ctx.Arango.CreateCollection(ctx, "social_network", "persons", false)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create persons collection: %w", err)
+	}
+
+	// Create an edge collection for friendships
+	err = ctx.Arango.CreateCollection(ctx, "social_network", "friendships", true)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create friendships collection: %w", err)
+	}
+
+	// Create a graph with edge definition
+	edgeDefs := []arangodb.EdgeDefinition{
+		{
+			Collection: "friendships",
+			From:       []string{"persons"},
+			To:         []string{"persons"},
+		},
+	}
+
+	err = ctx.Arango.CreateGraph(ctx, "social_network", "social_graph", &edgeDefs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create graph: %w", err)
+	}
+
+	return "Setup completed successfully", nil
+}
+
+// CreateUserHandler demonstrates user management and document creation
+func CreateUserHandler(ctx *gofr.Context) (interface{}, error) {
+	name := ctx.PathParam("name")
+
+	// Create an ArangoDB user
+	options := &arangodb.UserOptions{
+		Password: "user123",
+	}
+	err := ctx.Arango.CreateUser(ctx, name, options)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create user: %w", err)
+	}
+
+	// Grant database access to the user
+	err = ctx.Arango.GrantDB(ctx, "social_network", name, "rw")
+	if err != nil {
+		return nil, fmt.Errorf("failed to grant database access: %w", err)
+	}
+
+	// Create a person document
+	person := Person{
+		Name: name,
+		Age:  25,
+	}
+	docID, err := ctx.Arango.CreateDocument(ctx, "social_network", "persons", person)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create person document: %w", err)
+	}
+
+	return map[string]string{
+		"message": "User created successfully",
+		"docID":   docID,
+	}, nil
+}
+
+// CreateFriendship demonstrates edge document creation
+func CreateFriendship(ctx *gofr.Context) (interface{}, error) {
+	var req struct {
+		From      string `json:"from"`
+		To        string `json:"to"`
+		StartDate string `json:"startDate"`
+	}
+
+	if err := ctx.Bind(&req); err != nil {
+		return nil, err
+	}
+
+	friendship := Friendship{
+		StartDate: req.StartDate,
+	}
+
+	edgeID, err := ctx.Arango.CreateEdgeDocument(ctx, "social_network", "friendships", req.From, req.To, friendship)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create friendship: %w", err)
+	}
+
+	return map[string]string{
+		"message": "Friendship created successfully",
+		"edgeID":  edgeID,
+	}, nil
+}
+
+```
+
+
