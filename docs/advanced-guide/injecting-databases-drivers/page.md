@@ -1022,105 +1022,142 @@ go get gofr.dev/pkg/gofr/datasource/arango@latest
 package main
 
 import (
-    "context"
-    "fmt"
-    "strings"
+	"fmt"
 
-    "gofr.dev/pkg/gofr"
-    "gofr.dev/pkg/gofr/datasource/arango"
+	"github.com/arangodb/go-driver/v2/arangodb"
+
+	"gofr.dev/pkg/gofr"
+	"gofr.dev/pkg/gofr/datasource/arango"
 )
 
 type Person struct {
-    Name string `json:"name"`
-    Age  int    `json:"age"`
-    City string `json:"city"`
+	Name string `json:"name"`
+	Age  int    `json:"age"`
+}
+
+type Friendship struct {
+	StartDate string `json:"startDate"`
 }
 
 func main() {
-    app := gofr.New()
+	app := gofr.New()
 
-    // Configure the ArangoDB client
-    arangoClient := arango.New(arango.Config{
-        Host:     "localhost",
-        User:     "root",
-        Password: "root",
-        Port:     8529,
-    })
-    app.AddArango(arangoClient)
+	// Configure the ArangoDB client
+	arangoClient := arango.New(arango.Config{
+		Host:     "localhost",
+		User:     "root",
+		Password: "root",
+		Port:     8529,
+	})
+	app.AddArango(arangoClient)
 
-    // Create a collection for storing Person documents
-    err := arangoClient.CreateCollection(context.Background(), "my_database", "people", false)
-    if err != nil {
-        app.Logger().Errorf("error creating collection")
-    }
+	// Example routes demonstrating different types of operations
+	app.POST("/setup", Setup)
+	app.POST("/users/{name}", CreateUserHandler)
+	app.POST("/friends", CreateFriendship)
 
-    // CRUD routes
-    app.POST("/people", Insert)
-    app.GET("/people/{id}", Get)
-    app.PUT("/people/{id}", Update)
-    app.DELETE("/people/{id}", Delete)
-
-    app.Run()
+	app.Run()
 }
 
-// Insert creates a new person document in the ArangoDB collection
-func Insert(ctx *gofr.Context) (interface{}, error) {
-    var p Person
-    err := ctx.Bind(&p)
-    if err != nil {
-        return nil, err
-    }
+// Setup demonstrates database and collection creation
+func Setup(ctx *gofr.Context) (interface{}, error) {
+	// Create a database
+	err := ctx.Arango.CreateDB(ctx, "social_network")
+	if err != nil {
+		return nil, fmt.Errorf("failed to create database: %w", err)
+	}
 
-    res, err := ctx.Arango.CreateDocument(ctx, "_system", "people", p)
-    if err != nil {
-        return nil, err
-    }
+	// Create a regular collection for persons
+	err = ctx.Arango.CreateCollection(ctx, "social_network", "persons", false)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create persons collection: %w", err)
+	}
 
-    return res, nil
+	// Create an edge collection for friendships
+	err = ctx.Arango.CreateCollection(ctx, "social_network", "friendships", true)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create friendships collection: %w", err)
+	}
+
+	// Create a graph with edge definition
+	edgeDefs := []arangodb.EdgeDefinition{
+		{
+			Collection: "friendships",
+			From:       []string{"persons"},
+			To:         []string{"persons"},
+		},
+	}
+
+	err = ctx.Arango.CreateGraph(ctx, "social_network", "social_graph", &edgeDefs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create graph: %w", err)
+	}
+
+	return "Setup completed successfully", nil
 }
 
-// Get retrieves a person document by ID
-func Get(ctx *gofr.Context) (interface{}, error) {
-    id := strings.TrimPrefix(ctx.PathParam("id"), "id=")
+// CreateUserHandler demonstrates user management and document creation
+func CreateUserHandler(ctx *gofr.Context) (interface{}, error) {
+	name := ctx.PathParam("name")
 
-    var result Person
-    err := ctx.Arango.GetDocument(ctx, "_system", "people", id, &result)
-    if err != nil {
-        return nil, err
-    }
+	// Create an ArangoDB user
+	options := &arangodb.UserOptions{
+		Password: "user123",
+	}
+	err := ctx.Arango.CreateUser(ctx, name, options)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create user: %w", err)
+	}
 
-    return result, nil
+	// Grant database access to the user
+	err = ctx.Arango.GrantDB(ctx, "social_network", name, "rw")
+	if err != nil {
+		return nil, fmt.Errorf("failed to grant database access: %w", err)
+	}
+
+	// Create a person document
+	person := Person{
+		Name: name,
+		Age:  25,
+	}
+	docID, err := ctx.Arango.CreateDocument(ctx, "social_network", "persons", person)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create person document: %w", err)
+	}
+
+	return map[string]string{
+		"message": "User created successfully",
+		"docID":   docID,
+	}, nil
 }
 
-// Update modifies an existing person document
-func Update(ctx *gofr.Context) (interface{}, error) {
-    id := strings.TrimPrefix(ctx.PathParam("id"), "id=")
+// CreateFriendship demonstrates edge document creation
+func CreateFriendship(ctx *gofr.Context) (interface{}, error) {
+	var req struct {
+		From      string `json:"from"`
+		To        string `json:"to"`
+		StartDate string `json:"startDate"`
+	}
 
-    var p Person
-    err := ctx.Bind(&p)
-    if err != nil {
-        return nil, err
-    }
+	if err := ctx.Bind(&req); err != nil {
+		return nil, err
+	}
 
-    err = ctx.Arango.UpdateDocument(ctx, "_system", "people", id, p)
-    if err != nil {
-        return nil, err
-    }
+	friendship := Friendship{
+		StartDate: req.StartDate,
+	}
 
-    return fmt.Sprintf("Document with id %s updated", id), nil
+	edgeID, err := ctx.Arango.CreateEdgeDocument(ctx, "social_network", "friendships", req.From, req.To, friendship)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create friendship: %w", err)
+	}
+
+	return map[string]string{
+		"message": "Friendship created successfully",
+		"edgeID":  edgeID,
+	}, nil
 }
 
-// Delete removes a person document by ID
-func Delete(ctx *gofr.Context) (interface{}, error) {
-    id := strings.TrimPrefix(ctx.PathParam("id"), "id=")
-
-    err := ctx.Arango.DeleteDocument(ctx, "_system", "people", id)
-    if err != nil {
-        return nil, err
-    }
-
-    return fmt.Sprintf("Document with id %s deleted", id), nil
-}
 ```
 
 

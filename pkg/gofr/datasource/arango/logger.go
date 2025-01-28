@@ -34,9 +34,10 @@ func (ql *QueryLog) PrettyPrint(writer io.Writer) {
 		ql.ID = ""
 	}
 
-	fmt.Fprintf(writer, "\u001B[38;5;8m%-32s \u001B[38;5;206m%-6s\u001B[0m %8d\u001B[38;5;8mµs\u001B[0m %s\n",
-		clean(ql.Query), "ARANGO", ql.Duration,
-		clean(strings.Join([]string{ql.Database, ql.Collection, fmt.Sprint(ql.Filter), fmt.Sprint(ql.ID)}, " ")))
+	fmt.Fprintf(writer, "\u001B[38;5;8m%-32s \u001B[38;5;206m%-6s\u001B[0m %8d\u001B[38;5;8mµs\u001B[0m %s %s\n",
+		clean(ql.Operation), "ARANGO", ql.Duration,
+		clean(strings.Join([]string{ql.Database, ql.Collection, fmt.Sprint(ql.Filter), fmt.Sprint(ql.ID)}, " ")), clean(ql.Query))
+
 }
 
 func clean(query string) string {

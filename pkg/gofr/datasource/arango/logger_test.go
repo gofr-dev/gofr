@@ -9,9 +9,13 @@ import (
 
 func Test_PrettyPrint(t *testing.T) {
 	queryLog := QueryLog{
-		Query:      "getDocument",
+		Query:      "",
 		Duration:   12345,
+		Database:   "test",
 		Collection: "test",
+		Filter:     true,
+		ID:         "12345",
+		Operation:  "getDocument",
 	}
 	expected := "getDocument"
 
