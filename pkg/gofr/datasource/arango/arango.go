@@ -35,9 +35,10 @@ type Config struct {
 }
 
 var (
-	errStatusDown        = errors.New("status down")
-	errMissingField      = errors.New("missing required field in config")
-	errInvalidResultType = errors.New("result must be a pointer to a slice of maps")
+	errStatusDown             = errors.New("status down")
+	errMissingField           = errors.New("missing required field in config")
+	errInvalidResultType      = errors.New("result must be a pointer to a slice of maps")
+	errInvalidUserOptionsType = errors.New("userOptions must be a *UserOptions type")
 )
 
 // New creates a new ArangoDB client with the provided configuration.
@@ -143,18 +144,24 @@ func (c *Client) Version(ctx context.Context) (arangodb.VersionInfo, error) {
 }
 
 // CreateUser creates a new user in ArangoDB.
-func (c *Client) CreateUser(ctx context.Context, name string, options *arangodb.UserOptions) (arangodb.User, error) {
-	tracerCtx, span := c.addTrace(ctx, "createUser", map[string]string{"user": name})
+func (c *Client) CreateUser(ctx context.Context, username string, options any) error {
+	tracerCtx, span := c.addTrace(ctx, "createUser", map[string]string{"user": username})
 	startTime := time.Now()
 
-	defer c.sendOperationStats(&QueryLog{Query: "createUser"}, startTime, "createUser", span)
+	defer c.sendOperationStats(&QueryLog{Operation: "createUser", ID: username},
+		startTime, "createUser", span)
 
-	user, err := c.client.CreateUser(tracerCtx, name, options)
-	if err != nil {
-		return nil, err
+	userOptions, ok := options.(*arangodb.UserOptions)
+	if !ok {
+		return fmt.Errorf("%w", errInvalidUserOptionsType)
 	}
 
-	return user, nil
+	_, err := c.client.CreateUser(tracerCtx, username, userOptions)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // DropUser deletes a user from ArangoDB.
@@ -162,7 +169,8 @@ func (c *Client) DropUser(ctx context.Context, username string) error {
 	tracerCtx, span := c.addTrace(ctx, "dropUser", map[string]string{"user": username})
 	startTime := time.Now()
 
-	defer c.sendOperationStats(&QueryLog{Query: "dropUser"}, startTime, "dropUser", span)
+	defer c.sendOperationStats(&QueryLog{Operation: "dropUser",
+		ID: username}, startTime, "dropUser", span)
 
 	err := c.client.RemoveUser(tracerCtx, username)
 	if err != nil {
@@ -177,7 +185,8 @@ func (c *Client) GrantDB(ctx context.Context, database, username, permission str
 	tracerCtx, span := c.addTrace(ctx, "grantDB", map[string]string{"DB": database})
 	startTime := time.Now()
 
-	defer c.sendOperationStats(&QueryLog{Query: "grantDB", Collection: database, ID: username}, startTime, "grantDB", span)
+	defer c.sendOperationStats(&QueryLog{Operation: "grantDB",
+		Database: database, ID: username}, startTime, "grantDB", span)
 
 	user, err := c.client.User(tracerCtx, username)
 	if err != nil {
@@ -194,7 +203,9 @@ func (c *Client) GrantCollection(ctx context.Context, database, collection, user
 	tracerCtx, span := c.addTrace(ctx, "GrantCollection", map[string]string{"collection": collection})
 	startTime := time.Now()
 
-	defer c.sendOperationStats(&QueryLog{Query: "GrantCollection", Collection: collection, ID: username}, startTime, "GrantCollection", span)
+	defer c.sendOperationStats(&QueryLog{Operation: "GrantCollection",
+		Database: database, Collection: collection, ID: username}, startTime,
+		"GrantCollection", span)
 
 	user, err := c.client.User(tracerCtx, username)
 	if err != nil {
@@ -211,7 +222,8 @@ func (c *Client) Query(ctx context.Context, dbName, query string, bindVars map[s
 	tracerCtx, span := c.addTrace(ctx, "query", map[string]string{"DB": dbName})
 	startTime := time.Now()
 
-	defer c.sendOperationStats(&QueryLog{Query: query}, startTime, "query", span)
+	defer c.sendOperationStats(&QueryLog{Operation: "query",
+		Database: dbName, Query: query}, startTime, "query", span)
 
 	db, err := c.client.Database(tracerCtx, dbName)
 	if err != nil {

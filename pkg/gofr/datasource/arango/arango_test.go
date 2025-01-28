@@ -66,12 +66,12 @@ func Test_NewArangoClient(t *testing.T) {
 func Test_Client_CreateUser(t *testing.T) {
 	client, mockArango, _, mockLogger, mockMetrics := setupDB(t)
 
-	mockArango.EXPECT().CreateUser(gomock.Any(), "test", gomock.Any()).Return(nil, nil)
+	mockArango.EXPECT().AddUser(gomock.Any(), "test", &arangodb.UserOptions{}).Return(nil, nil)
 	mockLogger.EXPECT().Debug(gomock.Any())
 	mockMetrics.EXPECT().RecordHistogram(context.Background(), "app_arango_stats",
 		gomock.Any(), "endpoint", gomock.Any(), gomock.Any(), gomock.Any())
 
-	_, err := client.CreateUser(context.Background(), "test", nil)
+	err := client.CreateUser(context.Background(), "test", &arangodb.UserOptions{})
 	require.NoError(t, err, "Test_Arango_CreateUser: failed to create user")
 }
 

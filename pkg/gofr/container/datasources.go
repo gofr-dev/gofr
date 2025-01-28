@@ -576,7 +576,7 @@ type ScyllaDBProvider interface {
 
 type ArangoDB interface {
 	// CreateUser creates a new user in ArangoDB.
-	CreateUser(ctx context.Context, username, password string) error
+	CreateUser(ctx context.Context, userName string, options any) error
 	// DropUser deletes an existing user in ArangoDB.
 	DropUser(ctx context.Context, username string) error
 	// GrantDB grants permissions for a database to a user.

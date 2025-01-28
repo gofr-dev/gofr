@@ -14,7 +14,7 @@ type Arango interface {
 	Databases(ctx context.Context) ([]arangodb.Database, error)
 	Version(ctx context.Context) (arangodb.VersionInfo, error)
 
-	CreateUser(ctx context.Context, name string, options *arangodb.UserOptions) (arangodb.User, error)
+	CreateUser(ctx context.Context, username string, options any) error
 	DropUser(ctx context.Context, username string) error
 	GrantDB(ctx context.Context, database, username, permission string) error
 	GrantCollection(ctx context.Context, database, collection, username, permission string) error

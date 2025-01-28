@@ -24,7 +24,8 @@ func (g *Graph) CreateGraph(ctx context.Context, database, graph string, edgeDef
 	tracerCtx, span := g.client.addTrace(ctx, "createGraph", map[string]string{"graph": graph})
 	startTime := time.Now()
 
-	defer g.client.sendOperationStats(&QueryLog{Query: "createGraph", Collection: graph}, startTime, "createGraph", span)
+	defer g.client.sendOperationStats(&QueryLog{Operation: "createGraph",
+		Database: database, Collection: graph}, startTime, "createGraph", span)
 
 	db, err := g.client.client.Database(tracerCtx, database)
 	if err != nil {
@@ -64,7 +65,8 @@ func (g *Graph) DropGraph(ctx context.Context, database, graphName string) error
 	tracerCtx, span := g.client.addTrace(ctx, "dropGraph", map[string]string{"graph": graphName})
 	startTime := time.Now()
 
-	defer g.client.sendOperationStats(&QueryLog{Query: "dropGraph", Collection: graphName}, startTime, "dropGraph", span)
+	defer g.client.sendOperationStats(&QueryLog{Operation: "dropGraph",
+		Database: database}, startTime, "dropGraph", span)
 
 	db, err := g.client.client.Database(tracerCtx, database)
 	if err != nil {
@@ -89,7 +91,7 @@ func (g *Graph) ListGraphs(ctx context.Context, database string) ([]string, erro
 	tracerCtx, span := g.client.addTrace(ctx, "listGraphs", map[string]string{})
 	startTime := time.Now()
 
-	defer g.client.sendOperationStats(&QueryLog{Query: "listGraphs", Collection: database}, startTime, "listGraphs", span)
+	defer g.client.sendOperationStats(&QueryLog{Operation: "listGraphs", Database: database}, startTime, "listGraphs", span)
 
 	db, err := g.client.client.Database(tracerCtx, database)
 	if err != nil {

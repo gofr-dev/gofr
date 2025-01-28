@@ -21,6 +21,7 @@ type QueryLog struct {
 	Collection string `json:"collection,omitempty"`
 	Filter     any    `json:"filter,omitempty"`
 	ID         any    `json:"id,omitempty"`
+	Operation  string `json:"operation,omitempty"`
 }
 
 // PrettyPrint formats the QueryLog for output.

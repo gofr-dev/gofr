@@ -16,7 +16,7 @@ func (d *DB) ListDBs(ctx context.Context) ([]string, error) {
 	tracerCtx, span := d.client.addTrace(ctx, "listDBs", nil)
 	startTime := time.Now()
 
-	defer d.client.sendOperationStats(&QueryLog{Query: "listDBs"}, startTime, "listDBs", span)
+	defer d.client.sendOperationStats(&QueryLog{Operation: "listDBs"}, startTime, "listDBs", span)
 
 	dbs, err := d.client.client.Databases(tracerCtx)
 	if err != nil {
@@ -39,7 +39,7 @@ func (d *DB) CreateDB(ctx context.Context, database string) error {
 	tracerCtx, span := d.client.addTrace(ctx, "createDB", map[string]string{"DB": database})
 	startTime := time.Now()
 
-	defer d.client.sendOperationStats(&QueryLog{Query: "createDB", Collection: database}, startTime, "createDB", span)
+	defer d.client.sendOperationStats(&QueryLog{Operation: "createDB", Database: database}, startTime, "createDB", span)
 
 	_, err := d.client.client.CreateDatabase(tracerCtx, database, nil)
 
@@ -51,7 +51,7 @@ func (d *DB) DropDB(ctx context.Context, database string) error {
 	tracerCtx, span := d.client.addTrace(ctx, "dropDB", map[string]string{"DB": database})
 	startTime := time.Now()
 
-	defer d.client.sendOperationStats(&QueryLog{Query: "dropDB", Collection: database}, startTime, "dropDB", span)
+	defer d.client.sendOperationStats(&QueryLog{Operation: "dropDB", Database: database}, startTime, "dropDB", span)
 
 	db, err := d.client.client.Database(tracerCtx, database)
 	if err != nil {
@@ -71,7 +71,8 @@ func (d *DB) CreateCollection(ctx context.Context, database, collection string, 
 	tracerCtx, span := d.client.addTrace(ctx, "createCollection", map[string]string{"collection": collection})
 	startTime := time.Now()
 
-	defer d.client.sendOperationStats(&QueryLog{Query: "createCollection", Collection: collection}, startTime, "createCollection", span)
+	defer d.client.sendOperationStats(&QueryLog{Operation: "createCollection", Database: database,
+		Collection: collection, Filter: isEdge}, startTime, "createCollection", span)
 
 	db, err := d.client.client.Database(tracerCtx, database)
 	if err != nil {
@@ -90,43 +91,16 @@ func (d *DB) CreateCollection(ctx context.Context, database, collection string, 
 
 // DropCollection deletes an existing collection from a database.
 func (d *DB) DropCollection(ctx context.Context, database, collectionName string) error {
-	tracerCtx, span := d.client.addTrace(ctx, "dropCollection", map[string]string{"collection": collectionName})
-	startTime := time.Now()
-
-	defer d.client.sendOperationStats(&QueryLog{Query: "dropCollection", Collection: collectionName}, startTime, "dropCollection", span)
-
-	collection, err := d.getCollection(tracerCtx, database, collectionName)
-	if err != nil {
-		return err
-	}
-
-	err = collection.Remove(ctx)
-	if err != nil {
-		return err
-	}
-
-	return err
+	return d.handleCollectionOperation(ctx, "dropCollection", database, collectionName, func(collection arangodb.Collection) error {
+		return collection.Remove(ctx)
+	})
 }
 
 // TruncateCollection truncates a collection in a database.
 func (d *DB) TruncateCollection(ctx context.Context, database, collectionName string) error {
-	tracerCtx, span := d.client.addTrace(ctx, "truncateCollection", map[string]string{"collection": collectionName})
-	startTime := time.Now()
-
-	defer d.client.sendOperationStats(&QueryLog{Query: "truncateCollection", Collection: collectionName},
-		startTime, "truncateCollection", span)
-
-	collection, err := d.getCollection(tracerCtx, database, collectionName)
-	if err != nil {
-		return err
-	}
-
-	err = collection.Truncate(ctx)
-	if err != nil {
-		return err
-	}
-
-	return err
+	return d.handleCollectionOperation(ctx, "truncateCollection", database, collectionName, func(collection arangodb.Collection) error {
+		return collection.Truncate(ctx)
+	})
 }
 
 // ListCollections lists all collections in a database.
@@ -134,7 +108,8 @@ func (d *DB) ListCollections(ctx context.Context, database string) ([]string, er
 	tracerCtx, span := d.client.addTrace(ctx, "listCollections", map[string]string{"DB": database})
 	startTime := time.Now()
 
-	defer d.client.sendOperationStats(&QueryLog{Query: "listCollections", Collection: database}, startTime, "listCollections", span)
+	defer d.client.sendOperationStats(&QueryLog{Operation: "listCollections",
+		Database: database}, startTime, "listCollections", span)
 
 	db, err := d.client.client.Database(tracerCtx, database)
 	if err != nil {
@@ -166,4 +141,21 @@ func (d *DB) getCollection(ctx context.Context, dbName, collectionName string) (
 	}
 
 	return collection, nil
+}
+
+// handleCollectionOperation handles common logic for collection operations.
+func (d *DB) handleCollectionOperation(ctx context.Context, operation, database, collectionName string,
+	action func(arangodb.Collection) error) error {
+	tracerCtx, span := d.client.addTrace(ctx, operation, map[string]string{"collection": collectionName})
+	startTime := time.Now()
+
+	defer d.client.sendOperationStats(&QueryLog{Operation: operation, Database: database,
+		Collection: collectionName}, startTime, operation, span)
+
+	collection, err := d.getCollection(tracerCtx, database, collectionName)
+	if err != nil {
+		return err
+	}
+
+	return action(collection)
 }
