@@ -44,7 +44,7 @@ dbErr2 := datasource.ErrorDB{Message : "database connection timed out!"}
 GoFr's error structs implements an interface with `Error() string` and `StatusCode() int` methods, users can override the 
 status code by implementing it for their custom error.
 
-You can optionally define a log level for your error with the `LogLevel() logging.Level` methods
+Users  can optionally define a log level for your error with the `LogLevel() logging.Level` methods
 
 #### Usage:
 ```go

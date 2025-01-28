@@ -164,7 +164,7 @@ MQTT_USER=username       // authentication username
 MQTT_PASSWORD=password   // authentication password 
 ```
 > **Note** : If `MQTT_HOST` config is not provided, the application will connect to a public broker
-> {% new-tab-link title="HiveMQ" href="https://www.hivemq.com/mqtt/public-mqtt-broker/" /%}
+> {% new-tab-link title="EMQX Broker" href="https://www.emqx.com/en/mqtt/public-mqtt5-broker" /%}
 
 #### Docker setup
 ```shell 

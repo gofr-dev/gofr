@@ -133,7 +133,7 @@ GoFr publishes metrics to port: _2121_ on _/metrics_ endpoint in Prometheus form
 
 {% /table %}
 
-For example: When running application locally, you can access /metrics endpoint on port 2121 from: {% new-tab-link title="http://localhost:2121/metrics" href="http://localhost:2121/metrics" /%}
+For example: When running application locally, we can access /metrics endpoint on port 2121 from: {% new-tab-link title="http://localhost:2121/metrics" href="http://localhost:2121/metrics" /%}
 
 GoFr also supports creating {% new-tab-link newtab=false title="custom metrics" href="/docs/advanced-guide/publishing-custom-metrics" /%}.
 
@@ -158,7 +158,7 @@ automatically add traces to all requests and responses.
 **Automatic Correlation ID Propagation:**
 
 When a request enters your GoFr application, GoFr automatically generates a correlation-ID `X-Correlation-ID` and adds it
-to the response headers. This correlation ID is then propagated to all downstream requests. This means that you can track
+to the response headers. This correlation ID is then propagated to all downstream requests. This means that user can track
 a request as it travels through your distributed system by simply looking at the correlation ID in the request headers.
 
 ### Configuration & Usage:
@@ -245,7 +245,7 @@ TRACER_RATIO=0.1
 
 #### 4. [GoFr Tracer](https://tracer.gofr.dev/):
 
-GoFr tracer is GoFr's own custom trace exporter as well as collector. You can search a trace by its TraceID (correlationID)
+GoFr tracer is GoFr's own custom trace exporter as well as collector. User can search a trace by its TraceID (correlationID)
 in GoFr's own tracer service available anywhere, anytime.
 
 Add GoFr Tracer configs in `.env` file, your .env will be updated to
