@@ -8,9 +8,9 @@ import (
 
 // Register the gRPC service in your app using the following code in your main.go:
 //
-// client.RegisterHelloServerWithGofr(app, &client.HelloGoFrServer{})
+// server.RegisterHelloServerWithGofr(app, &server.HelloGoFrServer{})
 //
-// HelloGoFrServer defines the gRPC client implementation.
+// HelloGoFrServer defines the gRPC server implementation.
 // Customize the struct with required dependencies and fields as needed.
 
 type HelloGoFrServer struct {

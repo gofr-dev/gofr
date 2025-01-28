@@ -19,7 +19,7 @@ func Test_APIKeyAuthProvider_Get(t *testing.T) {
 	defer ctrl.Finish()
 
 	path := "/path"
-	queryParams := map[string]interface{}{"key": "value"}
+	queryParams := map[string]any{"key": "value"}
 	body := []byte("body")
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -55,7 +55,7 @@ func Test_APIKeyAuthProvider_Post(t *testing.T) {
 	defer ctrl.Finish()
 
 	path := "/path"
-	queryParams := map[string]interface{}{"key": "value"}
+	queryParams := map[string]any{"key": "value"}
 	body := []byte("body")
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -82,7 +82,7 @@ func TestApiKeyProvider_Put(t *testing.T) {
 	defer ctrl.Finish()
 
 	path := "/path"
-	queryParams := map[string]interface{}{"key": "value"}
+	queryParams := map[string]any{"key": "value"}
 	body := []byte("body")
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -109,7 +109,7 @@ func TestApiKeyAuthProvider_Patch(t *testing.T) {
 	defer ctrl.Finish()
 
 	path := "/path"
-	queryParams := map[string]interface{}{"key": "value"}
+	queryParams := map[string]any{"key": "value"}
 	body := []byte("body")
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

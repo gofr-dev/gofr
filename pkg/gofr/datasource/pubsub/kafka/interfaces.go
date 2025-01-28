@@ -10,6 +10,7 @@ import (
 
 type Reader interface {
 	ReadMessage(ctx context.Context) (kafka.Message, error)
+	FetchMessage(ctx context.Context) (kafka.Message, error)
 	CommitMessages(ctx context.Context, msgs ...kafka.Message) error
 	Stats() kafka.ReaderStats
 	Close() error

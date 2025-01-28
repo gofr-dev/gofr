@@ -26,10 +26,10 @@ type Manager interface {
 
 // Logger defines a simple interface for logging messages at different log levels.
 type Logger interface {
-	Error(args ...interface{})
-	Errorf(format string, args ...interface{})
-	Warn(args ...interface{})
-	Warnf(format string, args ...interface{})
+	Error(args ...any)
+	Errorf(format string, args ...any)
+	Warn(args ...any)
+	Warnf(format string, args ...any)
 }
 
 type metricsManager struct {

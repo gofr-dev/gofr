@@ -20,10 +20,10 @@ type EnvLoader struct {
 }
 
 type logger interface {
-	Warnf(format string, a ...interface{})
-	Infof(format string, a ...interface{})
-	Debugf(format string, a ...interface{})
-	Fatalf(format string, a ...interface{})
+	Warnf(format string, a ...any)
+	Infof(format string, a ...any)
+	Debugf(format string, a ...any)
+	Fatalf(format string, a ...any)
 }
 
 func NewEnvFile(configFolder string, logger logger) Config {
