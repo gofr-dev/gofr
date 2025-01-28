@@ -186,7 +186,7 @@ func (m *MQTT) Publish(ctx context.Context, topic string, message []byte) error 
 func (m *MQTT) Health() datasource.Health {
 	res := datasource.Health{
 		Status: "DOWN",
-		Details: map[string]interface{}{
+		Details: map[string]any{
 			"backend": "MQTT",
 			"host":    m.config.Hostname,
 		},

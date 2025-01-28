@@ -576,8 +576,10 @@ func (a *App) EnableBasicAuth(credentials ...string) {
 	a.httpServer.router.Use(middleware.BasicAuthMiddleware(middleware.BasicAuthProvider{Users: users}))
 }
 
-// Deprecated: EnableBasicAuthWithFunc is deprecated and will be removed in future releases, users must use
-// EnableBasicAuthWithValidator as it has access to application datasources.
+// EnableBasicAuthWithFunc enables basic authentication for the HTTP server with a custom validation function.
+//
+// Deprecated: This method is deprecated and will be removed in future releases, users must use
+// [App.EnableBasicAuthWithValidator] as it has access to application datasources.
 func (a *App) EnableBasicAuthWithFunc(validateFunc func(username, password string) bool) {
 	a.httpServer.router.Use(middleware.BasicAuthMiddleware(middleware.BasicAuthProvider{ValidateFunc: validateFunc, Container: a.container}))
 }
@@ -598,8 +600,10 @@ func (a *App) EnableAPIKeyAuth(apiKeys ...string) {
 	a.httpServer.router.Use(middleware.APIKeyAuthMiddleware(middleware.APIKeyAuthProvider{}, apiKeys...))
 }
 
-// Deprecated: EnableAPIKeyAuthWithFunc is deprecated and will be removed in future releases, users must use
-// EnableAPIKeyAuthWithValidator as it has access to application datasources.
+// EnableAPIKeyAuthWithFunc enables API key authentication for the application with a custom validation function.
+//
+// Deprecated: This method is deprecated and will be removed in future releases, users must use
+// [App.EnableAPIKeyAuthWithValidator] as it has access to application datasources.
 func (a *App) EnableAPIKeyAuthWithFunc(validateFunc func(apiKey string) bool) {
 	a.httpServer.router.Use(middleware.APIKeyAuthMiddleware(middleware.APIKeyAuthProvider{
 		ValidateFunc: validateFunc,
@@ -657,7 +661,7 @@ func (a *App) Subscribe(topic string, handler SubscribeFunc) {
 }
 
 // AddRESTHandlers creates and registers CRUD routes for the given struct, the struct should always be passed by reference.
-func (a *App) AddRESTHandlers(object interface{}) error {
+func (a *App) AddRESTHandlers(object any) error {
 	cfg, err := scanEntity(object)
 	if err != nil {
 		a.container.Logger.Errorf(err.Error())

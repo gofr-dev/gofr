@@ -31,7 +31,7 @@ func defineHealthTestCases() []healthTestCase {
 			setupMocks: func(mockConnManager *MockConnectionManagerInterface, mockJS *MockJetStream) {
 				mockConnManager.EXPECT().Health().Return(datasource.Health{
 					Status: datasource.StatusUp,
-					Details: map[string]interface{}{
+					Details: map[string]any{
 						"host":              NATSServer,
 						"connection_status": jetStreamConnected,
 					},
@@ -40,7 +40,7 @@ func defineHealthTestCases() []healthTestCase {
 				mockJS.EXPECT().AccountInfo(gomock.Any()).Return(&jetstream.AccountInfo{}, nil)
 			},
 			expectedStatus: datasource.StatusUp,
-			expectedDetails: map[string]interface{}{
+			expectedDetails: map[string]any{
 				"host":              NATSServer,
 				"backend":           natsBackend,
 				"connection_status": jetStreamConnected,
@@ -53,7 +53,7 @@ func defineHealthTestCases() []healthTestCase {
 			setupMocks: func(mockConnManager *MockConnectionManagerInterface, _ *MockJetStream) {
 				mockConnManager.EXPECT().Health().Return(datasource.Health{
 					Status: datasource.StatusDown,
-					Details: map[string]interface{}{
+					Details: map[string]any{
 						"host":              NATSServer,
 						"connection_status": jetStreamDisconnecting,
 					},
@@ -61,7 +61,7 @@ func defineHealthTestCases() []healthTestCase {
 				mockConnManager.EXPECT().JetStream().Return(nil, errJetStreamNotConfigured)
 			},
 			expectedStatus: datasource.StatusDown,
-			expectedDetails: map[string]interface{}{
+			expectedDetails: map[string]any{
 				"host":              NATSServer,
 				"backend":           natsBackend,
 				"connection_status": jetStreamDisconnecting,
@@ -74,7 +74,7 @@ func defineHealthTestCases() []healthTestCase {
 			setupMocks: func(mockConnManager *MockConnectionManagerInterface, mockJS *MockJetStream) {
 				mockConnManager.EXPECT().Health().Return(datasource.Health{
 					Status: datasource.StatusUp,
-					Details: map[string]interface{}{
+					Details: map[string]any{
 						"host":              NATSServer,
 						"connection_status": jetStreamConnected,
 					},
@@ -83,7 +83,7 @@ func defineHealthTestCases() []healthTestCase {
 				mockJS.EXPECT().AccountInfo(gomock.Any()).Return(nil, errJetStream)
 			},
 			expectedStatus: datasource.StatusUp,
-			expectedDetails: map[string]interface{}{
+			expectedDetails: map[string]any{
 				"host":              NATSServer,
 				"backend":           natsBackend,
 				"connection_status": jetStreamConnected,
@@ -121,5 +121,5 @@ type healthTestCase struct {
 	name            string
 	setupMocks      func(*MockConnectionManagerInterface, *MockJetStream)
 	expectedStatus  string
-	expectedDetails map[string]interface{}
+	expectedDetails map[string]any
 }
