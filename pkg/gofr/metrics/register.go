@@ -98,11 +98,11 @@ func (m *metricsManager) NewUpDownCounter(name, desc string) {
 //	Usage:
 //	 m.NewHistogram("another_histogram", "Another histogram metric", 0, 10, 100, 1000)
 //
-// When creating a histogram metric, you can specify custom bucket boundaries to group data points
+// When creating a histogram metric, we can specify custom bucket boundaries to group data points
 // into ranges. Buckets represent specific ranges of values. Each value recorded in the histogram
 // is placed into the appropriate bucket based on its value compared to the bucket boundaries.
 //
-//	For example, when tracking response times in milliseconds, you might define buckets like [0, 10),
+//	For example, when tracking response times in milliseconds, we might define buckets like [0, 10),
 //	[10, 100), [100, 1000), [1000, +Inf), where each range represents response times
 //	within a certain range, and the last bucket includes all values above 1000ms (represented by +Inf,
 //	which stands for positive infinity).
@@ -163,9 +163,9 @@ func (f *float64Gauge) callbackFunc(_ context.Context, o metric.Float64Observer)
 //	 2. m.IncrementCounter(ctx, "example_counter_with_labels", "label1", "value1", "label2", "value2")
 //
 // The IncrementCounter method is used to increase the specified counter metric by 1. If the counter metric
-// does not exist, an error is logged. Optionally, you can provide labels to associate additional information
+// does not exist, an error is logged. Optionally, we can provide labels to associate additional information
 // with the counter metric. Labels are provided as key-value pairs where the label name and value alternate.
-// For example, "label1", "value1", "label2", "value2". Labels allow you to segment and filter your metrics
+// For example, "label1", "value1", "label2", "value2". Labels allow us to segment and filter your metrics
 // based on different dimensions.
 func (m *metricsManager) IncrementCounter(ctx context.Context, name string, labels ...string) {
 	counter, err := m.store.getCounter(name)
@@ -189,9 +189,9 @@ func (m *metricsManager) IncrementCounter(ctx context.Context, name string, labe
 //	2. m.DeltaUpDownCounter(ctx, "successful_logins", 1.5, "label1", "value1", "label2", "value2")
 //
 // The DeltaUpDownCounter method is used to increase or decrease the last value of the specified UpDown counter metric
-// by the given value. For example, you might use this method to track changes in the number of active users or
+// by the given value. For example, we might use this method to track changes in the number of active users or
 // successful login attempts. Labels can provide additional context, such as the method and endpoint of the request,
-// allowing you to analyze metrics based on different dimensions.
+// allowing us to analyze metrics based on different dimensions.
 func (m *metricsManager) DeltaUpDownCounter(ctx context.Context, name string, value float64, labels ...string) {
 	upDownCounter, err := m.store.getUpDownCounter(name)
 	if err != nil {
@@ -224,7 +224,7 @@ func (m *metricsManager) RecordHistogram(ctx context.Context, name string, value
 }
 
 // SetGauge gets the value and sets the metric to the specified value.
-// Unlike counters, gauges do not track the last value for the metric. This method allows you to
+// Unlike counters, gauges do not track the last value for the metric. This method allows us to
 // directly set the value of the gauge to the specified value.
 //
 //	Usage:

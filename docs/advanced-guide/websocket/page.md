@@ -3,7 +3,7 @@
 WebSockets provide a full-duplex communication channel over a single, long-lived connection, making them ideal for 
 real-time applications like chat, notifications, and live updates. GoFr provides a convenient way to integrate websockets
 into your application. By leveraging GoFr's WebSocket support and customizable upgrader options,
-you can efficiently manage real-time communication in your applications.
+users can efficiently manage real-time communication in your applications.
 
 ## Usage in GoFr
 
@@ -40,8 +40,8 @@ func WSHandler(ctx *gofr.Context) (any, error) {
 ```
 
 ## Configuration Options
-GoFr allows you to customize the WebSocket upgrader with several options. You can set these options using the 
-`websocket.NewWSUpgrader` function. Here is the list of options you can apply to your websocket upgrader using GoFr.
+GoFr allows us to customize the WebSocket upgrader with several options. We can set these options using the 
+`websocket.NewWSUpgrader` function. Here is the list of options we can apply to your websocket upgrader using GoFr.
 
 - `HandshakeTimeout (WithHandshakeTimeout)`: Sets the handshake timeout.
 - `ReadBufferSize (WithReadBufferSize)`: Sets the size of the read buffer.
@@ -52,7 +52,7 @@ GoFr allows you to customize the WebSocket upgrader with several options. You ca
 - `Compression (WithCompression)`:  Enables compression.
 
 ## Example:
-You can configure the Upgrader by creating a chain of option functions provided by GoFr.
+We can configure the Upgrader by creating a chain of option functions provided by GoFr.
 
 ```go
 package main
