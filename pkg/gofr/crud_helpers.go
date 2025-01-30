@@ -1,12 +1,17 @@
 package gofr
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"strconv"
 	"strings"
 
 	"gofr.dev/pkg/gofr/datasource/sql"
+)
+
+var (
+	errUnsupportedIDType = errors.New("unsupported ID type")
 )
 
 func getTableName(object any, structName string) string {
@@ -94,15 +99,22 @@ func convertIDType(id string, fieldType reflect.Type) (any, error) {
 		if err != nil {
 			return nil, err
 		}
+
 		val.SetInt(intVal)
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 		uintVal, err := strconv.ParseUint(id, 10, fieldType.Bits())
 		if err != nil {
 			return nil, err
 		}
+
 		val.SetUint(uintVal)
+	case reflect.Bool, reflect.Uintptr, reflect.Float32, reflect.Float64,
+		reflect.Complex64, reflect.Complex128, reflect.Array, reflect.Chan,
+		reflect.Func, reflect.Interface, reflect.Invalid, reflect.Map,
+		reflect.Ptr, reflect.Slice, reflect.Struct, reflect.UnsafePointer:
+		return nil, fmt.Errorf("%w: %s", errUnsupportedIDType, fieldType.Kind())
 	default:
-		return nil, fmt.Errorf("unsupported ID type: %s", fieldType.Kind())
+		return nil, fmt.Errorf("%w: %s", errUnsupportedIDType, fieldType.Kind())
 	}
 
 	return val.Interface(), nil
