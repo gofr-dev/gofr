@@ -994,15 +994,15 @@ type ArangoDB interface {
     // CreateEdgeDocument creates a new edge document between two vertices.
     CreateEdgeDocument(ctx context.Context, dbName, collectionName string, from, to string, document interface{}) (string, error)
 
-    // CreateGraph creates a new graph in a database.
-    CreateGraph(ctx context.Context, database, graph string, edgeDefinitions []arango.EdgeDefinition) error
+ 	// CreateGraph creates a new graph in a database taking graph name and *[]arangodb.EdgeDefinition as input.
+    CreateGraph(ctx context.Context, database, graph string, edgeDefinitions any) error
     // DropGraph deletes an existing graph from a database.
     DropGraph(ctx context.Context, database, graph string) error
     // ListGraphs lists all graphs in a database.
     ListGraphs(ctx context.Context, database string) ([]string, error)
 
     // Query executes an AQL query and binds the results.
-    Query(ctx context.Context, dbName string, query string, bindVars map[string]interface{}, result interface{}) error
+    Query(ctx context.Context, dbName string, query string, bindVars map[string]any, result any) error
 
    HealthCheck(context.Context) (any, error)
 }

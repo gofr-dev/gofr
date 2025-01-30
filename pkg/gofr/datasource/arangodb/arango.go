@@ -9,6 +9,7 @@ import (
 	"github.com/arangodb/go-driver/v2/arangodb"
 	"github.com/arangodb/go-driver/v2/arangodb/shared"
 	"github.com/arangodb/go-driver/v2/connection"
+
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 )
@@ -246,7 +247,7 @@ func (c *Client) Query(ctx context.Context, dbName, query string, bindVars map[s
 		var doc map[string]any
 
 		_, err = cursor.ReadDocument(tracerCtx, &doc)
-		if errors.As(err, &shared.NoMoreDocumentsError{}) {
+		if shared.IsNoMoreDocuments(err) {
 			break
 		}
 
