@@ -9,7 +9,7 @@ import (
 	"gofr.dev/pkg/gofr/container"
 )
 
-func TestApp_AddOpenai(t *testing.T) {
+func TestApp_AddOpenAI(t *testing.T) {
 	t.Run("Adding OpenAI", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
@@ -20,15 +20,15 @@ func TestApp_AddOpenai(t *testing.T) {
 			container: c,
 		}
 
-		mock := container.NewMockOpenaiProvider(ctrl)
+		mock := container.NewMockOpenAIProvider(ctrl)
 
 		mock.EXPECT().UseLogger(app.Logger())
 		mock.EXPECT().UseMetrics(app.Metrics())
 		mock.EXPECT().UseTracer(gomock.Any())
 		mock.EXPECT().InitMetrics()
 
-		app.AddOpenai(mock)
+		app.AddOpenAI(mock)
 
-		assert.Equal(t, mock, app.container.Openai)
+		assert.Equal(t, mock, app.container.OpenAI)
 	})
 }

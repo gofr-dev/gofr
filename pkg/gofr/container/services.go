@@ -6,13 +6,13 @@ import (
 
 // Openai is the interface that wraps the basic endpoint of openai api.
 
-type Openai interface {
+type OpenAI interface {
 	// implementation of chat endpoint of openai api
 	CreateCompletions(ctx context.Context, r any) (any, error)
 }
 
-type OpenaiProvider interface {
-	Openai
+type OpenAIProvider interface {
+	OpenAI
 
 	// UseLogger set the logger for openai client
 	UseLogger(logger any)

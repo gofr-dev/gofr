@@ -1,10 +1,10 @@
 package openai
 
 type Logger interface {
-	Debug(args ...interface{})
-	Debugf(pattern string, args ...interface{})
-	Logf(pattern string, args ...interface{})
-	Errorf(pattern string, args ...interface{})
+	Debug(args ...any)
+	Debugf(pattern string, args ...any)
+	Logf(pattern string, args ...any)
+	Errorf(pattern string, args ...any)
 }
 
 type APILog struct {
@@ -17,11 +17,11 @@ type APILog struct {
 	Duration          int64  `json:"duration,omitempty"`
 
 	Usage struct {
-		PromptTokens            int         `json:"prompt_tokens,omitempty"`
-		CompletionTokens        int         `json:"completion_tokens,omitempty"`
-		TotalTokens             int         `json:"total_tokens,omitempty"`
-		CompletionTokensDetails interface{} `json:"completion_tokens_details,omitempty"`
-		PromptTokensDetails     interface{} `json:"prompt_tokens_details,omitempty"`
+		PromptTokens            int `json:"prompt_tokens,omitempty"`
+		CompletionTokens        int `json:"completion_tokens,omitempty"`
+		TotalTokens             int `json:"total_tokens,omitempty"`
+		CompletionTokensDetails any `json:"completion_tokens_details,omitempty"`
+		PromptTokensDetails     any `json:"prompt_tokens_details,omitempty"`
 	} `json:"usage,omitempty"`
 
 	Error *Error `json:"error,omitempty"`

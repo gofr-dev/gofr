@@ -48,7 +48,7 @@ func Test_ChatCompletions(t *testing.T) {
 			setupMocks: func(logger *MockLogger, metrics *MockMetrics) {
 				metrics.EXPECT().RecordHistogram(gomock.Any(), "openai_api_request_duration", gomock.Any())
 				metrics.EXPECT().IncrementCounter(gomock.Any(), "openai_api_total_request_count")
-				metrics.EXPECT().DeltaUpDownCounter(gomock.Any(), "openai_api_token_usage", 10, 20)
+				metrics.EXPECT().DeltaUpDownCounter(gomock.Any(), "openai_api_token_usage", 30.0)
 				logger.EXPECT().Debug(gomock.Any())
 			},
 		},
@@ -118,7 +118,7 @@ func Test_ChatCompletions(t *testing.T) {
 	}
 }
 
-func setupTestServer(t *testing.T, path string, response interface{}) *httptest.Server {
+func setupTestServer(t *testing.T, path string, response any) *httptest.Server {
 	t.Helper()
 
 	server := httptest.NewServer(

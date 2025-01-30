@@ -6,14 +6,14 @@ import (
 )
 
 // AddOpenai sets the Openai wrapper in the app's container.
-func (a *App) AddOpenai(openai container.OpenaiProvider) {
-	openai.UseLogger(a.Logger())
-	openai.UseMetrics(a.Metrics())
+func (a *App) AddOpenAI(openAI container.OpenAIProvider) {
+	openAI.UseLogger(a.Logger())
+	openAI.UseMetrics(a.Metrics())
 
-	tracer := otel.GetTracerProvider().Tracer("gofr-openai")
-	openai.UseTracer(tracer)
+	tracer := otel.GetTracerProvider().Tracer("gofr-openAI")
+	openAI.UseTracer(tracer)
 
-	openai.InitMetrics()
+	openAI.InitMetrics()
 
-	a.container.Openai = openai
+	a.container.OpenAI = openAI
 }

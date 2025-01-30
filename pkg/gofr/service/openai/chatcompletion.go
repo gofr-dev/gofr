@@ -18,7 +18,7 @@ type CreateCompletionsRequest struct {
 	Model               string            `json:"model,omitempty"`
 	Store               bool              `json:"store,omitempty"`
 	ReasoningEffort     string            `json:"reasoning_effort,omitempty"`
-	MetaData            interface{}       `json:"metadata,omitempty"` // object or null
+	MetaData            any               `json:"metadata,omitempty"` // object or null
 	FrequencyPenalty    float64           `json:"frequency_penalty,omitempty"`
 	LogitBias           map[string]string `json:"logit_bias,omitempty"`
 	LogProbs            int               `json:"logprobs,omitempty"`
@@ -27,7 +27,7 @@ type CreateCompletionsRequest struct {
 	MaxCompletionTokens int               `json:"max_completion_tokens,omitempty"`
 	N                   int               `json:"n,omitempty"`
 	Modalities          []string          `json:"modalities,omitempty"`
-	Prediction          interface{}       `json:"prediction,omitempty"`
+	Prediction          any               `json:"prediction,omitempty"`
 	PresencePenalty     float64           `json:"presence_penalty,omitempty"`
 
 	Audio struct {
@@ -35,11 +35,11 @@ type CreateCompletionsRequest struct {
 		Format string `json:"format,omitempty"`
 	} `json:"audio,omitempty"`
 
-	ResponseFormat interface{} `json:"response_format,omitempty"`
-	Seed           int         `json:"seed,omitempty"`
-	ServiceTier    string      `json:"service_tier,omitempty"`
-	Stop           interface{} `json:"stop,omitempty"`
-	Stream         bool        `json:"stream,omitempty"`
+	ResponseFormat any    `json:"response_format,omitempty"`
+	Seed           int    `json:"seed,omitempty"`
+	ServiceTier    string `json:"service_tier,omitempty"`
+	Stop           any    `json:"stop,omitempty"`
+	Stream         bool   `json:"stream,omitempty"`
 
 	StreamOptions struct {
 		IncludeUsage bool `json:"include_usage,omitempty"`
@@ -51,17 +51,17 @@ type CreateCompletionsRequest struct {
 	Tools []struct {
 		Type     string `json:"type,omitempty"`
 		Function struct {
-			Name        string      `json:"name,omitempty"`
-			Description string      `json:"description,omitempty"`
-			Parameters  interface{} `json:"parameters,omitempty"`
-			Strict      bool        `json:"strict,omitempty"`
+			Name        string `json:"name,omitempty"`
+			Description string `json:"description,omitempty"`
+			Parameters  any    `json:"parameters,omitempty"`
+			Strict      bool   `json:"strict,omitempty"`
 		} `json:"function,omitempty"`
 	} `json:"tools,omitempty"`
 
-	ToolChoice        interface{} `json:"tool_choice,omitempty"`
-	ParallelToolCalls bool        `json:"parallel_tool_calls,omitempty"`
-	Suffix            string      `json:"suffix,omitempty"`
-	User              string      `json:"user,omitempty"`
+	ToolChoice        any    `json:"tool_choice,omitempty"`
+	ParallelToolCalls bool   `json:"parallel_tool_calls,omitempty"`
+	Suffix            string `json:"suffix,omitempty"`
+	User              string `json:"user,omitempty"`
 }
 
 type Message struct {
@@ -82,14 +82,14 @@ type CreateCompletionsResponse struct {
 		Index int `json:"index,omitempty"`
 
 		Message struct {
-			Role      string      `json:"role,omitempty"`
-			Content   string      `json:"content,omitempty"`
-			Refusal   string      `json:"refusal,omitempty"`
-			ToolCalls interface{} `json:"tool_calls,omitempty"`
+			Role      string `json:"role,omitempty"`
+			Content   string `json:"content,omitempty"`
+			Refusal   string `json:"refusal,omitempty"`
+			ToolCalls any    `json:"tool_calls,omitempty"`
 		} `json:"message"`
 
-		Logprobs     interface{} `json:"logprobs,omitempty"`
-		FinishReason string      `json:"finish_reason,omitempty"`
+		Logprobs     any    `json:"logprobs,omitempty"`
+		FinishReason string `json:"finish_reason,omitempty"`
 	} `json:"choices,omitempty"`
 
 	Usage Usage `json:"usage,omitempty"`
@@ -98,18 +98,18 @@ type CreateCompletionsResponse struct {
 }
 
 type Usage struct {
-	PromptTokens            int         `json:"prompt_tokens,omitempty"`
-	CompletionTokens        int         `json:"completion_tokens,omitempty"`
-	TotalTokens             int         `json:"total_tokens,omitempty"`
-	CompletionTokensDetails interface{} `json:"completion_tokens_details,omitempty"`
-	PromptTokensDetails     interface{} `json:"prompt_tokens_details,omitempty"`
+	PromptTokens            int `json:"prompt_tokens,omitempty"`
+	CompletionTokens        int `json:"completion_tokens,omitempty"`
+	TotalTokens             int `json:"total_tokens,omitempty"`
+	CompletionTokensDetails any `json:"completion_tokens_details,omitempty"`
+	PromptTokensDetails     any `json:"prompt_tokens_details,omitempty"`
 }
 
 type Error struct {
-	Message string      `json:"message,omitempty"`
-	Type    string      `json:"type,omitempty"`
-	Param   interface{} `json:"param,omitempty"`
-	Code    interface{} `json:"code,omitempty"`
+	Message string `json:"message,omitempty"`
+	Type    string `json:"type,omitempty"`
+	Param   any    `json:"param,omitempty"`
+	Code    any    `json:"code,omitempty"`
 }
 
 var (

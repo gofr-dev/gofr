@@ -371,7 +371,7 @@ func Test_Post(t *testing.T) {
 	tests := []struct {
 		name       string
 		url        string
-		input      interface{}
+		input      any
 		setupMocks func(*http.Client)
 		want       []byte
 		wantErr    bool

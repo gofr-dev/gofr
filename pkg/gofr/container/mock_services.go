@@ -16,32 +16,32 @@ import (
 	gomock "go.uber.org/mock/gomock"
 )
 
-// MockOpenai is a mock of Openai interface.
-type MockOpenai struct {
+// MockOpenAI is a mock of OpenAI interface.
+type MockOpenAI struct {
 	ctrl     *gomock.Controller
-	recorder *MockOpenaiMockRecorder
+	recorder *MockOpenAIMockRecorder
 	isgomock struct{}
 }
 
-// MockOpenaiMockRecorder is the mock recorder for MockOpenai.
-type MockOpenaiMockRecorder struct {
-	mock *MockOpenai
+// MockOpenAIMockRecorder is the mock recorder for MockOpenAI.
+type MockOpenAIMockRecorder struct {
+	mock *MockOpenAI
 }
 
-// NewMockOpenai creates a new mock instance.
-func NewMockOpenai(ctrl *gomock.Controller) *MockOpenai {
-	mock := &MockOpenai{ctrl: ctrl}
-	mock.recorder = &MockOpenaiMockRecorder{mock}
+// NewMockOpenAI creates a new mock instance.
+func NewMockOpenAI(ctrl *gomock.Controller) *MockOpenAI {
+	mock := &MockOpenAI{ctrl: ctrl}
+	mock.recorder = &MockOpenAIMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockOpenai) EXPECT() *MockOpenaiMockRecorder {
+func (m *MockOpenAI) EXPECT() *MockOpenAIMockRecorder {
 	return m.recorder
 }
 
 // CreateCompletions mocks base method.
-func (m *MockOpenai) CreateCompletions(ctx context.Context, r any) (any, error) {
+func (m *MockOpenAI) CreateCompletions(ctx context.Context, r any) (any, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "CreateCompletions", ctx, r)
 	ret0, _ := ret[0].(any)
@@ -50,37 +50,37 @@ func (m *MockOpenai) CreateCompletions(ctx context.Context, r any) (any, error) 
 }
 
 // CreateCompletions indicates an expected call of CreateCompletions.
-func (mr *MockOpenaiMockRecorder) CreateCompletions(ctx, r any) *gomock.Call {
+func (mr *MockOpenAIMockRecorder) CreateCompletions(ctx, r any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateCompletions", reflect.TypeOf((*MockOpenai)(nil).CreateCompletions), ctx, r)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateCompletions", reflect.TypeOf((*MockOpenAI)(nil).CreateCompletions), ctx, r)
 }
 
-// MockOpenaiProvider is a mock of OpenaiProvider interface.
-type MockOpenaiProvider struct {
+// MockOpenAIProvider is a mock of OpenAIProvider interface.
+type MockOpenAIProvider struct {
 	ctrl     *gomock.Controller
-	recorder *MockOpenaiProviderMockRecorder
+	recorder *MockOpenAIProviderMockRecorder
 	isgomock struct{}
 }
 
-// MockOpenaiProviderMockRecorder is the mock recorder for MockOpenaiProvider.
-type MockOpenaiProviderMockRecorder struct {
-	mock *MockOpenaiProvider
+// MockOpenAIProviderMockRecorder is the mock recorder for MockOpenAIProvider.
+type MockOpenAIProviderMockRecorder struct {
+	mock *MockOpenAIProvider
 }
 
-// NewMockOpenaiProvider creates a new mock instance.
-func NewMockOpenaiProvider(ctrl *gomock.Controller) *MockOpenaiProvider {
-	mock := &MockOpenaiProvider{ctrl: ctrl}
-	mock.recorder = &MockOpenaiProviderMockRecorder{mock}
+// NewMockOpenAIProvider creates a new mock instance.
+func NewMockOpenAIProvider(ctrl *gomock.Controller) *MockOpenAIProvider {
+	mock := &MockOpenAIProvider{ctrl: ctrl}
+	mock.recorder = &MockOpenAIProviderMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockOpenaiProvider) EXPECT() *MockOpenaiProviderMockRecorder {
+func (m *MockOpenAIProvider) EXPECT() *MockOpenAIProviderMockRecorder {
 	return m.recorder
 }
 
 // CreateCompletions mocks base method.
-func (m *MockOpenaiProvider) CreateCompletions(ctx context.Context, r any) (any, error) {
+func (m *MockOpenAIProvider) CreateCompletions(ctx context.Context, r any) (any, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "CreateCompletions", ctx, r)
 	ret0, _ := ret[0].(any)
@@ -89,55 +89,55 @@ func (m *MockOpenaiProvider) CreateCompletions(ctx context.Context, r any) (any,
 }
 
 // CreateCompletions indicates an expected call of CreateCompletions.
-func (mr *MockOpenaiProviderMockRecorder) CreateCompletions(ctx, r any) *gomock.Call {
+func (mr *MockOpenAIProviderMockRecorder) CreateCompletions(ctx, r any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateCompletions", reflect.TypeOf((*MockOpenaiProvider)(nil).CreateCompletions), ctx, r)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateCompletions", reflect.TypeOf((*MockOpenAIProvider)(nil).CreateCompletions), ctx, r)
 }
 
 // InitMetrics mocks base method.
-func (m *MockOpenaiProvider) InitMetrics() {
+func (m *MockOpenAIProvider) InitMetrics() {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "InitMetrics")
 }
 
 // InitMetrics indicates an expected call of InitMetrics.
-func (mr *MockOpenaiProviderMockRecorder) InitMetrics() *gomock.Call {
+func (mr *MockOpenAIProviderMockRecorder) InitMetrics() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InitMetrics", reflect.TypeOf((*MockOpenaiProvider)(nil).InitMetrics))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InitMetrics", reflect.TypeOf((*MockOpenAIProvider)(nil).InitMetrics))
 }
 
 // UseLogger mocks base method.
-func (m *MockOpenaiProvider) UseLogger(logger any) {
+func (m *MockOpenAIProvider) UseLogger(logger any) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "UseLogger", logger)
 }
 
 // UseLogger indicates an expected call of UseLogger.
-func (mr *MockOpenaiProviderMockRecorder) UseLogger(logger any) *gomock.Call {
+func (mr *MockOpenAIProviderMockRecorder) UseLogger(logger any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UseLogger", reflect.TypeOf((*MockOpenaiProvider)(nil).UseLogger), logger)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UseLogger", reflect.TypeOf((*MockOpenAIProvider)(nil).UseLogger), logger)
 }
 
 // UseMetrics mocks base method.
-func (m *MockOpenaiProvider) UseMetrics(metrics any) {
+func (m *MockOpenAIProvider) UseMetrics(metrics any) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "UseMetrics", metrics)
 }
 
 // UseMetrics indicates an expected call of UseMetrics.
-func (mr *MockOpenaiProviderMockRecorder) UseMetrics(metrics any) *gomock.Call {
+func (mr *MockOpenAIProviderMockRecorder) UseMetrics(metrics any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UseMetrics", reflect.TypeOf((*MockOpenaiProvider)(nil).UseMetrics), metrics)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UseMetrics", reflect.TypeOf((*MockOpenAIProvider)(nil).UseMetrics), metrics)
 }
 
 // UseTracer mocks base method.
-func (m *MockOpenaiProvider) UseTracer(tracer any) {
+func (m *MockOpenAIProvider) UseTracer(tracer any) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "UseTracer", tracer)
 }
 
 // UseTracer indicates an expected call of UseTracer.
-func (mr *MockOpenaiProviderMockRecorder) UseTracer(tracer any) *gomock.Call {
+func (mr *MockOpenAIProviderMockRecorder) UseTracer(tracer any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UseTracer", reflect.TypeOf((*MockOpenaiProvider)(nil).UseTracer), tracer)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UseTracer", reflect.TypeOf((*MockOpenAIProvider)(nil).UseTracer), tracer)
 }

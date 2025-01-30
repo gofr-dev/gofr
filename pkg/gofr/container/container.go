@@ -62,7 +62,7 @@ type Container struct {
 	ScyllaDB   ScyllaDB
 	SurrealDB  SurrealDB
 
-	Openai Openai
+	OpenAI OpenAI
 
 	KVStore KVStore
 
