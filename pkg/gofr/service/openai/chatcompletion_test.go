@@ -47,8 +47,8 @@ func Test_ChatCompletions(t *testing.T) {
 			expectedError: nil,
 			setupMocks: func(logger *MockLogger, metrics *MockMetrics) {
 				metrics.EXPECT().RecordHistogram(gomock.Any(), "openai_api_request_duration", gomock.Any())
-				metrics.EXPECT().RecordRequestCount(gomock.Any(), "openai_api_total_request_count")
-				metrics.EXPECT().RecordTokenUsage(gomock.Any(), "openai_api_token_usage", 10, 20)
+				metrics.EXPECT().IncrementCounter(gomock.Any(), "openai_api_total_request_count")
+				metrics.EXPECT().DeltaUpDownCounter(gomock.Any(), "openai_api_token_usage", 10, 20)
 				logger.EXPECT().Debug(gomock.Any())
 			},
 		},

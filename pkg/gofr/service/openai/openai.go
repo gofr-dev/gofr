@@ -67,7 +67,7 @@ func NewClient(config *Config, opts ...ClientOption) (*Client, error) {
 			Timeout: config.Timeout,
 			Transport: &http.Transport{
 				MaxIdleConns:    config.MaxIdleConns,
-				IdleConnTimeout: 30 * time.Second,
+				IdleConnTimeout: 120 * time.Second,
 			},
 		},
 	}
@@ -79,13 +79,13 @@ func NewClient(config *Config, opts ...ClientOption) (*Client, error) {
 	return c, nil
 }
 
-func (c *Client) UseLogger(logger interface{}) {
+func (c *Client) UseLogger(logger any) {
 	if l, ok := logger.(Logger); ok {
 		c.logger = l
 	}
 }
 
-func (c *Client) UseMetrics(metrics interface{}) {
+func (c *Client) UseMetrics(metrics any) {
 	if m, ok := metrics.(Metrics); ok {
 		c.metrics = m
 	}
@@ -111,7 +111,7 @@ func (c *Client) InitMetrics() {
 		"counts total number of requests made.",
 	)
 
-	c.metrics.NewCounterVec(
+	c.metrics.NewUpDownCounter(
 		"openai_api_token_usage",
 		"counts number of tokens used.",
 	)

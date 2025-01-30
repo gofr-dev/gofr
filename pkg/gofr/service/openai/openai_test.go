@@ -152,7 +152,7 @@ func Test_InitMetrics(t *testing.T) {
 		"counts total number of requests made.",
 	)
 
-	mockMetrics.EXPECT().NewCounterVec(
+	mockMetrics.EXPECT().NewUpDownCounter(
 		"openai_api_token_usage",
 		"counts number of tokens used.",
 	)

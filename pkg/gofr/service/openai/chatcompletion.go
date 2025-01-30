@@ -116,6 +116,7 @@ var (
 	errMissingBoth     = errors.New("both messages and model fields not provided")
 	errMissingMessages = errors.New("messages fields not provided")
 	errMissingModel    = errors.New("model fields not provided")
+	errRequestType     = errors.New("invalid request type")
 )
 
 func (e *Error) Error() string {
@@ -126,29 +127,37 @@ func (c *Client) CreateCompletionsRaw(ctx context.Context, r *CreateCompletionsR
 	return c.Post(ctx, CompletionsEndpoint, r)
 }
 
-func (c *Client) CreateCompletions(ctx context.Context, r *CreateCompletionsRequest) (response *CreateCompletionsResponse, err error) {
+func (c *Client) CreateCompletions(ctx context.Context, r any) (any, error) {
+	req, ok := r.(*CreateCompletionsRequest)
+	if !ok {
+		c.logger.Errorf("%v", errRequestType)
+		return nil, errRequestType
+	}
+
 	tracerCtx, span := c.AddTrace(ctx, "CreateCompletions")
 	startTime := time.Now()
 
-	if r.Messages == nil && r.Model == "" {
+	if req.Messages == nil && req.Model == "" {
 		c.logger.Errorf("%v", errMissingBoth)
 		return nil, errMissingBoth
 	}
 
-	if r.Messages == nil {
+	if req.Messages == nil {
 		c.logger.Errorf("%v", errMissingMessages)
 		return nil, errMissingMessages
 	}
 
-	if r.Model == "" {
+	if req.Model == "" {
 		c.logger.Errorf("%v", errMissingModel)
 		return nil, errMissingModel
 	}
 
-	raw, err := c.CreateCompletionsRaw(tracerCtx, r)
+	raw, err := c.CreateCompletionsRaw(tracerCtx, req)
 	if err != nil {
-		return response, err
+		return nil, err
 	}
+
+	var response CreateCompletionsResponse
 
 	err = json.Unmarshal(raw, &response)
 	if err != nil {
@@ -179,8 +188,8 @@ func (c *Client) SendChatCompletionOperationStats(ctx context.Context, ql *APILo
 	c.logger.Debug(ql)
 
 	c.metrics.RecordHistogram(ctx, "openai_api_request_duration", float64(duration))
-	c.metrics.RecordRequestCount(ctx, "openai_api_total_request_count")
-	c.metrics.RecordTokenUsage(ctx, "openai_api_token_usage", ql.Usage.PromptTokens, ql.Usage.CompletionTokens)
+	c.metrics.IncrementCounter(ctx, "openai_api_total_request_count")
+	c.metrics.DeltaUpDownCounter(ctx, "openai_api_token_usage", float64(ql.Usage.TotalTokens))
 
 	if span != nil {
 		defer span.End()

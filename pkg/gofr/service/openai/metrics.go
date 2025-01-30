@@ -3,11 +3,11 @@ package openai
 import "context"
 
 type Metrics interface {
+	NewCounter(name, desc string)
+	NewUpDownCounter(name, desc string)
 	NewHistogram(name, desc string, buckets ...float64)
-	NewCounter(name, desc string, labels ...string)
-	NewCounterVec(name, desc string, labels ...string)
 
+	IncrementCounter(ctx context.Context, name string, labels ...string)
+	DeltaUpDownCounter(ctx context.Context, name string, value float64, labels ...string)
 	RecordHistogram(ctx context.Context, name string, value float64, labels ...string)
-	RecordRequestCount(ctx context.Context, name string, labels ...string)
-	RecordTokenUsage(ctx context.Context, name string, promptTokens, completionTokens int, labels ...string)
 }
