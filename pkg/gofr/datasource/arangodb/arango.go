@@ -9,7 +9,6 @@ import (
 	"github.com/arangodb/go-driver/v2/arangodb"
 	arangoShared "github.com/arangodb/go-driver/v2/arangodb/shared"
 	"github.com/arangodb/go-driver/v2/connection"
-
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 )
