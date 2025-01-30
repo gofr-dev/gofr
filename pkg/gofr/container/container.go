@@ -62,6 +62,8 @@ type Container struct {
 	ScyllaDB   ScyllaDB
 	SurrealDB  SurrealDB
 
+	Openai Openai
+
 	KVStore KVStore
 
 	File file.FileSystem
