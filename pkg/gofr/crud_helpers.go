@@ -3,6 +3,7 @@ package gofr
 import (
 	"fmt"
 	"reflect"
+	"strconv"
 	"strings"
 
 	"gofr.dev/pkg/gofr/datasource/sql"
@@ -80,4 +81,29 @@ func toSnakeCase(str string) string {
 	}
 
 	return builder.String()
+}
+
+func convertIDType(id string, fieldType reflect.Type) (any, error) {
+	val := reflect.New(fieldType).Elem()
+
+	switch fieldType.Kind() {
+	case reflect.String:
+		val.SetString(id)
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		intVal, err := strconv.ParseInt(id, 10, fieldType.Bits())
+		if err != nil {
+			return nil, err
+		}
+		val.SetInt(intVal)
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		uintVal, err := strconv.ParseUint(id, 10, fieldType.Bits())
+		if err != nil {
+			return nil, err
+		}
+		val.SetUint(uintVal)
+	default:
+		return nil, fmt.Errorf("unsupported ID type: %s", fieldType.Kind())
+	}
+
+	return val.Interface(), nil
 }

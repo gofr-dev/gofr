@@ -283,11 +283,14 @@ func (e *entity) Get(c *Context) (any, error) {
 
 func (e *entity) Update(c *Context) (any, error) {
 	newEntity := reflect.New(e.entityType).Interface()
+	id := c.Request.PathParam("id")
 
 	err := c.Bind(newEntity)
 	if err != nil {
 		return nil, err
 	}
+
+	isAutoIncrement := hasAutoIncrementID(e.constraints)
 
 	fieldNames := make([]string, 0, e.entityType.NumField())
 	fieldValues := make([]any, 0, e.entityType.NumField())
@@ -295,11 +298,20 @@ func (e *entity) Update(c *Context) (any, error) {
 	for i := 0; i < e.entityType.NumField(); i++ {
 		field := e.entityType.Field(i)
 
-		fieldNames = append(fieldNames, toSnakeCase(field.Name))
-		fieldValues = append(fieldValues, reflect.ValueOf(newEntity).Elem().Field(i).Interface())
-	}
+		fieldName := toSnakeCase(field.Name)
+		fieldValue := reflect.ValueOf(newEntity).Elem().Field(i)
 
-	id := c.PathParam("id")
+		if fieldName == e.primaryKey && isAutoIncrement {
+			convertedID, convErr := convertIDType(id, field.Type)
+			if convErr != nil {
+				return nil, fmt.Errorf("failed to convert ID: %w", convErr)
+			}
+			fieldValue.Set(reflect.ValueOf(convertedID))
+		}
+
+		fieldNames = append(fieldNames, fieldName)
+		fieldValues = append(fieldValues, fieldValue.Interface())
+	}
 
 	stmt := sql.UpdateByQuery(c.SQL.Dialect(), e.tableName, fieldNames[1:], e.primaryKey)
 
