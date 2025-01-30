@@ -9,6 +9,7 @@ import (
 	"github.com/arangodb/go-driver/v2/arangodb"
 	arangoShared "github.com/arangodb/go-driver/v2/arangodb/shared"
 	"github.com/arangodb/go-driver/v2/connection"
+
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 )
@@ -24,6 +25,14 @@ type Client struct {
 	*DB
 	*Document
 	*Graph
+}
+
+type EdgeDefinition []arangodb.EdgeDefinition
+
+type UserOptions struct {
+	Password string      `json:"passwd,omitempty"`
+	Active   *bool       `json:"active,omitempty"`
+	Extra    interface{} `json:"extra,omitempty"`
 }
 
 // Config holds the configuration for ArangoDB connection.
@@ -151,12 +160,12 @@ func (c *Client) CreateUser(ctx context.Context, username string, options any) e
 	defer c.sendOperationStats(&QueryLog{Operation: "createUser", ID: username},
 		startTime, "createUser", span)
 
-	userOptions, ok := options.(*arangodb.UserOptions)
+	userOptions, ok := options.(UserOptions)
 	if !ok {
 		return fmt.Errorf("%w", errInvalidUserOptionsType)
 	}
 
-	_, err := c.client.CreateUser(tracerCtx, username, userOptions)
+	_, err := c.client.CreateUser(tracerCtx, username, userOptions.toArangoUserOptions())
 	if err != nil {
 		return err
 	}
@@ -321,4 +330,12 @@ func (c *Client) HealthCheck(ctx context.Context) (any, error) {
 	h.Details["server"] = version.Server
 
 	return &h, nil
+}
+
+func (uo *UserOptions) toArangoUserOptions() *arangodb.UserOptions {
+	return &arangodb.UserOptions{
+		Password: uo.Password,
+		Active:   uo.Active,
+		Extra:    uo.Extra,
+	}
 }

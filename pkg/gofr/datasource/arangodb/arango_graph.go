@@ -11,7 +11,7 @@ import (
 )
 
 var (
-	errInvalidEdgeDefinitionsType = errors.New("edgeDefinitions must be a *[]EdgeDefinition type")
+	errInvalidEdgeDefinitionsType = errors.New("edgeDefinitions must be a *EdgeDefinition type")
 	errNilEdgeDefinitions         = errors.New("edgeDefinitions cannot be nil")
 )
 
@@ -33,7 +33,7 @@ func (g *Graph) CreateGraph(ctx context.Context, database, graph string, edgeDef
 	}
 
 	// Type assertion for edgeDefinitions
-	edgeDefs, ok := edgeDefinitions.(*[]arangodb.EdgeDefinition)
+	edgeDefs, ok := edgeDefinitions.(*EdgeDefinition)
 	if !ok {
 		return fmt.Errorf("%w", errInvalidEdgeDefinitionsType)
 	}
@@ -42,7 +42,7 @@ func (g *Graph) CreateGraph(ctx context.Context, database, graph string, edgeDef
 		return fmt.Errorf("%w", errNilEdgeDefinitions)
 	}
 
-	arangoEdgeDefs := make([]arangodb.EdgeDefinition, 0, len(*edgeDefs))
+	arangoEdgeDefs := make(EdgeDefinition, 0, len(*edgeDefs))
 	for _, ed := range *edgeDefs {
 		arangoEdgeDefs = append(arangoEdgeDefs, arangodb.EdgeDefinition{
 			Collection: ed.Collection,
