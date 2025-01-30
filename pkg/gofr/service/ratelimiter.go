@@ -31,9 +31,19 @@ type RateLimiterConfig struct {
 
 // AddOption creates a new rate limiter with the config settings and wraps the provided HTTP client.
 func (r *RateLimiterConfig) AddOption(h HTTP) HTTP {
+	if hs, ok := h.(*httpService); ok {
+		rl := NewRateLimiter(r.Limit, r.Duration, r.MaxQueue)
+		rl.HTTP = h
+		rl.Logger = hs.Logger
+		return rl
+	}
+
+	if _, ok := h.(*RateLimiter); ok {
+		return h
+	}
+
 	rl := NewRateLimiter(r.Limit, r.Duration, r.MaxQueue)
 	rl.HTTP = h
-
 	return rl
 }
 
@@ -46,6 +56,7 @@ type RateLimiter struct {
 	done           chan struct{}
 	wg             sync.WaitGroup
 	isShuttingDown bool
+	Logger
 }
 
 type requestWrapper struct {
@@ -75,7 +86,6 @@ func NewRateLimiter(limit int, window time.Duration, maxQueue int) *RateLimiter 
 	}
 
 	rl.Start()
-
 	return rl
 }
 
@@ -84,27 +94,34 @@ func handleContextDeadline(ctx context.Context) (context.Context, context.Cancel
 	if _, ok := ctx.Deadline(); !ok {
 		span := trace.SpanFromContext(ctx)
 		spanContext := span.SpanContext()
-		traceID := spanContext.TraceID().String()
-		spanID := spanContext.SpanID().String()
-
 		newCtx := context.Background()
 		if spanContext.IsValid() {
 			newCtx = trace.ContextWithSpanContext(newCtx, spanContext)
-
-			fmt.Printf("Request with TraceID: %s, SpanID: %s\n", traceID, spanID)
 		}
-
 		return context.WithCancel(newCtx)
 	}
-
 	return context.WithCancel(ctx)
 }
 
 // Shutdown gracefully shuts down the rate limiter.
 func (r *RateLimiter) Shutdown(ctx context.Context) error {
+	span := trace.SpanFromContext(ctx)
+	traceID := span.SpanContext().TraceID().String()
+	startTime := time.Now()
+
 	r.mutex.Lock()
 	if r.isShuttingDown {
 		r.mutex.Unlock()
+		r.Log(&ErrorLog{
+			Log: &Log{
+				Timestamp:     time.Now(),
+				CorrelationID: traceID,
+				ResponseTime:  time.Since(startTime).Microseconds(),
+				ResponseCode:  http.StatusServiceUnavailable,
+				HTTPMethod:    "SHUTDOWN",
+			},
+			ErrorMessage: "rate limiter already shutting down",
+		})
 		return ErrShuttingDown
 	}
 
@@ -123,11 +140,35 @@ func (r *RateLimiter) Shutdown(ctx context.Context) error {
 	case <-ctx.Done():
 		select {
 		case <-completed:
+			r.Log(&Log{
+				Timestamp:     time.Now(),
+				CorrelationID: traceID,
+				ResponseTime:  time.Since(startTime).Microseconds(),
+				ResponseCode:  http.StatusOK,
+				HTTPMethod:    "SHUTDOWN",
+			})
 			return nil
 		case <-time.After(shutdownTimeout):
+			r.Log(&ErrorLog{
+				Log: &Log{
+					Timestamp:     time.Now(),
+					CorrelationID: traceID,
+					ResponseTime:  time.Since(startTime).Microseconds(),
+					ResponseCode:  http.StatusGatewayTimeout,
+					HTTPMethod:    "SHUTDOWN",
+				},
+				ErrorMessage: fmt.Sprintf("shutdown failed: timeout after %v", shutdownTimeout),
+			})
 			return fmt.Errorf("%w: %w", ErrShutdownFailed, ctx.Err())
 		}
 	case <-completed:
+		r.Log(&Log{
+			Timestamp:     time.Now(),
+			CorrelationID: traceID,
+			ResponseTime:  time.Since(startTime).Microseconds(),
+			ResponseCode:  http.StatusOK,
+			HTTPMethod:    "SHUTDOWN",
+		})
 		return nil
 	}
 }
@@ -135,31 +176,51 @@ func (r *RateLimiter) Shutdown(ctx context.Context) error {
 // handleResponse processes the response from the request channel, handling cancellation and errors.
 func (r *RateLimiter) handleResponse(ctx context.Context, respCh chan *requestResponse,
 	reqCancel context.CancelFunc) (*http.Response, error) {
+	span := trace.SpanFromContext(ctx)
+	traceID := span.SpanContext().TraceID().String()
+	startTime := time.Now()
+
 	select {
 	case resp := <-respCh:
 		reqCancel()
-
 		if resp.err != nil {
-			span := trace.SpanFromContext(ctx)
-			traceID := span.SpanContext().TraceID().String()
-
+			r.Log(&ErrorLog{
+				Log: &Log{
+					Timestamp:     time.Now(),
+					CorrelationID: traceID,
+					ResponseTime:  time.Since(startTime).Microseconds(),
+					ResponseCode:  http.StatusInternalServerError,
+				},
+				ErrorMessage: fmt.Sprintf("request failed: %v", resp.err),
+			})
 			return nil, fmt.Errorf("request failed for TraceID %s: %w", traceID, resp.err)
 		}
-
 		return resp.response, resp.err
+
 	case <-ctx.Done():
 		reqCancel()
-
-		span := trace.SpanFromContext(ctx)
-		traceID := span.SpanContext().TraceID().String()
-
+		r.Log(&ErrorLog{
+			Log: &Log{
+				Timestamp:     time.Now(),
+				CorrelationID: traceID,
+				ResponseTime:  time.Since(startTime).Microseconds(),
+				ResponseCode:  http.StatusGatewayTimeout,
+			},
+			ErrorMessage: fmt.Sprintf("context canceled while waiting: %v", ctx.Err()),
+		})
 		return nil, fmt.Errorf("context canceled while waiting for request with TraceID %s: %w", traceID, ctx.Err())
+
 	case <-r.done:
 		reqCancel()
-
-		span := trace.SpanFromContext(ctx)
-		traceID := span.SpanContext().TraceID().String()
-
+		r.Log(&ErrorLog{
+			Log: &Log{
+				Timestamp:     time.Now(),
+				CorrelationID: traceID,
+				ResponseTime:  time.Since(startTime).Microseconds(),
+				ResponseCode:  http.StatusServiceUnavailable,
+			},
+			ErrorMessage: "rate limiter shutting down while waiting for response",
+		})
 		return nil, fmt.Errorf("rate limiter shutting down while waiting for request with TraceID %s: %w", traceID, ErrShuttingDown)
 	}
 }
@@ -169,21 +230,37 @@ func (r *RateLimiter) enqueueRequest(ctx context.Context, execute func() (*http.
 	ctx, cancel := handleContextDeadline(ctx)
 	defer cancel()
 
+	span := trace.SpanFromContext(ctx)
+	traceID := span.SpanContext().TraceID().String()
+	startTime := time.Now()
+
 	r.mutex.Lock()
 	if r.isShuttingDown {
-		span := trace.SpanFromContext(ctx)
-		traceID := span.SpanContext().TraceID().String()
 		r.mutex.Unlock()
-
+		r.Log(&ErrorLog{
+			Log: &Log{
+				Timestamp:     time.Now(),
+				CorrelationID: traceID,
+				ResponseTime:  time.Since(startTime).Microseconds(),
+				ResponseCode:  http.StatusServiceUnavailable,
+			},
+			ErrorMessage: "rate limiter shutting down",
+		})
 		return nil, fmt.Errorf("rate limiter shutting down for request with TraceID %s: %w", traceID, ErrShuttingDown)
 	}
 
 	queueLen := len(r.requests)
 	if queueLen >= r.maxQueue {
-		span := trace.SpanFromContext(ctx)
-		traceID := span.SpanContext().TraceID().String()
 		r.mutex.Unlock()
-
+		r.Log(&ErrorLog{
+			Log: &Log{
+				Timestamp:     time.Now(),
+				CorrelationID: traceID,
+				ResponseTime:  time.Since(startTime).Microseconds(),
+				ResponseCode:  http.StatusServiceUnavailable,
+			},
+			ErrorMessage: fmt.Sprintf("queue full (max size: %d)", r.maxQueue),
+		})
 		return nil, fmt.Errorf("%w for request with TraceID %s (max size: %d)", ErrQueueFull, traceID, r.maxQueue)
 	}
 	r.mutex.Unlock()
@@ -203,29 +280,41 @@ func (r *RateLimiter) enqueueRequest(ctx context.Context, execute func() (*http.
 	select {
 	case r.requests <- req:
 		if queueLen > 0 {
-			span := trace.SpanFromContext(ctx)
-			traceID := span.SpanContext().TraceID().String()
-			fmt.Printf("Request queued with TraceID: %s. Queue length: %d\n", traceID, queueLen)
+			r.Log(&Log{
+				Timestamp:     time.Now(),
+				CorrelationID: traceID,
+				ResponseTime:  time.Since(startTime).Microseconds(),
+				ResponseCode:  http.StatusAccepted,
+			})
 		}
-
 		return r.handleResponse(ctx, respCh, reqCancel)
 
 	case <-ctx.Done():
 		r.wg.Done()
 		reqCancel()
-
-		span := trace.SpanFromContext(ctx)
-		traceID := span.SpanContext().TraceID().String()
-
+		r.Log(&ErrorLog{
+			Log: &Log{
+				Timestamp:     time.Now(),
+				CorrelationID: traceID,
+				ResponseTime:  time.Since(startTime).Microseconds(),
+				ResponseCode:  http.StatusGatewayTimeout,
+			},
+			ErrorMessage: fmt.Sprintf("context canceled while enqueueing: %v", ctx.Err()),
+		})
 		return nil, fmt.Errorf("context canceled while enqueueing for request with TraceID %s: %w", traceID, ctx.Err())
 
 	case <-r.done:
 		r.wg.Done()
 		reqCancel()
-
-		span := trace.SpanFromContext(ctx)
-		traceID := span.SpanContext().TraceID().String()
-
+		r.Log(&ErrorLog{
+			Log: &Log{
+				Timestamp:     time.Now(),
+				CorrelationID: traceID,
+				ResponseTime:  time.Since(startTime).Microseconds(),
+				ResponseCode:  http.StatusServiceUnavailable,
+			},
+			ErrorMessage: "rate limiter shutting down while enqueueing request",
+		})
 		return nil, fmt.Errorf("rate limiter shutting down for request with TraceID %s: %w", traceID, ErrShuttingDown)
 	}
 }
@@ -259,36 +348,81 @@ func (r *RateLimiter) drainQueue() {
 
 // processRequest executes a single request with rate limiting.
 func (r *RateLimiter) processRequest(req requestWrapper) {
+	startTime := time.Now()
+	span := trace.SpanFromContext(req.ctx)
+	traceID := span.SpanContext().TraceID().String()
+
 	defer func() {
 		if rec := recover(); rec != nil {
+			r.Log(&ErrorLog{
+				Log: &Log{
+					Timestamp:     time.Now(),
+					CorrelationID: traceID,
+					ResponseTime:  time.Since(startTime).Microseconds(),
+					ResponseCode:  http.StatusInternalServerError,
+				},
+				ErrorMessage: fmt.Sprintf("panic recovered in request processing: %v", rec),
+			})
 			req.respCh <- &requestResponse{
 				response: nil,
 				err:      fmt.Errorf("%w: %v", ErrPanicRecovered, rec),
 			}
 		}
-
 		r.wg.Done()
 		req.cancel()
 	}()
 
 	select {
 	case <-req.ctx.Done():
+		r.Log(&ErrorLog{
+			Log: &Log{
+				Timestamp:     time.Now(),
+				CorrelationID: traceID,
+				ResponseTime:  time.Since(startTime).Microseconds(),
+				ResponseCode:  http.StatusGatewayTimeout,
+			},
+			ErrorMessage: fmt.Sprintf("request canceled in queue: %v", req.ctx.Err()),
+		})
 		req.respCh <- &requestResponse{nil, fmt.Errorf("request canceled in queue: %w", req.ctx.Err())}
 		return
 	default:
 	}
 
 	if err := r.limiter.Wait(req.ctx); err != nil {
+		r.Log(&ErrorLog{
+			Log: &Log{
+				Timestamp:     time.Now(),
+				CorrelationID: traceID,
+				ResponseTime:  time.Since(startTime).Microseconds(),
+				ResponseCode:  http.StatusTooManyRequests,
+			},
+			ErrorMessage: fmt.Sprintf("rate limit wait error: %v", err),
+		})
 		req.respCh <- &requestResponse{nil, fmt.Errorf("rate limit wait error: %w", err)}
 		return
 	}
 
-	//nolint:bodyclose // Response body must be closed by the consumer
 	resp, err := req.execute()
 	if err != nil {
+		r.Log(&ErrorLog{
+			Log: &Log{
+				Timestamp:     time.Now(),
+				CorrelationID: traceID,
+				ResponseTime:  time.Since(startTime).Microseconds(),
+				ResponseCode:  http.StatusInternalServerError,
+			},
+			ErrorMessage: fmt.Sprintf("request execution error: %v", err),
+		})
 		req.respCh <- &requestResponse{nil, fmt.Errorf("request execution error: %w", err)}
 		return
 	}
+
+	r.Log(&Log{
+		Timestamp:     time.Now(),
+		CorrelationID: traceID,
+		ResponseTime:  time.Since(startTime).Microseconds(),
+		ResponseCode:  resp.StatusCode,
+	})
 
 	req.respCh <- &requestResponse{resp, nil}
 }

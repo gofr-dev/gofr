@@ -81,6 +81,11 @@ func NewHTTPService(serviceAddress string, logger Logger, metrics Metrics, optio
 	// if options are given, then add them to the httpService struct
 	for _, o := range options {
 		svc = o.AddOption(svc)
+		if _, ok := svc.(*RateLimiter); ok {
+			if rl, ok := svc.(*RateLimiter); ok && rl.Logger == nil {
+				rl.Logger = logger
+			}
+		}
 	}
 
 	return svc
