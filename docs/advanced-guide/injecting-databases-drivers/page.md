@@ -1024,10 +1024,8 @@ package main
 import (
 	"fmt"
 
-	"github.com/arangodb/go-driver/v2/arangodb"
-
 	"gofr.dev/pkg/gofr"
-	"gofr.dev/pkg/gofr/datasource/arango"
+	"gofr.dev/pkg/gofr/datasource/arangodb"
 )
 
 type Person struct {
@@ -1043,7 +1041,7 @@ func main() {
 	app := gofr.New()
 
 	// Configure the ArangoDB client
-	arangoClient := arango.New(arango.Config{
+	arangoClient := arangodb.New(arangodb.Config{
 		Host:     "localhost",
 		User:     "root",
 		Password: "root",
@@ -1062,25 +1060,25 @@ func main() {
 // Setup demonstrates database and collection creation
 func Setup(ctx *gofr.Context) (interface{}, error) {
 	// Create a database
-	err := ctx.Arango.CreateDB(ctx, "social_network")
+	err := ctx.ArangoDB.CreateDB(ctx, "social_network")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create database: %w", err)
 	}
 
 	// Create a regular collection for persons
-	err = ctx.Arango.CreateCollection(ctx, "social_network", "persons", false)
+	err = ctx.ArangoDB.CreateCollection(ctx, "social_network", "persons", false)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create persons collection: %w", err)
 	}
 
 	// Create an edge collection for friendships
-	err = ctx.Arango.CreateCollection(ctx, "social_network", "friendships", true)
+	err = ctx.ArangoDB.CreateCollection(ctx, "social_network", "friendships", true)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create friendships collection: %w", err)
 	}
 
 	// Create a graph with edge definition
-	edgeDefs := []arangodb.EdgeDefinition{
+	edgeDefs := arangodb.EdgeDefinition{
 		{
 			Collection: "friendships",
 			From:       []string{"persons"},
@@ -1088,7 +1086,7 @@ func Setup(ctx *gofr.Context) (interface{}, error) {
 		},
 	}
 
-	err = ctx.Arango.CreateGraph(ctx, "social_network", "social_graph", &edgeDefs)
+	err = ctx.ArangoDB.CreateGraph(ctx, "social_network", "social_graph", &edgeDefs)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create graph: %w", err)
 	}
@@ -1101,16 +1099,16 @@ func CreateUserHandler(ctx *gofr.Context) (interface{}, error) {
 	name := ctx.PathParam("name")
 
 	// Create an ArangoDB user
-	options := &arangodb.UserOptions{
+	options := arangodb.UserOptions{
 		Password: "user123",
 	}
-	err := ctx.Arango.CreateUser(ctx, name, options)
+	err := ctx.ArangoDB.CreateUser(ctx, name, options)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create user: %w", err)
 	}
 
 	// Grant database access to the user
-	err = ctx.Arango.GrantDB(ctx, "social_network", name, "rw")
+	err = ctx.ArangoDB.GrantDB(ctx, "social_network", name, "rw")
 	if err != nil {
 		return nil, fmt.Errorf("failed to grant database access: %w", err)
 	}
@@ -1120,7 +1118,7 @@ func CreateUserHandler(ctx *gofr.Context) (interface{}, error) {
 		Name: name,
 		Age:  25,
 	}
-	docID, err := ctx.Arango.CreateDocument(ctx, "social_network", "persons", person)
+	docID, err := ctx.ArangoDB.CreateDocument(ctx, "social_network", "persons", person)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create person document: %w", err)
 	}
@@ -1147,7 +1145,7 @@ func CreateFriendship(ctx *gofr.Context) (interface{}, error) {
 		StartDate: req.StartDate,
 	}
 
-	edgeID, err := ctx.Arango.CreateEdgeDocument(ctx, "social_network", "friendships", req.From, req.To, friendship)
+	edgeID, err := ctx.ArangoDB.CreateEdgeDocument(ctx, "social_network", "friendships", req.From, req.To, friendship)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create friendship: %w", err)
 	}
@@ -1157,7 +1155,6 @@ func CreateFriendship(ctx *gofr.Context) (interface{}, error) {
 		"edgeID":  edgeID,
 	}, nil
 }
-
 ```
 
 
