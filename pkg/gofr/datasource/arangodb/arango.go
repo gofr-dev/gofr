@@ -13,6 +13,8 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
+const defaultTimeout = 5 * time.Second
+
 // Client represents an ArangoDB client.
 type Client struct {
 	client   arangodb.Client
@@ -93,22 +95,26 @@ func (c *Client) Connect() {
 	c.endpoint = fmt.Sprintf("http://%s:%d", c.config.Host, c.config.Port)
 	c.logger.Debugf("connecting to ArangoDB at %s", c.endpoint)
 
+	// Use HTTP connection instead of HTTP2
 	endpoint := connection.NewRoundRobinEndpoints([]string{c.endpoint})
-	conn := connection.NewHttpConnection(connection.HttpConfiguration{
-		Endpoint: endpoint,
-	})
+	conn := connection.NewHttpConnection(connection.HttpConfiguration{Endpoint: endpoint})
 
+	// Set authentication
 	auth := connection.NewBasicAuth(c.config.User, c.config.Password)
-
-	err := conn.SetAuthentication(auth)
-	if err != nil {
+	if err := conn.SetAuthentication(auth); err != nil {
 		c.logger.Errorf("authentication setup failed: %v", err)
+		return
 	}
 
+	// Create ArangoDB client
 	client := arangodb.NewClient(conn)
 	c.client = client
 
-	_, err = c.client.Version(context.Background())
+	// Test connection by fetching server version
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
+	defer cancel()
+
+	_, err := c.client.Version(ctx)
 	if err != nil {
 		c.logger.Errorf("failed to verify connection: %v", err)
 		return
@@ -118,7 +124,7 @@ func (c *Client) Connect() {
 	arangoBuckets := []float64{.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 4, 5, 7.5, 10}
 	c.metrics.NewHistogram("app_arango_stats", "Response time of ArangoDB operations in milliseconds.", arangoBuckets...)
 
-	c.logger.Logf("connected to ArangoDB successfully at %s", c.endpoint)
+	c.logger.Logf("Connected to ArangoDB successfully at %s", c.endpoint)
 }
 
 func (c *Client) validateConfig() error {
