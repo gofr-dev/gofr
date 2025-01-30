@@ -1013,7 +1013,7 @@ Users can easily inject a driver that supports this interface, providing usabili
 Import the GoFr's external driver for ArangoDB:
 
 ```shell
-go get gofr.dev/pkg/gofr/datasource/arango@latest
+go get gofr.dev/pkg/gofr/datasource/arangodb@latest
 ```
 
 ### Example
@@ -1100,7 +1100,7 @@ func CreateUserHandler(ctx *gofr.Context) (interface{}, error) {
 
 	// Create an ArangoDB user
 	options := arangodb.UserOptions{
-		Password: "user123",
+		Password: "rootpassword",
 	}
 	err := ctx.ArangoDB.CreateUser(ctx, name, options)
 	if err != nil {

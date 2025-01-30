@@ -9,7 +9,6 @@ import (
 	"github.com/arangodb/go-driver/v2/arangodb"
 	arangoShared "github.com/arangodb/go-driver/v2/arangodb/shared"
 	"github.com/arangodb/go-driver/v2/connection"
-
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 )
@@ -30,9 +29,9 @@ type Client struct {
 type EdgeDefinition []arangodb.EdgeDefinition
 
 type UserOptions struct {
-	Password string      `json:"passwd,omitempty"`
-	Active   *bool       `json:"active,omitempty"`
-	Extra    interface{} `json:"extra,omitempty"`
+	Password string `json:"passwd,omitempty"`
+	Active   *bool  `json:"active,omitempty"`
+	Extra    any    `json:"extra,omitempty"`
 }
 
 // Config holds the configuration for ArangoDB connection.
@@ -108,6 +107,12 @@ func (c *Client) Connect() {
 
 	client := arangodb.NewClient(conn)
 	c.client = client
+
+	_, err = c.client.Version(context.Background())
+	if err != nil {
+		c.logger.Errorf("failed to verify connection: %v", err)
+		return
+	}
 
 	// Initialize metrics
 	arangoBuckets := []float64{.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 4, 5, 7.5, 10}

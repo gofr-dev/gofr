@@ -1,9 +1,8 @@
-module gofr.dev/pkg/gofr/datasource/arango
+module gofr.dev/pkg/gofr/datasource/arangodb
 
 go 1.23.4
 
 require (
-	github.com/arangodb/go-driver v1.6.5
 	github.com/arangodb/go-driver/v2 v2.1.2
 	github.com/stretchr/testify v1.10.0
 	go.opentelemetry.io/otel v1.34.0

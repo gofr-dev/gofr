@@ -41,18 +41,15 @@ func setupDB(t *testing.T) (*Client, *MockArango, *MockUser, *MockLogger, *MockM
 	return client, mockArango, mockUser, mockLogger, mockMetrics
 }
 
-func Test_NewArangoClient(t *testing.T) {
+func Test_NewArangoClient_Error(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
 	metrics := NewMockMetrics(ctrl)
 	logger := NewMockLogger(ctrl)
 
+	logger.EXPECT().Errorf("failed to verify connection: %v", gomock.Any())
 	logger.EXPECT().Debugf(gomock.Any(), gomock.Any())
-	logger.EXPECT().Logf(gomock.Any(), gomock.Any())
-
-	metrics.EXPECT().NewHistogram("app_arango_stats",
-		"Response time of ArangoDB operations in milliseconds.", gomock.Any())
 
 	client := New(Config{Host: "localhost", Port: 8529, Password: "root", User: "admin"})
 
