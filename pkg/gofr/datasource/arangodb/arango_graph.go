@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/arangodb/go-driver/v2/arangodb"
-	"github.com/arangodb/go-driver/v2/arangodb/shared"
+	arangoShared "github.com/arangodb/go-driver/v2/arangodb/shared"
 )
 
 var (
@@ -107,7 +107,7 @@ func (g *Graph) ListGraphs(ctx context.Context, database string) ([]string, erro
 
 	for {
 		graph, err := graphsReader.Read()
-		if errors.Is(err, shared.NoMoreDocumentsError{}) {
+		if arangoShared.IsNoMoreDocuments(err) {
 			break
 		}
 

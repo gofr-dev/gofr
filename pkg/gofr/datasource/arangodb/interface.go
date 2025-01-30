@@ -9,10 +9,10 @@ import (
 type Arango interface {
 	Connect()
 
-	User(ctx context.Context, username string) (arangodb.User, error)
-	Database(ctx context.Context, name string) (arangodb.Database, error)
-	Databases(ctx context.Context) ([]arangodb.Database, error)
-	Version(ctx context.Context) (arangodb.VersionInfo, error)
+	user(ctx context.Context, username string) (arangodb.User, error)
+	database(ctx context.Context, name string) (arangodb.Database, error)
+	databases(ctx context.Context) ([]arangodb.Database, error)
+	version(ctx context.Context) (arangodb.VersionInfo, error)
 
 	CreateUser(ctx context.Context, username string, options any) error
 	DropUser(ctx context.Context, username string) error

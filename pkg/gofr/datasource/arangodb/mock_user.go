@@ -7,7 +7,7 @@ import (
 	"go.uber.org/mock/gomock"
 )
 
-// MockUser implements the complete arangodb.User interface.
+// MockUser implements the complete arangodb.user interface.
 type MockUser struct {
 	ctrl   *gomock.Controller
 	name   string

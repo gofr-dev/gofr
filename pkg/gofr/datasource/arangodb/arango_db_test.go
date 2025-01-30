@@ -88,7 +88,7 @@ func Test_Client_DropDB(t *testing.T) {
 	database := "testDB"
 	mockDB := NewMockDatabase(gomock.NewController(t))
 
-	// Mock the Database method to return a mock database instance
+	// Mock the database method to return a mock database instance
 	mockArango.EXPECT().Database(gomock.Any(), database).Return(mockDB, nil).Times(1)
 	mockDB.EXPECT().Remove(gomock.Any()).Return(nil).Times(1) // Mock Remove to return no error
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()

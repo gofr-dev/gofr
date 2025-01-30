@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/arangodb/go-driver/v2/arangodb"
-	"github.com/arangodb/go-driver/v2/arangodb/shared"
+	arangoShared "github.com/arangodb/go-driver/v2/arangodb/shared"
 	"github.com/arangodb/go-driver/v2/connection"
 
 	"go.opentelemetry.io/otel/attribute"
@@ -128,19 +128,19 @@ func (c *Client) validateConfig() error {
 	return nil
 }
 
-func (c *Client) User(ctx context.Context, username string) (arangodb.User, error) {
+func (c *Client) user(ctx context.Context, username string) (arangodb.User, error) {
 	return c.client.User(ctx, username)
 }
 
-func (c *Client) Database(ctx context.Context, name string) (arangodb.Database, error) {
+func (c *Client) database(ctx context.Context, name string) (arangodb.Database, error) {
 	return c.client.Database(ctx, name)
 }
 
-func (c *Client) Databases(ctx context.Context) ([]arangodb.Database, error) {
+func (c *Client) databases(ctx context.Context) ([]arangodb.Database, error) {
 	return c.client.Databases(ctx)
 }
 
-func (c *Client) Version(ctx context.Context) (arangodb.VersionInfo, error) {
+func (c *Client) version(ctx context.Context) (arangodb.VersionInfo, error) {
 	return c.client.Version(ctx)
 }
 
@@ -247,7 +247,7 @@ func (c *Client) Query(ctx context.Context, dbName, query string, bindVars map[s
 		var doc map[string]any
 
 		_, err = cursor.ReadDocument(tracerCtx, &doc)
-		if shared.IsNoMoreDocuments(err) {
+		if arangoShared.IsNoMoreDocuments(err) {
 			break
 		}
 

@@ -17,7 +17,7 @@ import (
 	gomock "go.uber.org/mock/gomock"
 )
 
-// MockArangoDatabase is a mock of Database interface.
+// MockArangoDatabase is a mock of database interface.
 type MockDatabase struct {
 	ctrl     *gomock.Controller
 	recorder *MockDatabaseMockRecorder

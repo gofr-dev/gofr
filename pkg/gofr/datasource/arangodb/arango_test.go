@@ -102,7 +102,7 @@ func Test_Client_GrantDB(t *testing.T) {
 		ctx, "app_arango_stats", gomock.Any(), "endpoint",
 		gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
-	// Expect User() call and return our mock user that implements the full interface
+	// Expect user() call and return our mock user that implements the full interface
 	mockArango.EXPECT().User(gomock.Any(), username).Return(mockUser, nil).MaxTimes(2)
 
 	// Test cases
@@ -148,7 +148,7 @@ func Test_Client_GrantDB_Errors(t *testing.T) {
 	dbName := "testDB"
 	username := "testUser"
 
-	// Expect User() call to return error
+	// Expect user() call to return error
 	mockArango.EXPECT().User(gomock.Any(), username).Return(nil, errUserNotFound)
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockMetrics.EXPECT().RecordHistogram(ctx, "app_arango_stats", gomock.Any(), "endpoint",
@@ -248,17 +248,17 @@ func TestUser(t *testing.T) {
 			User(ctx, username).
 			Return(mockUser, nil)
 
-		user, err := client.User(ctx, username)
+		user, err := client.user(ctx, username)
 		require.NoError(t, err)
 		require.NotNil(t, user)
 	})
 
-	t.Run("User fetch error", func(t *testing.T) {
+	t.Run("user fetch error", func(t *testing.T) {
 		mockArango.EXPECT().
 			User(ctx, username).
 			Return(nil, errUserNotFound)
 
-		user, err := client.User(ctx, username)
+		user, err := client.user(ctx, username)
 		require.Error(t, err)
 		require.Nil(t, user)
 	})
@@ -285,30 +285,30 @@ func TestClient_Database(t *testing.T) {
 	ctx := context.Background()
 	dbName := "testDB"
 
-	t.Run("Get Database Success", func(t *testing.T) {
+	t.Run("Get database Success", func(t *testing.T) {
 		mockArango.EXPECT().
 			Database(ctx, dbName).
 			Return(mockDatabase, nil)
 		mockDatabase.EXPECT().Name().Return(dbName)
 
-		db, err := client.Database(ctx, dbName)
+		db, err := client.database(ctx, dbName)
 		require.NoError(t, err)
 		require.NotNil(t, db)
 		require.Equal(t, dbName, db.Name())
 	})
 
-	t.Run("Get Database Error", func(t *testing.T) {
+	t.Run("Get database Error", func(t *testing.T) {
 		mockArango.EXPECT().
 			Database(ctx, dbName).
 			Return(nil, errDBNotFound)
 
-		db, err := client.Database(ctx, dbName)
+		db, err := client.database(ctx, dbName)
 		require.Error(t, err)
 		require.Nil(t, db)
 	})
 
 	// Test database operations
-	t.Run("Database Operations", func(t *testing.T) {
+	t.Run("database Operations", func(t *testing.T) {
 		mockArango.EXPECT().
 			Database(ctx, dbName).
 			Return(mockDatabase, nil)
@@ -316,7 +316,7 @@ func TestClient_Database(t *testing.T) {
 		mockDatabase.EXPECT().Remove(ctx).Return(nil)
 		mockDatabase.EXPECT().Collection(ctx, "testCollection").Return(nil, nil)
 
-		db, err := client.Database(ctx, dbName)
+		db, err := client.database(ctx, dbName)
 		require.NoError(t, err)
 		require.Equal(t, dbName, db.Name())
 

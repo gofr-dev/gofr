@@ -118,7 +118,7 @@ func (mr *MockCollectionMockRecorder) CreateDocumentsWithOptions(ctx, documents,
 // Database mocks base method.
 func (m *MockCollection) Database() arangodb.Database {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Database")
+	ret := m.ctrl.Call(m, "database")
 	ret0, _ := ret[0].(arangodb.Database)
 	return ret0
 }
@@ -126,7 +126,7 @@ func (m *MockCollection) Database() arangodb.Database {
 // Database indicates an expected call of Database.
 func (mr *MockCollectionMockRecorder) Database() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Database", reflect.TypeOf((*MockCollection)(nil).Database))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "database", reflect.TypeOf((*MockCollection)(nil).Database))
 }
 
 // DeleteDocument mocks base method.

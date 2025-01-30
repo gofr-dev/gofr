@@ -453,7 +453,7 @@ func (mr *MockArangoMockRecorder) AddUser(ctx, username, options any) *gomock.Ca
 // Database mocks base method.
 func (m *MockArango) Database(ctx context.Context, name string) (arangodb.Database, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Database", ctx, name)
+	ret := m.ctrl.Call(m, "database", ctx, name)
 	ret0, _ := ret[0].(arangodb.Database)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
@@ -462,13 +462,13 @@ func (m *MockArango) Database(ctx context.Context, name string) (arangodb.Databa
 // Database indicates an expected call of Database.
 func (mr *MockArangoMockRecorder) Database(ctx, name any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Database", reflect.TypeOf((*MockArango)(nil).Database), ctx, name)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "database", reflect.TypeOf((*MockArango)(nil).Database), ctx, name)
 }
 
 // Databases mocks base method.
 func (m *MockArango) Databases(ctx context.Context) ([]arangodb.Database, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Databases", ctx)
+	ret := m.ctrl.Call(m, "databases", ctx)
 	ret0, _ := ret[0].([]arangodb.Database)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
@@ -477,7 +477,7 @@ func (m *MockArango) Databases(ctx context.Context) ([]arangodb.Database, error)
 // Databases indicates an expected call of Databases.
 func (mr *MockArangoMockRecorder) Databases(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Databases", reflect.TypeOf((*MockArango)(nil).Databases), ctx)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "databases", reflect.TypeOf((*MockArango)(nil).Databases), ctx)
 }
 
 // DeleteDocument mocks base method.
@@ -697,7 +697,7 @@ func (mr *MockArangoMockRecorder) UpdateDocument(ctx, dbName, collectionName, do
 // User mocks base method.
 func (m *MockArango) User(ctx context.Context, username string) (arangodb.User, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "User", ctx, username)
+	ret := m.ctrl.Call(m, "user", ctx, username)
 	ret0, _ := ret[0].(arangodb.User)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
@@ -706,13 +706,13 @@ func (m *MockArango) User(ctx context.Context, username string) (arangodb.User, 
 // User indicates an expected call of User.
 func (mr *MockArangoMockRecorder) User(ctx, username any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "User", reflect.TypeOf((*MockArango)(nil).User), ctx, username)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "user", reflect.TypeOf((*MockArango)(nil).User), ctx, username)
 }
 
 // Version mocks base method.
 func (m *MockArango) Version(ctx context.Context) (arangodb.VersionInfo, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Version", ctx)
+	ret := m.ctrl.Call(m, "version", ctx)
 	ret0, _ := ret[0].(arangodb.VersionInfo)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
@@ -721,5 +721,5 @@ func (m *MockArango) Version(ctx context.Context) (arangodb.VersionInfo, error) 
 // Version indicates an expected call of Version.
 func (mr *MockArangoMockRecorder) Version(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Version", reflect.TypeOf((*MockArango)(nil).Version), ctx)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "version", reflect.TypeOf((*MockArango)(nil).Version), ctx)
 }
