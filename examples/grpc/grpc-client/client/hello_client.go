@@ -2,69 +2,73 @@
 package client
 
 import (
-	"io"
-	"fmt"
-	"encoding/json"
 	"time"
 
 	"gofr.dev/pkg/gofr"
+	gofrgRPC "gofr.dev/pkg/gofr/grpc"
 	"gofr.dev/pkg/gofr/metrics"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+    _ "google.golang.org/grpc/health"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/health/grpc_health_v1"
 )
-
-const (
-	statusCodeWidth  = 3
-	responseTimeWidth = 11
-)
-
-type RPCLog struct {
-	ID           string `json:"id"`
-StartTime    string `json:"startTime"`
-ResponseTime int64  `json:"responseTime"`
-Method       string `json:"method"`
-StatusCode   int32  `json:"statusCode"`
-}
 
 type HelloGoFrClient interface {
-	SayHello(*gofr.Context, *HelloRequest) (*HelloResponse, error)
+	SayHello(*gofr.Context, *HelloRequest, ...grpc.CallOption) (*HelloResponse, error)
+	health
+}
+
+type health interface {
+	Check(ctx *gofr.Context, in *grpc_health_v1.HealthCheckRequest, opts ...grpc.CallOption) (*grpc_health_v1.HealthCheckResponse, error)
+	Watch(ctx *gofr.Context, in *grpc_health_v1.HealthCheckRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[grpc_health_v1.HealthCheckResponse], error)
 }
 
 type HelloClientWrapper struct {
-	client    HelloClient
+	client HelloClient
+	health grpc_health_v1.HealthClient
 	HelloGoFrClient
 }
 
 func createGRPCConn(host string) (*grpc.ClientConn, error) {
-	conn, err := grpc.Dial(host, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	serviceConfig := `{
+        "loadBalancingPolicy": "round_robin",
+        "healthCheckConfig": {
+            "serviceName": "Hello"
+        }
+    }`
+
+	conn, err := grpc.Dial(host,
+		grpc.WithDefaultServiceConfig(serviceConfig),
+		grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return nil, err
 	}
 	return conn, nil
 }
 
-func NewHelloGoFrClient(host string, metrics metrics.Manager) (*HelloClientWrapper, error) {
+func NewHelloGoFrClient(host string, metrics metrics.Manager) (HelloGoFrClient, error) {
 	conn, err := createGRPCConn(host)
 	if err != nil {
 		return &HelloClientWrapper{client: nil}, err
 	}
 
 	gRPCBuckets := []float64{0.005, 0.01, .05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 4, 5, 7.5, 10}
-	metrics.NewHistogram("app_gRPC-Client_stats",
-		"Response time of gRPC client in milliseconds.",
-		gRPCBuckets...)
-
+	metrics.NewHistogram("app_gRPC-Client_stats", "Response time of gRPC client in milliseconds.", gRPCBuckets...)
 
 	res := NewHelloClient(conn)
+
+	healthClient := grpc_health_v1.NewHealthClient(conn)
+
 	return &HelloClientWrapper{
 		client: res,
+		health: healthClient,
 	}, nil
 }
 
-func (h *HelloClientWrapper) SayHello(ctx *gofr.Context, req *HelloRequest) (*HelloResponse, error) {
-	span := ctx.Trace("gRPC-srv-call: SayHello")
+func invokeRPC(ctx *gofr.Context, rpcName string, rpcFunc func() (interface{}, error)) (interface{}, error) {
+	span := ctx.Trace("gRPC-srv-call: " + rpcName)
 	defer span.End()
 
 	traceID := span.SpanContext().TraceID().String()
@@ -72,55 +76,43 @@ func (h *HelloClientWrapper) SayHello(ctx *gofr.Context, req *HelloRequest) (*He
 	md := metadata.Pairs("x-gofr-traceid", traceID, "x-gofr-spanid", spanID)
 
 	ctx.Context = metadata.NewOutgoingContext(ctx.Context, md)
-
-	var header metadata.MD
-  
 	transactionStartTime := time.Now()
 
-	res, err := h.client.SayHello(ctx.Context, req, grpc.Header(&header))
+	res, err := rpcFunc()
+	gofrgRPC.DocumentRPCLog(ctx.Context, ctx.Logger, ctx.Metrics(), transactionStartTime, err, rpcName, "app_gRPC-Client_stats")
+
+	return res, err
+}
+func (h *HelloClientWrapper) SayHello(ctx *gofr.Context, req *HelloRequest, opts ...grpc.CallOption) (*HelloResponse, error) {
+	result, err := invokeRPC(ctx, "/Hello/SayHello", func() (interface{}, error) {
+		return h.client.SayHello(ctx.Context, req, opts...)
+	})
+
+	if err != nil {
+		return nil, err
+	}
+	return result.(*HelloResponse), nil
+}
+
+func (h *HelloClientWrapper) Check(ctx *gofr.Context, in *grpc_health_v1.HealthCheckRequest, opts ...grpc.CallOption) (*grpc_health_v1.HealthCheckResponse, error) {
+	result, err := invokeRPC(ctx, "/grpc.health.v1.Health/Check", func() (interface{}, error) {
+		return h.health.Check(ctx.Context, in, opts...)
+	})
+
+	if err != nil {
+		return nil, err
+	}
+	return result.(*grpc_health_v1.HealthCheckResponse), nil
+}
+
+func (h *HelloClientWrapper) Watch(ctx *gofr.Context, in *grpc_health_v1.HealthCheckRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[grpc_health_v1.HealthCheckResponse], error) {
+	result, err := invokeRPC(ctx, "/grpc.health.v1.Health/Watch", func() (interface{}, error) {
+		return h.health.Watch(ctx, in, opts...)
+	})
+
 	if err != nil {
 		return nil, err
 	}
 
-	duration := time.Since(transactionStartTime)
-
-	ctx.Metrics().RecordHistogram(ctx, "app_gRPC-Client_stats",
-									float64(duration.Milliseconds())+float64(duration.Nanoseconds()%1e6)/1e6,
-									"gRPC_Service", "Hello",
-									"method", "SayHello")
-
-	log := &RPCLog{}
-
-	if values, ok := header["log"]; ok && len(values) > 0 {
-		errUnmarshal := json.Unmarshal([]byte(values[0]), log)
-		if errUnmarshal != nil {
-			return nil, fmt.Errorf("error while unmarshaling: %v", errUnmarshal)
-		}
-	}
-
-	ctx.Logger.Info(log)
-
-	return res, err
-}
-
-func (l RPCLog) PrettyPrint(writer io.Writer) {
-	fmt.Fprintf(writer, "\u001B[38;5;8m%s \u001B[38;5;%dm%-*d"+
-		"\u001B[0m %*d\u001B[38;5;8mµs\u001B[0m %s\n",
-		l.ID, colorForGRPCCode(l.StatusCode),
-		statusCodeWidth, l.StatusCode,
-		responseTimeWidth, l.ResponseTime,
-		l.Method)
-}
-
-func colorForGRPCCode(s int32) int {
-	const (
-		blue = 34
-		red  = 202
-	)
-
-	if s == 0 {
-		return blue
-	}
-
-	return red
+	return result.(grpc.ServerStreamingClient[grpc_health_v1.HealthCheckResponse]), nil
 }

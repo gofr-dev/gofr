@@ -12,29 +12,33 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+
+	"google.golang.org/grpc/health"
+	healthpb "google.golang.org/grpc/health/grpc_health_v1"
+	gofrGRPC "gofr.dev/pkg/gofr/grpc"
 )
 
 type HelloServerWithGofr interface {
 	SayHello(*gofr.Context) (any, error)
 }
 
+type healthServer struct {
+	*health.Server
+}
+
 type HelloServerWrapper struct {
 	HelloServer
+	*healthServer
 	Container *container.Container
 	server    HelloServerWithGofr
 }
 func (h *HelloServerWrapper) SayHello(ctx context.Context, req *HelloRequest) (*HelloResponse, error) {
 	gctx := h.GetGofrContext(ctx, &HelloRequestWrapper{ctx: ctx, HelloRequest: req})
 
-	start := time.Now()
-
 	res, err := h.server.SayHello(gctx)
 	if err != nil {
 		return nil, err
 	}
-
-	duration := time.Since(start)
-	gctx.Metrics().RecordHistogram(ctx, "app_gRPC-Server_stats", float64(duration.Milliseconds())+float64(duration.Nanoseconds()%1e6)/1e6, "gRPC_Service", "Hello", "method", "SayHello")
 
 	resp, ok := res.(*HelloResponse)
 	if !ok {
@@ -44,17 +48,67 @@ func (h *HelloServerWrapper) SayHello(ctx context.Context, req *HelloRequest) (*
 	return resp, nil
 }
 
+func (h *healthServer) Check(ctx *gofr.Context, req *healthpb.HealthCheckRequest) (*healthpb.HealthCheckResponse, error) {
+	start := time.Now()
+	span := ctx.Trace("check")
+	res, err := h.Server.Check(ctx.Context, req)
+	gofrGRPC.DocumentRPCLog(ctx.Context, ctx.Logger, ctx.Metrics(), start, err, "/grpc.health.v1.Health/Check", "app_gRPC-Server_stats")
+	span.End()
+	return res, err
+}
+
+func (h *healthServer) Watch(ctx *gofr.Context, in *healthpb.HealthCheckRequest, stream healthpb.Health_WatchServer) error {
+	start := time.Now()
+	span := ctx.Trace("watch")
+	err := h.Server.Watch(in, stream)
+	gofrGRPC.DocumentRPCLog(ctx.Context, ctx.Logger, ctx.Metrics(), start, err, "/grpc.health.v1.Health/Watch", "app_gRPC-Server_stats")
+	span.End()
+	return err
+}
+
+func (h *healthServer) SetServingStatus(ctx *gofr.Context, service string, servingStatus healthpb.HealthCheckResponse_ServingStatus) {
+	start := time.Now()
+	span := ctx.Trace("setServingStatus")
+	h.Server.SetServingStatus(service, servingStatus)
+	gofrGRPC.DocumentRPCLog(ctx.Context, ctx.Logger, ctx.Metrics(), start, nil, "/grpc.health.v1.Health/SetServingStatus", "app_gRPC-Server_stats")
+	span.End()
+}
+
+func (h *healthServer) Shutdown(ctx *gofr.Context) {
+	start := time.Now()
+	span := ctx.Trace("Shutdown")
+	h.Server.Shutdown()
+	gofrGRPC.DocumentRPCLog(ctx.Context, ctx.Logger, ctx.Metrics(), start, nil, "/grpc.health.v1.Health/Shutdown", "app_gRPC-Server_stats")
+	span.End()
+}
+
+func (h *healthServer) Resume(ctx *gofr.Context) {
+	start := time.Now()
+	span := ctx.Trace("Resume")
+	h.Server.Resume()
+	gofrGRPC.DocumentRPCLog(ctx.Context, ctx.Logger, ctx.Metrics(), start, nil, "/grpc.health.v1.Health/Resume", "app_gRPC-Server_stats")
+	span.End()
+}
+
 func (h *HelloServerWrapper) mustEmbedUnimplementedHelloServer() {}
 
 func RegisterHelloServerWithGofr(app *gofr.App, srv HelloServerWithGofr) {
 	var s grpc.ServiceRegistrar = app
 
-	wrapper := &HelloServerWrapper{server: srv}
+	h := health.NewServer()
+	res, _ := srv.(*HelloGoFrServer)
+	res.health = &healthServer{h}
+
+	wrapper := &HelloServerWrapper{server: srv, healthServer: res.health}
 
 	gRPCBuckets := []float64{0.005, 0.01, .05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 4, 5, 7.5, 10}
 	app.Metrics().NewHistogram("app_gRPC-Server_stats", "Response time of gRPC server in milliseconds.", gRPCBuckets...)
 
 	RegisterHelloServer(s, wrapper)
+	healthpb.RegisterHealthServer(s, h)
+
+	h.SetServingStatus("", healthpb.HealthCheckResponse_SERVING)
+	h.SetServingStatus("Hello", healthpb.HealthCheckResponse_SERVING)
 }
 
 func (h *HelloServerWrapper) GetGofrContext(ctx context.Context, req gofr.Request) *gofr.Context {
@@ -90,10 +144,8 @@ func (h *HelloRequestWrapper) Bind(p interface{}) error {
 	hValue := reflect.ValueOf(h.HelloRequest).Elem()
 	ptrValue := ptr.Elem()
 
-	// Ensure we can set exported fields (skip unexported fields)
 	for i := 0; i < hValue.NumField(); i++ {
 		field := hValue.Type().Field(i)
-		// Skip the fields we don't want to copy (state, sizeCache, unknownFields)
 		if field.Name == "state" || field.Name == "sizeCache" || field.Name == "unknownFields" {
 			continue
 		}
