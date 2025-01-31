@@ -146,6 +146,11 @@ export const navigation = [
                 title: 'Serving-Static Files',
                 href: '/docs/advanced-guide/serving-static-files',
                 desc: "Know how GoFr automatically serves static content from a static folder in the application directory."
+            },
+            {
+                title: 'Using OpenAI Api',
+                href: '/docs/advanced-guide/using-openai-api',
+                desc: "Know how to integrate OpenAI api into your applications easily with GoFr's very own OpenAI api wrapper."
             }
         ],
     },

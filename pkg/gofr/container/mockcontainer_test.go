@@ -15,26 +15,13 @@ import (
 )
 
 func Test_HttpServiceMock(t *testing.T) {
-	test := struct {
-		desc        string
-		path        string
-		statusCode  int
-		expectedRes string
-	}{
-
-		desc:        "simple service handler",
-		path:        "/fact",
-		expectedRes: `{"data":{"fact":"Cats have 3 eyelids.","length":20}}` + "\n",
-		statusCode:  200,
-	}
-
 	httpservices := []string{"cat-facts", "cat-facts1", "cat-facts2"}
 
 	_, mock := NewMockContainer(t, WithMockHTTPService(httpservices...))
 
 	res := httptest.NewRecorder()
 	res.Body = bytes.NewBufferString(`{"fact":"Cats have 3 eyelids.","length":20}` + "\n")
-	res.Code = test.statusCode
+	res.Code = 200
 	result := res.Result()
 
 	// Setting mock expectations

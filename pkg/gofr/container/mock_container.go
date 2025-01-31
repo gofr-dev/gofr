@@ -87,6 +87,9 @@ func NewMockContainer(t *testing.T, options ...options) (*Container, *Mocks) {
 	opentsdbMock := NewMockOpenTSDBProvider(ctrl)
 	container.OpenTSDB = opentsdbMock
 
+	openAIMock := NewMockOpenAIProvider(ctrl)
+	container.OpenAI = openAIMock
+
 	var httpMock *service.MockHTTP
 
 	container.Services = make(map[string]service.HTTP)
