@@ -35,7 +35,7 @@ func (ql *QueryLog) PrettyPrint(writer io.Writer) {
 	}
 
 	fmt.Fprintf(writer, "\u001B[38;5;8m%-32s \u001B[38;5;206m%-6s\u001B[0m %8d\u001B[38;5;8mµs\u001B[0m %s %s\n",
-		clean(ql.Operation), "ARANGO", ql.Duration,
+		clean(ql.Operation), "ARANGODB", ql.Duration,
 		clean(strings.Join([]string{ql.Database, ql.Collection, fmt.Sprint(ql.Filter), fmt.Sprint(ql.ID)}, " ")), clean(ql.Query))
 }
 

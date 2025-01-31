@@ -953,7 +953,7 @@ func main() {
 
 ## ArangoDB
 GoFr supports injecting `ArangoDB` that implements the following interface. Any driver that implements the interface can be 
-added using the `app.AddArango()` method, and users can use Arango across the application with `gofr.Context`.
+added using the `app.AddArangoDB()` method, and users can use ArangoDB across the application with `gofr.Context`.
 
 ```go
 type ArangoDB interface {
@@ -1047,7 +1047,7 @@ func main() {
 		Password: "root",
 		Port:     8529,
 	})
-	app.AddArango(arangoClient)
+	app.AddArangoDB(arangoClient)
 
 	// Example routes demonstrating different types of operations
 	app.POST("/setup", Setup)

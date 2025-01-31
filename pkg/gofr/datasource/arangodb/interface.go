@@ -6,7 +6,7 @@ import (
 	"github.com/arangodb/go-driver/v2/arangodb"
 )
 
-type Arango interface {
+type ArangoDB interface {
 	Connect()
 
 	user(ctx context.Context, username string) (arangodb.User, error)
