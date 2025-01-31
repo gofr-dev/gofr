@@ -5,7 +5,7 @@ import (
 	"gofr.dev/pkg/gofr/container"
 )
 
-// AddOpenai sets the Openai wrapper in the app's container.
+// AddOpenAI sets the OpenAI wrapper in the app's container.
 func (a *App) AddOpenAI(openAI container.OpenAIProvider) {
 	openAI.UseLogger(a.Logger())
 	openAI.UseMetrics(a.Metrics())
