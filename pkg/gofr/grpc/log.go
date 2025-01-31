@@ -16,9 +16,10 @@ import (
 )
 
 const (
-	statusCodeWidth   = 3
-	responseTimeWidth = 11
-	debugMethod       = "/grpc.health.v1.Health/SetServingStatus"
+	statusCodeWidth           = 3
+	responseTimeWidth         = 11
+	nanosecondsPerMillisecond = 1e6
+	debugMethod               = "/grpc.health.v1.Health/SetServingStatus"
 )
 
 type Logger interface {
@@ -139,7 +140,8 @@ func DocumentRPCLog(ctx context.Context, logger Logger, metrics Metrics, start t
 	}
 
 	if metrics != nil {
-		metrics.RecordHistogram(ctx, name, float64(duration.Milliseconds())+float64(duration.Nanoseconds()%1e6)/1e6,
+		metrics.RecordHistogram(ctx, name,
+			float64(duration.Milliseconds())+float64(duration.Nanoseconds()%nanosecondsPerMillisecond)/nanosecondsPerMillisecond,
 			"method",
 			method)
 	}
