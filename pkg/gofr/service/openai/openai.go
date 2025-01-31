@@ -30,7 +30,7 @@ type Client struct {
 }
 
 var (
-	errorMissingAPIKey = errors.New("api key not provided")
+	errorMissingAPIKey = errors.New("API key not provided")
 )
 
 type ClientOption func(*Client)

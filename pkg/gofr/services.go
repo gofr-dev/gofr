@@ -11,7 +11,7 @@ func (a *App) AddOpenAI(openAI container.OpenAIProvider) {
 	openAI.UseLogger(a.Logger())
 	openAI.UseMetrics(a.Metrics())
 
-	tracer := otel.GetTracerProvider().Tracer("gofr-openAI")
+	tracer := otel.GetTracerProvider().Tracer("gofr-openai")
 	openAI.UseTracer(tracer)
 
 	openAI.InitMetrics()
