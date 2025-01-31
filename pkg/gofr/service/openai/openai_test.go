@@ -11,7 +11,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.opentelemetry.io/otel/trace"
+	"go.opentelemetry.io/otel"
 	"go.uber.org/mock/gomock"
 )
 
@@ -114,7 +114,7 @@ func Test_UseTracer(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	tracer := trace.NewNoopTracerProvider().Tracer("test-tracer")
+	tracer := otel.GetTracerProvider().Tracer("gofr-openAI")
 
 	config := &Config{
 		APIKey: "key",
@@ -166,7 +166,7 @@ func Test_AddTrace(t *testing.T) {
 	}
 
 	client, _ := NewClient(config)
-	tracer := trace.NewNoopTracerProvider().Tracer("test-tracer")
+	tracer := otel.GetTracerProvider().Tracer("gofr-openAI")
 	client.UseTracer(tracer)
 
 	ctx := context.Background()
