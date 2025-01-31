@@ -18,11 +18,17 @@ import (
 const (
 	statusCodeWidth   = 3
 	responseTimeWidth = 11
+	debugMethod       = "/grpc.health.v1.Health/SetServingStatus"
 )
 
 type Logger interface {
 	Info(args ...any)
 	Errorf(string, ...any)
+	Debug(...any)
+}
+
+type Metrics interface {
+	RecordHistogram(ctx context.Context, name string, value float64, labels ...string)
 }
 
 type RPCLog struct {
@@ -35,11 +41,11 @@ type RPCLog struct {
 
 func (l RPCLog) PrettyPrint(writer io.Writer) {
 	fmt.Fprintf(writer, "\u001B[38;5;8m%s \u001B[38;5;%dm%-*d"+
-		"\u001B[0m %*d\u001B[38;5;8mµs\u001B[0m %s\n",
+		"\u001B[0m %*d\u001B[38;5;8mµs\u001B[0m %s %s\n",
 		l.ID, colorForGRPCCode(l.StatusCode),
 		statusCodeWidth, l.StatusCode,
 		responseTimeWidth, l.ResponseTime,
-		l.Method)
+		"GRPC", l.Method)
 }
 
 func colorForGRPCCode(s int32) int {
@@ -60,7 +66,7 @@ func (l RPCLog) String() string {
 	return string(line)
 }
 
-func LoggingInterceptor(logger Logger) grpc.UnaryServerInterceptor {
+func ObservabilityInterceptor(logger Logger, metrics Metrics) grpc.UnaryServerInterceptor {
 	tracer := otel.GetTracerProvider().Tracer("gofr", trace.WithInstrumentationVersion("v0.1"))
 
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
@@ -74,12 +80,7 @@ func LoggingInterceptor(logger Logger) grpc.UnaryServerInterceptor {
 			logger.Errorf("error while handling gRPC request to method %q: %q", info.FullMethod, err)
 		}
 
-		md := documentRPCLog(ctx, logger, info.FullMethod, start, err)
-
-		err = grpc.SendHeader(ctx, md)
-		if err != nil {
-			logger.Errorf("failed to send metadata in response to request method: %v, Error: %v", info.FullMethod, err)
-		}
+		DocumentRPCLog(ctx, logger, metrics, start, err, info.FullMethod, "app_gRPC-Server_stats")
 
 		span.End()
 
@@ -112,7 +113,8 @@ func initializeSpanContext(ctx context.Context) (context.Context, trace.SpanCont
 	return ctx, spanContext
 }
 
-func documentRPCLog(ctx context.Context, logger Logger, method string, start time.Time, err error) metadata.MD {
+func DocumentRPCLog(ctx context.Context, logger Logger, metrics Metrics, start time.Time, err error, method, name string) {
+	duration := time.Since(start)
 	logEntry := RPCLog{
 		ID:           trace.SpanFromContext(ctx).SpanContext().TraceID().String(),
 		StartTime:    start.Format("2006-01-02T15:04:05.999999999-07:00"),
@@ -129,10 +131,18 @@ func documentRPCLog(ctx context.Context, logger Logger, method string, start tim
 	}
 
 	if logger != nil {
-		logger.Info(logEntry)
+		if method == debugMethod {
+			logger.Debug(logEntry)
+		} else {
+			logger.Info(logEntry)
+		}
 	}
 
-	return metadata.Pairs("log", logEntry.String())
+	if metrics != nil {
+		metrics.RecordHistogram(ctx, name, float64(duration.Milliseconds())+float64(duration.Nanoseconds()%1e6)/1e6,
+			"method",
+			method)
+	}
 }
 
 // Helper function to safely extract a value from metadata.

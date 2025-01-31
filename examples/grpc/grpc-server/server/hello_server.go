@@ -2,7 +2,6 @@ package server
 
 import (
 	"fmt"
-
 	"gofr.dev/pkg/gofr"
 )
 
@@ -14,6 +13,7 @@ import (
 // Customize the struct with required dependencies and fields as needed.
 
 type HelloGoFrServer struct {
+	health *healthServer
 }
 
 func (s *HelloGoFrServer) SayHello(ctx *gofr.Context) (any, error) {
@@ -28,6 +28,9 @@ func (s *HelloGoFrServer) SayHello(ctx *gofr.Context) (any, error) {
 	if name == "" {
 		name = "World"
 	}
+
+	// Use the following to set the serving status
+	//s.health.SetServingStatus(ctx, "Hello", grpc_health_v1.HealthCheckResponse_NOT_SERVING)
 
 	return &HelloResponse{
 		Message: fmt.Sprintf("Hello %s!", name),
