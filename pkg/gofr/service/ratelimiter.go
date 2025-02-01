@@ -14,9 +14,10 @@ import (
 )
 
 var (
-	errQueueFull      = errors.New("request queue is full")
-	errShuttingDown   = errors.New("rate limiter is shutting down")
-	errPanicRecovered = errors.New("panic recovered in request processing")
+	errQueueFull       = errors.New("request queue is full")
+	errShuttingDown    = errors.New("rate limiter is shutting down")
+	errPanicRecovered  = errors.New("panic recovered in request processing")
+	errRequestComplete = errors.New("request completed")
 )
 
 // RateLimiterConfig holds configuration for creating a new rate limiter.
@@ -27,22 +28,22 @@ type RateLimiterConfig struct {
 
 // AddOption creates a new rate limiter with the config settings and wraps the provided HTTP client.
 func (r *RateLimiterConfig) AddOption(h HTTP) HTTP {
-	if hs, ok := h.(*httpService); ok {
-		rl := NewRateLimiter(r.Limit, r.Duration, r.MaxQueue)
+	switch v := h.(type) {
+	case *httpService:
+		rl := NewRateLimiter(context.Background(), r.Limit, r.Duration, r.MaxQueue)
 		rl.HTTP = h
-		rl.Logger = hs.Logger
+		rl.Logger = v.Logger
+
+		return rl
+
+	case *RateLimiter:
+		return h
+	default:
+		rl := NewRateLimiter(context.Background(), r.Limit, r.Duration, r.MaxQueue)
+		rl.HTTP = h
 
 		return rl
 	}
-
-	if _, ok := h.(*RateLimiter); ok {
-		return h
-	}
-
-	rl := NewRateLimiter(r.Limit, r.Duration, r.MaxQueue)
-	rl.HTTP = h
-
-	return rl
 }
 
 type RateLimiter struct {
@@ -51,10 +52,9 @@ type RateLimiter struct {
 	requests       chan requestWrapper
 	maxQueue       int
 	mutex          sync.Mutex
-	done           chan struct{}
 	wg             sync.WaitGroup
 	isShuttingDown bool
-	currentQueue   int32
+	currentQueue   atomic.Int32
 	Logger
 }
 
@@ -62,7 +62,7 @@ type requestWrapper struct {
 	execute func() (*http.Response, error)
 	respCh  chan *requestResponse
 	ctx     context.Context
-	cancel  context.CancelFunc
+	cancel  context.CancelCauseFunc
 }
 
 type requestResponse struct {
@@ -71,36 +71,28 @@ type requestResponse struct {
 }
 
 // NewRateLimiter creates a rate limiter.
-func NewRateLimiter(limit int, window time.Duration, maxQueue int) *RateLimiter {
+func NewRateLimiter(ctx context.Context, limit int, window time.Duration, maxQueue int) *RateLimiter {
 	if maxQueue <= 0 {
 		maxQueue = 1000
 	}
 
 	lim := rate.NewLimiter(rate.Every(window/time.Duration(limit)), limit)
 	rl := &RateLimiter{
-		limiter:      lim,
-		requests:     make(chan requestWrapper, maxQueue),
-		maxQueue:     maxQueue,
-		done:         make(chan struct{}),
-		currentQueue: 0,
+		limiter:  lim,
+		requests: make(chan requestWrapper, maxQueue),
+		maxQueue: maxQueue,
 	}
+	rl.currentQueue.Store(0)
 
-	rl.Start()
+	rl.Start(ctx)
 
 	return rl
 }
 
 func handleContextDeadline(ctx context.Context) (context.Context, context.CancelFunc) {
 	if _, ok := ctx.Deadline(); !ok {
-		span := trace.SpanFromContext(ctx)
-		spanContext := span.SpanContext()
-		newCtx := context.Background()
-
-		if spanContext.IsValid() {
-			newCtx = trace.ContextWithSpanContext(newCtx, spanContext)
-		}
-
-		return context.WithCancel(newCtx)
+		newCtx := context.WithoutCancel(ctx)
+		ctx = newCtx
 	}
 
 	return context.WithCancel(ctx)
@@ -120,10 +112,12 @@ func (r *RateLimiter) enqueueRequest(ctx context.Context, execute func() (*http.
 		r.mutex.Unlock()
 		r.Log(&ErrorLog{
 			Log: &Log{
-				Timestamp: time.Now(), CorrelationID: traceID, ResponseTime: time.Since(startTime).Microseconds(),
-				ResponseCode: http.StatusServiceUnavailable,
-				HTTPMethod:   "REQUEST",
-				URI:          "rate_limiter",
+				Timestamp:     time.Now(),
+				CorrelationID: traceID,
+				ResponseTime:  time.Since(startTime).Microseconds(),
+				ResponseCode:  http.StatusServiceUnavailable,
+				HTTPMethod:    "REQUEST",
+				URI:           "rate_limiter",
 			},
 			ErrorMessage: "rate limiter shutting down",
 		})
@@ -131,15 +125,18 @@ func (r *RateLimiter) enqueueRequest(ctx context.Context, execute func() (*http.
 		return nil, fmt.Errorf("rate limiter shutting down for request with TraceID %s: %w", traceID, errShuttingDown)
 	}
 
-	currentQueueSize := atomic.LoadInt32(&r.currentQueue)
+	currentQueueSize := r.currentQueue.Load()
+	//nolint:gosec // Acceptable int to int32 conversion as maxQueue is bounded
 	if currentQueueSize >= int32(r.maxQueue) {
 		r.mutex.Unlock()
 		r.Log(&ErrorLog{
 			Log: &Log{
-				Timestamp: time.Now(), CorrelationID: traceID, ResponseTime: time.Since(startTime).Microseconds(),
-				ResponseCode: http.StatusServiceUnavailable,
-				HTTPMethod:   "REQUEST",
-				URI:          "rate_limiter",
+				Timestamp:     time.Now(),
+				CorrelationID: traceID,
+				ResponseTime:  time.Since(startTime).Microseconds(),
+				ResponseCode:  http.StatusServiceUnavailable,
+				HTTPMethod:    "REQUEST",
+				URI:           "rate_limiter",
 			},
 			ErrorMessage: fmt.Sprintf("queue full (max size: %d, current size: %d)", r.maxQueue, currentQueueSize),
 		})
@@ -150,10 +147,10 @@ func (r *RateLimiter) enqueueRequest(ctx context.Context, execute func() (*http.
 	r.mutex.Unlock()
 
 	respCh := make(chan *requestResponse, 1)
-	reqCtx, reqCancel := context.WithCancel(ctx)
+	reqCtx, reqCancel := context.WithCancelCause(ctx)
 
-	if !atomic.CompareAndSwapInt32(&r.currentQueue, currentQueueSize, currentQueueSize+1) {
-		reqCancel()
+	if !r.currentQueue.CompareAndSwap(currentQueueSize, currentQueueSize+1) {
+		reqCancel(errQueueFull)
 		return nil, fmt.Errorf("%w for request with TraceID %s (queue size changed)", errQueueFull, traceID)
 	}
 
@@ -169,56 +166,47 @@ func (r *RateLimiter) enqueueRequest(ctx context.Context, execute func() (*http.
 	select {
 	case r.requests <- req:
 		r.Log(&Log{
-			Timestamp: time.Now(), CorrelationID: traceID, ResponseTime: time.Since(startTime).Microseconds(),
-			ResponseCode: http.StatusAccepted,
-			HTTPMethod:   "REQUEST",
-			URI:          "rate_limiter",
+			Timestamp:     time.Now(),
+			CorrelationID: traceID,
+			ResponseTime:  time.Since(startTime).Microseconds(),
+			ResponseCode:  http.StatusAccepted,
+			HTTPMethod:    "REQUEST",
+			URI:           "rate_limiter",
 		})
 
 		return r.handleResponse(ctx, respCh, reqCancel)
 
 	case <-ctx.Done():
-		atomic.AddInt32(&r.currentQueue, -1)
-		r.wg.Done()
-		reqCancel()
-		r.Log(&ErrorLog{
-			Log: &Log{Timestamp: time.Now(), CorrelationID: traceID, ResponseTime: time.Since(startTime).Microseconds(),
-				ResponseCode: http.StatusGatewayTimeout,
-				HTTPMethod:   "REQUEST",
-				URI:          "rate_limiter",
-			},
-			ErrorMessage: fmt.Sprintf("context canceled while enqueueing: %v", ctx.Err()),
-		})
+		cause := context.Cause(ctx)
 
-		return nil, fmt.Errorf("context canceled while enqueueing with TraceID %s: %w", traceID, ctx.Err())
-
-	case <-r.done:
-		atomic.AddInt32(&r.currentQueue, -1)
+		r.currentQueue.Add(-1)
 		r.wg.Done()
-		reqCancel()
+		reqCancel(cause)
 		r.Log(&ErrorLog{
 			Log: &Log{
-				Timestamp: time.Now(), CorrelationID: traceID, ResponseTime: time.Since(startTime).Microseconds(),
-				ResponseCode: http.StatusServiceUnavailable,
-				HTTPMethod:   "REQUEST",
-				URI:          "rate_limiter",
+				Timestamp:     time.Now(),
+				CorrelationID: traceID,
+				ResponseTime:  time.Since(startTime).Microseconds(),
+				ResponseCode:  http.StatusGatewayTimeout,
+				HTTPMethod:    "REQUEST",
+				URI:           "rate_limiter",
 			},
-			ErrorMessage: "rate limiter shutting down while enqueueing request",
+			ErrorMessage: fmt.Sprintf("context canceled while enqueueing: %v", cause),
 		})
 
-		return nil, fmt.Errorf("rate limiter shutting down for request with TraceID %s: %w", traceID, errShuttingDown)
+		return nil, fmt.Errorf("context canceled while enqueueing with TraceID %s: %w", traceID, cause)
 	}
 }
 
 func (r *RateLimiter) handleResponse(ctx context.Context, respCh chan *requestResponse,
-	reqCancel context.CancelFunc) (*http.Response, error) {
+	reqCancel context.CancelCauseFunc) (*http.Response, error) {
 	span := trace.SpanFromContext(ctx)
 	traceID := span.SpanContext().TraceID().String()
 	startTime := time.Now()
 
 	select {
 	case resp := <-respCh:
-		reqCancel()
+		reqCancel(errRequestComplete)
 
 		if resp.err != nil {
 			r.Log(&ErrorLog{
@@ -239,7 +227,8 @@ func (r *RateLimiter) handleResponse(ctx context.Context, respCh chan *requestRe
 		return resp.response, resp.err
 
 	case <-ctx.Done():
-		reqCancel()
+		cause := context.Cause(ctx)
+		reqCancel(cause)
 		r.Log(&ErrorLog{
 			Log: &Log{
 				Timestamp:     time.Now(),
@@ -249,35 +238,19 @@ func (r *RateLimiter) handleResponse(ctx context.Context, respCh chan *requestRe
 				HTTPMethod:    "REQUEST",
 				URI:           "rate_limiter",
 			},
-			ErrorMessage: fmt.Sprintf("context canceled while waiting: %v", ctx.Err()),
+			ErrorMessage: fmt.Sprintf("context canceled while waiting: %v", cause),
 		})
 
-		return nil, fmt.Errorf("context canceled while waiting for request with TraceID %s: %w", traceID, ctx.Err())
-
-	case <-r.done:
-		reqCancel()
-		r.Log(&ErrorLog{
-			Log: &Log{
-				Timestamp:     time.Now(),
-				CorrelationID: traceID,
-				ResponseTime:  time.Since(startTime).Microseconds(),
-				ResponseCode:  http.StatusServiceUnavailable,
-				HTTPMethod:    "REQUEST",
-				URI:           "rate_limiter",
-			},
-			ErrorMessage: "rate limiter shutting down while waiting for response",
-		})
-
-		return nil, fmt.Errorf("rate limiter shutting down while waiting for request with TraceID %s: %w", traceID, errShuttingDown)
+		return nil, fmt.Errorf("context canceled while waiting for request with TraceID %s: %w", traceID, cause)
 	}
 }
 
 // Start begins processing requests from the queue.
-func (r *RateLimiter) Start() {
+func (r *RateLimiter) Start(ctx context.Context) {
 	go func() {
 		for {
 			select {
-			case <-r.done:
+			case <-ctx.Done():
 				r.drainQueue()
 				return
 			case req := <-r.requests:
@@ -301,7 +274,11 @@ func (r *RateLimiter) drainQueue() {
 
 // processRequest executes a single request with rate limiting.
 func (r *RateLimiter) processRequest(req requestWrapper) {
-	defer atomic.AddInt32(&r.currentQueue, -1)
+	defer func() {
+		r.currentQueue.Add(-1)
+		r.wg.Done()
+		req.cancel(errRequestComplete) // Add error cause here
+	}()
 
 	startTime := time.Now()
 	span := trace.SpanFromContext(req.ctx)
@@ -323,10 +300,6 @@ func (r *RateLimiter) processRequest(req requestWrapper) {
 				err:      fmt.Errorf("%w: %v", errPanicRecovered, rec),
 			}
 		}
-
-		r.wg.Done()
-
-		req.cancel()
 	}()
 
 	select {
