@@ -2,88 +2,46 @@
 package client
 
 import (
-	"time"
-
 	"gofr.dev/pkg/gofr"
-	gofrgRPC "gofr.dev/pkg/gofr/grpc"
 	"gofr.dev/pkg/gofr/metrics"
-
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
-    _ "google.golang.org/grpc/health"
-	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/health/grpc_health_v1"
 )
 
 type HelloGoFrClient interface {
 	SayHello(*gofr.Context, *HelloRequest, ...grpc.CallOption) (*HelloResponse, error)
-	health
-}
-
-type health interface {
-	Check(ctx *gofr.Context, in *grpc_health_v1.HealthCheckRequest, opts ...grpc.CallOption) (*grpc_health_v1.HealthCheckResponse, error)
-	Watch(ctx *gofr.Context, in *grpc_health_v1.HealthCheckRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[grpc_health_v1.HealthCheckResponse], error)
+	HealthClient
 }
 
 type HelloClientWrapper struct {
 	client HelloClient
-	health grpc_health_v1.HealthClient
-	HelloGoFrClient
-}
-
-func createGRPCConn(host string) (*grpc.ClientConn, error) {
-	serviceConfig := `{
-        "loadBalancingPolicy": "round_robin",
-        "healthCheckConfig": {
-            "serviceName": "Hello"
-        }
-    }`
-
-	conn, err := grpc.Dial(host,
-		grpc.WithDefaultServiceConfig(serviceConfig),
-		grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		return nil, err
-	}
-	return conn, nil
+	HealthClient
 }
 
 func NewHelloGoFrClient(host string, metrics metrics.Manager) (HelloGoFrClient, error) {
-	conn, err := createGRPCConn(host)
+	conn, err := createGRPCConn(host, "Hello")
 	if err != nil {
-		return &HelloClientWrapper{client: nil}, err
+		// Return a fully implemented GoodbyeClientWrapper with a nil client
+		return &HelloClientWrapper{
+			client:       nil,
+			HealthClient: &HealthClientWrapper{client: nil}, // Ensure HealthClient is also implemented
+		}, err
 	}
 
-	gRPCBuckets := []float64{0.005, 0.01, .05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 4, 5, 7.5, 10}
-	metrics.NewHistogram("app_gRPC-Client_stats", "Response time of gRPC client in milliseconds.", gRPCBuckets...)
+	metricsOnce.Do(func() {
+		metrics.NewHistogram("app_gRPC-Client_stats", "Response time of gRPC client in milliseconds.", gRPCBuckets...)
+	})
 
 	res := NewHelloClient(conn)
-
-	healthClient := grpc_health_v1.NewHealthClient(conn)
+	healthClient := NewHealthClient(conn)
 
 	return &HelloClientWrapper{
 		client: res,
-		health: healthClient,
+		HealthClient: healthClient,
 	}, nil
 }
 
-func invokeRPC(ctx *gofr.Context, rpcName string, rpcFunc func() (interface{}, error)) (interface{}, error) {
-	span := ctx.Trace("gRPC-srv-call: " + rpcName)
-	defer span.End()
-
-	traceID := span.SpanContext().TraceID().String()
-	spanID := span.SpanContext().SpanID().String()
-	md := metadata.Pairs("x-gofr-traceid", traceID, "x-gofr-spanid", spanID)
-
-	ctx.Context = metadata.NewOutgoingContext(ctx.Context, md)
-	transactionStartTime := time.Now()
-
-	res, err := rpcFunc()
-	gofrgRPC.DocumentRPCLog(ctx.Context, ctx.Logger, ctx.Metrics(), transactionStartTime, err, rpcName, "app_gRPC-Client_stats")
-
-	return res, err
-}
-func (h *HelloClientWrapper) SayHello(ctx *gofr.Context, req *HelloRequest, opts ...grpc.CallOption) (*HelloResponse, error) {
+func (h *HelloClientWrapper) SayHello(ctx *gofr.Context, req *HelloRequest, 
+opts ...grpc.CallOption) (*HelloResponse, error) {
 	result, err := invokeRPC(ctx, "/Hello/SayHello", func() (interface{}, error) {
 		return h.client.SayHello(ctx.Context, req, opts...)
 	})
@@ -92,27 +50,4 @@ func (h *HelloClientWrapper) SayHello(ctx *gofr.Context, req *HelloRequest, opts
 		return nil, err
 	}
 	return result.(*HelloResponse), nil
-}
-
-func (h *HelloClientWrapper) Check(ctx *gofr.Context, in *grpc_health_v1.HealthCheckRequest, opts ...grpc.CallOption) (*grpc_health_v1.HealthCheckResponse, error) {
-	result, err := invokeRPC(ctx, "/grpc.health.v1.Health/Check", func() (interface{}, error) {
-		return h.health.Check(ctx.Context, in, opts...)
-	})
-
-	if err != nil {
-		return nil, err
-	}
-	return result.(*grpc_health_v1.HealthCheckResponse), nil
-}
-
-func (h *HelloClientWrapper) Watch(ctx *gofr.Context, in *grpc_health_v1.HealthCheckRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[grpc_health_v1.HealthCheckResponse], error) {
-	result, err := invokeRPC(ctx, "/grpc.health.v1.Health/Watch", func() (interface{}, error) {
-		return h.health.Watch(ctx, in, opts...)
-	})
-
-	if err != nil {
-		return nil, err
-	}
-
-	return result.(grpc.ServerStreamingClient[grpc_health_v1.HealthCheckResponse]), nil
 }

@@ -139,7 +139,7 @@ import (
 func main() {
     app := gofr.New()
 
-    packageName.Register{serviceName}ServerWithGofr(app, &{packageName}.{serviceName}GoFrServer{})
+    packageName.Register{serviceName}ServerWithGofr(app, &{packageName}.New{serviceName}GoFrServer())
 
     app.Run()
 }
