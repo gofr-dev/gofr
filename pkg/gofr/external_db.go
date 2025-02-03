@@ -158,7 +158,7 @@ func (a *App) AddScyllaDB(db container.ScyllaDBProvider) {
 }
 
 // AddArangoDB sets the ArangoDB datasource in the app's container.
-func (a *App) AddArangoDB(db container.ArangoProvider) {
+func (a *App) AddArangoDB(db container.ArangoDBProvider) {
 	// Set up logger, metrics, and tracer
 	db.UseLogger(a.Logger())
 	db.UseMetrics(a.Metrics())
