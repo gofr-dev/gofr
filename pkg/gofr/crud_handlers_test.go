@@ -520,7 +520,7 @@ func Test_UpdateHandler(t *testing.T) {
 			t.Run(dc.dialect+" "+tc.desc, func(t *testing.T) {
 				ctx := createTestContext(http.MethodPut, "/user", strconv.Itoa(tc.id), tc.reqBody, c)
 
-				mock.ExpectExec(dc.expectedQuery).WithArgs("goFr", true, tc.id).
+				mock.ExpectExec(dc.expectedQuery).WithArgs("goFr", true, strconv.Itoa(tc.id)).
 					WillReturnResult(sqlmock.NewResult(1, 1)).WillReturnError(nil)
 
 				resp, err := e.Update(ctx)
