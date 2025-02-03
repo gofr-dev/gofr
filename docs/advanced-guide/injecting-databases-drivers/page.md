@@ -1020,6 +1020,11 @@ import (
 	"gofr.dev/pkg/gofr/datasource/arangodb"
 )
 
+type Person struct {
+	Name string `json:"name"`
+	Age  int    `json:"age"`
+}
+
 type Friendship struct {
 	StartDate string `json:"startDate"`
 }
@@ -1038,13 +1043,14 @@ func main() {
 
 	// Example routes demonstrating different types of operations
 	app.POST("/setup", Setup)
+	app.POST("/users/{name}", CreateUserHandler)
 	app.POST("/friends", CreateFriendship)
 
 	app.Run()
 }
 
 // Setup demonstrates database and collection creation
-func Setup(ctx *gofr.Context) (any, error) {
+func Setup(ctx *gofr.Context) (interface{}, error) {
 	// Create a database
 	err := ctx.ArangoDB.CreateDB(ctx, "social_network")
 	if err != nil {
@@ -1080,8 +1086,28 @@ func Setup(ctx *gofr.Context) (any, error) {
 	return "Setup completed successfully", nil
 }
 
+// CreateUserHandler demonstrates user management and document creation
+func CreateUserHandler(ctx *gofr.Context) (interface{}, error) {
+	name := ctx.PathParam("name")
+
+	// Create a person document
+	person := Person{
+		Name: name,
+		Age:  25,
+	}
+	docID, err := ctx.ArangoDB.CreateDocument(ctx, "social_network", "persons", person)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create person document: %w", err)
+	}
+
+	return map[string]string{
+		"message": "User created successfully",
+		"docID":   docID,
+	}, nil
+}
+
 // CreateFriendship demonstrates edge document creation
-func CreateFriendship(ctx *gofr.Context) (any, error) {
+func CreateFriendship(ctx *gofr.Context) (interface{}, error) {
 	var req struct {
 		From      string `json:"from"`
 		To        string `json:"to"`
@@ -1106,6 +1132,7 @@ func CreateFriendship(ctx *gofr.Context) (any, error) {
 		"edgeID":  edgeID,
 	}, nil
 }
+
 ```
 
 
