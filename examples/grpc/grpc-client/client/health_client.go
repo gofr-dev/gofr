@@ -60,7 +60,8 @@ func invokeRPC(ctx *gofr.Context, rpcName string, rpcFunc func() (interface{}, e
 	transactionStartTime := time.Now()
 
 	res, err := rpcFunc()
-	gofrgRPC.DocumentRPCLog(ctx.Context, ctx.Logger, ctx.Metrics(), transactionStartTime, err, 
+	logger := gofrgRPC.NewgRPCLogger()
+	logger.DocumentRPCLog(ctx.Context, ctx.Logger, ctx.Metrics(), transactionStartTime, err,
 	rpcName, "app_gRPC-Client_stats")
 
 	return res, err

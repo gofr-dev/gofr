@@ -34,7 +34,7 @@ func (s *HelloGoFrServer) SayHello(ctx *gofr.Context) (any, error) {
 	//	Service: "Hello",
 	//})
 	//ctx.Log(res.String())
-	//
+
 	// Setting the serving status
 	//s.health.SetServingStatus(ctx, "Hello", grpc_health_v1.HealthCheckResponse_NOT_SERVING)
 
