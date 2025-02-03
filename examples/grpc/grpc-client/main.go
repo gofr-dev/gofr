@@ -1,10 +1,8 @@
 package main
 
 import (
-	"fmt"
 	"gofr.dev/examples/grpc/grpc-client/client"
 	"gofr.dev/pkg/gofr"
-	"google.golang.org/grpc/health/grpc_health_v1"
 )
 
 func main() {
@@ -43,13 +41,13 @@ func (g GreetHandler) Hello(ctx *gofr.Context) (interface{}, error) {
 	}
 
 	//HealthCheck to SayHello Service.
-	res, err := g.helloGRPCClient.Check(ctx, &grpc_health_v1.HealthCheckRequest{Service: "Hello"})
-	if err != nil {
-		return nil, err
-	} else if res.Status == grpc_health_v1.HealthCheckResponse_NOT_SERVING {
-		ctx.Error("Hello Service is down")
-		return nil, fmt.Errorf("Hello Service is down")
-	}
+	//res, err := g.helloGRPCClient.Check(ctx, &grpc_health_v1.HealthCheckRequest{Service: "Hello"})
+	//if err != nil {
+	//	return nil, err
+	//} else if res.Status == grpc_health_v1.HealthCheckResponse_NOT_SERVING {
+	//	ctx.Error("Hello Service is down")
+	//	return nil, fmt.Errorf("Hello Service is down")
+	//}
 
 	// Make a gRPC call to the Hello service
 	helloResponse, err := g.helloGRPCClient.SayHello(ctx, &client.HelloRequest{Name: userName})
