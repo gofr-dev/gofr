@@ -957,15 +957,6 @@ added using the `app.AddArangoDB()` method, and users can use ArangoDB across th
 
 ```go
 type ArangoDB interface {
-    // CreateUser creates a new user in ArangoDB.
-    CreateUser(ctx context.Context, username, password string) error
-    // DropUser deletes an existing user in ArangoDB.
-    DropUser(ctx context.Context, username string) error
-    // GrantDB grants permissions for a database to a user.
-    GrantDB(ctx context.Context, database, username, permission string) error
-    // GrantCollection grants permissions for a collection to a user.
-    GrantCollection(ctx context.Context, database, collection, username, permission string) error
-
     // ListDBs lists all databases in ArangoDB.
     ListDBs(ctx context.Context) ([]string, error)
     // CreateDB creates a new database in ArangoDB.
@@ -1051,7 +1042,6 @@ func main() {
 
 	// Example routes demonstrating different types of operations
 	app.POST("/setup", Setup)
-	app.POST("/users/{name}", CreateUserHandler)
 	app.POST("/friends", CreateFriendship)
 
 	app.Run()
@@ -1092,41 +1082,6 @@ func Setup(ctx *gofr.Context) (interface{}, error) {
 	}
 
 	return "Setup completed successfully", nil
-}
-
-// CreateUserHandler demonstrates user management and document creation
-func CreateUserHandler(ctx *gofr.Context) (interface{}, error) {
-	name := ctx.PathParam("name")
-
-	// Create an ArangoDB user
-	options := arangodb.UserOptions{
-		Password: "rootpassword",
-	}
-	err := ctx.ArangoDB.CreateUser(ctx, name, options)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create user: %w", err)
-	}
-
-	// Grant database access to the user
-	err = ctx.ArangoDB.GrantDB(ctx, "social_network", name, "rw")
-	if err != nil {
-		return nil, fmt.Errorf("failed to grant database access: %w", err)
-	}
-
-	// Create a person document
-	person := Person{
-		Name: name,
-		Age:  25,
-	}
-	docID, err := ctx.ArangoDB.CreateDocument(ctx, "social_network", "persons", person)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create person document: %w", err)
-	}
-
-	return map[string]string{
-		"message": "User created successfully",
-		"docID":   docID,
-	}, nil
 }
 
 // CreateFriendship demonstrates edge document creation

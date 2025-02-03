@@ -164,7 +164,7 @@ func (c *Client) version(ctx context.Context) (arangodb.VersionInfo, error) {
 }
 
 // CreateUser creates a new user in ArangoDB.
-func (c *Client) CreateUser(ctx context.Context, username string, options any) error {
+func (c *Client) createUser(ctx context.Context, username string, options any) error {
 	tracerCtx, span := c.addTrace(ctx, "createUser", map[string]string{"user": username})
 	startTime := time.Now()
 
@@ -185,7 +185,7 @@ func (c *Client) CreateUser(ctx context.Context, username string, options any) e
 }
 
 // DropUser deletes a user from ArangoDB.
-func (c *Client) DropUser(ctx context.Context, username string) error {
+func (c *Client) dropUser(ctx context.Context, username string) error {
 	tracerCtx, span := c.addTrace(ctx, "dropUser", map[string]string{"user": username})
 	startTime := time.Now()
 
@@ -201,7 +201,7 @@ func (c *Client) DropUser(ctx context.Context, username string) error {
 }
 
 // GrantDB grants permissions for a database to a user.
-func (c *Client) GrantDB(ctx context.Context, database, username, permission string) error {
+func (c *Client) grantDB(ctx context.Context, database, username, permission string) error {
 	tracerCtx, span := c.addTrace(ctx, "grantDB", map[string]string{"DB": database})
 	startTime := time.Now()
 
@@ -219,7 +219,7 @@ func (c *Client) GrantDB(ctx context.Context, database, username, permission str
 }
 
 // GrantCollection grants permissions for a collection to a user.
-func (c *Client) GrantCollection(ctx context.Context, database, collection, username, permission string) error {
+func (c *Client) grantCollection(ctx context.Context, database, collection, username, permission string) error {
 	tracerCtx, span := c.addTrace(ctx, "GrantCollection", map[string]string{"collection": collection})
 	startTime := time.Now()
 

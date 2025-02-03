@@ -576,15 +576,6 @@ type ScyllaDBProvider interface {
 }
 
 type ArangoDB interface {
-	// CreateUser creates a new user in ArangoDB.
-	CreateUser(ctx context.Context, userName string, options any) error
-	// DropUser deletes an existing user in ArangoDB.
-	DropUser(ctx context.Context, username string) error
-	// GrantDB grants permissions for a database to a user.
-	GrantDB(ctx context.Context, database, username, permission string) error
-	// GrantCollection grants permissions for a collection to a user.
-	GrantCollection(ctx context.Context, database, collection, username, permission string) error
-
 	// ListDBs lists all databases in ArangoDB.
 	ListDBs(ctx context.Context) ([]string, error)
 	// CreateDB creates a new database in ArangoDB.

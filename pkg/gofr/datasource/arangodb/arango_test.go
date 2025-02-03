@@ -69,7 +69,7 @@ func Test_Client_CreateUser(t *testing.T) {
 	mockMetrics.EXPECT().RecordHistogram(context.Background(), "app_arango_stats",
 		gomock.Any(), "endpoint", gomock.Any(), gomock.Any(), gomock.Any())
 
-	err := client.CreateUser(context.Background(), "test", UserOptions{
+	err := client.createUser(context.Background(), "test", UserOptions{
 		Password: "user123",
 		Extra:    nil,
 	})
@@ -85,7 +85,7 @@ func Test_Client_DropUser(t *testing.T) {
 	mockMetrics.EXPECT().RecordHistogram(context.Background(), "app_arango_stats", gomock.Any(),
 		gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any())
 
-	err := client.DropUser(context.Background(), "test")
+	err := client.dropUser(context.Background(), "test")
 	require.NoError(t, err, "Test_Arango_DropUser: failed to drop user")
 }
 
@@ -132,7 +132,7 @@ func Test_Client_GrantDB(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := client.GrantDB(ctx, tc.dbName, tc.username, tc.permission)
+			err := client.grantDB(ctx, tc.dbName, tc.username, tc.permission)
 			if tc.expectErr {
 				require.Error(t, err)
 			} else {
@@ -155,7 +155,7 @@ func Test_Client_GrantDB_Errors(t *testing.T) {
 	mockMetrics.EXPECT().RecordHistogram(ctx, "app_arango_stats", gomock.Any(), "endpoint",
 		gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
-	err := client.GrantDB(ctx, dbName, username, string(arangodb.GrantReadWrite))
+	err := client.grantDB(ctx, dbName, username, string(arangodb.GrantReadWrite))
 	require.Error(t, err)
 }
 
@@ -340,7 +340,7 @@ func Test_Client_GrantCollection(t *testing.T) {
 
 	mockArango.EXPECT().User(gomock.Any(), "testUser").Return(mockUser, nil)
 
-	err := client.GrantCollection(context.Background(), "testDB", "testCollection",
+	err := client.grantCollection(context.Background(), "testDB", "testCollection",
 		"testUser", string(arangodb.GrantReadOnly))
 
 	require.NoError(t, err)
@@ -356,7 +356,7 @@ func Test_Client_GrantCollection_Error(t *testing.T) {
 
 	mockArango.EXPECT().User(gomock.Any(), "testUser").Return(nil, errUserNotFound)
 
-	err := client.GrantCollection(context.Background(), "testDB", "testCollection",
+	err := client.grantCollection(context.Background(), "testDB", "testCollection",
 		"testUser", string(arangodb.GrantReadOnly))
 
 	require.ErrorIs(t, errUserNotFound, err, "Expected error when user not found")

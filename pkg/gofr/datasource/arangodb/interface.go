@@ -14,11 +14,6 @@ type ArangoDB interface {
 	databases(ctx context.Context) ([]arangodb.Database, error)
 	version(ctx context.Context) (arangodb.VersionInfo, error)
 
-	CreateUser(ctx context.Context, username string, options any) error
-	DropUser(ctx context.Context, username string) error
-	GrantDB(ctx context.Context, database, username, permission string) error
-	GrantCollection(ctx context.Context, database, collection, username, permission string) error
-
 	ListDBs(ctx context.Context) ([]string, error)
 	CreateDB(ctx context.Context, database string) error
 	DropDB(ctx context.Context, database string) error
