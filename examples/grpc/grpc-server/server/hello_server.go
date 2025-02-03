@@ -23,10 +23,13 @@ func (s *HelloGoFrServer) SayHello(ctx *gofr.Context) (any, error) {
 	//     return nil, err
 	// }
 
+	// Performing HealthCheck
 	//res, err := s.health.Check(ctx, &grpc_health_v1.HealthCheckRequest{
 	//	Service: "Hello",
 	//})
-
+	//fmt.Println(res, err)
+	//
+	// Setting the serving status
 	//s.health.SetServingStatus(ctx, "Hello", grpc_health_v1.HealthCheckResponse_NOT_SERVING)
 
 	return &HelloResponse{}, nil
