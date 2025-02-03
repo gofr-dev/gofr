@@ -20,7 +20,6 @@ type HelloClientWrapper struct {
 func NewHelloGoFrClient(host string, metrics metrics.Manager) (HelloGoFrClient, error) {
 	conn, err := createGRPCConn(host, "Hello")
 	if err != nil {
-		// Return a fully implemented GoodbyeClientWrapper with a nil client
 		return &HelloClientWrapper{
 			client:       nil,
 			HealthClient: &HealthClientWrapper{client: nil}, // Ensure HealthClient is also implemented
@@ -39,7 +38,6 @@ func NewHelloGoFrClient(host string, metrics metrics.Manager) (HelloGoFrClient, 
 		HealthClient: healthClient,
 	}, nil
 }
-
 func (h *HelloClientWrapper) SayHello(ctx *gofr.Context, req *HelloRequest, 
 opts ...grpc.CallOption) (*HelloResponse, error) {
 	result, err := invokeRPC(ctx, "/Hello/SayHello", func() (interface{}, error) {

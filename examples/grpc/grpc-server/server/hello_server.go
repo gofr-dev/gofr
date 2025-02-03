@@ -3,11 +3,12 @@ package server
 import (
 	"fmt"
 	"gofr.dev/pkg/gofr"
+	"google.golang.org/grpc/health/grpc_health_v1"
 )
 
 // Register the gRPC service in your app using the following code in your main.go:
 //
-// server.RegisterHelloServerWithGofr(app, &server.HelloGoFrServer{})
+// server.RegisterHelloServerWithGofr(app, &server.NewHelloGoFrServer())
 //
 // HelloGoFrServer defines the gRPC server implementation.
 // Customize the struct with required dependencies and fields as needed.
@@ -29,11 +30,11 @@ func (s *HelloGoFrServer) SayHello(ctx *gofr.Context) (any, error) {
 		name = "World"
 	}
 
-	// Performing HealthCheck
-	//res, err := s.health.Check(ctx, &grpc_health_v1.HealthCheckRequest{
-	//	Service: "Hello",
-	//})
-	//ctx.Log(res.String())
+	//Performing HealthCheck
+	res, err := s.health.Check(ctx, &grpc_health_v1.HealthCheckRequest{
+		Service: "Hello",
+	})
+	ctx.Log(res.String())
 
 	// Setting the serving status
 	//s.health.SetServingStatus(ctx, "Hello", grpc_health_v1.HealthCheckResponse_NOT_SERVING)

@@ -74,7 +74,7 @@ func (h *healthServer) SetServingStatus(ctx *gofr.Context, service string, servi
 	h.Server.SetServingStatus(service, servingStatus)
 	logger := gofrGRPC.NewgRPCLogger()
 	logger.DocumentRPCLog(ctx.Context, ctx.Logger, ctx.Metrics(), start, nil,
-	fmt.Sprintf("/grpc.health.v1.Health/SetServingStatus	Service:%q", service), "app_gRPC-Server_stats")
+	fmt.Sprintf("/grpc.health.v1.Health/SetServingStatus	Service: %q", service), "app_gRPC-Server_stats")
 	span.End()
 }
 
@@ -83,7 +83,8 @@ func (h *healthServer) Shutdown(ctx *gofr.Context) {
 	span := ctx.Trace("/grpc.health.v1.Health/Shutdown")
 	h.Server.Shutdown()
 	logger := gofrGRPC.NewgRPCLogger()
-	logger.DocumentRPCLog(ctx.Context, ctx.Logger, ctx.Metrics(), start, nil, "/grpc.health.v1.Health/Shutdown", "app_gRPC-Server_stats")
+	logger.DocumentRPCLog(ctx.Context, ctx.Logger, ctx.Metrics(), start, nil,
+	"/grpc.health.v1.Health/Shutdown", "app_gRPC-Server_stats")
 	span.End()
 }
 
@@ -92,6 +93,7 @@ func (h *healthServer) Resume(ctx *gofr.Context) {
 	span := ctx.Trace("/grpc.health.v1.Health/Resume")
 	h.Server.Resume()
 	logger := gofrGRPC.NewgRPCLogger()
-	logger.DocumentRPCLog(ctx.Context, ctx.Logger, ctx.Metrics(), start, nil, "/grpc.health.v1.Health/Resume", "app_gRPC-Server_stats")
+	logger.DocumentRPCLog(ctx.Context, ctx.Logger, ctx.Metrics(), start, nil,
+	"/grpc.health.v1.Health/Resume", "app_gRPC-Server_stats")
 	span.End()
 }
