@@ -1,6 +1,7 @@
 package server
 
 import (
+	"fmt"
 	"gofr.dev/pkg/gofr"
 )
 
@@ -16,12 +17,17 @@ type HelloGoFrServer struct {
 }
 
 func (s *HelloGoFrServer) SayHello(ctx *gofr.Context) (any, error) {
-	// Uncomment and use the following code if you need to bind the request payload
-	// request := HelloRequest{}
-	// err := ctx.Bind(&request)
-	// if err != nil {
-	//     return nil, err
-	// }
+	request := HelloRequest{}
+
+	err := ctx.Bind(&request)
+	if err != nil {
+		return nil, err
+	}
+
+	name := request.Name
+	if name == "" {
+		name = "World"
+	}
 
 	// Performing HealthCheck
 	//res, err := s.health.Check(ctx, &grpc_health_v1.HealthCheckRequest{
@@ -32,5 +38,7 @@ func (s *HelloGoFrServer) SayHello(ctx *gofr.Context) (any, error) {
 	// Setting the serving status
 	//s.health.SetServingStatus(ctx, "Hello", grpc_health_v1.HealthCheckResponse_NOT_SERVING)
 
-	return &HelloResponse{}, nil
+	return &HelloResponse{
+		Message: fmt.Sprintf("Hello %s!", name),
+	}, nil
 }
