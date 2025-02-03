@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"google.golang.org/grpc/health/grpc_health_v1"
 	"io"
 	"time"
 
@@ -12,6 +11,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
@@ -42,6 +42,7 @@ type gRPCLog struct {
 	StatusCode   int32  `json:"statusCode"`
 }
 
+//nolint:revive // We intend to keep it non-exported for ease in future changes without any breaking change.
 func NewgRPCLogger() gRPCLog {
 	return gRPCLog{}
 }
@@ -94,9 +95,7 @@ func ObservabilityInterceptor(logger Logger, metrics Metrics) grpc.UnaryServerIn
 			}
 		}
 
-		log := NewgRPCLogger()
-
-		log.DocumentRPCLog(ctx, logger, metrics, start, err, info.FullMethod, "app_gRPC-Server_stats")
+		logRPC(ctx, logger, metrics, start, err, info.FullMethod, "app_gRPC-Server_stats")
 
 		span.End()
 
@@ -129,11 +128,11 @@ func initializeSpanContext(ctx context.Context) (context.Context, trace.SpanCont
 	return ctx, spanContext
 }
 
-func (l gRPCLog) DocumentRPCLog(ctx context.Context, logger Logger, metrics Metrics, start time.Time, err error, method, name string) {
-	l.logRPC(ctx, logger, metrics, start, err, method, name)
+func (gRPCLog) DocumentRPCLog(ctx context.Context, logger Logger, metrics Metrics, start time.Time, err error, method, name string) {
+	logRPC(ctx, logger, metrics, start, err, method, name)
 }
 
-func (l gRPCLog) logRPC(ctx context.Context, logger Logger, metrics Metrics, start time.Time, err error, method, name string) {
+func logRPC(ctx context.Context, logger Logger, metrics Metrics, start time.Time, err error, method, name string) {
 	duration := time.Since(start)
 	logEntry := gRPCLog{
 		ID:           trace.SpanFromContext(ctx).SpanContext().TraceID().String(),
