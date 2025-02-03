@@ -623,8 +623,8 @@ type ArangoDB interface {
 	HealthChecker
 }
 
-// ArangoProvider is an interface that extends ArangoDB with additional methods for logging, metrics, and connection management.
-type ArangoProvider interface {
+// ArangoDBProvider is an interface that extends ArangoDB with additional methods for logging, metrics, and connection management.
+type ArangoDBProvider interface {
 	ArangoDB
 
 	provider

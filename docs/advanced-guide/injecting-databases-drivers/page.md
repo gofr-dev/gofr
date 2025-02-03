@@ -908,11 +908,11 @@ func main() {
 	app.AddSurrealDB(client)
 
 	// GET request to fetch person by ID
-	app.GET("/person/{id}", func(ctx *gofr.Context) (interface{}, error) {
+	app.GET("/person/{id}", func(ctx *gofr.Context) (any, error) {
 		id := ctx.PathParam("id")
 
 		query := "SELECT * FROM type::thing('person', $id)"
-		vars := map[string]interface{}{
+		vars := map[string]any{
 			"id": id,
 		}
 
@@ -925,14 +925,14 @@ func main() {
 	})
 
 	// POST request to create a new person
-	app.POST("/person", func(ctx *gofr.Context) (interface{}, error) {
+	app.POST("/person", func(ctx *gofr.Context) (any, error) {
 		var person Person
 
 		if err := ctx.Bind(&person); err != nil {
 			return ErrorResponse{Message: "Invalid request body"}, nil
 		}
 
-		result, err := ctx.SurrealDB.Create(ctx, "person", map[string]interface{}{
+		result, err := ctx.SurrealDB.Create(ctx, "person", map[string]any{
 			"name":  person.Name,
 			"age":   person.Age,
 			"email": person.Email,
@@ -952,6 +952,7 @@ func main() {
 
 
 ## ArangoDB
+
 GoFr supports injecting `ArangoDB` that implements the following interface. Any driver that implements the interface can be 
 added using the `app.AddArangoDB()` method, and users can use ArangoDB across the application with `gofr.Context`.
 
@@ -974,16 +975,16 @@ type ArangoDB interface {
     ListCollections(ctx context.Context, database string) ([]string, error)
 
     // CreateDocument creates a new document in the specified collection.
-    CreateDocument(ctx context.Context, dbName, collectionName string, document interface{}) (string, error)
+    CreateDocument(ctx context.Context, dbName, collectionName string, document any) (string, error)
     // GetDocument retrieves a document by its ID from the specified collection.
-    GetDocument(ctx context.Context, dbName, collectionName, documentID string, result interface{}) error
+    GetDocument(ctx context.Context, dbName, collectionName, documentID string, result any) error
     // UpdateDocument updates an existing document in the specified collection.
-    UpdateDocument(ctx context.Context, dbName, collectionName, documentID string, document interface{}) error
+    UpdateDocument(ctx context.Context, dbName, collectionName, documentID string, document any) error
     // DeleteDocument deletes a document by its ID from the specified collection.
     DeleteDocument(ctx context.Context, dbName, collectionName, documentID string) error
 
     // CreateEdgeDocument creates a new edge document between two vertices.
-    CreateEdgeDocument(ctx context.Context, dbName, collectionName string, from, to string, document interface{}) (string, error)
+    CreateEdgeDocument(ctx context.Context, dbName, collectionName string, from, to string, document any) (string, error)
 
  	// CreateGraph creates a new graph in a database taking graph name and *[]arangodb.EdgeDefinition as input.
     CreateGraph(ctx context.Context, database, graph string, edgeDefinitions any) error
@@ -1019,11 +1020,6 @@ import (
 	"gofr.dev/pkg/gofr/datasource/arangodb"
 )
 
-type Person struct {
-	Name string `json:"name"`
-	Age  int    `json:"age"`
-}
-
 type Friendship struct {
 	StartDate string `json:"startDate"`
 }
@@ -1048,7 +1044,7 @@ func main() {
 }
 
 // Setup demonstrates database and collection creation
-func Setup(ctx *gofr.Context) (interface{}, error) {
+func Setup(ctx *gofr.Context) (any, error) {
 	// Create a database
 	err := ctx.ArangoDB.CreateDB(ctx, "social_network")
 	if err != nil {
@@ -1085,7 +1081,7 @@ func Setup(ctx *gofr.Context) (interface{}, error) {
 }
 
 // CreateFriendship demonstrates edge document creation
-func CreateFriendship(ctx *gofr.Context) (interface{}, error) {
+func CreateFriendship(ctx *gofr.Context) (any, error) {
 	var req struct {
 		From      string `json:"from"`
 		To        string `json:"to"`

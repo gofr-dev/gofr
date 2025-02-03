@@ -12300,7 +12300,7 @@ func (mr *MockArangoDBMockRecorder) UpdateDocument(ctx, dbName, collectionName, 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateDocument", reflect.TypeOf((*MockArangoDB)(nil).UpdateDocument), ctx, dbName, collectionName, documentID, document)
 }
 
-// MockArangoProvider is a mock of ArangoProvider interface.
+// MockArangoProvider is a mock of ArangoDBProvider interface.
 type MockArangoProvider struct {
 	ctrl     *gomock.Controller
 	recorder *MockArangoProviderMockRecorder
