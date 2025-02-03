@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"google.golang.org/grpc/health/grpc_health_v1"
 	"io"
 	"time"
 
@@ -20,6 +21,7 @@ const (
 	responseTimeWidth         = 11
 	nanosecondsPerMillisecond = 1e6
 	debugMethod               = "/grpc.health.v1.Health/SetServingStatus"
+	healthCheck               = "/grpc.health.v1.Health/Check"
 )
 
 type Logger interface {
@@ -32,7 +34,7 @@ type Metrics interface {
 	RecordHistogram(ctx context.Context, name string, value float64, labels ...string)
 }
 
-type RPCLog struct {
+type gRPCLog struct {
 	ID           string `json:"id"`
 	StartTime    string `json:"startTime"`
 	ResponseTime int64  `json:"responseTime"`
@@ -40,7 +42,11 @@ type RPCLog struct {
 	StatusCode   int32  `json:"statusCode"`
 }
 
-func (l RPCLog) PrettyPrint(writer io.Writer) {
+func NewgRPCLogger() gRPCLog {
+	return gRPCLog{}
+}
+
+func (l gRPCLog) PrettyPrint(writer io.Writer) {
 	fmt.Fprintf(writer, "\u001B[38;5;8m%s \u001B[38;5;%dm%-*d"+
 		"\u001B[0m %*d\u001B[38;5;8mµs\u001B[0m %s %s\n",
 		l.ID, colorForGRPCCode(l.StatusCode),
@@ -62,7 +68,7 @@ func colorForGRPCCode(s int32) int {
 	return red
 }
 
-func (l RPCLog) String() string {
+func (l gRPCLog) String() string {
 	line, _ := json.Marshal(l)
 	return string(line)
 }
@@ -81,7 +87,16 @@ func ObservabilityInterceptor(logger Logger, metrics Metrics) grpc.UnaryServerIn
 			logger.Errorf("error while handling gRPC request to method %q: %q", info.FullMethod, err)
 		}
 
-		DocumentRPCLog(ctx, logger, metrics, start, err, info.FullMethod, "app_gRPC-Server_stats")
+		if info.FullMethod == healthCheck {
+			service, ok := req.(*grpc_health_v1.HealthCheckRequest)
+			if ok {
+				info.FullMethod = fmt.Sprintf("%s	Service: %q", healthCheck, service.Service)
+			}
+		}
+
+		log := NewgRPCLogger()
+
+		log.DocumentRPCLog(ctx, logger, metrics, start, err, info.FullMethod, "app_gRPC-Server_stats")
 
 		span.End()
 
@@ -114,9 +129,13 @@ func initializeSpanContext(ctx context.Context) (context.Context, trace.SpanCont
 	return ctx, spanContext
 }
 
-func DocumentRPCLog(ctx context.Context, logger Logger, metrics Metrics, start time.Time, err error, method, name string) {
+func (l gRPCLog) DocumentRPCLog(ctx context.Context, logger Logger, metrics Metrics, start time.Time, err error, method, name string) {
+	l.logRPC(ctx, logger, metrics, start, err, method, name)
+}
+
+func (l gRPCLog) logRPC(ctx context.Context, logger Logger, metrics Metrics, start time.Time, err error, method, name string) {
 	duration := time.Since(start)
-	logEntry := RPCLog{
+	logEntry := gRPCLog{
 		ID:           trace.SpanFromContext(ctx).SpanContext().TraceID().String(),
 		StartTime:    start.Format("2006-01-02T15:04:05.999999999-07:00"),
 		ResponseTime: time.Since(start).Microseconds(),
