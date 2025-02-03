@@ -3,9 +3,8 @@
 We have already seen how GoFr can help ease the development of HTTP servers, but there are cases where performance is primarily required sacrificing flexibility. In these types of scenarios gRPC protocol comes into picture. {% new-tab-link title="gRPC" href="https://grpc.io/docs/what-is-grpc/introduction/" /%} is an open-source RPC(Remote Procedure Call) framework initially developed by Google.
 
 GoFr streamlines the creation of gRPC servers and clients with unified GoFr's context support. 
-It provides built-in tracing, metrics, and logging to ensure seamless performance monitoring for both 
-gRPC servers and inter-service gRPC communication. With GoFr's context, you can seamlessly define custom 
-metrics and traces across gRPC handlers, ensuring consistent observability and streamlined debugging throughout 
+It provides built-in tracing, metrics, and logging to ensure seamless performance monitoring for both gRPC servers and inter-service gRPC communication. 
+With GoFr's context, you can seamlessly define custom metrics and traces across gRPC handlers, ensuring consistent observability and streamlined debugging throughout 
 your system. Additionally, GoFr provides a built-in health check for all your services and supports inter-service 
 health checks, allowing gRPC services to monitor each other effortlessly.
 
