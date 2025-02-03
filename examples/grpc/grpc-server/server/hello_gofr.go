@@ -38,7 +38,7 @@ type HelloServerWrapper struct {
 //
 // SayHello wraps the method and handles its execution
 func (h *HelloServerWrapper) SayHello(ctx context.Context, req *HelloRequest) (*HelloResponse, error) {
-	gctx := h.GetGofrContext(ctx, &HelloRequestWrapper{ctx: ctx, HelloRequest: req})
+	gctx := h.getGofrContext(ctx, &HelloRequestWrapper{ctx: ctx, HelloRequest: req})
 
 	res, err := h.server.SayHello(gctx)
 	if err != nil {
@@ -66,7 +66,7 @@ func RegisterHelloServerWithGofr(app *gofr.App, srv HelloServerWithGofr) {
 }
 
 // GetGofrContext extracts the GoFr context from the original context
-func (h *HelloServerWrapper) GetGofrContext(ctx context.Context, req gofr.Request) *gofr.Context {
+func (h *HelloServerWrapper) getGofrContext(ctx context.Context, req gofr.Request) *gofr.Context {
 	return &gofr.Context{
 		Context:   ctx,
 		Container: h.Container,
