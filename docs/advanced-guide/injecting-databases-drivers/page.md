@@ -958,56 +958,20 @@ added using the `app.AddArangoDB()` method, and users can use ArangoDB across th
 
 ```go
 type ArangoDB interface {
-    // ListDBs lists all databases in ArangoDB.
-    ListDBs(ctx context.Context) ([]string, error)
-    // CreateDB creates a new database in ArangoDB.
-    CreateDB(ctx context.Context, database string) error
-    // DropDB deletes an existing database in ArangoDB.
-    DropDB(ctx context.Context, database string) error
-
-    // CreateCollection creates a new collection in a database with specified type.
-    CreateCollection(ctx context.Context, database, collection string, isEdge bool) error
-    // DropCollection deletes an existing collection from a database.
-    DropCollection(ctx context.Context, database, collection string) error
-    // TruncateCollection truncates a collection in a database.
-    TruncateCollection(ctx context.Context, database, collection string) error
-    // ListCollections lists all collections in a database.
-    ListCollections(ctx context.Context, database string) ([]string, error)
-
     // CreateDocument creates a new document in the specified collection.
-    // If the collection is an edge collection, the document must include `_from` and `_to`.
-    // Example for creating a regular document:
-    //  doc := map[string]any{
-    //     "name": "Alice",
-    //     "age": 30,
-   // }
-   // id, err := client.CreateDocument(ctx, "myDB", "users", doc)
-   //
-   // Example for creating an edge document:
-   // edgeDoc := map[string]any{
-   //     "_from": "users/123",
-   //     "_to": "orders/456",
-   //     "relation": "purchased",
-   // }
-   // id, err := client.CreateDocument(ctx, "myDB", "edges", edgeDoc)
+	CreateDocument(ctx context.Context, dbName, collectionName string, document any) (string, error)
+	// GetDocument retrieves a document by its ID from the specified collection.
+	GetDocument(ctx context.Context, dbName, collectionName, documentID string, result any) error
+	// UpdateDocument updates an existing document in the specified collection.
+	UpdateDocument(ctx context.Context, dbName, collectionName, documentID string, document any) error
+	// DeleteDocument deletes a document by its ID from the specified collection.
+	DeleteDocument(ctx context.Context, dbName, collectionName, documentID string) error
 
-    CreateDocument(ctx context.Context, dbName, collectionName string, document any) (string, error)
-    // GetDocument retrieves a document by its ID from the specified collection.
-    GetDocument(ctx context.Context, dbName, collectionName, documentID string, result any) error
-    // UpdateDocument updates an existing document in the specified collection.
-    UpdateDocument(ctx context.Context, dbName, collectionName, documentID string, document any) error
-    // DeleteDocument deletes a document by its ID from the specified collection.
-    DeleteDocument(ctx context.Context, dbName, collectionName, documentID string) error
+	// GetEdges retrieves all the edge documents connected to a specific vertex in an ArangoDB graph.
+	GetEdges(ctx context.Context, dbName, graphName, edgeCollection, vertexID string, resp any) error
 
- 	// CreateGraph creates a new graph in a database taking graph name and *[]arangodb.EdgeDefinition as input.
-    CreateGraph(ctx context.Context, database, graph string, edgeDefinitions any) error
-    // DropGraph deletes an existing graph from a database.
-    DropGraph(ctx context.Context, database, graph string) error
-    // ListGraphs lists all graphs in a database.
-    ListGraphs(ctx context.Context, database string) ([]string, error)
-
-    // Query executes an AQL query and binds the results.
-    Query(ctx context.Context, dbName string, query string, bindVars map[string]any, result any) error
+	// Query executes an AQL query and binds the results
+	Query(ctx context.Context, dbName string, query string, bindVars map[string]any, result any) error
 
    HealthCheck(context.Context) (any, error)
 }
