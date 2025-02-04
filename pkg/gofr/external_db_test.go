@@ -215,7 +215,7 @@ func TestApp_AddArangoDB(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
-		mock := container.NewMockArangoProvider(ctrl)
+		mock := container.NewMockArangoDBProvider(ctrl)
 
 		mock.EXPECT().UseLogger(app.Logger())
 		mock.EXPECT().UseMetrics(app.Metrics())

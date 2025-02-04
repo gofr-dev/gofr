@@ -7,116 +7,79 @@ import (
 	"time"
 
 	"github.com/arangodb/go-driver/v2/arangodb"
-	arangoShared "github.com/arangodb/go-driver/v2/arangodb/shared"
 )
 
 var (
-	errInvalidEdgeDefinitionsType = errors.New("edgeDefinitions must be a *EdgeDefinition type")
-	errNilEdgeDefinitions         = errors.New("edgeDefinitions cannot be nil")
+	errInvalidInput        = errors.New("invalid input parameter")
+	errInvalidResponseType = errors.New("invalid response type")
 )
 
 type Graph struct {
 	client *Client
 }
 
-// CreateGraph creates a new graph in a database.
-func (g *Graph) CreateGraph(ctx context.Context, database, graph string, edgeDefinitions any) error {
-	tracerCtx, span := g.client.addTrace(ctx, "createGraph", map[string]string{"graph": graph})
-	startTime := time.Now()
-
-	defer g.client.sendOperationStats(&QueryLog{Operation: "createGraph",
-		Database: database, Collection: graph}, startTime, "createGraph", span)
-
-	db, err := g.client.client.Database(tracerCtx, database)
-	if err != nil {
-		return err
+// GetEdges retrieves all the edge documents connected to a specific vertex in an ArangoDB graph.
+// The method performs a query on the specified edge collection to fetch all edges where the vertex
+// is either the source (_from) or target (_to) of the edge. The results are returned and bound to
+// the provided `resp` argument.
+//
+// Parameters:
+//   - ctx: The context for the request, used for cancellation and timeouts.
+//   - dbName: The name of the database in which the graph resides.
+//   - graphName: The name of the graph to query edges from.
+//   - edgeCollection: The name of the edge collection to query edges from.
+//   - vertexID: The ID of the vertex whose connected edges are to be fetched.
+//   - resp: A pointer to a slice of `[]arangodb.EdgeDetails` where the resulting edges will be stored.
+//
+// Returns:
+//   - error: Returns an error if the query fails, the response type is invalid, or any of the input parameters are incorrect.
+//
+// Example usage:
+//
+//	var edges []arangodb.EdgeDetails
+//	err := client.GetEdges(ctx, "testDB", "testGraph", "edges", "vertex123", &edges)
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//	fmt.Println(edges)
+func (c *Graph) GetEdges(ctx context.Context, dbName, graphName, edgeCollection, vertexID string,
+	resp any) error {
+	if vertexID == "" || edgeCollection == "" {
+		return errInvalidInput
 	}
 
-	// Type assertion for edgeDefinitions
-	edgeDefs, ok := edgeDefinitions.(*EdgeDefinition)
+	_, ok := resp.(*[]arangodb.EdgeDetails)
 	if !ok {
-		return fmt.Errorf("%w", errInvalidEdgeDefinitionsType)
+		return fmt.Errorf("%w: Must be *[]arangodb.EdgeDetails", errInvalidResponseType)
 	}
 
-	if edgeDefs == nil {
-		return fmt.Errorf("%w", errNilEdgeDefinitions)
-	}
-
-	arangoEdgeDefs := make(EdgeDefinition, 0, len(*edgeDefs))
-	for _, ed := range *edgeDefs {
-		arangoEdgeDefs = append(arangoEdgeDefs, arangodb.EdgeDefinition{
-			Collection: ed.Collection,
-			From:       ed.From,
-			To:         ed.To,
-		})
-	}
-
-	options := &arangodb.GraphDefinition{
-		EdgeDefinitions: arangoEdgeDefs,
-	}
-
-	_, err = db.CreateGraph(tracerCtx, graph, options, nil)
-
-	return err
-}
-
-// DropGraph deletes an existing graph from a database.
-func (g *Graph) DropGraph(ctx context.Context, database, graphName string) error {
-	tracerCtx, span := g.client.addTrace(ctx, "dropGraph", map[string]string{"graph": graphName})
+	tracerCtx, span := c.client.addTrace(ctx, "getEdges", map[string]string{
+		"DB": dbName, "Graph": graphName, "Collection": edgeCollection, "Vertex": vertexID,
+	})
 	startTime := time.Now()
 
-	defer g.client.sendOperationStats(&QueryLog{Operation: "dropGraph",
-		Database: database}, startTime, "dropGraph", span)
+	defer c.client.sendOperationStats(&QueryLog{
+		Operation:  "getEdges",
+		Database:   dbName,
+		Collection: edgeCollection,
+	}, startTime, "getEdges", span)
 
-	db, err := g.client.client.Database(tracerCtx, database)
+	// Define the query to get edges from the specified vertex
+	query := `
+		FOR edge IN @@edgeCollection
+			FILTER edge._from == @vertexID OR edge._to == @vertexID
+			RETURN edge
+	`
+	// Bind variables
+	bindVars := map[string]any{
+		"@edgeCollection": edgeCollection,
+		"vertexID":        vertexID,
+	}
+
+	err := c.client.Query(tracerCtx, dbName, query, bindVars, resp)
 	if err != nil {
 		return err
 	}
 
-	graph, err := db.Graph(tracerCtx, graphName, nil)
-	if err != nil {
-		return err
-	}
-
-	err = graph.Remove(tracerCtx, &arangodb.RemoveGraphOptions{DropCollections: true})
-	if err != nil {
-		return err
-	}
-
-	return err
-}
-
-// ListGraphs lists all graphs in a database.
-func (g *Graph) ListGraphs(ctx context.Context, database string) ([]string, error) {
-	tracerCtx, span := g.client.addTrace(ctx, "listGraphs", map[string]string{})
-	startTime := time.Now()
-
-	defer g.client.sendOperationStats(&QueryLog{Operation: "listGraphs", Database: database}, startTime, "listGraphs", span)
-
-	db, err := g.client.client.Database(tracerCtx, database)
-	if err != nil {
-		return nil, err
-	}
-
-	graphsReader, err := db.Graphs(tracerCtx)
-	if err != nil {
-		return nil, err
-	}
-
-	var graphNames []string
-
-	for {
-		graph, err := graphsReader.Read()
-		if arangoShared.IsNoMoreDocuments(err) {
-			break
-		}
-
-		if err != nil {
-			return nil, err
-		}
-
-		graphNames = append(graphNames, graph.Name())
-	}
-
-	return graphNames, nil
+	return nil
 }

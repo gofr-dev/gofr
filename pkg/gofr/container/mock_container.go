@@ -87,7 +87,7 @@ func NewMockContainer(t *testing.T, options ...options) (*Container, *Mocks) {
 	opentsdbMock := NewMockOpenTSDBProvider(ctrl)
 	container.OpenTSDB = opentsdbMock
 
-	arangoMock := NewMockArangoProvider(ctrl)
+	arangoMock := NewMockArangoDBProvider(ctrl)
 	container.ArangoDB = arangoMock
 
 	var httpMock *service.MockHTTP

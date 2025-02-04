@@ -10,10 +10,9 @@ import (
 )
 
 var (
-	errUserNotFound       = errors.New("user not found")
-	errDBNotFound         = errors.New("database not found")
-	errCollectionNotFound = errors.New("collection not found")
-	errDocumentNotFound   = errors.New("document not found")
+	errUserNotFound     = errors.New("user not found")
+	errDBNotFound       = errors.New("database not found")
+	errDocumentNotFound = errors.New("document not found")
 )
 
 func setupDB(t *testing.T) (*Client, *MockArango, *MockUser, *MockLogger, *MockMetrics) {
