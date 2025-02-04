@@ -4,7 +4,7 @@ We have already seen how GoFr can help ease the development of HTTP servers, but
 
 GoFr streamlines the creation of gRPC servers and clients with unified GoFr's context support. 
 It provides built-in tracing, metrics, and logging to ensure seamless performance monitoring for both 
-gRPC servers and inter-service gRPC communication. Using GoFr's context, you can easily define custom metrics and 
+gRPC servers and inter-service gRPC communication. Using GoFr's context, we can easily define custom metrics and 
 traces across gRPC handlers, enabling consistent observability and simplified debugging throughout your system.
 
 ## Prerequisites
