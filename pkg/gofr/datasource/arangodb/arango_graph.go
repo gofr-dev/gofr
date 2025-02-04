@@ -14,6 +14,8 @@ var (
 	errInvalidResponseType = errors.New("invalid response type")
 )
 
+type EdgeDetails []arangodb.EdgeDetails
+
 type Graph struct {
 	client *Client
 }
@@ -48,9 +50,9 @@ func (c *Graph) GetEdges(ctx context.Context, dbName, graphName, edgeCollection,
 		return errInvalidInput
 	}
 
-	_, ok := resp.(*[]arangodb.EdgeDetails)
+	resultSlice, ok := resp.(*[]map[string]any)
 	if !ok {
-		return fmt.Errorf("%w: Must be *[]arangodb.EdgeDetails", errInvalidResponseType)
+		return errInvalidResultType
 	}
 
 	tracerCtx, span := c.client.addTrace(ctx, "getEdges", map[string]string{
@@ -76,10 +78,49 @@ func (c *Graph) GetEdges(ctx context.Context, dbName, graphName, edgeCollection,
 		"vertexID":        vertexID,
 	}
 
-	err := c.client.Query(tracerCtx, dbName, query, bindVars, resp)
+	err := c.client.Query(tracerCtx, dbName, query, bindVars, resultSlice)
 	if err != nil {
 		return err
 	}
+
+	return nil
+}
+
+func (c *Client) GetEdges(ctx context.Context, dbName, graphName, edgeCollection, vertexID string,
+	resp any) error {
+	if vertexID == "" || edgeCollection == "" {
+		return errInvalidInput
+	}
+
+	// Type check the response parameter
+	edgeResp, ok := resp.(*EdgeDetails)
+	if !ok {
+		return fmt.Errorf("%w: must be *[]arangodb.EdgeDetails", errInvalidResponseType)
+	}
+
+	tracerCtx, span := c.addTrace(ctx, "getEdges", map[string]string{
+		"DB": dbName, "Graph": graphName, "Collection": edgeCollection, "Vertex": vertexID,
+	})
+	startTime := time.Now()
+
+	defer c.sendOperationStats(&QueryLog{
+		Operation:  "getEdges",
+		Database:   dbName,
+		Collection: edgeCollection,
+	}, startTime, "getEdges", span)
+
+	db, err := c.client.Database(tracerCtx, dbName)
+	if err != nil {
+		return err
+	}
+
+	edges, err := db.GetEdges(tracerCtx, edgeCollection, vertexID, nil)
+	if err != nil {
+		return err
+	}
+
+	// Assign the result to the provided response parameter
+	*edgeResp = edges
 
 	return nil
 }

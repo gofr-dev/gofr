@@ -188,7 +188,7 @@ func (c *Client) Query(ctx context.Context, dbName, query string, bindVars map[s
 		*resultSlice = append(*resultSlice, doc)
 	}
 
-	return err
+	return nil
 }
 
 // addTrace adds tracing to context if tracer is configured.

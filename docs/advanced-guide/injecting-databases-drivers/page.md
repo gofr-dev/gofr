@@ -1002,10 +1002,6 @@ type Person struct {
 	Age  int    `json:"age"`
 }
 
-type Friendship struct {
-	StartDate string `json:"startDate"`
-}
-
 func main() {
 	app := gofr.New()
 
@@ -1022,45 +1018,45 @@ func main() {
 	app.POST("/setup", Setup)
 	app.POST("/users/{name}", CreateUserHandler)
 	app.POST("/friends", CreateFriendship)
+	app.GET("/friends/{collection}/{vertexID}", GetEdgesHandler)
 
 	app.Run()
 }
 
 // Setup demonstrates database and collection creation
 func Setup(ctx *gofr.Context) (interface{}, error) {
-	// Create a database
-	err := ctx.ArangoDB.CreateDB(ctx, "social_network")
+	_, err := ctx.ArangoDB.CreateDocument(ctx, "social_network", "", nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create database: %w", err)
 	}
 
-	// Create a regular collection for persons
-	err = ctx.ArangoDB.CreateCollection(ctx, "social_network", "persons", false)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create persons collection: %w", err)
+	if err := createCollection(ctx, "social_network", "persons"); err != nil {
+		return nil, err
+	}
+	if err := createCollection(ctx, "social_network", "friendships"); err != nil {
+		return nil, err
 	}
 
-	// Create an edge collection for friendships
-	err = ctx.ArangoDB.CreateCollection(ctx, "social_network", "friendships", true)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create friendships collection: %w", err)
-	}
-
-	// Create a graph with edge definition
+	// Define and create the graph
 	edgeDefs := arangodb.EdgeDefinition{
-		{
-			Collection: "friendships",
-			From:       []string{"persons"},
-			To:         []string{"persons"},
-		},
+		{Collection: "friendships", From: []string{"persons"}, To: []string{"persons"}},
 	}
 
-	err = ctx.ArangoDB.CreateGraph(ctx, "social_network", "social_graph", &edgeDefs)
+	_, err = ctx.ArangoDB.CreateDocument(ctx, "social_network", "social_graph", edgeDefs)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create graph: %w", err)
 	}
 
 	return "Setup completed successfully", nil
+}
+
+// Helper function to create collections
+func createCollection(ctx *gofr.Context, dbName, collectionName string) error {
+	_, err := ctx.ArangoDB.CreateDocument(ctx, dbName, collectionName, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create collection %s: %w", collectionName, err)
+	}
+	return nil
 }
 
 // CreateUserHandler demonstrates user management and document creation
@@ -1095,11 +1091,14 @@ func CreateFriendship(ctx *gofr.Context) (interface{}, error) {
 		return nil, err
 	}
 
-	friendship := Friendship{
-		StartDate: req.StartDate,
+	edgeDocument := map[string]any{
+		"_from":     fmt.Sprintf("persons/%s", req.From),
+		"_to":       fmt.Sprintf("persons/%s", req.To),
+		"startDate": req.StartDate,
 	}
 
-	edgeID, err := ctx.ArangoDB.CreateEdgeDocument(ctx, "social_network", "friendships", req.From, req.To, friendship)
+	// Create an edge document for the friendship
+	edgeID, err := ctx.ArangoDB.CreateDocument(ctx, "social_network", "friendships", edgeDocument)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create friendship: %w", err)
 	}
@@ -1110,6 +1109,28 @@ func CreateFriendship(ctx *gofr.Context) (interface{}, error) {
 	}, nil
 }
 
+// GetEdgesHandler demonstrates fetching edges connected to a vertex
+func GetEdgesHandler(ctx *gofr.Context) (interface{}, error) {
+	collection := ctx.PathParam("collection")
+	vertexID := ctx.PathParam("vertexID")
+
+	fullVertexID := fmt.Sprintf("%s/%s", collection, vertexID)
+
+	// Prepare a slice to hold edge details
+	edges := make(arangodb.EdgeDetails, 0)
+
+	// Fetch all edges connected to the given vertex
+	err := ctx.ArangoDB.GetEdges(ctx, "social_network", "social_graph", "friendships",
+		fullVertexID, &edges)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get edges: %w", err)
+	}
+
+	return map[string]interface{}{
+		"vertexID": vertexID,
+		"edges":    edges,
+	}, nil
+}
 ```
 
 
