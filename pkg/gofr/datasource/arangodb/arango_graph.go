@@ -3,10 +3,7 @@ package arangodb
 import (
 	"context"
 	"errors"
-	"fmt"
 	"time"
-
-	"github.com/arangodb/go-driver/v2/arangodb"
 )
 
 var (
@@ -48,9 +45,9 @@ func (c *Graph) GetEdges(ctx context.Context, dbName, graphName, edgeCollection,
 		return errInvalidInput
 	}
 
-	_, ok := resp.(*[]arangodb.EdgeDetails)
+	resultSlice, ok := resp.(*[]map[string]any)
 	if !ok {
-		return fmt.Errorf("%w: Must be *[]arangodb.EdgeDetails", errInvalidResponseType)
+		return errInvalidResultType
 	}
 
 	tracerCtx, span := c.client.addTrace(ctx, "getEdges", map[string]string{
@@ -76,7 +73,7 @@ func (c *Graph) GetEdges(ctx context.Context, dbName, graphName, edgeCollection,
 		"vertexID":        vertexID,
 	}
 
-	err := c.client.Query(tracerCtx, dbName, query, bindVars, resp)
+	err := c.client.Query(tracerCtx, dbName, query, bindVars, resultSlice)
 	if err != nil {
 		return err
 	}
