@@ -8,7 +8,7 @@ import (
 func main() {
 	app := gofr.New()
 
-	// Create a gRPC client for the Hello service
+	//Create a gRPC client for the Hello service
 	helloGRPCClient, err := client.NewHelloGoFrClient(app.Config.Get("GRPC_SERVER_HOST"), app.Metrics())
 	if err != nil {
 		app.Logger().Errorf("Failed to create Hello gRPC client: %v", err)
@@ -39,6 +39,15 @@ func (g GreetHandler) Hello(ctx *gofr.Context) (interface{}, error) {
 		ctx.Log("Name parameter is empty, defaulting to 'World'")
 		userName = "World"
 	}
+
+	//HealthCheck to SayHello Service.
+	//res, err := g.helloGRPCClient.Check(ctx, &grpc_health_v1.HealthCheckRequest{Service: "Hello"})
+	//if err != nil {
+	//	return nil, err
+	//} else if res.Status == grpc_health_v1.HealthCheckResponse_NOT_SERVING {
+	//	ctx.Error("Hello Service is down")
+	//	return nil, fmt.Errorf("Hello Service is down")
+	//}
 
 	// Make a gRPC call to the Hello service
 	helloResponse, err := g.helloGRPCClient.SayHello(ctx, &client.HelloRequest{Name: userName})
