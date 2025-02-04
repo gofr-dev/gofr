@@ -975,6 +975,22 @@ type ArangoDB interface {
     ListCollections(ctx context.Context, database string) ([]string, error)
 
     // CreateDocument creates a new document in the specified collection.
+    // If the collection is an edge collection, the document must include `_from` and `_to`.
+    // Example for creating a regular document:
+    //  doc := map[string]any{
+    //     "name": "Alice",
+    //     "age": 30,
+   // }
+   // id, err := client.CreateDocument(ctx, "myDB", "users", doc)
+   //
+   // Example for creating an edge document:
+   // edgeDoc := map[string]any{
+   //     "_from": "users/123",
+   //     "_to": "orders/456",
+   //     "relation": "purchased",
+   // }
+   // id, err := client.CreateDocument(ctx, "myDB", "edges", edgeDoc)
+
     CreateDocument(ctx context.Context, dbName, collectionName string, document any) (string, error)
     // GetDocument retrieves a document by its ID from the specified collection.
     GetDocument(ctx context.Context, dbName, collectionName, documentID string, result any) error
@@ -982,9 +998,6 @@ type ArangoDB interface {
     UpdateDocument(ctx context.Context, dbName, collectionName, documentID string, document any) error
     // DeleteDocument deletes a document by its ID from the specified collection.
     DeleteDocument(ctx context.Context, dbName, collectionName, documentID string) error
-
-    // CreateEdgeDocument creates a new edge document between two vertices.
-    CreateEdgeDocument(ctx context.Context, dbName, collectionName string, from, to string, document any) (string, error)
 
  	// CreateGraph creates a new graph in a database taking graph name and *[]arangodb.EdgeDefinition as input.
     CreateGraph(ctx context.Context, database, graph string, edgeDefinitions any) error

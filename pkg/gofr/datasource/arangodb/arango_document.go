@@ -2,9 +2,17 @@ package arangodb
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/arangodb/go-driver/v2/arangodb"
+)
+
+var (
+	errInvalidEdgeDocumentType = errors.New("document must be a map when creating an edge")
+	errMissingEdgeFields       = errors.New("missing '_from' or '_to' field for edge document")
+	errInvalidFromField        = errors.New("'_from' field must be a string")
+	errInvalidToField          = errors.New("'_to' field must be a string")
 )
 
 type Document struct {
@@ -12,6 +20,25 @@ type Document struct {
 }
 
 // CreateDocument creates a new document in the specified collection.
+// If the collection is an edge collection, the document must include `_from` and `_to`.
+// Example for creating a regular document:
+//
+//	 doc := map[string]any{
+//	    "name": "Alice",
+//	    "age": 30,
+//	}
+//
+// id, err := client.CreateDocument(ctx, "myDB", "users", doc)
+//
+// Example for creating an edge document:
+//
+//	edgeDoc := map[string]any{
+//	    "_from": "users/123",
+//	    "_to": "orders/456",
+//	    "relation": "purchased",
+//	}
+//
+// id, err := client.CreateDocument(ctx, "myDB", "edges", edgeDoc).
 func (d *Document) CreateDocument(ctx context.Context, dbName, collectionName string, document any) (string, error) {
 	collection, tracerCtx, err := executeCollectionOperation(ctx, *d, dbName, collectionName,
 		"createDocument", "")
@@ -19,6 +46,23 @@ func (d *Document) CreateDocument(ctx context.Context, dbName, collectionName st
 		return "", err
 	}
 
+	var isEdge bool
+
+	// Check if the collection is an edge collection
+	isEdge, err = d.isEdgeCollection(ctx, dbName, collectionName)
+	if err != nil {
+		return "", err
+	}
+
+	// Validate edge document if needed
+	if isEdge {
+		err = validateEdgeDocument(document)
+		if err != nil {
+			return "", err
+		}
+	}
+
+	// Create the document in ArangoDB
 	meta, err := collection.CreateDocument(tracerCtx, document)
 	if err != nil {
 		return "", err
@@ -66,24 +110,20 @@ func (d *Document) DeleteDocument(ctx context.Context, dbName, collectionName, d
 	return err
 }
 
-// CreateEdgeDocument creates a new edge document between two vertices.
-func (d *Document) CreateEdgeDocument(ctx context.Context, dbName, collectionName, from, to string, document any) (string, error) {
-	collection, tracerCtx, err := executeCollectionOperation(ctx, *d, dbName, collectionName,
-		"createEdgeDocument", "")
+// isEdgeCollection checks if the given collection is an edge collection.
+func (d *Document) isEdgeCollection(ctx context.Context, dbName, collectionName string) (bool, error) {
+	collection, err := d.client.DB.getCollection(ctx, dbName, collectionName)
 	if err != nil {
-		return "", err
+		return false, err
 	}
 
-	meta, err := collection.CreateDocument(tracerCtx, map[string]any{
-		"_from": from,
-		"_to":   to,
-		"data":  document,
-	})
+	properties, err := collection.Properties(ctx)
 	if err != nil {
-		return "", err
+		return false, err
 	}
 
-	return meta.Key, nil
+	// ArangoDB type: 3 = Edge Collection, 2 = Document Collection
+	return properties.Type == arangoEdgeCollectionType, nil
 }
 
 func executeCollectionOperation(ctx context.Context, d Document, dbName, collectionName,
@@ -107,4 +147,30 @@ func executeCollectionOperation(ctx context.Context, d Document, dbName, collect
 	}
 
 	return collection, tracerCtx, nil
+}
+
+// validateEdgeDocument ensures the document contains valid `_from` and `_to` fields when creating an edge.
+func validateEdgeDocument(document any) error {
+	docMap, ok := document.(map[string]any)
+	if !ok {
+		return errInvalidEdgeDocumentType
+	}
+
+	from, fromExists := docMap["_from"]
+	to, toExists := docMap["_to"]
+
+	if !fromExists || !toExists {
+		return errMissingEdgeFields
+	}
+
+	// Ensure `_from` and `_to` are strings
+	if _, ok := from.(string); !ok {
+		return errInvalidFromField
+	}
+
+	if _, ok := to.(string); !ok {
+		return errInvalidToField
+	}
+
+	return nil
 }

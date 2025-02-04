@@ -28,8 +28,6 @@ type ArangoDB interface {
 	UpdateDocument(ctx context.Context, dbName, collectionName, documentID string, document any) error
 	DeleteDocument(ctx context.Context, dbName, collectionName, documentID string) error
 
-	CreateEdgeDocument(ctx context.Context, dbName, collectionName string, from, to string, document any) (string, error)
-
 	CreateGraph(ctx context.Context, database, graph string, edgeDefinitions any) error
 	DropGraph(ctx context.Context, database, graph string) error
 	ListGraphs(ctx context.Context, database string) ([]string, error)

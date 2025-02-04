@@ -13,7 +13,10 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-const defaultTimeout = 5 * time.Second
+const (
+	defaultTimeout           = 5 * time.Second
+	arangoEdgeCollectionType = 3
+)
 
 // Client represents an ArangoDB client.
 type Client struct {

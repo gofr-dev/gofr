@@ -601,15 +601,6 @@ type ArangoDB interface {
 	// DeleteDocument deletes a document by its ID from the specified collection.
 	DeleteDocument(ctx context.Context, dbName, collectionName, documentID string) error
 
-	// CreateEdgeDocument creates a new edge document between two vertices.
-	// The `document` parameter should be a map or struct containing the edge data.
-	// Example of `document` parameter:
-	//   document := map[string]any{
-	//       "attribute1": "value1",
-	//       "attribute2": "value2",
-	//   }
-	CreateEdgeDocument(ctx context.Context, dbName, collectionName string, from, to string, document any) (string, error)
-
 	// CreateGraph creates a new graph in a database taking graph name and *[]arangodb.EdgeDefinition as input.
 	CreateGraph(ctx context.Context, database, graph string, edgeDefinitions any) error
 	// DropGraph deletes an existing graph from a database.

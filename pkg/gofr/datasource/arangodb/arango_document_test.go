@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/arangodb/go-driver/v2/arangodb"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 )
@@ -14,8 +15,9 @@ func Test_Client_CreateDocument(t *testing.T) {
 	mockDB := NewMockDatabase(gomock.NewController(t))
 	mockCollection := NewMockCollection(gomock.NewController(t))
 
-	mockArango.EXPECT().Database(gomock.Any(), "testDB").Return(mockDB, nil)
-	mockDB.EXPECT().Collection(gomock.Any(), "testCollection").Return(mockCollection, nil)
+	mockArango.EXPECT().Database(gomock.Any(), "testDB").Return(mockDB, nil).AnyTimes()
+	mockDB.EXPECT().Collection(gomock.Any(), "testCollection").Return(mockCollection, nil).AnyTimes()
+	mockCollection.EXPECT().Properties(gomock.Any()).Return(arangodb.CollectionProperties{}, nil)
 	mockCollection.EXPECT().CreateDocument(gomock.Any(), "testDocument").
 		Return(arangodb.CollectionDocumentCreateResponse{DocumentMeta: arangodb.DocumentMeta{
 			Key: "testDocument", ID: "1"}}, nil)
@@ -34,8 +36,9 @@ func Test_Client_CreateDocument_Error(t *testing.T) {
 	mockDB := NewMockDatabase(gomock.NewController(t))
 	mockCollection := NewMockCollection(gomock.NewController(t))
 
-	mockArango.EXPECT().Database(gomock.Any(), "testDB").Return(mockDB, nil)
-	mockDB.EXPECT().Collection(gomock.Any(), "testCollection").Return(mockCollection, nil)
+	mockArango.EXPECT().Database(gomock.Any(), "testDB").Return(mockDB, nil).AnyTimes()
+	mockDB.EXPECT().Collection(gomock.Any(), "testCollection").Return(mockCollection, nil).AnyTimes()
+	mockCollection.EXPECT().Properties(gomock.Any()).Return(arangodb.CollectionProperties{}, nil)
 	mockCollection.EXPECT().CreateDocument(gomock.Any(), "testDocument").
 		Return(arangodb.CollectionDocumentCreateResponse{}, errDocumentNotFound)
 	mockLogger.EXPECT().Debug(gomock.Any())
@@ -157,4 +160,95 @@ func Test_Client_DeleteDocument_Error(t *testing.T) {
 	err := client.DeleteDocument(context.Background(), "testDB", "testCollection",
 		"testDocument")
 	require.ErrorIs(t, err, errDocumentNotFound, "Expected error while updating the document")
+}
+
+func TestExecuteCollectionOperation(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockLogger := NewMockLogger(ctrl)
+	mockMetrics := NewMockMetrics(ctrl)
+	mockArango := NewMockArango(ctrl)
+	mockDatabase := NewMockDatabase(ctrl)
+	mockCollection := NewMockCollection(ctrl)
+
+	client := New(Config{Host: "localhost", Port: 8527, User: "root", Password: "root"})
+	client.UseLogger(mockLogger)
+	client.UseMetrics(mockMetrics)
+
+	client.client = mockArango
+	d := Document{client: client}
+
+	ctx := context.Background()
+	dbName := "testDB"
+	collectionName := "testCollection"
+	operation := "createDocument"
+	documentID := "doc123"
+
+	mockArango.EXPECT().Database(ctx, dbName).Return(mockDatabase, nil)
+	mockDatabase.EXPECT().Collection(ctx, collectionName).Return(mockCollection, nil)
+	mockLogger.EXPECT().Debug(gomock.Any())
+	mockMetrics.EXPECT().RecordHistogram(ctx, "app_arango_stats", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any())
+
+	_, _, err := executeCollectionOperation(ctx, d, dbName, collectionName, operation, documentID)
+	require.NoError(t, err)
+}
+
+func TestValidateEdgeDocument(t *testing.T) {
+	tests := []struct {
+		name          string
+		document      any
+		expectedError error
+	}{
+		{
+			name: "Success - Valid Edge Document",
+			document: map[string]any{
+				"_from": "vertex1",
+				"_to":   "vertex2",
+			},
+			expectedError: nil,
+		},
+		{
+			name:          "Fail - Document is Not a Map",
+			document:      "invalid",
+			expectedError: errInvalidEdgeDocumentType,
+		},
+		{
+			name: "Fail - Missing _from Field",
+			document: map[string]any{
+				"_to": "vertex2",
+			},
+			expectedError: errMissingEdgeFields,
+		},
+		{
+			name: "Fail - Missing _to Field",
+			document: map[string]any{
+				"_from": "vertex1",
+			},
+			expectedError: errMissingEdgeFields,
+		},
+		{
+			name: "Fail - _from is Not a String",
+			document: map[string]any{
+				"_from": 123,
+				"_to":   "vertex2",
+			},
+			expectedError: errInvalidFromField,
+		},
+		{
+			name: "Fail - _to is Not a String",
+			document: map[string]any{
+				"_from": "vertex1",
+				"_to":   123,
+			},
+			expectedError: errInvalidToField,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validateEdgeDocument(tc.document)
+			assert.Equal(t, tc.expectedError, err)
+		})
+	}
 }
