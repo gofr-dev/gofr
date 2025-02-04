@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
-	"strconv"
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
@@ -478,7 +477,7 @@ func Test_UpdateHandler(t *testing.T) {
 
 	type testCase struct {
 		desc         string
-		id           int
+		id           string
 		reqBody      []byte
 		mockErr      error
 		expectedResp any
@@ -489,7 +488,7 @@ func Test_UpdateHandler(t *testing.T) {
 		tests := []testCase{
 			{
 				desc:         "success case",
-				id:           1,
+				id:           "1",
 				reqBody:      []byte(`{"id":1,"name":"goFr","isEmployed":true}`),
 				mockErr:      nil,
 				expectedResp: "userEntity successfully updated with id: 1",
@@ -497,7 +496,7 @@ func Test_UpdateHandler(t *testing.T) {
 			},
 			{
 				desc:         "bind error",
-				id:           2,
+				id:           "2",
 				reqBody:      []byte(`{"id":"2"}`),
 				mockErr:      nil,
 				expectedResp: nil,
@@ -505,7 +504,7 @@ func Test_UpdateHandler(t *testing.T) {
 			},
 			{
 				desc:         "error From DB",
-				id:           3,
+				id:           "3",
 				reqBody:      []byte(`{"id":3,"name":"goFr","isEmployed":false}`),
 				mockErr:      sqlmock.ErrCancelled,
 				expectedResp: nil,
@@ -518,7 +517,7 @@ func Test_UpdateHandler(t *testing.T) {
 
 		for i, tc := range tests {
 			t.Run(dc.dialect+" "+tc.desc, func(t *testing.T) {
-				ctx := createTestContext(http.MethodPut, "/user", strconv.Itoa(tc.id), tc.reqBody, c)
+				ctx := createTestContext(http.MethodPut, "/user", tc.id, tc.reqBody, c)
 
 				mock.ExpectExec(dc.expectedQuery).WithArgs("goFr", true, tc.id).
 					WillReturnResult(sqlmock.NewResult(1, 1)).WillReturnError(nil)
