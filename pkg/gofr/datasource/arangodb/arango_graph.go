@@ -3,7 +3,10 @@ package arangodb
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
+
+	"github.com/arangodb/go-driver/v2/arangodb"
 )
 
 var (
