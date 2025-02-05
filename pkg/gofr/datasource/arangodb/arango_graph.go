@@ -20,72 +20,17 @@ type Graph struct {
 	client *Client
 }
 
-// GetEdges retrieves all the edge documents connected to a specific vertex in an ArangoDB graph.
-// The method performs a query on the specified edge collection to fetch all edges where the vertex
-// is either the source (_from) or target (_to) of the edge. The results are returned and bound to
-// the provided `resp` argument.
+// GetEdges fetches all edges connected to a given vertex in the specified edge collection.
 //
 // Parameters:
-//   - ctx: The context for the request, used for cancellation and timeouts.
-//   - dbName: The name of the database in which the graph resides.
-//   - graphName: The name of the graph to query edges from.
-//   - edgeCollection: The name of the edge collection to query edges from.
-//   - vertexID: The ID of the vertex whose connected edges are to be fetched.
-//   - resp: A pointer to a slice of `[]arangodb.EdgeDetails` where the resulting edges will be stored.
+//   - ctx: Request context for tracing and cancellation.
+//   - dbName: Database name.
+//   - graphName: Graph name.
+//   - edgeCollection: Edge collection name.
+//   - vertexID: Full vertex ID (e.g., "persons/16563").
+//   - resp: Pointer to `*EdgeDetails` to store results.
 //
-// Returns:
-//   - error: Returns an error if the query fails, the response type is invalid, or any of the input parameters are incorrect.
-//
-// Example usage:
-//
-//	var edges []arangodb.EdgeDetails
-//	err := client.GetEdges(ctx, "testDB", "testGraph", "edges", "vertex123", &edges)
-//	if err != nil {
-//	    log.Fatal(err)
-//	}
-//	fmt.Println(edges)
-func (c *Graph) GetEdges(ctx context.Context, dbName, graphName, edgeCollection, vertexID string,
-	resp any) error {
-	if vertexID == "" || edgeCollection == "" {
-		return errInvalidInput
-	}
-
-	resultSlice, ok := resp.(*[]map[string]any)
-	if !ok {
-		return errInvalidResultType
-	}
-
-	tracerCtx, span := c.client.addTrace(ctx, "getEdges", map[string]string{
-		"DB": dbName, "Graph": graphName, "Collection": edgeCollection, "Vertex": vertexID,
-	})
-	startTime := time.Now()
-
-	defer c.client.sendOperationStats(&QueryLog{
-		Operation:  "getEdges",
-		Database:   dbName,
-		Collection: edgeCollection,
-	}, startTime, "getEdges", span)
-
-	// Define the query to get edges from the specified vertex
-	query := `
-		FOR edge IN @@edgeCollection
-			FILTER edge._from == @vertexID OR edge._to == @vertexID
-			RETURN edge
-	`
-	// Bind variables
-	bindVars := map[string]any{
-		"@edgeCollection": edgeCollection,
-		"vertexID":        vertexID,
-	}
-
-	err := c.client.Query(tracerCtx, dbName, query, bindVars, resultSlice)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
+// Returns an error if input is invalid, `resp` is of the wrong type, or the query fails.
 func (c *Client) GetEdges(ctx context.Context, dbName, graphName, edgeCollection, vertexID string,
 	resp any) error {
 	if vertexID == "" || edgeCollection == "" {
