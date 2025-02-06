@@ -127,7 +127,7 @@ func (c *Client) AddTrace(ctx context.Context, method string) (context.Context, 
 	return ctx, nil
 }
 
-func (c *Client) Post(ctx context.Context, url string, input any) (response []byte, err error) {
+func (c *Client) post(ctx context.Context, url string, input any) (response []byte, err error) {
 	response = make([]byte, 0)
 
 	reqJSON, err := json.Marshal(input)
@@ -136,7 +136,7 @@ func (c *Client) Post(ctx context.Context, url string, input any) (response []by
 		return response, err
 	}
 
-	resp, err := c.Call(ctx, http.MethodPost, url, bytes.NewReader(reqJSON))
+	resp, err := c.call(ctx, http.MethodPost, url, bytes.NewReader(reqJSON))
 	if err != nil {
 		c.logger.Errorf("%v", err)
 		return response, err
@@ -152,8 +152,8 @@ func (c *Client) Post(ctx context.Context, url string, input any) (response []by
 }
 
 // Get makes a get request.
-func (c *Client) Get(ctx context.Context, url string) (response []byte, err error) {
-	resp, err := c.Call(ctx, http.MethodGet, url, nil)
+func (c *Client) get(ctx context.Context, url string) (response []byte, err error) {
+	resp, err := c.call(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		c.logger.Errorf("%v", err)
 		return response, err
@@ -169,7 +169,7 @@ func (c *Client) Get(ctx context.Context, url string) (response []byte, err erro
 }
 
 // Call makes a request.
-func (c *Client) Call(ctx context.Context, method, endpoint string, body io.Reader) (response *http.Response, err error) {
+func (c *Client) call(ctx context.Context, method, endpoint string, body io.Reader) (response *http.Response, err error) {
 	url := c.config.BaseURL + endpoint
 
 	req, err := http.NewRequestWithContext(ctx, method, url, body)

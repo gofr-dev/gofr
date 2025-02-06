@@ -53,8 +53,6 @@ func Chat(ctx *gofr.Context) (any, error) {
 		return nil, err
 	}
 
-	println(req)
-
 	resp, err := ctx.Openai.CreateCompletions(ctx, req)
 	if err != nil {
 		return nil, err

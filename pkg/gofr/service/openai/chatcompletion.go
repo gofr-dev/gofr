@@ -124,7 +124,7 @@ func (e *Error) Error() string {
 }
 
 func (c *Client) CreateCompletionsRaw(ctx context.Context, r *CreateCompletionsRequest) ([]byte, error) {
-	return c.Post(ctx, CompletionsEndpoint, r)
+	return c.post(ctx, CompletionsEndpoint, r)
 }
 
 func (c *Client) CreateCompletions(ctx context.Context, r any) (any, error) {

@@ -247,7 +247,7 @@ func Test_Call(t *testing.T) {
 
 			mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 
-			resp, err := client.Call(context.Background(), tt.method, tt.endpoint, tt.body)
+			resp, err := client.call(context.Background(), tt.method, tt.endpoint, tt.body)
 			if resp != nil {
 				defer resp.Body.Close()
 			}
@@ -335,7 +335,7 @@ func Test_Get(t *testing.T) {
 
 			mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 
-			got, err := client.Get(context.Background(), tt.url)
+			got, err := client.get(context.Background(), tt.url)
 
 			if tt.wantErr {
 				require.Error(t, err)
@@ -447,7 +447,7 @@ func Test_Post(t *testing.T) {
 
 			mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 
-			got, err := client.Post(context.Background(), tt.url, tt.input)
+			got, err := client.post(context.Background(), tt.url, tt.input)
 
 			if tt.wantErr {
 				require.Error(t, err)
