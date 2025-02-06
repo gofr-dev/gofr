@@ -9752,6 +9752,282 @@ func (mr *MockMongoProviderMockRecorder) UseTracer(tracer any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UseTracer", reflect.TypeOf((*MockMongoProvider)(nil).UseTracer), tracer)
 }
 
+// MockSurrealDB is a mock of SurrealDB interface.
+type MockSurrealDB struct {
+	ctrl     *gomock.Controller
+	recorder *MockSurrealDBMockRecorder
+	isgomock struct{}
+}
+
+// MockSurrealDBMockRecorder is the mock recorder for MockSurrealDB.
+type MockSurrealDBMockRecorder struct {
+	mock *MockSurrealDB
+}
+
+// NewMockSurrealDB creates a new mock instance.
+func NewMockSurrealDB(ctrl *gomock.Controller) *MockSurrealDB {
+	mock := &MockSurrealDB{ctrl: ctrl}
+	mock.recorder = &MockSurrealDBMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockSurrealDB) EXPECT() *MockSurrealDBMockRecorder {
+	return m.recorder
+}
+
+// Create mocks base method.
+func (m *MockSurrealDB) Create(ctx context.Context, table string, data any) (map[string]any, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Create", ctx, table, data)
+	ret0, _ := ret[0].(map[string]any)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Create indicates an expected call of Create.
+func (mr *MockSurrealDBMockRecorder) Create(ctx, table, data any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Create", reflect.TypeOf((*MockSurrealDB)(nil).Create), ctx, table, data)
+}
+
+// Delete mocks base method.
+func (m *MockSurrealDB) Delete(ctx context.Context, table, id string) (any, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Delete", ctx, table, id)
+	ret0, _ := ret[0].(any)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Delete indicates an expected call of Delete.
+func (mr *MockSurrealDBMockRecorder) Delete(ctx, table, id any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockSurrealDB)(nil).Delete), ctx, table, id)
+}
+
+// HealthCheck mocks base method.
+func (m *MockSurrealDB) HealthCheck(arg0 context.Context) (any, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HealthCheck", arg0)
+	ret0, _ := ret[0].(any)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// HealthCheck indicates an expected call of HealthCheck.
+func (mr *MockSurrealDBMockRecorder) HealthCheck(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HealthCheck", reflect.TypeOf((*MockSurrealDB)(nil).HealthCheck), arg0)
+}
+
+// Query mocks base method.
+func (m *MockSurrealDB) Query(ctx context.Context, query string, vars map[string]any) ([]any, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Query", ctx, query, vars)
+	ret0, _ := ret[0].([]any)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Query indicates an expected call of Query.
+func (mr *MockSurrealDBMockRecorder) Query(ctx, query, vars any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Query", reflect.TypeOf((*MockSurrealDB)(nil).Query), ctx, query, vars)
+}
+
+// Select mocks base method.
+func (m *MockSurrealDB) Select(ctx context.Context, table string) ([]map[string]any, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Select", ctx, table)
+	ret0, _ := ret[0].([]map[string]any)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Select indicates an expected call of Select.
+func (mr *MockSurrealDBMockRecorder) Select(ctx, table any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Select", reflect.TypeOf((*MockSurrealDB)(nil).Select), ctx, table)
+}
+
+// Update mocks base method.
+func (m *MockSurrealDB) Update(ctx context.Context, table, id string, data any) (any, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Update", ctx, table, id, data)
+	ret0, _ := ret[0].(any)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Update indicates an expected call of Update.
+func (mr *MockSurrealDBMockRecorder) Update(ctx, table, id, data any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Update", reflect.TypeOf((*MockSurrealDB)(nil).Update), ctx, table, id, data)
+}
+
+// MockSurrealBDProvider is a mock of SurrealBDProvider interface.
+type MockSurrealBDProvider struct {
+	ctrl     *gomock.Controller
+	recorder *MockSurrealBDProviderMockRecorder
+	isgomock struct{}
+}
+
+// MockSurrealBDProviderMockRecorder is the mock recorder for MockSurrealBDProvider.
+type MockSurrealBDProviderMockRecorder struct {
+	mock *MockSurrealBDProvider
+}
+
+// NewMockSurrealBDProvider creates a new mock instance.
+func NewMockSurrealBDProvider(ctrl *gomock.Controller) *MockSurrealBDProvider {
+	mock := &MockSurrealBDProvider{ctrl: ctrl}
+	mock.recorder = &MockSurrealBDProviderMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockSurrealBDProvider) EXPECT() *MockSurrealBDProviderMockRecorder {
+	return m.recorder
+}
+
+// Connect mocks base method.
+func (m *MockSurrealBDProvider) Connect() {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "Connect")
+}
+
+// Connect indicates an expected call of Connect.
+func (mr *MockSurrealBDProviderMockRecorder) Connect() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Connect", reflect.TypeOf((*MockSurrealBDProvider)(nil).Connect))
+}
+
+// Create mocks base method.
+func (m *MockSurrealBDProvider) Create(ctx context.Context, table string, data any) (map[string]any, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Create", ctx, table, data)
+	ret0, _ := ret[0].(map[string]any)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Create indicates an expected call of Create.
+func (mr *MockSurrealBDProviderMockRecorder) Create(ctx, table, data any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Create", reflect.TypeOf((*MockSurrealBDProvider)(nil).Create), ctx, table, data)
+}
+
+// Delete mocks base method.
+func (m *MockSurrealBDProvider) Delete(ctx context.Context, table, id string) (any, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Delete", ctx, table, id)
+	ret0, _ := ret[0].(any)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Delete indicates an expected call of Delete.
+func (mr *MockSurrealBDProviderMockRecorder) Delete(ctx, table, id any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockSurrealBDProvider)(nil).Delete), ctx, table, id)
+}
+
+// HealthCheck mocks base method.
+func (m *MockSurrealBDProvider) HealthCheck(arg0 context.Context) (any, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HealthCheck", arg0)
+	ret0, _ := ret[0].(any)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// HealthCheck indicates an expected call of HealthCheck.
+func (mr *MockSurrealBDProviderMockRecorder) HealthCheck(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HealthCheck", reflect.TypeOf((*MockSurrealBDProvider)(nil).HealthCheck), arg0)
+}
+
+// Query mocks base method.
+func (m *MockSurrealBDProvider) Query(ctx context.Context, query string, vars map[string]any) ([]any, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Query", ctx, query, vars)
+	ret0, _ := ret[0].([]any)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Query indicates an expected call of Query.
+func (mr *MockSurrealBDProviderMockRecorder) Query(ctx, query, vars any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Query", reflect.TypeOf((*MockSurrealBDProvider)(nil).Query), ctx, query, vars)
+}
+
+// Select mocks base method.
+func (m *MockSurrealBDProvider) Select(ctx context.Context, table string) ([]map[string]any, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Select", ctx, table)
+	ret0, _ := ret[0].([]map[string]any)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Select indicates an expected call of Select.
+func (mr *MockSurrealBDProviderMockRecorder) Select(ctx, table any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Select", reflect.TypeOf((*MockSurrealBDProvider)(nil).Select), ctx, table)
+}
+
+// Update mocks base method.
+func (m *MockSurrealBDProvider) Update(ctx context.Context, table, id string, data any) (any, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Update", ctx, table, id, data)
+	ret0, _ := ret[0].(any)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Update indicates an expected call of Update.
+func (mr *MockSurrealBDProviderMockRecorder) Update(ctx, table, id, data any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Update", reflect.TypeOf((*MockSurrealBDProvider)(nil).Update), ctx, table, id, data)
+}
+
+// UseLogger mocks base method.
+func (m *MockSurrealBDProvider) UseLogger(logger any) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "UseLogger", logger)
+}
+
+// UseLogger indicates an expected call of UseLogger.
+func (mr *MockSurrealBDProviderMockRecorder) UseLogger(logger any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UseLogger", reflect.TypeOf((*MockSurrealBDProvider)(nil).UseLogger), logger)
+}
+
+// UseMetrics mocks base method.
+func (m *MockSurrealBDProvider) UseMetrics(metrics any) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "UseMetrics", metrics)
+}
+
+// UseMetrics indicates an expected call of UseMetrics.
+func (mr *MockSurrealBDProviderMockRecorder) UseMetrics(metrics any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UseMetrics", reflect.TypeOf((*MockSurrealBDProvider)(nil).UseMetrics), metrics)
+}
+
+// UseTracer mocks base method.
+func (m *MockSurrealBDProvider) UseTracer(tracer any) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "UseTracer", tracer)
+}
+
+// UseTracer indicates an expected call of UseTracer.
+func (mr *MockSurrealBDProviderMockRecorder) UseTracer(tracer any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UseTracer", reflect.TypeOf((*MockSurrealBDProvider)(nil).UseTracer), tracer)
+}
+
 // Mockprovider is a mock of provider interface.
 type Mockprovider struct {
 	ctrl     *gomock.Controller
@@ -11754,4 +12030,300 @@ func (m *MockScyllaDBProvider) UseTracer(tracer any) {
 func (mr *MockScyllaDBProviderMockRecorder) UseTracer(tracer any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UseTracer", reflect.TypeOf((*MockScyllaDBProvider)(nil).UseTracer), tracer)
+}
+
+// MockArangoDB is a mock of ArangoDB interface.
+type MockArangoDB struct {
+	ctrl     *gomock.Controller
+	recorder *MockArangoDBMockRecorder
+	isgomock struct{}
+}
+
+// MockArangoDBMockRecorder is the mock recorder for MockArangoDB.
+type MockArangoDBMockRecorder struct {
+	mock *MockArangoDB
+}
+
+// NewMockArangoDB creates a new mock instance.
+func NewMockArangoDB(ctrl *gomock.Controller) *MockArangoDB {
+	mock := &MockArangoDB{ctrl: ctrl}
+	mock.recorder = &MockArangoDBMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockArangoDB) EXPECT() *MockArangoDBMockRecorder {
+	return m.recorder
+}
+
+// CreateDocument mocks base method.
+func (m *MockArangoDB) CreateDocument(ctx context.Context, dbName, collectionName string, document any) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateDocument", ctx, dbName, collectionName, document)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreateDocument indicates an expected call of CreateDocument.
+func (mr *MockArangoDBMockRecorder) CreateDocument(ctx, dbName, collectionName, document any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateDocument", reflect.TypeOf((*MockArangoDB)(nil).CreateDocument), ctx, dbName, collectionName, document)
+}
+
+// DeleteDocument mocks base method.
+func (m *MockArangoDB) DeleteDocument(ctx context.Context, dbName, collectionName, documentID string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteDocument", ctx, dbName, collectionName, documentID)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteDocument indicates an expected call of DeleteDocument.
+func (mr *MockArangoDBMockRecorder) DeleteDocument(ctx, dbName, collectionName, documentID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteDocument", reflect.TypeOf((*MockArangoDB)(nil).DeleteDocument), ctx, dbName, collectionName, documentID)
+}
+
+// GetDocument mocks base method.
+func (m *MockArangoDB) GetDocument(ctx context.Context, dbName, collectionName, documentID string, result any) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetDocument", ctx, dbName, collectionName, documentID, result)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// GetDocument indicates an expected call of GetDocument.
+func (mr *MockArangoDBMockRecorder) GetDocument(ctx, dbName, collectionName, documentID, result any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDocument", reflect.TypeOf((*MockArangoDB)(nil).GetDocument), ctx, dbName, collectionName, documentID, result)
+}
+
+// GetEdges mocks base method.
+func (m *MockArangoDB) GetEdges(ctx context.Context, dbName, graphName, edgeCollection, vertexID string, resp any) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetEdges", ctx, dbName, graphName, edgeCollection, vertexID, resp)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// GetEdges indicates an expected call of GetEdges.
+func (mr *MockArangoDBMockRecorder) GetEdges(ctx, dbName, graphName, edgeCollection, vertexID, resp any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetEdges", reflect.TypeOf((*MockArangoDB)(nil).GetEdges), ctx, dbName, graphName, edgeCollection, vertexID, resp)
+}
+
+// HealthCheck mocks base method.
+func (m *MockArangoDB) HealthCheck(arg0 context.Context) (any, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HealthCheck", arg0)
+	ret0, _ := ret[0].(any)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// HealthCheck indicates an expected call of HealthCheck.
+func (mr *MockArangoDBMockRecorder) HealthCheck(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HealthCheck", reflect.TypeOf((*MockArangoDB)(nil).HealthCheck), arg0)
+}
+
+// Query mocks base method.
+func (m *MockArangoDB) Query(ctx context.Context, dbName, query string, bindVars map[string]any, result any) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Query", ctx, dbName, query, bindVars, result)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Query indicates an expected call of Query.
+func (mr *MockArangoDBMockRecorder) Query(ctx, dbName, query, bindVars, result any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Query", reflect.TypeOf((*MockArangoDB)(nil).Query), ctx, dbName, query, bindVars, result)
+}
+
+// UpdateDocument mocks base method.
+func (m *MockArangoDB) UpdateDocument(ctx context.Context, dbName, collectionName, documentID string, document any) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateDocument", ctx, dbName, collectionName, documentID, document)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UpdateDocument indicates an expected call of UpdateDocument.
+func (mr *MockArangoDBMockRecorder) UpdateDocument(ctx, dbName, collectionName, documentID, document any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateDocument", reflect.TypeOf((*MockArangoDB)(nil).UpdateDocument), ctx, dbName, collectionName, documentID, document)
+}
+
+// MockArangoDBProvider is a mock of ArangoDBProvider interface.
+type MockArangoDBProvider struct {
+	ctrl     *gomock.Controller
+	recorder *MockArangoDBProviderMockRecorder
+	isgomock struct{}
+}
+
+// MockArangoDBProviderMockRecorder is the mock recorder for MockArangoDBProvider.
+type MockArangoDBProviderMockRecorder struct {
+	mock *MockArangoDBProvider
+}
+
+// NewMockArangoDBProvider creates a new mock instance.
+func NewMockArangoDBProvider(ctrl *gomock.Controller) *MockArangoDBProvider {
+	mock := &MockArangoDBProvider{ctrl: ctrl}
+	mock.recorder = &MockArangoDBProviderMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockArangoDBProvider) EXPECT() *MockArangoDBProviderMockRecorder {
+	return m.recorder
+}
+
+// Connect mocks base method.
+func (m *MockArangoDBProvider) Connect() {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "Connect")
+}
+
+// Connect indicates an expected call of Connect.
+func (mr *MockArangoDBProviderMockRecorder) Connect() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Connect", reflect.TypeOf((*MockArangoDBProvider)(nil).Connect))
+}
+
+// CreateDocument mocks base method.
+func (m *MockArangoDBProvider) CreateDocument(ctx context.Context, dbName, collectionName string, document any) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateDocument", ctx, dbName, collectionName, document)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreateDocument indicates an expected call of CreateDocument.
+func (mr *MockArangoDBProviderMockRecorder) CreateDocument(ctx, dbName, collectionName, document any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateDocument", reflect.TypeOf((*MockArangoDBProvider)(nil).CreateDocument), ctx, dbName, collectionName, document)
+}
+
+// DeleteDocument mocks base method.
+func (m *MockArangoDBProvider) DeleteDocument(ctx context.Context, dbName, collectionName, documentID string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteDocument", ctx, dbName, collectionName, documentID)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteDocument indicates an expected call of DeleteDocument.
+func (mr *MockArangoDBProviderMockRecorder) DeleteDocument(ctx, dbName, collectionName, documentID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteDocument", reflect.TypeOf((*MockArangoDBProvider)(nil).DeleteDocument), ctx, dbName, collectionName, documentID)
+}
+
+// GetDocument mocks base method.
+func (m *MockArangoDBProvider) GetDocument(ctx context.Context, dbName, collectionName, documentID string, result any) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetDocument", ctx, dbName, collectionName, documentID, result)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// GetDocument indicates an expected call of GetDocument.
+func (mr *MockArangoDBProviderMockRecorder) GetDocument(ctx, dbName, collectionName, documentID, result any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDocument", reflect.TypeOf((*MockArangoDBProvider)(nil).GetDocument), ctx, dbName, collectionName, documentID, result)
+}
+
+// GetEdges mocks base method.
+func (m *MockArangoDBProvider) GetEdges(ctx context.Context, dbName, graphName, edgeCollection, vertexID string, resp any) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetEdges", ctx, dbName, graphName, edgeCollection, vertexID, resp)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// GetEdges indicates an expected call of GetEdges.
+func (mr *MockArangoDBProviderMockRecorder) GetEdges(ctx, dbName, graphName, edgeCollection, vertexID, resp any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetEdges", reflect.TypeOf((*MockArangoDBProvider)(nil).GetEdges), ctx, dbName, graphName, edgeCollection, vertexID, resp)
+}
+
+// HealthCheck mocks base method.
+func (m *MockArangoDBProvider) HealthCheck(arg0 context.Context) (any, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HealthCheck", arg0)
+	ret0, _ := ret[0].(any)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// HealthCheck indicates an expected call of HealthCheck.
+func (mr *MockArangoDBProviderMockRecorder) HealthCheck(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HealthCheck", reflect.TypeOf((*MockArangoDBProvider)(nil).HealthCheck), arg0)
+}
+
+// Query mocks base method.
+func (m *MockArangoDBProvider) Query(ctx context.Context, dbName, query string, bindVars map[string]any, result any) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Query", ctx, dbName, query, bindVars, result)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Query indicates an expected call of Query.
+func (mr *MockArangoDBProviderMockRecorder) Query(ctx, dbName, query, bindVars, result any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Query", reflect.TypeOf((*MockArangoDBProvider)(nil).Query), ctx, dbName, query, bindVars, result)
+}
+
+// UpdateDocument mocks base method.
+func (m *MockArangoDBProvider) UpdateDocument(ctx context.Context, dbName, collectionName, documentID string, document any) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateDocument", ctx, dbName, collectionName, documentID, document)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UpdateDocument indicates an expected call of UpdateDocument.
+func (mr *MockArangoDBProviderMockRecorder) UpdateDocument(ctx, dbName, collectionName, documentID, document any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateDocument", reflect.TypeOf((*MockArangoDBProvider)(nil).UpdateDocument), ctx, dbName, collectionName, documentID, document)
+}
+
+// UseLogger mocks base method.
+func (m *MockArangoDBProvider) UseLogger(logger any) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "UseLogger", logger)
+}
+
+// UseLogger indicates an expected call of UseLogger.
+func (mr *MockArangoDBProviderMockRecorder) UseLogger(logger any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UseLogger", reflect.TypeOf((*MockArangoDBProvider)(nil).UseLogger), logger)
+}
+
+// UseMetrics mocks base method.
+func (m *MockArangoDBProvider) UseMetrics(metrics any) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "UseMetrics", metrics)
+}
+
+// UseMetrics indicates an expected call of UseMetrics.
+func (mr *MockArangoDBProviderMockRecorder) UseMetrics(metrics any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UseMetrics", reflect.TypeOf((*MockArangoDBProvider)(nil).UseMetrics), metrics)
+}
+
+// UseTracer mocks base method.
+func (m *MockArangoDBProvider) UseTracer(tracer any) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "UseTracer", tracer)
+}
+
+// UseTracer indicates an expected call of UseTracer.
+func (mr *MockArangoDBProviderMockRecorder) UseTracer(tracer any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UseTracer", reflect.TypeOf((*MockArangoDBProvider)(nil).UseTracer), tracer)
 }
