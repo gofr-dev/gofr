@@ -12,7 +12,7 @@ import (
 )
 
 func TestRPCLog_String(t *testing.T) {
-	l := RPCLog{
+	l := gRPCLog{
 		ID:         "123",
 		StartTime:  "2020-01-01T12:12:12",
 		Method:     http.MethodGet,
@@ -46,7 +46,7 @@ func TestRPCLog_PrettyPrint(t *testing.T) {
 	startTime := time.Now().String()
 
 	log := testutil.StdoutOutputForFunc(func() {
-		l := RPCLog{
+		l := gRPCLog{
 			ID:           "1",
 			StartTime:    startTime,
 			ResponseTime: 10,
