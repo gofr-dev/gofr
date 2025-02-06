@@ -3,9 +3,10 @@
 We have already seen how GoFr can help ease the development of HTTP servers, but there are cases where performance is primarily required sacrificing flexibility. In these types of scenarios gRPC protocol comes into picture. {% new-tab-link title="gRPC" href="https://grpc.io/docs/what-is-grpc/introduction/" /%} is an open-source RPC(Remote Procedure Call) framework initially developed by Google.
 
 GoFr streamlines the creation of gRPC servers and clients with unified GoFr's context support. 
-It provides built-in tracing, metrics, and logging to ensure seamless performance monitoring for both 
-gRPC servers and inter-service gRPC communication. Using GoFr's context, you can easily define custom metrics and 
-traces across gRPC handlers, enabling consistent observability and simplified debugging throughout your system.
+It provides built-in tracing, metrics, and logging to ensure seamless performance monitoring for both gRPC servers and inter-service gRPC communication. 
+With GoFr's context, you can seamlessly define custom metrics and traces across gRPC handlers, ensuring consistent observability and streamlined debugging throughout 
+your system. Additionally, GoFr provides a built-in health check for all your services and supports inter-service 
+health checks, allowing gRPC services to monitor each other effortlessly.
 
 ## Prerequisites
 
@@ -137,7 +138,7 @@ import (
 func main() {
     app := gofr.New()
 
-    packageName.Register{serviceName}ServerWithGofr(app, &{packageName}.{serviceName}GoFrServer{})
+    packageName.Register{serviceName}ServerWithGofr(app, &{packageName}.New{serviceName}GoFrServer())
 
     app.Run()
 }
@@ -145,7 +146,7 @@ func main() {
 
 >Note: By default, gRPC server will run on port 9000, to customize the port users can set `GRPC_PORT` config in the .env
 
-## Generating tracing enabled gRPC Client using `gofr wrap grpc client`
+## Generating gRPC Client using `gofr wrap grpc client`
 
 **1. Use the `gofr wrap grpc client` Command:**
    ```bash
@@ -177,5 +178,39 @@ return nil, err
 
 return res, nil
 }
+```
+
+## HealthChecks in GoFr's gRPC Service/Clients
+Health Checks in GoFr's gRPC Services
+
+GoFr provides built-in health checks for gRPC services, enabling observability, monitoring, and inter-service health verification.
+
+### Client Interface
+
+```go
+type {serviceName}GoFrClient interface {
+SayHello(*gofr.Context, *HelloRequest, ...grpc.CallOption) (*HelloResponse, error)
+health
+}
+
+type health interface {
+Check(ctx *gofr.Context, in *grpc_health_v1.HealthCheckRequest, opts ...grpc.CallOption) (*grpc_health_v1.HealthCheckResponse, error)
+Watch(ctx *gofr.Context, in *grpc_health_v1.HealthCheckRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[grpc_health_v1.HealthCheckResponse], error)
+}
+```
+
+### Server Integration
+```go
+type {serviceName}GoFrServer struct {
+health *healthServer
+}
+```
+Supported Methods for HealthCheck :
+```go
+func (h *healthServer) Check(ctx *gofr.Context, req *grpc_health_v1.HealthCheckRequest) (*grpc_health_v1.HealthCheckResponse, error)
+func (h *healthServer) Watch(ctx *gofr.Context, in *grpc_health_v1.HealthCheckRequest, stream grpc_health_v1.Health_WatchServer) error
+func (h *healthServer) SetServingStatus(ctx *gofr.Context, service string, status grpc_health_v1.HealthCheckResponse_ServingStatus)
+func (h *healthServer) Shutdown(ctx *gofr.Context)
+func (h *healthServer) Resume(ctx *gofr.Context)
 ```
 > ##### Check out the example of setting up a gRPC server/client in GoFr: [Visit GitHub](https://github.com/gofr-dev/gofr/tree/main/examples/grpc)

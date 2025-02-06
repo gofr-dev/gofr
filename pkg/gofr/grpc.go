@@ -25,7 +25,7 @@ func newGRPCServer(c *container.Container, port int) *grpcServer {
 		server: grpc.NewServer(
 			grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(
 				grpc_recovery.UnaryServerInterceptor(),
-				gofr_grpc.LoggingInterceptor(c.Logger),
+				gofr_grpc.ObservabilityInterceptor(c.Logger, c.Metrics()),
 			))),
 		port: port,
 	}

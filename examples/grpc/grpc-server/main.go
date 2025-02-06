@@ -8,7 +8,7 @@ import (
 func main() {
 	app := gofr.New()
 
-	server.RegisterHelloServerWithGofr(app, &server.HelloGoFrServer{})
+	server.RegisterHelloServerWithGofr(app, server.NewHelloGoFrServer())
 
 	app.Run()
 }

@@ -1,12 +1,12 @@
 # Custom Spans In Tracing
 
-GoFr's built-in tracing provides valuable insights into application's behavior. However, sometimes you might need 
+GoFr's built-in tracing provides valuable insights into application's behavior. However, sometimes we might need 
 even more granular details about specific operations within your application. This is where `custom spans` can be used.
 
 ## How it helps?
-By adding custom spans in traces to your requests, you can:
+By adding custom spans in traces to our requests, we can:
 
-- **Gain granular insights:** Custom spans allow you to track specific operations or functions within your application, 
+- **Gain granular insights:** Custom spans allows us to track specific operations or functions within your application, 
      providing detailed performance data.
 - **Identify bottlenecks:** Analyzing custom spans helps to pinpoint areas of your code that may be causing 
       performance bottlenecks or inefficiencies.

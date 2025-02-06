@@ -283,6 +283,7 @@ func (e *entity) Get(c *Context) (any, error) {
 
 func (e *entity) Update(c *Context) (any, error) {
 	newEntity := reflect.New(e.entityType).Interface()
+	id := c.PathParam(e.primaryKey)
 
 	err := c.Bind(newEntity)
 	if err != nil {
@@ -299,11 +300,9 @@ func (e *entity) Update(c *Context) (any, error) {
 		fieldValues = append(fieldValues, reflect.ValueOf(newEntity).Elem().Field(i).Interface())
 	}
 
-	id := c.PathParam("id")
-
 	stmt := sql.UpdateByQuery(c.SQL.Dialect(), e.tableName, fieldNames[1:], e.primaryKey)
 
-	_, err = c.SQL.ExecContext(c, stmt, append(fieldValues[1:], fieldValues[0])...)
+	_, err = c.SQL.ExecContext(c, stmt, append(fieldValues[1:], id)...)
 	if err != nil {
 		return nil, err
 	}
