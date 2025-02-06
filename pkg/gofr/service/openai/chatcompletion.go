@@ -166,6 +166,7 @@ func (c *Client) CreateCompletions(ctx context.Context, r any) (any, error) {
 
 	ql := &APILog{
 		ID:                response.ID,
+		Query:             "CreateCompletions",
 		Object:            response.Object,
 		Created:           response.Created,
 		Model:             response.Model,

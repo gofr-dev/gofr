@@ -89,6 +89,9 @@ func NewMockContainer(t *testing.T, options ...options) (*Container, *Mocks) {
 
 	openAIMock := NewMockOpenAIProvider(ctrl)
 	container.OpenAI = openAIMock
+	
+	arangoMock := NewMockArangoDBProvider(ctrl)
+	container.ArangoDB = arangoMock
 
 	var httpMock *service.MockHTTP
 
