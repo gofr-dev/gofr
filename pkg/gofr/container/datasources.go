@@ -574,3 +574,29 @@ type ScyllaDBProvider interface {
 	ScyllaDB
 	provider
 }
+
+type ArangoDB interface {
+	// CreateDocument creates a new document in the specified collection.
+	CreateDocument(ctx context.Context, dbName, collectionName string, document any) (string, error)
+	// GetDocument retrieves a document by its ID from the specified collection.
+	GetDocument(ctx context.Context, dbName, collectionName, documentID string, result any) error
+	// UpdateDocument updates an existing document in the specified collection.
+	UpdateDocument(ctx context.Context, dbName, collectionName, documentID string, document any) error
+	// DeleteDocument deletes a document by its ID from the specified collection.
+	DeleteDocument(ctx context.Context, dbName, collectionName, documentID string) error
+
+	// GetEdges retrieves all the edge documents connected to a specific vertex in an ArangoDB graph.
+	GetEdges(ctx context.Context, dbName, graphName, edgeCollection, vertexID string, resp any) error
+
+	// Query executes an AQL query and binds the results
+	Query(ctx context.Context, dbName string, query string, bindVars map[string]any, result any) error
+
+	HealthChecker
+}
+
+// ArangoDBProvider is an interface that extends ArangoDB with additional methods for logging, metrics, and connection management.
+type ArangoDBProvider interface {
+	ArangoDB
+
+	provider
+}
