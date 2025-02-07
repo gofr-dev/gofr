@@ -75,13 +75,15 @@ func New(config *Config, logger Logger, metrics Metrics) *MQTT {
 	options.SetReconnectingHandler(createReconnectingHandler(logger, config))
 	// create the client using the options above
 	client := mqtt.NewClient(options)
+
 	if token := client.Connect(); token.Wait() && token.Error() != nil {
 		logger.Errorf("could not connect to MQTT at '%v:%v', error: %v", config.Hostname, config.Port, token.Error())
 
-		return &MQTT{Client: client, config: config, logger: logger, mu: mu, metrics: metrics}
-	}
+		go retryConnect(client, config, logger, options)
+	} else {
+		logger.Infof("connected to MQTT at '%v:%v' with clientID '%v'", config.Hostname, config.Port, options.ClientID)
 
-	logger.Infof("connected to MQTT at '%v:%v' with clientID '%v'", config.Hostname, config.Port, options.ClientID)
+	}
 
 	return &MQTT{Client: client, config: config, logger: logger, subscriptions: subs, mu: mu, metrics: metrics}
 }
@@ -315,6 +317,20 @@ func (m *MQTT) Ping() error {
 	}
 
 	return nil
+}
+
+func retryConnect(client mqtt.Client, config *Config, logger Logger, options *mqtt.ClientOptions) {
+	for {
+		if token := client.Connect(); token.Wait() && token.Error() != nil {
+			logger.Errorf("could not connect to MQTT at '%v:%v', error: %v", config.Hostname, config.Port, token.Error())
+
+			time.Sleep(30 * time.Second)
+		} else {
+			logger.Infof("connected to MQTT at '%v:%v' with clientID '%v'", config.Hostname, config.Port, options.ClientID)
+
+			return
+		}
+	}
 }
 
 func createReconnectHandler(mu *sync.RWMutex, config *Config, subs map[string]subscription) func(c mqtt.Client) {
