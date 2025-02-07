@@ -11,6 +11,7 @@ import (
 
 	gcPubSub "cloud.google.com/go/pubsub"
 	"go.opentelemetry.io/otel"
+	"google.golang.org/api/iterator"
 
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 )
@@ -19,6 +20,8 @@ var (
 	errProjectIDNotProvided    = errors.New("google project id not provided")
 	errSubscriptionNotProvided = errors.New("subscription name not provided")
 )
+
+const defaultRetryInterval = 10 * time.Second
 
 type Config struct {
 	ProjectID        string
@@ -47,14 +50,14 @@ func New(conf Config, logger pubsub.Logger, metrics Metrics) *googleClient {
 
 	logger.Debugf("connecting to google pubsub client with projectID '%s' and subscriptionName '%s", conf.ProjectID, conf.SubscriptionName)
 
-	client, err := gcPubSub.NewClient(context.Background(), conf.ProjectID)
+	client, err := connect(conf, logger)
 	if err != nil {
+		go retryConnect(conf, logger)
+
 		return &googleClient{
 			Config: conf,
 		}
 	}
-
-	logger.Logf("connected to google pubsub client, projectID: %s", client.Project())
 
 	return &googleClient{
 		Config:      conf,
@@ -65,6 +68,30 @@ func New(conf Config, logger pubsub.Logger, metrics Metrics) *googleClient {
 		subStarted:  make(map[string]struct{}),
 		mu:          sync.RWMutex{},
 	}
+}
+
+func connect(conf Config, logger pubsub.Logger) (*gcPubSub.Client, error) {
+	client, err := gcPubSub.NewClient(context.Background(), conf.ProjectID)
+	if err != nil {
+		logger.Errorf("could not create Google PubSub client, error: %v", err)
+		return nil, err
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultRetryInterval)
+	defer cancel()
+
+	it := client.Topics(ctx)
+
+	_, err = it.Next()
+	if err != nil && !errors.Is(err, iterator.Done) {
+		logger.Errorf("google pubsub connection validation failed, error: %v", err)
+
+		return nil, err
+	}
+
+	logger.Logf("connected to google pubsub client, projectID: %s", client.Project())
+
+	return client, nil
 }
 
 func validateConfigs(conf *Config) error {
@@ -262,4 +289,17 @@ func (g *googleClient) Close() error {
 	}
 
 	return nil
+}
+
+func retryConnect(conf Config, logger pubsub.Logger) {
+	for {
+		_, err := connect(conf, logger)
+		if err == nil {
+			return
+		}
+
+		logger.Errorf("could not connect to Google PubSub, error: %v", err)
+
+		time.Sleep(defaultRetryInterval)
+	}
 }
