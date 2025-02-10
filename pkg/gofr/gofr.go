@@ -45,6 +45,7 @@ const (
 	gofrHost               = "https://gofr.dev"
 	startServerPing        = "/api/ping/up"
 	shutServerPing         = "/api/ping/down"
+	pingTimeout            = 5 * time.Second
 )
 
 // App is the main application in the GoFr framework.
@@ -179,7 +180,6 @@ func (a *App) Run() {
 		pingGoFr(http.DefaultClient, "shutdown")
 
 		_ = a.Shutdown(shutdownCtx)
-
 	}()
 
 	pingGoFr(http.DefaultClient, "start")
@@ -230,7 +230,6 @@ func (a *App) Run() {
 	}()
 
 	wg.Wait()
-
 }
 
 func pingGoFr(client *http.Client, s string) {
@@ -240,12 +239,20 @@ func pingGoFr(client *http.Client, s string) {
 		url = fmt.Sprint(gofrHost, startServerPing)
 	}
 
-	resp, err := client.Get(url)
+	ctx, cancel := context.WithTimeout(context.Background(), pingTimeout)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, http.NoBody)
 	if err != nil {
 		return
 	}
 
-	defer resp.Body.Close()
+	resp, err := client.Do(req)
+	if err != nil {
+		return
+	}
+
+	resp.Body.Close()
 }
 
 // Shutdown stops the service(s) and close the application.

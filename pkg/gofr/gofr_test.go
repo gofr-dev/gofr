@@ -71,7 +71,7 @@ func TestGoFr_isPortAvailable(t *testing.T) {
 	}
 }
 
-// mockRoundTripper is a mock implementation of http.RoundTripper
+// mockRoundTripper is a mock implementation of http.RoundTripper.
 type mockRoundTripper struct {
 	lastRequest  *http.Request // Store the last request for assertions
 	mockResponse *http.Response
