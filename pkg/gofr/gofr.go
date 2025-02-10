@@ -42,6 +42,9 @@ const (
 	gofrTraceExporter      = "gofr"
 	gofrTracerURL          = "https://tracer.gofr.dev"
 	checkPortTimeout       = 2 * time.Second
+	gofrHost               = "https://gofr.dev"
+	startServerPing        = "/api/ping/up"
+	shutServerPing         = "/api/ping/down"
 )
 
 // App is the main application in the GoFr framework.
@@ -173,8 +176,13 @@ func (a *App) Run() {
 		shutdownCtx, done := context.WithTimeout(context.WithoutCancel(ctx), shutDownTimeout)
 		defer done()
 
+		pingGoFr(http.DefaultClient, "shutdown")
+
 		_ = a.Shutdown(shutdownCtx)
+
 	}()
+
+	pingGoFr(http.DefaultClient, "start")
 
 	wg := sync.WaitGroup{}
 
@@ -222,6 +230,22 @@ func (a *App) Run() {
 	}()
 
 	wg.Wait()
+
+}
+
+func pingGoFr(client *http.Client, s string) {
+	url := fmt.Sprint(gofrHost, shutServerPing)
+
+	if s == "start" {
+		url = fmt.Sprint(gofrHost, startServerPing)
+	}
+
+	resp, err := client.Get(url)
+	if err != nil {
+		return
+	}
+
+	defer resp.Body.Close()
 }
 
 // Shutdown stops the service(s) and close the application.

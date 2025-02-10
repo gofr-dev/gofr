@@ -71,6 +71,44 @@ func TestGoFr_isPortAvailable(t *testing.T) {
 	}
 }
 
+// mockRoundTripper is a mock implementation of http.RoundTripper
+type mockRoundTripper struct {
+	mockResponse *http.Response
+	mockError    error
+}
+
+// RoundTrip mocks the HTTP request and returns the predefined response or error.
+func (m *mockRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	return m.mockResponse, m.mockError
+}
+
+func TestPingGoFr(t *testing.T) {
+	tests := []struct {
+		name       string
+		input      string
+		mockStatus int
+	}{
+		{"Ping Start Server", "start", http.StatusOK},
+		{"Ping Shut Server", "stop", http.StatusOK},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockClient := &http.Client{
+				Transport: &mockRoundTripper{
+					mockResponse: &http.Response{
+						StatusCode: tt.mockStatus,
+						Body:       http.NoBody,
+					},
+					mockError: nil,
+				},
+			}
+
+			pingGoFr(mockClient, tt.input)
+		})
+	}
+}
+
 func TestGofr_ServerRoutes(t *testing.T) {
 	_ = testutil.NewServerConfigs(t)
 
