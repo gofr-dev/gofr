@@ -63,6 +63,41 @@ type Mongo interface {
 	StartSession() (any, error)
 }
 
+// ArangoDB is an interface representing an ArangoDB database client with common CRUD operations.
+type ArangoDB interface {
+	// CreateDB creates a new database in ArangoDB.
+	CreateDB(ctx context.Context, database string) error
+	// DropDB deletes an existing database in ArangoDB.
+	DropDB(ctx context.Context, database string) error
+
+	// CreateCollection creates a new collection in a database with specified type.
+	CreateCollection(ctx context.Context, database, collection string, isEdge bool) error
+	// DropCollection deletes an existing collection from a database.
+	DropCollection(ctx context.Context, database, collection string) error
+
+	// CreateGraph creates a new graph in a database.
+	CreateGraph(ctx context.Context, database, graph string, edgeDefinitions any) error
+	// DropGraph deletes an existing graph from a database.
+	DropGraph(ctx context.Context, database, graph string) error
+
+	// CreateDocument creates a new document in the specified collection.
+	CreateDocument(ctx context.Context, dbName, collectionName string, document any) (string, error)
+	// GetDocument retrieves a document by its ID from the specified collection.
+	GetDocument(ctx context.Context, dbName, collectionName, documentID string, result any) error
+	// UpdateDocument updates an existing document in the specified collection.
+	UpdateDocument(ctx context.Context, dbName, collectionName, documentID string, document any) error
+	// DeleteDocument deletes a document by its ID from the specified collection.
+	DeleteDocument(ctx context.Context, dbName, collectionName, documentID string) error
+
+	// GetEdges retrieves all the edge documents connected to a specific vertex in an ArangoDB graph.
+	GetEdges(ctx context.Context, dbName, graphName, edgeCollection, vertexID string, resp any) error
+
+	// Query executes an AQL query and binds the results
+	Query(ctx context.Context, dbName, query string, bindVars map[string]any, result any) error
+
+	HealthCheck(context.Context) (any, error)
+}
+
 // keeping the migrator interface unexported as, right now it is not being implemented directly, by the externalDB drivers.
 // keeping the implementations for externalDB at one place such that if any change in migration logic, we would change directly here.
 type migrator interface {
