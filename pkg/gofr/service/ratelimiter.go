@@ -273,7 +273,6 @@ func (r *RateLimiter) drainQueue() {
 }
 
 // processRequest executes a single request with rate limiting.
-// processRequest executes a single request with rate limiting.
 func (r *RateLimiter) processRequest(req requestWrapper) {
 	defer func() {
 		r.currentQueue.Add(-1)
