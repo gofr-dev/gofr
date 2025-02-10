@@ -73,38 +73,46 @@ func TestGoFr_isPortAvailable(t *testing.T) {
 
 // mockRoundTripper is a mock implementation of http.RoundTripper
 type mockRoundTripper struct {
+	lastRequest  *http.Request // Store the last request for assertions
 	mockResponse *http.Response
 	mockError    error
 }
 
-// RoundTrip mocks the HTTP request and returns the predefined response or error.
+// RoundTrip mocks the HTTP request and stores the request for verification.
 func (m *mockRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	m.lastRequest = req // Store the request for assertions
 	return m.mockResponse, m.mockError
 }
 
 func TestPingGoFr(t *testing.T) {
 	tests := []struct {
-		name       string
-		input      string
-		mockStatus int
+		name           string
+		input          string
+		expectedURL    string
+		expectedMethod string
+		mockStatus     int
 	}{
-		{"Ping Start Server", "start", http.StatusOK},
-		{"Ping Shut Server", "stop", http.StatusOK},
+		{"Ping Start Server", "start", gofrHost + startServerPing, http.MethodGet, http.StatusOK},
+		{"Ping Shut Server", "stop", gofrHost + shutServerPing, http.MethodGet, http.StatusOK},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockClient := &http.Client{
-				Transport: &mockRoundTripper{
-					mockResponse: &http.Response{
-						StatusCode: tt.mockStatus,
-						Body:       http.NoBody,
-					},
-					mockError: nil,
+			mockTransport := &mockRoundTripper{
+				mockResponse: &http.Response{
+					StatusCode: tt.mockStatus,
+					Body:       http.NoBody,
 				},
+				mockError: nil,
 			}
 
+			mockClient := &http.Client{Transport: mockTransport}
+
 			pingGoFr(mockClient, tt.input)
+
+			assert.NotNil(t, mockTransport.lastRequest, "Request should not be nil")
+			assert.Equal(t, tt.expectedURL, mockTransport.lastRequest.URL.String(), "Unexpected request URL")
+			assert.Equal(t, tt.expectedMethod, mockTransport.lastRequest.Method, "Unexpected HTTP method")
 		})
 	}
 }
