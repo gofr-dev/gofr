@@ -273,11 +273,12 @@ func (r *RateLimiter) drainQueue() {
 }
 
 // processRequest executes a single request with rate limiting.
+// processRequest executes a single request with rate limiting.
 func (r *RateLimiter) processRequest(req requestWrapper) {
 	defer func() {
 		r.currentQueue.Add(-1)
 		r.wg.Done()
-		req.cancel(errRequestComplete) // Add error cause here
+		req.cancel(errRequestComplete)
 	}()
 
 	startTime := time.Now()
@@ -286,6 +287,7 @@ func (r *RateLimiter) processRequest(req requestWrapper) {
 
 	defer func() {
 		if rec := recover(); rec != nil {
+			err := fmt.Errorf("%w: %v", errPanicRecovered, rec)
 			r.Log(&ErrorLog{
 				Log: &Log{
 					Timestamp:     time.Now(),
@@ -293,17 +295,17 @@ func (r *RateLimiter) processRequest(req requestWrapper) {
 					ResponseTime:  time.Since(startTime).Microseconds(),
 					ResponseCode:  http.StatusInternalServerError,
 				},
-				ErrorMessage: fmt.Sprintf("panic recovered in request processing: %v", rec),
+				ErrorMessage: err.Error(),
 			})
 			req.respCh <- &requestResponse{
 				response: nil,
-				err:      fmt.Errorf("%w: %v", errPanicRecovered, rec),
+				err:      err,
 			}
 		}
 	}()
 
-	select {
-	case <-req.ctx.Done():
+	if err := req.ctx.Err(); err != nil {
+		err = fmt.Errorf("request canceled in queue: %w", err)
 		r.Log(&ErrorLog{
 			Log: &Log{
 				Timestamp:     time.Now(),
@@ -311,15 +313,15 @@ func (r *RateLimiter) processRequest(req requestWrapper) {
 				ResponseTime:  time.Since(startTime).Microseconds(),
 				ResponseCode:  http.StatusGatewayTimeout,
 			},
-			ErrorMessage: fmt.Sprintf("request canceled in queue: %v", req.ctx.Err()),
+			ErrorMessage: err.Error(),
 		})
-		req.respCh <- &requestResponse{nil, fmt.Errorf("request canceled in queue: %w", req.ctx.Err())}
+		req.respCh <- &requestResponse{nil, err}
 
 		return
-	default:
 	}
 
 	if err := r.limiter.Wait(req.ctx); err != nil {
+		err = fmt.Errorf("rate limit wait error: %w", err)
 		r.Log(&ErrorLog{
 			Log: &Log{
 				Timestamp:     time.Now(),
@@ -327,9 +329,9 @@ func (r *RateLimiter) processRequest(req requestWrapper) {
 				ResponseTime:  time.Since(startTime).Microseconds(),
 				ResponseCode:  http.StatusTooManyRequests,
 			},
-			ErrorMessage: fmt.Sprintf("rate limit wait error: %v", err),
+			ErrorMessage: err.Error(),
 		})
-		req.respCh <- &requestResponse{nil, fmt.Errorf("rate limit wait error: %w", err)}
+		req.respCh <- &requestResponse{nil, err}
 
 		return
 	}
@@ -337,6 +339,7 @@ func (r *RateLimiter) processRequest(req requestWrapper) {
 	//nolint:bodyclose // Response body is closed by the caller
 	resp, err := req.execute()
 	if err != nil {
+		err = fmt.Errorf("request execution error: %w", err)
 		r.Log(&ErrorLog{
 			Log: &Log{
 				Timestamp:     time.Now(),
@@ -344,9 +347,9 @@ func (r *RateLimiter) processRequest(req requestWrapper) {
 				ResponseTime:  time.Since(startTime).Microseconds(),
 				ResponseCode:  http.StatusInternalServerError,
 			},
-			ErrorMessage: fmt.Sprintf("request execution error: %v", err),
+			ErrorMessage: err.Error(),
 		})
-		req.respCh <- &requestResponse{nil, fmt.Errorf("request execution error: %w", err)}
+		req.respCh <- &requestResponse{nil, err}
 
 		return
 	}
@@ -362,9 +365,9 @@ func (r *RateLimiter) processRequest(req requestWrapper) {
 }
 
 // Get performs a rate-limited GET request.
-func (r *RateLimiter) Get(ctx context.Context, api string, queryParams map[string]any) (*http.Response, error) {
+func (r *RateLimiter) Get(ctx context.Context, path string, queryParams map[string]any) (*http.Response, error) {
 	return r.enqueueRequest(ctx, func() (*http.Response, error) {
-		return r.HTTP.Get(ctx, api, queryParams)
+		return r.HTTP.Get(ctx, path, queryParams)
 	})
 }
 
@@ -393,48 +396,48 @@ func (r *RateLimiter) PostWithHeaders(ctx context.Context, path string, queryPar
 }
 
 // Put performs a rate-limited PUT request.
-func (r *RateLimiter) Put(ctx context.Context, api string, queryParams map[string]any,
+func (r *RateLimiter) Put(ctx context.Context, path string, queryParams map[string]any,
 	body []byte) (*http.Response, error) {
 	return r.enqueueRequest(ctx, func() (*http.Response, error) {
-		return r.HTTP.Put(ctx, api, queryParams, body)
+		return r.HTTP.Put(ctx, path, queryParams, body)
 	})
 }
 
 // PutWithHeaders performs a rate-limited PUT request with custom headers.
-func (r *RateLimiter) PutWithHeaders(ctx context.Context, api string, queryParams map[string]any,
+func (r *RateLimiter) PutWithHeaders(ctx context.Context, path string, queryParams map[string]any,
 	body []byte, headers map[string]string) (*http.Response, error) {
 	return r.enqueueRequest(ctx, func() (*http.Response, error) {
-		return r.HTTP.PutWithHeaders(ctx, api, queryParams, body, headers)
+		return r.HTTP.PutWithHeaders(ctx, path, queryParams, body, headers)
 	})
 }
 
 // Patch performs a rate-limited PATCH request.
-func (r *RateLimiter) Patch(ctx context.Context, api string, queryParams map[string]any,
+func (r *RateLimiter) Patch(ctx context.Context, path string, queryParams map[string]any,
 	body []byte) (*http.Response, error) {
 	return r.enqueueRequest(ctx, func() (*http.Response, error) {
-		return r.HTTP.Patch(ctx, api, queryParams, body)
+		return r.HTTP.Patch(ctx, path, queryParams, body)
 	})
 }
 
 // PatchWithHeaders performs a rate-limited PATCH request with custom headers.
-func (r *RateLimiter) PatchWithHeaders(ctx context.Context, api string, queryParams map[string]any,
+func (r *RateLimiter) PatchWithHeaders(ctx context.Context, path string, queryParams map[string]any,
 	body []byte, headers map[string]string) (*http.Response, error) {
 	return r.enqueueRequest(ctx, func() (*http.Response, error) {
-		return r.HTTP.PatchWithHeaders(ctx, api, queryParams, body, headers)
+		return r.HTTP.PatchWithHeaders(ctx, path, queryParams, body, headers)
 	})
 }
 
 // Delete performs a rate-limited DELETE request.
-func (r *RateLimiter) Delete(ctx context.Context, api string, body []byte) (*http.Response, error) {
+func (r *RateLimiter) Delete(ctx context.Context, path string, body []byte) (*http.Response, error) {
 	return r.enqueueRequest(ctx, func() (*http.Response, error) {
-		return r.HTTP.Delete(ctx, api, body)
+		return r.HTTP.Delete(ctx, path, body)
 	})
 }
 
 // DeleteWithHeaders performs a rate-limited DELETE request with custom headers.
-func (r *RateLimiter) DeleteWithHeaders(ctx context.Context, api string, body []byte, headers map[string]string) (*http.Response, error) {
+func (r *RateLimiter) DeleteWithHeaders(ctx context.Context, path string, body []byte, headers map[string]string) (*http.Response, error) {
 	return r.enqueueRequest(ctx, func() (*http.Response, error) {
-		return r.HTTP.DeleteWithHeaders(ctx, api, body, headers)
+		return r.HTTP.DeleteWithHeaders(ctx, path, body, headers)
 	})
 }
 
