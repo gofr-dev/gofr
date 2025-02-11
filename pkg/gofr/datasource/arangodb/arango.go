@@ -26,6 +26,7 @@ type Client struct {
 	tracer   trace.Tracer
 	config   *Config
 	endpoint string
+	*DB
 	*Document
 	*Graph
 }
@@ -59,6 +60,7 @@ func New(c Config) *Client {
 		config: &c,
 	}
 
+	client.DB = &DB{client: client}
 	client.Document = &Document{client: client}
 	client.Graph = &Graph{client: client}
 

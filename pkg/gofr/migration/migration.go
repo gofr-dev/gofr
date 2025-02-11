@@ -1,6 +1,7 @@
 package migration
 
 import (
+	"fmt"
 	"reflect"
 	"time"
 
@@ -177,7 +178,10 @@ func getMigrator(c *container.Container) (Datasource, migrator, bool) {
 	if !isNil(c.ArangoDB) {
 		ok = true
 
-		ds.ArangoDB = arangoDS{c.ArangoDB}
+		x, ok := c.ArangoDB.(ArangoDB)
+		fmt.Print(ok)
+
+		ds.ArangoDB = arangoDS{x}
 
 		mg = arangoDS{ds.ArangoDB}.apply(mg)
 

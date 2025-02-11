@@ -112,7 +112,7 @@ func (d *Document) DeleteDocument(ctx context.Context, dbName, collectionName, d
 
 // isEdgeCollection checks if the given collection is an edge collection.
 func (d *Document) isEdgeCollection(ctx context.Context, dbName, collectionName string) (bool, error) {
-	collection, err := d.getCollection(ctx, dbName, collectionName)
+	collection, err := d.client.getCollection(ctx, dbName, collectionName)
 	if err != nil {
 		return false, err
 	}
@@ -141,7 +141,7 @@ func executeCollectionOperation(ctx context.Context, d Document, dbName, collect
 
 	defer d.client.sendOperationStats(ql, startTime, operation, span)
 
-	collection, err := d.getCollection(tracerCtx, dbName, collectionName)
+	collection, err := d.client.getCollection(tracerCtx, dbName, collectionName)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -173,18 +173,4 @@ func validateEdgeDocument(document any) error {
 	}
 
 	return nil
-}
-
-func (d *Document) getCollection(ctx context.Context, dbName, collectionName string) (arangodb.Collection, error) {
-	db, err := d.client.client.Database(ctx, dbName)
-	if err != nil {
-		return nil, err
-	}
-
-	collection, err := db.Collection(ctx, collectionName)
-	if err != nil {
-		return nil, err
-	}
-
-	return collection, nil
 }

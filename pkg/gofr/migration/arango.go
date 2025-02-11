@@ -2,7 +2,6 @@ package migration
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"gofr.dev/pkg/gofr/container"
@@ -10,7 +9,7 @@ import (
 
 // arangoDS is our adapter struct that will implement both interfaces.
 type arangoDS struct {
-	client container.ArangoDB
+	client ArangoDB
 }
 
 // arangoMigrator struct remains the same but uses our adapter.
@@ -39,82 +38,32 @@ const (
 `
 )
 
-func (ds arangoDS) CreateDocument(ctx context.Context, dbName, collectionName string, document any) (string, error) {
-	return ds.client.CreateDocument(ctx, dbName, collectionName, document)
-}
-
-func (ds arangoDS) GetDocument(ctx context.Context, dbName, collectionName, documentID string, result any) error {
-	return ds.client.GetDocument(ctx, dbName, collectionName, documentID, result)
-}
-
-func (ds arangoDS) UpdateDocument(ctx context.Context, dbName, collectionName, documentID string, document any) error {
-	return ds.client.UpdateDocument(ctx, dbName, collectionName, documentID, document)
-}
-
-func (ds arangoDS) DeleteDocument(ctx context.Context, dbName, collectionName, documentID string) error {
-	return ds.client.DeleteDocument(ctx, dbName, collectionName, documentID)
-}
-
-func (ds arangoDS) GetEdges(ctx context.Context, dbName, graphName, edgeCollection, vertexID string, resp any) error {
-	return ds.client.GetEdges(ctx, dbName, graphName, edgeCollection, vertexID, resp)
-}
-
-func (ds arangoDS) Query(ctx context.Context, dbName, query string, bindVars map[string]any, result any) error {
-	return ds.client.Query(ctx, dbName, query, bindVars, result)
-}
-
 func (ds arangoDS) CreateDB(ctx context.Context, database string) error {
-	query := fmt.Sprintf("CREATE DATABASE %s", database)
-	return ds.client.Query(ctx, "_system", query, nil, nil)
+	return ds.client.CreateDB(ctx, database)
 }
 
 func (ds arangoDS) DropDB(ctx context.Context, database string) error {
-	query := fmt.Sprintf("DROP DATABASE %s", database)
-	return ds.client.Query(ctx, "_system", query, nil, nil)
+	return ds.client.DropDB(ctx, database)
 }
 
 func (ds arangoDS) CreateCollection(ctx context.Context, database, collection string, isEdge bool) error {
-	var collType string
-	if isEdge {
-		collType = "edge"
-	} else {
-		collType = "document"
-	}
-
-	query := fmt.Sprintf(`
-		CREATE COLLECTION %s TYPE %s
-	`, collection, collType)
-
-	return ds.client.Query(ctx, database, query, nil, nil)
+	return ds.client.CreateCollection(ctx, database, collection, isEdge)
 }
 
 func (ds arangoDS) DropCollection(ctx context.Context, database, collection string) error {
-	query := fmt.Sprintf("DROP COLLECTION %s", collection)
-	return ds.client.Query(ctx, database, query, nil, nil)
+	return ds.client.DropCollection(ctx, database, collection)
 }
 
 func (ds arangoDS) CreateGraph(ctx context.Context, database, graph string, edgeDefinitions any) error {
-	query := fmt.Sprintf(`
-		CREATE GRAPH %s WITH edgeDefinitions: @edgeDefs
-	`, graph)
-
-	bindVars := map[string]any{
-		"edgeDefs": edgeDefinitions,
-	}
-
-	return ds.client.Query(ctx, database, query, bindVars, nil)
+	return ds.client.CreateGraph(ctx, database, graph, edgeDefinitions)
 }
 
 func (ds arangoDS) DropGraph(ctx context.Context, database, graph string) error {
-	query := fmt.Sprintf("DROP GRAPH %s", graph)
-	return ds.client.Query(ctx, database, query, nil, nil)
-}
-
-func (ds arangoDS) HealthCheck(ctx context.Context) (any, error) {
-	return ds.client.HealthCheck(ctx)
+	return ds.client.DropGraph(ctx, database, graph)
 }
 
 func (ds arangoDS) apply(m migrator) migrator {
+
 	return arangoMigrator{
 		ArangoDB: ds,
 		migrator: m,
@@ -122,7 +71,6 @@ func (ds arangoDS) apply(m migrator) migrator {
 }
 
 func (am arangoMigrator) checkAndCreateMigrationTable(c *container.Container) error {
-	// Create migration collection in _system database
 	err := am.CreateCollection(context.Background(), arangoMigrationDB, arangoMigrationCollection, false)
 	if err != nil {
 		c.Debug("Migration collection might already exist:", err)
@@ -165,7 +113,9 @@ func (am arangoMigrator) commitMigration(c *container.Container, data transactio
 		"duration":   time.Since(data.StartTime).Milliseconds(),
 	}
 
-	err := c.ArangoDB.Query(context.Background(), arangoMigrationDB, insertArangoMigrationRecord, bindVars, nil)
+	var result []map[string]any
+
+	err := c.ArangoDB.Query(context.Background(), arangoMigrationDB, insertArangoMigrationRecord, bindVars, &result)
 	if err != nil {
 		return err
 	}
