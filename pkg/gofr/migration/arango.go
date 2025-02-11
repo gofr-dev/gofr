@@ -63,7 +63,6 @@ func (ds arangoDS) DropGraph(ctx context.Context, database, graph string) error 
 }
 
 func (ds arangoDS) apply(m migrator) migrator {
-
 	return arangoMigrator{
 		ArangoDB: ds,
 		migrator: m,

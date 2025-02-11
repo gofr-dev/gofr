@@ -1,7 +1,6 @@
 package migration
 
 import (
-	"fmt"
 	"reflect"
 	"time"
 
@@ -178,10 +177,12 @@ func getMigrator(c *container.Container) (Datasource, migrator, bool) {
 	if !isNil(c.ArangoDB) {
 		ok = true
 
-		x, ok := c.ArangoDB.(ArangoDB)
-		fmt.Print(ok)
+		arangoClient, isArangoDB := c.ArangoDB.(ArangoDB)
+		if !isArangoDB {
+			c.Fatalf("failed to assert ArangoDB client")
+		}
 
-		ds.ArangoDB = arangoDS{x}
+		ds.ArangoDB = arangoDS{arangoClient}
 
 		mg = arangoDS{ds.ArangoDB}.apply(mg)
 
