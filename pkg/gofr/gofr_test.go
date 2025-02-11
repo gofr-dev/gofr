@@ -62,7 +62,7 @@ func TestGoFr_isPortAvailable(t *testing.T) {
 				g := New()
 
 				go g.Run()
-				time.Sleep(1000 * time.Millisecond)
+				time.Sleep(100 * time.Millisecond)
 			}
 
 			isAvailable := isPortAvailable(configs.HTTPPort)
@@ -86,21 +86,19 @@ func (m *mockRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) 
 
 func TestPingGoFr(t *testing.T) {
 	tests := []struct {
-		name           string
-		input          string
-		expectedURL    string
-		expectedMethod string
-		mockStatus     int
+		name        string
+		input       string
+		expectedURL string
 	}{
-		{"Ping Start Server", "start", gofrHost + startServerPing, http.MethodGet, http.StatusOK},
-		{"Ping Shut Server", "stop", gofrHost + shutServerPing, http.MethodGet, http.StatusOK},
+		{"Ping Start Server", "start", gofrHost + startServerPing},
+		{"Ping Shut Server", "stop", gofrHost + shutServerPing},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mockTransport := &mockRoundTripper{
 				mockResponse: &http.Response{
-					StatusCode: tt.mockStatus,
+					StatusCode: http.StatusOK,
 					Body:       http.NoBody,
 				},
 				mockError: nil,
@@ -116,7 +114,7 @@ func TestPingGoFr(t *testing.T) {
 
 			assert.NotNil(t, mockTransport.lastRequest, "Request should not be nil")
 			assert.Equal(t, tt.expectedURL, mockTransport.lastRequest.URL.String(), "Unexpected request URL")
-			assert.Equal(t, tt.expectedMethod, mockTransport.lastRequest.Method, "Unexpected HTTP method")
+			assert.Equal(t, http.MethodPost, mockTransport.lastRequest.Method, "Unexpected HTTP method")
 		})
 	}
 }

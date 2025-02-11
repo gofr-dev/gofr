@@ -46,7 +46,7 @@ const (
 	startServerPing        = "/api/ping/up"
 	shutServerPing         = "/api/ping/down"
 	pingTimeout            = 5 * time.Second
-	TelemetryTrue          = "true"
+	DefaultTelemetry       = "true"
 )
 
 // App is the main application in the GoFr framework.
@@ -178,14 +178,14 @@ func (a *App) Run() {
 		shutdownCtx, done := context.WithTimeout(context.WithoutCancel(ctx), shutDownTimeout)
 		defer done()
 
-		if a.Config.GetOrDefault("GOFR_TELEMETRY", "true") == TelemetryTrue {
+		if a.Config.GetOrDefault("GOFR_TELEMETRY", "true") == DefaultTelemetry {
 			a.pingGoFr(http.DefaultClient, "shutdown")
 		}
 
 		_ = a.Shutdown(shutdownCtx)
 	}()
 
-	if a.Config.GetOrDefault("GOFR_TELEMETRY", "true") == TelemetryTrue {
+	if a.Config.GetOrDefault("GOFR_TELEMETRY", "true") == DefaultTelemetry {
 		a.pingGoFr(http.DefaultClient, "start")
 	}
 
@@ -249,7 +249,7 @@ func (a *App) pingGoFr(client *http.Client, s string) {
 	ctx, cancel := context.WithTimeout(context.Background(), pingTimeout)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, http.NoBody)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, http.NoBody)
 	if err != nil {
 		return
 	}
