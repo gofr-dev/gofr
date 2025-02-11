@@ -66,6 +66,7 @@ func initialiseClickHouseRunMocks(t *testing.T) (*MockClickhouse, *container.Con
 	mockContainer.Mongo = nil
 	mockContainer.Cassandra = nil
 	mockContainer.PubSub = nil
+	mockContainer.ArangoDB = nil
 	mockContainer.Logger = logging.NewMockLogger(logging.DEBUG)
 	mockContainer.Clickhouse = mockClickHouse
 

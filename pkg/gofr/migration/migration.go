@@ -177,14 +177,9 @@ func getMigrator(c *container.Container) (Datasource, migrator, bool) {
 	if !isNil(c.ArangoDB) {
 		ok = true
 
-		arangoClient, isArangoDB := c.ArangoDB.(ArangoDB)
-		if !isArangoDB {
-			c.Fatalf("failed to assert ArangoDB client")
-		}
+		ds.ArangoDB = arangoDS{c.ArangoDB}
 
-		ds.ArangoDB = arangoDS{arangoClient}
-
-		mg = arangoDS{ds.ArangoDB}.apply(mg)
+		mg = arangoDS{c.ArangoDB}.apply(mg)
 
 		c.Debug("initialized data source for ArangoDB")
 	}

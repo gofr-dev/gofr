@@ -12056,6 +12056,34 @@ func (m *MockArangoDB) EXPECT() *MockArangoDBMockRecorder {
 	return m.recorder
 }
 
+// CreateCollection mocks base method.
+func (m *MockArangoDB) CreateCollection(ctx context.Context, database, collection string, isEdge bool) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateCollection", ctx, database, collection, isEdge)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CreateCollection indicates an expected call of CreateCollection.
+func (mr *MockArangoDBMockRecorder) CreateCollection(ctx, database, collection, isEdge any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateCollection", reflect.TypeOf((*MockArangoDB)(nil).CreateCollection), ctx, database, collection, isEdge)
+}
+
+// CreateDB mocks base method.
+func (m *MockArangoDB) CreateDB(ctx context.Context, database string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateDB", ctx, database)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CreateDB indicates an expected call of CreateDB.
+func (mr *MockArangoDBMockRecorder) CreateDB(ctx, database any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateDB", reflect.TypeOf((*MockArangoDB)(nil).CreateDB), ctx, database)
+}
+
 // CreateDocument mocks base method.
 func (m *MockArangoDB) CreateDocument(ctx context.Context, dbName, collectionName string, document any) (string, error) {
 	m.ctrl.T.Helper()
@@ -12071,6 +12099,20 @@ func (mr *MockArangoDBMockRecorder) CreateDocument(ctx, dbName, collectionName, 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateDocument", reflect.TypeOf((*MockArangoDB)(nil).CreateDocument), ctx, dbName, collectionName, document)
 }
 
+// CreateGraph mocks base method.
+func (m *MockArangoDB) CreateGraph(ctx context.Context, database, graph string, edgeDefinitions any) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateGraph", ctx, database, graph, edgeDefinitions)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CreateGraph indicates an expected call of CreateGraph.
+func (mr *MockArangoDBMockRecorder) CreateGraph(ctx, database, graph, edgeDefinitions any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateGraph", reflect.TypeOf((*MockArangoDB)(nil).CreateGraph), ctx, database, graph, edgeDefinitions)
+}
+
 // DeleteDocument mocks base method.
 func (m *MockArangoDB) DeleteDocument(ctx context.Context, dbName, collectionName, documentID string) error {
 	m.ctrl.T.Helper()
@@ -12083,6 +12125,48 @@ func (m *MockArangoDB) DeleteDocument(ctx context.Context, dbName, collectionNam
 func (mr *MockArangoDBMockRecorder) DeleteDocument(ctx, dbName, collectionName, documentID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteDocument", reflect.TypeOf((*MockArangoDB)(nil).DeleteDocument), ctx, dbName, collectionName, documentID)
+}
+
+// DropCollection mocks base method.
+func (m *MockArangoDB) DropCollection(ctx context.Context, database, collection string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DropCollection", ctx, database, collection)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DropCollection indicates an expected call of DropCollection.
+func (mr *MockArangoDBMockRecorder) DropCollection(ctx, database, collection any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DropCollection", reflect.TypeOf((*MockArangoDB)(nil).DropCollection), ctx, database, collection)
+}
+
+// DropDB mocks base method.
+func (m *MockArangoDB) DropDB(ctx context.Context, database string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DropDB", ctx, database)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DropDB indicates an expected call of DropDB.
+func (mr *MockArangoDBMockRecorder) DropDB(ctx, database any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DropDB", reflect.TypeOf((*MockArangoDB)(nil).DropDB), ctx, database)
+}
+
+// DropGraph mocks base method.
+func (m *MockArangoDB) DropGraph(ctx context.Context, database, graph string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DropGraph", ctx, database, graph)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DropGraph indicates an expected call of DropGraph.
+func (mr *MockArangoDBMockRecorder) DropGraph(ctx, database, graph any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DropGraph", reflect.TypeOf((*MockArangoDB)(nil).DropGraph), ctx, database, graph)
 }
 
 // GetDocument mocks base method.
@@ -12192,6 +12276,34 @@ func (mr *MockArangoDBProviderMockRecorder) Connect() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Connect", reflect.TypeOf((*MockArangoDBProvider)(nil).Connect))
 }
 
+// CreateCollection mocks base method.
+func (m *MockArangoDBProvider) CreateCollection(ctx context.Context, database, collection string, isEdge bool) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateCollection", ctx, database, collection, isEdge)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CreateCollection indicates an expected call of CreateCollection.
+func (mr *MockArangoDBProviderMockRecorder) CreateCollection(ctx, database, collection, isEdge any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateCollection", reflect.TypeOf((*MockArangoDBProvider)(nil).CreateCollection), ctx, database, collection, isEdge)
+}
+
+// CreateDB mocks base method.
+func (m *MockArangoDBProvider) CreateDB(ctx context.Context, database string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateDB", ctx, database)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CreateDB indicates an expected call of CreateDB.
+func (mr *MockArangoDBProviderMockRecorder) CreateDB(ctx, database any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateDB", reflect.TypeOf((*MockArangoDBProvider)(nil).CreateDB), ctx, database)
+}
+
 // CreateDocument mocks base method.
 func (m *MockArangoDBProvider) CreateDocument(ctx context.Context, dbName, collectionName string, document any) (string, error) {
 	m.ctrl.T.Helper()
@@ -12207,6 +12319,20 @@ func (mr *MockArangoDBProviderMockRecorder) CreateDocument(ctx, dbName, collecti
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateDocument", reflect.TypeOf((*MockArangoDBProvider)(nil).CreateDocument), ctx, dbName, collectionName, document)
 }
 
+// CreateGraph mocks base method.
+func (m *MockArangoDBProvider) CreateGraph(ctx context.Context, database, graph string, edgeDefinitions any) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateGraph", ctx, database, graph, edgeDefinitions)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CreateGraph indicates an expected call of CreateGraph.
+func (mr *MockArangoDBProviderMockRecorder) CreateGraph(ctx, database, graph, edgeDefinitions any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateGraph", reflect.TypeOf((*MockArangoDBProvider)(nil).CreateGraph), ctx, database, graph, edgeDefinitions)
+}
+
 // DeleteDocument mocks base method.
 func (m *MockArangoDBProvider) DeleteDocument(ctx context.Context, dbName, collectionName, documentID string) error {
 	m.ctrl.T.Helper()
@@ -12219,6 +12345,48 @@ func (m *MockArangoDBProvider) DeleteDocument(ctx context.Context, dbName, colle
 func (mr *MockArangoDBProviderMockRecorder) DeleteDocument(ctx, dbName, collectionName, documentID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteDocument", reflect.TypeOf((*MockArangoDBProvider)(nil).DeleteDocument), ctx, dbName, collectionName, documentID)
+}
+
+// DropCollection mocks base method.
+func (m *MockArangoDBProvider) DropCollection(ctx context.Context, database, collection string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DropCollection", ctx, database, collection)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DropCollection indicates an expected call of DropCollection.
+func (mr *MockArangoDBProviderMockRecorder) DropCollection(ctx, database, collection any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DropCollection", reflect.TypeOf((*MockArangoDBProvider)(nil).DropCollection), ctx, database, collection)
+}
+
+// DropDB mocks base method.
+func (m *MockArangoDBProvider) DropDB(ctx context.Context, database string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DropDB", ctx, database)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DropDB indicates an expected call of DropDB.
+func (mr *MockArangoDBProviderMockRecorder) DropDB(ctx, database any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DropDB", reflect.TypeOf((*MockArangoDBProvider)(nil).DropDB), ctx, database)
+}
+
+// DropGraph mocks base method.
+func (m *MockArangoDBProvider) DropGraph(ctx context.Context, database, graph string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DropGraph", ctx, database, graph)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DropGraph indicates an expected call of DropGraph.
+func (mr *MockArangoDBProviderMockRecorder) DropGraph(ctx, database, graph any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DropGraph", reflect.TypeOf((*MockArangoDBProvider)(nil).DropGraph), ctx, database, graph)
 }
 
 // GetDocument mocks base method.
