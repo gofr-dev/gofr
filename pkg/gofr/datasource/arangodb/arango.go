@@ -151,6 +151,15 @@ func (c *Client) validateConfig() error {
 }
 
 // Query executes an AQL query and binds the results.
+//
+// Parameters:
+//   - ctx: Request context for tracing and cancellation.
+//   - dbName: Name of the database where the query will be executed.
+//   - query: AQL query string to be executed.
+//   - bindVars: Map of bind variables to be used in the query.
+//   - result: Pointer to a slice of maps where the query results will be stored.
+//
+// Returns an error if the database connection fails, the query execution fails, or the result parameter is not a pointer to a slice of maps.
 func (c *Client) Query(ctx context.Context, dbName, query string, bindVars map[string]any, result any) error {
 	tracerCtx, span := c.addTrace(ctx, "query", map[string]string{"DB": dbName})
 	startTime := time.Now()

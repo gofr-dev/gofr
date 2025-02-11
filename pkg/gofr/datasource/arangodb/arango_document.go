@@ -21,22 +21,31 @@ type Document struct {
 
 // CreateDocument creates a new document in the specified collection.
 // If the collection is an edge collection, the document must include `_from` and `_to`.
+//
+// Parameters:
+//   - ctx: Request context for tracing and cancellation.
+//   - dbName: Name of the database where the document will be created.
+//   - collectionName: Name of the collection where the document will be created.
+//   - document: The document to be created. For edge collections, it must include `_from` and `_to` fields.
+//
+// Returns the ID of the created document and an error if the document creation fails.
+//
 // Example for creating a regular document:
 //
-//	 doc := map[string]any{
-//	    "name": "Alice",
-//	    "age": 30,
-//	}
+//   doc := map[string]any{
+//      "name": "Alice",
+//      "age": 30,
+//   }
 //
-// id, err := client.CreateDocument(ctx, "myDB", "users", doc)
+//   id, err := client.CreateDocument(ctx, "myDB", "users", doc)
 //
 // Example for creating an edge document:
 //
-//	edgeDoc := map[string]any{
-//	    "_from": "users/123",
-//	    "_to": "orders/456",
-//	    "relation": "purchased",
-//	}
+//   edgeDoc := map[string]any{
+//      "_from": "users/123",
+//      "_to": "orders/456",
+//      "relation": "purchased",
+//   }
 //
 // id, err := client.CreateDocument(ctx, "myDB", "edges", edgeDoc).
 func (d *Document) CreateDocument(ctx context.Context, dbName, collectionName string, document any) (string, error) {

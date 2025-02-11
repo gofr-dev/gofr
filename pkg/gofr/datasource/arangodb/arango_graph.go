@@ -23,6 +23,13 @@ type Graph struct {
 }
 
 // CreateGraph creates a new graph in a database.
+// Parameters:
+//   - ctx: Request context for tracing and cancellation.
+//   - database: Name of the database where the graph will be created.
+//   - graph: Name of the graph to be created.
+//   - edgeDefinitions: Pointer to EdgeDefinition struct containing edge definitions.
+//
+// Returns an error if the edgeDefinitions parameter is not of type *EdgeDefinition or is nil.
 func (g *Graph) CreateGraph(ctx context.Context, database, graph string, edgeDefinitions any) error {
 	tracerCtx, span := g.client.addTrace(ctx, "createGraph", map[string]string{"graph": graph})
 	startTime := time.Now()
@@ -63,6 +70,12 @@ func (g *Graph) CreateGraph(ctx context.Context, database, graph string, edgeDef
 }
 
 // DropGraph deletes an existing graph from a database.
+// Parameters:
+//   - ctx: Request context for tracing and cancellation.
+//   - database: Name of the database where the graph exists.
+//   - graphName: Name of the graph to be deleted.
+//
+// Returns an error if the graph does not exist or if there is an issue with the database connection.
 func (g *Graph) DropGraph(ctx context.Context, database, graphName string) error {
 	tracerCtx, span := g.client.addTrace(ctx, "dropGraph", map[string]string{"graph": graphName})
 	startTime := time.Now()

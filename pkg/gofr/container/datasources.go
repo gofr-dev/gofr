@@ -587,6 +587,13 @@ type ArangoDB interface {
 	DropCollection(ctx context.Context, database, collection string) error
 
 	// CreateGraph creates a new graph in a database.
+	// Parameters:
+	//   - ctx: Request context for tracing and cancellation.
+	//   - database: Name of the database where the graph will be created.
+	//   - graph: Name of the graph to be created.
+	//   - edgeDefinitions: Pointer to EdgeDefinition struct containing edge definitions.
+	//
+	// Returns an error if the edgeDefinitions parameter is not of type *EdgeDefinition or is nil.
 	CreateGraph(ctx context.Context, database, graph string, edgeDefinitions any) error
 	// DropGraph deletes an existing graph from a database.
 	DropGraph(ctx context.Context, database, graph string) error
@@ -600,10 +607,29 @@ type ArangoDB interface {
 	// DeleteDocument deletes a document by its ID from the specified collection.
 	DeleteDocument(ctx context.Context, dbName, collectionName, documentID string) error
 
-	// GetEdges retrieves all the edge documents connected to a specific vertex in an ArangoDB graph.
+	// GetEdges fetches all edges connected to a given vertex in the specified edge collection.
+	//
+	// Parameters:
+	//   - ctx: Request context for tracing and cancellation.
+	//   - dbName: Database name.
+	//   - graphName: Graph name.
+	//   - edgeCollection: Edge collection name.
+	//   - vertexID: Full vertex ID (e.g., "persons/16563").
+	//   - resp: Pointer to `*EdgeDetails` to store results.
+	//
+	// Returns an error if input is invalid, `resp` is of the wrong type, or the query fails.
 	GetEdges(ctx context.Context, dbName, graphName, edgeCollection, vertexID string, resp any) error
 
-	// Query executes an AQL query and binds the results
+	// Query executes an AQL query and binds the results.
+	//
+	// Parameters:
+	//   - ctx: Request context for tracing and cancellation.
+	//   - dbName: Name of the database where the query will be executed.
+	//   - query: AQL query string to be executed.
+	//   - bindVars: Map of bind variables to be used in the query.
+	//   - result: Pointer to a slice of maps where the query results will be stored.
+	//
+	// Returns an error if the database connection fails, the query execution fails, or the result parameter is not a pointer to a slice of maps.
 	Query(ctx context.Context, dbName string, query string, bindVars map[string]any, result any) error
 
 	HealthChecker
