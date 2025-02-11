@@ -32,20 +32,20 @@ type Document struct {
 //
 // Example for creating a regular document:
 //
-//   doc := map[string]any{
-//      "name": "Alice",
-//      "age": 30,
-//   }
+//	doc := map[string]any{
+//	   "name": "Alice",
+//	   "age": 30,
+//	}
 //
-//   id, err := client.CreateDocument(ctx, "myDB", "users", doc)
+//	id, err := client.CreateDocument(ctx, "myDB", "users", doc)
 //
 // Example for creating an edge document:
 //
-//   edgeDoc := map[string]any{
-//      "_from": "users/123",
-//      "_to": "orders/456",
-//      "relation": "purchased",
-//   }
+//	edgeDoc := map[string]any{
+//	   "_from": "users/123",
+//	   "_to": "orders/456",
+//	   "relation": "purchased",
+//	}
 //
 // id, err := client.CreateDocument(ctx, "myDB", "edges", edgeDoc).
 func (d *Document) CreateDocument(ctx context.Context, dbName, collectionName string, document any) (string, error) {

@@ -159,7 +159,8 @@ func (c *Client) validateConfig() error {
 //   - bindVars: Map of bind variables to be used in the query.
 //   - result: Pointer to a slice of maps where the query results will be stored.
 //
-// Returns an error if the database connection fails, the query execution fails, or the result parameter is not a pointer to a slice of maps.
+// Returns an error if the database connection fails, the query execution fails, or the
+// result parameter is not a pointer to a slice of maps.
 func (c *Client) Query(ctx context.Context, dbName, query string, bindVars map[string]any, result any) error {
 	tracerCtx, span := c.addTrace(ctx, "query", map[string]string{"DB": dbName})
 	startTime := time.Now()
