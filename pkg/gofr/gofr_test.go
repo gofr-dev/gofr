@@ -62,7 +62,7 @@ func TestGoFr_isPortAvailable(t *testing.T) {
 				g := New()
 
 				go g.Run()
-				time.Sleep(100 * time.Millisecond)
+				time.Sleep(1000 * time.Millisecond)
 			}
 
 			isAvailable := isPortAvailable(configs.HTTPPort)
@@ -108,7 +108,11 @@ func TestPingGoFr(t *testing.T) {
 
 			mockClient := &http.Client{Transport: mockTransport}
 
-			pingGoFr(mockClient, tt.input)
+			_ = testutil.NewServerConfigs(t)
+
+			a := New()
+
+			a.pingGoFr(mockClient, tt.input)
 
 			assert.NotNil(t, mockTransport.lastRequest, "Request should not be nil")
 			assert.Equal(t, tt.expectedURL, mockTransport.lastRequest.URL.String(), "Unexpected request URL")

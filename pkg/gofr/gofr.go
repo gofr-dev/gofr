@@ -177,12 +177,16 @@ func (a *App) Run() {
 		shutdownCtx, done := context.WithTimeout(context.WithoutCancel(ctx), shutDownTimeout)
 		defer done()
 
-		pingGoFr(http.DefaultClient, "shutdown")
+		if a.Config.GetOrDefault("GOFR_TELEMETRY", "true") == "true" {
+			a.pingGoFr(http.DefaultClient, "shutdown")
+		}
 
 		_ = a.Shutdown(shutdownCtx)
 	}()
 
-	pingGoFr(http.DefaultClient, "start")
+	if a.Config.GetOrDefault("GOFR_TELEMETRY", "true") == "true" {
+		a.pingGoFr(http.DefaultClient, "start")
+	}
 
 	wg := sync.WaitGroup{}
 
@@ -232,11 +236,12 @@ func (a *App) Run() {
 	wg.Wait()
 }
 
-func pingGoFr(client *http.Client, s string) {
+func (a *App) pingGoFr(client *http.Client, s string) {
 	url := fmt.Sprint(gofrHost, shutServerPing)
 
 	if s == "start" {
 		url = fmt.Sprint(gofrHost, startServerPing)
+		a.container.Info("GoFr tracks server count via telemetry. Use GOFR_TELEMETRY to disable it.")
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), pingTimeout)
