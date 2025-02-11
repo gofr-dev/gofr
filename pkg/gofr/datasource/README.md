@@ -69,21 +69,20 @@ Therefore, GoFr utilizes a pluggable approach for new datasources by separating 
 
 ## Supported Datasources
 
-| Datasource       | Health-Check | Logs | Metrics | Traces | As Driver |
-|------------------|:------------:|:----:|:-------:|:------:|:---------:|
-| MySQL            |      ✅       |  ✅   |    ✅    |   ✅    |           |
-| REDIS            |      ✅       |  ✅   |    ✅    |   ✅    |           |
-| PostgreSQL       |      ✅       |  ✅   |    ✅    |   ✅    |           |
-| MongoDB          |      ✅       |  ✅   |    ✅    |   ✅    |     ✅     |
-| SQLite           |      ✅       |  ✅   |    ✅    |   ✅    |           |
-| BadgerDB         |      ✅       |  ✅   |    ✅    |   ✅    |     ✅     |
-| Cassandra        |      ✅       |  ✅   |    ✅    |   ✅    |     ✅     |
-| ClickHouse       |              |  ✅   |    ✅    |   ✅    |     ✅     |
-| FTP              |              |  ✅   |         |        |     ✅     |
-| SFTP             |              |  ✅   |         |        |     ✅     |
-| Solr             |              |  ✅   |    ✅    |   ✅    |     ✅     |
-| DGraph           |      ✅       |  ✅   |    ✅    |   ✅    |           |
-| Azure Event Hubs |              |  ✅   |    ✅    |        |     ✅     |
-| OpenTSDB         |      ✅       |  ✅   |         |   ✅    |     ✅     |
-| SurrealDB        |      ✅       |  ✅   |         |   ✅    |     ✅     |
-| NATS-KV          |      ✅       |  ✅   |    ✅    |   ✅    |     ✅     |
+| MySQL            | ✅          |  ✅   | ✅    |   ✅    |           |
+| REDIS            | ✅          |  ✅   | ✅    |   ✅    |           |
+| PostgreSQL       | ✅          |  ✅   | ✅    |   ✅    |           |
+| MongoDB          | ✅          |  ✅   | ✅    |   ✅    | ✅         |
+| SQLite           | ✅          |  ✅   | ✅    |   ✅    |           |
+| BadgerDB         | ✅          |  ✅   | ✅    |   ✅    | ✅         |
+| Cassandra        | ✅          |  ✅   | ✅    |   ✅    | ✅         |
+| ClickHouse       |             |  ✅   | ✅    |   ✅    | ✅         |
+| FTP              |             |  ✅   |       |        | ✅         |
+| SFTP             |             |  ✅   |       |        | ✅         |
+| Solr             |             |  ✅   | ✅    |   ✅    |   ✅      |
+| DGraph           | ✅          |  ✅   | ✅    |   ✅    |           |
+| Azure Event Hubs |             |  ✅   | ✅    |        |✅       |
+| OpenTSDB         | ✅         |  ✅   |       |   ✅    |   ✅     |
+| SurrealDB        | ✅         |  ✅   |       |    ✅   |   ✅     |
+| ArangoDB         | ✅|   ✅   | ✅| ✅|✅|
+| NATS-KV         |      ✅       |  ✅   |    ✅    |   ✅    |     ✅     |
