@@ -46,6 +46,7 @@ const (
 	startServerPing        = "/api/ping/up"
 	shutServerPing         = "/api/ping/down"
 	pingTimeout            = 5 * time.Second
+	TelemetryTrue          = "true"
 )
 
 // App is the main application in the GoFr framework.
@@ -177,14 +178,14 @@ func (a *App) Run() {
 		shutdownCtx, done := context.WithTimeout(context.WithoutCancel(ctx), shutDownTimeout)
 		defer done()
 
-		if a.Config.GetOrDefault("GOFR_TELEMETRY", "true") == "true" {
+		if a.Config.GetOrDefault("GOFR_TELEMETRY", "true") == TelemetryTrue {
 			a.pingGoFr(http.DefaultClient, "shutdown")
 		}
 
 		_ = a.Shutdown(shutdownCtx)
 	}()
 
-	if a.Config.GetOrDefault("GOFR_TELEMETRY", "true") == "true" {
+	if a.Config.GetOrDefault("GOFR_TELEMETRY", "true") == TelemetryTrue {
 		a.pingGoFr(http.DefaultClient, "start")
 	}
 
@@ -241,6 +242,7 @@ func (a *App) pingGoFr(client *http.Client, s string) {
 
 	if s == "start" {
 		url = fmt.Sprint(gofrHost, startServerPing)
+
 		a.container.Info("GoFr tracks server count via telemetry. Use GOFR_TELEMETRY to disable it.")
 	}
 
