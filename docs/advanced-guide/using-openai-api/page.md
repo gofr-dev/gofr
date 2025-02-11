@@ -4,6 +4,8 @@ GoFr provides an injectable module that integrates OpenAI's API into the GoFr ap
 
 GoFr supports any OpenAI API wrapper that implements the following interface. Any other wrapper that implements the interface can be added using `app.AddOpenAI()` method, and user's can use openai across application with `gofr.Context`.
 
+OpenAI API keys can be generated from ([OpenAI platform](https://platform.openai.com/api-keys))
+
 ```go
 type OpenAI interface {
 	// implementation of chat endpoint of openai api
@@ -53,7 +55,7 @@ func Chat(ctx *gofr.Context) (any, error) {
 		return nil, err
 	}
 
-	resp, err := ctx.Openai.CreateCompletions(ctx, req)
+	resp, err := ctx.OpenAI.CreateCompletions(ctx, req)
 	if err != nil {
 		return nil, err
 	}
