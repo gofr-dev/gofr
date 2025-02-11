@@ -19,9 +19,17 @@ type Configs struct {
 	Bucket string
 }
 
+type jetstream struct {
+	nats.JetStreamContext
+}
+
+func (j jetstream) AccountInfo() (*nats.AccountInfo, error) {
+	return j.JetStreamContext.AccountInfo()
+}
+
 type Client struct {
 	conn    *nats.Conn
-	js      nats.JetStreamContext
+	js      JetStream
 	kv      nats.KeyValue
 	configs *Configs
 	tracer  trace.Tracer
@@ -56,7 +64,7 @@ func (c *Client) UseTracer(tracer any) {
 
 // Connect establishes a connection to NATS-KV and registers metrics using the provided configuration when the client was Created.
 func (c *Client) Connect() {
-	c.logger.Debugf("connecting to NATS at %v with bucket %v", c.configs.Server, c.configs.Bucket)
+	c.logger.Debugf("connecting to NATS at %v with bucket %q", c.configs.Server, c.configs.Bucket)
 
 	natsBuckets := []float64{.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 4, 5, 7.5, 10}
 	c.metrics.NewHistogram("app_natskv_stats", "Response time of NATS KV operations in milliseconds.", natsBuckets...)
@@ -68,7 +76,7 @@ func (c *Client) Connect() {
 	}
 
 	c.conn = nc
-	c.logger.Debugf("%s:%s Successfully established NATS connection", c.configs.Server, c.configs.Bucket)
+	c.logger.Debugf("successfully established NATS connection using %s:%s", c.configs.Server, c.configs.Bucket)
 
 	js, err := nc.JetStream()
 	if err != nil {
@@ -76,8 +84,9 @@ func (c *Client) Connect() {
 		return
 	}
 
-	c.js = js
-	c.logger.Debugf("%s:%s Successfully initialized JetStream", c.configs.Server, c.configs.Bucket)
+	c.js = jetstream{js}
+
+	c.logger.Debugf("successfully initialized JetStream using %s:%s", c.configs.Server, c.configs.Bucket)
 
 	kv, err := js.CreateKeyValue(&nats.KeyValueConfig{
 		Bucket: c.configs.Bucket,
@@ -88,7 +97,7 @@ func (c *Client) Connect() {
 	}
 
 	c.kv = kv
-	c.logger.Infof("%s:%s Successfully connected to NATS KV store", c.configs.Server, c.configs.Bucket)
+	c.logger.Infof("successfully connected to NATS KV store at %s:%s ", c.configs.Server, c.configs.Bucket)
 }
 
 func (c *Client) Get(ctx context.Context, key string) (string, error) {
@@ -167,7 +176,7 @@ func (c *Client) HealthCheck(context.Context) (any, error) {
 }
 
 func (c *Client) sendOperationStats(start time.Time, methodType, method string, span trace.Span, kv ...string) {
-	duration := time.Since(start).Microseconds()
+	duration := time.Since(start)
 
 	var key string
 	if len(kv) > 0 {
@@ -176,25 +185,26 @@ func (c *Client) sendOperationStats(start time.Time, methodType, method string, 
 
 	c.logger.Debug(&Log{
 		Type:     methodType,
-		Duration: duration,
+		Duration: duration.Microseconds(),
 		Key:      key,
 		Value:    c.configs.Bucket,
 	})
 
 	if span != nil {
 		defer span.End()
-		span.SetAttributes(attribute.Int64(fmt.Sprintf("natskv.%v.duration(μs)", method), duration))
+		span.SetAttributes(attribute.Int64(fmt.Sprintf("natskv.%v.duration(μs)", method), duration.Microseconds()))
 	}
 
-	c.metrics.RecordHistogram(context.Background(), "app_natskv_stats", float64(duration),
+	c.metrics.RecordHistogram(context.Background(), "app_natskv_stats", float64(duration.Milliseconds()),
 		"bucket", c.configs.Bucket,
-		"type", methodType)
+		"operation", methodType)
 }
 
 func (c *Client) addTrace(ctx context.Context, method, key string) trace.Span {
 	if c.tracer != nil {
 		_, span := c.tracer.Start(ctx, fmt.Sprintf("natskv-%v", method))
 		span.SetAttributes(attribute.String("natskv.key", key))
+		span.SetAttributes(attribute.String("operation", method))
 
 		return span
 	}
