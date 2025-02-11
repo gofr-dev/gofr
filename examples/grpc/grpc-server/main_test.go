@@ -19,7 +19,7 @@ func TestGRPCServer(t *testing.T) {
 	host := configs.GRPCHost
 
 	go main()
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(1000 * time.Millisecond)
 
 	client, conn := createGRPCClient(t, host)
 	defer conn.Close()
