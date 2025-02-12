@@ -13,6 +13,7 @@ type Datasource struct {
 	Clickhouse Clickhouse
 	Cassandra  Cassandra
 	Mongo      Mongo
+	ArangoDB   ArangoDB
 }
 
 // It is a base implementation for migration manager, on this other database drivers have been wrapped.

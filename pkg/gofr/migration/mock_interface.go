@@ -17,7 +17,6 @@ import (
 
 	redis "github.com/redis/go-redis/v9"
 	gomock "go.uber.org/mock/gomock"
-
 	container "gofr.dev/pkg/gofr/container"
 )
 
@@ -370,6 +369,415 @@ func (mr *MockClickhouseMockRecorder) Select(ctx, dest, query any, args ...any) 
 	mr.mock.ctrl.T.Helper()
 	varargs := append([]any{ctx, dest, query}, args...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Select", reflect.TypeOf((*MockClickhouse)(nil).Select), varargs...)
+}
+
+// MockCassandra is a mock of Cassandra interface.
+type MockCassandra struct {
+	ctrl     *gomock.Controller
+	recorder *MockCassandraMockRecorder
+}
+
+// MockCassandraMockRecorder is the mock recorder for MockCassandra.
+type MockCassandraMockRecorder struct {
+	mock *MockCassandra
+}
+
+// NewMockCassandra creates a new mock instance.
+func NewMockCassandra(ctrl *gomock.Controller) *MockCassandra {
+	mock := &MockCassandra{ctrl: ctrl}
+	mock.recorder = &MockCassandraMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockCassandra) EXPECT() *MockCassandraMockRecorder {
+	return m.recorder
+}
+
+// BatchQuery mocks base method.
+func (m *MockCassandra) BatchQuery(name, stmt string, values ...any) error {
+	m.ctrl.T.Helper()
+	varargs := []any{name, stmt}
+	for _, a := range values {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "BatchQuery", varargs...)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// BatchQuery indicates an expected call of BatchQuery.
+func (mr *MockCassandraMockRecorder) BatchQuery(name, stmt any, values ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{name, stmt}, values...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BatchQuery", reflect.TypeOf((*MockCassandra)(nil).BatchQuery), varargs...)
+}
+
+// Exec mocks base method.
+func (m *MockCassandra) Exec(query string, args ...any) error {
+	m.ctrl.T.Helper()
+	varargs := []any{query}
+	for _, a := range args {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "Exec", varargs...)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Exec indicates an expected call of Exec.
+func (mr *MockCassandraMockRecorder) Exec(query any, args ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{query}, args...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Exec", reflect.TypeOf((*MockCassandra)(nil).Exec), varargs...)
+}
+
+// ExecuteBatch mocks base method.
+func (m *MockCassandra) ExecuteBatch(name string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ExecuteBatch", name)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// ExecuteBatch indicates an expected call of ExecuteBatch.
+func (mr *MockCassandraMockRecorder) ExecuteBatch(name any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExecuteBatch", reflect.TypeOf((*MockCassandra)(nil).ExecuteBatch), name)
+}
+
+// HealthCheck mocks base method.
+func (m *MockCassandra) HealthCheck(ctx context.Context) (any, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HealthCheck", ctx)
+	ret0, _ := ret[0].(any)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// HealthCheck indicates an expected call of HealthCheck.
+func (mr *MockCassandraMockRecorder) HealthCheck(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HealthCheck", reflect.TypeOf((*MockCassandra)(nil).HealthCheck), ctx)
+}
+
+// NewBatch mocks base method.
+func (m *MockCassandra) NewBatch(name string, batchType int) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "NewBatch", name, batchType)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// NewBatch indicates an expected call of NewBatch.
+func (mr *MockCassandraMockRecorder) NewBatch(name, batchType any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NewBatch", reflect.TypeOf((*MockCassandra)(nil).NewBatch), name, batchType)
+}
+
+// MockMongo is a mock of Mongo interface.
+type MockMongo struct {
+	ctrl     *gomock.Controller
+	recorder *MockMongoMockRecorder
+}
+
+// MockMongoMockRecorder is the mock recorder for MockMongo.
+type MockMongoMockRecorder struct {
+	mock *MockMongo
+}
+
+// NewMockMongo creates a new mock instance.
+func NewMockMongo(ctrl *gomock.Controller) *MockMongo {
+	mock := &MockMongo{ctrl: ctrl}
+	mock.recorder = &MockMongoMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockMongo) EXPECT() *MockMongoMockRecorder {
+	return m.recorder
+}
+
+// CreateCollection mocks base method.
+func (m *MockMongo) CreateCollection(ctx context.Context, name string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateCollection", ctx, name)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CreateCollection indicates an expected call of CreateCollection.
+func (mr *MockMongoMockRecorder) CreateCollection(ctx, name any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateCollection", reflect.TypeOf((*MockMongo)(nil).CreateCollection), ctx, name)
+}
+
+// DeleteMany mocks base method.
+func (m *MockMongo) DeleteMany(ctx context.Context, collection string, filter any) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteMany", ctx, collection, filter)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// DeleteMany indicates an expected call of DeleteMany.
+func (mr *MockMongoMockRecorder) DeleteMany(ctx, collection, filter any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteMany", reflect.TypeOf((*MockMongo)(nil).DeleteMany), ctx, collection, filter)
+}
+
+// DeleteOne mocks base method.
+func (m *MockMongo) DeleteOne(ctx context.Context, collection string, filter any) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteOne", ctx, collection, filter)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// DeleteOne indicates an expected call of DeleteOne.
+func (mr *MockMongoMockRecorder) DeleteOne(ctx, collection, filter any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteOne", reflect.TypeOf((*MockMongo)(nil).DeleteOne), ctx, collection, filter)
+}
+
+// Drop mocks base method.
+func (m *MockMongo) Drop(ctx context.Context, collection string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Drop", ctx, collection)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Drop indicates an expected call of Drop.
+func (mr *MockMongoMockRecorder) Drop(ctx, collection any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Drop", reflect.TypeOf((*MockMongo)(nil).Drop), ctx, collection)
+}
+
+// Find mocks base method.
+func (m *MockMongo) Find(ctx context.Context, collection string, filter, results any) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Find", ctx, collection, filter, results)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Find indicates an expected call of Find.
+func (mr *MockMongoMockRecorder) Find(ctx, collection, filter, results any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Find", reflect.TypeOf((*MockMongo)(nil).Find), ctx, collection, filter, results)
+}
+
+// FindOne mocks base method.
+func (m *MockMongo) FindOne(ctx context.Context, collection string, filter, result any) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "FindOne", ctx, collection, filter, result)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// FindOne indicates an expected call of FindOne.
+func (mr *MockMongoMockRecorder) FindOne(ctx, collection, filter, result any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindOne", reflect.TypeOf((*MockMongo)(nil).FindOne), ctx, collection, filter, result)
+}
+
+// InsertMany mocks base method.
+func (m *MockMongo) InsertMany(ctx context.Context, collection string, documents []any) ([]any, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "InsertMany", ctx, collection, documents)
+	ret0, _ := ret[0].([]any)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// InsertMany indicates an expected call of InsertMany.
+func (mr *MockMongoMockRecorder) InsertMany(ctx, collection, documents any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InsertMany", reflect.TypeOf((*MockMongo)(nil).InsertMany), ctx, collection, documents)
+}
+
+// InsertOne mocks base method.
+func (m *MockMongo) InsertOne(ctx context.Context, collection string, document any) (any, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "InsertOne", ctx, collection, document)
+	ret0, _ := ret[0].(any)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// InsertOne indicates an expected call of InsertOne.
+func (mr *MockMongoMockRecorder) InsertOne(ctx, collection, document any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InsertOne", reflect.TypeOf((*MockMongo)(nil).InsertOne), ctx, collection, document)
+}
+
+// StartSession mocks base method.
+func (m *MockMongo) StartSession() (any, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "StartSession")
+	ret0, _ := ret[0].(any)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// StartSession indicates an expected call of StartSession.
+func (mr *MockMongoMockRecorder) StartSession() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartSession", reflect.TypeOf((*MockMongo)(nil).StartSession))
+}
+
+// UpdateByID mocks base method.
+func (m *MockMongo) UpdateByID(ctx context.Context, collection string, id, update any) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateByID", ctx, collection, id, update)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// UpdateByID indicates an expected call of UpdateByID.
+func (mr *MockMongoMockRecorder) UpdateByID(ctx, collection, id, update any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateByID", reflect.TypeOf((*MockMongo)(nil).UpdateByID), ctx, collection, id, update)
+}
+
+// UpdateMany mocks base method.
+func (m *MockMongo) UpdateMany(ctx context.Context, collection string, filter, update any) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateMany", ctx, collection, filter, update)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// UpdateMany indicates an expected call of UpdateMany.
+func (mr *MockMongoMockRecorder) UpdateMany(ctx, collection, filter, update any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateMany", reflect.TypeOf((*MockMongo)(nil).UpdateMany), ctx, collection, filter, update)
+}
+
+// UpdateOne mocks base method.
+func (m *MockMongo) UpdateOne(ctx context.Context, collection string, filter, update any) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateOne", ctx, collection, filter, update)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UpdateOne indicates an expected call of UpdateOne.
+func (mr *MockMongoMockRecorder) UpdateOne(ctx, collection, filter, update any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateOne", reflect.TypeOf((*MockMongo)(nil).UpdateOne), ctx, collection, filter, update)
+}
+
+// MockArangoDB is a mock of ArangoDB interface.
+type MockArangoDB struct {
+	ctrl     *gomock.Controller
+	recorder *MockArangoDBMockRecorder
+}
+
+// MockArangoDBMockRecorder is the mock recorder for MockArangoDB.
+type MockArangoDBMockRecorder struct {
+	mock *MockArangoDB
+}
+
+// NewMockArangoDB creates a new mock instance.
+func NewMockArangoDB(ctrl *gomock.Controller) *MockArangoDB {
+	mock := &MockArangoDB{ctrl: ctrl}
+	mock.recorder = &MockArangoDBMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockArangoDB) EXPECT() *MockArangoDBMockRecorder {
+	return m.recorder
+}
+
+// CreateCollection mocks base method.
+func (m *MockArangoDB) CreateCollection(ctx context.Context, database, collection string, isEdge bool) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateCollection", ctx, database, collection, isEdge)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CreateCollection indicates an expected call of CreateCollection.
+func (mr *MockArangoDBMockRecorder) CreateCollection(ctx, database, collection, isEdge any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateCollection", reflect.TypeOf((*MockArangoDB)(nil).CreateCollection), ctx, database, collection, isEdge)
+}
+
+// CreateDB mocks base method.
+func (m *MockArangoDB) CreateDB(ctx context.Context, database string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateDB", ctx, database)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CreateDB indicates an expected call of CreateDB.
+func (mr *MockArangoDBMockRecorder) CreateDB(ctx, database any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateDB", reflect.TypeOf((*MockArangoDB)(nil).CreateDB), ctx, database)
+}
+
+// CreateGraph mocks base method.
+func (m *MockArangoDB) CreateGraph(ctx context.Context, database, graph string, edgeDefinitions any) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateGraph", ctx, database, graph, edgeDefinitions)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CreateGraph indicates an expected call of CreateGraph.
+func (mr *MockArangoDBMockRecorder) CreateGraph(ctx, database, graph, edgeDefinitions any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateGraph", reflect.TypeOf((*MockArangoDB)(nil).CreateGraph), ctx, database, graph, edgeDefinitions)
+}
+
+// DropCollection mocks base method.
+func (m *MockArangoDB) DropCollection(ctx context.Context, database, collection string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DropCollection", ctx, database, collection)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DropCollection indicates an expected call of DropCollection.
+func (mr *MockArangoDBMockRecorder) DropCollection(ctx, database, collection any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DropCollection", reflect.TypeOf((*MockArangoDB)(nil).DropCollection), ctx, database, collection)
+}
+
+// DropDB mocks base method.
+func (m *MockArangoDB) DropDB(ctx context.Context, database string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DropDB", ctx, database)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DropDB indicates an expected call of DropDB.
+func (mr *MockArangoDBMockRecorder) DropDB(ctx, database any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DropDB", reflect.TypeOf((*MockArangoDB)(nil).DropDB), ctx, database)
+}
+
+// DropGraph mocks base method.
+func (m *MockArangoDB) DropGraph(ctx context.Context, database, graph string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DropGraph", ctx, database, graph)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DropGraph indicates an expected call of DropGraph.
+func (mr *MockArangoDBMockRecorder) DropGraph(ctx, database, graph any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DropGraph", reflect.TypeOf((*MockArangoDB)(nil).DropGraph), ctx, database, graph)
 }
 
 // Mockmigrator is a mock of migrator interface.
