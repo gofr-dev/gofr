@@ -174,6 +174,16 @@ func getMigrator(c *container.Container) (Datasource, migrator, bool) {
 		c.Debug("initialized data source for Mongo")
 	}
 
+	if !isNil(c.ArangoDB) {
+		ok = true
+
+		ds.ArangoDB = arangoDS{c.ArangoDB}
+
+		mg = arangoDS{c.ArangoDB}.apply(mg)
+
+		c.Debug("initialized data source for ArangoDB")
+	}
+
 	return ds, mg, ok
 }
 
