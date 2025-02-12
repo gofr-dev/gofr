@@ -47,6 +47,8 @@ const (
 	shutServerPing         = "/api/ping/down"
 	pingTimeout            = 5 * time.Second
 	defaultTelemetry       = "true"
+	telmetryStart          = "start"
+	telemetryEnd           = "shutdown"
 )
 
 // App is the main application in the GoFr framework.
@@ -178,15 +180,15 @@ func (a *App) Run() {
 		shutdownCtx, done := context.WithTimeout(context.WithoutCancel(ctx), shutDownTimeout)
 		defer done()
 
-		if a.Config.GetOrDefault("GOFR_TELEMETRY", "true") == defaultTelemetry {
-			a.pingGoFr(http.DefaultClient, "shutdown")
+		if a.hasTelemetry() {
+			a.sendTelemetry(http.DefaultClient, telemetryEnd)
 		}
 
 		_ = a.Shutdown(shutdownCtx)
 	}()
 
-	if a.Config.GetOrDefault("GOFR_TELEMETRY", "true") == defaultTelemetry {
-		go a.pingGoFr(http.DefaultClient, "start")
+	if a.hasTelemetry() {
+		go a.sendTelemetry(http.DefaultClient, telmetryStart)
 	}
 
 	wg := sync.WaitGroup{}
@@ -237,7 +239,11 @@ func (a *App) Run() {
 	wg.Wait()
 }
 
-func (a *App) pingGoFr(client *http.Client, s string) {
+func (a *App) hasTelemetry() bool {
+	return a.Config.GetOrDefault("GOFR_TELEMETRY", "true") == defaultTelemetry
+}
+
+func (a *App) sendTelemetry(client *http.Client, s string) {
 	url := fmt.Sprint(gofrHost, shutServerPing)
 
 	if s == "start" {
@@ -258,10 +264,14 @@ func (a *App) pingGoFr(client *http.Client, s string) {
 
 	resp, err := client.Do(req)
 	if err != nil {
+		a.container.Errorf("Failed to send telemetry: %v", err)
 		return
 	}
 
-	resp.Body.Close()
+	err = resp.Body.Close()
+	if err != nil {
+		a.container.Errorf("Failed to close telemetry response: %v", err)
+	}
 }
 
 // Shutdown stops the service(s) and close the application.

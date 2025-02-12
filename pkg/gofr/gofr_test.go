@@ -110,7 +110,7 @@ func TestPingGoFr(t *testing.T) {
 
 			a := New()
 
-			a.pingGoFr(mockClient, tt.input)
+			a.sendTelemetry(mockClient, tt.input)
 
 			assert.NotNil(t, mockTransport.lastRequest, "Request should not be nil")
 			assert.Equal(t, tt.expectedURL, mockTransport.lastRequest.URL.String(), "Unexpected request URL")
