@@ -24,6 +24,7 @@ type Mocks struct {
 	Mongo       *MockMongo
 	KVStore     *MockKVStore
 	DGraph      *MockDgraph
+	ArangoDB    *MockArangoDBProvider
 	OpenTSDB    *MockOpenTSDBProvider
 	File        *file.MockFileSystemProvider
 	HTTPService *service.MockHTTP
@@ -119,6 +120,7 @@ func NewMockContainer(t *testing.T, options ...options) (*Container, *Mocks) {
 		HTTPService: httpMock,
 		DGraph:      dgraphMock,
 		OpenTSDB:    opentsdbMock,
+		ArangoDB:    arangoMock,
 		Metrics:     mockMetrics,
 	}
 
