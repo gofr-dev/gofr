@@ -64,7 +64,7 @@ func (c *Client) UseTracer(tracer any) {
 
 // Connect establishes a connection to NATS-KV and registers metrics using the provided configuration when the client was Created.
 func (c *Client) Connect() {
-	c.logger.Debugf("connecting to NATS at %v with bucket %q", c.configs.Server, c.configs.Bucket)
+	c.logger.Debugf("connecting to NATS-KV Store at %v with bucket %q", c.configs.Server, c.configs.Bucket)
 
 	natsBuckets := []float64{.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 4, 5, 7.5, 10}
 	c.metrics.NewHistogram("app_natskv_stats", "Response time of NATS KV operations in milliseconds.", natsBuckets...)
@@ -76,7 +76,7 @@ func (c *Client) Connect() {
 	}
 
 	c.conn = nc
-	c.logger.Debugf("successfully established NATS connection using %s:%s", c.configs.Server, c.configs.Bucket)
+	c.logger.Debug("connection to NATS successful")
 
 	js, err := nc.JetStream()
 	if err != nil {
@@ -86,7 +86,7 @@ func (c *Client) Connect() {
 
 	c.js = jetstream{js}
 
-	c.logger.Debugf("successfully initialized JetStream using %s:%s", c.configs.Server, c.configs.Bucket)
+	c.logger.Debug("jetStream initialized successfully")
 
 	kv, err := js.CreateKeyValue(&nats.KeyValueConfig{
 		Bucket: c.configs.Bucket,
@@ -97,7 +97,7 @@ func (c *Client) Connect() {
 	}
 
 	c.kv = kv
-	c.logger.Infof("successfully connected to NATS KV store at %s:%s ", c.configs.Server, c.configs.Bucket)
+	c.logger.Infof("successfully connected to NATS-KV Store at %s:%s ", c.configs.Server, c.configs.Bucket)
 }
 
 func (c *Client) Get(ctx context.Context, key string) (string, error) {
