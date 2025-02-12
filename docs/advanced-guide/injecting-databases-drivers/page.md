@@ -958,6 +958,21 @@ added using the `app.AddArangoDB()` method, and users can use ArangoDB across th
 
 ```go
 type ArangoDB interface {
+    // CreateDB creates a new database in ArangoDB.
+	CreateDB(ctx context.Context, database string) error
+	// DropDB deletes an existing database in ArangoDB.
+	DropDB(ctx context.Context, database string) error
+
+	// CreateCollection creates a new collection in a database with specified type.
+	CreateCollection(ctx context.Context, database, collection string, isEdge bool) error
+	// DropCollection deletes an existing collection from a database.
+	DropCollection(ctx context.Context, database, collection string) error
+
+	// CreateGraph creates a new graph in a database.
+	CreateGraph(ctx context.Context, database, graph string, edgeDefinitions any) error
+	// DropGraph deletes an existing graph from a database.
+	DropGraph(ctx context.Context, database, graph string) error
+
     // CreateDocument creates a new document in the specified collection.
 	CreateDocument(ctx context.Context, dbName, collectionName string, document any) (string, error)
 	// GetDocument retrieves a document by its ID from the specified collection.
