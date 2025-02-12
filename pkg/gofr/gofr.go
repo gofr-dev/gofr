@@ -186,7 +186,7 @@ func (a *App) Run() {
 	}()
 
 	if a.Config.GetOrDefault("GOFR_TELEMETRY", "true") == defaultTelemetry {
-		a.pingGoFr(http.DefaultClient, "start")
+		go a.pingGoFr(http.DefaultClient, "start")
 	}
 
 	wg := sync.WaitGroup{}
@@ -243,7 +243,7 @@ func (a *App) pingGoFr(client *http.Client, s string) {
 	if s == "start" {
 		url = fmt.Sprint(gofrHost, startServerPing)
 
-		a.container.Info("GoFr tracks server count via telemetry. Use GOFR_TELEMETRY to disable it.")
+		a.container.Info("GoFr tracks running servers via telemetry. Set GOFR_TELEMETRY=false in configs to disable it.")
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), pingTimeout)
@@ -253,6 +253,8 @@ func (a *App) pingGoFr(client *http.Client, s string) {
 	if err != nil {
 		return
 	}
+
+	req.Header.Set("Connection", "close")
 
 	resp, err := client.Do(req)
 	if err != nil {
