@@ -16,8 +16,9 @@ import (
 )
 
 const (
-	publicBroker  = "broker.emqx.io"
-	messageBuffer = 10
+	publicBroker        = "broker.emqx.io"
+	messageBuffer       = 10
+	defaultRetryTimeout = 10 * time.Second
 )
 
 var errClientNotConnected = errors.New("client not connected")
@@ -82,7 +83,6 @@ func New(config *Config, logger Logger, metrics Metrics) *MQTT {
 		go retryConnect(client, config, logger, options)
 	} else {
 		logger.Infof("connected to MQTT at '%v:%v' with clientID '%v'", config.Hostname, config.Port, options.ClientID)
-
 	}
 
 	return &MQTT{Client: client, config: config, logger: logger, subscriptions: subs, mu: mu, metrics: metrics}
@@ -321,15 +321,18 @@ func (m *MQTT) Ping() error {
 
 func retryConnect(client mqtt.Client, config *Config, logger Logger, options *mqtt.ClientOptions) {
 	for {
-		if token := client.Connect(); token.Wait() && token.Error() != nil {
+		token := client.Connect()
+		if token.Wait() && token.Error() != nil {
 			logger.Errorf("could not connect to MQTT at '%v:%v', error: %v", config.Hostname, config.Port, token.Error())
 
-			time.Sleep(30 * time.Second)
-		} else {
-			logger.Infof("connected to MQTT at '%v:%v' with clientID '%v'", config.Hostname, config.Port, options.ClientID)
+			time.Sleep(defaultRetryTimeout)
 
-			return
+			continue
 		}
+
+		logger.Infof("connected to MQTT at '%v:%v' with clientID '%v'", config.Hostname, config.Port, options.ClientID)
+
+		return
 	}
 }
 
