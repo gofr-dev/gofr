@@ -84,6 +84,11 @@ docker run --name scylla -d -p 2025:9042 scylladb/scylla
 docker run -d --name nats-server -p 4222:4222 -p 8222:8222 nats:latest -js
 docker pull surrealdb/surrealdb:latest
 docker run --name surrealdb -d -p 8000:8000 surrealdb/surrealdb:latest start --bind 0.0.0.0:8000
+docker run -d --name arangodb \
+  -p 8529:8529 \
+  -e ARANGO_ROOT_PASSWORD=rootpassword \
+  --pull always \
+  arangodb:latest
 
 
 

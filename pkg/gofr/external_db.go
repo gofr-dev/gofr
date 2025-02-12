@@ -145,6 +145,7 @@ func (a *App) AddOpenTSDB(db container.OpenTSDBProvider) {
 	a.container.OpenTSDB = db
 }
 
+// AddScyllaDB sets the ScyllaDB datasource in the app's container.
 func (a *App) AddScyllaDB(db container.ScyllaDBProvider) {
 	// Create the ScyllaDB client with the provided configuration
 	db.UseLogger(a.Logger())
@@ -154,6 +155,23 @@ func (a *App) AddScyllaDB(db container.ScyllaDBProvider) {
 	db.UseTracer(tracer)
 	db.Connect()
 	a.container.ScyllaDB = db
+}
+
+// AddArangoDB sets the ArangoDB datasource in the app's container.
+func (a *App) AddArangoDB(db container.ArangoDBProvider) {
+	// Set up logger, metrics, and tracer
+	db.UseLogger(a.Logger())
+	db.UseMetrics(a.Metrics())
+
+	// Get tracer from OpenTelemetry
+	tracer := otel.GetTracerProvider().Tracer("gofr-arangodb")
+	db.UseTracer(tracer)
+
+	// Connect to ArangoDB
+	db.Connect()
+
+	// Add the ArangoDB provider to the container
+	a.container.ArangoDB = db
 }
 
 func (a *App) AddSurrealDB(db container.SurrealBDProvider) {
