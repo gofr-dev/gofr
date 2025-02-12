@@ -83,7 +83,12 @@ func connect(conf Config, logger pubsub.Logger) (*gcPubSub.Client, error) {
 	it := client.Topics(ctx)
 
 	_, err = it.Next()
-	if err != nil && !errors.Is(err, iterator.Done) {
+	if err != nil {
+		if errors.Is(err, iterator.Done) {
+			logger.Debugf("no topics found in Google PubSub")
+			return client, nil
+		}
+
 		logger.Errorf("google pubsub connection validation failed, error: %v", err)
 
 		return nil, err

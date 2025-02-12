@@ -27,7 +27,7 @@ const (
 	DefaultBatchSize    = 100
 	DefaultBatchBytes   = 1048576
 	DefaultBatchTimeout = 1000
-	DefaultRetryTimeout = 30 * time.Second
+	defaultRetryTimeout = 10 * time.Second
 )
 
 type Config struct {
@@ -279,7 +279,7 @@ func (k *kafkaClient) CreateTopic(_ context.Context, name string) error {
 // retryConnect handles the retry mechanism for connecting to the Kafka broker.
 func retryConnect(client *kafkaClient, conf *Config, logger pubsub.Logger) {
 	for {
-		time.Sleep(DefaultRetryTimeout)
+		time.Sleep(defaultRetryTimeout)
 
 		conn, err := kafka.Dial("tcp", conf.Broker)
 		if err != nil {
