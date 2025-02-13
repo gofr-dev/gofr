@@ -18,5 +18,6 @@ use (
 	./pkg/gofr/datasource/scylladb
 	./pkg/gofr/datasource/clickhouse
 	./pkg/gofr/datasource/opentsdb
+	./pkg/gofr/datasource/surrealdb
+	./pkg/gofr/datasource/arangodb
 )
-
