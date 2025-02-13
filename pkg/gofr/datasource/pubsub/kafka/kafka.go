@@ -66,37 +66,21 @@ func New(conf *Config, logger pubsub.Logger, metrics Metrics) *kafkaClient {
 
 	logger.Debugf("connecting to Kafka broker '%s'", conf.Broker)
 
-	conn, err := kafka.Dial("tcp", conf.Broker)
+	dialer, conn, writer, reader, err := initializeKafkaClient(conf, logger)
 	if err != nil {
 		logger.Errorf("failed to connect to kafka at %v, error: %v", conf.Broker, err)
 
 		client := &kafkaClient{
 			logger:  logger,
-			config:  Config{},
+			config:  *conf,
 			metrics: metrics,
+			mu:      &sync.RWMutex{},
 		}
 
 		go retryConnect(client, conf, logger)
 
 		return client
 	}
-
-	dialer := &kafka.Dialer{
-		Timeout:   10 * time.Second,
-		DualStack: true,
-	}
-
-	writer := kafka.NewWriter(kafka.WriterConfig{
-		Brokers:      []string{conf.Broker},
-		Dialer:       dialer,
-		BatchSize:    conf.BatchSize,
-		BatchBytes:   conf.BatchBytes,
-		BatchTimeout: time.Duration(conf.BatchTimeout),
-	})
-
-	reader := make(map[string]Reader)
-
-	logger.Logf("connected to Kafka broker '%s'", conf.Broker)
 
 	return &kafkaClient{
 		config:  *conf,
@@ -186,6 +170,10 @@ func (k *kafkaClient) Subscribe(ctx context.Context, topic string) (*pubsub.Mess
 	// Lock the reader map to ensure only one subscriber access the reader at a time
 	k.mu.Lock()
 
+	if k.reader == nil {
+		k.reader = make(map[string]Reader)
+	}
+
 	if k.reader[topic] == nil {
 		k.reader[topic] = k.getNewReader(topic)
 	}
@@ -243,6 +231,33 @@ func (k *kafkaClient) Close() (err error) {
 	return err
 }
 
+func initializeKafkaClient(conf *Config, logger pubsub.Logger) (*kafka.Dialer, Connection,
+	Writer, map[string]Reader, error) {
+	dialer := &kafka.Dialer{
+		Timeout:   10 * time.Second,
+		DualStack: true,
+	}
+
+	conn, err := kafka.Dial("tcp", conf.Broker)
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
+
+	writer := kafka.NewWriter(kafka.WriterConfig{
+		Brokers:      []string{conf.Broker},
+		Dialer:       dialer,
+		BatchSize:    conf.BatchSize,
+		BatchBytes:   conf.BatchBytes,
+		BatchTimeout: time.Duration(conf.BatchTimeout),
+	})
+
+	reader := make(map[string]Reader)
+
+	logger.Logf("connected to Kafka broker '%s'", conf.Broker)
+
+	return dialer, conn, writer, reader, nil
+}
+
 func (k *kafkaClient) getNewReader(topic string) Reader {
 	reader := kafka.NewReader(kafka.ReaderConfig{
 		GroupID:     k.config.ConsumerGroupID,
@@ -281,33 +296,18 @@ func retryConnect(client *kafkaClient, conf *Config, logger pubsub.Logger) {
 	for {
 		time.Sleep(defaultRetryTimeout)
 
-		conn, err := kafka.Dial("tcp", conf.Broker)
+		dialer, conn, writer, reader, err := initializeKafkaClient(conf, logger)
 		if err != nil {
 			logger.Errorf("could not connect to Kafka at '%v', error: %v", conf.Broker, err)
 			continue
 		}
 
-		dialer := &kafka.Dialer{
-			Timeout:   10 * time.Second,
-			DualStack: true,
-		}
-
-		writer := kafka.NewWriter(kafka.WriterConfig{
-			Brokers:      []string{conf.Broker},
-			Dialer:       dialer,
-			BatchSize:    conf.BatchSize,
-			BatchBytes:   conf.BatchBytes,
-			BatchTimeout: time.Duration(conf.BatchTimeout),
-		})
-
-		reader := make(map[string]Reader)
-
-		logger.Logf("connected to Kafka broker '%s'", conf.Broker)
-
+		client.mu.Lock()
 		client.conn = conn
 		client.dialer = dialer
 		client.writer = writer
 		client.reader = reader
+		client.mu.Unlock()
 
 		return
 	}
