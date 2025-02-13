@@ -11,22 +11,36 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+
+	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 )
 
+// NewHelloGoFrServer creates a new instance of HelloGoFrServer
+func NewHelloGoFrServer() *HelloGoFrServer {
+	return &HelloGoFrServer{
+		health: getOrCreateHealthServer(), // Initialize the health server
+	}
+}
+
+// HelloServerWithGofr is the interface for the server implementation
 type HelloServerWithGofr interface {
 	SayHello(*gofr.Context) (any, error)
 }
 
+// HelloServerWrapper wraps the server and handles request and response logic
 type HelloServerWrapper struct {
 	HelloServer
+	*healthServer
 	Container *container.Container
 	server    HelloServerWithGofr
 }
+
+//
+// SayHello wraps the method and handles its execution
 func (h *HelloServerWrapper) SayHello(ctx context.Context, req *HelloRequest) (*HelloResponse, error) {
-	gctx := h.GetGofrContext(ctx, &HelloRequestWrapper{ctx: ctx, HelloRequest: req})
+	gctx := h.getGofrContext(ctx, &HelloRequestWrapper{ctx: ctx, HelloRequest: req})
 
 	res, err := h.server.SayHello(gctx)
-
 	if err != nil {
 		return nil, err
 	}
@@ -39,20 +53,29 @@ func (h *HelloServerWrapper) SayHello(ctx context.Context, req *HelloRequest) (*
 	return resp, nil
 }
 
+// mustEmbedUnimplementedHelloServer ensures that the server implements all required methods
 func (h *HelloServerWrapper) mustEmbedUnimplementedHelloServer() {}
 
-func RegisterHelloServerWithGofr(s grpc.ServiceRegistrar, srv HelloServerWithGofr) {
-	wrapper := &HelloServerWrapper{server: srv}
-	RegisterHelloServer(s, wrapper)
+// RegisterHelloServerWithGofr registers the server with the application
+func RegisterHelloServerWithGofr(app *gofr.App, srv HelloServerWithGofr) {
+	registerServerWithGofr(app, srv, func(s grpc.ServiceRegistrar, srv any) {
+		wrapper := &HelloServerWrapper{server: srv.(HelloServerWithGofr), healthServer: getOrCreateHealthServer()}
+		RegisterHelloServer(s, wrapper)
+		wrapper.Server.SetServingStatus("Hello", healthpb.HealthCheckResponse_SERVING)
+	})
 }
 
-func (h *HelloServerWrapper) GetGofrContext(ctx context.Context, req gofr.Request) *gofr.Context {
+// GetGofrContext extracts the GoFr context from the original context
+func (h *HelloServerWrapper) getGofrContext(ctx context.Context, req gofr.Request) *gofr.Context {
 	return &gofr.Context{
 		Context:   ctx,
 		Container: h.Container,
 		Request:   req,
 	}
 }
+
+//
+// Request Wrappers
 type HelloRequestWrapper struct {
 	ctx context.Context
 	*HelloRequest
@@ -70,7 +93,7 @@ func (h *HelloRequestWrapper) PathParam(s string) string {
 	return ""
 }
 
-func (h *HelloRequestWrapper) Bind(p any) error {
+func (h *HelloRequestWrapper) Bind(p interface{}) error {
 	ptr := reflect.ValueOf(p)
 	if ptr.Kind() != reflect.Ptr {
 		return fmt.Errorf("expected a pointer, got %T", p)
@@ -79,10 +102,8 @@ func (h *HelloRequestWrapper) Bind(p any) error {
 	hValue := reflect.ValueOf(h.HelloRequest).Elem()
 	ptrValue := ptr.Elem()
 
-	// Ensure we can set exported fields (skip unexported fields)
 	for i := 0; i < hValue.NumField(); i++ {
 		field := hValue.Type().Field(i)
-		// Skip the fields we don't want to copy (state, sizeCache, unknownFields)
 		if field.Name == "state" || field.Name == "sizeCache" || field.Name == "unknownFields" {
 			continue
 		}

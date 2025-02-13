@@ -81,6 +81,13 @@ docker run --name kafka-1 -p 9092:9092 \
 bitnami/kafka:3.4
 docker pull scylladb/scylla
 docker run --name scylla -d -p 2025:9042 scylladb/scylla
+docker pull surrealdb/surrealdb:latest
+docker run --name surrealdb -d -p 8000:8000 surrealdb/surrealdb:latest start --bind 0.0.0.0:8000
+docker run -d --name arangodb \
+  -p 8529:8529 \
+  -e ARANGO_ROOT_PASSWORD=rootpassword \
+  --pull always \
+  arangodb:latest
 
 
 
@@ -116,7 +123,7 @@ Please note that the recommended local port for the services are different than 
 * After adding or modifying code existing code, update the documentation too - [development/docs](https://github.com/gofr-dev/gofr/tree/development/docs).
 * When you consider a new documentation page is needed, start by adding a new file and writing your new documentation. Then - add a reference to it in [navigation.js](https://gofr.dev/docs/navigation.js).
 * If needed, update or add proper code examples for your changes.
-* In case images are needed, add it to [docs/public](https://gofr.dev/docs/public) folder.
+* In case images are needed, add it to [docs/public](./docs/public) folder.
 * Make sure you don't break existing links and references.
 * Maintain Markdown standards, you can read more [here](https://www.markdownguide.org/basic-syntax/), this includes:
     - Headings (`#`, `##`, etc.) should be placed in order.

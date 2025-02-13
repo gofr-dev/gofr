@@ -5,22 +5,36 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"math"
 	"time"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
 
+const (
+	statusCodeWidth           = 3
+	responseTimeWidth         = 11
+	nanosecondsPerMillisecond = 1e6
+	debugMethod               = "/grpc.health.v1.Health/SetServingStatus"
+	healthCheck               = "/grpc.health.v1.Health/Check"
+)
+
 type Logger interface {
 	Info(args ...any)
+	Errorf(string, ...any)
+	Debug(...any)
 }
 
-type RPCLog struct {
+type Metrics interface {
+	RecordHistogram(ctx context.Context, name string, value float64, labels ...string)
+}
+
+type gRPCLog struct {
 	ID           string `json:"id"`
 	StartTime    string `json:"startTime"`
 	ResponseTime int64  `json:"responseTime"`
@@ -28,20 +42,18 @@ type RPCLog struct {
 	StatusCode   int32  `json:"statusCode"`
 }
 
-func (l RPCLog) PrettyPrint(writer io.Writer) {
-	var statusCodeLen int
+//nolint:revive // We intend to keep it non-exported for ease in future changes without any breaking change.
+func NewgRPCLogger() gRPCLog {
+	return gRPCLog{}
+}
 
-	if l.StatusCode <= 0 {
-		statusCodeLen = 1 // Default to 1 if StatusCode is invalid
-	} else {
-		statusCodeLen = 9 - int(math.Log10(float64(l.StatusCode))) + 1
-	}
-
-	// Print the log message with dynamic width for the status code
-	fmt.Fprintf(writer, "\u001B[38;5;8m%s \u001B[38;5;%dm%-6d"+
-		"\u001B[0m %-*d\u001B[38;5;8mµs\u001B[0m %s \n",
+func (l gRPCLog) PrettyPrint(writer io.Writer) {
+	fmt.Fprintf(writer, "\u001B[38;5;8m%s \u001B[38;5;%dm%-*d"+
+		"\u001B[0m %*d\u001B[38;5;8mµs\u001B[0m %s %s\n",
 		l.ID, colorForGRPCCode(l.StatusCode),
-		l.StatusCode, statusCodeLen, l.ResponseTime, l.Method)
+		statusCodeWidth, l.StatusCode,
+		responseTimeWidth, l.ResponseTime,
+		"GRPC", l.Method)
 }
 
 func colorForGRPCCode(s int32) int {
@@ -57,12 +69,12 @@ func colorForGRPCCode(s int32) int {
 	return red
 }
 
-func (l RPCLog) String() string {
+func (l gRPCLog) String() string {
 	line, _ := json.Marshal(l)
 	return string(line)
 }
 
-func LoggingInterceptor(logger Logger) grpc.UnaryServerInterceptor {
+func ObservabilityInterceptor(logger Logger, metrics Metrics) grpc.UnaryServerInterceptor {
 	tracer := otel.GetTracerProvider().Tracer("gofr", trace.WithInstrumentationVersion("v0.1"))
 
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
@@ -72,8 +84,18 @@ func LoggingInterceptor(logger Logger) grpc.UnaryServerInterceptor {
 		ctx, span := tracer.Start(ctx, info.FullMethod)
 
 		resp, err := handler(ctx, req)
+		if err != nil {
+			logger.Errorf("error while handling gRPC request to method %q: %q", info.FullMethod, err)
+		}
 
-		documentRPCLog(ctx, logger, info.FullMethod, start, err)
+		if info.FullMethod == healthCheck {
+			service, ok := req.(*grpc_health_v1.HealthCheckRequest)
+			if ok {
+				info.FullMethod = fmt.Sprintf("%s	Service: %q", healthCheck, service.Service)
+			}
+		}
+
+		logRPC(ctx, logger, metrics, start, err, info.FullMethod, "app_gRPC-Server_stats")
 
 		span.End()
 
@@ -106,8 +128,13 @@ func initializeSpanContext(ctx context.Context) (context.Context, trace.SpanCont
 	return ctx, spanContext
 }
 
-func documentRPCLog(ctx context.Context, logger Logger, method string, start time.Time, err error) {
-	logEntry := RPCLog{
+func (gRPCLog) DocumentRPCLog(ctx context.Context, logger Logger, metrics Metrics, start time.Time, err error, method, name string) {
+	logRPC(ctx, logger, metrics, start, err, method, name)
+}
+
+func logRPC(ctx context.Context, logger Logger, metrics Metrics, start time.Time, err error, method, name string) {
+	duration := time.Since(start)
+	logEntry := gRPCLog{
 		ID:           trace.SpanFromContext(ctx).SpanContext().TraceID().String(),
 		StartTime:    start.Format("2006-01-02T15:04:05.999999999-07:00"),
 		ResponseTime: time.Since(start).Microseconds(),
@@ -123,7 +150,18 @@ func documentRPCLog(ctx context.Context, logger Logger, method string, start tim
 	}
 
 	if logger != nil {
-		logger.Info(logEntry)
+		if method == debugMethod {
+			logger.Debug(logEntry)
+		} else {
+			logger.Info(logEntry)
+		}
+	}
+
+	if metrics != nil {
+		metrics.RecordHistogram(ctx, name,
+			float64(duration.Milliseconds())+float64(duration.Nanoseconds()%nanosecondsPerMillisecond)/nanosecondsPerMillisecond,
+			"method",
+			method)
 	}
 }
 

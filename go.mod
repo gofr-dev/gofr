@@ -5,7 +5,7 @@ go 1.22.7
 toolchain go1.23.4
 
 require (
-	cloud.google.com/go/pubsub v1.45.3
+	cloud.google.com/go/pubsub v1.47.0
 	github.com/DATA-DOG/go-sqlmock v1.5.2
 	github.com/XSAM/otelsql v0.36.0
 	github.com/alicebob/miniredis/v2 v2.34.0
@@ -26,30 +26,30 @@ require (
 	github.com/redis/go-redis/v9 v9.7.0
 	github.com/segmentio/kafka-go v0.4.47
 	github.com/stretchr/testify v1.10.0
-	go.opentelemetry.io/contrib/instrumentation/net/http/httptrace/otelhttptrace v0.58.0
+	go.opentelemetry.io/contrib/instrumentation/net/http/httptrace/otelhttptrace v0.59.0
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.59.0
 	go.opentelemetry.io/otel v1.34.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.33.0
 	go.opentelemetry.io/otel/exporters/prometheus v0.56.0
-	go.opentelemetry.io/otel/exporters/zipkin v1.33.0
+	go.opentelemetry.io/otel/exporters/zipkin v1.34.0
 	go.opentelemetry.io/otel/metric v1.34.0
 	go.opentelemetry.io/otel/sdk v1.34.0
 	go.opentelemetry.io/otel/sdk/metric v1.34.0
 	go.opentelemetry.io/otel/trace v1.34.0
 	go.uber.org/mock v0.5.0
-	golang.org/x/oauth2 v0.25.0
-	golang.org/x/sync v0.10.0
-	golang.org/x/term v0.28.0
-	golang.org/x/text v0.21.0
-	google.golang.org/api v0.217.0
-	google.golang.org/grpc v1.69.4
-	google.golang.org/protobuf v1.36.3
+	golang.org/x/oauth2 v0.26.0
+	golang.org/x/sync v0.11.0
+	golang.org/x/term v0.29.0
+	golang.org/x/text v0.22.0
+	google.golang.org/api v0.220.0
+	google.golang.org/grpc v1.70.0
+	google.golang.org/protobuf v1.36.5
 	modernc.org/sqlite v1.34.5
 )
 
 require (
-	cloud.google.com/go v0.118.0 // indirect
-	cloud.google.com/go/auth v0.14.0 // indirect
+	cloud.google.com/go v0.118.1 // indirect
+	cloud.google.com/go/auth v0.14.1 // indirect
 	cloud.google.com/go/auth/oauth2adapt v0.2.7 // indirect
 	cloud.google.com/go/compute/metadata v0.6.0 // indirect
 	cloud.google.com/go/iam v1.3.1 // indirect
@@ -84,7 +84,7 @@ require (
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/stretchr/objx v0.5.2 // indirect
 	github.com/yuin/gopher-lua v1.1.1 // indirect
-	go.einride.tech/aip v0.68.0 // indirect
+	go.einride.tech/aip v0.68.1 // indirect
 	go.opencensus.io v0.24.0 // indirect
 	go.opentelemetry.io/auto/sdk v1.1.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.58.0 // indirect
@@ -93,11 +93,11 @@ require (
 	golang.org/x/crypto v0.32.0 // indirect
 	golang.org/x/exp v0.0.0-20250106191152-7588d65b2ba8 // indirect
 	golang.org/x/net v0.34.0 // indirect
-	golang.org/x/sys v0.29.0 // indirect
+	golang.org/x/sys v0.30.0 // indirect
 	golang.org/x/time v0.9.0 // indirect
-	google.golang.org/genproto v0.0.0-20250106144421-5f5ef82da422 // indirect
-	google.golang.org/genproto/googleapis/api v0.0.0-20250106144421-5f5ef82da422 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20250106144421-5f5ef82da422 // indirect
+	google.golang.org/genproto v0.0.0-20250122153221-138b5a5a4fd4 // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20250124145028-65684f501c47 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20250127172529-29210b9bc287 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	modernc.org/libc v1.61.7 // indirect
 	modernc.org/mathutil v1.7.1 // indirect

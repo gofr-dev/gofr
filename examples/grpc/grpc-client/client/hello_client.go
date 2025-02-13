@@ -3,50 +3,49 @@ package client
 
 import (
 	"gofr.dev/pkg/gofr"
-	"gofr.dev/pkg/gofr/container"
+	"gofr.dev/pkg/gofr/metrics"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/metadata"
 )
 
 type HelloGoFrClient interface {
-	SayHello(*gofr.Context, *HelloRequest) (*HelloResponse, error)
+	SayHello(*gofr.Context, *HelloRequest, ...grpc.CallOption) (*HelloResponse, error)
+	HealthClient
 }
 
 type HelloClientWrapper struct {
-	client    HelloClient
-	Container *container.Container
-	HelloGoFrClient
+	client HelloClient
+	HealthClient
 }
 
-func createGRPCConn(host string) (*grpc.ClientConn, error) {
-	conn, err := grpc.Dial(host, grpc.WithTransportCredentials(insecure.NewCredentials()))
+func NewHelloGoFrClient(host string, metrics metrics.Manager) (HelloGoFrClient, error) {
+	conn, err := createGRPCConn(host, "Hello")
+	if err != nil {
+		return &HelloClientWrapper{
+			client:       nil,
+			HealthClient: &HealthClientWrapper{client: nil}, // Ensure HealthClient is also implemented
+		}, err
+	}
+
+	metricsOnce.Do(func() {
+		metrics.NewHistogram("app_gRPC-Client_stats", "Response time of gRPC client in milliseconds.", gRPCBuckets...)
+	})
+
+	res := NewHelloClient(conn)
+	healthClient := NewHealthClient(conn)
+
+	return &HelloClientWrapper{
+		client: res,
+		HealthClient: healthClient,
+	}, nil
+}
+func (h *HelloClientWrapper) SayHello(ctx *gofr.Context, req *HelloRequest, 
+opts ...grpc.CallOption) (*HelloResponse, error) {
+	result, err := invokeRPC(ctx, "/Hello/SayHello", func() (interface{}, error) {
+		return h.client.SayHello(ctx.Context, req, opts...)
+	})
+
 	if err != nil {
 		return nil, err
 	}
-	return conn, nil
-}
-
-func NewHelloGoFrClient(host string) (*HelloClientWrapper, error) {
-	conn, err := createGRPCConn(host)
-	if err != nil {
-		return &HelloClientWrapper{client: nil}, err
-	}
-
-	res := NewHelloClient(conn)
-	return &HelloClientWrapper{
-		client: res,
-	}, nil
-}
-func (h *HelloClientWrapper) SayHello(ctx *gofr.Context, req *HelloRequest) (*HelloResponse, error) {
-	span := ctx.Trace("gRPC-srv-call: SayHello")
-	defer span.End()
-
-	traceID := span.SpanContext().TraceID().String()
-	spanID := span.SpanContext().SpanID().String()
-	md := metadata.Pairs("x-gofr-traceid", traceID, "x-gofr-spanid", spanID)
-
-	ctx.Context = metadata.NewOutgoingContext(ctx.Context, md)
-
-	return h.client.SayHello(ctx.Context, req)
+	return result.(*HelloResponse), nil
 }

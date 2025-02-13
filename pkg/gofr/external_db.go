@@ -42,7 +42,7 @@ func (a *App) AddPubSub(pubsub container.PubSubProvider) {
 	a.container.PubSub = pubsub
 }
 
-// AddFile sets the FTP,SFTP,S3 datasource in the app's container.
+// AddFileStore sets the FTP,SFTP,S3 datasource in the app's container.
 func (a *App) AddFileStore(fs file.FileSystemProvider) {
 	fs.UseLogger(a.Logger())
 	fs.UseMetrics(a.Metrics())
@@ -130,7 +130,7 @@ func (a *App) AddDgraph(db container.DgraphProvider) {
 	a.container.DGraph = db
 }
 
-// AddOpentsdb sets the opentsdb datasource in the app's container.
+// AddOpenTSDB sets the OpenTSDB datasource in the app's container.
 func (a *App) AddOpenTSDB(db container.OpenTSDBProvider) {
 	// Create the Opentsdb client with the provided configuration
 	db.UseLogger(a.Logger())
@@ -145,6 +145,7 @@ func (a *App) AddOpenTSDB(db container.OpenTSDBProvider) {
 	a.container.OpenTSDB = db
 }
 
+// AddScyllaDB sets the ScyllaDB datasource in the app's container.
 func (a *App) AddScyllaDB(db container.ScyllaDBProvider) {
 	// Create the ScyllaDB client with the provided configuration
 	db.UseLogger(a.Logger())
@@ -154,4 +155,31 @@ func (a *App) AddScyllaDB(db container.ScyllaDBProvider) {
 	db.UseTracer(tracer)
 	db.Connect()
 	a.container.ScyllaDB = db
+}
+
+// AddArangoDB sets the ArangoDB datasource in the app's container.
+func (a *App) AddArangoDB(db container.ArangoDBProvider) {
+	// Set up logger, metrics, and tracer
+	db.UseLogger(a.Logger())
+	db.UseMetrics(a.Metrics())
+
+	// Get tracer from OpenTelemetry
+	tracer := otel.GetTracerProvider().Tracer("gofr-arangodb")
+	db.UseTracer(tracer)
+
+	// Connect to ArangoDB
+	db.Connect()
+
+	// Add the ArangoDB provider to the container
+	a.container.ArangoDB = db
+}
+
+func (a *App) AddSurrealDB(db container.SurrealBDProvider) {
+	db.UseLogger(a.Logger())
+	db.UseMetrics(a.Metrics())
+
+	tracer := otel.GetTracerProvider().Tracer("gofr-surrealdb")
+	db.UseTracer(tracer)
+	db.Connect()
+	a.container.SurrealDB = db
 }

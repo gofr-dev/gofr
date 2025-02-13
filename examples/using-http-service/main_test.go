@@ -7,7 +7,6 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"strconv"
 	"testing"
 	"time"
 
@@ -25,12 +24,7 @@ import (
 var port int
 
 func Test_main(t *testing.T) {
-	port = testutil.GetFreePort(t)
-	t.Setenv("HTTP_PORT", strconv.Itoa(port))
-	host := fmt.Sprint("http://localhost:", port)
-
-	metricsPort := testutil.GetFreePort(t)
-	t.Setenv("METRICS_PORT", strconv.Itoa(metricsPort))
+	configs := testutil.NewServerConfigs(t)
 
 	c := &http.Client{}
 
@@ -60,7 +54,7 @@ func Test_main(t *testing.T) {
 	}
 
 	for i, tc := range testCases {
-		req, _ := http.NewRequest(http.MethodGet, host+tc.path, nil)
+		req, _ := http.NewRequest(http.MethodGet, configs.HTTPHost+tc.path, nil)
 		resp, err := c.Do(req)
 
 		require.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)

@@ -2,7 +2,11 @@
 
 We have already seen how GoFr can help ease the development of HTTP servers, but there are cases where performance is primarily required sacrificing flexibility. In these types of scenarios gRPC protocol comes into picture. {% new-tab-link title="gRPC" href="https://grpc.io/docs/what-is-grpc/introduction/" /%} is an open-source RPC(Remote Procedure Call) framework initially developed by Google.
 
-GoFr simplifies creating gRPC servers and enables efficient tracing across inter-service calls, leveraging its context for seamless data access and trace management in your handlers.
+GoFr streamlines the creation of gRPC servers and clients with unified GoFr's context support. 
+It provides built-in tracing, metrics, and logging to ensure seamless performance monitoring for both gRPC servers and inter-service gRPC communication. 
+With GoFr's context, you can seamlessly define custom metrics and traces across gRPC handlers, ensuring consistent observability and streamlined debugging throughout 
+your system. Additionally, GoFr provides a built-in health check for all your services and supports inter-service 
+health checks, allowing gRPC services to monitor each other effortlessly.
 
 ## Prerequisites
 
@@ -11,15 +15,15 @@ GoFr simplifies creating gRPC servers and enables efficient tracing across inter
 - **Linux (using `apt` or `apt-get`):**
 
 ```bash
-  sudo apt install -y protobuf-compiler
-  protoc --version # Ensure compiler version is 3+
+sudo apt install -y protobuf-compiler
+protoc --version # Ensure compiler version is 3+
 ```
 
 - **macOS (using Homebrew):**
 
 ```bash
-  brew install protobuf
-  protoc --version # Ensure compiler version is 3+
+brew install protobuf
+protoc --version # Ensure compiler version is 3+
 ```
 
 **2. Go Plugins for Protocol Compiler:**
@@ -27,14 +31,14 @@ GoFr simplifies creating gRPC servers and enables efficient tracing across inter
 a. Install protocol compiler plugins for Go:
 
 ```bash
-  go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.28
-  go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.2
+go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.28
+go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.2
 ```
 
 b. Update `PATH` for `protoc` to locate the plugins:
 
 ```bash
-  export PATH="$PATH:$(go env GOPATH)/bin"
+export PATH="$PATH:$(go env GOPATH)/bin"
 ```
 
 ## Creating Protocol Buffers
@@ -81,12 +85,12 @@ string address = 3;
 Run the following command to generate Go code using the Go gRPC plugins:
 
 ```bash
-  protoc \
-	  --go_out=. \
-	  --go_opt=paths=source_relative \
-	  --go-grpc_out=. \
-	  --go-grpc_opt=paths=source_relative \
-	  {serviceName}.proto
+protoc \
+	--go_out=. \
+	--go_opt=paths=source_relative \
+	--go-grpc_out=. \
+	--go-grpc_opt=paths=source_relative \
+	{serviceName}.proto
 ```
 
 This command generates two files, `{serviceName}.pb.go` and `{serviceName}_grpc.pb.go`, containing the necessary code for performing RPC calls.
@@ -95,19 +99,15 @@ This command generates two files, `{serviceName}.pb.go` and `{serviceName}_grpc.
 To install the CLI -
 
 ```bash
-  go install gofr.dev/cli/gofr@latest
+go install gofr.dev/cli/gofr@latest
 ```
 
 ## Generating gRPC Server Handler Template using `gofr wrap grpc server`
 
 **1. Use the `gofr wrap grpc server` Command:**
    ```bash
-  gofr wrap grpc server -proto=./path/your/proto/file
+gofr wrap grpc server -proto=./path/your/proto/file
    ```
-
-```bash
-  gofr wrap grpc -proto=./path/your/proto/file
-```
 
 This command leverages the `gofr-cli` to generate a `{serviceName}_server.go` file (e.g., `customer_server.go`)
 containing a template for your gRPC server implementation, including context support, in the same directory as
@@ -138,7 +138,7 @@ import (
 func main() {
     app := gofr.New()
 
-    packageName.Register{serviceName}ServerWithGofr(app, &packageName.{serviceName}GoFrServer{})
+    packageName.Register{serviceName}ServerWithGofr(app, &{packageName}.New{serviceName}GoFrServer())
 
     app.Run()
 }
@@ -146,11 +146,11 @@ func main() {
 
 >Note: By default, gRPC server will run on port 9000, to customize the port users can set `GRPC_PORT` config in the .env
 
-## Generating tracing enabled gRPC Client using `gofr wrap grpc client`
+## Generating gRPC Client using `gofr wrap grpc client`
 
 **1. Use the `gofr wrap grpc client` Command:**
    ```bash
-     gofr wrap grpc client -proto=./path/your/proto/file
+gofr wrap grpc client -proto=./path/your/proto/file
    ```
 This command leverages the `gofr-cli` to generate a `{serviceName}_client.go` file (e.g., `customer_client.go`). This file must not be modified.
 
@@ -160,7 +160,7 @@ This command leverages the `gofr-cli` to generate a `{serviceName}_client.go` fi
 // gRPC Handler with context support
 func {serviceMethod}(ctx *gofr.Context) (*{serviceResponse}, error) {
 // Create the gRPC client
-srv, err := New{serviceName}GoFrClient("your-grpc-server-host")
+srv, err := New{serviceName}GoFrClient("your-grpc-server-host", ctx.Metrics())
 if err != nil {
 return nil, err
 }
@@ -170,7 +170,7 @@ req := &{serviceRequest}{
 // populate fields as necessary
 }
 
-// Call the gRPC method with tracing enabled
+// Call the gRPC method with tracing/metrics enabled
 res, err := srv.{serviceMethod}(ctx, req)
 if err != nil {
 return nil, err
@@ -179,4 +179,38 @@ return nil, err
 return res, nil
 }
 ```
-> ##### Check out the example of setting up a gRPC server in GoFr: [Visit GitHub](https://github.com/gofr-dev/gofr/blob/main/examples/grpc-server/main.go)
+
+## HealthChecks in GoFr's gRPC Service/Clients
+Health Checks in GoFr's gRPC Services
+
+GoFr provides built-in health checks for gRPC services, enabling observability, monitoring, and inter-service health verification.
+
+### Client Interface
+
+```go
+type {serviceName}GoFrClient interface {
+SayHello(*gofr.Context, *HelloRequest, ...grpc.CallOption) (*HelloResponse, error)
+health
+}
+
+type health interface {
+Check(ctx *gofr.Context, in *grpc_health_v1.HealthCheckRequest, opts ...grpc.CallOption) (*grpc_health_v1.HealthCheckResponse, error)
+Watch(ctx *gofr.Context, in *grpc_health_v1.HealthCheckRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[grpc_health_v1.HealthCheckResponse], error)
+}
+```
+
+### Server Integration
+```go
+type {serviceName}GoFrServer struct {
+health *healthServer
+}
+```
+Supported Methods for HealthCheck :
+```go
+func (h *healthServer) Check(ctx *gofr.Context, req *grpc_health_v1.HealthCheckRequest) (*grpc_health_v1.HealthCheckResponse, error)
+func (h *healthServer) Watch(ctx *gofr.Context, in *grpc_health_v1.HealthCheckRequest, stream grpc_health_v1.Health_WatchServer) error
+func (h *healthServer) SetServingStatus(ctx *gofr.Context, service string, status grpc_health_v1.HealthCheckResponse_ServingStatus)
+func (h *healthServer) Shutdown(ctx *gofr.Context)
+func (h *healthServer) Resume(ctx *gofr.Context)
+```
+> ##### Check out the example of setting up a gRPC server/client in GoFr: [Visit GitHub](https://github.com/gofr-dev/gofr/tree/main/examples/grpc)

@@ -60,6 +60,8 @@ type Container struct {
 	DGraph     Dgraph
 	OpenTSDB   OpenTSDB
 	ScyllaDB   ScyllaDB
+	SurrealDB  SurrealDB
+	ArangoDB   ArangoDB
 
 	KVStore KVStore
 

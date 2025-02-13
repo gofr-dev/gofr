@@ -141,7 +141,7 @@ func main() {
 
 ## Adding Labels to Custom Metrics
 
-GoFr leverages metrics support by enabling labels. Labels are a key feature in metrics that allow you to categorize and filter metrics based on relevant information.
+GoFr leverages metrics support by enabling labels. Labels are a key feature in metrics that allows us to categorize and filter metrics based on relevant information.
 
 ### Understanding Labels
 
@@ -152,7 +152,7 @@ Common examples of labels include:
 - service: (e.g., "api-gateway", "database")
 - status: (e.g., "success", "failure")
 
-By adding labels, you can create different time series for the same metric based on the label values.
+By adding labels, we can create different time series for the same metric based on the label values.
 This allows for more granular analysis and visualization in Grafana (or any other) dashboards.
 
 ### Additional Considerations
@@ -161,7 +161,7 @@ This allows for more granular analysis and visualization in Grafana (or any othe
 - Choose meaningful label names that clearly describe the data point.
 - Ensure consistency in label naming conventions across your application.
 
-By effectively using labels in GoFr, you can enrich your custom metrics and gain deeper insights into your application's performance and behavior.
+By effectively using labels in GoFr, we can enrich your custom metrics and gain deeper insights into your application's performance and behavior.
 
 ### Usage:
 

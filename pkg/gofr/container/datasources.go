@@ -13,6 +13,7 @@ import (
 )
 
 //go:generate go run go.uber.org/mock/mockgen -source=datasources.go -destination=mock_datasources.go -package=container
+
 type DB interface {
 	Query(query string, args ...any) (*sql.Rows, error)
 	QueryRow(query string, args ...any) *sql.Row
@@ -275,6 +276,40 @@ type MongoProvider interface {
 	provider
 }
 
+// SurrealDB defines an interface representing a SurrealDB client with common database operations.
+type SurrealDB interface {
+
+	// Query executes a Surreal query with the provided variables and returns the query results as a slice of interfaces{}.
+	// It returns an error if the query execution fails.
+	Query(ctx context.Context, query string, vars map[string]any) ([]any, error)
+
+	// Create inserts a new record into the specified table and returns the created record as a map.
+	// It returns an error if the operation fails.
+	Create(ctx context.Context, table string, data any) (map[string]any, error)
+
+	// Update modifies an existing record in the specified table by its ID with the provided data.
+	// It returns the updated record as an interface and an error if the operation fails.
+	Update(ctx context.Context, table string, id string, data any) (any, error)
+
+	// Delete removes a record from the specified table by its ID.
+	// It returns the result of the delete operation as an interface and an error if the operation fails.
+	Delete(ctx context.Context, table string, id string) (any, error)
+
+	// Select retrieves all records from the specified table.
+	// It returns a slice of maps representing the records and an error if the operation fails.
+	Select(ctx context.Context, table string) ([]map[string]any, error)
+
+	HealthChecker
+}
+
+// SurrealBDProvider is an interface that extends SurrealDB with additional methods for logging, metrics, or connection management.
+// It is typically used for initializing and managing SurrealDB-based data sources.
+type SurrealBDProvider interface {
+	SurrealDB
+
+	provider
+}
+
 type provider interface {
 	// UseLogger sets the logger for the Cassandra client.
 	UseLogger(logger any)
@@ -405,7 +440,6 @@ type OpenTSDBProvider interface {
 // through its REST APIs. Each method corresponds to an API endpoint defined in the
 // OpenTSDB documentation (http://opentsdb.net/docs/build/html/api_http/index.html#api-endpoints).
 type OpenTSDB interface {
-
 	// HealthChecker verifies if the OpenTSDB server is reachable.
 	// Returns an error if the server is unreachable, otherwise nil.
 	HealthChecker
@@ -538,5 +572,73 @@ type ScyllaDB interface {
 
 type ScyllaDBProvider interface {
 	ScyllaDB
+	provider
+}
+
+type ArangoDB interface {
+	// CreateDB creates a new database in ArangoDB.
+	CreateDB(ctx context.Context, database string) error
+	// DropDB deletes an existing database in ArangoDB.
+	DropDB(ctx context.Context, database string) error
+
+	// CreateCollection creates a new collection in a database with specified type.
+	CreateCollection(ctx context.Context, database, collection string, isEdge bool) error
+	// DropCollection deletes an existing collection from a database.
+	DropCollection(ctx context.Context, database, collection string) error
+
+	// CreateGraph creates a new graph in a database.
+	// Parameters:
+	//   - ctx: Request context for tracing and cancellation.
+	//   - database: Name of the database where the graph will be created.
+	//   - graph: Name of the graph to be created.
+	//   - edgeDefinitions: Pointer to EdgeDefinition struct containing edge definitions.
+	//
+	// Returns an error if the edgeDefinitions parameter is not of type *EdgeDefinition or is nil.
+	CreateGraph(ctx context.Context, database, graph string, edgeDefinitions any) error
+	// DropGraph deletes an existing graph from a database.
+	DropGraph(ctx context.Context, database, graph string) error
+
+	// CreateDocument creates a new document in the specified collection.
+	CreateDocument(ctx context.Context, dbName, collectionName string, document any) (string, error)
+	// GetDocument retrieves a document by its ID from the specified collection.
+	GetDocument(ctx context.Context, dbName, collectionName, documentID string, result any) error
+	// UpdateDocument updates an existing document in the specified collection.
+	UpdateDocument(ctx context.Context, dbName, collectionName, documentID string, document any) error
+	// DeleteDocument deletes a document by its ID from the specified collection.
+	DeleteDocument(ctx context.Context, dbName, collectionName, documentID string) error
+
+	// GetEdges fetches all edges connected to a given vertex in the specified edge collection.
+	//
+	// Parameters:
+	//   - ctx: Request context for tracing and cancellation.
+	//   - dbName: Database name.
+	//   - graphName: Graph name.
+	//   - edgeCollection: Edge collection name.
+	//   - vertexID: Full vertex ID (e.g., "persons/16563").
+	//   - resp: Pointer to `*EdgeDetails` to store results.
+	//
+	// Returns an error if input is invalid, `resp` is of the wrong type, or the query fails.
+	GetEdges(ctx context.Context, dbName, graphName, edgeCollection, vertexID string, resp any) error
+
+	// Query executes an AQL query and binds the results.
+	//
+	// Parameters:
+	//   - ctx: Request context for tracing and cancellation.
+	//   - dbName: Name of the database where the query will be executed.
+	//   - query: AQL query string to be executed.
+	//   - bindVars: Map of bind variables to be used in the query.
+	//   - result: Pointer to a slice of maps where the query results will be stored.
+	//
+	// Returns an error if the database connection fails, the query execution fails, or
+	// the result parameter is not a pointer to a slice of maps.
+	Query(ctx context.Context, dbName string, query string, bindVars map[string]any, result any) error
+
+	HealthChecker
+}
+
+// ArangoDBProvider is an interface that extends ArangoDB with additional methods for logging, metrics, and connection management.
+type ArangoDBProvider interface {
+	ArangoDB
+
 	provider
 }
