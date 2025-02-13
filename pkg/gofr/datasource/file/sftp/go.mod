@@ -4,13 +4,11 @@ go 1.22.7
 
 toolchain go1.23.4
 
-replace gofr.dev => ../../../../..
-
 require (
 	github.com/pkg/sftp v1.13.6
 	github.com/stretchr/testify v1.10.0
 	go.uber.org/mock v0.5.0
-	gofr.dev v0.19.0
+	gofr.dev v1.33.0
 	golang.org/x/crypto v0.32.0
 )
 

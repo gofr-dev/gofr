@@ -4,8 +4,6 @@ go 1.22.7
 
 toolchain go1.23.4
 
-replace gofr.dev => ../../../../..
-
 require (
 	github.com/aws/aws-sdk-go-v2 v1.30.4
 	github.com/aws/aws-sdk-go-v2/config v1.27.28
@@ -13,7 +11,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.60.0
 	github.com/stretchr/testify v1.10.0
 	go.uber.org/mock v0.5.0
-	gofr.dev v1.17.0
+	gofr.dev v1.33.0
 )
 
 require (
