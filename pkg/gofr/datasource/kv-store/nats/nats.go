@@ -11,8 +11,10 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-var errStatusDown = errors.New("status down")
-var errKeyNotFound = errors.New("key not found")
+var (
+	errStatusDown  = errors.New("status down")
+	errKeyNotFound = errors.New("key not found")
+)
 
 type Configs struct {
 	Server string
@@ -62,7 +64,7 @@ func (c *Client) UseTracer(tracer any) {
 	}
 }
 
-// Connect establishes a connection to NATS-KV and registers metrics using the provided configuration when the client was Created.
+// Connect establishes a connection to NATS-KV and registers metrics using the provided configuration when the client is created.
 func (c *Client) Connect() {
 	c.logger.Debugf("connecting to NATS-KV Store at %v with bucket %q", c.configs.Server, c.configs.Bucket)
 

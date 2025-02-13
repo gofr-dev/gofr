@@ -11,9 +11,7 @@ import (
 	"go.uber.org/mock/gomock"
 )
 
-var (
-	errFailedToSet = errors.New("failed to set")
-)
+var errFailedToSet = errors.New("failed to set")
 
 func Test_ClientSet(t *testing.T) {
 	ctrl := gomock.NewController(t)

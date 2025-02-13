@@ -6,7 +6,7 @@ import (
 )
 
 const (
-	UUIDLength = 36
+	uuidLength = 36
 )
 
 type Logger interface {
@@ -32,7 +32,7 @@ func (l *Log) PrettyPrint(writer io.Writer) {
 	case "GET":
 		description = fmt.Sprintf("Fetching record from bucket '%s' with ID '%s'", l.Value, l.Key)
 	case "SET":
-		if len(l.Key) == UUIDLength {
+		if len(l.Key) == uuidLength {
 			description = fmt.Sprintf("Creating new record in bucket '%s' with ID '%s'", l.Value, l.Key)
 		} else {
 			description = fmt.Sprintf("Updating record with ID '%s' in bucket '%s'", l.Key, l.Value)
