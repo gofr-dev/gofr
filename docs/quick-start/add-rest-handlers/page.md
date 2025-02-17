@@ -14,7 +14,7 @@ If the custom handlers ain't implemented on the struct, GoFr provides default ha
 - **Update**: `/entity/{id}` Updates an existing record identified by the {id} path parameter, based on data provided in a JSON request body.
 - **Delete**  `/entity/{id}` Deletes an existing record identified by the {id} path parameter.
 
-**NOTE**: The registered routes will have the same name as the given struct, but if you want to change route name, you can implement `RestPath` method in the struct:
+**NOTE**: The registered routes will have the same name as the given struct, but if we want to change route name, we can implement `RestPath` method in the struct:
 ```go
 type userEntity struct {
 	Id         int    `json:"id"`
