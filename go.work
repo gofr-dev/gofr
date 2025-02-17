@@ -20,4 +20,5 @@ use (
 	./pkg/gofr/datasource/opentsdb
 	./pkg/gofr/datasource/surrealdb
 	./pkg/gofr/datasource/arangodb
+	./pkg/gofr/datasource/kv-store/nats
 )
