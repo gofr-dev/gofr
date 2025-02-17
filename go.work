@@ -1,0 +1,23 @@
+go 1.22.7
+
+toolchain go1.23.4
+
+use (
+	.
+	./examples/using-add-filestore
+	./pkg/gofr/datasource/dgraph
+	./pkg/gofr/datasource/mongo
+	./pkg/gofr/datasource/kv-store/badger
+	./pkg/gofr/datasource/pubsub/nats
+	./pkg/gofr/datasource/pubsub/eventhub
+	./pkg/gofr/datasource/cassandra
+	./pkg/gofr/datasource/solr
+	./pkg/gofr/datasource/file/sftp
+	./pkg/gofr/datasource/file/s3
+	./pkg/gofr/datasource/file/ftp
+	./pkg/gofr/datasource/scylladb
+	./pkg/gofr/datasource/clickhouse
+	./pkg/gofr/datasource/opentsdb
+	./pkg/gofr/datasource/surrealdb
+	./pkg/gofr/datasource/arangodb
+)
