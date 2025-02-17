@@ -8,6 +8,7 @@ COPY  docs/advanced-guide /app/src/app/docs/advanced-guide
 COPY  docs/references /app/src/app/docs/references
 COPY  docs/page.md /app/src/app/docs
 COPY  docs/navigation.js /app/src/lib
+COPY  docs/events.json /app/src/app/events
 
 ENV NODE_ENV production
 

@@ -1,6 +1,8 @@
 module gofr.dev/pkg/gofr/datasource/arangodb
 
-go 1.23.4
+go 1.22.0
+
+toolchain go1.23.4
 
 require (
 	github.com/arangodb/go-driver/v2 v2.1.2
