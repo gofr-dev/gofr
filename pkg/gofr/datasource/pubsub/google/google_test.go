@@ -269,6 +269,17 @@ func TestGoogleClient_CreateTopic_Error(t *testing.T) {
 	require.ErrorIs(t, err, errTestSentinel, "expected test-error but got different error")
 }
 
+func TestGoogleClient_CreateTopic_EmptyClient(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	g := &googleClient{client: nil, Config: Config{ProjectID: "test", SubscriptionName: "sub"}}
+
+	err := g.CreateTopic(context.Background(), "test-topic")
+
+	require.ErrorIs(t, err, errClientNotConnected, "expected client-error but got different error")
+}
+
 func TestGoogleClient_DeleteTopic(t *testing.T) {
 	ctx := context.Background()
 
@@ -292,4 +303,15 @@ func TestGoogleClient_DeleteTopic(t *testing.T) {
 
 		require.ErrorContains(t, err, "NotFound", "expected NotFound error for non existing topic deletion")
 	})
+}
+
+func TestGoogleClient_DeleteTopic_EmptyClient(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	g := &googleClient{client: nil, Config: Config{ProjectID: "test", SubscriptionName: "sub"}}
+
+	err := g.DeleteTopic(context.Background(), "test-topic")
+
+	require.ErrorIs(t, err, errClientNotConnected, "expected client-error but got different error")
 }
