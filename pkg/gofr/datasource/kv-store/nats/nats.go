@@ -151,8 +151,9 @@ type Health struct {
 	Details map[string]any `json:"details,omitempty"`
 }
 
-func (c *Client) HealthCheck(context.Context) (any, error) {
-	c.logger.Debugf("%s:%s Performing health check", c.configs.Server, c.configs.Bucket)
+func (c *Client) HealthCheck(ctx context.Context) (any, error) {
+	start := time.Now()
+	span := c.addTrace(ctx, "healthcheck", c.configs.Bucket)
 
 	h := &Health{
 		Details: make(map[string]any),
@@ -164,16 +165,29 @@ func (c *Client) HealthCheck(context.Context) (any, error) {
 	_, err := c.js.AccountInfo()
 	if err != nil {
 		h.Status = "DOWN"
-
-		c.logger.Debugf("%s:%s Health check failed: %v", c.configs.Server, c.configs.Bucket, err)
-
+		c.logger.Debug(&Log{
+			Type:     "HEALTH CHECK",
+			Key:      "health",
+			Value:    fmt.Sprintf("Connection failed for bucket '%s' at '%s'", c.configs.Bucket, c.configs.Server),
+			Duration: time.Since(start).Microseconds(),
+		})
+		if span != nil {
+			span.End()
+		}
 		return h, errStatusDown
 	}
 
 	h.Status = "UP"
+	c.logger.Debug(&Log{
+		Type:     "HEALTH CHECK",
+		Key:      "health",
+		Value:    fmt.Sprintf("Checking connection status for bucket '%s' at '%s'", c.configs.Bucket, c.configs.Server),
+		Duration: time.Since(start).Microseconds(),
+	})
 
-	c.logger.Debugf("%s:%s Health check successful", c.configs.Server, c.configs.Bucket)
-
+	if span != nil {
+		span.End()
+	}
 	return h, nil
 }
 
