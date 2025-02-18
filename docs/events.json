@@ -1,0 +1,26 @@
+[
+    {
+        "date": "23-24th November, 2024",
+        "title": "GoFr Hackathon",
+        "description": "GoFr Hackathon was a major success with participants building innovative solutions using the GoFr framework. It was an exciting two-day event where developers and tech enthusiasts came together to collaborate and create.",
+        "imageSrc": "/events/hackathon.jpg"
+    },
+    {
+        "date": "23-24th October, 2024",
+        "title": "Open Source India",
+        "description": "At Open Source India, we had an amazing experience connecting with the open-source community. The event featured various sessions, demos, and showcases on GoFr, highlighting its role in simplifying backend development and its microservice approach.",
+        "imageSrc": "/events/OpenSourceIndia.jpeg"
+    },
+    {
+        "date": "18-19th October, 2024",
+        "title": "GopherCon Africa",
+        "description": "At GopherCon Africa, GoFr stood out with its cutting-edge tools and integration features, making backend development easier. We showcased GoFr's capabilities in working with databases, observability tools, and its seamless HTTP/gRPC support.",
+        "imageSrc": "/events/gopherconAfrica.jpeg"
+    },
+    {
+        "date": "September 2024",
+        "title": "GoFr Workshops",
+        "description": "GoFr workshops are held regularly to engage with developers and tech enthusiasts. We’ve conducted workshops across multiple cities such as IIT BHU, IIIT Sri City, Thapar University, JIIT Noida, NIT Jalandhar, and NIT Nagpur offering hands-on experiences and deep dives into GoFr’s powerful features.",
+        "imageSrc": "/events/WorkShop.jpeg"
+    }
+]
