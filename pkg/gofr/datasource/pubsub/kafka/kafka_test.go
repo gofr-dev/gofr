@@ -51,7 +51,7 @@ func TestValidateConfigs(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := validateConfigs(tc.config)
+			err := validateConfigs(&tc.config)
 			if !errors.Is(err, tc.expected) {
 				t.Errorf("Expected error %v, but got %v", tc.expected, err)
 			}
@@ -383,7 +383,7 @@ func TestNewKafkaClient(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.desc, func(t *testing.T) {
-			k := New(tc.config, logging.NewMockLogger(logging.ERROR), NewMockMetrics(ctrl))
+			k := New(&tc.config, logging.NewMockLogger(logging.ERROR), NewMockMetrics(ctrl))
 			if tc.expectNil {
 				assert.Nil(t, k)
 			} else {
