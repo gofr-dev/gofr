@@ -3,6 +3,7 @@ package nats
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/nats-io/nats.go"
@@ -257,12 +258,20 @@ func Test_ClientHealthCheck(t *testing.T) {
 		Server: "nats://localhost:4222",
 		Bucket: "test_bucket",
 	}
-
+	
 	mockJS.EXPECT().
 		AccountInfo().
 		Return(&nats.AccountInfo{}, nil)
 
-	mockLogger.EXPECT().Debugf(gomock.Any(), gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().
+		Debug(gomock.Any()).
+		Do(func(log *Log) {
+			assert.Equal(t, "HEALTH CHECK", log.Type)
+			assert.Equal(t, "health", log.Key)
+			assert.Equal(t, fmt.Sprintf("Checking connection status for bucket '%s' at '%s'",
+				configs.Bucket, configs.Server), log.Value)
+		}).
+		Times(1)
 
 	cl := Client{
 		js:      mockJS,
@@ -275,4 +284,49 @@ func Test_ClientHealthCheck(t *testing.T) {
 
 	health := val.(*Health)
 	assert.Equal(t, "UP", health.Status)
+	assert.Equal(t, configs.Server, health.Details["url"])
+	assert.Equal(t, configs.Bucket, health.Details["bucket"])
+}
+
+func Test_ClientHealthCheckFailure(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockJS := NewMockJts(ctrl)
+	mockLogger := NewMockLogger(ctrl)
+
+	configs := &Configs{
+		Server: "nats://localhost:4222",
+		Bucket: "test_bucket",
+	}
+
+	mockJS.EXPECT().
+		AccountInfo().
+		Return(nil, errors.New("connection failed"))
+
+	// Mock the Debug call for failed health check
+	mockLogger.EXPECT().
+		Debug(gomock.Any()).
+		Do(func(log *Log) {
+			assert.Equal(t, "HEALTH CHECK", log.Type)
+			assert.Equal(t, "health", log.Key)
+			assert.Equal(t, fmt.Sprintf("Connection failed for bucket '%s' at '%s'",
+				configs.Bucket, configs.Server), log.Value)
+		}).
+		Times(1)
+
+	cl := Client{
+		js:      mockJS,
+		logger:  mockLogger,
+		configs: configs,
+	}
+
+	val, err := cl.HealthCheck(context.Background())
+	require.Error(t, err)
+	require.Equal(t, errStatusDown, err)
+
+	health := val.(*Health)
+	assert.Equal(t, "DOWN", health.Status)
+	assert.Equal(t, configs.Server, health.Details["url"])
+	assert.Equal(t, configs.Bucket, health.Details["bucket"])
 }
