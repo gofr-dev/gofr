@@ -323,6 +323,8 @@ func retryConnect(conf Config, logger pubsub.Logger, g *googleClient) {
 			g.client = client
 			g.mu.Unlock()
 
+			logger.Logf("connected to google pubsub client, projectID: %s", conf.ProjectID)
+
 			return
 		}
 
