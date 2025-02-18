@@ -87,11 +87,11 @@ func (m *mockRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) 
 func TestPingGoFr(t *testing.T) {
 	tests := []struct {
 		name        string
-		input       string
+		input       bool
 		expectedURL string
 	}{
-		{"Ping Start Server", "start", gofrHost + startServerPing},
-		{"Ping Shut Server", "stop", gofrHost + shutServerPing},
+		{"Ping Start Server", true, gofrHost + startServerPing},
+		{"Ping Shut Server", false, gofrHost + shutServerPing},
 	}
 
 	for _, tt := range tests {
