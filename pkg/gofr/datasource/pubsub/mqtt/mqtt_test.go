@@ -488,7 +488,16 @@ func TestReconnectHandler(t *testing.T) {
 	qos := byte(1)
 
 	clientMock := NewMockClient(ctrl)
-	clientMock.EXPECT().Subscribe("topic1", qos, gomock.Any()).Return(nil)
+	tokenMock := NewMockToken(ctrl)
+
+	clientMock.EXPECT().Subscribe("topic1", qos, gomock.Any()).Return(tokenMock)
+
+	tokenMock.EXPECT().Wait().Return(true)
+	tokenMock.EXPECT().Error().Return(nil)
+
+	mockLogger := NewMockLogger(ctrl)
+
+	mockLogger.EXPECT().Debugf("resubscribed to topic %s successfully", "topic1")
 
 	msgsChan := make(chan *pubsub.Message)
 
@@ -506,7 +515,7 @@ func TestReconnectHandler(t *testing.T) {
 		Port:     1234,
 		ClientID: "gopher",
 		QoS:      qos,
-	}, subs)
+	}, subs, mockLogger)
 
 	assert.NotNil(t, reconnectHandler)
 
