@@ -240,7 +240,7 @@ func (a *App) Run() {
 }
 
 func (a *App) hasTelemetry() bool {
-	return a.Config.GetOrDefault("GOFR_TELEMETRY", "true") == defaultTelemetry
+	return a.Config.GetOrDefault("GOFR_TELEMETRY", defaultTelemetry) == "true"
 }
 
 func (a *App) sendTelemetry(client *http.Client, s string) {
@@ -264,14 +264,10 @@ func (a *App) sendTelemetry(client *http.Client, s string) {
 
 	resp, err := client.Do(req)
 	if err != nil {
-		a.container.Errorf("Failed to send telemetry: %v", err)
 		return
 	}
 
-	err = resp.Body.Close()
-	if err != nil {
-		a.container.Errorf("Failed to close telemetry response: %v", err)
-	}
+	resp.Body.Close()
 }
 
 // Shutdown stops the service(s) and close the application.
