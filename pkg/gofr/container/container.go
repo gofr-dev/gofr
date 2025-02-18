@@ -130,7 +130,7 @@ func (c *Container) Create(conf config.Config) {
 			batchBytes, _ := strconv.Atoi(conf.GetOrDefault("KAFKA_BATCH_BYTES", strconv.Itoa(kafka.DefaultBatchBytes)))
 			batchTimeout, _ := strconv.Atoi(conf.GetOrDefault("KAFKA_BATCH_TIMEOUT", strconv.Itoa(kafka.DefaultBatchTimeout)))
 
-			c.PubSub = kafka.New(kafka.Config{
+			c.PubSub = kafka.New(&kafka.Config{
 				Broker:          conf.Get("PUBSUB_BROKER"),
 				Partition:       partition,
 				ConsumerGroupID: conf.Get("CONSUMER_ID"),
