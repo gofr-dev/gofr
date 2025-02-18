@@ -165,19 +165,23 @@ func (c *Client) HealthCheck(ctx context.Context) (any, error) {
 	_, err := c.js.AccountInfo()
 	if err != nil {
 		h.Status = "DOWN"
+
 		c.logger.Debug(&Log{
 			Type:     "HEALTH CHECK",
 			Key:      "health",
 			Value:    fmt.Sprintf("Connection failed for bucket '%s' at '%s'", c.configs.Bucket, c.configs.Server),
 			Duration: time.Since(start).Microseconds(),
 		})
+
 		if span != nil {
 			span.End()
 		}
+
 		return h, errStatusDown
 	}
 
 	h.Status = "UP"
+
 	c.logger.Debug(&Log{
 		Type:     "HEALTH CHECK",
 		Key:      "health",
@@ -188,6 +192,7 @@ func (c *Client) HealthCheck(ctx context.Context) (any, error) {
 	if span != nil {
 		span.End()
 	}
+
 	return h, nil
 }
 

@@ -12,7 +12,10 @@ import (
 	"go.uber.org/mock/gomock"
 )
 
-var errFailedToSet = errors.New("failed to set")
+var (
+	errFailedToSet      = errors.New("failed to set")
+	errConnectionFailed = errors.New("connection failed")
+)
 
 func Test_ClientSet(t *testing.T) {
 	ctrl := gomock.NewController(t)
@@ -258,7 +261,7 @@ func Test_ClientHealthCheck(t *testing.T) {
 		Server: "nats://localhost:4222",
 		Bucket: "test_bucket",
 	}
-	
+
 	mockJS.EXPECT().
 		AccountInfo().
 		Return(&nats.AccountInfo{}, nil)
@@ -302,7 +305,7 @@ func Test_ClientHealthCheckFailure(t *testing.T) {
 
 	mockJS.EXPECT().
 		AccountInfo().
-		Return(nil, errors.New("connection failed"))
+		Return(nil, errConnectionFailed)
 
 	// Mock the Debug call for failed health check
 	mockLogger.EXPECT().
