@@ -38,7 +38,7 @@ func Test_ClientSet(t *testing.T) {
 
 	mockMetrics.EXPECT().RecordHistogram(
 		gomock.Any(),
-		"app_natskv_stats",
+		"app_nats_kv_stats",
 		gomock.Any(),
 		"bucket", configs.Bucket,
 		"operation", "SET",
@@ -73,7 +73,7 @@ func Test_ClientSetError(t *testing.T) {
 		Return(uint64(0), errFailedToSet)
 	mockMetrics.EXPECT().RecordHistogram(
 		gomock.Any(),
-		"app_natskv_stats",
+		"app_nats_kv_stats",
 		gomock.Any(),
 		"bucket", configs.Bucket,
 		"operation", "SET",
@@ -115,7 +115,7 @@ func Test_ClientGet(t *testing.T) {
 
 	mockMetrics.EXPECT().RecordHistogram(
 		gomock.Any(),
-		"app_natskv_stats",
+		"app_nats_kv_stats",
 		gomock.Any(),
 		"bucket", configs.Bucket,
 		"operation", "GET",
@@ -154,7 +154,7 @@ func Test_ClientGetError(t *testing.T) {
 
 	mockMetrics.EXPECT().RecordHistogram(
 		gomock.Any(),
-		"app_natskv_stats",
+		"app_nats_kv_stats",
 		gomock.Any(),
 		"bucket", configs.Bucket,
 		"operation", "GET",
@@ -194,7 +194,7 @@ func Test_ClientDelete(t *testing.T) {
 
 	mockMetrics.EXPECT().RecordHistogram(
 		gomock.Any(),
-		"app_natskv_stats",
+		"app_nats_kv_stats",
 		gomock.Any(),
 		"bucket", configs.Bucket,
 		"operation", "DELETE",
@@ -232,7 +232,7 @@ func Test_ClientDeleteError(t *testing.T) {
 
 	mockMetrics.EXPECT().RecordHistogram(
 		gomock.Any(),
-		"app_natskv_stats",
+		"app_nats_kv_stats",
 		gomock.Any(),
 		"bucket", configs.Bucket,
 		"operation", "DELETE",

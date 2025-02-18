@@ -21,11 +21,11 @@ type Configs struct {
 	Bucket string
 }
 
-type jetstream struct {
+type jetStream struct {
 	nats.JetStreamContext
 }
 
-func (j jetstream) AccountInfo() (*nats.AccountInfo, error) {
+func (j jetStream) AccountInfo() (*nats.AccountInfo, error) {
 	return j.JetStreamContext.AccountInfo()
 }
 
@@ -39,6 +39,7 @@ type Client struct {
 	logger  Logger
 }
 
+// New creates a new NATS-KV client with the provided configuration.
 func New(configs Configs) *Client {
 	return &Client{configs: &configs}
 }
@@ -69,7 +70,7 @@ func (c *Client) Connect() {
 	c.logger.Debugf("connecting to NATS-KV Store at %v with bucket %q", c.configs.Server, c.configs.Bucket)
 
 	natsBuckets := []float64{.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 4, 5, 7.5, 10}
-	c.metrics.NewHistogram("app_natskv_stats", "Response time of NATS KV operations in milliseconds.", natsBuckets...)
+	c.metrics.NewHistogram("app_nats_kv_stats", "Response time of NATS KV operations in milliseconds.", natsBuckets...)
 
 	nc, err := nats.Connect(c.configs.Server)
 	if err != nil {
@@ -86,7 +87,7 @@ func (c *Client) Connect() {
 		return
 	}
 
-	c.js = jetstream{js}
+	c.js = jetStream{js}
 
 	c.logger.Debug("jetStream initialized successfully")
 
@@ -216,7 +217,7 @@ func (c *Client) sendOperationStats(start time.Time, methodType, method string, 
 		span.SetAttributes(attribute.Int64(fmt.Sprintf("natskv.%v.duration(μs)", method), duration.Microseconds()))
 	}
 
-	c.metrics.RecordHistogram(context.Background(), "app_natskv_stats", float64(duration.Milliseconds()),
+	c.metrics.RecordHistogram(context.Background(), "app_nats_kv_stats", float64(duration.Milliseconds()),
 		"bucket", c.configs.Bucket,
 		"operation", methodType)
 }
