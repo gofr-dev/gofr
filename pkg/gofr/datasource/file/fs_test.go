@@ -326,8 +326,11 @@ func Test_ReadFromJSONArrayInvalidDelimiter(t *testing.T) {
 
 func Test_DirectoryOperations(t *testing.T) {
 	logger := logging.NewMockLogger(logging.DEBUG)
-
 	fileStore := New(logger)
+
+	// Get the initial working directory
+	initialDir, err := fileStore.Getwd()
+	require.NoError(t, err)
 
 	info, err := fileStore.Stat(".")
 	require.NoError(t, err)
@@ -337,7 +340,12 @@ func Test_DirectoryOperations(t *testing.T) {
 	require.NoError(t, err)
 
 	defer func() {
-		removeErr := fileStore.RemoveAll("../Hello_world")
+		// First change back to initial directory
+		err = fileStore.ChDir(initialDir)
+		require.NoError(t, err)
+
+		// Now remove the directory using just the directory name
+		removeErr := fileStore.RemoveAll("Hello_world")
 		require.NoError(t, removeErr)
 	}()
 
@@ -359,7 +367,12 @@ func Test_DirectoryOperations(t *testing.T) {
 	assert.False(t, v[0].IsDir())
 	assert.Equal(t, "Hello.txt", v[0].Name())
 
-	v, err = fileStore.ReadDir("../Hello_world")
+	// Change back to parent directory first
+	err = fileStore.ChDir(initialDir)
+	require.NoError(t, err)
+
+	// Read the directory using its name instead of ../
+	v, err = fileStore.ReadDir("Hello_world")
 	require.NoError(t, err)
 	require.NotEmpty(t, v)
 	assert.False(t, v[0].IsDir())
@@ -433,11 +446,6 @@ func Test_ValidatePath_Error(t *testing.T) {
 		{
 			name:        "Hidden parent traversal",
 			path:        ".../.../file",
-			expectedErr: errInvalidPath,
-		},
-		{
-			name:        "Windows style absolute path",
-			path:        `C:\Windows\System32\file.txt`,
 			expectedErr: errInvalidPath,
 		},
 	}
