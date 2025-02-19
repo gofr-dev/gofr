@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"os"
 	"path"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -363,4 +364,90 @@ func Test_DirectoryOperations(t *testing.T) {
 	require.NotEmpty(t, v)
 	assert.False(t, v[0].IsDir())
 	assert.Equal(t, "Hello.txt", v[0].Name())
+}
+
+func Test_ValidatePath_Success(t *testing.T) {
+	logger := logging.NewMockLogger(logging.DEBUG)
+	file := &fileSystem{logger: logger}
+
+	tests := []struct {
+		name     string
+		path     string
+		expected string
+	}{
+		{
+			name:     "Simple path",
+			path:     "testfile.txt",
+			expected: "testfile.txt",
+		},
+		{
+			name:     "Nested path",
+			path:     "dir/subdir/file.txt",
+			expected: filepath.Clean("dir/subdir/file.txt"),
+		},
+		{
+			name:     "Path with special characters",
+			path:     "temp!@#$%^&*(123/file.txt",
+			expected: filepath.Clean("temp!@#$%^&*(123/file.txt"),
+		},
+		{
+			name:     "Current directory reference",
+			path:     "./file.txt",
+			expected: "file.txt",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cleanPath, err := file.validatePath(tt.path)
+			require.NoError(t, err)
+			assert.Equal(t, tt.expected, cleanPath)
+		})
+	}
+}
+
+func Test_ValidatePath_Error(t *testing.T) {
+	logger := logging.NewMockLogger(logging.DEBUG)
+	file := &fileSystem{logger: logger}
+
+	tests := []struct {
+		name        string
+		path        string
+		expectedErr error
+	}{
+		{
+			name:        "Absolute path",
+			path:        "/etc/passwd",
+			expectedErr: errInvalidPath,
+		},
+		{
+			name:        "Parent traversal",
+			path:        "../secrets.txt",
+			expectedErr: errInvalidPath,
+		},
+		{
+			name:        "Nested parent traversal",
+			path:        "legal/../../illegal.txt",
+			expectedErr: errInvalidPath,
+		},
+		{
+			name:        "Hidden parent traversal",
+			path:        ".../.../file",
+			expectedErr: errInvalidPath,
+		},
+		{
+			name:        "Windows style absolute path",
+			path:        `C:\Windows\System32\file.txt`,
+			expectedErr: errInvalidPath,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cleanPath, err := file.validatePath(tt.path)
+			require.Error(t, err)
+			assert.Equal(t, tt.expectedErr, err)
+			assert.Empty(t, cleanPath)
+		})
+	}
 }
