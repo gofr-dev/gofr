@@ -11,6 +11,7 @@ import (
 
 	gcPubSub "cloud.google.com/go/pubsub"
 	"go.opentelemetry.io/otel"
+	"google.golang.org/api/iterator"
 
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 )
@@ -18,7 +19,10 @@ import (
 var (
 	errProjectIDNotProvided    = errors.New("google project id not provided")
 	errSubscriptionNotProvided = errors.New("subscription name not provided")
+	errClientNotConnected      = errors.New("google pubsub client is not connected")
 )
+
+const defaultRetryInterval = 10 * time.Second
 
 type Config struct {
 	ProjectID        string
@@ -47,24 +51,53 @@ func New(conf Config, logger pubsub.Logger, metrics Metrics) *googleClient {
 
 	logger.Debugf("connecting to google pubsub client with projectID '%s' and subscriptionName '%s", conf.ProjectID, conf.SubscriptionName)
 
+	var client googleClient
+	client.Config = conf
+	client.logger = logger
+	client.metrics = metrics
+	client.receiveChan = make(map[string]chan *pubsub.Message)
+	client.subStarted = make(map[string]struct{})
+	client.mu = sync.RWMutex{}
+
+	gClient, err := connect(conf, logger)
+	if err != nil {
+		go retryConnect(conf, logger, &client)
+
+		return &client
+	}
+
+	client.client = gClient
+
+	return &client
+}
+
+func connect(conf Config, logger pubsub.Logger) (*gcPubSub.Client, error) {
 	client, err := gcPubSub.NewClient(context.Background(), conf.ProjectID)
 	if err != nil {
-		return &googleClient{
-			Config: conf,
+		logger.Errorf("could not create Google PubSub client, error: %v", err)
+		return nil, err
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultRetryInterval)
+	defer cancel()
+
+	it := client.Topics(ctx)
+
+	_, err = it.Next()
+	if err != nil {
+		if errors.Is(err, iterator.Done) {
+			logger.Debugf("no topics found in Google PubSub")
+			return client, nil
 		}
+
+		logger.Errorf("google pubsub connection validation failed, error: %v", err)
+
+		return nil, err
 	}
 
 	logger.Logf("connected to google pubsub client, projectID: %s", client.Project())
 
-	return &googleClient{
-		Config:      conf,
-		client:      client,
-		logger:      logger,
-		metrics:     metrics,
-		receiveChan: make(map[string]chan *pubsub.Message),
-		subStarted:  make(map[string]struct{}),
-		mu:          sync.RWMutex{},
-	}
+	return client, nil
 }
 
 func validateConfigs(conf *Config) error {
@@ -123,6 +156,10 @@ func (g *googleClient) Publish(ctx context.Context, topic string, message []byte
 
 func (g *googleClient) Subscribe(ctx context.Context, topic string) (*pubsub.Message, error) {
 	var end time.Duration
+
+	if g.client == nil {
+		return nil, nil
+	}
 
 	spanCtx, span := otel.GetTracerProvider().Tracer("gofr").Start(ctx, "gcp-subscribe")
 	defer span.End()
@@ -194,6 +231,10 @@ func (g *googleClient) Subscribe(ctx context.Context, topic string) (*pubsub.Mes
 }
 
 func (g *googleClient) getTopic(ctx context.Context, topic string) (*gcPubSub.Topic, error) {
+	if g.client == nil {
+		return nil, errClientNotConnected
+	}
+
 	t := g.client.Topic(topic)
 
 	// check if topic exists, if not create the topic
@@ -208,6 +249,10 @@ func (g *googleClient) getTopic(ctx context.Context, topic string) (*gcPubSub.To
 }
 
 func (g *googleClient) getSubscription(ctx context.Context, topic *gcPubSub.Topic) (*gcPubSub.Subscription, error) {
+	if g.client == nil {
+		return nil, errClientNotConnected
+	}
+
 	subscription := g.client.Subscription(g.SubscriptionName + "-" + topic.ID())
 
 	// check if subscription already exists or not
@@ -233,8 +278,11 @@ func (g *googleClient) getSubscription(ctx context.Context, topic *gcPubSub.Topi
 }
 
 func (g *googleClient) DeleteTopic(ctx context.Context, name string) error {
-	err := g.client.Topic(name).Delete(ctx)
+	if g.client == nil {
+		return errClientNotConnected
+	}
 
+	err := g.client.Topic(name).Delete(ctx)
 	if err != nil && strings.Contains(err.Error(), "Topic not found") {
 		return nil
 	}
@@ -243,8 +291,11 @@ func (g *googleClient) DeleteTopic(ctx context.Context, name string) error {
 }
 
 func (g *googleClient) CreateTopic(ctx context.Context, name string) error {
-	_, err := g.client.CreateTopic(ctx, name)
+	if g.client == nil {
+		return errClientNotConnected
+	}
 
+	_, err := g.client.CreateTopic(ctx, name)
 	if err != nil && strings.Contains(err.Error(), "Topic already exists") {
 		return nil
 	}
@@ -262,4 +313,23 @@ func (g *googleClient) Close() error {
 	}
 
 	return nil
+}
+
+func retryConnect(conf Config, logger pubsub.Logger, g *googleClient) {
+	for {
+		client, err := connect(conf, logger)
+		if err == nil {
+			g.mu.Lock()
+			g.client = client
+			g.mu.Unlock()
+
+			logger.Logf("connected to google pubsub client, projectID: %s", conf.ProjectID)
+
+			return
+		}
+
+		logger.Errorf("could not connect to Google PubSub, error: %v", err)
+
+		time.Sleep(defaultRetryInterval)
+	}
 }
