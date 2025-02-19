@@ -1,4 +1,4 @@
-go 1.22.7
+go 1.23.4
 
 toolchain go1.23.4
 
@@ -20,4 +20,5 @@ use (
 	./pkg/gofr/datasource/opentsdb
 	./pkg/gofr/datasource/surrealdb
 	./pkg/gofr/datasource/arangodb
+	./pkg/gofr/datasource/kv-store/nats
 )
