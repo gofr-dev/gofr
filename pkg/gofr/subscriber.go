@@ -3,6 +3,7 @@ package gofr
 import (
 	"context"
 	"runtime/debug"
+	"time"
 
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/logging"
@@ -42,8 +43,13 @@ func (s *SubscriptionManager) handleSubscription(ctx context.Context, topic stri
 	msg, err := s.container.GetSubscriber().Subscribe(ctx, topic)
 
 	if err != nil {
-		s.container.Logger.Errorf("error while reading from topic %v, err: %v", topic, err.Error())
+		if !s.container.GetSubscriber().IsConnected() {
+			s.container.Logger.Debugf("error while reading from topic %v, err: %v", topic, err.Error())
+			time.Sleep(5 * time.Second)
+			return err
+		}
 
+		s.container.Logger.Errorf("error while reading from topic %v, err: %v", topic, err.Error())
 		return err
 	}
 
