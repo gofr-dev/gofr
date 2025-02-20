@@ -333,3 +333,17 @@ func retryConnect(conf Config, logger pubsub.Logger, g *googleClient) {
 		time.Sleep(defaultRetryInterval)
 	}
 }
+
+func (g *googleClient) IsConnected() bool {
+	if g.client == nil {
+		return false
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultRetryInterval)
+	defer cancel()
+
+	it := g.client.Topics(ctx)
+	_, err := it.Next()
+
+	return err == nil || errors.Is(err, iterator.Done)
+}
