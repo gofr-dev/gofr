@@ -472,7 +472,7 @@ func TestKafkaClient_IsConnected_Failure(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockConn := NewMockConnection(ctrl)
-	mockConn.EXPECT().Controller().Return(kafka.Broker{}, errors.New("controller error"))
+	mockConn.EXPECT().Controller().Return(kafka.Broker{}, ErrConsumerGroupNotProvided)
 
 	client := &kafkaClient{
 		conn: mockConn,

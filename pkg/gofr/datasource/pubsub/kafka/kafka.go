@@ -319,5 +319,6 @@ func (k *kafkaClient) IsConnected() bool {
 	}
 
 	_, err := k.conn.Controller()
+
 	return err == nil
 }
