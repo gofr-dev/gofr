@@ -10,6 +10,8 @@ import (
 	"github.com/google/uuid"
 )
 
+const backoffMultiplier = 2
+
 func getDefaultClient(config *Config, logger Logger, metrics Metrics) *MQTT {
 	var (
 		host     = publicBroker
@@ -49,6 +51,7 @@ func getDefaultClient(config *Config, logger Logger, metrics Metrics) *MQTT {
 		logger.Errorf("could not connect to MQTT at '%v:%v', error: %v", config.Hostname, config.Port, token.Error())
 
 		go retryDefaultConnect(client, config, logger, opts)
+
 		return mqttClient
 	}
 
@@ -108,11 +111,13 @@ func retryDefaultConnect(client mqtt.Client, config *Config, logger Logger, opti
 			logger.Errorf("could not connect to MQTT at '%v:%v', error: %v", config.Hostname, config.Port, token.Error())
 
 			time.Sleep(backoff)
-			backoff = time.Duration(math.Min(float64(backoff*2), float64(maxRetryTimeout)))
+			backoff = time.Duration(math.Min(float64(backoff*backoffMultiplier), float64(maxRetryTimeout)))
+
 			continue
 		}
 
 		logger.Infof("connected to MQTT at '%v:%v' with clientID '%v'", config.Hostname, config.Port, options.ClientID)
+
 		return
 	}
 }
