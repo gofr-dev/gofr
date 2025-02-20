@@ -451,3 +451,42 @@ func TestKafkaClient_CreateTopic(t *testing.T) {
 		assert.Equal(t, tc.err, err)
 	}
 }
+
+func TestKafkaClient_IsConnected_Success(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockConn := NewMockConnection(ctrl)
+	mockConn.EXPECT().Controller().Return(kafka.Broker{}, nil)
+
+	client := &kafkaClient{
+		conn: mockConn,
+	}
+
+	isConnected := client.IsConnected()
+	assert.True(t, isConnected)
+}
+
+func TestKafkaClient_IsConnected_Failure(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockConn := NewMockConnection(ctrl)
+	mockConn.EXPECT().Controller().Return(kafka.Broker{}, errors.New("controller error"))
+
+	client := &kafkaClient{
+		conn: mockConn,
+	}
+
+	isConnected := client.IsConnected()
+	assert.False(t, isConnected)
+}
+
+func TestKafkaClient_IsConnected_NilConnection(t *testing.T) {
+	client := &kafkaClient{
+		conn: nil,
+	}
+
+	isConnected := client.IsConnected()
+	assert.False(t, isConnected)
+}

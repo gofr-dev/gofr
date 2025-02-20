@@ -176,3 +176,11 @@ func (cm *ConnectionManager) Health() datasource.Health {
 		},
 	}
 }
+
+func (cm *ConnectionManager) IsConnected() bool {
+	if cm.conn == nil {
+		return false
+	}
+
+	return cm.conn.Status() == nats.CONNECTED
+}

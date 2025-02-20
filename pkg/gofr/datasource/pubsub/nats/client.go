@@ -283,3 +283,7 @@ func GetJetStreamStatus(ctx context.Context, js jetstream.JetStream) (string, er
 
 	return jetStreamStatusOK, nil
 }
+
+func (c *Client) IsConnected() bool {
+	return c.connManager.IsConnected()
+}

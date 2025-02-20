@@ -312,3 +312,12 @@ func retryConnect(client *kafkaClient, conf *Config, logger pubsub.Logger) {
 		return
 	}
 }
+
+func (k *kafkaClient) IsConnected() bool {
+	if k.conn == nil {
+		return false
+	}
+
+	_, err := k.conn.Controller()
+	return err == nil
+}

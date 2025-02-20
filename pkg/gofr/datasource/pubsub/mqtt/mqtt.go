@@ -370,3 +370,7 @@ func createReconnectingHandler(logger Logger, config *Config) func(mqtt.Client, 
 		logger.Infof("reconnecting to MQTT at '%v:%v' with clientID '%v'", config.Hostname, config.Port, config.ClientID)
 	}
 }
+
+func (m *MQTT) IsConnected() bool {
+	return m.Client.IsConnected()
+}
