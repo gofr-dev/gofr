@@ -9,6 +9,8 @@ import (
 	"gofr.dev/pkg/gofr/logging"
 )
 
+const retrySubscriptionInterval = 5 * time.Second
+
 type SubscribeFunc func(c *Context) error
 
 type SubscriptionManager struct {
@@ -45,11 +47,13 @@ func (s *SubscriptionManager) handleSubscription(ctx context.Context, topic stri
 	if err != nil {
 		if !s.container.GetSubscriber().IsConnected() {
 			s.container.Logger.Debugf("error while reading from topic %v, err: %v", topic, err.Error())
-			time.Sleep(5 * time.Second)
+			time.Sleep(retrySubscriptionInterval)
+
 			return err
 		}
 
 		s.container.Logger.Errorf("error while reading from topic %v, err: %v", topic, err.Error())
+
 		return err
 	}
 
