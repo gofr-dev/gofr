@@ -588,3 +588,37 @@ func TestMQTT_Close(t *testing.T) {
 
 	require.NoError(t, err)
 }
+
+func TestMQTT_IsConnected(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockClient := NewMockClient(ctrl)
+
+	testCases := []struct {
+		desc        string
+		isConnected bool
+	}{
+		{
+			desc:        "client is connected",
+			isConnected: true,
+		},
+		{
+			desc:        "client is not connected",
+			isConnected: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			mockClient.EXPECT().IsConnected().Return(tc.isConnected)
+
+			client := &MQTT{
+				Client: mockClient,
+			}
+
+			isConnected := client.IsConnected()
+			assert.Equal(t, tc.isConnected, isConnected)
+		})
+	}
+}
