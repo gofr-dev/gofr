@@ -19,6 +19,7 @@ const (
 	publicBroker        = "broker.emqx.io"
 	messageBuffer       = 10
 	defaultRetryTimeout = 5 * time.Second
+	maxRetryTimeout     = 1 * time.Minute
 )
 
 var errClientNotConnected = errors.New("client not connected")
@@ -90,6 +91,7 @@ func New(config *Config, logger Logger, metrics Metrics) *MQTT {
 
 func (m *MQTT) Subscribe(ctx context.Context, topic string) (*pubsub.Message, error) {
 	m.mu.Lock()
+
 	// get the message channel for the given topic
 	subs, ok := m.subscriptions[topic]
 	if !ok {
