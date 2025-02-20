@@ -285,3 +285,13 @@ func getTestConfigs() Config {
 		},
 	}
 }
+
+func TestClient_IsConnected_Error(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	client := &Client{}
+
+	isConnected := client.IsConnected()
+	require.False(t, isConnected)
+}

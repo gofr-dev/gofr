@@ -371,3 +371,11 @@ func (c *Client) Close() error {
 
 	return err
 }
+
+func (c *Client) IsConnected() bool {
+	if c.producer == nil || c.consumer == nil || c.processor == nil {
+		return false
+	}
+
+	return true
+}
