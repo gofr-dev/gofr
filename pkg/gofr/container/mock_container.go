@@ -153,4 +153,8 @@ func (*MockPubSub) Subscribe(_ context.Context, _ string) (*pubsub.Message, erro
 	return nil, nil
 }
 
+func (*MockPubSub) IsConnected() bool {
+	return true
+}
+
 func (*MockPubSub) Close() error { return nil }

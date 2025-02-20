@@ -50,6 +50,10 @@ func (mockSubscriber) Publish(_ context.Context, _ string, _ []byte) error {
 	return nil
 }
 
+func (mockSubscriber) IsConnected() bool {
+	return true
+}
+
 func (mockSubscriber) Subscribe(ctx context.Context, topic string) (*pubsub.Message, error) {
 	msg := pubsub.NewMessage(ctx)
 	msg.Topic = topic
