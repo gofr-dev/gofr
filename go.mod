@@ -1,8 +1,8 @@
 module gofr.dev
 
-go 1.22.7
+go 1.24
 
-toolchain go1.23.4
+toolchain go1.24
 
 require (
 	cloud.google.com/go/pubsub v1.47.0

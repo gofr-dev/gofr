@@ -6,6 +6,7 @@ on:
     branches:
       - main
       - development
+      - update/go_1.24
     paths-ignore:
       - 'docs/**'
   pull_request:
@@ -21,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go-version: ['1.23', '1.22']
+        go-version: ['1.24','1.23', '1.22']
 
     services:
       kafka:
@@ -93,7 +94,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go-version: ['1.22', '1.21']
+        go-version: ['1.24','1.23', '1.22']
 
     steps:
       - name: Checkout code into go module directory
@@ -119,7 +120,7 @@ jobs:
           go tool cover -func profile.cov
 
       - name: Upload Test Coverage
-        if: ${{ matrix.go-version == '1.22'}}
+        if: ${{ matrix.go-version == '1.24'}}
         uses: actions/upload-artifact@v4
         with:
           name: PKG-Coverage-Report
@@ -162,7 +163,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go-version: [ '1.23', '1.22' ]
+        go-version:  ['1.24','1.23', '1.22']
 
     steps:
       - name: Checkout code into go module directory
@@ -243,7 +244,7 @@ jobs:
       - name: Set up Go environment
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22'
+          go-version: '1.24'
           cache: false
 
       - name: Get dependencies
