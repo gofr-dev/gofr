@@ -281,8 +281,8 @@ jobs:
     name: Linting Party🥳
     runs-on: ubuntu-latest
     steps:
-      - - name: Check out code
-      - uses: actions/checkout@v4
+      - name: Check out code
+        uses: actions/checkout@v4
 
       - name: Set up Go environment
         uses: actions/setup-go@v5
