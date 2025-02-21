@@ -281,10 +281,14 @@ jobs:
     name: Linting Party🥳
     runs-on: ubuntu-latest
     steps:
-      - name: Check out code
+      - - name: Check out code
+      - uses: actions/checkout@v4
+
+      - name: Set up Go environment
         uses: actions/setup-go@v5
         with:
           go-version: 1.24
+
       - name: Check for file names errors
         uses: ls-lint/action@v2.2.3
         with:
