@@ -247,18 +247,17 @@ jobs:
           go-version: '1.24'
           cache: false
 
+      - name: Install golangci-lint
+        run: |
+          go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.62
+
       - name: Get dependencies
         run: |
           go mod tidy
 
       - name: Lint Root Module
-        uses: golangci/golangci-lint-action@v6
-        with:
-          version: v1.62
-          working-directory: .
-          args: >
-            --out-format=colored-line-number
-            --timeout=5m
+        run: |
+          golangci-lint run --out-format=colored-line-number --timeout=5m
 
       - name: Lint Submodules
         run: |
