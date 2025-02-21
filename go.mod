@@ -2,8 +2,6 @@ module gofr.dev
 
 go 1.24
 
-toolchain go1.24
-
 require (
 	cloud.google.com/go/pubsub v1.47.0
 	github.com/DATA-DOG/go-sqlmock v1.5.2
