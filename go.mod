@@ -11,7 +11,7 @@ require (
 	github.com/alicebob/miniredis/v2 v2.34.0
 	github.com/eclipse/paho.mqtt.golang v1.5.0
 	github.com/go-redis/redismock/v9 v9.2.0
-	github.com/go-sql-driver/mysql v1.8.1
+	github.com/go-sql-driver/mysql v1.9.0
 	github.com/gogo/protobuf v1.3.2
 	github.com/golang-jwt/jwt/v5 v5.2.1
 	github.com/google/uuid v1.6.0
