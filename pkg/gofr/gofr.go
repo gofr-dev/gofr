@@ -4,20 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net"
-	"net/http"
-	"os"
-	"os/signal"
-	"path/filepath"
-	"strconv"
-	"strings"
-	"sync"
-	"syscall"
-	"time"
-
 	"github.com/gorilla/mux"
-	"golang.org/x/sync/errgroup"
-
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
 	gofrHTTP "gofr.dev/pkg/gofr/http"
@@ -25,6 +12,13 @@ import (
 	"gofr.dev/pkg/gofr/metrics"
 	"gofr.dev/pkg/gofr/migration"
 	"gofr.dev/pkg/gofr/service"
+	"golang.org/x/sync/errgroup"
+	"net"
+	"net/http"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
 )
 
 // App is the main application in the GoFr framework.
@@ -46,83 +40,6 @@ type App struct {
 	httpRegistered bool
 
 	subscriptionManager SubscriptionManager
-}
-
-// Run starts the application. If it is an HTTP server, it will start the server.
-func (a *App) Run() {
-	if a.cmd != nil {
-		a.cmd.Run(a.container)
-	}
-
-	// Create a context that is canceled on receiving termination signals
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
-
-	// Goroutine to handle shutdown when context is canceled
-	go func() {
-		<-ctx.Done()
-
-		// Create a shutdown context with a timeout
-		shutdownCtx, done := context.WithTimeout(context.WithoutCancel(ctx), shutDownTimeout)
-		defer done()
-
-		if a.hasTelemetry() {
-			a.sendTelemetry(http.DefaultClient, false)
-		}
-
-		_ = a.Shutdown(shutdownCtx)
-	}()
-
-	if a.hasTelemetry() {
-		go a.sendTelemetry(http.DefaultClient, true)
-	}
-
-	wg := sync.WaitGroup{}
-
-	// Start Metrics Server
-	// running metrics server before HTTP and gRPC
-	if a.metricServer != nil {
-		wg.Add(1)
-
-		go func(m *metricServer) {
-			defer wg.Done()
-			m.Run(a.container)
-		}(a.metricServer)
-	}
-
-	// Start HTTP Server
-	if a.httpRegistered {
-		wg.Add(1)
-		a.httpServerSetup()
-
-		go func(s *httpServer) {
-			defer wg.Done()
-			s.Run(a.container)
-		}(a.httpServer)
-	}
-
-	// Start gRPC Server only if a service is registered
-	if a.grpcRegistered {
-		wg.Add(1)
-
-		go func(s *grpcServer) {
-			defer wg.Done()
-			s.Run(a.container)
-		}(a.grpcServer)
-	}
-
-	wg.Add(1)
-
-	go func() {
-		defer wg.Done()
-
-		err := a.startSubscriptions(ctx)
-		if err != nil {
-			a.Logger().Errorf("Subscription Error : %v", err)
-		}
-	}()
-
-	wg.Wait()
 }
 
 // Shutdown stops the service(s) and close the application.
@@ -245,50 +162,6 @@ func (a *App) AddHTTPService(serviceName, serviceAddress string, options ...serv
 	a.container.Services[serviceName] = service.NewHTTPService(serviceAddress, a.container.Logger, a.container.Metrics(), options...)
 }
 
-// GET adds a Handler for HTTP GET method for a route pattern.
-func (a *App) GET(pattern string, handler Handler) {
-	a.add("GET", pattern, handler)
-}
-
-// PUT adds a Handler for HTTP PUT method for a route pattern.
-func (a *App) PUT(pattern string, handler Handler) {
-	a.add("PUT", pattern, handler)
-}
-
-// POST adds a Handler for HTTP POST method for a route pattern.
-func (a *App) POST(pattern string, handler Handler) {
-	a.add("POST", pattern, handler)
-}
-
-// DELETE adds a Handler for HTTP DELETE method for a route pattern.
-func (a *App) DELETE(pattern string, handler Handler) {
-	a.add("DELETE", pattern, handler)
-}
-
-// PATCH adds a Handler for HTTP PATCH method for a route pattern.
-func (a *App) PATCH(pattern string, handler Handler) {
-	a.add("PATCH", pattern, handler)
-}
-
-func (a *App) add(method, pattern string, h Handler) {
-	if !a.httpRegistered && !isPortAvailable(a.httpServer.port) {
-		a.container.Logger.Fatalf("http port %d is blocked or unreachable", a.httpServer.port)
-	}
-
-	a.httpRegistered = true
-
-	reqTimeout, err := strconv.Atoi(a.Config.Get("REQUEST_TIMEOUT"))
-	if (err != nil && a.Config.Get("REQUEST_TIMEOUT") != "") || reqTimeout < 0 {
-		reqTimeout = 0
-	}
-
-	a.httpServer.router.Add(method, pattern, handler{
-		function:       h,
-		container:      a.container,
-		requestTimeout: time.Duration(reqTimeout) * time.Second,
-	})
-}
-
 // Metrics returns the metrics manager associated with the App.
 func (a *App) Metrics() metrics.Manager {
 	return a.container.Metrics()
@@ -336,19 +209,6 @@ func (a *App) Subscribe(topic string, handler SubscribeFunc) {
 	}
 
 	a.subscriptionManager.subscriptions[topic] = handler
-}
-
-// AddRESTHandlers creates and registers CRUD routes for the given struct, the struct should always be passed by reference.
-func (a *App) AddRESTHandlers(object any) error {
-	cfg, err := scanEntity(object)
-	if err != nil {
-		a.container.Logger.Errorf(err.Error())
-		return err
-	}
-
-	a.registerCRUDHandlers(cfg, object)
-
-	return nil
 }
 
 // UseMiddleware is a setter method for adding user defined custom middleware to GoFr's router.
