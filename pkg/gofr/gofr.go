@@ -36,19 +36,6 @@ import (
 	"gofr.dev/pkg/gofr/service"
 )
 
-const (
-	defaultPublicStaticDir = "static"
-	shutDownTimeout        = 30 * time.Second
-	gofrTraceExporter      = "gofr"
-	gofrTracerURL          = "https://tracer.gofr.dev"
-	checkPortTimeout       = 2 * time.Second
-	gofrHost               = "https://gofr.dev"
-	startServerPing        = "/api/ping/up"
-	shutServerPing         = "/api/ping/down"
-	pingTimeout            = 5 * time.Second
-	defaultTelemetry       = "true"
-)
-
 // App is the main application in the GoFr framework.
 type App struct {
 	// Config can be used by applications to fetch custom configurations from environment or file.
