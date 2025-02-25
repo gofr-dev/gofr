@@ -2,13 +2,13 @@ package gofr
 
 import (
 	"embed"
-	gofrHTTP "gofr.dev/pkg/gofr/http"
 	"mime"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 
+	gofrHTTP "gofr.dev/pkg/gofr/http"
 	"gofr.dev/pkg/gofr/http/response"
 )
 
