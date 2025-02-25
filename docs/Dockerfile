@@ -17,7 +17,7 @@ RUN npm install
 RUN npm run build
 
 # Stage 2: Serve with Static Server
-FROM zopdev/static-server:v0.0.4
+FROM zopdev/static-server:v0.0.5
 
 # Copy static files from the builder stage
 COPY --from=builder /app/out static
