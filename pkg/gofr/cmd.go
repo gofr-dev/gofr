@@ -130,6 +130,7 @@ func (cmd *cmd) addRoute(pattern string, handler Handler, options ...Options) {
 	// Check if the pattern contains any restricted characters
 	for i := 0; i < len(pattern); i++ {
 		if strings.ContainsRune(restrictedChars, rune(pattern[i])) {
+			fmt.Println("found a restricted character in the command while registering with GoFr:", pattern[i])
 			return
 		}
 	}
