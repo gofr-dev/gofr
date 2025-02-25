@@ -1,6 +1,7 @@
 package gofr
 
 import (
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -25,7 +26,7 @@ func TestApp_AddKVStore(t *testing.T) {
 
 		mock.EXPECT().UseLogger(app.Logger())
 		mock.EXPECT().UseMetrics(app.Metrics())
-		mock.EXPECT().UseTracer(otel.GetTracerProvider().Tracer("gofr-badger"))
+		mock.EXPECT().UseTracer(otel.GetTracerProvider().Tracer("gofr-kvstore"))
 		mock.EXPECT().Connect()
 
 		app.AddKVStore(mock)
@@ -201,5 +202,28 @@ func TestApp_AddScyllaDB(t *testing.T) {
 		app.AddScyllaDB(mock)
 
 		assert.Equal(t, mock, app.container.ScyllaDB)
+	})
+}
+
+func TestApp_AddArangoDB(t *testing.T) {
+	t.Run("Adding ArangoDB", func(t *testing.T) {
+		port := testutil.GetFreePort(t)
+		t.Setenv("METRICS_PORT", strconv.Itoa(port))
+
+		app := New()
+
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mock := container.NewMockArangoDBProvider(ctrl)
+
+		mock.EXPECT().UseLogger(app.Logger())
+		mock.EXPECT().UseMetrics(app.Metrics())
+		mock.EXPECT().UseTracer(otel.GetTracerProvider().Tracer("gofr-arangodb"))
+		mock.EXPECT().Connect()
+
+		app.AddArangoDB(mock)
+
+		assert.Equal(t, mock, app.container.ArangoDB)
 	})
 }

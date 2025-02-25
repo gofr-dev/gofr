@@ -23,8 +23,10 @@ func newKafkaMessage(msg *kafka.Message, reader Reader, logger pubsub.Logger) *k
 }
 
 func (kmsg *kafkaMessage) Commit() {
-	err := kmsg.reader.CommitMessages(context.Background(), *kmsg.msg)
-	if err != nil {
-		kmsg.logger.Errorf("unable to commit message on kafka")
+	if kmsg.reader != nil {
+		err := kmsg.reader.CommitMessages(context.Background(), *kmsg.msg)
+		if err != nil {
+			kmsg.logger.Errorf("unable to commit message on kafka")
+		}
 	}
 }

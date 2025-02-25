@@ -5,36 +5,45 @@ import (
 	"context"
 	"fmt"
 	"reflect"
-	"time"
 
 	"gofr.dev/pkg/gofr"
 	"gofr.dev/pkg/gofr/container"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+
+	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 )
 
+// NewHelloGoFrServer creates a new instance of HelloGoFrServer
+func NewHelloGoFrServer() *HelloGoFrServer {
+	return &HelloGoFrServer{
+		health: getOrCreateHealthServer(), // Initialize the health server
+	}
+}
+
+// HelloServerWithGofr is the interface for the server implementation
 type HelloServerWithGofr interface {
 	SayHello(*gofr.Context) (any, error)
 }
 
+// HelloServerWrapper wraps the server and handles request and response logic
 type HelloServerWrapper struct {
 	HelloServer
+	*healthServer
 	Container *container.Container
 	server    HelloServerWithGofr
 }
-func (h *HelloServerWrapper) SayHello(ctx context.Context, req *HelloRequest) (*HelloResponse, error) {
-	gctx := h.GetGofrContext(ctx, &HelloRequestWrapper{ctx: ctx, HelloRequest: req})
 
-	start := time.Now()
+//
+// SayHello wraps the method and handles its execution
+func (h *HelloServerWrapper) SayHello(ctx context.Context, req *HelloRequest) (*HelloResponse, error) {
+	gctx := h.getGofrContext(ctx, &HelloRequestWrapper{ctx: ctx, HelloRequest: req})
 
 	res, err := h.server.SayHello(gctx)
 	if err != nil {
 		return nil, err
 	}
-
-	duration := time.Since(start)
-	gctx.Metrics().RecordHistogram(ctx, "app_gRPC-Server_stats", float64(duration.Milliseconds())+float64(duration.Nanoseconds()%1e6)/1e6, "gRPC_Service", "Hello", "method", "SayHello")
 
 	resp, ok := res.(*HelloResponse)
 	if !ok {
@@ -44,26 +53,29 @@ func (h *HelloServerWrapper) SayHello(ctx context.Context, req *HelloRequest) (*
 	return resp, nil
 }
 
+// mustEmbedUnimplementedHelloServer ensures that the server implements all required methods
 func (h *HelloServerWrapper) mustEmbedUnimplementedHelloServer() {}
 
+// RegisterHelloServerWithGofr registers the server with the application
 func RegisterHelloServerWithGofr(app *gofr.App, srv HelloServerWithGofr) {
-	var s grpc.ServiceRegistrar = app
-
-	wrapper := &HelloServerWrapper{server: srv}
-
-	gRPCBuckets := []float64{0.005, 0.01, .05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 4, 5, 7.5, 10}
-	app.Metrics().NewHistogram("app_gRPC-Server_stats", "Response time of gRPC server in milliseconds.", gRPCBuckets...)
-
-	RegisterHelloServer(s, wrapper)
+	registerServerWithGofr(app, srv, func(s grpc.ServiceRegistrar, srv any) {
+		wrapper := &HelloServerWrapper{server: srv.(HelloServerWithGofr), healthServer: getOrCreateHealthServer()}
+		RegisterHelloServer(s, wrapper)
+		wrapper.Server.SetServingStatus("Hello", healthpb.HealthCheckResponse_SERVING)
+	})
 }
 
-func (h *HelloServerWrapper) GetGofrContext(ctx context.Context, req gofr.Request) *gofr.Context {
+// GetGofrContext extracts the GoFr context from the original context
+func (h *HelloServerWrapper) getGofrContext(ctx context.Context, req gofr.Request) *gofr.Context {
 	return &gofr.Context{
 		Context:   ctx,
 		Container: h.Container,
 		Request:   req,
 	}
 }
+
+//
+// Request Wrappers
 type HelloRequestWrapper struct {
 	ctx context.Context
 	*HelloRequest
@@ -90,10 +102,8 @@ func (h *HelloRequestWrapper) Bind(p interface{}) error {
 	hValue := reflect.ValueOf(h.HelloRequest).Elem()
 	ptrValue := ptr.Elem()
 
-	// Ensure we can set exported fields (skip unexported fields)
 	for i := 0; i < hValue.NumField(); i++ {
 		field := hValue.Type().Field(i)
-		// Skip the fields we don't want to copy (state, sizeCache, unknownFields)
 		if field.Name == "state" || field.Name == "sizeCache" || field.Name == "unknownFields" {
 			continue
 		}
