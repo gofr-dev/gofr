@@ -125,6 +125,7 @@ func TestNATSClient_SubscribeSuccess(t *testing.T) {
 		Value: []byte("test message"),
 	}
 
+	mockConnManager.EXPECT().IsConnected().Return(true)
 	mockConnManager.EXPECT().JetStream().Return(mockJetStream, nil).AnyTimes()
 
 	mockSubManager.EXPECT().
@@ -163,6 +164,7 @@ func TestNATSClient_SubscribeError(t *testing.T) {
 	ctx := context.Background()
 	expectedErr := errSubscriptionError
 
+	mockConnManager.EXPECT().IsConnected().Return(true)
 	mockConnManager.EXPECT().JetStream().Return(mockJetStream, nil).AnyTimes()
 
 	mockSubManager.EXPECT().

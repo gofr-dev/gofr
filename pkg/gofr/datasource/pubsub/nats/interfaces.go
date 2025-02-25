@@ -47,6 +47,7 @@ type ConnectionManagerInterface interface {
 	Publish(ctx context.Context, subject string, message []byte, metrics Metrics) error
 	Health() datasource.Health
 	jetStream() (jetstream.JetStream, error)
+	isConnected() bool
 }
 
 // SubscriptionManagerInterface represents the main Subscription Manager.
