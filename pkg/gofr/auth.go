@@ -1,10 +1,10 @@
 package gofr
 
 import (
+	"time"
+
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/http/middleware"
-
-	"time"
 )
 
 // EnableBasicAuth enables basic authentication for the application.

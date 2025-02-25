@@ -1,15 +1,15 @@
 package gofr
 
 import (
-	"gofr.dev/pkg/gofr/cmd/terminal"
-	"gofr.dev/pkg/gofr/container"
-	"gofr.dev/pkg/gofr/http/middleware"
-	"gofr.dev/pkg/gofr/logging"
-
 	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
+
+	"gofr.dev/pkg/gofr/cmd/terminal"
+	"gofr.dev/pkg/gofr/container"
+	"gofr.dev/pkg/gofr/http/middleware"
+	"gofr.dev/pkg/gofr/logging"
 )
 
 // New creates an HTTP Server Application and returns that App.
