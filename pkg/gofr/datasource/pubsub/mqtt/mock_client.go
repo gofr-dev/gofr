@@ -80,7 +80,7 @@ func (mr *MockClientMockRecorder) Disconnect(arg0 any) *gomock.Call {
 // IsConnected mocks base method.
 func (m *MockClient) IsConnected() bool {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "IsConnected")
+	ret := m.ctrl.Call(m, "isConnected")
 	ret0, _ := ret[0].(bool)
 	return ret0
 }
@@ -88,7 +88,7 @@ func (m *MockClient) IsConnected() bool {
 // IsConnected indicates an expected call of IsConnected.
 func (mr *MockClientMockRecorder) IsConnected() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsConnected", reflect.TypeOf((*MockClient)(nil).IsConnected))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "isConnected", reflect.TypeOf((*MockClient)(nil).IsConnected))
 }
 
 // IsConnectionOpen mocks base method.

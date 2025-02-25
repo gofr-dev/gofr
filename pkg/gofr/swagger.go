@@ -3,10 +3,12 @@ package gofr
 import (
 	"embed"
 	"mime"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 
+	gofrHTTP "gofr.dev/pkg/gofr/http"
 	"gofr.dev/pkg/gofr/http/response"
 )
 
@@ -52,4 +54,17 @@ func SwaggerUIHandler(c *Context) (any, error) {
 
 	// Return the rendered HTML as a string
 	return response.File{Content: data, ContentType: ct}, nil
+}
+
+func (a *App) checkAndAddOpenAPIDocumentation() {
+	// If the openapi.json file exists in the static directory, set up routes for OpenAPI and Swagger documentation.
+	if _, err := os.Stat("./static/" + gofrHTTP.DefaultSwaggerFileName); err == nil {
+		// Route to serve the OpenAPI JSON specification file.
+		a.add(http.MethodGet, "/.well-known/"+gofrHTTP.DefaultSwaggerFileName, OpenAPIHandler)
+		// Route to serve the Swagger UI, providing a user interface for the API documentation.
+		a.add(http.MethodGet, "/.well-known/swagger", SwaggerUIHandler)
+		// Catchall route: any request to /.well-known/{name} (e.g., /.well-known/other)
+		// will be handled by the SwaggerUIHandler, serving the Swagger UI.
+		a.add(http.MethodGet, "/.well-known/{name}", SwaggerUIHandler)
+	}
 }
