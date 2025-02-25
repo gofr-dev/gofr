@@ -46,16 +46,27 @@ jobs:
         run: |
           docker pull ${{ env.WEBSITE_REGISTRY }}/gofr-dev/website:latest
 
-      - name: Build and Push Image Stage
+      - name: Determine Image Tag
+        id: determine-tag
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            TAG=${GITHUB_REF#refs/tags/}
+          else
+            TAG=${{ github.sha }}
+          fi
+          echo "TAG=$TAG" >> $GITHUB_ENV
+
+
+      - name: Build and Push Image
         uses: docker/build-push-action@v6
         with:
           push: true
           context: ./
           file: ./docs/Dockerfile
-          tags: us-central1-docker.pkg.dev/${{ env.GAR_PROJECT }}/${{ env.GAR_REGISTRY }}/${{ env.APP_NAME }}:${{ github.sha }}
+          tags: us-central1-docker.pkg.dev/${{ env.GAR_PROJECT }}/${{ env.GAR_REGISTRY }}/${{ env.APP_NAME }}:${{ env.TAG }}
 
       - id: output-image
-        run: echo "image=`echo us-central1-docker.pkg.dev/${{ env.GAR_PROJECT }}/${{ env.GAR_REGISTRY }}/${{ env.APP_NAME }}:${{ github.sha }}`" >> "$GITHUB_OUTPUT"
+        run: echo "image=`echo us-central1-docker.pkg.dev/${{ env.GAR_PROJECT }}/${{ env.GAR_REGISTRY }}/${{ env.APP_NAME }}:${{ env.TAG }}`" >> "$GITHUB_OUTPUT"
 
   deployment_stage:
     runs-on: ubuntu-latest
