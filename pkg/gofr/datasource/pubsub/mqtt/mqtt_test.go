@@ -228,7 +228,7 @@ func TestMQTT_SubscribeSuccess(t *testing.T) {
 
 	mockMetrics.EXPECT().
 		IncrementCounter(gomock.Any(), "app_pubsub_subscribe_success_count", "topic", "test/topic")
-
+	mockClient.EXPECT().IsConnected().Return(true)
 	mockClient.EXPECT().Subscribe("test/topic", mockConfigs.QoS, gomock.Any()).Return(mockToken)
 
 	mockToken.EXPECT().Wait().Return(true)
@@ -255,6 +255,7 @@ func TestMQTT_SubscribeFailure(t *testing.T) {
 
 	ctx := context.Background()
 
+	mockClient.EXPECT().IsConnected().Return(true)
 	mockClient.EXPECT().Subscribe("test/topic", mockConfigs.QoS, gomock.Any()).Return(mockToken)
 
 	mockToken.EXPECT().Wait().Return(true)
