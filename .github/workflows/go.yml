@@ -21,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go-version: ['1.23', '1.22']
+        go-version: ['1.24','1.23', '1.22']
 
     services:
       kafka:
@@ -93,7 +93,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go-version: ['1.22', '1.21']
+        go-version: ['1.24','1.23', '1.22']
 
     steps:
       - name: Checkout code into go module directory
@@ -119,7 +119,7 @@ jobs:
           go tool cover -func profile.cov
 
       - name: Upload Test Coverage
-        if: ${{ matrix.go-version == '1.22'}}
+        if: ${{ matrix.go-version == '1.24'}}
         uses: actions/upload-artifact@v4
         with:
           name: PKG-Coverage-Report
@@ -162,7 +162,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go-version: [ '1.23', '1.22' ]
+        go-version:  ['1.24','1.23', '1.22']
 
     steps:
       - name: Checkout code into go module directory
@@ -243,21 +243,20 @@ jobs:
       - name: Set up Go environment
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22'
+          go-version: '1.24'
           cache: false
+
+      - name: Install golangci-lint
+        run: |
+          go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.62
 
       - name: Get dependencies
         run: |
           go mod tidy
 
       - name: Lint Root Module
-        uses: golangci/golangci-lint-action@v6
-        with:
-          version: v1.62
-          working-directory: .
-          args: >
-            --out-format=colored-line-number
-            --timeout=5m
+        run: |
+          golangci-lint run --out-format=colored-line-number --timeout=5m
 
       - name: Lint Submodules
         run: |
@@ -283,6 +282,12 @@ jobs:
     steps:
       - name: Check out code
         uses: actions/checkout@v4
+
+      - name: Set up Go environment
+        uses: actions/setup-go@v5
+        with:
+          go-version: 1.24
+
       - name: Check for file names errors
         uses: ls-lint/action@v2.2.3
         with:
