@@ -4,7 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/gorilla/mux"
+	"net"
+	"net/http"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
+
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
 	gofrHTTP "gofr.dev/pkg/gofr/http"
@@ -12,13 +18,9 @@ import (
 	"gofr.dev/pkg/gofr/metrics"
 	"gofr.dev/pkg/gofr/migration"
 	"gofr.dev/pkg/gofr/service"
+
+	"github.com/gorilla/mux"
 	"golang.org/x/sync/errgroup"
-	"net"
-	"net/http"
-	"os"
-	"path/filepath"
-	"strconv"
-	"strings"
 )
 
 // App is the main application in the GoFr framework.
