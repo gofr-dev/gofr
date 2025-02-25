@@ -156,7 +156,7 @@ func (k *kafkaClient) Publish(ctx context.Context, topic string, message []byte)
 }
 
 func (k *kafkaClient) Subscribe(ctx context.Context, topic string) (*pubsub.Message, error) {
-	if !k.IsConnected() {
+	if !k.isConnected() {
 		time.Sleep(defaultRetryTimeout)
 
 		return nil, errClientNotConnected
@@ -320,7 +320,7 @@ func retryConnect(client *kafkaClient, conf *Config, logger pubsub.Logger) {
 	}
 }
 
-func (k *kafkaClient) IsConnected() bool {
+func (k *kafkaClient) isConnected() bool {
 	if k.conn == nil {
 		return false
 	}

@@ -109,7 +109,7 @@ func (c *Client) Publish(ctx context.Context, subject string, message []byte) er
 // Subscribe subscribes to a topic and returns a single message.
 func (c *Client) Subscribe(ctx context.Context, topic string) (*pubsub.Message, error) {
 	for {
-		if !c.connManager.IsConnected() {
+		if !c.connManager.isConnected() {
 			time.Sleep(defaultRetryTimeout)
 
 			return nil, errClientNotConnected
@@ -290,8 +290,4 @@ func GetJetStreamStatus(ctx context.Context, js jetstream.JetStream) (string, er
 	}
 
 	return jetStreamStatusOK, nil
-}
-
-func (c *Client) IsConnected() bool {
-	return c.connManager.IsConnected()
 }

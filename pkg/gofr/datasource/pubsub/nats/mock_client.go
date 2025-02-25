@@ -365,9 +365,9 @@ func (mr *MockConnectionManagerInterfaceMockRecorder) Health() *gomock.Call {
 }
 
 // IsConnected mocks base method.
-func (m *MockConnectionManagerInterface) IsConnected() bool {
+func (m *MockConnectionManagerInterface) isConnected() bool {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "IsConnected")
+	ret := m.ctrl.Call(m, "isConnected")
 	ret0, _ := ret[0].(bool)
 	return ret0
 }
@@ -375,7 +375,7 @@ func (m *MockConnectionManagerInterface) IsConnected() bool {
 // IsConnected indicates an expected call of IsConnected.
 func (mr *MockConnectionManagerInterfaceMockRecorder) IsConnected() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsConnected", reflect.TypeOf((*MockConnectionManagerInterface)(nil).IsConnected))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "isConnected", reflect.TypeOf((*MockConnectionManagerInterface)(nil).isConnected))
 }
 
 // Publish mocks base method.

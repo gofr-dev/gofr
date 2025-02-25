@@ -161,7 +161,7 @@ func (g *googleClient) Subscribe(ctx context.Context, topic string) (*pubsub.Mes
 		return nil, nil
 	}
 
-	if !g.IsConnected() {
+	if !g.isConnected() {
 		time.Sleep(defaultRetryInterval)
 
 		return nil, errClientNotConnected
@@ -340,7 +340,7 @@ func retryConnect(conf Config, logger pubsub.Logger, g *googleClient) {
 	}
 }
 
-func (g *googleClient) IsConnected() bool {
+func (g *googleClient) isConnected() bool {
 	if g.client == nil {
 		return false
 	}

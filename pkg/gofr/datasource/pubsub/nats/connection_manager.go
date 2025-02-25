@@ -177,7 +177,7 @@ func (cm *ConnectionManager) Health() datasource.Health {
 	}
 }
 
-func (cm *ConnectionManager) IsConnected() bool {
+func (cm *ConnectionManager) isConnected() bool {
 	if cm.conn == nil {
 		return false
 	}
