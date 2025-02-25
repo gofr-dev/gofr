@@ -161,12 +161,15 @@ func TestKafkaClient_SubscribeSuccess(t *testing.T) {
 	ctx := context.TODO()
 	mockReader := NewMockReader(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
+	mockConnection := NewMockConnection(ctrl)
+
 	k := &kafkaClient{
 		dialer: &kafka.Dialer{},
 		writer: nil,
 		reader: map[string]Reader{
 			"test": mockReader,
 		},
+		conn:   mockConnection,
 		logger: nil,
 		config: Config{
 			ConsumerGroupID: "consumer",
@@ -182,6 +185,7 @@ func TestKafkaClient_SubscribeSuccess(t *testing.T) {
 		Topic: "test",
 	}
 
+	mockConnection.EXPECT().Controller().Return(kafka.Broker{}, nil)
 	mockReader.EXPECT().FetchMessage(gomock.Any()).
 		Return(kafka.Message{Value: []byte(`hello`), Topic: "test"}, nil)
 	mockMetrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_subscribe_total_count", "topic", "test",
@@ -207,14 +211,22 @@ func TestKafkaClient_SubscribeSuccess(t *testing.T) {
 }
 
 func TestKafkaClient_Subscribe_ErrConsumerGroupID(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockConnection := NewMockConnection(ctrl)
+
 	k := &kafkaClient{
 		dialer: &kafka.Dialer{},
 		config: Config{
 			Broker: "kafkabroker",
 			OffSet: -1,
 		},
+		conn:   mockConnection,
 		logger: logging.NewMockLogger(logging.INFO),
 	}
+
+	mockConnection.EXPECT().Controller().Return(kafka.Broker{}, nil)
 
 	msg, err := k.Subscribe(context.TODO(), "test")
 	assert.NotNil(t, msg)
@@ -234,12 +246,15 @@ func TestKafkaClient_SubscribeError(t *testing.T) {
 	ctx := context.TODO()
 	mockReader := NewMockReader(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
+	mockConnection := NewMockConnection(ctrl)
+
 	k := &kafkaClient{
 		dialer: &kafka.Dialer{},
 		writer: nil,
 		reader: map[string]Reader{
 			"test": mockReader,
 		},
+		conn:   mockConnection,
 		logger: logging.NewMockLogger(logging.INFO),
 		config: Config{
 			ConsumerGroupID: "consumer",
@@ -250,6 +265,7 @@ func TestKafkaClient_SubscribeError(t *testing.T) {
 		metrics: mockMetrics,
 	}
 
+	mockConnection.EXPECT().Controller().Return(kafka.Broker{}, nil)
 	mockReader.EXPECT().FetchMessage(gomock.Any()).
 		Return(kafka.Message{}, errSub)
 	mockMetrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_subscribe_total_count",
@@ -450,4 +466,31 @@ func TestKafkaClient_CreateTopic(t *testing.T) {
 
 		assert.Equal(t, tc.err, err)
 	}
+}
+
+func TestKafkaClient_Subscribe_NotConnected(t *testing.T) {
+	var (
+		msg *pubsub.Message
+		err error
+	)
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	ctx := context.TODO()
+	mockConnection := NewMockConnection(ctrl)
+
+	k := &kafkaClient{
+		dialer: &kafka.Dialer{},
+		conn:   mockConnection,
+		logger: logging.NewMockLogger(logging.DEBUG),
+	}
+
+	mockConnection.EXPECT().Controller().Return(kafka.Broker{}, errClientNotConnected)
+
+	msg, err = k.Subscribe(ctx, "test")
+
+	require.Error(t, err)
+	assert.Nil(t, msg)
+	assert.Equal(t, errClientNotConnected, err)
 }
