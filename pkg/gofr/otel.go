@@ -6,8 +6,6 @@ import (
 	"strconv"
 	"strings"
 
-	"gofr.dev/pkg/gofr/logging"
-
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/exporters/zipkin"
@@ -15,6 +13,8 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
+
+	"gofr.dev/pkg/gofr/logging"
 )
 
 func (a *App) initTracer() {
