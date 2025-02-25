@@ -36,7 +36,7 @@ func defineHealthTestCases() []healthTestCase {
 						"connection_status": jetStreamConnected,
 					},
 				})
-				mockConnManager.EXPECT().jetStream().Return(mockJS, nil)
+				mockConnManager.EXPECT().JetStream().Return(mockJS, nil)
 				mockJS.EXPECT().AccountInfo(gomock.Any()).Return(&jetstream.AccountInfo{}, nil)
 			},
 			expectedStatus: datasource.StatusUp,
@@ -58,7 +58,7 @@ func defineHealthTestCases() []healthTestCase {
 						"connection_status": jetStreamDisconnecting,
 					},
 				})
-				mockConnManager.EXPECT().jetStream().Return(nil, errJetStreamNotConfigured)
+				mockConnManager.EXPECT().JetStream().Return(nil, errJetStreamNotConfigured)
 			},
 			expectedStatus: datasource.StatusDown,
 			expectedDetails: map[string]any{
@@ -79,7 +79,7 @@ func defineHealthTestCases() []healthTestCase {
 						"connection_status": jetStreamConnected,
 					},
 				})
-				mockConnManager.EXPECT().jetStream().Return(mockJS, nil)
+				mockConnManager.EXPECT().JetStream().Return(mockJS, nil)
 				mockJS.EXPECT().AccountInfo(gomock.Any()).Return(nil, errJetStream)
 			},
 			expectedStatus: datasource.StatusUp,

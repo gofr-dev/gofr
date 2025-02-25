@@ -161,6 +161,12 @@ func (g *googleClient) Subscribe(ctx context.Context, topic string) (*pubsub.Mes
 		return nil, nil
 	}
 
+	if !g.IsConnected() {
+		time.Sleep(defaultRetryInterval)
+
+		return nil, errClientNotConnected
+	}
+
 	spanCtx, span := otel.GetTracerProvider().Tracer("gofr").Start(ctx, "gcp-subscribe")
 	defer span.End()
 

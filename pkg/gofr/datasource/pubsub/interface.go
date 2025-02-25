@@ -14,7 +14,6 @@ type Publisher interface {
 
 type Subscriber interface {
 	Subscribe(ctx context.Context, topic string) (*Message, error)
-	IsConnected() bool
 }
 
 type Client interface {

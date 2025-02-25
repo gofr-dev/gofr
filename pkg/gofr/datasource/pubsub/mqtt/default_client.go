@@ -107,17 +107,14 @@ func retryDefaultConnect(client mqtt.Client, config *Config, logger Logger, opti
 
 	for {
 		token := client.Connect()
-		if token.Wait() && token.Error() != nil {
-			logger.Errorf("could not connect to MQTT at '%v:%v', error: %v", config.Hostname, config.Port, token.Error())
+		if token.Wait() && token.Error() == nil {
+			logger.Infof("connected to MQTT at '%v:%v' with clientID '%v'", config.Hostname, config.Port, options.ClientID)
 
-			time.Sleep(backoff)
-			backoff = time.Duration(math.Min(float64(backoff*backoffMultiplier), float64(maxRetryTimeout)))
-
-			continue
+			return
 		}
 
-		logger.Infof("connected to MQTT at '%v:%v' with clientID '%v'", config.Hostname, config.Port, options.ClientID)
-
-		return
+		logger.Errorf("could not connect to MQTT at '%v:%v', error: %v", config.Hostname, config.Port, token.Error())
+		time.Sleep(backoff)
+		backoff = time.Duration(math.Min(float64(backoff*backoffMultiplier), float64(maxRetryTimeout)))
 	}
 }

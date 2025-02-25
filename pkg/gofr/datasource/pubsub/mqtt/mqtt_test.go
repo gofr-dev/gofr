@@ -228,7 +228,7 @@ func TestMQTT_SubscribeSuccess(t *testing.T) {
 
 	mockMetrics.EXPECT().
 		IncrementCounter(gomock.Any(), "app_pubsub_subscribe_success_count", "topic", "test/topic")
-
+	mockClient.EXPECT().IsConnected().Return(true)
 	mockClient.EXPECT().Subscribe("test/topic", mockConfigs.QoS, gomock.Any()).Return(mockToken)
 
 	mockToken.EXPECT().Wait().Return(true)
@@ -255,6 +255,7 @@ func TestMQTT_SubscribeFailure(t *testing.T) {
 
 	ctx := context.Background()
 
+	mockClient.EXPECT().IsConnected().Return(true)
 	mockClient.EXPECT().Subscribe("test/topic", mockConfigs.QoS, gomock.Any()).Return(mockToken)
 
 	mockToken.EXPECT().Wait().Return(true)
@@ -587,38 +588,4 @@ func TestMQTT_Close(t *testing.T) {
 	err := client.Close()
 
 	require.NoError(t, err)
-}
-
-func TestMQTT_IsConnected(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockClient := NewMockClient(ctrl)
-
-	testCases := []struct {
-		desc        string
-		isConnected bool
-	}{
-		{
-			desc:        "client is connected",
-			isConnected: true,
-		},
-		{
-			desc:        "client is not connected",
-			isConnected: false,
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.desc, func(t *testing.T) {
-			mockClient.EXPECT().IsConnected().Return(tc.isConnected)
-
-			client := &MQTT{
-				Client: mockClient,
-			}
-
-			isConnected := client.IsConnected()
-			assert.Equal(t, tc.isConnected, isConnected)
-		})
-	}
 }

@@ -21,6 +21,7 @@ var (
 	errBatchSize                = errors.New("KAFKA_BATCH_SIZE must be greater than 0")
 	errBatchBytes               = errors.New("KAFKA_BATCH_BYTES must be greater than 0")
 	errBatchTimeout             = errors.New("KAFKA_BATCH_TIMEOUT must be greater than 0")
+	errClientNotConnected       = errors.New("kafka client not connected")
 )
 
 const (
@@ -155,6 +156,12 @@ func (k *kafkaClient) Publish(ctx context.Context, topic string, message []byte)
 }
 
 func (k *kafkaClient) Subscribe(ctx context.Context, topic string) (*pubsub.Message, error) {
+	if !k.IsConnected() {
+		time.Sleep(defaultRetryTimeout)
+
+		return nil, errClientNotConnected
+	}
+
 	if k.config.ConsumerGroupID == "" {
 		k.logger.Error("cannot subscribe as consumer_id is not provided in configs")
 

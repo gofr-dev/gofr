@@ -17,6 +17,8 @@ import (
 
 const defaultRetryTimeout = 10 * time.Second
 
+var errClientNotConnected = errors.New("nats client not connected")
+
 // Client represents a Client for NATS jStream operations.
 type Client struct {
 	connManager      ConnectionManagerInterface
@@ -107,6 +109,12 @@ func (c *Client) Publish(ctx context.Context, subject string, message []byte) er
 // Subscribe subscribes to a topic and returns a single message.
 func (c *Client) Subscribe(ctx context.Context, topic string) (*pubsub.Message, error) {
 	for {
+		if !c.connManager.IsConnected() {
+			time.Sleep(defaultRetryTimeout)
+
+			return nil, errClientNotConnected
+		}
+
 		js, err := c.connManager.jetStream()
 		if err == nil {
 			return c.subManager.Subscribe(ctx, topic, js, c.Config, c.logger, c.metrics)

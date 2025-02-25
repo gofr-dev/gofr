@@ -125,7 +125,8 @@ func TestNATSClient_SubscribeSuccess(t *testing.T) {
 		Value: []byte("test message"),
 	}
 
-	mockConnManager.EXPECT().jetStream().Return(mockJetStream, nil).AnyTimes()
+	mockConnManager.EXPECT().IsConnected().Return(true)
+	mockConnManager.EXPECT().JetStream().Return(mockJetStream, nil).AnyTimes()
 
 	mockSubManager.EXPECT().
 		Subscribe(ctx, "test-subject", mockJetStream, gomock.Any(), gomock.Any(), gomock.Any()).
@@ -163,7 +164,8 @@ func TestNATSClient_SubscribeError(t *testing.T) {
 	ctx := context.Background()
 	expectedErr := errSubscriptionError
 
-	mockConnManager.EXPECT().jetStream().Return(mockJetStream, nil).AnyTimes()
+	mockConnManager.EXPECT().IsConnected().Return(true)
+	mockConnManager.EXPECT().JetStream().Return(mockJetStream, nil).AnyTimes()
 
 	mockSubManager.EXPECT().
 		Subscribe(ctx, "test-subject", mockJetStream, gomock.Any(), gomock.Any(), gomock.Any()).
@@ -543,7 +545,7 @@ func createTestConfig() *Config {
 }
 
 func setupCommonExpectations(mocks *testMocks) {
-	mocks.connManager.EXPECT().jetStream().Return(mocks.jetStream, nil).AnyTimes()
+	mocks.connManager.EXPECT().JetStream().Return(mocks.jetStream, nil).AnyTimes()
 	mocks.subManager.EXPECT().Close().Times(1)
 	mocks.connManager.EXPECT().Close(gomock.Any()).AnyTimes()
 }
