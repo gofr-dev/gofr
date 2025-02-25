@@ -3,7 +3,6 @@ package gofr
 import (
 	"fmt"
 	"os"
-	"regexp"
 	"strings"
 
 	cmd2 "gofr.dev/pkg/gofr/cmd"
@@ -95,13 +94,11 @@ func (cmd *cmd) noCommandResponse(r *route, ctx *Context) bool {
 
 func (cmd *cmd) handler(path string) *route {
 	// Trim leading dashes
-	path = strings.TrimPrefix(strings.TrimPrefix(path, "--"), "-")
+	path = strings.TrimSpace(strings.TrimPrefix(strings.TrimPrefix(path, "--"), "-"))
 
 	// Iterate over the routes to find a matching handler
 	for _, r := range cmd.routes {
-		re := regexp.MustCompile(r.pattern)
-
-		if re.MatchString(path) {
+		if strings.HasPrefix(path, r.pattern) {
 			return &r
 		}
 	}
@@ -127,6 +124,16 @@ func AddHelp(helperString string) Options {
 
 // addRoute adds a new route to cmd's list of routes.
 func (cmd *cmd) addRoute(pattern string, handler Handler, options ...Options) {
+	// Define restricted characters
+	restrictedChars := "$^"
+
+	// Check if the pattern contains any restricted characters
+	for i := 0; i < len(pattern); i++ {
+		if strings.ContainsRune(restrictedChars, rune(pattern[i])) {
+			return
+		}
+	}
+
 	tempRoute := route{
 		pattern: pattern,
 		handler: handler,
