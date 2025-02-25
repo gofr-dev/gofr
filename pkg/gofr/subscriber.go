@@ -2,9 +2,10 @@ package gofr
 
 import (
 	"context"
+	"runtime/debug"
+
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/logging"
-	"runtime/debug"
 )
 
 type SubscribeFunc func(c *Context) error
