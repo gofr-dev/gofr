@@ -7,6 +7,8 @@ import (
 	"os/signal"
 	"sync"
 	"syscall"
+
+	"gofr.dev/pkg/gofr/http/middleware"
 )
 
 // Run starts the application. If it is an HTTP server, it will start the server.
@@ -18,6 +20,12 @@ func (a *App) Run() {
 	// Create a context that is canceled on receiving termination signals
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+
+	if a.httpServer.ws != nil {
+		a.httpServer.router.Use(middleware.WSHandlerUpgrade(a.container, a.httpServer.ws))
+		a.httpServer.router.Use(middleware.Logging(a.Logger()))
+		a.httpServer.router.Use(middleware.Metrics(a.Metrics()))
+	}
 
 	// Goroutine to handle shutdown when context is canceled
 	go func() {
