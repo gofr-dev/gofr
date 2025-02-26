@@ -101,6 +101,13 @@ This document lists all the configuration options supported by the GoFr framewor
 -  CMD_LOGS_FILE
 -  File to save the logs in case of a CMD application
 
+---
+
+-  SERVER_SHUTDOWN_THRESHOLD
+-  Timeout duration for server shutdown process
+-  30s
+
+
 {% /table %}
 
 ## HTTP
