@@ -34,7 +34,7 @@ func ShutdownWithContext(ctx context.Context, shutdownFunc func(ctx context.Cont
 }
 
 func getShutdownTimeoutFromConfig(config config.Config) (time.Duration, error) {
-	value := config.Get("SERVER_SHUTDOWN_THRESHOLD")
+	value := config.Get("SHUTDOWN_GRACE_PERIOD")
 	if value == "" {
 		return 0, nil
 	}

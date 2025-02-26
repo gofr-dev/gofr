@@ -56,7 +56,7 @@ func Test_getShutdownTimeoutFromConfig_Success(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mockConfig := config.NewMockConfig(map[string]string{
-				"SERVER_SHUTDOWN_THRESHOLD": tt.configValue,
+				"SHUTDOWN_GRACE_PERIOD": tt.configValue,
 			})
 
 			timeout, err := getShutdownTimeoutFromConfig(mockConfig)
@@ -68,7 +68,7 @@ func Test_getShutdownTimeoutFromConfig_Success(t *testing.T) {
 
 func Test_getShutdownTimeoutFromConfig_Error(t *testing.T) {
 	mockConfig := config.NewMockConfig(map[string]string{
-		"SERVER_SHUTDOWN_THRESHOLD": "invalid",
+		"SHUTDOWN_GRACE_PERIOD": "invalid",
 	})
 
 	_, err := getShutdownTimeoutFromConfig(mockConfig)

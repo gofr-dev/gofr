@@ -103,7 +103,7 @@ This document lists all the configuration options supported by the GoFr framewor
 
 ---
 
--  SERVER_SHUTDOWN_THRESHOLD
+-  SHUTDOWN_GRACE_PERIOD
 -  Timeout duration for server shutdown process
 -  30s
 

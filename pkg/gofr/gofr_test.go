@@ -691,8 +691,8 @@ func Test_UseMiddleware(t *testing.T) {
 		},
 		container: c,
 		Config: config.NewMockConfig(map[string]string{
-			"REQUEST_TIMEOUT":           "5",
-			"SERVER_SHUTDOWN_THRESHOLD": "invalid",
+			"REQUEST_TIMEOUT":       "5",
+			"SHUTDOWN_GRACE_PERIOD": "invalid",
 		}),
 	}
 
