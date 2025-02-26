@@ -22,11 +22,9 @@ func (a *App) Run() {
 	timeout, err := getShutdownTimeoutFromConfig(a.Config)
 	if err != nil {
 		a.Logger().Errorf("error parsing value of shutdown timeout from config: %v. Setting default timeout of 30 sec.", err)
+
 		timeout = shutDownTimeout
 	}
-
-	var shutdownErr error
-	shutdownOnce := sync.Once{}
 
 	// Goroutine to handle shutdown when context is canceled
 	go func() {
@@ -41,12 +39,11 @@ func (a *App) Run() {
 		}
 
 		a.Logger().Infof("Shutting down server with a timeout of %v", timeout)
-		shutdownErr = a.Shutdown(shutdownCtx)
-		shutdownOnce.Do(func() {
-			if shutdownErr != nil {
-				//a.Logger().Errorf("Server shutdown failed: %v", shutdownErr)
-			}
-		})
+
+		shutdownErr := a.Shutdown(shutdownCtx)
+		if shutdownErr != nil {
+			a.Logger().Debugf("Server shutdown failed: %v", shutdownErr)
+		}
 	}()
 
 	if a.hasTelemetry() {
