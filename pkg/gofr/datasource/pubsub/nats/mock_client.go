@@ -364,19 +364,18 @@ func (mr *MockConnectionManagerInterfaceMockRecorder) Health() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Health", reflect.TypeOf((*MockConnectionManagerInterface)(nil).Health))
 }
 
-// JetStream mocks base method.
-func (m *MockConnectionManagerInterface) jetStream() (jetstream.JetStream, error) {
+// IsConnected mocks base method.
+func (m *MockConnectionManagerInterface) isConnected() bool {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "jStream")
-	ret0, _ := ret[0].(jetstream.JetStream)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	ret := m.ctrl.Call(m, "isConnected")
+	ret0, _ := ret[0].(bool)
+	return ret0
 }
 
-// JetStream indicates an expected call of JetStream.
-func (mr *MockConnectionManagerInterfaceMockRecorder) JetStream() *gomock.Call {
+// IsConnected indicates an expected call of IsConnected.
+func (mr *MockConnectionManagerInterfaceMockRecorder) IsConnected() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "jStream", reflect.TypeOf((*MockConnectionManagerInterface)(nil).jetStream))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "isConnected", reflect.TypeOf((*MockConnectionManagerInterface)(nil).isConnected))
 }
 
 // Publish mocks base method.
@@ -391,6 +390,29 @@ func (m *MockConnectionManagerInterface) Publish(ctx context.Context, subject st
 func (mr *MockConnectionManagerInterfaceMockRecorder) Publish(ctx, subject, message, metrics any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Publish", reflect.TypeOf((*MockConnectionManagerInterface)(nil).Publish), ctx, subject, message, metrics)
+}
+
+// jetStream mocks base method.
+func (m *MockConnectionManagerInterface) JetStream() (jetstream.JetStream, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "jetStream")
+	ret0, _ := ret[0].(jetstream.JetStream)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// JetStream mocks base method.
+func (m *MockConnectionManagerInterface) jetStream() (jetstream.JetStream, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "jStream")
+	ret0, _ := ret[0].(jetstream.JetStream)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+func (mr *MockConnectionManagerInterfaceMockRecorder) JetStream() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "jStream", reflect.TypeOf((*MockConnectionManagerInterface)(nil).jetStream))
 }
 
 // MockSubscriptionManagerInterface is a mock of SubscriptionManagerInterface interface.

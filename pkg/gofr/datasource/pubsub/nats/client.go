@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/nats-io/nats.go/jetstream"
 	"go.opentelemetry.io/otel/trace"
@@ -13,6 +14,10 @@ import (
 )
 
 //go:generate mockgen -destination=mock_tracer.go -package=nats go.opentelemetry.io/otel/trace Tracer
+
+const defaultRetryTimeout = 10 * time.Second
+
+var errClientNotConnected = errors.New("nats client not connected")
 
 // Client represents a Client for NATS jStream operations.
 type Client struct {
@@ -103,12 +108,22 @@ func (c *Client) Publish(ctx context.Context, subject string, message []byte) er
 
 // Subscribe subscribes to a topic and returns a single message.
 func (c *Client) Subscribe(ctx context.Context, topic string) (*pubsub.Message, error) {
-	js, err := c.connManager.jetStream()
-	if err != nil {
-		return nil, err
-	}
+	for {
+		if !c.connManager.isConnected() {
+			time.Sleep(defaultRetryTimeout)
 
-	return c.subManager.Subscribe(ctx, topic, js, c.Config, c.logger, c.metrics)
+			return nil, errClientNotConnected
+		}
+
+		js, err := c.connManager.jetStream()
+		if err == nil {
+			return c.subManager.Subscribe(ctx, topic, js, c.Config, c.logger, c.metrics)
+		}
+
+		c.logger.Debugf("Waiting for NATS connection to be established for topic %s", topic)
+
+		time.Sleep(defaultRetryTimeout)
+	}
 }
 
 func (c *Client) generateConsumerName(subject string) string {

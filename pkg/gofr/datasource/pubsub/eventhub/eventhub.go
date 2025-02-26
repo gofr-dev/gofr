@@ -19,8 +19,9 @@ import (
 // It is different from other datasources.
 
 var (
-	ErrNoMsgReceived = errors.New("no message received")
-	ErrTopicMismatch = errors.New("topic should be same as Event Hub name")
+	ErrNoMsgReceived      = errors.New("no message received")
+	ErrTopicMismatch      = errors.New("topic should be same as Event Hub name")
+	errClientNotConnected = errors.New("eventhub client not connected")
 )
 
 type Config struct {
@@ -205,6 +206,10 @@ func (c *Client) Connect() {
 
 // Subscribe checks all partitions for the first available event and returns it.
 func (c *Client) Subscribe(ctx context.Context, topic string) (*pubsub.Message, error) {
+	if c.producer == nil || c.consumer == nil || c.processor == nil {
+		return nil, errClientNotConnected
+	}
+
 	var (
 		msg *pubsub.Message
 		err error
