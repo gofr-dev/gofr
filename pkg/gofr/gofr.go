@@ -65,7 +65,6 @@ func (a *App) Shutdown(ctx context.Context) error {
 	}
 
 	if err != nil {
-		a.container.Logger.Errorf("error while shutting down: %v", err)
 		return err
 	}
 
