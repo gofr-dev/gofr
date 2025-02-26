@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"gofr.dev/pkg/gofr/http/middleware"
 	"net/http"
 	"net/http/pprof"
 	"os"
@@ -11,7 +12,6 @@ import (
 
 	"gofr.dev/pkg/gofr/container"
 	gofrHTTP "gofr.dev/pkg/gofr/http"
-	"gofr.dev/pkg/gofr/http/middleware"
 	"gofr.dev/pkg/gofr/websocket"
 )
 
@@ -34,11 +34,8 @@ func newHTTPServer(c *container.Container, port int, middlewareConfigs map[strin
 	wsManager := websocket.New()
 
 	r.Use(
-		middleware.WSHandlerUpgrade(c, wsManager),
 		middleware.Tracer,
-		middleware.Logging(c.Logger),
 		middleware.CORS(middlewareConfigs, r.RegisteredRoutes),
-		middleware.Metrics(c.Metrics()),
 	)
 
 	return &httpServer{
