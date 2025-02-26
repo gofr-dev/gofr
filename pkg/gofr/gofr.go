@@ -70,7 +70,7 @@ func (a *App) Shutdown(ctx context.Context) error {
 
 	a.container.Logger.Info("Application shutdown complete")
 
-	return nil
+	return err
 }
 
 func isPortAvailable(port int) bool {
