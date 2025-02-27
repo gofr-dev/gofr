@@ -46,6 +46,7 @@ func handleWebSocketConnection(ctx *Context, conn *websocket.Connection, handler
 		response, err := handler(ctx)
 		if err != nil {
 			if gWebsocket.IsCloseError(err, gWebsocket.CloseNormalClosure, gWebsocket.CloseGoingAway, gWebsocket.CloseAbnormalClosure) {
+				ctx.Errorf("Error handling message: %v", err)
 				break
 			}
 
