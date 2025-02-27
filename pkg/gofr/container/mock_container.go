@@ -2,8 +2,6 @@ package container
 
 import (
 	"context"
-	"fmt"
-	"net/http"
 	"testing"
 
 	"go.uber.org/mock/gomock"
@@ -123,9 +121,6 @@ func NewMockContainer(t *testing.T, options ...options) (*Container, *Mocks) {
 		ArangoDB:    arangoMock,
 		Metrics:     mockMetrics,
 	}
-
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_http_response", gomock.Any(), "path", gomock.Any(),
-		"method", gomock.Any(), "status", fmt.Sprintf("%v", http.StatusOK)).AnyTimes()
 
 	return container, &mocks
 }

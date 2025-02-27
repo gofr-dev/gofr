@@ -16,6 +16,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
@@ -780,7 +781,7 @@ func TestUseMiddlewareWithContainer(t *testing.T) {
 func Test_APIKeyAuthMiddleware(t *testing.T) {
 	port := testutil.GetFreePort(t)
 
-	c, _ := container.NewMockContainer(t)
+	c, mock := container.NewMockContainer(t)
 
 	app := &App{
 		httpServer: &httpServer{
@@ -795,6 +796,9 @@ func Test_APIKeyAuthMiddleware(t *testing.T) {
 	validateFunc := func(_ *container.Container, apiKey string) bool {
 		return apiKey == "test-key"
 	}
+
+	mock.Metrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(),
+		gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	// Registering APIKey middleware with and without custom validator
 	app.EnableAPIKeyAuth(apiKeys...)
