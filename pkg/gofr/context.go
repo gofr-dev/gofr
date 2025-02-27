@@ -14,8 +14,6 @@ import (
 	"gofr.dev/pkg/gofr/cmd/terminal"
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/http/middleware"
-
-	gWebsocket "github.com/gorilla/websocket"
 )
 
 type Context struct {
@@ -90,8 +88,9 @@ func (c *Context) WriteMessageToSocket(data any) error {
 
 	err = conn.WriteMessage(websocket.TextMessage, message)
 	if err != nil {
-		if gWebsocket.IsCloseError(err, gWebsocket.CloseNormalClosure, gWebsocket.CloseGoingAway, gWebsocket.CloseAbnormalClosure) || errors.Is(err, net.ErrClosed) {
-			fmt.Println("failed to write message to websocket: %v", err)
+		if websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway,
+			websocket.CloseAbnormalClosure) || errors.Is(err, net.ErrClosed) {
+			fmt.Printf("failed to write message to websocket: %v", err)
 		}
 	}
 
