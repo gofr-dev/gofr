@@ -21,7 +21,7 @@ func (a *App) Run() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	if a.httpServer.ws != nil {
+	if a.httpServer != nil {
 		a.httpServer.router.Use(middleware.WSHandlerUpgrade(a.container, a.httpServer.ws))
 		a.httpServer.router.Use(middleware.Logging(a.Logger()))
 		a.httpServer.router.Use(middleware.Metrics(a.Metrics()))
