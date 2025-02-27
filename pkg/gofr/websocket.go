@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-
 	gWebsocket "github.com/gorilla/websocket"
+	"net"
 
 	"gofr.dev/pkg/gofr/websocket"
 )
@@ -45,11 +45,12 @@ func handleWebSocketConnection(ctx *Context, conn *websocket.Connection, handler
 	for {
 		response, err := handler(ctx)
 		if err != nil {
-			if gWebsocket.IsCloseError(err, gWebsocket.CloseNormalClosure, gWebsocket.CloseGoingAway, gWebsocket.CloseAbnormalClosure) {
+			if gWebsocket.IsCloseError(err, gWebsocket.CloseNormalClosure, gWebsocket.CloseGoingAway, gWebsocket.CloseAbnormalClosure) || errors.Is(err, net.ErrClosed) {
+				ctx.Errorf("failed to write response to websocket: %v", err)
 				break
 			}
 
-			ctx.Errorf("Error handling message: %v", err)
+			ctx.Errorf("error handling message: %v", err)
 		}
 
 		message, err := serializeMessage(response)
@@ -60,7 +61,13 @@ func handleWebSocketConnection(ctx *Context, conn *websocket.Connection, handler
 
 		err = conn.WriteMessage(websocket.TextMessage, message)
 		if err != nil {
-			ctx.Errorf("Error writing message: %v", err)
+			if gWebsocket.IsCloseError(err, gWebsocket.CloseNormalClosure, gWebsocket.CloseGoingAway, gWebsocket.CloseAbnormalClosure) || errors.Is(err, net.ErrClosed) {
+				ctx.Errorf("failed to write response to websocket: %v", err)
+
+				break
+			}
+
+			ctx.Errorf("error writing message: %v", err)
 		}
 	}
 }
