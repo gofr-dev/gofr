@@ -21,12 +21,14 @@ var (
 	errBatchSize                = errors.New("KAFKA_BATCH_SIZE must be greater than 0")
 	errBatchBytes               = errors.New("KAFKA_BATCH_BYTES must be greater than 0")
 	errBatchTimeout             = errors.New("KAFKA_BATCH_TIMEOUT must be greater than 0")
+	errClientNotConnected       = errors.New("kafka client not connected")
 )
 
 const (
 	DefaultBatchSize    = 100
 	DefaultBatchBytes   = 1048576
 	DefaultBatchTimeout = 1000
+	defaultRetryTimeout = 10 * time.Second
 )
 
 type Config struct {
@@ -37,6 +39,7 @@ type Config struct {
 	BatchSize       int
 	BatchBytes      int
 	BatchTimeout    int
+	RetryTimeout    time.Duration
 }
 
 type kafkaClient struct {
@@ -54,7 +57,7 @@ type kafkaClient struct {
 }
 
 //nolint:revive // We do not want anyone using the client without initialization steps.
-func New(conf Config, logger pubsub.Logger, metrics Metrics) *kafkaClient {
+func New(conf *Config, logger pubsub.Logger, metrics Metrics) *kafkaClient {
 	err := validateConfigs(conf)
 	if err != nil {
 		logger.Errorf("could not initialize kafka, error: %v", err)
@@ -64,36 +67,24 @@ func New(conf Config, logger pubsub.Logger, metrics Metrics) *kafkaClient {
 
 	logger.Debugf("connecting to Kafka broker '%s'", conf.Broker)
 
-	conn, err := kafka.Dial("tcp", conf.Broker)
+	dialer, conn, writer, reader, err := initializeKafkaClient(conf, logger)
 	if err != nil {
 		logger.Errorf("failed to connect to kafka at %v, error: %v", conf.Broker, err)
 
-		return &kafkaClient{
+		client := &kafkaClient{
 			logger:  logger,
-			config:  Config{},
+			config:  *conf,
 			metrics: metrics,
+			mu:      &sync.RWMutex{},
 		}
+
+		go retryConnect(client, conf, logger)
+
+		return client
 	}
-
-	dialer := &kafka.Dialer{
-		Timeout:   10 * time.Second,
-		DualStack: true,
-	}
-
-	writer := kafka.NewWriter(kafka.WriterConfig{
-		Brokers:      []string{conf.Broker},
-		Dialer:       dialer,
-		BatchSize:    conf.BatchSize,
-		BatchBytes:   conf.BatchBytes,
-		BatchTimeout: time.Duration(conf.BatchTimeout),
-	})
-
-	reader := make(map[string]Reader)
-
-	logger.Logf("connected to Kafka broker '%s'", conf.Broker)
 
 	return &kafkaClient{
-		config:  conf,
+		config:  *conf,
 		dialer:  dialer,
 		reader:  reader,
 		conn:    conn,
@@ -104,7 +95,7 @@ func New(conf Config, logger pubsub.Logger, metrics Metrics) *kafkaClient {
 	}
 }
 
-func validateConfigs(conf Config) error {
+func validateConfigs(conf *Config) error {
 	if conf.Broker == "" {
 		return errBrokerNotProvided
 	}
@@ -165,6 +156,12 @@ func (k *kafkaClient) Publish(ctx context.Context, topic string, message []byte)
 }
 
 func (k *kafkaClient) Subscribe(ctx context.Context, topic string) (*pubsub.Message, error) {
+	if !k.isConnected() {
+		time.Sleep(defaultRetryTimeout)
+
+		return nil, errClientNotConnected
+	}
+
 	if k.config.ConsumerGroupID == "" {
 		k.logger.Error("cannot subscribe as consumer_id is not provided in configs")
 
@@ -179,6 +176,10 @@ func (k *kafkaClient) Subscribe(ctx context.Context, topic string) (*pubsub.Mess
 	var reader Reader
 	// Lock the reader map to ensure only one subscriber access the reader at a time
 	k.mu.Lock()
+
+	if k.reader == nil {
+		k.reader = make(map[string]Reader)
+	}
 
 	if k.reader[topic] == nil {
 		k.reader[topic] = k.getNewReader(topic)
@@ -237,6 +238,33 @@ func (k *kafkaClient) Close() (err error) {
 	return err
 }
 
+func initializeKafkaClient(conf *Config, logger pubsub.Logger) (*kafka.Dialer, Connection,
+	Writer, map[string]Reader, error) {
+	dialer := &kafka.Dialer{
+		Timeout:   10 * time.Second,
+		DualStack: true,
+	}
+
+	conn, err := kafka.Dial("tcp", conf.Broker)
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
+
+	writer := kafka.NewWriter(kafka.WriterConfig{
+		Brokers:      []string{conf.Broker},
+		Dialer:       dialer,
+		BatchSize:    conf.BatchSize,
+		BatchBytes:   conf.BatchBytes,
+		BatchTimeout: time.Duration(conf.BatchTimeout),
+	})
+
+	reader := make(map[string]Reader)
+
+	logger.Logf("connected to Kafka broker '%s'", conf.Broker)
+
+	return dialer, conn, writer, reader, nil
+}
+
 func (k *kafkaClient) getNewReader(topic string) Reader {
 	reader := kafka.NewReader(kafka.ReaderConfig{
 		GroupID:     k.config.ConsumerGroupID,
@@ -268,4 +296,36 @@ func (k *kafkaClient) CreateTopic(_ context.Context, name string) error {
 	}
 
 	return nil
+}
+
+// retryConnect handles the retry mechanism for connecting to the Kafka broker.
+func retryConnect(client *kafkaClient, conf *Config, logger pubsub.Logger) {
+	for {
+		time.Sleep(defaultRetryTimeout)
+
+		dialer, conn, writer, reader, err := initializeKafkaClient(conf, logger)
+		if err != nil {
+			logger.Errorf("could not connect to Kafka at '%v', error: %v", conf.Broker, err)
+			continue
+		}
+
+		client.mu.Lock()
+		client.conn = conn
+		client.dialer = dialer
+		client.writer = writer
+		client.reader = reader
+		client.mu.Unlock()
+
+		return
+	}
+}
+
+func (k *kafkaClient) isConnected() bool {
+	if k.conn == nil {
+		return false
+	}
+
+	_, err := k.conn.Controller()
+
+	return err == nil
 }
