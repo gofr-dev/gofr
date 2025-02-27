@@ -31,7 +31,7 @@ type Mocks struct {
 
 type options func(c *Container, ctrl *gomock.Controller) any
 
-//nolint:revive //Because user should not access the options, and we might change it to an interface in the future.
+//nolint:revive // Because user should not access the options, and we might change it to an interface in the future.
 func WithMockHTTPService(httpServiceNames ...string) options {
 	return func(c *Container, ctrl *gomock.Controller) any {
 		mockservice := service.NewMockHTTP(ctrl)
