@@ -122,6 +122,9 @@ func NewMockContainer(t *testing.T, options ...options) (*Container, *Mocks) {
 		Metrics:     mockMetrics,
 	}
 
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(),
+		gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+
 	return container, &mocks
 }
 
