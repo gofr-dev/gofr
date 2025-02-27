@@ -45,34 +45,38 @@ func (a *App) WebSocket(route string, handler Handler) {
 func handleWebSocketConnection(ctx *Context, conn *websocket.Connection, handler Handler) {
 	for {
 		response, err := handler(ctx)
-		if err != nil {
-			if gWebsocket.IsCloseError(err, gWebsocket.CloseNormalClosure, gWebsocket.CloseGoingAway,
-				gWebsocket.CloseAbnormalClosure) || errors.Is(err, net.ErrClosed) {
-				ctx.Errorf("failed to write response to websocket: %v", err)
-				break
-			}
-
-			ctx.Errorf("error handling message: %v", err)
+		if handleWebSocketError(ctx, "error handling message", err) {
+			break
 		}
 
 		message, err := serializeMessage(response)
-		if err != nil {
-			ctx.Errorf("%v", err)
+		if handleWebSocketError(ctx, "failed to serialize message", err) {
 			continue
 		}
 
 		err = conn.WriteMessage(websocket.TextMessage, message)
-		if err != nil {
-			if gWebsocket.IsCloseError(err, gWebsocket.CloseNormalClosure, gWebsocket.CloseGoingAway,
-				gWebsocket.CloseAbnormalClosure) || errors.Is(err, net.ErrClosed) {
-				ctx.Errorf("failed to write response to websocket: %v", err)
-
-				break
-			}
-
-			ctx.Errorf("error writing message: %v", err)
+		if handleWebSocketError(ctx, "failed to write response to websocket", err) {
+			break
 		}
 	}
+}
+
+func handleWebSocketError(ctx *Context, msg string, err error) bool {
+	if err == nil {
+		return false
+	}
+
+	if isWebSocketClosed(err) {
+		ctx.Errorf("%s: %v", msg, err)
+		return true
+	}
+
+	ctx.Errorf("%s: %v", msg, err)
+	return false
+}
+
+func isWebSocketClosed(err error) bool {
+	return gWebsocket.IsCloseError(err, gWebsocket.CloseNormalClosure, gWebsocket.CloseGoingAway, gWebsocket.CloseAbnormalClosure) || errors.Is(err, net.ErrClosed)
 }
 
 func serializeMessage(response any) ([]byte, error) {
