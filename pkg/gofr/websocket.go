@@ -52,6 +52,11 @@ func handleWebSocketConnection(ctx *Context, conn *websocket.Connection, handler
 			ctx.Errorf("Error handling message: %v", err)
 		}
 
+		if conn.NetConn().Close() != nil {
+			fmt.Println("Connection closed.")
+			break
+		}
+
 		message, err := serializeMessage(response)
 		if err != nil {
 			ctx.Errorf("%v", err)

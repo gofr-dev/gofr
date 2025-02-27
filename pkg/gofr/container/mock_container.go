@@ -124,8 +124,8 @@ func NewMockContainer(t *testing.T, options ...options) (*Container, *Mocks) {
 		Metrics:     mockMetrics,
 	}
 
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_http_service_response", gomock.Any(), "path", gomock.Any(),
-		"method", gomock.Any(), "status", fmt.Sprintf("%v", http.StatusInternalServerError)).AnyTimes()
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_http_response", gomock.Any(), "path", gomock.Any(),
+		"method", gomock.Any(), "status", fmt.Sprintf("%v", http.StatusOK)).AnyTimes()
 
 	return container, &mocks
 }
