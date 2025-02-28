@@ -12,5 +12,5 @@ type Template struct { // Named as such to avoid conflict with imported template
 
 func (t *Template) Render(w io.Writer) {
 	tmpl := template.Must(template.ParseFiles("./templates/" + t.Name))
-	tmpl.Execute(w, t.Data)
+	_ = tmpl.Execute(w, t.Data)
 }

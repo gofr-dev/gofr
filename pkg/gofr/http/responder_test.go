@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -182,4 +183,39 @@ func TestIsNil(t *testing.T) {
 
 		assert.Equal(t, tc.expected, resp, "TEST[%d], Failed.\n%s", i, tc.desc)
 	}
+}
+
+func TestResponder_TemplateResponse(t *testing.T) {
+	templatePath := "./templates/example.html"
+	templateContent := `<html><head><title>{{.Title}}</title></head><body>{{.Body}}</body></html>`
+	createTemplateFile(t, templatePath, templateContent)
+	defer removeTemplateDir(t)
+
+	recorder := httptest.NewRecorder()
+	r := NewResponder(recorder, http.MethodGet)
+
+	templateData := map[string]string{"Title": "Test Title", "Body": "Test Body"}
+	expectedBody := "<html><head><title>Test Title</title></head><body>Test Body</body></html>"
+
+	r.Respond(resTypes.Template{Name: "example.html", Data: templateData}, nil)
+
+	contentType := recorder.Header().Get("Content-Type")
+	responseBody := recorder.Body.String()
+
+	assert.Equal(t, "text/html", contentType)
+	assert.Equal(t, expectedBody, responseBody)
+
+}
+
+func createTemplateFile(t *testing.T, path, content string) {
+	err := os.MkdirAll("./templates", os.ModePerm)
+	require.NoError(t, err)
+
+	err = os.WriteFile(path, []byte(content), 0644)
+	require.NoError(t, err)
+}
+
+func removeTemplateDir(t *testing.T) {
+	err := os.RemoveAll("./templates")
+	require.NoError(t, err)
 }
