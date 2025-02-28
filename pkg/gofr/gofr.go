@@ -23,6 +23,10 @@ import (
 	"gofr.dev/pkg/gofr/service"
 )
 
+const (
+	defaultConfigLocation = "./configs"
+)
+
 // App is the main application in the GoFr framework.
 type App struct {
 	// Config can be used by applications to fetch custom configurations from environment or file.
@@ -138,8 +142,9 @@ func (a *App) startSubscriptions(ctx context.Context) error {
 // readConfig reads the configuration from the default location.
 func (a *App) readConfig(isAppCMD bool) {
 	var configLocation string
-	if _, err := os.Stat("./configs"); err == nil {
-		configLocation = "./configs"
+
+	if _, err := os.Stat(defaultConfigLocation); err == nil {
+		configLocation = defaultConfigLocation
 	}
 
 	if isAppCMD {

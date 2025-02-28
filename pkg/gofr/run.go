@@ -21,18 +21,6 @@ func (a *App) Run() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	// Developer Note:
-	//	WebSocket connections do not inherently support authentication mechanisms.
-	//	It is recommended to authenticate users before upgrading to a WebSocket connection.
-	//	Hence, we are registering middlewares here, to ensure that authentication or other
-	//	middleware logic is executed during the initial HTTP handshake request, prior to upgrading
-	//	the connection to WebSocket.
-	if a.httpServer != nil {
-		a.httpServer.router.Use(middleware.WSHandlerUpgrade(a.container, a.httpServer.ws))
-		a.httpServer.router.Use(middleware.Logging(a.Logger()))
-		a.httpServer.router.Use(middleware.Metrics(a.Metrics()))
-	}
-
 	// Goroutine to handle shutdown when context is canceled
 	go func() {
 		<-ctx.Done()
@@ -72,7 +60,7 @@ func (a *App) Run() {
 
 		go func(s *httpServer) {
 			defer wg.Done()
-			s.Run(a.container)
+			s.Run(a.container, middleware.GetConfigs(a.Config))
 		}(a.httpServer)
 	}
 
