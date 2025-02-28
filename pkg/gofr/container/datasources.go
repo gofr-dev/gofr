@@ -633,6 +633,15 @@ type ArangoDB interface {
 	// the result parameter is not a pointer to a slice of maps.
 	Query(ctx context.Context, dbName string, query string, bindVars map[string]any, result any) error
 
+	// Exists checks if a database, collection, or graph exists.
+	// Parameters:
+	//   - ctx: Request context for tracing and cancellation.
+	//   - name: Name of the database, collection, or graph.
+	//   - resourceType: Type of the resource ("database", "collection", "graph").
+	//
+	// Returns true if the resource exists, otherwise false.
+	Exists(ctx context.Context, name, resourceType string) (bool, error)
+
 	HealthChecker
 }
 

@@ -12460,6 +12460,21 @@ func (mr *MockArangoDBProviderMockRecorder) UpdateDocument(ctx, dbName, collecti
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateDocument", reflect.TypeOf((*MockArangoDBProvider)(nil).UpdateDocument), ctx, dbName, collectionName, documentID, document)
 }
 
+// Exists mocks base method.
+func (m *MockArangoDBProvider) Exists(ctx context.Context, name string, resourceType string) (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Exists", ctx, name, resourceType)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Exists indicates an expected call of Exists.
+func (mr *MockArangoDBProviderMockRecorder) Exists(ctx, name, resourceType any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Exists", reflect.TypeOf((*MockArangoDBProvider)(nil).Exists), ctx, name, resourceType)
+}
+
 // UseLogger mocks base method.
 func (m *MockArangoDBProvider) UseLogger(logger any) {
 	m.ctrl.T.Helper()

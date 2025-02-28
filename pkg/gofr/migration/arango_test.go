@@ -188,6 +188,6 @@ func Test_ArangoMigration_Exists(t *testing.T) {
 
 	res, err := arangoDB.Exists(context.Background(), "test", "database")
 
-	assert.Equal(t, true, res)
+	assert.True(t, res, "Test_ArangoMigration_Exists failed!")
 	assert.NoError(t, err, "Test_ArangoMigration_Exists failed!")
 }
