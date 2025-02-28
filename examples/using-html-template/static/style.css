@@ -1,0 +1,39 @@
+body,html {
+    margin: 0;
+    padding: 0;
+    background: oklch(0.208 0.042 265.755);
+    color: oklch(0.869 0.022 252.894);
+    font-family: ui-sans-serif, system-ui, sans-serif;
+}
+* {
+    box-sizing: border-box;
+}
+h1 {
+    font-size: 2rem;
+    margin: 0;
+    padding: 1rem;
+    background: oklch(0.208 0.042 265.755);
+    color: oklch(0.869 0.022 252.894);
+}
+
+div#content {padding:80px 20px; text-align: center }
+
+a {color: oklch(0.917 0.08 205.041); text-decoration: none;}
+a:hover {font-weight: bold}
+
+
+h2 {
+    text-align: left;
+}
+ul {
+    text-align: left ;
+}
+
+li {
+    list-style-type: circle;
+}
+
+li.done {
+    list-style-type: disc;
+    text-decoration: line-through;
+}
