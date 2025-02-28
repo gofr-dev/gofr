@@ -72,11 +72,13 @@ func handleWebSocketError(ctx *Context, msg string, err error) bool {
 	}
 
 	ctx.Errorf("%s: %v", msg, err)
+
 	return false
 }
 
 func isWebSocketClosed(err error) bool {
-	return gWebsocket.IsCloseError(err, gWebsocket.CloseNormalClosure, gWebsocket.CloseGoingAway, gWebsocket.CloseAbnormalClosure) || errors.Is(err, net.ErrClosed)
+	return gWebsocket.IsCloseError(err, gWebsocket.CloseNormalClosure, gWebsocket.CloseGoingAway,
+		gWebsocket.CloseAbnormalClosure) || errors.Is(err, net.ErrClosed)
 }
 
 func serializeMessage(response any) ([]byte, error) {
