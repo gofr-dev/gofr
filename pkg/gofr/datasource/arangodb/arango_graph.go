@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/arangodb/go-driver/v2/arangodb"
+	"github.com/arangodb/go-driver/v2/arangodb/shared"
 )
 
 var (
@@ -149,4 +150,33 @@ func (c *Client) GetEdges(ctx context.Context, dbName, graphName, edgeCollection
 	*edgeResp = edges
 
 	return nil
+}
+
+func (c *Client) graphExists(ctx context.Context, name string) (bool, error) {
+	db, err := c.client.Database(ctx, "_system")
+	if err != nil {
+		return false, err
+	}
+
+	graphs, err := db.Graphs(ctx)
+	if err != nil {
+		return false, err
+	}
+
+	for {
+		graph, err := graphs.Read()
+		if shared.IsNoMoreDocuments(err) {
+			break
+		}
+
+		if err != nil {
+			return false, err
+		}
+
+		if graph.Name() == name {
+			return true, nil
+		}
+	}
+
+	return false, nil
 }
