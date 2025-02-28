@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/arangodb/go-driver/v2/arangodb"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 )
@@ -150,4 +151,130 @@ func Test_Client_DropCollection_Error(t *testing.T) {
 	err := client.DropCollection(context.Background(), "testDB", "testCollection")
 	require.Error(t, err, "Expected error when trying to drop a non-existent collection")
 	require.Equal(t, "collection not found", err.Error())
+}
+
+func Test_Client_DatabaseExists_Success(t *testing.T) {
+	client, mockArango, _, mockLogger, mockMetrics := setupDB(t)
+	mockDB := NewMockDatabase(gomock.NewController(t))
+
+	ctx := context.Background()
+	database := "testDB"
+
+	mockArango.EXPECT().Databases(gomock.Any()).Return([]arangodb.Database{mockDB}, nil)
+	mockDB.EXPECT().Name().Return(database)
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_arango_stats",
+		gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+
+	exists, err := client.databaseExists(ctx, database)
+	require.NoError(t, err, "Expected no error while checking if the database exists")
+	require.True(t, exists, "Expected the database to exist")
+}
+
+func Test_Client_DatabaseExists_Error(t *testing.T) {
+	client, mockArango, _, mockLogger, mockMetrics := setupDB(t)
+
+	ctx := context.Background()
+	database := "nonExistentDB"
+
+	mockArango.EXPECT().Databases(gomock.Any()).Return(nil, errDBNotFound)
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_arango_stats",
+		gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+
+	exists, err := client.databaseExists(ctx, database)
+	require.Error(t, err, "Expected an error while checking if the database exists")
+	require.False(t, exists, "Expected the database to not exist")
+}
+
+func Test_Client_DatabaseExists_NotExist(t *testing.T) {
+	client, mockArango, _, mockLogger, mockMetrics := setupDB(t)
+	mockDB := NewMockDatabase(gomock.NewController(t))
+
+	ctx := context.Background()
+	database := "nonExistentDB"
+
+	mockArango.EXPECT().Databases(gomock.Any()).Return([]arangodb.Database{mockDB}, nil)
+	mockDB.EXPECT().Name().Return("someOtherDB")
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_arango_stats",
+		gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+
+	exists, err := client.databaseExists(ctx, database)
+	require.NoError(t, err, "Expected no error while checking if the database exists")
+	require.False(t, exists, "Expected the database to not exist")
+}
+
+func Test_Client_CollectionExists_Success(t *testing.T) {
+	client, mockArango, _, mockLogger, mockMetrics := setupDB(t)
+	mockDatabase := NewMockDatabase(gomock.NewController(t))
+	mockCollection := NewMockCollection(gomock.NewController(t))
+
+	ctx := context.Background()
+	collection := "testCollection"
+
+	mockArango.EXPECT().Database(gomock.Any(), "_system").Return(mockDatabase, nil)
+	mockDatabase.EXPECT().Collections(gomock.Any()).Return([]arangodb.Collection{mockCollection}, nil)
+	mockCollection.EXPECT().Name().Return(collection)
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_arango_stats",
+		gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+
+	exists, err := client.collectionExists(ctx, collection)
+	require.NoError(t, err, "Expected no error while checking if the collection exists")
+	require.True(t, exists, "Expected the collection to exist")
+}
+
+func Test_Client_CollectionExists_DatabaseError(t *testing.T) {
+	client, mockArango, _, mockLogger, mockMetrics := setupDB(t)
+
+	ctx := context.Background()
+	collection := "testCollection"
+
+	mockArango.EXPECT().Database(gomock.Any(), "_system").Return(nil, errDBNotFound)
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_arango_stats",
+		gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+
+	exists, err := client.collectionExists(ctx, collection)
+	require.Error(t, err, "Expected an error while checking if the collection exists")
+	require.False(t, exists, "Expected the collection to not exist")
+}
+
+func Test_Client_CollectionExists_Error(t *testing.T) {
+	client, mockArango, _, mockLogger, mockMetrics := setupDB(t)
+	mockDatabase := NewMockDatabase(gomock.NewController(t))
+
+	ctx := context.Background()
+	collection := "nonExistentCollection"
+
+	mockArango.EXPECT().Database(gomock.Any(), "_system").Return(mockDatabase, nil)
+	mockDatabase.EXPECT().Collections(gomock.Any()).Return(nil, errCollectionNotFound)
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_arango_stats",
+		gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+
+	exists, err := client.collectionExists(ctx, collection)
+	require.Error(t, err, "Expected an error while checking if the collection exists")
+	require.False(t, exists, "Expected the collection to not exist")
+}
+
+func Test_Client_CollectionExists_NotExist(t *testing.T) {
+	client, mockArango, _, mockLogger, mockMetrics := setupDB(t)
+	mockDatabase := NewMockDatabase(gomock.NewController(t))
+	mockCollection := NewMockCollection(gomock.NewController(t))
+
+	ctx := context.Background()
+	collection := "nonExistentCollection"
+
+	mockArango.EXPECT().Database(gomock.Any(), "_system").Return(mockDatabase, nil)
+	mockDatabase.EXPECT().Collections(gomock.Any()).Return([]arangodb.Collection{mockCollection}, nil)
+	mockCollection.EXPECT().Name().Return("someOtherCollection")
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_arango_stats",
+		gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+
+	exists, err := client.collectionExists(ctx, collection)
+	require.NoError(t, err, "Expected no error while checking if the collection exists")
+	require.False(t, exists, "Expected the collection to not exist")
 }

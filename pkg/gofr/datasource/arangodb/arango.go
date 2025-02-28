@@ -229,41 +229,6 @@ func (c *Client) Exists(ctx context.Context, name, resourceType string) (bool, e
 	}
 }
 
-func (c *Client) databaseExists(ctx context.Context, name string) (bool, error) {
-	dbs, err := c.client.Databases(ctx)
-	if err != nil {
-		return false, err
-	}
-
-	for _, db := range dbs {
-		if db.Name() == name {
-			return true, nil
-		}
-	}
-
-	return false, nil
-}
-
-func (c *Client) collectionExists(ctx context.Context, name string) (bool, error) {
-	db, err := c.client.Database(ctx, "_system")
-	if err != nil {
-		return false, err
-	}
-
-	collections, err := db.Collections(ctx)
-	if err != nil {
-		return false, err
-	}
-
-	for _, col := range collections {
-		if col.Name() == name {
-			return true, nil
-		}
-	}
-
-	return false, nil
-}
-
 func (c *Client) graphExists(ctx context.Context, name string) (bool, error) {
 	db, err := c.client.Database(ctx, "_system")
 	if err != nil {

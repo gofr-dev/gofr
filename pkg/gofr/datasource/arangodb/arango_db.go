@@ -87,6 +87,41 @@ func (d *DB) getCollection(ctx context.Context, dbName, collectionName string) (
 	return collection, nil
 }
 
+func (c *Client) databaseExists(ctx context.Context, name string) (bool, error) {
+	dbs, err := c.client.Databases(ctx)
+	if err != nil {
+		return false, err
+	}
+
+	for _, db := range dbs {
+		if db.Name() == name {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+func (c *Client) collectionExists(ctx context.Context, name string) (bool, error) {
+	db, err := c.client.Database(ctx, "_system")
+	if err != nil {
+		return false, err
+	}
+
+	collections, err := db.Collections(ctx)
+	if err != nil {
+		return false, err
+	}
+
+	for _, col := range collections {
+		if col.Name() == name {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
 // handleCollectionOperation handles common logic for collection operations.
 func (d *DB) handleCollectionOperation(ctx context.Context, operation, database, collectionName string,
 	action func(arangodb.Collection) error) error {
