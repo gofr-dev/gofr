@@ -780,6 +780,21 @@ func (mr *MockArangoDBMockRecorder) DropGraph(ctx, database, graph any) *gomock.
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DropGraph", reflect.TypeOf((*MockArangoDB)(nil).DropGraph), ctx, database, graph)
 }
 
+// Exists mocks base method.
+func (m *MockArangoDB) Exists(ctx context.Context, name, resourceType string) (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Exists", ctx, name, resourceType)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Exists indicates an expected call of Exists.
+func (mr *MockArangoDBMockRecorder) Exists(ctx, name, resourceType any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Exists", reflect.TypeOf((*MockArangoDB)(nil).Exists), ctx, name, resourceType)
+}
+
 // Mockmigrator is a mock of migrator interface.
 type Mockmigrator struct {
 	ctrl     *gomock.Controller

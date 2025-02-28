@@ -62,6 +62,10 @@ func (ds arangoDS) DropGraph(ctx context.Context, database, graph string) error 
 	return ds.client.DropGraph(ctx, database, graph)
 }
 
+func (ds arangoDS) Exists(ctx context.Context, name, resourceType string) (bool, error) {
+	return ds.client.Exists(ctx, name, resourceType)
+}
+
 func (ds arangoDS) apply(m migrator) migrator {
 	return arangoMigrator{
 		ArangoDB: ds,

@@ -52,6 +52,7 @@ var (
 	errMissingField           = errors.New("missing required field in config")
 	errInvalidResultType      = errors.New("result must be a pointer to a slice of maps")
 	errInvalidUserOptionsType = errors.New("userOptions must be a *UserOptions type")
+	errInvalidResourceType    = errors.New("invalid resource type")
 )
 
 // New creates a new ArangoDB client with the provided configuration.
@@ -201,6 +202,31 @@ func (c *Client) Query(ctx context.Context, dbName, query string, bindVars map[s
 	}
 
 	return nil
+}
+
+// Exists checks if a database, collection, or graph exists.
+// Parameters:
+//   - ctx: Request context for tracing and cancellation.
+//   - name: Name of the database, collection, or graph.
+//   - resourceType: Type of the resource ("database", "collection", "graph").
+//
+// Returns true if the resource exists, otherwise false.
+func (c *Client) Exists(ctx context.Context, name, resourceType string) (bool, error) {
+	tracerCtx, span := c.addTrace(ctx, "exists", map[string]string{"name": name, "resourceType": resourceType})
+	startTime := time.Now()
+
+	defer c.sendOperationStats(&QueryLog{Operation: "exists", Database: name, Collection: resourceType}, startTime, "exists", span)
+
+	switch resourceType {
+	case "database":
+		return c.databaseExists(tracerCtx, name)
+	case "collection":
+		return c.collectionExists(tracerCtx, name)
+	case "graph":
+		return c.graphExists(tracerCtx, name)
+	default:
+		return false, errInvalidResourceType
+	}
 }
 
 // addTrace adds tracing to context if tracer is configured.
