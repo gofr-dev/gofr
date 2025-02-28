@@ -34,14 +34,14 @@ func ShutdownWithContext(ctx context.Context, shutdownFunc func(ctx context.Cont
 }
 
 func getShutdownTimeoutFromConfig(cfg config.Config) (time.Duration, error) {
-	value := cfg.Get("SHUTDOWN_GRACE_PERIOD")
+	value := cfg.GetOrDefault("SHUTDOWN_GRACE_PERIOD", "30s")
 	if value == "" {
-		return 0, nil
+		return shutDownTimeout, nil
 	}
 
 	timeout, err := time.ParseDuration(value)
 	if err != nil {
-		return 0, err
+		return shutDownTimeout, err
 	}
 
 	return timeout, nil

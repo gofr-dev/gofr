@@ -50,7 +50,7 @@ func Test_getShutdownTimeoutFromConfig_Success(t *testing.T) {
 		expectedValue time.Duration
 	}{
 		{"Valid timeout", "1s", 1 * time.Second},
-		{"Empty timeout", "", 0},
+		{"Empty timeout", "", 30 * time.Second},
 	}
 
 	for _, tt := range tests {
