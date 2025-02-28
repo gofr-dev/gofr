@@ -114,3 +114,80 @@ func Test_ArangoBeginTransaction(t *testing.T) {
 
 	assert.Contains(t, logs, "ArangoDB migrator begin successfully")
 }
+
+func Test_ArangoMigration_CreateDB(t *testing.T) {
+	_, mockArango, _ := arangoSetup(t)
+
+	arangoDB := arangoDS{client: mockArango}
+
+	mockArango.EXPECT().CreateDB(context.Background(), "test").Return(nil)
+
+	err := arangoDB.CreateDB(context.Background(), "test")
+
+	assert.NoError(t, err, "Test_ArangoMigration_CreateDB failed!")
+}
+
+func Test_ArangoMigration_DropDB(t *testing.T) {
+	_, mockArango, _ := arangoSetup(t)
+
+	arangoDB := arangoDS{client: mockArango}
+
+	mockArango.EXPECT().DropDB(context.Background(), "test").Return(nil)
+
+	err := arangoDB.DropDB(context.Background(), "test")
+
+	assert.NoError(t, err, "Test_ArangoMigration_DropDB failed!")
+}
+
+func Test_ArangoMigration_DropCollection(t *testing.T) {
+	_, mockArango, _ := arangoSetup(t)
+
+	arangoDB := arangoDS{client: mockArango}
+
+	mockArango.EXPECT().DropCollection(context.Background(), "test",
+		"database").Return(nil)
+
+	err := arangoDB.DropCollection(context.Background(), "test", "database")
+
+	assert.NoError(t, err, "Test_ArangoMigration_DropCollection failed!")
+}
+
+func Test_ArangoMigration_CreateGraph(t *testing.T) {
+	_, mockArango, _ := arangoSetup(t)
+
+	arangoDB := arangoDS{client: mockArango}
+
+	mockArango.EXPECT().CreateGraph(context.Background(), "test",
+		"database", nil).Return(nil)
+
+	err := arangoDB.CreateGraph(context.Background(), "test", "database", nil)
+
+	assert.NoError(t, err, "Test_ArangoMigration_CreateGraph failed!")
+}
+
+func Test_ArangoMigration_DropGraph(t *testing.T) {
+	_, mockArango, _ := arangoSetup(t)
+
+	arangoDB := arangoDS{client: mockArango}
+
+	mockArango.EXPECT().DropGraph(context.Background(), "test",
+		"database").Return(nil)
+
+	err := arangoDB.DropGraph(context.Background(), "test", "database")
+
+	assert.NoError(t, err, "Test_ArangoMigration_DropGraph failed!")
+}
+
+func Test_ArangoMigration_Exists(t *testing.T) {
+	_, mockArango, _ := arangoSetup(t)
+
+	arangoDB := arangoDS{client: mockArango}
+
+	mockArango.EXPECT().Exists(context.Background(), "test",
+		"database").Return(true, nil)
+
+	res, err := arangoDB.Exists(context.Background(), "test", "database")
+
+	assert.Equal(t, true, res)
+	assert.NoError(t, err, "Test_ArangoMigration_Exists failed!")
+}

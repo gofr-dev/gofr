@@ -79,6 +79,15 @@ type ArangoDB interface {
 	CreateGraph(ctx context.Context, database, graph string, edgeDefinitions any) error
 	// DropGraph deletes an existing graph from a database.
 	DropGraph(ctx context.Context, database, graph string) error
+
+	// Exists checks if a database, collection, or graph exists.
+	// Parameters:
+	//   - ctx: Request context for tracing and cancellation.
+	//   - name: Name of the database, collection, or graph.
+	//   - resourceType: Type of the resource ("database", "collection", "graph").
+	//
+	// Returns true if the resource exists, otherwise false.
+	Exists(ctx context.Context, name, resourceType string) (bool, error)
 }
 
 // keeping the migrator interface unexported as, right now it is not being implemented directly, by the externalDB drivers.
