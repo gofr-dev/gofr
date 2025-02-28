@@ -122,6 +122,7 @@ func NewMockContainer(t *testing.T, options ...options) (*Container, *Mocks) {
 		Metrics:     mockMetrics,
 	}
 
+	// TODO: Remove this expectation from mock container (previous generalisation) to the actual tests where their expectations are being set.
 	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(),
 		gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
