@@ -22,8 +22,6 @@ func (a *App) Run() {
 	timeout, err := getShutdownTimeoutFromConfig(a.Config)
 	if err != nil {
 		a.Logger().Errorf("error parsing value of shutdown timeout from config: %v. Setting default timeout of 30 sec.", err)
-
-		timeout = shutDownTimeout
 	}
 
 	// Goroutine to handle shutdown when context is canceled
