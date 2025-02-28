@@ -1,6 +1,7 @@
 package arangodb
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -129,4 +130,17 @@ func TestValidateConfig(t *testing.T) {
 			}
 		})
 	}
+}
+
+func Test_Client_Exists_InvalidResourceType(t *testing.T) {
+	client, _, _, mockLogger, mockMetrics := setupDB(t)
+
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_arango_stats",
+		gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+
+	exists, err := client.Exists(context.Background(), "testResource", "invalid")
+	require.Error(t, err, "Expected an error for invalid resource type")
+	require.False(t, exists, "Expected the resource to not exist")
+	require.Equal(t, errInvalidResourceType, err)
 }

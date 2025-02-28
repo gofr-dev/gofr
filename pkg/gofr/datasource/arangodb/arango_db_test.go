@@ -166,7 +166,7 @@ func Test_Client_DatabaseExists_Success(t *testing.T) {
 	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_arango_stats",
 		gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
-	exists, err := client.databaseExists(ctx, database)
+	exists, err := client.Exists(ctx, database, "database")
 	require.NoError(t, err, "Expected no error while checking if the database exists")
 	require.True(t, exists, "Expected the database to exist")
 }
@@ -182,7 +182,7 @@ func Test_Client_DatabaseExists_Error(t *testing.T) {
 	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_arango_stats",
 		gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
-	exists, err := client.databaseExists(ctx, database)
+	exists, err := client.Exists(ctx, database, "database")
 	require.Error(t, err, "Expected an error while checking if the database exists")
 	require.False(t, exists, "Expected the database to not exist")
 }
@@ -200,7 +200,7 @@ func Test_Client_DatabaseExists_NotExist(t *testing.T) {
 	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_arango_stats",
 		gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
-	exists, err := client.databaseExists(ctx, database)
+	exists, err := client.Exists(ctx, database, "database")
 	require.NoError(t, err, "Expected no error while checking if the database exists")
 	require.False(t, exists, "Expected the database to not exist")
 }
@@ -220,7 +220,7 @@ func Test_Client_CollectionExists_Success(t *testing.T) {
 	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_arango_stats",
 		gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
-	exists, err := client.collectionExists(ctx, collection)
+	exists, err := client.Exists(ctx, collection, "collection")
 	require.NoError(t, err, "Expected no error while checking if the collection exists")
 	require.True(t, exists, "Expected the collection to exist")
 }
@@ -236,7 +236,7 @@ func Test_Client_CollectionExists_DatabaseError(t *testing.T) {
 	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_arango_stats",
 		gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
-	exists, err := client.collectionExists(ctx, collection)
+	exists, err := client.Exists(ctx, collection, "collection")
 	require.Error(t, err, "Expected an error while checking if the collection exists")
 	require.False(t, exists, "Expected the collection to not exist")
 }
@@ -254,7 +254,7 @@ func Test_Client_CollectionExists_Error(t *testing.T) {
 	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_arango_stats",
 		gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
-	exists, err := client.collectionExists(ctx, collection)
+	exists, err := client.Exists(ctx, collection, "collection")
 	require.Error(t, err, "Expected an error while checking if the collection exists")
 	require.False(t, exists, "Expected the collection to not exist")
 }
@@ -274,7 +274,7 @@ func Test_Client_CollectionExists_NotExist(t *testing.T) {
 	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_arango_stats",
 		gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
-	exists, err := client.collectionExists(ctx, collection)
+	exists, err := client.Exists(ctx, collection, "collection")
 	require.NoError(t, err, "Expected no error while checking if the collection exists")
 	require.False(t, exists, "Expected the collection to not exist")
 }

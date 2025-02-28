@@ -225,37 +225,8 @@ func (c *Client) Exists(ctx context.Context, name, resourceType string) (bool, e
 	case "graph":
 		return c.graphExists(tracerCtx, name)
 	default:
-		return false, fmt.Errorf("%w", errInvalidResourceType)
+		return false, errInvalidResourceType
 	}
-}
-
-func (c *Client) graphExists(ctx context.Context, name string) (bool, error) {
-	db, err := c.client.Database(ctx, "_system")
-	if err != nil {
-		return false, err
-	}
-
-	graphs, err := db.Graphs(ctx)
-	if err != nil {
-		return false, err
-	}
-
-	for {
-		graph, err := graphs.Read()
-		if arangoShared.IsNoMoreDocuments(err) {
-			break
-		}
-
-		if err != nil {
-			return false, err
-		}
-
-		if graph.Name() == name {
-			return true, nil
-		}
-	}
-
-	return false, nil
 }
 
 // addTrace adds tracing to context if tracer is configured.
