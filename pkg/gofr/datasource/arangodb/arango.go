@@ -52,6 +52,7 @@ var (
 	errMissingField           = errors.New("missing required field in config")
 	errInvalidResultType      = errors.New("result must be a pointer to a slice of maps")
 	errInvalidUserOptionsType = errors.New("userOptions must be a *UserOptions type")
+	errInvalidResourceType    = errors.New("invalid resource type")
 )
 
 // New creates a new ArangoDB client with the provided configuration.
@@ -201,6 +202,95 @@ func (c *Client) Query(ctx context.Context, dbName, query string, bindVars map[s
 	}
 
 	return nil
+}
+
+// Exists checks if a database, collection, or graph exists.
+// Parameters:
+//   - ctx: Request context for tracing and cancellation.
+//   - name: Name of the database, collection, or graph.
+//   - resourceType: Type of the resource ("database", "collection", "graph").
+//
+// Returns true if the resource exists, otherwise false.
+func (c *Client) Exists(ctx context.Context, name, resourceType string) (bool, error) {
+	tracerCtx, span := c.addTrace(ctx, "exists", map[string]string{"name": name, "resourceType": resourceType})
+	startTime := time.Now()
+
+	defer c.sendOperationStats(&QueryLog{Operation: "exists", Database: name, Collection: resourceType}, startTime, "exists", span)
+
+	switch resourceType {
+	case "database":
+		return c.databaseExists(tracerCtx, name)
+	case "collection":
+		return c.collectionExists(tracerCtx, name)
+	case "graph":
+		return c.graphExists(tracerCtx, name)
+	default:
+		return false, fmt.Errorf("%w", errInvalidResourceType)
+	}
+}
+
+func (c *Client) databaseExists(ctx context.Context, name string) (bool, error) {
+	dbs, err := c.client.Databases(ctx)
+	if err != nil {
+		return false, err
+	}
+
+	for _, db := range dbs {
+		if db.Name() == name {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+func (c *Client) collectionExists(ctx context.Context, name string) (bool, error) {
+	db, err := c.client.Database(ctx, "_system")
+	if err != nil {
+		return false, err
+	}
+
+	collections, err := db.Collections(ctx)
+	if err != nil {
+		return false, err
+	}
+
+	for _, col := range collections {
+		if col.Name() == name {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+func (c *Client) graphExists(ctx context.Context, name string) (bool, error) {
+	db, err := c.client.Database(ctx, "_system")
+	if err != nil {
+		return false, err
+	}
+
+	graphs, err := db.Graphs(ctx)
+	if err != nil {
+		return false, err
+	}
+
+	for {
+		graph, err := graphs.Read()
+		if arangoShared.IsNoMoreDocuments(err) {
+			break
+		}
+
+		if err != nil {
+			return false, err
+		}
+
+		if graph.Name() == name {
+			return true, nil
+		}
+	}
+
+	return false, nil
 }
 
 // addTrace adds tracing to context if tracer is configured.
