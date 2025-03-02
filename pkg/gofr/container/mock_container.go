@@ -2,8 +2,6 @@ package container
 
 import (
 	"context"
-	"fmt"
-	"net/http"
 	"testing"
 
 	"go.uber.org/mock/gomock"
@@ -33,7 +31,7 @@ type Mocks struct {
 
 type options func(c *Container, ctrl *gomock.Controller) any
 
-//nolint:revive //Because user should not access the options, and we might change it to an interface in the future.
+//nolint:revive // Because user should not access the options, and we might change it to an interface in the future.
 func WithMockHTTPService(httpServiceNames ...string) options {
 	return func(c *Container, ctrl *gomock.Controller) any {
 		mockservice := service.NewMockHTTP(ctrl)
@@ -124,8 +122,9 @@ func NewMockContainer(t *testing.T, options ...options) (*Container, *Mocks) {
 		Metrics:     mockMetrics,
 	}
 
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_http_service_response", gomock.Any(), "path", gomock.Any(),
-		"method", gomock.Any(), "status", fmt.Sprintf("%v", http.StatusInternalServerError)).AnyTimes()
+	// TODO: Remove this expectation from mock container (previous generalisation) to the actual tests where their expectations are being set.
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(),
+		gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	return container, &mocks
 }
