@@ -26,6 +26,15 @@ func TestParam(t *testing.T) {
 	}
 }
 
+func TestAllParam(t *testing.T) {
+	req := NewRequest(httptest.NewRequest(http.MethodGet, "/abc?a=b&c=d&e=f", http.NoBody))
+	params := req.AllParams()
+	if params.Get("a") != "b" || params.Get("c") != "d" || params.Get("e") != "f" {
+		t.Error("Can not parse the request params")
+	}
+	assert.Nilf(t, params["g"], "expected nil value for non-existent query param")
+}
+
 func TestBind(t *testing.T) {
 	r := httptest.NewRequest(http.MethodPost, "/abc", strings.NewReader(`{"a": "b", "b": 5}`))
 	r.Header.Set("Content-Type", "application/json")
