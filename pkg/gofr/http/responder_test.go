@@ -188,6 +188,7 @@ func TestIsNil(t *testing.T) {
 func TestResponder_TemplateResponse(t *testing.T) {
 	templatePath := "./templates/example.html"
 	templateContent := `<html><head><title>{{.Title}}</title></head><body>{{.Body}}</body></html>`
+
 	createTemplateFile(t, templatePath, templateContent)
 	defer removeTemplateDir(t)
 
@@ -204,18 +205,22 @@ func TestResponder_TemplateResponse(t *testing.T) {
 
 	assert.Equal(t, "text/html", contentType)
 	assert.Equal(t, expectedBody, responseBody)
-
 }
 
 func createTemplateFile(t *testing.T, path, content string) {
+	t.Helper()
+
 	err := os.MkdirAll("./templates", os.ModePerm)
 	require.NoError(t, err)
 
-	err = os.WriteFile(path, []byte(content), 0644)
+	err = os.WriteFile(path, []byte(content), 0600)
 	require.NoError(t, err)
 }
 
 func removeTemplateDir(t *testing.T) {
+	t.Helper()
+
 	err := os.RemoveAll("./templates")
+
 	require.NoError(t, err)
 }
