@@ -29,7 +29,7 @@ func (a *App) Run() {
 		<-ctx.Done()
 
 		// Create a shutdown context with a timeout
-		shutdownCtx, done := context.WithTimeout(context.Background(), timeout)
+		shutdownCtx, done := context.WithTimeout(context.WithoutCancel(ctx), timeout)
 		defer done()
 
 		if a.hasTelemetry() {
