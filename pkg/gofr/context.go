@@ -2,6 +2,9 @@ package gofr
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"net"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/websocket"
@@ -83,7 +86,15 @@ func (c *Context) WriteMessageToSocket(data any) error {
 		return err
 	}
 
-	return conn.WriteMessage(websocket.TextMessage, message)
+	err = conn.WriteMessage(websocket.TextMessage, message)
+	if err != nil {
+		if websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway,
+			websocket.CloseAbnormalClosure) || errors.Is(err, net.ErrClosed) {
+			fmt.Printf("failed to write message to websocket: %v", err)
+		}
+	}
+
+	return err
 }
 
 type authInfo struct {
