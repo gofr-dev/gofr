@@ -3,6 +3,9 @@ package gofr
 import (
 	"context"
 	"errors"
+	"time"
+
+	"gofr.dev/pkg/gofr/config"
 )
 
 // ShutdownWithContext handles the shutdown process with context timeout.
@@ -28,4 +31,18 @@ func ShutdownWithContext(ctx context.Context, shutdownFunc func(ctx context.Cont
 	case err := <-errCh:
 		return err
 	}
+}
+
+func getShutdownTimeoutFromConfig(cfg config.Config) (time.Duration, error) {
+	value := cfg.GetOrDefault("SHUTDOWN_GRACE_PERIOD", "30s")
+	if value == "" {
+		return shutDownTimeout, nil
+	}
+
+	timeout, err := time.ParseDuration(value)
+	if err != nil {
+		return shutDownTimeout, err
+	}
+
+	return timeout, nil
 }

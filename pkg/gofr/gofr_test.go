@@ -690,7 +690,10 @@ func Test_UseMiddleware(t *testing.T) {
 			port:   port,
 		},
 		container: c,
-		Config:    config.NewMockConfig(map[string]string{"REQUEST_TIMEOUT": "5"}),
+		Config: config.NewMockConfig(map[string]string{
+			"REQUEST_TIMEOUT":       "5",
+			"SHUTDOWN_GRACE_PERIOD": "1s",
+		}),
 	}
 
 	app.UseMiddleware(testMiddleware)
