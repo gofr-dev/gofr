@@ -1,0 +1,22 @@
+<html>
+<head>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="content">
+
+<h2>{{.PageTitle}}</h2>
+<ul>
+    {{range .Todos}}
+    {{if .Done}}
+    <li class="done">{{.Title}}</li>
+    {{else}}
+    <li>{{.Title}}</li>
+    {{end}}
+    {{end}}
+</ul>
+
+</div>
+</body>
+
+</html>

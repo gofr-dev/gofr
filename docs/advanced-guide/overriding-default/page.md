@@ -71,6 +71,50 @@ Response example:
 ]
 ```
 
+## Rendering Templates
+GoFr allows rendering HTML templates in handlers using the response.Template type.
+
+### Example
+```go
+package main
+
+import (
+ "gofr.dev/pkg/gofr"
+ "gofr.dev/pkg/gofr/http/response"
+)
+
+func main() {
+ app := gofr.New()
+ app.GET("/list", listHandler)
+ app.AddStaticFiles("/", "./static")
+ app.Run()
+}
+
+type Todo struct {
+ Title string
+ Done  bool
+}
+
+type TodoPageData struct {
+ PageTitle string
+ Todos     []Todo
+}
+
+func listHandler(ctx *gofr.Context) (any, error) {
+ // Get data from somewhere
+ data := TodoPageData{
+  PageTitle: "My TODO list",
+  Todos: []Todo{
+   {Title: "Expand on Gofr documentation ", Done: false},
+   {Title: "Add more examples", Done: true},
+   {Title: "Write some articles", Done: false},
+  },
+ }
+
+ return response.Template{Data: data, Name: "todo.html"}, nil
+}
+```
+
 ## Favicon.ico
 
 By default, GoFr load its own `favicon.ico` present in root directory for an application. To override `favicon.ico` user
