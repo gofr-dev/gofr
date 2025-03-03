@@ -2,10 +2,6 @@ package gofr
 
 import (
 	"context"
-	"errors"
-	"fmt"
-	"net"
-
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/websocket"
 	"go.opentelemetry.io/otel"
@@ -86,15 +82,7 @@ func (c *Context) WriteMessageToSocket(data any) error {
 		return err
 	}
 
-	err = conn.WriteMessage(websocket.TextMessage, message)
-	if err != nil {
-		if websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway,
-			websocket.CloseAbnormalClosure) || errors.Is(err, net.ErrClosed) {
-			fmt.Printf("failed to write message to websocket: %v", err)
-		}
-	}
-
-	return err
+	return conn.WriteMessage(websocket.TextMessage, message)
 }
 
 type authInfo struct {
