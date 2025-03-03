@@ -70,7 +70,7 @@ func (a *App) Run() {
 
 		go func(s *httpServer) {
 			defer wg.Done()
-			s.Run(a.container, middleware.GetConfigs(a.Config))
+			s.run(a.container, middleware.GetConfigs(a.Config))
 		}(a.httpServer)
 	}
 

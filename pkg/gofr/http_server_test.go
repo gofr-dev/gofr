@@ -57,7 +57,7 @@ func TestRun_ServerStartsListening(t *testing.T) {
 	}
 
 	// Start the server
-	go server.Run(c, middleware.GetConfigs(getConfigs(t)))
+	go server.run(c, middleware.GetConfigs(getConfigs(t)))
 
 	// Wait for the server to start listening
 	time.Sleep(100 * time.Millisecond)
@@ -104,7 +104,7 @@ func TestRegisterProfillingRoutes(t *testing.T) {
 
 	server.RegisterProfilingRoutes()
 
-	go server.Run(c, middleware.GetConfigs(getConfigs(t)))
+	go server.run(c, middleware.GetConfigs(getConfigs(t)))
 
 	// Test if the expected handlers are registered for the pprof endpoints
 	expectedRoutes := []string{
@@ -143,7 +143,7 @@ func TestShutdown_ServerStopsListening(t *testing.T) {
 	}
 
 	// Start the server
-	go server.Run(c, middleware.GetConfigs(getConfigs(t)))
+	go server.run(c, middleware.GetConfigs(getConfigs(t)))
 
 	// Create a context with a timeout to test the shutdown
 	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
@@ -179,7 +179,7 @@ func TestShutdown_ServerContextDeadline(t *testing.T) {
 	}
 
 	// Start the server
-	go server.Run(c, middleware.GetConfigs(getConfigs(t)))
+	go server.run(c, middleware.GetConfigs(getConfigs(t)))
 
 	// Create a context with a timeout to test the shutdown
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)

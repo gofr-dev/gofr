@@ -62,7 +62,7 @@ func (s *httpServer) RegisterProfilingRoutes() {
 	s.router.NewRoute().Methods(http.MethodGet).PathPrefix("/debug/pprof/").HandlerFunc(pprof.Index)
 }
 
-func (s *httpServer) Run(c *container.Container, middlewareConfigs map[string]string) {
+func (s *httpServer) run(c *container.Container, middlewareConfigs map[string]string) {
 	// Developer Note:
 	//	WebSocket connections do not inherently support authentication mechanisms.
 	//	It is recommended to authenticate users before upgrading to a WebSocket connection.
