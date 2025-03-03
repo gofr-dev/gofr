@@ -214,9 +214,9 @@ func (c *Client) Query(ctx context.Context, dbName, query string, bindVars map[s
 //   - ctx: Request context for tracing and cancellation.
 //   - name: Name of the database, collection, or graph.
 //   - resourceType: Type of the resource (any). Allowed values are:
-//     - arangodb.ResourceTypeDatabase
-//     - arangodb.ResourceTypeCollection
-//     - arangodb.ResourceTypeGraph
+//   - arangodb.ResourceTypeDatabase
+//   - arangodb.ResourceTypeCollection
+//   - arangodb.ResourceTypeGraph
 //
 // Returns true if the resource exists, otherwise false.
 func (c *Client) Exists(ctx context.Context, name string, resourceType any) (bool, error) {
