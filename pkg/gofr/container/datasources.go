@@ -637,7 +637,10 @@ type ArangoDB interface {
 	// Parameters:
 	//   - ctx: Request context for tracing and cancellation.
 	//   - name: Name of the database, collection, or graph.
-	//   - resourceType: Type of the resource ("database", "collection", "graph").
+	//   - resourceType: Type of the resource (any). Allowed values are:
+	//     - arangodb.ResourceTypeDatabase
+	//     - arangodb.ResourceTypeCollection
+	//     - arangodb.ResourceTypeGraph
 	//
 	// Returns true if the resource exists, otherwise false.
 	Exists(ctx context.Context, name string, resourceType any) (bool, error)
