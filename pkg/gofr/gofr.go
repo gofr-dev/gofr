@@ -24,7 +24,7 @@ import (
 )
 
 const (
-	defaultConfigLocation = "./configs"
+	configLocation = "./configs"
 )
 
 // App is the main application in the GoFr framework.
@@ -142,8 +142,8 @@ func (a *App) startSubscriptions(ctx context.Context) error {
 func (a *App) readConfig(isAppCMD bool) {
 	var configLocation string
 
-	if _, err := os.Stat(defaultConfigLocation); err == nil {
-		configLocation = defaultConfigLocation
+	if _, err := os.Stat(configLocation); err == nil {
+		configLocation = configLocation
 	}
 
 	if isAppCMD {
