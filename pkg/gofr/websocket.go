@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 
 	gWebsocket "github.com/gorilla/websocket"
 
@@ -44,26 +45,34 @@ func (a *App) WebSocket(route string, handler Handler) {
 func handleWebSocketConnection(ctx *Context, conn *websocket.Connection, handler Handler) {
 	for {
 		response, err := handler(ctx)
-		if err != nil {
-			if gWebsocket.IsCloseError(err, gWebsocket.CloseNormalClosure, gWebsocket.CloseGoingAway, gWebsocket.CloseAbnormalClosure) {
-				ctx.Errorf("Error handling message: %v", err)
+		if handleWebSocketError(ctx, "error handling message", err) {
+			ctx.Errorf("Error handling message: %v", err)
 				break
 			}
 
-			ctx.Errorf("Error handling message: %v", err)
-		}
-
 		message, err := serializeMessage(response)
-		if err != nil {
-			ctx.Errorf("%v", err)
+		if handleWebSocketError(ctx, "failed to serialize message", err) {
 			continue
 		}
 
 		err = conn.WriteMessage(websocket.TextMessage, message)
-		if err != nil {
-			ctx.Errorf("Error writing message: %v", err)
+		if handleWebSocketError(ctx, "failed to write response to websocket", err) {
+			break
 		}
 	}
+}
+
+func handleWebSocketError(ctx *Context, msg string, err error) bool {
+	if err == nil {
+		return false
+	}
+
+	ctx.Errorf("%s: %v", msg, err)
+
+	// Check if the error is a WebSocket close error or if the underlying TCP connection is closed.
+	// This prevents unnecessary retries and avoids an infinite loop of read/write operations on the WebSocket.
+	return gWebsocket.IsCloseError(err, gWebsocket.CloseNormalClosure, gWebsocket.CloseGoingAway,
+		gWebsocket.CloseAbnormalClosure) || errors.Is(err, net.ErrClosed)
 }
 
 func serializeMessage(response any) ([]byte, error) {
