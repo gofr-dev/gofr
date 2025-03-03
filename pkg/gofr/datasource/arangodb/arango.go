@@ -13,9 +13,14 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
+type ResourceType string
+
 const (
-	defaultTimeout           = 5 * time.Second
-	arangoEdgeCollectionType = 3
+	defaultTimeout                        = 5 * time.Second
+	arangoEdgeCollectionType              = 3
+	ResourceTypeDatabase     ResourceType = "Database"
+	ResourceTypeCollection   ResourceType = "Collection"
+	ResourceTypeGraph        ResourceType = "Graph"
 )
 
 // Client represents an ArangoDB client.
@@ -208,22 +213,30 @@ func (c *Client) Query(ctx context.Context, dbName, query string, bindVars map[s
 // Parameters:
 //   - ctx: Request context for tracing and cancellation.
 //   - name: Name of the database, collection, or graph.
-//   - resourceType: Type of the resource ("database", "collection", "graph").
+//   - resourceType: Type of the resource (any). Allowed values are:
+//     - arangodb.ResourceTypeDatabase
+//     - arangodb.ResourceTypeCollection
+//     - arangodb.ResourceTypeGraph
 //
 // Returns true if the resource exists, otherwise false.
-func (c *Client) Exists(ctx context.Context, name, resourceType string) (bool, error) {
-	tracerCtx, span := c.addTrace(ctx, "exists", map[string]string{"name": name, "resourceType": resourceType})
+func (c *Client) Exists(ctx context.Context, name string, resourceType any) (bool, error) {
+	tracerCtx, span := c.addTrace(ctx, "exists", map[string]string{"name": name})
 	startTime := time.Now()
 
-	defer c.sendOperationStats(&QueryLog{Operation: "exists", Database: name, Collection: resourceType}, startTime, "exists", span)
+	defer c.sendOperationStats(&QueryLog{Operation: "exists", Database: name}, startTime, "exists", span)
 
-	switch resourceType {
-	case "database":
-		return c.databaseExists(tracerCtx, name)
-	case "collection":
-		return c.collectionExists(tracerCtx, name)
-	case "graph":
-		return c.graphExists(tracerCtx, name)
+	switch rt := resourceType.(type) {
+	case ResourceType:
+		switch rt {
+		case ResourceTypeDatabase:
+			return c.databaseExists(tracerCtx, name)
+		case ResourceTypeCollection:
+			return c.collectionExists(tracerCtx, name)
+		case ResourceTypeGraph:
+			return c.graphExists(tracerCtx, name)
+		default:
+			return false, errInvalidResourceType
+		}
 	default:
 		return false, errInvalidResourceType
 	}

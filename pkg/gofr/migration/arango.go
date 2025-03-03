@@ -62,7 +62,17 @@ func (ds arangoDS) DropGraph(ctx context.Context, database, graph string) error 
 	return ds.client.DropGraph(ctx, database, graph)
 }
 
-func (ds arangoDS) Exists(ctx context.Context, name, resourceType string) (bool, error) {
+// Exists checks if a database, collection, or graph exists.
+// Parameters:
+//   - ctx: Request context for tracing and cancellation.
+//   - name: Name of the database, collection, or graph.
+//   - resourceType: Type of the resource (any). Allowed values are:
+//   - arangodb.ResourceTypeDatabase
+//   - arangodb.ResourceTypeCollection
+//   - arangodb.ResourceTypeGraph
+//
+// Returns true if the resource exists, otherwise false.
+func (ds arangoDS) Exists(ctx context.Context, name string, resourceType any) (bool, error) {
 	return ds.client.Exists(ctx, name, resourceType)
 }
 

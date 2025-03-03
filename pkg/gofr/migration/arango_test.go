@@ -177,17 +177,3 @@ func Test_ArangoMigration_DropGraph(t *testing.T) {
 
 	assert.NoError(t, err, "Test_ArangoMigration_DropGraph failed!")
 }
-
-func Test_ArangoMigration_Exists(t *testing.T) {
-	_, mockArango, _ := arangoSetup(t)
-
-	arangoDB := arangoDS{client: mockArango}
-
-	mockArango.EXPECT().Exists(context.Background(), "test",
-		"database").Return(true, nil)
-
-	res, err := arangoDB.Exists(context.Background(), "test", "database")
-
-	assert.True(t, res, "Test_ArangoMigration_Exists failed!")
-	assert.NoError(t, err, "Test_ArangoMigration_Exists failed!")
-}

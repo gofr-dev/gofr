@@ -640,7 +640,7 @@ type ArangoDB interface {
 	//   - resourceType: Type of the resource ("database", "collection", "graph").
 	//
 	// Returns true if the resource exists, otherwise false.
-	Exists(ctx context.Context, name, resourceType string) (bool, error)
+	Exists(ctx context.Context, name string, resourceType any) (bool, error)
 
 	HealthChecker
 }

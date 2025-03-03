@@ -781,7 +781,7 @@ func (mr *MockArangoDBMockRecorder) DropGraph(ctx, database, graph any) *gomock.
 }
 
 // Exists mocks base method.
-func (m *MockArangoDB) Exists(ctx context.Context, name, resourceType string) (bool, error) {
+func (m *MockArangoDB) Exists(ctx context.Context, name string, resourceType string) (bool, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Exists", ctx, name, resourceType)
 	ret0, _ := ret[0].(bool)
@@ -790,7 +790,7 @@ func (m *MockArangoDB) Exists(ctx context.Context, name, resourceType string) (b
 }
 
 // Exists indicates an expected call of Exists.
-func (mr *MockArangoDBMockRecorder) Exists(ctx, name, resourceType any) *gomock.Call {
+func (mr *MockArangoDBMockRecorder) Exists(ctx context.Context, name string, resourceType any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Exists", reflect.TypeOf((*MockArangoDB)(nil).Exists), ctx, name, resourceType)
 }
