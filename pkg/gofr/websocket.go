@@ -66,17 +66,8 @@ func handleWebSocketError(ctx *Context, msg string, err error) bool {
 		return false
 	}
 
-	if isWebSocketClosed(err) {
-		ctx.Errorf("%s: %v", msg, err)
-		return true
-	}
-
 	ctx.Errorf("%s: %v", msg, err)
 
-	return false
-}
-
-func isWebSocketClosed(err error) bool {
 	return gWebsocket.IsCloseError(err, gWebsocket.CloseNormalClosure, gWebsocket.CloseGoingAway,
 		gWebsocket.CloseAbnormalClosure) || errors.Is(err, net.ErrClosed)
 }
