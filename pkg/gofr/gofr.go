@@ -140,19 +140,19 @@ func (a *App) startSubscriptions(ctx context.Context) error {
 
 // readConfig reads the configuration from the default location.
 func (a *App) readConfig(isAppCMD bool) {
-	var configLocation string
+	var location string
 
 	if _, err := os.Stat(configLocation); err == nil {
-		configLocation = configLocation
+		location = configLocation
 	}
 
 	if isAppCMD {
-		a.Config = config.NewEnvFile(configLocation, logging.NewFileLogger(""))
+		a.Config = config.NewEnvFile(location, logging.NewFileLogger(""))
 
 		return
 	}
 
-	a.Config = config.NewEnvFile(configLocation, logging.NewLogger(logging.INFO))
+	a.Config = config.NewEnvFile(location, logging.NewLogger(logging.INFO))
 }
 
 // AddHTTPService registers HTTP service in container.

@@ -46,9 +46,8 @@ func handleWebSocketConnection(ctx *Context, conn *websocket.Connection, handler
 	for {
 		response, err := handler(ctx)
 		if handleWebSocketError(ctx, "error handling message", err) {
-			ctx.Errorf("Error handling message: %v", err)
-				break
-			}
+			break
+		}
 
 		message, err := serializeMessage(response)
 		if handleWebSocketError(ctx, "failed to serialize message", err) {
