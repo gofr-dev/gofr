@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"strings"
@@ -21,10 +22,12 @@ func TestListHandler(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Make a GET request to the /list endpoint
-	req, _ := http.NewRequest(http.MethodGet, configs.HTTPHost+"/list", nil)
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet,
+		configs.HTTPHost+"/list", http.NoBody)
 	resp, err := c.Do(req)
 
 	require.NoError(t, err)
+
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
