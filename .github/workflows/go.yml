@@ -259,6 +259,8 @@ jobs:
             
               # Copy coverage file to the coverage_reports directory
               cp ${module_name}.cov ../../../coverage_reports/
+              
+              cd -
             '
 
       # Upload submodule coverage reports as an artifact
