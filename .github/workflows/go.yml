@@ -33,7 +33,7 @@ jobs:
 
     # Define service containers that tests depend on
     services:
-      # Kafka service for messaging tests
+      # Kafka service
       kafka:
         image: bitnami/kafka:3.4
         ports:
@@ -51,14 +51,14 @@ jobs:
           ALLOW_PLAINTEXT_LISTENER: yes
           KAFKA_CFG_NODE_ID: 1
 
-      # Redis service for caching tests
+      # Redis service
       redis:
         image: redis:7.0.5
         ports:
           - "2002:6379"
         options: "--entrypoint redis-server"
 
-      # MySQL service for database tests
+      # MySQL service
       mysql:
         image: mysql:8.2.0
         ports:
@@ -69,7 +69,6 @@ jobs:
 
     # Steps to execute for this job
     steps:
-      # Checkout the repository code
       - name: Checkout code into go module directory
         uses: actions/checkout@v4
         with:
@@ -82,12 +81,10 @@ jobs:
           go-version: ${{ matrix.go-version }}
         id: Go
 
-      # Download Go module dependencies
       - name: Get dependencies
         run: |
           go mod download
 
-      # Start Zipkin for distributed tracing tests
       - name: Start Zipkin
         run: docker run -d -p 2005:9411 openzipkin/zipkin:latest
 
@@ -227,8 +224,8 @@ jobs:
         run: |
           # Find all directories containing a go.mod file within 'pkg'
           SUBMODULES=$(find pkg -name "go.mod" -exec dirname {} \; | jq -R -s -c 'split("\n") | map(select(length > 0))')
-          echo "submodules=$SUBMODULES" >> $GITHUB_OUTPUT
-          echo "Detected submodules: $SUBMODULES"
+          # Store in GitHub Actions output
+          echo "submodules=$SUBMODULES" >> $GITHUB_OUTPUT 
 
       # Test all submodules in parallel with retry logic
       - name: Test Submodules with Retry and Parallelism
@@ -242,11 +239,8 @@ jobs:
             # Create a directory for coverage reports
             mkdir -p coverage_reports
             
-            # Get the list of submodules
-            SUBMODULES='${{ steps.detect_submodules.outputs.submodules }}'
-            
             # Process each submodule in parallel with a maximum of 4 parallel jobs
-            echo $SUBMODULES | jq -c '.[]' | xargs -I{} -P 4 bash -c '
+             echo '${{ steps.detect_submodules.outputs.submodules }}' | jq -c '.[]' | xargs -I{} -P 4 bash -c '
               module={}
               echo "Testing module: $module"
               cd $module
@@ -263,8 +257,6 @@ jobs:
             
               # Copy coverage file to the coverage_reports directory
               cp ${module_name}.cov ../../../coverage_reports/
-            
-              cd -
             '
 
       # Upload submodule coverage reports as an artifact
@@ -280,8 +272,8 @@ jobs:
     runs-on: ubuntu-latest
     # This job only needs example and pkg test results, not submodules
     needs: [Example-Unit-Testing, PKG-Unit-Testing]
-#    # Only run this job on pushes to the development branch
-#    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/development'}}
+    # Only run this job on pushes to the development branch
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/development'}}
     steps:
       - name: Check out code into the Go module directory
         uses: actions/checkout@v4
