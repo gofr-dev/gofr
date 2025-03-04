@@ -109,8 +109,7 @@ func TestContext_WriteMessageToSocket(t *testing.T) {
 	_, message, err := ws.ReadMessage()
 	require.NoError(t, err, "Failed to read WebSocket message")
 
-	expected := "Hello! GoFr"
-	assert.Equal(t, expected, string(message))
+	assert.Equal(t, "Hello! GoFr", string(message))
 }
 
 func TestGetAuthInfo_BasicAuth(t *testing.T) {
