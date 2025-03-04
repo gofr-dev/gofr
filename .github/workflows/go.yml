@@ -296,8 +296,13 @@ jobs:
       - name: Merge Coverage Files
         working-directory: artifacts
         run: |
-          echo awk '!/^mode: / && FNR==1{print "mode: set"} {print}' ./Example-Test-Report/profile.cov > merged_profile.cov
+          echo "mode: set" > merged_profile.cov
+          tail -n +2 ./Example-Test-Report/profile.cov >> merged_profile.cov
           tail -n +2 ./PKG-Coverage-Report/profile.cov >> merged_profile.cov
+
+          # Print the merged coverage file
+          echo "Merged Coverage Report:"
+          cat merged_profile.cov
 
       # Upload merged coverage to CodeClimate for analysis
       - name: Upload
