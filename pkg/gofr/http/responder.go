@@ -37,6 +37,11 @@ func (r Responder) Respond(data any, err error) {
 		_, _ = r.w.Write(v.Content)
 
 		return
+	case resTypes.Template:
+		r.w.Header().Set("Content-Type", "text/html")
+		v.Render(r.w)
+
+		return
 	default:
 		// handling where an interface contains a nullable type with a nil value.
 		if isNil(data) {

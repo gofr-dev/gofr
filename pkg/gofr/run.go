@@ -7,6 +7,8 @@ import (
 	"os/signal"
 	"sync"
 	"syscall"
+
+	"gofr.dev/pkg/gofr/http/middleware"
 )
 
 // Run starts the application. If it is an HTTP server, it will start the server.
@@ -19,19 +21,29 @@ func (a *App) Run() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
+	timeout, err := getShutdownTimeoutFromConfig(a.Config)
+	if err != nil {
+		a.Logger().Errorf("error parsing value of shutdown timeout from config: %v. Setting default timeout of 30 sec.", err)
+	}
+
 	// Goroutine to handle shutdown when context is canceled
 	go func() {
 		<-ctx.Done()
 
 		// Create a shutdown context with a timeout
-		shutdownCtx, done := context.WithTimeout(context.WithoutCancel(ctx), shutDownTimeout)
+		shutdownCtx, done := context.WithTimeout(context.WithoutCancel(ctx), timeout)
 		defer done()
 
 		if a.hasTelemetry() {
 			a.sendTelemetry(http.DefaultClient, false)
 		}
 
-		_ = a.Shutdown(shutdownCtx)
+		a.Logger().Infof("Shutting down server with a timeout of %v", timeout)
+
+		shutdownErr := a.Shutdown(shutdownCtx)
+		if shutdownErr != nil {
+			a.Logger().Debugf("Server shutdown failed: %v", shutdownErr)
+		}
 	}()
 
 	if a.hasTelemetry() {
@@ -58,7 +70,7 @@ func (a *App) Run() {
 
 		go func(s *httpServer) {
 			defer wg.Done()
-			s.Run(a.container)
+			s.run(a.container, middleware.GetConfigs(a.Config))
 		}(a.httpServer)
 	}
 

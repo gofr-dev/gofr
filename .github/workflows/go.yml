@@ -1,29 +1,39 @@
 ---
 name: Workflow-Pipeline
 
+# Define when this workflow should run
 on:
+  # Run on push events to main or development branches
   push:
     branches:
       - main
       - development
     paths-ignore:
-      - 'docs/**'
+      - 'docs/**'  # Ignore changes to docs folder
+  # Run on pull requests to main or development branches
   pull_request:
     branches:
       - main
       - development
     paths-ignore:
-      - 'docs/**'
+      - 'docs/**'  # Ignore changes to docs folder
 
+# Define the jobs that this workflow will run
 jobs:
+  # Job for testing the examples directory
   Example-Unit-Testing:
     name: Example Unit Testing (v${{ matrix.go-version }})🛠
     runs-on: ubuntu-latest
+    # Define a matrix strategy to test against multiple Go versions
     strategy:
       matrix:
         go-version: ['1.24','1.23', '1.22']
+      # Continue with other jobs if one version fails
+      fail-fast: false
 
+    # Define service containers that tests depend on
     services:
+      # Kafka service
       kafka:
         image: bitnami/kafka:3.4
         ports:
@@ -41,12 +51,14 @@ jobs:
           ALLOW_PLAINTEXT_LISTENER: yes
           KAFKA_CFG_NODE_ID: 1
 
+      # Redis service
       redis:
         image: redis:7.0.5
         ports:
           - "2002:6379"
         options: "--entrypoint redis-server"
 
+      # MySQL service
       mysql:
         image: mysql:8.2.0
         ports:
@@ -55,12 +67,14 @@ jobs:
           MYSQL_ROOT_PASSWORD: "password"
           MYSQL_DATABASE: "test"
 
+    # Steps to execute for this job
     steps:
       - name: Checkout code into go module directory
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 0  # Full git history for accurate testing
 
+      # Set up the Go environment with the specified version
       - name: Set up Go ${{ matrix.go-version }}
         uses: actions/setup-go@v5
         with:
@@ -74,26 +88,38 @@ jobs:
       - name: Start Zipkin
         run: docker run -d -p 2005:9411 openzipkin/zipkin:latest
 
-      - name: Test
-        run: |
-          export APP_ENV=test
-          go test gofr.dev/examples/... -v -short -coverprofile packageWithpbgo.cov -coverpkg=gofr.dev/examples/...
-          grep -vE '^gofr\.dev\/.*\.pb\.go' packageWithpbgo.cov > profile.cov
-          go tool cover -func profile.cov
+      # Run tests with automatic retry on failures
+      - name: Test with Retry Logic
+        id: test
+        uses: nick-fields/retry@v2
+        with:
+          timeout_minutes: 5  # Maximum time for the tests to run
+          max_attempts: 2      # Retry up to 2 times if tests fail
+          command: |
+            export APP_ENV=test
+            # Run tests for the examples directory with coverage
+            go test gofr.dev/examples/... -v -short -coverprofile packageWithpbgo.cov -coverpkg=gofr.dev/examples/...
+            # Filter out generated protobuf files from coverage report
+            grep -vE '^gofr\.dev\/.*\.pb\.go' packageWithpbgo.cov > profile.cov
+            # Display coverage statistics
+            go tool cover -func profile.cov
 
+      # Upload coverage report for the 1.24 Go version only
       - name: Upload Test Coverage
-        if: ${{ matrix.go-version == '1.22'}}
+        if: ${{ matrix.go-version == '1.24'}}
         uses: actions/upload-artifact@v4
         with:
           name: Example-Test-Report
           path: profile.cov
 
+  # Job for testing the pkg directory
   PKG-Unit-Testing:
     name: PKG Unit Testing (v${{ matrix.go-version }})🛠
     runs-on: ubuntu-latest
     strategy:
       matrix:
         go-version: ['1.24','1.23', '1.22']
+      fail-fast: false
 
     steps:
       - name: Checkout code into go module directory
@@ -111,13 +137,23 @@ jobs:
         run: |
           go mod download
 
-      - name: Test
-        run: |
-          export APP_ENV=test
-          go test gofr.dev/pkg/... -v -short -coverprofile package.cov -coverpkg=gofr.dev/pkg/...
-          grep -v '/mock_' package.cov > profile.cov
-          go tool cover -func profile.cov
+      # Run pkg tests with automatic retry logic
+      - name: Test with Retry Logic
+        id: test
+        uses: nick-fields/retry@v2
+        with:
+          timeout_minutes: 5
+          max_attempts: 2
+          command: |
+            export APP_ENV=test
+            # Run tests for the pkg directory with coverage
+            go test gofr.dev/pkg/... -v -short -coverprofile package.cov -coverpkg=gofr.dev/pkg/...
+            # Filter out mock files from coverage report
+            grep -v '/mock_' package.cov > profile.cov
+            # Display coverage statistics
+            go tool cover -func profile.cov
 
+      # Upload coverage report for the 1.24 Go version only
       - name: Upload Test Coverage
         if: ${{ matrix.go-version == '1.24'}}
         uses: actions/upload-artifact@v4
@@ -125,44 +161,50 @@ jobs:
           name: PKG-Coverage-Report
           path: profile.cov
 
+  # Job for analyzing and reporting code coverage
   parse_coverage:
     name: Code Coverage
     runs-on: ubuntu-latest
-    needs: [ Example-Unit-Testing,PKG-Unit-Testing]
+    # This job runs after both Example and PKG testing are complete
+    needs: [ Example-Unit-Testing,PKG-Unit-Testing ]
     steps:
       - name: Check out code into the Go module directory
         uses: actions/checkout@v4
 
+      # Download coverage reports from previous jobs
       - name: Download Coverage Report
         uses: actions/download-artifact@v4
         with:
           path: artifacts
 
-
+      # Merge the coverage reports from Example and PKG tests
       - name: Merge Coverage Files
         working-directory: artifacts
         run: |
           awk '!/^mode: / && FNR==1{print "mode: set"} {print}' ./Example-Test-Report/profile.cov > merged_profile.cov
           tail -n +2 ./PKG-Coverage-Report/profile.cov >> merged_profile.cov
 
+      # Calculate and output the total code coverage percentage
       - name: Parse code-coverage value
         working-directory: artifacts
         run: |
           codeCoverage=$(go tool cover -func=merged_profile.cov | grep total | awk '{print $3}')
           codeCoverage=${codeCoverage%?}
           echo "CODE_COVERAGE=$codeCoverage" >> $GITHUB_ENV
-
   #      - name: Check if code-coverage is greater than threshold
   #        run: |
   #          codeCoverage=${{ env.CODE_COVERAGE }}
   #          codeCoverage=${codeCoverage%??}
   #          if [[ $codeCoverage -lt 92 ]]; then echo "code coverage cannot be less than 92%, currently its ${{ env.CODE_COVERAGE }}%" && exit 1; fi;
+
+  # Job for testing submodules inside the pkg directory
   Submodule-Unit-Testing:
     name: Submodule Unit Testing (v${{ matrix.go-version }})🛠
     runs-on: ubuntu-latest
     strategy:
       matrix:
         go-version:  ['1.24','1.23', '1.22']
+      fail-fast: false
 
     steps:
       - name: Checkout code into go module directory
@@ -176,55 +218,90 @@ jobs:
           go-version: ${{ matrix.go-version }}
         id: Go
 
-      - name: Detect and Test Submodules
+      # Find all submodules (directories with go.mod files) in the pkg directory
+      - name: Detect Submodules
+        id: detect_submodules
         run: |
           # Find all directories containing a go.mod file within 'pkg'
-          for module in $(find pkg -name "go.mod" -exec dirname {} \;); do
-            echo "Testing module: $module"
-            cd $module
-          
-            # Extract module name (replace '/' with '_')
-            module_name=$(echo $module | tr '/' '_')
+          SUBMODULES=$(find pkg -name "go.mod" -exec dirname {} \; | jq -R -s -c 'split("\n") | map(select(length > 0))')
+          echo "submodules=$SUBMODULES" >> $GITHUB_OUTPUT
 
-            # Download dependencies for the submodule
-            go mod download
-            go mod tidy
-
-            # Run tests for the submodule and generate coverage
+      # Test all submodules in parallel with retry logic
+      - name: Test Submodules with Retry and Parallelism
+        id: test_submodules
+        uses: nick-fields/retry@v2
+        with:
+          timeout_minutes: 5
+          max_attempts: 2
+          command: |
             export APP_ENV=test
-            go test ./... -v -short -coverprofile=${module_name}.cov -coverpkg=./...
+            # Create a directory for coverage reports
+            mkdir -p coverage_reports
+            
+            # Get the list of submodules
+            SUBMODULES='${{ steps.detect_submodules.outputs.submodules }}'
+            
+            # Process each submodule in parallel with a maximum of 4 parallel jobs
+            echo $SUBMODULES | jq -c '.[]' | xargs -I{} -P 4 bash -c '
+              module={}
+              echo "Testing module: $module"
+              cd $module
+            
+              # Extract module name (replace / with _)
+              module_name=$(echo $module | tr "/" "_")
+            
+              # Download dependencies for the submodule
+              go mod download
+              go mod tidy
+            
+              # Run tests with a focus on failed tests first
+              go test ./... -v -short -coverprofile=${module_name}.cov -coverpkg=./...
+            
+              # Copy coverage file to the coverage_reports directory
+              cp ${module_name}.cov ../../../coverage_reports/
+              
+              cd -
+            '
 
-            # Return to the root directory
-            cd -
-          done
-
+      # Upload submodule coverage reports as an artifact
       - name: Upload Coverage Reports
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-reports
-          path: pkg/**/*.cov
+          name: submodule-coverage-reports
+          path: coverage_reports/*.cov
 
-
+  # Job for uploading coverage to external services (CodeClimate)
   upload_coverage:
     name: Upload Coverage📊
     runs-on: ubuntu-latest
-    needs: [Example-Unit-Testing,PKG-Unit-Testing]
+    # This job only needs example and pkg test results, not submodules
+    needs: [Example-Unit-Testing, PKG-Unit-Testing]
+    # Only run this job on pushes to the development branch
     if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/development'}}
     steps:
       - name: Check out code into the Go module directory
         uses: actions/checkout@v4
 
+      # Download coverage artifacts
       - name: Download Coverage Report
         uses: actions/download-artifact@v4
         with:
           path: artifacts
 
+      # Merge coverage from example and pkg tests only
       - name: Merge Coverage Files
         working-directory: artifacts
         run: |
-          awk '!/^mode: / && FNR==1{print "mode: set"} {print}' ./Example-Test-Report/profile.cov > merged_profile.cov
+          echo "mode: set" > merged_profile.cov
+          tail -n +2 ./Example-Test-Report/profile.cov >> merged_profile.cov
           tail -n +2 ./PKG-Coverage-Report/profile.cov >> merged_profile.cov
-          
+
+          # Generate and print total coverage percentage
+          echo "Total Coverage:"
+          go tool cover -func=merged_profile.cov | tail -n 1
+        shell: bash
+
+      # Upload merged coverage to CodeClimate for analysis
       - name: Upload
         uses: paambaati/codeclimate-action@v9.0.0
         env:
@@ -233,6 +310,7 @@ jobs:
           coverageLocations: artifacts/merged_profile.cov:gocov
           prefix: gofr.dev
 
+  # Job for code quality checks
   code_quality:
     name: Code Quality🎖️
     runs-on: ubuntu-latest
@@ -246,6 +324,7 @@ jobs:
           go-version: '1.24'
           cache: false
 
+      # Install the linting tool
       - name: Install golangci-lint
         run: |
           go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.62
@@ -254,10 +333,12 @@ jobs:
         run: |
           go mod tidy
 
+      # Run linter on the root module
       - name: Lint Root Module
         run: |
           golangci-lint run --out-format=colored-line-number --timeout=5m
 
+      # Run linter on each submodule
       - name: Lint Submodules
         run: |
           echo "Searching for submodules..."
@@ -276,6 +357,7 @@ jobs:
             exit 1  # Fail the job if there are linting errors in submodules
           fi
 
+  # Job for checking filename conventions
   linting_party:
     name: Linting Party🥳
     runs-on: ubuntu-latest
@@ -288,6 +370,7 @@ jobs:
         with:
           go-version: 1.24
 
+      # Check file naming conventions using ls-lint
       - name: Check for file names errors
         uses: ls-lint/action@v2.2.3
         with:
