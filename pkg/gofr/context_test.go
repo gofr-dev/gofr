@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/websocket"
@@ -78,16 +79,14 @@ func TestContext_AddTrace(t *testing.T) {
 
 func TestContext_WriteMessageToSocket(t *testing.T) {
 	port := testutil.GetFreePort(t)
-
 	t.Setenv("HTTP_PORT", fmt.Sprint(port))
 
 	app := New()
 
-	server := httptest.NewServer(app.httpServer.router)
-	defer server.Close()
-
 	app.WebSocket("/ws", func(ctx *Context) (any, error) {
-		socketErr := ctx.WriteMessageToSocket("Hello! GoFr")
+		msg := "Hello! GoFr"
+
+		socketErr := ctx.WriteMessageToSocket(msg)
 		if socketErr != nil {
 			return nil, socketErr
 		}
@@ -95,25 +94,25 @@ func TestContext_WriteMessageToSocket(t *testing.T) {
 		// TODO: returning error here to close the connection to the websocket
 		// as the websocket close error is not caught because we are using no bind function here.
 		// this must not be necessary. We should put an actual check in handleWebSocketConnection method instead.
-		return nil, &websocket.CloseError{Code: websocket.CloseNormalClosure, Text: "Error closing"}
+		return "", &websocket.CloseError{Code: websocket.CloseNormalClosure, Text: "Closing"}
 	})
 
 	go app.Run()
+	time.Sleep(200 * time.Millisecond) // Wait for the server to boot
 
-	wsURL := "ws" + server.URL[len("http"):] + "/ws"
+	wsURL := fmt.Sprintf("ws://localhost:%d/ws", port)
 
-	// Create a WebSocket client
 	ws, resp, err := websocket.DefaultDialer.Dial(wsURL, nil)
-	require.NoError(t, err)
+	require.NoError(t, err, "WebSocket handshake failed")
 
 	defer resp.Body.Close()
 	defer ws.Close()
 
 	_, message, err := ws.ReadMessage()
-	require.NoError(t, err)
+	require.NoError(t, err, "Failed to read WebSocket message")
 
-	expectedResponse := "Hello! GoFr"
-	assert.Equal(t, expectedResponse, string(message))
+	expected := "Hello! GoFr"
+	assert.Equal(t, expected, string(message))
 }
 
 func TestGetAuthInfo_BasicAuth(t *testing.T) {
