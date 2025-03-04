@@ -72,7 +72,7 @@ Response example:
 ```
 
 ## Rendering Templates
-GoFr allows rendering HTML templates in handlers using the response.Template type.
+GoFr allows rendering HTML/HTMX templates in handlers using the response.Template type.
 
 ### Example
 ```go
