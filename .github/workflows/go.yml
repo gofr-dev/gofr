@@ -296,7 +296,7 @@ jobs:
       - name: Merge Coverage Files
         working-directory: artifacts
         run: |
-          echo "mode: set" > merged_profile.cov
+          "mode: set" > merged_profile.cov
           tail -n +2 ./Example-Test-Report/profile.cov >> merged_profile.cov
           tail -n +2 ./PKG-Coverage-Report/profile.cov >> merged_profile.cov
 
