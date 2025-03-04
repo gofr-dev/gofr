@@ -93,7 +93,7 @@ jobs:
         id: test
         uses: nick-fields/retry@v2
         with:
-          timeout_minutes: 10  # Maximum time for the tests to run
+          timeout_minutes: 5  # Maximum time for the tests to run
           max_attempts: 3      # Retry up to 3 times if tests fail
           command: |
             export APP_ENV=test
@@ -142,7 +142,7 @@ jobs:
         id: test
         uses: nick-fields/retry@v2
         with:
-          timeout_minutes: 10
+          timeout_minutes: 5
           max_attempts: 3
           command: |
             export APP_ENV=test
@@ -231,7 +231,7 @@ jobs:
         id: test_submodules
         uses: nick-fields/retry@v2
         with:
-          timeout_minutes: 15
+          timeout_minutes: 10
           max_attempts: 3
           command: |
             export APP_ENV=test
