@@ -22,7 +22,7 @@ type TodoPageData struct {
 	Todos     []Todo
 }
 
-func listHandler(c *gofr.Context) (any, error) {
+func listHandler(*gofr.Context) (any, error) {
 	// Get data from somewhere
 	data := TodoPageData{
 		PageTitle: "My TODO list",
@@ -33,5 +33,5 @@ func listHandler(c *gofr.Context) (any, error) {
 		},
 	}
 
-	return response.Template{data, "todo.html"}, nil
+	return response.Template{Data: data, Name: "todo.html"}, nil
 }
