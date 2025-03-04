@@ -231,7 +231,7 @@ jobs:
         id: test_submodules
         uses: nick-fields/retry@v2
         with:
-          timeout_minutes: 10
+          timeout_minutes: 5
           max_attempts: 2
           command: |
             export APP_ENV=test
