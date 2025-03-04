@@ -224,8 +224,7 @@ jobs:
         run: |
           # Find all directories containing a go.mod file within 'pkg'
           SUBMODULES=$(find pkg -name "go.mod" -exec dirname {} \; | jq -R -s -c 'split("\n") | map(select(length > 0))')
-          # Store in GitHub Actions output
-          echo "submodules=$SUBMODULES" >> $GITHUB_OUTPUT 
+          echo "submodules=$SUBMODULES" >> $GITHUB_OUTPUT
 
       # Test all submodules in parallel with retry logic
       - name: Test Submodules with Retry and Parallelism
@@ -239,8 +238,11 @@ jobs:
             # Create a directory for coverage reports
             mkdir -p coverage_reports
             
+            # Get the list of submodules
+            SUBMODULES='${{ steps.detect_submodules.outputs.submodules }}'
+            
             # Process each submodule in parallel with a maximum of 4 parallel jobs
-             echo '${{ steps.detect_submodules.outputs.submodules }}' | jq -c '.[]' | xargs -I{} -P 4 bash -c '
+            echo $SUBMODULES | jq -c '.[]' | xargs -I{} -P 4 bash -c '
               module={}
               echo "Testing module: $module"
               cd $module
