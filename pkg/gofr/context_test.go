@@ -84,21 +84,19 @@ func TestContext_WriteMessageToSocket(t *testing.T) {
 	app := New()
 
 	app.WebSocket("/ws", func(ctx *Context) (any, error) {
-		msg := "Hello! GoFr"
-
-		socketErr := ctx.WriteMessageToSocket(msg)
+		socketErr := ctx.WriteMessageToSocket("Hello! GoFr")
 		if socketErr != nil {
 			return nil, socketErr
 		}
 
-		// TODO: returning error here to close the connection to the websocket
-		// as the websocket close error is not caught because we are using no bind function here.
-		// this must not be necessary. We should put an actual check in handleWebSocketConnection method instead.
-		return "", &websocket.CloseError{Code: websocket.CloseNormalClosure, Text: "Closing"}
+		conn := ctx.GetConnectionFromContext(ctx)
+		defer conn.Close()
+
+		return "", socketErr
 	})
 
 	go app.Run()
-	time.Sleep(200 * time.Millisecond) // Wait for the server to boot
+	time.Sleep(100 * time.Millisecond) // Wait for the server to boot
 
 	wsURL := fmt.Sprintf("ws://localhost:%d/ws", port)
 

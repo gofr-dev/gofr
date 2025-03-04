@@ -63,7 +63,7 @@ func TestRun_ServerStartsListening(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	var netClient = &http.Client{
-		Timeout: 200 * time.Second,
+		Timeout: 200 * time.Millisecond,
 	}
 
 	// Send a GET request to the server
