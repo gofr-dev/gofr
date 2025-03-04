@@ -296,13 +296,14 @@ jobs:
       - name: Merge Coverage Files
         working-directory: artifacts
         run: |
-          "mode: set" > merged_profile.cov
+          echo "mode: set" > merged_profile.cov
           tail -n +2 ./Example-Test-Report/profile.cov >> merged_profile.cov
           tail -n +2 ./PKG-Coverage-Report/profile.cov >> merged_profile.cov
 
           # Generate and print total coverage percentage
           echo "Total Coverage:"
           go tool cover -func=merged_profile.cov | tail -n 1
+        shell: bash
 
       # Upload merged coverage to CodeClimate for analysis
       - name: Upload
