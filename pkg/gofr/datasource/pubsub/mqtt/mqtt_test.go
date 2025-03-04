@@ -228,7 +228,7 @@ func TestMQTT_SubscribeSuccess(t *testing.T) {
 
 	mockMetrics.EXPECT().
 		IncrementCounter(gomock.Any(), "app_pubsub_subscribe_success_count", "topic", "test/topic")
-
+	mockClient.EXPECT().IsConnected().Return(true)
 	mockClient.EXPECT().Subscribe("test/topic", mockConfigs.QoS, gomock.Any()).Return(mockToken)
 
 	mockToken.EXPECT().Wait().Return(true)
@@ -255,6 +255,7 @@ func TestMQTT_SubscribeFailure(t *testing.T) {
 
 	ctx := context.Background()
 
+	mockClient.EXPECT().IsConnected().Return(true)
 	mockClient.EXPECT().Subscribe("test/topic", mockConfigs.QoS, gomock.Any()).Return(mockToken)
 
 	mockToken.EXPECT().Wait().Return(true)
@@ -488,7 +489,16 @@ func TestReconnectHandler(t *testing.T) {
 	qos := byte(1)
 
 	clientMock := NewMockClient(ctrl)
-	clientMock.EXPECT().Subscribe("topic1", qos, gomock.Any()).Return(nil)
+	tokenMock := NewMockToken(ctrl)
+
+	clientMock.EXPECT().Subscribe("topic1", qos, gomock.Any()).Return(tokenMock)
+
+	tokenMock.EXPECT().Wait().Return(true)
+	tokenMock.EXPECT().Error().Return(nil)
+
+	mockLogger := NewMockLogger(ctrl)
+
+	mockLogger.EXPECT().Debugf("resubscribed to topic %s successfully", "topic1")
 
 	msgsChan := make(chan *pubsub.Message)
 
@@ -506,7 +516,7 @@ func TestReconnectHandler(t *testing.T) {
 		Port:     1234,
 		ClientID: "gopher",
 		QoS:      qos,
-	}, subs)
+	}, subs, mockLogger)
 
 	assert.NotNil(t, reconnectHandler)
 

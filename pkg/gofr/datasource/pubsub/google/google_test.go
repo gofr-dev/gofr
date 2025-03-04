@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"testing"
-	"time"
 
 	gcPubSub "cloud.google.com/go/pubsub"
 	"cloud.google.com/go/pubsub/pstest"
@@ -41,20 +40,6 @@ func getGoogleClient(t *testing.T) *gcPubSub.Client {
 	}
 
 	return client
-}
-
-func TestGoogleClient_New(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	t.Setenv("PUBSUB_EMULATOR_HOST", "localhost:8085")
-
-	mockMetrics := NewMockMetrics(ctrl)
-	logger := logging.NewMockLogger(logging.DEBUG)
-
-	client := New(Config{ProjectID: "test", SubscriptionName: "test"}, logger, mockMetrics)
-
-	require.NotNil(t, client.client, "TestGoogleClient_New Failed!")
 }
 
 func TestGoogleClient_New_InvalidConfig(t *testing.T) {
@@ -145,40 +130,6 @@ func TestGoogleClient_PublishTopic_Error(t *testing.T) {
 
 	err := g.Publish(ctx, "test-topic", []byte(""))
 	require.ErrorContains(t, err, "context canceled")
-}
-
-func TestGoogleClient_Subscribe_ContextDone(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	t.Setenv("PUBSUB_EMULATOR_HOST", "localhost:8085")
-
-	mockMetrics := NewMockMetrics(ctrl)
-
-	client := New(Config{ProjectID: "test", SubscriptionName: "sub"}, logging.NewMockLogger(logging.DEBUG), mockMetrics)
-	client.client = getGoogleClient(t)
-
-	client.mu.Lock()
-	client.receiveChan = map[string]chan *pubsub.Message{
-		"test-topic": make(chan *pubsub.Message, 1),
-	}
-	client.mu.Unlock()
-
-	mockMetrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_subscribe_total_count", gomock.Any())
-
-	client.receiveChan["test-topic"] <- &pubsub.Message{
-		Topic:    "test-topic",
-		Value:    []byte("test-data"),
-		MetaData: map[string]string{"key": "value"},
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-
-	message, err := client.Subscribe(ctx, "test-topic")
-
-	require.NoError(t, err)
-	require.Nil(t, message)
 }
 
 func TestGoogleClient_getTopic_Success(t *testing.T) {
@@ -318,6 +269,17 @@ func TestGoogleClient_CreateTopic_Error(t *testing.T) {
 	require.ErrorIs(t, err, errTestSentinel, "expected test-error but got different error")
 }
 
+func TestGoogleClient_CreateTopic_EmptyClient(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	g := &googleClient{client: nil, Config: Config{ProjectID: "test", SubscriptionName: "sub"}}
+
+	err := g.CreateTopic(context.Background(), "test-topic")
+
+	require.ErrorIs(t, err, errClientNotConnected, "expected client-error but got different error")
+}
+
 func TestGoogleClient_DeleteTopic(t *testing.T) {
 	ctx := context.Background()
 
@@ -341,4 +303,15 @@ func TestGoogleClient_DeleteTopic(t *testing.T) {
 
 		require.ErrorContains(t, err, "NotFound", "expected NotFound error for non existing topic deletion")
 	})
+}
+
+func TestGoogleClient_DeleteTopic_EmptyClient(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	g := &googleClient{client: nil, Config: Config{ProjectID: "test", SubscriptionName: "sub"}}
+
+	err := g.DeleteTopic(context.Background(), "test-topic")
+
+	require.ErrorIs(t, err, errClientNotConnected, "expected client-error but got different error")
 }

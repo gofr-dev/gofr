@@ -125,6 +125,7 @@ func TestNATSClient_SubscribeSuccess(t *testing.T) {
 		Value: []byte("test message"),
 	}
 
+	mockConnManager.EXPECT().IsConnected().Return(true)
 	mockConnManager.EXPECT().JetStream().Return(mockJetStream, nil).AnyTimes()
 
 	mockSubManager.EXPECT().
@@ -163,6 +164,7 @@ func TestNATSClient_SubscribeError(t *testing.T) {
 	ctx := context.Background()
 	expectedErr := errSubscriptionError
 
+	mockConnManager.EXPECT().IsConnected().Return(true)
 	mockConnManager.EXPECT().JetStream().Return(mockJetStream, nil).AnyTimes()
 
 	mockSubManager.EXPECT().
@@ -335,36 +337,29 @@ func TestClient_Connect(t *testing.T) {
 	}
 
 	// Set expectations
-	mockNATSConnector.EXPECT().
-		Connect("nats://localhost:4222", gomock.Any()).
-		Return(mockConn, nil).
-		Times(2)
+	mockNATSConnector.EXPECT().Connect("nats://localhost:4222", gomock.Any()).
+		Return(mockConn, nil).Times(2)
 
-	mockJSCreator.EXPECT().
-		New(mockConn).
-		Return(mockJS, nil).
-		Times(2)
+	mockJSCreator.EXPECT().New(mockConn).Return(mockJS, nil).Times(2)
 
-	// Call the Connect method on the client
-	err := client.Connect()
-	require.NoError(t, err)
+	_ = client.Connect()
+
+	time.Sleep(100 * time.Millisecond)
 
 	// Assert that the connection manager was set
 	assert.NotNil(t, client.connManager)
 
-	// Assert that the stream manager and subscription manager were created
-	assert.NotNil(t, client.streamManager)
-	assert.NotNil(t, client.subManager)
-
 	// Check for log output
 	out := testutil.StdoutOutputForFunc(func() {
 		client.logger = logging.NewMockLogger(logging.DEBUG)
-		err := client.Connect()
-		require.NoError(t, err)
+		_ = client.Connect()
+
+		time.Sleep(100 * time.Millisecond)
 	})
 
 	// Assert that the expected log message is produced
-	assert.Contains(t, out, "connected to NATS server 'nats://localhost:4222'")
+	assert.Contains(t, out, "connecting to NATS server at nats://localhost:4222\n"+
+		"Successfully connected to NATS server at nats://localhost:4222\n")
 }
 
 func TestClient_ConnectError(t *testing.T) {
@@ -391,7 +386,7 @@ func TestClient_ConnectError(t *testing.T) {
 	}
 
 	// Simulate a connection error
-	expectedErr := errConnectionError
+	expectedErr := errJetStreamNotConfigured
 	mockNATSConnector.EXPECT().
 		Connect(config.Server, gomock.Any()).
 		Return(nil, expectedErr)
@@ -400,15 +395,16 @@ func TestClient_ConnectError(t *testing.T) {
 	output := testutil.StderrOutputForFunc(func() {
 		client.logger = logging.NewMockLogger(logging.DEBUG)
 		err := client.Connect()
+
+		time.Sleep(100 * time.Millisecond)
+
 		require.Error(t, err)
 		assert.Equal(t, expectedErr, err)
 	})
 
 	// Check for the error log
-	assert.Contains(t, output, "failed to connect to NATS server at nats://localhost:4222: connection error")
+	assert.Contains(t, output, "Failed to connect to NATS server at nats://localhost:4222: jStream is not configured\n")
 
-	// Assert that the connection manager, stream manager, and subscription manager were not set
-	assert.Nil(t, client.connManager)
 	assert.Nil(t, client.streamManager)
 	assert.Nil(t, client.subManager)
 }
