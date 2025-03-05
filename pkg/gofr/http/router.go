@@ -59,7 +59,7 @@ func (rou *Router) AddStaticFiles(dirName, endpoint string) {
 	fileServer := http.FileServer(http.Dir(cfg.directoryName))
 
 	if endpoint != "/" {
-		endpoint = endpoint + "/"
+		endpoint += "/"
 	}
 
 	rou.Router.NewRoute().PathPrefix(endpoint).Handler(http.StripPrefix(endpoint, cfg.staticHandler(fileServer)))
