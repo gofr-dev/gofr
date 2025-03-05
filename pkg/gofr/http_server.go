@@ -22,6 +22,7 @@ type httpServer struct {
 	srv      *http.Server
 	certFile string
 	keyFile  string
+	static   map[string]string
 }
 
 var (
