@@ -16,13 +16,13 @@ import (
 )
 
 type httpServer struct {
-	router   *gofrHTTP.Router
-	port     int
-	ws       *websocket.Manager
-	srv      *http.Server
-	certFile string
-	keyFile  string
-	static   map[string]string
+	router      *gofrHTTP.Router
+	port        int
+	ws          *websocket.Manager
+	srv         *http.Server
+	certFile    string
+	keyFile     string
+	staticFiles map[string]string
 }
 
 var (
