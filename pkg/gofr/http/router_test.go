@@ -92,7 +92,7 @@ func TestRouter_AddStaticFiles(t *testing.T) {
 
 	// Create a new router instance using the mock container
 	router := NewRouter()
-	router.AddStaticFiles("/gofr", currentWorkingDir+"/testDir")
+	router.AddStaticFiles(currentWorkingDir+"/testDir", "/gofr")
 
 	// Send a request to the test handler
 	req := httptest.NewRequest(http.MethodGet, "/gofr/indexTest.html", http.NoBody)
