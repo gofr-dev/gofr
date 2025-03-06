@@ -52,6 +52,9 @@ var (
 	errMissingField           = errors.New("missing required field in config")
 	errInvalidResultType      = errors.New("result must be a pointer to a slice of maps")
 	errInvalidUserOptionsType = errors.New("userOptions must be a *UserOptions type")
+	ErrDatabaseExists         = errors.New("database already exists")
+	ErrCollectionExists       = errors.New("collection already exists")
+	ErrGraphExists            = errors.New("graph already exists")
 )
 
 // New creates a new ArangoDB client with the provided configuration.

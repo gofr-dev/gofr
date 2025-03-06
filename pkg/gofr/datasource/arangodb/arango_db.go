@@ -18,7 +18,18 @@ func (d *DB) CreateDB(ctx context.Context, database string) error {
 
 	defer d.client.sendOperationStats(&QueryLog{Operation: "createDB", Database: database}, startTime, "createDB", span)
 
-	_, err := d.client.client.CreateDatabase(tracerCtx, database, nil)
+	// Check if the database already exists
+	exists, err := d.client.client.DatabaseExists(tracerCtx, database)
+	if err != nil {
+		return err
+	}
+
+	if exists {
+		d.client.logger.Debugf("database %s already exists", database)
+		return ErrDatabaseExists
+	}
+
+	_, err = d.client.client.CreateDatabase(tracerCtx, database, nil)
 
 	return err
 }
@@ -54,6 +65,17 @@ func (d *DB) CreateCollection(ctx context.Context, database, collection string, 
 	db, err := d.client.client.Database(tracerCtx, database)
 	if err != nil {
 		return err
+	}
+
+	// Check if the collection already exists
+	exists, err := db.CollectionExists(tracerCtx, collection)
+	if err != nil {
+		return err
+	}
+
+	if exists {
+		d.client.logger.Debugf("collection %s already exists in database %s", collection, database)
+		return ErrCollectionExists
 	}
 
 	options := arangodb.CreateCollectionProperties{Type: arangodb.CollectionTypeDocument}

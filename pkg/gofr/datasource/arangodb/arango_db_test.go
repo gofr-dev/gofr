@@ -42,6 +42,21 @@ func Test_Client_CreateDB_Error(t *testing.T) {
 	require.Equal(t, "database not found", err.Error())
 }
 
+func Test_Client_CreateDB_AlreadyExists(t *testing.T) {
+	client, _, _, mockLogger, mockMetrics := setupDB(t)
+
+	ctx := context.Background()
+	database := "dbExists"
+
+	mockLogger.EXPECT().Debugf("database %s already exists", database)
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_arango_stats", gomock.Any(),
+		gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+
+	err := client.CreateDB(ctx, database)
+	require.Equal(t, ErrDatabaseExists, err, "Expected error when database already exists")
+}
+
 func Test_Client_DropDB(t *testing.T) {
 	client, mockArango, _, mockLogger, mockMetrics := setupDB(t)
 
@@ -96,6 +111,7 @@ func Test_Client_CreateCollection(t *testing.T) {
 	mockDB := NewMockDatabase(gomock.NewController(t))
 
 	mockArango.EXPECT().Database(gomock.Any(), "testDB").Return(mockDB, nil)
+	mockDB.EXPECT().CollectionExists(gomock.Any(), "testCollection").Return(false, nil)
 	mockDB.EXPECT().CreateCollection(gomock.Any(), "testCollection", gomock.Any()).Return(nil, nil)
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_arango_stats", gomock.Any(),
@@ -110,6 +126,7 @@ func Test_Client_CreateCollection_Error(t *testing.T) {
 	mockDB := NewMockDatabase(gomock.NewController(t))
 
 	mockArango.EXPECT().Database(gomock.Any(), "testDB").Return(mockDB, nil)
+	mockDB.EXPECT().CollectionExists(gomock.Any(), "testCollection").Return(false, nil)
 	mockDB.EXPECT().CreateCollection(gomock.Any(), "testCollection", gomock.Any()).Return(nil, errCollectionNotFound)
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_arango_stats", gomock.Any(),
@@ -118,6 +135,22 @@ func Test_Client_CreateCollection_Error(t *testing.T) {
 	err := client.CreateCollection(context.Background(), "testDB", "testCollection", false)
 	require.Error(t, err, "Expected an error while creating the collection")
 	require.Equal(t, "collection not found", err.Error())
+}
+
+func Test_Client_CreateCollection_AlreadyExists(t *testing.T) {
+	client, mockArango, _, mockLogger, mockMetrics := setupDB(t)
+	mockDB := NewMockDatabase(gomock.NewController(t))
+
+	mockArango.EXPECT().Database(gomock.Any(), "dbExists").Return(mockDB, nil)
+	mockDB.EXPECT().CollectionExists(gomock.Any(), "testCollection").Return(true, nil)
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Debugf("collection %s already exists in database %s",
+		"testCollection", "dbExists")
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_arango_stats", gomock.Any(),
+		gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+
+	err := client.CreateCollection(context.Background(), "dbExists", "testCollection", true)
+	require.Equal(t, ErrCollectionExists, err, "Expected error when collection already exists")
 }
 
 func Test_Client_DropCollection(t *testing.T) {

@@ -42,6 +42,17 @@ func (g *Graph) CreateGraph(ctx context.Context, database, graph string, edgeDef
 		return err
 	}
 
+	// Check if the graph already exists
+	exists, err := db.GraphExists(tracerCtx, graph)
+	if err != nil {
+		return err
+	}
+
+	if exists {
+		g.client.logger.Debugf("graph %s already exists in database %s", graph, database)
+		return ErrGraphExists
+	}
+
 	edgeDefs, ok := edgeDefinitions.(*EdgeDefinition)
 	if !ok {
 		return fmt.Errorf("%w", errInvalidEdgeDefinitionsType)
