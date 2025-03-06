@@ -2,16 +2,17 @@ package arangodb
 
 import (
 	"context"
-	"github.com/arangodb/go-driver/v2/arangodb"
 	"testing"
 
+	"github.com/arangodb/go-driver/v2/arangodb"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 )
 
-func TestGraph_CreateGraph_AlreadyExists(t *testing.T) {
+// setupGraphTest is a helper function to set up the common test environment for graph tests.
+func setupGraphTest(t *testing.T) (*gomock.Controller, *MockArango, *MockDatabase, *MockLogger,
+	*MockMetrics, *Client, *Graph, context.Context, string, string, *EdgeDefinition) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 
 	mockArango := NewMockArango(ctrl)
 	mockDB := NewMockDatabase(ctrl)
@@ -29,6 +30,13 @@ func TestGraph_CreateGraph_AlreadyExists(t *testing.T) {
 	databaseName := "testDB"
 	graphName := "testGraph"
 	edgeDefinitions := &EdgeDefinition{{Collection: "edgeColl", From: []string{"fromColl"}, To: []string{"toColl"}}}
+
+	return ctrl, mockArango, mockDB, mockLogger, mockMetrics, client, graph, ctx, databaseName, graphName, edgeDefinitions
+}
+
+func TestGraph_CreateGraph_AlreadyExists(t *testing.T) {
+	ctrl, mockArango, mockDB, mockLogger, mockMetrics, _, graph, ctx, databaseName, graphName, edgeDefinitions := setupGraphTest(t)
+	defer ctrl.Finish()
 
 	mockArango.EXPECT().Database(ctx, databaseName).Return(mockDB, nil)
 	mockDB.EXPECT().GraphExists(ctx, graphName).Return(true, nil)
@@ -41,30 +49,14 @@ func TestGraph_CreateGraph_AlreadyExists(t *testing.T) {
 	require.Equal(t, ErrGraphExists, err, "Expected graph already exits error but got %v", err)
 }
 
-func TestGraph_CreateGraph_Error(t *testing.T) {
-	ctrl := gomock.NewController(t)
+func TestGraph_CreateGraph_InvalidEdgeDocumentType(t *testing.T) {
+	ctrl, mockArango, mockDB, mockLogger, mockMetrics, _, graph, ctx, databaseName, graphName, edgeDefinitions := setupGraphTest(t)
 	defer ctrl.Finish()
 
-	mockArango := NewMockArango(ctrl)
-	mockDB := NewMockDatabase(ctrl)
-	mockLogger := NewMockLogger(ctrl)
-	mockMetrics := NewMockMetrics(ctrl)
-
-	client := &Client{
-		logger:  mockLogger,
-		metrics: mockMetrics,
-		client:  mockArango,
-	}
-
-	graph := &Graph{client: client}
-	ctx := context.Background()
-	databaseName := "testDB"
-	graphName := "testGraph"
-	edgeDefinitions := &EdgeDefinition{{Collection: "edgeColl", From: []string{"fromColl"}, To: []string{"toColl"}}}
 	options := &arangodb.GraphDefinition{EdgeDefinitions: []arangodb.EdgeDefinition{{
 		Collection: "edgeColl",
-		To:         []string{"toColl"},
 		From:       []string{"fromColl"},
+		To:         []string{"toColl"},
 	}}}
 
 	mockArango.EXPECT().Database(ctx, databaseName).Return(mockDB, nil)
