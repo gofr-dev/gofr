@@ -309,10 +309,10 @@ func (mr *MockGraphMockRecorder) EdgeDefinitionExists(ctx, collection any) *gomo
 }
 
 // EdgeDefinitions mocks base method.
-func (m *MockGraph) EdgeDefinitions() []EdgeDefinition {
+func (m *MockGraph) EdgeDefinitions() []arangodb.EdgeDefinition {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "EdgeDefinitions")
-	ret0, _ := ret[0].([]EdgeDefinition)
+	ret0, _ := ret[0].([]arangodb.EdgeDefinition)
 
 	return ret0
 }

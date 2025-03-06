@@ -12,6 +12,8 @@ type DB struct {
 }
 
 // CreateDB creates a new database in ArangoDB.
+// It first checks if the database already exists before attempting to create it.
+// Returns ErrDatabaseExists if the database already exists.
 func (d *DB) CreateDB(ctx context.Context, database string) error {
 	tracerCtx, span := d.client.addTrace(ctx, "createDB", map[string]string{"DB": database})
 	startTime := time.Now()
@@ -55,6 +57,8 @@ func (d *DB) DropDB(ctx context.Context, database string) error {
 }
 
 // CreateCollection creates a new collection in a database with specified type.
+// It first checks if the collection already exists before attempting to create it.
+// Returns ErrCollectionExists if the collection already exists.
 func (d *DB) CreateCollection(ctx context.Context, database, collection string, isEdge bool) error {
 	tracerCtx, span := d.client.addTrace(ctx, "createCollection", map[string]string{"collection": collection})
 	startTime := time.Now()
