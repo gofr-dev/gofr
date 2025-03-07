@@ -10,11 +10,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
 	gofrHTTP "gofr.dev/pkg/gofr/http"
+	"gofr.dev/pkg/gofr/http/middleware"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/testutil"
 )
@@ -28,10 +31,24 @@ func TestRun_ServerStartsListening(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
+	// adding registered routes for applying middlewares
+	var registeredMethods []string
+
+	_ = router.Walk(func(route *mux.Route, _ *mux.Router, _ []*mux.Route) error {
+		met, _ := route.GetMethods()
+		for _, method := range met {
+			if !contains(registeredMethods, method) { // Check for uniqueness before adding
+				registeredMethods = append(registeredMethods, method)
+			}
+		}
+
+		return nil
+	})
+
+	router.RegisteredRoutes = &registeredMethods
+
 	// Create a mock container
-	c := &container.Container{
-		Logger: logging.NewLogger(logging.INFO),
-	}
+	c := container.NewContainer(getConfigs(t))
 
 	// Create an instance of httpServer
 	server := &httpServer{
@@ -40,7 +57,7 @@ func TestRun_ServerStartsListening(t *testing.T) {
 	}
 
 	// Start the server
-	go server.Run(c)
+	go server.run(c, middleware.GetConfigs(getConfigs(t)))
 
 	// Wait for the server to start listening
 	time.Sleep(100 * time.Millisecond)
@@ -61,6 +78,18 @@ func TestRun_ServerStartsListening(t *testing.T) {
 	resp.Body.Close()
 }
 
+func getConfigs(t *testing.T) config.Config {
+	t.Helper()
+
+	var configLocation string
+
+	if _, err := os.Stat("./configs"); err == nil {
+		configLocation = "./configs"
+	}
+
+	return config.NewEnvFile(configLocation, logging.NewLogger(logging.INFO))
+}
+
 func TestRegisterProfillingRoutes(t *testing.T) {
 	port := testutil.GetFreePort(t)
 
@@ -75,7 +104,7 @@ func TestRegisterProfillingRoutes(t *testing.T) {
 
 	server.RegisterProfilingRoutes()
 
-	go server.Run(c)
+	go server.run(c, middleware.GetConfigs(getConfigs(t)))
 
 	// Test if the expected handlers are registered for the pprof endpoints
 	expectedRoutes := []string{
@@ -114,7 +143,7 @@ func TestShutdown_ServerStopsListening(t *testing.T) {
 	}
 
 	// Start the server
-	go server.Run(c)
+	go server.run(c, middleware.GetConfigs(getConfigs(t)))
 
 	// Create a context with a timeout to test the shutdown
 	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
@@ -150,7 +179,7 @@ func TestShutdown_ServerContextDeadline(t *testing.T) {
 	}
 
 	// Start the server
-	go server.Run(c)
+	go server.run(c, middleware.GetConfigs(getConfigs(t)))
 
 	// Create a context with a timeout to test the shutdown
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
