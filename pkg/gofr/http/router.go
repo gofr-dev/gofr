@@ -53,7 +53,7 @@ type staticFileConfig struct {
 	directoryName string
 }
 
-func (rou *Router) AddStaticFiles(dirName, endpoint string) {
+func (rou *Router) AddStaticFiles(endpoint, dirName string) {
 	cfg := staticFileConfig{directoryName: dirName}
 
 	fileServer := http.FileServer(http.Dir(cfg.directoryName))
