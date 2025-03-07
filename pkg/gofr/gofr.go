@@ -100,7 +100,7 @@ func (a *App) httpServerSetup() {
 	}
 
 	for dirName, endpoint := range a.httpServer.staticFiles {
-		a.httpServer.router.AddStaticFiles(dirName, endpoint)
+		a.httpServer.router.AddStaticFiles(endpoint, dirName)
 		a.container.Logf("registered static files at endpoint %v from directory %v", endpoint, dirName)
 	}
 
