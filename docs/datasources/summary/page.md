@@ -61,7 +61,7 @@ as unnecessary database drivers are not being compiled and added to the build.
 - ✅
 - ✅
 - ✅
-- 
+-
 
 ---
 
@@ -75,7 +75,7 @@ as unnecessary database drivers are not being compiled and added to the build.
 ---
 
 -  ClickHouse
-- 
+-
 - ✅
 - ✅
 - ✅
@@ -88,7 +88,7 @@ as unnecessary database drivers are not being compiled and added to the build.
 - ✅
 - ✅
 - ✅
-- 
+-
 
 ---
 
@@ -111,7 +111,7 @@ as unnecessary database drivers are not being compiled and added to the build.
 -  OpenTSDB
 - ✅
 - ✅
-- 
+-
 - ✅
 -
 ---
@@ -125,7 +125,7 @@ as unnecessary database drivers are not being compiled and added to the build.
 ---
 
 -  Solr
-- 
+-
 - ✅
 - ✅
 - ✅
