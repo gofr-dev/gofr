@@ -27,6 +27,22 @@ func TestNewValidationProblem(t *testing.T) {
 			}
 		})
 	}
+	
+	// Test with additional options
+	customProblem := NewValidationProblem(detail, 
+		WithInstance("/test"),
+		WithExtension("field", "username"),
+	)
+	
+	if customProblem.Instance != "/test" {
+		t.Errorf("NewValidationProblem() with options: Instance = %v, want %v", 
+			customProblem.Instance, "/test")
+	}
+	
+	if val, ok := customProblem.Extensions["field"]; !ok || val != "username" {
+		t.Errorf("NewValidationProblem() with options: Extensions[field] = %v, want %v", 
+			val, "username")
+	}
 }
 
 func TestNewAuthenticationProblem(t *testing.T) {

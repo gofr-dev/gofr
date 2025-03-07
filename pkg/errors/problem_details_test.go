@@ -13,24 +13,24 @@ func TestProblemDetails_Error(t *testing.T) {
 	}{
 		{
 			name: "basic error string",
-			problem: &ProblemDetails{
-				Title:  "Test Error",
-				Detail: "Something went wrong",
-			},
+			problem: NewProblemDetails(
+				WithTitle("Test Error"),
+				WithDetail("Something went wrong"),
+			),
 			expected: "Test Error: Something went wrong",
 		},
 		{
 			name: "empty title",
-			problem: &ProblemDetails{
-				Detail: "Just details",
-			},
+			problem: NewProblemDetails(
+				WithDetail("Just details"),
+			),
 			expected: ": Just details",
 		},
 		{
 			name: "empty detail",
-			problem: &ProblemDetails{
-				Title: "Just title",
-			},
+			problem: NewProblemDetails(
+				WithTitle("Just title"),
+			),
 			expected: "Just title: ",
 		},
 	}
@@ -53,26 +53,24 @@ func TestProblemDetails_MarshalJSON(t *testing.T) {
 	}{
 		{
 			name: "basic fields",
-			problem: &ProblemDetails{
-				Type:   "https://example.com/problems/test",
-				Title:  "Test Error",
-				Status: 400,
-				Detail: "Something went wrong",
-			},
+			problem: NewProblemDetails(
+				WithType("https://example.com/problems/test"),
+				WithTitle("Test Error"),
+				WithStatus(400),
+				WithDetail("Something went wrong"),
+			),
 			expected: `{"type":"https://example.com/problems/test","title":"Test Error","status":400,"detail":"Something went wrong"}`,
 		},
 		{
 			name: "with extensions",
-			problem: &ProblemDetails{
-				Type:   "https://example.com/problems/test",
-				Title:  "Test Error",
-				Status: 400,
-				Detail: "Something went wrong",
-				Extensions: map[string]interface{}{
-					"extra": "value",
-					"code":  123,
-				},
-			},
+			problem: NewProblemDetails(
+				WithType("https://example.com/problems/test"),
+				WithTitle("Test Error"),
+				WithStatus(400),
+				WithDetail("Something went wrong"),
+				WithExtension("extra", "value"),
+				WithExtension("code", 123),
+			),
 			expected: `{"type":"https://example.com/problems/test","title":"Test Error","status":400,"detail":"Something went wrong","extra":"value","code":123}`,
 		},
 	}
@@ -102,7 +100,11 @@ func TestProblemDetails_MarshalJSON(t *testing.T) {
 }
 
 func TestNewProblemDetails(t *testing.T) {
-	problem := NewProblemDetails(400, "Test Error", "Test Detail")
+	problem := NewProblemDetails(
+		WithStatus(400),
+		WithTitle("Test Error"),
+		WithDetail("Test Detail"),
+	)
 
 	if problem.Type != "about:blank" {
 		t.Errorf("Expected Type to be 'about:blank', got %v", problem.Type)
@@ -121,23 +123,23 @@ func TestNewProblemDetails(t *testing.T) {
 	}
 }
 
-func TestProblemDetails_WithMethods(t *testing.T) {
-	problem := NewProblemDetails(400, "Test Error", "Test Detail")
+func TestProblemOptions(t *testing.T) {
+	problem := NewProblemDetails()
 
 	// Test WithType
-	problem.WithType("https://example.com/problems/test")
+	WithType("https://example.com/problems/test")(problem)
 	if problem.Type != "https://example.com/problems/test" {
 		t.Errorf("WithType() failed, got %v", problem.Type)
 	}
 
 	// Test WithInstance
-	problem.WithInstance("/resources/123")
+	WithInstance("/resources/123")(problem)
 	if problem.Instance != "/resources/123" {
 		t.Errorf("WithInstance() failed, got %v", problem.Instance)
 	}
 
 	// Test WithExtension
-	problem.WithExtension("code", 123)
+	WithExtension("code", 123)(problem)
 	if val, ok := problem.Extensions["code"]; !ok || val != 123 {
 		t.Errorf("WithExtension() failed, got %v", problem.Extensions["code"])
 	}

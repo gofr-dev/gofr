@@ -58,34 +58,67 @@ func (p *ProblemDetails) MarshalJSON() ([]byte, error) {
 	return json.Marshal(m)
 }
 
-// NewProblemDetails creates a new ProblemDetails with common defaults
-func NewProblemDetails(status int, title, detail string) *ProblemDetails {
-	return &ProblemDetails{
+// NewProblemDetails creates a new ProblemDetails with all fields set directly
+// This simplifies error creation by allowing all fields to be set at once
+func NewProblemDetails(options ...ProblemOption) *ProblemDetails {
+	// Create problem with default values
+	p := &ProblemDetails{
 		Type:       "about:blank", // default as per RFC 7807
-		Title:      title,
-		Status:     status,
-		Detail:     detail,
 		Extensions: make(map[string]interface{}),
 	}
-}
-
-// WithType sets the type URI and returns the ProblemDetails
-func (p *ProblemDetails) WithType(typeURI string) *ProblemDetails {
-	p.Type = typeURI
-	return p
-}
-
-// WithInstance sets the instance URI and returns the ProblemDetails
-func (p *ProblemDetails) WithInstance(instance string) *ProblemDetails {
-	p.Instance = instance
-	return p
-}
-
-// WithExtension adds an extension field and returns the ProblemDetails
-func (p *ProblemDetails) WithExtension(key string, value interface{}) *ProblemDetails {
-	if p.Extensions == nil {
-		p.Extensions = make(map[string]interface{})
+	
+	// Apply all options
+	for _, option := range options {
+		option(p)
 	}
-	p.Extensions[key] = value
+	
 	return p
+}
+
+// ProblemOption defines a function that configures a ProblemDetails
+type ProblemOption func(*ProblemDetails)
+
+// WithType sets the type URI
+func WithType(typeURI string) ProblemOption {
+	return func(p *ProblemDetails) {
+		p.Type = typeURI
+	}
+}
+
+// WithTitle sets the title
+func WithTitle(title string) ProblemOption {
+	return func(p *ProblemDetails) {
+		p.Title = title
+	}
+}
+
+// WithStatus sets the HTTP status code
+func WithStatus(status int) ProblemOption {
+	return func(p *ProblemDetails) {
+		p.Status = status
+	}
+}
+
+// WithDetail sets the detail message
+func WithDetail(detail string) ProblemOption {
+	return func(p *ProblemDetails) {
+		p.Detail = detail
+	}
+}
+
+// WithInstance sets the instance URI
+func WithInstance(instance string) ProblemOption {
+	return func(p *ProblemDetails) {
+		p.Instance = instance
+	}
+}
+
+// WithExtension adds an extension field
+func WithExtension(key string, value interface{}) ProblemOption {
+	return func(p *ProblemDetails) {
+		if p.Extensions == nil {
+			p.Extensions = make(map[string]interface{})
+		}
+		p.Extensions[key] = value
+	}
 } 
