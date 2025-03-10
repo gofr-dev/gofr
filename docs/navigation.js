@@ -145,11 +145,11 @@ export const navigation = [
         ],
     },
     {
-        title: 'DataSources',
+        title: 'Datasources',
         links: [
             {
                 title: "Getting Started",
-                href: "/docs/datasources/summary",
+                href: "/docs/datasources/getting-started",
                 desc: "Learn how to connect to and interact with multiple databases in GoFr."
             },
             {
