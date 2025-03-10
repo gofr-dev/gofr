@@ -1,13 +1,13 @@
 package http
 
 import (
+	"bytes"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 
@@ -76,70 +76,108 @@ func TestRouterWithMiddleware(t *testing.T) {
 	assert.Equal(t, "applied", testHeaderValue, "Test_UseMiddleware Failed! header value mismatch.")
 }
 
-func TestRouter_AddStaticFiles(t *testing.T) {
-	port := testutil.GetFreePort(t)
+func TestServeExistingFile(t *testing.T) {
+	tempDir := t.TempDir()
 
-	cfg := map[string]string{"HTTP_PORT": fmt.Sprint(port), "LOG_LEVEL": "INFO"}
-	_ = container.NewContainer(config.NewMockConfig(cfg))
+	// Create a test file
+	testContent := []byte("Hello, World!")
 
-	createTestFileAndDirectory(t, "testDir")
+	err := os.WriteFile(filepath.Join(tempDir, "test.txt"), testContent, 0600)
+	if err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
 
-	defer os.RemoveAll("testDir")
-
-	time.Sleep(100 * time.Millisecond)
-
-	currentWorkingDir, _ := os.Getwd()
-
-	// Create a new router instance using the mock container
 	router := NewRouter()
-	router.AddStaticFiles("/gofr", currentWorkingDir+"/testDir")
+	router.AddStaticFiles("/static", tempDir)
 
-	// Send a request to the test handler
-	req := httptest.NewRequest(http.MethodGet, "/gofr/indexTest.html", http.NoBody)
-	rec := httptest.NewRecorder()
-	router.ServeHTTP(rec, req)
+	req := httptest.NewRequest(http.MethodGet, "/static/test.txt", http.NoBody)
+	w := httptest.NewRecorder()
 
-	// Verify the response
-	assert.Equal(t, http.StatusOK, rec.Code)
+	router.ServeHTTP(w, req)
 
-	// Send a request to the test handler
-	req = httptest.NewRequest(http.MethodGet, "/gofr/openapi.json", http.NoBody)
-	rec = httptest.NewRecorder()
-	router.ServeHTTP(rec, req)
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status code 200, got %d", w.Code)
+	}
 
-	// Verify the response
-	assert.Equal(t, http.StatusForbidden, rec.Code)
+	if !bytes.Equal(w.Body.Bytes(), testContent) {
+		t.Errorf("Expected body %q, got %q", testContent, w.Body.Bytes())
+	}
 }
 
-func createTestFileAndDirectory(t *testing.T, dirName string) {
-	t.Helper()
+func TestNonExistentFileWith404Page(t *testing.T) {
+	tempDir := t.TempDir()
 
-	htmlContent := []byte("<html><head><title>Test Static File</title></head><body><p>Testing Static File</p></body></html>")
+	// Create a 404.html file
+	notFoundContent := []byte("<html>404 Not Found</html>")
 
-	const indexHTML = "indexTest.html"
-
-	directory := "./" + dirName
-
-	if err := os.Mkdir("./"+dirName, os.ModePerm); err != nil {
-		t.Fatalf("Couldn't create a "+dirName+" directory, error: %s", err)
-	}
-
-	file, err := os.Create(filepath.Join(directory, indexHTML))
+	err := os.WriteFile(filepath.Join(tempDir, "404.html"), notFoundContent, 0600)
 	if err != nil {
-		t.Fatalf("Couldn't create %s file", indexHTML)
+		t.Fatalf("Failed to create 404.html: %v", err)
 	}
 
-	_, err = file.Write(htmlContent)
+	router := NewRouter()
+	router.AddStaticFiles("/static", tempDir)
+
+	req := httptest.NewRequest(http.MethodGet, "/static/nonexistent.html", http.NoBody)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("Expected status code 404, got %d", w.Code)
+	}
+
+	if !bytes.Equal(w.Body.Bytes(), notFoundContent) {
+		t.Errorf("Expected body %q, got %q", notFoundContent, w.Body.Bytes())
+	}
+}
+
+func TestNonExistentFileWithout404Page(t *testing.T) {
+	tempDir := t.TempDir() // No 404.html
+
+	router := NewRouter()
+	router.AddStaticFiles("/static", tempDir)
+
+	req := httptest.NewRequest(http.MethodGet, "/static/nonexistent.html", http.NoBody)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("Expected status code 404, got %d", w.Code)
+	}
+
+	expectedBody := "404 not found"
+	if w.Body.String() != expectedBody {
+		t.Errorf("Expected body %q, got %q", expectedBody, w.Body.String())
+	}
+}
+
+func TestAccessOpenAPIJSONForbidden(t *testing.T) {
+	tempDir := t.TempDir()
+
+	// Create openapi.json file
+	openAPIContent := []byte(`{"openapi": "3.0.0"}`)
+
+	err := os.WriteFile(filepath.Join(tempDir, DefaultSwaggerFileName), openAPIContent, 0600)
 	if err != nil {
-		t.Fatalf("Couldn't write to %s file", indexHTML)
+		t.Fatalf("Failed to create openapi.json: %v", err)
 	}
 
-	file.Close()
+	router := NewRouter()
+	router.AddStaticFiles("/static", tempDir)
 
-	file, err = os.Create(filepath.Join(directory, "openapi.json"))
-	if err != nil {
-		t.Fatalf("Couldn't create %s file", indexHTML)
+	req := httptest.NewRequest(http.MethodGet, "/static/openapi.json", http.NoBody)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Errorf("Expected status code 403, got %d", w.Code)
 	}
 
-	file.Close()
+	expectedBody := "403 forbidden"
+	if w.Body.String() != expectedBody {
+		t.Errorf("Expected body %q, got %q", expectedBody, w.Body.String())
+	}
 }

@@ -71,12 +71,12 @@ func (s *httpServer) RegisterProfilingRoutes() {
 }
 
 func (s *httpServer) run(c *container.Container) {
-	//// Developer Note:
-	////	WebSocket connections do not inherently support authentication mechanisms.
-	////	It is recommended to authenticate users before upgrading to a WebSocket connection.
-	////	Hence, we are registering websocket middleware here, to ensure that authentication or other
-	////	middleware logic is executed during the initial HTTP handshake request, prior to upgrading
-	////	the connection to WebSocket, if any.
+	// Developer Note:
+	//	WebSocket connections do not inherently support authentication mechanisms.
+	//	It is recommended to authenticate users before upgrading to a WebSocket connection.
+	//	Hence, we are registering websocket middleware here, to ensure that authentication or other
+	//	middleware logic is executed during the initial HTTP handshake request, prior to upgrading
+	//	the connection to WebSocket, if any.
 	s.router.Use(
 		middleware.WSHandlerUpgrade(c, s.ws),
 	)

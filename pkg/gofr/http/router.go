@@ -94,7 +94,7 @@ func (staticConfig staticFileConfig) staticHandler(fileServer http.Handler) http
 			// Serve 404.html for missing HTML pages
 			path, err := filepath.Abs(filepath.Join(staticConfig.directoryName, "404.html"))
 			if err != nil {
-				w.Write([]byte("404 not found"))
+				_, _ = w.Write([]byte("404 not found"))
 				return
 			}
 
@@ -102,12 +102,13 @@ func (staticConfig staticFileConfig) staticHandler(fileServer http.Handler) http
 				http.ServeFile(w, r, path)
 
 				return
-			} else {
-				w.Write([]byte("404 not found"))
 			}
+
+			_, _ = w.Write([]byte("404 not found"))
 
 			return
 		}
+
 		// Serve the requested file
 		fileServer.ServeHTTP(w, r)
 	})

@@ -3,6 +3,7 @@ package middleware
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -13,6 +14,8 @@ import (
 
 	"go.opentelemetry.io/otel/trace"
 )
+
+var errHijackNotSupported = errors.New("response writer does not support hijacking")
 
 // StatusResponseWriter Defines own Response Writer to be used for logging of status - as http.ResponseWriter does not let us read status.
 type StatusResponseWriter struct {
@@ -31,12 +34,13 @@ func (w *StatusResponseWriter) WriteHeader(status int) {
 	w.ResponseWriter.WriteHeader(status)
 }
 
-// Hijack implements the http.Hijacker interface
-func (srw *StatusResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
-	if hijacker, ok := srw.ResponseWriter.(http.Hijacker); ok {
+// Hijack implements the http.Hijacker interface.
+func (w *StatusResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	if hijacker, ok := w.ResponseWriter.(http.Hijacker); ok {
 		return hijacker.Hijack()
 	}
-	return nil, nil, fmt.Errorf("response writer does not support hijacking")
+
+	return nil, nil, fmt.Errorf("%w: cannot hijack connection", errHijackNotSupported)
 }
 
 // RequestLog represents a log entry for HTTP requests.

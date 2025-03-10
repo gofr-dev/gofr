@@ -1,7 +1,6 @@
 package gofr
 
 import (
-	"gofr.dev/pkg/gofr/http/middleware"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -9,6 +8,7 @@ import (
 
 	"gofr.dev/pkg/gofr/cmd/terminal"
 	"gofr.dev/pkg/gofr/container"
+	"gofr.dev/pkg/gofr/http/middleware"
 	"gofr.dev/pkg/gofr/logging"
 )
 
