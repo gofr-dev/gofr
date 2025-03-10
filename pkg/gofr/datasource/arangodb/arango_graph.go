@@ -23,12 +23,14 @@ type Graph struct {
 }
 
 // CreateGraph creates a new graph in a database.
+// It first checks if the graph already exists before attempting to create it.
 // Parameters:
 //   - ctx: Request context for tracing and cancellation.
 //   - database: Name of the database where the graph will be created.
 //   - graph: Name of the graph to be created.
 //   - edgeDefinitions: Pointer to EdgeDefinition struct containing edge definitions.
 //
+// Returns ErrGraphExists if the graph already exists.
 // Returns an error if the edgeDefinitions parameter is not of type *EdgeDefinition or is nil.
 func (g *Graph) CreateGraph(ctx context.Context, database, graph string, edgeDefinitions any) error {
 	tracerCtx, span := g.client.addTrace(ctx, "createGraph", map[string]string{"graph": graph})
@@ -40,6 +42,17 @@ func (g *Graph) CreateGraph(ctx context.Context, database, graph string, edgeDef
 	db, err := g.client.client.Database(tracerCtx, database)
 	if err != nil {
 		return err
+	}
+
+	// Check if the graph already exists
+	exists, err := db.GraphExists(tracerCtx, graph)
+	if err != nil {
+		return err
+	}
+
+	if exists {
+		g.client.logger.Debugf("graph %s already exists in database %s", graph, database)
+		return ErrGraphExists
 	}
 
 	edgeDefs, ok := edgeDefinitions.(*EdgeDefinition)
