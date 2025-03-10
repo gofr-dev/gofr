@@ -1,9 +1,12 @@
 package arangodb
 
 import (
+	"context"
 	"errors"
 	"testing"
 
+	"github.com/arangodb/go-driver/v2/arangodb"
+	"github.com/arangodb/go-driver/v2/arangodb/shared"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel"
 	"go.uber.org/mock/gomock"
@@ -55,6 +58,31 @@ func Test_NewArangoClient_Error(t *testing.T) {
 	client.Connect()
 
 	require.NotNil(t, client)
+}
+
+func TestClient_Query_Success(t *testing.T) {
+	test := setupGraphTest(t)
+	defer test.Ctrl.Finish()
+
+	dbName := "testDB"
+	query := "FOR doc IN collection RETURN doc"
+	bindVars := map[string]any{"key": "value"}
+
+	var result []map[string]any
+
+	expectedResult := []map[string]any{
+		{"_key": "doc1", "value": "test1"},
+		{"_key": "doc2", "value": "test2"},
+	}
+
+	test.MockArango.EXPECT().Database(test.Ctx, dbName).Return(test.MockDB, nil)
+	test.MockDB.EXPECT().Query(test.Ctx, query, &arangodb.QueryOptions{BindVars: bindVars}).
+		Return(NewMockQueryCursor(test.Ctrl, expectedResult), nil)
+
+	err := test.Client.Query(test.Ctx, dbName, query, bindVars, &result)
+
+	require.NoError(t, err)
+	require.Equal(t, expectedResult, result)
 }
 
 func TestValidateConfig(t *testing.T) {
@@ -129,4 +157,102 @@ func TestValidateConfig(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestClient_HealthCheck_Success(t *testing.T) {
+	test := setupGraphTest(t)
+	defer test.Ctrl.Finish()
+
+	expectedVersion := arangodb.VersionInfo{
+		Version: "3.9.0",
+		Server:  "arango",
+	}
+
+	test.MockArango.EXPECT().Version(test.Ctx).Return(expectedVersion, nil)
+
+	health, err := test.Client.HealthCheck(test.Ctx)
+
+	require.NoError(t, err)
+
+	h, ok := health.(*Health)
+	require.True(t, ok)
+
+	require.Equal(t, "UP", h.Status)
+	require.Equal(t, test.Client.endpoint, h.Details["endpoint"])
+	require.Equal(t, expectedVersion.Version, h.Details["version"])
+	require.Equal(t, expectedVersion.Server, h.Details["server"])
+}
+
+func TestClient_HealthCheck_Error(t *testing.T) {
+	test := setupGraphTest(t)
+	defer test.Ctrl.Finish()
+
+	test.MockArango.EXPECT().Version(test.Ctx).Return(arangodb.VersionInfo{}, errStatusDown)
+
+	health, err := test.Client.HealthCheck(test.Ctx)
+
+	require.Error(t, err)
+	require.Equal(t, errStatusDown, err)
+
+	h, ok := health.(*Health)
+	require.True(t, ok)
+
+	require.Equal(t, "DOWN", h.Status)
+	require.Equal(t, test.Client.endpoint, h.Details["endpoint"])
+}
+
+type MockQueryCursor struct {
+	ctrl *gomock.Controller
+	data []map[string]any
+	idx  int
+}
+
+func NewMockQueryCursor(ctrl *gomock.Controller, data []map[string]any) *MockQueryCursor {
+	return &MockQueryCursor{
+		ctrl: ctrl,
+		data: data,
+		idx:  0,
+	}
+}
+
+func (*MockQueryCursor) Close() error {
+	return nil
+}
+
+func (*MockQueryCursor) CloseWithContext(_ context.Context) error {
+	return nil
+}
+
+func (m *MockQueryCursor) HasMore() bool {
+	return m.idx < len(m.data)
+}
+
+func (m *MockQueryCursor) ReadDocument(_ context.Context, document any) (arangodb.DocumentMeta, error) {
+	if m.idx >= len(m.data) {
+		return arangodb.DocumentMeta{}, shared.NoMoreDocumentsError{}
+	}
+
+	doc, ok := document.(*map[string]any)
+	if !ok {
+		return arangodb.DocumentMeta{}, errInvalidEdgeDocumentType
+	}
+
+	*doc = m.data[m.idx]
+	meta := arangodb.DocumentMeta{}
+
+	m.idx++
+
+	return meta, nil
+}
+
+func (m *MockQueryCursor) Count() int64 {
+	return int64(len(m.data))
+}
+
+func (*MockQueryCursor) Statistics() arangodb.CursorStats {
+	return arangodb.CursorStats{}
+}
+
+func (*MockQueryCursor) Plan() arangodb.CursorPlan {
+	return arangodb.CursorPlan{}
 }
