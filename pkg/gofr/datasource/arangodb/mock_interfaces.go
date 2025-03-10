@@ -145,8 +145,11 @@ func (mr *MockArangoMockRecorder) GetDatabase(ctx, name, options interface{}) *g
 }
 
 func (m *MockArango) DatabaseExists(ctx context.Context, name string) (bool, error) {
-	//TODO implement me
-	panic("implement me")
+	if strings.EqualFold(name, "dbExists") {
+		return true, nil
+	}
+
+	return false, nil
 }
 
 func (m *MockArango) AccessibleDatabases(ctx context.Context) ([]arangodb.Database, error) {
