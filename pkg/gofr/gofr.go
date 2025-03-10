@@ -99,6 +99,11 @@ func (a *App) httpServerSetup() {
 		}
 	}
 
+	for dirName, endpoint := range a.httpServer.staticFiles {
+		a.httpServer.router.AddStaticFiles(endpoint, dirName)
+		a.container.Logf("registered static files at endpoint %v from directory %v", endpoint, dirName)
+	}
+
 	a.httpServer.router.PathPrefix("/").Handler(handler{
 		function:  catchAllHandler,
 		container: a.container,
@@ -290,7 +295,5 @@ func (a *App) AddStaticFiles(endpoint, filePath string) {
 		return
 	}
 
-	a.container.Logger.Infof("registered static files at endpoint '%s' from directory '%s'", endpoint, filePath)
-
-	a.httpServer.router.AddStaticFiles(endpoint, filePath)
+	a.httpServer.staticFiles[filePath] = endpoint
 }
