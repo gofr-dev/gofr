@@ -30,9 +30,16 @@ var (
 	errInvalidKeyFile         = errors.New("invalid key file")
 )
 
-func newHTTPServer(port int) *httpServer {
+func newHTTPServer(c *container.Container, port int, middlewareConfigs map[string]string) *httpServer {
 	r := gofrHTTP.NewRouter()
 	wsManager := websocket.New()
+
+	r.Use(
+		middleware.Tracer,
+		middleware.Logging(c.Logger),
+		middleware.CORS(middlewareConfigs, r.RegisteredRoutes),
+		middleware.Metrics(c.Metrics()),
+	)
 
 	return &httpServer{
 		router: r,
@@ -63,19 +70,15 @@ func (s *httpServer) RegisterProfilingRoutes() {
 	s.router.NewRoute().Methods(http.MethodGet).PathPrefix("/debug/pprof/").HandlerFunc(pprof.Index)
 }
 
-func (s *httpServer) run(c *container.Container, middlewareConfigs map[string]string) {
-	// Developer Note:
-	//	WebSocket connections do not inherently support authentication mechanisms.
-	//	It is recommended to authenticate users before upgrading to a WebSocket connection.
-	//	Hence, we are registering middlewares here, to ensure that authentication or other
-	//	middleware logic is executed during the initial HTTP handshake request, prior to upgrading
-	//	the connection to WebSocket, if any.
+func (s *httpServer) run(c *container.Container) {
+	//// Developer Note:
+	////	WebSocket connections do not inherently support authentication mechanisms.
+	////	It is recommended to authenticate users before upgrading to a WebSocket connection.
+	////	Hence, we are registering websocket middleware here, to ensure that authentication or other
+	////	middleware logic is executed during the initial HTTP handshake request, prior to upgrading
+	////	the connection to WebSocket, if any.
 	s.router.Use(
 		middleware.WSHandlerUpgrade(c, s.ws),
-		middleware.Tracer,
-		middleware.CORS(middlewareConfigs, s.router.RegisteredRoutes),
-		middleware.Logging(c.Logger),
-		middleware.Metrics(c.Metrics()),
 	)
 
 	if s.srv != nil {

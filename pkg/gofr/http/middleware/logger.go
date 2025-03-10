@@ -1,9 +1,11 @@
 package middleware
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"runtime/debug"
 	"strings"
@@ -15,12 +17,26 @@ import (
 // StatusResponseWriter Defines own Response Writer to be used for logging of status - as http.ResponseWriter does not let us read status.
 type StatusResponseWriter struct {
 	http.ResponseWriter
-	status int
+	status      int
+	wroteHeader bool // Track if header is already written
 }
 
 func (w *StatusResponseWriter) WriteHeader(status int) {
+	if w.wroteHeader { // Prevent duplicate calls
+		return
+	}
+
 	w.status = status
+	w.wroteHeader = true
 	w.ResponseWriter.WriteHeader(status)
+}
+
+// Hijack implements the http.Hijacker interface
+func (srw *StatusResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	if hijacker, ok := srw.ResponseWriter.(http.Hijacker); ok {
+		return hijacker.Hijack()
+	}
+	return nil, nil, fmt.Errorf("response writer does not support hijacking")
 }
 
 // RequestLog represents a log entry for HTTP requests.

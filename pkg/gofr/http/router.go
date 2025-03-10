@@ -2,6 +2,7 @@ package http
 
 import (
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -85,6 +86,29 @@ func (staticConfig staticFileConfig) staticHandler(fileServer http.Handler) http
 			return
 		}
 
+		// Check if the requested file exists
+		if _, err = os.Stat(absPath); os.IsNotExist(err) {
+			// Set response status before writing to avoid GoFr overriding it
+			w.WriteHeader(http.StatusNotFound)
+
+			// Serve 404.html for missing HTML pages
+			path, err := filepath.Abs(filepath.Join(staticConfig.directoryName, "404.html"))
+			if err != nil {
+				w.Write([]byte("404 not found"))
+				return
+			}
+
+			if _, err = os.Stat(path); !os.IsNotExist(err) {
+				http.ServeFile(w, r, path)
+
+				return
+			} else {
+				w.Write([]byte("404 not found"))
+			}
+
+			return
+		}
+		// Serve the requested file
 		fileServer.ServeHTTP(w, r)
 	})
 }
