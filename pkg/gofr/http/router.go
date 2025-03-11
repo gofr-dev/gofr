@@ -58,13 +58,11 @@ func (rou *Router) AddStaticFiles(endpoint, dirName string) {
 
 	fileServer := http.FileServer(http.Dir(cfg.directoryName))
 
-	if endpoint == "/" {
-		rou.Router.NewRoute().PathPrefix("/").Handler(cfg.staticHandler(fileServer))
-
-		return
+	if endpoint != "/" {
+		endpoint += "/"
 	}
 
-	rou.Router.NewRoute().PathPrefix(endpoint + "/").Handler(http.StripPrefix(endpoint, cfg.staticHandler(fileServer)))
+	rou.Router.NewRoute().PathPrefix(endpoint).Handler(http.StripPrefix(endpoint, cfg.staticHandler(fileServer)))
 }
 
 func (staticConfig staticFileConfig) staticHandler(fileServer http.Handler) http.Handler {

@@ -23,8 +23,9 @@ func TestValidateConfigs(t *testing.T) {
 		expected error
 	}{
 		{
-			name:     "Valid Config",
-			config:   Config{Broker: "kafkabroker", BatchSize: 1, BatchBytes: 1, BatchTimeout: 1},
+			name: "Valid Config",
+			config: Config{Broker: "kafkabroker", BatchSize: 1, BatchBytes: 1, BatchTimeout: 1,
+				SASLMechanism: "PLAIN", SASLUser: "user", SASLPassword: "password"},
 			expected: nil,
 		},
 		{
@@ -46,6 +47,12 @@ func TestValidateConfigs(t *testing.T) {
 			name:     "Zero BatchTimeout",
 			config:   Config{Broker: "kafkabroker", BatchSize: 1, BatchBytes: 1, BatchTimeout: 0},
 			expected: errBatchTimeout,
+		},
+		{
+			name: "Empty SASL Password",
+			config: Config{Broker: "kafkabroker", BatchSize: 1, BatchBytes: 1, BatchTimeout: 1,
+				SASLMechanism: "PLAIN", SASLUser: "user"},
+			expected: errSASLCredentialsMissing,
 		},
 	}
 
