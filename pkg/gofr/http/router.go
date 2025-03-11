@@ -10,7 +10,10 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
-const DefaultSwaggerFileName = "openapi.json"
+const (
+	DefaultSwaggerFileName       = "openapi.json"
+	staticServerNotFoundFileName = "404.html"
+)
 
 // Router is responsible for routing HTTP request.
 type Router struct {
@@ -74,11 +77,19 @@ func (staticConfig staticFileConfig) staticHandler(fileServer http.Handler) http
 
 		fileName := filePath[len(filePath)-1]
 
+		absPath, err := filepath.Abs(filepath.Join(staticConfig.directoryName, url))
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = w.Write([]byte("500 internal server error"))
+
+			return
+		}
+
 		// Prevent direct access to the openapi.json file via static file routes.
 		// The file should only be accessible through the explicitly defined /.well-known/swagger or
 		// /.well-known/openapi.json for controlled access.
-		absPath, err := filepath.Abs(filepath.Join(staticConfig.directoryName, url))
-		if err != nil || !strings.HasPrefix(absPath, staticConfig.directoryName) || (fileName == DefaultSwaggerFileName && err == nil) {
+		if err != nil || !strings.HasPrefix(absPath, staticConfig.directoryName) ||
+			(fileName == DefaultSwaggerFileName && err == nil) {
 			w.WriteHeader(http.StatusForbidden)
 
 			_, _ = w.Write([]byte("403 forbidden"))
@@ -86,17 +97,15 @@ func (staticConfig staticFileConfig) staticHandler(fileServer http.Handler) http
 			return
 		}
 
-		// Check if the requested file exists
-		if _, err = os.Stat(absPath); os.IsNotExist(err) {
+		file, err := os.Open(absPath)
+
+		switch {
+		case os.IsNotExist(err):
 			// Set response status before writing to avoid GoFr overriding it
 			w.WriteHeader(http.StatusNotFound)
 
 			// Serve 404.html for missing HTML pages
-			path, err := filepath.Abs(filepath.Join(staticConfig.directoryName, "404.html"))
-			if err != nil {
-				_, _ = w.Write([]byte("404 not found"))
-				return
-			}
+			path, _ := filepath.Abs(filepath.Join(staticConfig.directoryName, staticServerNotFoundFileName))
 
 			if _, err = os.Stat(path); !os.IsNotExist(err) {
 				http.ServeFile(w, r, path)
@@ -107,9 +116,22 @@ func (staticConfig staticFileConfig) staticHandler(fileServer http.Handler) http
 			_, _ = w.Write([]byte("404 not found"))
 
 			return
-		}
 
-		// Serve the requested file
-		fileServer.ServeHTTP(w, r)
+		case os.IsPermission(err):
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte("403 forbidden"))
+
+			return
+
+		case err != nil:
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = w.Write([]byte("500 internal server error"))
+
+			return
+
+		default:
+			defer file.Close()
+			fileServer.ServeHTTP(w, r)
+		}
 	})
 }
