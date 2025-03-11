@@ -1,7 +1,6 @@
 package http
 
 import (
-	"gofr.dev/pkg/gofr/logging"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -9,6 +8,8 @@ import (
 
 	"github.com/gorilla/mux"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+
+	"gofr.dev/pkg/gofr/logging"
 )
 
 const (
@@ -102,6 +103,7 @@ func (staticConfig staticFileConfig) staticHandler(fileServer http.Handler) http
 		}
 
 		_, err = os.Open(absPath)
+
 		switch {
 		case os.IsNotExist(err):
 			staticConfig.logger.Warnf("Requested file not found: %s", absPath)
@@ -118,6 +120,7 @@ func (staticConfig staticFileConfig) staticHandler(fileServer http.Handler) http
 			}
 
 			_, _ = w.Write([]byte("404 Not Found"))
+
 			return
 
 		case err != nil:

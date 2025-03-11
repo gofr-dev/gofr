@@ -2,7 +2,6 @@ package http
 
 import (
 	"fmt"
-	"gofr.dev/pkg/gofr/logging"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -14,6 +13,7 @@ import (
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
+	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/testutil"
 )
 
