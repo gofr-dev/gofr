@@ -81,118 +81,95 @@ func TestStaticFileServing_Static(t *testing.T) {
 	tempDir := t.TempDir()
 
 	testCases := []struct {
-		name         string
-		setupFiles   func() error
-		path         string
-		expectedCode int
-		expectedBody string
+		name             string
+		setupFiles       func() error
+		path             string
+		staticServerPath string
+		expectedCode     int
+		expectedBody     string
 	}{
 		{
 			name: "Serve existing file from /static",
 			setupFiles: func() error {
 				return os.WriteFile(filepath.Join(tempDir, "test.txt"), []byte("Hello, World!"), 0600)
 			},
-			path:         "/static/test.txt",
-			expectedCode: http.StatusOK,
-			expectedBody: "Hello, World!",
+			path:             "/static/test.txt",
+			staticServerPath: "/static",
+			expectedCode:     http.StatusOK,
+			expectedBody:     "Hello, World!",
+		},
+		{
+			name: "Serve existing file from /",
+			setupFiles: func() error {
+				return os.WriteFile(filepath.Join(tempDir, "test.txt"), []byte("Hello, Root!"), 0600)
+			},
+			path:             "/test.txt",
+			staticServerPath: "/",
+			expectedCode:     http.StatusOK,
+			expectedBody:     "Hello, Root!",
+		},
+		{
+			name: "Serve existing file from /public",
+			setupFiles: func() error {
+				return os.WriteFile(filepath.Join(tempDir, "test.txt"), []byte("Hello, Public!"), 0600)
+			},
+			path:             "/public/test.txt",
+			staticServerPath: "/public",
+			expectedCode:     http.StatusOK,
+			expectedBody:     "Hello, Public!",
 		},
 		{
 			name: "Serve 404.html for non-existent file",
 			setupFiles: func() error {
 				return os.WriteFile(filepath.Join(tempDir, "404.html"), []byte("<html>404 Not Found</html>"), 0600)
 			},
-			path:         "/static/nonexistent.html",
-			expectedCode: http.StatusNotFound,
-			expectedBody: "<html>404 Not Found</html>",
+			path:             "/static/nonexistent.html",
+			staticServerPath: "/static",
+			expectedCode:     http.StatusNotFound,
+			expectedBody:     "<html>404 Not Found</html>",
 		},
 		{
 			name: "Serve default 404 message when 404.html is missing",
 			setupFiles: func() error {
 				return os.Remove(filepath.Join(tempDir, "404.html"))
 			},
-			path:         "/static/nonexistent.html",
-			expectedCode: http.StatusNotFound,
-			expectedBody: "404 Not Found",
+			path:             "/static/nonexistent.html",
+			staticServerPath: "/static",
+			expectedCode:     http.StatusNotFound,
+			expectedBody:     "404 Not Found",
 		},
 		{
 			name: "Access forbidden OpenAPI JSON",
 			setupFiles: func() error {
 				return os.WriteFile(filepath.Join(tempDir, DefaultSwaggerFileName), []byte(`{"openapi": "3.0.0"}`), 0600)
 			},
-			path:         "/static/openapi.json",
-			expectedCode: http.StatusForbidden,
-			expectedBody: "403 Forbidden",
+			path:             "/static/openapi.json",
+			staticServerPath: "/static",
+			expectedCode:     http.StatusForbidden,
+			expectedBody:     "403 Forbidden",
 		},
 		{
 			name: "Serving File with no Read permission",
 			setupFiles: func() error {
 				return os.WriteFile(filepath.Join(tempDir, "restricted.txt"), []byte("Restricted content"), 0000)
 			},
-			path:         "/static/restricted.txt",
-			expectedCode: http.StatusInternalServerError,
-			expectedBody: "500 Internal Server Error",
+			path:             "/static/restricted.txt",
+			staticServerPath: "/static",
+			expectedCode:     http.StatusInternalServerError,
+			expectedBody:     "500 Internal Server Error",
 		},
 	}
 
-	runStaticFileTests(t, tempDir, "/static", testCases)
+	runStaticFileTests(t, tempDir, testCases)
 }
 
-// Testing files being served at an endpoint named public.
-func TestStaticFileServing_Public(t *testing.T) {
-	tempDir := t.TempDir()
-
-	testCases := []struct {
-		name         string
-		setupFiles   func() error
-		path         string
-		expectedCode int
-		expectedBody string
-	}{
-		{
-			name: "Serve existing file from /public",
-			setupFiles: func() error {
-				return os.WriteFile(filepath.Join(tempDir, "test.txt"), []byte("Hello, Public!"), 0600)
-			},
-			path:         "/public/test.txt",
-			expectedCode: http.StatusOK,
-			expectedBody: "Hello, Public!",
-		},
-	}
-
-	runStaticFileTests(t, tempDir, "/public", testCases)
-}
-
-// testing files being served at root level.
-func TestStaticFileServing_Root(t *testing.T) {
-	tempDir := t.TempDir()
-
-	testCases := []struct {
-		name         string
-		setupFiles   func() error
-		path         string
-		expectedCode int
-		expectedBody string
-	}{
-		{
-			name: "Serve existing file from /",
-			setupFiles: func() error {
-				return os.WriteFile(filepath.Join(tempDir, "test.txt"), []byte("Hello, Root!"), 0600)
-			},
-			path:         "/test.txt",
-			expectedCode: http.StatusOK,
-			expectedBody: "Hello, Root!",
-		},
-	}
-
-	runStaticFileTests(t, tempDir, "/", testCases)
-}
-
-func runStaticFileTests(t *testing.T, tempDir, basePath string, testCases []struct {
-	name         string
-	setupFiles   func() error
-	path         string
-	expectedCode int
-	expectedBody string
+func runStaticFileTests(t *testing.T, tempDir string, testCases []struct {
+	name             string
+	setupFiles       func() error
+	path             string
+	staticServerPath string
+	expectedCode     int
+	expectedBody     string
 }) {
 	t.Helper()
 
@@ -205,7 +182,7 @@ func runStaticFileTests(t *testing.T, tempDir, basePath string, testCases []stru
 			logger := logging.NewMockLogger(logging.DEBUG)
 
 			router := NewRouter()
-			router.AddStaticFiles(logger, basePath, tempDir)
+			router.AddStaticFiles(logger, tc.staticServerPath, tempDir)
 
 			req := httptest.NewRequest(http.MethodGet, tc.path, http.NoBody)
 			w := httptest.NewRecorder()
