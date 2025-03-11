@@ -91,7 +91,7 @@ jobs:
       # Run tests with automatic retry on failures
       - name: Test with Retry Logic
         id: test
-        uses: nick-fields/retry@v2
+        uses: nick-fields/retry@v3
         with:
           timeout_minutes: 5  # Maximum time for the tests to run
           max_attempts: 2      # Retry up to 2 times if tests fail
@@ -140,7 +140,7 @@ jobs:
       # Run pkg tests with automatic retry logic
       - name: Test with Retry Logic
         id: test
-        uses: nick-fields/retry@v2
+        uses: nick-fields/retry@v3
         with:
           timeout_minutes: 5
           max_attempts: 2
@@ -229,7 +229,7 @@ jobs:
       # Test all submodules in parallel with retry logic
       - name: Test Submodules with Retry and Parallelism
         id: test_submodules
-        uses: nick-fields/retry@v2
+        uses: nick-fields/retry@v3
         with:
           timeout_minutes: 5
           max_attempts: 2
