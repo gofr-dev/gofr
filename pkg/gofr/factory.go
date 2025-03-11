@@ -40,6 +40,7 @@ func New() *App {
 	app.httpServer = newHTTPServer(port)
 	app.httpServer.certFile = app.Config.GetOrDefault("CERT_FILE", "")
 	app.httpServer.keyFile = app.Config.GetOrDefault("KEY_FILE", "")
+	app.httpServer.staticFiles = make(map[string]string)
 
 	// Add Default routes
 	app.add(http.MethodGet, "/.well-known/health", healthHandler)
@@ -67,7 +68,7 @@ func New() *App {
 	checkDirectory := filepath.Join(currentWd, defaultPublicStaticDir)
 
 	if _, err = os.Stat(checkDirectory); err == nil {
-		app.AddStaticFiles(defaultPublicStaticDir, checkDirectory)
+		app.httpServer.staticFiles[checkDirectory] = "/static"
 	}
 
 	return app
