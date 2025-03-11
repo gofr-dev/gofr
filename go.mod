@@ -40,7 +40,7 @@ require (
 	golang.org/x/term v0.29.0
 	golang.org/x/text v0.22.0
 	google.golang.org/api v0.224.0
-	google.golang.org/grpc v1.70.0
+	google.golang.org/grpc v1.71.0
 	google.golang.org/protobuf v1.36.5
 	modernc.org/sqlite v1.36.0
 )
