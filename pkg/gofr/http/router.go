@@ -1,6 +1,7 @@
 package http
 
 import (
+	"gofr.dev/pkg/gofr/logging"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -55,10 +56,11 @@ func (rou *Router) UseMiddleware(mws ...Middleware) {
 
 type staticFileConfig struct {
 	directoryName string
+	logger        logging.Logger
 }
 
-func (rou *Router) AddStaticFiles(endpoint, dirName string) {
-	cfg := staticFileConfig{directoryName: dirName}
+func (rou *Router) AddStaticFiles(logger logging.Logger, endpoint, dirName string) {
+	cfg := staticFileConfig{directoryName: dirName, logger: logger}
 
 	fileServer := http.FileServer(http.Dir(cfg.directoryName))
 
@@ -79,58 +81,56 @@ func (staticConfig staticFileConfig) staticHandler(fileServer http.Handler) http
 
 		absPath, err := filepath.Abs(filepath.Join(staticConfig.directoryName, url))
 		if err != nil {
+			staticConfig.logger.Errorf("Failed to resolve absolute path for URL: %s, error: %v", url, err)
+
 			w.WriteHeader(http.StatusInternalServerError)
-			_, _ = w.Write([]byte("500 internal server error"))
+			_, _ = w.Write([]byte("500 Internal Server Error"))
 
 			return
 		}
 
-		// Prevent direct access to the openapi.json file via static file routes.
-		// The file should only be accessible through the explicitly defined /.well-known/swagger or
-		// /.well-known/openapi.json for controlled access.
-		if err != nil || !strings.HasPrefix(absPath, staticConfig.directoryName) ||
-			(fileName == DefaultSwaggerFileName && err == nil) {
+		// Restrict direct access to openapi.json via static routes.
+		// Allow access only through /.well-known/swagger or /.well-known/openapi.json.
+		if !strings.HasPrefix(absPath, staticConfig.directoryName) ||
+			(fileName == DefaultSwaggerFileName) {
+			staticConfig.logger.Warnf("Unauthorized attempt to access restricted file: %s", url)
+
 			w.WriteHeader(http.StatusForbidden)
-
-			_, _ = w.Write([]byte("403 forbidden"))
+			_, _ = w.Write([]byte("403 Forbidden"))
 
 			return
 		}
 
-		file, err := os.Open(absPath)
-
+		_, err = os.Open(absPath)
 		switch {
 		case os.IsNotExist(err):
-			// Set response status before writing to avoid GoFr overriding it
+			staticConfig.logger.Warnf("Requested file not found: %s", absPath)
 			w.WriteHeader(http.StatusNotFound)
 
-			// Serve 404.html for missing HTML pages
-			path, _ := filepath.Abs(filepath.Join(staticConfig.directoryName, staticServerNotFoundFileName))
+			// Serve custom 404.html if available
+			notFoundPath, _ := filepath.Abs(filepath.Join(staticConfig.directoryName, staticServerNotFoundFileName))
+			if _, err = os.Stat(notFoundPath); err == nil {
+				staticConfig.logger.Debugf("Serving custom 404 page: %s", notFoundPath)
 
-			if _, err = os.Stat(path); !os.IsNotExist(err) {
-				http.ServeFile(w, r, path)
+				http.ServeFile(w, r, notFoundPath)
 
 				return
 			}
 
-			_, _ = w.Write([]byte("404 not found"))
-
-			return
-
-		case os.IsPermission(err):
-			w.WriteHeader(http.StatusForbidden)
-			_, _ = w.Write([]byte("403 forbidden"))
-
+			_, _ = w.Write([]byte("404 Not Found"))
 			return
 
 		case err != nil:
+			staticConfig.logger.Errorf("Error accessing file %s: %v", absPath, err)
+
 			w.WriteHeader(http.StatusInternalServerError)
-			_, _ = w.Write([]byte("500 internal server error"))
+			_, _ = w.Write([]byte("500 Internal Server Error"))
 
 			return
 
 		default:
-			defer file.Close()
+			staticConfig.logger.Debugf("Serving file: %s", absPath)
+
 			fileServer.ServeHTTP(w, r)
 		}
 	})

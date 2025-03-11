@@ -2,6 +2,7 @@ package http
 
 import (
 	"fmt"
+	"gofr.dev/pkg/gofr/logging"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -111,7 +112,7 @@ func TestStaticFileServing_Static(t *testing.T) {
 			},
 			path:         "/static/nonexistent.html",
 			expectedCode: http.StatusNotFound,
-			expectedBody: "404 not found",
+			expectedBody: "404 Not Found",
 		},
 		{
 			name: "Access forbidden OpenAPI JSON",
@@ -120,7 +121,7 @@ func TestStaticFileServing_Static(t *testing.T) {
 			},
 			path:         "/static/openapi.json",
 			expectedCode: http.StatusForbidden,
-			expectedBody: "403 forbidden",
+			expectedBody: "403 Forbidden",
 		},
 		{
 			name: "Serving File with no Read permission",
@@ -128,8 +129,8 @@ func TestStaticFileServing_Static(t *testing.T) {
 				return os.WriteFile(filepath.Join(tempDir, "restricted.txt"), []byte("Restricted content"), 0000)
 			},
 			path:         "/static/restricted.txt",
-			expectedCode: http.StatusForbidden,
-			expectedBody: "403 forbidden",
+			expectedCode: http.StatusInternalServerError,
+			expectedBody: "500 Internal Server Error",
 		},
 	}
 
@@ -161,7 +162,7 @@ func TestStaticFileServing_Public(t *testing.T) {
 	runStaticFileTests(t, tempDir, "/public", testCases)
 }
 
-// testing file sbeing served at root level.
+// testing files being served at root level.
 func TestStaticFileServing_Root(t *testing.T) {
 	tempDir := t.TempDir()
 
@@ -201,18 +202,18 @@ func runStaticFileTests(t *testing.T, tempDir, basePath string, testCases []stru
 				t.Fatalf("Failed to set up files: %v", err)
 			}
 
+			logger := logging.NewMockLogger(logging.DEBUG)
+
 			router := NewRouter()
-			router.AddStaticFiles(basePath, tempDir)
+			router.AddStaticFiles(logger, basePath, tempDir)
 
 			req := httptest.NewRequest(http.MethodGet, tc.path, http.NoBody)
 			w := httptest.NewRecorder()
 
 			router.ServeHTTP(w, req)
 
-			assert.Equal(t, tc.expectedCode, w.Code,
-				"Expected status code %d, got %d", tc.expectedCode, w.Code)
-			assert.Equal(t, tc.expectedBody, strings.TrimSpace(w.Body.String()),
-				"Expected body %q, got %q", tc.expectedBody, strings.TrimSpace(w.Body.String()))
+			assert.Equal(t, tc.expectedCode, w.Code)
+			assert.Equal(t, tc.expectedBody, strings.TrimSpace(w.Body.String()))
 		})
 	}
 }
