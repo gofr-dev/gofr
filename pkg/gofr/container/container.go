@@ -138,6 +138,9 @@ func (c *Container) Create(conf config.Config) {
 				BatchSize:       batchSize,
 				BatchBytes:      batchBytes,
 				BatchTimeout:    batchTimeout,
+				SASLMechanism:   conf.Get("KAFKA_SASL_MECHANISM"),
+				SASLUser:        conf.Get("KAFKA_SASL_USERNAME"),
+				SASLPassword:    conf.Get("KAFKA_SASL_PASSWORD"),
 			}, c.Logger, c.metricsManager)
 		}
 	case "GOOGLE":
