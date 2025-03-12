@@ -8,7 +8,6 @@ on:
     branches:
       - main
       - development
-      - fix/test_coverage
     paths-ignore:
       - 'docs/**'  # Ignore changes to docs folder
   # Run on pull requests to main or development branches
@@ -193,7 +192,6 @@ jobs:
         run: |
           codeCoverage=$(go tool cover -func=merged_profile.cov | grep total | awk '{print $3}')
           codeCoverage=${codeCoverage%?}
-          echo "Total Coverage: $codeCoverage%"
           echo "CODE_COVERAGE=$codeCoverage" >> $GITHUB_ENV
   #      - name: Check if code-coverage is greater than threshold
   #        run: |
