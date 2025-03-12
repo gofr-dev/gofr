@@ -209,6 +209,7 @@ func TestApp_AddArangoDB(t *testing.T) {
 	t.Run("Adding ArangoDB", func(t *testing.T) {
 		port := testutil.GetFreePort(t)
 		t.Setenv("METRICS_PORT", strconv.Itoa(port))
+		t.Setenv("GOFR_TELEMETRY", "false")
 
 		app := New()
 

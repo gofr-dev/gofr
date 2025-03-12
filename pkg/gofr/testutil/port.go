@@ -47,6 +47,7 @@ func NewServerConfigs(t *testing.T) *ServiceConfigs {
 	t.Setenv("HTTP_PORT", strconv.Itoa(httpPort))
 	t.Setenv("METRICS_PORT", strconv.Itoa(metricsPort))
 	t.Setenv("GRPC_PORT", strconv.Itoa(grpcPort))
+	t.Setenv("GOFR_TELEMETRY", "false")
 
 	return &ServiceConfigs{
 		HTTPPort:    httpPort,
