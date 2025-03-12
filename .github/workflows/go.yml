@@ -28,7 +28,7 @@ jobs:
     # Define a matrix strategy to test against multiple Go versions
     strategy:
       matrix:
-        go-version: ['1.24']
+        go-version: ['1.24','1.23', '1.22']
       # Continue with other jobs if one version fails
       fail-fast: false
 
@@ -100,8 +100,8 @@ jobs:
             export APP_ENV=test
             # Run tests for the examples directory with coverage
             go test gofr.dev/examples/... -v -short -coverprofile packageWithpbgo.cov -coverpkg=gofr.dev/examples/...
-            # Filter out generated protobuf files from coverage report
-            grep -vE '^gofr\.dev\/.*\.pb\.go' packageWithpbgo.cov > profile.cov
+             # Filter out auto-generated files by protobuf and gofr framework from coverage report
+            grep -vE '^gofr\.dev\/.*(\.pb\.go|hello\.proto|hello_grpc\.pb\.go|health_client\.go|hello_client\.go|hello_server\.go|health_gofr\.go)' packageWithpbgo.cov > profile.cov
             # Display coverage statistics
             go tool cover -func profile.cov
 
@@ -119,7 +119,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go-version: ['1.24']
+        go-version: ['1.24','1.23', '1.22']
       fail-fast: false
 
     steps:
@@ -193,6 +193,7 @@ jobs:
         run: |
           codeCoverage=$(go tool cover -func=merged_profile.cov | grep total | awk '{print $3}')
           codeCoverage=${codeCoverage%?}
+          echo "Total Coverage: $codeCoverage%"
           echo "CODE_COVERAGE=$codeCoverage" >> $GITHUB_ENV
   #      - name: Check if code-coverage is greater than threshold
   #        run: |
@@ -206,7 +207,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go-version:  ['1.24']
+        go-version:  ['1.24','1.23', '1.22']
       fail-fast: false
 
     steps:
