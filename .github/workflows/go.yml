@@ -154,7 +154,7 @@ jobs:
             grep -v '/mock_' package.cov > profile.cov
             mv profile.cov ../profile.cov
             # Display coverage statistics
-            go tool cover -func profile.cov
+            go tool cover -func ../profile.cov
 
       # Upload coverage report for the 1.24 Go version only
       - name: Upload Test Coverage
