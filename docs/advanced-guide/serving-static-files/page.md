@@ -35,7 +35,9 @@ func main() {
 ```
 
 Additionally, if we want to serve more static endpoints, we have a dedicated function called `AddStaticFiles()`
-which takes 2 parameters `endpoint` and the `filepath` of the static folder which we want to serve.
+which takes 2 parameters `endpoint` and the `filepath` of the static folder which we want to serve. If the folder 
+contains a `404.html` file, GoFr automatically serves it for any missing URL, redirecting all "Not Found" requests 
+to this page.
 
 Example project structure:
 
@@ -54,6 +56,7 @@ project_folder
 |       |---js
 |       |       main.js
 |       |   index.html
+|       |   404.html
 |   main.go
 |   main_test.go
 ```
