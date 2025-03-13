@@ -244,11 +244,9 @@ func Test_AddHTTPService(t *testing.T) {
 }
 
 func Test_AddDuplicateHTTPService(t *testing.T) {
-	configs := testutil.NewServerConfigs(t)
+	testutil.NewServerConfigs(t)
 
 	t.Setenv("LOG_LEVEL", "DEBUG")
-	t.Setenv("METRICS_PORT", strconv.Itoa(configs.MetricsPort))
-	t.Setenv("HTTP_PORT", strconv.Itoa(configs.HTTPPort))
 
 	logs := testutil.StdoutOutputForFunc(func() {
 		a := New()

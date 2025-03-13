@@ -26,6 +26,7 @@ func TestIntegration_SimpleAPIServer(t *testing.T) {
 
 	port := testutil.GetFreePort(t)
 	t.Setenv("METRICS_PORT", strconv.Itoa(port))
+	t.Setenv("GOFR_TELEMETRY", "false")
 
 	go main()
 	time.Sleep(100 * time.Millisecond) // Giving some time to start the server
@@ -151,11 +152,7 @@ func TestIntegration_SimpleAPIServer_Health(t *testing.T) {
 }
 
 func TestRedisHandler(t *testing.T) {
-	metricsPort := testutil.GetFreePort(t)
-	httpPort := testutil.GetFreePort(t)
-
-	t.Setenv("METRICS_PORT", strconv.Itoa(metricsPort))
-	t.Setenv("HTTP_PORT", strconv.Itoa(httpPort))
+	testutil.NewServerConfigs(t)
 
 	a := gofr.New()
 	logger := logging.NewLogger(logging.DEBUG)
