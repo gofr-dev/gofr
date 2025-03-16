@@ -80,7 +80,6 @@ func TestContext_AddTrace(t *testing.T) {
 func TestContext_WriteMessageToSocket(t *testing.T) {
 	port := testutil.GetFreePort(t)
 	t.Setenv("HTTP_PORT", fmt.Sprint(port))
-	t.Setenv("GOFR_TELEMETRY", "false")
 
 	app := New()
 
