@@ -4,10 +4,17 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"testing"
 )
 
 func (a *App) hasTelemetry() bool {
+	// Check if running inside a test (Go 1.21+)
+	if testing.Testing() {
+		return false
+	}
+
 	return a.Config.GetOrDefault("GOFR_TELEMETRY", defaultTelemetry) == "true"
+
 }
 
 func (a *App) sendTelemetry(client *http.Client, isStart bool) {
