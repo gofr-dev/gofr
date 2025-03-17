@@ -82,7 +82,7 @@ func (staticConfig staticFileConfig) staticHandler(fileServer http.Handler) http
 
 		absPath, err := filepath.Abs(filepath.Join(staticConfig.directoryName, url))
 		if err != nil {
-			staticConfig.logger.Errorf("Failed to resolve absolute path for URL: %s, error: %v", url, err)
+			staticConfig.logger.Errorf("failed to resolve absolute path for URL: %s, error: %v", url, err)
 
 			w.WriteHeader(http.StatusInternalServerError)
 			_, _ = w.Write([]byte("500 Internal Server Error"))
@@ -94,7 +94,7 @@ func (staticConfig staticFileConfig) staticHandler(fileServer http.Handler) http
 		// Allow access only through /.well-known/swagger or /.well-known/openapi.json.
 		if !strings.HasPrefix(absPath, staticConfig.directoryName) ||
 			(fileName == DefaultSwaggerFileName) {
-			staticConfig.logger.Warnf("Unauthorized attempt to access restricted file: %s", url)
+			staticConfig.logger.Warnf("unauthorized attempt to access restricted file: %s", url)
 
 			w.WriteHeader(http.StatusForbidden)
 			_, _ = w.Write([]byte("403 Forbidden"))
@@ -106,13 +106,13 @@ func (staticConfig staticFileConfig) staticHandler(fileServer http.Handler) http
 
 		switch {
 		case os.IsNotExist(err):
-			staticConfig.logger.Warnf("Requested file not found: %s", absPath)
+			staticConfig.logger.Warnf("requested file not found: %s", absPath)
 			w.WriteHeader(http.StatusNotFound)
 
 			// Serve custom 404.html if available
 			notFoundPath, _ := filepath.Abs(filepath.Join(staticConfig.directoryName, staticServerNotFoundFileName))
 			if _, err = os.Stat(notFoundPath); err == nil {
-				staticConfig.logger.Debugf("Serving custom 404 page: %s", notFoundPath)
+				staticConfig.logger.Debugf("serving custom 404 page: %s", notFoundPath)
 
 				http.ServeFile(w, r, notFoundPath)
 
@@ -124,7 +124,7 @@ func (staticConfig staticFileConfig) staticHandler(fileServer http.Handler) http
 			return
 
 		case err != nil:
-			staticConfig.logger.Errorf("Error accessing file %s: %v", absPath, err)
+			staticConfig.logger.Errorf("error accessing file %s: %v", absPath, err)
 
 			w.WriteHeader(http.StatusInternalServerError)
 			_, _ = w.Write([]byte("500 Internal Server Error"))
@@ -132,7 +132,7 @@ func (staticConfig staticFileConfig) staticHandler(fileServer http.Handler) http
 			return
 
 		default:
-			staticConfig.logger.Debugf("Serving file: %s", absPath)
+			staticConfig.logger.Debugf("serving file: %s", absPath)
 
 			fileServer.ServeHTTP(w, r)
 		}
