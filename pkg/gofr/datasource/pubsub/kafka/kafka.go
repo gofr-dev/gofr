@@ -5,6 +5,8 @@ package kafka
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -15,15 +17,16 @@ import (
 )
 
 var (
-	ErrConsumerGroupNotProvided = errors.New("consumer group id not provided")
-	errBrokerNotProvided        = errors.New("kafka broker address not provided")
-	errPublisherNotConfigured   = errors.New("can't publish message. Publisher not configured or topic is empty")
-	errBatchSize                = errors.New("KAFKA_BATCH_SIZE must be greater than 0")
-	errBatchBytes               = errors.New("KAFKA_BATCH_BYTES must be greater than 0")
-	errBatchTimeout             = errors.New("KAFKA_BATCH_TIMEOUT must be greater than 0")
-	errClientNotConnected       = errors.New("kafka client not connected")
-	errUnsupportedSASLMechanism = errors.New("unsupported SASL mechanism")
-	errSASLCredentialsMissing   = errors.New("SASL credentials missing")
+	ErrConsumerGroupNotProvided    = errors.New("consumer group id not provided")
+	errBrokerNotProvided           = errors.New("kafka broker address not provided")
+	errPublisherNotConfigured      = errors.New("can't publish message. Publisher not configured or topic is empty")
+	errBatchSize                   = errors.New("KAFKA_BATCH_SIZE must be greater than 0")
+	errBatchBytes                  = errors.New("KAFKA_BATCH_BYTES must be greater than 0")
+	errBatchTimeout                = errors.New("KAFKA_BATCH_TIMEOUT must be greater than 0")
+	errClientNotConnected          = errors.New("kafka client not connected")
+	errUnsupportedSASLMechanism    = errors.New("unsupported SASL mechanism")
+	errSASLCredentialsMissing      = errors.New("SASL credentials missing")
+	errUnsupportedSecurityProtocol = errors.New("unsupported security protocol")
 )
 
 const (
@@ -34,17 +37,19 @@ const (
 )
 
 type Config struct {
-	Broker          string
-	Partition       int
-	ConsumerGroupID string
-	OffSet          int
-	BatchSize       int
-	BatchBytes      int
-	BatchTimeout    int
-	RetryTimeout    time.Duration
-	SASLMechanism   string
-	SASLUser        string
-	SASLPassword    string
+	Broker           string
+	Partition        int
+	ConsumerGroupID  string
+	OffSet           int
+	BatchSize        int
+	BatchBytes       int
+	BatchTimeout     int
+	RetryTimeout     time.Duration
+	SASLMechanism    string
+	SASLUser         string
+	SASLPassword     string
+	SecurityProtocol string
+	TLS              TLSConfig
 }
 
 type kafkaClient struct {
@@ -101,26 +106,47 @@ func New(conf *Config, logger pubsub.Logger, metrics Metrics) *kafkaClient {
 }
 
 func validateConfigs(conf *Config) error {
+	// Validate required fields
 	if conf.Broker == "" {
 		return errBrokerNotProvided
 	}
-
 	if conf.BatchSize <= 0 {
-		return errBatchSize
+		return fmt.Errorf("batch size must be greater than 0: %w", errBatchSize)
 	}
-
 	if conf.BatchBytes <= 0 {
-		return errBatchBytes
+		return fmt.Errorf("batch bytes must be greater than 0: %w", errBatchBytes)
 	}
-
 	if conf.BatchTimeout <= 0 {
-		return errBatchTimeout
+		return fmt.Errorf("batch timeout must be greater than 0: %w", errBatchTimeout)
 	}
 
-	if conf.SASLMechanism != "" {
-		if conf.SASLUser == "" || conf.SASLPassword == "" {
-			return errSASLCredentialsMissing
+	// Default to PLAINTEXT if no protocol is specified
+	if conf.SecurityProtocol == "" {
+		conf.SecurityProtocol = "PLAINTEXT"
+	}
+
+	protocol := strings.ToUpper(conf.SecurityProtocol)
+
+	// Validate SASL configurations
+	if protocol == "SASL_PLAINTEXT" || protocol == "SASL_SSL" {
+		if conf.SASLMechanism == "" || conf.SASLUser == "" || conf.SASLPassword == "" {
+			return fmt.Errorf("SASL credentials missing: %w", errSASLCredentialsMissing)
 		}
+	}
+
+	// Validate TLS configurations for SSL/SASL_SSL
+	if protocol == "SSL" || protocol == "SASL_SSL" {
+		if conf.TLS.CACertFile == "" && !conf.TLS.InsecureSkipVerify && conf.TLS.CertFile == "" {
+			return fmt.Errorf("for %s, provide either CA cert, client certs, or enable insecure mode: %w",
+				protocol, errUnsupportedSecurityProtocol)
+		}
+	}
+
+	// Validate unsupported protocols
+	switch protocol {
+	case "PLAINTEXT", "SASL_PLAINTEXT", "SASL_SSL", "SSL":
+	default:
+		return fmt.Errorf("unsupported security protocol: %s: %w", protocol, errUnsupportedSecurityProtocol)
 	}
 
 	return nil
@@ -256,13 +282,22 @@ func initializeKafkaClient(conf *Config, logger pubsub.Logger) (*kafka.Dialer, C
 		DualStack: true,
 	}
 
-	if conf.SASLMechanism != "" {
+	if conf.SecurityProtocol == "SASL_PLAINTEXT" || conf.SecurityProtocol == "SASL_SSL" {
 		mechanism, err := getSASLMechanism(conf.SASLMechanism, conf.SASLUser, conf.SASLPassword)
 		if err != nil {
 			return nil, nil, nil, nil, err
 		}
 
 		dialer.SASLMechanism = mechanism
+	}
+
+	if conf.SecurityProtocol == "SSL" || conf.SecurityProtocol == "SASL_SSL" {
+		tlsConfig, err := createTLSConfig(&conf.TLS)
+		if err != nil {
+			return nil, nil, nil, nil, err
+		}
+
+		dialer.TLS = tlsConfig
 	}
 
 	conn, err := dialer.DialContext(context.Background(), "tcp", conf.Broker)
