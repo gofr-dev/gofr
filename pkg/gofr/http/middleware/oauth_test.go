@@ -22,7 +22,7 @@ func TestOAuthSuccess(t *testing.T) {
 	router.HandleFunc("/test", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}).Methods(http.MethodGet).Name("/test")
-	router.Use(OAuth(NewOAuth(OauthConfigs{Provider: &MockProvider{}, RefreshInterval: 10}), nil))
+	router.Use(OAuth(NewOAuth(OauthConfigs{Provider: &MockProvider{}, RefreshInterval: 10}), &ClaimConfig{}))
 
 	server := httptest.NewServer(router)
 
@@ -68,7 +68,7 @@ func TestGetJwtClaims(t *testing.T) {
 
 		w.WriteHeader(http.StatusOK)
 	}).Methods(http.MethodGet).Name("/test")
-	router.Use(OAuth(NewOAuth(OauthConfigs{Provider: &MockProvider{}, RefreshInterval: 10}), nil))
+	router.Use(OAuth(NewOAuth(OauthConfigs{Provider: &MockProvider{}, RefreshInterval: 10}), &ClaimConfig{}))
 
 	server := httptest.NewServer(router)
 
@@ -100,7 +100,7 @@ func TestOAuthInvalidTokenFormat(t *testing.T) {
 	router.HandleFunc("/test", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}).Methods(http.MethodGet).Name("/test")
-	router.Use(OAuth(NewOAuth(OauthConfigs{Provider: &MockProvider{}, RefreshInterval: 10}), nil))
+	router.Use(OAuth(NewOAuth(OauthConfigs{Provider: &MockProvider{}, RefreshInterval: 10}), &ClaimConfig{}))
 
 	server := httptest.NewServer(router)
 
@@ -125,7 +125,7 @@ func TestOAuthEmptyAuthHeader(t *testing.T) {
 	router.HandleFunc("/test", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}).Methods(http.MethodGet).Name("/test")
-	router.Use(OAuth(NewOAuth(OauthConfigs{Provider: &MockProvider{}, RefreshInterval: 10}), nil))
+	router.Use(OAuth(NewOAuth(OauthConfigs{Provider: &MockProvider{}, RefreshInterval: 10}), &ClaimConfig{}))
 
 	server := httptest.NewServer(router)
 
@@ -149,7 +149,7 @@ func TestOAuthMalformedToken(t *testing.T) {
 	router.HandleFunc("/test", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}).Methods(http.MethodGet).Name("/test")
-	router.Use(OAuth(NewOAuth(OauthConfigs{Provider: &MockProvider{}, RefreshInterval: 1 * time.Millisecond}), nil))
+	router.Use(OAuth(NewOAuth(OauthConfigs{Provider: &MockProvider{}, RefreshInterval: 1 * time.Millisecond}), &ClaimConfig{}))
 
 	server := httptest.NewServer(router)
 
@@ -174,7 +174,7 @@ func TestOAuthJWKSKeyNotFound(t *testing.T) {
 	router.HandleFunc("/test", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}).Methods(http.MethodGet).Name("/test")
-	router.Use(OAuth(NewOAuth(OauthConfigs{Provider: &MockProvider{}, RefreshInterval: 10}), nil))
+	router.Use(OAuth(NewOAuth(OauthConfigs{Provider: &MockProvider{}, RefreshInterval: 10}), &ClaimConfig{}))
 
 	server := httptest.NewServer(router)
 
@@ -231,7 +231,7 @@ func TestOAuthHTTPCallFailed(t *testing.T) {
 	router.HandleFunc("/test", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}).Methods(http.MethodGet).Name("/test")
-	router.Use(OAuth(NewOAuth(OauthConfigs{Provider: &MockErrorProvider{}, RefreshInterval: 10}), nil))
+	router.Use(OAuth(NewOAuth(OauthConfigs{Provider: &MockErrorProvider{}, RefreshInterval: 10}), &ClaimConfig{}))
 
 	server := httptest.NewServer(router)
 
@@ -261,7 +261,7 @@ func TestOAuthReadError(t *testing.T) {
 	router.HandleFunc("/test", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}).Methods(http.MethodGet).Name("/test")
-	router.Use(OAuth(NewOAuth(OauthConfigs{Provider: &MockReaderErrorProvider{}, RefreshInterval: 10}), nil))
+	router.Use(OAuth(NewOAuth(OauthConfigs{Provider: &MockReaderErrorProvider{}, RefreshInterval: 10}), &ClaimConfig{}))
 
 	server := httptest.NewServer(router)
 
@@ -291,7 +291,7 @@ func TestOAuthJSONUnmarshalError(t *testing.T) {
 	router.HandleFunc("/test", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}).Methods(http.MethodGet).Name("/test")
-	router.Use(OAuth(NewOAuth(OauthConfigs{Provider: &MockJSONResponseErrorProvider{}, RefreshInterval: 10}), nil))
+	router.Use(OAuth(NewOAuth(OauthConfigs{Provider: &MockJSONResponseErrorProvider{}, RefreshInterval: 10}), &ClaimConfig{}))
 
 	server := httptest.NewServer(router)
 
@@ -530,7 +530,7 @@ func TestValidateClaims(t *testing.T) {
 			expectedErr: errInvalidJTI,
 		},
 		{
-			name:   "missing jti",
+			name: "missing jti",
 			claims: jwt.MapClaims{
 				// no jti provided
 			},
