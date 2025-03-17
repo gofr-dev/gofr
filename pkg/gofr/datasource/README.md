@@ -88,3 +88,4 @@ Therefore, GoFr utilizes a pluggable approach for new datasources by separating 
 | SurrealDB        |      ✅       |  ✅   |         |   ✅    |     ✅     |
 | ArangoDB         |      ✅       |  ✅   |    ✅    |   ✅    |     ✅     |
 | NATS-KV          |      ✅       |  ✅   |    ✅    |   ✅    |     ✅     |
+| ScyllaDB         |      ✅       |  ✅   |    ✅    |   ✅    |           |

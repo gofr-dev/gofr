@@ -22,6 +22,8 @@ var (
 	errBatchBytes               = errors.New("KAFKA_BATCH_BYTES must be greater than 0")
 	errBatchTimeout             = errors.New("KAFKA_BATCH_TIMEOUT must be greater than 0")
 	errClientNotConnected       = errors.New("kafka client not connected")
+	errUnsupportedSASLMechanism = errors.New("unsupported SASL mechanism")
+	errSASLCredentialsMissing   = errors.New("SASL credentials missing")
 )
 
 const (
@@ -40,6 +42,9 @@ type Config struct {
 	BatchBytes      int
 	BatchTimeout    int
 	RetryTimeout    time.Duration
+	SASLMechanism   string
+	SASLUser        string
+	SASLPassword    string
 }
 
 type kafkaClient struct {
@@ -110,6 +115,12 @@ func validateConfigs(conf *Config) error {
 
 	if conf.BatchTimeout <= 0 {
 		return errBatchTimeout
+	}
+
+	if conf.SASLMechanism != "" {
+		if conf.SASLUser == "" || conf.SASLPassword == "" {
+			return errSASLCredentialsMissing
+		}
 	}
 
 	return nil
@@ -245,7 +256,16 @@ func initializeKafkaClient(conf *Config, logger pubsub.Logger) (*kafka.Dialer, C
 		DualStack: true,
 	}
 
-	conn, err := kafka.Dial("tcp", conf.Broker)
+	if conf.SASLMechanism != "" {
+		mechanism, err := getSASLMechanism(conf.SASLMechanism, conf.SASLUser, conf.SASLPassword)
+		if err != nil {
+			return nil, nil, nil, nil, err
+		}
+
+		dialer.SASLMechanism = mechanism
+	}
+
+	conn, err := dialer.DialContext(context.Background(), "tcp", conf.Broker)
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
