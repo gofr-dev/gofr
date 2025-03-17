@@ -221,74 +221,154 @@ func OAuth(key PublicKeyProvider, config *ClaimConfig) func(inner http.Handler) 
 }
 
 func validateClaims(claims jwt.MapClaims, config *ClaimConfig) error {
-	if len(config.TrustedIssuers) > 0 {
-		iss, ok := claims["iss"].(string)
-		if !ok || !contains(config.TrustedIssuers, iss) {
-			return errInvalidIssuer
-		}
+	if err := validateIssuer(claims, config); err != nil {
+		return err
 	}
 
-	if len(config.ValidAudiences) > 0 {
-		switch aud := claims["aud"].(type) {
-		case string:
-			if !contains(config.ValidAudiences, aud) {
-				return errInvalidAudience
-			}
-		case []interface{}:
-			if !containsAny(config.ValidAudiences, aud) {
-				return errInvalidAudience
-			}
-		default:
-			return errInvalidAudience
-		}
+	if err := validateAudience(claims, config); err != nil {
+		return err
 	}
 
-	if len(config.AllowedSubjects) > 0 {
-		sub, ok := claims["sub"].(string)
-		if !ok || !contains(config.AllowedSubjects, sub) {
-			return errInvalidSubject
-		}
+	if err := validateSubject(claims, config); err != nil {
+		return err
 	}
 
-	if config.CheckExpiry {
-		exp, ok := claims["exp"].(float64)
-		if !ok || time.Now().Unix() > int64(exp) {
-			return errTokenExpired
-		}
+	if err := validateExpiry(claims, config); err != nil {
+		return err
 	}
 
-	if config.CheckNotBefore {
-		nbf, ok := claims["nbf"].(float64)
-		if ok && time.Now().Unix() < int64(nbf) {
-			return errTokenNotActive
-		}
+	if err := validateNotBefore(claims, config); err != nil {
+		return err
 	}
 
-	if config.CheckIssuedAt {
-		iat, ok := claims["iat"].(float64)
-		if !ok || time.Now().Unix() < int64(iat) {
-			return errInvalidIssuedAt
-		}
+	if err := validateIssuedAt(claims, config); err != nil {
+		return err
 	}
 
-	if config.ValidateJTI != nil {
-		jti, ok := claims["jti"].(string)
-		if !ok || !config.ValidateJTI(jti) {
-			return errInvalidJTI
-		}
+	if err := validateJTI(claims, config); err != nil {
+		return err
 	}
 
-	if len(config.RequiredRoles) > 0 {
-		roles, _ := claims["roles"].([]interface{})
-		if !hasRequiredRole(roles, config.RequiredRoles) {
-			return errInvalidRole
-		}
+	if err := validateRoles(claims, config); err != nil {
+		return err
 	}
 
 	return nil
 }
 
-func hasRequiredRole(roles []interface{}, required []string) bool {
+func validateIssuer(claims jwt.MapClaims, config *ClaimConfig) error {
+	if len(config.TrustedIssuers) == 0 {
+		return nil
+	}
+
+	iss, ok := claims["iss"].(string)
+	if !ok || !contains(config.TrustedIssuers, iss) {
+		return errInvalidIssuer
+	}
+
+	return nil
+}
+
+func validateAudience(claims jwt.MapClaims, config *ClaimConfig) error {
+	if len(config.ValidAudiences) == 0 {
+		return nil
+	}
+
+	switch aud := claims["aud"].(type) {
+	case string:
+		if !contains(config.ValidAudiences, aud) {
+			return errInvalidAudience
+		}
+	case []any:
+		if !containsAny(config.ValidAudiences, aud) {
+			return errInvalidAudience
+		}
+	default:
+		return errInvalidAudience
+	}
+
+	return nil
+}
+
+func validateSubject(claims jwt.MapClaims, config *ClaimConfig) error {
+	if len(config.AllowedSubjects) == 0 {
+		return nil
+	}
+
+	sub, ok := claims["sub"].(string)
+	if !ok || !contains(config.AllowedSubjects, sub) {
+		return errInvalidSubject
+	}
+
+	return nil
+}
+
+func validateExpiry(claims jwt.MapClaims, config *ClaimConfig) error {
+	if !config.CheckExpiry {
+		return nil
+	}
+
+	exp, ok := claims["exp"].(float64)
+	if !ok || time.Now().Unix() > int64(exp) {
+		return errTokenExpired
+	}
+
+	return nil
+}
+
+func validateNotBefore(claims jwt.MapClaims, config *ClaimConfig) error {
+	if !config.CheckNotBefore {
+		return nil
+	}
+
+	nbf, ok := claims["nbf"].(float64)
+	if ok && time.Now().Unix() < int64(nbf) {
+		return errTokenNotActive
+	}
+
+	return nil
+}
+
+func validateIssuedAt(claims jwt.MapClaims, config *ClaimConfig) error {
+	if !config.CheckIssuedAt {
+		return nil
+	}
+
+	iat, ok := claims["iat"].(float64)
+	if !ok || time.Now().Unix() < int64(iat) {
+		return errInvalidIssuedAt
+	}
+
+	return nil
+}
+
+func validateJTI(claims jwt.MapClaims, config *ClaimConfig) error {
+	if config.ValidateJTI == nil {
+		return nil
+	}
+
+	jti, ok := claims["jti"].(string)
+	if !ok || !config.ValidateJTI(jti) {
+		return errInvalidJTI
+	}
+
+	return nil
+}
+
+func validateRoles(claims jwt.MapClaims, config *ClaimConfig) error {
+	if len(config.RequiredRoles) == 0 {
+		return nil
+	}
+
+	roles, _ := claims["roles"].([]any)
+	if !hasRequiredRole(roles, config.RequiredRoles) {
+		return errInvalidRole
+	}
+
+	return nil
+}
+
+func hasRequiredRole(roles []any, required []string) bool {
 	for _, r := range required {
 		for _, role := range roles {
 			if roleStr, ok := role.(string); ok && roleStr == r {
@@ -310,7 +390,7 @@ func contains(s []string, str string) bool {
 	return false
 }
 
-func containsAny(s []string, items []interface{}) bool {
+func containsAny(s []string, items []any) bool {
 	for _, item := range items {
 		if str, ok := item.(string); ok && contains(s, str) {
 			return true

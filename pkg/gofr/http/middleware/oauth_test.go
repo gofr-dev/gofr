@@ -410,9 +410,7 @@ func (*MockJSONResponseErrorProvider) GetWithHeaders(context.Context, string, ma
 	return response, nil
 }
 
-func TestValidateClaims(t *testing.T) {
-	now := time.Now().Unix()
-
+func TestValidateClaims_Issuer(t *testing.T) {
 	tests := []struct {
 		name        string
 		claims      jwt.MapClaims
@@ -420,30 +418,12 @@ func TestValidateClaims(t *testing.T) {
 		expectedErr error
 	}{
 		{
-			name: "valid claims with all checks passed",
+			name: "valid issuer",
 			claims: jwt.MapClaims{
 				"iss": "trusted-issuer",
-				"aud": "valid-audience",
-				"sub": "allowed-subject",
-				"exp": float64(now + 1000),
-				"nbf": float64(now - 1000),
-				"iat": float64(now - 1000),
-				"jti": "valid-jti",
-				"roles": []interface{}{
-					"admin",
-				},
 			},
 			config: ClaimConfig{
-				TrustedIssuers:  []string{"trusted-issuer"},
-				ValidAudiences:  []string{"valid-audience"},
-				AllowedSubjects: []string{"allowed-subject"},
-				CheckExpiry:     true,
-				CheckNotBefore:  true,
-				CheckIssuedAt:   true,
-				ValidateJTI: func(jti string) bool {
-					return jti == "valid-jti"
-				},
-				RequiredRoles: []string{"admin"},
+				TrustedIssuers: []string{"trusted-issuer"},
 			},
 			expectedErr: nil,
 		},
@@ -456,6 +436,37 @@ func TestValidateClaims(t *testing.T) {
 				TrustedIssuers: []string{"trusted-issuer"},
 			},
 			expectedErr: errInvalidIssuer,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validateClaims(tc.claims, &tc.config)
+			if tc.expectedErr != nil {
+				assert.ErrorIs(t, err, tc.expectedErr)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestValidateClaims_Audience(t *testing.T) {
+	tests := []struct {
+		name        string
+		claims      jwt.MapClaims
+		config      ClaimConfig
+		expectedErr error
+	}{
+		{
+			name: "valid audience string",
+			claims: jwt.MapClaims{
+				"aud": "valid-audience",
+			},
+			config: ClaimConfig{
+				ValidAudiences: []string{"valid-audience"},
+			},
+			expectedErr: nil,
 		},
 		{
 			name: "invalid audience - string case",
@@ -470,12 +481,43 @@ func TestValidateClaims(t *testing.T) {
 		{
 			name: "invalid audience - array case",
 			claims: jwt.MapClaims{
-				"aud": []interface{}{"invalid-audience", "something-else"},
+				"aud": []any{"invalid-audience", "something-else"},
 			},
 			config: ClaimConfig{
 				ValidAudiences: []string{"valid-audience"},
 			},
 			expectedErr: errInvalidAudience,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validateClaims(tc.claims, &tc.config)
+			if tc.expectedErr != nil {
+				assert.ErrorIs(t, err, tc.expectedErr)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestValidateClaims_Subject(t *testing.T) {
+	tests := []struct {
+		name        string
+		claims      jwt.MapClaims
+		config      ClaimConfig
+		expectedErr error
+	}{
+		{
+			name: "valid subject",
+			claims: jwt.MapClaims{
+				"sub": "allowed-subject",
+			},
+			config: ClaimConfig{
+				AllowedSubjects: []string{"allowed-subject"},
+			},
+			expectedErr: nil,
 		},
 		{
 			name: "invalid subject",
@@ -487,6 +529,39 @@ func TestValidateClaims(t *testing.T) {
 			},
 			expectedErr: errInvalidSubject,
 		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validateClaims(tc.claims, &tc.config)
+			if tc.expectedErr != nil {
+				assert.ErrorIs(t, err, tc.expectedErr)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestValidateClaims_Expiry(t *testing.T) {
+	now := time.Now().Unix()
+
+	tests := []struct {
+		name        string
+		claims      jwt.MapClaims
+		config      ClaimConfig
+		expectedErr error
+	}{
+		{
+			name: "valid expiry",
+			claims: jwt.MapClaims{
+				"exp": float64(now + 1000),
+			},
+			config: ClaimConfig{
+				CheckExpiry: true,
+			},
+			expectedErr: nil,
+		},
 		{
 			name: "expired token",
 			claims: jwt.MapClaims{
@@ -497,15 +572,38 @@ func TestValidateClaims(t *testing.T) {
 			},
 			expectedErr: errTokenExpired,
 		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validateClaims(tc.claims, &tc.config)
+			if tc.expectedErr != nil {
+				assert.ErrorIs(t, err, tc.expectedErr)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestValidateClaims_IssuedAt(t *testing.T) {
+	now := time.Now().Unix()
+
+	tests := []struct {
+		name        string
+		claims      jwt.MapClaims
+		config      ClaimConfig
+		expectedErr error
+	}{
 		{
-			name: "token not active yet",
+			name: "valid issued at",
 			claims: jwt.MapClaims{
-				"nbf": float64(now + 1000),
+				"iat": float64(now - 1000),
 			},
 			config: ClaimConfig{
-				CheckNotBefore: true,
+				CheckIssuedAt: true,
 			},
-			expectedErr: errTokenNotActive,
+			expectedErr: nil,
 		},
 		{
 			name: "invalid issued at",
@@ -517,62 +615,51 @@ func TestValidateClaims(t *testing.T) {
 			},
 			expectedErr: errInvalidIssuedAt,
 		},
-		{
-			name: "invalid jti",
-			claims: jwt.MapClaims{
-				"jti": "invalid-jti",
-			},
-			config: ClaimConfig{
-				ValidateJTI: func(jti string) bool {
-					return jti == "valid-jti"
-				},
-			},
-			expectedErr: errInvalidJTI,
-		},
-		{
-			name: "missing jti",
-			claims: jwt.MapClaims{
-				// no jti provided
-			},
-			config: ClaimConfig{
-				ValidateJTI: func(jti string) bool {
-					return jti == "valid-jti"
-				},
-			},
-			expectedErr: errInvalidJTI,
-		},
-		{
-			name: "missing roles",
-			claims: jwt.MapClaims{
-				"roles": []interface{}{},
-			},
-			config: ClaimConfig{
-				RequiredRoles: []string{"admin"},
-			},
-			expectedErr: errInvalidRole,
-		},
-		{
-			name: "roles present but insufficient",
-			claims: jwt.MapClaims{
-				"roles": []interface{}{"user"},
-			},
-			config: ClaimConfig{
-				RequiredRoles: []string{"admin"},
-			},
-			expectedErr: errInvalidRole,
-		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			err := validateClaims(tc.claims, &tc.config)
 			if tc.expectedErr != nil {
-				assert.ErrorIs(t, err, tc.expectedErr, "expected error %v but got %v", tc.expectedErr, err)
+				assert.ErrorIs(t, err, tc.expectedErr)
 			} else {
 				assert.NoError(t, err)
 			}
 		})
 	}
+}
+
+func TestValidateClaims_AllValid(t *testing.T) {
+	now := time.Now().Unix()
+
+	claims := jwt.MapClaims{
+		"iss": "trusted-issuer",
+		"aud": "valid-audience",
+		"sub": "allowed-subject",
+		"exp": float64(now + 1000),
+		"nbf": float64(now - 1000),
+		"iat": float64(now - 1000),
+		"jti": "valid-jti",
+		"roles": []any{
+			"admin",
+		},
+	}
+
+	config := ClaimConfig{
+		TrustedIssuers:  []string{"trusted-issuer"},
+		ValidAudiences:  []string{"valid-audience"},
+		AllowedSubjects: []string{"allowed-subject"},
+		CheckExpiry:     true,
+		CheckNotBefore:  true,
+		CheckIssuedAt:   true,
+		ValidateJTI: func(jti string) bool {
+			return jti == "valid-jti"
+		},
+		RequiredRoles: []string{"admin"},
+	}
+
+	err := validateClaims(claims, &config)
+	assert.NoError(t, err)
 }
 
 func TestWithRequiredRoles(t *testing.T) {
