@@ -16,6 +16,11 @@ import (
 	"gofr.dev/pkg/gofr/testutil"
 )
 
+func TestMain(m *testing.M) {
+	os.Setenv("GOFR_TELEMETRY", "false")
+	m.Run()
+}
+
 // TestCMDRunWithNoArg checks that if no subcommand is found then error comes on stderr.
 func TestCMDRunWithNoArg(t *testing.T) {
 	expErr := "No Command Found!\n"

@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -13,6 +14,11 @@ import (
 
 	"gofr.dev/pkg/gofr/testutil"
 )
+
+func TestMain(m *testing.M) {
+	os.Setenv("GOFR_TELEMETRY", "false")
+	m.Run()
+}
 
 func Test_ListHandler(t *testing.T) {
 	configs := testutil.NewServerConfigs(t)

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"net/http"
+	"os"
 	"testing"
 	"time"
 
@@ -12,6 +13,11 @@ import (
 
 	"gofr.dev/pkg/gofr/testutil"
 )
+
+func TestMain(m *testing.M) {
+	os.Setenv("GOFR_TELEMETRY", "false")
+	m.Run()
+}
 
 func TestExamplePublisher(t *testing.T) {
 	configs := testutil.NewServerConfigs(t)
