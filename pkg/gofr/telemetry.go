@@ -7,10 +7,6 @@ import (
 )
 
 func (a *App) hasTelemetry() bool {
-	if isTest() {
-		return false
-	}
-
 	return a.Config.GetOrDefault("GOFR_TELEMETRY", defaultTelemetry) == "true"
 }
 

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"os"
 	"testing"
 	"time"
 
@@ -13,6 +14,11 @@ import (
 	"gofr.dev/examples/grpc/grpc-server/server"
 	"gofr.dev/pkg/gofr/testutil"
 )
+
+func TestMain(m *testing.M) {
+	os.Setenv("GOFR_TELEMETRY", "false")
+	m.Run()
+}
 
 func TestGRPCServer(t *testing.T) {
 	configs := testutil.NewServerConfigs(t)
