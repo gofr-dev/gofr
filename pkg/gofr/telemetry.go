@@ -14,7 +14,6 @@ func (a *App) hasTelemetry() bool {
 	}
 
 	return a.Config.GetOrDefault("GOFR_TELEMETRY", defaultTelemetry) == "true"
-
 }
 
 func (a *App) sendTelemetry(client *http.Client, isStart bool) {
