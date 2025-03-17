@@ -1,12 +1,18 @@
 package main
 
 import (
+	"os"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"gofr.dev/pkg/gofr/testutil"
 )
+
+func TestMain(m *testing.M) {
+	os.Setenv("GOFR_TELEMETRY", "false")
+	m.Run()
+}
 
 func Test_UserPurgeCron(t *testing.T) {
 	configs := testutil.NewServerConfigs(t)

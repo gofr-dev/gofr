@@ -3,11 +3,17 @@ package http
 import (
 	"fmt"
 	"net/http"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestMain(m *testing.M) {
+	os.Setenv("GOFR_TELEMETRY", "false")
+	m.Run()
+}
 
 func TestErrorEntityNotFound(t *testing.T) {
 	fieldName := "id"

@@ -2,6 +2,7 @@ package container
 
 import (
 	"context"
+	"os"
 	"testing"
 
 	"github.com/gorilla/websocket"
@@ -17,6 +18,11 @@ import (
 	"gofr.dev/pkg/gofr/service"
 	ws "gofr.dev/pkg/gofr/websocket"
 )
+
+func TestMain(m *testing.M) {
+	os.Setenv("GOFR_TELEMETRY", "false")
+	m.Run()
+}
 
 func Test_newContainerSuccessWithLogger(t *testing.T) {
 	cfg := config.NewEnvFile("", logging.NewMockLogger(logging.DEBUG))
