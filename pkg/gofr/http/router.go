@@ -102,7 +102,7 @@ func (staticConfig staticFileConfig) staticHandler(fileServer http.Handler) http
 			return
 		}
 
-		_, err = os.Open(absPath)
+		f, err := os.Open(absPath)
 
 		switch {
 		case os.IsNotExist(err):
@@ -136,5 +136,7 @@ func (staticConfig staticFileConfig) staticHandler(fileServer http.Handler) http
 
 			fileServer.ServeHTTP(w, r)
 		}
+
+		f.Close()
 	})
 }
