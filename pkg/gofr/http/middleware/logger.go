@@ -20,8 +20,10 @@ var errHijackNotSupported = errors.New("response writer does not support hijacki
 // StatusResponseWriter Defines own Response Writer to be used for logging of status - as http.ResponseWriter does not let us read status.
 type StatusResponseWriter struct {
 	http.ResponseWriter
-	status      int
-	wroteHeader bool // Track if header is already written
+	status int
+	// wroteHeader keeps a flag to keep a check that the framework do not attemot to write the header again. This was previously causing
+	// `superfluous response.WriteHeader call`
+	wroteHeader bool
 }
 
 func (w *StatusResponseWriter) WriteHeader(status int) {
@@ -34,7 +36,8 @@ func (w *StatusResponseWriter) WriteHeader(status int) {
 	w.ResponseWriter.WriteHeader(status)
 }
 
-// Hijack implements the http.Hijacker interface.
+// Hijack implements the http.Hijacker interface. So that we are able to upgrade to a websocket
+// connection that requires the responseWriter implementation to implement this method.
 func (w *StatusResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 	if hijacker, ok := w.ResponseWriter.(http.Hijacker); ok {
 		return hijacker.Hijack()
