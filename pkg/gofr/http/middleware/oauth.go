@@ -214,7 +214,7 @@ func processToken(authHeader string, key PublicKeyProvider, config *ClaimConfig)
 
 	claims, ok := token.Claims.(jwt.MapClaims)
 	if !ok {
-		return nil, errors.New("invalid claims")
+		return nil, jwt.ErrTokenInvalidClaims
 	}
 
 	if err := validateClaims(claims, config); err != nil {

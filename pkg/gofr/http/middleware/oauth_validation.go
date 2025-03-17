@@ -1,8 +1,9 @@
 package middleware
 
 import (
-	"github.com/golang-jwt/jwt/v5"
 	"time"
+
+	"github.com/golang-jwt/jwt/v5"
 )
 
 func validateClaims(claims jwt.MapClaims, config *ClaimConfig) error {
@@ -22,6 +23,7 @@ func validateClaims(claims jwt.MapClaims, config *ClaimConfig) error {
 			return err
 		}
 	}
+
 	return nil
 }
 
