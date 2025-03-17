@@ -182,7 +182,7 @@ func Test_ColorForStatusCode(t *testing.T) {
 	}
 }
 
-func TestStatusResponseWriter_WriteHeader(t *testing.T) {
+func Test_StatusResponseWriter_WriteHeader(t *testing.T) {
 	tests := []struct {
 		name           string
 		status         int
@@ -207,7 +207,7 @@ func TestStatusResponseWriter_WriteHeader(t *testing.T) {
 	}
 }
 
-func TestStatusResponseWriter_WriteHeader_DuplicateCalls(t *testing.T) {
+func Test_StatusResponseWriter_WriteHeader_DuplicateCalls(t *testing.T) {
 	rr := httptest.NewRecorder()
 	srw := &StatusResponseWriter{ResponseWriter: rr}
 
@@ -218,7 +218,7 @@ func TestStatusResponseWriter_WriteHeader_DuplicateCalls(t *testing.T) {
 	require.Equal(t, http.StatusOK, rr.Code, "expected recorder status 200")
 }
 
-func TestStatusResponseWriter_Hijack_Supported(t *testing.T) {
+func Test_StatusResponseWriter_Hijack_Supported(t *testing.T) {
 	rr := httptest.NewRecorder()
 	srw := &StatusResponseWriter{ResponseWriter: rr}
 
@@ -232,7 +232,7 @@ func TestStatusResponseWriter_Hijack_Supported(t *testing.T) {
 	require.NotNil(t, rw, "expected rw to be non-nil")
 }
 
-func TestStatusResponseWriter_Hijack_NotSupported(t *testing.T) {
+func Test_StatusResponseWriter_Hijack_NotSupported(t *testing.T) {
 	rr := httptest.NewRecorder()
 	srw := &StatusResponseWriter{ResponseWriter: rr}
 

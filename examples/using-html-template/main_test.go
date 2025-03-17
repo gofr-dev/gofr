@@ -14,7 +14,7 @@ import (
 	"gofr.dev/pkg/gofr/testutil"
 )
 
-func TestListHandler(t *testing.T) {
+func Test_ListHandler(t *testing.T) {
 	configs := testutil.NewServerConfigs(t)
 	c := &http.Client{}
 
@@ -51,7 +51,7 @@ func TestListHandler(t *testing.T) {
 	assert.Contains(t, bodyStr, `<link rel="stylesheet" href="style.css">`, "Stylesheet link missing")
 }
 
-func TestIndexHTML(t *testing.T) {
+func Test_IndexHTML(t *testing.T) {
 	configs := testutil.NewServerConfigs(t)
 	c := &http.Client{}
 
@@ -80,7 +80,7 @@ func TestIndexHTML(t *testing.T) {
 	assert.Contains(t, bodyStr, `href="/list"`, "List endpoint link missing")
 }
 
-func Test404HTML(t *testing.T) {
+func Test_404HTML(t *testing.T) {
 	configs := testutil.NewServerConfigs(t)
 	c := &http.Client{}
 

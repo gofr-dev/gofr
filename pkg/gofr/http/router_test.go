@@ -77,7 +77,7 @@ func TestRouterWithMiddleware(t *testing.T) {
 	assert.Equal(t, "applied", testHeaderValue, "Test_UseMiddleware Failed! header value mismatch.")
 }
 
-func TestStaticFileServing_Static(t *testing.T) {
+func Test_StaticFileServing_Static(t *testing.T) {
 	tempDir := t.TempDir()
 
 	testCases := []struct {

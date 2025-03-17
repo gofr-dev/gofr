@@ -925,7 +925,7 @@ func setupTestEnvironment(t *testing.T) (host string, htmlContent []byte) {
 
 	app := New()
 
-	app.AddStaticFiles("/gofrTest", "testdir")
+	app.AddStaticFiles("gofrTest", "testdir")
 
 	app.httpRegistered = true
 	app.httpServer.port = configs.HTTPPort
