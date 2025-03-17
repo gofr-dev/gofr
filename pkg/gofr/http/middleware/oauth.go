@@ -29,6 +29,7 @@ var (
 	errInvalidJTI                  = errors.New("invalid JWT ID")
 )
 
+// authMethod represents a custom type to define the different authentication methods supported.
 type authMethod int
 
 const (
@@ -127,6 +128,7 @@ func WithJTIValidator(fn func(string) bool) ClaimOption {
 	}
 }
 
+// NewOAuth creates a PublicKeyProvider that periodically fetches and updates public keys from a JWKS endpoint.
 func NewOAuth(config OauthConfigs) PublicKeyProvider {
 	var publicKeys PublicKeys
 
@@ -224,6 +226,7 @@ func processToken(authHeader string, key PublicKeyProvider, config *ClaimConfig)
 	return claims, nil
 }
 
+// extractToken validates the Authorization header and extracts the JWT token.
 func extractToken(authHeader string) (string, error) {
 	if authHeader == "" {
 		return "", errAuthorizationHeaderRequired

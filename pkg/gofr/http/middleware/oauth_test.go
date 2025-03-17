@@ -218,7 +218,7 @@ func Test_OAuth_well_known(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/.well-known/health-check", http.NoBody)
 	rr := httptest.NewRecorder()
 
-	authMiddleware := OAuth(nil, nil)(testHandler)
+	authMiddleware := OAuth(nil, &ClaimConfig{})(testHandler)
 	authMiddleware.ServeHTTP(rr, req)
 
 	assert.Equal(t, 200, rr.Code, "TEST Failed.\n")
@@ -410,7 +410,7 @@ func (*MockJSONResponseErrorProvider) GetWithHeaders(context.Context, string, ma
 	return response, nil
 }
 
-func TestValidateClaims_Issuer(t *testing.T) {
+func Test_ValidateClaims_Issuer(t *testing.T) {
 	tests := []struct {
 		name        string
 		claims      jwt.MapClaims
@@ -451,7 +451,7 @@ func TestValidateClaims_Issuer(t *testing.T) {
 	}
 }
 
-func TestValidateClaims_Audience(t *testing.T) {
+func Test_ValidateClaims_Audience(t *testing.T) {
 	tests := []struct {
 		name        string
 		claims      jwt.MapClaims
@@ -502,7 +502,7 @@ func TestValidateClaims_Audience(t *testing.T) {
 	}
 }
 
-func TestValidateClaims_Subject(t *testing.T) {
+func Test_ValidateClaims_Subject(t *testing.T) {
 	tests := []struct {
 		name        string
 		claims      jwt.MapClaims
@@ -543,7 +543,7 @@ func TestValidateClaims_Subject(t *testing.T) {
 	}
 }
 
-func TestValidateClaims_Expiry(t *testing.T) {
+func Test_ValidateClaims_Expiry(t *testing.T) {
 	now := time.Now().Unix()
 
 	tests := []struct {
@@ -586,7 +586,7 @@ func TestValidateClaims_Expiry(t *testing.T) {
 	}
 }
 
-func TestValidateClaims_IssuedAt(t *testing.T) {
+func Test_ValidateClaims_IssuedAt(t *testing.T) {
 	now := time.Now().Unix()
 
 	tests := []struct {
@@ -629,7 +629,7 @@ func TestValidateClaims_IssuedAt(t *testing.T) {
 	}
 }
 
-func TestValidateClaims_AllValid(t *testing.T) {
+func Test_ValidateClaims_AllValid(t *testing.T) {
 	now := time.Now().Unix()
 
 	claims := jwt.MapClaims{
@@ -662,7 +662,7 @@ func TestValidateClaims_AllValid(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func TestWithRequiredRoles(t *testing.T) {
+func Test_WithRequiredRoles(t *testing.T) {
 	cfg := &ClaimConfig{}
 	opt := WithRequiredRoles("admin", "user")
 	opt(cfg)
@@ -671,7 +671,7 @@ func TestWithRequiredRoles(t *testing.T) {
 	require.ElementsMatch(t, expected, cfg.RequiredRoles, "RequiredRoles mismatch")
 }
 
-func TestWithTrustedIssuers(t *testing.T) {
+func Test_WithTrustedIssuers(t *testing.T) {
 	cfg := &ClaimConfig{}
 	opt := WithTrustedIssuers("issuer1", "issuer2")
 	opt(cfg)
@@ -680,7 +680,7 @@ func TestWithTrustedIssuers(t *testing.T) {
 	require.ElementsMatch(t, expected, cfg.TrustedIssuers, "TrustedIssuers mismatch")
 }
 
-func TestWithValidAudiences(t *testing.T) {
+func Test_WithValidAudiences(t *testing.T) {
 	cfg := &ClaimConfig{}
 	opt := WithValidAudiences("aud1", "aud2")
 	opt(cfg)
@@ -689,7 +689,7 @@ func TestWithValidAudiences(t *testing.T) {
 	require.ElementsMatch(t, expected, cfg.ValidAudiences, "ValidAudiences mismatch")
 }
 
-func TestWithAllowedSubjects(t *testing.T) {
+func Test_WithAllowedSubjects(t *testing.T) {
 	cfg := &ClaimConfig{}
 	opt := WithAllowedSubjects("sub1", "sub2")
 	opt(cfg)
@@ -698,7 +698,7 @@ func TestWithAllowedSubjects(t *testing.T) {
 	require.ElementsMatch(t, expected, cfg.AllowedSubjects, "AllowedSubjects mismatch")
 }
 
-func TestWithCheckExpiry(t *testing.T) {
+func Test_WithCheckExpiry(t *testing.T) {
 	cfg := &ClaimConfig{}
 	opt := WithCheckExpiry()
 	opt(cfg)
@@ -706,7 +706,7 @@ func TestWithCheckExpiry(t *testing.T) {
 	require.True(t, cfg.CheckExpiry, "CheckExpiry should be true")
 }
 
-func TestWithCheckNotBefore(t *testing.T) {
+func Test_WithCheckNotBefore(t *testing.T) {
 	cfg := &ClaimConfig{}
 	opt := WithCheckNotBefore()
 	opt(cfg)
@@ -714,7 +714,7 @@ func TestWithCheckNotBefore(t *testing.T) {
 	require.True(t, cfg.CheckNotBefore, "CheckNotBefore should be true")
 }
 
-func TestWithCheckIssuedAt(t *testing.T) {
+func Test_WithCheckIssuedAt(t *testing.T) {
 	cfg := &ClaimConfig{}
 	opt := WithCheckIssuedAt()
 	opt(cfg)
@@ -722,7 +722,7 @@ func TestWithCheckIssuedAt(t *testing.T) {
 	require.True(t, cfg.CheckIssuedAt, "CheckIssuedAt should be true")
 }
 
-func TestWithJTIValidator(t *testing.T) {
+func Test_WithJTIValidator(t *testing.T) {
 	cfg := &ClaimConfig{}
 	fn := func(jti string) bool {
 		return jti == "valid-jti"
