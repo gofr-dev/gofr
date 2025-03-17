@@ -1158,3 +1158,7 @@ func TestApp_Subscribe(t *testing.T) {
 		assert.False(t, ok)
 	})
 }
+
+func isTest() bool {
+	return testing.Testing()
+}

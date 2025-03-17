@@ -4,12 +4,10 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"testing"
 )
 
 func (a *App) hasTelemetry() bool {
-	// Check if running inside a test (Go 1.21+)
-	if testing.Testing() {
+	if isTest() {
 		return false
 	}
 
