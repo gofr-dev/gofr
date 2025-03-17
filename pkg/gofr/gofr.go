@@ -622,14 +622,23 @@ func (a *App) EnableAPIKeyAuthWithValidator(validateFunc func(c *container.Conta
 	}))
 }
 
-// EnableOAuth configures OAuth middleware for the application.
+// EnableOAuth configures OAuth middleware for authentication & authorization.
 //
 // It registers a new HTTP service for fetching JWKS and sets up OAuth middleware
 // with the given JWKS endpoint and refresh interval.
 //
 // The JWKS endpoint is used to retrieve JSON Web Key Sets for verifying tokens.
 // The refresh interval specifies how often to refresh the token cache.
-func (a *App) EnableOAuth(jwksEndpoint string, refreshInterval int) {
+func (a *App) EnableOAuth(jwksEndpoint string,
+	refreshInterval int,
+	opts ...middleware.ClaimOption,
+) {
+	cnf := &middleware.ClaimConfig{}
+
+	for _, opt := range opts {
+		opt(cnf)
+	}
+
 	a.AddHTTPService("gofr_oauth", jwksEndpoint)
 
 	oauthOption := middleware.OauthConfigs{
@@ -637,7 +646,7 @@ func (a *App) EnableOAuth(jwksEndpoint string, refreshInterval int) {
 		RefreshInterval: time.Second * time.Duration(refreshInterval),
 	}
 
-	a.httpServer.router.Use(middleware.OAuth(middleware.NewOAuth(oauthOption)))
+	a.httpServer.router.Use(middleware.OAuth(middleware.NewOAuth(oauthOption), cnf))
 }
 
 // Subscribe registers a handler for the given topic.

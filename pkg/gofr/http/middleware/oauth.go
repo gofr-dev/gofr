@@ -19,9 +19,16 @@ import (
 var (
 	errAuthorizationHeaderRequired = errors.New("authorization header is required")
 	errInvalidAuthorizationHeader  = errors.New("authorization header format must be Bearer {token}")
+	errInvalidIssuer               = errors.New("invalid issuer")
+	errInvalidAudience             = errors.New("invalid audience")
+	errTokenExpired                = errors.New("token has expired")
+	errTokenNotActive              = errors.New("token is not active yet")
+	errInvalidRole                 = errors.New("insufficient permissions")
+	errInvalidSubject              = errors.New("invalid subject")
+	errInvalidIssuedAt             = errors.New("invalid issued at time")
+	errInvalidJTI                  = errors.New("invalid JWT ID")
 )
 
-// authMethod represents a custom type to define the different authentication methods supported.
 type authMethod int
 
 const (
@@ -59,7 +66,67 @@ type OauthConfigs struct {
 	RefreshInterval time.Duration
 }
 
-// NewOAuth creates a PublicKeyProvider that periodically fetches and updates public keys from a JWKS endpoint.
+type ClaimOption func(*ClaimConfig)
+
+type ClaimConfig struct {
+	RequiredRoles   []string
+	TrustedIssuers  []string
+	ValidAudiences  []string
+	AllowedSubjects []string
+	CheckExpiry     bool
+	CheckNotBefore  bool
+	CheckIssuedAt   bool
+	ValidateJTI     func(string) bool
+}
+
+func WithRequiredRoles(roles ...string) ClaimOption {
+	return func(cfg *ClaimConfig) {
+		cfg.RequiredRoles = roles
+	}
+}
+
+func WithTrustedIssuers(issuers ...string) ClaimOption {
+	return func(cfg *ClaimConfig) {
+		cfg.TrustedIssuers = issuers
+	}
+}
+
+func WithValidAudiences(audiences ...string) ClaimOption {
+	return func(cfg *ClaimConfig) {
+		cfg.ValidAudiences = audiences
+	}
+}
+
+func WithAllowedSubjects(subjects ...string) ClaimOption {
+	return func(cfg *ClaimConfig) {
+		cfg.AllowedSubjects = subjects
+	}
+}
+
+func WithCheckExpiry() ClaimOption {
+	return func(cfg *ClaimConfig) {
+		cfg.CheckExpiry = true
+	}
+}
+
+func WithCheckNotBefore() ClaimOption {
+	return func(cfg *ClaimConfig) {
+		cfg.CheckNotBefore = true
+	}
+}
+
+func WithCheckIssuedAt() ClaimOption {
+	return func(cfg *ClaimConfig) {
+		cfg.CheckIssuedAt = true
+	}
+}
+
+func WithJTIValidator(fn func(string) bool) ClaimOption {
+	return func(cfg *ClaimConfig) {
+		cfg.ValidateJTI = fn
+	}
+}
+
 func NewOAuth(config OauthConfigs) PublicKeyProvider {
 	var publicKeys PublicKeys
 
@@ -114,7 +181,7 @@ type PublicKeyProvider interface {
 }
 
 // OAuth is a middleware function that validates JWT access tokens using a provided PublicKeyProvider.
-func OAuth(key PublicKeyProvider) func(inner http.Handler) http.Handler {
+func OAuth(key PublicKeyProvider, config *ClaimConfig) func(inner http.Handler) http.Handler {
 	return func(inner http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if isWellKnown(r.URL.Path) {
@@ -134,6 +201,17 @@ func OAuth(key PublicKeyProvider) func(inner http.Handler) http.Handler {
 				return
 			}
 
+			claims, ok := token.Claims.(jwt.MapClaims)
+			if !ok {
+				http.Error(w, "invalid claims", http.StatusUnauthorized)
+				return
+			}
+
+			if err := validateClaims(claims, config); err != nil {
+				http.Error(w, err.Error(), http.StatusForbidden)
+				return
+			}
+
 			ctx := context.WithValue(r.Context(), JWTClaim, token.Claims)
 			*r = *r.Clone(ctx)
 
@@ -142,7 +220,106 @@ func OAuth(key PublicKeyProvider) func(inner http.Handler) http.Handler {
 	}
 }
 
-// ExtractToken validates the Authorization header and extracts the JWT token.
+func validateClaims(claims jwt.MapClaims, config *ClaimConfig) error {
+	if len(config.TrustedIssuers) > 0 {
+		iss, ok := claims["iss"].(string)
+		if !ok || !contains(config.TrustedIssuers, iss) {
+			return errInvalidIssuer
+		}
+	}
+
+	if len(config.ValidAudiences) > 0 {
+		switch aud := claims["aud"].(type) {
+		case string:
+			if !contains(config.ValidAudiences, aud) {
+				return errInvalidAudience
+			}
+		case []interface{}:
+			if !containsAny(config.ValidAudiences, aud) {
+				return errInvalidAudience
+			}
+		default:
+			return errInvalidAudience
+		}
+	}
+
+	if len(config.AllowedSubjects) > 0 {
+		sub, ok := claims["sub"].(string)
+		if !ok || !contains(config.AllowedSubjects, sub) {
+			return errInvalidSubject
+		}
+	}
+
+	if config.CheckExpiry {
+		exp, ok := claims["exp"].(float64)
+		if !ok || time.Now().Unix() > int64(exp) {
+			return errTokenExpired
+		}
+	}
+
+	if config.CheckNotBefore {
+		nbf, ok := claims["nbf"].(float64)
+		if ok && time.Now().Unix() < int64(nbf) {
+			return errTokenNotActive
+		}
+	}
+
+	if config.CheckIssuedAt {
+		iat, ok := claims["iat"].(float64)
+		if !ok || time.Now().Unix() < int64(iat) {
+			return errInvalidIssuedAt
+		}
+	}
+
+	if config.ValidateJTI != nil {
+		jti, ok := claims["jti"].(string)
+		if !ok || !config.ValidateJTI(jti) {
+			return errInvalidJTI
+		}
+	}
+
+	if len(config.RequiredRoles) > 0 {
+		roles, _ := claims["roles"].([]interface{})
+		if !hasRequiredRole(roles, config.RequiredRoles) {
+			return errInvalidRole
+		}
+	}
+
+	return nil
+}
+
+func hasRequiredRole(roles []interface{}, required []string) bool {
+	for _, r := range required {
+		for _, role := range roles {
+			if roleStr, ok := role.(string); ok && roleStr == r {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+func contains(s []string, str string) bool {
+	for _, v := range s {
+		if v == str {
+			return true
+		}
+	}
+
+	return false
+}
+
+func containsAny(s []string, items []interface{}) bool {
+	for _, item := range items {
+		if str, ok := item.(string); ok && contains(s, str) {
+			return true
+		}
+	}
+
+	return false
+}
+
 func extractToken(authHeader string) (string, error) {
 	if authHeader == "" {
 		return "", errAuthorizationHeaderRequired

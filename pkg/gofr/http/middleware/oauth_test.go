@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -21,7 +22,7 @@ func TestOAuthSuccess(t *testing.T) {
 	router.HandleFunc("/test", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}).Methods(http.MethodGet).Name("/test")
-	router.Use(OAuth(NewOAuth(OauthConfigs{Provider: &MockProvider{}, RefreshInterval: 10})))
+	router.Use(OAuth(NewOAuth(OauthConfigs{Provider: &MockProvider{}, RefreshInterval: 10}), nil))
 
 	server := httptest.NewServer(router)
 
@@ -67,7 +68,7 @@ func TestGetJwtClaims(t *testing.T) {
 
 		w.WriteHeader(http.StatusOK)
 	}).Methods(http.MethodGet).Name("/test")
-	router.Use(OAuth(NewOAuth(OauthConfigs{Provider: &MockProvider{}, RefreshInterval: 10})))
+	router.Use(OAuth(NewOAuth(OauthConfigs{Provider: &MockProvider{}, RefreshInterval: 10}), nil))
 
 	server := httptest.NewServer(router)
 
@@ -99,7 +100,7 @@ func TestOAuthInvalidTokenFormat(t *testing.T) {
 	router.HandleFunc("/test", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}).Methods(http.MethodGet).Name("/test")
-	router.Use(OAuth(NewOAuth(OauthConfigs{Provider: &MockProvider{}, RefreshInterval: 10})))
+	router.Use(OAuth(NewOAuth(OauthConfigs{Provider: &MockProvider{}, RefreshInterval: 10}), nil))
 
 	server := httptest.NewServer(router)
 
@@ -124,7 +125,7 @@ func TestOAuthEmptyAuthHeader(t *testing.T) {
 	router.HandleFunc("/test", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}).Methods(http.MethodGet).Name("/test")
-	router.Use(OAuth(NewOAuth(OauthConfigs{Provider: &MockProvider{}, RefreshInterval: 10})))
+	router.Use(OAuth(NewOAuth(OauthConfigs{Provider: &MockProvider{}, RefreshInterval: 10}), nil))
 
 	server := httptest.NewServer(router)
 
@@ -148,7 +149,7 @@ func TestOAuthMalformedToken(t *testing.T) {
 	router.HandleFunc("/test", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}).Methods(http.MethodGet).Name("/test")
-	router.Use(OAuth(NewOAuth(OauthConfigs{Provider: &MockProvider{}, RefreshInterval: 1 * time.Millisecond})))
+	router.Use(OAuth(NewOAuth(OauthConfigs{Provider: &MockProvider{}, RefreshInterval: 1 * time.Millisecond}), nil))
 
 	server := httptest.NewServer(router)
 
@@ -173,7 +174,7 @@ func TestOAuthJWKSKeyNotFound(t *testing.T) {
 	router.HandleFunc("/test", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}).Methods(http.MethodGet).Name("/test")
-	router.Use(OAuth(NewOAuth(OauthConfigs{Provider: &MockProvider{}, RefreshInterval: 10})))
+	router.Use(OAuth(NewOAuth(OauthConfigs{Provider: &MockProvider{}, RefreshInterval: 10}), nil))
 
 	server := httptest.NewServer(router)
 
@@ -217,7 +218,7 @@ func Test_OAuth_well_known(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/.well-known/health-check", http.NoBody)
 	rr := httptest.NewRecorder()
 
-	authMiddleware := OAuth(nil)(testHandler)
+	authMiddleware := OAuth(nil, nil)(testHandler)
 	authMiddleware.ServeHTTP(rr, req)
 
 	assert.Equal(t, 200, rr.Code, "TEST Failed.\n")
@@ -230,7 +231,7 @@ func TestOAuthHTTPCallFailed(t *testing.T) {
 	router.HandleFunc("/test", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}).Methods(http.MethodGet).Name("/test")
-	router.Use(OAuth(NewOAuth(OauthConfigs{Provider: &MockErrorProvider{}, RefreshInterval: 10})))
+	router.Use(OAuth(NewOAuth(OauthConfigs{Provider: &MockErrorProvider{}, RefreshInterval: 10}), nil))
 
 	server := httptest.NewServer(router)
 
@@ -260,7 +261,7 @@ func TestOAuthReadError(t *testing.T) {
 	router.HandleFunc("/test", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}).Methods(http.MethodGet).Name("/test")
-	router.Use(OAuth(NewOAuth(OauthConfigs{Provider: &MockReaderErrorProvider{}, RefreshInterval: 10})))
+	router.Use(OAuth(NewOAuth(OauthConfigs{Provider: &MockReaderErrorProvider{}, RefreshInterval: 10}), nil))
 
 	server := httptest.NewServer(router)
 
@@ -290,7 +291,7 @@ func TestOAuthJSONUnmarshalError(t *testing.T) {
 	router.HandleFunc("/test", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}).Methods(http.MethodGet).Name("/test")
-	router.Use(OAuth(NewOAuth(OauthConfigs{Provider: &MockJSONResponseErrorProvider{}, RefreshInterval: 10})))
+	router.Use(OAuth(NewOAuth(OauthConfigs{Provider: &MockJSONResponseErrorProvider{}, RefreshInterval: 10}), nil))
 
 	server := httptest.NewServer(router)
 
@@ -407,4 +408,243 @@ func (*MockJSONResponseErrorProvider) GetWithHeaders(context.Context, string, ma
 	}
 
 	return response, nil
+}
+
+func TestValidateClaims(t *testing.T) {
+	now := time.Now().Unix()
+
+	tests := []struct {
+		name        string
+		claims      jwt.MapClaims
+		config      ClaimConfig
+		expectedErr error
+	}{
+		{
+			name: "valid claims with all checks passed",
+			claims: jwt.MapClaims{
+				"iss": "trusted-issuer",
+				"aud": "valid-audience",
+				"sub": "allowed-subject",
+				"exp": float64(now + 1000),
+				"nbf": float64(now - 1000),
+				"iat": float64(now - 1000),
+				"jti": "valid-jti",
+				"roles": []interface{}{
+					"admin",
+				},
+			},
+			config: ClaimConfig{
+				TrustedIssuers:  []string{"trusted-issuer"},
+				ValidAudiences:  []string{"valid-audience"},
+				AllowedSubjects: []string{"allowed-subject"},
+				CheckExpiry:     true,
+				CheckNotBefore:  true,
+				CheckIssuedAt:   true,
+				ValidateJTI: func(jti string) bool {
+					return jti == "valid-jti"
+				},
+				RequiredRoles: []string{"admin"},
+			},
+			expectedErr: nil,
+		},
+		{
+			name: "invalid issuer",
+			claims: jwt.MapClaims{
+				"iss": "untrusted-issuer",
+			},
+			config: ClaimConfig{
+				TrustedIssuers: []string{"trusted-issuer"},
+			},
+			expectedErr: errInvalidIssuer,
+		},
+		{
+			name: "invalid audience - string case",
+			claims: jwt.MapClaims{
+				"aud": "invalid-audience",
+			},
+			config: ClaimConfig{
+				ValidAudiences: []string{"valid-audience"},
+			},
+			expectedErr: errInvalidAudience,
+		},
+		{
+			name: "invalid audience - array case",
+			claims: jwt.MapClaims{
+				"aud": []interface{}{"invalid-audience", "something-else"},
+			},
+			config: ClaimConfig{
+				ValidAudiences: []string{"valid-audience"},
+			},
+			expectedErr: errInvalidAudience,
+		},
+		{
+			name: "invalid subject",
+			claims: jwt.MapClaims{
+				"sub": "invalid-subject",
+			},
+			config: ClaimConfig{
+				AllowedSubjects: []string{"allowed-subject"},
+			},
+			expectedErr: errInvalidSubject,
+		},
+		{
+			name: "expired token",
+			claims: jwt.MapClaims{
+				"exp": float64(now - 1000),
+			},
+			config: ClaimConfig{
+				CheckExpiry: true,
+			},
+			expectedErr: errTokenExpired,
+		},
+		{
+			name: "token not active yet",
+			claims: jwt.MapClaims{
+				"nbf": float64(now + 1000),
+			},
+			config: ClaimConfig{
+				CheckNotBefore: true,
+			},
+			expectedErr: errTokenNotActive,
+		},
+		{
+			name: "invalid issued at",
+			claims: jwt.MapClaims{
+				"iat": float64(now + 1000),
+			},
+			config: ClaimConfig{
+				CheckIssuedAt: true,
+			},
+			expectedErr: errInvalidIssuedAt,
+		},
+		{
+			name: "invalid jti",
+			claims: jwt.MapClaims{
+				"jti": "invalid-jti",
+			},
+			config: ClaimConfig{
+				ValidateJTI: func(jti string) bool {
+					return jti == "valid-jti"
+				},
+			},
+			expectedErr: errInvalidJTI,
+		},
+		{
+			name:   "missing jti",
+			claims: jwt.MapClaims{
+				// no jti provided
+			},
+			config: ClaimConfig{
+				ValidateJTI: func(jti string) bool {
+					return jti == "valid-jti"
+				},
+			},
+			expectedErr: errInvalidJTI,
+		},
+		{
+			name: "missing roles",
+			claims: jwt.MapClaims{
+				"roles": []interface{}{},
+			},
+			config: ClaimConfig{
+				RequiredRoles: []string{"admin"},
+			},
+			expectedErr: errInvalidRole,
+		},
+		{
+			name: "roles present but insufficient",
+			claims: jwt.MapClaims{
+				"roles": []interface{}{"user"},
+			},
+			config: ClaimConfig{
+				RequiredRoles: []string{"admin"},
+			},
+			expectedErr: errInvalidRole,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validateClaims(tc.claims, &tc.config)
+			if tc.expectedErr != nil {
+				assert.ErrorIs(t, err, tc.expectedErr, "expected error %v but got %v", tc.expectedErr, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestWithRequiredRoles(t *testing.T) {
+	cfg := &ClaimConfig{}
+	opt := WithRequiredRoles("admin", "user")
+	opt(cfg)
+
+	expected := []string{"admin", "user"}
+	require.ElementsMatch(t, expected, cfg.RequiredRoles, "RequiredRoles mismatch")
+}
+
+func TestWithTrustedIssuers(t *testing.T) {
+	cfg := &ClaimConfig{}
+	opt := WithTrustedIssuers("issuer1", "issuer2")
+	opt(cfg)
+
+	expected := []string{"issuer1", "issuer2"}
+	require.ElementsMatch(t, expected, cfg.TrustedIssuers, "TrustedIssuers mismatch")
+}
+
+func TestWithValidAudiences(t *testing.T) {
+	cfg := &ClaimConfig{}
+	opt := WithValidAudiences("aud1", "aud2")
+	opt(cfg)
+
+	expected := []string{"aud1", "aud2"}
+	require.ElementsMatch(t, expected, cfg.ValidAudiences, "ValidAudiences mismatch")
+}
+
+func TestWithAllowedSubjects(t *testing.T) {
+	cfg := &ClaimConfig{}
+	opt := WithAllowedSubjects("sub1", "sub2")
+	opt(cfg)
+
+	expected := []string{"sub1", "sub2"}
+	require.ElementsMatch(t, expected, cfg.AllowedSubjects, "AllowedSubjects mismatch")
+}
+
+func TestWithCheckExpiry(t *testing.T) {
+	cfg := &ClaimConfig{}
+	opt := WithCheckExpiry()
+	opt(cfg)
+
+	require.True(t, cfg.CheckExpiry, "CheckExpiry should be true")
+}
+
+func TestWithCheckNotBefore(t *testing.T) {
+	cfg := &ClaimConfig{}
+	opt := WithCheckNotBefore()
+	opt(cfg)
+
+	require.True(t, cfg.CheckNotBefore, "CheckNotBefore should be true")
+}
+
+func TestWithCheckIssuedAt(t *testing.T) {
+	cfg := &ClaimConfig{}
+	opt := WithCheckIssuedAt()
+	opt(cfg)
+
+	require.True(t, cfg.CheckIssuedAt, "CheckIssuedAt should be true")
+}
+
+func TestWithJTIValidator(t *testing.T) {
+	cfg := &ClaimConfig{}
+	fn := func(jti string) bool {
+		return jti == "valid-jti"
+	}
+
+	opt := WithJTIValidator(fn)
+	opt(cfg)
+
+	require.NotNil(t, cfg.ValidateJTI, "ValidateJTI should not be nil")
+	require.True(t, cfg.ValidateJTI("valid-jti"), "ValidateJTI should return true for 'valid-jti'")
+	require.False(t, cfg.ValidateJTI("invalid-jti"), "ValidateJTI should return false for 'invalid-jti'")
 }
