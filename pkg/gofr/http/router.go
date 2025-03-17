@@ -102,41 +102,44 @@ func (staticConfig staticFileConfig) staticHandler(fileServer http.Handler) http
 			return
 		}
 
-		f, err := os.Open(absPath)
+		// checking the file permissions
+		fileinfo, err := os.Stat(absPath)
+		if err != nil {
+			if os.IsNotExist(err) {
+				staticConfig.logger.Warnf("requested file not found: %s", absPath)
+				w.WriteHeader(http.StatusNotFound)
 
-		switch {
-		case os.IsNotExist(err):
-			staticConfig.logger.Warnf("requested file not found: %s", absPath)
-			w.WriteHeader(http.StatusNotFound)
+				// Serve custom 404.html if available
+				notFoundPath, _ := filepath.Abs(filepath.Join(staticConfig.directoryName, staticServerNotFoundFileName))
+				if _, err = os.Stat(notFoundPath); err == nil {
+					staticConfig.logger.Debugf("serving custom 404 page: %s", notFoundPath)
 
-			// Serve custom 404.html if available
-			notFoundPath, _ := filepath.Abs(filepath.Join(staticConfig.directoryName, staticServerNotFoundFileName))
-			if _, err = os.Stat(notFoundPath); err == nil {
-				staticConfig.logger.Debugf("serving custom 404 page: %s", notFoundPath)
+					http.ServeFile(w, r, notFoundPath)
 
-				http.ServeFile(w, r, notFoundPath)
+					return
+				}
+
+				_, _ = w.Write([]byte("404 Not Found"))
 
 				return
 			}
 
-			_, _ = w.Write([]byte("404 Not Found"))
-
-			return
-
-		case err != nil:
 			staticConfig.logger.Errorf("error accessing file %s: %v", absPath, err)
-
-			w.WriteHeader(http.StatusInternalServerError)
-			_, _ = w.Write([]byte("500 Internal Server Error"))
+			http.Error(w, "500 Internal Server Error", http.StatusInternalServerError)
 
 			return
-
-		default:
-			staticConfig.logger.Debugf("serving file: %s", absPath)
-
-			fileServer.ServeHTTP(w, r)
 		}
 
-		f.Close()
+		// Ensure file has at least read (`r--`) permission
+		if fileinfo.Mode().Perm()&0444 == 0 {
+			staticConfig.logger.Errorf("file does not have read permission: %s", absPath)
+			http.Error(w, "500 Internal Server Error", http.StatusInternalServerError)
+
+			return
+		}
+
+		staticConfig.logger.Debugf("serving file: %s", absPath)
+
+		fileServer.ServeHTTP(w, r)
 	})
 }
